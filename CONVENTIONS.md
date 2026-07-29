@@ -95,7 +95,7 @@ Python 側のアクセス（`config.BROWSER.HEADLESS`）と表記が完全に一
 
 ```ini
 [FILES]
-CSV_EAST = 東日本.csv        ; ← 値は自由
+CSV_EAST = 支店A.csv        ; ← 値は自由
 OUTPUT_FOLDER = C:\work\out  ; ← 値は自由
 ```
 

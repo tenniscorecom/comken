@@ -59,7 +59,7 @@ class Config:
         INPUT_FOLDER = C:\\作業\\input
 
         [REPORT]
-        TARGET_SHEETS = [東日本, 西日本, 集計]
+        TARGET_SHEETS = [支店A, 支店B, 集計]
 
     使い方:
         config = Config() # カレントディレクトリの config.ini を読む
@@ -68,8 +68,8 @@ class Config:
         config.BROWSER.HEADLESS        # → False（bool）
         config.BROWSER.WAIT_SECONDS    # → 10（int）
         config.FILES.INPUT_FOLDER      # → Path("C:\\作業\\input")
-        config.FILES.INPUT_FOLDER / "東日本.csv"  # → Path("C:\\作業\\input\\東日本.csv")
-        config.REPORT.TARGET_SHEETS    # → ["東日本", "西日本", "集計"]
+        config.FILES.INPUT_FOLDER / "支店A.csv"  # → Path("C:\\作業\\input\\支店A.csv")
+        config.REPORT.TARGET_SHEETS    # → ["支店A", "支店B", "集計"]
     """
 
     def __init__(self, path: str | Path = "config.ini") -> None:

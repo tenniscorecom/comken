@@ -171,14 +171,14 @@ class TestConfigListConversion:
     def test_japanese_values(self, tmp_path):
         """日本語の値も変換されることを確認する。"""
         ini = tmp_path / "config.ini"
-        ini.write_text("[s]\nsheets = [東日本, 西日本, 集計]\n", encoding="utf-8")
-        assert Config(ini).S.SHEETS == ["東日本", "西日本", "集計"]
+        ini.write_text("[s]\nsheets = [支店A, 支店B, 集計]\n", encoding="utf-8")
+        assert Config(ini).S.SHEETS == ["支店A", "支店B", "集計"]
 
     def test_single_item_is_still_list(self, tmp_path):
         """1要素でもリストになることを確認する（カンマ自動判定では実現できない要件）。"""
         ini = tmp_path / "config.ini"
-        ini.write_text("[s]\nsheets = [東日本]\n", encoding="utf-8")
-        assert Config(ini).S.SHEETS == ["東日本"]
+        ini.write_text("[s]\nsheets = [支店A]\n", encoding="utf-8")
+        assert Config(ini).S.SHEETS == ["支店A"]
 
     def test_empty_values_excluded(self, tmp_path):
         """空文字列はリストから除外されることを確認する。"""
@@ -192,8 +192,8 @@ class TestConfigListConversion:
         config.ini で複数行値を書く場合は、2行目以降を字下げ（スペースまたはタブ）する。
 
         [REPORT]
-        TARGET_SHEETS = [東日本
-            西日本
+        TARGET_SHEETS = [支店A
+            支店B
             集計]
         """
         ini = tmp_path / "config.ini"

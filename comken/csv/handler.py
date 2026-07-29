@@ -37,7 +37,7 @@ class CsvReader:
     読み込みは各メソッド呼び出し時に毎回行う（キャッシュなし）。
 
     使い方:
-        reader = CsvReader("東日本.csv")
+        reader = CsvReader("支店A.csv")
 
         # 全行取得
         rows = reader.rows()

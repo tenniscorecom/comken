@@ -154,7 +154,7 @@ from comken import config
 
 # 初回アクセス時にカレントディレクトリの config.ini を1度だけ読む（遅延読み込み）
 folder = config.REPORT.OUTPUT_FOLDER
-path = config.FILES.INPUT_FOLDER / "東日本.csv"
+path = config.FILES.INPUT_FOLDER / "支店A.csv"
 
 # config.ini が別の場所にある場合は、最初に使う前に読む場所を指定する
 config.read(r"C:\作業\config.ini")
@@ -212,13 +212,13 @@ config.REPORT.TEMPLATE_PATH # → str
 
 ```ini
 [REPORT]
-TARGET_SHEETS = [東日本, 西日本, 集計]
-ONE_SHEET = [東日本]
+TARGET_SHEETS = [支店A, 支店B, 集計]
+ONE_SHEET = [支店A]
 ```
 
 ```python
-config.REPORT.TARGET_SHEETS   # → ["東日本", "西日本", "集計"]
-config.REPORT.ONE_SHEET       # → ["東日本"]（1要素でもリスト）
+config.REPORT.TARGET_SHEETS   # → ["支店A", "支店B", "集計"]
+config.REPORT.ONE_SHEET       # → ["支店A"]（1要素でもリスト）
 ```
 
 `[...]` で囲むのは「1要素のリスト」と「ただの文字列」を区別するため
