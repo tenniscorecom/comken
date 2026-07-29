@@ -73,7 +73,9 @@ def test_exception_guide_covers_all_public_exceptions():
     guide = (_ROOT / "ERRORS.md").read_text(encoding="utf-8")
     names = _all_names(_ROOT / "comken" / "exceptions" / "__init__.py")
 
-    assert len(names) == 32
+    # NOTE: 件数は直書きしない。下の網羅チェックで目的は満たせており、
+    #       件数だけ固定すると API を1つ足すたびに無関係な失敗が出る。
+    assert names, "公開例外を読み取れていない（__all__ の解析に失敗している）"
     assert not [name for name in names if f"`{name}`" not in guide]
 
 
@@ -90,7 +92,7 @@ def test_feature_catalog_covers_all_public_api():
             continue
         names.extend(name for name in _all_names(path) if name not in names)
 
-    assert len(names) == 51
+    assert names, "公開 API を読み取れていない（__all__ の解析に失敗している）"
     assert not [name for name in names if name not in catalog]
 
 
