@@ -285,7 +285,9 @@ def _reserve_backup_path(folder: Path, source: Path) -> Path:
     candidate = folder / filename
     while True:
         try:
-            candidate.open("xb").close()
+            # "xb" は既存ファイルがあると失敗する。空ファイルを作って名前を先に押さえる。
+            with candidate.open("xb"):
+                pass
             return candidate
         except FileExistsError:
             candidate = folder / f"{Path(filename).stem}_{sequence}{source.suffix}"

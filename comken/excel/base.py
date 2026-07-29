@@ -9,6 +9,7 @@ import logging
 import shutil
 import tempfile
 from collections.abc import Generator
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
@@ -185,11 +186,10 @@ class ExcelBase(FileBase):
             各行の値のタプル。
         """
         self._sheet(sheet_name)  # シート名の存在チェック（間違いを分かりやすいエラーにする）
-        wb = load_workbook(self._working_path, data_only=True, read_only=True)
-        try:
+        # openpyxl の Workbook は with に対応していないため closing で包む。
+        # read_only=True はファイルを開いたままにするので、閉じ忘れると次の処理が失敗する。
+        with closing(load_workbook(self._working_path, data_only=True, read_only=True)) as wb:
             yield from wb[str(sheet_name)].iter_rows(min_row=int(min_row), values_only=True)
-        finally:
-            wb.close()
 
     @measure
     def read_computed_rows(self, sheet_name: str, min_row: int = 2) -> list[tuple]:
@@ -211,21 +211,19 @@ class ExcelBase(FileBase):
         """
         self._sheet(sheet_name)  # シート名の存在チェック（間違いを分かりやすいエラーにする）
         try:
-            formula_wb = load_workbook(self._working_path, data_only=False, read_only=True)
-            try:
+            with closing(
+                load_workbook(self._working_path, data_only=False, read_only=True)
+            ) as formula_wb:
                 formula_rows = list(
                     formula_wb[str(sheet_name)].iter_rows(min_row=int(min_row), values_only=True)
                 )
-            finally:
-                formula_wb.close()
 
-            value_wb = load_workbook(self._working_path, data_only=True, read_only=True)
-            try:
+            with closing(
+                load_workbook(self._working_path, data_only=True, read_only=True)
+            ) as value_wb:
                 rows = list(
                     value_wb[str(sheet_name)].iter_rows(min_row=int(min_row), values_only=True)
                 )
-            finally:
-                value_wb.close()
 
             needs_calculation = any(
                 isinstance(formula_cell, str)
