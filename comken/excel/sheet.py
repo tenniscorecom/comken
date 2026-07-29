@@ -179,6 +179,35 @@ class Sheet:
         """シート内の構造化テーブル名を返す。"""
         return list(self.ws.tables)
 
+    def rename_table(self, old_name: str, new_name: str) -> None:
+        """構造化テーブルの名前を変更する。
+
+        範囲・スタイル・列定義はそのまま保持する。
+
+        注意:
+            openpyxl はテーブルを参照する数式（構造化参照）を書き換えない。
+            例えば ``=SUM(売上[金額])`` は、テーブルを「月次売上」に変更しても
+            元の式のまま残り、Excel では ``#NAME?`` になる。参照している数式も
+            呼び出し側で書き換えること。
+        """
+        table = self._table(old_name)
+        _validate_table_name(new_name)
+        other_table_names = {
+            table_name.casefold()
+            for worksheet in self.ws.parent.worksheets
+            for table_name in worksheet.tables
+            if worksheet.tables[table_name] is not table
+        }
+        if new_name.casefold() in other_table_names:
+            raise TableAlreadyExistsError(new_name)
+
+        if old_name == new_name:
+            return
+        del self.ws.tables[old_name]
+        table.name = new_name
+        table.displayName = new_name
+        self.ws.tables.add(table)
+
     def resize_table(self, name: str, ref: str) -> None:
         """構造化テーブルの範囲を変更する。"""
         self._table(name).ref = ref

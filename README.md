@@ -741,13 +741,22 @@ with ExcelWriter.create("table.xlsx") as f:
     s.write_table(rows)
     s.add_table("売上", f"A1:C{len(rows) + 1}")
     s.resize_table("売上", f"A1:C{len(rows) + 2}")
+    s.rename_table("売上", "月次売上")
     f.save()
 
-# 数式は文字列で保存される。openpyxl 自体は計算しない
+# 数式は文字列で書く。構造化参照も同じ
+TABLE_NAME = "月次売上"
+AMOUNT_HEADER = "金額"
 with ExcelWriter("data.xlsx") as f:
-    f.sheet(SHEET)["A4"] = "=SUM(A1:A3)"
+    s = f.sheet(SHEET)
+    s["A4"] = "=SUM(A1:A3)"
+    s["D1"] = f"=SUM({TABLE_NAME}[{AMOUNT_HEADER}])"
     f.save()
-# Python で計算結果を読む場合は ExcelReader.read_computed_rows() を使う
+
+# COM でも数式を書ける
+with ExcelComHandler("data.xlsx") as f:
+    f.write_cell(SHEET, row=4, col=1, value="=SUM(A1:A3)")
+    f.save()
 
 # 用意している色: RED / PINK / ORANGE / YELLOW / LIGHT_YELLOW / GREEN / LIGHT_GREEN
 #                BLUE / LIGHT_BLUE / PURPLE / GRAY / LIGHT_GRAY / WHITE / BLACK
@@ -758,6 +767,26 @@ from comken.windows import ExcelComHandler
 with ExcelComHandler("data.xlsm") as f:
     f.run_macro(MACRO_NAME)
 ```
+
+### 数式は openpyxl と COM のどちらで扱うか
+
+判断軸は、作ったブックを人が Excel で開くか、機械が続けて処理するか。
+
+| 状況 | 使うもの | 理由 |
+|---|---|---|
+| 数式入りのブックを作り、人が Excel で開く | `ExcelWriter`（openpyxl） | 開いた瞬間に Excel が計算する。Excel を起動しないため速い |
+| 数式の計算結果を Python 側で使う | `read_computed_rows()`（内部で COM） | openpyxl は計算しないため、キャッシュがなければ結果が `None` になる |
+| 数式を入れて、そのままPDF化・印刷・他システムへ渡す | `ExcelComHandler`（COM） | 計算済みでないと空欄に見えることがある |
+| 数式を大量に書く | `ExcelWriter`（openpyxl） | COM はセルごとの往復が重い |
+
+openpyxl で書いたブックは数式を持つが、**計算結果（キャッシュ値）を持たない**。
+「作って人に渡す」なら openpyxl、「Excel で開かず機械が続きを処理する」なら COM を使う。
+openpyxl は数式を検証しないため、テーブル名や列名を間違えても保存でき、Excel で開いて初めて
+`#NAME?` に気づく。テーブル名と見出しは上の例のように定数へ揃えると安全。
+
+また、`rename_table()` は範囲・スタイル・列定義を保持するが、構造化参照の数式を追随更新しない。
+Excel の画面上で改名する場合と異なり、`=SUM(売上[金額])` は元の式のまま残るため、
+テーブル名を変えたら参照している数式も自分で書き換えること。
 
 **数万行クラスの大きいファイルを扱うときのベストプラクティス:**
 

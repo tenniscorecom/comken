@@ -647,6 +647,31 @@ class TestSheetApiBoundary:
 class TestStructuredTable:
     """Sheet の構造化テーブル操作。"""
 
+    def test_rename_preserves_table_definition_after_save(self, tmp_path):
+        path = tmp_path / "rename_table.xlsx"
+        with ExcelWriter.create(path) as writer:
+            sheet = writer.sheet("Sheet1")
+            sheet.write_rows(1, [["注文番号", "金額"], ["A001", 1000], ["A002", 2000]])
+            sheet.add_table("売上", "A1:B3")
+            table = sheet.ws.tables["売上"]
+            table.tableStyleInfo.name = "TableStyleMedium4"
+            writer.save()
+
+        with ExcelWriter(path) as writer:
+            sheet = writer.sheet("Sheet1")
+            original = sheet.ws.tables["売上"]
+            original_columns = [(column.id, column.name) for column in original.tableColumns]
+            sheet.rename_table("売上", "月次売上")
+            assert sheet.table_names() == ["月次売上"]
+            writer.save()
+
+        workbook = load_workbook(path)
+        renamed = workbook["Sheet1"].tables["月次売上"]
+        assert renamed.ref == "A1:B3"
+        assert renamed.tableStyleInfo.name == "TableStyleMedium4"
+        assert [(column.id, column.name) for column in renamed.tableColumns] == original_columns
+        workbook.close()
+
     def test_add_resize_delete_and_save(self, tmp_path):
         path = tmp_path / "table.xlsx"
         with ExcelWriter.create(path) as writer:
@@ -686,6 +711,31 @@ class TestStructuredTable:
                 sheet.resize_table("不在", "A1:B2")
             with pytest.raises(TableNotFoundError, match="既存"):
                 sheet.delete_table("不在")
+
+    @pytest.mark.parametrize("name", ["売上 表", "1売上", "A1", "R1C1", "A" * 256])
+    def test_rename_rejects_invalid_new_name(self, tmp_path, name):
+        with ExcelWriter.create(tmp_path / "invalid_rename.xlsx") as writer:
+            sheet = writer.sheet("Sheet1")
+            sheet.write_rows(1, [["A", "B"], [1, 2]])
+            sheet.add_table("売上", "A1:B2")
+            with pytest.raises(InvalidTableNameError):
+                sheet.rename_table("売上", name)
+
+    def test_rename_duplicate_and_missing_errors_are_specific(self, tmp_path):
+        with ExcelWriter.create(tmp_path / "rename_errors.xlsx") as writer:
+            first = writer.sheet("Sheet1")
+            first.write_rows(1, [["A", "B"], [1, 2]])
+            first.add_table("売上", "A1:B2")
+            second = writer.add_sheet("Sheet2")
+            second.write_rows(1, [["A", "B"], [3, 4]])
+            second.add_table("Summary", "A1:B2")
+
+            with pytest.raises(TableAlreadyExistsError):
+                first.rename_table("売上", "Summary")
+            with pytest.raises(TableAlreadyExistsError):
+                first.rename_table("売上", "SUMMARY")
+            with pytest.raises(TableNotFoundError, match="売上"):
+                first.rename_table("不在", "新規")
 
 
 class TestReadComputedRows:
