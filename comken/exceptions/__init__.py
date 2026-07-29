@@ -31,6 +31,8 @@ OriginalLibsError
 │   ├── CsvNoDataRowsError
 │   ├── CsvRowNotFoundError
 │   └── CsvCellReferenceError
+├── RpaError
+│   └── RpaLibraryNotFoundError
 ├── InvalidColumnError
 ├── ColumnNotFoundError
 │   ├── ExcelColumnNotFoundError
@@ -38,6 +40,8 @@ OriginalLibsError
 │   └── KeyColumnNotFoundError
 └── ConfigError
     ├── ConfigFileNotFoundError
+    ├── ConfigCreatedFromExampleError
+    ├── ConfigLowerCaseNameError
     └── ConfigSectionNotFoundError
 
 カテゴリ基底クラスはまとめて捕捉するために使い、直接送出しない。
@@ -60,8 +64,10 @@ from .column import (
     KeyColumnNotFoundError,
 )
 from .config import (
+    ConfigCreatedFromExampleError,
     ConfigError,
     ConfigFileNotFoundError,
+    ConfigLowerCaseNameError,
     ConfigSectionNotFoundError,
 )
 from .csv import (
@@ -93,6 +99,10 @@ from .outlook import (
     OutlookAttachmentNotFoundError,
     OutlookError,
     OutlookFolderNotFoundError,
+)
+from .rpa import (
+    RpaError,
+    RpaLibraryNotFoundError,
 )
 from .warning import _warn_coerce as _warn_coerce
 
@@ -130,10 +140,14 @@ __all__ = [
     "InvalidColumnError",
     "ConfigError",
     "ConfigFileNotFoundError",
+    "ConfigCreatedFromExampleError",
+    "ConfigLowerCaseNameError",
     "ConfigSectionNotFoundError",
     "UnsupportedFileSuffixError",
     "OutlookError",
     "ClassicOutlookNotAvailableError",
     "OutlookFolderNotFoundError",
     "OutlookAttachmentNotFoundError",
+    "RpaError",
+    "RpaLibraryNotFoundError",
 ]

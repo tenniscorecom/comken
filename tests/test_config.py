@@ -12,7 +12,11 @@ import pytest
 
 import comken.config as config_module
 from comken.config import Config
-from comken.exceptions import ConfigError
+from comken.exceptions import (
+    ConfigCreatedFromExampleError,
+    ConfigError,
+    ConfigLowerCaseNameError,
+)
 
 
 class TestConfigMissingFile:
@@ -42,22 +46,39 @@ class TestConfigBasic:
     def test_reads_string_value(self, tmp_path):
         """文字列の設定値を正しく読み込めることを確認する。"""
         ini = tmp_path / "config.ini"
-        ini.write_text("[section]\nkey = hello\n", encoding="utf-8")
+        ini.write_text("[SECTION]\nKEY = hello\n", encoding="utf-8")
         config = Config(ini)
         assert config.SECTION.KEY == "hello"
 
-    def test_section_and_key_are_uppercased(self, tmp_path):
-        """セクション名・キー名が大文字に変換されることを確認する。"""
+    def test_underscore_names_are_read(self, tmp_path):
+        """アンダースコアを含む名前を読み込めることを確認する。"""
         ini = tmp_path / "config.ini"
-        ini.write_text("[my_section]\nmy_key = value\n", encoding="utf-8")
+        ini.write_text("[MY_SECTION]\nMY_KEY = value\n", encoding="utf-8")
         config = Config(ini)
         assert config.MY_SECTION.MY_KEY == "value"
+
+    def test_lowercase_section_raises(self, tmp_path):
+        """小文字のセクション名は読み込んだ時点でエラーになることを確認する。"""
+        ini = tmp_path / "config.ini"
+        ini.write_text("[files]\nINPUT = x\n", encoding="utf-8")
+        with pytest.raises(ConfigLowerCaseNameError) as exc:
+            Config(ini)
+        # 直し方が分かるよう、書き換え後の名前まで出すこと
+        assert "[files] → [FILES]" in str(exc.value)
+
+    def test_lowercase_key_raises(self, tmp_path):
+        """小文字のキー名は読み込んだ時点でエラーになることを確認する。"""
+        ini = tmp_path / "config.ini"
+        ini.write_text("[FILES]\ninput = x\n", encoding="utf-8")
+        with pytest.raises(ConfigLowerCaseNameError) as exc:
+            Config(ini)
+        assert "input → INPUT" in str(exc.value)
 
     def test_multiple_sections(self, tmp_path):
         """複数セクションをそれぞれ読み込めることを確認する。"""
         ini = tmp_path / "config.ini"
         ini.write_text(
-            "[service]\nusername = user@example.com\n\n[report]\nfolder = output\n",
+            "[SERVICE]\nUSERNAME = user@example.com\n\n[REPORT]\nFOLDER = output\n",
             encoding="utf-8",
         )
         config = Config(ini)
@@ -67,7 +88,7 @@ class TestConfigBasic:
     def test_default_path_is_config_ini(self, tmp_path, monkeypatch):
         """パス省略時にカレントディレクトリの config.ini を読むことを確認する。"""
         monkeypatch.chdir(tmp_path)
-        (tmp_path / "config.ini").write_text("[s]\nk = v\n", encoding="utf-8")
+        (tmp_path / "config.ini").write_text("[S]\nK = v\n", encoding="utf-8")
         config = Config()
         assert config.S.K == "v"
 
@@ -78,13 +99,13 @@ class TestConfigBasic:
         BOM を素通しすると1つ目のセクションが MissingSectionHeaderError になる）
         """
         ini = tmp_path / "config.ini"
-        ini.write_text("[s]\nk = 日本語\n", encoding="utf-8-sig")
+        ini.write_text("[S]\nK = 日本語\n", encoding="utf-8-sig")
         assert Config(ini).S.K == "日本語"
 
     def test_reads_percent_sign_without_interpolation(self, tmp_path):
         """単独の % を含む設定値をそのまま読める。"""
         ini = tmp_path / "config.ini"
-        ini.write_text("[s]\nurl = https://example.test/a%20b\n", encoding="utf-8")
+        ini.write_text("[S]\nURL = https://example.test/a%20b\n", encoding="utf-8")
         assert Config(ini).S.URL == "https://example.test/a%20b"
 
 
@@ -94,26 +115,26 @@ class TestConfigBoolConversion:
     def test_true_string_becomes_true(self, tmp_path):
         """'true' が bool の True に変換されることを確認する。"""
         ini = tmp_path / "config.ini"
-        ini.write_text("[s]\nflag = true\n", encoding="utf-8")
+        ini.write_text("[S]\nFLAG = true\n", encoding="utf-8")
         assert Config(ini).S.FLAG is True
 
     def test_false_string_becomes_false(self, tmp_path):
         """'false' が bool の False に変換されることを確認する。"""
         ini = tmp_path / "config.ini"
-        ini.write_text("[s]\nflag = false\n", encoding="utf-8")
+        ini.write_text("[S]\nFLAG = false\n", encoding="utf-8")
         assert Config(ini).S.FLAG is False
 
     def test_uppercase_true_becomes_true(self, tmp_path):
         """'True' / 'TRUE' など大文字混じりも変換されることを確認する。"""
         ini = tmp_path / "config.ini"
-        ini.write_text("[s]\nflag = True\n", encoding="utf-8")
+        ini.write_text("[S]\nFLAG = True\n", encoding="utf-8")
         assert Config(ini).S.FLAG is True
 
     @pytest.mark.parametrize("value", ["yes", "no", "on", "off"])
     def test_boolean_like_values_stay_string(self, tmp_path, value):
         """true / false 以外の yes / no / on / off は変換せず文字列のままを確認する。"""
         ini = tmp_path / "config.ini"
-        ini.write_text(f"[s]\nflag = {value}\n", encoding="utf-8")
+        ini.write_text(f"[S]\nFLAG = {value}\n", encoding="utf-8")
         assert value == Config(ini).S.FLAG
 
 
@@ -123,33 +144,33 @@ class TestConfigTypeConversion:
     def test_integer_value_becomes_int(self, tmp_path):
         """整数値が int に変換されることを確認する。"""
         ini = tmp_path / "config.ini"
-        ini.write_text("[s]\ncount = 10\n", encoding="utf-8")
+        ini.write_text("[S]\nCOUNT = 10\n", encoding="utf-8")
         assert Config(ini).S.COUNT == 10
         assert isinstance(Config(ini).S.COUNT, int)
 
     def test_float_value_becomes_float(self, tmp_path):
         """小数値が float に変換されることを確認する。"""
         ini = tmp_path / "config.ini"
-        ini.write_text("[s]\nratio = 1.5\n", encoding="utf-8")
+        ini.write_text("[S]\nRATIO = 1.5\n", encoding="utf-8")
         assert Config(ini).S.RATIO == 1.5
         assert isinstance(Config(ini).S.RATIO, float)
 
     def test_windows_absolute_path_becomes_path(self, tmp_path):
         """Windows 絶対パス（C:\\）が Path に変換されることを確認する。"""
         ini = tmp_path / "config.ini"
-        ini.write_text("[s]\nfolder = C:\\work\\input\n", encoding="utf-8")
+        ini.write_text("[S]\nFOLDER = C:\\work\\input\n", encoding="utf-8")
         assert Path("C:\\work\\input") == Config(ini).S.FOLDER
 
     def test_unc_path_becomes_path(self, tmp_path):
         """UNC パス（\\\\server\\...）が Path に変換されることを確認する。"""
         ini = tmp_path / "config.ini"
-        ini.write_text("[s]\nfolder = \\\\nas\\reports\n", encoding="utf-8")
+        ini.write_text("[S]\nFOLDER = \\\\nas\\reports\n", encoding="utf-8")
         assert isinstance(Config(ini).S.FOLDER, Path)
 
     def test_plain_string_stays_string(self, tmp_path):
         """数値・パスでない文字列はそのまま str で返ることを確認する。"""
         ini = tmp_path / "config.ini"
-        ini.write_text("[s]\nname = T_data\n", encoding="utf-8")
+        ini.write_text("[S]\nNAME = T_data\n", encoding="utf-8")
         assert Config(ini).S.NAME == "T_data"
         assert isinstance(Config(ini).S.NAME, str)
 
@@ -157,14 +178,14 @@ class TestConfigTypeConversion:
     def test_leading_zero_stays_string(self, tmp_path, value):
         """先頭ゼロの数字（社員番号・電話番号）は桁落ちを避けて文字列のままを確認する。"""
         ini = tmp_path / "config.ini"
-        ini.write_text(f"[s]\ncode = {value}\n", encoding="utf-8")
+        ini.write_text(f"[S]\nCODE = {value}\n", encoding="utf-8")
         assert value == Config(ini).S.CODE
 
     @pytest.mark.parametrize("value", ["nan", "inf", "-inf"])
     def test_nan_inf_stay_string(self, tmp_path, value):
         """nan / inf は float() が受理してしまうが、設定値としては文字列で返す。"""
         ini = tmp_path / "config.ini"
-        ini.write_text(f"[s]\nx = {value}\n", encoding="utf-8")
+        ini.write_text(f"[S]\nX = {value}\n", encoding="utf-8")
         assert value == Config(ini).S.X
 
 
@@ -172,10 +193,46 @@ class TestConfigMissingSection:
     def test_missing_section_raises_config_error(self, tmp_path):
         """未定義セクションへのアクセスは素の AttributeError ではなく ConfigError になる。"""
         ini = tmp_path / "config.ini"
-        ini.write_text("[s]\nk = v\n", encoding="utf-8")
+        ini.write_text("[S]\nK = v\n", encoding="utf-8")
         config = Config(ini)
         with pytest.raises(ConfigError, match="セクションがありません"):
             _ = config.NOPE
+
+
+class TestConfigCreatedFromExample:
+    """config.ini が無いときの example からの作成のテスト。"""
+
+    def test_creates_config_ini_from_example(self, tmp_path):
+        """example があれば config.ini を作ることを確認する。"""
+        example = tmp_path / "config.ini.example"
+        example.write_text("[FILES]\nINPUT = x\n", encoding="utf-8")
+        ini = tmp_path / "config.ini"
+
+        with pytest.raises(ConfigCreatedFromExampleError):
+            Config(ini)
+
+        assert ini.is_file()
+        assert ini.read_text(encoding="utf-8") == example.read_text(encoding="utf-8")
+
+    def test_stops_instead_of_running_with_example_values(self, tmp_path):
+        """作っただけで止め、確認を促すことを確認する。"""
+        (tmp_path / "config.ini.example").write_text("[FILES]\nINPUT = x\n", encoding="utf-8")
+        with pytest.raises(ConfigCreatedFromExampleError) as exc:
+            Config(tmp_path / "config.ini")
+        assert "もう一度実行" in str(exc.value)
+
+    def test_second_run_reads_the_created_file(self, tmp_path):
+        """2回目は作られた config.ini を読めることを確認する。"""
+        (tmp_path / "config.ini.example").write_text("[FILES]\nINPUT = x\n", encoding="utf-8")
+        ini = tmp_path / "config.ini"
+        with pytest.raises(ConfigCreatedFromExampleError):
+            Config(ini)
+        assert Config(ini).FILES.INPUT == "x"
+
+    def test_missing_example_keeps_file_not_found_error(self, tmp_path):
+        """example も無ければ従来どおり「見つかりません」になることを確認する。"""
+        with pytest.raises(ConfigError, match="見つかりません"):
+            Config(tmp_path / "config.ini")
 
 
 class TestConfigListConversion:
@@ -184,25 +241,25 @@ class TestConfigListConversion:
     def test_comma_separated(self, tmp_path):
         """[a, b, c] が自動でリストに変換されることを確認する。"""
         ini = tmp_path / "config.ini"
-        ini.write_text("[s]\nitems = [a, b, c]\n", encoding="utf-8")
+        ini.write_text("[S]\nITEMS = [a, b, c]\n", encoding="utf-8")
         assert Config(ini).S.ITEMS == ["a", "b", "c"]
 
     def test_japanese_values(self, tmp_path):
         """日本語の値も変換されることを確認する。"""
         ini = tmp_path / "config.ini"
-        ini.write_text("[s]\nsheets = [支店A, 支店B, 集計]\n", encoding="utf-8")
+        ini.write_text("[S]\nSHEETS = [支店A, 支店B, 集計]\n", encoding="utf-8")
         assert Config(ini).S.SHEETS == ["支店A", "支店B", "集計"]
 
     def test_single_item_is_still_list(self, tmp_path):
         """1要素でもリストになることを確認する（カンマ自動判定では実現できない要件）。"""
         ini = tmp_path / "config.ini"
-        ini.write_text("[s]\nsheets = [支店A]\n", encoding="utf-8")
+        ini.write_text("[S]\nSHEETS = [支店A]\n", encoding="utf-8")
         assert Config(ini).S.SHEETS == ["支店A"]
 
     def test_empty_values_excluded(self, tmp_path):
         """空文字列はリストから除外されることを確認する。"""
         ini = tmp_path / "config.ini"
-        ini.write_text("[s]\nitems = [a, , b]\n", encoding="utf-8")
+        ini.write_text("[S]\nITEMS = [a, , b]\n", encoding="utf-8")
         assert Config(ini).S.ITEMS == ["a", "b"]
 
     def test_newline_separated(self, tmp_path):
@@ -216,19 +273,19 @@ class TestConfigListConversion:
             集計]
         """
         ini = tmp_path / "config.ini"
-        ini.write_text("[s]\nitems = [a\n\tb\n\tc]\n", encoding="utf-8")
+        ini.write_text("[S]\nITEMS = [a\n\tb\n\tc]\n", encoding="utf-8")
         assert Config(ini).S.ITEMS == ["a", "b", "c"]
 
     def test_empty_list(self, tmp_path):
         """[] は空リストになることを確認する。"""
         ini = tmp_path / "config.ini"
-        ini.write_text("[s]\nitems = []\n", encoding="utf-8")
+        ini.write_text("[S]\nITEMS = []\n", encoding="utf-8")
         assert Config(ini).S.ITEMS == []
 
     def test_comma_without_brackets_stays_string(self, tmp_path):
         """[] なしのカンマ入り文字列は変換されないことを確認する（SOQL 等の誤変換防止）。"""
         ini = tmp_path / "config.ini"
-        ini.write_text("[s]\nquery = SELECT Id, Name FROM Account\n", encoding="utf-8")
+        ini.write_text("[S]\nQUERY = SELECT Id, Name FROM Account\n", encoding="utf-8")
         assert Config(ini).S.QUERY == "SELECT Id, Name FROM Account"
 
 
@@ -278,9 +335,9 @@ class TestGenerateStub:
     def ini(self, tmp_path):
         path = tmp_path / "config.ini"
         path.write_text(
-            "[browser]\nwait_seconds = 10\nheadless = false\n"
-            "[files]\ninput_folder = C:\\work\\input\nratio = 1.5\n"
-            "[report]\nsheets = [a, b]\nname = T_data\n",
+            "[BROWSER]\nWAIT_SECONDS = 10\nHEADLESS = false\n"
+            "[FILES]\nINPUT_FOLDER = C:\\work\\input\nRATIO = 1.5\n"
+            "[REPORT]\nSHEETS = [a, b]\nNAME = T_data\n",
             encoding="utf-8",
         )
         return path
@@ -319,7 +376,7 @@ class TestGenerateStub:
 
         (tmp_path / "src").mkdir()
         (tmp_path / "src" / "config.py").write_text(
-            "from comken.config import Config\nconfig = Config()\n", encoding="utf-8"
+            "from comken.config import Config\nCONFIG = Config()\n", encoding="utf-8"
         )
 
         out = generate_stub(ini)
@@ -373,10 +430,10 @@ class TestAutoStub:
     def project(self, tmp_path):
         """src/config.py がある最小プロジェクトを作って (ini, stub) を返す。"""
         ini = tmp_path / "config.ini"
-        ini.write_text("[report]\ncount = 10\n", encoding="utf-8")
+        ini.write_text("[REPORT]\nCOUNT = 10\n", encoding="utf-8")
         (tmp_path / "src").mkdir()
         (tmp_path / "src" / "config.py").write_text(
-            "from comken.config import Config\nconfig = Config()\n", encoding="utf-8"
+            "from comken.config import Config\nCONFIG = Config()\n", encoding="utf-8"
         )
         return ini, tmp_path / "src" / "config.pyi"
 
@@ -394,7 +451,7 @@ class TestAutoStub:
         ini, stub = project
         Config(ini)
 
-        ini.write_text("[report]\ncount = 10\nname = 月次\n", encoding="utf-8")
+        ini.write_text("[REPORT]\nCOUNT = 10\nNAME = 月次\n", encoding="utf-8")
         Config(ini)
 
         assert "NAME: str" in stub.read_text(encoding="utf-8")
@@ -415,7 +472,7 @@ class TestAutoStub:
         （.pyi 単体では補完に使えず、無関係なフォルダを汚さないため）
         """
         ini = tmp_path / "config.ini"
-        ini.write_text("[s]\nk = v\n", encoding="utf-8")
+        ini.write_text("[S]\nK = v\n", encoding="utf-8")
 
         Config(ini)
 
@@ -464,10 +521,10 @@ class TestCleanupStaleTmp:
         import os
 
         ini = tmp_path / "config.ini"
-        ini.write_text("[s]\nk = v\n", encoding="utf-8")
+        ini.write_text("[S]\nK = v\n", encoding="utf-8")
         (tmp_path / "src").mkdir()
         (tmp_path / "src" / "config.py").write_text(
-            "from comken.config import Config\nconfig = Config()\n", encoding="utf-8"
+            "from comken.config import Config\nCONFIG = Config()\n", encoding="utf-8"
         )
         stale = tmp_path / "src" / "config.pyi.12345.tmp"
         stale.write_text("残骸", encoding="utf-8")

@@ -18,7 +18,7 @@ comken（社内共通ライブラリ）を使った業務自動化ツールで�
 
 ## セットアップ（初回だけ）
 
-1. `config.ini.example` をコピーして `config.ini` を作り、値を書き換える
+1. `実行.bat` を1度動かす。`config.ini.example` から `config.ini` が作られるので、値を書き換える
 2. `実行.bat` の先頭 `COMKEN_ROOT` を、共有サーバー上の comken の場所に合わせる
 
 ## 実行

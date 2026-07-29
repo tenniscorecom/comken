@@ -22,6 +22,32 @@ class ConfigFileNotFoundError(ConfigError):
         )
 
 
+class ConfigCreatedFromExampleError(ConfigError):
+    """config.ini が無かったため example から作成し、確認を求める場合。
+
+    発生箇所: Config.__init__()
+    """
+
+    def __init__(self, path: Path | str) -> None:
+        super().__init__(
+            f"config.ini が無かったので、config.ini.example から作成しました: {path}\n"
+            "中の値（フォルダの場所など）を確認して書き換えてから、もう一度実行してください。"
+        )
+
+
+class ConfigLowerCaseNameError(ConfigError):
+    """config.ini のセクション名・キー名に小文字が使われている場合。
+
+    発生箇所: Config.__init__()
+    """
+
+    def __init__(self, path: Path | str, wrong: list[str]) -> None:
+        super().__init__(
+            f"config.ini のセクション名とキー名は大文字で書いてください: {path}\n"
+            + "\n".join(f"  {item}" for item in wrong)
+        )
+
+
 class ConfigSectionNotFoundError(ConfigError):
     """config.ini に要求されたセクションが存在しない場合。
 

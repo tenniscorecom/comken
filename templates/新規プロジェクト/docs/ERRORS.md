@@ -62,7 +62,10 @@
 | `CsvColumnNotFoundError` | CSV の列見出しが見つからない | CSV の1行目を確認する |
 | `KeyColumnNotFoundError` | 比較に使うキー列が見つからない | Excel・CSV の列名を確認する |
 | `InvalidColumnError` | 列の指定が正しくない（打ち間違いなど） | 列は番号（1, 2, …）か列記号（"A", "AA"）で指定する |
+| `RpaLibraryNotFoundError` | 社内ライブラリを読み込めない | 実行.bat の PYTHONPATH に社内ライブラリが入っているか確認する。バージョンが変わった場合は管理者へ連絡する |
 | `ConfigFileNotFoundError` | config.ini が見つからない | config.ini.example をコピーして config.ini を作る |
+| `ConfigCreatedFromExampleError` | config.ini が無かったので example から作った | 作られた config.ini の値を書き換えて、もう一度実行する |
+| `ConfigLowerCaseNameError` | config.ini のセクション名・キー名に小文字がある | 表示された名前を大文字に書き換える（`[files]` → `[FILES]`） |
 | `ConfigSectionNotFoundError` | config.ini の必要な節がない | 表示されたセクション名を config.ini に追加する |
 
 ---
@@ -81,6 +84,7 @@
 | `CsvError` | CSV に関するエラー |
 | `ColumnNotFoundError` | Excel・CSV・データ比較で列が見つからないエラー |
 | `ConfigError` | config.ini に関するエラー |
+| `RpaError` | 社内 RPA 基盤の呼び出しに関するエラー |
 
 ---
 

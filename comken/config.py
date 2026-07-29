@@ -32,16 +32,54 @@ config.ini を読み込み、config.SECTION.KEY の形式でアクセスでき�
 import configparser
 import logging
 import math
+import shutil
 import types
 from pathlib import Path
 from typing import NoReturn
 
 from . import __version__
-from .exceptions import ConfigFileNotFoundError, ConfigSectionNotFoundError
+from .exceptions import (
+    ConfigCreatedFromExampleError,
+    ConfigFileNotFoundError,
+    ConfigLowerCaseNameError,
+    ConfigSectionNotFoundError,
+)
 
 logger = logging.getLogger(__name__)
 
 _is_version_logged = False
+
+
+def _create_from_example(path: Path) -> Path | None:
+    """config.ini が無いとき、隣の config.ini.example からコピーして作る。
+
+    作らずにエラーだけ出すと、毎回「example をコピーする」手作業が要る。
+    ただし作ってそのまま動かすと、ダミーの値のまま別のフォルダを読み書きしうるため、
+    作るところまでで止めて確認を促す（呼び出し元で例外にする）。
+    """
+    example = path.with_name(f"{path.name}.example")
+    if not example.is_file():
+        return None
+    shutil.copy2(example, path)
+    return path.resolve()
+
+
+def _validate_upper_case(cfg: configparser.ConfigParser, path: Path) -> None:
+    """セクション名・キー名が大文字で書かれているか確かめる。
+
+    小文字で書かれていても読み込み自体は成功し、大文字に直して保持されるため、
+    小文字のままアクセスしたときに初めて「そんなセクションはない」と言われる。
+    書いた場所から遠いエラーになるので、読み込んだ時点で止める。
+    """
+    wrong = [f"[{s}] → [{s.upper()}]" for s in cfg.sections() if s != s.upper()]
+    wrong += [
+        f"[{s}] の {k} → {k.upper()}"
+        for s in cfg.sections()
+        for k in cfg.options(s)
+        if k != k.upper()
+    ]
+    if wrong:
+        raise ConfigLowerCaseNameError(path.resolve(), wrong)
 
 
 class Config:
@@ -76,12 +114,20 @@ class Config:
             path: config.ini のパス。省略するとカレントディレクトリの config.ini を読む。
         """
         cfg = configparser.ConfigParser(interpolation=None)
+        # configparser は既定でキー名を小文字に潰すため、書かれたとおりの綴りを保つ。
+        # これがないと「大文字で書かれていたか」を判定できない（_validate_upper_case）。
+        cfg.optionxform = str  # type: ignore[method-assign]
         # utf-8-sig: メモ帳等で保存すると BOM 付き UTF-8 になるため（BOM なしも読める）
         loaded = cfg.read(path, encoding="utf-8-sig")
         if not loaded:
             # configparser はファイルがなくても黙って空になるため、明示的にエラーにする
             # （後で config.FILES 等が分かりにくい AttributeError になるのを防ぐ）
+            created = _create_from_example(Path(path))
+            if created is not None:
+                raise ConfigCreatedFromExampleError(created)
             raise ConfigFileNotFoundError(Path(path).resolve())
+
+        _validate_upper_case(cfg, Path(path))
 
         for section in cfg.sections():
             ns = types.SimpleNamespace(
