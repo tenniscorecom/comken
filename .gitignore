@@ -13,5 +13,8 @@ logs/
 examples/**/output/
 config.pyi
 
+# ChatGPT 貼り付け用の書き出し（export_for_chat.py がいつでも作り直せる）
+貼り付け用/
+
 # プロジェクト設定（テンプレートは config.ini.example を使う）
 config.ini
