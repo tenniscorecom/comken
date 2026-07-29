@@ -7,6 +7,7 @@ utils モジュールのテスト。
 
 import datetime
 import os
+import time
 from unittest.mock import patch
 
 import pytest
@@ -41,6 +42,25 @@ class TestClock:
 
     def test_today_returns_date(self):
         assert isinstance(today(), datetime.date)
+
+    def test_now_returns_local_time_not_utc(self):
+        """UTC ではなく PC のローカル時刻を返す。
+
+        now() を UTC のままにすると、日本時間の 0:00〜9:00 の間は date() が前日になり、
+        「今日のファイル」の判定や日付付きファイル名が1日ずれる。
+        うっかり .astimezone() を削られたときに、この検証で気づけるようにしておく。
+        """
+        # OS が持つローカルのUTCオフセット（夏時間の有無も考慮する）
+        is_dst = time.daylight and time.localtime().tm_isdst > 0
+        expected_offset = datetime.timedelta(seconds=-(time.altzone if is_dst else time.timezone))
+
+        assert now().utcoffset() == expected_offset
+
+    def test_today_matches_the_date_on_the_pc_clock(self):
+        """today() が PC の時計どおりの日付になる（1日ずれない）。"""
+        year, month, day = time.localtime()[:3]
+
+        assert today() == datetime.date(year, month, day)
 
 
 def test_date_in_name_is_available_from_public_package() -> None:
