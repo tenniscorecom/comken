@@ -100,7 +100,7 @@ def main() -> None:
         s.write_table(report_rows, headers=REPORT_HEADERS)
         # 区分セルを色分けする（データはヘッダーの次の行から始まる）
         for i, row in enumerate(report_rows, start=HEADER_ROW + 1):
-            f.set_fill(SHEET, row=i, col=1, color=FILL_COLORS[row[STATUS_COL]])
+            s.set_fill(row=i, col=1, color=FILL_COLORS[row[STATUS_COL]])
         s.auto_width()
         s.freeze_header()
         f.save()

@@ -16,10 +16,13 @@ import comken.excel
 from comken.excel import ExcelReader, ExcelWriter
 from comken.exceptions import (
     ExcelError,
+    InvalidTableNameError,
     LastSheetDeletionError,
     OriginalLibsError,
     SheetAlreadyExistsError,
     SheetNotFoundError,
+    TableAlreadyExistsError,
+    TableNotFoundError,
     UnsupportedFileSuffixError,
 )
 from comken.utils.data import col_to_num
@@ -80,8 +83,9 @@ class TestExcelReader:
     def test_reads_value_written_by_writer(self, tmp_path: Path) -> None:
         path = tmp_path / "book.xlsx"
         with ExcelWriter.create(path) as writer:
-            writer.write_cell("Sheet1", row=1, col=1, value="見出し")
-            writer.write_cell("Sheet1", row=2, col=1, value="値")
+            sheet = writer.sheet("Sheet1")
+            sheet.write_cell(row=1, col=1, value="見出し")
+            sheet.write_cell(row=2, col=1, value="値")
             writer.save()
 
         with ExcelReader(path) as reader:
@@ -94,17 +98,18 @@ class TestExcelWriterColumn:
     @pytest.mark.parametrize("col", ["A", "AA", 27])
     def test_write_cell_accepts_column_letter_or_number(self, tmp_path, col):
         with ExcelWriter.create(tmp_path / "book.xlsx") as writer:
-            writer.write_cell("Sheet1", row=2, col=col, value="値")
+            writer.sheet("Sheet1").write_cell(row=2, col=col, value="値")
             expected_col = 1 if col == "A" else 27
             assert writer._wb["Sheet1"].cell(2, expected_col).value == "値"
 
     @pytest.mark.parametrize("col", ["A", "AA", 27])
     def test_format_methods_accept_column_letter_or_number(self, tmp_path, col):
         with ExcelWriter.create(tmp_path / "book.xlsx") as writer:
-            writer.set_fill("Sheet1", 2, col, "FFFF00")
-            writer.set_column_width("Sheet1", col, 20)
-            writer.set_number_format("Sheet1", 2, col, "#,##0")
-            writer.set_bold("Sheet1", 2, col)
+            sheet = writer.sheet("Sheet1")
+            sheet.set_fill(2, col, "FFFF00")
+            sheet.set_column_width(col, 20)
+            sheet.set_number_format(2, col, "#,##0")
+            sheet.set_bold(2, col)
             expected_col = 1 if col == "A" else 27
             cell = writer._wb["Sheet1"].cell(2, expected_col)
             assert cell.fill.fgColor.rgb == "00FFFF00"
@@ -173,7 +178,7 @@ class TestExcelWriterInvalidColumn:
             ExcelWriter.create(tmp_path / "book.xlsx") as writer,
             pytest.raises(OriginalLibsError, match="例: 1"),
         ):
-            writer.write_cell("Sheet1", row=2, col=col, value="値")
+            writer.sheet("Sheet1").write_cell(row=2, col=col, value="値")
 
 
 class TestExcelComHandlerColumn:
@@ -416,7 +421,7 @@ class TestReadRowsAsDictsWithHeaders:
 
 
 class TestTransferByKey:
-    """ExcelWriter.transfer_by_key（openpyxl 版のキー突合転記）のテスト。"""
+    """Sheet.transfer_by_key（openpyxl 版のキー突合転記）のテスト。"""
 
     @pytest.fixture
     def transfer_excel(self, tmp_path):
@@ -440,8 +445,8 @@ class TestTransferByKey:
         }
 
         with ExcelWriter(transfer_excel) as f:
-            matched = f.transfer_by_key(
-                "T_data", key_col="A", lookup=lookup, column_mapping={"B": "顧客名", "C": "金額"}
+            matched = f.sheet("T_data").transfer_by_key(
+                key_col="A", lookup=lookup, column_mapping={"B": "顧客名", "C": "金額"}
             )
             f.save()
 
@@ -457,8 +462,8 @@ class TestTransferByKey:
         lookup = {"A001": {"顧客名": "株式会社A"}}
 
         with ExcelWriter(transfer_excel) as f:
-            matched = f.transfer_by_key(
-                "T_data", key_col="A", lookup=lookup, column_mapping={"B": "顧客名"}
+            matched = f.sheet("T_data").transfer_by_key(
+                key_col="A", lookup=lookup, column_mapping={"B": "顧客名"}
             )
             f.save()
 
@@ -481,8 +486,8 @@ class TestTransferByKey:
         lookup = {"1001": {"顧客名": "株式会社C"}}
 
         with ExcelWriter(path) as f:
-            matched = f.transfer_by_key(
-                "T_data", key_col="A", lookup=lookup, column_mapping={"B": "顧客名"}
+            matched = f.sheet("T_data").transfer_by_key(
+                key_col="A", lookup=lookup, column_mapping={"B": "顧客名"}
             )
             f.save()
 
@@ -496,8 +501,8 @@ class TestTransferByKey:
         lookup = {"A001": {"顧客名": "株式会社A"}}
 
         with ExcelWriter(transfer_excel) as f:
-            matched = f.transfer_by_key(
-                "T_data", key_col=1, lookup=lookup, column_mapping={"B": "顧客名"}
+            matched = f.sheet("T_data").transfer_by_key(
+                key_col=1, lookup=lookup, column_mapping={"B": "顧客名"}
             )
 
         assert matched == 1
@@ -505,7 +510,7 @@ class TestTransferByKey:
     def test_raises_on_missing_sheet(self, transfer_excel):
         """存在しないシートを指定すると SheetNotFoundError になることを確認する。"""
         with ExcelWriter(transfer_excel) as f, pytest.raises(SheetNotFoundError):
-            f.transfer_by_key("存在しない", key_col="A", lookup={}, column_mapping={})
+            f.sheet("存在しない").transfer_by_key(key_col="A", lookup={}, column_mapping={})
 
 
 class TestSheetWrapper:
@@ -611,6 +616,78 @@ class TestSheetWrapper:
             f.sheet("存在しないシート")
 
 
+class TestSheetApiBoundary:
+    @pytest.mark.parametrize("col", ["A", "AA", 27])
+    def test_moved_cell_and_format_methods(self, tmp_path, col):
+        with ExcelWriter.create(tmp_path / "format.xlsx") as writer:
+            sheet = writer.sheet("Sheet1")
+            sheet.write_cell(2, col, 1000)
+            sheet.set_fill(2, col, "FFFF00")
+            sheet.set_column_width(col, 20)
+            sheet.set_number_format(2, col, "#,##0")
+            sheet.set_bold(2, col)
+            cell = sheet.ws.cell(row=2, column=27 if col in ("AA", 27) else 1)
+            assert cell.value == 1000
+            assert cell.number_format == "#,##0"
+            assert cell.font.bold
+
+    def test_writer_has_no_sheet_level_methods(self, tmp_path):
+        names = (
+            "write_cell",
+            "set_fill",
+            "set_column_width",
+            "set_number_format",
+            "set_bold",
+            "transfer_by_key",
+        )
+        with ExcelWriter.create(tmp_path / "boundary.xlsx") as writer:
+            assert not [name for name in names if hasattr(writer, name)]
+
+
+class TestStructuredTable:
+    """Sheet の構造化テーブル操作。"""
+
+    def test_add_resize_delete_and_save(self, tmp_path):
+        path = tmp_path / "table.xlsx"
+        with ExcelWriter.create(path) as writer:
+            sheet = writer.sheet("Sheet1")
+            sheet.write_rows(1, [["注文番号", "金額"], ["A001", 1000], ["A002", 2000]])
+            sheet.add_table("売上", "A1:B2")
+            assert sheet.table_names() == ["売上"]
+            sheet.resize_table("売上", "A1:B3")
+            writer.save()
+
+        workbook = load_workbook(path)
+        assert workbook["Sheet1"].tables["売上"].ref == "A1:B3"
+        workbook.close()
+
+        with ExcelWriter(path) as writer:
+            sheet = writer.sheet("Sheet1")
+            sheet.delete_table("売上")
+            assert sheet.table_names() == []
+            assert sheet["A2"] == "A001"
+
+    @pytest.mark.parametrize("name", ["売上 表", "1売上", "A1", "R1C1"])
+    def test_invalid_name_raises_with_guidance(self, tmp_path, name):
+        with (
+            ExcelWriter.create(tmp_path / "invalid.xlsx") as writer,
+            pytest.raises(InvalidTableNameError, match="空白を含めず"),
+        ):
+            writer.sheet("Sheet1").add_table(name, "A1:B2")
+
+    def test_duplicate_and_missing_errors_are_specific(self, tmp_path):
+        with ExcelWriter.create(tmp_path / "errors.xlsx") as writer:
+            sheet = writer.sheet("Sheet1")
+            sheet.write_rows(1, [["A", "B"], [1, 2]])
+            sheet.add_table("既存", "A1:B2")
+            with pytest.raises(TableAlreadyExistsError):
+                sheet.add_table("既存", "A1:B2")
+            with pytest.raises(TableNotFoundError, match="既存"):
+                sheet.resize_table("不在", "A1:B2")
+            with pytest.raises(TableNotFoundError, match="既存"):
+                sheet.delete_table("不在")
+
+
 class TestReadComputedRows:
     """read_computed_rows() のフォールバック判定を確認する。"""
 
@@ -693,7 +770,7 @@ class TestExcelWriterTransactionalSave:
         original_bytes = excel_with_header.read_bytes()
 
         with ExcelWriter(excel_with_header) as writer:
-            writer.write_cell("Sheet1", row=2, col=2, value=9999)
+            writer.sheet("Sheet1").write_cell(row=2, col=2, value=9999)
             with (
                 patch.object(writer._wb, "save", side_effect=OSError("save failed")),
                 pytest.raises(OSError, match="save failed"),

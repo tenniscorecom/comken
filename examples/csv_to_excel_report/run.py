@@ -64,10 +64,10 @@ def main() -> None:
         # 見た目の調整（ヘッダー色付け・合計行の強調・列幅・ヘッダー固定）
         column_count = len(excel_rows[0])
         for col in range(1, column_count + 1):
-            f.set_fill(SHEET, row=HEADER_ROW, col=col, color=Color.LIGHT_BLUE)
-        f.set_bold(SHEET, row=s.last_row, col=1)
-        f.set_bold(SHEET, row=s.last_row, col=column_count)
-        f.set_number_format(SHEET, row=s.last_row, col=column_count, fmt=AMOUNT_FORMAT)
+            s.set_fill(row=HEADER_ROW, col=col, color=Color.LIGHT_BLUE)
+        s.set_bold(row=s.last_row, col=1)
+        s.set_bold(row=s.last_row, col=column_count)
+        s.set_number_format(row=s.last_row, col=column_count, fmt=AMOUNT_FORMAT)
         s.auto_width()
         s.freeze_header()
 

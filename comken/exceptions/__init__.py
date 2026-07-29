@@ -17,6 +17,9 @@ OriginalLibsError
 │   ├── SheetNotFoundError
 │   ├── SheetAlreadyExistsError
 │   ├── LastSheetDeletionError
+│   ├── InvalidTableNameError
+│   ├── TableAlreadyExistsError
+│   ├── TableNotFoundError
 │   ├── MacroError
 │   ├── RowTransferError
 │   ├── EmptyHeaderCellError
@@ -73,11 +76,14 @@ from .excel import (
     ExcelFileNotFoundError,
     ExcelHeadersTooFewError,
     FileFormatMismatchError,
+    InvalidTableNameError,
     LastSheetDeletionError,
     MacroError,
     RowTransferError,
     SheetAlreadyExistsError,
     SheetNotFoundError,
+    TableAlreadyExistsError,
+    TableNotFoundError,
 )
 from .file import UnsupportedFileSuffixError
 from .outlook import (
@@ -101,6 +107,9 @@ __all__ = [
     "SheetNotFoundError",
     "SheetAlreadyExistsError",
     "LastSheetDeletionError",
+    "InvalidTableNameError",
+    "TableAlreadyExistsError",
+    "TableNotFoundError",
     "MacroError",
     "RowTransferError",
     "EmptyHeaderCellError",

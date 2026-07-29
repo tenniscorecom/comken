@@ -69,7 +69,9 @@ def main() -> None:
 
         # キー列の値で lookup を引き、一致した行に MAPPING に従って書き込む。
         # 空行・キーが空の行・lookup にないキーの行は自動でスキップされる
-        matched = f.transfer_by_key(SHEET, key_col=KEY_COL, lookup=lookup, column_mapping=MAPPING)
+        matched = f.sheet(SHEET).transfer_by_key(
+            key_col=KEY_COL, lookup=lookup, column_mapping=MAPPING
+        )
         f.save()  # 書き込み後は save() を忘れずに
 
         after = f.read_rows_as_dicts(SHEET)

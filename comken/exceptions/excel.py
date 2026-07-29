@@ -52,6 +52,33 @@ class LastSheetDeletionError(ExcelError):
         )
 
 
+class InvalidTableNameError(ExcelError):
+    """Excel のテーブル名が制約に違反している場合。"""
+
+    def __init__(self, name: str) -> None:
+        super().__init__(
+            f"テーブル名「{name}」は Excel で使用できません。\n"
+            "空白を含めず、数字以外から始まり、セル参照（A1、R1C1 など）と"
+            "紛らわしくない名前を指定してください。"
+        )
+
+
+class TableAlreadyExistsError(ExcelError):
+    """同名のテーブルが既に存在する場合。"""
+
+    def __init__(self, name: str) -> None:
+        super().__init__(
+            f"テーブル「{name}」は既に存在します。\n別のテーブル名を指定してください。"
+        )
+
+
+class TableNotFoundError(ExcelError):
+    """指定したテーブルがシートに存在しない場合。"""
+
+    def __init__(self, name: str, tables: list[str]) -> None:
+        super().__init__(f"テーブルが見つかりません: {name}  存在するテーブル: {tables}")
+
+
 class MacroError(ExcelError):
     """VBA マクロの実行に失敗した場合。
 

@@ -516,6 +516,8 @@ logger.error("エラーが発生しました", exc_info=True)  # exc_info=True �
 
 Excel の読み取りだけなら `ExcelReader`、書き込みを伴う場合は `ExcelWriter` を使う。
 openpyxl を直接触るのはライブラリにない機能が必要なときだけ。
+シートに対する書き込み・書式・構造化テーブル操作は `f.sheet(name)` で取得した
+`Sheet` に集約し、`ExcelWriter` にはブック単位の操作だけを置く。
 
 ### 書式設定は処理ロジックと分離する
 

@@ -32,7 +32,7 @@ class ExcelBase(FileBase):
     """ExcelReader と ExcelWriter の共通基盤。
 
     with 文によるブックのクローズ、シートの存在確認、行の読み取りを受け持つ。
-    書き込み・書式設定・保存は持たず、ExcelWriter が提供する。
+    書き込み・書式設定は Sheet、保存は ExcelWriter が提供する。
     数式の計算結果を読む read_computed_rows() は、必要な場合に openpyxl から
     win32com（pywin32）へ自動的にフォールバックする。
     利用例は用途に応じて ExcelReader または ExcelWriter の docstring を参照する。

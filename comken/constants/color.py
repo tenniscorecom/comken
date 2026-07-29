@@ -1,14 +1,15 @@
 """Excel で使う色定数。
 
-ExcelWriter.set_fill() の color 引数や openpyxl の色指定にそのまま渡せる RGB 16進値。
+Sheet.set_fill() の color 引数や openpyxl の色指定にそのまま渡せる RGB 16進値。
 ここにない色は 16進値を直接渡す（例: "CCE5FF"）。
 
 使い方:
     from comken.constants import Color
 
     with ExcelWriter("data.xlsx") as f:
-        f.set_fill("Sheet1", row=2, col=1, color=Color.YELLOW)
-        f.set_fill("Sheet1", row=3, col=1, color="CCE5FF")  # 好きな色は16進で
+        s = f.sheet("Sheet1")
+        s.set_fill(row=2, col=1, color=Color.YELLOW)
+        s.set_fill(row=3, col=1, color="CCE5FF")  # 好きな色は16進で
 """
 
 

@@ -674,7 +674,8 @@ with ExcelReader("data.xlsx") as f:
 
 # 書き込み・保存
 with ExcelWriter("data.xlsx") as f:
-    f.write_cell(SHEET, row=ROW, col=COL, value="値")
+    s = f.sheet(SHEET)
+    s.write_cell(row=ROW, col=COL, value="値")
     f.save()
     f.save("output.xlsx") # 別名で保存
 
@@ -718,8 +719,9 @@ lookup = CsvReader("data.csv").index("注文番号")
 MAPPING = {"B": "顧客名", "C": "金額"}  # Excel の列レター → lookup の列名
 
 with ExcelWriter("data.xlsx") as f:
-    f.write_cell(SHEET, row=2, col="AA", value="備考")  # Excel の列記号をそのまま指定
-    matched = f.transfer_by_key(SHEET, key_col="A", lookup=lookup, column_mapping=MAPPING)
+    s = f.sheet(SHEET)
+    s.write_cell(row=2, col="AA", value="備考")  # Excel の列記号をそのまま指定
+    matched = s.transfer_by_key(key_col="A", lookup=lookup, column_mapping=MAPPING)
     f.save()  # 書き込み後は save() を忘れずに
 # Excel を起動しないため数万行でも速い。数式の再計算が必要なら ExcelComHandler 版を使う
 
@@ -727,10 +729,25 @@ with ExcelWriter("data.xlsx") as f:
 from comken.constants import Color
 
 with ExcelWriter("data.xlsx") as f:
-    f.set_fill(SHEET, row=ROW, col=COL, color=Color.YELLOW)
-    f.set_fill(SHEET, row=ROW, col=COL, color=Color.RED)
-    f.set_fill(SHEET, row=ROW, col=COL, color="CCE5FF") # 定数にない色は16進で
+    s = f.sheet(SHEET)
+    s.set_fill(row=ROW, col=COL, color=Color.YELLOW)
+    s.set_fill(row=ROW, col=COL, color=Color.RED)
+    s.set_fill(row=ROW, col=COL, color="CCE5FF") # 定数にない色は16進で
     f.save()
+
+# 構造化テーブル（write_table は値を書き、add_table はテーブル定義を付ける）
+with ExcelWriter.create("table.xlsx") as f:
+    s = f.sheet("Sheet1")
+    s.write_table(rows)
+    s.add_table("売上", f"A1:C{len(rows) + 1}")
+    s.resize_table("売上", f"A1:C{len(rows) + 2}")
+    f.save()
+
+# 数式は文字列で保存される。openpyxl 自体は計算しない
+with ExcelWriter("data.xlsx") as f:
+    f.sheet(SHEET)["A4"] = "=SUM(A1:A3)"
+    f.save()
+# Python で計算結果を読む場合は ExcelReader.read_computed_rows() を使う
 
 # 用意している色: RED / PINK / ORANGE / YELLOW / LIGHT_YELLOW / GREEN / LIGHT_GREEN
 #                BLUE / LIGHT_BLUE / PURPLE / GRAY / LIGHT_GRAY / WHITE / BLACK
@@ -799,7 +816,7 @@ with ExcelComHandler("data.xlsx") as h:
 
 キー列の値で lookup を引き、一致した行に列マッピングに従って値を書き込む。
 空行・キーが空の行・lookup にないキーの行は自動でスキップされる。
-数式の再計算が不要なら openpyxl 版（`ExcelWriter.transfer_by_key`）の方が速い（Excel セクション参照）。
+数式の再計算が不要なら openpyxl 版（`Sheet.transfer_by_key`）の方が速い（Excel セクション参照）。
 
 ```python
 lookup = CsvReader("data.csv").index("注文番号")
