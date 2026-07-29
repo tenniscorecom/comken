@@ -42,10 +42,27 @@
 | `EncodingDetectionError` | CSV の文字コードを判定できない | CSV の保存形式を確認し、管理者へ連絡する |
 | `CsvHeadersTooFewError` | 指定した見出し数が CSV の列数より少ない | 管理者へ連絡する |
 | `CsvNoDataRowsError` | CSV に見出し以外のデータ行がない | 見出し行の下にデータが1行以上あるか確認する |
+| `CsvCellReferenceError` | CSV のセル位置（例: A2）の指定が正しくない、または範囲外 | 表示されたセル位置と、CSV の行数・列数を確認する |
 | `CsvColumnNotFoundError` | CSV の列見出しが見つからない | CSV の1行目を確認する |
 | `KeyColumnNotFoundError` | 比較に使うキー列が見つからない | Excel・CSV の列名を確認する |
 | `ConfigFileNotFoundError` | config.ini が見つからない | config.ini.example をコピーして config.ini を作る |
 | `ConfigSectionNotFoundError` | config.ini の必要な節がない | 表示されたセクション名を config.ini に追加する |
+
+---
+
+## 分類（まとめて捕捉する用）
+
+次の名前は、似たエラーをプログラム側でまとめて扱うための分類です。
+これらの名前が単独で表示されることはありません。対処するときは、画面に表示された
+具体的なエラー名を上の表から探してください。
+
+| 分類名 | まとめるエラー |
+|---|---|
+| `OriginalLibsError` | comken が出す固有エラー全体 |
+| `ExcelError` | Excel に関するエラー |
+| `CsvError` | CSV に関するエラー |
+| `ColumnNotFoundError` | Excel・CSV・データ比較で列が見つからないエラー |
+| `ConfigError` | config.ini に関するエラー |
 
 ---
 

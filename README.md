@@ -43,7 +43,9 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 | モジュール | 概要 |
 |---|---|
 | Config | INI ファイルの読み込み |
-| Logging | 標準 logging によるログ出力（設定は社内共通ライブラリが担当） |
+| runtime | `with debug():` / `with dry_run():` による実行モード |
+| constants | CSV・Excel・ファイル検索で使う公開定数 |
+| exceptions | comken 固有の例外（エラー名別に対処可能） |
 | CSV | CSV の読み込み・検索・抽出 |
 | Excel（openpyxl） | Excel の読み書き（数式・マクロは自動で win32com を使用） |
 | Windows（pywin32） | Excel COM 操作・ウィンドウ操作・レジストリ読み取り |
@@ -60,6 +62,7 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 | `Color` | `from comken.constants import Color` | セルの背景色 | `set_fill(color=Color.RED)` |
 | `SortBy` | `from comken.constants import SortBy` | FileFinder.latest の並び順 | `latest(by=SortBy.UPDATED)` |
 | `Encoding` | `from comken.constants import Encoding` | CSV の文字コード | `CsvReader(path, encoding=Encoding.CP932)` |
+| `FileFormat` | `from comken.constants import FileFormat` | Excel COM の別名保存形式 | `save_as(path, file_format=FileFormat.CSV)` |
 
 ---
 
@@ -1031,8 +1034,11 @@ python -m examples.sample_login.run
 ```mermaid
 graph LR
     comken --> config["Config\n設定ファイル"]
-    comken --> utils["utils\n比較・テキスト・待機"]
-    utils --> files["files\n検索・操作・圧縮・パス・命名"]
+    comken --> runtime["runtime\n実行モード"]
+    comken --> constants["constants\n公開定数"]
+    comken --> exceptions["exceptions\n例外体系"]
+    comken --> utils["utils\n比較・テキスト・待機・日時"]
+    utils --> files["utils.files\n検索・操作・圧縮・パス・命名"]
     comken --> excel["excel\nExcel"]
     comken --> csv["csv\nCSV"]
     comken --> windows["windows\nCOM / Window"]
