@@ -1,7 +1,7 @@
 """ファイルのコピー・移動と一時ファイル管理。
 
 使い方:
-    from comken.files import local_copy
+    from comken.utils.files import local_copy
 
     # NAS ファイルのローカルコピー
     with local_copy(r"\\\\nas-server\\share\\data.xlsx") as path:
@@ -16,7 +16,7 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
-from ..runtime import dry_run_log, is_dry_run
+from ...runtime import dry_run_log, is_dry_run
 
 logger = logging.getLogger(__name__)
 

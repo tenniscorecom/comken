@@ -34,7 +34,7 @@ class EdgeDriver:
                       - 省略 → BrowserOptions.DOWNLOAD_DIR を使う（None なら一時フォルダ）
 
     使い方（デフォルト：一時フォルダ、with 終了で自動削除）:
-        from comken.files import move_file
+        from comken.utils.files import move_file
 
         with EdgeDriver() as d:
             d.open("https://example.com")

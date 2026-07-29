@@ -1,11 +1,11 @@
 """
-utils/archive.py — zip 圧縮・展開ユーティリティ
+utils/files/archive.py — zip 圧縮・展開ユーティリティ
 
 標準ライブラリのみで動く。Windows のエクスプローラーで作られた zip
 （日本語ファイル名が cp932 で入っている）も文字化けせずに展開できる。
 
 使い方:
-    from comken.utils import unzip, zip_files, zip_folder
+    from comken.utils.files import unzip, zip_files, zip_folder
 
     # フォルダごと圧縮（出力先を省略すると隣に「フォルダ名.zip」）
     zip_folder(r"C:\\作業\\reports")                        # → C:\\作業\\reports.zip
@@ -25,7 +25,7 @@ import sys
 import zipfile
 from pathlib import Path
 
-from .timer import measure
+from ..timer import measure
 
 logger = logging.getLogger(__name__)
 

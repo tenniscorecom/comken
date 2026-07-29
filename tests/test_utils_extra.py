@@ -10,7 +10,8 @@ import zipfile
 
 import pytest
 
-from comken.utils import Timer, retry, unzip, zip_files, zip_folder
+from comken.utils import Timer, retry
+from comken.utils.files import unzip, zip_files, zip_folder
 
 
 class TestRetry:
@@ -235,7 +236,7 @@ class TestUnzip:
 
         実行環境が 3.11+ でも通るように、フォールバック実装を直接呼んで検証する。
         """
-        from comken.utils.archive import _extract_cp932
+        from comken.utils.files.archive import _extract_cp932
 
         name_bytes = "請求書.txt".encode("cp932")
 

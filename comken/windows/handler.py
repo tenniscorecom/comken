@@ -29,8 +29,8 @@ from ..exceptions import (
     RowTransferError,
     _warn_coerce,
 )
-from ..files.base import FileBase
 from ..utils.data import col_to_num
+from ..utils.files.base import FileBase
 
 logger = logging.getLogger(__name__)
 

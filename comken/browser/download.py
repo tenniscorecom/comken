@@ -22,7 +22,7 @@ class DownloadDir:
 
     使い方:
         from comken.browser import DownloadDir
-        from comken.files import move_file
+        from comken.utils.files import move_file
 
         with DownloadDir() as dl, EdgeDriver(download_dir=dl) as d:
             d.open("https://example.com/download")

@@ -22,20 +22,6 @@ class ConfigFileNotFoundError(ConfigError):
         )
 
 
-class StubTargetNotFoundError(ConfigError):
-    """補完スタブの出力先が存在しない場合。
-
-    発生箇所: 現在は未送出
-    """
-
-    def __init__(self, path: Path | str) -> None:
-        super().__init__(
-            f"補完スタブの出力先が見つかりません: {path}\n"
-            "src/config.py（from comken.config import Config / config = Config()）を"
-            "作成してから実行してください。"
-        )
-
-
 class ConfigSectionNotFoundError(ConfigError):
     """config.ini に要求されたセクションが存在しない場合。
 

@@ -1,7 +1,7 @@
 """フォルダ内のファイル検索。
 
 使い方:
-    from comken.files import FileFinder
+    from comken.utils.files import FileFinder
 
     FileFinder(r"\\\\nas\\share").today()      # → 今日の日付を含むファイル
     FileFinder(r"\\\\nas\\share").latest()     # → 最も新しい .xlsx ファイル
@@ -10,7 +10,7 @@
 import datetime
 from pathlib import Path
 
-from ..constants import SortBy
+from ...constants import SortBy
 
 
 class FileFinder:

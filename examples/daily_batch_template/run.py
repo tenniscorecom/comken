@@ -19,7 +19,7 @@ import logging
 from comken import OriginalLibsError, setup_logger
 from comken.csv import CsvReader
 from comken.excel import ExcelWriter
-from comken.files import DateNameBuilder, FileFinder
+from comken.utils.files import DateNameBuilder, FileFinder
 
 from .config import config
 

@@ -19,7 +19,6 @@ OriginalLibsError
 │   └── KeyColumnNotFoundError
 └── ConfigError
     ├── ConfigFileNotFoundError
-    ├── StubTargetNotFoundError
     └── ConfigSectionNotFoundError
 
 カテゴリ基底クラスはまとめて捕捉するために使い、直接送出しない。
@@ -36,7 +35,6 @@ from .config import (
     ConfigError,
     ConfigFileNotFoundError,
     ConfigSectionNotFoundError,
-    StubTargetNotFoundError,
 )
 from .csv import CsvError, CsvHeadersTooFewError, EncodingDetectionError
 from .excel import (
@@ -71,7 +69,6 @@ __all__ = [
     "KeyColumnNotFoundError",
     "ConfigError",
     "ConfigFileNotFoundError",
-    "StubTargetNotFoundError",
     "ConfigSectionNotFoundError",
     "UnsupportedFileSuffixError",
 ]

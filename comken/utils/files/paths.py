@@ -15,7 +15,7 @@ class Paths:
     C:\\Users\\xxx 直下にないことがあるため、レジストリから実際の場所を取得する。
 
     使い方:
-        from comken.files import Paths
+        from comken.utils.files import Paths
 
         Paths.downloads()   # → C:\\Users\\xxx\\Downloads
         Paths.desktop()     # → C:\\Users\\xxx\\OneDrive\\Desktop（リダイレクトされている場合）

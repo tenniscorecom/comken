@@ -48,8 +48,8 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 | Excel（openpyxl） | Excel の読み書き（数式・マクロは自動で win32com を使用） |
 | Windows（pywin32） | Excel COM 操作・ウィンドウ操作・レジストリ読み取り |
 | Browser（Edge） | Edge ブラウザ操作 |
-| files | ファイル検索・操作・標準フォルダ取得・ファイル名の組み立て |
-| utils | データ比較・テキスト正規化・待機・リトライ・時間計測・zip |
+| utils.files | ファイル検索・操作・圧縮・標準フォルダ取得・ファイル名の組み立て |
+| utils | データ比較・テキスト正規化・待機・リトライ・時間計測 |
 
 ## 定数クラス一覧
 
@@ -359,7 +359,7 @@ shutil を知らなくても使えるラッパー。ルールは共通で
 「**dst が既存フォルダならその中へ、それ以外はファイルパス扱い（親フォルダ自動作成）、同名は上書き**」。
 
 ```python
-from comken.files import copy_file, move_file
+from comken.utils.files import copy_file, move_file
 
 move_file("report.xlsx", r"C:\作業\output")            # フォルダの中へ移動
 move_file("report.xlsx", r"C:\作業\output\売上.xlsx")   # 名前を変えて移動（out フォルダがなければ作られる）
@@ -370,7 +370,7 @@ copy_file("report.xlsx", r"C:\作業\backup")             # コピー（元フ�
 ### ファイル名の組み立て・検索
 
 ```python
-from comken.files import DateNameBuilder, FileFinder
+from comken.utils.files import DateNameBuilder, FileFinder
 
 FOLDER = r"\\nas-server\share"
 
@@ -442,7 +442,7 @@ Desktop / Downloads は **OneDrive の「既知のフォルダーの移動」に
 リダイレクトされている環境でも正しいパスが返る）。
 
 ```python
-from comken.files import Paths
+from comken.utils.files import Paths
 
 Paths.downloads()   # → C:\Users\xxx\Downloads
 Paths.desktop()     # → C:\Users\xxx\OneDrive\Desktop（リダイレクトされている場合）
@@ -534,7 +534,7 @@ print(t.elapsed)              # 経過秒数を値として使える
 Windows のエクスプローラーで作られた zip（日本語ファイル名）も文字化けせず展開できる。
 
 ```python
-from comken.utils import unzip, zip_files, zip_folder
+from comken.utils.files import unzip, zip_files, zip_folder
 
 zip_folder(r"C:\作業\reports")                       # → C:\作業\reports.zip
 zip_files(["a.xlsx", "b.csv"], r"C:\作業\提出用.zip")
@@ -579,7 +579,7 @@ with ExcelReader(NAS_PATH, local_copy_threshold_mb=0) as f:
 win32com は `ExcelReader` / `ExcelWriter` の自動コピー機能がないため、`local_copy` を使う。
 
 ```python
-from comken.files import local_copy
+from comken.utils.files import local_copy
 from comken.windows.handler import ExcelComHandler
 
 NAS_PATH = r"\\nas-server\share\data.xlsx"
@@ -889,7 +889,7 @@ Edge がダウンロード中に作る `.crdownload` を監視して完了を判
 ファイルを残したい場合は `BrowserOptions.DOWNLOAD_DIR` か `EdgeDriver(download_dir=...)` でパスを指定する。
 
 ```python
-from comken.files import move_file
+from comken.utils.files import move_file
 
 # デフォルト（一時フォルダ）: with を抜けると自動削除される
 with EdgeDriver() as d:
@@ -1020,8 +1020,8 @@ python -m examples.sample_login.run
 ```mermaid
 graph LR
     comken --> config["Config\n設定ファイル"]
-    comken --> files["files\n検索・操作・パス・命名"]
-    comken --> utils["utils\n比較・テキスト・待機・圧縮"]
+    comken --> utils["utils\n比較・テキスト・待機"]
+    utils --> files["files\n検索・操作・圧縮・パス・命名"]
     comken --> excel["excel\nExcel"]
     comken --> csv["csv\nCSV"]
     comken --> windows["windows\nCOM / Window"]

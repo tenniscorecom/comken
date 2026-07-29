@@ -24,7 +24,6 @@ from comken.exceptions import (
     OriginalLibsError,
     RowTransferError,
     SheetNotFoundError,
-    StubTargetNotFoundError,
     _warn_coerce,
 )
 
@@ -49,7 +48,6 @@ from comken.exceptions import (
         ),
         (KeyColumnNotFoundError("ID", ["名前"]), ColumnNotFoundError, "ID"),
         (ConfigFileNotFoundError("config.ini"), ConfigError, "config.ini"),
-        (StubTargetNotFoundError("src/config.py"), ConfigError, "src/config.py"),
         (ConfigSectionNotFoundError("FILES", ["LOG"]), ConfigError, "[FILES]"),
     ],
 )

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ..exceptions.file import UnsupportedFileSuffixError
+from ...exceptions.file import UnsupportedFileSuffixError
 
 
 class FileBase:

@@ -19,7 +19,7 @@ from comken import setup_logger
 from comken.constants import Color
 from comken.csv import CsvReader
 from comken.excel import ExcelWriter
-from comken.files import DateNameBuilder
+from comken.utils.files import DateNameBuilder
 
 # 入出力はこのフォルダ内で完結させる（サンプル用。実プロジェクトではパスは config.ini に書く）
 HERE = Path(__file__).parent

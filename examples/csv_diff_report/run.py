@@ -20,8 +20,8 @@ from comken import setup_logger
 from comken.constants import Color
 from comken.csv import CsvReader, CsvWriter
 from comken.excel import ExcelWriter
-from comken.files import DateNameBuilder
 from comken.utils import diff_rows
+from comken.utils.files import DateNameBuilder
 
 HERE = Path(__file__).parent
 OUTPUT_FOLDER = HERE / "output"

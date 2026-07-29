@@ -60,7 +60,7 @@ Python の作法（PEP 8）に従う。
 | フォルダ名 | snake_case | `excel/`, `browser/` |
 | 内部用（外から呼ばない） | `_` プレフィックス | `_sheet()`, `_click()` |
 | config.ini のセクション・キー | UPPER_SNAKE_CASE | `[FILES]`, `OUTPUT_FOLDER` |
-| テストクラス | `Test` + PascalCase | `TestExcelFile`, `TestCsvReader` |
+| テストクラス | `Test` + PascalCase | `TestExcelWriter`, `TestCsvReader` |
 | テストメソッド | `test_` + snake_case | `test_reads_all_rows` |
 
 ### 名前の付け方の原則
@@ -505,7 +505,7 @@ def apply_header_style(cell) -> None:
 
 pywin32 は **Windows 固有の API** に限定して使う。
 ファイル操作は標準ライブラリの `shutil` / `pathlib` を優先する。
-comken 本体のファイル検索・操作・パス取得・命名は `files/` に置く。
+comken 本体のファイル検索・操作・圧縮・パス取得・命名は `utils/files/` に置く。
 
 | 用途 | 推奨 |
 |---|---|
@@ -650,7 +650,7 @@ class TestCsvReaderFind:
 
 | ルール | 例 |
 |---|---|
-| テストクラス名は `Test` + 対象クラス名 | `TestExcelFile`, `TestCsvReader` |
+| テストクラス名は `Test` + 対象クラス名 | `TestExcelWriter`, `TestCsvReader` |
 | テストメソッド名は `test_` + 何を確認するか | `test_returns_none_when_not_found` |
 | 一時ファイルは `tmp_path` フィクスチャを使う | `def test_something(tmp_path):` |
 

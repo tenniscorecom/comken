@@ -8,9 +8,9 @@ from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from ..exceptions import _warn_coerce
-from ..files.base import FileBase
 from ..runtime import dry_run_log, is_dry_run
 from ..utils.data import col_to_num
+from ..utils.files.base import FileBase
 from ..utils.timer import measure
 from .base import ExcelBase
 

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ..files.base import FileBase
+from ..utils.files.base import FileBase
 
 
 class CsvBase(FileBase):

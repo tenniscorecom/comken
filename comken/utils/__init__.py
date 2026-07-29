@@ -1,4 +1,3 @@
-from .archive import unzip, zip_files, zip_folder
 from .data import DiffResult, RowChange, col_to_num, diff_row, diff_rows
 from .retry import retry
 from .text import normalize, remove_spaces, strip_spaces
@@ -18,7 +17,4 @@ __all__ = [
     "retry",
     "Timer",
     "measure",
-    "zip_folder",
-    "zip_files",
-    "unzip",
 ]

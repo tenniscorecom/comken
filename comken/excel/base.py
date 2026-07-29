@@ -22,7 +22,7 @@ from ..exceptions import (
     SheetNotFoundError,
     _warn_coerce,
 )
-from ..files.base import FileBase
+from ..utils.files.base import FileBase
 from ..utils.timer import measure
 from .sheet import Sheet
 

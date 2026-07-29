@@ -44,7 +44,6 @@
 | `CsvColumnNotFoundError` | CSV の列見出しが見つからない | CSV の1行目を確認する |
 | `KeyColumnNotFoundError` | 比較に使うキー列が見つからない | Excel・CSV の列名を確認する |
 | `ConfigFileNotFoundError` | config.ini が見つからない | config.ini.example をコピーして config.ini を作る |
-| `StubTargetNotFoundError` | 設定補完の出力先が見つからない | src/config.py を作成して再実行する |
 | `ConfigSectionNotFoundError` | config.ini の必要な節がない | 表示されたセクション名を config.ini に追加する |
 
 ---
