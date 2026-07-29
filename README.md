@@ -385,6 +385,10 @@ DateNameBuilder("月次レポート").prefix(date_format="%Y%m") # → "202607_�
 path = FileFinder(FOLDER).today()                      # YYYYMMDD で探す
 path = FileFinder(FOLDER).today(date_format="%Y%m")    # YYYYMM で探す
 
+# 日付入りファイルをすべて取得（日付の新しい順。同じ日付なら更新日時の新しい順）
+paths = FileFinder(FOLDER).dated()
+paths = FileFinder(FOLDER).dated(pattern="*.csv")       # CSV に絞る場合
+
 # フォルダ内で最新のファイルを取得（見つからなければ FileNotFoundError）
 # デフォルトは「ファイル名の辞書順で最後」= 日付プレフィックス命名なら名前上の最新。
 # コピーや再保存で更新日時が変わっていても影響を受けない
@@ -398,6 +402,9 @@ path = FileFinder(FOLDER).latest(by=SortBy.UPDATED)      # 更新日時で選び
 path = FileFinder(FOLDER).today(required=False)
 if path is None:
     ...  # スキップ処理など
+
+# dated() は複数件を返すため、required=False で見つからなければ空リスト
+paths = FileFinder(FOLDER).dated(required=False)
 ```
 
 ### データ比較（diff_row / diff_rows）

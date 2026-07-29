@@ -318,6 +318,80 @@ class TestFileFinderLatest:
         assert FileFinder(tmp_path).latest(required=False) is None
 
 
+class TestFileFinderDated:
+    """FileFinder.dated() のテスト。"""
+
+    def test_returns_files_in_date_descending_order(self, tmp_path):
+        """ファイル名の日付が新しい順で返る。"""
+        old = tmp_path / "売上_20260101.xlsx"
+        new = tmp_path / "売上_20260729.xlsx"
+        old.touch()
+        new.touch()
+
+        assert FileFinder(tmp_path).dated() == [new, old]
+
+    @pytest.mark.parametrize(
+        "date_text",
+        ["20260729", "2026-07-29", "2026_07_29", "2026.07.29"],
+    )
+    def test_recognizes_supported_date_formats(self, tmp_path, date_text):
+        """対応する4種類の日付表記を認識する。"""
+        target = tmp_path / f"日本語レポート_{date_text}.xlsx"
+        target.touch()
+
+        assert FileFinder(tmp_path).dated() == [target]
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "日付なし.xlsx",
+            "不正日付_20261345.xlsx",
+            "伝票120260729001.xlsx",
+            "区切り不一致_2026-07_29.xlsx",
+            "全角数字_２０２６０７２９.xlsx",
+        ],
+    )
+    def test_ignores_names_without_valid_supported_date(self, tmp_path, name):
+        """日付でない数字や未対応の表記を検索結果に含めない。"""
+        (tmp_path / name).touch()
+
+        assert FileFinder(tmp_path).dated(required=False) == []
+
+    def test_ignores_matching_folder(self, tmp_path):
+        """日付表記を含む名前でもフォルダは検索結果に含めない。"""
+        (tmp_path / "売上_20260729.xlsx").mkdir()
+
+        assert FileFinder(tmp_path).dated(required=False) == []
+
+    def test_same_date_is_ordered_by_updated_time(self, tmp_path):
+        """同じ日付なら更新日時が新しい順で返る。"""
+        old = tmp_path / "売上_20260729_v1.xlsx"
+        new = tmp_path / "売上_20260729_v2.xlsx"
+        old.touch()
+        new.touch()
+        os.utime(old, (0, 0))
+
+        assert FileFinder(tmp_path).dated() == [new, old]
+
+    def test_returns_empty_list_when_not_required(self, tmp_path):
+        """required=False なら該当ファイルがなくても空リストを返す。"""
+        assert FileFinder(tmp_path).dated(required=False) == []
+
+    def test_raises_when_required_file_is_not_found(self, tmp_path):
+        """required=True なら該当ファイルがないと FileNotFoundError になる。"""
+        with pytest.raises(FileNotFoundError, match="ファイル名に 20260729"):
+            FileFinder(tmp_path).dated()
+
+    def test_uses_first_date_when_name_contains_multiple_dates(self, tmp_path):
+        """名前に日付が複数ある場合は先に現れる日付で並べる。"""
+        first_is_old = tmp_path / "20260101_比較_20261231.xlsx"
+        middle = tmp_path / "20260729_売上.xlsx"
+        first_is_old.touch()
+        middle.touch()
+
+        assert FileFinder(tmp_path).dated() == [middle, first_is_old]
+
+
 class TestDownloadDir:
     """DownloadDir のテスト。
 
