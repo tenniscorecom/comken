@@ -225,6 +225,25 @@ class TestExcelComHandlerRecalculate:
         handler._excel.CalculateFull.assert_called_once_with()
         sheet.UsedRange.SpecialCells.assert_called_once_with(-4123, 16)
 
+    def test_ranges_use_only_the_requested_range(self) -> None:
+        sheet = self._sheet("Sheet1", ("$Z$99", "#REF!"))
+        requested = MagicMock()
+        requested.SpecialCells.side_effect = com_error()
+        sheet.Range.return_value = requested
+        handler = self._handler(sheet)
+
+        handler.recalculate(ranges={"Sheet1": "E1:E2"})
+
+        sheet.Range.assert_called_once_with("E1:E2")
+        requested.SpecialCells.assert_called_once_with(-4123, 16)
+        sheet.UsedRange.SpecialCells.assert_not_called()
+
+    def test_ranges_reject_unknown_sheet(self) -> None:
+        handler = self._handler(self._sheet("Sheet1"))
+
+        with pytest.raises(SheetNotFoundError):
+            handler.recalculate(ranges={"Missing": "A1:A1"})
+
     def test_default_errors_include_location_and_error(self) -> None:
         sheet = self._sheet("集計", ("$E$1", "#NAME?"), ("$F$2", "#REF!"))
         handler = self._handler(sheet)
@@ -600,6 +619,46 @@ class TestSheetWrapper:
             f.save()
 
         assert path.exists()
+
+    def test_written_ranges_include_values_but_not_formatting(self, tmp_path):
+        with ExcelWriter.create(tmp_path / "ranges.xlsx") as writer:
+            sheet = writer.sheet("Sheet1")
+            sheet["C3"] = "value"
+            sheet.write_cell(5, "E", "value")
+            sheet.write_rows(7, [[1, 2]], start_col=2)
+            sheet.write_table([{"first": 1, "second": 2}], start_row=10)
+            sheet["A13"] = "key"
+            sheet.transfer_by_key(
+                key_col="A",
+                lookup={"key": {"result": "ok"}},
+                column_mapping={"D": "result"},
+                start_row=12,
+            )
+            formatted = writer.add_sheet("Formatted")
+            formatted.set_fill(1, "A", "FFFF00")
+
+            assert writer.written_ranges() == {"Sheet1": "A3:E13"}
+
+    def test_written_ranges_wrap_disjoint_cells(self, tmp_path):
+        with ExcelWriter.create(tmp_path / "ranges.xlsx") as writer:
+            sheet = writer.sheet("Sheet1")
+            sheet["B2"] = 1
+            sheet["F9"] = 2
+
+            assert writer.written_ranges() == {"Sheet1": "B2:F9"}
+
+    def test_transfer_by_key_expands_written_range_to_output_column(self, tmp_path):
+        with ExcelWriter.create(tmp_path / "ranges.xlsx") as writer:
+            sheet = writer.sheet("Sheet1")
+            sheet["A2"] = "key"
+
+            sheet.transfer_by_key(
+                key_col="A",
+                lookup={"key": {"result": "ok"}},
+                column_mapping={"D": "result"},
+            )
+
+            assert writer.written_ranges() == {"Sheet1": "A2:D2"}
 
     def test_write_row_and_rows(self, tmp_path):
         """write_row / write_rows で横並びに書き込まれることを確認する。"""

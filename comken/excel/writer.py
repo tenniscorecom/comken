@@ -90,6 +90,25 @@ class ExcelWriter(ExcelBase):
             raise SheetAlreadyExistsError(name)
         return Sheet(self._wb.create_sheet(title=name, index=index))
 
+    def written_ranges(self) -> dict[str, str]:
+        """値を書いた範囲を、数式の再計算後に検査できる形式で返す。
+
+        Returns:
+            値を書いたシート名と、それらのセルを包む矩形範囲の辞書。
+            書式だけを変更したシートは含まない。
+
+        Note:
+            この範囲だけを検査すると、自分が書いていないセルの数式が変更の影響で
+            壊れた場合は見つけられない。テーブル名の変更、シートの削除、行や列の
+            削除など参照を壊す変更後は、ブック全体を検査すること。
+        """
+        ranges = {}
+        for worksheet in self._wb.worksheets:
+            written_range = Sheet(worksheet)._written_range()
+            if written_range is not None:
+                ranges[worksheet.title] = written_range
+        return ranges
+
     def rename_sheet(self, old_name: str, new_name: str) -> None:
         """シート名を変更する。"""
         if old_name not in self._wb.sheetnames:

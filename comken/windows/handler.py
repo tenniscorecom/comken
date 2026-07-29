@@ -29,6 +29,7 @@ from ..exceptions import (
     FileFormatMismatchError,
     MacroError,
     RowTransferError,
+    SheetNotFoundError,
     _warn_coerce,
 )
 from ..utils.data import col_to_num, column_number
@@ -156,7 +157,11 @@ class ExcelComHandler(FileBase):
         """
         self._sheet(sheet_name).Cells(int(row), column_number(col)).Value = value
 
-    def recalculate(self, error_values: tuple[str, ...] = _DEFAULT_FORMULA_ERRORS) -> None:
+    def recalculate(
+        self,
+        error_values: tuple[str, ...] = _DEFAULT_FORMULA_ERRORS,
+        ranges: dict[str, str] | None = None,
+    ) -> None:
         """ブックを再計算し、指定した数式エラーがあれば例外にする。
 
         既定では、数式やテーブル名などの書き間違いを強く示す ``#NAME?`` と、
@@ -168,6 +173,12 @@ class ExcelComHandler(FileBase):
 
         Args:
             error_values: 異常とする Excel エラー表示のタプル。
+            ranges: 検査する範囲を ``{シート名: "A1:C100"}`` で指定する。
+                省略時はブック全体を検査する。
+
+                範囲を指定すると、自分が書いていないセルの数式が変更の影響で
+                壊れた場合は見つけられない。テーブル名の変更、シートの削除、
+                行や列の削除など参照を壊す変更後は省略して全体を検査すること。
 
         Raises:
             ExcelFormulaError: 対象の数式エラーが見つかった場合。
@@ -177,9 +188,24 @@ class ExcelComHandler(FileBase):
 
         found: list[tuple[str, str, str]] = []
         total = 0
-        for sheet in self._wb.Worksheets:
+        available_sheets = {str(sheet.Name): sheet for sheet in self._wb.Worksheets}
+        if ranges is None:
+            targets = [(sheet, sheet.UsedRange) for sheet in available_sheets.values()]
+        else:
+            missing = next(
+                (sheet_name for sheet_name in ranges if sheet_name not in available_sheets),
+                None,
+            )
+            if missing is not None:
+                raise SheetNotFoundError(missing, list(available_sheets))
+            targets = [
+                (available_sheets[sheet_name], available_sheets[sheet_name].Range(cell_range))
+                for sheet_name, cell_range in ranges.items()
+            ]
+
+        for sheet, target_range in targets:
             try:
-                error_cells = sheet.UsedRange.SpecialCells(_XL_CELL_TYPE_FORMULAS, _XL_ERRORS)
+                error_cells = target_range.SpecialCells(_XL_CELL_TYPE_FORMULAS, _XL_ERRORS)
             except com_error:
                 # SpecialCells は該当セルがない場合にも COM 例外を送出する。
                 continue
