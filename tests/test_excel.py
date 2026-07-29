@@ -115,9 +115,8 @@ class TestReadRowsAsDicts:
 
     def test_raises_on_missing_sheet(self, excel_with_header):
         """存在しないシートを指定すると SheetNotFoundError になることを確認する。"""
-        with ExcelReader(excel_with_header) as f:
-            with pytest.raises(SheetNotFoundError):
-                f.read_rows_as_dicts("存在しないシート")
+        with ExcelReader(excel_with_header) as f, pytest.raises(SheetNotFoundError):
+            f.read_rows_as_dicts("存在しないシート")
 
     def test_raises_on_none_header_cell(self, tmp_path):
         """ヘッダー行に空のセルがある場合は ExcelError になることを確認する。"""
@@ -128,9 +127,8 @@ class TestReadRowsAsDicts:
         ws.append(["A001", 1000, "山田"])
         path = tmp_path / "none_header.xlsx"
         wb.save(path)
-        with ExcelReader(path) as f:
-            with pytest.raises(ExcelError, match="空のセル"):
-                f.read_rows_as_dicts("Sheet1")
+        with ExcelReader(path) as f, pytest.raises(ExcelError, match="空のセル"):
+            f.read_rows_as_dicts("Sheet1")
 
 
 class TestReadRowsAsDictsWithHeaders:
@@ -176,9 +174,11 @@ class TestReadRowsAsDictsWithHeaders:
 
         （zip が黙って列を落とすとデータ欠損に気づけないため）
         """
-        with ExcelReader(excel_no_header, headers=["注文番号", "金額"]) as f:  # 実際は3列
-            with pytest.raises(ExcelError, match="列数"):
-                f.read_rows_as_dicts("Sheet1")
+        with (
+            ExcelReader(excel_no_header, headers=["注文番号", "金額"]) as f,  # 実際は3列
+            pytest.raises(ExcelError, match="列数"),
+        ):
+            f.read_rows_as_dicts("Sheet1")
 
     def test_headers_with_empty_sheet_returns_empty(self, tmp_path):
         """headers 指定でも空シートは空リストを返すことを確認する（偽の1行を返さない）。"""
@@ -297,9 +297,8 @@ class TestTransferByKey:
 
     def test_raises_on_missing_sheet(self, transfer_excel):
         """存在しないシートを指定すると SheetNotFoundError になることを確認する。"""
-        with ExcelWriter(transfer_excel) as f:
-            with pytest.raises(SheetNotFoundError):
-                f.transfer_by_key("存在しない", key_col="A", lookup={}, column_mapping={})
+        with ExcelWriter(transfer_excel) as f, pytest.raises(SheetNotFoundError):
+            f.transfer_by_key("存在しない", key_col="A", lookup={}, column_mapping={})
 
 
 class TestSheetWrapper:
@@ -398,9 +397,11 @@ class TestSheetWrapper:
 
     def test_sheet_raises_on_missing_sheet(self, tmp_path):
         """存在しないシート名は SheetNotFoundError になることを確認する。"""
-        with ExcelWriter.create(tmp_path / "e.xlsx") as f:
-            with pytest.raises(SheetNotFoundError):
-                f.sheet("存在しないシート")
+        with (
+            ExcelWriter.create(tmp_path / "e.xlsx") as f,
+            pytest.raises(SheetNotFoundError),
+        ):
+            f.sheet("存在しないシート")
 
 
 class TestReadComputedRows:

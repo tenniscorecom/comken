@@ -30,12 +30,18 @@ config.ini を読み込み、config.SECTION.KEY の形式でアクセスでき�
 """
 
 import configparser
+import logging
 import math
 import types
 from pathlib import Path
 from typing import NoReturn
 
+from . import __version__
 from .exceptions import ConfigFileNotFoundError, ConfigSectionNotFoundError
+
+logger = logging.getLogger(__name__)
+
+_is_version_logged = False
 
 
 class Config:
@@ -98,6 +104,7 @@ class Config:
         from .config_stub import update_stub
 
         update_stub(cfg, path)
+        _log_version_once()
 
     def __getattr__(self, name: str) -> NoReturn:
         # 通常の属性（設定済みセクション）は __dict__ にあり、ここには来ない。
@@ -153,6 +160,14 @@ def _split_list_items(text: str) -> list[str]:
     """カンマまたは改行区切りの文字列をリストに変換する。空文字は除外する。"""
     items = text.replace("\n", ",").split(",")
     return [s.strip() for s in items if s.strip()]
+
+
+def _log_version_once() -> None:
+    """設定の初回読み込み後に障害調査用のバージョンを1回だけ記録する。"""
+    global _is_version_logged
+    if not _is_version_logged:
+        logger.info("comken v%s", __version__)
+        _is_version_logged = True
 
 
 def _parse_value(

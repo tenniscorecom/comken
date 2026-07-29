@@ -67,5 +67,5 @@ if __name__ == "__main__":
         logger.error("処理を中断しました: %s", e)
         raise
     except Exception:
-        logger.error("予期しないエラーが発生しました", exc_info=True)
+        logger.exception("予期しないエラーが発生しました")
         raise

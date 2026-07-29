@@ -13,6 +13,7 @@ import re
 from pathlib import Path
 
 from ...constants import SortBy
+from ..clock import today
 
 # ファイル名に含まれる日付らしい数字（20260729 / 2026-07-29 / 2026_07_29 / 2026.07.29）。
 # 前後を数字で挟まれたものは日付とみなさない（社員番号・伝票番号の一部を拾わないため）
@@ -66,12 +67,12 @@ class FileFinder:
         Raises:
             FileNotFoundError: required=True で該当ファイルがない場合。
         """
-        today = datetime.date.today().strftime(date_format)
-        matched = [p for p in self._folder.glob(pattern) if p.is_file() and today in p.name]
+        today_text = today().strftime(date_format)
+        matched = [p for p in self._folder.glob(pattern) if p.is_file() and today_text in p.name]
         if not matched:
             if required:
                 raise FileNotFoundError(
-                    f"今日の日付（{today}）を含むファイルが見つかりません: "
+                    f"今日の日付（{today_text}）を含むファイルが見つかりません: "
                     f"{self._folder}\\{pattern}"
                 )
             return None

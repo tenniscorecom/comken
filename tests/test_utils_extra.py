@@ -100,9 +100,8 @@ class TestTimer:
 
     def test_logs_name_and_seconds(self, caplog):
         """処理名と秒数が INFO ログに出ることを確認する。"""
-        with caplog.at_level(logging.INFO):
-            with Timer("CSV読み込み"):
-                pass
+        with caplog.at_level(logging.INFO), Timer("CSV読み込み"):
+            pass
 
         assert "CSV読み込み" in caplog.text
         assert "秒" in caplog.text

@@ -75,7 +75,8 @@ class ExcelBase(FileBase):
         # close() 内の対応する削除ブロックも併せて削除すること。
         self._tmp = None
         if local_copy_threshold_mb and src.stat().st_size > local_copy_threshold_mb * 1024 * 1024:
-            tmp = tempfile.NamedTemporaryFile(suffix=src.suffix, delete=False)
+            # NOTE: openpyxl がパスから開けるよう、名前を確保して即座に閉じる。
+            tmp = tempfile.NamedTemporaryFile(suffix=src.suffix, delete=False)  # noqa: SIM115
             self._tmp = Path(tmp.name)
             tmp.close()
             shutil.copy2(src, self._tmp)
@@ -148,7 +149,10 @@ class ExcelBase(FileBase):
             if all_rows and len(all_rows[0]) > len(self._headers):
                 raise ExcelHeadersTooFewError(len(self._headers), len(all_rows[0]))
             return [
-                dict(zip(self._headers, row)) for row in all_rows if not all(c is None for c in row)
+                # headers が実データ列より多い場合は、従来どおり余った見出しを含めない。
+                dict(zip(self._headers, row, strict=False))
+                for row in all_rows
+                if not all(c is None for c in row)
             ]
         all_rows = list(ws.iter_rows(min_row=int(header_row), values_only=True))
         if not all_rows:
@@ -159,7 +163,8 @@ class ExcelBase(FileBase):
         none_cols = [i + 1 for i, h in enumerate(file_headers) if h is None]
         if none_cols:
             raise EmptyHeaderCellError(none_cols)
-        return [dict(zip(file_headers, row)) for row in all_rows[1:]]
+        # openpyxl の行幅差は末尾空セルによるため、見出しとの対応範囲だけ辞書化する。
+        return [dict(zip(file_headers, row, strict=False)) for row in all_rows[1:]]
 
     def iter_rows(
         self, sheet_name: str, min_row: int = 2
@@ -182,8 +187,7 @@ class ExcelBase(FileBase):
         self._sheet(sheet_name)  # シート名の存在チェック（間違いを分かりやすいエラーにする）
         wb = load_workbook(self._working_path, data_only=True, read_only=True)
         try:
-            for row in wb[str(sheet_name)].iter_rows(min_row=int(min_row), values_only=True):
-                yield row
+            yield from wb[str(sheet_name)].iter_rows(min_row=int(min_row), values_only=True)
         finally:
             wb.close()
 
@@ -227,8 +231,8 @@ class ExcelBase(FileBase):
                 isinstance(formula_cell, str)
                 and formula_cell.startswith("=")
                 and value_cell is None
-                for formula_row, value_row in zip(formula_rows, rows)
-                for formula_cell, value_cell in zip(formula_row, value_row)
+                for formula_row, value_row in zip(formula_rows, rows, strict=True)
+                for formula_cell, value_cell in zip(formula_row, value_row, strict=True)
             )
             if not needs_calculation:
                 return rows

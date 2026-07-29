@@ -1,4 +1,3 @@
-import datetime
 import logging
 import os
 from pathlib import Path
@@ -7,6 +6,8 @@ from selenium import webdriver
 from selenium.webdriver.edge.options import Options
 from selenium.webdriver.edge.service import Service
 from selenium.webdriver.remote.webelement import WebElement
+
+from comken.utils import now
 
 from .download import DownloadDir
 from .options import BrowserOptions
@@ -117,7 +118,7 @@ class EdgeDriver:
         保存に失敗しても本来の例外を邪魔しない（警告ログだけ出して続行）。
         """
         try:
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = now().strftime("%Y%m%d_%H%M%S")
             path = Path("logs") / f"error_{timestamp}.png"
             path.parent.mkdir(exist_ok=True)
             self._driver.save_screenshot(str(path))

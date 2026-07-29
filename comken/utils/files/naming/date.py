@@ -1,6 +1,6 @@
 """日付を付けたファイル名の組み立て。"""
 
-import datetime
+from ...clock import today
 
 
 class DateNameBuilder:
@@ -40,4 +40,4 @@ class DateNameBuilder:
 
     @staticmethod
     def _today(date_format: str) -> str:
-        return datetime.date.today().strftime(date_format)
+        return today().strftime(date_format)

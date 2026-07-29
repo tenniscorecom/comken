@@ -19,8 +19,10 @@ from comken.utils import (
     diff_row,
     diff_rows,
     normalize,
+    now,
     remove_spaces,
     strip_spaces,
+    today,
     wait,
 )
 from comken.utils.files import (
@@ -31,6 +33,14 @@ from comken.utils.files import (
     date_in_name,
     move_file,
 )
+
+
+class TestClock:
+    def test_now_has_timezone(self):
+        assert now().tzinfo is not None
+
+    def test_today_returns_date(self):
+        assert isinstance(today(), datetime.date)
 
 
 def test_date_in_name_is_available_from_public_package() -> None:
@@ -96,7 +106,7 @@ class TestMoveFile:
         target.write_text("old", encoding="utf-8")
 
         with (
-            patch("comken.utils.files.ops.os.replace", side_effect=OSError),
+            patch.object(type(src), "replace", side_effect=OSError),
             patch("comken.utils.files.ops.shutil.copy2", side_effect=OSError("copy failed")),
             pytest.raises(OSError, match="copy failed"),
         ):
@@ -183,18 +193,18 @@ class TestDateNameBuilder:
 
     def test_prefix(self):
         """prefix() は YYYYMMDD を前に付ける。"""
-        today = datetime.date.today().strftime("%Y%m%d")
-        assert DateNameBuilder("レポート").prefix() == f"{today}_レポート.xlsx"
+        today_text = today().strftime("%Y%m%d")
+        assert DateNameBuilder("レポート").prefix() == f"{today_text}_レポート.xlsx"
 
     def test_suffix(self):
         """suffix() は YYYYMMDD を後ろに付ける。"""
-        today = datetime.date.today().strftime("%Y%m%d")
-        assert DateNameBuilder("レポート").suffix() == f"レポート_{today}.xlsx"
+        today_text = today().strftime("%Y%m%d")
+        assert DateNameBuilder("レポート").suffix() == f"レポート_{today_text}.xlsx"
 
     def test_custom_ext(self):
         """ext 引数で拡張子を変更できる。"""
-        today = datetime.date.today().strftime("%Y%m%d")
-        assert DateNameBuilder("ログ", ext=".csv").prefix() == f"{today}_ログ.csv"
+        today_text = today().strftime("%Y%m%d")
+        assert DateNameBuilder("ログ", ext=".csv").prefix() == f"{today_text}_ログ.csv"
 
     def test_ext_without_dot_is_normalized(self):
         """ext をドットなしで渡しても補完されることを確認する。"""
@@ -202,12 +212,12 @@ class TestDateNameBuilder:
 
     def test_yyyymm_format(self):
         """date_format="%Y%m" にすると年月のみになる。月次ファイルに使う。"""
-        ym = datetime.date.today().strftime("%Y%m")
+        ym = today().strftime("%Y%m")
         assert DateNameBuilder("月次").prefix(date_format="%Y%m") == f"{ym}_月次.xlsx"
 
     def test_custom_date_format(self):
         """任意の strftime フォーマットを指定できる。"""
-        formatted = datetime.date.today().strftime("%Y-%m-%d")
+        formatted = today().strftime("%Y-%m-%d")
         assert (
             DateNameBuilder("レポート").prefix(date_format="%Y-%m-%d")
             == f"{formatted}_レポート.xlsx"
@@ -223,8 +233,8 @@ class TestFileFinderToday:
 
     def test_finds_today_file(self, tmp_path):
         """今日の日付を含むファイルが見つかる。"""
-        today = datetime.date.today().strftime("%Y%m%d")
-        target = tmp_path / f"{today}_売上.xlsx"
+        today_text = today().strftime("%Y%m%d")
+        target = tmp_path / f"{today_text}_売上.xlsx"
         target.touch()
 
         assert FileFinder(tmp_path).today() == target
@@ -242,7 +252,7 @@ class TestFileFinderToday:
 
     def test_yyyymm_format(self, tmp_path):
         """date_format="%Y%m" で年月のみのファイル名を検索できる。"""
-        ym = datetime.date.today().strftime("%Y%m")
+        ym = today().strftime("%Y%m")
         target = tmp_path / f"{ym}_月次.xlsx"
         target.touch()
 
@@ -250,17 +260,17 @@ class TestFileFinderToday:
 
     def test_csv_pattern(self, tmp_path):
         """pattern="*.csv" にすると CSV ファイルのみ検索対象になる。"""
-        today = datetime.date.today().strftime("%Y%m%d")
-        target = tmp_path / f"{today}_ログ.csv"
+        today_text = today().strftime("%Y%m%d")
+        target = tmp_path / f"{today_text}_ログ.csv"
         target.touch()
 
         assert FileFinder(tmp_path).today(pattern="*.csv") == target
 
     def test_returns_latest_when_multiple(self, tmp_path):
         """今日のファイルが複数ある場合、更新日時が最も新しいものを返す。"""
-        today = datetime.date.today().strftime("%Y%m%d")
-        old = tmp_path / f"{today}_v1.xlsx"
-        new = tmp_path / f"{today}_v2.xlsx"
+        today_text = today().strftime("%Y%m%d")
+        old = tmp_path / f"{today_text}_v1.xlsx"
+        new = tmp_path / f"{today_text}_v2.xlsx"
         old.touch()
         new.touch()
         os.utime(old, (0, 0))  # old の更新日時を過去（Unix エポック）に設定
@@ -269,8 +279,8 @@ class TestFileFinderToday:
 
     def test_ignores_matching_folder(self, tmp_path):
         """名前が一致してもフォルダは検索結果に含めない。"""
-        today = datetime.date.today().strftime("%Y%m%d")
-        (tmp_path / f"{today}_売上.xlsx").mkdir()
+        today_text = today().strftime("%Y%m%d")
+        (tmp_path / f"{today_text}_売上.xlsx").mkdir()
 
         assert FileFinder(tmp_path).today(required=False) is None
 

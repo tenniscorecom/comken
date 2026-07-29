@@ -94,10 +94,9 @@ class TestDryRun:
         from comken.excel import ExcelWriter
 
         path = tmp_path / "out.xlsx"
-        with comken.dry_run(), caplog.at_level(logging.INFO):
-            with ExcelWriter.create(path) as f:
-                f.sheet("Sheet1")["A1"] = "test"
-                f.save()
+        with comken.dry_run(), caplog.at_level(logging.INFO), ExcelWriter.create(path) as f:
+            f.sheet("Sheet1")["A1"] = "test"
+            f.save()
 
         assert not path.exists()
         assert "[DRY-RUN]" in caplog.text

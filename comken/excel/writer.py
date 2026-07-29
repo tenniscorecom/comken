@@ -1,7 +1,6 @@
 """Excel の書き込み・書式設定・保存を行う入口。"""
 
 import logging
-import os
 import tempfile
 from pathlib import Path
 
@@ -197,14 +196,15 @@ class ExcelWriter(ExcelBase):
             return
         save_path.parent.mkdir(parents=True, exist_ok=True)
         # os.replace は同一ドライブ内で使うため、保存先と同じフォルダに一時ファイルを作る。
-        tmp = tempfile.NamedTemporaryFile(
+        # NOTE: openpyxl がパスへ保存できるよう、名前を確保して即座に閉じる。
+        tmp = tempfile.NamedTemporaryFile(  # noqa: SIM115
             dir=save_path.parent, prefix=f".{save_path.name}.", suffix=".tmp", delete=False
         )
         tmp_path = Path(tmp.name)
         tmp.close()
         try:
             self._wb.save(tmp_path)
-            os.replace(tmp_path, save_path)
+            tmp_path.replace(save_path)
         finally:
             tmp_path.unlink(missing_ok=True)
 

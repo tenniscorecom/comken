@@ -20,7 +20,6 @@ utils/files/archive.py — zip 圧縮・展開ユーティリティ
 """
 
 import logging
-import os
 import shutil
 import sys
 import tempfile
@@ -58,7 +57,10 @@ def zip_folder(folder: str | Path, dst: str | Path | None = None) -> Path:
     dst.parent.mkdir(parents=True, exist_ok=True)
 
     # NOTE: os.replace を確実に使えるよう、一時ファイルは出力先と同じフォルダに作る。
-    tmp = tempfile.NamedTemporaryFile(dir=dst.parent, suffix=".tmp", delete=False)
+    # NOTE: アーカイバがパスへ書けるよう、名前を確保して即座に閉じる。
+    tmp = tempfile.NamedTemporaryFile(  # noqa: SIM115
+        dir=dst.parent, suffix=".tmp", delete=False
+    )
     tmp_path = Path(tmp.name)
     tmp.close()
     try:
@@ -70,7 +72,7 @@ def zip_folder(folder: str | Path, dst: str | Path | None = None) -> Path:
                     and path.resolve() != tmp_path.resolve()
                 ):
                     zf.write(path, path.relative_to(folder))
-        os.replace(tmp_path, dst)
+        tmp_path.replace(dst)
     finally:
         tmp_path.unlink(missing_ok=True)
     return dst
@@ -108,14 +110,17 @@ def zip_files(files: Sequence[str | Path], dst: str | Path) -> Path:
     dst.parent.mkdir(parents=True, exist_ok=True)
 
     # NOTE: os.replace を確実に使えるよう、一時ファイルは出力先と同じフォルダに作る。
-    tmp = tempfile.NamedTemporaryFile(dir=dst.parent, suffix=".tmp", delete=False)
+    # NOTE: アーカイバがパスへ書けるよう、名前を確保して即座に閉じる。
+    tmp = tempfile.NamedTemporaryFile(  # noqa: SIM115
+        dir=dst.parent, suffix=".tmp", delete=False
+    )
     tmp_path = Path(tmp.name)
     tmp.close()
     try:
         with zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for path in paths:
                 zf.write(path, path.name)
-        os.replace(tmp_path, dst)
+        tmp_path.replace(dst)
     finally:
         tmp_path.unlink(missing_ok=True)
     return dst
@@ -173,5 +178,5 @@ def _extract_cp932(src: Path, dst: Path) -> None:
                 target.mkdir(parents=True, exist_ok=True)
                 continue
             target.parent.mkdir(parents=True, exist_ok=True)
-            with zf.open(info) as fsrc, open(target, "wb") as fdst:
+            with zf.open(info) as fsrc, target.open("wb") as fdst:
                 shutil.copyfileobj(fsrc, fdst)

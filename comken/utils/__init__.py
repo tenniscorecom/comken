@@ -17,4 +17,7 @@ __all__ = [
     "retry",
     "Timer",
     "measure",
+    "now",
+    "today",
 ]
+from .clock import now, today

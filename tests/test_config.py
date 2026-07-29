@@ -5,10 +5,12 @@ Config クラスのテスト。
     リポジトリのルートで python -m pytest tests/ -v
 """
 
+import logging
 from pathlib import Path
 
 import pytest
 
+import comken.config as config_module
 from comken.config import Config
 from comken.exceptions import ConfigError
 
@@ -19,12 +21,23 @@ class TestConfigMissingFile:
 
         （configparser は黙って空になるため、後の分かりにくい AttributeError を防ぐ）
         """
-        with pytest.raises(ConfigError, match="config.ini が見つかりません"):
+        with pytest.raises(ConfigError, match=r"config\.ini が見つかりません"):
             Config(tmp_path / "config.ini")
 
 
 class TestConfigBasic:
     """Config の基本的な読み込みのテスト。"""
+
+    def test_logs_version_only_once(self, tmp_path, caplog, monkeypatch):
+        ini = tmp_path / "config.ini"
+        ini.write_text("[S]\nK = value\n", encoding="utf-8")
+        monkeypatch.setattr(config_module, "_is_version_logged", False)
+
+        with caplog.at_level(logging.INFO, logger="comken.config"):
+            Config(ini)
+            Config(ini)
+
+        assert caplog.text.count("comken v") == 1
 
     def test_reads_string_value(self, tmp_path):
         """文字列の設定値を正しく読み込めることを確認する。"""
@@ -101,7 +114,7 @@ class TestConfigBoolConversion:
         """true / false 以外の yes / no / on / off は変換せず文字列のままを確認する。"""
         ini = tmp_path / "config.ini"
         ini.write_text(f"[s]\nflag = {value}\n", encoding="utf-8")
-        assert Config(ini).S.FLAG == value
+        assert value == Config(ini).S.FLAG
 
 
 class TestConfigTypeConversion:
@@ -125,7 +138,7 @@ class TestConfigTypeConversion:
         """Windows 絶対パス（C:\\）が Path に変換されることを確認する。"""
         ini = tmp_path / "config.ini"
         ini.write_text("[s]\nfolder = C:\\work\\input\n", encoding="utf-8")
-        assert Config(ini).S.FOLDER == Path("C:\\work\\input")
+        assert Path("C:\\work\\input") == Config(ini).S.FOLDER
 
     def test_unc_path_becomes_path(self, tmp_path):
         """UNC パス（\\\\server\\...）が Path に変換されることを確認する。"""
@@ -145,14 +158,14 @@ class TestConfigTypeConversion:
         """先頭ゼロの数字（社員番号・電話番号）は桁落ちを避けて文字列のままを確認する。"""
         ini = tmp_path / "config.ini"
         ini.write_text(f"[s]\ncode = {value}\n", encoding="utf-8")
-        assert Config(ini).S.CODE == value
+        assert value == Config(ini).S.CODE
 
     @pytest.mark.parametrize("value", ["nan", "inf", "-inf"])
     def test_nan_inf_stay_string(self, tmp_path, value):
         """nan / inf は float() が受理してしまうが、設定値としては文字列で返す。"""
         ini = tmp_path / "config.ini"
         ini.write_text(f"[s]\nx = {value}\n", encoding="utf-8")
-        assert Config(ini).S.X == value
+        assert value == Config(ini).S.X
 
 
 class TestConfigMissingSection:
@@ -239,7 +252,7 @@ class TestModuleSingleton:
         ini.write_text("[FILES]\nINPUT_FOLDER = C:\\work\\input\n", encoding="utf-8")
 
         config_mod.read(ini)
-        assert config_mod.FILES.INPUT_FOLDER == Path("C:\\work\\input")
+        assert Path("C:\\work\\input") == config_mod.FILES.INPUT_FOLDER
 
     def test_lazy_default_reads_cwd(self, tmp_path, monkeypatch):
         """read を呼ばない場合、初回アクセス時にカレントの config.ini を読む。"""
@@ -255,7 +268,7 @@ class TestModuleSingleton:
         import comken.config as config_mod
 
         with pytest.raises(AttributeError):
-            config_mod.nonexistent
+            _ = config_mod.nonexistent
 
 
 class TestGenerateStub:

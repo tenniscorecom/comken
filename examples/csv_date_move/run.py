@@ -39,7 +39,10 @@ def move_matching_files(
         try:
             cell_value = CsvReader(path).cell(DATE_CELL)
             try:
-                content_date = datetime.datetime.strptime(cell_value, date_format).date()
+                # NOTE: CSV に書かれた業務日付の解析であり、タイムゾーンは不要。
+                content_date = datetime.datetime.strptime(  # noqa: DTZ007
+                    cell_value, date_format
+                ).date()
             except ValueError as error:
                 raise ValueError(
                     f"{path.name} の {DATE_CELL} の値「{cell_value}」を日付として読めません。"

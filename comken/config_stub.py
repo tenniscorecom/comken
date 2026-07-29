@@ -109,7 +109,7 @@ def _write_stub_atomic(stub_path: Path, content: str) -> None:
         # 一時ファイル経由で置き換える（複数プロセス同時起動時の書き込み競合対策）
         tmp_path = stub_path.with_suffix(f"{stub_path.suffix}.{os.getpid()}.tmp")
         tmp_path.write_text(content, encoding="utf-8")
-        os.replace(tmp_path, stub_path)
+        tmp_path.replace(stub_path)
     except OSError:
         pass  # 読み取り専用フォルダ等。補完が更新されないだけで実行には影響しない
 

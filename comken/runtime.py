@@ -84,4 +84,4 @@ def is_dry_run() -> bool:
 
 def dry_run_log(action: str, *args) -> None:
     """dry-run でスキップした操作をログに出す（ライブラリ内部用）。"""
-    logger.info("[DRY-RUN] " + action, *args)
+    logger.info("[DRY-RUN] %s", action % args if args else action)

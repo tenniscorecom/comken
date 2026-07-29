@@ -20,7 +20,6 @@ CsvWriter クラスを通じて CSV ファイルへの書き込みを行う。
 import csv
 import io
 import logging
-import os
 import tempfile
 from pathlib import Path
 
@@ -69,7 +68,7 @@ class CsvWriter(CsvBase):
     def _open(self, mode: str):
         """親フォルダを作ってからファイルを開く（ExcelWriter.save と挙動を揃える）。"""
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        return open(self._path, mode, encoding=self._encoding, newline="")
+        return self._path.open(mode, encoding=self._encoding, newline="")
 
     def _warn_unknown_keys(self, rows: list[dict]) -> None:
         """fieldnames にないキーがあれば警告する（黙って列が欠落するのを防ぐ）。
@@ -110,7 +109,8 @@ class CsvWriter(CsvBase):
             return
         self._path.parent.mkdir(parents=True, exist_ok=True)
         # os.replace は同一ドライブ内で使うため、出力先と同じフォルダに一時ファイルを作る。
-        tmp = tempfile.NamedTemporaryFile(
+        # NOTE: CSV を別の open で書くため、一時ファイル名を確保して即座に閉じる。
+        tmp = tempfile.NamedTemporaryFile(  # noqa: SIM115
             dir=self._path.parent, prefix=f".{self._path.name}.", suffix=".tmp", delete=False
         )
         tmp_path = Path(tmp.name)
@@ -120,7 +120,7 @@ class CsvWriter(CsvBase):
                 writer = csv.DictWriter(f, fieldnames=self._fieldnames, extrasaction="ignore")
                 writer.writeheader()
                 writer.writerows(rows)
-            os.replace(tmp_path, self._path)
+            tmp_path.replace(self._path)
         finally:
             tmp_path.unlink(missing_ok=True)
 

@@ -28,7 +28,8 @@ utils/timer.py — 処理時間の計測
 import functools
 import logging
 import time
-from typing import Callable, ParamSpec, TypeVar
+from collections.abc import Callable
+from typing import ParamSpec, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,7 @@ class Timer:
         self.elapsed = 0.0
 
     def __enter__(self) -> "Timer":
+        # NOTE: 経過時間の計測であり、現在の日時の取得ではない。
         self._start = time.perf_counter()
         return self
 

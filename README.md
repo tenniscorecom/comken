@@ -43,13 +43,13 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 | モジュール | 概要 |
 |---|---|
 | Config | INI ファイルの読み込み |
-| Logger | ロガーの初期化（日別ファイル + コンソール） |
+| Logging | 標準 logging によるログ出力（設定は社内共通ライブラリが担当） |
 | CSV | CSV の読み込み・検索・抽出 |
 | Excel（openpyxl） | Excel の読み書き（数式・マクロは自動で win32com を使用） |
 | Windows（pywin32） | Excel COM 操作・ウィンドウ操作・レジストリ読み取り |
 | Browser（Edge） | Edge ブラウザ操作 |
 | utils.files | ファイル検索・操作・圧縮・標準フォルダ取得・ファイル名の組み立て |
-| utils | データ比較・テキスト正規化・待機・リトライ・時間計測 |
+| utils | データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時取得 |
 
 ## 定数クラス一覧
 

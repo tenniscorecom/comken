@@ -1,5 +1,4 @@
-"""
-BrowserOptions: Edge/Chrome 起動オプションの定義クラス。
+"""BrowserOptions: Edge/Chrome 起動オプションの定義クラス。
 
 - bool 属性: True = 有効、False = 無効
 - str 属性: 値付きオプション。None で無効
@@ -13,6 +12,8 @@ BrowserOptions: Edge/Chrome 起動オプションの定義クラス。
         WINDOW_SIZE = "1600,1024"
 """
 
+from typing import ClassVar
+
 
 class BrowserOptions:
     # ── ドライバー設定 ──
@@ -21,7 +22,7 @@ class BrowserOptions:
     DOWNLOAD_DIR: str | None = None  # None = 一時フォルダを自動作成（EdgeDriver 終了時に削除）
 
     # 属性名 → 実際の Chrome 引数
-    _BOOL_ARGS: dict[str, str] = {
+    _BOOL_ARGS: ClassVar[dict[str, str]] = {
         "DISABLE_AUTOMATION_CONTROLLED": "--disable-blink-features=AutomationControlled",
         "DISABLE_BACKGROUND_NETWORKING": "--disable-background-networking",
         "DISABLE_DEFAULT_APPS": "--disable-default-apps",
@@ -44,7 +45,7 @@ class BrowserOptions:
     }
 
     # 属性名 → 引数テンプレート（{} に値が入る）
-    _VALUE_ARGS: dict[str, str] = {
+    _VALUE_ARGS: ClassVar[dict[str, str]] = {
         "USER_AGENT": "--user-agent={}",
         "WINDOW_SIZE": "--window-size={}",
         "WINDOW_POSITION": "--window-position={}",

@@ -196,7 +196,10 @@ class ExcelComHandler(FileBase):
                 for row in range(1, last_row + 1)
             ]
             return [
-                dict(zip(self._headers, row)) for row in rows if not all(c is None for c in row)
+                # headers が実データ列より多い場合は、従来どおり余った見出しを含めない。
+                dict(zip(self._headers, row, strict=False))
+                for row in rows
+                if not all(c is None for c in row)
             ]
         header_row = int(header_row)
         file_headers = [ws.Cells(header_row, col).Value for col in range(1, last_col + 1)]
@@ -206,7 +209,13 @@ class ExcelComHandler(FileBase):
         if none_cols:
             raise EmptyHeaderCellError(none_cols)
         return [
-            dict(zip(file_headers, (ws.Cells(row, col).Value for col in range(1, last_col + 1))))
+            dict(
+                zip(
+                    file_headers,
+                    (ws.Cells(row, col).Value for col in range(1, last_col + 1)),
+                    strict=False,
+                )
+            )
             for row in range(header_row + 1, last_row + 1)
         ]
 

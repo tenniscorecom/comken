@@ -20,7 +20,7 @@ time.sleep の薄いラッパー。単位を明示することで可読性を上
 """
 
 import time
-from typing import Callable
+from collections.abc import Callable
 
 
 class wait:

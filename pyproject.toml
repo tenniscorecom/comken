@@ -27,4 +27,16 @@ line-length = 100
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I"]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "PTH", "C4", "LOG", "G", "T20", "DTZ", "RUF"]
+ignore = [
+    # 日本語のコード・コメント・docstring を「紛らわしい文字」として大量に誤検知するため
+    "RUF001", "RUF002", "RUF003",
+    # __all__ は意味のまとまり順に並べているため、アルファベット順の強制は受け入れない
+    "RUF022",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# 管理者・利用者が結果を画面で確認する CLI ツールでは print が出力手段になる。
+"rename_package.py" = ["T20"]
+"comken/config.py" = ["T20"]
+"examples/sample_login/run.py" = ["T20"]

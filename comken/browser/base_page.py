@@ -42,7 +42,6 @@ browser/base_page.py — Page Object の基底クラス
 従来のセレクター種別入りメソッド（click_id / input_css / text_xpath 等）もそのまま使える。
 """
 
-import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -52,6 +51,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
+
+from comken.utils import now
 
 from .locator import Locator
 
@@ -101,7 +102,7 @@ class BasePage:
         Returns:
             保存したファイルのパス。
         """
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = now().strftime("%Y%m%d_%H%M%S")
         path = Path("logs") / f"{prefix}_{timestamp}.png"
         path.parent.mkdir(exist_ok=True)
         self._driver.save_screenshot(str(path))

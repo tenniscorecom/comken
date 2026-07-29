@@ -72,7 +72,7 @@ class TestEdgeDriverDelegation:
         d = EdgeDriver.__new__(EdgeDriver)  # _driver 未設定の状態
 
         with pytest.raises(AttributeError):
-            d._nonexistent
+            _ = d._nonexistent
 
     def test_save_screenshot_accepts_path_object(self, tmp_path):
         """save_screenshot に Path を渡しても str に変換されて委譲されることを確認する。"""

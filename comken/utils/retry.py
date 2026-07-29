@@ -23,7 +23,8 @@ utils/retry.py — リトライデコレータ
 import functools
 import logging
 import time
-from typing import Callable, ParamSpec, TypeVar
+from collections.abc import Callable
+from typing import ParamSpec, TypeVar
 
 logger = logging.getLogger(__name__)
 

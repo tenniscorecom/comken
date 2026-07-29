@@ -10,7 +10,6 @@
 """
 
 import logging
-import os
 import shutil
 import tempfile
 import time
@@ -45,7 +44,8 @@ def local_copy(path: str | Path) -> Iterator[Path]:
         ローカルのテンポラリファイルパス（Path）。
     """
     src = Path(path)
-    tmp = tempfile.NamedTemporaryFile(suffix=src.suffix, delete=False)
+    # NOTE: 呼び出し側がパスから開くため、名前を確保して即座に閉じる。
+    tmp = tempfile.NamedTemporaryFile(suffix=src.suffix, delete=False)  # noqa: SIM115
     tmp_path = Path(tmp.name)
     tmp.close()
     try:
@@ -84,17 +84,18 @@ def move_file(src: str | Path, dst: str | Path) -> Path:
     if target.exists() and src.samefile(target):
         return target
     try:
-        os.replace(src, target)
+        src.replace(target)
     except OSError:
         # os.replace は同一ドライブ内で使うため、移動先と同じフォルダに一時ファイルを作る。
-        tmp = tempfile.NamedTemporaryFile(
+        # NOTE: shutil.copy2 で書くため、一時ファイル名を確保して即座に閉じる。
+        tmp = tempfile.NamedTemporaryFile(  # noqa: SIM115
             dir=target.parent, prefix=f".{target.name}.", suffix=".tmp", delete=False
         )
         tmp_path = Path(tmp.name)
         tmp.close()
         try:
             shutil.copy2(src, tmp_path)
-            os.replace(tmp_path, target)
+            tmp_path.replace(target)
             src.unlink()
         finally:
             tmp_path.unlink(missing_ok=True)
@@ -145,6 +146,7 @@ def _cleanup_stale_tmp(target: str | Path, max_age_seconds: float = 3600) -> Non
         max_age_seconds: これより古い一時ファイルだけ削除する（デフォルト: 1時間）。
     """
     target = Path(target)
+    # NOTE: ファイルの st_mtime と同じ基準で比較するため time.time() を使う。
     now = time.time()
     for tmp in target.parent.glob(f"{target.name}.*.tmp"):
         try:
