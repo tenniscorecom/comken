@@ -48,7 +48,6 @@ with ExcelFile.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作る
 | Excel（openpyxl） | Excel の読み書き（数式・マクロは自動で win32com を使用） |
 | Windows（pywin32） | Excel COM 操作・ウィンドウ操作・レジストリ読み取り |
 | Browser（Edge） | Edge ブラウザ操作 |
-| PDF | PDF の結合・分割・テキスト抽出（pypdf。導入できない環境では使わない） |
 | files | ファイル検索・操作・標準フォルダ取得・ファイル名の組み立て |
 | utils | データ比較・テキスト正規化・待機・リトライ・時間計測・zip |
 
@@ -1011,23 +1010,6 @@ python -m examples.sample_login.run
 
 ---
 
-## PDF
-
-PDF の結合・分割・テキスト抽出・ページ数取得。
-**pypdf（外部ライブラリ）が必要**。導入できない環境では `comken/pdf` フォルダは使わない
-（import した時点で対処法つきのエラーになる。他のモジュールには影響しない）。
-
-```python
-from comken.pdf import extract_text, merge_pdfs, page_count, split_pdf
-
-merge_pdfs(["表紙.pdf", "本文.pdf"], r"C:\作業\提出用.pdf")   # 結合
-paths = split_pdf(r"C:\作業\請求書まとめ.pdf")                # 1ページずつ分割（_001.pdf, _002.pdf ...）
-text = extract_text("報告書.pdf")                             # テキスト抽出
-n = page_count("報告書.pdf")                                  # ページ数
-```
-
----
-
 ## パッケージ構成
 
 ```mermaid
@@ -1039,7 +1021,6 @@ graph LR
     comken --> csv["csv\nCSV"]
     comken --> windows["windows\nCOM / Window"]
     comken --> browser["browser\nブラウザ"]
-    comken --> pdf["pdf\nPDF（pypdf）"]
 ```
 
 ---
@@ -1086,7 +1067,7 @@ flowchart LR
 | 2026-07-12 | ExcelFile・ExcelComHandler に `headers` 引数追加（ヘッダーなし Excel 対応）。EdgeDriver のダウンロードフォルダ管理を内部化（デフォルト一時フォルダ・with 終了時自動削除）。`ExcelFile.transfer_by_key`（openpyxl 版）追加。`diff_row` 追加・`diff_rows` を列単位の差分付きに改良。ExcelComHandler の初期化失敗時に Excel プロセスが残るバグ等を修正 |
 | 2026-07-12 | Teams 通知（TeamsNotifier。Power Automate Webhook / Adaptive Card 形式）・テキスト正規化（normalize / strip_spaces / remove_spaces）・待機（wait）・特殊フォルダ取得（Paths）を追加。Paths は OneDrive リダイレクトに追従、通知失敗は TeamsError |
 | 2026-07-12 | Config: [a, b, c] 記法でリストに自動変換（parse_list は警告付きで残存）。エディタ補完用スタブ生成（python -m comken.config）を追加。BOM 付き UTF-8 の config.ini が読めないバグを修正 |
-| 2026-07-12 | Locator（セレクターのクラス変数管理）・retry・Timer / measure・zip・PDF（pypdf）・Excel の Sheet ラッパー（セル参照 / write_table / auto_width / freeze_header）・ExcelFile.create を追加 |
+| 2026-07-12 | Locator（セレクターのクラス変数管理）・retry・Timer / measure・zip・Excel の Sheet ラッパー（セル参照 / write_table / auto_width / freeze_header）・ExcelFile.create を追加 |
 | 2026-07-12 | comken.__version__ / set_debug()（主要処理の時間を DEBUG ログに記録）/ set_dry_run()（外部に影響する操作をスキップ）を追加。EdgeDriver がエラー時に画面を logs/ に自動保存。Excel 孤立プロセス対策（is_excel_running / kill_excel）。リリース.bat で git tag を打つ運用に。スタブ書き込みをアトミック化 |
 | 2026-07-13 | ExcelComHandler: 上書き保存 save() 追加、save_as のパスワードが効かない問題を修正（FileFormat を常に明示。形式変換は file_format 引数）、close() でプロセスが残る問題を修正、AskToUpdateLinks=False 追加。CONVENTIONS に「モジュール内の並び順」を追加し全体を整理。docs/（機能カタログ・コードリーディングガイド・設計メモ）を追加 |
 | 2026-07-14 | 監査指摘の修正一式（keep_vba・run_macro 保存・DispatchEx・EdgeDriver/SF のリソース解放・config 型変換・CSV/ログの堅牢化・unzip の 3.10 対応/Zip Slip 対策）。コーディング規約を3層（共通/本体/利用側）に分割。配布方式を廃止し共有サーバー直接参照（PYTHONPATH）に変更、同期用 bat（templates/）を削除 |

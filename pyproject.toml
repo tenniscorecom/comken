@@ -11,10 +11,6 @@ dependencies = [
     "pywin32; sys_platform == 'win32'",
 ]
 
-[project.optional-dependencies]
-# comken.pdf（PDF の結合・分割・テキスト抽出）を使う場合のみ
-pdf = ["pypdf>=4.0"]
-
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
