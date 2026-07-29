@@ -49,6 +49,20 @@ class CsvNoDataRowsError(CsvError):
         )
 
 
+class CsvRowNotFoundError(CsvError):
+    """キーに一致する行が CSV に無い場合。
+
+    発生箇所: CsvReader.find()
+    """
+
+    def __init__(self, key_col: str, value: str, path: Path | str) -> None:
+        super().__init__(
+            f"「{key_col}」が「{value}」の行が見つかりません: {path}\n"
+            "値の書き方（前後の空白・全角半角・ゼロ埋め）が元データと合っているか確認してください。\n"
+            "この行が無くても処理を続けてよい場合は find(..., required=False) を指定します。"
+        )
+
+
 class CsvCellReferenceError(CsvError):
     """CSV のセル参照が不正、または範囲外の場合。
 

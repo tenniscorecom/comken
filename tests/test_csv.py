@@ -20,6 +20,7 @@ from comken.exceptions import (
     CsvColumnNotFoundError,
     CsvError,
     CsvNoDataRowsError,
+    CsvRowNotFoundError,
     UnsupportedFileSuffixError,
 )
 
@@ -145,10 +146,17 @@ class TestCsvReaderFind:
         assert row is not None
         assert row["金額"] == "1000"
 
-    def test_returns_none_when_not_found(self, sample_csv):
-        """見つからない場合は None を返すことを確認する。"""
-        row = CsvReader(sample_csv).find("注文番号", "Z999")
-        assert row is None
+    def test_raises_when_not_found(self, sample_csv):
+        """見つからない場合は既定で例外になることを確認する。"""
+        with pytest.raises(CsvRowNotFoundError) as exc:
+            CsvReader(sample_csv).find("注文番号", "Z999")
+        # 非エンジニアが自力で直せるよう、探した列と値がメッセージに出ること
+        assert "注文番号" in str(exc.value)
+        assert "Z999" in str(exc.value)
+
+    def test_returns_none_when_not_required(self, sample_csv):
+        """required=False なら見つからなくても None を返すことを確認する。"""
+        assert CsvReader(sample_csv).find("注文番号", "Z999", required=False) is None
 
     def test_returns_first_match(self, sample_csv):
         """複数一致する場合は最初の行を返すことを確認する。"""

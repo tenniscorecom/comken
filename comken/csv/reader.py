@@ -26,6 +26,7 @@ from ..exceptions import (
     CsvColumnNotFoundError,
     CsvHeadersTooFewError,
     CsvNoDataRowsError,
+    CsvRowNotFoundError,
     EncodingDetectionError,
 )
 from ..utils.data import col_to_num
@@ -228,15 +229,14 @@ class CsvReader(CsvBase):
             raise CsvNoDataRowsError(self._path)
         return data[0][column]
 
-    def find(self, key_col: str, value: str) -> dict[str, str] | None:
+    def find(self, key_col: str, value: str, required: bool = True) -> dict[str, str] | None:
         """key_col が value に一致する最初の行を返す。
 
-        Args:
-            key_col: 検索対象の列名。
-            value: 検索する値。
+        見つからないときは既定で CsvRowNotFoundError。
+        「無くても処理を続けたい」場合だけ required=False にすると None を返す。
 
-        Returns:
-            一致した行の辞書。見つからない場合は None。
+        Raises:
+            CsvRowNotFoundError: required=True で該当行がない場合。
         """
         data = self._load()
         self._validate_columns([key_col])
@@ -245,6 +245,8 @@ class CsvReader(CsvBase):
             # CSV の値は常に文字列。int 等を渡されても取りこぼさないよう文字列で比較する
             if str(row.get(key_col, "")) == target:
                 return row
+        if required:
+            raise CsvRowNotFoundError(key_col, target, self.path)
         return None
 
     def filter(self, key_col: str, value: str) -> list[dict[str, str]]:

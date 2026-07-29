@@ -29,6 +29,7 @@ OriginalLibsError
 │   ├── EncodingDetectionError
 │   ├── CsvHeadersTooFewError
 │   ├── CsvNoDataRowsError
+│   ├── CsvRowNotFoundError
 │   └── CsvCellReferenceError
 ├── InvalidColumnError
 ├── ColumnNotFoundError
@@ -68,6 +69,7 @@ from .csv import (
     CsvError,
     CsvHeadersTooFewError,
     CsvNoDataRowsError,
+    CsvRowNotFoundError,
     EncodingDetectionError,
 )
 from .excel import (
@@ -119,6 +121,7 @@ __all__ = [
     "EncodingDetectionError",
     "CsvHeadersTooFewError",
     "CsvNoDataRowsError",
+    "CsvRowNotFoundError",
     "CsvCellReferenceError",
     "ColumnNotFoundError",
     "ExcelColumnNotFoundError",
