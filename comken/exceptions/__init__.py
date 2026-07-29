@@ -12,7 +12,8 @@ OriginalLibsError
 │   └── FileFormatMismatchError
 ├── CsvError
 │   ├── EncodingDetectionError
-│   └── CsvHeadersTooFewError
+│   ├── CsvHeadersTooFewError
+│   └── CsvCellReferenceError
 ├── ColumnNotFoundError
 │   ├── ExcelColumnNotFoundError
 │   ├── CsvColumnNotFoundError
@@ -36,7 +37,7 @@ from .config import (
     ConfigFileNotFoundError,
     ConfigSectionNotFoundError,
 )
-from .csv import CsvError, CsvHeadersTooFewError, EncodingDetectionError
+from .csv import CsvCellReferenceError, CsvError, CsvHeadersTooFewError, EncodingDetectionError
 from .excel import (
     EmptyHeaderCellError,
     ExcelError,
@@ -63,6 +64,7 @@ __all__ = [
     "CsvError",
     "EncodingDetectionError",
     "CsvHeadersTooFewError",
+    "CsvCellReferenceError",
     "ColumnNotFoundError",
     "ExcelColumnNotFoundError",
     "CsvColumnNotFoundError",

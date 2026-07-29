@@ -152,7 +152,7 @@ class FileFinder:
         for path in self._folder.glob(pattern):
             if not path.is_file():
                 continue
-            date = _date_in_name(path.name)
+            date = date_in_name(path.name)
             if date is not None:
                 dated_files.append((date, path))
 
@@ -169,8 +169,11 @@ class FileFinder:
         return [path for _, path in dated_files]
 
 
-def _date_in_name(name: str) -> datetime.date | None:
-    """ファイル名に含まれる最初の日付を返す。日付が無ければ None。"""
+def date_in_name(name: str) -> datetime.date | None:
+    """ファイル名に含まれる最初の日付を返す。日付が無ければ None。
+
+    ファイル名の日付とファイル内容の日付を突き合わせる業務で使うため公開している。
+    """
     for match in _DATE_IN_NAME.finditer(name):
         year, _, month, day = match.groups()
         try:

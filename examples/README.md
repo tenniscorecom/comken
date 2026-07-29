@@ -11,6 +11,7 @@ comken の使い方を「動くコード」で覚えるためのサンプル。
 | 2 | excel_key_transfer | マスタ CSV を Excel にキー突合転記（XLOOKUP 的転記） | CsvReader.index / transfer_by_key / diff_rows | なし（データを自動生成） |
 | 3 | csv_diff_report | 昨日と今日の CSV の差分を色付き Excel レポートに | diff_rows / CsvWriter / set_fill | なし（データを自動生成） |
 | 4 | sample_login | ブラウザ自動化（Page Object Model の一式） | EdgeDriver / BasePage / Locator | Edge + msedgedriver |
+| 5 | csv_date_move | CSV の A2 とファイル名の日付が一致したファイルを移動 | CsvReader.cell / date_in_name / dry_run | config.ini の作成 |
 | 6 | daily_batch_template | 日次バッチの雛形（新規プロジェクトのコピー元） | logging / FileFinder / ExcelWriter | config.ini の作成 |
 
 ## 実行方法

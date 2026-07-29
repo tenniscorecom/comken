@@ -1,0 +1,14 @@
+; このファイルを config.ini にコピーし、業務環境に合わせて変更してください。
+
+[FILES]
+INPUT_FOLDER = C:\作業\input
+OUTPUT_FOLDER = C:\作業\output
+
+[CSV]
+; A2 の日付書式。業務のファイルに合わせて変更する（例: %Y-%m-%d）。
+DATE_FORMAT = %Y/%m/%d
+PATTERN = *.csv
+
+[RUN]
+; 本番前は true のまま実行し、ログで移動対象を確認する。
+DRY_RUN = true

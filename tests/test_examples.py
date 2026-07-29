@@ -59,3 +59,25 @@ class TestCsvDiffReport:
         }
         # 追加(004)・削除(003)・変更(002) がそれぞれ検出されている
         assert {"追加", "削除", "変更"} <= statuses
+
+
+class TestCsvDateMove:
+    def test_moves_only_file_with_matching_date(self, tmp_path):
+        """A2 とファイル名の日付が一致する CSV だけを移動する。"""
+        from examples.csv_date_move.run import move_matching_files
+
+        input_folder = tmp_path / "input"
+        output_folder = tmp_path / "output"
+        input_folder.mkdir()
+        matching = input_folder / "売上_20260729.csv"
+        mismatching = input_folder / "売上_20260730.csv"
+        matching.write_text("日付\n2026/07/29\n", encoding="utf-8")
+        mismatching.write_text("日付\n2026/07/29\n", encoding="utf-8")
+
+        result = move_matching_files(input_folder, output_folder, "%Y/%m/%d", "*.csv")
+
+        assert result == (1, 1)
+        assert (output_folder / matching.name).exists()
+        assert not matching.exists()
+        assert mismatching.exists()
+        assert not (output_folder / mismatching.name).exists()

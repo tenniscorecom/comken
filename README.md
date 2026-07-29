@@ -272,6 +272,9 @@ reader = CsvReader("data.csv")
 # 文字コードは自動判定（UTF-8 → CP932 の順に試す）。明示する場合:
 # from comken.constants import Encoding
 # CsvReader("data.csv", encoding=Encoding.CP932)
+
+# Excel と同じ位置の言い方で1セルを読む（ヘッダー行も1行目）
+date_text = reader.cell("A2")
 ```
 
 data.csv の中身が以下だとする。
@@ -365,7 +368,7 @@ copy_file("report.xlsx", r"C:\作業\backup")             # コピー（元フ�
 ### ファイル名の組み立て・検索
 
 ```python
-from comken.utils.files import DateNameBuilder, FileFinder
+from comken.utils.files import DateNameBuilder, FileFinder, date_in_name
 
 FOLDER = r"\\nas-server\share"
 
@@ -375,6 +378,9 @@ DateNameBuilder("売上レポート").prefix()               # → "20260711_売
 DateNameBuilder("売上レポート").suffix()               # → "売上レポート_20260711.xlsx"
 DateNameBuilder("ログ", ext=".csv").prefix()           # → "20260711_ログ.csv"
 DateNameBuilder("月次レポート").prefix(date_format="%Y%m") # → "202607_月次レポート.xlsx"
+
+# ファイル名に含まれる最初の日付を取得（なければ None）
+file_date = date_in_name("売上_20260729.csv")            # → datetime.date(2026, 7, 29)
 
 # 今日の日付を含むファイルを取得（見つからなければ FileNotFoundError）
 path = FileFinder(FOLDER).today()                      # YYYYMMDD で探す

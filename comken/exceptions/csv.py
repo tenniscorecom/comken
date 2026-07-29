@@ -34,3 +34,16 @@ class CsvHeadersTooFewError(CsvError):
             f"はみ出した列のデータが失われます: {path}\n"
             "headers にすべての列名を指定してください。"
         )
+
+
+class CsvCellReferenceError(CsvError):
+    """CSV のセル参照が不正、または範囲外の場合。
+
+    発生箇所: CsvReader.cell()
+    """
+
+    def __init__(self, ref: str, path: Path | str, detail: str) -> None:
+        super().__init__(
+            f"CSV のセル「{ref}」を読み取れませんでした: {path}\n"
+            f"{detail}。A1 や B2 のように、CSV を開いたときに存在するセルを指定してください。"
+        )

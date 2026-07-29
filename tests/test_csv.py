@@ -12,7 +12,12 @@ import pytest
 
 from comken.constants import Encoding
 from comken.csv import CsvReader, CsvWriter
-from comken.exceptions import ColumnNotFoundError, CsvError, UnsupportedFileSuffixError
+from comken.exceptions import (
+    ColumnNotFoundError,
+    CsvCellReferenceError,
+    CsvError,
+    UnsupportedFileSuffixError,
+)
 
 
 @pytest.fixture
@@ -47,6 +52,29 @@ class TestCsvReaderRows:
         rows = CsvReader(sample_csv).rows(columns=["注文番号", "金額"])
         assert rows[0] == {"注文番号": "A001", "金額": "1000"}
         assert "担当者" not in rows[0]
+
+
+class TestCsvReaderCell:
+    """cell() のテスト。"""
+
+    def test_counts_header_as_first_row(self, sample_csv):
+        assert CsvReader(sample_csv).cell("A2") == "A001"
+
+    def test_returns_empty_string_for_empty_cell(self, tmp_path):
+        path = tmp_path / "data.csv"
+        path.write_text("日付,備考\n2026/07/29,\n", encoding="utf-8")
+
+        assert CsvReader(path).cell("B2") == ""
+
+    @pytest.mark.parametrize("ref", ["", "2A", "A0", "A-1"])
+    def test_rejects_invalid_reference(self, sample_csv, ref):
+        with pytest.raises(CsvCellReferenceError):
+            CsvReader(sample_csv).cell(ref)
+
+    @pytest.mark.parametrize("ref", ["A99", "Z2"])
+    def test_rejects_out_of_range_reference(self, sample_csv, ref):
+        with pytest.raises(CsvCellReferenceError):
+            CsvReader(sample_csv).cell(ref)
 
 
 class TestCsvReaderFind:

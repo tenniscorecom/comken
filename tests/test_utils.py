@@ -23,7 +23,19 @@ from comken.utils import (
     strip_spaces,
     wait,
 )
-from comken.utils.files import DateNameBuilder, FileFinder, Paths, copy_file, move_file
+from comken.utils.files import (
+    DateNameBuilder,
+    FileFinder,
+    Paths,
+    copy_file,
+    date_in_name,
+    move_file,
+)
+
+
+def test_date_in_name_is_available_from_public_package() -> None:
+    assert date_in_name("売上_20260729.csv") == datetime.date(2026, 7, 29)
+    assert date_in_name("日付なし.csv") is None
 
 
 class TestMoveFile:

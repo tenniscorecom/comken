@@ -16,10 +16,16 @@ CsvReader クラスを通じて CSV ファイルの読み込み・検索・抽�
 
 import csv
 import io
+import re
 from pathlib import Path
 
 from ..constants import Encoding
-from ..exceptions import CsvColumnNotFoundError, CsvHeadersTooFewError, EncodingDetectionError
+from ..exceptions import (
+    CsvCellReferenceError,
+    CsvColumnNotFoundError,
+    CsvHeadersTooFewError,
+    EncodingDetectionError,
+)
 from ..utils.timer import measure
 from .base import CsvBase
 
@@ -61,6 +67,7 @@ class CsvReader(CsvBase):
     # UTF-8 を先にするのは、CP932 は大半のバイト列を「読めてしまう」ため
     # （逆順にすると UTF-8 のファイルが文字化けしたまま通ってしまう）
     AUTO_ENCODINGS = (Encoding.UTF8_SIG, Encoding.CP932)
+    CELL_REFERENCE_PATTERN = re.compile(r"([A-Za-z]+)([1-9][0-9]*)")
 
     def __init__(
         self,
@@ -150,6 +157,48 @@ class CsvReader(CsvBase):
             return data
         self._validate_columns(columns)
         return [{col: row[col] for col in columns} for row in data]
+
+    def cell(self, ref: str) -> str:
+        """Excel 風のセル参照で、CSV の1セルを返す。
+
+        ヘッダー付き辞書を作る ``_load()`` とは別に生の行を読むため、
+        列名や ``headers`` の指定には依存しない。ヘッダー行も1行目として数える。
+
+        Args:
+            ref: A1、B2 のような1始まりのセル参照。
+
+        Returns:
+            セルの文字列。空セルの場合は空文字。
+
+        Raises:
+            CsvCellReferenceError: 参照が不正、またはCSVの範囲外の場合。
+        """
+        match = self.CELL_REFERENCE_PATTERN.fullmatch(ref)
+        if match is None:
+            raise CsvCellReferenceError(ref, self._path, "セル参照の書き方が正しくありません")
+
+        column_letters, row_text = match.groups()
+        row_index = int(row_text) - 1
+        column_number = 0
+        for letter in column_letters.upper():
+            column_number = column_number * 26 + ord(letter) - ord("A") + 1
+        column_index = column_number - 1
+
+        raw_rows = list(csv.reader(io.StringIO(self._read_text())))
+        if row_index >= len(raw_rows):
+            raise CsvCellReferenceError(
+                ref,
+                self._path,
+                f"指定した行は範囲外です（CSV は {len(raw_rows)} 行です）",
+            )
+        if column_index >= len(raw_rows[row_index]):
+            column_count = len(raw_rows[row_index])
+            raise CsvCellReferenceError(
+                ref,
+                self._path,
+                f"指定した列は範囲外です（{row_index + 1} 行目は {column_count} 列です）",
+            )
+        return raw_rows[row_index][column_index]
 
     def find(self, key_col: str, value: str) -> dict[str, str] | None:
         """key_col が value に一致する最初の行を返す。
