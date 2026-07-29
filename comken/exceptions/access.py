@@ -19,6 +19,17 @@ class AccessFileNotFoundError(AccessError):
         )
 
 
+class AccessLocalCopyError(AccessError):
+    """Access ファイルのローカルコピーに失敗した場合。"""
+
+    def __init__(self, path: Path | str, detail: Exception) -> None:
+        super().__init__(
+            f"Access ファイルをローカルにコピーできませんでした: {path}\n"
+            "ファイルがほかの処理で使用中でないか、読み取り権限があるか、"
+            f"一時フォルダに空き容量があるかを確認してください。（詳細: {detail}）"
+        )
+
+
 class AccessRoutineError(AccessError):
     """Access マクロまたは VBA の実行に失敗した場合。"""
 

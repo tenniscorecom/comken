@@ -34,6 +34,7 @@
 | エラー名 | 意味 | 対処 |
 |---|---|---|
 | `AccessFileNotFoundError` | Access ファイルが見つからない | ファイルの置き場所と名前を確認する |
+| `AccessLocalCopyError` | Access ファイルを一時フォルダへコピーできない | 使用状況・読み取り権限・空き容量を確認する |
 | `AccessRoutineError` | Access マクロまたは VBA の実行に失敗した | 表示された名前と Access 側の内容を確認する |
 | `AccessSourceNotFoundError` | テーブルまたはクエリが見つからない | エラーに表示された存在する名前を確認する |
 | `FileFormatMismatchError` | 保存拡張子と形式が合わない | 管理者へ連絡する |

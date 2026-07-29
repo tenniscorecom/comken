@@ -1,6 +1,7 @@
 """Access COM 操作の配線をモックで検証する。"""
 
 import inspect
+import logging
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -9,7 +10,11 @@ import pytest
 from comken import dry_run
 from comken.access import AccessDatabase
 from comken.constants import Encoding
-from comken.exceptions import AccessSourceNotFoundError, UnsupportedFileSuffixError
+from comken.exceptions import (
+    AccessLocalCopyError,
+    AccessSourceNotFoundError,
+    UnsupportedFileSuffixError,
+)
 
 
 def _database(tmp_path: Path) -> tuple[AccessDatabase, MagicMock]:
@@ -17,7 +22,7 @@ def _database(tmp_path: Path) -> tuple[AccessDatabase, MagicMock]:
     path.touch()
     access = MagicMock()
     with patch("comken.access.handler.win32com.client.DispatchEx", return_value=access):
-        database = AccessDatabase(path)
+        database = AccessDatabase(path, local_copy=False)
     return database, access
 
 
@@ -30,6 +35,81 @@ def _set_sources(access: MagicMock, tables: list[str], queries: list[str] | None
 
 
 class TestAccessDatabase:
+    def test_default_opens_local_copy_and_removes_it(self, tmp_path):
+        path = tmp_path / "顧客.accdb"
+        path.write_bytes(b"database")
+        access = MagicMock()
+
+        with (
+            patch("comken.access.handler.win32com.client.DispatchEx", return_value=access),
+            AccessDatabase(path) as database,
+        ):
+            opened_path = Path(access.OpenCurrentDatabase.call_args.args[0])
+            assert opened_path != path.resolve()
+            assert opened_path.suffix == path.suffix
+            assert opened_path.read_bytes() == b"database"
+            assert database.path == path
+
+        assert not opened_path.exists()
+
+    def test_exception_removes_local_copy_and_lock_file(self, tmp_path):
+        path = tmp_path / "顧客.accdb"
+        path.touch()
+        original_lock = tmp_path / "顧客.laccdb"
+        original_lock.write_text("元のロック", encoding="utf-8")
+        access = MagicMock()
+
+        with (
+            patch("comken.access.handler.win32com.client.DispatchEx", return_value=access),
+            pytest.raises(RuntimeError),
+            AccessDatabase(path),
+        ):
+            opened_path = Path(access.OpenCurrentDatabase.call_args.args[0])
+            lock_path = opened_path.with_suffix(".laccdb")
+            lock_path.write_text("コピー側のロック", encoding="utf-8")
+            raise RuntimeError("test")
+
+        assert not opened_path.exists()
+        assert not lock_path.exists()
+        assert original_lock.read_text(encoding="utf-8") == "元のロック"
+
+    def test_local_copy_false_opens_original_without_copy(self, tmp_path):
+        path = tmp_path / "顧客.accdb"
+        path.touch()
+        access = MagicMock()
+
+        with (
+            patch("comken.access.handler.win32com.client.DispatchEx", return_value=access),
+            AccessDatabase(path, local_copy=False),
+        ):
+            pass
+
+        access.OpenCurrentDatabase.assert_called_once_with(str(path.resolve()))
+        assert list(tmp_path.iterdir()) == [path]
+
+    def test_local_copy_logs_that_changes_are_not_reflected(self, tmp_path, caplog):
+        path = tmp_path / "顧客.accdb"
+        path.touch()
+
+        with (
+            patch("comken.access.handler.win32com.client.DispatchEx", return_value=MagicMock()),
+            caplog.at_level(logging.INFO, logger="comken.access.handler"),
+            AccessDatabase(path),
+        ):
+            pass
+
+        assert "元のデータベースへの変更は反映されません" in caplog.text
+
+    def test_copy_failure_raises_access_error(self, tmp_path):
+        path = tmp_path / "顧客.accdb"
+        path.touch()
+
+        with (
+            patch("comken.access.handler.shutil.copy2", side_effect=PermissionError("使用中")),
+            pytest.raises(AccessLocalCopyError, match="読み取り権限"),
+        ):
+            AccessDatabase(path)
+
     def test_run_macro_calls_do_cmd(self, tmp_path):
         database, access = _database(tmp_path)
         database.run_macro("日次整形")

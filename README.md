@@ -612,6 +612,8 @@ with local_copy(NAS_PATH) as local_path:
 Access がインストールされた Windows PC で、マクロや VBA による整形結果を CSV に出力する。
 数十万件では `rows()` の結果をリスト化せず、Python のメモリを使わない `export_csv()` を使う。
 既定の文字コードは Excel で開きやすい CP932。`Encoding.UTF8_SIG` も指定できる。
+既定では DB を一時フォルダへコピーして開き、終了時にコピーとロックファイルを削除する。
+NAS・共有フォルダ・クラウド同期フォルダを直接開かないため、速度・排他・破損リスクを抑えられる。
 
 ```python
 from comken.access import AccessDatabase
@@ -625,6 +627,9 @@ with AccessDatabase(r"C:\作業\顧客.accdb") as db:
     for row in db.rows("T_出力"):  # Python 側で逐次処理するときだけ
         ...
 ```
+
+コピー上の変更は元 DB に反映されない。元 DB を更新するマクロや VBA を実行する場合だけ、
+`AccessDatabase(path, local_copy=False)` を指定して元ファイルを直接開く。
 
 `table_names()` で利用可能なテーブルと保存済みクエリを確認できる。外部に影響する
 マクロ・VBA・CSV 出力は `dry_run()` 中には実行されない。

@@ -23,6 +23,8 @@ OUTPUT_TABLE = "T_出力"
 
 def main() -> None:
     """Access の整形結果を CSV に出し、Excel 帳票へ転記する。"""
+    # NAS 等の DB は既定でローカルコピーされるため、ネットワーク越しの遅延や破損を避けられる。
+    # 整形結果は CSV に出す中間生成物なので、元 DB へ書き戻す必要はない。
     with AccessDatabase(DATABASE_PATH) as database:
         database.run_macro(MACRO_NAME)
         database.export_csv(OUTPUT_TABLE, CSV_PATH)

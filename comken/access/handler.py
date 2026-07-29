@@ -1,5 +1,8 @@
 """Microsoft Access のマクロ実行・データ出力。"""
 
+import logging
+import shutil
+import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -8,11 +11,14 @@ import win32com.client
 from ..constants import Encoding
 from ..exceptions import (
     AccessFileNotFoundError,
+    AccessLocalCopyError,
     AccessRoutineError,
     AccessSourceNotFoundError,
 )
 from ..runtime import dry_run_log, is_dry_run
 from ..utils.files.base import FileBase
+
+logger = logging.getLogger(__name__)
 
 ACCESS_EXPORT_DELIMITED = 2
 ACCESS_OPEN_TABLE = 0
@@ -29,24 +35,51 @@ _ENCODING_CODE_PAGES = {
 class AccessDatabase(FileBase):
     """Access データベースを COM で操作する。
 
+    既定ではネットワーク越しの遅延・排他・破損を避けるため、一時フォルダへコピーして開く。
+    コピー上の変更は元ファイルへ反映されない。元データベースを更新するマクロを実行する場合は
+    ``local_copy=False`` を指定する。
+
     数十万件を CSV に出す場合は、Python にデータを載せない ``export_csv()`` を使う。
     ``rows()`` は逐次処理用であり、結果を ``list`` にすると全件分のメモリを消費する。
     """
 
     SUFFIXES = (".accdb", ".mdb")
 
-    def __init__(self, path: str | Path) -> None:
+    def __init__(self, path: str | Path, local_copy: bool = True) -> None:
         super().__init__(path)
         if not self.path.is_file():
             raise AccessFileNotFoundError(self.path)
+
+        self._working_path = self._path
+        self._temporary_directory: tempfile.TemporaryDirectory[str] | None = None
+        self._access = None
+
+        if local_copy:
+            self._temporary_directory = tempfile.TemporaryDirectory(prefix="comken_access_")
+            self._working_path = (
+                Path(self._temporary_directory.name) / f"database{self._path.suffix}"
+            )
+            try:
+                shutil.copy2(self._path, self._working_path)
+            except Exception as e:
+                self._temporary_directory.cleanup()
+                self._temporary_directory = None
+                raise AccessLocalCopyError(self._path, e) from e
+
         # DispatchEx は利用者が手で開いている Access とは別のプロセスを起動する。
-        self._access = win32com.client.DispatchEx("Access.Application")
-        self._access.Visible = False
         try:
-            self._access.OpenCurrentDatabase(str(self.path.resolve()))
+            self._access = win32com.client.DispatchEx("Access.Application")
+            self._access.Visible = False
+            self._access.OpenCurrentDatabase(str(self._working_path.resolve()))
         except Exception:
-            self._access.Quit()
+            self._close()
             raise
+        if local_copy:
+            logger.info(
+                "Access ファイルをローカルにコピーして開きました。"
+                "元のデータベースへの変更は反映されません: %s",
+                self._path,
+            )
 
     def __enter__(self) -> "AccessDatabase":
         return self
@@ -57,6 +90,7 @@ class AccessDatabase(FileBase):
     def run_macro(self, name: str) -> None:
         """Access マクロを実行する。
 
+        元データベースを更新するマクロの場合は、初期化時に ``local_copy=False`` を指定する。
         VBA のプロシージャ／関数を実行する場合は ``run_function()`` を使う。
         """
         if is_dry_run():
@@ -70,6 +104,7 @@ class AccessDatabase(FileBase):
     def run_function(self, name: str, *args: object) -> object | None:
         """VBA のプロシージャ／関数を実行する。
 
+        元データベースを更新する処理の場合は、初期化時に ``local_copy=False`` を指定する。
         Access のマクロは別の仕組みなので、マクロには ``run_macro()`` を使う。
         dry-run 時は実行せず ``None`` を返す。
         """
@@ -147,11 +182,17 @@ class AccessDatabase(FileBase):
         return tables + queries
 
     def _close(self) -> None:
-        """Access を終了する。2回呼んでも安全。"""
+        """Access を終了し、一時コピーを削除する。2回呼んでも安全。"""
         access = self._access
         self._access = None
-        if access:
-            access.Quit()
+        try:
+            if access:
+                access.Quit()
+        finally:
+            temporary_directory = self._temporary_directory
+            self._temporary_directory = None
+            if temporary_directory:
+                temporary_directory.cleanup()
 
     def _ensure_source(self, source: str) -> None:
         names = self.table_names()

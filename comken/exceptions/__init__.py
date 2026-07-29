@@ -4,6 +4,7 @@ OriginalLibsError
 ├── UnsupportedFileSuffixError
 ├── AccessError
 │   ├── AccessFileNotFoundError
+│   ├── AccessLocalCopyError
 │   ├── AccessRoutineError
 │   └── AccessSourceNotFoundError
 ├── ExcelError
@@ -33,6 +34,7 @@ OriginalLibsError
 from .access import (
     AccessError,
     AccessFileNotFoundError,
+    AccessLocalCopyError,
     AccessRoutineError,
     AccessSourceNotFoundError,
 )
@@ -72,6 +74,7 @@ __all__ = [
     "OriginalLibsError",
     "AccessError",
     "AccessFileNotFoundError",
+    "AccessLocalCopyError",
     "AccessRoutineError",
     "AccessSourceNotFoundError",
     "ExcelError",
