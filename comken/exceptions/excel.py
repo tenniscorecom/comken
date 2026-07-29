@@ -32,6 +32,26 @@ class SheetNotFoundError(ExcelError):
         super().__init__(f"シートが見つかりません: {name}  存在するシート: {sheets}")
 
 
+class SheetAlreadyExistsError(ExcelError):
+    """同名のシートが既に存在する場合。"""
+
+    def __init__(self, name: str) -> None:
+        super().__init__(
+            f"シート「{name}」は既に存在します。\n"
+            "別のシート名を指定するか、既存のシートをリネームしてください。"
+        )
+
+
+class LastSheetDeletionError(ExcelError):
+    """ブックの最後のシートを削除しようとした場合。"""
+
+    def __init__(self, name: str) -> None:
+        super().__init__(
+            f"最後のシート「{name}」は削除できません。\n"
+            "先に別のシートを追加してから削除してください。"
+        )
+
+
 class MacroError(ExcelError):
     """VBA マクロの実行に失敗した場合。
 

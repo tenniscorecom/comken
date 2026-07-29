@@ -8,7 +8,12 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from ..exceptions import _warn_coerce
+from ..exceptions import (
+    LastSheetDeletionError,
+    SheetAlreadyExistsError,
+    SheetNotFoundError,
+    _warn_coerce,
+)
 from ..runtime import dry_run_log, is_dry_run
 from ..utils.data import col_to_num, column_number
 from ..utils.files.base import FileBase
@@ -74,6 +79,36 @@ class ExcelWriter(ExcelBase):
             SheetNotFoundError: 指定したシートが存在しない場合。
         """
         return Sheet(self._sheet(name))
+
+    def add_sheet(self, name: str, index: int | None = None) -> Sheet:
+        """シートを追加し、そのまま書き込める Sheet を返す。
+
+        Args:
+            name: 追加するシート名。
+            index: 挿入位置（0始まり）。省略時は末尾。
+
+        Raises:
+            SheetAlreadyExistsError: 同名のシートが既に存在する場合。
+        """
+        if name in self._wb.sheetnames:
+            raise SheetAlreadyExistsError(name)
+        return Sheet(self._wb.create_sheet(title=name, index=index))
+
+    def rename_sheet(self, old_name: str, new_name: str) -> None:
+        """シート名を変更する。"""
+        if old_name not in self._wb.sheetnames:
+            raise SheetNotFoundError(old_name, self._wb.sheetnames)
+        if new_name in self._wb.sheetnames and new_name != old_name:
+            raise SheetAlreadyExistsError(new_name)
+        self._wb[old_name].title = new_name
+
+    def delete_sheet(self, name: str) -> None:
+        """シートを削除する。"""
+        if name not in self._wb.sheetnames:
+            raise SheetNotFoundError(name, self._wb.sheetnames)
+        if len(self._wb.sheetnames) == 1:
+            raise LastSheetDeletionError(name)
+        self._wb.remove(self._wb[name])
 
     @classmethod
     def create(cls, path: str | Path, sheet_name: str = "Sheet1") -> "ExcelWriter":

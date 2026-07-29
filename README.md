@@ -705,6 +705,14 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:
     s.freeze_header()
     f.save()
 
+# シートの追加・リネーム・削除
+with ExcelWriter.create(r"C:\作業\report.xlsx") as f:
+    s = f.add_sheet("集計")
+    s.write_table(rows)
+    f.rename_sheet("Sheet1", "元データ")
+    f.delete_sheet("元データ")
+    f.save()
+
 # キー突合で転記（XLOOKUP 的転記。CSV → Excel の更新などに使う）
 lookup = CsvReader("data.csv").index("注文番号")
 MAPPING = {"B": "顧客名", "C": "金額"}  # Excel の列レター → lookup の列名
@@ -740,8 +748,8 @@ with ExcelComHandler("data.xlsm") as f:
 |---|---|
 | 大量行を読む | `iter_rows()` で1行ずつ処理する（全行をメモリに乗せない） |
 | NAS 上の大きいファイル | `local_copy_threshold_mb` の自動ローカルコピーに任せる（デフォルト10MB） |
-| 大量行への書き込み | openpyxl（`ExcelWriter.write_cell`）を使う。COM のセル単位書き込みは1呼び出しごとにプロセス間通信が発生して桁違いに遅い |
-| キー突合転記が大量行 | `ExcelWriter.transfer_by_key`（openpyxl 版）を使う。COM 版（`ExcelComHandler.transfer_by_key`）はセル単位アクセスのため数万行では時間がかかる。COM は最後の保存・マクロだけに使う |
+| 大量行への書き込み | 1セルずつ書かず、行は `Sheet.write_rows()`、見出し＋データは `Sheet.write_table()` でまとめて書く |
+| キー突合転記が大量行 | `transfer_by_key()` を使う。COM 版も Range 単位で一括転記するが、数式再計算が不要なら openpyxl 版を優先する |
 
 ---
 

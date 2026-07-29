@@ -291,13 +291,27 @@ class ExcelComHandler(FileBase):
         last_row = self.used_last_row(sheet_name)
         logger.info("シート「%s」: 最終行 %d行", sheet_name, last_row)
 
+        if last_row < int(start_row):
+            return 0
+
+        first_row = int(start_row)
+        last_col = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
+        read_last_col = max(last_col, key_col_num, *mapping)
+        values = ws.Range(ws.Cells(first_row, 1), ws.Cells(last_row, read_last_col)).Value
+        if first_row == last_row and not isinstance(values, tuple):
+            values = ((values,),)
+        elif first_row == last_row and values and not isinstance(values[0], tuple):
+            values = (values,)
+
         matched = 0
-        for row in range(int(start_row), last_row + 1):
+        output_by_column: dict[int, list[tuple[int, object]]] = {col_num: [] for col_num in mapping}
+        for row_offset, row_values in enumerate(values):
+            row = first_row + row_offset
             try:
-                if self._excel.WorksheetFunction.CountA(ws.Rows(row)) == 0:
+                if all(value is None for value in row_values):
                     continue
 
-                key_value = ws.Cells(row, key_col_num).Value
+                key_value = row_values[key_col_num - 1]
                 if not key_value or str(key_value).strip() == "":
                     continue
 
@@ -312,12 +326,30 @@ class ExcelComHandler(FileBase):
                     continue
 
                 for col_num, name in mapping.items():
-                    ws.Cells(row, col_num).Value = lookup_row.get(name, "")
+                    output_by_column[col_num].append((row, lookup_row.get(name, "")))
                 logger.debug("%d行目: 転記完了（キー: %s）", row, key_value)
                 matched += 1
 
             except Exception as e:
                 raise RowTransferError(row, e) from e
+
+        for col_num, updates in output_by_column.items():
+            run_start = 0
+            while run_start < len(updates):
+                run_end = run_start + 1
+                while run_end < len(updates) and updates[run_end][0] == updates[run_end - 1][0] + 1:
+                    run_end += 1
+                run = updates[run_start:run_end]
+                target = ws.Range(ws.Cells(run[0][0], col_num), ws.Cells(run[-1][0], col_num))
+                try:
+                    target.Value = tuple((value,) for _, value in run)
+                except Exception:
+                    for row, value in run:
+                        try:
+                            ws.Range(ws.Cells(row, col_num), ws.Cells(row, col_num)).Value = value
+                        except Exception as row_error:
+                            raise RowTransferError(row, row_error) from row_error
+                run_start = run_end
 
         logger.info("転記完了: %d件一致（シート: %s）", matched, sheet_name)
         return matched

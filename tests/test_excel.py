@@ -6,6 +6,7 @@ ExcelReader / ExcelWriter クラスのテスト。
 """
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -15,7 +16,9 @@ import comken.excel
 from comken.excel import ExcelReader, ExcelWriter
 from comken.exceptions import (
     ExcelError,
+    LastSheetDeletionError,
     OriginalLibsError,
+    SheetAlreadyExistsError,
     SheetNotFoundError,
     UnsupportedFileSuffixError,
 )
@@ -112,6 +115,58 @@ class TestExcelWriterColumn:
             assert cell.number_format == "#,##0"
             assert cell.font.bold is True
 
+
+class TestExcelWriterSheetOperations:
+    def test_add_sheet_returns_writable_sheet(self, tmp_path: Path) -> None:
+        with ExcelWriter.create(tmp_path / "book.xlsx") as writer:
+            sheet = writer.add_sheet("集計")
+            sheet.write_table([{"注文番号": "A001", "金額": 1000}])
+
+            assert writer._wb.sheetnames == ["Sheet1", "集計"]
+            assert writer._wb["集計"]["A2"].value == "A001"
+
+    def test_add_sheet_inserts_at_index(self, tmp_path: Path) -> None:
+        with ExcelWriter.create(tmp_path / "book.xlsx") as writer:
+            writer.add_sheet("末尾")
+            writer.add_sheet("先頭", index=0)
+
+            assert writer._wb.sheetnames == ["先頭", "Sheet1", "末尾"]
+
+    def test_rejects_duplicate_sheet_name(self, tmp_path: Path) -> None:
+        with (
+            ExcelWriter.create(tmp_path / "book.xlsx") as writer,
+            pytest.raises(SheetAlreadyExistsError, match="別のシート名"),
+        ):
+            writer.add_sheet("Sheet1")
+
+    def test_renames_and_deletes_sheet(self, tmp_path: Path) -> None:
+        with ExcelWriter.create(tmp_path / "book.xlsx") as writer:
+            writer.add_sheet("作業用")
+            writer.rename_sheet("Sheet1", "元データ")
+            writer.delete_sheet("作業用")
+
+            assert writer._wb.sheetnames == ["元データ"]
+
+    @pytest.mark.parametrize("operation", ["rename", "delete"])
+    def test_missing_sheet_raises_sheet_not_found(self, tmp_path: Path, operation: str) -> None:
+        with (
+            ExcelWriter.create(tmp_path / "book.xlsx") as writer,
+            pytest.raises(SheetNotFoundError, match="Sheet1"),
+        ):
+            if operation == "rename":
+                writer.rename_sheet("なし", "新名称")
+            else:
+                writer.delete_sheet("なし")
+
+    def test_rejects_deleting_last_sheet(self, tmp_path: Path) -> None:
+        with (
+            ExcelWriter.create(tmp_path / "book.xlsx") as writer,
+            pytest.raises(LastSheetDeletionError, match="先に別のシート"),
+        ):
+            writer.delete_sheet("Sheet1")
+
+
+class TestExcelWriterInvalidColumn:
     @pytest.mark.parametrize("col", ["", "A1", "あ"])
     def test_rejects_invalid_column_letter_with_guidance(self, tmp_path, col):
         with (
@@ -134,6 +189,101 @@ class TestExcelComHandlerColumn:
 
         assert sheet.Cells.call_args_list == [((2, expected),), ((2, expected),)]
         assert sheet.Cells.return_value.Value == "書込値"
+
+
+class TestExcelComHandlerTransferByKey:
+    def test_reads_and_writes_ranges_in_bulk(self) -> None:
+        source = (
+            (1001.0, "旧顧客", "旧金額"),
+            (1002.0, "旧顧客続き", "旧金額続き"),
+            (None, "数式を想定した未一致値", 0),
+            ("A002", "旧顧客2", "旧金額2"),
+        )
+        written: dict[tuple[int, int, int], tuple] = {}
+
+        class FakeRange:
+            def __init__(self, start: tuple[int, int], end: tuple[int, int]) -> None:
+                self.start = start
+                self.end = end
+
+            @property
+            def Value(self):
+                return source
+
+            @Value.setter
+            def Value(self, value) -> None:
+                written[(self.start[0], self.end[0], self.start[1])] = value
+
+        sheet = MagicMock()
+        sheet.Cells.side_effect = lambda row, col: (row, col)
+        sheet.Range.side_effect = lambda start, end: FakeRange(start, end)
+        sheet.UsedRange = SimpleNamespace(
+            Row=1,
+            Column=1,
+            Rows=SimpleNamespace(Count=5),
+            Columns=SimpleNamespace(Count=3),
+        )
+
+        handler = ExcelComHandler.__new__(ExcelComHandler)
+        handler._sheet = MagicMock(return_value=sheet)
+        handler.used_last_row = MagicMock(return_value=5)
+
+        matched = handler.transfer_by_key(
+            "Sheet1",
+            key_col="A",
+            lookup={
+                "1001": {"顧客名": "株式会社A", "金額": 1000},
+                "1002": {"顧客名": "株式会社C", "金額": 1500},
+                "A002": {"顧客名": "株式会社B", "金額": 2000},
+            },
+            column_mapping={"B": "顧客名", "C": "金額"},
+        )
+
+        assert matched == 3
+        assert written[(2, 3, 2)] == (("株式会社A",), ("株式会社C",))
+        assert written[(5, 5, 2)] == (("株式会社B",),)
+        assert written[(2, 3, 3)] == ((1000,), (1500,))
+        assert written[(5, 5, 3)] == ((2000,),)
+        assert not any(start == 4 for start, _, _ in written)
+        assert sheet.Range.call_count == 5
+
+    def test_write_error_identifies_row(self) -> None:
+        source = ((1001.0,), (1002.0,))
+
+        class FailingRange:
+            def __init__(self, start: tuple[int, int], end: tuple[int, int]) -> None:
+                self.start = start
+                self.end = end
+
+            @property
+            def Value(self):
+                return source
+
+            @Value.setter
+            def Value(self, value) -> None:
+                if self.start[0] != self.end[0] or self.start[0] == 3:
+                    raise TypeError("書き込み不可")
+
+        sheet = MagicMock()
+        sheet.Cells.side_effect = lambda row, col: (row, col)
+        sheet.Range.side_effect = lambda start, end: FailingRange(start, end)
+        sheet.UsedRange = SimpleNamespace(
+            Row=1,
+            Column=1,
+            Rows=SimpleNamespace(Count=3),
+            Columns=SimpleNamespace(Count=1),
+        )
+        handler = ExcelComHandler.__new__(ExcelComHandler)
+        handler._sheet = MagicMock(return_value=sheet)
+        handler.used_last_row = MagicMock(return_value=3)
+
+        with pytest.raises(ExcelError, match="3行目"):
+            handler.transfer_by_key(
+                "Sheet1",
+                key_col="A",
+                lookup={"1001": {"値": "A"}, "1002": {"値": "B"}},
+                column_mapping={"B": "値"},
+            )
 
 
 class TestOpen:

@@ -15,6 +15,8 @@ OriginalLibsError
 ├── ExcelError
 │   ├── ExcelFileNotFoundError
 │   ├── SheetNotFoundError
+│   ├── SheetAlreadyExistsError
+│   ├── LastSheetDeletionError
 │   ├── MacroError
 │   ├── RowTransferError
 │   ├── EmptyHeaderCellError
@@ -71,8 +73,10 @@ from .excel import (
     ExcelFileNotFoundError,
     ExcelHeadersTooFewError,
     FileFormatMismatchError,
+    LastSheetDeletionError,
     MacroError,
     RowTransferError,
+    SheetAlreadyExistsError,
     SheetNotFoundError,
 )
 from .file import UnsupportedFileSuffixError
@@ -95,6 +99,8 @@ __all__ = [
     "ExcelError",
     "ExcelFileNotFoundError",
     "SheetNotFoundError",
+    "SheetAlreadyExistsError",
+    "LastSheetDeletionError",
     "MacroError",
     "RowTransferError",
     "EmptyHeaderCellError",
