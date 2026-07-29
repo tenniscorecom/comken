@@ -28,6 +28,14 @@
 | `RowTransferError` | Excel の行転記に失敗した | 表示された行番号のデータを確認する |
 | `EmptyHeaderCellError` | Excel の見出しに空欄がある | Excel の1行目の空欄を埋める |
 | `ExcelHeadersTooFewError` | 指定した見出し数が列数より少ない | 管理者へ連絡する |
+
+## Access のエラー
+
+| エラー名 | 意味 | 対処 |
+|---|---|---|
+| `AccessFileNotFoundError` | Access ファイルが見つからない | ファイルの置き場所と名前を確認する |
+| `AccessRoutineError` | Access マクロまたは VBA の実行に失敗した | 表示された名前と Access 側の内容を確認する |
+| `AccessSourceNotFoundError` | テーブルまたはクエリが見つからない | エラーに表示された存在する名前を確認する |
 | `FileFormatMismatchError` | 保存拡張子と形式が合わない | 管理者へ連絡する |
 | `PermissionError` | ファイルが誰かに開かれている | 自分や他の人がそのファイルを開いていないか確認して閉じる |
 
@@ -60,6 +68,7 @@
 |---|---|
 | `OriginalLibsError` | comken が出す固有エラー全体 |
 | `ExcelError` | Excel に関するエラー |
+| `AccessError` | Access に関するエラー |
 | `CsvError` | CSV に関するエラー |
 | `ColumnNotFoundError` | Excel・CSV・データ比較で列が見つからないエラー |
 | `ConfigError` | config.ini に関するエラー |

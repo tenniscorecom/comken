@@ -73,7 +73,7 @@ def test_exception_guide_covers_all_public_exceptions():
     guide = (_ROOT / "ERRORS.md").read_text(encoding="utf-8")
     names = _all_names(_ROOT / "comken" / "exceptions" / "__init__.py")
 
-    assert len(names) == 22
+    assert len(names) == 26
     assert not [name for name in names if f"`{name}`" not in guide]
 
 
@@ -90,7 +90,7 @@ def test_feature_catalog_covers_all_public_api():
             continue
         names.extend(name for name in _all_names(path) if name not in names)
 
-    assert len(names) == 49
+    assert len(names) == 50
     assert not [name for name in names if name not in catalog]
 
 

@@ -13,6 +13,7 @@ comken の使い方を「動くコード」で覚えるためのサンプル。
 | 4 | sample_login | ブラウザ自動化（Page Object Model の一式） | EdgeDriver / BasePage / Locator | Edge + msedgedriver |
 | 5 | csv_date_move | CSV の日付列とファイル名の日付が一致したファイルを移動 | CsvReader.first / date_in_name / dry_run | config.ini の作成 |
 | 6 | daily_batch_template | 日次バッチの雛形（新規プロジェクトのコピー元） | logging / FileFinder / ExcelWriter | config.ini の作成 |
+| 7 | access_export | Access マクロで整形 → CSV 出力 → Excel 帳票 | AccessDatabase / CsvReader / ExcelWriter | Microsoft Access + パス設定 |
 
 ## 実行方法
 

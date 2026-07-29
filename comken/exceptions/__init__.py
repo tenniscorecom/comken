@@ -2,6 +2,10 @@
 
 OriginalLibsError
 ├── UnsupportedFileSuffixError
+├── AccessError
+│   ├── AccessFileNotFoundError
+│   ├── AccessRoutineError
+│   └── AccessSourceNotFoundError
 ├── ExcelError
 │   ├── ExcelFileNotFoundError
 │   ├── SheetNotFoundError
@@ -26,6 +30,12 @@ OriginalLibsError
 カテゴリ基底クラスはまとめて捕捉するために使い、直接送出しない。
 """
 
+from .access import (
+    AccessError,
+    AccessFileNotFoundError,
+    AccessRoutineError,
+    AccessSourceNotFoundError,
+)
 from .base import OriginalLibsError
 from .column import (
     ColumnNotFoundError,
@@ -60,6 +70,10 @@ from .warning import _warn_coerce as _warn_coerce
 
 __all__ = [
     "OriginalLibsError",
+    "AccessError",
+    "AccessFileNotFoundError",
+    "AccessRoutineError",
+    "AccessSourceNotFoundError",
     "ExcelError",
     "ExcelFileNotFoundError",
     "SheetNotFoundError",

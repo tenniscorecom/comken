@@ -48,6 +48,7 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 | exceptions | comken 固有の例外（エラー名別に対処可能） |
 | CSV | CSV の読み込み・検索・抽出 |
 | Excel（openpyxl） | Excel の読み書き（数式・マクロは自動で win32com を使用） |
+| Access | Access のマクロ・VBA 実行、テーブル／クエリの CSV 出力 |
 | Windows（pywin32） | Excel COM 操作・ウィンドウ操作・レジストリ読み取り |
 | Browser（Edge） | Edge ブラウザ操作 |
 | utils.files | ファイル検索・操作・圧縮・標準フォルダ取得・ファイル名の組み立て |
@@ -605,6 +606,28 @@ with local_copy(NAS_PATH) as local_path:
 ```
 
 ---
+
+## Access
+
+Access がインストールされた Windows PC で、マクロや VBA による整形結果を CSV に出力する。
+数十万件では `rows()` の結果をリスト化せず、Python のメモリを使わない `export_csv()` を使う。
+既定の文字コードは Excel で開きやすい CP932。`Encoding.UTF8_SIG` も指定できる。
+
+```python
+from comken.access import AccessDatabase
+from comken.constants import Encoding
+
+with AccessDatabase(r"C:\作業\顧客.accdb") as db:
+    db.run_macro("日次整形")  # Access マクロ
+    db.run_function("集計処理", "東日本")  # VBA のプロシージャ／関数
+    db.export_csv("T_出力", r"C:\作業\顧客.csv", encoding=Encoding.CP932)
+
+    for row in db.rows("T_出力"):  # Python 側で逐次処理するときだけ
+        ...
+```
+
+`table_names()` で利用可能なテーブルと保存済みクエリを確認できる。外部に影響する
+マクロ・VBA・CSV 出力は `dry_run()` 中には実行されない。
 
 ## Excel
 
