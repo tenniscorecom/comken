@@ -438,6 +438,17 @@ class TestDownloadDir:
         finally:
             dl.remove()
 
+    def test_wait_ignores_old_temp_file(self, tmp_path):
+        """作成前からある一時ファイルは新しいダウンロードを妨げない。"""
+        target = tmp_path / "downloads"
+        target.mkdir()
+        (target / "old.tmp").touch()
+        dl = DownloadDir(path=target)
+        completed = target / "report.xlsx"
+        completed.touch()
+
+        assert dl.wait(timeout=1) == [completed]
+
     def test_remove_deletes_dir(self):
         """remove() でフォルダごと削除される。"""
         dl = DownloadDir()

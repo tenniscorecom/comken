@@ -80,6 +80,7 @@ class CsvReader(CsvBase):
         """
         super().__init__(path, encoding)
         self._headers = headers
+        self._fieldnames: list[str] | None = None
         self._cache: list[dict[str, str]] | None = None
 
     def _load(self) -> list[dict[str, str]]:
@@ -93,15 +94,16 @@ class CsvReader(CsvBase):
         if self._cache is not None:
             return self._cache
         # headers 指定時は1行目をヘッダーではなくデータとして扱う
-        rows = list(csv.DictReader(io.StringIO(self._read_text()), fieldnames=self._headers))
+        reader = csv.DictReader(io.StringIO(self._read_text()), fieldnames=self._headers)
+        rows = list(reader)
+        self._fieldnames = reader.fieldnames
         # DictReader は headers より多い列を None キーに押し込む。無音のデータ落ちを防ぐ
         if self._headers is not None and any(None in row for row in rows):
             raise CsvHeadersTooFewError(len(self._headers), self._path)
         self._cache = rows
         return rows
 
-    @staticmethod
-    def _validate_columns(rows: list[dict[str, str]], columns: list[str]) -> None:
+    def _validate_columns(self, columns: list[str]) -> None:
         """指定した列名が CSV に存在するか確認する。
 
         非エンジニアがヘッダーを変更したとき「黙って0件」ではなく
@@ -110,11 +112,11 @@ class CsvReader(CsvBase):
         Raises:
             ColumnNotFoundError: 存在しない列名が含まれる場合。
         """
-        if not rows:
+        if self._fieldnames is None:
             return  # データがなければ検証できない（空の結果を返す側に任せる）
-        missing = [col for col in columns if col not in rows[0]]
+        missing = [col for col in columns if col not in self._fieldnames]
         if missing:
-            raise CsvColumnNotFoundError(missing, list(rows[0].keys()))
+            raise CsvColumnNotFoundError(missing, self._fieldnames)
 
     def _read_text(self) -> str:
         """ファイルを読み、文字コードを判定してテキストとして返す。
@@ -146,7 +148,7 @@ class CsvReader(CsvBase):
         data = self._load()
         if columns is None:
             return data
-        self._validate_columns(data, columns)
+        self._validate_columns(columns)
         return [{col: row[col] for col in columns} for row in data]
 
     def find(self, key_col: str, value: str) -> dict[str, str] | None:
@@ -160,7 +162,7 @@ class CsvReader(CsvBase):
             一致した行の辞書。見つからない場合は None。
         """
         data = self._load()
-        self._validate_columns(data, [key_col])
+        self._validate_columns([key_col])
         target = str(value)
         for row in data:
             # CSV の値は常に文字列。int 等を渡されても取りこぼさないよう文字列で比較する
@@ -179,7 +181,7 @@ class CsvReader(CsvBase):
             一致した行の辞書のリスト。一致しない場合は空リスト。
         """
         data = self._load()
-        self._validate_columns(data, [key_col])
+        self._validate_columns([key_col])
         target = str(value)
         # CSV の値は常に文字列。int 等を渡されても取りこぼさないよう文字列で比較する
         return [row for row in data if str(row.get(key_col, "")) == target]
@@ -194,7 +196,7 @@ class CsvReader(CsvBase):
             列の値のリスト（ヘッダー行を除く）。
         """
         data = self._load()
-        self._validate_columns(data, [col_name])
+        self._validate_columns([col_name])
         return [row[col_name] for row in data]
 
     def index(self, key_col: str) -> dict[str, dict[str, str]]:
@@ -210,5 +212,5 @@ class CsvReader(CsvBase):
             {キー値: 行の辞書} の形式の辞書。
         """
         data = self._load()
-        self._validate_columns(data, [key_col])
+        self._validate_columns([key_col])
         return {row[key_col]: row for row in data}

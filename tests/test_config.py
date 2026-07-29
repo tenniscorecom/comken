@@ -68,6 +68,12 @@ class TestConfigBasic:
         ini.write_text("[s]\nk = 日本語\n", encoding="utf-8-sig")
         assert Config(ini).S.K == "日本語"
 
+    def test_reads_percent_sign_without_interpolation(self, tmp_path):
+        """単独の % を含む設定値をそのまま読める。"""
+        ini = tmp_path / "config.ini"
+        ini.write_text("[s]\nurl = https://example.test/a%20b\n", encoding="utf-8")
+        assert Config(ini).S.URL == "https://example.test/a%20b"
+
 
 class TestConfigBoolConversion:
     """bool 変換のテスト。"""
@@ -327,7 +333,7 @@ class TestGenerateStub:
         assert "BROWSER: _BROWSER" in text
         # __init__.pyi は comken の公開 API を再エクスポートする
         init_text = (tmp_path / "typings" / "comken" / "__init__.pyi").read_text(encoding="utf-8")
-        assert "set_dry_run as set_dry_run" in init_text
+        assert "dry_run as dry_run" in init_text
         assert "is_debug as is_debug" in init_text
 
     def test_missing_ini_raises(self, tmp_path):

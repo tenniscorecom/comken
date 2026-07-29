@@ -18,6 +18,7 @@ CsvWriter クラスを通じて CSV ファイルへの書き込みを行う。
 """
 
 import csv
+import io
 import logging
 import os
 import tempfile
@@ -87,6 +88,14 @@ class CsvWriter(CsvBase):
                 )
                 return  # 全行で同じ構造のことが多いので1回警告すれば十分
 
+    def _validate_encoding(self, rows: list[dict]) -> None:
+        """追記内容を対象文字コードへ変換できることをファイル操作前に確認する。"""
+        buffer = io.StringIO()
+        writer = csv.DictWriter(buffer, fieldnames=self._fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+        buffer.getvalue().encode(self._encoding)
+
     def write_rows(self, rows: list[dict]) -> None:
         """ファイルを新規作成（または上書き）して全行を書き込む。
 
@@ -122,11 +131,15 @@ class CsvWriter(CsvBase):
 
         Args:
             row: 追記する行の辞書。
+
+        Notes:
+            複数の PC から同じ CSV へ同時に追記する使い方は想定していない。
         """
         self._warn_unknown_keys([row])
         if is_dry_run():
             dry_run_log("CSV に 1 行追記: %s", self._path)
             return
+        self._validate_encoding([row])
         is_new = not self._path.exists()
         with self._open("a") as f:
             writer = csv.DictWriter(f, fieldnames=self._fieldnames, extrasaction="ignore")
@@ -141,11 +154,15 @@ class CsvWriter(CsvBase):
 
         Args:
             rows: 追記する行のリスト（辞書のリスト）。
+
+        Notes:
+            複数の PC から同じ CSV へ同時に追記する使い方は想定していない。
         """
         self._warn_unknown_keys(rows)
         if is_dry_run():
             dry_run_log("CSV に %d 行追記: %s", len(rows), self._path)
             return
+        self._validate_encoding(rows)
         is_new = not self._path.exists()
         with self._open("a") as f:
             writer = csv.DictWriter(f, fieldnames=self._fieldnames, extrasaction="ignore")

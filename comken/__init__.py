@@ -17,12 +17,12 @@ if _sys.pycache_prefix is None and not _os.environ.get("PYTHONPYCACHEPREFIX"):
 # ────────────────────────────────────────────────────────────────────────────
 
 from .config import Config
-from .runtime import is_debug, is_dry_run, set_debug, set_dry_run
+from .runtime import debug, dry_run, is_debug, is_dry_run
 
 __all__ = [
     "Config",
-    "set_debug",
-    "is_debug",
-    "set_dry_run",
+    "dry_run",
+    "debug",
     "is_dry_run",
+    "is_debug",
 ]

@@ -46,7 +46,7 @@ def generate_stub(
     Raises:
         ConfigError: config.ini が見つからない場合。
     """
-    cfg = configparser.ConfigParser()
+    cfg = configparser.ConfigParser(interpolation=None)
     loaded = cfg.read(ini_path, encoding="utf-8-sig")
     if not loaded:
         raise ConfigFileNotFoundError(Path(ini_path).resolve())

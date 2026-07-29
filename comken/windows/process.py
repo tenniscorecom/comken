@@ -45,14 +45,17 @@ def kill_excel() -> bool:
       無人実行の PC で自動処理の開始前に呼ぶのが主な用途。
 
     Returns:
-        True: 終了させた（残骸があった）。False: そもそも起動していなかった。
+        True: 終了に成功した。False: 起動していなかった、または終了に失敗した。
     """
     if not is_excel_running():
         return False
-    subprocess.run(
+    result = subprocess.run(
         ["taskkill", "/F", "/IM", "EXCEL.EXE"],
         capture_output=True,
         text=True,
     )
+    if result.returncode != 0:
+        logger.warning("EXCEL.EXE プロセスを終了できませんでした: %s", result.stderr.strip())
+        return False
     logger.info("EXCEL.EXE プロセスを終了しました（前回処理の残骸の可能性）")
     return True

@@ -8,14 +8,18 @@ runtime.py — ライブラリ全体の実行モード（デバッグ・dry-run�
 
     # デバッグモード: ライブラリ主要処理の所要時間が DEBUG ログに残る
     # （出力先・フォーマット・レベルは社内の共通ライブラリ側で設定する）
-    comken.set_debug(True)
+    with comken.debug():
+        run()
 
     # dry-run モード: 外部に影響する操作を実行せず、内容だけ INFO ログに出す
     # 対象: ファイルの移動・コピー、Excel/CSV の保存
-    comken.set_dry_run(True)
+    with comken.dry_run():
+        run()
 """
 
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
 
@@ -23,18 +27,23 @@ _debug = False
 _dry_run = False
 
 
-def set_debug(enabled: bool = True) -> None:
-    """デバッグモードを切り替える。
+@contextmanager
+def debug(enabled: bool = True) -> Iterator[None]:
+    """ブロック内だけデバッグモードを指定した状態にする。
 
     有効にすると、ライブラリの主要処理（Excel 読み込み・転記・保存、CSV 読み書き、
     zip 等）の所要時間が DEBUG ログに記録される。どこが遅いかの調査に使う。
 
     Args:
-        enabled: True で有効（デフォルト）。False で無効。
+        enabled: True で有効（デフォルト）。False ならブロック内だけ無効。
     """
     global _debug
+    previous = _debug
     _debug = enabled
-    logger.info("デバッグモード: %s", "ON（処理時間を DEBUG ログに記録）" if enabled else "OFF")
+    try:
+        yield
+    finally:
+        _debug = previous
 
 
 def is_debug() -> bool:
@@ -42,8 +51,9 @@ def is_debug() -> bool:
     return _debug
 
 
-def set_dry_run(enabled: bool = True) -> None:
-    """dry-run モードを切り替える。
+@contextmanager
+def dry_run(enabled: bool = True) -> Iterator[None]:
+    """ブロック内だけ dry-run モードを指定した状態にする。
 
     有効にすると、外部に影響する操作を実行せず、何をするはずだったかを
     INFO ログ（[DRY-RUN] プレフィックス付き）に出す。本番実行前の動作確認に使う。
@@ -55,11 +65,16 @@ def set_dry_run(enabled: bool = True) -> None:
     読み取り（CSV・Excel の読み込み、SOQL クエリ等）は通常どおり実行される。
 
     Args:
-        enabled: True で有効（デフォルト）。False で無効。
+        enabled: True で有効（デフォルト）。False ならブロック内だけ無効。
+                 外側が dry-run 中でも、このブロックでは通常どおり書き込む。
     """
     global _dry_run
+    previous = _dry_run
     _dry_run = enabled
-    logger.info("dry-run モード: %s", "ON（外部に影響する操作をスキップ）" if enabled else "OFF")
+    try:
+        yield
+    finally:
+        _dry_run = previous
 
 
 def is_dry_run() -> bool:

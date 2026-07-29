@@ -116,12 +116,12 @@ from comken.exceptions import SheetNotFoundError
 
 # 例外: プロジェクト全体の土台だけは comken 直下から import してよい
 from comken import config
-from comken import is_dry_run, set_dry_run
-from comken import is_debug, set_debug
+from comken import is_dry_run, dry_run
+from comken import is_debug, debug
 ```
 
-comken 直下から import してよいのは、`config`、`Config`、`set_dry_run`、`is_dry_run`、
-`set_debug`、`is_debug` だけ。それ以外は必ず機能を提供するパッケージを明示する。
+comken 直下から import してよいのは、`config`、`Config`、`dry_run`、`is_dry_run`、
+`debug`、`is_debug` だけ。それ以外は必ず機能を提供するパッケージを明示する。
 
 ```python
 # 悪い（どの機能群に依存しているか分からない）

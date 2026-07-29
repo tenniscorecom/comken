@@ -75,13 +75,13 @@ class Timer:
 def measure(func: Callable[_P, _R]) -> Callable[_P, _R]:
     """デバッグモード時だけ処理時間を DEBUG ログに出すデコレータ。
 
-    ライブラリの主要処理に付いており、comken.set_debug(True) にすると
+    ライブラリの主要処理に付いており、with comken.debug(): の範囲では
     「どの処理に何秒かかったか」を DEBUG ログに出す。
     プロジェクト側の関数に付けてもよい。
 
     Timer との使い分け:
         - Timer: 常にログに出したい・経過秒数を値として使いたい場合
-        - measure: 普段は出さず、調査のときだけ set_debug(True) で出したい場合
+        - measure: 普段は出さず、調査のときだけ with debug(): で出したい場合
 
     使い方:
         from comken.utils import measure

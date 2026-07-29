@@ -170,6 +170,13 @@ class TestCsvReaderColumnValidation:
         with pytest.raises(ColumnNotFoundError):
             CsvReader(sample_csv).rows(columns=["注文番号", "存在しない列"])
 
+    def test_header_only_raises_on_missing_column(self, tmp_path):
+        """ヘッダーだけの CSV でも存在しない列名を検出する。"""
+        path = tmp_path / "header_only.csv"
+        path.write_text("注文番号,金額\n", encoding="utf-8-sig")
+        with pytest.raises(ColumnNotFoundError):
+            CsvReader(path).rows(columns=["存在しない列"])
+
 
 class TestCsvReaderEncoding:
     """文字コードのテスト。"""
@@ -287,3 +294,14 @@ class TestCsvWriterTransactionalWrite:
 
         assert path.read_text(encoding="utf-8-sig") == original
         assert list(path.parent.glob(f".{path.name}.*.tmp")) == []
+
+    def test_append_encoding_failure_preserves_existing_file(self, tmp_path):
+        """追記内容を変換できない場合は既存 CSV を一切変更しない。"""
+        path = tmp_path / "output.csv"
+        original = "名前\n山田\n"
+        path.write_text(original, encoding="cp932")
+        with pytest.raises(UnicodeEncodeError):
+            CsvWriter(path, fieldnames=["名前"], encoding="cp932").append_rows(
+                [{"名前": "佐藤"}, {"名前": "😀"}]
+            )
+        assert path.read_text(encoding="cp932") == original

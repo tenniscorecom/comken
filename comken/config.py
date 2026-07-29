@@ -78,7 +78,7 @@ class Config:
         Args:
             path: config.ini のパス。省略するとカレントディレクトリの config.ini を読む。
         """
-        cfg = configparser.ConfigParser()
+        cfg = configparser.ConfigParser(interpolation=None)
         # utf-8-sig: メモ帳等で保存すると BOM 付き UTF-8 になるため（BOM なしも読める）
         loaded = cfg.read(path, encoding="utf-8-sig")
         if not loaded:

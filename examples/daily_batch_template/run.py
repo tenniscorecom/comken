@@ -58,7 +58,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     # ログの設定は社内の共通ライブラリ側で行う。ここでは logging をそのまま使う
-    # 動きを確認したいだけのとき: from comken import set_dry_run; set_dry_run(True)
+    # 動きを確認したいだけのとき: from comken import dry_run; with dry_run(): main()
     # （ファイル出力をスキップして、流れだけ [DRY-RUN] ログで確認できる）
     try:
         main()

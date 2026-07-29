@@ -29,7 +29,9 @@ def main() -> None:
 if __name__ == "__main__":
     # ログの設定は社内の共通ライブラリ側で行う。ここでは logging をそのまま使う
     # 動作確認だけしたいときは保存・送信をスキップできる:
-    #   from comken import set_dry_run; set_dry_run(True)
+    #   from comken import dry_run
+    #   with dry_run():
+    #       main()
     try:
         main()
     except OriginalLibsError as e:

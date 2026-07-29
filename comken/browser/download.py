@@ -56,7 +56,7 @@ class DownloadDir:
             self.path = Path(tempfile.mkdtemp(prefix=prefix))
             self._is_temp = True
         # 既存フォルダを指定した場合、前回のファイルを wait() の完了対象にしないための記録
-        self._initial_files = {p.name for p in self.path.iterdir() if p.is_file()}
+        self._initial_files = {p: p.stat().st_mtime_ns for p in self.path.iterdir() if p.is_file()}
 
     def __fspath__(self) -> str:
         # os.PathLike 対応。EdgeDriver(download_dir=dl) のように直接渡せるようにする
@@ -91,14 +91,12 @@ class DownloadDir:
 
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            in_progress = list(self.path.glob("*.crdownload")) + list(self.path.glob("*.tmp"))
-            files = [
-                p
-                for p in self.path.iterdir()
-                if p.is_file()
-                and p.suffix not in (".crdownload", ".tmp")
-                and p.name not in self._initial_files
-            ]
+            current = {p: p.stat().st_mtime_ns for p in self.path.iterdir() if p.is_file()}
+            changed = {
+                p for p, modified_at in current.items() if self._initial_files.get(p) != modified_at
+            }
+            in_progress = [p for p in changed if p.suffix in (".crdownload", ".tmp")]
+            files = [p for p in changed if p.suffix not in (".crdownload", ".tmp")]
             if files and not in_progress:
                 return sorted(files, key=lambda p: p.stat().st_mtime)
             time.sleep(0.5)
