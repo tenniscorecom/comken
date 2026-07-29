@@ -779,50 +779,55 @@ class TestSheetApiBoundary:
 class TestStructuredTable:
     """Sheet の構造化テーブル操作。"""
 
-    def test_rename_preserves_table_definition_after_save(self, tmp_path):
-        path = tmp_path / "rename_table.xlsx"
+    def test_append_expands_table_and_matches_headers_after_save(self, tmp_path):
+        path = tmp_path / "append_table.xlsx"
         with ExcelWriter.create(path) as writer:
             sheet = writer.sheet("Sheet1")
-            sheet.write_rows(1, [["注文番号", "金額"], ["A001", 1000], ["A002", 2000]])
-            sheet.add_table("売上", "A1:B3")
-            table = sheet.ws.tables["売上"]
-            table.tableStyleInfo.name = "TableStyleMedium4"
-            writer.save()
-
-        with ExcelWriter(path) as writer:
-            sheet = writer.sheet("Sheet1")
-            original = sheet.ws.tables["売上"]
-            original_columns = [(column.id, column.name) for column in original.tableColumns]
-            sheet.rename_table("売上", "月次売上")
-            assert sheet.table_names() == ["月次売上"]
-            writer.save()
-
-        workbook = load_workbook(path)
-        renamed = workbook["Sheet1"].tables["月次売上"]
-        assert renamed.ref == "A1:B3"
-        assert renamed.tableStyleInfo.name == "TableStyleMedium4"
-        assert [(column.id, column.name) for column in renamed.tableColumns] == original_columns
-        workbook.close()
-
-    def test_add_resize_delete_and_save(self, tmp_path):
-        path = tmp_path / "table.xlsx"
-        with ExcelWriter.create(path) as writer:
-            sheet = writer.sheet("Sheet1")
-            sheet.write_rows(1, [["注文番号", "金額"], ["A001", 1000], ["A002", 2000]])
+            sheet.write_rows(1, [["商品", "金額"], ["A", 100]])
             sheet.add_table("売上", "A1:B2")
-            assert sheet.table_names() == ["売上"]
-            sheet.resize_table("売上", "A1:B3")
             writer.save()
-
-        workbook = load_workbook(path)
-        assert workbook["Sheet1"].tables["売上"].ref == "A1:B3"
-        workbook.close()
 
         with ExcelWriter(path) as writer:
             sheet = writer.sheet("Sheet1")
-            sheet.delete_table("売上")
-            assert sheet.table_names() == []
-            assert sheet["A2"] == "A001"
+            sheet.append_to_table("売上", [{"金額": 200, "商品": "B"}])
+            assert writer.written_ranges() == {"Sheet1": "A3:B3"}
+            writer.save()
+
+        workbook = load_workbook(path)
+        worksheet = workbook["Sheet1"]
+        assert worksheet.tables["売上"].ref == "A1:B3"
+        assert worksheet["A3"].value == "B"
+        assert worksheet["B3"].value == 200
+        workbook.close()
+
+    def test_clear_removes_only_data_and_shrinks_table_after_save(self, tmp_path):
+        path = tmp_path / "clear_table.xlsx"
+        with ExcelWriter.create(path) as writer:
+            sheet = writer.sheet("Sheet1")
+            sheet.write_rows(1, [["商品", "金額"], ["A", 100], ["B", 200]])
+            sheet.add_table("売上", "A1:B3")
+            sheet.clear_table("売上")
+            assert sheet["A1"] == "商品"
+            assert sheet["B1"] == "金額"
+            assert sheet["A2"] is None
+            assert writer.written_ranges() == {"Sheet1": "A1:B3"}
+            writer.save()
+
+        workbook = load_workbook(path)
+        assert workbook["Sheet1"].tables["売上"].ref == "A1:B1"
+        workbook.close()
+
+    def test_replace_swaps_data_and_keeps_missing_header_blank(self, tmp_path):
+        path = tmp_path / "replace_table.xlsx"
+        with ExcelWriter.create(path) as writer:
+            sheet = writer.sheet("Sheet1")
+            sheet.write_rows(1, [["商品", "金額"], ["旧", 999], ["残ると困る", 888]])
+            sheet.add_table("売上", "A1:B3")
+            sheet.replace_table("売上", [{"商品": "新"}])
+            assert sheet["A2"] == "新"
+            assert sheet["B2"] == ""
+            assert sheet["A3"] is None
+            assert sheet.ws.tables["売上"].ref == "A1:B2"
 
     @pytest.mark.parametrize("name", ["売上 表", "1売上", "A1", "R1C1"])
     def test_invalid_name_raises_with_guidance(self, tmp_path, name):
@@ -840,34 +845,31 @@ class TestStructuredTable:
             with pytest.raises(TableAlreadyExistsError):
                 sheet.add_table("既存", "A1:B2")
             with pytest.raises(TableNotFoundError, match="既存"):
-                sheet.resize_table("不在", "A1:B2")
-            with pytest.raises(TableNotFoundError, match="既存"):
-                sheet.delete_table("不在")
+                sheet.append_to_table("不在", [{"A": 3}])
 
-    @pytest.mark.parametrize("name", ["売上 表", "1売上", "A1", "R1C1", "A" * 256])
-    def test_rename_rejects_invalid_new_name(self, tmp_path, name):
-        with ExcelWriter.create(tmp_path / "invalid_rename.xlsx") as writer:
+    def test_unknown_key_raises_with_guidance(self, tmp_path):
+        with ExcelWriter.create(tmp_path / "unknown_key.xlsx") as writer:
             sheet = writer.sheet("Sheet1")
-            sheet.write_rows(1, [["A", "B"], [1, 2]])
+            sheet.write_rows(1, [["商品", "金額"], ["A", 100]])
             sheet.add_table("売上", "A1:B2")
-            with pytest.raises(InvalidTableNameError):
-                sheet.rename_table("売上", name)
+            with pytest.raises(ValueError, match="キー名を見出しに合わせて"):
+                sheet.append_to_table("売上", [{"商品": "B", "数量": 2}])
 
-    def test_rename_duplicate_and_missing_errors_are_specific(self, tmp_path):
-        with ExcelWriter.create(tmp_path / "rename_errors.xlsx") as writer:
-            first = writer.sheet("Sheet1")
-            first.write_rows(1, [["A", "B"], [1, 2]])
-            first.add_table("売上", "A1:B2")
-            second = writer.add_sheet("Sheet2")
-            second.write_rows(1, [["A", "B"], [3, 4]])
-            second.add_table("Summary", "A1:B2")
+    def test_replace_validates_before_clearing_existing_data(self, tmp_path):
+        with ExcelWriter.create(tmp_path / "invalid_replace.xlsx") as writer:
+            sheet = writer.sheet("Sheet1")
+            sheet.write_rows(1, [["商品", "金額"], ["A", 100]])
+            sheet.add_table("売上", "A1:B2")
+            with pytest.raises(ValueError):
+                sheet.replace_table("売上", [{"商品": "B", "数量": 2}])
+            assert sheet["A2"] == "A"
+            assert sheet["B2"] == 100
 
-            with pytest.raises(TableAlreadyExistsError):
-                first.rename_table("売上", "Summary")
-            with pytest.raises(TableAlreadyExistsError):
-                first.rename_table("売上", "SUMMARY")
-            with pytest.raises(TableNotFoundError, match="売上"):
-                first.rename_table("不在", "新規")
+    def test_removed_table_methods_do_not_exist(self, tmp_path):
+        with ExcelWriter.create(tmp_path / "removed.xlsx") as writer:
+            sheet = writer.sheet("Sheet1")
+            for name in ("table_names", "rename_table", "resize_table", "delete_table"):
+                assert not hasattr(sheet, name)
 
 
 class TestReadComputedRows:

@@ -735,13 +735,18 @@ with ExcelWriter("data.xlsx") as f:
     s.set_fill(row=ROW, col=COL, color="CCE5FF") # 定数にない色は16進で
     f.save()
 
-# 構造化テーブル（write_table は値を書き、add_table はテーブル定義を付ける）
+# 構造化テーブル
 with ExcelWriter.create("table.xlsx") as f:
     s = f.sheet("Sheet1")
     s.write_table(rows)
     s.add_table("売上", f"A1:C{len(rows) + 1}")
-    s.resize_table("売上", f"A1:C{len(rows) + 2}")
-    s.rename_table("売上", "月次売上")
+    f.save()
+
+# 既存テーブルのデータを洗い替える（範囲も自動で調整される）
+with ExcelWriter("table.xlsx") as f:
+    s = f.sheet("Sheet1")
+    s.replace_table("売上", rows)
+    s.append_to_table("売上", [{"商品": "D", "金額": 400}])
     f.save()
 
 # 数式は文字列で書く。構造化参照も同じ
@@ -767,6 +772,9 @@ from comken.windows import ExcelComHandler
 with ExcelComHandler("data.xlsm") as f:
     f.run_macro(MACRO_NAME)
 ```
+
+テーブルの作成・名前変更・削除は人が Excel で行い、プログラムでは既存テーブルの中の
+データを追記・全消去・洗い替えする。`add_table()` は新規レポートを作る場合に限って使う。
 
 ### 数式は openpyxl と COM のどちらで扱うか
 
@@ -808,16 +816,18 @@ with ExcelComHandler(path) as h:
 
 - 通常は `written_ranges()` を渡し、自分が書いた範囲だけを検査する。長く使われている
   業務ブックに残った、無関係な古いエラーで処理が止まらない。
-- `rename_table()`、シートの削除、行や列の削除など参照を壊す変更をしたときは、
+- シートの削除、行や列の削除など参照を壊す変更をしたときは、
   `ranges` を省略してブック全体を検査する。
 
 範囲検査には限界がある。**自分が書いていないセルの数式が、自分の変更のせいで
-壊れた場合は見つけられない。** たとえば `rename_table()` でテーブル名を変えると、
-そのテーブルを参照する別セルが `#NAME?` になっても書き込み範囲には入らない。
+壊れた場合は見つけられない。** テーブルやシートの定義変更は人が Excel で行い、
+プログラムでは参照を壊さないデータの追記・洗い替えを行う。
 
-また、`rename_table()` は範囲・スタイル・列定義を保持するが、構造化参照の数式を追随更新しない。
-Excel の画面上で改名する場合と異なり、`=SUM(売上[金額])` は元の式のまま残るため、
-テーブル名を変えたら参照している数式も自分で書き換えること。
+`append_to_table()` と `replace_table()` は openpyxl の制約により、Excel の計算列の数式を
+新しい行へ自動入力しない。数式が必要な列は
+`{"商品": "D", "金額": 400, "税込": "=[@金額]*1.1"}` のように、行データへ数式文字列を
+含めて渡す。`[@列名]` はテーブル内のセルでのみ有効であり、テーブル外へ書くと
+Excel で `#NAME?` になる。
 
 **数万行クラスの大きいファイルを扱うときのベストプラクティス:**
 

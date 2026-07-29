@@ -34,7 +34,7 @@ import re
 
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
-from openpyxl.utils.cell import coordinate_to_tuple
+from openpyxl.utils.cell import coordinate_to_tuple, range_boundaries
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.worksheet.worksheet import Worksheet
 
@@ -187,51 +187,70 @@ class Sheet:
         )
         self.ws.add_table(table)
 
-    def table_names(self) -> list[str]:
-        """シート内の構造化テーブル名を返す。"""
-        return list(self.ws.tables)
+    def append_to_table(self, name: str, rows: list[dict]) -> None:
+        """構造化テーブルの末尾にデータ行を追記する。
 
-    def rename_table(self, old_name: str, new_name: str) -> None:
-        """構造化テーブルの名前を変更する。
-
-        範囲・スタイル・列定義はそのまま保持する。
-
-        注意:
-            openpyxl はテーブルを参照する数式（構造化参照）を書き換えない。
-            例えば ``=SUM(売上[金額])`` は、テーブルを「月次売上」に変更しても
-            元の式のまま残り、Excel では ``#NAME?`` になる。参照している数式も
-            呼び出し側で書き換えること。
+        openpyxl は計算列を自動入力しない。数式の列がある場合は、
+        ``{"税込": "=[@金額]*1.1"}`` のように行データへ数式文字列を含める。
+        ``[@列名]`` の構造化参照はテーブル内のセルでのみ有効。
         """
-        table = self._table(old_name)
-        _validate_table_name(new_name)
-        other_table_names = {
-            table_name.casefold()
-            for worksheet in self.ws.parent.worksheets
-            for table_name in worksheet.tables
-            if worksheet.tables[table_name] is not table
-        }
-        if new_name.casefold() in other_table_names:
-            raise TableAlreadyExistsError(new_name)
-
-        if old_name == new_name:
+        if not rows:
             return
-        del self.ws.tables[old_name]
-        table.name = new_name
-        table.displayName = new_name
-        self.ws.tables.add(table)
+        table = self._table(name)
+        min_col, header_row, max_col, last_row = range_boundaries(table.ref)
+        headers = [
+            self.ws.cell(row=header_row, column=col).value for col in range(min_col, max_col + 1)
+        ]
+        _validate_table_rows(rows, headers)
 
-    def resize_table(self, name: str, ref: str) -> None:
-        """構造化テーブルの範囲を変更する。"""
-        self._table(name).ref = ref
+        for row_number, row in enumerate(rows, start=last_row + 1):
+            self.write_row(row_number, [row.get(header, "") for header in headers], min_col)
 
-    def delete_table(self, name: str) -> None:
-        """構造化テーブルの定義だけを外す。セルの値・書式は削除しない。"""
-        self._table(name)
-        del self.ws.tables[name]
+        # NOTE: 範囲を広げないと追記行はただのセルになり、構造化参照や集計に入らない。
+        new_last_row = last_row + len(rows)
+        table.ref = (
+            f"{get_column_letter(min_col)}{header_row}:{get_column_letter(max_col)}{new_last_row}"
+        )
+
+    def clear_table(self, name: str) -> None:
+        """構造化テーブルのデータ行だけを消す（見出し行は残す）。"""
+        table = self._table(name)
+        min_col, header_row, max_col, last_row = range_boundaries(table.ref)
+        if last_row > header_row:
+            for row in self.ws.iter_rows(
+                min_row=header_row + 1,
+                max_row=last_row,
+                min_col=min_col,
+                max_col=max_col,
+            ):
+                for cell in row:
+                    cell.value = None
+            self._record_written_range(header_row + 1, min_col, last_row, max_col)
+
+        # NOTE: 0件でも見出し行を範囲として残さないと、テーブル定義が壊れる。
+        table.ref = (
+            f"{get_column_letter(min_col)}{header_row}:{get_column_letter(max_col)}{header_row}"
+        )
+
+    def replace_table(self, name: str, rows: list[dict]) -> None:
+        """構造化テーブルのデータ行をすべて入れ替える。
+
+        openpyxl は計算列を自動入力しない。数式の列がある場合は、
+        ``{"税込": "=[@金額]*1.1"}`` のように行データへ数式文字列を含める。
+        ``[@列名]`` の構造化参照はテーブル内のセルでのみ有効。
+        """
+        table = self._table(name)
+        min_col, header_row, max_col, _ = range_boundaries(table.ref)
+        headers = [
+            self.ws.cell(row=header_row, column=col).value for col in range(min_col, max_col + 1)
+        ]
+        _validate_table_rows(rows, headers)
+        self.clear_table(name)
+        self.append_to_table(name, rows)
 
     def _table(self, name: str) -> Table:
         if name not in self.ws.tables:
-            raise TableNotFoundError(name, self.table_names())
+            raise TableNotFoundError(name, _table_names(self.ws))
         return self.ws.tables[name]
 
     # ------------------------------------------------------------ 見た目の調整
@@ -327,3 +346,19 @@ def _validate_table_name(name: str) -> None:
         or _R1C1_REFERENCE.fullmatch(name)
     ):
         raise InvalidTableNameError(name)
+
+
+def _table_names(ws: Worksheet) -> list[str]:
+    return list(ws.tables)
+
+
+def _validate_table_rows(rows: list[dict], headers: list) -> None:
+    header_set = set(headers)
+    for row_number, row in enumerate(rows, start=1):
+        unknown_keys = [key for key in row if key not in header_set]
+        if unknown_keys:
+            raise ValueError(
+                f"{row_number}件目のデータにテーブルの見出しにないキーがあります: "
+                f"{unknown_keys}。使用できる見出し: {headers}。"
+                "キー名を見出しに合わせてください。"
+            )
