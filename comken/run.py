@@ -2,7 +2,7 @@
 
 社内ライブラリはバージョンが import パスに入っている:
 
-    from 社内ライブラリ名.vXXXX.rpa import backoffice
+    from example_libs.v0000.rpa import backoffice
 
 これを各プロジェクトに直接書くと、バージョンが上がるたびに全プロジェクトの
 import 行を書き換えることになる。comken は共有サーバー上の1か所を
@@ -13,42 +13,29 @@ PYTHONPATH で参照する運用なので、**ここで吸収すれば comken �
 
     backoffice(main, "受注取込")
 
+**このリポジトリは公開しているため、社内ライブラリ名は `example_libs.v0000` という
+仮の名前にしてある。共有サーバーへ配置するときに、下の2つの関数の import 行を
+実際の名前とバージョンへ書き換える。**（バージョンが上がったときも同じ2行を直す）
+
+社内ライブラリの正式版が出てこのファイルが不要になったら、次を消せば完了する
+（comken の他のモジュールはこのファイルに依存していない）:
+
+    1. このファイル（comken/run.py）
+    2. comken/exceptions/rpa.py と、comken/exceptions/__init__.py の RpaError の記述
+    3. tests/test_run.py
+    4. ERRORS.md / templates/新規プロジェクト/docs/ERRORS.md / docs/機能カタログ.md /
+       仕様書.md の、社内 RPA 基盤に関する記述
+
 使い方は docs/機能カタログ.md を参照。
 """
 
-import importlib
 import logging
 from collections.abc import Callable
-from types import ModuleType
 from typing import Any
 
 from .exceptions import RpaLibraryNotFoundError
 
 logger = logging.getLogger(__name__)
-
-# 社内ライブラリのパッケージ名とバージョン。
-# このリポジトリは公開しているため実名は書かない。**共有サーバーへ配置するときに
-# この2行を実際の値へ書き換える**（バージョンが上がったときもここだけ直せばよい）。
-LIB_ROOT = "internal_rpa_libs"
-LIB_VERSION = "v0000"
-
-
-def _load(name: str) -> ModuleType | Any:
-    """社内ライブラリから backoffice / intranet を読み込む。
-
-    Raises:
-        RpaLibraryNotFoundError: 社内ライブラリが見つからない場合。
-    """
-    package_path = f"{LIB_ROOT}.{LIB_VERSION}.rpa"
-    try:
-        package = importlib.import_module(package_path)
-        # `from ... import backoffice` は、名前が属性でもサブモジュールでも通る。
-        # importlib で同じ挙動にするには、属性で取れなければ import を試す。
-        if hasattr(package, name):
-            return getattr(package, name)
-        return importlib.import_module(f"{package_path}.{name}")
-    except ImportError as e:
-        raise RpaLibraryNotFoundError(f"{package_path}.{name}", e) from e
 
 
 def _prepare(project_name: str) -> None:
@@ -61,9 +48,8 @@ def _prepare(project_name: str) -> None:
     #       書き方が分かったらここに足す（呼び出し側は変更不要）。
 
 
-def _call(target: str, main: Callable[[], Any], project_name: str) -> Any:
+def _call(entry: Any, target: str, main: Callable[[], Any], project_name: str) -> Any:
     """社内 RPA 基盤の入口を呼ぶ。"""
-    entry = _load(target)
     _prepare(project_name)
     logger.info("%s で %s を開始します", target, project_name)
     return entry.rpta(main, project_name)
@@ -73,13 +59,29 @@ def backoffice(main: Callable[[], Any], project_name: str) -> Any:
     """バックオフィスの RPA として main を実行する。
 
     社内ライブラリが設定の初期化と時間計測を行い、main を呼ぶ。
+
+    Raises:
+        RpaLibraryNotFoundError: 社内ライブラリが読み込めない場合。
     """
-    return _call("backoffice", main, project_name)
+    # 社内ライブラリを読むのはこの1行。関数の中に置くのは、社内ライブラリが無い PC でも
+    # comken 自体は読み込めるようにするため（テストもここを差し替える）。
+    try:
+        from example_libs.v0000.rpa import backoffice as entry
+    except ImportError as e:
+        raise RpaLibraryNotFoundError("example_libs.v0000.rpa.backoffice", e) from e
+    return _call(entry, "backoffice", main, project_name)
 
 
 def intranet(main: Callable[[], Any], project_name: str) -> Any:
     """イントラネットの RPA として main を実行する。
 
     社内ライブラリが設定の初期化と時間計測を行い、main を呼ぶ。
+
+    Raises:
+        RpaLibraryNotFoundError: 社内ライブラリが読み込めない場合。
     """
-    return _call("intranet", main, project_name)
+    try:
+        from example_libs.v0000.rpa import intranet as entry
+    except ImportError as e:
+        raise RpaLibraryNotFoundError("example_libs.v0000.rpa.intranet", e) from e
+    return _call(entry, "intranet", main, project_name)
