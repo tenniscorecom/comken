@@ -38,7 +38,8 @@ class AccessBackupError(AccessError):
             f"Access ファイルをバックアップできませんでした: {path}\n"
             f"保存先: {backup_path}\n"
             "更新を中止しました。読み取り権限・保存先の空き容量・書き込み権限を"
-            f"確認してください。（詳細: {detail}）"
+            "確認してください。共有フォルダに書き込めない場合は、backup_dir で"
+            f"書き込み可能なローカルフォルダを指定してください。（詳細: {detail}）"
         )
 
 

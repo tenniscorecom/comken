@@ -20,6 +20,7 @@ src/config.pyi
 
 # ログ・出力・一時ファイル
 logs/
+# backup_dir にプロジェクト内を指定した場合の安全網
 backup/
 output/
 *.log

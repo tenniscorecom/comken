@@ -191,6 +191,18 @@ class TestAccessDatabase:
             AccessDatabase(path, local_copy=False, backup_dir=tmp_path / "backup")
         access.OpenCurrentDatabase.assert_not_called()
 
+    def test_backup_folder_creation_failure_does_not_open_database(self, tmp_path):
+        path = tmp_path / "顧客.accdb"
+        path.touch()
+        access = MagicMock()
+        with (
+            patch("comken.access.handler.Path.mkdir", side_effect=PermissionError("拒否")),
+            patch("comken.access.handler.win32com.client.DispatchEx", return_value=access),
+            pytest.raises(AccessBackupError, match=r"backup_dir.*ローカルフォルダ"),
+        ):
+            AccessDatabase(path, local_copy=False)
+        access.OpenCurrentDatabase.assert_not_called()
+
     def test_lock_file_warns_during_backup(self, tmp_path, caplog):
         path = tmp_path / "顧客.accdb"
         path.touch()
@@ -215,11 +227,13 @@ class TestAccessDatabase:
             pass
         assert not backup_folder.exists()
 
-    def test_default_backup_folder_is_current_directory(self, monkeypatch, tmp_path):
-        local_app_data = tmp_path / "local-app-data"
-        monkeypatch.setenv("LOCALAPPDATA", str(local_app_data))
-        monkeypatch.chdir(tmp_path)
-        path = tmp_path / "顧客.accdb"
+    def test_default_backup_folder_is_next_to_database(self, monkeypatch, tmp_path):
+        current_folder = tmp_path / "current"
+        database_folder = tmp_path / "shared"
+        current_folder.mkdir()
+        database_folder.mkdir()
+        monkeypatch.chdir(current_folder)
+        path = database_folder / "顧客.accdb"
         path.write_bytes(b"database")
 
         with (
@@ -228,9 +242,9 @@ class TestAccessDatabase:
         ):
             pass
 
-        backups = list((tmp_path / "backup").glob("*.accdb"))
+        backups = list((database_folder / "backup").glob("*.accdb"))
         assert len(backups) == 1
-        assert not local_app_data.exists()
+        assert not (current_folder / "backup").exists()
 
     def test_local_copy_logs_that_changes_are_not_reflected(self, tmp_path, caplog):
         path = tmp_path / "顧客.accdb"

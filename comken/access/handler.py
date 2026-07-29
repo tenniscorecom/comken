@@ -49,9 +49,13 @@ class AccessDatabase(FileBase):
     既定で7日間残す。バックアップは成功後も削除せず、自動では書き戻さない。
     復旧時は内容を確認した人が手でコピーする（自動復旧は正常なデータを古い控えで
     上書きする危険があるため）。
-    バックアップ先は既定でカレントディレクトリ直下の ``backup``。プロジェクトが
-    共有フォルダ上にある場合、ネットワーク越しのコピーは遅く、破損リスクを避ける
-    目的も損なうため、``backup_dir`` にローカルフォルダを明示する。
+    バックアップ先は既定で元データベースと同じフォルダの ``backup``。
+    数百 MB 以上のデータベースでは、ネットワーク越しのコピーに時間がかかる。
+    ``backup_dir`` にローカルフォルダを指定すれば速くなるが、顧客情報がローカルに
+    残ることを理解したうえで指定する。元データベースと同じ場所に控えを置くため、
+    サーバー障害や誤削除では一緒に失われる。本格的な世代保全はサーバー側の
+    バックアップに依存する。OneDrive などの同期フォルダでは控えも同期され、
+    容量と帯域を消費する。
 
     数十万件を CSV に出す場合は、Python にデータを載せない ``export_csv()`` を使う。
     ``rows()`` は逐次処理用であり、結果を ``list`` にすると全件分のメモリを消費する。
@@ -74,10 +78,8 @@ class AccessDatabase(FileBase):
             raise ValueError("backup_days は0以上で指定してください。")
 
         self._working_path = self._path
-        # 実行.bat、config.ini、logs/ と同じプロジェクトルートなら、
-        # 非エンジニアも実行フォルダを開くだけでバックアップを見つけられる。
         self._backup_dir = (
-            Path.cwd() / BACKUP_FOLDER_NAME if backup_dir is None else Path(backup_dir)
+            self._path.parent / BACKUP_FOLDER_NAME if backup_dir is None else Path(backup_dir)
         )
         self._temporary_directory: tempfile.TemporaryDirectory[str] | None = None
         self._access = None
