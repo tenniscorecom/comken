@@ -11,17 +11,13 @@ import os
 import pytest
 
 from comken.browser.download import DownloadDir
-from comken.const import SortBy
+from comken.constants import SortBy
 from comken.exceptions import ColumnNotFoundError
-from comken.naming import DateNameBuilder
+from comken.files import DateNameBuilder, FileFinder, Paths, copy_file, move_file
 from comken.utils import (
-    FileFinder,
-    Paths,
     col_to_num,
-    copy_file,
     diff_row,
     diff_rows,
-    move_file,
     normalize,
     remove_spaces,
     strip_spaces,
@@ -609,7 +605,7 @@ class TestPaths:
 
     def test_shell_folder_falls_back_on_missing_value(self, tmp_path):
         """レジストリに値がない場合はデフォルトにフォールバックすることを確認する。"""
-        from comken.utils.file import _shell_folder
+        from comken.files.paths import _shell_folder
 
         assert _shell_folder("存在しない値名", tmp_path) == tmp_path
 

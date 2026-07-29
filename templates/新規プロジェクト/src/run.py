@@ -23,7 +23,7 @@ def run(output_folder: Path) -> None:
     # 例:
     #   from comken.csv import CsvReader
     #   from comken.excel import ExcelFile
-    #   from comken.naming import DateNameBuilder
+    #   from comken.files import DateNameBuilder
     #
     #   from comken import config   # config.FILES. まで打つと補完が出る
     #

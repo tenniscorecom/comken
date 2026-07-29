@@ -18,7 +18,7 @@ import csv
 import io
 from pathlib import Path
 
-from ..const import Encoding
+from ..constants import Encoding
 from ..exceptions import CsvColumnNotFoundError, CsvHeadersTooFewError, EncodingDetectionError
 from ..utils.timer import measure
 

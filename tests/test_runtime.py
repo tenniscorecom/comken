@@ -8,7 +8,8 @@ import pytest
 
 import comken
 from comken.csv.writer import CsvWriter
-from comken.utils import measure, move_file
+from comken.files import move_file
+from comken.utils import measure
 
 
 @pytest.fixture(autouse=True)

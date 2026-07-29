@@ -410,7 +410,7 @@ class TestCleanupStaleTmp:
         """古い .tmp は削除され、新しい .tmp（並行実行中の可能性）は残ることを確認する。"""
         import os
 
-        from comken.utils.file import cleanup_stale_tmp
+        from comken.files import cleanup_stale_tmp
 
         target = tmp_path / "config.pyi"
         stale = tmp_path / "config.pyi.99999.tmp"
@@ -428,7 +428,7 @@ class TestCleanupStaleTmp:
         """対象と無関係のファイルは削除されないことを確認する。"""
         import os
 
-        from comken.utils.file import cleanup_stale_tmp
+        from comken.files import cleanup_stale_tmp
 
         target = tmp_path / "config.pyi"
         other = tmp_path / "data.csv"

@@ -16,10 +16,10 @@ import logging
 from pathlib import Path
 
 from comken import setup_logger
-from comken.const import Color
+from comken.constants import Color
 from comken.csv import CsvReader
 from comken.excel import ExcelFile
-from comken.naming import DateNameBuilder
+from comken.files import DateNameBuilder
 
 # 入出力はこのフォルダ内で完結させる（サンプル用。実プロジェクトではパスは config.ini に書く）
 HERE = Path(__file__).parent

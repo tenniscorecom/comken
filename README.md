@@ -49,7 +49,8 @@ with ExcelFile.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作る
 | Windows（pywin32） | Excel COM 操作・ウィンドウ操作・レジストリ読み取り |
 | Browser（Edge） | Edge ブラウザ操作 |
 | PDF | PDF の結合・分割・テキスト抽出（pypdf。導入できない環境では使わない） |
-| utils | ファイル操作・データ比較・テキスト正規化・待機・リトライ・時間計測・zip・特殊フォルダ取得 |
+| files | ファイル検索・操作・標準フォルダ取得・ファイル名の組み立て |
+| utils | データ比較・テキスト正規化・待機・リトライ・時間計測・zip |
 
 ## 定数クラス一覧
 
@@ -57,9 +58,9 @@ with ExcelFile.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作る
 
 | 定数クラス | import | 用途 | 例 |
 |---|---|---|---|
-| `Color` | `from comken.const import Color` | セルの背景色 | `set_fill(color=Color.RED)` |
-| `SortBy` | `from comken.const import SortBy` | FileFinder.latest の並び順 | `latest(by=SortBy.UPDATED)` |
-| `Encoding` | `from comken.const import Encoding` | CSV の文字コード | `CsvReader(path, encoding=Encoding.CP932)` |
+| `Color` | `from comken.constants import Color` | セルの背景色 | `set_fill(color=Color.RED)` |
+| `SortBy` | `from comken.constants import SortBy` | FileFinder.latest の並び順 | `latest(by=SortBy.UPDATED)` |
+| `Encoding` | `from comken.constants import Encoding` | CSV の文字コード | `CsvReader(path, encoding=Encoding.CP932)` |
 
 ---
 
@@ -275,7 +276,7 @@ STAFF_NAME = "山田"
 
 reader = CsvReader("data.csv")
 # 文字コードは自動判定（UTF-8 → CP932 の順に試す）。明示する場合:
-# from comken.const import Encoding
+# from comken.constants import Encoding
 # CsvReader("data.csv", encoding=Encoding.CP932)
 ```
 
@@ -359,7 +360,7 @@ shutil を知らなくても使えるラッパー。ルールは共通で
 「**dst が既存フォルダならその中へ、それ以外はファイルパス扱い（親フォルダ自動作成）、同名は上書き**」。
 
 ```python
-from comken.utils import copy_file, move_file
+from comken.files import copy_file, move_file
 
 move_file("report.xlsx", r"C:\作業\output")            # フォルダの中へ移動
 move_file("report.xlsx", r"C:\作業\output\売上.xlsx")   # 名前を変えて移動（out フォルダがなければ作られる）
@@ -370,8 +371,7 @@ copy_file("report.xlsx", r"C:\作業\backup")             # コピー（元フ�
 ### ファイル名の組み立て・検索
 
 ```python
-from comken.naming import DateNameBuilder
-from comken.utils import FileFinder
+from comken.files import DateNameBuilder, FileFinder
 
 FOLDER = r"\\nas-server\share"
 
@@ -389,7 +389,7 @@ path = FileFinder(FOLDER).today(date_format="%Y%m")    # YYYYMM で探す
 # フォルダ内で最新のファイルを取得（見つからなければ FileNotFoundError）
 # デフォルトは「ファイル名の辞書順で最後」= 日付プレフィックス命名なら名前上の最新。
 # コピーや再保存で更新日時が変わっていても影響を受けない
-from comken.const import SortBy
+from comken.constants import SortBy
 
 path = FileFinder(FOLDER).latest()
 path = FileFinder(FOLDER).latest(pattern="*.csv")        # CSV に絞る場合
@@ -443,7 +443,7 @@ Desktop / Downloads は **OneDrive の「既知のフォルダーの移動」に
 リダイレクトされている環境でも正しいパスが返る）。
 
 ```python
-from comken.utils import Paths
+from comken.files import Paths
 
 Paths.downloads()   # → C:\Users\xxx\Downloads
 Paths.desktop()     # → C:\Users\xxx\OneDrive\Desktop（リダイレクトされている場合）
@@ -577,7 +577,7 @@ with ExcelFile(NAS_PATH, local_copy_threshold_mb=0) as f:
 win32com は `ExcelFile` の自動コピー機能がないため、`local_copy` を使う。
 
 ```python
-from comken.utils import local_copy
+from comken.files import local_copy
 from comken.windows.handler import ExcelComHandler
 
 NAS_PATH = r"\\nas-server\share\data.xlsx"
@@ -658,7 +658,7 @@ with ExcelFile("data.xlsx") as f:
 # Excel を起動しないため数万行でも速い。数式の再計算が必要なら ExcelComHandler 版を使う
 
 # 背景色の設定（よく使う色は Color 定数で指定できる）
-from comken.const import Color
+from comken.constants import Color
 
 with ExcelFile("data.xlsx") as f:
     f.set_fill(SHEET, row=ROW, col=COL, color=Color.YELLOW)
@@ -723,7 +723,7 @@ with ExcelComHandler("data.xlsx") as h:
     # h.save_as("output.xlsx", read_pw=READ_PW)  # 読み取り保護のみ
 
     # 形式を変換して保存する場合だけ file_format を明示する
-    # from comken.const import FileFormat
+    # from comken.constants import FileFormat
     # h.save_as("output.csv", file_format=FileFormat.CSV)
 ```
 
@@ -885,7 +885,7 @@ Edge がダウンロード中に作る `.crdownload` を監視して完了を判
 ファイルを残したい場合は `BrowserOptions.DOWNLOAD_DIR` か `EdgeDriver(download_dir=...)` でパスを指定する。
 
 ```python
-from comken.utils import move_file
+from comken.files import move_file
 
 # デフォルト（一時フォルダ）: with を抜けると自動削除される
 with EdgeDriver() as d:
@@ -1033,7 +1033,8 @@ n = page_count("報告書.pdf")                                  # ページ数
 ```mermaid
 graph LR
     comken --> config["Config\n設定ファイル"]
-    comken --> utils["utils\nファイル操作・比較"]
+    comken --> files["files\n検索・操作・パス・命名"]
+    comken --> utils["utils\n比較・テキスト・待機・圧縮"]
     comken --> excel["excel\nExcel"]
     comken --> csv["csv\nCSV"]
     comken --> windows["windows\nCOM / Window"]

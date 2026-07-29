@@ -17,10 +17,10 @@ import logging
 from pathlib import Path
 
 from comken import setup_logger
-from comken.const import Color
+from comken.constants import Color
 from comken.csv import CsvReader, CsvWriter
 from comken.excel import ExcelFile
-from comken.naming import DateNameBuilder
+from comken.files import DateNameBuilder
 from comken.utils import diff_rows
 
 HERE = Path(__file__).parent

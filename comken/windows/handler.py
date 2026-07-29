@@ -20,7 +20,7 @@ import win32com.client
 import win32con
 import win32gui
 
-from ..const import FileFormat
+from ..constants import FileFormat
 from ..exceptions import (
     EmptyHeaderCellError,
     ExcelHeadersTooFewError,
