@@ -1,4 +1,4 @@
-# original_libs
+﻿# original_libs
 
 業務自動化で使う Python 共通ライブラリ。
 
@@ -16,11 +16,11 @@
 
 ```python
 from comken.csv import CsvReader
-from comken.excel import ExcelFile
+from comken.excel import ExcelWriter
 
 rows = CsvReader(r"C:\作業\data.csv").rows()      # CSV を読む（1行 = 1辞書）
 
-with ExcelFile.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作る
+with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作る
     s = f.sheet("Sheet1")
     s.write_table(rows)                            # ヘッダー + データをまとめて書く
     s.auto_width()                                 # 列幅を整える
@@ -268,7 +268,7 @@ logger.info("CSV読み込み完了: %d件", len(rows))
 ## CSV
 
 ```python
-from comken.csv.handler import CsvReader
+from comken.csv.reader import CsvReader
 
 ORDER_ID = "A001"
 STAFF_NAME = "山田"
@@ -419,7 +419,7 @@ diff_row(before, after)
 
 # データセット同士の差分（キー列で突合）
 before = CsvReader("昨日.csv").rows()
-with ExcelFile("今日.xlsx") as f:
+with ExcelReader("今日.xlsx") as f:
     after = f.read_rows_as_dicts("Sheet1")
 
 result = diff_rows(before, after, key="社員番号")
@@ -547,33 +547,36 @@ unzip(r"C:\作業\data.zip")                           # → C:\作業\data\ に
 
 NAS やネットワークドライブ上のファイルは直接開くと遅い・不安定になる場合がある。
 
-### ExcelFile（openpyxl）
+### ExcelReader / ExcelWriter（openpyxl）
+
+読み取りだけなら `ExcelReader`（読み取り専用）、書き込み・保存を行うなら
+`ExcelWriter` を使う。どちらも `with` 文で確実に閉じる。
 
 `local_copy_threshold_mb` を超えるファイルは自動でローカルにコピーしてから開く。
 `with` ブロックを抜けるとテンポラリファイルは自動削除される。
 
 ```python
-from comken.excel.handler import ExcelFile
+from comken.excel import ExcelReader
 
 NAS_PATH = r"\\nas-server\share\data.xlsx"
 SHEET = "Sheet1"
 
 # 10MB 以上は自動でローカルコピー（デフォルト）
-with ExcelFile(NAS_PATH) as f:
+with ExcelReader(NAS_PATH) as f:
     rows = f.read_rows_as_dicts(SHEET)
 
 # 閾値を変える（50MB 以上でコピー）
-with ExcelFile(NAS_PATH, local_copy_threshold_mb=50) as f:
+with ExcelReader(NAS_PATH, local_copy_threshold_mb=50) as f:
     rows = f.read_rows_as_dicts(SHEET)
 
 # ローカルコピーを無効化（社内ルールで不可の場合）
-with ExcelFile(NAS_PATH, local_copy_threshold_mb=0) as f:
+with ExcelReader(NAS_PATH, local_copy_threshold_mb=0) as f:
     rows = f.read_rows_as_dicts(SHEET)
 ```
 
 ### ExcelComHandler（win32com）
 
-win32com は `ExcelFile` の自動コピー機能がないため、`local_copy` を使う。
+win32com は `ExcelReader` / `ExcelWriter` の自動コピー機能がないため、`local_copy` を使う。
 
 ```python
 from comken.files import local_copy
@@ -594,7 +597,7 @@ with local_copy(NAS_PATH) as local_path:
 数式の計算結果や VBA マクロが必要な場合は自動で win32com にフォールバックする。
 
 ```python
-from comken.excel.handler import ExcelFile
+from comken.excel import ExcelReader, ExcelWriter
 
 SHEET = "Sheet1"
 ROW = 2
@@ -602,26 +605,26 @@ COL = 1
 MACRO_NAME = "Module1.UpdateData"
 
 # 読み取り
-with ExcelFile("data.xlsx") as f:
+with ExcelReader("data.xlsx") as f:
     rows = f.read_rows(SHEET) # タプルのリスト
     rows = f.read_rows_as_dicts(SHEET) # 辞書のリスト（ヘッダーをキーに）
 
 # ヘッダー行がない Excel は __init__ で列名を渡す（1行目からデータとして読まれる）
-with ExcelFile("data.xlsx", headers=["注文番号", "金額", "担当者"]) as f:
+with ExcelReader("data.xlsx", headers=["注文番号", "金額", "担当者"]) as f:
     rows = f.read_rows_as_dicts(SHEET)
 
 # 数式の計算結果を読む（openpyxl → win32com 自動フォールバック）
-with ExcelFile("data.xlsx") as f:
+with ExcelReader("data.xlsx") as f:
     rows = f.read_computed_rows(SHEET)
 
 # 書き込み・保存
-with ExcelFile("data.xlsx") as f:
+with ExcelWriter("data.xlsx") as f:
     f.write_cell(SHEET, row=ROW, col=COL, value="値")
     f.save()
     f.save("output.xlsx") # 別名で保存
 
 # 大量データの読み取り（メモリ効率優先）
-with ExcelFile("data.xlsx") as f:
+with ExcelReader("data.xlsx") as f:
     for row in f.iter_rows(SHEET):
         print(row) # 1行ずつ処理。全行をメモリに乗せない
 
@@ -629,7 +632,7 @@ with ExcelFile("data.xlsx") as f:
 # concurrent.futures.ThreadPoolExecutor を使うと高速化できる
 
 # シート単位の書き込みは sheet() のラッパーが楽（sheet_name を毎回渡さなくてよい）
-with ExcelFile("report.xlsx") as f:
+with ExcelWriter("report.xlsx") as f:
     s = f.sheet("Sheet1")
     s["A1"] = "売上レポート"              # セル参照で読み書き
     s.write_row(3, ["日付", "金額"])      # 1行を横並びで書く
@@ -640,7 +643,7 @@ with ExcelFile("report.xlsx") as f:
 
 # 新規ブックの作成 + 辞書リストの一括書き込み（CSV → Excel レポート）
 rows = CsvReader("data.csv").rows()
-with ExcelFile.create(r"C:\作業\report.xlsx") as f:
+with ExcelWriter.create(r"C:\作業\report.xlsx") as f:
     s = f.sheet("Sheet1")
     s.write_table(rows)                   # ヘッダー行 + データ行をまとめて書く
     s.auto_width()
@@ -651,7 +654,7 @@ with ExcelFile.create(r"C:\作業\report.xlsx") as f:
 lookup = CsvReader("data.csv").index("注文番号")
 MAPPING = {"B": "顧客名", "C": "金額"}  # Excel の列レター → lookup の列名
 
-with ExcelFile("data.xlsx") as f:
+with ExcelWriter("data.xlsx") as f:
     matched = f.transfer_by_key(SHEET, key_col="A", lookup=lookup, column_mapping=MAPPING)
     f.save()  # 書き込み後は save() を忘れずに
 # Excel を起動しないため数万行でも速い。数式の再計算が必要なら ExcelComHandler 版を使う
@@ -659,7 +662,7 @@ with ExcelFile("data.xlsx") as f:
 # 背景色の設定（よく使う色は Color 定数で指定できる）
 from comken.constants import Color
 
-with ExcelFile("data.xlsx") as f:
+with ExcelWriter("data.xlsx") as f:
     f.set_fill(SHEET, row=ROW, col=COL, color=Color.YELLOW)
     f.set_fill(SHEET, row=ROW, col=COL, color=Color.RED)
     f.set_fill(SHEET, row=ROW, col=COL, color="CCE5FF") # 定数にない色は16進で
@@ -669,7 +672,9 @@ with ExcelFile("data.xlsx") as f:
 #                BLUE / LIGHT_BLUE / PURPLE / GRAY / LIGHT_GRAY / WHITE / BLACK
 
 # VBA マクロの実行（常に win32com を使用）
-with ExcelFile("data.xlsm") as f:
+from comken.windows import ExcelComHandler
+
+with ExcelComHandler("data.xlsm") as f:
     f.run_macro(MACRO_NAME)
 ```
 
@@ -679,14 +684,14 @@ with ExcelFile("data.xlsm") as f:
 |---|---|
 | 大量行を読む | `iter_rows()` で1行ずつ処理する（全行をメモリに乗せない） |
 | NAS 上の大きいファイル | `local_copy_threshold_mb` の自動ローカルコピーに任せる（デフォルト10MB） |
-| 大量行への書き込み | openpyxl（`ExcelFile.write_cell`）を使う。COM のセル単位書き込みは1呼び出しごとにプロセス間通信が発生して桁違いに遅い |
-| キー突合転記が大量行 | `ExcelFile.transfer_by_key`（openpyxl 版）を使う。COM 版（`ExcelComHandler.transfer_by_key`）はセル単位アクセスのため数万行では時間がかかる。COM は最後の保存・マクロだけに使う |
+| 大量行への書き込み | openpyxl（`ExcelWriter.write_cell`）を使う。COM のセル単位書き込みは1呼び出しごとにプロセス間通信が発生して桁違いに遅い |
+| キー突合転記が大量行 | `ExcelWriter.transfer_by_key`（openpyxl 版）を使う。COM 版（`ExcelComHandler.transfer_by_key`）はセル単位アクセスのため数万行では時間がかかる。COM は最後の保存・マクロだけに使う |
 
 ---
 
 ## Windows
 
-通常の Excel 読み書きは ExcelFile（openpyxl）を使うこと。
+通常の Excel 読み取りは ExcelReader、書き込みは ExcelWriter（openpyxl）を使うこと。
 ExcelComHandler は数式・マクロ・パスワード保存が必要な場合に限定して使う。
 
 ### ExcelComHandler
@@ -730,7 +735,7 @@ with ExcelComHandler("data.xlsx") as h:
 
 キー列の値で lookup を引き、一致した行に列マッピングに従って値を書き込む。
 空行・キーが空の行・lookup にないキーの行は自動でスキップされる。
-数式の再計算が不要なら openpyxl 版（`ExcelFile.transfer_by_key`）の方が速い（Excel セクション参照）。
+数式の再計算が不要なら openpyxl 版（`ExcelWriter.transfer_by_key`）の方が速い（Excel セクション参照）。
 
 ```python
 lookup = CsvReader("data.csv").index("注文番号")
@@ -1032,7 +1037,7 @@ graph LR
 ```mermaid
 flowchart LR
     A["NAS\nExcel"] -->|FileFinder.today| B["ファイルパス取得"]
-    B -->|ExcelFile| C["データ読み込み"]
+    B -->|ExcelWriter| C["データ読み込み"]
     C --> D["データ加工"]
     D -->|write_cell + save| E["Excel出力"]
 ```
@@ -1043,7 +1048,7 @@ flowchart LR
 flowchart LR
     A["CSVファイル"] -->|CsvReader| B["データ読み込み"]
     B -->|filter / index| C["絞り込み・突合"]
-    C -->|ExcelFile| D["Excel書き込み"]
+    C -->|ExcelWriter| D["Excel書き込み"]
     D --> E["レポート完成"]
 ```
 
@@ -1064,11 +1069,13 @@ flowchart LR
 |---|---|
 | 2026-07-09 | 初版作成 |
 | 2026-07-10 | 全モジュールにドキュメント追加、README 整理 |
-| 2026-07-12 | ExcelFile・ExcelComHandler に `headers` 引数追加（ヘッダーなし Excel 対応）。EdgeDriver のダウンロードフォルダ管理を内部化（デフォルト一時フォルダ・with 終了時自動削除）。`ExcelFile.transfer_by_key`（openpyxl 版）追加。`diff_row` 追加・`diff_rows` を列単位の差分付きに改良。ExcelComHandler の初期化失敗時に Excel プロセスが残るバグ等を修正 |
+| 2026-07-12 | ExcelWriter・ExcelComHandler に `headers` 引数追加（ヘッダーなし Excel 対応）。EdgeDriver のダウンロードフォルダ管理を内部化（デフォルト一時フォルダ・with 終了時自動削除）。`ExcelWriter.transfer_by_key`（openpyxl 版）追加。`diff_row` 追加・`diff_rows` を列単位の差分付きに改良。ExcelComHandler の初期化失敗時に Excel プロセスが残るバグ等を修正 |
 | 2026-07-12 | Teams 通知（TeamsNotifier。Power Automate Webhook / Adaptive Card 形式）・テキスト正規化（normalize / strip_spaces / remove_spaces）・待機（wait）・特殊フォルダ取得（Paths）を追加。Paths は OneDrive リダイレクトに追従、通知失敗は TeamsError |
 | 2026-07-12 | Config: [a, b, c] 記法でリストに自動変換（parse_list は警告付きで残存）。エディタ補完用スタブ生成（python -m comken.config）を追加。BOM 付き UTF-8 の config.ini が読めないバグを修正 |
-| 2026-07-12 | Locator（セレクターのクラス変数管理）・retry・Timer / measure・zip・Excel の Sheet ラッパー（セル参照 / write_table / auto_width / freeze_header）・ExcelFile.create を追加 |
+| 2026-07-12 | Locator（セレクターのクラス変数管理）・retry・Timer / measure・zip・Excel の Sheet ラッパー（セル参照 / write_table / auto_width / freeze_header）・ExcelWriter.create を追加 |
 | 2026-07-12 | comken.__version__ / set_debug()（主要処理の時間を DEBUG ログに記録）/ set_dry_run()（外部に影響する操作をスキップ）を追加。EdgeDriver がエラー時に画面を logs/ に自動保存。Excel 孤立プロセス対策（is_excel_running / kill_excel）。リリース.bat で git tag を打つ運用に。スタブ書き込みをアトミック化 |
 | 2026-07-13 | ExcelComHandler: 上書き保存 save() 追加、save_as のパスワードが効かない問題を修正（FileFormat を常に明示。形式変換は file_format 引数）、close() でプロセスが残る問題を修正、AskToUpdateLinks=False 追加。CONVENTIONS に「モジュール内の並び順」を追加し全体を整理。docs/（機能カタログ・コードリーディングガイド・設計メモ）を追加 |
 | 2026-07-14 | 監査指摘の修正一式（keep_vba・run_macro 保存・DispatchEx・EdgeDriver/SF のリソース解放・config 型変換・CSV/ログの堅牢化・unzip の 3.10 対応/Zip Slip 対策）。コーディング規約を3層（共通/本体/利用側）に分割。配布方式を廃止し共有サーバー直接参照（PYTHONPATH）に変更、同期用 bat（templates/）を削除 |
 | 2026-07-15 | `from comken import config` に一本化（src/config.py 不要）。Pylance 補完用 typings スタブを自動生成。setup_logger が comken バージョンを出力。バイトコードキャッシュをローカルに自動退避。examples テスト・README コード構文チェック・CI（GitHub Actions）を追加。新規プロジェクトのひな形 templates/新規プロジェクト/ を追加 |
+
+

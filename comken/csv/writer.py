@@ -23,11 +23,12 @@ from pathlib import Path
 
 from ..constants import Encoding
 from ..runtime import dry_run_log, is_dry_run
+from .base import CsvBase
 
 logger = logging.getLogger(__name__)
 
 
-class CsvWriter:
+class CsvWriter(CsvBase):
     """CSV ファイルへの書き込みユーティリティ。
 
     使い方:
@@ -59,12 +60,11 @@ class CsvWriter:
         # （CsvReader と同じ定数を渡し回しても落ちないようにする）
         if encoding == Encoding.AUTO:
             encoding = Encoding.UTF8_SIG
-        self._path = Path(path)
+        super().__init__(path, encoding)
         self._fieldnames = fieldnames
-        self._encoding = encoding
 
     def _open(self, mode: str):
-        """親フォルダを作ってからファイルを開く（ExcelFile.save と挙動を揃える）。"""
+        """親フォルダを作ってからファイルを開く（ExcelWriter.save と挙動を揃える）。"""
         self._path.parent.mkdir(parents=True, exist_ok=True)
         return open(self._path, mode, encoding=self._encoding, newline="")
 

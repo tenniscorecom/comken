@@ -19,7 +19,7 @@ from pathlib import Path
 
 from comken import setup_logger
 from comken.csv import CsvReader, CsvWriter
-from comken.excel import ExcelFile
+from comken.excel import ExcelWriter
 from comken.utils import diff_rows
 
 HERE = Path(__file__).parent
@@ -52,7 +52,7 @@ def create_sample_files() -> None:
     """入力になる CSV / Excel を生成する（サンプルを自己完結させるための準備処理）。"""
     CsvWriter(MASTER_CSV, fieldnames=list(MASTER_ROWS[0].keys())).write_rows(MASTER_ROWS)
 
-    with ExcelFile.create(INVOICE_XLSX) as f:
+    with ExcelWriter.create(INVOICE_XLSX) as f:
         s = f.sheet(SHEET)
         s.write_table([{"注文番号": key, "顧客名": "", "金額": ""} for key in INVOICE_KEYS])
         f.save()
@@ -65,7 +65,7 @@ def main() -> None:
     # → {"A001": {"注文番号": "A001", "顧客名": "株式会社アルファ", "金額": "120000"}, ...}
     lookup = CsvReader(MASTER_CSV).index(KEY)
 
-    with ExcelFile(INVOICE_XLSX) as f:
+    with ExcelWriter(INVOICE_XLSX) as f:
         before = f.read_rows_as_dicts(SHEET)  # 検証用に転記前の状態を控えておく
 
         # キー列の値で lookup を引き、一致した行に MAPPING に従って書き込む。

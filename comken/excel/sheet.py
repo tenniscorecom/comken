@@ -1,14 +1,14 @@
 """
 excel/sheet.py — ワークシートの高レベルラッパー
 
-ExcelFile.sheet() から取得し、セル書き込み・行書き込み・列幅調整・
+ExcelWriter.sheet() から取得し、セル書き込み・行書き込み・列幅調整・
 ヘッダー固定などをシート単位で行う（sheet_name を毎回渡さなくてよい）。
 
 使い方:
-    from comken.excel import ExcelFile
+    from comken.excel import ExcelWriter
 
     # 既存ファイルを開いて書き込む
-    with ExcelFile("report.xlsx") as f:
+    with ExcelWriter("report.xlsx") as f:
         s = f.sheet("Sheet1")
         s["A1"] = "売上レポート"          # セル参照で書き込み
         title = s["A1"]                   # セル参照で読み取り
@@ -20,7 +20,7 @@ ExcelFile.sheet() から取得し、セル書き込み・行書き込み・列�
 
     # 新規ブックを作ってレポートを出力する
     rows = CsvReader("data.csv").rows()
-    with ExcelFile.create(r"C:\\作業\\report.xlsx") as f:
+    with ExcelWriter.create(r"C:\\作業\\report.xlsx") as f:
         s = f.sheet("Sheet1")
         s.write_table(rows)               # ヘッダー行 + データ行をまとめて書く
         s.auto_width()
@@ -33,7 +33,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 
 class Sheet:
-    """1枚のワークシートのラッパー。ExcelFile.sheet() から取得する。
+    """1枚のワークシートのラッパー。ExcelWriter.sheet() から取得する。
 
     ここにないシート操作は .ws から生の openpyxl Worksheet を使える。
     """

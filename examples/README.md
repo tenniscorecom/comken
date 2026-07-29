@@ -1,4 +1,4 @@
-# examples — 動くサンプル集
+﻿# examples — 動くサンプル集
 
 comken の使い方を「動くコード」で覚えるためのサンプル。
 どれもリポジトリのルートから `python -m examples.<フォルダ名>.run` で実行する。
@@ -7,11 +7,11 @@ comken の使い方を「動くコード」で覚えるためのサンプル。
 
 | # | フォルダ | 内容 | 主に使うモジュール | 実行条件 |
 |---|---|---|---|---|
-| 1 | csv_to_excel_report | CSV を読んで Excel レポートを作る | CsvReader / ExcelFile / Sheet / Color | なし（同梱データで動く） |
+| 1 | csv_to_excel_report | CSV を読んで Excel レポートを作る | CsvReader / ExcelWriter / Sheet / Color | なし（同梱データで動く） |
 | 2 | excel_key_transfer | マスタ CSV を Excel にキー突合転記（XLOOKUP 的転記） | CsvReader.index / transfer_by_key / diff_rows | なし（データを自動生成） |
 | 3 | csv_diff_report | 昨日と今日の CSV の差分を色付き Excel レポートに | diff_rows / CsvWriter / set_fill | なし（データを自動生成） |
 | 4 | sample_login | ブラウザ自動化（Page Object Model の一式） | EdgeDriver / BasePage / Locator | Edge + msedgedriver |
-| 6 | daily_batch_template | 日次バッチの雛形（新規プロジェクトのコピー元） | setup_logger / FileFinder / ExcelFile | config.ini の作成 |
+| 6 | daily_batch_template | 日次バッチの雛形（新規プロジェクトのコピー元） | setup_logger / FileFinder / ExcelWriter | config.ini の作成 |
 
 ## 実行方法
 
@@ -35,3 +35,4 @@ python -m examples.csv_to_excel_report.run
 実務でいちばん多い構成に、エラー処理・ログ・config.ini の書き方が入っている。
 
 ブラウザ自動化のツールなら `sample_login` の pages/ 構成（Page Object Model）を合わせて使う。
+

@@ -5,7 +5,7 @@
 
     # NAS ファイルのローカルコピー
     with local_copy(r"\\\\nas-server\\share\\data.xlsx") as path:
-        with ExcelFile(path) as f:
+        with ExcelReader(path) as f:
             rows = f.read_rows_as_dicts("Sheet1")
 """
 
@@ -33,7 +33,7 @@ def local_copy(path: str | Path):
 
     使い方:
         with local_copy(r"\\\\nas-server\\share\\data.xlsx") as local_path:
-            with ExcelFile(local_path) as f:
+            with ExcelReader(local_path) as f:
                 rows = f.read_rows_as_dicts("Sheet1")
 
     Args:

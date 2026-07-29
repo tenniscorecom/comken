@@ -22,6 +22,7 @@
 |---|---|---|
 | `SheetNotFoundError` | 指定した名前のシートがない | Excel を開いて、下のシート名（タブ）が変わっていないか確認する。変えた場合は元に戻す |
 | `ExcelFileNotFoundError` | Excel ファイルが見つからない | ファイルの置き場所と名前を確認する |
+| `UnsupportedFileSuffixError` | 対応外の拡張子が指定された | CSV / Excel の対応する拡張子のファイルを指定する |
 | `ExcelColumnNotFoundError` | Excel の列見出しが見つからない | Excel の1行目を確認する |
 | `MacroError` | Excel のマクロが失敗した | Excel をすべて閉じて再実行する。続く場合は管理者へ |
 | `RowTransferError` | Excel の行転記に失敗した | 表示された行番号のデータを確認する |

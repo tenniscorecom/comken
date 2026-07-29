@@ -30,7 +30,7 @@ def mini_repo(tmp_path):
     pkg.mkdir()
     (pkg / "__init__.py").write_text("from comken.config import Config\n", encoding="utf-8")
     (tmp_path / "README.md").write_text(
-        "# comken\n\nfrom comken.excel import ExcelFile\n", encoding="utf-8"
+        "# comken\n\nfrom comken.excel import ExcelWriter\n", encoding="utf-8"
     )
     # bat は cp932（社内実環境の再現）
     (tmp_path / "実行.bat").write_bytes(

@@ -50,7 +50,7 @@ def set_dry_run(enabled: bool = True) -> None:
 
     対象の操作:
         - move_file / copy_file（ファイルの移動・コピー）
-        - ExcelFile.save / CsvWriter の書き込み
+        - ExcelWriter.save / CsvWriter の書き込み
 
     読み取り（CSV・Excel の読み込み、SOQL クエリ等）は通常どおり実行される。
 

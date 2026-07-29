@@ -7,7 +7,7 @@ pywin32 を使った Windows 固有操作を提供する。
 - WindowHandler: ウィンドウの検索・前面表示
 - RegistryHandler: レジストリ値の読み取り
 
-通常の Excel 読み書きは excel/handler.py の ExcelFile（openpyxl）を使うこと。
+通常の Excel 読み書きは excel/writer.py の ExcelWriter（openpyxl）を使うこと。
 ExcelComHandler は数式やマクロが必要な場面に限定して使う。
 """
 
@@ -29,6 +29,7 @@ from ..exceptions import (
     RowTransferError,
     _warn_coerce,
 )
+from ..files.base import FileBase
 from ..utils.data import col_to_num
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ _SUFFIX_TO_FORMAT = {
 }
 
 
-class ExcelComHandler:
+class ExcelComHandler(FileBase):
     """win32com を使った Excel 操作クラス。
 
     openpyxl では対応できない以下の操作に使う:
@@ -81,6 +82,8 @@ class ExcelComHandler:
             h.save_as("output.xlsx", read_pw="読み取りPW", write_pw="書き込みPW")
     """
 
+    SUFFIXES = (".xlsx", ".xlsm", ".xlsb", ".xls", ".xltx", ".xltm")
+
     def __init__(
         self, path: str | Path, password: str = "", headers: list[str] | None = None
     ) -> None:
@@ -91,6 +94,7 @@ class ExcelComHandler:
             headers: ヘッダー行がない Excel の場合に、列名のリストをここで付ける。
                      指定すると read_rows_as_dicts() は全行をデータとして読む。
         """
+        super().__init__(path)
         self._headers = headers
         self._wb = None
         # DispatchEx は常に新規の Excel プロセスを起動する。
@@ -105,7 +109,7 @@ class ExcelComHandler:
         # Open に失敗すると with に入る前に例外で抜けるため、ここで Quit しないと
         # 起動済みの Excel プロセスが残り続ける
         try:
-            kwargs = {"Filename": str(Path(path).resolve())}
+            kwargs = {"Filename": str(self.path.resolve())}
             if password:
                 kwargs["Password"] = password
             self._wb = self._excel.Workbooks.Open(**kwargs)
@@ -197,7 +201,7 @@ class ExcelComHandler:
         header_row = int(header_row)
         file_headers = [ws.Cells(header_row, col).Value for col in range(1, last_col + 1)]
         if all(h is None for h in file_headers):
-            return []  # 空シート（ExcelFile 側と挙動を揃える）
+            return []  # 空シート（ExcelWriter 側と挙動を揃える）
         none_cols = [i + 1 for i, h in enumerate(file_headers) if h is None]
         if none_cols:
             raise EmptyHeaderCellError(none_cols)

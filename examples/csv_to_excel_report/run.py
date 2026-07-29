@@ -3,7 +3,7 @@
 
 comken の最初の一歩としてまず動かすサンプル。
 CSV の読み込み・絞り込み・集計（CsvReader）と、
-Excel レポートの作成・見た目調整（ExcelFile.create + Sheet）を通しで行う。
+Excel レポートの作成・見た目調整（ExcelWriter.create + Sheet）を通しで行う。
 
 実行方法:
     リポジトリのルートで python -m examples.csv_to_excel_report.run
@@ -18,7 +18,7 @@ from pathlib import Path
 from comken import setup_logger
 from comken.constants import Color
 from comken.csv import CsvReader
-from comken.excel import ExcelFile
+from comken.excel import ExcelWriter
 from comken.files import DateNameBuilder
 
 # 入出力はこのフォルダ内で完結させる（サンプル用。実プロジェクトではパスは config.ini に書く）
@@ -57,7 +57,7 @@ def main() -> None:
     # 「売上レポート_20260713.xlsx」のような日付付きファイル名を組み立てる
     output_path = OUTPUT_FOLDER / DateNameBuilder("売上レポート").suffix()
 
-    with ExcelFile.create(output_path) as f:
+    with ExcelWriter.create(output_path) as f:
         s = f.sheet(SHEET)
         s.write_table(excel_rows)  # ヘッダー行 + データ行をまとめて書く
         s.append_row(["合計", "", "", "", total])  # 最終行の下に追記

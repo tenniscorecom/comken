@@ -21,9 +21,10 @@ from pathlib import Path
 from ..constants import Encoding
 from ..exceptions import CsvColumnNotFoundError, CsvHeadersTooFewError, EncodingDetectionError
 from ..utils.timer import measure
+from .base import CsvBase
 
 
-class CsvReader:
+class CsvReader(CsvBase):
     """CSV ファイルの読み込みユーティリティ。
 
     ヘッダー行をキーにした辞書のリストとして扱う。
@@ -77,8 +78,7 @@ class CsvReader:
                      指定すると1行目からデータとして読む。
                      例: CsvReader("data.csv", headers=["注文番号", "金額", "担当者"])
         """
-        self._path = Path(path)
-        self._encoding = encoding
+        super().__init__(path, encoding)
         self._headers = headers
         self._cache: list[dict[str, str]] | None = None
 

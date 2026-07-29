@@ -1,4 +1,4 @@
-# Python コーディング規約（共通）
+﻿# Python コーディング規約（共通）
 
 comken 本体と、comken を使うプロジェクトの**両方に共通する Python の書き方**を定める。
 **PEP 8**（Python 公式スタイルガイド）に準拠し、矛盾する場合は本規約を優先する。
@@ -52,7 +52,7 @@ Python の作法（PEP 8）に従う。
 
 | 種別 | 規則 | 例 |
 |---|---|---|
-| クラス名 | PascalCase | `ExcelFile`, `LoginPage`, `CsvMerger` |
+| クラス名 | PascalCase | `ExcelWriter`, `LoginPage`, `CsvMerger` |
 | 定数・固定値 | UPPER_SNAKE_CASE | `COL_Q`, `SHEET_NAME`, `WAIT_SECONDS` |
 | 関数・メソッド | snake_case | `read_rows()`, `run_macro()` |
 | 変数 | snake_case | `csv_lookup`, `matched_rows` |
@@ -208,7 +208,7 @@ if file_size > LOCAL_COPY_THRESHOLD_BYTES:
 |---|---|---|
 | 決まった値の一覧を名前で持つ（インスタンスを作らない） | ただのクラス属性（**定数クラス**） | `Color.RED`, `SortBy.UPDATED`, `Encoding.CP932` |
 | 複数の値をひとまとまりで持ち運ぶ「データの箱」 | `@dataclass` | 集計結果・検索結果など、名前付きの値のセットを返すとき |
-| 振る舞い（メソッド）が主役のもの | 普通のクラス | `ExcelFile`, `FileFinder` |
+| 振る舞い（メソッド）が主役のもの | 普通のクラス | `ExcelWriter`, `FileFinder` |
 
 ### 定数クラス — 「変わらない値の一覧」を入れる箱
 
@@ -344,15 +344,15 @@ class EdgeDriver:
 別コンストラクタが必要なときだけ使う。
 
 ```python
-class ExcelFile:
+class ExcelWriter:
     @classmethod
-    def from_template(cls, template_path: Path, output_path: Path) -> "ExcelFile":
-        """テンプレートをコピーして新しい ExcelFile を返す。"""
+    def from_template(cls, template_path: Path, output_path: Path) -> "ExcelWriter":
+        """テンプレートをコピーして新しい ExcelWriter を返す。"""
         shutil.copy2(template_path, output_path)
         return cls(output_path)
 
 # 呼び出し側
-f = ExcelFile.from_template(TEMPLATE_PATH, output_path)
+f = ExcelWriter.from_template(TEMPLATE_PATH, output_path)
 ```
 
 ### @staticmethod の使いどき
@@ -385,7 +385,7 @@ class CsvReader:
 
 ```python
 # 良い（with 文）
-with ExcelFile("data.xlsx") as f:
+with ExcelReader("data.xlsx") as f:
     rows = f.read_rows_as_dicts("Sheet1")
 
 # with が使えない場合（pywin32 の COM オブジェクト等）
@@ -425,7 +425,7 @@ Excel ファイルが開きっぱなしになると、次に開こうとした�
 from comken.exceptions import SheetNotFoundError, ExcelError, OriginalLibsError
 
 try:
-    with ExcelFile("data.xlsx") as f:
+    with ExcelReader("data.xlsx") as f:
         rows = f.read_rows("存在しないシート")
 
 except SheetNotFoundError as e:
@@ -476,7 +476,8 @@ logger.error("エラーが発生しました", exc_info=True)  # exc_info=True �
 
 ## Excel（openpyxl）
 
-Excel の読み書きは `ExcelFile` を使う。openpyxl を直接触るのはライブラリにない機能が必要なときだけ。
+Excel の読み取りだけなら `ExcelReader`、書き込みを伴う場合は `ExcelWriter` を使う。
+openpyxl を直接触るのはライブラリにない機能が必要なときだけ。
 
 ### 書式設定は処理ロジックと分離する
 
@@ -656,3 +657,4 @@ class TestCsvReaderFind:
 > プロジェクトのセットアップファイル（ERRORS.md / .gitignore / pyproject.toml /
 > requirements.txt / config.ini.example）と VS Code の設定は
 > [プロジェクト規約](docs/プロジェクト規約.md#プロジェクトセットアップファイル) を参照。
+

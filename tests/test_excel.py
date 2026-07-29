@@ -1,15 +1,17 @@
 """
-ExcelFile クラスのテスト。
+ExcelReader / ExcelWriter クラスのテスト。
 
 実行方法:
     リポジトリのルートで python -m pytest tests/ -v
 """
 
+from pathlib import Path
+
 import pytest
 from openpyxl import Workbook, load_workbook
 
-from comken.excel.handler import ExcelFile
-from comken.exceptions import ExcelError, SheetNotFoundError
+from comken.excel import ExcelReader, ExcelWriter
+from comken.exceptions import ExcelError, SheetNotFoundError, UnsupportedFileSuffixError
 
 
 @pytest.fixture
@@ -53,11 +55,34 @@ def excel_header_row2(tmp_path):
     return path
 
 
+class TestExcelReader:
+    def test_path_is_path(self, excel_with_header: Path) -> None:
+        with ExcelReader(str(excel_with_header)) as reader:
+            assert reader.path == excel_with_header
+            assert isinstance(reader.path, Path)
+
+    def test_rejects_non_excel_suffix(self, tmp_path: Path) -> None:
+        with pytest.raises(UnsupportedFileSuffixError):
+            ExcelReader(tmp_path / "data.csv")
+
+    def test_reads_value_written_by_writer(self, tmp_path: Path) -> None:
+        path = tmp_path / "book.xlsx"
+        with ExcelWriter.create(path) as writer:
+            writer.write_cell("Sheet1", row=1, col=1, value="見出し")
+            writer.write_cell("Sheet1", row=2, col=1, value="値")
+            writer.save()
+
+        with ExcelReader(path) as reader:
+            assert reader.read_rows("Sheet1") == [("値",)]
+            assert reader._wb.read_only is True
+            assert not hasattr(reader, "write_cell")
+
+
 class TestOpen:
     def test_missing_file_raises_excel_error(self, tmp_path):
         """存在しないファイルは素の FileNotFoundError ではなく ExcelError になる。"""
         with pytest.raises(ExcelError, match="見つかりません"):
-            ExcelFile(tmp_path / "no_such.xlsx")
+            ExcelReader(tmp_path / "no_such.xlsx")
 
 
 class TestReadRowsAsDicts:
@@ -65,14 +90,14 @@ class TestReadRowsAsDicts:
 
     def test_reads_all_rows(self, excel_with_header):
         """1行目ヘッダーの場合に全データ行を辞書で返すことを確認する。"""
-        with ExcelFile(excel_with_header) as f:
+        with ExcelReader(excel_with_header) as f:
             rows = f.read_rows_as_dicts("Sheet1")
         assert len(rows) == 2
         assert rows[0] == {"注文番号": "A001", "金額": 1000, "担当者": "山田"}
 
     def test_header_row_parameter(self, excel_header_row2):
         """header_row=2 の場合に2行目をヘッダーとして読むことを確認する。"""
-        with ExcelFile(excel_header_row2) as f:
+        with ExcelReader(excel_header_row2) as f:
             rows = f.read_rows_as_dicts("Sheet1", header_row=2)
         assert len(rows) == 1
         assert rows[0]["注文番号"] == "A001"
@@ -83,13 +108,13 @@ class TestReadRowsAsDicts:
         wb.active.title = "Sheet1"
         path = tmp_path / "empty.xlsx"
         wb.save(path)
-        with ExcelFile(path) as f:
+        with ExcelReader(path) as f:
             rows = f.read_rows_as_dicts("Sheet1")
         assert rows == []
 
     def test_raises_on_missing_sheet(self, excel_with_header):
         """存在しないシートを指定すると SheetNotFoundError になることを確認する。"""
-        with ExcelFile(excel_with_header) as f:
+        with ExcelReader(excel_with_header) as f:
             with pytest.raises(SheetNotFoundError):
                 f.read_rows_as_dicts("存在しないシート")
 
@@ -102,17 +127,17 @@ class TestReadRowsAsDicts:
         ws.append(["A001", 1000, "山田"])
         path = tmp_path / "none_header.xlsx"
         wb.save(path)
-        with ExcelFile(path) as f:
+        with ExcelReader(path) as f:
             with pytest.raises(ExcelError, match="空のセル"):
                 f.read_rows_as_dicts("Sheet1")
 
 
 class TestReadRowsAsDictsWithHeaders:
-    """ExcelFile(path, headers=...) のテスト（ヘッダー行なしファイル）。"""
+    """ExcelReader(path, headers=...) のテスト（ヘッダー行なしファイル）。"""
 
     def test_reads_headerless_file(self, excel_no_header):
         """__init__ で headers を指定すると全行をデータとして読めることを確認する。"""
-        with ExcelFile(excel_no_header, headers=["注文番号", "金額", "担当者"]) as f:
+        with ExcelReader(excel_no_header, headers=["注文番号", "金額", "担当者"]) as f:
             rows = f.read_rows_as_dicts("Sheet1")
         assert len(rows) == 2
         assert rows[0] == {"注文番号": "A001", "金額": 1000, "担当者": "山田"}
@@ -123,7 +148,7 @@ class TestReadRowsAsDictsWithHeaders:
 
         （ヘッダーありファイルに headers を渡すと、ヘッダー行もデータになる）
         """
-        with ExcelFile(excel_with_header, headers=["C1", "C2", "C3"]) as f:
+        with ExcelReader(excel_with_header, headers=["C1", "C2", "C3"]) as f:
             rows = f.read_rows_as_dicts("Sheet1")
         assert len(rows) == 3  # ヘッダー行を含む全3行
         assert rows[0] == {"C1": "注文番号", "C2": "金額", "C3": "担当者"}
@@ -139,7 +164,7 @@ class TestReadRowsAsDictsWithHeaders:
         path = tmp_path / "multi.xlsx"
         wb.save(path)
 
-        with ExcelFile(path, headers=["注文番号", "金額"]) as f:
+        with ExcelReader(path, headers=["注文番号", "金額"]) as f:
             rows1 = f.read_rows_as_dicts("Sheet1")
             rows2 = f.read_rows_as_dicts("Sheet2")
         assert rows1[0]["注文番号"] == "A001"
@@ -150,7 +175,7 @@ class TestReadRowsAsDictsWithHeaders:
 
         （zip が黙って列を落とすとデータ欠損に気づけないため）
         """
-        with ExcelFile(excel_no_header, headers=["注文番号", "金額"]) as f:  # 実際は3列
+        with ExcelReader(excel_no_header, headers=["注文番号", "金額"]) as f:  # 実際は3列
             with pytest.raises(ExcelError, match="列数"):
                 f.read_rows_as_dicts("Sheet1")
 
@@ -161,7 +186,7 @@ class TestReadRowsAsDictsWithHeaders:
         path = tmp_path / "empty.xlsx"
         wb.save(path)
 
-        with ExcelFile(path, headers=["注文番号", "金額"]) as f:
+        with ExcelReader(path, headers=["注文番号", "金額"]) as f:
             rows = f.read_rows_as_dicts("Sheet1")
         assert rows == []
 
@@ -176,14 +201,14 @@ class TestReadRowsAsDictsWithHeaders:
         path = tmp_path / "blank_row.xlsx"
         wb.save(path)
 
-        with ExcelFile(path, headers=["注文番号", "金額"]) as f:
+        with ExcelReader(path, headers=["注文番号", "金額"]) as f:
             rows = f.read_rows_as_dicts("Sheet1")
         assert len(rows) == 2
         assert rows[1]["注文番号"] == "A002"
 
 
 class TestTransferByKey:
-    """ExcelFile.transfer_by_key（openpyxl 版のキー突合転記）のテスト。"""
+    """ExcelWriter.transfer_by_key（openpyxl 版のキー突合転記）のテスト。"""
 
     @pytest.fixture
     def transfer_excel(self, tmp_path):
@@ -206,7 +231,7 @@ class TestTransferByKey:
             "A002": {"顧客名": "株式会社B", "金額": "2000"},
         }
 
-        with ExcelFile(transfer_excel) as f:
+        with ExcelWriter(transfer_excel) as f:
             matched = f.transfer_by_key(
                 "T_data", key_col="A", lookup=lookup, column_mapping={"B": "顧客名", "C": "金額"}
             )
@@ -223,7 +248,7 @@ class TestTransferByKey:
         """lookup にないキーの行は転記されずスキップされることを確認する。"""
         lookup = {"A001": {"顧客名": "株式会社A"}}
 
-        with ExcelFile(transfer_excel) as f:
+        with ExcelWriter(transfer_excel) as f:
             matched = f.transfer_by_key(
                 "T_data", key_col="A", lookup=lookup, column_mapping={"B": "顧客名"}
             )
@@ -247,7 +272,7 @@ class TestTransferByKey:
 
         lookup = {"1001": {"顧客名": "株式会社C"}}
 
-        with ExcelFile(path) as f:
+        with ExcelWriter(path) as f:
             matched = f.transfer_by_key(
                 "T_data", key_col="A", lookup=lookup, column_mapping={"B": "顧客名"}
             )
@@ -262,7 +287,7 @@ class TestTransferByKey:
         """key_col を列レターではなく列番号（1）で指定できることを確認する。"""
         lookup = {"A001": {"顧客名": "株式会社A"}}
 
-        with ExcelFile(transfer_excel) as f:
+        with ExcelWriter(transfer_excel) as f:
             matched = f.transfer_by_key(
                 "T_data", key_col=1, lookup=lookup, column_mapping={"B": "顧客名"}
             )
@@ -271,7 +296,7 @@ class TestTransferByKey:
 
     def test_raises_on_missing_sheet(self, transfer_excel):
         """存在しないシートを指定すると SheetNotFoundError になることを確認する。"""
-        with ExcelFile(transfer_excel) as f:
+        with ExcelWriter(transfer_excel) as f:
             with pytest.raises(SheetNotFoundError):
                 f.transfer_by_key("存在しない", key_col="A", lookup={}, column_mapping={})
 
@@ -280,9 +305,9 @@ class TestSheetWrapper:
     """Sheet（シート単位の高レベルラッパー）のテスト。"""
 
     def test_create_and_cell_access(self, tmp_path):
-        """ExcelFile.create で新規ブックを作り、セル参照で読み書きできることを確認する。"""
+        """ExcelWriter.create で新規ブックを作り、セル参照で読み書きできることを確認する。"""
         path = tmp_path / "new.xlsx"
-        with ExcelFile.create(path) as f:
+        with ExcelWriter.create(path) as f:
             s = f.sheet("Sheet1")
             s["A1"] = "タイトル"
 
@@ -294,19 +319,19 @@ class TestSheetWrapper:
     def test_write_row_and_rows(self, tmp_path):
         """write_row / write_rows で横並びに書き込まれることを確認する。"""
         path = tmp_path / "rows.xlsx"
-        with ExcelFile.create(path) as f:
+        with ExcelWriter.create(path) as f:
             s = f.sheet("Sheet1")
             s.write_row(1, ["日付", "金額"])
             s.write_rows(2, [["7/1", 100], ["7/2", 200]])
             f.save()
 
-        with ExcelFile(path) as f:
+        with ExcelReader(path) as f:
             rows = f.read_rows_as_dicts("Sheet1")
             assert rows == [{"日付": "7/1", "金額": 100}, {"日付": "7/2", "金額": 200}]
 
     def test_append_row_on_empty_sheet_starts_at_row1(self, tmp_path):
         """空シートへの append_row は1行目から書かれることを確認する（2行目から始まらない）。"""
-        with ExcelFile.create(tmp_path / "a.xlsx") as f:
+        with ExcelWriter.create(tmp_path / "a.xlsx") as f:
             s = f.sheet("Sheet1")
             assert s.is_empty
 
@@ -321,17 +346,17 @@ class TestSheetWrapper:
         """write_table で辞書のリストがヘッダー付きで書かれることを確認する。"""
         rows = [{"注文番号": "A001", "金額": 1000}, {"注文番号": "A002", "金額": 2000}]
         path = tmp_path / "table.xlsx"
-        with ExcelFile.create(path) as f:
+        with ExcelWriter.create(path) as f:
             f.sheet("Sheet1").write_table(rows)
             f.save()
 
-        with ExcelFile(path) as f:
+        with ExcelReader(path) as f:
             assert f.read_rows_as_dicts("Sheet1") == rows
 
     def test_write_table_respects_header_order(self, tmp_path):
         """headers 指定で列の並び順を制御できることを確認する。"""
         rows = [{"金額": 1000, "注文番号": "A001"}]
-        with ExcelFile.create(tmp_path / "t.xlsx") as f:
+        with ExcelWriter.create(tmp_path / "t.xlsx") as f:
             s = f.sheet("Sheet1")
             s.write_table(rows, headers=["注文番号", "金額"])
 
@@ -340,7 +365,7 @@ class TestSheetWrapper:
 
     def test_auto_width_considers_japanese(self, tmp_path):
         """auto_width で全角文字が2文字ぶんとして幅計算されることを確認する。"""
-        with ExcelFile.create(tmp_path / "w.xlsx") as f:
+        with ExcelWriter.create(tmp_path / "w.xlsx") as f:
             s = f.sheet("Sheet1")
             s["A1"] = "日本語のタイトル"  # 8文字 → 表示幅16
             s["B1"] = "abc"
@@ -352,7 +377,7 @@ class TestSheetWrapper:
 
     def test_auto_width_caps_at_max(self, tmp_path):
         """長文があっても max_width を超えないことを確認する。"""
-        with ExcelFile.create(tmp_path / "w.xlsx") as f:
+        with ExcelWriter.create(tmp_path / "w.xlsx") as f:
             s = f.sheet("Sheet1")
             s["A1"] = "あ" * 100
 
@@ -362,7 +387,7 @@ class TestSheetWrapper:
 
     def test_freeze_header(self, tmp_path):
         """freeze_header で1行目（指定行数）が固定されることを確認する。"""
-        with ExcelFile.create(tmp_path / "f.xlsx") as f:
+        with ExcelWriter.create(tmp_path / "f.xlsx") as f:
             s = f.sheet("Sheet1")
             s.freeze_header()
             assert s.ws.freeze_panes == "A2"
@@ -372,6 +397,6 @@ class TestSheetWrapper:
 
     def test_sheet_raises_on_missing_sheet(self, tmp_path):
         """存在しないシート名は SheetNotFoundError になることを確認する。"""
-        with ExcelFile.create(tmp_path / "e.xlsx") as f:
+        with ExcelWriter.create(tmp_path / "e.xlsx") as f:
             with pytest.raises(SheetNotFoundError):
                 f.sheet("存在しないシート")

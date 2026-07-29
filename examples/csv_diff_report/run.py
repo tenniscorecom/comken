@@ -19,7 +19,7 @@ from pathlib import Path
 from comken import setup_logger
 from comken.constants import Color
 from comken.csv import CsvReader, CsvWriter
-from comken.excel import ExcelFile
+from comken.excel import ExcelWriter
 from comken.files import DateNameBuilder
 from comken.utils import diff_rows
 
@@ -96,7 +96,7 @@ def main() -> None:
         report_rows.append({STATUS_COL: STATUS_CHANGED, DETAIL_COL: detail, **change.after})
 
     output_path = OUTPUT_FOLDER / DateNameBuilder("差分レポート").suffix()
-    with ExcelFile.create(output_path) as f:
+    with ExcelWriter.create(output_path) as f:
         s = f.sheet(SHEET)
         s.write_table(report_rows, headers=REPORT_HEADERS)
         # 区分セルを色分けする（データはヘッダーの次の行から始まる）

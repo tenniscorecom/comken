@@ -1,6 +1,7 @@
 """comken の例外体系。
 
 OriginalLibsError
+├── UnsupportedFileSuffixError
 ├── ExcelError
 │   ├── ExcelFileNotFoundError
 │   ├── SheetNotFoundError
@@ -48,6 +49,7 @@ from .excel import (
     RowTransferError,
     SheetNotFoundError,
 )
+from .file import UnsupportedFileSuffixError
 from .warning import _warn_coerce as _warn_coerce
 
 __all__ = [
@@ -71,4 +73,5 @@ __all__ = [
     "ConfigFileNotFoundError",
     "StubTargetNotFoundError",
     "ConfigSectionNotFoundError",
+    "UnsupportedFileSuffixError",
 ]

@@ -5,12 +5,13 @@ CsvReader クラスのテスト。
     リポジトリのルートで python -m pytest tests/ -v
 """
 
+from pathlib import Path
+
 import pytest
 
 from comken.constants import Encoding
-from comken.csv.handler import CsvReader
-from comken.csv.writer import CsvWriter
-from comken.exceptions import ColumnNotFoundError, CsvError
+from comken.csv import CsvReader, CsvWriter
+from comken.exceptions import ColumnNotFoundError, CsvError, UnsupportedFileSuffixError
 
 
 @pytest.fixture
@@ -24,6 +25,15 @@ def sample_csv(tmp_path):
 
 class TestCsvReaderRows:
     """rows() のテスト。"""
+
+    def test_path_is_path(self, tmp_path: Path) -> None:
+        reader = CsvReader(str(tmp_path / "data.csv"))
+        assert reader.path == tmp_path / "data.csv"
+        assert isinstance(reader.path, Path)
+
+    def test_rejects_non_csv_suffix(self, tmp_path: Path) -> None:
+        with pytest.raises(UnsupportedFileSuffixError):
+            CsvReader(tmp_path / "data.txt")
 
     def test_returns_all_rows(self, sample_csv):
         """全行を辞書のリストで返すことを確認する。"""
@@ -234,7 +244,7 @@ class TestCsvWriter:
     def test_creates_parent_folder(self, tmp_path):
         """親フォルダがなくても自動作成して書き込めることを確認する。
 
-        （ExcelFile.save と同じ挙動）
+        （ExcelWriter.save と同じ挙動）
         """
         path = tmp_path / "reports" / "2026" / "output.csv"
 

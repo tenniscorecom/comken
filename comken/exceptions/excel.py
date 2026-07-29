@@ -12,7 +12,7 @@ class ExcelError(OriginalLibsError):
 class ExcelFileNotFoundError(ExcelError):
     """Excel ファイルが存在しない場合。
 
-    発生箇所: ExcelFile.__init__()
+    発生箇所: ExcelBase.__init__()
     """
 
     def __init__(self, path: Path | str) -> None:
@@ -25,7 +25,7 @@ class ExcelFileNotFoundError(ExcelError):
 class SheetNotFoundError(ExcelError):
     """指定したシートが存在しない場合。
 
-    発生箇所: ExcelFile._sheet() / ExcelComHandler._sheet()
+    発生箇所: ExcelBase._sheet() / ExcelComHandler._sheet()
     """
 
     def __init__(self, name: str, sheets: list[str]) -> None:
@@ -61,7 +61,7 @@ class RowTransferError(ExcelError):
 class EmptyHeaderCellError(ExcelError):
     """Excel のヘッダー行に空のセルがある場合。
 
-    発生箇所: ExcelFile.read_rows_as_dicts() / ExcelComHandler.read_rows_as_dicts()
+    発生箇所: ExcelBase.read_rows_as_dicts() / ExcelComHandler.read_rows_as_dicts()
     """
 
     def __init__(self, columns: list[int]) -> None:
@@ -74,7 +74,7 @@ class EmptyHeaderCellError(ExcelError):
 class ExcelHeadersTooFewError(ExcelError):
     """指定したヘッダー数が Excel の列数より少ない場合。
 
-    発生箇所: ExcelFile.read_rows_as_dicts() / ExcelComHandler.read_rows_as_dicts()
+    発生箇所: ExcelBase.read_rows_as_dicts() / ExcelComHandler.read_rows_as_dicts()
     """
 
     def __init__(self, expected: int, actual: int) -> None:

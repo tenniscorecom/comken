@@ -1,4 +1,4 @@
-from .handler import CsvReader
+from .reader import CsvReader
 from .writer import CsvWriter
 
 __all__ = ["CsvReader", "CsvWriter"]
