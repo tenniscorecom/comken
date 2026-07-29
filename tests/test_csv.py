@@ -15,7 +15,9 @@ from comken.csv import CsvReader, CsvWriter
 from comken.exceptions import (
     ColumnNotFoundError,
     CsvCellReferenceError,
+    CsvColumnNotFoundError,
     CsvError,
+    CsvNoDataRowsError,
     UnsupportedFileSuffixError,
 )
 
@@ -75,6 +77,39 @@ class TestCsvReaderCell:
     def test_rejects_out_of_range_reference(self, sample_csv, ref):
         with pytest.raises(CsvCellReferenceError):
             CsvReader(sample_csv).cell(ref)
+
+
+class TestCsvReaderFirst:
+    """first() のテスト。"""
+
+    def test_returns_first_data_row_value(self, sample_csv):
+        assert CsvReader(sample_csv).first("金額") == "1000"
+
+    def test_returns_empty_string_for_empty_cell(self, tmp_path):
+        path = tmp_path / "data.csv"
+        path.write_text("日付,備考\n2026/07/29,\n", encoding="utf-8")
+
+        assert CsvReader(path).first("備考") == ""
+
+    def test_raises_on_missing_column(self, sample_csv):
+        with pytest.raises(CsvColumnNotFoundError):
+            CsvReader(sample_csv).first("価格")
+
+    def test_raises_when_no_data_rows(self, tmp_path):
+        path = tmp_path / "header_only.csv"
+        path.write_text("日付,備考\n", encoding="utf-8")
+
+        with pytest.raises(CsvNoDataRowsError, match="ヘッダー行の下"):
+            CsvReader(path).first("日付")
+
+    def test_returns_same_value_when_column_position_changes(self, tmp_path):
+        original = tmp_path / "original.csv"
+        reordered = tmp_path / "reordered.csv"
+        original.write_text("日付,備考\n2026/07/29,確定\n", encoding="utf-8")
+        reordered.write_text("備考,日付\n確定,2026/07/29\n", encoding="utf-8")
+
+        assert CsvReader(original).first("日付") == "2026/07/29"
+        assert CsvReader(reordered).first("日付") == "2026/07/29"
 
 
 class TestCsvReaderFind:

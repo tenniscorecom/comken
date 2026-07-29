@@ -8,6 +8,7 @@ CsvReader クラスを通じて CSV ファイルの読み込み・検索・抽�
 
     reader = CsvReader("data.csv")
     reader.rows() # 全行を辞書のリストで取得
+    reader.first("日付") # 最初のデータ行の値
     reader.find("注文番号", "A001") # 1件検索
     reader.filter("ステータス", "完了") # 複数行検索
     reader.column("金額") # 列の値一覧
@@ -24,6 +25,7 @@ from ..exceptions import (
     CsvCellReferenceError,
     CsvColumnNotFoundError,
     CsvHeadersTooFewError,
+    CsvNoDataRowsError,
     EncodingDetectionError,
 )
 from ..utils.timer import measure
@@ -42,6 +44,10 @@ class CsvReader(CsvBase):
         # 全行取得
         rows = reader.rows()
         # → [{"注文番号": "A001", "金額": "1000", "担当者": "山田"}, ...]
+
+        # ヘッダー名で最初のデータ行の値を取得
+        first_order_id = reader.first("注文番号")
+        # → "A001"
 
         # 特定列のみ取得
         rows = reader.rows(columns=["注文番号", "金額"])
@@ -163,6 +169,8 @@ class CsvReader(CsvBase):
 
         ヘッダー付き辞書を作る ``_load()`` とは別に生の行を読むため、
         列名や ``headers`` の指定には依存しない。ヘッダー行も1行目として数える。
+        列の位置に依存するため、上流で列が増減すると別の値を読む可能性がある。
+        ヘッダーがある CSV では、列の位置が変わっても壊れない ``first()`` を推奨する。
 
         Args:
             ref: A1、B2 のような1始まりのセル参照。
@@ -199,6 +207,28 @@ class CsvReader(CsvBase):
                 f"指定した列は範囲外です（{row_index + 1} 行目は {column_count} 列です）",
             )
         return raw_rows[row_index][column_index]
+
+    def first(self, column: str) -> str:
+        """ヘッダー名で列を指定し、最初のデータ行の値を返す。
+
+        ヘッダーがある CSV では、列の位置が変わっても壊れないこのメソッドを推奨する。
+        ヘッダーがない、または位置で決まっている CSV では ``cell("A2")`` を使う。
+
+        Args:
+            column: 取得する列名。
+
+        Returns:
+            最初のデータ行にある指定列の文字列。空セルの場合は空文字。
+
+        Raises:
+            CsvColumnNotFoundError: 指定した列名が存在しない場合。
+            CsvNoDataRowsError: データ行が1行もない場合。
+        """
+        data = self._load()
+        self._validate_columns([column])
+        if not data:
+            raise CsvNoDataRowsError(self._path)
+        return data[0][column]
 
     def find(self, key_col: str, value: str) -> dict[str, str] | None:
         """key_col が value に一致する最初の行を返す。

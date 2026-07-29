@@ -12,6 +12,7 @@ from comken.exceptions import (
     CsvColumnNotFoundError,
     CsvError,
     CsvHeadersTooFewError,
+    CsvNoDataRowsError,
     EmptyHeaderCellError,
     EncodingDetectionError,
     ExcelColumnNotFoundError,
@@ -40,6 +41,7 @@ from comken.exceptions import (
         (FileFormatMismatchError(".csv"), ExcelError, ".csv"),
         (EncodingDetectionError("data.csv"), CsvError, "data.csv"),
         (CsvHeadersTooFewError(2, "data.csv"), CsvError, "2列"),
+        (CsvNoDataRowsError("data.csv"), CsvError, "ヘッダー行の下"),
         (ExcelColumnNotFoundError(["金額"]), ColumnNotFoundError, "金額"),
         (
             CsvColumnNotFoundError(["金額"], ["日付"]),

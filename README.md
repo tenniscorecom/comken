@@ -273,8 +273,11 @@ reader = CsvReader("data.csv")
 # from comken.constants import Encoding
 # CsvReader("data.csv", encoding=Encoding.CP932)
 
-# Excel と同じ位置の言い方で1セルを読む（ヘッダー行も1行目）
-date_text = reader.cell("A2")
+# ヘッダーがある CSV は、列の位置が変わっても壊れない first() を推奨
+first_order_id = reader.first("注文番号")  # 最初のデータ行の値。空セルは ""
+
+# ヘッダーがない、または位置で決まっている CSV は cell() で読む
+date_text = reader.cell("A2")  # ヘッダー行も1行目として数える
 ```
 
 data.csv の中身が以下だとする。

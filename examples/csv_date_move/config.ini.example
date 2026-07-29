@@ -5,7 +5,8 @@ INPUT_FOLDER = C:\作業\input
 OUTPUT_FOLDER = C:\作業\output
 
 [CSV]
-; A2 の日付書式。業務のファイルに合わせて変更する（例: %Y-%m-%d）。
+; 日付が入っている列の見出しと書式。業務のファイルに合わせて変更する。
+DATE_COLUMN = 日付
 DATE_FORMAT = %Y/%m/%d
 PATTERN = *.csv
 

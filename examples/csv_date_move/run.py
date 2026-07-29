@@ -1,8 +1,8 @@
 """
-サンプル: CSV の A2 とファイル名の日付を照合して移動する
+サンプル: CSV の指定列とファイル名の日付を照合して移動する
 
 事前準備:
-    config.ini.example を config.ini にコピーし、フォルダ等を書き換える。
+    config.ini.example を config.ini にコピーし、フォルダ・日付列名・書式等を書き換える。
 
 実行方法:
     リポジトリのルートで python -m examples.csv_date_move.run
@@ -19,7 +19,6 @@ from comken.utils.files import FileFinder, date_in_name, move_file
 
 HERE = Path(__file__).parent
 CONFIG_PATH = HERE / "config.ini"
-DATE_CELL = "A2"
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +26,7 @@ logger = logging.getLogger(__name__)
 def move_matching_files(
     input_folder: Path,
     output_folder: Path,
+    date_column: str,
     date_format: str,
     pattern: str,
 ) -> tuple[int, int]:
@@ -37,24 +37,27 @@ def move_matching_files(
 
     for path in paths:
         try:
-            cell_value = CsvReader(path).cell(DATE_CELL)
+            # ヘッダーがない CSV なら CsvReader(path).cell("A2") でも読める。
+            # この例はヘッダーがあるため、列の位置変更に強い first() を使う。
+            date_value = CsvReader(path).first(date_column)
             try:
                 # NOTE: CSV に書かれた業務日付の解析であり、タイムゾーンは不要。
                 content_date = datetime.datetime.strptime(  # noqa: DTZ007
-                    cell_value, date_format
+                    date_value, date_format
                 ).date()
             except ValueError as error:
                 raise ValueError(
-                    f"{path.name} の {DATE_CELL} の値「{cell_value}」を日付として読めません。"
+                    f"{path.name} の「{date_column}」列の値「{date_value}」を"
+                    "日付として読めません。"
                     f"設定 DATE_FORMAT（{date_format}）とCSVの書式を確認してください。"
                 ) from error
 
             name_date = date_in_name(path.name)
             if content_date != name_date:
                 logger.warning(
-                    "スキップ: %s（%s は %s、ファイル名の日付は %s）",
+                    "スキップ: %s（「%s」列は %s、ファイル名の日付は %s）",
                     path.name,
-                    DATE_CELL,
+                    date_column,
                     content_date,
                     name_date,
                 )
@@ -79,6 +82,7 @@ def main() -> None:
         move_matching_files(
             config.FILES.INPUT_FOLDER,
             config.FILES.OUTPUT_FOLDER,
+            config.CSV.DATE_COLUMN,
             config.CSV.DATE_FORMAT,
             config.CSV.PATTERN,
         )

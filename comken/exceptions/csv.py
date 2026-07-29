@@ -36,6 +36,19 @@ class CsvHeadersTooFewError(CsvError):
         )
 
 
+class CsvNoDataRowsError(CsvError):
+    """CSV にデータ行が1行もない場合。
+
+    発生箇所: CsvReader.first()
+    """
+
+    def __init__(self, path: Path | str) -> None:
+        super().__init__(
+            f"CSV にデータ行がありません: {path}\n"
+            "ヘッダー行の下に、読み取るデータが1行以上あることを確認してください。"
+        )
+
+
 class CsvCellReferenceError(CsvError):
     """CSV のセル参照が不正、または範囲外の場合。
 

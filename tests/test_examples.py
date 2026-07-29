@@ -63,7 +63,7 @@ class TestCsvDiffReport:
 
 class TestCsvDateMove:
     def test_moves_only_file_with_matching_date(self, tmp_path):
-        """A2 とファイル名の日付が一致する CSV だけを移動する。"""
+        """指定列とファイル名の日付が一致する CSV だけを移動する。"""
         from examples.csv_date_move.run import move_matching_files
 
         input_folder = tmp_path / "input"
@@ -74,7 +74,7 @@ class TestCsvDateMove:
         matching.write_text("日付\n2026/07/29\n", encoding="utf-8")
         mismatching.write_text("日付\n2026/07/29\n", encoding="utf-8")
 
-        result = move_matching_files(input_folder, output_folder, "%Y/%m/%d", "*.csv")
+        result = move_matching_files(input_folder, output_folder, "日付", "%Y/%m/%d", "*.csv")
 
         assert result == (1, 1)
         assert (output_folder / matching.name).exists()
