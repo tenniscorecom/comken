@@ -146,20 +146,26 @@ def _api_text() -> str:
         "ここに無い名前は公開 API ではないので、import しないこと。",
         "`#` の行はその関数・クラスの説明。",
     ]
-    for init_path in sorted(PACKAGE_ROOT.rglob("__init__.py")):
-        tree = ast.parse(init_path.read_text(encoding="utf-8"))
+    # パッケージ（__init__.py）と、直接 import されるモジュール（comken/run.py など）の両方。
+    modules = [p for p in PACKAGE_ROOT.glob("*.py") if p.name != "__init__.py"]
+    sources = sorted(PACKAGE_ROOT.rglob("__init__.py")) + sorted(modules)
+    for source in sources:
+        tree = ast.parse(source.read_text(encoding="utf-8"))
         names = _all_names(tree)
         if not names:
             continue
-        package = ".".join(init_path.parent.relative_to(ROOT).parts)
-        origins = _import_origins(tree, init_path.parent)
-        sections += ["", "-" * 60, f"## from {package} import ...", ""]
+        is_package = source.name == "__init__.py"
+        module = source.parent if is_package else source.with_suffix("")
+        module_path = ".".join(module.relative_to(ROOT).parts)
+        origins = _import_origins(tree, source.parent) if is_package else {}
+        sections += ["", "-" * 60, f"## from {module_path} import ...", ""]
 
         # 定義元ごとにまとめると、関連する API が並んで読みやすい。
         for name in names:
-            path = origins.get(name)
+            # パッケージは再輸出元をたどる。モジュールはその場に定義がある。
+            path = origins.get(name, source if not is_package else None)
             if path is None:
-                sections.append(f"{name}  # {package} で定義")
+                sections.append(f"{name}  # {module_path} で定義")
                 continue
             definition = _definition(path, name)
             sections += definition if definition else [f"{name}"]
