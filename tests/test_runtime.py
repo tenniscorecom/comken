@@ -109,21 +109,6 @@ class TestDryRun:
         assert not path.exists()
         assert "[DRY-RUN]" in caplog.text
 
-    def test_salesforce_insert_returns_dummy_id(self, caplog):
-        """dry-run 中の Salesforce insert はダミー ID を返すことを確認する。"""
-        from comken.salesforce.api import SalesforceApiClient
-
-        client = SalesforceApiClient.__new__(SalesforceApiClient)
-        client._access_token = "S"
-        client._instance_url = "https://example.my.salesforce.com"
-        comken.set_dry_run(True)
-
-        with caplog.at_level(logging.INFO):
-            new_id = client.insert("Account", {"Name": "テスト"})
-
-        assert new_id.startswith("DRYRUN")
-        assert "[DRY-RUN]" in caplog.text
-
     def test_reads_still_work(self, tmp_path):
         """dry-run 中でも読み取りは通常どおり実行されることを確認する。"""
         from comken.csv import CsvReader

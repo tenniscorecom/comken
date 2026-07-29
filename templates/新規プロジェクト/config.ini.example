@@ -5,14 +5,10 @@
 ; ルール:
 ;   - セクション名・キー名は大文字で書く（Python 側の config.SECTION.KEY と一致させる）
 ;   - 機密情報（パスワード・トークン・メールアドレス等）はここに書かない
-;     → 認証情報の登録.bat（python -m comken.credentials）で暗号化して登録する
+;     → 社内の既存の管理方法を使う
 ;   - config.ini は .gitignore 済み（git に上がらない）。このテンプレートだけ git に含める
 ; =====================================================
 
-[CREDENTIALS]
-; どのサービス名で登録した認証情報を使うか（キー名そのものは機密ではない）
-; 例: SALESFORCE = salesforce  →  salesforce_username / salesforce_password を使う
-; SALESFORCE = salesforce
 
 [FILES]
 ; 入力ファイルの場所など（環境によって変わる非機密の値）

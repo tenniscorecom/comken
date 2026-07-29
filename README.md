@@ -37,7 +37,6 @@ with ExcelFile.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作る
 - エラーが出たときの対応: ERRORS.md（プロジェクトに配る雛形）
 - 用途別の関数一覧（何が用意されているか）: docs/機能カタログ.md
 - コードレビュー・読解する人向け: docs/コードリーディングガイド.md（全体地図と読む順番）
-- 検討中の設計メモ: docs/Salesforce認証パターン.md、docs/認証情報の公開鍵配布.md
 
 ## モジュール一覧
 
@@ -45,12 +44,10 @@ with ExcelFile.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作る
 |---|---|
 | Config | INI ファイルの読み込み |
 | Logger | ロガーの初期化（日別ファイル + コンソール） |
-| 認証情報（credentials） | パスワード等の暗号化保存（Windows DPAPI） |
 | CSV | CSV の読み込み・検索・抽出 |
 | Excel（openpyxl） | Excel の読み書き（数式・マクロは自動で win32com を使用） |
 | Windows（pywin32） | Excel COM 操作・ウィンドウ操作・レジストリ読み取り |
 | Browser（Edge） | Edge ブラウザ操作 |
-| Salesforce | CRUD・SOQL・レポート・Bulk（salesforce。requests 使用） |
 | PDF | PDF の結合・分割・テキスト抽出（pypdf。導入できない環境では使わない） |
 | utils | ファイル操作・データ比較・テキスト正規化・待機・リトライ・時間計測・zip・特殊フォルダ取得 |
 
@@ -109,8 +106,6 @@ python main.py
 
 > 旧方式（robocopy でローカル同期する `初回セットアップ.bat` / `実行.bat` / `リリース.bat`）は
 > 直接参照への移行で不要になったため削除済み。
-> `templates/認証情報の登録.bat` は、ダブルクリックで認証情報の登録 GUI を開くためのもの
-> （各プロジェクトのルートにコピーして使う。非エンジニア向け）。
 
 ---
 
@@ -126,8 +121,7 @@ comken.__version__        # → "0.2.0"
 comken.set_debug(True)
 
 # dry-run モード: 外部に影響する操作を実行せず、内容だけ [DRY-RUN] 付きで INFO ログに出す。
-# 対象: ファイル移動・コピー、Excel/CSV の保存、Salesforce の書き込み。
-# 読み取り（CSV・Excel の読み込み、SOQL クエリ）は通常どおり実行される
+# 読み取り（CSV・Excel の読み込み）は通常どおり実行される
 comken.set_dry_run(True)
 ```
 
@@ -176,10 +170,7 @@ config = Config("path/to/config.ini")  # パスを指定する場合
 
 ```ini
 ; config.ini（プロジェクト固有の非機密設定を書く）
-; パスワード等の機密情報は書かない → 認証情報（credentials）を使う
 ; セクション名・キー名は大文字で書く（固定値と分かる + Python 側と表記が一致する）
-[CREDENTIALS]
-SALESFORCE = salesforce
 
 [REPORT]
 OUTPUT_FOLDER = C:\作業\reports
@@ -187,7 +178,6 @@ TEMPLATE_PATH = \\nas-server\templates\template.xlsx
 ```
 
 ```python
-config.CREDENTIALS.SALESFORCE # → str
 config.REPORT.OUTPUT_FOLDER # → str
 config.REPORT.TEMPLATE_PATH # → str
 ```
@@ -272,161 +262,6 @@ import logging
 logger = logging.getLogger(__name__)
 logger.info("CSV読み込み完了: %d件", len(rows))
 ```
-
----
-
-## 認証情報（credentials）
-
-パスワード・トークン・ユーザー名などの機密情報・個人情報を Windows DPAPI で暗号化して保存する。
-config.ini には機密情報を書かず、このモジュールを使う。
-
-**仕組み:**
-
-- 保存先は `%USERPROFILE%\.comken\credentials.dat`（プロジェクト内には置かない）
-- Windows がログオン中のアカウントに紐付けて暗号化する。鍵の管理は不要
-- 同じ「ユーザー × PC」でないと復号できない。ファイルをコピーされても読まれない
-- 逆に言うと、**実行する PC ごとに登録が必要**（別の PC やサーバーで実行する場合はそこでも登録する）
-- 1ユーザーにつき1ファイルで、キー名1つに値1つを何件でも登録できる
-- 「ユーザー名とパスワードが必ずセット」という決め打ちはしない。パスワードだけのシステムにも対応できる
-
-### 登録・削除（GUI）
-
-ターミナル操作が不要な GUI 版。登録済みキーの一覧・登録フォーム・削除ボタンが1画面に揃っている。
-値はマスク表示（●●●）され、「値を表示する」チェックで確認できる。
-
-```
-> python -m comken.credentials --gui
-```
-
-bat ファイルにしておくとダブルクリックで起動できる:
-
-```bat
-@echo off
-python -m comken.credentials --gui
-```
-
-- 登録済みキーをダブルクリックするとフォームに読み込まれる（上書き用。値は空のまま）
-- プロジェクトのフォルダで起動すると、コード内の REQUIRED_CREDENTIALS 宣言のうち
-  未登録の項目が一覧表示される。ダブルクリックでフォームに入力される
-
-### 登録・削除（対話式ツール）
-
-GUI が使えない環境（リモートのターミナル等）向け。起動してメニューを選ぶだけ。
-
-```
-> python -m comken.credentials
-=== comken 認証情報の管理 ===
-
-登録済みのキー名:
-  oju_sys_password
-
-1: 登録（新規追加・上書き）
-2: 削除
-q: 終了
-選択: 1
-
-システム名（例: salesforce）: salesforce
-salesforce は新しいシステム名です。この名前で登録しますか？（y で続行）: y
-項目名（例: username / password / token。空 Enter で終了）: username
-値（入力しても画面には表示されません）:
-値（確認のためもう一度）:
-保存しました: salesforce_username
-項目名（例: username / password / token。空 Enter で終了）: password
-値（入力しても画面には表示されません）:
-値（確認のためもう一度）:
-保存しました: salesforce_password
-項目名（例: username / password / token。空 Enter で終了）: ← 空 Enter で終了
-保存先: C:\Users\xxx\.comken\credentials.dat
-```
-
-- **システム名は1回だけ入力**し、項目（username / password / token…）を続けて登録できる。
-  項目ごとにシステム名を打ち直さないので「password のときだけスペルミス」が起きない
-- 新しいシステム名のときは確認が入る（既存システムに追加するつもりのタイプミスに気づける）
-- 既存のシステム名なら登録済みの項目一覧が表示される
-- 同じキー名なら「上書き（＝変更）」になる。パスワードを変えたいときも同じ名前で登録し直せばよい
-- 値は打ち間違い防止のため2回入力する（画面には表示されない）
-
-### コードからの利用
-
-まとめて使う場合は `Credentials` にプレフィックスを渡して属性で取り出す（キー名の直書きを避けられる）。
-
-```python
-from comken.credentials import Credentials
-
-sf = Credentials("salesforce")
-sf.username # → salesforce_username の値
-sf.password # → salesforce_password の値
-```
-
-1件だけなら `load_credential` を使う。
-
-```python
-from comken.credentials import load_credential
-
-password = load_credential("oju_sys_password")
-```
-
-未登録のキー名を指定すると `CredentialNotFoundError` になる（登録コマンドを案内するメッセージ付き）。
-
-### キー名の付け方
-
-| ルール | 例 |
-|---|---|
-| `システム名_項目名` の形式にする | `salesforce_password`, `oju_sys_password` |
-| アカウントを使い分けるときはシステム名に用途を含める | `salesforce_test_password` |
-
-キー名に使えるのは**半角英数字とアンダースコアのみ**。
-それ以外（漢字・スペース・記号）は `InvalidCredentialNameError` で弾かれる。
-
-どのシステム名（プレフィックス）を使うかはプロジェクトの config.ini の `[CREDENTIALS]` セクションに書く（キー名は機密ではない）:
-
-```ini
-[CREDENTIALS]
-SALESFORCE = salesforce
-```
-
-```python
-sf = Credentials(config.CREDENTIALS.SALESFORCE)
-sf.username, sf.password, sf.token
-# SALESFORCE = salesforce_test に変えるだけで全項目がテスト用に切り替わる
-```
-
-### 必要な項目の宣言（まとめて登録）
-
-プロジェクトのコード側で「使う認証情報」を宣言しておくと、
-CLI をプロジェクトのフォルダで起動したときに「3: まとめて登録」メニューが出る。
-
-```python
-# src/credentials.py（プロジェクト側で宣言する）
-REQUIRED_CREDENTIALS = {
-    "SALESFORCE": ["username", "password", "token"],  # キーは config.ini [CREDENTIALS] のキー名
-    "OJU_SYS": ["password"],
-}
-```
-
-```
-選択: 3
-
-このプロジェクトが使う認証情報（コード内の REQUIRED_CREDENTIALS 宣言）:
-  oju_sys_password: 登録済み
-  salesforce_password: 未登録
-  salesforce_token: 未登録
-  salesforce_username: 未登録
-
-未登録の 3 件を順番に登録します（中断は Ctrl+C）。
-
---- salesforce_username ---
-値（入力しても画面には表示されません）:
-値（確認のためもう一度）:
-保存しました: salesforce_username
-...
-```
-
-- **キー名を1文字も打たずに登録できる**ので、スペルミスの余地がない
-- プレフィックスは config.ini の `[CREDENTIALS]` から解決される
-  （`SALESFORCE = salesforce_test` にすると要求されるキーもテスト用に変わる）
-- 宣言はコードの一部としてエンジニアが管理する。宣言にない項目もメニュー1で自由に登録できる
-- CLI は宣言を AST で読み取るだけで、プロジェクトのコードを実行しない
 
 ---
 
@@ -1175,115 +1010,6 @@ python -m examples.sample_login.run
 
 ---
 
-## Salesforce
-
-認証は **OAuth 2.0 クライアントクレデンシャルフロー**。接続アプリケーション（Connected App）の
-`client_id` / `client_secret` だけで認証し、ユーザー名・パスワード・セキュリティトークンは使わない
-（無人 RPA 向け。リフレッシュトークンの保管・失効も起きない）。事前設定と選択理由は
-[docs/Salesforce認証パターン.md](docs/Salesforce認証パターン.md) を参照。
-
-| クラス | 用途 |
-|---|---|
-| `SalesforceApiClient`（推奨） | CRUD・SOQL・レポート・Bulk 2.0 |
-| `SalesforceRestClient` | REST API 直接操作（低レベル） |
-| `SalesforceReportClient` | レポート取得（低レベル） |
-
-いずれも requests を使う（`pip install comken[salesforce]` の追加依存は requests のみ）。
-
-### SalesforceApiClient
-
-```python
-from comken.credentials import Credentials
-from comken.salesforce import SalesforceApiClient
-
-cred = Credentials("salesforce")   # client_id / client_secret を暗号化保存しておく
-sf = SalesforceApiClient(
-    client_id=cred.client_id,
-    client_secret=cred.client_secret,
-    domain_url="https://your-domain.my.salesforce.com",  # 組織の My Domain
-)
-
-# SOQL クエリ（全件取得・ページネーション自動）
-records = sf.query("SELECT Id, Name FROM Account WHERE IsDeleted = false")
-# → [{"Id": "001...", "Name": "取引先A"}, ...]
-
-# CRUD
-record = sf.get("Account", record_id="001XXXXXXXXXXXX")
-new_id = sf.insert("Account", {"Name": "新規取引先"})
-sf.update("Account", record_id=new_id, data={"Name": "更新後の名前"})
-sf.upsert("Account", external_id_field="ExternalId__c",
-          data={"ExternalId__c": "001", "Name": "取引先"})
-sf.delete("Account", record_id=new_id)
-
-# レポート（2000行以下は run_report、超える場合は run_report_async）
-rows = sf.run_report("00O000000000001")
-rows = sf.run_report_async("00O000000000001", filters=[
-    {"column": "CREATED_DATE", "operator": "greaterThan", "value": "2026-01-01"},
-])
-
-# Bulk API 2.0（1000件を超える大量操作向け）
-result = sf.bulk_insert("Account", [{"Name": f"取引先{i}"} for i in range(10000)])
-# → {"success": 9998, "failed": [{"sf__Error": "...", ...}, ...]}
-result = sf.bulk_update("Account", records)   # 各レコードに "Id" が必要
-result = sf.bulk_upsert("Account", records, external_id_field="ExternalId__c")
-result = sf.bulk_delete("Account", [{"Id": "001..."}, ...])
-big = sf.bulk_query("SELECT Id, Name FROM Account")  # 数万件以上の取得
-```
-
-エラーはすべて `SalesforceError`（認証失敗には対処法がメッセージに入る）。
-
-### SalesforceRestClient（REST API）
-
-```python
-from comken.salesforce import SalesforceRestClient
-
-sf = SalesforceRestClient.from_client_credentials(
-    client_id="Consumer Key",
-    client_secret="Consumer Secret",
-    domain_url="https://your-domain.my.salesforce.com",
-)
-
-SOQL = "SELECT Id, Name FROM Account"
-ACCOUNT_NAME = "新規取引先"
-ACCOUNT_NAME_UPDATED = "更新後"
-
-records = sf.query(SOQL)
-new_id = sf.insert("Account", {"Name": ACCOUNT_NAME})
-sf.update("Account", record_id=new_id, data={"Name": ACCOUNT_NAME_UPDATED})
-sf.delete("Account", record_id=new_id)
-```
-
-### SalesforceReportClient（レポート取得）
-
-```python
-from comken.salesforce import SalesforceReportClient
-
-sf = SalesforceReportClient(
-    instance_url="https://xxx.salesforce.com",
-    access_token="アクセストークン",
-)
-
-REPORT_ID = "00O000000000001"
-START_DATE = "2026-01-01"
-
-# 2000行以下（同期）
-rows = sf.run(REPORT_ID)
-# → [{"取引先名": "株式会社A", "金額": "100,000"}, ...]
-
-# 2000行超え（非同期）
-rows = sf.run_async(REPORT_ID)
-
-# 絞り込みあり
-rows = sf.run(REPORT_ID, filters=[
-    {"column": "CREATED_DATE", "operator": "greaterThan", "value": START_DATE},
-])
-```
-
-レポート ID は Salesforce でレポートを開いたときの URL から確認できる:
-`https://xxx.salesforce.com/00O000000000001`
-
----
-
 ## PDF
 
 PDF の結合・分割・テキスト抽出・ページ数取得。
@@ -1306,13 +1032,11 @@ n = page_count("報告書.pdf")                                  # ページ数
 ```mermaid
 graph LR
     comken --> config["Config\n設定ファイル"]
-    comken --> credentials["credentials\n認証情報の暗号化"]
     comken --> utils["utils\nファイル操作・比較"]
     comken --> excel["excel\nExcel"]
     comken --> csv["csv\nCSV"]
     comken --> windows["windows\nCOM / Window"]
     comken --> browser["browser\nブラウザ"]
-    comken --> salesforce["salesforce\nSalesforce（requests）"]
     comken --> pdf["pdf\nPDF（pypdf）"]
 ```
 
@@ -1340,15 +1064,6 @@ flowchart LR
     D --> E["レポート完成"]
 ```
 
-### Salesforce のデータを Excel に出力する
-
-```mermaid
-flowchart LR
-    A["Salesforce"] -->|SalesforceApiClient.run_report| B["レポート取得"]
-    B --> C["データ加工"]
-    C -->|ExcelFile| D["Excel出力"]
-```
-
 ### ブラウザを自動操作する
 
 ```mermaid
@@ -1366,17 +1081,11 @@ flowchart LR
 |---|---|
 | 2026-07-09 | 初版作成 |
 | 2026-07-10 | 全モジュールにドキュメント追加、README 整理 |
-| 2026-07-11 | credentials モジュール追加（認証情報の暗号化保存・管理ツール） |
 | 2026-07-12 | ExcelFile・ExcelComHandler に `headers` 引数追加（ヘッダーなし Excel 対応）。EdgeDriver のダウンロードフォルダ管理を内部化（デフォルト一時フォルダ・with 終了時自動削除）。`ExcelFile.transfer_by_key`（openpyxl 版）追加。`diff_row` 追加・`diff_rows` を列単位の差分付きに改良。ExcelComHandler の初期化失敗時に Excel プロセスが残るバグ等を修正 |
 | 2026-07-12 | Teams 通知（TeamsNotifier。Power Automate Webhook / Adaptive Card 形式）・テキスト正規化（normalize / strip_spaces / remove_spaces）・待機（wait）・特殊フォルダ取得（Paths）を追加。Paths は OneDrive リダイレクトに追従、通知失敗は TeamsError |
-| 2026-07-12 | Salesforce を salesforce_std（標準ライブラリのみ）と salesforce_requests（requests 版）の2フォルダ構成に分割（同じクラス名・同じ API。import 行だけで切り替え）。credentials に GUI 版を追加（python -m comken.credentials --gui） |
 | 2026-07-12 | Config: [a, b, c] 記法でリストに自動変換（parse_list は警告付きで残存）。エディタ補完用スタブ生成（python -m comken.config）を追加。BOM 付き UTF-8 の config.ini が読めないバグを修正 |
 | 2026-07-12 | Locator（セレクターのクラス変数管理）・retry・Timer / measure・zip・PDF（pypdf）・Excel の Sheet ラッパー（セル参照 / write_table / auto_width / freeze_header）・ExcelFile.create を追加 |
 | 2026-07-12 | comken.__version__ / set_debug()（主要処理の時間を DEBUG ログに記録）/ set_dry_run()（外部に影響する操作をスキップ）を追加。EdgeDriver がエラー時に画面を logs/ に自動保存。Excel 孤立プロセス対策（is_excel_running / kill_excel）。リリース.bat で git tag を打つ運用に。スタブ書き込みをアトミック化 |
-| 2026-07-13 | examples を拡充。CSV→Excel レポート・キー突合転記・CSV 差分レポート（オフラインでそのまま動く3本）、Salesforce→Excel、日次バッチ雛形（daily_batch_template。新規プロジェクトのコピー元）と examples/README.md を追加 |
 | 2026-07-13 | ExcelComHandler: 上書き保存 save() 追加、save_as のパスワードが効かない問題を修正（FileFormat を常に明示。形式変換は file_format 引数）、close() でプロセスが残る問題を修正、AskToUpdateLinks=False 追加。CONVENTIONS に「モジュール内の並び順」を追加し全体を整理。docs/（機能カタログ・コードリーディングガイド・設計メモ）を追加 |
-| 2026-07-13 | requests 採用が確定したため salesforce_std を削除（salesforce_requests に一本化。旧 import パス comken.salesforce は警告付きで動作） |
-| 2026-07-14 | teams モジュールを削除（Power Automate 側が OAuth 必須化の方向で Webhook 運用が不安定なため）。salesforce_requests を salesforce に改名（一本化により接尾辞が不要になった） |
 | 2026-07-14 | 監査指摘の修正一式（keep_vba・run_macro 保存・DispatchEx・EdgeDriver/SF のリソース解放・config 型変換・CSV/ログの堅牢化・unzip の 3.10 対応/Zip Slip 対策）。コーディング規約を3層（共通/本体/利用側）に分割。配布方式を廃止し共有サーバー直接参照（PYTHONPATH）に変更、同期用 bat（templates/）を削除 |
 | 2026-07-15 | `from comken import config` に一本化（src/config.py 不要）。Pylance 補完用 typings スタブを自動生成。setup_logger が comken バージョンを出力。バイトコードキャッシュをローカルに自動退避。examples テスト・README コード構文チェック・CI（GitHub Actions）を追加。新規プロジェクトのひな形 templates/新規プロジェクト/ を追加 |
-| 2026-07-15 | Salesforce 認証を OAuth 2.0 クライアントクレデンシャルフロー（client_id / client_secret + My Domain）に変更（セキュリティトークン廃止対応）。simple-salesforce ベースのクライアント（SalesforceClient / SalesforceBulkClient）を削除 |

@@ -8,5 +8,4 @@ pywin32
 
 # 使う機能に応じて追加する（使わないものは消す）
 # selenium            # ブラウザ操作
-# requests            # Salesforce（SalesforceApiClient。OAuth クライアントクレデンシャル）
 # pypdf               # PDF の結合・分割・抽出

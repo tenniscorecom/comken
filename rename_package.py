@@ -20,8 +20,6 @@ rename_package.py — パッケージ名の一括変更ツール（管理者用�
     2. git で変更を確認してコミット
 
 補足:
-    - 認証情報の保存先（%USERPROFILE%\\.旧名）は自動で新名にリネームされる
-      （登録済みの認証情報はそのまま引き継がれる）
     - 現在の名前は pyproject.toml から自動で読むため、二度目以降の改名にも使える
 """
 
@@ -111,14 +109,6 @@ def rename_package(
         print(f"  フォルダ: {package_dir} → {root / new_name}")
         if not dry_run:
             package_dir.rename(root / new_name)
-
-    # ── 認証情報フォルダの引き継ぎ（%USERPROFILE%\.旧名 → .新名） ──
-    old_cred = Path.home() / f".{old_name}"
-    new_cred = Path.home() / f".{new_name}"
-    if old_cred.is_dir() and not new_cred.exists():
-        print(f"  認証情報: {old_cred} → {new_cred}（登録済みの認証情報を引き継ぎ）")
-        if not dry_run:
-            old_cred.rename(new_cred)
 
     print()
     print(f"完了（{len(changed)} ファイルを置換）。")

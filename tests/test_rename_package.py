@@ -89,15 +89,3 @@ class TestRenamePackage:
         rename_package("mylib", [project], dry_run=False, root=mini_repo)
 
         assert "from mylib.csv" in (project / "main.py").read_text(encoding="utf-8")
-
-
-class TestCredentialsPathFollowsPackageName:
-    def test_credentials_path_derived_from_package(self):
-        """認証情報の保存先フォルダ名がパッケージ名から自動導出されることを確認する。
-
-        （".comken" の直書きをなくし、パッケージ名変更に自動追従させる）
-        """
-        from comken.credentials.store import _PACKAGE_NAME, CREDENTIALS_PATH
-
-        assert _PACKAGE_NAME == "comken"
-        assert CREDENTIALS_PATH == Path.home() / ".comken" / "credentials.dat"

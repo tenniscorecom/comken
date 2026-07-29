@@ -4,7 +4,6 @@ openpyxl
 selenium
 pywin32
 ; --- 任意（導入承認が下りた場合のみ）---
-; requests        … salesforce（SalesforceApiClient。OAuth クライアントクレデンシャル）を使う場合のみ
 ; pypdf           … comken.pdf（PDF の結合・分割・テキスト抽出）を使う場合のみ
 ; --- 開発用 ---
 ruff

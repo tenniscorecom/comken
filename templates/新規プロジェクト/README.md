@@ -19,7 +19,6 @@ comken（社内共通ライブラリ）を使った業務自動化ツールで�
 ## セットアップ（初回だけ）
 
 1. `config.ini.example` をコピーして `config.ini` を作り、値を書き換える
-2. ログインを使う場合は `認証情報の登録.bat` で ID・パスワードを登録する
 3. `実行.bat` の先頭 `COMKEN_ROOT` を、共有サーバー上の comken の場所に合わせる
 
 ## 実行
@@ -39,7 +38,6 @@ comken（社内共通ライブラリ）を使った業務自動化ツールで�
 2. `src/run.py` の `run()` に処理を書く（`from comken import config` で設定を読む。
    `config.` まで打つと Pylance が補完する。補完用スタブ typings/ は自動生成される。
    ツールを動かす前に補完を用意したいときは `スタブ生成.bat` を実行）
-3. 使う設定を `config.ini.example` に、使う認証情報を `src/credentials.py` に書く
 4. `docs/使い方.md` / `docs/仕様書.md` / この README の `（ここを書く）` を埋める
 5. `docs/ERRORS.md` の「プロジェクト固有のエラー」に、このツールで起きやすいエラーを追記する
 6. この節を README から削除する

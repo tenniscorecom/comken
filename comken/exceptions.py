@@ -129,47 +129,6 @@ class ConfigError(OriginalLibsError):
     )
 
 
-class SalesforceError(OriginalLibsError):
-    """Salesforce API の呼び出しに失敗した場合。
-
-    発生箇所: SalesforceApiClient の各メソッド
-
-    ログイン失敗・API エラー・Bulk ジョブ失敗など。
-    メッセージに HTTP ステータスや Salesforce からのエラー詳細を含める。
-    """
-
-
-class CredentialError(OriginalLibsError):
-    """認証情報の保存・取得に関する例外の基底クラス。"""
-
-
-class CredentialNotFoundError(CredentialError):
-    """指定したサービス名の認証情報が登録されていない場合。
-
-    発生箇所: credentials.load_credential() / delete_credential()
-    """
-
-    MSG = (
-        "認証情報が登録されていません: {name}\n"
-        "python -m comken.credentials を実行して登録してください。"
-    )
-
-
-class InvalidCredentialNameError(CredentialError):
-    """キー名に使えない文字が含まれている場合。
-
-    発生箇所: credentials.save_credential() / Credentials.__init__()
-
-    キー名に使えるのは半角英数字とアンダースコアのみ。
-    """
-
-    MSG_PREFIX = "プレフィックスに使えるのは半角英数字とアンダースコアだけです: {name}"
-    MSG_KEY = (
-        "キー名に使えるのは半角英数字とアンダースコアだけです: {name}\n"
-        "例: salesforce_username, salesforce_password, oju_sys_password"
-    )
-
-
 # ── 型変換の警告 ──────────────────────────────────────────────────────────────
 
 

@@ -1,4 +1,4 @@
-# 認証情報・環境設定（絶対に git に含めない。example だけ含める）
+# 機密情報・環境設定（絶対に git に含めない。example だけ含める）
 config.ini
 .env
 

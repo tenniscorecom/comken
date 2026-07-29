@@ -11,7 +11,7 @@ runtime.py — ライブラリ全体の実行モード（デバッグ・dry-run�
     comken.set_debug(True)
 
     # dry-run モード: 外部に影響する操作を実行せず、内容だけ INFO ログに出す
-    # 対象: ファイルの移動・コピー、Excel/CSV の保存、Salesforce の書き込み
+    # 対象: ファイルの移動・コピー、Excel/CSV の保存
     comken.set_dry_run(True)
 """
 
@@ -51,7 +51,6 @@ def set_dry_run(enabled: bool = True) -> None:
     対象の操作:
         - move_file / copy_file（ファイルの移動・コピー）
         - ExcelFile.save / CsvWriter の書き込み
-        - Salesforce の書き込み（insert / update / upsert / delete / bulk_*）
 
     読み取り（CSV・Excel の読み込み、SOQL クエリ等）は通常どおり実行される。
 

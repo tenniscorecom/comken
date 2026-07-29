@@ -44,11 +44,11 @@ class TestConfigBasic:
         """複数セクションをそれぞれ読み込めることを確認する。"""
         ini = tmp_path / "config.ini"
         ini.write_text(
-            "[salesforce]\nusername = user@example.com\n\n[report]\nfolder = output\n",
+            "[service]\nusername = user@example.com\n\n[report]\nfolder = output\n",
             encoding="utf-8",
         )
         config = Config(ini)
-        assert config.SALESFORCE.USERNAME == "user@example.com"
+        assert config.SERVICE.USERNAME == "user@example.com"
         assert config.REPORT.FOLDER == "output"
 
     def test_default_path_is_config_ini(self, tmp_path, monkeypatch):

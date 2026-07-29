@@ -11,7 +11,6 @@ comken の使い方を「動くコード」で覚えるためのサンプル。
 | 2 | excel_key_transfer | マスタ CSV を Excel にキー突合転記（XLOOKUP 的転記） | CsvReader.index / transfer_by_key / diff_rows | なし（データを自動生成） |
 | 3 | csv_diff_report | 昨日と今日の CSV の差分を色付き Excel レポートに | diff_rows / CsvWriter / set_fill | なし（データを自動生成） |
 | 4 | sample_login | ブラウザ自動化（Page Object Model の一式） | EdgeDriver / BasePage / Locator | Edge + msedgedriver |
-| 5 | salesforce_to_excel | Salesforce のデータを Excel に出力 | Credentials / SalesforceApiClient / Config | Salesforce 環境 + 認証情報の登録 |
 | 6 | daily_batch_template | 日次バッチの雛形（新規プロジェクトのコピー元） | setup_logger / FileFinder / ExcelFile | config.ini の作成 |
 
 ## 実行方法

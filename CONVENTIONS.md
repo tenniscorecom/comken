@@ -1,4 +1,4 @@
-﻿# Python コーディング規約（共通）
+# Python コーディング規約（共通）
 
 comken 本体と、comken を使うプロジェクトの**両方に共通する Python の書き方**を定める。
 **PEP 8**（Python 公式スタイルガイド）に準拠し、矛盾する場合は本規約を優先する。
@@ -31,7 +31,6 @@ comken 本体と、comken を使うプロジェクトの**両方に共通する 
 14. コメント
 15. テスト
 
-> パッケージ構成・設定パターン・認証情報・Page Object Model・循環インポート・
 > プロジェクトセットアップ・VS Code 設定は、対象別に
 > [プロジェクト規約](docs/プロジェクト規約.md) / [ライブラリ開発規約](docs/ライブラリ開発規約.md) へ移動した。
 
@@ -60,7 +59,7 @@ Python の作法（PEP 8）に従う。
 | モジュール・ファイル名 | snake_case | `handler.py`, `base_page.py` |
 | フォルダ名 | snake_case | `excel/`, `browser/` |
 | 内部用（外から呼ばない） | `_` プレフィックス | `_sheet()`, `_click()` |
-| config.ini のセクション・キー | UPPER_SNAKE_CASE | `[CREDENTIALS]`, `OUTPUT_FOLDER` |
+| config.ini のセクション・キー | UPPER_SNAKE_CASE | `[FILES]`, `OUTPUT_FOLDER` |
 | テストクラス | `Test` + PascalCase | `TestExcelFile`, `TestCsvReader` |
 | テストメソッド | `test_` + snake_case | `test_reads_all_rows` |
 
@@ -68,7 +67,7 @@ Python の作法（PEP 8）に従う。
 
 | ルール | 良い例 | 悪い例 |
 |---|---|---|
-| 役割が分かる名前にする | `load_credential` | `load`, `f` |
+| 役割が分かる名前にする | `load_setting` | `load`, `f` |
 | 略しすぎない | `sheet_name` | `sn`, `s` |
 | bool は is / has / can で始める | `is_empty`, `has_header` | `empty`, `header` |
 | 返り値が複数なら複数形 | `rows`, `records` | `row`, `record` |
