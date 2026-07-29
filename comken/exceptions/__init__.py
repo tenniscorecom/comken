@@ -4,6 +4,7 @@ OriginalLibsError
 ├── UnsupportedFileSuffixError
 ├── AccessError
 │   ├── AccessFileNotFoundError
+│   ├── AccessBackupError
 │   ├── AccessLocalCopyError
 │   ├── AccessRoutineError
 │   └── AccessSourceNotFoundError
@@ -32,6 +33,7 @@ OriginalLibsError
 """
 
 from .access import (
+    AccessBackupError,
     AccessError,
     AccessFileNotFoundError,
     AccessLocalCopyError,
@@ -73,6 +75,7 @@ from .warning import _warn_coerce as _warn_coerce
 __all__ = [
     "OriginalLibsError",
     "AccessError",
+    "AccessBackupError",
     "AccessFileNotFoundError",
     "AccessLocalCopyError",
     "AccessRoutineError",

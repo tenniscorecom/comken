@@ -30,6 +30,18 @@ class AccessLocalCopyError(AccessError):
         )
 
 
+class AccessBackupError(AccessError):
+    """Access ファイルのバックアップに失敗した場合。"""
+
+    def __init__(self, path: Path | str, backup_path: Path | str, detail: Exception) -> None:
+        super().__init__(
+            f"Access ファイルをバックアップできませんでした: {path}\n"
+            f"保存先: {backup_path}\n"
+            "更新を中止しました。読み取り権限・保存先の空き容量・書き込み権限を"
+            f"確認してください。（詳細: {detail}）"
+        )
+
+
 class AccessRoutineError(AccessError):
     """Access マクロまたは VBA の実行に失敗した場合。"""
 

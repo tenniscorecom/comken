@@ -73,7 +73,7 @@ def test_exception_guide_covers_all_public_exceptions():
     guide = (_ROOT / "ERRORS.md").read_text(encoding="utf-8")
     names = _all_names(_ROOT / "comken" / "exceptions" / "__init__.py")
 
-    assert len(names) == 27
+    assert len(names) == 28
     assert not [name for name in names if f"`{name}`" not in guide]
 
 

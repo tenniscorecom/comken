@@ -1,6 +1,6 @@
 """日付を付けたファイル名の組み立て。"""
 
-from ...clock import today
+from ...clock import now
 
 
 class DateNameBuilder:
@@ -32,12 +32,12 @@ class DateNameBuilder:
 
     def prefix(self, date_format: str = "%Y%m%d") -> str:
         """今日の日付を前に付けたファイル名を返す（例: 20260711_売上レポート.xlsx）。"""
-        return f"{self._today(date_format)}_{self._name}{self._ext}"
+        return f"{self._current_time(date_format)}_{self._name}{self._ext}"
 
     def suffix(self, date_format: str = "%Y%m%d") -> str:
         """今日の日付を後ろに付けたファイル名を返す（例: 売上レポート_20260711.xlsx）。"""
-        return f"{self._name}_{self._today(date_format)}{self._ext}"
+        return f"{self._name}_{self._current_time(date_format)}{self._ext}"
 
     @staticmethod
-    def _today(date_format: str) -> str:
-        return today().strftime(date_format)
+    def _current_time(date_format: str) -> str:
+        return now().strftime(date_format)

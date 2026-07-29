@@ -25,6 +25,8 @@ def main() -> None:
     """Access の整形結果を CSV に出し、Excel 帳票へ転記する。"""
     # NAS 等の DB は既定でローカルコピーされるため、ネットワーク越しの遅延や破損を避けられる。
     # 整形結果は CSV に出す中間生成物なので、元 DB へ書き戻す必要はない。
+    # 元 DB を更新するときは AccessDatabase(DATABASE_PATH, local_copy=False) とする。
+    # その場合は、元 DB を開く前に日時付きバックアップが自動作成され、既定で7日間残る。
     with AccessDatabase(DATABASE_PATH) as database:
         database.run_macro(MACRO_NAME)
         database.export_csv(OUTPUT_TABLE, CSV_PATH)
