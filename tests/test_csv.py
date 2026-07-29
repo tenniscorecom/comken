@@ -20,6 +20,7 @@ from comken.exceptions import (
     CsvColumnNotFoundError,
     CsvError,
     CsvNoDataRowsError,
+    CsvRowDuplicateKeyError,
     CsvRowNotFoundError,
     UnsupportedFileSuffixError,
 )
@@ -201,6 +202,60 @@ class TestCsvReaderIndex:
         """全行がインデックスに含まれることを確認する。"""
         lookup = CsvReader(sample_csv).index("注文番号")
         assert len(lookup) == 3
+
+    def test_duplicate_key_raises(self, tmp_path):
+        """キーが重複していたら例外になることを確認する。"""
+        # 黙って後勝ちにすると、転記結果が静かに変わって気づけない。
+        path = tmp_path / "dup.csv"
+        path.write_text("注文番号,金額\nA001,1000\nA001,2000\nA002,3000\n", encoding="utf-8")
+
+        with pytest.raises(CsvRowDuplicateKeyError) as exc:
+            CsvReader(path).index("注文番号")
+
+        message = str(exc.value)
+        assert "A001（2件）" in message  # どのキーが何件あるか出す
+        assert "A002" not in message  # 重複していないキーは出さない
+        assert "group_by" in message  # 重複を前提にする場合の行き先を示す
+
+    def test_duplicate_message_is_truncated(self, tmp_path):
+        """重複が多数でもメッセージが読める長さに収まることを確認する。"""
+        rows = "".join(f"K{i:03},1\nK{i:03},2\n" for i in range(8))
+        path = tmp_path / "many.csv"
+        path.write_text(f"注文番号,金額\n{rows}", encoding="utf-8")
+
+        with pytest.raises(CsvRowDuplicateKeyError) as exc:
+            CsvReader(path).index("注文番号")
+
+        assert "ほか3件" in str(exc.value)
+
+
+class TestCsvReaderGroupBy:
+    """group_by() のテスト。"""
+
+    def test_groups_rows_by_key(self, tmp_path):
+        """同じキーの行がまとめられることを確認する。"""
+        path = tmp_path / "dup.csv"
+        path.write_text("注文番号,金額\nA001,1000\nA001,2000\nA002,3000\n", encoding="utf-8")
+
+        groups = CsvReader(path).group_by("注文番号")
+
+        assert [row["金額"] for row in groups["A001"]] == ["1000", "2000"]
+        assert len(groups["A002"]) == 1
+
+    def test_keeps_file_order(self, tmp_path):
+        """ファイルの並び順が保たれることを確認する。"""
+        path = tmp_path / "order.csv"
+        path.write_text("注文番号,行\nA,1\nB,2\nA,3\n", encoding="utf-8")
+
+        groups = CsvReader(path).group_by("注文番号")
+
+        assert list(groups) == ["A", "B"]
+        assert [row["行"] for row in groups["A"]] == ["1", "3"]
+
+    def test_unknown_column_raises(self, sample_csv):
+        """存在しない列名は index() と同じエラーになることを確認する。"""
+        with pytest.raises(CsvColumnNotFoundError):
+            CsvReader(sample_csv).group_by("受注番号")
 
 
 class TestCsvReaderHeaders:

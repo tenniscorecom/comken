@@ -8,6 +8,7 @@ CsvReader クラスを通じて CSV ファイルの読み込み・検索・抽�
 import csv
 import io
 import re
+from collections import Counter
 from pathlib import Path
 
 from ..constants import Encoding
@@ -16,6 +17,7 @@ from ..exceptions import (
     CsvColumnNotFoundError,
     CsvHeadersTooFewError,
     CsvNoDataRowsError,
+    CsvRowDuplicateKeyError,
     CsvRowNotFoundError,
     EncodingDetectionError,
 )
@@ -240,17 +242,36 @@ class CsvReader(CsvBase):
         return [row[col_name] for row in data]
 
     def index(self, key_col: str) -> dict[str, dict[str, str]]:
-        """key_col をキーにした辞書を返す。
+        """key_col をキーにした {キー: 行} の辞書を返す。
 
-        Excel との突合など、キーで素早く行を引きたい場合に使う。
-        キーが重複する場合は後の行で上書きされる。
+        Excel との突合（transfer_by_key の lookup）など、キーで1行を引く用途に使う。
+        キーが重複していれば CsvRowDuplicateKeyError。重複が普通のデータは group_by() を使う。
 
-        Args:
-            key_col: キーとして使う列名。
-
-        Returns:
-            {キー値: 行の辞書} の形式の辞書。
+        Raises:
+            CsvRowDuplicateKeyError: キーが重複している場合。
         """
         data = self._load()
         self._validate_columns([key_col])
-        return {row[key_col]: row for row in data}
+        indexed = {row[key_col]: row for row in data}
+        # 黙って後勝ちにすると、転記結果が静かに変わって気づけない。
+        if len(indexed) != len(data):
+            duplicates = Counter(row[key_col] for row in data)
+            raise CsvRowDuplicateKeyError(
+                key_col,
+                {key: count for key, count in duplicates.items() if count > 1},
+                self.path,
+            )
+        return indexed
+
+    def group_by(self, key_col: str) -> dict[str, list[dict[str, str]]]:
+        """key_col をキーにした {キー: 行のリスト} の辞書を返す。
+
+        同じキーの行が複数あるデータを、キーごとにまとめたいときに使う。
+        1件だけ引きたい（重複しないはずの）データは index() を使う。
+        """
+        data = self._load()
+        self._validate_columns([key_col])
+        grouped: dict[str, list[dict[str, str]]] = {}
+        for row in data:
+            grouped.setdefault(row[key_col], []).append(row)
+        return grouped

@@ -58,6 +58,7 @@
 | `CsvHeadersTooFewError` | 指定した見出し数が CSV の列数より少ない | 管理者へ連絡する |
 | `CsvNoDataRowsError` | CSV に見出し以外のデータ行がない | 見出し行の下にデータが1行以上あるか確認する |
 | `CsvRowNotFoundError` | キーに一致する行が CSV に無い | 探している値の書き方（前後の空白・全角半角・ゼロ埋め）を元データと見比べる |
+| `CsvRowDuplicateKeyError` | キーにする列に同じ値が複数ある | 表示された値の行を元データで確認し、重複を取り除く。重複が正しいデータなら管理者へ連絡する |
 | `CsvCellReferenceError` | CSV のセル位置（例: A2）の指定が正しくない、または範囲外 | 表示されたセル位置と、CSV の行数・列数を確認する |
 | `CsvColumnNotFoundError` | CSV の列見出しが見つからない | CSV の1行目を確認する |
 | `KeyColumnNotFoundError` | 比較に使うキー列が見つからない | Excel・CSV の列名を確認する |

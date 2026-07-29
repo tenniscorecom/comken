@@ -63,6 +63,25 @@ class CsvRowNotFoundError(CsvError):
         )
 
 
+class CsvRowDuplicateKeyError(CsvError):
+    """キーにするはずの列に、同じ値が複数ある場合。
+
+    発生箇所: CsvReader.index()
+    """
+
+    def __init__(self, key_col: str, duplicates: dict[str, int], path: Path | str) -> None:
+        # 件数が多いと読めないので先頭だけ出す。全部出しても直す手がかりは増えない。
+        shown = list(duplicates.items())[:5]
+        detail = "、".join(f"{key}（{count}件）" for key, count in shown)
+        if len(duplicates) > len(shown):
+            detail += f" ほか{len(duplicates) - len(shown)}件"
+        super().__init__(
+            f"「{key_col}」が重複しています: {detail}\n{path}\n"
+            "キーが1件に決まらないと、突合の結果が変わってしまいます。"
+            "元データの重複を取り除くか、重複を前提にする場合は group_by() を使ってください。"
+        )
+
+
 class CsvCellReferenceError(CsvError):
     """CSV のセル参照が不正、または範囲外の場合。
 

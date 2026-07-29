@@ -30,6 +30,7 @@ OriginalLibsError
 │   ├── CsvHeadersTooFewError
 │   ├── CsvNoDataRowsError
 │   ├── CsvRowNotFoundError
+│   ├── CsvRowDuplicateKeyError
 │   └── CsvCellReferenceError
 ├── RpaError
 │   └── RpaLibraryNotFoundError
@@ -75,6 +76,7 @@ from .csv import (
     CsvError,
     CsvHeadersTooFewError,
     CsvNoDataRowsError,
+    CsvRowDuplicateKeyError,
     CsvRowNotFoundError,
     EncodingDetectionError,
 )
@@ -132,6 +134,7 @@ __all__ = [
     "CsvHeadersTooFewError",
     "CsvNoDataRowsError",
     "CsvRowNotFoundError",
+    "CsvRowDuplicateKeyError",
     "CsvCellReferenceError",
     "ColumnNotFoundError",
     "ExcelColumnNotFoundError",
