@@ -57,7 +57,7 @@ class FileFinder:
             FileNotFoundError: required=True で該当ファイルがない場合。
         """
         today = datetime.date.today().strftime(date_format)
-        matched = [p for p in self._folder.glob(pattern) if today in p.name]
+        matched = [p for p in self._folder.glob(pattern) if p.is_file() and today in p.name]
         if not matched:
             if required:
                 raise FileNotFoundError(
@@ -96,7 +96,7 @@ class FileFinder:
         if by not in (SortBy.NAME, SortBy.UPDATED):
             raise ValueError(f"by には SortBy.NAME か SortBy.UPDATED を指定してください: {by}")
 
-        files = list(self._folder.glob(pattern))
+        files = [path for path in self._folder.glob(pattern) if path.is_file()]
         if not files:
             if required:
                 raise FileNotFoundError(f"ファイルが見つかりません: {self._folder}\\{pattern}")

@@ -10,9 +10,11 @@
 """
 
 import logging
+import os
 import shutil
 import tempfile
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -22,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 @contextmanager
-def local_copy(path: str | Path):
+def local_copy(path: str | Path) -> Iterator[Path]:
     """ネットワーク上のファイルをローカルにコピーし、処理後に自動削除する。
 
     NAS やネットワークドライブ上の大きなファイルを直接開くと遅い場合や、
@@ -79,9 +81,14 @@ def move_file(src: str | Path, dst: str | Path) -> Path:
         dry_run_log("ファイルを移動: %s → %s", src, target)
         return target
     target.parent.mkdir(parents=True, exist_ok=True)
-    if target.exists():
-        target.unlink()
-    shutil.move(str(src), str(target))
+    if target.exists() and src.samefile(target):
+        return target
+    try:
+        os.replace(src, target)
+    except OSError:
+        # NOTE: ドライブをまたぐ移動では os.replace が使えないため、コピー完了後に元を消す。
+        shutil.copy2(src, target)
+        src.unlink()
     return target
 
 
@@ -107,6 +114,8 @@ def copy_file(src: str | Path, dst: str | Path) -> Path:
         dry_run_log("ファイルをコピー: %s → %s", src, target)
         return target
     target.parent.mkdir(parents=True, exist_ok=True)
+    if target.exists() and src.samefile(target):
+        return target
     shutil.copy2(src, target)
     return target
 
@@ -133,4 +142,4 @@ def cleanup_stale_tmp(target: str | Path, max_age_seconds: float = 3600) -> None
             if now - tmp.stat().st_mtime > max_age_seconds:
                 tmp.unlink()
         except OSError:
-            pass  # 他プロセスが使用中・権限なし等。次回の実行でまた試みる
+            logger.debug("一時ファイルを削除できませんでした: %s", tmp, exc_info=True)

@@ -161,6 +161,13 @@ class TestZipFolder:
         with pytest.raises(FileNotFoundError):
             zip_folder(tmp_path / "なし")
 
+    def test_default_name_preserves_dots_in_folder_name(self, tmp_path):
+        """出力先省略時はフォルダ名中のドットを残して .zip を付ける。"""
+        folder = tmp_path / "売上 v1.2"
+        folder.mkdir()
+
+        assert zip_folder(folder) == tmp_path / "売上 v1.2.zip"
+
 
 class TestZipFiles:
     """zip_files のテスト。"""
@@ -182,6 +189,30 @@ class TestZipFiles:
         """存在しないファイルが含まれると FileNotFoundError になることを確認する。"""
         with pytest.raises(FileNotFoundError):
             zip_files([tmp_path / "なし.txt"], tmp_path / "out.zip")
+
+    def test_missing_file_does_not_break_existing_zip(self, tmp_path):
+        """入力不足で失敗しても既存 zip の内容を維持する。"""
+        dst = tmp_path / "out.zip"
+        with zipfile.ZipFile(dst, "w") as zf:
+            zf.writestr("existing.txt", "existing")
+
+        with pytest.raises(FileNotFoundError):
+            zip_files([tmp_path / "なし.txt"], dst)
+
+        with zipfile.ZipFile(dst) as zf:
+            assert zf.read("existing.txt").decode() == "existing"
+
+    def test_duplicate_names_raise(self, tmp_path):
+        """別フォルダにある大文字小文字違いの同名ファイルはエラーにする。"""
+        first = tmp_path / "A" / "report.xlsx"
+        second = tmp_path / "B" / "REPORT.xlsx"
+        first.parent.mkdir()
+        second.parent.mkdir()
+        first.touch()
+        second.touch()
+
+        with pytest.raises(ValueError, match="同じ名前"):
+            zip_files([first, second], tmp_path / "out.zip")
 
 
 class TestUnzip:

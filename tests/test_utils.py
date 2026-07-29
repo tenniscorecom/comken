@@ -64,6 +64,16 @@ class TestMoveFile:
 
         assert target.read_text(encoding="utf-8") == "new"
 
+    def test_same_file_is_left_unchanged(self, tmp_path):
+        """移動元と移動先が同じファイルなら、何もせずそのパスを返す。"""
+        src = tmp_path / "report.xlsx"
+        src.write_text("data", encoding="utf-8")
+
+        result = move_file(src, tmp_path)
+
+        assert result == src
+        assert src.read_text(encoding="utf-8") == "data"
+
 
 class TestCopyFile:
     """copy_file のテスト。"""
@@ -90,6 +100,16 @@ class TestCopyFile:
 
         assert result == target
         assert target.read_text(encoding="utf-8") == "data"
+
+    def test_same_file_is_left_unchanged(self, tmp_path):
+        """コピー元とコピー先が同じファイルなら、何もせずそのパスを返す。"""
+        src = tmp_path / "report.xlsx"
+        src.write_text("data", encoding="utf-8")
+
+        result = copy_file(src, tmp_path)
+
+        assert result == src
+        assert src.read_text(encoding="utf-8") == "data"
 
 
 class TestColToNum:
@@ -215,6 +235,13 @@ class TestFileFinderToday:
 
         assert FileFinder(tmp_path).today() == new
 
+    def test_ignores_matching_folder(self, tmp_path):
+        """名前が一致してもフォルダは検索結果に含めない。"""
+        today = datetime.date.today().strftime("%Y%m%d")
+        (tmp_path / f"{today}_売上.xlsx").mkdir()
+
+        assert FileFinder(tmp_path).today(required=False) is None
+
 
 class TestFileFinderLatest:
     """FileFinder.latest() のテスト。
@@ -263,6 +290,12 @@ class TestFileFinderLatest:
         target.touch()
 
         assert FileFinder(tmp_path).latest(pattern="*.csv") == target
+
+    def test_ignores_matching_folder(self, tmp_path):
+        """パターンに一致してもフォルダは検索結果に含めない。"""
+        (tmp_path / "売上.xlsx").mkdir()
+
+        assert FileFinder(tmp_path).latest(required=False) is None
 
 
 class TestDownloadDir:
