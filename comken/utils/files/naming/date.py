@@ -9,12 +9,6 @@ class DateNameBuilder:
     日付はファイル名の属性ではなく「付け方」なので、コンストラクタではなく
     prefix() / suffix() の呼び出し時に決める。
 
-    使い方:
-        DateNameBuilder("売上レポート").plain()                 # → "売上レポート.xlsx"
-        DateNameBuilder("売上レポート").prefix()                # → "20260711_売上レポート.xlsx"
-        DateNameBuilder("売上レポート").suffix()                # → "売上レポート_20260711.xlsx"
-        DateNameBuilder("ログ", ext=".csv").prefix()            # → "20260711_ログ.csv"
-        DateNameBuilder("月次").prefix(date_format="%Y%m")      # → "202607_月次.xlsx"
     """
 
     def __init__(self, name: str, ext: str = ".xlsx") -> None:

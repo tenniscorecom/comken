@@ -7,15 +7,6 @@ COM 経由の Excel 自動化は、クラッシュや強制終了で EXCEL.EXE �
 
 自動処理の開始前に呼んで、前回の残骸を片付けるために使う。
 
-使い方:
-    from comken.windows import is_excel_running, kill_excel
-
-    # 無人実行の PC（自分で Excel を開いていない前提）: 開始前に必ず片付ける
-    kill_excel()
-
-    # 人が使う PC: 残っていたら警告だけ出す（作業中の Excel を殺さない）
-    if is_excel_running():
-        logger.warning("Excel が起動中です。前回の処理の残骸の可能性があります")
 """
 
 import logging

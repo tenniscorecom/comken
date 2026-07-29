@@ -11,19 +11,6 @@ class ExcelReader(ExcelBase):
     read_only=True で開くため、大きなブックもメモリ効率よく速く読み取れる。
     書き込みメソッドを持たないので、誤って元ファイルを書き換える事故を防げる。
 
-    使い方:
-        with ExcelReader("data.xlsx") as f:
-            rows = f.read_rows("Sheet1")
-            # → [(値, 値, ...), ...]
-
-            records = f.read_rows_as_dicts("Sheet1")
-            # → [{"列名": 値, ...}, ...]
-
-        # ヘッダー行がない場合は列名を指定する
-        headers = ["注文番号", "金額", "担当者"]
-        with ExcelReader("data.xlsx", headers=headers) as f:
-            records = f.read_rows_as_dicts("Sheet1")
-            # → 1行目からデータとして読み込む
     """
 
     def __init__(

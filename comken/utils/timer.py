@@ -4,25 +4,6 @@ utils/timer.py — 処理時間の計測
 「どこが遅いのか」を調べるためのユーティリティ。with とデコレータの両方で使える。
 結果は logging（INFO）に出る。出力先・フォーマット・レベルは社内の共通ライブラリ側で設定する。
 
-使い方:
-    from comken.utils import Timer
-
-    # with で区間を計測する
-    with Timer("CSV読み込み"):
-        rows = CsvReader("data.csv").rows()
-    # ログ: CSV読み込み: 3.21秒
-
-    # デコレータで関数全体を計測する
-    @Timer("売上集計")
-    def aggregate():
-        ...
-
-    # 経過秒数を値として使う
-    t = Timer("転記処理")
-    with t:
-        ...
-    if t.elapsed > 60:
-        notifier.send(f"転記処理が {t.elapsed:.0f} 秒かかっています")
 """
 
 import functools
@@ -85,12 +66,6 @@ def measure(func: Callable[_P, _R]) -> Callable[_P, _R]:
         - Timer: 常にログに出したい・経過秒数を値として使いたい場合
         - measure: 普段は出さず、調査のときだけ with debug(): で出したい場合
 
-    使い方:
-        from comken.utils import measure
-
-        @measure
-        def build_report():
-            ...
     """
 
     @functools.wraps(func)

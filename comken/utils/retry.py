@@ -4,20 +4,6 @@ utils/retry.py — リトライデコレータ
 一時的な失敗（クリックが要素に遮られた、ネットワークが一瞬切れた等）を
 自動でやり直すためのデコレータ。
 
-使い方:
-    from comken.utils import retry
-
-    # 3回まで試す（間隔1秒）。3回とも失敗したら最後の例外がそのまま出る
-    @retry()
-    def download_report():
-        ...
-
-    # 対象の例外を絞る（それ以外の例外は即座に出る）
-    from selenium.common.exceptions import ElementClickInterceptedException
-
-    @retry(times=5, wait=2, on=(ElementClickInterceptedException,))
-    def click_submit():
-        page.click(page.SUBMIT_BTN)
 """
 
 import functools

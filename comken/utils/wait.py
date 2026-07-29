@@ -3,20 +3,6 @@ utils/wait.py — 待機ユーティリティ
 
 time.sleep の薄いラッパー。単位を明示することで可読性を上げる。
 
-使い方:
-    from comken.utils import wait
-
-    wait.seconds(3)           # 3秒待つ
-    wait.minutes(1)           # 1分待つ
-    wait.seconds(0.5)         # 0.5秒待つ
-
-    # 条件が満たされるまで待つ（最大60秒、1秒間隔）
-    ok = wait.until(lambda: Path("result.xlsx").exists())
-    if not ok:
-        raise TimeoutError("ファイルが生成されませんでした")
-
-    # タイムアウトや間隔を変えたい場合
-    ok = wait.until(lambda: flag, timeout=120, interval=2)
 """
 
 import time

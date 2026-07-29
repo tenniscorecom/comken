@@ -1,13 +1,4 @@
-"""ファイルのコピー・移動と一時ファイル管理。
-
-使い方:
-    from comken.utils.files import local_copy
-
-    # NAS ファイルのローカルコピー
-    with local_copy(r"\\\\nas-server\\share\\data.xlsx") as path:
-        with ExcelReader(path) as f:
-            rows = f.read_rows_as_dicts("Sheet1")
-"""
+"""ファイルのコピー・移動と一時ファイル管理。"""
 
 import logging
 import shutil
@@ -31,12 +22,6 @@ def local_copy(path: str | Path) -> Iterator[Path]:
 
     テンポラリファイルの保存先: C:\\Users\\<ユーザー名>\\AppData\\Local\\Temp\\
     with ブロックを抜けると自動削除される（例外が発生した場合も削除される）。
-
-    使い方:
-        with local_copy(r"\\\\nas-server\\share\\data.xlsx") as local_path:
-            with ExcelReader(local_path) as f:
-                rows = f.read_rows_as_dicts("Sheet1")
-
     Args:
         path: コピー元のファイルパス（ネットワークパス・UNCパス・マップドドライブ）。
 
@@ -62,11 +47,6 @@ def move_file(src: str | Path, dst: str | Path) -> Path:
         - dst が既存フォルダなら、その中に同名で移動する
         - それ以外はファイルパスとして扱う（親フォルダがなければ自動作成する）
         - 移動先に同名ファイルがあれば上書きする
-
-    使い方:
-        move_file("report.xlsx", r"C:\\作業\\output")               # フォルダの中へ
-        move_file("report.xlsx", r"C:\\作業\\output\\売上.xlsx")     # 名前を変えて移動
-
     Args:
         src: 移動するファイルのパス。
         dst: 移動先（フォルダ、またはファイルパス）。

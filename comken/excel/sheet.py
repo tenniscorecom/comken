@@ -4,29 +4,6 @@ excel/sheet.py — ワークシートの高レベルラッパー
 ExcelWriter.sheet() から取得し、セル書き込み・行書き込み・列幅調整・
 ヘッダー固定などをシート単位で行う（sheet_name を毎回渡さなくてよい）。
 
-使い方:
-    from comken.csv import CsvReader
-    from comken.excel import ExcelWriter
-
-    # 既存ファイルを開いて書き込む
-    with ExcelWriter("report.xlsx") as f:
-        s = f.sheet("Sheet1")
-        s["A1"] = "売上レポート"          # セル参照で書き込み
-        title = s["A1"]                   # セル参照で読み取り
-        s.write_row(3, ["日付", "金額"])  # 3行目に横並びで書く
-        s.append_row(["2026-07-12", 1000])  # 最終行の下に追記
-        s.auto_width()                    # 列幅を内容に合わせる（日本語対応）
-        s.freeze_header()                 # 1行目を固定
-        f.save()
-
-    # 新規ブックを作ってレポートを出力する
-    rows = CsvReader("data.csv").rows()
-    with ExcelWriter.create(r"C:\\作業\\report.xlsx") as f:
-        s = f.sheet("Sheet1")
-        s.write_table(rows)               # ヘッダー行 + データ行をまとめて書く
-        s.auto_width()
-        s.freeze_header()
-        f.save()
 """
 
 import logging

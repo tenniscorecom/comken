@@ -132,6 +132,7 @@ class EdgeDriver:
         return self._driver
 
     def quit(self) -> None:
+        """ブラウザを閉じる。with 文を使っていれば自分で呼ぶ必要はない。"""
         self._driver.quit()
 
     # ---------------------------------------------------- WebDriver の委譲
@@ -143,12 +144,7 @@ class EdgeDriver:
         self._driver.get(url)
 
     def find_element(self, by: str, value: str) -> WebElement:
-        """要素を1つ取得する（見つからなければ NoSuchElementException）。
-
-        使い方:
-            from selenium.webdriver.common.by import By
-            d.find_element(By.ID, "login-btn").click()
-        """
+        """要素を1つ取得する（見つからなければ NoSuchElementException）。"""
         return self._driver.find_element(by, value)
 
     def find_elements(self, by: str, value: str) -> list[WebElement]:

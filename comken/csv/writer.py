@@ -3,18 +3,6 @@ csv/writer.py — CSV 書き込みユーティリティ
 
 CsvWriter クラスを通じて CSV ファイルへの書き込みを行う。
 
-使い方:
-    from comken.csv import CsvWriter
-
-    rows = [{"注文番号": "A001", "金額": "1000"}, {"注文番号": "A002", "金額": "2000"}]
-
-    # 新規作成（上書き）
-    writer = CsvWriter("output.csv", fieldnames=["注文番号", "金額"])
-    writer.write_rows(rows)
-
-    # 既存ファイルに追記
-    writer = CsvWriter("output.csv", fieldnames=["注文番号", "金額"])
-    writer.append_row({"注文番号": "A003", "金額": "3000"})
 """
 
 import csv
@@ -31,18 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class CsvWriter(CsvBase):
-    """CSV ファイルへの書き込みユーティリティ。
-
-    使い方:
-        rows = [{"氏名": "山田", "金額": "1000"}, {"氏名": "佐藤", "金額": "2000"}]
-
-        # 新規作成
-        writer = CsvWriter("output.csv", fieldnames=["氏名", "金額"])
-        writer.write_rows(rows)
-
-        # 1行追記
-        writer.append_row({"氏名": "田中", "金額": "3000"})
-    """
+    """CSV ファイルへの書き込みユーティリティ。"""
 
     def __init__(
         self,

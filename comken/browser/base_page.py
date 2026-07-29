@@ -3,36 +3,6 @@ browser/base_page.py — Page Object の基底クラス
 
 画面ごとに BasePage を継承したクラスを作り、その画面でできる操作をメソッドとして定義する。
 セレクターは Locator のクラス変数として先頭にまとめる（画面変更時に直す場所が一箇所になる）。
-
-使い方:
-    1. 画面クラスを作る
-        from comken.browser import BasePage, Locator
-
-        class LoginPage(BasePage):
-            URL = "https://example.com/login"
-
-            # セレクターはクラス変数として宣言する
-            USERNAME = Locator.id("username")
-            PASSWORD = Locator.id("password")
-            LOGIN_BTN = Locator.css("#login-btn")
-            ERROR_MSG = Locator.css(".error-message")
-
-            def login(self, username: str, password: str) -> None:
-                self.input(self.USERNAME, username)
-                self.input(self.PASSWORD, password)
-                self.click(self.LOGIN_BTN)
-
-            def get_error(self) -> str:
-                return self.text(self.ERROR_MSG)
-
-    2. EdgeDriver と組み合わせて使う（EdgeDriver をそのまま渡せる）
-        from comken.browser import EdgeDriver
-
-        with EdgeDriver() as d:
-            page = LoginPage(d)
-            page.open(page.URL)
-            page.login("yamada", "password123")
-
 セレクターの優先順位（Locator のファクトリも同じ順で選ぶ）:
     1. ID（Locator.id）
     2. name 属性（Locator.name）

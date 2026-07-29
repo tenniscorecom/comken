@@ -14,12 +14,6 @@ class Paths:
     Desktop / Downloads は OneDrive の「既知のフォルダーの移動」で
     C:\\Users\\xxx 直下にないことがあるため、レジストリから実際の場所を取得する。
 
-    使い方:
-        from comken.utils.files import Paths
-
-        Paths.downloads()   # → C:\\Users\\xxx\\Downloads
-        Paths.desktop()     # → C:\\Users\\xxx\\OneDrive\\Desktop（リダイレクトされている場合）
-        Paths.temp_dir()    # → C:\\Users\\xxx\\AppData\\Local\\Temp
     """
 
     @staticmethod

@@ -3,16 +3,6 @@ csv/handler.py — CSV 読み込みユーティリティ
 
 CsvReader クラスを通じて CSV ファイルの読み込み・検索・抽出を行う。
 
-使い方:
-    from comken.csv import CsvReader
-
-    reader = CsvReader("data.csv")
-    reader.rows() # 全行を辞書のリストで取得
-    reader.first("日付") # 最初のデータ行の値
-    reader.find("注文番号", "A001") # 1件検索
-    reader.filter("ステータス", "完了") # 複数行検索
-    reader.column("金額") # 列の値一覧
-    reader.index("注文番号") # 辞書化（突合に使う）
 """
 
 import csv
@@ -40,35 +30,6 @@ class CsvReader(CsvBase):
     ヘッダー行をキーにした辞書のリストとして扱う。
     読み込みは各メソッド呼び出し時に毎回行う（キャッシュなし）。
 
-    使い方:
-        reader = CsvReader("支店A.csv")
-
-        # 全行取得
-        rows = reader.rows()
-        # → [{"注文番号": "A001", "金額": "1000", "担当者": "山田"}, ...]
-
-        # ヘッダー名で最初のデータ行の値を取得
-        first_order_id = reader.first("注文番号")
-        # → "A001"
-
-        # 特定列のみ取得
-        rows = reader.rows(columns=["注文番号", "金額"])
-        # → [{"注文番号": "A001", "金額": "1000"}, ...]
-
-        # キーで1件検索
-        row = reader.find("注文番号", "A001")
-        # → {"注文番号": "A001", ...} または None（見つからない場合）
-
-        # キーで複数行検索
-        rows = reader.filter("担当者", "山田")
-
-        # 列の値一覧
-        amounts = reader.column("金額")
-        # → ["1000", "2000", "3000"]
-
-        # キー列でインデックス化（突合用辞書の作成）
-        lookup = reader.index("注文番号")
-        # → {"A001": {"注文番号": "A001", ...}, "A002": {...}}
     """
 
     # encoding=Encoding.AUTO のときに試す文字コード（この順に試す）

@@ -3,27 +3,6 @@ browser/locator.py — セレクターの宣言的管理
 
 Page Object のセレクターをクラス変数として一箇所にまとめるための型。
 画面変更でセレクターが変わったとき、直す場所がクラスの先頭に集まる。
-
-使い方:
-    from comken.browser import BasePage, Locator
-
-    class LoginPage(BasePage):
-        URL = "https://example.com/login"
-
-        # セレクターはクラス変数として宣言する（画面変更時はここだけ直す）
-        USERNAME = Locator.id("username")
-        PASSWORD = Locator.id("password")
-        LOGIN_BTN = Locator.css("#login-btn")
-        ERROR_MSG = Locator.css(".error-message")
-
-        def login(self, username: str, password: str) -> None:
-            self.input(self.USERNAME, username)
-            self.input(self.PASSWORD, password)
-            self.click(self.LOGIN_BTN)
-
-        def get_error(self) -> str:
-            return self.text(self.ERROR_MSG)
-
 NamedTuple なので selenium にそのまま展開できる:
     driver.find_element(*LoginPage.LOGIN_BTN)
 """

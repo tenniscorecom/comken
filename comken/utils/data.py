@@ -1,18 +1,6 @@
 """
 utils/data.py — データ変換・比較ユーティリティ
 
-使い方:
-    from comken.utils import diff_row, diff_rows
-
-    # 1行同士の差分（値が違う列だけ返る）
-    diff = diff_row(before_row, after_row)
-    # → {"金額": ("1000", "2000")}
-
-    # 2つのデータセットの差分（キー列で突合）
-    result = diff_rows(before_rows, after_rows, key="社員番号")
-    # result.added   → after にだけある行
-    # result.removed → before にだけある行
-    # result.changed → 値が変わった行（どの列がどう変わったかも分かる）
 """
 
 from dataclasses import dataclass
@@ -58,15 +46,6 @@ def diff_row(before: dict, after: dict) -> dict[str, tuple]:
 
     先頭ゼロ付きの文字列（社員番号 "0001" 等）は数値化しない。
     "0001" と 1 は別の値として差分になる（先頭ゼロの消失を検出できる）。
-
-    使い方:
-        before = {"注文番号": "A001", "金額": "1000", "担当者": "山田"}
-        after  = {"注文番号": "A001", "金額": 2000,   "担当者": "山田"}
-
-        diff_row(before, after)
-        # → {"金額": ("1000", 2000)}
-        # 差分がなければ {} が返る（if diff_row(a, b): で判定できる）
-
     Args:
         before: 変更前の行（辞書）。
         after: 変更後の行（辞書）。
@@ -110,18 +89,6 @@ def diff_rows(
 
     CSV と Excel をまたいだ比較にも使える（"1000" と 1000 は同一視される）。
     キーが重複する場合は後の行が優先される。
-
-    使い方:
-        before = CsvReader("昨日.csv").rows()
-        after = f.read_rows_as_dicts("Sheet1")
-
-        result = diff_rows(before, after, key="社員番号")
-        for row in result.added:
-            print("追加:", row)
-        for change in result.changed:
-            print(change.key, change.columns)
-            # → "001" {"氏名": ("山田", "山田太郎")}
-
     Args:
         before: 変更前のデータ（辞書のリスト）。
         after: 変更後のデータ（辞書のリスト）。

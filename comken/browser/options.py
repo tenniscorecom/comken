@@ -16,6 +16,11 @@ from typing import ClassVar
 
 
 class BrowserOptions:
+    """Edge の起動オプション。サブクラスで必要な属性だけ上書きして使う。
+
+    bool 属性は True で有効・False で無効、str 属性は None で無効。
+    """
+
     # ── ドライバー設定 ──
     DRIVER_PATH: str = r"C:\Users\Public\Documents\msedgedriver.exe"
     WAIT_SECONDS: int = 10

@@ -2,16 +2,6 @@
 utils/text.py — テキスト正規化ユーティリティ
 
 業務データでよくある文字列の揺れを正規化する。
-
-使い方:
-    from comken.utils.text import normalize, strip_spaces
-
-    normalize("Ａ１２３")         # → "A123"  （全角英数→半角）
-    normalize("ｱｲｳ")             # → "アイウ"（半角カナ→全角カナ）
-    normalize("（株）")            # → "(株)"  （全角括弧→半角）
-
-    strip_spaces("　山田　太郎　") # → "山田　太郎"（前後の全角スペースも除去）
-
 仕様:
     normalize() は unicodedata.normalize("NFKC") を使うため:
         - 全角英数字・記号 → 半角

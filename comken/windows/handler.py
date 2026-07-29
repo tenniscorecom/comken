@@ -52,34 +52,6 @@ class ExcelComHandler(FileBase):
         - VBA マクロを実行する
         - パスワード付きで保存する
 
-    使い方:
-        with ExcelComHandler("data.xlsx") as h:
-            # 数式の計算結果を取得
-            value = h.read_cell("Sheet1", row=2, col=3)
-
-            # 行データをまとめて取得
-            rows = h.read_rows("Sheet1")
-            rows = h.read_rows_as_dicts("Sheet1")
-
-            # 最終行を取得
-            last_row = h.used_last_row("Sheet1")
-
-            # 行全体が空かどうか確認
-            if h.count_a("Sheet1", row=5) == 0:
-                print("5行目は空行")
-
-            # キー突合で転記（XLOOKUP 的転記）
-            matched = h.transfer_by_key("T_data", key_col="Q",
-                                        lookup=lookup, column_mapping={"A": "顧客名"})
-
-            # マクロを実行
-            h.run_macro("Module1.UpdateData")
-
-            # 上書き保存（close() は保存しないため、変更を残すなら必須）
-            h.save()
-
-            # パスワードをかけて別名保存
-            h.save_as("output.xlsx", read_pw="読み取りPW", write_pw="書き込みPW")
     """
 
     SUFFIXES = (".xlsx", ".xlsm", ".xlsb", ".xls", ".xltx", ".xltm")
@@ -262,15 +234,6 @@ class ExcelComHandler(FileBase):
         Excel の各行についてキー列の値を lookup のキーと突合し、
         一致したら column_mapping に従って値を書き込む。
         空行・キーが空の行・lookup に存在しないキーの行はスキップする。
-
-        使い方:
-            lookup = {"A001": {"顧客名": "株式会社A", "金額": "1000"}, ...}
-            mapping = {"A": "顧客名", "B": "金額"}  # 列レター → lookup の列名
-
-            with ExcelComHandler("data.xlsx") as h:
-                matched = h.transfer_by_key("T_data", key_col="Q",
-                                            lookup=lookup, column_mapping=mapping)
-
         Args:
             sheet_name: シート名。
             key_col: キー列。列レター（"Q"）または列番号（17）で指定する。
@@ -433,10 +396,6 @@ class WindowHandler:
 
     タイトルでウィンドウを検索し、前面に表示する。
 
-    使い方:
-        w = WindowHandler("メモ帳")
-        w.activate() # ウィンドウを前面に表示
-        w.get_title() # ウィンドウタイトルを取得
     """
 
     def __init__(self, title: str) -> None:
@@ -462,16 +421,7 @@ class WindowHandler:
 
 
 class RegistryHandler:
-    """レジストリ値の読み取りクラス。with 文で確実にキーを閉じる。
-
-    使い方:
-        import win32con
-        from comken.windows.handler import RegistryHandler
-
-        with RegistryHandler(win32con.HKEY_CURRENT_USER, r"Software\\MyApp") as r:
-            value = r.read("SettingName")
-            print(value)
-    """
+    """レジストリ値の読み取りクラス。with 文で確実にキーを閉じる。"""
 
     def __init__(self, hive: int, key_path: str) -> None:
         """

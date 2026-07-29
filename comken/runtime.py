@@ -1,20 +1,6 @@
 """
 runtime.py — ライブラリ全体の実行モード（デバッグ・dry-run）
 
-使い方:
-    import comken
-
-    comken.__version__        # → "0.2.0"（ライブラリのバージョン）
-
-    # デバッグモード: ライブラリ主要処理の所要時間が DEBUG ログに残る
-    # （出力先・フォーマット・レベルは社内の共通ライブラリ側で設定する）
-    with comken.debug():
-        run()
-
-    # dry-run モード: 外部に影響する操作を実行せず、内容だけ INFO ログに出す
-    # 対象: ファイルの移動・コピー、Excel/CSV の保存
-    with comken.dry_run():
-        run()
 """
 
 import logging

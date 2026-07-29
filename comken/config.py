@@ -68,15 +68,6 @@ class Config:
         [REPORT]
         TARGET_SHEETS = [支店A, 支店B, 集計]
 
-    使い方:
-        config = Config() # カレントディレクトリの config.ini を読む
-        config = Config("path/to/config.ini") # パスを指定する場合
-
-        config.BROWSER.HEADLESS        # → False（bool）
-        config.BROWSER.WAIT_SECONDS    # → 10（int）
-        config.FILES.INPUT_FOLDER      # → Path("C:\\作業\\input")
-        config.FILES.INPUT_FOLDER / "支店A.csv"  # → Path("C:\\作業\\input\\支店A.csv")
-        config.REPORT.TARGET_SHEETS    # → ["支店A", "支店B", "集計"]
     """
 
     def __init__(self, path: str | Path = "config.ini") -> None:

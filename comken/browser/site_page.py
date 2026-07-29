@@ -9,31 +9,6 @@ BasePage（ブラウザ操作の道具箱）を継承し、BASE_URL と共通ナ
       └── SitePage  ← サイト固有（BASE_URL / 共通ヘッダー操作 / ログイン等）
             └── LoginPage / HomePage / ...  ← 各画面
 
-使い方:
-    # プロジェクト側でサイトごとのベースクラスを作る
-    from comken.browser.site_page import SitePage
-
-    class AppPage(SitePage):
-        BASE_URL = "https://example.com"
-
-        def logout(self) -> None:
-            self.click_css(".logout-btn")
-
-    # 各画面は AppPage を継承する
-    class LoginPage(AppPage):
-        def open(self) -> "LoginPage":
-            self.go("/login")
-            return self  # 自画面を開くメソッドは self を返す（チェーンできる）
-
-        def login(self, username: str, password: str) -> "DashboardPage":
-            self.input_id("username", username)
-            self.input_id("password", password)
-            self.click_id("login-btn")
-            return DashboardPage(self._driver)  # 遷移先のクラスを返す
-
-    class DashboardPage(AppPage):
-        def get_title(self) -> str:
-            return self.text_css("h1")
 """
 
 from .base_page import BasePage

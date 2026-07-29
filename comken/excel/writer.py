@@ -26,18 +26,6 @@ class ExcelWriter(ExcelBase):
     読み取りメソッドも継承しているため、データを読んでから Sheet で
     書き換える処理を1つのブックで完結できる。
 
-    使い方:
-        # 既存ブックを開いて編集する
-        with ExcelWriter("data.xlsx") as f:
-            rows = f.read_rows_as_dicts("Sheet1")
-            f.sheet("Sheet1").write_cell(row=2, col=1, value="新しい値")
-            f.save()
-
-        # 新規ブックを作る
-        with ExcelWriter.create("report.xlsx") as f:
-            sheet = f.sheet("Sheet1")
-            sheet.write_table([{"注文番号": "A001", "金額": 1000}])
-            f.save()
     """
 
     def __init__(
@@ -113,15 +101,6 @@ class ExcelWriter(ExcelBase):
     @classmethod
     def create(cls, path: str | Path, sheet_name: str = "Sheet1") -> "ExcelWriter":
         """新規ブックを作る（ファイルはまだ作られず、save() で path に保存される）。
-
-        使い方:
-            rows = CsvReader("data.csv").rows()
-            with ExcelWriter.create(r"C:\\作業\\report.xlsx") as f:
-                s = f.sheet("Sheet1")
-                s.write_table(rows)
-                s.auto_width()
-                f.save()
-
         Args:
             path: save() で保存されるパス。親フォルダがなければ保存時に自動作成される。
             sheet_name: 最初のシートの名前（デフォルト: "Sheet1"）。

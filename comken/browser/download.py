@@ -19,18 +19,6 @@ class DownloadDir:
 
     with 文で使うと、一時フォルダは with を抜けた時点で自動削除される（消し忘れ防止）。
     必要なファイルは with 内で移動しておくこと。
-
-    使い方:
-        from comken.browser import DownloadDir
-        from comken.utils.files import move_file
-
-        with DownloadDir() as dl, EdgeDriver(download_dir=dl) as d:
-            d.open("https://example.com/download")
-            ...  # ダウンロード操作
-            files = dl.wait()                        # 完了まで待機
-            move_file(files[0], r"C:\\作業\\output")  # with 内で移動する
-        # ← ここで一時フォルダは自動削除される
-
     ダウンロードしたものを残したい場合は path で固定フォルダを指定する
     （固定フォルダは with を抜けても削除されない）:
         with DownloadDir(path=r"C:\\作業\\downloads") as dl, EdgeDriver(download_dir=dl) as d:
