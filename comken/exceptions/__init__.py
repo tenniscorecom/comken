@@ -8,6 +8,10 @@ OriginalLibsError
 │   ├── AccessLocalCopyError
 │   ├── AccessRoutineError
 │   └── AccessSourceNotFoundError
+├── OutlookError
+│   ├── ClassicOutlookNotAvailableError
+│   ├── OutlookFolderNotFoundError
+│   └── OutlookAttachmentNotFoundError
 ├── ExcelError
 │   ├── ExcelFileNotFoundError
 │   ├── SheetNotFoundError
@@ -70,6 +74,12 @@ from .excel import (
     SheetNotFoundError,
 )
 from .file import UnsupportedFileSuffixError
+from .outlook import (
+    ClassicOutlookNotAvailableError,
+    OutlookAttachmentNotFoundError,
+    OutlookError,
+    OutlookFolderNotFoundError,
+)
 from .warning import _warn_coerce as _warn_coerce
 
 __all__ = [
@@ -101,4 +111,8 @@ __all__ = [
     "ConfigFileNotFoundError",
     "ConfigSectionNotFoundError",
     "UnsupportedFileSuffixError",
+    "OutlookError",
+    "ClassicOutlookNotAvailableError",
+    "OutlookFolderNotFoundError",
+    "OutlookAttachmentNotFoundError",
 ]

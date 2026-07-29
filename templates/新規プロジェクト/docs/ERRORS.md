@@ -104,3 +104,11 @@
 1. エラー画面全体のスクリーンショット（黒い画面の文字が読める状態で）
 2. 何をしようとしていたか（例: 「朝の売上レポート作成を実行した」）
 3. いつから起きているか（例: 「昨日までは動いていた」）
+## Outlook のエラー
+
+| エラー名 | 意味 | 対処 |
+|---|---|---|
+| `OutlookError` | Outlook 関連エラーの分類 | 下の個別エラーを確認する |
+| `ClassicOutlookNotAvailableError` | Classic Outlook を利用できない | Classic Outlook を使うか管理者に相談する |
+| `OutlookFolderNotFoundError` | 指定したフォルダがない | エラーに表示された存在するフォルダ名を確認する |
+| `OutlookAttachmentNotFoundError` | 添付ファイルがない | 表示されたファイルパスを確認する |

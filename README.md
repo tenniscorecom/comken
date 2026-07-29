@@ -49,6 +49,7 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 | CSV | CSV の読み込み・検索・抽出 |
 | Excel（openpyxl） | Excel の読み書き（数式・マクロは自動で win32com を使用） |
 | Access | Access のマクロ・VBA 実行、テーブル／クエリの CSV 出力 |
+| Outlook | Classic Outlook の受信メール読み取り・下書き作成 |
 | Windows（pywin32） | Excel COM 操作・ウィンドウ操作・レジストリ読み取り |
 | Browser（Edge） | Edge ブラウザ操作 |
 | utils.files | ファイル検索・操作・圧縮・標準フォルダ取得・ファイル名の組み立て |
@@ -1135,3 +1136,28 @@ flowchart LR
 | 2026-07-15 | `from comken import config` に一本化（src/config.py 不要）。Pylance 補完用 typings スタブを自動生成。当時のログ初期化で comken バージョンを出力。バイトコードキャッシュをローカルに自動退避。examples テスト・README コード構文チェック・CI（GitHub Actions）を追加。新規プロジェクトのひな形 templates/新規プロジェクト/ を追加 |
 
 
+# Outlook（Classic 限定）
+
+```python
+import logging
+
+from comken.outlook import Outlook
+
+logger = logging.getLogger(__name__)
+
+with Outlook() as mail:
+    for message in mail.messages(subject_contains="日次データ", days=7):
+        logger.info("%s / %s", message.received_at, message.subject)
+
+    mail.save_draft(
+        to="taro@example.co.jp",
+        subject="日次レポート",
+        body="添付をご確認ください。",
+        attachments=[r"C:\作業\report.csv"],
+    )
+```
+
+受信メールは新しい順に逐次読み取り、既読・未読の状態を変えません。誤送信を防ぐため
+送信機能はなく、下書き保存までです。COM に対応する従来版（Classic）Outlook 専用で、
+New Outlook は利用できません。Graph API は認証とネットワークが必要なため、
+オフライン環境向けの代替として提供しません。

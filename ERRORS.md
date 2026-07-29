@@ -41,6 +41,15 @@
 | `FileFormatMismatchError` | 保存拡張子と形式が合わない | 管理者へ連絡する |
 | `PermissionError` | ファイルが誰かに開かれている | 自分や他の人がそのファイルを開いていないか確認して閉じる |
 
+## Outlook のエラー
+
+| エラー名 | 意味 | 対処 |
+|---|---|---|
+| `OutlookError` | Outlook 関連エラーの分類 | 下の個別エラーを確認する |
+| `ClassicOutlookNotAvailableError` | Classic Outlook を利用できない | Classic Outlook を使うか管理者に相談する |
+| `OutlookFolderNotFoundError` | 指定したフォルダがない | エラーに表示された存在するフォルダ名を確認する |
+| `OutlookAttachmentNotFoundError` | 添付ファイルがない | 表示されたファイルパスを確認する |
+
 ---
 
 ## ファイルのエラー
