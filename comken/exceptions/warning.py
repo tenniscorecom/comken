@@ -6,7 +6,7 @@ from typing import Any, TypeVar
 _T = TypeVar("_T")
 
 
-class Warnings:
+class _Warnings:
     """ライブラリが発行する UserWarning のメッセージ。"""
 
     COERCION = "{param} に {type_name}（{value!r}）が渡されました。{expected} に変換します。"
@@ -18,7 +18,7 @@ def _warn_coerce(value: Any, expected: type[_T], param: str, stacklevel: int = 3
         raise TypeError(f"{param} に None が渡されました。{expected.__name__} を渡してください。")
     if not isinstance(value, expected):
         warnings.warn(
-            Warnings.COERCION.format(
+            _Warnings.COERCION.format(
                 param=param,
                 type_name=type(value).__name__,
                 value=value,

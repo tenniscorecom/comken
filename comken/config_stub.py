@@ -15,7 +15,7 @@ from pathlib import Path
 
 from .config import _parse_value
 from .exceptions import ConfigFileNotFoundError
-from .utils.files.ops import cleanup_stale_tmp as _cleanup_stale_tmp
+from .utils.files.ops import _cleanup_stale_tmp
 
 _STUB_HEADER = '''"""config.ini から自動生成されたエディタ補完用スタブ。手で編集しない。
 

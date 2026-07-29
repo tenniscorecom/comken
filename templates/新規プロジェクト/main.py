@@ -8,7 +8,8 @@ main.py — エントリポイント
 
 import logging
 
-from comken import OriginalLibsError, config, setup_logger
+from comken import config, setup_logger
+from comken.exceptions import OriginalLibsError
 
 from src.run import run
 

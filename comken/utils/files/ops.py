@@ -129,7 +129,7 @@ def copy_file(src: str | Path, dst: str | Path) -> Path:
     return target
 
 
-def cleanup_stale_tmp(target: str | Path, max_age_seconds: float = 3600) -> None:
+def _cleanup_stale_tmp(target: str | Path, max_age_seconds: float = 3600) -> None:
     """アトミック書き込みで残った一時ファイルの残骸を削除する（ライブラリ内部用）。
 
     アトミック書き込み（一時ファイル + os.replace）は、置換直前にプロセスが

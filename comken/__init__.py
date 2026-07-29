@@ -17,15 +17,6 @@ if _sys.pycache_prefix is None and not _os.environ.get("PYTHONPYCACHEPREFIX"):
 # ────────────────────────────────────────────────────────────────────────────
 
 from .config import Config
-from .exceptions import (
-    ColumnNotFoundError,
-    ConfigError,
-    CsvError,
-    ExcelError,
-    MacroError,
-    OriginalLibsError,
-    SheetNotFoundError,
-)
 from .logger import setup_logger
 from .runtime import is_debug, is_dry_run, set_debug, set_dry_run
 
@@ -36,11 +27,4 @@ __all__ = [
     "is_debug",
     "set_dry_run",
     "is_dry_run",
-    "OriginalLibsError",
-    "ExcelError",
-    "SheetNotFoundError",
-    "MacroError",
-    "ColumnNotFoundError",
-    "CsvError",
-    "ConfigError",
 ]
