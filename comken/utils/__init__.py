@@ -1,11 +1,10 @@
-from .data import DiffResult, RowChange, col_to_num, diff_row, diff_rows
+from .data import DiffResult, RowChange, diff_row, diff_rows
 from .retry import retry
 from .text import normalize, remove_spaces, strip_spaces
 from .timer import Timer, measure
 from .wait import wait
 
 __all__ = [
-    "col_to_num",
     "diff_row",
     "diff_rows",
     "DiffResult",

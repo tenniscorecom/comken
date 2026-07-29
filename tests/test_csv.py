@@ -10,6 +10,8 @@ from unittest.mock import patch
 
 import pytest
 
+import comken.csv
+import comken.utils
 from comken.constants import Encoding
 from comken.csv import CsvReader, CsvWriter
 from comken.exceptions import (
@@ -68,6 +70,12 @@ class TestCsvReaderCell:
 
         assert CsvReader(path).cell("B2") == ""
 
+    def test_reads_multiple_letter_column(self, tmp_path):
+        path = tmp_path / "wide.csv"
+        path.write_text(",".join([*map(str, range(1, 27)), "27"]) + "\n", encoding="utf-8")
+
+        assert CsvReader(path).cell("AA1") == "27"
+
     @pytest.mark.parametrize("ref", ["", "2A", "A0", "A-1"])
     def test_rejects_invalid_reference(self, sample_csv, ref):
         with pytest.raises(CsvCellReferenceError):
@@ -77,6 +85,22 @@ class TestCsvReaderCell:
     def test_rejects_out_of_range_reference(self, sample_csv, ref):
         with pytest.raises(CsvCellReferenceError):
             CsvReader(sample_csv).cell(ref)
+
+
+class TestCsvPublicApi:
+    """CSV の公開 API と依存境界を確認する。"""
+
+    def test_utils_does_not_export_col_to_num(self):
+        for package in (comken.csv, comken.utils):
+            assert "col_to_num" not in package.__all__
+            assert not hasattr(package, "col_to_num")
+
+    def test_csv_does_not_import_excel(self):
+        csv_dir = Path(__file__).resolve().parents[1] / "comken" / "csv"
+        source = "\n".join(path.read_text(encoding="utf-8") for path in csv_dir.glob("*.py"))
+
+        assert "from ..excel" not in source
+        assert "from comken.excel" not in source
 
 
 class TestCsvReaderFirst:

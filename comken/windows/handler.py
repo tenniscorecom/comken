@@ -29,7 +29,7 @@ from ..exceptions import (
     RowTransferError,
     _warn_coerce,
 )
-from ..utils.data import col_to_num
+from ..utils.data import col_to_num, column_number
 from ..utils.files.base import FileBase
 
 logger = logging.getLogger(__name__)
@@ -129,26 +129,26 @@ class ExcelComHandler(FileBase):
         """シートオブジェクトを返す。"""
         return self._wb.Sheets(_warn_coerce(name, str, "sheet_name", stacklevel=3))
 
-    def read_cell(self, sheet_name: str, row: int, col: int) -> Any:
+    def read_cell(self, sheet_name: str, row: int, col: int | str) -> Any:
         """セルの値を返す（数式の計算結果）。
 
         Args:
             sheet_name: シート名。
             row: 行番号（1始まり）。
-            col: 列番号（1始まり。A列=1、B列=2、…）。
+            col: 列番号（1始まり）または列記号（"A" / "AA"）。
         """
-        return self._sheet(sheet_name).Cells(int(row), int(col)).Value
+        return self._sheet(sheet_name).Cells(int(row), column_number(col)).Value
 
-    def write_cell(self, sheet_name: str, row: int, col: int, value) -> None:
+    def write_cell(self, sheet_name: str, row: int, col: int | str, value) -> None:
         """セルに値を書き込む。
 
         Args:
             sheet_name: シート名。
             row: 行番号（1始まり）。
-            col: 列番号（1始まり）。
+            col: 列番号（1始まり）または列記号（"A" / "AA"）。
             value: 書き込む値。
         """
-        self._sheet(sheet_name).Cells(int(row), int(col)).Value = value
+        self._sheet(sheet_name).Cells(int(row), column_number(col)).Value = value
 
     def read_rows(self, sheet_name: str, min_row: int = 2) -> list[tuple]:
         """指定シートの行データをタプルのリストで返す。
@@ -284,7 +284,7 @@ class ExcelComHandler(FileBase):
         Raises:
             ExcelError: 行の処理に失敗した場合（メッセージに行番号を含む）。
         """
-        key_col_num = col_to_num(key_col) if isinstance(key_col, str) else key_col
+        key_col_num = column_number(key_col)
         mapping = {col_to_num(letter): name for letter, name in column_mapping.items()}
 
         ws = self._sheet(sheet_name)

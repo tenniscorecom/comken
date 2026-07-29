@@ -28,6 +28,7 @@ from ..exceptions import (
     CsvNoDataRowsError,
     EncodingDetectionError,
 )
+from ..utils.data import col_to_num
 from ..utils.timer import measure
 from .base import CsvBase
 
@@ -187,10 +188,7 @@ class CsvReader(CsvBase):
 
         column_letters, row_text = match.groups()
         row_index = int(row_text) - 1
-        column_number = 0
-        for letter in column_letters.upper():
-            column_number = column_number * 26 + ord(letter) - ord("A") + 1
-        column_index = column_number - 1
+        column_index = col_to_num(column_letters) - 1
 
         raw_rows = list(csv.reader(io.StringIO(self._read_text())))
         if row_index >= len(raw_rows):

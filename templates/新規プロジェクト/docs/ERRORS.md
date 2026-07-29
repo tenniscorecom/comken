@@ -48,12 +48,14 @@
 |---|---|---|
 | `FileNotFoundError` | ファイルが見つからない | ファイルの置き場所と名前を確認する。「今日の日付のファイル」を探す処理なら、今日のファイルが作られているか確認する |
 | `TimeoutError` | ダウンロードが終わらない | ネットワークの状態を確認して再実行する |
+| `UnsupportedFileSuffixError` | 対応外の拡張子が指定された | CSV / Excel の対応する拡張子のファイルを指定する |
 | `EncodingDetectionError` | CSV の文字コードを判定できない | CSV の保存形式を確認し、管理者へ連絡する |
 | `CsvHeadersTooFewError` | 指定した見出し数が CSV の列数より少ない | 管理者へ連絡する |
 | `CsvNoDataRowsError` | CSV に見出し以外のデータ行がない | 見出し行の下にデータが1行以上あるか確認する |
 | `CsvCellReferenceError` | CSV のセル位置（例: A2）の指定が正しくない、または範囲外 | 表示されたセル位置と、CSV の行数・列数を確認する |
 | `CsvColumnNotFoundError` | CSV の列見出しが見つからない | CSV の1行目を確認する |
 | `KeyColumnNotFoundError` | 比較に使うキー列が見つからない | Excel・CSV の列名を確認する |
+| `InvalidColumnError` | 列の指定が正しくない（打ち間違いなど） | 列は番号（1, 2, …）か列記号（"A", "AA"）で指定する |
 | `ConfigFileNotFoundError` | config.ini が見つからない | config.ini.example をコピーして config.ini を作る |
 | `ConfigSectionNotFoundError` | config.ini の必要な節がない | 表示されたセクション名を config.ini に追加する |
 

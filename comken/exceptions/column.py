@@ -68,3 +68,13 @@ class KeyColumnNotFoundError(ColumnNotFoundError):
 
     def __init__(self, key: str, existing: list[str]) -> None:
         super().__init__(f"キー列が見つかりません: {key}\n存在する列: {', '.join(existing)}")
+
+
+class InvalidColumnError(OriginalLibsError):
+    """Excel の列指定が A / AA 形式でない場合。"""
+
+    def __init__(self, column: str) -> None:
+        super().__init__(
+            f"列の指定が正しくありません: {column!r}\n"
+            '列番号（1始まり）または列記号で指定してください（例: 1, "A", "AA"）。'
+        )

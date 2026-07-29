@@ -25,6 +25,7 @@ OriginalLibsError
 │   ├── CsvHeadersTooFewError
 │   ├── CsvNoDataRowsError
 │   └── CsvCellReferenceError
+├── InvalidColumnError
 ├── ColumnNotFoundError
 │   ├── ExcelColumnNotFoundError
 │   ├── CsvColumnNotFoundError
@@ -49,6 +50,7 @@ from .column import (
     ColumnNotFoundError,
     CsvColumnNotFoundError,
     ExcelColumnNotFoundError,
+    InvalidColumnError,
     KeyColumnNotFoundError,
 )
 from .config import (
@@ -107,6 +109,7 @@ __all__ = [
     "ExcelColumnNotFoundError",
     "CsvColumnNotFoundError",
     "KeyColumnNotFoundError",
+    "InvalidColumnError",
     "ConfigError",
     "ConfigFileNotFoundError",
     "ConfigSectionNotFoundError",

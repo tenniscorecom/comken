@@ -64,6 +64,7 @@
 | `CsvCellReferenceError` | CSV のセル位置（例: A2）の指定が正しくない、または範囲外 | 表示されたセル位置と、CSV の行数・列数を確認する |
 | `CsvColumnNotFoundError` | CSV の列見出しが見つからない | CSV の1行目を確認する |
 | `KeyColumnNotFoundError` | 比較に使うキー列が見つからない | Excel・CSV の列名を確認する |
+| `InvalidColumnError` | 列の指定が正しくない（打ち間違いなど） | 列は番号（1, 2, …）か列記号（"A", "AA"）で指定する |
 | `ConfigFileNotFoundError` | config.ini が見つからない | config.ini.example をコピーして config.ini を作る |
 | `ConfigSectionNotFoundError` | config.ini の必要な節がない | 表示されたセクション名を config.ini に追加する |
 

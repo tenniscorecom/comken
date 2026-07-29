@@ -268,7 +268,7 @@ logger.info("CSV読み込み完了: %d件", len(rows))
 ## CSV
 
 ```python
-from comken.csv.reader import CsvReader
+from comken.csv import CsvReader
 
 ORDER_ID = "A001"
 STAFF_NAME = "山田"
@@ -283,6 +283,7 @@ first_order_id = reader.first("注文番号")  # 最初のデータ行の値。�
 
 # ヘッダーがない、または位置で決まっている CSV は cell() で読む
 date_text = reader.cell("A2")  # ヘッダー行も1行目として数える
+# 複数文字の列記号にも対応: reader.cell("AA2") で27列目を取得
 ```
 
 data.csv の中身が以下だとする。
@@ -709,6 +710,7 @@ lookup = CsvReader("data.csv").index("注文番号")
 MAPPING = {"B": "顧客名", "C": "金額"}  # Excel の列レター → lookup の列名
 
 with ExcelWriter("data.xlsx") as f:
+    f.write_cell(SHEET, row=2, col="AA", value="備考")  # Excel の列記号をそのまま指定
     matched = f.transfer_by_key(SHEET, key_col="A", lookup=lookup, column_mapping=MAPPING)
     f.save()  # 書き込み後は save() を忘れずに
 # Excel を起動しないため数万行でも速い。数式の再計算が必要なら ExcelComHandler 版を使う

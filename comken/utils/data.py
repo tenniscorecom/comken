@@ -2,10 +2,7 @@
 utils/data.py — データ変換・比較ユーティリティ
 
 使い方:
-    from comken.utils import col_to_num, diff_row, diff_rows
-
-    # Excel の列レターを列番号に変換
-    col_to_num("Q")   # → 17
+    from comken.utils import diff_row, diff_rows
 
     # 1行同士の差分（値が違う列だけ返る）
     diff = diff_row(before_row, after_row)
@@ -21,6 +18,7 @@ utils/data.py — データ変換・比較ユーティリティ
 from dataclasses import dataclass
 
 from ..exceptions import KeyColumnNotFoundError
+from ..exceptions.column import InvalidColumnError
 
 
 def col_to_num(letter: str) -> int:
@@ -36,18 +34,20 @@ def col_to_num(letter: str) -> int:
         1始まりの列番号。
 
     Raises:
-        ValueError: 空文字列または英字以外が含まれる場合。
+        InvalidColumnError: 空文字列または半角英字以外が含まれる場合。
     """
-    normalized = str(letter).strip().upper()
-    if not normalized or not normalized.isalpha():
-        raise ValueError(
-            f"列レターとして無効な値です: {letter!r}\n"
-            "A〜Z または AA〜ZZZ 形式で指定してください（例: 'A', 'Q', 'AA'）。"
-        )
+    normalized = letter.strip().upper()
+    if not normalized or not normalized.isascii() or not normalized.isalpha():
+        raise InvalidColumnError(letter)
     result = 0
     for char in normalized:
         result = result * 26 + (ord(char) - ord("A") + 1)
     return result
+
+
+def column_number(col: int | str) -> int:
+    """列番号または列記号を1始まりの列番号に揃える。"""
+    return col_to_num(col) if isinstance(col, str) else int(col)
 
 
 def diff_row(before: dict, after: dict) -> dict[str, tuple]:

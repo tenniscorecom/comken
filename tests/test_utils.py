@@ -16,7 +16,6 @@ from comken.browser.download import DownloadDir
 from comken.constants import SortBy
 from comken.exceptions import ColumnNotFoundError
 from comken.utils import (
-    col_to_num,
     diff_row,
     diff_rows,
     normalize,
@@ -172,32 +171,6 @@ class TestCopyFile:
 
         assert result == src
         assert src.read_text(encoding="utf-8") == "data"
-
-
-class TestColToNum:
-    """col_to_num のテスト。Excel の列レターを列番号に変換する。"""
-
-    @pytest.mark.parametrize(
-        ("letter", "expected"),
-        [("A", 1), ("B", 2), ("Q", 17), ("Z", 26), ("AA", 27), ("AZ", 52)],
-    )
-    def test_converts_letter_to_number(self, letter, expected):
-        """列レターが正しい列番号に変換されることを確認する。"""
-        assert col_to_num(letter) == expected
-
-    def test_lowercase_is_allowed(self):
-        """小文字でも変換できることを確認する。"""
-        assert col_to_num("q") == 17
-
-    def test_empty_string_raises(self):
-        """空文字列を渡すと ValueError が発生することを確認する。"""
-        with pytest.raises(ValueError, match="無効な値"):
-            col_to_num("")
-
-    def test_number_string_raises(self):
-        """数字文字列を渡すと ValueError が発生することを確認する。"""
-        with pytest.raises(ValueError, match="無効な値"):
-            col_to_num("1")
 
 
 class TestDateNameBuilder:

@@ -11,8 +11,16 @@ from unittest.mock import MagicMock, patch
 import pytest
 from openpyxl import Workbook, load_workbook
 
+import comken.excel
 from comken.excel import ExcelReader, ExcelWriter
-from comken.exceptions import ExcelError, SheetNotFoundError, UnsupportedFileSuffixError
+from comken.exceptions import (
+    ExcelError,
+    OriginalLibsError,
+    SheetNotFoundError,
+    UnsupportedFileSuffixError,
+)
+from comken.utils.data import col_to_num
+from comken.windows.handler import ExcelComHandler
 
 
 @pytest.fixture
@@ -77,6 +85,55 @@ class TestExcelReader:
             assert reader.read_rows("Sheet1") == [("値",)]
             assert reader._wb.read_only is True
             assert not hasattr(reader, "write_cell")
+
+
+class TestExcelWriterColumn:
+    @pytest.mark.parametrize("col", ["A", "AA", 27])
+    def test_write_cell_accepts_column_letter_or_number(self, tmp_path, col):
+        with ExcelWriter.create(tmp_path / "book.xlsx") as writer:
+            writer.write_cell("Sheet1", row=2, col=col, value="値")
+            expected_col = 1 if col == "A" else 27
+            assert writer._wb["Sheet1"].cell(2, expected_col).value == "値"
+
+    @pytest.mark.parametrize("col", ["A", "AA", 27])
+    def test_format_methods_accept_column_letter_or_number(self, tmp_path, col):
+        with ExcelWriter.create(tmp_path / "book.xlsx") as writer:
+            writer.set_fill("Sheet1", 2, col, "FFFF00")
+            writer.set_column_width("Sheet1", col, 20)
+            writer.set_number_format("Sheet1", 2, col, "#,##0")
+            writer.set_bold("Sheet1", 2, col)
+            expected_col = 1 if col == "A" else 27
+            cell = writer._wb["Sheet1"].cell(2, expected_col)
+            assert cell.fill.fgColor.rgb == "00FFFF00"
+            assert (
+                writer._wb["Sheet1"].column_dimensions["A" if expected_col == 1 else "AA"].width
+                == 20
+            )
+            assert cell.number_format == "#,##0"
+            assert cell.font.bold is True
+
+    @pytest.mark.parametrize("col", ["", "A1", "あ"])
+    def test_rejects_invalid_column_letter_with_guidance(self, tmp_path, col):
+        with (
+            ExcelWriter.create(tmp_path / "book.xlsx") as writer,
+            pytest.raises(OriginalLibsError, match="例: 1"),
+        ):
+            writer.write_cell("Sheet1", row=2, col=col, value="値")
+
+
+class TestExcelComHandlerColumn:
+    @pytest.mark.parametrize(("col", "expected"), [("A", 1), ("AA", 27), (27, 27)])
+    def test_read_and_write_accept_column_letter_or_number(self, col, expected):
+        handler = ExcelComHandler.__new__(ExcelComHandler)
+        sheet = MagicMock()
+        sheet.Cells.return_value.Value = "読取値"
+        handler._sheet = MagicMock(return_value=sheet)
+
+        assert handler.read_cell("Sheet1", 2, col) == "読取値"
+        handler.write_cell("Sheet1", 2, col, "書込値")
+
+        assert sheet.Cells.call_args_list == [((2, expected),), ((2, expected),)]
+        assert sheet.Cells.return_value.Value == "書込値"
 
 
 class TestOpen:
@@ -441,8 +498,31 @@ class TestReadComputedRows:
         handler.assert_not_called()
 
 
+class TestColToNum:
+    """内部の列記号変換の振る舞いを確認する。"""
+
+    @pytest.mark.parametrize(
+        ("letter", "expected"),
+        [("A", 1), ("B", 2), ("Q", 17), ("Z", 26), ("AA", 27), ("AZ", 52)],
+    )
+    def test_converts_letter_to_number(self, letter, expected):
+        assert col_to_num(letter) == expected
+
+    def test_lowercase_is_allowed(self):
+        assert col_to_num("q") == 17
+
+    @pytest.mark.parametrize("letter", ["", "1", "A1", "あ"])
+    def test_rejects_invalid_letter(self, letter):
+        with pytest.raises(OriginalLibsError, match="列番号（1始まり）または列記号"):
+            col_to_num(letter)
+
+
 class TestExcelApiBoundaries:
     """Reader と Writer の公開 API 境界を確認する。"""
+
+    def test_col_to_num_is_not_public(self):
+        assert "col_to_num" not in comken.excel.__all__
+        assert not hasattr(comken.excel, "col_to_num")
 
     def test_writer_rejects_read_only_argument(self, excel_with_header):
         """ExcelWriter は read_only 引数を公開しない。"""

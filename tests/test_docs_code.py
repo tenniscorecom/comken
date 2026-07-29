@@ -90,7 +90,7 @@ def test_feature_catalog_covers_all_public_api():
             continue
         names.extend(name for name in _all_names(path) if name not in names)
 
-    assert len(names) == 52
+    assert len(names) == 51
     assert not [name for name in names if name not in catalog]
 
 

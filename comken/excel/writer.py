@@ -10,7 +10,7 @@ from openpyxl.utils import get_column_letter
 
 from ..exceptions import _warn_coerce
 from ..runtime import dry_run_log, is_dry_run
-from ..utils.data import col_to_num
+from ..utils.data import col_to_num, column_number
 from ..utils.files.base import FileBase
 from ..utils.timer import measure
 from .base import ExcelBase
@@ -101,16 +101,16 @@ class ExcelWriter(ExcelBase):
         instance._wb.active.title = sheet_name
         return instance
 
-    def write_cell(self, sheet_name: str, row: int, col: int, value) -> None:
+    def write_cell(self, sheet_name: str, row: int, col: int | str, value) -> None:
         """セルに値を書き込む。
 
         Args:
             sheet_name: シート名。
             row: 行番号（1始まり）。
-            col: 列番号（1始まり。A列=1、B列=2、…）。
+            col: 列番号（1始まり）または列記号（"A" / "AA"）。
             value: 書き込む値。
         """
-        self._sheet(sheet_name).cell(row=int(row), column=int(col)).value = value
+        self._sheet(sheet_name).cell(row=int(row), column=column_number(col)).value = value
 
     @measure
     def transfer_by_key(
@@ -149,7 +149,7 @@ class ExcelWriter(ExcelBase):
         Raises:
             SheetNotFoundError: 指定したシートが存在しない場合。
         """
-        key_col_num = col_to_num(key_col) if isinstance(key_col, str) else int(key_col)
+        key_col_num = column_number(key_col)
         mapping = {col_to_num(letter): name for letter, name in column_mapping.items()}
 
         ws = self._sheet(sheet_name)
@@ -208,7 +208,7 @@ class ExcelWriter(ExcelBase):
         finally:
             tmp_path.unlink(missing_ok=True)
 
-    def set_fill(self, sheet_name: str, row: int, col: int, color: str) -> None:
+    def set_fill(self, sheet_name: str, row: int, col: int | str, color: str) -> None:
         """セルの背景色を設定する。
 
         よく使う色コード:
@@ -225,14 +225,14 @@ class ExcelWriter(ExcelBase):
         Args:
             sheet_name: シート名。
             row: 行番号（1始まり）。
-            col: 列番号（1始まり）。
+            col: 列番号（1始まり）または列記号（"A" / "AA"）。
             color: 16進数カラーコード（"RRGGBB" 形式、# なし）。
         """
         color = _warn_coerce(color, str, "color", stacklevel=2)
         fill = PatternFill(fill_type="solid", fgColor=color)
-        self._sheet(sheet_name).cell(row=int(row), column=int(col)).fill = fill
+        self._sheet(sheet_name).cell(row=int(row), column=column_number(col)).fill = fill
 
-    def set_column_width(self, sheet_name: str, col: int, width: float) -> None:
+    def set_column_width(self, sheet_name: str, col: int | str, width: float) -> None:
         """列幅を設定する。
 
         Excel の列幅の目安: 標準フォント（11pt）で 1文字 ≈ 1。
@@ -245,13 +245,13 @@ class ExcelWriter(ExcelBase):
 
         Args:
             sheet_name: シート名。
-            col: 列番号（1始まり。A列=1、B列=2、…）。
+            col: 列番号（1始まり）または列記号（"A" / "AA"）。
             width: 列幅（Excel の列幅単位）。
         """
-        col_letter = get_column_letter(int(col))
+        col_letter = get_column_letter(column_number(col))
         self._sheet(sheet_name).column_dimensions[col_letter].width = float(width)
 
-    def set_number_format(self, sheet_name: str, row: int, col: int, fmt: str) -> None:
+    def set_number_format(self, sheet_name: str, row: int, col: int | str, fmt: str) -> None:
         """セルの数値フォーマットを設定する。
 
         よく使うフォーマット:
@@ -270,13 +270,13 @@ class ExcelWriter(ExcelBase):
         Args:
             sheet_name: シート名。
             row: 行番号（1始まり）。
-            col: 列番号（1始まり）。
+            col: 列番号（1始まり）または列記号（"A" / "AA"）。
             fmt: Excel の書式文字列。
         """
         fmt = _warn_coerce(fmt, str, "fmt", stacklevel=2)
-        self._sheet(sheet_name).cell(row=int(row), column=int(col)).number_format = fmt
+        self._sheet(sheet_name).cell(row=int(row), column=column_number(col)).number_format = fmt
 
-    def set_bold(self, sheet_name: str, row: int, col: int, bold: bool = True) -> None:
+    def set_bold(self, sheet_name: str, row: int, col: int | str, bold: bool = True) -> None:
         """セルの太字を設定する。
 
         使い方:
@@ -287,10 +287,10 @@ class ExcelWriter(ExcelBase):
         Args:
             sheet_name: シート名。
             row: 行番号（1始まり）。
-            col: 列番号（1始まり）。
+            col: 列番号（1始まり）または列記号（"A" / "AA"）。
             bold: True で太字、False で解除。
         """
-        cell = self._sheet(sheet_name).cell(row=int(row), column=int(col))
+        cell = self._sheet(sheet_name).cell(row=int(row), column=column_number(col))
         cell.font = Font(bold=bool(bold))
 
     def run_macro(self, macro_name: str, save: bool = True) -> None:
