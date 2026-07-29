@@ -5,6 +5,7 @@
 README・ドキュメントが「そのまま動く」と案内している主張をテストで担保する。
 """
 
+import pytest
 from openpyxl import load_workbook
 
 
@@ -25,20 +26,34 @@ class TestCsvToExcelReport:
 
 
 class TestExcelKeyTransfer:
-    def test_transfers_matched_rows(self, tmp_path, monkeypatch):
-        """キー突合転記の例が、マスタにあるキーだけ転記する。"""
+    @pytest.fixture
+    def transferred(self, tmp_path, monkeypatch):
+        """サンプルを実行し、転記後のシートを {注文番号: 行} で返す。"""
         from examples.excel_key_transfer import run
 
         monkeypatch.setattr(run, "OUTPUT_FOLDER", tmp_path)
         monkeypatch.setattr(run, "MASTER_CSV", tmp_path / "master.csv")
+        monkeypatch.setattr(run, "DETAIL_CSV", tmp_path / "detail.csv")
         monkeypatch.setattr(run, "INVOICE_XLSX", tmp_path / "invoice.xlsx")
         run.main()
 
         ws = load_workbook(tmp_path / "invoice.xlsx").active
-        rows = {r[0]: r for r in ws.iter_rows(min_row=2, values_only=True)}
-        # A001 は転記され顧客名が入る、Z999 はマスタにないので空のまま
-        assert rows["A001"][1] == "株式会社アルファ"
-        assert rows["Z999"][1] in (None, "")
+        return {r[0]: r for r in ws.iter_rows(min_row=2, values_only=True)}
+
+    def test_transfers_matched_rows(self, transferred):
+        """マスタにあるキーだけ転記される。"""
+        assert transferred["A001"][1] == "株式会社アルファ"
+        assert transferred["Z999"][1] in (None, "")
+
+    def test_sums_multiple_detail_rows(self, transferred):
+        """1対多の明細は合計して転記される（後の行で上書きしない）。"""
+        # A001 は 48000 + 12000 + 1500。index() で引くと最後の 1500 になってしまう
+        assert transferred["A001"][2] == 61500
+        assert transferred["A002"][2] == 18000
+
+    def test_amount_is_number_not_text(self, transferred):
+        """金額が文字列でなく数値で入る（Excel 側で集計できる）。"""
+        assert isinstance(transferred["A001"][2], int)
 
 
 class TestCsvDiffReport:
