@@ -47,7 +47,7 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 | constants | CSV・Excel・ファイル検索で使う公開定数 |
 | exceptions | comken 固有の例外（エラー名別に対処可能） |
 | CSV | CSV の読み込み・検索・抽出 |
-| Excel（openpyxl） | Excel の読み書き（数式・マクロは自動で win32com を使用） |
+| Excel（openpyxl） | Excel の読み書き（既存数式の計算結果・マクロは必要時に win32com を使用） |
 | Access | Access のマクロ・VBA 実行、テーブル／クエリの CSV 出力 |
 | Outlook | Classic Outlook の受信メール読み取り・下書き作成 |
 | Windows（pywin32） | Excel COM 操作・ウィンドウ操作・レジストリ読み取り |
@@ -723,7 +723,7 @@ with ExcelWriter("data.xlsx") as f:
     s.write_cell(row=2, col="AA", value="備考")  # Excel の列記号をそのまま指定
     matched = s.transfer_by_key(key_col="A", lookup=lookup, column_mapping=MAPPING)
     f.save()  # 書き込み後は save() を忘れずに
-# Excel を起動しないため数万行でも速い。数式の再計算が必要なら ExcelComHandler 版を使う
+# Excel を起動しないため数万行でも速い
 
 # 背景色の設定（よく使う色は Color 定数で指定できる）
 from comken.constants import Color
@@ -758,11 +758,6 @@ with ExcelWriter("data.xlsx") as f:
     s["D1"] = f"=SUM({TABLE_NAME}[{AMOUNT_HEADER}])"
     f.save()
 
-# COM でも数式を書ける
-with ExcelComHandler("data.xlsx") as f:
-    f.write_cell(SHEET, row=4, col=1, value="=SUM(A1:A3)")
-    f.save()
-
 # 用意している色: RED / PINK / ORANGE / YELLOW / LIGHT_YELLOW / GREEN / LIGHT_GREEN
 #                BLUE / LIGHT_BLUE / PURPLE / GRAY / LIGHT_GRAY / WHITE / BLACK
 
@@ -776,58 +771,16 @@ with ExcelComHandler("data.xlsm") as f:
 テーブルの作成・名前変更・削除は人が Excel で行い、プログラムでは既存テーブルの中の
 データを追記・全消去・洗い替えする。`add_table()` は新規レポートを作る場合に限って使う。
 
-### 数式は openpyxl と COM のどちらで扱うか
+### 数式の扱い
 
-判断軸は、作ったブックを人が Excel で開くか、機械が続けて処理するか。
+`s["A4"] = "=SUM(A1:A3)"` のように数式を文字列として書けば、ファイルには保存される。
+ただし openpyxl は数式を計算も検証もしない。計算結果を Python 側で読む必要がある場合は、
+既存の数式セルを必要に応じて COM で再計算する `read_computed_rows()` を使う。
 
-| 状況 | 使うもの | 理由 |
-|---|---|---|
-| 数式入りのブックを作り、人が Excel で開く | `ExcelWriter`（openpyxl） | 開いた瞬間に Excel が計算する。Excel を起動しないため速い |
-| 数式の計算結果を Python 側で使う | `read_computed_rows()`（内部で COM） | openpyxl は計算しないため、キャッシュがなければ結果が `None` になる |
-| 数式を入れて、そのままPDF化・印刷・他システムへ渡す | `ExcelComHandler`（COM） | 計算済みでないと空欄に見えることがある |
-| 数式を大量に書く | `ExcelWriter`（openpyxl） | COM はセルごとの往復が重い |
-
-openpyxl で書いたブックは数式を持つが、**計算結果（キャッシュ値）を持たない**。
-「作って人に渡す」なら openpyxl、「Excel で開かず機械が続きを処理する」なら COM を使う。
-openpyxl は数式を検証しないため、テーブル名や列名を間違えても保存でき、Excel で開いて初めて
-`#NAME?` に気づく。重要なブックは、速い openpyxl で数式まで書いた後、COM で検算する。
-再計算後に保存すると計算結果も入り、PDF化や他システムへの受け渡しでも空欄にならない。
-
-```python
-from comken.excel import ExcelWriter
-from comken.windows import ExcelComHandler
-
-path = "売上.xlsx"
-with ExcelWriter.create(path) as f:
-    sheet = f.sheet("Sheet1")
-    sheet["E1"] = "=SUM(売上[金額])"
-    f.save()
-    written = f.written_ranges()
-
-with ExcelComHandler(path) as h:
-    h.recalculate(ranges=written)  # 自分が値を書いた範囲だけを検査
-    h.save()         # 再計算した結果も保存
-```
-
-既定で異常にするのは、名前の書き間違いを示す `#NAME?` と、参照先の消失を示す
-`#REF!`。`#N/A` や `#DIV/0!` は業務データ上正常なことがあるため対象外。
-対象を変える場合は、例として `h.recalculate(error_values=("#N/A",))` のように指定する。
-テーブル名と見出しは上の例のように定数へ揃えるとさらに安全。
-
-- 通常は `written_ranges()` を渡し、自分が書いた範囲だけを検査する。長く使われている
-  業務ブックに残った、無関係な古いエラーで処理が止まらない。
-- シートの削除、行や列の削除など参照を壊す変更をしたときは、
-  `ranges` を省略してブック全体を検査する。
-
-範囲検査には限界がある。**自分が書いていないセルの数式が、自分の変更のせいで
-壊れた場合は見つけられない。** テーブルやシートの定義変更は人が Excel で行い、
-プログラムでは参照を壊さないデータの追記・洗い替えを行う。
-
-`append_to_table()` と `replace_table()` は openpyxl の制約により、Excel の計算列の数式を
-新しい行へ自動入力しない。数式が必要な列は
-`{"商品": "D", "金額": 400, "税込": "=[@金額]*1.1"}` のように、行データへ数式文字列を
-含めて渡す。`[@列名]` はテーブル内のセルでのみ有効であり、テーブル外へ書くと
-Excel で `#NAME?` になる。
+**comken を使うプログラムから数式を入れることは避ける。** 書いた数式の正しさを保証するための
+再計算・検査は、値の転記に対してコストが重いためである。計算は Power Query や、
+プログラムが触らない範囲（人が用意した数式列・集計シート）で行い、プログラムは値の
+書き込みと転記に徹する。
 
 **数万行クラスの大きいファイルを扱うときのベストプラクティス:**
 
@@ -836,14 +789,14 @@ Excel で `#NAME?` になる。
 | 大量行を読む | `iter_rows()` で1行ずつ処理する（全行をメモリに乗せない） |
 | NAS 上の大きいファイル | `local_copy_threshold_mb` の自動ローカルコピーに任せる（デフォルト10MB） |
 | 大量行への書き込み | 1セルずつ書かず、行は `Sheet.write_rows()`、見出し＋データは `Sheet.write_table()` でまとめて書く |
-| キー突合転記が大量行 | `transfer_by_key()` を使う。COM 版も Range 単位で一括転記するが、数式再計算が不要なら openpyxl 版を優先する |
+| キー突合転記が大量行 | `transfer_by_key()` を使う。COM 版も Range 単位で一括転記するが、通常は高速な openpyxl 版を優先する |
 
 ---
 
 ## Windows
 
 通常の Excel 読み取りは ExcelReader、書き込みは ExcelWriter（openpyxl）を使うこと。
-ExcelComHandler は数式・マクロ・パスワード保存が必要な場合に限定して使う。
+ExcelComHandler は既存数式の計算結果・マクロ・パスワード保存が必要な場合に限定して使う。
 
 ### ExcelComHandler
 
@@ -886,7 +839,7 @@ with ExcelComHandler("data.xlsx") as h:
 
 キー列の値で lookup を引き、一致した行に列マッピングに従って値を書き込む。
 空行・キーが空の行・lookup にないキーの行は自動でスキップされる。
-数式の再計算が不要なら openpyxl 版（`Sheet.transfer_by_key`）の方が速い（Excel セクション参照）。
+通常は openpyxl 版（`Sheet.transfer_by_key`）の方が速い（Excel セクション参照）。
 
 ```python
 lookup = CsvReader("data.csv").index("注文番号")

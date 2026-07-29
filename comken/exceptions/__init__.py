@@ -14,7 +14,6 @@ OriginalLibsError
 │   └── OutlookAttachmentNotFoundError
 ├── ExcelError
 │   ├── ExcelFileNotFoundError
-│   ├── ExcelFormulaError
 │   ├── SheetNotFoundError
 │   ├── SheetAlreadyExistsError
 │   ├── LastSheetDeletionError
@@ -75,7 +74,6 @@ from .excel import (
     EmptyHeaderCellError,
     ExcelError,
     ExcelFileNotFoundError,
-    ExcelFormulaError,
     ExcelHeadersTooFewError,
     FileFormatMismatchError,
     InvalidTableNameError,
@@ -106,7 +104,6 @@ __all__ = [
     "AccessSourceNotFoundError",
     "ExcelError",
     "ExcelFileNotFoundError",
-    "ExcelFormulaError",
     "SheetNotFoundError",
     "SheetAlreadyExistsError",
     "LastSheetDeletionError",

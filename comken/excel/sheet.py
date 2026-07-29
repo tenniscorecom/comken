@@ -34,7 +34,7 @@ import re
 
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
-from openpyxl.utils.cell import coordinate_to_tuple, range_boundaries
+from openpyxl.utils.cell import range_boundaries
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.worksheet.worksheet import Worksheet
 
@@ -63,8 +63,6 @@ class Sheet:
 
     def __init__(self, ws: Worksheet) -> None:
         self.ws = ws  # 生の openpyxl Worksheet（高度な操作用に公開）
-        if not hasattr(ws, "_comken_written_bounds"):
-            ws._comken_written_bounds = None
 
     # ------------------------------------------------------------ セル参照
     def __getitem__(self, ref: str):
@@ -74,15 +72,12 @@ class Sheet:
     def __setitem__(self, ref: str, value) -> None:
         """セル参照で値を書く（例: s["A1"] = "タイトル"）。"""
         self.ws[ref] = value
-        row, col = coordinate_to_tuple(ref)
-        self._record_written_range(row, col, row, col)
 
     def write_cell(self, row: int, col: int | str, value) -> None:
         """行番号と列番号・列記号を指定してセルに値を書き込む。"""
         row_num = int(row)
         col_num = column_number(col)
         self.ws.cell(row=row_num, column=col_num).value = value
-        self._record_written_range(row_num, col_num, row_num, col_num)
 
     # ------------------------------------------------------------ 行の書き込み
     def write_row(self, row: int, values: list, start_col: int = 1) -> None:
@@ -95,8 +90,6 @@ class Sheet:
         """
         for i, value in enumerate(values):
             self.ws.cell(row=int(row), column=start_col + i).value = value
-        if values:
-            self._record_written_range(int(row), start_col, int(row), start_col + len(values) - 1)
 
     def write_rows(self, start_row: int, rows: list[list], start_col: int = 1) -> None:
         """複数行をまとめて書き込む。
@@ -158,8 +151,6 @@ class Sheet:
                 continue
             for col_num, name in mapping.items():
                 self.ws.cell(row=row, column=col_num).value = lookup_row.get(name, "")
-            if mapping:
-                self._record_written_range(row, min(mapping), row, max(mapping))
             matched += 1
         logger.info("転記完了: %d件一致（シート: %s）", matched, self.ws.title)
         return matched
@@ -225,7 +216,6 @@ class Sheet:
             ):
                 for cell in row:
                     cell.value = None
-            self._record_written_range(header_row + 1, min_col, last_row, max_col)
 
         # NOTE: 0件でも見出し行を範囲として残さないと、テーブル定義が壊れる。
         table.ref = (
@@ -310,27 +300,6 @@ class Sheet:
         if self.ws.max_row > 1 or self.ws.max_column > 1:
             return False
         return self.ws.cell(row=1, column=1).value is None
-
-    def _written_range(self) -> str | None:
-        bounds = self.ws._comken_written_bounds
-        if bounds is None:
-            return None
-        min_row, min_col, max_row, max_col = bounds
-        return f"{get_column_letter(min_col)}{min_row}:{get_column_letter(max_col)}{max_row}"
-
-    def _record_written_range(self, min_row: int, min_col: int, max_row: int, max_col: int) -> None:
-        # NOTE: 飛び地も包む矩形にすることで、数万セルでもセル単位の記録を避ける。
-        bounds = self.ws._comken_written_bounds
-        if bounds is None:
-            self.ws._comken_written_bounds = (min_row, min_col, max_row, max_col)
-            return
-        old_min_row, old_min_col, old_max_row, old_max_col = bounds
-        self.ws._comken_written_bounds = (
-            min(old_min_row, min_row),
-            min(old_min_col, min_col),
-            max(old_max_row, max_row),
-            max(old_max_col, max_col),
-        )
 
 
 def _display_width(value) -> int:

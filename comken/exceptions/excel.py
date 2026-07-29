@@ -22,23 +22,6 @@ class ExcelFileNotFoundError(ExcelError):
         )
 
 
-class ExcelFormulaError(ExcelError):
-    """Excel の再計算で異常な数式エラーが見つかった場合。
-
-    発生箇所: ExcelComHandler.recalculate()
-    """
-
-    def __init__(self, errors: list[tuple[str, str, str]], remaining: int = 0) -> None:
-        details = "\n".join(
-            f"- {sheet_name}!{address}: {error}" for sheet_name, address, error in errors
-        )
-        remaining_message = f"\n- 他 {remaining} 件" if remaining else ""
-        super().__init__(
-            f"Excel の数式にエラーがあります。\n{details}{remaining_message}\n"
-            "数式の参照先、テーブル名、列名が正しいか確認してください。"
-        )
-
-
 class SheetNotFoundError(ExcelError):
     """指定したシートが存在しない場合。
 

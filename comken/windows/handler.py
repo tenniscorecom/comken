@@ -19,17 +19,14 @@ import win32api
 import win32com.client
 import win32con
 import win32gui
-from pywintypes import com_error
 
 from ..constants import FileFormat
 from ..exceptions import (
     EmptyHeaderCellError,
-    ExcelFormulaError,
     ExcelHeadersTooFewError,
     FileFormatMismatchError,
     MacroError,
     RowTransferError,
-    SheetNotFoundError,
     _warn_coerce,
 )
 from ..utils.data import col_to_num, column_number
@@ -45,10 +42,6 @@ _SUFFIX_TO_FORMAT = {
     ".xls": FileFormat.XLS,
     ".csv": FileFormat.CSV,
 }
-_XL_CELL_TYPE_FORMULAS = -4123
-_XL_ERRORS = 16
-_DEFAULT_FORMULA_ERRORS = ("#NAME?", "#REF!")
-_MAX_FORMULA_ERRORS_IN_MESSAGE = 10
 
 
 class ExcelComHandler(FileBase):
@@ -156,71 +149,6 @@ class ExcelComHandler(FileBase):
             value: 書き込む値。
         """
         self._sheet(sheet_name).Cells(int(row), column_number(col)).Value = value
-
-    def recalculate(
-        self,
-        error_values: tuple[str, ...] = _DEFAULT_FORMULA_ERRORS,
-        ranges: dict[str, str] | None = None,
-    ) -> None:
-        """ブックを再計算し、指定した数式エラーがあれば例外にする。
-
-        既定では、数式やテーブル名などの書き間違いを強く示す ``#NAME?`` と、
-        消えた参照先を示す ``#REF!`` を異常とする。``#N/A`` や ``#DIV/0!`` は
-        業務データ次第で正常に起こりうるため、既定では異常としない。
-
-        dry-run でもファイル保存はせず、再計算と検査は行う。ファイルを変更せずに
-        数式を検査できるため、事前確認として有用だからである。
-
-        Args:
-            error_values: 異常とする Excel エラー表示のタプル。
-            ranges: 検査する範囲を ``{シート名: "A1:C100"}`` で指定する。
-                省略時はブック全体を検査する。
-
-                範囲を指定すると、自分が書いていないセルの数式が変更の影響で
-                壊れた場合は見つけられない。テーブル名の変更、シートの削除、
-                行や列の削除など参照を壊す変更後は省略して全体を検査すること。
-
-        Raises:
-            ExcelFormulaError: 対象の数式エラーが見つかった場合。
-        """
-        logger.info("Excel の再計算を開始します: %s", self.path)
-        self._excel.CalculateFull()
-
-        found: list[tuple[str, str, str]] = []
-        total = 0
-        available_sheets = {str(sheet.Name): sheet for sheet in self._wb.Worksheets}
-        if ranges is None:
-            targets = [(sheet, sheet.UsedRange) for sheet in available_sheets.values()]
-        else:
-            missing = next(
-                (sheet_name for sheet_name in ranges if sheet_name not in available_sheets),
-                None,
-            )
-            if missing is not None:
-                raise SheetNotFoundError(missing, list(available_sheets))
-            targets = [
-                (available_sheets[sheet_name], available_sheets[sheet_name].Range(cell_range))
-                for sheet_name, cell_range in ranges.items()
-            ]
-
-        for sheet, target_range in targets:
-            try:
-                error_cells = target_range.SpecialCells(_XL_CELL_TYPE_FORMULAS, _XL_ERRORS)
-            except com_error:
-                # SpecialCells は該当セルがない場合にも COM 例外を送出する。
-                continue
-
-            for cell in error_cells.Cells:
-                error = str(cell.Text)
-                if error not in error_values:
-                    continue
-                total += 1
-                if len(found) < _MAX_FORMULA_ERRORS_IN_MESSAGE:
-                    found.append((str(sheet.Name), str(cell.Address), error))
-
-        logger.info("Excel の再計算が完了しました: %s", self.path)
-        if found:
-            raise ExcelFormulaError(found, total - len(found))
 
     def read_rows(self, sheet_name: str, min_row: int = 2) -> list[tuple]:
         """指定シートの行データをタプルのリストで返す。
