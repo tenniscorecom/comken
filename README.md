@@ -308,9 +308,12 @@ rows = reader.rows(columns=["注文番号", "金額"])
 #    {"注文番号": "A002", "金額": "2000"},
 #    {"注文番号": "A003", "金額": "3000"}]
 
-# キーで1件検索（最初に一致した1行。見つからなければ None）
+# キーで1件検索（最初に一致した1行。見つからなければ CsvRowNotFoundError）
 row = reader.find("注文番号", ORDER_ID)
 # → {"注文番号": "A001", "金額": "1000", "担当者": "山田"}
+
+# 見つからなくても処理を続けたい場合だけ required=False（このときは None が返る）
+row = reader.find("注文番号", ORDER_ID, required=False)
 
 # キーで複数行検索（一致した全行。一致なしなら空リスト []）
 rows = reader.filter("担当者", STAFF_NAME)
