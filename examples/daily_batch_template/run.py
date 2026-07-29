@@ -18,7 +18,7 @@ import logging
 
 from comken.csv import CsvReader
 from comken.excel import ExcelWriter
-from comken.exceptions import OriginalLibsError
+from comken.exceptions import ComkenError
 from comken.run import backoffice  # イントラネットのツールなら intranet に変える
 from comken.utils.files import DateNameBuilder, FileFinder
 
@@ -65,7 +65,7 @@ if __name__ == "__main__":
     try:
         # main を直接呼ばず社内 RPA 基盤に渡す。基盤が設定の初期化と時間計測をしてから呼ぶ
         backoffice(main, BATCH_NAME)
-    except OriginalLibsError as e:
+    except ComkenError as e:
         # comken のエラーはメッセージに対処法が入っている → ログを調査の起点にする
         logger.error("処理を中断しました: %s", e)
         raise

@@ -1,9 +1,9 @@
 """社内 RPA 基盤の呼び出しに関する例外。"""
 
-from .base import OriginalLibsError
+from .base import ComkenError
 
 
-class RpaError(OriginalLibsError):
+class RpaError(ComkenError):
     """社内 RPA 基盤の呼び出しに関する例外をまとめて捕捉するための基底クラス。"""
 
 

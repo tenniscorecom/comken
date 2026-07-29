@@ -2,10 +2,10 @@
 
 from pathlib import Path
 
-from .base import OriginalLibsError
+from .base import ComkenError
 
 
-class ExcelError(OriginalLibsError):
+class ExcelError(ComkenError):
     """Excel 操作に関する例外をまとめて捕捉するための基底クラス。"""
 
 

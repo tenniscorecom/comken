@@ -15,10 +15,10 @@ from openpyxl import Workbook, load_workbook
 import comken.excel
 from comken.excel import ExcelReader, ExcelWriter
 from comken.exceptions import (
+    ComkenError,
     ExcelError,
     InvalidTableNameError,
     LastSheetDeletionError,
-    OriginalLibsError,
     SheetAlreadyExistsError,
     SheetNotFoundError,
     TableAlreadyExistsError,
@@ -176,7 +176,7 @@ class TestExcelWriterInvalidColumn:
     def test_rejects_invalid_column_letter_with_guidance(self, tmp_path, col):
         with (
             ExcelWriter.create(tmp_path / "book.xlsx") as writer,
-            pytest.raises(OriginalLibsError, match="例: 1"),
+            pytest.raises(ComkenError, match="例: 1"),
         ):
             writer.sheet("Sheet1").write_cell(row=2, col=col, value="値")
 
@@ -900,7 +900,7 @@ class TestColToNum:
 
     @pytest.mark.parametrize("letter", ["", "1", "A1", "あ"])
     def test_rejects_invalid_letter(self, letter):
-        with pytest.raises(OriginalLibsError, match="列番号（1始まり）または列記号"):
+        with pytest.raises(ComkenError, match="列番号（1始まり）または列記号"):
             col_to_num(letter)
 
 

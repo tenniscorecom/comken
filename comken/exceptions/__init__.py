@@ -1,6 +1,6 @@
 """comken の例外体系。
 
-OriginalLibsError
+ComkenError
 ├── UnsupportedFileSuffixError
 ├── AccessError
 │   ├── AccessFileNotFoundError
@@ -56,7 +56,7 @@ from .access import (
     AccessRoutineError,
     AccessSourceNotFoundError,
 )
-from .base import OriginalLibsError
+from .base import ComkenError
 from .column import (
     ColumnNotFoundError,
     CsvColumnNotFoundError,
@@ -109,7 +109,7 @@ from .rpa import (
 from .warning import _warn_coerce as _warn_coerce
 
 __all__ = [
-    "OriginalLibsError",
+    "ComkenError",
     "AccessError",
     "AccessBackupError",
     "AccessFileNotFoundError",

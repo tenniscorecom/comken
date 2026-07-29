@@ -79,7 +79,7 @@
 
 | 分類名 | まとめるエラー |
 |---|---|
-| `OriginalLibsError` | comken が出す固有エラー全体 |
+| `ComkenError` | comken が出す固有エラー全体 |
 | `ExcelError` | Excel に関するエラー |
 | `AccessError` | Access に関するエラー |
 | `CsvError` | CSV に関するエラー |

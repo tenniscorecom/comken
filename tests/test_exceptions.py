@@ -7,6 +7,7 @@ import pytest
 import comken.exceptions
 from comken.exceptions import (
     ColumnNotFoundError,
+    ComkenError,
     ConfigError,
     ConfigFileNotFoundError,
     ConfigSectionNotFoundError,
@@ -23,7 +24,6 @@ from comken.exceptions import (
     FileFormatMismatchError,
     KeyColumnNotFoundError,
     MacroError,
-    OriginalLibsError,
     RowTransferError,
     SheetNotFoundError,
     _warn_coerce,
@@ -32,6 +32,10 @@ from comken.exceptions import (
 
 def test_excel_formula_error_is_not_exposed() -> None:
     assert not hasattr(comken.exceptions, "ExcelFormulaError")
+
+
+def test_original_libs_error_is_not_exposed() -> None:
+    assert not hasattr(comken.exceptions, "OriginalLibsError")
 
 
 @pytest.mark.parametrize(
@@ -59,15 +63,15 @@ def test_excel_formula_error_is_not_exposed() -> None:
     ],
 )
 def test_individual_error_type_and_message(
-    error: OriginalLibsError,
-    base: type[OriginalLibsError],
+    error: ComkenError,
+    base: type[ComkenError],
     message: str,
 ) -> None:
     """各失敗が個別型を持ち、値を含むメッセージを自分で組み立てる。"""
     with pytest.raises(type(error)) as caught:
         raise error
     assert isinstance(caught.value, base)
-    assert isinstance(caught.value, OriginalLibsError)
+    assert isinstance(caught.value, ComkenError)
     assert message in str(caught.value)
 
 

@@ -1,4 +1,4 @@
-﻿# Python コーディング規約（共通）
+# Python コーディング規約（共通）
 
 comken 本体と、comken を使うプロジェクトの**両方に共通する Python の書き方**を定める。
 **PEP 8**（Python 公式スタイルガイド）に準拠し、矛盾する場合は本規約を優先する。
@@ -440,7 +440,7 @@ Excel ファイルが開きっぱなしになると、次に開こうとした�
 
 ## 例外
 
-ライブラリ固有の業務エラーはすべて `OriginalLibsError` を基底とする階層になっている
+ライブラリ固有の業務エラーはすべて `ComkenError` を基底とする階層になっている
 （一覧と体系図は 仕様書の「例外体系」 を参照）。ここでは使い方のルールを定める。
 
 | ルール | 理由 |
@@ -458,7 +458,7 @@ Excel ファイルが開きっぱなしになると、次に開こうとした�
 ### try / except での受け取り方
 
 ```python
-from comken.exceptions import SheetNotFoundError, ExcelError, OriginalLibsError
+from comken.exceptions import SheetNotFoundError, ExcelError, ComkenError
 
 try:
     with ExcelReader("data.xlsx") as f:
@@ -470,7 +470,7 @@ except SheetNotFoundError as e:
 except ExcelError as e:
     logger.error("Excel エラー: %s", e)
 
-except OriginalLibsError as e:
+except ComkenError as e:
     logger.error("ライブラリエラー: %s", e)
 ```
 
@@ -480,7 +480,7 @@ except OriginalLibsError as e:
 |---|---|
 | `SheetNotFoundError` | そのエラーだけ個別に対応したいとき |
 | `ExcelError` | Excel 系のエラーをまとめて処理したいとき |
-| `OriginalLibsError` | ライブラリのエラーを全部キャッチしたいとき |
+| `ComkenError` | ライブラリのエラーを全部キャッチしたいとき |
 
 ---
 

@@ -1,9 +1,9 @@
 """列が見つからない場合の例外。"""
 
-from .base import OriginalLibsError
+from .base import ComkenError
 
 
-class ColumnNotFoundError(OriginalLibsError):
+class ColumnNotFoundError(ComkenError):
     """列不在エラーをまとめて捕捉するための基底クラス。"""
 
 
@@ -70,7 +70,7 @@ class KeyColumnNotFoundError(ColumnNotFoundError):
         super().__init__(f"キー列が見つかりません: {key}\n存在する列: {', '.join(existing)}")
 
 
-class InvalidColumnError(OriginalLibsError):
+class InvalidColumnError(ComkenError):
     """Excel の列指定が A / AA 形式でない場合。"""
 
     def __init__(self, column: str) -> None:

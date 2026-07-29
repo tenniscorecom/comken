@@ -10,7 +10,7 @@ main.py — エントリポイント
 import logging
 
 from comken import config
-from comken.exceptions import OriginalLibsError
+from comken.exceptions import ComkenError
 from comken.run import backoffice  # イントラネットのツールなら intranet に変える
 
 from src.run import run
@@ -40,7 +40,7 @@ if __name__ == "__main__":
     try:
         # main を直接呼ばず基盤に渡す。基盤が設定の初期化と時間計測をしてから main を呼ぶ
         backoffice(main, PROJECT_NAME)
-    except OriginalLibsError as e:
+    except ComkenError as e:
         # comken のエラーはメッセージに対処法が入っている（docs/ERRORS.md も参照）
         logger.error("処理を中断しました: %s", e)
         raise

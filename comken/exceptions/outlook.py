@@ -2,10 +2,10 @@
 
 from pathlib import Path
 
-from .base import OriginalLibsError
+from .base import ComkenError
 
 
-class OutlookError(OriginalLibsError):
+class OutlookError(ComkenError):
     """Outlook 関連エラーの基底クラス。"""
 
 

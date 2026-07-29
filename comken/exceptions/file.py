@@ -2,10 +2,10 @@
 
 from pathlib import Path
 
-from .base import OriginalLibsError
+from .base import ComkenError
 
 
-class UnsupportedFileSuffixError(OriginalLibsError):
+class UnsupportedFileSuffixError(ComkenError):
     """扱えない拡張子のファイルが指定された。"""
 
     def __init__(self, path: Path, suffixes: tuple[str, ...]) -> None:

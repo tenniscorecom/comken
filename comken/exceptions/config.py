@@ -2,10 +2,10 @@
 
 from pathlib import Path
 
-from .base import OriginalLibsError
+from .base import ComkenError
 
 
-class ConfigError(OriginalLibsError):
+class ConfigError(ComkenError):
     """設定エラーをまとめて捕捉するための基底クラス。"""
 
 
