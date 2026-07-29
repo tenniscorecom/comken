@@ -27,6 +27,7 @@
 | `TableAlreadyExistsError` | 同じ名前のテーブルが既にある | 別のテーブル名を指定する |
 | `TableNotFoundError` | 指定したテーブルがシートにない | エラーに表示された既存テーブル名を確認する |
 | `ExcelFileNotFoundError` | Excel ファイルが見つからない | ファイルの置き場所と名前を確認する |
+| `ExcelFormulaError` | 再計算した数式に `#NAME?` / `#REF!` 等がある | 表示されたシート・セルの数式、参照先、テーブル名、列名を確認する |
 | `ExcelColumnNotFoundError` | Excel の列見出しが見つからない | Excel の1行目を確認する |
 | `MacroError` | Excel のマクロが失敗した | Excel をすべて閉じて再実行する。続く場合は管理者へ |
 | `RowTransferError` | Excel の行転記に失敗した | 表示された行番号のデータを確認する |

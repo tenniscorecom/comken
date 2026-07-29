@@ -19,10 +19,12 @@ import win32api
 import win32com.client
 import win32con
 import win32gui
+from pywintypes import com_error
 
 from ..constants import FileFormat
 from ..exceptions import (
     EmptyHeaderCellError,
+    ExcelFormulaError,
     ExcelHeadersTooFewError,
     FileFormatMismatchError,
     MacroError,
@@ -42,6 +44,10 @@ _SUFFIX_TO_FORMAT = {
     ".xls": FileFormat.XLS,
     ".csv": FileFormat.CSV,
 }
+_XL_CELL_TYPE_FORMULAS = -4123
+_XL_ERRORS = 16
+_DEFAULT_FORMULA_ERRORS = ("#NAME?", "#REF!")
+_MAX_FORMULA_ERRORS_IN_MESSAGE = 10
 
 
 class ExcelComHandler(FileBase):
@@ -149,6 +155,46 @@ class ExcelComHandler(FileBase):
             value: 書き込む値。
         """
         self._sheet(sheet_name).Cells(int(row), column_number(col)).Value = value
+
+    def recalculate(self, error_values: tuple[str, ...] = _DEFAULT_FORMULA_ERRORS) -> None:
+        """ブックを再計算し、指定した数式エラーがあれば例外にする。
+
+        既定では、数式やテーブル名などの書き間違いを強く示す ``#NAME?`` と、
+        消えた参照先を示す ``#REF!`` を異常とする。``#N/A`` や ``#DIV/0!`` は
+        業務データ次第で正常に起こりうるため、既定では異常としない。
+
+        dry-run でもファイル保存はせず、再計算と検査は行う。ファイルを変更せずに
+        数式を検査できるため、事前確認として有用だからである。
+
+        Args:
+            error_values: 異常とする Excel エラー表示のタプル。
+
+        Raises:
+            ExcelFormulaError: 対象の数式エラーが見つかった場合。
+        """
+        logger.info("Excel の再計算を開始します: %s", self.path)
+        self._excel.CalculateFull()
+
+        found: list[tuple[str, str, str]] = []
+        total = 0
+        for sheet in self._wb.Worksheets:
+            try:
+                error_cells = sheet.UsedRange.SpecialCells(_XL_CELL_TYPE_FORMULAS, _XL_ERRORS)
+            except com_error:
+                # SpecialCells は該当セルがない場合にも COM 例外を送出する。
+                continue
+
+            for cell in error_cells.Cells:
+                error = str(cell.Text)
+                if error not in error_values:
+                    continue
+                total += 1
+                if len(found) < _MAX_FORMULA_ERRORS_IN_MESSAGE:
+                    found.append((str(sheet.Name), str(cell.Address), error))
+
+        logger.info("Excel の再計算が完了しました: %s", self.path)
+        if found:
+            raise ExcelFormulaError(found, total - len(found))
 
     def read_rows(self, sheet_name: str, min_row: int = 2) -> list[tuple]:
         """指定シートの行データをタプルのリストで返す。

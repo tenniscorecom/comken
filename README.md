@@ -782,7 +782,28 @@ with ExcelComHandler("data.xlsm") as f:
 openpyxl で書いたブックは数式を持つが、**計算結果（キャッシュ値）を持たない**。
 「作って人に渡す」なら openpyxl、「Excel で開かず機械が続きを処理する」なら COM を使う。
 openpyxl は数式を検証しないため、テーブル名や列名を間違えても保存でき、Excel で開いて初めて
-`#NAME?` に気づく。テーブル名と見出しは上の例のように定数へ揃えると安全。
+`#NAME?` に気づく。重要なブックは、速い openpyxl で数式まで書いた後、COM で検算する。
+再計算後に保存すると計算結果も入り、PDF化や他システムへの受け渡しでも空欄にならない。
+
+```python
+from comken.excel import ExcelWriter
+from comken.windows import ExcelComHandler
+
+path = "売上.xlsx"
+with ExcelWriter.create(path) as f:
+    sheet = f.sheet("Sheet1")
+    sheet["E1"] = "=SUM(売上[金額])"
+    f.save()
+
+with ExcelComHandler(path) as h:
+    h.recalculate()  # #NAME? / #REF! があれば、シート・セル位置つきの例外
+    h.save()         # 再計算した結果も保存
+```
+
+既定で異常にするのは、名前の書き間違いを示す `#NAME?` と、参照先の消失を示す
+`#REF!`。`#N/A` や `#DIV/0!` は業務データ上正常なことがあるため対象外。
+対象を変える場合は、例として `h.recalculate(error_values=("#N/A",))` のように指定する。
+テーブル名と見出しは上の例のように定数へ揃えるとさらに安全。
 
 また、`rename_table()` は範囲・スタイル・列定義を保持するが、構造化参照の数式を追随更新しない。
 Excel の画面上で改名する場合と異なり、`=SUM(売上[金額])` は元の式のまま残るため、

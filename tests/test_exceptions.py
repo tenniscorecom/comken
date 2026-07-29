@@ -18,6 +18,7 @@ from comken.exceptions import (
     ExcelColumnNotFoundError,
     ExcelError,
     ExcelFileNotFoundError,
+    ExcelFormulaError,
     ExcelHeadersTooFewError,
     FileFormatMismatchError,
     KeyColumnNotFoundError,
@@ -33,6 +34,11 @@ from comken.exceptions import (
     ("error", "base", "message"),
     [
         (ExcelFileNotFoundError("book.xlsx"), ExcelError, "book.xlsx"),
+        (
+            ExcelFormulaError([("集計", "$E$1", "#REF!")]),
+            ExcelError,
+            "集計!$E$1",
+        ),
         (SheetNotFoundError("集計", ["Sheet1"]), ExcelError, "集計"),
         (MacroError("Module1.Run", "失敗"), ExcelError, "Module1.Run"),
         (RowTransferError(3, "不正値"), ExcelError, "3行目"),

@@ -11,11 +11,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from openpyxl import Workbook, load_workbook
+from pywintypes import com_error
 
 import comken.excel
 from comken.excel import ExcelReader, ExcelWriter
 from comken.exceptions import (
     ExcelError,
+    ExcelFormulaError,
     InvalidTableNameError,
     LastSheetDeletionError,
     OriginalLibsError,
@@ -194,6 +196,77 @@ class TestExcelComHandlerColumn:
 
         assert sheet.Cells.call_args_list == [((2, expected),), ((2, expected),)]
         assert sheet.Cells.return_value.Value == "書込値"
+
+
+class TestExcelComHandlerRecalculate:
+    @staticmethod
+    def _handler(*sheets: MagicMock) -> ExcelComHandler:
+        handler = ExcelComHandler.__new__(ExcelComHandler)
+        handler._path = Path("book.xlsx")
+        handler._excel = MagicMock()
+        handler._wb = SimpleNamespace(Worksheets=sheets)
+        return handler
+
+    @staticmethod
+    def _sheet(name: str, *errors: tuple[str, str]) -> MagicMock:
+        sheet = MagicMock()
+        sheet.Name = name
+        sheet.UsedRange.SpecialCells.return_value.Cells = [
+            SimpleNamespace(Address=address, Text=error) for address, error in errors
+        ]
+        return sheet
+
+    def test_recalculates_and_uses_special_cells(self) -> None:
+        sheet = self._sheet("Sheet1")
+        handler = self._handler(sheet)
+
+        handler.recalculate()
+
+        handler._excel.CalculateFull.assert_called_once_with()
+        sheet.UsedRange.SpecialCells.assert_called_once_with(-4123, 16)
+
+    def test_default_errors_include_location_and_error(self) -> None:
+        sheet = self._sheet("集計", ("$E$1", "#NAME?"), ("$F$2", "#REF!"))
+        handler = self._handler(sheet)
+
+        with pytest.raises(ExcelFormulaError) as exc_info:
+            handler.recalculate()
+
+        message = str(exc_info.value)
+        assert "集計!$E$1" in message
+        assert "#NAME?" in message
+        assert "集計!$F$2" in message
+        assert "#REF!" in message
+        assert "テーブル名" in message
+
+    def test_default_ignores_na(self) -> None:
+        handler = self._handler(self._sheet("Sheet1", ("$A$1", "#N/A")))
+        handler.recalculate()
+
+    def test_error_values_can_be_changed(self) -> None:
+        handler = self._handler(self._sheet("Sheet1", ("$A$1", "#N/A")))
+
+        with pytest.raises(ExcelFormulaError, match="#N/A"):
+            handler.recalculate(error_values=("#N/A",))
+
+    def test_many_errors_are_truncated(self) -> None:
+        errors = tuple((f"$A${index}", "#REF!") for index in range(1, 13))
+        handler = self._handler(self._sheet("Sheet1", *errors))
+
+        with pytest.raises(ExcelFormulaError) as exc_info:
+            handler.recalculate()
+
+        message = str(exc_info.value)
+        assert "$A$10" in message
+        assert "$A$11" not in message
+        assert "他 2 件" in message
+
+    def test_special_cells_no_match_is_success(self) -> None:
+        sheet = self._sheet("Sheet1")
+        sheet.UsedRange.SpecialCells.side_effect = com_error()
+        handler = self._handler(sheet)
+
+        handler.recalculate()
 
 
 class TestExcelComHandlerTransferByKey:
