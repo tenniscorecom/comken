@@ -44,6 +44,23 @@ _SUFFIX_TO_FORMAT = {
 }
 
 
+def _block_values(ws, first_row: int, last_row: int, last_col: int) -> list[tuple]:
+    """シートの矩形範囲をまとめて読み、行ごとのタプルにして返す。
+
+    セルを1つずつ読むと COM の往復が「行数 × 列数」になり、数万行では実用にならない。
+    Range で一度に読めば往復は1回で済む。
+    """
+    if first_row > last_row or last_col < 1:
+        return []
+    values = ws.Range(ws.Cells(first_row, 1), ws.Cells(last_row, last_col)).Value
+    # Range.Value は1セルだけの範囲でスカラーを返すため、行のタプルの形にそろえる。
+    if not isinstance(values, tuple):
+        return [(values,)]
+    if not isinstance(values[0], tuple):
+        return [values]
+    return [tuple(row) for row in values]
+
+
 class ExcelComHandler(FileBase):
     """win32com を使った Excel 操作クラス。
 
@@ -73,22 +90,26 @@ class ExcelComHandler(FileBase):
         # Dispatch だとユーザーが開いている Excel に接続してしまい、
         # Visible=False で画面を消したり close() の Quit で相手のブックを閉じる事故が起きる
         self._excel = win32com.client.DispatchEx("Excel.Application")
-        self._excel.Visible = False
-        self._excel.DisplayAlerts = False
-        # 外部リンクを持つブックを開いたときの「リンクを更新しますか」ダイアログで
-        # 無人実行が止まるのを防ぐ（DisplayAlerts では抑制されない）
-        self._excel.AskToUpdateLinks = False
-        # Open に失敗すると with に入る前に例外で抜けるため、ここで Quit しないと
-        # 起動済みの Excel プロセスが残り続ける
         try:
+            self._excel.Visible = False
+            self._excel.DisplayAlerts = False
+            # 外部リンクを持つブックを開いたときの「リンクを更新しますか」ダイアログで
+            # 無人実行が止まるのを防ぐ（DisplayAlerts では抑制されない）
+            self._excel.AskToUpdateLinks = False
             kwargs = {"Filename": str(self.path.resolve())}
             if password:
                 kwargs["Password"] = password
             self._wb = self._excel.Workbooks.Open(**kwargs)
             self._excel.CalculateFull()
         except Exception:
-            self._excel.Quit()
-            self._excel = None
+            # COM の設定や Open に失敗すると with に入れないため、ここで確実に終了する。
+            # Quit 自体の失敗で、本来の初期化エラーを隠さない。
+            try:
+                self._excel.Quit()
+            except Exception:
+                logger.warning("初期化失敗後の Excel 終了に失敗しました", exc_info=True)
+            finally:
+                self._excel = None
             raise
 
     def __enter__(self) -> "ExcelComHandler":
@@ -135,10 +156,7 @@ class ExcelComHandler(FileBase):
         ws = self._sheet(sheet_name)
         last_row = self.used_last_row(sheet_name)
         last_col = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
-        return [
-            tuple(ws.Cells(row, col).Value for col in range(1, last_col + 1))
-            for row in range(int(min_row), last_row + 1)
-        ]
+        return _block_values(ws, int(min_row), last_row, last_col)
 
     def read_rows_as_dicts(self, sheet_name: str, header_row: int = 1) -> list[dict]:
         """ヘッダー行をキーとした辞書のリストで返す。
@@ -163,32 +181,23 @@ class ExcelComHandler(FileBase):
         if self._headers is not None:
             if last_col > len(self._headers):
                 raise ExcelHeadersTooFewError(len(self._headers), last_col)
-            rows = [
-                tuple(ws.Cells(row, col).Value for col in range(1, last_col + 1))
-                for row in range(1, last_row + 1)
-            ]
             return [
                 # headers が実データ列より多い場合は、従来どおり余った見出しを含めない。
                 dict(zip(self._headers, row, strict=False))
-                for row in rows
+                for row in _block_values(ws, 1, last_row, last_col)
                 if not all(c is None for c in row)
             ]
         header_row = int(header_row)
-        file_headers = [ws.Cells(header_row, col).Value for col in range(1, last_col + 1)]
-        if all(h is None for h in file_headers):
+        header_values = _block_values(ws, header_row, header_row, last_col)
+        file_headers = list(header_values[0]) if header_values else []
+        if not file_headers or all(h is None for h in file_headers):
             return []  # 空シート（ExcelWriter 側と挙動を揃える）
         none_cols = [i + 1 for i, h in enumerate(file_headers) if h is None]
         if none_cols:
             raise EmptyHeaderCellError(none_cols)
         return [
-            dict(
-                zip(
-                    file_headers,
-                    (ws.Cells(row, col).Value for col in range(1, last_col + 1)),
-                    strict=False,
-                )
-            )
-            for row in range(header_row + 1, last_row + 1)
+            dict(zip(file_headers, row, strict=False))
+            for row in _block_values(ws, header_row + 1, last_row, last_col)
         ]
 
     def count_a(self, sheet_name: str, row: int) -> int:

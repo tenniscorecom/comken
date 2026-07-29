@@ -81,10 +81,12 @@ def main() -> None:
     args = parser.parse_args()
 
     # 非エンジニアがダブルクリックで使うため、想定内の失敗は traceback を見せない。
+    # OSError で受けるのは、使えない文字（: * ?）をフォルダ名に入れた場合も拾うため。
     try:
         target = create(args.project_name, args.into)
-    except (FileExistsError, FileNotFoundError) as e:
+    except OSError as e:
         print(f"[!] {e}")  # noqa: T201
+        print(r'[!] フォルダ名に使えない文字（\ / : * ? " < > |）が無いか確認してください。')  # noqa: T201
         raise SystemExit(1) from None
 
     print(f"作成しました: {target}")  # noqa: T201

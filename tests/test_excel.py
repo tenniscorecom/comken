@@ -182,6 +182,36 @@ class TestExcelWriterInvalidColumn:
 
 
 class TestExcelComHandlerColumn:
+    def test_quits_excel_when_application_setup_fails(self, tmp_path):
+        """Excel 起動後のプロパティ設定に失敗してもプロセスを終了する。"""
+
+        class FailingExcel:
+            def __init__(self) -> None:
+                self.is_quit = False
+
+            @property
+            def Visible(self) -> bool:
+                return False
+
+            @Visible.setter
+            def Visible(self, value: object) -> None:
+                raise RuntimeError("setup failed")
+
+            def Quit(self) -> None:
+                self.is_quit = True
+
+        path = tmp_path / "book.xlsx"
+        path.touch()
+        excel = FailingExcel()
+
+        with (
+            patch("comken.windows.handler.win32com.client.DispatchEx", return_value=excel),
+            pytest.raises(RuntimeError, match="setup failed"),
+        ):
+            ExcelComHandler(path)
+
+        assert excel.is_quit is True
+
     @pytest.mark.parametrize(("col", "expected"), [("A", 1), ("AA", 27), (27, 27)])
     def test_read_and_write_accept_column_letter_or_number(self, col, expected):
         handler = ExcelComHandler.__new__(ExcelComHandler)
@@ -289,6 +319,81 @@ class TestExcelComHandlerTransferByKey:
                 lookup={"1001": {"値": "A"}, "1002": {"値": "B"}},
                 column_mapping={"B": "値"},
             )
+
+
+class TestExcelComHandlerBulkRead:
+    """COM 読み取りが範囲一括で行われることのテスト。"""
+
+    @staticmethod
+    def _sheet_with(block: tuple[tuple, ...], rows: int, cols: int):
+        """指定の値を Range でまとめて返す偽シートと、Range の呼び出し記録を返す。"""
+        calls: list[tuple] = []
+
+        class FakeRange:
+            def __init__(self, start, end) -> None:
+                calls.append((start, end))
+                self._first_row = start[0]
+                self._last_row = end[0]
+
+            @property
+            def Value(self):
+                return tuple(block[self._first_row - 1 : self._last_row])
+
+        sheet = MagicMock()
+        sheet.Cells.side_effect = lambda row, col: (row, col)
+        sheet.Range.side_effect = FakeRange
+        sheet.UsedRange = SimpleNamespace(
+            Row=1,
+            Column=1,
+            Rows=SimpleNamespace(Count=rows),
+            Columns=SimpleNamespace(Count=cols),
+        )
+        return sheet, calls
+
+    def _handler(self, sheet, last_row: int, headers=None):
+        handler = ExcelComHandler.__new__(ExcelComHandler)
+        handler._sheet = MagicMock(return_value=sheet)
+        handler.used_last_row = MagicMock(return_value=last_row)
+        handler._headers = headers
+        return handler
+
+    def test_read_rows_uses_one_range_call(self):
+        """行数×列数ぶん COM を往復せず、1回の Range で読むことを確認する。"""
+        block = (("見出A", "見出B"), ("a1", "b1"), ("a2", "b2"))
+        sheet, calls = self._sheet_with(block, rows=3, cols=2)
+        handler = self._handler(sheet, last_row=3)
+
+        assert handler.read_rows("Sheet1") == [("a1", "b1"), ("a2", "b2")]
+        assert len(calls) == 1  # セル単位の走査に戻したらここが増える
+
+    def test_read_rows_as_dicts_reads_header_and_body_in_two_calls(self):
+        """見出しと本体をそれぞれ1回ずつの Range で読むことを確認する。"""
+        block = (("注文番号", "金額"), ("A001", 1000), ("A002", 2000))
+        sheet, calls = self._sheet_with(block, rows=3, cols=2)
+        handler = self._handler(sheet, last_row=3)
+
+        assert handler.read_rows_as_dicts("Sheet1") == [
+            {"注文番号": "A001", "金額": 1000},
+            {"注文番号": "A002", "金額": 2000},
+        ]
+        assert len(calls) == 2
+
+    def test_single_cell_range_is_normalised(self):
+        """1セルだけの範囲でも行のタプルとして返ることを確認する。"""
+        # Range.Value は1セルのときスカラーを返すため、そろえないと呼び出し側が壊れる。
+        sheet, _ = self._sheet_with((("値",),), rows=1, cols=1)
+        sheet.Range.side_effect = lambda start, end: SimpleNamespace(Value="値")
+        handler = self._handler(sheet, last_row=1)
+
+        assert handler.read_rows("Sheet1", min_row=1) == [("値",)]
+
+    def test_empty_range_returns_no_rows(self):
+        """データ行が無ければ Range を呼ばずに空を返すことを確認する。"""
+        sheet, calls = self._sheet_with((("見出",),), rows=1, cols=1)
+        handler = self._handler(sheet, last_row=1)
+
+        assert handler.read_rows("Sheet1", min_row=2) == []
+        assert calls == []
 
 
 class TestOpen:
