@@ -42,15 +42,10 @@ def _load(name: str) -> ModuleType | Any:
     package_path = f"{LIB_ROOT}.{LIB_VERSION}.rpa"
     try:
         package = importlib.import_module(package_path)
-    except ImportError as e:
-        raise RpaLibraryNotFoundError(package_path, e) from e
-
-    # `from ... import backoffice` は、属性でもサブモジュールでも通る。
-    # importlib で同じことをするには両方試す必要がある。
-    target = getattr(package, name, None)
-    if target is not None:
-        return target
-    try:
+        # `from ... import backoffice` は、名前が属性でもサブモジュールでも通る。
+        # importlib で同じ挙動にするには、属性で取れなければ import を試す。
+        if hasattr(package, name):
+            return getattr(package, name)
         return importlib.import_module(f"{package_path}.{name}")
     except ImportError as e:
         raise RpaLibraryNotFoundError(f"{package_path}.{name}", e) from e
