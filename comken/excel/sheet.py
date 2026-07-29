@@ -5,6 +5,7 @@ ExcelWriter.sheet() から取得し、セル書き込み・行書き込み・列
 ヘッダー固定などをシート単位で行う（sheet_name を毎回渡さなくてよい）。
 
 使い方:
+    from comken.csv import CsvReader
     from comken.excel import ExcelWriter
 
     # 既存ファイルを開いて書き込む

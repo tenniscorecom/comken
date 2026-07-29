@@ -1,6 +1,8 @@
 """Excel の書き込み・書式設定・保存を行う入口。"""
 
 import logging
+import os
+import tempfile
 from pathlib import Path
 
 from openpyxl import Workbook
@@ -13,6 +15,7 @@ from ..utils.data import col_to_num
 from ..utils.files.base import FileBase
 from ..utils.timer import measure
 from .base import ExcelBase
+from .sheet import Sheet
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +44,6 @@ class ExcelWriter(ExcelBase):
         self,
         path: str | Path,
         data_only: bool = False,
-        read_only: bool = False,
         local_copy_threshold_mb: float = 10,
         headers: list[str] | None = None,
     ) -> None:
@@ -49,7 +51,6 @@ class ExcelWriter(ExcelBase):
         Args:
             path: Excel ファイルのパス。
             data_only: True にすると数式セルのキャッシュ値を読む（read_computed_rows 推奨）。
-            read_only: True にすると読み取り専用で開く（大きなファイルで高速化）。
             local_copy_threshold_mb: この MB 以上のファイルはローカルにコピーしてから開く。
                 NAS・ネットワークドライブのファイルが遅い・不安定な場合に有効。
                 0 を指定するとローカルコピーを無効化できる。
@@ -59,10 +60,21 @@ class ExcelWriter(ExcelBase):
         super().__init__(
             path,
             data_only=data_only,
-            read_only=read_only,
+            read_only=False,
             local_copy_threshold_mb=local_copy_threshold_mb,
             headers=headers,
         )
+
+    def sheet(self, name: str) -> Sheet:
+        """シートの高レベルラッパーを返す（シート単位でセル・行を書き込む）。
+
+        Args:
+            name: シート名。
+
+        Raises:
+            SheetNotFoundError: 指定したシートが存在しない場合。
+        """
+        return Sheet(self._sheet(name))
 
     @classmethod
     def create(cls, path: str | Path, sheet_name: str = "Sheet1") -> "ExcelWriter":
@@ -184,7 +196,17 @@ class ExcelWriter(ExcelBase):
             dry_run_log("Excel を保存: %s", save_path)
             return
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        self._wb.save(save_path)
+        # os.replace は同一ドライブ内で使うため、保存先と同じフォルダに一時ファイルを作る。
+        tmp = tempfile.NamedTemporaryFile(
+            dir=save_path.parent, prefix=f".{save_path.name}.", suffix=".tmp", delete=False
+        )
+        tmp_path = Path(tmp.name)
+        tmp.close()
+        try:
+            self._wb.save(tmp_path)
+            os.replace(tmp_path, save_path)
+        finally:
+            tmp_path.unlink(missing_ok=True)
 
     def set_fill(self, sheet_name: str, row: int, col: int, color: str) -> None:
         """セルの背景色を設定する。

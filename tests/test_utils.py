@@ -7,6 +7,7 @@ utils モジュールのテスト。
 
 import datetime
 import os
+from unittest.mock import patch
 
 import pytest
 
@@ -73,6 +74,25 @@ class TestMoveFile:
 
         assert result == src
         assert src.read_text(encoding="utf-8") == "data"
+
+    def test_copy_failure_preserves_source_and_existing_target(self, tmp_path):
+        """ドライブ間コピーが失敗しても移動元と既存の移動先を残す。"""
+        src = tmp_path / "report.xlsx"
+        src.write_text("new", encoding="utf-8")
+        target = tmp_path / "out" / "report.xlsx"
+        target.parent.mkdir()
+        target.write_text("old", encoding="utf-8")
+
+        with (
+            patch("comken.utils.files.ops.os.replace", side_effect=OSError),
+            patch("comken.utils.files.ops.shutil.copy2", side_effect=OSError("copy failed")),
+            pytest.raises(OSError, match="copy failed"),
+        ):
+            move_file(src, target)
+
+        assert src.read_text(encoding="utf-8") == "new"
+        assert target.read_text(encoding="utf-8") == "old"
+        assert list(target.parent.glob(f".{target.name}.*.tmp")) == []
 
 
 class TestCopyFile:

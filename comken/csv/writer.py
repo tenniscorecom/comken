@@ -19,6 +19,8 @@ CsvWriter クラスを通じて CSV ファイルへの書き込みを行う。
 
 import csv
 import logging
+import os
+import tempfile
 from pathlib import Path
 
 from ..constants import Encoding
@@ -97,10 +99,21 @@ class CsvWriter(CsvBase):
         if is_dry_run():
             dry_run_log("CSV に %d 行書き込み（上書き）: %s", len(rows), self._path)
             return
-        with self._open("w") as f:
-            writer = csv.DictWriter(f, fieldnames=self._fieldnames, extrasaction="ignore")
-            writer.writeheader()
-            writer.writerows(rows)
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        # os.replace は同一ドライブ内で使うため、出力先と同じフォルダに一時ファイルを作る。
+        tmp = tempfile.NamedTemporaryFile(
+            dir=self._path.parent, prefix=f".{self._path.name}.", suffix=".tmp", delete=False
+        )
+        tmp_path = Path(tmp.name)
+        tmp.close()
+        try:
+            with tmp_path.open("w", encoding=self._encoding, newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=self._fieldnames, extrasaction="ignore")
+                writer.writeheader()
+                writer.writerows(rows)
+            os.replace(tmp_path, self._path)
+        finally:
+            tmp_path.unlink(missing_ok=True)
 
     def append_row(self, row: dict) -> None:
         """既存ファイルの末尾に1行追記する。

@@ -6,6 +6,7 @@ CsvReader クラスのテスト。
 """
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -264,3 +265,25 @@ class TestCsvWriter:
 
         assert path.read_bytes().startswith(b"\xef\xbb\xbf")  # UTF-8 BOM
         assert CsvReader(path).rows() == [{"名前": "山田"}]
+
+
+class TestCsvWriterTransactionalWrite:
+    """CsvWriter.write_rows() の既存ファイル保護を確認する。"""
+
+    def test_write_failure_preserves_existing_file(self, tmp_path):
+        """一時ファイルへの書き込み失敗時に既存 CSV を変更しない。"""
+        path = tmp_path / "output.csv"
+        original = "注文番号\nOLD\n"
+        path.write_text(original, encoding="utf-8-sig")
+        writer = CsvWriter(path, fieldnames=["注文番号"])
+
+        with (
+            patch(
+                "comken.csv.writer.csv.DictWriter.writerows", side_effect=OSError("write failed")
+            ),
+            pytest.raises(OSError, match="write failed"),
+        ):
+            writer.write_rows([{"注文番号": "NEW"}])
+
+        assert path.read_text(encoding="utf-8-sig") == original
+        assert list(path.parent.glob(f".{path.name}.*.tmp")) == []

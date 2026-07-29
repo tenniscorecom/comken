@@ -6,6 +6,7 @@ ExcelReader / ExcelWriter クラスのテスト。
 """
 
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 from openpyxl import Workbook, load_workbook
@@ -400,3 +401,73 @@ class TestSheetWrapper:
         with ExcelWriter.create(tmp_path / "e.xlsx") as f:
             with pytest.raises(SheetNotFoundError):
                 f.sheet("存在しないシート")
+
+
+class TestReadComputedRows:
+    """read_computed_rows() のフォールバック判定を確認する。"""
+
+    def test_formula_without_cached_value_uses_com(self, tmp_path):
+        """キャッシュ値がない数式があれば COM で再計算する。"""
+        path = tmp_path / "formula.xlsx"
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Sheet1"
+        ws.append(["値", "計算結果"])
+        ws.append([10, "=A2*2"])
+        wb.save(path)
+        com = MagicMock()
+        com.__enter__.return_value.read_rows.return_value = [(10, 20)]
+
+        with (
+            patch("comken.windows.handler.ExcelComHandler", return_value=com) as handler,
+            ExcelReader(path) as reader,
+        ):
+            rows = reader.read_computed_rows("Sheet1")
+
+        assert rows == [(10, 20)]
+        handler.assert_called_once_with(path)
+        com.__enter__.return_value.read_rows.assert_called_once_with("Sheet1", 2)
+
+    def test_workbook_without_formula_does_not_use_com(self, excel_with_header):
+        """数式がなければ openpyxl の結果を返し、COM を起動しない。"""
+        with (
+            patch("comken.windows.handler.ExcelComHandler") as handler,
+            ExcelReader(excel_with_header) as reader,
+        ):
+            rows = reader.read_computed_rows("Sheet1")
+
+        assert rows == [("A001", 1000, "山田"), ("A002", 2000, "佐藤")]
+        handler.assert_not_called()
+
+
+class TestExcelApiBoundaries:
+    """Reader と Writer の公開 API 境界を確認する。"""
+
+    def test_writer_rejects_read_only_argument(self, excel_with_header):
+        """ExcelWriter は read_only 引数を公開しない。"""
+        with pytest.raises(TypeError, match="read_only"):
+            ExcelWriter(excel_with_header, read_only=True)
+
+    def test_reader_has_no_sheet_method(self, excel_with_header):
+        """ExcelReader は書き込み可能な Sheet を公開しない。"""
+        with ExcelReader(excel_with_header) as reader:
+            assert not hasattr(reader, "sheet")
+
+
+class TestExcelWriterTransactionalSave:
+    """ExcelWriter.save() の既存ファイル保護を確認する。"""
+
+    def test_save_failure_preserves_existing_file(self, excel_with_header):
+        """一時ファイルへの保存失敗時に既存ファイルを変更しない。"""
+        original_bytes = excel_with_header.read_bytes()
+
+        with ExcelWriter(excel_with_header) as writer:
+            writer.write_cell("Sheet1", row=2, col=2, value=9999)
+            with (
+                patch.object(writer._wb, "save", side_effect=OSError("save failed")),
+                pytest.raises(OSError, match="save failed"),
+            ):
+                writer.save()
+
+        assert excel_with_header.read_bytes() == original_bytes
+        assert list(excel_with_header.parent.glob(f".{excel_with_header.name}.*.tmp")) == []

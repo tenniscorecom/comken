@@ -86,9 +86,18 @@ def move_file(src: str | Path, dst: str | Path) -> Path:
     try:
         os.replace(src, target)
     except OSError:
-        # NOTE: ドライブをまたぐ移動では os.replace が使えないため、コピー完了後に元を消す。
-        shutil.copy2(src, target)
-        src.unlink()
+        # os.replace は同一ドライブ内で使うため、移動先と同じフォルダに一時ファイルを作る。
+        tmp = tempfile.NamedTemporaryFile(
+            dir=target.parent, prefix=f".{target.name}.", suffix=".tmp", delete=False
+        )
+        tmp_path = Path(tmp.name)
+        tmp.close()
+        try:
+            shutil.copy2(src, tmp_path)
+            os.replace(tmp_path, target)
+            src.unlink()
+        finally:
+            tmp_path.unlink(missing_ok=True)
     return target
 
 

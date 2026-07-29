@@ -1,6 +1,6 @@
 """ExcelReader と ExcelWriter に共通するワークブック操作。
 
-ブックを開く・閉じる、シートを取得する、行を読み取るといった共通処理を持つ。
+ブックを開く・閉じる、シートの存在確認、行を読み取るといった共通処理を持つ。
 読み取り専用の ExcelReader と書き込み用の ExcelWriter がこの基底クラスを継承する。
 数式の計算結果が必要な場合は、内部で win32com（pywin32）にフォールバックする。
 """
@@ -24,7 +24,6 @@ from ..exceptions import (
 )
 from ..utils.files.base import FileBase
 from ..utils.timer import measure
-from .sheet import Sheet
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +31,7 @@ logger = logging.getLogger(__name__)
 class ExcelBase(FileBase):
     """ExcelReader と ExcelWriter の共通基盤。
 
-    with 文によるブックのクローズ、シート取得、行の読み取りを受け持つ。
+    with 文によるブックのクローズ、シートの存在確認、行の読み取りを受け持つ。
     書き込み・書式設定・保存は持たず、ExcelWriter が提供する。
     数式の計算結果を読む read_computed_rows() は、必要な場合に openpyxl から
     win32com（pywin32）へ自動的にフォールバックする。
@@ -96,26 +95,6 @@ class ExcelBase(FileBase):
 
     def __exit__(self, *args) -> None:
         self.close()
-
-    def sheet(self, name: str) -> Sheet:
-        """シートの高レベルラッパーを返す（シート単位でセル・行を書き込む）。
-
-        使い方:
-            with ExcelWriter("report.xlsx") as f:
-                s = f.sheet("Sheet1")
-                s["A1"] = "タイトル"
-                s.write_row(3, ["日付", "金額"])
-                s.auto_width()
-                s.freeze_header()
-                f.save()
-
-        Args:
-            name: シート名。
-
-        Raises:
-            SheetNotFoundError: 指定したシートが存在しない場合。
-        """
-        return Sheet(self._sheet(name))
 
     def _sheet(self, name: str) -> Worksheet:
         """シートオブジェクトを返す。
@@ -212,9 +191,9 @@ class ExcelBase(FileBase):
     def read_computed_rows(self, sheet_name: str, min_row: int = 2) -> list[tuple]:
         """数式の計算結果を含む行を読む。
 
-        まず openpyxl のキャッシュ値（data_only=True）で読もうとする。
-        キャッシュが古いか数式文字列（=...）が残っている場合は
-        win32com（pywin32）にフォールバックして Excel を起動して取得する。
+        openpyxl で数式の位置とキャッシュ値を別々に読み、数式セルの
+        キャッシュ値がない場合だけ win32com（pywin32）にフォールバックする。
+        数式がない場合や、すべての数式にキャッシュ値がある場合は Excel を起動しない。
 
         Args:
             sheet_name: シート名。
@@ -228,13 +207,30 @@ class ExcelBase(FileBase):
         """
         self._sheet(sheet_name)  # シート名の存在チェック（間違いを分かりやすいエラーにする）
         try:
-            wb = load_workbook(self._working_path, data_only=True, read_only=True)
-            rows = list(wb[str(sheet_name)].iter_rows(min_row=int(min_row), values_only=True))
-            wb.close()
-            has_formula = any(
-                isinstance(cell, str) and cell.startswith("=") for row in rows for cell in row
+            formula_wb = load_workbook(self._working_path, data_only=False, read_only=True)
+            try:
+                formula_rows = list(
+                    formula_wb[str(sheet_name)].iter_rows(min_row=int(min_row), values_only=True)
+                )
+            finally:
+                formula_wb.close()
+
+            value_wb = load_workbook(self._working_path, data_only=True, read_only=True)
+            try:
+                rows = list(
+                    value_wb[str(sheet_name)].iter_rows(min_row=int(min_row), values_only=True)
+                )
+            finally:
+                value_wb.close()
+
+            needs_calculation = any(
+                isinstance(formula_cell, str)
+                and formula_cell.startswith("=")
+                and value_cell is None
+                for formula_row, value_row in zip(formula_rows, rows)
+                for formula_cell, value_cell in zip(formula_row, value_row)
             )
-            if not has_formula:
+            if not needs_calculation:
                 return rows
         except Exception as e:
             logger.debug("openpyxl での読み込みに失敗（%s）。win32com にフォールバックします", e)
