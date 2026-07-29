@@ -117,7 +117,7 @@ import comken
 comken.__version__        # → "0.2.0"
 
 # デバッグモード: ライブラリ主要処理（Excel 読み込み・転記・保存、CSV 読み書き、zip 等）の
-# 所要時間が DEBUG ログ（日別ログファイル）に残る。どこが遅いかの調査に使う
+# 所要時間を DEBUG ログに出す。どこが遅いかの調査に使う
 comken.set_debug(True)
 
 # dry-run モード: 外部に影響する操作を実行せず、内容だけ [DRY-RUN] 付きで INFO ログに出す。
@@ -237,22 +237,15 @@ python -m comken.config
 
 ## Logger
 
-main.py で1回だけ呼ぶ。以降サブモジュールは `logging.getLogger(__name__)` でそのまま出力される。
-
-- `logs/main_YYYYMMDD.log` に DEBUG 以上を出力（日別ファイル）
-- コンソールには INFO 以上を出力
-- 2回呼んでもハンドラは重複しない
+ログの設定（出力先・フォーマット・レベル）は社内の共通ライブラリ側で行う。
+comken と利用プロジェクトは、各モジュールで標準の `logging.getLogger(__name__)` を使うだけでよい。
 
 ```python
 # main.py
-from comken import setup_logger
+import logging
 
-logger = setup_logger("main")
+logger = logging.getLogger(__name__)
 logger.info("処理開始")
-
-# ログの出力先フォルダを変えたい場合は log_dir で指定する（なければ作成される）
-# ※ 出力先はローカルにする。NAS はモジュールの置き場・読み込み元であり、ログ等の新規出力先にはしない
-logger = setup_logger("main", log_dir=r"C:\logs\my_project")
 ```
 
 ```python
@@ -1083,6 +1076,6 @@ flowchart LR
 | 2026-07-12 | comken.__version__ / set_debug()（主要処理の時間を DEBUG ログに記録）/ set_dry_run()（外部に影響する操作をスキップ）を追加。EdgeDriver がエラー時に画面を logs/ に自動保存。Excel 孤立プロセス対策（is_excel_running / kill_excel）。リリース.bat で git tag を打つ運用に。スタブ書き込みをアトミック化 |
 | 2026-07-13 | ExcelComHandler: 上書き保存 save() 追加、save_as のパスワードが効かない問題を修正（FileFormat を常に明示。形式変換は file_format 引数）、close() でプロセスが残る問題を修正、AskToUpdateLinks=False 追加。CONVENTIONS に「モジュール内の並び順」を追加し全体を整理。docs/（機能カタログ・コードリーディングガイド・設計メモ）を追加 |
 | 2026-07-14 | 監査指摘の修正一式（keep_vba・run_macro 保存・DispatchEx・EdgeDriver/SF のリソース解放・config 型変換・CSV/ログの堅牢化・unzip の 3.10 対応/Zip Slip 対策）。コーディング規約を3層（共通/本体/利用側）に分割。配布方式を廃止し共有サーバー直接参照（PYTHONPATH）に変更、同期用 bat（templates/）を削除 |
-| 2026-07-15 | `from comken import config` に一本化（src/config.py 不要）。Pylance 補完用 typings スタブを自動生成。setup_logger が comken バージョンを出力。バイトコードキャッシュをローカルに自動退避。examples テスト・README コード構文チェック・CI（GitHub Actions）を追加。新規プロジェクトのひな形 templates/新規プロジェクト/ を追加 |
+| 2026-07-15 | `from comken import config` に一本化（src/config.py 不要）。Pylance 補完用 typings スタブを自動生成。当時のログ初期化で comken バージョンを出力。バイトコードキャッシュをローカルに自動退避。examples テスト・README コード構文チェック・CI（GitHub Actions）を追加。新規プロジェクトのひな形 templates/新規プロジェクト/ を追加 |
 
 

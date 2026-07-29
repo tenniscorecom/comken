@@ -3,12 +3,12 @@ main.py — エントリポイント
 
 このプロジェクトの入口。`python main.py` で実行できる（非エンジニアは 実行.bat をダブルクリック）。
 
-処理の本体は src/ 以下に書き、ここでは「ログの初期化 → 実行 → エラーの受け止め」だけを行う。
+処理の本体は src/ 以下に書き、ここでは「実行 → エラーの受け止め」だけを行う。
 """
 
 import logging
 
-from comken import config, setup_logger
+from comken import config
 from comken.exceptions import OriginalLibsError
 
 from src.run import run
@@ -27,7 +27,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    setup_logger("main")  # logs/main_YYYYMMDD.log とコンソールに出力
+    # ログの設定は社内の共通ライブラリ側で行う。ここでは logging をそのまま使う
     # 動作確認だけしたいときは保存・送信をスキップできる:
     #   from comken import set_dry_run; set_dry_run(True)
     try:

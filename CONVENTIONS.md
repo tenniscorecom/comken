@@ -17,19 +17,20 @@ comken 本体と、comken を使うプロジェクトの**両方に共通する 
 
 1. 基本方針
 2. 命名規則
-3. モジュール内の並び順
-4. 型ヒント
-5. 定数とマジックナンバー
-6. dataclass・定数クラス・Enum の使い分け
-7. getter / setter は書かない
-8. デコレーター
-9. リソース管理（with 文）
-10. 例外
-11. ロギング
-12. Excel（openpyxl）
-13. Windows 操作（pywin32）
-14. コメント
-15. テスト
+3. import の書き方
+4. モジュール内の並び順
+5. 型ヒント
+6. 定数とマジックナンバー
+7. dataclass・定数クラス・Enum の使い分け
+8. getter / setter は書かない
+9. デコレーター
+10. リソース管理（with 文）
+11. 例外
+12. ロギング
+13. Excel（openpyxl）
+14. Windows 操作（pywin32）
+15. コメント
+16. テスト
 
 > プロジェクトセットアップ・VS Code 設定は、対象別に
 > [プロジェクト規約](docs/プロジェクト規約.md) / [ライブラリ開発規約](docs/ライブラリ開発規約.md) へ移動した。
@@ -97,6 +98,40 @@ Python 側のアクセス（`config.BROWSER.HEADLESS`）と表記が完全に一
 CSV_EAST = 支店A.csv        ; ← 値は自由
 OUTPUT_FOLDER = C:\work\out  ; ← 値は自由
 ```
+
+---
+
+## import の書き方
+
+comken の機能は、**どの機能群に依存しているかが import 行で分かる形**にする。
+ファイルの先頭を見るだけで依存先が分かり、非エンジニアがコードを読むときの手がかりにもなる。
+
+```python
+# 良い（機能を提供するパッケージが分かる）
+from comken.utils.files import DateNameBuilder, FileFinder
+from comken.excel import ExcelReader, ExcelWriter
+from comken.csv import CsvReader
+from comken.constants import Color, Encoding
+from comken.exceptions import SheetNotFoundError
+
+# 例外: プロジェクト全体の土台だけは comken 直下から import してよい
+from comken import config
+from comken import is_dry_run, set_dry_run
+from comken import is_debug, set_debug
+```
+
+comken 直下から import してよいのは、`config`、`Config`、`set_dry_run`、`is_dry_run`、
+`set_debug`、`is_debug` だけ。それ以外は必ず機能を提供するパッケージを明示する。
+
+```python
+# 悪い（どの機能群に依存しているか分からない）
+from comken import CsvReader, ExcelWriter, FileFinder
+
+# 悪い（使う名前と依存範囲が分からない）
+from comken.utils.files import *
+```
+
+ワイルドカード import（`import *`）は禁止する。
 
 ---
 
@@ -451,6 +486,8 @@ except OriginalLibsError as e:
 ## ロギング
 
 `print` は禁止。必ず `logging` を使う。
+ログの設定（出力先・フォーマット・レベル）は社内の共通ライブラリ側で行う。
+comken とその利用プロジェクトは `logging.getLogger(__name__)` を使うだけでよい。
 
 ```python
 import logging
@@ -657,4 +694,3 @@ class TestCsvReaderFind:
 > プロジェクトのセットアップファイル（ERRORS.md / .gitignore / pyproject.toml /
 > requirements.txt / config.ini.example）と VS Code の設定は
 > [プロジェクト規約](docs/プロジェクト規約.md#プロジェクトセットアップファイル) を参照。
-

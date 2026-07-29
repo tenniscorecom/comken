@@ -327,7 +327,8 @@ class TestGenerateStub:
         assert "BROWSER: _BROWSER" in text
         # __init__.pyi は comken の公開 API を再エクスポートする
         init_text = (tmp_path / "typings" / "comken" / "__init__.pyi").read_text(encoding="utf-8")
-        assert "setup_logger as setup_logger" in init_text
+        assert "set_dry_run as set_dry_run" in init_text
+        assert "is_debug as is_debug" in init_text
 
     def test_missing_ini_raises(self, tmp_path):
         """config.ini がない場合は ConfigError になることを確認する。"""

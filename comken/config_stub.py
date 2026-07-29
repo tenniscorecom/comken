@@ -90,8 +90,8 @@ def update_stub(cfg: configparser.ConfigParser, ini_path: str | Path) -> None:
 def _write_typings_stubs(project_dir: Path, cfg: configparser.ConfigParser) -> None:
     """`from comken import config` 方式向けの補完スタブ一式を書く。
 
-    Pylance の typings 上書きを使う。config.pyi だけだと comken の他のシンボル
-    （setup_logger 等）が解決できなくなるため、__init__.pyi で本物の comken を
+    Pylance の typings 上書きを使う。config.pyi だけだと comken の他の公開シンボル
+    （実行モード関数等）が解決できなくなるため、__init__.pyi で本物の comken を
     再エクスポートして両立させる。
     """
     comken_typings = project_dir / "typings" / "comken"
@@ -192,7 +192,7 @@ def _build_package_init_stub() -> str:
     """typings/comken/__init__.pyi を組み立てる。
 
     config.pyi で comken.config を上書きすると、そのままでは comken 直下の
-    公開シンボル（setup_logger 等）が解決できなくなる。ここで本物の comken の
+    公開シンボル（実行モード関数等）が解決できなくなる。ここで本物の comken の
     __all__ を、定義元サブモジュールから再エクスポートして両立させる。
     comken の公開 API を内省して作るので、comken 側が増えても追従する。
     """

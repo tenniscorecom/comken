@@ -17,7 +17,6 @@ Excel 関数の VLOOKUP / XLOOKUP でやっている作業を transfer_by_key �
 import logging
 from pathlib import Path
 
-from comken import setup_logger
 from comken.csv import CsvReader, CsvWriter
 from comken.excel import ExcelWriter
 from comken.utils import diff_rows
@@ -86,5 +85,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    setup_logger("main")
+    # ログの設定は社内の共通ライブラリ側で行う。ここでは logging をそのまま使う
     main()

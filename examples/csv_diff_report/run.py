@@ -16,7 +16,6 @@ diff_rows で追加・削除・変更を検出し、区分ごとに色分けし�
 import logging
 from pathlib import Path
 
-from comken import setup_logger
 from comken.constants import Color
 from comken.csv import CsvReader, CsvWriter
 from comken.excel import ExcelWriter
@@ -110,5 +109,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    setup_logger("main")
+    # ログの設定は社内の共通ライブラリ側で行う。ここでは logging をそのまま使う
     main()

@@ -15,7 +15,6 @@ Excel レポートの作成・見た目調整（ExcelWriter.create + Sheet）を
 import logging
 from pathlib import Path
 
-from comken import setup_logger
 from comken.constants import Color
 from comken.csv import CsvReader
 from comken.excel import ExcelWriter
@@ -78,5 +77,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    setup_logger("main")
+    # ログの設定は社内の共通ライブラリ側で行う。ここでは logging をそのまま使う
     main()

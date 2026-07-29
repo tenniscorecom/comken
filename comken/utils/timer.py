@@ -2,7 +2,7 @@
 utils/timer.py — 処理時間の計測
 
 「どこが遅いのか」を調べるためのユーティリティ。with とデコレータの両方で使える。
-結果は logging（INFO）に出るので、setup_logger を使っていればログファイルにも残る。
+結果は logging（INFO）に出る。出力先・フォーマット・レベルは社内の共通ライブラリ側で設定する。
 
 使い方:
     from comken.utils import Timer
@@ -76,7 +76,7 @@ def measure(func: Callable[_P, _R]) -> Callable[_P, _R]:
     """デバッグモード時だけ処理時間を DEBUG ログに出すデコレータ。
 
     ライブラリの主要処理に付いており、comken.set_debug(True) にすると
-    「どの処理に何秒かかったか」が日別ログファイルに残る（コンソールには出ない）。
+    「どの処理に何秒かかったか」を DEBUG ログに出す。
     プロジェクト側の関数に付けてもよい。
 
     Timer との使い分け:

@@ -16,7 +16,6 @@
 
 import logging
 
-from comken import setup_logger
 from comken.csv import CsvReader
 from comken.excel import ExcelWriter
 from comken.exceptions import OriginalLibsError
@@ -58,7 +57,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    setup_logger("main")
+    # ログの設定は社内の共通ライブラリ側で行う。ここでは logging をそのまま使う
     # 動きを確認したいだけのとき: from comken import set_dry_run; set_dry_run(True)
     # （ファイル出力をスキップして、流れだけ [DRY-RUN] ログで確認できる）
     try:
