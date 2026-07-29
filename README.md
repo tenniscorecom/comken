@@ -57,9 +57,9 @@ with ExcelFile.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作る
 
 | 定数クラス | import | 用途 | 例 |
 |---|---|---|---|
-| `Color` | `from comken.excel import Color` | セルの背景色 | `set_fill(color=Color.RED)` |
-| `SortBy` | `from comken.utils import SortBy` | FileFinder.latest の並び順 | `latest(by=SortBy.UPDATED)` |
-| `Encoding` | `from comken.csv import Encoding` | CSV の文字コード | `CsvReader(path, encoding=Encoding.CP932)` |
+| `Color` | `from comken.const import Color` | セルの背景色 | `set_fill(color=Color.RED)` |
+| `SortBy` | `from comken.const import SortBy` | FileFinder.latest の並び順 | `latest(by=SortBy.UPDATED)` |
+| `Encoding` | `from comken.const import Encoding` | CSV の文字コード | `CsvReader(path, encoding=Encoding.CP932)` |
 
 ---
 
@@ -275,7 +275,7 @@ STAFF_NAME = "山田"
 
 reader = CsvReader("data.csv")
 # 文字コードは自動判定（UTF-8 → CP932 の順に試す）。明示する場合:
-# from comken.csv import Encoding
+# from comken.const import Encoding
 # CsvReader("data.csv", encoding=Encoding.CP932)
 ```
 
@@ -370,16 +370,17 @@ copy_file("report.xlsx", r"C:\作業\backup")             # コピー（元フ�
 ### ファイル名の組み立て・検索
 
 ```python
-from comken.utils import FileFinder, FileNameBuilder
+from comken.naming import DateNameBuilder
+from comken.utils import FileFinder
 
 FOLDER = r"\\nas-server\share"
 
 # 今日の日付付きファイル名を組み立てる
-FileNameBuilder("売上レポート").plain()                # → "売上レポート.xlsx"
-FileNameBuilder("売上レポート").prefix()               # → "20260711_売上レポート.xlsx"
-FileNameBuilder("売上レポート").suffix()               # → "売上レポート_20260711.xlsx"
-FileNameBuilder("ログ", ext=".csv").prefix()           # → "20260711_ログ.csv"
-FileNameBuilder("月次レポート").prefix(date_format="%Y%m") # → "202607_月次レポート.xlsx"
+DateNameBuilder("売上レポート").plain()                # → "売上レポート.xlsx"
+DateNameBuilder("売上レポート").prefix()               # → "20260711_売上レポート.xlsx"
+DateNameBuilder("売上レポート").suffix()               # → "売上レポート_20260711.xlsx"
+DateNameBuilder("ログ", ext=".csv").prefix()           # → "20260711_ログ.csv"
+DateNameBuilder("月次レポート").prefix(date_format="%Y%m") # → "202607_月次レポート.xlsx"
 
 # 今日の日付を含むファイルを取得（見つからなければ FileNotFoundError）
 path = FileFinder(FOLDER).today()                      # YYYYMMDD で探す
@@ -388,7 +389,7 @@ path = FileFinder(FOLDER).today(date_format="%Y%m")    # YYYYMM で探す
 # フォルダ内で最新のファイルを取得（見つからなければ FileNotFoundError）
 # デフォルトは「ファイル名の辞書順で最後」= 日付プレフィックス命名なら名前上の最新。
 # コピーや再保存で更新日時が変わっていても影響を受けない
-from comken.utils import SortBy
+from comken.const import SortBy
 
 path = FileFinder(FOLDER).latest()
 path = FileFinder(FOLDER).latest(pattern="*.csv")        # CSV に絞る場合
@@ -657,7 +658,7 @@ with ExcelFile("data.xlsx") as f:
 # Excel を起動しないため数万行でも速い。数式の再計算が必要なら ExcelComHandler 版を使う
 
 # 背景色の設定（よく使う色は Color 定数で指定できる）
-from comken.excel import Color
+from comken.const import Color
 
 with ExcelFile("data.xlsx") as f:
     f.set_fill(SHEET, row=ROW, col=COL, color=Color.YELLOW)
@@ -722,7 +723,7 @@ with ExcelComHandler("data.xlsx") as h:
     # h.save_as("output.xlsx", read_pw=READ_PW)  # 読み取り保護のみ
 
     # 形式を変換して保存する場合だけ file_format を明示する
-    # from comken.windows import FileFormat
+    # from comken.const import FileFormat
     # h.save_as("output.csv", file_format=FileFormat.CSV)
 ```
 

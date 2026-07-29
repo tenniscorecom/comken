@@ -18,16 +18,9 @@ import csv
 import io
 from pathlib import Path
 
-from ..exceptions import ColumnNotFoundError, CsvError
+from ..const import Encoding
+from ..exceptions import CsvColumnNotFoundError, CsvHeadersTooFewError, EncodingDetectionError
 from ..utils.timer import measure
-
-
-class Encoding:
-    """CsvReader / CsvWriter の encoding 引数に使う定数。"""
-
-    AUTO = "auto"  # UTF-8 → CP932 の順に自動判定（CsvReader のみ）
-    UTF8_SIG = "utf-8-sig"  # BOM 付き UTF-8（Excel でそのまま開ける）
-    CP932 = "cp932"  # Shift-JIS（Windows の従来形式）
 
 
 class CsvReader:
@@ -103,9 +96,7 @@ class CsvReader:
         rows = list(csv.DictReader(io.StringIO(self._read_text()), fieldnames=self._headers))
         # DictReader は headers より多い列を None キーに押し込む。無音のデータ落ちを防ぐ
         if self._headers is not None and any(None in row for row in rows):
-            raise CsvError(
-                CsvError.MSG_HEADERS_TOO_FEW.format(expected=len(self._headers), path=self._path)
-            )
+            raise CsvHeadersTooFewError(len(self._headers), self._path)
         self._cache = rows
         return rows
 
@@ -123,11 +114,7 @@ class CsvReader:
             return  # データがなければ検証できない（空の結果を返す側に任せる）
         missing = [col for col in columns if col not in rows[0]]
         if missing:
-            raise ColumnNotFoundError(
-                ColumnNotFoundError.MSG_CSV.format(
-                    columns=", ".join(missing), existing=", ".join(rows[0].keys())
-                )
-            )
+            raise CsvColumnNotFoundError(missing, list(rows[0].keys()))
 
     def _read_text(self) -> str:
         """ファイルを読み、文字コードを判定してテキストとして返す。
@@ -144,7 +131,7 @@ class CsvReader:
                 return raw.decode(encoding)
             except UnicodeDecodeError:
                 continue
-        raise CsvError(CsvError.MSG_ENCODING.format(path=self._path))
+        raise EncodingDetectionError(self._path)
 
     @measure
     def rows(self, columns: list[str] | None = None) -> list[dict[str, str]]:

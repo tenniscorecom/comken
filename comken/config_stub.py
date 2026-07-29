@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 
 from .config import _parse_value
-from .exceptions import ConfigError
+from .exceptions import ConfigFileNotFoundError
 from .utils.file import cleanup_stale_tmp as _cleanup_stale_tmp
 
 _STUB_HEADER = '''"""config.ini から自動生成されたエディタ補完用スタブ。手で編集しない。
@@ -49,7 +49,7 @@ def generate_stub(
     cfg = configparser.ConfigParser()
     loaded = cfg.read(ini_path, encoding="utf-8-sig")
     if not loaded:
-        raise ConfigError(ConfigError.MSG.format(path=Path(ini_path).resolve()))
+        raise ConfigFileNotFoundError(Path(ini_path).resolve())
 
     if output_path is not None:
         # 出力先を明示した場合は class スタブ（src/config.pyi 形式）を書く
@@ -145,7 +145,7 @@ def _build_stub_content(cfg: configparser.ConfigParser) -> str:
         section_lines.append("")
 
     # Path は Config.__init__ のシグネチャでも使うため常に import する
-    lines = [_STUB_HEADER, "from pathlib import Path\n", ""]
+    lines = [_STUB_HEADER, "from pathlib import Path\n", "from typing import NoReturn\n", ""]
     lines.extend(section_lines)
     lines.append("class Config:")
     lines.extend(config_attrs or ["    pass"])
@@ -176,11 +176,11 @@ def _build_module_stub_content(cfg: configparser.ConfigParser) -> str:
             section_lines.append(f"    {key.upper()}: {_stub_type_name(value)}")
         section_lines.append("")
 
-    lines = [_STUB_HEADER, "from pathlib import Path\n", ""]
+    lines = [_STUB_HEADER, "from pathlib import Path\n", "from typing import NoReturn\n", ""]
     lines.extend(section_lines)
     lines.append("class Config:")
     lines.append("    def __init__(self, path: str | Path = ...) -> None: ...")
-    lines.append("    def __getattr__(self, name: str) -> object: ...")
+    lines.append("    def __getattr__(self, name: str) -> NoReturn: ...")
     lines.append("")
     lines.append("def read(path: str | Path = ...) -> Config: ...")
     lines.append("")

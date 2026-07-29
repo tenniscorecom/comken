@@ -11,12 +11,12 @@ import os
 import pytest
 
 from comken.browser.download import DownloadDir
+from comken.const import SortBy
 from comken.exceptions import ColumnNotFoundError
+from comken.naming import DateNameBuilder
 from comken.utils import (
     FileFinder,
-    FileNameBuilder,
     Paths,
-    SortBy,
     col_to_num,
     copy_file,
     diff_row,
@@ -122,8 +122,8 @@ class TestColToNum:
             col_to_num("1")
 
 
-class TestFileNameBuilder:
-    """FileNameBuilder のテスト。
+class TestDateNameBuilder:
+    """DateNameBuilder のテスト。
 
     今日の日付をファイル名に付与するクラス。
     prefix / suffix / 拡張子 / 日付フォーマットの組み合わせを確認する。
@@ -131,37 +131,37 @@ class TestFileNameBuilder:
 
     def test_plain(self):
         """plain() は日付なしのファイル名を返す。"""
-        assert FileNameBuilder("レポート").plain() == "レポート.xlsx"
+        assert DateNameBuilder("レポート").plain() == "レポート.xlsx"
 
     def test_prefix(self):
         """prefix() は YYYYMMDD を前に付ける。"""
         today = datetime.date.today().strftime("%Y%m%d")
-        assert FileNameBuilder("レポート").prefix() == f"{today}_レポート.xlsx"
+        assert DateNameBuilder("レポート").prefix() == f"{today}_レポート.xlsx"
 
     def test_suffix(self):
         """suffix() は YYYYMMDD を後ろに付ける。"""
         today = datetime.date.today().strftime("%Y%m%d")
-        assert FileNameBuilder("レポート").suffix() == f"レポート_{today}.xlsx"
+        assert DateNameBuilder("レポート").suffix() == f"レポート_{today}.xlsx"
 
     def test_custom_ext(self):
         """ext 引数で拡張子を変更できる。"""
         today = datetime.date.today().strftime("%Y%m%d")
-        assert FileNameBuilder("ログ", ext=".csv").prefix() == f"{today}_ログ.csv"
+        assert DateNameBuilder("ログ", ext=".csv").prefix() == f"{today}_ログ.csv"
 
     def test_ext_without_dot_is_normalized(self):
         """ext をドットなしで渡しても補完されることを確認する。"""
-        assert FileNameBuilder("ログ", ext="csv").plain() == "ログ.csv"
+        assert DateNameBuilder("ログ", ext="csv").plain() == "ログ.csv"
 
     def test_yyyymm_format(self):
         """date_format="%Y%m" にすると年月のみになる。月次ファイルに使う。"""
         ym = datetime.date.today().strftime("%Y%m")
-        assert FileNameBuilder("月次").prefix(date_format="%Y%m") == f"{ym}_月次.xlsx"
+        assert DateNameBuilder("月次").prefix(date_format="%Y%m") == f"{ym}_月次.xlsx"
 
     def test_custom_date_format(self):
         """任意の strftime フォーマットを指定できる。"""
         formatted = datetime.date.today().strftime("%Y-%m-%d")
         assert (
-            FileNameBuilder("レポート").prefix(date_format="%Y-%m-%d")
+            DateNameBuilder("レポート").prefix(date_format="%Y-%m-%d")
             == f"{formatted}_レポート.xlsx"
         )
 

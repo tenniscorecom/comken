@@ -33,8 +33,9 @@ import configparser
 import math
 import types
 from pathlib import Path
+from typing import NoReturn
 
-from .exceptions import ConfigError
+from .exceptions import ConfigFileNotFoundError, ConfigSectionNotFoundError
 
 
 class Config:
@@ -83,7 +84,7 @@ class Config:
         if not loaded:
             # configparser はファイルがなくても黙って空になるため、明示的にエラーにする
             # （後で config.FILES 等が分かりにくい AttributeError になるのを防ぐ）
-            raise ConfigError(ConfigError.MSG.format(path=Path(path).resolve()))
+            raise ConfigFileNotFoundError(Path(path).resolve())
 
         for section in cfg.sections():
             ns = types.SimpleNamespace(
@@ -98,17 +99,13 @@ class Config:
 
         update_stub(cfg, path)
 
-    def __getattr__(self, name: str) -> object:
+    def __getattr__(self, name: str) -> NoReturn:
         # 通常の属性（設定済みセクション）は __dict__ にあり、ここには来ない。
         # 未定義セクションのアクセスだけがここに来るので、分かりやすいエラーにする。
         if name.startswith("_"):  # copy/pickle 等の内部属性探索は通常の AttributeError に
             raise AttributeError(name)
         sections = [k for k in vars(self) if k.isupper()]
-        raise ConfigError(
-            f"config.ini に [{name}] セクションがありません。\n"
-            f"存在するセクション: {sections}\n"
-            "セクション名の綴りと、config.ini に定義されているかを確認してください。"
-        )
+        raise ConfigSectionNotFoundError(name, sections)
 
 
 # ── `from comken import config` 用の遅延シングルトン ──────────────────────────
@@ -137,7 +134,7 @@ def read(path: str | Path = "config.ini") -> Config:
     return _singleton
 
 
-def __getattr__(name: str) -> object:
+def __getattr__(name: str) -> types.SimpleNamespace:
     # PEP 562: `comken.config.FILES` のようにモジュール属性として見つからない名前で呼ばれる。
     # セクションは大文字なので、大文字名のときだけ遅延シングルトンへ委譲する
     # （Config / read などの実体は通常の属性解決で見つかるためここには来ない）。

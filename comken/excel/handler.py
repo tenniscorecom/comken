@@ -26,7 +26,13 @@ from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
-from ..exceptions import ExcelError, SheetNotFoundError, _warn_coerce
+from ..exceptions import (
+    EmptyHeaderCellError,
+    ExcelFileNotFoundError,
+    ExcelHeadersTooFewError,
+    SheetNotFoundError,
+    _warn_coerce,
+)
 from ..runtime import dry_run_log, is_dry_run
 from ..utils.data import col_to_num
 from ..utils.timer import measure
@@ -101,7 +107,7 @@ class ExcelFile:
 
         # 素の FileNotFoundError ではなく、対処法つきの ExcelError にする
         if not src.exists():
-            raise ExcelError(ExcelError.MSG_FILE_NOT_FOUND.format(path=src))
+            raise ExcelFileNotFoundError(src)
 
         # ── NAS・ネットワークファイルのローカルコピー ──────────────────
         # 社内ルールでローカルへのコピーが不可の場合は、
@@ -186,9 +192,7 @@ class ExcelFile:
         """
         name = _warn_coerce(name, str, "sheet_name", stacklevel=3)
         if name not in self._wb.sheetnames:
-            raise SheetNotFoundError(
-                SheetNotFoundError.MSG.format(name=name, sheets=self._wb.sheetnames)
-            )
+            raise SheetNotFoundError(name, self._wb.sheetnames)
         return self._wb[name]
 
     @measure
@@ -227,11 +231,7 @@ class ExcelFile:
         if self._headers is not None:
             all_rows = list(ws.iter_rows(min_row=1, values_only=True))
             if all_rows and len(all_rows[0]) > len(self._headers):
-                raise ExcelError(
-                    ExcelError.MSG_HEADERS_TOO_FEW.format(
-                        expected=len(self._headers), actual=len(all_rows[0])
-                    )
-                )
+                raise ExcelHeadersTooFewError(len(self._headers), len(all_rows[0]))
             return [
                 dict(zip(self._headers, row)) for row in all_rows if not all(c is None for c in row)
             ]
@@ -243,7 +243,7 @@ class ExcelFile:
             return []
         none_cols = [i + 1 for i, h in enumerate(file_headers) if h is None]
         if none_cols:
-            raise ExcelError(ExcelError.MSG_HEADER_NONE.format(cols=none_cols))
+            raise EmptyHeaderCellError(none_cols)
         return [dict(zip(file_headers, row)) for row in all_rows[1:]]
 
     def iter_rows(

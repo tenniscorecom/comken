@@ -2,9 +2,7 @@ from .archive import unzip, zip_files, zip_folder
 from .data import DiffResult, RowChange, col_to_num, diff_row, diff_rows
 from .file import (
     FileFinder,
-    FileNameBuilder,
     Paths,
-    SortBy,
     copy_file,
     local_copy,
     move_file,
@@ -15,10 +13,8 @@ from .timer import Timer, measure
 from .wait import wait
 
 __all__ = [
-    "FileNameBuilder",
     "FileFinder",
     "Paths",
-    "SortBy",
     "move_file",
     "copy_file",
     "local_copy",

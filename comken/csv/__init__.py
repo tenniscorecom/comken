@@ -1,4 +1,4 @@
-from .handler import CsvReader, Encoding
+from .handler import CsvReader
 from .writer import CsvWriter
 
-__all__ = ["CsvReader", "CsvWriter", "Encoding"]
+__all__ = ["CsvReader", "CsvWriter"]

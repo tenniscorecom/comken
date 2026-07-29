@@ -1,5 +1,4 @@
-"""
-excel/colors.py — セル背景色などで使う色の定数
+"""Excel で使う色定数。
 
 ExcelFile.set_fill() の color 引数や openpyxl の色指定にそのまま渡せる RGB 16進値。
 ここにない色は 16進値を直接渡す（例: "CCE5FF"）。

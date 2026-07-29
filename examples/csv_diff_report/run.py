@@ -17,9 +17,11 @@ import logging
 from pathlib import Path
 
 from comken import setup_logger
+from comken.const import Color
 from comken.csv import CsvReader, CsvWriter
-from comken.excel import Color, ExcelFile
-from comken.utils import FileNameBuilder, diff_rows
+from comken.excel import ExcelFile
+from comken.naming import DateNameBuilder
+from comken.utils import diff_rows
 
 HERE = Path(__file__).parent
 OUTPUT_FOLDER = HERE / "output"
@@ -93,7 +95,7 @@ def main() -> None:
         detail = " / ".join(f"{col}: {old} → {new}" for col, (old, new) in change.columns.items())
         report_rows.append({STATUS_COL: STATUS_CHANGED, DETAIL_COL: detail, **change.after})
 
-    output_path = OUTPUT_FOLDER / FileNameBuilder("差分レポート").suffix()
+    output_path = OUTPUT_FOLDER / DateNameBuilder("差分レポート").suffix()
     with ExcelFile.create(output_path) as f:
         s = f.sheet(SHEET)
         s.write_table(report_rows, headers=REPORT_HEADERS)

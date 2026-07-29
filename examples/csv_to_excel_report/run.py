@@ -16,9 +16,10 @@ import logging
 from pathlib import Path
 
 from comken import setup_logger
+from comken.const import Color
 from comken.csv import CsvReader
-from comken.excel import Color, ExcelFile
-from comken.utils import FileNameBuilder
+from comken.excel import ExcelFile
+from comken.naming import DateNameBuilder
 
 # 入出力はこのフォルダ内で完結させる（サンプル用。実プロジェクトではパスは config.ini に書く）
 HERE = Path(__file__).parent
@@ -54,7 +55,7 @@ def main() -> None:
     excel_rows = [{**row, AMOUNT_COL: int(row[AMOUNT_COL])} for row in rows]
 
     # 「売上レポート_20260713.xlsx」のような日付付きファイル名を組み立てる
-    output_path = OUTPUT_FOLDER / FileNameBuilder("売上レポート").suffix()
+    output_path = OUTPUT_FOLDER / DateNameBuilder("売上レポート").suffix()
 
     with ExcelFile.create(output_path) as f:
         s = f.sheet(SHEET)

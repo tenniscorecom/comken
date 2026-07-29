@@ -7,7 +7,8 @@ CsvReader クラスのテスト。
 
 import pytest
 
-from comken.csv.handler import CsvReader, Encoding
+from comken.const import Encoding
+from comken.csv.handler import CsvReader
 from comken.csv.writer import CsvWriter
 from comken.exceptions import ColumnNotFoundError, CsvError
 

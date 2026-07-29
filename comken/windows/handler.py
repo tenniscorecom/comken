@@ -20,24 +20,18 @@ import win32com.client
 import win32con
 import win32gui
 
-from ..exceptions import ExcelError, _warn_coerce
+from ..const import FileFormat
+from ..exceptions import (
+    EmptyHeaderCellError,
+    ExcelHeadersTooFewError,
+    FileFormatMismatchError,
+    MacroError,
+    RowTransferError,
+    _warn_coerce,
+)
 from ..utils.data import col_to_num
 
 logger = logging.getLogger(__name__)
-
-
-class FileFormat:
-    """Workbook.SaveAs に渡す FileFormat 定数（Excel の XlFileFormat）。
-
-    save_as() では元ファイルと同じ形式が自動で使われるため、通常は指定不要。
-    形式を変換して保存する場合だけ file_format 引数で渡す。
-    """
-
-    XLSX = 51  # xlOpenXMLWorkbook
-    XLSM = 52  # xlOpenXMLWorkbookMacroEnabled
-    XLSB = 50  # xlExcel12
-    XLS = 56  # xlExcel8
-    CSV = 6  # xlCSV
 
 
 _SUFFIX_TO_FORMAT = {
@@ -192,11 +186,7 @@ class ExcelComHandler:
         last_col = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
         if self._headers is not None:
             if last_col > len(self._headers):
-                raise ExcelError(
-                    ExcelError.MSG_HEADERS_TOO_FEW.format(
-                        expected=len(self._headers), actual=last_col
-                    )
-                )
+                raise ExcelHeadersTooFewError(len(self._headers), last_col)
             rows = [
                 tuple(ws.Cells(row, col).Value for col in range(1, last_col + 1))
                 for row in range(1, last_row + 1)
@@ -210,7 +200,7 @@ class ExcelComHandler:
             return []  # 空シート（ExcelFile 側と挙動を揃える）
         none_cols = [i + 1 for i, h in enumerate(file_headers) if h is None]
         if none_cols:
-            raise ExcelError(ExcelError.MSG_HEADER_NONE.format(cols=none_cols))
+            raise EmptyHeaderCellError(none_cols)
         return [
             dict(zip(file_headers, (ws.Cells(row, col).Value for col in range(1, last_col + 1))))
             for row in range(header_row + 1, last_row + 1)
@@ -314,7 +304,7 @@ class ExcelComHandler:
                 matched += 1
 
             except Exception as e:
-                raise ExcelError(ExcelError.MSG_TRANSFER.format(row=row, detail=e)) from e
+                raise RowTransferError(row, e) from e
 
         logger.info("転記完了: %d件一致（シート: %s）", matched, sheet_name)
         return matched
@@ -326,7 +316,10 @@ class ExcelComHandler:
             macro_name: 実行するマクロ名。"モジュール名.プロシージャ名" の形式で指定する。
                         例: "Module1.UpdateData"
         """
-        self._excel.Run(str(macro_name))
+        try:
+            self._excel.Run(str(macro_name))
+        except Exception as e:
+            raise MacroError(str(macro_name), e) from e
 
     def save(self) -> None:
         """元のファイルに上書き保存する。
@@ -363,7 +356,7 @@ class ExcelComHandler:
             # 変換の意図がある場合は file_format の明示を必須にする
             suffix_format = _SUFFIX_TO_FORMAT.get(save_path.suffix.lower())
             if suffix_format is not None and suffix_format != file_format:
-                raise ExcelError(ExcelError.MSG_FORMAT_MISMATCH.format(suffix=save_path.suffix))
+                raise FileFormatMismatchError(save_path.suffix)
         # NOTE: FileFormat を省略して SaveAs すると Password / WriteResPassword が
         # 反映されないことがあるため、必ず明示して渡す
         self._wb.SaveAs(

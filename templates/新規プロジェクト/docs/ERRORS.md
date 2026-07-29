@@ -21,8 +21,13 @@
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
 | `SheetNotFoundError` | 指定した名前のシートがない | Excel を開いて、下のシート名（タブ）が変わっていないか確認する。変えた場合は元に戻す |
-| `ColumnNotFoundError` | 列の見出し（1行目）が見つからない | Excel の1行目を確認する。列名を変更・削除した場合は元に戻す |
+| `ExcelFileNotFoundError` | Excel ファイルが見つからない | ファイルの置き場所と名前を確認する |
+| `ExcelColumnNotFoundError` | Excel の列見出しが見つからない | Excel の1行目を確認する |
 | `MacroError` | Excel のマクロが失敗した | Excel をすべて閉じて再実行する。続く場合は管理者へ |
+| `RowTransferError` | Excel の行転記に失敗した | 表示された行番号のデータを確認する |
+| `EmptyHeaderCellError` | Excel の見出しに空欄がある | Excel の1行目の空欄を埋める |
+| `ExcelHeadersTooFewError` | 指定した見出し数が列数より少ない | 管理者へ連絡する |
+| `FileFormatMismatchError` | 保存拡張子と形式が合わない | 管理者へ連絡する |
 | `PermissionError` | ファイルが誰かに開かれている | 自分や他の人がそのファイルを開いていないか確認して閉じる |
 
 ---
@@ -33,6 +38,13 @@
 |---|---|---|
 | `FileNotFoundError` | ファイルが見つからない | ファイルの置き場所と名前を確認する。「今日の日付のファイル」を探す処理なら、今日のファイルが作られているか確認する |
 | `TimeoutError` | ダウンロードが終わらない | ネットワークの状態を確認して再実行する |
+| `EncodingDetectionError` | CSV の文字コードを判定できない | CSV の保存形式を確認し、管理者へ連絡する |
+| `CsvHeadersTooFewError` | 指定した見出し数が CSV の列数より少ない | 管理者へ連絡する |
+| `CsvColumnNotFoundError` | CSV の列見出しが見つからない | CSV の1行目を確認する |
+| `KeyColumnNotFoundError` | 比較に使うキー列が見つからない | Excel・CSV の列名を確認する |
+| `ConfigFileNotFoundError` | config.ini が見つからない | config.ini.example をコピーして config.ini を作る |
+| `StubTargetNotFoundError` | 設定補完の出力先が見つからない | src/config.py を作成して再実行する |
+| `ConfigSectionNotFoundError` | config.ini の必要な節がない | 表示されたセクション名を config.ini に追加する |
 
 ---
 

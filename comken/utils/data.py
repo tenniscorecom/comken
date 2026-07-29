@@ -20,7 +20,7 @@ utils/data.py — データ変換・比較ユーティリティ
 
 from dataclasses import dataclass
 
-from ..exceptions import ColumnNotFoundError
+from ..exceptions import KeyColumnNotFoundError
 
 
 def col_to_num(letter: str) -> int:
@@ -135,9 +135,7 @@ def diff_rows(
     """
     for rows in (before, after):
         if rows and key not in rows[0]:
-            raise ColumnNotFoundError(
-                ColumnNotFoundError.MSG_KEY.format(key=key, existing=", ".join(rows[0].keys()))
-            )
+            raise KeyColumnNotFoundError(key, list(rows[0].keys()))
 
     before_by_key = {_normalize(row[key]): row for row in before}
     after_by_key = {_normalize(row[key]): row for row in after}

@@ -21,8 +21,8 @@ import csv
 import logging
 from pathlib import Path
 
+from ..const import Encoding
 from ..runtime import dry_run_log, is_dry_run
-from .handler import Encoding
 
 logger = logging.getLogger(__name__)
 

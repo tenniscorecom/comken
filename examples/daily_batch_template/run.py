@@ -19,7 +19,8 @@ import logging
 from comken import OriginalLibsError, setup_logger
 from comken.csv import CsvReader
 from comken.excel import ExcelFile
-from comken.utils import FileFinder, FileNameBuilder
+from comken.naming import DateNameBuilder
+from comken.utils import FileFinder
 
 from .config import config
 
@@ -45,7 +46,7 @@ def main() -> None:
 
     # ↑↑↑ ここまで ↑↑↑
 
-    output_path = config.REPORT.OUTPUT_FOLDER / FileNameBuilder(BATCH_NAME).prefix()
+    output_path = config.REPORT.OUTPUT_FOLDER / DateNameBuilder(BATCH_NAME).prefix()
     with ExcelFile.create(output_path) as f:
         s = f.sheet(SHEET)
         s.write_table(rows)

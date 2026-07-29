@@ -23,12 +23,12 @@ def run(output_folder: Path) -> None:
     # 例:
     #   from comken.csv import CsvReader
     #   from comken.excel import ExcelFile
-    #   from comken.utils import FileNameBuilder
+    #   from comken.naming import DateNameBuilder
     #
     #   from comken import config   # config.FILES. まで打つと補完が出る
     #
     #   rows = CsvReader(config.FILES.INPUT_CSV).rows()
-    #   out = output_folder / FileNameBuilder("レポート").prefix()
+    #   out = output_folder / DateNameBuilder("レポート").prefix()
     #   with ExcelFile.create(out) as f:
     #       s = f.sheet(SHEET)
     #       s.write_table(rows)

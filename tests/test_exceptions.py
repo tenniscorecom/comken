@@ -1,9 +1,4 @@
-"""
-例外クラスのテスト。
-
-実行方法:
-    リポジトリのルートで python -m pytest tests/ -v
-"""
+"""個別例外クラスの型とメッセージを確認する。"""
 
 import warnings
 
@@ -12,104 +7,81 @@ import pytest
 from comken.exceptions import (
     ColumnNotFoundError,
     ConfigError,
+    ConfigFileNotFoundError,
+    ConfigSectionNotFoundError,
+    CsvColumnNotFoundError,
     CsvError,
+    CsvHeadersTooFewError,
+    EmptyHeaderCellError,
+    EncodingDetectionError,
+    ExcelColumnNotFoundError,
     ExcelError,
+    ExcelFileNotFoundError,
+    ExcelHeadersTooFewError,
+    FileFormatMismatchError,
+    KeyColumnNotFoundError,
     MacroError,
     OriginalLibsError,
+    RowTransferError,
     SheetNotFoundError,
+    StubTargetNotFoundError,
     _warn_coerce,
 )
 
 
-class TestExceptionHierarchy:
-    """例外の継承関係のテスト。
-
-    すべての例外が正しく OriginalLibsError を継承しているかを確認する。
-    継承関係が正しいと、except OriginalLibsError でまとめて補足できる。
-    """
-
-    def test_sheet_not_found_is_excel_error(self):
-        """SheetNotFoundError は ExcelError のサブクラスである。"""
-        assert issubclass(SheetNotFoundError, ExcelError)
-
-    def test_macro_error_is_excel_error(self):
-        """MacroError は ExcelError のサブクラスである。"""
-        assert issubclass(MacroError, ExcelError)
-
-    def test_excel_error_is_original_libs_error(self):
-        """ExcelError は OriginalLibsError のサブクラスである。"""
-        assert issubclass(ExcelError, OriginalLibsError)
-
-    def test_column_not_found_is_original_libs_error(self):
-        """ColumnNotFoundError は OriginalLibsError のサブクラスである。"""
-        assert issubclass(ColumnNotFoundError, OriginalLibsError)
-
-    def test_csv_error_is_original_libs_error(self):
-        """CsvError は OriginalLibsError のサブクラスである。"""
-        assert issubclass(CsvError, OriginalLibsError)
-
-    def test_config_error_is_original_libs_error(self):
-        """ConfigError は OriginalLibsError のサブクラスである。"""
-        assert issubclass(ConfigError, OriginalLibsError)
-
-
-class TestExceptionMessages:
-    """例外メッセージのテスト。
-
-    非エンジニアが読んでも分かるメッセージになっているかを確認する。
-    """
-
-    def test_sheet_not_found_message(self):
-        """SheetNotFoundError のメッセージに存在しないシート名が含まれる。"""
-        with pytest.raises(SheetNotFoundError, match="Sheet2"):
-            raise SheetNotFoundError("シートが見つかりません: Sheet2")
-
-    def test_column_not_found_message(self):
-        """ColumnNotFoundError のメッセージにヘッダー確認を促す文言が含まれる。"""
-        missing = {"金額", "担当者"}
-        with pytest.raises(ColumnNotFoundError, match="Excelのヘッダー"):
-            raise ColumnNotFoundError(
-                f"Excelのヘッダーが正しくありません。\n"
-                f"見つからない列: {', '.join(missing)}\n"
-                f"Excelの1行目を確認してください。"
-            )
-
-    def test_catch_by_base_class(self):
-        """OriginalLibsError でサブクラスの例外をまとめて補足できる。
-
-        プロジェクト側で except OriginalLibsError と書けば、
-        ライブラリ内で発生したすべての例外を一箇所で処理できる。
-        """
-        with pytest.raises(OriginalLibsError):
-            raise SheetNotFoundError("テスト")
-
-        with pytest.raises(OriginalLibsError):
-            raise ColumnNotFoundError("テスト")
-
-        with pytest.raises(OriginalLibsError):
-            raise MacroError("テスト")
+@pytest.mark.parametrize(
+    ("error", "base", "message"),
+    [
+        (ExcelFileNotFoundError("book.xlsx"), ExcelError, "book.xlsx"),
+        (SheetNotFoundError("集計", ["Sheet1"]), ExcelError, "集計"),
+        (MacroError("Module1.Run", "失敗"), ExcelError, "Module1.Run"),
+        (RowTransferError(3, "不正値"), ExcelError, "3行目"),
+        (EmptyHeaderCellError([2]), ExcelError, "列番号: [2]"),
+        (ExcelHeadersTooFewError(2, 3), ExcelError, "2列"),
+        (FileFormatMismatchError(".csv"), ExcelError, ".csv"),
+        (EncodingDetectionError("data.csv"), CsvError, "data.csv"),
+        (CsvHeadersTooFewError(2, "data.csv"), CsvError, "2列"),
+        (ExcelColumnNotFoundError(["金額"]), ColumnNotFoundError, "金額"),
+        (
+            CsvColumnNotFoundError(["金額"], ["日付"]),
+            ColumnNotFoundError,
+            "存在する列: 日付",
+        ),
+        (KeyColumnNotFoundError("ID", ["名前"]), ColumnNotFoundError, "ID"),
+        (ConfigFileNotFoundError("config.ini"), ConfigError, "config.ini"),
+        (StubTargetNotFoundError("src/config.py"), ConfigError, "src/config.py"),
+        (ConfigSectionNotFoundError("FILES", ["LOG"]), ConfigError, "[FILES]"),
+    ],
+)
+def test_individual_error_type_and_message(
+    error: OriginalLibsError,
+    base: type[OriginalLibsError],
+    message: str,
+) -> None:
+    """各失敗が個別型を持ち、値を含むメッセージを自分で組み立てる。"""
+    with pytest.raises(type(error)) as caught:
+        raise error
+    assert isinstance(caught.value, base)
+    assert isinstance(caught.value, OriginalLibsError)
+    assert message in str(caught.value)
 
 
 class TestWarnCoerce:
     """_warn_coerce のテスト。"""
 
-    def test_none_raises_type_error(self):
-        """None を渡すと TypeError が発生することを確認する。"""
+    def test_none_raises_type_error(self) -> None:
         with pytest.raises(TypeError, match="None"):
             _warn_coerce(None, str, "sheet_name")
 
-    def test_wrong_type_warns_and_converts(self):
-        """型が違う場合に UserWarning を発行して変換することを確認する。"""
+    def test_wrong_type_warns_and_converts(self) -> None:
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             result = _warn_coerce(1, str, "sheet_name")
         assert result == "1"
-        assert isinstance(result, str)
         assert len(caught) == 1
         assert issubclass(caught[0].category, UserWarning)
 
-    def test_correct_type_no_warning(self):
-        """型が一致している場合は警告なしでそのまま返すことを確認する。"""
+    def test_correct_type_no_warning(self) -> None:
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             result = _warn_coerce("ok", str, "sheet_name")
