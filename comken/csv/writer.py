@@ -18,6 +18,16 @@ from .base import CsvBase
 logger = logging.getLogger(__name__)
 
 
+def _needs_header(path: Path) -> bool:
+    """追記の前に見出し行を書く必要があるか返す。
+
+    ファイルが無いときだけでなく、中身が空のときも見出しが要る。
+    前回の実行が途中で落ちて0バイトのファイルが残ると、
+    見出しの無い CSV に追記され、後で読んだときに1行目がデータ扱いになる。
+    """
+    return not path.exists() or path.stat().st_size == 0
+
+
 class CsvWriter(CsvBase):
     """CSV ファイルへの書き込みユーティリティ。"""
 
@@ -117,7 +127,7 @@ class CsvWriter(CsvBase):
             dry_run_log("CSV に 1 行追記: %s", self._path)
             return
         self._validate_encoding([row])
-        is_new = not self._path.exists()
+        is_new = _needs_header(self._path)
         with self._open("a") as f:
             writer = csv.DictWriter(f, fieldnames=self._fieldnames, extrasaction="ignore")
             if is_new:
@@ -140,7 +150,7 @@ class CsvWriter(CsvBase):
             dry_run_log("CSV に %d 行追記: %s", len(rows), self._path)
             return
         self._validate_encoding(rows)
-        is_new = not self._path.exists()
+        is_new = _needs_header(self._path)
         with self._open("a") as f:
             writer = csv.DictWriter(f, fieldnames=self._fieldnames, extrasaction="ignore")
             if is_new:

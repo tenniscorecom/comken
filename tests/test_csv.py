@@ -344,6 +344,26 @@ class TestCsvWriter:
         result = CsvReader(path).rows()
         assert result == [{"注文番号": "A001"}]
 
+    def test_append_writes_header_when_file_is_empty(self, tmp_path):
+        """0バイトのファイルが残っていてもヘッダーから書き直すことを確認する。"""
+        # 前回の実行が途中で落ちると空ファイルが残る。見出し無しで追記すると
+        # 後で読んだときに1行目がデータ扱いになり、静かに間違う。
+        path = tmp_path / "empty.csv"
+        path.touch()
+
+        CsvWriter(path, fieldnames=["注文番号"]).append_row({"注文番号": "A001"})
+
+        assert CsvReader(path).rows() == [{"注文番号": "A001"}]
+
+    def test_append_rows_writes_header_when_file_is_empty(self, tmp_path):
+        """append_rows も同様に空ファイルへヘッダーから書くことを確認する。"""
+        path = tmp_path / "empty.csv"
+        path.touch()
+
+        CsvWriter(path, fieldnames=["注文番号"]).append_rows([{"注文番号": "A001"}])
+
+        assert CsvReader(path).rows() == [{"注文番号": "A001"}]
+
     def test_creates_parent_folder(self, tmp_path):
         """親フォルダがなくても自動作成して書き込めることを確認する。
 
