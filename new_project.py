@@ -37,6 +37,20 @@ TEMPLATE_ONLY_HEADING = "## このひな形の使い方"
 
 PLACEHOLDER_NAME = "（プロジェクト名）"
 
+# プロジェクト名を差し込むファイル（main.py は社内 RPA 基盤へ渡す名前として使う）
+NAMED_FILES = ("main.py", "docs/仕様書.md", "docs/使い方.md")
+
+
+def _fill_project_name(target: Path, project_name: str) -> None:
+    """ひな形の（プロジェクト名）を実際の名前に置き換える。"""
+    for name in NAMED_FILES:
+        path = target / name
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8-sig")
+        if PLACEHOLDER_NAME in text:
+            path.write_text(text.replace(PLACEHOLDER_NAME, project_name), encoding="utf-8")
+
 
 def _strip_template_notes(readme: Path, project_name: str) -> None:
     """README からひな形向けの節を落とし、プロジェクト名を入れる。"""
@@ -63,6 +77,7 @@ def create(project_name: str, into: Path) -> Path:
 
     shutil.copytree(TEMPLATE_DIR, target, ignore=IGNORED)
     _strip_template_notes(target / "README.md", project_name)
+    _fill_project_name(target, project_name)
 
     # NOTE: config.ini はここでは作らない。初回実行時に comken が
     #       config.ini.example から作って確認を促す（作り忘れの受け皿はそちらに一本化）。
