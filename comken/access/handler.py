@@ -1,7 +1,6 @@
 """Microsoft Access のマクロ実行・データ出力。"""
 
 import logging
-import os
 import re
 import shutil
 import tempfile
@@ -34,7 +33,7 @@ UTF8_CODE_PAGE = 65001
 ROWS_BATCH_SIZE = 1000
 DEFAULT_BACKUP_DAYS = 7
 BACKUP_DATE_FORMAT = "%Y%m%d_%H%M%S"
-BACKUP_FOLDER_NAME = "access-backup"
+BACKUP_FOLDER_NAME = "backup"
 _ENCODING_CODE_PAGES = {
     Encoding.CP932: CP932_CODE_PAGE,
     Encoding.UTF8_SIG: UTF8_CODE_PAGE,
@@ -50,6 +49,9 @@ class AccessDatabase(FileBase):
     既定で7日間残す。バックアップは成功後も削除せず、自動では書き戻さない。
     復旧時は内容を確認した人が手でコピーする（自動復旧は正常なデータを古い控えで
     上書きする危険があるため）。
+    バックアップ先は既定でカレントディレクトリ直下の ``backup``。プロジェクトが
+    共有フォルダ上にある場合、ネットワーク越しのコピーは遅く、破損リスクを避ける
+    目的も損なうため、``backup_dir`` にローカルフォルダを明示する。
 
     数十万件を CSV に出す場合は、Python にデータを載せない ``export_csv()`` を使う。
     ``rows()`` は逐次処理用であり、結果を ``list`` にすると全件分のメモリを消費する。
@@ -63,6 +65,7 @@ class AccessDatabase(FileBase):
         local_copy: bool = True,
         backup: bool | None = None,
         backup_days: int = DEFAULT_BACKUP_DAYS,
+        backup_dir: str | Path | None = None,
     ) -> None:
         super().__init__(path)
         if not self.path.is_file():
@@ -71,16 +74,19 @@ class AccessDatabase(FileBase):
             raise ValueError("backup_days は0以上で指定してください。")
 
         self._working_path = self._path
+        # 実行.bat、config.ini、logs/ と同じプロジェクトルートなら、
+        # 非エンジニアも実行フォルダを開くだけでバックアップを見つけられる。
+        self._backup_dir = (
+            Path.cwd() / BACKUP_FOLDER_NAME if backup_dir is None else Path(backup_dir)
+        )
         self._temporary_directory: tempfile.TemporaryDirectory[str] | None = None
         self._access = None
         should_backup = not local_copy if backup is None else backup
 
         if should_backup:
             self._backup(backup_days)
-        elif not is_dry_run():
-            backup_folder = _backup_folder()
-            if backup_folder.is_dir():
-                _remove_expired_backups(backup_folder, self._path, backup_days)
+        elif not is_dry_run() and self._backup_dir.is_dir():
+            _remove_expired_backups(self._backup_dir, self._path, backup_days)
 
         if local_copy:
             self._temporary_directory = tempfile.TemporaryDirectory(prefix="comken_access_")
@@ -228,7 +234,7 @@ class AccessDatabase(FileBase):
             raise AccessSourceNotFoundError(source, names)
 
     def _backup(self, backup_days: int) -> None:
-        backup_folder = _backup_folder()
+        backup_folder = self._backup_dir
         if is_dry_run():
             dry_run_log(
                 "Access ファイルをバックアップ: %s → %s（保持日数: %d日）",
@@ -266,14 +272,7 @@ class AccessDatabase(FileBase):
                     cleanup_error,
                 )
             raise AccessBackupError(self._path, backup_path, e) from e
-        logger.info("Access ファイルをバックアップしました: %s", backup_path)
-
-
-def _backup_folder() -> Path:
-    base = os.environ.get("LOCALAPPDATA")
-    if base:
-        return Path(base) / "comken" / BACKUP_FOLDER_NAME
-    return Path.home() / ".comken" / BACKUP_FOLDER_NAME
+        logger.info("バックアップを作りました: %s", backup_path)
 
 
 def _reserve_backup_path(folder: Path, source: Path) -> Path:
@@ -301,6 +300,7 @@ def _remove_expired_backups(folder: Path, source: Path, backup_days: int) -> Non
     except OSError as e:
         logger.debug("バックアップフォルダを確認できませんでした: %s（%s）", folder, e)
         return
+    removed_count = 0
     for backup_path in backup_paths:
         if not filename_pattern.fullmatch(backup_path.name):
             continue
@@ -308,5 +308,12 @@ def _remove_expired_backups(folder: Path, source: Path, backup_days: int) -> Non
             modified = backup_path.stat().st_mtime
             if modified < cutoff.timestamp():
                 backup_path.unlink()
+                removed_count += 1
         except OSError as e:
             logger.debug("期限切れバックアップを削除できませんでした: %s（%s）", backup_path, e)
+    if removed_count:
+        logger.info(
+            "バックアップを%d日分残す設定に従い、期限切れの控えを%d件削除しました。",
+            backup_days,
+            removed_count,
+        )

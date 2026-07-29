@@ -3,7 +3,6 @@
 import inspect
 import logging
 import os
-import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -94,7 +93,7 @@ class TestAccessDatabase:
     def test_local_copy_false_backs_up_before_opening(self, tmp_path):
         path = tmp_path / "顧客.accdb"
         path.write_bytes(b"database")
-        backup_folder = tmp_path / "backups"
+        backup_folder = tmp_path / "backup"
         access = MagicMock()
 
         def assert_backup_exists(_database_path):
@@ -104,9 +103,8 @@ class TestAccessDatabase:
 
         access.OpenCurrentDatabase.side_effect = assert_backup_exists
         with (
-            patch("comken.access.handler._backup_folder", return_value=backup_folder),
             patch("comken.access.handler.win32com.client.DispatchEx", return_value=access),
-            AccessDatabase(path, local_copy=False),
+            AccessDatabase(path, local_copy=False, backup_dir=backup_folder),
         ):
             pass
 
@@ -115,9 +113,8 @@ class TestAccessDatabase:
         path.touch()
         backup_folder = tmp_path / "backups"
         with (
-            patch("comken.access.handler._backup_folder", return_value=backup_folder),
             patch("comken.access.handler.win32com.client.DispatchEx", return_value=MagicMock()),
-            AccessDatabase(path),
+            AccessDatabase(path, backup_dir=backup_folder),
         ):
             pass
         assert not backup_folder.exists()
@@ -127,9 +124,8 @@ class TestAccessDatabase:
         path.touch()
         backup_folder = tmp_path / "backups"
         with (
-            patch("comken.access.handler._backup_folder", return_value=backup_folder),
             patch("comken.access.handler.win32com.client.DispatchEx", return_value=MagicMock()),
-            AccessDatabase(path, local_copy=False, backup=False),
+            AccessDatabase(path, local_copy=False, backup=False, backup_dir=backup_folder),
         ):
             pass
         assert not backup_folder.exists()
@@ -141,11 +137,10 @@ class TestAccessDatabase:
         fixed_now = datetime(2026, 7, 29, 15, 30, 45, tzinfo=timezone.utc)
         for _ in range(2):
             with (
-                patch("comken.access.handler._backup_folder", return_value=backup_folder),
                 patch("comken.access.handler.now", return_value=fixed_now),
                 patch("comken.utils.files.naming.date.now", return_value=fixed_now),
                 patch("comken.access.handler.win32com.client.DispatchEx", return_value=MagicMock()),
-                AccessDatabase(path, local_copy=False),
+                AccessDatabase(path, local_copy=False, backup_dir=backup_folder),
             ):
                 pass
         assert sorted(item.name for item in backup_folder.iterdir()) == [
@@ -153,7 +148,7 @@ class TestAccessDatabase:
             "20260729_153045_顧客_2.accdb",
         ]
 
-    def test_removes_only_expired_backups_for_same_database(self, tmp_path):
+    def test_removes_only_expired_backups_for_same_database(self, tmp_path, caplog):
         path = tmp_path / "顧客.accdb"
         path.touch()
         backup_folder = tmp_path / "backups"
@@ -171,29 +166,29 @@ class TestAccessDatabase:
         os.utime(recent_same, (recent_timestamp, recent_timestamp))
 
         with (
-            patch("comken.access.handler._backup_folder", return_value=backup_folder),
             patch("comken.access.handler.now", return_value=fixed_now),
             patch("comken.utils.files.naming.date.now", return_value=fixed_now),
             patch("comken.access.handler.win32com.client.DispatchEx", return_value=MagicMock()),
-            AccessDatabase(path, local_copy=False),
+            caplog.at_level(logging.INFO, logger="comken.access.handler"),
+            AccessDatabase(path, local_copy=False, backup_dir=backup_folder),
         ):
             pass
 
         assert not old_same.exists()
         assert recent_same.exists()
         assert old_other.exists()
+        assert "7日分残す設定に従い、期限切れの控えを1件削除しました" in caplog.text
 
     def test_backup_failure_does_not_open_database(self, tmp_path):
         path = tmp_path / "顧客.accdb"
         path.touch()
         access = MagicMock()
         with (
-            patch("comken.access.handler._backup_folder", return_value=tmp_path / "backups"),
             patch("comken.access.handler.shutil.copy2", side_effect=PermissionError("拒否")),
             patch("comken.access.handler.win32com.client.DispatchEx", return_value=access),
             pytest.raises(AccessBackupError, match="更新を中止"),
         ):
-            AccessDatabase(path, local_copy=False)
+            AccessDatabase(path, local_copy=False, backup_dir=tmp_path / "backup")
         access.OpenCurrentDatabase.assert_not_called()
 
     def test_lock_file_warns_during_backup(self, tmp_path, caplog):
@@ -201,10 +196,9 @@ class TestAccessDatabase:
         path.touch()
         path.with_suffix(".laccdb").touch()
         with (
-            patch("comken.access.handler._backup_folder", return_value=tmp_path / "backups"),
             patch("comken.access.handler.win32com.client.DispatchEx", return_value=MagicMock()),
             caplog.at_level(logging.WARNING, logger="comken.access.handler"),
-            AccessDatabase(path, local_copy=False),
+            AccessDatabase(path, local_copy=False, backup_dir=tmp_path / "backup"),
         ):
             pass
         assert "他の利用者が Access を開いている状態" in caplog.text
@@ -215,21 +209,28 @@ class TestAccessDatabase:
         backup_folder = tmp_path / "backups"
         with (
             dry_run(),
-            patch("comken.access.handler._backup_folder", return_value=backup_folder),
             patch("comken.access.handler.win32com.client.DispatchEx", return_value=MagicMock()),
-            AccessDatabase(path, local_copy=False),
+            AccessDatabase(path, local_copy=False, backup_dir=backup_folder),
         ):
             pass
         assert not backup_folder.exists()
 
-    def test_backup_folder_is_not_temporary_folder(self, monkeypatch, tmp_path):
+    def test_default_backup_folder_is_current_directory(self, monkeypatch, tmp_path):
         local_app_data = tmp_path / "local-app-data"
         monkeypatch.setenv("LOCALAPPDATA", str(local_app_data))
-        from comken.access.handler import _backup_folder
+        monkeypatch.chdir(tmp_path)
+        path = tmp_path / "顧客.accdb"
+        path.write_bytes(b"database")
 
-        backup_folder = _backup_folder()
-        assert backup_folder == local_app_data / "comken" / "access-backup"
-        assert backup_folder != Path(tempfile.gettempdir())
+        with (
+            patch("comken.access.handler.win32com.client.DispatchEx", return_value=MagicMock()),
+            AccessDatabase(path, local_copy=False),
+        ):
+            pass
+
+        backups = list((tmp_path / "backup").glob("*.accdb"))
+        assert len(backups) == 1
+        assert not local_app_data.exists()
 
     def test_local_copy_logs_that_changes_are_not_reflected(self, tmp_path, caplog):
         path = tmp_path / "顧客.accdb"

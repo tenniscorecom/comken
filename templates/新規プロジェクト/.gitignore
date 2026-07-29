@@ -20,5 +20,6 @@ src/config.pyi
 
 # ログ・出力・一時ファイル
 logs/
+backup/
 output/
 *.log
