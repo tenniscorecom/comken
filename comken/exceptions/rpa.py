@@ -10,7 +10,7 @@ class RpaError(OriginalLibsError):
 class RpaLibraryNotFoundError(RpaError):
     """社内ライブラリを読み込めない場合。
 
-    発生箇所: comken.rpa._load()
+    発生箇所: comken.run._load()
     """
 
     def __init__(self, module_path: str, detail: Exception) -> None:
@@ -18,5 +18,5 @@ class RpaLibraryNotFoundError(RpaError):
             f"社内ライブラリを読み込めませんでした: {module_path}\n"
             f"（{detail}）\n"
             "社内ライブラリが PYTHONPATH に含まれているか、"
-            "comken/rpa.py の LIB_ROOT・LIB_VERSION が今のものと合っているか確認してください。"
+            "comken/run.py の LIB_ROOT・LIB_VERSION が今のものと合っているか確認してください。"
         )

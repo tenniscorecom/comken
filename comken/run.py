@@ -9,6 +9,10 @@ import 行を書き換えることになる。comken は共有サーバー上の
 PYTHONPATH で参照する運用なので、**ここで吸収すれば comken を差し替えるだけで
 全プロジェクトが追随する**。
 
+    from comken.run import backoffice   # イントラネット側は intranet
+
+    backoffice(main, "受注取込")
+
 使い方は docs/機能カタログ.md を参照。
 """
 
@@ -62,7 +66,7 @@ def _prepare(project_name: str) -> None:
     #       書き方が分かったらここに足す（呼び出し側は変更不要）。
 
 
-def _run(target: str, main: Callable[[], Any], project_name: str) -> Any:
+def _call(target: str, main: Callable[[], Any], project_name: str) -> Any:
     """社内 RPA 基盤の入口を呼ぶ。"""
     entry = _load(target)
     _prepare(project_name)
@@ -70,17 +74,17 @@ def _run(target: str, main: Callable[[], Any], project_name: str) -> Any:
     return entry.rpta(main, project_name)
 
 
-def run_backoffice(main: Callable[[], Any], project_name: str) -> Any:
+def backoffice(main: Callable[[], Any], project_name: str) -> Any:
     """バックオフィスの RPA として main を実行する。
 
     社内ライブラリが設定の初期化と時間計測を行い、main を呼ぶ。
     """
-    return _run("backoffice", main, project_name)
+    return _call("backoffice", main, project_name)
 
 
-def run_intranet(main: Callable[[], Any], project_name: str) -> Any:
+def intranet(main: Callable[[], Any], project_name: str) -> Any:
     """イントラネットの RPA として main を実行する。
 
     社内ライブラリが設定の初期化と時間計測を行い、main を呼ぶ。
     """
-    return _run("intranet", main, project_name)
+    return _call("intranet", main, project_name)
