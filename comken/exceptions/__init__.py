@@ -36,6 +36,8 @@ ComkenError
 │   └── RpaLibraryNotFoundError
 ├── BrowserError
 │   ├── DriverStartError
+│   ├── BrowsersNotStartedError
+│   ├── BrowsersClosedError
 │   ├── SessionNotStartedError
 │   ├── SessionClosedError
 │   ├── ConcurrentSessionUseError
@@ -69,6 +71,8 @@ from .access import (
 from .base import ComkenError
 from .browser import (
     BrowserError,
+    BrowsersClosedError,
+    BrowsersNotStartedError,
     ConcurrentSessionUseError,
     DownloadTimeoutError,
     DriverStartError,
@@ -177,6 +181,8 @@ __all__ = [
     "RpaLibraryNotFoundError",
     "BrowserError",
     "DriverStartError",
+    "BrowsersNotStartedError",
+    "BrowsersClosedError",
     "SessionNotStartedError",
     "SessionClosedError",
     "ConcurrentSessionUseError",

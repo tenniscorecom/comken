@@ -20,6 +20,8 @@ from comken.browser import BrowserOptions, Browsers, DownloadDir, Locator, Page,
 from comken.browser.driver_update import _major, _pick_source, _replace_driver
 from comken.browser.session import BrowserSession
 from comken.exceptions import (
+    BrowsersClosedError,
+    BrowsersNotStartedError,
     ConcurrentSessionUseError,
     DriverStartError,
     ElementNotFoundError,
@@ -240,6 +242,56 @@ class TestPopupTab:
 
         with pytest.raises(PopupTabNotOpenedError), session.popup_tab(timeout=1):
             pass
+
+
+class TestBrowsersRequiresWith:
+    """with を使わない書き方を弾くことのテスト。"""
+
+    def test_rejects_launch_without_with(self, monkeypatch):
+        """with に入れずに launch すると、ブラウザを起動する前に止まる。"""
+        edge = MagicMock()
+        monkeypatch.setattr("comken.browser.session.webdriver.Edge", edge)
+
+        browsers = Browsers()
+
+        with pytest.raises(BrowsersNotStartedError):
+            browsers.launch("kintai")
+
+        edge.assert_not_called()  # 弾かれた時点で何も起きていない
+
+    def test_rejects_start_without_with(self):
+        """with に入れずに start しても動かない。"""
+        browsers = Browsers()
+
+        with pytest.raises(BrowsersNotStartedError):
+            browsers.start(lambda: "動いてしまった")
+
+    def test_rejects_getitem_without_with(self):
+        """with に入れずにセッションを取り出すこともできない。"""
+        browsers = Browsers()
+
+        with pytest.raises(BrowsersNotStartedError):
+            browsers["kintai"]
+
+    def test_rejects_launch_after_with(self, monkeypatch):
+        """with を抜けた後に使うと BrowsersClosedError になる。"""
+        monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
+        monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
+
+        with Browsers() as browsers:
+            browsers.launch("kintai")
+
+        with pytest.raises(BrowsersClosedError):
+            browsers.launch("keiri")
+
+    def test_error_message_shows_correct_form(self):
+        """エラーメッセージに、正しい書き方が載っている。"""
+        browsers = Browsers()
+
+        with pytest.raises(BrowsersNotStartedError) as exc_info:
+            browsers.launch("kintai")
+
+        assert "with Browsers() as browsers:" in str(exc_info.value)
 
 
 class TestBrowsers:

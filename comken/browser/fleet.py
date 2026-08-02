@@ -44,7 +44,12 @@ from contextlib import ExitStack
 from pathlib import Path
 from typing import TypeVar
 
-from comken.exceptions import SessionNameConflictError, SessionNotFoundError
+from comken.exceptions import (
+    BrowsersClosedError,
+    BrowsersNotStartedError,
+    SessionNameConflictError,
+    SessionNotFoundError,
+)
 
 from .download import DownloadDir
 from .options import BrowserOptions
@@ -61,10 +66,14 @@ _MAX_BACKGROUND_TASKS = 16
 
 
 class Browsers:
-    """複数サイト分のブラウザをまとめて起動・終了する。with 文の中で使う。
+    """複数サイト分のブラウザをまとめて起動・終了する。**with 文の中でだけ使える。**
 
     どこで例外が出ても、起動済みのブラウザはすべて閉じる。
     1つのブラウザの終了に失敗しても、残りの終了は続行される。
+
+    with を使わずに launch すると BrowsersNotStartedError になる（ブラウザは起動しない）。
+    with を必須にしているのは、途中で例外が出たときにブラウザのプロセスが残り、
+    次の実行でドライバーの更新まで邪魔するのを防ぐため。
 
     Attributes:
         names: 起動済みのセッション名（起動した順）。
@@ -75,12 +84,16 @@ class Browsers:
         self._sessions: dict[str, BrowserSession] = {}
         self._executor: ThreadPoolExecutor | None = None
         self._tasks: list[BackgroundTask] = []
+        self._is_started = False
+        self._is_closed = False
 
     def __enter__(self) -> "Browsers":
         self._stack.__enter__()
+        self._is_started = True
         return self
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
+        self._is_closed = True
         # ブラウザを閉じる前に、裏で動いている処理の終了を待つ。
         # 先に閉じると、操作の途中でブラウザが消えて追いにくいエラーになる
         self._finish_background_tasks()
@@ -117,6 +130,7 @@ class Browsers:
             SessionNameConflictError: 同じ名前ですでに起動している場合。
             DriverStartError: ブラウザを起動できなかった場合。
         """
+        self._require_in_with(f"launch({name!r})")
         if name in self._sessions:
             raise SessionNameConflictError(name)
 
@@ -155,6 +169,7 @@ class Browsers:
         Returns:
             結果を受け取るための取っ手。wait() で結果、is_done で終了確認ができる。
         """
+        self._require_in_with("start")
         if self._executor is None:
             self._executor = ThreadPoolExecutor(
                 max_workers=_MAX_BACKGROUND_TASKS, thread_name_prefix="browser"
@@ -229,9 +244,25 @@ class Browsers:
         launch の戻り値を変数に入れておけば普通は不要。
         処理を関数へ切り出したときに、引数を増やさず取り出すためにある。
         """
+        self._require_in_with(f"browsers[{name!r}]")
         if name not in self._sessions:
             raise SessionNotFoundError(name, self.names)
         return self._sessions[name]
+
+    def _require_in_with(self, operation: str) -> None:
+        """with の中で使われているかを確かめる。
+
+        with を使わないと、途中で例外が出たときにブラウザのプロセスが残り続ける。
+        起動してしまう前にここで止めるので、弾かれた時点では何も起きていない。
+
+        Raises:
+            BrowsersNotStartedError: with に入れずに使った場合。
+            BrowsersClosedError: with を抜けた後に使った場合。
+        """
+        if self._is_closed:
+            raise BrowsersClosedError(operation)
+        if not self._is_started:
+            raise BrowsersNotStartedError(operation)
 
     def _finish_background_tasks(self) -> None:
         """裏で動いている処理の終了を待ってから、実行の仕組みを片付ける。

@@ -112,6 +112,8 @@
 
 | エラー名 | 意味 | 対処 |
 |---|---|---|
+| `BrowsersNotStartedError` | `with` を使わずに `Browsers` を使った | `with Browsers() as browsers:` の中で使う（ブラウザは起動していないので実害はない） |
+| `BrowsersClosedError` | `with` を抜けた後の `Browsers` を使った | 続けたい処理を `with` の中に入れる。外へ持ち出すのは取り出した値だけにする |
 | `SessionNotStartedError` | `with` を使わずにブラウザを操作した | `with Browsers() as browsers:` の中で使う |
 | `SessionClosedError` | `with` を抜けた後のブラウザを操作した | `with` の外へ持ち出すのは、ブラウザではなく取り出した値にする |
 | `ConcurrentSessionUseError` | 1つのブラウザを複数の処理から同時に操作した | サイトごとに `launch` でブラウザを分ける |

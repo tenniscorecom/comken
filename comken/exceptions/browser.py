@@ -3,6 +3,8 @@
 BrowserError
 ├── 起動・終了に関するもの
 │   ├── DriverStartError            ドライバーの起動に失敗した
+│   ├── BrowsersNotStartedError     Browsers を with に入れずに使った
+│   ├── BrowsersClosedError         with を抜けた後の Browsers を使った
 │   ├── SessionNotStartedError      with に入らずに操作した
 │   └── SessionClosedError          with を抜けた後に操作した
 ├── 並列実行に関するもの
@@ -44,6 +46,48 @@ class DriverStartError(BrowserError):
             "  1. そのパスに msedgedriver.exe があるか\n"
             "  2. msedgedriver.exe のバージョンが、今インストールされている Edge と一致しているか\n"
             "     （Edge のバージョンは edge://version で確認できます）"
+        )
+
+
+class BrowsersNotStartedError(BrowserError):
+    """with に入れずに Browsers を使った場合。
+
+    with を使わないと、処理の途中で例外が出たときにブラウザのプロセスが残り続ける。
+    残ったブラウザはドライバーの更新も邪魔するため、必ず with の中で使う。
+
+        # 誤り
+        browsers = Browsers()
+        browsers.launch("kintai")     # ← ここで送出される（ブラウザは起動しない）
+
+        # 正しい
+        with Browsers() as browsers:
+            browsers.launch("kintai")
+    """
+
+    def __init__(self, operation: str) -> None:
+        super().__init__(
+            f"with に入れずに Browsers を使いました: {operation}\n"
+            "Browsers は with 文の中でだけ使えます。\n"
+            "  with Browsers() as browsers:\n"
+            '      kintai = browsers.launch("kintai")\n'
+            "      ...\n"
+            "こうしておくと、途中でエラーが出てもブラウザは必ず閉じられます。"
+        )
+
+
+class BrowsersClosedError(BrowserError):
+    """with を抜けた後の Browsers を使った場合。
+
+    with の外へ browsers を持ち出すと起きる。with を抜けた時点で
+    ブラウザはすべて閉じているため、そこから起動や操作はできない。
+    """
+
+    def __init__(self, operation: str) -> None:
+        super().__init__(
+            f"with を抜けた後の Browsers を使いました: {operation}\n"
+            "ブラウザはすでに全部閉じています。\n"
+            "続けて操作したい処理は with の中に入れてください。\n"
+            "with の外へ持ち出すのはブラウザではなく、取り出した値にします。"
         )
 
 
