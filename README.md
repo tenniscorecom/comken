@@ -1109,6 +1109,7 @@ class LoginPage(SitePage):
 | 確認ダイアログ | `alert_accept()` / `alert_dismiss()` / `alert_text()` |
 | iframe の中を操作 | `with page.frame(LOC):` |
 | スクリーンショット | `save_screenshot(prefix)` |
+| 一覧の各行を処理する | `elements(LOC)`（WebElement のリスト） |
 | 最終手段 | `element(LOC)`（生の WebElement） / `js(script, *args)` |
 
 要素は自動で待機する（既定10秒）。時間内に見つからない場合は `ElementNotFoundError` になり、

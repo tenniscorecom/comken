@@ -660,6 +660,24 @@ class TestPage:
 
         assert "login-btn" in str(exc_info.value)
 
+    def test_elements_returns_all_matches(self, tmp_path):
+        """elements は一致した全要素をリストで返す。"""
+        page = self._page(tmp_path)
+        rows = [MagicMock(), MagicMock(), MagicMock()]
+        page._wait.until.return_value = rows
+
+        assert page.elements(Locator.css("table tr")) == rows
+
+    def test_elements_reports_selector_when_none_found(self, tmp_path):
+        """1件も見つからなければ、セレクター付きのエラーになる。"""
+        page = self._page(tmp_path)
+        page._wait.until.side_effect = TimeoutException()
+
+        with pytest.raises(ElementNotFoundError) as exc_info:
+            page.elements(Locator.css("table tr"))
+
+        assert "table tr" in str(exc_info.value)
+
     def test_escape_hatches_are_guarded_too(self, tmp_path):
         """逃げ道（element / js）も同時操作の見張りを通る。
 

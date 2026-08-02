@@ -252,6 +252,34 @@ class Page:
         with self.session.operating(f"element({locator})"):
             return self._until(EC.presence_of_element_located(tuple(locator)), locator, "見つかり")
 
+    def elements(self, locator: Locator) -> list[WebElement]:
+        """一致する全要素を WebElement のリストで返す。1件見つかるまで待つ。
+
+        一覧表の行を1行ずつ処理するときに使う。行の中をさらに探すときは、
+        行の WebElement から find_element(*Locator) で絞り込む:
+
+            for row in page.elements(page.ROWS):
+                if "未提出" in row.text:
+                    row.find_element(*page.EDIT_BUTTON).click()
+
+        まず値を読むだけなら texts() のほうが簡単で、
+        「何番目かをクリックする」だけなら click(locator, index=...) で足りる。
+
+        Args:
+            locator: 対象のセレクター。
+
+        Returns:
+            見つかった要素のリスト（画面に並んでいる順）。
+
+        Raises:
+            ElementNotFoundError: 1件も見つからないまま待ち時間が過ぎた場合。
+                                  0件がありうる場面では、先に has() か count() で確認する。
+        """
+        with self.session.operating(f"elements({locator})"):
+            return self._until(
+                EC.presence_of_all_elements_located(tuple(locator)), locator, "見つかり"
+            )
+
     def js(self, script: str, *args: object) -> object:
         """JavaScript を実行して戻り値を返す。
 
