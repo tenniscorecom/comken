@@ -34,6 +34,16 @@ ComkenError
 │   └── CsvCellReferenceError
 ├── RpaError
 │   └── RpaLibraryNotFoundError
+├── BrowserError
+│   ├── DriverStartError
+│   ├── SessionNotStartedError
+│   ├── SessionClosedError
+│   ├── ConcurrentSessionUseError
+│   ├── SessionNameConflictError
+│   ├── SessionNotFoundError
+│   ├── ElementNotFoundError
+│   ├── PopupTabNotOpenedError
+│   └── DownloadTimeoutError
 ├── InvalidColumnError
 ├── ColumnNotFoundError
 │   ├── ExcelColumnNotFoundError
@@ -57,6 +67,18 @@ from .access import (
     AccessSourceNotFoundError,
 )
 from .base import ComkenError
+from .browser import (
+    BrowserError,
+    ConcurrentSessionUseError,
+    DownloadTimeoutError,
+    DriverStartError,
+    ElementNotFoundError,
+    PopupTabNotOpenedError,
+    SessionClosedError,
+    SessionNameConflictError,
+    SessionNotFoundError,
+    SessionNotStartedError,
+)
 from .column import (
     ColumnNotFoundError,
     CsvColumnNotFoundError,
@@ -153,4 +175,14 @@ __all__ = [
     "OutlookAttachmentNotFoundError",
     "RpaError",
     "RpaLibraryNotFoundError",
+    "BrowserError",
+    "DriverStartError",
+    "SessionNotStartedError",
+    "SessionClosedError",
+    "ConcurrentSessionUseError",
+    "SessionNameConflictError",
+    "SessionNotFoundError",
+    "ElementNotFoundError",
+    "PopupTabNotOpenedError",
+    "DownloadTimeoutError",
 ]

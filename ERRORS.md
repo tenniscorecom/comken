@@ -62,7 +62,7 @@
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
 | `FileNotFoundError` | ファイルが見つからない | ファイルの置き場所と名前を確認する。「今日の日付のファイル」を探す処理なら、今日のファイルが作られているか確認する |
-| `TimeoutError` | ダウンロードが終わらない | ネットワークの状態を確認して再実行する |
+| `DownloadTimeoutError` | ダウンロードが終わらない | ネットワークの状態を確認して再実行する。大きいファイルなら時間がかかっているだけのこともある |
 | `EncodingDetectionError` | CSV の文字コードを判定できない | CSV の保存形式を確認し、管理者へ連絡する |
 | `CsvHeadersTooFewError` | 指定した見出し数が CSV の列数より少ない | 管理者へ連絡する |
 | `CsvNoDataRowsError` | CSV に見出し以外のデータ行がない | 見出し行の下にデータが1行以上あるか確認する |
@@ -95,6 +95,7 @@
 | `ColumnNotFoundError` | Excel・CSV・データ比較で列が見つからないエラー |
 | `ConfigError` | config.ini に関するエラー |
 | `RpaError` | 社内 RPA 基盤の呼び出しに関するエラー |
+| `BrowserError` | ブラウザ操作に関するエラー |
 
 ---
 
@@ -102,10 +103,20 @@
 
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
-| `TimeoutException` | 画面の表示待ちで時間切れ | もう一度実行する。サイトが重いだけのことが多い。毎回出るなら画面が変わった可能性があるので管理者へ |
-| `NoSuchElementException` | 画面の部品が見つからない | サイトの画面が変わった可能性が高い。管理者へ |
-| `SessionNotCreatedException` | Edge とドライバーのバージョン不一致 | Windows Update で Edge が更新された直後に起きる。管理者へ（msedgedriver の更新が必要） |
+| `ElementNotFoundError` | 画面の部品が時間内に見つからない | もう一度実行する。サイトが重いだけのことが多い。毎回出るなら画面が変わった可能性があるので管理者へ（エラーに、どの部品を探していたかが出ます） |
+| `DriverStartError` | ブラウザを起動できない | エラーの本文にある確認事項をそのまま試す。Windows Update で Edge が更新された直後に起きやすい |
+| `PopupTabNotOpenedError` | 別タブが開かない | もう一度実行する。続く場合は、その画面の「別ウィンドウで開く」ボタンが変わった可能性があるので管理者へ |
 | `WebDriverException` | ブラウザ操作の一般的なエラー | Edge のウィンドウをすべて閉じて再実行する |
+
+### 作り手向け（使う人の操作では直せないもの）
+
+| エラー名 | 意味 | 対処 |
+|---|---|---|
+| `SessionNotStartedError` | `with` を使わずにブラウザを操作した | `with Browsers() as browsers:` の中で使う |
+| `SessionClosedError` | `with` を抜けた後のブラウザを操作した | `with` の外へ持ち出すのは、ブラウザではなく取り出した値にする |
+| `ConcurrentSessionUseError` | 1つのブラウザを複数の処理から同時に操作した | サイトごとに `launch` でブラウザを分ける |
+| `SessionNameConflictError` | 同じ名前で2回 `launch` した | 名前を変える（同一サイトの別アカウントなら `kintai_a` / `kintai_b` など） |
+| `SessionNotFoundError` | `launch` していない名前を取り出した | 先に `launch` する。エラーに起動済みの一覧が出ます |
 
 ---
 

@@ -910,200 +910,197 @@ if is_excel_running():
 
 ## Browser
 
-### EdgeDriver
+詳しい使い方と、社内システムを追加する手順は [docs/ブラウザ操作.md](docs/ブラウザ操作.md) を参照。
+
+### Browsers（入口）
+
+**1サイトにつき1ブラウザを起動する。タブでは分けない。**
+ダウンロード先・起動オプション・ログイン状態はすべてブラウザ単位で決まるため、
+タブで分けるとサイト間で取り違えが起きる。
+
+サイトが1つでも複数でも書き方は同じで、増やすときは `launch` を1行足すだけ:
 
 ```python
-from comken.browser.driver import EdgeDriver
+from comken.browser import Browsers
 
-URL = "https://example.com"
+with Browsers() as browsers:
+    kintai = browsers.launch("kintai", KintaiOptions)
+    keiri = browsers.launch("keiri", KeiriOptions)      # ← 増えるのはこの行だけ
 
-# デフォルト設定のまま起動
-with EdgeDriver() as d:
-    d.open(URL)
+    kintai_days = KintaiFlow(kintai).unfilled_days()
+    keiri_rows = KeiriFlow(keiri).pending_rows()
 ```
 
-よく使うブラウザ操作は `d.` から直接呼べる（エディタ補完が効く）:
+`launch` に付けた名前で、ダウンロードフォルダ・ログイン状態・ログのファイル名が自動的に分かれる。
+同じサイトを2アカウントで開く場合も、名前を変えれば混ざらない。
+
+| メソッド | 何をするか |
+|---|---|
+| `launch(name, options=None, download_dir=None)` | 名前を付けてブラウザを1つ起動し、`BrowserSession` を返す |
+| `parallel(*tasks)` | 複数の処理を同時に実行し、渡した順に結果を返す |
+| `names` | 起動済みのセッション名（起動した順） |
+| `browsers["kintai"]` | 名前でセッションを取り出す |
+
+**同時に走らせる**: 逐次で書いた呼び出しを `lambda:` で包むだけ。
 
 ```python
-d.open(url)                      # URL を開く
-d.find_element(By.ID, "btn")     # 要素取得
-d.current_url                    # 現在の URL
-d.title                          # ページタイトル
-d.save_screenshot("shot.png")    # スクリーンショット
-d.switch_to.frame("main")        # フレーム切り替え
-d.refresh() / d.back()           # 再読み込み / 戻る
+with Browsers() as browsers:
+    kintai = browsers.launch("kintai", KintaiOptions)
+    keiri = browsers.launch("keiri", KeiriOptions)
 
-# ここにない WebDriver の機能は d.driver から使う（こちらも補完が効く）
-d.driver.set_window_size(1200, 800)
+    kintai_days, keiri_rows = browsers.parallel(
+        lambda: KintaiFlow(kintai).unfilled_days(),
+        lambda: KeiriFlow(keiri).pending_rows(),
+    )
 ```
 
-**エラー時の自動スクリーンショット**: with ブロック内で例外が発生すると、
-その時点の画面が `logs/error_YYYYMMDD_HHMMSS.png` に自動保存される（原因調査用）。
+1つの処理では1つのセッションだけを触ること。同じセッションを2つの処理から触ると
+`ConcurrentSessionUseError` で即座に止まる（黙って別の画面を操作するより安全なため）。
 
-**Page Object のセレクターは Locator でクラス変数にまとめる**（画面変更時に直す場所が一箇所になる）:
+---
+
+### BrowserSession（1サイト分のブラウザ）
+
+`with` の中でだけ使える。使わずに操作すると `SessionNotStartedError` になる
+（エラーで落ちたときにブラウザのプロセスが残り続けるのを防ぐため）。
 
 ```python
-from comken.browser import BasePage, EdgeDriver, Locator
+session.open(url)                    # URL を開く
+session.current_url                  # 現在の URL
+session.title                        # ページタイトル
+session.refresh() / session.back()   # 再読み込み / 戻る
+session.save_screenshot("prefix")    # logs/prefix_セッション名_日時.png に保存
+session.download_dir.wait()          # ダウンロード完了まで待つ
 
-class LoginPage(BasePage):
-    URL = "https://example.com/login"
+with session.popup_tab():            # 別タブへ移り、抜けるときに閉じて戻る
+    session.save_screenshot("report")
 
-    USERNAME = Locator.id("username")
-    PASSWORD = Locator.id("password")
-    LOGIN_BTN = Locator.css("#login-btn")
-
-    def login(self, username: str, password: str) -> None:
-        self.input(self.USERNAME, username)
-        self.input(self.PASSWORD, password)
-        self.click(self.LOGIN_BTN)
-
-with EdgeDriver() as d:
-    page = LoginPage(d)          # EdgeDriver をそのまま渡せる
-    page.open(page.URL)
-    page.login("yamada", "password123")
+session.raw.set_window_size(1200, 800)   # ここにない機能は raw（生の WebDriver）から
 ```
 
-**ブラウザオプションのカスタマイズ:**
+**エラー時の自動スクリーンショット**: `with` の中で例外が発生すると、
+その時点の画面が `logs/error_セッション名_YYYYMMDD_HHMMSS.png` に自動保存される。
 
-デフォルト設定は `comken/browser/options.py` の `BrowserOptions` を参照。
-変更したい項目をインスタンスに直接上書きする。
+---
+
+### BrowserOptions（起動オプション）
+
+サイトごとにサブクラスを作り、変えたい項目だけ上書きする。
+`Browsers.launch` にクラスのまま渡せば、セッションごとに別インスタンスが作られる。
 
 ```python
 # src/browser_options.py（プロジェクト側）
-from comken.browser.options import BrowserOptions
+from comken.browser import BrowserOptions
 
-options = BrowserOptions()
-options.DRIVER_PATH = r"C:\tools\msedgedriver.exe"  # ドライバーパスを変更する場合
-options.WAIT_SECONDS = 15  # 待機秒数を変更する場合
-options.INCOGNITO = False  # シークレットモードを無効
-options.START_MAXIMIZED = False  # 最大化を無効（WINDOW_SIZE と併用不可）
-options.WINDOW_SIZE = "1600,1024"
+class KintaiOptions(BrowserOptions):
+    DRIVER_PATH = r"C:\tools\msedgedriver.exe"
+    WAIT_SECONDS = 15
+    INCOGNITO = False
+    START_MAXIMIZED = False          # WINDOW_SIZE と併用不可
+    WINDOW_SIZE = "1600,1024"
 ```
+
+| 項目 | 役割 |
+|---|---|
+| `DRIVER_PATH` | 使う msedgedriver.exe のパス |
+| `DRIVER_SOURCE_DIR` | ドライバーの配布フォルダ。起動に失敗したとき、ここから自動でコピーして直す |
+| `PROFILE_ROOT` | ログイン状態を残すフォルダ。指定するとシークレットモードは自動で外れる |
+| `DOWNLOAD_DIR` | ダウンロード先。セッション名のサブフォルダに自動で分かれる |
+| `WAIT_SECONDS` | 要素待機のタイムアウト秒数 |
+
+設定できる項目の一覧と現在値は `print()` で確認できる:
 
 ```python
-from src.browser_options import options
-
-with EdgeDriver(browser_options=options) as d:
-    ...
+print(BrowserOptions())    # 既定値を表示
+print(KintaiOptions())     # 既定値からの変更箇所に * が付く
 ```
 
-デフォルト一覧の確認:
-
-```python
-print(BrowserOptions()) # デフォルト設定を表示
-print(MyOptions()) # デフォルトからの変更箇所に * が付く
-```
+**ドライバーの自動更新**: Windows Update で Edge だけが新しくなると
+`msedgedriver.exe` が取り残されて起動できなくなる。`DRIVER_SOURCE_DIR` を設定しておくと、
+起動に失敗した時点で配布フォルダから合うバージョンをコピーし、もう一度起動を試みる。
+配布フォルダは直下に置く形でも、バージョン別サブフォルダでもよい。
 
 ---
 
 ### ダウンロード（DownloadDir）
 
-ブラウザでダウンロードするときのフォルダ管理。作成・完了待ち・後片付けを1つのオブジェクトで扱う。
-Edge がダウンロード中に作る `.crdownload` を監視して完了を判定する（ブラウザ専用。API ダウンロードには不要）。
+ダウンロードフォルダはセッションごとに分かれている。
+Edge がダウンロード中に作る `.crdownload` を監視して完了を判定する。
 
-**デフォルトは一時フォルダ。`with EdgeDriver()` を抜けると自動削除される。**
-ファイルを残したい場合は `BrowserOptions.DOWNLOAD_DIR` か `EdgeDriver(download_dir=...)` でパスを指定する。
+**`DOWNLOAD_DIR` を指定しない場合は一時フォルダになり、`with` を抜けると消える。**
+残したいファイルは `with` の中で移動しておく。
 
 ```python
+from comken.browser import Browsers
 from comken.utils.files import move_file
 
-# デフォルト（一時フォルダ）: with を抜けると自動削除される
-with EdgeDriver() as d:
-    d.open("https://example.com/download")
-    # ... ダウンロード操作 ...
-    files = d.download_dir.wait()            # 完了まで待機（.crdownload が消えるまで）
-    move_file(files[0], r"C:\作業\output")   # with 内でファイルを移動する
-# ← ここで一時フォルダは自動削除される
+with Browsers() as browsers:
+    kintai = browsers.launch("kintai", KintaiOptions)
 
-# ファイルを残す（BrowserOptions で指定）
-opts = BrowserOptions()
-opts.DOWNLOAD_DIR = r"C:\作業\downloads"
-with EdgeDriver(opts) as d:
-    files = d.download_dir.wait()
-# ← C:\作業\downloads のファイルはそのまま残る
-
-# ファイルを残す（EdgeDriver に直接指定）
-with EdgeDriver(download_dir=r"C:\作業\downloads") as d:
-    files = d.download_dir.wait()
+    HomePage(kintai).export_csv()
+    files = kintai.download_dir.wait()          # .crdownload が消えるまで待つ
+    move_file(files[0], r"C:\作業\output")       # with の中で移動する
 ```
 
-- `wait()` は固定フォルダに前回のファイルが残っていても誤検出しない（新しく増えた分だけを返す）
-- `d.download_dir` は常に `DownloadDir` インスタンスとして持つ（どの指定方法でも `.wait()` が使える）
+- `wait()` は前回のファイルが残っていても誤検出しない（新しく増えた分だけを返す）
+- 時間内に終わらなければ `DownloadTimeoutError` になる
 
 ---
 
-### BasePage
+### Page / SitePage（画面クラス）
 
-画面ごとに `BasePage` を継承したクラスを作る。
+画面ごとに `Page`（サイト共通の処理があれば `SitePage`）を継承したクラスを作る。
+セレクターは `Locator` のクラス変数としてクラスの先頭にまとめる。
 
 ```python
-from comken.browser.base_page import BasePage
+from comken.browser import Locator, SitePage
 
-class LoginPage(BasePage):
-    URL = "https://example.com/login"
-    USERNAME_ID = "username"
-    PASSWORD_ID = "password"
-    LOGIN_BTN_ID = "login-btn"
+class LoginPage(SitePage):
+    BASE_URL = "https://example.com"
 
-    def open(self) -> None:
-        self._driver.get(self.URL)
+    USERNAME = Locator.id("username")
+    PASSWORD = Locator.id("password")
+    LOGIN_BTN = Locator.css("#login-btn")
 
-    def login(self, username: str, password: str) -> None:
-        self.input_id(self.USERNAME_ID, username)
-        self.input_id(self.PASSWORD_ID, password)
-        self.click_id(self.LOGIN_BTN_ID)
+    def login(self, username: str, password: str) -> "DashboardPage":
+        from .dashboard_page import DashboardPage
+
+        self.go("/login")
+        self.input(self.USERNAME, username)
+        self.input(self.PASSWORD, password)
+        self.click(self.LOGIN_BTN)
+        return DashboardPage(self.session)      # 遷移先の画面クラスを返す
 ```
 
-**セレクター別メソッド一覧:**
+**操作メソッド一覧**（すべて `Locator` を受け取る）:
 
-メソッド名は「`返すもの/動作` + `_セレクター種別`」の2部構成。
-複数形かどうかは前半（返すもの）で決まる: `texts_css` はテキストの**リスト**を返すので複数形、
-`count_css` は件数という**1個の数値**を返すので単数形。末尾の `_css` / `_id` はセレクター種別なので常に単数。
-
-| 操作 | ID | name属性 | CSSセレクター | XPath |
-|---|---|---|---|---|
-| クリック | `click_id` | `click_name` | `click_css` | `click_xpath` |
-| テキスト入力 | `input_id` | `input_name` | `input_css` | `input_xpath` |
-| テキスト取得 | `text_id` | `text_name` | `text_css` | `text_xpath` |
-| プルダウン（テキスト） | `select_text_id` | `select_text_name` | `select_text_css` | `select_text_xpath` |
-| プルダウン（value） | `select_value_id` | `select_value_name` | `select_value_css` | `select_value_xpath` |
-| プルダウン（番号） | `select_index_id` | `select_index_name` | `select_index_css` | `select_index_xpath` |
-| 要素が出るまで待つ | `wait_visible_id` | — | `wait_visible_css` | `wait_visible_xpath` |
-| 要素が消えるまで待つ | — | — | `wait_invisible_css` | `wait_invisible_xpath` |
-| 要素の存在チェック | `has_id` | — | `has_css` | `has_xpath` |
-| スクロール（要素まで） | `scroll_to_id` | — | `scroll_to_css` | — |
-
-**複数要素の扱い:**
-
-同じセレクターに複数の要素が一致する場合に使う。本来 id は一意だが、複数ある画面も実在するため id 版もある。
-
-| 操作 | ID | name属性 | CSSセレクター | XPath |
-|---|---|---|---|---|
-| 要素の数を数える | `count_id` | — | `count_css` | `count_xpath` |
-| 全要素のテキスト取得 | `texts_id` | — | `texts_css` | `texts_xpath` |
-| n番目をクリック | `click_id(v, index=1)` | `click_name(v, index=1)` | `click_css(v, index=1)` | `click_xpath(v, index=1)` |
-
-使い分けの優先順位:
-
-1. **セレクター側で一意に絞り込む（原則）** — 例: `"table tr:nth-child(2) .edit-btn"`
-2. リストで取得して選ぶ — `texts_css` / `count_css`
-3. 何番目かを直接指定（最終手段） — `click_css(selector, index=1)`（0始まり）
-
-**セレクター不要のメソッド:**
-
-| メソッド | 用途 |
+| したいこと | メソッド |
 |---|---|
-| `select_radio_name(name, value)` | ラジオボタンを name + value で選択 |
-| `alert_accept()` | アラートを OK する |
-| `alert_dismiss()` | アラートをキャンセルする |
-| `alert_text()` | アラートのテキストを取得 |
-| `scroll_bottom()` | ページ最下部へスクロール |
-| `drag_drop_css(source, target)` | ドラッグ＆ドロップ |
-| `js(script, *args)` | JavaScript を実行 |
-| `save_screenshot(prefix)` | スクリーンショットを保存 |
+| クリック | `click(LOC, index=0)` |
+| 文字入力（既存の値は消える） | `input(LOC, text)` |
+| テキスト取得 | `text(LOC)` / `texts(LOC)` |
+| 属性取得（href, value 等） | `attribute(LOC, name)` |
+| プルダウン選択 | `select_text(LOC, 表示名)` / `select_value(LOC, v)` / `select_index(LOC, i)` |
+| 表示・非表示を待つ | `wait_visible(LOC)` / `wait_invisible(LOC)` |
+| 存在確認・件数（待たない） | `has(LOC)` / `count(LOC)` |
+| スクロール | `scroll_to(LOC)` / `scroll_bottom()` |
+| ドラッグ＆ドロップ | `drag_drop(source, target)` |
+| 確認ダイアログ | `alert_accept()` / `alert_dismiss()` / `alert_text()` |
+| iframe の中を操作 | `with page.frame(LOC):` |
+| スクリーンショット | `save_screenshot(prefix)` |
+| 最終手段 | `element(LOC)`（生の WebElement） / `js(script, *args)` |
 
-セレクターの値は Edge の開発者ツール（F12）で確認する。
-`input_*` は入力前に既存の値を自動でクリアする（clear() → send_keys() の順）。
+要素は自動で待機する（既定10秒）。時間内に見つからない場合は `ElementNotFoundError` になり、
+**どのセレクターで失敗したか**がメッセージに出る。`time.sleep` で待たないこと。
+
+セレクターは `Locator.id` > `Locator.name` > `Locator.css` > `Locator.xpath` の順で選ぶ。
+値は Edge の開発者ツール（F12）で確認する。絶対 XPath は使わない。
+
+複数一致する場合の優先順位:
+
+1. **セレクター側で一意に絞り込む（原則）** — 例: `Locator.css("table tr:nth-child(2) .edit-btn")`
+2. リストで取得して選ぶ — `texts(LOC)` / `count(LOC)`
+3. 何番目かを直接指定（最終手段） — `click(LOC, index=1)`（0始まり）
 
 ---
 

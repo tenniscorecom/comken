@@ -12,7 +12,11 @@
         WINDOW_SIZE = "1600,1024"
 """
 
+import logging
+from pathlib import Path
 from typing import ClassVar
+
+logger = logging.getLogger(__name__)
 
 
 class BrowserOptions:
@@ -24,7 +28,19 @@ class BrowserOptions:
     # ── ドライバー設定 ──
     DRIVER_PATH: str = r"C:\Users\Public\Documents\msedgedriver.exe"
     WAIT_SECONDS: int = 10
-    DOWNLOAD_DIR: str | None = None  # None = 一時フォルダを自動作成（EdgeDriver 終了時に削除）
+    DOWNLOAD_DIR: str | None = None  # None = 一時フォルダを自動作成（セッション終了時に削除）
+
+    # Edge は自動更新で上がるが msedgedriver.exe は上がらないため、
+    # バージョン不一致で起動に失敗したときはこのフォルダから自動でコピーして上書きする。
+    # None にすると自動更新せず、不一致のまま起動エラーになる
+    DRIVER_SOURCE_DIR: str | None = None
+
+    # ── ログイン状態の永続化 ──
+    # 指定すると Cookie とログイン状態がフォルダに残り、次回起動時のログインを省略できる。
+    # 実際に使われるのは PROFILE_ROOT/<セッション名>/ で、セッションごとに自動で分かれる
+    # （同じフォルダを2つの Edge が同時に開くと起動に失敗するため、共有させない）。
+    # None にすると毎回まっさらな状態で起動する
+    PROFILE_ROOT: str | None = None
 
     # 属性名 → 実際の Chrome 引数
     _BOOL_ARGS: ClassVar[dict[str, str]] = {
@@ -116,30 +132,61 @@ class BrowserOptions:
             display = template.format(value) if value else "None"
             lines.append(f"    {attr:<35} = {display}{diff}")
 
+        # None のときに何が起きるかは属性ごとに違うため、表示も個別に用意する
+        none_meanings = {
+            "DOWNLOAD_DIR": "None（一時フォルダを自動作成し、終了時に削除）",
+            "DRIVER_SOURCE_DIR": "None（ドライバーの自動更新なし）",
+            "PROFILE_ROOT": "None（毎回まっさらな状態で起動）",
+        }
         lines.append("  ── ドライバー設定 ──")
-        for attr in ("DRIVER_PATH", "WAIT_SECONDS", "DOWNLOAD_DIR"):
+        for attr in ("DRIVER_PATH", "WAIT_SECONDS", "DOWNLOAD_DIR", "DRIVER_SOURCE_DIR"):
             current = getattr(self, attr)
             default = getattr(base, attr)
             diff = " *" if current != default else ""
-            display = current if current is not None else "None（一時フォルダ自動作成）"
+            display = current if current is not None else none_meanings.get(attr, "None")
             lines.append(f"    {attr:<35} = {display}{diff}")
+
+        lines.append("  ── ログイン状態の永続化 ──")
+        current = self.PROFILE_ROOT
+        diff = " *" if current != base.PROFILE_ROOT else ""
+        display = current if current is not None else none_meanings["PROFILE_ROOT"]
+        lines.append(f"    {'PROFILE_ROOT':<35} = {display}{diff}")
 
         if self.__class__ is not BrowserOptions:
             lines.append("  (* = デフォルトから変更)")
 
         return "\n".join(lines)
 
-    def build(self) -> list[str]:
-        """有効なオプションを Chrome 引数リストに変換する。"""
+    def build(self, profile_dir: "Path | None" = None) -> list[str]:
+        """有効なオプションを Edge の起動引数リストに変換する。
+
+        Args:
+            profile_dir: ログイン状態を残すプロファイルフォルダ。
+                         指定するとシークレットモードは自動的に外れる
+                         （シークレットは Cookie を残さないため、永続化と両立しない）。
+
+        Returns:
+            webdriver に渡す起動引数のリスト。
+        """
         args = []
 
         for attr, arg in self._BOOL_ARGS.items():
-            if getattr(self, attr, False):
-                args.append(arg)
+            if not getattr(self, attr, False):
+                continue
+            if profile_dir is not None and attr == "INCOGNITO":
+                logger.info(
+                    "ログイン状態を永続化するため、シークレットモードを無効にしました: %s",
+                    profile_dir,
+                )
+                continue
+            args.append(arg)
 
         for attr, template in self._VALUE_ARGS.items():
             value = getattr(self, attr, None)
             if value:
                 args.append(template.format(value))
+
+        if profile_dir is not None:
+            args.append(f"--user-data-dir={profile_dir}")
 
         return args

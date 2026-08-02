@@ -39,7 +39,7 @@ class LoginPage(AppPage):
         """ログイン画面を開き、自分自身を返す（メソッドチェーンできる）。
 
         使い方:
-            secure = LoginPage(d).open().login("user", "pass")
+            secure = LoginPage(session).open().login("user", "pass")
         """
         self.go(self.PATH)
         return self
@@ -57,7 +57,7 @@ class LoginPage(AppPage):
         self.input(self.USERNAME, username)
         self.input(self.PASSWORD, password)
         self.click(self.LOGIN_BTN)
-        return SecurePage(self._driver)
+        return SecurePage(self.session)
 
     def get_error_message(self) -> str:
         """ログイン失敗時のエラーメッセージを返す。"""

@@ -9,24 +9,37 @@ DownloadDir は Edge/Chrome がダウンロード中に作る ".crdownload" フ�
 import logging
 import shutil
 import tempfile
+import time
 from pathlib import Path
 
+from comken.exceptions import DownloadTimeoutError
+
 logger = logging.getLogger(__name__)
+
+# ダウンロード完了を確認する間隔（秒）
+_POLL_INTERVAL_SECONDS = 0.5
+
+# ダウンロード中のファイルに付く拡張子。これが消えたら完了とみなす
+_IN_PROGRESS_SUFFIXES = (".crdownload", ".tmp")
 
 
 class DownloadDir:
     """ブラウザダウンロード用のフォルダ。作成・完了待ち・後片付けをまとめて扱う。
 
-    with 文で使うと、一時フォルダは with を抜けた時点で自動削除される（消し忘れ防止）。
-    必要なファイルは with 内で移動しておくこと。
-    ダウンロードしたものを残したい場合は path で固定フォルダを指定する
+    通常は Browsers.launch() がセッションごとに1つ用意するので、自分で作る必要はない
+    （session.download_dir で受け取り、session.download_dir.wait() で完了を待つ）。
+
+    一時フォルダの場合、セッションの with を抜けた時点で自動削除される（消し忘れ防止）。
+    必要なファイルは with の中で移動しておくこと。
+    ダウンロードしたものを残したい場合は、起動時に保存先を指定する
     （固定フォルダは with を抜けても削除されない）:
-        with DownloadDir(path=r"C:\\作業\\downloads") as dl, EdgeDriver(download_dir=dl) as d:
-            ...
-            files = dl.wait()
+
+        with Browsers() as browsers:
+            kintai = browsers.launch("kintai", download_dir=r"C:\\作業\\downloads")
+            files = kintai.download_dir.wait()
         # ← C:\\作業\\downloads とファイルはそのまま残る
-        # wait() は作成時点で既にあったファイルを無視し、
-        # 新しく増えたファイルだけを完了対象にする
+
+    wait() は作成時点で既にあったファイルを無視し、新しく増えたファイルだけを完了対象にする。
     """
 
     def __init__(self, prefix: str = "comken_dl_", path: str | Path | None = None) -> None:
@@ -47,7 +60,7 @@ class DownloadDir:
         self._initial_files = {p: p.stat().st_mtime_ns for p in self.path.iterdir() if p.is_file()}
 
     def __fspath__(self) -> str:
-        # os.PathLike 対応。EdgeDriver(download_dir=dl) のように直接渡せるようにする
+        # os.PathLike 対応。パスを受け取る関数へそのまま渡せるようにする
         return str(self.path)
 
     def __enter__(self) -> "DownloadDir":
@@ -73,23 +86,21 @@ class DownloadDir:
             新しくダウンロードされたファイルのパスリスト（更新日時順）。
 
         Raises:
-            TimeoutError: timeout 秒以内にダウンロードが完了しなかった場合。
+            DownloadTimeoutError: timeout 秒以内にダウンロードが完了しなかった場合。
         """
-        import time
-
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             current = {p: p.stat().st_mtime_ns for p in self.path.iterdir() if p.is_file()}
             changed = {
                 p for p, modified_at in current.items() if self._initial_files.get(p) != modified_at
             }
-            in_progress = [p for p in changed if p.suffix in (".crdownload", ".tmp")]
-            files = [p for p in changed if p.suffix not in (".crdownload", ".tmp")]
+            in_progress = [p for p in changed if p.suffix in _IN_PROGRESS_SUFFIXES]
+            files = [p for p in changed if p.suffix not in _IN_PROGRESS_SUFFIXES]
             if files and not in_progress:
                 return sorted(files, key=lambda p: p.stat().st_mtime)
-            time.sleep(0.5)
+            time.sleep(_POLL_INTERVAL_SECONDS)
 
-        raise TimeoutError(f"ダウンロードが {timeout} 秒以内に完了しませんでした: {self.path}")
+        raise DownloadTimeoutError(self.path, timeout)
 
     def remove(self, force: bool = False) -> None:
         """フォルダごと削除する。ファイルを残したい場合は呼ばなくてよい。

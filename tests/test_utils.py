@@ -14,7 +14,7 @@ import pytest
 
 from comken.browser.download import DownloadDir
 from comken.constants import SortBy
-from comken.exceptions import ColumnNotFoundError
+from comken.exceptions import ColumnNotFoundError, DownloadTimeoutError
 from comken.utils import (
     diff_row,
     diff_rows,
@@ -448,7 +448,7 @@ class TestDownloadDir:
         try:
             (dl.path / "report.xlsx.crdownload").touch()
 
-            with pytest.raises(TimeoutError):
+            with pytest.raises(DownloadTimeoutError):
                 dl.wait(timeout=1)
         finally:
             dl.remove()
@@ -488,37 +488,11 @@ class TestDownloadDir:
         assert (target / "report.xlsx").exists()
 
 
-class TestResolveDownloadDir:
-    """EdgeDriver の download_dir 解決（_resolve_download_dir）のテスト。
+class TestDownloadDirFixedPath:
+    """path で固定フォルダを指定した場合の DownloadDir のテスト。
 
-    どの指定方法でも DownloadDir に揃い、d.download_dir.wait() が使えることを保証する。
+    セッションごとの割り当て（どのフォルダを使うか）は test_browser.py で確認する。
     """
-
-    def test_passes_through_download_dir_instance(self, tmp_path):
-        """DownloadDir を渡した場合はそのまま使われる（一時フォルダの性質を保つ）。"""
-        from comken.browser.driver import _resolve_download_dir
-
-        dl = DownloadDir(path=tmp_path / "dl")
-        assert _resolve_download_dir(dl, tmp_path / "default") is dl
-
-    def test_wraps_path_as_fixed_folder(self, tmp_path):
-        """パスを渡した場合は固定フォルダの DownloadDir に包まれる。"""
-        from comken.browser.driver import _resolve_download_dir
-
-        result = _resolve_download_dir(tmp_path / "dl", tmp_path / "default")
-
-        assert isinstance(result, DownloadDir)
-        assert result.path == tmp_path / "dl"
-        assert result.path.is_dir()  # なければ作成される
-
-    def test_uses_default_when_omitted(self, tmp_path):
-        """未指定なら BrowserOptions のデフォルトパスが固定フォルダとして使われる。"""
-        from comken.browser.driver import _resolve_download_dir
-
-        result = _resolve_download_dir(None, tmp_path / "default")
-
-        assert isinstance(result, DownloadDir)
-        assert result.path == tmp_path / "default"
 
     def test_uses_specified_path(self, tmp_path):
         """path 指定で既存フォルダをそのまま使えることを確認する。"""
@@ -546,7 +520,7 @@ class TestResolveDownloadDir:
 
         dl = DownloadDir(path=tmp_path)
 
-        with pytest.raises(TimeoutError):
+        with pytest.raises(DownloadTimeoutError):
             dl.wait(timeout=1)
 
     def test_remove_skips_specified_path_with_warning(self, tmp_path, caplog):

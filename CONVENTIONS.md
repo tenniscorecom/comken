@@ -58,7 +58,7 @@ Python の作法（PEP 8）に従う。
 | 定数・固定値 | UPPER_SNAKE_CASE | `COL_Q`, `SHEET_NAME`, `WAIT_SECONDS` |
 | 関数・メソッド | snake_case | `read_rows()`, `run_macro()` |
 | 変数 | snake_case | `csv_lookup`, `matched_rows` |
-| モジュール・ファイル名 | snake_case | `handler.py`, `base_page.py` |
+| モジュール・ファイル名 | snake_case | `handler.py`, `driver_update.py` |
 | フォルダ名 | snake_case | `excel/`, `browser/` |
 | 内部用（外から呼ばない） | `_` プレフィックス | `_sheet()`, `_click()` |
 | config.ini のセクション・キー | UPPER_SNAKE_CASE | `[FILES]`, `OUTPUT_FOLDER` |
@@ -345,10 +345,10 @@ print(dl.path)
 path = config.FILES.CSV_INPUT_FOLDER / config.FILES.CSV_EAST
 
 # 良い（上書きさせたくない属性の公開に @property を使う）
-class EdgeDriver:
+class BrowserSession:
     @property
-    def driver(self) -> webdriver.Edge:
-        return self._driver  # 外部から driver = xxx と上書きさせない
+    def raw(self) -> webdriver.Edge:
+        return self._driver  # 外部から raw = xxx と上書きさせない
 ```
 
 `@property` の使い分け:

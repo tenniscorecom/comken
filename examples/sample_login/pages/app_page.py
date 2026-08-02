@@ -9,7 +9,7 @@ app_page.py — このサンプルサイト共通の SitePage
   - 各画面クラス（LoginPage, DashboardPage 等）はこのクラスを継承する
 
 継承の構造（コピーして使う）:
-    BasePage   ← comken が提供（click / input / select / alert 等の操作）
+    Page       ← comken が提供（click / input / select / alert 等の操作）
       └── SitePage   ← comken が提供（BASE_URL / go() を追加）
             └── AppPage   ← このファイル（サイト共通処理を追加）
                   └── LoginPage / SecurePage / ...   ← 各画面
@@ -29,16 +29,16 @@ app_page.py — このサンプルサイト共通の SitePage
             self.input(self.USERNAME, username)
             self.input(self.PASSWORD, password)
             self.click(self.LOGIN_BTN)
-            return SecurePage(self._driver)   # 遷移先クラスのインスタンスを返す
+            return SecurePage(self.session)   # 遷移先クラスのインスタンスを返す
 
     # 呼び出し側
-    login_page = LoginPage(d)
+    login_page = LoginPage(session)
     secure_page = login_page.login("user", "pass")   # SecurePage が返ってくる
     print(secure_page.get_heading())                 # そのまま次の画面の操作が書ける
 ---------------------------------------------------------------------------
 """
 
-from comken.browser.site_page import SitePage
+from comken.browser import Locator, SitePage
 
 
 class AppPage(SitePage):
@@ -50,8 +50,10 @@ class AppPage(SitePage):
 
     BASE_URL = "https://the-internet.herokuapp.com"
 
+    FLASH_MESSAGE = Locator.css("#flash")
+
     def get_flash_message(self) -> str:
         """ページ上部に表示されるフラッシュメッセージを取得する。
         ログイン成功・失敗の通知など、サイト全体で共通の要素。
         """
-        return self.text_css("#flash")
+        return self.text(self.FLASH_MESSAGE)

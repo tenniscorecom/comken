@@ -22,6 +22,11 @@ version = {attr = "comken.__version__"}
 where = ["."]
 include = ["comken*"]
 
+# py.typed（PEP 561）が無いと、インストール先の comken を型付きライブラリとして扱ってもらえず、
+# エディタの補完・型チェックが弱くなる。会社では AI 補助なしで書くため補完の質が効く。
+[tool.setuptools.package-data]
+comken = ["py.typed"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"
