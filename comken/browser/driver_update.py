@@ -13,6 +13,7 @@ Edge は自動更新で勝手に上がるが、msedgedriver.exe は上がらな�
 """
 
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -91,10 +92,36 @@ def update_driver(driver_path: Path, source_dir: Path) -> bool:
         current_version or "不明",
     )
 
+    _replace_driver(source, driver_path)
+
+    updated_version = _driver_version(driver_path)
+    if edge_version and updated_version and _major(edge_version) != _major(updated_version):
+        # 起動は再試行させる（動く可能性は残る）が、原因調査の手がかりを残す
+        logger.warning(
+            "配布フォルダの msedgedriver（%s）が Edge %s と一致していません。"
+            "配布フォルダに新しいドライバーが置かれているか確認してください: %s",
+            updated_version,
+            edge_version,
+            source,
+        )
+    else:
+        logger.info("msedgedriver を更新しました: %s", updated_version or "バージョン不明")
+    return True
+
+
+def _replace_driver(source: Path, driver_path: Path) -> None:
+    """配布フォルダの exe を driver_path へ置き換える。
+
+    いったん同じフォルダの一時ファイルへコピーしてから置換する。
+    共有フォルダからの直接コピーは途中で失敗すると壊れた exe が残り、
+    別のプロセスが中途半端なファイルを掴むおそれがあるため。
+    """
     driver_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = driver_path.with_name(f".{driver_path.name}.{os.getpid()}.tmp")
     try:
         # copy2 でタイムスタンプも引き継ぐ。次回の「どれが新しいか」判定を狂わせないため
-        shutil.copy2(source, driver_path)
+        shutil.copy2(source, temporary)
+        temporary.replace(driver_path)
     except PermissionError as exc:
         raise PermissionError(
             f"msedgedriver.exe を上書きできませんでした: {driver_path}\n"
@@ -102,10 +129,8 @@ def update_driver(driver_path: Path, source_dir: Path) -> bool:
             "別の Python プロセスやブラウザがドライバーを掴んだままの可能性があります。\n"
             "実行中の自動化をすべて終了してから、もう一度実行してください。"
         ) from exc
-
-    updated_version = _driver_version(driver_path)
-    logger.info("msedgedriver を更新しました: %s", updated_version or "バージョン不明")
-    return True
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def _pick_source(source_dir: Path, edge_version: str | None) -> Path:
@@ -129,9 +154,10 @@ def _pick_source(source_dir: Path, edge_version: str | None) -> Path:
 
     if edge_version:
         major = _major(edge_version)
-        # パスにメジャーバージョンが数字のかたまりとして現れるものだけを拾う
-        # （"131" が "1310" や "13" に誤爆しないよう前後を数字以外で挟む）
-        matched = [p for p in candidates if re.search(rf"(?<!\d){major}(?!\d)", str(p))]
+        # 配布フォルダより下のフォルダ名だけを見る。source_dir 自身のパスに
+        # たまたま数字が含まれている場合（\\サーバー\ツール131\ 等）に、
+        # 配下の全候補が一致してしまうのを防ぐ
+        matched = [p for p in candidates if _has_major_in_subpath(p, source_dir, major)]
         if matched:
             return max(matched, key=lambda p: p.stat().st_mtime)
 
@@ -143,6 +169,22 @@ def _pick_source(source_dir: Path, edge_version: str | None) -> Path:
         newest,
     )
     return newest
+
+
+def _has_major_in_subpath(candidate: Path, source_dir: Path, major: str) -> bool:
+    """配布フォルダから下のフォルダ名に、メジャーバージョンが含まれるか。
+
+    数字のかたまりとして一致することを求める（"131" が "1310" や "13" に誤爆しないよう、
+    前後を数字以外で挟む）。
+    """
+    try:
+        relative = candidate.relative_to(source_dir)
+    except ValueError:
+        # rglob の結果なので通常は起きないが、シンボリックリンク経由だとあり得る
+        return False
+
+    pattern = re.compile(rf"(?<!\d){re.escape(major)}(?!\d)")
+    return any(pattern.search(part) for part in relative.parts)
 
 
 def _installed_edge_version() -> str | None:

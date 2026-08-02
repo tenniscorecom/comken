@@ -91,7 +91,6 @@ class BrowserSession:
         self._profile_dir = profile_dir
         self._driver: webdriver.Edge | None = None
         self._is_closed = False
-        self._main_window: str | None = None
 
         # 同じセッションを2スレッドから同時に操作していないかを見張る。
         # RLock なので、同じスレッドの中で操作がネストしても止まらない
@@ -101,8 +100,9 @@ class BrowserSession:
     # ------------------------------------------------------------ with 管理
 
     def __enter__(self) -> "BrowserSession":
+        # ここで例外を投げると、この with の __exit__ は呼ばれない。
+        # 後始末は _start_driver() の中で完結させること
         self._driver = self._start_driver()
-        self._main_window = self._driver.current_window_handle
         logger.info("ブラウザを起動しました: %s", self.name)
         return self
 
@@ -206,9 +206,7 @@ class BrowserSession:
             try:
                 yield self
             finally:
-                # 閉じ忘れるとタブが溜まり、次の popup_tab がどれを掴むか分からなくなる
-                driver.close()
-                driver.switch_to.window(original)
+                self._close_popup_tab(driver, opened, original)
 
     # ------------------------------------------------------------ 内部連携用
 
@@ -219,6 +217,9 @@ class BrowserSession:
         このクラスと Page に用意されていない機能を使うときの逃げ道。
         ここから switch_to でタブを移動すると、セッションが今どのタブにいるかを
         見失うことがあるので、タブ操作は popup_tab() を使うこと。
+
+        ここから直接操作すると、同時操作の見張り（operating）を通らない。
+        parallel の中で使う場合、他のスレッドと衝突しないことは呼び出し側の責任になる。
         """
         return self._require_driver()
 
@@ -299,10 +300,40 @@ class BrowserSession:
         )
 
         driver = webdriver.Edge(service=Service(executable_path=str(driver_path)), options=options)
-        # 暗黙的待機は 0 にして、待機を Page の WebDriverWait（明示的待機）へ一本化する。
-        # 両方が効いていると待ち時間が読めなくなり、要素の不在確認が毎回タイムアウト分ブロックする
-        driver.implicitly_wait(0)
+        # 起動そのものが成功した後に初期化で失敗すると、掴んでいる Edge プロセスが
+        # 誰にも閉じられずに残る。ここで確実に閉じてから例外を伝える
+        try:
+            # 暗黙的待機は 0 にして、待機を Page の WebDriverWait（明示的待機）へ一本化する。
+            # 両方が効いていると待ち時間が読めなくなり、
+            # 要素の不在確認が毎回タイムアウト分ブロックする
+            driver.implicitly_wait(0)
+        except Exception:
+            try:
+                driver.quit()
+            except Exception:
+                logger.warning("初期化に失敗したブラウザを閉じられませんでした", exc_info=True)
+            raise
         return driver
+
+    def _close_popup_tab(self, driver: webdriver.Edge, opened: str, original: str) -> None:
+        """別タブを閉じて元のタブへ戻る。
+
+        後始末そのものが失敗しても、警告を出すだけで例外にはしない。
+        with の中で起きた本来のエラーを、片付けの失敗で覆い隠さないため。
+        タブが自分で閉じた場合や、元のタブが消えている場合もここで吸収する。
+        """
+        try:
+            handles = driver.window_handles
+            # 閉じ忘れるとタブが溜まり、次の popup_tab がどれを掴むか分からなくなる。
+            # ページ側が自分で閉じていた場合は、もう閉じる必要がない
+            if opened in handles:
+                driver.close()
+            if original in driver.window_handles:
+                driver.switch_to.window(original)
+            else:
+                logger.warning("元のタブが閉じられていたため、戻れませんでした: %s", self.name)
+        except Exception:
+            logger.warning("別タブの後始末に失敗しました: %s", self.name, exc_info=True)
 
     def _wait_for_new_tab(self, driver: webdriver.Edge, original: str, seconds: int) -> None:
         """元のタブ以外のタブが現れるまで待つ。"""

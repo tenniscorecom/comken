@@ -5,7 +5,10 @@
 CI でも手元でも安定しないため、ここでは扱わない。
 """
 
+import logging
+import shutil
 import threading
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -13,11 +16,13 @@ from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 
 from comken.browser import BrowserOptions, Browsers, DownloadDir, Locator, Page, SitePage
-from comken.browser.driver_update import _major, _pick_source
+from comken.browser.driver_update import _major, _pick_source, _replace_driver
 from comken.browser.session import BrowserSession
 from comken.exceptions import (
     ConcurrentSessionUseError,
+    DriverStartError,
     ElementNotFoundError,
+    PopupTabNotOpenedError,
     SessionClosedError,
     SessionNameConflictError,
     SessionNotFoundError,
@@ -34,7 +39,6 @@ def _make_session(tmp_path, name: str = "test") -> BrowserSession:
         profile_dir=None,
     )
     session._driver = MagicMock()
-    session._main_window = "main"
     return session
 
 
@@ -61,17 +65,91 @@ class TestSessionRequiresWith:
             session.open("https://example.com")
 
     def test_quit_failure_still_cleans_download_dir(self, tmp_path):
-        """ブラウザの終了に失敗しても、一時フォルダの後片付けは行われる。"""
+        """ブラウザの終了に失敗しても、ダウンロードフォルダの後片付けは行われる。"""
         session = _make_session(tmp_path)
         session._driver.quit.side_effect = RuntimeError("quit failed")
-        download_dir = session.download_dir
+        session.download_dir = MagicMock(wraps=session.download_dir)
 
         with pytest.raises(RuntimeError):
             session.__exit__(None, None, None)
 
-        # 固定フォルダなので消えないが、__exit__ が呼ばれたこと自体を状態で確認する
+        session.download_dir.__exit__.assert_called_once()
         assert session._is_closed
-        assert download_dir.path.exists()
+
+    def test_temp_download_dir_is_removed_on_exit(self, tmp_path):
+        """一時フォルダは with を抜けると実際に削除される。"""
+        session = BrowserSession(
+            name="test",
+            options=BrowserOptions(),
+            download_dir=DownloadDir(prefix="comken_test_"),
+        )
+        session._driver = MagicMock()
+        temp_path = session.download_dir.path
+        assert temp_path.is_dir()
+
+        session.__exit__(None, None, None)
+
+        assert not temp_path.exists()
+
+
+class TestSessionStartFailure:
+    """起動に失敗したときに、プロセスもフォルダも残さないことのテスト。"""
+
+    def test_quits_driver_when_initialization_fails(self, tmp_path, monkeypatch):
+        """起動後の初期化で失敗したら、掴んだブラウザを必ず閉じる。
+
+        ここで閉じ損ねると、誰も参照していない Edge プロセスが残り続ける。
+        """
+        driver = MagicMock()
+        driver.implicitly_wait.side_effect = RuntimeError("初期化に失敗")
+        monkeypatch.setattr("comken.browser.session.webdriver.Edge", lambda **kwargs: driver)
+
+        session = BrowserSession(
+            name="test",
+            options=BrowserOptions(),
+            download_dir=DownloadDir(path=tmp_path / "dl"),
+        )
+
+        with pytest.raises(DriverStartError):
+            session.__enter__()
+
+        driver.quit.assert_called_once_with()
+
+    def test_cleans_download_dir_exactly_once_on_failure(self, tmp_path, monkeypatch):
+        """起動に失敗したとき、ダウンロードフォルダの後始末はちょうど1回だけ行う。
+
+        __enter__ が失敗すると with の __exit__ は呼ばれないため、
+        後始末は起動処理の側で完結している必要がある。
+        """
+        monkeypatch.setattr(
+            "comken.browser.session.webdriver.Edge",
+            MagicMock(side_effect=RuntimeError("起動に失敗")),
+        )
+        download_dir = MagicMock(wraps=DownloadDir(path=tmp_path / "dl"))
+        download_dir.path = tmp_path / "dl"
+
+        session = BrowserSession(name="test", options=BrowserOptions(), download_dir=download_dir)
+
+        with pytest.raises(DriverStartError):
+            session.__enter__()
+
+        download_dir.__exit__.assert_called_once()
+
+    def test_does_not_retry_when_no_source_dir(self, tmp_path, monkeypatch):
+        """配布フォルダが未設定なら、ドライバー更新も再試行もしない。"""
+        edge = MagicMock(side_effect=RuntimeError("起動に失敗"))
+        monkeypatch.setattr("comken.browser.session.webdriver.Edge", edge)
+
+        session = BrowserSession(
+            name="test",
+            options=BrowserOptions(),
+            download_dir=DownloadDir(path=tmp_path / "dl"),
+        )
+
+        with pytest.raises(DriverStartError):
+            session.__enter__()
+
+        assert edge.call_count == 1
 
 
 class TestSessionConcurrencyGuard:
@@ -106,6 +184,61 @@ class TestSessionConcurrencyGuard:
             session.open("https://example.com")
 
         session._driver.get.assert_called_once_with("https://example.com")
+
+
+class TestPopupTab:
+    """別タブの操作と後始末のテスト。"""
+
+    def test_closes_tab_and_returns_to_original(self, tmp_path):
+        """別タブを閉じて、元のタブへ戻る。"""
+        session = _make_session(tmp_path)
+        driver = session._driver
+        driver.current_window_handle = "main"
+        driver.window_handles = ["main", "popup"]
+
+        with session.popup_tab():
+            pass
+
+        driver.close.assert_called_once_with()
+        assert driver.switch_to.window.call_args_list[-1].args == ("main",)
+
+    def test_cleanup_failure_does_not_hide_original_error(self, tmp_path):
+        """後始末に失敗しても、中で起きた本来のエラーを覆い隠さない。"""
+        session = _make_session(tmp_path)
+        driver = session._driver
+        driver.current_window_handle = "main"
+        driver.window_handles = ["main", "popup"]
+        driver.close.side_effect = RuntimeError("タブを閉じられない")
+
+        with pytest.raises(ValueError, match="本来のエラー"), session.popup_tab():
+            raise ValueError("本来のエラー")
+
+    def test_skips_close_when_tab_closed_itself(self, tmp_path):
+        """ページ側がタブを閉じていた場合は、閉じ直そうとしない。"""
+        session = _make_session(tmp_path)
+        driver = session._driver
+        driver.current_window_handle = "main"
+        # with に入るときは2枚、抜けるときは popup が自分で閉じている
+        handles = iter([["main", "popup"], ["main", "popup"], ["main"], ["main"]])
+        type(driver).window_handles = property(lambda self: next(handles))
+
+        try:
+            with session.popup_tab():
+                pass
+
+            driver.close.assert_not_called()
+        finally:
+            del type(driver).window_handles
+
+    def test_raises_when_no_new_tab(self, tmp_path):
+        """新しいタブが開かなければ PopupTabNotOpenedError になる。"""
+        session = _make_session(tmp_path)
+        driver = session._driver
+        driver.current_window_handle = "main"
+        driver.window_handles = ["main"]
+
+        with pytest.raises(PopupTabNotOpenedError), session.popup_tab(timeout=1):
+            pass
 
 
 class TestBrowsers:
@@ -294,10 +427,71 @@ class TestDriverUpdate:
         # 一致するものが無いので、最新のものへフォールバックする（例外にはしない）
         assert _pick_source(tmp_path, "13.0.0.0").parent.name == "131.0.2903.86"
 
+    def test_ignores_version_in_source_dir_own_path(self, tmp_path, caplog):
+        """配布フォルダ自身のパスに含まれる数字では、一致と判定しない。
+
+        \\\\サーバー\\ツール131\\ のような親フォルダがあると、配下のどのドライバーも
+        メジャー131に一致したことになり、不一致に気づけないまま使われてしまう。
+        """
+        source_dir = tmp_path / "ツール131"
+        folder = source_dir / "130.0.2849.68"
+        folder.mkdir(parents=True)
+        (folder / "msedgedriver.exe").write_bytes(b"x")
+
+        with caplog.at_level(logging.WARNING):
+            picked = _pick_source(source_dir, "131.0.2903.86")
+
+        # 選ぶファイルは1つしかないが、「一致した」ではなく
+        # 「一致が無いので最新で代用した」と扱われる必要がある
+        assert picked.parent.name == "130.0.2849.68"
+        assert "見つからない" in caplog.text
+
     def test_raises_when_no_driver_found(self, tmp_path):
         """配布フォルダに1つも無ければ FileNotFoundError になる。"""
         with pytest.raises(FileNotFoundError):
             _pick_source(tmp_path, "131.0.2903.86")
+
+    def test_replaces_via_temporary_file(self, tmp_path, monkeypatch):
+        """更新は一時ファイル経由で行い、途中の壊れた exe を残さない。
+
+        共有フォルダから直接上書きすると、失敗したときに中途半端なファイルが
+        残り、別のプロセスがそれを掴んでしまう。
+        """
+        source = tmp_path / "source" / "msedgedriver.exe"
+        source.parent.mkdir()
+        source.write_bytes(b"new-driver")
+        target = tmp_path / "bin" / "msedgedriver.exe"
+        target.parent.mkdir()
+        target.write_bytes(b"old-driver")
+
+        copied = []
+        real_copy = shutil.copy2
+
+        def record_copy(src, dst):
+            copied.append(Path(dst).name)
+            return real_copy(src, dst)
+
+        monkeypatch.setattr("comken.browser.driver_update.shutil.copy2", record_copy)
+
+        _replace_driver(source, target)
+
+        assert target.read_bytes() == b"new-driver"
+        assert copied and copied[0] != target.name  # いったん別名へ書いている
+        assert list(target.parent.iterdir()) == [target]  # 一時ファイルが残らない
+
+    def test_reports_locked_driver_with_guidance(self, tmp_path, monkeypatch):
+        """掴まれていて置き換えられない場合は、対処を添えて知らせる。"""
+        source = tmp_path / "msedgedriver.exe"
+        source.write_bytes(b"new-driver")
+        target = tmp_path / "bin" / "msedgedriver.exe"
+
+        monkeypatch.setattr(
+            "comken.browser.driver_update.shutil.copy2",
+            MagicMock(side_effect=PermissionError("使用中")),
+        )
+
+        with pytest.raises(PermissionError, match="実行中の自動化"):
+            _replace_driver(source, target)
 
 
 class TestLocator:
@@ -360,6 +554,32 @@ class TestPage:
             page.click(Locator.id("login-btn"))
 
         assert "login-btn" in str(exc_info.value)
+
+    def test_escape_hatches_are_guarded_too(self, tmp_path):
+        """逃げ道（element / js）も同時操作の見張りを通る。
+
+        ここが素通りだと、並列実行時に一番気づきにくい形で壊れる。
+        """
+        page = self._page(tmp_path)
+        holding = threading.Event()
+        release = threading.Event()
+
+        def hold_session():
+            with page.session.operating("hold"):
+                holding.set()
+                release.wait(timeout=5)
+
+        holder = threading.Thread(target=hold_session, name="holder")
+        holder.start()
+        try:
+            assert holding.wait(timeout=5)
+            with pytest.raises(ConcurrentSessionUseError):
+                page.element(Locator.id("x"))
+            with pytest.raises(ConcurrentSessionUseError):
+                page.js("return 1;")
+        finally:
+            release.set()
+            holder.join(timeout=5)
 
     def test_frame_returns_to_default_content_on_error(self, tmp_path):
         """iframe の中で例外が出ても、元の画面へ戻る。"""

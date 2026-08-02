@@ -33,7 +33,7 @@ class BrowserError(ComkenError):
 class DriverStartError(BrowserError):
     """Edge WebDriver の起動に失敗した場合。
 
-    発生箇所: comken.browser.edge_session() / BrowserFleet.launch()
+    発生箇所: Browsers.launch()
     """
 
     def __init__(self, driver_path: str, detail: Exception) -> None:
@@ -58,7 +58,8 @@ class SessionNotStartedError(BrowserError):
         session.open("https://example.com")     # ← ここで送出される
 
         # 正しい
-        with edge_session() as session:
+        with Browsers() as browsers:
+            session = browsers.launch("kintai")
             session.open("https://example.com")
     """
 
@@ -66,9 +67,10 @@ class SessionNotStartedError(BrowserError):
         super().__init__(
             f"with に入る前のセッションを操作しました: {operation}\n"
             "BrowserSession は with 文の中でだけ使えます。\n"
-            "  with edge_session() as session:\n"
+            "  with Browsers() as browsers:\n"
+            '      session = browsers.launch("サイト名")\n'
             "      session.open(...)\n"
-            "複数サイトを同時に扱う場合は BrowserFleet を使ってください。"
+            "サイトを増やすときは launch を1行足してください。"
         )
 
 
@@ -96,7 +98,7 @@ class ConcurrentSessionUseError(BrowserError):
     WebDriver は1つの接続でコマンドを順番に処理するため、
     同じセッションを2スレッドから同時に操作すると応答が入れ替わり、
     「別の画面を操作していた」という追跡困難な不具合になる。
-    サイトごとにセッションを分けること（BrowserFleet.launch で1サイト1セッション）。
+    サイトごとにセッションを分けること（Browsers.launch で1サイト1セッション）。
     """
 
     def __init__(self, name: str, operation: str, holder_thread: str) -> None:
@@ -104,8 +106,8 @@ class ConcurrentSessionUseError(BrowserError):
             f"セッション「{name}」を複数スレッドから同時に操作しました: {operation}\n"
             f"（先に操作中のスレッド: {holder_thread}）\n"
             "1つのセッションを同時に操作できるのは1スレッドだけです。\n"
-            "並列にしたい場合は BrowserFleet.launch でサイトごとにセッションを分け、\n"
-            "BrowserFleet.run_parallel で実行してください。"
+            "並列にしたい場合は Browsers.launch でサイトごとにセッションを分け、\n"
+            "Browsers.parallel で実行してください。"
         )
 
 
@@ -115,13 +117,13 @@ class ConcurrentSessionUseError(BrowserError):
 class SessionNameConflictError(BrowserError):
     """同じ名前のセッションを2回起動しようとした場合。
 
-    発生箇所: BrowserFleet.launch()
+    発生箇所: Browsers.launch()
     """
 
     def __init__(self, name: str) -> None:
         super().__init__(
             f"セッション名が重複しています: {name}\n"
-            "1つの BrowserFleet の中で同じ名前は使えません。\n"
+            "1つの Browsers の中で同じ名前は使えません。\n"
             "同じサイトに2つのアカウントでログインする場合は、"
             '「kintai_a」「kintai_b」のように名前を分けてください。'
         )
@@ -130,7 +132,7 @@ class SessionNameConflictError(BrowserError):
 class SessionNotFoundError(BrowserError):
     """起動していないセッションを取り出そうとした場合。
 
-    発生箇所: BrowserFleet.__getitem__() / BrowserFleet.run_parallel()
+    発生箇所: Browsers.__getitem__()
     """
 
     def __init__(self, name: str, launched: list[str]) -> None:
@@ -138,7 +140,7 @@ class SessionNotFoundError(BrowserError):
         super().__init__(
             f"起動していないセッションです: {name}\n"
             f"起動済み: {launched_text}\n"
-            "BrowserFleet.launch(name, ...) で起動してから使ってください。"
+            "Browsers.launch(name) で起動してから使ってください。"
         )
 
 
@@ -173,9 +175,9 @@ class PopupTabNotOpenedError(BrowserError):
         super().__init__(
             f"新しいタブが {seconds} 秒以内に開きませんでした。\n"
             "次を確認してください:\n"
-            "  1. with popup_tab() の中で、タブを開く操作（リンクのクリック等）を行っているか\n"
+            "  1. popup_tab() に入る前に、タブを開く操作（リンクのクリック等）を済ませているか\n"
             "  2. ポップアップがブラウザにブロックされていないか"
-            "（EdgeOptions.DISABLE_POPUP_BLOCKING を True にする）\n"
+            "（BrowserOptions.DISABLE_POPUP_BLOCKING を True にする）\n"
             "  3. 実際は同じタブで開いていないか（その場合 popup_tab は不要）"
         )
 
