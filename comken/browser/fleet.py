@@ -75,6 +75,10 @@ class Browsers:
     with を必須にしているのは、途中で例外が出たときにブラウザのプロセスが残り、
     次の実行でドライバーの更新まで邪魔するのを防ぐため。
 
+    **start() で始めた処理が終わらないと、with も終わらない。** ブラウザを閉じる前に
+    裏の処理の終了を待つため（操作の途中でブラウザが消えると原因が分かりにくいエラーになる）。
+    終わらない可能性がある処理には、その中で待ち時間の上限を設けること。
+
     Attributes:
         names: 起動済みのセッション名（起動した順）。
     """
@@ -84,6 +88,9 @@ class Browsers:
         self._sessions: dict[str, BrowserSession] = {}
         self._executor: ThreadPoolExecutor | None = None
         self._tasks: list[BackgroundTask] = []
+        # 既定の名前（処理1、処理2 …）の連番。回収済みを捨てても番号が戻らないよう、
+        # リストの長さではなく開始した総数で数える
+        self._started_count = 0
         self._is_started = False
         self._is_closed = False
 
@@ -93,14 +100,23 @@ class Browsers:
         return self
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
-        self._is_closed = True
-        # ブラウザを閉じる前に、裏で動いている処理の終了を待つ。
-        # 先に閉じると、操作の途中でブラウザが消えて追いにくいエラーになる
-        self._finish_background_tasks()
-        # ExitStack が起動と逆順にすべてのセッションを閉じる。
-        # 途中の終了処理が失敗しても、残りの終了は実行される
-        self._stack.__exit__(exc_type, exc_value, traceback)
-        self._sessions.clear()
+        # 待っている途中で Ctrl+C を押されても、ブラウザだけは必ず閉じる。
+        # ここを try/finally にしないと、待ち合わせで例外が飛んだ時点で
+        # 下のブラウザ終了に到達せず、Edge のプロセスが残る
+        try:
+            # ブラウザを閉じる前に、裏で動いている処理の終了を待つ。
+            # 先に閉じると、操作の途中でブラウザが消えて追いにくいエラーになる
+            self._finish_background_tasks()
+        finally:
+            # 裏の処理が終わってから閉じたことにする。先に閉じたことにすると、
+            # 動き出すのが遅れたタスクが browsers[...] を使えなくなる
+            self._is_closed = True
+            try:
+                # ExitStack が起動と逆順にすべてのセッションを閉じる。
+                # 途中の終了処理が失敗しても、残りの終了は実行される
+                self._stack.__exit__(exc_type, exc_value, traceback)
+            finally:
+                self._sessions.clear()
 
     def launch(
         self,
@@ -175,7 +191,13 @@ class Browsers:
                 max_workers=_MAX_BACKGROUND_TASKS, thread_name_prefix="browser"
             )
 
-        name = label or f"処理{len(self._tasks) + 1}"
+        # 受け取り済みのものは手放す。ここで捨てないと、繰り返し start する処理で
+        # 結果や例外の情報を持ったまま溜まり続ける。
+        # 未回収のものは、終了時に報告するために残す
+        self._tasks = [pending for pending in self._tasks if not pending.is_collected]
+
+        name = label or f"処理{self._started_count + 1}"
+        self._started_count += 1
         background_task = BackgroundTask(self._executor.submit(task), name)
         self._tasks.append(background_task)
         logger.debug("裏で開始しました: %s", name)
@@ -213,6 +235,7 @@ class Browsers:
                        すべてをログに出したうえで、引数の並び順で最初に失敗したものを送出する
                        （時間的に最初に失敗したものとは限らない）。
         """
+        self._require_in_with("parallel")
         if not tasks:
             return []
 
@@ -266,6 +289,9 @@ class Browsers:
 
     def _finish_background_tasks(self) -> None:
         """裏で動いている処理の終了を待ってから、実行の仕組みを片付ける。
+
+        待ち時間に上限は設けない。処理の途中でブラウザを閉じるより、
+        終わるまで待つほうが安全なため（終わらない処理があると with も終わらない）。
 
         wait() を呼ばずに with を抜けた処理があると、その中で起きた例外は
         誰にも渡らない。黙って消えると原因調査ができないため、ここでログに出す。

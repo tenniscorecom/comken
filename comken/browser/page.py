@@ -273,7 +273,9 @@ class Page:
 
         Raises:
             ElementNotFoundError: 1件も見つからないまま待ち時間が過ぎた場合。
-                                  0件がありうる場面では、先に has() か count() で確認する。
+                                  0件がありうる場面では、表そのものが出るのを wait_visible() で
+                                  待ってから count() で件数を確認する。count() は待たないので、
+                                  読み込み前に呼ぶと「まだ出ていない」を「0件」と読み違える。
         """
         with self.session.operating(f"elements({locator})"):
             return self._until(

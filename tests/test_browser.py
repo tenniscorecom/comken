@@ -444,6 +444,77 @@ class TestBrowsersStart:
 
         assert events == ["処理がおわった", "ブラウザを閉じた"]
 
+    def test_closes_browsers_even_if_waiting_is_interrupted(self, monkeypatch):
+        """終了待ちの最中に中断されても、ブラウザは必ず閉じる。
+
+        ここで閉じ損ねると、with を必須にした意味がなくなる
+        （Ctrl+C のたびに Edge のプロセスが残る）。
+        """
+        closed = []
+        monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
+        monkeypatch.setattr(
+            BrowserSession, "__exit__", lambda self, *args: closed.append(self.name)
+        )
+
+        with pytest.raises(KeyboardInterrupt), Browsers() as browsers:
+            browsers.launch("kintai")
+            browsers.launch("keiri")
+            # 終了待ちが中断された状況を作る
+            monkeypatch.setattr(
+                browsers,
+                "_finish_background_tasks",
+                MagicMock(side_effect=KeyboardInterrupt()),
+            )
+
+        assert closed == ["keiri", "kintai"]
+
+    def test_late_task_can_still_use_sessions(self, monkeypatch):
+        """動き出すのが遅れたタスクからでも、ブラウザを取り出せる。
+
+        閉じたことにするタイミングが早すぎると、まだ閉じていないのに
+        BrowsersClosedError になる。
+        """
+        monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
+        monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
+        released = threading.Event()
+        taken = []
+
+        def late_task():
+            # with を抜ける処理が始まってから動き出す状況を作る
+            released.wait(timeout=5)
+            taken.append(browsers["kintai"].name)
+
+        with Browsers() as browsers:
+            browsers.launch("kintai")
+            browsers.start(late_task, label="遅れて動く処理")
+            released.set()
+
+        assert taken == ["kintai"]
+
+    def test_releases_collected_tasks(self):
+        """受け取り済みの処理は保持し続けない（繰り返し start しても溜まらない）。"""
+        with Browsers() as browsers:
+            for _ in range(20):
+                browsers.start(lambda: "ok").wait(timeout=5)
+
+            assert len(browsers._tasks) <= 1
+
+    def test_label_numbering_keeps_increasing(self):
+        """既定の名前は、受け取り済みを手放しても番号が戻らない。"""
+        with Browsers() as browsers:
+            first = browsers.start(lambda: "ok")
+            first.wait(timeout=5)
+            second = browsers.start(lambda: "ok")
+
+            assert (first.label, second.label) == ("処理1", "処理2")
+
+    def test_rejects_parallel_without_with(self):
+        """with に入れずに parallel を呼ぶと、引数が空でも弾かれる。"""
+        browsers = Browsers()
+
+        with pytest.raises(BrowsersNotStartedError):
+            browsers.parallel()
+
     def test_reports_uncollected_error(self, caplog):
         """wait を呼び忘れた処理の例外も、黙って消えずにログへ出す。"""
         def fail():
