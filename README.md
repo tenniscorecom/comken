@@ -937,25 +937,46 @@ with Browsers() as browsers:
 | メソッド | 何をするか |
 |---|---|
 | `launch(name, options=None, download_dir=None)` | 名前を付けてブラウザを1つ起動し、`BrowserSession` を返す |
+| `start(処理, label="")` | 処理を裏で始めて、すぐ次の行へ進む。`BackgroundTask` を返す |
 | `parallel(*tasks)` | 複数の処理を同時に実行し、渡した順に結果を返す |
 | `names` | 起動済みのセッション名（起動した順） |
 | `browsers["kintai"]` | 名前でセッションを取り出す |
 
-**同時に走らせる**: 逐次で書いた呼び出しを `lambda:` で包むだけ。
+**待ち時間を使って別のことを進める**: 書いた順に動くのが基本で、
+待ちたくないところだけ `start()` にする。
 
 ```python
 with Browsers() as browsers:
     kintai = browsers.launch("kintai", KintaiOptions)
     keiri = browsers.launch("keiri", KeiriOptions)
 
-    kintai_days, keiri_rows = browsers.parallel(
-        lambda: KintaiFlow(kintai).unfilled_days(),
-        lambda: KeiriFlow(keiri).pending_rows(),
-    )
+    勤怠 = browsers.start(lambda: KintaiFlow(kintai).unfilled_days(), label="勤怠")
+
+    keiri_rows = KeiriFlow(keiri).pending_rows()   # 勤怠の読み込み中にこちらが進む
+
+    kintai_days = 勤怠.wait()                       # 戻って結果を受け取る
 ```
 
-1つの処理では1つのセッションだけを触ること。同じセッションを2つの処理から触ると
-`ConcurrentSessionUseError` で即座に止まる（黙って別の画面を操作するより安全なため）。
+重い画面を待っている間、ブラウザは何も消費しないので他方がその時間を使えます。
+読み込みが終われば、そちらも自分で続きを始めます（「優先する」指示は不要）。
+
+| `BackgroundTask` | 何をするか |
+|---|---|
+| `wait(timeout=None)` | 終わるのを待って結果を返す。中で起きた例外はここで送出される |
+| `is_done` | 終わったかどうかだけ見る（待たない） |
+
+**全部同時でよければ** `parallel` が短く書けます（`start` と `wait` を並べるのと同じ）:
+
+```python
+kintai_days, keiri_rows = browsers.parallel(
+    lambda: KintaiFlow(kintai).unfilled_days(),
+    lambda: KeiriFlow(keiri).pending_rows(),
+)
+```
+
+裏で動かしている処理と、自分で書いている処理で、同じセッションを触らないこと。
+同時に触ると `ConcurrentSessionUseError` で即座に止まります
+（黙って別の画面を操作するより安全なため）。
 
 ---
 

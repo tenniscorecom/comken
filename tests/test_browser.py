@@ -8,6 +8,7 @@ CI でも手元でも安定しないため、ここでは扱わない。
 import logging
 import shutil
 import threading
+import time
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -311,8 +312,112 @@ class TestBrowsers:
         assert closed == ["keiri", "kintai"]
 
 
+class TestBrowsersStart:
+    """「先に始めておいて、あとで受け取る」形のテスト。"""
+
+    def test_returns_before_task_finishes(self):
+        """start は処理の終了を待たずに、すぐ次の行へ進む。"""
+        release = threading.Event()
+
+        with Browsers() as browsers:
+            task = browsers.start(lambda: release.wait(timeout=5) and "done")
+
+            # 処理はまだ終わっていないのに、ここまで進んでいる
+            assert not task.is_done
+            release.set()
+            assert task.wait(timeout=5) == "done"
+            assert task.is_done
+
+    def test_other_work_progresses_while_waiting(self):
+        """重い処理を待っている間に、後続の行が進む。"""
+        heavy_started = threading.Event()
+        light_finished = threading.Event()
+
+        def heavy():
+            heavy_started.set()
+            # 後続の処理が先に終わるまで待つ。順番に動いていればここで詰まる
+            assert light_finished.wait(timeout=5)
+            return "重い方"
+
+        with Browsers() as browsers:
+            task = browsers.start(heavy, label="勤怠")
+            assert heavy_started.wait(timeout=5)
+
+            light_finished.set()  # 後続の処理（軽い方）がここで終わったとみなす
+
+            assert task.wait(timeout=5) == "重い方"
+
+    def test_wait_reraises_error(self):
+        """裏で起きた例外は、wait で受け取ったときに送出される。"""
+        def fail():
+            raise ValueError("取得に失敗")
+
+        with Browsers() as browsers:
+            task = browsers.start(fail)
+
+            with pytest.raises(ValueError, match="取得に失敗"):
+                task.wait(timeout=5)
+
+    def test_wait_timeout_keeps_task_running(self):
+        """待ち時間を過ぎても、処理自体は動き続ける。"""
+        release = threading.Event()
+
+        with Browsers() as browsers:
+            task = browsers.start(lambda: release.wait(timeout=5) and "done", label="勤怠")
+
+            with pytest.raises(TimeoutError, match="勤怠"):
+                task.wait(timeout=0.1)
+
+            release.set()
+            assert task.wait(timeout=5) == "done"
+
+    def test_waits_for_tasks_before_closing_browsers(self, tmp_path, monkeypatch):
+        """with を抜けるとき、裏の処理が終わってからブラウザを閉じる。
+
+        先に閉じると、操作の途中でブラウザが消えて原因の分かりにくいエラーになる。
+        """
+        events = []
+        monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
+        monkeypatch.setattr(
+            BrowserSession, "__exit__", lambda self, *args: events.append("ブラウザを閉じた")
+        )
+
+        def slow_task():
+            time.sleep(0.1)
+            events.append("処理がおわった")
+
+        with Browsers() as browsers:
+            browsers.launch("kintai")
+            browsers.start(slow_task)
+
+        assert events == ["処理がおわった", "ブラウザを閉じた"]
+
+    def test_reports_uncollected_error(self, caplog):
+        """wait を呼び忘れた処理の例外も、黙って消えずにログへ出す。"""
+        def fail():
+            raise ValueError("誰にも受け取られない失敗")
+
+        with caplog.at_level(logging.ERROR), Browsers() as browsers:
+            browsers.start(fail, label="勤怠")
+
+        assert "勤怠" in caplog.text
+        assert "誰にも受け取られない失敗" in caplog.text
+
+    def test_does_not_report_collected_error_twice(self, caplog):
+        """wait で受け取り済みの失敗は、終了時に重ねて報告しない。"""
+        def fail():
+            raise ValueError("受け取り済みの失敗")
+
+        with caplog.at_level(logging.ERROR), Browsers() as browsers:
+            task = browsers.start(fail, label="勤怠")
+            with pytest.raises(ValueError):
+                task.wait(timeout=5)
+
+        assert "受け取られないまま終了" not in caplog.text
+
+
 class TestBrowsersParallel:
-    """並列実行のテスト。"""
+    """まとめて同時実行するときのテスト。"""
 
     def test_returns_results_in_given_order(self):
         """結果は、渡した順で返る（終わった順ではない）。"""

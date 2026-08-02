@@ -17,6 +17,7 @@
     Page / SitePage 1画面ぶんの操作をまとめる基底クラス
     Locator         セレクター（Locator.id(...) / .css(...) など）
     DownloadDir     ダウンロード先フォルダ。完了待ちに使う
+    BackgroundTask  Browsers.start() が返す取っ手。wait() で結果を受け取る
 """
 
 from .download import DownloadDir
@@ -25,6 +26,7 @@ from .locator import Locator
 from .options import BrowserOptions
 from .page import Page, SitePage
 from .session import BrowserSession
+from .task import BackgroundTask
 
 __all__ = [
     "Browsers",
@@ -34,4 +36,5 @@ __all__ = [
     "SitePage",
     "Locator",
     "DownloadDir",
+    "BackgroundTask",
 ]

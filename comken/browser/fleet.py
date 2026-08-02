@@ -15,7 +15,18 @@
         kintai_data = KintaiFlow(kintai).fetch()
         keiri_data = KeiriFlow(keiri).fetch()
 
-同時に走らせたくなったら、上の呼び出しを lambda で包むだけで並列になる:
+**書いた順に上から動く（同期）のが基本。** 待っている間に別のことを進めたいときだけ、
+start() で先に始めておき、結果が必要になったところで wait() で受け取る:
+
+        勤怠 = browsers.start(lambda: KintaiFlow(kintai).fetch())  # 始めるだけ。待たない
+        keiri_data = KeiriFlow(keiri).fetch()                      # その間にこちらを進める
+        kintai_data = 勤怠.wait()                                  # 戻って結果を受け取る
+
+重い画面の読み込みを待っている間、ブラウザは何も消費していないので、
+その時間で別のサイトの操作が進む。読み込みが終われば、そちらも自分で続きを始める。
+
+全部まとめて同時に始めて、全部の結果を受け取るだけなら parallel で短く書ける
+（start して wait するのと同じことをしている）:
 
         kintai_data, keiri_data = browsers.parallel(
             lambda: KintaiFlow(kintai).fetch(),
@@ -38,10 +49,15 @@ from comken.exceptions import SessionNameConflictError, SessionNotFoundError
 from .download import DownloadDir
 from .options import BrowserOptions
 from .session import BrowserSession
+from .task import BackgroundTask
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+
+# 裏で動かす処理の同時実行数の上限。ブラウザ操作は待ち時間がほとんどで
+# CPU を使わないため、サイト数として現実的な範囲を確保しておけばよい
+_MAX_BACKGROUND_TASKS = 16
 
 
 class Browsers:
@@ -57,12 +73,17 @@ class Browsers:
     def __init__(self) -> None:
         self._stack = ExitStack()
         self._sessions: dict[str, BrowserSession] = {}
+        self._executor: ThreadPoolExecutor | None = None
+        self._tasks: list[BackgroundTask] = []
 
     def __enter__(self) -> "Browsers":
         self._stack.__enter__()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
+        # ブラウザを閉じる前に、裏で動いている処理の終了を待つ。
+        # 先に閉じると、操作の途中でブラウザが消えて追いにくいエラーになる
+        self._finish_background_tasks()
         # ExitStack が起動と逆順にすべてのセッションを閉じる。
         # 途中の終了処理が失敗しても、残りの終了は実行される
         self._stack.__exit__(exc_type, exc_value, traceback)
@@ -112,24 +133,59 @@ class Browsers:
         self._sessions[name] = session
         return session
 
+    def start(self, task: Callable[[], T], label: str = "") -> BackgroundTask[T]:
+        """処理を裏で始めて、すぐ次の行へ進む。結果は wait() で受け取る。
+
+        普通に書けば上から順に動く。時間のかかる処理を待っている間に
+        別のことを進めたいときだけ、これで先に始めておく:
+
+            勤怠 = browsers.start(lambda: KintaiFlow(kintai).search())
+            KeiriFlow(keiri).login(user, password)   # 勤怠の読み込み中にこちらが進む
+            days = 勤怠.wait()                        # 戻って結果を受け取る
+
+        **裏で動かす処理と、その後に自分で書く処理で、同じセッションを触らないこと。**
+        同じセッションを同時に触ると ConcurrentSessionUseError で止まる
+        （黙って別の画面を操作するより、早く気づけるほうが安全なため）。
+
+        Args:
+            task: 引数を取らない呼び出し可能オブジェクト。lambda で包んで渡す。
+            label: 何の処理か。省略するとセッション名の代わりに連番が付く。
+                   ログとエラーメッセージに出るので、付けておくと原因を追いやすい。
+
+        Returns:
+            結果を受け取るための取っ手。wait() で結果、is_done で終了確認ができる。
+        """
+        if self._executor is None:
+            self._executor = ThreadPoolExecutor(
+                max_workers=_MAX_BACKGROUND_TASKS, thread_name_prefix="browser"
+            )
+
+        name = label or f"処理{len(self._tasks) + 1}"
+        background_task = BackgroundTask(self._executor.submit(task), name)
+        self._tasks.append(background_task)
+        logger.debug("裏で開始しました: %s", name)
+        return background_task
+
     def parallel(self, *tasks: Callable[[], T]) -> list[T]:
-        """複数の処理を同時に走らせ、渡した順に結果を返す。
+        """複数の処理を同時に始めて、全部終わるまで待ち、渡した順に結果を返す。
 
-        逐次で書いたコードを lambda で包むだけで並列になる:
+        start() で始めて wait() で受け取るのを、まとめて書けるようにしたもの。
+        「全部同時に始めて、全部の結果が欲しい」だけならこちらが短い:
 
-            # 逐次
+            # 逐次（上から順に動く）
             a = KintaiFlow(kintai).fetch()
             b = KeiriFlow(keiri).fetch()
 
-            # 並列（同じ呼び出しを lambda で包む）
+            # 同時（同じ呼び出しを lambda で包む）
             a, b = browsers.parallel(
                 lambda: KintaiFlow(kintai).fetch(),
                 lambda: KeiriFlow(keiri).fetch(),
             )
 
+        受け取るタイミングを自分で決めたい場合は start() を使う。
+
         1つの処理では1つのセッションだけを触ること。同じセッションを2つの処理から
-        触ると ConcurrentSessionUseError で止まる（黙って壊れるより早く気づけるように、
-        待たずにエラーにしている）。
+        触ると ConcurrentSessionUseError で止まる。
 
         Args:
             *tasks: 引数を取らない呼び出し可能オブジェクト。
@@ -145,18 +201,18 @@ class Browsers:
         if not tasks:
             return []
 
-        with ThreadPoolExecutor(max_workers=len(tasks), thread_name_prefix="browser") as executor:
-            # 例外が出ても、走り出した処理は最後まで待つ。
-            # 途中で打ち切るとブラウザを操作中のまま放置することになるため
-            futures = [executor.submit(task) for task in tasks]
-            results: list[T] = []
-            errors: list[Exception] = []
-            for index, future in enumerate(futures):
-                try:
-                    results.append(future.result())
-                except Exception as exc:
-                    logger.error("並列処理の %d 番目が失敗しました: %s", index + 1, exc)
-                    errors.append(exc)
+        started = [self.start(task, label=f"処理{index + 1}") for index, task in enumerate(tasks)]
+
+        # 例外が出ても、走り出した処理は最後まで待つ。
+        # 途中で打ち切るとブラウザを操作中のまま放置することになるため
+        results: list[T] = []
+        errors: list[Exception] = []
+        for background_task in started:
+            try:
+                results.append(background_task.wait())
+            except Exception as exc:
+                logger.error("「%s」が失敗しました: %s", background_task.label, exc)
+                errors.append(exc)
 
         if errors:
             raise errors[0]
@@ -176,6 +232,35 @@ class Browsers:
         if name not in self._sessions:
             raise SessionNotFoundError(name, self.names)
         return self._sessions[name]
+
+    def _finish_background_tasks(self) -> None:
+        """裏で動いている処理の終了を待ってから、実行の仕組みを片付ける。
+
+        wait() を呼ばずに with を抜けた処理があると、その中で起きた例外は
+        誰にも渡らない。黙って消えると原因調査ができないため、ここでログに出す。
+        """
+        if self._executor is None:
+            return
+
+        self._executor.shutdown(wait=True)
+        for background_task in self._tasks:
+            if background_task.is_collected:
+                continue
+            try:
+                background_task.wait(timeout=0)
+                logger.warning(
+                    "「%s」の結果が受け取られないまま終了しました（wait の呼び忘れ）",
+                    background_task.label,
+                )
+            except Exception as exc:
+                logger.error(
+                    "「%s」が失敗していました（wait で受け取られないまま終了）: %s",
+                    background_task.label,
+                    exc,
+                )
+
+        self._executor = None
+        self._tasks.clear()
 
     def __repr__(self) -> str:
         launched = "、".join(self.names) if self._sessions else "なし"
