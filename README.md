@@ -119,7 +119,7 @@ python main.py
 ```python
 import comken
 
-comken.__version__        # → "0.2.0"
+comken.__version__        # → "0.3.0"
 
 # デバッグモード: ライブラリ主要処理（Excel 読み込み・転記・保存、CSV 読み書き、zip 等）の
 # 所要時間を DEBUG ログに出す。どこが遅いかの調査に使う
@@ -1215,6 +1215,7 @@ flowchart LR
 | 2026-07-13 | ExcelComHandler: 上書き保存 save() 追加、save_as のパスワードが効かない問題を修正（FileFormat を常に明示。形式変換は file_format 引数）、close() でプロセスが残る問題を修正、AskToUpdateLinks=False 追加。CONVENTIONS に「モジュール内の並び順」を追加し全体を整理。docs/（機能カタログ・コードリーディングガイド・設計メモ）を追加 |
 | 2026-07-14 | 監査指摘の修正一式（keep_vba・run_macro 保存・DispatchEx・EdgeDriver/SF のリソース解放・config 型変換・CSV/ログの堅牢化・unzip の 3.10 対応/Zip Slip 対策）。コーディング規約を3層（共通/本体/利用側）に分割。配布方式を廃止し共有サーバー直接参照（PYTHONPATH）に変更、同期用 bat（templates/）を削除 |
 | 2026-07-15 | `from comken import config` に一本化（src/config.py 不要）。Pylance 補完用 typings スタブを自動生成。当時のログ初期化で comken バージョンを出力。バイトコードキャッシュをローカルに自動退避。examples テスト・README コード構文チェック・CI（GitHub Actions）を追加。新規プロジェクトのひな形 templates/新規プロジェクト/ を追加 |
+| 2026-08-03 | browser を作り直し（**破壊的変更**）。`EdgeDriver` / `BasePage` を廃止し、入口を `Browsers` に一本化（1サイト1ブラウザ・`with` 必須・サイトが1つでも複数でも同じ書き方）。`start` / `wait` で待ち時間に別サイトを進められるようにし、`parallel` はその短縮形に。`Page` を `Locator` 版へ一本化して `click_id` 等の直積メソッドを削除、`elements` を追加。msedgedriver のバージョン不一致を配布フォルダから自動修復。`PROFILE_ROOT` でログイン状態を永続化。ブラウザ例外を `BrowserError` 配下に新設。`py.typed` 追加（補完・型チェック改善）。docs/ブラウザ操作.md・docs/Outlook操作.md を追加 |
 
 
 # Outlook（Classic 限定）

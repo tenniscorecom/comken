@@ -722,6 +722,31 @@ class TestDriverUpdate:
             _replace_driver(source, target)
 
 
+class TestRemovedNames:
+    """作り直しで無くなった名前を使ったときの案内のテスト。"""
+
+    def test_old_driver_name_explains_replacement(self):
+        """EdgeDriver を使うと、置き換え先が分かるエラーになる。"""
+        import comken.browser as browser_package
+
+        with pytest.raises(AttributeError, match="Browsers"):
+            _ = browser_package.EdgeDriver
+
+    def test_old_page_name_explains_replacement(self):
+        """BasePage を使うと、置き換え先が分かるエラーになる。"""
+        import comken.browser as browser_package
+
+        with pytest.raises(AttributeError, match="Page"):
+            _ = browser_package.BasePage
+
+    def test_unknown_name_raises_plain_error(self):
+        """それ以外の未知の名前は、普通の AttributeError になる。"""
+        import comken.browser as browser_package
+
+        with pytest.raises(AttributeError, match="has no attribute"):
+            _ = browser_package.NotAThing
+
+
 class TestLocator:
     """セレクターの宣言的管理のテスト。"""
 
