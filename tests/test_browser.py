@@ -24,6 +24,7 @@ from comken.exceptions import (
     SessionNotStartedError,
 )
 
+
 def _make_session(tmp_path, name: str = "test") -> BrowserSession:
     """Edge を起動せずに、起動済みと同じ状態の BrowserSession を作る。"""
     session = BrowserSession(
@@ -168,11 +169,10 @@ class TestBrowsers:
             BrowserSession, "__exit__", lambda self, *args: closed.append(self.name)
         )
 
-        with pytest.raises(RuntimeError):
-            with Browsers() as browsers:
-                browsers.launch("kintai")
-                browsers.launch("keiri")
-                raise RuntimeError("処理中のエラー")
+        with pytest.raises(RuntimeError), Browsers() as browsers:
+            browsers.launch("kintai")
+            browsers.launch("keiri")
+            raise RuntimeError("処理中のエラー")
 
         # ExitStack は起動と逆順に閉じる
         assert closed == ["keiri", "kintai"]
@@ -206,9 +206,8 @@ class TestBrowsersParallel:
         def fail():
             raise ValueError("取得に失敗")
 
-        with Browsers() as browsers:
-            with pytest.raises(ValueError, match="取得に失敗"):
-                browsers.parallel(fail, lambda: "ok")
+        with Browsers() as browsers, pytest.raises(ValueError, match="取得に失敗"):
+            browsers.parallel(fail, lambda: "ok")
 
     def test_waits_for_all_tasks_even_when_one_fails(self):
         """1つ失敗しても、走り出した処理は最後まで待つ（操作中に放置しない）。"""
@@ -222,9 +221,8 @@ class TestBrowsersParallel:
             finished.append("slow")
             return "ok"
 
-        with Browsers() as browsers:
-            with pytest.raises(ValueError):
-                browsers.parallel(fail, slow)
+        with Browsers() as browsers, pytest.raises(ValueError):
+            browsers.parallel(fail, slow)
 
         assert finished == ["slow"]
 
@@ -367,9 +365,8 @@ class TestPage:
         """iframe の中で例外が出ても、元の画面へ戻る。"""
         page = self._page(tmp_path)
 
-        with pytest.raises(RuntimeError):
-            with page.frame(Locator.id("content")):
-                raise RuntimeError("中での失敗")
+        with pytest.raises(RuntimeError), page.frame(Locator.id("content")):
+            raise RuntimeError("中での失敗")
 
         page.session._driver.switch_to.default_content.assert_called_once_with()
 
