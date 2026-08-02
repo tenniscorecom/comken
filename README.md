@@ -1197,6 +1197,8 @@ flowchart LR
 
 # Outlook（Classic 限定）
 
+詳しい使い方は [docs/Outlook操作.md](docs/Outlook操作.md) を参照。
+
 ```python
 import logging
 
