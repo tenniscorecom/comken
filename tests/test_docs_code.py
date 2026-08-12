@@ -21,9 +21,9 @@ _DOCS = [
 _CODE_BLOCK = re.compile(r"```python\n(.*?)```", re.DOTALL)
 _MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]*]\(([^)]+)\)")
 _HEADING = re.compile(r"^#{1,6}\s+(.+)$", re.MULTILINE)
+# NOTE: salesforce / credentials は 2026-07-29 に撤去したが、社内の仕組みを作り直すことになり
+#       再開が決まったため対象から外した（docs/Salesforce設計メモ.md）。
 _REMOVED_NAMES = (
-    "salesforce",
-    "credentials",
     "pdf",
     "setup_logger",
     "ExcelFile",
