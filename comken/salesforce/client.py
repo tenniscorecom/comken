@@ -1,0 +1,331 @@
+"""
+salesforce/client.py — Salesforce API クライアント
+
+1インスタンスが1組織を受け持つ。組織ごとに固有の処理があるときは、
+**このクラスを継承して利用プロジェクト側でメソッドを足す**
+（組織名は社内固有の情報なので、このリポジトリには置かない）。
+
+    # 利用プロジェクト側
+    class 自組織(Salesforce):
+        def 未処理の申請(self) -> list[dict]:
+            return self.query("SELECT Id, Name FROM Application__c WHERE Status__c = '未処理'")
+
+認証・レポート・計測は継承せず**持たせている**。認証は「トークンを取る部品」で
+あって Salesforce の一種ではなく、合成にしておくと JWT フローへの差し替えが
+`auth` の入れ替えだけで済むため（詳しくは docs/Salesforce設計メモ.md）。
+"""
+
+import logging
+import time
+import urllib.parse
+
+import requests
+
+from ..exceptions import (
+    SalesforceConnectionError,
+    SalesforceRequestError,
+)
+from ..runtime import dry_run_log, is_dry_run
+from .metrics import ApiMetrics, RetryReason
+from .oauth import ClientCredentialsAuth
+from .report import ReportApi
+
+logger = logging.getLogger(__name__)
+
+HTTP_UNAUTHORIZED = 401
+HTTP_TOO_MANY_REQUESTS = 429
+HTTP_SERVER_ERROR = 500
+HTTP_BAD_REQUEST = 400
+DRY_RUN_RECORD_ID = "DRYRUN00000000000A"
+
+# 一時的な失敗をやり直す回数と待ち時間。待ち時間は試行回数に比例して伸ばす
+MAX_ATTEMPTS = 3
+RETRY_WAIT_SECONDS = 2
+
+
+class Salesforce:
+    """Salesforce の 1 組織に対する API クライアント。
+
+    使い方:
+        with Salesforce(
+            client_id="接続アプリの Consumer Key",
+            client_secret="接続アプリの Consumer Secret",
+            domain_url="https://your-domain.my.salesforce.com",
+        ) as sf:
+            records = sf.query("SELECT Id, Name FROM Account")
+            rows = sf.report.run("00O000000000001")
+            sf.metrics.log_summary()
+
+    Attributes:
+        report: レポート API（sf.report.run(...)）。
+        metrics: API 呼び出しの計測（sf.metrics.log_summary()）。
+    """
+
+    # API バージョン。組織が対応していない場合はサブクラスで上書きする
+    API_VERSION = "60.0"
+    TIMEOUT_SECONDS = 60
+
+    def __init__(
+        self,
+        client_id: str,
+        client_secret: str,
+        domain_url: str,
+        org_name: str = "",
+    ) -> None:
+        """
+        Args:
+            client_id: 接続アプリの Consumer Key。
+            client_secret: 接続アプリの Consumer Secret。
+            domain_url: 組織の My Domain の URL。login.salesforce.com は使えない。
+            org_name: 計測ログに出す組織の呼び名。省略時はクラス名を使う。
+
+        Raises:
+            SalesforceAuthError: 認証に失敗した場合。
+            SalesforceConnectionError: ネットワークの問題で接続できない場合。
+        """
+        self.auth = ClientCredentialsAuth(client_id, client_secret, domain_url)
+        self.metrics = ApiMetrics(org_name or type(self).__name__)
+        self.report = ReportApi(self)
+
+        self._session = requests.Session()
+        self._access_token = ""
+        self._instance_url = ""
+        self._authenticate()
+
+    def __enter__(self) -> "Salesforce":
+        return self
+
+    def __exit__(self, *args) -> None:
+        self.close()
+
+    def close(self) -> None:
+        """HTTP セッションを閉じる。with を使う場合は自動で呼ばれる。"""
+        self._session.close()
+
+    # ------------------------------------------------------------------ query
+    def query(self, soql: str) -> list[dict]:
+        """SOQL クエリを実行してレコードを返す（全件取得・ページ送り自動）。
+
+        レポート API と違って**行数の上限がない**ので、
+        2000 行を超えるデータはこちらで取る。
+
+        Args:
+            soql: 実行する SOQL クエリ文字列。
+
+        Returns:
+            レコードの辞書のリスト。
+        """
+        records: list[dict] = []
+        path = self.data_path(f"/query?q={urllib.parse.quote(soql)}")
+        while path:
+            result, _ = self.request("GET", path, component="query")
+            if not isinstance(result, dict):
+                break
+            for record in result.get("records", []):
+                record.pop("attributes", None)  # メタ情報は業務データに不要
+                records.append(record)
+            # done が真なら次のページは無い
+            path = "" if result.get("done", True) else result.get("nextRecordsUrl", "")
+        return records
+
+    # ------------------------------------------------------------------- CRUD
+    def get(self, object_name: str, record_id: str) -> dict:
+        """レコードを1件取得する。
+
+        Args:
+            object_name: オブジェクトの API 参照名（例: "Account"）。
+            record_id: レコードの Id。
+        """
+        record, _ = self.request(
+            "GET", self.data_path(f"/sobjects/{object_name}/{record_id}"), component="crud"
+        )
+        if isinstance(record, dict):
+            record.pop("attributes", None)
+            return record
+        return {}
+
+    def insert(self, object_name: str, data: dict) -> str:
+        """レコードを作成して Id を返す。
+
+        Args:
+            object_name: オブジェクトの API 参照名。
+            data: 作成するレコードの項目と値。
+        """
+        if is_dry_run():
+            dry_run_log("Salesforce %s に insert: %s", object_name, data)
+            return DRY_RUN_RECORD_ID
+        result, _ = self.request(
+            "POST", self.data_path(f"/sobjects/{object_name}"), body=data, component="crud"
+        )
+        return result["id"] if isinstance(result, dict) else ""
+
+    def update(self, object_name: str, record_id: str, data: dict) -> None:
+        """レコードを更新する。
+
+        Args:
+            object_name: オブジェクトの API 参照名。
+            record_id: 更新するレコードの Id。
+            data: 更新する項目と値。
+        """
+        if is_dry_run():
+            dry_run_log("Salesforce %s (%s) を update: %s", object_name, record_id, data)
+            return
+        self.request(
+            "PATCH",
+            self.data_path(f"/sobjects/{object_name}/{record_id}"),
+            body=data,
+            component="crud",
+        )
+
+    def upsert(self, object_name: str, external_id_field: str, data: dict) -> None:
+        """外部 ID で upsert する（一致すれば更新、なければ作成）。
+
+        Args:
+            object_name: オブジェクトの API 参照名。
+            external_id_field: 外部 ID 項目の API 参照名（例: "ExternalId__c"）。
+            data: 項目と値。external_id_field の値を含めること。
+        """
+        if is_dry_run():
+            dry_run_log("Salesforce %s を upsert（%s）: %s", object_name, external_id_field, data)
+            return
+        external_id = urllib.parse.quote(str(data[external_id_field]))
+        # 外部 ID は URL 側で指定するため、本文からは取り除く
+        body = {key: value for key, value in data.items() if key != external_id_field}
+        self.request(
+            "PATCH",
+            self.data_path(f"/sobjects/{object_name}/{external_id_field}/{external_id}"),
+            body=body,
+            component="crud",
+        )
+
+    def delete(self, object_name: str, record_id: str) -> None:
+        """レコードを削除する。
+
+        Args:
+            object_name: オブジェクトの API 参照名。
+            record_id: 削除するレコードの Id。
+        """
+        if is_dry_run():
+            dry_run_log("Salesforce %s (%s) を delete", object_name, record_id)
+            return
+        self.request(
+            "DELETE", self.data_path(f"/sobjects/{object_name}/{record_id}"), component="crud"
+        )
+
+    # ---------------------------------------------------------------- request
+    def request(
+        self,
+        method: str,
+        path: str,
+        body: dict | None = None,
+        component: str = "other",
+    ) -> tuple[dict | list | str | None, dict]:
+        """REST API を呼び、(レスポンス本文, レスポンスヘッダー) を返す。
+
+        すべての API 呼び出しがここを通る。計測と、401 のときの再認証もここで行う。
+        通常は query() / get() 等を使い、このメソッドは
+        ライブラリに無い API を叩くときだけ使う。
+
+        Args:
+            method: HTTP メソッド（GET / POST / PATCH / DELETE）。
+            path: "/services/data/..." から始まるパス。
+            body: JSON で送る辞書（省略可）。
+            component: 計測での呼び出し元の区別（"query" / "crud" / "report"）。
+
+        Raises:
+            SalesforceRequestError: API がエラーを返した場合。
+            SalesforceConnectionError: ネットワークの問題で接続できない場合。
+        """
+        start = time.perf_counter()
+        is_reauthenticated = False
+        response = None
+
+        for attempt in range(1, MAX_ATTEMPTS + 1):
+            # instance_url は再認証で変わりうるので、毎回組み立て直す
+            response = self._send(method, f"{self._instance_url}{path}", body)
+
+            # 401 はトークンが切れただけのことが多い。取り直して1回だけやり直す。
+            # 2回目も 401 なら設定の問題なので、リトライで隠さずエラーにする。
+            if response.status_code == HTTP_UNAUTHORIZED and not is_reauthenticated:
+                logger.debug("401 を受け取ったのでトークンを取り直します: %s", path)
+                self.metrics.record_retry(component, RetryReason.REAUTH)
+                self._authenticate()
+                is_reauthenticated = True
+                continue
+
+            reason = _retry_reason(response.status_code)
+            if reason and attempt < MAX_ATTEMPTS:
+                # 5xx と 429 は Salesforce 側の一時的な事情なので、待って試し直す
+                logger.debug(
+                    "%s のため %d 秒待って再試行します（%d/%d）: %s",
+                    reason,
+                    RETRY_WAIT_SECONDS * attempt,
+                    attempt,
+                    MAX_ATTEMPTS,
+                    path,
+                )
+                self.metrics.record_retry(component, reason)
+                time.sleep(RETRY_WAIT_SECONDS * attempt)
+                continue
+
+            break
+
+        is_error = response.status_code >= HTTP_BAD_REQUEST
+        self.metrics.record_call(component, time.perf_counter() - start, is_error=is_error)
+
+        limit_info = response.headers.get("Sforce-Limit-Info")
+        if limit_info:
+            self.metrics.update_api_usage(limit_info)
+
+        if is_error:
+            raise SalesforceRequestError(method, path, response.status_code, response.text)
+
+        return self._body_of(response), dict(response.headers)
+
+    def _send(self, method: str, url: str, body: dict | None) -> requests.Response:
+        """HTTP リクエストを1回送る。"""
+        try:
+            return self._session.request(method, url, json=body, timeout=self.TIMEOUT_SECONDS)
+        except requests.exceptions.RequestException as e:
+            raise SalesforceConnectionError(url, e) from e
+
+    @staticmethod
+    def _body_of(response: requests.Response) -> dict | list | str | None:
+        """レスポンス本文を、内容に応じて辞書・リスト・文字列・None で返す。"""
+        if not response.text:
+            return None  # DELETE や PATCH は本文が空で返る
+        if response.headers.get("Content-Type", "").startswith("application/json"):
+            return response.json()
+        return response.text
+
+    def _authenticate(self) -> None:
+        """トークンを取り直し、以降のリクエストに使うヘッダーを差し替える。"""
+        self._access_token, self._instance_url = self.auth.fetch()
+        self._session.headers.update(
+            {
+                "Authorization": f"Bearer {self._access_token}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+        )
+
+    def data_path(self, path: str) -> str:
+        """REST API のバージョン付きパスを組み立てる。
+
+        ライブラリに無い API を request() で叩くときに使う。
+
+            sf.request("GET", sf.data_path("/limits"))
+        """
+        return f"/services/data/v{self.API_VERSION}{path}"
+
+
+# ── 内部ヘルパー ──────────────────────────────────────────────────────────────
+
+
+def _retry_reason(status_code: int) -> str:
+    """やり直す価値のあるステータスなら、その理由を返す。それ以外は空文字。"""
+    if status_code >= HTTP_SERVER_ERROR:
+        return RetryReason.SERVER_ERROR  # Salesforce 側の一時的な不調
+    if status_code == HTTP_TOO_MANY_REQUESTS:
+        return RetryReason.RATE_LIMIT  # 同時実行数の制限。待てば通ることがある
+    return ""

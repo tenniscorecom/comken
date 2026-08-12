@@ -3,6 +3,7 @@
 openpyxl
 selenium
 pywin32
+requests
 ; --- 開発用 ---
 ruff
 pytest

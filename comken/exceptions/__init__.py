@@ -34,6 +34,12 @@ ComkenError
 │   └── CsvCellReferenceError
 ├── RpaError
 │   └── RpaLibraryNotFoundError
+├── SalesforceError
+│   ├── SalesforceAuthError
+│   ├── SalesforceConnectionError
+│   ├── SalesforceRequestError
+│   ├── SalesforceReportTruncatedError
+│   └── SalesforceReportFormatError
 ├── BrowserError
 │   ├── DriverStartError
 │   ├── BrowsersNotStartedError
@@ -132,6 +138,14 @@ from .rpa import (
     RpaError,
     RpaLibraryNotFoundError,
 )
+from .salesforce import (
+    SalesforceAuthError,
+    SalesforceConnectionError,
+    SalesforceError,
+    SalesforceReportFormatError,
+    SalesforceReportTruncatedError,
+    SalesforceRequestError,
+)
 from .warning import _warn_coerce as _warn_coerce
 
 __all__ = [
@@ -179,6 +193,12 @@ __all__ = [
     "OutlookAttachmentNotFoundError",
     "RpaError",
     "RpaLibraryNotFoundError",
+    "SalesforceError",
+    "SalesforceAuthError",
+    "SalesforceConnectionError",
+    "SalesforceRequestError",
+    "SalesforceReportTruncatedError",
+    "SalesforceReportFormatError",
     "BrowserError",
     "DriverStartError",
     "BrowsersNotStartedError",

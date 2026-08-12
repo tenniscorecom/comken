@@ -52,6 +52,7 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 | Outlook | Classic Outlook の受信メール読み取り・下書き作成 |
 | Windows（pywin32） | Excel COM 操作・ウィンドウ操作・レジストリ読み取り |
 | Browser（Edge） | Edge ブラウザ操作 |
+| Salesforce（requests） | Salesforce の SOQL・レコード操作・レポート取得・API 使用量の計測 |
 | utils.files | ファイル検索・操作・圧縮・標準フォルダ取得・ファイル名の組み立て |
 | utils | データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時取得 |
 
@@ -1150,6 +1151,74 @@ python -m examples.sample_login.run
 
 ---
 
+## Salesforce
+
+1インスタンスが1組織を受け持つ。認証は OAuth 2.0 クライアントクレデンシャルフローで、
+**ユーザー名・パスワード・セキュリティトークン・リフレッシュトークンを使わない**
+（このフローはリフレッシュトークンを発行しないため、保管も更新も発生しない）。
+
+```python
+from comken.salesforce import Salesforce
+
+with Salesforce(
+    client_id="接続アプリの Consumer Key",
+    client_secret="接続アプリの Consumer Secret",
+    domain_url="https://your-domain.my.salesforce.com",   # My Domain 必須
+    org_name="site_a",                                     # 計測ログでの呼び名
+) as sf:
+    accounts = sf.query("SELECT Id, Name FROM Account")    # 行数の上限なし・ページ送り自動
+    new_id = sf.insert("Account", {"Name": "新規取引先"})
+    sf.update("Account", record_id=new_id, data={"Name": "更新後"})
+
+    rows = sf.report.run("00O000000000001")                # レポートは上限 2000 行
+
+    sf.metrics.log_summary()                               # 使用量を最後にまとめて出す
+```
+
+`domain_url` は組織の **My Domain** を渡す。`login.salesforce.com` ではこのフローは動かない。
+
+### 事前に管理者へ依頼すること
+
+1. RPA 専用のインテグレーションユーザーを作る（「API の有効化」権限）
+2. 接続アプリを作り、OAuth 有効化・スコープ `api`・
+   **「クライアントクレデンシャルフローを有効化」**にチェック
+3. 接続アプリのポリシーで**実行ユーザー（Run As）**に 1 のユーザーを指定
+   （未指定だと `invalid_grant` になる）
+4. Consumer Key / Consumer Secret を受け取る
+
+### レポートの 2000 行制限
+
+レポート API は**同期・非同期のどちらも 2000 行が上限**で、非同期にしても超えられない。
+上限で切り捨てられた場合は既定で `SalesforceReportTruncatedError` を送出して**止める**
+（欠けたデータのまま処理が進むのを防ぐため）。
+
+```python
+# 期間で区切って回避する
+rows = sf.report.run(
+    "00O000000000001",
+    filters=[{"column": "CREATED_DATE", "operator": "greaterThan", "value": "2026-01-01"}],
+)
+
+# それでも足りないときは SOQL に置き換える（行数の上限がない）
+rows = sf.query("SELECT Name, Amount FROM Opportunity WHERE CreatedDate > 2026-01-01T00:00:00Z")
+```
+
+### 組織を増やす
+
+組織ごとに `Salesforce` を作る。固有の処理があるときは**継承して足す**。
+
+```python
+class 自組織(Salesforce):
+    def 未処理の申請(self) -> list[dict]:
+        return self.query("SELECT Id, Name FROM Application__c WHERE Status__c = '未処理'")
+```
+
+書き込み系（`insert` / `update` / `upsert` / `delete`）は `dry_run` を尊重する。
+使い方の一覧は [docs/機能カタログ.md](docs/機能カタログ.md)、
+設計の背景は [docs/Salesforce設計メモ.md](docs/Salesforce設計メモ.md) を参照。
+
+---
+
 ## パッケージ構成
 
 ```mermaid
@@ -1215,6 +1284,7 @@ flowchart LR
 | 2026-07-13 | ExcelComHandler: 上書き保存 save() 追加、save_as のパスワードが効かない問題を修正（FileFormat を常に明示。形式変換は file_format 引数）、close() でプロセスが残る問題を修正、AskToUpdateLinks=False 追加。CONVENTIONS に「モジュール内の並び順」を追加し全体を整理。docs/（機能カタログ・コードリーディングガイド・設計メモ）を追加 |
 | 2026-07-14 | 監査指摘の修正一式（keep_vba・run_macro 保存・DispatchEx・EdgeDriver/SF のリソース解放・config 型変換・CSV/ログの堅牢化・unzip の 3.10 対応/Zip Slip 対策）。コーディング規約を3層（共通/本体/利用側）に分割。配布方式を廃止し共有サーバー直接参照（PYTHONPATH）に変更、同期用 bat（templates/）を削除 |
 | 2026-07-15 | `from comken import config` に一本化（src/config.py 不要）。Pylance 補完用 typings スタブを自動生成。当時のログ初期化で comken バージョンを出力。バイトコードキャッシュをローカルに自動退避。examples テスト・README コード構文チェック・CI（GitHub Actions）を追加。新規プロジェクトのひな形 templates/新規プロジェクト/ を追加 |
+| 2026-08-12 | **v0.4.0** — Salesforce 連携を追加（`comken.salesforce`）。認証は OAuth 2.0 クライアントクレデンシャルフローで、リフレッシュトークンを保管しない。1インスタンス=1組織で、組織固有の処理は継承して足す。認証・レポート・計測は継承ではなく合成（JWT フローへ差し替えられるようにするため）。アクセストークンの期限は測らず 401 で1回だけ取り直す。5xx と 429 は待ち時間を伸ばしながら最大3回やり直し、4xx は即エラーにする。レポートは**同期・非同期とも 2000 行が上限**なので、切り捨てを検知したら既定で例外にする（`allow_truncated=True` で警告に落とせる）。API 呼び出しは1か所を通るので、呼び出し元別の回数・リトライ理由・所要時間・`Sforce-Limit-Info` 由来の組織 API 消費量をまとめて記録し、ログと CSV に出せる。例外を `SalesforceError` 配下に新設。依存に requests を追加。docs/Salesforce設計メモ.md・docs/Salesforce_JWTと鍵配布.md を追加 |
 | 2026-08-03 | browser を作り直し（**破壊的変更**）。`EdgeDriver` / `BasePage` を廃止し、入口を `Browsers` に一本化（1サイト1ブラウザ・`with` 必須・サイトが1つでも複数でも同じ書き方）。`start` / `wait` で待ち時間に別サイトを進められるようにし、`parallel` はその短縮形に。`Page` を `Locator` 版へ一本化して `click_id` 等の直積メソッドを削除、`elements` を追加。msedgedriver のバージョン不一致を配布フォルダから自動修復。`PROFILE_ROOT` でログイン状態を永続化。ブラウザ例外を `BrowserError` 配下に新設。`py.typed` 追加（補完・型チェック改善）。docs/ブラウザ操作.md・docs/Outlook操作.md を追加 |
 
 
