@@ -13,6 +13,7 @@ salesforce/metrics.py — API 呼び出しの計測
 
 import csv
 import logging
+from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -99,6 +100,14 @@ class ApiMetrics:
         if report_id not in self.truncated_reports:
             self.truncated_reports.append(report_id)
 
+    def component_stats(self) -> dict[str, ComponentStat]:
+        """呼び出し元別の集計を、読み取り用のコピーとして返す。"""
+        return deepcopy(self._by_component)
+
+    def retry_reason_counts(self) -> dict[str, int]:
+        """リトライ理由別の回数を、読み取り用のコピーとして返す。"""
+        return self._retry_reasons.copy()
+
     def update_api_usage(self, limit_info: str) -> None:
         """`Sforce-Limit-Info` ヘッダーの値から API 消費量を取り出して更新する。
 
@@ -133,7 +142,7 @@ class ApiMetrics:
         for reason, count in sorted(self._retry_reasons.items()):
             logger.info("  リトライ内訳 %s: %d 回", reason, count)
 
-        if self.api_usage:
+        if self.api_usage and self.api_usage.limit > 0:
             # 上限に対する割合が分かると「増やしてよいか」の判断ができる
             percentage = self.api_usage.used / self.api_usage.limit * 100
             logger.info(

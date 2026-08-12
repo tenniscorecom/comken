@@ -23,6 +23,7 @@ import requests
 
 from ..exceptions import (
     SalesforceConnectionError,
+    SalesforceExternalIdMissingError,
     SalesforceRequestError,
 )
 from ..runtime import dry_run_log, is_dry_run
@@ -184,11 +185,16 @@ class Salesforce:
             object_name: オブジェクトの API 参照名。
             external_id_field: 外部 ID 項目の API 参照名（例: "ExternalId__c"）。
             data: 項目と値。external_id_field の値を含めること。
+
+        Raises:
+            SalesforceExternalIdMissingError: data に external_id_field が無い場合。
         """
         if is_dry_run():
             dry_run_log("Salesforce %s を upsert（%s）: %s", object_name, external_id_field, data)
             return
-        external_id = urllib.parse.quote(str(data[external_id_field]))
+        if external_id_field not in data:
+            raise SalesforceExternalIdMissingError(object_name, external_id_field)
+        external_id = urllib.parse.quote(str(data[external_id_field]), safe="")
         # 外部 ID は URL 側で指定するため、本文からは取り除く
         body = {key: value for key, value in data.items() if key != external_id_field}
         self.request(
@@ -238,11 +244,9 @@ class Salesforce:
         """
         start = time.perf_counter()
         is_reauthenticated = False
-        response = None
-
         for attempt in range(1, MAX_ATTEMPTS + 1):
             # instance_url は再認証で変わりうるので、毎回組み立て直す
-            response = self._send(method, f"{self._instance_url}{path}", body)
+            response = self._send(method, self._request_url(path), body)
 
             # 401 はトークンが切れただけのことが多い。取り直して1回だけやり直す。
             # 2回目も 401 なら設定の問題なので、リトライで隠さずエラーにする。
@@ -251,7 +255,8 @@ class Salesforce:
                 self.metrics.record_retry(component, RetryReason.REAUTH)
                 self._authenticate()
                 is_reauthenticated = True
-                continue
+                # 401 は一時障害の試行回数を消費させず、新しいトークンで直ちに1回だけ再送する
+                response = self._send(method, self._request_url(path), body)
 
             reason = _retry_reason(response.status_code)
             if reason and attempt < MAX_ATTEMPTS:
@@ -281,6 +286,18 @@ class Salesforce:
             raise SalesforceRequestError(method, path, response.status_code, response.text)
 
         return self._body_of(response), dict(response.headers)
+
+    def _request_url(self, path: str) -> str:
+        """相対パスと Salesforce が返す絶対 URL の両方を送信用 URL にする。
+
+        絶対 URL で渡された場合もホスト部分は使わず、必ず instance_url へ送る。
+        nextRecordsUrl はレスポンス本文の値なので、書かれたホストへそのまま送ると
+        Authorization ヘッダーのアクセストークンを別のホストへ渡すことになる。
+        同じ組織の中でページを辿るだけなので、ホストは自分が知っているものに固定する。
+        """
+        parsed = urllib.parse.urlsplit(path)
+        relative = urllib.parse.urlunsplit(("", "", parsed.path, parsed.query, ""))
+        return f"{self._instance_url}{relative}"
 
     def _send(self, method: str, url: str, body: dict | None) -> requests.Response:
         """HTTP リクエストを1回送る。"""

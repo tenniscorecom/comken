@@ -11,6 +11,8 @@ from comken import dry_run
 from comken.exceptions import (
     SalesforceAuthError,
     SalesforceConnectionError,
+    SalesforceExternalIdMissingError,
+    SalesforceReportExecutionError,
     SalesforceReportFormatError,
     SalesforceReportTruncatedError,
     SalesforceRequestError,
@@ -132,12 +134,55 @@ class TestSalesforceQuery:
         second_url = session.request.call_args_list[1][0][1]
         assert second_url == f"{INSTANCE_URL}{DATA_PREFIX}/query/01g000-2000"
 
+    def test_follows_absolute_next_records_url_without_prefixing_instance_url(self):
+        """絶対 URL の nextRecordsUrl は instance_url を二重に付けずに辿る。"""
+        next_url = f"{INSTANCE_URL}{DATA_PREFIX}/query/01g000-2000"
+        page1 = _response(json_body={"records": [], "done": False, "nextRecordsUrl": next_url})
+        page2 = _response(json_body={"records": [], "done": True})
+
+        with _salesforce([page1, page2]) as (client, session, _):
+            client.query("SELECT Id FROM Account")
+
+        assert session.request.call_args_list[1][0][1] == next_url
+
+    def test_next_records_url_on_another_host_is_not_followed(self):
+        """別ホストの nextRecordsUrl へアクセストークンを送らない。
+
+        nextRecordsUrl はレスポンス本文の値なので、書かれたホストをそのまま
+        信用すると Bearer トークンを外部へ渡すことになる。
+        """
+        page1 = _response(
+            json_body={
+                "records": [],
+                "done": False,
+                "nextRecordsUrl": f"https://attacker.example.com{DATA_PREFIX}/query/01g000-2000",
+            }
+        )
+        page2 = _response(json_body={"records": [], "done": True})
+
+        with _salesforce([page1, page2]) as (client, session, _):
+            client.query("SELECT Id FROM Account")
+
+        second_url = session.request.call_args_list[1][0][1]
+        assert second_url.startswith(INSTANCE_URL), "ホストは instance_url に固定する"
+        assert "attacker.example.com" not in second_url
+
+    def test_query_string_survives_url_normalization(self):
+        """SOQL を載せたクエリ文字列が URL の組み立てで落ちない。"""
+        with _salesforce([_response(json_body={"records": [], "done": True})]) as (
+            client,
+            session,
+            _,
+        ):
+            client.query("SELECT Id FROM Account")
+        assert "?q=SELECT%20Id%20FROM%20Account" in session.request.call_args[0][1]
+
     def test_counts_calls_per_component(self):
         """呼び出しは component ごとに数えられる。"""
         with _salesforce([_response(json_body={"records": [], "done": True})]) as (client, _, _):
             client.query("SELECT Id FROM Account")
             summary = client.metrics
-        assert summary._by_component["query"].calls == 1
+        assert summary.component_stats()["query"].calls == 1
 
     def test_api_usage_comes_from_response_header(self):
         """Sforce-Limit-Info から組織の API 消費量を取り込む。"""
@@ -163,7 +208,23 @@ class TestSalesforceReauthentication:
         assert records == [{"Id": "1"}]
         assert session.request.call_count == 2
         assert post.call_count == 2, "初回認証と再認証で2回トークンを取る"
-        assert client.metrics._by_component["query"].retries == 1
+        assert client.metrics.component_stats()["query"].retries == 1
+
+    def test_401_on_last_transient_attempt_is_retried_once(self):
+        """一時障害の最終試行で 401 になっても、新トークンで1回再送する。"""
+        responses = [
+            _response(500, text="Server Error"),
+            _response(500, text="Server Error"),
+            _response(401, text="INVALID_SESSION_ID"),
+            _response(json_body={"records": [{"Id": "1"}], "done": True}),
+        ]
+        with _salesforce(responses) as (client, session, _), patch(
+            "comken.salesforce.client.time.sleep"
+        ):
+            records = client.query("SELECT Id FROM Account")
+
+        assert records == [{"Id": "1"}]
+        assert session.request.call_count == 4
 
     def test_second_401_raises_instead_of_looping(self):
         """2回続けて 401 ならリトライで隠さずエラーにする。"""
@@ -208,7 +269,7 @@ class TestSalesforceTransientFailures:
         assert records == [{"Id": "1"}]
         assert session.request.call_count == 2
         sleep.assert_called_once()
-        assert client.metrics._by_component["query"].retries == 1
+        assert client.metrics.component_stats()["query"].retries == 1
 
     def test_rate_limit_is_retried(self):
         """429 も一時的な事情として試し直す。"""
@@ -271,6 +332,22 @@ class TestSalesforceCrud:
         url = session.request.call_args[0][1]
         assert url.endswith("/sobjects/Account/ExternalId__c/A%201"), "値は URL エンコードする"
         assert session.request.call_args[1]["json"] == {"Name": "取引先"}
+
+    def test_upsert_encodes_slash_in_external_id(self):
+        """外部 ID のスラッシュを URL のパス区切りとして扱わせない。"""
+        with _salesforce([_response(204)]) as (client, session, _):
+            client.upsert("Account", "ExternalId__c", {"ExternalId__c": "A/1"})
+
+        assert session.request.call_args[0][1].endswith("/ExternalId__c/A%2F1")
+
+    def test_upsert_without_external_id_raises_specific_error(self):
+        """外部 ID 不在は KeyError ではなく利用者向けの個別例外にする。"""
+        with (
+            _salesforce([]) as (client, session, _),
+            pytest.raises(SalesforceExternalIdMissingError, match="ExternalId__c"),
+        ):
+            client.upsert("Account", "ExternalId__c", {"Name": "取引先"})
+        session.request.assert_not_called()
 
     def test_delete_sends_delete_request(self):
         with _salesforce([_response(204)]) as (client, session, _):
@@ -388,6 +465,16 @@ class TestReportApi:
         assert session.request.call_args_list[0][0][0] == "POST"
         assert session.request.call_args_list[1][0][0] == "GET"
 
+    def test_async_run_error_raises_execution_error(self):
+        """非同期実行の失敗をレポート形式エラーと混同しない。"""
+        started = _response(json_body={"id": "0LG000000000001"})
+        failed = _response(json_body={"status": "Error", "message": "権限がありません"})
+        with (
+            _salesforce([started, failed]) as (client, _, _),
+            pytest.raises(SalesforceReportExecutionError, match="権限がありません"),
+        ):
+            client.report.run_async("00O000000000001")
+
 
 class TestApiMetrics:
     def test_writes_header_once_then_appends(self, tmp_path):
@@ -407,8 +494,9 @@ class TestApiMetrics:
         metrics.record_call("crud", 0.1, is_error=True)
         metrics.record_retry("crud", "再認証")
 
-        stat = metrics._by_component["crud"]
+        stat = metrics.component_stats()["crud"]
         assert (stat.calls, stat.errors, stat.retries) == (1, 1, 1)
+        assert metrics.retry_reason_counts() == {"再認証": 1}
 
     def test_truncated_report_is_not_duplicated(self):
         metrics = ApiMetrics("site_a")

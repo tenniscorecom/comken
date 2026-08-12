@@ -54,6 +54,17 @@ class SalesforceRequestError(SalesforceError):
         )
 
 
+class SalesforceExternalIdMissingError(SalesforceError):
+    """upsert のデータに外部 ID 項目が含まれていない場合。"""
+
+    def __init__(self, object_name: str, external_id_field: str) -> None:
+        super().__init__(
+            f"Salesforce の upsert データに外部 ID 項目がありません: "
+            f"{object_name}.{external_id_field}\n"
+            f"data に {external_id_field} の値を含めてください。"
+        )
+
+
 class SalesforceReportTruncatedError(SalesforceError):
     """レポートの行が上限で切り捨てられた場合。
 
@@ -87,4 +98,15 @@ class SalesforceReportFormatError(SalesforceError):
             f"このレポートは {report_format} 形式です: {report_id}\n"
             "取得できるのは明細（TABULAR）形式のレポートだけです。\n"
             "レポート側を明細形式に変更するか、SOQL（query）で取得してください。"
+        )
+
+
+class SalesforceReportExecutionError(SalesforceError):
+    """非同期レポートの実行自体が Salesforce 側で失敗した場合。"""
+
+    def __init__(self, report_id: str, detail: str) -> None:
+        super().__init__(
+            f"Salesforce のレポート実行に失敗しました: {report_id}\n"
+            f"{detail}\n"
+            "Salesforce でレポートを直接実行し、条件・権限・参照項目を確認してください。"
         )

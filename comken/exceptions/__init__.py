@@ -38,8 +38,10 @@ ComkenError
 │   ├── SalesforceAuthError
 │   ├── SalesforceConnectionError
 │   ├── SalesforceRequestError
+│   ├── SalesforceExternalIdMissingError
 │   ├── SalesforceReportTruncatedError
-│   └── SalesforceReportFormatError
+│   ├── SalesforceReportFormatError
+│   └── SalesforceReportExecutionError
 ├── BrowserError
 │   ├── DriverStartError
 │   ├── BrowsersNotStartedError
@@ -142,6 +144,8 @@ from .salesforce import (
     SalesforceAuthError,
     SalesforceConnectionError,
     SalesforceError,
+    SalesforceExternalIdMissingError,
+    SalesforceReportExecutionError,
     SalesforceReportFormatError,
     SalesforceReportTruncatedError,
     SalesforceRequestError,
@@ -197,8 +201,10 @@ __all__ = [
     "SalesforceAuthError",
     "SalesforceConnectionError",
     "SalesforceRequestError",
+    "SalesforceExternalIdMissingError",
     "SalesforceReportTruncatedError",
     "SalesforceReportFormatError",
+    "SalesforceReportExecutionError",
     "BrowserError",
     "DriverStartError",
     "BrowsersNotStartedError",

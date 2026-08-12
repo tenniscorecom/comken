@@ -24,7 +24,11 @@ import logging
 import time
 from typing import TYPE_CHECKING
 
-from ..exceptions import SalesforceReportFormatError, SalesforceReportTruncatedError
+from ..exceptions import (
+    SalesforceReportExecutionError,
+    SalesforceReportFormatError,
+    SalesforceReportTruncatedError,
+)
 
 if TYPE_CHECKING:  # 実行時は import しない（client と相互参照になるため）
     from .client import Salesforce
@@ -111,6 +115,7 @@ class ReportApi:
         Raises:
             SalesforceReportTruncatedError: 上限で切り捨てられた場合。
             SalesforceReportFormatError: 明細（TABULAR）形式でない場合。
+            SalesforceReportExecutionError: Salesforce 側で実行が失敗した場合。
             TimeoutError: 制限時間内に完了しなかった場合。
         """
         instances_path = f"{self._base_path()}/{report_id}/instances"
@@ -127,7 +132,8 @@ class ReportApi:
             if status == "Success":
                 return self._parse(data, report_id, allow_truncated)
             if status == "Error":
-                raise SalesforceReportFormatError(report_id, "実行エラー")
+                detail = str(data.get("error", data.get("message", "詳細情報なし")))
+                raise SalesforceReportExecutionError(report_id, detail)
             time.sleep(POLL_INTERVAL_SECONDS)
 
         raise TimeoutError(
