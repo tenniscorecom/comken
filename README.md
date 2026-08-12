@@ -1203,15 +1203,35 @@ rows = sf.report.run(
 rows = sf.query("SELECT Name, Amount FROM Opportunity WHERE CreatedDate > 2026-01-01T00:00:00Z")
 ```
 
-### 組織を増やす
+### 組織（サイト）ごとのクラス
 
-組織ごとに `Salesforce` を作る。固有の処理があるときは**継承して足す**。
+組織は My Domain の URL が違うので、1組織につき1クラスにする。
+3組織ぶんの雛形が `comken/salesforce/sites/` に入っている。
 
 ```python
-class 自組織(Salesforce):
-    def 未処理の申請(self) -> list[dict]:
-        return self.query("SELECT Id, Name FROM Application__c WHERE Status__c = '未処理'")
+from comken.salesforce.sites import SITES, SiteA
+
+with SiteA(
+    client_id=cred.client_id,
+    client_secret=cred.client_secret,
+    domain_url=config.SITE_A.DOMAIN_URL,
+) as sf:
+    rows = sf.案件一覧()
+
+# 3組織をまとめて回す
+for site_class in SITES:
+    with site_class(**認証情報(site_class.CREDENTIAL_PREFIX), domain_url=...) as sf:
+        rows = sf.案件一覧()
 ```
+
+各クラスには `CREDENTIAL_PREFIX`（認証情報のキー名の頭）・`CONFIG_SECTION`
+（My Domain を書く config.ini のセクション名）・`REPORT_*`（その組織のレポート ID）を持たせる。
+共通の操作は `Salesforce` にあるので、書くのは**その組織でしか通じないもの**だけ。
+計測の組織名は指定しなければクラス名になるので、ログで組織を見分けられる。
+
+**`SiteA` / `SiteB` / `SiteC` は仮名。** このリポジトリは公開しているため、
+実際の組織名は書かず、配置時にクラス名・`CREDENTIAL_PREFIX`・`CONFIG_SECTION` を
+書き換える（`comken/run.py` の `example_libs.v0000` と同じ扱い）。
 
 書き込み系（`insert` / `update` / `upsert` / `delete`）は `dry_run` を尊重する。
 使い方の一覧は [docs/機能カタログ.md](docs/機能カタログ.md)、

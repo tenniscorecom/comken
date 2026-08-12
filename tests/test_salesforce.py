@@ -18,6 +18,7 @@ from comken.exceptions import (
     SalesforceRequestError,
 )
 from comken.salesforce import ApiMetrics, ClientCredentialsAuth, Salesforce
+from comken.salesforce.sites import SITES, SiteA
 
 DOMAIN_URL = "https://example.my.salesforce.com"
 INSTANCE_URL = "https://example.my.salesforce.com"
@@ -474,6 +475,55 @@ class TestReportApi:
             pytest.raises(SalesforceReportExecutionError, match="権限がありません"),
         ):
             client.report.run_async("00O000000000001")
+
+
+class TestSites:
+    def test_every_site_is_a_salesforce_client(self):
+        """SITES はすべて Salesforce のサブクラスで、共通操作をそのまま使える。"""
+        assert SITES, "組織が登録されていない"
+        for site_class in SITES:
+            assert issubclass(site_class, Salesforce), site_class
+
+    def test_sites_do_not_share_credential_prefix_or_section(self):
+        """組織ごとに認証情報と設定の置き場が分かれている。
+
+        取り違えると別組織の認証情報で接続してしまうため、重複を許さない。
+        """
+        prefixes = [site_class.CREDENTIAL_PREFIX for site_class in SITES]
+        sections = [site_class.CONFIG_SECTION for site_class in SITES]
+        assert len(set(prefixes)) == len(prefixes), prefixes
+        assert len(set(sections)) == len(sections), sections
+
+    def test_config_section_is_upper_case(self):
+        """config.ini のセクション名は規約どおり大文字。"""
+        for site_class in SITES:
+            assert site_class.CONFIG_SECTION.isupper(), site_class
+
+    def test_org_name_defaults_to_class_name(self):
+        """計測の組織名は、指定しなければクラス名になる。"""
+        session = MagicMock()
+        session.headers = {}
+        with (
+            patch("comken.salesforce.client.requests.Session", return_value=session),
+            patch("comken.salesforce.oauth.requests.post", return_value=_token_response()),
+        ):
+            site = SiteA(client_id="CID", client_secret="CSECRET", domain_url=DOMAIN_URL)
+        assert site.metrics.org_name == "SiteA"
+
+    def test_site_report_uses_its_own_report_id(self):
+        """組織固有のレポート ID がそのまま URL に載る。"""
+        session = MagicMock()
+        session.headers = {}
+        session.request.side_effect = [_response(json_body=_report_body([("A社", "1")]))]
+        with (
+            patch("comken.salesforce.client.requests.Session", return_value=session),
+            patch("comken.salesforce.oauth.requests.post", return_value=_token_response()),
+            SiteA(client_id="CID", client_secret="CSECRET", domain_url=DOMAIN_URL) as sf,
+        ):
+            rows = sf.案件一覧()
+
+        assert rows == [{"名前": "A社", "金額": "1"}]
+        assert session.request.call_args[0][1].endswith(f"/{SiteA.REPORT_案件一覧}")
 
 
 class TestApiMetrics:
