@@ -101,9 +101,22 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 ## プロジェクトの準備
 
 comken は共有サーバー上の1か所を**直接参照する**（ローカルへのコピー・同期はしない）。
-各プロジェクトのルートに `templates/実行.bat` をコピーし、先頭の `COMKEN_ROOT` を
-共有サーバー上の comken リポジトリルートに合わせる。バッチは実行中だけ `PYTHONPATH` を設定するため、
-PC の環境変数を変更しない。
+
+### PCへ恒久的に設定する
+
+リポジトリ直下の`install_pythonpath.bat`を1回実行すると、このフォルダが現在のWindows
+ユーザーの`PYTHONPATH`へ追加される。バッチ自身の場所からパスを判定するため編集は不要。
+既存の`PYTHONPATH`は残し、同じパスが登録済みなら重複追加しない。
+
+設定は新しく開いたコマンドプロンプト、PowerShell、VS Codeから有効になる。共有フォルダを
+移動した場合は、Windowsのユーザー環境変数から古いパスを削除し、移動後のバッチを再実行する。
+管理者権限は不要。
+
+### プロジェクトごとに設定する
+
+PCの環境変数を変更したくない場合は、各プロジェクトのルートに`templates/実行.bat`をコピーし、
+先頭の`COMKEN_ROOT`を共有サーバー上のリポジトリルートに合わせる。この方法ではバッチの
+実行中だけ`PYTHONPATH`を設定する。
 
 ```bat
 set "COMKEN_ROOT=\\server\share\tools\comken"
