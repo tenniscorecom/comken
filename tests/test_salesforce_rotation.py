@@ -23,6 +23,18 @@ def _client() -> Mock:
 
 
 class TestSalesforceCredentialRotator:
+    def test_uses_local_today_when_date_is_not_injected(self):
+        client = _client()
+        rotator = SalesforceCredentialRotator(client, "app-1", "site_a", is_enabled=True)
+
+        with (
+            patch("comken.salesforce.rotation.local_today", return_value=TODAY) as current_date,
+            patch("comken.salesforce.rotation.load_credential", return_value="2026-08-01"),
+        ):
+            assert not rotator.rotate_if_due()
+
+        current_date.assert_called_once_with()
+
     def test_rotates_after_saving_new_credentials(self):
         client = _client()
         rotator = SalesforceCredentialRotator(client, "app-1", "site_a", is_enabled=True)

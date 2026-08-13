@@ -19,26 +19,23 @@ import inspect
 import logging
 import os
 import threading
-import time
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 
 from selenium import webdriver
-from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.edge.options import Options
 from selenium.webdriver.edge.service import Service
-from selenium.webdriver.support.ui import WebDriverWait
 
 from comken.exceptions import (
     ConcurrentSessionUseError,
     DriverStartError,
-    PopupTabNotOpenedError,
     SessionClosedError,
     SessionNotStartedError,
 )
 from comken.utils import now
 
+from ._tabs import _TabManager
 from .download import DownloadDir
 from .driver_update import update_driver
 from .locator import Locator
@@ -56,12 +53,6 @@ _POPUP_TAB_TIMEOUT_SECONDS = 10
 # load_many で同時に開いておくタブの既定数。増やすほど待ち時間が重なって速くなるが、
 # メモリとサイト側の負荷も増えるため、控えめな値から始める
 _DEFAULT_MAX_OPEN_TABS = 5
-
-# 読み込みが終わったタブを探す間隔（秒）
-_TAB_POLL_INTERVAL_SECONDS = 0.5
-
-# window.open がタブを作るのを待つ秒数
-_NEW_TAB_TIMEOUT_SECONDS = 10
 
 
 def _create_service(driver_path: Path, suppress_logs: bool) -> Service:
@@ -222,17 +213,9 @@ class BrowserSession:
         """
         seconds = timeout if timeout is not None else _POPUP_TAB_TIMEOUT_SECONDS
         with self.operating("popup_tab"):
-            driver = self._require_driver()
-            original = driver.current_window_handle
-            self._wait_for_new_tab(driver, original, seconds)
-
-            # 最後に増えたものが、今開いたタブ
-            opened = [h for h in driver.window_handles if h != original][-1]
-            driver.switch_to.window(opened)
-            try:
+            tabs = _TabManager(self._require_driver(), self.name)
+            with tabs.popup(seconds):
                 yield self
-            finally:
-                self._close_popup_tab(driver, opened, original)
 
     def load_many(
         self,
@@ -276,38 +259,8 @@ class BrowserSession:
         """
         seconds = timeout if timeout is not None else self.wait_seconds
         with self.operating("load_many"):
-            driver = self._require_driver()
-            original = driver.current_window_handle
-            waiting = list(urls)
-            # 開いてあるタブ: ウィンドウハンドル → (URL, 開いた時刻)
-            opened: dict[str, tuple[str, float]] = {}
-            try:
-                while waiting or opened:
-                    while waiting and len(opened) < max_open:
-                        url = waiting.pop(0)
-                        handle = self._open_tab_in_background(driver, url)
-                        if handle is not None:
-                            opened[handle] = (url, time.monotonic())
-
-                    finished = self._take_finished_tab(driver, opened, ready, seconds)
-                    if finished is None:
-                        # まだどれも読み込めていない。ブラウザ側の進行を待つ
-                        time.sleep(_TAB_POLL_INTERVAL_SECONDS)
-                        continue
-
-                    handle, url = finished
-                    driver.switch_to.window(handle)
-                    try:
-                        yield url
-                    finally:
-                        del opened[handle]
-                        self._close_tab(driver, handle)
-            finally:
-                # 途中で break されても、開いたタブを残さない
-                for handle in list(opened):
-                    self._close_tab(driver, handle)
-                if original in driver.window_handles:
-                    driver.switch_to.window(original)
+            tabs = _TabManager(self._require_driver(), self.name)
+            yield from tabs.load_many(urls, ready, max_open, seconds)
 
     # ------------------------------------------------------------ 内部連携用
 
@@ -421,105 +374,6 @@ class BrowserSession:
                 logger.warning("初期化に失敗したブラウザを閉じられませんでした", exc_info=True)
             raise
         return driver
-
-    def _open_tab_in_background(self, driver: webdriver.Edge, url: str) -> str | None:
-        """新しいタブで URL を開き、読み込みを待たずにハンドルを返す。
-
-        driver.get() は読み込み完了までブロックするため使わない。それでは
-        「先に何枚も開いておく」ことができず、待ち時間が重ならない。
-        JavaScript の window.open は投げるだけで返るので、読み込みはブラウザに任せられる。
-        """
-        before = set(driver.window_handles)
-        driver.execute_script("window.open(arguments[0], '_blank');", url)
-        try:
-            WebDriverWait(driver, _NEW_TAB_TIMEOUT_SECONDS).until(
-                lambda d: set(d.window_handles) - before
-            )
-        except TimeoutException:
-            # ポップアップがブロックされている等。1件だけ諦めて残りを続ける
-            logger.warning("タブを開けませんでした（この URL は飛ばします）: %s", url)
-            return None
-        return next(iter(set(driver.window_handles) - before))
-
-    def _take_finished_tab(
-        self,
-        driver: webdriver.Edge,
-        opened: "dict[str, tuple[str, float]]",
-        ready: "Locator | None",
-        seconds: int,
-    ) -> "tuple[str, str] | None":
-        """開いてあるタブから、読み込みが終わったものを1つ選んで返す。
-
-        時間切れのタブは諦めて閉じ、警告に残す（1件のために全体を止めない）。
-        まだどれも終わっていなければ None を返す。
-        """
-        for handle, (url, started_at) in list(opened.items()):
-            if handle not in driver.window_handles:
-                # ページ側がタブを閉じた
-                logger.warning("読み込み中にタブが閉じられました: %s", url)
-                del opened[handle]
-                continue
-
-            if self._is_tab_loaded(driver, handle, ready):
-                return handle, url
-
-            if time.monotonic() - started_at > seconds:
-                logger.warning("%s 秒以内に読み込めませんでした（飛ばします）: %s", seconds, url)
-                del opened[handle]
-                self._close_tab(driver, handle)
-
-        return None
-
-    def _is_tab_loaded(self, driver: webdriver.Edge, handle: str, ready: "Locator | None") -> bool:
-        """そのタブの読み込みが終わっているかを見る（待たずにその場で判断する）。"""
-        try:
-            driver.switch_to.window(handle)
-            if ready is not None:
-                # 画面を描いてから中身を入れるサイトでは、HTML の読み込み完了だけでは
-                # 空の表を掴んでしまう。目印の要素が出たかどうかで判断する
-                return bool(driver.find_elements(*ready))
-            return driver.execute_script("return document.readyState") == "complete"
-        except Exception:
-            logger.warning("タブの状態を確認できませんでした", exc_info=True)
-            return False
-
-    def _close_tab(self, driver: webdriver.Edge, handle: str) -> None:
-        """タブを1枚閉じる。閉じられなくても処理は続ける。"""
-        try:
-            if handle in driver.window_handles:
-                driver.switch_to.window(handle)
-                driver.close()
-        except Exception:
-            logger.warning("タブを閉じられませんでした", exc_info=True)
-
-    def _close_popup_tab(self, driver: webdriver.Edge, opened: str, original: str) -> None:
-        """別タブを閉じて元のタブへ戻る。
-
-        後始末そのものが失敗しても、警告を出すだけで例外にはしない。
-        with の中で起きた本来のエラーを、片付けの失敗で覆い隠さないため。
-        タブが自分で閉じた場合や、元のタブが消えている場合もここで吸収する。
-        """
-        try:
-            handles = driver.window_handles
-            # 閉じ忘れるとタブが溜まり、次の popup_tab がどれを掴むか分からなくなる。
-            # ページ側が自分で閉じていた場合は、もう閉じる必要がない
-            if opened in handles:
-                driver.close()
-            if original in driver.window_handles:
-                driver.switch_to.window(original)
-            else:
-                logger.warning("元のタブが閉じられていたため、戻れませんでした: %s", self.name)
-        except Exception:
-            logger.warning("別タブの後始末に失敗しました: %s", self.name, exc_info=True)
-
-    def _wait_for_new_tab(self, driver: webdriver.Edge, original: str, seconds: int) -> None:
-        """元のタブ以外のタブが現れるまで待つ。"""
-        try:
-            WebDriverWait(driver, seconds).until(
-                lambda d: any(h != original for h in d.window_handles)
-            )
-        except TimeoutException as exc:
-            raise PopupTabNotOpenedError(seconds) from exc
 
     def _require_driver(self) -> webdriver.Edge:
         """起動済みの WebDriver を返す。使える状態でなければ理由を示して落とす。"""

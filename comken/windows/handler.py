@@ -38,6 +38,62 @@ from ..utils.files.base import FileBase
 logger = logging.getLogger(__name__)
 
 
+def _normalize_com_rows(values: Any, is_single_row: bool) -> tuple[tuple[Any, ...], ...]:
+    """COM の Range.Value を常に行のタプルへ揃える。"""
+    if not is_single_row:
+        return values
+    if not isinstance(values, tuple):
+        return ((values,),)
+    if values and not isinstance(values[0], tuple):
+        return (values,)
+    return values
+
+
+def _normalized_lookup_key(value: Any) -> str | None:
+    """COM が整数セルを float にする差を吸収し、照合キーを返す。"""
+    if value is None or str(value).strip() == "":
+        return None
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    return str(value).strip()
+
+
+def _consecutive_update_runs(
+    updates: list[tuple[int, object]],
+) -> list[list[tuple[int, object]]]:
+    """連続した行への更新を、COM で一括書き込みできる単位へ分ける。"""
+    runs: list[list[tuple[int, object]]] = []
+    run_start = 0
+    while run_start < len(updates):
+        run_end = run_start + 1
+        while run_end < len(updates) and updates[run_end][0] == updates[run_end - 1][0] + 1:
+            run_end += 1
+        runs.append(updates[run_start:run_end])
+        run_start = run_end
+    return runs
+
+
+def _write_com_updates(ws: Any, output_by_column: dict[int, list[tuple[int, object]]]) -> None:
+    """列ごとの更新を一括で書き、失敗した範囲だけセル単位へフォールバックする。"""
+    for destination_column_number, updates in output_by_column.items():
+        for run in _consecutive_update_runs(updates):
+            target = ws.Range(
+                ws.Cells(run[0][0], destination_column_number),
+                ws.Cells(run[-1][0], destination_column_number),
+            )
+            try:
+                target.Value = tuple((value,) for _, value in run)
+            except Exception:
+                for row_number, value in run:
+                    try:
+                        ws.Range(
+                            ws.Cells(row_number, destination_column_number),
+                            ws.Cells(row_number, destination_column_number),
+                        ).Value = value
+                    except Exception as error:
+                        raise RowTransferError(row_number, error) from error
+
+
 _SUFFIX_TO_FORMAT = {
     ".xlsx": FileFormat.XLSX,
     ".xlsm": FileFormat.XLSM,
@@ -294,10 +350,7 @@ class ExcelComHandler(FileBase):
             return 0
         first_row = int(header_row) + 1
         values = ws.Range(ws.Cells(first_row, 1), ws.Cells(last_row, last_col)).Value
-        if first_row == last_row and not isinstance(values, tuple):
-            values = ((values,),)
-        elif first_row == last_row and values and not isinstance(values[0], tuple):
-            values = (values,)
+        values = _normalize_com_rows(values, first_row == last_row)
 
         matched = 0
         output_by_column: dict[int, list[tuple[int, object]]] = {
@@ -310,15 +363,10 @@ class ExcelComHandler(FileBase):
                     continue
 
                 key_value = row_values[header_columns[key_col] - 1]
-                if not key_value or str(key_value).strip() == "":
+                lookup_key = _normalized_lookup_key(key_value)
+                if lookup_key is None:
                     continue
-
-                # 数値セルは COM 経由だと float になり "1001.0" になってしまうため、
-                # 整数値なら int を経由して "1001" に揃える（CSV 側の文字列と一致させる）
-                if isinstance(key_value, float) and key_value.is_integer():
-                    key_value = int(key_value)
-
-                lookup_row = lookup.get(str(key_value).strip())
+                lookup_row = lookup.get(lookup_key)
                 if lookup_row is None:
                     logger.debug("%d行目: キー「%s」が lookup に存在しません", row, key_value)
                     continue
@@ -328,26 +376,10 @@ class ExcelComHandler(FileBase):
                 logger.debug("%d行目: 転記完了（キー: %s）", row, key_value)
                 matched += 1
 
-            except Exception as e:
-                raise RowTransferError(row, e) from e
+            except Exception as error:
+                raise RowTransferError(row, error) from error
 
-        for col_num, updates in output_by_column.items():
-            run_start = 0
-            while run_start < len(updates):
-                run_end = run_start + 1
-                while run_end < len(updates) and updates[run_end][0] == updates[run_end - 1][0] + 1:
-                    run_end += 1
-                run = updates[run_start:run_end]
-                target = ws.Range(ws.Cells(run[0][0], col_num), ws.Cells(run[-1][0], col_num))
-                try:
-                    target.Value = tuple((value,) for _, value in run)
-                except Exception:
-                    for row, value in run:
-                        try:
-                            ws.Range(ws.Cells(row, col_num), ws.Cells(row, col_num)).Value = value
-                        except Exception as row_error:
-                            raise RowTransferError(row, row_error) from row_error
-                run_start = run_end
+        _write_com_updates(ws, output_by_column)
 
         logger.info("転記完了: %d件一致（シート: %s）", matched, sheet_name)
         return matched
@@ -378,10 +410,7 @@ class ExcelComHandler(FileBase):
         last_col = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
         read_last_col = max(last_col, key_col_num, *destination_columns)
         values = ws.Range(ws.Cells(first_row, 1), ws.Cells(last_row, read_last_col)).Value
-        if first_row == last_row and not isinstance(values, tuple):
-            values = ((values,),)
-        elif first_row == last_row and values and not isinstance(values[0], tuple):
-            values = (values,)
+        values = _normalize_com_rows(values, first_row == last_row)
         matched = 0
         output_by_column: dict[int, list[tuple[int, object]]] = {
             column: [] for column in destination_columns
@@ -390,11 +419,10 @@ class ExcelComHandler(FileBase):
             row = first_row + row_offset
             try:
                 key_value = row_values[key_col_num - 1]
-                if key_value is None or str(key_value).strip() == "":
+                lookup_key = _normalized_lookup_key(key_value)
+                if lookup_key is None:
                     continue
-                if isinstance(key_value, float) and key_value.is_integer():
-                    key_value = int(key_value)
-                lookup_row = lookup.get(str(key_value).strip())
+                lookup_row = lookup.get(lookup_key)
                 if lookup_row is None:
                     continue
                 for destination_column, source in destination_columns.items():
@@ -402,29 +430,7 @@ class ExcelComHandler(FileBase):
                 matched += 1
             except Exception as error:
                 raise RowTransferError(row, error) from error
-        for destination_column, updates in output_by_column.items():
-            run_start = 0
-            while run_start < len(updates):
-                run_end = run_start + 1
-                while run_end < len(updates) and updates[run_end][0] == updates[run_end - 1][0] + 1:
-                    run_end += 1
-                run = updates[run_start:run_end]
-                target = ws.Range(
-                    ws.Cells(run[0][0], destination_column),
-                    ws.Cells(run[-1][0], destination_column),
-                )
-                try:
-                    target.Value = tuple((value,) for _, value in run)
-                except Exception:
-                    for row, value in run:
-                        try:
-                            ws.Range(
-                                ws.Cells(row, destination_column),
-                                ws.Cells(row, destination_column),
-                            ).Value = value
-                        except Exception as error:
-                            raise RowTransferError(row, error) from error
-                run_start = run_end
+        _write_com_updates(ws, output_by_column)
         logger.info("転記完了: %d件一致（シート: %s）", matched, sheet_name)
         return matched
 

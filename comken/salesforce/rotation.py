@@ -18,6 +18,7 @@ from pathlib import Path
 from ..credentials import load_credential, save_credentials
 from ..exceptions import CredentialError, CredentialNotFoundError
 from ..exceptions.salesforce import SalesforceCredentialRotationError
+from ..utils.clock import today as local_today
 from .client import Salesforce
 
 DEFAULT_ROTATION_INTERVAL_DAYS = 60
@@ -59,7 +60,7 @@ class SalesforceCredentialRotator:
         """有効かつ指定日数を過ぎていれば実行し、実行したかを返す。"""
         if not self._is_enabled:
             return False
-        rotation_date = today or datetime.datetime.now(datetime.timezone.utc).date()
+        rotation_date = today or local_today()
         if not self._is_due(rotation_date):
             return False
         self._rotate(rotation_date)

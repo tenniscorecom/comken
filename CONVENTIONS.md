@@ -75,6 +75,10 @@ Python の作法（PEP 8）に従う。
 | 返り値が複数なら複数形 | `rows`, `records` | `row`, `record` |
 | 否定形の変数名を使わない | `is_valid = True` | `is_invalid = False` |
 
+`cfg`（config）、`src`（source）、`tmp`（temporary）は広く定着した慣用略語として許容する。
+Excel の変数名は `ws` / `wb` より `worksheet` / `workbook` を推奨する。その他の、意味を
+推測しないと読めない略語は避ける。
+
 ### 定数を大文字にする理由
 
 **大文字にすることで「これは変更しない値だ」とコードを読む人が一目で判断できる。**
@@ -200,7 +204,10 @@ def find_latest(folder: str | Path, pattern: str = "*.xlsx") -> Path | None:
 | `dict[str, list]` | キーが文字列、値がリストの辞書 |
 | `X \| None` | `Optional[X]` の代わりに使う（Python 3.10+） |
 
-- `Any` は使わない（型チェックが無意味になる）
+- 原則として `Any` は使わず、具体的な型を付ける。
+- ただし、COM オブジェクト、Excel セル値、型情報を提供しない外部ライブラリとの境界など、
+  正確な型を現実的に表せない動的境界では `Any` を最小限の範囲に限って許容する。
+  `Any` を通常のアプリケーションロジックへ伝播させず、境界の内側で具体型へ変換する。
 
 ---
 
