@@ -13,7 +13,14 @@ comken の使い方を「動くコード」で覚えるためのサンプル。
 | csv_write.py | CsvWriter の新規作成・1行/複数行追記 | `python -m examples.basics.csv_write` |
 | excel_read.py | ExcelReader の辞書・タプル・逐次読み取り | `python -m examples.basics.excel_read` |
 | excel_write.py | ExcelWriter / Sheet で帳票作成・書式設定 | `python -m examples.basics.excel_write` |
-| config_and_transfer.py | config.ini の列対応表で Excel へ転記 | `python -m examples.basics.config_and_transfer` |
+| column_mapping.py | コードまたは config.ini の列対応表で Excel へ転記 | `python -m examples.basics.column_mapping` |
+| state.py | 前回の実行結果を次回へ持ち越す | `python -m examples.basics.state` |
+| logger.py | 単体実行向けのログ設定 | `python -m examples.basics.logger` |
+| runtime.py | debug / dry-run の範囲と書き込み抑止 | `python -m examples.basics.runtime` |
+| files.py | 日付入りファイルの検索・移動・コピー・zip | `python -m examples.basics.files` |
+| utils.py | 差分・再試行・待機・文字列正規化・現在時刻 | `python -m examples.basics.utils` |
+| constants.py | 文字コード・色・形式・並び順の定数 | `python -m examples.basics.constants` |
+| exceptions.py | comken 例外の粒度別の捕捉 | `python -m examples.basics.exceptions` |
 
 成果物は `examples/basics/output/` に出力される。
 

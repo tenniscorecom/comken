@@ -50,19 +50,77 @@ class TestBasicExamples:
         assert worksheet.freeze_panes == "A2"
         assert excel_write.TABLE_NAME in worksheet.tables
 
-    def test_config_and_transfer(self, tmp_path, monkeypatch):
-        from examples.basics import config_and_transfer
+    def test_column_mapping(self, tmp_path, monkeypatch):
+        from examples.basics import column_mapping
 
-        monkeypatch.setattr(config_and_transfer, "OUTPUT_FOLDER", tmp_path)
-        monkeypatch.setattr(config_and_transfer, "CONFIG_PATH", tmp_path / "config.ini")
-        monkeypatch.setattr(config_and_transfer, "SOURCE_CSV", tmp_path / "顧客マスタ.csv")
-        monkeypatch.setattr(config_and_transfer, "OUTPUT_PATH", tmp_path / "請求先一覧.xlsx")
-        config_and_transfer.main()
+        monkeypatch.setattr(column_mapping, "OUTPUT_FOLDER", tmp_path)
+        monkeypatch.setattr(column_mapping, "CONFIG_PATH", tmp_path / "config.ini")
+        monkeypatch.setattr(column_mapping, "SOURCE_CSV", tmp_path / "受注.csv")
+        monkeypatch.setattr(column_mapping, "OUTPUT_PATH", tmp_path / "請求一覧.xlsx")
+        column_mapping.main()
 
-        worksheet = load_workbook(config_and_transfer.OUTPUT_PATH).active
-        assert worksheet["B2"].value == "株式会社アルファ"
-        assert worksheet["C3"].value == "06-3333-4444"
-        assert worksheet["B4"].value in (None, "")
+        workbook = load_workbook(column_mapping.OUTPUT_PATH)
+        for sheet_name in (column_mapping.CODE_SHEET, column_mapping.CONFIG_SHEET):
+            assert workbook[sheet_name]["B2"].value == "株式会社アルファ"
+            assert workbook[sheet_name]["C2"].value == "12000"
+
+    def test_state(self, tmp_path, monkeypatch):
+        from examples.basics import state
+
+        state_path = tmp_path / "state.ini"
+        monkeypatch.setattr(state, "STATE_PATH", state_path)
+        state.main()
+        state.main()
+
+        assert "1002" in state_path.read_text(encoding="utf-8")
+
+    def test_logger(self, tmp_path, monkeypatch):
+        from examples.basics import logger
+
+        monkeypatch.setattr(logger, "LOG_FOLDER", tmp_path / "logs")
+        logger.main()
+
+    def test_runtime(self, tmp_path, monkeypatch):
+        from examples.basics import runtime
+
+        monkeypatch.setattr(runtime, "OUTPUT_FOLDER", tmp_path)
+        monkeypatch.setattr(runtime, "SOURCE_PATH", tmp_path / "source.txt")
+        monkeypatch.setattr(runtime, "DRY_RUN_PATH", tmp_path / "dry-run.txt")
+        monkeypatch.setattr(runtime, "ACTUAL_PATH", tmp_path / "actual.txt")
+        runtime.main()
+
+        assert not runtime.DRY_RUN_PATH.exists()
+        assert runtime.ACTUAL_PATH.exists()
+
+    def test_files(self, tmp_path, monkeypatch):
+        from examples.basics import files
+
+        monkeypatch.setattr(files, "OUTPUT_FOLDER", tmp_path)
+        monkeypatch.setattr(files, "ARCHIVE_PATH", tmp_path / "日次資料.zip")
+        files.main()
+
+        assert files.ARCHIVE_PATH.exists()
+        assert len(list((tmp_path / "展開").glob("*.csv"))) == 2
+
+    def test_utils(self):
+        from examples.basics import utils
+
+        utils.main()
+
+    def test_constants(self, tmp_path, monkeypatch):
+        from examples.basics import constants
+
+        monkeypatch.setattr(constants, "OUTPUT_FOLDER", tmp_path)
+        monkeypatch.setattr(constants, "CSV_PATH", tmp_path / "名簿.csv")
+        constants.main()
+
+        assert constants.CSV_PATH.exists()
+
+    def test_exceptions(self, tmp_path, monkeypatch):
+        from examples.basics import exceptions
+
+        monkeypatch.setattr(exceptions, "CSV_PATH", tmp_path / "例外確認.csv")
+        exceptions.main()
 
 
 class TestCsvToExcelReport:
