@@ -19,6 +19,7 @@ from comken.constants import Encoding
 with AccessDatabase(r"C:\作業\顧客.accdb") as db:
     db.run_macro("日次整形")  # Access マクロ
     db.run_function("集計処理", "東日本")  # VBA のプロシージャ／関数
+    db.run_query("Q_日次更新")  # 保存済みの更新・追加・削除・テーブル作成クエリ
     db.export_csv("T_出力", r"C:\作業\顧客.csv", encoding=Encoding.CP932)
 
     for row in db.rows("T_出力"):  # Python 側で逐次処理するときだけ

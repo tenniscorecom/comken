@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 ACCESS_EXPORT_DELIMITED = 2
 ACCESS_OPEN_TABLE = 0
 ACCESS_OPEN_QUERY = 1
+DAO_FAIL_ON_ERROR = 128
 CP932_CODE_PAGE = 932
 UTF8_CODE_PAGE = 65001
 ROWS_BATCH_SIZE = 1000
@@ -152,6 +153,23 @@ class AccessDatabase(FileBase):
         except Exception as e:
             raise AccessRoutineError(name, "VBA", e) from e
 
+    def run_query(self, name: str) -> None:
+        """保存済みのアクションクエリを名前で実行する。
+
+        UPDATE・INSERT・DELETE・テーブル作成など、データを変更するクエリ向け。
+        元データベースへ変更を反映する場合は、初期化時に ``local_copy=False`` を指定する。
+        SELECT クエリの結果を読む場合は ``rows()``、CSVへ出す場合は ``export_csv()`` を使う。
+        """
+        self._ensure_query(name)
+        if is_dry_run():
+            dry_run_log("Access クエリを実行: %s（%s）", name, self.path)
+            return
+        try:
+            # DAO_FAIL_ON_ERROR により、一部の行だけ更新して処理を続ける事故を防ぐ。
+            self._access.CurrentDb().QueryDefs(name).Execute(DAO_FAIL_ON_ERROR)
+        except Exception as e:
+            raise AccessRoutineError(name, "クエリ", e) from e
+
     def export_csv(
         self,
         source: str,
@@ -234,6 +252,14 @@ class AccessDatabase(FileBase):
         names = self.table_names()
         if source not in names:
             raise AccessSourceNotFoundError(source, names)
+
+    def _ensure_query(self, name: str) -> None:
+        query_names = [
+            str(self._access.CurrentData.AllQueries.Item(index).Name)
+            for index in range(self._access.CurrentData.AllQueries.Count)
+        ]
+        if name not in query_names:
+            raise AccessSourceNotFoundError(name, query_names)
 
     def _backup(self, backup_days: int) -> None:
         backup_folder = self._backup_dir

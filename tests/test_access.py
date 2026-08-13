@@ -33,8 +33,8 @@ def _set_sources(access: MagicMock, tables: list[str], queries: list[str] | None
     queries = queries or []
     access.CurrentData.AllTables.Count = len(tables)
     access.CurrentData.AllQueries.Count = len(queries)
-    access.CurrentData.AllTables.Item.side_effect = [MagicMock(Name=name) for name in tables]
-    access.CurrentData.AllQueries.Item.side_effect = [MagicMock(Name=name) for name in queries]
+    access.CurrentData.AllTables.Item.side_effect = lambda index: MagicMock(Name=tables[index])
+    access.CurrentData.AllQueries.Item.side_effect = lambda index: MagicMock(Name=queries[index])
 
 
 class TestAccessDatabase:
@@ -279,6 +279,21 @@ class TestAccessDatabase:
         database.run_function("集計", 1, "A")
         access.Run.assert_called_once_with("集計", 1, "A")
 
+    def test_run_query_executes_saved_query_by_name(self, tmp_path):
+        database, access = _database(tmp_path)
+        _set_sources(access, [], ["Q_日次更新"])
+
+        database.run_query("Q_日次更新")
+
+        access.CurrentDb.return_value.QueryDefs.return_value.Execute.assert_called_once_with(128)
+
+    def test_run_query_rejects_unknown_query(self, tmp_path):
+        database, access = _database(tmp_path)
+        _set_sources(access, [], ["Q_日次更新"])
+
+        with pytest.raises(AccessSourceNotFoundError, match=r"Q_なし.*Q_日次更新"):
+            database.run_query("Q_なし")
+
     def test_export_csv_calls_transfer_text(self, tmp_path):
         database, access = _database(tmp_path)
         _set_sources(access, ["T_出力"])
@@ -310,13 +325,15 @@ class TestAccessDatabase:
 
     def test_dry_run_skips_external_operations(self, tmp_path):
         database, access = _database(tmp_path)
-        _set_sources(access, ["T_出力"])
+        _set_sources(access, ["T_出力"], ["Q_更新"])
         with dry_run():
             database.run_macro("日次整形")
             database.run_function("集計")
+            database.run_query("Q_更新")
             database.export_csv("T_出力", tmp_path / "out.csv")
         access.DoCmd.RunMacro.assert_not_called()
         access.Run.assert_not_called()
+        access.CurrentDb.return_value.QueryDefs.assert_not_called()
         access.DoCmd.TransferText.assert_not_called()
 
     def test_context_manager_quits_after_exception(self, tmp_path):
