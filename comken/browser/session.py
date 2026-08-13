@@ -470,9 +470,7 @@ class BrowserSession:
 
         return None
 
-    def _is_tab_loaded(
-        self, driver: webdriver.Edge, handle: str, ready: "Locator | None"
-    ) -> bool:
+    def _is_tab_loaded(self, driver: webdriver.Edge, handle: str, ready: "Locator | None") -> bool:
         """そのタブの読み込みが終わっているかを見る（待たずにその場で判断する）。"""
         try:
             driver.switch_to.window(handle)

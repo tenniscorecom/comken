@@ -232,5 +232,5 @@ def _driver_version(driver_path: Path) -> str | None:
 
 
 def _major(version: str) -> str:
-    """"131.0.2903.86" → "131"。ドライバーと Edge はメジャーが一致していれば動く。"""
+    """ "131.0.2903.86" → "131"。ドライバーと Edge はメジャーが一致していれば動く。"""
     return version.split(".", 1)[0]

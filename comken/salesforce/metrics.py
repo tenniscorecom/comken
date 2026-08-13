@@ -153,9 +153,7 @@ class ApiMetrics:
             )
 
         if self.truncated_reports:
-            logger.warning(
-                "  上限で切り捨てられたレポート: %s", "、".join(self.truncated_reports)
-            )
+            logger.warning("  上限で切り捨てられたレポート: %s", "、".join(self.truncated_reports))
 
     def append_csv(self, path: str | Path) -> None:
         """集計結果を CSV に1行ずつ追記する（呼び出し元ごとに1行）。

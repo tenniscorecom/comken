@@ -166,9 +166,7 @@ class TestExternalLogSuppression:
         service_class = MagicMock(return_value=service)
         service_class.__signature__ = inspect.Signature(
             parameters=[
-                inspect.Parameter(
-                    "executable_path", inspect.Parameter.POSITIONAL_OR_KEYWORD
-                ),
+                inspect.Parameter("executable_path", inspect.Parameter.POSITIONAL_OR_KEYWORD),
                 inspect.Parameter("log_output", inspect.Parameter.KEYWORD_ONLY),
             ]
         )
@@ -206,6 +204,7 @@ class TestExternalLogSuppression:
 
     def test_can_restore_external_logs(self, tmp_path, monkeypatch):
         """調査時はオプション1つでドライバーと Edge のログ抑制を外せる。"""
+
         class DebugOptions(BrowserOptions):
             SUPPRESS_EXTERNAL_LOGS = False
 
@@ -474,6 +473,7 @@ class TestBrowsersStart:
 
     def test_wait_reraises_error(self):
         """裏で起きた例外は、wait で受け取ったときに送出される。"""
+
         def fail():
             raise ValueError("取得に失敗")
 
@@ -590,6 +590,7 @@ class TestBrowsersStart:
 
     def test_reports_uncollected_error(self, caplog):
         """wait を呼び忘れた処理の例外も、黙って消えずにログへ出す。"""
+
         def fail():
             raise ValueError("誰にも受け取られない失敗")
 
@@ -601,6 +602,7 @@ class TestBrowsersStart:
 
     def test_does_not_report_collected_error_twice(self, caplog):
         """wait で受け取り済みの失敗は、終了時に重ねて報告しない。"""
+
         def fail():
             raise ValueError("受け取り済みの失敗")
 
@@ -637,6 +639,7 @@ class TestBrowsersParallel:
 
     def test_raises_first_error(self):
         """失敗した処理があれば例外を送出する。"""
+
         def fail():
             raise ValueError("取得に失敗")
 
