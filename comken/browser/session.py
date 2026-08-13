@@ -15,7 +15,9 @@
 サイトが1つでも複数でも書き方は同じで、増やすときは launch を1行足すだけにしてある。
 """
 
+import inspect
 import logging
+import os
 import threading
 import time
 from collections.abc import Iterator, Sequence
@@ -60,6 +62,18 @@ _TAB_POLL_INTERVAL_SECONDS = 0.5
 
 # window.open がタブを作るのを待つ秒数
 _NEW_TAB_TIMEOUT_SECONDS = 10
+
+
+def _create_service(driver_path: Path, suppress_logs: bool) -> Service:
+    """Selenium の版に合うログ指定で EdgeDriver の Service を作る。"""
+    kwargs: dict[str, str] = {"executable_path": str(driver_path)}
+    if suppress_logs:
+        # Selenium 4.11 で log_path から log_output に変わった。
+        # 社内版を更新できないため、実際の引数をここだけで判定して両方に対応する
+        parameter_names = inspect.signature(Service).parameters
+        log_argument = "log_output" if "log_output" in parameter_names else "log_path"
+        kwargs[log_argument] = os.devnull
+    return Service(**kwargs)
 
 
 class BrowserSession:
@@ -378,6 +392,11 @@ class BrowserSession:
         for argument in self._options.build(self._profile_dir):
             options.add_argument(argument)
 
+        if self._options.SUPPRESS_EXTERNAL_LOGS:
+            # Service のログとは別に Edge 本体が標準エラーへ出す Chromium ログを抑える
+            options.add_experimental_option("excludeSwitches", ["enable-logging"])
+            options.add_argument("--log-level=3")
+
         options.add_experimental_option(
             "prefs",
             {
@@ -386,7 +405,8 @@ class BrowserSession:
             },
         )
 
-        driver = webdriver.Edge(service=Service(executable_path=str(driver_path)), options=options)
+        service = _create_service(driver_path, self._options.SUPPRESS_EXTERNAL_LOGS)
+        driver = webdriver.Edge(service=service, options=options)
         # 起動そのものが成功した後に初期化で失敗すると、掴んでいる Edge プロセスが
         # 誰にも閉じられずに残る。ここで確実に閉じてから例外を伝える
         try:

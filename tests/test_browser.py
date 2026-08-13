@@ -5,7 +5,9 @@
 CI でも手元でも安定しないため、ここでは扱わない。
 """
 
+import inspect
 import logging
+import os
 import shutil
 import threading
 import time
@@ -18,7 +20,7 @@ from selenium.webdriver.common.by import By
 
 from comken.browser import BrowserOptions, Browsers, DownloadDir, Locator, Page, SitePage
 from comken.browser.driver_update import _major, _pick_source, _replace_driver
-from comken.browser.session import BrowserSession
+from comken.browser.session import BrowserSession, _create_service
 from comken.exceptions import (
     BrowsersClosedError,
     BrowsersNotStartedError,
@@ -153,6 +155,77 @@ class TestSessionStartFailure:
             session.__enter__()
 
         assert edge.call_count == 1
+
+
+class TestExternalLogSuppression:
+    """ドライバーと Edge 自身の標準出力を抑える設定のテスト。"""
+
+    def test_suppresses_driver_and_edge_logs_by_default(self, tmp_path, monkeypatch):
+        """既定では新しい Selenium の Service と Edge の両方へ抑制設定を渡す。"""
+        service = MagicMock()
+        service_class = MagicMock(return_value=service)
+        service_class.__signature__ = inspect.Signature(
+            parameters=[
+                inspect.Parameter(
+                    "executable_path", inspect.Parameter.POSITIONAL_OR_KEYWORD
+                ),
+                inspect.Parameter("log_output", inspect.Parameter.KEYWORD_ONLY),
+            ]
+        )
+        edge = MagicMock(return_value=MagicMock())
+        monkeypatch.setattr("comken.browser.session.Service", service_class)
+        monkeypatch.setattr("comken.browser.session.webdriver.Edge", edge)
+        session = BrowserSession(
+            name="test",
+            options=BrowserOptions(),
+            download_dir=DownloadDir(path=tmp_path / "dl"),
+        )
+
+        session._build_driver(tmp_path / "msedgedriver.exe")
+
+        service_class.assert_called_once_with(
+            executable_path=str(tmp_path / "msedgedriver.exe"), log_output=os.devnull
+        )
+        edge_options = edge.call_args.kwargs["options"]
+        assert "--log-level=3" in edge_options.arguments
+        assert edge_options.experimental_options["excludeSwitches"] == ["enable-logging"]
+
+    def test_uses_log_path_with_old_selenium(self, tmp_path, monkeypatch):
+        """古い Selenium では TypeError を避けるため旧引数 log_path を使う。"""
+        calls = []
+
+        class OldService:
+            def __init__(self, executable_path, log_path=None):
+                calls.append((executable_path, log_path))
+
+        monkeypatch.setattr("comken.browser.session.Service", OldService)
+
+        _create_service(tmp_path / "msedgedriver.exe", suppress_logs=True)
+
+        assert calls == [(str(tmp_path / "msedgedriver.exe"), os.devnull)]
+
+    def test_can_restore_external_logs(self, tmp_path, monkeypatch):
+        """調査時はオプション1つでドライバーと Edge のログ抑制を外せる。"""
+        class DebugOptions(BrowserOptions):
+            SUPPRESS_EXTERNAL_LOGS = False
+
+        service = MagicMock()
+        service_class = MagicMock(return_value=service)
+        edge = MagicMock(return_value=MagicMock())
+        monkeypatch.setattr("comken.browser.session.Service", service_class)
+        monkeypatch.setattr("comken.browser.session.webdriver.Edge", edge)
+        session = BrowserSession(
+            name="test",
+            options=DebugOptions(),
+            download_dir=DownloadDir(path=tmp_path / "dl"),
+        )
+
+        session._build_driver(tmp_path / "msedgedriver.exe")
+
+        service_class.assert_called_once_with(executable_path=str(tmp_path / "msedgedriver.exe"))
+        edge_options = edge.call_args.kwargs["options"]
+        assert "--log-level=3" not in edge_options.arguments
+        assert "excludeSwitches" not in edge_options.experimental_options
 
 
 class TestSessionConcurrencyGuard:

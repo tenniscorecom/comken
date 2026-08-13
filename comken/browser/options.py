@@ -29,6 +29,9 @@ class BrowserOptions:
     DRIVER_PATH: str = r"C:\Users\Public\Documents\msedgedriver.exe"
     WAIT_SECONDS: int = 10
     DOWNLOAD_DIR: str | None = None  # None = 一時フォルダを自動作成（セッション終了時に削除）
+    # 調査時にドライバーと Edge 自身のログが必要な場合だけ False にする。
+    # comken の logging によるログには影響しない
+    SUPPRESS_EXTERNAL_LOGS: bool = True
 
     # Edge は自動更新で上がるが msedgedriver.exe は上がらないため、
     # バージョン不一致で起動に失敗したときはこのフォルダから自動でコピーして上書きする。
@@ -139,7 +142,13 @@ class BrowserOptions:
             "PROFILE_ROOT": "None（毎回まっさらな状態で起動）",
         }
         lines.append("  ── ドライバー設定 ──")
-        for attr in ("DRIVER_PATH", "WAIT_SECONDS", "DOWNLOAD_DIR", "DRIVER_SOURCE_DIR"):
+        for attr in (
+            "DRIVER_PATH",
+            "WAIT_SECONDS",
+            "DOWNLOAD_DIR",
+            "DRIVER_SOURCE_DIR",
+            "SUPPRESS_EXTERNAL_LOGS",
+        ):
             current = getattr(self, attr)
             default = getattr(base, attr)
             diff = " *" if current != default else ""
