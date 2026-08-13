@@ -489,6 +489,8 @@ except ComkenError as e:
 `print` は禁止。必ず `logging` を使う。
 ログの設定（出力先・フォーマット・レベル）は社内の共通ライブラリ側で行う。
 comken とその利用プロジェクトは `logging.getLogger(__name__)` を使うだけでよい。
+社内 RPA 基盤を通さず単体実行するときだけ、`comken.logger.setup_logging()` を明示的に呼ぶ。
+設定済みの環境では既存設定を優先するため、この関数は何も変更しない。
 
 ```python
 import logging

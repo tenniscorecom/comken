@@ -248,6 +248,16 @@ python -m comken.config
 
 ログの設定（出力先・フォーマット・レベル）は社内の共通ライブラリ側で行う。
 comken と利用プロジェクトは、各モジュールで標準の `logging.getLogger(__name__)` を使うだけでよい。
+RPA 基盤を通さず `python main.py` で単体実行するときだけ、先頭で `setup_logging()` を呼ぶ。
+明示的に呼んだ場合も、すでに設定済みなら既存のログ設定には触れない。
+
+```python
+# main.py（単体実行する場合だけ）
+from comken.logger import setup_logging
+
+setup_logging()  # コンソールと logs/YYYY-MM-DD.log（UTF-8）へ出力
+# setup_logging(to_file=False)  # コンソールだけに出力する場合
+```
 
 ```python
 # main.py

@@ -4885,6 +4885,25 @@ Returns:
     True: 終了に成功した。False: 起動していなかった、または終了に失敗した。
 
 
+## `from comken.logger import ...`
+
+### `setup_logging`
+
+```text
+def setup_logging(to_file: bool=True) -> None:
+```
+
+#### 説明
+
+単体実行向けに、コンソールと日付別ファイルへのログ出力を設定する。
+
+社内 RPA 基盤がログを設定する実行では呼び出す必要はない。すでに root logger に
+ハンドラがある場合は、既存の出力先・書式・レベルを変更せず、そのまま返る。
+
+Args:
+    to_file: True なら ``logs/YYYY-MM-DD.log`` にも UTF-8 で出力する。
+
+
 ## `from comken.run import ...`
 
 ### `backoffice`
