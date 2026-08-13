@@ -1,9 +1,28 @@
 ﻿# examples — 動くサンプル集
 
 comken の使い方を「動くコード」で覚えるためのサンプル。
-どれもリポジトリのルートから `python -m examples.<フォルダ名>.run` で実行する。
 
-## 一覧（学ぶ順のおすすめ）
+## 基本の使い方（basics/）
+
+1つの機能だけを確認したいときは、短い基本サンプルから読む。
+どれも外部システムや事前データなしで実行でき、入力データもその場で作る。
+
+| ファイル | 内容 | 実行方法 |
+|---|---|---|
+| csv_read.py | CsvReader の検索・抽出・索引・グループ化 | `python -m examples.basics.csv_read` |
+| csv_write.py | CsvWriter の新規作成・1行/複数行追記 | `python -m examples.basics.csv_write` |
+| excel_read.py | ExcelReader の辞書・タプル・逐次読み取り | `python -m examples.basics.excel_read` |
+| excel_write.py | ExcelWriter / Sheet で帳票作成・書式設定 | `python -m examples.basics.excel_write` |
+| config_and_transfer.py | config.ini の列対応表で Excel へ転記 | `python -m examples.basics.config_and_transfer` |
+
+成果物は `examples/basics/output/` に出力される。
+
+## 実務シナリオ（既存サンプル）
+
+複数機能を組み合わせた実務の流れを知りたいときはこちらを読む。
+リポジトリのルートから `python -m examples.<フォルダ名>.run` で実行する。
+
+### 一覧（学ぶ順のおすすめ）
 
 | # | フォルダ | 内容 | 主に使うモジュール | 実行条件 |
 |---|---|---|---|---|
@@ -16,7 +35,7 @@ comken の使い方を「動くコード」で覚えるためのサンプル。
 | 7 | access_export | Access マクロで整形 → CSV 出力 → Excel 帳票 | AccessDatabase / CsvReader / ExcelWriter | Microsoft Access + パス設定 |
 | 8 | outlook_inbox | 受信メール → CSV → 結果メールの下書き | Outlook / MailMessage / CsvWriter | Classic Outlook |
 
-## 実行方法
+### 実行方法
 
 ```bash
 # 例: CSV → Excel レポート

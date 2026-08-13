@@ -1,12 +1,68 @@
 """examples/ のオフラインサンプルが実際に動くことを確認するテスト。
 
-外部システム（Excel COM・ブラウザ）を必要としない3本を、
+外部システム（Excel COM・ブラウザ）を必要としないサンプルを、
 出力先を tmp_path に差し替えて main() まで通し、成果物ができることを検証する。
 README・ドキュメントが「そのまま動く」と案内している主張をテストで担保する。
 """
 
 import pytest
 from openpyxl import load_workbook
+
+
+class TestBasicExamples:
+    def test_csv_read(self, tmp_path, monkeypatch):
+        from examples.basics import csv_read
+
+        csv_path = tmp_path / "受注明細.csv"
+        monkeypatch.setattr(csv_read, "CSV_PATH", csv_path)
+        csv_read.main()
+
+        assert csv_path.exists()
+        assert "株式会社アルファ" in csv_path.read_text(encoding="utf-8")
+
+    def test_csv_write(self, tmp_path, monkeypatch):
+        from examples.basics import csv_write
+
+        output_path = tmp_path / "作業記録.csv"
+        monkeypatch.setattr(csv_write, "OUTPUT_PATH", output_path)
+        csv_write.main()
+
+        assert output_path.exists()
+        assert len(output_path.read_text(encoding="utf-8-sig").splitlines()) == 5
+
+    def test_excel_read(self, tmp_path, monkeypatch):
+        from examples.basics import excel_read
+
+        excel_path = tmp_path / "在庫一覧.xlsx"
+        monkeypatch.setattr(excel_read, "EXCEL_PATH", excel_path)
+        excel_read.main()
+
+        assert load_workbook(excel_path, read_only=True)[excel_read.SHEET_NAME].max_row == 3
+
+    def test_excel_write(self, tmp_path, monkeypatch):
+        from examples.basics import excel_write
+
+        output_path = tmp_path / "売上帳票.xlsx"
+        monkeypatch.setattr(excel_write, "OUTPUT_PATH", output_path)
+        excel_write.main()
+
+        worksheet = load_workbook(output_path)[excel_write.SHEET_NAME]
+        assert worksheet.freeze_panes == "A2"
+        assert excel_write.TABLE_NAME in worksheet.tables
+
+    def test_config_and_transfer(self, tmp_path, monkeypatch):
+        from examples.basics import config_and_transfer
+
+        monkeypatch.setattr(config_and_transfer, "OUTPUT_FOLDER", tmp_path)
+        monkeypatch.setattr(config_and_transfer, "CONFIG_PATH", tmp_path / "config.ini")
+        monkeypatch.setattr(config_and_transfer, "SOURCE_CSV", tmp_path / "顧客マスタ.csv")
+        monkeypatch.setattr(config_and_transfer, "OUTPUT_PATH", tmp_path / "請求先一覧.xlsx")
+        config_and_transfer.main()
+
+        worksheet = load_workbook(config_and_transfer.OUTPUT_PATH).active
+        assert worksheet["B2"].value == "株式会社アルファ"
+        assert worksheet["C3"].value == "06-3333-4444"
+        assert worksheet["B4"].value in (None, "")
 
 
 class TestCsvToExcelReport:
