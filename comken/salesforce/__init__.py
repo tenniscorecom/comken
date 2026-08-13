@@ -15,7 +15,7 @@
 `Salesforce` を継承して利用プロジェクト側でメソッドを足す。
 認証は OAuth 2.0 クライアントクレデンシャルフローで、
 ユーザー名・パスワード・リフレッシュトークンは使わない。
-設計の背景は docs/Salesforce.md を参照。
+設計の背景は docs/salesforce.md を参照。
 
     Salesforce             1組織ぶんの API クライアント（入口）
     ReportApi              レポート API。Salesforce.report が持っている

@@ -36,7 +36,7 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 |---|---|
 | はじめて使う | この README の「[はじめて使う人へ](#はじめて使う人へ)」 |
 | 何が用意されているか探す | [機能カタログ](docs/機能カタログ.md)（早見表） |
-| モジュールの使い方を知る | [CSV](docs/CSV操作.md)・[Excel](docs/Excel操作.md)・[Access](docs/Access操作.md)・[Outlook](docs/Outlook操作.md)・[Windows](docs/Windows操作.md)・[ブラウザ](docs/ブラウザ操作.md)・[Salesforce](docs/Salesforce.md)・[ファイル](docs/ファイル操作.md)・[認証情報](docs/認証情報.md) |
+| モジュールの使い方を知る | [CSV](docs/csv.md)・[Excel](docs/excel.md)・[Access](docs/access.md)・[Outlook](docs/outlook.md)・[Windows](docs/windows.md)・[ブラウザ](docs/browser.md)・[Salesforce](docs/salesforce.md)・[ファイル](docs/utils-files.md)・[認証情報](docs/credentials.md) |
 | 引数・戻り値・例外を正確に知る | [公開 API](docs/自動生成/API.md)（**自動生成**） |
 | エラーが出た | [エラー対応ガイド](ERRORS.md)（エラー表は **自動生成**） |
 | 動くコードを見る | [examples](examples/README.md) |
@@ -45,7 +45,7 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 | comken 本体を直す | [ライブラリ開発規約](docs/ライブラリ開発規約.md) |
 | comken を使うツールを作る | [プロジェクト規約](docs/プロジェクト規約.md) |
 | コードを読む・レビューする | [コードリーディングガイド](docs/コードリーディングガイド.md) |
-| ブラウザのクライアント証明書を検討する | [クライアント証明書の自動選択](docs/ブラウザのクライアント証明書自動選択.md)（検討中） |
+| ブラウザのクライアント証明書を検討する | [クライアント証明書の自動選択](docs/browser-client-certificates.md)（検討中） |
 
 ## モジュール一覧
 
@@ -55,16 +55,16 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 | runtime | `with debug():` / `with dry_run():` による実行モード |
 | constants | CSV・Excel・ファイル検索で使う公開定数 |
 | exceptions | comken 固有の例外（エラー名別に対処可能） |
-| [CSV](docs/CSV操作.md) | CSV の読み込み・検索・抽出 |
-| [Excel（openpyxl）](docs/Excel操作.md) | Excel の読み書き（既存数式の計算結果・マクロは必要時に win32com を使用） |
-| [Access](docs/Access操作.md) | Access のマクロ・VBA 実行、テーブル／クエリの CSV 出力 |
-| [Outlook](docs/Outlook操作.md) | Classic Outlook の受信メール読み取り・下書き作成 |
-| [Windows（pywin32）](docs/Windows操作.md) | Excel COM 操作・ウィンドウ操作・レジストリ読み取り |
-| [Browser（Edge）](docs/ブラウザ操作.md) | Edge ブラウザ操作 |
-| [Salesforce（requests）](docs/Salesforce.md) | Salesforce の SOQL・レコード操作・レポート取得・API 使用量の計測 |
-| [credentials（DPAPI）](docs/認証情報.md) | パスワード・client_secret の暗号化保存（Windows ユーザーに紐付く） |
-| [utils.files](docs/ファイル操作.md) | ファイル検索・操作・圧縮・標準フォルダ取得・ファイル名の組み立て |
-| [utils](docs/ファイル操作.md) | データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時取得 |
+| [CSV](docs/csv.md) | CSV の読み込み・検索・抽出 |
+| [Excel（openpyxl）](docs/excel.md) | Excel の読み書き（既存数式の計算結果・マクロは必要時に win32com を使用） |
+| [Access](docs/access.md) | Access のマクロ・VBA 実行、テーブル／クエリの CSV 出力 |
+| [Outlook](docs/outlook.md) | Classic Outlook の受信メール読み取り・下書き作成 |
+| [Windows（pywin32）](docs/windows.md) | Excel COM 操作・ウィンドウ操作・レジストリ読み取り |
+| [Browser（Edge）](docs/browser.md) | Edge ブラウザ操作 |
+| [Salesforce（requests）](docs/salesforce.md) | Salesforce の SOQL・レコード操作・レポート取得・API 使用量の計測 |
+| [credentials（DPAPI）](docs/credentials.md) | パスワード・client_secret の暗号化保存（Windows ユーザーに紐付く） |
+| [utils.files](docs/utils-files.md) | ファイル検索・操作・圧縮・標準フォルダ取得・ファイル名の組み立て |
+| [utils](docs/utils-files.md) | データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時取得 |
 
 ## 定数クラス一覧
 
@@ -405,4 +405,4 @@ flowchart LR
 | 2026-07-15 | `from comken import config` に一本化（src/config.py 不要）。Pylance 補完用 typings スタブを自動生成。当時のログ初期化で comken バージョンを出力。バイトコードキャッシュをローカルに自動退避。examples テスト・README コード構文チェック・CI（GitHub Actions）を追加。新規プロジェクトのひな形 templates/新規プロジェクト/ を追加 |
 | 2026-08-13 | **v0.5.0** — 認証情報の暗号化保存を追加（`comken.credentials`）。client_secret・パスワードを Windows DPAPI で暗号化し、`%USERPROFILE%\.comken\credentials.dat` に保管する。登録は対話式ではなく**平文 JSON の取り込み**（`python -m comken.credentials import`）にして、配布時に手入力を挟まない。JSON はシステム名ごとに項目をまとめる形式で、`site_a_client_id` のようなキー名に展開される。書き込みはまとめて1回で、1件でも不正なら1件も保存しない。復号できない場合（登録時と違う Windows アカウント・PC）は原因の確認順を示す `CredentialDecryptionError` にする。`Salesforce.from_credentials()` を追加し、サイトクラスの `CREDENTIAL_PREFIX` から client_id / client_secret を読めるようにした。例外を `CredentialError` 配下に新設 |
 | 2026-08-12 | **v0.4.0** — Salesforce 連携を追加（`comken.salesforce`）。認証は OAuth 2.0 クライアントクレデンシャルフローで、リフレッシュトークンを保管しない。1インスタンス=1組織で、組織固有の処理は継承して足す。認証・レポート・計測は継承ではなく合成（JWT フローへ差し替えられるようにするため）。アクセストークンの期限は測らず 401 で1回だけ取り直す。5xx と 429 は待ち時間を伸ばしながら最大3回やり直し、4xx は即エラーにする。レポートは**同期・非同期とも 2000 行が上限**なので、切り捨てを検知したら既定で例外にする（`allow_truncated=True` で警告に落とせる）。API 呼び出しは1か所を通るので、呼び出し元別の回数・リトライ理由・所要時間・`Sforce-Limit-Info` 由来の組織 API 消費量をまとめて記録し、ログと CSV に出せる。例外を `SalesforceError` 配下に新設。依存に requests を追加。docs/Salesforce設計メモ.md・docs/Salesforce_JWTと鍵配布.md を追加 |
-| 2026-08-03 | browser を作り直し（**破壊的変更**）。`EdgeDriver` / `BasePage` を廃止し、入口を `Browsers` に一本化（1サイト1ブラウザ・`with` 必須・サイトが1つでも複数でも同じ書き方）。`start` / `wait` で待ち時間に別サイトを進められるようにし、`parallel` はその短縮形に。`Page` を `Locator` 版へ一本化して `click_id` 等の直積メソッドを削除、`elements` を追加。msedgedriver のバージョン不一致を配布フォルダから自動修復。`PROFILE_ROOT` でログイン状態を永続化。ブラウザ例外を `BrowserError` 配下に新設。`py.typed` 追加（補完・型チェック改善）。docs/ブラウザ操作.md・docs/Outlook操作.md を追加 |
+| 2026-08-03 | browser を作り直し（**破壊的変更**）。`EdgeDriver` / `BasePage` を廃止し、入口を `Browsers` に一本化（1サイト1ブラウザ・`with` 必須・サイトが1つでも複数でも同じ書き方）。`start` / `wait` で待ち時間に別サイトを進められるようにし、`parallel` はその短縮形に。`Page` を `Locator` 版へ一本化して `click_id` 等の直積メソッドを削除、`elements` を追加。msedgedriver のバージョン不一致を配布フォルダから自動修復。`PROFILE_ROOT` でログイン状態を永続化。ブラウザ例外を `BrowserError` 配下に新設。`py.typed` 追加（補完・型チェック改善）。docs/browser.md・docs/outlook.md を追加 |

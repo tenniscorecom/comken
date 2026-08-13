@@ -11,7 +11,7 @@
 
 認証・レポート・計測は継承せず**持たせている**。認証は「トークンを取る部品」で
 あって Salesforce の一種ではなく、合成にしておくと JWT フローへの差し替えが
-`auth` の入れ替えだけで済むため（詳しくは docs/Salesforce.md）。
+`auth` の入れ替えだけで済むため（詳しくは docs/salesforce.md）。
 """
 
 import logging

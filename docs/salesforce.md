@@ -1,4 +1,4 @@
-﻿# Salesforce 連携 設計メモ
+# Salesforce 連携 設計メモ
 
 [README（ドキュメントの入口）へ戻る](../README.md)
 
@@ -440,7 +440,7 @@ v67.0 の主な変更は「Apex のセキュリティ既定が user mode に」�
 
 作成日: 2026-08-12
 背景: `cryptography` をオフライン環境へ持ち込める見込みが立ったため、
-[Salesforce 連携 設計メモ](Salesforce.md) で「後回し」にした2つを先に用意する。
+[Salesforce 連携 設計メモ](salesforce.md) で「後回し」にした2つを先に用意する。
 
 1. **JWT ベアラーフロー** — client_secret をネットワークに流さない認証
 2. **公開鍵ハイブリッド暗号での認証情報配布** — 複数台へ機密を一括で配る
@@ -613,7 +613,7 @@ def fetch_token(assertion: str, login_url: str) -> tuple[str, str]:
 
 ### 差し替え方
 
-[設計メモ](Salesforce.md)のとおり、認証は `SalesforceBase` が**持つ**部品にする。
+[設計メモ](salesforce.md)のとおり、認証は `SalesforceBase` が**持つ**部品にする。
 クライアントクレデンシャル版と JWT 版が同じ形（トークンと instance_url を返す）を
 満たしていれば、入れ替えるだけで移行できる。
 
@@ -870,7 +870,7 @@ for site_class in SITES:
 ```
 
 `from_credentials()` は `CREDENTIAL_PREFIX` を頭に付けたキー名で、DPAPI に保管した
-client_id / client_secret を読む（後述の [credentials](認証情報.md#credentials)）。
+client_id / client_secret を読む（後述の [credentials](credentials.md#credentials)）。
 コードにも config.ini にも秘密の値が現れない。
 
 各クラスには `CREDENTIAL_PREFIX`（認証情報のキー名の頭）・`CONFIG_SECTION`
@@ -884,7 +884,7 @@ client_id / client_secret を読む（後述の [credentials](認証情報.md#cr
 
 書き込み系（`insert` / `update` / `upsert` / `delete`）は `dry_run` を尊重する。
 使い方の一覧は [docs/機能カタログ.md](機能カタログ.md)、
-設計の背景は [docs/Salesforce.md](Salesforce.md) を参照。
+設計の背景は [docs/salesforce.md](salesforce.md) を参照。
 
 ---
 

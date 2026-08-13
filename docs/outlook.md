@@ -190,7 +190,7 @@ Outlook が起動していない場合も起きるので、まず Outlook を開
 
 README に掲載していた概要とコード例です。
 
-詳しい使い方は [docs/Outlook操作.md](Outlook操作.md) を参照。
+詳しい使い方は [docs/outlook.md](outlook.md) を参照。
 
 ```python
 import logging

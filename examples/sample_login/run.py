@@ -5,7 +5,7 @@
     リポジトリのルートで python -m examples.sample_login.run
 
 サイトが1つでも Browsers を使う。サイトが増えたときに書き方を変えなくて済むため
-（増やすときは launch を1行足すだけ。複数サイトの例は docs/ブラウザ操作.md を参照）。
+（増やすときは launch を1行足すだけ。複数サイトの例は docs/browser.md を参照）。
 """
 
 from comken.browser import Browsers

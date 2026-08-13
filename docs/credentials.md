@@ -67,7 +67,7 @@ DPAPI は **Windows アカウント × PC** に紐付く。ファイルを他人
 取り込みは人が1回だけ実行する前提。
 
 複数台へ配る必要が出てきたら公開鍵ハイブリッド方式を足す余地がある
-（準備は [docs/Salesforce.md](Salesforce.md) の付録）。
+（準備は [docs/salesforce.md](salesforce.md) の付録）。
 まずローカル保管で動かし、配布が現実の問題になってから入れる。
 
 ---

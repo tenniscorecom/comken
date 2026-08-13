@@ -9,7 +9,7 @@
         data = KintaiFlow(kintai).fetch()
 
 サイトを増やすときは launch を1行足す。同時に走らせたくなったら parallel で包む。
-詳しくは docs/ブラウザ操作.md を参照。
+詳しくは docs/browser.md を参照。
 
     Browsers        複数サイトのブラウザをまとめて起動・終了する（入口）
     BrowserSession  1サイト分のブラウザ。Browsers.launch() が返す
@@ -61,6 +61,6 @@ def __getattr__(name: str) -> object:
         raise AttributeError(
             f"comken.browser.{name} は廃止されました。\n"
             f"{_REMOVED_NAMES[name]}\n"
-            "書き換え方は docs/ブラウザ操作.md を参照してください。"
+            "書き換え方は docs/browser.md を参照してください。"
         )
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
