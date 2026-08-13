@@ -4,42 +4,33 @@ main.py — エントリポイント
 このプロジェクトの入口。`python main.py` で実行できる（非エンジニアは 実行.bat をダブルクリック）。
 
 処理の本体は src/ 以下に書き、ここでは「実行 → エラーの受け止め」だけを行う。
-実行は社内 RPA 基盤を通す（設定の初期化と時間計測は基盤側が行う）。
+社内 RPA 基盤から動かす場合は、下の「社内 RPA 基盤から実行する場合」を参照。
 """
 
 import logging
 
-from comken import config
 from comken.exceptions import ComkenError
-from comken.run import backoffice  # イントラネットのツールなら intranet に変える
+from comken.logger import setup_logging
 
 from src.run import run
 
 logger = logging.getLogger(__name__)
 
-# 社内 RPA 基盤へ渡すプロジェクト名。ログの識別に使われる
-PROJECT_NAME = "（プロジェクト名）"
-
 
 def main() -> None:
-    # config.SECTION.KEY で config.ini（このフォルダ）の値にアクセスできる。
-    # config.REPORT. まで打つと Pylance で補完が出る（typings スタブは自動生成）。
-    # 例: 出力先フォルダを取り出す（config.ini の [REPORT] OUTPUT_FOLDER）
-    output_folder = config.REPORT.OUTPUT_FOLDER
-    logger.info("出力先: %s", output_folder)
-
-    run(output_folder)
+    # 設定の読み取りも処理も src/run.py に書く。ここは呼ぶだけにしておく
+    run()
 
 
 if __name__ == "__main__":
-    # ログの設定は社内の共通ライブラリ側で行う。ここでは logging をそのまま使う
+    # 単体で動かすので、ログの出力先をここで用意する（コンソールと logs/YYYY-MM-DD.log）。
     # 動作確認だけしたいときは保存・送信をスキップできる:
     #   from comken import dry_run
     #   with dry_run():
-    #       backoffice(main, PROJECT_NAME)
+    #       main()
+    setup_logging()
     try:
-        # main を直接呼ばず基盤に渡す。基盤が設定の初期化と時間計測をしてから main を呼ぶ
-        backoffice(main, PROJECT_NAME)
+        main()
     except ComkenError as e:
         # comken のエラーはメッセージに対処法が入っている（docs/ERRORS.md も参照）
         logger.error("処理を中断しました: %s", e)
@@ -47,3 +38,19 @@ if __name__ == "__main__":
     except Exception:
         logger.error("予期しないエラーが発生しました", exc_info=True)
         raise
+
+# ── 社内 RPA 基盤から実行する場合 ─────────────────────────────────────────────
+# 上の `setup_logging()` と `main()` の2行を、次の形に差し替える。
+# 基盤が設定の初期化・時間計測・ログ設定をしてから main を呼ぶので、
+# setup_logging() は呼ばない（呼んでも二重設定にはならないが、基盤の設定が正になる）。
+#
+#     from comken.run import backoffice   # イントラネットのツールなら intranet に変える
+#
+#     PROJECT_NAME = "（プロジェクト名）"   # 基盤へ渡す名前。ログの識別に使われる
+#
+#     if __name__ == "__main__":
+#         try:
+#             backoffice(main, PROJECT_NAME)
+#         except ComkenError as e:
+#             logger.error("処理を中断しました: %s", e)
+#             raise

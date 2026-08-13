@@ -6,26 +6,25 @@ main.py から呼ばれる。ここに「実際にやりたいこと」を書く
 """
 
 import logging
-from pathlib import Path
+
+from comken import config
 
 logger = logging.getLogger(__name__)
 
 SHEET = "Sheet1"
 
 
-def run(output_folder: Path) -> None:
-    """処理の入口。main.py から config の値を受け取って実行する。
+def run() -> None:
+    """処理の入口。main.py から呼ばれる。"""
+    # config.SECTION.KEY で config.ini（プロジェクト直下）の値を読む。
+    # config.REPORT. まで打つと Pylance で補完が出る（typings スタブは自動生成）。
+    output_folder = config.REPORT.OUTPUT_FOLDER
 
-    Args:
-        output_folder: 出力先フォルダ（config.ini の [REPORT] OUTPUT_FOLDER）。
-    """
     # ── ここに処理を書く ──────────────────────────────────────────────
     # 例:
     #   from comken.csv import CsvReader
     #   from comken.excel import ExcelWriter
     #   from comken.utils.files import DateNameBuilder
-    #
-    #   from comken import config   # config.FILES. まで打つと補完が出る
     #
     #   rows = CsvReader(config.FILES.INPUT_CSV).rows()
     #   out = output_folder / DateNameBuilder("レポート").prefix()
