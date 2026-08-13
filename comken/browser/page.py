@@ -44,7 +44,7 @@ from selenium.webdriver.support.ui import Select, WebDriverWait
 from comken.exceptions import ElementNotFoundError
 
 from .locator import Locator
-from .session import BrowserSession
+from .management import BrowserSession
 
 logger = logging.getLogger(__name__)
 

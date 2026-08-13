@@ -18,9 +18,22 @@ import pytest
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 
-from comken.browser import BrowserOptions, Browsers, DownloadDir, Locator, Page, SitePage
-from comken.browser.driver_update import _major, _pick_source, _replace_driver
-from comken.browser.session import BrowserSession, _create_service
+from comken import browser
+from comken.browser import (
+    BackgroundTask,
+    BrowserOptions,
+    Browsers,
+    BrowserSession,
+    DownloadDir,
+    Locator,
+    Page,
+    SitePage,
+)
+from comken.browser.driver import _major, _pick_source, _replace_driver
+from comken.browser.management.browsers import Browsers as InternalBrowsers
+from comken.browser.management.sessions import BrowserSession as InternalBrowserSession
+from comken.browser.management.startup import _build_driver, create_service
+from comken.browser.management.tasks import BackgroundTask as InternalBackgroundTask
 from comken.exceptions import (
     BrowsersClosedError,
     BrowsersNotStartedError,
@@ -33,6 +46,17 @@ from comken.exceptions import (
     SessionNotFoundError,
     SessionNotStartedError,
 )
+
+
+class TestPublicApi:
+    """内部整理後も comken.browser の公開入口を維持する。"""
+
+    def test_exports_management_classes_from_browser_package(self):
+        """管理クラス3つを従来どおり comken.browser からimportできる。"""
+        assert BrowserSession is InternalBrowserSession
+        assert Browsers is InternalBrowsers
+        assert BackgroundTask is InternalBackgroundTask
+        assert {"Browsers", "BrowserSession", "BackgroundTask"} <= set(browser.__all__)
 
 
 def _make_session(tmp_path, name: str = "test") -> BrowserSession:
@@ -107,7 +131,9 @@ class TestSessionStartFailure:
         """
         driver = MagicMock()
         driver.implicitly_wait.side_effect = RuntimeError("初期化に失敗")
-        monkeypatch.setattr("comken.browser.session.webdriver.Edge", lambda **kwargs: driver)
+        monkeypatch.setattr(
+            "comken.browser.management.startup.webdriver.Edge", lambda **kwargs: driver
+        )
 
         session = BrowserSession(
             name="test",
@@ -127,7 +153,7 @@ class TestSessionStartFailure:
         後始末は起動処理の側で完結している必要がある。
         """
         monkeypatch.setattr(
-            "comken.browser.session.webdriver.Edge",
+            "comken.browser.management.startup.webdriver.Edge",
             MagicMock(side_effect=RuntimeError("起動に失敗")),
         )
         download_dir = MagicMock(wraps=DownloadDir(path=tmp_path / "dl"))
@@ -143,7 +169,7 @@ class TestSessionStartFailure:
     def test_does_not_retry_when_no_source_dir(self, tmp_path, monkeypatch):
         """配布フォルダが未設定なら、ドライバー更新も再試行もしない。"""
         edge = MagicMock(side_effect=RuntimeError("起動に失敗"))
-        monkeypatch.setattr("comken.browser.session.webdriver.Edge", edge)
+        monkeypatch.setattr("comken.browser.management.startup.webdriver.Edge", edge)
 
         session = BrowserSession(
             name="test",
@@ -171,15 +197,15 @@ class TestExternalLogSuppression:
             ]
         )
         edge = MagicMock(return_value=MagicMock())
-        monkeypatch.setattr("comken.browser.session.Service", service_class)
-        monkeypatch.setattr("comken.browser.session.webdriver.Edge", edge)
+        monkeypatch.setattr("comken.browser.management.startup.Service", service_class)
+        monkeypatch.setattr("comken.browser.management.startup.webdriver.Edge", edge)
         session = BrowserSession(
             name="test",
             options=BrowserOptions(),
             download_dir=DownloadDir(path=tmp_path / "dl"),
         )
 
-        session._build_driver(tmp_path / "msedgedriver.exe")
+        _build_driver(tmp_path / "msedgedriver.exe", session._options, None, session.download_dir)
 
         service_class.assert_called_once_with(
             executable_path=str(tmp_path / "msedgedriver.exe"), log_output=os.devnull
@@ -196,9 +222,9 @@ class TestExternalLogSuppression:
             def __init__(self, executable_path, log_path=None):
                 calls.append((executable_path, log_path))
 
-        monkeypatch.setattr("comken.browser.session.Service", OldService)
+        monkeypatch.setattr("comken.browser.management.startup.Service", OldService)
 
-        _create_service(tmp_path / "msedgedriver.exe", suppress_logs=True)
+        create_service(tmp_path / "msedgedriver.exe", suppress_logs=True)
 
         assert calls == [(str(tmp_path / "msedgedriver.exe"), os.devnull)]
 
@@ -211,15 +237,15 @@ class TestExternalLogSuppression:
         service = MagicMock()
         service_class = MagicMock(return_value=service)
         edge = MagicMock(return_value=MagicMock())
-        monkeypatch.setattr("comken.browser.session.Service", service_class)
-        monkeypatch.setattr("comken.browser.session.webdriver.Edge", edge)
+        monkeypatch.setattr("comken.browser.management.startup.Service", service_class)
+        monkeypatch.setattr("comken.browser.management.startup.webdriver.Edge", edge)
         session = BrowserSession(
             name="test",
             options=DebugOptions(),
             download_dir=DownloadDir(path=tmp_path / "dl"),
         )
 
-        session._build_driver(tmp_path / "msedgedriver.exe")
+        _build_driver(tmp_path / "msedgedriver.exe", session._options, None, session.download_dir)
 
         service_class.assert_called_once_with(executable_path=str(tmp_path / "msedgedriver.exe"))
         edge_options = edge.call_args.kwargs["options"]
@@ -322,7 +348,7 @@ class TestBrowsersRequiresWith:
     def test_rejects_launch_without_with(self, monkeypatch):
         """with に入れずに launch すると、ブラウザを起動する前に止まる。"""
         edge = MagicMock()
-        monkeypatch.setattr("comken.browser.session.webdriver.Edge", edge)
+        monkeypatch.setattr("comken.browser.management.startup.webdriver.Edge", edge)
 
         browsers = Browsers()
 
@@ -775,7 +801,7 @@ class TestDriverUpdate:
             copied.append(Path(dst).name)
             return real_copy(src, dst)
 
-        monkeypatch.setattr("comken.browser.driver_update.shutil.copy2", record_copy)
+        monkeypatch.setattr("comken.browser.driver.shutil.copy2", record_copy)
 
         _replace_driver(source, target)
 
@@ -790,7 +816,7 @@ class TestDriverUpdate:
         target = tmp_path / "bin" / "msedgedriver.exe"
 
         monkeypatch.setattr(
-            "comken.browser.driver_update.shutil.copy2",
+            "comken.browser.driver.shutil.copy2",
             MagicMock(side_effect=PermissionError("使用中")),
         )
 

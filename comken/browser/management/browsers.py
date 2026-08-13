@@ -1,4 +1,7 @@
-"""Browsers — サイトごとのブラウザをまとめて管理する。
+"""複数ブラウザーをまとめて管理する公開クラス ``Browsers``。
+
+このファイルは管理の入口だけを担当する。1つのブラウザーの起動・操作・終了は
+``sessions.py``、バックグラウンド処理の結果管理は ``tasks.py`` が担う。
 
 サイトが1つでも複数でも、書き方は変わらない:
 
@@ -51,10 +54,10 @@ from comken.exceptions import (
     SessionNotFoundError,
 )
 
-from .download import DownloadDir
-from .options import BrowserOptions
-from .session import BrowserSession
-from .task import BackgroundTask
+from ..download import DownloadDir
+from ..options import BrowserOptions
+from .sessions import BrowserSession
+from .tasks import BackgroundTask
 
 logger = logging.getLogger(__name__)
 

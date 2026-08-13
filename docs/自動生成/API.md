@@ -1194,52 +1194,6 @@ def is_done(self) -> bool:
 True になっていても、結果や例外を受け取るには wait() を呼ぶ。
 
 
-## `from comken.constants import ...`
-
-### `Encoding`
-
-```text
-class Encoding:
-```
-
-#### 説明
-
-CsvReader / CsvWriter の encoding 引数に使う定数。
-
-### `Color`
-
-```text
-class Color:
-```
-
-#### 説明
-
-Excel でよく使う色の定数（RGB 16進値）。
-
-### `FileFormat`
-
-```text
-class FileFormat:
-```
-
-#### 説明
-
-Workbook.SaveAs に渡す FileFormat 定数（Excel の XlFileFormat）。
-
-save_as() では元ファイルと同じ形式が自動で使われるため、通常は指定不要。
-形式を変換して保存する場合だけ file_format 引数で渡す。
-
-### `SortBy`
-
-```text
-class SortBy:
-```
-
-#### 説明
-
-FileFinder.latest() の by 引数に使う定数。
-
-
 ## `from comken.credentials import ...`
 
 ### `CREDENTIALS_PATH`
@@ -5296,6 +5250,49 @@ def kill_excel() -> bool:
 
 Returns:
     True: 終了に成功した。False: 起動していなかった、または終了に失敗した。
+
+
+## `from comken.constants import ...`
+
+### `Encoding`
+
+```text
+class Encoding:
+```
+
+#### 説明
+
+CsvReader / CsvWriter の encoding 引数に使う定数。
+
+### `Color`
+
+```text
+class Color:
+```
+
+#### 説明
+
+Excel でよく使う色の定数（RGB 16進値）。
+
+### `FileFormat`
+
+```text
+class FileFormat:
+```
+
+#### 説明
+
+Workbook.SaveAs に渡す Excel の保存形式定数。
+
+### `SortBy`
+
+```text
+class SortBy:
+```
+
+#### 説明
+
+FileFinder.latest() の by 引数に使う定数。
 
 
 ## `from comken.logger import ...`

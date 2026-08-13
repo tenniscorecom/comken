@@ -21,12 +21,10 @@
 """
 
 from .download import DownloadDir
-from .fleet import Browsers
 from .locator import Locator
+from .management import BackgroundTask, Browsers, BrowserSession
 from .options import BrowserOptions
 from .page import Page, SitePage
-from .session import BrowserSession
-from .task import BackgroundTask
 
 __all__ = [
     "Browsers",

@@ -1,4 +1,4 @@
-"""BrowserSession の内部タブ管理。"""
+"""1つのブラウザーセッション内でタブを開閉する内部管理。"""
 
 import logging
 import time
@@ -11,7 +11,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 from comken.exceptions import PopupTabNotOpenedError
 
-from .locator import Locator
+from ..locator import Locator
 
 logger = logging.getLogger(__name__)
 

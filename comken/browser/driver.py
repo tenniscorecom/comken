@@ -1,4 +1,4 @@
-"""msedgedriver.exe のバージョン合わせ。
+"""msedgedriver.exe の取得・更新とバージョン合わせ。
 
 Edge は自動更新で勝手に上がるが、msedgedriver.exe は上がらない。
 そのままにしておくと、ある日突然すべての自動化が

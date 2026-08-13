@@ -1,5 +1,5 @@
 """
-config_stub.py — config.ini からエディタ補完用スタブ（.pyi）を生成する
+config/stubs.py — config.ini からエディタ補完用スタブ（.pyi）を生成する
 
 Config の属性（config.SECTION.KEY）は config.ini から実行時に動的に作られるため、
 そのままではエディタが補完できない。ここで config.ini の内容を型付きの .pyi に書き出し、
@@ -13,9 +13,9 @@ import configparser
 import os
 from pathlib import Path
 
-from .config import _is_mapping_section, _parse_value
-from .exceptions import ConfigFileNotFoundError
-from .utils.files.ops import _cleanup_stale_tmp
+from ..exceptions import ConfigFileNotFoundError
+from ..utils.files.ops import _cleanup_stale_tmp
+from . import _is_mapping_section, _parse_value
 
 _STUB_HEADER = '''"""config.ini から自動生成されたエディタ補完用スタブ。手で編集しない。
 

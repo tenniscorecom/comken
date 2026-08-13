@@ -37,8 +37,8 @@ import types
 from pathlib import Path
 from typing import NoReturn
 
-from . import __version__
-from .exceptions import (
+from .. import __version__
+from ..exceptions import (
     ConfigCreatedFromExampleError,
     ConfigFileNotFoundError,
     ConfigLowerCaseNameError,
@@ -150,8 +150,8 @@ class Config:
 
         # エディタ補完用スタブ（src/config.pyi）を自動更新する。
         # config.ini を変更してもスタブが古くならない（失敗しても本処理は止めない）。
-        # スタブ生成は別モジュール（config_stub）に分離しており、遅延 import で循環を避ける
-        from .config_stub import update_stub
+        # スタブ生成は別モジュールへ分離しており、遅延 import で循環を避ける
+        from .stubs import update_stub
 
         update_stub(cfg, path)
         _log_version_once()
@@ -293,12 +293,3 @@ def _parse_value(
         pass
 
     return value
-
-
-if __name__ == "__main__":
-    # スタブの手動生成（python -m comken.config）。生成本体は config_stub にある
-    from .config_stub import generate_stub
-
-    stub_path = generate_stub()
-    print(f"補完用スタブを生成しました: {stub_path.resolve()}")
-    print("以後は Config() を呼ぶたびに自動更新されます。")

@@ -1,10 +1,13 @@
-"""BrowserSession — 1サイト分のブラウザ。
+"""1サイト分のブラウザーを表す ``BrowserSession``。
+
+このファイルはWebDriverの生存期間と、1セッションを同時に操作させない排他制御を担当する。
+複数ブラウザーの管理は ``browsers.py``、タブの開閉は ``tabs.py`` が担当する。
 
 1つのサイトにつき1つのブラウザを起動する。タブで複数サイトを扱わないのは、
 ダウンロード先・起動オプション・ログイン状態がすべてブラウザ単位で決まるため。
 タブで分けると「サイトAのCSVがサイトBのフォルダに落ちる」といった取り違えが起きる。
 
-このクラスを直接作らず、Browsers（fleet.py）から起動する:
+このクラスを直接作らず、Browsersから起動する:
 
     from comken.browser import Browsers
 
@@ -15,37 +18,28 @@
 サイトが1つでも複数でも書き方は同じで、増やすときは launch を1行足すだけにしてある。
 """
 
-import inspect
 import logging
-import os
 import threading
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 
 from selenium import webdriver
-from selenium.webdriver.edge.options import Options
-from selenium.webdriver.edge.service import Service
 
 from comken.exceptions import (
     ConcurrentSessionUseError,
-    DriverStartError,
     SessionClosedError,
     SessionNotStartedError,
 )
 from comken.utils import now
 
-from ._tabs import _TabManager
-from .download import DownloadDir
-from .driver_update import update_driver
-from .locator import Locator
-from .options import BrowserOptions
+from ..download import DownloadDir
+from ..locator import Locator
+from ..options import BrowserOptions
+from .startup import start_driver
+from .tabs import _TabManager
 
 logger = logging.getLogger(__name__)
-
-# 起動失敗時にドライバーを更新して再試行する回数。
-# 1回で十分（更新しても直らないなら、原因はバージョン不一致ではない）
-_START_RETRY_COUNT = 1
 
 # 新しいタブが開くのを待つ既定の秒数
 _POPUP_TAB_TIMEOUT_SECONDS = 10
@@ -53,18 +47,6 @@ _POPUP_TAB_TIMEOUT_SECONDS = 10
 # load_many で同時に開いておくタブの既定数。増やすほど待ち時間が重なって速くなるが、
 # メモリとサイト側の負荷も増えるため、控えめな値から始める
 _DEFAULT_MAX_OPEN_TABS = 5
-
-
-def _create_service(driver_path: Path, suppress_logs: bool) -> Service:
-    """Selenium の版に合うログ指定で EdgeDriver の Service を作る。"""
-    kwargs: dict[str, str] = {"executable_path": str(driver_path)}
-    if suppress_logs:
-        # Selenium 4.11 で log_path から log_output に変わった。
-        # 社内版を更新できないため、実際の引数をここだけで判定して両方に対応する
-        parameter_names = inspect.signature(Service).parameters
-        log_argument = "log_output" if "log_output" in parameter_names else "log_path"
-        kwargs[log_argument] = os.devnull
-    return Service(**kwargs)
 
 
 class BrowserSession:
@@ -119,7 +101,7 @@ class BrowserSession:
     def __enter__(self) -> "BrowserSession":
         # ここで例外を投げると、この with の __exit__ は呼ばれない。
         # 後始末は _start_driver() の中で完結させること
-        self._driver = self._start_driver()
+        self._driver = start_driver(self._options, self._profile_dir, self.download_dir)
         logger.info("ブラウザを起動しました: %s", self.name)
         return self
 
@@ -308,72 +290,6 @@ class BrowserSession:
             self._lock.release()
 
     # ------------------------------------------------------------ 内部処理
-
-    def _start_driver(self) -> webdriver.Edge:
-        """Edge を起動する。バージョン不一致なら1回だけドライバーを更新して再試行する。"""
-        driver_path = Path(self._options.DRIVER_PATH)
-        source_dir = self._options.DRIVER_SOURCE_DIR
-
-        for attempt in range(_START_RETRY_COUNT + 1):
-            try:
-                return self._build_driver(driver_path)
-            except Exception as exc:
-                is_last = attempt == _START_RETRY_COUNT
-                # 配布フォルダが設定されていなければ、更新のしようがない
-                if is_last or source_dir is None:
-                    self.download_dir.__exit__(None, None, None)
-                    raise DriverStartError(str(driver_path), exc) from exc
-
-                logger.warning("ブラウザの起動に失敗しました。ドライバーの更新を試みます: %s", exc)
-                try:
-                    is_updated = update_driver(driver_path, Path(source_dir))
-                except Exception as update_error:
-                    self.download_dir.__exit__(None, None, None)
-                    raise DriverStartError(str(driver_path), update_error) from exc
-
-                # 更新が不要だった＝バージョン不一致ではない。再試行しても同じ結果になる
-                if not is_updated:
-                    self.download_dir.__exit__(None, None, None)
-                    raise DriverStartError(str(driver_path), exc) from exc
-
-        # ループは必ず return か raise で抜けるため、ここには到達しない
-        raise AssertionError("unreachable")
-
-    def _build_driver(self, driver_path: Path) -> webdriver.Edge:
-        """起動オプションを組み立てて Edge を起動する。"""
-        options = Options()
-        for argument in self._options.build(self._profile_dir):
-            options.add_argument(argument)
-
-        if self._options.SUPPRESS_EXTERNAL_LOGS:
-            # Service のログとは別に Edge 本体が標準エラーへ出す Chromium ログを抑える
-            options.add_experimental_option("excludeSwitches", ["enable-logging"])
-            options.add_argument("--log-level=3")
-
-        options.add_experimental_option(
-            "prefs",
-            {
-                "download.default_directory": str(self.download_dir.path),
-                "download.prompt_for_download": False,
-            },
-        )
-
-        service = _create_service(driver_path, self._options.SUPPRESS_EXTERNAL_LOGS)
-        driver = webdriver.Edge(service=service, options=options)
-        # 起動そのものが成功した後に初期化で失敗すると、掴んでいる Edge プロセスが
-        # 誰にも閉じられずに残る。ここで確実に閉じてから例外を伝える
-        try:
-            # 暗黙的待機は 0 にして、待機を Page の WebDriverWait（明示的待機）へ一本化する。
-            # 両方が効いていると待ち時間が読めなくなり、
-            # 要素の不在確認が毎回タイムアウト分ブロックする
-            driver.implicitly_wait(0)
-        except Exception:
-            try:
-                driver.quit()
-            except Exception:
-                logger.warning("初期化に失敗したブラウザを閉じられませんでした", exc_info=True)
-            raise
-        return driver
 
     def _require_driver(self) -> webdriver.Edge:
         """起動済みの WebDriver を返す。使える状態でなければ理由を示して落とす。"""

@@ -404,7 +404,7 @@ class TestGenerateStub:
 
     def test_generates_typed_sections(self, ini, tmp_path):
         """セクションごとのクラスと型注釈が生成されることを確認する。"""
-        from comken.config_stub import generate_stub
+        from comken.config.stubs import generate_stub
 
         out = generate_stub(ini, tmp_path / "config.pyi")
         text = out.read_text(encoding="utf-8")
@@ -419,7 +419,7 @@ class TestGenerateStub:
 
     def test_config_class_references_sections(self, ini, tmp_path):
         """Config クラスが各セクションクラスを属性に持つことを確認する。"""
-        from comken.config_stub import generate_stub
+        from comken.config.stubs import generate_stub
 
         text = generate_stub(ini, tmp_path / "config.pyi").read_text(encoding="utf-8")
 
@@ -429,7 +429,7 @@ class TestGenerateStub:
 
     def test_mapping_section_uses_dictionary_api_only(self, tmp_path):
         """動的な列名は列挙せず、辞書取得 API の型だけをスタブに出す。"""
-        from comken.config_stub import generate_stub
+        from comken.config.stubs import generate_stub
 
         ini = tmp_path / "config.ini"
         ini.write_text("[COLUMN_MAPPING]\n受注No = 受注番号\n", encoding="utf-8")
@@ -444,7 +444,7 @@ class TestGenerateStub:
 
         出力先は config.ini の場所基準なので、どこから実行しても同じ場所に生成される。
         """
-        from comken.config_stub import generate_stub
+        from comken.config.stubs import generate_stub
 
         (tmp_path / "src").mkdir()
         (tmp_path / "src" / "config.py").write_text(
@@ -462,7 +462,7 @@ class TestGenerateStub:
         from comken import config 方式（src/config.py なし）でも補完が効くように、
         Pylance の typings 上書き用スタブ（config.pyi + __init__.pyi）を作る。
         """
-        from comken.config_stub import generate_stub
+        from comken.config.stubs import generate_stub
 
         monkeypatch.chdir(tmp_path)
         out = generate_stub(ini)
@@ -480,7 +480,7 @@ class TestGenerateStub:
 
     def test_missing_ini_raises(self, tmp_path):
         """config.ini がない場合は ConfigError になることを確認する。"""
-        from comken.config_stub import generate_stub
+        from comken.config.stubs import generate_stub
 
         with pytest.raises(ConfigError):
             generate_stub(tmp_path / "config.ini", tmp_path / "config.pyi")
@@ -489,7 +489,7 @@ class TestGenerateStub:
         """生成されたスタブが Python として構文エラーにならないことを確認する。"""
         import ast
 
-        from comken.config_stub import generate_stub
+        from comken.config.stubs import generate_stub
 
         text = generate_stub(ini, tmp_path / "config.pyi").read_text(encoding="utf-8")
         ast.parse(text)  # 構文エラーなら例外になる
