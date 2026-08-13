@@ -11,11 +11,7 @@ class SiteC(Salesforce):
     """SiteC 組織のクライアント。
 
     使い方:
-        with SiteC(
-            client_id=cred.client_id,
-            client_secret=cred.client_secret,
-            domain_url=config.SITE_C.DOMAIN_URL,
-        ) as sf:
+        with SiteC.from_credentials(config.SITE_C.DOMAIN_URL) as sf:
             rows = sf.案件一覧()
     """
 

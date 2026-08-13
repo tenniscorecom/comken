@@ -18,6 +18,7 @@ salesforce/client.py — Salesforce API クライアント
 import logging
 import time
 import urllib.parse
+from typing import TypeVar
 
 import requests
 
@@ -43,6 +44,9 @@ DRY_RUN_RECORD_ID = "DRYRUN00000000000A"
 MAX_ATTEMPTS = 3
 RETRY_WAIT_SECONDS = 2
 
+# サブクラスのまま返すための型変数（SiteA.from_credentials(...) は SiteA を返す）
+_SalesforceT = TypeVar("_SalesforceT", bound="Salesforce")
+
 
 class Salesforce:
     """Salesforce の 1 組織に対する API クライアント。
@@ -65,6 +69,9 @@ class Salesforce:
     # API バージョン。組織が対応していない場合はサブクラスで上書きする
     API_VERSION = "60.0"
     TIMEOUT_SECONDS = 60
+
+    # 認証情報のキー名の頭。from_credentials() を使う組織のクラスで指定する
+    CREDENTIAL_PREFIX = ""
 
     def __init__(
         self,
@@ -92,6 +99,46 @@ class Salesforce:
         self._access_token = ""
         self._instance_url = ""
         self._authenticate()
+
+    @classmethod
+    def from_credentials(
+        cls: type[_SalesforceT],
+        domain_url: str,
+        prefix: str = "",
+        org_name: str = "",
+    ) -> _SalesforceT:
+        """DPAPI に保管した client_id / client_secret を読んでインスタンスを作る。
+
+        `python -m comken.credentials import` で取り込んだ
+        「<システム名>_client_id」「<システム名>_client_secret」を使う。
+        呼び出し側のコードに秘密の値が現れないので、通常はこちらを使う。
+
+        使い方:
+            with SiteA.from_credentials(config.SITE_A.DOMAIN_URL) as sf:
+                rows = sf.案件一覧()
+
+        Args:
+            domain_url: 組織の My Domain の URL。
+            prefix: 認証情報のシステム名。省略時はクラスの CREDENTIAL_PREFIX。
+                本番とテストを切り替えるときだけ config.ini から渡す。
+            org_name: 計測ログに出す組織の呼び名。省略時はクラス名を使う。
+
+        Raises:
+            InvalidCredentialNameError: システム名が空、または使えない文字を含む場合。
+            CredentialNotFoundError: client_id / client_secret が未登録の場合。
+            CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
+        """
+        # NOTE: 遅延 import。credentials は pywin32（DPAPI）を使うので、
+        #       認証情報を直接渡す使い方では読み込ませない
+        from ..credentials import Credentials
+
+        cred = Credentials(prefix or cls.CREDENTIAL_PREFIX)
+        return cls(
+            client_id=cred.client_id,
+            client_secret=cred.client_secret,
+            domain_url=domain_url,
+            org_name=org_name,
+        )
 
     def __enter__(self) -> "Salesforce":
         return self

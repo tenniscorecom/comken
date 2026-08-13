@@ -8,7 +8,10 @@ import pytest
 import requests
 
 from comken import dry_run
+from comken.credentials import save_credentials, store
 from comken.exceptions import (
+    CredentialNotFoundError,
+    InvalidCredentialNameError,
     SalesforceAuthError,
     SalesforceConnectionError,
     SalesforceExternalIdMissingError,
@@ -524,6 +527,57 @@ class TestSites:
 
         assert rows == [{"名前": "A社", "金額": "1"}]
         assert session.request.call_args[0][1].endswith(f"/{SiteA.REPORT_案件一覧}")
+
+
+class TestFromCredentials:
+    """DPAPI に入れた client_id / client_secret から組み立てる経路。"""
+
+    def _store(self, tmp_path):
+        path = tmp_path / "credentials.dat"
+        save_credentials({"site_a_client_id": "CID", "site_a_client_secret": "CSECRET"}, path)
+        return path
+
+    def test_uses_the_class_credential_prefix(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(store, "CREDENTIALS_PATH", self._store(tmp_path))
+        session = MagicMock()
+        session.headers = {}
+        with (
+            patch("comken.salesforce.client.requests.Session", return_value=session),
+            patch("comken.salesforce.oauth.requests.post", return_value=_token_response()) as post,
+        ):
+            sf = SiteA.from_credentials(DOMAIN_URL)
+
+        assert isinstance(sf, SiteA), "サブクラスのまま返る"
+        assert post.call_args.kwargs["data"]["client_id"] == "CID"
+        assert post.call_args.kwargs["data"]["client_secret"] == "CSECRET"
+
+    def test_prefix_argument_switches_the_account(self, tmp_path, monkeypatch):
+        """本番とテストの切り替えは、システム名を差し替えるだけで済む。"""
+        path = self._store(tmp_path)
+        save_credentials(
+            {"site_a_test_client_id": "TEST-CID", "site_a_test_client_secret": "TEST-SECRET"}, path
+        )
+        monkeypatch.setattr(store, "CREDENTIALS_PATH", path)
+        session = MagicMock()
+        session.headers = {}
+        with (
+            patch("comken.salesforce.client.requests.Session", return_value=session),
+            patch("comken.salesforce.oauth.requests.post", return_value=_token_response()) as post,
+        ):
+            SiteA.from_credentials(DOMAIN_URL, prefix="site_a_test")
+
+        assert post.call_args.kwargs["data"]["client_id"] == "TEST-CID"
+
+    def test_unset_prefix_raises(self, tmp_path, monkeypatch):
+        """CREDENTIAL_PREFIX を決めていない基底クラスからは作れない。"""
+        monkeypatch.setattr(store, "CREDENTIALS_PATH", self._store(tmp_path))
+        with pytest.raises(InvalidCredentialNameError):
+            Salesforce.from_credentials(DOMAIN_URL)
+
+    def test_missing_credential_raises(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(store, "CREDENTIALS_PATH", tmp_path / "credentials.dat")
+        with pytest.raises(CredentialNotFoundError):
+            SiteA.from_credentials(DOMAIN_URL)
 
 
 class TestApiMetrics:

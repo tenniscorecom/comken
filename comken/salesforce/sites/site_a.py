@@ -14,16 +14,12 @@ class SiteA(Salesforce):
     """SiteA 組織のクライアント。
 
     使い方:
-        with SiteA(
-            client_id=cred.client_id,
-            client_secret=cred.client_secret,
-            domain_url=config.SITE_A.DOMAIN_URL,
-        ) as sf:
+        with SiteA.from_credentials(config.SITE_A.DOMAIN_URL) as sf:
             rows = sf.案件一覧()
     """
 
-    # 認証情報のキー名の頭。DPAPI には site_a_client_id / site_a_client_secret で入れる。
-    # 本番とテストを切り替えるときは、この値を config.ini から渡す形にする
+    # 認証情報のキー名の頭。DPAPI には site_a_client_id / site_a_client_secret で入る。
+    # 本番とテストを切り替えるときは from_credentials(prefix=...) に config.ini から渡す
     CREDENTIAL_PREFIX = "site_a"
 
     # My Domain の URL を書く config.ini のセクション名

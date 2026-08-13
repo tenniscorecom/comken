@@ -6,18 +6,19 @@
 
     from comken.salesforce.sites import SiteA
 
-    with SiteA(
-        client_id=..., client_secret=..., domain_url=config.SITE_A.DOMAIN_URL
-    ) as sf:
-        rows = sf.未処理の申請()
+    with SiteA.from_credentials(config.SITE_A.DOMAIN_URL) as sf:
+        rows = sf.案件一覧()
+
+client_id / client_secret は DPAPI から読む（`comken.credentials`）ので、
+コードにも config.ini にも秘密の値は現れない。
 
 3組織をまとめて回すときは SITES を使う:
 
     from comken.salesforce.sites import SITES
 
     for site_class in SITES:
-        secrets = 認証情報(site_class.CREDENTIAL_PREFIX)
-        with site_class(**secrets, domain_url=ドメイン(site_class)) as sf:
+        domain_url = getattr(config, site_class.CONFIG_SECTION).DOMAIN_URL
+        with site_class.from_credentials(domain_url) as sf:
             ...
 
 > [!warning] サイト名は仮名

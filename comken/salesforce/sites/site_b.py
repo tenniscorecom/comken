@@ -11,11 +11,7 @@ class SiteB(Salesforce):
     """SiteB 組織のクライアント。
 
     使い方:
-        with SiteB(
-            client_id=cred.client_id,
-            client_secret=cred.client_secret,
-            domain_url=config.SITE_B.DOMAIN_URL,
-        ) as sf:
+        with SiteB.from_credentials(config.SITE_B.DOMAIN_URL) as sf:
             rows = sf.案件一覧()
     """
 

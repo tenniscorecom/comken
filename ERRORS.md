@@ -80,6 +80,11 @@
 | `SalesforceReportTruncatedError` | レポートが上限の 2000 行で切れた（**全件ではない**） | 期間を狭めて何回かに分けて実行する。1回で全部必要なら管理者へ連絡する |
 | `SalesforceReportFormatError` | レポートの形式が対応していない | レポートを明細形式にするか、管理者へ連絡する |
 | `SalesforceReportExecutionError` | Salesforce 側でレポート実行に失敗した | Salesforce で同じレポートを直接実行し、表示された内容を管理者へ連絡する |
+| `CredentialNotFoundError` | 認証情報（パスワード・client_secret など）が登録されていない | 表示された登録済みキー名と見比べる。無ければ `python -m comken.credentials import 認証情報.json` で取り込む |
+| `CredentialDecryptionError` | 認証情報を復号できない | 登録したときと**同じ Windows アカウント・同じ PC** で実行しているか確認する。タスクスケジューラの実行ユーザー違いが最も多い |
+| `CredentialStoreCorruptedError` | 認証情報の中身が壊れている | 実行アカウントの問題ではない。表示されたファイルを削除して、もう一度取り込み直す |
+| `InvalidCredentialNameError` | 認証情報のキー名に使えない文字がある | 半角英数字とアンダースコアだけにする（漢字・スペース・記号は使えない） |
+| `CredentialImportError` | 取り込む JSON が壊れている・形式が違う | 表示された形式のとおりに書き直す。値は必ず `" "` で囲む |
 | `ConfigFileNotFoundError` | config.ini が見つからない | config.ini.example をコピーして config.ini を作る |
 | `ConfigCreatedFromExampleError` | config.ini が無かったので example から作った | 作られた config.ini の値を書き換えて、もう一度実行する |
 | `ConfigLowerCaseNameError` | config.ini のセクション名・キー名に小文字がある | 表示された名前を大文字に書き換える（`[files]` → `[FILES]`） |
@@ -103,6 +108,7 @@
 | `ConfigError` | config.ini に関するエラー |
 | `RpaError` | 社内 RPA 基盤の呼び出しに関するエラー |
 | `SalesforceError` | Salesforce に関するエラー |
+| `CredentialError` | 認証情報の保存・取得に関するエラー |
 | `BrowserError` | ブラウザ操作に関するエラー |
 
 ---

@@ -53,6 +53,7 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 | Windows（pywin32） | Excel COM 操作・ウィンドウ操作・レジストリ読み取り |
 | Browser（Edge） | Edge ブラウザ操作 |
 | Salesforce（requests） | Salesforce の SOQL・レコード操作・レポート取得・API 使用量の計測 |
+| credentials（DPAPI） | パスワード・client_secret の暗号化保存（Windows ユーザーに紐付く） |
 | utils.files | ファイル検索・操作・圧縮・標準フォルダ取得・ファイル名の組み立て |
 | utils | データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時取得 |
 
@@ -1211,18 +1212,19 @@ rows = sf.query("SELECT Name, Amount FROM Opportunity WHERE CreatedDate > 2026-0
 ```python
 from comken.salesforce.sites import SITES, SiteA
 
-with SiteA(
-    client_id=cred.client_id,
-    client_secret=cred.client_secret,
-    domain_url=config.SITE_A.DOMAIN_URL,
-) as sf:
+with SiteA.from_credentials(config.SITE_A.DOMAIN_URL) as sf:
     rows = sf.案件一覧()
 
 # 3組織をまとめて回す
 for site_class in SITES:
-    with site_class(**認証情報(site_class.CREDENTIAL_PREFIX), domain_url=...) as sf:
+    domain_url = getattr(config, site_class.CONFIG_SECTION).DOMAIN_URL
+    with site_class.from_credentials(domain_url) as sf:
         rows = sf.案件一覧()
 ```
+
+`from_credentials()` は `CREDENTIAL_PREFIX` を頭に付けたキー名で、DPAPI に保管した
+client_id / client_secret を読む（後述の [credentials](#credentials)）。
+コードにも config.ini にも秘密の値が現れない。
 
 各クラスには `CREDENTIAL_PREFIX`（認証情報のキー名の頭）・`CONFIG_SECTION`
 （My Domain を書く config.ini のセクション名）・`REPORT_*`（その組織のレポート ID）を持たせる。
@@ -1236,6 +1238,74 @@ for site_class in SITES:
 書き込み系（`insert` / `update` / `upsert` / `delete`）は `dry_run` を尊重する。
 使い方の一覧は [docs/機能カタログ.md](docs/機能カタログ.md)、
 設計の背景は [docs/Salesforce設計メモ.md](docs/Salesforce設計メモ.md) を参照。
+
+---
+
+## credentials
+
+client_secret・パスワード・トークンは config.ini に平文で書けない。
+Windows 標準の **DPAPI** で暗号化して保管し、コードからはキー名で引く。
+暗号鍵の管理は不要で、Windows がログオン中のアカウントに紐付けて暗号化・復号する。
+
+### 取り込み（初回だけ）
+
+平文の JSON を一時的に置いて、1回だけコマンドを実行する。
+
+```json
+{
+  "site_a": {"client_id": "...", "client_secret": "..."},
+  "site_b": {"client_id": "...", "client_secret": "..."}
+}
+```
+
+```
+python -m comken.credentials import 認証情報.json    取り込む
+python -m comken.credentials list                     登録済みのキー名を表示する
+python -m comken.credentials delete site_a_client_id  1件削除する
+```
+
+`{"site_a": {"client_id": ...}}` は `site_a_client_id` というキー名に展開されて
+`%USERPROFILE%\.comken\credentials.dat` に保存される。JSON に無いキーはそのまま残るので、
+組織ごとに JSON を分けて何回かに分けて取り込める。
+
+取り込んだら**平文の JSON は消す**。`--delete-source` を付けると成功時に自動で消えるが、
+既定では消さない。実行アカウントで読めることを `list` で確かめてから消すのが安全なため。
+
+### 使う側
+
+```python
+from comken.credentials import Credentials
+
+cred = Credentials("site_a")
+cred.client_id      # → site_a_client_id の値
+cred.client_secret  # → site_a_client_secret の値
+```
+
+システム名を config.ini から渡せば、本番とテストの切り替えが config.ini の1行で済む
+（コード側にキー名の直書きが残らない）。
+
+```python
+# [CREDENTIALS]
+# SITE_A = site_a          ← site_a_test にすると全項目が切り替わる
+cred = Credentials(config.CREDENTIALS.SITE_A)
+```
+
+### 登録したユーザー・PC でしか復号できない
+
+DPAPI は **Windows アカウント × PC** に紐付く。ファイルを他人にコピーされても中身は
+読めない代わりに、**自分でも別アカウント・別 PC では読めない**（`CredentialDecryptionError`）。
+
+**タスクスケジューラの実行ユーザーが登録時と違う**のが最も多い事故。
+バッチを動かす運用アカウントで取り込むこと。
+
+守っているのは**中身が読まれないこと**だけで、ファイルを消される・差し替えられることは
+防いでいない（`CredentialStoreCorruptedError` になり、取り込み直しで復旧する）。
+また、読んで足して書き戻す作りなので**同時に2つのプロセスから書かない**こと。
+取り込みは人が1回だけ実行する前提。
+
+複数台へ配る必要が出てきたら公開鍵ハイブリッド方式を足す余地がある
+（準備は [docs/Salesforce_JWTと鍵配布.md](docs/Salesforce_JWTと鍵配布.md)）。
+まずローカル保管で動かし、配布が現実の問題になってから入れる。
 
 ---
 
@@ -1253,6 +1323,10 @@ graph LR
     comken --> csv["csv\nCSV"]
     comken --> windows["windows\nCOM / Window"]
     comken --> browser["browser\nブラウザ"]
+    comken --> salesforce["salesforce\nSalesforce API"]
+    salesforce --> sites["salesforce.sites\n組織ごとのクラス"]
+    comken --> credentials["credentials\n認証情報（DPAPI）"]
+    salesforce --> credentials
 ```
 
 ---
@@ -1304,6 +1378,7 @@ flowchart LR
 | 2026-07-13 | ExcelComHandler: 上書き保存 save() 追加、save_as のパスワードが効かない問題を修正（FileFormat を常に明示。形式変換は file_format 引数）、close() でプロセスが残る問題を修正、AskToUpdateLinks=False 追加。CONVENTIONS に「モジュール内の並び順」を追加し全体を整理。docs/（機能カタログ・コードリーディングガイド・設計メモ）を追加 |
 | 2026-07-14 | 監査指摘の修正一式（keep_vba・run_macro 保存・DispatchEx・EdgeDriver/SF のリソース解放・config 型変換・CSV/ログの堅牢化・unzip の 3.10 対応/Zip Slip 対策）。コーディング規約を3層（共通/本体/利用側）に分割。配布方式を廃止し共有サーバー直接参照（PYTHONPATH）に変更、同期用 bat（templates/）を削除 |
 | 2026-07-15 | `from comken import config` に一本化（src/config.py 不要）。Pylance 補完用 typings スタブを自動生成。当時のログ初期化で comken バージョンを出力。バイトコードキャッシュをローカルに自動退避。examples テスト・README コード構文チェック・CI（GitHub Actions）を追加。新規プロジェクトのひな形 templates/新規プロジェクト/ を追加 |
+| 2026-08-13 | **v0.5.0** — 認証情報の暗号化保存を追加（`comken.credentials`）。client_secret・パスワードを Windows DPAPI で暗号化し、`%USERPROFILE%\.comken\credentials.dat` に保管する。登録は対話式ではなく**平文 JSON の取り込み**（`python -m comken.credentials import`）にして、配布時に手入力を挟まない。JSON はシステム名ごとに項目をまとめる形式で、`site_a_client_id` のようなキー名に展開される。書き込みはまとめて1回で、1件でも不正なら1件も保存しない。復号できない場合（登録時と違う Windows アカウント・PC）は原因の確認順を示す `CredentialDecryptionError` にする。`Salesforce.from_credentials()` を追加し、サイトクラスの `CREDENTIAL_PREFIX` から client_id / client_secret を読めるようにした。例外を `CredentialError` 配下に新設 |
 | 2026-08-12 | **v0.4.0** — Salesforce 連携を追加（`comken.salesforce`）。認証は OAuth 2.0 クライアントクレデンシャルフローで、リフレッシュトークンを保管しない。1インスタンス=1組織で、組織固有の処理は継承して足す。認証・レポート・計測は継承ではなく合成（JWT フローへ差し替えられるようにするため）。アクセストークンの期限は測らず 401 で1回だけ取り直す。5xx と 429 は待ち時間を伸ばしながら最大3回やり直し、4xx は即エラーにする。レポートは**同期・非同期とも 2000 行が上限**なので、切り捨てを検知したら既定で例外にする（`allow_truncated=True` で警告に落とせる）。API 呼び出しは1か所を通るので、呼び出し元別の回数・リトライ理由・所要時間・`Sforce-Limit-Info` 由来の組織 API 消費量をまとめて記録し、ログと CSV に出せる。例外を `SalesforceError` 配下に新設。依存に requests を追加。docs/Salesforce設計メモ.md・docs/Salesforce_JWTと鍵配布.md を追加 |
 | 2026-08-03 | browser を作り直し（**破壊的変更**）。`EdgeDriver` / `BasePage` を廃止し、入口を `Browsers` に一本化（1サイト1ブラウザ・`with` 必須・サイトが1つでも複数でも同じ書き方）。`start` / `wait` で待ち時間に別サイトを進められるようにし、`parallel` はその短縮形に。`Page` を `Locator` 版へ一本化して `click_id` 等の直積メソッドを削除、`elements` を追加。msedgedriver のバージョン不一致を配布フォルダから自動修復。`PROFILE_ROOT` でログイン状態を永続化。ブラウザ例外を `BrowserError` 配下に新設。`py.typed` 追加（補完・型チェック改善）。docs/ブラウザ操作.md・docs/Outlook操作.md を追加 |
 

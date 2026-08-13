@@ -34,6 +34,12 @@ ComkenError
 │   └── CsvCellReferenceError
 ├── RpaError
 │   └── RpaLibraryNotFoundError
+├── CredentialError
+│   ├── InvalidCredentialNameError
+│   ├── CredentialNotFoundError
+│   ├── CredentialDecryptionError
+│   ├── CredentialStoreCorruptedError
+│   └── CredentialImportError
 ├── SalesforceError
 │   ├── SalesforceAuthError
 │   ├── SalesforceConnectionError
@@ -104,6 +110,14 @@ from .config import (
     ConfigFileNotFoundError,
     ConfigLowerCaseNameError,
     ConfigSectionNotFoundError,
+)
+from .credential import (
+    CredentialDecryptionError,
+    CredentialError,
+    CredentialImportError,
+    CredentialNotFoundError,
+    CredentialStoreCorruptedError,
+    InvalidCredentialNameError,
 )
 from .csv import (
     CsvCellReferenceError,
@@ -197,6 +211,12 @@ __all__ = [
     "OutlookAttachmentNotFoundError",
     "RpaError",
     "RpaLibraryNotFoundError",
+    "CredentialError",
+    "InvalidCredentialNameError",
+    "CredentialNotFoundError",
+    "CredentialDecryptionError",
+    "CredentialStoreCorruptedError",
+    "CredentialImportError",
     "SalesforceError",
     "SalesforceAuthError",
     "SalesforceConnectionError",
