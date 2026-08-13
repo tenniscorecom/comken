@@ -118,16 +118,29 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:
     f.delete_sheet("元データ")
     f.save()
 
-# キー突合で転記（XLOOKUP 的転記。CSV → Excel の更新などに使う）
+# config.ini の列名マッピングで転記（XLOOKUP 的転記。CSV → Excel の更新など）
+# config.ini の [受注_MAPPING] は「取引先 = 顧客名」「金額 = 請求額」と書く
+from comken import Config
+from comken.csv import CsvReader
+
+config = Config()
 lookup = CsvReader("data.csv").index("注文番号")
-MAPPING = {"B": "顧客名", "C": "金額"}  # Excel の列レター → lookup の列名
+mapping = config.mapping("受注_MAPPING")
 
 with ExcelWriter("data.xlsx") as f:
-    s = f.sheet(SHEET)
-    s.write_cell(row=2, col="AA", value="備考")  # Excel の列記号をそのまま指定
-    matched = s.transfer_by_key(key_col="A", lookup=lookup, column_mapping=MAPPING)
+    matched = f.sheet(SHEET).transfer_by_mapping(
+        key_col="受注番号", lookup=lookup, mapping=mapping
+    )
     f.save()  # 書き込み後は save() を忘れずに
-# Excel を起動しないため数万行でも速い
+
+# ヘッダーがない、または列位置が固定された Excel は列記号版を使う
+# この対応表だけは「転記先の列記号 → 転記元の列名」の向き
+column_mapping = {"B": "顧客名", "C": "金額"}
+with ExcelWriter("data.xlsx") as f:
+    matched = f.sheet(SHEET).transfer_by_key(
+        key_col="A", lookup=lookup, column_mapping=column_mapping
+    )
+    f.save()
 
 # 背景色の設定（よく使う色は Color 定数で指定できる）
 from comken.constants import Color
@@ -193,7 +206,7 @@ with ExcelComHandler("data.xlsm") as f:
 | 大量行を読む | `iter_rows()` で1行ずつ処理する（全行をメモリに乗せない） |
 | NAS 上の大きいファイル | `local_copy_threshold_mb` の自動ローカルコピーに任せる（デフォルト10MB） |
 | 大量行への書き込み | 1セルずつ書かず、行は `Sheet.write_rows()`、見出し＋データは `Sheet.write_table()` でまとめて書く |
-| キー突合転記が大量行 | `transfer_by_key()` を使う。COM 版も Range 単位で一括転記するが、通常は高速な openpyxl 版を優先する |
+| キー突合転記が大量行 | ヘッダーがある帳票は `transfer_by_mapping()`、列位置が固定なら `transfer_by_key()` を使う。通常は高速な openpyxl 版を優先する |
 
 ---
 

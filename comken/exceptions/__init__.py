@@ -64,7 +64,10 @@ ComkenError
 ├── ColumnNotFoundError
 │   ├── ExcelColumnNotFoundError
 │   ├── CsvColumnNotFoundError
-│   └── KeyColumnNotFoundError
+│   ├── KeyColumnNotFoundError
+│   ├── TransferKeyColumnNotFoundError
+│   ├── TransferDestinationColumnNotFoundError
+│   └── TransferSourceColumnNotFoundError
 ├── ConfigError
     ├── ConfigFileNotFoundError
     ├── ConfigCreatedFromExampleError
@@ -107,6 +110,9 @@ from .column import (
     ExcelColumnNotFoundError,
     InvalidColumnError,
     KeyColumnNotFoundError,
+    TransferDestinationColumnNotFoundError,
+    TransferKeyColumnNotFoundError,
+    TransferSourceColumnNotFoundError,
 )
 from .config import (
     ConfigCreatedFromExampleError,
@@ -208,6 +214,9 @@ __all__ = [
     "ExcelColumnNotFoundError",
     "CsvColumnNotFoundError",
     "KeyColumnNotFoundError",
+    "TransferKeyColumnNotFoundError",
+    "TransferDestinationColumnNotFoundError",
+    "TransferSourceColumnNotFoundError",
     "InvalidColumnError",
     "ConfigError",
     "ConfigFileNotFoundError",

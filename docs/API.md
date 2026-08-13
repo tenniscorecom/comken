@@ -1917,7 +1917,39 @@ def transfer_by_key(self, key_col: int | str, lookup: dict[str, dict], column_ma
 
 ##### 説明
 
-キー列の値で lookup を引き、一致した行へ値を転記する。
+列番号・列記号で転記先を指定し、キーが一致した行へ値を転記する。
+
+ヘッダーがない、または列位置が仕様として固定された Excel に使う。
+列名で指定する場合は transfer_by_mapping() を使う。
+
+column_mapping の向きは ``{転記先の列記号: 転記元の列名}`` であり、
+transfer_by_mapping() や config.ini の MAPPING セクションとは逆になる。
+取り違えると意図しない列へ転記してもエラーにならないため注意する。
+
+#### `transfer_by_mapping`
+
+```text
+@measure
+def transfer_by_mapping(self, key_col: str, lookup: dict[str, dict], mapping: dict[str, str], header_row: int=1) -> int:
+```
+
+##### 説明
+
+列名で転記先を指定し、キーが一致した行へ値を転記する。
+
+config.mapping("..._MAPPING") の戻り値を変換せずに渡せる。
+mapping の向きは ``{転記元の列名: 転記先の列名}`` で、左が元、右が先。
+transfer_by_key() の column_mapping とは逆である。取り違えると逆方向に
+転記されても気づけないため、config.ini の向きのまま渡すこと。
+
+ヘッダーがなく、列位置で指定する Excel には transfer_by_key() を使う。
+転記を始める前にキー列・転記先列・転記元列をすべて検証する。
+
+Args:
+    key_col: 転記先 Excel で照合に使う列名。
+    lookup: キーから転記元の行データを引く辞書。
+    mapping: 転記元の列名から転記先の列名への対応表。
+    header_row: 転記先 Excel のヘッダー行番号（1始まり）。
 
 #### `add_table`
 
@@ -2676,6 +2708,69 @@ class KeyColumnNotFoundError(ColumnNotFoundError):
 
 ```text
 def __init__(self, key: str, existing: list[str]) -> None:
+```
+
+### `TransferKeyColumnNotFoundError`
+
+```text
+class TransferKeyColumnNotFoundError(ColumnNotFoundError):
+```
+
+#### 説明
+
+列名転記で、Excel のキー列が見つからない
+
+発生箇所: Sheet.transfer_by_mapping()
+
+対処:
+    Excel のヘッダー行と key_col の列名を確認する
+
+#### `__init__`
+
+```text
+def __init__(self, column: str, existing: list[str]) -> None:
+```
+
+### `TransferDestinationColumnNotFoundError`
+
+```text
+class TransferDestinationColumnNotFoundError(ColumnNotFoundError):
+```
+
+#### 説明
+
+列名転記で、Excel の転記先列が見つからない
+
+発生箇所: Sheet.transfer_by_mapping()
+
+対処:
+    Excel のヘッダー行と config.ini のマッピング右側を確認する
+
+#### `__init__`
+
+```text
+def __init__(self, columns: list[str], existing: list[str]) -> None:
+```
+
+### `TransferSourceColumnNotFoundError`
+
+```text
+class TransferSourceColumnNotFoundError(ColumnNotFoundError):
+```
+
+#### 説明
+
+列名転記で、lookup の転記元列が見つからない
+
+発生箇所: Sheet.transfer_by_mapping()
+
+対処:
+    転記元データと config.ini のマッピング左側を確認する
+
+#### `__init__`
+
+```text
+def __init__(self, columns: list[str], existing: list[str]) -> None:
 ```
 
 ### `InvalidColumnError`

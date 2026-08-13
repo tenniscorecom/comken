@@ -13,6 +13,7 @@ import pytest
 from openpyxl import Workbook, load_workbook
 
 import comken.excel
+from comken.config import Config
 from comken.excel import ExcelReader, ExcelWriter
 from comken.exceptions import (
     ComkenError,
@@ -23,6 +24,9 @@ from comken.exceptions import (
     SheetNotFoundError,
     TableAlreadyExistsError,
     TableNotFoundError,
+    TransferDestinationColumnNotFoundError,
+    TransferKeyColumnNotFoundError,
+    TransferSourceColumnNotFoundError,
     UnsupportedFileSuffixError,
 )
 from comken.utils.data import col_to_num
@@ -616,6 +620,112 @@ class TestTransferByKey:
         """存在しないシートを指定すると SheetNotFoundError になることを確認する。"""
         with ExcelWriter(transfer_excel) as f, pytest.raises(SheetNotFoundError):
             f.sheet("存在しない").transfer_by_key(key_col="A", lookup={}, column_mapping={})
+
+
+class TestTransferByMapping:
+    """Sheet.transfer_by_mapping（列名で指定するキー突合転記）のテスト。"""
+
+    @pytest.fixture
+    def transfer_excel(self, tmp_path):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "T_data"
+        ws.append(["受注番号", "顧客名", "請求額"])
+        ws.append(["A001", None, None])
+        ws.append(["A002", None, None])
+        ws.append(["Z999", None, None])
+        path = tmp_path / "transfer_by_mapping.xlsx"
+        wb.save(path)
+        return path
+
+    def test_transfers_config_mapping_in_source_to_destination_direction(
+        self, transfer_excel, tmp_path
+    ):
+        lookup = {
+            "A001": {"取引先": "株式会社A", "金額": 1000},
+            "A002": {"取引先": "株式会社B", "金額": 2000},
+        }
+        ini = tmp_path / "config.ini"
+        ini.write_text("[受注_MAPPING]\n取引先 = 顧客名\n金額 = 請求額\n", encoding="utf-8")
+        config_mapping = Config(ini).mapping("受注_MAPPING")
+
+        with ExcelWriter(transfer_excel) as f:
+            matched = f.sheet("T_data").transfer_by_mapping(
+                key_col="受注番号", lookup=lookup, mapping=config_mapping
+            )
+            f.save()
+
+        assert matched == 2
+        wb = load_workbook(transfer_excel)
+        ws = wb["T_data"]
+        assert ws["B2"].value == "株式会社A"
+        assert ws["C3"].value == 2000
+        assert ws["B4"].value is None
+        wb.close()
+
+    def test_missing_destination_raises_before_any_cell_or_file_is_changed(self, transfer_excel):
+        lookup = {"A001": {"取引先": "株式会社A", "金額": 1000}}
+
+        with ExcelWriter(transfer_excel) as f:
+            sheet = f.sheet("T_data")
+            with pytest.raises(TransferDestinationColumnNotFoundError) as error:
+                sheet.transfer_by_mapping(
+                    key_col="受注番号",
+                    lookup=lookup,
+                    mapping={"取引先": "顧客名", "金額": "存在しない列"},
+                )
+            assert sheet.ws["B2"].value is None
+
+        wb = load_workbook(transfer_excel)
+        assert wb["T_data"]["B2"].value is None
+        wb.close()
+        assert str(error.value) == (
+            "転記先の列がExcelに見つかりません: 存在しない列\n"
+            "転記先に存在する列: 受注番号, 顧客名, 請求額\n"
+            "Excelのヘッダー行と config.ini のマッピング右側を確認してください。"
+        )
+
+    def test_missing_source_raises_before_transfer(self, transfer_excel):
+        lookup = {"A001": {"取引先": "株式会社A"}}
+
+        with ExcelWriter(transfer_excel) as f, pytest.raises(TransferSourceColumnNotFoundError):
+            f.sheet("T_data").transfer_by_mapping(
+                key_col="受注番号",
+                lookup=lookup,
+                mapping={"取引先": "顧客名", "金額": "請求額"},
+            )
+
+    def test_missing_key_column_raises(self, transfer_excel):
+        with ExcelWriter(transfer_excel) as f, pytest.raises(TransferKeyColumnNotFoundError):
+            f.sheet("T_data").transfer_by_mapping(
+                key_col="存在しないキー",
+                lookup={"A001": {"取引先": "株式会社A"}},
+                mapping={"取引先": "顧客名"},
+            )
+
+    def test_uses_header_row_other_than_first(self, tmp_path):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "T_data"
+        ws.append(["帳票タイトル"])
+        ws.append(["受注番号", "顧客名"])
+        ws.append(["A001", None])
+        path = tmp_path / "header_row_2.xlsx"
+        wb.save(path)
+
+        with ExcelWriter(path) as f:
+            matched = f.sheet("T_data").transfer_by_mapping(
+                key_col="受注番号",
+                lookup={"A001": {"取引先": "株式会社A"}},
+                mapping={"取引先": "顧客名"},
+                header_row=2,
+            )
+            f.save()
+
+        assert matched == 1
+        wb = load_workbook(path)
+        assert wb["T_data"]["B3"].value == "株式会社A"
+        wb.close()
 
 
 class TestSheetWrapper:

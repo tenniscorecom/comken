@@ -19,6 +19,9 @@ from ..exceptions import (
     InvalidTableNameError,
     TableAlreadyExistsError,
     TableNotFoundError,
+    TransferDestinationColumnNotFoundError,
+    TransferKeyColumnNotFoundError,
+    TransferSourceColumnNotFoundError,
     _warn_coerce,
 )
 from ..utils.data import col_to_num, column_number
@@ -111,7 +114,15 @@ class Sheet:
         column_mapping: dict[str, str],
         start_row: int = 2,
     ) -> int:
-        """キー列の値で lookup を引き、一致した行へ値を転記する。"""
+        """列番号・列記号で転記先を指定し、キーが一致した行へ値を転記する。
+
+        ヘッダーがない、または列位置が仕様として固定された Excel に使う。
+        列名で指定する場合は transfer_by_mapping() を使う。
+
+        column_mapping の向きは ``{転記先の列記号: 転記元の列名}`` であり、
+        transfer_by_mapping() や config.ini の MAPPING セクションとは逆になる。
+        取り違えると意図しない列へ転記してもエラーにならないため注意する。
+        """
         key_col_num = column_number(key_col)
         mapping = {col_to_num(letter): name for letter, name in column_mapping.items()}
         logger.info("シート「%s」: 最終行 %d行", self.ws.title, self.ws.max_row)
@@ -128,6 +139,77 @@ class Sheet:
                 continue
             for col_num, name in mapping.items():
                 self.ws.cell(row=row, column=col_num).value = lookup_row.get(name, "")
+            matched += 1
+        logger.info("転記完了: %d件一致（シート: %s）", matched, self.ws.title)
+        return matched
+
+    @measure
+    def transfer_by_mapping(
+        self,
+        key_col: str,
+        lookup: dict[str, dict],
+        mapping: dict[str, str],
+        header_row: int = 1,
+    ) -> int:
+        """列名で転記先を指定し、キーが一致した行へ値を転記する。
+
+        config.mapping("..._MAPPING") の戻り値を変換せずに渡せる。
+        mapping の向きは ``{転記元の列名: 転記先の列名}`` で、左が元、右が先。
+        transfer_by_key() の column_mapping とは逆である。取り違えると逆方向に
+        転記されても気づけないため、config.ini の向きのまま渡すこと。
+
+        ヘッダーがなく、列位置で指定する Excel には transfer_by_key() を使う。
+        転記を始める前にキー列・転記先列・転記元列をすべて検証する。
+
+        Args:
+            key_col: 転記先 Excel で照合に使う列名。
+            lookup: キーから転記元の行データを引く辞書。
+            mapping: 転記元の列名から転記先の列名への対応表。
+            header_row: 転記先 Excel のヘッダー行番号（1始まり）。
+        """
+        headers = [
+            self.ws.cell(row=int(header_row), column=column).value
+            for column in range(1, self.ws.max_column + 1)
+        ]
+        header_names = [str(header) for header in headers if header is not None]
+        header_columns = {
+            str(header): column
+            for column, header in enumerate(headers, start=1)
+            if header is not None
+        }
+
+        if key_col not in header_columns:
+            raise TransferKeyColumnNotFoundError(key_col, header_names)
+
+        missing_destinations = [name for name in mapping.values() if name not in header_columns]
+        if missing_destinations:
+            raise TransferDestinationColumnNotFoundError(missing_destinations, header_names)
+
+        lookup_rows = list(lookup.values())
+        source_columns = set(lookup_rows[0]) if lookup_rows else set()
+        for lookup_row in lookup_rows[1:]:
+            source_columns.intersection_update(lookup_row)
+        missing_sources = [name for name in mapping if name not in source_columns]
+        if missing_sources:
+            raise TransferSourceColumnNotFoundError(missing_sources, sorted(source_columns))
+
+        destination_columns = {
+            source: header_columns[destination] for source, destination in mapping.items()
+        }
+        logger.info("シート「%s」: 最終行 %d行", self.ws.title, self.ws.max_row)
+        matched = 0
+        for row in range(int(header_row) + 1, self.ws.max_row + 1):
+            key_value = self.ws.cell(row=row, column=header_columns[key_col]).value
+            if key_value is None or str(key_value).strip() == "":
+                continue
+            if isinstance(key_value, float) and key_value.is_integer():
+                key_value = int(key_value)
+            lookup_row = lookup.get(str(key_value).strip())
+            if lookup_row is None:
+                logger.debug("%d行目: キー「%s」が lookup に存在しません", row, key_value)
+                continue
+            for source, destination_column in destination_columns.items():
+                self.ws.cell(row=row, column=destination_column).value = lookup_row[source]
             matched += 1
         logger.info("転記完了: %d件一致（シート: %s）", matched, self.ws.title)
         return matched

@@ -83,6 +83,57 @@ class KeyColumnNotFoundError(ColumnNotFoundError):
         super().__init__(f"キー列が見つかりません: {key}\n存在する列: {', '.join(existing)}")
 
 
+class TransferKeyColumnNotFoundError(ColumnNotFoundError):
+    """列名転記で、Excel のキー列が見つからない
+
+    発生箇所: Sheet.transfer_by_mapping()
+
+    対処:
+        Excel のヘッダー行と key_col の列名を確認する
+    """
+
+    def __init__(self, column: str, existing: list[str]) -> None:
+        super().__init__(
+            f"転記に使うキー列が転記先のExcelに見つかりません: {column}\n"
+            f"転記先に存在する列: {', '.join(existing)}\n"
+            "Excelのヘッダー行と key_col の列名を確認してください。"
+        )
+
+
+class TransferDestinationColumnNotFoundError(ColumnNotFoundError):
+    """列名転記で、Excel の転記先列が見つからない
+
+    発生箇所: Sheet.transfer_by_mapping()
+
+    対処:
+        Excel のヘッダー行と config.ini のマッピング右側を確認する
+    """
+
+    def __init__(self, columns: list[str], existing: list[str]) -> None:
+        super().__init__(
+            f"転記先の列がExcelに見つかりません: {', '.join(columns)}\n"
+            f"転記先に存在する列: {', '.join(existing)}\n"
+            "Excelのヘッダー行と config.ini のマッピング右側を確認してください。"
+        )
+
+
+class TransferSourceColumnNotFoundError(ColumnNotFoundError):
+    """列名転記で、lookup の転記元列が見つからない
+
+    発生箇所: Sheet.transfer_by_mapping()
+
+    対処:
+        転記元データと config.ini のマッピング左側を確認する
+    """
+
+    def __init__(self, columns: list[str], existing: list[str]) -> None:
+        super().__init__(
+            f"転記元の列がlookupに見つかりません: {', '.join(columns)}\n"
+            f"転記元に存在する列: {', '.join(existing)}\n"
+            "CSVなどの転記元データと config.ini のマッピング左側を確認してください。"
+        )
+
+
 class InvalidColumnError(ComkenError):
     """列の指定が正しくない（打ち間違いなど）
 
