@@ -48,6 +48,12 @@ from .exceptions import (
 logger = logging.getLogger(__name__)
 
 _is_version_logged = False
+MAPPING_SECTION_SUFFIX = "MAPPING"
+
+
+def _is_mapping_section(section: str) -> bool:
+    """列名の対応表として扱うセクションかを返す。"""
+    return section.endswith(MAPPING_SECTION_SUFFIX)
 
 
 def _create_from_example(path: Path) -> Path | None:
@@ -75,6 +81,7 @@ def _validate_upper_case(cfg: configparser.ConfigParser, path: Path) -> None:
     wrong += [
         f"[{s}] の {k} → {k.upper()}"
         for s in cfg.sections()
+        if not _is_mapping_section(s)
         for k in cfg.options(s)
         if k != k.upper()
     ]
@@ -129,7 +136,13 @@ class Config:
 
         _validate_upper_case(cfg, Path(path))
 
+        self._mappings: dict[str, dict[str, str]] = {}
         for section in cfg.sections():
+            if _is_mapping_section(section):
+                self._mappings[section] = {
+                    key: cfg.get(section, key).strip() for key in cfg.options(section)
+                }
+                continue
             ns = types.SimpleNamespace(
                 **{k.upper(): _parse_value(cfg, section, k) for k in cfg.options(section)}
             )
@@ -142,6 +155,23 @@ class Config:
 
         update_stub(cfg, path)
         _log_version_once()
+
+    def mapping(self, section: str) -> dict[str, str]:
+        """マッピングセクションを列名が書かれたままの辞書で返す。
+
+        Args:
+            section: `MAPPING` で終わるセクション名。
+
+        Returns:
+            転記元の列名をキー、転記先の列名を値とする辞書。
+
+        Raises:
+            ConfigSectionNotFoundError: 指定したマッピングセクションがない場合。
+        """
+        try:
+            return self._mappings[section]
+        except KeyError:
+            raise ConfigSectionNotFoundError(section, list(self._mappings)) from None
 
     def __getattr__(self, name: str) -> NoReturn:
         # 通常の属性（設定済みセクション）は __dict__ にあり、ここには来ない。
@@ -176,6 +206,14 @@ def read(path: str | Path = "config.ini") -> Config:
     global _singleton
     _singleton = Config(path)
     return _singleton
+
+
+def mapping(section: str) -> dict[str, str]:
+    """遅延シングルトンからマッピングセクションを辞書で返す。"""
+    global _singleton
+    if _singleton is None:
+        _singleton = Config()
+    return _singleton.mapping(section)
 
 
 def __getattr__(name: str) -> types.SimpleNamespace:

@@ -50,6 +50,25 @@ def __init__(self, path: str | Path='config.ini') -> None:
 Args:
     path: config.ini のパス。省略するとカレントディレクトリの config.ini を読む。
 
+#### `mapping`
+
+```text
+def mapping(self, section: str) -> dict[str, str]:
+```
+
+##### 説明
+
+マッピングセクションを列名が書かれたままの辞書で返す。
+
+Args:
+    section: `MAPPING` で終わるセクション名。
+
+Returns:
+    転記元の列名をキー、転記先の列名を値とする辞書。
+
+Raises:
+    ConfigSectionNotFoundError: 指定したマッピングセクションがない場合。
+
 ### `dry_run`
 
 ```text

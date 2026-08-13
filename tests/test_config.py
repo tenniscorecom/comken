@@ -109,6 +109,66 @@ class TestConfigBasic:
         assert Config(ini).S.URL == "https://example.test/a%20b"
 
 
+class TestConfigMapping:
+    """列名マッピングの読み込み規則を確認する。"""
+
+    def test_preserves_mixed_case_column_names(self, tmp_path):
+        ini = tmp_path / "config.ini"
+        ini.write_text(
+            "[受注_MAPPING]\n受注No = 受注番号\nWeb受注 = Web受付\n"
+            "商品cd = 商品コード\nNo = 管理番号\n",
+            encoding="utf-8",
+        )
+
+        assert Config(ini).mapping("受注_MAPPING") == {
+            "受注No": "受注番号",
+            "Web受注": "Web受付",
+            "商品cd": "商品コード",
+            "No": "管理番号",
+        }
+
+    def test_keeps_numeric_value_as_string(self, tmp_path):
+        ini = tmp_path / "config.ini"
+        ini.write_text("[MAPPING]\n年度 = 2026\n", encoding="utf-8")
+
+        mapping = Config(ini).mapping("MAPPING")
+
+        assert mapping["年度"] == "2026"
+        assert isinstance(mapping["年度"], str)
+
+    def test_preserves_japanese_and_symbol_column_names(self, tmp_path):
+        ini = tmp_path / "config.ini"
+        ini.write_text(
+            "[MAPPING]\n担当者・部署 = 担当部署\n金額(税込) = 税込金額\n№ = 番号\n",
+            encoding="utf-8",
+        )
+
+        assert Config(ini).mapping("MAPPING") == {
+            "担当者・部署": "担当部署",
+            "金額(税込)": "税込金額",
+            "№": "番号",
+        }
+
+    def test_coexists_with_normal_section(self, tmp_path):
+        ini = tmp_path / "config.ini"
+        ini.write_text(
+            "[REPORT]\nYEAR = 2026\n\n[COLUMN_MAPPING]\n受注No = 受注番号\n",
+            encoding="utf-8",
+        )
+        config = Config(ini)
+
+        assert config.REPORT.YEAR == 2026
+        assert config.mapping("COLUMN_MAPPING") == {"受注No": "受注番号"}
+
+    @pytest.mark.parametrize("key", ["受注No", "Web受注", "商品cd", "No"])
+    def test_normal_section_still_rejects_mixed_case_key(self, tmp_path, key):
+        ini = tmp_path / "config.ini"
+        ini.write_text(f"[REPORT]\n{key} = value\n", encoding="utf-8")
+
+        with pytest.raises(ConfigLowerCaseNameError):
+            Config(ini)
+
+
 class TestConfigBoolConversion:
     """bool 変換のテスト。"""
 
@@ -366,6 +426,18 @@ class TestGenerateStub:
         assert "class Config:" in text
         assert "    BROWSER: _BROWSER" in text
         assert "config: Config" in text
+
+    def test_mapping_section_uses_dictionary_api_only(self, tmp_path):
+        """動的な列名は列挙せず、辞書取得 API の型だけをスタブに出す。"""
+        from comken.config_stub import generate_stub
+
+        ini = tmp_path / "config.ini"
+        ini.write_text("[COLUMN_MAPPING]\n受注No = 受注番号\n", encoding="utf-8")
+        text = generate_stub(ini, tmp_path / "config.pyi").read_text(encoding="utf-8")
+
+        assert "受注No" not in text
+        assert "COLUMN_MAPPING" not in text
+        assert "def mapping(self, section: str) -> dict[str, str]" in text
 
     def test_default_output_is_src_config_pyi(self, ini, tmp_path):
         """src/config.py があるプロジェクトでは src/config.pyi に出力されることを確認する。

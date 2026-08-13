@@ -191,6 +191,23 @@ config.REPORT.OUTPUT_FOLDER # → str
 config.REPORT.TEMPLATE_PATH # → str
 ```
 
+**列名の対応表:** セクション名を `MAPPING` で終わらせ、`転記元の列名 = 転記先の列名`
+の向きで書く。列名は大文字に直されず、値も常に文字列として返る。
+
+```ini
+[受注_MAPPING]
+受注No = 受注番号
+商品cd = 商品コード
+年度 = 2026
+```
+
+```python
+mapping = config.mapping("受注_MAPPING")
+# → {"受注No": "受注番号", "商品cd": "商品コード", "年度": "2026"}
+```
+
+半角の `:` と `=` は INI の区切り記号になるため、列名には使えない（全角の `：` `＝` は使用可）。
+
 **値の型変換ルール:**
 
 | config.ini の値 | 返る型 |

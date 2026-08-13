@@ -13,7 +13,7 @@ import configparser
 import os
 from pathlib import Path
 
-from .config import _parse_value
+from .config import _is_mapping_section, _parse_value
 from .exceptions import ConfigFileNotFoundError
 from .utils.files.ops import _cleanup_stale_tmp
 
@@ -133,6 +133,9 @@ def _build_stub_content(cfg: configparser.ConfigParser) -> str:
     section_lines: list[str] = []
     config_attrs: list[str] = []
     for section in cfg.sections():
+        # マッピングのキーは列名という動的データなので、属性としてスタブに列挙しない。
+        if _is_mapping_section(section):
+            continue
         class_name = f"_{section.upper()}"
         config_attrs.append(f"    {section.upper()}: {class_name}")
         section_lines.append(f"class {class_name}:")
@@ -150,6 +153,7 @@ def _build_stub_content(cfg: configparser.ConfigParser) -> str:
     lines.append("class Config:")
     lines.extend(config_attrs or ["    pass"])
     lines.append("    def __init__(self, path: str | Path = ...) -> None: ...")
+    lines.append("    def mapping(self, section: str) -> dict[str, str]: ...")
     lines.append("")
     lines.append("config: Config")
     return "\n".join(lines) + "\n"
@@ -165,6 +169,9 @@ def _build_module_stub_content(cfg: configparser.ConfigParser) -> str:
     section_lines: list[str] = []
     module_attrs: list[str] = []
     for section in cfg.sections():
+        # マッピングは mapping() で辞書として読むため、動的な列名を補完候補にしない。
+        if _is_mapping_section(section):
+            continue
         class_name = f"_{section.upper()}"
         module_attrs.append(f"{section.upper()}: {class_name}")
         section_lines.append(f"class {class_name}:")
@@ -180,9 +187,11 @@ def _build_module_stub_content(cfg: configparser.ConfigParser) -> str:
     lines.extend(section_lines)
     lines.append("class Config:")
     lines.append("    def __init__(self, path: str | Path = ...) -> None: ...")
+    lines.append("    def mapping(self, section: str) -> dict[str, str]: ...")
     lines.append("    def __getattr__(self, name: str) -> NoReturn: ...")
     lines.append("")
     lines.append("def read(path: str | Path = ...) -> Config: ...")
+    lines.append("def mapping(section: str) -> dict[str, str]: ...")
     lines.append("")
     lines.extend(module_attrs)
     return "\n".join(lines) + "\n"
