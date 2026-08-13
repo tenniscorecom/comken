@@ -91,7 +91,7 @@ class Page:
             index: 同じセレクターに複数の要素が一致する場合、何番目か（0始まり）。
                    まずはセレクター側で1つに絞り込み、index は最後の手段にする。
         """
-        with self.session.operating(f"click({locator})"):
+        with self.session._operating(f"click({locator})"):
             if index == 0:
                 condition = EC.element_to_be_clickable(tuple(locator))
                 self._until(condition, locator, "クリックでき").click()
@@ -103,34 +103,34 @@ class Page:
 
     def input(self, locator: Locator, text: str) -> None:
         """入力欄に文字を入れる。もとの値は消える。"""
-        with self.session.operating(f"input({locator})"):
+        with self.session._operating(f"input({locator})"):
             element = self._visible(locator)
             element.clear()
             element.send_keys(text)
 
-    def text(self, locator: Locator) -> str:
+    def read_text(self, locator: Locator) -> str:
         """要素の表示文字を返す。"""
-        with self.session.operating(f"text({locator})"):
+        with self.session._operating(f"read_text({locator})"):
             return self._until(
                 EC.visibility_of_element_located(tuple(locator)), locator, "表示され"
             ).text
 
-    def texts(self, locator: Locator) -> list[str]:
+    def read_texts(self, locator: Locator) -> list[str]:
         """一致する全要素の表示文字をリストで返す（一覧表の全行を読むときなど）。"""
-        with self.session.operating(f"texts({locator})"):
+        with self.session._operating(f"read_texts({locator})"):
             elements = self._until(
                 EC.presence_of_all_elements_located(tuple(locator)), locator, "見つかり"
             )
             return [element.text for element in elements]
 
-    def attribute(self, locator: Locator, name: str) -> str | None:
+    def read_attribute(self, locator: Locator, name: str) -> str | None:
         """要素の属性値を返す（href やチェック状態など）。属性が無ければ None。
 
         Args:
             locator: 対象のセレクター。
             name: 属性名（例: "href", "value", "checked"）。
         """
-        with self.session.operating(f"attribute({locator}, {name})"):
+        with self.session._operating(f"read_attribute({locator}, {name})"):
             element = self._until(
                 EC.presence_of_element_located(tuple(locator)), locator, "見つかり"
             )
@@ -138,29 +138,29 @@ class Page:
 
     def select_text(self, locator: Locator, text: str) -> None:
         """プルダウンを、表示されている文字で選ぶ。"""
-        with self.session.operating(f"select_text({locator})"):
+        with self.session._operating(f"select_text({locator})"):
             Select(self._visible(locator)).select_by_visible_text(text)
 
     def select_value(self, locator: Locator, option_value: str) -> None:
         """プルダウンを、option の value 属性で選ぶ。"""
-        with self.session.operating(f"select_value({locator})"):
+        with self.session._operating(f"select_value({locator})"):
             Select(self._visible(locator)).select_by_value(option_value)
 
     def select_index(self, locator: Locator, index: int) -> None:
         """プルダウンを、上から何番目かで選ぶ（0始まり）。"""
-        with self.session.operating(f"select_index({locator})"):
+        with self.session._operating(f"select_index({locator})"):
             Select(self._visible(locator)).select_by_index(index)
 
     def drag_drop(self, source: Locator, target: Locator) -> None:
         """要素を別の要素までドラッグして落とす。"""
-        with self.session.operating(f"drag_drop({source} → {target})"):
+        with self.session._operating(f"drag_drop({source} → {target})"):
             ActionChains(self.session.raw).drag_and_drop(
                 self._visible(source), self._visible(target)
             ).perform()
 
     def scroll_to(self, locator: Locator) -> None:
         """要素が画面に入るまでスクロールする。"""
-        with self.session.operating(f"scroll_to({locator})"):
+        with self.session._operating(f"scroll_to({locator})"):
             element = self._until(
                 EC.presence_of_element_located(tuple(locator)), locator, "見つかり"
             )
@@ -168,53 +168,53 @@ class Page:
 
     def scroll_bottom(self) -> None:
         """ページの一番下までスクロールする（続きを読み込ませるときなど）。"""
-        with self.session.operating("scroll_bottom"):
+        with self.session._operating("scroll_bottom"):
             self.session.raw.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 
     # ------------------------------------------------------------ 確認・待機
 
-    def has(self, locator: Locator) -> bool:
+    def has_element(self, locator: Locator) -> bool:
         """要素が HTML 上に在るかを返す（待たずにその場で確認する）。
 
         「在れば押す」のような分岐に使う。表示されているかどうかは見ない。
         """
-        with self.session.operating(f"has({locator})"):
+        with self.session._operating(f"has_element({locator})"):
             try:
                 self.session.raw.find_element(*locator)
                 return True
             except NoSuchElementException:
                 return False
 
-    def count(self, locator: Locator) -> int:
+    def count_elements(self, locator: Locator) -> int:
         """一致する要素の数を返す（待たずにその場で数える。無ければ 0）。"""
-        with self.session.operating(f"count({locator})"):
+        with self.session._operating(f"count_elements({locator})"):
             return len(self.session.raw.find_elements(*locator))
 
     def wait_visible(self, locator: Locator) -> None:
         """要素が表示されるまで待つ（画面が開くのを待つときなど）。"""
-        with self.session.operating(f"wait_visible({locator})"):
+        with self.session._operating(f"wait_visible({locator})"):
             self._until(EC.visibility_of_element_located(tuple(locator)), locator, "表示され")
 
     def wait_invisible(self, locator: Locator) -> None:
         """要素が消えるまで待つ（読み込み中の表示が消えるのを待つときなど）。"""
-        with self.session.operating(f"wait_invisible({locator})"):
+        with self.session._operating(f"wait_invisible({locator})"):
             self._until(EC.invisibility_of_element_located(tuple(locator)), locator, "消え")
 
     # ------------------------------------------------------------ 警告ダイアログ
 
     def alert_accept(self) -> None:
         """ブラウザの確認ダイアログで OK を押す。出るまで待つ。"""
-        with self.session.operating("alert_accept"):
+        with self.session._operating("alert_accept"):
             self._until(EC.alert_is_present(), "alert", "現れ").accept()
 
     def alert_dismiss(self) -> None:
         """ブラウザの確認ダイアログでキャンセルを押す。出るまで待つ。"""
-        with self.session.operating("alert_dismiss"):
+        with self.session._operating("alert_dismiss"):
             self._until(EC.alert_is_present(), "alert", "現れ").dismiss()
 
-    def alert_text(self) -> str:
+    def read_alert_text(self) -> str:
         """ブラウザの確認ダイアログの文言を返す。出るまで待つ。"""
-        with self.session.operating("alert_text"):
+        with self.session._operating("read_alert_text"):
             return self._until(EC.alert_is_present(), "alert", "現れ").text
 
     # ------------------------------------------------------------ 逃げ道
@@ -234,7 +234,7 @@ class Page:
         Yields:
             自分自身。中では今までどおりメソッドを呼べる。
         """
-        with self.session.operating(f"frame({locator})"):
+        with self.session._operating(f"frame({locator})"):
             self._until(
                 EC.frame_to_be_available_and_switch_to_it(tuple(locator)), locator, "切り替えられ"
             )
@@ -243,26 +243,26 @@ class Page:
             finally:
                 self.session.raw.switch_to.default_content()
 
-    def element(self, locator: Locator) -> WebElement:
+    def find_element(self, locator: Locator) -> WebElement:
         """selenium の WebElement をそのまま返す。
 
         このクラスに用意されていない操作をするときの逃げ道。
         よく使うものはこのクラスにメソッドとして足すこと。
         """
-        with self.session.operating(f"element({locator})"):
+        with self.session._operating(f"find_element({locator})"):
             return self._until(EC.presence_of_element_located(tuple(locator)), locator, "見つかり")
 
-    def elements(self, locator: Locator) -> list[WebElement]:
+    def find_elements(self, locator: Locator) -> list[WebElement]:
         """一致する全要素を WebElement のリストで返す。1件見つかるまで待つ。
 
         一覧表の行を1行ずつ処理するときに使う。行の中をさらに探すときは、
         行の WebElement から find_element(*Locator) で絞り込む:
 
-            for row in page.elements(page.ROWS):
+            for row in page.find_elements(page.ROWS):
                 if "未提出" in row.text:
                     row.find_element(*page.EDIT_BUTTON).click()
 
-        まず値を読むだけなら texts() のほうが簡単で、
+        まず値を読むだけなら read_texts() のほうが簡単で、
         「何番目かをクリックする」だけなら click(locator, index=...) で足りる。
 
         Args:
@@ -274,22 +274,23 @@ class Page:
         Raises:
             ElementNotFoundError: 1件も見つからないまま待ち時間が過ぎた場合。
                                   0件がありうる場面では、表そのものが出るのを wait_visible() で
-                                  待ってから count() で件数を確認する。count() は待たないので、
+                                  待ってから count_elements() で件数を確認する。
+                                  count_elements() は待たないので、
                                   読み込み前に呼ぶと「まだ出ていない」を「0件」と読み違える。
         """
-        with self.session.operating(f"elements({locator})"):
+        with self.session._operating(f"find_elements({locator})"):
             return self._until(
                 EC.presence_of_all_elements_located(tuple(locator)), locator, "見つかり"
             )
 
-    def js(self, script: str, *args: object) -> object:
+    def execute_script(self, script: str, *args: object) -> object:
         """JavaScript を実行して戻り値を返す。
 
         Args:
             script: 実行する JavaScript。
             *args: スクリプト内で arguments[0], arguments[1] ... として参照できる値。
         """
-        with self.session.operating("js"):
+        with self.session._operating("execute_script"):
             return self.session.raw.execute_script(script, *args)
 
     # ------------------------------------------------------------ 内部処理

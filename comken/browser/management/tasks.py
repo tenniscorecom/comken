@@ -4,13 +4,13 @@
 
 ブラウザ操作は基本的に上から順に動く（同期）。
 重い画面の読み込みなど、待っている間に別のことを進めたいときだけ、
-Browsers.start() で始めて、必要になったところで wait() で受け取る。
+Browsers.run_task() で始めて、必要になったところで wait() で受け取る。
 
-    勤怠 = browsers.start(lambda: KintaiFlow(kintai).search())  # 始めるだけ
+    勤怠 = browsers.run_task(lambda: KintaiFlow(kintai).search())  # 始めるだけ
     KeiriFlow(keiri).login(user, password)                      # その間に別サイトを進める
     days = 勤怠.wait()                                          # 戻って結果を受け取る
 
-このクラスを直接作らない。Browsers.start() が返すものを受け取って使う。
+このクラスを直接作らない。Browsers.run_task() が返すものを受け取って使う。
 """
 
 import logging
@@ -24,14 +24,14 @@ T = TypeVar("T")
 
 
 class BackgroundTask(Generic[T]):
-    """裏で動いている処理の取っ手。Browsers.start() が返す。
+    """裏で動いている処理の取っ手。Browsers.run_task() が返す。
 
     Attributes:
         label: 何の処理か。ログとエラーメッセージに出る。
     """
 
     def __init__(self, future: "Future[T]", label: str) -> None:
-        """直接呼ばず、Browsers.start() から作る。"""
+        """直接呼ばず、Browsers.run_task() から作る。"""
         self._future = future
         self.label = label
         # wait() で結果（や例外）を受け取ったか。受け取られないまま終わった処理だけを

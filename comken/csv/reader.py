@@ -66,7 +66,7 @@ class CsvReader(CsvBase):
                       （はみ出した列が黙って失われるのを防ぐ）。
         """
         # 同じインスタンスで複数メソッドを呼んでもファイルを読むのは1回だけにする
-        # （rows() の後に index() を呼ぶ等で毎回 IO するのを防ぐ）
+        # （read_rows() の後に index() を呼ぶ等で毎回 IO するのを防ぐ）
         if self._cache is not None:
             return self._cache
         # headers 指定時は1行目をヘッダーではなくデータとして扱う
@@ -112,7 +112,7 @@ class CsvReader(CsvBase):
         raise EncodingDetectionError(self._path)
 
     @measure
-    def rows(self, columns: list[str] | None = None) -> list[dict[str, str]]:
+    def read_rows(self, columns: list[str] | None = None) -> list[dict[str, str]]:
         """全行を返す。
 
         Args:

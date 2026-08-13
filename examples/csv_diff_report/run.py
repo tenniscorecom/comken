@@ -68,8 +68,8 @@ def create_sample_files() -> None:
 def main() -> None:
     create_sample_files()
 
-    before = CsvReader(YESTERDAY_CSV).rows()
-    after = CsvReader(TODAY_CSV).rows()
+    before = CsvReader(YESTERDAY_CSV).read_rows()
+    after = CsvReader(TODAY_CSV).read_rows()
 
     # キー列で突合して差分を取る（added / removed / changed に分かれて返る）
     result = diff_rows(before, after, key=KEY)

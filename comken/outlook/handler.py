@@ -42,7 +42,7 @@ class MailMessage:
 class Outlook:
     """Classic Outlook を COM で操作する。
 
-    New Outlook は COM を持たないため利用できない。``messages()`` はメールの値を
+    New Outlook は COM を持たないため利用できない。``read_messages()`` はメールの値を
     読むだけで、既読・未読の状態を変更しない。送信機能は提供せず、確認可能な下書き
     の作成だけを行う。
     """
@@ -64,7 +64,7 @@ class Outlook:
         self._namespace = None
         self._application = None
 
-    def messages(
+    def read_messages(
         self,
         subject_contains: str = "",
         days: int = 7,

@@ -59,7 +59,7 @@ class AccessDatabase(FileBase):
     容量と帯域を消費する。
 
     数十万件を CSV に出す場合は、Python にデータを載せない ``export_csv()`` を使う。
-    ``rows()`` は逐次処理用であり、結果を ``list`` にすると全件分のメモリを消費する。
+    ``read_rows()`` は逐次処理用であり、結果を ``list`` にすると全件分のメモリを消費する。
     """
 
     SUFFIXES = (".accdb", ".mdb")
@@ -158,7 +158,7 @@ class AccessDatabase(FileBase):
 
         UPDATE・INSERT・DELETE・テーブル作成など、データを変更するクエリ向け。
         元データベースへ変更を反映する場合は、初期化時に ``local_copy=False`` を指定する。
-        SELECT クエリの結果を読む場合は ``rows()``、CSVへ出す場合は ``export_csv()`` を使う。
+        SELECT クエリの結果を読む場合は ``read_rows()``、CSVへ出す場合は ``export_csv()`` を使う。
         """
         self._ensure_query(name)
         if is_dry_run():
@@ -200,7 +200,7 @@ class AccessDatabase(FileBase):
             code_page,
         )
 
-    def rows(self, source: str) -> Iterator[dict[str, object]]:
+    def read_rows(self, source: str) -> Iterator[dict[str, object]]:
         """テーブルまたはクエリを辞書で1行ずつ返すジェネレータ。
 
         COM 往復を減らすため小さなバッチで取得する。数十万件を ``list`` にすると

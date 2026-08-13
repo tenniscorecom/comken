@@ -61,4 +61,4 @@ class LoginPage(AppPage):
 
     def get_error_message(self) -> str:
         """ログイン失敗時のエラーメッセージを返す。"""
-        return self.text(self.ERROR_MSG)
+        return self.read_text(self.ERROR_MSG)

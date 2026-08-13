@@ -56,4 +56,4 @@ class AppPage(SitePage):
         """ページ上部に表示されるフラッシュメッセージを取得する。
         ログイン成功・失敗の通知など、サイト全体で共通の要素。
         """
-        return self.text(self.FLASH_MESSAGE)
+        return self.read_text(self.FLASH_MESSAGE)

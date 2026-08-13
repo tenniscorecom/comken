@@ -161,7 +161,7 @@ Access データベースを COM で操作する。
 容量と帯域を消費する。
 
 数十万件を CSV に出す場合は、Python にデータを載せない ``export_csv()`` を使う。
-``rows()`` は逐次処理用であり、結果を ``list`` にすると全件分のメモリを消費する。
+``read_rows()`` は逐次処理用であり、結果を ``list`` にすると全件分のメモリを消費する。
 
 #### `__init__`
 
@@ -196,6 +196,20 @@ VBA のプロシージャ／関数を実行する。
 Access のマクロは別の仕組みなので、マクロには ``run_macro()`` を使う。
 dry-run 時は実行せず ``None`` を返す。
 
+#### `run_query`
+
+```text
+def run_query(self, name: str) -> None:
+```
+
+##### 説明
+
+保存済みのアクションクエリを名前で実行する。
+
+UPDATE・INSERT・DELETE・テーブル作成など、データを変更するクエリ向け。
+元データベースへ変更を反映する場合は、初期化時に ``local_copy=False`` を指定する。
+SELECT クエリの結果を読む場合は ``read_rows()``、CSVへ出す場合は ``export_csv()`` を使う。
+
 #### `export_csv`
 
 ```text
@@ -208,10 +222,10 @@ def export_csv(self, source: str, dst: str | Path, encoding: str=Encoding.CP932)
 
 数十万件でも Python のメモリにデータを載せない、大量件数向けの方法。
 
-#### `rows`
+#### `read_rows`
 
 ```text
-def rows(self, source: str) -> Iterator[dict[str, object]]:
+def read_rows(self, source: str) -> Iterator[dict[str, object]]:
 ```
 
 ##### 説明
@@ -251,7 +265,7 @@ with を使わずに launch すると BrowsersNotStartedError になる（ブラ
 with を必須にしているのは、途中で例外が出たときにブラウザのプロセスが残り、
 次の実行でドライバーの更新まで邪魔するのを防ぐため。
 
-**start() で始めた処理が終わらないと、with も終わらない。** ブラウザを閉じる前に
+**run_task() で始めた処理が終わらないと、with も終わらない。** ブラウザを閉じる前に
 裏の処理の終了を待つため（操作の途中でブラウザが消えると原因が分かりにくいエラーになる）。
 終わらない可能性がある処理には、その中で待ち時間の上限を設けること。
 
@@ -294,10 +308,10 @@ Raises:
     SessionNameConflictError: 同じ名前ですでに起動している場合。
     DriverStartError: ブラウザを起動できなかった場合。
 
-#### `start`
+#### `run_task`
 
 ```text
-def start(self, task: Callable[[], T], label: str='') -> BackgroundTask[T]:
+def run_task(self, task: Callable[[], T], label: str='') -> BackgroundTask[T]:
 ```
 
 ##### 説明
@@ -307,7 +321,7 @@ def start(self, task: Callable[[], T], label: str='') -> BackgroundTask[T]:
 普通に書けば上から順に動く。時間のかかる処理を待っている間に
 別のことを進めたいときだけ、これで先に始めておく:
 
-    勤怠 = browsers.start(lambda: KintaiFlow(kintai).search())
+    勤怠 = browsers.run_task(lambda: KintaiFlow(kintai).search())
     KeiriFlow(keiri).login(user, password)   # 勤怠の読み込み中にこちらが進む
     days = 勤怠.wait()                        # 戻って結果を受け取る
 
@@ -333,7 +347,7 @@ def parallel(self, *tasks: Callable[[], T]) -> list[T]:
 
 複数の処理を同時に始めて、全部終わるまで待ち、渡した順に結果を返す。
 
-start() で始めて wait() で受け取るのを、まとめて書けるようにしたもの。
+run_task() で始めて wait() で受け取るのを、まとめて書けるようにしたもの。
 「全部同時に始めて、全部の結果が欲しい」だけならこちらが短い:
 
     # 逐次（上から順に動く）
@@ -346,7 +360,7 @@ start() で始めて wait() で受け取るのを、まとめて書けるよう�
         lambda: KeiriFlow(keiri).fetch(),
     )
 
-受け取るタイミングを自分で決めたい場合は start() を使う。
+受け取るタイミングを自分で決めたい場合は run_task() を使う。
 
 1つの処理では1つのセッションだけを触ること。同じセッションを2つの処理から
 触ると ConcurrentSessionUseError で止まる。
@@ -579,28 +593,6 @@ selenium の WebDriver そのもの。
 ここから直接操作すると、同時操作の見張り（operating）を通らない。
 parallel の中で使う場合、他のスレッドと衝突しないことは呼び出し側の責任になる。
 
-#### `operating`
-
-```text
-@contextmanager
-def operating(self, operation: str) -> Iterator[None]:
-```
-
-##### 説明
-
-このセッションを操作している間の目印。Page から使う。
-
-with に入っているか、すでに閉じていないか、他のスレッドが同時に
-触っていないかをまとめて確認する。
-
-Args:
-    operation: 何をしようとしているか（エラーメッセージに出る）。
-
-Raises:
-    SessionNotStartedError: with に入る前に操作した場合。
-    SessionClosedError: with を抜けた後に操作した場合。
-    ConcurrentSessionUseError: 他のスレッドが同時に操作している場合。
-
 ### `BrowserOptions`
 
 ```text
@@ -705,30 +697,30 @@ def input(self, locator: Locator, text: str) -> None:
 
 入力欄に文字を入れる。もとの値は消える。
 
-#### `text`
+#### `read_text`
 
 ```text
-def text(self, locator: Locator) -> str:
+def read_text(self, locator: Locator) -> str:
 ```
 
 ##### 説明
 
 要素の表示文字を返す。
 
-#### `texts`
+#### `read_texts`
 
 ```text
-def texts(self, locator: Locator) -> list[str]:
+def read_texts(self, locator: Locator) -> list[str]:
 ```
 
 ##### 説明
 
 一致する全要素の表示文字をリストで返す（一覧表の全行を読むときなど）。
 
-#### `attribute`
+#### `read_attribute`
 
 ```text
-def attribute(self, locator: Locator, name: str) -> str | None:
+def read_attribute(self, locator: Locator, name: str) -> str | None:
 ```
 
 ##### 説明
@@ -799,10 +791,10 @@ def scroll_bottom(self) -> None:
 
 ページの一番下までスクロールする（続きを読み込ませるときなど）。
 
-#### `has`
+#### `has_element`
 
 ```text
-def has(self, locator: Locator) -> bool:
+def has_element(self, locator: Locator) -> bool:
 ```
 
 ##### 説明
@@ -811,10 +803,10 @@ def has(self, locator: Locator) -> bool:
 
 「在れば押す」のような分岐に使う。表示されているかどうかは見ない。
 
-#### `count`
+#### `count_elements`
 
 ```text
-def count(self, locator: Locator) -> int:
+def count_elements(self, locator: Locator) -> int:
 ```
 
 ##### 説明
@@ -861,10 +853,10 @@ def alert_dismiss(self) -> None:
 
 ブラウザの確認ダイアログでキャンセルを押す。出るまで待つ。
 
-#### `alert_text`
+#### `read_alert_text`
 
 ```text
-def alert_text(self) -> str:
+def read_alert_text(self) -> str:
 ```
 
 ##### 説明
@@ -893,10 +885,10 @@ ElementNotFoundError が出て、HTML 上には要素があるのに掴めない
 Yields:
     自分自身。中では今までどおりメソッドを呼べる。
 
-#### `element`
+#### `find_element`
 
 ```text
-def element(self, locator: Locator) -> WebElement:
+def find_element(self, locator: Locator) -> WebElement:
 ```
 
 ##### 説明
@@ -906,10 +898,10 @@ selenium の WebElement をそのまま返す。
 このクラスに用意されていない操作をするときの逃げ道。
 よく使うものはこのクラスにメソッドとして足すこと。
 
-#### `elements`
+#### `find_elements`
 
 ```text
-def elements(self, locator: Locator) -> list[WebElement]:
+def find_elements(self, locator: Locator) -> list[WebElement]:
 ```
 
 ##### 説明
@@ -919,11 +911,11 @@ def elements(self, locator: Locator) -> list[WebElement]:
 一覧表の行を1行ずつ処理するときに使う。行の中をさらに探すときは、
 行の WebElement から find_element(*Locator) で絞り込む:
 
-    for row in page.elements(page.ROWS):
+    for row in page.find_elements(page.ROWS):
         if "未提出" in row.text:
             row.find_element(*page.EDIT_BUTTON).click()
 
-まず値を読むだけなら texts() のほうが簡単で、
+まず値を読むだけなら read_texts() のほうが簡単で、
 「何番目かをクリックする」だけなら click(locator, index=...) で足りる。
 
 Args:
@@ -935,13 +927,14 @@ Returns:
 Raises:
     ElementNotFoundError: 1件も見つからないまま待ち時間が過ぎた場合。
                           0件がありうる場面では、表そのものが出るのを wait_visible() で
-                          待ってから count() で件数を確認する。count() は待たないので、
+                          待ってから count_elements() で件数を確認する。
+                          count_elements() は待たないので、
                           読み込み前に呼ぶと「まだ出ていない」を「0件」と読み違える。
 
-#### `js`
+#### `execute_script`
 
 ```text
-def js(self, script: str, *args: object) -> object:
+def execute_script(self, script: str, *args: object) -> object:
 ```
 
 ##### 説明
@@ -1129,7 +1122,7 @@ class BackgroundTask(Generic[T]):
 
 #### 説明
 
-裏で動いている処理の取っ手。Browsers.start() が返す。
+裏で動いている処理の取っ手。Browsers.run_task() が返す。
 
 Attributes:
     label: 何の処理か。ログとエラーメッセージに出る。
@@ -1142,7 +1135,7 @@ def __init__(self, future: 'Future[T]', label: str) -> None:
 
 ##### 説明
 
-直接呼ばず、Browsers.start() から作る。
+直接呼ばず、Browsers.run_task() から作る。
 
 #### `wait`
 
@@ -1387,11 +1380,11 @@ Args:
              指定すると1行目からデータとして読む。
              例: CsvReader("data.csv", headers=["注文番号", "金額", "担当者"])
 
-#### `rows`
+#### `read_rows`
 
 ```text
 @measure
-def rows(self, columns: list[str] | None=None) -> list[dict[str, str]]:
+def read_rows(self, columns: list[str] | None=None) -> list[dict[str, str]]:
 ```
 
 ##### 説明
@@ -1856,7 +1849,7 @@ def write_table(self, rows: list[dict], start_row: int=1, headers: list[str] | N
 
 ヘッダー行 + データ行の値を書き込む（構造化テーブルにはしない）。
 
-CsvReader.rows() や read_rows_as_dicts() の結果をそのまま渡せる。
+CsvReader.read_rows() や read_rows_as_dicts() の結果をそのまま渡せる。
 Excel の構造化テーブルにする場合は、書き込み後に add_table() を呼ぶ。
 
 Args:
@@ -3604,7 +3597,7 @@ class Outlook:
 
 Classic Outlook を COM で操作する。
 
-New Outlook は COM を持たないため利用できない。``messages()`` はメールの値を
+New Outlook は COM を持たないため利用できない。``read_messages()`` はメールの値を
 読むだけで、既読・未読の状態を変更しない。送信機能は提供せず、確認可能な下書き
 の作成だけを行う。
 
@@ -3614,10 +3607,10 @@ New Outlook は COM を持たないため利用できない。``messages()`` は
 def __init__(self) -> None:
 ```
 
-#### `messages`
+#### `read_messages`
 
 ```text
-def messages(self, subject_contains: str='', days: int=7, folder: str='') -> Iterator[MailMessage]:
+def read_messages(self, subject_contains: str='', days: int=7, folder: str='') -> Iterator[MailMessage]:
 ```
 
 ##### 説明

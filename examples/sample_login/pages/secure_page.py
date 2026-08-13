@@ -22,7 +22,7 @@ class SecurePage(AppPage):
 
     def get_heading(self) -> str:
         """画面の見出しテキストを返す。"""
-        return self.text(self.HEADING)
+        return self.read_text(self.HEADING)
 
     def logout(self) -> LoginPage:
         """ログアウトして LoginPage を返す。"""

@@ -38,7 +38,7 @@ from comken.outlook import Outlook
 logger = logging.getLogger(__name__)
 
 with Outlook() as mail:
-    for message in mail.messages(subject_contains="日次データ", days=7):
+    for message in mail.read_messages(subject_contains="日次データ", days=7):
         logger.info("%s / %s", message.received_at, message.subject)
 ```
 
@@ -47,7 +47,7 @@ with Outlook() as mail:
 ## メールを探す
 
 ```python
-mail.messages(subject_contains="", days=7, folder="")
+mail.read_messages(subject_contains="", days=7, folder="")
 ```
 
 | 引数 | 意味 |
@@ -61,7 +61,7 @@ mail.messages(subject_contains="", days=7, folder="")
 ```python
 with Outlook() as mail:
     # 受信トレイ直下の「日次連携」フォルダから、3日以内の該当メールを探す
-    for message in mail.messages(subject_contains="売上データ", days=3, folder="日次連携"):
+    for message in mail.read_messages(subject_contains="売上データ", days=3, folder="日次連携"):
         if message.has_attachments:
             logger.info("添付あり: %s", message.subject)
 ```
@@ -79,7 +79,7 @@ Outlook に条件を渡して絞り込ませてから受け取っている。そ
 
 ```python
 with Outlook() as mail:
-    for message in mail.messages(days=7):
+    for message in mail.read_messages(days=7):
         if message.sender_address.endswith("@example.co.jp"):
             logger.info("%s", message.subject)
 ```
@@ -91,7 +91,7 @@ with Outlook() as mail:
 ```python
 def latest_report(mail: Outlook) -> str:
     """「日次レポート」の最新メールの本文を返す。無ければ空文字。"""
-    for message in mail.messages(subject_contains="日次レポート", days=7):
+    for message in mail.read_messages(subject_contains="日次レポート", days=7):
         return message.body
     return ""
 ```
@@ -200,7 +200,7 @@ from comken.outlook import Outlook
 logger = logging.getLogger(__name__)
 
 with Outlook() as mail:
-    for message in mail.messages(subject_contains="日次データ", days=7):
+    for message in mail.read_messages(subject_contains="日次データ", days=7):
         logger.info("%s / %s", message.received_at, message.subject)
 
     mail.save_draft(

@@ -21,7 +21,7 @@ def main() -> None:
     CsvWriter(CSV_PATH, ["社員番号", "氏名"], encoding=Encoding.UTF8_SIG).write_rows(
         [{"社員番号": "001", "氏名": "山田"}]
     )
-    rows = CsvReader(CSV_PATH, encoding=Encoding.AUTO).rows()
+    rows = CsvReader(CSV_PATH, encoding=Encoding.AUTO).read_rows()
     latest = FileFinder(OUTPUT_FOLDER).latest("*.csv", by=SortBy.UPDATED)
 
     logger.info("Encoding: %s（%d 件）", Encoding.UTF8_SIG, len(rows))

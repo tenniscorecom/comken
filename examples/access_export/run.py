@@ -32,7 +32,7 @@ def main() -> None:
         database.export_csv(OUTPUT_TABLE, CSV_PATH)
 
     # Access 側で帳票用に絞り込んだ出力を、既存の CSV / Excel API へつなぐ。
-    rows = CsvReader(CSV_PATH).rows()
+    rows = CsvReader(CSV_PATH).read_rows()
     with ExcelWriter.create(REPORT_PATH) as writer:
         sheet = writer.sheet("Sheet1")
         sheet.write_table(rows)

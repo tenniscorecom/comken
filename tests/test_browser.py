@@ -263,7 +263,7 @@ class TestSessionConcurrencyGuard:
         release = threading.Event()
 
         def hold_session():
-            with session.operating("hold"):
+            with session._operating("hold"):
                 holding.set()
                 release.wait(timeout=5)
 
@@ -281,7 +281,7 @@ class TestSessionConcurrencyGuard:
         """同じスレッドの中で操作がネストしても止まらない（RLock のため）。"""
         session = _make_session(tmp_path)
 
-        with session.operating("outer"):
+        with session._operating("outer"):
             session.open("https://example.com")
 
         session._driver.get.assert_called_once_with("https://example.com")
@@ -362,7 +362,7 @@ class TestBrowsersRequiresWith:
         browsers = Browsers()
 
         with pytest.raises(BrowsersNotStartedError):
-            browsers.start(lambda: "動いてしまった")
+            browsers.run_task(lambda: "動いてしまった")
 
     def test_rejects_getitem_without_with(self):
         """with に入れずにセッションを取り出すこともできない。"""
@@ -470,7 +470,7 @@ class TestBrowsersStart:
         release = threading.Event()
 
         with Browsers() as browsers:
-            task = browsers.start(lambda: release.wait(timeout=5) and "done")
+            task = browsers.run_task(lambda: release.wait(timeout=5) and "done")
 
             # 処理はまだ終わっていないのに、ここまで進んでいる
             assert not task.is_done
@@ -490,7 +490,7 @@ class TestBrowsersStart:
             return "重い方"
 
         with Browsers() as browsers:
-            task = browsers.start(heavy, label="勤怠")
+            task = browsers.run_task(heavy, label="勤怠")
             assert heavy_started.wait(timeout=5)
 
             light_finished.set()  # 後続の処理（軽い方）がここで終わったとみなす
@@ -504,7 +504,7 @@ class TestBrowsersStart:
             raise ValueError("取得に失敗")
 
         with Browsers() as browsers:
-            task = browsers.start(fail)
+            task = browsers.run_task(fail)
 
             with pytest.raises(ValueError, match="取得に失敗"):
                 task.wait(timeout=5)
@@ -514,7 +514,7 @@ class TestBrowsersStart:
         release = threading.Event()
 
         with Browsers() as browsers:
-            task = browsers.start(lambda: release.wait(timeout=5) and "done", label="勤怠")
+            task = browsers.run_task(lambda: release.wait(timeout=5) and "done", label="勤怠")
 
             with pytest.raises(TimeoutError, match="勤怠"):
                 task.wait(timeout=0.1)
@@ -539,7 +539,7 @@ class TestBrowsersStart:
 
         with Browsers() as browsers:
             browsers.launch("kintai")
-            browsers.start(slow_task)
+            browsers.run_task(slow_task)
 
         assert events == ["処理がおわった", "ブラウザを閉じた"]
 
@@ -585,7 +585,7 @@ class TestBrowsersStart:
 
         with Browsers() as browsers:
             browsers.launch("kintai")
-            browsers.start(late_task, label="遅れて動く処理")
+            browsers.run_task(late_task, label="遅れて動く処理")
             released.set()
 
         assert taken == ["kintai"]
@@ -594,16 +594,16 @@ class TestBrowsersStart:
         """受け取り済みの処理は保持し続けない（繰り返し start しても溜まらない）。"""
         with Browsers() as browsers:
             for _ in range(20):
-                browsers.start(lambda: "ok").wait(timeout=5)
+                browsers.run_task(lambda: "ok").wait(timeout=5)
 
             assert len(browsers._tasks) <= 1
 
     def test_label_numbering_keeps_increasing(self):
         """既定の名前は、受け取り済みを手放しても番号が戻らない。"""
         with Browsers() as browsers:
-            first = browsers.start(lambda: "ok")
+            first = browsers.run_task(lambda: "ok")
             first.wait(timeout=5)
-            second = browsers.start(lambda: "ok")
+            second = browsers.run_task(lambda: "ok")
 
             assert (first.label, second.label) == ("処理1", "処理2")
 
@@ -621,7 +621,7 @@ class TestBrowsersStart:
             raise ValueError("誰にも受け取られない失敗")
 
         with caplog.at_level(logging.ERROR), Browsers() as browsers:
-            browsers.start(fail, label="勤怠")
+            browsers.run_task(fail, label="勤怠")
 
         assert "勤怠" in caplog.text
         assert "誰にも受け取られない失敗" in caplog.text
@@ -633,7 +633,7 @@ class TestBrowsersStart:
             raise ValueError("受け取り済みの失敗")
 
         with caplog.at_level(logging.ERROR), Browsers() as browsers:
-            task = browsers.start(fail, label="勤怠")
+            task = browsers.run_task(fail, label="勤怠")
             with pytest.raises(ValueError):
                 task.wait(timeout=5)
 
@@ -897,7 +897,7 @@ class TestPage:
         page = self._page(tmp_path)
         page.session._driver.find_elements.return_value = [1, 2, 3]
 
-        assert page.count(Locator.css("table tr")) == 3
+        assert page.count_elements(Locator.css("table tr")) == 3
         page.session._driver.find_elements.assert_called_with(By.CSS_SELECTOR, "table tr")
 
     def test_timeout_becomes_element_not_found_with_selector(self, tmp_path):
@@ -916,7 +916,7 @@ class TestPage:
         rows = [MagicMock(), MagicMock(), MagicMock()]
         page._wait.until.return_value = rows
 
-        assert page.elements(Locator.css("table tr")) == rows
+        assert page.find_elements(Locator.css("table tr")) == rows
 
     def test_elements_reports_selector_when_none_found(self, tmp_path):
         """1件も見つからなければ、セレクター付きのエラーになる。"""
@@ -924,7 +924,7 @@ class TestPage:
         page._wait.until.side_effect = TimeoutException()
 
         with pytest.raises(ElementNotFoundError) as exc_info:
-            page.elements(Locator.css("table tr"))
+            page.find_elements(Locator.css("table tr"))
 
         assert "table tr" in str(exc_info.value)
 
@@ -938,7 +938,7 @@ class TestPage:
         release = threading.Event()
 
         def hold_session():
-            with page.session.operating("hold"):
+            with page.session._operating("hold"):
                 holding.set()
                 release.wait(timeout=5)
 
@@ -947,9 +947,9 @@ class TestPage:
         try:
             assert holding.wait(timeout=5)
             with pytest.raises(ConcurrentSessionUseError):
-                page.element(Locator.id("x"))
+                page.find_element(Locator.id("x"))
             with pytest.raises(ConcurrentSessionUseError):
-                page.js("return 1;")
+                page.execute_script("return 1;")
         finally:
             release.set()
             holder.join(timeout=5)

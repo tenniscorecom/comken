@@ -19,9 +19,9 @@
         keiri_data = KeiriFlow(keiri).fetch()
 
 **書いた順に上から動く（同期）のが基本。** 待っている間に別のことを進めたいときだけ、
-start() で先に始めておき、結果が必要になったところで wait() で受け取る:
+run_task() で先に始めておき、結果が必要になったところで wait() で受け取る:
 
-        勤怠 = browsers.start(lambda: KintaiFlow(kintai).fetch())  # 始めるだけ。待たない
+        勤怠 = browsers.run_task(lambda: KintaiFlow(kintai).fetch())  # 始めるだけ。待たない
         keiri_data = KeiriFlow(keiri).fetch()                      # その間にこちらを進める
         kintai_data = 勤怠.wait()                                  # 戻って結果を受け取る
 
@@ -78,7 +78,7 @@ class Browsers:
     with を必須にしているのは、途中で例外が出たときにブラウザのプロセスが残り、
     次の実行でドライバーの更新まで邪魔するのを防ぐため。
 
-    **start() で始めた処理が終わらないと、with も終わらない。** ブラウザを閉じる前に
+    **run_task() で始めた処理が終わらないと、with も終わらない。** ブラウザを閉じる前に
     裏の処理の終了を待つため（操作の途中でブラウザが消えると原因が分かりにくいエラーになる）。
     終わらない可能性がある処理には、その中で待ち時間の上限を設けること。
 
@@ -166,13 +166,13 @@ class Browsers:
         self._sessions[name] = session
         return session
 
-    def start(self, task: Callable[[], T], label: str = "") -> BackgroundTask[T]:
+    def run_task(self, task: Callable[[], T], label: str = "") -> BackgroundTask[T]:
         """処理を裏で始めて、すぐ次の行へ進む。結果は wait() で受け取る。
 
         普通に書けば上から順に動く。時間のかかる処理を待っている間に
         別のことを進めたいときだけ、これで先に始めておく:
 
-            勤怠 = browsers.start(lambda: KintaiFlow(kintai).search())
+            勤怠 = browsers.run_task(lambda: KintaiFlow(kintai).search())
             KeiriFlow(keiri).login(user, password)   # 勤怠の読み込み中にこちらが進む
             days = 勤怠.wait()                        # 戻って結果を受け取る
 
@@ -209,7 +209,7 @@ class Browsers:
     def parallel(self, *tasks: Callable[[], T]) -> list[T]:
         """複数の処理を同時に始めて、全部終わるまで待ち、渡した順に結果を返す。
 
-        start() で始めて wait() で受け取るのを、まとめて書けるようにしたもの。
+        run_task() で始めて wait() で受け取るのを、まとめて書けるようにしたもの。
         「全部同時に始めて、全部の結果が欲しい」だけならこちらが短い:
 
             # 逐次（上から順に動く）
@@ -222,7 +222,7 @@ class Browsers:
                 lambda: KeiriFlow(keiri).fetch(),
             )
 
-        受け取るタイミングを自分で決めたい場合は start() を使う。
+        受け取るタイミングを自分で決めたい場合は run_task() を使う。
 
         1つの処理では1つのセッションだけを触ること。同じセッションを2つの処理から
         触ると ConcurrentSessionUseError で止まる。
@@ -242,7 +242,10 @@ class Browsers:
         if not tasks:
             return []
 
-        started = [self.start(task, label=f"処理{index + 1}") for index, task in enumerate(tasks)]
+        started = [
+            self.run_task(task, label=f"処理{index + 1}")
+            for index, task in enumerate(tasks)
+        ]
 
         # 例外が出ても、走り出した処理は最後まで待つ。
         # 途中で打ち切るとブラウザを操作中のまま放置することになるため

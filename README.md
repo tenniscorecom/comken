@@ -18,7 +18,7 @@
 from comken.csv import CsvReader
 from comken.excel import ExcelWriter
 
-rows = CsvReader(r"C:\作業\data.csv").rows()      # CSV を読む（1行 = 1辞書）
+rows = CsvReader(r"C:\作業\data.csv").read_rows()      # CSV を読む（1行 = 1辞書）
 
 with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作る
     s = f.sheet("Sheet1")

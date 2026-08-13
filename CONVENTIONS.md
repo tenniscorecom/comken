@@ -79,6 +79,27 @@ Python の作法（PEP 8）に従う。
 Excel の変数名は `ws` / `wb` より `worksheet` / `workbook` を推奨する。その他の、意味を
 推測しないと読めない略語は避ける。
 
+### 公開メソッドの動詞
+
+同じ操作には同じ動詞を使う。名詞だけのメソッドや、`js()` のように処理が分からない略称は
+公開 API に使わない。
+
+| 操作 | 動詞 | 例 |
+|---|---|---|
+| 処理・マクロ・クエリを実行する | `run_` | `run_macro()`, `run_query()`, `run_task()` |
+| データや値を読み取る | `read_` | `read_rows()`, `read_text()`, `read_messages()` |
+| 1件を検索する | `find_` | `find_element()` |
+| 複数件を絞り込む | `filter_` | `filter_rows()` |
+| 存在・状態を判定する | `is_` / `has_` / `can_` | `is_empty()`, `has_element()` |
+| 件数を数える | `count_` | `count_elements()` |
+| 差分を求める | `diff_` | `diff_row()`, `diff_rows()` |
+| 書き込む・保存する | `write_` / `save_` | `write_rows()`, `save_draft()` |
+| 末尾へ追加する | `append_` | `append_rows()` |
+| 生のスクリプトを実行する | `execute_` | `execute_script()` |
+
+HTTP の `get()`、キー・値ストアの `get()` / `set()` など、その分野で意味が確立している名前は
+例外として使ってよい。
+
 ### 定数を大文字にする理由
 
 **大文字にすることで「これは変更しない値だ」とコードを読む人が一目で判断できる。**

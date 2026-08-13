@@ -51,7 +51,7 @@ class TestDebugMode:
         path = tmp_path / "data.csv"
         path.write_text("番号\n1\n", encoding="utf-8-sig")
         with comken.debug(), caplog.at_level(logging.DEBUG):
-            CsvReader(path).rows()
+            CsvReader(path).read_rows()
 
         assert "rows" in caplog.text
 
@@ -108,7 +108,7 @@ class TestDryRun:
         path = tmp_path / "data.csv"
         path.write_text("番号\n1\n", encoding="utf-8-sig")
         with comken.dry_run():
-            assert CsvReader(path).rows() == [{"番号": "1"}]
+            assert CsvReader(path).read_rows() == [{"番号": "1"}]
 
     def test_nested_and_exception_restore_previous_state(self):
         """入れ子と例外の後に、入る前の状態へ戻る。"""

@@ -49,13 +49,13 @@ class TestCsvReaderRows:
 
     def test_returns_all_rows(self, sample_csv):
         """全行を辞書のリストで返すことを確認する。"""
-        rows = CsvReader(sample_csv).rows()
+        rows = CsvReader(sample_csv).read_rows()
         assert len(rows) == 3
         assert rows[0] == {"注文番号": "A001", "金額": "1000", "担当者": "山田"}
 
     def test_columns_filter(self, sample_csv):
         """columns 指定時は指定列のみ返すことを確認する。"""
-        rows = CsvReader(sample_csv).rows(columns=["注文番号", "金額"])
+        rows = CsvReader(sample_csv).read_rows(columns=["注文番号", "金額"])
         assert rows[0] == {"注文番号": "A001", "金額": "1000"}
         assert "担当者" not in rows[0]
 
@@ -266,7 +266,7 @@ class TestCsvReaderHeaders:
         path = tmp_path / "no_header.csv"
         path.write_text("A001,1000\nA002,2000\n", encoding="utf-8")
 
-        rows = CsvReader(path, headers=["注文番号", "金額"]).rows()
+        rows = CsvReader(path, headers=["注文番号", "金額"]).read_rows()
 
         assert len(rows) == 2
         assert rows[0]["注文番号"] == "A001"
@@ -290,7 +290,7 @@ class TestCsvReaderHeaders:
         path.write_text("A001,1000,山田\n", encoding="utf-8")  # 実際は3列
 
         with pytest.raises(CsvError, match="列数"):
-            CsvReader(path, headers=["注文番号", "金額"]).rows()
+            CsvReader(path, headers=["注文番号", "金額"]).read_rows()
 
 
 class TestCsvReaderColumnValidation:
@@ -318,14 +318,14 @@ class TestCsvReaderColumnValidation:
     def test_rows_columns_raises_on_missing_column(self, sample_csv):
         """rows(columns=...) に存在しない列名が含まれるとエラーになる。"""
         with pytest.raises(ColumnNotFoundError):
-            CsvReader(sample_csv).rows(columns=["注文番号", "存在しない列"])
+            CsvReader(sample_csv).read_rows(columns=["注文番号", "存在しない列"])
 
     def test_header_only_raises_on_missing_column(self, tmp_path):
         """ヘッダーだけの CSV でも存在しない列名を検出する。"""
         path = tmp_path / "header_only.csv"
         path.write_text("注文番号,金額\n", encoding="utf-8-sig")
         with pytest.raises(ColumnNotFoundError):
-            CsvReader(path).rows(columns=["存在しない列"])
+            CsvReader(path).read_rows(columns=["存在しない列"])
 
 
 class TestCsvReaderEncoding:
@@ -335,7 +335,7 @@ class TestCsvReaderEncoding:
         """Shift-JIS（cp932）のファイルを明示指定で読み込めることを確認する。"""
         path = tmp_path / "sjis.csv"
         path.write_bytes("番号,名前\n1,山田\n".encode("cp932"))
-        rows = CsvReader(path, encoding="cp932").rows()
+        rows = CsvReader(path, encoding="cp932").read_rows()
         assert rows[0]["名前"] == "山田"
 
     def test_auto_detects_utf8_sig(self, tmp_path):
@@ -343,7 +343,7 @@ class TestCsvReaderEncoding:
         path = tmp_path / "utf8.csv"
         path.write_text("番号,名前\n1,山田\n", encoding="utf-8-sig")
 
-        rows = CsvReader(path).rows()
+        rows = CsvReader(path).read_rows()
         assert rows[0]["名前"] == "山田"
         assert "番号" in rows[0]  # BOM がキーに混入していない
 
@@ -352,7 +352,7 @@ class TestCsvReaderEncoding:
         path = tmp_path / "sjis.csv"
         path.write_bytes("番号,名前\n1,鈴木\n".encode("cp932"))
 
-        rows = CsvReader(path).rows()
+        rows = CsvReader(path).read_rows()
         assert rows[0]["名前"] == "鈴木"
 
     def test_auto_raises_when_unknown_encoding(self, tmp_path):
@@ -361,7 +361,7 @@ class TestCsvReaderEncoding:
         path.write_bytes(b"\x81\x20\x81\x20")  # どちらの文字コードでも不正なバイト列
 
         with pytest.raises(CsvError):
-            CsvReader(path).rows()
+            CsvReader(path).read_rows()
 
 
 class TestCsvWriter:
@@ -374,7 +374,7 @@ class TestCsvWriter:
 
         CsvWriter(path, fieldnames=["注文番号", "金額"]).write_rows(rows)
 
-        result = CsvReader(path).rows()
+        result = CsvReader(path).read_rows()
         assert len(result) == 2
         assert result[0] == {"注文番号": "A001", "金額": "1000"}
 
@@ -386,7 +386,7 @@ class TestCsvWriter:
 
         writer.append_row({"注文番号": "A002", "金額": "2000"})
 
-        result = CsvReader(path).rows()
+        result = CsvReader(path).read_rows()
         assert len(result) == 2
         assert result[1]["注文番号"] == "A002"
 
@@ -396,7 +396,7 @@ class TestCsvWriter:
 
         CsvWriter(path, fieldnames=["注文番号"]).append_row({"注文番号": "A001"})
 
-        result = CsvReader(path).rows()
+        result = CsvReader(path).read_rows()
         assert result == [{"注文番号": "A001"}]
 
     def test_append_writes_header_when_file_is_empty(self, tmp_path):
@@ -408,7 +408,7 @@ class TestCsvWriter:
 
         CsvWriter(path, fieldnames=["注文番号"]).append_row({"注文番号": "A001"})
 
-        assert CsvReader(path).rows() == [{"注文番号": "A001"}]
+        assert CsvReader(path).read_rows() == [{"注文番号": "A001"}]
 
     def test_append_rows_writes_header_when_file_is_empty(self, tmp_path):
         """append_rows も同様に空ファイルへヘッダーから書くことを確認する。"""
@@ -417,7 +417,7 @@ class TestCsvWriter:
 
         CsvWriter(path, fieldnames=["注文番号"]).append_rows([{"注文番号": "A001"}])
 
-        assert CsvReader(path).rows() == [{"注文番号": "A001"}]
+        assert CsvReader(path).read_rows() == [{"注文番号": "A001"}]
 
     def test_creates_parent_folder(self, tmp_path):
         """親フォルダがなくても自動作成して書き込めることを確認する。
@@ -441,7 +441,7 @@ class TestCsvWriter:
         CsvWriter(path, fieldnames=["名前"], encoding=Encoding.AUTO).write_rows([{"名前": "山田"}])
 
         assert path.read_bytes().startswith(b"\xef\xbb\xbf")  # UTF-8 BOM
-        assert CsvReader(path).rows() == [{"名前": "山田"}]
+        assert CsvReader(path).read_rows() == [{"名前": "山田"}]
 
 
 class TestCsvWriterTransactionalWrite:

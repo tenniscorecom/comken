@@ -89,7 +89,7 @@ class Sheet:
     ) -> None:
         """ヘッダー行 + データ行の値を書き込む（構造化テーブルにはしない）。
 
-        CsvReader.rows() や read_rows_as_dicts() の結果をそのまま渡せる。
+        CsvReader.read_rows() や read_rows_as_dicts() の結果をそのまま渡せる。
         Excel の構造化テーブルにする場合は、書き込み後に add_table() を呼ぶ。
 
         Args:

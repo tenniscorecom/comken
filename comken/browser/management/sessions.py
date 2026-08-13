@@ -125,35 +125,35 @@ class BrowserSession:
 
     def open(self, url: str) -> None:
         """URL を開く。"""
-        with self.operating("open"):
+        with self._operating("open"):
             self._require_driver().get(url)
 
     def refresh(self) -> None:
         """今のページを再読み込みする。"""
-        with self.operating("refresh"):
+        with self._operating("refresh"):
             self._require_driver().refresh()
 
     def back(self) -> None:
         """ブラウザの「戻る」。"""
-        with self.operating("back"):
+        with self._operating("back"):
             self._require_driver().back()
 
     @property
     def current_url(self) -> str:
         """今開いている URL。"""
-        with self.operating("current_url"):
+        with self._operating("current_url"):
             return self._require_driver().current_url
 
     @property
     def title(self) -> str:
         """今開いているページのタイトル。"""
-        with self.operating("title"):
+        with self._operating("title"):
             return self._require_driver().title
 
     @property
     def page_source(self) -> str:
         """今開いているページの HTML。"""
-        with self.operating("page_source"):
+        with self._operating("page_source"):
             return self._require_driver().page_source
 
     def save_screenshot(self, prefix: str = "screenshot") -> Path:
@@ -165,7 +165,7 @@ class BrowserSession:
         Returns:
             保存したファイルのパス。
         """
-        with self.operating("save_screenshot"):
+        with self._operating("save_screenshot"):
             timestamp = now().strftime("%Y%m%d_%H%M%S")
             path = Path("logs") / f"{prefix}_{self.name}_{timestamp}.png"
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -194,7 +194,7 @@ class BrowserSession:
             PopupTabNotOpenedError: 時間内に新しいタブが開かなかった場合。
         """
         seconds = timeout if timeout is not None else _POPUP_TAB_TIMEOUT_SECONDS
-        with self.operating("popup_tab"):
+        with self._operating("popup_tab"):
             tabs = _TabManager(self._require_driver(), self.name)
             with tabs.popup(seconds):
                 yield self
@@ -240,7 +240,7 @@ class BrowserSession:
             ConcurrentSessionUseError: 他のスレッドが同じセッションを操作している場合。
         """
         seconds = timeout if timeout is not None else self.wait_seconds
-        with self.operating("load_many"):
+        with self._operating("load_many"):
             tabs = _TabManager(self._require_driver(), self.name)
             yield from tabs.load_many(urls, ready, max_open, seconds)
 
@@ -260,7 +260,7 @@ class BrowserSession:
         return self._require_driver()
 
     @contextmanager
-    def operating(self, operation: str) -> Iterator[None]:
+    def _operating(self, operation: str) -> Iterator[None]:
         """このセッションを操作している間の目印。Page から使う。
 
         with に入っているか、すでに閉じていないか、他のスレッドが同時に

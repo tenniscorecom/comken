@@ -26,7 +26,7 @@ def run() -> None:
     #   from comken.excel import ExcelWriter
     #   from comken.utils.files import DateNameBuilder
     #
-    #   rows = CsvReader(config.FILES.INPUT_CSV).rows()
+    #   rows = CsvReader(config.FILES.INPUT_CSV).read_rows()
     #   out = output_folder / DateNameBuilder("レポート").prefix()
     #   with ExcelWriter.create(out) as f:
     #       s = f.sheet(SHEET)

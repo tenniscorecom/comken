@@ -104,7 +104,7 @@ with ExcelWriter("report.xlsx") as f:
     f.save()
 
 # 新規ブックの作成 + 辞書リストの一括書き込み（CSV → Excel レポート）
-rows = CsvReader("data.csv").rows()
+rows = CsvReader("data.csv").read_rows()
 with ExcelWriter.create(r"C:\作業\report.xlsx") as f:
     s = f.sheet("Sheet1")
     s.write_table(rows)                   # ヘッダー行 + データ行をまとめて書く

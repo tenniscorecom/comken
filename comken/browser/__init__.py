@@ -17,7 +17,7 @@
     Page / SitePage 1画面ぶんの操作をまとめる基底クラス
     Locator         セレクター（Locator.id(...) / .css(...) など）
     DownloadDir     ダウンロード先フォルダ。完了待ちに使う
-    BackgroundTask  Browsers.start() が返す取っ手。wait() で結果を受け取る
+    BackgroundTask  Browsers.run_task() が返す取っ手。wait() で結果を受け取る
 """
 
 from .download import DownloadDir

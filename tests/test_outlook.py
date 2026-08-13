@@ -54,7 +54,7 @@ class TestOutlook:
 
     def test_messages_is_generator_and_restricts_and_sorts(self):
         outlook, _, inbox = _outlook()
-        messages = outlook.messages(subject_contains="日次", days=7)
+        messages = outlook.read_messages(subject_contains="日次", days=7)
         assert inspect.isgenerator(messages)
         assert list(messages) == []
         condition = inbox.Items.Restrict.call_args.args[0]
@@ -74,7 +74,7 @@ class TestOutlook:
         item.Body = "本文"
         item.Attachments.Count = 0
         inbox.Items.Restrict.return_value.__iter__.return_value = iter((item,))
-        assert len(list(outlook.messages())) == 1
+        assert len(list(outlook.read_messages())) == 1
         assert "UnRead" not in item.__dict__
 
     def test_missing_folder_lists_existing_names(self):
@@ -85,7 +85,7 @@ class TestOutlook:
             MagicMock(Name="共有"),
         ]
         with pytest.raises(OutlookFolderNotFoundError, match=r"処理済み.*共有"):
-            list(outlook.messages(folder="なし"))
+            list(outlook.read_messages(folder="なし"))
 
     def test_save_draft_saves_but_does_not_send(self, tmp_path):
         outlook, application, _ = _outlook()
@@ -127,6 +127,6 @@ class TestOutlook:
         )
         item.Attachments.Count = 1
         inbox.Items.Restrict.return_value.__iter__.return_value = iter((item,))
-        message = next(outlook.messages())
+        message = next(outlook.read_messages())
         assert isinstance(message, MailMessage)
         assert message.received_at.tzinfo is not None

@@ -30,7 +30,7 @@ def main() -> None:
                 "件名": message.subject,
                 "本文": message.body,
             }
-            for message in mail.messages(subject_contains=SUBJECT_CONTAINS, days=DAYS)
+            for message in mail.read_messages(subject_contains=SUBJECT_CONTAINS, days=DAYS)
         ]
         CsvWriter(
             OUTPUT_CSV,

@@ -30,7 +30,7 @@ def main() -> None:
     )
     reader = CsvReader(CSV_PATH)
 
-    rows = reader.rows()
+    rows = reader.read_rows()
     logger.info("全行: %d 件（先頭: %s）", len(rows), rows[0])
 
     # ヘッダーがある CSV は列順が変わっても壊れない first() を選ぶ。

@@ -81,7 +81,7 @@ diff_row(before, after)
 # 差分がなければ {} が返るので、if diff_row(a, b): で「変更あり」を判定できる
 
 # データセット同士の差分（キー列で突合）
-before = CsvReader("昨日.csv").rows()
+before = CsvReader("昨日.csv").read_rows()
 with ExcelReader("今日.xlsx") as f:
     after = f.read_rows_as_dicts("Sheet1")
 
@@ -179,7 +179,7 @@ def click_submit():
 from comken.utils import Timer
 
 with Timer("CSV読み込み"):
-    rows = CsvReader("data.csv").rows()
+    rows = CsvReader("data.csv").read_rows()
 # ログ: CSV読み込み: 3.21秒
 
 @Timer("売上集計")            # デコレータでも使える

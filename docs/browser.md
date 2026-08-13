@@ -101,7 +101,7 @@ with Browsers() as browsers:
     kintai = browsers.launch("kintai", KintaiOptions)
     keiri = browsers.launch("keiri", KeiriOptions)
 
-    勤怠 = browsers.start(lambda: KintaiFlow(kintai).unfilled_days(), label="勤怠")
+    勤怠 = browsers.run_task(lambda: KintaiFlow(kintai).unfilled_days(), label="勤怠")
 
     keiri_rows = KeiriFlow(keiri).pending_rows()   # 勤怠の読み込み中にこちらが進む
 
@@ -129,7 +129,7 @@ with Browsers() as browsers:
 
 | メソッド | 何をするか |
 |---|---|
-| `browsers.start(処理, label="名前")` | 裏で始めて、すぐ次の行へ進む。取っ手を返す |
+| `browsers.run_task(処理, label="名前")` | 裏で始めて、すぐ次の行へ進む。取っ手を返す |
 | `取っ手.wait()` | 終わるのを待って結果を受け取る。すでに終わっていればすぐ返る |
 | `取っ手.is_done` | 終わったかどうかだけ見る（待たない） |
 
@@ -157,7 +157,7 @@ kintai_days, keiri_rows = browsers.parallel(
 早く気づけるほうが安全なため。
 
 ```python
-勤怠 = browsers.start(lambda: KintaiFlow(kintai).unfilled_days())
+勤怠 = browsers.run_task(lambda: KintaiFlow(kintai).unfilled_days())
 KeiriFlow(keiri).pending_rows()      # ⭕ 別のブラウザなので問題ない
 KintaiPage(kintai).open_menu()       # ❌ 裏で使っている勤怠を触っている
 ```
@@ -209,7 +209,7 @@ class KintaiPage(SitePage):
 
     def error_message(self) -> str:
         """画面上部のエラー表示を返す。"""
-        return self.text(self.ERROR_MESSAGE)
+        return self.read_text(self.ERROR_MESSAGE)
 ```
 
 ### 4. 画面ごとのクラスを作る
@@ -265,10 +265,10 @@ days = home.open_attendance().unfilled_days()
 
 | やりたいこと | 書き方 |
 |---|---|
-| 全行の値を読む | `page.texts(page.ROW_NAMES)` |
-| 件数だけ知りたい | `page.count(page.ROWS)`（0件でもエラーにならない） |
+| 全行の値を読む | `page.read_texts(page.ROW_NAMES)` |
+| 件数だけ知りたい | `page.count_elements(page.ROWS)`（0件でもエラーにならない） |
 | 何番目かをクリック | `page.click(page.EDIT_BUTTONS, index=2)` |
-| 行ごとに中身を見て操作する | `page.elements(page.ROWS)` |
+| 行ごとに中身を見て操作する | `page.find_elements(page.ROWS)` |
 
 行の中をさらに探すときだけ `elements()` を使う。行の WebElement から絞り込む:
 
@@ -276,7 +276,7 @@ days = home.open_attendance().unfilled_days()
 def submit_unfilled_rows(self) -> int:
     """未提出の行だけ提出ボタンを押し、押した件数を返す。"""
     submitted = 0
-    for row in self.elements(self.ROWS):
+    for row in self.find_elements(self.ROWS):
         if "未提出" in row.text:
             row.find_element(*self.SUBMIT_BUTTON).click()
             submitted += 1
@@ -290,10 +290,10 @@ def submit_unfilled_rows(self) -> int:
 def unfilled_names(self) -> list[str]:
     """未提出者の名前を返す。1件も無ければ空リストを返す。"""
     self.wait_visible(self.TABLE)      # 表が描画されるまで待つ
-    if self.count(self.ROWS) == 0:     # count は待たないので、先に上の行が要る
+    if self.count_elements(self.ROWS) == 0:     # count は待たないので、先に上の行が要る
         logger.info("対象の行がありません")
         return []
-    return self.texts(self.ROW_NAMES)
+    return self.read_texts(self.ROW_NAMES)
 ```
 
 `count()` と `has()` は**その場で数えるだけで待たない**。
@@ -304,7 +304,7 @@ def unfilled_names(self) -> list[str]:
 その場合は毎回取り直す形にする:
 
 ```python
-for index in range(page.count(page.ROWS)):
+for index in range(page.count_elements(page.ROWS)):
     page.click(page.EDIT_BUTTONS, index=index)
 ```
 
@@ -330,7 +330,7 @@ def ensure_login(self, user_id: str, password: str) -> "HomePage":
     from .home_page import HomePage
 
     self.go("/")
-    if self.has(self.USER_ID):
+    if self.has_element(self.USER_ID):
         return self.login(user_id, password)
     return HomePage(self.session)
 ```
@@ -462,7 +462,7 @@ with Browsers() as browsers:
     kintai = browsers.launch("kintai", KintaiOptions)
     keiri = browsers.launch("keiri", KeiriOptions)
 
-    勤怠 = browsers.start(lambda: KintaiFlow(kintai).unfilled_days(), label="勤怠")
+    勤怠 = browsers.run_task(lambda: KintaiFlow(kintai).unfilled_days(), label="勤怠")
 
     keiri_rows = KeiriFlow(keiri).pending_rows()   # 勤怠の読み込み中にこちらが進む
 

@@ -311,7 +311,7 @@ class TestAccessDatabase:
         recordset.Fields.Item.side_effect = [MagicMock(Name="ID"), MagicMock(Name="名前")]
         recordset.EOF = False
         recordset.GetRows.side_effect = [((1, 2), ("A", "B")), ()]
-        rows = database.rows("T_出力")
+        rows = database.read_rows("T_出力")
         assert inspect.isgenerator(rows)
         assert list(rows) == [{"ID": 1, "名前": "A"}, {"ID": 2, "名前": "B"}]
         recordset.GetRows.assert_called_with(1000)
