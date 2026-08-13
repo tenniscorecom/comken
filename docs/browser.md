@@ -666,7 +666,6 @@ python -m examples.sample_login.run
 ## 関連
 
 - [公開 API](自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外
-- [クライアント証明書の自動選択](browser-client-certificates.md) — 証明書選択の自動化を検討するとき
 - [プロジェクト規約](プロジェクト規約.md#page-object-model) — ファイル構成と命名
 - [エラー対応ガイド](../ERRORS.md#ブラウザedge-自動操作のエラー) — エラー名から対処を引く
 - `examples/sample_login/` — 動くサンプル一式

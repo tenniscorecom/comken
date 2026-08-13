@@ -1,10 +1,12 @@
-# Salesforce 連携 設計メモ
+# comken.salesforce
 
 [README（ドキュメントの入口）へ戻る](../README.md)
 
-作成日: 2026-08-12（更新: 2026-08-13）
+認証方式を社内へ説明するときは、公式資料と判断理由をまとめた
+[Salesforce authentication decisions](salesforce-authentication.md) を参照する。
+
 背景: 複数の Salesforce 組織（3組織）から、レポートとレコードを API で取得したい。
-一度作って撤去した経緯があるため、**なぜ今の形にするか**を残す。
+本書には現行仕様と、保守に必要な設計理由だけを記載する。
 関連: [プロジェクト規約](プロジェクト規約.md)、[ライブラリ開発規約](ライブラリ開発規約.md)
 
 > [!note] 組織名の書き方
@@ -14,28 +16,53 @@
 
 ---
 
-## 経緯 — 一度作って撤去した
+## 認証フロー
 
-| 時期 | 出来事 |
-|---|---|
-| 〜2026-07 | `SfApiClient` / `SfRestClient` / `SfReportClient` と DPAPI 保管を実装 |
-| 2026-07-29 | **撤去**（社内の既存の仕組みを使う方針になったため） |
-| 2026-08-12 | 社内の仕組みを作り直すことになり、**再開**。requests も利用可になった |
-| 2026-08-13 | 認証情報の DPAPI 保管（`comken.credentials`）を復活。入口を JSON 取り込みに変更 |
+無人の組織共通処理には Client Credentials Flow を使う。利用者本人の権限・監査主体が
+必要な処理には Web Server（Authorization Code）Flow と Refresh Token Flow を使える。
+どちらも `fetch() -> (access_token, instance_url)` を実装し、API クライアントへ差し替える。
 
-撤去前の実装は履歴に残っている。土台として読める。
+```python
+from comken.salesforce import Salesforce
+from comken.salesforce.oauth_refresh import OAuth
 
+auth = OAuth(
+    client_id="Consumer Key",
+    refresh_token="DPAPIから取得した値",
+    domain_url="https://example.my.salesforce.com",
+    client_secret="Require Secret for Refresh Token Flow が有効な場合のみ",
+    on_refresh_token=save_rotated_token,
+)
+with Salesforce(auth=auth) as sf:
+    records = sf.query("SELECT Id FROM Account")
 ```
-git show adc3d92^:comken/salesforce/api.py     # 認証+SOQL+CRUD+レポート+Bulk 2.0
-git show adc3d92^:comken/credentials/store.py  # DPAPI 保管
+
+初回だけ `OAuth.authorization_url()` の URL をブラウザで開き、戻された `state` を
+照合してから `exchange_code()` へ code を渡す。ライブラリはローカル HTTP サーバーや
+ブラウザを勝手に起動しない。レスポンスに新しい refresh token が含まれた場合は
+`on_refresh_token` が呼ばれるので、その場で DPAPI へ保存する。コールバックを省略すると
+プロセス内だけ更新され、次回起動時に古い token を使う点に注意する。
+
+### 認証方式を確定するとき
+
+2方式は同じ`OAuth`クラス名と`from_credentials()` / `fetch()`を持つ。
+`comken/salesforce/client.py`では、importと生成処理を2方式ぶん隣に置き、未採用側を
+コメントアウトしている。
+
+```python
+# Client Credentials Flow
+from .oauth_credentials import OAuth
+
+# Refresh Token Flowへ確定するときは上の1行を次へ変更
+from .oauth_refresh import OAuth
 ```
 
-前回からの変更点は3つ。**認証を差し替え可能にする**、**組織ごとのサブクラスを持つ**、
-**計測を入れる**。
+同じ場所にあるOAuth生成処理もコメントを入れ替える。確定後は不要な
+`oauth_credentials.py`または`oauth_refresh.py`を削除し、
+`comken/salesforce/__init__.py`から不要方式の公開名を消す。共通のquery、CRUD、report、metricsは
+認証方式に依存しないため変更不要。
 
----
-
-## 認証フロー — クライアントクレデンシャル
+### Client Credentials Flow
 
 ### 決定と理由
 
@@ -146,7 +173,6 @@ with SiteA(
 > — [Requirements and Limitations — Reports and Dashboards REST API](https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_limits_limitations.htm)
 
 **非同期にすれば 2000 行を超えられる、というのは誤り。**
-撤去前の実装の docstring にこの誤りが入っていたので、作り直しでは持ち込まない。
 非同期の利点は「重いレポートで HTTP タイムアウトしない」ことと実行枠
 （同期 500 回/時、非同期 1200 回/時）であって、行数制限の解除ではない。
 
@@ -169,7 +195,7 @@ with SiteA(
 ### レポート形式
 
 明細（TABULAR）以外は `factMap` の構造が変わり、そのまま読むと**無言で空を返す**。
-`reportFormat` を見て、明細以外は明示的にエラーにする（撤去前の実装と同じ扱い）。
+`reportFormat` を見て、明細以外は明示的にエラーにする。
 実際にどの形式かは触れば分かるので、事前に決め打ちしない。
 
 ---
@@ -201,11 +227,10 @@ with SiteA(
 
 ---
 
-## 認証情報の保存（2026-08-13 実装）
+## 認証情報の保存
 
 平文 JSON を置いて読む形にはできないため、**DPAPI で暗号化した 1 ファイル**に取り込む。
-撤去前の `credentials.dat`（DPAPI で暗号化した JSON）と同じ形式なので、
-**保存側はそのまま流用し、入口だけ差し替えた**（`comken.credentials`）。
+保存と読み込みは `comken.credentials` に集約する。
 
 ```
 平文の JSON      →  取り込みコマンド  →  DPAPI 暗号化ファイル  →  コードから読む
@@ -213,8 +238,7 @@ with SiteA(
                       平文は確認後に削除
 ```
 
-- 撤去前は対話式 CLI で 1 件ずつ登録していた。**JSON を食わせる**形に変えた。
-  配布時に手入力を挟まないため
+- 平文JSONをまとめて取り込む。配布時に手入力を挟まないため
 - JSON はシステム名ごとに項目をまとめる形式（`{"site_a": {"client_id": ...}}`）にして、
   `site_a_client_id` というキー名に展開する。組織ごとに client_id / client_secret が
   別なので、システム名で分けられる形が要る
@@ -246,554 +270,6 @@ with SiteA(
 複数台への配布が必要になったら、公開鍵ハイブリッド方式を足す余地がある。
 ただし `cryptography` 依存が JWT と同じ関門に当たるため、
 **まずローカル保管で動かし、配布が現実の問題になってから**にする。
-
----
-
-## 未確定事項
-
-- [ ] `cryptography` / `PyJWT` をオフライン環境へ持ち込めるか（決裁待ち）
-      → 通れば JWT フローと公開鍵配布の両方が解禁される
-- [ ] 3組織の処理差が実際にどこまであるか（サブクラスに何を書くか）
-- [ ] 2000 行を超えるレポートが実在するか・どれか（計測で洗い出す）
-- [ ] レポートが明細形式か集計形式か（触れば分かる）
-- [ ] 接続アプリを 3 組織それぞれで作成できるか（管理者への依頼ルート）
-
----
-
-## 参考（一次情報）
-
-- [OAuth 2.0 Client Credentials Flow for Server-to-Server Integration](https://help.salesforce.com/s/articleView?id=sf.remoteaccess_oauth_client_credentials_flow.htm&language=ja)
-- [Requirements and Limitations — Reports and Dashboards REST API](https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_limits_limitations.htm)
-- [Manage Session Policies for a Connected App](https://help.salesforce.com/s/articleView?id=xcloud.connected_app_manage_session_policies.htm&language=ja)
-- [Run Reports Synchronously or Asynchronously](https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_get_reportdata.htm)
-
----
-
-# Claude が書いた新方針セクション（Codex はこれを統合先へ組み込む）
-
-以下は 2026-08-13 に決めた新しい方針。上記の従来判断を
-**上書きするのではなく、変更点として追記する**（Brain の方針: 過去を書き換えず履歴として残す）。
-
----
-
-## 2026-08-13 の変更: 接続アプリ → External Client App
-
-### 何が変わったか
-
-**接続アプリ（Connected App）は新規に作れなくなった。** Spring '26 以降、UI・Metadata API の
-両方で作成が既定で禁止され、再有効化には Salesforce サポートへの依頼が要る。
-新規は **External Client App（ECA）** を使う。既存の接続アプリは動き続ける。
-
-- 出典: [New connected apps can no longer be created in Spring '26](https://community.servicemax.com/s/article/Announcement-Salesforce---New-connected-apps-can-no-longer-be-created-in-Spring-26)
-- 出典: [External Client Apps in Salesforce Spring '26: A Practical Migration Guide](https://dev.to/dipojjal/external-client-apps-in-salesforce-spring-26-a-practical-migration-guide-37o0)
-
-**この案件のアプリはこれから作るもの**なので、選択の余地なく ECA になる。
-
-### 認証フローは変えない
-
-ECA でも **OAuth 2.0 クライアントクレデンシャルフロー**が使える。
-2026-08-12 に決めた3つの運用制約（パスワードを平文で保存できない／リフレッシュトークンを
-中央集権で管理できない／無人実行）は今も有効で、判断は変わらない。
-
-- 出典: [Configure an External Client App for OAuth 2.0 Client Credentials Flow](https://help.salesforce.com/s/articleView?id=xcloud.meta_configure_client_credentials_flow_for_external_client_apps.htm&language=en_US&type=5)
-
-トークン取得のエンドポイントと手順は接続アプリと同じなので、`comken/salesforce/oauth.py` は
-そのまま使える。
-
----
-
-## secret ローテーションを自分で回す
-
-### なぜ要るか
-
-Salesforce は consumer secret を**定期的に変更すること**を推奨している。
-「90日」のような具体的な数字は公式には無く、「periodically（定期的に）」とだけ書かれている。
-
-- 出典: [View and Rotate the Consumer Key and Consumer Secret of a Connected App](https://help.salesforce.com/s/articleView?id=xcloud.connected_app_rotate_consumer_details.htm&language=en_US&type=5)
-
-問題は数字ではなく**運用**にある。四半期であれ半年であれ、そのたびに情シスへ連絡して
-新しい secret を発行してもらう必要があり、決裁が要る。これが実務上の負担になる。
-
-### 解決: ECA は REST API でローテーションできる
-
-Winter '26（API v65.0）で、ECA の consumer key / secret を REST API から
-ローテーションできるようになった。
-
-```
-GET   /services/data/v67.0/apps/oauth/credentials/{appId}
-POST  /services/data/v67.0/apps/oauth/credentials/{appId}/{consumerId}/staged
-PATCH /services/data/v67.0/apps/oauth/credentials/{appId}/{consumerId}/staged/{stagedId}
-      {"command": "rotate"}
-```
-
-- 新旧2セットが**同時に有効**なので、無停止で切り替わる
-- ローテーション後、旧セットは **30日後に自動削除**される
-- 前提: Setup の Apps/External Client Apps で
-  **「Allow access to External Client App consumer secrets via REST API」を有効化**する
-
-- 出典: [Salesforce External Client App key and secret rotation via REST API](https://lekkimworld.com/2025/09/24/salesforce-external-client-app-key-and-secret-rotation-via-rest-api/)
-
-**情シスへの依頼はこの有効化1回だけ**で、以後のローテーションは comken が自分で実行できる。
-これが「定期的に情シスへ連絡する」負担を消す。
-
-### なぜ JWT ではないのか
-
-JWT ベアラーフローなら client_secret 自体が無くなるので、ローテーション問題は根本から消える。
-それでも採らないのは、**`cryptography` を社内オフライン環境へ持ち込めないため**（pip が使えず、
-持ち込みには決裁が要る。2026-08-13 時点で未決）。
-
-ECA のローテーション API は `requests` だけで叩ける。`requests` は既に解禁済みなので、
-**追加の決裁なしで実装できる**のが決め手。
-
-決裁が通れば JWT に移る価値は残る（secret がネットワークを流れない）。認証は独立クラスに
-してあるので、`_oauth` の差し替えで移れる。
-
-### なぜリフレッシュトークンではないのか
-
-2026-08-13 に検討して**採らなかった**。理由は3つ。
-
-1. **痛みが消えない。** リフレッシュトークンフローでも client_secret は要る
-   （接続アプリ/ECA 側の「Require Secret for Refresh Token Flow」を管理者がオフにしない限り）
-2. **「ユーザー側で更新しやすい」が成り立たない。** リフレッシュトークンの有効期限は
-   Refresh Token Policy で**管理者が**決める（即時失効／N日未使用で失効／N日後に失効／
-   取り消されるまで有効）。使う側では決められないし、期間が一意に決まらない
-3. **無人実行という前提を壊す。** リフレッシュトークンの初回取得には、ブラウザで人が
-   同意する操作が必須。組織が3つあれば3回、失効のたびに再実行が要る
-
-- 出典: [Manage OAuth Access Policies for a Connected App](https://help.salesforce.com/s/articleView?language=en_US&id=sf.connected_app_manage_oauth.htm&type=5)
-
----
-
-## ローテーション実装の設計
-
-### 実行順序（この順序でないと詰む）
-
-1. `POST .../staged` で新しい資格情報を作る。**レスポンスに新しい key / secret が入る**
-2. **先に DPAPI へ保存する**（この時点で新旧どちらも有効なので、まだ壊れない）
-3. `PATCH .../staged/{stagedId}` で `{"command": "rotate"}` を実行し、新しい方を有効にする
-4. 旧セットは 30日後に Salesforce 側で自動削除される
-
-2 と 3 を逆にすると、rotate 済みなのに新しい secret を保存できていない状態が起こりうる。
-**保存が先**。保存に失敗しても rotate していなければ、旧 secret のまま何も壊れない。
-
-### いつ実行するか
-
-最終ローテーション日を DPAPI に一緒に保存し、`config.ini` で指定した日数
-（既定は 60日程度）を過ぎていたら実行する。旧セットの猶予が30日なので、
-猶予より短い間隔で回す必要はない。
-
-### 落とし穴: DPAPI は他の PC と共有できない（最重要）
-
-`comken/credentials/store.py` は認証情報を `Path.home()/.comken/credentials.dat` に
-**Windows DPAPI** で暗号化して保存する。DPAPI は**登録した Windows ユーザーと PC に
-紐付く**ので、別ユーザー・別 PC では復号できない（これは意図した設計）。
-
-つまり **ローテーションを実行した PC だけが新しい secret を持つ**。
-他の PC は古い secret を持ったまま 30日後に動かなくなり、しかも新しい secret を
-受け取る手段がない。
-
-したがって次の制約を置く。
-
-- **同じ ECA の資格情報を複数の PC で使っている場合、ローテーションを有効にしてよいのは1台だけ。**
-- 複数台で動かす必要があるなら、PC ごとに別の ECA（別の consumer）を用意する
-- ローテーションは既定で**無効**にし、`config.ini` で明示的に有効化した環境だけが実行する
-  （知らないうちに他の PC を壊さないため）
-
-この制約はコードのコメントと docstring に必ず書く。半年後に読む人が
-「なぜ1台だけなのか」を追えるようにするため。
-
-### 検証できていないこと
-
-REST API のレスポンス本文の正確なスキーマは、公開されている記事から読み取ったもので、
-**Salesforce 公式のリファレンスで確認できていない**（ヘルプが JS レンダリングのため未取得）。
-実装は社内環境で実際に叩いて確認する必要がある。
-フィールド名が違っていた場合に備え、レスポンスの取り出しは1箇所にまとめる。
-
----
-
-## API バージョンを 60.0 → 67.0 へ
-
-現在 `comken/salesforce/client.py` の `API_VERSION = "60.0"`（Spring '24）。
-**ローテーション API が v65.0 以降でしか使えない**ため、上げる必要がある。
-
-最新は **v67.0（Summer '26）**。
-
-- 出典: [Salesforce Summer '26 Release API Updates: API Version 67.0](https://www.conemis.com/news/salesforce-summer-26-release-api-updates-version-67-0)
-
-### 廃止スケジュールとの関係（v60.0 は危険ではない）
-
-- **Platform API v31.0〜40.0** — Summer '27 に非推奨、**Summer '28 に廃止**。v60.0 は対象外
-- **SOAP API の `login()` 呼び出し（v31.0〜64.0）** — Summer '27 に廃止。
-  ただし comken は **REST + OAuth** なので `login()` を使っておらず、**無関係**
-- v21.0〜30.0 は既に廃止済み（HTTP 410 GONE）
-
-- 出典: [Salesforce SOAP API Retirement: Before Summer '27](https://www.apexhours.com/salesforce-soap-api-retirement-everything-you-need-to-know-before-summer-27/)
-
-v67.0 の主な変更は「Apex のセキュリティ既定が user mode に」「`WITH SECURITY_ENFORCED` の削除」だが、
-これは **Apex の話**で、REST API を外から叩く comken には影響しない。
-
----
-
-# 付録: JWT ベアラーフローと認証情報の鍵配布
-
-# JWT ベアラーフローと認証情報の鍵配布（準備）
-
-作成日: 2026-08-12
-背景: `cryptography` をオフライン環境へ持ち込める見込みが立ったため、
-[Salesforce 連携 設計メモ](salesforce.md) で「後回し」にした2つを先に用意する。
-
-1. **JWT ベアラーフロー** — client_secret をネットワークに流さない認証
-2. **公開鍵ハイブリッド暗号での認証情報配布** — 複数台へ機密を一括で配る
-
-> [!important] まだ入れていない
-> `cryptography` は決裁待ちで、**comken の依存には追加していない**。
-> 本書のコードは動作確認済みだが、置き場所を用意しただけの段階。
-> 通った時点で `comken/salesforce/` と `comken/credentials/` に落とす。
-
-本書のコードは**すべて実際に実行して確認した**（末尾の「検証結果」参照）。
-
----
-
-## パート1: JWT ベアラーフロー
-
-### 仕様（一次情報）
-
-[OAuth 2.0 JWT Bearer Flow for Server-to-Server Integration](https://help.salesforce.com/s/articleView?id=sf.remoteaccess_oauth_jwt_flow.htm&language=ja) より。
-
-| 項目 | 値 |
-|---|---|
-| `iss`（発行者） | 接続アプリの client_id（Consumer Key） |
-| `sub`（主体） | 成り代わるユーザーの username |
-| `aud`（対象） | `https://login.salesforce.com`（本番） / `https://test.salesforce.com`（Sandbox） |
-| `exp`（期限） | UTC エポック秒。**時計ずれの許容は3分** |
-| 署名 | **RSA SHA256（RS256）** |
-| `grant_type` | `urn:ietf:params:oauth:grant-type:jwt-bearer` |
-
-> **This flow never issues a refresh token.**
-
-クライアントクレデンシャルと同じく、**リフレッシュトークンの管理問題は発生しない**。
-
-> [!warning] `aud` と接続先を混同しない
-> クライアントクレデンシャルは **My Domain 必須**（`login.salesforce.com` 不可）だったが、
-> JWT の `aud` は逆に **`login.salesforce.com` / `test.salesforce.com`** を書く。
-> `aud` は「認可サーバーの識別子」であって POST 先の URL とは別物。
-> 前のフローの知識をそのまま持ち込むとここで詰まる。
-
-### PyJWT は要らない
-
-`cryptography` だけで JWT を組み立てられる。**持ち込む wheel が1つ減る**ので、
-オフライン環境ではこれが効く。生成した JWT が PyJWT で検証できることも確認済み
-（他実装と相互運用できる ＝ 独自形式になっていない）。
-
-### 鍵と証明書を作る
-
-接続アプリには**公開鍵証明書（X.509）**をアップロードする。自己署名でよい。
-
-```python
-import datetime
-from pathlib import Path
-
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.x509.oid import NameOID
-
-KEY_SIZE_BITS = 2048
-CERT_VALID_DAYS = 365
-
-
-def create_key_and_certificate(common_name: str, out_dir: Path) -> tuple[Path, Path]:
-    """秘密鍵と自己署名証明書を作り、(秘密鍵パス, 証明書パス) を返す。
-
-    証明書は接続アプリへアップロードする。秘密鍵は外に出さない。
-    """
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=KEY_SIZE_BITS)
-    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
-    now = datetime.datetime.now(datetime.timezone.utc)
-    certificate = (
-        x509.CertificateBuilder()
-        .subject_name(subject)
-        .issuer_name(subject)  # 自己署名なので発行者は自分
-        .public_key(private_key.public_key())
-        .serial_number(x509.random_serial_number())
-        .not_valid_before(now)
-        .not_valid_after(now + datetime.timedelta(days=CERT_VALID_DAYS))
-        .sign(private_key, hashes.SHA256())
-    )
-
-    key_path = out_dir / f"{common_name}.key.pem"
-    cert_path = out_dir / f"{common_name}.crt"
-    key_path.write_bytes(
-        private_key.private_bytes(
-            serialization.Encoding.PEM,
-            serialization.PrivateFormat.PKCS8,
-            serialization.NoEncryption(),
-        )
-    )
-    cert_path.write_bytes(certificate.public_bytes(serialization.Encoding.PEM))
-    return key_path, cert_path
-```
-
-**秘密鍵は平文で置かない。** 作ったら DPAPI で包んで保管する（パート2と同じ方式）。
-証明書の有効期限が切れると認証が止まるので、期限は台帳で管理すること。
-
-### トークンを取る
-
-```python
-import base64
-import json
-import time
-
-import requests
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding
-
-TOKEN_PATH = "/services/oauth2/token"
-GRANT_TYPE = "urn:ietf:params:oauth:grant-type:jwt-bearer"
-ASSERTION_LIFETIME_SECONDS = 180  # 時計ずれの許容が3分なので、それに合わせる
-TIMEOUT_SECONDS = 30
-
-
-def _b64url(raw: bytes) -> str:
-    """JWT で使う、パディングなしの base64url に変換する。"""
-    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
-
-
-def build_assertion(
-    client_id: str, username: str, audience: str, private_key_pem: bytes
-) -> str:
-    """署名済みの JWT を組み立てて返す。
-
-    Args:
-        client_id: 接続アプリの Consumer Key。
-        username: 成り代わるユーザーの username。
-        audience: 本番なら "https://login.salesforce.com"。
-        private_key_pem: 証明書と対になる秘密鍵の PEM。
-    """
-    header = {"alg": "RS256", "typ": "JWT"}
-    claims = {
-        "iss": client_id,
-        "sub": username,
-        "aud": audience,
-        "exp": int(time.time()) + ASSERTION_LIFETIME_SECONDS,
-    }
-    segments = [
-        _b64url(json.dumps(header, separators=(",", ":")).encode("utf-8")),
-        _b64url(json.dumps(claims, separators=(",", ":")).encode("utf-8")),
-    ]
-    signing_input = ".".join(segments).encode("ascii")
-    private_key = serialization.load_pem_private_key(private_key_pem, password=None)
-    signature = private_key.sign(signing_input, padding.PKCS1v15(), hashes.SHA256())
-    return f"{'.'.join(segments)}.{_b64url(signature)}"
-
-
-def fetch_token(assertion: str, login_url: str) -> tuple[str, str]:
-    """JWT を渡してアクセストークンと instance_url を取得する。"""
-    response = requests.post(
-        f"{login_url.rstrip('/')}{TOKEN_PATH}",
-        data={"grant_type": GRANT_TYPE, "assertion": assertion},
-        timeout=TIMEOUT_SECONDS,
-    )
-    response.raise_for_status()
-    body = response.json()
-    return body["access_token"], body["instance_url"]
-```
-
-`padding.PKCS1v15()` + `hashes.SHA256()` が RS256 の実体。ここを OAEP や PSS に
-間違えると Salesforce 側で無言の `invalid_grant` になる。
-
-### 管理者に依頼すること
-
-1. 接続アプリ（新規は External Client App 推奨）を作り、OAuth を有効化
-2. **「デジタル署名を使用」に上で作った `.crt` をアップロード**
-3. スコープに `api` を入れる
-4. **実行ユーザーを事前承認する** — 「管理者が承認したユーザーは事前承認済み」に設定し、
-   プロファイルまたは権限セットを割り当てる。ここが抜けると `invalid_grant` になる
-5. 実行ユーザーに「API の有効化（API Enabled）」を付与
-
-### 差し替え方
-
-[設計メモ](salesforce.md)のとおり、認証は `SalesforceBase` が**持つ**部品にする。
-クライアントクレデンシャル版と JWT 版が同じ形（トークンと instance_url を返す）を
-満たしていれば、入れ替えるだけで移行できる。
-
-```python
-class SfJwtOAuth:
-    """JWT ベアラーフローでトークンを取る。SfOAuth と同じ形を満たす。"""
-
-    def __init__(self, client_id: str, username: str, login_url: str, private_key_pem: bytes):
-        self._client_id = client_id
-        self._username = username
-        self._login_url = login_url
-        self._private_key_pem = private_key_pem
-
-    def fetch(self) -> tuple[str, str]:
-        """(アクセストークン, instance_url) を返す。401 のたびに呼び直してよい。"""
-        assertion = build_assertion(
-            self._client_id, self._username, self._login_url, self._private_key_pem
-        )
-        return fetch_token(assertion, self._login_url)
-```
-
----
-
-## パート2: 公開鍵ハイブリッド暗号での配布
-
-### 何を解決するか
-
-DPAPI は**同じ Windows ユーザー × 同じ PC** でしか復号できない。
-だから「管理サーバーで暗号化して各PCへ配る」が原理的にできない。
-各PCに鍵ペアを持たせ、**公開鍵で包んで配る**とこれが解ける。
-
-```
-管理サーバー                共有フォルダ              実行PC
-────────────           ──────────         ────────────
-機密を登録                 public_keys/          [初回] setup:
-    │                      ├ PC01.pem  ◀──────  鍵ペア生成・公開鍵を提出
-    │                      └ PC02.pem            秘密鍵は DPAPI で保護
-    ▼
-pack: 全公開鍵で暗号化 ──▶ bundle.json ──────▶  [毎回] pull:
-                                                  秘密鍵で開いてローカルへ取り込み
-```
-
-**肝は「配布＝ローカル保管の同期」と捉えること。** 実行PC側は開いたら既存の保存関数で
-登録するだけなので、コード側の読み出し（`Credentials("site_a")`）は一切変わらない。
-
-### なぜハイブリッドか
-
-RSA は長いデータを直接暗号化できない。そこで**共通鍵で本文を1回だけ暗号化し、
-その共通鍵だけを台数分 RSA で包む**。台数が増えても本文は1つで済む。
-
-| 部品 | 選定 | 理由 |
-|---|---|---|
-| 本文の暗号化 | Fernet（AES + HMAC） | 認証付き。**改ざんが復号時に必ず露見する** |
-| 共通鍵の包み | RSA-OAEP（SHA-256）・3072bit | `cryptography` 標準 |
-| 秘密鍵の保管 | PEM を DPAPI で暗号化 | 鍵管理が不要 |
-
-### bundle を作る（管理サーバー）
-
-```python
-import base64
-import json
-
-from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding
-
-BUNDLE_VERSION = 1
-
-
-def _oaep() -> padding.OAEP:
-    return padding.OAEP(
-        mgf=padding.MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None
-    )
-
-
-def pack_bundle(secrets: dict, public_key_pems: dict) -> dict:
-    """機密一式を、登録済みの全公開鍵で開ける bundle にする。
-
-    Args:
-        secrets: {"site_a_client_id": "...", ...} の平文辞書。
-        public_key_pems: {"PC01": 公開鍵PEM, ...}。
-    """
-    fernet_key = Fernet.generate_key()
-    payload = Fernet(fernet_key).encrypt(json.dumps(secrets, ensure_ascii=False).encode("utf-8"))
-
-    wrapped_keys = {}
-    for name, public_pem in public_key_pems.items():
-        public_key = serialization.load_pem_public_key(public_pem)
-        wrapped = public_key.encrypt(fernet_key, _oaep())
-        wrapped_keys[name] = base64.b64encode(wrapped).decode("ascii")
-
-    return {
-        "version": BUNDLE_VERSION,
-        "payload": base64.b64encode(payload).decode("ascii"),
-        "wrapped_keys": wrapped_keys,
-    }
-```
-
-### bundle を開く（実行PC）
-
-```python
-def open_bundle(bundle: dict, machine_name: str, private_key_pem: bytes) -> dict:
-    """自分あての共通鍵を取り出して本文を復号する。
-
-    Raises:
-        KeyError: この PC が bundle に登録されていない場合。
-    """
-    private_key = serialization.load_pem_private_key(private_key_pem, password=None)
-    fernet_key = private_key.decrypt(
-        base64.b64decode(bundle["wrapped_keys"][machine_name]), _oaep()
-    )
-    raw = Fernet(fernet_key).decrypt(base64.b64decode(bundle["payload"]))
-    return json.loads(raw.decode("utf-8"))
-```
-
-### 秘密鍵を DPAPI で保管する
-
-```python
-import os
-from pathlib import Path
-
-import win32crypt
-
-KEY_DESCRIPTION = "comken dist key"
-
-
-def save_private_key(private_key_pem: bytes, path: Path) -> None:
-    """秘密鍵を DPAPI で暗号化して保存する。
-
-    一時ファイル経由で置き換え、書き込み中のクラッシュで鍵が壊れるのを防ぐ。
-    """
-    encrypted = win32crypt.CryptProtectData(
-        private_key_pem, KEY_DESCRIPTION, None, None, None, 0
-    )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_suffix(f".{os.getpid()}.tmp")
-    tmp_path.write_bytes(encrypted)
-    os.replace(tmp_path, path)
-
-
-def load_private_key(path: Path) -> bytes:
-    """DPAPI で保管した秘密鍵を復号して返す。"""
-    _, private_key_pem = win32crypt.CryptUnprotectData(
-        path.read_bytes(), None, None, None, 0
-    )
-    return private_key_pem
-```
-
-### 運用の注意
-
-| 論点 | 対応 |
-|---|---|
-| **公開鍵のすり替えが唯一の本質的な弱点** | 攻撃者が偽の公開鍵を置くと次回の pack から機密を受け取れる。共有フォルダの**書き込み権限を絞る**、pack 時に包んだ PC 名をログに出して台帳と照合する |
-| DPAPI はユーザー単位 | setup と実行を**同じ Windows アカウント**で行う。一番ハマりやすい |
-| 管理サーバーには平文が集まる | どの配布方式でも同じ。サーバー自体の保護が本丸 |
-| ログに値を出さない | 出してよいのはキー名と件数まで |
-| bundle と公開鍵は秘密でない | 読まれても安全。**守るのは書き込みだけ** |
-
----
-
-## 検証結果
-
-本書のコードを実行して確認した内容。
-
-| 確認 | 結果 |
-|---|---|
-| JWT を組み立てて PyJWT で検証 | 成功（iss / sub / aud が意図どおり） |
-| `cryptography` だけで署名検証 | 成功（PyJWT なしで完結する） |
-| 3台ぶんの bundle を作り全台で復号 | 成功（bundle 1891 バイト） |
-| 未登録の鍵で復号を試みる | 失敗する（`ValueError`）＝ 意図どおり |
-| payload を1バイト改ざんして復号 | 検出される（`InvalidToken`）＝ 意図どおり |
-| 秘密鍵を DPAPI で保存して復号 | 成功（2484 → 2740 バイト） |
-| 自己署名証明書の生成 | 成功（CN・有効期限・鍵長を確認） |
-
-## 次にやること
-
-- [ ] `cryptography` の決裁を通す（これが全ての前提）
-- [ ] 通ったら `pyproject.toml` と `requirements.txt` に追加し、本書のコードを実装に落とす
-- [ ] JWT は接続アプリの設定（証明書アップロード・事前承認）が要るので、管理者依頼と並行する
-- [ ] 配布方式は、実際に複数台構成になってから入れる（1台なら DPAPI 直接登録で足りる）
 
 ---
 
@@ -883,8 +359,8 @@ client_id / client_secret を読む（後述の [credentials](credentials.md#cre
 書き換える（`comken/run.py` の `example_libs.v0000` と同じ扱い）。
 
 書き込み系（`insert` / `update` / `upsert` / `delete`）は `dry_run` を尊重する。
-使い方の一覧は [docs/機能カタログ.md](機能カタログ.md)、
-設計の背景は [docs/salesforce.md](salesforce.md) を参照。
+使い方の一覧は [README](../README.md#モジュール一覧)、
+認証の判断根拠は [salesforce-authentication.md](salesforce-authentication.md) を参照。
 
 ---
 

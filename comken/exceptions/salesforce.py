@@ -24,11 +24,11 @@ class SalesforceAuthError(SalesforceError):
         super().__init__(
             f"Salesforce の認証に失敗しました（HTTP {status_code}）: {detail}\n"
             "次を順に確認してください。\n"
-            "  1. client_id / client_secret が正しいか\n"
-            "  2. 接続アプリで「クライアントクレデンシャルフローを有効化」にチェックがあるか\n"
-            "  3. 接続アプリのポリシーで「実行ユーザー（Run As）」を指定しているか\n"
-            "     （未指定だと invalid_grant になります）\n"
-            "  4. domain_url が My Domain の URL か\n"
+            "  1. 選択した OAuth 方式と ECA 側で有効なフローが一致しているか\n"
+            "  2. client_id / client_secret と、必要なら refresh_token が正しいか\n"
+            "  3. Client Credentials では実行ユーザー（Run As）が指定されているか\n"
+            "  4. Refresh Token では初回認可、失効ポリシー、secret 必須設定が正しいか\n"
+            "  5. domain_url が My Domain の URL か\n"
             "     （login.salesforce.com では動きません）"
         )
 

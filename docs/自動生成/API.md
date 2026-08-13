@@ -3674,7 +3674,7 @@ Attributes:
 #### `__init__`
 
 ```text
-def __init__(self, client_id: str, client_secret: str, domain_url: str, org_name: str='') -> None:
+def __init__(self, client_id: str='', client_secret: str='', domain_url: str='', org_name: str='', *, auth: _OAuth | None=None, refresh_token: str='') -> None:
 ```
 
 ##### 説明
@@ -3684,6 +3684,8 @@ Args:
     client_secret: 接続アプリの Consumer Secret。
     domain_url: 組織の My Domain の URL。login.salesforce.com は使えない。
     org_name: 計測ログに出す組織の呼び名。省略時はクラス名を使う。
+    auth: Client Credentials 以外の認証方式。指定時は上の3引数を使わない。
+    refresh_token: Refresh Token方式を選択した場合に指定する。選択前は省略可。
 
 Raises:
     SalesforceAuthError: 認証に失敗した場合。
@@ -3698,10 +3700,11 @@ def from_credentials(cls: type[_SalesforceT], domain_url: str, prefix: str='', o
 
 ##### 説明
 
-DPAPI に保管した client_id / client_secret を読んでインスタンスを作る。
+DPAPIに保管した認証情報を読み、選択中のOAuth方式で接続する。
 
-`python -m comken.credentials import` で取り込んだ
-「<システム名>_client_id」「<システム名>_client_secret」を使う。
+読み込む項目はclient.pyがimportしているOAuth方式で決まる。
+Client Credentials方式はclient_id / client_secret、Refresh Token方式は
+client_id / client_secret / refresh_tokenを使う。
 呼び出し側のコードに秘密の値が現れないので、通常はこちらを使う。
 
 使い方:
@@ -3716,7 +3719,7 @@ Args:
 
 Raises:
     InvalidCredentialNameError: システム名が空、または使えない文字を含む場合。
-    CredentialNotFoundError: client_id / client_secret が未登録の場合。
+    CredentialNotFoundError: 選択方式に必要な認証情報が未登録の場合。
     CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
 
 #### `close`
@@ -3940,21 +3943,21 @@ Raises:
 
 ### `ClientCredentialsAuth`
 
+公開定数。
+
+### `RefreshTokenAuth`
+
+公開定数。
+
+### `CredentialsOAuth`
+
 ```text
-class ClientCredentialsAuth:
+class OAuth:
 ```
 
 #### 説明
 
-クライアントクレデンシャルフローでアクセストークンを取得する。
-
-使い方:
-    auth = ClientCredentialsAuth(
-        client_id="接続アプリの Consumer Key",
-        client_secret="接続アプリの Consumer Secret",
-        domain_url="https://your-domain.my.salesforce.com",
-    )
-    access_token, instance_url = auth.fetch()
+client_id と client_secret でアクセストークンを取得する。
 
 #### `__init__`
 
@@ -3962,15 +3965,16 @@ class ClientCredentialsAuth:
 def __init__(self, client_id: str, client_secret: str, domain_url: str) -> None:
 ```
 
+#### `from_credentials`
+
+```text
+@classmethod
+def from_credentials(cls, domain_url: str, prefix: str) -> 'OAuth':
+```
+
 ##### 説明
 
-Args:
-    client_id: 接続アプリの Consumer Key。
-    client_secret: 接続アプリの Consumer Secret。
-    domain_url: 組織の My Domain の URL
-        （例: "https://foo.my.salesforce.com"）。
-        Sandbox は "https://foo--sandbox.sandbox.my.salesforce.com"。
-        このフローは My Domain が必須で、login.salesforce.com では動かない。
+DPAPIに保存したclient_idとclient_secretから認証を作る。
 
 #### `fetch`
 
@@ -3980,16 +3984,66 @@ def fetch(self) -> tuple[str, str]:
 
 ##### 説明
 
-アクセストークンと instance_url を取得して返す。
+アクセストークンと instance_url を取得する。
 
-期限切れのたびに呼び直してよい（毎回まっさらなトークンが返る）。
+### `RefreshOAuth`
 
-Returns:
-    (アクセストークン, instance_url) のタプル。
+```text
+class OAuth:
+```
 
-Raises:
-    SalesforceAuthError: 認証に失敗した場合。
-    SalesforceConnectionError: ネットワークの問題で接続できない場合。
+#### 説明
+
+保存済み refresh_token でアクセストークンを更新する。
+
+#### `__init__`
+
+```text
+def __init__(self, client_id: str, refresh_token: str, domain_url: str, *, client_secret: str | None=None, on_refresh_token: Callable[[str], None] | None=None) -> None:
+```
+
+#### `from_credentials`
+
+```text
+@classmethod
+def from_credentials(cls, domain_url: str, prefix: str) -> 'OAuth':
+```
+
+##### 説明
+
+DPAPIに保存したOAuth資格情報から認証を作る。
+
+#### `fetch`
+
+```text
+def fetch(self) -> tuple[str, str]:
+```
+
+##### 説明
+
+refresh_token を使ってアクセストークンを取得する。
+
+#### `authorization_url`
+
+```text
+@staticmethod
+def authorization_url(client_id: str, redirect_uri: str, domain_url: str, *, scope: str='api refresh_token', state: str | None=None) -> tuple[str, str]:
+```
+
+##### 説明
+
+利用者がブラウザで開く認可 URL と CSRF 検証用 state を返す。
+
+#### `exchange_code`
+
+```text
+@classmethod
+def exchange_code(cls, client_id: str, client_secret: str, code: str, redirect_uri: str, domain_url: str, *, on_refresh_token: Callable[[str], None] | None=None) -> 'OAuth':
+```
+
+##### 説明
+
+認可コードを交換し、取得した refresh_token を持つ認証部品を返す。
 
 ### `ApiMetrics`
 

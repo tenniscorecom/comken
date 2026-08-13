@@ -35,7 +35,7 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 | したいこと | 読むもの |
 |---|---|
 | はじめて使う | この README の「[はじめて使う人へ](#はじめて使う人へ)」 |
-| 何が用意されているか探す | [機能カタログ](docs/機能カタログ.md)（早見表） |
+| 何が用意されているか探す | このREADMEの「[モジュール一覧](#モジュール一覧)」 |
 | モジュールの使い方を知る | [CSV](docs/csv.md)・[Excel](docs/excel.md)・[Access](docs/access.md)・[Outlook](docs/outlook.md)・[Windows](docs/windows.md)・[ブラウザ](docs/browser.md)・[Salesforce](docs/salesforce.md)・[ファイル](docs/utils-files.md)・[認証情報](docs/credentials.md) |
 | 引数・戻り値・例外を正確に知る | [公開 API](docs/自動生成/API.md)（**自動生成**） |
 | エラーが出た | [エラー対応ガイド](ERRORS.md)（エラー表は **自動生成**） |
@@ -45,7 +45,6 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 | comken 本体を直す | [ライブラリ開発規約](docs/ライブラリ開発規約.md) |
 | comken を使うツールを作る | [プロジェクト規約](docs/プロジェクト規約.md) |
 | コードを読む・レビューする | [コードリーディングガイド](docs/コードリーディングガイド.md) |
-| ブラウザのクライアント証明書を検討する | [クライアント証明書の自動選択](docs/browser-client-certificates.md)（検討中） |
 
 ## モジュール一覧
 
@@ -62,6 +61,7 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 | [Windows（pywin32）](docs/windows.md) | Excel COM 操作・ウィンドウ操作・レジストリ読み取り |
 | [Browser（Edge）](docs/browser.md) | Edge ブラウザ操作 |
 | [Salesforce（requests）](docs/salesforce.md) | Salesforce の SOQL・レコード操作・レポート取得・API 使用量の計測 |
+| [Salesforce認証の判断根拠](docs/salesforce-authentication.md) | ECA・Client Credentials Flowを選んだ理由と公式資料 |
 | [credentials（DPAPI）](docs/credentials.md) | パスワード・client_secret の暗号化保存（Windows ユーザーに紐付く） |
 | [utils.files](docs/utils-files.md) | ファイル検索・操作・圧縮・標準フォルダ取得・ファイル名の組み立て |
 | [utils](docs/utils-files.md) | データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時取得 |
@@ -119,11 +119,6 @@ python main.py
   に向ける（`sys.pycache_prefix`）。環境変数 `PYTHONPYCACHEPREFIX` を設定済みの場合はそちらを尊重する。
 - **代償**: import のたびにネットワークを読むので起動が遅く、共有サーバーが落ちると動かない。
   詳しい仕組み・運用（更新/ロールバック/開発との分離）は 仕様書.md の「参照・運用」を参照。
-
-> 旧方式（robocopy でローカル同期する `初回セットアップ.bat` / `実行.bat` / `リリース.bat`）は
-> 直接参照への移行で不要になったため削除済み。
-
----
 
 ## 実行モード（バージョン / デバッグ / dry-run）
 
@@ -387,22 +382,3 @@ flowchart LR
 ```
 
 ---
-
-## 改訂履歴
-
-| 日付 | 内容 |
-|---|---|
-| 2026-08-13 | **v0.6.0** — VS Code の補完・定義ジャンプ用 `extraPaths` を雛形へ追加し、`new_project.py` が comken の場所を3ファイルへ書き込むようにした。API・エラー文書を docstring から生成して重複を解消。Salesforce を Spring '26 対応の External Client App と REST API による secret ローテーションへ移行し、API 67.0 へ更新。単体実行用 logger、dry-run では書かない state.ini、`Config.mapping()`、実行テスト付き basics 12例を追加。雛形を単体実行中心へ変更し、共有フォルダ起動時の `C:\Windows` 問題を pushd で修正。Excel 転記を `{転記元: 転記先}` に統一して列名版・列記号版を区別し、openpyxl / COM の同じ役割のメソッド名を揃えた |
-| 2026-07-09 | 初版作成 |
-| 2026-07-10 | 全モジュールにドキュメント追加、README 整理 |
-| 2026-07-12 | ExcelWriter・ExcelComHandler に `headers` 引数追加（ヘッダーなし Excel 対応）。EdgeDriver のダウンロードフォルダ管理を内部化（デフォルト一時フォルダ・with 終了時自動削除）。`ExcelWriter.transfer_by_letter`（openpyxl 版）追加。`diff_row` 追加・`diff_rows` を列単位の差分付きに改良。ExcelComHandler の初期化失敗時に Excel プロセスが残るバグ等を修正 |
-| 2026-07-12 | Teams 通知（TeamsNotifier。Power Automate Webhook / Adaptive Card 形式）・テキスト正規化（normalize / strip_spaces / remove_spaces）・待機（wait）・特殊フォルダ取得（Paths）を追加。Paths は OneDrive リダイレクトに追従、通知失敗は TeamsError |
-| 2026-07-12 | Config: [a, b, c] 記法でリストに自動変換（parse_list は警告付きで残存）。エディタ補完用スタブ生成（python -m comken.config）を追加。BOM 付き UTF-8 の config.ini が読めないバグを修正 |
-| 2026-07-12 | Locator（セレクターのクラス変数管理）・retry・Timer / measure・zip・Excel の Sheet ラッパー（セル参照 / write_table / auto_width / freeze_header）・ExcelWriter.create を追加 |
-| 2026-07-12 | comken.__version__ / debug()（主要処理の時間を DEBUG ログに記録）/ dry_run()（外部に影響する操作をスキップ）を追加。EdgeDriver がエラー時に画面を logs/ に自動保存。Excel 孤立プロセス対策（is_excel_running / kill_excel）。リリース.bat で git tag を打つ運用に。スタブ書き込みをアトミック化 |
-| 2026-07-13 | ExcelComHandler: 上書き保存 save() 追加、save_as のパスワードが効かない問題を修正（FileFormat を常に明示。形式変換は file_format 引数）、close() でプロセスが残る問題を修正、AskToUpdateLinks=False 追加。CONVENTIONS に「モジュール内の並び順」を追加し全体を整理。docs/（機能カタログ・コードリーディングガイド・設計メモ）を追加 |
-| 2026-07-14 | 監査指摘の修正一式（keep_vba・run_macro 保存・DispatchEx・EdgeDriver/SF のリソース解放・config 型変換・CSV/ログの堅牢化・unzip の 3.10 対応/Zip Slip 対策）。コーディング規約を3層（共通/本体/利用側）に分割。配布方式を廃止し共有サーバー直接参照（PYTHONPATH）に変更、同期用 bat（templates/）を削除 |
-| 2026-07-15 | `from comken import config` に一本化（src/config.py 不要）。Pylance 補完用 typings スタブを自動生成。当時のログ初期化で comken バージョンを出力。バイトコードキャッシュをローカルに自動退避。examples テスト・README コード構文チェック・CI（GitHub Actions）を追加。新規プロジェクトのひな形 templates/新規プロジェクト/ を追加 |
-| 2026-08-13 | **v0.5.0** — 認証情報の暗号化保存を追加（`comken.credentials`）。client_secret・パスワードを Windows DPAPI で暗号化し、`%USERPROFILE%\.comken\credentials.dat` に保管する。登録は対話式ではなく**平文 JSON の取り込み**（`python -m comken.credentials import`）にして、配布時に手入力を挟まない。JSON はシステム名ごとに項目をまとめる形式で、`site_a_client_id` のようなキー名に展開される。書き込みはまとめて1回で、1件でも不正なら1件も保存しない。復号できない場合（登録時と違う Windows アカウント・PC）は原因の確認順を示す `CredentialDecryptionError` にする。`Salesforce.from_credentials()` を追加し、サイトクラスの `CREDENTIAL_PREFIX` から client_id / client_secret を読めるようにした。例外を `CredentialError` 配下に新設 |
-| 2026-08-12 | **v0.4.0** — Salesforce 連携を追加（`comken.salesforce`）。認証は OAuth 2.0 クライアントクレデンシャルフローで、リフレッシュトークンを保管しない。1インスタンス=1組織で、組織固有の処理は継承して足す。認証・レポート・計測は継承ではなく合成（JWT フローへ差し替えられるようにするため）。アクセストークンの期限は測らず 401 で1回だけ取り直す。5xx と 429 は待ち時間を伸ばしながら最大3回やり直し、4xx は即エラーにする。レポートは**同期・非同期とも 2000 行が上限**なので、切り捨てを検知したら既定で例外にする（`allow_truncated=True` で警告に落とせる）。API 呼び出しは1か所を通るので、呼び出し元別の回数・リトライ理由・所要時間・`Sforce-Limit-Info` 由来の組織 API 消費量をまとめて記録し、ログと CSV に出せる。例外を `SalesforceError` 配下に新設。依存に requests を追加。docs/Salesforce設計メモ.md・docs/Salesforce_JWTと鍵配布.md を追加 |
-| 2026-08-03 | browser を作り直し（**破壊的変更**）。`EdgeDriver` / `BasePage` を廃止し、入口を `Browsers` に一本化（1サイト1ブラウザ・`with` 必須・サイトが1つでも複数でも同じ書き方）。`start` / `wait` で待ち時間に別サイトを進められるようにし、`parallel` はその短縮形に。`Page` を `Locator` 版へ一本化して `click_id` 等の直積メソッドを削除、`elements` を追加。msedgedriver のバージョン不一致を配布フォルダから自動修復。`PROFILE_ROOT` でログイン状態を永続化。ブラウザ例外を `BrowserError` 配下に新設。`py.typed` 追加（補完・型チェック改善）。docs/browser.md・docs/outlook.md を追加 |

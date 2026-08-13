@@ -13,13 +13,14 @@
 
 組織を増やすときは、組織ごとに Salesforce を作る。組織固有の処理が必要なら
 `Salesforce` を継承して利用プロジェクト側でメソッドを足す。
-認証は OAuth 2.0 クライアントクレデンシャルフローで、
-ユーザー名・パスワード・リフレッシュトークンは使わない。
+認証は `oauth_credentials.py` と `oauth_refresh.py` の2方式を用意している。
+`client.py` のOAuth import先が、`Salesforce.from_credentials()`で使う方式を決める。
 設計の背景は docs/salesforce.md を参照。
 
     Salesforce             1組織ぶんの API クライアント（入口）
     ReportApi              レポート API。Salesforce.report が持っている
-    ClientCredentialsAuth  アクセストークンの取得。Salesforce.auth が持っている
+    CredentialsOAuth       Client Credentials Flow
+    RefreshOAuth           Authorization Code + Refresh Token Flow
     ApiMetrics             API 呼び出しの計測。Salesforce.metrics が持っている
     ApiUsage               組織の 24 時間 API 消費量
     ComponentStat          呼び出し元ごとの集計
@@ -39,7 +40,10 @@ except ImportError as e:  # pragma: no cover
 
 from .client import Salesforce
 from .metrics import ApiMetrics, ApiUsage, ComponentStat, RetryReason
-from .oauth import ClientCredentialsAuth
+from .oauth_credentials import ClientCredentialsAuth
+from .oauth_credentials import OAuth as CredentialsOAuth
+from .oauth_refresh import OAuth as RefreshOAuth
+from .oauth_refresh import RefreshTokenAuth
 from .report import ReportApi
 from .rotation import SalesforceCredentialRotator
 
@@ -47,6 +51,9 @@ __all__ = [
     "Salesforce",
     "ReportApi",
     "ClientCredentialsAuth",
+    "RefreshTokenAuth",
+    "CredentialsOAuth",
+    "RefreshOAuth",
     "ApiMetrics",
     "ApiUsage",
     "ComponentStat",

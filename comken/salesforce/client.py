@@ -17,7 +17,7 @@
 import logging
 import time
 import urllib.parse
-from typing import TypeVar
+from typing import Protocol, TypeVar
 
 import requests
 
@@ -28,7 +28,11 @@ from ..exceptions import (
 )
 from ..runtime import dry_run_log, is_dry_run
 from .metrics import ApiMetrics, RetryReason
-from .oauth import ClientCredentialsAuth
+
+# 採用する認証方式だけコメントを外す。確定後は不要な方式の行とファイルを削除する。
+from .oauth_credentials import OAuth
+
+# from .oauth_refresh import OAuth
 from .report import ReportApi
 
 logger = logging.getLogger(__name__)
@@ -45,6 +49,14 @@ RETRY_WAIT_SECONDS = 2
 
 # サブクラスのまま返すための型変数（SiteA.from_credentials(...) は SiteA を返す）
 _SalesforceT = TypeVar("_SalesforceT", bound="Salesforce")
+
+
+class _OAuth(Protocol):
+    """Salesforceクライアントが認証方式へ求める最小インターフェース。"""
+
+    def fetch(self) -> tuple[str, str]:
+        """アクセストークンとinstance_urlを返す。"""
+        ...
 
 
 class Salesforce:
@@ -74,10 +86,13 @@ class Salesforce:
 
     def __init__(
         self,
-        client_id: str,
-        client_secret: str,
-        domain_url: str,
+        client_id: str = "",
+        client_secret: str = "",
+        domain_url: str = "",
         org_name: str = "",
+        *,
+        auth: _OAuth | None = None,
+        refresh_token: str = "",
     ) -> None:
         """
         Args:
@@ -85,12 +100,21 @@ class Salesforce:
             client_secret: 接続アプリの Consumer Secret。
             domain_url: 組織の My Domain の URL。login.salesforce.com は使えない。
             org_name: 計測ログに出す組織の呼び名。省略時はクラス名を使う。
+            auth: Client Credentials 以外の認証方式。指定時は上の3引数を使わない。
+            refresh_token: Refresh Token方式を選択した場合に指定する。選択前は省略可。
 
         Raises:
             SalesforceAuthError: 認証に失敗した場合。
             SalesforceConnectionError: ネットワークの問題で接続できない場合。
         """
-        self.auth = ClientCredentialsAuth(client_id, client_secret, domain_url)
+        # 採用する認証方式だけコメントを外す。
+        self.auth = auth or OAuth(client_id, client_secret, domain_url)
+        # self.auth = auth or OAuth(
+        #     client_id,
+        #     refresh_token,
+        #     domain_url,
+        #     client_secret=client_secret,
+        # )
         self.metrics = ApiMetrics(org_name or type(self).__name__)
         self.report = ReportApi(self)
 
@@ -106,10 +130,11 @@ class Salesforce:
         prefix: str = "",
         org_name: str = "",
     ) -> _SalesforceT:
-        """DPAPI に保管した client_id / client_secret を読んでインスタンスを作る。
+        """DPAPIに保管した認証情報を読み、選択中のOAuth方式で接続する。
 
-        `python -m comken.credentials import` で取り込んだ
-        「<システム名>_client_id」「<システム名>_client_secret」を使う。
+        読み込む項目はclient.pyがimportしているOAuth方式で決まる。
+        Client Credentials方式はclient_id / client_secret、Refresh Token方式は
+        client_id / client_secret / refresh_tokenを使う。
         呼び出し側のコードに秘密の値が現れないので、通常はこちらを使う。
 
         使い方:
@@ -124,19 +149,13 @@ class Salesforce:
 
         Raises:
             InvalidCredentialNameError: システム名が空、または使えない文字を含む場合。
-            CredentialNotFoundError: client_id / client_secret が未登録の場合。
+            CredentialNotFoundError: 選択方式に必要な認証情報が未登録の場合。
             CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
         """
-        # NOTE: 遅延 import。credentials は pywin32（DPAPI）を使うので、
-        #       認証情報を直接渡す使い方では読み込ませない
-        from ..credentials import Credentials
-
-        cred = Credentials(prefix or cls.CREDENTIAL_PREFIX)
+        selected_prefix = prefix or cls.CREDENTIAL_PREFIX
         return cls(
-            client_id=cred.client_id,
-            client_secret=cred.client_secret,
-            domain_url=domain_url,
             org_name=org_name,
+            auth=OAuth.from_credentials(domain_url, selected_prefix),
         )
 
     def __enter__(self) -> "Salesforce":

@@ -55,7 +55,7 @@ def _salesforce(responses, token_responses=None):
     tokens = list(token_responses) if token_responses else [_token_response() for _ in range(5)]
     with (
         patch("comken.salesforce.client.requests.Session", return_value=session),
-        patch("comken.salesforce.oauth.requests.post", side_effect=tokens) as post,
+        patch("comken.salesforce.oauth_credentials.requests.post", side_effect=tokens) as post,
     ):
         client = Salesforce(
             client_id="CID", client_secret="CSECRET", domain_url=DOMAIN_URL, org_name="site_a"
@@ -66,7 +66,9 @@ def _salesforce(responses, token_responses=None):
 class TestClientCredentialsAuth:
     def test_posts_client_credentials_to_my_domain(self):
         """My Domain のトークンエンドポイントへ client_credentials を POST する。"""
-        with patch("comken.salesforce.oauth.requests.post", return_value=_token_response()) as post:
+        with patch(
+            "comken.salesforce.oauth_credentials.requests.post", return_value=_token_response()
+        ) as post:
             token, instance_url = ClientCredentialsAuth("CID", "CSECRET", DOMAIN_URL).fetch()
 
         assert (token, instance_url) == ("TOKEN", INSTANCE_URL)
@@ -81,7 +83,9 @@ class TestClientCredentialsAuth:
 
     def test_trailing_slash_in_domain_url_is_tolerated(self):
         """domain_url の末尾スラッシュがあっても URL が壊れない。"""
-        with patch("comken.salesforce.oauth.requests.post", return_value=_token_response()) as post:
+        with patch(
+            "comken.salesforce.oauth_credentials.requests.post", return_value=_token_response()
+        ) as post:
             ClientCredentialsAuth("CID", "CSECRET", f"{DOMAIN_URL}/").fetch()
         assert post.call_args[0][0] == f"{DOMAIN_URL}/services/oauth2/token"
 
@@ -89,7 +93,7 @@ class TestClientCredentialsAuth:
         """認証失敗のメッセージに Run As と My Domain の確認手順が入る。"""
         with (
             patch(
-                "comken.salesforce.oauth.requests.post",
+                "comken.salesforce.oauth_credentials.requests.post",
                 return_value=_response(400, json_body={"error": "invalid_grant"}),
             ),
             pytest.raises(SalesforceAuthError, match=r"(?s)Run As.*My Domain"),
@@ -100,7 +104,7 @@ class TestClientCredentialsAuth:
         """通信できない場合は SalesforceConnectionError になる。"""
         with (
             patch(
-                "comken.salesforce.oauth.requests.post",
+                "comken.salesforce.oauth_credentials.requests.post",
                 side_effect=requests.exceptions.ConnectTimeout("timed out"),
             ),
             pytest.raises(SalesforceConnectionError, match="接続できませんでした"),
@@ -507,7 +511,10 @@ class TestSites:
         session.headers = {}
         with (
             patch("comken.salesforce.client.requests.Session", return_value=session),
-            patch("comken.salesforce.oauth.requests.post", return_value=_token_response()),
+            patch(
+                "comken.salesforce.oauth_credentials.requests.post",
+                return_value=_token_response(),
+            ),
         ):
             site = SiteA(client_id="CID", client_secret="CSECRET", domain_url=DOMAIN_URL)
         assert site.metrics.org_name == "SiteA"
@@ -519,7 +526,10 @@ class TestSites:
         session.request.side_effect = [_response(json_body=_report_body([("A社", "1")]))]
         with (
             patch("comken.salesforce.client.requests.Session", return_value=session),
-            patch("comken.salesforce.oauth.requests.post", return_value=_token_response()),
+            patch(
+                "comken.salesforce.oauth_credentials.requests.post",
+                return_value=_token_response(),
+            ),
             SiteA(client_id="CID", client_secret="CSECRET", domain_url=DOMAIN_URL) as sf,
         ):
             rows = sf.案件一覧()
@@ -542,7 +552,10 @@ class TestFromCredentials:
         session.headers = {}
         with (
             patch("comken.salesforce.client.requests.Session", return_value=session),
-            patch("comken.salesforce.oauth.requests.post", return_value=_token_response()) as post,
+            patch(
+                "comken.salesforce.oauth_credentials.requests.post",
+                return_value=_token_response(),
+            ) as post,
         ):
             sf = SiteA.from_credentials(DOMAIN_URL)
 
@@ -561,7 +574,10 @@ class TestFromCredentials:
         session.headers = {}
         with (
             patch("comken.salesforce.client.requests.Session", return_value=session),
-            patch("comken.salesforce.oauth.requests.post", return_value=_token_response()) as post,
+            patch(
+                "comken.salesforce.oauth_credentials.requests.post",
+                return_value=_token_response(),
+            ) as post,
         ):
             SiteA.from_credentials(DOMAIN_URL, prefix="site_a_test")
 

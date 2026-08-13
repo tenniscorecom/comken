@@ -46,4 +46,4 @@ comken を別の場所へ移したときだけ、`実行.bat` と `.vscode/setti
 5. この節を README から削除する
 
 コーディング規約は comken リポジトリの `docs/プロジェクト規約.md` / `CONVENTIONS.md` に従う。
-使える機能の探し方は comken の `docs/機能カタログ.md`。
+使える機能の探し方は comken の `README.md`「モジュール一覧」。

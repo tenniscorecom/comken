@@ -23,10 +23,10 @@ PYTHONPATH で参照する運用なので、**ここで吸収すれば comken �
     1. このファイル（comken/run.py）
     2. comken/exceptions/rpa.py と、comken/exceptions/__init__.py の RpaError の記述
     3. tests/test_run.py
-    4. ERRORS.md / templates/新規プロジェクト/docs/ERRORS.md / docs/機能カタログ.md /
+    4. ERRORS.md / templates/新規プロジェクト/docs/ERRORS.md / README.md /
        仕様書.md の、社内 RPA 基盤に関する記述
 
-使い方は docs/機能カタログ.md を参照。
+使い方は README.md を参照。
 """
 
 import logging
