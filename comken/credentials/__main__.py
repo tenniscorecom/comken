@@ -1,5 +1,4 @@
-"""
-credentials/__main__.py — 認証情報の管理コマンド
+"""comken/credentials/__main__.py — 認証情報の管理コマンド
 
     python -m comken.credentials import 認証情報.json   平文 JSON を取り込む
     python -m comken.credentials list                    登録済みの認証情報を接頭辞別に表示する

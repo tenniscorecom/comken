@@ -1,5 +1,4 @@
-"""
-browser/download.py — ブラウザダウンロード用フォルダの管理
+"""comken/browser/download.py — ブラウザダウンロード用フォルダの管理
 
 DownloadDir は Edge/Chrome がダウンロード中に作る ".crdownload" ファイルを監視して
 完了を判定するため、ブラウザ専用のクラスとして browser パッケージに置いている

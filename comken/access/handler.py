@@ -1,4 +1,4 @@
-"""Microsoft Access のマクロ実行・データ出力。"""
+"""comken/access/handler.py — Microsoft Access のマクロ実行・データ出力。"""
 
 import logging
 import re

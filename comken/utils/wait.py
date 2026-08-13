@@ -1,8 +1,6 @@
-"""
-utils/wait.py — 待機ユーティリティ
+"""comken/utils/wait.py — 待機ユーティリティ
 
 time.sleep の薄いラッパー。単位を明示することで可読性を上げる。
-
 """
 
 import time

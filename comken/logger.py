@@ -1,4 +1,4 @@
-"""単体実行するプロジェクト向けのログ設定。"""
+"""comken/logger.py — 単体実行するプロジェクト向けのログ設定。"""
 
 import logging
 from pathlib import Path

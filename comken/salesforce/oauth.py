@@ -1,5 +1,4 @@
-"""
-salesforce/oauth.py — アクセストークンの取得
+"""comken/salesforce/oauth.py — アクセストークンの取得
 
 OAuth 2.0 クライアントクレデンシャルフローでトークンを取る。
 接続アプリの client_id / client_secret だけを使い、ユーザー名・パスワード・

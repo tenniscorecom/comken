@@ -1,5 +1,4 @@
-"""
-windows/handler.py — Windows API ユーティリティ（pywin32）
+"""comken/windows/handler.py — Windows API ユーティリティ（pywin32）
 
 pywin32 を使った Windows 固有操作を提供する。
 

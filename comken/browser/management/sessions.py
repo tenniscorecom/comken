@@ -1,4 +1,4 @@
-"""1サイト分のブラウザーを表す ``BrowserSession``。
+"""comken/browser/management/sessions.py — 1サイト分のブラウザーを表す ``BrowserSession``。
 
 このファイルはWebDriverの生存期間と、1セッションを同時に操作させない排他制御を担当する。
 複数ブラウザーの管理は ``browsers.py``、タブの開閉は ``tabs.py`` が担当する。

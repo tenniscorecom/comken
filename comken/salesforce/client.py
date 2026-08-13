@@ -1,5 +1,4 @@
-"""
-salesforce/client.py — Salesforce API クライアント
+"""comken/salesforce/client.py — Salesforce API クライアント
 
 1インスタンスが1組織を受け持つ。組織ごとに固有の処理があるときは、
 **このクラスを継承して利用プロジェクト側でメソッドを足す**

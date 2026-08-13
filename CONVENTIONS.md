@@ -150,16 +150,16 @@ from comken.utils.files import *
 
 | 順番 | 置くもの |
 |---|---|
-| 1 | モジュール docstring（役割と使い方） |
+| 1 | モジュール docstring（1行目は `comken/からの相対パス.py — 役割`、続けて背景・使い方） |
 | 2 | import |
 | 3 | `logger`・型変数（`TypeVar` / `ParamSpec`） |
-| 4 | 定数・定数クラス（利用側プロジェクト）。comken 本体の公開選択肢クラスは `constants/` に1クラス1ファイルで置く |
+| 4 | 定数・定数クラス。comken 本体の小規模な公開定数は `constants.py` にまとめ、役割や量が増えた場合だけパッケージ分割を検討する |
 | 5 | 主役の公開クラス（モジュール名が指すもの） |
 | 6 | その他の公開クラス・公開関数 |
 | 7 | 内部ヘルパー（`_` プレフィックス）— **必ず最後** |
 
 ```python
-"""handler.py — ○○ユーティリティ"""   # 1. docstring
+"""comken/example/handler.py — ○○ユーティリティ"""   # 1. docstring
 import logging                          # 2. import
 
 logger = logging.getLogger(__name__)    # 3. logger

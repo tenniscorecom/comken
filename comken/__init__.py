@@ -1,3 +1,5 @@
+"""comken/__init__.py — comken 全体の基盤 API を公開するパッケージ。"""
+
 # バージョンの定義はここ1箇所だけ（pyproject.toml は dynamic version でここを参照する）
 __version__ = "0.6.0"
 

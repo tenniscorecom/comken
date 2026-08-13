@@ -1,9 +1,7 @@
-"""
-utils/retry.py — リトライデコレータ
+"""comken/utils/retry.py — リトライデコレータ
 
 一時的な失敗（クリックが要素に遮られた、ネットワークが一瞬切れた等）を
 自動でやり直すためのデコレータ。
-
 """
 
 import functools
@@ -37,8 +35,11 @@ def retry(
     total = max(int(times), 1)
 
     def decorator(func: Callable[_P, _R]) -> Callable[_P, _R]:
+        """対象関数へ再実行処理を適用する。"""
+
         @functools.wraps(func)
         def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+            """指定回数まで対象関数を再実行する。"""
             for attempt in range(1, total + 1):
                 try:
                     return func(*args, **kwargs)

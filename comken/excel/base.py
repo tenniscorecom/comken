@@ -1,4 +1,4 @@
-"""ExcelReader と ExcelWriter に共通するワークブック操作。
+"""comken/excel/base.py — ExcelReader と ExcelWriter に共通するワークブック操作。
 
 ブックを開く・閉じる、シートの存在確認、行を読み取るといった共通処理を持つ。
 読み取り専用の ExcelReader と書き込み用の ExcelWriter がこの基底クラスを継承する。

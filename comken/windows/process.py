@@ -1,12 +1,10 @@
-"""
-windows/process.py — Excel 孤立プロセスの検出・後始末
+"""comken/windows/process.py — Excel 孤立プロセスの検出・後始末
 
 COM 経由の Excel 自動化は、クラッシュや強制終了で EXCEL.EXE が
 画面に見えないまま裏に残ることがある。残った Excel はファイルを
 ロックし続け、次回実行時に原因不明のエラーを引き起こす。
 
 自動処理の開始前に呼んで、前回の残骸を片付けるために使う。
-
 """
 
 import logging

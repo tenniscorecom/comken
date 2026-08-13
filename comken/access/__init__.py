@@ -1,4 +1,4 @@
-"""Microsoft Access 操作。"""
+"""comken/access/__init__.py — Microsoft Access 操作。"""
 
 from .handler import AccessDatabase
 

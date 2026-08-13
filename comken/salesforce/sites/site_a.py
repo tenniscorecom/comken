@@ -1,5 +1,4 @@
-"""
-salesforce/sites/site_a.py — SiteA 組織
+"""comken/salesforce/sites/site_a.py — SiteA 組織
 
 ※ SiteA は仮名。配置時に実際の組織名へ書き換える（詳細は sites/__init__.py）。
 

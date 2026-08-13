@@ -1,4 +1,4 @@
-"""ブラウザ操作に関する例外。
+"""comken/exceptions/browser.py — ブラウザ操作に関する例外。
 
 BrowserError
 ├── 起動・終了に関するもの

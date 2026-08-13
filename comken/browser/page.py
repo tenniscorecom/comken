@@ -1,4 +1,4 @@
-"""Page — 1画面ぶんの操作をまとめる基底クラス（Page Object）。
+"""comken/browser/page.py — Page — 1画面ぶんの操作をまとめる基底クラス（Page Object）。
 
 画面ごとに Page を継承したクラスを作り、その画面でできることをメソッドにする。
 セレクターは Locator のクラス変数としてクラスの先頭に並べる。

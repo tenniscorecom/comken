@@ -1,4 +1,4 @@
-"""社内 RPA 基盤の呼び出しに関する例外。"""
+"""comken/exceptions/rpa.py — 社内 RPA 基盤の呼び出しに関する例外。"""
 
 from .base import ComkenError
 

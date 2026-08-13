@@ -1,4 +1,4 @@
-"""組織（サイト）ごとの Salesforce クライアント。
+"""comken/salesforce/sites/__init__.py — 組織（サイト）ごとの Salesforce クライアント。
 
 組織は My Domain の URL が違うので、1組織につき1クラス・1インスタンスにする。
 共通の操作（SOQL・CRUD・レポート・計測）は `Salesforce` が持っているので、

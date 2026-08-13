@@ -1,4 +1,4 @@
-"""CSV・Excel・ファイル操作で使う、小さな公開定数クラス。"""
+"""comken/constants.py — CSV・Excel・ファイル操作で使う、小さな公開定数クラス。"""
 
 
 class Encoding:

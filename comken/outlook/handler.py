@@ -1,4 +1,4 @@
-"""Classic Outlook の受信メール読み取りと下書き作成。
+"""comken/outlook/handler.py — Classic Outlook の受信メール読み取りと下書き作成。
 
 New Outlook は COM サーバーを持たないため非対応。認証とネットワークが必要な
 Graph API や、pst ファイルの直接読み取りによる代替も提供しない。

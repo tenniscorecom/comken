@@ -1,4 +1,4 @@
-"""Salesforce API の呼び出しに関する例外。"""
+"""comken/exceptions/salesforce.py — Salesforce API の呼び出しに関する例外。"""
 
 from .base import ComkenError
 

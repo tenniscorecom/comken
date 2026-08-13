@@ -1,5 +1,4 @@
-"""
-credentials/store.py — 認証情報の暗号化保存（Windows DPAPI）
+"""comken/credentials/store.py — 認証情報の暗号化保存（Windows DPAPI）
 
 client_id / client_secret・パスワード・トークンなど、config.ini に平文で書けない値を
 Windows ログオンユーザーに紐付けて暗号化し、ユーザープロファイル内に保存する。

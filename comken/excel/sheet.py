@@ -1,9 +1,7 @@
-"""
-excel/sheet.py — ワークシートの高レベルラッパー
+"""comken/excel/sheet.py — ワークシートの高レベルラッパー
 
 ExcelWriter.sheet() から取得し、セル書き込み・行書き込み・列幅調整・
 ヘッダー固定などをシート単位で行う（sheet_name を毎回渡さなくてよい）。
-
 """
 
 import logging

@@ -1,4 +1,7 @@
-"""Edgeの起動、初期化、起動失敗時のドライバー更新をまとめる。"""
+"""comken/browser/management/startup.py — Edgeの起動と初期化を担う
+
+起動に失敗した場合のドライバー更新もここで扱う。
+"""
 
 import inspect
 import logging

@@ -1,4 +1,4 @@
-"""Excel の書き込み・書式設定・保存を行う入口。"""
+"""comken/excel/writer.py — Excel の書き込み・書式設定・保存を行う入口。"""
 
 import logging
 import tempfile

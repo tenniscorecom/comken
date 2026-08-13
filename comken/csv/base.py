@@ -1,4 +1,4 @@
-"""CSV Reader / Writer に共通する設定。"""
+"""comken/csv/base.py — CSV Reader / Writer に共通する設定。"""
 
 from pathlib import Path
 

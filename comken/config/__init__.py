@@ -1,5 +1,4 @@
-"""
-config.py — INI ファイル読み込みユーティリティ
+"""comken/config/__init__.py — INI ファイル読み込みユーティリティ
 
 config.ini を読み込み、config.SECTION.KEY の形式でアクセスできる Config クラスを提供する。
 

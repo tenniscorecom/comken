@@ -1,7 +1,4 @@
-"""
-runtime.py — ライブラリ全体の実行モード（デバッグ・dry-run）
-
-"""
+"""comken/runtime.py — ライブラリ全体の実行モード（デバッグ・dry-run）"""
 
 import logging
 from collections.abc import Iterator

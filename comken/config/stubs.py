@@ -1,11 +1,10 @@
-"""
-config/stubs.py — config.ini からエディタ補完用スタブ（.pyi）を生成する
+"""comken/config/stubs.py — config.ini からエディタ補完用スタブ（.pyi）を生成する
 
 Config の属性（config.SECTION.KEY）は config.ini から実行時に動的に作られるため、
 そのままではエディタが補完できない。ここで config.ini の内容を型付きの .pyi に書き出し、
-補完を効かせる。設定値の読み込み（config.py）とは責務を分けている。
+補完を効かせる。設定値の読み込みとはモジュール内で責務を分けている。
 
-- Config() を呼ぶたびに update_stub() が自動で走る（config.py から呼ばれる）
+- Config() を呼ぶたびに update_stub() が自動で走る（config パッケージから呼ばれる）
 - コードを書く前に手動で作りたい場合は generate_stub()（`python -m comken.config`）
 """
 

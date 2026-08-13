@@ -1,7 +1,4 @@
-"""
-utils/data.py — データ変換・比較ユーティリティ
-
-"""
+"""comken/utils/data.py — データ変換・比較ユーティリティ"""
 
 from dataclasses import dataclass
 

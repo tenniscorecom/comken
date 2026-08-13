@@ -1,4 +1,4 @@
-"""社内 RPA 基盤（backoffice / intranet）の呼び出しをまとめる。
+"""comken/run.py — 社内 RPA 基盤（backoffice / intranet）の呼び出しをまとめる。
 
 社内ライブラリはバージョンが import パスに入っている:
 

@@ -1,5 +1,4 @@
-"""
-salesforce/metrics.py — API 呼び出しの計測
+"""comken/salesforce/metrics.py — API 呼び出しの計測
 
 「どのモジュールから何回 API を呼んだか」「リトライが何回起きたか」
 「レポートが上限で切り捨てられたか」を貯めて、実行の最後にまとめて出す。

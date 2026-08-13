@@ -1,4 +1,4 @@
-"""Excel 操作に関する例外。"""
+"""comken/exceptions/excel.py — Excel 操作に関する例外。"""
 
 from pathlib import Path
 

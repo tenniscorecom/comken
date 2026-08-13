@@ -1,9 +1,7 @@
-"""
-utils/files/archive.py — zip 圧縮・展開ユーティリティ
+"""comken/utils/files/archive.py — zip 圧縮・展開ユーティリティ
 
 標準ライブラリのみで動く。Windows のエクスプローラーで作られた zip
 （日本語ファイル名が cp932 で入っている）も文字化けせずに展開できる。
-
 """
 
 import logging

@@ -1,4 +1,4 @@
-"""BrowserOptions: Edge/Chrome 起動オプションの定義クラス。
+"""comken/browser/options.py — BrowserOptions: Edge/Chrome 起動オプションの定義クラス。
 
 - bool 属性: True = 有効、False = 無効
 - str 属性: 値付きオプション。None で無効

@@ -1,8 +1,6 @@
-"""
-csv/handler.py — CSV 読み込みユーティリティ
+"""comken/csv/reader.py — CSV 読み込みユーティリティ
 
 CsvReader クラスを通じて CSV ファイルの読み込み・検索・抽出を行う。
-
 """
 
 import csv

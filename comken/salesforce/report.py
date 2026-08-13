@@ -1,5 +1,4 @@
-"""
-salesforce/report.py — レポート API
+"""comken/salesforce/report.py — レポート API
 
 レポート ID を渡して、明細行を [{列名: 値}, ...] で受け取る。
 

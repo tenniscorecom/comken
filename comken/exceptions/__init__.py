@@ -1,4 +1,4 @@
-"""comken の例外体系。
+"""comken/exceptions/__init__.py — comken の例外体系。
 
 ComkenError
 ├── UnsupportedFileSuffixError

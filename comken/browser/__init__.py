@@ -1,4 +1,4 @@
-"""ブラウザ操作（Edge / selenium）。
+"""comken/browser/__init__.py — ブラウザ操作（Edge / selenium）。
 
 サイトが1つでも複数でも、書き方は同じ:
 

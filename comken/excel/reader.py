@@ -1,4 +1,4 @@
-"""Excel を読み取り専用で開く入口。"""
+"""comken/excel/reader.py — Excel を読み取り専用で開く入口。"""
 
 from pathlib import Path
 

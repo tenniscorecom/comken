@@ -1,4 +1,4 @@
-"""列が見つからない場合の例外。"""
+"""comken/exceptions/column.py — 列が見つからない場合の例外。"""
 
 from .base import ComkenError
 

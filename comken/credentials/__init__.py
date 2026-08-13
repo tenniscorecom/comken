@@ -1,4 +1,4 @@
-"""認証情報の暗号化保存（Windows DPAPI）。
+"""comken/credentials/__init__.py — 認証情報の暗号化保存（Windows DPAPI）。
 
 config.ini に平文で書けない値（client_secret・パスワード・トークン）を、
 Windows ログオンユーザーに紐付けて暗号化して保管する。

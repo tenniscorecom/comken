@@ -1,4 +1,4 @@
-"""設定ファイルに関する例外。"""
+"""comken/exceptions/config.py — 設定ファイルに関する例外。"""
 
 from pathlib import Path
 

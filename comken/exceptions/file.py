@@ -1,4 +1,4 @@
-"""ファイル形式の検証に関する例外。"""
+"""comken/exceptions/file.py — ファイル形式の検証に関する例外。"""
 
 from pathlib import Path
 

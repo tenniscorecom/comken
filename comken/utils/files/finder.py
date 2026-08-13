@@ -1,4 +1,7 @@
-"""フォルダ内のファイル検索。使い方は docs/機能カタログ.md を参照。"""
+"""comken/utils/files/finder.py — フォルダ内のファイル検索
+
+使い方は docs/機能カタログ.md を参照。
+"""
 
 import datetime
 import re

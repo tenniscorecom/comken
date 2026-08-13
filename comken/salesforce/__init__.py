@@ -1,4 +1,4 @@
-"""Salesforce API 連携（requests）。
+"""comken/salesforce/__init__.py — Salesforce API 連携（requests）。
 
 1インスタンスが1組織を受け持つ:
 

@@ -1,4 +1,4 @@
-"""型変換時に使う警告。"""
+"""comken/exceptions/warning.py — 型変換時に使う警告。"""
 
 import warnings
 from typing import Any, TypeVar

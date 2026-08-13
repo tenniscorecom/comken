@@ -1,4 +1,4 @@
-"""状態ファイルに関する例外。"""
+"""comken/exceptions/state.py — 状態ファイルに関する例外。"""
 
 from pathlib import Path
 

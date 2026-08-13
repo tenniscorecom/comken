@@ -49,6 +49,33 @@ def _python_blocks() -> list:
     return blocks
 
 
+def test_all_comken_modules_start_docstring_with_their_path() -> None:
+    """全モジュールを開いた瞬間に、どのファイルの説明か判断できる。"""
+    missing = []
+    for path in sorted((_ROOT / "comken").rglob("*.py")):
+        relative_path = path.relative_to(_ROOT).as_posix()
+        docstring = ast.get_docstring(ast.parse(path.read_text(encoding="utf-8")), clean=False)
+        first_line = docstring.splitlines()[0] if docstring else ""
+        if not first_line.startswith(f"{relative_path} — "):
+            missing.append(relative_path)
+    assert not missing, f"先頭docstringにファイルパスがありません: {missing}"
+
+
+def test_all_named_comken_classes_and_functions_have_docstrings() -> None:
+    """利用者が名前から辿るクラス・関数には説明を必須にする。"""
+    missing = []
+    for path in sorted((_ROOT / "comken").rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if node.name.startswith("_"):
+                continue
+            if ast.get_docstring(node) is None:
+                missing.append(f"{path.relative_to(_ROOT).as_posix()}:{node.lineno} {node.name}")
+    assert not missing, f"docstringがないクラス・関数があります: {missing}"
+
+
 @pytest.mark.parametrize("code", _python_blocks())
 def test_python_code_block_compiles(code):
     """ドキュメントの ```python ブロックが構文エラーなくコンパイルできる。"""

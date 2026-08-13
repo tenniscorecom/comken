@@ -1,9 +1,7 @@
-"""
-utils/timer.py — 処理時間の計測
+"""comken/utils/timer.py — 処理時間の計測
 
 「どこが遅いのか」を調べるためのユーティリティ。with とデコレータの両方で使える。
 結果は logging（INFO）に出る。出力先・フォーマット・レベルは社内の共通ライブラリ側で設定する。
-
 """
 
 import functools
@@ -48,6 +46,7 @@ class Timer:
 
         @functools.wraps(func)
         def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+            """呼び出しごとに独立したTimerで処理時間を測る。"""
             # 呼び出しごとに独立して計測する（同じ Timer を使い回さない）
             with Timer(self._name):
                 return func(*args, **kwargs)
@@ -70,6 +69,7 @@ def measure(func: Callable[_P, _R]) -> Callable[_P, _R]:
 
     @functools.wraps(func)
     def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        """デバッグ中だけ対象関数の処理時間を記録する。"""
         from ..runtime import is_debug
 
         if not is_debug():

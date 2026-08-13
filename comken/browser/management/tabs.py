@@ -1,4 +1,4 @@
-"""1つのブラウザーセッション内でタブを開閉する内部管理。"""
+"""comken/browser/management/tabs.py — 1つのブラウザーセッション内でタブを開閉する内部管理。"""
 
 import logging
 import time
@@ -28,6 +28,7 @@ class _TabManager:
 
     @contextmanager
     def popup(self, seconds: int) -> Iterator[None]:
+        """新しく開いたタブへ移動し、終了時に閉じて元のタブへ戻る。"""
         original = self._driver.current_window_handle
         self._wait_for_new_tab(original, seconds)
         opened = [handle for handle in self._driver.window_handles if handle != original][-1]
@@ -40,6 +41,7 @@ class _TabManager:
     def load_many(
         self, urls: Sequence[str], ready: Locator | None, max_open: int, seconds: int
     ) -> Iterator[str]:
+        """URLを複数タブで先に開き、読み込みが終わった順にURLを返す。"""
         original = self._driver.current_window_handle
         waiting = list(urls)
         opened: dict[str, tuple[str, float]] = {}

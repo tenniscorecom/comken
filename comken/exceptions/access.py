@@ -1,4 +1,4 @@
-"""Microsoft Access 操作に関する例外。"""
+"""comken/exceptions/access.py — Microsoft Access 操作に関する例外。"""
 
 from pathlib import Path
 

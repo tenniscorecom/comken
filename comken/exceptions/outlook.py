@@ -1,4 +1,4 @@
-"""Outlook 操作の例外。"""
+"""comken/exceptions/outlook.py — Outlook 操作の例外。"""
 
 from pathlib import Path
 

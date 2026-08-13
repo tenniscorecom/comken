@@ -1,5 +1,4 @@
-"""
-credentials/importer.py — 平文 JSON を暗号化ファイルへ取り込む
+"""comken/credentials/importer.py — 平文 JSON を暗号化ファイルへ取り込む
 
 認証情報は平文で置けないが、対話式で1件ずつ入力させるのも配布時に手間がかかる。
 そこで **一時的に置いた平文 JSON を読み、DPAPI で暗号化して取り込み、

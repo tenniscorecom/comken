@@ -1,4 +1,4 @@
-"""CSV 操作に関する例外。"""
+"""comken/exceptions/csv.py — CSV 操作に関する例外。"""
 
 from pathlib import Path
 

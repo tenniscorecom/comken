@@ -1,4 +1,4 @@
-"""ライブラリ共通の基底例外。"""
+"""comken/exceptions/base.py — ライブラリ共通の基底例外。"""
 
 
 class ComkenError(Exception):

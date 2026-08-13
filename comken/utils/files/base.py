@@ -1,4 +1,4 @@
-"""1つのファイルを扱うクラスに共通する薄い基底クラス。"""
+"""comken/utils/files/base.py — 1つのファイルを扱うクラスに共通する薄い基底クラス。"""
 
 from pathlib import Path
 

@@ -1,8 +1,6 @@
-"""
-csv/writer.py — CSV 書き込みユーティリティ
+"""comken/csv/writer.py — CSV 書き込みユーティリティ
 
 CsvWriter クラスを通じて CSV ファイルへの書き込みを行う。
-
 """
 
 import csv

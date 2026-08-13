@@ -1,4 +1,4 @@
-"""日付を付けたファイル名の組み立て。"""
+"""comken/utils/files/naming/date.py — 日付を付けたファイル名の組み立て。"""
 
 from ...clock import now
 

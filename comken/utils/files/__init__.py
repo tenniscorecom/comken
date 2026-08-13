@@ -1,4 +1,7 @@
-"""ファイルの検索・操作・圧縮・パス取得・命名をまとめたパッケージ。"""
+"""comken/utils/files/__init__.py — ファイル関連機能の公開窓口
+
+検索・操作・圧縮・パス取得・命名をまとめて公開する。
+"""
 
 from .archive import unzip, zip_files, zip_folder
 from .finder import FileFinder, date_in_name
