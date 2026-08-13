@@ -1,4 +1,4 @@
-"""comken の公開 API ドキュメントと、貼り付け用資料を生成する。
+"""comken の公開 API ドキュメント、エラー対応ガイド、貼り付け用資料を生成する。
 
 通常は各パッケージの ``__all__`` をたどり、型ヒント付き署名と docstring 全文を
 ``docs/API.md`` へ書き出す。添付できない環境では ``--max-chars`` を指定すると、
@@ -13,13 +13,90 @@ from __future__ import annotations
 
 import argparse
 import ast
+import inspect
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
+
+import comken.exceptions as exceptions
 
 ROOT = Path(__file__).resolve().parent
 PACKAGE_ROOT = ROOT / "comken"
 API_OUTPUT_PATH = ROOT / "docs" / "API.md"
+ERRORS_OUTPUT_PATH = ROOT / "ERRORS.md"
 LEGACY_OUTPUT_DIR = ROOT / "貼り付け用"
+ERRORS_GENERATED_MARKER = (
+    "<!-- ここから下は python export_for_chat.py が自動生成する。手で編集しない -->"
+)
+
+
+@dataclass(frozen=True)
+class ErrorCategory:
+    """エラー表1つ分の見出しと、分類に使う基底例外を持つ。"""
+
+    heading: str
+    bases: tuple[type[BaseException], ...]
+
+
+ERROR_CATEGORIES = (
+    ErrorCategory("Excel のエラー", (exceptions.ExcelError,)),
+    ErrorCategory("Access のエラー", (exceptions.AccessError,)),
+    ErrorCategory("Outlook のエラー", (exceptions.OutlookError,)),
+    ErrorCategory(
+        "ファイル・設定などのエラー",
+        (
+            exceptions.CsvError,
+            exceptions.ColumnNotFoundError,
+            exceptions.ConfigError,
+            exceptions.StateError,
+            exceptions.RpaError,
+            exceptions.SalesforceError,
+            exceptions.CredentialError,
+        ),
+    ),
+    ErrorCategory("ブラウザ（Edge 自動操作）のエラー", (exceptions.BrowserError,)),
+)
+DIRECT_ERROR_CATEGORIES = {
+    exceptions.UnsupportedFileSuffixError: "ファイル・設定などのエラー",
+    exceptions.InvalidColumnError: "ファイル・設定などのエラー",
+}
+SUPPLEMENTAL_ERRORS = {
+    "Access のエラー": (
+        (
+            "PermissionError",
+            "ファイルが誰かに開かれている",
+            "自分や他の人がそのファイルを開いていないか確認して閉じる",
+        ),
+    ),
+    "ファイル・設定などのエラー": (
+        (
+            "FileNotFoundError",
+            "ファイルが見つからない",
+            "ファイルの置き場所と名前を確認する。「今日の日付のファイル」を探す処理なら、"
+            "今日のファイルが作られているか確認する",
+        ),
+    ),
+    "ブラウザ（Edge 自動操作）のエラー": (
+        (
+            "WebDriverException",
+            "ブラウザ操作の一般的なエラー",
+            "Edge のウィンドウをすべて閉じて再実行する",
+        ),
+    ),
+}
+CLASSIFICATION_ERRORS = (
+    exceptions.ComkenError,
+    exceptions.ExcelError,
+    exceptions.AccessError,
+    exceptions.CsvError,
+    exceptions.ColumnNotFoundError,
+    exceptions.ConfigError,
+    exceptions.StateError,
+    exceptions.RpaError,
+    exceptions.SalesforceError,
+    exceptions.CredentialError,
+    exceptions.BrowserError,
+)
 
 BUNDLES: dict[str, tuple[str, list[str]]] = {
     "1_コーディング規約": (
@@ -187,6 +264,104 @@ def _api_text() -> str:
     return "\n".join(sections).rstrip() + "\n"
 
 
+def _exception_details(exception: type[BaseException]) -> tuple[str, str]:
+    """例外の docstring から、平易な意味と対処を取り出す。"""
+    docstring = inspect.getdoc(exception)
+    if not docstring:
+        raise ValueError(f"{exception.__name__} に docstring がありません")
+    meaning, _, remainder = docstring.partition("\n")
+    treatment_marker = "\n対処:\n"
+    if treatment_marker not in f"\n{remainder}":
+        raise ValueError(f"{exception.__name__} の docstring に「対処:」がありません")
+    treatment = remainder.split(treatment_marker.strip("\n"), maxsplit=1)[1].strip()
+    if not treatment:
+        raise ValueError(f"{exception.__name__} の docstring の「対処:」が空です")
+    return meaning, "".join(line.strip() for line in treatment.splitlines())
+
+
+def _error_category(exception: type[BaseException]) -> str:
+    """継承階層から掲載カテゴリを返し、未分類なら生成を止める。"""
+    direct_category = DIRECT_ERROR_CATEGORIES.get(exception)
+    if direct_category:
+        return direct_category
+    matches = [
+        category.heading
+        for category in ERROR_CATEGORIES
+        if any(issubclass(exception, base) for base in category.bases)
+    ]
+    if len(matches) != 1:
+        raise ValueError(f"{exception.__name__} のカテゴリを一意に決められません: {matches}")
+    return matches[0]
+
+
+def _error_table(
+    exceptions_in_category: list[type[BaseException]],
+    supplemental_rows: tuple[tuple[str, str, str], ...] = (),
+) -> list[str]:
+    """例外一覧を非エンジニア向け Markdown 表にする。"""
+    lines = ["| エラー名 | 意味 | 自分でできる対処 |", "|---|---|---|"]
+    for exception in exceptions_in_category:
+        meaning, treatment = _exception_details(exception)
+        lines.append(f"| `{exception.__name__}` | {meaning} | {treatment} |")
+    for name, meaning, treatment in supplemental_rows:
+        lines.append(f"| `{name}` | {meaning} | {treatment} |")
+    return lines
+
+
+def _errors_generated_text() -> str:
+    """公開例外の docstring と継承階層からエラー一覧を組み立てる。"""
+    public_exceptions = [getattr(exceptions, name) for name in exceptions.__all__]
+    concrete_exceptions = [
+        exception for exception in public_exceptions if exception not in CLASSIFICATION_ERRORS
+    ]
+    grouped: dict[str, list[type[BaseException]]] = {
+        category.heading: [] for category in ERROR_CATEGORIES
+    }
+    for exception in concrete_exceptions:
+        grouped[_error_category(exception)].append(exception)
+
+    sections: list[str] = []
+    for category in ERROR_CATEGORIES:
+        sections += [
+            f"## {category.heading}",
+            "",
+            *_error_table(grouped[category.heading], SUPPLEMENTAL_ERRORS.get(category.heading, ())),
+            "",
+        ]
+
+    sections += [
+        "## 分類（まとめて捕捉する用）",
+        "",
+        "次の名前は、似たエラーをプログラム側でまとめて扱うための分類です。",
+        "これらの名前が単独で表示されることはありません。対処するときは、画面に表示された",
+        "具体的なエラー名を上の表から探してください。",
+        "",
+        *_error_table(list(CLASSIFICATION_ERRORS)),
+    ]
+    return "\n".join(sections).rstrip() + "\n"
+
+
+def _merged_errors_text(current: str) -> str:
+    """マーカーより上の手書き部分と、新しい生成部分を結合する。
+
+    マーカーが見つからない場合は、手書き部分を誤って消さないため ValueError にする。
+    """
+    if ERRORS_GENERATED_MARKER not in current:
+        raise ValueError(
+            f"{ERRORS_OUTPUT_PATH.name} に自動生成マーカーがありません。"
+            "手書き部分は変更していません"
+        )
+    handwritten = current.split(ERRORS_GENERATED_MARKER, maxsplit=1)[0].rstrip()
+    generated = _errors_generated_text()
+    return f"{handwritten}\n\n{ERRORS_GENERATED_MARKER}\n\n{generated}"
+
+
+def _write_errors() -> None:
+    """ERRORS.md の手書き部分を残して、生成部分だけを書き換える。"""
+    current = ERRORS_OUTPUT_PATH.read_text(encoding="utf-8")
+    ERRORS_OUTPUT_PATH.write_text(_merged_errors_text(current), encoding="utf-8")
+
+
 def _bundle_text(title: str, purpose: str, sources: list[str]) -> str:
     """貼り付け用資料1種類のテキストを組み立てる。"""
     parts = [f"# {title}", "", purpose, ""]
@@ -243,6 +418,8 @@ def main() -> None:
     args = parser.parse_args()
     API_OUTPUT_PATH.write_text(_api_text(), encoding="utf-8")
     print(f"{API_OUTPUT_PATH.relative_to(ROOT)} を生成しました")  # noqa: T201
+    _write_errors()
+    print(f"{ERRORS_OUTPUT_PATH.relative_to(ROOT)} を生成しました")  # noqa: T201
     if args.max_chars is not None:
         _write_legacy_bundles(args.max_chars)
 

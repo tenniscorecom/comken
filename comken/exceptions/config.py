@@ -6,13 +6,20 @@ from .base import ComkenError
 
 
 class ConfigError(ComkenError):
-    """設定エラーをまとめて捕捉するための基底クラス。"""
+    """config.ini に関するエラー
+
+    対処:
+        画面に表示された具体的なエラー名を上の表から探す
+    """
 
 
 class ConfigFileNotFoundError(ConfigError):
-    """config.ini が存在しない場合。
+    """config.ini が見つからない
 
     発生箇所: Config.__init__() / generate_stub()
+
+    対処:
+        config.ini.example をコピーして config.ini を作る
     """
 
     def __init__(self, path: Path | str) -> None:
@@ -23,9 +30,12 @@ class ConfigFileNotFoundError(ConfigError):
 
 
 class ConfigCreatedFromExampleError(ConfigError):
-    """config.ini が無かったため example から作成し、確認を求める場合。
+    """config.ini が無かったので example から作った
 
     発生箇所: Config.__init__()
+
+    対処:
+        作られた config.ini の値を書き換えて、もう一度実行する
     """
 
     def __init__(self, path: Path | str) -> None:
@@ -36,9 +46,12 @@ class ConfigCreatedFromExampleError(ConfigError):
 
 
 class ConfigLowerCaseNameError(ConfigError):
-    """config.ini のセクション名・キー名に小文字が使われている場合。
+    """config.ini のセクション名・キー名に小文字がある
 
     発生箇所: Config.__init__()
+
+    対処:
+        表示された名前を大文字に書き換える（`[files]` → `[FILES]`）
     """
 
     def __init__(self, path: Path | str, wrong: list[str]) -> None:
@@ -49,9 +62,12 @@ class ConfigLowerCaseNameError(ConfigError):
 
 
 class ConfigSectionNotFoundError(ConfigError):
-    """config.ini に要求されたセクションが存在しない場合。
+    """config.ini の必要な節がない
 
     発生箇所: Config.__getattr__()
+
+    対処:
+        表示されたセクション名を config.ini に追加する
     """
 
     def __init__(self, name: str, existing: list[str]) -> None:

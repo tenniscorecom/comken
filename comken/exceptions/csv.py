@@ -6,13 +6,20 @@ from .base import ComkenError
 
 
 class CsvError(ComkenError):
-    """CSV 操作に関する例外をまとめて捕捉するための基底クラス。"""
+    """CSV に関するエラー
+
+    対処:
+        画面に表示された具体的なエラー名を上の表から探す
+    """
 
 
 class EncodingDetectionError(CsvError):
-    """CSV の文字コードを自動判定できない場合。
+    """CSV の文字コードを判定できない
 
     発生箇所: CsvReader._read_text()
+
+    対処:
+        CSV の保存形式を確認し、管理者へ連絡する
     """
 
     def __init__(self, path: Path | str) -> None:
@@ -23,9 +30,12 @@ class EncodingDetectionError(CsvError):
 
 
 class CsvHeadersTooFewError(CsvError):
-    """指定したヘッダー数が CSV の列数より少ない場合。
+    """指定した見出し数が CSV の列数より少ない
 
     発生箇所: CsvReader._load()
+
+    対処:
+        管理者へ連絡する
     """
 
     def __init__(self, expected: int, path: Path | str) -> None:
@@ -37,9 +47,12 @@ class CsvHeadersTooFewError(CsvError):
 
 
 class CsvNoDataRowsError(CsvError):
-    """CSV にデータ行が1行もない場合。
+    """CSV に見出し以外のデータ行がない
 
     発生箇所: CsvReader.first()
+
+    対処:
+        見出し行の下にデータが1行以上あるか確認する
     """
 
     def __init__(self, path: Path | str) -> None:
@@ -50,9 +63,12 @@ class CsvNoDataRowsError(CsvError):
 
 
 class CsvRowNotFoundError(CsvError):
-    """キーに一致する行が CSV に無い場合。
+    """キーに一致する行が CSV に無い
 
     発生箇所: CsvReader.find()
+
+    対処:
+        探している値の書き方（前後の空白・全角半角・ゼロ埋め）を元データと見比べる
     """
 
     def __init__(self, key_col: str, value: str, path: Path | str) -> None:
@@ -64,9 +80,12 @@ class CsvRowNotFoundError(CsvError):
 
 
 class CsvRowDuplicateKeyError(CsvError):
-    """キーにするはずの列に、同じ値が複数ある場合。
+    """キーにする列に同じ値が複数ある
 
     発生箇所: CsvReader.index()
+
+    対処:
+        表示された値の行を元データで確認し、重複を取り除く。重複が正しいデータなら管理者へ連絡する
     """
 
     def __init__(self, key_col: str, duplicates: dict[str, int], path: Path | str) -> None:
@@ -83,9 +102,12 @@ class CsvRowDuplicateKeyError(CsvError):
 
 
 class CsvCellReferenceError(CsvError):
-    """CSV のセル参照が不正、または範囲外の場合。
+    """CSV のセル位置（例: A2）の指定が正しくない、または範囲外
 
     発生箇所: CsvReader.cell()
+
+    対処:
+        表示されたセル位置と、CSV の行数・列数を確認する
     """
 
     def __init__(self, ref: str, path: Path | str, detail: str) -> None:

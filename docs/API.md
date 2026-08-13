@@ -2051,7 +2051,10 @@ class ComkenError(Exception):
 
 #### 説明
 
-comken が送出するすべてのカスタム例外の基底クラス。
+comken が出す固有エラー全体
+
+対処:
+    画面に表示された具体的なエラー名を上の表から探す
 
 ### `AccessError`
 
@@ -2061,7 +2064,10 @@ class AccessError(ComkenError):
 
 #### 説明
 
-Access 操作に関する例外をまとめて捕捉するための基底クラス。
+Access に関するエラー
+
+対処:
+    画面に表示された具体的なエラー名を上の表から探す
 
 ### `AccessBackupError`
 
@@ -2071,7 +2077,10 @@ class AccessBackupError(AccessError):
 
 #### 説明
 
-Access ファイルのバックアップに失敗した場合。
+元 DB を開く前のバックアップに失敗した
+
+対処:
+    保存先の空き容量・書き込み権限・元 DB の読み取り権限を確認する
 
 #### `__init__`
 
@@ -2087,7 +2096,10 @@ class AccessFileNotFoundError(AccessError):
 
 #### 説明
 
-Access ファイルが存在しない場合。
+Access ファイルが見つからない
+
+対処:
+    ファイルの置き場所と名前を確認する
 
 #### `__init__`
 
@@ -2103,7 +2115,10 @@ class AccessLocalCopyError(AccessError):
 
 #### 説明
 
-Access ファイルのローカルコピーに失敗した場合。
+Access ファイルを一時フォルダへコピーできない
+
+対処:
+    使用状況・読み取り権限・空き容量を確認する
 
 #### `__init__`
 
@@ -2119,7 +2134,10 @@ class AccessRoutineError(AccessError):
 
 #### 説明
 
-Access マクロまたは VBA の実行に失敗した場合。
+Access マクロまたは VBA の実行に失敗した
+
+対処:
+    表示された名前と Access 側の内容を確認する
 
 #### `__init__`
 
@@ -2135,7 +2153,10 @@ class AccessSourceNotFoundError(AccessError):
 
 #### 説明
 
-指定したテーブルまたはクエリが存在しない場合。
+テーブルまたはクエリが見つからない
+
+対処:
+    エラーに表示された存在する名前を確認する
 
 #### `__init__`
 
@@ -2151,7 +2172,10 @@ class ExcelError(ComkenError):
 
 #### 説明
 
-Excel 操作に関する例外をまとめて捕捉するための基底クラス。
+Excel に関するエラー
+
+対処:
+    画面に表示された具体的なエラー名を上の表から探す
 
 ### `ExcelFileNotFoundError`
 
@@ -2161,9 +2185,12 @@ class ExcelFileNotFoundError(ExcelError):
 
 #### 説明
 
-Excel ファイルが存在しない場合。
+Excel ファイルが見つからない
 
 発生箇所: ExcelBase.__init__()
+
+対処:
+    ファイルの置き場所と名前を確認する
 
 #### `__init__`
 
@@ -2179,9 +2206,12 @@ class SheetNotFoundError(ExcelError):
 
 #### 説明
 
-指定したシートが存在しない場合。
+指定した名前のシートがない
 
 発生箇所: ExcelBase._sheet() / ExcelComHandler._sheet()
+
+対処:
+    Excel を開いて、下のシート名（タブ）が変わっていないか確認する。変えた場合は元に戻す
 
 #### `__init__`
 
@@ -2197,7 +2227,10 @@ class SheetAlreadyExistsError(ExcelError):
 
 #### 説明
 
-同名のシートが既に存在する場合。
+同じ名前のシートが既にある
+
+対処:
+    別のシート名を指定するか、既存のシート名を変更する
 
 #### `__init__`
 
@@ -2213,7 +2246,10 @@ class LastSheetDeletionError(ExcelError):
 
 #### 説明
 
-ブックの最後のシートを削除しようとした場合。
+ブックの最後のシートを削除しようとした
+
+対処:
+    先に別のシートを追加してから削除する
 
 #### `__init__`
 
@@ -2229,7 +2265,10 @@ class InvalidTableNameError(ExcelError):
 
 #### 説明
 
-Excel のテーブル名が制約に違反している場合。
+Excel で使えないテーブル名を指定した
+
+対処:
+    空白・数字始まり・セル参照のような名前を避ける
 
 #### `__init__`
 
@@ -2245,7 +2284,10 @@ class TableAlreadyExistsError(ExcelError):
 
 #### 説明
 
-同名のテーブルが既に存在する場合。
+同じ名前のテーブルが既にある
+
+対処:
+    別のテーブル名を指定する
 
 #### `__init__`
 
@@ -2261,7 +2303,10 @@ class TableNotFoundError(ExcelError):
 
 #### 説明
 
-指定したテーブルがシートに存在しない場合。
+指定したテーブルがシートにない
+
+対処:
+    エラーに表示された既存テーブル名を確認する
 
 #### `__init__`
 
@@ -2277,9 +2322,12 @@ class MacroError(ExcelError):
 
 #### 説明
 
-VBA マクロの実行に失敗した場合。
+Excel のマクロが失敗した
 
 発生箇所: ExcelComHandler.run_macro()
+
+対処:
+    Excel をすべて閉じて再実行する。続く場合は管理者へ
 
 #### `__init__`
 
@@ -2295,9 +2343,12 @@ class RowTransferError(ExcelError):
 
 #### 説明
 
-Excel の行転記に失敗した場合。
+Excel の行転記に失敗した
 
 発生箇所: ExcelComHandler.transfer_by_key()
+
+対処:
+    表示された行番号のデータを確認する
 
 #### `__init__`
 
@@ -2313,9 +2364,12 @@ class EmptyHeaderCellError(ExcelError):
 
 #### 説明
 
-Excel のヘッダー行に空のセルがある場合。
+Excel の見出しに空欄がある
 
 発生箇所: ExcelBase.read_rows_as_dicts() / ExcelComHandler.read_rows_as_dicts()
+
+対処:
+    Excel の1行目の空欄を埋める
 
 #### `__init__`
 
@@ -2331,9 +2385,12 @@ class ExcelHeadersTooFewError(ExcelError):
 
 #### 説明
 
-指定したヘッダー数が Excel の列数より少ない場合。
+指定した見出し数が列数より少ない
 
 発生箇所: ExcelBase.read_rows_as_dicts() / ExcelComHandler.read_rows_as_dicts()
+
+対処:
+    管理者へ連絡する
 
 #### `__init__`
 
@@ -2349,9 +2406,12 @@ class FileFormatMismatchError(ExcelError):
 
 #### 説明
 
-保存先の拡張子と Excel の保存形式が一致しない場合。
+保存拡張子と形式が合わない
 
 発生箇所: ExcelComHandler.save_as()
+
+対処:
+    管理者へ連絡する
 
 #### `__init__`
 
@@ -2367,7 +2427,10 @@ class CsvError(ComkenError):
 
 #### 説明
 
-CSV 操作に関する例外をまとめて捕捉するための基底クラス。
+CSV に関するエラー
+
+対処:
+    画面に表示された具体的なエラー名を上の表から探す
 
 ### `EncodingDetectionError`
 
@@ -2377,9 +2440,12 @@ class EncodingDetectionError(CsvError):
 
 #### 説明
 
-CSV の文字コードを自動判定できない場合。
+CSV の文字コードを判定できない
 
 発生箇所: CsvReader._read_text()
+
+対処:
+    CSV の保存形式を確認し、管理者へ連絡する
 
 #### `__init__`
 
@@ -2395,9 +2461,12 @@ class CsvHeadersTooFewError(CsvError):
 
 #### 説明
 
-指定したヘッダー数が CSV の列数より少ない場合。
+指定した見出し数が CSV の列数より少ない
 
 発生箇所: CsvReader._load()
+
+対処:
+    管理者へ連絡する
 
 #### `__init__`
 
@@ -2413,9 +2482,12 @@ class CsvNoDataRowsError(CsvError):
 
 #### 説明
 
-CSV にデータ行が1行もない場合。
+CSV に見出し以外のデータ行がない
 
 発生箇所: CsvReader.first()
+
+対処:
+    見出し行の下にデータが1行以上あるか確認する
 
 #### `__init__`
 
@@ -2431,9 +2503,12 @@ class CsvRowNotFoundError(CsvError):
 
 #### 説明
 
-キーに一致する行が CSV に無い場合。
+キーに一致する行が CSV に無い
 
 発生箇所: CsvReader.find()
+
+対処:
+    探している値の書き方（前後の空白・全角半角・ゼロ埋め）を元データと見比べる
 
 #### `__init__`
 
@@ -2449,9 +2524,12 @@ class CsvRowDuplicateKeyError(CsvError):
 
 #### 説明
 
-キーにするはずの列に、同じ値が複数ある場合。
+キーにする列に同じ値が複数ある
 
 発生箇所: CsvReader.index()
+
+対処:
+    表示された値の行を元データで確認し、重複を取り除く。重複が正しいデータなら管理者へ連絡する
 
 #### `__init__`
 
@@ -2467,9 +2545,12 @@ class CsvCellReferenceError(CsvError):
 
 #### 説明
 
-CSV のセル参照が不正、または範囲外の場合。
+CSV のセル位置（例: A2）の指定が正しくない、または範囲外
 
 発生箇所: CsvReader.cell()
+
+対処:
+    表示されたセル位置と、CSV の行数・列数を確認する
 
 #### `__init__`
 
@@ -2485,7 +2566,10 @@ class ColumnNotFoundError(ComkenError):
 
 #### 説明
 
-列不在エラーをまとめて捕捉するための基底クラス。
+Excel・CSV・データ比較で列が見つからないエラー
+
+対処:
+    画面に表示された具体的なエラー名を上の表から探す
 
 ### `ExcelColumnNotFoundError`
 
@@ -2495,7 +2579,7 @@ class ExcelColumnNotFoundError(ColumnNotFoundError):
 
 #### 説明
 
-Excel に必要な列が存在しない場合。
+Excel の列見出しが見つからない
 
 非エンジニアが列名を変更したときに分かりやすいメッセージを出すために使う。
 
@@ -2511,6 +2595,9 @@ Excel に必要な列が存在しない場合。
         if missing:
             raise ExcelColumnNotFoundError(missing)
 
+対処:
+    Excel の1行目を確認する
+
 #### `__init__`
 
 ```text
@@ -2525,7 +2612,7 @@ class CsvColumnNotFoundError(ColumnNotFoundError):
 
 #### 説明
 
-CSV に必要な列が存在しない場合。
+CSV の列見出しが見つからない
 
 非エンジニアが列名を変更したときに分かりやすいメッセージを出すために使う。
 
@@ -2542,6 +2629,9 @@ CSV に必要な列が存在しない場合。
         if missing:
             raise CsvColumnNotFoundError(missing, existing)
 
+対処:
+    CSV の1行目を確認する
+
 #### `__init__`
 
 ```text
@@ -2556,9 +2646,12 @@ class KeyColumnNotFoundError(ColumnNotFoundError):
 
 #### 説明
 
-差分比較のキー列が存在しない場合。
+比較に使うキー列が見つからない
 
 発生箇所: diff_rows()
+
+対処:
+    Excel・CSV の列名を確認する
 
 #### `__init__`
 
@@ -2574,7 +2667,10 @@ class InvalidColumnError(ComkenError):
 
 #### 説明
 
-Excel の列指定が A / AA 形式でない場合。
+列の指定が正しくない（打ち間違いなど）
+
+対処:
+    列は番号（1, 2, …）か列記号（"A", "AA"）で指定する
 
 #### `__init__`
 
@@ -2590,7 +2686,10 @@ class ConfigError(ComkenError):
 
 #### 説明
 
-設定エラーをまとめて捕捉するための基底クラス。
+config.ini に関するエラー
+
+対処:
+    画面に表示された具体的なエラー名を上の表から探す
 
 ### `ConfigFileNotFoundError`
 
@@ -2600,9 +2699,12 @@ class ConfigFileNotFoundError(ConfigError):
 
 #### 説明
 
-config.ini が存在しない場合。
+config.ini が見つからない
 
 発生箇所: Config.__init__() / generate_stub()
+
+対処:
+    config.ini.example をコピーして config.ini を作る
 
 #### `__init__`
 
@@ -2618,9 +2720,12 @@ class ConfigCreatedFromExampleError(ConfigError):
 
 #### 説明
 
-config.ini が無かったため example から作成し、確認を求める場合。
+config.ini が無かったので example から作った
 
 発生箇所: Config.__init__()
+
+対処:
+    作られた config.ini の値を書き換えて、もう一度実行する
 
 #### `__init__`
 
@@ -2636,9 +2741,12 @@ class ConfigLowerCaseNameError(ConfigError):
 
 #### 説明
 
-config.ini のセクション名・キー名に小文字が使われている場合。
+config.ini のセクション名・キー名に小文字がある
 
 発生箇所: Config.__init__()
+
+対処:
+    表示された名前を大文字に書き換える（`[files]` → `[FILES]`）
 
 #### `__init__`
 
@@ -2654,9 +2762,12 @@ class ConfigSectionNotFoundError(ConfigError):
 
 #### 説明
 
-config.ini に要求されたセクションが存在しない場合。
+config.ini の必要な節がない
 
 発生箇所: Config.__getattr__()
+
+対処:
+    表示されたセクション名を config.ini に追加する
 
 #### `__init__`
 
@@ -2672,7 +2783,10 @@ class UnsupportedFileSuffixError(ComkenError):
 
 #### 説明
 
-扱えない拡張子のファイルが指定された。
+対応外の拡張子が指定された
+
+対処:
+    CSV / Excel の対応する拡張子のファイルを指定する
 
 #### `__init__`
 
@@ -2688,7 +2802,10 @@ class OutlookError(ComkenError):
 
 #### 説明
 
-Outlook 関連エラーの基底クラス。
+Outlook 関連エラーの分類
+
+対処:
+    下の個別エラーを確認する
 
 ### `ClassicOutlookNotAvailableError`
 
@@ -2698,7 +2815,10 @@ class ClassicOutlookNotAvailableError(OutlookError):
 
 #### 説明
 
-Classic Outlook を COM で利用できない。
+Classic Outlook を利用できない
+
+対処:
+    Classic Outlook を使うか管理者に相談する
 
 #### `__init__`
 
@@ -2714,7 +2834,10 @@ class OutlookFolderNotFoundError(OutlookError):
 
 #### 説明
 
-指定された Outlook フォルダが存在しない。
+指定したフォルダがない
+
+対処:
+    エラーに表示された存在するフォルダ名を確認する
 
 #### `__init__`
 
@@ -2730,7 +2853,10 @@ class OutlookAttachmentNotFoundError(OutlookError):
 
 #### 説明
 
-下書きへ添付するファイルが存在しない。
+添付ファイルがない
+
+対処:
+    表示されたファイルパスを確認する
 
 #### `__init__`
 
@@ -2746,7 +2872,10 @@ class RpaError(ComkenError):
 
 #### 説明
 
-社内 RPA 基盤の呼び出しに関する例外をまとめて捕捉するための基底クラス。
+社内 RPA 基盤の呼び出しに関するエラー
+
+対処:
+    画面に表示された具体的なエラー名を上の表から探す
 
 ### `RpaLibraryNotFoundError`
 
@@ -2756,9 +2885,13 @@ class RpaLibraryNotFoundError(RpaError):
 
 #### 説明
 
-社内ライブラリを読み込めない場合。
+社内ライブラリを読み込めない
 
 発生箇所: comken.run.backoffice() / comken.run.intranet()
+
+対処:
+    実行.bat の PYTHONPATH に社内ライブラリが入っているか確認する。
+    バージョンが変わった場合は管理者へ連絡する
 
 #### `__init__`
 
@@ -2774,7 +2907,10 @@ class CredentialError(ComkenError):
 
 #### 説明
 
-認証情報に関する例外をまとめて捕捉するための基底クラス。
+認証情報の保存・取得に関するエラー
+
+対処:
+    画面に表示された具体的なエラー名を上の表から探す
 
 ### `InvalidCredentialNameError`
 
@@ -2784,9 +2920,12 @@ class InvalidCredentialNameError(CredentialError):
 
 #### 説明
 
-キー名・システム名に使えない文字が含まれている場合。
+認証情報のキー名に使えない文字がある
 
 発生箇所: comken.credentials の Credentials() / save_credential() / 取り込み
+
+対処:
+    半角英数字とアンダースコアだけにする（漢字・スペース・記号は使えない）
 
 #### `__init__`
 
@@ -2802,9 +2941,13 @@ class CredentialNotFoundError(CredentialError):
 
 #### 説明
 
-指定したキー名が登録されていない場合。
+認証情報（パスワード・client_secret など）が登録されていない
 
 発生箇所: comken.credentials の load_credential() / Credentials の属性アクセス
+
+対処:
+    表示された登録済みキー名と見比べる。
+    無ければ `python -m comken.credentials import 認証情報.json` で取り込む
 
 #### `__init__`
 
@@ -2820,12 +2963,16 @@ class CredentialDecryptionError(CredentialError):
 
 #### 説明
 
-保存ファイルを復号できない場合。
+認証情報を復号できない
 
 DPAPI は「登録したときの Windows ユーザー × PC」でしか復号できない。
 別のアカウントで実行した・別の PC にファイルをコピーした場合がほとんど。
 
 発生箇所: comken.credentials の読み書き全般
+
+対処:
+    登録したときと**同じ Windows アカウント・同じ PC** で実行しているか確認する。
+    タスクスケジューラの実行ユーザー違いが最も多い
 
 #### `__init__`
 
@@ -2841,12 +2988,15 @@ class CredentialStoreCorruptedError(CredentialError):
 
 #### 説明
 
-復号はできたが、中身が壊れていて読めない場合。
+認証情報の中身が壊れている
 
 復号できない（別ユーザー・別 PC）のとは対処が違う。こちらは実行アカウントを
 直しても直らないので、ファイルを捨てて取り込み直すしかない。
 
 発生箇所: comken.credentials の読み書き全般
+
+対処:
+    実行アカウントの問題ではない。表示されたファイルを削除して、もう一度取り込み直す
 
 #### `__init__`
 
@@ -2862,9 +3012,12 @@ class CredentialImportError(CredentialError):
 
 #### 説明
 
-取り込む JSON を読めない、または形式が違う場合。
+取り込む JSON が壊れている・形式が違う
 
 発生箇所: comken.credentials の import_json()
+
+対処:
+    表示された形式のとおりに書き直す。値は必ず `" "` で囲む
 
 #### `__init__`
 
@@ -2880,7 +3033,10 @@ class SalesforceError(ComkenError):
 
 #### 説明
 
-Salesforce に関する例外をまとめて捕捉するための基底クラス。
+Salesforce に関するエラー
+
+対処:
+    画面に表示された具体的なエラー名を上の表から探す
 
 ### `SalesforceAuthError`
 
@@ -2890,9 +3046,12 @@ class SalesforceAuthError(SalesforceError):
 
 #### 説明
 
-アクセストークンを取得できない場合。
+Salesforce にログインできない
 
 発生箇所: comken.salesforce.Salesforce の認証時（初回・401 後の取り直し）
+
+対処:
+    表示された確認項目を上から順に見る。それでも直らなければ管理者へ連絡する
 
 #### `__init__`
 
@@ -2908,9 +3067,12 @@ class SalesforceConnectionError(SalesforceError):
 
 #### 説明
 
-ネットワークの問題で Salesforce に接続できない場合。
+Salesforce につながらない
 
 発生箇所: comken.salesforce.Salesforce の全リクエスト
+
+対処:
+    ネットワークの状態を確認して、少し待ってから再実行する
 
 #### `__init__`
 
@@ -2926,9 +3088,12 @@ class SalesforceRequestError(SalesforceError):
 
 #### 説明
 
-Salesforce API がエラーを返した場合。
+Salesforce が処理を断った
 
 発生箇所: comken.salesforce.Salesforce の全リクエスト
+
+対処:
+    表示されたメッセージをそのまま添えて管理者へ連絡する（権限か項目名の問題が多い）
 
 #### `__init__`
 
@@ -2944,7 +3109,10 @@ class SalesforceExternalIdMissingError(SalesforceError):
 
 #### 説明
 
-upsert のデータに外部 ID 項目が含まれていない場合。
+upsert 用データに外部 ID がない
+
+対処:
+    管理者へ連絡する
 
 #### `__init__`
 
@@ -2960,12 +3128,15 @@ class SalesforceReportTruncatedError(SalesforceError):
 
 #### 説明
 
-レポートの行が上限で切り捨てられた場合。
+レポートが上限の 2000 行で切れた（**全件ではない**）
 
 レポート API は同期・非同期とも 2000 行が上限。非同期にしても超えられない。
 黙って欠けたデータで処理を続けないよう、既定ではこの例外で止める。
 
 発生箇所: comken.salesforce.ReportApi.run() / run_async()
+
+対処:
+    期間を狭めて何回かに分けて実行する。1回で全部必要なら管理者へ連絡する
 
 #### `__init__`
 
@@ -2981,12 +3152,15 @@ class SalesforceReportFormatError(SalesforceError):
 
 #### 説明
 
-明細（TABULAR）以外の形式のレポートを取得しようとした場合。
+レポートの形式が対応していない
 
 集計（サマリ・マトリックス）形式は行の入れ物の構造が変わり、
 そのまま読むと無言で空を返すため、明示的に弾く。
 
 発生箇所: comken.salesforce.ReportApi.run() / run_async()
+
+対処:
+    レポートを明細形式にするか、管理者へ連絡する
 
 #### `__init__`
 
@@ -3002,7 +3176,10 @@ class SalesforceReportExecutionError(SalesforceError):
 
 #### 説明
 
-非同期レポートの実行自体が Salesforce 側で失敗した場合。
+Salesforce 側でレポート実行に失敗した
+
+対処:
+    Salesforce で同じレポートを直接実行し、表示された内容を管理者へ連絡する
 
 #### `__init__`
 
@@ -3018,7 +3195,10 @@ class BrowserError(ComkenError):
 
 #### 説明
 
-ブラウザ操作の例外をまとめて捕捉するための基底クラス。直接送出しない。
+ブラウザ操作に関するエラー
+
+対処:
+    画面に表示された具体的なエラー名を上の表から探す
 
 ### `DriverStartError`
 
@@ -3028,9 +3208,13 @@ class DriverStartError(BrowserError):
 
 #### 説明
 
-Edge WebDriver の起動に失敗した場合。
+ブラウザを起動できない
 
 発生箇所: Browsers.launch()
+
+対処:
+    エラーの本文にある確認事項をそのまま試す。
+    Windows Update で Edge が更新された直後に起きやすい
 
 #### `__init__`
 
@@ -3046,7 +3230,7 @@ class BrowsersNotStartedError(BrowserError):
 
 #### 説明
 
-with に入れずに Browsers を使った場合。
+`with` を使わずに `Browsers` を使った
 
 with を使わないと、処理の途中で例外が出たときにブラウザのプロセスが残り続ける。
 残ったブラウザはドライバーの更新も邪魔するため、必ず with の中で使う。
@@ -3058,6 +3242,9 @@ with を使わないと、処理の途中で例外が出たときにブラウザ
     # 正しい
     with Browsers() as browsers:
         browsers.launch("kintai")
+
+対処:
+    `with Browsers() as browsers:` の中で使う（ブラウザは起動していないので実害はない）
 
 #### `__init__`
 
@@ -3073,10 +3260,13 @@ class BrowsersClosedError(BrowserError):
 
 #### 説明
 
-with を抜けた後の Browsers を使った場合。
+`with` を抜けた後の `Browsers` を使った
 
 with の外へ browsers を持ち出すと起きる。with を抜けた時点で
 ブラウザはすべて閉じているため、そこから起動や操作はできない。
+
+対処:
+    続けたい処理を `with` の中に入れる。外へ持ち出すのは取り出した値だけにする
 
 #### `__init__`
 
@@ -3092,7 +3282,7 @@ class SessionNotStartedError(BrowserError):
 
 #### 説明
 
-with に入る前のセッションを操作した場合。
+`with` を使わずにブラウザを操作した
 
 BrowserSession は with 文の中でだけ使える。with を使わないと、
 処理の途中で例外が出たときにブラウザのプロセスが残り続けるため。
@@ -3105,6 +3295,9 @@ BrowserSession は with 文の中でだけ使える。with を使わないと、
     with Browsers() as browsers:
         session = browsers.launch("kintai")
         session.open("https://example.com")
+
+対処:
+    `with Browsers() as browsers:` の中で使う
 
 #### `__init__`
 
@@ -3120,10 +3313,13 @@ class SessionClosedError(BrowserError):
 
 #### 説明
 
-with を抜けて閉じ終わったセッションを操作した場合。
+`with` を抜けた後のブラウザを操作した
 
 with の外へセッションを持ち出すと起きる。取得したデータを with の外で使いたい場合は、
 セッションではなく取り出した値（文字列やファイルパス）を返すようにする。
+
+対処:
+    `with` の外へ持ち出すのは、ブラウザではなく取り出した値にする
 
 #### `__init__`
 
@@ -3139,12 +3335,15 @@ class ConcurrentSessionUseError(BrowserError):
 
 #### 説明
 
-1つのセッションを複数スレッドから同時に操作した場合。
+1つのブラウザを複数の処理から同時に操作した
 
 WebDriver は1つの接続でコマンドを順番に処理するため、
 同じセッションを2スレッドから同時に操作すると応答が入れ替わり、
 「別の画面を操作していた」という追跡困難な不具合になる。
 サイトごとにセッションを分けること（Browsers.launch で1サイト1セッション）。
+
+対処:
+    サイトごとに `launch` でブラウザを分ける
 
 #### `__init__`
 
@@ -3160,9 +3359,12 @@ class SessionNameConflictError(BrowserError):
 
 #### 説明
 
-同じ名前のセッションを2回起動しようとした場合。
+同じ名前で2回 `launch` した
 
 発生箇所: Browsers.launch()
+
+対処:
+    名前を変える（同一サイトの別アカウントなら `kintai_a` / `kintai_b` など）
 
 #### `__init__`
 
@@ -3178,9 +3380,12 @@ class SessionNotFoundError(BrowserError):
 
 #### 説明
 
-起動していないセッションを取り出そうとした場合。
+`launch` していない名前を取り出した
 
 発生箇所: Browsers.__getitem__()
+
+対処:
+    先に `launch` する。エラーに起動済みの一覧が出ます
 
 #### `__init__`
 
@@ -3196,10 +3401,13 @@ class ElementNotFoundError(BrowserError):
 
 #### 説明
 
-要素が待機時間内に見つからなかった場合。
+画面の部品が時間内に見つからない
 
 selenium の TimeoutException を、どのセレクターで失敗したかが分かる形に包み直したもの。
 素の TimeoutException はメッセージにセレクターが入らず、ログから原因を追えないため。
+
+対処:
+    もう一度実行する。サイトが重いだけのことが多い。毎回出るなら画面が変わった可能性があるので管理者へ（エラーに、どの部品を探していたかが出ます）
 
 #### `__init__`
 
@@ -3215,9 +3423,12 @@ class PopupTabNotOpenedError(BrowserError):
 
 #### 説明
 
-popup_tab() で新しいタブが待機時間内に開かなかった場合。
+別タブが開かない
 
 発生箇所: BrowserSession.popup_tab()
+
+対処:
+    もう一度実行する。続く場合は、その画面の「別ウィンドウで開く」ボタンが変わった可能性があるので管理者へ
 
 #### `__init__`
 
@@ -3233,9 +3444,12 @@ class DownloadTimeoutError(BrowserError):
 
 #### 説明
 
-ダウンロードが待機時間内に完了しなかった場合。
+ダウンロードが終わらない
 
 発生箇所: DownloadDir.wait()
+
+対処:
+    ネットワークの状態を確認して再実行する。大きいファイルなら時間がかかっているだけのこともある
 
 #### `__init__`
 
@@ -3251,7 +3465,10 @@ class StateError(ComkenError):
 
 #### 説明
 
-状態ファイルのエラーをまとめて捕捉するための基底クラス。
+state.ini に関するエラー
+
+対処:
+    画面に表示された具体的なエラー名を上の表から探す
 
 ### `StateFileCorruptedError`
 
@@ -3261,7 +3478,10 @@ class StateFileCorruptedError(StateError):
 
 #### 説明
 
-state.ini を正しく読み取れない場合。
+state.ini が壊れていて読み取れない
+
+対処:
+    内容を直す。直せない場合は別名に変更して、空の状態から再実行する
 
 #### `__init__`
 
@@ -3277,7 +3497,10 @@ class StateLowerCaseNameError(StateError):
 
 #### 説明
 
-状態のキー名に小文字が使われた場合。
+state のキー名に小文字がある
+
+対処:
+    表示されたキー名を大文字に直す（`last_file` → `LAST_FILE`）
 
 #### `__init__`
 
@@ -3293,7 +3516,10 @@ class StateValueTypeError(StateError):
 
 #### 説明
 
-state.ini に保存できない型の値が渡された場合。
+state に保存できない型の値が渡された
+
+対処:
+    真偽値・整数・小数・文字列・文字列のリストのいずれかに変更する
 
 #### `__init__`
 

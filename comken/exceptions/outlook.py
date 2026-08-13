@@ -6,11 +6,19 @@ from .base import ComkenError
 
 
 class OutlookError(ComkenError):
-    """Outlook 関連エラーの基底クラス。"""
+    """Outlook 関連エラーの分類
+
+    対処:
+        下の個別エラーを確認する
+    """
 
 
 class ClassicOutlookNotAvailableError(OutlookError):
-    """Classic Outlook を COM で利用できない。"""
+    """Classic Outlook を利用できない
+
+    対処:
+        Classic Outlook を使うか管理者に相談する
+    """
 
     def __init__(self) -> None:
         super().__init__(
@@ -21,7 +29,11 @@ class ClassicOutlookNotAvailableError(OutlookError):
 
 
 class OutlookFolderNotFoundError(OutlookError):
-    """指定された Outlook フォルダが存在しない。"""
+    """指定したフォルダがない
+
+    対処:
+        エラーに表示された存在するフォルダ名を確認する
+    """
 
     def __init__(self, folder: str, existing_folders: list[str]) -> None:
         names = "、".join(existing_folders) if existing_folders else "（なし）"
@@ -29,7 +41,11 @@ class OutlookFolderNotFoundError(OutlookError):
 
 
 class OutlookAttachmentNotFoundError(OutlookError):
-    """下書きへ添付するファイルが存在しない。"""
+    """添付ファイルがない
+
+    対処:
+        表示されたファイルパスを確認する
+    """
 
     def __init__(self, path: Path) -> None:
         super().__init__(

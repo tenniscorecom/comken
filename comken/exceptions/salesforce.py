@@ -4,13 +4,20 @@ from .base import ComkenError
 
 
 class SalesforceError(ComkenError):
-    """Salesforce に関する例外をまとめて捕捉するための基底クラス。"""
+    """Salesforce に関するエラー
+
+    対処:
+        画面に表示された具体的なエラー名を上の表から探す
+    """
 
 
 class SalesforceAuthError(SalesforceError):
-    """アクセストークンを取得できない場合。
+    """Salesforce にログインできない
 
     発生箇所: comken.salesforce.Salesforce の認証時（初回・401 後の取り直し）
+
+    対処:
+        表示された確認項目を上から順に見る。それでも直らなければ管理者へ連絡する
     """
 
     def __init__(self, status_code: int, detail: str) -> None:
@@ -27,9 +34,12 @@ class SalesforceAuthError(SalesforceError):
 
 
 class SalesforceConnectionError(SalesforceError):
-    """ネットワークの問題で Salesforce に接続できない場合。
+    """Salesforce につながらない
 
     発生箇所: comken.salesforce.Salesforce の全リクエスト
+
+    対処:
+        ネットワークの状態を確認して、少し待ってから再実行する
     """
 
     def __init__(self, url: str, detail: Exception) -> None:
@@ -41,9 +51,12 @@ class SalesforceConnectionError(SalesforceError):
 
 
 class SalesforceRequestError(SalesforceError):
-    """Salesforce API がエラーを返した場合。
+    """Salesforce が処理を断った
 
     発生箇所: comken.salesforce.Salesforce の全リクエスト
+
+    対処:
+        表示されたメッセージをそのまま添えて管理者へ連絡する（権限か項目名の問題が多い）
     """
 
     def __init__(self, method: str, path: str, status_code: int, detail: str) -> None:
@@ -55,7 +68,11 @@ class SalesforceRequestError(SalesforceError):
 
 
 class SalesforceExternalIdMissingError(SalesforceError):
-    """upsert のデータに外部 ID 項目が含まれていない場合。"""
+    """upsert 用データに外部 ID がない
+
+    対処:
+        管理者へ連絡する
+    """
 
     def __init__(self, object_name: str, external_id_field: str) -> None:
         super().__init__(
@@ -78,12 +95,15 @@ class SalesforceCredentialRotationError(SalesforceError):
 
 
 class SalesforceReportTruncatedError(SalesforceError):
-    """レポートの行が上限で切り捨てられた場合。
+    """レポートが上限の 2000 行で切れた（**全件ではない**）
 
     レポート API は同期・非同期とも 2000 行が上限。非同期にしても超えられない。
     黙って欠けたデータで処理を続けないよう、既定ではこの例外で止める。
 
     発生箇所: comken.salesforce.ReportApi.run() / run_async()
+
+    対処:
+        期間を狭めて何回かに分けて実行する。1回で全部必要なら管理者へ連絡する
     """
 
     def __init__(self, report_id: str, row_limit: int) -> None:
@@ -97,12 +117,15 @@ class SalesforceReportTruncatedError(SalesforceError):
 
 
 class SalesforceReportFormatError(SalesforceError):
-    """明細（TABULAR）以外の形式のレポートを取得しようとした場合。
+    """レポートの形式が対応していない
 
     集計（サマリ・マトリックス）形式は行の入れ物の構造が変わり、
     そのまま読むと無言で空を返すため、明示的に弾く。
 
     発生箇所: comken.salesforce.ReportApi.run() / run_async()
+
+    対処:
+        レポートを明細形式にするか、管理者へ連絡する
     """
 
     def __init__(self, report_id: str, report_format: str) -> None:
@@ -114,7 +137,11 @@ class SalesforceReportFormatError(SalesforceError):
 
 
 class SalesforceReportExecutionError(SalesforceError):
-    """非同期レポートの実行自体が Salesforce 側で失敗した場合。"""
+    """Salesforce 側でレポート実行に失敗した
+
+    対処:
+        Salesforce で同じレポートを直接実行し、表示された内容を管理者へ連絡する
+    """
 
     def __init__(self, report_id: str, detail: str) -> None:
         super().__init__(

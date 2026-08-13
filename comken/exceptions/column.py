@@ -4,11 +4,15 @@ from .base import ComkenError
 
 
 class ColumnNotFoundError(ComkenError):
-    """列不在エラーをまとめて捕捉するための基底クラス。"""
+    """Excel・CSV・データ比較で列が見つからないエラー
+
+    対処:
+        画面に表示された具体的なエラー名を上の表から探す
+    """
 
 
 class ExcelColumnNotFoundError(ColumnNotFoundError):
-    """Excel に必要な列が存在しない場合。
+    """Excel の列見出しが見つからない
 
     非エンジニアが列名を変更したときに分かりやすいメッセージを出すために使う。
 
@@ -23,6 +27,9 @@ class ExcelColumnNotFoundError(ColumnNotFoundError):
             missing = [column for column in required if column not in rows[0]]
             if missing:
                 raise ExcelColumnNotFoundError(missing)
+
+    対処:
+        Excel の1行目を確認する
     """
 
     def __init__(self, columns: list[str]) -> None:
@@ -34,7 +41,7 @@ class ExcelColumnNotFoundError(ColumnNotFoundError):
 
 
 class CsvColumnNotFoundError(ColumnNotFoundError):
-    """CSV に必要な列が存在しない場合。
+    """CSV の列見出しが見つからない
 
     非エンジニアが列名を変更したときに分かりやすいメッセージを出すために使う。
 
@@ -50,6 +57,9 @@ class CsvColumnNotFoundError(ColumnNotFoundError):
             missing = [column for column in required if column not in existing]
             if missing:
                 raise CsvColumnNotFoundError(missing, existing)
+
+    対処:
+        CSV の1行目を確認する
     """
 
     def __init__(self, columns: list[str], existing: list[str]) -> None:
@@ -61,9 +71,12 @@ class CsvColumnNotFoundError(ColumnNotFoundError):
 
 
 class KeyColumnNotFoundError(ColumnNotFoundError):
-    """差分比較のキー列が存在しない場合。
+    """比較に使うキー列が見つからない
 
     発生箇所: diff_rows()
+
+    対処:
+        Excel・CSV の列名を確認する
     """
 
     def __init__(self, key: str, existing: list[str]) -> None:
@@ -71,7 +84,11 @@ class KeyColumnNotFoundError(ColumnNotFoundError):
 
 
 class InvalidColumnError(ComkenError):
-    """Excel の列指定が A / AA 形式でない場合。"""
+    """列の指定が正しくない（打ち間違いなど）
+
+    対処:
+        列は番号（1, 2, …）か列記号（"A", "AA"）で指定する
+    """
 
     def __init__(self, column: str) -> None:
         super().__init__(

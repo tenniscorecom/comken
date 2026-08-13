@@ -26,16 +26,24 @@ from .base import ComkenError
 
 
 class BrowserError(ComkenError):
-    """ブラウザ操作の例外をまとめて捕捉するための基底クラス。直接送出しない。"""
+    """ブラウザ操作に関するエラー
+
+    対処:
+        画面に表示された具体的なエラー名を上の表から探す
+    """
 
 
 # ------------------------------------------------------------ 起動・終了
 
 
 class DriverStartError(BrowserError):
-    """Edge WebDriver の起動に失敗した場合。
+    """ブラウザを起動できない
 
     発生箇所: Browsers.launch()
+
+    対処:
+        エラーの本文にある確認事項をそのまま試す。
+        Windows Update で Edge が更新された直後に起きやすい
     """
 
     def __init__(self, driver_path: str, detail: Exception) -> None:
@@ -50,7 +58,7 @@ class DriverStartError(BrowserError):
 
 
 class BrowsersNotStartedError(BrowserError):
-    """with に入れずに Browsers を使った場合。
+    """`with` を使わずに `Browsers` を使った
 
     with を使わないと、処理の途中で例外が出たときにブラウザのプロセスが残り続ける。
     残ったブラウザはドライバーの更新も邪魔するため、必ず with の中で使う。
@@ -62,6 +70,9 @@ class BrowsersNotStartedError(BrowserError):
         # 正しい
         with Browsers() as browsers:
             browsers.launch("kintai")
+
+    対処:
+        `with Browsers() as browsers:` の中で使う（ブラウザは起動していないので実害はない）
     """
 
     def __init__(self, operation: str) -> None:
@@ -76,10 +87,13 @@ class BrowsersNotStartedError(BrowserError):
 
 
 class BrowsersClosedError(BrowserError):
-    """with を抜けた後の Browsers を使った場合。
+    """`with` を抜けた後の `Browsers` を使った
 
     with の外へ browsers を持ち出すと起きる。with を抜けた時点で
     ブラウザはすべて閉じているため、そこから起動や操作はできない。
+
+    対処:
+        続けたい処理を `with` の中に入れる。外へ持ち出すのは取り出した値だけにする
     """
 
     def __init__(self, operation: str) -> None:
@@ -92,7 +106,7 @@ class BrowsersClosedError(BrowserError):
 
 
 class SessionNotStartedError(BrowserError):
-    """with に入る前のセッションを操作した場合。
+    """`with` を使わずにブラウザを操作した
 
     BrowserSession は with 文の中でだけ使える。with を使わないと、
     処理の途中で例外が出たときにブラウザのプロセスが残り続けるため。
@@ -105,6 +119,9 @@ class SessionNotStartedError(BrowserError):
         with Browsers() as browsers:
             session = browsers.launch("kintai")
             session.open("https://example.com")
+
+    対処:
+        `with Browsers() as browsers:` の中で使う
     """
 
     def __init__(self, operation: str) -> None:
@@ -119,10 +136,13 @@ class SessionNotStartedError(BrowserError):
 
 
 class SessionClosedError(BrowserError):
-    """with を抜けて閉じ終わったセッションを操作した場合。
+    """`with` を抜けた後のブラウザを操作した
 
     with の外へセッションを持ち出すと起きる。取得したデータを with の外で使いたい場合は、
     セッションではなく取り出した値（文字列やファイルパス）を返すようにする。
+
+    対処:
+        `with` の外へ持ち出すのは、ブラウザではなく取り出した値にする
     """
 
     def __init__(self, name: str, operation: str) -> None:
@@ -137,12 +157,15 @@ class SessionClosedError(BrowserError):
 
 
 class ConcurrentSessionUseError(BrowserError):
-    """1つのセッションを複数スレッドから同時に操作した場合。
+    """1つのブラウザを複数の処理から同時に操作した
 
     WebDriver は1つの接続でコマンドを順番に処理するため、
     同じセッションを2スレッドから同時に操作すると応答が入れ替わり、
     「別の画面を操作していた」という追跡困難な不具合になる。
     サイトごとにセッションを分けること（Browsers.launch で1サイト1セッション）。
+
+    対処:
+        サイトごとに `launch` でブラウザを分ける
     """
 
     def __init__(self, name: str, operation: str, holder_thread: str) -> None:
@@ -159,9 +182,12 @@ class ConcurrentSessionUseError(BrowserError):
 
 
 class SessionNameConflictError(BrowserError):
-    """同じ名前のセッションを2回起動しようとした場合。
+    """同じ名前で2回 `launch` した
 
     発生箇所: Browsers.launch()
+
+    対処:
+        名前を変える（同一サイトの別アカウントなら `kintai_a` / `kintai_b` など）
     """
 
     def __init__(self, name: str) -> None:
@@ -169,14 +195,17 @@ class SessionNameConflictError(BrowserError):
             f"セッション名が重複しています: {name}\n"
             "1つの Browsers の中で同じ名前は使えません。\n"
             "同じサイトに2つのアカウントでログインする場合は、"
-            '「kintai_a」「kintai_b」のように名前を分けてください。'
+            "「kintai_a」「kintai_b」のように名前を分けてください。"
         )
 
 
 class SessionNotFoundError(BrowserError):
-    """起動していないセッションを取り出そうとした場合。
+    """`launch` していない名前を取り出した
 
     発生箇所: Browsers.__getitem__()
+
+    対処:
+        先に `launch` する。エラーに起動済みの一覧が出ます
     """
 
     def __init__(self, name: str, launched: list[str]) -> None:
@@ -192,10 +221,13 @@ class SessionNotFoundError(BrowserError):
 
 
 class ElementNotFoundError(BrowserError):
-    """要素が待機時間内に見つからなかった場合。
+    """画面の部品が時間内に見つからない
 
     selenium の TimeoutException を、どのセレクターで失敗したかが分かる形に包み直したもの。
     素の TimeoutException はメッセージにセレクターが入らず、ログから原因を追えないため。
+
+    対処:
+        もう一度実行する。サイトが重いだけのことが多い。毎回出るなら画面が変わった可能性があるので管理者へ（エラーに、どの部品を探していたかが出ます）
     """
 
     def __init__(self, locator: object, seconds: int, condition: str) -> None:
@@ -210,9 +242,12 @@ class ElementNotFoundError(BrowserError):
 
 
 class PopupTabNotOpenedError(BrowserError):
-    """popup_tab() で新しいタブが待機時間内に開かなかった場合。
+    """別タブが開かない
 
     発生箇所: BrowserSession.popup_tab()
+
+    対処:
+        もう一度実行する。続く場合は、その画面の「別ウィンドウで開く」ボタンが変わった可能性があるので管理者へ
     """
 
     def __init__(self, seconds: int) -> None:
@@ -227,9 +262,12 @@ class PopupTabNotOpenedError(BrowserError):
 
 
 class DownloadTimeoutError(BrowserError):
-    """ダウンロードが待機時間内に完了しなかった場合。
+    """ダウンロードが終わらない
 
     発生箇所: DownloadDir.wait()
+
+    対処:
+        ネットワークの状態を確認して再実行する。大きいファイルなら時間がかかっているだけのこともある
     """
 
     def __init__(self, directory: object, seconds: int) -> None:

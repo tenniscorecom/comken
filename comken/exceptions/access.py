@@ -6,11 +6,19 @@ from .base import ComkenError
 
 
 class AccessError(ComkenError):
-    """Access 操作に関する例外をまとめて捕捉するための基底クラス。"""
+    """Access に関するエラー
+
+    対処:
+        画面に表示された具体的なエラー名を上の表から探す
+    """
 
 
 class AccessFileNotFoundError(AccessError):
-    """Access ファイルが存在しない場合。"""
+    """Access ファイルが見つからない
+
+    対処:
+        ファイルの置き場所と名前を確認する
+    """
 
     def __init__(self, path: Path | str) -> None:
         super().__init__(
@@ -20,7 +28,11 @@ class AccessFileNotFoundError(AccessError):
 
 
 class AccessLocalCopyError(AccessError):
-    """Access ファイルのローカルコピーに失敗した場合。"""
+    """Access ファイルを一時フォルダへコピーできない
+
+    対処:
+        使用状況・読み取り権限・空き容量を確認する
+    """
 
     def __init__(self, path: Path | str, detail: Exception) -> None:
         super().__init__(
@@ -31,7 +43,11 @@ class AccessLocalCopyError(AccessError):
 
 
 class AccessBackupError(AccessError):
-    """Access ファイルのバックアップに失敗した場合。"""
+    """元 DB を開く前のバックアップに失敗した
+
+    対処:
+        保存先の空き容量・書き込み権限・元 DB の読み取り権限を確認する
+    """
 
     def __init__(self, path: Path | str, backup_path: Path | str, detail: Exception) -> None:
         super().__init__(
@@ -44,7 +60,11 @@ class AccessBackupError(AccessError):
 
 
 class AccessRoutineError(AccessError):
-    """Access マクロまたは VBA の実行に失敗した場合。"""
+    """Access マクロまたは VBA の実行に失敗した
+
+    対処:
+        表示された名前と Access 側の内容を確認する
+    """
 
     def __init__(self, name: str, kind: str, detail: Exception) -> None:
         super().__init__(
@@ -54,7 +74,11 @@ class AccessRoutineError(AccessError):
 
 
 class AccessSourceNotFoundError(AccessError):
-    """指定したテーブルまたはクエリが存在しない場合。"""
+    """テーブルまたはクエリが見つからない
+
+    対処:
+        エラーに表示された存在する名前を確認する
+    """
 
     def __init__(self, name: str, sources: list[str]) -> None:
         super().__init__(

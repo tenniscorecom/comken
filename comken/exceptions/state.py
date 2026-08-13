@@ -6,11 +6,19 @@ from .base import ComkenError
 
 
 class StateError(ComkenError):
-    """状態ファイルのエラーをまとめて捕捉するための基底クラス。"""
+    """state.ini に関するエラー
+
+    対処:
+        画面に表示された具体的なエラー名を上の表から探す
+    """
 
 
 class StateFileCorruptedError(StateError):
-    """state.ini を正しく読み取れない場合。"""
+    """state.ini が壊れていて読み取れない
+
+    対処:
+        内容を直す。直せない場合は別名に変更して、空の状態から再実行する
+    """
 
     def __init__(self, path: Path | str) -> None:
         super().__init__(
@@ -21,14 +29,22 @@ class StateFileCorruptedError(StateError):
 
 
 class StateLowerCaseNameError(StateError):
-    """状態のキー名に小文字が使われた場合。"""
+    """state のキー名に小文字がある
+
+    対処:
+        表示されたキー名を大文字に直す（`last_file` → `LAST_FILE`）
+    """
 
     def __init__(self, key: str) -> None:
         super().__init__(f"state のキー名は大文字で指定してください: {key} → {key.upper()}")
 
 
 class StateValueTypeError(StateError):
-    """state.ini に保存できない型の値が渡された場合。"""
+    """state に保存できない型の値が渡された
+
+    対処:
+        真偽値・整数・小数・文字列・文字列のリストのいずれかに変更する
+    """
 
     def __init__(self, value: object) -> None:
         super().__init__(

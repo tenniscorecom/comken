@@ -6,7 +6,11 @@ from .base import ComkenError
 
 
 class UnsupportedFileSuffixError(ComkenError):
-    """扱えない拡張子のファイルが指定された。"""
+    """対応外の拡張子が指定された
+
+    対処:
+        CSV / Excel の対応する拡張子のファイルを指定する
+    """
 
     def __init__(self, path: Path, suffixes: tuple[str, ...]) -> None:
         expected = "、".join(suffixes)

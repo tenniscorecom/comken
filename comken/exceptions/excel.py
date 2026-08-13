@@ -6,13 +6,20 @@ from .base import ComkenError
 
 
 class ExcelError(ComkenError):
-    """Excel 操作に関する例外をまとめて捕捉するための基底クラス。"""
+    """Excel に関するエラー
+
+    対処:
+        画面に表示された具体的なエラー名を上の表から探す
+    """
 
 
 class ExcelFileNotFoundError(ExcelError):
-    """Excel ファイルが存在しない場合。
+    """Excel ファイルが見つからない
 
     発生箇所: ExcelBase.__init__()
+
+    対処:
+        ファイルの置き場所と名前を確認する
     """
 
     def __init__(self, path: Path | str) -> None:
@@ -23,9 +30,12 @@ class ExcelFileNotFoundError(ExcelError):
 
 
 class SheetNotFoundError(ExcelError):
-    """指定したシートが存在しない場合。
+    """指定した名前のシートがない
 
     発生箇所: ExcelBase._sheet() / ExcelComHandler._sheet()
+
+    対処:
+        Excel を開いて、下のシート名（タブ）が変わっていないか確認する。変えた場合は元に戻す
     """
 
     def __init__(self, name: str, sheets: list[str]) -> None:
@@ -33,7 +43,11 @@ class SheetNotFoundError(ExcelError):
 
 
 class SheetAlreadyExistsError(ExcelError):
-    """同名のシートが既に存在する場合。"""
+    """同じ名前のシートが既にある
+
+    対処:
+        別のシート名を指定するか、既存のシート名を変更する
+    """
 
     def __init__(self, name: str) -> None:
         super().__init__(
@@ -43,7 +57,11 @@ class SheetAlreadyExistsError(ExcelError):
 
 
 class LastSheetDeletionError(ExcelError):
-    """ブックの最後のシートを削除しようとした場合。"""
+    """ブックの最後のシートを削除しようとした
+
+    対処:
+        先に別のシートを追加してから削除する
+    """
 
     def __init__(self, name: str) -> None:
         super().__init__(
@@ -53,7 +71,11 @@ class LastSheetDeletionError(ExcelError):
 
 
 class InvalidTableNameError(ExcelError):
-    """Excel のテーブル名が制約に違反している場合。"""
+    """Excel で使えないテーブル名を指定した
+
+    対処:
+        空白・数字始まり・セル参照のような名前を避ける
+    """
 
     def __init__(self, name: str) -> None:
         super().__init__(
@@ -64,7 +86,11 @@ class InvalidTableNameError(ExcelError):
 
 
 class TableAlreadyExistsError(ExcelError):
-    """同名のテーブルが既に存在する場合。"""
+    """同じ名前のテーブルが既にある
+
+    対処:
+        別のテーブル名を指定する
+    """
 
     def __init__(self, name: str) -> None:
         super().__init__(
@@ -73,16 +99,23 @@ class TableAlreadyExistsError(ExcelError):
 
 
 class TableNotFoundError(ExcelError):
-    """指定したテーブルがシートに存在しない場合。"""
+    """指定したテーブルがシートにない
+
+    対処:
+        エラーに表示された既存テーブル名を確認する
+    """
 
     def __init__(self, name: str, tables: list[str]) -> None:
         super().__init__(f"テーブルが見つかりません: {name}  存在するテーブル: {tables}")
 
 
 class MacroError(ExcelError):
-    """VBA マクロの実行に失敗した場合。
+    """Excel のマクロが失敗した
 
     発生箇所: ExcelComHandler.run_macro()
+
+    対処:
+        Excel をすべて閉じて再実行する。続く場合は管理者へ
     """
 
     def __init__(self, name: str, detail: Exception) -> None:
@@ -93,9 +126,12 @@ class MacroError(ExcelError):
 
 
 class RowTransferError(ExcelError):
-    """Excel の行転記に失敗した場合。
+    """Excel の行転記に失敗した
 
     発生箇所: ExcelComHandler.transfer_by_key()
+
+    対処:
+        表示された行番号のデータを確認する
     """
 
     def __init__(self, row: int, detail: Exception) -> None:
@@ -106,9 +142,12 @@ class RowTransferError(ExcelError):
 
 
 class EmptyHeaderCellError(ExcelError):
-    """Excel のヘッダー行に空のセルがある場合。
+    """Excel の見出しに空欄がある
 
     発生箇所: ExcelBase.read_rows_as_dicts() / ExcelComHandler.read_rows_as_dicts()
+
+    対処:
+        Excel の1行目の空欄を埋める
     """
 
     def __init__(self, columns: list[int]) -> None:
@@ -119,9 +158,12 @@ class EmptyHeaderCellError(ExcelError):
 
 
 class ExcelHeadersTooFewError(ExcelError):
-    """指定したヘッダー数が Excel の列数より少ない場合。
+    """指定した見出し数が列数より少ない
 
     発生箇所: ExcelBase.read_rows_as_dicts() / ExcelComHandler.read_rows_as_dicts()
+
+    対処:
+        管理者へ連絡する
     """
 
     def __init__(self, expected: int, actual: int) -> None:
@@ -133,9 +175,12 @@ class ExcelHeadersTooFewError(ExcelError):
 
 
 class FileFormatMismatchError(ExcelError):
-    """保存先の拡張子と Excel の保存形式が一致しない場合。
+    """保存拡張子と形式が合わない
 
     発生箇所: ExcelComHandler.save_as()
+
+    対処:
+        管理者へ連絡する
     """
 
     def __init__(self, suffix: str) -> None:

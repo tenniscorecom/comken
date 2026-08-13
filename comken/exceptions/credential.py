@@ -6,13 +6,20 @@ from .base import ComkenError
 
 
 class CredentialError(ComkenError):
-    """認証情報に関する例外をまとめて捕捉するための基底クラス。"""
+    """認証情報の保存・取得に関するエラー
+
+    対処:
+        画面に表示された具体的なエラー名を上の表から探す
+    """
 
 
 class InvalidCredentialNameError(CredentialError):
-    """キー名・システム名に使えない文字が含まれている場合。
+    """認証情報のキー名に使えない文字がある
 
     発生箇所: comken.credentials の Credentials() / save_credential() / 取り込み
+
+    対処:
+        半角英数字とアンダースコアだけにする（漢字・スペース・記号は使えない）
     """
 
     def __init__(self, label: str, name: str) -> None:
@@ -24,9 +31,13 @@ class InvalidCredentialNameError(CredentialError):
 
 
 class CredentialNotFoundError(CredentialError):
-    """指定したキー名が登録されていない場合。
+    """認証情報（パスワード・client_secret など）が登録されていない
 
     発生箇所: comken.credentials の load_credential() / Credentials の属性アクセス
+
+    対処:
+        表示された登録済みキー名と見比べる。
+        無ければ `python -m comken.credentials import 認証情報.json` で取り込む
     """
 
     def __init__(self, name: str, registered: list[str]) -> None:
@@ -41,12 +52,16 @@ class CredentialNotFoundError(CredentialError):
 
 
 class CredentialDecryptionError(CredentialError):
-    """保存ファイルを復号できない場合。
+    """認証情報を復号できない
 
     DPAPI は「登録したときの Windows ユーザー × PC」でしか復号できない。
     別のアカウントで実行した・別の PC にファイルをコピーした場合がほとんど。
 
     発生箇所: comken.credentials の読み書き全般
+
+    対処:
+        登録したときと**同じ Windows アカウント・同じ PC** で実行しているか確認する。
+        タスクスケジューラの実行ユーザー違いが最も多い
     """
 
     def __init__(self, path: Path, detail: Exception) -> None:
@@ -63,12 +78,15 @@ class CredentialDecryptionError(CredentialError):
 
 
 class CredentialStoreCorruptedError(CredentialError):
-    """復号はできたが、中身が壊れていて読めない場合。
+    """認証情報の中身が壊れている
 
     復号できない（別ユーザー・別 PC）のとは対処が違う。こちらは実行アカウントを
     直しても直らないので、ファイルを捨てて取り込み直すしかない。
 
     発生箇所: comken.credentials の読み書き全般
+
+    対処:
+        実行アカウントの問題ではない。表示されたファイルを削除して、もう一度取り込み直す
     """
 
     def __init__(self, path: Path, detail: str) -> None:
@@ -82,9 +100,12 @@ class CredentialStoreCorruptedError(CredentialError):
 
 
 class CredentialImportError(CredentialError):
-    """取り込む JSON を読めない、または形式が違う場合。
+    """取り込む JSON が壊れている・形式が違う
 
     発生箇所: comken.credentials の import_json()
+
+    対処:
+        表示された形式のとおりに書き直す。値は必ず `" "` で囲む
     """
 
     def __init__(self, path: Path, detail: str) -> None:
