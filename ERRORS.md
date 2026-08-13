@@ -89,6 +89,9 @@
 | `ConfigCreatedFromExampleError` | config.ini が無かったので example から作った | 作られた config.ini の値を書き換えて、もう一度実行する |
 | `ConfigLowerCaseNameError` | config.ini のセクション名・キー名に小文字がある | 表示された名前を大文字に書き換える（`[files]` → `[FILES]`） |
 | `ConfigSectionNotFoundError` | config.ini の必要な節がない | 表示されたセクション名を config.ini に追加する |
+| `StateFileCorruptedError` | state.ini が壊れていて読み取れない | 内容を直す。直せない場合は別名に変更して、空の状態から再実行する |
+| `StateLowerCaseNameError` | state のキー名に小文字がある | 表示されたキー名を大文字に直す（`last_file` → `LAST_FILE`） |
+| `StateValueTypeError` | state に保存できない型の値が渡された | 真偽値・整数・小数・文字列・文字列のリストのいずれかに変更する |
 
 ---
 
@@ -106,6 +109,7 @@
 | `CsvError` | CSV に関するエラー |
 | `ColumnNotFoundError` | Excel・CSV・データ比較で列が見つからないエラー |
 | `ConfigError` | config.ini に関するエラー |
+| `StateError` | state.ini に関するエラー |
 | `RpaError` | 社内 RPA 基盤の呼び出しに関するエラー |
 | `SalesforceError` | Salesforce に関するエラー |
 | `CredentialError` | 認証情報の保存・取得に関するエラー |

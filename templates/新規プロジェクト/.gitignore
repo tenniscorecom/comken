@@ -1,5 +1,6 @@
 # 機密情報・環境設定（絶対に git に含めない。example だけ含める）
 config.ini
+state.ini
 .env
 
 # Python

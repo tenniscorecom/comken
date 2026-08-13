@@ -47,6 +47,7 @@ def dry_run(enabled: bool = True) -> Iterator[None]:
     対象の操作:
         - move_file / copy_file（ファイルの移動・コピー）
         - ExcelWriter.save / CsvWriter の書き込み
+        - State.set（state.ini の書き込み）
 
     読み取り（CSV・Excel の読み込み、SOQL クエリ等）は通常どおり実行される。
 

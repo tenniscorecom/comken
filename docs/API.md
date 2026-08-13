@@ -67,6 +67,7 @@ INFO ログ（[DRY-RUN] プレフィックス付き）に出す。本番実行�
 対象の操作:
     - move_file / copy_file（ファイルの移動・コピー）
     - ExcelWriter.save / CsvWriter の書き込み
+    - State.set（state.ini の書き込み）
 
 読み取り（CSV・Excel の読み込み、SOQL クエリ等）は通常どおり実行される。
 
@@ -3242,6 +3243,64 @@ class DownloadTimeoutError(BrowserError):
 def __init__(self, directory: object, seconds: int) -> None:
 ```
 
+### `StateError`
+
+```text
+class StateError(ComkenError):
+```
+
+#### 説明
+
+状態ファイルのエラーをまとめて捕捉するための基底クラス。
+
+### `StateFileCorruptedError`
+
+```text
+class StateFileCorruptedError(StateError):
+```
+
+#### 説明
+
+state.ini を正しく読み取れない場合。
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path | str) -> None:
+```
+
+### `StateLowerCaseNameError`
+
+```text
+class StateLowerCaseNameError(StateError):
+```
+
+#### 説明
+
+状態のキー名に小文字が使われた場合。
+
+#### `__init__`
+
+```text
+def __init__(self, key: str) -> None:
+```
+
+### `StateValueTypeError`
+
+```text
+class StateValueTypeError(StateError):
+```
+
+#### 説明
+
+state.ini に保存できない型の値が渡された場合。
+
+#### `__init__`
+
+```text
+def __init__(self, value: object) -> None:
+```
+
 
 ## `from comken.outlook import ...`
 
@@ -4935,3 +4994,51 @@ def intranet(main: Callable[[], Any], project_name: str) -> Any:
 
 Raises:
     RpaLibraryNotFoundError: 社内ライブラリが読み込めない場合。
+
+
+## `from comken.state import ...`
+
+### `State`
+
+```text
+class State:
+```
+
+#### 説明
+
+プログラムが次回実行へ持ち越す値を state.ini に保存する。
+
+``set()`` は呼び出すたびに UTF-8 で原子的に保存する。dry-run 中に状態を
+書くと、試運転したファイルが本番で処理済みと判断されうるため、ファイルは
+変更せず、書く予定だった内容だけをログへ出す。
+
+保存できる値は、真偽値・整数・小数・文字列・文字列のリスト。
+
+Args:
+    path: state.ini のパス。省略すると実行フォルダ直下の state.ini。
+
+#### `__init__`
+
+```text
+def __init__(self, path: str | Path='state.ini') -> None:
+```
+
+#### `get`
+
+```text
+def get(self, key: str, default: StateValue | None=None) -> StateValue | None:
+```
+
+##### 説明
+
+保存済みの値を返す。無い場合は default を返す。
+
+#### `set`
+
+```text
+def set(self, key: str, value: StateValue) -> None:
+```
+
+##### 説明
+
+値を保存する。dry-run 中はファイルもメモリ上の状態も変更しない。

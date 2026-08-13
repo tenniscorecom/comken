@@ -65,11 +65,15 @@ ComkenError
 │   ├── ExcelColumnNotFoundError
 │   ├── CsvColumnNotFoundError
 │   └── KeyColumnNotFoundError
-└── ConfigError
+├── ConfigError
     ├── ConfigFileNotFoundError
     ├── ConfigCreatedFromExampleError
     ├── ConfigLowerCaseNameError
     └── ConfigSectionNotFoundError
+└── StateError
+    ├── StateFileCorruptedError
+    ├── StateLowerCaseNameError
+    └── StateValueTypeError
 
 カテゴリ基底クラスはまとめて捕捉するために使い、直接送出しない。
 """
@@ -164,6 +168,12 @@ from .salesforce import (
     SalesforceReportTruncatedError,
     SalesforceRequestError,
 )
+from .state import (
+    StateError,
+    StateFileCorruptedError,
+    StateLowerCaseNameError,
+    StateValueTypeError,
+)
 from .warning import _warn_coerce as _warn_coerce
 
 __all__ = [
@@ -237,4 +247,8 @@ __all__ = [
     "ElementNotFoundError",
     "PopupTabNotOpenedError",
     "DownloadTimeoutError",
+    "StateError",
+    "StateFileCorruptedError",
+    "StateLowerCaseNameError",
+    "StateValueTypeError",
 ]

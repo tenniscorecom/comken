@@ -18,3 +18,4 @@ config.pyi
 
 # プロジェクト設定（テンプレートは config.ini.example を使う）
 config.ini
+state.ini

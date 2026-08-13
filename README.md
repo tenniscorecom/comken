@@ -244,6 +244,34 @@ python -m comken.config
 
 ---
 
+## State
+
+人が書く固定の設定は `config.ini`、プログラムが次回へ持ち越す状態は `state.ini` と
+使い分ける。人が調整した設定をプログラムが上書きする事故を防ぐため、両者は混ぜない。
+
+```python
+from comken.state import State
+
+state = State()                         # 実行フォルダ直下の state.ini
+last_file = state.get("LAST_FILE")     # 無ければ None
+position = state.get("POSITION", 0)    # 既定値も指定できる
+state.set("LAST_FILE", "data.csv")    # その場で保存
+```
+
+`state.ini` が無い初回実行は空の状態で続行する。値は文字列・数値・bool・文字列リストの
+型を保って読み戻せる。壊れたファイルは続きの位置を失わないよう、初回扱いにせずエラーで止まる。
+dry-run 中の `set()` はログだけを出し、本番の「処理済み」判定を変えない。
+
+実際に保存される内容:
+
+```ini
+[STATE]
+LAST_FILE = "data.csv"
+POSITION = 42
+```
+
+---
+
 ## Logger
 
 ログの設定（出力先・フォーマット・レベル）は社内の共通ライブラリ側で行う。
