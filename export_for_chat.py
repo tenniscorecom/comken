@@ -1,15 +1,12 @@
-"""社内 ChatGPT に貼り付けるためのテキストを書き出す。
+"""comken の公開 API ドキュメントと、貼り付け用資料を生成する。
 
-ファイル添付（ZIP など）が使えない環境向け。目的ごとにドキュメントを連結し、
-貼り付け1回分に収まるよう分割して `貼り付け用/` に出力する。
-
-comken の公開 API は、機能カタログ（人が書いた説明）に加えて
-`__all__` と AST から**署名だけ**を機械的に抜き出して添える。
-説明だけだと ChatGPT が引数を推測で埋めてしまうため。
+通常は各パッケージの ``__all__`` をたどり、型ヒント付き署名と docstring 全文を
+``docs/API.md`` へ書き出す。添付できない環境では ``--max-chars`` を指定すると、
+従来どおり資料を文字数の目安で分割して ``貼り付け用/`` へ出力する。
 
 使い方:
-    python export_for_chat.py                 # 既定の文字数で分割して出力
-    python export_for_chat.py --max-chars 8000
+    python export_for_chat.py
+    python export_for_chat.py --max-chars 20000
 """
 
 from __future__ import annotations
@@ -21,13 +18,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 PACKAGE_ROOT = ROOT / "comken"
-OUTPUT_DIR = ROOT / "貼り付け用"
+API_OUTPUT_PATH = ROOT / "docs" / "API.md"
+LEGACY_OUTPUT_DIR = ROOT / "貼り付け用"
 
-# 1回の貼り付けに収める目安。社内 ChatGPT の入力欄の上限が分からないため、
-# どの環境でも通りやすい控えめな値を既定にしている（--max-chars で変更可）。
-DEFAULT_MAX_CHARS = 20000
-
-# 出力ファイル名 → (ChatGPT に伝える役割, 連結する資料)
 BUNDLES: dict[str, tuple[str, list[str]]] = {
     "1_コーディング規約": (
         "これは社内 Python ライブラリ comken を使うツールの**コーディング規約**です。"
@@ -39,7 +32,7 @@ BUNDLES: dict[str, tuple[str, list[str]]] = {
         "comken を使うコードを書くときは、ここに載っている関数・引数だけを使ってください。"
         "載っていない機能は「comken には無い」と判断し、勝手に作らず標準ライブラリで書くか、"
         "その旨を伝えてください。",
-        ["docs/機能カタログ.md", "@API署名"],
+        ["docs/機能カタログ.md", "@API"],
     ),
     "3_ドキュメントの書き方": (
         "これは社内ツールに付ける**仕様書とエラー対応ガイドのひな形**です。"
@@ -58,24 +51,13 @@ BUNDLES: dict[str, tuple[str, list[str]]] = {
 }
 
 
-DOC_SECTION_HEADS = ("Args:", "Returns:", "Raises:", "Yields:", "Note:")
-
-
-def _first_doc_line(node: ast.AST) -> str:
-    """docstring の要約（1行目）を返す（無ければ空文字）。"""
-    doc = ast.get_docstring(node) or ""
-    for line in doc.splitlines():
-        summary = line.strip()
-        # 要約を書かず Args: から始まる docstring があるため、見出しは要約とみなさない。
-        if summary and not summary.startswith(DOC_SECTION_HEADS):
-            return summary
-    return ""
+def _parse(path: Path) -> ast.Module:
+    """UTF-8 の Python ファイルを AST として読む。"""
+    return ast.parse(path.read_text(encoding="utf-8"))
 
 
 def _signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
-    """関数定義から本文を落とし、シグネチャだけの1行を作る。"""
-    # NOTE: 本文を `...` に差し替えて unparse すると、引数・型ヒント・デコレーターを
-    #       自前で組み立てずに済む。
+    """関数定義から本文を除き、型ヒントを含む署名を返す。"""
     stub = type(node)(
         name=node.name,
         args=node.args,
@@ -89,108 +71,127 @@ def _signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
 
 
 def _all_names(tree: ast.Module) -> list[str]:
-    """`__all__ = [...]` に並んだ名前を返す。"""
+    """``__all__`` の文字列要素を定義順に返す。"""
     for node in tree.body:
         if not isinstance(node, ast.Assign):
             continue
-        targets = [t.id for t in node.targets if isinstance(t, ast.Name)]
-        if "__all__" in targets and isinstance(node.value, ast.List):
-            return [e.value for e in node.value.elts if isinstance(e, ast.Constant)]
+        targets = [target.id for target in node.targets if isinstance(target, ast.Name)]
+        if "__all__" in targets and isinstance(node.value, (ast.List, ast.Tuple)):
+            return [
+                element.value
+                for element in node.value.elts
+                if isinstance(element, ast.Constant) and isinstance(element.value, str)
+            ]
     return []
 
 
-def _import_origins(tree: ast.Module, package_dir: Path) -> dict[str, Path]:
-    """`from .module import X` を読み、名前 → 定義元ファイルの対応を作る。"""
-    origins: dict[str, Path] = {}
+def _source_for_import(package_file: Path, node: ast.ImportFrom) -> Path | None:
+    """相対 import の参照先 Python ファイルを返す。"""
+    if node.level != 1 or not node.module:
+        return None
+    source = package_file.parent.joinpath(*node.module.split("."))
+    module_path = source.with_suffix(".py")
+    package_path = source / "__init__.py"
+    if module_path.exists():
+        return module_path
+    if package_path.exists():
+        return package_path
+    return None
+
+
+def _find_definition(path: Path, name: str) -> tuple[Path, ast.AST] | None:
+    """再エクスポートをたどり、名前の定義元と AST ノードを返す。"""
+    tree = _parse(path)
     for node in tree.body:
-        if not isinstance(node, ast.ImportFrom) or node.level != 1 or not node.module:
+        if (
+            isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == name
+        ):
+            return path, node
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if any(isinstance(target, ast.Name) and target.id == name for target in targets):
+                return path, node
+    for node in tree.body:
+        if not isinstance(node, ast.ImportFrom):
             continue
-        source = package_dir.joinpath(*node.module.split("."))
-        path = source.with_suffix(".py")
-        if not path.exists():
-            path = source / "__init__.py"  # サブパッケージからの再輸出
-        if path.exists():
-            for alias in node.names:
-                origins[alias.asname or alias.name] = path
-    return origins
+        source = _source_for_import(path, node)
+        if source is None:
+            continue
+        for alias in node.names:
+            if (alias.asname or alias.name) == name:
+                return _find_definition(source, alias.name)
+    return None
 
 
-def _class_text(node: ast.ClassDef) -> list[str]:
-    """クラスを「1行説明 + 公開メソッドの署名」に畳んだ行を返す。"""
-    # 継承元は例外の捕捉範囲を判断する材料になるので残す。
+def _doc_lines(node: ast.AST, heading_level: int) -> list[str]:
+    """docstring 全文を Markdown の節として返す。"""
+    docstring = ast.get_docstring(node, clean=True)
+    if not docstring:
+        return []
+    return [f"{'#' * heading_level} 説明", "", docstring, ""]
+
+
+def _class_lines(node: ast.ClassDef) -> list[str]:
+    """公開クラスの宣言、docstring、公開メソッドを Markdown にする。"""
     bases = ", ".join(ast.unparse(base) for base in node.bases)
-    lines = [f"class {node.name}({bases}):" if bases else f"class {node.name}:"]
-    if summary := _first_doc_line(node):
-        lines.append(f"    # {summary}")
+    declaration = f"class {node.name}({bases}):" if bases else f"class {node.name}:"
+    lines = ["```text", declaration, "```", "", *_doc_lines(node, 4)]
     for child in node.body:
-        if not isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
+        if not isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        # 内部実装は渡さない。`__init__` は呼び出し方そのものなので例外的に載せる。
         if child.name.startswith("_") and child.name != "__init__":
             continue
-        # デコレーター付きは複数行になるため、全行をまとめて字下げする。
-        lines += [f"    {line}" for line in _signature(child).splitlines()]
-        if summary := _first_doc_line(child):
-            lines.append(f"        # {summary}")
-    if len(lines) == 1:
-        lines.append("    ...")  # 例外クラスなど、中身が無いもの
+        lines += [f"#### `{child.name}`", "", "```text", _signature(child), "```", ""]
+        lines += _doc_lines(child, 5)
     return lines
 
 
+def _definition_lines(name: str, node: ast.AST) -> list[str]:
+    """公開名1つ分の Markdown を返す。"""
+    lines = [f"### `{name}`", ""]
+    if isinstance(node, ast.ClassDef):
+        return [*lines, *_class_lines(node)]
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        return [*lines, "```text", _signature(node), "```", "", *_doc_lines(node, 4)]
+    return [*lines, "公開定数。", ""]
+
+
 def _api_text() -> str:
-    """`__all__` に載っている公開 API の署名一覧を組み立てる。"""
-    sections: list[str] = [
-        "# comken 公開 API 署名一覧（自動生成）",
+    """``__all__`` ベースの公開 API リファレンスを組み立てる。"""
+    sections = [
+        "# comken 公開 API",
         "",
-        "各パッケージの `__all__` に載っているものだけを列挙している。",
-        "ここに無い名前は公開 API ではないので、import しないこと。",
-        "`#` の行はその関数・クラスの説明。",
+        "> [!IMPORTANT]",
+        "> このファイルは自動生成物です。手で編集しないでください。",
+        "> 再生成: `python export_for_chat.py`",
+        "",
+        "各パッケージの `__all__` にある公開名だけを掲載しています。",
     ]
-    # パッケージ（__init__.py）と、直接 import されるモジュール（comken/run.py など）の両方。
-    modules = [p for p in PACKAGE_ROOT.glob("*.py") if p.name != "__init__.py"]
+    modules = [path for path in PACKAGE_ROOT.glob("*.py") if path.name != "__init__.py"]
     sources = sorted(PACKAGE_ROOT.rglob("__init__.py")) + sorted(modules)
     for source in sources:
-        tree = ast.parse(source.read_text(encoding="utf-8"))
-        names = _all_names(tree)
+        names = _all_names(_parse(source))
         if not names:
             continue
-        is_package = source.name == "__init__.py"
-        module = source.parent if is_package else source.with_suffix("")
+        module = source.parent if source.name == "__init__.py" else source.with_suffix("")
         module_path = ".".join(module.relative_to(ROOT).parts)
-        origins = _import_origins(tree, source.parent) if is_package else {}
-        sections += ["", "-" * 60, f"## from {module_path} import ...", ""]
-
-        # 定義元ごとにまとめると、関連する API が並んで読みやすい。
+        sections += ["", f"## `from {module_path} import ...`", ""]
         for name in names:
-            # パッケージは再輸出元をたどる。モジュールはその場に定義がある。
-            path = origins.get(name, source if not is_package else None)
-            if path is None:
-                sections.append(f"{name}  # {module_path} で定義")
+            definition = _find_definition(source, name)
+            if definition is None:
+                sections += [f"### `{name}`", "", "定義を解決できませんでした。", ""]
                 continue
-            definition = _definition(path, name)
-            sections += definition if definition else [f"{name}"]
-    return "\n".join(sections) + "\n"
-
-
-def _definition(path: Path, name: str) -> list[str]:
-    """モジュールから `name` の定義を探し、署名の行を返す。"""
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    for node in tree.body:
-        if isinstance(node, ast.ClassDef) and node.name == name:
-            return [*_class_text(node), ""]
-        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name == name:
-            lines = [_signature(node)]
-            if summary := _first_doc_line(node):
-                lines.append(f"    # {summary}")
-            return [*lines, ""]
-    return []
+            _, node = definition
+            sections += _definition_lines(name, node)
+    return "\n".join(sections).rstrip() + "\n"
 
 
 def _bundle_text(title: str, purpose: str, sources: list[str]) -> str:
-    """1つの貼り付け用テキストを組み立てる。"""
+    """貼り付け用資料1種類のテキストを組み立てる。"""
     parts = [f"# {title}", "", purpose, ""]
     for source in sources:
-        if source == "@API署名":
+        if source == "@API":
             parts += ["", "=" * 60, "", _api_text()]
             continue
         parts += ["", "=" * 60, f"（資料: {source}）", "=" * 60, ""]
@@ -199,14 +200,15 @@ def _bundle_text(title: str, purpose: str, sources: list[str]) -> str:
 
 
 def _split(text: str, max_chars: int) -> list[str]:
-    """行の途中で切らずに、指定文字数を目安に分割する。"""
+    """行の途中で切らず、指定文字数を目安に分割する。"""
     chunks: list[str] = []
     current: list[str] = []
     size = 0
     for line in text.splitlines(keepends=True):
         if current and size + len(line) > max_chars:
             chunks.append("".join(current))
-            current, size = [], 0
+            current = []
+            size = 0
         current.append(line)
         size += len(line)
     if current:
@@ -214,28 +216,35 @@ def _split(text: str, max_chars: int) -> list[str]:
     return chunks
 
 
+def _write_legacy_bundles(max_chars: int) -> None:
+    """従来の貼り付け用分割テキストを生成する。"""
+    if max_chars <= 0:
+        raise ValueError("--max-chars には1以上の整数を指定してください")
+    if LEGACY_OUTPUT_DIR.exists():
+        shutil.rmtree(LEGACY_OUTPUT_DIR)
+    LEGACY_OUTPUT_DIR.mkdir()
+    for title, (purpose, sources) in BUNDLES.items():
+        chunks = _split(_bundle_text(title, purpose, sources), max_chars)
+        for number, chunk in enumerate(chunks, start=1):
+            suffix = "" if len(chunks) == 1 else f"_{number}of{len(chunks)}"
+            path = LEGACY_OUTPUT_DIR / f"{title}{suffix}.txt"
+            header = "" if number == 1 else f"（{title} の続き {number}/{len(chunks)}）\n\n"
+            path.write_text(header + chunk, encoding="utf-8")
+            print(f"{path.name}  {len(chunk):,} 文字")  # noqa: T201
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--max-chars",
         type=int,
-        default=DEFAULT_MAX_CHARS,
-        help=f"1ファイルの目安の文字数（既定 {DEFAULT_MAX_CHARS}）",
+        help="指定時だけ、貼り付け用資料をこの文字数の目安で分割して出力する",
     )
     args = parser.parse_args()
-
-    if OUTPUT_DIR.exists():
-        shutil.rmtree(OUTPUT_DIR)
-    OUTPUT_DIR.mkdir()
-
-    for title, (purpose, sources) in BUNDLES.items():
-        chunks = _split(_bundle_text(title, purpose, sources), args.max_chars)
-        for number, chunk in enumerate(chunks, start=1):
-            suffix = "" if len(chunks) == 1 else f"_{number}of{len(chunks)}"
-            path = OUTPUT_DIR / f"{title}{suffix}.txt"
-            header = "" if number == 1 else f"（{title} の続き {number}/{len(chunks)}）\n\n"
-            path.write_text(header + chunk, encoding="utf-8")
-            print(f"{path.name}  {len(chunk):,} 文字")  # noqa: T201
+    API_OUTPUT_PATH.write_text(_api_text(), encoding="utf-8")
+    print(f"{API_OUTPUT_PATH.relative_to(ROOT)} を生成しました")  # noqa: T201
+    if args.max_chars is not None:
+        _write_legacy_bundles(args.max_chars)
 
 
 if __name__ == "__main__":

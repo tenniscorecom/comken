@@ -25,7 +25,7 @@ from comken.salesforce.sites import SITES, SiteA
 
 DOMAIN_URL = "https://example.my.salesforce.com"
 INSTANCE_URL = "https://example.my.salesforce.com"
-DATA_PREFIX = "/services/data/v60.0"
+DATA_PREFIX = "/services/data/v67.0"
 
 
 def _response(status: int = 200, json_body: object = None, text: str = "", headers=None):
@@ -66,9 +66,7 @@ def _salesforce(responses, token_responses=None):
 class TestClientCredentialsAuth:
     def test_posts_client_credentials_to_my_domain(self):
         """My Domain のトークンエンドポイントへ client_credentials を POST する。"""
-        with patch(
-            "comken.salesforce.oauth.requests.post", return_value=_token_response()
-        ) as post:
+        with patch("comken.salesforce.oauth.requests.post", return_value=_token_response()) as post:
             token, instance_url = ClientCredentialsAuth("CID", "CSECRET", DOMAIN_URL).fetch()
 
         assert (token, instance_url) == ("TOKEN", INSTANCE_URL)
@@ -83,9 +81,7 @@ class TestClientCredentialsAuth:
 
     def test_trailing_slash_in_domain_url_is_tolerated(self):
         """domain_url の末尾スラッシュがあっても URL が壊れない。"""
-        with patch(
-            "comken.salesforce.oauth.requests.post", return_value=_token_response()
-        ) as post:
+        with patch("comken.salesforce.oauth.requests.post", return_value=_token_response()) as post:
             ClientCredentialsAuth("CID", "CSECRET", f"{DOMAIN_URL}/").fetch()
         assert post.call_args[0][0] == f"{DOMAIN_URL}/services/oauth2/token"
 
@@ -222,8 +218,9 @@ class TestSalesforceReauthentication:
             _response(401, text="INVALID_SESSION_ID"),
             _response(json_body={"records": [{"Id": "1"}], "done": True}),
         ]
-        with _salesforce(responses) as (client, session, _), patch(
-            "comken.salesforce.client.time.sleep"
+        with (
+            _salesforce(responses) as (client, session, _),
+            patch("comken.salesforce.client.time.sleep"),
         ):
             records = client.query("SELECT Id FROM Account")
 
@@ -265,9 +262,10 @@ class TestSalesforceTransientFailures:
             _response(500, text="Server Error"),
             _response(json_body={"records": [{"Id": "1"}], "done": True}),
         ]
-        with _salesforce(responses) as (client, session, _), patch(
-            "comken.salesforce.client.time.sleep"
-        ) as sleep:
+        with (
+            _salesforce(responses) as (client, session, _),
+            patch("comken.salesforce.client.time.sleep") as sleep,
+        ):
             records = client.query("SELECT Id FROM Account")
 
         assert records == [{"Id": "1"}]
@@ -281,8 +279,9 @@ class TestSalesforceTransientFailures:
             _response(429, text="REQUEST_LIMIT_EXCEEDED"),
             _response(json_body={"records": [], "done": True}),
         ]
-        with _salesforce(responses) as (client, session, _), patch(
-            "comken.salesforce.client.time.sleep"
+        with (
+            _salesforce(responses) as (client, session, _),
+            patch("comken.salesforce.client.time.sleep"),
         ):
             client.query("SELECT Id FROM Account")
         assert session.request.call_count == 2

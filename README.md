@@ -1237,7 +1237,7 @@ client_id / client_secret を読む（後述の [credentials](#credentials)）�
 
 書き込み系（`insert` / `update` / `upsert` / `delete`）は `dry_run` を尊重する。
 使い方の一覧は [docs/機能カタログ.md](docs/機能カタログ.md)、
-設計の背景は [docs/Salesforce設計メモ.md](docs/Salesforce設計メモ.md) を参照。
+設計の背景は [docs/Salesforce.md](docs/Salesforce.md) を参照。
 
 ---
 
@@ -1304,7 +1304,7 @@ DPAPI は **Windows アカウント × PC** に紐付く。ファイルを他人
 取り込みは人が1回だけ実行する前提。
 
 複数台へ配る必要が出てきたら公開鍵ハイブリッド方式を足す余地がある
-（準備は [docs/Salesforce_JWTと鍵配布.md](docs/Salesforce_JWTと鍵配布.md)）。
+（準備は [docs/Salesforce.md](docs/Salesforce.md) の付録）。
 まずローカル保管で動かし、配布が現実の問題になってから入れる。
 
 ---

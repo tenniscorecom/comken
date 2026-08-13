@@ -1,0 +1,87 @@
+"""Salesforce ECA の認証情報ローテーションを検証する。"""
+
+import datetime
+from unittest.mock import Mock, call, patch
+
+import pytest
+
+from comken.exceptions.salesforce import SalesforceCredentialRotationError
+from comken.salesforce.rotation import SalesforceCredentialRotator
+
+TODAY = datetime.date(2026, 8, 13)
+
+
+def _client() -> Mock:
+    client = Mock()
+    client.data_path.side_effect = lambda path: f"/services/data/v67.0{path}"
+    client.request.side_effect = [
+        ({"consumerId": "consumer-1"}, {}),
+        ({"id": "staged-1", "consumerKey": "new-key", "consumerSecret": "new-secret"}, {}),
+        (None, {}),
+    ]
+    return client
+
+
+class TestSalesforceCredentialRotator:
+    def test_rotates_after_saving_new_credentials(self):
+        client = _client()
+        rotator = SalesforceCredentialRotator(client, "app-1", "site_a", is_enabled=True)
+
+        with (
+            patch(
+                "comken.salesforce.rotation.load_credential",
+                return_value="2026-06-01",
+            ),
+            patch("comken.salesforce.rotation.save_credentials") as save,
+        ):
+            assert rotator.rotate_if_due(TODAY)
+
+        assert client.request.call_args_list == [
+            call(
+                "GET",
+                "/services/data/v67.0/apps/oauth/credentials/app-1",
+                component="credential_rotation",
+            ),
+            call(
+                "POST",
+                "/services/data/v67.0/apps/oauth/credentials/app-1/consumer-1/staged",
+                component="credential_rotation",
+            ),
+            call(
+                "PATCH",
+                "/services/data/v67.0/apps/oauth/credentials/app-1/consumer-1/staged/staged-1",
+                body={"command": "rotate"},
+                component="credential_rotation",
+            ),
+        ]
+        save.assert_called_once_with(
+            {
+                "site_a_client_id": "new-key",
+                "site_a_client_secret": "new-secret",
+                "site_a_last_rotation_date": "2026-08-13",
+            },
+            None,
+        )
+
+    def test_does_not_rotate_when_dpapi_save_fails(self):
+        client = _client()
+        rotator = SalesforceCredentialRotator(client, "app-1", "site_a", is_enabled=True)
+
+        with (
+            patch("comken.salesforce.rotation.load_credential", return_value="2026-06-01"),
+            patch(
+                "comken.salesforce.rotation.save_credentials",
+                side_effect=OSError("保存失敗"),
+            ),
+            pytest.raises(SalesforceCredentialRotationError, match="DPAPI"),
+        ):
+            rotator.rotate_if_due(TODAY)
+
+        assert [request.args[0] for request in client.request.call_args_list] == ["GET", "POST"]
+
+    def test_is_disabled_by_default(self):
+        client = _client()
+        rotator = SalesforceCredentialRotator(client, "app-1", "site_a")
+
+        assert not rotator.rotate_if_due(TODAY)
+        client.request.assert_not_called()

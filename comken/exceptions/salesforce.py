@@ -65,6 +65,18 @@ class SalesforceExternalIdMissingError(SalesforceError):
         )
 
 
+class SalesforceCredentialRotationError(SalesforceError):
+    """consumer key / secret のローテーションを安全に完了できない場合。"""
+
+    def __init__(self, detail: str) -> None:
+        super().__init__(
+            "Salesforce の認証情報をローテーションできませんでした。\n"
+            f"{detail}\n"
+            "旧認証情報はまだ有効です。Salesforce の ECA 設定、API レスポンス、"
+            "DPAPI の保存先を確認してください。"
+        )
+
+
 class SalesforceReportTruncatedError(SalesforceError):
     """レポートの行が上限で切り捨てられた場合。
 

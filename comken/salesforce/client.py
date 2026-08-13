@@ -12,7 +12,7 @@ salesforce/client.py — Salesforce API クライアント
 
 認証・レポート・計測は継承せず**持たせている**。認証は「トークンを取る部品」で
 あって Salesforce の一種ではなく、合成にしておくと JWT フローへの差し替えが
-`auth` の入れ替えだけで済むため（詳しくは docs/Salesforce設計メモ.md）。
+`auth` の入れ替えだけで済むため（詳しくは docs/Salesforce.md）。
 """
 
 import logging
@@ -67,7 +67,7 @@ class Salesforce:
     """
 
     # API バージョン。組織が対応していない場合はサブクラスで上書きする
-    API_VERSION = "60.0"
+    API_VERSION = "67.0"
     TIMEOUT_SECONDS = 60
 
     # 認証情報のキー名の頭。from_credentials() を使う組織のクラスで指定する

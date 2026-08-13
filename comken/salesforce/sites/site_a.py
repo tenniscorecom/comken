@@ -26,7 +26,7 @@ class SiteA(Salesforce):
     CONFIG_SECTION = "SITE_A"
 
     # 組織が対応している API バージョン。既定と違うときだけ上書きする
-    # API_VERSION = "60.0"
+    # API_VERSION = "67.0"
 
     # レポート ID は組織ごとに固有で、環境で変わらないのでここに書く。
     # 環境で変わる値（URL・出力先フォルダ）だけを config.ini に置く

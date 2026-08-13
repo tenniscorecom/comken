@@ -1,0 +1,4918 @@
+# comken 公開 API
+
+> [!IMPORTANT]
+> このファイルは自動生成物です。手で編集しないでください。
+> 再生成: `python export_for_chat.py`
+
+各パッケージの `__all__` にある公開名だけを掲載しています。
+
+## `from comken import ...`
+
+### `Config`
+
+```text
+class Config:
+```
+
+#### 説明
+
+config.ini を読み込み、config.SECTION.KEY の形式でアクセスできるクラス。
+
+値の型変換（_parse_value の変換順と同じ）:
+    - true / false → bool
+    - [a, b, c] → list[str]
+    - 絶対パス（C:\ / \\ / /）→ Path
+    - 整数 → int
+    - 小数 → float
+    - それ以外 → str
+
+数値を文字列として使いたい場合はコード側で str() に変換する。
+
+config.ini の例（セクション名・キー名は大文字で書く）:
+    [BROWSER]
+    WAIT_SECONDS = 10
+    HEADLESS = false
+
+    [FILES]
+    INPUT_FOLDER = C:\作業\input
+
+    [REPORT]
+    TARGET_SHEETS = [支店A, 支店B, 集計]
+
+#### `__init__`
+
+```text
+def __init__(self, path: str | Path='config.ini') -> None:
+```
+
+##### 説明
+
+Args:
+    path: config.ini のパス。省略するとカレントディレクトリの config.ini を読む。
+
+### `dry_run`
+
+```text
+@contextmanager
+def dry_run(enabled: bool=True) -> Iterator[None]:
+```
+
+#### 説明
+
+ブロック内だけ dry-run モードを指定した状態にする。
+
+有効にすると、外部に影響する操作を実行せず、何をするはずだったかを
+INFO ログ（[DRY-RUN] プレフィックス付き）に出す。本番実行前の動作確認に使う。
+
+対象の操作:
+    - move_file / copy_file（ファイルの移動・コピー）
+    - ExcelWriter.save / CsvWriter の書き込み
+
+読み取り（CSV・Excel の読み込み、SOQL クエリ等）は通常どおり実行される。
+
+Args:
+    enabled: True で有効（デフォルト）。False ならブロック内だけ無効。
+             外側が dry-run 中でも、このブロックでは通常どおり書き込む。
+
+### `debug`
+
+```text
+@contextmanager
+def debug(enabled: bool=True) -> Iterator[None]:
+```
+
+#### 説明
+
+ブロック内だけデバッグモードを指定した状態にする。
+
+有効にすると、ライブラリの主要処理（Excel 読み込み・転記・保存、CSV 読み書き、
+zip 等）の所要時間が DEBUG ログに記録される。どこが遅いかの調査に使う。
+
+Args:
+    enabled: True で有効（デフォルト）。False ならブロック内だけ無効。
+
+### `is_dry_run`
+
+```text
+def is_dry_run() -> bool:
+```
+
+#### 説明
+
+dry-run モードが有効か返す。
+
+### `is_debug`
+
+```text
+def is_debug() -> bool:
+```
+
+#### 説明
+
+デバッグモードが有効か返す。
+
+
+## `from comken.access import ...`
+
+### `AccessDatabase`
+
+```text
+class AccessDatabase(FileBase):
+```
+
+#### 説明
+
+Access データベースを COM で操作する。
+
+既定ではネットワーク越しの遅延・排他・破損を避けるため、一時フォルダへコピーして開く。
+コピー上の変更は元ファイルへ反映されない。元データベースを更新するマクロを実行する場合は
+``local_copy=False`` を指定する。この場合は開く前に日時付きバックアップを作り、
+既定で7日間残す。バックアップは成功後も削除せず、自動では書き戻さない。
+復旧時は内容を確認した人が手でコピーする（自動復旧は正常なデータを古い控えで
+上書きする危険があるため）。
+バックアップ先は既定で元データベースと同じフォルダの ``backup``。
+数百 MB 以上のデータベースでは、ネットワーク越しのコピーに時間がかかる。
+``backup_dir`` にローカルフォルダを指定すれば速くなるが、顧客情報がローカルに
+残ることを理解したうえで指定する。元データベースと同じ場所に控えを置くため、
+サーバー障害や誤削除では一緒に失われる。本格的な世代保全はサーバー側の
+バックアップに依存する。OneDrive などの同期フォルダでは控えも同期され、
+容量と帯域を消費する。
+
+数十万件を CSV に出す場合は、Python にデータを載せない ``export_csv()`` を使う。
+``rows()`` は逐次処理用であり、結果を ``list`` にすると全件分のメモリを消費する。
+
+#### `__init__`
+
+```text
+def __init__(self, path: str | Path, local_copy: bool=True, backup: bool | None=None, backup_days: int=DEFAULT_BACKUP_DAYS, backup_dir: str | Path | None=None) -> None:
+```
+
+#### `run_macro`
+
+```text
+def run_macro(self, name: str) -> None:
+```
+
+##### 説明
+
+Access マクロを実行する。
+
+元データベースを更新するマクロの場合は、初期化時に ``local_copy=False`` を指定する。
+VBA のプロシージャ／関数を実行する場合は ``run_function()`` を使う。
+
+#### `run_function`
+
+```text
+def run_function(self, name: str, *args: object) -> object | None:
+```
+
+##### 説明
+
+VBA のプロシージャ／関数を実行する。
+
+元データベースを更新する処理の場合は、初期化時に ``local_copy=False`` を指定する。
+Access のマクロは別の仕組みなので、マクロには ``run_macro()`` を使う。
+dry-run 時は実行せず ``None`` を返す。
+
+#### `export_csv`
+
+```text
+def export_csv(self, source: str, dst: str | Path, encoding: str=Encoding.CP932) -> None:
+```
+
+##### 説明
+
+テーブルまたはクエリを Access から直接 CSV に書き出す。
+
+数十万件でも Python のメモリにデータを載せない、大量件数向けの方法。
+
+#### `rows`
+
+```text
+def rows(self, source: str) -> Iterator[dict[str, object]]:
+```
+
+##### 説明
+
+テーブルまたはクエリを辞書で1行ずつ返すジェネレータ。
+
+COM 往復を減らすため小さなバッチで取得する。数十万件を ``list`` にすると
+メモリを大量に使うため、CSV が目的なら ``export_csv()`` を使う。
+
+#### `table_names`
+
+```text
+def table_names(self) -> list[str]:
+```
+
+##### 説明
+
+利用可能なテーブルと保存済みクエリの名前を返す。
+
+
+## `from comken.browser import ...`
+
+### `Browsers`
+
+```text
+class Browsers:
+```
+
+#### 説明
+
+複数サイト分のブラウザをまとめて起動・終了する。**with 文の中でだけ使える。**
+
+どこで例外が出ても、起動済みのブラウザはすべて閉じる。
+1つのブラウザの終了に失敗しても、残りの終了は続行される。
+
+with を使わずに launch すると BrowsersNotStartedError になる（ブラウザは起動しない）。
+with を必須にしているのは、途中で例外が出たときにブラウザのプロセスが残り、
+次の実行でドライバーの更新まで邪魔するのを防ぐため。
+
+**start() で始めた処理が終わらないと、with も終わらない。** ブラウザを閉じる前に
+裏の処理の終了を待つため（操作の途中でブラウザが消えると原因が分かりにくいエラーになる）。
+終わらない可能性がある処理には、その中で待ち時間の上限を設けること。
+
+Attributes:
+    names: 起動済みのセッション名（起動した順）。
+
+#### `__init__`
+
+```text
+def __init__(self) -> None:
+```
+
+#### `launch`
+
+```text
+def launch(self, name: str, options: 'type[BrowserOptions] | BrowserOptions | None'=None, download_dir: 'str | Path | None'=None) -> BrowserSession:
+```
+
+##### 説明
+
+名前を付けてブラウザを1つ起動する。
+
+ダウンロードフォルダとログイン状態はこの名前ごとに分かれる。
+同じサイトへ2つのアカウントでログインしたい場合も、
+「kintai_a」「kintai_b」と名前を分ければ混ざらない。
+
+Args:
+    name: セッション名。ログとエラーメッセージに出るので、
+          「kintai」「keiri」のようにサイトが分かる名前にする。
+    options: 起動オプション。BrowserOptions のサブクラスをそのまま渡せる
+             （セッションごとに別インスタンスを作るので、設定が混ざらない）。
+             省略時は BrowserOptions の初期値で起動する。
+    download_dir: ダウンロード先。省略時は options.DOWNLOAD_DIR/<name>、
+                  それも未設定なら一時フォルダを作り、終了時に削除する。
+
+Returns:
+    起動済みの BrowserSession。この with を抜けるまで使える。
+
+Raises:
+    SessionNameConflictError: 同じ名前ですでに起動している場合。
+    DriverStartError: ブラウザを起動できなかった場合。
+
+#### `start`
+
+```text
+def start(self, task: Callable[[], T], label: str='') -> BackgroundTask[T]:
+```
+
+##### 説明
+
+処理を裏で始めて、すぐ次の行へ進む。結果は wait() で受け取る。
+
+普通に書けば上から順に動く。時間のかかる処理を待っている間に
+別のことを進めたいときだけ、これで先に始めておく:
+
+    勤怠 = browsers.start(lambda: KintaiFlow(kintai).search())
+    KeiriFlow(keiri).login(user, password)   # 勤怠の読み込み中にこちらが進む
+    days = 勤怠.wait()                        # 戻って結果を受け取る
+
+**裏で動かす処理と、その後に自分で書く処理で、同じセッションを触らないこと。**
+同じセッションを同時に触ると ConcurrentSessionUseError で止まる
+（黙って別の画面を操作するより、早く気づけるほうが安全なため）。
+
+Args:
+    task: 引数を取らない呼び出し可能オブジェクト。lambda で包んで渡す。
+    label: 何の処理か。省略するとセッション名の代わりに連番が付く。
+           ログとエラーメッセージに出るので、付けておくと原因を追いやすい。
+
+Returns:
+    結果を受け取るための取っ手。wait() で結果、is_done で終了確認ができる。
+
+#### `parallel`
+
+```text
+def parallel(self, *tasks: Callable[[], T]) -> list[T]:
+```
+
+##### 説明
+
+複数の処理を同時に始めて、全部終わるまで待ち、渡した順に結果を返す。
+
+start() で始めて wait() で受け取るのを、まとめて書けるようにしたもの。
+「全部同時に始めて、全部の結果が欲しい」だけならこちらが短い:
+
+    # 逐次（上から順に動く）
+    a = KintaiFlow(kintai).fetch()
+    b = KeiriFlow(keiri).fetch()
+
+    # 同時（同じ呼び出しを lambda で包む）
+    a, b = browsers.parallel(
+        lambda: KintaiFlow(kintai).fetch(),
+        lambda: KeiriFlow(keiri).fetch(),
+    )
+
+受け取るタイミングを自分で決めたい場合は start() を使う。
+
+1つの処理では1つのセッションだけを触ること。同じセッションを2つの処理から
+触ると ConcurrentSessionUseError で止まる。
+
+Args:
+    *tasks: 引数を取らない呼び出し可能オブジェクト。
+
+Returns:
+    各処理の戻り値を、渡した順に並べたリスト。
+
+Raises:
+    Exception: いずれかの処理で発生した例外。複数失敗した場合は、
+               すべてをログに出したうえで、引数の並び順で最初に失敗したものを送出する
+               （時間的に最初に失敗したものとは限らない）。
+
+#### `names`
+
+```text
+@property
+def names(self) -> list[str]:
+```
+
+##### 説明
+
+起動済みのセッション名（起動した順）。
+
+### `BrowserSession`
+
+```text
+class BrowserSession:
+```
+
+#### 説明
+
+1サイト分の Edge ブラウザ。with 文の中でだけ使える。
+
+with を必須にしているのは、処理の途中で例外が出たときに
+ブラウザのプロセスと一時フォルダを確実に片付けるため。
+with を使わずに操作すると SessionNotStartedError になる。
+
+ダウンロード先・ログイン状態・起動オプションはこのセッションが専有する。
+他のセッションと混ざらないので、サイトごとに違う設定を安心して使える。
+
+Attributes:
+    name: セッション名。ログとエラーメッセージに出るので、
+          「kintai」「keiri」のようにサイトが分かる名前にする。
+    download_dir: このセッション専用のダウンロードフォルダ。
+                  完了待ちは download_dir.wait() を使う。
+    wait_seconds: 要素待機のタイムアウト秒数。Page がこれを引き継ぐ。
+
+#### `__init__`
+
+```text
+def __init__(self, name: str, options: BrowserOptions, download_dir: DownloadDir, profile_dir: Path | None=None) -> None:
+```
+
+##### 説明
+
+直接呼ばず、Browsers.launch() から作る。
+
+Args:
+    name: セッション名。
+    options: 起動オプション。セッションごとに別インスタンスを渡すこと。
+    download_dir: このセッション専用のダウンロードフォルダ。
+    profile_dir: ログイン状態を残すフォルダ。None なら毎回まっさらな状態で起動する。
+
+#### `open`
+
+```text
+def open(self, url: str) -> None:
+```
+
+##### 説明
+
+URL を開く。
+
+#### `refresh`
+
+```text
+def refresh(self) -> None:
+```
+
+##### 説明
+
+今のページを再読み込みする。
+
+#### `back`
+
+```text
+def back(self) -> None:
+```
+
+##### 説明
+
+ブラウザの「戻る」。
+
+#### `current_url`
+
+```text
+@property
+def current_url(self) -> str:
+```
+
+##### 説明
+
+今開いている URL。
+
+#### `title`
+
+```text
+@property
+def title(self) -> str:
+```
+
+##### 説明
+
+今開いているページのタイトル。
+
+#### `page_source`
+
+```text
+@property
+def page_source(self) -> str:
+```
+
+##### 説明
+
+今開いているページの HTML。
+
+#### `save_screenshot`
+
+```text
+def save_screenshot(self, prefix: str='screenshot') -> Path:
+```
+
+##### 説明
+
+今の画面を logs/ に PNG で保存し、そのパスを返す。
+
+Args:
+    prefix: ファイル名の先頭。保存先は logs/{prefix}_{セッション名}_{日時}.png。
+
+Returns:
+    保存したファイルのパス。
+
+#### `popup_tab`
+
+```text
+@contextmanager
+def popup_tab(self, timeout: int | None=None) -> Iterator['BrowserSession']:
+```
+
+##### 説明
+
+別タブで開いた画面を操作し、抜けるときに閉じて元のタブへ戻る。
+
+リンクの target="_blank" や帳票 PDF のように、こちらの意図と関係なく
+タブが増える場面のためのもの。タブを開く操作を済ませてから with に入る:
+
+    page.click(PDF_LINK)              # ここで別タブが開く
+    with session.popup_tab():         # 開いたタブへ移る
+        session.save_screenshot("pdf")
+    # ← 別タブを閉じて、元のタブへ戻る（中で例外が出ても戻る）
+
+Args:
+    timeout: 新しいタブが開くのを待つ秒数。省略時は 10 秒。
+
+Yields:
+    自分自身。中では今までどおり session と Page をそのまま使える。
+
+Raises:
+    PopupTabNotOpenedError: 時間内に新しいタブが開かなかった場合。
+
+#### `load_many`
+
+```text
+def load_many(self, urls: 'Sequence[str]', ready: 'Locator | None'=None, max_open: int=_DEFAULT_MAX_OPEN_TABS, timeout: int | None=None) -> Iterator[str]:
+```
+
+##### 説明
+
+同じサイトの複数ページをまとめて開き、**読み込めたものから順に**返す。
+
+レポート一覧のように、同じサイトの大量の URL を見て回るときに使う。
+1件ずつ開いて待つと「読み込み時間 × 件数」かかるが、先に何枚か開いておくと
+待ち時間がブラウザ側で重なるため、全体が大幅に短くなる
+（1件2分・90件なら、逐次で3時間、10枚開けば20分台）。
+
+ログインは1回で済む。同じブラウザの中でタブを開くだけなので、
+Cookie も二要素認証の記憶も共有される。
+
+    for url in sf.load_many(report_urls, ready=ReportPage.TABLE, max_open=10):
+        rows = ReportPage(sf).rows()     # そのページのタブに切り替わっている
+        save(url, rows)
+    # ← 抜けると、開いたタブは全部閉じて元のタブへ戻る
+
+Args:
+    urls: 開く URL。渡した順に開くが、**返る順番は読み込みが終わった順**になる。
+    ready: 読み込み完了とみなす目印の要素。省略すると HTML の読み込み完了で判断する。
+           画面を描いてから中身を入れるサイト（Salesforce など）では、
+           表やヘッダーなど「出たら中身がある」要素を指定すること。
+    max_open: 同時に開いておくタブの数。増やすほど速くなるが、
+              メモリとサイト側の負荷も増える。
+    timeout: 1ページあたりの待ち時間の上限（秒）。省略時はセッションの設定。
+             超えたページは諦めて次へ進み、警告ログに残す。
+
+Yields:
+    読み込みが終わった URL。yield されている間、そのページのタブに切り替わっており、
+    Page のメソッドがそのまま使える。
+
+Raises:
+    SessionNotStartedError: with に入る前に呼んだ場合。
+    ConcurrentSessionUseError: 他のスレッドが同じセッションを操作している場合。
+
+#### `raw`
+
+```text
+@property
+def raw(self) -> webdriver.Edge:
+```
+
+##### 説明
+
+selenium の WebDriver そのもの。
+
+このクラスと Page に用意されていない機能を使うときの逃げ道。
+ここから switch_to でタブを移動すると、セッションが今どのタブにいるかを
+見失うことがあるので、タブ操作は popup_tab() を使うこと。
+
+ここから直接操作すると、同時操作の見張り（operating）を通らない。
+parallel の中で使う場合、他のスレッドと衝突しないことは呼び出し側の責任になる。
+
+#### `operating`
+
+```text
+@contextmanager
+def operating(self, operation: str) -> Iterator[None]:
+```
+
+##### 説明
+
+このセッションを操作している間の目印。Page から使う。
+
+with に入っているか、すでに閉じていないか、他のスレッドが同時に
+触っていないかをまとめて確認する。
+
+Args:
+    operation: 何をしようとしているか（エラーメッセージに出る）。
+
+Raises:
+    SessionNotStartedError: with に入る前に操作した場合。
+    SessionClosedError: with を抜けた後に操作した場合。
+    ConcurrentSessionUseError: 他のスレッドが同時に操作している場合。
+
+### `BrowserOptions`
+
+```text
+class BrowserOptions:
+```
+
+#### 説明
+
+Edge の起動オプション。サブクラスで必要な属性だけ上書きして使う。
+
+bool 属性は True で有効・False で無効、str 属性は None で無効。
+
+#### `build`
+
+```text
+def build(self, profile_dir: 'Path | None'=None) -> list[str]:
+```
+
+##### 説明
+
+有効なオプションを Edge の起動引数リストに変換する。
+
+Args:
+    profile_dir: ログイン状態を残すプロファイルフォルダ。
+                 指定するとシークレットモードは自動的に外れる
+                 （シークレットは Cookie を残さないため、永続化と両立しない）。
+
+Returns:
+    webdriver に渡す起動引数のリスト。
+
+### `Page`
+
+```text
+class Page:
+```
+
+#### 説明
+
+1画面ぶんの操作をまとめる基底クラス。画面ごとに継承して使う。
+
+要素は見つかるまで自動で待つ。時間内に見つからない場合は
+ElementNotFoundError になり、どのセレクターで失敗したかがメッセージに出る。
+
+Attributes:
+    session: この画面が乗っているブラウザ。遷移先の画面クラスを作るときに渡す。
+
+#### `__init__`
+
+```text
+def __init__(self, session: BrowserSession, wait_seconds: int | None=None) -> None:
+```
+
+##### 説明
+
+Args:
+    session: Browsers.launch() で起動したセッション。
+    wait_seconds: 要素待機のタイムアウト秒数。
+                  省略時はセッションの設定（BrowserOptions.WAIT_SECONDS）を引き継ぐ。
+
+#### `open`
+
+```text
+def open(self, url: str) -> 'Page':
+```
+
+##### 説明
+
+URL を開き、自分自身を返す。
+
+#### `save_screenshot`
+
+```text
+def save_screenshot(self, prefix: str='screenshot') -> Path:
+```
+
+##### 説明
+
+今の画面を logs/ に PNG で保存し、そのパスを返す。
+
+#### `click`
+
+```text
+def click(self, locator: Locator, index: int=0) -> None:
+```
+
+##### 説明
+
+要素をクリックする。クリックできる状態になるまで待つ。
+
+Args:
+    locator: 対象のセレクター。
+    index: 同じセレクターに複数の要素が一致する場合、何番目か（0始まり）。
+           まずはセレクター側で1つに絞り込み、index は最後の手段にする。
+
+#### `input`
+
+```text
+def input(self, locator: Locator, text: str) -> None:
+```
+
+##### 説明
+
+入力欄に文字を入れる。もとの値は消える。
+
+#### `text`
+
+```text
+def text(self, locator: Locator) -> str:
+```
+
+##### 説明
+
+要素の表示文字を返す。
+
+#### `texts`
+
+```text
+def texts(self, locator: Locator) -> list[str]:
+```
+
+##### 説明
+
+一致する全要素の表示文字をリストで返す（一覧表の全行を読むときなど）。
+
+#### `attribute`
+
+```text
+def attribute(self, locator: Locator, name: str) -> str | None:
+```
+
+##### 説明
+
+要素の属性値を返す（href やチェック状態など）。属性が無ければ None。
+
+Args:
+    locator: 対象のセレクター。
+    name: 属性名（例: "href", "value", "checked"）。
+
+#### `select_text`
+
+```text
+def select_text(self, locator: Locator, text: str) -> None:
+```
+
+##### 説明
+
+プルダウンを、表示されている文字で選ぶ。
+
+#### `select_value`
+
+```text
+def select_value(self, locator: Locator, option_value: str) -> None:
+```
+
+##### 説明
+
+プルダウンを、option の value 属性で選ぶ。
+
+#### `select_index`
+
+```text
+def select_index(self, locator: Locator, index: int) -> None:
+```
+
+##### 説明
+
+プルダウンを、上から何番目かで選ぶ（0始まり）。
+
+#### `drag_drop`
+
+```text
+def drag_drop(self, source: Locator, target: Locator) -> None:
+```
+
+##### 説明
+
+要素を別の要素までドラッグして落とす。
+
+#### `scroll_to`
+
+```text
+def scroll_to(self, locator: Locator) -> None:
+```
+
+##### 説明
+
+要素が画面に入るまでスクロールする。
+
+#### `scroll_bottom`
+
+```text
+def scroll_bottom(self) -> None:
+```
+
+##### 説明
+
+ページの一番下までスクロールする（続きを読み込ませるときなど）。
+
+#### `has`
+
+```text
+def has(self, locator: Locator) -> bool:
+```
+
+##### 説明
+
+要素が HTML 上に在るかを返す（待たずにその場で確認する）。
+
+「在れば押す」のような分岐に使う。表示されているかどうかは見ない。
+
+#### `count`
+
+```text
+def count(self, locator: Locator) -> int:
+```
+
+##### 説明
+
+一致する要素の数を返す（待たずにその場で数える。無ければ 0）。
+
+#### `wait_visible`
+
+```text
+def wait_visible(self, locator: Locator) -> None:
+```
+
+##### 説明
+
+要素が表示されるまで待つ（画面が開くのを待つときなど）。
+
+#### `wait_invisible`
+
+```text
+def wait_invisible(self, locator: Locator) -> None:
+```
+
+##### 説明
+
+要素が消えるまで待つ（読み込み中の表示が消えるのを待つときなど）。
+
+#### `alert_accept`
+
+```text
+def alert_accept(self) -> None:
+```
+
+##### 説明
+
+ブラウザの確認ダイアログで OK を押す。出るまで待つ。
+
+#### `alert_dismiss`
+
+```text
+def alert_dismiss(self) -> None:
+```
+
+##### 説明
+
+ブラウザの確認ダイアログでキャンセルを押す。出るまで待つ。
+
+#### `alert_text`
+
+```text
+def alert_text(self) -> str:
+```
+
+##### 説明
+
+ブラウザの確認ダイアログの文言を返す。出るまで待つ。
+
+#### `frame`
+
+```text
+@contextmanager
+def frame(self, locator: Locator) -> Iterator['Page']:
+```
+
+##### 説明
+
+iframe の中を操作し、抜けるときに元の画面へ戻る。
+
+iframe の中の要素は、切り替えないと見つからない。
+ElementNotFoundError が出て、HTML 上には要素があるのに掴めないときは
+たいていこれが原因:
+
+    with page.frame(page.CONTENT_FRAME):
+        page.click(page.SAVE_BUTTON)
+    # ← 元の画面へ戻る（中で例外が出ても戻る）
+
+Yields:
+    自分自身。中では今までどおりメソッドを呼べる。
+
+#### `element`
+
+```text
+def element(self, locator: Locator) -> WebElement:
+```
+
+##### 説明
+
+selenium の WebElement をそのまま返す。
+
+このクラスに用意されていない操作をするときの逃げ道。
+よく使うものはこのクラスにメソッドとして足すこと。
+
+#### `elements`
+
+```text
+def elements(self, locator: Locator) -> list[WebElement]:
+```
+
+##### 説明
+
+一致する全要素を WebElement のリストで返す。1件見つかるまで待つ。
+
+一覧表の行を1行ずつ処理するときに使う。行の中をさらに探すときは、
+行の WebElement から find_element(*Locator) で絞り込む:
+
+    for row in page.elements(page.ROWS):
+        if "未提出" in row.text:
+            row.find_element(*page.EDIT_BUTTON).click()
+
+まず値を読むだけなら texts() のほうが簡単で、
+「何番目かをクリックする」だけなら click(locator, index=...) で足りる。
+
+Args:
+    locator: 対象のセレクター。
+
+Returns:
+    見つかった要素のリスト（画面に並んでいる順）。
+
+Raises:
+    ElementNotFoundError: 1件も見つからないまま待ち時間が過ぎた場合。
+                          0件がありうる場面では、表そのものが出るのを wait_visible() で
+                          待ってから count() で件数を確認する。count() は待たないので、
+                          読み込み前に呼ぶと「まだ出ていない」を「0件」と読み違える。
+
+#### `js`
+
+```text
+def js(self, script: str, *args: object) -> object:
+```
+
+##### 説明
+
+JavaScript を実行して戻り値を返す。
+
+Args:
+    script: 実行する JavaScript。
+    *args: スクリプト内で arguments[0], arguments[1] ... として参照できる値。
+
+### `SitePage`
+
+```text
+class SitePage(Page):
+```
+
+#### 説明
+
+1つのサイト共通の画面クラス。サイトごとにこれを継承する。
+
+BASE_URL とログインなど、そのサイトのどの画面でも使う処理をここに書く。
+画面ごとのクラスは、さらにこれを継承する:
+
+    Page          … ブラウザ操作（click / input / select ...）
+      └ SitePage  … サイト共通（BASE_URL / ログイン / 共通ヘッダー）
+          └ LoginPage / HomePage / ...   … 各画面
+
+#### `go`
+
+```text
+def go(self, path: str='') -> 'SitePage':
+```
+
+##### 説明
+
+BASE_URL からの相対パスへ移動し、自分自身を返す。
+
+Args:
+    path: BASE_URL からの相対パス（例: "/login"）。省略時は BASE_URL を開く。
+
+### `Locator`
+
+```text
+class Locator(NamedTuple):
+```
+
+#### 説明
+
+セレクター（探し方 + 値）。Locator.id(...) 等のファクトリで作る。
+
+セレクターの優先順位（CONVENTIONS.md と同じ）:
+    1. Locator.id      … id 属性
+    2. Locator.name    … name 属性
+    3. Locator.css     … CSS セレクター
+    4. Locator.xpath   … XPath（最終手段。絶対パスは使わない）
+
+#### `id`
+
+```text
+@classmethod
+def id(cls, value: str) -> 'Locator':
+```
+
+##### 説明
+
+id 属性で探す（例: Locator.id("login-btn")）。
+
+#### `name`
+
+```text
+@classmethod
+def name(cls, value: str) -> 'Locator':
+```
+
+##### 説明
+
+name 属性で探す（例: Locator.name("username")）。
+
+#### `css`
+
+```text
+@classmethod
+def css(cls, value: str) -> 'Locator':
+```
+
+##### 説明
+
+CSS セレクターで探す（例: Locator.css("table tr .name")）。
+
+#### `xpath`
+
+```text
+@classmethod
+def xpath(cls, value: str) -> 'Locator':
+```
+
+##### 説明
+
+XPath で探す（最終手段。例: Locator.xpath("//button[text()='検索']")）。
+
+### `DownloadDir`
+
+```text
+class DownloadDir:
+```
+
+#### 説明
+
+ブラウザダウンロード用のフォルダ。作成・完了待ち・後片付けをまとめて扱う。
+
+通常は Browsers.launch() がセッションごとに1つ用意するので、自分で作る必要はない
+（session.download_dir で受け取り、session.download_dir.wait() で完了を待つ）。
+
+一時フォルダの場合、セッションの with を抜けた時点で自動削除される（消し忘れ防止）。
+必要なファイルは with の中で移動しておくこと。
+ダウンロードしたものを残したい場合は、起動時に保存先を指定する
+（固定フォルダは with を抜けても削除されない）:
+
+    with Browsers() as browsers:
+        kintai = browsers.launch("kintai", download_dir=r"C:\作業\downloads")
+        files = kintai.download_dir.wait()
+    # ← C:\作業\downloads とファイルはそのまま残る
+
+wait() は作成時点で既にあったファイルを無視し、新しく増えたファイルだけを完了対象にする。
+
+#### `__init__`
+
+```text
+def __init__(self, prefix: str='comken_dl_', path: str | Path | None=None) -> None:
+```
+
+##### 説明
+
+Args:
+    prefix: 一時フォルダ名のプレフィックス（path 指定時は使われない）。
+    path: 使用するフォルダのパス。指定するとそのフォルダを使う（なければ作成）。
+          省略時は一時フォルダを新規作成する。
+
+#### `wait`
+
+```text
+def wait(self, timeout: int=30) -> list[Path]:
+```
+
+##### 説明
+
+ダウンロードが完了するまで待機し、完了したファイルの一覧を返す。
+
+Edge/Chrome はダウンロード中のファイルを ".crdownload" 拡張子で保存する。
+この拡張子のファイルが消えたらダウンロード完了と判断する。
+DownloadDir 作成時点で既にあったファイルは対象外
+（固定フォルダに前回のファイルが残っていても誤検出しない）。
+
+Args:
+    timeout: タイムアウトまでの秒数（デフォルト: 30秒）。
+
+Returns:
+    新しくダウンロードされたファイルのパスリスト（更新日時順）。
+
+Raises:
+    DownloadTimeoutError: timeout 秒以内にダウンロードが完了しなかった場合。
+
+#### `remove`
+
+```text
+def remove(self, force: bool=False) -> None:
+```
+
+##### 説明
+
+フォルダごと削除する。ファイルを残したい場合は呼ばなくてよい。
+
+誤削除防止のため、path で指定した固定フォルダは削除せず警告を出す
+（自動作成した一時フォルダだけを削除する）。
+固定フォルダも本当に削除したい場合は force=True を指定する。
+
+Args:
+    force: True にすると path 指定した固定フォルダも削除する。
+
+### `BackgroundTask`
+
+```text
+class BackgroundTask(Generic[T]):
+```
+
+#### 説明
+
+裏で動いている処理の取っ手。Browsers.start() が返す。
+
+Attributes:
+    label: 何の処理か。ログとエラーメッセージに出る。
+
+#### `__init__`
+
+```text
+def __init__(self, future: 'Future[T]', label: str) -> None:
+```
+
+##### 説明
+
+直接呼ばず、Browsers.start() から作る。
+
+#### `wait`
+
+```text
+def wait(self, timeout: float | None=None) -> T:
+```
+
+##### 説明
+
+終わるのを待って、結果を返す。
+
+すでに終わっていれば、待たずにすぐ返る。
+中で例外が起きていた場合は、ここで送出される
+（裏で起きた失敗が黙って消えないよう、必ず受け取る側で表に出す）。
+
+Args:
+    timeout: 待つ秒数の上限。省略すると終わるまで待つ。
+
+Returns:
+    渡した処理の戻り値。
+
+Raises:
+    TimeoutError: timeout 秒以内に終わらなかった場合。処理自体は動き続ける。
+    Exception: 処理の中で起きた例外をそのまま送出する。
+
+#### `is_collected`
+
+```text
+@property
+def is_collected(self) -> bool:
+```
+
+##### 説明
+
+wait() で結果や例外を受け取り済みなら True。
+
+#### `is_done`
+
+```text
+@property
+def is_done(self) -> bool:
+```
+
+##### 説明
+
+終わっていれば True。まだ動いていれば False。
+
+待たずに様子だけ見たいときに使う。
+True になっていても、結果や例外を受け取るには wait() を呼ぶ。
+
+
+## `from comken.constants import ...`
+
+### `Encoding`
+
+```text
+class Encoding:
+```
+
+#### 説明
+
+CsvReader / CsvWriter の encoding 引数に使う定数。
+
+### `Color`
+
+```text
+class Color:
+```
+
+#### 説明
+
+Excel でよく使う色の定数（RGB 16進値）。
+
+### `FileFormat`
+
+```text
+class FileFormat:
+```
+
+#### 説明
+
+Workbook.SaveAs に渡す FileFormat 定数（Excel の XlFileFormat）。
+
+save_as() では元ファイルと同じ形式が自動で使われるため、通常は指定不要。
+形式を変換して保存する場合だけ file_format 引数で渡す。
+
+### `SortBy`
+
+```text
+class SortBy:
+```
+
+#### 説明
+
+FileFinder.latest() の by 引数に使う定数。
+
+
+## `from comken.credentials import ...`
+
+### `CREDENTIALS_PATH`
+
+公開定数。
+
+### `Credentials`
+
+```text
+class Credentials:
+```
+
+#### 説明
+
+システム名配下の認証情報に、属性アクセスでまとめてアクセスする。
+
+キー名「システム名_項目名」のシステム名部分だけを指定し、項目名は属性で取り出す。
+システム名を config.ini から渡せば、本番用・テスト用アカウントの切り替えが
+config.ini の1行だけで済む（コード側にキー名の直書きが残らない）。
+
+使い方:
+    cred = Credentials("site_a")
+    cred.client_id      # → load_credential("site_a_client_id") と同じ
+    cred.client_secret  # → load_credential("site_a_client_secret") と同じ
+
+    # config.ini で本番・テストを切り替える場合
+    # [CREDENTIALS]
+    # SITE_A = site_a          ← site_a_test にすると全項目が切り替わる
+    cred = Credentials(config.CREDENTIALS.SITE_A)
+
+Raises:
+    InvalidCredentialNameError: システム名に使えない文字が含まれている場合。
+    CredentialNotFoundError: 属性に対応するキーが未登録の場合。
+    CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
+
+#### `__init__`
+
+```text
+def __init__(self, prefix: str, path: Path | None=None) -> None:
+```
+
+##### 説明
+
+Args:
+    prefix: キー名のシステム名部分（例: "site_a", "site_a_test"）。
+    path: 保存先ファイル。省略時は CREDENTIALS_PATH（通常は省略する）。
+
+### `load_credential`
+
+```text
+def load_credential(name: str, path: Path | None=None) -> str:
+```
+
+#### 説明
+
+保存済みの認証情報を復号して返す。
+
+Args:
+    name: 登録時に指定したキー名。
+    path: 保存先ファイル。省略時は CREDENTIALS_PATH（通常は省略する）。
+
+Raises:
+    CredentialNotFoundError: キー名が未登録の場合。
+    CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
+
+### `save_credential`
+
+```text
+def save_credential(name: str, value: str, path: Path | None=None) -> None:
+```
+
+#### 説明
+
+認証情報を1件、暗号化して保存する。同じキー名は上書きされる。
+
+Args:
+    name: キー名（例: "site_a_client_secret"）。取得時のキーになる。
+        半角英数字とアンダースコアのみ使用できる。
+    value: 保存する値（client_secret・パスワード・トークンなど）。
+    path: 保存先ファイル。省略時は CREDENTIALS_PATH（通常は省略する）。
+
+Raises:
+    InvalidCredentialNameError: キー名に使えない文字が含まれている場合。
+    CredentialDecryptionError: 既存ファイルを復号できない場合。
+
+### `save_credentials`
+
+```text
+def save_credentials(items: dict[str, str], path: Path | None=None) -> None:
+```
+
+#### 説明
+
+認証情報をまとめて暗号化して保存する。同じキー名は上書きされる。
+
+1件ずつ save_credential() を呼ぶと、件数ぶん復号と暗号化を繰り返し、
+途中で失敗すると一部だけ入った状態になる。まとめて渡せば書き込みは1回で、
+「全部入るか、1つも入らないか」のどちらかになる。
+
+Args:
+    items: キー名と値の対応（例: {"site_a_client_id": "..."}）。
+    path: 保存先ファイル。省略時は CREDENTIALS_PATH（通常は省略する）。
+
+Raises:
+    InvalidCredentialNameError: キー名に使えない文字が含まれている場合。
+    CredentialDecryptionError: 既存ファイルを復号できない場合。
+    TypeError: 値が文字列でない場合（呼び出し側のバグ）。
+
+### `delete_credential`
+
+```text
+def delete_credential(name: str, path: Path | None=None) -> None:
+```
+
+#### 説明
+
+登録済みの認証情報を1件削除する。
+
+Raises:
+    CredentialNotFoundError: キー名が未登録の場合。
+    CredentialDecryptionError: 既存ファイルを復号できない場合。
+
+### `list_names`
+
+```text
+def list_names(path: Path | None=None) -> list[str]:
+```
+
+#### 説明
+
+登録済みのキー名一覧を返す（値そのものは返さない）。
+
+Raises:
+    CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
+
+### `import_json`
+
+```text
+def import_json(json_path: str | Path, path: Path | None=None) -> list[str]:
+```
+
+#### 説明
+
+平文 JSON を読み、暗号化ファイルへ取り込む。
+
+取り込みは「全部入るか、1つも入らないか」のどちらかになる。
+途中のキーが不正なら、1件も書き込まずに例外を送出する。
+
+Args:
+    json_path: 読み込む平文 JSON のパス。
+    path: 保存先ファイル。省略時は CREDENTIALS_PATH（通常は省略する）。
+
+Returns:
+    取り込んだキー名のリスト（値は含まない）。
+
+Raises:
+    CredentialImportError: JSON が見つからない・壊れている・形式が違う場合。
+    InvalidCredentialNameError: 展開したキー名に使えない文字が含まれている場合。
+    CredentialDecryptionError: 既存ファイルを復号できない場合。
+
+
+## `from comken.csv import ...`
+
+### `CsvReader`
+
+```text
+class CsvReader(CsvBase):
+```
+
+#### 説明
+
+CSV ファイルの読み込みユーティリティ。
+
+ヘッダー行をキーにした辞書のリストとして扱う。
+読み込みは最初のメソッド呼び出し時に行い、同じインスタンス内では結果を再利用する。
+
+#### `__init__`
+
+```text
+def __init__(self, path: str | Path, encoding: str=Encoding.AUTO, headers: list[str] | None=None) -> None:
+```
+
+##### 説明
+
+Args:
+    path: CSV ファイルのパス。
+    encoding: 文字コード。Encoding.AUTO（デフォルト）は UTF-8（BOM付き含む）→
+              CP932（Shift-JIS）の順に自動判定する。
+              明示したい場合は Encoding.UTF8_SIG / Encoding.CP932 を指定する。
+    headers: ヘッダー行がない CSV の場合に、列名のリストをここで付ける。
+             指定すると1行目からデータとして読む。
+             例: CsvReader("data.csv", headers=["注文番号", "金額", "担当者"])
+
+#### `rows`
+
+```text
+@measure
+def rows(self, columns: list[str] | None=None) -> list[dict[str, str]]:
+```
+
+##### 説明
+
+全行を返す。
+
+Args:
+    columns: 取得する列名のリスト。省略すると全列を返す。
+
+Returns:
+    辞書のリスト。columns 指定時は指定列のみ含む。
+
+#### `cell`
+
+```text
+def cell(self, ref: str) -> str:
+```
+
+##### 説明
+
+Excel 風のセル参照で、CSV の1セルを返す。
+
+ヘッダー付き辞書を作る ``_load()`` とは別に生の行を読むため、
+列名や ``headers`` の指定には依存しない。ヘッダー行も1行目として数える。
+列の位置に依存するため、上流で列が増減すると別の値を読む可能性がある。
+ヘッダーがある CSV では、列の位置が変わっても壊れない ``first()`` を推奨する。
+
+Args:
+    ref: A1、B2 のような1始まりのセル参照。
+
+Returns:
+    セルの文字列。空セルの場合は空文字。
+
+Raises:
+    CsvCellReferenceError: 参照が不正、またはCSVの範囲外の場合。
+
+#### `first`
+
+```text
+def first(self, column: str) -> str:
+```
+
+##### 説明
+
+ヘッダー名で列を指定し、最初のデータ行の値を返す。
+
+ヘッダーがある CSV では、列の位置が変わっても壊れないこのメソッドを推奨する。
+ヘッダーがない、または位置で決まっている CSV では ``cell("A2")`` を使う。
+
+Args:
+    column: 取得する列名。
+
+Returns:
+    最初のデータ行にある指定列の文字列。空セルの場合は空文字。
+
+Raises:
+    CsvColumnNotFoundError: 指定した列名が存在しない場合。
+    CsvNoDataRowsError: データ行が1行もない場合。
+
+#### `find`
+
+```text
+def find(self, key_col: str, value: str, required: bool=True) -> dict[str, str] | None:
+```
+
+##### 説明
+
+key_col が value に一致する最初の行を返す。
+
+見つからないときは既定で CsvRowNotFoundError。
+「無くても処理を続けたい」場合だけ required=False にすると None を返す。
+
+Raises:
+    CsvRowNotFoundError: required=True で該当行がない場合。
+
+#### `filter`
+
+```text
+def filter(self, key_col: str, value: str) -> list[dict[str, str]]:
+```
+
+##### 説明
+
+key_col が value に一致する全行を返す。
+
+Args:
+    key_col: 検索対象の列名。
+    value: 検索する値。
+
+Returns:
+    一致した行の辞書のリスト。一致しない場合は空リスト。
+
+#### `column`
+
+```text
+def column(self, col_name: str) -> list[str]:
+```
+
+##### 説明
+
+指定列の値一覧を返す。
+
+Args:
+    col_name: 取得する列名。
+
+Returns:
+    列の値のリスト（ヘッダー行を除く）。
+
+#### `index`
+
+```text
+def index(self, key_col: str) -> dict[str, dict[str, str]]:
+```
+
+##### 説明
+
+key_col をキーにした {キー: 行} の辞書を返す。
+
+Excel との突合（transfer_by_key の lookup）など、キーで1行を引く用途に使う。
+キーが重複していれば CsvRowDuplicateKeyError。重複が普通のデータは group_by() を使う。
+
+Raises:
+    CsvRowDuplicateKeyError: キーが重複している場合。
+
+#### `group_by`
+
+```text
+def group_by(self, key_col: str) -> dict[str, list[dict[str, str]]]:
+```
+
+##### 説明
+
+key_col をキーにした {キー: 行のリスト} の辞書を返す。
+
+同じキーの行が複数あるデータを、キーごとにまとめたいときに使う。
+1件だけ引きたい（重複しないはずの）データは index() を使う。
+
+### `CsvWriter`
+
+```text
+class CsvWriter(CsvBase):
+```
+
+#### 説明
+
+CSV ファイルへの書き込みユーティリティ。
+
+#### `__init__`
+
+```text
+def __init__(self, path: str | Path, fieldnames: list[str], encoding: str=Encoding.UTF8_SIG) -> None:
+```
+
+##### 説明
+
+Args:
+    path: 書き込み先の CSV ファイルパス。親フォルダがなければ書き込み時に自動作成される。
+    fieldnames: ヘッダー行の列名リスト。書き込み順に影響する。
+    encoding: 文字コード。Excel で開く場合は Encoding.UTF8_SIG（デフォルト）。
+              Shift-JIS が必要な場合は Encoding.CP932 を指定する。
+              Encoding.AUTO は自動判定できない（読み込み専用）ため UTF8_SIG として扱う。
+
+#### `write_rows`
+
+```text
+def write_rows(self, rows: list[dict]) -> None:
+```
+
+##### 説明
+
+ファイルを新規作成（または上書き）して全行を書き込む。
+
+既存ファイルがある場合は上書きされる。
+
+Args:
+    rows: 書き込む行のリスト（辞書のリスト）。
+
+#### `append_row`
+
+```text
+def append_row(self, row: dict) -> None:
+```
+
+##### 説明
+
+既存ファイルの末尾に1行追記する。
+
+ファイルが存在しない場合はヘッダー付きで新規作成する。
+
+Args:
+    row: 追記する行の辞書。
+
+Notes:
+    複数の PC から同じ CSV へ同時に追記する使い方は想定していない。
+
+#### `append_rows`
+
+```text
+def append_rows(self, rows: list[dict]) -> None:
+```
+
+##### 説明
+
+既存ファイルの末尾に複数行追記する。
+
+ファイルが存在しない場合はヘッダー付きで新規作成する。
+
+Args:
+    rows: 追記する行のリスト（辞書のリスト）。
+
+Notes:
+    複数の PC から同じ CSV へ同時に追記する使い方は想定していない。
+
+
+## `from comken.excel import ...`
+
+### `ExcelReader`
+
+```text
+class ExcelReader(ExcelBase):
+```
+
+#### 説明
+
+Excel ブックを読み取り専用で開くクラス。
+
+read_only=True で開くため、大きなブックもメモリ効率よく速く読み取れる。
+書き込みメソッドを持たないので、誤って元ファイルを書き換える事故を防げる。
+
+#### `__init__`
+
+```text
+def __init__(self, path: str | Path, data_only: bool=False, local_copy_threshold_mb: float=10, headers: list[str] | None=None) -> None:
+```
+
+##### 説明
+
+Args:
+    path: Excel ファイルのパス。
+    data_only: True にすると数式セルのキャッシュ値を読む（read_computed_rows 推奨）。
+    local_copy_threshold_mb: この MB 以上のファイルはローカルにコピーしてから開く。
+        NAS・ネットワークドライブのファイルが遅い・不安定な場合に有効。
+        0 を指定するとローカルコピーを無効化できる。
+    headers: ヘッダー行がない Excel の場合に、列名のリストをここで付ける。
+        指定すると read_rows_as_dicts() は全行をデータとして読む。
+
+### `ExcelWriter`
+
+```text
+class ExcelWriter(ExcelBase):
+```
+
+#### 説明
+
+Excel ブックの読み取り・書き込み・保存を行うクラス。
+
+読み取りメソッドも継承しているため、データを読んでから Sheet で
+書き換える処理を1つのブックで完結できる。
+
+#### `__init__`
+
+```text
+def __init__(self, path: str | Path, data_only: bool=False, local_copy_threshold_mb: float=10, headers: list[str] | None=None) -> None:
+```
+
+##### 説明
+
+Args:
+    path: Excel ファイルのパス。
+    data_only: True にすると数式セルのキャッシュ値を読む（read_computed_rows 推奨）。
+    local_copy_threshold_mb: この MB 以上のファイルはローカルにコピーしてから開く。
+        NAS・ネットワークドライブのファイルが遅い・不安定な場合に有効。
+        0 を指定するとローカルコピーを無効化できる。
+    headers: ヘッダー行がない Excel の場合に、列名のリストをここで付ける。
+        指定すると read_rows_as_dicts() は全行をデータとして読む。
+
+#### `sheet`
+
+```text
+def sheet(self, name: str) -> Sheet:
+```
+
+##### 説明
+
+シートの高レベルラッパーを返す（シート単位でセル・行を書き込む）。
+
+Args:
+    name: シート名。
+
+Raises:
+    SheetNotFoundError: 指定したシートが存在しない場合。
+
+#### `add_sheet`
+
+```text
+def add_sheet(self, name: str, index: int | None=None) -> Sheet:
+```
+
+##### 説明
+
+シートを追加し、そのまま書き込める Sheet を返す。
+
+Args:
+    name: 追加するシート名。
+    index: 挿入位置（0始まり）。省略時は末尾。
+
+Raises:
+    SheetAlreadyExistsError: 同名のシートが既に存在する場合。
+
+#### `rename_sheet`
+
+```text
+def rename_sheet(self, old_name: str, new_name: str) -> None:
+```
+
+##### 説明
+
+シート名を変更する。
+
+#### `delete_sheet`
+
+```text
+def delete_sheet(self, name: str) -> None:
+```
+
+##### 説明
+
+シートを削除する。
+
+シートを削除すると、そのシートを参照している数式が ``#REF!`` になる。
+削除する前に、他のシートから参照されていないか確認すること。
+
+#### `create`
+
+```text
+@classmethod
+def create(cls, path: str | Path, sheet_name: str='Sheet1') -> 'ExcelWriter':
+```
+
+##### 説明
+
+新規ブックを作る（ファイルはまだ作られず、save() で path に保存される）。
+Args:
+    path: save() で保存されるパス。親フォルダがなければ保存時に自動作成される。
+    sheet_name: 最初のシートの名前（デフォルト: "Sheet1"）。
+
+#### `save`
+
+```text
+@measure
+def save(self, path: str | Path | None=None) -> None:
+```
+
+##### 説明
+
+ファイルを保存する。
+
+ローカルコピーで開いている場合も、省略時の保存先は元のファイル
+（一時コピーに保存すると close() でコピーごと消えてしまうため）。
+
+Args:
+    path: 保存先のパス。省略すると開いた元のファイルに上書き保存する。
+
+#### `run_macro`
+
+```text
+def run_macro(self, macro_name: str, save: bool=True) -> None:
+```
+
+##### 説明
+
+VBA マクロを実行する。内部で win32com（pywin32）を使用する。
+
+COM は保存せずに閉じる仕様のため、save=True（デフォルト）で実行後に
+元ファイルへ保存する。マクロがブックを変更しても保存しないと結果は破棄される。
+
+WARNING: このメソッドは COM で元ファイルを直接編集する。openpyxl 側
+    （Sheet で行った書き込み等）の未保存の変更とは独立で、run_macro の後に f.save() を
+    呼ぶと openpyxl の内容で上書きされマクロの結果が消える。
+    マクロと openpyxl 書き込みを混在させないこと。
+
+Args:
+    macro_name: 実行するマクロ名。"モジュール名.プロシージャ名" の形式で指定する。
+                例: "Module1.UpdateData"
+    save: True（デフォルト）ならマクロ実行後に元ファイルへ保存する。
+
+### `Sheet`
+
+```text
+class Sheet:
+```
+
+#### 説明
+
+1枚のワークシートのラッパー。ExcelWriter.sheet() から取得する。
+
+ここにないシート操作は .ws から生の openpyxl Worksheet を使える。
+
+#### `__init__`
+
+```text
+def __init__(self, ws: Worksheet) -> None:
+```
+
+#### `write_cell`
+
+```text
+def write_cell(self, row: int, col: int | str, value) -> None:
+```
+
+##### 説明
+
+行番号と列番号・列記号を指定してセルに値を書き込む。
+
+#### `write_row`
+
+```text
+def write_row(self, row: int, values: list, start_col: int=1) -> None:
+```
+
+##### 説明
+
+1行に値を横並びで書き込む。
+
+Args:
+    row: 行番号（1始まり）。
+    values: 書き込む値のリスト（左から順に並ぶ）。
+    start_col: 開始列番号（1始まり。デフォルト: A列から）。
+
+#### `write_rows`
+
+```text
+def write_rows(self, start_row: int, rows: list[list], start_col: int=1) -> None:
+```
+
+##### 説明
+
+複数行をまとめて書き込む。
+
+Args:
+    start_row: 開始行番号（1始まり）。
+    rows: 行のリスト（値のリストのリスト）。
+    start_col: 開始列番号（1始まり）。
+
+#### `append_row`
+
+```text
+def append_row(self, values: list) -> None:
+```
+
+##### 説明
+
+最終行の下に1行追記する（空シートなら1行目に書く）。
+
+#### `write_table`
+
+```text
+def write_table(self, rows: list[dict], start_row: int=1, headers: list[str] | None=None) -> None:
+```
+
+##### 説明
+
+ヘッダー行 + データ行の値を書き込む（構造化テーブルにはしない）。
+
+CsvReader.rows() や read_rows_as_dicts() の結果をそのまま渡せる。
+Excel の構造化テーブルにする場合は、書き込み後に add_table() を呼ぶ。
+
+Args:
+    rows: 辞書のリスト（キーが列名になる）。
+    start_row: ヘッダー行の行番号（1始まり）。
+    headers: 列の並び順。省略すると最初の行のキー順。
+
+#### `transfer_by_key`
+
+```text
+@measure
+def transfer_by_key(self, key_col: int | str, lookup: dict[str, dict], column_mapping: dict[str, str], start_row: int=2) -> int:
+```
+
+##### 説明
+
+キー列の値で lookup を引き、一致した行へ値を転記する。
+
+#### `add_table`
+
+```text
+def add_table(self, name: str, ref: str) -> None:
+```
+
+##### 説明
+
+指定範囲を Excel の構造化テーブルにする。
+
+write_table() は値だけを書き、このメソッドは既存の値をテーブルにする。
+スタイルを変えたい場合は .ws から openpyxl を直接使用する。
+
+#### `append_to_table`
+
+```text
+def append_to_table(self, name: str, rows: list[dict]) -> None:
+```
+
+##### 説明
+
+構造化テーブルの末尾にデータ行を追記する。
+
+openpyxl は計算列を自動入力しない。数式の列がある場合は、
+``{"税込": "=[@金額]*1.1"}`` のように行データへ数式文字列を含める。
+``[@列名]`` の構造化参照はテーブル内のセルでのみ有効。
+
+#### `clear_table`
+
+```text
+def clear_table(self, name: str) -> None:
+```
+
+##### 説明
+
+構造化テーブルのデータ行だけを消す（見出し行は残す）。
+
+#### `replace_table`
+
+```text
+def replace_table(self, name: str, rows: list[dict]) -> None:
+```
+
+##### 説明
+
+構造化テーブルのデータ行をすべて入れ替える。
+
+openpyxl は計算列を自動入力しない。数式の列がある場合は、
+``{"税込": "=[@金額]*1.1"}`` のように行データへ数式文字列を含める。
+``[@列名]`` の構造化参照はテーブル内のセルでのみ有効。
+
+#### `set_fill`
+
+```text
+def set_fill(self, row: int, col: int | str, color: str) -> None:
+```
+
+##### 説明
+
+セルの背景色を16進 RGB（# なし）で設定する。
+
+#### `set_column_width`
+
+```text
+def set_column_width(self, col: int | str, width: float) -> None:
+```
+
+##### 説明
+
+列番号または列記号を指定して列幅を設定する。
+
+#### `set_number_format`
+
+```text
+def set_number_format(self, row: int, col: int | str, fmt: str) -> None:
+```
+
+##### 説明
+
+セルの数値フォーマットを設定する。
+
+#### `set_bold`
+
+```text
+def set_bold(self, row: int, col: int | str, bold: bool=True) -> None:
+```
+
+##### 説明
+
+セルの太字を設定または解除する。
+
+#### `auto_width`
+
+```text
+def auto_width(self, min_width: float=8, max_width: float=60) -> None:
+```
+
+##### 説明
+
+全列の幅を内容に合わせて調整する（全角文字は2文字ぶんで計算）。
+
+Args:
+    min_width: 最小の列幅（内容が短くても これより狭くしない）。
+    max_width: 最大の列幅（長文があっても これより広げない）。
+
+#### `freeze_header`
+
+```text
+def freeze_header(self, rows: int=1) -> None:
+```
+
+##### 説明
+
+ヘッダー行を固定する（スクロールしても見出しが消えない）。
+
+Args:
+    rows: 固定する行数（デフォルト: 1行目のみ）。
+
+#### `last_row`
+
+```text
+@property
+def last_row(self) -> int:
+```
+
+##### 説明
+
+データがある最終行の番号（1始まり）。空シートでも 1 が返る点に注意。
+
+#### `is_empty`
+
+```text
+@property
+def is_empty(self) -> bool:
+```
+
+##### 説明
+
+シートに値が1つもないか返す。
+
+
+## `from comken.exceptions import ...`
+
+### `ComkenError`
+
+```text
+class ComkenError(Exception):
+```
+
+#### 説明
+
+comken が送出するすべてのカスタム例外の基底クラス。
+
+### `AccessError`
+
+```text
+class AccessError(ComkenError):
+```
+
+#### 説明
+
+Access 操作に関する例外をまとめて捕捉するための基底クラス。
+
+### `AccessBackupError`
+
+```text
+class AccessBackupError(AccessError):
+```
+
+#### 説明
+
+Access ファイルのバックアップに失敗した場合。
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path | str, backup_path: Path | str, detail: Exception) -> None:
+```
+
+### `AccessFileNotFoundError`
+
+```text
+class AccessFileNotFoundError(AccessError):
+```
+
+#### 説明
+
+Access ファイルが存在しない場合。
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path | str) -> None:
+```
+
+### `AccessLocalCopyError`
+
+```text
+class AccessLocalCopyError(AccessError):
+```
+
+#### 説明
+
+Access ファイルのローカルコピーに失敗した場合。
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path | str, detail: Exception) -> None:
+```
+
+### `AccessRoutineError`
+
+```text
+class AccessRoutineError(AccessError):
+```
+
+#### 説明
+
+Access マクロまたは VBA の実行に失敗した場合。
+
+#### `__init__`
+
+```text
+def __init__(self, name: str, kind: str, detail: Exception) -> None:
+```
+
+### `AccessSourceNotFoundError`
+
+```text
+class AccessSourceNotFoundError(AccessError):
+```
+
+#### 説明
+
+指定したテーブルまたはクエリが存在しない場合。
+
+#### `__init__`
+
+```text
+def __init__(self, name: str, sources: list[str]) -> None:
+```
+
+### `ExcelError`
+
+```text
+class ExcelError(ComkenError):
+```
+
+#### 説明
+
+Excel 操作に関する例外をまとめて捕捉するための基底クラス。
+
+### `ExcelFileNotFoundError`
+
+```text
+class ExcelFileNotFoundError(ExcelError):
+```
+
+#### 説明
+
+Excel ファイルが存在しない場合。
+
+発生箇所: ExcelBase.__init__()
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path | str) -> None:
+```
+
+### `SheetNotFoundError`
+
+```text
+class SheetNotFoundError(ExcelError):
+```
+
+#### 説明
+
+指定したシートが存在しない場合。
+
+発生箇所: ExcelBase._sheet() / ExcelComHandler._sheet()
+
+#### `__init__`
+
+```text
+def __init__(self, name: str, sheets: list[str]) -> None:
+```
+
+### `SheetAlreadyExistsError`
+
+```text
+class SheetAlreadyExistsError(ExcelError):
+```
+
+#### 説明
+
+同名のシートが既に存在する場合。
+
+#### `__init__`
+
+```text
+def __init__(self, name: str) -> None:
+```
+
+### `LastSheetDeletionError`
+
+```text
+class LastSheetDeletionError(ExcelError):
+```
+
+#### 説明
+
+ブックの最後のシートを削除しようとした場合。
+
+#### `__init__`
+
+```text
+def __init__(self, name: str) -> None:
+```
+
+### `InvalidTableNameError`
+
+```text
+class InvalidTableNameError(ExcelError):
+```
+
+#### 説明
+
+Excel のテーブル名が制約に違反している場合。
+
+#### `__init__`
+
+```text
+def __init__(self, name: str) -> None:
+```
+
+### `TableAlreadyExistsError`
+
+```text
+class TableAlreadyExistsError(ExcelError):
+```
+
+#### 説明
+
+同名のテーブルが既に存在する場合。
+
+#### `__init__`
+
+```text
+def __init__(self, name: str) -> None:
+```
+
+### `TableNotFoundError`
+
+```text
+class TableNotFoundError(ExcelError):
+```
+
+#### 説明
+
+指定したテーブルがシートに存在しない場合。
+
+#### `__init__`
+
+```text
+def __init__(self, name: str, tables: list[str]) -> None:
+```
+
+### `MacroError`
+
+```text
+class MacroError(ExcelError):
+```
+
+#### 説明
+
+VBA マクロの実行に失敗した場合。
+
+発生箇所: ExcelComHandler.run_macro()
+
+#### `__init__`
+
+```text
+def __init__(self, name: str, detail: Exception) -> None:
+```
+
+### `RowTransferError`
+
+```text
+class RowTransferError(ExcelError):
+```
+
+#### 説明
+
+Excel の行転記に失敗した場合。
+
+発生箇所: ExcelComHandler.transfer_by_key()
+
+#### `__init__`
+
+```text
+def __init__(self, row: int, detail: Exception) -> None:
+```
+
+### `EmptyHeaderCellError`
+
+```text
+class EmptyHeaderCellError(ExcelError):
+```
+
+#### 説明
+
+Excel のヘッダー行に空のセルがある場合。
+
+発生箇所: ExcelBase.read_rows_as_dicts() / ExcelComHandler.read_rows_as_dicts()
+
+#### `__init__`
+
+```text
+def __init__(self, columns: list[int]) -> None:
+```
+
+### `ExcelHeadersTooFewError`
+
+```text
+class ExcelHeadersTooFewError(ExcelError):
+```
+
+#### 説明
+
+指定したヘッダー数が Excel の列数より少ない場合。
+
+発生箇所: ExcelBase.read_rows_as_dicts() / ExcelComHandler.read_rows_as_dicts()
+
+#### `__init__`
+
+```text
+def __init__(self, expected: int, actual: int) -> None:
+```
+
+### `FileFormatMismatchError`
+
+```text
+class FileFormatMismatchError(ExcelError):
+```
+
+#### 説明
+
+保存先の拡張子と Excel の保存形式が一致しない場合。
+
+発生箇所: ExcelComHandler.save_as()
+
+#### `__init__`
+
+```text
+def __init__(self, suffix: str) -> None:
+```
+
+### `CsvError`
+
+```text
+class CsvError(ComkenError):
+```
+
+#### 説明
+
+CSV 操作に関する例外をまとめて捕捉するための基底クラス。
+
+### `EncodingDetectionError`
+
+```text
+class EncodingDetectionError(CsvError):
+```
+
+#### 説明
+
+CSV の文字コードを自動判定できない場合。
+
+発生箇所: CsvReader._read_text()
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path | str) -> None:
+```
+
+### `CsvHeadersTooFewError`
+
+```text
+class CsvHeadersTooFewError(CsvError):
+```
+
+#### 説明
+
+指定したヘッダー数が CSV の列数より少ない場合。
+
+発生箇所: CsvReader._load()
+
+#### `__init__`
+
+```text
+def __init__(self, expected: int, path: Path | str) -> None:
+```
+
+### `CsvNoDataRowsError`
+
+```text
+class CsvNoDataRowsError(CsvError):
+```
+
+#### 説明
+
+CSV にデータ行が1行もない場合。
+
+発生箇所: CsvReader.first()
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path | str) -> None:
+```
+
+### `CsvRowNotFoundError`
+
+```text
+class CsvRowNotFoundError(CsvError):
+```
+
+#### 説明
+
+キーに一致する行が CSV に無い場合。
+
+発生箇所: CsvReader.find()
+
+#### `__init__`
+
+```text
+def __init__(self, key_col: str, value: str, path: Path | str) -> None:
+```
+
+### `CsvRowDuplicateKeyError`
+
+```text
+class CsvRowDuplicateKeyError(CsvError):
+```
+
+#### 説明
+
+キーにするはずの列に、同じ値が複数ある場合。
+
+発生箇所: CsvReader.index()
+
+#### `__init__`
+
+```text
+def __init__(self, key_col: str, duplicates: dict[str, int], path: Path | str) -> None:
+```
+
+### `CsvCellReferenceError`
+
+```text
+class CsvCellReferenceError(CsvError):
+```
+
+#### 説明
+
+CSV のセル参照が不正、または範囲外の場合。
+
+発生箇所: CsvReader.cell()
+
+#### `__init__`
+
+```text
+def __init__(self, ref: str, path: Path | str, detail: str) -> None:
+```
+
+### `ColumnNotFoundError`
+
+```text
+class ColumnNotFoundError(ComkenError):
+```
+
+#### 説明
+
+列不在エラーをまとめて捕捉するための基底クラス。
+
+### `ExcelColumnNotFoundError`
+
+```text
+class ExcelColumnNotFoundError(ColumnNotFoundError):
+```
+
+#### 説明
+
+Excel に必要な列が存在しない場合。
+
+非エンジニアが列名を変更したときに分かりやすいメッセージを出すために使う。
+
+発生箇所: 利用側プロジェクトの列検証処理（現在 comken 内からは未送出）
+
+使い方:
+    from comken.exceptions import ExcelColumnNotFoundError
+
+    REQUIRED_COLUMNS = ["日付", "担当者", "金額"]
+
+    def validate_columns(rows: list[dict[str, str]], required: list[str]) -> None:
+        missing = [column for column in required if column not in rows[0]]
+        if missing:
+            raise ExcelColumnNotFoundError(missing)
+
+#### `__init__`
+
+```text
+def __init__(self, columns: list[str]) -> None:
+```
+
+### `CsvColumnNotFoundError`
+
+```text
+class CsvColumnNotFoundError(ColumnNotFoundError):
+```
+
+#### 説明
+
+CSV に必要な列が存在しない場合。
+
+非エンジニアが列名を変更したときに分かりやすいメッセージを出すために使う。
+
+発生箇所: CsvReader._validate_columns()
+
+使い方:
+    from comken.exceptions import CsvColumnNotFoundError
+
+    REQUIRED_COLUMNS = ["日付", "担当者", "金額"]
+
+    def validate_columns(rows: list[dict[str, str]], required: list[str]) -> None:
+        existing = list(rows[0])
+        missing = [column for column in required if column not in existing]
+        if missing:
+            raise CsvColumnNotFoundError(missing, existing)
+
+#### `__init__`
+
+```text
+def __init__(self, columns: list[str], existing: list[str]) -> None:
+```
+
+### `KeyColumnNotFoundError`
+
+```text
+class KeyColumnNotFoundError(ColumnNotFoundError):
+```
+
+#### 説明
+
+差分比較のキー列が存在しない場合。
+
+発生箇所: diff_rows()
+
+#### `__init__`
+
+```text
+def __init__(self, key: str, existing: list[str]) -> None:
+```
+
+### `InvalidColumnError`
+
+```text
+class InvalidColumnError(ComkenError):
+```
+
+#### 説明
+
+Excel の列指定が A / AA 形式でない場合。
+
+#### `__init__`
+
+```text
+def __init__(self, column: str) -> None:
+```
+
+### `ConfigError`
+
+```text
+class ConfigError(ComkenError):
+```
+
+#### 説明
+
+設定エラーをまとめて捕捉するための基底クラス。
+
+### `ConfigFileNotFoundError`
+
+```text
+class ConfigFileNotFoundError(ConfigError):
+```
+
+#### 説明
+
+config.ini が存在しない場合。
+
+発生箇所: Config.__init__() / generate_stub()
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path | str) -> None:
+```
+
+### `ConfigCreatedFromExampleError`
+
+```text
+class ConfigCreatedFromExampleError(ConfigError):
+```
+
+#### 説明
+
+config.ini が無かったため example から作成し、確認を求める場合。
+
+発生箇所: Config.__init__()
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path | str) -> None:
+```
+
+### `ConfigLowerCaseNameError`
+
+```text
+class ConfigLowerCaseNameError(ConfigError):
+```
+
+#### 説明
+
+config.ini のセクション名・キー名に小文字が使われている場合。
+
+発生箇所: Config.__init__()
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path | str, wrong: list[str]) -> None:
+```
+
+### `ConfigSectionNotFoundError`
+
+```text
+class ConfigSectionNotFoundError(ConfigError):
+```
+
+#### 説明
+
+config.ini に要求されたセクションが存在しない場合。
+
+発生箇所: Config.__getattr__()
+
+#### `__init__`
+
+```text
+def __init__(self, name: str, existing: list[str]) -> None:
+```
+
+### `UnsupportedFileSuffixError`
+
+```text
+class UnsupportedFileSuffixError(ComkenError):
+```
+
+#### 説明
+
+扱えない拡張子のファイルが指定された。
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path, suffixes: tuple[str, ...]) -> None:
+```
+
+### `OutlookError`
+
+```text
+class OutlookError(ComkenError):
+```
+
+#### 説明
+
+Outlook 関連エラーの基底クラス。
+
+### `ClassicOutlookNotAvailableError`
+
+```text
+class ClassicOutlookNotAvailableError(OutlookError):
+```
+
+#### 説明
+
+Classic Outlook を COM で利用できない。
+
+#### `__init__`
+
+```text
+def __init__(self) -> None:
+```
+
+### `OutlookFolderNotFoundError`
+
+```text
+class OutlookFolderNotFoundError(OutlookError):
+```
+
+#### 説明
+
+指定された Outlook フォルダが存在しない。
+
+#### `__init__`
+
+```text
+def __init__(self, folder: str, existing_folders: list[str]) -> None:
+```
+
+### `OutlookAttachmentNotFoundError`
+
+```text
+class OutlookAttachmentNotFoundError(OutlookError):
+```
+
+#### 説明
+
+下書きへ添付するファイルが存在しない。
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path) -> None:
+```
+
+### `RpaError`
+
+```text
+class RpaError(ComkenError):
+```
+
+#### 説明
+
+社内 RPA 基盤の呼び出しに関する例外をまとめて捕捉するための基底クラス。
+
+### `RpaLibraryNotFoundError`
+
+```text
+class RpaLibraryNotFoundError(RpaError):
+```
+
+#### 説明
+
+社内ライブラリを読み込めない場合。
+
+発生箇所: comken.run.backoffice() / comken.run.intranet()
+
+#### `__init__`
+
+```text
+def __init__(self, module_path: str, detail: Exception) -> None:
+```
+
+### `CredentialError`
+
+```text
+class CredentialError(ComkenError):
+```
+
+#### 説明
+
+認証情報に関する例外をまとめて捕捉するための基底クラス。
+
+### `InvalidCredentialNameError`
+
+```text
+class InvalidCredentialNameError(CredentialError):
+```
+
+#### 説明
+
+キー名・システム名に使えない文字が含まれている場合。
+
+発生箇所: comken.credentials の Credentials() / save_credential() / 取り込み
+
+#### `__init__`
+
+```text
+def __init__(self, label: str, name: str) -> None:
+```
+
+### `CredentialNotFoundError`
+
+```text
+class CredentialNotFoundError(CredentialError):
+```
+
+#### 説明
+
+指定したキー名が登録されていない場合。
+
+発生箇所: comken.credentials の load_credential() / Credentials の属性アクセス
+
+#### `__init__`
+
+```text
+def __init__(self, name: str, registered: list[str]) -> None:
+```
+
+### `CredentialDecryptionError`
+
+```text
+class CredentialDecryptionError(CredentialError):
+```
+
+#### 説明
+
+保存ファイルを復号できない場合。
+
+DPAPI は「登録したときの Windows ユーザー × PC」でしか復号できない。
+別のアカウントで実行した・別の PC にファイルをコピーした場合がほとんど。
+
+発生箇所: comken.credentials の読み書き全般
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path, detail: Exception) -> None:
+```
+
+### `CredentialStoreCorruptedError`
+
+```text
+class CredentialStoreCorruptedError(CredentialError):
+```
+
+#### 説明
+
+復号はできたが、中身が壊れていて読めない場合。
+
+復号できない（別ユーザー・別 PC）のとは対処が違う。こちらは実行アカウントを
+直しても直らないので、ファイルを捨てて取り込み直すしかない。
+
+発生箇所: comken.credentials の読み書き全般
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path, detail: str) -> None:
+```
+
+### `CredentialImportError`
+
+```text
+class CredentialImportError(CredentialError):
+```
+
+#### 説明
+
+取り込む JSON を読めない、または形式が違う場合。
+
+発生箇所: comken.credentials の import_json()
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path, detail: str) -> None:
+```
+
+### `SalesforceError`
+
+```text
+class SalesforceError(ComkenError):
+```
+
+#### 説明
+
+Salesforce に関する例外をまとめて捕捉するための基底クラス。
+
+### `SalesforceAuthError`
+
+```text
+class SalesforceAuthError(SalesforceError):
+```
+
+#### 説明
+
+アクセストークンを取得できない場合。
+
+発生箇所: comken.salesforce.Salesforce の認証時（初回・401 後の取り直し）
+
+#### `__init__`
+
+```text
+def __init__(self, status_code: int, detail: str) -> None:
+```
+
+### `SalesforceConnectionError`
+
+```text
+class SalesforceConnectionError(SalesforceError):
+```
+
+#### 説明
+
+ネットワークの問題で Salesforce に接続できない場合。
+
+発生箇所: comken.salesforce.Salesforce の全リクエスト
+
+#### `__init__`
+
+```text
+def __init__(self, url: str, detail: Exception) -> None:
+```
+
+### `SalesforceRequestError`
+
+```text
+class SalesforceRequestError(SalesforceError):
+```
+
+#### 説明
+
+Salesforce API がエラーを返した場合。
+
+発生箇所: comken.salesforce.Salesforce の全リクエスト
+
+#### `__init__`
+
+```text
+def __init__(self, method: str, path: str, status_code: int, detail: str) -> None:
+```
+
+### `SalesforceExternalIdMissingError`
+
+```text
+class SalesforceExternalIdMissingError(SalesforceError):
+```
+
+#### 説明
+
+upsert のデータに外部 ID 項目が含まれていない場合。
+
+#### `__init__`
+
+```text
+def __init__(self, object_name: str, external_id_field: str) -> None:
+```
+
+### `SalesforceReportTruncatedError`
+
+```text
+class SalesforceReportTruncatedError(SalesforceError):
+```
+
+#### 説明
+
+レポートの行が上限で切り捨てられた場合。
+
+レポート API は同期・非同期とも 2000 行が上限。非同期にしても超えられない。
+黙って欠けたデータで処理を続けないよう、既定ではこの例外で止める。
+
+発生箇所: comken.salesforce.ReportApi.run() / run_async()
+
+#### `__init__`
+
+```text
+def __init__(self, report_id: str, row_limit: int) -> None:
+```
+
+### `SalesforceReportFormatError`
+
+```text
+class SalesforceReportFormatError(SalesforceError):
+```
+
+#### 説明
+
+明細（TABULAR）以外の形式のレポートを取得しようとした場合。
+
+集計（サマリ・マトリックス）形式は行の入れ物の構造が変わり、
+そのまま読むと無言で空を返すため、明示的に弾く。
+
+発生箇所: comken.salesforce.ReportApi.run() / run_async()
+
+#### `__init__`
+
+```text
+def __init__(self, report_id: str, report_format: str) -> None:
+```
+
+### `SalesforceReportExecutionError`
+
+```text
+class SalesforceReportExecutionError(SalesforceError):
+```
+
+#### 説明
+
+非同期レポートの実行自体が Salesforce 側で失敗した場合。
+
+#### `__init__`
+
+```text
+def __init__(self, report_id: str, detail: str) -> None:
+```
+
+### `BrowserError`
+
+```text
+class BrowserError(ComkenError):
+```
+
+#### 説明
+
+ブラウザ操作の例外をまとめて捕捉するための基底クラス。直接送出しない。
+
+### `DriverStartError`
+
+```text
+class DriverStartError(BrowserError):
+```
+
+#### 説明
+
+Edge WebDriver の起動に失敗した場合。
+
+発生箇所: Browsers.launch()
+
+#### `__init__`
+
+```text
+def __init__(self, driver_path: str, detail: Exception) -> None:
+```
+
+### `BrowsersNotStartedError`
+
+```text
+class BrowsersNotStartedError(BrowserError):
+```
+
+#### 説明
+
+with に入れずに Browsers を使った場合。
+
+with を使わないと、処理の途中で例外が出たときにブラウザのプロセスが残り続ける。
+残ったブラウザはドライバーの更新も邪魔するため、必ず with の中で使う。
+
+    # 誤り
+    browsers = Browsers()
+    browsers.launch("kintai")     # ← ここで送出される（ブラウザは起動しない）
+
+    # 正しい
+    with Browsers() as browsers:
+        browsers.launch("kintai")
+
+#### `__init__`
+
+```text
+def __init__(self, operation: str) -> None:
+```
+
+### `BrowsersClosedError`
+
+```text
+class BrowsersClosedError(BrowserError):
+```
+
+#### 説明
+
+with を抜けた後の Browsers を使った場合。
+
+with の外へ browsers を持ち出すと起きる。with を抜けた時点で
+ブラウザはすべて閉じているため、そこから起動や操作はできない。
+
+#### `__init__`
+
+```text
+def __init__(self, operation: str) -> None:
+```
+
+### `SessionNotStartedError`
+
+```text
+class SessionNotStartedError(BrowserError):
+```
+
+#### 説明
+
+with に入る前のセッションを操作した場合。
+
+BrowserSession は with 文の中でだけ使える。with を使わないと、
+処理の途中で例外が出たときにブラウザのプロセスが残り続けるため。
+
+    # 誤り
+    session = BrowserSession(...)
+    session.open("https://example.com")     # ← ここで送出される
+
+    # 正しい
+    with Browsers() as browsers:
+        session = browsers.launch("kintai")
+        session.open("https://example.com")
+
+#### `__init__`
+
+```text
+def __init__(self, operation: str) -> None:
+```
+
+### `SessionClosedError`
+
+```text
+class SessionClosedError(BrowserError):
+```
+
+#### 説明
+
+with を抜けて閉じ終わったセッションを操作した場合。
+
+with の外へセッションを持ち出すと起きる。取得したデータを with の外で使いたい場合は、
+セッションではなく取り出した値（文字列やファイルパス）を返すようにする。
+
+#### `__init__`
+
+```text
+def __init__(self, name: str, operation: str) -> None:
+```
+
+### `ConcurrentSessionUseError`
+
+```text
+class ConcurrentSessionUseError(BrowserError):
+```
+
+#### 説明
+
+1つのセッションを複数スレッドから同時に操作した場合。
+
+WebDriver は1つの接続でコマンドを順番に処理するため、
+同じセッションを2スレッドから同時に操作すると応答が入れ替わり、
+「別の画面を操作していた」という追跡困難な不具合になる。
+サイトごとにセッションを分けること（Browsers.launch で1サイト1セッション）。
+
+#### `__init__`
+
+```text
+def __init__(self, name: str, operation: str, holder_thread: str) -> None:
+```
+
+### `SessionNameConflictError`
+
+```text
+class SessionNameConflictError(BrowserError):
+```
+
+#### 説明
+
+同じ名前のセッションを2回起動しようとした場合。
+
+発生箇所: Browsers.launch()
+
+#### `__init__`
+
+```text
+def __init__(self, name: str) -> None:
+```
+
+### `SessionNotFoundError`
+
+```text
+class SessionNotFoundError(BrowserError):
+```
+
+#### 説明
+
+起動していないセッションを取り出そうとした場合。
+
+発生箇所: Browsers.__getitem__()
+
+#### `__init__`
+
+```text
+def __init__(self, name: str, launched: list[str]) -> None:
+```
+
+### `ElementNotFoundError`
+
+```text
+class ElementNotFoundError(BrowserError):
+```
+
+#### 説明
+
+要素が待機時間内に見つからなかった場合。
+
+selenium の TimeoutException を、どのセレクターで失敗したかが分かる形に包み直したもの。
+素の TimeoutException はメッセージにセレクターが入らず、ログから原因を追えないため。
+
+#### `__init__`
+
+```text
+def __init__(self, locator: object, seconds: int, condition: str) -> None:
+```
+
+### `PopupTabNotOpenedError`
+
+```text
+class PopupTabNotOpenedError(BrowserError):
+```
+
+#### 説明
+
+popup_tab() で新しいタブが待機時間内に開かなかった場合。
+
+発生箇所: BrowserSession.popup_tab()
+
+#### `__init__`
+
+```text
+def __init__(self, seconds: int) -> None:
+```
+
+### `DownloadTimeoutError`
+
+```text
+class DownloadTimeoutError(BrowserError):
+```
+
+#### 説明
+
+ダウンロードが待機時間内に完了しなかった場合。
+
+発生箇所: DownloadDir.wait()
+
+#### `__init__`
+
+```text
+def __init__(self, directory: object, seconds: int) -> None:
+```
+
+
+## `from comken.outlook import ...`
+
+### `Outlook`
+
+```text
+class Outlook:
+```
+
+#### 説明
+
+Classic Outlook を COM で操作する。
+
+New Outlook は COM を持たないため利用できない。``messages()`` はメールの値を
+読むだけで、既読・未読の状態を変更しない。送信機能は提供せず、確認可能な下書き
+の作成だけを行う。
+
+#### `__init__`
+
+```text
+def __init__(self) -> None:
+```
+
+#### `messages`
+
+```text
+def messages(self, subject_contains: str='', days: int=7, folder: str='') -> Iterator[MailMessage]:
+```
+
+##### 説明
+
+受信メールを新しい順に逐次返す。既読・未読の状態は変更しない。
+
+#### `save_draft`
+
+```text
+def save_draft(self, to: str | Sequence[str], subject: str, body: str, attachments: Sequence[str | Path] | None=None, cc: str | Sequence[str]='') -> None:
+```
+
+##### 説明
+
+メールを送信せず、利用者が確認する下書きとして保存する。
+
+### `MailMessage`
+
+```text
+class MailMessage:
+```
+
+#### 説明
+
+受信メールから読み取った、変更されない値のセット。
+
+
+## `from comken.salesforce import ...`
+
+### `Salesforce`
+
+```text
+class Salesforce:
+```
+
+#### 説明
+
+Salesforce の 1 組織に対する API クライアント。
+
+使い方:
+    with Salesforce(
+        client_id="接続アプリの Consumer Key",
+        client_secret="接続アプリの Consumer Secret",
+        domain_url="https://your-domain.my.salesforce.com",
+    ) as sf:
+        records = sf.query("SELECT Id, Name FROM Account")
+        rows = sf.report.run("00O000000000001")
+        sf.metrics.log_summary()
+
+Attributes:
+    report: レポート API（sf.report.run(...)）。
+    metrics: API 呼び出しの計測（sf.metrics.log_summary()）。
+
+#### `__init__`
+
+```text
+def __init__(self, client_id: str, client_secret: str, domain_url: str, org_name: str='') -> None:
+```
+
+##### 説明
+
+Args:
+    client_id: 接続アプリの Consumer Key。
+    client_secret: 接続アプリの Consumer Secret。
+    domain_url: 組織の My Domain の URL。login.salesforce.com は使えない。
+    org_name: 計測ログに出す組織の呼び名。省略時はクラス名を使う。
+
+Raises:
+    SalesforceAuthError: 認証に失敗した場合。
+    SalesforceConnectionError: ネットワークの問題で接続できない場合。
+
+#### `from_credentials`
+
+```text
+@classmethod
+def from_credentials(cls: type[_SalesforceT], domain_url: str, prefix: str='', org_name: str='') -> _SalesforceT:
+```
+
+##### 説明
+
+DPAPI に保管した client_id / client_secret を読んでインスタンスを作る。
+
+`python -m comken.credentials import` で取り込んだ
+「<システム名>_client_id」「<システム名>_client_secret」を使う。
+呼び出し側のコードに秘密の値が現れないので、通常はこちらを使う。
+
+使い方:
+    with SiteA.from_credentials(config.SITE_A.DOMAIN_URL) as sf:
+        rows = sf.案件一覧()
+
+Args:
+    domain_url: 組織の My Domain の URL。
+    prefix: 認証情報のシステム名。省略時はクラスの CREDENTIAL_PREFIX。
+        本番とテストを切り替えるときだけ config.ini から渡す。
+    org_name: 計測ログに出す組織の呼び名。省略時はクラス名を使う。
+
+Raises:
+    InvalidCredentialNameError: システム名が空、または使えない文字を含む場合。
+    CredentialNotFoundError: client_id / client_secret が未登録の場合。
+    CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
+
+#### `close`
+
+```text
+def close(self) -> None:
+```
+
+##### 説明
+
+HTTP セッションを閉じる。with を使う場合は自動で呼ばれる。
+
+#### `query`
+
+```text
+def query(self, soql: str) -> list[dict]:
+```
+
+##### 説明
+
+SOQL クエリを実行してレコードを返す（全件取得・ページ送り自動）。
+
+レポート API と違って**行数の上限がない**ので、
+2000 行を超えるデータはこちらで取る。
+
+Args:
+    soql: 実行する SOQL クエリ文字列。
+
+Returns:
+    レコードの辞書のリスト。
+
+#### `get`
+
+```text
+def get(self, object_name: str, record_id: str) -> dict:
+```
+
+##### 説明
+
+レコードを1件取得する。
+
+Args:
+    object_name: オブジェクトの API 参照名（例: "Account"）。
+    record_id: レコードの Id。
+
+#### `insert`
+
+```text
+def insert(self, object_name: str, data: dict) -> str:
+```
+
+##### 説明
+
+レコードを作成して Id を返す。
+
+Args:
+    object_name: オブジェクトの API 参照名。
+    data: 作成するレコードの項目と値。
+
+#### `update`
+
+```text
+def update(self, object_name: str, record_id: str, data: dict) -> None:
+```
+
+##### 説明
+
+レコードを更新する。
+
+Args:
+    object_name: オブジェクトの API 参照名。
+    record_id: 更新するレコードの Id。
+    data: 更新する項目と値。
+
+#### `upsert`
+
+```text
+def upsert(self, object_name: str, external_id_field: str, data: dict) -> None:
+```
+
+##### 説明
+
+外部 ID で upsert する（一致すれば更新、なければ作成）。
+
+Args:
+    object_name: オブジェクトの API 参照名。
+    external_id_field: 外部 ID 項目の API 参照名（例: "ExternalId__c"）。
+    data: 項目と値。external_id_field の値を含めること。
+
+Raises:
+    SalesforceExternalIdMissingError: data に external_id_field が無い場合。
+
+#### `delete`
+
+```text
+def delete(self, object_name: str, record_id: str) -> None:
+```
+
+##### 説明
+
+レコードを削除する。
+
+Args:
+    object_name: オブジェクトの API 参照名。
+    record_id: 削除するレコードの Id。
+
+#### `request`
+
+```text
+def request(self, method: str, path: str, body: dict | None=None, component: str='other') -> tuple[dict | list | str | None, dict]:
+```
+
+##### 説明
+
+REST API を呼び、(レスポンス本文, レスポンスヘッダー) を返す。
+
+すべての API 呼び出しがここを通る。計測と、401 のときの再認証もここで行う。
+通常は query() / get() 等を使い、このメソッドは
+ライブラリに無い API を叩くときだけ使う。
+
+Args:
+    method: HTTP メソッド（GET / POST / PATCH / DELETE）。
+    path: "/services/data/..." から始まるパス。
+    body: JSON で送る辞書（省略可）。
+    component: 計測での呼び出し元の区別（"query" / "crud" / "report"）。
+
+Raises:
+    SalesforceRequestError: API がエラーを返した場合。
+    SalesforceConnectionError: ネットワークの問題で接続できない場合。
+
+#### `data_path`
+
+```text
+def data_path(self, path: str) -> str:
+```
+
+##### 説明
+
+REST API のバージョン付きパスを組み立てる。
+
+ライブラリに無い API を request() で叩くときに使う。
+
+    sf.request("GET", sf.data_path("/limits"))
+
+### `ReportApi`
+
+```text
+class ReportApi:
+```
+
+#### 説明
+
+レポートを実行して明細行を取得する。
+
+`Salesforce` が `report` 属性として持っている。単体では作らない。
+
+    with Salesforce(...) as sf:
+        rows = sf.report.run("00O000000000001")
+
+#### `__init__`
+
+```text
+def __init__(self, client: Salesforce) -> None:
+```
+
+##### 説明
+
+Args:
+    client: このレポート API を使う Salesforce インスタンス。
+
+#### `run`
+
+```text
+def run(self, report_id: str, filters: list[dict] | None=None, allow_truncated: bool=False) -> list[dict]:
+```
+
+##### 説明
+
+レポートを同期実行して明細行を返す（上限 2000 行）。
+
+Args:
+    report_id: レポート ID（レポートを開いたときの URL の末尾。15桁 or 18桁）。
+    filters: 絞り込み条件（省略可）。レポート定義の条件を実行時に上書きする。
+        例: [{"column": "CREATED_DATE",
+              "operator": "greaterThan", "value": "2026-01-01"}]
+    allow_truncated: True にすると、2000 行で切り捨てられても例外にせず
+        警告ログだけを出して、取れた分を返す。**既定は False**
+        （欠けたデータで処理が進むのを防ぐため）。
+
+Returns:
+    [{"列の表示名": "値", ...}, ...] のリスト。
+
+Raises:
+    SalesforceReportTruncatedError: 上限で切り捨てられた場合
+        （allow_truncated=True のときは送出しない）。
+    SalesforceReportFormatError: 明細（TABULAR）形式でない場合。
+
+#### `run_async`
+
+```text
+def run_async(self, report_id: str, filters: list[dict] | None=None, allow_truncated: bool=False) -> list[dict]:
+```
+
+##### 説明
+
+レポートを非同期実行して明細行を返す（**上限は同期と同じ 2000 行**）。
+
+重いレポートで同期実行がタイムアウトするときに使う。
+行数の上限は緩まないので、2000 行を超えるなら filters か SOQL で対処する。
+
+Args:
+    report_id: レポート ID。
+    filters: 絞り込み条件（省略可）。
+    allow_truncated: run() と同じ。
+
+Raises:
+    SalesforceReportTruncatedError: 上限で切り捨てられた場合。
+    SalesforceReportFormatError: 明細（TABULAR）形式でない場合。
+    SalesforceReportExecutionError: Salesforce 側で実行が失敗した場合。
+    TimeoutError: 制限時間内に完了しなかった場合。
+
+### `ClientCredentialsAuth`
+
+```text
+class ClientCredentialsAuth:
+```
+
+#### 説明
+
+クライアントクレデンシャルフローでアクセストークンを取得する。
+
+使い方:
+    auth = ClientCredentialsAuth(
+        client_id="接続アプリの Consumer Key",
+        client_secret="接続アプリの Consumer Secret",
+        domain_url="https://your-domain.my.salesforce.com",
+    )
+    access_token, instance_url = auth.fetch()
+
+#### `__init__`
+
+```text
+def __init__(self, client_id: str, client_secret: str, domain_url: str) -> None:
+```
+
+##### 説明
+
+Args:
+    client_id: 接続アプリの Consumer Key。
+    client_secret: 接続アプリの Consumer Secret。
+    domain_url: 組織の My Domain の URL
+        （例: "https://foo.my.salesforce.com"）。
+        Sandbox は "https://foo--sandbox.sandbox.my.salesforce.com"。
+        このフローは My Domain が必須で、login.salesforce.com では動かない。
+
+#### `fetch`
+
+```text
+def fetch(self) -> tuple[str, str]:
+```
+
+##### 説明
+
+アクセストークンと instance_url を取得して返す。
+
+期限切れのたびに呼び直してよい（毎回まっさらなトークンが返る）。
+
+Returns:
+    (アクセストークン, instance_url) のタプル。
+
+Raises:
+    SalesforceAuthError: 認証に失敗した場合。
+    SalesforceConnectionError: ネットワークの問題で接続できない場合。
+
+### `ApiMetrics`
+
+```text
+class ApiMetrics:
+```
+
+#### 説明
+
+API 呼び出しの計測を貯める。
+
+使い方:
+    metrics = ApiMetrics("site_a")
+    # …API を呼ぶ…
+    metrics.log_summary()
+    metrics.append_csv(Path("logs/salesforce_metrics.csv"))
+
+#### `record_call`
+
+```text
+def record_call(self, component: str, elapsed_seconds: float, is_error: bool=False) -> None:
+```
+
+##### 説明
+
+API 呼び出しを1件記録する。
+
+#### `record_retry`
+
+```text
+def record_retry(self, component: str, reason: str) -> None:
+```
+
+##### 説明
+
+リトライを1件記録する。reason は RetryReason の値を渡す。
+
+#### `record_truncated_report`
+
+```text
+def record_truncated_report(self, report_id: str) -> None:
+```
+
+##### 説明
+
+レポートが上限で切り捨てられたことを記録する。
+
+止めずに続けた場合（allow_truncated=True）でも記録は残す。
+あとから「どのレポートを SOQL へ移すか」を実測で決めるための材料になる。
+
+#### `component_stats`
+
+```text
+def component_stats(self) -> dict[str, ComponentStat]:
+```
+
+##### 説明
+
+呼び出し元別の集計を、読み取り用のコピーとして返す。
+
+#### `retry_reason_counts`
+
+```text
+def retry_reason_counts(self) -> dict[str, int]:
+```
+
+##### 説明
+
+リトライ理由別の回数を、読み取り用のコピーとして返す。
+
+#### `update_api_usage`
+
+```text
+def update_api_usage(self, limit_info: str) -> None:
+```
+
+##### 説明
+
+`Sforce-Limit-Info` ヘッダーの値から API 消費量を取り出して更新する。
+
+Args:
+    limit_info: "api-usage=1234/15000" の形式。
+                解釈できない形式は無視する（計測のために本処理を止めない）。
+
+#### `log_summary`
+
+```text
+def log_summary(self) -> None:
+```
+
+##### 説明
+
+集計結果を INFO ログに出す。実行の最後に1回呼ぶ。
+
+#### `append_csv`
+
+```text
+def append_csv(self, path: str | Path) -> None:
+```
+
+##### 説明
+
+集計結果を CSV に1行ずつ追記する（呼び出し元ごとに1行）。
+
+日ごとに追記していくと、API 消費量の推移と切り捨ての発生が追える。
+ファイルが無ければ見出し行から作る。
+
+### `ApiUsage`
+
+```text
+class ApiUsage:
+```
+
+#### 説明
+
+組織の 24 時間 API 消費量（Sforce-Limit-Info ヘッダーの値）。
+
+### `ComponentStat`
+
+```text
+class ComponentStat:
+```
+
+#### 説明
+
+呼び出し元ごとの集計。
+
+### `RetryReason`
+
+```text
+class RetryReason:
+```
+
+#### 説明
+
+リトライの理由。どれが多いかで対処が変わるため区別して数える。
+
+### `SalesforceCredentialRotator`
+
+```text
+class SalesforceCredentialRotator:
+```
+
+#### 説明
+
+ECA の資格情報を、期限到来時だけ安全な順序でローテーションする。
+
+``is_enabled`` は config.ini の明示設定から渡す。既定で無効なのは、DPAPI が
+Windows ユーザーと PC に紐付き、同じ ECA を使う他 PC へ新 secret を配れないため。
+同じ ECA を複数 PC で使う場合、有効にしてよいのは1台だけである。
+
+#### `__init__`
+
+```text
+def __init__(self, client: Salesforce, app_id: str, credential_prefix: str, is_enabled: bool=False, interval_days: int=DEFAULT_ROTATION_INTERVAL_DAYS, credential_path: Path | None=None) -> None:
+```
+
+#### `rotate_if_due`
+
+```text
+def rotate_if_due(self, today: datetime.date | None=None) -> bool:
+```
+
+##### 説明
+
+有効かつ指定日数を過ぎていれば実行し、実行したかを返す。
+
+
+## `from comken.salesforce.sites import ...`
+
+### `SiteA`
+
+```text
+class SiteA(Salesforce):
+```
+
+#### 説明
+
+SiteA 組織のクライアント。
+
+使い方:
+    with SiteA.from_credentials(config.SITE_A.DOMAIN_URL) as sf:
+        rows = sf.案件一覧()
+
+#### `案件一覧`
+
+```text
+def 案件一覧(self) -> list[dict]:
+```
+
+##### 説明
+
+案件一覧レポートの明細を返す。
+
+2000 行を超えると SalesforceReportTruncatedError で止まる。
+超えるようになったら、期間で区切るか SOQL へ移す。
+
+### `SiteB`
+
+```text
+class SiteB(Salesforce):
+```
+
+#### 説明
+
+SiteB 組織のクライアント。
+
+使い方:
+    with SiteB.from_credentials(config.SITE_B.DOMAIN_URL) as sf:
+        rows = sf.案件一覧()
+
+#### `案件一覧`
+
+```text
+def 案件一覧(self) -> list[dict]:
+```
+
+##### 説明
+
+案件一覧レポートの明細を返す。
+
+### `SiteC`
+
+```text
+class SiteC(Salesforce):
+```
+
+#### 説明
+
+SiteC 組織のクライアント。
+
+使い方:
+    with SiteC.from_credentials(config.SITE_C.DOMAIN_URL) as sf:
+        rows = sf.案件一覧()
+
+#### `案件一覧`
+
+```text
+def 案件一覧(self) -> list[dict]:
+```
+
+##### 説明
+
+案件一覧レポートの明細を返す。
+
+### `SITES`
+
+公開定数。
+
+
+## `from comken.utils import ...`
+
+### `diff_row`
+
+```text
+def diff_row(before: dict, after: dict) -> dict[str, tuple]:
+```
+
+#### 説明
+
+1行同士を比較し、値が異なる列だけを {列名: (変更前, 変更後)} で返す。
+
+CSV の str と Excel の数値は同一視する（"1000" と 1000 は差分にならない）。
+片方にしか存在しない列は、もう片方を None として比較する。
+
+先頭ゼロ付きの文字列（社員番号 "0001" 等）は数値化しない。
+"0001" と 1 は別の値として差分になる（先頭ゼロの消失を検出できる）。
+Args:
+    before: 変更前の行（辞書）。
+    after: 変更後の行（辞書）。
+
+Returns:
+    {列名: (変更前の値, 変更後の値)} の辞書。値は元の型のまま返す。
+
+### `diff_rows`
+
+```text
+def diff_rows(before: list[dict], after: list[dict], key: str) -> DiffResult:
+```
+
+#### 説明
+
+2つのデータセットをキー列で突合し、差分を返す。
+
+CSV と Excel をまたいだ比較にも使える（"1000" と 1000 は同一視される）。
+キーが重複する場合は後の行が優先される。
+Args:
+    before: 変更前のデータ（辞書のリスト）。
+    after: 変更後のデータ（辞書のリスト）。
+    key: 行を一意に識別するキー列名。
+
+Returns:
+    DiffResult（added / removed / changed）。
+
+Raises:
+    ColumnNotFoundError: key で指定した列が存在しない場合。
+
+### `DiffResult`
+
+```text
+class DiffResult:
+```
+
+#### 説明
+
+diff_rows の結果。
+
+### `RowChange`
+
+```text
+class RowChange:
+```
+
+#### 説明
+
+diff_rows が返す「変更のあった行」の情報。
+
+### `wait`
+
+```text
+class wait:
+```
+
+#### 説明
+
+待機ユーティリティ。インスタンス化せず静的メソッドで使う。
+
+#### `seconds`
+
+```text
+@staticmethod
+def seconds(n: float) -> None:
+```
+
+##### 説明
+
+指定した秒数だけ待つ。
+
+Args:
+    n: 待機秒数。小数も指定できる（例: 0.5）。
+
+#### `minutes`
+
+```text
+@staticmethod
+def minutes(n: float) -> None:
+```
+
+##### 説明
+
+指定した分数だけ待つ。
+
+Args:
+    n: 待機分数。小数も指定できる（例: 0.5 → 30秒）。
+
+#### `until`
+
+```text
+@staticmethod
+def until(condition: Callable[[], bool], timeout: float=60, interval: float=1.0) -> bool:
+```
+
+##### 説明
+
+条件が True になるまで繰り返し確認する。
+
+Args:
+    condition: 引数なしで呼び出せる callable。True を返したら待機終了。
+    timeout: 最大待機秒数（デフォルト: 60秒）。
+    interval: 確認間隔（秒）（デフォルト: 1秒）。
+
+Returns:
+    True: 条件が満たされた。
+    False: タイムアウトした（条件は満たされなかった）。
+
+### `normalize`
+
+```text
+def normalize(text: str) -> str:
+```
+
+#### 説明
+
+文字列を NFKC 形式に正規化する。
+
+主な変換:
+    - 全角英数字・記号 → 半角（ａ→a, １→1, （→(, ．→.）
+    - 半角カタカナ     → 全角カタカナ（ｱ→ア, ｶﾞ→ガ）
+    - 合字             → 展開（㌔→km, ㍉→mm）
+
+Args:
+    text: 正規化する文字列。
+
+Returns:
+    正規化後の文字列。
+
+### `strip_spaces`
+
+```text
+def strip_spaces(text: str) -> str:
+```
+
+#### 説明
+
+前後の半角・全角スペースを除去する。
+
+str.strip() は全角スペース（U+3000）を除去しないため、
+業務データの氏名・住所フィールドで使うのに向いている。
+
+Args:
+    text: 処理する文字列。
+
+Returns:
+    前後のスペースを除去した文字列。
+
+### `remove_spaces`
+
+```text
+def remove_spaces(text: str) -> str:
+```
+
+#### 説明
+
+文字列中の半角・全角スペースをすべて除去する。
+
+電話番号・郵便番号など、スペースを含んではいけない値の正規化に使う。
+
+Args:
+    text: 処理する文字列。
+
+Returns:
+    スペースを除去した文字列。
+
+### `retry`
+
+```text
+def retry(times: int=3, wait: float=1.0, on: tuple=(Exception,)) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
+```
+
+#### 説明
+
+失敗したら wait 秒空けて実行し直すデコレータ。
+
+Args:
+    times: 合計の実行回数（デフォルト: 3。「3回試して全部失敗ならエラー」）。
+    wait: 失敗から次の実行までの待機秒数（デフォルト: 1秒）。
+    on: リトライ対象の例外のタプル（デフォルト: すべての例外）。
+        ここに含まれない例外は即座にそのまま出る。
+
+Raises:
+    最後の実行で出た例外（times 回すべて失敗した場合）。
+
+### `Timer`
+
+```text
+class Timer:
+```
+
+#### 説明
+
+処理時間を計測して INFO ログに出す。with・デコレータ両対応。
+
+Attributes:
+    elapsed: 経過秒数（float）。with を抜けた後に参照できる。
+
+#### `__init__`
+
+```text
+def __init__(self, name: str='処理') -> None:
+```
+
+##### 説明
+
+Args:
+    name: ログに出す処理名（例: "CSV読み込み"）。
+
+### `measure`
+
+```text
+def measure(func: Callable[_P, _R]) -> Callable[_P, _R]:
+```
+
+#### 説明
+
+デバッグモード時だけ処理時間を DEBUG ログに出すデコレータ。
+
+ライブラリの主要処理に付いており、with comken.debug(): の範囲では
+「どの処理に何秒かかったか」を DEBUG ログに出す。
+プロジェクト側の関数に付けてもよい。
+
+Timer との使い分け:
+    - Timer: 常にログに出したい・経過秒数を値として使いたい場合
+    - measure: 普段は出さず、調査のときだけ with debug(): で出したい場合
+
+### `now`
+
+```text
+def now() -> datetime.datetime:
+```
+
+#### 説明
+
+タイムゾーン付きの現在時刻（この PC のローカル時刻）を返す。
+
+### `today`
+
+```text
+def today() -> datetime.date:
+```
+
+#### 説明
+
+この PC のローカルの今日の日付を返す。
+
+
+## `from comken.utils.files import ...`
+
+### `FileFinder`
+
+```text
+class FileFinder:
+```
+
+#### 説明
+
+フォルダからファイルを探して取得する。
+
+見つからないときは既定で FileNotFoundError を投げる
+（業務スクリプトでは「ファイルがない＝処理を止める」がほとんどのため）。
+処理を続けたい場合は required=False を指定すると None または空リストを返す。
+
+#### `__init__`
+
+```text
+def __init__(self, folder: str | Path) -> None:
+```
+
+#### `today`
+
+```text
+def today(self, pattern: str='*.xlsx', date_format: str='%Y%m%d', required: bool=True) -> Path | None:
+```
+
+##### 説明
+
+ファイル名に今日の日付を含むファイルを返す。
+
+複数ある場合は更新日時が最も新しいもの。年月で探すなら date_format="%Y%m"。
+
+Raises:
+    FileNotFoundError: required=True で該当ファイルがない場合。
+
+#### `latest`
+
+```text
+def latest(self, pattern: str='*.xlsx', by: str=SortBy.NAME, required: bool=True) -> Path | None:
+```
+
+##### 説明
+
+最新のファイルを返す。既定はファイル名の辞書順で最後のもの。
+
+"20260711_売上.xlsx" のような日付プレフィックス命名を想定しており、
+コピーや再保存で更新日時が変わっても影響を受けない。
+
+注意: 文字列比較のため、ゼロ埋めしていない連番（report_9 と report_10）は
+9 の方が「最新」と判定される。連番命名なら by=SortBy.UPDATED を使うこと。
+
+Raises:
+    FileNotFoundError: required=True で該当ファイルがない場合。
+    ValueError: by に SortBy.NAME / SortBy.UPDATED 以外を指定した場合。
+
+#### `dated`
+
+```text
+def dated(self, pattern: str='*.xlsx', required: bool=True) -> list[Path]:
+```
+
+##### 説明
+
+ファイル名に日付が入っているファイルを、日付の新しい順で返す。
+
+日付として認識するのは 20260729 / 2026-07-29 / 2026_07_29 / 2026.07.29。
+実在しない日付や、前後を数字で挟まれた数字（伝票番号の一部など）は対象外。
+同じ日付なら更新日時の新しい順。詳しくは date_in_name を参照。
+
+Raises:
+    FileNotFoundError: required=True で該当ファイルがない場合。
+
+### `date_in_name`
+
+```text
+def date_in_name(name: str) -> datetime.date | None:
+```
+
+#### 説明
+
+ファイル名に含まれる最初の日付を返す。日付が無ければ None。
+
+1つのファイル名に日付が複数あるときは、先に出てくる方を使う。
+ファイル名の日付とファイル内容の日付を突き合わせる業務で使うため公開している。
+
+### `Paths`
+
+```text
+class Paths:
+```
+
+#### 説明
+
+よく使うフォルダのパスを返すユーティリティ。インスタンス化せず静的メソッドで使う。
+
+Desktop / Downloads は OneDrive の「既知のフォルダーの移動」で
+C:\Users\xxx 直下にないことがあるため、レジストリから実際の場所を取得する。
+
+#### `downloads`
+
+```text
+@staticmethod
+def downloads() -> Path:
+```
+
+##### 説明
+
+ダウンロードフォルダのパスを返す。
+
+#### `desktop`
+
+```text
+@staticmethod
+def desktop() -> Path:
+```
+
+##### 説明
+
+デスクトップのパスを返す（OneDrive リダイレクトにも追従する）。
+
+#### `temp_dir`
+
+```text
+@staticmethod
+def temp_dir() -> Path:
+```
+
+##### 説明
+
+システムの一時フォルダのパスを返す。
+
+### `move_file`
+
+```text
+def move_file(src: str | Path, dst: str | Path) -> Path:
+```
+
+#### 説明
+
+ファイルを移動する。
+
+shutil.move の分かりにくい点をなくしたラッパー:
+    - dst が既存フォルダなら、その中に同名で移動する
+    - それ以外はファイルパスとして扱う（親フォルダがなければ自動作成する）
+    - 移動先に同名ファイルがあれば上書きする
+Args:
+    src: 移動するファイルのパス。
+    dst: 移動先（フォルダ、またはファイルパス）。
+
+Returns:
+    移動後のファイルパス。
+
+### `copy_file`
+
+```text
+def copy_file(src: str | Path, dst: str | Path) -> Path:
+```
+
+#### 説明
+
+ファイルをコピーする（更新日時などの属性も保持する）。
+
+ルールは move_file と同じ:
+    - dst が既存フォルダなら、その中に同名でコピーする
+    - それ以外はファイルパスとして扱う（親フォルダがなければ自動作成する）
+    - コピー先に同名ファイルがあれば上書きする
+
+Args:
+    src: コピーするファイルのパス。
+    dst: コピー先（フォルダ、またはファイルパス）。
+
+Returns:
+    コピー後のファイルパス。
+
+### `local_copy`
+
+```text
+@contextmanager
+def local_copy(path: str | Path) -> Iterator[Path]:
+```
+
+#### 説明
+
+ネットワーク上のファイルをローカルにコピーし、処理後に自動削除する。
+
+NAS やネットワークドライブ上の大きなファイルを直接開くと遅い場合や、
+win32com（Excel COM）でネットワークファイルが不安定な場合に使う。
+
+テンポラリファイルの保存先: C:\Users\<ユーザー名>\AppData\Local\Temp\
+with ブロックを抜けると自動削除される（例外が発生した場合も削除される）。
+Args:
+    path: コピー元のファイルパス（ネットワークパス・UNCパス・マップドドライブ）。
+
+Yields:
+    ローカルのテンポラリファイルパス（Path）。
+
+### `zip_folder`
+
+```text
+@measure
+def zip_folder(folder: str | Path, dst: str | Path | None=None) -> Path:
+```
+
+#### 説明
+
+フォルダの中身をまるごと zip に圧縮する（サブフォルダも含む）。
+
+Args:
+    folder: 圧縮するフォルダ。
+    dst: 出力する zip のパス。省略するとフォルダの隣に「フォルダ名.zip」。
+         親フォルダがなければ自動作成される。既存の zip は上書きされる。
+
+Returns:
+    作成した zip のパス。
+
+Raises:
+    FileNotFoundError: folder が存在しない場合。
+
+### `zip_files`
+
+```text
+def zip_files(files: Sequence[str | Path], dst: str | Path) -> Path:
+```
+
+#### 説明
+
+ファイルを選んで zip に圧縮する（zip 内はフラットに並ぶ）。
+
+Args:
+    files: 圧縮するファイルパスのリスト。
+    dst: 出力する zip のパス。親フォルダがなければ自動作成される。
+
+Returns:
+    作成した zip のパス。
+
+Raises:
+    FileNotFoundError: files の中に存在しないファイルがある場合。
+    ValueError: zip 内で同じ名前になるファイルが複数ある場合。
+
+### `unzip`
+
+```text
+@measure
+def unzip(src: str | Path, dst: str | Path | None=None) -> Path:
+```
+
+#### 説明
+
+zip を展開する。
+
+Windows のエクスプローラーで作られた zip（ファイル名が cp932）も
+文字化けせずに展開できる（UTF-8 の zip はそのまま正しく読まれる）。
+
+Args:
+    src: 展開する zip のパス。
+    dst: 展開先フォルダ。省略すると zip の隣に同名フォルダ（data.zip → data\）。
+         同名ファイルがあれば上書きされる。
+
+Returns:
+    展開先フォルダのパス。
+
+### `DateNameBuilder`
+
+```text
+class DateNameBuilder:
+```
+
+#### 説明
+
+今日の日付を付けたファイル名を組み立てる。
+
+日付はファイル名の属性ではなく「付け方」なので、コンストラクタではなく
+prefix() / suffix() の呼び出し時に決める。
+
+#### `__init__`
+
+```text
+def __init__(self, name: str, ext: str='.xlsx') -> None:
+```
+
+##### 説明
+
+Args:
+    name: ファイル名（拡張子なし）。
+    ext: 拡張子（デフォルト: ".xlsx"）。ドットなしで渡しても補完される。
+
+#### `plain`
+
+```text
+def plain(self) -> str:
+```
+
+##### 説明
+
+日付なしのファイル名を返す。
+
+#### `prefix`
+
+```text
+def prefix(self, date_format: str='%Y%m%d') -> str:
+```
+
+##### 説明
+
+今日の日付を前に付けたファイル名を返す（例: 20260711_売上レポート.xlsx）。
+
+#### `suffix`
+
+```text
+def suffix(self, date_format: str='%Y%m%d') -> str:
+```
+
+##### 説明
+
+今日の日付を後ろに付けたファイル名を返す（例: 売上レポート_20260711.xlsx）。
+
+
+## `from comken.utils.files.naming import ...`
+
+### `DateNameBuilder`
+
+```text
+class DateNameBuilder:
+```
+
+#### 説明
+
+今日の日付を付けたファイル名を組み立てる。
+
+日付はファイル名の属性ではなく「付け方」なので、コンストラクタではなく
+prefix() / suffix() の呼び出し時に決める。
+
+#### `__init__`
+
+```text
+def __init__(self, name: str, ext: str='.xlsx') -> None:
+```
+
+##### 説明
+
+Args:
+    name: ファイル名（拡張子なし）。
+    ext: 拡張子（デフォルト: ".xlsx"）。ドットなしで渡しても補完される。
+
+#### `plain`
+
+```text
+def plain(self) -> str:
+```
+
+##### 説明
+
+日付なしのファイル名を返す。
+
+#### `prefix`
+
+```text
+def prefix(self, date_format: str='%Y%m%d') -> str:
+```
+
+##### 説明
+
+今日の日付を前に付けたファイル名を返す（例: 20260711_売上レポート.xlsx）。
+
+#### `suffix`
+
+```text
+def suffix(self, date_format: str='%Y%m%d') -> str:
+```
+
+##### 説明
+
+今日の日付を後ろに付けたファイル名を返す（例: 売上レポート_20260711.xlsx）。
+
+
+## `from comken.windows import ...`
+
+### `ExcelComHandler`
+
+```text
+class ExcelComHandler(FileBase):
+```
+
+#### 説明
+
+win32com を使った Excel 操作クラス。
+
+openpyxl では対応できない以下の操作に使う:
+    - 数式の計算結果を読む（CalculateFull で再計算してから取得）
+    - VBA マクロを実行する
+    - パスワード付きで保存する
+
+#### `__init__`
+
+```text
+def __init__(self, path: str | Path, password: str='', headers: list[str] | None=None) -> None:
+```
+
+##### 説明
+
+Args:
+    path: Excel ファイルのパス。
+    password: 読み取りパスワード（パスワード保護されたファイルを開く場合）。
+    headers: ヘッダー行がない Excel の場合に、列名のリストをここで付ける。
+             指定すると read_rows_as_dicts() は全行をデータとして読む。
+
+#### `read_cell`
+
+```text
+def read_cell(self, sheet_name: str, row: int, col: int | str) -> Any:
+```
+
+##### 説明
+
+セルの値を返す（数式の計算結果）。
+
+Args:
+    sheet_name: シート名。
+    row: 行番号（1始まり）。
+    col: 列番号（1始まり）または列記号（"A" / "AA"）。
+
+#### `write_cell`
+
+```text
+def write_cell(self, sheet_name: str, row: int, col: int | str, value) -> None:
+```
+
+##### 説明
+
+セルに値を書き込む。
+
+Args:
+    sheet_name: シート名。
+    row: 行番号（1始まり）。
+    col: 列番号（1始まり）または列記号（"A" / "AA"）。
+    value: 書き込む値。
+
+#### `read_rows`
+
+```text
+def read_rows(self, sheet_name: str, min_row: int=2) -> list[tuple]:
+```
+
+##### 説明
+
+指定シートの行データをタプルのリストで返す。
+
+Args:
+    sheet_name: シート名。
+    min_row: 読み始める行番号（デフォルト: 2 でヘッダーをスキップ）。
+
+Returns:
+    各行を値のタプルにしたリスト。
+
+#### `read_rows_as_dicts`
+
+```text
+def read_rows_as_dicts(self, sheet_name: str, header_row: int=1) -> list[dict]:
+```
+
+##### 説明
+
+ヘッダー行をキーとした辞書のリストで返す。
+
+ヘッダー行がないファイルは ExcelComHandler(path, headers=[...]) で列名を指定すること。
+
+Args:
+    sheet_name: シート名。
+    header_row: ヘッダーが存在する行番号（デフォルト: 1）。
+                __init__ で headers を指定した場合は無視される。
+
+Returns:
+    [{"列名": 値, ...}, ...] の形式のリスト。全セルが空の行は除外される。
+
+Raises:
+    ExcelError: ヘッダー行に空のセルがある場合（headers 未指定時のみ）、
+                または headers の列数がシートの列数より少ない場合。
+
+#### `count_a`
+
+```text
+def count_a(self, sheet_name: str, row: int) -> int:
+```
+
+##### 説明
+
+指定行の空でないセル数を返す。
+
+数式が入っていても "" を返すセルは空としてカウントされる。
+行全体が空かどうかの判定（スキップ処理）に使う。
+
+Args:
+    sheet_name: シート名。
+    row: 確認する行番号。
+
+Returns:
+    空でないセルの数。0 なら行全体が空。
+
+#### `used_last_row`
+
+```text
+def used_last_row(self, sheet_name: str) -> int:
+```
+
+##### 説明
+
+データが存在する最終行の行番号を返す。
+
+UsedRange を使うため、数式が入ったセルも含めて正確に最終行を取得できる。
+
+Args:
+    sheet_name: シート名。
+
+Returns:
+    最終行の行番号（1始まり）。
+
+#### `transfer_by_key`
+
+```text
+def transfer_by_key(self, sheet_name: str, key_col: int | str, lookup: dict[str, dict], column_mapping: dict[str, str], start_row: int=2) -> int:
+```
+
+##### 説明
+
+キー列の値で lookup を引き、一致した行に値を転記する（XLOOKUP 的転記）。
+
+Excel の各行についてキー列の値を lookup のキーと突合し、
+一致したら column_mapping に従って値を書き込む。
+空行・キーが空の行・lookup に存在しないキーの行はスキップする。
+Args:
+    sheet_name: シート名。
+    key_col: キー列。列レター（"Q"）または列番号（17）で指定する。
+    lookup: {キーの値: {列名: 値}} の辞書。CsvReader.index() 等で作る。
+    column_mapping: {列レター: lookup の列名} の辞書。
+    start_row: 転記を始める行番号（デフォルト: 2。1行目はヘッダー想定）。
+
+Returns:
+    転記した行数。
+
+Raises:
+    ExcelError: 行の処理に失敗した場合（メッセージに行番号を含む）。
+
+#### `run_macro`
+
+```text
+def run_macro(self, macro_name: str) -> None:
+```
+
+##### 説明
+
+VBA マクロを実行する。
+
+Args:
+    macro_name: 実行するマクロ名。"モジュール名.プロシージャ名" の形式で指定する。
+                例: "Module1.UpdateData"
+
+#### `save`
+
+```text
+def save(self) -> None:
+```
+
+##### 説明
+
+元のファイルに上書き保存する。
+
+close() は保存せずに閉じる（SaveChanges=False）ため、
+write_cell や transfer_by_key での変更を残す場合は必ず呼ぶこと。
+
+#### `save_as`
+
+```text
+def save_as(self, path: str | Path, read_pw: str='', write_pw: str='', file_format: int | None=None) -> None:
+```
+
+##### 説明
+
+ファイルを別名で保存する。パスワードを設定できる。
+
+Args:
+    path: 保存先のパス。
+    read_pw: 読み取りパスワード（省略可）。
+    write_pw: 書き込みパスワード（省略可）。
+    file_format: FileFormat 定数（例: FileFormat.CSV）。
+                 省略すると元ファイルと同じ形式で保存する。
+
+Raises:
+    ExcelError: 保存先の拡張子が元ファイルの形式と食い違う場合
+                （file_format 未指定時のみ）。
+
+#### `close`
+
+```text
+def close(self) -> None:
+```
+
+##### 説明
+
+Excel を閉じる。with 文を使う場合は自動で呼ばれる。
+
+Close が失敗しても Quit は必ず実行する（Excel プロセスを残さないため）。
+2回呼んでも安全。
+
+### `WindowHandler`
+
+```text
+class WindowHandler:
+```
+
+#### 説明
+
+ウィンドウの検索・操作クラス。
+
+タイトルでウィンドウを検索し、前面に表示する。
+
+#### `__init__`
+
+```text
+def __init__(self, title: str) -> None:
+```
+
+##### 説明
+
+Args:
+    title: 検索するウィンドウのタイトル（完全一致）。
+
+Raises:
+    RuntimeError: ウィンドウが見つからない場合。
+
+#### `activate`
+
+```text
+def activate(self) -> None:
+```
+
+##### 説明
+
+ウィンドウを前面に表示する。最小化されている場合は復元する。
+
+#### `get_title`
+
+```text
+def get_title(self) -> str:
+```
+
+##### 説明
+
+ウィンドウのタイトルを返す。
+
+### `RegistryHandler`
+
+```text
+class RegistryHandler:
+```
+
+#### 説明
+
+レジストリ値の読み取りクラス。with 文で確実にキーを閉じる。
+
+#### `__init__`
+
+```text
+def __init__(self, hive: int, key_path: str) -> None:
+```
+
+##### 説明
+
+Args:
+    hive: レジストリのルートキー（例: win32con.HKEY_CURRENT_USER）。
+    key_path: キーのパス（例: r"Software\MyApp"）。
+
+#### `read`
+
+```text
+def read(self, value_name: str) -> str:
+```
+
+##### 説明
+
+レジストリ値を読み取る。
+
+Args:
+    value_name: 読み取る値の名前。
+
+Returns:
+    レジストリ値の文字列。
+
+#### `close`
+
+```text
+def close(self) -> None:
+```
+
+##### 説明
+
+レジストリキーを閉じる。with 文を使う場合は自動で呼ばれる。
+
+### `is_excel_running`
+
+```text
+def is_excel_running() -> bool:
+```
+
+#### 説明
+
+EXCEL.EXE プロセスが存在するか返す。
+
+画面に見えない孤立プロセスも、ユーザーが開いている Excel も区別せず検出する。
+
+### `kill_excel`
+
+```text
+def kill_excel() -> bool:
+```
+
+#### 説明
+
+すべての EXCEL.EXE プロセスを強制終了する。
+
+※ ユーザーが開いている Excel も終了する（未保存の変更は失われる）。
+  人が作業する PC では実行前に確認するか、is_excel_running() の警告に留めること。
+  無人実行の PC で自動処理の開始前に呼ぶのが主な用途。
+
+Returns:
+    True: 終了に成功した。False: 起動していなかった、または終了に失敗した。
+
+
+## `from comken.run import ...`
+
+### `backoffice`
+
+```text
+def backoffice(main: Callable[[], Any], project_name: str) -> Any:
+```
+
+#### 説明
+
+バックオフィスの RPA として main を実行する。
+
+社内ライブラリが設定の初期化と時間計測を行い、main を呼ぶ。
+
+Raises:
+    RpaLibraryNotFoundError: 社内ライブラリが読み込めない場合。
+
+### `intranet`
+
+```text
+def intranet(main: Callable[[], Any], project_name: str) -> Any:
+```
+
+#### 説明
+
+イントラネットの RPA として main を実行する。
+
+社内ライブラリが設定の初期化と時間計測を行い、main を呼ぶ。
+
+Raises:
+    RpaLibraryNotFoundError: 社内ライブラリが読み込めない場合。

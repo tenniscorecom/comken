@@ -15,7 +15,7 @@
 `Salesforce` を継承して利用プロジェクト側でメソッドを足す。
 認証は OAuth 2.0 クライアントクレデンシャルフローで、
 ユーザー名・パスワード・リフレッシュトークンは使わない。
-設計の背景は docs/Salesforce設計メモ.md を参照。
+設計の背景は docs/Salesforce.md を参照。
 
     Salesforce             1組織ぶんの API クライアント（入口）
     ReportApi              レポート API。Salesforce.report が持っている
@@ -41,6 +41,7 @@ from .client import Salesforce
 from .metrics import ApiMetrics, ApiUsage, ComponentStat, RetryReason
 from .oauth import ClientCredentialsAuth
 from .report import ReportApi
+from .rotation import SalesforceCredentialRotator
 
 __all__ = [
     "Salesforce",
@@ -50,4 +51,5 @@ __all__ = [
     "ApiUsage",
     "ComponentStat",
     "RetryReason",
+    "SalesforceCredentialRotator",
 ]

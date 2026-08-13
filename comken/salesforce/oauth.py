@@ -12,11 +12,11 @@ OAuth 2.0 クライアントクレデンシャルフローでトークンを取�
 アクセストークンの有効期限は固定値ではなく、接続アプリのセッションポリシー →
 ユーザーのプロファイル → 組織のセッション設定、の順で決まる。つまり残り秒数を
 コード側で計算する意味がないため、**期限を測らず 401 が返ったら取り直す**
-（取り直しは Salesforce 側が行う。詳しくは docs/Salesforce設計メモ.md）。
+（取り直しは Salesforce 側が行う。詳しくは docs/Salesforce.md）。
 
 将来 JWT ベアラーフローへ移る場合は、fetch() が同じ形（アクセストークンと
 instance_url のタプル）を返すクラスを作って差し替える。
-準備は docs/Salesforce_JWTと鍵配布.md にある。
+準備は docs/Salesforce.md の付録にある。
 """
 
 import logging
