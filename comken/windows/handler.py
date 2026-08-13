@@ -94,6 +94,38 @@ def _write_com_updates(ws: Any, output_by_column: dict[int, list[tuple[int, obje
                         raise RowTransferError(row_number, error) from error
 
 
+def _mapping_columns(
+    headers: tuple[Any, ...],
+    key_column_name: str,
+    lookup: dict[str, dict],
+    mapping: dict[str, str],
+) -> tuple[dict[str, int], dict[str, int]]:
+    """列名の対応関係を検証し、照合列と転記先の列番号を返す。"""
+    header_names = [str(header) for header in headers if header is not None]
+    header_columns = {
+        str(header): column for column, header in enumerate(headers, start=1) if header is not None
+    }
+    if key_column_name not in header_columns:
+        raise TransferKeyColumnNotFoundError(key_column_name, header_names)
+
+    missing_destinations = [name for name in mapping.values() if name not in header_columns]
+    if missing_destinations:
+        raise TransferDestinationColumnNotFoundError(missing_destinations, header_names)
+
+    lookup_rows = list(lookup.values())
+    source_columns = set(lookup_rows[0]) if lookup_rows else set()
+    for lookup_row in lookup_rows[1:]:
+        source_columns.intersection_update(lookup_row)
+    missing_sources = [name for name in mapping if name not in source_columns]
+    if missing_sources:
+        raise TransferSourceColumnNotFoundError(missing_sources, sorted(source_columns))
+
+    destination_columns = {
+        source: header_columns[destination] for source, destination in mapping.items()
+    }
+    return header_columns, destination_columns
+
+
 _SUFFIX_TO_FORMAT = {
     ".xlsx": FileFormat.XLSX,
     ".xlsm": FileFormat.XLSM,
@@ -323,28 +355,8 @@ class ExcelComHandler(FileBase):
         last_row = self.last_row(sheet_name)
         last_col = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
         header_values = _block_values(ws, int(header_row), int(header_row), last_col)
-        headers = list(header_values[0]) if header_values else []
-        header_names = [str(header) for header in headers if header is not None]
-        header_columns = {
-            str(header): column
-            for column, header in enumerate(headers, start=1)
-            if header is not None
-        }
-        if key_col not in header_columns:
-            raise TransferKeyColumnNotFoundError(key_col, header_names)
-        missing_destinations = [name for name in mapping.values() if name not in header_columns]
-        if missing_destinations:
-            raise TransferDestinationColumnNotFoundError(missing_destinations, header_names)
-        lookup_rows = list(lookup.values())
-        source_columns = set(lookup_rows[0]) if lookup_rows else set()
-        for lookup_row in lookup_rows[1:]:
-            source_columns.intersection_update(lookup_row)
-        missing_sources = [name for name in mapping if name not in source_columns]
-        if missing_sources:
-            raise TransferSourceColumnNotFoundError(missing_sources, sorted(source_columns))
-        destination_columns = {
-            source: header_columns[destination] for source, destination in mapping.items()
-        }
+        headers = header_values[0] if header_values else ()
+        header_columns, destination_columns = _mapping_columns(headers, key_col, lookup, mapping)
         logger.info("シート「%s」: 最終行 %d行", sheet_name, last_row)
         if last_row <= int(header_row):
             return 0

@@ -79,6 +79,12 @@ def import_json(json_path: str | Path, path: Path | None = None) -> list[str]:
 
 def _flatten(json_path: Path) -> dict[str, str]:
     """JSON を読み、{"site_a": {"client_id": ...}} を {"site_a_client_id": ...} にする。"""
+    parsed = _read_json_object(json_path)
+    return _flatten_fields(json_path, parsed)
+
+
+def _read_json_object(json_path: Path) -> dict[str, object]:
+    """JSON を読み、重複キーを含まない最上位オブジェクトとして返す。"""
     try:
         raw = json_path.read_text(encoding="utf-8")
     except OSError as e:
@@ -94,7 +100,11 @@ def _flatten(json_path: Path) -> dict[str, str]:
 
     if not isinstance(parsed, dict):
         raise CredentialImportError(json_path, "いちばん外側が { } になっていません。")
+    return parsed
 
+
+def _flatten_fields(json_path: Path, parsed: dict[str, object]) -> dict[str, str]:
+    """検証済みの最上位オブジェクトを、保存用の平らなキーへ展開する。"""
     items: dict[str, str] = {}
     for system, fields in parsed.items():
         if not isinstance(fields, dict):
