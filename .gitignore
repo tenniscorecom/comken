@@ -19,3 +19,7 @@ config.pyi
 # プロジェクト設定（テンプレートは config.ini.example を使う）
 config.ini
 state.ini
+
+# AIツール向けのローカル作業指示（ライブラリ本体には含めない）
+AGENTS.md
+CLAUDE.md
