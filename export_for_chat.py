@@ -1,7 +1,7 @@
 """comken の公開 API ドキュメント、エラー対応ガイド、貼り付け用資料を生成する。
 
 通常は各パッケージの ``__all__`` をたどり、型ヒント付き署名と docstring 全文を
-``docs/API.md`` へ書き出す。添付できない環境では ``--max-chars`` を指定すると、
+``docs/自動生成/API.md`` へ書き出す。添付できない環境では ``--max-chars`` を指定すると、
 従来どおり資料を文字数の目安で分割して ``貼り付け用/`` へ出力する。
 
 使い方:
@@ -22,7 +22,7 @@ import comken.exceptions as exceptions
 
 ROOT = Path(__file__).resolve().parent
 PACKAGE_ROOT = ROOT / "comken"
-API_OUTPUT_PATH = ROOT / "docs" / "API.md"
+API_OUTPUT_PATH = ROOT / "docs" / "自動生成" / "API.md"
 ERRORS_OUTPUT_PATH = ROOT / "ERRORS.md"
 LEGACY_OUTPUT_DIR = ROOT / "貼り付け用"
 ERRORS_GENERATED_MARKER = (
@@ -243,6 +243,8 @@ def _api_text() -> str:
         "> このファイルは自動生成物です。手で編集しないでください。",
         "> 再生成: `python export_for_chat.py`",
         "",
+        "[README（ドキュメントの入口）へ戻る](../../README.md)",
+        "",
         "各パッケージの `__all__` にある公開名だけを掲載しています。",
     ]
     modules = [path for path in PACKAGE_ROOT.glob("*.py") if path.name != "__init__.py"]
@@ -416,6 +418,7 @@ def main() -> None:
         help="指定時だけ、貼り付け用資料をこの文字数の目安で分割して出力する",
     )
     args = parser.parse_args()
+    API_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     API_OUTPUT_PATH.write_text(_api_text(), encoding="utf-8")
     print(f"{API_OUTPUT_PATH.relative_to(ROOT)} を生成しました")  # noqa: T201
     _write_errors()

@@ -18,7 +18,7 @@
 
 | ファイル | 大きさ | 中身 |
 |---|---|---|
-| `docs/API.md` | **5,300行** | 全公開 API の署名と docstring。**生成物**（`python export_for_chat.py` で再生成）。手で編集しない |
+| `docs/自動生成/API.md` | **5,300行** | 全公開 API の署名と docstring。**生成物**（`python export_for_chat.py` で再生成）。手で編集しない |
 | `tests/` | 6,200行 | テスト。変更するとき以外は読まなくてよい |
 | `docs/Salesforce.md` | 900行 | 認証方式の判断と経緯、JWT の付録 |
 | `CONVENTIONS.md` | 700行 | 規約 |
@@ -29,12 +29,12 @@
 ## ドキュメントを増やす前に
 
 **同じことを2箇所に書かない。** API の説明（引数・戻り値・例外）は **docstring が一次情報**で、
-`docs/API.md` はそこから自動生成する。手書きのメソッド一覧表を作らないこと
+`docs/自動生成/API.md` はそこから自動生成する。手書きのメソッド一覧表を作らないこと
 （2026-08-13 に `docs/機能カタログ.md` を 577行→37行に縮めたのはこのため）。
 
 | 情報 | 置き場所 |
 |---|---|
-| API の使い方（引数・戻り値・例外） | **docstring**（→ `docs/API.md` へ自動生成） |
+| API の使い方（引数・戻り値・例外） | **docstring**（→ `docs/自動生成/API.md` へ自動生成） |
 | 何を使えばいいか | `docs/機能カタログ.md` の早見表 |
 | 動く例 | `examples/`（`tests/test_examples.py` が実際に実行する） |
 | なぜそう設計したか | `仕様書.md` / `docs/Salesforce.md` |
@@ -56,5 +56,5 @@
 python -m pytest          # 全通過が前提
 python -m ruff check
 python -m ruff format
-python export_for_chat.py # 公開 API・例外を変えたら docs/API.md と ERRORS.md を再生成する
+python export_for_chat.py # 公開 API・例外を変えたら docs/自動生成/API.md と ERRORS.md を再生成する
 ```

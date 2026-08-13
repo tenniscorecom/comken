@@ -4,6 +4,8 @@
 > このファイルは自動生成物です。手で編集しないでください。
 > 再生成: `python export_for_chat.py`
 
+[README（ドキュメントの入口）へ戻る](../../README.md)
+
 各パッケージの `__all__` にある公開名だけを掲載しています。
 
 ## `from comken import ...`

@@ -114,7 +114,7 @@ def test_error_guide_generation_requires_marker():
 
 
 def test_generated_api_covers_all_public_api():
-    api = (_ROOT / "docs" / "API.md").read_text(encoding="utf-8")
+    api = (_ROOT / "docs" / "自動生成" / "API.md").read_text(encoding="utf-8")
     init_files = [
         _ROOT / "comken" / "__init__.py",
         *(_ROOT / "comken").glob("*/__init__.py"),
