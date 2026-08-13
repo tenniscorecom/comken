@@ -184,6 +184,36 @@ Outlook が起動していない場合も起きるので、まず Outlook を開
 
 ---
 
+## 概要コード例
+
+README に掲載していた概要とコード例です。
+
+詳しい使い方は [docs/Outlook操作.md](Outlook操作.md) を参照。
+
+```python
+import logging
+
+from comken.outlook import Outlook
+
+logger = logging.getLogger(__name__)
+
+with Outlook() as mail:
+    for message in mail.messages(subject_contains="日次データ", days=7):
+        logger.info("%s / %s", message.received_at, message.subject)
+
+    mail.save_draft(
+        to="taro@example.co.jp",
+        subject="日次レポート",
+        body="添付をご確認ください。",
+        attachments=[r"C:\作業\report.csv"],
+    )
+```
+
+受信メールは新しい順に逐次読み取り、既読・未読の状態を変えません。誤送信を防ぐため
+送信機能はなく、下書き保存までです。COM に対応する従来版（Classic）Outlook 専用で、
+New Outlook は利用できません。Graph API は認証とネットワークが必要なため、
+オフライン環境向けの代替として提供しません。
+
 ## 関連
 
 - [機能カタログ](機能カタログ.md) — 用途別の API 一覧

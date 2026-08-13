@@ -793,3 +793,100 @@ def load_private_key(path: Path) -> bytes:
 - [ ] JWT は接続アプリの設定（証明書アップロード・事前承認）が要るので、管理者依頼と並行する
 - [ ] 配布方式は、実際に複数台構成になってから入れる（1台なら DPAPI 直接登録で足りる）
 
+---
+
+## 基本的な使い方
+
+README の Salesforce 節に掲載していた、実装を使う側の説明です。
+
+1インスタンスが1組織を受け持つ。認証は OAuth 2.0 クライアントクレデンシャルフローで、
+**ユーザー名・パスワード・セキュリティトークン・リフレッシュトークンを使わない**
+（このフローはリフレッシュトークンを発行しないため、保管も更新も発生しない）。
+
+```python
+from comken.salesforce import Salesforce
+
+with Salesforce(
+    client_id="接続アプリの Consumer Key",
+    client_secret="接続アプリの Consumer Secret",
+    domain_url="https://your-domain.my.salesforce.com",   # My Domain 必須
+    org_name="site_a",                                     # 計測ログでの呼び名
+) as sf:
+    accounts = sf.query("SELECT Id, Name FROM Account")    # 行数の上限なし・ページ送り自動
+    new_id = sf.insert("Account", {"Name": "新規取引先"})
+    sf.update("Account", record_id=new_id, data={"Name": "更新後"})
+
+    rows = sf.report.run("00O000000000001")                # レポートは上限 2000 行
+
+    sf.metrics.log_summary()                               # 使用量を最後にまとめて出す
+```
+
+`domain_url` は組織の **My Domain** を渡す。`login.salesforce.com` ではこのフローは動かない。
+
+### 事前に管理者へ依頼すること
+
+1. RPA 専用のインテグレーションユーザーを作る（「API の有効化」権限）
+2. 接続アプリを作り、OAuth 有効化・スコープ `api`・
+   **「クライアントクレデンシャルフローを有効化」**にチェック
+3. 接続アプリのポリシーで**実行ユーザー（Run As）**に 1 のユーザーを指定
+   （未指定だと `invalid_grant` になる）
+4. Consumer Key / Consumer Secret を受け取る
+
+### レポートの 2000 行制限
+
+レポート API は**同期・非同期のどちらも 2000 行が上限**で、非同期にしても超えられない。
+上限で切り捨てられた場合は既定で `SalesforceReportTruncatedError` を送出して**止める**
+（欠けたデータのまま処理が進むのを防ぐため）。
+
+```python
+# 期間で区切って回避する
+rows = sf.report.run(
+    "00O000000000001",
+    filters=[{"column": "CREATED_DATE", "operator": "greaterThan", "value": "2026-01-01"}],
+)
+
+# それでも足りないときは SOQL に置き換える（行数の上限がない）
+rows = sf.query("SELECT Name, Amount FROM Opportunity WHERE CreatedDate > 2026-01-01T00:00:00Z")
+```
+
+### 組織（サイト）ごとのクラス
+
+組織は My Domain の URL が違うので、1組織につき1クラスにする。
+3組織ぶんの雛形が `comken/salesforce/sites/` に入っている。
+
+```python
+from comken.salesforce.sites import SITES, SiteA
+
+with SiteA.from_credentials(config.SITE_A.DOMAIN_URL) as sf:
+    rows = sf.案件一覧()
+
+# 3組織をまとめて回す
+for site_class in SITES:
+    domain_url = getattr(config, site_class.CONFIG_SECTION).DOMAIN_URL
+    with site_class.from_credentials(domain_url) as sf:
+        rows = sf.案件一覧()
+```
+
+`from_credentials()` は `CREDENTIAL_PREFIX` を頭に付けたキー名で、DPAPI に保管した
+client_id / client_secret を読む（後述の [credentials](認証情報.md#credentials)）。
+コードにも config.ini にも秘密の値が現れない。
+
+各クラスには `CREDENTIAL_PREFIX`（認証情報のキー名の頭）・`CONFIG_SECTION`
+（My Domain を書く config.ini のセクション名）・`REPORT_*`（その組織のレポート ID）を持たせる。
+共通の操作は `Salesforce` にあるので、書くのは**その組織でしか通じないもの**だけ。
+計測の組織名は指定しなければクラス名になるので、ログで組織を見分けられる。
+
+**`SiteA` / `SiteB` / `SiteC` は仮名。** このリポジトリは公開しているため、
+実際の組織名は書かず、配置時にクラス名・`CREDENTIAL_PREFIX`・`CONFIG_SECTION` を
+書き換える（`comken/run.py` の `example_libs.v0000` と同じ扱い）。
+
+書き込み系（`insert` / `update` / `upsert` / `delete`）は `dry_run` を尊重する。
+使い方の一覧は [docs/機能カタログ.md](機能カタログ.md)、
+設計の背景は [docs/Salesforce.md](Salesforce.md) を参照。
+
+---
+
+## 関連
+
+- [README](../README.md) — ライブラリ全体の概要と環境構築
+- [公開 API](API.md) — 型ヒント付き署名・引数・戻り値・例外
