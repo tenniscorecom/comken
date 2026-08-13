@@ -55,8 +55,6 @@
 ```
 python -m pytest          # 全通過が前提
 python -m ruff check
-python export_for_chat.py # 公開 API を変えたら docs/API.md を再生成する
+python -m ruff format
+python export_for_chat.py # 公開 API・例外を変えたら docs/API.md と ERRORS.md を再生成する
 ```
-
-`ruff format --check` は既存7ファイルが未整形のまま残っている（既存の負債。
-触るときに直す方針で、まとめて整形はしない）。
