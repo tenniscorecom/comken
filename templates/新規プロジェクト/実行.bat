@@ -10,7 +10,18 @@ rem ============================================================
 
 set "COMKEN_ROOT=\\server\share\tools\comken"
 
-cd /d "%~dp0"
+rem 共有フォルダ（\\サーバー名\...）から起動されると、cd ではこのフォルダへ移動できず、
+rem カレントが C:\Windows のままになって main.py が見つからない（CMD の仕様）。
+rem pushd は共有フォルダに一時的なドライブ名を割り当てるので、その場合でも動く。
+pushd "%~dp0"
+if errorlevel 1 (
+  echo.
+  echo [!] このフォルダへ移動できませんでした: %~dp0
+  echo     共有フォルダが切断されていないか確認してください。
+  pause
+  exit /b 1
+)
+
 set "PYTHONPATH=%COMKEN_ROOT%;%PYTHONPATH%"
 
 python main.py
@@ -20,3 +31,5 @@ if errorlevel 1 (
   echo [!] エラーで終了しました。上の赤い文字（エラー名）を docs\ERRORS.md で調べてください。
   pause
 )
+
+popd

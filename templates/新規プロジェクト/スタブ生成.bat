@@ -11,7 +11,8 @@ rem ============================================================
 
 set "COMKEN_ROOT=\\server\share\tools\comken"
 
-cd /d "%~dp0"
+rem 共有フォルダから起動されると cd では移動できないため pushd を使う（CMD の仕様）
+pushd "%~dp0"
 set "PYTHONPATH=%COMKEN_ROOT%;%PYTHONPATH%"
 
 python -m comken.config
@@ -20,3 +21,5 @@ if errorlevel 1 (
   echo [!] スタブ生成に失敗しました。config.ini があるか確認してください。
   pause
 )
+
+popd

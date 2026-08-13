@@ -14,9 +14,12 @@ if not exist "%COMKEN_ROOT%\comken\__init__.py" (
 
 rem この起動中だけ comken を import できるようにする（PC の環境変数は変更しない）
 set "PYTHONPATH=%COMKEN_ROOT%;%PYTHONPATH%"
-cd /d "%~dp0"
+rem 共有フォルダから起動されると cd では移動できないため pushd を使う（CMD の仕様）
+pushd "%~dp0"
 
 python main.py
 if errorlevel 1 pause
+
+popd
 
 endlocal
