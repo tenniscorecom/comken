@@ -83,7 +83,11 @@ class SalesforceExternalIdMissingError(SalesforceError):
 
 
 class SalesforceCredentialRotationError(SalesforceError):
-    """consumer key / secret のローテーションを安全に完了できない場合。"""
+    """consumer key / secret のローテーションを安全に完了できない
+
+    対処:
+        Salesforce の ECA 設定・API レスポンス・DPAPI の保存先を確認する
+    """
 
     def __init__(self, detail: str) -> None:
         super().__init__(

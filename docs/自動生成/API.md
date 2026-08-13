@@ -3177,6 +3177,25 @@ upsert 用データに外部 ID がない
 def __init__(self, object_name: str, external_id_field: str) -> None:
 ```
 
+### `SalesforceCredentialRotationError`
+
+```text
+class SalesforceCredentialRotationError(SalesforceError):
+```
+
+#### 説明
+
+consumer key / secret のローテーションを安全に完了できない
+
+対処:
+    Salesforce の ECA 設定・API レスポンス・DPAPI の保存先を確認する
+
+#### `__init__`
+
+```text
+def __init__(self, detail: str) -> None:
+```
+
 ### `SalesforceReportTruncatedError`
 
 ```text

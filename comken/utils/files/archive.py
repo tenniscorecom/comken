@@ -5,8 +5,6 @@
 """
 
 import logging
-import shutil
-import sys
 import tempfile
 import zipfile
 from collections.abc import Sequence
@@ -15,9 +13,6 @@ from pathlib import Path
 from ..timer import measure
 
 logger = logging.getLogger(__name__)
-
-# zip エントリのファイル名が UTF-8 で格納されていることを示すフラグ（general purpose bit 11）
-_ZIP_UTF8_FLAG = 0x800
 
 
 @measure
@@ -130,38 +125,7 @@ def unzip(src: str | Path, dst: str | Path | None = None) -> Path:
     dst = Path(dst) if dst else src.with_suffix("")
     dst.mkdir(parents=True, exist_ok=True)
 
-    if sys.version_info >= (3, 11):
-        # metadata_encoding は Python 3.11 で追加。
-        # UTF-8 フラグのないエントリ（Windows 製 zip）にだけ効く
-        with zipfile.ZipFile(src, metadata_encoding="cp932") as zf:
-            zf.extractall(dst)
-    else:
-        # 3.10 以前は metadata_encoding が無いため、ファイル名を自前で cp932 に直して展開する
-        _extract_cp932(src, dst)
+    # UTF-8 フラグのないエントリ（Windows 製 zip）にだけ cp932 を適用する。
+    with zipfile.ZipFile(src, metadata_encoding="cp932") as zf:
+        zf.extractall(dst)
     return dst
-
-
-def _extract_cp932(src: Path, dst: Path) -> None:
-    """Windows 製 zip（ファイル名が cp932）を Python 3.10 以前でも文字化けせず展開する。
-
-    UTF-8 フラグのないエントリのファイル名は、zipfile が cp437 で復元して保持している。
-    これを cp437 → cp932 に戻すと元の日本語名になる（metadata_encoding="cp932" と同じ結果）。
-    """
-    dst_resolved = dst.resolve()
-    with zipfile.ZipFile(src) as zf:
-        for info in zf.infolist():
-            name = info.filename
-            if not info.flag_bits & _ZIP_UTF8_FLAG:
-                name = name.encode("cp437").decode("cp932", errors="replace")
-            target = dst / name
-            # Zip Slip 対策: 展開先フォルダの外を指すエントリはスキップする
-            # （3.11+ の extractall は Python 側で無害化されるが、この自前展開では自分で守る）
-            if not target.resolve().is_relative_to(dst_resolved):
-                logger.warning("展開先の外を指すエントリをスキップしました: %s", info.filename)
-                continue
-            if info.is_dir():
-                target.mkdir(parents=True, exist_ok=True)
-                continue
-            target.parent.mkdir(parents=True, exist_ok=True)
-            with zf.open(info) as fsrc, target.open("wb") as fdst:
-                shutil.copyfileobj(fsrc, fdst)

@@ -3,7 +3,7 @@
 import inspect
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -134,7 +134,7 @@ class TestAccessDatabase:
         path = tmp_path / "顧客.accdb"
         path.write_bytes(b"database")
         backup_folder = tmp_path / "backups"
-        fixed_now = datetime(2026, 7, 29, 15, 30, 45, tzinfo=timezone.utc)
+        fixed_now = datetime(2026, 7, 29, 15, 30, 45, tzinfo=UTC)
         for _ in range(2):
             with (
                 patch("comken.access.handler.now", return_value=fixed_now),
@@ -158,7 +158,7 @@ class TestAccessDatabase:
         old_other = backup_folder / "20260701_120000_顧客台帳.accdb"
         for item in (old_same, recent_same, old_other):
             item.touch()
-        fixed_now = datetime(2026, 7, 29, 15, 30, 45, tzinfo=timezone.utc)
+        fixed_now = datetime(2026, 7, 29, 15, 30, 45, tzinfo=UTC)
         old_timestamp = (fixed_now - timedelta(days=8)).timestamp()
         recent_timestamp = (fixed_now - timedelta(days=1)).timestamp()
         os.utime(old_same, (old_timestamp, old_timestamp))

@@ -156,7 +156,7 @@ python main.py
 ```python
 import comken
 
-comken.__version__        # → "0.3.0"
+comken.__version__        # → "0.7.0"
 
 # デバッグモード: ライブラリ主要処理（Excel 読み込み・転記・保存、CSV 読み書き、zip 等）の
 # 所要時間を DEBUG ログに出す。どこが遅いかの調査に使う

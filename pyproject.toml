@@ -4,7 +4,7 @@ name = "comken"
 dynamic = ["version"]
 description = "業務自動化共通ライブラリ"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "openpyxl>=3.1",
     "selenium>=4.0",
@@ -30,7 +30,7 @@ comken = ["py.typed"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "PTH", "C4", "C90", "LOG", "G", "T20", "DTZ", "RUF"]

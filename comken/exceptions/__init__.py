@@ -45,6 +45,7 @@ ComkenError
 │   ├── SalesforceConnectionError
 │   ├── SalesforceRequestError
 │   ├── SalesforceExternalIdMissingError
+│   ├── SalesforceCredentialRotationError
 │   ├── SalesforceReportTruncatedError
 │   ├── SalesforceReportFormatError
 │   └── SalesforceReportExecutionError
@@ -167,6 +168,7 @@ from .rpa import (
 from .salesforce import (
     SalesforceAuthError,
     SalesforceConnectionError,
+    SalesforceCredentialRotationError,
     SalesforceError,
     SalesforceExternalIdMissingError,
     SalesforceReportExecutionError,
@@ -241,6 +243,7 @@ __all__ = [
     "SalesforceConnectionError",
     "SalesforceRequestError",
     "SalesforceExternalIdMissingError",
+    "SalesforceCredentialRotationError",
     "SalesforceReportTruncatedError",
     "SalesforceReportFormatError",
     "SalesforceReportExecutionError",

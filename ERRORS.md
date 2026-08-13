@@ -110,6 +110,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `SalesforceConnectionError` | Salesforce につながらない | ネットワークの状態を確認して、少し待ってから再実行する |
 | `SalesforceRequestError` | Salesforce が処理を断った | 表示されたメッセージをそのまま添えて管理者へ連絡する（権限か項目名の問題が多い） |
 | `SalesforceExternalIdMissingError` | upsert 用データに外部 ID がない | 管理者へ連絡する |
+| `SalesforceCredentialRotationError` | consumer key / secret のローテーションを安全に完了できない | Salesforce の ECA 設定・API レスポンス・DPAPI の保存先を確認する |
 | `SalesforceReportTruncatedError` | レポートが上限の 2000 行で切れた（**全件ではない**） | 期間を狭めて何回かに分けて実行する。1回で全部必要なら管理者へ連絡する |
 | `SalesforceReportFormatError` | レポートの形式が対応していない | レポートを明細形式にするか、管理者へ連絡する |
 | `SalesforceReportExecutionError` | Salesforce 側でレポート実行に失敗した | Salesforce で同じレポートを直接実行し、表示された内容を管理者へ連絡する |

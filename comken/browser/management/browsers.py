@@ -243,8 +243,7 @@ class Browsers:
             return []
 
         started = [
-            self.run_task(task, label=f"処理{index + 1}")
-            for index, task in enumerate(tasks)
+            self.run_task(task, label=f"処理{index + 1}") for index, task in enumerate(tasks)
         ]
 
         # 例外が出ても、走り出した処理は最後まで待つ。

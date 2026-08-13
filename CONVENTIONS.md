@@ -223,7 +223,7 @@ def find_latest(folder: str | Path, pattern: str = "*.xlsx") -> Path | None:
 | `Path \| str` | Path オブジェクトまたは文字列 |
 | `list[dict]` | 辞書のリスト |
 | `dict[str, list]` | キーが文字列、値がリストの辞書 |
-| `X \| None` | `Optional[X]` の代わりに使う（Python 3.10+） |
+| `X \| None` | `Optional[X]` の代わりに使う（Python 3.11+） |
 
 - 原則として `Any` は使わず、具体的な型を付ける。
 - ただし、COM オブジェクト、Excel セル値、型情報を提供しない外部ライブラリとの境界など、

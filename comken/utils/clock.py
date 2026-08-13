@@ -12,7 +12,7 @@ import datetime
 def now() -> datetime.datetime:
     """タイムゾーン付きの現在時刻（この PC のローカル時刻）を返す。"""
     # NOTE: Windows のオフライン環境で追加の tzdata を要求しないよう ZoneInfo は使わない。
-    return datetime.datetime.now(datetime.timezone.utc).astimezone()
+    return datetime.datetime.now(datetime.UTC).astimezone()
 
 
 def today() -> datetime.date:

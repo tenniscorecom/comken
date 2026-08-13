@@ -260,26 +260,3 @@ class TestUnzip:
         dst = unzip(src, tmp_path / "out")
 
         assert (dst / "帳票.txt").read_text(encoding="utf-8") == "OK"
-
-    def test_cp932_fallback_extracts_japanese(self, tmp_path):
-        """Python 3.10 以前用のフォールバック展開が cp932 名を正しく復元することを確認する。
-
-        実行環境が 3.11+ でも通るように、フォールバック実装を直接呼んで検証する。
-        """
-        from comken.utils.files.archive import _extract_cp932
-
-        name_bytes = "請求書.txt".encode("cp932")
-
-        class Cp932ZipInfo(zipfile.ZipInfo):
-            def _encodeFilenameFlags(self):
-                return name_bytes, 0  # UTF-8 フラグを立てない（Windows 製 zip を再現）
-
-        src = tmp_path / "win.zip"
-        with zipfile.ZipFile(src, "w") as zf:
-            zf.writestr(Cp932ZipInfo("dummy.txt"), "データ")
-
-        dst = tmp_path / "out"
-        dst.mkdir()
-        _extract_cp932(src, dst)
-
-        assert (dst / "請求書.txt").read_text(encoding="utf-8") == "データ"
