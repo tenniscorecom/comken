@@ -26,9 +26,9 @@ with ExcelComHandler("data.xlsx") as h:
     value = h.read_cell(SHEET, row=DATA_ROW, col=DATA_COL)
     rows = h.read_rows(SHEET)
     rows = h.read_rows_as_dicts(SHEET)
-    last_row = h.used_last_row(SHEET)
+    last_row = h.last_row(SHEET)
 
-    if h.count_a(SHEET, row=CHECK_ROW) == 0:
+    if h.count_non_empty_cells(SHEET, row=CHECK_ROW) == 0:
         print(f"{CHECK_ROW}行目は空行")
 
     h.run_macro(MACRO_NAME)
@@ -50,16 +50,16 @@ with ExcelComHandler("data.xlsx") as h:
 
 キー列の値で lookup を引き、一致した行に列マッピングに従って値を書き込む。
 空行・キーが空の行・lookup にないキーの行は自動でスキップされる。
-通常は openpyxl 版（`Sheet.transfer_by_key`）の方が速い（Excel セクション参照）。
+通常は openpyxl 版（`Sheet.transfer_by_letter`）の方が速い（Excel セクション参照）。
 
 ```python
 lookup = CsvReader("data.csv").index("注文番号")
 # → {"A001": {"注文番号": "A001", "顧客名": "株式会社A", ...}, ...}
 
-MAPPING = {"A": "顧客名", "B": "金額"}  # Excel の列レター → lookup の列名
+MAPPING = {"顧客名": "A", "金額": "B"}  # lookup の列名 → Excel の列レター
 
 with ExcelComHandler("data.xlsx") as h:
-    matched = h.transfer_by_key(SHEET, key_col="Q", lookup=lookup, column_mapping=MAPPING)
+    matched = h.transfer_by_letter(SHEET, key_col="Q", lookup=lookup, mapping=MAPPING)
     h.save_as("output.xlsx")
 
 print(f"{matched}件転記した")

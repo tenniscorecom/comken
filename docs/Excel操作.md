@@ -136,11 +136,11 @@ with ExcelWriter("data.xlsx") as f:
     f.save()  # 書き込み後は save() を忘れずに
 
 # ヘッダーがない、または列位置が固定された Excel は列記号版を使う
-# この対応表だけは「転記先の列記号 → 転記元の列名」の向き
-column_mapping = {"B": "顧客名", "C": "金額"}
+# どちらのメソッドも「転記元 → 転記先」の向き
+column_mapping = {"顧客名": "B", "金額": "C"}
 with ExcelWriter("data.xlsx") as f:
-    matched = f.sheet(SHEET).transfer_by_key(
-        key_col="A", lookup=lookup, column_mapping=column_mapping
+    matched = f.sheet(SHEET).transfer_by_letter(
+        key_col="A", lookup=lookup, mapping=column_mapping
     )
     f.save()
 
@@ -208,7 +208,7 @@ with ExcelComHandler("data.xlsm") as f:
 | 大量行を読む | `iter_rows()` で1行ずつ処理する（全行をメモリに乗せない） |
 | NAS 上の大きいファイル | `local_copy_threshold_mb` の自動ローカルコピーに任せる（デフォルト10MB） |
 | 大量行への書き込み | 1セルずつ書かず、行は `Sheet.write_rows()`、見出し＋データは `Sheet.write_table()` でまとめて書く |
-| キー突合転記が大量行 | ヘッダーがある帳票は `transfer_by_mapping()`、列位置が固定なら `transfer_by_key()` を使う。通常は高速な openpyxl 版を優先する |
+| キー突合転記が大量行 | ヘッダーがある帳票は `transfer_by_mapping()`、列位置が固定なら `transfer_by_letter()` を使う。通常は高速な openpyxl 版を優先する |
 
 ---
 

@@ -1,4 +1,4 @@
-﻿# original_libs
+# original_libs
 
 業務自動化で使う Python 共通ライブラリ。
 
@@ -392,9 +392,10 @@ flowchart LR
 
 | 日付 | 内容 |
 |---|---|
+| 2026-08-13 | **v0.6.0** — VS Code の補完・定義ジャンプ用 `extraPaths` を雛形へ追加し、`new_project.py` が comken の場所を3ファイルへ書き込むようにした。API・エラー文書を docstring から生成して重複を解消。Salesforce を Spring '26 対応の External Client App と REST API による secret ローテーションへ移行し、API 67.0 へ更新。単体実行用 logger、dry-run では書かない state.ini、`Config.mapping()`、実行テスト付き basics 12例を追加。雛形を単体実行中心へ変更し、共有フォルダ起動時の `C:\Windows` 問題を pushd で修正。Excel 転記を `{転記元: 転記先}` に統一して列名版・列記号版を区別し、openpyxl / COM の同じ役割のメソッド名を揃えた |
 | 2026-07-09 | 初版作成 |
 | 2026-07-10 | 全モジュールにドキュメント追加、README 整理 |
-| 2026-07-12 | ExcelWriter・ExcelComHandler に `headers` 引数追加（ヘッダーなし Excel 対応）。EdgeDriver のダウンロードフォルダ管理を内部化（デフォルト一時フォルダ・with 終了時自動削除）。`ExcelWriter.transfer_by_key`（openpyxl 版）追加。`diff_row` 追加・`diff_rows` を列単位の差分付きに改良。ExcelComHandler の初期化失敗時に Excel プロセスが残るバグ等を修正 |
+| 2026-07-12 | ExcelWriter・ExcelComHandler に `headers` 引数追加（ヘッダーなし Excel 対応）。EdgeDriver のダウンロードフォルダ管理を内部化（デフォルト一時フォルダ・with 終了時自動削除）。`ExcelWriter.transfer_by_letter`（openpyxl 版）追加。`diff_row` 追加・`diff_rows` を列単位の差分付きに改良。ExcelComHandler の初期化失敗時に Excel プロセスが残るバグ等を修正 |
 | 2026-07-12 | Teams 通知（TeamsNotifier。Power Automate Webhook / Adaptive Card 形式）・テキスト正規化（normalize / strip_spaces / remove_spaces）・待機（wait）・特殊フォルダ取得（Paths）を追加。Paths は OneDrive リダイレクトに追従、通知失敗は TeamsError |
 | 2026-07-12 | Config: [a, b, c] 記法でリストに自動変換（parse_list は警告付きで残存）。エディタ補完用スタブ生成（python -m comken.config）を追加。BOM 付き UTF-8 の config.ini が読めないバグを修正 |
 | 2026-07-12 | Locator（セレクターのクラス変数管理）・retry・Timer / measure・zip・Excel の Sheet ラッパー（セル参照 / write_table / auto_width / freeze_header）・ExcelWriter.create を追加 |

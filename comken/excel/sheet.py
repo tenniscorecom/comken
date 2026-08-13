@@ -24,7 +24,7 @@ from ..exceptions import (
     TransferSourceColumnNotFoundError,
     _warn_coerce,
 )
-from ..utils.data import col_to_num, column_number
+from ..utils.data import column_number
 from ..utils.timer import measure
 
 logger = logging.getLogger(__name__)
@@ -107,25 +107,23 @@ class Sheet:
             self.write_row(i, [row.get(h, "") for h in headers])
 
     @measure
-    def transfer_by_key(
+    def transfer_by_letter(
         self,
         key_col: int | str,
         lookup: dict[str, dict],
-        column_mapping: dict[str, str],
+        mapping: dict[str, int | str],
         start_row: int = 2,
     ) -> int:
-        """列番号・列記号で転記先を指定し、キーが一致した行へ値を転記する。
+        """列記号で転記先を指定し、キーが一致した行へ値を転記する。
 
         ヘッダーがない、または列位置が仕様として固定された Excel に使う。
-        列名で指定する場合は transfer_by_mapping() を使う。
-
-        column_mapping の向きは ``{転記先の列記号: 転記元の列名}`` であり、
-        transfer_by_mapping() や config.ini の MAPPING セクションとは逆になる。
-        取り違えると意図しない列へ転記してもエラーにならないため注意する。
+        ヘッダー名で列を指定できる帳票には transfer_by_mapping() を使う。
+        mapping は両メソッド共通で ``{転記元の列名: 転記先}`` の向き。
         """
         key_col_num = column_number(key_col)
-        mapping = {col_to_num(letter): name for letter, name in column_mapping.items()}
-        logger.info("シート「%s」: 最終行 %d行", self.ws.title, self.ws.max_row)
+        destination_columns = {
+            source: column_number(destination) for source, destination in mapping.items()
+        }
         matched = 0
         for row in range(int(start_row), self.ws.max_row + 1):
             key_value = self.ws.cell(row=row, column=key_col_num).value
@@ -135,10 +133,9 @@ class Sheet:
                 key_value = int(key_value)
             lookup_row = lookup.get(str(key_value).strip())
             if lookup_row is None:
-                logger.debug("%d行目: キー「%s」が lookup に存在しません", row, key_value)
                 continue
-            for col_num, name in mapping.items():
-                self.ws.cell(row=row, column=col_num).value = lookup_row.get(name, "")
+            for source, destination_column in destination_columns.items():
+                self.ws.cell(row=row, column=destination_column).value = lookup_row.get(source, "")
             matched += 1
         logger.info("転記完了: %d件一致（シート: %s）", matched, self.ws.title)
         return matched
@@ -155,10 +152,7 @@ class Sheet:
 
         config.mapping("..._MAPPING") の戻り値を変換せずに渡せる。
         mapping の向きは ``{転記元の列名: 転記先の列名}`` で、左が元、右が先。
-        transfer_by_key() の column_mapping とは逆である。取り違えると逆方向に
-        転記されても気づけないため、config.ini の向きのまま渡すこと。
-
-        ヘッダーがなく、列位置で指定する Excel には transfer_by_key() を使う。
+        ヘッダーがない、または列位置が固定された帳票には transfer_by_letter() を使う。
         転記を始める前にキー列・転記先列・転記元列をすべて検証する。
 
         Args:

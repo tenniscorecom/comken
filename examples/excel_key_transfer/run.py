@@ -77,7 +77,7 @@ def create_sample_files() -> None:
 
 
 def total_by_key() -> dict[str, dict[str, int]]:
-    """明細をキーごとに合計し、transfer_by_key に渡せる形にする。
+    """明細をキーごとに合計し、transfer_by_letter に渡せる形にする。
 
     group_by() は {キー: 行のリスト} を返すので、転記に使うには
     {キー: {列名: 値}} へ組み直す。SUMIF を Python で書いているのと同じことをしている。
@@ -104,10 +104,10 @@ def main() -> None:
 
         # キー列の値で lookup を引き、一致した行に書き込む。
         # 空行・キーが空の行・lookup にないキーの行は自動でスキップされる
-        matched = s.transfer_by_key(
-            key_col=KEY_COL, lookup=customers, column_mapping={CUSTOMER_COL: "顧客名"}
+        matched = s.transfer_by_letter(
+            key_col=KEY_COL, lookup=customers, mapping={"顧客名": CUSTOMER_COL}
         )
-        s.transfer_by_key(key_col=KEY_COL, lookup=totals, column_mapping={AMOUNT_COL: TOTAL})
+        s.transfer_by_letter(key_col=KEY_COL, lookup=totals, mapping={TOTAL: AMOUNT_COL})
 
         for row in range(2, s.last_row + 1):
             s.set_number_format(row=row, col=AMOUNT_COL, fmt=AMOUNT_FORMAT)

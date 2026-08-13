@@ -128,7 +128,7 @@ class MacroError(ExcelError):
 class RowTransferError(ExcelError):
     """Excel の行転記に失敗した
 
-    発生箇所: ExcelComHandler.transfer_by_key()
+    発生箇所: ExcelComHandler.transfer_by_mapping()
 
     対処:
         表示された行番号のデータを確認する

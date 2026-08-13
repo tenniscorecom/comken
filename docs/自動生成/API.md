@@ -1556,7 +1556,7 @@ def index(self, key_col: str) -> dict[str, dict[str, str]]:
 
 key_col をキーにした {キー: 行} の辞書を返す。
 
-Excel との突合（transfer_by_key の lookup）など、キーで1行を引く用途に使う。
+Excel との突合（transfer_by_mapping の lookup）など、キーで1行を引く用途に使う。
 キーが重複していれば CsvRowDuplicateKeyError。重複が普通のデータは group_by() を使う。
 
 Raises:
@@ -1910,23 +1910,20 @@ Args:
     start_row: ヘッダー行の行番号（1始まり）。
     headers: 列の並び順。省略すると最初の行のキー順。
 
-#### `transfer_by_key`
+#### `transfer_by_letter`
 
 ```text
 @measure
-def transfer_by_key(self, key_col: int | str, lookup: dict[str, dict], column_mapping: dict[str, str], start_row: int=2) -> int:
+def transfer_by_letter(self, key_col: int | str, lookup: dict[str, dict], mapping: dict[str, int | str], start_row: int=2) -> int:
 ```
 
 ##### 説明
 
-列番号・列記号で転記先を指定し、キーが一致した行へ値を転記する。
+列記号で転記先を指定し、キーが一致した行へ値を転記する。
 
 ヘッダーがない、または列位置が仕様として固定された Excel に使う。
-列名で指定する場合は transfer_by_mapping() を使う。
-
-column_mapping の向きは ``{転記先の列記号: 転記元の列名}`` であり、
-transfer_by_mapping() や config.ini の MAPPING セクションとは逆になる。
-取り違えると意図しない列へ転記してもエラーにならないため注意する。
+ヘッダー名で列を指定できる帳票には transfer_by_mapping() を使う。
+mapping は両メソッド共通で ``{転記元の列名: 転記先}`` の向き。
 
 #### `transfer_by_mapping`
 
@@ -1941,10 +1938,7 @@ def transfer_by_mapping(self, key_col: str, lookup: dict[str, dict], mapping: di
 
 config.mapping("..._MAPPING") の戻り値を変換せずに渡せる。
 mapping の向きは ``{転記元の列名: 転記先の列名}`` で、左が元、右が先。
-transfer_by_key() の column_mapping とは逆である。取り違えると逆方向に
-転記されても気づけないため、config.ini の向きのまま渡すこと。
-
-ヘッダーがなく、列位置で指定する Excel には transfer_by_key() を使う。
+ヘッダーがない、または列位置が固定された帳票には transfer_by_letter() を使う。
 転記を始める前にキー列・転記先列・転記元列をすべて検証する。
 
 Args:
@@ -2398,7 +2392,7 @@ class RowTransferError(ExcelError):
 
 Excel の行転記に失敗した
 
-発生箇所: ExcelComHandler.transfer_by_key()
+発生箇所: ExcelComHandler.transfer_by_mapping()
 
 対処:
     表示された行番号のデータを確認する
@@ -5037,10 +5031,10 @@ Raises:
     ExcelError: ヘッダー行に空のセルがある場合（headers 未指定時のみ）、
                 または headers の列数がシートの列数より少ない場合。
 
-#### `count_a`
+#### `count_non_empty_cells`
 
 ```text
-def count_a(self, sheet_name: str, row: int) -> int:
+def count_non_empty_cells(self, sheet_name: str, row: int) -> int:
 ```
 
 ##### 説明
@@ -5057,10 +5051,10 @@ Args:
 Returns:
     空でないセルの数。0 なら行全体が空。
 
-#### `used_last_row`
+#### `last_row`
 
 ```text
-def used_last_row(self, sheet_name: str) -> int:
+def last_row(self, sheet_name: str) -> int:
 ```
 
 ##### 説明
@@ -5075,31 +5069,49 @@ Args:
 Returns:
     最終行の行番号（1始まり）。
 
-#### `transfer_by_key`
+#### `transfer_by_mapping`
 
 ```text
-def transfer_by_key(self, sheet_name: str, key_col: int | str, lookup: dict[str, dict], column_mapping: dict[str, str], start_row: int=2) -> int:
+def transfer_by_mapping(self, sheet_name: str, key_col: str, lookup: dict[str, dict], mapping: dict[str, str], header_row: int=1) -> int:
 ```
 
 ##### 説明
 
-キー列の値で lookup を引き、一致した行に値を転記する（XLOOKUP 的転記）。
+列名で指定し、キーが一致した行に値を転記する（XLOOKUP 的転記）。
 
 Excel の各行についてキー列の値を lookup のキーと突合し、
-一致したら column_mapping に従って値を書き込む。
+一致したら mapping に従って値を書き込む。
 空行・キーが空の行・lookup に存在しないキーの行はスキップする。
+
+Sheet.transfer_by_mapping() と同じ引数・対応表の向きであり、数式の再計算や
+パスワード付き保存など COM が必要なブックに限ってこちらを使う。
+ヘッダーがない、または列位置が固定された帳票には transfer_by_letter() を使う。
 Args:
     sheet_name: シート名。
-    key_col: キー列。列レター（"Q"）または列番号（17）で指定する。
+    key_col: 転記先 Excel で照合に使う列名。
     lookup: {キーの値: {列名: 値}} の辞書。CsvReader.index() 等で作る。
-    column_mapping: {列レター: lookup の列名} の辞書。
-    start_row: 転記を始める行番号（デフォルト: 2。1行目はヘッダー想定）。
+    mapping: {転記元の列名: 転記先の列名} の辞書。
+    header_row: 転記先 Excel のヘッダー行番号（1始まり）。
 
 Returns:
     転記した行数。
 
 Raises:
     ExcelError: 行の処理に失敗した場合（メッセージに行番号を含む）。
+
+#### `transfer_by_letter`
+
+```text
+def transfer_by_letter(self, sheet_name: str, key_col: int | str, lookup: dict[str, dict], mapping: dict[str, int | str], start_row: int=2) -> int:
+```
+
+##### 説明
+
+列記号で指定し、キーが一致した行へ値を転記する。
+
+ヘッダーがない、または列位置が仕様として固定された Excel に使う。
+ヘッダー名で指定できる帳票には transfer_by_mapping() を使う。
+mapping は両メソッド共通で ``{転記元の列名: 転記先}`` の向き。
 
 #### `run_macro`
 
@@ -5126,7 +5138,7 @@ def save(self) -> None:
 元のファイルに上書き保存する。
 
 close() は保存せずに閉じる（SaveChanges=False）ため、
-write_cell や transfer_by_key での変更を残す場合は必ず呼ぶこと。
+write_cell や transfer_by_mapping での変更を残す場合は必ず呼ぶこと。
 
 #### `save_as`
 

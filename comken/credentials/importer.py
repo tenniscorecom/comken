@@ -31,6 +31,27 @@ from pathlib import Path
 from ..exceptions import CredentialImportError
 from .store import save_credentials
 
+_NAME_SEPARATOR = "_"
+_FIELD_PART_COUNT = 2
+
+
+def credential_name(system: str, field: str) -> str:
+    """システム名と項目名を、保存に使う1つのキー名へまとめる。"""
+    return f"{system}{_NAME_SEPARATOR}{field}"
+
+
+def split_credential_name(name: str) -> tuple[str, str] | None:
+    """保存キーをシステム名と項目名へ戻す。規則に合わなければ None を返す。
+
+    項目名は importer の標準形（client_id / client_secret）の2語として扱い、
+    それより左をすべてシステム名にする。
+    """
+    parts = name.rsplit(_NAME_SEPARATOR, _FIELD_PART_COUNT)
+    if len(parts) != _FIELD_PART_COUNT + 1 or not all(parts):
+        return None
+    system, field_first, field_second = parts
+    return system, f"{field_first}{_NAME_SEPARATOR}{field_second}"
+
 
 def import_json(json_path: str | Path, path: Path | None = None) -> list[str]:
     """平文 JSON を読み、暗号化ファイルへ取り込む。
@@ -89,7 +110,7 @@ def _flatten(json_path: Path) -> dict[str, str]:
                 raise CredentialImportError(json_path, "システム名・項目名に空の名前があります。")
             if not value:
                 raise CredentialImportError(json_path, f"「{system}」の「{field}」が空です。")
-            name = f"{system}_{field}"
+            name = credential_name(system, field)
             # 「site_a + _client_id」と「site + _a_client_id」は同じキー名になる。
             # 黙って上書きすると別の認証情報が入れ替わるので、ここで止める
             if name in items:

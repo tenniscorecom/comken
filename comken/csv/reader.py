@@ -244,7 +244,7 @@ class CsvReader(CsvBase):
     def index(self, key_col: str) -> dict[str, dict[str, str]]:
         """key_col をキーにした {キー: 行} の辞書を返す。
 
-        Excel との突合（transfer_by_key の lookup）など、キーで1行を引く用途に使う。
+        Excel との突合（transfer_by_mapping の lookup）など、キーで1行を引く用途に使う。
         キーが重複していれば CsvRowDuplicateKeyError。重複が普通のデータは group_by() を使う。
 
         Raises:

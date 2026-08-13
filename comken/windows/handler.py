@@ -27,9 +27,12 @@ from ..exceptions import (
     FileFormatMismatchError,
     MacroError,
     RowTransferError,
+    TransferDestinationColumnNotFoundError,
+    TransferKeyColumnNotFoundError,
+    TransferSourceColumnNotFoundError,
     _warn_coerce,
 )
-from ..utils.data import col_to_num, column_number
+from ..utils.data import column_number
 from ..utils.files.base import FileBase
 
 logger = logging.getLogger(__name__)
@@ -154,7 +157,7 @@ class ExcelComHandler(FileBase):
             各行を値のタプルにしたリスト。
         """
         ws = self._sheet(sheet_name)
-        last_row = self.used_last_row(sheet_name)
+        last_row = self.last_row(sheet_name)
         last_col = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
         return _block_values(ws, int(min_row), last_row, last_col)
 
@@ -176,7 +179,7 @@ class ExcelComHandler(FileBase):
                         または headers の列数がシートの列数より少ない場合。
         """
         ws = self._sheet(sheet_name)
-        last_row = self.used_last_row(sheet_name)
+        last_row = self.last_row(sheet_name)
         last_col = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
         if self._headers is not None:
             if last_col > len(self._headers):
@@ -200,7 +203,7 @@ class ExcelComHandler(FileBase):
             for row in _block_values(ws, header_row + 1, last_row, last_col)
         ]
 
-    def count_a(self, sheet_name: str, row: int) -> int:
+    def count_non_empty_cells(self, sheet_name: str, row: int) -> int:
         """指定行の空でないセル数を返す。
 
         数式が入っていても "" を返すセルは空としてカウントされる。
@@ -216,7 +219,7 @@ class ExcelComHandler(FileBase):
         ws = self._sheet(sheet_name)
         return self._excel.WorksheetFunction.CountA(ws.Rows(int(row)))
 
-    def used_last_row(self, sheet_name: str) -> int:
+    def last_row(self, sheet_name: str) -> int:
         """データが存在する最終行の行番号を返す。
 
         UsedRange を使うため、数式が入ったセルも含めて正確に最終行を取得できる。
@@ -230,25 +233,29 @@ class ExcelComHandler(FileBase):
         ws = self._sheet(sheet_name)
         return ws.UsedRange.Row + ws.UsedRange.Rows.Count - 1
 
-    def transfer_by_key(
+    def transfer_by_mapping(
         self,
         sheet_name: str,
-        key_col: int | str,
+        key_col: str,
         lookup: dict[str, dict],
-        column_mapping: dict[str, str],
-        start_row: int = 2,
+        mapping: dict[str, str],
+        header_row: int = 1,
     ) -> int:
-        """キー列の値で lookup を引き、一致した行に値を転記する（XLOOKUP 的転記）。
+        """列名で指定し、キーが一致した行に値を転記する（XLOOKUP 的転記）。
 
         Excel の各行についてキー列の値を lookup のキーと突合し、
-        一致したら column_mapping に従って値を書き込む。
+        一致したら mapping に従って値を書き込む。
         空行・キーが空の行・lookup に存在しないキーの行はスキップする。
+
+        Sheet.transfer_by_mapping() と同じ引数・対応表の向きであり、数式の再計算や
+        パスワード付き保存など COM が必要なブックに限ってこちらを使う。
+        ヘッダーがない、または列位置が固定された帳票には transfer_by_letter() を使う。
         Args:
             sheet_name: シート名。
-            key_col: キー列。列レター（"Q"）または列番号（17）で指定する。
+            key_col: 転記先 Excel で照合に使う列名。
             lookup: {キーの値: {列名: 値}} の辞書。CsvReader.index() 等で作る。
-            column_mapping: {列レター: lookup の列名} の辞書。
-            start_row: 転記を始める行番号（デフォルト: 2。1行目はヘッダー想定）。
+            mapping: {転記元の列名: 転記先の列名} の辞書。
+            header_row: 転記先 Excel のヘッダー行番号（1始まり）。
 
         Returns:
             転記した行数。
@@ -256,34 +263,53 @@ class ExcelComHandler(FileBase):
         Raises:
             ExcelError: 行の処理に失敗した場合（メッセージに行番号を含む）。
         """
-        key_col_num = column_number(key_col)
-        mapping = {col_to_num(letter): name for letter, name in column_mapping.items()}
-
         ws = self._sheet(sheet_name)
-        last_row = self.used_last_row(sheet_name)
-        logger.info("シート「%s」: 最終行 %d行", sheet_name, last_row)
-
-        if last_row < int(start_row):
-            return 0
-
-        first_row = int(start_row)
+        last_row = self.last_row(sheet_name)
         last_col = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
-        read_last_col = max(last_col, key_col_num, *mapping)
-        values = ws.Range(ws.Cells(first_row, 1), ws.Cells(last_row, read_last_col)).Value
+        header_values = _block_values(ws, int(header_row), int(header_row), last_col)
+        headers = list(header_values[0]) if header_values else []
+        header_names = [str(header) for header in headers if header is not None]
+        header_columns = {
+            str(header): column
+            for column, header in enumerate(headers, start=1)
+            if header is not None
+        }
+        if key_col not in header_columns:
+            raise TransferKeyColumnNotFoundError(key_col, header_names)
+        missing_destinations = [name for name in mapping.values() if name not in header_columns]
+        if missing_destinations:
+            raise TransferDestinationColumnNotFoundError(missing_destinations, header_names)
+        lookup_rows = list(lookup.values())
+        source_columns = set(lookup_rows[0]) if lookup_rows else set()
+        for lookup_row in lookup_rows[1:]:
+            source_columns.intersection_update(lookup_row)
+        missing_sources = [name for name in mapping if name not in source_columns]
+        if missing_sources:
+            raise TransferSourceColumnNotFoundError(missing_sources, sorted(source_columns))
+        destination_columns = {
+            source: header_columns[destination] for source, destination in mapping.items()
+        }
+        logger.info("シート「%s」: 最終行 %d行", sheet_name, last_row)
+        if last_row <= int(header_row):
+            return 0
+        first_row = int(header_row) + 1
+        values = ws.Range(ws.Cells(first_row, 1), ws.Cells(last_row, last_col)).Value
         if first_row == last_row and not isinstance(values, tuple):
             values = ((values,),)
         elif first_row == last_row and values and not isinstance(values[0], tuple):
             values = (values,)
 
         matched = 0
-        output_by_column: dict[int, list[tuple[int, object]]] = {col_num: [] for col_num in mapping}
+        output_by_column: dict[int, list[tuple[int, object]]] = {
+            col_num: [] for col_num in destination_columns.values()
+        }
         for row_offset, row_values in enumerate(values):
             row = first_row + row_offset
             try:
                 if all(value is None for value in row_values):
                     continue
 
-                key_value = row_values[key_col_num - 1]
+                key_value = row_values[header_columns[key_col] - 1]
                 if not key_value or str(key_value).strip() == "":
                     continue
 
@@ -297,8 +323,8 @@ class ExcelComHandler(FileBase):
                     logger.debug("%d行目: キー「%s」が lookup に存在しません", row, key_value)
                     continue
 
-                for col_num, name in mapping.items():
-                    output_by_column[col_num].append((row, lookup_row.get(name, "")))
+                for source, col_num in destination_columns.items():
+                    output_by_column[col_num].append((row, lookup_row[source]))
                 logger.debug("%d行目: 転記完了（キー: %s）", row, key_value)
                 matched += 1
 
@@ -326,6 +352,82 @@ class ExcelComHandler(FileBase):
         logger.info("転記完了: %d件一致（シート: %s）", matched, sheet_name)
         return matched
 
+    def transfer_by_letter(
+        self,
+        sheet_name: str,
+        key_col: int | str,
+        lookup: dict[str, dict],
+        mapping: dict[str, int | str],
+        start_row: int = 2,
+    ) -> int:
+        """列記号で指定し、キーが一致した行へ値を転記する。
+
+        ヘッダーがない、または列位置が仕様として固定された Excel に使う。
+        ヘッダー名で指定できる帳票には transfer_by_mapping() を使う。
+        mapping は両メソッド共通で ``{転記元の列名: 転記先}`` の向き。
+        """
+        ws = self._sheet(sheet_name)
+        last_row = self.last_row(sheet_name)
+        key_col_num = column_number(key_col)
+        destination_columns = {
+            column_number(destination): source for source, destination in mapping.items()
+        }
+        if last_row < int(start_row):
+            return 0
+        first_row = int(start_row)
+        last_col = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
+        read_last_col = max(last_col, key_col_num, *destination_columns)
+        values = ws.Range(ws.Cells(first_row, 1), ws.Cells(last_row, read_last_col)).Value
+        if first_row == last_row and not isinstance(values, tuple):
+            values = ((values,),)
+        elif first_row == last_row and values and not isinstance(values[0], tuple):
+            values = (values,)
+        matched = 0
+        output_by_column: dict[int, list[tuple[int, object]]] = {
+            column: [] for column in destination_columns
+        }
+        for row_offset, row_values in enumerate(values):
+            row = first_row + row_offset
+            try:
+                key_value = row_values[key_col_num - 1]
+                if key_value is None or str(key_value).strip() == "":
+                    continue
+                if isinstance(key_value, float) and key_value.is_integer():
+                    key_value = int(key_value)
+                lookup_row = lookup.get(str(key_value).strip())
+                if lookup_row is None:
+                    continue
+                for destination_column, source in destination_columns.items():
+                    output_by_column[destination_column].append((row, lookup_row.get(source, "")))
+                matched += 1
+            except Exception as error:
+                raise RowTransferError(row, error) from error
+        for destination_column, updates in output_by_column.items():
+            run_start = 0
+            while run_start < len(updates):
+                run_end = run_start + 1
+                while run_end < len(updates) and updates[run_end][0] == updates[run_end - 1][0] + 1:
+                    run_end += 1
+                run = updates[run_start:run_end]
+                target = ws.Range(
+                    ws.Cells(run[0][0], destination_column),
+                    ws.Cells(run[-1][0], destination_column),
+                )
+                try:
+                    target.Value = tuple((value,) for _, value in run)
+                except Exception:
+                    for row, value in run:
+                        try:
+                            ws.Range(
+                                ws.Cells(row, destination_column),
+                                ws.Cells(row, destination_column),
+                            ).Value = value
+                        except Exception as error:
+                            raise RowTransferError(row, error) from error
+                run_start = run_end
+        logger.info("転記完了: %d件一致（シート: %s）", matched, sheet_name)
+        return matched
+
     def run_macro(self, macro_name: str) -> None:
         """VBA マクロを実行する。
 
@@ -342,7 +444,7 @@ class ExcelComHandler(FileBase):
         """元のファイルに上書き保存する。
 
         close() は保存せずに閉じる（SaveChanges=False）ため、
-        write_cell や transfer_by_key での変更を残す場合は必ず呼ぶこと。
+        write_cell や transfer_by_mapping での変更を残す場合は必ず呼ぶこと。
         """
         self._wb.Save()
 

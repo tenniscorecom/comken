@@ -2,7 +2,7 @@
 credentials/__main__.py — 認証情報の管理コマンド
 
     python -m comken.credentials import 認証情報.json   平文 JSON を取り込む
-    python -m comken.credentials list                    登録済みのキー名を表示する
+    python -m comken.credentials list                    登録済みの認証情報を接頭辞別に表示する
     python -m comken.credentials delete site_a_client_id 1件削除する
 
 取り込んだあと、平文の JSON は**手で消す**。`--delete-source` を付けると
@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 from ..exceptions import CredentialError
-from .importer import import_json
+from .importer import import_json, split_credential_name
 from .store import CREDENTIALS_PATH, delete_credential, list_names
 
 
@@ -48,7 +48,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     importer.set_defaults(run=_run_import)
 
-    lister = subparsers.add_parser("list", help="登録済みのキー名を表示する")
+    lister = subparsers.add_parser("list", help="登録済みの認証情報を接頭辞別に表示する")
     lister.set_defaults(run=_run_list)
 
     deleter = subparsers.add_parser("delete", help="登録済みの認証情報を1件削除する")
@@ -81,8 +81,20 @@ def _run_list(args: argparse.Namespace) -> None:
     if not names:
         print("登録済みの認証情報はありません。")
         return
-    print(f"登録済みのキー名（{CREDENTIALS_PATH}）:")
+    grouped: dict[str, list[str]] = {}
+    ungrouped: list[str] = []
     for name in names:
+        parts = split_credential_name(name)
+        if parts is None:
+            ungrouped.append(name)
+            continue
+        prefix, field = parts
+        grouped.setdefault(prefix, []).append(field)
+
+    print(f"登録済みの認証情報（{CREDENTIALS_PATH}）:")
+    for prefix, fields in grouped.items():
+        print(f"  {prefix}    {' / '.join(fields)}")
+    for name in ungrouped:
         print(f"  {name}")
 
 

@@ -33,6 +33,9 @@ _REMOVED_NAMES = (
     "set_debug",
     "FileNameBuilder",
     "cleanup_stale_tmp",
+    "transfer_by_key",
+    "used_last_row",
+    "count_a",
 )
 
 
