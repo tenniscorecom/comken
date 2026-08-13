@@ -3,6 +3,10 @@
 comken 本体と、comken を使うプロジェクトの**両方に共通する Python の書き方**を定める。
 **PEP 8**（Python 公式スタイルガイド）に準拠し、矛盾する場合は本規約を優先する。
 
+**本書には comken 固有のルールを書かない。** どの名前を import してよいか、どの基底例外を
+継承するかといった comken に依存する話は下の2つが持つ。本書は comken を知らなくても
+読める言語レベルのルールだけを扱い、置き場所が1つに定まるようにする。
+
 このリポジトリの規約は3層に分かれる。まず本書を読み、対象に応じて下の2つを見る。
 
 | 規約 | 対象 | 内容 |
@@ -129,35 +133,29 @@ OUTPUT_FOLDER = C:\work\out  ; ← 値は自由
 
 ## import の書き方
 
-comken の機能は、**どの機能群に依存しているかが import 行で分かる形**にする。
+**どの機能群に依存しているかが import 行で分かる形**にする。
 ファイルの先頭を見るだけで依存先が分かり、非エンジニアがコードを読むときの手がかりにもなる。
+
+| ルール | 理由 |
+|---|---|
+| 名前を提供するパッケージまで明示して import する | ファイルの先頭だけで依存範囲が分かる |
+| ワイルドカード import（`import *`）は禁止 | 使っている名前がどこから来たか追えなくなる |
+| 並び順は「標準ライブラリ → サードパーティ → 自分のコード」 | Ruff の `I` が自動で整列する |
 
 ```python
 # 良い（機能を提供するパッケージが分かる）
-from comken.utils.files import DateNameBuilder, FileFinder
-from comken.excel import ExcelReader, ExcelWriter
-from comken.csv import CsvReader
-from comken.constants import Color, Encoding
-from comken.exceptions import SheetNotFoundError
+from パッケージ.excel import ExcelReader, ExcelWriter
 
-# 例外: プロジェクト全体の土台だけは comken 直下から import してよい
-from comken import config
-from comken import is_dry_run, dry_run
-from comken import is_debug, debug
-```
-
-comken 直下から import してよいのは、`config`、`Config`、`dry_run`、`is_dry_run`、
-`debug`、`is_debug` だけ。それ以外は必ず機能を提供するパッケージを明示する。
-
-```python
 # 悪い（どの機能群に依存しているか分からない）
-from comken import CsvReader, ExcelWriter, FileFinder
+from パッケージ import ExcelWriter, FileFinder
 
 # 悪い（使う名前と依存範囲が分からない）
-from comken.utils.files import *
+from パッケージ.utils.files import *
 ```
 
-ワイルドカード import（`import *`）は禁止する。
+> どのパッケージから何を import してよいかは対象で決まる。comken を使うプロジェクトは
+> [プロジェクト規約](docs/プロジェクト規約.md#import-の書き方)、comken 本体を編集する場合は
+> [ライブラリ開発規約](docs/ライブラリ開発規約.md#公開-api-の管理) を参照。
 
 ---
 
@@ -171,16 +169,16 @@ from comken.utils.files import *
 
 | 順番 | 置くもの |
 |---|---|
-| 1 | モジュール docstring（1行目は `comken/からの相対パス.py — 役割`、続けて背景・使い方） |
+| 1 | モジュール docstring（1行目は `パッケージルートからの相対パス.py — 役割`、続けて背景・使い方） |
 | 2 | import |
 | 3 | `logger`・型変数（`TypeVar` / `ParamSpec`） |
-| 4 | 定数・定数クラス。comken 本体の小規模な公開定数は `constants.py` にまとめ、役割や量が増えた場合だけパッケージ分割を検討する |
+| 4 | 定数・定数クラス |
 | 5 | 主役の公開クラス（モジュール名が指すもの） |
 | 6 | その他の公開クラス・公開関数 |
 | 7 | 内部ヘルパー（`_` プレフィックス）— **必ず最後** |
 
 ```python
-"""comken/example/handler.py — ○○ユーティリティ"""   # 1. docstring
+"""example/handler.py — ○○ユーティリティ"""            # 1. docstring
 import logging                          # 2. import
 
 logger = logging.getLogger(__name__)    # 3. logger
@@ -468,8 +466,8 @@ Excel ファイルが開きっぱなしになると、次に開こうとした�
 
 ## 例外
 
-ライブラリ固有の業務エラーはすべて `ComkenError` を基底とする階層になっている
-（一覧と体系図は 仕様書の「例外体系」 を参照）。ここでは使い方のルールを定める。
+固有の失敗にはカスタム例外を使い、**基底例外を1つ決めて、その下に階層化する**。
+呼び出し側が基底1つで「自分たちのコード由来の失敗」をまとめて捕捉できるようにするため。
 
 | ルール | 理由 |
 |---|---|
@@ -485,40 +483,31 @@ Excel ファイルが開きっぱなしになると、次に開こうとした�
 
 ### try / except での受け取り方
 
-```python
-from comken.exceptions import SheetNotFoundError, ExcelError, ComkenError
-
-try:
-    with ExcelReader("data.xlsx") as f:
-        rows = f.read_rows("存在しないシート")
-
-except SheetNotFoundError as e:
-    logger.error("シートが見つかりません: %s", e)
-
-except ExcelError as e:
-    logger.error("Excel エラー: %s", e)
-
-except ComkenError as e:
-    logger.error("ライブラリエラー: %s", e)
-```
-
-**粒度の使い分け:**
+捕捉する粒度は、対応の細かさに合わせて3段階から選ぶ。細かい方から順に `except` を並べる
+（先に基底を書くと、下位の例外がそこで捕まって個別の対応に届かない）。
 
 | except の粒度 | 使いどころ |
 |---|---|
-| `SheetNotFoundError` | そのエラーだけ個別に対応したいとき |
-| `ExcelError` | Excel 系のエラーをまとめて処理したいとき |
-| `ComkenError` | ライブラリのエラーを全部キャッチしたいとき |
+| 個別の例外 | そのエラーだけ個別に対応したいとき |
+| カテゴリの基底 | ある分野のエラーをまとめて処理したいとき |
+| ライブラリの基底 | ライブラリ由来のエラーを全部キャッチしたいとき |
+
+> comken の例外階層の全体像は 仕様書「例外体系」、本体へ例外を足すときの設計は
+> [ライブラリ開発規約](docs/ライブラリ開発規約.md#カスタム例外の階層設計)、
+> 利用プロジェクトでの書き方は
+> [プロジェクト規約](docs/プロジェクト規約.md#例外の受け取り方) を参照。
 
 ---
 
 ## ロギング
 
 `print` は禁止。必ず `logging` を使う。
-ログの設定（出力先・フォーマット・レベル）は社内の共通ライブラリ側で行う。
-comken とその利用プロジェクトは `logging.getLogger(__name__)` を使うだけでよい。
-社内 RPA 基盤を通さず単体実行するときだけ、`comken.logger.setup_logging()` を明示的に呼ぶ。
-設定済みの環境では既存設定を優先するため、この関数は何も変更しない。
+**ログの設定（出力先・フォーマット・レベル）は呼び出し元（実行基盤やアプリの入口）が持ち、
+ライブラリや個々のモジュールは `logging.getLogger(__name__)` を使うだけ**にする。
+モジュール側で設定すると、呼び出し元の設定を黙って上書きしてしまう。
+
+> 単体実行するときの設定の呼び出し方は
+> [プロジェクト規約](docs/プロジェクト規約.md#ログ設定) を参照。
 
 ```python
 import logging
@@ -575,7 +564,6 @@ def apply_header_style(cell) -> None:
 
 pywin32 は **Windows 固有の API** に限定して使う。
 ファイル操作は標準ライブラリの `shutil` / `pathlib` を優先する。
-comken 本体のファイル検索・操作・圧縮・パス取得・命名は `utils/files/` に置く。
 
 | 用途 | 推奨 |
 |---|---|
@@ -690,8 +678,10 @@ if __name__ == "__main__":  # pragma: no cover
 
 ## 日時の扱い
 
-- 現在時刻・今日の日付は `comken.utils` の `now()` / `today()` を使う。
+- 現在時刻・今日の日付は共通の `now()` / `today()`（`comken.utils`）を使い、
   `datetime.datetime.now()` / `datetime.date.today()` を直接呼ばない。
+  タイムゾーンの扱いを1か所に集め、テストで時刻を差し替えられるようにするため
+  （素の `now()` は Ruff の `DTZ` でも検出される）。
 - CSV・ファイル名・帳票などの業務日付は `datetime.date` のまま扱い、
   タイムゾーンを付けない。
 - 経過時間の計測は `time.perf_counter()`（`Timer` / `measure`）を使う。
