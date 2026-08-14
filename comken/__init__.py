@@ -1,7 +1,7 @@
 """comken/__init__.py — comken 全体の基盤 API を公開するパッケージ。"""
 
 # バージョンの定義はここ1箇所だけ（pyproject.toml は dynamic version でここを参照する）
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 # ── バイトコードキャッシュをローカルに逃がす ─────────────────────────────────
 # comken は共有サーバー上の1か所を直接参照する運用（PYTHONPATH で参照）。
