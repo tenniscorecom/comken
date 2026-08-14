@@ -1,6 +1,7 @@
 @echo off
 setlocal
 rem このリポジトリを、現在の Windows ユーザーの PYTHONPATH に追加します。
+rem 一度実行しておくと、各プロジェクトの 実行.bat が comken の場所を知らなくても動きます。
 rem 場所はこの bat から判定するので、編集は不要です。
 
 for %%I in ("%~dp0.") do set "COMKEN_ROOT=%%~fI"

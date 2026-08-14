@@ -3,25 +3,12 @@ setlocal
 rem このツールの起動用。ダブルクリックで main.py を実行します。
 rem comken を別の場所へ移したときは、ここと .vscode\settings.json の両方を直してください。
 
+rem comken の場所。PC に恒久登録していない場合だけ、ここが使われる
 set "COMKEN_ROOT=\\server\share\tools\comken"
-set "PYTHONPATH=%COMKEN_ROOT%;%PYTHONPATH%"
 
 rem 共有フォルダ（\\サーバー名\...）から起動されても動くよう pushd を使う（cd は UNC 不可）
 pushd "%~dp0" || (
   echo [エラー] このフォルダを開けませんでした: %~dp0
-  pause
-  exit /b 1
-)
-
-rem 一番多い失敗を先に名指しで出す。ここで止めないと、後から出る Python のエラーが
-rem 「ModuleNotFoundError: comken」だけになり、原因が共有サーバーだと分からない
-if not exist "%COMKEN_ROOT%\comken\__init__.py" (
-  echo [エラー] 共通ライブラリ comken が見つかりません。
-  echo     さがした場所: %COMKEN_ROOT%
-  echo.
-  echo   - 共有サーバーにつながっているか確認してください
-  echo   - つながっているなら、この 実行.bat の COMKEN_ROOT が正しいか確認してください
-  popd
   pause
   exit /b 1
 )
@@ -34,8 +21,31 @@ where python >nul 2>&1 || (
   exit /b 1
 )
 
+rem すでに PYTHONPATH が通っていれば、そのまま動かす（恒久登録してある場合）
+python -c "import comken" >nul 2>&1
+if not errorlevel 1 goto :run
+
+rem 通っていないので、この bat に書いてある場所を使う
+set "PYTHONPATH=%COMKEN_ROOT%;%PYTHONPATH%"
+
+rem 一番多い失敗を先に名指しで出す。ここで止めないと、後から出る Python のエラーが
+rem 「ModuleNotFoundError: comken」だけになり、原因が共有サーバーだと分からない
+if not exist "%COMKEN_ROOT%\comken\__init__.py" (
+  echo [エラー] 共通ライブラリ comken が見つかりません。
+  echo     さがした場所: %COMKEN_ROOT%
+  echo.
+  echo   - 共有サーバーにつながっているか確認してください
+  echo   - つながっているなら、この bat の COMKEN_ROOT が正しいか確認してください
+  echo   - このパソコンで何度も使うなら、comken のフォルダにある
+  echo     install_pythonpath.bat を1回実行しておくと、以後この bat を直さずに済みます
+  popd
+  pause
+  exit /b 1
+)
+
+:run
 python main.py
-rem 終了コードは popd より前に控える（popd が成功すると 0 で上書きされてしまう）
+rem 終了コードは popd より前に控える（popd が成功すると 0 で上書きされる）
 set "EXIT_CODE=%ERRORLEVEL%"
 popd
 
