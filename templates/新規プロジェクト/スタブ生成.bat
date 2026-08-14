@@ -1,26 +1,13 @@
 @echo off
 setlocal
-rem ============================================================
-rem  config.ini から補完用スタブ（typings/comken/）を作り直す。
-rem  config.ini のセクション・キーを増やしたあとに実行すると、
-rem  VS Code（Pylance）で config.SECTION.KEY が補完されるようになる。
-rem
-rem  ※ 普段は main.py を1回動かせば自動生成されるので必須ではない。
-rem     「ツールを動かさずに補完だけ先に用意したい」ときに使う。
-rem ============================================================
+rem config.ini ����⊮�p�X�^�u�itypings/comken/�j����蒼���܂��B
+rem ���i�� main.py ��1�񓮂����Ύ����ō����̂ŁA�K�{�ł͂���܂���B
 
 set "COMKEN_ROOT=\\server\share\tools\comken"
-
-rem 共有フォルダから起動されると cd では移動できないため pushd を使う（CMD の仕様）
-pushd "%~dp0"
 set "PYTHONPATH=%COMKEN_ROOT%;%PYTHONPATH%"
 
+pushd "%~dp0"
 python -m comken.config
-if errorlevel 1 (
-  echo.
-  echo [!] スタブ生成に失敗しました。config.ini があるか確認してください。
-  pause
-)
-
+if errorlevel 1 pause
 popd
 endlocal

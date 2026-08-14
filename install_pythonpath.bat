@@ -1,23 +1,16 @@
 @echo off
 setlocal
+rem このリポジトリを、現在の Windows ユーザーの PYTHONPATH に追加します。
+rem 場所はこの bat から判定するので、編集は不要です。
 
-rem Add this repository to the current Windows user's PYTHONPATH.
-rem The repository path is detected from this batch file, so no editing is needed.
-for %%I in ("%~dp0.") do set "COMKEN_ROOT_TO_ADD=%%~fI"
+for %%I in ("%~dp0.") do set "COMKEN_ROOT=%%~fI"
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$root = [Environment]::GetEnvironmentVariable('COMKEN_ROOT_TO_ADD', 'Process');" ^
-  "$current = [Environment]::GetEnvironmentVariable('PYTHONPATH', 'User');" ^
-  "$paths = @($current -split ';' | Where-Object { $_ });" ^
-  "$exists = $paths | Where-Object { $_.TrimEnd('\') -ieq $root.TrimEnd('\') };" ^
-  "if (-not $exists) { $paths += $root; [Environment]::SetEnvironmentVariable('PYTHONPATH', ($paths -join ';'), 'User'); Write-Host ('Added to user PYTHONPATH: ' + $root) } else { Write-Host ('Already in user PYTHONPATH: ' + $root) }"
+  "$root = $env:COMKEN_ROOT;" ^
+  "$paths = @([Environment]::GetEnvironmentVariable('PYTHONPATH','User') -split ';' | Where-Object { $_ });" ^
+  "if ($paths -notcontains $root) { [Environment]::SetEnvironmentVariable('PYTHONPATH', (($paths + $root) -join ';'), 'User') };" ^
+  "Write-Host ('PYTHONPATH に設定しました: ' + $root)"
 
-if errorlevel 1 (
-    echo Failed to update PYTHONPATH.
-    pause
-    exit /b 1
-)
-
-echo.
-echo Open a new Command Prompt or restart VS Code before using comken.
+echo 新しいコマンドプロンプト（または再起動した VS Code）から有効になります。
 pause
+endlocal

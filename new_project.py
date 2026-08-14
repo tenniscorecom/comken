@@ -47,6 +47,11 @@ PLACEHOLDER_COMKEN_ROOT = r"\\server\share\tools\comken"
 COMKEN_ROOT_FILES = ("実行.bat", "スタブ生成.bat", ".vscode/settings.json")
 
 
+def _encoding_of(path: Path) -> str:
+    """そのファイルの文字コード。bat は cmd.exe に合わせて CP932。"""
+    return "cp932" if path.suffix.lower() == ".bat" else "utf-8"
+
+
 def _fill_project_name(target: Path, project_name: str) -> None:
     """ひな形の（プロジェクト名）を実際の名前に置き換える。"""
     for name in NAMED_FILES:
@@ -71,11 +76,12 @@ def _fill_comken_root(target: Path, comken_root: Path) -> None:
         path = target / name
         if not path.is_file():
             continue
-        text = path.read_text(encoding="utf-8-sig")
+        encoding = _encoding_of(path)
+        text = path.read_text(encoding=encoding)
         # JSON は \ が特殊文字なので / 区切りで書いてある。先に / 版を replace する
         text = text.replace(slash_placeholder, slash_root)
         text = text.replace(PLACEHOLDER_COMKEN_ROOT, str(comken_root))
-        path.write_text(text, encoding="utf-8")
+        path.write_text(text, encoding=encoding)
 
 
 def _strip_template_notes(readme: Path, project_name: str) -> None:

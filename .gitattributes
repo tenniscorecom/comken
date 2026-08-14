@@ -1,2 +1,3 @@
-# bat は UTF-8・CRLF で統一する。git の改行変換で壊さない。
+# bat は CP932(Shift-JIS)・CRLF で統一する（cmd.exe が CP932 で読むため）。
+# git の改行・エンコーディング変換で壊さない。
 *.bat -text
