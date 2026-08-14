@@ -2178,6 +2178,22 @@ def is_scheduled(self) -> bool:
 
 定期取得の対象か。
 
+### `create_master_template`
+
+```text
+def create_master_template(path: str | Path) -> Path:
+```
+
+#### 説明
+
+管理表の雛形を作って、そのパスを返す。
+
+Args:
+    path: 作成先（.xlsx）。
+
+Returns:
+    作成したファイルのパス。
+
 
 ## `from comken.toolbox.access import ...`
 

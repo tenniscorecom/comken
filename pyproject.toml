@@ -46,4 +46,5 @@ ignore = [
 "comken/config/__main__.py" = ["T20"]
 "comken/toolbox/credentials/__main__.py" = ["T20"]
 "comken/toolbox/salesforce/__main__.py" = ["T20"]
+"comken/services/salesforce_downloader/__main__.py" = ["T20"]
 "examples/sample_login/run.py" = ["T20"]

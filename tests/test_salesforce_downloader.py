@@ -22,6 +22,7 @@ from comken.exceptions import (
     ScheduledReportNotRegisteredError,
 )
 from comken.services.salesforce_downloader import (
+    create_master_template,
     download_report,
     download_scheduled,
     file_path_of,
@@ -30,6 +31,7 @@ from comken.services.salesforce_downloader import (
     load_master,
     shared_report_ids,
 )
+from comken.services.salesforce_downloader.__main__ import main as cli
 from comken.toolbox.csv import CsvReader
 from comken.toolbox.excel import ExcelWriter
 from comken.toolbox.utils.clock import today
@@ -358,3 +360,59 @@ def _opts(paths: dict) -> dict:
 
 def _history_rows(paths: dict) -> list[dict]:
     return CsvReader(paths["history_path"]).read_rows()
+
+
+class TestTemplate:
+    """管理表の雛形は、そのまま読み込める状態で作られる。"""
+
+    def test_generated_template_can_be_loaded(self, tmp_path):
+        """雛形の記入例が、そのまま load_master() を通る（列名の食い違いが起きない）。"""
+        path = create_master_template(tmp_path / "レポート管理表.xlsx")
+        entries = load_master(path)
+        assert list(entries) == [1001, 1002]
+        assert entries[1001].is_scheduled
+        assert not entries[1002].is_scheduled
+
+    def test_examples_point_at_different_reports(self, tmp_path):
+        """記入例が同じレポートを指していると、check が重複として報告してしまう。"""
+        entries = load_master(create_master_template(tmp_path / "管理表.xlsx"))
+        assert shared_report_ids(entries) == {}
+
+    def test_guide_sheet_is_included(self, tmp_path):
+        """非エンジニアが1枚で分かるよう、記入方法のシートを付ける。"""
+        from openpyxl import load_workbook
+
+        path = create_master_template(tmp_path / "管理表.xlsx")
+        assert "記入方法" in load_workbook(path).sheetnames
+
+
+class TestCommandLine:
+    """保守用コマンド（雛形作成・検査）。"""
+
+    def test_init_creates_the_template(self, tmp_path, capsys):
+        path = tmp_path / "レポート管理表.xlsx"
+        assert cli(["init", str(path)]) == 0
+        assert path.is_file()
+
+    def test_init_does_not_overwrite(self, tmp_path, capsys):
+        """記入済みの管理表を消さない。"""
+        path = tmp_path / "管理表.xlsx"
+        cli(["init", str(path)])
+        before = path.read_bytes()
+        assert cli(["init", str(path)]) == 0
+        assert path.read_bytes() == before
+        assert "すでにある" in capsys.readouterr().err
+
+    def test_check_reports_counts(self, paths, capsys):
+        assert cli(["check", str(paths["master_path"])]) == 0
+        out = capsys.readouterr().out
+        assert "登録 3 件" in out
+        assert "00O5g00000FGHIJ" in out  # 同じレポートを指している管理番号を知らせる
+
+    def test_check_returns_failure_for_a_broken_master(self, tmp_path, capsys):
+        master = make_master(
+            tmp_path / "管理表.xlsx",
+            [[1001, "顧客一覧", "https://example.com/", "定期", str(tmp_path), "有効"]],
+        )
+        assert cli(["check", str(master)]) == 1
+        assert "エラー:" in capsys.readouterr().err

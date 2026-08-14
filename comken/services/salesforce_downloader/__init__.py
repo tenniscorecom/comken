@@ -22,10 +22,17 @@ r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポー�
     load_master          管理表を読む
     shared_report_ids    同じ Salesforce レポートを指している管理番号を返す
     ReportEntry          管理表の1行
+    create_master_template  管理表の雛形（Excel）を作る
+
+管理表の雛形作成と検査はコマンドからも呼べる（保守用。業務の定期実行ではない）:
+
+    python -m comken.services.salesforce_downloader init レポート管理表.xlsx
+    python -m comken.services.salesforce_downloader check レポート管理表.xlsx
 """
 
 from .master import ReportEntry, load_master, shared_report_ids
 from .service import download_report, download_scheduled, file_path_of, get_scheduled_report
+from .template import create_master_template
 
 __all__ = [
     "download_report",
@@ -35,4 +42,5 @@ __all__ = [
     "load_master",
     "shared_report_ids",
     "ReportEntry",
+    "create_master_template",
 ]
