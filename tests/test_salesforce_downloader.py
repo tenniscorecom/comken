@@ -17,6 +17,7 @@ from comken.exceptions import (
     ReportFileMissingError,
     ReportFolderNotFoundError,
     ReportNotRegisteredError,
+    ScheduledDownloadFailedError,
     ScheduledReportNotDownloadedError,
     ScheduledReportNotRegisteredError,
 )
@@ -332,12 +333,16 @@ class TestDownloadScheduled:
             ],
         )
         opts = {"master_path": master, "history_path": tmp_path / "履歴.csv"}
-        with patch(
-            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
+        with (
+            patch(
+                "comken.services.salesforce_downloader.service.site_for",
+                return_value=fake_salesforce(),
+            ),
+            pytest.raises(ScheduledDownloadFailedError),
         ):
-            saved = download_scheduled(**opts)
-        assert len(saved) == 1
-        assert saved[0].name.startswith("1002_")
+            download_scheduled(**opts)
+        # 1001 で失敗しても 1002 は保存されている（続けたうえで最後に知らせる）
+        assert [path.name.split("_")[0] for path in folder.glob("*.csv")] == ["1002"]
 
     def test_records_the_trigger_as_scheduled(self, paths):
         with patch(

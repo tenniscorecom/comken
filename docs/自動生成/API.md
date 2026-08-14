@@ -1990,6 +1990,32 @@ class ReportFolderNotFoundError(DownloaderError):
 def __init__(self, report_key: int, folder: Path) -> None:
 ```
 
+### `ScheduledDownloadFailedError`
+
+```text
+class ScheduledDownloadFailedError(DownloaderError):
+```
+
+#### 説明
+
+定期取得で1件以上が失敗した
+
+取得できたものは保存済み。**1件失敗しても残りは続けたうえで、最後にまとめて知らせる。**
+ログだけに出して正常終了すると、スケジューラや RPA 基盤から見て成功と区別が付かず、
+落ちていることに誰も気づかない。
+
+発生箇所: comken.services.salesforce_downloader の download_scheduled()
+
+対処:
+    履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。
+    急いで必要なものは download_report() でその場で取得する
+
+#### `__init__`
+
+```text
+def __init__(self, failed_keys: list[int], history_path: Path) -> None:
+```
+
 
 ## `from comken.services.salesforce_downloader import ...`
 
@@ -2067,9 +2093,9 @@ Returns:
     取得できたファイルのパス。
 
 Raises:
-    DownloaderError: 1件も取得できず、かつ対象が1件以上あった場合は送出しない。
-        失敗の有無は戻り値の件数とログで判断する（呼び出し側が方針を決められるよう、
-        ここでは止めない）。
+    ScheduledDownloadFailedError: 1件でも取得できなかった場合。
+        **取得できたものは保存したうえで**送出する。ログだけに出して正常終了すると、
+        スケジューラや RPA 基盤から見て成功と区別が付かない。
 
 ### `file_path_of`
 

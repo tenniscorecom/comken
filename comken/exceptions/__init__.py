@@ -89,7 +89,8 @@ ComkenError
     ├── ScheduledReportNotDownloadedError
     ├── ReportFileMissingError
     ├── EmptyReportError
-    └── ReportFolderNotFoundError
+    ├── ReportFolderNotFoundError
+    └── ScheduledDownloadFailedError
 
 カテゴリ基底クラスはまとめて捕捉するために使い、直接送出しない。
 """
@@ -160,6 +161,7 @@ from .downloader import (
     ReportFileMissingError,
     ReportFolderNotFoundError,
     ReportNotRegisteredError,
+    ScheduledDownloadFailedError,
     ScheduledReportNotDownloadedError,
     ScheduledReportNotRegisteredError,
 )
@@ -301,4 +303,5 @@ __all__ = [
     "ReportFileMissingError",
     "EmptyReportError",
     "ReportFolderNotFoundError",
+    "ScheduledDownloadFailedError",
 ]

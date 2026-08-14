@@ -31,6 +31,7 @@ from ...exceptions import (
     ReportFileMissingError,
     ReportFolderNotFoundError,
     ReportNotRegisteredError,
+    ScheduledDownloadFailedError,
     ScheduledReportNotDownloadedError,
     ScheduledReportNotRegisteredError,
 )
@@ -145,9 +146,9 @@ def download_scheduled(
         取得できたファイルのパス。
 
     Raises:
-        DownloaderError: 1件も取得できず、かつ対象が1件以上あった場合は送出しない。
-            失敗の有無は戻り値の件数とログで判断する（呼び出し側が方針を決められるよう、
-            ここでは止めない）。
+        ScheduledDownloadFailedError: 1件でも取得できなかった場合。
+            **取得できたものは保存したうえで**送出する。ログだけに出して正常終了すると、
+            スケジューラや RPA 基盤から見て成功と区別が付かない。
     """
     master_path = master_path or MASTER_PATH
     history_path = history_path or HISTORY_PATH
@@ -158,13 +159,19 @@ def download_scheduled(
     logger.info("定期取得の対象: %d 件", len(targets))
 
     saved: list[Path] = []
+    failed: list[int] = []
     for entry in targets:
         try:
             saved.append(_download(entry, project, history.TRIGGER_SCHEDULED, history_path))
         except ComkenError as e:
             # 1件の失敗で残りを落とさない。失敗は履歴とログに残る
             logger.error("取得に失敗しました: %s（%s）", entry.key, e)
+            failed.append(entry.key)
+
     logger.info("定期取得: %d 件中 %d 件を取得しました。", len(targets), len(saved))
+    if failed:
+        # 続けたぶん、最後に必ず知らせる（終了コードで落ちたことが分かるように）
+        raise ScheduledDownloadFailedError(failed, history_path)
     return saved
 
 
