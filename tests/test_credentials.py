@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 import win32crypt
@@ -257,6 +258,40 @@ class TestImportJson:
         )
         with pytest.raises(CredentialImportError):
             import_json(json_path, store)
+
+
+class TestSetCommand:
+    """画面から入力して登録する入口（保存先は既定パスなので保存処理はモックする）。"""
+
+    def _run(self, values, argv):
+        with (
+            patch("comken.credentials.__main__.save_credentials") as save,
+            patch("comken.credentials.__main__.load_credential", return_value="x" * 5),
+            patch("getpass.getpass", side_effect=values),
+        ):
+            code = main(argv)
+        return code, save
+
+    def test_input_becomes_prefixed_keys(self):
+        """システム名と項目名をつないだキーで保存する。"""
+        code, save = self._run(
+            ["ID-VALUE", "SECRET-VALUE"], ["set", "site_a", "client_id", "client_secret"]
+        )
+        assert code == 0
+        save.assert_called_once_with(
+            {"site_a_client_id": "ID-VALUE", "site_a_client_secret": "SECRET-VALUE"}
+        )
+
+    def test_empty_input_saves_nothing(self, capsys):
+        """途中で空を入れたら、それまでの入力ごと保存しない。"""
+        _, save = self._run(["ID-VALUE", ""], ["set", "site_a", "client_id", "client_secret"])
+        save.assert_not_called()
+        assert "値が空です" in capsys.readouterr().err
+
+    def test_value_is_not_printed(self, capsys):
+        """入力した値を画面に出さない（桁数だけ）。"""
+        self._run(["SECRET-VALUE"], ["set", "site_a", "client_secret"])
+        assert "SECRET-VALUE" not in capsys.readouterr().out
 
 
 class TestCommandLine:

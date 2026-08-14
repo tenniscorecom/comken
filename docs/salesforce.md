@@ -278,10 +278,17 @@ with SiteA(
 秘密の値はコマンドラインに渡さない。先に DPAPI へ登録し、そこから読ませる。
 
 ```bat
-python -m comken.credentials import 認証情報.json    :: site_a_client_id / site_a_client_secret
+:: 1. 登録（画面から入力する。平文のファイルは作らない）
+python -m comken.credentials set site_a client_id client_secret
+
+:: 2. つないでみる
 python -m comken.salesforce check  --domain https://xxx.my.salesforce.com --prefix site_a
 python -m comken.salesforce report --domain ... --prefix site_a --report-id 00O...
 ```
+
+`--prefix` に渡すのは**システム名だけ**（`site_a`）。`site_a_client_id` /
+`site_a_client_secret` が自動で引かれる。**DPAPI は「登録した Windows ユーザー × その PC」
+でしか復号できない**ので、実際に動かす PC・アカウントで登録する。
 
 | コマンド | すること | Salesforce 側への影響 |
 |---|---|---|
