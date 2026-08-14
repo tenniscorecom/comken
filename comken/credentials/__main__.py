@@ -1,12 +1,17 @@
 """comken/credentials/__main__.py — 認証情報の管理コマンド
 
-    python -m comken.credentials set site_a client_id client_secret  画面から入力して登録する
+    python -m comken.credentials gui                     登録画面を開く
     python -m comken.credentials import 認証情報.json   平文 JSON を取り込む
     python -m comken.credentials list                    登録済みの認証情報を接頭辞別に表示する
     python -m comken.credentials delete site_a_client_id 1件削除する
 
-**入口は2つある。** 1台で初めて登録するときは `set`（平文のファイルを作らずに済む）。
+**登録の入口は2つある。** 1台で登録するときは `gui`（平文のファイルを作らずに済む）。
 たくさんの PC へ同じ値を配るときは `import`（手入力の工程が要らない）。
+`gui` からも JSON を選んで取り込めるので、ターミナルを使わない人はそこだけで済む。
+
+プログラムから保存するときはコマンドではなく `save_credential()` /
+`save_credentials()` を呼ぶ（Salesforce のリフレッシュトークンのように、
+実行中に発行された値を書き戻す場合）。
 
 `import` の平文 JSON は**手で消す**。`--delete-source` を付けると
 取り込みが成功したときだけ自動で消す。既定で消さないのは、DPAPI が
@@ -15,22 +20,13 @@
 `list` で確かめてから消すのが安全。
 """
 
-from __future__ import annotations
-
 import argparse
-import getpass
 import sys
 from pathlib import Path
 
 from ..exceptions import CredentialError
-from .importer import credential_name, import_json, split_credential_name
-from .store import (
-    CREDENTIALS_PATH,
-    delete_credential,
-    list_names,
-    load_credential,
-    save_credentials,
-)
+from .importer import import_json, split_credential_name
+from .store import CREDENTIALS_PATH, delete_credential, list_names
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -51,14 +47,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    setter = subparsers.add_parser("set", help="画面から入力して登録する（平文ファイル不要）")
-    setter.add_argument("system", help="システム名（例: site_a）")
-    setter.add_argument(
-        "fields",
-        nargs="+",
-        help="登録する項目名（例: client_id client_secret）",
-    )
-    setter.set_defaults(run=_run_set)
+    gui = subparsers.add_parser("gui", help="登録画面を開く（平文ファイル不要）")
+    gui.set_defaults(run=_run_gui)
 
     importer = subparsers.add_parser("import", help="平文 JSON を取り込む")
     importer.add_argument("json_path", type=Path, help="取り込む JSON のパス")
@@ -79,25 +69,15 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _run_set(args: argparse.Namespace) -> None:
-    """項目ごとに値を聞いて、まとめて1回で保存する。
+def _run_gui(args: argparse.Namespace) -> None:
+    """登録画面を開く。
 
-    入力は画面に表示しない（getpass）。打ち間違いに気づけるよう、
-    保存後に読み直して桁数だけを出す。
+    tkinter の import を関数の中に置くのは、画面を使わないコマンド
+    （import / list / delete）が GUI の無い環境でも動くようにするため。
     """
-    items = {}
-    for field in args.fields:
-        name = credential_name(args.system, field)
-        value = getpass.getpass(f"{name} の値（入力は表示されません）: ")
-        if not value:
-            print(f"値が空です: {name}", file=sys.stderr)
-            return
-        items[name] = value
+    from .gui import main as open_window
 
-    save_credentials(items)
-    print(f"{len(items)} 件を登録しました: {CREDENTIALS_PATH}")
-    for name in sorted(items):
-        print(f"  {name}  （{len(load_credential(name))} 文字）")
+    open_window()
 
 
 def _run_import(args: argparse.Namespace) -> None:

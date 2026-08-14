@@ -3,7 +3,8 @@
 config.ini に平文で書けない値（client_secret・パスワード・トークン）を、
 Windows ログオンユーザーに紐付けて暗号化して保管する。
 
-    # 取り込み（初回だけ。平文 JSON を用意して1回実行する）
+    # 登録（初回だけ。1台なら画面から、何台にも配るなら平文 JSON を用意して取り込む）
+    python -m comken.credentials gui
     python -m comken.credentials import 認証情報.json
 
     # 使う側
@@ -26,8 +27,6 @@ Windows ログオンユーザーに紐付けて暗号化して保管する。
     import_json        平文 JSON を読み込んで取り込む
     CREDENTIALS_PATH   保存先のパス
 """
-
-from __future__ import annotations
 
 from .importer import import_json
 from .store import (

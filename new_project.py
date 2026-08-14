@@ -10,8 +10,6 @@
 `新規プロジェクト作成.bat` をダブルクリックしても同じことができる。
 """
 
-from __future__ import annotations
-
 import argparse
 import shutil
 from pathlib import Path
@@ -44,7 +42,12 @@ NAMED_FILES = ("main.py", "docs/仕様書.md", "docs/使い方.md")
 PLACEHOLDER_COMKEN_ROOT = r"\\server\share\tools\comken"
 
 # comken の場所を書いてあるファイル。bat は \ 区切り、settings.json は JSON なので / 区切り。
-COMKEN_ROOT_FILES = ("実行.bat", "スタブ生成.bat", ".vscode/settings.json")
+COMKEN_ROOT_FILES = (
+    "実行.bat",
+    "スタブ生成.bat",
+    "認証情報の登録.bat",
+    ".vscode/settings.json",
+)
 
 
 def _encoding_of(path: Path) -> str:

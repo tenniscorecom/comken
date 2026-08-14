@@ -4,8 +4,6 @@ DPAPI は Windows 標準機能なので、モックせず本物で暗号化・�
 保存先は tmp_path に逃がし、実行環境の %USERPROFILE%\\.comken は触らない。
 """
 
-from __future__ import annotations
-
 import json
 from pathlib import Path
 from unittest.mock import patch
@@ -260,42 +258,14 @@ class TestImportJson:
             import_json(json_path, store)
 
 
-class TestSetCommand:
-    """画面から入力して登録する入口（保存先は既定パスなので保存処理はモックする）。"""
-
-    def _run(self, values, argv):
-        with (
-            patch("comken.credentials.__main__.save_credentials") as save,
-            patch("comken.credentials.__main__.load_credential", return_value="x" * 5),
-            patch("getpass.getpass", side_effect=values),
-        ):
-            code = main(argv)
-        return code, save
-
-    def test_input_becomes_prefixed_keys(self):
-        """システム名と項目名をつないだキーで保存する。"""
-        code, save = self._run(
-            ["ID-VALUE", "SECRET-VALUE"], ["set", "site_a", "client_id", "client_secret"]
-        )
-        assert code == 0
-        save.assert_called_once_with(
-            {"site_a_client_id": "ID-VALUE", "site_a_client_secret": "SECRET-VALUE"}
-        )
-
-    def test_empty_input_saves_nothing(self, capsys):
-        """途中で空を入れたら、それまでの入力ごと保存しない。"""
-        _, save = self._run(["ID-VALUE", ""], ["set", "site_a", "client_id", "client_secret"])
-        save.assert_not_called()
-        assert "値が空です" in capsys.readouterr().err
-
-    def test_value_is_not_printed(self, capsys):
-        """入力した値を画面に出さない（桁数だけ）。"""
-        self._run(["SECRET-VALUE"], ["set", "site_a", "client_secret"])
-        assert "SECRET-VALUE" not in capsys.readouterr().out
-
-
 class TestCommandLine:
     """コマンドの入口が動くこと（保存先は既定のパスなので、失敗系だけを見る）。"""
+
+    def test_gui_opens_the_window(self):
+        """gui は登録画面を開くだけ（画面そのものは test_credentials_gui.py で見る）。"""
+        with patch("comken.credentials.gui.main") as open_window:
+            assert main(["gui"]) == 0
+        open_window.assert_called_once_with()
 
     def test_missing_json_returns_failure(self, tmp_path, capsys):
         assert main(["import", str(tmp_path / "ない.json")]) == 1

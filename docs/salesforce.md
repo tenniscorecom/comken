@@ -277,8 +277,8 @@ with Sandbox() as sf:
 秘密の値はコマンドラインに渡さない。先に DPAPI へ登録し、そこから読ませる。
 
 ```bat
-:: 1. 登録（画面から入力する。平文のファイルは作らない）
-python -m comken.credentials set sandbox client_id client_secret
+:: 1. 登録（開いた画面で sandbox / client_id・client_secret を入れる。平文のファイルは作らない）
+python -m comken.credentials gui
 
 :: 2. つないでみる
 python -m comken.salesforce check
