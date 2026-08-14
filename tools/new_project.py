@@ -14,7 +14,8 @@ import argparse
 import shutil
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+# このファイルは tools/ にあるので、リポジトリのルートは1つ上
+ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE_DIR = ROOT / "templates" / "新規プロジェクト"
 
 # コピーしないもの（開発ツールが作るキャッシュと、実行時の生成物）

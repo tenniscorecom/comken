@@ -9,9 +9,8 @@ import ast
 import re
 from pathlib import Path
 
-import pytest
-
 import export_for_chat
+import pytest
 
 _ROOT = Path(__file__).resolve().parent.parent
 _DOCS = [
@@ -100,7 +99,7 @@ def _anchor(heading: str) -> str:
 
 
 def test_exception_guide_covers_all_public_exceptions():
-    guide = (_ROOT / "ERRORS.md").read_text(encoding="utf-8")
+    guide = (_ROOT / "docs" / "ERRORS.md").read_text(encoding="utf-8")
     names = _all_names(_ROOT / "comken" / "exceptions" / "__init__.py")
 
     # NOTE: 件数は直書きしない。下の網羅チェックで目的は満たせており、

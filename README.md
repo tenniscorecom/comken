@@ -39,12 +39,12 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 | モジュールの使い方を知る | [CSV](docs/csv.md)・[Excel](docs/excel.md)・[Access](docs/access.md)・[Outlook](docs/outlook.md)・[Windows](docs/windows.md)・[ブラウザ](docs/browser.md)・[Salesforce](docs/salesforce.md)・[レポートの集約取得](docs/salesforce-downloader.md)・[ファイル](docs/utils-files.md)・[認証情報](docs/credentials.md) |
 | **初めて外部システムにつなぐ** | ID とパスワードの[登録](docs/credentials.md#登録初回だけ) → [Salesforce につないで確かめる](docs/salesforce.md#つないで確かめるコマンド) |
 | 引数・戻り値・例外を正確に知る | [公開 API](docs/自動生成/API.md)（**自動生成**） |
-| エラーが出た | [エラー対応ガイド](ERRORS.md)（エラー表は **自動生成**） |
+| エラーが出た | [エラー対応ガイド](docs/ERRORS.md)（エラー表は **自動生成**） |
 | 動くコードを見る | [examples](examples/README.md) |
-| なぜこの設計なのか知る | [仕様書](仕様書.md) |
-| コードを書く規約 | [共通コーディング規約](CONVENTIONS.md) |
+| なぜこの設計なのか知る | [仕様書](docs/仕様書.md) |
+| コードを書く規約 | [共通コーディング規約](docs/CONVENTIONS.md) |
 | comken 本体を直す | [ライブラリ開発規約](docs/ライブラリ開発規約.md) |
-| 開発してリリースする | [仕様書「開発とリリース」](仕様書.md#開発とリリース)（タグを打つ → 共有サーバーで checkout） |
+| 開発してリリースする | [仕様書「開発とリリース」](docs/仕様書.md#開発とリリース)（タグを打つ → 共有サーバーで checkout） |
 | comken を使うツールを作る | `新規プロジェクト作成.bat` で雛形を作る（作られた `README.md` が中を案内する） |
 | コードを読む・レビューする | [コードリーディングガイド](docs/コードリーディングガイド.md) |
 
@@ -55,7 +55,7 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
   `from comken.toolbox.excel import ExcelWriter` のように機能パッケージを明示する（依存が import 行で分かる）
 - **ファイル・ブラウザ・COM は `with` で開く。** 途中で失敗しても閉じられる
 - **エラーは細かい方から受ける。** 個別（`SheetNotFoundError`）→ 分野（`ExcelError`）→
-  全体（`ComkenError`）の3段。階層は[仕様書「例外体系」](仕様書.md#5-例外体系)
+  全体（`ComkenError`）の3段。階層は[仕様書「例外体系」](docs/仕様書.md#5-例外体系)
 - **機密は config.ini に書かない。** [認証情報](docs/credentials.md)（DPAPI）に入れ、
   config.ini にはキー名だけ書く
 
@@ -141,7 +141,7 @@ comken は共有サーバー上の1か所を**直接参照する**（ローカ�
 
 ### PCへ恒久的に設定する
 
-リポジトリ直下の`install_pythonpath.bat`を1回実行すると、このフォルダが現在のWindows
+リポジトリ直下の`setup_comken.bat`を1回実行すると、このフォルダが現在のWindows
 ユーザーの`PYTHONPATH`へ追加される。バッチ自身の場所からパスを判定するため編集は不要。
 既存の`PYTHONPATH`は残し、同じパスが登録済みなら重複追加しない。
 
@@ -166,13 +166,13 @@ PCの環境変数を変更したくない場合は、各プロジェクトのル
 1. **すでに`PYTHONPATH`が通っていれば、そのまま`main.py`を動かす**（上の恒久登録をした場合）
 2. 通っていなければ、bat に書いてある`COMKEN_ROOT`を使う
 3. そこにも comken が無ければ、**さがした場所を表示して止まる**
-   （`install_pythonpath.bat`を使う案内も出す）
+   （`setup_comken.bat`を使う案内も出す）
 4. 処理の終了コードを**そのまま返す**。スケジューラや RPA 基盤が成否を判断できる
    （`pause`や`popd`で終わると、失敗しても成功したように見えてしまう）
 
 ### 共有サーバーの comken を更新する
 
-共有サーバーのチェックアウトを、**リリース済みのタグへ切り替える**（→ [開発とリリース](仕様書.md#開発とリリース)）。
+共有サーバーのチェックアウトを、**リリース済みのタグへ切り替える**（→ [開発とリリース](docs/仕様書.md#開発とリリース)）。
 
 ```bat
 pushd \\server\share\tools\comken
@@ -192,7 +192,7 @@ git update-index --skip-worktree comken/services/salesforce_downloader/service.p
 
 これで手元の書き換えが消えず、うっかり push することもない。comken 側でこの3ファイルを
 変更したときは切り替えが止まるので、そのときだけ `--no-skip-worktree` で解除して
-手で合わせ、また設定し直す（→ [仕様書](仕様書.md#配置時に書き換える3ファイル)）。
+手で合わせ、また設定し直す（→ [仕様書](docs/仕様書.md#配置時に書き換える3ファイル)）。
 
 **切り替えた瞬間に、次に import した全プロジェクトが新しい版になる。** 更新のたびの
 配布作業はない。問題が出たら前のタグへ戻せば、同じように全プロジェクトが戻る。
@@ -211,8 +211,8 @@ comken を別の共有フォルダへ移すと、各プロジェクトの**3か�
 まとめて書き換える。
 
 ```bat
-python set_comken_root.py \\新サーバー\share\tools\comken F:\案件           :: 確認だけ
-python set_comken_root.py \\新サーバー\share\tools\comken F:\案件 --apply   :: 書き換える
+python tools\set_comken_root.py \\新サーバー\share\tools\comken F:\案件           :: 確認だけ
+python tools\set_comken_root.py \\新サーバー\share\tools\comken F:\案件 --apply   :: 書き換える
 ```
 
 **--apply を付けるまで何も書き換えない。** 先に「どのファイルが、どこから、どこへ」

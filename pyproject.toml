@@ -48,3 +48,8 @@ ignore = [
 "comken/toolbox/salesforce/__main__.py" = ["T20"]
 "comken/services/salesforce_downloader/__main__.py" = ["T20"]
 "examples/sample_login/run.py" = ["T20"]
+
+[tool.pytest.ini_options]
+# tools/ のスクリプト（export_for_chat など）をテストから import できるようにする。
+# 直下に置くとリポジトリのルートが散らかるので tools/ へ移し、その分をここで補う
+pythonpath = ["tools"]

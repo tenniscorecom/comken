@@ -219,4 +219,4 @@ New Outlook は利用できません。Graph API は認証とネットワーク�
 ## 関連
 
 - [README](../README.md#モジュール一覧) — モジュール一覧
-- [エラー対応ガイド](../ERRORS.md#outlook-のエラー) — エラー名から対処を引く
+- [エラー対応ガイド](ERRORS.md#outlook-のエラー) — エラー名から対処を引く

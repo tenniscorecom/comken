@@ -18,10 +18,11 @@ from pathlib import Path
 
 import comken.exceptions as exceptions
 
-ROOT = Path(__file__).resolve().parent
+# このファイルは tools/ にあるので、リポジトリのルートは1つ上
+ROOT = Path(__file__).resolve().parent.parent
 PACKAGE_ROOT = ROOT / "comken"
 API_OUTPUT_PATH = ROOT / "docs" / "自動生成" / "API.md"
-ERRORS_OUTPUT_PATH = ROOT / "ERRORS.md"
+ERRORS_OUTPUT_PATH = ROOT / "docs" / "ERRORS.md"
 LEGACY_OUTPUT_DIR = ROOT / "貼り付け用"
 ERRORS_GENERATED_MARKER = (
     "<!-- ここから下は python export_for_chat.py が自動生成する。手で編集しない -->"

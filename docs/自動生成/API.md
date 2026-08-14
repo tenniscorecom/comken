@@ -2034,8 +2034,8 @@ def download_report(report_key: int, project: str='', *, master_path: Path | Non
 Args:
     report_key: 管理表の管理番号（例: 1001）。
     project: 呼び出し元の名前。履歴に残るので、入れておくと後から追える。
-    master_path: 管理表のパス（省略時は settings.MASTER_PATH。通常は省略する）。
-    history_path: 履歴のパス（省略時は settings.HISTORY_PATH。通常は省略する）。
+    master_path: 管理表のパス（省略時は MASTER_PATH。通常は省略する）。
+    history_path: 履歴のパス（省略時は HISTORY_PATH。通常は省略する）。
 
 Returns:
     保存したファイルのパス。
@@ -2059,8 +2059,8 @@ def get_scheduled_report(report_key: int, project: str='', *, master_path: Path 
 Args:
     report_key: 管理表の管理番号（例: 1001）。
     project: 呼び出し元の名前（履歴には残さないが、例外の調査に使えるよう受け取る）。
-    master_path: 管理表のパス（省略時は settings.MASTER_PATH。通常は省略する）。
-    history_path: 履歴のパス（省略時は settings.HISTORY_PATH。通常は省略する）。
+    master_path: 管理表のパス（省略時は MASTER_PATH。通常は省略する）。
+    history_path: 履歴のパス（省略時は HISTORY_PATH。通常は省略する）。
 
 Returns:
     定期取得で保存されたファイルのパス。
@@ -2086,8 +2086,8 @@ def download_scheduled(project: str='定期実行', *, master_path: Path | None=
 
 Args:
     project: 履歴に残す呼び出し元の名前。
-    master_path: 管理表のパス（省略時は settings.MASTER_PATH。通常は省略する）。
-    history_path: 履歴のパス（省略時は settings.HISTORY_PATH。通常は省略する）。
+    master_path: 管理表のパス（省略時は MASTER_PATH。通常は省略する）。
+    history_path: 履歴のパス（省略時は HISTORY_PATH。通常は省略する）。
 
 Returns:
     取得できたファイルのパス。
@@ -2716,7 +2716,7 @@ Args:
 #### `open`
 
 ```text
-def open(self, url: str) -> Page:
+def open(self, url: str) -> Self:
 ```
 
 ##### 説明
@@ -3026,7 +3026,7 @@ BASE_URL とログインなど、そのサイトのどの画面でも使う処�
 #### `go`
 
 ```text
-def go(self, path: str='') -> SitePage:
+def go(self, path: str='') -> Self:
 ```
 
 ##### 説明
@@ -3056,7 +3056,7 @@ class Locator(NamedTuple):
 
 ```text
 @classmethod
-def id(cls, value: str) -> Locator:
+def id(cls, value: str) -> Self:
 ```
 
 ##### 説明
@@ -3067,7 +3067,7 @@ id 属性で探す（例: Locator.id("login-btn")）。
 
 ```text
 @classmethod
-def name(cls, value: str) -> Locator:
+def name(cls, value: str) -> Self:
 ```
 
 ##### 説明
@@ -3078,7 +3078,7 @@ name 属性で探す（例: Locator.name("username")）。
 
 ```text
 @classmethod
-def css(cls, value: str) -> Locator:
+def css(cls, value: str) -> Self:
 ```
 
 ##### 説明
@@ -3089,7 +3089,7 @@ CSS セレクターで探す（例: Locator.css("table tr .name")）。
 
 ```text
 @classmethod
-def xpath(cls, value: str) -> Locator:
+def xpath(cls, value: str) -> Self:
 ```
 
 ##### 説明
@@ -3782,7 +3782,7 @@ def delete_sheet(self, name: str) -> None:
 
 ```text
 @classmethod
-def create(cls, path: str | Path, sheet_name: str='Sheet1') -> ExcelWriter:
+def create(cls, path: str | Path, sheet_name: str='Sheet1') -> Self:
 ```
 
 ##### 説明
@@ -4475,7 +4475,7 @@ def __init__(self, client_id: str, client_secret: str, domain_url: str) -> None:
 
 ```text
 @classmethod
-def from_credentials(cls, domain_url: str, prefix: str) -> OAuth:
+def from_credentials(cls, domain_url: str, prefix: str) -> Self:
 ```
 
 ##### 説明
@@ -4512,7 +4512,7 @@ def __init__(self, client_id: str, refresh_token: str, domain_url: str, *, clien
 
 ```text
 @classmethod
-def from_credentials(cls, domain_url: str, prefix: str) -> OAuth:
+def from_credentials(cls, domain_url: str, prefix: str) -> Self:
 ```
 
 ##### 説明
@@ -4544,7 +4544,7 @@ def authorization_url(client_id: str, redirect_uri: str, domain_url: str, *, sco
 
 ```text
 @classmethod
-def exchange_code(cls, client_id: str, client_secret: str, code: str, redirect_uri: str, domain_url: str, *, on_refresh_token: Callable[[str], None] | None=None) -> OAuth:
+def exchange_code(cls, client_id: str, client_secret: str, code: str, redirect_uri: str, domain_url: str, *, on_refresh_token: Callable[[str], None] | None=None) -> Self:
 ```
 
 ##### 説明

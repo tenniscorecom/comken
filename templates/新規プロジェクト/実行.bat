@@ -37,7 +37,7 @@ if not exist "%COMKEN_ROOT%\comken\__init__.py" (
   echo   - 共有サーバーにつながっているか確認してください
   echo   - つながっているなら、この bat の COMKEN_ROOT が正しいか確認してください
   echo   - このパソコンで何度も使うなら、comken のフォルダにある
-  echo     install_pythonpath.bat を1回実行しておくと、以後この bat を直さずに済みます
+  echo     setup_comken.bat を1回実行しておくと、以後この bat を直さずに済みます
   popd
   pause
   exit /b 1

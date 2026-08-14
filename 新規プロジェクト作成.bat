@@ -27,7 +27,7 @@ if not defined PROJECT_NAME (
   exit /b 1
 )
 
-python new_project.py "%PROJECT_NAME%" --into ".."
+python tools\new_project.py "%PROJECT_NAME%" --into ".."
 rem 終了コードは popd より前に控える（popd が成功すると 0 で上書きされる）
 set "EXIT_CODE=%ERRORLEVEL%"
 popd
