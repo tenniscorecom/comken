@@ -90,7 +90,6 @@ from comken.services.salesforce_downloader import download_report   # 社内の�
 | runtime | `with debug():` / `with dry_run():` による実行モード |
 | constants | CSV・Excel・ファイル検索で使う公開定数 |
 | exceptions | comken 固有の例外（エラー名別に対処可能） |
-| settings | 社内固有の値（共有フォルダの場所・組織の URL など）。配置する人が1回だけ書き換える |
 | [CSV](docs/csv.md) | CSV の読み込み・検索・抽出 |
 | [Excel（openpyxl）](docs/excel.md) | Excel の読み書き（既存数式の計算結果・マクロは必要時に win32com を使用） |
 | [Access](docs/access.md) | Access のマクロ・VBA 実行、テーブル／クエリの CSV 出力 |
@@ -182,17 +181,18 @@ git checkout v0.8.0
 popd
 ```
 
-**社内固有の値を書いた2ファイルは、切り替えで上書きされないようにしておく。**
+**社内固有の値を書いた3ファイルは、切り替えで上書きされないようにしておく。**
 配置したときに1回だけ設定する。
 
 ```bat
-git update-index --skip-worktree comken/settings.py
 git update-index --skip-worktree comken/toolbox/rpa.py
+git update-index --skip-worktree comken/toolbox/salesforce/sites/sandbox.py
+git update-index --skip-worktree comken/services/salesforce_downloader/service.py
 ```
 
-これで手元の書き換えが消えず、うっかり push することもない。comken 側でこの2ファイルを
-変更したとき（設定を足したときなど）は切り替えが止まるので、そのときだけ
-`--no-skip-worktree` で解除して手で合わせ、また設定し直す。
+これで手元の書き換えが消えず、うっかり push することもない。comken 側でこの3ファイルを
+変更したときは切り替えが止まるので、そのときだけ `--no-skip-worktree` で解除して
+手で合わせ、また設定し直す（→ [仕様書](仕様書.md#配置時に書き換える3ファイル)）。
 
 **切り替えた瞬間に、次に import した全プロジェクトが新しい版になる。** 更新のたびの
 配布作業はない。問題が出たら前のタグへ戻せば、同じように全プロジェクトが戻る。

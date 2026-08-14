@@ -204,16 +204,16 @@ def run() -> None:
 
 ## 配置するときの設定
 
-管理表と履歴の場所は **`comken/settings.py`** に書く。社内の値を持つファイルはここ1つだけ。
+管理表と履歴の場所は `comken/services/salesforce_downloader/service.py` に書いてある。
+配置するときに実際の場所へ書き換える。
 
 ```python
-# comken/settings.py
 MASTER_PATH = Path(r"\\実際のサーバー\share\tools\salesforce\レポート管理表.xlsx")
 HISTORY_PATH = Path(r"\\実際のサーバー\share\tools\salesforce\ダウンロード履歴.csv")
 ```
 
-**設定を ini に分けない。** 設定がコードと ini に散ると、どちらを見ればよいか
-分からなくなる。探す場所は1つにする（→ 仕様書「配置時に書き換える2ファイル」）。
+**設定ファイルへ集約せず、使う場所に書く。** 理由と、共有サーバーで書き換えを守る方法は
+[仕様書「配置時に書き換える3ファイル」](../仕様書.md#配置時に書き換える3ファイル)を参照。
 
 ---
 

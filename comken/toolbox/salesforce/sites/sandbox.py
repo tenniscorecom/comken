@@ -1,13 +1,12 @@
 """comken/toolbox/salesforce/sites/sandbox.py — Sandbox 組織
 
-※ 組織固有の値（My Domain・レポート ID）は `comken/settings.py` にある。
-配置時に書き換えるのはそちらで、このファイルは触らない。
+※ URL とレポート ID は**ダミー**。配置するときに実際の値へ書き換える
+（詳細は sites/__init__.py）。
 
 この組織でしか通じないもの（レポート ID・オブジェクトの API 参照名・独自の手順）を
 ここに置く。共通の操作は `SalesforceBase` 側にあるので書かない。
 """
 
-from .... import settings
 from ..client import SalesforceBase
 
 
@@ -19,18 +18,21 @@ class Sandbox(SalesforceBase):
             rows = sf.案件一覧()
     """
 
-    # 組織で固定の値は comken/settings.py にまとめる（社内の値を持つファイルを1つにする）
-    DOMAIN_URL = settings.SANDBOX_DOMAIN_URL
+    # My Domain の URL。Sandbox は「<組織>--<サンドボックス名>.sandbox」の形になる。
+    # 組織で固定なので config.ini には置かない（環境で変わる値だけを config.ini へ）
+    # TODO: 配置するときに実際の URL へ置き換える
+    DOMAIN_URL = "https://example--sandbox.sandbox.my.salesforce.com"
 
     # 認証情報のキー名の頭。DPAPI には sandbox_client_id / sandbox_client_secret で入る。
     # 別の登録に切り替えるときだけ Sandbox(prefix=...) で渡す
-    CREDENTIAL_PREFIX = settings.SANDBOX_CREDENTIAL_PREFIX
+    CREDENTIAL_PREFIX = "sandbox"
 
     # 組織が対応している API バージョン。既定と違うときだけ上書きする
     # API_VERSION = "67.0"
 
     # レポート ID は組織ごとに固有で、環境では変わらない
-    REPORT_案件一覧 = settings.SANDBOX_REPORT_案件一覧
+    # TODO: 配置するときに実際のレポート ID へ置き換える
+    REPORT_案件一覧 = "00O000000000001"
 
     def 案件一覧(self) -> list[dict]:
         """案件一覧レポートの明細を返す。
