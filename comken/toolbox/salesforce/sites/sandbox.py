@@ -1,0 +1,42 @@
+"""comken/toolbox/salesforce/sites/sandbox.py — Sandbox 組織
+
+※ URL は**ダミー**。配置時に実際の Sandbox の My Domain へ書き換える
+（詳細は sites/__init__.py）。
+
+この組織でしか通じないもの（レポート ID・オブジェクトの API 参照名・独自の手順）を
+ここに置く。共通の操作は `SalesforceBase` 側にあるので書かない。
+"""
+
+from ..client import SalesforceBase
+
+
+class Sandbox(SalesforceBase):
+    """Sandbox 組織のクライアント。
+
+    使い方:
+        with Sandbox() as sf:
+            rows = sf.案件一覧()
+    """
+
+    # My Domain の URL。Sandbox は「<組織>--<サンドボックス名>.sandbox」の形になる。
+    # 組織で固定なので config.ini には置かない（環境で変わる値だけを config.ini へ）
+    # TODO: 実際の URL に置き換える
+    DOMAIN_URL = "https://example--sandbox.sandbox.my.salesforce.com"
+
+    # 認証情報のキー名の頭。DPAPI には sandbox_client_id / sandbox_client_secret で入る。
+    # 別の登録に切り替えるときだけ Sandbox(prefix=...) で渡す
+    CREDENTIAL_PREFIX = "sandbox"
+
+    # 組織が対応している API バージョン。既定と違うときだけ上書きする
+    # API_VERSION = "67.0"
+
+    # レポート ID は組織ごとに固有で、環境で変わらないのでここに書く
+    REPORT_案件一覧 = "00O000000000001"  # TODO: 実際のレポート ID に置き換える
+
+    def 案件一覧(self) -> list[dict]:
+        """案件一覧レポートの明細を返す。
+
+        2000 行を超えると SalesforceReportTruncatedError で止まる。
+        超えるようになったら、期間で区切るか SOQL へ移す。
+        """
+        return self.report.run(self.REPORT_案件一覧)

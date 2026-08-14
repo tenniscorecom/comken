@@ -38,7 +38,7 @@ comken の使い方を「動くコード」で覚えるためのサンプル。
 | 3 | csv_diff_report | 昨日と今日の CSV の差分を色付き Excel レポートに | diff_rows / CsvWriter / set_fill | なし（データを自動生成） |
 | 4 | sample_login | ブラウザ自動化（Page Object Model の一式） | Browsers / Page / Locator | Edge + msedgedriver |
 | 5 | csv_date_move | CSV の日付列とファイル名の日付が一致したファイルを移動 | CsvReader.first / date_in_name / dry_run | config.ini の作成 |
-| 6 | daily_batch_template | 日次バッチの流れ（入力を探す → 加工 → Excel 出力） | comken.run / FileFinder / ExcelWriter | config.ini + 社内ライブラリ |
+| 6 | daily_batch_template | 日次バッチの流れ（入力を探す → 加工 → Excel 出力） | comken.toolbox.rpa / FileFinder / ExcelWriter | config.ini + 社内ライブラリ |
 | 7 | access_export | Access マクロで整形 → CSV 出力 → Excel 帳票 | AccessDatabase / CsvReader / ExcelWriter | Microsoft Access + パス設定 |
 | 8 | outlook_inbox | 受信メール → CSV → 結果メールの下書き | Outlook / MailMessage / CsvWriter | Classic Outlook |
 | 9 | copy_then_macro | 当日ファイルをコピー → Excel マクロ → 配布 | FileFinder / ExcelWriter.run_macro / copy_file | Microsoft Excel + パス設定 |

@@ -10,10 +10,9 @@ from unittest.mock import patch
 
 import pytest
 
-import comken.csv
-import comken.utils
+import comken.toolbox.csv
+import comken.toolbox.utils
 from comken.constants import Encoding
-from comken.csv import CsvReader, CsvWriter
 from comken.exceptions import (
     ColumnNotFoundError,
     CsvCellReferenceError,
@@ -24,6 +23,7 @@ from comken.exceptions import (
     CsvRowNotFoundError,
     UnsupportedFileSuffixError,
 )
+from comken.toolbox.csv import CsvReader, CsvWriter
 
 
 @pytest.fixture
@@ -93,7 +93,7 @@ class TestCsvPublicApi:
     """CSV の公開 API と依存境界を確認する。"""
 
     def test_utils_does_not_export_col_to_num(self):
-        for package in (comken.csv, comken.utils):
+        for package in (comken.toolbox.csv, comken.toolbox.utils):
             assert "col_to_num" not in package.__all__
             assert not hasattr(package, "col_to_num")
 
@@ -102,7 +102,7 @@ class TestCsvPublicApi:
         source = "\n".join(path.read_text(encoding="utf-8") for path in csv_dir.glob("*.py"))
 
         assert "from ..excel" not in source
-        assert "from comken.excel" not in source
+        assert "from comken.toolbox.excel" not in source
 
 
 class TestCsvReaderFirst:
@@ -456,7 +456,8 @@ class TestCsvWriterTransactionalWrite:
 
         with (
             patch(
-                "comken.csv.writer.csv.DictWriter.writerows", side_effect=OSError("write failed")
+                "comken.toolbox.csv.writer.csv.DictWriter.writerows",
+                side_effect=OSError("write failed"),
             ),
             pytest.raises(OSError, match="write failed"),
         ):

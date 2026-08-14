@@ -10,7 +10,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from comken import dry_run
-from comken.access import AccessDatabase
 from comken.constants import Encoding
 from comken.exceptions import (
     AccessBackupError,
@@ -18,13 +17,14 @@ from comken.exceptions import (
     AccessSourceNotFoundError,
     UnsupportedFileSuffixError,
 )
+from comken.toolbox.access import AccessDatabase
 
 
 def _database(tmp_path: Path) -> tuple[AccessDatabase, MagicMock]:
     path = tmp_path / "顧客.accdb"
     path.touch()
     access = MagicMock()
-    with patch("comken.access.handler.win32com.client.DispatchEx", return_value=access):
+    with patch("comken.toolbox.access.handler.win32com.client.DispatchEx", return_value=access):
         database = AccessDatabase(path, local_copy=False, backup=False)
     return database, access
 
@@ -44,7 +44,7 @@ class TestAccessDatabase:
         access = MagicMock()
 
         with (
-            patch("comken.access.handler.win32com.client.DispatchEx", return_value=access),
+            patch("comken.toolbox.access.handler.win32com.client.DispatchEx", return_value=access),
             AccessDatabase(path) as database,
         ):
             opened_path = Path(access.OpenCurrentDatabase.call_args.args[0])
@@ -63,7 +63,7 @@ class TestAccessDatabase:
         access = MagicMock()
 
         with (
-            patch("comken.access.handler.win32com.client.DispatchEx", return_value=access),
+            patch("comken.toolbox.access.handler.win32com.client.DispatchEx", return_value=access),
             pytest.raises(RuntimeError),
             AccessDatabase(path),
         ):
@@ -82,7 +82,7 @@ class TestAccessDatabase:
         access = MagicMock()
 
         with (
-            patch("comken.access.handler.win32com.client.DispatchEx", return_value=access),
+            patch("comken.toolbox.access.handler.win32com.client.DispatchEx", return_value=access),
             AccessDatabase(path, local_copy=False, backup=False),
         ):
             pass
@@ -103,7 +103,7 @@ class TestAccessDatabase:
 
         access.OpenCurrentDatabase.side_effect = assert_backup_exists
         with (
-            patch("comken.access.handler.win32com.client.DispatchEx", return_value=access),
+            patch("comken.toolbox.access.handler.win32com.client.DispatchEx", return_value=access),
             AccessDatabase(path, local_copy=False, backup_dir=backup_folder),
         ):
             pass
@@ -113,7 +113,9 @@ class TestAccessDatabase:
         path.touch()
         backup_folder = tmp_path / "backups"
         with (
-            patch("comken.access.handler.win32com.client.DispatchEx", return_value=MagicMock()),
+            patch(
+                "comken.toolbox.access.handler.win32com.client.DispatchEx", return_value=MagicMock()
+            ),
             AccessDatabase(path, backup_dir=backup_folder),
         ):
             pass
@@ -124,7 +126,9 @@ class TestAccessDatabase:
         path.touch()
         backup_folder = tmp_path / "backups"
         with (
-            patch("comken.access.handler.win32com.client.DispatchEx", return_value=MagicMock()),
+            patch(
+                "comken.toolbox.access.handler.win32com.client.DispatchEx", return_value=MagicMock()
+            ),
             AccessDatabase(path, local_copy=False, backup=False, backup_dir=backup_folder),
         ):
             pass
@@ -137,9 +141,12 @@ class TestAccessDatabase:
         fixed_now = datetime(2026, 7, 29, 15, 30, 45, tzinfo=UTC)
         for _ in range(2):
             with (
-                patch("comken.access.handler.now", return_value=fixed_now),
-                patch("comken.utils.files.naming.date.now", return_value=fixed_now),
-                patch("comken.access.handler.win32com.client.DispatchEx", return_value=MagicMock()),
+                patch("comken.toolbox.access.handler.now", return_value=fixed_now),
+                patch("comken.toolbox.utils.files.naming.date.now", return_value=fixed_now),
+                patch(
+                    "comken.toolbox.access.handler.win32com.client.DispatchEx",
+                    return_value=MagicMock(),
+                ),
                 AccessDatabase(path, local_copy=False, backup_dir=backup_folder),
             ):
                 pass
@@ -166,10 +173,12 @@ class TestAccessDatabase:
         os.utime(recent_same, (recent_timestamp, recent_timestamp))
 
         with (
-            patch("comken.access.handler.now", return_value=fixed_now),
-            patch("comken.utils.files.naming.date.now", return_value=fixed_now),
-            patch("comken.access.handler.win32com.client.DispatchEx", return_value=MagicMock()),
-            caplog.at_level(logging.INFO, logger="comken.access.handler"),
+            patch("comken.toolbox.access.handler.now", return_value=fixed_now),
+            patch("comken.toolbox.utils.files.naming.date.now", return_value=fixed_now),
+            patch(
+                "comken.toolbox.access.handler.win32com.client.DispatchEx", return_value=MagicMock()
+            ),
+            caplog.at_level(logging.INFO, logger="comken.toolbox.access.handler"),
             AccessDatabase(path, local_copy=False, backup_dir=backup_folder),
         ):
             pass
@@ -184,8 +193,10 @@ class TestAccessDatabase:
         path.touch()
         access = MagicMock()
         with (
-            patch("comken.access.handler.shutil.copy2", side_effect=PermissionError("拒否")),
-            patch("comken.access.handler.win32com.client.DispatchEx", return_value=access),
+            patch(
+                "comken.toolbox.access.handler.shutil.copy2", side_effect=PermissionError("拒否")
+            ),
+            patch("comken.toolbox.access.handler.win32com.client.DispatchEx", return_value=access),
             pytest.raises(AccessBackupError, match="更新を中止"),
         ):
             AccessDatabase(path, local_copy=False, backup_dir=tmp_path / "backup")
@@ -196,8 +207,8 @@ class TestAccessDatabase:
         path.touch()
         access = MagicMock()
         with (
-            patch("comken.access.handler.Path.mkdir", side_effect=PermissionError("拒否")),
-            patch("comken.access.handler.win32com.client.DispatchEx", return_value=access),
+            patch("comken.toolbox.access.handler.Path.mkdir", side_effect=PermissionError("拒否")),
+            patch("comken.toolbox.access.handler.win32com.client.DispatchEx", return_value=access),
             pytest.raises(AccessBackupError, match=r"backup_dir.*ローカルフォルダ"),
         ):
             AccessDatabase(path, local_copy=False)
@@ -208,8 +219,10 @@ class TestAccessDatabase:
         path.touch()
         path.with_suffix(".laccdb").touch()
         with (
-            patch("comken.access.handler.win32com.client.DispatchEx", return_value=MagicMock()),
-            caplog.at_level(logging.WARNING, logger="comken.access.handler"),
+            patch(
+                "comken.toolbox.access.handler.win32com.client.DispatchEx", return_value=MagicMock()
+            ),
+            caplog.at_level(logging.WARNING, logger="comken.toolbox.access.handler"),
             AccessDatabase(path, local_copy=False, backup_dir=tmp_path / "backup"),
         ):
             pass
@@ -221,7 +234,9 @@ class TestAccessDatabase:
         backup_folder = tmp_path / "backups"
         with (
             dry_run(),
-            patch("comken.access.handler.win32com.client.DispatchEx", return_value=MagicMock()),
+            patch(
+                "comken.toolbox.access.handler.win32com.client.DispatchEx", return_value=MagicMock()
+            ),
             AccessDatabase(path, local_copy=False, backup_dir=backup_folder),
         ):
             pass
@@ -237,7 +252,9 @@ class TestAccessDatabase:
         path.write_bytes(b"database")
 
         with (
-            patch("comken.access.handler.win32com.client.DispatchEx", return_value=MagicMock()),
+            patch(
+                "comken.toolbox.access.handler.win32com.client.DispatchEx", return_value=MagicMock()
+            ),
             AccessDatabase(path, local_copy=False),
         ):
             pass
@@ -251,8 +268,10 @@ class TestAccessDatabase:
         path.touch()
 
         with (
-            patch("comken.access.handler.win32com.client.DispatchEx", return_value=MagicMock()),
-            caplog.at_level(logging.INFO, logger="comken.access.handler"),
+            patch(
+                "comken.toolbox.access.handler.win32com.client.DispatchEx", return_value=MagicMock()
+            ),
+            caplog.at_level(logging.INFO, logger="comken.toolbox.access.handler"),
             AccessDatabase(path),
         ):
             pass
@@ -264,7 +283,9 @@ class TestAccessDatabase:
         path.touch()
 
         with (
-            patch("comken.access.handler.shutil.copy2", side_effect=PermissionError("使用中")),
+            patch(
+                "comken.toolbox.access.handler.shutil.copy2", side_effect=PermissionError("使用中")
+            ),
             pytest.raises(AccessLocalCopyError, match="読み取り権限"),
         ):
             AccessDatabase(path)

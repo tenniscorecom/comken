@@ -3,7 +3,7 @@
 from subprocess import CompletedProcess
 from unittest.mock import patch
 
-from comken.windows import kill_excel
+from comken.toolbox.windows import kill_excel
 
 
 def test_kill_excel_returns_false_when_taskkill_fails():
@@ -11,5 +11,5 @@ def test_kill_excel_returns_false_when_taskkill_fails():
     running = CompletedProcess([], 0, stdout="EXCEL.EXE", stderr="")
     failed = CompletedProcess([], 1, stdout="", stderr="access denied")
 
-    with patch("comken.windows.process.subprocess.run", side_effect=[running, failed]):
+    with patch("comken.toolbox.windows.process.subprocess.run", side_effect=[running, failed]):
         assert kill_excel() is False

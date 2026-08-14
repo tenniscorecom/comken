@@ -12,7 +12,7 @@ from comken.exceptions import (
     OutlookAttachmentNotFoundError,
     OutlookFolderNotFoundError,
 )
-from comken.outlook import MailMessage, Outlook
+from comken.toolbox.outlook import MailMessage, Outlook
 
 
 def _outlook():
@@ -21,7 +21,7 @@ def _outlook():
     inbox = namespace.GetDefaultFolder.return_value
     restricted_items = inbox.Items.Restrict.return_value
     restricted_items.__iter__.return_value = iter(())
-    with patch("comken.outlook.handler.win32com.client.Dispatch", return_value=application):
+    with patch("comken.toolbox.outlook.handler.win32com.client.Dispatch", return_value=application):
         outlook = Outlook()
     return outlook, application, inbox
 
@@ -31,7 +31,7 @@ class TestOutlook:
         application = MagicMock()
         with (
             patch(
-                "comken.outlook.handler.win32com.client.Dispatch", return_value=application
+                "comken.toolbox.outlook.handler.win32com.client.Dispatch", return_value=application
             ) as dispatch,
             Outlook(),
         ):
@@ -42,7 +42,7 @@ class TestOutlook:
     def test_missing_classic_outlook_has_guidance(self):
         with (
             patch(
-                "comken.outlook.handler.win32com.client.Dispatch",
+                "comken.toolbox.outlook.handler.win32com.client.Dispatch",
                 side_effect=OSError("COM error"),
             ),
             pytest.raises(

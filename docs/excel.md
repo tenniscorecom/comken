@@ -17,7 +17,7 @@ NAS やネットワークドライブ上のファイルは直接開くと遅い�
 `with` ブロックを抜けるとテンポラリファイルは自動削除される。
 
 ```python
-from comken.excel import ExcelReader
+from comken.toolbox.excel import ExcelReader
 
 NAS_PATH = r"\\nas-server\share\data.xlsx"
 SHEET = "Sheet1"
@@ -40,8 +40,8 @@ with ExcelReader(NAS_PATH, local_copy_threshold_mb=0) as f:
 win32com は `ExcelReader` / `ExcelWriter` の自動コピー機能がないため、`local_copy` を使う。
 
 ```python
-from comken.utils.files import local_copy
-from comken.windows.handler import ExcelComHandler
+from comken.toolbox.utils.files import local_copy
+from comken.toolbox.windows.handler import ExcelComHandler
 
 NAS_PATH = r"\\nas-server\share\data.xlsx"
 SHEET = "Sheet1"
@@ -58,7 +58,7 @@ with local_copy(NAS_PATH) as local_path:
 数式の計算結果や VBA マクロが必要な場合は自動で win32com にフォールバックする。
 
 ```python
-from comken.excel import ExcelReader, ExcelWriter
+from comken.toolbox.excel import ExcelReader, ExcelWriter
 
 SHEET = "Sheet1"
 ROW = 2
@@ -123,7 +123,7 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:
 # config.ini の列名マッピングで転記（XLOOKUP 的転記。CSV → Excel の更新など）
 # config.ini の [受注_MAPPING] は「取引先 = 顧客名」「金額 = 請求額」と書く
 from comken import Config
-from comken.csv import CsvReader
+from comken.toolbox.csv import CsvReader
 
 config = Config()
 lookup = CsvReader("data.csv").index("注文番号")
@@ -181,7 +181,7 @@ with ExcelWriter("data.xlsx") as f:
 #                BLUE / LIGHT_BLUE / PURPLE / GRAY / LIGHT_GRAY / WHITE / BLACK
 
 # VBA マクロの実行（常に win32com を使用）
-from comken.windows import ExcelComHandler
+from comken.toolbox.windows import ExcelComHandler
 
 with ExcelComHandler("data.xlsm") as f:
     f.run_macro(MACRO_NAME)

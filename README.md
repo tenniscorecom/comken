@@ -15,8 +15,8 @@
 最初の1本はこれだけで書ける（CSV を読んで Excel レポートを作る例）:
 
 ```python
-from comken.csv import CsvReader
-from comken.excel import ExcelWriter
+from comken.toolbox.csv import CsvReader
+from comken.toolbox.excel import ExcelWriter
 
 rows = CsvReader(r"C:\作業\data.csv").read_rows()      # CSV を読む（1行 = 1辞書）
 
@@ -51,12 +51,35 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 
 - **`comken` 直下から import してよいのは `config` / `Config` と実行モードの4関数
   （`dry_run` / `is_dry_run` / `debug` / `is_debug`）だけ。** それ以外は
-  `from comken.excel import ExcelWriter` のように機能パッケージを明示する（依存が import 行で分かる）
+  `from comken.toolbox.excel import ExcelWriter` のように機能パッケージを明示する（依存が import 行で分かる）
 - **ファイル・ブラウザ・COM は `with` で開く。** 途中で失敗しても閉じられる
 - **エラーは細かい方から受ける。** 個別（`SheetNotFoundError`）→ 分野（`ExcelError`）→
   全体（`ComkenError`）の3段。階層は[仕様書「例外体系」](仕様書.md#5-例外体系)
 - **機密は config.ini に書かない。** [認証情報](docs/credentials.md)（DPAPI）に入れ、
   config.ini にはキー名だけ書く
+
+## パッケージの構成
+
+comken は置き場所を3つに分けている。**どこに置くかは「そのモジュールをどう説明できるか」で決まる。**
+
+| 場所 | 基準 | 中身 |
+|---|---|---|
+| `comken` 直下 | **何を操作するかに関係なく使う** | 設定・実行モード・ログ・状態・例外・定数 |
+| `comken.toolbox` | **「〜を操作する／〜と通信する」で説明できる** | Excel・CSV・Access・Outlook・Windows・ブラウザ・Salesforce・社内 RPA 基盤・ファイル・認証情報 |
+| `comken.services` | **社内の管理表や規約を知らないと説明できない** | Salesforce レポートの集約ダウンローダー |
+
+```python
+from comken import config, dry_run          # 直下（土台）
+from comken.exceptions import ComkenError
+from comken.toolbox.excel import ExcelWriter                        # 部品
+from comken.services.salesforce_downloader import download_report   # 社内の仕組み
+```
+
+社内 RPA 基盤のラッパー（`comken.toolbox.rpa`）が toolbox にあるのは、**相手が社内のものでも
+「呼び出すための部品」だから**。社内固有かどうかではなく、部品か仕組みかで分けている。
+
+**実行される単位（定期実行のバッチなど）は comken に置かない。** それは個別プロジェクトの
+仕事で、comken に置くのは呼ばれる側だけにする。
 
 ## モジュール一覧
 
@@ -199,7 +222,7 @@ with comken.dry_run():
 自作関数の処理時間も同じ仕組みで計測できる（デバッグモード中だけログに出る）:
 
 ```python
-from comken.utils import measure
+from comken.toolbox.utils import measure
 
 @measure
 def build_report():

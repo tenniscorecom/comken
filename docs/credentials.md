@@ -26,7 +26,7 @@ Windows 標準の **DPAPI** で暗号化して保管し、コードからはキ�
 #### gui — 画面から登録する
 
 ```
-python -m comken.credentials gui
+python -m comken.toolbox.credentials gui
 ```
 
 システム名・項目名・値を入れて「登録する」を押す。**入力した文字は伏せ字で、平文の
@@ -54,9 +54,9 @@ python -m comken.credentials gui
 ```
 
 ```
-python -m comken.credentials import 認証情報.json    取り込む
-python -m comken.credentials list                     登録済みの認証情報を接頭辞別に表示する
-python -m comken.credentials delete site_a_client_id  1件削除する
+python -m comken.toolbox.credentials import 認証情報.json    取り込む
+python -m comken.toolbox.credentials list                     登録済みの認証情報を接頭辞別に表示する
+python -m comken.toolbox.credentials delete site_a_client_id  1件削除する
 ```
 
 `{"site_a": {"client_id": ...}}` は `site_a_client_id` というキー名に展開されて
@@ -69,7 +69,7 @@ python -m comken.credentials delete site_a_client_id  1件削除する
 ### 使う側
 
 ```python
-from comken.credentials import Credentials
+from comken.toolbox.credentials import Credentials
 
 cred = Credentials("site_a")
 cred.client_id      # → site_a_client_id の値

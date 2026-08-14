@@ -18,22 +18,6 @@ import pytest
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 
-from comken import browser
-from comken.browser import (
-    BackgroundTask,
-    BrowserOptions,
-    Browsers,
-    BrowserSession,
-    DownloadDir,
-    Locator,
-    Page,
-    SitePage,
-)
-from comken.browser.driver import _major, _pick_source, _replace_driver
-from comken.browser.management.browsers import Browsers as InternalBrowsers
-from comken.browser.management.sessions import BrowserSession as InternalBrowserSession
-from comken.browser.management.startup import _build_driver, create_service
-from comken.browser.management.tasks import BackgroundTask as InternalBackgroundTask
 from comken.exceptions import (
     BrowsersClosedError,
     BrowsersNotStartedError,
@@ -46,13 +30,29 @@ from comken.exceptions import (
     SessionNotFoundError,
     SessionNotStartedError,
 )
+from comken.toolbox import browser
+from comken.toolbox.browser import (
+    BackgroundTask,
+    BrowserOptions,
+    Browsers,
+    BrowserSession,
+    DownloadDir,
+    Locator,
+    Page,
+    SitePage,
+)
+from comken.toolbox.browser.driver import _major, _pick_source, _replace_driver
+from comken.toolbox.browser.management.browsers import Browsers as InternalBrowsers
+from comken.toolbox.browser.management.sessions import BrowserSession as InternalBrowserSession
+from comken.toolbox.browser.management.startup import _build_driver, create_service
+from comken.toolbox.browser.management.tasks import BackgroundTask as InternalBackgroundTask
 
 
 class TestPublicApi:
-    """内部整理後も comken.browser の公開入口を維持する。"""
+    """内部整理後も comken.toolbox.browser の公開入口を維持する。"""
 
     def test_exports_management_classes_from_browser_package(self):
-        """管理クラス3つを従来どおり comken.browser からimportできる。"""
+        """管理クラス3つを従来どおり comken.toolbox.browser からimportできる。"""
         assert BrowserSession is InternalBrowserSession
         assert Browsers is InternalBrowsers
         assert BackgroundTask is InternalBackgroundTask
@@ -132,7 +132,7 @@ class TestSessionStartFailure:
         driver = MagicMock()
         driver.implicitly_wait.side_effect = RuntimeError("初期化に失敗")
         monkeypatch.setattr(
-            "comken.browser.management.startup.webdriver.Edge", lambda **kwargs: driver
+            "comken.toolbox.browser.management.startup.webdriver.Edge", lambda **kwargs: driver
         )
 
         session = BrowserSession(
@@ -153,7 +153,7 @@ class TestSessionStartFailure:
         後始末は起動処理の側で完結している必要がある。
         """
         monkeypatch.setattr(
-            "comken.browser.management.startup.webdriver.Edge",
+            "comken.toolbox.browser.management.startup.webdriver.Edge",
             MagicMock(side_effect=RuntimeError("起動に失敗")),
         )
         download_dir = MagicMock(wraps=DownloadDir(path=tmp_path / "dl"))
@@ -169,7 +169,7 @@ class TestSessionStartFailure:
     def test_does_not_retry_when_no_source_dir(self, tmp_path, monkeypatch):
         """配布フォルダが未設定なら、ドライバー更新も再試行もしない。"""
         edge = MagicMock(side_effect=RuntimeError("起動に失敗"))
-        monkeypatch.setattr("comken.browser.management.startup.webdriver.Edge", edge)
+        monkeypatch.setattr("comken.toolbox.browser.management.startup.webdriver.Edge", edge)
 
         session = BrowserSession(
             name="test",
@@ -197,8 +197,8 @@ class TestExternalLogSuppression:
             ]
         )
         edge = MagicMock(return_value=MagicMock())
-        monkeypatch.setattr("comken.browser.management.startup.Service", service_class)
-        monkeypatch.setattr("comken.browser.management.startup.webdriver.Edge", edge)
+        monkeypatch.setattr("comken.toolbox.browser.management.startup.Service", service_class)
+        monkeypatch.setattr("comken.toolbox.browser.management.startup.webdriver.Edge", edge)
         session = BrowserSession(
             name="test",
             options=BrowserOptions(),
@@ -222,7 +222,7 @@ class TestExternalLogSuppression:
             def __init__(self, executable_path, log_path=None):
                 calls.append((executable_path, log_path))
 
-        monkeypatch.setattr("comken.browser.management.startup.Service", OldService)
+        monkeypatch.setattr("comken.toolbox.browser.management.startup.Service", OldService)
 
         create_service(tmp_path / "msedgedriver.exe", suppress_logs=True)
 
@@ -237,8 +237,8 @@ class TestExternalLogSuppression:
         service = MagicMock()
         service_class = MagicMock(return_value=service)
         edge = MagicMock(return_value=MagicMock())
-        monkeypatch.setattr("comken.browser.management.startup.Service", service_class)
-        monkeypatch.setattr("comken.browser.management.startup.webdriver.Edge", edge)
+        monkeypatch.setattr("comken.toolbox.browser.management.startup.Service", service_class)
+        monkeypatch.setattr("comken.toolbox.browser.management.startup.webdriver.Edge", edge)
         session = BrowserSession(
             name="test",
             options=DebugOptions(),
@@ -348,7 +348,7 @@ class TestBrowsersRequiresWith:
     def test_rejects_launch_without_with(self, monkeypatch):
         """with に入れずに launch すると、ブラウザを起動する前に止まる。"""
         edge = MagicMock()
-        monkeypatch.setattr("comken.browser.management.startup.webdriver.Edge", edge)
+        monkeypatch.setattr("comken.toolbox.browser.management.startup.webdriver.Edge", edge)
 
         browsers = Browsers()
 
@@ -801,7 +801,7 @@ class TestDriverUpdate:
             copied.append(Path(dst).name)
             return real_copy(src, dst)
 
-        monkeypatch.setattr("comken.browser.driver.shutil.copy2", record_copy)
+        monkeypatch.setattr("comken.toolbox.browser.driver.shutil.copy2", record_copy)
 
         _replace_driver(source, target)
 
@@ -816,7 +816,7 @@ class TestDriverUpdate:
         target = tmp_path / "bin" / "msedgedriver.exe"
 
         monkeypatch.setattr(
-            "comken.browser.driver.shutil.copy2",
+            "comken.toolbox.browser.driver.shutil.copy2",
             MagicMock(side_effect=PermissionError("使用中")),
         )
 
@@ -829,21 +829,21 @@ class TestRemovedNames:
 
     def test_old_driver_name_explains_replacement(self):
         """EdgeDriver を使うと、置き換え先が分かるエラーになる。"""
-        import comken.browser as browser_package
+        import comken.toolbox.browser as browser_package
 
         with pytest.raises(AttributeError, match="Browsers"):
             _ = browser_package.EdgeDriver
 
     def test_old_page_name_explains_replacement(self):
         """BasePage を使うと、置き換え先が分かるエラーになる。"""
-        import comken.browser as browser_package
+        import comken.toolbox.browser as browser_package
 
         with pytest.raises(AttributeError, match="Page"):
             _ = browser_package.BasePage
 
     def test_unknown_name_raises_plain_error(self):
         """それ以外の未知の名前は、普通の AttributeError になる。"""
-        import comken.browser as browser_package
+        import comken.toolbox.browser as browser_package
 
         with pytest.raises(AttributeError, match="has no attribute"):
             _ = browser_package.NotAThing

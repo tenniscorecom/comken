@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from comken.exceptions import SalesforceAuthError
-from comken.salesforce import CredentialsOAuth, RefreshOAuth, SalesforceBase
+from comken.toolbox.salesforce import CredentialsOAuth, RefreshOAuth, SalesforceBase
 
 DOMAIN_URL = "https://example.my.salesforce.com"
 INSTANCE_URL = "https://instance.my.salesforce.com"
@@ -42,7 +42,7 @@ class TestRefreshOAuth:
         response = _response(
             {"access_token": "ACCESS", "instance_url": INSTANCE_URL, "refresh_token": "REFRESH"}
         )
-        with patch("comken.salesforce.oauth_refresh.requests.post", return_value=response):
+        with patch("comken.toolbox.salesforce.oauth_refresh.requests.post", return_value=response):
             auth = RefreshOAuth.exchange_code(
                 "CID",
                 "SECRET",
@@ -59,7 +59,9 @@ class TestRefreshOAuth:
         response = _response(
             {"access_token": "ACCESS", "instance_url": INSTANCE_URL, "refresh_token": "ROTATED"}
         )
-        with patch("comken.salesforce.oauth_refresh.requests.post", return_value=response) as post:
+        with patch(
+            "comken.toolbox.salesforce.oauth_refresh.requests.post", return_value=response
+        ) as post:
             result = RefreshOAuth(
                 "CID", "REFRESH", DOMAIN_URL, on_refresh_token=saved_tokens.append
             ).fetch()
@@ -69,7 +71,9 @@ class TestRefreshOAuth:
 
     def test_refresh_sends_secret_when_required(self):
         response = _response({"access_token": "ACCESS", "instance_url": INSTANCE_URL})
-        with patch("comken.salesforce.oauth_refresh.requests.post", return_value=response) as post:
+        with patch(
+            "comken.toolbox.salesforce.oauth_refresh.requests.post", return_value=response
+        ) as post:
             RefreshOAuth(
                 "CID",
                 "REFRESH",
@@ -81,7 +85,7 @@ class TestRefreshOAuth:
     def test_auth_error_redacts_refresh_token(self):
         response = MagicMock(status_code=400, text="invalid REFRESH")
         with (
-            patch("comken.salesforce.oauth_refresh.requests.post", return_value=response),
+            patch("comken.toolbox.salesforce.oauth_refresh.requests.post", return_value=response),
             pytest.raises(SalesforceAuthError) as raised,
         ):
             RefreshOAuth("CID", "REFRESH", DOMAIN_URL).fetch()
@@ -90,8 +94,8 @@ class TestRefreshOAuth:
     def test_from_credentials_saves_rotated_token_to_same_prefix(self):
         credentials = MagicMock(client_id="CID", client_secret="SECRET", refresh_token="REFRESH")
         with (
-            patch("comken.credentials.Credentials", return_value=credentials),
-            patch("comken.credentials.save_credential") as save_credential,
+            patch("comken.toolbox.credentials.Credentials", return_value=credentials),
+            patch("comken.toolbox.credentials.save_credential") as save_credential,
         ):
             auth = RefreshOAuth.from_credentials(DOMAIN_URL, "site_a")
             auth._on_refresh_token("ROTATED")
@@ -101,7 +105,7 @@ class TestRefreshOAuth:
 class TestCredentialsOAuth:
     def test_from_credentials_reads_same_prefix(self):
         credentials = MagicMock(client_id="CID", client_secret="SECRET")
-        with patch("comken.credentials.Credentials", return_value=credentials) as load:
+        with patch("comken.toolbox.credentials.Credentials", return_value=credentials) as load:
             auth = CredentialsOAuth.from_credentials(DOMAIN_URL, "site_a")
         load.assert_called_once_with("site_a")
         assert auth._client_id == "CID"
@@ -120,7 +124,7 @@ class TestPluggableSalesforceAuth:
         success.json.return_value = {"done": True, "records": []}
         session.request.side_effect = [unauthorized, success]
         with (
-            patch("comken.salesforce.client.requests.Session", return_value=session),
+            patch("comken.toolbox.salesforce.client.requests.Session", return_value=session),
             _TestSalesforce(auth=auth) as client,
         ):
             assert client.query("SELECT Id FROM Account") == []

@@ -7,7 +7,7 @@
 
 import pytest
 
-from comken.credentials.gui import build_credential_name
+from comken.toolbox.credentials.gui import build_credential_name
 
 
 class TestBuildCredentialName:
@@ -51,7 +51,7 @@ class TestWindow:
     def test_window_builds_and_closes(self, tmp_path):
         import tkinter as tk
 
-        from comken.credentials.gui import CredentialsApp
+        from comken.toolbox.credentials.gui import CredentialsApp
 
         try:
             root = tk.Tk()

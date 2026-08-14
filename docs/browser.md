@@ -29,7 +29,7 @@ Edge を自動で動かして、社内システムから情報を取ったり入
 ## まず動かす
 
 ```python
-from comken.browser import Browsers
+from comken.toolbox.browser import Browsers
 
 from .browser_options import KintaiOptions
 from .pages.login_page import LoginPage
@@ -184,7 +184,7 @@ src/
 ### 2. オプションクラスを足す
 
 ```python
-from comken.browser import BrowserOptions
+from comken.toolbox.browser import BrowserOptions
 
 
 class KintaiOptions(BrowserOptions):
@@ -197,7 +197,7 @@ class KintaiOptions(BrowserOptions):
 ### 3. サイト共通クラスを作る
 
 ```python
-from comken.browser import Locator, SitePage
+from comken.toolbox.browser import Locator, SitePage
 
 
 class KintaiPage(SitePage):
@@ -217,7 +217,7 @@ class KintaiPage(SitePage):
 セレクターは**クラスの先頭にまとめる**。画面の HTML が変わったとき、直す場所が一箇所に集まる。
 
 ```python
-from comken.browser import Locator
+from comken.toolbox.browser import Locator
 
 from .kintai_page import KintaiPage
 
@@ -346,7 +346,7 @@ def ensure_login(self, user_id: str, password: str) -> "HomePage":
 ダウンロードフォルダはセッションごとに分かれている。完了待ちは `download_dir.wait()`。
 
 ```python
-from comken.utils.files import move_file
+from comken.toolbox.utils.files import move_file
 
 with Browsers() as browsers:
     kintai = browsers.launch("kintai", KintaiOptions)
@@ -437,7 +437,7 @@ class KintaiOptions(BrowserOptions):
 サイトが1つでも複数でも書き方は同じで、増やすときは `launch` を1行足すだけ:
 
 ```python
-from comken.browser import Browsers
+from comken.toolbox.browser import Browsers
 
 with Browsers() as browsers:
     kintai = browsers.launch("kintai", KintaiOptions)
@@ -527,7 +527,7 @@ session.raw.set_window_size(1200, 800)   # ここにない機能は raw（生の
 
 ```python
 # src/browser_options.py（プロジェクト側）
-from comken.browser import BrowserOptions
+from comken.toolbox.browser import BrowserOptions
 
 class KintaiOptions(BrowserOptions):
     DRIVER_PATH = r"C:\tools\msedgedriver.exe"
@@ -569,8 +569,8 @@ Edge がダウンロード中に作る `.crdownload` を監視して完了を判
 残したいファイルは `with` の中で移動しておく。
 
 ```python
-from comken.browser import Browsers
-from comken.utils.files import move_file
+from comken.toolbox.browser import Browsers
+from comken.toolbox.utils.files import move_file
 
 with Browsers() as browsers:
     kintai = browsers.launch("kintai", KintaiOptions)
@@ -591,7 +591,7 @@ with Browsers() as browsers:
 セレクターは `Locator` のクラス変数としてクラスの先頭にまとめる。
 
 ```python
-from comken.browser import Locator, SitePage
+from comken.toolbox.browser import Locator, SitePage
 
 class LoginPage(SitePage):
     BASE_URL = "https://example.com"

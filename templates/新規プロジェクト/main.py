@@ -44,7 +44,7 @@ if __name__ == "__main__":
 # 基盤が設定の初期化・時間計測・ログ設定をしてから main を呼ぶので、
 # setup_logging() は呼ばない（呼んでも二重設定にはならないが、基盤の設定が正になる）。
 #
-#     from comken.run import backoffice   # イントラネットのツールなら intranet に変える
+#     from comken.toolbox.rpa import backoffice   # イントラネットのツールなら intranet に変える
 #
 #     PROJECT_NAME = "（プロジェクト名）"   # 基盤へ渡す名前。ログの識別に使われる
 #

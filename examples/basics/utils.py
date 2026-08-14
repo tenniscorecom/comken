@@ -3,7 +3,7 @@
 import logging
 
 from comken.logger import setup_logging
-from comken.utils import (
+from comken.toolbox.utils import (
     DiffResult,
     RowChange,
     diff_rows,

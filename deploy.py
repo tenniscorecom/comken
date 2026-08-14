@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 import comken
-from comken.utils import now
+from comken.toolbox.utils import now
 
 ROOT = Path(__file__).resolve().parent
 PACKAGE = ROOT / "comken"

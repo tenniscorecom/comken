@@ -673,7 +673,7 @@ if __name__ == "__main__":  # pragma: no cover
 
 ## 日時の扱い
 
-- 現在時刻・今日の日付は共通の `now()` / `today()`（`comken.utils`）を使い、
+- 現在時刻・今日の日付は共通の `now()` / `today()`（`comken.toolbox.utils`）を使い、
   `datetime.datetime.now()` / `datetime.date.today()` を直接呼ばない。
   タイムゾーンの扱いを1か所に集め、テストで時刻を差し替えられるようにするため
   （素の `now()` は Ruff の `DTZ` でも検出される）。

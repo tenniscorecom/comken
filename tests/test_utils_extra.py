@@ -10,8 +10,8 @@ import zipfile
 
 import pytest
 
-from comken.utils import Timer, retry
-from comken.utils.files import unzip, zip_files, zip_folder
+from comken.toolbox.utils import Timer, retry
+from comken.toolbox.utils.files import unzip, zip_files, zip_folder
 
 
 class TestRetry:

@@ -22,9 +22,9 @@ def run() -> None:
 
     # ── ここに処理を書く ──────────────────────────────────────────────
     # 例:
-    #   from comken.csv import CsvReader
-    #   from comken.excel import ExcelWriter
-    #   from comken.utils.files import DateNameBuilder
+    #   from comken.toolbox.csv import CsvReader
+    #   from comken.toolbox.excel import ExcelWriter
+    #   from comken.toolbox.utils.files import DateNameBuilder
     #
     #   rows = CsvReader(config.FILES.INPUT_CSV).read_rows()
     #   out = output_folder / DateNameBuilder("レポート").prefix()

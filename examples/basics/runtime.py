@@ -5,7 +5,7 @@ from pathlib import Path
 
 from comken import debug, dry_run, is_debug, is_dry_run
 from comken.logger import setup_logging
-from comken.utils.files import copy_file
+from comken.toolbox.utils.files import copy_file
 
 HERE = Path(__file__).parent
 OUTPUT_FOLDER = HERE / "output"

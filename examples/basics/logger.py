@@ -5,7 +5,7 @@ from pathlib import Path
 
 import comken.logger as comken_logger
 from comken.logger import setup_logging
-from comken.utils import today
+from comken.toolbox.utils import today
 
 HERE = Path(__file__).parent
 LOG_FOLDER = HERE / "output" / "logs"

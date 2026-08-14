@@ -11,7 +11,14 @@ from unittest.mock import patch
 import pytest
 import win32crypt
 
-from comken.credentials import (
+from comken.exceptions import (
+    CredentialDecryptionError,
+    CredentialImportError,
+    CredentialNotFoundError,
+    CredentialStoreCorruptedError,
+    InvalidCredentialNameError,
+)
+from comken.toolbox.credentials import (
     Credentials,
     delete_credential,
     import_json,
@@ -20,14 +27,7 @@ from comken.credentials import (
     save_credential,
     save_credentials,
 )
-from comken.credentials.__main__ import main
-from comken.exceptions import (
-    CredentialDecryptionError,
-    CredentialImportError,
-    CredentialNotFoundError,
-    CredentialStoreCorruptedError,
-    InvalidCredentialNameError,
-)
+from comken.toolbox.credentials.__main__ import main
 
 SECRET = "s3cret-値-🔑"  # 日本語と絵文字を含めて UTF-8 の往復も確かめる
 
@@ -263,7 +263,7 @@ class TestCommandLine:
 
     def test_gui_opens_the_window(self):
         """gui は登録画面を開くだけ（画面そのものは test_credentials_gui.py で見る）。"""
-        with patch("comken.credentials.gui.main") as open_window:
+        with patch("comken.toolbox.credentials.gui.main") as open_window:
             assert main(["gui"]) == 0
         open_window.assert_called_once_with()
 

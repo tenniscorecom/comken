@@ -7,7 +7,7 @@ README の「CSV」から移した、モジュールを使うときの詳しい�
 ## CSV
 
 ```python
-from comken.csv import CsvReader
+from comken.toolbox.csv import CsvReader
 
 ORDER_ID = "A001"
 STAFF_NAME = "山田"
@@ -90,7 +90,7 @@ reader.read_rows()
 ### CSV の書き込み（CsvWriter）
 
 ```python
-from comken.csv import CsvWriter
+from comken.toolbox.csv import CsvWriter
 
 rows = [{"注文番号": "A001", "金額": "1000"}, {"注文番号": "A002", "金額": "2000"}]
 

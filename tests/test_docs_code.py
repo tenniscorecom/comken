@@ -146,7 +146,9 @@ def test_generated_api_covers_all_public_api():
     init_files = [
         _ROOT / "comken" / "__init__.py",
         *(_ROOT / "comken").glob("*/__init__.py"),
-        _ROOT / "comken" / "utils" / "files" / "__init__.py",
+        *(_ROOT / "comken" / "toolbox").glob("*/__init__.py"),
+        *(_ROOT / "comken" / "services").glob("*/__init__.py"),
+        _ROOT / "comken" / "toolbox" / "utils" / "files" / "__init__.py",
     ]
     names = []
     for path in init_files:

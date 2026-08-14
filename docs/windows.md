@@ -12,7 +12,7 @@ ExcelComHandler は既存数式の計算結果・マクロ・パスワード保�
 ### ExcelComHandler
 
 ```python
-from comken.windows.handler import ExcelComHandler
+from comken.toolbox.windows.handler import ExcelComHandler
 
 SHEET = "Sheet1"
 DATA_ROW = 2
@@ -68,7 +68,7 @@ print(f"{matched}件転記した")
 ### WindowHandler
 
 ```python
-from comken.windows.handler import WindowHandler
+from comken.toolbox.windows.handler import WindowHandler
 
 WINDOW_TITLE = "メモ帳"
 
@@ -81,7 +81,7 @@ w.get_title() # タイトルを取得
 
 ```python
 import win32con
-from comken.windows.handler import RegistryHandler
+from comken.toolbox.windows.handler import RegistryHandler
 
 SETTING_KEY = "SettingName"
 
@@ -95,7 +95,7 @@ COM 経由の Excel 自動化は、クラッシュ等で EXCEL.EXE が画面に�
 残った Excel はファイルをロックし続け、次回実行時の原因不明エラーのもとになる。
 
 ```python
-from comken.windows import is_excel_running, kill_excel
+from comken.toolbox.windows import is_excel_running, kill_excel
 
 # 無人実行の PC: 自動処理の開始前に前回の残骸を片付ける
 kill_excel()   # ※ ユーザーが開いている Excel も終了する（未保存の変更は失われる）

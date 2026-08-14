@@ -14,8 +14,8 @@ from pathlib import Path
 
 from comken import dry_run
 from comken.config import Config
-from comken.csv import CsvReader
-from comken.utils.files import FileFinder, date_in_name, move_file
+from comken.toolbox.csv import CsvReader
+from comken.toolbox.utils.files import FileFinder, date_in_name, move_file
 
 HERE = Path(__file__).parent
 CONFIG_PATH = HERE / "config.ini"

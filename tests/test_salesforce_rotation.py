@@ -6,7 +6,7 @@ from unittest.mock import Mock, call, patch
 import pytest
 
 from comken.exceptions.salesforce import SalesforceCredentialRotationError
-from comken.salesforce.rotation import SalesforceCredentialRotator
+from comken.toolbox.salesforce.rotation import SalesforceCredentialRotator
 
 TODAY = datetime.date(2026, 8, 13)
 
@@ -28,8 +28,10 @@ class TestSalesforceCredentialRotator:
         rotator = SalesforceCredentialRotator(client, "app-1", "site_a", is_enabled=True)
 
         with (
-            patch("comken.salesforce.rotation.local_today", return_value=TODAY) as current_date,
-            patch("comken.salesforce.rotation.load_credential", return_value="2026-08-01"),
+            patch(
+                "comken.toolbox.salesforce.rotation.local_today", return_value=TODAY
+            ) as current_date,
+            patch("comken.toolbox.salesforce.rotation.load_credential", return_value="2026-08-01"),
         ):
             assert not rotator.rotate_if_due()
 
@@ -41,10 +43,10 @@ class TestSalesforceCredentialRotator:
 
         with (
             patch(
-                "comken.salesforce.rotation.load_credential",
+                "comken.toolbox.salesforce.rotation.load_credential",
                 return_value="2026-06-01",
             ),
-            patch("comken.salesforce.rotation.save_credentials") as save,
+            patch("comken.toolbox.salesforce.rotation.save_credentials") as save,
         ):
             assert rotator.rotate_if_due(TODAY)
 
@@ -80,9 +82,9 @@ class TestSalesforceCredentialRotator:
         rotator = SalesforceCredentialRotator(client, "app-1", "site_a", is_enabled=True)
 
         with (
-            patch("comken.salesforce.rotation.load_credential", return_value="2026-06-01"),
+            patch("comken.toolbox.salesforce.rotation.load_credential", return_value="2026-06-01"),
             patch(
-                "comken.salesforce.rotation.save_credentials",
+                "comken.toolbox.salesforce.rotation.save_credentials",
                 side_effect=OSError("保存失敗"),
             ),
             pytest.raises(SalesforceCredentialRotationError, match="DPAPI"),

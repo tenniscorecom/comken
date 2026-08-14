@@ -14,7 +14,7 @@ class SalesforceError(ComkenError):
 class SalesforceAuthError(SalesforceError):
     """Salesforce にログインできない
 
-    発生箇所: comken.salesforce.SalesforceBase の認証時（初回・401 後の取り直し）
+    発生箇所: comken.toolbox.salesforce.SalesforceBase の認証時（初回・401 後の取り直し）
 
     対処:
         表示された確認項目を上から順に見る。それでも直らなければ管理者へ連絡する
@@ -36,7 +36,7 @@ class SalesforceAuthError(SalesforceError):
 class SalesforceConnectionError(SalesforceError):
     """Salesforce につながらない
 
-    発生箇所: comken.salesforce.SalesforceBase の全リクエスト
+    発生箇所: comken.toolbox.salesforce.SalesforceBase の全リクエスト
 
     対処:
         ネットワークの状態を確認して、少し待ってから再実行する
@@ -53,7 +53,7 @@ class SalesforceConnectionError(SalesforceError):
 class SalesforceRequestError(SalesforceError):
     """Salesforce が処理を断った
 
-    発生箇所: comken.salesforce.SalesforceBase の全リクエスト
+    発生箇所: comken.toolbox.salesforce.SalesforceBase の全リクエスト
 
     対処:
         表示されたメッセージをそのまま添えて管理者へ連絡する（権限か項目名の問題が多い）
@@ -104,7 +104,7 @@ class SalesforceReportTruncatedError(SalesforceError):
     レポート API は同期・非同期とも 2000 行が上限。非同期にしても超えられない。
     黙って欠けたデータで処理を続けないよう、既定ではこの例外で止める。
 
-    発生箇所: comken.salesforce.ReportApi.run() / run_async()
+    発生箇所: comken.toolbox.salesforce.ReportApi.run() / run_async()
 
     対処:
         期間を狭めて何回かに分けて実行する。1回で全部必要なら管理者へ連絡する
@@ -126,7 +126,7 @@ class SalesforceReportFormatError(SalesforceError):
     集計（サマリ・マトリックス）形式は行の入れ物の構造が変わり、
     そのまま読むと無言で空を返すため、明示的に弾く。
 
-    発生箇所: comken.salesforce.ReportApi.run() / run_async()
+    発生箇所: comken.toolbox.salesforce.ReportApi.run() / run_async()
 
     対処:
         レポートを明細形式にするか、管理者へ連絡する
@@ -146,7 +146,7 @@ class SalesforceSiteNotFoundError(SalesforceError):
     管理表には複数の組織のレポート URL が混ざる。どの組織へつなぐかは
     URL のドメインで決めるので、未登録のドメインでは接続先を選べない。
 
-    発生箇所: comken.salesforce.sites.site_for()
+    発生箇所: comken.toolbox.salesforce.sites.site_for()
 
     対処:
         URL のドメインを見直す。新しい組織なら管理者へ連絡する
@@ -169,7 +169,7 @@ class SalesforceReportIdNotFoundError(SalesforceError):
     管理表にはレポートの URL をそのまま貼れるようにしてあるが、
     貼られたものが Salesforce のレポート URL でないと ID を取り出せない。
 
-    発生箇所: comken.salesforce.report_id_from_url()
+    発生箇所: comken.toolbox.salesforce.report_id_from_url()
 
     対処:
         Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す

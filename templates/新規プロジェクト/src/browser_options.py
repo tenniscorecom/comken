@@ -12,7 +12,7 @@ config.ini ではなくこのファイル（src/ 内の Python）で持つ。
 片方の設定がもう片方へ影響しない。
 
 使い方（呼ぶ側）:
-    from comken.browser import Browsers
+    from comken.toolbox.browser import Browsers
 
     from .browser_options import KintaiOptions
 
@@ -21,7 +21,7 @@ config.ini ではなくこのファイル（src/ 内の Python）で持つ。
         kintai.open("https://kintai.example.co.jp")
 """
 
-from comken.browser import BrowserOptions
+from comken.toolbox.browser import BrowserOptions
 
 
 class KintaiOptions(BrowserOptions):

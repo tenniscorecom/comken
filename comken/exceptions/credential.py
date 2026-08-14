@@ -16,7 +16,7 @@ class CredentialError(ComkenError):
 class InvalidCredentialNameError(CredentialError):
     """認証情報のキー名に使えない文字がある
 
-    発生箇所: comken.credentials の Credentials() / save_credential() / 取り込み
+    発生箇所: comken.toolbox.credentials の Credentials() / save_credential() / 取り込み
 
     対処:
         半角英数字とアンダースコアだけにする（漢字・スペース・記号は使えない）
@@ -33,11 +33,11 @@ class InvalidCredentialNameError(CredentialError):
 class CredentialNotFoundError(CredentialError):
     """認証情報（パスワード・client_secret など）が登録されていない
 
-    発生箇所: comken.credentials の load_credential() / Credentials の属性アクセス
+    発生箇所: comken.toolbox.credentials の load_credential() / Credentials の属性アクセス
 
     対処:
         表示された登録済みキー名と見比べる。
-        無ければ `python -m comken.credentials import 認証情報.json` で取り込む
+        無ければ `python -m comken.toolbox.credentials import 認証情報.json` で取り込む
     """
 
     def __init__(self, name: str, registered: list[str]) -> None:
@@ -46,7 +46,7 @@ class CredentialNotFoundError(CredentialError):
             f"登録済みのキー名:\n{known}"
             if registered
             else "まだ1件も登録されていません。次のコマンドで取り込んでください。\n"
-            "  python -m comken.credentials import 認証情報.json"
+            "  python -m comken.toolbox.credentials import 認証情報.json"
         )
         super().__init__(f"認証情報が登録されていません: {name}\n{detail}")
 
@@ -57,7 +57,7 @@ class CredentialDecryptionError(CredentialError):
     DPAPI は「登録したときの Windows ユーザー × PC」でしか復号できない。
     別のアカウントで実行した・別の PC にファイルをコピーした場合がほとんど。
 
-    発生箇所: comken.credentials の読み書き全般
+    発生箇所: comken.toolbox.credentials の読み書き全般
 
     対処:
         登録したときと**同じ Windows アカウント・同じ PC** で実行しているか確認する。
@@ -83,7 +83,7 @@ class CredentialStoreCorruptedError(CredentialError):
     復号できない（別ユーザー・別 PC）のとは対処が違う。こちらは実行アカウントを
     直しても直らないので、ファイルを捨てて取り込み直すしかない。
 
-    発生箇所: comken.credentials の読み書き全般
+    発生箇所: comken.toolbox.credentials の読み書き全般
 
     対処:
         実行アカウントの問題ではない。表示されたファイルを削除して、もう一度取り込み直す
@@ -95,14 +95,14 @@ class CredentialStoreCorruptedError(CredentialError):
             f"（{detail}）\n"
             "復号はできているので、実行アカウントの問題ではありません。\n"
             "このファイルを削除して、もう一度取り込み直してください。\n"
-            "  python -m comken.credentials import 認証情報.json"
+            "  python -m comken.toolbox.credentials import 認証情報.json"
         )
 
 
 class CredentialImportError(CredentialError):
     """取り込む JSON が壊れている・形式が違う
 
-    発生箇所: comken.credentials の import_json()
+    発生箇所: comken.toolbox.credentials の import_json()
 
     対処:
         表示された形式のとおりに書き直す。値は必ず `" "` で囲む

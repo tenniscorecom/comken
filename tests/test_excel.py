@@ -12,9 +12,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from openpyxl import Workbook, load_workbook
 
-import comken.excel
+import comken.toolbox.excel
 from comken.config import Config
-from comken.excel import ExcelReader, ExcelWriter
 from comken.exceptions import (
     ComkenError,
     ExcelError,
@@ -29,8 +28,9 @@ from comken.exceptions import (
     TransferSourceColumnNotFoundError,
     UnsupportedFileSuffixError,
 )
-from comken.utils.data import col_to_num
-from comken.windows.handler import ExcelComHandler
+from comken.toolbox.excel import ExcelReader, ExcelWriter
+from comken.toolbox.utils.data import col_to_num
+from comken.toolbox.windows.handler import ExcelComHandler
 
 
 @pytest.fixture
@@ -209,7 +209,7 @@ class TestExcelComHandlerColumn:
         excel = FailingExcel()
 
         with (
-            patch("comken.windows.handler.win32com.client.DispatchEx", return_value=excel),
+            patch("comken.toolbox.windows.handler.win32com.client.DispatchEx", return_value=excel),
             pytest.raises(RuntimeError, match="setup failed"),
         ):
             ExcelComHandler(path)
@@ -974,7 +974,7 @@ class TestReadComputedRows:
         com.__enter__.return_value.read_rows.return_value = [(10, 20)]
 
         with (
-            patch("comken.windows.handler.ExcelComHandler", return_value=com) as handler,
+            patch("comken.toolbox.windows.handler.ExcelComHandler", return_value=com) as handler,
             ExcelReader(path) as reader,
         ):
             rows = reader.read_computed_rows("Sheet1")
@@ -986,7 +986,7 @@ class TestReadComputedRows:
     def test_workbook_without_formula_does_not_use_com(self, excel_with_header):
         """数式がなければ openpyxl の結果を返し、COM を起動しない。"""
         with (
-            patch("comken.windows.handler.ExcelComHandler") as handler,
+            patch("comken.toolbox.windows.handler.ExcelComHandler") as handler,
             ExcelReader(excel_with_header) as reader,
         ):
             rows = reader.read_computed_rows("Sheet1")
@@ -1018,8 +1018,8 @@ class TestExcelApiBoundaries:
     """Reader と Writer の公開 API 境界を確認する。"""
 
     def test_col_to_num_is_not_public(self):
-        assert "col_to_num" not in comken.excel.__all__
-        assert not hasattr(comken.excel, "col_to_num")
+        assert "col_to_num" not in comken.toolbox.excel.__all__
+        assert not hasattr(comken.toolbox.excel, "col_to_num")
 
     def test_writer_rejects_read_only_argument(self, excel_with_header):
         """ExcelWriter は read_only 引数を公開しない。"""

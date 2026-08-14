@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from comken.browser import Locator
+from comken.toolbox.browser import Locator
 
 from .app_page import AppPage
 

@@ -38,7 +38,7 @@ app_page.py — このサンプルサイト共通の SitePage
 ---------------------------------------------------------------------------
 """
 
-from comken.browser import Locator, SitePage
+from comken.toolbox.browser import Locator, SitePage
 
 
 class AppPage(SitePage):

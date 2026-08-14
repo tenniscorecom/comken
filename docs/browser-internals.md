@@ -8,7 +8,7 @@
 利用プロジェクトは内部ファイルを直接importせず、次の入口だけを使う。
 
 ```python
-from comken.browser import BrowserOptions, Browsers, Locator, Page
+from comken.toolbox.browser import BrowserOptions, Browsers, Locator, Page
 ```
 
 `Browsers`、`BrowserSession`などの公開名は互換性のため維持する。内部ファイルは役割が

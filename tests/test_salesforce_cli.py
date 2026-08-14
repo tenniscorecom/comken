@@ -1,9 +1,9 @@
-"""確認コマンド（python -m comken.salesforce）のテスト。"""
+"""確認コマンド（python -m comken.toolbox.salesforce）のテスト。"""
 
 from unittest.mock import MagicMock, patch
 
 from comken.exceptions.salesforce import SalesforceAuthError
-from comken.salesforce.__main__ import main
+from comken.toolbox.salesforce.__main__ import main
 
 
 def _client(**kwargs) -> MagicMock:
@@ -23,7 +23,7 @@ class TestPrintShape:
             {"id": "STG1", "consumerKey": "KEY-VALUE", "consumerSecret": "SECRET-VALUE"},
             {},
         )
-        with patch("comken.salesforce.__main__.Sandbox", return_value=client):
+        with patch("comken.toolbox.salesforce.__main__.Sandbox", return_value=client):
             main(
                 [
                     "app",
@@ -47,7 +47,7 @@ class TestReport:
         """既定では行数と列名だけを出し、中身は出さない。"""
         client = _client()
         client.report.run.return_value = [{"案件名": "極秘案件", "金額": "1000"}]
-        with patch("comken.salesforce.__main__.Sandbox", return_value=client):
+        with patch("comken.toolbox.salesforce.__main__.Sandbox", return_value=client):
             code = main(
                 [
                     "report",
@@ -70,7 +70,7 @@ class TestReport:
         """--rows を指定したときだけ中身を出す。"""
         client = _client()
         client.report.run.return_value = [{"案件名": "案件A"}]
-        with patch("comken.salesforce.__main__.Sandbox", return_value=client):
+        with patch("comken.toolbox.salesforce.__main__.Sandbox", return_value=client):
             main(
                 [
                     "report",
@@ -96,7 +96,7 @@ class TestRotate:
             ({"consumerId": "CID"}, {}),
             ({"id": "STG1", "consumerKey": "K", "consumerSecret": "S"}, {}),
         ]
-        with patch("comken.salesforce.__main__.Sandbox", return_value=client):
+        with patch("comken.toolbox.salesforce.__main__.Sandbox", return_value=client):
             main(
                 [
                     "rotate",
@@ -117,7 +117,7 @@ class TestRotate:
     def test_aborts_when_not_confirmed(self, capsys):
         """確認に y 以外を入れたら何もしない。"""
         with (
-            patch("comken.salesforce.__main__.Sandbox") as sandbox,
+            patch("comken.toolbox.salesforce.__main__.Sandbox") as sandbox,
             patch("builtins.input", return_value="n"),
         ):
             main(["rotate", "--domain", "https://x", "--prefix", "site_a", "--app-id", "1CE"])
@@ -130,7 +130,7 @@ class TestErrors:
     def test_returns_1_with_message(self, capsys):
         """接続に失敗したら、traceback ではなくメッセージを出して 1 を返す。"""
         with patch(
-            "comken.salesforce.__main__.Sandbox",
+            "comken.toolbox.salesforce.__main__.Sandbox",
             side_effect=SalesforceAuthError(401, "invalid_client"),
         ):
             code = main(["check", "--domain", "https://x", "--prefix", "site_a"])

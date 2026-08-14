@@ -12,7 +12,7 @@ shutil を知らなくても使えるラッパー。ルールは共通で
 「**dst が既存フォルダならその中へ、それ以外はファイルパス扱い（親フォルダ自動作成）、同名は上書き**」。
 
 ```python
-from comken.utils.files import copy_file, move_file
+from comken.toolbox.utils.files import copy_file, move_file
 
 move_file("report.xlsx", r"C:\作業\output")            # フォルダの中へ移動
 move_file("report.xlsx", r"C:\作業\output\売上.xlsx")   # 名前を変えて移動（out フォルダがなければ作られる）
@@ -23,7 +23,7 @@ copy_file("report.xlsx", r"C:\作業\backup")             # コピー（元フ�
 ### ファイル名の組み立て・検索
 
 ```python
-from comken.utils.files import DateNameBuilder, FileFinder, date_in_name
+from comken.toolbox.utils.files import DateNameBuilder, FileFinder, date_in_name
 
 FOLDER = r"\\nas-server\share"
 
@@ -70,7 +70,7 @@ CSV・Excel から読んだ行（辞書）同士の差分を取る。for ルー�
 空セルの `None` と `""` も同じ扱い）ので、CSV ↔ Excel をまたいだ比較にそのまま使える。
 
 ```python
-from comken.utils import diff_row, diff_rows
+from comken.toolbox.utils import diff_row, diff_rows
 
 # 1行同士の差分（値が違う列だけ返る）
 before = {"注文番号": "A001", "金額": "1000", "担当者": "山田"}
@@ -105,7 +105,7 @@ Desktop / Downloads は **OneDrive の「既知のフォルダーの移動」に
 リダイレクトされている環境でも正しいパスが返る）。
 
 ```python
-from comken.utils.files import Paths
+from comken.toolbox.utils.files import Paths
 
 Paths.downloads()   # → C:\Users\xxx\Downloads
 Paths.desktop()     # → C:\Users\xxx\OneDrive\Desktop（リダイレクトされている場合）
@@ -117,7 +117,7 @@ Paths.temp_dir()    # → C:\Users\xxx\AppData\Local\Temp
 `time.sleep` の代わりに単位を明示して書ける。「条件が満たされるまで待つ」もループを書かずに済む。
 
 ```python
-from comken.utils import wait
+from comken.toolbox.utils import wait
 
 wait.seconds(3)     # 3秒待つ
 wait.seconds(0.5)   # 0.5秒待つ
@@ -138,7 +138,7 @@ ok = wait.until(lambda: 条件, timeout=120, interval=2)
 突合キーの正規化に使うと「見た目は同じなのに一致しない」問題を防げる。
 
 ```python
-from comken.utils import normalize, remove_spaces, strip_spaces
+from comken.toolbox.utils import normalize, remove_spaces, strip_spaces
 
 normalize("ＡＢＣ１２３")          # → "ABC123"（全角英数 → 半角）
 normalize("ｱｲｳ")                  # → "アイウ"（半角カナ → 全角）
@@ -157,7 +157,7 @@ row = lookup.get(normalize(key))
 一時的な失敗（クリックが要素に遮られた、ネットワークが一瞬切れた等）を自動でやり直す。
 
 ```python
-from comken.utils import retry
+from comken.toolbox.utils import retry
 
 @retry()                     # 3回まで試す（間隔1秒）。全部失敗なら最後の例外が出る
 def download_report():
@@ -176,7 +176,7 @@ def click_submit():
 「どこが遅いのか」を調べる。結果は INFO ログに出る。
 
 ```python
-from comken.utils import Timer
+from comken.toolbox.utils import Timer
 
 with Timer("CSV読み込み"):
     rows = CsvReader("data.csv").read_rows()
@@ -197,7 +197,7 @@ print(t.elapsed)              # 経過秒数を値として使える
 Windows のエクスプローラーで作られた zip（日本語ファイル名）も文字化けせず展開できる。
 
 ```python
-from comken.utils.files import unzip, zip_files, zip_folder
+from comken.toolbox.utils.files import unzip, zip_files, zip_folder
 
 zip_folder(r"C:\作業\reports")                       # → C:\作業\reports.zip
 zip_files(["a.xlsx", "b.csv"], r"C:\作業\提出用.zip")

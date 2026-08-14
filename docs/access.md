@@ -13,7 +13,7 @@ Access がインストールされた Windows PC で、マクロや VBA によ�
 NAS・共有フォルダ・クラウド同期フォルダを直接開かないため、速度・排他・破損リスクを抑えられる。
 
 ```python
-from comken.access import AccessDatabase
+from comken.toolbox.access import AccessDatabase
 from comken.constants import Encoding
 
 with AccessDatabase(r"C:\作業\顧客.accdb") as db:

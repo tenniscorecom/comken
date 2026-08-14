@@ -7,9 +7,9 @@ import logging
 import pytest
 
 import comken
-from comken.csv.writer import CsvWriter
-from comken.utils import measure
-from comken.utils.files import move_file
+from comken.toolbox.csv.writer import CsvWriter
+from comken.toolbox.utils import measure
+from comken.toolbox.utils.files import move_file
 
 
 class TestVersion:
@@ -46,7 +46,7 @@ class TestDebugMode:
 
     def test_library_methods_measured(self, tmp_path, caplog):
         """ライブラリの主要処理（CSV 読み込み等）が計測対象になっていることを確認する。"""
-        from comken.csv import CsvReader
+        from comken.toolbox.csv import CsvReader
 
         path = tmp_path / "data.csv"
         path.write_text("番号\n1\n", encoding="utf-8-sig")
@@ -91,7 +91,7 @@ class TestDryRun:
 
     def test_excel_save_skipped(self, tmp_path, caplog):
         """dry-run 中は Excel が保存されないことを確認する。"""
-        from comken.excel import ExcelWriter
+        from comken.toolbox.excel import ExcelWriter
 
         path = tmp_path / "out.xlsx"
         with comken.dry_run(), caplog.at_level(logging.INFO), ExcelWriter.create(path) as f:
@@ -103,7 +103,7 @@ class TestDryRun:
 
     def test_reads_still_work(self, tmp_path):
         """dry-run 中でも読み取りは通常どおり実行されることを確認する。"""
-        from comken.csv import CsvReader
+        from comken.toolbox.csv import CsvReader
 
         path = tmp_path / "data.csv"
         path.write_text("番号\n1\n", encoding="utf-8-sig")
@@ -138,12 +138,12 @@ class TestDiffLeadingZero:
 
         社員番号・郵便番号などの先頭ゼロの消失を「差分なし」と誤判定しない。
         """
-        from comken.utils import diff_row
+        from comken.toolbox.utils import diff_row
 
         assert diff_row({"社員番号": "0001"}, {"社員番号": 1}) == {"社員番号": ("0001", 1)}
 
     def test_leading_zero_strings_match(self):
         """ "0001" 同士は差分にならないことを確認する。"""
-        from comken.utils import diff_row
+        from comken.toolbox.utils import diff_row
 
         assert diff_row({"社員番号": "0001"}, {"社員番号": "0001"}) == {}

@@ -1,6 +1,6 @@
 # Salesforce authentication decisions
 
-この文書は、`comken.salesforce` の認証方式を社内で説明するための判断記録です。
+この文書は、`comken.toolbox.salesforce` の認証方式を社内で説明するための判断記録です。
 Salesforce の公式発表・仕様と、それを受けた comken 側の判断を分けて記載します。
 
 最終確認日: 2026-08-13
@@ -162,7 +162,7 @@ comkenでは認証処理を独立部品にしているため、将来JWTへ交�
 
 ## 5. secretの保管とローテーション
 
-`client_secret` はコード、Git、`config.ini`、ログへ書きません。`comken.credentials` がWindows
+`client_secret` はコード、Git、`config.ini`、ログへ書きません。`comken.toolbox.credentials` がWindows
 DPAPIで暗号化し、登録したWindowsユーザーとPCに紐付けて保存します。これは共有配布の仕組み
 ではないため、実行PCごとに登録が必要です。
 

@@ -1,4 +1,4 @@
-# comken.salesforce
+# comken.toolbox.salesforce
 
 [README（ドキュメントの入口）へ戻る](../README.md)
 
@@ -23,8 +23,8 @@
 どちらも `fetch() -> (access_token, instance_url)` を実装し、API クライアントへ差し替える。
 
 ```python
-from comken.salesforce.sites import Sandbox
-from comken.salesforce.oauth_refresh import OAuth
+from comken.toolbox.salesforce.sites import Sandbox
+from comken.toolbox.salesforce.oauth_refresh import OAuth
 
 auth = OAuth(
     client_id="Consumer Key",
@@ -46,7 +46,7 @@ with Sandbox(auth=auth) as sf:
 ### 認証方式を確定するとき
 
 2方式は同じ`OAuth`クラス名と`from_credentials()` / `fetch()`を持つ。
-`comken/salesforce/client.py`では、importと生成処理を2方式ぶん隣に置き、未採用側を
+`comken/toolbox/salesforce/client.py`では、importと生成処理を2方式ぶん隣に置き、未採用側を
 コメントアウトしている。
 
 ```python
@@ -59,7 +59,7 @@ from .oauth_refresh import OAuth
 
 同じ場所にあるOAuth生成処理もコメントを入れ替える。確定後は不要な
 `oauth_credentials.py`または`oauth_refresh.py`を削除し、
-`comken/salesforce/__init__.py`から不要方式の公開名を消す。共通のquery、CRUD、report、metricsは
+`comken/toolbox/salesforce/__init__.py`から不要方式の公開名を消す。共通のquery、CRUD、report、metricsは
 認証方式に依存しないため変更不要。
 
 ### Client Credentials Flow
@@ -153,7 +153,7 @@ DPAPI から読む別コンストラクタを併存させる意味がない。�
 ### 使い方のイメージ
 
 ```python
-from comken.salesforce.sites import Sandbox
+from comken.toolbox.salesforce.sites import Sandbox
 
 with Sandbox() as sf:
     rows = sf.report.run("00O000000000001")
@@ -164,8 +164,8 @@ with Sandbox() as sf:
 未登録の組織や ID を含まない URL は例外になるため、誤った組織へ接続したまま処理を続けない。
 
 ```python
-from comken.salesforce import report_id_from_url
-from comken.salesforce.sites import site_for
+from comken.toolbox.salesforce import report_id_from_url
+from comken.toolbox.salesforce.sites import site_for
 
 report_url = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O000000000001/view"
 site = site_for(report_url)
@@ -245,7 +245,7 @@ with site() as sf:
 ## 認証情報の保存
 
 平文 JSON を置いて読む形にはできないため、**DPAPI で暗号化した 1 ファイル**に取り込む。
-保存と読み込みは `comken.credentials` に集約する。
+保存と読み込みは `comken.toolbox.credentials` に集約する。
 
 ```
 平文の JSON      →  取り込みコマンド  →  DPAPI 暗号化ファイル  →  コードから読む
@@ -293,11 +293,11 @@ with site() as sf:
 
 ```bat
 :: 1. 登録（開いた画面で sandbox / client_id・client_secret を入れる。平文のファイルは作らない）
-python -m comken.credentials gui
+python -m comken.toolbox.credentials gui
 
 :: 2. つないでみる
-python -m comken.salesforce check
-python -m comken.salesforce report --report-id 00O...
+python -m comken.toolbox.salesforce check
+python -m comken.toolbox.salesforce report --report-id 00O...
 ```
 
 既定では `Sandbox.CREDENTIAL_PREFIX` の `sandbox_client_id` / `sandbox_client_secret` が
@@ -326,7 +326,7 @@ python -m comken.salesforce report --report-id 00O...
 （このフローはリフレッシュトークンを発行しないため、保管も更新も発生しない）。
 
 ```python
-from comken.salesforce.sites import Sandbox
+from comken.toolbox.salesforce.sites import Sandbox
 
 with Sandbox() as sf:
     accounts = sf.query("SELECT Id, Name FROM Account")    # 行数の上限なし・ページ送り自動
@@ -369,10 +369,10 @@ rows = sf.query("SELECT Name, Amount FROM Opportunity WHERE CreatedDate > 2026-0
 ### 組織（サイト）ごとのクラス
 
 組織は My Domain の URL と固有処理をまとめるため、1組織につき1クラスにする。
-現在は Sandbox 1組織の雛形が `comken/salesforce/sites/` に入っている。
+現在は Sandbox 1組織の雛形が `comken/toolbox/salesforce/sites/` に入っている。
 
 ```python
-from comken.salesforce.sites import Sandbox
+from comken.toolbox.salesforce.sites import Sandbox
 
 with Sandbox() as sf:
     rows = sf.案件一覧()
@@ -393,7 +393,7 @@ client_id / client_secret を読む（[credentials](credentials.md#credentials)�
 
 **`Sandbox` と URL・レポート ID は仮の値。** このリポジトリは公開しているため、
 実際の組織名や値は書かず、配置時に `DOMAIN_URL`・`CREDENTIAL_PREFIX`・`REPORT_*` を
-書き換える（`comken/run.py` の `example_libs.v0000` と同じ扱い）。
+書き換える（`comken/toolbox/rpa.py` の `example_libs.v0000` と同じ扱い）。
 
 書き込み系（`insert` / `update` / `upsert` / `delete`）は `dry_run` を尊重する。
 使い方の一覧は [README](../README.md#モジュール一覧)、

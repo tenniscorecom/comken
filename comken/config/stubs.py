@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 
 from ..exceptions import ConfigFileNotFoundError
-from ..utils.files.ops import _cleanup_stale_tmp
+from ..toolbox.utils.files.ops import _cleanup_stale_tmp
 from . import _is_mapping_section, _parse_value
 
 _STUB_HEADER = '''"""config.ini から自動生成されたエディタ補完用スタブ。手で編集しない。

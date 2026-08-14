@@ -9,8 +9,8 @@
 import logging
 from pathlib import Path
 
-from comken.csv import CsvWriter
-from comken.outlook import Outlook
+from comken.toolbox.csv import CsvWriter
+from comken.toolbox.outlook import Outlook
 
 logger = logging.getLogger(__name__)
 

@@ -14,7 +14,7 @@ class RpaError(ComkenError):
 class RpaLibraryNotFoundError(RpaError):
     """社内ライブラリを読み込めない
 
-    発生箇所: comken.run.backoffice() / comken.run.intranet()
+    発生箇所: comken.toolbox.rpa.backoffice() / comken.toolbox.rpa.intranet()
 
     対処:
         実行.bat の PYTHONPATH に社内ライブラリが入っているか確認する。
@@ -26,6 +26,6 @@ class RpaLibraryNotFoundError(RpaError):
             f"社内ライブラリを読み込めませんでした: {module_path}\n"
             f"（{detail}）\n"
             "社内ライブラリが PYTHONPATH に含まれているか、"
-            "comken/run.py の import 行が今の社内ライブラリ名・バージョンと"
+            "comken/toolbox/rpa.py の import 行が今の社内ライブラリ名・バージョンと"
             "合っているか確認してください。"
         )

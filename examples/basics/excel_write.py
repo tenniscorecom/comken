@@ -11,8 +11,8 @@ import logging
 from pathlib import Path
 
 from comken.constants import Color
-from comken.excel import ExcelWriter
 from comken.logger import setup_logging
+from comken.toolbox.excel import ExcelWriter
 
 HERE = Path(__file__).parent
 OUTPUT_PATH = HERE / "output" / "売上帳票.xlsx"
