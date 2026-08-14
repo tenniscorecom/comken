@@ -245,6 +245,34 @@ class ExcelBase(FileBase):
         with ExcelComHandler(self._working_path) as com:
             return com.read_rows(sheet_name, min_row)
 
+    def read_computed_rows_as_dicts(self, sheet_name: str, header_row: int = 1) -> list[dict]:
+        """数式の計算結果を含む行を、見出しをキーにした辞書で返す。
+
+        `read_rows_as_dicts()` は数式をそのまま（`"=SUM(A1:A9)"` という文字列で）返す。
+        **人が数式で値を組み立てている表**では、それが値として通ってしまい、
+        エラーにもならず変な結果で処理が進む。こちらは計算結果を返す。
+
+        Args:
+            sheet_name: シート名。
+            header_row: ヘッダーが存在する行番号（デフォルト: 1）。
+
+        Returns:
+            [{"列名": 値, ...}, ...] の形式のリスト。全セルが空の行は除外される。
+
+        Raises:
+            SheetNotFoundError: 指定したシートが存在しない場合。
+        """
+        rows = self.read_computed_rows(sheet_name, min_row=int(header_row))
+        if not rows:
+            return []
+
+        headers = ["" if cell is None else str(cell) for cell in rows[0]]
+        return [
+            dict(zip(headers, row, strict=False))
+            for row in rows[1:]
+            if not all(cell is None for cell in row)
+        ]
+
     def close(self) -> None:
         """ワークブックを閉じる。with 文を使う場合は自動で呼ばれる。"""
         self._wb.close()

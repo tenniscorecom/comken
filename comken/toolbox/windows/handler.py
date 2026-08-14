@@ -25,6 +25,7 @@ import win32gui
 from ...constants import FileFormat
 from ...exceptions import (
     EmptyHeaderCellError,
+    ExcelApplicationNotAvailableError,
     ExcelHeadersTooFewError,
     FileFormatMismatchError,
     MacroError,
@@ -182,7 +183,11 @@ class ExcelComHandler(FileBase):
         # DispatchEx は常に新規の Excel プロセスを起動する。
         # Dispatch だとユーザーが開いている Excel に接続してしまい、
         # Visible=False で画面を消したり close() の Quit で相手のブックを閉じる事故が起きる
-        self._excel = win32com.client.DispatchEx("Excel.Application")
+        try:
+            self._excel = win32com.client.DispatchEx("Excel.Application")
+        except Exception as e:
+            # Excel が入っていない PC では com_error がそのまま出て原因が分からない
+            raise ExcelApplicationNotAvailableError(self.path, e) from e
         try:
             self._excel.Visible = False
             self._excel.DisplayAlerts = False

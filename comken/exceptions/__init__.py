@@ -14,6 +14,7 @@ ComkenError
 │   └── OutlookAttachmentNotFoundError
 ├── ExcelError
 │   ├── ExcelFileNotFoundError
+│   ├── ExcelApplicationNotAvailableError
 │   ├── SheetNotFoundError
 │   ├── SheetAlreadyExistsError
 │   ├── LastSheetDeletionError
@@ -170,6 +171,7 @@ from .downloader import (
 )
 from .excel import (
     EmptyHeaderCellError,
+    ExcelApplicationNotAvailableError,
     ExcelError,
     ExcelFileNotFoundError,
     ExcelHeadersTooFewError,
@@ -232,6 +234,7 @@ __all__ = [
     "AccessSourceNotFoundError",
     "ExcelError",
     "ExcelFileNotFoundError",
+    "ExcelApplicationNotAvailableError",
     "SheetNotFoundError",
     "SheetAlreadyExistsError",
     "LastSheetDeletionError",

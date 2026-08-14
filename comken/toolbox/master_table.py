@@ -152,8 +152,11 @@ class MasterRow:
         if source is None:
             raise MasterSheetNotDefinedError(cls.__name__)
 
+        # **人が数式で値を組み立てることがある**（保存先を連結する等）。そのまま読むと
+        # '=CONCATENATE(...)' が値として通ってしまい、エラーにもならず変な結果で処理が進む。
+        # 計算結果を読む（キャッシュが無いときだけ Excel を起動して計算させる）
         with ExcelReader(source) as book:
-            raw_rows = book.read_rows_as_dicts(cls.SHEET_NAME)
+            raw_rows = book.read_computed_rows_as_dicts(cls.SHEET_NAME)
 
         rows: list[Self] = []
         seen: dict[str, set] = {}
@@ -174,7 +177,12 @@ class MasterRow:
             if value is _EMPTY:
                 default = _default_of(cls, name)
                 if default is dataclasses.MISSING:
-                    raise MasterRowValueError(row_number, spec.header, "", "空のままにできません。")
+                    raise MasterRowValueError(
+                        row_number,
+                        spec.header,
+                        "",
+                        "空のままにできません。",
+                    )
                 value = default
             if spec.unique:
                 if value in seen.setdefault(name, set()):

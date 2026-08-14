@@ -11,6 +11,7 @@ import pytest
 from openpyxl import load_workbook
 
 from comken.exceptions import (
+    ExcelApplicationNotAvailableError,
     MasterColumnNotFoundError,
     MasterDuplicateValueError,
     MasterRowValueError,
@@ -251,3 +252,41 @@ class TestBlankPolicy:
 
         path = make_sheet(tmp_path / "一覧.xlsx", [[1001, None]], ["ID", "備考"])
         assert WithMemo.load(path)[0].memo == ""
+
+
+class TestFormula:
+    r"""セルに数式が入っていても、数式そのものが値として通らないこと。
+
+    人は保存先などを数式で組み立てる（`=CONCATENATE(D2,"\input")`）。そのまま読むと
+    **数式が文字列として通ってしまい**、エラーにもならず `=CONCATENATE(...)` という値で
+    処理が進む。それが一番まずいので、計算結果を読む
+    （計算結果がファイルに無いときだけ Excel を起動して計算させる）。
+    """
+
+    def _with_formula(self, path: Path) -> Path:
+        from openpyxl import Workbook
+
+        book = Workbook()
+        sheet = book.active
+        sheet.title = "一覧"
+        sheet.append(["ID", "名前", "コピー元", "方式", "有効", "サーバー"])
+        sheet.append(
+            [1001, "受注一覧", r'=CONCATENATE(F2,"\data.csv")', "毎日", "有効", r"\server\受注"]
+        )
+        book.save(path)
+        return path
+
+    def test_formula_is_never_taken_as_a_value(self, tmp_path):
+        """数式が値として通らない。
+
+        Excel がある PC では計算結果が読め、無い PC では
+        ExcelApplicationNotAvailableError で止まる。**どちらでも
+        '=CONCATENATE(...)' が値になることはない。**
+        """
+        path = self._with_formula(tmp_path / "数式.xlsx")
+        try:
+            items = Item.load(path)
+        except ExcelApplicationNotAvailableError as e:
+            assert "Excel" in str(e)  # Excel が無い PC。原因が分かる形で止まる
+        else:
+            assert "CONCATENATE" not in str(items[0].source)  # 計算結果が入っている
