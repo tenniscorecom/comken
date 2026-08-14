@@ -1,23 +1,31 @@
 @echo off
-chcp 65001 >nul
+setlocal
 rem ============================================================
-rem  このツールの起動用。ダブルクリックで main.py を実行します。
+rem  ���̃c�[���̋N���p�B�_�u���N���b�N�� main.py �����s���܂��B
 rem
-rem  下の COMKEN_ROOT は作成時に入っているので、通常は触らなくてよい。
-rem  comken を別の場所へ移したときだけ、ここと .vscode\settings.json の両方を直す。
-rem  （PC の環境変数は変更しません。この bat の実行中だけ PYTHONPATH を設定します）
+rem  ���� COMKEN_ROOT �͍쐬���ɓ����Ă���̂ŁA�ʏ�͐G��Ȃ��Ă悢�B
+rem  comken ��ʂ̏ꏊ�ֈڂ����Ƃ������A������ .vscode\settings.json �̗����𒼂��B
+rem  �iPC �̊��ϐ��͕ύX���܂���B���� bat �̎��s������ PYTHONPATH ��ݒ肵�܂��j
 rem ============================================================
 
 set "COMKEN_ROOT=\\server\share\tools\comken"
 
-rem 共有フォルダ（\\サーバー名\...）から起動されると、cd ではこのフォルダへ移動できず、
-rem カレントが C:\Windows のままになって main.py が見つからない（CMD の仕様）。
-rem pushd は共有フォルダに一時的なドライブ名を割り当てるので、その場合でも動く。
+if not exist "%COMKEN_ROOT%\comken\__init__.py" (
+  echo.
+  echo [!] comken ��������܂���: %COMKEN_ROOT%
+  echo     ���̎��s.bat �� COMKEN_ROOT �𐳂������L�t�H���_�ɕύX���Ă��������B
+  pause
+  exit /b 1
+)
+
+rem ���L�t�H���_�i\\�T�[�o�[��\...�j����N�������ƁAcd �ł͂��̃t�H���_�ֈړ��ł����A
+rem �J�����g�� C:\Windows �̂܂܂ɂȂ��� main.py ��������Ȃ��iCMD �̎d�l�j�B
+rem pushd �͋��L�t�H���_�Ɉꎞ�I�ȃh���C�u�������蓖�Ă�̂ŁA���̏ꍇ�ł������B
 pushd "%~dp0"
 if errorlevel 1 (
   echo.
-  echo [!] このフォルダへ移動できませんでした: %~dp0
-  echo     共有フォルダが切断されていないか確認してください。
+  echo [!] ���̃t�H���_�ֈړ��ł��܂���ł���: %~dp0
+  echo     ���L�t�H���_���ؒf����Ă��Ȃ����m�F���Ă��������B
   pause
   exit /b 1
 )
@@ -28,8 +36,9 @@ python main.py
 
 if errorlevel 1 (
   echo.
-  echo [!] エラーで終了しました。上の赤い文字（エラー名）を docs\ERRORS.md で調べてください。
+  echo [!] �G���[�ŏI�����܂����B��̐Ԃ������i�G���[���j�� docs\ERRORS.md �Œ��ׂĂ��������B
   pause
 )
 
 popd
+endlocal

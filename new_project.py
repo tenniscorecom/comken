@@ -46,6 +46,19 @@ PLACEHOLDER_COMKEN_ROOT = r"\\server\share\tools\comken"
 # comken の場所を書いてあるファイル。bat は \ 区切り、settings.json は JSON なので / 区切り。
 COMKEN_ROOT_FILES = ("実行.bat", "スタブ生成.bat", ".vscode/settings.json")
 
+# bat は cmd.exe が CP932 として読むため、UTF-8 で保存すると日本語のメッセージが化ける。
+BAT_ENCODING = "cp932"
+
+
+def _encodings_of(path: Path) -> tuple[str, str]:
+    """そのファイルを (読む文字コード, 書く文字コード) で返す。
+
+    bat だけ CP932。他は UTF-8 で読み（BOM 付きも受ける）、BOM なしで書き戻す。
+    """
+    if path.suffix.lower() == ".bat":
+        return BAT_ENCODING, BAT_ENCODING
+    return "utf-8-sig", "utf-8"
+
 
 def _fill_project_name(target: Path, project_name: str) -> None:
     """ひな形の（プロジェクト名）を実際の名前に置き換える。"""
@@ -71,11 +84,12 @@ def _fill_comken_root(target: Path, comken_root: Path) -> None:
         path = target / name
         if not path.is_file():
             continue
-        text = path.read_text(encoding="utf-8-sig")
+        read_encoding, write_encoding = _encodings_of(path)
+        text = path.read_text(encoding=read_encoding)
         # JSON は \ が特殊文字なので / 区切りで書いてある。先に / 版を replace する
         text = text.replace(slash_placeholder, slash_root)
         text = text.replace(PLACEHOLDER_COMKEN_ROOT, str(comken_root))
-        path.write_text(text, encoding="utf-8")
+        path.write_text(text, encoding=write_encoding)
 
 
 def _strip_template_notes(readme: Path, project_name: str) -> None:
