@@ -22,12 +22,19 @@ from comken.exceptions import (
     SalesforceReportTruncatedError,
     SalesforceRequestError,
 )
-from comken.salesforce import ApiMetrics, ClientCredentialsAuth, Salesforce
-from comken.salesforce.sites import SITES, SiteA
+from comken.salesforce import ApiMetrics, ClientCredentialsAuth, SalesforceBase
+from comken.salesforce.sites import Sandbox
 
 DOMAIN_URL = "https://example.my.salesforce.com"
 INSTANCE_URL = "https://example.my.salesforce.com"
 DATA_PREFIX = "/services/data/v67.0"
+
+
+class _TestSalesforceBase(SalesforceBase):
+    """基底クライアントの共通動作を検証するための組織クラス。"""
+
+    DOMAIN_URL = DOMAIN_URL
+    CREDENTIAL_PREFIX = "test_salesforce"
 
 
 def _response(status: int = 200, json_body: object = None, text: str = "", headers=None):
@@ -59,8 +66,8 @@ def _salesforce(responses, token_responses=None):
         patch("comken.salesforce.client.requests.Session", return_value=session),
         patch("comken.salesforce.oauth_credentials.requests.post", side_effect=tokens) as post,
     ):
-        client = Salesforce(
-            client_id="CID", client_secret="CSECRET", domain_url=DOMAIN_URL, org_name="site_a"
+        client = _TestSalesforceBase(
+            auth=ClientCredentialsAuth("CID", "CSECRET", DOMAIN_URL), org_name="sandbox"
         )
         yield client, session, post
 
@@ -486,26 +493,16 @@ class TestReportApi:
 
 
 class TestSites:
-    def test_every_site_is_a_salesforce_client(self):
-        """SITES はすべて Salesforce のサブクラスで、共通操作をそのまま使える。"""
-        assert SITES, "組織が登録されていない"
-        for site_class in SITES:
-            assert issubclass(site_class, Salesforce), site_class
-
-    def test_sites_do_not_share_credential_prefix_or_section(self):
-        """組織ごとに認証情報と設定の置き場が分かれている。
-
-        取り違えると別組織の認証情報で接続してしまうため、重複を許さない。
-        """
-        prefixes = [site_class.CREDENTIAL_PREFIX for site_class in SITES]
-        sections = [site_class.CONFIG_SECTION for site_class in SITES]
-        assert len(set(prefixes)) == len(prefixes), prefixes
-        assert len(set(sections)) == len(sections), sections
-
-    def test_config_section_is_upper_case(self):
-        """config.ini のセクション名は規約どおり大文字。"""
-        for site_class in SITES:
-            assert site_class.CONFIG_SECTION.isupper(), site_class
+    def test_sandbox_is_a_salesforce_client(self):
+        """組織クラスは共通の query / report / metrics をそのまま使える。"""
+        assert issubclass(Sandbox, SalesforceBase)
+        auth = MagicMock()
+        auth.fetch.return_value = ("TOKEN", INSTANCE_URL)
+        with patch("comken.salesforce.client.requests.Session"):
+            sandbox = Sandbox(auth=auth)
+        assert callable(sandbox.query)
+        assert sandbox.report is not None
+        assert sandbox.metrics is not None
 
     def test_org_name_defaults_to_class_name(self):
         """計測の組織名は、指定しなければクラス名になる。"""
@@ -518,8 +515,8 @@ class TestSites:
                 return_value=_token_response(),
             ),
         ):
-            site = SiteA(client_id="CID", client_secret="CSECRET", domain_url=DOMAIN_URL)
-        assert site.metrics.org_name == "SiteA"
+            site = Sandbox(auth=ClientCredentialsAuth("CID", "CSECRET", DOMAIN_URL))
+        assert site.metrics.org_name == "Sandbox"
 
     def test_site_report_uses_its_own_report_id(self):
         """組織固有のレポート ID がそのまま URL に載る。"""
@@ -532,20 +529,20 @@ class TestSites:
                 "comken.salesforce.oauth_credentials.requests.post",
                 return_value=_token_response(),
             ),
-            SiteA(client_id="CID", client_secret="CSECRET", domain_url=DOMAIN_URL) as sf,
+            Sandbox(auth=ClientCredentialsAuth("CID", "CSECRET", DOMAIN_URL)) as sf,
         ):
             rows = sf.案件一覧()
 
         assert rows == [{"名前": "A社", "金額": "1"}]
-        assert session.request.call_args[0][1].endswith(f"/{SiteA.REPORT_案件一覧}")
+        assert session.request.call_args[0][1].endswith(f"/{Sandbox.REPORT_案件一覧}")
 
 
-class TestFromCredentials:
+class TestCredentialsInitialization:
     """DPAPI に入れた client_id / client_secret から組み立てる経路。"""
 
     def _store(self, tmp_path):
         path = tmp_path / "credentials.dat"
-        save_credentials({"site_a_client_id": "CID", "site_a_client_secret": "CSECRET"}, path)
+        save_credentials({"sandbox_client_id": "CID", "sandbox_client_secret": "CSECRET"}, path)
         return path
 
     def test_uses_the_class_credential_prefix(self, tmp_path, monkeypatch):
@@ -559,9 +556,10 @@ class TestFromCredentials:
                 return_value=_token_response(),
             ) as post,
         ):
-            sf = SiteA.from_credentials(DOMAIN_URL)
+            sf = Sandbox()
 
-        assert isinstance(sf, SiteA), "サブクラスのまま返る"
+        assert isinstance(sf, Sandbox), "サブクラスのまま作られる"
+        assert post.call_args.args[0] == f"{Sandbox.DOMAIN_URL}/services/oauth2/token"
         assert post.call_args.kwargs["data"]["client_id"] == "CID"
         assert post.call_args.kwargs["data"]["client_secret"] == "CSECRET"
 
@@ -569,7 +567,8 @@ class TestFromCredentials:
         """本番とテストの切り替えは、システム名を差し替えるだけで済む。"""
         path = self._store(tmp_path)
         save_credentials(
-            {"site_a_test_client_id": "TEST-CID", "site_a_test_client_secret": "TEST-SECRET"}, path
+            {"sandbox_test_client_id": "TEST-CID", "sandbox_test_client_secret": "TEST-SECRET"},
+            path,
         )
         monkeypatch.setattr(store, "CREDENTIALS_PATH", path)
         session = MagicMock()
@@ -581,20 +580,24 @@ class TestFromCredentials:
                 return_value=_token_response(),
             ) as post,
         ):
-            SiteA.from_credentials(DOMAIN_URL, prefix="site_a_test")
+            Sandbox(prefix="sandbox_test")
 
         assert post.call_args.kwargs["data"]["client_id"] == "TEST-CID"
 
     def test_unset_prefix_raises(self, tmp_path, monkeypatch):
         """CREDENTIAL_PREFIX を決めていない基底クラスからは作れない。"""
+
+        class PrefixUnsetSalesforce(SalesforceBase):
+            DOMAIN_URL = DOMAIN_URL
+
         monkeypatch.setattr(store, "CREDENTIALS_PATH", self._store(tmp_path))
         with pytest.raises(InvalidCredentialNameError):
-            Salesforce.from_credentials(DOMAIN_URL)
+            PrefixUnsetSalesforce()
 
     def test_missing_credential_raises(self, tmp_path, monkeypatch):
         monkeypatch.setattr(store, "CREDENTIALS_PATH", tmp_path / "credentials.dat")
         with pytest.raises(CredentialNotFoundError):
-            SiteA.from_credentials(DOMAIN_URL)
+            Sandbox()
 
 
 class TestApiMetrics:

@@ -8,10 +8,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from comken.exceptions import SalesforceAuthError
-from comken.salesforce import CredentialsOAuth, RefreshOAuth, Salesforce
+from comken.salesforce import CredentialsOAuth, RefreshOAuth, SalesforceBase
 
 DOMAIN_URL = "https://example.my.salesforce.com"
 INSTANCE_URL = "https://instance.my.salesforce.com"
+
+
+class _TestSalesforce(SalesforceBase):
+    """認証方式の差し替えを検証するための組織クラス。"""
 
 
 def _response(body: dict, status_code: int = 200) -> MagicMock:
@@ -119,7 +123,7 @@ class TestPluggableSalesforceAuth:
         session.request.side_effect = [unauthorized, success]
         with (
             patch("comken.salesforce.client.requests.Session", return_value=session),
-            Salesforce(auth=auth) as client,
+            _TestSalesforce(auth=auth) as client,
         ):
             assert client.query("SELECT Id FROM Account") == []
         assert auth.fetch.call_count == 2

@@ -1,9 +1,12 @@
 """comken/salesforce/__main__.py — 接続と資格情報ローテーションの確認コマンド
 
-    python -m comken.salesforce check  --domain https://xxx.my.salesforce.com --prefix site_a
-    python -m comken.salesforce report --domain ... --prefix site_a --report-id 00O...
-    python -m comken.salesforce app    --domain ... --prefix site_a --app-id 1CE...
-    python -m comken.salesforce rotate --domain ... --prefix site_a --app-id 1CE... --stage-only
+    python -m comken.salesforce check
+    python -m comken.salesforce report --report-id 00O...
+    python -m comken.salesforce app    --app-id 1CE...
+    python -m comken.salesforce rotate --app-id 1CE... --stage-only
+
+つなぎ先は組織クラス（`sites/`）の DOMAIN_URL と CREDENTIAL_PREFIX。
+別の組織・別の登録を試すときだけ `--domain` / `--prefix` で上書きする。
 
 client_id / client_secret は **DPAPI に登録したものを読む**。コマンドラインに秘密の値は渡さない。
 先に `python -m comken.credentials import 認証情報.json` で登録しておく。
@@ -28,8 +31,8 @@ import argparse
 import sys
 
 from ..exceptions import ComkenError
-from .client import Salesforce
 from .rotation import ROTATION_COMPONENT, SalesforceCredentialRotator, _staged_credentials_of
+from .sites import Sandbox
 
 # 値そのものは絶対に出さない。項目名と型だけを見せる。
 _SECRET_FIELDS = ("consumersecret", "consumerkey", "secret", "token", "password")
@@ -88,19 +91,26 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--domain", required=True, help="My Domain の URL")
-    parser.add_argument("--prefix", required=True, help="DPAPI に登録したシステム名")
+    parser.add_argument("--domain", default="", help="My Domain の URL（既定は組織クラスの値）")
+    parser.add_argument(
+        "--prefix", default="", help="DPAPI に登録したシステム名（既定は組織クラスの値）"
+    )
+
+
+def _open(args: argparse.Namespace) -> Sandbox:
+    """確認対象の組織へつなぐ。--domain / --prefix があればそちらを使う。"""
+    return Sandbox(domain_url=args.domain, prefix=args.prefix)
 
 
 def _run_check(args: argparse.Namespace) -> None:
-    with Salesforce.from_credentials(args.domain, args.prefix) as sf:
+    with _open(args) as sf:
         sf.request("GET", sf.data_path("/limits"), component=ROTATION_COMPONENT)
         print(f"接続できました（API v{sf.API_VERSION}）")
 
 
 def _run_report(args: argparse.Namespace) -> None:
     """主用途（レポートの読み取り）が通るか確かめる。"""
-    with Salesforce.from_credentials(args.domain, args.prefix) as sf:
+    with _open(args) as sf:
         rows = sf.report.run(args.report_id, allow_truncated=True)
     print(f"{len(rows)} 行 取得しました")
     if not rows:
@@ -113,7 +123,7 @@ def _run_report(args: argparse.Namespace) -> None:
 
 
 def _run_app(args: argparse.Namespace) -> None:
-    with Salesforce.from_credentials(args.domain, args.prefix) as sf:
+    with _open(args) as sf:
         body, _ = sf.request(
             "GET",
             sf.data_path(f"/apps/oauth/credentials/{args.app_id}"),
@@ -136,11 +146,11 @@ def _run_rotate(args: argparse.Namespace) -> None:
         print("中止しました。")
         return
 
-    with Salesforce.from_credentials(args.domain, args.prefix) as sf:
+    with _open(args) as sf:
         rotator = SalesforceCredentialRotator(
             sf,
             app_id=args.app_id,
-            credential_prefix=args.prefix,
+            credential_prefix=args.prefix or Sandbox.CREDENTIAL_PREFIX,
             is_enabled=True,
             interval_days=0,  # 期限に関わらず、この場で実行する
         )
@@ -151,7 +161,7 @@ def _run_rotate(args: argparse.Namespace) -> None:
 
 def _stage_only(args: argparse.Namespace) -> None:
     """新しい secret を発行するところまでで止める（切り替えない）。"""
-    with Salesforce.from_credentials(args.domain, args.prefix) as sf:
+    with _open(args) as sf:
         from .rotation import _consumer_id_of
 
         credentials, _ = sf.request(

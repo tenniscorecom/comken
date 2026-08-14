@@ -16,7 +16,7 @@ class SalesforceError(ComkenError):
 class SalesforceAuthError(SalesforceError):
     """Salesforce にログインできない
 
-    発生箇所: comken.salesforce.Salesforce の認証時（初回・401 後の取り直し）
+    発生箇所: comken.salesforce.SalesforceBase の認証時（初回・401 後の取り直し）
 
     対処:
         表示された確認項目を上から順に見る。それでも直らなければ管理者へ連絡する
@@ -38,7 +38,7 @@ class SalesforceAuthError(SalesforceError):
 class SalesforceConnectionError(SalesforceError):
     """Salesforce につながらない
 
-    発生箇所: comken.salesforce.Salesforce の全リクエスト
+    発生箇所: comken.salesforce.SalesforceBase の全リクエスト
 
     対処:
         ネットワークの状態を確認して、少し待ってから再実行する
@@ -55,7 +55,7 @@ class SalesforceConnectionError(SalesforceError):
 class SalesforceRequestError(SalesforceError):
     """Salesforce が処理を断った
 
-    発生箇所: comken.salesforce.Salesforce の全リクエスト
+    発生箇所: comken.salesforce.SalesforceBase の全リクエスト
 
     対処:
         表示されたメッセージをそのまま添えて管理者へ連絡する（権限か項目名の問題が多い）

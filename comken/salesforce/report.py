@@ -11,7 +11,7 @@
 
     1. 切り捨てを検知して止める  ← 既定。allow_truncated=True で警告に落とせる
     2. filters で日付などを区切り、複数回に分けて取得する
-    3. それでも足りないものだけ Salesforce.query()（SOQL）へ書き換える
+    3. それでも足りないものだけ SalesforceBase.query()（SOQL）へ書き換える
 
 3 を先回りで全部やる必要はない。切り捨ては計測に残るので、
 あとから「どのレポートを SOQL へ移すか」を実測で決められる。
@@ -30,7 +30,7 @@ from ..exceptions import (
 )
 
 if TYPE_CHECKING:  # 実行時は import しない（client と相互参照になるため）
-    from .client import Salesforce
+    from .client import SalesforceBase
 
 logger = logging.getLogger(__name__)
 
@@ -45,16 +45,16 @@ ASYNC_TIMEOUT_SECONDS = 120
 class ReportApi:
     """レポートを実行して明細行を取得する。
 
-    `Salesforce` が `report` 属性として持っている。単体では作らない。
+    `SalesforceBase` が `report` 属性として持っている。単体では作らない。
 
-        with Salesforce(...) as sf:
+        with Sandbox() as sf:
             rows = sf.report.run("00O000000000001")
     """
 
-    def __init__(self, client: Salesforce) -> None:
+    def __init__(self, client: SalesforceBase) -> None:
         """
         Args:
-            client: このレポート API を使う Salesforce インスタンス。
+            client: このレポート API を使う Salesforce クライアント。
         """
         self._client = client
 

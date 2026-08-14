@@ -1,27 +1,25 @@
 """comken/salesforce/__init__.py — Salesforce API 連携（requests）。
 
-1インスタンスが1組織を受け持つ:
+1インスタンスが1組織を受け持つ。**入口は組織クラス**（`sites/`）:
 
-    from comken.salesforce import Salesforce
+    from comken.salesforce.sites import Sandbox
 
-    with Salesforce(
-        client_id=..., client_secret=..., domain_url="https://your-domain.my.salesforce.com"
-    ) as sf:
+    with Sandbox() as sf:
         records = sf.query("SELECT Id, Name FROM Account")
         rows = sf.report.run("00O000000000001")
         sf.metrics.log_summary()
 
-組織を増やすときは、組織ごとに Salesforce を作る。組織固有の処理が必要なら
-`Salesforce` を継承して利用プロジェクト側でメソッドを足す。
+URL と認証情報のシステム名は組織クラスがクラス定数として持つので、
+呼び出し側は何も渡さなくてよい。組織を増やすときは `sites/` にクラスを足す。
 認証は `oauth_credentials.py` と `oauth_refresh.py` の2方式を用意している。
-`client.py` のOAuth import先が、`Salesforce.from_credentials()`で使う方式を決める。
+`client.py` のOAuth import先が、どちらを使うかを決める。
 設計の背景は docs/salesforce.md を参照。
 
-    Salesforce             1組織ぶんの API クライアント（入口）
-    ReportApi              レポート API。Salesforce.report が持っている
+    SalesforceBase         1組織ぶんの API クライアントの土台（組織クラスで継承する）
+    ReportApi              レポート API。SalesforceBase.report が持っている
     CredentialsOAuth       Client Credentials Flow
     RefreshOAuth           Authorization Code + Refresh Token Flow
-    ApiMetrics             API 呼び出しの計測。Salesforce.metrics が持っている
+    ApiMetrics             API 呼び出しの計測。SalesforceBase.metrics が持っている
     ApiUsage               組織の 24 時間 API 消費量
     ComponentStat          呼び出し元ごとの集計
     RetryReason            リトライ理由の定数
@@ -40,7 +38,7 @@ except ImportError as e:  # pragma: no cover
         "comken.salesforce を import しなければ影響を受けません。"
     ) from e
 
-from .client import Salesforce
+from .client import SalesforceBase
 from .metrics import ApiMetrics, ApiUsage, ComponentStat, RetryReason
 from .oauth_credentials import ClientCredentialsAuth
 from .oauth_credentials import OAuth as CredentialsOAuth
@@ -50,7 +48,7 @@ from .report import ReportApi
 from .rotation import SalesforceCredentialRotator
 
 __all__ = [
-    "Salesforce",
+    "SalesforceBase",
     "ReportApi",
     "ClientCredentialsAuth",
     "RefreshTokenAuth",

@@ -1,13 +1,17 @@
 """comken/salesforce/client.py — Salesforce API クライアント
 
-1インスタンスが1組織を受け持つ。組織ごとに固有の処理があるときは、
-**このクラスを継承して利用プロジェクト側でメソッドを足す**
-（組織名は社内固有の情報なので、このリポジトリには置かない）。
+1インスタンスが1組織を受け持つ。**このクラスは直接使わず、組織ごとに継承する**
+（`comken/salesforce/sites/`）。組織の My Domain の URL と認証情報のシステム名は
+サブクラスがクラス定数として持ち、呼び出し側は組織クラスを作るだけでつながる。
 
-    # 利用プロジェクト側
-    class 自組織(Salesforce):
-        def 未処理の申請(self) -> list[dict]:
-            return self.query("SELECT Id, Name FROM Application__c WHERE Status__c = '未処理'")
+    # 組織クラス側（sites/）
+    class Sandbox(SalesforceBase):
+        DOMAIN_URL = "https://example--sandbox.sandbox.my.salesforce.com"
+        CREDENTIAL_PREFIX = "sandbox"
+
+    # 使う側
+    with Sandbox() as sf:
+        rows = sf.query("SELECT Id, Name FROM Application__c")
 
 認証・レポート・計測は継承せず**持たせている**。認証は「トークンを取る部品」で
 あって Salesforce の一種ではなく、合成にしておくと JWT フローへの差し替えが
@@ -19,7 +23,7 @@ from __future__ import annotations
 import logging
 import time
 import urllib.parse
-from typing import Protocol, TypeVar
+from typing import Protocol, Self
 
 import requests
 
@@ -49,9 +53,6 @@ DRY_RUN_RECORD_ID = "DRYRUN00000000000A"
 MAX_ATTEMPTS = 3
 RETRY_WAIT_SECONDS = 2
 
-# サブクラスのまま返すための型変数（SiteA.from_credentials(...) は SiteA を返す）
-_SalesforceT = TypeVar("_SalesforceT", bound="Salesforce")
-
 
 class _OAuth(Protocol):
     """Salesforceクライアントが認証方式へ求める最小インターフェース。"""
@@ -61,15 +62,14 @@ class _OAuth(Protocol):
         ...
 
 
-class Salesforce:
-    """Salesforce の 1 組織に対する API クライアント。
+class SalesforceBase:
+    """Salesforce の 1 組織に対する API クライアント（組織クラスの土台）。
+
+    DOMAIN_URL と CREDENTIAL_PREFIX を持つサブクラスを作って使う。
+    認証情報は DPAPI から読むので、呼び出し側のコードに秘密の値が現れない。
 
     使い方:
-        with Salesforce(
-            client_id="接続アプリの Consumer Key",
-            client_secret="接続アプリの Consumer Secret",
-            domain_url="https://your-domain.my.salesforce.com",
-        ) as sf:
+        with Sandbox() as sf:
             records = sf.query("SELECT Id, Name FROM Account")
             rows = sf.report.run("00O000000000001")
             sf.metrics.log_summary()
@@ -83,40 +83,45 @@ class Salesforce:
     API_VERSION = "67.0"
     TIMEOUT_SECONDS = 60
 
-    # 認証情報のキー名の頭。from_credentials() を使う組織のクラスで指定する
+    # 組織の My Domain の URL。組織クラスで指定する
+    DOMAIN_URL = ""
+
+    # 認証情報のキー名の頭。組織クラスで指定する
     CREDENTIAL_PREFIX = ""
 
     def __init__(
         self,
-        client_id: str = "",
-        client_secret: str = "",
+        *,
+        prefix: str = "",
         domain_url: str = "",
         org_name: str = "",
-        *,
         auth: _OAuth | None = None,
-        refresh_token: str = "",
     ) -> None:
-        """
+        """DPAPI に保管した認証情報を読み、選択中の OAuth 方式で接続する。
+
+        読み込む項目は client.py が import している OAuth 方式で決まる。
+        Client Credentials 方式は client_id / client_secret、Refresh Token 方式は
+        client_id / client_secret / refresh_token を使う。
+
         Args:
-            client_id: 接続アプリの Consumer Key。
-            client_secret: 接続アプリの Consumer Secret。
-            domain_url: 組織の My Domain の URL。login.salesforce.com は使えない。
+            prefix: 認証情報のシステム名。省略時はクラスの CREDENTIAL_PREFIX。
+                本番とテストを切り替えるときだけ渡す。
+            domain_url: My Domain の URL。省略時はクラスの DOMAIN_URL。
             org_name: 計測ログに出す組織の呼び名。省略時はクラス名を使う。
-            auth: Client Credentials 以外の認証方式。指定時は上の3引数を使わない。
-            refresh_token: Refresh Token方式を選択した場合に指定する。選択前は省略可。
+            auth: 認証方式を差し替えるとき（テスト・JWT 等）に渡す。
+                指定時は prefix / domain_url を使わない。
 
         Raises:
+            InvalidCredentialNameError: システム名が空、または使えない文字を含む場合。
+            CredentialNotFoundError: 選択方式に必要な認証情報が未登録の場合。
+            CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
             SalesforceAuthError: 認証に失敗した場合。
             SalesforceConnectionError: ネットワークの問題で接続できない場合。
         """
-        # 採用する認証方式だけコメントを外す。
-        self.auth = auth or OAuth(client_id, client_secret, domain_url)
-        # self.auth = auth or OAuth(
-        #     client_id,
-        #     refresh_token,
-        #     domain_url,
-        #     client_secret=client_secret,
-        # )
+        self.auth = auth or OAuth.from_credentials(
+            domain_url or self.DOMAIN_URL,
+            prefix or self.CREDENTIAL_PREFIX,
+        )
         self.metrics = ApiMetrics(org_name or type(self).__name__)
         self.report = ReportApi(self)
 
@@ -125,42 +130,8 @@ class Salesforce:
         self._instance_url = ""
         self._authenticate()
 
-    @classmethod
-    def from_credentials(
-        cls: type[_SalesforceT],
-        domain_url: str,
-        prefix: str = "",
-        org_name: str = "",
-    ) -> _SalesforceT:
-        """DPAPIに保管した認証情報を読み、選択中のOAuth方式で接続する。
-
-        読み込む項目はclient.pyがimportしているOAuth方式で決まる。
-        Client Credentials方式はclient_id / client_secret、Refresh Token方式は
-        client_id / client_secret / refresh_tokenを使う。
-        呼び出し側のコードに秘密の値が現れないので、通常はこちらを使う。
-
-        使い方:
-            with SiteA.from_credentials(config.SITE_A.DOMAIN_URL) as sf:
-                rows = sf.案件一覧()
-
-        Args:
-            domain_url: 組織の My Domain の URL。
-            prefix: 認証情報のシステム名。省略時はクラスの CREDENTIAL_PREFIX。
-                本番とテストを切り替えるときだけ config.ini から渡す。
-            org_name: 計測ログに出す組織の呼び名。省略時はクラス名を使う。
-
-        Raises:
-            InvalidCredentialNameError: システム名が空、または使えない文字を含む場合。
-            CredentialNotFoundError: 選択方式に必要な認証情報が未登録の場合。
-            CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
-        """
-        selected_prefix = prefix or cls.CREDENTIAL_PREFIX
-        return cls(
-            org_name=org_name,
-            auth=OAuth.from_credentials(domain_url, selected_prefix),
-        )
-
-    def __enter__(self) -> Salesforce:
+    # 組織クラスのまま返す（with Sandbox() as sf: で sf.案件一覧() の補完が効く）
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *args) -> None:

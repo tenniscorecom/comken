@@ -5,13 +5,13 @@
 認証方式を社内へ説明するときは、公式資料と判断理由をまとめた
 [Salesforce authentication decisions](salesforce-authentication.md) を参照する。
 
-背景: 複数の Salesforce 組織（3組織）から、レポートとレコードを API で取得したい。
+背景: Salesforce Sandbox 1組織から、レポートとレコードを API で取得したい。
 本書には現行仕様と、保守に必要な設計理由だけを記載する。
 関連: [ライブラリ開発規約](ライブラリ開発規約.md)
 
 > [!note] 組織名の書き方
 > このリポジトリは公開しているため、**実際の組織名・サイト名は書かない**。
-> 本書では `SiteA` / `SiteB` / `SiteC` の仮名を使い、配置時に書き換える
+> 本書では `Sandbox` の仮名を使い、組織名・URL・レポート ID は配置時に書き換える
 > （社内ライブラリの実名を書かないのと同じ扱い）。
 
 ---
@@ -23,7 +23,7 @@
 どちらも `fetch() -> (access_token, instance_url)` を実装し、API クライアントへ差し替える。
 
 ```python
-from comken.salesforce import Salesforce
+from comken.salesforce.sites import Sandbox
 from comken.salesforce.oauth_refresh import OAuth
 
 auth = OAuth(
@@ -33,7 +33,7 @@ auth = OAuth(
     client_secret="Require Secret for Refresh Token Flow が有効な場合のみ",
     on_refresh_token=save_rotated_token,
 )
-with Salesforce(auth=auth) as sf:
+with Sandbox(auth=auth) as sf:
     records = sf.query("SELECT Id FROM Account")
 ```
 
@@ -127,35 +127,35 @@ SalesforceBase                     HTTP の土台。_request() が唯一の通�
   .report   : SfReport             レポート API
   .query() / .get() / .insert() …  SOQL・CRUD
   │
-  ├─ SiteA(SalesforceBase)         組織固有の処理を書き加える
-  ├─ SiteB(SalesforceBase)
-  └─ SiteC(SalesforceBase)
+  └─ Sandbox(SalesforceBase)       URL・認証情報名・組織固有の処理を持つ
 ```
 
 **なぜレポートを継承にしないか。** `SfReport` を `SalesforceBase` のサブクラスにすると、
-`SiteA` は `SfReport` ではないためレポートを呼べず、多重継承に追い込まれる。
-持たせる形なら `site_a.report.run(...)` と `site_a.query(...)` が同じインスタンスから出る。
+`Sandbox` は `SfReport` ではないためレポートを呼べず、多重継承に追い込まれる。
+持たせる形なら `sf.report.run(...)` と `sf.query(...)` が同じインスタンスから出る。
 
 **なぜ認証を継承にしないか。** OAuth は「Salesforce の一種」ではなく「トークンを取る部品」。
 継承すると `SfReport` まで認証コードを引き継いで責務が混ざる。
 合成にしておけば JWT 版の差し替えが `_oauth` の入れ替えだけで済む。
 
-**なぜ組織は継承にするか。** 3組織は URL と認証情報が違うだけでなく、
-多少の処理差があると分かっている。差分の置き場としてサブクラスが要る。
-差が無い組織は素の `SalesforceBase` を使えばよい。
+**なぜ組織は継承にするか。** 基底は HTTP・認証・共通操作の土台であり、直接使わない。
+組織固定の URL・認証情報名・レポート ID と固有処理の置き場としてサブクラスを使う。
+その意図を名前でも示すため、実装名を `Salesforce` から `SalesforceBase` へ改めた。
+
+**なぜ URL を config.ini に置かないか。** My Domain は実行環境で変わる設定ではなく、
+レポート ID と同じく組織に固定された値である。`DOMAIN_URL` クラス定数に置けば、
+呼び出し側で組織と URL を取り違えず、組織の情報を1か所に集約できる。
+
+**なぜ入口を1つにしたか。** 認証情報は常に DPAPI から読むため、秘密を直接渡す入口と
+DPAPI から読む別コンストラクタを併存させる意味がない。通常は `Sandbox()` だけを使い、
+テストや JWT への差し替えに限って `auth=` を渡す。
 
 ### 使い方のイメージ
 
 ```python
-from comken.salesforce import SiteA
-from comken.credentials import Credentials
+from comken.salesforce.sites import Sandbox
 
-cred = Credentials("site_a")
-with SiteA(
-    client_id=cred.client_id,
-    client_secret=cred.client_secret,
-    domain_url="https://example.my.salesforce.com",
-) as sf:
+with Sandbox() as sf:
     rows = sf.report.run("00O000000000001")
     ...
 ```
@@ -234,13 +234,13 @@ with SiteA(
 
 ```
 平文の JSON      →  取り込みコマンド  →  DPAPI 暗号化ファイル  →  コードから読む
-（一時的に置く）      （暗号化して取込）    （ユーザー×PC に紐付く）   Credentials("site_a")
+（一時的に置く）      （暗号化して取込）    （ユーザー×PC に紐付く）   Credentials("sandbox")
                       平文は確認後に削除
 ```
 
 - 平文JSONをまとめて取り込む。配布時に手入力を挟まないため
-- JSON はシステム名ごとに項目をまとめる形式（`{"site_a": {"client_id": ...}}`）にして、
-  `site_a_client_id` というキー名に展開する。組織ごとに client_id / client_secret が
+- JSON はシステム名ごとに項目をまとめる形式（`{"sandbox": {"client_id": ...}}`）にして、
+  `sandbox_client_id` というキー名に展開する。組織ごとに client_id / client_secret が
   別なので、システム名で分けられる形が要る
 - 取り込みは**まとめて 1 回書く**。1 件ずつ保存すると件数ぶん復号と暗号化を繰り返し、
   途中で失敗すると一部だけ入った状態になる
@@ -250,10 +250,9 @@ with SiteA(
 - DPAPI は**同じ Windows ユーザー × 同じ PC** でしか復号できない。
   登録した本人と実行アカウントが違うとハマる（一番多い事故）。
   原因を区別できないので、確認する順番を書いた `CredentialDecryptionError` にまとめた
-- `Salesforce.from_credentials()` を入口にした。組織クラスの `CREDENTIAL_PREFIX` から
-  client_id / client_secret を読むので、**呼び出し側のコードに秘密の値が現れない**。
-  `credentials` の import はこのメソッドの中だけ（遅延 import）。認証情報を直接渡す
-  使い方をする人に DPAPI 依存を持ち込まないため
+- 組織クラスの初期化を唯一の入口にした。`CREDENTIAL_PREFIX` から client_id / client_secret
+  を読むので、**呼び出し側のコードに秘密の値が現れない**。別の登録へ切り替える場合だけ
+  `prefix=` を渡す
 
 ### 何を守っていて、何を守っていないか
 
@@ -279,15 +278,16 @@ with SiteA(
 
 ```bat
 :: 1. 登録（画面から入力する。平文のファイルは作らない）
-python -m comken.credentials set site_a client_id client_secret
+python -m comken.credentials set sandbox client_id client_secret
 
 :: 2. つないでみる
-python -m comken.salesforce check  --domain https://xxx.my.salesforce.com --prefix site_a
-python -m comken.salesforce report --domain ... --prefix site_a --report-id 00O...
+python -m comken.salesforce check
+python -m comken.salesforce report --report-id 00O...
 ```
 
-`--prefix` に渡すのは**システム名だけ**（`site_a`）。`site_a_client_id` /
-`site_a_client_secret` が自動で引かれる。**DPAPI は「登録した Windows ユーザー × その PC」
+既定では `Sandbox.CREDENTIAL_PREFIX` の `sandbox_client_id` / `sandbox_client_secret` が
+自動で引かれる。別の登録を試すときだけ `--prefix` にシステム名を渡す。
+**DPAPI は「登録した Windows ユーザー × その PC」
 でしか復号できない**ので、実際に動かす PC・アカウントで登録する。
 
 | コマンド | すること | Salesforce 側への影響 |
@@ -311,14 +311,9 @@ python -m comken.salesforce report --domain ... --prefix site_a --report-id 00O.
 （このフローはリフレッシュトークンを発行しないため、保管も更新も発生しない）。
 
 ```python
-from comken.salesforce import Salesforce
+from comken.salesforce.sites import Sandbox
 
-with Salesforce(
-    client_id="接続アプリの Consumer Key",
-    client_secret="接続アプリの Consumer Secret",
-    domain_url="https://your-domain.my.salesforce.com",   # My Domain 必須
-    org_name="site_a",                                     # 計測ログでの呼び名
-) as sf:
+with Sandbox() as sf:
     accounts = sf.query("SELECT Id, Name FROM Account")    # 行数の上限なし・ページ送り自動
     new_id = sf.insert("Account", {"Name": "新規取引先"})
     sf.update("Account", record_id=new_id, data={"Name": "更新後"})
@@ -328,7 +323,7 @@ with Salesforce(
     sf.metrics.log_summary()                               # 使用量を最後にまとめて出す
 ```
 
-`domain_url` は組織の **My Domain** を渡す。`login.salesforce.com` ではこのフローは動かない。
+My Domain は `Sandbox.DOMAIN_URL` に置く。`login.salesforce.com` ではこのフローは動かない。
 
 ### 事前に管理者へ依頼すること
 
@@ -358,33 +353,31 @@ rows = sf.query("SELECT Name, Amount FROM Opportunity WHERE CreatedDate > 2026-0
 
 ### 組織（サイト）ごとのクラス
 
-組織は My Domain の URL が違うので、1組織につき1クラスにする。
-3組織ぶんの雛形が `comken/salesforce/sites/` に入っている。
+組織は My Domain の URL と固有処理をまとめるため、1組織につき1クラスにする。
+現在は Sandbox 1組織の雛形が `comken/salesforce/sites/` に入っている。
 
 ```python
-from comken.salesforce.sites import SITES, SiteA
+from comken.salesforce.sites import Sandbox
 
-with SiteA.from_credentials(config.SITE_A.DOMAIN_URL) as sf:
+with Sandbox() as sf:
     rows = sf.案件一覧()
 
-# 3組織をまとめて回す
-for site_class in SITES:
-    domain_url = getattr(config, site_class.CONFIG_SECTION).DOMAIN_URL
-    with site_class.from_credentials(domain_url) as sf:
-        rows = sf.案件一覧()
+# 別の DPAPI 登録へ切り替える場合だけ指定する
+with Sandbox(prefix="sandbox_test") as sf:
+    rows = sf.案件一覧()
 ```
 
-`from_credentials()` は `CREDENTIAL_PREFIX` を頭に付けたキー名で、DPAPI に保管した
-client_id / client_secret を読む（後述の [credentials](credentials.md#credentials)）。
+組織クラスは `CREDENTIAL_PREFIX` を頭に付けたキー名で、DPAPI に保管した
+client_id / client_secret を読む（[credentials](credentials.md#credentials)）。
 コードにも config.ini にも秘密の値が現れない。
 
-各クラスには `CREDENTIAL_PREFIX`（認証情報のキー名の頭）・`CONFIG_SECTION`
-（My Domain を書く config.ini のセクション名）・`REPORT_*`（その組織のレポート ID）を持たせる。
-共通の操作は `Salesforce` にあるので、書くのは**その組織でしか通じないもの**だけ。
+各クラスには `CREDENTIAL_PREFIX`（認証情報のキー名の頭）・`DOMAIN_URL`（My Domain）・
+`REPORT_*`（その組織のレポート ID）を持たせる。共通の操作は `SalesforceBase` にあるので、
+書くのは**その組織でしか通じないもの**だけ。
 計測の組織名は指定しなければクラス名になるので、ログで組織を見分けられる。
 
-**`SiteA` / `SiteB` / `SiteC` は仮名。** このリポジトリは公開しているため、
-実際の組織名は書かず、配置時にクラス名・`CREDENTIAL_PREFIX`・`CONFIG_SECTION` を
+**`Sandbox` と URL・レポート ID は仮の値。** このリポジトリは公開しているため、
+実際の組織名や値は書かず、配置時に `DOMAIN_URL`・`CREDENTIAL_PREFIX`・`REPORT_*` を
 書き換える（`comken/run.py` の `example_libs.v0000` と同じ扱い）。
 
 書き込み系（`insert` / `update` / `upsert` / `delete`）は `dry_run` を尊重する。

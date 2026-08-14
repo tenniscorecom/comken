@@ -3,7 +3,7 @@
 「どのモジュールから何回 API を呼んだか」「リトライが何回起きたか」
 「レポートが上限で切り捨てられたか」を貯めて、実行の最後にまとめて出す。
 
-計測を1か所に集められるのは、API 呼び出しがすべて Salesforce._request() を
+計測を1か所に集められるのは、API 呼び出しがすべて SalesforceBase._request() を
 通るため。呼び出し元は component（"report" / "crud" / "query"）で区別する。
 
 組織の 24 時間 API 消費量は、自前で数えるより Salesforce が返す
@@ -67,7 +67,7 @@ class ApiMetrics:
     """API 呼び出しの計測を貯める。
 
     使い方:
-        metrics = ApiMetrics("site_a")
+        metrics = ApiMetrics("sandbox")
         # …API を呼ぶ…
         metrics.log_summary()
         metrics.append_csv(Path("logs/salesforce_metrics.csv"))

@@ -19,7 +19,7 @@ from ..credentials import load_credential, save_credentials
 from ..exceptions import CredentialError, CredentialNotFoundError
 from ..exceptions.salesforce import SalesforceCredentialRotationError
 from ..utils.clock import today as local_today
-from .client import Salesforce
+from .client import SalesforceBase
 
 DEFAULT_ROTATION_INTERVAL_DAYS = 60
 ROTATION_COMPONENT = "credential_rotation"
@@ -42,7 +42,7 @@ class SalesforceCredentialRotator:
 
     def __init__(
         self,
-        client: Salesforce,
+        client: SalesforceBase,
         app_id: str,
         credential_prefix: str,
         is_enabled: bool = False,
