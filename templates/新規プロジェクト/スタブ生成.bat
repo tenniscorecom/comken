@@ -1,24 +1,24 @@
 @echo off
 setlocal
 rem ============================================================
-rem  config.ini ����⊮�p�X�^�u�itypings/comken/�j����蒼���B
-rem  config.ini �̃Z�N�V�����E�L�[�𑝂₵�����ƂɎ��s����ƁA
-rem  VS Code�iPylance�j�� config.SECTION.KEY ���⊮�����悤�ɂȂ�B
+rem  config.ini から補完用スタブ（typings/comken/）を作り直す。
+rem  config.ini のセクション・キーを増やしたあとに実行すると、
+rem  VS Code（Pylance）で config.SECTION.KEY が補完されるようになる。
 rem
-rem  �� ���i�� main.py ��1�񓮂����Ύ������������̂ŕK�{�ł͂Ȃ��B
-rem     �u�c�[���𓮂������ɕ⊮������ɗp�ӂ������v�Ƃ��Ɏg���B
+rem  ※ 普段は main.py を1回動かせば自動生成されるので必須ではない。
+rem     「ツールを動かさずに補完だけ先に用意したい」ときに使う。
 rem ============================================================
 
 set "COMKEN_ROOT=\\server\share\tools\comken"
 
-rem ���L�t�H���_����N�������� cd �ł͈ړ��ł��Ȃ����� pushd ���g���iCMD �̎d�l�j
+rem 共有フォルダから起動されると cd では移動できないため pushd を使う（CMD の仕様）
 pushd "%~dp0"
 set "PYTHONPATH=%COMKEN_ROOT%;%PYTHONPATH%"
 
 python -m comken.config
 if errorlevel 1 (
   echo.
-  echo [!] �X�^�u�����Ɏ��s���܂����Bconfig.ini �����邩�m�F���Ă��������B
+  echo [!] スタブ生成に失敗しました。config.ini があるか確認してください。
   pause
 )
 
