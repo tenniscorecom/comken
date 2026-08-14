@@ -14,7 +14,7 @@ import tempfile
 from collections.abc import Generator
 from contextlib import closing
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
@@ -95,7 +95,7 @@ class ExcelBase(FileBase):
             self._working_path, data_only=data_only, read_only=read_only, keep_vba=keep_vba
         )
 
-    def __enter__(self) -> ExcelBase:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *args) -> None:

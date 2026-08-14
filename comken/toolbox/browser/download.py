@@ -13,6 +13,7 @@ import shutil
 import tempfile
 import time
 from pathlib import Path
+from typing import Self
 
 from comken.exceptions import DownloadTimeoutError
 
@@ -65,7 +66,7 @@ class DownloadDir:
         # os.PathLike 対応。パスを受け取る関数へそのまま渡せるようにする
         return str(self.path)
 
-    def __enter__(self) -> DownloadDir:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *args) -> None:

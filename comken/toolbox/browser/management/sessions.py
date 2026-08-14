@@ -26,6 +26,7 @@ import threading
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Self
 
 from selenium import webdriver
 
@@ -101,7 +102,7 @@ class BrowserSession:
 
     # ------------------------------------------------------------ with 管理
 
-    def __enter__(self) -> BrowserSession:
+    def __enter__(self) -> Self:
         # ここで例外を投げると、この with の __exit__ は呼ばれない。
         # 後始末は _start_driver() の中で完結させること
         self._driver = start_driver(self._options, self._profile_dir, self.download_dir)

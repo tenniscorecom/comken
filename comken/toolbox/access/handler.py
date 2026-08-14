@@ -10,6 +10,7 @@ import tempfile
 from collections.abc import Iterator
 from datetime import timedelta
 from pathlib import Path
+from typing import Self
 
 import win32com.client
 
@@ -121,7 +122,7 @@ class AccessDatabase(FileBase):
                 self._path,
             )
 
-    def __enter__(self) -> AccessDatabase:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *args: object) -> None:

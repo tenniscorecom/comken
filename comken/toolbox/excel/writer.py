@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 import tempfile
 from pathlib import Path
+from typing import Self
 
 from openpyxl import Workbook
 
@@ -102,7 +103,7 @@ class ExcelWriter(ExcelBase):
         self._wb.remove(self._wb[name])
 
     @classmethod
-    def create(cls, path: str | Path, sheet_name: str = "Sheet1") -> ExcelWriter:
+    def create(cls, path: str | Path, sheet_name: str = "Sheet1") -> Self:
         """新規ブックを作る（ファイルはまだ作られず、save() で path に保存される）。
         Args:
             path: save() で保存されるパス。親フォルダがなければ保存時に自動作成される。

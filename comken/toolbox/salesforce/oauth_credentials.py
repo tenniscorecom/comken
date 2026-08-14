@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Self
 
 import requests
 
@@ -25,7 +26,7 @@ class OAuth:
         self._domain_url = domain_url.rstrip("/")
 
     @classmethod
-    def from_credentials(cls, domain_url: str, prefix: str) -> OAuth:
+    def from_credentials(cls, domain_url: str, prefix: str) -> Self:
         """DPAPIに保存したclient_idとclient_secretから認証を作る。"""
         from ..credentials import Credentials
 

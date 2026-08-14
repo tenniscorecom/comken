@@ -37,6 +37,7 @@ import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Self
 
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.common.action_chains import ActionChains
@@ -75,7 +76,7 @@ class Page:
 
     # ------------------------------------------------------------ 画面の移動
 
-    def open(self, url: str) -> Page:
+    def open(self, url: str) -> Self:
         """URL を開き、自分自身を返す。"""
         self.session.open(url)
         return self
@@ -330,7 +331,7 @@ class SitePage(Page):
 
     BASE_URL: str = ""
 
-    def go(self, path: str = "") -> SitePage:
+    def go(self, path: str = "") -> Self:
         """BASE_URL からの相対パスへ移動し、自分自身を返す。
 
         Args:

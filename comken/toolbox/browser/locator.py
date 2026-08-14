@@ -9,7 +9,7 @@ NamedTuple なので selenium にそのまま展開できる:
 # 定義中の Locator を戻り値の型注釈に使うため、注釈の評価を遅延する。
 from __future__ import annotations
 
-from typing import NamedTuple
+from typing import NamedTuple, Self
 
 from selenium.webdriver.common.by import By
 
@@ -28,22 +28,22 @@ class Locator(NamedTuple):
     value: str
 
     @classmethod
-    def id(cls, value: str) -> Locator:
+    def id(cls, value: str) -> Self:
         """id 属性で探す（例: Locator.id("login-btn")）。"""
         return cls(By.ID, value)
 
     @classmethod
-    def name(cls, value: str) -> Locator:
+    def name(cls, value: str) -> Self:
         """name 属性で探す（例: Locator.name("username")）。"""
         return cls(By.NAME, value)
 
     @classmethod
-    def css(cls, value: str) -> Locator:
+    def css(cls, value: str) -> Self:
         """CSS セレクターで探す（例: Locator.css("table tr .name")）。"""
         return cls(By.CSS_SELECTOR, value)
 
     @classmethod
-    def xpath(cls, value: str) -> Locator:
+    def xpath(cls, value: str) -> Self:
         """XPath で探す（最終手段。例: Locator.xpath("//button[text()='検索']")）。"""
         return cls(By.XPATH, value)
 

@@ -11,7 +11,7 @@ import functools
 import logging
 import time
 from collections.abc import Callable
-from typing import ParamSpec, TypeVar
+from typing import ParamSpec, Self, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ class Timer:
         self._start = 0.0
         self.elapsed = 0.0
 
-    def __enter__(self) -> Timer:
+    def __enter__(self) -> Self:
         # NOTE: 経過時間の計測であり、現在の日時の取得ではない。
         self._start = time.perf_counter()
         return self

@@ -50,7 +50,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 from pathlib import Path
-from typing import TypeVar
+from typing import Self, TypeVar
 
 from comken.exceptions import (
     BrowsersClosedError,
@@ -102,7 +102,7 @@ class Browsers:
         self._is_started = False
         self._is_closed = False
 
-    def __enter__(self) -> Browsers:
+    def __enter__(self) -> Self:
         self._stack.__enter__()
         self._is_started = True
         return self

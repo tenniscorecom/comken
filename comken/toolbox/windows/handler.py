@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 import win32api
 import win32com.client
@@ -205,7 +205,7 @@ class ExcelComHandler(FileBase):
                 self._excel = None
             raise
 
-    def __enter__(self) -> ExcelComHandler:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *args) -> None:
@@ -562,7 +562,7 @@ class RegistryHandler:
         """
         self._key = win32api.RegOpenKey(hive, key_path)
 
-    def __enter__(self) -> RegistryHandler:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *args) -> None:

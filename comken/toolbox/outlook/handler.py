@@ -12,6 +12,7 @@ import logging
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Self
 
 import win32com.client
 
@@ -59,7 +60,7 @@ class Outlook:
             raise ClassicOutlookNotAvailableError() from error
         self._namespace = self._application.GetNamespace("MAPI")
 
-    def __enter__(self) -> Outlook:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
