@@ -17,6 +17,8 @@
     4. 転記前後を diff_rows で比較して「どの行のどの列が変わったか」をログに出す
 """
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 

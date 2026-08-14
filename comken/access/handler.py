@@ -1,5 +1,7 @@
 """comken/access/handler.py — Microsoft Access のマクロ実行・データ出力。"""
 
+from __future__ import annotations
+
 import logging
 import re
 import shutil
@@ -118,7 +120,7 @@ class AccessDatabase(FileBase):
                 self._path,
             )
 
-    def __enter__(self) -> "AccessDatabase":
+    def __enter__(self) -> AccessDatabase:
         return self
 
     def __exit__(self, *args: object) -> None:

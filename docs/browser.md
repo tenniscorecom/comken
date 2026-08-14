@@ -238,6 +238,10 @@ class LoginPage(KintaiPage):
         return HomePage(self.session)
 ```
 
+遷移先の import をメソッドの中に置いているのは、画面クラス同士が互いを参照して
+循環インポートになるため（型注釈でも名前を使うなら `from __future__ import annotations` と
+`TYPE_CHECKING` を合わせる）。
+
 **画面が変わるメソッドは、遷移先の画面クラスを返す。** 呼ぶ側が画面の流れを
 コードのまま追えるようになる:
 
@@ -666,6 +670,5 @@ python -m examples.sample_login.run
 ## 関連
 
 - [公開 API](自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外
-- [プロジェクト規約](プロジェクト規約.md#page-object-model) — ファイル構成と命名
 - [エラー対応ガイド](../ERRORS.md#ブラウザedge-自動操作のエラー) — エラー名から対処を引く
 - `examples/sample_login/` — 動くサンプル一式

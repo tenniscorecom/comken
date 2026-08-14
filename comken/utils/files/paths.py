@@ -1,5 +1,7 @@
 """comken/utils/files/paths.py — よく使う標準フォルダのパス取得。"""
 
+from __future__ import annotations
+
 import os
 import tempfile
 from pathlib import Path

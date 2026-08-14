@@ -22,6 +22,8 @@ BrowserError
 ログだけを見る人が原因にたどり着けるようにするため。
 """
 
+from __future__ import annotations
+
 from .base import ComkenError
 
 

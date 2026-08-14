@@ -6,6 +6,8 @@
 ここに置く。共通の操作は `Salesforce` 側にあるので書かない。
 """
 
+from __future__ import annotations
+
 from ..client import Salesforce
 
 

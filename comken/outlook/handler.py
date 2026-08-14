@@ -4,6 +4,8 @@ New Outlook は COM サーバーを持たないため非対応。認証とネッ
 Graph API や、pst ファイルの直接読み取りによる代替も提供しない。
 """
 
+from __future__ import annotations
+
 import datetime
 import logging
 from collections.abc import Iterator, Sequence
@@ -56,7 +58,7 @@ class Outlook:
             raise ClassicOutlookNotAvailableError() from error
         self._namespace = self._application.GetNamespace("MAPI")
 
-    def __enter__(self) -> "Outlook":
+    def __enter__(self) -> Outlook:
         return self
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:

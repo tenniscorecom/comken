@@ -1,5 +1,7 @@
 """Salesforce クライアントの配線を、HTTP をモックして検証する。"""
 
+from __future__ import annotations
+
 import contextlib
 import json
 from unittest.mock import MagicMock, patch

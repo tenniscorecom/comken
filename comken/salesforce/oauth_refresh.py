@@ -1,5 +1,7 @@
 """comken/salesforce/oauth_refresh.py — Refresh Token Flow"""
 
+from __future__ import annotations
+
 import secrets
 import urllib.parse
 from collections.abc import Callable
@@ -35,7 +37,7 @@ class OAuth:
         self._on_refresh_token = on_refresh_token
 
     @classmethod
-    def from_credentials(cls, domain_url: str, prefix: str) -> "OAuth":
+    def from_credentials(cls, domain_url: str, prefix: str) -> OAuth:
         """DPAPIに保存したOAuth資格情報から認証を作る。"""
         from ..credentials import Credentials, save_credential
 
@@ -101,7 +103,7 @@ class OAuth:
         domain_url: str,
         *,
         on_refresh_token: Callable[[str], None] | None = None,
-    ) -> "OAuth":
+    ) -> OAuth:
         """認可コードを交換し、取得した refresh_token を持つ認証部品を返す。"""
         token_request = {
             "grant_type": AUTHORIZATION_CODE_GRANT,

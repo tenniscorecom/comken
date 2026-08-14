@@ -1,5 +1,7 @@
 """サンプル: 日付入りファイルの検索・命名・移動・コピー・zip。"""
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 

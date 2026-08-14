@@ -4,6 +4,8 @@ DPAPI は Windows 標準機能なので、モックせず本物で暗号化・�
 保存先は tmp_path に逃がし、実行環境の %USERPROFILE%\\.comken は触らない。
 """
 
+from __future__ import annotations
+
 import json
 from pathlib import Path
 

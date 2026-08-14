@@ -1,5 +1,7 @@
 """Access COM 操作の配線をモックで検証する。"""
 
+from __future__ import annotations
+
 import inspect
 import logging
 import os

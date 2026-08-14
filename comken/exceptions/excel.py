@@ -1,5 +1,7 @@
 """comken/exceptions/excel.py — Excel 操作に関する例外。"""
 
+from __future__ import annotations
+
 from pathlib import Path
 
 from .base import ComkenError

@@ -3,6 +3,8 @@
 検索・操作・圧縮・パス取得・命名をまとめて公開する。
 """
 
+from __future__ import annotations
+
 from .archive import unzip, zip_files, zip_folder
 from .finder import FileFinder, date_in_name
 from .naming import DateNameBuilder

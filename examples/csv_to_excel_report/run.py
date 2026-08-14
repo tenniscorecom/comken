@@ -12,6 +12,8 @@ Excel レポートの作成・見た目調整（ExcelWriter.create + Sheet）を
 - 出力: このフォルダの output/売上レポート_YYYYMMDD.xlsx
 """
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 

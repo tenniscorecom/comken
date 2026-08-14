@@ -1,5 +1,7 @@
 """comken/exceptions/config.py — 設定ファイルに関する例外。"""
 
+from __future__ import annotations
+
 from pathlib import Path
 
 from .base import ComkenError

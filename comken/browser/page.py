@@ -30,6 +30,8 @@
 time.sleep で待たないこと。待ち時間が読めなくなり、遅いうえに不安定になる。
 """
 
+from __future__ import annotations
+
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -72,7 +74,7 @@ class Page:
 
     # ------------------------------------------------------------ 画面の移動
 
-    def open(self, url: str) -> "Page":
+    def open(self, url: str) -> Page:
         """URL を開き、自分自身を返す。"""
         self.session.open(url)
         return self
@@ -220,7 +222,7 @@ class Page:
     # ------------------------------------------------------------ 逃げ道
 
     @contextmanager
-    def frame(self, locator: Locator) -> Iterator["Page"]:
+    def frame(self, locator: Locator) -> Iterator[Page]:
         """iframe の中を操作し、抜けるときに元の画面へ戻る。
 
         iframe の中の要素は、切り替えないと見つからない。
@@ -327,7 +329,7 @@ class SitePage(Page):
 
     BASE_URL: str = ""
 
-    def go(self, path: str = "") -> "SitePage":
+    def go(self, path: str = "") -> SitePage:
         """BASE_URL からの相対パスへ移動し、自分自身を返す。
 
         Args:

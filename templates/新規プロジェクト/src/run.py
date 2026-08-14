@@ -5,6 +5,8 @@ main.py から呼ばれる。ここに「実際にやりたいこと」を書く
 下は「CSV を読んで Excel レポートを作る」最小例。不要なら丸ごと書き換えてよい。
 """
 
+from __future__ import annotations
+
 import logging
 
 from comken import config

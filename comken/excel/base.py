@@ -5,6 +5,8 @@
 数式の計算結果が必要な場合は、内部で win32com（pywin32）にフォールバックする。
 """
 
+from __future__ import annotations
+
 import logging
 import shutil
 import tempfile
@@ -92,7 +94,7 @@ class ExcelBase(FileBase):
             self._working_path, data_only=data_only, read_only=read_only, keep_vba=keep_vba
         )
 
-    def __enter__(self) -> "ExcelBase":
+    def __enter__(self) -> ExcelBase:
         return self
 
     def __exit__(self, *args) -> None:

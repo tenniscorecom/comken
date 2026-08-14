@@ -14,6 +14,8 @@
 `auth` の入れ替えだけで済むため（詳しくは docs/salesforce.md）。
 """
 
+from __future__ import annotations
+
 import logging
 import time
 import urllib.parse
@@ -158,7 +160,7 @@ class Salesforce:
             auth=OAuth.from_credentials(domain_url, selected_prefix),
         )
 
-    def __enter__(self) -> "Salesforce":
+    def __enter__(self) -> Salesforce:
         return self
 
     def __exit__(self, *args) -> None:

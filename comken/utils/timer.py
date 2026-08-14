@@ -4,6 +4,8 @@
 結果は logging（INFO）に出る。出力先・フォーマット・レベルは社内の共通ライブラリ側で設定する。
 """
 
+from __future__ import annotations
+
 import functools
 import logging
 import time
@@ -32,7 +34,7 @@ class Timer:
         self._start = 0.0
         self.elapsed = 0.0
 
-    def __enter__(self) -> "Timer":
+    def __enter__(self) -> Timer:
         # NOTE: 経過時間の計測であり、現在の日時の取得ではない。
         self._start = time.perf_counter()
         return self

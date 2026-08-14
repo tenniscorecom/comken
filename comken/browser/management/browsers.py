@@ -40,6 +40,8 @@ run_task() で先に始めておき、結果が必要になったところで wa
 サイトを増やしても「どちらのファイルか分からない」状態にならない。
 """
 
+from __future__ import annotations
+
 import logging
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -97,7 +99,7 @@ class Browsers:
         self._is_started = False
         self._is_closed = False
 
-    def __enter__(self) -> "Browsers":
+    def __enter__(self) -> Browsers:
         self._stack.__enter__()
         self._is_started = True
         return self
@@ -124,8 +126,8 @@ class Browsers:
     def launch(
         self,
         name: str,
-        options: "type[BrowserOptions] | BrowserOptions | None" = None,
-        download_dir: "str | Path | None" = None,
+        options: type[BrowserOptions] | BrowserOptions | None = None,
+        download_dir: str | Path | None = None,
     ) -> BrowserSession:
         """名前を付けてブラウザを1つ起動する。
 
@@ -330,7 +332,7 @@ class Browsers:
 
 
 def _resolve_options(
-    options: "type[BrowserOptions] | BrowserOptions | None",
+    options: type[BrowserOptions] | BrowserOptions | None,
 ) -> BrowserOptions:
     """options 引数を BrowserOptions のインスタンスに揃える。
 
@@ -347,7 +349,7 @@ def _resolve_options(
 def _resolve_download_dir(
     name: str,
     options: BrowserOptions,
-    download_dir: "str | Path | None",
+    download_dir: str | Path | None,
 ) -> DownloadDir:
     """このセッション専用のダウンロードフォルダを決める。
 

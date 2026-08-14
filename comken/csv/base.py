@@ -1,5 +1,7 @@
 """comken/csv/base.py — CSV Reader / Writer に共通する設定。"""
 
+from __future__ import annotations
+
 from pathlib import Path
 
 from ..utils.files.base import FileBase

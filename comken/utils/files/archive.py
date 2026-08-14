@@ -4,6 +4,8 @@
 （日本語ファイル名が cp932 で入っている）も文字化けせずに展開できる。
 """
 
+from __future__ import annotations
+
 import logging
 import tempfile
 import zipfile

@@ -1,5 +1,7 @@
 """comken/logger.py — 単体実行するプロジェクト向けのログ設定。"""
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 

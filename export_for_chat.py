@@ -102,7 +102,7 @@ BUNDLES: dict[str, tuple[str, list[str]]] = {
     "1_コーディング規約": (
         "これは社内 Python ライブラリ comken を使うツールの**コーディング規約**です。"
         "以後このスレッドで書くコードは、この規約に従ってください。",
-        ["CONVENTIONS.md", "docs/プロジェクト規約.md"],
+        ["CONVENTIONS.md"],
     ),
     "2_ライブラリの使い方": (
         "これは社内 Python ライブラリ comken の**API 一覧**です。"

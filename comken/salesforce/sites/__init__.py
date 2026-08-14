@@ -29,6 +29,8 @@ client_id / client_secret は DPAPI から読む（`comken.credentials`）ので
 > **実名をこのリポジトリへ書き戻さないこと。**
 """
 
+from __future__ import annotations
+
 from ..client import Salesforce
 from .site_a import SiteA
 from .site_b import SiteB

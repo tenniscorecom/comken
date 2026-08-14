@@ -5,6 +5,8 @@ DownloadDir は Edge/Chrome がダウンロード中に作る ".crdownload" フ�
 （requests 等の API ダウンロードには使わない。あちらは自分でファイルに書くだけ）。
 """
 
+from __future__ import annotations
+
 import logging
 import shutil
 import tempfile
@@ -62,7 +64,7 @@ class DownloadDir:
         # os.PathLike 対応。パスを受け取る関数へそのまま渡せるようにする
         return str(self.path)
 
-    def __enter__(self) -> "DownloadDir":
+    def __enter__(self) -> DownloadDir:
         return self
 
     def __exit__(self, *args) -> None:

@@ -9,6 +9,8 @@
     がすべて同時に適用される。
 """
 
+from __future__ import annotations
+
 import unicodedata
 
 

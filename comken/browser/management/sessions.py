@@ -18,6 +18,8 @@
 サイトが1つでも複数でも書き方は同じで、増やすときは launch を1行足すだけにしてある。
 """
 
+from __future__ import annotations
+
 import logging
 import threading
 from collections.abc import Iterator, Sequence
@@ -98,7 +100,7 @@ class BrowserSession:
 
     # ------------------------------------------------------------ with 管理
 
-    def __enter__(self) -> "BrowserSession":
+    def __enter__(self) -> BrowserSession:
         # ここで例外を投げると、この with の __exit__ は呼ばれない。
         # 後始末は _start_driver() の中で完結させること
         self._driver = start_driver(self._options, self._profile_dir, self.download_dir)
@@ -173,7 +175,7 @@ class BrowserSession:
             return path
 
     @contextmanager
-    def popup_tab(self, timeout: int | None = None) -> Iterator["BrowserSession"]:
+    def popup_tab(self, timeout: int | None = None) -> Iterator[BrowserSession]:
         """別タブで開いた画面を操作し、抜けるときに閉じて元のタブへ戻る。
 
         リンクの target="_blank" や帳票 PDF のように、こちらの意図と関係なく
@@ -201,8 +203,8 @@ class BrowserSession:
 
     def load_many(
         self,
-        urls: "Sequence[str]",
-        ready: "Locator | None" = None,
+        urls: Sequence[str],
+        ready: Locator | None = None,
         max_open: int = _DEFAULT_MAX_OPEN_TABS,
         timeout: int | None = None,
     ) -> Iterator[str]:

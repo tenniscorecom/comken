@@ -1,5 +1,7 @@
 """comken/constants.py — CSV・Excel・ファイル操作で使う、小さな公開定数クラス。"""
 
+from __future__ import annotations
+
 
 class Encoding:
     """CsvReader / CsvWriter の encoding 引数に使う定数。"""

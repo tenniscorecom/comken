@@ -1,5 +1,7 @@
 """個別例外クラスの型とメッセージを確認する。"""
 
+from __future__ import annotations
+
 import warnings
 
 import pytest

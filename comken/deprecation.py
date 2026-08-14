@@ -24,6 +24,8 @@ FutureWarning を使う理由:
         raise AttributeError(name)
 """
 
+from __future__ import annotations
+
 import warnings
 
 

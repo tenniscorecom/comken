@@ -12,6 +12,8 @@
         WINDOW_SIZE = "1600,1024"
 """
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 from typing import ClassVar
@@ -166,7 +168,7 @@ class BrowserOptions:
 
         return "\n".join(lines)
 
-    def build(self, profile_dir: "Path | None" = None) -> list[str]:
+    def build(self, profile_dir: Path | None = None) -> list[str]:
         """有効なオプションを Edge の起動引数リストに変換する。
 
         Args:

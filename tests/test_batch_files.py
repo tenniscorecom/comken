@@ -8,6 +8,8 @@ UNC パス（`\\\\サーバー名\\...`）から起動されると、cmd.exe は
 （一時的なドライブ名が割り当てられ、UNC でもそのフォルダで動く）。
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 
 import pytest

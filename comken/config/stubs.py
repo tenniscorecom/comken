@@ -8,6 +8,8 @@ Config の属性（config.SECTION.KEY）は config.ini から実行時に動的�
 - コードを書く前に手動で作りたい場合は generate_stub()（`python -m comken.config`）
 """
 
+from __future__ import annotations
+
 import configparser
 import os
 from pathlib import Path

@@ -3,6 +3,8 @@
 使い方は docs/utils-files.md を参照。
 """
 
+from __future__ import annotations
+
 import datetime
 import re
 from pathlib import Path

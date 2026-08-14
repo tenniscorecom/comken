@@ -281,7 +281,7 @@ def __init__(self) -> None:
 #### `launch`
 
 ```text
-def launch(self, name: str, options: 'type[BrowserOptions] | BrowserOptions | None'=None, download_dir: 'str | Path | None'=None) -> BrowserSession:
+def launch(self, name: str, options: type[BrowserOptions] | BrowserOptions | None=None, download_dir: str | Path | None=None) -> BrowserSession:
 ```
 
 ##### 説明
@@ -510,7 +510,7 @@ Returns:
 
 ```text
 @contextmanager
-def popup_tab(self, timeout: int | None=None) -> Iterator['BrowserSession']:
+def popup_tab(self, timeout: int | None=None) -> Iterator[BrowserSession]:
 ```
 
 ##### 説明
@@ -537,7 +537,7 @@ Raises:
 #### `load_many`
 
 ```text
-def load_many(self, urls: 'Sequence[str]', ready: 'Locator | None'=None, max_open: int=_DEFAULT_MAX_OPEN_TABS, timeout: int | None=None) -> Iterator[str]:
+def load_many(self, urls: Sequence[str], ready: Locator | None=None, max_open: int=_DEFAULT_MAX_OPEN_TABS, timeout: int | None=None) -> Iterator[str]:
 ```
 
 ##### 説明
@@ -608,7 +608,7 @@ bool 属性は True で有効・False で無効、str 属性は None で無効�
 #### `build`
 
 ```text
-def build(self, profile_dir: 'Path | None'=None) -> list[str]:
+def build(self, profile_dir: Path | None=None) -> list[str]:
 ```
 
 ##### 説明
@@ -655,7 +655,7 @@ Args:
 #### `open`
 
 ```text
-def open(self, url: str) -> 'Page':
+def open(self, url: str) -> Page:
 ```
 
 ##### 説明
@@ -867,7 +867,7 @@ def read_alert_text(self) -> str:
 
 ```text
 @contextmanager
-def frame(self, locator: Locator) -> Iterator['Page']:
+def frame(self, locator: Locator) -> Iterator[Page]:
 ```
 
 ##### 説明
@@ -965,7 +965,7 @@ BASE_URL とログインなど、そのサイトのどの画面でも使う処�
 #### `go`
 
 ```text
-def go(self, path: str='') -> 'SitePage':
+def go(self, path: str='') -> SitePage:
 ```
 
 ##### 説明
@@ -995,7 +995,7 @@ class Locator(NamedTuple):
 
 ```text
 @classmethod
-def id(cls, value: str) -> 'Locator':
+def id(cls, value: str) -> Locator:
 ```
 
 ##### 説明
@@ -1006,7 +1006,7 @@ id 属性で探す（例: Locator.id("login-btn")）。
 
 ```text
 @classmethod
-def name(cls, value: str) -> 'Locator':
+def name(cls, value: str) -> Locator:
 ```
 
 ##### 説明
@@ -1017,7 +1017,7 @@ name 属性で探す（例: Locator.name("username")）。
 
 ```text
 @classmethod
-def css(cls, value: str) -> 'Locator':
+def css(cls, value: str) -> Locator:
 ```
 
 ##### 説明
@@ -1028,7 +1028,7 @@ CSS セレクターで探す（例: Locator.css("table tr .name")）。
 
 ```text
 @classmethod
-def xpath(cls, value: str) -> 'Locator':
+def xpath(cls, value: str) -> Locator:
 ```
 
 ##### 説明
@@ -1130,7 +1130,7 @@ Attributes:
 #### `__init__`
 
 ```text
-def __init__(self, future: 'Future[T]', label: str) -> None:
+def __init__(self, future: Future[T], label: str) -> None:
 ```
 
 ##### 説明
@@ -1721,7 +1721,7 @@ def delete_sheet(self, name: str) -> None:
 
 ```text
 @classmethod
-def create(cls, path: str | Path, sheet_name: str='Sheet1') -> 'ExcelWriter':
+def create(cls, path: str | Path, sheet_name: str='Sheet1') -> ExcelWriter:
 ```
 
 ##### 説明
@@ -3981,7 +3981,7 @@ def __init__(self, client_id: str, client_secret: str, domain_url: str) -> None:
 
 ```text
 @classmethod
-def from_credentials(cls, domain_url: str, prefix: str) -> 'OAuth':
+def from_credentials(cls, domain_url: str, prefix: str) -> OAuth:
 ```
 
 ##### 説明
@@ -4018,7 +4018,7 @@ def __init__(self, client_id: str, refresh_token: str, domain_url: str, *, clien
 
 ```text
 @classmethod
-def from_credentials(cls, domain_url: str, prefix: str) -> 'OAuth':
+def from_credentials(cls, domain_url: str, prefix: str) -> OAuth:
 ```
 
 ##### 説明
@@ -4050,7 +4050,7 @@ def authorization_url(client_id: str, redirect_uri: str, domain_url: str, *, sco
 
 ```text
 @classmethod
-def exchange_code(cls, client_id: str, client_secret: str, code: str, redirect_uri: str, domain_url: str, *, on_refresh_token: Callable[[str], None] | None=None) -> 'OAuth':
+def exchange_code(cls, client_id: str, client_secret: str, code: str, redirect_uri: str, domain_url: str, *, on_refresh_token: Callable[[str], None] | None=None) -> OAuth:
 ```
 
 ##### 説明

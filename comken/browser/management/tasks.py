@@ -13,6 +13,8 @@ Browsers.run_task() で始めて、必要になったところで wait() で受�
 このクラスを直接作らない。Browsers.run_task() が返すものを受け取って使う。
 """
 
+from __future__ import annotations
+
 import logging
 from concurrent.futures import Future
 from concurrent.futures import TimeoutError as FutureTimeoutError
@@ -30,7 +32,7 @@ class BackgroundTask(Generic[T]):
         label: 何の処理か。ログとエラーメッセージに出る。
     """
 
-    def __init__(self, future: "Future[T]", label: str) -> None:
+    def __init__(self, future: Future[T], label: str) -> None:
         """直接呼ばず、Browsers.run_task() から作る。"""
         self._future = future
         self.label = label

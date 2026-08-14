@@ -3,6 +3,8 @@
 起動に失敗した場合のドライバー更新もここで扱う。
 """
 
+from __future__ import annotations
+
 import inspect
 import logging
 import os

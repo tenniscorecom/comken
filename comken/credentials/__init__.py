@@ -27,6 +27,8 @@ Windows ログオンユーザーに紐付けて暗号化して保管する。
     CREDENTIALS_PATH   保存先のパス
 """
 
+from __future__ import annotations
+
 from .importer import import_json
 from .store import (
     CREDENTIALS_PATH,

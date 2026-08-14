@@ -1,5 +1,7 @@
 """サンプル: 差分・再試行・待機・文字列正規化・現在時刻。"""
 
+from __future__ import annotations
+
 import logging
 
 from comken.logger import setup_logging

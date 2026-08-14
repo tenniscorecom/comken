@@ -3,6 +3,8 @@
 CsvWriter クラスを通じて CSV ファイルへの書き込みを行う。
 """
 
+from __future__ import annotations
+
 import csv
 import io
 import logging

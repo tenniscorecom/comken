@@ -1,5 +1,7 @@
 """comken/csv/__init__.py — CSV の読み書き API を公開するパッケージ。"""
 
+from __future__ import annotations
+
 from .reader import CsvReader
 from .writer import CsvWriter
 

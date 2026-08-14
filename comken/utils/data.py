@@ -1,5 +1,7 @@
 """comken/utils/data.py — データ変換・比較ユーティリティ"""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 from ..exceptions import KeyColumnNotFoundError

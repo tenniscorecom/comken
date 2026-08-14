@@ -8,6 +8,8 @@
 （増やすときは launch を1行足すだけ。複数サイトの例は docs/browser.md を参照）。
 """
 
+from __future__ import annotations
+
 from comken.browser import Browsers
 from examples.sample_login.browser_options import SampleBrowserOptions
 from examples.sample_login.pages.login_page import LoginPage

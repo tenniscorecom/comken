@@ -1,5 +1,7 @@
 """サンプル: comken の例外を粒度に応じて捕まえる。"""
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 

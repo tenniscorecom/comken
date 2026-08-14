@@ -11,6 +11,8 @@
 `list` で確かめてから消すのが安全。
 """
 
+from __future__ import annotations
+
 import argparse
 import sys
 from pathlib import Path

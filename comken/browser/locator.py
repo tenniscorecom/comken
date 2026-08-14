@@ -6,6 +6,8 @@ NamedTuple なので selenium にそのまま展開できる:
     driver.find_element(*LoginPage.LOGIN_BTN)
 """
 
+from __future__ import annotations
+
 from typing import NamedTuple
 
 from selenium.webdriver.common.by import By
@@ -25,22 +27,22 @@ class Locator(NamedTuple):
     value: str
 
     @classmethod
-    def id(cls, value: str) -> "Locator":
+    def id(cls, value: str) -> Locator:
         """id 属性で探す（例: Locator.id("login-btn")）。"""
         return cls(By.ID, value)
 
     @classmethod
-    def name(cls, value: str) -> "Locator":
+    def name(cls, value: str) -> Locator:
         """name 属性で探す（例: Locator.name("username")）。"""
         return cls(By.NAME, value)
 
     @classmethod
-    def css(cls, value: str) -> "Locator":
+    def css(cls, value: str) -> Locator:
         """CSS セレクターで探す（例: Locator.css("table tr .name")）。"""
         return cls(By.CSS_SELECTOR, value)
 
     @classmethod
-    def xpath(cls, value: str) -> "Locator":
+    def xpath(cls, value: str) -> Locator:
         """XPath で探す（最終手段。例: Locator.xpath("//button[text()='検索']")）。"""
         return cls(By.XPATH, value)
 

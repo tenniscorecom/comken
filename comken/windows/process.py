@@ -7,6 +7,8 @@ COM 経由の Excel 自動化は、クラッシュや強制終了で EXCEL.EXE �
 自動処理の開始前に呼んで、前回の残骸を片付けるために使う。
 """
 
+from __future__ import annotations
+
 import logging
 import subprocess
 

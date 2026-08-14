@@ -1,5 +1,7 @@
 """comken/excel/reader.py — Excel を読み取り専用で開く入口。"""
 
+from __future__ import annotations
+
 from pathlib import Path
 
 from .base import ExcelBase

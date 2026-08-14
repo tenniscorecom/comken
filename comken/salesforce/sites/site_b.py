@@ -3,6 +3,8 @@
 ※ SiteB は仮名。配置時に実際の組織名へ書き換える（詳細は sites/__init__.py）。
 """
 
+from __future__ import annotations
+
 from ..client import Salesforce
 
 

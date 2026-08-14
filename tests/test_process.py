@@ -1,5 +1,7 @@
 """Windows プロセス操作のテスト。"""
 
+from __future__ import annotations
+
 from subprocess import CompletedProcess
 from unittest.mock import patch
 

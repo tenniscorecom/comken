@@ -1,5 +1,7 @@
 """comken/config/__main__.py — ``python -m comken.config`` で補完用スタブを生成する。"""
 
+from __future__ import annotations
+
 from .stubs import generate_stub
 
 stub_path = generate_stub()

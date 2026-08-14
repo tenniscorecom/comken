@@ -43,8 +43,19 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 | なぜこの設計なのか知る | [仕様書](仕様書.md) |
 | コードを書く規約 | [共通コーディング規約](CONVENTIONS.md) |
 | comken 本体を直す | [ライブラリ開発規約](docs/ライブラリ開発規約.md) |
-| comken を使うツールを作る | [プロジェクト規約](docs/プロジェクト規約.md) |
+| comken を使うツールを作る | `新規プロジェクト作成.bat` で雛形を作る（作られた `README.md` が中を案内する） |
 | コードを読む・レビューする | [コードリーディングガイド](docs/コードリーディングガイド.md) |
+
+## 使うときの約束
+
+- **`comken` 直下から import してよいのは `config` / `Config` と実行モードの4関数
+  （`dry_run` / `is_dry_run` / `debug` / `is_debug`）だけ。** それ以外は
+  `from comken.excel import ExcelWriter` のように機能パッケージを明示する（依存が import 行で分かる）
+- **ファイル・ブラウザ・COM は `with` で開く。** 途中で失敗しても閉じられる
+- **エラーは細かい方から受ける。** 個別（`SheetNotFoundError`）→ 分野（`ExcelError`）→
+  全体（`ComkenError`）の3段。階層は[仕様書「例外体系」](仕様書.md#5-例外体系)
+- **機密は config.ini に書かない。** [認証情報](docs/credentials.md)（DPAPI）に入れ、
+  config.ini にはキー名だけ書く
 
 ## モジュール一覧
 

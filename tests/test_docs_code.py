@@ -5,6 +5,8 @@
 実際に動くことの担保は test_examples.py（オフライン例の実行）が担う。
 """
 
+from __future__ import annotations
+
 import ast
 import re
 from pathlib import Path

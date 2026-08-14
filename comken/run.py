@@ -29,6 +29,8 @@ PYTHONPATH で参照する運用なので、**ここで吸収すれば comken �
 使い方は README.md を参照。
 """
 
+from __future__ import annotations
+
 import logging
 from collections.abc import Callable
 from typing import Any

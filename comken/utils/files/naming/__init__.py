@@ -3,6 +3,8 @@
 日付以外の方式を足すときは、このパッケージに新しいモジュールを作る。
 """
 
+from __future__ import annotations
+
 from .date import DateNameBuilder
 
 __all__ = ["DateNameBuilder"]

@@ -1,5 +1,7 @@
 """comken/utils/__init__.py — 汎用的なデータ・時間・文字列操作 API を公開するパッケージ。"""
 
+from __future__ import annotations
+
 from .data import DiffResult, RowChange, diff_row, diff_rows
 from .retry import retry
 from .text import normalize, remove_spaces, strip_spaces

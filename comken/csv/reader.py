@@ -3,6 +3,8 @@
 CsvReader クラスを通じて CSV ファイルの読み込み・検索・抽出を行う。
 """
 
+from __future__ import annotations
+
 import csv
 import io
 import re

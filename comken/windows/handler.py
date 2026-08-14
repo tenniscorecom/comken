@@ -10,6 +10,8 @@ pywin32 を使った Windows 固有操作を提供する。
 ExcelComHandler は数式やマクロが必要な場面に限定して使う。
 """
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 from typing import Any
@@ -202,7 +204,7 @@ class ExcelComHandler(FileBase):
                 self._excel = None
             raise
 
-    def __enter__(self) -> "ExcelComHandler":
+    def __enter__(self) -> ExcelComHandler:
         return self
 
     def __exit__(self, *args) -> None:
@@ -559,7 +561,7 @@ class RegistryHandler:
         """
         self._key = win32api.RegOpenKey(hive, key_path)
 
-    def __enter__(self) -> "RegistryHandler":
+    def __enter__(self) -> RegistryHandler:
         return self
 
     def __exit__(self, *args) -> None:
