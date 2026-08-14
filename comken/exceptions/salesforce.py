@@ -140,6 +140,50 @@ class SalesforceReportFormatError(SalesforceError):
         )
 
 
+class SalesforceSiteNotFoundError(SalesforceError):
+    """URL のドメインに対応する組織が登録されていない
+
+    管理表には複数の組織のレポート URL が混ざる。どの組織へつなぐかは
+    URL のドメインで決めるので、未登録のドメインでは接続先を選べない。
+
+    発生箇所: comken.salesforce.sites.site_for()
+
+    対処:
+        URL のドメインを見直す。新しい組織なら管理者へ連絡する
+        （組織クラスの追加が要る）
+    """
+
+    def __init__(self, url: str, known_domains: list[str]) -> None:
+        known = "\n".join(f"  {domain}" for domain in known_domains) or "  （登録なし）"
+        super().__init__(
+            f"この URL の組織が登録されていません: {url}\n"
+            f"登録済みの組織:\n{known}\n"
+            "レポートを開いたときのアドレスをそのまま貼ってください。\n"
+            "新しい組織の場合は、組織クラスの追加が必要です（管理者へ連絡してください）。"
+        )
+
+
+class SalesforceReportIdNotFoundError(SalesforceError):
+    """レポートの URL からレポート ID を取り出せない
+
+    管理表にはレポートの URL をそのまま貼れるようにしてあるが、
+    貼られたものが Salesforce のレポート URL でないと ID を取り出せない。
+
+    発生箇所: comken.salesforce.report_id_from_url()
+
+    対処:
+        Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す
+    """
+
+    def __init__(self, text: str) -> None:
+        super().__init__(
+            f"レポート ID を取り出せませんでした: {text}\n"
+            "Salesforce でレポートを開いたときのアドレス（.../Report/00O.../view）を、\n"
+            "そのまま貼り付けてください。レポート ID（00O で始まる 15 桁か 18 桁）を"
+            "直接書いても構いません。"
+        )
+
+
 class SalesforceReportExecutionError(SalesforceError):
     """Salesforce 側でレポート実行に失敗した
 

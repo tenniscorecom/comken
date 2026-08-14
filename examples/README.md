@@ -41,6 +41,8 @@ comken の使い方を「動くコード」で覚えるためのサンプル。
 | 6 | daily_batch_template | 日次バッチの流れ（入力を探す → 加工 → Excel 出力） | comken.run / FileFinder / ExcelWriter | config.ini + 社内ライブラリ |
 | 7 | access_export | Access マクロで整形 → CSV 出力 → Excel 帳票 | AccessDatabase / CsvReader / ExcelWriter | Microsoft Access + パス設定 |
 | 8 | outlook_inbox | 受信メール → CSV → 結果メールの下書き | Outlook / MailMessage / CsvWriter | Classic Outlook |
+| 9 | copy_then_macro | 当日ファイルをコピー → Excel マクロ → 配布 | FileFinder / ExcelWriter.run_macro / copy_file | Microsoft Excel + パス設定 |
+| 10 | salesforce_handoff | Salesforce レポートを受け渡しフォルダへ集約して配布 | Handoff / Salesforce / CsvReader / copy | Salesforce 接続 + パス設定 |
 
 ### 実行方法
 
@@ -50,7 +52,7 @@ python -m examples.csv_to_excel_report.run
 ```
 
 - 1〜3 は外部システム・ネット接続なしでそのまま動く。出力は各フォルダの `output/` に入る
-- 4〜6 は各フォルダの run.py 冒頭に書いてある事前準備を済ませてから実行する
+- 4〜10 は各フォルダの Python ファイル冒頭に書いてある事前準備を済ませてから実行する
 
 > **run.py という名前について**: 実プロジェクトのエントリポイントは規約どおり `main.py`（CONVENTIONS.md 参照）。
 > examples 内は複数のサンプルが同居し `python -m examples.<フォルダ名>.run` とモジュール実行するため、

@@ -42,12 +42,13 @@ from .oauth_credentials import ClientCredentialsAuth
 from .oauth_credentials import OAuth as CredentialsOAuth
 from .oauth_refresh import OAuth as RefreshOAuth
 from .oauth_refresh import RefreshTokenAuth
-from .report import ReportApi
+from .report import ReportApi, report_id_from_url
 from .rotation import SalesforceCredentialRotator
 
 __all__ = [
     "SalesforceBase",
     "ReportApi",
+    "report_id_from_url",
     "ClientCredentialsAuth",
     "RefreshTokenAuth",
     "CredentialsOAuth",

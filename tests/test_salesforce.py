@@ -17,11 +17,13 @@ from comken.exceptions import (
     SalesforceExternalIdMissingError,
     SalesforceReportExecutionError,
     SalesforceReportFormatError,
+    SalesforceReportIdNotFoundError,
     SalesforceReportTruncatedError,
     SalesforceRequestError,
+    SalesforceSiteNotFoundError,
 )
-from comken.salesforce import ApiMetrics, ClientCredentialsAuth, SalesforceBase
-from comken.salesforce.sites import Sandbox
+from comken.salesforce import ApiMetrics, ClientCredentialsAuth, SalesforceBase, report_id_from_url
+from comken.salesforce.sites import SITES, Sandbox, site_for
 
 DOMAIN_URL = "https://example.my.salesforce.com"
 INSTANCE_URL = "https://example.my.salesforce.com"
@@ -33,6 +35,43 @@ class _TestSalesforceBase(SalesforceBase):
 
     DOMAIN_URL = DOMAIN_URL
     CREDENTIAL_PREFIX = "test_salesforce"
+
+
+class TestReportIdFromUrl:
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            (
+                "https://example.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE/view",
+                "00O5g00000ABCDE",
+            ),
+            (
+                "https://example.my.salesforce.com/lightning/r/Report/00O5g00000ABCDEfgh/view",
+                "00O5g00000ABCDEfgh",
+            ),
+            ("00O5g00000ABCDE", "00O5g00000ABCDE"),
+            ("  00O5g00000ABCDEfgh\n", "00O5g00000ABCDEfgh"),
+            (
+                "https://example.my.salesforce.com/00O5g00000ABCDE",
+                "00O5g00000ABCDE",
+            ),
+        ],
+    )
+    def test_extracts_only_15_or_18_character_report_id(self, text, expected):
+        assert report_id_from_url(text) == expected
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "https://example.my.salesforce.com/",
+            "https://example.my.salesforce.com/00O1234",
+            "00O5g00000ABCDEfg",
+            "00O5g00000ABCDEfghi",
+        ],
+    )
+    def test_raises_when_report_id_is_missing_or_has_an_intermediate_length(self, text):
+        with pytest.raises(SalesforceReportIdNotFoundError):
+            report_id_from_url(text)
 
 
 def _response(status: int = 200, json_body: object = None, text: str = "", headers=None):
@@ -533,6 +572,41 @@ class TestSites:
 
         assert rows == [{"名前": "A社", "金額": "1"}]
         assert session.request.call_args[0][1].endswith(f"/{Sandbox.REPORT_案件一覧}")
+
+
+class TestSiteFor:
+    """レポートの URL から、つなぐ組織を決める（管理表に複数組織が混ざるため）。"""
+
+    def test_url_of_a_registered_org(self):
+        url = f"{Sandbox.DOMAIN_URL}/lightning/r/Report/00O5g00000ABCDE/view"
+        assert site_for(url) is Sandbox
+
+    def test_host_case_is_ignored(self):
+        assert site_for(Sandbox.DOMAIN_URL.upper()) is Sandbox
+
+    def test_surrounding_spaces_are_ignored(self):
+        """表からコピーした値に空白が混ざっていても引ける。"""
+        assert site_for(f"  {Sandbox.DOMAIN_URL}/lightning  ") is Sandbox
+
+    def test_unknown_domain_raises(self):
+        """未登録のドメインでは、黙って別組織へつながず止まる。"""
+        with pytest.raises(SalesforceSiteNotFoundError) as error:
+            site_for("https://other.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE/view")
+        assert Sandbox.DOMAIN_URL in str(error.value)  # 登録済みの組織を案内する
+
+    def test_report_id_alone_raises(self):
+        """ID だけでは、どの組織のレポートか決められない。"""
+        with pytest.raises(SalesforceSiteNotFoundError):
+            site_for("00O5g00000ABCDE")
+
+    def test_empty_raises(self):
+        with pytest.raises(SalesforceSiteNotFoundError):
+            site_for("")
+
+    def test_registered_sites_are_salesforce_clients(self):
+        """SITES に登録されているものは、すべて SalesforceBase の組織クラス。"""
+        assert SITES
+        assert all(issubclass(site, SalesforceBase) for site in SITES)
 
 
 class TestCredentialsInitialization:

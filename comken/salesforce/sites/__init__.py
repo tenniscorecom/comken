@@ -28,6 +28,45 @@ client_id / client_secret は DPAPI から読む（`comken.credentials`）ので
 > 組織名を出すならクラス名。**実名をこのリポジトリへ書き戻さないこと。**
 """
 
+from urllib.parse import urlsplit
+
+from ...exceptions import SalesforceSiteNotFoundError
+from ..client import SalesforceBase
 from .sandbox import Sandbox
 
-__all__ = ["Sandbox"]
+# 登録済みの組織。URL からどの組織へつなぐかを引くのに使う。
+# **組織を増やしたらここにも足す。** 足し忘れると、その組織の URL だけが
+# SalesforceSiteNotFoundError になる（黙って別組織へつなぐことはない）
+SITES: tuple[type[SalesforceBase], ...] = (Sandbox,)
+
+__all__ = ["SITES", "Sandbox", "site_for"]
+
+
+def site_for(url: str) -> type[SalesforceBase]:
+    """レポートの URL から、つなぐ組織のクラスを返す。
+
+    レポートの一覧表には**複数の組織の URL が混ざる**。どの組織のレポートかは
+    URL のドメイン（My Domain）で決まるので、表に行を足すだけで新しい組織の
+    レポートも取れるようにする。組織を人が選ぶ列を作ると、URL と食い違ったときに
+    別組織へ問い合わせて「レポートが見つからない」という分かりにくい失敗になる。
+
+        site_for("https://example--sandbox.sandbox.my.salesforce.com/lightning/...")
+        # → Sandbox
+
+    Args:
+        url: レポートを開いたときのアドレス。**ドメインを含む URL であること**
+            （レポート ID だけでは、どの組織のものか決められない）。
+
+    Raises:
+        SalesforceSiteNotFoundError: 登録済みのどの組織にも当てはまらない場合。
+    """
+    host = _host_of(url)
+    for site in SITES:
+        if host and _host_of(site.DOMAIN_URL) == host:
+            return site
+    raise SalesforceSiteNotFoundError(url, [site.DOMAIN_URL for site in SITES])
+
+
+def _host_of(url: str) -> str:
+    """URL からホスト名だけを取り出す（大文字小文字の違いは無視する）。"""
+    return urlsplit(url.strip()).netloc.lower()

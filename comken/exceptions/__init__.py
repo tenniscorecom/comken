@@ -48,6 +48,8 @@ ComkenError
 │   ├── SalesforceCredentialRotationError
 │   ├── SalesforceReportTruncatedError
 │   ├── SalesforceReportFormatError
+│   ├── SalesforceReportIdNotFoundError
+│   ├── SalesforceSiteNotFoundError
 │   └── SalesforceReportExecutionError
 ├── BrowserError
 │   ├── DriverStartError
@@ -74,10 +76,12 @@ ComkenError
     ├── ConfigCreatedFromExampleError
     ├── ConfigLowerCaseNameError
     └── ConfigSectionNotFoundError
-└── StateError
-    ├── StateFileCorruptedError
-    ├── StateLowerCaseNameError
-    └── StateValueTypeError
+├── StateError
+│   ├── StateFileCorruptedError
+│   ├── StateLowerCaseNameError
+│   └── StateValueTypeError
+└── HandoffError
+    └── HandoffFilesMissingError
 
 カテゴリ基底クラスはまとめて捕捉するために使い、直接送出しない。
 """
@@ -155,6 +159,10 @@ from .excel import (
     TableNotFoundError,
 )
 from .file import UnsupportedFileSuffixError
+from .handoff import (
+    HandoffError,
+    HandoffFilesMissingError,
+)
 from .outlook import (
     ClassicOutlookNotAvailableError,
     OutlookAttachmentNotFoundError,
@@ -173,8 +181,10 @@ from .salesforce import (
     SalesforceExternalIdMissingError,
     SalesforceReportExecutionError,
     SalesforceReportFormatError,
+    SalesforceReportIdNotFoundError,
     SalesforceReportTruncatedError,
     SalesforceRequestError,
+    SalesforceSiteNotFoundError,
 )
 from .state import (
     StateError,
@@ -246,7 +256,9 @@ __all__ = [
     "SalesforceCredentialRotationError",
     "SalesforceReportTruncatedError",
     "SalesforceReportFormatError",
+    "SalesforceReportIdNotFoundError",
     "SalesforceReportExecutionError",
+    "SalesforceSiteNotFoundError",
     "BrowserError",
     "DriverStartError",
     "BrowsersNotStartedError",
@@ -263,4 +275,6 @@ __all__ = [
     "StateFileCorruptedError",
     "StateLowerCaseNameError",
     "StateValueTypeError",
+    "HandoffError",
+    "HandoffFilesMissingError",
 ]

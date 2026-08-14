@@ -3244,6 +3244,30 @@ class SalesforceReportFormatError(SalesforceError):
 def __init__(self, report_id: str, report_format: str) -> None:
 ```
 
+### `SalesforceReportIdNotFoundError`
+
+```text
+class SalesforceReportIdNotFoundError(SalesforceError):
+```
+
+#### 説明
+
+レポートの URL からレポート ID を取り出せない
+
+管理表にはレポートの URL をそのまま貼れるようにしてあるが、
+貼られたものが Salesforce のレポート URL でないと ID を取り出せない。
+
+発生箇所: comken.salesforce.report_id_from_url()
+
+対処:
+    Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す
+
+#### `__init__`
+
+```text
+def __init__(self, text: str) -> None:
+```
+
 ### `SalesforceReportExecutionError`
 
 ```text
@@ -3261,6 +3285,31 @@ Salesforce 側でレポート実行に失敗した
 
 ```text
 def __init__(self, report_id: str, detail: str) -> None:
+```
+
+### `SalesforceSiteNotFoundError`
+
+```text
+class SalesforceSiteNotFoundError(SalesforceError):
+```
+
+#### 説明
+
+URL のドメインに対応する組織が登録されていない
+
+管理表には複数の組織のレポート URL が混ざる。どの組織へつなぐかは
+URL のドメインで決めるので、未登録のドメインでは接続先を選べない。
+
+発生箇所: comken.salesforce.sites.site_for()
+
+対処:
+    URL のドメインを見直す。新しい組織なら管理者へ連絡する
+    （組織クラスの追加が要る）
+
+#### `__init__`
+
+```text
+def __init__(self, url: str, known_domains: list[str]) -> None:
 ```
 
 ### `BrowserError`
@@ -3603,6 +3652,39 @@ state に保存できない型の値が渡された
 def __init__(self, value: object) -> None:
 ```
 
+### `HandoffError`
+
+```text
+class HandoffError(ComkenError):
+```
+
+#### 説明
+
+受け渡しフォルダに関するエラー
+
+対処:
+    画面に表示された具体的なエラー名を上の表から探す
+
+### `HandoffFilesMissingError`
+
+```text
+class HandoffFilesMissingError(HandoffError):
+```
+
+#### 説明
+
+受け渡しフォルダに必要なファイルが揃っていない
+
+対処:
+    画面に出たファイル名のとおりに、表示された場所へ置いてから再実行する
+    （取得が失敗したときは、手で置けばそのまま続きから動く）
+
+#### `__init__`
+
+```text
+def __init__(self, folder: Path | str, missing: Sequence[str]) -> None:
+```
+
 
 ## `from comken.outlook import ...`
 
@@ -3930,6 +4012,31 @@ Raises:
     SalesforceReportExecutionError: Salesforce 側で実行が失敗した場合。
     TimeoutError: 制限時間内に完了しなかった場合。
 
+### `report_id_from_url`
+
+```text
+def report_id_from_url(text: str) -> str:
+```
+
+#### 説明
+
+レポートの URL からレポート ID を取り出す。ID をそのまま渡してもよい。
+
+管理表（レポート一覧の CSV・Excel）には**画面のアドレスをそのまま貼れる**ようにする。
+人が ID の部分だけを抜き出す工程を挟むと、そこで写し間違いが起きるため。
+
+    https://example.my.salesforce.com/lightning/r/Report/00O5g00000ABCDEfgh/view
+    → 00O5g00000ABCDEfgh
+
+Args:
+    text: レポートの URL、またはレポート ID。前後の空白は無視する。
+
+Returns:
+    レポート ID（15 桁または 18 桁）。
+
+Raises:
+    SalesforceReportIdNotFoundError: レポート ID が見つからない場合。
+
 ### `ClientCredentialsAuth`
 
 公開定数。
@@ -4203,6 +4310,10 @@ def rotate_if_due(self, today: datetime.date | None=None) -> bool:
 
 ## `from comken.salesforce.sites import ...`
 
+### `SITES`
+
+公開定数。
+
 ### `Sandbox`
 
 ```text
@@ -4229,6 +4340,31 @@ def 案件一覧(self) -> list[dict]:
 
 2000 行を超えると SalesforceReportTruncatedError で止まる。
 超えるようになったら、期間で区切るか SOQL へ移す。
+
+### `site_for`
+
+```text
+def site_for(url: str) -> type[SalesforceBase]:
+```
+
+#### 説明
+
+レポートの URL から、つなぐ組織のクラスを返す。
+
+レポートの一覧表には**複数の組織の URL が混ざる**。どの組織のレポートかは
+URL のドメイン（My Domain）で決まるので、表に行を足すだけで新しい組織の
+レポートも取れるようにする。組織を人が選ぶ列を作ると、URL と食い違ったときに
+別組織へ問い合わせて「レポートが見つからない」という分かりにくい失敗になる。
+
+    site_for("https://example--sandbox.sandbox.my.salesforce.com/lightning/...")
+    # → Sandbox
+
+Args:
+    url: レポートを開いたときのアドレス。**ドメインを含む URL であること**
+        （レポート ID だけでは、どの組織のものか決められない）。
+
+Raises:
+    SalesforceSiteNotFoundError: 登録済みのどの組織にも当てはまらない場合。
 
 
 ## `from comken.utils import ...`
@@ -5284,6 +5420,116 @@ class SortBy:
 #### 説明
 
 FileFinder.latest() の by 引数に使う定数。
+
+
+## `from comken.handoff import ...`
+
+### `Handoff`
+
+```text
+class Handoff:
+```
+
+#### 説明
+
+受け渡しフォルダから、その日のファイルを受け取る。
+
+ファイル名は「名前_日付.拡張子」の形に固定する（例: 売上レポート_20260814.csv）。
+置く側と受け取る側で名前の作り方が違うと、置いたのに見つからないという
+分かりにくい失敗になるため、組み立てはこのクラスだけが行う。
+
+使い方:
+    handoff = Handoff(r"\\server\share\受け渡し")
+
+    # 使う側: 揃っているか確かめて受け取る（足りなければ止まる）
+    files = handoff.require("売上レポート", "在庫レポート")
+    rows = CsvReader(files["売上レポート"]).read_rows()
+
+    # 取得側: もう取れているものは取り直さない
+    if handoff.find("売上レポート") is None:
+        download_to(handoff.path_of("売上レポート"))
+
+Args:
+    folder: 受け渡しフォルダ。共有サーバー上の1か所を指す。
+    date: 受け取る日付。省略すると今日。
+    suffix: ファイルの拡張子。拡張子が混ざるなら Handoff を分けて作る。
+
+#### `__init__`
+
+```text
+def __init__(self, folder: str | Path, date: datetime.date | None=None, suffix: str='.csv') -> None:
+```
+
+#### `folder`
+
+```text
+@property
+def folder(self) -> Path:
+```
+
+##### 説明
+
+受け渡しフォルダ。案内やログに出すために公開する。
+
+#### `path_of`
+
+```text
+def path_of(self, name: str) -> Path:
+```
+
+##### 説明
+
+その名前のファイルが置かれるべきパスを返す（実際にあるかは見ない）。
+
+置く側がこれを保存先に使い、受け取る側が同じ規則で探す。
+
+Args:
+    name: ファイルの名前（日付と拡張子は付けない。例: "売上レポート"）。
+
+#### `find`
+
+```text
+def find(self, name: str) -> Path | None:
+```
+
+##### 説明
+
+置かれていればパスを返し、無ければ None を返す。
+
+取得側が「もう取れているか」を確かめて、取り直しを省くのに使う。
+
+#### `missing`
+
+```text
+def missing(self, *names: str) -> list[str]:
+```
+
+##### 説明
+
+置かれていない名前を、渡した順で返す。
+
+#### `require`
+
+```text
+def require(self, *names: str) -> dict[str, Path]:
+```
+
+##### 説明
+
+全部揃っていることを確かめて、名前とパスの対応を返す。
+
+1件目で止めずに**足りないものを全部集めて**から失敗させる。1件ずつ
+知らせると、置く人は「1つ置いて再実行」を人数分繰り返すことになる。
+
+Args:
+    *names: 必要なファイルの名前（日付と拡張子は付けない）。
+
+Returns:
+    {名前: パス} の対応。渡した順を保つ。
+
+Raises:
+    HandoffFilesMissingError: 1件でも置かれていない場合。
+        足りないファイル名と置き場所がメッセージに入る。
 
 
 ## `from comken.logger import ...`

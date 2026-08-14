@@ -190,6 +190,58 @@ class TestCsvDiffReport:
         assert {"追加", "削除", "変更"} <= statuses
 
 
+class TestSalesforceHandoffDeliver:
+    """受け渡しフォルダから配り先へ配るサンプル（取得側は Salesforce が要るので試さない）。"""
+
+    def _prepare(self, tmp_path, monkeypatch, names):
+        from examples.salesforce_handoff import deliver
+
+        handoff_folder = tmp_path / "受け渡し"
+        handoff_folder.mkdir()
+        destinations = {name: tmp_path / "配布先" / f"{name}.csv" for name in names}
+        rows = "".join(
+            f"{name},https://example.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE/view,"
+            f"{path}\n"
+            for name, path in destinations.items()
+        )
+        report_list = tmp_path / "レポート一覧.csv"
+        report_list.write_text("名前,レポートURL,配り先\n" + rows, encoding="utf-8")
+
+        monkeypatch.setattr(deliver, "HANDOFF_FOLDER", handoff_folder)
+        monkeypatch.setattr(deliver, "REPORT_LIST_PATH", report_list)
+        return deliver, handoff_folder, destinations
+
+    def _place(self, folder, name):
+        from comken.utils.clock import today
+
+        path = folder / f"{name}_{today().strftime('%Y%m%d')}.csv"
+        path.write_text("列A\n値\n", encoding="utf-8")
+        return path
+
+    def test_delivers_to_the_mapped_path(self, tmp_path, monkeypatch):
+        """対応表のとおりの場所・名前で配られる（配り先のフォルダは作られる）。"""
+        deliver, handoff_folder, destinations = self._prepare(tmp_path, monkeypatch, ["案件一覧"])
+        self._place(handoff_folder, "案件一覧")
+
+        assert deliver.main() == 0
+        assert destinations["案件一覧"].read_text(encoding="utf-8") == "列A\n値\n"
+
+    def test_stops_before_delivering_when_a_file_is_missing(self, tmp_path, monkeypatch):
+        """1件でも足りなければ、揃っている分も配らない（日付が混ざるのを防ぐ）。"""
+        from comken.exceptions import HandoffFilesMissingError
+
+        deliver, handoff_folder, destinations = self._prepare(
+            tmp_path, monkeypatch, ["案件一覧", "売上"]
+        )
+        self._place(handoff_folder, "案件一覧")
+
+        with pytest.raises(HandoffFilesMissingError) as error:
+            deliver.main()
+
+        assert "売上_" in str(error.value)
+        assert not destinations["案件一覧"].exists()
+
+
 class TestCsvDateMove:
     def test_moves_only_file_with_matching_date(self, tmp_path):
         """指定列とファイル名の日付が一致する CSV だけを移動する。"""

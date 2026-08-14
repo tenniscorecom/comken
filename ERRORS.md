@@ -113,10 +113,13 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `SalesforceCredentialRotationError` | consumer key / secret のローテーションを安全に完了できない | Salesforce の ECA 設定・API レスポンス・DPAPI の保存先を確認する |
 | `SalesforceReportTruncatedError` | レポートが上限の 2000 行で切れた（**全件ではない**） | 期間を狭めて何回かに分けて実行する。1回で全部必要なら管理者へ連絡する |
 | `SalesforceReportFormatError` | レポートの形式が対応していない | レポートを明細形式にするか、管理者へ連絡する |
+| `SalesforceReportIdNotFoundError` | レポートの URL からレポート ID を取り出せない | Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す |
 | `SalesforceReportExecutionError` | Salesforce 側でレポート実行に失敗した | Salesforce で同じレポートを直接実行し、表示された内容を管理者へ連絡する |
+| `SalesforceSiteNotFoundError` | URL のドメインに対応する組織が登録されていない | URL のドメインを見直す。新しい組織なら管理者へ連絡する（組織クラスの追加が要る） |
 | `StateFileCorruptedError` | state.ini が壊れていて読み取れない | 内容を直す。直せない場合は別名に変更して、空の状態から再実行する |
 | `StateLowerCaseNameError` | state のキー名に小文字がある | 表示されたキー名を大文字に直す（`last_file` → `LAST_FILE`） |
 | `StateValueTypeError` | state に保存できない型の値が渡された | 真偽値・整数・小数・文字列・文字列のリストのいずれかに変更する |
+| `HandoffFilesMissingError` | 受け渡しフォルダに必要なファイルが揃っていない | 画面に出たファイル名のとおりに、表示された場所へ置いてから再実行する（取得が失敗したときは、手で置けばそのまま続きから動く） |
 | `FileNotFoundError` | ファイルが見つからない | ファイルの置き場所と名前を確認する。「今日の日付のファイル」を探す処理なら、今日のファイルが作られているか確認する |
 
 ## ブラウザ（Edge 自動操作）のエラー
@@ -150,6 +153,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `CsvError` | CSV に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `ColumnNotFoundError` | Excel・CSV・データ比較で列が見つからないエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `ConfigError` | config.ini に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
+| `HandoffError` | 受け渡しフォルダに関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `StateError` | state.ini に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `RpaError` | 社内 RPA 基盤の呼び出しに関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `SalesforceError` | Salesforce に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
