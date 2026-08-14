@@ -116,6 +116,9 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `SalesforceReportIdNotFoundError` | レポートの URL からレポート ID を取り出せない | Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す |
 | `SalesforceReportExecutionError` | Salesforce 側でレポート実行に失敗した | Salesforce で同じレポートを直接実行し、表示された内容を管理者へ連絡する |
 | `SalesforceSiteNotFoundError` | URL のドメインに対応する組織が登録されていない | URL のドメインを見直す。新しい組織なら管理者へ連絡する（組織クラスの追加が要る） |
+| `SettingsCreatedFromExampleError` | settings.ini が無かったので、example から作った | 作られた settings.ini を開き、社内の実際の値へ書き換えてから、もう一度実行する。settings.ini は git 管理外なので、comken を更新（git pull）しても消えない |
+| `SettingsSectionNotFoundError` | settings.ini に必要なセクションが無い | settings.ini.example と見比べて、足りないセクションを書き足す |
+| `SettingsKeyNotFoundError` | settings.ini に必要なキーが無い | settings.ini.example と見比べて、足りないキーを書き足す |
 | `StateFileCorruptedError` | state.ini が壊れていて読み取れない | 内容を直す。直せない場合は別名に変更して、空の状態から再実行する |
 | `StateLowerCaseNameError` | state のキー名に小文字がある | 表示されたキー名を大文字に直す（`last_file` → `LAST_FILE`） |
 | `StateValueTypeError` | state に保存できない型の値が渡された | 真偽値・整数・小数・文字列・文字列のリストのいずれかに変更する |
@@ -162,6 +165,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `CsvError` | CSV に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `ColumnNotFoundError` | Excel・CSV・データ比較で列が見つからないエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `ConfigError` | config.ini に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
+| `SettingsError` | comken の設定（settings.ini）に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `StateError` | state.ini に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `DownloaderError` | Salesforce レポートの集約取得に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `RpaError` | 社内 RPA 基盤の呼び出しに関するエラー | 画面に表示された具体的なエラー名を上の表から探す |

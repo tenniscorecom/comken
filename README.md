@@ -89,6 +89,7 @@ from comken.services.salesforce_downloader import download_report   # 社内の�
 | runtime | `with debug():` / `with dry_run():` による実行モード |
 | constants | CSV・Excel・ファイル検索で使う公開定数 |
 | exceptions | comken 固有の例外（エラー名別に対処可能） |
+| settings | comken 自身の設定（settings.ini。社内の共有フォルダの場所など。配置する人が1回だけ書く） |
 | [CSV](docs/csv.md) | CSV の読み込み・検索・抽出 |
 | [Excel（openpyxl）](docs/excel.md) | Excel の読み書き（既存数式の計算結果・マクロは必要時に win32com を使用） |
 | [Access](docs/access.md) | Access のマクロ・VBA 実行、テーブル／クエリの CSV 出力 |

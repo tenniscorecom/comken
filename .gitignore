@@ -23,3 +23,6 @@ state.ini
 # AIツール向けのローカル作業指示（ライブラリ本体には含めない）
 AGENTS.md
 CLAUDE.md
+
+# comken 自身の設定（社内固有の値。git 管理外にして pull で消えないようにする）
+settings.ini

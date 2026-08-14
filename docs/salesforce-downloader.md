@@ -202,16 +202,33 @@ def run() -> None:
 
 ---
 
-## 配置するときに書き換える
+## 配置するときの設定
 
-公開リポジトリなので、管理表と履歴の場所は仮名にしてある。
-`comken/services/salesforce_downloader/service.py` の次の2つを実際の場所へ書き換える
-（社内ライブラリ名を `example_libs.v0000` にしてあるのと同じ扱い）。
+管理表と履歴の場所は、**コードではなく `settings.ini` に書く**。
 
-```python
-MASTER_PATH = Path(r"\\server\share\tools\salesforce\レポート管理表.xlsx")
-HISTORY_PATH = Path(r"\\server\share\tools\salesforce\ダウンロード履歴.csv")
 ```
+共有サーバー \\server\share\tools\comken\
+    comken/                ← git 管理（pull で更新される）
+    settings.ini           ← git 管理外（ここに社内の値を書く。pull で消えない）
+    settings.ini.example   ← git 管理（雛形）
+```
+
+```ini
+[SALESFORCE_DOWNLOADER]
+MASTER_PATH  = \\実際のサーバー\share\tools\salesforce\レポート管理表.xlsx
+HISTORY_PATH = \\実際のサーバー\share\tools\salesforce\ダウンロード履歴.csv
+```
+
+**コードに直接書くと、共有サーバーの comken を `git pull` したときに衝突する。**
+書き換えた内容をコミットすれば公開リポジトリに社内の実名が載り、コミットしなければ
+更新のたびに手作業になる。`settings.ini` は git 管理外なので、どちらも起きない。
+
+`settings.ini` が無ければ example から作られ、**その時点で止まる**
+（`SettingsCreatedFromExampleError`）。仮の値のまま動いて、つながらない場所や
+誰も見ない場所を読みに行くことを防ぐ。
+
+読むのは**使うときだけ**なので、`settings.ini` を用意していない開発環境でも
+comken は import できる（テストもそのまま動く）。
 
 ---
 
