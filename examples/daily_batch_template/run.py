@@ -11,7 +11,8 @@
 
 実行方法:
     リポジトリのルートで python -m examples.daily_batch_template.run
-    （実プロジェクトに移すときは main.py にリネームし、templates/新規プロジェクト/実行.bat を組み合わせる）
+    （実プロジェクトに移すときは main.py にリネームし、
+     templates/新規プロジェクト/実行.bat を組み合わせる）
 """
 
 import logging

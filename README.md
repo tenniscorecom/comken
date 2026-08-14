@@ -121,21 +121,19 @@ PCの環境変数を変更したくない場合は、各プロジェクトのル
 
 ### BO用フォルダへ配置する
 
-`deploy_comken.bat`は、バージョン更新、Ruff、pytest、BO用フォルダへのコピーを順番に行う。
-コピー先と更新する桁を引数で渡せる。
+`deploy_comken.bat`（中身は`deploy.py`）は、Ruff、pytest、BO用フォルダへのコピーを順番に行う。
+配置先を引数で渡す。省略すると画面で入力する。
 
 ```bat
-deploy_comken.bat "\\server\share\BO_LIBS" patch
+deploy_comken.bat "\\server\share\BO_LIBS"
 ```
 
-第2引数は`patch`、`minor`、`major`、または`1.2.3`のような任意バージョンを指定する。
-引数を省略すると画面で入力する。新バージョンは現在より大きい値だけを受け付けるため、
-バージョンを変え忘れた状態では配置できない。
+**バージョンはここでは上げない。** 先に`comken/__init__.py`の`__version__`を上げてから配置する
+（[リリース手順](仕様書.md#リリース手順バージョンアップ)）。配置先に同じバージョンが入っている場合は
+上げ忘れとみなして止まる。
 
-配置先の既存`comken`は`backup/`へ退避し、一時フォルダへコピーした新バージョンをimport
-できた場合だけ切り替える。`DEPLOYMENT.txt`にはバージョン、日時、Gitコミット、バージョン変更前
-から存在した未コミット変更の有無を記録する。手元の未コミット変更も配置できるが、その場合は
-警告を表示する。
+配置先の既存`comken`は`backup/`へ退避し、配置先の中の一時フォルダへコピーしてimportできた
+場合だけ切り替える。`DEPLOYMENT.txt`にはバージョン、日時、Gitコミット、コピー元を記録する。
 
 ```bat
 set "COMKEN_ROOT=\\server\share\tools\comken"
