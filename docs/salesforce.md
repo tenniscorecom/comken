@@ -160,12 +160,24 @@ with Sandbox() as sf:
     ...
 ```
 
+レポート URL を管理表などから読む場合は、URL から接続先の組織とレポート ID を判定できる。
+未登録の組織や ID を含まない URL は例外になるため、誤った組織へ接続したまま処理を続けない。
+
+```python
+from comken.salesforce import report_id_from_url
+from comken.salesforce.sites import site_for
+
+report_url = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O000000000001/view"
+site = site_for(report_url)
+report_id = report_id_from_url(report_url)
+
+with site() as sf:
+    rows = sf.report.run(report_id)
+```
+
 ---
 
 ## レポート — 2000行の壁
-
-複数プロジェクトで同じレポートを使う場合は、取得を1本にまとめる
-[受け渡しフォルダ](handoff.md)も参照する。
 
 ### 事実
 

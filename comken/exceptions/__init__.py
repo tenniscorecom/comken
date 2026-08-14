@@ -76,12 +76,10 @@ ComkenError
     ├── ConfigCreatedFromExampleError
     ├── ConfigLowerCaseNameError
     └── ConfigSectionNotFoundError
-├── StateError
-│   ├── StateFileCorruptedError
-│   ├── StateLowerCaseNameError
-│   └── StateValueTypeError
-└── HandoffError
-    └── HandoffFilesMissingError
+└── StateError
+    ├── StateFileCorruptedError
+    ├── StateLowerCaseNameError
+    └── StateValueTypeError
 
 カテゴリ基底クラスはまとめて捕捉するために使い、直接送出しない。
 """
@@ -159,10 +157,6 @@ from .excel import (
     TableNotFoundError,
 )
 from .file import UnsupportedFileSuffixError
-from .handoff import (
-    HandoffError,
-    HandoffFilesMissingError,
-)
 from .outlook import (
     ClassicOutlookNotAvailableError,
     OutlookAttachmentNotFoundError,
@@ -275,6 +269,4 @@ __all__ = [
     "StateFileCorruptedError",
     "StateLowerCaseNameError",
     "StateValueTypeError",
-    "HandoffError",
-    "HandoffFilesMissingError",
 ]

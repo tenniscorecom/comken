@@ -62,9 +62,7 @@ def main() -> None:
         book.run_macro(MACRO_NAME)
     logger.info("マクロを実行: %s", MACRO_NAME)
 
-    # 4. できた結果を配る。配り先ごとにファイル名が違う場合は、
-    #    どこへ何という名前で配るかを config.ini の対応表にまとめる
-    #    （→ examples/salesforce_handoff/deliver.py）
+    # 4. できた結果を配る。
     delivered = copy_file(WORK_FOLDER / OUTPUT_NAME, DELIVERY_FOLDER / OUTPUT_NAME)
     logger.info("配布しました: %s", delivered)
 

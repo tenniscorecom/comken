@@ -42,7 +42,6 @@ comken の使い方を「動くコード」で覚えるためのサンプル。
 | 7 | access_export | Access マクロで整形 → CSV 出力 → Excel 帳票 | AccessDatabase / CsvReader / ExcelWriter | Microsoft Access + パス設定 |
 | 8 | outlook_inbox | 受信メール → CSV → 結果メールの下書き | Outlook / MailMessage / CsvWriter | Classic Outlook |
 | 9 | copy_then_macro | 当日ファイルをコピー → Excel マクロ → 配布 | FileFinder / ExcelWriter.run_macro / copy_file | Microsoft Excel + パス設定 |
-| 10 | salesforce_handoff | Salesforce レポートを受け渡しフォルダへ集約して配布 | Handoff / Salesforce / CsvReader / copy | Salesforce 接続 + パス設定 |
 
 ### 実行方法
 
