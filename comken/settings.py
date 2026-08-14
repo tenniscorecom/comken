@@ -1,98 +1,47 @@
-r"""comken/settings.py — comken 自身の設定（社内固有の値）。
+r"""comken/settings.py — 社内固有の値をまとめる。
 
-**共有サーバーの comken は git チェックアウトなので、コード内の定数を書き換えると
-`git pull` のたびに衝突する。** 社内の共有フォルダのパスのように、公開リポジトリへ
-書けない値は git 管理外の `settings.ini` に置く。
+**社内の値を持つのはこのファイルだけ。** 共有フォルダの場所・組織の URL など、
+公開リポジトリに実物を書けない値をここに集める。配置するときに実際の値へ書き換える。
 
-    共有サーバー \\server\share\tools\comken\
-        comken/                ← git 管理（pull で更新される）
-        settings.ini           ← git 管理外（社内固有の値。pull で消えない）
-        settings.ini.example   ← git 管理（雛形）
+**配置しても上書きされない。** `deploy.py` はこのファイルを配置先の既存のまま残すので、
+comken を更新しても書き換えた値は消えない。
 
-プロジェクトの `config.ini`（`comken.config`）とは別物。
+    from comken import settings
 
-| | 誰の設定か | 誰が書くか |
-|---|---|---|
-| `config.ini` | **そのプロジェクト**（入力フォルダ・出力先など） | プロジェクトの利用者 |
-| `settings.ini` | **comken 自身**（共有フォルダの場所など） | comken を配置する人（1回だけ） |
+    settings.MASTER_PATH        # レポート管理表の場所
 
-**無ければ example から作って、そこで止める**（config.ini と同じ）。作り忘れも、
-仮の値のまま動かすことも防ぐ。
+設定を ini にしない理由:
 
-読み込みは**初回アクセス時**に行う。import しただけでは読まないので、settings.ini を
-用意していない開発環境でも comken を import できる。
+- **設定がコードと ini に散ると、どちらを見ればよいか分からなくなる。** 探す場所は1つにする
+- Python の定数なら import した時点で解決するので、**クラス定数にも使える**
+  （ini から読む形にすると、import した瞬間に設定ファイルが必要になる）
+- 補完が効き、型も付く。書き間違いは import した時点で分かる
+
+ここに書かないもの:
+
+- **プロジェクトごとに変わる値**（入力フォルダ・出力先など）は各プロジェクトの config.ini へ。
+  ここに書くのは「comken を1回配置したら、そのまま変わらない値」だけ
+- **社内 RPA 基盤の import 名**（`comken/toolbox/rpa.py`）。import 文は文字列にできないため、
+  あちらは直接書き換える。あのファイルも deploy で上書きされない
 """
 
-import configparser
-import shutil
 from pathlib import Path
 
-from .exceptions import (
-    SettingsCreatedFromExampleError,
-    SettingsKeyNotFoundError,
-    SettingsSectionNotFoundError,
-)
+# ── Salesforce レポートの集約取得（comken.services.salesforce_downloader）────────
+# レポート管理表（Excel）。非エンジニアが編集する。雛形は次のコマンドで作れる:
+#     python -m comken.services.salesforce_downloader init レポート管理表.xlsx
+MASTER_PATH = Path(r"\\server\share\tools\salesforce\レポート管理表.xlsx")
 
-# settings.ini はリポジトリのルート（comken パッケージの親）に置く
-_ROOT = Path(__file__).resolve().parent.parent
-SETTINGS_PATH = _ROOT / "settings.ini"
-EXAMPLE_PATH = _ROOT / "settings.ini.example"
-
-_parser: configparser.ConfigParser | None = None
+# ダウンロード履歴（CSV）。プログラムが追記する（人は編集しない）
+HISTORY_PATH = Path(r"\\server\share\tools\salesforce\ダウンロード履歴.csv")
 
 
-def get(section: str, key: str) -> str:
-    """設定を1つ読む。
+# ── Salesforce の組織（comken.toolbox.salesforce.sites）──────────────────────────
+# Sandbox 組織の My Domain。「<組織>--<サンドボックス名>.sandbox」の形になる
+SANDBOX_DOMAIN_URL = "https://example--sandbox.sandbox.my.salesforce.com"
 
-    Args:
-        section: セクション名（例: "SALESFORCE_DOWNLOADER"）。
-        key: キー名（例: "MASTER_PATH"）。
+# 認証情報のキー名の頭。DPAPI には sandbox_client_id / sandbox_client_secret で入る
+SANDBOX_CREDENTIAL_PREFIX = "sandbox"
 
-    Raises:
-        SettingsCreatedFromExampleError: settings.ini が無く、example から作った場合。
-        SettingsSectionNotFoundError: セクションが無い場合。
-        SettingsKeyNotFoundError: キーが無い場合。
-    """
-    parser = _load()
-    if not parser.has_section(section):
-        raise SettingsSectionNotFoundError(section, parser.sections(), SETTINGS_PATH)
-    if not parser.has_option(section, key):
-        raise SettingsKeyNotFoundError(section, key, parser.options(section), SETTINGS_PATH)
-    return parser.get(section, key).strip()
-
-
-def get_path(section: str, key: str) -> Path:
-    """設定をパスとして読む。"""
-    return Path(get(section, key))
-
-
-def reload() -> None:
-    """次のアクセスで settings.ini を読み直す（テストと、設定を書き換えた直後に使う）。"""
-    global _parser
-    _parser = None
-
-
-def _load() -> configparser.ConfigParser:
-    """settings.ini を読む（初回だけ）。無ければ example から作って止める。"""
-    global _parser
-    if _parser is not None:
-        return _parser
-
-    if not SETTINGS_PATH.exists():
-        created = _create_from_example()
-        raise SettingsCreatedFromExampleError(SETTINGS_PATH, created)
-
-    parser = configparser.ConfigParser()
-    # キー名を小文字にしない（config.ini と同じく、書いたとおりの大文字で引く）
-    parser.optionxform = str
-    parser.read(SETTINGS_PATH, encoding="utf-8")
-    _parser = parser
-    return parser
-
-
-def _create_from_example() -> bool:
-    """example から settings.ini を作る。example も無ければ False を返す。"""
-    if not EXAMPLE_PATH.exists():
-        return False
-    shutil.copyfile(EXAMPLE_PATH, SETTINGS_PATH)
-    return True
+# Sandbox 組織のレポート ID（組織ごとに固有で、環境では変わらない）
+SANDBOX_REPORT_案件一覧 = "00O000000000001"

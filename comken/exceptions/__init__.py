@@ -76,10 +76,6 @@ ComkenError
     ├── ConfigCreatedFromExampleError
     ├── ConfigLowerCaseNameError
     └── ConfigSectionNotFoundError
-├── SettingsError
-│   ├── SettingsCreatedFromExampleError
-│   ├── SettingsSectionNotFoundError
-│   └── SettingsKeyNotFoundError
 ├── StateError
 │   ├── StateFileCorruptedError
 │   ├── StateLowerCaseNameError
@@ -208,12 +204,6 @@ from .salesforce import (
     SalesforceRequestError,
     SalesforceSiteNotFoundError,
 )
-from .settings import (
-    SettingsCreatedFromExampleError,
-    SettingsError,
-    SettingsKeyNotFoundError,
-    SettingsSectionNotFoundError,
-)
 from .state import (
     StateError,
     StateFileCorruptedError,
@@ -299,10 +289,6 @@ __all__ = [
     "ElementNotFoundError",
     "PopupTabNotOpenedError",
     "DownloadTimeoutError",
-    "SettingsError",
-    "SettingsCreatedFromExampleError",
-    "SettingsSectionNotFoundError",
-    "SettingsKeyNotFoundError",
     "StateError",
     "StateFileCorruptedError",
     "StateLowerCaseNameError",

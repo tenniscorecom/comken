@@ -204,31 +204,16 @@ def run() -> None:
 
 ## 配置するときの設定
 
-管理表と履歴の場所は、**コードではなく `settings.ini` に書く**。
+管理表と履歴の場所は **`comken/settings.py`** に書く。社内の値を持つファイルはここ1つだけ。
 
-```
-共有サーバー \\server\share\tools\comken\
-    comken/                ← git 管理（pull で更新される）
-    settings.ini           ← git 管理外（ここに社内の値を書く。pull で消えない）
-    settings.ini.example   ← git 管理（雛形）
-```
-
-```ini
-[SALESFORCE_DOWNLOADER]
-MASTER_PATH  = \\実際のサーバー\share\tools\salesforce\レポート管理表.xlsx
-HISTORY_PATH = \\実際のサーバー\share\tools\salesforce\ダウンロード履歴.csv
+```python
+# comken/settings.py
+MASTER_PATH = Path(r"\\実際のサーバー\share\tools\salesforce\レポート管理表.xlsx")
+HISTORY_PATH = Path(r"\\実際のサーバー\share\tools\salesforce\ダウンロード履歴.csv")
 ```
 
-**コードに直接書くと、共有サーバーの comken を `git pull` したときに衝突する。**
-書き換えた内容をコミットすれば公開リポジトリに社内の実名が載り、コミットしなければ
-更新のたびに手作業になる。`settings.ini` は git 管理外なので、どちらも起きない。
-
-`settings.ini` が無ければ example から作られ、**その時点で止まる**
-（`SettingsCreatedFromExampleError`）。仮の値のまま動いて、つながらない場所や
-誰も見ない場所を読みに行くことを防ぐ。
-
-読むのは**使うときだけ**なので、`settings.ini` を用意していない開発環境でも
-comken は import できる（テストもそのまま動く）。
+**設定を ini に分けない。** 設定がコードと ini に散ると、どちらを見ればよいか
+分からなくなる。探す場所は1つにする（→ 仕様書「配置時に書き換える2ファイル」）。
 
 ---
 

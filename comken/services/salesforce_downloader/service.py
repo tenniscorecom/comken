@@ -44,29 +44,11 @@ from .master import ReportEntry, load_master, shared_report_ids
 
 logger = logging.getLogger(__name__)
 
-# 管理表と履歴の場所は settings.ini に書く。コードに直接書くと、共有サーバーの comken を
-# git pull したときに衝突するため（→ comken/settings.py）
-_SETTINGS_SECTION = "SALESFORCE_DOWNLOADER"
-
 SUFFIX = ".csv"
 # ファイル名に使えない文字。概要をファイル名に混ぜるので、ここで落とす
 _FORBIDDEN_IN_NAME = '\\/:*?"<>|'
 # 概要が長いとパスが伸びすぎるので、ファイル名に使うのはこの長さまで
 _SUMMARY_LIMIT = 30
-
-
-def _default_master_path() -> Path:
-    """管理表（Excel）の場所。非エンジニアが編集するファイル。
-
-    **読むのは使うときだけ。** import した時点では settings.ini を読まないので、
-    設定していない開発環境でも comken を import できる。
-    """
-    return settings.get_path(_SETTINGS_SECTION, "MASTER_PATH")
-
-
-def _default_history_path() -> Path:
-    """ダウンロード履歴（CSV）の場所。プログラムが追記する。"""
-    return settings.get_path(_SETTINGS_SECTION, "HISTORY_PATH")
 
 
 def download_report(
@@ -83,8 +65,8 @@ def download_report(
     Args:
         report_key: 管理表の管理番号（例: 1001）。
         project: 呼び出し元の名前。履歴に残るので、入れておくと後から追える。
-        master_path: 管理表のパス（省略時は settings.ini の MASTER_PATH。通常は省略する）。
-        history_path: 履歴のパス（省略時は settings.ini の HISTORY_PATH。通常は省略する）。
+        master_path: 管理表のパス（省略時は settings.MASTER_PATH。通常は省略する）。
+        history_path: 履歴のパス（省略時は settings.HISTORY_PATH。通常は省略する）。
 
     Returns:
         保存したファイルのパス。
@@ -95,8 +77,8 @@ def download_report(
         ReportFolderNotFoundError: 保存先のフォルダが無い場合。
         EmptyReportError: 明細が 0 行だった場合。
     """
-    master_path = master_path or _default_master_path()
-    history_path = history_path or _default_history_path()
+    master_path = master_path or settings.MASTER_PATH
+    history_path = history_path or settings.HISTORY_PATH
     entry = _find(report_key, master_path)
     return _download(entry, project, history.TRIGGER_ON_DEMAND, history_path)
 
@@ -113,8 +95,8 @@ def get_scheduled_report(
     Args:
         report_key: 管理表の管理番号（例: 1001）。
         project: 呼び出し元の名前（履歴には残さないが、例外の調査に使えるよう受け取る）。
-        master_path: 管理表のパス（省略時は settings.ini の MASTER_PATH。通常は省略する）。
-        history_path: 履歴のパス（省略時は settings.ini の HISTORY_PATH。通常は省略する）。
+        master_path: 管理表のパス（省略時は settings.MASTER_PATH。通常は省略する）。
+        history_path: 履歴のパス（省略時は settings.HISTORY_PATH。通常は省略する）。
 
     Returns:
         定期取得で保存されたファイルのパス。
@@ -125,8 +107,8 @@ def get_scheduled_report(
         ScheduledReportNotDownloadedError: 本日の定期取得がまだ済んでいない場合。
         ReportFileMissingError: 履歴では取得済みだが、ファイルが無い場合。
     """
-    master_path = master_path or _default_master_path()
-    history_path = history_path or _default_history_path()
+    master_path = master_path or settings.MASTER_PATH
+    history_path = history_path or settings.HISTORY_PATH
     entry = _find(report_key, master_path)
     if not entry.is_scheduled:
         raise ScheduledReportNotRegisteredError(
@@ -152,8 +134,8 @@ def download_scheduled(
 
     Args:
         project: 履歴に残す呼び出し元の名前。
-        master_path: 管理表のパス（省略時は settings.ini の MASTER_PATH。通常は省略する）。
-        history_path: 履歴のパス（省略時は settings.ini の HISTORY_PATH。通常は省略する）。
+        master_path: 管理表のパス（省略時は settings.MASTER_PATH。通常は省略する）。
+        history_path: 履歴のパス（省略時は settings.HISTORY_PATH。通常は省略する）。
 
     Returns:
         取得できたファイルのパス。
@@ -163,8 +145,8 @@ def download_scheduled(
             **取得できたものは保存したうえで**送出する。ログだけに出して正常終了すると、
             スケジューラや RPA 基盤から見て成功と区別が付かない。
     """
-    master_path = master_path or _default_master_path()
-    history_path = history_path or _default_history_path()
+    master_path = master_path or settings.MASTER_PATH
+    history_path = history_path or settings.HISTORY_PATH
     entries = load_master(master_path)
     _warn_shared_reports(entries)
 

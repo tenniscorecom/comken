@@ -1681,86 +1681,6 @@ class DownloadTimeoutError(BrowserError):
 def __init__(self, directory: object, seconds: int) -> None:
 ```
 
-### `SettingsError`
-
-```text
-class SettingsError(ComkenError):
-```
-
-#### 説明
-
-comken の設定（settings.ini）に関するエラー
-
-対処:
-    画面に表示された具体的なエラー名を上の表から探す
-
-### `SettingsCreatedFromExampleError`
-
-```text
-class SettingsCreatedFromExampleError(SettingsError):
-```
-
-#### 説明
-
-settings.ini が無かったので、example から作った
-
-**仮の値のまま動かさないために、作った時点で止める。** 共有フォルダのパスなどが
-仮名のままだと、つながらないか、誰も見ない場所を読みに行くことになる。
-
-発生箇所: comken.settings の読み込み
-
-対処:
-    作られた settings.ini を開き、社内の実際の値へ書き換えてから、もう一度実行する。
-    settings.ini は git 管理外なので、comken を更新（git pull）しても消えない
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path, created: bool) -> None:
-```
-
-### `SettingsSectionNotFoundError`
-
-```text
-class SettingsSectionNotFoundError(SettingsError):
-```
-
-#### 説明
-
-settings.ini に必要なセクションが無い
-
-発生箇所: comken.settings.get()
-
-対処:
-    settings.ini.example と見比べて、足りないセクションを書き足す
-
-#### `__init__`
-
-```text
-def __init__(self, section: str, existing: list[str], path: Path) -> None:
-```
-
-### `SettingsKeyNotFoundError`
-
-```text
-class SettingsKeyNotFoundError(SettingsError):
-```
-
-#### 説明
-
-settings.ini に必要なキーが無い
-
-発生箇所: comken.settings.get()
-
-対処:
-    settings.ini.example と見比べて、足りないキーを書き足す
-
-#### `__init__`
-
-```text
-def __init__(self, section: str, key: str, existing: list[str], path: Path) -> None:
-```
-
 ### `StateError`
 
 ```text
@@ -2114,8 +2034,8 @@ def download_report(report_key: int, project: str='', *, master_path: Path | Non
 Args:
     report_key: 管理表の管理番号（例: 1001）。
     project: 呼び出し元の名前。履歴に残るので、入れておくと後から追える。
-    master_path: 管理表のパス（省略時は settings.ini の MASTER_PATH。通常は省略する）。
-    history_path: 履歴のパス（省略時は settings.ini の HISTORY_PATH。通常は省略する）。
+    master_path: 管理表のパス（省略時は settings.MASTER_PATH。通常は省略する）。
+    history_path: 履歴のパス（省略時は settings.HISTORY_PATH。通常は省略する）。
 
 Returns:
     保存したファイルのパス。
@@ -2139,8 +2059,8 @@ def get_scheduled_report(report_key: int, project: str='', *, master_path: Path 
 Args:
     report_key: 管理表の管理番号（例: 1001）。
     project: 呼び出し元の名前（履歴には残さないが、例外の調査に使えるよう受け取る）。
-    master_path: 管理表のパス（省略時は settings.ini の MASTER_PATH。通常は省略する）。
-    history_path: 履歴のパス（省略時は settings.ini の HISTORY_PATH。通常は省略する）。
+    master_path: 管理表のパス（省略時は settings.MASTER_PATH。通常は省略する）。
+    history_path: 履歴のパス（省略時は settings.HISTORY_PATH。通常は省略する）。
 
 Returns:
     定期取得で保存されたファイルのパス。
@@ -2166,8 +2086,8 @@ def download_scheduled(project: str='定期実行', *, master_path: Path | None=
 
 Args:
     project: 履歴に残す呼び出し元の名前。
-    master_path: 管理表のパス（省略時は settings.ini の MASTER_PATH。通常は省略する）。
-    history_path: 履歴のパス（省略時は settings.ini の HISTORY_PATH。通常は省略する）。
+    master_path: 管理表のパス（省略時は settings.MASTER_PATH。通常は省略する）。
+    history_path: 履歴のパス（省略時は settings.HISTORY_PATH。通常は省略する）。
 
 Returns:
     取得できたファイルのパス。

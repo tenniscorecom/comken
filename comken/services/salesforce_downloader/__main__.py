@@ -15,9 +15,9 @@ import argparse
 import sys
 from pathlib import Path
 
+from ... import settings
 from ...exceptions import ComkenError
 from .master import load_master, shared_report_ids
-from .service import _default_master_path
 from .template import create_master_template
 
 
@@ -49,7 +49,7 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         nargs="?",
         default=None,
-        help="管理表のパス（省略時は settings.ini の MASTER_PATH）",
+        help="管理表のパス（省略時は settings.MASTER_PATH）",
     )
     check.set_defaults(run=_run_check)
 
@@ -70,7 +70,7 @@ def _run_init(args: argparse.Namespace) -> None:
 
 def _run_check(args: argparse.Namespace) -> None:
     """管理表を読んで、件数と気になる点を出す。"""
-    path = args.path or _default_master_path()
+    path = args.path or settings.MASTER_PATH
     entries = load_master(path)  # 書き方の誤りはここで例外になる
 
     scheduled = [entry for entry in entries.values() if entry.is_scheduled and entry.enabled]
