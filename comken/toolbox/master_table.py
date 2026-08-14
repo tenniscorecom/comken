@@ -12,7 +12,7 @@ config.ini より表のほうが扱いやすい（並べ替え・フィルタ・
     from comken.toolbox.master_table import MasterRow, column
 
 
-    @dataclass(frozen=True)
+    @dataclass(frozen=True, kw_only=True)
     class Report(MasterRow):
         \"\"\"レポート管理表の1行。\"\"\"
 
@@ -30,6 +30,26 @@ config.ini より表のほうが扱いやすい（並べ替え・フィルタ・
 
 **Python の名前は英語、Excel の見出しは日本語**にできる。`column()` の第1引数が
 Excel の見出しで、スペースを含む見出し（`Salesforce URL`）も扱える。
+
+**`kw_only=True` を付ける。** 付けないと「既定値のある列の後ろに、既定値のない列を
+書けない」という dataclass の制約に引っかかり、**列を足すときに並び順を気にする**ことに
+なる。Excel の列は増えるものなので、どこにでも書けるようにしておく
+（Excel 側の並び順は元から自由。見出しの名前で引くため）。
+
+**空欄をどう扱うかは、既定値の有無で決まる。**
+
+| 宣言 | セルが空欄 | 列（見出し）ごと無い |
+|---|---|---|
+| `column("備考", default="")` | 既定値を使う | 既定値を使う |
+| `column("担当")` | **エラー** | **エラー** |
+
+**既定値は「空欄でよい」という宣言**として使う。意味が反転する列（有効/無効のような）に
+既定値を付けてはいけない——**書き忘れが「有効」になり、意図と逆の結果になる**。
+そういう列は既定値を持たせず、必ず書かせる。
+
+既定値のある列は、**見出しごと無くても読める**。列を1つ足した瞬間に既存の管理表が
+すべて読めなくなると業務が止まるため（共有サーバーを更新すると全プロジェクトへ伝播する）。
+値が要る列を足したときは、管理表に足すまで止まる。
 
 型は注釈から決まる（`int` / `str` / `bool` / `Path`）。**列の定義はここ1か所**なので、
 読み込む型と Excel の見出しがズレることがない。
@@ -101,7 +121,7 @@ def column(
 
 
 class MasterRow:
-    """Excel の表の1行。dataclass と一緒に継承して使う。
+    """Excel の表の1行。`@dataclass(frozen=True, kw_only=True)` と一緒に継承して使う。
 
     クラス変数:
         SHEET_NAME: 読み書きするシート名。
@@ -221,6 +241,28 @@ class MasterRow:
 
     # ── 列の情報 ─────────────────────────────────────────────────────────────
     @classmethod
+    def header(cls, name: str) -> str:
+        """Python の名前から、Excel の見出しを返す。
+
+        メッセージに出す・Excel を直接触るときに使う。見出しを直接書くと、
+        宣言を変えたときにズレるため。
+
+            ReportEntry.header("summary")   # → "概要"
+
+        Raises:
+            KeyError: そのフィールドが宣言されていない場合。
+        """
+        for field_name, spec, _ in cls._columns():
+            if field_name == name:
+                return spec.header
+        raise KeyError(f"{cls.__name__} に {name} という列はありません")
+
+    @classmethod
+    def headers(cls) -> list[str]:
+        """Excel の見出しを宣言順で返す。"""
+        return [spec.header for _, spec, _ in cls._columns()]
+
+    @classmethod
     def _columns(cls) -> list[tuple[str, ColumnSpec, type]]:
         """(Python の名前, 列の決まり, 型) を宣言順で返す。
 
@@ -252,10 +294,18 @@ def _is_blank(raw: dict) -> bool:
 
 
 def _require_headers(cls: type[MasterRow], raw: dict, source: Path) -> None:
-    """宣言した見出しが表にあるか確かめる。"""
-    for _, spec, _ in cls._columns():
-        if spec.header not in raw:
-            raise MasterColumnNotFoundError(spec.header, sorted(raw), source, cls.SHEET_NAME)
+    """宣言した見出しが表にあるか確かめる。
+
+    **既定値のある列は、見出しごと無くてもよい。** 列を1つ足した瞬間に、既存の管理表が
+    すべて読めなくなると業務が止まる（共有サーバーを更新すると全プロジェクトへ伝播するため）。
+    既定値を付けて足せば、**既存の管理表はそのまま動き、必要な人だけ Excel に列を足せる**。
+    """
+    for name, spec, _ in cls._columns():
+        if spec.header in raw:
+            continue
+        if _default_of(cls, name) is not dataclasses.MISSING:
+            continue  # 既定値があるので、列が無くても埋められる
+        raise MasterColumnNotFoundError(spec.header, sorted(raw), source, cls.SHEET_NAME)
 
 
 def _default_of(cls: type[MasterRow], name: str) -> Any:

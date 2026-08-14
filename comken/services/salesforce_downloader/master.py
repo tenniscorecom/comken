@@ -50,7 +50,7 @@ EXAMPLES = [
 ]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ReportEntry(MasterRow):
     """レポート管理表の1行。"""
 
@@ -81,11 +81,12 @@ class ReportEntry(MasterRow):
         help="落としたファイルを置くフォルダ。フォルダが無いとエラーになります"
         "（打ち間違いに気づけるよう、勝手には作りません）",
     )
+    # **既定値を持たせない。** 空欄を「有効」にすると、書き忘れがそのまま有効になり、
+    # 「まだ有効にしたくない」のか「書き方が分からず空にした」のか区別できなくなる
     enabled: bool = column(
         "有効",
-        default=True,
-        help="使わなくなったら「無効」にしてください。行は消さないでください"
-        "（過去の履歴と対応が取れなくなります）",
+        help="「有効」か「無効」と書いてください。使わなくなったら「無効」にし、"
+        "行は消さないでください（過去の履歴と対応が取れなくなります）",
     )
 
     @property

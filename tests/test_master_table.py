@@ -20,7 +20,7 @@ from comken.toolbox.excel import ExcelWriter
 from comken.toolbox.master_table import MasterRow, column
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class Item(MasterRow):
     """検証用の1行。"""
 
@@ -30,7 +30,7 @@ class Item(MasterRow):
     name: str = column("名前", help="人が読んで分かる名前")
     source: Path = column("コピー元", help="共有サーバー上のファイル")
     mode: str = column("方式", choices=("毎日", "手動"), help="毎日は自動で取ります")
-    enabled: bool = column("有効", default=True, help="使わなくなったら「無効」")
+    enabled: bool = column("有効", help="「有効」か「無効」と書いてください")
 
 
 HEADERS = ["ID", "名前", "コピー元", "方式", "有効"]
@@ -63,10 +63,11 @@ class TestLoad:
         items = Item.load(make_sheet(tmp_path / "一覧.xlsx", [ROW_A, [None] * 5]))
         assert len(items) == 1
 
-    def test_default_is_used_for_blank_cell(self, tmp_path):
-        """既定値のある列は空欄でよい。"""
+    def test_blank_in_required_column_raises(self, tmp_path):
+        """既定値の無い列が空欄なら止める（→ 理由は TestBlankPolicy）。"""
         row = [1001, "受注一覧", r"\\server\a.csv", "毎日", None]
-        assert Item.load(make_sheet(tmp_path / "一覧.xlsx", [row]))[0].enabled is True
+        with pytest.raises(MasterRowValueError):
+            Item.load(make_sheet(tmp_path / "一覧.xlsx", [row]))
 
     def test_blank_without_default_raises(self, tmp_path):
         """既定値の無い列が空なら、その行と列を示して止める。"""
@@ -148,3 +149,105 @@ class TestTemplate:
         """Excel のテーブルにしておくと、行を足すのが楽になる。"""
         path = Item.create_template(tmp_path / "一覧.xlsx", [{"key": 1, "name": "a"}])
         assert load_workbook(path)["一覧"].tables
+
+
+class TestColumnAdded:
+    """あとから列を足しても、既存の表が読めなくならないこと。
+
+    共有サーバーを更新すると全プロジェクトへ伝播するので、**列を1つ足した瞬間に
+    既存の管理表がすべて読めなくなる**と業務が止まる。
+    """
+
+    def test_new_column_with_default_is_filled(self, tmp_path):
+        """既定値のある列は、見出しごと無くても埋められる。"""
+
+        @dataclass(frozen=True, kw_only=True)
+        class WithNewColumn(MasterRow):
+            SHEET_NAME = "一覧"
+
+            key: int = column("ID", unique=True)
+            name: str = column("名前")
+            source: Path = column("コピー元")
+            mode: str = column("方式", choices=("毎日", "手動"))
+            enabled: bool = column("有効")
+            memo: str = column("備考", default="")  # ← あとから足した列
+
+        items = WithNewColumn.load(make_sheet(tmp_path / "一覧.xlsx", [ROW_A]))
+        assert items[0].memo == ""  # 既定値で埋まる
+        assert items[0].name == "受注一覧"  # 既存の列はそのまま読める
+
+    def test_new_column_without_default_still_raises(self, tmp_path):
+        """値が要る列を足したなら、管理表に足すまで止める。"""
+
+        @dataclass(frozen=True, kw_only=True)
+        class WithRequiredColumn(MasterRow):
+            SHEET_NAME = "一覧"
+
+            key: int = column("ID", unique=True)
+            name: str = column("名前")
+            source: Path = column("コピー元")
+            mode: str = column("方式", choices=("毎日", "手動"))
+            enabled: bool = column("有効")
+            owner: str = column("担当", help="この一覧の持ち主")  # 既定値なし
+
+        with pytest.raises(MasterColumnNotFoundError) as e:
+            WithRequiredColumn.load(make_sheet(tmp_path / "一覧.xlsx", [ROW_A]))
+        assert "担当" in str(e.value)
+
+    def test_extra_column_in_excel_is_ignored(self, tmp_path):
+        """宣言していない列が Excel にあっても無視する（列を消したとき）。"""
+        headers = [*HEADERS, "使わない列"]
+        rows = [[*ROW_A, "なにか"]]
+        items = Item.load(make_sheet(tmp_path / "一覧.xlsx", rows, headers))
+        assert items[0].key == 1001
+
+
+class TestHeaderAccess:
+    """Python の名前から Excel の見出しを引ける。"""
+
+    def test_header_returns_the_excel_header(self):
+        assert Item.header("name") == "名前"
+        assert Item.header("source") == "コピー元"
+
+    def test_headers_are_in_declaration_order(self):
+        assert Item.headers() == HEADERS
+
+    def test_unknown_field_raises(self):
+        with pytest.raises(KeyError):
+            Item.header("存在しない")
+
+
+class TestBlankPolicy:
+    """空欄をどう扱うかは、既定値の有無で決まる。
+
+    **既定値は「空欄でよい」という宣言。** 意味が反転する列（有効/無効）に既定値を
+    付けると、書き忘れがそのまま「有効」になり、意図と逆の結果になる。
+    """
+
+    def test_blank_is_an_error_without_default(self, tmp_path):
+        """既定値の無い列は、空欄なら止める（入力し忘れと区別が付かないため）。"""
+
+        @dataclass(frozen=True, kw_only=True)
+        class Strict(MasterRow):
+            SHEET_NAME = "一覧"
+
+            key: int = column("ID")
+            enabled: bool = column("有効")  # 既定値を持たせない
+
+        path = make_sheet(tmp_path / "一覧.xlsx", [[1001, None]], ["ID", "有効"])
+        with pytest.raises(MasterRowValueError) as e:
+            Strict.load(path)
+        assert "有効" in str(e.value)
+
+    def test_blank_uses_default_when_declared(self, tmp_path):
+        """既定値があるなら、空欄は「そう書いた」とみなす。"""
+
+        @dataclass(frozen=True, kw_only=True)
+        class WithMemo(MasterRow):
+            SHEET_NAME = "一覧"
+
+            key: int = column("ID")
+            memo: str = column("備考", default="")
+
+        path = make_sheet(tmp_path / "一覧.xlsx", [[1001, None]], ["ID", "備考"])
+        assert WithMemo.load(path)[0].memo == ""
