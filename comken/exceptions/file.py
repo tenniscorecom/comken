@@ -1,7 +1,5 @@
 """comken/exceptions/file.py — ファイル形式の検証に関する例外。"""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from .base import ComkenError

@@ -2,8 +2,6 @@
 runtime（version / デバッグモード / dry-run）のテスト。
 """
 
-from __future__ import annotations
-
 import logging
 
 import pytest

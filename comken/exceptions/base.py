@@ -1,7 +1,5 @@
 """comken/exceptions/base.py — ライブラリ共通の基底例外。"""
 
-from __future__ import annotations
-
 
 class ComkenError(Exception):
     """comken が出す固有エラー全体

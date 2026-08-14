@@ -12,8 +12,6 @@ Edge は自動更新で勝手に上がるが、msedgedriver.exe は上がらな�
 起動が遅くなるため、失敗したときだけ確認する。
 """
 
-from __future__ import annotations
-
 import logging
 import os
 import re

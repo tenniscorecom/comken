@@ -13,8 +13,6 @@ Browsers.run_task() で始めて、必要になったところで wait() で受�
 このクラスを直接作らない。Browsers.run_task() が返すものを受け取って使う。
 """
 
-from __future__ import annotations
-
 import logging
 from concurrent.futures import Future
 from concurrent.futures import TimeoutError as FutureTimeoutError

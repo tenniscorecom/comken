@@ -3,8 +3,6 @@
 time.sleep の薄いラッパー。単位を明示することで可読性を上げる。
 """
 
-from __future__ import annotations
-
 import time
 from collections.abc import Callable
 

@@ -1,7 +1,5 @@
 """export_for_chat.py のテスト。"""
 
-from __future__ import annotations
-
 import ast
 
 import export_for_chat

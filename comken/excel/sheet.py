@@ -4,8 +4,6 @@ ExcelWriter.sheet() から取得し、セル書き込み・行書き込み・列
 ヘッダー固定などをシート単位で行う（sheet_name を毎回渡さなくてよい）。
 """
 
-from __future__ import annotations
-
 import logging
 import re
 

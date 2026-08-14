@@ -25,8 +25,6 @@ External Client App の consumer secret を REST API から回せるか（＝ロ
 | `rotate` | DPAPI へ保存し Salesforce 側を切り替える。**旧 secret は猶予後に無効** |
 """
 
-from __future__ import annotations
-
 import argparse
 import sys
 

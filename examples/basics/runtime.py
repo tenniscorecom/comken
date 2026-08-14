@@ -1,7 +1,5 @@
 """サンプル: debug と dry_run の実行範囲を限定する。"""
 
-from __future__ import annotations
-
 import logging
 from pathlib import Path
 

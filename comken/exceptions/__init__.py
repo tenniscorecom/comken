@@ -82,8 +82,6 @@ ComkenError
 カテゴリ基底クラスはまとめて捕捉するために使い、直接送出しない。
 """
 
-from __future__ import annotations
-
 from .access import (
     AccessBackupError,
     AccessError,

@@ -1,7 +1,5 @@
 """確認コマンド（python -m comken.salesforce）のテスト。"""
 
-from __future__ import annotations
-
 from unittest.mock import MagicMock, patch
 
 from comken.exceptions.salesforce import SalesforceAuthError

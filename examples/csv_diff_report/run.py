@@ -13,8 +13,6 @@ diff_rows で追加・削除・変更を検出し、区分ごとに色分けし�
     3. 区分（追加=緑 / 削除=赤 / 変更=黄）で色分けした Excel レポートを出力する
 """
 
-from __future__ import annotations
-
 import logging
 from pathlib import Path
 

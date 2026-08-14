@@ -5,8 +5,6 @@ config.ini は人が書く設定なのでプログラムから変更しない。
 正常なので、config.ini と異なり空の状態として処理を続ける。
 """
 
-from __future__ import annotations
-
 import configparser
 import json
 import os

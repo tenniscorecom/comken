@@ -5,6 +5,7 @@ DownloadDir は Edge/Chrome がダウンロード中に作る ".crdownload" フ�
 （requests 等の API ダウンロードには使わない。あちらは自分でファイルに書くだけ）。
 """
 
+# 定義中の DownloadDir を戻り値の型注釈に使うため、注釈の評価を遅延する。
 from __future__ import annotations
 
 import logging

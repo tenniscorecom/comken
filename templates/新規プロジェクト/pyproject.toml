@@ -6,7 +6,3 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]  # E=style, F=pyflakes, W=warning, I=import order
 ignore = []
-
-[tool.ruff.lint.isort]
-# 型注釈を実行時に評価させない。書き忘れは ruff check --fix が直す。
-required-imports = ["from __future__ import annotations"]

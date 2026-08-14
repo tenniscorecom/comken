@@ -5,8 +5,6 @@
 README・ドキュメントが「そのまま動く」と案内している主張をテストで担保する。
 """
 
-from __future__ import annotations
-
 import pytest
 from openpyxl import load_workbook
 

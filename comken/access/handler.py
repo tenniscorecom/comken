@@ -1,5 +1,6 @@
 """comken/access/handler.py — Microsoft Access のマクロ実行・データ出力。"""
 
+# 定義中の AccessDatabase を戻り値の型注釈に使うため、注釈の評価を遅延する。
 from __future__ import annotations
 
 import logging

@@ -29,8 +29,6 @@ client_id と client_secret だけ・トークンだけ、といった構成に�
     password = load_credential("oju_sys_password")
 """
 
-from __future__ import annotations
-
 import json
 import re
 import uuid

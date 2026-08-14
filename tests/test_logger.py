@@ -1,7 +1,5 @@
 """単体実行向けログ設定のテスト。"""
 
-from __future__ import annotations
-
 import logging
 from datetime import date
 

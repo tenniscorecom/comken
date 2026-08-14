@@ -1,7 +1,5 @@
 """comken/exceptions/warning.py — 型変換時に使う警告。"""
 
-from __future__ import annotations
-
 import warnings
 from typing import Any, TypeVar
 

@@ -1,5 +1,6 @@
 """comken/excel/writer.py — Excel の書き込み・書式設定・保存を行う入口。"""
 
+# 定義中の ExcelWriter を戻り値の型注釈に使うため、注釈の評価を遅延する。
 from __future__ import annotations
 
 import logging

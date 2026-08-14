@@ -1,7 +1,5 @@
 """comken/utils/files/naming/date.py — 日付を付けたファイル名の組み立て。"""
 
-from __future__ import annotations
-
 from ...clock import now
 
 

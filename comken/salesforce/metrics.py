@@ -10,8 +10,6 @@
 `Sforce-Limit-Info` ヘッダーの方が正確なので、そちらを併せて記録する。
 """
 
-from __future__ import annotations
-
 import csv
 import logging
 from copy import deepcopy

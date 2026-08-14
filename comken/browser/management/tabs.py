@@ -1,7 +1,5 @@
 """comken/browser/management/tabs.py — 1つのブラウザーセッション内でタブを開閉する内部管理。"""
 
-from __future__ import annotations
-
 import logging
 import time
 from collections.abc import Iterator, Sequence

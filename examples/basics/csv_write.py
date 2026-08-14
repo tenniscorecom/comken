@@ -5,8 +5,6 @@
     リポジトリのルートで python -m examples.basics.csv_write
 """
 
-from __future__ import annotations
-
 import logging
 from pathlib import Path
 

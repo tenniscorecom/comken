@@ -40,6 +40,7 @@ run_task() で先に始めておき、結果が必要になったところで wa
 サイトを増やしても「どちらのファイルか分からない」状態にならない。
 """
 
+# 定義中の Browsers を戻り値の型注釈に使うため、注釈の評価を遅延する。
 from __future__ import annotations
 
 import logging

@@ -4,8 +4,6 @@
 sys.modules に差し込んで配線だけを検証する。
 """
 
-from __future__ import annotations
-
 import sys
 import types
 

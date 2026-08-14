@@ -9,8 +9,6 @@
     python export_for_chat.py --max-chars 20000
 """
 
-from __future__ import annotations
-
 import argparse
 import ast
 import inspect

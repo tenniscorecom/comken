@@ -1,7 +1,5 @@
 """Classic Outlook の COM 配線をモックで検証する。"""
 
-from __future__ import annotations
-
 import datetime
 import inspect
 from unittest.mock import MagicMock, patch

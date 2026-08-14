@@ -1,7 +1,5 @@
 """サンプル: 列マッピングをコードと config.ini の2通りから渡す。"""
 
-from __future__ import annotations
-
 import logging
 from pathlib import Path
 

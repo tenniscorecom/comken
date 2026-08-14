@@ -25,8 +25,6 @@ URL と認証情報のシステム名は組織クラスがクラス定数とし�
     RetryReason            リトライ理由の定数
 """
 
-from __future__ import annotations
-
 try:
     import requests as _requests  # noqa: F401  # 依存の有無をここで確かめるだけ
 except ImportError as e:  # pragma: no cover

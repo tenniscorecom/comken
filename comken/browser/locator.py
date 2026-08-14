@@ -6,6 +6,7 @@ NamedTuple なので selenium にそのまま展開できる:
     driver.find_element(*LoginPage.LOGIN_BTN)
 """
 
+# 定義中の Locator を戻り値の型注釈に使うため、注釈の評価を遅延する。
 from __future__ import annotations
 
 from typing import NamedTuple

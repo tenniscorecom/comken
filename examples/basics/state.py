@@ -1,7 +1,5 @@
 """サンプル: State で前回の実行結果を次回へ持ち越す。"""
 
-from __future__ import annotations
-
 import logging
 from pathlib import Path
 

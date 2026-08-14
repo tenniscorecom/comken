@@ -20,8 +20,6 @@
     BackgroundTask  Browsers.run_task() が返す取っ手。wait() で結果を受け取る
 """
 
-from __future__ import annotations
-
 from .download import DownloadDir
 from .locator import Locator
 from .management import BackgroundTask, Browsers, BrowserSession

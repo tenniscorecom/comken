@@ -28,8 +28,6 @@ client_id / client_secret は DPAPI から読む（`comken.credentials`）ので
 > 組織名を出すならクラス名。**実名をこのリポジトリへ書き戻さないこと。**
 """
 
-from __future__ import annotations
-
 from .sandbox import Sandbox
 
 __all__ = ["Sandbox"]

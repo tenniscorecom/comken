@@ -8,8 +8,6 @@
     リポジトリのルートで python -m examples.access_export.run
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from comken.access import AccessDatabase

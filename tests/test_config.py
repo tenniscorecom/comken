@@ -5,8 +5,6 @@ Config クラスのテスト。
     リポジトリのルートで python -m pytest tests/ -v
 """
 
-from __future__ import annotations
-
 import logging
 from pathlib import Path
 

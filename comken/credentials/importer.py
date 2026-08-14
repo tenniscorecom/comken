@@ -22,8 +22,6 @@ JSON の形式（システム名ごとに項目をまとめる）:
 （組織ごとに JSON を分けて、何回かに分けて取り込める）。
 """
 
-from __future__ import annotations
-
 import json
 from pathlib import Path
 

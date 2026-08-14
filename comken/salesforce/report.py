@@ -17,6 +17,7 @@
 あとから「どのレポートを SOQL へ移すか」を実測で決められる。
 """
 
+# TYPE_CHECKING 内の SalesforceBase を型注釈で使うため、注釈の評価を遅延する。
 from __future__ import annotations
 
 import logging

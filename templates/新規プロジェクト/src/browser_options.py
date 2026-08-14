@@ -21,8 +21,6 @@ config.ini ではなくこのファイル（src/ 内の Python）で持つ。
         kintai.open("https://kintai.example.co.jp")
 """
 
-from __future__ import annotations
-
 from comken.browser import BrowserOptions
 
 

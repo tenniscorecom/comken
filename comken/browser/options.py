@@ -12,8 +12,6 @@
         WINDOW_SIZE = "1600,1024"
 """
 
-from __future__ import annotations
-
 import logging
 from pathlib import Path
 from typing import ClassVar

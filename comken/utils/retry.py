@@ -4,8 +4,6 @@
 自動でやり直すためのデコレータ。
 """
 
-from __future__ import annotations
-
 import functools
 import logging
 import time

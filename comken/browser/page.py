@@ -30,6 +30,7 @@
 time.sleep で待たないこと。待ち時間が読めなくなり、遅いうえに不安定になる。
 """
 
+# 定義中の Page と SitePage を型注釈に使うため、注釈の評価を遅延する。
 from __future__ import annotations
 
 import logging

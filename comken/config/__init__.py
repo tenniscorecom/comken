@@ -28,8 +28,6 @@ config.ini を読み込み、config.SECTION.KEY の形式でアクセスでき�
    （src/browser_options.py）で行う。config はブラウザ設定を持たない。
 """
 
-from __future__ import annotations
-
 import configparser
 import logging
 import math

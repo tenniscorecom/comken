@@ -5,8 +5,6 @@
 CI でも手元でも安定しないため、ここでは扱わない。
 """
 
-from __future__ import annotations
-
 import inspect
 import logging
 import os

@@ -1,7 +1,5 @@
 """サンプル: 生の値ではなく公開定数を使って選択肢を指定する。"""
 
-from __future__ import annotations
-
 import logging
 from pathlib import Path
 

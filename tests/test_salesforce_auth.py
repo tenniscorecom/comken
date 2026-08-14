@@ -1,7 +1,5 @@
 """Salesforce の差し替え可能な OAuth 認証方式。"""
 
-from __future__ import annotations
-
 import urllib.parse
 from unittest.mock import MagicMock, patch
 

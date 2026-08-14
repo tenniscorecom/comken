@@ -18,6 +18,7 @@
 サイトが1つでも複数でも書き方は同じで、増やすときは launch を1行足すだけにしてある。
 """
 
+# 定義中の BrowserSession を型注釈に使うため、注釈の評価を遅延する。
 from __future__ import annotations
 
 import logging

@@ -9,8 +9,6 @@ REST レスポンスの正確なスキーマは公式リファレンスで確認
 ``_staged_credentials_of`` に集約している。
 """
 
-from __future__ import annotations
-
 import datetime
 from dataclasses import dataclass
 from pathlib import Path

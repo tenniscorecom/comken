@@ -1,7 +1,5 @@
 """comken/exceptions/credential.py — 認証情報の暗号化保存に関する例外。"""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from .base import ComkenError

@@ -15,8 +15,6 @@
      templates/新規プロジェクト/実行.bat を組み合わせる）
 """
 
-from __future__ import annotations
-
 import logging
 
 from comken.csv import CsvReader

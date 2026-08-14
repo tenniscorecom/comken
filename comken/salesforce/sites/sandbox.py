@@ -7,8 +7,6 @@
 ここに置く。共通の操作は `SalesforceBase` 側にあるので書かない。
 """
 
-from __future__ import annotations
-
 from ..client import SalesforceBase
 
 

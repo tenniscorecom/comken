@@ -8,8 +8,6 @@
     リポジトリのルートで python -m examples.csv_date_move.run
 """
 
-from __future__ import annotations
-
 import datetime
 import logging
 from pathlib import Path

@@ -6,8 +6,6 @@
 これらは datetime.date のまま扱い、タイムゾーンを付けようとしないこと。
 """
 
-from __future__ import annotations
-
 import datetime
 
 

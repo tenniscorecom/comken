@@ -221,6 +221,9 @@ def find_latest(folder: str | Path, pattern: str = "*.xlsx") -> Path | None:
 - ただし、COM オブジェクト、Excel セル値、型情報を提供しない外部ライブラリとの境界など、
   正確な型を現実的に表せない動的境界では `Any` を最小限の範囲に限って許容する。
   `Any` を通常のアプリケーションロジックへ伝播させず、境界の内側で具体型へ変換する。
+- `from __future__ import annotations` は全ファイルには入れず、前方参照、循環 import の回避、
+  `TYPE_CHECKING` 内だけで import する名前を型注釈に使う場合など、注釈の遅延評価が必要な
+  ファイルにだけ入れる。残す場合は、必要な理由を import の直前にコメントで書く。
 
 ---
 

@@ -2,6 +2,7 @@
 secure_page.py — ログイン後のセキュアエリア画面
 """
 
+# TYPE_CHECKING 内の LoginPage を型注釈で使うため、注釈の評価を遅延する。
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

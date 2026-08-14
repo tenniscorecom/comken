@@ -7,8 +7,6 @@ main.py — エントリポイント
 社内 RPA 基盤から動かす場合は、下の「社内 RPA 基盤から実行する場合」を参照。
 """
 
-from __future__ import annotations
-
 import logging
 
 from comken.exceptions import ComkenError

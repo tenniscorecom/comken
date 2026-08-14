@@ -1,7 +1,5 @@
 """サンプル: 単体実行向けのログ設定。"""
 
-from __future__ import annotations
-
 import logging
 from pathlib import Path
 

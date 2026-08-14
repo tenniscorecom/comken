@@ -1,7 +1,5 @@
 """comken/exceptions/state.py — 状態ファイルに関する例外。"""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from .base import ComkenError

@@ -11,8 +11,6 @@
 利用側はこの内部構造へ依存せず、``from comken.browser import ...`` を使う。
 """
 
-from __future__ import annotations
-
 from .browsers import Browsers as Browsers
 from .sessions import BrowserSession as BrowserSession
 from .tasks import BackgroundTask as BackgroundTask

@@ -5,8 +5,6 @@ utils モジュールのテスト。
     リポジトリのルートで python -m pytest tests/ -v
 """
 
-from __future__ import annotations
-
 import datetime
 import os
 import time

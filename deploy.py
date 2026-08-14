@@ -13,8 +13,6 @@ git を使えない環境へ渡すため、`comken/` パッケージだけをコ
 `deploy_comken.bat` をダブルクリックしても同じことができる。
 """
 
-from __future__ import annotations
-
 import argparse
 import shutil
 import subprocess

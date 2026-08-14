@@ -1,7 +1,5 @@
 """Salesforce ECA の認証情報ローテーションを検証する。"""
 
-from __future__ import annotations
-
 import datetime
 from unittest.mock import Mock, call, patch
 

@@ -12,6 +12,7 @@ login_page.py — ログイン画面
   - from __future__ import annotations: 型注釈を文字列として扱い、実行時評価を避ける
 """
 
+# TYPE_CHECKING 内の SecurePage を型注釈で使うため、注釈の評価を遅延する。
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

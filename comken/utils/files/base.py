@@ -1,7 +1,5 @@
 """comken/utils/files/base.py — 1つのファイルを扱うクラスに共通する薄い基底クラス。"""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from ...exceptions.file import UnsupportedFileSuffixError

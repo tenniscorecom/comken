@@ -38,8 +38,6 @@ app_page.py — このサンプルサイト共通の SitePage
 ---------------------------------------------------------------------------
 """
 
-from __future__ import annotations
-
 from comken.browser import Locator, SitePage
 
 

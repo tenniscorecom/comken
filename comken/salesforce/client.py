@@ -18,8 +18,6 @@
 `auth` の入れ替えだけで済むため（詳しくは docs/salesforce.md）。
 """
 
-from __future__ import annotations
-
 import logging
 import time
 import urllib.parse

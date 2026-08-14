@@ -1,7 +1,5 @@
 """comken/runtime.py — ライブラリ全体の実行モード（デバッグ・dry-run）"""
 
-from __future__ import annotations
-
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
