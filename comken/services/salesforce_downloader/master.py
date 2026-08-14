@@ -1,16 +1,15 @@
-r"""comken/services/salesforce_downloader/master.py — 管理表（Excel）の読み取り。
+r"""comken/services/salesforce_downloader/master.py — レポート管理表の列を決める。
 
-**設定の正は Excel。** 非エンジニアが自分で編集するため、内部 DB は持たない。
-呼ばれるたびに読み直す（数百行の Excel なので、貯め込むより毎回読む方が単純で、
-編集した内容がすぐ効く）。
+**このファイルにあるのは「社内の取り決め」だけ。** Excel を読む・検証する・雛形を作る
+仕組みは `comken.toolbox.master_table` にあり、ここは**どんな列があるか**を宣言する。
 
     | ID   | 概要     | Salesforce URL              | 実行方式 | 保存先              | 有効 |
     |------|----------|-----------------------------|----------|---------------------|------|
     | 1001 | 顧客一覧 | https://.../Report/00O.../  | 定期     | \\server\A\input    | 有効 |
 
-**Salesforce のレポート ID は入力させない。** URL を貼れば
-`report_id_from_url()` が取り出す。ID を人が抜き出す工程を挟むと、そこで写し間違いが
-起きるうえ、「どのレポートか」を確かめるには結局 URL を開くことになる。
+**Salesforce のレポート ID は入力させない。** URL を貼れば `report_id_from_url()` が
+取り出す。ID を人が抜き出す工程を挟むと、そこで写し間違いが起きるうえ、
+「どのレポートか」を確かめるには結局 URL を開くことになる。
 
 **ID（管理番号）は Salesforce のレポート ID ではない。** 社内で決める論理的な番号で、
 同じ意味のデータを指す限り変えない。参照先の Salesforce レポートを差し替えても、
@@ -20,56 +19,89 @@ r"""comken/services/salesforce_downloader/master.py — 管理表（Excel）の�
 from dataclasses import dataclass
 from pathlib import Path
 
-from ...exceptions import (
-    DuplicateReportKeyError,
-    InvalidReportEntryError,
-    SalesforceReportIdNotFoundError,
-)
-from ...toolbox.excel import ExcelReader
+from ...exceptions import InvalidReportUrlError, SalesforceReportIdNotFoundError
+from ...toolbox.master_table import MasterRow, column
 from ...toolbox.salesforce import report_id_from_url
-
-# 管理表のシート名と列名。実物の見出しと合わせる
-SHEET_NAME = "管理表"
-KEY_COLUMN = "ID"
-SUMMARY_COLUMN = "概要"
-URL_COLUMN = "Salesforce URL"
-SCHEDULE_COLUMN = "実行方式"
-FOLDER_COLUMN = "保存先"
-ENABLED_COLUMN = "有効"
 
 # 「実行方式」に書ける値
 SCHEDULED = "定期"
 ON_DEMAND = "個別"
-SCHEDULES = (SCHEDULED, ON_DEMAND)
 
-# 「有効」に書ける値（左が有効）
-ENABLED_VALUES = ("有効", "有効化", "○", "o", "yes", "true", "1")
-
-# 見出し行を除いた1行目が Excel の何行目か（見出しが1行目のため）
-_FIRST_DATA_ROW = 2
+# 記入例（雛形に入れる）。2行目は別のレポートにする——同じ URL を並べると、
+# check が「同じレポートを指している」と報告してしまう
+_DOMAIN = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report"
+EXAMPLES = [
+    {
+        "key": 1001,
+        "summary": "顧客一覧",
+        "url": f"{_DOMAIN}/00O5g00000ABCDE/view",
+        "schedule": SCHEDULED,
+        "folder": r"\\server\案件集計\input",
+        "enabled": True,
+    },
+    {
+        "key": 1002,
+        "summary": "売上実績",
+        "url": f"{_DOMAIN}/00O5g00000FGHIJ/view",
+        "schedule": ON_DEMAND,
+        "folder": r"\\server\売上帳票\input",
+        "enabled": True,
+    },
+]
 
 
 @dataclass(frozen=True)
-class ReportEntry:
-    """管理表の1行。
+class ReportEntry(MasterRow):
+    """レポート管理表の1行。"""
 
-    Attributes:
-        key: 管理番号（社内で決める論理 ID。Salesforce のレポート ID ではない）。
-        summary: 人が読んで何のレポートか分かる説明。ファイル名にも使う。
-        url: Salesforce でレポートを開いたときのアドレス。
-        report_id: url から取り出した Salesforce のレポート ID。
-        schedule: "定期" か "個別"。
-        folder: 保存先のフォルダ。
-        enabled: 有効なら True。
-    """
+    SHEET_NAME = "管理表"
 
-    key: int
-    summary: str
-    url: str
-    report_id: str
-    schedule: str
-    folder: Path
-    enabled: bool
+    key: int = column(
+        "ID",
+        unique=True,
+        help="社内で決める管理番号。Salesforce のレポート ID ではありません。"
+        "参照先のレポートを差し替えても、この番号は変えません",
+    )
+    summary: str = column(
+        "概要", help="人が読んで何のレポートか分かる説明。保存するファイル名にも使われます"
+    )
+    url: str = column(
+        "Salesforce URL",
+        help="Salesforce でレポートを開いたときのアドレスを、そのまま貼り付けてください。"
+        "レポート ID を抜き出す必要はありません",
+    )
+    schedule: str = column(
+        "実行方式",
+        choices=(SCHEDULED, ON_DEMAND),
+        help=f"「{SCHEDULED}」は毎日決まった時刻にまとめて取ります。"
+        f"「{ON_DEMAND}」は、使うプログラムから呼ばれたときだけ取ります",
+    )
+    folder: Path = column(
+        "保存先",
+        help="落としたファイルを置くフォルダ。フォルダが無いとエラーになります"
+        "（打ち間違いに気づけるよう、勝手には作りません）",
+    )
+    enabled: bool = column(
+        "有効",
+        default=True,
+        help="使わなくなったら「無効」にしてください。行は消さないでください"
+        "（過去の履歴と対応が取れなくなります）",
+    )
+
+    @property
+    def report_id(self) -> str:
+        """URL から取り出した Salesforce のレポート ID。
+
+        **行番号ではなく管理番号で示す。** 空行を飛ばして読むので行番号はズレうるが、
+        管理番号なら管理表を検索して一発で見つかる。
+
+        Raises:
+            InvalidReportUrlError: URL からレポート ID を取り出せない場合。
+        """
+        try:
+            return report_id_from_url(self.url)
+        except SalesforceReportIdNotFoundError as e:
+            raise InvalidReportUrlError(self.key, self.url, str(e)) from e
 
     @property
     def is_scheduled(self) -> bool:
@@ -77,7 +109,7 @@ class ReportEntry:
         return self.schedule == SCHEDULED
 
 
-def load_master(path: str | Path) -> dict[int, ReportEntry]:
+def load_master(path: str | Path | None = None) -> dict[int, ReportEntry]:
     """管理表を読んで、管理番号をキーにした辞書を返す。
 
     Args:
@@ -85,23 +117,10 @@ def load_master(path: str | Path) -> dict[int, ReportEntry]:
 
     Returns:
         {管理番号: ReportEntry}。管理表に並んでいる順を保つ。
-
-    Raises:
-        DuplicateReportKeyError: 同じ管理番号が2つ以上ある場合。
-        InvalidReportEntryError: 行の書き方が正しくない場合。
     """
-    path = Path(path)
-    with ExcelReader(path) as book:
-        rows = book.read_rows_as_dicts(SHEET_NAME)
-
-    entries: dict[int, ReportEntry] = {}
-    for offset, row in enumerate(rows):
-        row_number = offset + _FIRST_DATA_ROW
-        if _is_blank_row(row):
-            continue  # 表の下に残った空行は読み飛ばす
-        entry = _to_entry(row, row_number)
-        if entry.key in entries:
-            raise DuplicateReportKeyError(entry.key, path)
+    entries = {}
+    for entry in ReportEntry.load(path):
+        entry.report_id  # noqa: B018 — URL が壊れていれば、ここで読み込みごと止める
         entries[entry.key] = entry
     return entries
 
@@ -120,70 +139,3 @@ def shared_report_ids(entries: dict[int, ReportEntry]) -> dict[str, list[int]]:
     for entry in entries.values():
         by_report_id.setdefault(entry.report_id, []).append(entry.key)
     return {report_id: keys for report_id, keys in by_report_id.items() if len(keys) > 1}
-
-
-def _is_blank_row(row: dict) -> bool:
-    """すべての列が空の行か。"""
-    return all(value in (None, "") for value in row.values())
-
-
-def _to_entry(row: dict, row_number: int) -> ReportEntry:
-    """1行を ReportEntry にする。書き方が正しくなければ、行と列を示して止める。"""
-    key = _to_key(row.get(KEY_COLUMN), row_number)
-    url = _to_text(row.get(URL_COLUMN), row_number, URL_COLUMN)
-    try:
-        report_id = report_id_from_url(url)
-    except SalesforceReportIdNotFoundError as e:
-        raise InvalidReportEntryError(row_number, URL_COLUMN, url, str(e)) from e
-
-    schedule = _to_text(row.get(SCHEDULE_COLUMN), row_number, SCHEDULE_COLUMN)
-    if schedule not in SCHEDULES:
-        raise InvalidReportEntryError(
-            row_number,
-            SCHEDULE_COLUMN,
-            schedule,
-            f"「{SCHEDULED}」か「{ON_DEMAND}」と書いてください。",
-        )
-
-    return ReportEntry(
-        key=key,
-        summary=_to_text(row.get(SUMMARY_COLUMN), row_number, SUMMARY_COLUMN),
-        url=url,
-        report_id=report_id,
-        schedule=schedule,
-        folder=Path(_to_text(row.get(FOLDER_COLUMN), row_number, FOLDER_COLUMN)),
-        enabled=_to_enabled(row.get(ENABLED_COLUMN)),
-    )
-
-
-def _to_key(value: object, row_number: int) -> int:
-    """管理番号を整数にする。Excel は数値を小数で返すことがあるので丸めずに検査する。"""
-    if isinstance(value, bool) or value in (None, ""):
-        raise InvalidReportEntryError(row_number, KEY_COLUMN, value, "数字を入れてください。")
-    if isinstance(value, int):
-        return value
-    if isinstance(value, float) and value.is_integer():
-        return int(value)
-    text = str(value).strip()
-    if not text.isdigit():
-        raise InvalidReportEntryError(
-            row_number, KEY_COLUMN, value, "数字だけで書いてください（例: 1001）。"
-        )
-    return int(text)
-
-
-def _to_text(value: object, row_number: int, column: str) -> str:
-    """空でない文字列にする。"""
-    text = "" if value is None else str(value).strip()
-    if not text:
-        raise InvalidReportEntryError(row_number, column, value, "空のままにできません。")
-    return text
-
-
-def _to_enabled(value: object) -> bool:
-    """「有効」列を真偽にする。空欄は有効として扱う（書き忘れで止めない）。"""
-    if value in (None, ""):
-        return True
-    if isinstance(value, bool):
-        return value
-    return str(value).strip().lower() in ENABLED_VALUES

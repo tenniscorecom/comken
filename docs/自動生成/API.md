@@ -1681,6 +1681,115 @@ class DownloadTimeoutError(BrowserError):
 def __init__(self, directory: object, seconds: int) -> None:
 ```
 
+### `MasterTableError`
+
+```text
+class MasterTableError(ComkenError):
+```
+
+#### 説明
+
+Excel の管理表に関するエラー
+
+対処:
+    画面に表示された具体的なエラー名を上の表から探す
+
+### `MasterSheetNotDefinedError`
+
+```text
+class MasterSheetNotDefinedError(MasterTableError):
+```
+
+#### 説明
+
+管理表の場所が決まっていない
+
+`load()` を引数なしで呼ぶには、クラス変数 `PATH` に既定の場所を書いておく必要がある。
+
+発生箇所: comken.toolbox.master_table の load()
+
+対処:
+    `load(パス)` のようにファイルを渡すか、クラスに PATH を書く（コードの直し方の話なので、
+    非エンジニアが見た場合は管理者へ連絡する）
+
+#### `__init__`
+
+```text
+def __init__(self, class_name: str) -> None:
+```
+
+### `MasterColumnNotFoundError`
+
+```text
+class MasterColumnNotFoundError(MasterTableError):
+```
+
+#### 説明
+
+管理表に必要な列（見出し）が無い
+
+見出しの行を書き換えた・列を消した・別のシートを見ている、のいずれか。
+**プログラムは見出しの名前で列を探す**ので、見出しが変わると読めなくなる。
+
+発生箇所: comken.toolbox.master_table の load()
+
+対処:
+    管理表の1行目（見出し）を元に戻す。消してしまった場合は、
+    メッセージに出ている「今ある見出し」と見比べて足す
+
+#### `__init__`
+
+```text
+def __init__(self, header: str, existing: list[str], path: Path, sheet_name: str) -> None:
+```
+
+### `MasterRowValueError`
+
+```text
+class MasterRowValueError(MasterTableError):
+```
+
+#### 説明
+
+管理表の値が正しくない
+
+数字を書く列に文字が入っている、決まった書き方以外を書いた、空にできない列が空、など。
+
+発生箇所: comken.toolbox.master_table の load()
+
+対処:
+    メッセージに出ている行と列を、管理表で確認して直す
+
+#### `__init__`
+
+```text
+def __init__(self, row_number: int, header: str, value: object, reason: str) -> None:
+```
+
+### `MasterDuplicateValueError`
+
+```text
+class MasterDuplicateValueError(MasterTableError):
+```
+
+#### 説明
+
+一意であるべき列に、同じ値が2つ以上ある
+
+管理番号のように「1つに決まる」ことが前提の列で重複すると、
+どの行を指しているか決められない。
+
+発生箇所: comken.toolbox.master_table の load()
+
+対処:
+    管理表を開いて、重複している値のどちらかを別の値に変える
+
+#### `__init__`
+
+```text
+def __init__(self, header: str, value: object, path: Path) -> None:
+```
+
 ### `StateError`
 
 ```text
@@ -1814,52 +1923,27 @@ class ReportDisabledError(DownloaderError):
 def __init__(self, report_key: int, summary: str, master_path: Path) -> None:
 ```
 
-### `DuplicateReportKeyError`
+### `InvalidReportUrlError`
 
 ```text
-class DuplicateReportKeyError(DownloaderError):
+class InvalidReportUrlError(DownloaderError):
 ```
 
 #### 説明
 
-管理表に同じ管理番号が2つ以上ある
+管理表の URL から Salesforce のレポート ID を取り出せない
 
-管理番号は保存するファイル名にも使うため、重複していると
-どちらのレポートを指すか決められない。
-
-発生箇所: comken.services.salesforce_downloader の管理表読み込み
-
-対処:
-    管理表を開いて、重複している管理番号のどちらかを別の番号に変える
-
-#### `__init__`
-
-```text
-def __init__(self, report_key: int, master_path: Path) -> None:
-```
-
-### `InvalidReportEntryError`
-
-```text
-class InvalidReportEntryError(DownloaderError):
-```
-
-#### 説明
-
-管理表の行の書き方が正しくない
-
-管理番号が数字でない、実行方式が「定期」「個別」以外、保存先が空など。
-非エンジニアが編集する表なので、どの行のどの列かを示して止める。
+貼られたものが Salesforce のレポート URL でないと、どのレポートか決められない。
 
 発生箇所: comken.services.salesforce_downloader の管理表読み込み
 
 対処:
-    メッセージに出ている行と列を、管理表で確認して直す
+    Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す
 
 #### `__init__`
 
 ```text
-def __init__(self, row_number: int, column: str, value: object, reason: str) -> None:
+def __init__(self, report_key: int, url: str, reason: str) -> None:
 ```
 
 ### `ScheduledReportNotRegisteredError`
@@ -2114,7 +2198,7 @@ def file_path_of(entry: ReportEntry) -> Path:
 ### `load_master`
 
 ```text
-def load_master(path: str | Path) -> dict[int, ReportEntry]:
+def load_master(path: str | Path | None=None) -> dict[int, ReportEntry]:
 ```
 
 #### 説明
@@ -2126,10 +2210,6 @@ Args:
 
 Returns:
     {管理番号: ReportEntry}。管理表に並んでいる順を保つ。
-
-Raises:
-    DuplicateReportKeyError: 同じ管理番号が2つ以上ある場合。
-    InvalidReportEntryError: 行の書き方が正しくない場合。
 
 ### `shared_report_ids`
 
@@ -2151,21 +2231,29 @@ Returns:
 ### `ReportEntry`
 
 ```text
-class ReportEntry:
+class ReportEntry(MasterRow):
 ```
 
 #### 説明
 
-管理表の1行。
+レポート管理表の1行。
 
-Attributes:
-    key: 管理番号（社内で決める論理 ID。Salesforce のレポート ID ではない）。
-    summary: 人が読んで何のレポートか分かる説明。ファイル名にも使う。
-    url: Salesforce でレポートを開いたときのアドレス。
-    report_id: url から取り出した Salesforce のレポート ID。
-    schedule: "定期" か "個別"。
-    folder: 保存先のフォルダ。
-    enabled: 有効なら True。
+#### `report_id`
+
+```text
+@property
+def report_id(self) -> str:
+```
+
+##### 説明
+
+URL から取り出した Salesforce のレポート ID。
+
+**行番号ではなく管理番号で示す。** 空行を飛ばして読むので行番号はズレうるが、
+管理番号なら管理表を検索して一発で見つかる。
+
+Raises:
+    InvalidReportUrlError: URL からレポート ID を取り出せない場合。
 
 #### `is_scheduled`
 
@@ -2177,22 +2265,6 @@ def is_scheduled(self) -> bool:
 ##### 説明
 
 定期取得の対象か。
-
-### `create_master_template`
-
-```text
-def create_master_template(path: str | Path) -> Path:
-```
-
-#### 説明
-
-管理表の雛形を作って、そのパスを返す。
-
-Args:
-    path: 作成先（.xlsx）。
-
-Returns:
-    作成したファイルのパス。
 
 
 ## `from comken.toolbox.access import ...`

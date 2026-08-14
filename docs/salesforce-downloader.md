@@ -83,7 +83,9 @@ python -m comken.services.salesforce_downloader check レポート管理表.xlsx
 
 ### 列
 
-シート名は `管理表`。1行目が見出し。
+シート名は `管理表`。1行目が見出し。列の宣言は
+`comken/services/salesforce_downloader/master.py` にあり、読み込み・検証・雛形生成の
+仕組みは [管理表（master_table）](master-table.md) が持つ。
 
 | ID | 概要 | Salesforce URL | 実行方式 | 保存先 | 有効 |
 |---|---|---|---|---|---|

@@ -4,7 +4,6 @@
 """
 
 import pytest
-
 from set_comken_root import main
 
 OLD_ROOT = r"\\old\share\tools\comken"

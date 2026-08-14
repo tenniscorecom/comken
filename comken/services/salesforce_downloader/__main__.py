@@ -16,9 +16,8 @@ import sys
 from pathlib import Path
 
 from ...exceptions import ComkenError
-from .master import load_master, shared_report_ids
+from .master import EXAMPLES, ReportEntry, load_master, shared_report_ids
 from .service import MASTER_PATH
-from .template import create_master_template
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -63,7 +62,7 @@ def _run_init(args: argparse.Namespace) -> None:
         print("作り直すときは、先にファイルを移動するか名前を変えてください。", file=sys.stderr)
         return
 
-    path = create_master_template(args.path)
+    path = ReportEntry.create_template(args.path, EXAMPLES)
     print(f"管理表の雛形を作りました: {path}")
     print("「記入方法」シートに各列の書き方があります。記入例の2行は使う前に消してください。")
 

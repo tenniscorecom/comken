@@ -10,9 +10,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from comken.exceptions import (
-    DuplicateReportKeyError,
     EmptyReportError,
-    InvalidReportEntryError,
+    InvalidReportUrlError,
+    MasterDuplicateValueError,
+    MasterRowValueError,
     ReportDisabledError,
     ReportFileMissingError,
     ReportFolderNotFoundError,
@@ -22,7 +23,7 @@ from comken.exceptions import (
     ScheduledReportNotRegisteredError,
 )
 from comken.services.salesforce_downloader import (
-    create_master_template,
+    ReportEntry,
     download_report,
     download_scheduled,
     file_path_of,
@@ -32,6 +33,7 @@ from comken.services.salesforce_downloader import (
     shared_report_ids,
 )
 from comken.services.salesforce_downloader.__main__ import main as cli
+from comken.services.salesforce_downloader.master import EXAMPLES
 from comken.toolbox.csv import CsvReader
 from comken.toolbox.excel import ExcelWriter
 from comken.toolbox.utils.clock import today
@@ -109,7 +111,7 @@ class TestLoadMaster:
                 [1001, "別の名前", URL_B, "個別", str(tmp_path), "有効"],
             ],
         )
-        with pytest.raises(DuplicateReportKeyError):
+        with pytest.raises(MasterDuplicateValueError):
             load_master(master)
 
     def test_url_without_report_id_raises_with_row_number(self, tmp_path):
@@ -117,16 +119,16 @@ class TestLoadMaster:
             tmp_path / "管理表.xlsx",
             [[1001, "顧客一覧", "https://example.com/", "定期", str(tmp_path), "有効"]],
         )
-        with pytest.raises(InvalidReportEntryError) as e:
+        with pytest.raises(InvalidReportUrlError) as e:
             load_master(master)
-        assert "2 行目" in str(e.value)  # 見出しが1行目なので、最初のデータは2行目
+        assert "1001" in str(e.value)  # 行番号ではなく管理番号で示す（空行があるとズレるため）
 
     def test_unknown_schedule_raises(self, tmp_path):
         master = make_master(
             tmp_path / "管理表.xlsx",
             [[1001, "顧客一覧", URL_A, "毎日", str(tmp_path), "有効"]],
         )
-        with pytest.raises(InvalidReportEntryError) as e:
+        with pytest.raises(MasterRowValueError) as e:
             load_master(master)
         assert "実行方式" in str(e.value)
 
@@ -135,7 +137,7 @@ class TestLoadMaster:
             tmp_path / "管理表.xlsx",
             [["A001", "顧客一覧", URL_A, "定期", str(tmp_path), "有効"]],
         )
-        with pytest.raises(InvalidReportEntryError):
+        with pytest.raises(MasterRowValueError):
             load_master(master)
 
 
@@ -367,7 +369,7 @@ class TestTemplate:
 
     def test_generated_template_can_be_loaded(self, tmp_path):
         """雛形の記入例が、そのまま load_master() を通る（列名の食い違いが起きない）。"""
-        path = create_master_template(tmp_path / "レポート管理表.xlsx")
+        path = ReportEntry.create_template(tmp_path / "レポート管理表.xlsx", EXAMPLES)
         entries = load_master(path)
         assert list(entries) == [1001, 1002]
         assert entries[1001].is_scheduled
@@ -375,14 +377,14 @@ class TestTemplate:
 
     def test_examples_point_at_different_reports(self, tmp_path):
         """記入例が同じレポートを指していると、check が重複として報告してしまう。"""
-        entries = load_master(create_master_template(tmp_path / "管理表.xlsx"))
+        entries = load_master(ReportEntry.create_template(tmp_path / "管理表.xlsx", EXAMPLES))
         assert shared_report_ids(entries) == {}
 
     def test_guide_sheet_is_included(self, tmp_path):
         """非エンジニアが1枚で分かるよう、記入方法のシートを付ける。"""
         from openpyxl import load_workbook
 
-        path = create_master_template(tmp_path / "管理表.xlsx")
+        path = ReportEntry.create_template(tmp_path / "管理表.xlsx", EXAMPLES)
         assert "記入方法" in load_workbook(path).sheetnames
 
 

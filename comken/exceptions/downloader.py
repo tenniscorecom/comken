@@ -39,6 +39,23 @@ class ReportNotRegisteredError(DownloaderError):
         )
 
 
+class InvalidReportUrlError(DownloaderError):
+    """管理表の URL から Salesforce のレポート ID を取り出せない
+
+    貼られたものが Salesforce のレポート URL でないと、どのレポートか決められない。
+
+    発生箇所: comken.services.salesforce_downloader の管理表読み込み
+
+    対処:
+        Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す
+    """
+
+    def __init__(self, report_key: int, url: str, reason: str) -> None:
+        super().__init__(
+            f"管理番号 {report_key} の Salesforce URL が正しくありません: {url}\n{reason}"
+        )
+
+
 class ReportDisabledError(DownloaderError):
     """管理表で「無効」になっているレポートを取ろうとした
 
@@ -57,45 +74,6 @@ class ReportDisabledError(DownloaderError):
             f"このレポートは無効になっています: {report_key}（{summary}）\n"
             f"管理表: {master_path}\n"
             "また使うなら「有効」列を有効に戻してください。"
-        )
-
-
-class DuplicateReportKeyError(DownloaderError):
-    """管理表に同じ管理番号が2つ以上ある
-
-    管理番号は保存するファイル名にも使うため、重複していると
-    どちらのレポートを指すか決められない。
-
-    発生箇所: comken.services.salesforce_downloader の管理表読み込み
-
-    対処:
-        管理表を開いて、重複している管理番号のどちらかを別の番号に変える
-    """
-
-    def __init__(self, report_key: int, master_path: Path) -> None:
-        super().__init__(
-            f"管理表に同じ管理番号が2つあります: {report_key}\n"
-            f"{master_path}\n"
-            "管理番号は保存するファイル名にも使うため、重複していると"
-            "どちらのレポートか決められません。どちらかの番号を変えてください。"
-        )
-
-
-class InvalidReportEntryError(DownloaderError):
-    """管理表の行の書き方が正しくない
-
-    管理番号が数字でない、実行方式が「定期」「個別」以外、保存先が空など。
-    非エンジニアが編集する表なので、どの行のどの列かを示して止める。
-
-    発生箇所: comken.services.salesforce_downloader の管理表読み込み
-
-    対処:
-        メッセージに出ている行と列を、管理表で確認して直す
-    """
-
-    def __init__(self, row_number: int, column: str, value: object, reason: str) -> None:
-        super().__init__(
-            f"管理表 {row_number} 行目の「{column}」が正しくありません: {value!r}\n{reason}"
         )
 
 

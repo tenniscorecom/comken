@@ -76,6 +76,11 @@ ComkenError
     ├── ConfigCreatedFromExampleError
     ├── ConfigLowerCaseNameError
     └── ConfigSectionNotFoundError
+├── MasterTableError
+│   ├── MasterSheetNotDefinedError
+│   ├── MasterColumnNotFoundError
+│   ├── MasterRowValueError
+│   └── MasterDuplicateValueError
 ├── StateError
 │   ├── StateFileCorruptedError
 │   ├── StateLowerCaseNameError
@@ -83,8 +88,7 @@ ComkenError
 └── DownloaderError
     ├── ReportNotRegisteredError
     ├── ReportDisabledError
-    ├── DuplicateReportKeyError
-    ├── InvalidReportEntryError
+    ├── InvalidReportUrlError
     ├── ScheduledReportNotRegisteredError
     ├── ScheduledReportNotDownloadedError
     ├── ReportFileMissingError
@@ -154,9 +158,8 @@ from .csv import (
 )
 from .downloader import (
     DownloaderError,
-    DuplicateReportKeyError,
     EmptyReportError,
-    InvalidReportEntryError,
+    InvalidReportUrlError,
     ReportDisabledError,
     ReportFileMissingError,
     ReportFolderNotFoundError,
@@ -181,6 +184,13 @@ from .excel import (
     TableNotFoundError,
 )
 from .file import UnsupportedFileSuffixError
+from .master_table import (
+    MasterColumnNotFoundError,
+    MasterDuplicateValueError,
+    MasterRowValueError,
+    MasterSheetNotDefinedError,
+    MasterTableError,
+)
 from .outlook import (
     ClassicOutlookNotAvailableError,
     OutlookAttachmentNotFoundError,
@@ -289,6 +299,11 @@ __all__ = [
     "ElementNotFoundError",
     "PopupTabNotOpenedError",
     "DownloadTimeoutError",
+    "MasterTableError",
+    "MasterSheetNotDefinedError",
+    "MasterColumnNotFoundError",
+    "MasterRowValueError",
+    "MasterDuplicateValueError",
     "StateError",
     "StateFileCorruptedError",
     "StateLowerCaseNameError",
@@ -296,8 +311,7 @@ __all__ = [
     "DownloaderError",
     "ReportNotRegisteredError",
     "ReportDisabledError",
-    "DuplicateReportKeyError",
-    "InvalidReportEntryError",
+    "InvalidReportUrlError",
     "ScheduledReportNotRegisteredError",
     "ScheduledReportNotDownloadedError",
     "ReportFileMissingError",

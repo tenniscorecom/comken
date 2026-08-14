@@ -47,6 +47,8 @@ ERROR_CATEGORIES = (
             exceptions.CsvError,
             exceptions.ColumnNotFoundError,
             exceptions.ConfigError,
+            exceptions.MasterTableError,
+            exceptions.MasterTableError,
             exceptions.StateError,
             exceptions.DownloaderError,
             exceptions.RpaError,
