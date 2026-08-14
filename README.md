@@ -156,21 +156,26 @@ PCの環境変数を変更したくない場合は、各プロジェクトのル
 リポジトリルートに合わせる。この方法ではバッチの実行中だけ`PYTHONPATH`を設定する。
 （`新規プロジェクト作成.bat`で作ったプロジェクトには、この`実行.bat`が場所入りで最初から入る）
 
-### BO用フォルダへ配置する
+### 共有サーバーの comken を更新する
 
-`deploy_comken.bat`（中身は`deploy.py`）は、Ruff、pytest、BO用フォルダへのコピーを順番に行う。
-配置先を引数で渡す。省略すると画面で入力する。
+共有サーバーのチェックアウトで `git pull` する（**常に main またはリリースタグに保つ**）。
 
 ```bat
-deploy_comken.bat "\\server\share\BO_LIBS"
+cd \server\share	ools\comken
+git pull
 ```
 
-**バージョンはここでは上げない。** 先に`comken/__init__.py`の`__version__`を上げてから配置する
-（[リリース手順](仕様書.md#リリース手順バージョンアップ)）。配置先に同じバージョンが入っている場合は
-上げ忘れとみなして止まる。
+**社内固有の値を書いた2ファイルは、pull で上書きされないようにしておく。**
+配置したときに1回だけ設定する。
 
-配置先の既存`comken`は`backup/`へ退避し、配置先の中の一時フォルダへコピーしてimportできた
-場合だけ切り替える。`DEPLOYMENT.txt`にはバージョン、日時、Gitコミット、コピー元を記録する。
+```bat
+git update-index --skip-worktree comken/settings.py
+git update-index --skip-worktree comken/toolbox/rpa.py
+```
+
+これで手元の書き換えが pull で消えず、うっかり push することもない。comken 側でこの
+2ファイルを変更したとき（設定を足したときなど）は pull が止まるので、そのときだけ
+`--no-skip-worktree` で解除して手で合わせ、また設定し直す。
 
 ```bat
 set "COMKEN_ROOT=\\server\share\tools\comken"
