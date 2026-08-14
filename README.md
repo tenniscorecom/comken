@@ -37,6 +37,7 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 | はじめて使う | この README の「[はじめて使う人へ](#はじめて使う人へ)」 |
 | 何が用意されているか探す | このREADMEの「[モジュール一覧](#モジュール一覧)」 |
 | モジュールの使い方を知る | [CSV](docs/csv.md)・[Excel](docs/excel.md)・[Access](docs/access.md)・[Outlook](docs/outlook.md)・[Windows](docs/windows.md)・[ブラウザ](docs/browser.md)・[Salesforce](docs/salesforce.md)・[ファイル](docs/utils-files.md)・[認証情報](docs/credentials.md) |
+| **初めて外部システムにつなぐ** | ID とパスワードの[登録](docs/credentials.md#登録初回だけ) → [Salesforce につないで確かめる](docs/salesforce.md#つないで確かめるコマンド) |
 | 引数・戻り値・例外を正確に知る | [公開 API](docs/自動生成/API.md)（**自動生成**） |
 | エラーが出た | [エラー対応ガイド](ERRORS.md)（エラー表は **自動生成**） |
 | 動くコードを見る | [examples](examples/README.md) |
