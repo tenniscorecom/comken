@@ -50,4 +50,5 @@ required-imports = ["from __future__ import annotations"]
 # 管理者・利用者が結果を画面で確認する CLI ツールでは print が出力手段になる。
 "comken/config/__main__.py" = ["T20"]
 "comken/credentials/__main__.py" = ["T20"]
+"comken/salesforce/__main__.py" = ["T20"]
 "examples/sample_login/run.py" = ["T20"]

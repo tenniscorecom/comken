@@ -273,6 +273,28 @@ with SiteA(
 
 ---
 
+## つないで確かめる（コマンド）
+
+秘密の値はコマンドラインに渡さない。先に DPAPI へ登録し、そこから読ませる。
+
+```bat
+python -m comken.credentials import 認証情報.json    :: site_a_client_id / site_a_client_secret
+python -m comken.salesforce check  --domain https://xxx.my.salesforce.com --prefix site_a
+python -m comken.salesforce report --domain ... --prefix site_a --report-id 00O...
+```
+
+| コマンド | すること | Salesforce 側への影響 |
+|---|---|---|
+| `check` | 接続してみる | なし |
+| `report` | レポートを実行し、行数と列名を出す（`--rows N` で中身も） | なし（読むだけ） |
+| `app` | ECA の資格情報を取り、項目名を出す | なし |
+| `rotate --stage-only` | 新しい secret を発行するところまで | **発行される**が切り替わらない |
+| `rotate` | DPAPI へ保存して切り替える | **旧 secret は猶予後に無効** |
+
+`app` と `rotate --stage-only` は、**REST API から consumer secret を回せるか**と
+**応答の項目名**を実機で確かめるためにある（公開資料で確認できていないため）。
+値そのものは画面に出さず、項目名と桁数だけを表示する。
+
 ## 実装を使うときの早見
 
 前半の設計判断を、利用側から引ける形にまとめる。背景と制約の説明は前半を正とする。
