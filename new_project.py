@@ -75,7 +75,6 @@ def _fill_comken_root(target: Path, comken_root: Path) -> None:
         # JSON は \ が特殊文字なので / 区切りで書いてある。先に / 版を replace する
         text = text.replace(slash_placeholder, slash_root)
         text = text.replace(PLACEHOLDER_COMKEN_ROOT, str(comken_root))
-        # bat に BOM を付けない（CP932 コンソールで @echo off の前に残りエラーになる）
         path.write_text(text, encoding="utf-8")
 
 
