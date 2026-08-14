@@ -1,7 +1,7 @@
 r"""set_comken_root.py — 各プロジェクトが見ている comken の場所をまとめて変える。
 
 共有サーバー上の comken を別の場所へ移すと、利用プロジェクト側の**1プロジェクトにつき
-4か所**（実行.bat・スタブ生成.bat・認証情報の登録.bat・.vscode/settings.json）が
+3か所**（実行.bat・認証情報の登録.bat・.vscode/settings.json）が
 古い場所を指したままになる。プロジェクトが増えるほど手で直すのは現実的でなくなり、
 **直し漏れたプロジェクトだけが動かなくなる**。しかも実行.bat だけ直して
 settings.json を忘れると、動くのに補完だけ効かないという分かりにくい状態になる。
@@ -28,7 +28,6 @@ from pathlib import Path
 # 新しく場所を書くファイルを増やしたら、ここにも足す（足し忘れるとそこだけ古いままになる）
 COMKEN_ROOT_FILES = (
     "実行.bat",
-    "スタブ生成.bat",
     "認証情報の登録.bat",
     ".vscode/settings.json",
 )

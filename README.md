@@ -162,7 +162,7 @@ PCの環境変数を変更したくない場合は、各プロジェクトのル
 
 ### bat が何をしているか
 
-`実行.bat`（`スタブ生成.bat`・`認証情報の登録.bat`も同じ）は、この順で動く。
+`実行.bat`（`認証情報の登録.bat`も同じ）は、この順で動く。
 
 1. **すでに`PYTHONPATH`が通っていれば、そのまま`main.py`を動かす**（上の恒久登録をした場合）
 2. 通っていなければ、bat に書いてある`COMKEN_ROOT`を使う
@@ -173,14 +173,16 @@ PCの環境変数を変更したくない場合は、各プロジェクトのル
 
 ### 共有サーバーの comken を更新する
 
-共有サーバーのチェックアウトで `git pull` する（**常に main またはリリースタグに保つ**）。
+共有サーバーのチェックアウトを、**リリース済みのタグへ切り替える**（→ [開発とリリース](仕様書.md#開発とリリース)）。
 
 ```bat
-cd \server\share	ools\comken
-git pull
+pushd \\server\share\tools\comken
+git fetch --tags
+git checkout v0.8.0
+popd
 ```
 
-**社内固有の値を書いた2ファイルは、pull で上書きされないようにしておく。**
+**社内固有の値を書いた2ファイルは、切り替えで上書きされないようにしておく。**
 配置したときに1回だけ設定する。
 
 ```bat
@@ -188,18 +190,12 @@ git update-index --skip-worktree comken/settings.py
 git update-index --skip-worktree comken/toolbox/rpa.py
 ```
 
-これで手元の書き換えが pull で消えず、うっかり push することもない。comken 側でこの
-2ファイルを変更したとき（設定を足したときなど）は pull が止まるので、そのときだけ
+これで手元の書き換えが消えず、うっかり push することもない。comken 側でこの2ファイルを
+変更したとき（設定を足したときなど）は切り替えが止まるので、そのときだけ
 `--no-skip-worktree` で解除して手で合わせ、また設定し直す。
 
-```bat
-set "COMKEN_ROOT=\\server\share\tools\comken"
-set "PYTHONPATH=%COMKEN_ROOT%;%PYTHONPATH%"
-python main.py
-```
-
-以後、どのプロジェクトからでも `import comken` が共有サーバーの最新版を読む。更新のたびの配布作業はない。
-（共有サーバーの comken を更新すれば、次に import した全プロジェクトが最新になる）
+**切り替えた瞬間に、次に import した全プロジェクトが新しい版になる。** 更新のたびの
+配布作業はない。問題が出たら前のタグへ戻せば、同じように全プロジェクトが戻る。
 
 - **バイトコードキャッシュは自動でローカルに逃がす**: 共有サーバーが読み取り専用でも
   遅くならないよう、comken は import 時に `.pyc` の出力先を `%LOCALAPPDATA%\comken-pycache`
@@ -209,7 +205,7 @@ python main.py
 
 ### comken の場所を変えたとき
 
-comken を別の共有フォルダへ移すと、各プロジェクトの**4か所**（実行.bat・スタブ生成.bat・
+comken を別の共有フォルダへ移すと、各プロジェクトの**3か所**（実行.bat・
 認証情報の登録.bat・.vscode/settings.json）が古い場所を指したままになる。
 プロジェクトが増えるほど手で直すのは現実的でなくなり、直し漏れたものだけが動かなくなる。
 まとめて書き換える。

@@ -40,7 +40,7 @@ comken を別の場所へ移したときだけ、`実行.bat` と `.vscode/setti
 1. このフォルダをコピーしてプロジェクト名にリネームし、git 初期化する
 2. `src/run.py` の `run()` に処理を書く（`from comken import config` で設定を読む。
    `config.` まで打つと Pylance が補完する。補完用スタブ typings/ は自動生成される。
-   ツールを動かす前に補完を用意したいときは `スタブ生成.bat` を実行）
+)
 3. `docs/使い方.md` / `docs/仕様書.md` / この README の `（ここを書く）` を埋める
 4. `docs/ERRORS.md` の「プロジェクト固有のエラー」に、このツールで起きやすいエラーを追記する
 5. この節を README から削除する
