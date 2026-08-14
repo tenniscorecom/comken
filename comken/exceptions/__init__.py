@@ -76,10 +76,20 @@ ComkenError
     ├── ConfigCreatedFromExampleError
     ├── ConfigLowerCaseNameError
     └── ConfigSectionNotFoundError
-└── StateError
-    ├── StateFileCorruptedError
-    ├── StateLowerCaseNameError
-    └── StateValueTypeError
+├── StateError
+│   ├── StateFileCorruptedError
+│   ├── StateLowerCaseNameError
+│   └── StateValueTypeError
+└── DownloaderError
+    ├── ReportNotRegisteredError
+    ├── ReportDisabledError
+    ├── DuplicateReportKeyError
+    ├── InvalidReportEntryError
+    ├── ScheduledReportNotRegisteredError
+    ├── ScheduledReportNotDownloadedError
+    ├── ReportFileMissingError
+    ├── EmptyReportError
+    └── ReportFolderNotFoundError
 
 カテゴリ基底クラスはまとめて捕捉するために使い、直接送出しない。
 """
@@ -140,6 +150,18 @@ from .csv import (
     CsvRowDuplicateKeyError,
     CsvRowNotFoundError,
     EncodingDetectionError,
+)
+from .downloader import (
+    DownloaderError,
+    DuplicateReportKeyError,
+    EmptyReportError,
+    InvalidReportEntryError,
+    ReportDisabledError,
+    ReportFileMissingError,
+    ReportFolderNotFoundError,
+    ReportNotRegisteredError,
+    ScheduledReportNotDownloadedError,
+    ScheduledReportNotRegisteredError,
 )
 from .excel import (
     EmptyHeaderCellError,
@@ -269,4 +291,14 @@ __all__ = [
     "StateFileCorruptedError",
     "StateLowerCaseNameError",
     "StateValueTypeError",
+    "DownloaderError",
+    "ReportNotRegisteredError",
+    "ReportDisabledError",
+    "DuplicateReportKeyError",
+    "InvalidReportEntryError",
+    "ScheduledReportNotRegisteredError",
+    "ScheduledReportNotDownloadedError",
+    "ReportFileMissingError",
+    "EmptyReportError",
+    "ReportFolderNotFoundError",
 ]

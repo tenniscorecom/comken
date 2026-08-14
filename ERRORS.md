@@ -119,6 +119,15 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `StateFileCorruptedError` | state.ini が壊れていて読み取れない | 内容を直す。直せない場合は別名に変更して、空の状態から再実行する |
 | `StateLowerCaseNameError` | state のキー名に小文字がある | 表示されたキー名を大文字に直す（`last_file` → `LAST_FILE`） |
 | `StateValueTypeError` | state に保存できない型の値が渡された | 真偽値・整数・小数・文字列・文字列のリストのいずれかに変更する |
+| `ReportNotRegisteredError` | 指定した管理番号が管理表に無い | 管理表を開いて、その管理番号の行があるか確認する。新しく使うレポートは、先に管理表へ登録する |
+| `ReportDisabledError` | 管理表で「無効」になっているレポートを取ろうとした | また使うなら管理表の「有効」を「有効」に戻す。使わないなら、呼び出し側のコードから消す |
+| `DuplicateReportKeyError` | 管理表に同じ管理番号が2つ以上ある | 管理表を開いて、重複している管理番号のどちらかを別の番号に変える |
+| `InvalidReportEntryError` | 管理表の行の書き方が正しくない | メッセージに出ている行と列を、管理表で確認して直す |
+| `ScheduledReportNotRegisteredError` | 定期取得の対象として登録されていないレポートを、定期取得済みとして受け取ろうとした | 毎日決まった時刻に取るなら、管理表の「実行方式」を「定期」にする。使うときに毎回取りに行くなら、download_report() を呼ぶ |
+| `ScheduledReportNotDownloadedError` | 本日の定期取得がまだ済んでいない | 定期取得の実行結果を確認する。急ぐ場合は download_report() でその場で取得する（そのぶん Salesforce への呼び出しが増える） |
+| `ReportFileMissingError` | 履歴では取得済みだが、保存先にファイルが無い | 保存先のフォルダを確認する。消してしまった場合はdownload_report() で取り直す |
+| `EmptyReportError` | レポートは実行できたが明細が 0 行だった | Salesforce の画面で同じレポートを開き、本当に 0 件か確認する。本当に 0 件の日であれば、空の CSV を保存先へ手で置く |
+| `ReportFolderNotFoundError` | 管理表に書かれた保存先のフォルダが無い | 管理表の「保存先」を確認する。共有フォルダなら、つながっているか・権限があるかも確認する |
 | `FileNotFoundError` | ファイルが見つからない | ファイルの置き場所と名前を確認する。「今日の日付のファイル」を探す処理なら、今日のファイルが作られているか確認する |
 
 ## ブラウザ（Edge 自動操作）のエラー
@@ -153,6 +162,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `ColumnNotFoundError` | Excel・CSV・データ比較で列が見つからないエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `ConfigError` | config.ini に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `StateError` | state.ini に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
+| `DownloaderError` | Salesforce レポートの集約取得に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `RpaError` | 社内 RPA 基盤の呼び出しに関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `SalesforceError` | Salesforce に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `CredentialError` | 認証情報の保存・取得に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |

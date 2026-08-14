@@ -1751,6 +1751,407 @@ state に保存できない型の値が渡された
 def __init__(self, value: object) -> None:
 ```
 
+### `DownloaderError`
+
+```text
+class DownloaderError(ComkenError):
+```
+
+#### 説明
+
+Salesforce レポートの集約取得に関するエラー
+
+対処:
+    画面に表示された具体的なエラー名を上の表から探す
+
+### `ReportNotRegisteredError`
+
+```text
+class ReportNotRegisteredError(DownloaderError):
+```
+
+#### 説明
+
+指定した管理番号が管理表に無い
+
+管理番号はコードに定数で書く（CUSTOMER_LIST = 1001）。管理表から行を消したり、
+番号を打ち間違えたりすると、どのレポートを指しているか決められない。
+
+発生箇所: comken.services.salesforce_downloader の download_report()
+
+対処:
+    管理表を開いて、その管理番号の行があるか確認する。
+    新しく使うレポートは、先に管理表へ登録する
+
+#### `__init__`
+
+```text
+def __init__(self, report_key: int, registered: list[int], master_path: Path) -> None:
+```
+
+### `ReportDisabledError`
+
+```text
+class ReportDisabledError(DownloaderError):
+```
+
+#### 説明
+
+管理表で「無効」になっているレポートを取ろうとした
+
+使うのをやめたレポートは、行を消さずに「無効」にして履歴との対応を残す。
+無効のものを黙って取りに行くと、やめたはずの取得が続いてしまう。
+
+発生箇所: comken.services.salesforce_downloader の download_report()
+
+対処:
+    また使うなら管理表の「有効」を「有効」に戻す。
+    使わないなら、呼び出し側のコードから消す
+
+#### `__init__`
+
+```text
+def __init__(self, report_key: int, summary: str, master_path: Path) -> None:
+```
+
+### `DuplicateReportKeyError`
+
+```text
+class DuplicateReportKeyError(DownloaderError):
+```
+
+#### 説明
+
+管理表に同じ管理番号が2つ以上ある
+
+管理番号は保存するファイル名にも使うため、重複していると
+どちらのレポートを指すか決められない。
+
+発生箇所: comken.services.salesforce_downloader の管理表読み込み
+
+対処:
+    管理表を開いて、重複している管理番号のどちらかを別の番号に変える
+
+#### `__init__`
+
+```text
+def __init__(self, report_key: int, master_path: Path) -> None:
+```
+
+### `InvalidReportEntryError`
+
+```text
+class InvalidReportEntryError(DownloaderError):
+```
+
+#### 説明
+
+管理表の行の書き方が正しくない
+
+管理番号が数字でない、実行方式が「定期」「個別」以外、保存先が空など。
+非エンジニアが編集する表なので、どの行のどの列かを示して止める。
+
+発生箇所: comken.services.salesforce_downloader の管理表読み込み
+
+対処:
+    メッセージに出ている行と列を、管理表で確認して直す
+
+#### `__init__`
+
+```text
+def __init__(self, row_number: int, column: str, value: object, reason: str) -> None:
+```
+
+### `ScheduledReportNotRegisteredError`
+
+```text
+class ScheduledReportNotRegisteredError(DownloaderError):
+```
+
+#### 説明
+
+定期取得の対象として登録されていないレポートを、定期取得済みとして受け取ろうとした
+
+get_scheduled_report() は「決まった時刻に取っておいたものを受け取る」関数。
+管理表で「個別」になっているレポートは誰も取りに行かないので、いつまでも揃わない。
+
+発生箇所: comken.services.salesforce_downloader の get_scheduled_report()
+
+対処:
+    毎日決まった時刻に取るなら、管理表の「実行方式」を「定期」にする。
+    使うときに毎回取りに行くなら、download_report() を呼ぶ
+
+#### `__init__`
+
+```text
+def __init__(self, report_key: int, summary: str, schedule: str, master_path: Path) -> None:
+```
+
+### `ScheduledReportNotDownloadedError`
+
+```text
+class ScheduledReportNotDownloadedError(DownloaderError):
+```
+
+#### 説明
+
+本日の定期取得がまだ済んでいない
+
+定期取得の時刻より前に呼ばれた、定期取得が失敗した、その日に管理表へ
+追加されて今日の分に間に合わなかった、のいずれか。
+
+**勝手に Salesforce へ取りに行かない。** get_scheduled_report() は
+「取っておいたものを受け取る」関数で、取りに行く関数ではない。
+ここで自動的に取りに行くと、定期取得が動いていないことに誰も気づかなくなる。
+
+発生箇所: comken.services.salesforce_downloader の get_scheduled_report()
+
+対処:
+    定期取得の実行結果を確認する。急ぐ場合は download_report() で
+    その場で取得する（そのぶん Salesforce への呼び出しが増える）
+
+#### `__init__`
+
+```text
+def __init__(self, report_key: int, summary: str, history_path: Path) -> None:
+```
+
+### `ReportFileMissingError`
+
+```text
+class ReportFileMissingError(DownloaderError):
+```
+
+#### 説明
+
+履歴では取得済みだが、保存先にファイルが無い
+
+取得の後で人が消した・移動した・保存先の設定を変えた、のいずれか。
+
+発生箇所: comken.services.salesforce_downloader の get_scheduled_report()
+
+対処:
+    保存先のフォルダを確認する。消してしまった場合は
+    download_report() で取り直す
+
+#### `__init__`
+
+```text
+def __init__(self, report_key: int, path: Path) -> None:
+```
+
+### `EmptyReportError`
+
+```text
+class EmptyReportError(DownloaderError):
+```
+
+#### 説明
+
+レポートは実行できたが明細が 0 行だった
+
+空のファイルを置くと、使う側は「データが無い日」と「取得が失敗した日」を
+区別できなくなる。0 行のときはファイルを作らず、失敗として扱う。
+
+発生箇所: comken.services.salesforce_downloader の download_report()
+
+対処:
+    Salesforce の画面で同じレポートを開き、本当に 0 件か確認する。
+    本当に 0 件の日であれば、空の CSV を保存先へ手で置く
+
+#### `__init__`
+
+```text
+def __init__(self, report_key: int, summary: str, url: str) -> None:
+```
+
+### `ReportFolderNotFoundError`
+
+```text
+class ReportFolderNotFoundError(DownloaderError):
+```
+
+#### 説明
+
+管理表に書かれた保存先のフォルダが無い
+
+無いフォルダを作らないのは、書き間違いのことが多いため。
+勝手に作ると、誰も読まない場所へ置き続けることになる。
+
+発生箇所: comken.services.salesforce_downloader の download_report()
+
+対処:
+    管理表の「保存先」を確認する。共有フォルダなら、
+    つながっているか・権限があるかも確認する
+
+#### `__init__`
+
+```text
+def __init__(self, report_key: int, folder: Path) -> None:
+```
+
+
+## `from comken.services.salesforce_downloader import ...`
+
+### `download_report`
+
+```text
+def download_report(report_key: int, project: str='', *, master_path: Path | None=None, history_path: Path | None=None) -> Path:
+```
+
+#### 説明
+
+今すぐ Salesforce から取得して保存し、そのパスを返す。
+
+**必ず Salesforce へ問い合わせる。** 今日すでに取っていても取り直す。
+
+Args:
+    report_key: 管理表の管理番号（例: 1001）。
+    project: 呼び出し元の名前。履歴に残るので、入れておくと後から追える。
+    master_path: 管理表のパス（省略時は MASTER_PATH。通常は省略する）。
+    history_path: 履歴のパス（省略時は HISTORY_PATH。通常は省略する）。
+
+Returns:
+    保存したファイルのパス。
+
+Raises:
+    ReportNotRegisteredError: 管理表に無い管理番号の場合。
+    ReportDisabledError: 管理表で無効になっている場合。
+    ReportFolderNotFoundError: 保存先のフォルダが無い場合。
+    EmptyReportError: 明細が 0 行だった場合。
+
+### `get_scheduled_report`
+
+```text
+def get_scheduled_report(report_key: int, project: str='', *, master_path: Path | None=None, history_path: Path | None=None) -> Path:
+```
+
+#### 説明
+
+定期取得しておいたファイルのパスを返す。**取りに行かない。**
+
+Args:
+    report_key: 管理表の管理番号（例: 1001）。
+    project: 呼び出し元の名前（履歴には残さないが、例外の調査に使えるよう受け取る）。
+    master_path: 管理表のパス（省略時は MASTER_PATH。通常は省略する）。
+    history_path: 履歴のパス（省略時は HISTORY_PATH。通常は省略する）。
+
+Returns:
+    定期取得で保存されたファイルのパス。
+
+Raises:
+    ReportNotRegisteredError: 管理表に無い管理番号の場合。
+    ScheduledReportNotRegisteredError: 管理表で「個別」になっている場合。
+    ScheduledReportNotDownloadedError: 本日の定期取得がまだ済んでいない場合。
+    ReportFileMissingError: 履歴では取得済みだが、ファイルが無い場合。
+
+### `download_scheduled`
+
+```text
+def download_scheduled(project: str='定期実行', *, master_path: Path | None=None, history_path: Path | None=None) -> list[Path]:
+```
+
+#### 説明
+
+管理表で「定期」かつ有効なレポートをまとめて取得する。
+
+定期実行のプロジェクトから呼ぶ。**1件失敗しても残りは続ける** ——
+5本のうち1本が落ちたときに全部やり直すと、手で用意する手間が5本ぶんになる。
+
+Args:
+    project: 履歴に残す呼び出し元の名前。
+    master_path: 管理表のパス（省略時は MASTER_PATH。通常は省略する）。
+    history_path: 履歴のパス（省略時は HISTORY_PATH。通常は省略する）。
+
+Returns:
+    取得できたファイルのパス。
+
+Raises:
+    DownloaderError: 1件も取得できず、かつ対象が1件以上あった場合は送出しない。
+        失敗の有無は戻り値の件数とログで判断する（呼び出し側が方針を決められるよう、
+        ここでは止めない）。
+
+### `file_path_of`
+
+```text
+def file_path_of(entry: ReportEntry) -> Path:
+```
+
+#### 説明
+
+そのレポートを保存するパス。
+
+ファイル名は「管理番号_概要_日付」。**管理番号を先頭に置く**のは、概要や
+参照先の Salesforce レポートが変わっても、番号は変わらないため。概要を入れるのは、
+保存先を人が直接見たときに何のファイルか分かるようにするため。
+
+### `load_master`
+
+```text
+def load_master(path: str | Path) -> dict[int, ReportEntry]:
+```
+
+#### 説明
+
+管理表を読んで、管理番号をキーにした辞書を返す。
+
+Args:
+    path: 管理表（Excel）のパス。
+
+Returns:
+    {管理番号: ReportEntry}。管理表に並んでいる順を保つ。
+
+Raises:
+    DuplicateReportKeyError: 同じ管理番号が2つ以上ある場合。
+    InvalidReportEntryError: 行の書き方が正しくない場合。
+
+### `shared_report_ids`
+
+```text
+def shared_report_ids(entries: dict[int, ReportEntry]) -> dict[str, list[int]]:
+```
+
+#### 説明
+
+同じ Salesforce レポートを指している管理番号を返す。
+
+**同じレポートを複数のプロジェクトが別々の管理番号で使っている**ことが分かる。
+エラーにはしない——意図してそうしている場合（保存先を分けたい等）もあるため、
+気づけるようにするだけにする。
+
+Returns:
+    {Salesforce のレポート ID: [管理番号, ...]}。2つ以上のものだけ。
+
+### `ReportEntry`
+
+```text
+class ReportEntry:
+```
+
+#### 説明
+
+管理表の1行。
+
+Attributes:
+    key: 管理番号（社内で決める論理 ID。Salesforce のレポート ID ではない）。
+    summary: 人が読んで何のレポートか分かる説明。ファイル名にも使う。
+    url: Salesforce でレポートを開いたときのアドレス。
+    report_id: url から取り出した Salesforce のレポート ID。
+    schedule: "定期" か "個別"。
+    folder: 保存先のフォルダ。
+    enabled: 有効なら True。
+
+#### `is_scheduled`
+
+```text
+@property
+def is_scheduled(self) -> bool:
+```
+
+##### 説明
+
+定期取得の対象か。
+
 
 ## `from comken.toolbox.access import ...`
 
