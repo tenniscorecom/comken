@@ -9,8 +9,30 @@ set "COMKEN_ROOT=\\server\share\tools\comken"
 set "PYTHONPATH=%COMKEN_ROOT%;%PYTHONPATH%"
 
 rem 共有フォルダ（\\サーバー名\...）から起動されても動くよう pushd を使う（cd は UNC 不可）
-pushd "%~dp0"
-python -m comken.credentials gui
-if errorlevel 1 pause
+pushd "%~dp0" || (
+  echo [エラー] このフォルダを開けませんでした: %~dp0
+  pause
+  exit /b 1
+)
+
+if not exist "%COMKEN_ROOT%\comken\__init__.py" (
+  echo [エラー] 共通ライブラリ comken が見つかりません。
+  echo     さがした場所: %COMKEN_ROOT%
+  echo   共有サーバーにつながっているか、COMKEN_ROOT が正しいかを確認してください。
+  popd
+  pause
+  exit /b 1
+)
+
+python -m comken.toolbox.credentials gui
+set "EXIT_CODE=%ERRORLEVEL%"
 popd
-endlocal
+
+if not "%EXIT_CODE%"=="0" (
+  echo.
+  echo [失敗] 登録画面を開けませんでした（終了コード %EXIT_CODE%）。
+  echo   エラーの内容は画面の上のほうに出ています。
+  pause
+)
+
+endlocal & exit /b %EXIT_CODE%

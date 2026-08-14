@@ -53,3 +53,41 @@ def test_batch_file_does_not_switch_codepage(path: Path):
     後続の `set "X=値"` や `set /p` が壊れる。
     """
     assert "chcp" not in _read(path), f"{path.name} に chcp があります。CP932 のままで動きます。"
+
+
+@pytest.mark.parametrize("path", _BAT_FILES, ids=lambda p: p.name)
+def test_batch_file_returns_the_exit_code(path: Path):
+    """**終了コードをそのまま返す。**
+
+    `pause` や `popd` で終わると、bat の終了コードはそれらの結果（0）になり、
+    中の Python が失敗してもスケジューラや RPA 基盤からは成功に見える。
+    """
+    assert "exit /b" in _read(path), "失敗を終了コードで返していない（exit /b が無い）"
+
+
+@pytest.mark.parametrize("path", _BAT_FILES, ids=lambda p: p.name)
+def test_batch_file_captures_errorlevel_before_popd(path: Path):
+    """`popd` の前に終了コードを控える。
+
+    `popd` は成功すると ERRORLEVEL を 0 にするので、後から読むと失敗が消える。
+    """
+    text = _read(path)
+    if "popd" not in text or "%ERRORLEVEL%" not in text:
+        return  # Python を呼ばない bat（環境変数を設定するだけ）は対象外
+    # エラー分岐の中にも popd があるので、最後の popd（正常系）と比べる
+    assert text.rindex("popd") > text.index('set "EXIT_CODE=%ERRORLEVEL%"'), (
+        "popd より後で ERRORLEVEL を読んでいる（そこでは 0 になっている）"
+    )
+
+
+@pytest.mark.parametrize("path", _BAT_FILES, ids=lambda p: p.name)
+def test_batch_file_checks_comken_before_running(path: Path):
+    """comken を使う bat は、先に見つかるかを確かめる。
+
+    共有サーバーへつながっていないのが一番多い失敗。先に名指しで出さないと、
+    Python の `ModuleNotFoundError: comken` だけになり、原因が分からない。
+    """
+    text = _read(path)
+    if "PYTHONPATH" not in text:
+        return  # comken を使わない bat は対象外
+    assert r"%COMKEN_ROOT%\comken\__init__.py" in text, "comken の存在を確かめていない"
