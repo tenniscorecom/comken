@@ -100,7 +100,7 @@ import の書き方は上の「[使うときの約束](#使うときの約束)�
 | [Salesforce（requests）](docs/salesforce.md) | Salesforce の SOQL・レコード操作・レポート取得・API 使用量の計測 |
 | [管理表（Excel を設定として使う）](docs/master-table.md) | 行が増える設定を Excel の表で持ち、型付きの行として読む（雛形・検証つき） |
 | [Salesforce レポートの集約取得](docs/salesforce-downloader.md) | 管理表（Excel）に沿ってレポートを取得し、履歴を残す（どのプロジェクトが何を使っているかが分かる） |
-| [Salesforce認証の判断根拠](docs/salesforce-authentication.md) | ECA・Client Credentials Flowを選んだ理由と公式資料 |
+| [Salesforce認証の判断根拠](docs/salesforce-authentication.md) | ECA・Refresh Token Flow を既定にした理由と公式資料 |
 | [credentials（DPAPI）](docs/credentials.md) | パスワード・client_secret の暗号化保存（Windows ユーザーに紐付く） |
 | [core（部品）](docs/core.md) | `from comken.core import ...` で取る23個。ファイル検索・操作・圧縮・ファイル名の組み立て／データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時 |
 

@@ -18,9 +18,19 @@
 
 ## 認証フロー
 
-無人の組織共通処理には Client Credentials Flow を使う。利用者本人の権限・監査主体が
-必要な処理には Web Server（Authorization Code）Flow と Refresh Token Flow を使える。
-どちらも `fetch() -> (access_token, instance_url)` を実装し、API クライアントへ差し替える。
+**既定は Refresh Token Flow。** 組織クラスをそのまま使えばこの方式になる。
+
+Client Credentials Flow は `client_secret` だけでアクセストークンを取れてしまうため、
+**本番では使わない**（判断の根拠は [Salesforce 認証の判断根拠](salesforce-authentication.md)）。
+開発中に手元で動かすときだけ `auth=` で明示的に渡す。
+
+| 使う場面 | 書き方 |
+|---|---|
+| 本番・通常 | `with Sandbox() as sf:` |
+| 開発中の動作確認 | `with Sandbox(auth=ClientCredentialsAuth(cid, secret, domain)) as sf:` |
+
+どちらも `fetch() -> (access_token, instance_url)` を実装しているので、
+API クライアント側は認証方式を知らずに済む。
 
 ```python
 from comken.toolbox.salesforce.sites import Sandbox
@@ -43,48 +53,23 @@ with Sandbox(auth=auth) as sf:
 `on_refresh_token` が呼ばれるので、その場で DPAPI へ保存する。コールバックを省略すると
 プロセス内だけ更新され、次回起動時に古い token を使う点に注意する。
 
-### 認証方式を確定するとき
+### 開発中だけ Client Credentials Flow を使う
 
-2方式は同じ`OAuth`クラス名と`from_credentials()` / `fetch()`を持つ。
-`comken/toolbox/salesforce/client.py`では、importと生成処理を2方式ぶん隣に置き、未採用側を
-コメントアウトしている。
+初回の対話的な認可を挟まずに動かせるので、動作確認の回転が速い。
+**本番では使わない**（→ [判断の根拠](salesforce-authentication.md#2-なぜ-refresh-token-flow-を既定にするのか)）。
 
 ```python
-# Client Credentials Flow
-from .oauth_credentials import OAuth
+from comken.toolbox.salesforce import ClientCredentialsAuth
+from comken.toolbox.salesforce.sites import Sandbox
 
-# Refresh Token Flowへ確定するときは上の1行を次へ変更
-from .oauth_refresh import OAuth
+with Sandbox(auth=ClientCredentialsAuth(cid, secret, Sandbox.DOMAIN_URL)) as sf:
+    rows = sf.query("SELECT Id, Name FROM Account")
 ```
 
-同じ場所にあるOAuth生成処理もコメントを入れ替える。確定後は不要な
-`oauth_credentials.py`または`oauth_refresh.py`を削除し、
-`comken/toolbox/salesforce/__init__.py`から不要方式の公開名を消す。共通のquery、CRUD、report、metricsは
-認証方式に依存しないため変更不要。
+2方式は同じ `from_credentials()` / `fetch()` を持つので、
+共通の query・CRUD・report・metrics は認証方式に依存しない。
 
-### Client Credentials Flow
-
-### 決定と理由
-
-**OAuth 2.0 クライアントクレデンシャルフロー**を採る。判断の決め手は運用制約3つ。
-
-| 制約 | クライアントクレデンシャルでどうなるか |
-|---|---|
-| パスワードを平文で保存できない | 保存するのは client_id / client_secret のみ。パスワード不要 |
-| リフレッシュトークンを中央集権で管理できない | **そもそも発行されない** |
-| 無人実行（人がブラウザ操作できない） | 対話ログインなし |
-
-公式ドキュメントに明記されている。
-
-> **This flow doesn't support refresh tokens.**
->
-> — [OAuth 2.0 Client Credentials Flow for Server-to-Server Integration](https://help.salesforce.com/s/articleView?id=sf.remoteaccess_oauth_client_credentials_flow.htm&language=ja)
-
-**「リフレッシュトークンをどう管理するか」という論点自体が消える**のが最大の利点。
-リフレッシュトークンが要るのは OAuth Web サーバーフロー（人がブラウザで同意する）だけで、
-これは無人・複数組織の運用と相性が最悪になる。
-
-### 落とし穴
+### Client Credentials Flow を使うときの落とし穴
 
 - **My Domain の URL 必須。** 同じドキュメントに
   「`login.salesforce.com` と `test.salesforce.com` はサポートされない」と明記がある

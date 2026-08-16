@@ -8,16 +8,24 @@ Salesforce の公式発表・仕様と、それを受けた comken 側の判断�
 ## 結論
 
 - 新規の連携アプリには **External Client App（ECA）** を使う。
-- 無人バッチの認証には **OAuth 2.0 Client Credentials Flow** を使う。
+- 無人バッチの認証は **Authorization Code + Refresh Token Flow**。**これが既定**で、
+  組織クラスをそのまま使えばこの方式になる（`with Sandbox() as sf:`）。
+- **Client Credentials Flow は本番で使わない。** ECA 側でも無効にする。
+  `client_secret` だけでアクセストークンを取れてしまい、漏えいすると実行ユーザーとして
+  操作されるため（→ 次の節）。開発中に手元で動かすときだけ
+  `Sandbox(auth=ClientCredentialsAuth(...))` と**明示的に渡す**。
 - 実行専用ユーザーを割り当て、権限はそのユーザー側で最小限にする。
-- `client_id` と `client_secret` はコードや `config.ini` に書かず、Windows DPAPI で保管する。
+- `client_id` / `client_secret` / `refresh_token` はコードや `config.ini` に書かず、
+  Windows DPAPI で保管する。
 - アクセストークンの期限を予測せず、401 を受けたときだけ再取得して1回再試行する。
 - JWT Bearer Flow は将来の移行候補として残す。
 
 ## 最重要: secretが漏えいしたときの違い
 
-comkenはClient Credentials FlowとRefresh Token Flowの両方を実装している。ICSとの運用確認後、
-`client.py`のimport先を選び、不要な方式のファイルを削除して確定する。
+comken は両方を実装しているが、**既定は Refresh Token Flow**
+（`client.py` が `oauth_refresh` を import している）。
+Client Credentials Flow は、開発中に `auth=` で明示的に渡したときだけ使われる。
+下の表がその理由で、**この差だけで既定を決めている**。
 
 | 有効な認証フロー | `client_id + client_secret`だけが漏えい | 結果 |
 |---|---|---|
@@ -73,7 +81,59 @@ ECA は、開発者が決めるOAuth設定と、各組織の管理者が決め�
 
 - [External Client Apps in Salesforce Spring '26: A Practical Migration Guide](https://dev.to/dipojjal/external-client-apps-in-salesforce-spring-26-a-practical-migration-guide-37o0)
 
-## 2. なぜ Client Credentials Flow なのか
+## 2. なぜ Refresh Token Flow を既定にするのか
+
+### 一度は Client Credentials Flow を選び、撤回した
+
+当初はこちらを採用していた。無人実行に最も素直に合うためで、判断の材料はこの表だった。
+
+| 要件 | Client Credentials Flow での扱い |
+|---|---|
+| 夜間・無人実行 | ブラウザーでのログインや同意操作が不要 |
+| Salesforce パスワードを保存しない | `client_id` / `client_secret` だけを使う |
+| リフレッシュトークンを管理しない | 保管・失効監視・再同意の運用が不要 |
+| 操作権限を説明できる | ECA に指定した実行ユーザーの権限として監査できる |
+
+**この表は今も正しい。運用の手間だけで見れば Client Credentials Flow の方が軽い。**
+撤回したのは、手間ではなく**漏えいしたときに何が起きるか**で決め直したため。
+
+`client_id` と `client_secret` の2値が漏れた場合の違い:
+
+| 有効なフロー | 2値だけが漏れたとき |
+|---|---|
+| Client Credentials Flow | **その2値だけでアクセストークンが取れる**。実行ユーザーとして操作できる |
+| Refresh Token Flow のみ | `refresh_token` か新しい認可コードが別途要る。2値だけでは通常アクセスできない |
+
+comken は秘密の値を DPAPI に置くが、**DPAPI は同じ Windows ユーザーなら復号できる**。
+運用担当者の PC が侵害されたとき、被害が「値を読まれる」で止まるか
+「Salesforce を操作される」まで届くかの差になる。ここは運用の手間より重いと判断した。
+
+### 引き換えに受け入れたもの
+
+- 初回に**対話的な認可が1回だけ必要**（`authorization_url()` で URL を作り、
+  ブラウザーで承認して `exchange_code()` に渡す）
+- `refresh_token` の保管と失効監視が増える
+- 設定によっては更新時にも `client_secret` が要る
+
+いずれも初回と例外時の作業で、日々の無人実行には出てこない。
+Refresh Token Rotation を有効にすると、更新のたびに新しい token へ入れ替わる。
+comken は受け取った新しい token を DPAPI へ**自動で書き戻す**ので、
+運用としてやることは増えない。
+
+### Client Credentials Flow を残してある理由
+
+**開発中に手元で動かすときだけ**使う。初回の対話的な認可を挟まずに済むため、
+動作確認の回転が速い。使うときは既定を上書きして明示的に渡す。
+
+```python
+from comken.toolbox.salesforce import ClientCredentialsAuth
+
+with Sandbox(auth=ClientCredentialsAuth(cid, secret, domain)) as sf:
+    ...
+```
+
+**本番では使わない。ECA 側でも無効にする。** 有効なまま残すと、
+Refresh Token Flow を併用していても、漏えいした2値で入れる入口が残る。
 
 ### Salesforce の公式仕様
 
@@ -90,29 +150,16 @@ Web Server Flowが説明されています。Client Credentials Flowは、必要
 
 - [OAuth Tokens and Scopes](https://help.salesforce.com/s/articleView?id=remoteaccess_oauth_tokens_scopes.htm&language=en_US&type=5)
 
-### comken 側の判断
+## 3. なぜ Username-Password Flow ではないのか
 
-次の社内要件に最も素直に合うため採用しました。
+Username-Password Flow は、Salesforce ユーザーのパスワードを自動処理環境へ置く必要が
+あります。「パスワードを保管しない」という要件に反するため採用しません。
 
-| 要件 | Client Credentials Flowでの扱い |
-|---|---|
-| 夜間・無人実行 | ブラウザーでのログインや同意操作が不要 |
-| Salesforceパスワードを保存しない | `client_id` / `client_secret` だけを使う |
-| リフレッシュトークンを管理しない | 保管・失効監視・再同意の運用が不要 |
-| 操作権限を説明できる | ECAに指定した実行ユーザーの権限として監査できる |
-
-## 3. なぜUsername-Password FlowやRefresh Token Flowではないのか
-
-Username-Password Flowは、Salesforceユーザーのパスワードを自動処理環境へ置く必要があります。
-今回の「パスワードを保管しない」という要件に反するため採用しません。
-
-Refresh Token Flowは長期トークンの保護、失効ポリシー、初回の対話的な認可を運用する必要が
-あります。また、設定によっては更新時にもclient secretが必要です。
+Refresh Token Flow を選んだ代償（長期トークンの保護・失効ポリシー・初回の対話的な認可）は
+2章に書いたとおりで、設定によっては更新時にも client secret が必要です。
 
 - [Manage OAuth Access Policies for a Connected App](https://help.salesforce.com/s/articleView?id=sf.connected_app_manage_oauth.htm&language=en_US&type=5)
 - [Require Secret for Refresh Token Flow](https://help.salesforce.com/s/articleView?id=xcloud.shr_security_require_secret_for_refresh_token_flow.htm&language=en_US&type=5)
-
-そのため、リフレッシュトークンを導入しても今回の無人実行が単純になるとは限りません。
 
 ### 社内の90日変更規定との関係
 

@@ -619,11 +619,18 @@ class TestSiteFor:
 
 
 class TestCredentialsInitialization:
-    """DPAPI に入れた client_id / client_secret から組み立てる経路。"""
+    """DPAPI に入れた資格情報から組み立てる経路（既定は Refresh Token Flow）。"""
 
     def _store(self, tmp_path):
         path = tmp_path / "credentials.dat"
-        save_credentials({"sandbox_client_id": "CID", "sandbox_client_secret": "CSECRET"}, path)
+        save_credentials(
+            {
+                "sandbox_client_id": "CID",
+                "sandbox_client_secret": "CSECRET",
+                "sandbox_refresh_token": "RTOKEN",
+            },
+            path,
+        )
         return path
 
     def test_uses_the_class_credential_prefix(self, tmp_path, monkeypatch):
@@ -633,7 +640,7 @@ class TestCredentialsInitialization:
         with (
             patch("comken.toolbox.salesforce.client.requests.Session", return_value=session),
             patch(
-                "comken.toolbox.salesforce.oauth_credentials.requests.post",
+                "comken.toolbox.salesforce.oauth_refresh.requests.post",
                 return_value=_token_response(),
             ) as post,
         ):
@@ -648,7 +655,11 @@ class TestCredentialsInitialization:
         """本番とテストの切り替えは、システム名を差し替えるだけで済む。"""
         path = self._store(tmp_path)
         save_credentials(
-            {"sandbox_test_client_id": "TEST-CID", "sandbox_test_client_secret": "TEST-SECRET"},
+            {
+                "sandbox_test_client_id": "TEST-CID",
+                "sandbox_test_client_secret": "TEST-SECRET",
+                "sandbox_test_refresh_token": "TEST-RTOKEN",
+            },
             path,
         )
         monkeypatch.setattr(store, "CREDENTIALS_PATH", path)
@@ -657,7 +668,7 @@ class TestCredentialsInitialization:
         with (
             patch("comken.toolbox.salesforce.client.requests.Session", return_value=session),
             patch(
-                "comken.toolbox.salesforce.oauth_credentials.requests.post",
+                "comken.toolbox.salesforce.oauth_refresh.requests.post",
                 return_value=_token_response(),
             ) as post,
         ):

@@ -6,7 +6,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from comken.exceptions import SalesforceAuthError
-from comken.toolbox.salesforce import CredentialsOAuth, RefreshOAuth, SalesforceBase
+from comken.toolbox.salesforce import (
+    ClientCredentialsAuth,
+    RefreshTokenAuth,
+    SalesforceBase,
+)
 
 DOMAIN_URL = "https://example.my.salesforce.com"
 INSTANCE_URL = "https://instance.my.salesforce.com"
@@ -22,9 +26,9 @@ def _response(body: dict, status_code: int = 200) -> MagicMock:
     return response
 
 
-class TestRefreshOAuth:
+class TestRefreshTokenAuth:
     def test_authorization_url_contains_required_values_and_state(self):
-        url, state = RefreshOAuth.authorization_url(
+        url, state = RefreshTokenAuth.authorization_url(
             "CID", "https://localhost/callback", DOMAIN_URL, state="STATE"
         )
         query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
@@ -43,7 +47,7 @@ class TestRefreshOAuth:
             {"access_token": "ACCESS", "instance_url": INSTANCE_URL, "refresh_token": "REFRESH"}
         )
         with patch("comken.toolbox.salesforce.oauth_refresh.requests.post", return_value=response):
-            auth = RefreshOAuth.exchange_code(
+            auth = RefreshTokenAuth.exchange_code(
                 "CID",
                 "SECRET",
                 "CODE",
@@ -51,7 +55,7 @@ class TestRefreshOAuth:
                 DOMAIN_URL,
                 on_refresh_token=saved_tokens.append,
             )
-        assert isinstance(auth, RefreshOAuth)
+        assert isinstance(auth, RefreshTokenAuth)
         assert saved_tokens == ["REFRESH"]
 
     def test_refresh_omits_optional_secret_and_saves_rotated_token(self):
@@ -62,7 +66,7 @@ class TestRefreshOAuth:
         with patch(
             "comken.toolbox.salesforce.oauth_refresh.requests.post", return_value=response
         ) as post:
-            result = RefreshOAuth(
+            result = RefreshTokenAuth(
                 "CID", "REFRESH", DOMAIN_URL, on_refresh_token=saved_tokens.append
             ).fetch()
         assert result == ("ACCESS", INSTANCE_URL)
@@ -74,7 +78,7 @@ class TestRefreshOAuth:
         with patch(
             "comken.toolbox.salesforce.oauth_refresh.requests.post", return_value=response
         ) as post:
-            RefreshOAuth(
+            RefreshTokenAuth(
                 "CID",
                 "REFRESH",
                 DOMAIN_URL,
@@ -88,7 +92,7 @@ class TestRefreshOAuth:
             patch("comken.toolbox.salesforce.oauth_refresh.requests.post", return_value=response),
             pytest.raises(SalesforceAuthError) as raised,
         ):
-            RefreshOAuth("CID", "REFRESH", DOMAIN_URL).fetch()
+            RefreshTokenAuth("CID", "REFRESH", DOMAIN_URL).fetch()
         assert "REFRESH" not in str(raised.value)
 
     def test_from_credentials_saves_rotated_token_to_same_prefix(self):
@@ -97,16 +101,16 @@ class TestRefreshOAuth:
             patch("comken.toolbox.credentials.Credentials", return_value=credentials),
             patch("comken.toolbox.credentials.save_credential") as save_credential,
         ):
-            auth = RefreshOAuth.from_credentials(DOMAIN_URL, "site_a")
+            auth = RefreshTokenAuth.from_credentials(DOMAIN_URL, "site_a")
             auth._on_refresh_token("ROTATED")
         save_credential.assert_called_once_with("site_a_refresh_token", "ROTATED")
 
 
-class TestCredentialsOAuth:
+class TestClientCredentialsAuth:
     def test_from_credentials_reads_same_prefix(self):
         credentials = MagicMock(client_id="CID", client_secret="SECRET")
         with patch("comken.toolbox.credentials.Credentials", return_value=credentials) as load:
-            auth = CredentialsOAuth.from_credentials(DOMAIN_URL, "site_a")
+            auth = ClientCredentialsAuth.from_credentials(DOMAIN_URL, "site_a")
         load.assert_called_once_with("site_a")
         assert auth._client_id == "CID"
         assert auth._client_secret == "SECRET"

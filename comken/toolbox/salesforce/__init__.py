@@ -11,14 +11,26 @@
 
 URL と認証情報のシステム名は組織クラスがクラス定数として持つので、
 呼び出し側は何も渡さなくてよい。組織を増やすときは `sites/` にクラスを足す。
-認証は `oauth_credentials.py` と `oauth_refresh.py` の2方式を用意している。
-`client.py` のOAuth import先が、どちらを使うかを決める。
-設計の背景は docs/salesforce.md を参照。
+**認証の既定は Refresh Token Flow。** 組織クラスをそのまま使えばこれになる。
+
+    with Sandbox() as sf:                                    # 既定（本番もこれ）
+        ...
+
+Client Credentials Flow は `client_secret` だけでアクセストークンを取れてしまい、
+漏えいすると実行ユーザーとして操作されるため、本番では使わない。
+**開発中に手元で動かしたいときだけ** `auth=` で明示的に渡す。
+
+    from comken.toolbox.salesforce import ClientCredentialsAuth
+
+    with Sandbox(auth=ClientCredentialsAuth(cid, secret, domain)) as sf:  # 開発時だけ
+        ...
+
+設計の背景は docs/salesforce-authentication.md を参照。
 
     SalesforceBase         1組織ぶんの API クライアントの土台（組織クラスで継承する）
     ReportApi              レポート API。SalesforceBase.report が持っている
-    CredentialsOAuth       Client Credentials Flow
-    RefreshOAuth           Authorization Code + Refresh Token Flow
+    RefreshTokenAuth       Authorization Code + Refresh Token Flow（既定）
+    ClientCredentialsAuth  Client Credentials Flow（開発時に auth= で渡す）
     ApiMetrics             API 呼び出しの計測。SalesforceBase.metrics が持っている
     ApiUsage               組織の 24 時間 API 消費量
     ComponentStat          呼び出し元ごとの集計
@@ -39,8 +51,6 @@ except ImportError as e:  # pragma: no cover
 from .client import SalesforceBase
 from .metrics import ApiMetrics, ApiUsage, ComponentStat, RetryReason
 from .oauth_credentials import ClientCredentialsAuth
-from .oauth_credentials import OAuth as CredentialsOAuth
-from .oauth_refresh import OAuth as RefreshOAuth
 from .oauth_refresh import RefreshTokenAuth
 from .report import ReportApi, report_id_from_url
 from .rotation import SalesforceCredentialRotator
@@ -51,8 +61,6 @@ __all__ = [
     "report_id_from_url",
     "ClientCredentialsAuth",
     "RefreshTokenAuth",
-    "CredentialsOAuth",
-    "RefreshOAuth",
     "ApiMetrics",
     "ApiUsage",
     "ComponentStat",

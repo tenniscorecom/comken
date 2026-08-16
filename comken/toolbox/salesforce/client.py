@@ -33,10 +33,10 @@ from ...exceptions import (
 from ...runtime import dry_run_log, is_dry_run
 from .metrics import ApiMetrics, RetryReason
 
-# 採用する認証方式だけコメントを外す。確定後は不要な方式の行とファイルを削除する。
-from .oauth_credentials import OAuth
-
-# from .oauth_refresh import OAuth
+# 既定は Refresh Token Flow。Client Credentials Flow は client_secret だけで
+# アクセストークンを取れてしまい、漏えいしたときに実行ユーザーとして操作されるため
+# 使わない（→ docs/salesforce-authentication.md）。
+from .oauth_refresh import OAuth
 from .report import ReportApi
 
 logger = logging.getLogger(__name__)
