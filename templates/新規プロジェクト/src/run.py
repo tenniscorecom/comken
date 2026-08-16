@@ -17,8 +17,8 @@ SHEET = "Sheet1"
 def run() -> None:
     """処理の入口。main.py から呼ばれる。"""
     # config.SECTION.KEY で config.ini（プロジェクト直下）の値を読む。
-    # config.REPORT. まで打つと Pylance で補完が出る（typings スタブは自動生成）。
-    output_folder = config.REPORT.OUTPUT_FOLDER
+    # config.FILES. まで打つと Pylance で補完が出る（typings スタブは自動生成）。
+    output_folder = config.FILES.OUTPUT_FOLDER
 
     # ── ここに処理を書く ──────────────────────────────────────────────
     # 例:

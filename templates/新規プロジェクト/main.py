@@ -9,7 +9,7 @@ main.py — エントリポイント
 
 import logging
 
-from comken import config, setup_logging
+from comken import config, dry_run, setup_logging
 from comken.exceptions import ComkenError
 
 from src.run import run
@@ -18,24 +18,33 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> None:
-    # config.ini に必要な項目がそろっているかを最初に確かめる。
-    # 途中まで動いてから足りないと分かるより、動き出す前に全部まとめて出す。
-    # 使う項目を増やしたらここにも足す（消しても動くが、エラーが遅くなる）
-    config.require("REPORT.OUTPUT_FOLDER")
-
     # 設定の読み取りも処理も src/run.py に書く。ここは呼ぶだけにしておく
     run()
 
 
 if __name__ == "__main__":
     # 単体で動かすので、ログの出力先をここで用意する（コンソールと logs/YYYY-MM-DD.log）。
-    # 動作確認だけしたいときは保存・送信をスキップできる:
-    #   from comken import dry_run
-    #   with dry_run():
-    #       main()
     setup_logging()
     try:
-        main()
+        # config.ini に必要な項目がそろっているかを最初に確かめる。
+        # 途中まで動いてから足りないと分かるより、動き出す前に全部まとめて出す。
+        # 使う項目を増やしたらここにも足す（消しても動くが、エラーが遅くなる）
+        config.require("RUN.DRY_RUN", "FILES.OUTPUT_FOLDER")
+
+        # config.ini の [RUN] DRY_RUN で切り替える。True の間は書き込み・移動・保存を
+        # せず、何をするつもりかだけログに出す。コードを触らずに試せるので、
+        # 本番前の確認を非エンジニアだけで回せる。
+        #
+        # True のまま戻し忘れると「毎日成功しているのに何も出力されない」状態になり、
+        # 終了コードも 0 なのでスケジューラからは正常に見える。気づけるように
+        # 実行のたび WARNING を出す（INFO は流し読みされるので警告にする）。
+        if config.RUN.DRY_RUN:
+            logger.warning(
+                "DRY-RUN で実行します。ファイルは書き込まれません"
+                "（本番で動かすなら config.ini の [RUN] DRY_RUN を False にする）"
+            )
+        with dry_run(config.RUN.DRY_RUN):
+            main()
     except ComkenError as e:
         # comken のエラーはメッセージに対処法が入っている（docs/ERRORS.md も参照）
         logger.error("処理を中断しました: %s", e)

@@ -47,7 +47,7 @@ def main() -> None:
 
     # ↑↑↑ ここまで ↑↑↑
 
-    output_path = config.REPORT.OUTPUT_FOLDER / DateNameBuilder(BATCH_NAME).prefix()
+    output_path = config.FILES.OUTPUT_FOLDER / DateNameBuilder(BATCH_NAME).prefix()
     with ExcelWriter.create(output_path) as f:
         s = f.sheet(SHEET)
         s.write_table(rows)

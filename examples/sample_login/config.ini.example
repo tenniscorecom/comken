@@ -3,5 +3,5 @@
 ; セクション名・キー名は大文字で書く（Python 側の config.SECTION.KEY と一致する）
 ; =====================================================
 
-[REPORT]
+[FILES]
 OUTPUT_FOLDER = C:\Users\Public\Downloads
