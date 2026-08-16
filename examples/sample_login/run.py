@@ -4,13 +4,13 @@
 実行方法:
     リポジトリのルートで python -m examples.sample_login.run
 
-サイトが1つでも Browsers を使う。サイトが増えたときに書き方を変えなくて済むため
-（増やすときは launch を1行足すだけ。複数サイトの例は docs/browser.md を参照）。
+サイト固有の値は Site サブクラスに集める。launch に Site を渡すと
+戻り値の `kintai.session` から BrowserSession に繋がる。
 """
 
 from comken.toolbox.browser import Browsers
-from examples.sample_login.browser_options import SampleBrowserOptions
 from examples.sample_login.pages.login_page import LoginPage
+from examples.sample_login.sample_site import SampleSite
 
 USERNAME = "tomsmith"
 PASSWORD = "SuperSecretPassword!"
@@ -18,11 +18,11 @@ PASSWORD = "SuperSecretPassword!"
 
 def main() -> None:
     with Browsers() as browsers:
-        sample = browsers.launch("sample", SampleBrowserOptions)
+        sample = browsers.launch(SampleSite)
 
         # open() は自分自身を返すので、開いてそのままログインまでチェーンできる
         # login() は SecurePage を返す → そのまま次の画面の操作が書ける
-        secure = LoginPage(sample).open().login(username=USERNAME, password=PASSWORD)
+        secure = LoginPage(sample.session).open().login(username=USERNAME, password=PASSWORD)
         print("画面見出し:", secure.get_heading())
         print("メッセージ:", secure.get_flash_message())
 

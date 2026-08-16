@@ -184,7 +184,7 @@ class ConcurrentSessionUseError(BrowserError):
 class SessionNameConflictError(BrowserError):
     """同じ名前で2回 `launch` した
 
-    発生箇所: Browsers.launch()
+    発生箇所: Browsers.launch() / Browsers.launch_session()
 
     対処:
         名前を変える（同一サイトの別アカウントなら `kintai_a` / `kintai_b` など）
@@ -196,6 +196,31 @@ class SessionNameConflictError(BrowserError):
             "1つの Browsers の中で同じ名前は使えません。\n"
             "同じサイトに2つのアカウントでログインする場合は、"
             "「kintai_a」「kintai_b」のように名前を分けてください。"
+        )
+
+
+class SiteConfigError(BrowserError):
+    """`Site` サブクラスの設定が不足している
+
+    ブラウザを起動する前に、必要なクラス定数が設定されていないとここで止まる。
+    起動してから「どのサイトか分からない」では遅いので、設定不足は呼び出し時点で
+    確実に発見する。
+
+    発生箇所: Browsers.launch(Site)
+
+    対処:
+        サブクラスに NAME を定義する（BASE_URL / OPTIONS も同じ）
+    """
+
+    def __init__(self, site_cls: type, missing: str) -> None:
+        super().__init__(
+            f"{site_cls.__name__} に {missing} が設定されていません。\n"
+            "Site サブクラスでは、次のクラス定数を決めてください:\n"
+            f"  class {site_cls.__name__}(Site):\n"
+            f"      {missing} = ...\n"
+            "  NAME      セッション名（ログ・ダウンロード先で使われる）\n"
+            "  BASE_URL  このサイトの入口 URL（SitePage から参照される）\n"
+            "  OPTIONS   起動オプション（BrowserOptions のサブクラス）"
         )
 
 

@@ -29,6 +29,7 @@ from comken.exceptions import (
     SessionNameConflictError,
     SessionNotFoundError,
     SessionNotStartedError,
+    SiteConfigError,
 )
 from comken.toolbox import browser
 from comken.toolbox.browser import (
@@ -39,6 +40,7 @@ from comken.toolbox.browser import (
     DownloadDir,
     Locator,
     Page,
+    Site,
     SitePage,
 )
 from comken.toolbox.browser.driver import _major, _pick_source, _replace_driver
@@ -57,6 +59,13 @@ class TestPublicApi:
         assert Browsers is InternalBrowsers
         assert BackgroundTask is InternalBackgroundTask
         assert {"Browsers", "BrowserSession", "BackgroundTask"} <= set(browser.__all__)
+
+    def test_exports_site_class_from_browser_package(self):
+        """Site も comken.toolbox.browser から import できる公開クラス。"""
+        from comken.toolbox.browser.site import Site as InternalSite
+
+        assert Site is InternalSite
+        assert "Site" in set(browser.__all__)
 
 
 def _make_session(tmp_path, name: str = "test") -> BrowserSession:
@@ -353,7 +362,7 @@ class TestBrowsersRequiresWith:
         browsers = Browsers()
 
         with pytest.raises(BrowsersNotStartedError):
-            browsers.launch("kintai")
+            browsers.launch_session("kintai")
 
         edge.assert_not_called()  # 弾かれた時点で何も起きていない
 
@@ -377,17 +386,17 @@ class TestBrowsersRequiresWith:
         monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
 
         with Browsers() as browsers:
-            browsers.launch("kintai")
+            browsers.launch_session("kintai")
 
         with pytest.raises(BrowsersClosedError):
-            browsers.launch("keiri")
+            browsers.launch_session("keiri")
 
     def test_error_message_shows_correct_form(self):
         """エラーメッセージに、正しい書き方が載っている。"""
         browsers = Browsers()
 
         with pytest.raises(BrowsersNotStartedError) as exc_info:
-            browsers.launch("kintai")
+            browsers.launch_session("kintai")
 
         assert "with Browsers() as browsers:" in str(exc_info.value)
 
@@ -401,9 +410,9 @@ class TestBrowsers:
         monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
 
         with Browsers() as browsers:
-            browsers.launch("kintai")
+            browsers.launch_session("kintai")
             with pytest.raises(SessionNameConflictError):
-                browsers.launch("kintai")
+                browsers.launch_session("kintai")
 
     def test_getitem_reports_launched_names(self, tmp_path, monkeypatch):
         """未起動の名前を取り出すと、起動済みの一覧つきで SessionNotFoundError になる。"""
@@ -411,7 +420,7 @@ class TestBrowsers:
         monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
 
         with Browsers() as browsers:
-            browsers.launch("kintai")
+            browsers.launch_session("kintai")
 
             assert browsers.names == ["kintai"]
             with pytest.raises(SessionNotFoundError) as exc_info:
@@ -427,8 +436,8 @@ class TestBrowsers:
             DOWNLOAD_DIR = str(tmp_path / "downloads")
 
         with Browsers() as browsers:
-            kintai = browsers.launch("kintai", SharedOptions)
-            keiri = browsers.launch("keiri", SharedOptions)
+            kintai = browsers.launch_session("kintai", SharedOptions)
+            keiri = browsers.launch_session("keiri", SharedOptions)
 
             assert kintai.download_dir.path != keiri.download_dir.path
             assert kintai.download_dir.path.name == "kintai"
@@ -440,8 +449,8 @@ class TestBrowsers:
         monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
 
         with Browsers() as browsers:
-            kintai = browsers.launch("kintai", BrowserOptions)
-            keiri = browsers.launch("keiri", BrowserOptions)
+            kintai = browsers.launch_session("kintai", BrowserOptions)
+            keiri = browsers.launch_session("keiri", BrowserOptions)
 
             assert kintai._options is not keiri._options
 
@@ -454,8 +463,8 @@ class TestBrowsers:
         )
 
         with pytest.raises(RuntimeError), Browsers() as browsers:
-            browsers.launch("kintai")
-            browsers.launch("keiri")
+            browsers.launch_session("kintai")
+            browsers.launch_session("keiri")
             raise RuntimeError("処理中のエラー")
 
         # ExitStack は起動と逆順に閉じる
@@ -538,7 +547,7 @@ class TestBrowsersStart:
             events.append("処理がおわった")
 
         with Browsers() as browsers:
-            browsers.launch("kintai")
+            browsers.launch_session("kintai")
             browsers.run_task(slow_task)
 
         assert events == ["処理がおわった", "ブラウザを閉じた"]
@@ -556,8 +565,8 @@ class TestBrowsersStart:
         )
 
         with pytest.raises(KeyboardInterrupt), Browsers() as browsers:
-            browsers.launch("kintai")
-            browsers.launch("keiri")
+            browsers.launch_session("kintai")
+            browsers.launch_session("keiri")
             # 終了待ちが中断された状況を作る
             monkeypatch.setattr(
                 browsers,
@@ -584,7 +593,7 @@ class TestBrowsersStart:
             taken.append(browsers["kintai"].name)
 
         with Browsers() as browsers:
-            browsers.launch("kintai")
+            browsers.launch_session("kintai")
             browsers.run_task(late_task, label="遅れて動く処理")
             released.set()
 
@@ -979,3 +988,247 @@ class TestSitePage:
 
         page.session._driver.get.assert_called_once_with("https://kintai.example.co.jp/login")
         assert result is page
+
+    def test_go_falls_back_to_site_base_url(self, tmp_path):
+        """SitePage 側に BASE_URL が無ければ、Site.BASE_URL が使われる。"""
+
+        class KintaiPage(SitePage):
+            # BASE_URL は Site 側だけで持ち、SitePage には書かない
+            pass
+
+        session = _make_session(tmp_path)
+        session._site = Site.__new__(Site)
+        session._site.NAME = "kintai"
+        session._site.BASE_URL = "https://kintai.example.co.jp"
+        session._site.OPTIONS = None
+
+        page = KintaiPage(session)
+        page.go("/login")
+
+        page.session._driver.get.assert_called_once_with("https://kintai.example.co.jp/login")
+
+    def test_site_base_url_takes_precedence_over_own(self, tmp_path):
+        """SitePage.BASE_URL が設定されていれば、それが Site よりも優先される。"""
+
+        class KintaiPage(SitePage):
+            BASE_URL = "https://kintai.example.co.jp/page"
+
+        session = _make_session(tmp_path)
+        session._site = Site.__new__(Site)
+        session._site.NAME = "kintai"
+        session._site.BASE_URL = "https://other.example.co.jp"
+        session._site.OPTIONS = None
+
+        page = KintaiPage(session)
+        page.go("/login")
+
+        page.session._driver.get.assert_called_once_with("https://kintai.example.co.jp/page/login")
+
+
+class TestBrowsersLaunchSite:
+    """`Browsers.launch(Site)` の挙動のテスト。"""
+
+    def test_returns_site_instance_with_session(self, tmp_path, monkeypatch):
+        """launch(Site) は Site インスタンスを返し、.session から BrowserSession に繋がる。"""
+        monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
+        monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
+
+        class KintaiOptions(BrowserOptions):
+            pass
+
+        class Kintai(Site):
+            NAME = "kintai"
+            BASE_URL = "https://kintai.example.co.jp"
+            OPTIONS = KintaiOptions
+
+        with Browsers() as browsers:
+            kintai = browsers.launch(Kintai)
+
+            assert isinstance(kintai, Kintai)
+            assert kintai.NAME == "kintai"
+            assert kintai.BASE_URL == "https://kintai.example.co.jp"
+            assert isinstance(kintai.session, BrowserSession)
+            assert kintai.session.name == "kintai"
+            assert kintai.session._site is kintai
+
+    def test_uses_site_name_as_session_name(self, tmp_path, monkeypatch):
+        """Site.NAME がそのままセッション名として使われる。"""
+        monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
+        monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
+
+        class Kintai(Site):
+            NAME = "kintai"
+            OPTIONS = BrowserOptions
+
+        with Browsers() as browsers:
+            kintai = browsers.launch(Kintai)
+
+            assert kintai.session.name == "kintai"
+            assert browsers.names == ["kintai"]
+
+    def test_uses_site_options_as_launch_options(self, tmp_path, monkeypatch):
+        """Site.OPTIONS が起動オプションとして渡る（launch_session() 経由）。"""
+
+        class KintaiOptions(BrowserOptions):
+            WAIT_SECONDS = 20
+
+        class Kintai(Site):
+            NAME = "kintai"
+            OPTIONS = KintaiOptions
+
+        captured: list[BrowserOptions] = []
+
+        real_resolve = InternalBrowsers.launch_session
+
+        def capture(self, name, options=None, download_dir=None):
+            captured.append(options)
+            return real_resolve(self, name, options, download_dir)
+
+        monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
+        monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
+        monkeypatch.setattr(InternalBrowsers, "launch_session", capture)
+
+        with Browsers() as browsers:
+            browsers.launch(Kintai)
+
+        assert len(captured) == 1
+        # launch_session() にはクラスのまま渡る（インスタンス化は _resolve_options が担当）
+        assert captured[0] is KintaiOptions
+
+    def test_rejects_site_without_name(self, monkeypatch):
+        """NAME が空の Site サブクラスを渡すと SiteConfigError で止まる。"""
+
+        class Unnamed(Site):
+            BASE_URL = "https://example.co.jp"
+            OPTIONS = BrowserOptions
+
+        monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
+        monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
+
+        with Browsers() as browsers, pytest.raises(SiteConfigError) as exc_info:
+            browsers.launch(Unnamed)
+
+        assert "Unnamed" in str(exc_info.value)
+        assert "NAME" in str(exc_info.value)
+
+    def test_rejects_launch_without_with(self, monkeypatch):
+        """with に入れずに launch(Site) すると、ブラウザを起動する前に止まる。"""
+        edge = MagicMock()
+        monkeypatch.setattr("comken.toolbox.browser.management.startup.webdriver.Edge", edge)
+
+        class Kintai(Site):
+            NAME = "kintai"
+            OPTIONS = BrowserOptions
+
+        browsers = Browsers()
+
+        with pytest.raises(BrowsersNotStartedError):
+            browsers.launch(Kintai)
+
+        edge.assert_not_called()  # 弾かれた時点で何も起きていない
+
+    def test_rejects_duplicate_site_name(self, tmp_path, monkeypatch):
+        """同じ NAME の Site を2回起動すると SessionNameConflictError になる。"""
+        monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
+        monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
+
+        class Kintai(Site):
+            NAME = "kintai"
+            OPTIONS = BrowserOptions
+
+        with Browsers() as browsers:
+            browsers.launch(Kintai)
+            with pytest.raises(SessionNameConflictError):
+                browsers.launch(Kintai)
+
+
+class TestBrowsersLaunchSession:
+    """`Browsers.launch_session(name, options)`（低レベル経路）のテスト。"""
+
+    def test_returns_browser_session(self, tmp_path, monkeypatch):
+        """launch_session() は従来どおり BrowserSession を返す。"""
+        monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
+        monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
+
+        with Browsers() as browsers:
+            session = browsers.launch_session("kintai", BrowserOptions)
+
+            assert isinstance(session, BrowserSession)
+            assert session.name == "kintai"
+
+    def test_rejects_launch_session_without_with(self, monkeypatch):
+        """with に入れずに launch_session しても動かない。"""
+        edge = MagicMock()
+        monkeypatch.setattr("comken.toolbox.browser.management.startup.webdriver.Edge", edge)
+
+        browsers = Browsers()
+
+        with pytest.raises(BrowsersNotStartedError):
+            browsers.launch_session("kintai")
+
+        edge.assert_not_called()
+
+
+class TestSiteStandsAlone:
+    """Site を単体で使える（Browsers を経由しない）ことを固める。
+
+    1サイトだけ触るツールで `with Browsers() as browsers:` を挟ませたくない。
+    Salesforce の `with Sandbox() as sf:` と同じ形で始められるようにする。
+    """
+
+    @staticmethod
+    def _no_real_browser(monkeypatch):
+        """BrowserSession の起動・終了だけ差し替える（既存テストと同じやり方）。"""
+        closed = []
+        monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
+        monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *a: closed.append(self))
+        return closed
+
+    def test_creates_its_own_browser_when_session_is_omitted(self, monkeypatch):
+        """session を省略すると、自分でブラウザを起動する。"""
+        self._no_real_browser(monkeypatch)
+
+        class Kintai(Site):
+            NAME = "kintai"
+            BASE_URL = "https://kintai.example.co.jp"
+
+        with Kintai() as kintai:
+            assert isinstance(kintai.session, BrowserSession)
+            assert kintai.BASE_URL == "https://kintai.example.co.jp"
+
+    def test_closes_the_browser_it_started(self, monkeypatch):
+        """自分で起動したブラウザは、with を抜けるときに閉じる。"""
+        closed = self._no_real_browser(monkeypatch)
+
+        class Kintai(Site):
+            NAME = "kintai"
+
+        with Kintai():
+            assert not closed, "with の中で閉じてしまっている"
+
+        assert closed, "自分で起動したブラウザを閉じていない"
+
+    def test_does_not_close_a_session_it_was_given(self, monkeypatch):
+        """Browsers から渡されたセッションは閉じない（持ち主は Browsers）。"""
+        closed = self._no_real_browser(monkeypatch)
+
+        class Kintai(Site):
+            NAME = "kintai"
+
+        with Browsers() as browsers:
+            kintai = browsers.launch(Kintai)
+            kintai.close()
+            assert not closed, "Browsers の持ち物を閉じてしまっている"
+
+        assert closed, "Browsers を抜けたのに閉じていない"
+
+    def test_close_is_safe_to_call_twice(self, monkeypatch):
+        """close() を2回呼んでも落ちない。"""
+        self._no_real_browser(monkeypatch)
+
+        class Kintai(Site):
+            NAME = "kintai"
+
+        kintai = Kintai()
+        kintai.close()
+        kintai.close()

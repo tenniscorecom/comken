@@ -7,18 +7,19 @@ config.ini ではなくこのファイル（src/ 内の Python）で持つ。
 
 ブラウザ操作を使わないプロジェクトでは、このファイルは削除してよい。
 
-サイトが複数あるときは、サイトごとにクラスを分ける。
+サイトが複数あるときは、サイトごとに Site サブクラスを src/site.py に作って、
+それぞれ OPTIONS をこの BrowserOptions のサブクラスに向ける。
 起動オプション・ダウンロード先・ログイン状態はサイトごとに独立するので、
 片方の設定がもう片方へ影響しない。
 
 使い方（呼ぶ側）:
     from comken.toolbox.browser import Browsers
 
-    from .browser_options import KintaiOptions
+    from .site import Kintai
 
     with Browsers() as browsers:
-        kintai = browsers.launch("kintai", KintaiOptions)
-        kintai.open("https://kintai.example.co.jp")
+        kintai = browsers.launch(Kintai)
+        kintai.session.open(kintai.BASE_URL)
 """
 
 from comken.toolbox.browser import BrowserOptions

@@ -32,11 +32,13 @@ Edge を自動で動かして、社内システムから情報を取ったり入
 
 | | Salesforce | ブラウザ |
 |---|---|---|
-| 土台（直接は使わない） | `SalesforceBase` | `SitePage` |
-| 対象ごとのクラス | `Sandbox(SalesforceBase)` | `KintaiPage(SitePage)` |
-| 固有の値の置き場 | `DOMAIN_URL` / `CREDENTIAL_PREFIX` | `BASE_URL` / セレクター |
+| 土台（直接は使わない） | `SalesforceBase` | `Site` |
+| 対象ごとのクラス | `Sandbox(SalesforceBase)` | `Kintai(Site)` |
+| 固有の値の置き場 | `DOMAIN_URL` / `CREDENTIAL_PREFIX` | `NAME` / `BASE_URL` / `OPTIONS` |
 | 機能は継承せず持たせる | `.auth` / `.report` / `.metrics` | `.session`（`BrowserSession`） |
+| 単体で使う入口 | `with Sandbox() as sf:` | `with Kintai() as kintai:` |
 | 複数まとめて扱う入口 | `sites/` の `site_for()` | `Browsers` |
+| 画面／機能の分割 | `.report` / `.metrics` | `Page` のサブクラス |
 
 **ブラウザ自体は継承しない。** サイトクラスがブラウザを継承する書き方
 （`class 勤怠(Chrome)` のような形）もあるが、そうすると
@@ -48,20 +50,32 @@ Edge を自動で動かして、社内システムから情報を取ったり入
 
 ## まず動かす
 
-```python
-from comken.toolbox.browser import Browsers
+1サイトだけなら、**サイトクラスをそのまま `with` に置く**。
 
-from .browser_options import KintaiOptions
-from .pages.login_page import LoginPage
+```python
+from .sites.kintai import Kintai
 
 
 def main() -> None:
-    with Browsers() as browsers:
-        kintai = browsers.launch("kintai", KintaiOptions)
-
-        home = LoginPage(kintai).login("user01", "password")
-        print(home.unfilled_days())
+    with Kintai() as 勤怠:
+        print(勤怠.login("user01", "password").unfilled_days())
 ```
+
+`勤怠.login(...)` が返すのはログイン後の画面クラスなので、**そのまま次の操作へ繋がる**。
+`LoginPage(session)` のように画面クラスへセッションを渡し直す必要はない。
+Salesforce の `with Sandbox() as sf:` と同じ形。
+
+途中の画面を変数に取れば、そこから何度も操作できる。
+
+```python
+with Kintai() as 勤怠:
+    ホーム = 勤怠.login("user01", "password")
+    未入力 = ホーム.unfilled_days()
+    ホーム.勤怠入力(未入力[0]).保存()
+```
+
+**変数は「そこから何度も呼ぶとき」だけ作る。** 一度きりなら繋げて書く。
+どの画面にいるかはメソッド名と戻り値の型で分かるので、変数名で管理しなくてよい。
 
 `with` を抜けるとブラウザは必ず閉じる。途中でエラーが出ても閉じる。
 
@@ -69,7 +83,7 @@ def main() -> None:
 
 ```python
 browsers = Browsers()
-browsers.launch("kintai")   # ← BrowsersNotStartedError（ブラウザは起動しない）
+browsers.launch(Kintai)   # ← BrowsersNotStartedError（ブラウザは起動しない）
 ```
 
 `with` を忘れるとエラーで落ちたときにブラウザのプロセスが残り続け、
@@ -84,14 +98,16 @@ browsers.launch("kintai")   # ← BrowsersNotStartedError（ブラウザは起�
 
 ```python
 with Browsers() as browsers:
-    kintai = browsers.launch("kintai", KintaiOptions)
-    keiri = browsers.launch("keiri", KeiriOptions)      # ← 増えるのはこの行だけ
+    勤怠 = browsers.launch(Kintai)
+    経理 = browsers.launch(Keiri)          # ← 増えるのはこの行だけ
 
-    kintai_days = KintaiFlow(kintai).unfilled_days()
-    keiri_rows = KeiriFlow(keiri).pending_rows()
+    未入力 = 勤怠.login(USER, PW).unfilled_days()
+    未処理 = 経理.login(USER, PW).pending_rows()
 ```
 
-`launch` に付けた名前（`"kintai"`）は、次の3つを分ける鍵になる:
+サイトが2つ以上になったら `Browsers` を使う。1つだけなら `with Kintai() as 勤怠:` で足りる。
+
+サイトクラスの `NAME`（`"kintai"`）は、次の3つを分ける鍵になる:
 
 | 分かれるもの | 置き場所 |
 |---|---|
@@ -102,10 +118,20 @@ with Browsers() as browsers:
 同じサイトに2つのアカウントでログインしたいときも、名前を分ければ混ざらない:
 
 ```python
+class KintaiAdmin(Kintai):
+    NAME = "kintai_admin"
+
+
+class KintaiMember(Kintai):
+    NAME = "kintai_member"
+
+
 with Browsers() as browsers:
-    admin = browsers.launch("kintai_admin", KintaiOptions)
-    member = browsers.launch("kintai_member", KintaiOptions)
+    admin = browsers.launch(KintaiAdmin)
+    member = browsers.launch(KintaiMember)
 ```
+
+`NAME` だけ変えたサブクラスを作る。URL もセレクターも継承されるので、書くのは1行。
 
 ---
 
@@ -118,14 +144,14 @@ with Browsers() as browsers:
 
 ```python
 with Browsers() as browsers:
-    kintai = browsers.launch("kintai", KintaiOptions)
-    keiri = browsers.launch("keiri", KeiriOptions)
+    勤怠 = browsers.launch(Kintai)
+    経理 = browsers.launch(Keiri)
 
-    勤怠 = browsers.run_task(lambda: KintaiFlow(kintai).unfilled_days(), label="勤怠")
+    勤怠タスク = browsers.run_task(lambda: 勤怠.login(USER, PW).unfilled_days(), label="勤怠")
 
-    keiri_rows = KeiriFlow(keiri).pending_rows()   # 勤怠の読み込み中にこちらが進む
+    未処理 = 経理.login(USER, PW).pending_rows()   # 勤怠の読み込み中にこちらが進む
 
-    kintai_days = 勤怠.wait()                       # 戻って結果を受け取る
+    未入力 = 勤怠タスク.wait()                       # 戻って結果を受け取る
 ```
 
 実際にこうなる（勤怠の open が8秒かかる場合）:
@@ -161,9 +187,9 @@ with Browsers() as browsers:
 1つにまとめられる。やっていることは同じ。
 
 ```python
-kintai_days, keiri_rows = browsers.parallel(
-    lambda: KintaiFlow(kintai).unfilled_days(),
-    lambda: KeiriFlow(keiri).pending_rows(),
+未入力, 未処理 = browsers.parallel(
+    lambda: 勤怠.login(USER, PW).unfilled_days(),
+    lambda: 経理.login(USER, PW).pending_rows(),
 )
 ```
 
@@ -177,9 +203,9 @@ kintai_days, keiri_rows = browsers.parallel(
 早く気づけるほうが安全なため。
 
 ```python
-勤怠 = browsers.run_task(lambda: KintaiFlow(kintai).unfilled_days())
-KeiriFlow(keiri).pending_rows()      # ⭕ 別のブラウザなので問題ない
-KintaiPage(kintai).open_menu()       # ❌ 裏で使っている勤怠を触っている
+勤怠タスク = browsers.run_task(lambda: 勤怠.login(USER, PW).unfilled_days())
+経理.login(USER, PW).pending_rows()   # ⭕ 別のブラウザなので問題ない
+勤怠.login(USER, PW)                  # ❌ 裏で使っている勤怠を触っている
 ```
 
 `wait()` を呼び忘れたまま `with` を抜けても、ブラウザを閉じる前に処理の終了は待つ。
@@ -194,12 +220,17 @@ KintaiPage(kintai).open_menu()       # ❌ 裏で使っている勤怠を触っ�
 ```
 src/
   browser_options.py        ← サイトごとのオプションクラスを足す
+  sites/
+    kintai.py               ← サイトクラス（NAME・BASE_URL・入口の操作）
   pages/
     kintai/
-      kintai_page.py        ← このサイト共通（BASE_URL・ログイン）
+      kintai_page.py        ← このサイトの画面に共通（セレクター・共通処理）
       login_page.py         ← 画面ごと
       home_page.py
 ```
+
+**サイトクラスと画面共通クラスは別物。** サイトクラスは「どのサイトか」を表し、
+画面共通クラスは「その画面群に共通の操作」を持つ。
 
 ### 2. オプションクラスを足す
 
@@ -214,14 +245,40 @@ class KintaiOptions(BrowserOptions):
 
 設定できる項目は `print(KintaiOptions())` で一覧できる（既定値との差分に `*` が付く）。
 
-### 3. サイト共通クラスを作る
+### 3. サイトクラスを作る
+
+**ここが利用側の入口になる。** 固有の値と、最初にやる操作をここへ集める。
+
+```python
+from comken.toolbox.browser import Site
+
+from ..browser_options import KintaiOptions
+from ..pages.kintai.login_page import LoginPage
+
+
+class Kintai(Site):
+    """勤怠システム。"""
+
+    NAME = "kintai"
+    BASE_URL = "https://kintai.example.co.jp"
+    OPTIONS = KintaiOptions
+
+    def login(self, user_id: str, password: str) -> "HomePage":
+        """ログインして、ログイン後の画面を返す。"""
+        return LoginPage(self.session).login(user_id, password)
+```
+
+**入口の操作だけをサイトクラスに置く。** 画面ごとの操作は画面クラスへ。
+ここに全部書くと、画面が増えるたびにこのクラスが膨らむ。
+
+### 4. 画面に共通のクラスを作る
 
 ```python
 from comken.toolbox.browser import Locator, SitePage
 
 
 class KintaiPage(SitePage):
-    """勤怠システム共通。全画面クラスはこれを継承する。"""
+    """勤怠システムの画面に共通。全画面クラスはこれを継承する。"""
 
     BASE_URL = "https://kintai.example.co.jp"
 
@@ -232,7 +289,7 @@ class KintaiPage(SitePage):
         return self.read_text(self.ERROR_MESSAGE)
 ```
 
-### 4. 画面ごとのクラスを作る
+### 5. 画面ごとのクラスを作る
 
 セレクターは**クラスの先頭にまとめる**。画面の HTML が変わったとき、直す場所が一箇所に集まる。
 
@@ -483,14 +540,14 @@ with Browsers() as browsers:
 
 ```python
 with Browsers() as browsers:
-    kintai = browsers.launch("kintai", KintaiOptions)
-    keiri = browsers.launch("keiri", KeiriOptions)
+    勤怠 = browsers.launch(Kintai)
+    経理 = browsers.launch(Keiri)
 
-    勤怠 = browsers.run_task(lambda: KintaiFlow(kintai).unfilled_days(), label="勤怠")
+    勤怠タスク = browsers.run_task(lambda: 勤怠.login(USER, PW).unfilled_days(), label="勤怠")
 
-    keiri_rows = KeiriFlow(keiri).pending_rows()   # 勤怠の読み込み中にこちらが進む
+    未処理 = 経理.login(USER, PW).pending_rows()   # 勤怠の読み込み中にこちらが進む
 
-    kintai_days = 勤怠.wait()                       # 戻って結果を受け取る
+    未入力 = 勤怠タスク.wait()                       # 戻って結果を受け取る
 ```
 
 重い画面を待っている間、ブラウザは何も消費しないので他方がその時間を使えます。
@@ -504,9 +561,9 @@ with Browsers() as browsers:
 **全部同時でよければ** `parallel` が短く書けます（`start` と `wait` を並べるのと同じ）:
 
 ```python
-kintai_days, keiri_rows = browsers.parallel(
-    lambda: KintaiFlow(kintai).unfilled_days(),
-    lambda: KeiriFlow(keiri).pending_rows(),
+未入力, 未処理 = browsers.parallel(
+    lambda: 勤怠.login(USER, PW).unfilled_days(),
+    lambda: 経理.login(USER, PW).pending_rows(),
 )
 ```
 

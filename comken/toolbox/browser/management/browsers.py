@@ -5,27 +5,28 @@
 このファイルは管理の入口だけを担当する。1つのブラウザーの起動・操作・終了は
 ``sessions.py``、バックグラウンド処理の結果管理は ``tasks.py`` が担う。
 
-サイトが1つでも複数でも、書き方は変わらない:
+サイトが1つでも複数でも、書き方は変わらない。`Site` サブクラスを `launch` に
+渡せば、戻り値から `.session` 経由で BrowserSession に繋がる:
 
     with Browsers() as browsers:
-        kintai = browsers.launch("kintai", KintaiOptions)
-        data = KintaiFlow(kintai).fetch()
+        kintai = browsers.launch(Kintai)
+        data = KintaiFlow(kintai.session).fetch()
 
 サイトを増やすときは launch を1行足すだけでよい:
 
     with Browsers() as browsers:
-        kintai = browsers.launch("kintai", KintaiOptions)
-        keiri = browsers.launch("keiri", KeiriOptions)      # ← 増えるのはこの行だけ
+        kintai = browsers.launch(Kintai)
+        keiri = browsers.launch(Keiri)      # ← 増えるのはこの行だけ
 
-        kintai_data = KintaiFlow(kintai).fetch()
-        keiri_data = KeiriFlow(keiri).fetch()
+        kintai_data = KintaiFlow(kintai.session).fetch()
+        keiri_data = KeiriFlow(keiri.session).fetch()
 
 **書いた順に上から動く（同期）のが基本。** 待っている間に別のことを進めたいときだけ、
 run_task() で先に始めておき、結果が必要になったところで wait() で受け取る:
 
-        勤怠 = browsers.run_task(lambda: KintaiFlow(kintai).fetch())  # 始めるだけ。待たない
-        keiri_data = KeiriFlow(keiri).fetch()                      # その間にこちらを進める
-        kintai_data = 勤怠.wait()                                  # 戻って結果を受け取る
+        勤怠 = browsers.run_task(lambda: KintaiFlow(kintai.session).fetch())  # 始めるだけ。待たない
+        keiri_data = KeiriFlow(keiri.session).fetch()                      # その間にこちらを進める
+        kintai_data = 勤怠.wait()                                          # 戻って結果を受け取る
 
 重い画面の読み込みを待っている間、ブラウザは何も消費していないので、
 その時間で別のサイトの操作が進む。読み込みが終われば、そちらも自分で続きを始める。
@@ -34,8 +35,8 @@ run_task() で先に始めておき、結果が必要になったところで wa
 （start して wait するのと同じことをしている）:
 
         kintai_data, keiri_data = browsers.parallel(
-            lambda: KintaiFlow(kintai).fetch(),
-            lambda: KeiriFlow(keiri).fetch(),
+            lambda: KintaiFlow(kintai.session).fetch(),
+            lambda: KeiriFlow(keiri.session).fetch(),
         )
 
 ダウンロードフォルダとログイン状態はセッション名ごとに自動で分かれるので、
@@ -57,9 +58,11 @@ from ....exceptions import (
     BrowsersNotStartedError,
     SessionNameConflictError,
     SessionNotFoundError,
+    SiteConfigError,
 )
 from ..download import DownloadDir
 from ..options import BrowserOptions
+from ..site import Site
 from .sessions import BrowserSession
 from .tasks import BackgroundTask
 
@@ -127,11 +130,49 @@ class Browsers:
 
     def launch(
         self,
+        site: type[Site],
+        download_dir: str | Path | None = None,
+    ) -> Site:
+        """サイトクラスを渡してブラウザを1つ起動する（推奨経路）。
+
+        サブクラスの NAME と OPTIONS を読んで、内部で `launch_session()` を
+        呼び出す。呼び出し側に「名前」と「オプション」を別々に書かせないことで、
+        取り違えが起きにくく、固有の値が1か所に集まる。
+
+        Args:
+            site: 起動する Site サブクラス。`NAME` が必須（空だと SiteConfigError）。
+            download_dir: ダウンロード先。省略時は OPTIONS.DOWNLOAD_DIR/<NAME>、
+                          それも未設定なら一時フォルダを作り、終了時に削除する。
+
+        Returns:
+            起動済みの Site インスタンス。`.session` で BrowserSession に繋がる。
+
+        Raises:
+            SiteConfigError: サブクラスに NAME が設定されていない場合。
+            SessionNameConflictError: 同じ NAME ですでに起動している場合。
+            DriverStartError: ブラウザを起動できなかった場合。
+        """
+        if not site.NAME:
+            raise SiteConfigError(site, "NAME")
+        operation = f"launch({site.__name__})"
+        self._require_in_with(operation)
+        session = self.launch_session(site.NAME, site.OPTIONS, download_dir)
+        instance = site(session)
+        # SitePage.BASE_URL が未設定のときの参照先。launch_session() から直接
+        # 起動したセッションには紐付かない（Site 経由で起動したときだけ設定する）
+        session._site = instance
+        return instance
+
+    def launch_session(
+        self,
         name: str,
         options: type[BrowserOptions] | BrowserOptions | None = None,
         download_dir: str | Path | None = None,
     ) -> BrowserSession:
-        """名前を付けてブラウザを1つ起動する。
+        """名前とオプションを直接渡してブラウザを1つ起動する（低レベル経路）。
+
+        `launch(Site)` の中から呼ばれる雑務用。Site サブクラスが用意できない
+        場面（テスト・一時的な検証）で使う。通常は `launch(Site)` を使う。
 
         ダウンロードフォルダとログイン状態はこの名前ごとに分かれる。
         同じサイトへ2つのアカウントでログインしたい場合も、
@@ -153,7 +194,7 @@ class Browsers:
             SessionNameConflictError: 同じ名前ですでに起動している場合。
             DriverStartError: ブラウザを起動できなかった場合。
         """
-        self._require_in_with(f"launch({name!r})")
+        self._require_in_with(f"launch_session({name!r})")
         if name in self._sessions:
             raise SessionNameConflictError(name)
 

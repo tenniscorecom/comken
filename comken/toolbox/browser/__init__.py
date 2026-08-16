@@ -5,14 +5,15 @@
     from comken.toolbox.browser import Browsers
 
     with Browsers() as browsers:
-        kintai = browsers.launch("kintai", KintaiOptions)
-        data = KintaiFlow(kintai).fetch()
+        kintai = browsers.launch(Kintai)
+        data = KintaiFlow(kintai.session).fetch()
 
 サイトを増やすときは launch を1行足す。同時に走らせたくなったら parallel で包む。
 詳しくは docs/browser.md を参照。
 
     Browsers        複数サイトのブラウザをまとめて起動・終了する（入口）
-    BrowserSession  1サイト分のブラウザ。Browsers.launch() が返す
+    BrowserSession  1サイト分のブラウザ。launch(Site) では Site.session 経由で扱う
+    Site            1サイトの入口。Browsers.launch() に渡す土台クラス
     BrowserOptions  起動オプション。サイトごとにサブクラスを作って上書きする
     Page / SitePage 1画面ぶんの操作をまとめる基底クラス
     Locator         セレクター（Locator.id(...) / .css(...) など）
@@ -25,10 +26,12 @@ from .locator import Locator
 from .management import BackgroundTask, Browsers, BrowserSession
 from .options import BrowserOptions
 from .page import Page, SitePage
+from .site import Site
 
 __all__ = [
     "Browsers",
     "BrowserSession",
+    "Site",
     "BrowserOptions",
     "Page",
     "SitePage",
@@ -44,8 +47,8 @@ _REMOVED_NAMES = {
     "EdgeDriver": (
         "Browsers に変わりました。1サイトでも複数サイトでも同じ書き方になります。\n"
         "  with Browsers() as browsers:\n"
-        '      kintai = browsers.launch("kintai", KintaiOptions)\n'
-        "      kintai.open(...)"
+        "      kintai = browsers.launch(Kintai)\n"
+        "      kintai.session.open(...)"
     ),
     "BasePage": (
         "Page に変わりました。セレクターは Locator にまとめ、\n"

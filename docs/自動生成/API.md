@@ -2609,7 +2609,7 @@ class SessionNameConflictError(BrowserError):
 
 同じ名前で2回 `launch` した
 
-発生箇所: Browsers.launch()
+発生箇所: Browsers.launch() / Browsers.launch_session()
 
 対処:
     名前を変える（同一サイトの別アカウントなら `kintai_a` / `kintai_b` など）
@@ -2639,6 +2639,31 @@ class SessionNotFoundError(BrowserError):
 
 ```text
 def __init__(self, name: str, launched: list[str]) -> None:
+```
+
+### `SiteConfigError`
+
+```text
+class SiteConfigError(BrowserError):
+```
+
+#### 説明
+
+`Site` サブクラスの設定が不足している
+
+ブラウザを起動する前に、必要なクラス定数が設定されていないとここで止まる。
+起動してから「どのサイトか分からない」では遅いので、設定不足は呼び出し時点で
+確実に発見する。
+
+発生箇所: Browsers.launch(Site)
+
+対処:
+    サブクラスに NAME を定義する（BASE_URL / OPTIONS も同じ）
+
+#### `__init__`
+
+```text
+def __init__(self, site_cls: type, missing: str) -> None:
 ```
 
 ### `ElementNotFoundError`
@@ -3436,12 +3461,42 @@ def __init__(self) -> None:
 #### `launch`
 
 ```text
-def launch(self, name: str, options: type[BrowserOptions] | BrowserOptions | None=None, download_dir: str | Path | None=None) -> BrowserSession:
+def launch(self, site: type[Site], download_dir: str | Path | None=None) -> Site:
 ```
 
 ##### 説明
 
-名前を付けてブラウザを1つ起動する。
+サイトクラスを渡してブラウザを1つ起動する（推奨経路）。
+
+サブクラスの NAME と OPTIONS を読んで、内部で `launch_session()` を
+呼び出す。呼び出し側に「名前」と「オプション」を別々に書かせないことで、
+取り違えが起きにくく、固有の値が1か所に集まる。
+
+Args:
+    site: 起動する Site サブクラス。`NAME` が必須（空だと SiteConfigError）。
+    download_dir: ダウンロード先。省略時は OPTIONS.DOWNLOAD_DIR/<NAME>、
+                  それも未設定なら一時フォルダを作り、終了時に削除する。
+
+Returns:
+    起動済みの Site インスタンス。`.session` で BrowserSession に繋がる。
+
+Raises:
+    SiteConfigError: サブクラスに NAME が設定されていない場合。
+    SessionNameConflictError: 同じ NAME ですでに起動している場合。
+    DriverStartError: ブラウザを起動できなかった場合。
+
+#### `launch_session`
+
+```text
+def launch_session(self, name: str, options: type[BrowserOptions] | BrowserOptions | None=None, download_dir: str | Path | None=None) -> BrowserSession:
+```
+
+##### 説明
+
+名前とオプションを直接渡してブラウザを1つ起動する（低レベル経路）。
+
+`launch(Site)` の中から呼ばれる雑務用。Site サブクラスが用意できない
+場面（テスト・一時的な検証）で使う。通常は `launch(Site)` を使う。
 
 ダウンロードフォルダとログイン状態はこの名前ごとに分かれる。
 同じサイトへ2つのアカウントでログインしたい場合も、
@@ -3747,6 +3802,50 @@ selenium の WebDriver そのもの。
 
 ここから直接操作すると、同時操作の見張り（operating）を通らない。
 parallel の中で使う場合、他のスレッドと衝突しないことは呼び出し側の責任になる。
+
+### `Site`
+
+```text
+class Site:
+```
+
+#### 説明
+
+1サイト分の入口。サイトごとにサブクラスを作って固有の値を置く。
+
+サブクラスで NAME / BASE_URL / OPTIONS を上書きする。`session` 以外の状態
+（current_url や cookie など）は持たない — 同じサイトを2アカウントで並列に
+開けるようにするため。
+
+Attributes:
+    session: このサイトに紐づく BrowserSession。Page に渡して操作する。
+
+#### `__init__`
+
+```text
+def __init__(self, session: BrowserSession | None=None) -> None:
+```
+
+##### 説明
+
+Args:
+    session: 使うブラウザ。**省略するとこのサイト専用に1つ起動する**
+        （`with Kintai() as kintai:` の形）。`Browsers.launch()` から
+        作られるときは、そこで起動済みのものが渡る。
+
+#### `close`
+
+```text
+def close(self) -> None:
+```
+
+##### 説明
+
+自分で起動したブラウザを閉じる。
+
+`Browsers.launch()` から作られた場合は**何もしない**。
+そのブラウザの持ち主は `Browsers` の方で、閉じるのもそちらの仕事。
+2回呼んでも安全。
 
 ### `BrowserOptions`
 
@@ -4116,6 +4215,10 @@ BASE_URL とログインなど、そのサイトのどの画面でも使う処�
     Page          … ブラウザ操作（click / input / select ...）
       └ SitePage  … サイト共通（BASE_URL / ログイン / 共通ヘッダー）
           └ LoginPage / HomePage / ...   … 各画面
+
+BASE_URL は次の順で解決する:
+  1. 自身（または親クラス）に `BASE_URL` が定義されていればそれ
+  2. 無ければ、`browsers.launch(Site)` で起動した `Site` の `BASE_URL`
 
 #### `go`
 

@@ -326,6 +326,10 @@ class SitePage(Page):
         Page          … ブラウザ操作（click / input / select ...）
           └ SitePage  … サイト共通（BASE_URL / ログイン / 共通ヘッダー）
               └ LoginPage / HomePage / ...   … 各画面
+
+    BASE_URL は次の順で解決する:
+      1. 自身（または親クラス）に `BASE_URL` が定義されていればそれ
+      2. 無ければ、`browsers.launch(Site)` で起動した `Site` の `BASE_URL`
     """
 
     BASE_URL: str = ""
@@ -336,5 +340,21 @@ class SitePage(Page):
         Args:
             path: BASE_URL からの相対パス（例: "/login"）。省略時は BASE_URL を開く。
         """
-        self.session.open(self.BASE_URL + path)
+        self.session.open(self._base_url + path)
         return self
+
+    @property
+    def _base_url(self) -> str:
+        """画面クラス側の BASE_URL を、なければ Site.BASE_URL から解決する。
+
+        クラス変数の解決は Python の MRO に任せる（`type(self).BASE_URL` ではなく
+        `self.__class__.BASE_URL` を使う）。SitePage 側で必ず定義する設計もあるが、
+        それでは Site クラスの BASE_URL を取りに行く経路が消えるため、ここでは
+        「未設定なら上位 Site を見る」形にしている。
+        """
+        if self.__class__.BASE_URL:
+            return self.__class__.BASE_URL
+        site = getattr(self.session, "_site", None)
+        if site is not None:
+            return site.BASE_URL
+        return ""

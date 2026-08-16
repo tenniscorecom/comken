@@ -62,6 +62,7 @@ ComkenError
 │   ├── ConcurrentSessionUseError
 │   ├── SessionNameConflictError
 │   ├── SessionNotFoundError
+│   ├── SiteConfigError
 │   ├── ElementNotFoundError
 │   ├── PopupTabNotOpenedError
 │   └── DownloadTimeoutError
@@ -123,6 +124,7 @@ from .browser import (
     SessionNameConflictError,
     SessionNotFoundError,
     SessionNotStartedError,
+    SiteConfigError,
 )
 from .column import (
     ColumnNotFoundError,
@@ -304,6 +306,7 @@ __all__ = [
     "ConcurrentSessionUseError",
     "SessionNameConflictError",
     "SessionNotFoundError",
+    "SiteConfigError",
     "ElementNotFoundError",
     "PopupTabNotOpenedError",
     "DownloadTimeoutError",
