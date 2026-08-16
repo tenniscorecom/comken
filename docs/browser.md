@@ -57,21 +57,21 @@ from .sites.kintai import Kintai
 
 
 def main() -> None:
-    with Kintai() as 勤怠:
-        print(勤怠.login("user01", "password").unfilled_days())
+    with Kintai() as kintai:
+        print(kintai.login("user01", "password").unfilled_days())
 ```
 
-`勤怠.login(...)` が返すのはログイン後の画面クラスなので、**そのまま次の操作へ繋がる**。
+`kintai.login(...)` が返すのはログイン後の画面クラスなので、**そのまま次の操作へ繋がる**。
 `LoginPage(session)` のように画面クラスへセッションを渡し直す必要はない。
 Salesforce の `with Sandbox() as sf:` と同じ形。
 
 途中の画面を変数に取れば、そこから何度も操作できる。
 
 ```python
-with Kintai() as 勤怠:
-    ホーム = 勤怠.login("user01", "password")
-    未入力 = ホーム.unfilled_days()
-    ホーム.勤怠入力(未入力[0]).保存()
+with Kintai() as kintai:
+    home = kintai.login("user01", "password")
+    unfilled = home.unfilled_days()
+    home.enter_attendance(unfilled[0]).save()
 ```
 
 **変数は「そこから何度も呼ぶとき」だけ作る。** 一度きりなら繋げて書く。
@@ -98,14 +98,14 @@ browsers.launch(Kintai)   # ← BrowsersNotStartedError（ブラウザは起動�
 
 ```python
 with Browsers() as browsers:
-    勤怠 = browsers.launch(Kintai)
-    経理 = browsers.launch(Keiri)          # ← 増えるのはこの行だけ
+    kintai = browsers.launch(Kintai)
+    keiri = browsers.launch(Keiri)          # ← 増えるのはこの行だけ
 
-    未入力 = 勤怠.login(USER, PW).unfilled_days()
-    未処理 = 経理.login(USER, PW).pending_rows()
+    unfilled = kintai.login(USER, PW).unfilled_days()
+    pending = keiri.login(USER, PW).pending_rows()
 ```
 
-サイトが2つ以上になったら `Browsers` を使う。1つだけなら `with Kintai() as 勤怠:` で足りる。
+サイトが2つ以上になったら `Browsers` を使う。1つだけなら `with Kintai() as kintai:` で足りる。
 
 サイトクラスの `NAME`（`"kintai"`）は、次の3つを分ける鍵になる:
 
@@ -144,14 +144,14 @@ with Browsers() as browsers:
 
 ```python
 with Browsers() as browsers:
-    勤怠 = browsers.launch(Kintai)
-    経理 = browsers.launch(Keiri)
+    kintai = browsers.launch(Kintai)
+    keiri = browsers.launch(Keiri)
 
-    勤怠タスク = browsers.run_task(lambda: 勤怠.login(USER, PW).unfilled_days(), label="勤怠")
+    kintai_task = browsers.run_task(lambda: kintai.login(USER, PW).unfilled_days(), label="勤怠")
 
-    未処理 = 経理.login(USER, PW).pending_rows()   # 勤怠の読み込み中にこちらが進む
+    pending = keiri.login(USER, PW).pending_rows()   # 勤怠の読み込み中にこちらが進む
 
-    未入力 = 勤怠タスク.wait()                       # 戻って結果を受け取る
+    unfilled = kintai_task.wait()                       # 戻って結果を受け取る
 ```
 
 実際にこうなる（勤怠の open が8秒かかる場合）:
@@ -187,9 +187,9 @@ with Browsers() as browsers:
 1つにまとめられる。やっていることは同じ。
 
 ```python
-未入力, 未処理 = browsers.parallel(
-    lambda: 勤怠.login(USER, PW).unfilled_days(),
-    lambda: 経理.login(USER, PW).pending_rows(),
+unfilled, pending = browsers.parallel(
+    lambda: kintai.login(USER, PW).unfilled_days(),
+    lambda: keiri.login(USER, PW).pending_rows(),
 )
 ```
 
@@ -203,9 +203,9 @@ with Browsers() as browsers:
 早く気づけるほうが安全なため。
 
 ```python
-勤怠タスク = browsers.run_task(lambda: 勤怠.login(USER, PW).unfilled_days())
-経理.login(USER, PW).pending_rows()   # ⭕ 別のブラウザなので問題ない
-勤怠.login(USER, PW)                  # ❌ 裏で使っている勤怠を触っている
+kintai_task = browsers.run_task(lambda: kintai.login(USER, PW).unfilled_days())
+keiri.login(USER, PW).pending_rows()   # ⭕ 別のブラウザなので問題ない
+kintai.login(USER, PW)                  # ❌ 裏で使っている勤怠を触っている
 ```
 
 `wait()` を呼び忘れたまま `with` を抜けても、ブラウザを閉じる前に処理の終了は待つ。
@@ -426,10 +426,10 @@ def ensure_login(self, user_id: str, password: str) -> "HomePage":
 from comken.core import move_file
 
 with Browsers() as browsers:
-    kintai = browsers.launch("kintai", KintaiOptions)
+    kintai = browsers.launch(Kintai)
 
-    HomePage(kintai).export_csv()
-    files = kintai.download_dir.wait()          # .crdownload が消えるまで待つ
+    HomePage(kintai.session).export_csv()
+    files = kintai.session.download_dir.wait()          # .crdownload が消えるまで待つ
     move_file(files[0], r"C:\作業\output")       # with の中で移動する
 ```
 
@@ -517,19 +517,20 @@ class KintaiOptions(BrowserOptions):
 from comken.toolbox.browser import Browsers
 
 with Browsers() as browsers:
-    kintai = browsers.launch("kintai", KintaiOptions)
-    keiri = browsers.launch("keiri", KeiriOptions)      # ← 増えるのはこの行だけ
+    kintai = browsers.launch(Kintai)
+    keiri = browsers.launch(Keiri)      # ← 増えるのはこの行だけ
 
-    kintai_days = KintaiFlow(kintai).unfilled_days()
-    keiri_rows = KeiriFlow(keiri).pending_rows()
+    kintai_days = KintaiFlow(kintai.session).unfilled_days()
+    keiri_rows = KeiriFlow(keiri.session).pending_rows()
 ```
 
-`launch` に付けた名前で、ダウンロードフォルダ・ログイン状態・ログのファイル名が自動的に分かれる。
-同じサイトを2アカウントで開く場合も、名前を変えれば混ざらない。
+`Site.NAME` が、ダウンロードフォルダ・ログイン状態・ログのファイル名を分ける鍵になる。
+同じサイトを2アカウントで開く場合も、NAME を変えれば混ざらない。
 
 | メソッド | 何をするか |
 |---|---|
-| `launch(name, options=None, download_dir=None)` | 名前を付けてブラウザを1つ起動し、`BrowserSession` を返す |
+| `launch(Site, download_dir=None)` | Site サブクラスを渡してブラウザを1つ起動し、Site インスタンスを返す |
+| `launch_session(name, options=None, download_dir=None)` | 低レベル経路。`Browsers` を使わずに名前とオプションで直接起動する |
 | `start(処理, label="")` | 処理を裏で始めて、すぐ次の行へ進む。`BackgroundTask` を返す |
 | `parallel(*tasks)` | 複数の処理を同時に実行し、渡した順に結果を返す |
 | `names` | 起動済みのセッション名（起動した順） |
@@ -540,14 +541,14 @@ with Browsers() as browsers:
 
 ```python
 with Browsers() as browsers:
-    勤怠 = browsers.launch(Kintai)
-    経理 = browsers.launch(Keiri)
+    kintai = browsers.launch(Kintai)
+    keiri = browsers.launch(Keiri)
 
-    勤怠タスク = browsers.run_task(lambda: 勤怠.login(USER, PW).unfilled_days(), label="勤怠")
+    kintai_task = browsers.run_task(lambda: kintai.login(USER, PW).unfilled_days(), label="勤怠")
 
-    未処理 = 経理.login(USER, PW).pending_rows()   # 勤怠の読み込み中にこちらが進む
+    pending = keiri.login(USER, PW).pending_rows()   # 勤怠の読み込み中にこちらが進む
 
-    未入力 = 勤怠タスク.wait()                       # 戻って結果を受け取る
+    unfilled = kintai_task.wait()                       # 戻って結果を受け取る
 ```
 
 重い画面を待っている間、ブラウザは何も消費しないので他方がその時間を使えます。
@@ -561,9 +562,9 @@ with Browsers() as browsers:
 **全部同時でよければ** `parallel` が短く書けます（`start` と `wait` を並べるのと同じ）:
 
 ```python
-未入力, 未処理 = browsers.parallel(
-    lambda: 勤怠.login(USER, PW).unfilled_days(),
-    lambda: 経理.login(USER, PW).pending_rows(),
+unfilled, pending = browsers.parallel(
+    lambda: kintai.login(USER, PW).unfilled_days(),
+    lambda: keiri.login(USER, PW).pending_rows(),
 )
 ```
 
@@ -650,10 +651,10 @@ from comken.core import move_file
 from comken.toolbox.browser import Browsers
 
 with Browsers() as browsers:
-    kintai = browsers.launch("kintai", KintaiOptions)
+    kintai = browsers.launch(Kintai)
 
-    HomePage(kintai).export_csv()
-    files = kintai.download_dir.wait()          # .crdownload が消えるまで待つ
+    HomePage(kintai.session).export_csv()
+    files = kintai.session.download_dir.wait()          # .crdownload が消えるまで待つ
     move_file(files[0], r"C:\作業\output")       # with の中で移動する
 ```
 

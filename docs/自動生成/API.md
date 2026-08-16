@@ -2485,11 +2485,11 @@ with を使わないと、処理の途中で例外が出たときにブラウザ
 
     # 誤り
     browsers = Browsers()
-    browsers.launch("kintai")     # ← ここで送出される（ブラウザは起動しない）
+    browsers.launch(Kintai)     # ← ここで送出される（ブラウザは起動しない）
 
     # 正しい
     with Browsers() as browsers:
-        browsers.launch("kintai")
+        kintai = browsers.launch(Kintai)
 
 対処:
     `with Browsers() as browsers:` の中で使う（ブラウザは起動していないので実害はない）
@@ -2541,8 +2541,8 @@ BrowserSession は with 文の中でだけ使える。with を使わないと、
 
     # 正しい
     with Browsers() as browsers:
-        session = browsers.launch("kintai")
-        session.open("https://example.com")
+        kintai = browsers.launch(Kintai)
+        kintai.session.open("https://example.com")
 
 対処:
     `with Browsers() as browsers:` の中で使う
@@ -3531,9 +3531,9 @@ def run_task(self, task: Callable[[], T], label: str='') -> BackgroundTask[T]:
 普通に書けば上から順に動く。時間のかかる処理を待っている間に
 別のことを進めたいときだけ、これで先に始めておく:
 
-    勤怠 = browsers.run_task(lambda: KintaiFlow(kintai).search())
+    kintai = browsers.run_task(lambda: KintaiFlow(kintai).search())
     KeiriFlow(keiri).login(user, password)   # 勤怠の読み込み中にこちらが進む
-    days = 勤怠.wait()                        # 戻って結果を受け取る
+    days = kintai.wait()                        # 戻って結果を受け取る
 
 **裏で動かす処理と、その後に自分で書く処理で、同じセッションを触らないこと。**
 同じセッションを同時に触ると ConcurrentSessionUseError で止まる
@@ -3817,6 +3817,10 @@ class Site:
 （current_url や cookie など）は持たない — 同じサイトを2アカウントで並列に
 開けるようにするため。
 
+使い方は2つ:
+  - `with Kintai() as kintai:` … 1サイトだけ。Browsers を内側で抱えて起動する
+  - `with Browsers() as browsers: kintai = browsers.launch(Kintai)` … 複数サイト
+
 Attributes:
     session: このサイトに紐づく BrowserSession。Page に渡して操作する。
 
@@ -3826,13 +3830,6 @@ Attributes:
 def __init__(self, session: BrowserSession | None=None) -> None:
 ```
 
-##### 説明
-
-Args:
-    session: 使うブラウザ。**省略するとこのサイト専用に1つ起動する**
-        （`with Kintai() as kintai:` の形）。`Browsers.launch()` から
-        作られるときは、そこで起動済みのものが渡る。
-
 #### `close`
 
 ```text
@@ -3841,11 +3838,11 @@ def close(self) -> None:
 
 ##### 説明
 
-自分で起動したブラウザを閉じる。
+Browsers から渡されたセッションは触らず、自分で起動したブラウザだけ閉じる。
 
-`Browsers.launch()` から作られた場合は**何もしない**。
-そのブラウザの持ち主は `Browsers` の方で、閉じるのもそちらの仕事。
-2回呼んでも安全。
+`with Kintai() as kintai:` で起動したインスタンスを `close()` しても安全。
+ただし `Browsers.launch()` から持たせてもらったインスタンスでは何もしない
+（持ち主の Browsers が with を抜けるときに閉じるため、二重に閉じない）。
 
 ### `BrowserOptions`
 
@@ -4312,8 +4309,8 @@ class DownloadDir:
 （固定フォルダは with を抜けても削除されない）:
 
     with Browsers() as browsers:
-        kintai = browsers.launch("kintai", download_dir=r"C:\作業\downloads")
-        files = kintai.download_dir.wait()
+        kintai = browsers.launch(Kintai, download_dir=r"C:\作業\downloads")
+        files = kintai.session.download_dir.wait()
     # ← C:\作業\downloads とファイルはそのまま残る
 
 wait() は作成時点で既にあったファイルを無視し、新しく増えたファイルだけを完了対象にする。

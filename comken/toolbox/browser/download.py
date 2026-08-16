@@ -38,8 +38,8 @@ class DownloadDir:
     （固定フォルダは with を抜けても削除されない）:
 
         with Browsers() as browsers:
-            kintai = browsers.launch("kintai", download_dir=r"C:\\作業\\downloads")
-            files = kintai.download_dir.wait()
+            kintai = browsers.launch(Kintai, download_dir=r"C:\\作業\\downloads")
+            files = kintai.session.download_dir.wait()
         # ← C:\\作業\\downloads とファイルはそのまま残る
 
     wait() は作成時点で既にあったファイルを無視し、新しく増えたファイルだけを完了対象にする。

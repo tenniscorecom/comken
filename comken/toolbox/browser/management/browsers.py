@@ -24,9 +24,9 @@
 **書いた順に上から動く（同期）のが基本。** 待っている間に別のことを進めたいときだけ、
 run_task() で先に始めておき、結果が必要になったところで wait() で受け取る:
 
-        勤怠 = browsers.run_task(lambda: KintaiFlow(kintai.session).fetch())  # 始めるだけ。待たない
+        kintai = browsers.run_task(lambda: KintaiFlow(kintai.session).fetch())  # 始めるだけ。待たない
         keiri_data = KeiriFlow(keiri.session).fetch()                      # その間にこちらを進める
-        kintai_data = 勤怠.wait()                                          # 戻って結果を受け取る
+        kintai_data = kintai.wait()                                          # 戻って結果を受け取る
 
 重い画面の読み込みを待っている間、ブラウザは何も消費していないので、
 その時間で別のサイトの操作が進む。読み込みが終われば、そちらも自分で続きを始める。
@@ -217,9 +217,9 @@ class Browsers:
         普通に書けば上から順に動く。時間のかかる処理を待っている間に
         別のことを進めたいときだけ、これで先に始めておく:
 
-            勤怠 = browsers.run_task(lambda: KintaiFlow(kintai).search())
+            kintai = browsers.run_task(lambda: KintaiFlow(kintai).search())
             KeiriFlow(keiri).login(user, password)   # 勤怠の読み込み中にこちらが進む
-            days = 勤怠.wait()                        # 戻って結果を受け取る
+            days = kintai.wait()                        # 戻って結果を受け取る
 
         **裏で動かす処理と、その後に自分で書く処理で、同じセッションを触らないこと。**
         同じセッションを同時に触ると ConcurrentSessionUseError で止まる

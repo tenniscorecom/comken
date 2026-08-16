@@ -12,8 +12,8 @@
     from comken.toolbox.browser import Browsers
 
     with Browsers() as browsers:
-        kintai = browsers.launch("kintai")
-        kintai.open("https://kintai.example.co.jp")
+        kintai = browsers.launch(Kintai)
+        kintai.session.open("https://kintai.example.co.jp")
 
 サイトが1つでも複数でも書き方は同じで、増やすときは launch を1行足すだけにしてある。
 """

@@ -4,6 +4,10 @@ r"""comken/toolbox/browser/site.py — サイトを表す Site 基底クラス�
 `comken.toolbox.salesforce.SalesforceBase` と同じ。読み書き両方を知っていれば、
 片方は形だけで分かる。
 
+1サイトだけ触るツールでは `with Kintai() as kintai:` で完結する。複数サイトを
+扱うときは `with Browsers() as browsers: kintai = browsers.launch(Kintai)`。
+どちらの出口でも Site インスタンスが返り、`.session` で BrowserSession に繋がる。
+
     from comken.toolbox.browser import Browsers, Site, BrowserOptions
 
     class KintaiOptions(BrowserOptions):
@@ -14,28 +18,27 @@ r"""comken/toolbox/browser/site.py — サイトを表す Site 基底クラス�
         BASE_URL = "https://kintai.example.co.jp"
         OPTIONS = KintaiOptions
 
-    # 1サイトだけなら、これだけで起動から後片付けまで済む
+    # 1サイトだけ
     with Kintai() as kintai:
-        kintai.session.open(kintai.BASE_URL)
+        print(kintai.login("user01", "password").unfilled_days())
 
-    # 複数サイトを扱う・並列で動かすときは Browsers から
+    # 複数サイト
     with Browsers() as browsers:
         kintai = browsers.launch(Kintai)
         keiri = browsers.launch(Keiri)
-
-Name を渡していた書き方を、Site クラスを渡す書き方に集約する。サイト固有の値を
-1か所に集められるため、Name と Options を別々に渡したときに取り違える事故がない。
+        ...
 """
 
-# BrowseSessions から type 注釈に使うため、注釈の評価を遅延する。
+# 定義中（クラス内）の BrowserSession / Browsers を型注釈に使うため、注釈の評価を遅延する。
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar, Self
+from typing import TYPE_CHECKING, ClassVar
 
+from ...exceptions import SiteConfigError
 from .options import BrowserOptions
 
 if TYPE_CHECKING:
-    from .management import BrowserSession
+    from .management import Browsers, BrowserSession
 
 
 class Site:
@@ -44,6 +47,10 @@ class Site:
     サブクラスで NAME / BASE_URL / OPTIONS を上書きする。`session` 以外の状態
     （current_url や cookie など）は持たない — 同じサイトを2アカウントで並列に
     開けるようにするため。
+
+    使い方は2つ:
+      - `with Kintai() as kintai:` … 1サイトだけ。Browsers を内側で抱えて起動する
+      - `with Browsers() as browsers: kintai = browsers.launch(Kintai)` … 複数サイト
 
     Attributes:
         session: このサイトに紐づく BrowserSession。Page に渡して操作する。
@@ -57,45 +64,43 @@ class Site:
     OPTIONS: ClassVar[type[BrowserOptions] | None] = None
 
     def __init__(self, session: BrowserSession | None = None) -> None:
-        """
-        Args:
-            session: 使うブラウザ。**省略するとこのサイト専用に1つ起動する**
-                （`with Kintai() as kintai:` の形）。`Browsers.launch()` から
-                作られるときは、そこで起動済みのものが渡る。
-        """
-        # Browsers を import すると management → site の循環になるので、
-        # 使う瞬間に読み込む（社内ライブラリの呼び出しと同じ扱い）。
-        self._owned = None
-        if session is None:
-            from .management import Browsers
-
-            owned = Browsers()
-            owned.__enter__()
-            try:
-                session = owned.launch(type(self)).session
-            except BaseException:
-                # 起動に失敗したら、開きかけのブラウザを残さない
-                owned.__exit__(None, None, None)
-                raise
-            self._owned = owned
         self.session = session
+        # 自分で起動した Browsers（with Kintai() 経由）。Browsers から持ってきた
+        # ときは None のままにして、`close()` で持ち物を閉じてしまわないように区別する
+        self._browsers: Browsers | None = None
 
-    def __enter__(self) -> Self:
+    def __enter__(self) -> Site:
+        # 循環インポートを避けるため、使う直前に取り出す
+        from .management import Browsers
+
+        if not self.NAME:
+            raise SiteConfigError(self.__class__, "NAME")
+        self._browsers = Browsers()
+        self._browsers.__enter__()
+        session = self._browsers.launch_session(self.NAME, self.OPTIONS)
+        self.session = session
+        # SitePage.BASE_URL が未設定のときの参照先。launch_session() からは
+        # 設定されないので、ここで結びつける
+        session._site = self
         return self
 
-    def __exit__(self, *args: object) -> None:
-        self.close()
+    def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+        if self._browsers is not None:
+            self._browsers.__exit__(exc_type, exc_val, exc_tb)
+            self._browsers = None
+        self.session = None
 
     def close(self) -> None:
-        """自分で起動したブラウザを閉じる。
+        """Browsers から渡されたセッションは触らず、自分で起動したブラウザだけ閉じる。
 
-        `Browsers.launch()` から作られた場合は**何もしない**。
-        そのブラウザの持ち主は `Browsers` の方で、閉じるのもそちらの仕事。
-        2回呼んでも安全。
+        `with Kintai() as kintai:` で起動したインスタンスを `close()` しても安全。
+        ただし `Browsers.launch()` から持たせてもらったインスタンスでは何もしない
+        （持ち主の Browsers が with を抜けるときに閉じるため、二重に閉じない）。
         """
-        owned, self._owned = self._owned, None
-        if owned is not None:
-            owned.__exit__(None, None, None)
+        if self._browsers is not None:
+            self._browsers.__exit__(None, None, None)
+            self._browsers = None
+        self.session = None
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(name={self.NAME!r})"

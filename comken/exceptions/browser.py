@@ -65,11 +65,11 @@ class BrowsersNotStartedError(BrowserError):
 
         # 誤り
         browsers = Browsers()
-        browsers.launch("kintai")     # ← ここで送出される（ブラウザは起動しない）
+        browsers.launch(Kintai)     # ← ここで送出される（ブラウザは起動しない）
 
         # 正しい
         with Browsers() as browsers:
-            browsers.launch("kintai")
+            kintai = browsers.launch(Kintai)
 
     対処:
         `with Browsers() as browsers:` の中で使う（ブラウザは起動していないので実害はない）
@@ -80,7 +80,7 @@ class BrowsersNotStartedError(BrowserError):
             f"with に入れずに Browsers を使いました: {operation}\n"
             "Browsers は with 文の中でだけ使えます。\n"
             "  with Browsers() as browsers:\n"
-            '      kintai = browsers.launch("kintai")\n'
+            "      kintai = browsers.launch(Kintai)\n"
             "      ...\n"
             "こうしておくと、途中でエラーが出てもブラウザは必ず閉じられます。"
         )
@@ -117,8 +117,8 @@ class SessionNotStartedError(BrowserError):
 
         # 正しい
         with Browsers() as browsers:
-            session = browsers.launch("kintai")
-            session.open("https://example.com")
+            kintai = browsers.launch(Kintai)
+            kintai.session.open("https://example.com")
 
     対処:
         `with Browsers() as browsers:` の中で使う
@@ -129,8 +129,8 @@ class SessionNotStartedError(BrowserError):
             f"with に入る前のセッションを操作しました: {operation}\n"
             "BrowserSession は with 文の中でだけ使えます。\n"
             "  with Browsers() as browsers:\n"
-            '      session = browsers.launch("サイト名")\n'
-            "      session.open(...)\n"
+            "      kintai = browsers.launch(Kintai)\n"
+            "      kintai.session.open(...)\n"
             "サイトを増やすときは launch を1行足してください。"
         )
 

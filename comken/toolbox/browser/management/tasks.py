@@ -6,9 +6,9 @@
 重い画面の読み込みなど、待っている間に別のことを進めたいときだけ、
 Browsers.run_task() で始めて、必要になったところで wait() で受け取る。
 
-    勤怠 = browsers.run_task(lambda: KintaiFlow(kintai).search())  # 始めるだけ
+    kintai = browsers.run_task(lambda: KintaiFlow(kintai).search())  # 始めるだけ
     KeiriFlow(keiri).login(user, password)                      # その間に別サイトを進める
-    days = 勤怠.wait()                                          # 戻って結果を受け取る
+    days = kintai.wait()                                          # 戻って結果を受け取る
 
 このクラスを直接作らない。Browsers.run_task() が返すものを受け取って使う。
 """
