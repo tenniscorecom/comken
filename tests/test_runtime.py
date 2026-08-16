@@ -44,6 +44,85 @@ class TestDebugMode:
         assert "slow_func" in caplog.text
         assert "秒" in caplog.text
 
+    def test_measure_emits_start_and_complete(self, caplog):
+        """デバッグモードでは「開始」「完了」の2行が出ることを確認する。"""
+
+        @measure
+        def do_work():
+            return 1
+
+        with comken.debug(), caplog.at_level(logging.DEBUG, logger="comken.core.timer"):
+            assert do_work() == 1
+
+        # 開始ログと完了ログの両方が同じ qualname で出ている
+        assert "do_work: 開始" in caplog.text
+        assert "do_work: 完了" in caplog.text
+        # 「中断」は出ない
+        assert "中断" not in caplog.text
+
+    def test_measure_logs_interrupt_on_exception(self, caplog):
+        """例外で抜けたとき「開始」「中断」が出て、例外がそのまま伝わることを確認する。"""
+
+        @measure
+        def fails():
+            raise RuntimeError("boom")
+
+        with (
+            pytest.raises(RuntimeError, match="boom"),
+            comken.debug(),
+            caplog.at_level(logging.DEBUG, logger="comken.core.timer"),
+        ):
+            fails()
+
+        assert "fails: 開始" in caplog.text
+        assert "fails: 中断" in caplog.text
+        # 完了は出ない
+        assert "fails: 完了" not in caplog.text
+
+    def test_measure_catches_keyboard_interrupt(self, caplog):
+        """KeyboardInterrupt でも「中断」が出て再送出されることを確認する。"""
+
+        @measure
+        def hang():
+            raise KeyboardInterrupt()
+
+        with (
+            pytest.raises(KeyboardInterrupt),
+            comken.debug(),
+            caplog.at_level(logging.DEBUG, logger="comken.core.timer"),
+        ):
+            hang()
+
+        assert "hang: 開始" in caplog.text
+        assert "hang: 中断" in caplog.text
+        assert "hang: 完了" not in caplog.text
+
+    def test_measure_does_not_log_arguments(self, caplog):
+        """引数の値がログに出ないことを確認する（秘密の値が漏れないことの担保）。"""
+
+        @measure
+        def with_secret(secret: str) -> str:
+            return secret
+
+        with comken.debug(), caplog.at_level(logging.DEBUG, logger="comken.core.timer"):
+            assert with_secret("super-secret-token-12345") == "super-secret-token-12345"
+
+        # qualname は出てもよいが、引数の値は絶対に出してはならない
+        assert "with_secret" in caplog.text
+        assert "super-secret-token-12345" not in caplog.text
+
+    def test_measure_does_not_log_return_value(self, caplog):
+        """戻り値もログに出ないことを確認する。"""
+
+        @measure
+        def returns_secret() -> str:
+            return "another-secret-value"
+
+        with comken.debug(), caplog.at_level(logging.DEBUG, logger="comken.core.timer"):
+            assert returns_secret() == "another-secret-value"
+
+        assert "another-secret-value" not in caplog.text
+
     def test_library_methods_measured(self, tmp_path, caplog):
         """ライブラリの主要処理（CSV 読み込み等）が計測対象になっていることを確認する。"""
         from comken.toolbox.csv import CsvReader

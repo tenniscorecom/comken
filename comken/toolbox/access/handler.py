@@ -18,6 +18,7 @@ from ...constants import Encoding
 from ...core.clock import now
 from ...core.files.base import FileBase
 from ...core.files.naming import DateNameBuilder
+from ...core.timer import measure
 from ...exceptions import (
     AccessBackupError,
     AccessFileNotFoundError,
@@ -128,6 +129,7 @@ class AccessDatabase(FileBase):
     def __exit__(self, *args: object) -> None:
         self._close()
 
+    @measure
     def run_macro(self, name: str) -> None:
         """Access マクロを実行する。
 
@@ -142,6 +144,7 @@ class AccessDatabase(FileBase):
         except Exception as e:
             raise AccessRoutineError(name, "マクロ", e) from e
 
+    @measure
     def run_function(self, name: str, *args: object) -> object | None:
         """VBA のプロシージャ／関数を実行する。
 
@@ -157,6 +160,7 @@ class AccessDatabase(FileBase):
         except Exception as e:
             raise AccessRoutineError(name, "VBA", e) from e
 
+    @measure
     def run_query(self, name: str) -> None:
         """保存済みのアクションクエリを名前で実行する。
 
@@ -174,6 +178,7 @@ class AccessDatabase(FileBase):
         except Exception as e:
             raise AccessRoutineError(name, "クエリ", e) from e
 
+    @measure
     def export_csv(
         self,
         source: str,

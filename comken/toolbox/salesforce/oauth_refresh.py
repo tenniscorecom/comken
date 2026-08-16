@@ -10,6 +10,7 @@ from typing import Self
 
 import requests
 
+from ...core.timer import measure
 from ...exceptions import SalesforceAuthError, SalesforceConnectionError
 
 AUTHORIZATION_PATH = "/services/oauth2/authorize"
@@ -56,6 +57,7 @@ class OAuth:
             on_refresh_token=_save_rotated_token,
         )
 
+    @measure
     def fetch(self) -> tuple[str, str]:
         """refresh_token を使ってアクセストークンを取得する。"""
         data = {

@@ -9,6 +9,7 @@ from pathlib import Path
 
 from ...constants import SortBy
 from ..clock import today
+from ..timer import measure
 
 # ファイル名に含まれる日付らしい数字（20260729 / 2026-07-29 / 2026_07_29 / 2026.07.29）。
 # 前後を数字で挟まれたものは日付とみなさない（社員番号・伝票番号の一部を拾わないため）
@@ -26,6 +27,7 @@ class FileFinder:
     def __init__(self, folder: str | Path) -> None:
         self._folder = Path(folder)
 
+    @measure
     def today(
         self,
         pattern: str = "*.xlsx",
@@ -50,6 +52,7 @@ class FileFinder:
             return None
         return max(matched, key=lambda p: p.stat().st_mtime)
 
+    @measure
     def latest(
         self,
         pattern: str = "*.xlsx",
@@ -80,6 +83,7 @@ class FileFinder:
             return max(files, key=lambda p: p.stat().st_mtime)
         return max(files, key=lambda p: p.name)
 
+    @measure
     def dated(self, pattern: str = "*.xlsx", required: bool = True) -> list[Path]:
         """ファイル名に日付が入っているファイルを、日付の新しい順で返す。
 

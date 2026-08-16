@@ -179,6 +179,32 @@ with t:
 print(t.elapsed)              # 経過秒数を値として使える
 ```
 
+### デバッグ用 measure（`comken.debug()` 中だけログ）
+
+`Timer` は**常に**ログが出る。`measure` は `with comken.debug():` ブロック内でのみ
+DEBUG ログが出る。普段は無音で、止まったときだけ `config.RUN.DEBUG = True` にして
+再実行すれば、どの処理で止まったかが後から分かる。
+
+```python
+from comken.core import measure
+
+@measure
+def build_report():
+    ...
+```
+
+ログは関数ごとに次の2行（例外時は別の1行）になる:
+
+```
+DEBUG ExcelWriter.save: 開始
+DEBUG ExcelWriter.save: 完了 1.234秒
+```
+
+主目的は「どの処理で止まったか」を特定すること。終了時にしかログを出さないと、
+止まった処理の痕跡は永久に残らない。**関数名だけ**を出し、引数・戻り値は出さない
+（DPAPI のトークン・client_secret などの秘密の値がログへ載る危険があるため）。
+「どのファイルで止まったか」を知りたいときは呼び出し側がログへ出す。
+
 ### zip 圧縮・展開（zip_folder / zip_files / unzip）
 
 Windows のエクスプローラーで作られた zip（日本語ファイル名）も文字化けせず展開できる。

@@ -9,7 +9,7 @@ main.py — エントリポイント
 
 import logging
 
-from comken import config, dry_run, setup_logging
+from comken import config, debug, dry_run, setup_logging
 from comken.exceptions import ComkenError
 
 from src.run import run
@@ -29,7 +29,7 @@ if __name__ == "__main__":
         # config.ini に必要な項目がそろっているかを最初に確かめる。
         # 途中まで動いてから足りないと分かるより、動き出す前に全部まとめて出す。
         # 使う項目を増やしたらここにも足す（消しても動くが、エラーが遅くなる）
-        config.require("RUN.DRY_RUN", "FILES.OUTPUT_FOLDER")
+        config.require("RUN.DRY_RUN", "RUN.DEBUG", "FILES.OUTPUT_FOLDER")
 
         # config.ini の [RUN] DRY_RUN で切り替える。True の間は書き込み・移動・保存を
         # せず、何をするつもりかだけログに出す。コードを触らずに試せるので、
@@ -43,7 +43,22 @@ if __name__ == "__main__":
                 "DRY-RUN で実行します。ファイルは書き込まれません"
                 "（本番で動かすなら config.ini の [RUN] DRY_RUN を False にする）"
             )
-        with dry_run(config.RUN.DRY_RUN):
+
+        # config.ini の [RUN] DEBUG で切り替える。True だと @measure を付けた
+        # メソッドの出入りを DEBUG ログへ出す。外部待ちでバッチが止まったときに
+        # True にして再実行すると、ログの末尾が「DEBUG ○○: 開始」の行で止まるので、
+        # どこで止まったかが分かる。普段は False のままでよい。
+        #
+        # True のままでも業務は正常に動く（ログが増えるだけ）ので dry-run ほど
+        # 危険ではないが、ログが膨らみ続けるので検証後は False に戻す。
+        # 戻し忘れに気づきやすいよう、True のときは INFO を1行出す。
+        if config.RUN.DEBUG:
+            logger.info(
+                "DEBUG モードで実行します。"
+                "各メソッドの開始/完了ログが出ます（検証後 False に戻してください）"
+            )
+
+        with dry_run(config.RUN.DRY_RUN), debug(config.RUN.DEBUG):
             main()
     except ComkenError as e:
         # comken のエラーはメッセージに対処法が入っている（docs/ERRORS.md も参照）

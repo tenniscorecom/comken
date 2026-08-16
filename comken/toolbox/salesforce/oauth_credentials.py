@@ -8,6 +8,7 @@ from typing import Self
 
 import requests
 
+from ...core.timer import measure
 from ...exceptions import SalesforceAuthError, SalesforceConnectionError
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,7 @@ class OAuth:
         credentials = Credentials(prefix)
         return cls(credentials.client_id, credentials.client_secret, domain_url)
 
+    @measure
     def fetch(self) -> tuple[str, str]:
         """アクセストークンと instance_url を取得する。"""
         url = f"{self._domain_url}{TOKEN_PATH}"

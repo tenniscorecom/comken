@@ -17,6 +17,7 @@ from typing import Self
 import win32com.client
 
 from ...core.clock import now
+from ...core.timer import measure
 from ...exceptions import (
     ClassicOutlookNotAvailableError,
     OutlookAttachmentNotFoundError,
@@ -92,6 +93,7 @@ class Outlook:
         for item in restricted_items:
             yield self._to_message(item)
 
+    @measure
     def save_draft(
         self,
         to: str | Sequence[str],

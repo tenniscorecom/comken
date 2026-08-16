@@ -31,6 +31,7 @@ from typing import Self
 from selenium import webdriver
 
 from ....core.clock import now
+from ....core.timer import measure
 from ....exceptions import (
     ConcurrentSessionUseError,
     SessionClosedError,
@@ -126,6 +127,7 @@ class BrowserSession:
 
     # ------------------------------------------------------------ ページ操作
 
+    @measure
     def open(self, url: str) -> None:
         """URL を開く。"""
         with self._operating("open"):

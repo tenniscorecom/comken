@@ -86,8 +86,27 @@ def debug(enabled: bool=True) -> Iterator[None]:
 
 ブロック内だけデバッグモードを指定した状態にする。
 
-有効にすると、ライブラリの主要処理（Excel 読み込み・転記・保存、CSV 読み書き、
-zip 等）の所要時間が DEBUG ログに記録される。どこが遅いかの調査に使う。
+有効にすると、`@measure` を付けたメソッドの出入りを DEBUG ログに記録する。
+ログは関数ごとに次の2行（例外時は別の1行）になる:
+
+    DEBUG ExcelWriter.save: 開始
+    DEBUG ExcelWriter.save: 完了 1.234秒
+
+**主目的は「どの処理で止まったか」を後から特定できるようにすること。**
+業務バッチが外部待ち（ブラウザ・HTTP・Excel COM・共有サーバー）で止まったとき、
+ログの末尾が「開始」の行で止まっていれば、そこが停止位置だと分かる。
+終了時にしかログを出さないと、止まった処理の痕跡は永久に残らない。
+
+副次的に、各メソッドの所要時間も分かる（遅い処理の発見）。
+
+**引数・戻り値は記録しない。** 秘密の値（DPAPI のトークン・client_secret・
+パスワード）がログへ載る危険を避けるため。「どのファイルで止まったか」を
+知りたいときは、呼び出し側が処理対象をログへ出す（ライブラリの責務は
+「どのメソッドで止まったか」まで）。
+
+雛形プロジェクトでは `config.RUN.DEBUG` で `with debug():` の on/off を
+切り替えられる。止まったときに非エンジニアが自分で「デバッグモードで再実行」
+できるよう、`config.ini` からのスイッチを前提にしている。
 
 Args:
     enabled: True で有効（デフォルト）。False ならブロック内だけ無効。
@@ -234,6 +253,7 @@ def __init__(self, folder: str | Path) -> None:
 #### `today`
 
 ```text
+@measure
 def today(self, pattern: str='*.xlsx', date_format: str='%Y%m%d', required: bool=True) -> Path | None:
 ```
 
@@ -249,6 +269,7 @@ Raises:
 #### `latest`
 
 ```text
+@measure
 def latest(self, pattern: str='*.xlsx', by: str=SortBy.NAME, required: bool=True) -> Path | None:
 ```
 
@@ -269,6 +290,7 @@ Raises:
 #### `dated`
 
 ```text
+@measure
 def dated(self, pattern: str='*.xlsx', required: bool=True) -> list[Path]:
 ```
 
@@ -365,6 +387,7 @@ Args:
 ### `copy_file`
 
 ```text
+@measure
 def copy_file(src: str | Path, dst: str | Path) -> Path:
 ```
 
@@ -472,11 +495,27 @@ def measure(func: Callable[_P, _R]) -> Callable[_P, _R]:
 
 #### 説明
 
-デバッグモード時だけ処理時間を DEBUG ログに出すデコレータ。
+デバッグモード時だけ対象関数の出入りを DEBUG ログに出すデコレータ。
 
-ライブラリの主要処理に付いており、with comken.debug(): の範囲では
-「どの処理に何秒かかったか」を DEBUG ログに出す。
-プロジェクト側の関数に付けてもよい。
+呼び出しごとに次の3種のうち、いずれか1組を出す:
+
+- 開始
+- 完了 ○.○○○秒        （正常終了）
+- 中断 ○.○○○秒        （例外で抜けた場合。BaseException も拾う）
+
+**「開始」を必ず出してから本体を呼ぶ。** 処理が外部待ちで止まったとき、
+ログの末尾が「開始」で終わっていれば、そこが停止位置だと分かる。
+終了時にしかログを出さないと、止まった処理の記録は永久に残らない。
+
+**引数・戻り値はログに出さない。** comken は DPAPI のトークン・client_secret・
+パスワードを扱うため、汎用デコレータが自動で引数を出せる形になっていると、
+いつか秘密の値がログへ載る危険がある。「どのメソッドで止まったか」までは
+ライブラリが受け持ち、「どのファイル・どの行で止まったか」は呼び出し側が
+処理対象を DEBUG ログへ出す形にする。
+
+例外は `BaseException` で捕捉し、`raise` で必ず再送出する
+（`KeyboardInterrupt` も拾う。ハングして Ctrl+C で止めたときに
+「どこで待っていたか」が分かるのが狙い）。
 
 Timer との使い分け:
     - Timer: 常にログに出したい・経過秒数を値として使いたい場合
@@ -485,6 +524,7 @@ Timer との使い分け:
 ### `move_file`
 
 ```text
+@measure
 def move_file(src: str | Path, dst: str | Path) -> Path:
 ```
 
@@ -775,6 +815,7 @@ def __init__(self, folder: str | Path) -> None:
 #### `today`
 
 ```text
+@measure
 def today(self, pattern: str='*.xlsx', date_format: str='%Y%m%d', required: bool=True) -> Path | None:
 ```
 
@@ -790,6 +831,7 @@ Raises:
 #### `latest`
 
 ```text
+@measure
 def latest(self, pattern: str='*.xlsx', by: str=SortBy.NAME, required: bool=True) -> Path | None:
 ```
 
@@ -810,6 +852,7 @@ Raises:
 #### `dated`
 
 ```text
+@measure
 def dated(self, pattern: str='*.xlsx', required: bool=True) -> list[Path]:
 ```
 
@@ -840,6 +883,7 @@ def date_in_name(name: str) -> datetime.date | None:
 ### `move_file`
 
 ```text
+@measure
 def move_file(src: str | Path, dst: str | Path) -> Path:
 ```
 
@@ -887,6 +931,7 @@ Returns:
 ### `copy_file`
 
 ```text
+@measure
 def copy_file(src: str | Path, dst: str | Path) -> Path:
 ```
 
@@ -3434,6 +3479,7 @@ def __init__(self, path: str | Path, local_copy: bool=True, backup: bool | None=
 #### `run_macro`
 
 ```text
+@measure
 def run_macro(self, name: str) -> None:
 ```
 
@@ -3447,6 +3493,7 @@ VBA のプロシージャ／関数を実行する場合は ``run_function()`` �
 #### `run_function`
 
 ```text
+@measure
 def run_function(self, name: str, *args: object) -> object | None:
 ```
 
@@ -3461,6 +3508,7 @@ dry-run 時は実行せず ``None`` を返す。
 #### `run_query`
 
 ```text
+@measure
 def run_query(self, name: str) -> None:
 ```
 
@@ -3475,6 +3523,7 @@ SELECT クエリの結果を読む場合は ``read_rows()``、CSVへ出す場合
 #### `export_csv`
 
 ```text
+@measure
 def export_csv(self, source: str, dst: str | Path, encoding: str=Encoding.CP932) -> None:
 ```
 
@@ -3570,6 +3619,7 @@ Raises:
 #### `launch_session`
 
 ```text
+@measure
 def launch_session(self, name: str, options: type[BrowserOptions] | BrowserOptions | None=None, download_dir: str | Path | None=None) -> BrowserSession:
 ```
 
@@ -3722,6 +3772,7 @@ Args:
 #### `open`
 
 ```text
+@measure
 def open(self, url: str) -> None:
 ```
 
@@ -4482,6 +4533,7 @@ Args:
 #### `wait`
 
 ```text
+@measure
 def wait(self, timeout: int=30) -> list[Path]:
 ```
 
@@ -5487,6 +5539,7 @@ def read_messages(self, subject_contains: str='', days: int=7, folder: str='') -
 #### `save_draft`
 
 ```text
+@measure
 def save_draft(self, to: str | Sequence[str], subject: str, body: str, attachments: Sequence[str | Path] | None=None, cc: str | Sequence[str]='') -> None:
 ```
 
@@ -5575,6 +5628,7 @@ HTTP セッションを閉じる。with を使う場合は自動で呼ばれる�
 #### `query`
 
 ```text
+@measure
 def query(self, soql: str) -> list[dict]:
 ```
 
@@ -5594,6 +5648,7 @@ Returns:
 #### `get`
 
 ```text
+@measure
 def get(self, object_name: str, record_id: str) -> dict:
 ```
 
@@ -5608,6 +5663,7 @@ Args:
 #### `insert`
 
 ```text
+@measure
 def insert(self, object_name: str, data: dict) -> str:
 ```
 
@@ -5622,6 +5678,7 @@ Args:
 #### `update`
 
 ```text
+@measure
 def update(self, object_name: str, record_id: str, data: dict) -> None:
 ```
 
@@ -5637,6 +5694,7 @@ Args:
 #### `upsert`
 
 ```text
+@measure
 def upsert(self, object_name: str, external_id_field: str, data: dict) -> None:
 ```
 
@@ -5655,6 +5713,7 @@ Raises:
 #### `delete`
 
 ```text
+@measure
 def delete(self, object_name: str, record_id: str) -> None:
 ```
 
@@ -5733,6 +5792,7 @@ Args:
 #### `run`
 
 ```text
+@measure
 def run(self, report_id: str, filters: list[dict] | None=None, allow_truncated: bool=False) -> list[dict]:
 ```
 
@@ -5760,6 +5820,7 @@ Raises:
 #### `run_async`
 
 ```text
+@measure
 def run_async(self, report_id: str, filters: list[dict] | None=None, allow_truncated: bool=False) -> list[dict]:
 ```
 

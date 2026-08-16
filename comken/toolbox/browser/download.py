@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 from typing import Self
 
+from ...core.timer import measure
 from ...exceptions import DownloadTimeoutError
 
 logger = logging.getLogger(__name__)
@@ -74,6 +75,7 @@ class DownloadDir:
         if self._is_temp:
             shutil.rmtree(self.path, ignore_errors=True)
 
+    @measure
     def wait(self, timeout: int = 30) -> list[Path]:
         """ダウンロードが完了するまで待機し、完了したファイルの一覧を返す。
 

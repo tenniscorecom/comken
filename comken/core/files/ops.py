@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from ...runtime import dry_run_log, is_dry_run
+from ..timer import measure
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ def project_dir() -> Path:
     return Path(sys.argv[0]).resolve().parent
 
 
+@measure
 def copy_to_local_if_large(path: str | Path, threshold_mb: float) -> tuple[Path, Path | None]:
     """ファイルサイズが閾値を超えていればローカルへコピーして、そのパスを返す。
 
@@ -114,6 +116,7 @@ def local_copy(path: str | Path) -> Iterator[Path]:
         tmp_path.unlink(missing_ok=True)
 
 
+@measure
 def move_file(src: str | Path, dst: str | Path) -> Path:
     """ファイルを移動する。
 
@@ -156,6 +159,7 @@ def move_file(src: str | Path, dst: str | Path) -> Path:
     return target
 
 
+@measure
 def copy_file(src: str | Path, dst: str | Path) -> Path:
     """ファイルをコピーする（更新日時などの属性も保持する）。
 

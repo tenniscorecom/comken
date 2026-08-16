@@ -25,6 +25,7 @@ from typing import Protocol, Self
 
 import requests
 
+from ...core.timer import measure
 from ...exceptions import (
     SalesforceConnectionError,
     SalesforceExternalIdMissingError,
@@ -199,6 +200,7 @@ class SalesforceBase:
         self._session.close()
 
     # ------------------------------------------------------------------ query
+    @measure
     def query(self, soql: str) -> list[dict]:
         """SOQL クエリを実行してレコードを返す（全件取得・ページ送り自動）。
 
@@ -225,6 +227,7 @@ class SalesforceBase:
         return records
 
     # ------------------------------------------------------------------- CRUD
+    @measure
     def get(self, object_name: str, record_id: str) -> dict:
         """レコードを1件取得する。
 
@@ -240,6 +243,7 @@ class SalesforceBase:
             return record
         return {}
 
+    @measure
     def insert(self, object_name: str, data: dict) -> str:
         """レコードを作成して Id を返す。
 
@@ -255,6 +259,7 @@ class SalesforceBase:
         )
         return result["id"] if isinstance(result, dict) else ""
 
+    @measure
     def update(self, object_name: str, record_id: str, data: dict) -> None:
         """レコードを更新する。
 
@@ -273,6 +278,7 @@ class SalesforceBase:
             component="crud",
         )
 
+    @measure
     def upsert(self, object_name: str, external_id_field: str, data: dict) -> None:
         """外部 ID で upsert する（一致すれば更新、なければ作成）。
 
@@ -299,6 +305,7 @@ class SalesforceBase:
             component="crud",
         )
 
+    @measure
     def delete(self, object_name: str, record_id: str) -> None:
         """レコードを削除する。
 

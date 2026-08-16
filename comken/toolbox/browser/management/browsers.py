@@ -53,6 +53,7 @@ from contextlib import ExitStack
 from pathlib import Path
 from typing import Self, TypeVar
 
+from ....core.timer import measure
 from ....exceptions import (
     BrowsersClosedError,
     BrowsersNotStartedError,
@@ -170,6 +171,7 @@ class Browsers:
         site._log_started()
         return instance
 
+    @measure
     def launch_session(
         self,
         name: str,

@@ -25,6 +25,7 @@ import re
 import time
 from typing import TYPE_CHECKING
 
+from ...core.timer import measure
 from ...exceptions import (
     SalesforceReportExecutionError,
     SalesforceReportFormatError,
@@ -88,6 +89,7 @@ class ReportApi:
         """
         self._client = client
 
+    @measure
     def run(
         self,
         report_id: str,
@@ -125,6 +127,7 @@ class ReportApi:
             data, _ = self._client.request("GET", path, component=COMPONENT)
         return self._parse(data, report_id, allow_truncated)
 
+    @measure
     def run_async(
         self,
         report_id: str,
