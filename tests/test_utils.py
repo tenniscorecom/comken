@@ -237,6 +237,23 @@ class TestCopyToLocalIfLarge:
         assert isinstance(working2, Path)
         assert isinstance(tmp2, Path)
 
+    def test_copy_failure_removes_reserved_temp_file(self, tmp_path):
+        """コピー失敗時は名前を確保済みの一時ファイルを残さない。"""
+        src = tmp_path / "big.xlsx"
+        src.write_bytes(b"x" * (2 * 1024 * 1024))
+
+        with (
+            patch("comken.core.files.ops.shutil.copy2", side_effect=OSError("copy failed")),
+            patch("comken.core.files.ops.tempfile.NamedTemporaryFile") as named_temp,
+        ):
+            reserved = tmp_path / "reserved.xlsx"
+            reserved.touch()
+            named_temp.return_value.name = str(reserved)
+            with pytest.raises(OSError, match="copy failed"):
+                copy_to_local_if_large(src, threshold_mb=1)
+
+        assert not reserved.exists()
+
 
 class TestDateNameBuilder:
     """DateNameBuilder のテスト。

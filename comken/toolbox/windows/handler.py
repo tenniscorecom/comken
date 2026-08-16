@@ -92,6 +92,8 @@ def _write_com_updates(ws: Any, output_by_column: dict[int, list[tuple[int, obje
 _SUFFIX_TO_FORMAT = {
     ".xlsx": FileFormat.XLSX,
     ".xlsm": FileFormat.XLSM,
+    ".xltm": FileFormat.XLTM,
+    ".xltx": FileFormat.XLTX,
     ".xlsb": FileFormat.XLSB,
     ".xls": FileFormat.XLS,
     ".csv": FileFormat.CSV,
@@ -167,6 +169,7 @@ class ExcelComHandler(FileBase):
             self._excel = win32com.client.DispatchEx("Excel.Application")
         except Exception as e:
             # Excel が入っていない PC では com_error がそのまま出て原因が分からない
+            self._cleanup_tmp()
             raise ExcelApplicationNotAvailableError(self.path, e) from e
         try:
             self._excel.Visible = False
@@ -475,6 +478,9 @@ class ExcelComHandler(FileBase):
         if suffix_format is not None and suffix_format != file_format:
             raise FileFormatMismatchError(original.suffix)
         self._wb.SaveAs(str(original), FileFormat=file_format)
+        # SaveAs 後は開いているブック自体が元ファイルへ切り替わる。
+        # 次回の save() は同じファイルに対する Save() にする。
+        self._working_path = original
 
     def save_as(
         self,
@@ -526,27 +532,30 @@ class ExcelComHandler(FileBase):
             self._wb = None
             excel = self._excel
             self._excel = None
-            if excel:
-                excel.Quit()
-            # ローカルコピーは不要になったので消す。Excel がファイルロックを
-            # 握っている間に消そうとすると Windows で失敗するため try で握る。
-            self._cleanup_tmp()
+            try:
+                if excel:
+                    excel.Quit()
+            finally:
+                # ローカルコピーは不要になったので消す。Excel がファイルロックを
+                # 握っている間に消そうとすると Windows で失敗するため try で握る。
+                self._cleanup_tmp()
 
     def _cleanup_tmp(self) -> None:
         """ローカルコピー（_tmp）を削除する（ライブラリ内部用）。
 
-        2回呼ばれても安全。_tmp を None に戻してから消すので、残骸は次回の
-        ``_cleanup_tmp()`` でも重複削除されない。失敗しても例外を上げない
+        2回呼ばれても安全。削除できた場合だけ _tmp を None に戻す。
+        失敗時は次回の ``close()`` で再試行できるようパスを残すが、例外は上げない
         （Excel がファイルロックを握っているケースがあるため）。
         """
         tmp = self._tmp
-        self._tmp = None
         if tmp is None:
             return
         try:
             tmp.unlink(missing_ok=True)
         except OSError:
             logger.debug("一時ファイルを削除できませんでした: %s", tmp, exc_info=True)
+        else:
+            self._tmp = None
 
 
 class WindowHandler:

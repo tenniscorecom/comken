@@ -51,7 +51,16 @@ def copy_to_local_if_large(path: str | Path, threshold_mb: float) -> tuple[Path,
     tmp = tempfile.NamedTemporaryFile(suffix=src.suffix, delete=False)  # noqa: SIM115
     tmp_path = Path(tmp.name)
     tmp.close()
-    shutil.copy2(src, tmp_path)
+    try:
+        shutil.copy2(src, tmp_path)
+    except Exception:
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except OSError:
+            logger.debug(
+                "コピー失敗後の一時ファイルを削除できませんでした: %s", tmp_path, exc_info=True
+            )
+        raise
     return tmp_path, tmp_path
 
 

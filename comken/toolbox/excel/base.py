@@ -82,9 +82,18 @@ class ExcelBase(FileBase):
         self._headers = headers
         # マクロ入りブック（.xlsm/.xlsb）は keep_vba=True で開かないと save() で VBA が消える
         keep_vba = self._original_path.suffix.lower() in (".xlsm", ".xlsb", ".xltm")
-        self._wb: Workbook = load_workbook(
-            self._working_path, data_only=data_only, read_only=read_only, keep_vba=keep_vba
-        )
+        try:
+            self._wb: Workbook = load_workbook(
+                self._working_path, data_only=data_only, read_only=read_only, keep_vba=keep_vba
+            )
+        except Exception:
+            if self._tmp is not None:
+                try:
+                    self._tmp.unlink(missing_ok=True)
+                except OSError:
+                    logger.debug("初期化失敗後の一時ファイルを削除できませんでした: %s", self._tmp)
+                self._tmp = None
+            raise
 
     def __enter__(self) -> Self:
         return self

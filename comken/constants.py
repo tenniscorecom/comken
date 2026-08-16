@@ -33,6 +33,8 @@ class FileFormat:
 
     XLSX = 51
     XLSM = 52
+    XLTM = 53
+    XLTX = 54
     XLSB = 50
     XLS = 56
     CSV = 6

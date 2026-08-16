@@ -14,12 +14,15 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
 import comken.toolbox.excel
+from comken import dry_run
 from comken.core.config import Config
 from comken.core.data import col_to_num
 from comken.exceptions import (
     ComkenError,
     EmptyHeaderCellError,
+    ExcelApplicationNotAvailableError,
     ExcelError,
+    FileFormatMismatchError,
     InvalidTableNameError,
     LastSheetDeletionError,
     SheetAlreadyExistsError,
@@ -1267,10 +1270,13 @@ class TestExcelComHandlerLocalCopy:
         wb.Save.assert_not_called()
         wb.SaveAs.assert_called_once_with(str(original), FileFormat=51)
 
+        handler.save()
+
+        wb.Save.assert_called_once_with()
+        wb.SaveAs.assert_called_once_with(str(original), FileFormat=51)
+
     def test_save_raises_on_format_mismatch_when_local_copy_used(self, tmp_path):
         """ローカルコピー経路で、保存先拡張子とワークブック形式が食い違うとエラー。"""
-        from comken.exceptions import FileFormatMismatchError
-
         original = tmp_path / "data.xlsm"
         original.touch()
         local = tmp_path / "tmp.xlsx"
@@ -1286,6 +1292,35 @@ class TestExcelComHandlerLocalCopy:
 
         with pytest.raises(FileFormatMismatchError, match="xlsm"):
             handler.save()
+
+    @pytest.mark.parametrize(("suffix", "file_format"), [(".xltx", 53), (".xltm", 54)])
+    def test_save_raises_on_template_format_mismatch(self, tmp_path, suffix, file_format):
+        """テンプレート形式でも拡張子と FileFormat の不一致を見逃さない。"""
+        original = tmp_path / f"data{suffix}"
+        original.touch()
+        handler = ExcelComHandler.__new__(ExcelComHandler)
+        handler._wb = MagicMock(FileFormat=file_format)
+        handler._original_path = original
+        handler._working_path = tmp_path / f"tmp{suffix}"
+        handler._tmp = handler._working_path
+
+        with pytest.raises(FileFormatMismatchError, match=suffix.removeprefix(".")):
+            handler.save()
+
+    def test_save_dry_run_does_not_call_com(self, tmp_path):
+        """dry-run ではローカルコピー経路でも COM の保存処理を呼ばない。"""
+        original = tmp_path / "data.xlsx"
+        handler = ExcelComHandler.__new__(ExcelComHandler)
+        handler._wb = MagicMock(FileFormat=51)
+        handler._original_path = original
+        handler._working_path = tmp_path / "tmp.xlsx"
+        handler._tmp = handler._working_path
+
+        with dry_run():
+            handler.save()
+
+        handler._wb.Save.assert_not_called()
+        handler._wb.SaveAs.assert_not_called()
 
     def test_close_removes_local_copy(self, tmp_path):
         """``close()`` は Excel を閉じた後にローカルコピーを削除する。"""
@@ -1332,4 +1367,80 @@ class TestExcelComHandlerLocalCopy:
         handler.close()
 
         excel.Quit.assert_called_once_with()
+        assert not local.exists()
+
+    def test_close_removes_local_copy_when_quit_fails(self, tmp_path):
+        """Quit が失敗してもローカルコピーは残さない。"""
+        local = tmp_path / "tmp.xlsx"
+        local.write_text("data", encoding="utf-8")
+        handler = ExcelComHandler.__new__(ExcelComHandler)
+        handler._wb = MagicMock()
+        handler._excel = MagicMock()
+        handler._excel.Quit.side_effect = OSError("quit failed")
+        handler._tmp = local
+
+        with pytest.raises(OSError, match="quit failed"):
+            handler.close()
+
+        assert not local.exists()
+
+    def test_close_retries_local_copy_cleanup(self, tmp_path):
+        """一時ファイル削除に一度失敗しても次の close で再試行する。"""
+        local = tmp_path / "tmp.xlsx"
+        local.touch()
+        handler = ExcelComHandler.__new__(ExcelComHandler)
+        handler._wb = None
+        handler._excel = None
+        handler._tmp = local
+
+        with patch.object(Path, "unlink", side_effect=[OSError("locked"), None]) as unlink:
+            handler.close()
+            assert handler._tmp == local
+            handler.close()
+
+        assert unlink.call_count == 2
+        assert handler._tmp is None
+
+    def test_init_removes_local_copy_when_excel_is_unavailable(self, tmp_path):
+        """DispatchEx 失敗時は Open 前でもローカルコピーを残さない。"""
+        original = tmp_path / "data.xlsx"
+        original.touch()
+        local = tmp_path / "tmp.xlsx"
+        local.touch()
+
+        with (
+            patch(
+                "comken.toolbox.windows.handler.copy_to_local_if_large",
+                return_value=(local, local),
+            ),
+            patch(
+                "comken.toolbox.windows.handler.win32com.client.DispatchEx",
+                side_effect=OSError("Excel unavailable"),
+            ),
+            pytest.raises(ExcelApplicationNotAvailableError, match="Excel"),
+        ):
+            ExcelComHandler(original)
+
+        assert not local.exists()
+
+
+class TestExcelBaseLocalCopyCleanup:
+    """openpyxl で開けなかった場合の一時コピー後始末。"""
+
+    def test_init_removes_local_copy_when_load_fails(self, tmp_path):
+        original = tmp_path / "data.xlsx"
+        original.touch()
+        local = tmp_path / "tmp.xlsx"
+        local.touch()
+
+        with (
+            patch(
+                "comken.toolbox.excel.base.copy_to_local_if_large",
+                return_value=(local, local),
+            ),
+            patch("comken.toolbox.excel.base.load_workbook", side_effect=OSError("load failed")),
+            pytest.raises(OSError, match="load failed"),
+        ):
+            ExcelReader(original)
+
         assert not local.exists()
