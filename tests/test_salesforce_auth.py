@@ -19,6 +19,8 @@ INSTANCE_URL = "https://instance.my.salesforce.com"
 class _TestSalesforce(SalesforceBase):
     """認証方式の差し替えを検証するための組織クラス。"""
 
+    OWNER = "test_salesforce_auth / テスト"
+
 
 def _response(body: dict, status_code: int = 200) -> MagicMock:
     response = MagicMock(status_code=status_code, text="")

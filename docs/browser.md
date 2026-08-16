@@ -34,11 +34,15 @@ Edge を自動で動かして、社内システムから情報を取ったり入
 |---|---|---|
 | 土台（直接は使わない） | `SalesforceBase` | `SiteBase` |
 | 対象ごとのクラス | `Sandbox(SalesforceBase)` | `Kintai(SiteBase)` |
-| 固有の値の置き場 | `DOMAIN_URL` / `CREDENTIAL_PREFIX` | `NAME` / `BASE_URL` / `OPTIONS` |
+| 固有の値の置き場 | `DOMAIN_URL` / `CREDENTIAL_PREFIX` / `OWNER` | `NAME` / `BASE_URL` / `OPTIONS` / `OWNER` |
 | 機能は継承せず持たせる | `.auth` / `.report` / `.metrics` | `.to(画面クラス)` で画面を作る |
 | 単体で使う入口 | `with Sandbox() as sf:` | `with Kintai() as kintai:` |
 | 複数まとめて扱う入口 | `sites/` の `site_for()` | `Browsers` |
 | 画面／機能の分割 | `.report` / `.metrics` | `Page` のサブクラス |
+
+`OWNER` は「プロジェクト名 / 担当者」の形式で必ず書く（起動時に検査される）。
+ライブラリへ昇格したクラスは `OWNER = "comken"` にする。昇格の基準は
+[ライブラリ開発規約](ライブラリ開発規約.md#サイト組織クラスを昇格させる基準) を参照。
 
 **ブラウザ自体は継承しない。** サイトクラスがブラウザを継承する書き方
 （`class 勤怠(Chrome)` のような形）もあるが、そうすると
@@ -272,6 +276,7 @@ class Kintai(SiteBase):
     NAME = "kintai"
     BASE_URL = "https://kintai.example.co.jp"
     OPTIONS = KintaiOptions
+    OWNER = "勤怠 / 担当者"
 
     # 画面の操作はここに書かない。画面クラスの仕事にする
 ```
@@ -283,6 +288,7 @@ class Kintai(SiteBase):
     NAME = "kintai"
     BASE_URL = "https://kintai.example.co.jp"
     OPTIONS = KintaiOptions
+    OWNER = "勤怠 / 担当者"
 
     def go_login(self) -> LoginPage:
         """ログイン画面を開く。"""

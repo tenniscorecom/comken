@@ -141,8 +141,12 @@ SalesforceBase                     HTTP の土台。_request() が唯一の通�
   .report   : SfReport             レポート API
   .query() / .get() / .insert() …  SOQL・CRUD
   │
-  └─ Sandbox(SalesforceBase)       URL・認証情報名・組織固有の処理を持つ
+  └─ Sandbox(SalesforceBase)       URL・認証情報名・OWNER・組織固有の処理を持つ
 ```
+
+`OWNER` は「プロジェクト名 / 担当者」の形式で必ず書く（起動時に検査される）。
+ライブラリへ昇格したクラスは `OWNER = "comken"` にする。昇格の基準は
+[ライブラリ開発規約](ライブラリ開発規約.md#サイト組織クラスを昇格させる基準) を参照。
 
 **なぜレポートを継承にしないか。** `SfReport` を `SalesforceBase` のサブクラスにすると、
 `Sandbox` は `SfReport` ではないためレポートを呼べず、多重継承に追い込まれる。
@@ -401,8 +405,10 @@ client_id / client_secret を読む（[credentials](credentials.md#credentials)�
 コードにも config.ini にも秘密の値が現れない。
 
 各クラスには `CREDENTIAL_PREFIX`（認証情報のキー名の頭）・`DOMAIN_URL`（My Domain）・
-`REPORT_*`（その組織のレポート ID）を持たせる。共通の操作は `SalesforceBase` にあるので、
-書くのは**その組織でしか通じないもの**だけ。
+`REPORT_*`（その組織のレポート ID）・`OWNER`（プロジェクト名 / 担当者）を持たせる。
+共通の操作は `SalesforceBase` にあるので、書くのは**その組織でしか通じないもの**だけ。
+`OWNER` はライブラリ管理者が重複を把握するために必須で、空だと起動時に
+`SiteOwnerRequiredError` で止まる。
 計測の組織名は指定しなければクラス名になるので、ログで組織を見分けられる。
 
 **`Sandbox` と URL・レポート ID は仮の値。** このリポジトリは公開しているため、

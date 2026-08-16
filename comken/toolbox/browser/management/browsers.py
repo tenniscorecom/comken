@@ -156,11 +156,18 @@ class Browsers:
             raise SiteConfigError(site, "NAME")
         operation = f"launch({site.__name__})"
         self._require_in_with(operation)
+        # OWNER 検査と SITES 衝突検査は SiteBase._check_start() に集約。
+        # `with SiteBase()` 経由とここ（Browsers.launch() 経由）の両方から同じ検証が走る。
+        # `with` の中であることが確かめてから動かす（外のときに OWNER 不足を言うのは筋が違う）
+        site._check_start()
         session = self.launch_session(site.NAME, site.OPTIONS, download_dir)
         instance = site(session)
         # SitePage.BASE_URL が未設定のときの参照先。launch_session() から直接
         # 起動したセッションには紐付かない（SiteBase 経由で起動したときだけ設定する）
         session._site = instance
+        # 起動成功後に1回だけ INFO ログを出す。`with SiteBase()` 経路は
+        # SiteBase.__enter__() 経由でログを出すため、ここは通らない
+        site._log_started()
         return instance
 
     def launch_session(

@@ -18,6 +18,10 @@ class Sandbox(SalesforceBase):
             rows = sf.opportunities()
     """
 
+    # comken 配下の組織クラスは、管理者が昇格を判断した印として OWNER = "comken" を書く。
+    # プロジェクト側で定義した組織クラスは「プロジェクト名 / 担当者」の形式で書く。
+    OWNER = "comken"
+
     # My Domain の URL。Sandbox は「<組織>--<サンドボックス名>.sandbox」の形になる。
     # 組織で固定なので config.ini には置かない（環境で変わる値だけを config.ini へ）
     # TODO: 配置するときに実際の URL へ置き換える

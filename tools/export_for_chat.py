@@ -61,6 +61,7 @@ ERROR_CATEGORIES = (
 DIRECT_ERROR_CATEGORIES = {
     exceptions.UnsupportedFileSuffixError: "ファイル・設定などのエラー",
     exceptions.InvalidColumnError: "ファイル・設定などのエラー",
+    exceptions.SiteOwnerRequiredError: "ファイル・設定などのエラー",
 }
 SUPPLEMENTAL_ERRORS = {
     "Access のエラー": (

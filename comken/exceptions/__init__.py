@@ -1,6 +1,7 @@
 """comken/exceptions/__init__.py — comken の例外体系。
 
 ComkenError
+├── SiteOwnerRequiredError          SiteBase / SalesforceBase に OWNER が未設定
 ├── UnsupportedFileSuffixError
 ├── AccessError
 │   ├── AccessFileNotFoundError
@@ -63,6 +64,7 @@ ComkenError
 │   ├── SessionNameConflictError
 │   ├── SessionNotFoundError
 │   ├── SiteConfigError
+│   ├── SiteAlreadyInLibraryError
 │   ├── ElementNotFoundError
 │   ├── PopupTabNotOpenedError
 │   └── DownloadTimeoutError
@@ -110,7 +112,7 @@ from .access import (
     AccessRoutineError,
     AccessSourceNotFoundError,
 )
-from .base import ComkenError
+from .base import ComkenError, SiteOwnerRequiredError
 from .browser import (
     BrowserError,
     BrowsersClosedError,
@@ -124,6 +126,7 @@ from .browser import (
     SessionNameConflictError,
     SessionNotFoundError,
     SessionNotStartedError,
+    SiteAlreadyInLibraryError,
     SiteConfigError,
     SiteNotStartedError,
 )
@@ -232,6 +235,7 @@ from .warning import _warn_coerce as _warn_coerce
 
 __all__ = [
     "ComkenError",
+    "SiteOwnerRequiredError",
     "AccessError",
     "AccessBackupError",
     "AccessFileNotFoundError",
@@ -308,6 +312,7 @@ __all__ = [
     "SessionNameConflictError",
     "SessionNotFoundError",
     "SiteConfigError",
+    "SiteAlreadyInLibraryError",
     "SiteNotStartedError",
     "ElementNotFoundError",
     "PopupTabNotOpenedError",

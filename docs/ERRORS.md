@@ -84,6 +84,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
+| `SiteOwnerRequiredError` | `SiteBase` / `SalesforceBase` のサブクラスに `OWNER` が設定されていない | サブクラスに `OWNER = "プロジェクト名 / 担当者"` を1行追加する。ライブラリ（`comken.toolbox.browser.sites/` または`comken.toolbox.salesforce.sites/`）に入れるべきサイトかは`docs/ライブラリ開発規約.md` の「サイト／組織クラスを昇格させる基準」を参照して判断する。ライブラリに昇格したい場合はライブラリ管理者へ連絡する。 |
 | `EncodingDetectionError` | CSV の文字コードを判定できない | CSV の保存形式を確認し、管理者へ連絡する |
 | `CsvHeadersTooFewError` | 指定した見出し数が CSV の列数より少ない | 管理者へ連絡する |
 | `CsvNoDataRowsError` | CSV に見出し以外のデータ行がない | 見出し行の下にデータが1行以上あるか確認する |
@@ -151,6 +152,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `SessionNameConflictError` | 同じ名前で2回 `launch` した | 名前を変える（同一サイトの別アカウントなら `kintai_a` / `kintai_b` など） |
 | `SessionNotFoundError` | `launch` していない名前を取り出した | 先に `launch` する。エラーに起動済みの一覧が出ます |
 | `SiteConfigError` | `SiteBase` サブクラスの設定が不足している | サブクラスに NAME を定義する（BASE_URL / OPTIONS も同じ） |
+| `SiteAlreadyInLibraryError` | ライブラリ公認のサイトと同じ NAME のサイトをプロジェクト側で定義した | ライブラリから `from comken.toolbox.browser.sites import <クラス名>` で取り出して使う。プロジェクト側の定義は消す。ライブラリへ昇格する基準は`docs/ライブラリ開発規約.md` を参照。 |
 | `SiteNotStartedError` | まだ起動していないサイトの画面を作ろうとした | `with Kintai() as kintai:` の中で使う |
 | `ElementNotFoundError` | 画面の部品が時間内に見つからない | もう一度実行する。サイトが重いだけのことが多い。毎回出るなら画面が変わった可能性があるので管理者へ（エラーに、どの部品を探していたかが出ます） |
 | `PopupTabNotOpenedError` | 別タブが開かない | もう一度実行する。続く場合は、その画面の「別ウィンドウで開く」ボタンが変わった可能性があるので管理者へ |

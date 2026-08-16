@@ -11,7 +11,10 @@ BrowserError
 │   └── ConcurrentSessionUseError   1つのセッションを複数スレッドから同時に操作した
 ├── 複数サイト管理に関するもの
 │   ├── SessionNameConflictError    同じ名前で2回起動した
-│   └── SessionNotFoundError        起動していない名前を取り出そうとした
+│   ├── SessionNotFoundError        起動していない名前を取り出そうとした
+│   ├── SiteConfigError             サブクラスの NAME が空
+│   ├── SiteAlreadyInLibraryError   ライブラリにあるサイトをプロジェクト側で再定義した
+│   └── SiteNotStartedError         起動していないサイトで to() / downloads を呼んだ
 └── 画面操作に関するもの
     ├── ElementNotFoundError        要素が時間内に見つからなかった
     ├── PopupTabNotOpenedError      新しいタブが時間内に開かなかった
@@ -258,6 +261,34 @@ class SessionNotFoundError(BrowserError):
             f"起動していないセッションです: {name}\n"
             f"起動済み: {launched_text}\n"
             "Browsers.launch(name) で起動してから使ってください。"
+        )
+
+
+class SiteAlreadyInLibraryError(BrowserError):
+    """ライブラリ公認のサイトと同じ NAME のサイトをプロジェクト側で定義した
+
+    ライブラリ（`comken.toolbox.browser.sites`）に同じ NAME のクラスが
+    登録されているものを、プロジェクト側で再定義するとここで止まる。
+    「すでにライブラリにあるものを自作している」状態を自動で捕まえるのが目的。
+    どちらもプロジェクト側に置くと、片方を直してもう片方が追従できない事故になる。
+
+    発生箇所: SiteBase.__enter__() / Browsers.launch(SiteBase)
+
+    対処:
+        ライブラリから `from comken.toolbox.browser.sites import <クラス名>` で取り出して使う。
+        プロジェクト側の定義は消す。ライブラリへ昇格する基準は
+        `docs/ライブラリ開発規約.md` を参照。
+    """
+
+    def __init__(self, site_cls: type, library_cls: type) -> None:
+        super().__init__(
+            f'{site_cls.__name__}（NAME="{site_cls.NAME}"）はライブラリにすでに登録されています: '
+            f"{library_cls.__module__}.{library_cls.__name__}\n"
+            "ライブラリ公認のクラスを取り出して使う形に書き換えてください:\n"
+            f"  from {library_cls.__module__} import {library_cls.__name__}\n"
+            "  with Browsers() as browsers:\n"
+            f"      site = browsers.launch({library_cls.__name__})\n"
+            "プロジェクト側に独自実装を残したい場合は、クラス名と NAME を別のものへ変えてください。"
         )
 
 

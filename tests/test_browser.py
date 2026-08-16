@@ -1041,6 +1041,7 @@ class TestBrowsersLaunchSite:
             NAME = "kintai"
             BASE_URL = "https://kintai.example.co.jp"
             OPTIONS = KintaiOptions
+            OWNER = "test_browser / テスト"
 
         with Browsers() as browsers:
             kintai = browsers.launch(Kintai)
@@ -1060,6 +1061,7 @@ class TestBrowsersLaunchSite:
         class Kintai(SiteBase):
             NAME = "kintai"
             OPTIONS = BrowserOptions
+            OWNER = "test_browser / テスト"
 
         with Browsers() as browsers:
             kintai = browsers.launch(Kintai)
@@ -1076,6 +1078,7 @@ class TestBrowsersLaunchSite:
         class Kintai(SiteBase):
             NAME = "kintai"
             OPTIONS = KintaiOptions
+            OWNER = "test_browser / テスト"
 
         captured: list[BrowserOptions] = []
 
@@ -1120,6 +1123,7 @@ class TestBrowsersLaunchSite:
         class Kintai(SiteBase):
             NAME = "kintai"
             OPTIONS = BrowserOptions
+            OWNER = "test_browser / テスト"
 
         browsers = Browsers()
 
@@ -1136,6 +1140,7 @@ class TestBrowsersLaunchSite:
         class Kintai(SiteBase):
             NAME = "kintai"
             OPTIONS = BrowserOptions
+            OWNER = "test_browser / テスト"
 
         with Browsers() as browsers:
             browsers.launch(Kintai)
@@ -1192,6 +1197,7 @@ class TestSiteStandsAlone:
         class Kintai(SiteBase):
             NAME = "kintai"
             BASE_URL = "https://kintai.example.co.jp"
+            OWNER = "test_browser / テスト"
 
         with Kintai() as kintai:
             assert isinstance(kintai.session, BrowserSession)
@@ -1203,6 +1209,7 @@ class TestSiteStandsAlone:
 
         class Kintai(SiteBase):
             NAME = "kintai"
+            OWNER = "test_browser / テスト"
 
         with Kintai():
             assert not closed, "with の中で閉じてしまっている"
@@ -1215,6 +1222,7 @@ class TestSiteStandsAlone:
 
         class Kintai(SiteBase):
             NAME = "kintai"
+            OWNER = "test_browser / テスト"
 
         with Browsers() as browsers:
             kintai = browsers.launch(Kintai)
@@ -1229,6 +1237,7 @@ class TestSiteStandsAlone:
 
         class Kintai(SiteBase):
             NAME = "kintai"
+            OWNER = "test_browser / テスト"
 
         kintai = Kintai()
         kintai.close()
@@ -1259,6 +1268,7 @@ class TestSessionIsNotExposedToCallers:
 
         class Kintai(SiteBase):
             NAME = "kintai"
+            OWNER = "test_browser / テスト"
 
         with Kintai() as kintai:
             page = kintai.to(Page)
@@ -1272,6 +1282,7 @@ class TestSessionIsNotExposedToCallers:
 
         class Kintai(SiteBase):
             NAME = "kintai"
+            OWNER = "test_browser / テスト"
 
         class HomePage(Page):
             pass
@@ -1287,6 +1298,7 @@ class TestSessionIsNotExposedToCallers:
 
         class Kintai(SiteBase):
             NAME = "kintai"
+            OWNER = "test_browser / テスト"
 
         with pytest.raises(SiteNotStartedError):
             Kintai().to(Page)
@@ -1296,6 +1308,7 @@ class TestSessionIsNotExposedToCallers:
 
         class Kintai(SiteBase):
             NAME = "kintai"
+            OWNER = "test_browser / テスト"
 
         with pytest.raises(SiteNotStartedError):
             _ = Kintai().downloads

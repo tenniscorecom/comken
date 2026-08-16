@@ -40,6 +40,7 @@ class _TestSalesforceBase(SalesforceBase):
 
     DOMAIN_URL = DOMAIN_URL
     CREDENTIAL_PREFIX = "test_salesforce"
+    OWNER = "test_salesforce / テスト"
 
 
 class TestReportIdFromUrl:
@@ -681,6 +682,7 @@ class TestCredentialsInitialization:
 
         class PrefixUnsetSalesforce(SalesforceBase):
             DOMAIN_URL = DOMAIN_URL
+            OWNER = "test_salesforce / テスト"
 
         monkeypatch.setattr(store, "CREDENTIALS_PATH", self._store(tmp_path))
         with pytest.raises(InvalidCredentialNameError):

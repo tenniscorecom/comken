@@ -29,6 +29,7 @@ from ...exceptions import (
     SalesforceConnectionError,
     SalesforceExternalIdMissingError,
     SalesforceRequestError,
+    SiteOwnerRequiredError,
 )
 from ...runtime import dry_run_log, is_dry_run
 from .metrics import ApiMetrics, RetryReason
@@ -40,6 +41,10 @@ from .oauth_refresh import OAuth
 from .report import ReportApi
 
 logger = logging.getLogger(__name__)
+
+# comken 配下のクラスは OWNER 検査の対象外（管理者が既に昇格を判断した印）。
+# SiteBase 側と同じ定数を同じ目的で置く
+_COMKEN_MODULE_PREFIX = "comken."
 
 HTTP_UNAUTHORIZED = 401
 HTTP_TOO_MANY_REQUESTS = 429
@@ -87,6 +92,11 @@ class SalesforceBase:
     # 認証情報のキー名の頭。組織クラスで指定する
     CREDENTIAL_PREFIX = ""
 
+    # 「どのプロジェクト／誰が継承して作ったか」を示す識別子。同じ社内組織の
+    # クラスが複数プロジェクトで重複していないかを、ライブラリ管理者が
+    # 把握するために使う。comken 配下に置くクラスは OWNER = "comken" にする。
+    OWNER = ""
+
     def __init__(
         self,
         *,
@@ -119,6 +129,11 @@ class SalesforceBase:
             SalesforceAuthError: 認証に失敗した場合。
             SalesforceConnectionError: ネットワークの問題で接続できない場合。
         """
+        # 認証やネットワークに触れる前に OWNER を確かめる。`_check_start()` は
+        # OWNER 必須検査だけを行う classmethod。comken 配下の組織クラスは検査しない
+        # （管理者が既に判断した印）。ライブラリ内の同名組織は sites/site_for() が
+        # 別途検出するため、ここでは NAME 衝突まで見ない
+        type(self)._check_start()
         # 認証方式のクラスを渡されたら、組み立ては省略せず DPAPI から作る。
         # 値を手で並べる書き方（ClientCredentialsAuth(cid, secret, url)）を
         # 利用側に強いないため。既定（None）も同じ経路を通る。
@@ -137,6 +152,40 @@ class SalesforceBase:
         self._access_token = ""
         self._instance_url = ""
         self._authenticate()
+        # 起動成功後に1回だけ INFO ログを出す。検証 (`_check_start()`) とは別
+        # 経路で、認証が失敗したら出さない（5xx をリトライしたと計測しながら
+        # 実際にはやり直していなかった反省を踏まないため）
+        type(self)._log_started()
+
+    @classmethod
+    def _check_start(cls) -> None:
+        """起動時に1回だけ行う検証（OWNER 必須）。
+
+        OWNER の必須検査を `with SalesforceBase()` 経路から確実に通すため、
+        SiteBase と同じ形で classmethod にまとめる。comken 配下の組織クラスは
+        検査対象外（管理者が既に判断した印）。ライブラリ内の同名組織の検出は
+        sites/site_for() が担うため、ここでは NAME 衝突まで見ない。
+        起動 INFO ログは出さない。ログは起動が成功した後 `_log_started()` で
+        1回だけ出す（ここで出すと認証失敗のときに「使った」という嘘のログが残る）。
+        """
+        if cls.__module__.startswith(_COMKEN_MODULE_PREFIX):
+            return
+        if not cls.OWNER:
+            raise SiteOwnerRequiredError(cls, "SalesforceBase")
+
+    @classmethod
+    def _log_started(cls) -> None:
+        """起動が成功した後に1回だけ出す INFO ログ。
+
+        検証 (`_check_start()`) とは分けて、認証の出口に置く。
+        認証が失敗したらログは出さない（5xx をリトライしたと計測しながら
+        実際にはやり直していなかった反省を踏まないため）。
+        comken 配下のクラスは免除の判定を `_check_start()` と共有し、ログも
+        出さない（管理者が把握済みのものを毎回流しても情報が増えないため）。
+        """
+        if cls.__module__.startswith(_COMKEN_MODULE_PREFIX):
+            return
+        logger.info("site=%s owner=%s defined=%s", cls.__name__, cls.OWNER, cls.__module__)
 
     # 組織クラスのまま返す（with Sandbox() as sf: で sf.opportunities() の補完が効く）
     def __enter__(self) -> Self:

@@ -16,3 +16,4 @@ class SampleSite(SiteBase):
     NAME = "sample"
     BASE_URL = "https://the-internet.herokuapp.com"
     OPTIONS = SampleBrowserOptions
+    OWNER = "sample_login / サンプル"

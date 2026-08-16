@@ -17,6 +17,7 @@ r"""comken/toolbox/browser/site.py — サイトを表す SiteBase 基底クラ�
         NAME = "kintai"
         BASE_URL = "https://kintai.example.co.jp"
         OPTIONS = KintaiOptions
+        OWNER = "勤怠 / 小栗"
 
     # 1サイトだけ
     with Kintai() as kintai:
@@ -32,9 +33,15 @@ r"""comken/toolbox/browser/site.py — サイトを表す SiteBase 基底クラ�
 # 定義中（クラス内）の BrowserSession / Browsers を型注釈に使うため、注釈の評価を遅延する。
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, ClassVar, TypeVar
 
-from ...exceptions import SiteConfigError, SiteNotStartedError
+from ...exceptions import (
+    SiteAlreadyInLibraryError,
+    SiteConfigError,
+    SiteNotStartedError,
+    SiteOwnerRequiredError,
+)
 from .download import DownloadDir
 from .options import BrowserOptions
 
@@ -46,11 +53,17 @@ if TYPE_CHECKING:
 # これがないと補完が Page 止まりになり、画面ごとのメソッドが出ない
 P = TypeVar("P", bound="Page")
 
+# comken 配下のクラスは OWNER 検査の対象外（管理者が既に昇格を判断した印）。
+# 検査する側の classmethod とこの定数を同じ場所に置いて、意味のずれを防ぐ
+_COMKEN_MODULE_PREFIX = "comken."
+
+logger = logging.getLogger(__name__)
+
 
 class SiteBase:
     """1サイト分の入口。サイトごとにサブクラスを作って固有の値を置く。
 
-    サブクラスで NAME / BASE_URL / OPTIONS を上書きする。`session` 以外の状態
+    サブクラスで NAME / BASE_URL / OPTIONS / OWNER を上書きする。`session` 以外の状態
     （current_url や cookie など）は持たない — 同じサイトを2アカウントで並列に
     開けるようにするため。
 
@@ -68,6 +81,10 @@ class SiteBase:
     BASE_URL: ClassVar[str] = ""
     # 起動オプション。クラスで渡す（セッションごとに別インスタンスが作られる）
     OPTIONS: ClassVar[type[BrowserOptions] | None] = None
+    # 「どのプロジェクト／誰が継承して作ったか」を示す識別子。同じ社内システムの
+    # クラスが複数プロジェクトで重複していないかを、ライブラリ管理者が
+    # 把握するために使う。comken 配下に置くクラスは OWNER = "comken" にする。
+    OWNER: ClassVar[str] = ""
 
     def __init__(self, session: BrowserSession | None = None) -> None:
         self.session = session
@@ -81,6 +98,7 @@ class SiteBase:
 
         if not self.NAME:
             raise SiteConfigError(self.__class__, "NAME")
+        type(self)._check_start()
         self._browsers = Browsers()
         self._browsers.__enter__()
         session = self._browsers.launch_session(self.NAME, self.OPTIONS)
@@ -88,7 +106,40 @@ class SiteBase:
         # SitePage.BASE_URL が未設定のときの参照先。launch_session() からは
         # 設定されないので、ここで結びつける
         session._site = self
+        # 起動成功後に1回だけ INFO ログを出す。`Browsers.launch()` 経路と
+        # この経路のどちらでも同じログが1行だけ出る（Browsers.launch() は
+        # launch_session() を直接呼ぶため、ここは通らない）
+        type(self)._log_started()
         return self
+
+    @classmethod
+    def _check_start(cls) -> None:
+        """起動時に1回だけ行う検証（OWNER 必須とライブラリ公認サイトとの NAME 衝突）。
+
+        `with SiteBase()` 経路と `Browsers.launch()` 経路の両方から共有するために
+        1か所にまとめる。comken 配下のクラスは検査対象外（管理者が既に判断した印）。
+        起動 INFO ログは出さない。ログは起動が成功した後 `_log_started()` で
+        1回だけ出す（ここで出すと起動失敗のときに「使った」という嘘のログが残る）。
+        """
+        if cls.__module__.startswith(_COMKEN_MODULE_PREFIX):
+            return
+        if not cls.OWNER:
+            raise SiteOwnerRequiredError(cls, "SiteBase")
+        _check_not_in_library(cls)
+
+    @classmethod
+    def _log_started(cls) -> None:
+        """起動が成功した後に1回だけ出す INFO ログ。
+
+        検証 (`_check_start()`) とは分けて、起動の入口ではなく出口に置く。
+        ブラウザの起動や NAME 衝突が失敗したらログは出ない（5xx をリトライしたと
+        計測しながら実際にはやり直していなかった反省をここで踏まないため）。
+        comken 配下のクラスは免除の判定を `_check_start()` と共有し、ログも
+        出さない（管理者が把握済みのものを毎回流しても情報が増えないため）。
+        """
+        if cls.__module__.startswith(_COMKEN_MODULE_PREFIX):
+            return
+        logger.info("site=%s owner=%s defined=%s", cls.NAME, cls.OWNER, cls.__module__)
 
     def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
         if self._browsers is not None:
@@ -153,3 +204,18 @@ class SiteBase:
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(name={self.NAME!r})"
+
+
+def _check_not_in_library(cls: type[SiteBase]) -> None:
+    """起動しようとしているクラスと同じ NAME がライブラリ公認サイトにあれば止める。
+
+    ライブラリに同じ NAME のクラスがあるなら、プロジェクト側で再定義するのではなく
+    ライブラリから import して使う形に直してほしい。`SiteAlreadyInLibraryError` で
+    「取り出して使う import パス」まで案内する。
+    """
+    # 循環 import 回避のため、ここで import する（`site.py` が `sites` を import する形になる）
+    from .sites import SITES
+
+    for library_cls in SITES:
+        if library_cls.NAME == cls.NAME:
+            raise SiteAlreadyInLibraryError(cls, library_cls)

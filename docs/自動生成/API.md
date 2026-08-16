@@ -1102,6 +1102,36 @@ comken が出す固有エラー全体
 対処:
     画面に表示された具体的なエラー名を上の表から探す
 
+### `SiteOwnerRequiredError`
+
+```text
+class SiteOwnerRequiredError(ComkenError):
+```
+
+#### 説明
+
+`SiteBase` / `SalesforceBase` のサブクラスに `OWNER` が設定されていない
+
+継承してサイト／組織クラスを作った事実がライブラリ管理者に届かないと、
+同じ社内システムのクラスが複数プロジェクトで重複しても気づけない。
+ドキュメントの努力目標では守れないので、起動時に OWNER の設定を強制する。
+
+発生箇所: SiteBase.__enter__() / Browsers.launch(SiteBase) /
+         SalesforceBase.__init__()
+
+対処:
+    サブクラスに `OWNER = "プロジェクト名 / 担当者"` を1行追加する。
+    ライブラリ（`comken.toolbox.browser.sites/` または
+    `comken.toolbox.salesforce.sites/`）に入れるべきサイトかは
+    `docs/ライブラリ開発規約.md` の「サイト／組織クラスを昇格させる基準」を
+    参照して判断する。ライブラリに昇格したい場合はライブラリ管理者へ連絡する。
+
+#### `__init__`
+
+```text
+def __init__(self, site_cls: type, base_cls_name: str) -> None:
+```
+
 ### `AccessError`
 
 ```text
@@ -2666,6 +2696,34 @@ class SiteConfigError(BrowserError):
 def __init__(self, site_cls: type, missing: str) -> None:
 ```
 
+### `SiteAlreadyInLibraryError`
+
+```text
+class SiteAlreadyInLibraryError(BrowserError):
+```
+
+#### 説明
+
+ライブラリ公認のサイトと同じ NAME のサイトをプロジェクト側で定義した
+
+ライブラリ（`comken.toolbox.browser.sites`）に同じ NAME のクラスが
+登録されているものを、プロジェクト側で再定義するとここで止まる。
+「すでにライブラリにあるものを自作している」状態を自動で捕まえるのが目的。
+どちらもプロジェクト側に置くと、片方を直してもう片方が追従できない事故になる。
+
+発生箇所: SiteBase.__enter__() / Browsers.launch(SiteBase)
+
+対処:
+    ライブラリから `from comken.toolbox.browser.sites import <クラス名>` で取り出して使う。
+    プロジェクト側の定義は消す。ライブラリへ昇格する基準は
+    `docs/ライブラリ開発規約.md` を参照。
+
+#### `__init__`
+
+```text
+def __init__(self, site_cls: type, library_cls: type) -> None:
+```
+
 ### `SiteNotStartedError`
 
 ```text
@@ -3837,7 +3895,7 @@ class SiteBase:
 
 1サイト分の入口。サイトごとにサブクラスを作って固有の値を置く。
 
-サブクラスで NAME / BASE_URL / OPTIONS を上書きする。`session` 以外の状態
+サブクラスで NAME / BASE_URL / OPTIONS / OWNER を上書きする。`session` 以外の状態
 （current_url や cookie など）は持たない — 同じサイトを2アカウントで並列に
 開けるようにするため。
 
@@ -4533,6 +4591,13 @@ def is_done(self) -> bool:
 
 待たずに様子だけ見たいときに使う。
 True になっていても、結果や例外を受け取るには wait() を呼ぶ。
+
+
+## `from comken.toolbox.browser.sites import ...`
+
+### `SITES`
+
+公開定数。
 
 
 ## `from comken.toolbox.credentials import ...`

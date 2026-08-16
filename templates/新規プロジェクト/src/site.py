@@ -16,3 +16,4 @@ class Kintai(SiteBase):
     NAME = "kintai"
     BASE_URL = "https://kintai.example.co.jp"
     OPTIONS = KintaiOptions
+    OWNER = "プロジェクト名 / 担当者"
