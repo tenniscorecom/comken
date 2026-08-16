@@ -8,7 +8,7 @@
 import logging
 from pathlib import Path
 
-from comken.core.logger import setup_logging
+from comken import setup_logging
 from comken.toolbox.csv import CsvReader, CsvWriter
 
 HERE = Path(__file__).parent

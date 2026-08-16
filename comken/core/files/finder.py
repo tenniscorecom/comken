@@ -1,4 +1,4 @@
-"""comken/core/utils/files/finder.py — フォルダ内のファイル検索
+"""comken/core/files/finder.py — フォルダ内のファイル検索
 
 使い方は docs/utils-files.md を参照。
 """
@@ -7,7 +7,7 @@ import datetime
 import re
 from pathlib import Path
 
-from ....constants import SortBy
+from ...constants import SortBy
 from ..clock import today
 
 # ファイル名に含まれる日付らしい数字（20260729 / 2026-07-29 / 2026_07_29 / 2026.07.29）。

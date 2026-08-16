@@ -1,8 +1,8 @@
-"""comken/core/utils/files/base.py — 1つのファイルを扱うクラスに共通する薄い基底クラス。"""
+"""comken/core/files/base.py — 1つのファイルを扱うクラスに共通する薄い基底クラス。"""
 
 from pathlib import Path
 
-from ....exceptions.file import UnsupportedFileSuffixError
+from ...exceptions.file import UnsupportedFileSuffixError
 
 
 class FileBase:

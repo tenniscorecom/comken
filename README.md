@@ -241,7 +241,7 @@ with comken.dry_run():
 自作関数の処理時間も同じ仕組みで計測できる（デバッグモード中だけログに出る）:
 
 ```python
-from comken.core.utils import measure
+from comken.core import measure
 
 @measure
 def build_report():
@@ -275,7 +275,7 @@ config.read(r"C:\作業\config.ini")
 明示的にインスタンスを持ちたい場合（テストや複数 ini の読み分けに）:
 
 ```python
-from comken.core.config import Config
+from comken import Config
 
 config = Config()                      # カレントディレクトリの config.ini
 config = Config("path/to/config.ini")  # パスを指定する場合
@@ -371,7 +371,7 @@ python -m comken.core.config
 使い分ける。人が調整した設定をプログラムが上書きする事故を防ぐため、両者は混ぜない。
 
 ```python
-from comken.core.state import State
+from comken.core import State
 
 state = State()                         # 実行フォルダ直下の state.ini
 last_file = state.get("LAST_FILE")     # 無ければ None
@@ -402,7 +402,7 @@ RPA 基盤を通さず `python main.py` で単体実行するときだけ、先�
 
 ```python
 # main.py（単体実行する場合だけ）
-from comken.core.logger import setup_logging
+from comken import setup_logging
 
 setup_logging()  # コンソールと logs/YYYY-MM-DD.log（UTF-8）へ出力
 # setup_logging(to_file=False)  # コンソールだけに出力する場合

@@ -142,7 +142,7 @@ class TestAccessDatabase:
         for _ in range(2):
             with (
                 patch("comken.toolbox.access.handler.now", return_value=fixed_now),
-                patch("comken.core.utils.files.naming.date.now", return_value=fixed_now),
+                patch("comken.core.files.naming.date.now", return_value=fixed_now),
                 patch(
                     "comken.toolbox.access.handler.win32com.client.DispatchEx",
                     return_value=MagicMock(),
@@ -174,7 +174,7 @@ class TestAccessDatabase:
 
         with (
             patch("comken.toolbox.access.handler.now", return_value=fixed_now),
-            patch("comken.core.utils.files.naming.date.now", return_value=fixed_now),
+            patch("comken.core.files.naming.date.now", return_value=fixed_now),
             patch(
                 "comken.toolbox.access.handler.win32com.client.DispatchEx", return_value=MagicMock()
             ),

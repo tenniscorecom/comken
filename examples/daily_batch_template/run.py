@@ -17,7 +17,7 @@
 
 import logging
 
-from comken.core.utils.files import DateNameBuilder, FileFinder
+from comken.core import DateNameBuilder, FileFinder
 from comken.exceptions import ComkenError
 from comken.toolbox.csv import CsvReader
 from comken.toolbox.excel import ExcelWriter

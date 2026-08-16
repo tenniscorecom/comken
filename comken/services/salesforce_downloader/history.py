@@ -36,7 +36,7 @@ import logging
 import uuid
 from pathlib import Path
 
-from ...core.utils.clock import now, today
+from ...core.clock import now, today
 
 logger = logging.getLogger(__name__)
 

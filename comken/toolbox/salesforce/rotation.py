@@ -13,7 +13,7 @@ import datetime
 from dataclasses import dataclass
 from pathlib import Path
 
-from ...core.utils.clock import today as local_today
+from ...core.clock import today as local_today
 from ...exceptions import (
     CredentialError,
     CredentialNotFoundError,

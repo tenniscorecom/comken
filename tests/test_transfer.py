@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from comken.core.utils.transfer import mapping_columns, normalize_lookup_key
+from comken.core.transfer import mapping_columns, normalize_lookup_key
 from comken.exceptions import (
     TransferDestinationColumnNotFoundError,
     TransferKeyColumnNotFoundError,

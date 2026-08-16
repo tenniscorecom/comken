@@ -15,9 +15,9 @@ from typing import Self
 import win32com.client
 
 from ...constants import Encoding
-from ...core.utils.clock import now
-from ...core.utils.files.base import FileBase
-from ...core.utils.files.naming import DateNameBuilder
+from ...core.clock import now
+from ...core.files.base import FileBase
+from ...core.files.naming import DateNameBuilder
 from ...exceptions import (
     AccessBackupError,
     AccessFileNotFoundError,

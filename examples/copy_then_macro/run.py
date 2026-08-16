@@ -25,8 +25,8 @@ r"""サンプル: bat でやっていた「コピー → マクロ → 配る」
 import logging
 from pathlib import Path
 
-from comken.core.logger import setup_logging
-from comken.core.utils.files import FileFinder, copy_file
+from comken import setup_logging
+from comken.core import FileFinder, copy_file
 from comken.toolbox.excel import ExcelWriter
 
 # 受け取り元・作業場所・配り先。共有フォルダは遅く、Excel が掴んだままになることもあるので、

@@ -10,8 +10,8 @@
 import logging
 from pathlib import Path
 
+from comken import setup_logging
 from comken.constants import Color
-from comken.core.logger import setup_logging
 from comken.toolbox.excel import ExcelWriter
 
 HERE = Path(__file__).parent

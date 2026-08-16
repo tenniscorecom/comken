@@ -36,7 +36,6 @@ import types
 from pathlib import Path
 from typing import NoReturn
 
-from ... import __version__
 from ...exceptions import (
     ConfigCreatedFromExampleError,
     ConfigFileNotFoundError,
@@ -240,6 +239,11 @@ def _log_version_once() -> None:
     """設定の初回読み込み後に障害調査用のバージョンを1回だけ記録する。"""
     global _is_version_logged
     if not _is_version_logged:
+        # 親パッケージ側の __version__ は comken/__init__.py で定義されるため、
+        # モジュール先頭で `from ... import __version__` すると import 順序に
+        # 依存した循環が起きる。関数の内側で取る形にすることで循環を断つ。
+        from ... import __version__
+
         logger.info("comken v%s", __version__)
         _is_version_logged = True
 

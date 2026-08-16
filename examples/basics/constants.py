@@ -3,9 +3,9 @@
 import logging
 from pathlib import Path
 
+from comken import setup_logging
 from comken.constants import Color, Encoding, FileFormat, SortBy
-from comken.core.logger import setup_logging
-from comken.core.utils.files import FileFinder
+from comken.core import FileFinder
 from comken.toolbox.csv import CsvReader, CsvWriter
 
 HERE = Path(__file__).parent

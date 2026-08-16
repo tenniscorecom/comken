@@ -13,26 +13,20 @@ from unittest.mock import patch
 import pytest
 
 from comken.constants import SortBy
-from comken.core.utils import (
-    diff_row,
-    diff_rows,
-    normalize,
-    now,
-    remove_spaces,
-    strip_spaces,
-    today,
-    wait,
-)
-from comken.core.utils.files import (
+from comken.core.clock import now, today
+from comken.core.data import diff_row, diff_rows
+from comken.core.files import (
     DateNameBuilder,
     FileFinder,
-    Paths,
     copy_file,
     date_in_name,
     move_file,
 )
+from comken.core.text import normalize, remove_spaces, strip_spaces
+from comken.core.wait import wait
 from comken.exceptions import ColumnNotFoundError, DownloadTimeoutError
 from comken.toolbox.browser.download import DownloadDir
+from comken.toolbox.windows import Paths
 
 
 class TestClock:
@@ -126,7 +120,7 @@ class TestMoveFile:
 
         with (
             patch.object(type(src), "replace", side_effect=OSError),
-            patch("comken.core.utils.files.ops.shutil.copy2", side_effect=OSError("copy failed")),
+            patch("comken.core.files.ops.shutil.copy2", side_effect=OSError("copy failed")),
             pytest.raises(OSError, match="copy failed"),
         ):
             move_file(src, target)
@@ -732,7 +726,7 @@ class TestPaths:
 
     def test_shell_folder_falls_back_on_missing_value(self, tmp_path):
         """レジストリに値がない場合はデフォルトにフォールバックすることを確認する。"""
-        from comken.core.utils.files.paths import _shell_folder
+        from comken.toolbox.windows.paths import _shell_folder
 
         assert _shell_folder("存在しない値名", tmp_path) == tmp_path
 

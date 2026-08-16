@@ -17,8 +17,7 @@ import logging
 from pathlib import Path
 
 from comken.constants import Color
-from comken.core.utils import diff_rows
-from comken.core.utils.files import DateNameBuilder
+from comken.core import DateNameBuilder, diff_rows
 from comken.toolbox.csv import CsvReader, CsvWriter
 from comken.toolbox.excel import ExcelWriter
 

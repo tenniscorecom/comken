@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from comken.core.utils.clock import today
+from comken.core.clock import today
 from comken.exceptions import (
     EmptyReportError,
     InvalidReportUrlError,

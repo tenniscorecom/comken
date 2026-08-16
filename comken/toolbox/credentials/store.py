@@ -37,7 +37,7 @@ from pathlib import Path
 import pywintypes
 import win32crypt
 
-from ...core.utils.files.ops import cleanup_stale_tmp
+from ...core.files.ops import cleanup_stale_tmp
 from ...exceptions import (
     CredentialDecryptionError,
     CredentialNotFoundError,

@@ -23,9 +23,9 @@ import win32con
 import win32gui
 
 from ...constants import FileFormat
-from ...core.utils.data import column_number
-from ...core.utils.files.base import FileBase
-from ...core.utils.transfer import mapping_columns, normalize_lookup_key
+from ...core.data import column_number
+from ...core.files.base import FileBase
+from ...core.transfer import mapping_columns, normalize_lookup_key
 from ...exceptions import (
     EmptyHeaderCellError,
     ExcelApplicationNotAvailableError,

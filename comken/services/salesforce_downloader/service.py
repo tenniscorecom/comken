@@ -44,7 +44,7 @@ import logging
 import time
 from pathlib import Path
 
-from ...core.utils.files import DateNameBuilder
+from ...core.files import DateNameBuilder
 from ...exceptions import (
     ComkenError,
     EmptyReportError,

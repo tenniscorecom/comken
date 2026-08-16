@@ -14,7 +14,7 @@ from openpyxl import Workbook, load_workbook
 
 import comken.toolbox.excel
 from comken.core.config import Config
-from comken.core.utils.data import col_to_num
+from comken.core.data import col_to_num
 from comken.exceptions import (
     ComkenError,
     ExcelError,

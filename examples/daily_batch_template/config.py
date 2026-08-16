@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from comken.core.config import Config
+from comken import Config
 
 # 実プロジェクトでは main.py と config.ini が同じフォルダにあるため Config() だけでよい。
 # このサンプルはリポジトリのルートから実行するので、config.ini の場所を明示している

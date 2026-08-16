@@ -346,7 +346,7 @@ def ensure_login(self, user_id: str, password: str) -> "HomePage":
 ダウンロードフォルダはセッションごとに分かれている。完了待ちは `download_dir.wait()`。
 
 ```python
-from comken.core.utils.files import move_file
+from comken.core import move_file
 
 with Browsers() as browsers:
     kintai = browsers.launch("kintai", KintaiOptions)
@@ -569,8 +569,8 @@ Edge がダウンロード中に作る `.crdownload` を監視して完了を判
 残したいファイルは `with` の中で移動しておく。
 
 ```python
+from comken.core import move_file
 from comken.toolbox.browser import Browsers
-from comken.core.utils.files import move_file
 
 with Browsers() as browsers:
     kintai = browsers.launch("kintai", KintaiOptions)

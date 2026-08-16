@@ -3,9 +3,8 @@
 import logging
 from pathlib import Path
 
-from comken import dry_run
-from comken.core.logger import setup_logging
-from comken.core.state import State
+from comken import dry_run, setup_logging
+from comken.core import State
 
 HERE = Path(__file__).parent
 STATE_PATH = HERE / "output" / "state.ini"

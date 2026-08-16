@@ -30,7 +30,7 @@ from typing import Self
 
 from selenium import webdriver
 
-from ....core.utils import now
+from ....core.clock import now
 from ....exceptions import (
     ConcurrentSessionUseError,
     SessionClosedError,

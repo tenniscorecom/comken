@@ -16,7 +16,7 @@ from typing import Self
 
 import win32com.client
 
-from ...core.utils.clock import now
+from ...core.clock import now
 from ...exceptions import (
     ClassicOutlookNotAvailableError,
     OutlookAttachmentNotFoundError,

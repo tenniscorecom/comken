@@ -13,7 +13,7 @@ from pathlib import Path
 
 from ..exceptions import StateFileCorruptedError, StateLowerCaseNameError, StateValueTypeError
 from ..runtime import dry_run_log, is_dry_run
-from .utils.files.ops import cleanup_stale_tmp
+from .files.ops import cleanup_stale_tmp
 
 STATE_SECTION = "STATE"
 

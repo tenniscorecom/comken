@@ -1,3 +1,3 @@
-from comken.core.config import Config
+from comken import Config
 
 config = Config()

@@ -13,9 +13,9 @@ from openpyxl.utils.cell import range_boundaries
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.worksheet.worksheet import Worksheet
 
-from ...core.utils.data import column_number
-from ...core.utils.timer import measure
-from ...core.utils.transfer import mapping_columns, normalize_lookup_key
+from ...core.data import column_number
+from ...core.timer import measure
+from ...core.transfer import mapping_columns, normalize_lookup_key
 from ...exceptions import (
     InvalidTableNameError,
     TableAlreadyExistsError,

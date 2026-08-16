@@ -1,4 +1,4 @@
-"""comken/core/utils/files/ops.py — ファイルのコピー・移動と一時ファイル管理。"""
+"""comken/core/files/ops.py — ファイルのコピー・移動と一時ファイル管理。"""
 
 import logging
 import shutil
@@ -8,7 +8,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from ....runtime import dry_run_log, is_dry_run
+from ...runtime import dry_run_log, is_dry_run
 
 logger = logging.getLogger(__name__)
 

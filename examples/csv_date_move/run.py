@@ -12,9 +12,8 @@ import datetime
 import logging
 from pathlib import Path
 
-from comken import dry_run
-from comken.core.config import Config
-from comken.core.utils.files import FileFinder, date_in_name, move_file
+from comken import Config, dry_run
+from comken.core import FileFinder, date_in_name, move_file
 from comken.toolbox.csv import CsvReader
 
 HERE = Path(__file__).parent

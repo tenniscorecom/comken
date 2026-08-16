@@ -10,7 +10,6 @@ from unittest.mock import patch
 
 import pytest
 
-import comken.core.utils
 import comken.toolbox.csv
 from comken.constants import Encoding
 from comken.exceptions import (
@@ -93,9 +92,10 @@ class TestCsvPublicApi:
     """CSV の公開 API と依存境界を確認する。"""
 
     def test_utils_does_not_export_col_to_num(self):
-        for package in (comken.toolbox.csv, comken.core.utils):
-            assert "col_to_num" not in package.__all__
-            assert not hasattr(package, "col_to_num")
+        # col_to_num は comken.core.data 内の内部実装。facade には出さない
+        # （core.data は `__all__` を持たない内部モジュール）。
+        assert "col_to_num" not in comken.__all__
+        assert "col_to_num" not in comken.toolbox.csv.__all__
 
     def test_csv_does_not_import_excel(self):
         csv_dir = Path(__file__).resolve().parents[1] / "comken" / "csv"

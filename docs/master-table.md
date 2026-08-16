@@ -1,4 +1,4 @@
-﻿# Excel の表を設定として使う（master_table）
+# Excel の表を設定として使う（master_table）
 
 [README（ドキュメントの入口）へ戻る](../README.md)
 

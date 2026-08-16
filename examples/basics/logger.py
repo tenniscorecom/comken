@@ -3,9 +3,8 @@
 import logging
 from pathlib import Path
 
-import comken.core.logger as comken_logger
-from comken.core.logger import setup_logging
-from comken.core.utils import today
+from comken import setup_logging
+from comken.core import today
 
 HERE = Path(__file__).parent
 LOG_FOLDER = HERE / "output" / "logs"
@@ -23,6 +22,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    comken_logger.LOG_DIR = LOG_FOLDER
+    # 出力先を変えたいときは実行前にフォルダを作って setup_logging() を呼ぶ。
+    LOG_FOLDER.mkdir(parents=True, exist_ok=True)
     setup_logging()
     main()

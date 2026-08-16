@@ -3,9 +3,9 @@
 import logging
 from pathlib import Path
 
+from comken import setup_logging
 from comken.constants import SortBy
-from comken.core.logger import setup_logging
-from comken.core.utils.files import (
+from comken.core import (
     DateNameBuilder,
     FileFinder,
     copy_file,

@@ -3,8 +3,7 @@
 import logging
 from pathlib import Path
 
-from comken import Config
-from comken.core.logger import setup_logging
+from comken import Config, setup_logging
 from comken.toolbox.csv import CsvReader, CsvWriter
 from comken.toolbox.excel import ExcelWriter
 

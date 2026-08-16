@@ -7,7 +7,7 @@ main.py から呼ばれる。ここに「実際にやりたいこと」を書く
 
 import logging
 
-from comken.core.config import config
+from comken import config
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ def run() -> None:
     # 例:
     #   from comken.toolbox.csv import CsvReader
     #   from comken.toolbox.excel import ExcelWriter
-    #   from comken.core.utils.files import DateNameBuilder
+    #   from comken.core import DateNameBuilder
     #
     #   rows = CsvReader(config.FILES.INPUT_CSV).read_rows()
     #   out = output_folder / DateNameBuilder("レポート").prefix()

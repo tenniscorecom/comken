@@ -1,4 +1,11 @@
-"""comken/core/utils/files/paths.py — よく使う標準フォルダのパス取得。"""
+"""comken/toolbox/windows/paths.py — よく使う標準フォルダのパス取得。
+
+レジストリを触る（``winreg``）ため、外側にあるものを触らない ``comken.core`` ではなく
+``comken.toolbox.windows`` に置いている。
+
+    from comken.toolbox.windows import Paths
+    Paths.downloads()
+"""
 
 import os
 import tempfile

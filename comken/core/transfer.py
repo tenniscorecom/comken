@@ -1,4 +1,4 @@
-"""comken/core/utils/transfer.py — 転記で共有する補助関数。
+"""comken/core/transfer.py — 転記で共有する補助関数。
 
 `excel/sheet.py`（openpyxl 版）と `windows/handler.py`（COM 版）の両方から
 利用される、転記の前処理だけを置く。
@@ -15,7 +15,7 @@ NOTE: 公開 API ではない。利用者が直接呼ぶことは想定してい
 
 from typing import Any
 
-from ...exceptions import (
+from ..exceptions import (
     TransferDestinationColumnNotFoundError,
     TransferKeyColumnNotFoundError,
     TransferSourceColumnNotFoundError,

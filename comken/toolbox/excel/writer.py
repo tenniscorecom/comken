@@ -10,8 +10,8 @@ from typing import Self
 
 from openpyxl import Workbook
 
-from ...core.utils.files.base import FileBase
-from ...core.utils.timer import measure
+from ...core.files.base import FileBase
+from ...core.timer import measure
 from ...exceptions import (
     LastSheetDeletionError,
     SheetAlreadyExistsError,
