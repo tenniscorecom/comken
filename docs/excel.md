@@ -154,20 +154,6 @@ with ExcelWriter("data.xlsx") as f:
     s.set_fill(row=ROW, col=COL, color="CCE5FF") # 定数にない色は16進で
     f.save()
 
-# 構造化テーブル
-with ExcelWriter.create("table.xlsx") as f:
-    s = f.sheet("Sheet1")
-    s.write_table(rows)
-    s.add_table("売上", f"A1:C{len(rows) + 1}")
-    f.save()
-
-# 既存テーブルのデータを洗い替える（範囲も自動で調整される）
-with ExcelWriter("table.xlsx") as f:
-    s = f.sheet("Sheet1")
-    s.replace_table("売上", rows)
-    s.append_to_table("売上", [{"商品": "D", "金額": 400}])
-    f.save()
-
 # 数式は文字列で書く。構造化参照も同じ
 TABLE_NAME = "月次売上"
 AMOUNT_HEADER = "金額"
@@ -187,8 +173,105 @@ with ExcelComHandler("data.xlsm") as f:
     f.run_macro(MACRO_NAME)
 ```
 
-テーブルの作成・名前変更・削除は人が Excel で行い、プログラムでは既存テーブルの中の
-データを追記・全消去・洗い替えする。`add_table()` は新規レポートを作る場合に限って使う。
+### 構造化テーブル
+
+Excel の「テーブル」（リボンの *挿入 > テーブル*）は、**名前の付いたデータ範囲**。
+行を足すと範囲が自動で伸びるので、「どこからどこまでがデータか」を行番号で
+管理しなくてよくなる。comken では**テーブル名を指定して読み書きできる**。
+
+```
+        A          B        C
+   1  無関係なメモ
+   2
+   3
+   5    商品      金額     担当     ← 見出し行
+   6   りんご      100     田中
+   7   みかん      200     鈴木     ← ここまでが「売上」テーブル（C5:E7）
+```
+
+シートのどこにあっても、何行あっても、**コードに行番号は出てこない**。
+
+#### 読む
+
+```python
+from comken.toolbox.excel import ExcelReader
+
+with ExcelReader("売上.xlsx", tables=True) as f:
+    rows = f.read_table("Sheet1", "売上")
+
+# [{"商品": "りんご", "金額": 100, "担当": "田中"},
+#  {"商品": "みかん", "金額": 200, "担当": "鈴木"}]
+```
+
+見出し行が自動でキーになり、辞書のリストで返る。
+人が Excel でテーブルに行を足しても、このコードは直さなくてよい。
+
+| 引数 | 意味 |
+|---|---|
+| 第1引数 | シート名 |
+| 第2引数 | テーブル名（Excel の *テーブルデザイン > テーブル名* で確認できる） |
+
+> **`tables=True` が要る理由**
+> `ExcelReader` は既定で読み取り専用モードで開く（大きなブックを速く・省メモリで読むため）。
+> このモードでは openpyxl がテーブル定義を読めないので、テーブルを使うときだけ
+> 通常モードに切り替える。付け忘れると `TableNotAvailableInReadOnlyError` が出て、
+> 対処法がメッセージに表示される。
+
+`ExcelWriter` で開いた場合は `tables` の指定なしで読める（元から通常モードのため）。
+
+```python
+with ExcelWriter("売上.xlsx") as f:
+    rows = f.read_table("Sheet1", "売上")                       # 読んで
+    f.sheet("Sheet1").append_to_table("売上", [{"商品": "ぶどう"}])  # 書く
+    f.save()
+```
+
+#### 書く
+
+```python
+from comken.toolbox.excel import ExcelWriter
+
+rows = [{"商品": "りんご", "金額": 100}, {"商品": "みかん", "金額": 200}]
+
+with ExcelWriter.create("売上.xlsx") as f:            # 新しく作る
+    s = f.sheet("Sheet1")
+    s.write_table(rows)                               # 見出し + データを書く
+    s.add_table("売上", f"A1:B{len(rows) + 1}")       # その範囲をテーブルにする
+    f.save()
+
+with ExcelWriter("売上.xlsx") as f:                   # 既存を触る
+    s = f.sheet("Sheet1")
+    s.replace_table("売上", rows)                     # 中身を入れ替える
+    s.append_to_table("売上", [{"商品": "ぶどう", "金額": 300}])  # 行を足す
+    s.clear_table("売上")                             # 中身を空にする
+    f.save()
+```
+
+#### メソッドの使い分け
+
+| したいこと | メソッド | 範囲の扱い |
+|---|---|---|
+| テーブル名で読む | `read_table(シート名, テーブル名)` | 定義から自動取得 |
+| 新しくテーブルを作る | `write_table()` → `add_table()` | `add_table()` で明示 |
+| 中身を入れ替える | `replace_table(名前, 行)` | 行数に応じて自動調整 |
+| 行を足す | `append_to_table(名前, 行)` | 自動で伸びる |
+| 中身を空にする | `clear_table(名前)` | 定義と見出しは残る |
+
+**テーブルの作成・名前変更・削除は人が Excel で行い、プログラムは中のデータだけを触る**のが基本。
+`add_table()` を使うのは、プログラムが新規レポートを一から作る場合に限る。
+既にあるテーブルを作り直すと、人が設定した書式・数式・スライサーが消える。
+
+#### よくあるつまずき
+
+| 症状 | 原因 | 対処 |
+|---|---|---|
+| `TableNotAvailableInReadOnlyError` | `ExcelReader` を既定（読み取り専用）で開いた | `ExcelReader(path, tables=True)` |
+| `TableNotFoundError` | テーブル名が違う／そのシートに無い | メッセージに出る既存テーブル名の一覧を見る。**シート名も合っているか**確認する |
+| `EmptyHeaderCellError` | 見出し行の一部が空 | Excel で見出しの空欄を埋める。列番号がメッセージに出る |
+| 空のリストが返る | 見出し行が全て空／データ行が0件 | テーブルの範囲が正しいか Excel で確認する |
+| 読んだ値が `=SUM(...)` のような文字列 | テーブル内に数式がある | 下の「数式の扱い」を参照 |
+| 人が足した行が読めない | テーブルの範囲外に書かれた | 最終行の**すぐ下**に入力すると範囲に入る。離れた行に書くと入らない |
+| 合計行が混ざる | — | 集計行（totalsRow）は自動で除外されるので対処不要 |
 
 ### 数式の扱い
 

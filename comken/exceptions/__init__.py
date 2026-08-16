@@ -21,6 +21,7 @@ ComkenError
 │   ├── InvalidTableNameError
 │   ├── TableAlreadyExistsError
 │   ├── TableNotFoundError
+│   ├── TableNotAvailableInReadOnlyError
 │   ├── MacroError
 │   ├── RowTransferError
 │   ├── EmptyHeaderCellError
@@ -183,6 +184,7 @@ from .excel import (
     SheetAlreadyExistsError,
     SheetNotFoundError,
     TableAlreadyExistsError,
+    TableNotAvailableInReadOnlyError,
     TableNotFoundError,
 )
 from .file import UnsupportedFileSuffixError
@@ -241,6 +243,7 @@ __all__ = [
     "InvalidTableNameError",
     "TableAlreadyExistsError",
     "TableNotFoundError",
+    "TableNotAvailableInReadOnlyError",
     "MacroError",
     "RowTransferError",
     "EmptyHeaderCellError",

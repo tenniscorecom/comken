@@ -109,6 +109,23 @@ class TableNotFoundError(ExcelError):
         super().__init__(f"テーブルが見つかりません: {name}  存在するテーブル: {tables}")
 
 
+class TableNotAvailableInReadOnlyError(ExcelError):
+    """read_only で開いたブックからテーブル名で読めない
+
+    発生箇所: ExcelBase.read_table()
+
+    対処:
+        ExcelReader を ``tables=True`` で開き直す。
+        例: ``ExcelReader(path, tables=True)`` のように指定する。
+    """
+
+    def __init__(self, path: Path | str) -> None:
+        super().__init__(
+            f"テーブル定義を名前で読むには read_only=False で開く必要があります: {path}\n"
+            "ExcelReader(path, tables=True) で開き直してください。"
+        )
+
+
 class MacroError(ExcelError):
     """Excel のマクロが失敗した
 

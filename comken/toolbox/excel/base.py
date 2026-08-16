@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Self
 
 from openpyxl import Workbook, load_workbook
+from openpyxl.utils.cell import range_boundaries
 from openpyxl.worksheet.worksheet import Worksheet
 
 from ...core.files.base import FileBase
@@ -26,6 +27,8 @@ from ...exceptions import (
     ExcelFileNotFoundError,
     ExcelHeadersTooFewError,
     SheetNotFoundError,
+    TableNotAvailableInReadOnlyError,
+    TableNotFoundError,
     _warn_coerce,
 )
 
@@ -244,6 +247,68 @@ class ExcelBase(FileBase):
 
         with ExcelComHandler(self._working_path) as com:
             return com.read_rows(sheet_name, min_row)
+
+    @measure
+    def read_table(self, sheet_name: str, table_name: str) -> list[dict]:
+        """テーブル名で指定した構造化テーブルを、ヘッダーをキーにした辞書のリストで返す。
+
+        テーブルはデータ本体がどこにあっても、定義された範囲を自動で使う。
+        ユーザーがセル範囲（A1:B3 など）を指定する必要はない。
+
+        集計行（合計行など）を持つテーブルの場合、その行はデータから除外する。
+        見出しが全て空のテーブルは、表とみなさず空のリストを返す
+        （`read_rows_as_dicts()` と同じ扱い）。
+
+        Args:
+            sheet_name: シート名。
+            table_name: 読み取る構造化テーブルの名前。
+
+        Returns:
+            [{"列名": 値, ...}, ...] の形式のリスト。全セルが空の行は除外される。
+
+        Raises:
+            SheetNotFoundError: 指定したシートが存在しない場合。
+            TableNotFoundError: 指定したテーブルがそのシートにない場合。
+            TableNotAvailableInReadOnlyError: ExcelReader(tables=False) など、
+                read_only=True で開いたブックに対して呼ばれた場合。
+            EmptyHeaderCellError: 見出しの一部だけが空の場合。
+        """
+        ws = self._sheet(sheet_name)
+        # read_only=True の Worksheet には tables 属性が無い。hasattr で先に判定して
+        # AttributeError をそのまま出さない。
+        if not hasattr(ws, "tables"):
+            raise TableNotAvailableInReadOnlyError(self._original_path)
+        if table_name not in ws.tables:
+            raise TableNotFoundError(table_name, list(ws.tables))
+        table = ws.tables[table_name]
+        min_col, header_row, max_col, last_row = range_boundaries(table.ref)
+        # 集計行があるテーブルは、最終行から totalsRowCount 行分をデータから省く。
+        totals_count = int(getattr(table, "totalsRowCount", 0) or 0)
+        data_last_row = last_row - totals_count if totals_count else last_row
+        # ヘッダー行が無いテーブルは列名が引けないため、データ部を返さない。
+        if header_row >= data_last_row:
+            return []
+        header_cells = [
+            ws.cell(row=header_row, column=col).value for col in range(min_col, max_col + 1)
+        ]
+        if all(cell is None for cell in header_cells):
+            return []
+        # 一部だけ空の見出しは read_rows_as_dicts() と同じく事故のもとなので止める。
+        # 黙って読むと、その列だけキーが None になった辞書が静かに流れていく。
+        none_cols = [min_col + i for i, cell in enumerate(header_cells) if cell is None]
+        if none_cols:
+            raise EmptyHeaderCellError(none_cols)
+        return [
+            dict(zip(header_cells, row, strict=False))
+            for row in ws.iter_rows(
+                min_row=header_row + 1,
+                max_row=data_last_row,
+                min_col=min_col,
+                max_col=max_col,
+                values_only=True,
+            )
+            if not all(cell is None for cell in row)
+        ]
 
     def read_computed_rows_as_dicts(self, sheet_name: str, header_row: int = 1) -> list[dict]:
         """数式の計算結果を含む行を、見出しをキーにした辞書で返す。

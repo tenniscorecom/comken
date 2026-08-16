@@ -53,6 +53,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `InvalidTableNameError` | Excel で使えないテーブル名を指定した | 空白・数字始まり・セル参照のような名前を避ける |
 | `TableAlreadyExistsError` | 同じ名前のテーブルが既にある | 別のテーブル名を指定する |
 | `TableNotFoundError` | 指定したテーブルがシートにない | エラーに表示された既存テーブル名を確認する |
+| `TableNotAvailableInReadOnlyError` | read_only で開いたブックからテーブル名で読めない | ExcelReader を ``tables=True`` で開き直す。例: ``ExcelReader(path, tables=True)`` のように指定する。 |
 | `MacroError` | Excel のマクロが失敗した | Excel をすべて閉じて再実行する。続く場合は管理者へ |
 | `RowTransferError` | Excel の行転記に失敗した | 表示された行番号のデータを確認する |
 | `EmptyHeaderCellError` | Excel の見出しに空欄がある | Excel の1行目の空欄を埋める |

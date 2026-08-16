@@ -19,6 +19,7 @@ class ExcelReader(ExcelBase):
         data_only: bool = False,
         local_copy_threshold_mb: float = 10,
         headers: list[str] | None = None,
+        tables: bool = False,
     ) -> None:
         """
         Args:
@@ -29,11 +30,15 @@ class ExcelReader(ExcelBase):
                 0 を指定するとローカルコピーを無効化できる。
             headers: ヘッダー行がない Excel の場合に、列名のリストをここで付ける。
                 指定すると read_rows_as_dicts() は全行をデータとして読む。
+            tables: True にするとテーブル名で読むために read_only=False で開く。
+                大きなブックでもメモリ効率が下がる点に注意。
+                read_only モードでは openpyxl がテーブル定義を読めないため、
+                read_table() を呼ぶときに必要。
         """
         super().__init__(
             path,
             data_only=data_only,
-            read_only=True,
+            read_only=not tables,
             local_copy_threshold_mb=local_copy_threshold_mb,
             headers=headers,
         )

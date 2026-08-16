@@ -1368,6 +1368,28 @@ class TableNotFoundError(ExcelError):
 def __init__(self, name: str, tables: list[str]) -> None:
 ```
 
+### `TableNotAvailableInReadOnlyError`
+
+```text
+class TableNotAvailableInReadOnlyError(ExcelError):
+```
+
+#### 説明
+
+read_only で開いたブックからテーブル名で読めない
+
+発生箇所: ExcelBase.read_table()
+
+対処:
+    ExcelReader を ``tables=True`` で開き直す。
+    例: ``ExcelReader(path, tables=True)`` のように指定する。
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path | str) -> None:
+```
+
 ### `MacroError`
 
 ```text
@@ -4709,7 +4731,7 @@ read_only=True で開くため、大きなブックもメモリ効率よく速�
 #### `__init__`
 
 ```text
-def __init__(self, path: str | Path, data_only: bool=False, local_copy_threshold_mb: float=10, headers: list[str] | None=None) -> None:
+def __init__(self, path: str | Path, data_only: bool=False, local_copy_threshold_mb: float=10, headers: list[str] | None=None, tables: bool=False) -> None:
 ```
 
 ##### 説明
@@ -4722,6 +4744,10 @@ Args:
         0 を指定するとローカルコピーを無効化できる。
     headers: ヘッダー行がない Excel の場合に、列名のリストをここで付ける。
         指定すると read_rows_as_dicts() は全行をデータとして読む。
+    tables: True にするとテーブル名で読むために read_only=False で開く。
+        大きなブックでもメモリ効率が下がる点に注意。
+        read_only モードでは openpyxl がテーブル定義を読めないため、
+        read_table() を呼ぶときに必要。
 
 ### `ExcelWriter`
 

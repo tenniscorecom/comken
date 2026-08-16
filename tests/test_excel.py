@@ -11,18 +11,21 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from openpyxl import Workbook, load_workbook
+from openpyxl.worksheet.table import Table, TableStyleInfo
 
 import comken.toolbox.excel
 from comken.core.config import Config
 from comken.core.data import col_to_num
 from comken.exceptions import (
     ComkenError,
+    EmptyHeaderCellError,
     ExcelError,
     InvalidTableNameError,
     LastSheetDeletionError,
     SheetAlreadyExistsError,
     SheetNotFoundError,
     TableAlreadyExistsError,
+    TableNotAvailableInReadOnlyError,
     TableNotFoundError,
     TransferDestinationColumnNotFoundError,
     TransferKeyColumnNotFoundError,
@@ -30,6 +33,7 @@ from comken.exceptions import (
     UnsupportedFileSuffixError,
 )
 from comken.toolbox.excel import ExcelReader, ExcelWriter
+from comken.toolbox.excel.sheet import DEFAULT_TABLE_STYLE
 from comken.toolbox.windows.handler import ExcelComHandler
 
 
@@ -956,6 +960,173 @@ class TestStructuredTable:
             sheet = writer.sheet("Sheet1")
             for name in ("table_names", "rename_table", "resize_table", "delete_table"):
                 assert not hasattr(sheet, name)
+
+
+class TestReadTable:
+    """ExcelBase.read_table() の挙動確認。"""
+
+    def test_reads_table_with_headers(self, tmp_path):
+        """ヘッダー付きの構造化テーブルを読み、キーと値が一致する。"""
+        path = tmp_path / "table_basic.xlsx"
+        with ExcelWriter.create(path) as writer:
+            sheet = writer.sheet("Sheet1")
+            sheet.write_rows(1, [["品目", "数量"], ["A", 100], ["B", 200]])
+            sheet.add_table("売上", "A1:B3")
+            writer.save()
+
+        with ExcelReader(path, tables=True) as reader:
+            rows = reader.read_table("Sheet1", "売上")
+
+        assert rows == [{"品目": "A", "数量": 100}, {"品目": "B", "数量": 200}]
+
+    def test_reads_table_when_not_at_top_of_sheet(self, tmp_path):
+        """シートの途中にあるテーブルも、セル範囲を意識せず読み取れる。"""
+        path = tmp_path / "table_middle.xlsx"
+        with ExcelWriter.create(path) as writer:
+            sheet = writer.sheet("Sheet1")
+            sheet.write_rows(1, [["タイトル"], ["", "", ""], ["", "", ""], ["", "", ""]])
+            sheet.write_rows(5, [["品目", "数量"], ["A", 100], ["B", 200], ["C", 300]])
+            sheet.add_table("売上", "A5:B8")
+            writer.save()
+
+        with ExcelReader(path, tables=True) as reader:
+            rows = reader.read_table("Sheet1", "売上")
+
+        assert rows == [
+            {"品目": "A", "数量": 100},
+            {"品目": "B", "数量": 200},
+            {"品目": "C", "数量": 300},
+        ]
+
+    def test_reads_appended_rows_after_save(self, tmp_path):
+        """append_to_table() で行を追加した後も、追加した行まで読める。"""
+        path = tmp_path / "table_appended.xlsx"
+        with ExcelWriter.create(path) as writer:
+            sheet = writer.sheet("Sheet1")
+            sheet.write_rows(1, [["品目", "数量"], ["A", 100]])
+            sheet.add_table("売上", "A1:B2")
+            writer.save()
+
+        with ExcelWriter(path) as writer:
+            sheet = writer.sheet("Sheet1")
+            sheet.append_to_table("売上", [{"品目": "B", "数量": 200}, {"品目": "C", "数量": 300}])
+            writer.save()
+
+        with ExcelReader(path, tables=True) as reader:
+            rows = reader.read_table("Sheet1", "売上")
+
+        assert rows == [
+            {"品目": "A", "数量": 100},
+            {"品目": "B", "数量": 200},
+            {"品目": "C", "数量": 300},
+        ]
+
+    def test_missing_table_raises_with_list(self, tmp_path):
+        """テーブル名を間違えると、既存テーブル名一覧つきの TableNotFoundError。"""
+        path = tmp_path / "table_missing.xlsx"
+        with ExcelWriter.create(path) as writer:
+            sheet = writer.sheet("Sheet1")
+            sheet.write_rows(1, [["品目", "数量"], ["A", 100]])
+            sheet.add_table("売上", "A1:B2")
+            writer.save()
+
+        with (
+            ExcelReader(path, tables=True) as reader,
+            pytest.raises(TableNotFoundError, match="売上"),
+        ):
+            reader.read_table("Sheet1", "存在しない")
+
+    def test_read_only_reader_rejects_read_table(self, excel_with_header):
+        """read_only で開いた ExcelReader では TableNotAvailableInReadOnlyError。"""
+        with (
+            ExcelReader(excel_with_header) as reader,
+            pytest.raises(TableNotAvailableInReadOnlyError, match="tables=True"),
+        ):
+            reader.read_table("Sheet1", "なんでも")
+
+    def test_writer_can_read_table(self, tmp_path):
+        """ExcelWriter で開いた場合も read_table() を使える。"""
+        path = tmp_path / "table_writer.xlsx"
+        with ExcelWriter.create(path) as writer:
+            sheet = writer.sheet("Sheet1")
+            sheet.write_rows(1, [["品目", "数量"], ["A", 100]])
+            sheet.add_table("売上", "A1:B2")
+            writer.save()
+
+        with ExcelWriter(path) as writer:
+            rows = writer.read_table("Sheet1", "売上")
+
+        assert rows == [{"品目": "A", "数量": 100}]
+
+    def test_excludes_totals_row(self, tmp_path):
+        """集計行（totalsRow）を持つテーブルで、集計行がデータに含まれない。"""
+        path = tmp_path / "table_totals.xlsx"
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Sheet1"
+        ws["A1"] = "品目"
+        ws["B1"] = "数量"
+        ws["A2"] = "A"
+        ws["B2"] = 100
+        ws["A3"] = "B"
+        ws["B3"] = 200
+        ws["A4"] = "合計"
+        ws["B4"] = "=SUM(B2:B3)"
+        table = Table(displayName="売上", ref="A1:B4", totalsRowCount=1)
+        table.tableStyleInfo = TableStyleInfo(
+            name=DEFAULT_TABLE_STYLE,
+            showFirstColumn=False,
+            showLastColumn=False,
+            showRowStripes=True,
+            showColumnStripes=False,
+        )
+        ws.add_table(table)
+        wb.save(path)
+
+        with ExcelReader(path, tables=True) as reader:
+            rows = reader.read_table("Sheet1", "売上")
+
+        assert rows == [{"品目": "A", "数量": 100}, {"品目": "B", "数量": 200}]
+
+    def test_partially_empty_header_raises(self, tmp_path):
+        """見出しの一部だけが空なら止める。
+
+        黙って読むと、その列だけキーが None の辞書が静かに流れていく。
+        read_rows_as_dicts() と同じ扱いにそろえる。
+        """
+        path = tmp_path / "table_broken_header.xlsx"
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Sheet1"
+        ws["A1"] = "品目"
+        ws["C1"] = "担当"  # B1 を空のままにする
+        ws["A2"] = "A"
+        ws["B2"] = 100
+        ws["C2"] = "田中"
+        ws.add_table(Table(displayName="欠け", ref="A1:C2"))
+        wb.save(path)
+
+        with ExcelReader(path, tables=True) as reader, pytest.raises(EmptyHeaderCellError):
+            reader.read_table("Sheet1", "欠け")
+
+    def test_partially_empty_header_reports_actual_column(self, tmp_path):
+        """空欄の列番号は、テーブルが途中から始まっても実際の列で報告する。"""
+        path = tmp_path / "table_broken_header_offset.xlsx"
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Sheet1"
+        ws["C1"] = "品目"
+        ws["E1"] = "担当"  # D1 を空のままにする
+        ws["C2"] = "A"
+        ws["D2"] = 100
+        ws["E2"] = "田中"
+        ws.add_table(Table(displayName="ずれ", ref="C1:E2"))
+        wb.save(path)
+
+        with ExcelReader(path, tables=True) as reader, pytest.raises(EmptyHeaderCellError) as e:
+            reader.read_table("Sheet1", "ずれ")
+
+        assert "[4]" in str(e.value)  # D 列＝4列目
 
 
 class TestReadComputedRows:
