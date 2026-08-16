@@ -126,10 +126,14 @@ class MasterRow:
     クラス変数:
         SHEET_NAME: 読み書きするシート名。
         PATH: 既定のファイル。指定すると `load()` を引数なしで呼べる。
+        GUIDE_INTRO: 「記入方法」シートの冒頭に出す説明文。設定した管理表だけを
+            向いた案内（Salesforce なら Salesforce の）をここに置くと、非エンジニアが
+            表を開いた瞬間にこの表で何ができるかが分かる。空のままでも雛形は作れる。
     """
 
     SHEET_NAME: ClassVar[str] = "管理表"
     PATH: ClassVar[Path | None] = None
+    GUIDE_INTRO: ClassVar[str] = ""
 
     # ── 読む ────────────────────────────────────────────────────────────────
     @classmethod
@@ -206,7 +210,10 @@ class MasterRow:
         path = Path(path)
         headers = [spec.header for _, spec, _ in cls._columns()]
         rows = [
-            [_to_cell(example.get(name, "")) for name, _, _ in cls._columns()]
+            [
+                _to_cell(example.get(name, ""), spec, value_type)
+                for name, spec, value_type in cls._columns()
+            ]
             for example in (examples or [])
         ]
 
@@ -227,10 +234,23 @@ class MasterRow:
 
     @classmethod
     def _write_guide(cls, book: ExcelWriter) -> None:
-        """「記入方法」シートを書く。非エンジニアが1枚で分かるようにする。"""
+        """「記入方法」シートを書く。非エンジニアが1枚で分かるようにする。
+
+        `GUIDE_INTRO` が設定されていれば冒頭（見出しより上）に書き出す。
+        `docs/` を読まない編集者への唯一の案内になるため、各管理表に特化した
+        説明を置く。改行は同じセル内に表示される。
+        """
         sheet = book.add_sheet("記入方法")
-        sheet.write_row(1, ["列", "何を書くか", "書けない場合"])
-        for row_number, (name, spec, value_type) in enumerate(cls._columns(), start=2):
+        # 冒頭の説明文。設定が無ければ何も書かない（空の欄を増やさない）
+        if cls.GUIDE_INTRO:
+            sheet.write_row(1, [cls.GUIDE_INTRO])
+            # 改行を含む説明文も1セルなので、空ける行数は変えない
+            header_row = 3
+        else:
+            header_row = 1
+        sheet.write_row(header_row, ["列", "何を書くか", "書けない場合"])
+        for offset, (name, spec, value_type) in enumerate(cls._columns(), start=1):
+            row_number = header_row + offset
             required = _default_of(cls, name) is dataclasses.MISSING
             note = "空欄にできません" if required else "空欄にできます"
             if spec.choices:
@@ -239,13 +259,13 @@ class MasterRow:
                 note = "「有効」か「無効」と書いてください"
             sheet.write_row(row_number, [spec.header, spec.help, note])
 
-        last = len(cls._columns()) + 3
+        last = header_row + len(cls._columns()) + 2
         sheet.write_row(last, ["注意", "1行目の見出しは変えないでください（列名で読みます）", ""])
         sheet.write_row(last + 1, ["", "記入例の行は、実際に使うときに消してください", ""])
         for letter in ("A", "B", "C"):
-            sheet.set_bold(1, letter)
+            sheet.set_bold(header_row, letter)
         sheet.auto_width(max_width=80)
-        sheet.freeze_header()
+        sheet.freeze_header(header_row)
 
     # ── 列の情報 ─────────────────────────────────────────────────────────────
     @classmethod
@@ -362,9 +382,11 @@ def _to_int(value: Any, text: str, spec: ColumnSpec, row: int) -> int:
     return int(text)
 
 
-def _to_cell(value: Any) -> Any:
+def _to_cell(value: Any, spec: ColumnSpec, value_type: Any) -> Any:
     """記入例をセルに書ける形にする。"""
     if isinstance(value, bool):
+        if (value_type is bool or value_type == "bool") and spec.choices:
+            return spec.choices[0] if value else spec.choices[1]
         return "有効" if value else "無効"
     if isinstance(value, Path):
         return str(value)

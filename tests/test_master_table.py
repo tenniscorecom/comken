@@ -131,6 +131,26 @@ class TestTemplate:
         assert items[0].key == 1001
         assert items[0].enabled is True  # True は「有効」として書かれ、読み戻せる
 
+    def test_bool_choices_round_trip(self, tmp_path):
+        """bool 列の独自表記は、雛形へ書いて読み戻しても値が変わらない。"""
+
+        @dataclass(frozen=True, kw_only=True)
+        class WithBoolChoices(MasterRow):
+            SHEET_NAME = "一覧"
+
+            key: int = column("ID")
+            is_allowed: bool = column("許可", choices=("○", "×"))
+
+        examples = [
+            {"key": 1, "is_allowed": True},
+            {"key": 2, "is_allowed": False},
+        ]
+        path = WithBoolChoices.create_template(tmp_path / "一覧.xlsx", examples)
+
+        sheet = load_workbook(path)["一覧"]
+        assert [sheet["B2"].value, sheet["B3"].value] == ["○", "×"]
+        assert [row.is_allowed for row in WithBoolChoices.load(path)] == [True, False]
+
     def test_headers_are_written_in_declaration_order(self, tmp_path):
         path = Item.create_template(tmp_path / "一覧.xlsx")
         sheet = load_workbook(path)["一覧"]
@@ -145,6 +165,21 @@ class TestTemplate:
             assert header in text
         assert "管理番号" in text  # help がそのまま出る
         assert "「毎日」か「手動」" in text  # 選択肢は書き方として出す
+
+    def test_multiline_guide_intro_uses_one_cell_row(self, tmp_path):
+        @dataclass(frozen=True, kw_only=True)
+        class WithMultilineGuide(MasterRow):
+            SHEET_NAME = "一覧"
+            GUIDE_INTRO = "1行目\n2行目"
+
+            key: int = column("ID")
+
+        path = WithMultilineGuide.create_template(tmp_path / "一覧.xlsx")
+        guide = load_workbook(path)["記入方法"]
+
+        assert guide["A1"].value == "1行目\n2行目"
+        assert [cell.value for cell in guide[3]] == ["列", "何を書くか", "書けない場合"]
+        assert guide.freeze_panes == "A4"
 
     def test_table_is_created(self, tmp_path):
         """Excel のテーブルにしておくと、行を足すのが楽になる。"""

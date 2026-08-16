@@ -61,7 +61,8 @@ for item in Item.load():        # 読む（型変換・検証込み）
 | `default` | 空欄のときの値。**省略すると空欄はエラー**（下の「空欄の扱い」を参照） |
 
 **型は注釈から決まります**（`int` / `str` / `bool` / `Path`）。`bool` は「有効」「○」「yes」などを
-True として読みます。
+True として読みます。bool 列に2つの `choices` を指定すると、雛形の記入例では1つ目を True、
+2つ目を False の表記として書き出します。指定しなければ従来どおり「有効」「無効」です。
 
 ---
 
@@ -145,6 +146,25 @@ True として読みます。
 ```python
 Item.create_template(path, examples=[{"key": 1001, "name": "受注一覧", ...}])
 ```
+
+### 「記入方法」シートの冒頭に案内を出す
+
+編集者が `docs/` を読まない前提で、**このシートの上部**にだけ出す一言を置けます。
+`GUIDE_INTRO` をクラス変数で宣言してください（複数行も可）。
+
+```python
+@dataclass(frozen=True, kw_only=True)
+class ReportEntry(MasterRow):
+    SHEET_NAME = "管理表"
+    GUIDE_INTRO = (
+        "この表に行を足すだけで、新しいレポートを取得できます。"
+        "プログラム（コード）を直す必要はありません。"
+    )
+```
+
+ツール側の汎用文言（`docs/` への誘導）はここに書きません。Salesforce なら
+Salesforce の、Access なら Access の案内にすべきで、ツールが事情を知ると
+境界が壊れます。
 
 ---
 
