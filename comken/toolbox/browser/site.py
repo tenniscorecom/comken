@@ -109,14 +109,18 @@ class SiteBase:
             raise SiteNotStartedError(self.__class__)
         return self.session.download_dir
 
-    def page(self, page_class: type[P]) -> P:
-        """このサイトの画面クラスを作る。
+    def to(self, page_class: type[P]) -> P:
+        """このサイトの画面へ移る。
 
         画面クラスは動かすのにブラウザ（`BrowserSession`）を要るが、
         **それを呼ぶ側に書かせない**ためのもの。
 
-            def login(self, user_id: str, password: str) -> HomePage:
-                return self.page(LoginPage).login(user_id, password)
+            with Kintai() as kintai:
+                home = kintai.to(LoginPage).login(user_id, password)
+
+        `Page.to()` と同じ名前にそろえてある。サイトから最初の画面へ移るのも、
+        画面から次の画面へ移るのも、利用側から見れば同じ「移る」なので、
+        覚える言葉を増やさない。
 
         `LoginPage(self.session)` と書いても同じだが、そう書くと
         「セッションとは何か」を知らないとサイトクラスを書けなくなる。

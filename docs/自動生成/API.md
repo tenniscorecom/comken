@@ -2676,10 +2676,10 @@ class SiteNotStartedError(BrowserError):
 
 まだ起動していないサイトの画面を作ろうとした
 
-`with` に入る前、または閉じた後に `page()` を呼ぶとここで止まる。
+`with` に入る前、または閉じた後に `to()` を呼ぶとここで止まる。
 ブラウザが無い状態で画面クラスを作ると、最初の操作まで失敗が遅れる。
 
-発生箇所: SiteBase.page()
+発生箇所: SiteBase.to() / SiteBase.downloads
 
 対処:
     `with Kintai() as kintai:` の中で使う
@@ -3870,21 +3870,25 @@ def downloads(self) -> DownloadDir:
 Raises:
     SiteNotStartedError: まだ起動していない場合。
 
-#### `page`
+#### `to`
 
 ```text
-def page(self, page_class: type[P]) -> P:
+def to(self, page_class: type[P]) -> P:
 ```
 
 ##### 説明
 
-このサイトの画面クラスを作る。
+このサイトの画面へ移る。
 
 画面クラスは動かすのにブラウザ（`BrowserSession`）を要るが、
 **それを呼ぶ側に書かせない**ためのもの。
 
-    def login(self, user_id: str, password: str) -> HomePage:
-        return self.page(LoginPage).login(user_id, password)
+    with Kintai() as kintai:
+        home = kintai.to(LoginPage).login(user_id, password)
+
+`Page.to()` と同じ名前にそろえてある。サイトから最初の画面へ移るのも、
+画面から次の画面へ移るのも、利用側から見れば同じ「移る」なので、
+覚える言葉を増やさない。
 
 `LoginPage(self.session)` と書いても同じだが、そう書くと
 「セッションとは何か」を知らないとサイトクラスを書けなくなる。

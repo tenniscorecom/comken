@@ -35,7 +35,7 @@ Edge を自動で動かして、社内システムから情報を取ったり入
 | 土台（直接は使わない） | `SalesforceBase` | `SiteBase` |
 | 対象ごとのクラス | `Sandbox(SalesforceBase)` | `Kintai(SiteBase)` |
 | 固有の値の置き場 | `DOMAIN_URL` / `CREDENTIAL_PREFIX` | `NAME` / `BASE_URL` / `OPTIONS` |
-| 機能は継承せず持たせる | `.auth` / `.report` / `.metrics` | `.page(画面クラス)` で画面を作る |
+| 機能は継承せず持たせる | `.auth` / `.report` / `.metrics` | `.to(画面クラス)` で画面を作る |
 | 単体で使う入口 | `with Sandbox() as sf:` | `with Kintai() as kintai:` |
 | 複数まとめて扱う入口 | `sites/` の `site_for()` | `Browsers` |
 | 画面／機能の分割 | `.report` / `.metrics` | `Page` のサブクラス |
@@ -58,18 +58,19 @@ from .sites.kintai import Kintai
 
 def main() -> None:
     with Kintai() as kintai:
-        print(kintai.login("user01", "password").unfilled_days())
+        print(kintai.to(LoginPage).login("user01", "password").unfilled_days())
 ```
 
-`kintai.login(...)` が返すのはログイン後の画面クラスなので、**そのまま次の操作へ繋がる**。
-`LoginPage(session)` のように画面クラスへセッションを渡し直す必要はない。
-Salesforce の `with Sandbox() as sf:` と同じ形。
+`to(LoginPage)` でログイン画面へ移り、`login(...)` が返すのは次の画面。
+**画面の流れがそのまま1行に並ぶ。** `LoginPage(session)` のように
+画面クラスへセッションを渡し直す必要はない。
+起動の形は Salesforce の `with Sandbox() as sf:` と同じ。
 
 途中の画面を変数に取れば、そこから何度も操作できる。
 
 ```python
 with Kintai() as kintai:
-    home = kintai.login("user01", "password")
+    home = kintai.to(LoginPage).login("user01", "password")
     unfilled = home.unfilled_days()
     home.enter_attendance(unfilled[0]).save()
 ```
@@ -101,8 +102,8 @@ with Browsers() as browsers:
     kintai = browsers.launch(Kintai)
     keiri = browsers.launch(Keiri)          # ← 増えるのはこの行だけ
 
-    unfilled = kintai.login(USER, PW).unfilled_days()
-    pending = keiri.login(USER, PW).pending_rows()
+    unfilled = kintai.to(LoginPage).login(USER, PW).unfilled_days()
+    pending = keiri.to(LoginPage).login(USER, PW).pending_rows()
 ```
 
 サイトが2つ以上になったら `Browsers` を使う。1つだけなら `with Kintai() as kintai:` で足りる。
@@ -147,9 +148,9 @@ with Browsers() as browsers:
     kintai = browsers.launch(Kintai)
     keiri = browsers.launch(Keiri)
 
-    kintai_task = browsers.run_task(lambda: kintai.login(USER, PW).unfilled_days(), label="勤怠")
+    kintai_task = browsers.run_task(lambda: kintai.to(LoginPage).login(USER, PW).unfilled_days(), label="勤怠")
 
-    pending = keiri.login(USER, PW).pending_rows()   # 勤怠の読み込み中にこちらが進む
+    pending = keiri.to(LoginPage).login(USER, PW).pending_rows()   # 勤怠の読み込み中にこちらが進む
 
     unfilled = kintai_task.wait()                       # 戻って結果を受け取る
 ```
@@ -188,8 +189,8 @@ with Browsers() as browsers:
 
 ```python
 unfilled, pending = browsers.parallel(
-    lambda: kintai.login(USER, PW).unfilled_days(),
-    lambda: keiri.login(USER, PW).pending_rows(),
+    lambda: kintai.to(LoginPage).login(USER, PW).unfilled_days(),
+    lambda: keiri.to(LoginPage).login(USER, PW).pending_rows(),
 )
 ```
 
@@ -203,9 +204,9 @@ unfilled, pending = browsers.parallel(
 早く気づけるほうが安全なため。
 
 ```python
-kintai_task = browsers.run_task(lambda: kintai.login(USER, PW).unfilled_days())
-keiri.login(USER, PW).pending_rows()   # ⭕ 別のブラウザなので問題ない
-kintai.login(USER, PW)                  # ❌ 裏で使っている勤怠を触っている
+kintai_task = browsers.run_task(lambda: kintai.to(LoginPage).login(USER, PW).unfilled_days())
+keiri.to(LoginPage).login(USER, PW).pending_rows()   # ⭕ 別のブラウザなので問題ない
+kintai.to(LoginPage).login(USER, PW)                  # ❌ 裏で使っている勤怠を触っている
 ```
 
 `wait()` を呼び忘れたまま `with` を抜けても、ブラウザを閉じる前に処理の終了は待つ。
@@ -263,13 +264,21 @@ class Kintai(SiteBase):
     BASE_URL = "https://kintai.example.co.jp"
     OPTIONS = KintaiOptions
 
-    def login(self, user_id: str, password: str) -> "HomePage":
-        """ログインして、ログイン後の画面を返す。"""
-        return self.page(LoginPage).login(user_id, password)
+    # 画面の操作はここに書かない。画面クラスの仕事にする
 ```
 
-**入口の操作だけをサイトクラスに置く。** 画面ごとの操作は画面クラスへ。
-ここに全部書くと、画面が増えるたびにこのクラスが膨らむ。
+**サイトクラスには値だけ置く。** 画面の操作は画面クラスの仕事にする。
+ここに `login()` のような近道を作ることもできるが、そうすると
+「どこへ着くのか」がメソッドの中に潰れて、型注釈を読まないと分からなくなる。
+
+    with Kintai() as kintai:
+        home = kintai.to(LoginPage).login(USER, PW)
+
+`to(LoginPage)` でログイン画面へ移り、`login()` で次の画面へ。
+**どこを通ってどこへ着いたかが左から右に読める。**
+
+毎回2段書くのが煩わしければ、サイトクラスに近道を足してよい。
+その場合も名前は「行き先」が分かる形にする（`go_login()` など）。
 
 ### 4. 画面に共通のクラスを作る
 
@@ -428,7 +437,7 @@ from comken.core import move_file
 with Browsers() as browsers:
     kintai = browsers.launch(Kintai)
 
-    kintai.page(HomePage).export_csv()
+    kintai.to(HomePage).export_csv()
     files = kintai.downloads.wait()                     # .crdownload が消えるまで待つ
     move_file(files[0], r"C:\作業\output")       # with の中で移動する
 ```
@@ -520,8 +529,8 @@ with Browsers() as browsers:
     kintai = browsers.launch(Kintai)
     keiri = browsers.launch(Keiri)      # ← 増えるのはこの行だけ
 
-    kintai_days = kintai.login(USER, PW).unfilled_days()
-    keiri_rows = keiri.login(USER, PW).pending_rows()
+    kintai_days = kintai.to(LoginPage).login(USER, PW).unfilled_days()
+    keiri_rows = keiri.to(LoginPage).login(USER, PW).pending_rows()
 ```
 
 `SiteBase.NAME` が、ダウンロードフォルダ・ログイン状態・ログのファイル名を分ける鍵になる。
@@ -544,9 +553,9 @@ with Browsers() as browsers:
     kintai = browsers.launch(Kintai)
     keiri = browsers.launch(Keiri)
 
-    kintai_task = browsers.run_task(lambda: kintai.login(USER, PW).unfilled_days(), label="勤怠")
+    kintai_task = browsers.run_task(lambda: kintai.to(LoginPage).login(USER, PW).unfilled_days(), label="勤怠")
 
-    pending = keiri.login(USER, PW).pending_rows()   # 勤怠の読み込み中にこちらが進む
+    pending = keiri.to(LoginPage).login(USER, PW).pending_rows()   # 勤怠の読み込み中にこちらが進む
 
     unfilled = kintai_task.wait()                       # 戻って結果を受け取る
 ```
@@ -563,8 +572,8 @@ with Browsers() as browsers:
 
 ```python
 unfilled, pending = browsers.parallel(
-    lambda: kintai.login(USER, PW).unfilled_days(),
-    lambda: keiri.login(USER, PW).pending_rows(),
+    lambda: kintai.to(LoginPage).login(USER, PW).unfilled_days(),
+    lambda: keiri.to(LoginPage).login(USER, PW).pending_rows(),
 )
 ```
 
@@ -653,7 +662,7 @@ from comken.toolbox.browser import Browsers
 with Browsers() as browsers:
     kintai = browsers.launch(Kintai)
 
-    kintai.page(HomePage).export_csv()
+    kintai.to(HomePage).export_csv()
     files = kintai.downloads.wait()                     # .crdownload が消えるまで待つ
     move_file(files[0], r"C:\作業\output")       # with の中で移動する
 ```

@@ -1254,14 +1254,14 @@ class TestSessionIsNotExposedToCallers:
         monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *a: None)
 
     def test_site_creates_pages_without_session(self, monkeypatch):
-        """SiteBase.page() で画面クラスを作れる。"""
+        """SiteBase.to() で画面クラスを作れる。"""
         self._fake_browser(monkeypatch)
 
         class Kintai(SiteBase):
             NAME = "kintai"
 
         with Kintai() as kintai:
-            page = kintai.page(Page)
+            page = kintai.to(Page)
 
             assert isinstance(page, Page)
             assert page.session is kintai.session
@@ -1277,7 +1277,7 @@ class TestSessionIsNotExposedToCallers:
             pass
 
         with Kintai() as kintai:
-            home = kintai.page(Page).to(HomePage)
+            home = kintai.to(Page).to(HomePage)
 
             assert isinstance(home, HomePage)
             assert home.session is kintai.session
@@ -1289,7 +1289,7 @@ class TestSessionIsNotExposedToCallers:
             NAME = "kintai"
 
         with pytest.raises(SiteNotStartedError):
-            Kintai().page(Page)
+            Kintai().to(Page)
 
     def test_downloads_before_start_is_rejected(self):
         """起動前に downloads を触ったら止める。"""

@@ -202,10 +202,10 @@ class SessionNameConflictError(BrowserError):
 class SiteNotStartedError(BrowserError):
     """まだ起動していないサイトの画面を作ろうとした
 
-    `with` に入る前、または閉じた後に `page()` を呼ぶとここで止まる。
+    `with` に入る前、または閉じた後に `to()` を呼ぶとここで止まる。
     ブラウザが無い状態で画面クラスを作ると、最初の操作まで失敗が遅れる。
 
-    発生箇所: SiteBase.page()
+    発生箇所: SiteBase.to() / SiteBase.downloads
 
     対処:
         `with Kintai() as kintai:` の中で使う
