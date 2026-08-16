@@ -18,7 +18,9 @@ app_page.py — このサンプルサイト共通の SitePage
 【画面遷移の書き方】
 ---------------------------------------------------------------------------
 「次の画面に移動するメソッド」は、遷移先のページクラスを返すことで
-  どの画面に移ったかをコードで追えるようにする:
+  どの画面に移ったかをコードで追えるようにする。
+  画面インスタンスを新しく作るときは `self.to(遷移先クラス)` を使う
+  （書き方の正本は docs/browser.md）:
 
     class LoginPage(AppPage):
         USERNAME = Locator.id("username")     # セレクターはクラス上部にまとめる
@@ -29,10 +31,10 @@ app_page.py — このサンプルサイト共通の SitePage
             self.input(self.USERNAME, username)
             self.input(self.PASSWORD, password)
             self.click(self.LOGIN_BTN)
-            return SecurePage(self.session)   # 遷移先クラスのインスタンスを返す
+            return self.to(SecurePage)        # 遷移先クラスを返す
 
     # 呼び出し側
-    login_page = LoginPage(session)
+    login_page = sample.go_login()           # サイトクラスの go_〇〇() から始める
     secure_page = login_page.login("user", "pass")   # SecurePage が返ってくる
     print(secure_page.get_heading())                 # そのまま次の画面の操作が書ける
 ---------------------------------------------------------------------------

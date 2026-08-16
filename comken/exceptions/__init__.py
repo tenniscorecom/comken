@@ -65,6 +65,7 @@ ComkenError
 │   ├── SessionNotFoundError
 │   ├── SiteConfigError
 │   ├── SiteAlreadyInLibraryError
+│   ├── SiteNotStartedError
 │   ├── ElementNotFoundError
 │   ├── PopupTabNotOpenedError
 │   └── DownloadTimeoutError
@@ -77,10 +78,11 @@ ComkenError
 │   ├── TransferDestinationColumnNotFoundError
 │   └── TransferSourceColumnNotFoundError
 ├── ConfigError
-    ├── ConfigFileNotFoundError
-    ├── ConfigCreatedFromExampleError
-    ├── ConfigLowerCaseNameError
-    └── ConfigSectionNotFoundError
+│   ├── ConfigFileNotFoundError
+│   ├── ConfigCreatedFromExampleError
+│   ├── ConfigLowerCaseNameError
+│   ├── ConfigRequiredKeysMissingError
+│   └── ConfigSectionNotFoundError
 ├── MasterTableError
 │   ├── MasterSheetNotDefinedError
 │   ├── MasterColumnNotFoundError
@@ -91,15 +93,15 @@ ComkenError
 │   ├── StateLowerCaseNameError
 │   └── StateValueTypeError
 └── DownloaderError
-    ├── ReportNotRegisteredError
-    ├── ReportDisabledError
-    ├── InvalidReportUrlError
-    ├── ScheduledReportNotRegisteredError
-    ├── ScheduledReportNotDownloadedError
-    ├── ReportFileMissingError
-    ├── EmptyReportError
-    ├── ReportFolderNotFoundError
-    └── ScheduledDownloadFailedError
+│   ├── ReportNotRegisteredError
+│   ├── ReportDisabledError
+│   ├── InvalidReportUrlError
+│   ├── ScheduledReportNotRegisteredError
+│   ├── ScheduledReportNotDownloadedError
+│   ├── ReportFileMissingError
+│   ├── EmptyReportError
+│   ├── ReportFolderNotFoundError
+│   └── ScheduledDownloadFailedError
 
 カテゴリ基底クラスはまとめて捕捉するために使い、直接送出しない。
 """

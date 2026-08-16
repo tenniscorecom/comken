@@ -54,7 +54,7 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
   `config` / `Config`（設定）、`setup_logging`（ログ）、実行モードの4関数
   （`dry_run` / `is_dry_run` / `debug` / `is_debug`）
 - **部品は `from comken.core import ...` から取る。** ファイル検索・日時・文字列・差分・
-  計測など23個（`FileFinder` / `copy_file` / `today` / `Timer` / `retry` など）
+  計測など24個（`FileFinder` / `copy_file` / `project_dir` / `today` / `Timer` / `retry` など）
 - **機能は `from comken.toolbox.excel import ExcelWriter` のように機能パッケージを明示する**
   （どの機能群に依存しているかが import 行で分かる）
 - **書くときは `from comken import X` が第一選択。** そこに無いものだけ `from comken.core import Y`
@@ -97,12 +97,13 @@ import の書き方は上の「[使うときの約束](#使うときの約束)�
 | [Outlook](docs/outlook.md) | Classic Outlook の受信メール読み取り・下書き作成 |
 | [Windows（pywin32）](docs/windows.md) | Excel COM 操作・ウィンドウ操作・レジストリ読み取り |
 | [Browser（Edge）](docs/browser.md) | Edge ブラウザ操作 |
+| [Browser 公認サイト](docs/browser.md) | ライブラリ公認の `SiteBase` サブクラスを集めた置き場（`comken.toolbox.browser.sites`）。プロジェクト横断で再利用するサイトだけ昇格する |
 | [Salesforce（requests）](docs/salesforce.md) | Salesforce の SOQL・レコード操作・レポート取得・API 使用量の計測 |
 | [管理表（Excel を設定として使う）](docs/master-table.md) | 行が増える設定を Excel の表で持ち、型付きの行として読む（雛形・検証つき） |
 | [Salesforce レポートの集約取得](docs/salesforce-downloader.md) | 管理表（Excel）に沿ってレポートを取得し、履歴を残す（どのプロジェクトが何を使っているかが分かる） |
 | [Salesforce認証の判断根拠](docs/salesforce-authentication.md) | ECA・Refresh Token Flow を既定にした理由と公式資料 |
 | [credentials（DPAPI）](docs/credentials.md) | パスワード・client_secret の暗号化保存（Windows ユーザーに紐付く） |
-| [core（部品）](docs/core.md) | `from comken.core import ...` で取る23個。ファイル検索・操作・圧縮・ファイル名の組み立て／データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時 |
+| [core（部品）](docs/core.md) | `from comken.core import ...` で取る24個。ファイル検索・操作・圧縮・ファイル名の組み立て／データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時 |
 
 ## 定数クラス一覧
 
@@ -179,7 +180,7 @@ PCの環境変数を変更したくない場合は、各プロジェクトのル
 pushd \\server\share\tools\comken
 git fetch --tags
 git tag -l                 :: 出ているタグを確認する
-git checkout v0.9.0        :: 切り替えたいタグ（上で確認した最新版）
+git checkout v0.10.0       :: 切り替えたいタグ（上で確認した最新版）
 popd
 ```
 
@@ -437,8 +438,9 @@ graph LR
         exceptions["exceptions\n例外体系"]
         constants["constants\n公開定数"]
         runtime["runtime\n実行モード"]
+        deprecation["deprecation\n旧名の警告"]
     end
-    subgraph L1["comken.core — 外を触らない部品（23個）"]
+    subgraph L1["comken.core — 外を触らない部品（24個）"]
         config["config\n設定ファイル"]
         logger["logger\nログ設定"]
         state["state\n状態の永続化"]
@@ -454,6 +456,7 @@ graph LR
         outlook["outlook\nOutlook"]
         windows["windows\nCOM / Window / Paths"]
         browser["browser\nブラウザ"]
+        browsersites["browser.sites\nライブラリ公認サイト"]
         salesforce["salesforce\nSalesforce API"]
         credentials["credentials\n認証情報（DPAPI）"]
         mastertable["master_table\n管理表"]
@@ -466,6 +469,7 @@ graph LR
     L3 --> L2
     salesforce --> sites["salesforce.sites\n組織ごとのクラス"]
     salesforce --> credentials
+    browser --> browsersites
 ```
 
 ---

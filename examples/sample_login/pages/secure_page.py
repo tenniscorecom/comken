@@ -30,4 +30,4 @@ class SecurePage(AppPage):
         from .login_page import LoginPage  # ランタイム用
 
         self.click(self.LOGOUT_BTN)
-        return LoginPage(self.session)
+        return self.to(LoginPage)

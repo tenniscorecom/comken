@@ -19,7 +19,7 @@ config.ini ではなくこのファイル（src/ 内の Python）で持つ。
 
     with Browsers() as browsers:
         kintai = browsers.launch(Kintai)
-        kintai.session.open(kintai.BASE_URL)
+        kintai.go_login()                    # 行ける画面は go_〇〇() で書く
 """
 
 from comken.toolbox.browser import BrowserOptions

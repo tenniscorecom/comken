@@ -4,12 +4,11 @@
 実行方法:
     リポジトリのルートで python -m examples.sample_login.run
 
-サイト固有の値は SiteBase サブクラスに集める。launch に SiteBase を渡すと
-戻り値の `kintai.session` から BrowserSession に繋がる。
+画面へ移るときは `SiteBase` の `go_〇〇()` から始める
+（書き方の正本は docs/browser.md）。
 """
 
 from comken.toolbox.browser import Browsers
-from examples.sample_login.pages.login_page import LoginPage
 from examples.sample_login.sample_site import SampleSite
 
 USERNAME = "tomsmith"
@@ -20,9 +19,8 @@ def main() -> None:
     with Browsers() as browsers:
         sample = browsers.launch(SampleSite)
 
-        # open() は自分自身を返すので、開いてそのままログインまでチェーンできる
-        # login() は SecurePage を返す → そのまま次の画面の操作が書ける
-        secure = LoginPage(sample.session).open().login(username=USERNAME, password=PASSWORD)
+        # go_login() は LoginPage を返す → login() で SecurePage へ
+        secure = sample.go_login().login(username=USERNAME, password=PASSWORD)
         print("画面見出し:", secure.get_heading())
         print("メッセージ:", secure.get_flash_message())
 

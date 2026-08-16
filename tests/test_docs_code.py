@@ -6,6 +6,7 @@
 """
 
 import ast
+import importlib
 import re
 from pathlib import Path
 
@@ -120,6 +121,121 @@ def test_all_public_exceptions_have_treatment():
         except ValueError:
             missing.append(name)
     assert not missing
+
+
+def _parse_tree_line(line: str) -> tuple[int, str] | None:
+    """ツリー1行を (level, name) に分解する。ツリー行でなければ None。"""
+    prefix_len = 0
+    while line[prefix_len : prefix_len + 4] == "│   ":
+        prefix_len += 4
+    rest = line[prefix_len:]
+
+    if rest.startswith("├── ") or rest.startswith("└── "):
+        return prefix_len // 4 + 1, rest[4:].split()[0]
+
+    stripped = line.strip()
+    if not stripped:
+        return None  # 空行はスキップ
+    # ルート候補（マーカー無し・非空）— 呼び出し側で「最初の1件だけ」を管理する
+    return 0, stripped.split()[0]
+
+
+def _parse_exception_tree(docstring: str) -> tuple[dict[str, str | None], str | None]:
+    """`comken/exceptions/__init__.py` の冒頭 docstring ツリーを解析する。
+
+    解析ルール:
+        - ツリーはファイル説明文の直後の **空行以降** から始まる
+        - 行頭の `│   ` を1段のインデントとする（ASCII 罫線の縦線）
+        - `├── ` / `└── ` の次の単語が例外名（後ろのコメントは読み飛ばす）
+        - ルート（`ComkenError`）はインデント無しで1行だけ
+
+    Returns:
+        (parent_map, root_name)
+        parent_map: 例外名 → 親クラス名（ルートは None）
+        root_name: ルート（`ComkenError` であるべき）
+    """
+    parent: dict[str, str | None] = {}
+    root: str | None = None
+    stack: list[tuple[str, int]] = []  # (name, level)
+    started = False  # 最初の空行を過ぎてからツリーが始まる
+
+    for line in docstring.splitlines():
+        if not started:
+            if not line.strip():
+                started = True
+            continue
+
+        parsed = _parse_tree_line(line)
+        if parsed is None:
+            continue  # ツリー末尾の空行など
+        level, _name = parsed
+
+        if level == 0:
+            # ルート候補: 先頭の1件だけ採用し、以降の非マーカー行は読み飛ばす
+            if root is not None:
+                continue
+            name = _name
+            root = name
+        else:
+            name = _name
+
+        while stack and stack[-1][1] >= level:
+            stack.pop()
+
+        if stack:
+            parent[name] = stack[-1][0]
+        else:
+            parent[name] = None
+            if root is None:
+                root = name
+
+        stack.append((name, level))
+
+    return parent, root
+
+
+def test_exception_docstring_tree_matches_public_api():
+    """`comken/exceptions/__init__.py` の冒頭 docstring ツリーが、
+    `__all__` の例外名集合と**完全に一致**し、
+    ツリーが表す継承関係が実際の継承関係と一致することを検証する。
+    """
+    init = _ROOT / "comken" / "exceptions" / "__init__.py"
+    tree = ast.parse(init.read_text(encoding="utf-8"))
+    docstring = ast.get_docstring(tree, clean=False)
+    assert docstring is not None, "exceptions/__init__.py の冒頭に docstring がない"
+
+    parent, root = _parse_exception_tree(docstring)
+
+    expected_names = set(_all_names(init))
+    tree_names = set(parent)
+
+    missing_in_tree = expected_names - tree_names
+    extra_in_tree = tree_names - expected_names
+    assert not missing_in_tree, f"docstring ツリーに無い公開例外: {sorted(missing_in_tree)}"
+    assert not extra_in_tree, (
+        f"docstring ツリーにだけある名前（__all__ に無い）: {sorted(extra_in_tree)}"
+    )
+
+    assert root is not None, "docstring ツリーのルート（先頭のインデント無し行）が見つからない"
+    assert root == "ComkenError", f"ルートは ComkenError であるべき、実際: {root!r}"
+
+    exceptions_module = importlib.import_module("comken.exceptions")
+    for name, declared_parent in parent.items():
+        cls = getattr(exceptions_module, name)
+        actual_parent_name = cls.__bases__[0].__name__
+        if name == root:
+            assert declared_parent is None, (
+                f"ルート {name} にツリー上で親が書かれている: {declared_parent}"
+            )
+            assert actual_parent_name == "Exception", (
+                f"ルート {name} の継承元が Exception ではない: {actual_parent_name}"
+            )
+            continue
+        assert declared_parent is not None, f"{name} はツリー上で親の下に書かれているべき"
+        assert actual_parent_name == declared_parent, (
+            f"{name} は {actual_parent_name} を継承しているが、"
+            f"ツリーでは {declared_parent} の下にある"
+        )
 
 
 def test_error_guide_generation_is_idempotent_and_preserves_handwritten_part():

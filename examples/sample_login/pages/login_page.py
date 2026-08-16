@@ -5,6 +5,8 @@ login_page.py — ログイン画面
   - 画面に存在する要素のセレクターは Locator のクラス変数としてクラス上部に定義する
   - メソッドは「この画面でできること」だけを書く
   - 別の画面に移動するメソッドは、遷移先のページクラスを返す
+  - 画面インスタンスを新しく作るときは `self.to(遷移先クラス)` を使う
+    （書き方の正本は docs/browser.md）
 
 【循環インポートの対処】
   - TYPE_CHECKING ブロック: IDE・型チェッカー用（ランタイムでは評価されない）
@@ -36,15 +38,6 @@ class LoginPage(AppPage):
     LOGIN_BTN = Locator.css(".radius")
     ERROR_MSG = Locator.css("#flash.error")
 
-    def open(self) -> LoginPage:
-        """ログイン画面を開き、自分自身を返す（メソッドチェーンできる）。
-
-        使い方:
-            secure = LoginPage(session).open().login("user", "pass")
-        """
-        self.go(self.PATH)
-        return self
-
     def login(self, username: str, password: str) -> SecurePage:
         """ログインして SecurePage を返す。
 
@@ -58,7 +51,7 @@ class LoginPage(AppPage):
         self.input(self.USERNAME, username)
         self.input(self.PASSWORD, password)
         self.click(self.LOGIN_BTN)
-        return SecurePage(self.session)
+        return self.to(SecurePage)
 
     def get_error_message(self) -> str:
         """ログイン失敗時のエラーメッセージを返す。"""

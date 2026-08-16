@@ -20,6 +20,9 @@ from comken.toolbox.browser import BrowserOptions, Browsers, Locator, Page
 ```text
 browser/
 ├── __init__.py                 公開APIの入口
+├── site.py                    SiteBase（サイトを書く人が最初に読む土台クラス）
+├── sites/                     ライブラリ公認サイトの置き場（SITES タプル）
+├── options.py                 Edgeの起動設定（BrowserOptions）
 ├── management/                ブラウザーと非同期処理の管理
 │   ├── browsers.py            複数ブラウザーをまとめて起動・終了する
 │   ├── sessions.py           1サイト分のWebDriverと排他制御
@@ -28,7 +31,6 @@ browser/
 │   └── tabs.py               1セッション内のタブを開閉する
 ├── page.py                    Page Objectの共通操作
 ├── locator.py                 画面要素の指定方法
-├── options.py                 Edgeの起動設定
 ├── download.py                ダウンロード先と完了待ち
 └── driver.py                  EdgeDriverの取得・更新
 ```
