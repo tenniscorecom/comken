@@ -138,7 +138,7 @@ class SalesforceBase:
         self._instance_url = ""
         self._authenticate()
 
-    # 組織クラスのまま返す（with Sandbox() as sf: で sf.案件一覧() の補完が効く）
+    # 組織クラスのまま返す（with Sandbox() as sf: で sf.opportunities() の補完が効く）
     def __enter__(self) -> Self:
         return self
 

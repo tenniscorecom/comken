@@ -1,4 +1,4 @@
-r"""comken/toolbox/browser/site.py — サイトを表す Site 基底クラス。
+r"""comken/toolbox/browser/site.py — サイトを表す SiteBase 基底クラス。
 
 1サイトにつき1クラスを作って、固有の値をそこに集める。設計の骨格は
 `comken.toolbox.salesforce.SalesforceBase` と同じ。読み書き両方を知っていれば、
@@ -6,14 +6,14 @@ r"""comken/toolbox/browser/site.py — サイトを表す Site 基底クラス�
 
 1サイトだけ触るツールでは `with Kintai() as kintai:` で完結する。複数サイトを
 扱うときは `with Browsers() as browsers: kintai = browsers.launch(Kintai)`。
-どちらの出口でも Site インスタンスが返り、`.session` で BrowserSession に繋がる。
+どちらの出口でも SiteBase インスタンスが返り、`.session` で BrowserSession に繋がる。
 
-    from comken.toolbox.browser import Browsers, Site, BrowserOptions
+    from comken.toolbox.browser import Browsers, SiteBase, BrowserOptions
 
     class KintaiOptions(BrowserOptions):
         DOWNLOAD_DIR = r"C:\work\downloads"
 
-    class Kintai(Site):
+    class Kintai(SiteBase):
         NAME = "kintai"
         BASE_URL = "https://kintai.example.co.jp"
         OPTIONS = KintaiOptions
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from .management import Browsers, BrowserSession
 
 
-class Site:
+class SiteBase:
     """1サイト分の入口。サイトごとにサブクラスを作って固有の値を置く。
 
     サブクラスで NAME / BASE_URL / OPTIONS を上書きする。`session` 以外の状態
@@ -69,7 +69,7 @@ class Site:
         # ときは None のままにして、`close()` で持ち物を閉じてしまわないように区別する
         self._browsers: Browsers | None = None
 
-    def __enter__(self) -> Site:
+    def __enter__(self) -> SiteBase:
         # 循環インポートを避けるため、使う直前に取り出す
         from .management import Browsers
 

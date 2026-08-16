@@ -15,7 +15,7 @@ class Sandbox(SalesforceBase):
 
     使い方:
         with Sandbox() as sf:
-            rows = sf.案件一覧()
+            rows = sf.opportunities()
     """
 
     # My Domain の URL。Sandbox は「<組織>--<サンドボックス名>.sandbox」の形になる。
@@ -32,12 +32,12 @@ class Sandbox(SalesforceBase):
 
     # レポート ID は組織ごとに固有で、環境では変わらない
     # TODO: 配置するときに実際のレポート ID へ置き換える
-    REPORT_案件一覧 = "00O000000000001"
+    REPORT_OPPORTUNITIES = "00O000000000001"
 
-    def 案件一覧(self) -> list[dict]:
+    def opportunities(self) -> list[dict]:
         """案件一覧レポートの明細を返す。
 
         2000 行を超えると SalesforceReportTruncatedError で止まる。
         超えるようになったら、期間で区切るか SOQL へ移す。
         """
-        return self.report.run(self.REPORT_案件一覧)
+        return self.report.run(self.REPORT_OPPORTUNITIES)

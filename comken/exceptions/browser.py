@@ -200,13 +200,13 @@ class SessionNameConflictError(BrowserError):
 
 
 class SiteConfigError(BrowserError):
-    """`Site` サブクラスの設定が不足している
+    """`SiteBase` サブクラスの設定が不足している
 
     ブラウザを起動する前に、必要なクラス定数が設定されていないとここで止まる。
     起動してから「どのサイトか分からない」では遅いので、設定不足は呼び出し時点で
     確実に発見する。
 
-    発生箇所: Browsers.launch(Site)
+    発生箇所: Browsers.launch(SiteBase)
 
     対処:
         サブクラスに NAME を定義する（BASE_URL / OPTIONS も同じ）
@@ -215,8 +215,8 @@ class SiteConfigError(BrowserError):
     def __init__(self, site_cls: type, missing: str) -> None:
         super().__init__(
             f"{site_cls.__name__} に {missing} が設定されていません。\n"
-            "Site サブクラスでは、次のクラス定数を決めてください:\n"
-            f"  class {site_cls.__name__}(Site):\n"
+            "SiteBase サブクラスでは、次のクラス定数を決めてください:\n"
+            f"  class {site_cls.__name__}(SiteBase):\n"
             f"      {missing} = ...\n"
             "  NAME      セッション名（ログ・ダウンロード先で使われる）\n"
             "  BASE_URL  このサイトの入口 URL（SitePage から参照される）\n"

@@ -389,11 +389,11 @@ rows = sf.query("SELECT Name, Amount FROM Opportunity WHERE CreatedDate > 2026-0
 from comken.toolbox.salesforce.sites import Sandbox
 
 with Sandbox() as sf:
-    rows = sf.案件一覧()
+    rows = sf.opportunities()
 
 # 別の DPAPI 登録へ切り替える場合だけ指定する
 with Sandbox(prefix="sandbox_test") as sf:
-    rows = sf.案件一覧()
+    rows = sf.opportunities()
 ```
 
 組織クラスは `CREDENTIAL_PREFIX` を頭に付けたキー名で、DPAPI に保管した

@@ -12,8 +12,8 @@
 詳しくは docs/browser.md を参照。
 
     Browsers        複数サイトのブラウザをまとめて起動・終了する（入口）
-    BrowserSession  1サイト分のブラウザ。launch(Site) では Site.session 経由で扱う
-    Site            1サイトの入口。Browsers.launch() に渡す土台クラス
+    BrowserSession  1サイト分のブラウザ。launch(SiteBase) では SiteBase.session 経由で扱う
+    SiteBase            1サイトの入口。Browsers.launch() に渡す土台クラス
     BrowserOptions  起動オプション。サイトごとにサブクラスを作って上書きする
     Page / SitePage 1画面ぶんの操作をまとめる基底クラス
     Locator         セレクター（Locator.id(...) / .css(...) など）
@@ -26,12 +26,12 @@ from .locator import Locator
 from .management import BackgroundTask, Browsers, BrowserSession
 from .options import BrowserOptions
 from .page import Page, SitePage
-from .site import Site
+from .site import SiteBase
 
 __all__ = [
     "Browsers",
     "BrowserSession",
-    "Site",
+    "SiteBase",
     "BrowserOptions",
     "Page",
     "SitePage",

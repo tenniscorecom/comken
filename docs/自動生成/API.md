@@ -2649,13 +2649,13 @@ class SiteConfigError(BrowserError):
 
 #### 説明
 
-`Site` サブクラスの設定が不足している
+`SiteBase` サブクラスの設定が不足している
 
 ブラウザを起動する前に、必要なクラス定数が設定されていないとここで止まる。
 起動してから「どのサイトか分からない」では遅いので、設定不足は呼び出し時点で
 確実に発見する。
 
-発生箇所: Browsers.launch(Site)
+発生箇所: Browsers.launch(SiteBase)
 
 対処:
     サブクラスに NAME を定義する（BASE_URL / OPTIONS も同じ）
@@ -3461,7 +3461,7 @@ def __init__(self) -> None:
 #### `launch`
 
 ```text
-def launch(self, site: type[Site], download_dir: str | Path | None=None) -> Site:
+def launch(self, site: type[SiteBase], download_dir: str | Path | None=None) -> SiteBase:
 ```
 
 ##### 説明
@@ -3473,12 +3473,12 @@ def launch(self, site: type[Site], download_dir: str | Path | None=None) -> Site
 取り違えが起きにくく、固有の値が1か所に集まる。
 
 Args:
-    site: 起動する Site サブクラス。`NAME` が必須（空だと SiteConfigError）。
+    site: 起動する SiteBase サブクラス。`NAME` が必須（空だと SiteConfigError）。
     download_dir: ダウンロード先。省略時は OPTIONS.DOWNLOAD_DIR/<NAME>、
                   それも未設定なら一時フォルダを作り、終了時に削除する。
 
 Returns:
-    起動済みの Site インスタンス。`.session` で BrowserSession に繋がる。
+    起動済みの SiteBase インスタンス。`.session` で BrowserSession に繋がる。
 
 Raises:
     SiteConfigError: サブクラスに NAME が設定されていない場合。
@@ -3495,8 +3495,8 @@ def launch_session(self, name: str, options: type[BrowserOptions] | BrowserOptio
 
 名前とオプションを直接渡してブラウザを1つ起動する（低レベル経路）。
 
-`launch(Site)` の中から呼ばれる雑務用。Site サブクラスが用意できない
-場面（テスト・一時的な検証）で使う。通常は `launch(Site)` を使う。
+`launch(SiteBase)` の中から呼ばれる雑務用。SiteBase サブクラスが用意できない
+場面（テスト・一時的な検証）で使う。通常は `launch(SiteBase)` を使う。
 
 ダウンロードフォルダとログイン状態はこの名前ごとに分かれる。
 同じサイトへ2つのアカウントでログインしたい場合も、
@@ -3803,10 +3803,10 @@ selenium の WebDriver そのもの。
 ここから直接操作すると、同時操作の見張り（operating）を通らない。
 parallel の中で使う場合、他のスレッドと衝突しないことは呼び出し側の責任になる。
 
-### `Site`
+### `SiteBase`
 
 ```text
-class Site:
+class SiteBase:
 ```
 
 #### 説明
@@ -4215,7 +4215,7 @@ BASE_URL とログインなど、そのサイトのどの画面でも使う処�
 
 BASE_URL は次の順で解決する:
   1. 自身（または親クラス）に `BASE_URL` が定義されていればそれ
-  2. 無ければ、`browsers.launch(Site)` で起動した `Site` の `BASE_URL`
+  2. 無ければ、`browsers.launch(SiteBase)` で起動した `SiteBase` の `BASE_URL`
 
 #### `go`
 
@@ -5841,12 +5841,12 @@ Sandbox 組織のクライアント。
 
 使い方:
     with Sandbox() as sf:
-        rows = sf.案件一覧()
+        rows = sf.opportunities()
 
-#### `案件一覧`
+#### `opportunities`
 
 ```text
-def 案件一覧(self) -> list[dict]:
+def opportunities(self) -> list[dict]:
 ```
 
 ##### 説明

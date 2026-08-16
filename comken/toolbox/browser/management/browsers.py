@@ -5,7 +5,7 @@
 このファイルは管理の入口だけを担当する。1つのブラウザーの起動・操作・終了は
 ``sessions.py``、バックグラウンド処理の結果管理は ``tasks.py`` が担う。
 
-サイトが1つでも複数でも、書き方は変わらない。`Site` サブクラスを `launch` に
+サイトが1つでも複数でも、書き方は変わらない。`SiteBase` サブクラスを `launch` に
 渡せば、戻り値から `.session` 経由で BrowserSession に繋がる:
 
     with Browsers() as browsers:
@@ -62,7 +62,7 @@ from ....exceptions import (
 )
 from ..download import DownloadDir
 from ..options import BrowserOptions
-from ..site import Site
+from ..site import SiteBase
 from .sessions import BrowserSession
 from .tasks import BackgroundTask
 
@@ -130,9 +130,9 @@ class Browsers:
 
     def launch(
         self,
-        site: type[Site],
+        site: type[SiteBase],
         download_dir: str | Path | None = None,
-    ) -> Site:
+    ) -> SiteBase:
         """サイトクラスを渡してブラウザを1つ起動する（推奨経路）。
 
         サブクラスの NAME と OPTIONS を読んで、内部で `launch_session()` を
@@ -140,12 +140,12 @@ class Browsers:
         取り違えが起きにくく、固有の値が1か所に集まる。
 
         Args:
-            site: 起動する Site サブクラス。`NAME` が必須（空だと SiteConfigError）。
+            site: 起動する SiteBase サブクラス。`NAME` が必須（空だと SiteConfigError）。
             download_dir: ダウンロード先。省略時は OPTIONS.DOWNLOAD_DIR/<NAME>、
                           それも未設定なら一時フォルダを作り、終了時に削除する。
 
         Returns:
-            起動済みの Site インスタンス。`.session` で BrowserSession に繋がる。
+            起動済みの SiteBase インスタンス。`.session` で BrowserSession に繋がる。
 
         Raises:
             SiteConfigError: サブクラスに NAME が設定されていない場合。
@@ -159,7 +159,7 @@ class Browsers:
         session = self.launch_session(site.NAME, site.OPTIONS, download_dir)
         instance = site(session)
         # SitePage.BASE_URL が未設定のときの参照先。launch_session() から直接
-        # 起動したセッションには紐付かない（Site 経由で起動したときだけ設定する）
+        # 起動したセッションには紐付かない（SiteBase 経由で起動したときだけ設定する）
         session._site = instance
         return instance
 
@@ -171,8 +171,8 @@ class Browsers:
     ) -> BrowserSession:
         """名前とオプションを直接渡してブラウザを1つ起動する（低レベル経路）。
 
-        `launch(Site)` の中から呼ばれる雑務用。Site サブクラスが用意できない
-        場面（テスト・一時的な検証）で使う。通常は `launch(Site)` を使う。
+        `launch(SiteBase)` の中から呼ばれる雑務用。SiteBase サブクラスが用意できない
+        場面（テスト・一時的な検証）で使う。通常は `launch(SiteBase)` を使う。
 
         ダウンロードフォルダとログイン状態はこの名前ごとに分かれる。
         同じサイトへ2つのアカウントでログインしたい場合も、

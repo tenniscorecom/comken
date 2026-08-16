@@ -329,7 +329,7 @@ class SitePage(Page):
 
     BASE_URL は次の順で解決する:
       1. 自身（または親クラス）に `BASE_URL` が定義されていればそれ
-      2. 無ければ、`browsers.launch(Site)` で起動した `Site` の `BASE_URL`
+      2. 無ければ、`browsers.launch(SiteBase)` で起動した `SiteBase` の `BASE_URL`
     """
 
     BASE_URL: str = ""
@@ -345,12 +345,12 @@ class SitePage(Page):
 
     @property
     def _base_url(self) -> str:
-        """画面クラス側の BASE_URL を、なければ Site.BASE_URL から解決する。
+        """画面クラス側の BASE_URL を、なければ SiteBase.BASE_URL から解決する。
 
         クラス変数の解決は Python の MRO に任せる（`type(self).BASE_URL` ではなく
         `self.__class__.BASE_URL` を使う）。SitePage 側で必ず定義する設計もあるが、
-        それでは Site クラスの BASE_URL を取りに行く経路が消えるため、ここでは
-        「未設定なら上位 Site を見る」形にしている。
+        それでは SiteBase クラスの BASE_URL を取りに行く経路が消えるため、ここでは
+        「未設定なら上位 SiteBase を見る」形にしている。
         """
         if self.__class__.BASE_URL:
             return self.__class__.BASE_URL

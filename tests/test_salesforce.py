@@ -577,10 +577,10 @@ class TestSites:
             ),
             Sandbox(auth=ClientCredentialsAuth("CID", "CSECRET", DOMAIN_URL)) as sf,
         ):
-            rows = sf.案件一覧()
+            rows = sf.opportunities()
 
         assert rows == [{"名前": "A社", "金額": "1"}]
-        assert session.request.call_args[0][1].endswith(f"/{Sandbox.REPORT_案件一覧}")
+        assert session.request.call_args[0][1].endswith(f"/{Sandbox.REPORT_OPPORTUNITIES}")
 
 
 class TestSiteFor:

@@ -32,8 +32,8 @@ Edge を自動で動かして、社内システムから情報を取ったり入
 
 | | Salesforce | ブラウザ |
 |---|---|---|
-| 土台（直接は使わない） | `SalesforceBase` | `Site` |
-| 対象ごとのクラス | `Sandbox(SalesforceBase)` | `Kintai(Site)` |
+| 土台（直接は使わない） | `SalesforceBase` | `SiteBase` |
+| 対象ごとのクラス | `Sandbox(SalesforceBase)` | `Kintai(SiteBase)` |
 | 固有の値の置き場 | `DOMAIN_URL` / `CREDENTIAL_PREFIX` | `NAME` / `BASE_URL` / `OPTIONS` |
 | 機能は継承せず持たせる | `.auth` / `.report` / `.metrics` | `.session`（`BrowserSession`） |
 | 単体で使う入口 | `with Sandbox() as sf:` | `with Kintai() as kintai:` |
@@ -250,13 +250,13 @@ class KintaiOptions(BrowserOptions):
 **ここが利用側の入口になる。** 固有の値と、最初にやる操作をここへ集める。
 
 ```python
-from comken.toolbox.browser import Site
+from comken.toolbox.browser import SiteBase
 
 from ..browser_options import KintaiOptions
 from ..pages.kintai.login_page import LoginPage
 
 
-class Kintai(Site):
+class Kintai(SiteBase):
     """勤怠システム。"""
 
     NAME = "kintai"
@@ -524,12 +524,12 @@ with Browsers() as browsers:
     keiri_rows = KeiriFlow(keiri.session).pending_rows()
 ```
 
-`Site.NAME` が、ダウンロードフォルダ・ログイン状態・ログのファイル名を分ける鍵になる。
+`SiteBase.NAME` が、ダウンロードフォルダ・ログイン状態・ログのファイル名を分ける鍵になる。
 同じサイトを2アカウントで開く場合も、NAME を変えれば混ざらない。
 
 | メソッド | 何をするか |
 |---|---|
-| `launch(Site, download_dir=None)` | Site サブクラスを渡してブラウザを1つ起動し、Site インスタンスを返す |
+| `launch(SiteBase, download_dir=None)` | SiteBase サブクラスを渡してブラウザを1つ起動し、SiteBase インスタンスを返す |
 | `launch_session(name, options=None, download_dir=None)` | 低レベル経路。`Browsers` を使わずに名前とオプションで直接起動する |
 | `start(処理, label="")` | 処理を裏で始めて、すぐ次の行へ進む。`BackgroundTask` を返す |
 | `parallel(*tasks)` | 複数の処理を同時に実行し、渡した順に結果を返す |

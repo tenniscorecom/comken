@@ -4,7 +4,7 @@
 実行方法:
     リポジトリのルートで python -m examples.sample_login.run
 
-サイト固有の値は Site サブクラスに集める。launch に Site を渡すと
+サイト固有の値は SiteBase サブクラスに集める。launch に SiteBase を渡すと
 戻り値の `kintai.session` から BrowserSession に繋がる。
 """
 

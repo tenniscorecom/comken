@@ -40,7 +40,7 @@ from comken.toolbox.browser import (
     DownloadDir,
     Locator,
     Page,
-    Site,
+    SiteBase,
     SitePage,
 )
 from comken.toolbox.browser.driver import _major, _pick_source, _replace_driver
@@ -61,11 +61,11 @@ class TestPublicApi:
         assert {"Browsers", "BrowserSession", "BackgroundTask"} <= set(browser.__all__)
 
     def test_exports_site_class_from_browser_package(self):
-        """Site も comken.toolbox.browser から import できる公開クラス。"""
-        from comken.toolbox.browser.site import Site as InternalSite
+        """SiteBase も comken.toolbox.browser から import できる公開クラス。"""
+        from comken.toolbox.browser.site import SiteBase as InternalSite
 
-        assert Site is InternalSite
-        assert "Site" in set(browser.__all__)
+        assert SiteBase is InternalSite
+        assert "SiteBase" in set(browser.__all__)
 
 
 def _make_session(tmp_path, name: str = "test") -> BrowserSession:
@@ -990,14 +990,14 @@ class TestSitePage:
         assert result is page
 
     def test_go_falls_back_to_site_base_url(self, tmp_path):
-        """SitePage 側に BASE_URL が無ければ、Site.BASE_URL が使われる。"""
+        """SitePage 側に BASE_URL が無ければ、SiteBase.BASE_URL が使われる。"""
 
         class KintaiPage(SitePage):
-            # BASE_URL は Site 側だけで持ち、SitePage には書かない
+            # BASE_URL は SiteBase 側だけで持ち、SitePage には書かない
             pass
 
         session = _make_session(tmp_path)
-        session._site = Site.__new__(Site)
+        session._site = SiteBase.__new__(SiteBase)
         session._site.NAME = "kintai"
         session._site.BASE_URL = "https://kintai.example.co.jp"
         session._site.OPTIONS = None
@@ -1008,13 +1008,13 @@ class TestSitePage:
         page.session._driver.get.assert_called_once_with("https://kintai.example.co.jp/login")
 
     def test_site_base_url_takes_precedence_over_own(self, tmp_path):
-        """SitePage.BASE_URL が設定されていれば、それが Site よりも優先される。"""
+        """SitePage.BASE_URL が設定されていれば、それが SiteBase よりも優先される。"""
 
         class KintaiPage(SitePage):
             BASE_URL = "https://kintai.example.co.jp/page"
 
         session = _make_session(tmp_path)
-        session._site = Site.__new__(Site)
+        session._site = SiteBase.__new__(SiteBase)
         session._site.NAME = "kintai"
         session._site.BASE_URL = "https://other.example.co.jp"
         session._site.OPTIONS = None
@@ -1026,17 +1026,17 @@ class TestSitePage:
 
 
 class TestBrowsersLaunchSite:
-    """`Browsers.launch(Site)` の挙動のテスト。"""
+    """`Browsers.launch(SiteBase)` の挙動のテスト。"""
 
     def test_returns_site_instance_with_session(self, tmp_path, monkeypatch):
-        """launch(Site) は Site インスタンスを返し、.session から BrowserSession に繋がる。"""
+        """launch(SiteBase) はそのインスタンスを返し、.session から BrowserSession に繋がる。"""
         monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
         monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
 
         class KintaiOptions(BrowserOptions):
             pass
 
-        class Kintai(Site):
+        class Kintai(SiteBase):
             NAME = "kintai"
             BASE_URL = "https://kintai.example.co.jp"
             OPTIONS = KintaiOptions
@@ -1052,11 +1052,11 @@ class TestBrowsersLaunchSite:
             assert kintai.session._site is kintai
 
     def test_uses_site_name_as_session_name(self, tmp_path, monkeypatch):
-        """Site.NAME がそのままセッション名として使われる。"""
+        """SiteBase.NAME がそのままセッション名として使われる。"""
         monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
         monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
 
-        class Kintai(Site):
+        class Kintai(SiteBase):
             NAME = "kintai"
             OPTIONS = BrowserOptions
 
@@ -1067,12 +1067,12 @@ class TestBrowsersLaunchSite:
             assert browsers.names == ["kintai"]
 
     def test_uses_site_options_as_launch_options(self, tmp_path, monkeypatch):
-        """Site.OPTIONS が起動オプションとして渡る（launch_session() 経由）。"""
+        """SiteBase.OPTIONS が起動オプションとして渡る（launch_session() 経由）。"""
 
         class KintaiOptions(BrowserOptions):
             WAIT_SECONDS = 20
 
-        class Kintai(Site):
+        class Kintai(SiteBase):
             NAME = "kintai"
             OPTIONS = KintaiOptions
 
@@ -1096,9 +1096,9 @@ class TestBrowsersLaunchSite:
         assert captured[0] is KintaiOptions
 
     def test_rejects_site_without_name(self, monkeypatch):
-        """NAME が空の Site サブクラスを渡すと SiteConfigError で止まる。"""
+        """NAME が空の SiteBase サブクラスを渡すと SiteConfigError で止まる。"""
 
-        class Unnamed(Site):
+        class Unnamed(SiteBase):
             BASE_URL = "https://example.co.jp"
             OPTIONS = BrowserOptions
 
@@ -1112,11 +1112,11 @@ class TestBrowsersLaunchSite:
         assert "NAME" in str(exc_info.value)
 
     def test_rejects_launch_without_with(self, monkeypatch):
-        """with に入れずに launch(Site) すると、ブラウザを起動する前に止まる。"""
+        """with に入れずに launch(SiteBase) すると、ブラウザを起動する前に止まる。"""
         edge = MagicMock()
         monkeypatch.setattr("comken.toolbox.browser.management.startup.webdriver.Edge", edge)
 
-        class Kintai(Site):
+        class Kintai(SiteBase):
             NAME = "kintai"
             OPTIONS = BrowserOptions
 
@@ -1128,11 +1128,11 @@ class TestBrowsersLaunchSite:
         edge.assert_not_called()  # 弾かれた時点で何も起きていない
 
     def test_rejects_duplicate_site_name(self, tmp_path, monkeypatch):
-        """同じ NAME の Site を2回起動すると SessionNameConflictError になる。"""
+        """同じ NAME の SiteBase を2回起動すると SessionNameConflictError になる。"""
         monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
         monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
 
-        class Kintai(Site):
+        class Kintai(SiteBase):
             NAME = "kintai"
             OPTIONS = BrowserOptions
 
@@ -1170,7 +1170,7 @@ class TestBrowsersLaunchSession:
 
 
 class TestSiteStandsAlone:
-    """Site を単体で使える（Browsers を経由しない）ことを固める。
+    """SiteBase を単体で使える（Browsers を経由しない）ことを固める。
 
     1サイトだけ触るツールで `with Browsers() as browsers:` を挟ませたくない。
     Salesforce の `with Sandbox() as sf:` と同じ形で始められるようにする。
@@ -1188,7 +1188,7 @@ class TestSiteStandsAlone:
         """session を省略すると、自分でブラウザを起動する。"""
         self._no_real_browser(monkeypatch)
 
-        class Kintai(Site):
+        class Kintai(SiteBase):
             NAME = "kintai"
             BASE_URL = "https://kintai.example.co.jp"
 
@@ -1200,7 +1200,7 @@ class TestSiteStandsAlone:
         """自分で起動したブラウザは、with を抜けるときに閉じる。"""
         closed = self._no_real_browser(monkeypatch)
 
-        class Kintai(Site):
+        class Kintai(SiteBase):
             NAME = "kintai"
 
         with Kintai():
@@ -1212,7 +1212,7 @@ class TestSiteStandsAlone:
         """Browsers から渡されたセッションは閉じない（持ち主は Browsers）。"""
         closed = self._no_real_browser(monkeypatch)
 
-        class Kintai(Site):
+        class Kintai(SiteBase):
             NAME = "kintai"
 
         with Browsers() as browsers:
@@ -1226,7 +1226,7 @@ class TestSiteStandsAlone:
         """close() を2回呼んでも落ちない。"""
         self._no_real_browser(monkeypatch)
 
-        class Kintai(Site):
+        class Kintai(SiteBase):
             NAME = "kintai"
 
         kintai = Kintai()
