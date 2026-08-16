@@ -1,4 +1,4 @@
-r"""comken/services/salesforce_downloader/history.py — ダウンロード履歴の記録。
+"""comken/services/salesforce_downloader/history.py — ダウンロード履歴の記録。
 
 **管理表とは別のファイルにする。** 管理表は人が Excel で編集し、履歴はプログラムが
 書き足す。同じファイルにすると、人が開いている間はプログラムが保存できず、
@@ -12,7 +12,22 @@ r"""comken/services/salesforce_downloader/history.py — ダウンロード履�
 - どのプロジェクトが、どのレポートを、どれくらいの頻度で使っているか
 - 同じ Salesforce レポートを複数のプロジェクトが取りに行っていないか
 - Salesforce へ実際に何回問い合わせたか（＝ API をどれだけ使っているか）
-- 失敗がいつ・何回起きているか
+- 失敗がいつ・何回起きているか、どの段階で失敗したか
+
+成功／失敗の判断と各段階の結果（Salesforce への問い合わせ、保存）は呼ぶ側
+（`service.py`）が決めて、ここは受け取った値を1行に書くだけ。履歴を集計・分析
+したい場合は、利用プロジェクト側でこの CSV を `CsvReader` で読む。
+
+このファイルが持つもの:
+- 履歴CSVの列を決める
+- 1行追記する
+- その日の定期取得が成功しているかを履歴から答える
+
+ここに書かないもの:
+- 成功／失敗の判断 → 呼ぶ側（service.py）が決めて渡す。ここは受け取った結果を書くだけ
+- 履歴の集計・分析（月別の件数、失敗の多いレポートの抽出など）
+  → 利用プロジェクトで、この CSV を CsvReader で読んで集計する
+- 取得や保存そのもの → service.py
 """
 
 import csv
@@ -25,6 +40,8 @@ from ...toolbox.utils.clock import now, today
 
 logger = logging.getLogger(__name__)
 
+# 履歴CSVの列。順序は出力ファイルそのものなので、追加・並び替えは全プロジェクトの
+# 既存履歴を読む処理へ影響する（互換性ポリシーに従う）
 COLUMNS = (
     "実行日時",
     "管理番号",
@@ -34,11 +51,14 @@ COLUMNS = (
     "プロジェクト",
     "実行方式",
     "成否",
-    "Salesforce取得",
+    "Salesforce取得結果",  # 成功 / 失敗 / 空（その段階まで到達しなかった）
+    "保存結果",  # 成功 / 失敗 / 空（その段階まで到達しなかった）
     "保存先",
     "ファイル名",
     "取得件数",
     "処理秒数",
+    "原因区分",  # 成功時は空。失敗時のみ、設定 / Salesforce / ファイル / プログラムの4値
+    "エラーコード",  # 例外クラス名。成功時・到達しなかった段階は空
     "エラー内容",
 )
 
@@ -52,6 +72,13 @@ TRIGGER_ON_DEMAND = "個別"
 _TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
+def _stage(value: bool | None) -> str:
+    """3状態（成功／失敗／未到達）を履歴の文字列に変換する。"""
+    if value is None:
+        return ""
+    return SUCCESS if value else FAILURE
+
+
 def record(
     path: str | Path,
     *,
@@ -62,11 +89,14 @@ def record(
     project: str,
     trigger: str,
     succeeded: bool,
-    fetched_from_salesforce: bool,
+    fetched_from_salesforce: bool | None,
+    saved_to_file: bool | None,
     folder: Path | None = None,
     file_name: str = "",
     row_count: int | None = None,
     seconds: float | None = None,
+    cause: str = "",
+    error_code: str = "",
     error: str = "",
 ) -> None:
     """履歴を1行追記する。ファイルが無ければ見出し行から作る。
@@ -82,12 +112,19 @@ def record(
         url: レポートの URL。
         project: 呼び出したプロジェクト名。
         trigger: TRIGGER_SCHEDULED か TRIGGER_ON_DEMAND。
-        succeeded: 取得できたか。
-        fetched_from_salesforce: 実際に Salesforce へ問い合わせたか。
+        succeeded: 全体の成否。
+        fetched_from_salesforce: Salesforce への問い合わせ結果（True=成功 / False=失敗 /
+            None=その段階まで到達しなかった）。
+        saved_to_file: ファイル保存の結果（True=成功 / False=失敗 /
+            None=その段階まで到達しなかった）。
         folder: 保存先フォルダ。
         file_name: 保存したファイル名。
         row_count: 取得できた件数。
         seconds: かかった秒数。
+        cause: 失敗の原因区分（`設定` / `Salesforce` / `ファイル` / `プログラム`）。
+            成功時は空文字。判定は呼ぶ側（`service.py`）が行う。
+        error_code: 例外クラス名（`ERRORS.md` と1対1で引ける）。成功時・到達しなかった
+            段階は空文字。
         error: 失敗した場合のエラー内容。
     """
     path = Path(path)
@@ -100,11 +137,14 @@ def record(
         project,
         trigger,
         SUCCESS if succeeded else FAILURE,
-        "○" if fetched_from_salesforce else "",
+        _stage(fetched_from_salesforce),
+        _stage(saved_to_file),
         str(folder) if folder else "",
         file_name,
         "" if row_count is None else row_count,
         "" if seconds is None else f"{seconds:.2f}",
+        cause,
+        error_code,
         error.replace("\n", " "),  # 1行1レコードを保つ
     ]
     try:

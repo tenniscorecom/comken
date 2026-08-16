@@ -2136,23 +2136,21 @@ def __init__(self, failed_keys: list[int], history_path: Path) -> None:
 ### `download_report`
 
 ```text
-def download_report(report_key: int, project: str='', *, master_path: Path | None=None, history_path: Path | None=None) -> Path:
+def download_report(report_key: int, project: str='') -> CsvReader:
 ```
 
 #### 説明
 
-今すぐ Salesforce から取得して保存し、そのパスを返す。
+今すぐ Salesforce から取得して保存し、そのファイルを `CsvReader` で返す。
 
 **必ず Salesforce へ問い合わせる。** 今日すでに取っていても取り直す。
 
 Args:
     report_key: 管理表の管理番号（例: 1001）。
     project: 呼び出し元の名前。履歴に残るので、入れておくと後から追える。
-    master_path: 管理表のパス（省略時は MASTER_PATH。通常は省略する）。
-    history_path: 履歴のパス（省略時は HISTORY_PATH。通常は省略する）。
 
 Returns:
-    保存したファイルのパス。
+    保存したファイルを読み取る `CsvReader`。ファイルパスは `.path` で取れる。
 
 Raises:
     ReportNotRegisteredError: 管理表に無い管理番号の場合。
@@ -2163,21 +2161,19 @@ Raises:
 ### `get_scheduled_report`
 
 ```text
-def get_scheduled_report(report_key: int, project: str='', *, master_path: Path | None=None, history_path: Path | None=None) -> Path:
+def get_scheduled_report(report_key: int, project: str='') -> CsvReader:
 ```
 
 #### 説明
 
-定期取得しておいたファイルのパスを返す。**取りに行かない。**
+定期取得しておいたファイルを `CsvReader` で返す。**取りに行かない。**
 
 Args:
     report_key: 管理表の管理番号（例: 1001）。
     project: 呼び出し元の名前（履歴には残さないが、例外の調査に使えるよう受け取る）。
-    master_path: 管理表のパス（省略時は MASTER_PATH。通常は省略する）。
-    history_path: 履歴のパス（省略時は HISTORY_PATH。通常は省略する）。
 
 Returns:
-    定期取得で保存されたファイルのパス。
+    定期取得で保存されたファイルを読み取る `CsvReader`。ファイルパスは `.path` で取れる。
 
 Raises:
     ReportNotRegisteredError: 管理表に無い管理番号の場合。
@@ -2188,7 +2184,7 @@ Raises:
 ### `download_scheduled`
 
 ```text
-def download_scheduled(project: str='定期実行', *, master_path: Path | None=None, history_path: Path | None=None) -> list[Path]:
+def download_scheduled(project: str='定期実行') -> list[Path]:
 ```
 
 #### 説明
@@ -2198,10 +2194,12 @@ def download_scheduled(project: str='定期実行', *, master_path: Path | None=
 定期実行のプロジェクトから呼ぶ。**1件失敗しても残りは続ける** ——
 5本のうち1本が落ちたときに全部やり直すと、手で用意する手間が5本ぶんになる。
 
+戻り値は `list[Path]` のままで **`CsvReader` を返さない**。定期取得の呼び出し側は
+中身を読まず「取らせる」のが目的なので、reader を並べても使い道がないため
+（役割の違いが戻り値の型に出ている）。
+
 Args:
     project: 履歴に残す呼び出し元の名前。
-    master_path: 管理表のパス（省略時は MASTER_PATH。通常は省略する）。
-    history_path: 履歴のパス（省略時は HISTORY_PATH。通常は省略する）。
 
 Returns:
     取得できたファイルのパス。

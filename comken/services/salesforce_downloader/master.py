@@ -14,6 +14,15 @@ r"""comken/services/salesforce_downloader/master.py — レポート管理表の
 **ID（管理番号）は Salesforce のレポート ID ではない。** 社内で決める論理的な番号で、
 同じ意味のデータを指す限り変えない。参照先の Salesforce レポートを差し替えても、
 利用側の Python コード（`CUSTOMER_LIST = 1001`）は変えずに済む。
+
+このファイルが持つもの:
+- 管理表にどんな列があるか
+- 各列の意味と書き方
+- URL からレポートIDを取り出すこと
+
+ここに書かないもの:
+- Excel をどう読むか・どう検証するか → comken/toolbox/master_table.py
+- 取得・保存・履歴 → service.py / history.py
 """
 
 from dataclasses import dataclass
@@ -38,6 +47,7 @@ EXAMPLES = [
         "schedule": SCHEDULED,
         "folder": r"\\server\案件集計\input",
         "enabled": True,
+        "allow_empty": False,  # 普段はデータがあるが、念のため「×」（既定）
     },
     {
         "key": 1002,
@@ -46,6 +56,7 @@ EXAMPLES = [
         "schedule": ON_DEMAND,
         "folder": r"\\server\売上帳票\input",
         "enabled": True,
+        "allow_empty": True,  # 「該当データ無し」が普通に起きるレポートの例
     },
 ]
 
@@ -55,6 +66,12 @@ class ReportEntry(MasterRow):
     """レポート管理表の1行。"""
 
     SHEET_NAME = "管理表"
+    # 「記入方法」シートの冒頭に出す案内。docs/ を読まない編集者へ向けた唯一の
+    # 1次情報として、ここに置く（マス目を増やす必要が無いよう簡潔に）
+    GUIDE_INTRO = (
+        "この表に行を足すだけで、新しいレポートを取得できます。"
+        "プログラム（コード）を直す必要はありません。"
+    )
 
     key: int = column(
         "ID",
@@ -87,6 +104,23 @@ class ReportEntry(MasterRow):
         "有効",
         help="「有効」か「無効」と書いてください。使わなくなったら「無効」にし、"
         "行は消さないでください（過去の履歴と対応が取れなくなります）",
+    )
+    # **既定値 `×`（＝「普段はデータがある」）を持たせる。** 意味が反転する列だが、
+    # この列だけ事情が違う:
+    # - 書き忘れると `×` になり、**厳しい側（エラー）へ倒れる**。
+    #   誤報が出るだけで、データは失われない（運用側で `○` に直せば正しくなる）
+    # - 既定値を持つ列は**見出しごと無くても読める**。列を足した瞬間に既存管理表が
+    #   すべて読めなくなり全プロジェクトの業務が止まる事故を防ぐ
+    # `choices` で `○` `×` 以外を弾く（既定の bool 変換は一覧に無い文字を黙って
+    # `False` として通すため危険）。bool 列の `choices` は1つ目を True、2つ目を
+    # False の表記として雛形へ書き出す
+    allow_empty: bool = column(
+        "0件あり",
+        choices=("○", "×"),
+        default=False,
+        help="その日のデータが 0 件になることがあるレポートなら「○」。"
+        "「×」のときに 0 件だとエラーになります"
+        "（指しているレポートが違う可能性に気づけるようにするため）",
     )
 
     @property
