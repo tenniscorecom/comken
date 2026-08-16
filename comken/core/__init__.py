@@ -27,6 +27,7 @@ from .files.naming import DateNameBuilder as DateNameBuilder
 from .files.ops import copy_file as copy_file
 from .files.ops import local_copy as local_copy
 from .files.ops import move_file as move_file
+from .files.ops import project_dir as project_dir
 from .retry import retry as retry
 from .state import State as State
 from .text import normalize as normalize
@@ -50,6 +51,7 @@ __all__ = [
     "local_copy",
     "measure",
     "move_file",
+    "project_dir",
     "normalize",
     "now",
     "remove_spaces",

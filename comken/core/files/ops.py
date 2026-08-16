@@ -1,7 +1,8 @@
-"""comken/core/files/ops.py — ファイルのコピー・移動と一時ファイル管理。"""
+"""comken/core/files/ops.py — ファイルのコピー・移動、置き場所の取得、一時ファイル管理。"""
 
 import logging
 import shutil
+import sys
 import tempfile
 import time
 from collections.abc import Iterator
@@ -11,6 +12,28 @@ from pathlib import Path
 from ...runtime import dry_run_log, is_dry_run
 
 logger = logging.getLogger(__name__)
+
+
+def project_dir() -> Path:
+    """実行したスクリプトが置かれているフォルダを返す。
+
+    `python main.py` で動かしたときの `main.py` の場所、つまりプロジェクトの
+    ルートを指す。`src/run.py` のような下の階層から呼んでも同じ場所を返す。
+
+    利用側で `Path(__file__).parent` と書かなくて済むようにするためのもの。
+    あの書き方はファイルを別の階層へ移した瞬間に指す先が変わるが、
+    こちらは呼ぶ場所を選ばない。
+
+    入力元・出力先は config.ini に書くのが基本なので、これが要るのは
+    **プロジェクトに同梱したファイルを読む**ような場面に限られる。
+
+    対話実行（REPL）や pytest から呼ぶと、その実行環境の場所を返す。
+    バッチとして動かす前提の関数なので、そこは想定していない。
+
+    Returns:
+        実行スクリプトのあるフォルダ。
+    """
+    return Path(sys.argv[0]).resolve().parent
 
 
 def copy_to_local_if_large(path: str | Path, threshold_mb: float) -> tuple[Path, Path | None]:

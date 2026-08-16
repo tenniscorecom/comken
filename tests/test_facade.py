@@ -46,7 +46,7 @@ def test_facade_only_seven_names() -> None:
 
 
 def test_core_exposes_parts() -> None:
-    """comken.core は部品23個を公開し、その全てが実際に取れる。
+    """comken.core は部品24個を公開し、その全てが実際に取れる。
 
     増えるべき時: core に部品を足して、利用側から使わせるとき。
     ここに書かないと `from comken.core import ...` で届かない。
@@ -67,6 +67,7 @@ def test_core_exposes_parts() -> None:
         "move_file",
         "normalize",
         "now",
+        "project_dir",
         "remove_spaces",
         "retry",
         "strip_spaces",

@@ -7,6 +7,7 @@ utils モジュールのテスト。
 
 import datetime
 import os
+import sys
 import time
 from pathlib import Path
 from unittest.mock import patch
@@ -23,7 +24,7 @@ from comken.core.files import (
     date_in_name,
     move_file,
 )
-from comken.core.files.ops import copy_to_local_if_large
+from comken.core.files.ops import copy_to_local_if_large, project_dir
 from comken.core.text import normalize, remove_spaces, strip_spaces
 from comken.core.wait import wait
 from comken.exceptions import ColumnNotFoundError, DownloadTimeoutError
@@ -824,3 +825,47 @@ class TestPaths:
     def test_temp_dir_exists(self):
         """temp_dir() が実在するディレクトリを返すことを確認する。"""
         assert Paths.temp_dir().is_dir()
+
+
+class TestProjectDir:
+    """project_dir() の挙動を固める。
+
+    利用側に `Path(__file__).parent` を書かせないための関数。
+    呼ぶ場所（main.py でも src/run.py でも）に関係なく、
+    実行したスクリプトの場所を返すことがこの関数の値打ち。
+    """
+
+    def test_returns_directory_of_the_executed_script(self, tmp_path, monkeypatch):
+        """sys.argv[0] のフォルダを返す。"""
+        script = tmp_path / "main.py"
+        script.touch()
+        monkeypatch.setattr(sys, "argv", [str(script)])
+
+        assert project_dir() == tmp_path.resolve()
+
+    def test_is_independent_of_the_current_directory(self, tmp_path, monkeypatch):
+        """カレントディレクトリを移動しても結果が変わらない。
+
+        `実行.bat` はプロジェクト直下から動かすが、RPA 基盤や
+        タスクスケジューラ経由だとカレントが別の場所になることがある。
+        """
+        script = tmp_path / "main.py"
+        script.touch()
+        other = tmp_path / "別のフォルダ"
+        other.mkdir()
+        monkeypatch.setattr(sys, "argv", [str(script)])
+        monkeypatch.chdir(other)
+
+        assert project_dir() == tmp_path.resolve()
+
+    def test_returns_absolute_path_for_relative_argv(self, tmp_path, monkeypatch):
+        """argv が相対パスでも絶対パスを返す（そのまま連結して使えるように）。"""
+        script = tmp_path / "main.py"
+        script.touch()
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(sys, "argv", ["main.py"])
+
+        result = project_dir()
+
+        assert result.is_absolute()
+        assert result == tmp_path.resolve()
