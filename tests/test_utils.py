@@ -8,6 +8,7 @@ utils モジュールのテスト。
 import datetime
 import os
 import time
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -22,6 +23,7 @@ from comken.core.files import (
     date_in_name,
     move_file,
 )
+from comken.core.files.ops import copy_to_local_if_large
 from comken.core.text import normalize, remove_spaces, strip_spaces
 from comken.core.wait import wait
 from comken.exceptions import ColumnNotFoundError, DownloadTimeoutError
@@ -165,6 +167,75 @@ class TestCopyFile:
 
         assert result == src
         assert src.read_text(encoding="utf-8") == "data"
+
+
+class TestCopyToLocalIfLarge:
+    """copy_to_local_if_large の境界テスト。
+
+    ExcelBase / ExcelComHandler が共通で使うため、ここで境界を固める。
+    """
+
+    def test_returns_original_when_under_threshold(self, tmp_path):
+        """閾値未満ならコピーせず元のパスを返し、tmp は None。"""
+        src = tmp_path / "small.xlsx"
+        src.write_bytes(b"x" * 100)
+
+        working, tmp = copy_to_local_if_large(src, threshold_mb=1)
+
+        assert working == src
+        assert tmp is None
+        assert src.exists()
+
+    def test_copies_when_above_threshold(self, tmp_path):
+        """閾値を超えていればコピーし、tmp が作られる。"""
+        src = tmp_path / "big.xlsx"
+        src.write_bytes(b"x" * (2 * 1024 * 1024))  # 2 MB
+
+        working, tmp = copy_to_local_if_large(src, threshold_mb=1)
+
+        assert working != src
+        assert tmp == working
+        assert tmp.exists()
+        assert tmp.stat().st_size == src.stat().st_size
+        # 呼び出し側が所有者なのでこちらでは消さない
+        assert tmp.exists()
+
+    def test_boundary_equal_to_threshold_does_not_copy(self, tmp_path):
+        """ちょうど閾値のサイズはコピーしない（``>`` の判定）。"""
+        src = tmp_path / "edge.xlsx"
+        one_mib = 1024 * 1024
+        src.write_bytes(b"x" * one_mib)
+
+        working, tmp = copy_to_local_if_large(src, threshold_mb=1)
+
+        assert working == src
+        assert tmp is None
+
+    def test_threshold_zero_disables_copy(self, tmp_path):
+        """``threshold_mb=0`` はオプトアウト用。確実に元のまま返す。"""
+        src = tmp_path / "huge.xlsx"
+        src.write_bytes(b"x" * (10 * 1024 * 1024))  # 10 MB
+
+        working, tmp = copy_to_local_if_large(src, threshold_mb=0)
+
+        assert working == src
+        assert tmp is None
+
+    def test_returns_path_objects(self, tmp_path):
+        """返り値はどちらも Path オブジェクト（呼び出し側の簡潔さのため）。"""
+        # 閾値未満
+        small = tmp_path / "s.xlsx"
+        small.write_bytes(b"x")
+        working, tmp = copy_to_local_if_large(small, threshold_mb=1)
+        assert isinstance(working, Path)
+        assert tmp is None
+
+        # 閾値超え
+        big = tmp_path / "b.xlsx"
+        big.write_bytes(b"x" * (2 * 1024 * 1024))
+        working2, tmp2 = copy_to_local_if_large(big, threshold_mb=1)
+        assert isinstance(working2, Path)
+        assert isinstance(tmp2, Path)
 
 
 class TestDateNameBuilder:

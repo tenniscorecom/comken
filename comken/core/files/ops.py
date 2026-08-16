@@ -13,6 +13,48 @@ from ...runtime import dry_run_log, is_dry_run
 logger = logging.getLogger(__name__)
 
 
+def copy_to_local_if_large(path: str | Path, threshold_mb: float) -> tuple[Path, Path | None]:
+    """ファイルサイズが閾値を超えていればローカルへコピーして、そのパスを返す。
+
+    NAS・ネットワークドライブ上のファイルを openpyxl や win32com が開くときに
+    遅い・不安定になる事があり、社内ルールで許可されていればローカルへコピーして
+    安定化させる。``threshold_mb=0`` を指定すればコピーせず元のまま返す
+    （社内ルールでローカルコピーが禁止されている場合のオプトアウト）。
+
+    返り値は ``(working_path, tmp_path_or_None)``。第2要素が ``None`` 以外の
+    ときは呼び出し側がローカルコピーの所有者となり、不要になったら
+    ``tmp_path.unlink(missing_ok=True)`` で削除する。
+    ``local_copy`` のような ``with`` ブロックでの自動削除はしない
+    （openpyxl / win32com は ``close()`` までパスを保持する必要があるため、
+    スコープがクラス側に寄る）。
+
+    この関数は ``__all__`` に入れない。利用者が直接呼ぶことは想定せず、
+    ExcelBase / ExcelComHandler などクラス側の自動コピールーチンが使う。
+
+    Args:
+        path: 元のファイルパス。
+        threshold_mb: この値（MB）を**超える**ファイルはコピーする。
+                      0 を指定するとコピーしない。
+
+    Returns:
+        (working_path, tmp_path_or_None) のタプル。
+        コピーしたときは ``(ローカルコピーへのPath, そのPath)``、
+        コピーしなかったときは ``(元のパス, None)``。
+    """
+    src = Path(path)
+    if not threshold_mb:
+        return src, None
+    if src.stat().st_size <= threshold_mb * 1024 * 1024:
+        return src, None
+    # クラス側に open できる名前（パス）が必要なので NamedTemporaryFile で
+    # 名前だけ確保してすぐ閉じ、呼び出し側がパスから開ける状態にする。
+    tmp = tempfile.NamedTemporaryFile(suffix=src.suffix, delete=False)  # noqa: SIM115
+    tmp_path = Path(tmp.name)
+    tmp.close()
+    shutil.copy2(src, tmp_path)
+    return tmp_path, tmp_path
+
+
 @contextmanager
 def local_copy(path: str | Path) -> Iterator[Path]:
     """ネットワーク上のファイルをローカルにコピーし、処理後に自動削除する。

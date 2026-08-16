@@ -108,7 +108,7 @@ INFO ログ（[DRY-RUN] プレフィックス付き）に出す。本番実行�
 
 対象の操作:
     - move_file / copy_file（ファイルの移動・コピー）
-    - ExcelWriter.save / CsvWriter の書き込み
+    - ExcelWriter.save / ExcelComHandler.save / CsvWriter の書き込み
     - State.set（state.ini の書き込み）
 
 読み取り（CSV・Excel の読み込み、SOQL クエリ等）は通常どおり実行される。
@@ -5824,7 +5824,7 @@ openpyxl では対応できない以下の操作に使う:
 #### `__init__`
 
 ```text
-def __init__(self, path: str | Path, password: str='', headers: list[str] | None=None) -> None:
+def __init__(self, path: str | Path, password: str='', headers: list[str] | None=None, local_copy_threshold_mb: float=10) -> None:
 ```
 
 ##### 説明
@@ -5834,6 +5834,14 @@ Args:
     password: 読み取りパスワード（パスワード保護されたファイルを開く場合）。
     headers: ヘッダー行がない Excel の場合に、列名のリストをここで付ける。
              指定すると read_rows_as_dicts() は全行をデータとして読む。
+    local_copy_threshold_mb: この MB 以上のファイルはローカルにコピーしてから開く。
+        NAS やネットワークドライブのファイルが遅い・不安定な場合に有効。
+        0 を指定するとローカルコピーを無効化できる
+        （社内ルールでローカルコピーが禁止されている環境向け。
+        ExcelReader / ExcelWriter と挙動を揃えるためのオプトアウト）。
+        マクロ起動が UNC / 共有サーバー上のファイルを参照する場合、
+        コピー元では見つからないことがある。そのときは
+        ``local_copy_threshold_mb=0`` を指定して元の場所で開く。
 
 #### `read_cell`
 
@@ -6013,8 +6021,14 @@ def save(self) -> None:
 
 元のファイルに上書き保存する。
 
+NAS 上のファイルをローカルコピーして開いている場合も、保存先は元のファイル
+（一時コピーに保存すると close() でコピーごと消えるため）。
+動作は ExcelWriter.save() と同じ考え方（開いた場所ではなく、元の場所へ保存）。
 close() は保存せずに閉じる（SaveChanges=False）ため、
 write_cell や transfer_by_mapping での変更を残す場合は必ず呼ぶこと。
+
+Raises:
+    FileFormatMismatchError: 保存先の拡張子がワークブックの形式と食い違う場合。
 
 #### `save_as`
 

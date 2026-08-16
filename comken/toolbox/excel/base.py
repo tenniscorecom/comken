@@ -9,8 +9,6 @@
 from __future__ import annotations
 
 import logging
-import shutil
-import tempfile
 from collections.abc import Generator
 from contextlib import closing
 from pathlib import Path
@@ -21,6 +19,7 @@ from openpyxl.utils.cell import range_boundaries
 from openpyxl.worksheet.worksheet import Worksheet
 
 from ...core.files.base import FileBase
+from ...core.files.ops import copy_to_local_if_large
 from ...core.timer import measure
 from ...exceptions import (
     EmptyHeaderCellError,
@@ -76,21 +75,10 @@ class ExcelBase(FileBase):
         if not src.exists():
             raise ExcelFileNotFoundError(src)
 
-        # ── NAS・ネットワークファイルのローカルコピー ──────────────────
-        # 社内ルールでローカルへのコピーが不可の場合は、
-        # このブロックを丸ごと削除し「self._tmp = None」だけ残す。
-        # close() 内の対応する削除ブロックも併せて削除すること。
-        self._tmp = None
-        if local_copy_threshold_mb and src.stat().st_size > local_copy_threshold_mb * 1024 * 1024:
-            # NOTE: openpyxl がパスから開けるよう、名前を確保して即座に閉じる。
-            tmp = tempfile.NamedTemporaryFile(suffix=src.suffix, delete=False)  # noqa: SIM115
-            self._tmp = Path(tmp.name)
-            tmp.close()
-            shutil.copy2(src, self._tmp)
-            src = self._tmp
-        # ────────────────────────────────────────────────────────────────
-
-        self._working_path = src
+        # NAS・ネットワークファイルのローカルコピー（社内ルールで禁止なら閾値を 0 にする）
+        self._working_path, self._tmp = copy_to_local_if_large(
+            self._original_path, local_copy_threshold_mb
+        )
         self._headers = headers
         # マクロ入りブック（.xlsm/.xlsb）は keep_vba=True で開かないと save() で VBA が消える
         keep_vba = self._original_path.suffix.lower() in (".xlsm", ".xlsb", ".xltm")
@@ -342,7 +330,6 @@ class ExcelBase(FileBase):
         """ワークブックを閉じる。with 文を使う場合は自動で呼ばれる。"""
         self._wb.close()
 
-        # ── ローカルコピーの後処理（__init__ の対応ブロックと一緒に削除）──
+        # ローカルコピーは不要になったので消す（close を2回呼んでも安全）
         if self._tmp:
             self._tmp.unlink(missing_ok=True)
-        # ──────────────────────────────────────────────────────────────────

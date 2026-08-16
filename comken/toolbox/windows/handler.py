@@ -25,16 +25,19 @@ import win32gui
 from ...constants import FileFormat
 from ...core.data import column_number
 from ...core.files.base import FileBase
+from ...core.files.ops import copy_to_local_if_large
 from ...core.transfer import mapping_columns, normalize_lookup_key
 from ...exceptions import (
     EmptyHeaderCellError,
     ExcelApplicationNotAvailableError,
+    ExcelFileNotFoundError,
     ExcelHeadersTooFewError,
     FileFormatMismatchError,
     MacroError,
     RowTransferError,
     _warn_coerce,
 )
+from ...runtime import dry_run_log, is_dry_run
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +128,11 @@ class ExcelComHandler(FileBase):
     SUFFIXES = (".xlsx", ".xlsm", ".xlsb", ".xls", ".xltx", ".xltm")
 
     def __init__(
-        self, path: str | Path, password: str = "", headers: list[str] | None = None
+        self,
+        path: str | Path,
+        password: str = "",
+        headers: list[str] | None = None,
+        local_copy_threshold_mb: float = 10,
     ) -> None:
         """
         Args:
@@ -133,8 +140,24 @@ class ExcelComHandler(FileBase):
             password: 読み取りパスワード（パスワード保護されたファイルを開く場合）。
             headers: ヘッダー行がない Excel の場合に、列名のリストをここで付ける。
                      指定すると read_rows_as_dicts() は全行をデータとして読む。
+            local_copy_threshold_mb: この MB 以上のファイルはローカルにコピーしてから開く。
+                NAS やネットワークドライブのファイルが遅い・不安定な場合に有効。
+                0 を指定するとローカルコピーを無効化できる
+                （社内ルールでローカルコピーが禁止されている環境向け。
+                ExcelReader / ExcelWriter と挙動を揃えるためのオプトアウト）。
+                マクロ起動が UNC / 共有サーバー上のファイルを参照する場合、
+                コピー元では見つからないことがある。そのときは
+                ``local_copy_threshold_mb=0`` を指定して元の場所で開く。
         """
         super().__init__(path)
+        self._original_path = self._path
+        if not self._original_path.exists():
+            raise ExcelFileNotFoundError(self._original_path)
+        # save() は元ファイルへ保存するので、コピーで開いたかどうかは _working_path と
+        # _original_path を比べることで判別する。
+        self._working_path, self._tmp = copy_to_local_if_large(
+            self._original_path, local_copy_threshold_mb
+        )
         self._headers = headers
         self._wb = None
         # DispatchEx は常に新規の Excel プロセスを起動する。
@@ -151,7 +174,7 @@ class ExcelComHandler(FileBase):
             # 外部リンクを持つブックを開いたときの「リンクを更新しますか」ダイアログで
             # 無人実行が止まるのを防ぐ（DisplayAlerts では抑制されない）
             self._excel.AskToUpdateLinks = False
-            kwargs = {"Filename": str(self.path.resolve())}
+            kwargs = {"Filename": str(self._working_path.resolve())}
             if password:
                 kwargs["Password"] = password
             self._wb = self._excel.Workbooks.Open(**kwargs)
@@ -165,6 +188,8 @@ class ExcelComHandler(FileBase):
                 logger.warning("初期化失敗後の Excel 終了に失敗しました", exc_info=True)
             finally:
                 self._excel = None
+                # 初期化失敗時も一時コピーは片付けておく
+                self._cleanup_tmp()
             raise
 
     def __enter__(self) -> Self:
@@ -425,10 +450,31 @@ class ExcelComHandler(FileBase):
     def save(self) -> None:
         """元のファイルに上書き保存する。
 
+        NAS 上のファイルをローカルコピーして開いている場合も、保存先は元のファイル
+        （一時コピーに保存すると close() でコピーごと消えるため）。
+        動作は ExcelWriter.save() と同じ考え方（開いた場所ではなく、元の場所へ保存）。
         close() は保存せずに閉じる（SaveChanges=False）ため、
         write_cell や transfer_by_mapping での変更を残す場合は必ず呼ぶこと。
+
+        Raises:
+            FileFormatMismatchError: 保存先の拡張子がワークブックの形式と食い違う場合。
         """
-        self._wb.Save()
+        original = Path(self._original_path)
+        if is_dry_run():
+            dry_run_log("Excel を保存: %s", original)
+            return
+        if self._working_path == original:
+            # そのまま開いているケース。Save() で上書き。
+            self._wb.Save()
+            return
+        # ローカルコピーで開いているときは SaveAs で元ファイルへ。
+        # FileFormat を明示しないと xlOpenXMLWorkbook 固定になり、.xlsm などの
+        # マクロ付きブックが壊れる（ExcelWriter の save_as() と同じ理由）。
+        file_format = self._wb.FileFormat
+        suffix_format = _SUFFIX_TO_FORMAT.get(original.suffix.lower())
+        if suffix_format is not None and suffix_format != file_format:
+            raise FileFormatMismatchError(original.suffix)
+        self._wb.SaveAs(str(original), FileFormat=file_format)
 
     def save_as(
         self,
@@ -482,6 +528,25 @@ class ExcelComHandler(FileBase):
             self._excel = None
             if excel:
                 excel.Quit()
+            # ローカルコピーは不要になったので消す。Excel がファイルロックを
+            # 握っている間に消そうとすると Windows で失敗するため try で握る。
+            self._cleanup_tmp()
+
+    def _cleanup_tmp(self) -> None:
+        """ローカルコピー（_tmp）を削除する（ライブラリ内部用）。
+
+        2回呼ばれても安全。_tmp を None に戻してから消すので、残骸は次回の
+        ``_cleanup_tmp()`` でも重複削除されない。失敗しても例外を上げない
+        （Excel がファイルロックを握っているケースがあるため）。
+        """
+        tmp = self._tmp
+        self._tmp = None
+        if tmp is None:
+            return
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            logger.debug("一時ファイルを削除できませんでした: %s", tmp, exc_info=True)
 
 
 class WindowHandler:

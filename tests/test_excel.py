@@ -1220,3 +1220,116 @@ class TestExcelWriterTransactionalSave:
 
         assert excel_with_header.read_bytes() == original_bytes
         assert list(excel_with_header.parent.glob(f".{excel_with_header.name}.*.tmp")) == []
+
+
+class TestExcelComHandlerLocalCopy:
+    """ExcelComHandler のローカルコピー挙動。
+
+    COM を起動しない境界で、閾値・保存先・close での一時ファイル削除を確認する。
+    ``__init__`` 全体をモック化せず ``__new__`` でフィールドだけ埋めて検証する。
+    """
+
+    def test_save_uses_save_when_working_path_matches_original(self, tmp_path):
+        """ローカルコピーせず開いたときは ``wb.Save()`` で保存する。"""
+        original = tmp_path / "data.xlsx"
+        original.touch()
+        wb = MagicMock()
+        wb.FileFormat = 51  # xlOpenXMLWorkbook
+
+        handler = ExcelComHandler.__new__(ExcelComHandler)
+        handler._wb = wb
+        handler._original_path = original
+        handler._working_path = original
+        handler._tmp = None
+
+        handler.save()
+
+        wb.Save.assert_called_once_with()
+        wb.SaveAs.assert_not_called()
+
+    def test_save_uses_save_as_to_original_when_local_copy_was_used(self, tmp_path):
+        """ローカルコピーで開いたときは元の場所へ ``SaveAs`` する（最重要）。"""
+        original = tmp_path / "data.xlsx"
+        original.touch()
+        local = tmp_path / "tmp.xlsx"
+        local.touch()
+        wb = MagicMock()
+        wb.FileFormat = 51
+
+        handler = ExcelComHandler.__new__(ExcelComHandler)
+        handler._wb = wb
+        handler._original_path = original
+        handler._working_path = local
+        handler._tmp = local
+
+        handler.save()
+
+        wb.Save.assert_not_called()
+        wb.SaveAs.assert_called_once_with(str(original), FileFormat=51)
+
+    def test_save_raises_on_format_mismatch_when_local_copy_used(self, tmp_path):
+        """ローカルコピー経路で、保存先拡張子とワークブック形式が食い違うとエラー。"""
+        from comken.exceptions import FileFormatMismatchError
+
+        original = tmp_path / "data.xlsm"
+        original.touch()
+        local = tmp_path / "tmp.xlsx"
+        local.touch()
+        wb = MagicMock()
+        wb.FileFormat = 51  # xlsx 形式なのに保存先拡張子は .xlsm
+
+        handler = ExcelComHandler.__new__(ExcelComHandler)
+        handler._wb = wb
+        handler._original_path = original
+        handler._working_path = local
+        handler._tmp = local
+
+        with pytest.raises(FileFormatMismatchError, match="xlsm"):
+            handler.save()
+
+    def test_close_removes_local_copy(self, tmp_path):
+        """``close()`` は Excel を閉じた後にローカルコピーを削除する。"""
+        original = tmp_path / "data.xlsx"
+        original.touch()
+        local = tmp_path / "tmp.xlsx"
+        local.write_text("data", encoding="utf-8")
+
+        wb = MagicMock()
+        excel = MagicMock()
+        handler = ExcelComHandler.__new__(ExcelComHandler)
+        handler._wb = wb
+        handler._excel = excel
+        handler._original_path = original
+        handler._working_path = local
+        handler._tmp = local
+
+        handler.close()
+
+        wb.Close.assert_called_once_with(SaveChanges=False)
+        excel.Quit.assert_called_once_with()
+        assert not local.exists()
+        assert handler._tmp is None
+        assert handler._excel is None
+        assert handler._wb is None
+
+    def test_close_is_idempotent_on_double_call(self, tmp_path):
+        """``close()`` を2回呼んでも Excel.Quit が二重に走らない（一時ファイル削除も冪等）。"""
+        original = tmp_path / "data.xlsx"
+        original.touch()
+        local = tmp_path / "tmp.xlsx"
+        local.write_text("data", encoding="utf-8")
+
+        wb = MagicMock()
+        excel = MagicMock()
+        handler = ExcelComHandler.__new__(ExcelComHandler)
+        handler._wb = wb
+        handler._excel = excel
+        handler._original_path = original
+        handler._working_path = local
+        handler._tmp = local
+
+        handler.close()
+        handler.close()
+
+        excel.Quit.assert_called_once_with()
+        assert not local.exists()

@@ -37,19 +37,40 @@ with ExcelReader(NAS_PATH, local_copy_threshold_mb=0) as f:
 
 ### ExcelComHandler（win32com）
 
-win32com は `ExcelReader` / `ExcelWriter` の自動コピー機能がないため、`local_copy` を使う。
+`ExcelReader` / `ExcelWriter` と同じく、`local_copy_threshold_mb` を超えるサイズの
+ファイルは自動でローカルコピーしてから開く（NAS・共有サーバー上のファイル向け）。
+`0` を指定すれば無効化できる（社内ルールでローカルコピーが禁止されている場合、
+または UNC / 共有サーバー上のマクロがコピー元のパスを参照する場合
+——`0` を指定すれば元で開ける）。
 
 ```python
-from comken.core import local_copy
 from comken.toolbox.windows.handler import ExcelComHandler
 
 NAS_PATH = r"\\nas-server\share\data.xlsx"
 SHEET = "Sheet1"
 
-with local_copy(NAS_PATH) as local_path:
-    with ExcelComHandler(local_path) as h:
-        rows = h.read_rows_as_dicts(SHEET)
+# 10 MB 以上は自動でローカルコピー（デフォルト）
+with ExcelComHandler(NAS_PATH) as h:
+    rows = h.read_rows_as_dicts(SHEET)
+
+# 閾値を変える（50 MB 以上でコピー）
+with ExcelComHandler(NAS_PATH, local_copy_threshold_mb=50) as h:
+    rows = h.read_rows_as_dicts(SHEET)
+
+# ローカルコピーを無効化（社内ルールで不可・マクロが元パスを参照する場合など）
+with ExcelComHandler(NAS_PATH, local_copy_threshold_mb=0) as h:
+    rows = h.read_rows_as_dicts(SHEET)
 ```
+
+ローカルコピーで開いた場合も `save()` は元ファイルへ保存される
+（`ExcelWriter.save()` と同じ考え方。一時コピーに保存すると `close()` で消えるため）。
+`close()`（with 文の終わり）で一時コピーは自動削除される。
+
+`comken.core.local_copy` コンテキストマネージャは別用途
+（COM以外のファイルを NAS 上で読みたい等）で残っている。
+**Excel を伴うなら `ExcelComHandler` の自動コピーを使うこと**。
+保存先が自動で元ファイルへ戻されるため、`local_copy` で手動コピーすると
+`save()` した結果がすべて消える事故が起きる。
 
 ---
 
