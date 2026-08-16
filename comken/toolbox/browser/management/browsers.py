@@ -24,9 +24,9 @@
 **書いた順に上から動く（同期）のが基本。** 待っている間に別のことを進めたいときだけ、
 run_task() で先に始めておき、結果が必要になったところで wait() で受け取る:
 
-        kintai = browsers.run_task(lambda: KintaiFlow(kintai.session).fetch())  # 始めるだけ。待たない
-        keiri_data = KeiriFlow(keiri.session).fetch()                      # その間にこちらを進める
-        kintai_data = kintai.wait()                                          # 戻って結果を受け取る
+        task = browsers.run_task(lambda: kintai.fetch())  # 始めるだけ。待たない
+        keiri_data = keiri.fetch()                        # その間にこちらを進める
+        kintai_data = task.wait()                         # 戻って結果を受け取る
 
 重い画面の読み込みを待っている間、ブラウザは何も消費していないので、
 その時間で別のサイトの操作が進む。読み込みが終われば、そちらも自分で続きを始める。
