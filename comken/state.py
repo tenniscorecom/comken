@@ -13,7 +13,7 @@ from pathlib import Path
 
 from .exceptions import StateFileCorruptedError, StateLowerCaseNameError, StateValueTypeError
 from .runtime import dry_run_log, is_dry_run
-from .toolbox.utils.files.ops import _cleanup_stale_tmp
+from .toolbox.utils.files.ops import cleanup_stale_tmp
 
 STATE_SECTION = "STATE"
 
@@ -79,7 +79,7 @@ class State:
 
     def _write(self, values: dict[str, StateValue]) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        _cleanup_stale_tmp(self._path)
+        cleanup_stale_tmp(self._path)
         parser = _new_parser()
         parser[STATE_SECTION] = {
             key: json.dumps(value, ensure_ascii=False) for key, value in values.items()

@@ -110,8 +110,15 @@ def copy_file(src: str | Path, dst: str | Path) -> Path:
     return target
 
 
-def _cleanup_stale_tmp(target: str | Path, max_age_seconds: float = 3600) -> None:
+def cleanup_stale_tmp(target: str | Path, max_age_seconds: float = 3600) -> None:
     """アトミック書き込みで残った一時ファイルの残骸を削除する（ライブラリ内部用）。
+
+    利用者が呼ぶものではないので `__all__` には入れない。ただし `_` も付けない。
+    アトミック書き込みをする側（state / config のスタブ / 認証情報の保存）から
+    モジュールを跨いで呼ばれるためで、`_` は「同じモジュールの中だけ」の印だから。
+    2026-07-29 に一度 `_cleanup_stale_tmp` へ内部化したが、そのときの理由
+    （呼ぶのは config のスタブだけ）は、呼び手が3つに増えた時点で失効した。
+
 
     アトミック書き込み（一時ファイル + os.replace）は、置換直前にプロセスが
     強制終了すると「target名.<PID>.tmp」が残ることがある。

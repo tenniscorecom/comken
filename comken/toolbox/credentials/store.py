@@ -43,7 +43,7 @@ from ...exceptions import (
     CredentialStoreCorruptedError,
     InvalidCredentialNameError,
 )
-from ..utils.files.ops import _cleanup_stale_tmp
+from ..utils.files.ops import cleanup_stale_tmp
 
 # 保存先フォルダ名はパッケージ名に自動追従する（パッケージ名を変更しても書き換え不要）
 _PACKAGE_NAME = __package__.split(".")[0]
@@ -225,7 +225,7 @@ def _save_all(data: dict[str, str], path: Path) -> None:
     取り込みは人が1回だけ実行する運用なので、ロックは持たせていない。
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    _cleanup_stale_tmp(path)  # 前回クラッシュ時の .tmp 残骸を掃除
+    cleanup_stale_tmp(path)  # 前回クラッシュ時の .tmp 残骸を掃除
     raw = json.dumps(data, ensure_ascii=False).encode("utf-8")
     encrypted = win32crypt.CryptProtectData(raw, _FILE_DESCRIPTION, None, None, None, 0)
     # 同時に走っても衝突しないよう、一時ファイル名は毎回変える

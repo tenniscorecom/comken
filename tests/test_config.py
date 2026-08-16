@@ -559,7 +559,7 @@ class TestCleanupStaleTmp:
         """古い .tmp は削除され、新しい .tmp（並行実行中の可能性）は残ることを確認する。"""
         import os
 
-        from comken.toolbox.utils.files.ops import _cleanup_stale_tmp
+        from comken.toolbox.utils.files.ops import cleanup_stale_tmp
 
         target = tmp_path / "config.pyi"
         stale = tmp_path / "config.pyi.99999.tmp"
@@ -568,7 +568,7 @@ class TestCleanupStaleTmp:
         fresh = tmp_path / "config.pyi.88888.tmp"
         fresh.write_text("書き込み中かもしれない", encoding="utf-8")
 
-        _cleanup_stale_tmp(target)
+        cleanup_stale_tmp(target)
 
         assert not stale.exists()
         assert fresh.exists()
@@ -577,14 +577,14 @@ class TestCleanupStaleTmp:
         """対象と無関係のファイルは削除されないことを確認する。"""
         import os
 
-        from comken.toolbox.utils.files.ops import _cleanup_stale_tmp
+        from comken.toolbox.utils.files.ops import cleanup_stale_tmp
 
         target = tmp_path / "config.pyi"
         other = tmp_path / "data.csv"
         other.write_text("業務データ", encoding="utf-8")
         os.utime(other, (0, 0))
 
-        _cleanup_stale_tmp(target)
+        cleanup_stale_tmp(target)
 
         assert other.exists()
 

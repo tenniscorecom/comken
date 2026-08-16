@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 
 from ..exceptions import ConfigFileNotFoundError
-from ..toolbox.utils.files.ops import _cleanup_stale_tmp
+from ..toolbox.utils.files.ops import cleanup_stale_tmp
 from . import _is_mapping_section, _parse_value
 
 _STUB_HEADER = '''"""config.ini から自動生成されたエディタ補完用スタブ。手で編集しない。
@@ -104,7 +104,7 @@ def _write_stub_atomic(stub_path: Path, content: str) -> None:
         if stub_path.exists() and stub_path.read_text(encoding="utf-8") == content:
             return
         stub_path.parent.mkdir(parents=True, exist_ok=True)
-        _cleanup_stale_tmp(stub_path)  # 前回クラッシュ時の .tmp 残骸を掃除
+        cleanup_stale_tmp(stub_path)  # 前回クラッシュ時の .tmp 残骸を掃除
         # 一時ファイル経由で置き換える（複数プロセス同時起動時の書き込み競合対策）
         tmp_path = stub_path.with_suffix(f"{stub_path.suffix}.{os.getpid()}.tmp")
         tmp_path.write_text(content, encoding="utf-8")
