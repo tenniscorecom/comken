@@ -8,6 +8,7 @@ UNC パス（`\\\\サーバー名\\...`）から起動されると、cmd.exe は
 （一時的なドライブ名が割り当てられ、UNC でもそのフォルダで動く）。
 """
 
+import re
 from pathlib import Path
 
 import pytest
@@ -34,6 +35,19 @@ def test_batch_file_is_cp932(path: Path):
         raw.decode("cp932")
     except UnicodeDecodeError as e:
         pytest.fail(f"{path.name} が CP932 で読めません（UTF-8 で保存された可能性）。: {e}")
+
+
+@pytest.mark.parametrize("path", _BAT_FILES, ids=lambda p: p.name)
+def test_batch_file_ends_with_newline(path: Path):
+    """最終行の後に改行を置く。
+
+    改行が無いと cmd.exe が最後の行を読み切れないことがあり、そこが
+    `exit /b` だと**終了コードが返らない**。失敗を終了コードで伝える設計が
+    ここで崩れるので、エディタ任せにせずテストで固定する。
+    """
+    assert path.read_bytes().endswith(b"\n"), (
+        f"{path.name} の末尾に改行がありません。最終行が実行されないことがあります。"
+    )
 
 
 @pytest.mark.parametrize("path", _BAT_FILES, ids=lambda p: p.name)
@@ -72,10 +86,14 @@ def test_batch_file_captures_errorlevel_before_popd(path: Path):
     `popd` は成功すると ERRORLEVEL を 0 にするので、後から読むと失敗が消える。
     """
     text = _read(path)
-    if "popd" not in text or "%ERRORLEVEL%" not in text:
-        return  # Python を呼ばない bat（環境変数を設定するだけ）は対象外
-    # エラー分岐の中にも popd があるので、最後の popd（正常系）と比べる
-    assert text.rindex("popd") > text.index('set "EXIT_CODE=%ERRORLEVEL%"'), (
+    # `popd` コマンドとして使われているか。rem コメント内の言及は無視する
+    popd_iter = list(re.finditer(r"(?m)^\s*popd\b", text))
+    if not popd_iter:
+        return  # popd を使わない bat（環境変数を設定するだけ・純粋なラッパー）は対象外
+    if "%ERRORLEVEL%" not in text:
+        return  # 終了コードを見ていない bat は対象外
+    # 最後の popd（正常系）と ERRORLEVEL の控えの位置を比べる
+    assert popd_iter[-1].start() > text.index('set "EXIT_CODE=%ERRORLEVEL%"'), (
         "popd より後で ERRORLEVEL を読んでいる（そこでは 0 になっている）"
     )
 

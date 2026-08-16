@@ -7,7 +7,7 @@
     python new_project.py 受注取込
     python new_project.py 受注取込 --into "C:\\作業\\tools"
 
-`新規プロジェクト作成.bat` をダブルクリックしても同じことができる。
+`comken init` からも同じことができる（リポジトリ直下の `comken.bat` を経由）。
 """
 
 import argparse
