@@ -31,6 +31,7 @@ client_id と client_secret だけ・トークンだけ、といった構成に�
 
 import json
 import re
+import threading
 import uuid
 from pathlib import Path
 
@@ -56,6 +57,16 @@ CREDENTIAL_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")
 
 # 復号失敗時に DPAPI が返す説明文字列（デバッグ用。動作には影響しない）
 _FILE_DESCRIPTION = "comken credentials"
+
+# **`save_credentials()` を同一プロセス内の複数スレッドから同時に呼ばれても**
+# 登録済みの認証情報が「後勝ちで消える」事故を防ぐための排他。
+# `save_credentials()` は「読んで足して書き戻す」方式のため、ロックなしで
+# 並行すると `load_all → update → save_all` の間で別スレッドが割り込み、
+# 先に書いた側の追加が消える。Salesforce の定期取得をスレッド並列化したとき、
+# Refresh Token 回転（`oauth_refresh.on_refresh_token`）が複数スレッドから
+# 同時に走る経路でこの問題が出るため、**プロセス内の排他だけは必須**。
+# プロセス間の排他は引き続き持たない（`_save_all` のコメント参照）。
+_SAVE_LOCK = threading.Lock()
 
 
 class Credentials:
@@ -139,9 +150,16 @@ def save_credentials(items: dict[str, str], path: Path | None = None) -> None:
                 f"認証情報の値は文字列で渡してください: {name} は {type(value).__name__}"
             )
     path = path or CREDENTIALS_PATH
-    data = _load_all(path)
-    data.update(items)
-    _save_all(data, path)
+    # **「読んで足して書き戻す」を 1 つのまとまりにする**。ロックなしだと、
+    # Salesforce の Refresh Token 回転を別スレッドから同時に呼ばれたときに
+    # 片方の更新が消える（_SAVE_LOCK のコメント参照）。
+    # プロセス間の排他ではないので、**別プロセスから同時に書かれる状況は
+    # 想定外**（`_save_all` のコメントもそのまま——「取り込みは人が1回だけ
+    # 実行する運用」の前提は変えていない）
+    with _SAVE_LOCK:
+        data = _load_all(path)
+        data.update(items)
+        _save_all(data, path)
 
 
 def load_credential(name: str, path: Path | None = None) -> str:

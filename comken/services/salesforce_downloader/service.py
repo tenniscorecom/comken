@@ -42,6 +42,7 @@ r"""comken/services/salesforce_downloader/service.py — 取得の本体。
 
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from ...core.files import DateNameBuilder
@@ -80,6 +81,20 @@ SUFFIX = ".csv"
 _FORBIDDEN_IN_NAME = '\\/:*?"<>|'
 # 概要が長いとパスが伸びすぎるので、ファイル名に使うのはこの長さまで
 _SUMMARY_LIMIT = 30
+
+# 並列で定期取得するときのワーカー数。**`MAX_BACKGROUND_TASKS` のように呼び出し側から
+# 渡せない形にする**——プロジェクトごとに値が違うと、共有サーバー上で複数プロジェクトが
+# 同時に走ったときに「合計で Salesforce の API 枠を誰がどれくらい食っているか」が
+# 追えなくなるため。値はライブラリ側で固定する。
+# 4 にした理由:
+# - ブラウザ側の `_MAX_BACKGROUND_TASKS = 16` と違って、**相手（Salesforce）の
+#   API 実行枠を消費する**側。1ターンに 4 本までなら、レート制限に当たりにくく、
+#   当たってもリトライで吸収できる経験的な値
+# - 共有サーバー上で複数のプロジェクトが並列で呼びうるので、**1プロジェクトが
+#   食える量を絞る**。プロジェクト側が勝手に上限を上げると合計で枠を食い尽くす
+# - 待ち時間のほとんどは Salesforce との通信（I/O）で CPU をほぼ使わないので、
+#   Python の GIL が並列度の制約にはならない。スレッドで十分
+MAX_WORKERS = 4
 
 
 def download_report(report_key: int, project: str = "") -> CsvReader:
@@ -142,6 +157,11 @@ def download_scheduled(project: str = "定期実行") -> list[Path]:
     定期実行のプロジェクトから呼ぶ。**1件失敗しても残りは続ける** ——
     5本のうち1本が落ちたときに全部やり直すと、手で用意する手間が5本ぶんになる。
 
+    `MAX_WORKERS` 本のワーカーで並列に走らせる（並列度の理由は定数のコメント参照）。
+    **全件の完了を待ってから**失敗を判定する（途中では止めない）。並列で走らせても、
+    出力の順序は管理表の順を保つ。完了順だと実行のたびに並びが変わり、ログ・履歴・
+    戻り値を目視で比べられなくなるため。
+
     戻り値は `list[Path]` のままで **`CsvReader` を返さない**。定期取得の呼び出し側は
     中身を読まず「取らせる」のが目的なので、reader を並べても使い道がないため
     （役割の違いが戻り値の型に出ている）。
@@ -150,12 +170,18 @@ def download_scheduled(project: str = "定期実行") -> list[Path]:
         project: 履歴に残す呼び出し元の名前。
 
     Returns:
-        取得できたファイルのパス。
+        取得できたファイルのパス。**管理表の順に並んだ** `list[Path]`。
 
     Raises:
-        ScheduledDownloadFailedError: 1件でも取得できなかった場合。
-            **取得できたものは保存したうえで**送出する。ログだけに出して正常終了すると、
-            スケジューラや RPA 基盤から見て成功と区別が付かない。
+        ScheduledDownloadFailedError: 想定内の失敗（`ComkenError` / `OSError`）が
+            1件以上あった場合。**取得できたものは保存したうえで**送出する。
+            ログだけに出して正常終了すると、スケジューラや RPA 基盤から見て成功と
+            区別が付かないため。`failed` には**管理表の順**で管理番号が入る。
+        Exception: 想定外の例外（`TypeError` など、comken 側のバグ）が1件でもあった
+            場合、**全件の完了を待ってから**管理表順で最初のものをそのまま送出する。
+            `ScheduledDownloadFailedError` の顔で出さないのは逐次版と同じ意図
+            ——非エンジニアが「もう一度実行してみる」を繰り返すだけになるため。
+            成功した他のレポートは保存済みであることに変わりはない。
     """
     entries = load_master(MASTER_PATH)
     _warn_shared_reports(entries)
@@ -163,30 +189,108 @@ def download_scheduled(project: str = "定期実行") -> list[Path]:
     targets = [entry for entry in entries.values() if entry.is_scheduled and entry.enabled]
     logger.info("定期取得の対象: %d 件", len(targets))
 
-    saved: list[Path] = []
-    failed: list[int] = []
-    for entry in targets:
-        try:
-            saved.append(_download(entry, project, history.TRIGGER_SCHEDULED, HISTORY_PATH))
-        except (ComkenError, OSError) as e:
-            # **想定した失敗は続ける。想定していない失敗は止める。**
-            # - `ComkenError` は `docs/ERRORS.md` に対処法が載っている想定内の失敗なので続行する
-            # - `OSError` は共有サーバー断・権限・パスなど運用上の失敗。保存先は
-            #   レポートごとに違うので、1本ダメでも他は書けるので続行する
-            # - それ以外（`TypeError` などプログラムのバグ）は想定していない。
-            #   `ScheduledDownloadFailedError`（＝「1件取れませんでした」）の顔で
-            #   出てくると、非エンジニアが「もう一度実行してみる」を繰り返すだけなので、
-            #   ここでは捕捉せず、その場で落として気づかせる
-            # KeyboardInterrupt など処理中断を示す例外は `ComkenError` / `OSError` の
-            # どちらでもないので、これもそのまま抜ける
-            logger.error("取得に失敗しました: %s（%s）", entry.key, e)
-            failed.append(entry.key)
+    # 全部の完了を待ってから失敗を判定する設計。逐次版と異なり、**想定外例外も
+    # ここでは送出してしまわない**。既に投入済みのタスクを「途中で打ち切ると
+    # Salesforce への問い合わせが走りっぱなしになる」ため、全件終わってから送る。
+    # 戻り値の順序を管理表順で揃えるため、`future.result()` は投入順（=管理表順）に
+    # 取る。`as_completed()` を使うと「終わった順」になり、`saved` と `failed` の
+    # 並びが毎回変わってしまう
+    saved, failed, unexpected_errors = _run_parallel(targets, project, history.TRIGGER_SCHEDULED)
+
+    # 想定外はログに出したうえで、管理表順で最初のものをそのまま送出する。
+    # `ScheduledDownloadFailedError` の顔で出さないのは逐次版と同じ意図——
+    # 非エンジニアが「もう一度実行してみる」を繰り返すだけになるため。
+    # **ここで全件ログを出す理由**: 並列版では「想定外が複数件あっても、
+    # 送出できるのは管理表順で最初の 1 件だけ」。2 件目以降の例外はここで
+    # ログに残さない限りどこにも残らないため、`download_scheduled()` 側で
+    # 全件を 1 行ずつ書き出す
+    for key, exc in unexpected_errors:
+        logger.error("取得に失敗しました: %s（%s）", key, exc)
+    if unexpected_errors:
+        raise unexpected_errors[0][1]
 
     logger.info("定期取得: %d 件中 %d 件を取得しました。", len(targets), len(saved))
     if failed:
-        # 続けたぶん、最後に必ず知らせる（終了コードで落ちたことが分かるように）
+        # 続けたぶん、最後に必ず知らせる（終了コードで落ちたことが分かるように）。
+        # `failed` の並びは管理表順（投入順に `result()` を取り、`failed.append()` の
+        # 順番をそのまま使うため）
         raise ScheduledDownloadFailedError(failed, HISTORY_PATH)
     return saved
+
+
+def _run_parallel(
+    targets: list[ReportEntry],
+    project: str,
+    trigger: str,
+) -> tuple[list[Path], list[int], list[tuple[int, Exception]]]:
+    """`targets` を並列に走らせ、3 つの結果に分けて返す。
+
+    - `saved`: 保存できたパス。**管理表順**（投入順に `result()` を取り、
+      `append()` の順番をそのまま使うため）
+    - `failed`: 想定内の失敗（`ComkenError` / `OSError`）の管理番号。
+      **管理表順**（同上）
+    - `unexpected_errors`: 想定外の例外（バグ）。**(管理番号, 例外)** の組を
+      **管理表順**で入れる。呼び出し側がここで先頭のものをそのまま送出する
+      ——`ScheduledDownloadFailedError` の顔で出さないのは逐次版と同じ意図
+
+    **Future の例外機構をそのまま使う設計**: `_run_one()` は `Path | None` を
+    返すだけにし、想定外例外は Future 内に保持させる。呼び出し側の
+    `future.result()` で再送出されたものをそのまま受け取る方が、戻り値タプルで
+    受け取って `try / except` で詰め替えるより**情報が落ちない**（呼び出し側の
+    スタックフレームを保ったまま伝搬し、`__traceback__` もそのまま）。想定内の
+    失敗（`ComkenError` / `OSError`）は `_download()` 側で履歴・ログまで書いた
+    うえで `None` を返す扱いにする。
+
+    並列度の定数はモジュール定数 `MAX_WORKERS` で固定する（呼び出し側に渡さない）。
+    """
+    saved: list[Path] = []
+    failed: list[int] = []
+    unexpected_errors: list[tuple[int, Exception]] = []
+
+    def _run_one(entry: ReportEntry) -> Path | None:
+        """1 件分の処理。成功時は `Path`、想定内の失敗は `None`、想定外は送出する。
+
+        想定内の失敗（`ComkenError` / `OSError`）は `_download()` 内で履歴に書いた
+        うえでログだけ出して `None` を返す。想定外（バグ）は捕捉しない——
+        Future に持たせて `future.result()` で再送出される方が、情報を落とさず
+        に済むため
+        """
+        try:
+            return _download(entry, project, trigger, HISTORY_PATH)
+        except (ComkenError, OSError) as e:
+            # 想定した失敗（共有サーバー・権限・通信・0 件・フォルダ無し 等）。
+            # `_download()` 側で既に履歴・ログを書いているので、ここでは「続行する
+            # 対象」として記録するだけ。追加で1行ログを出しているのは、逐次版と
+            # 同じ運用上のメッセージを保つため
+            logger.error("取得に失敗しました: %s（%s）", entry.key, e)
+            return None
+
+    # **KeyboardInterrupt の挙動**: `ThreadPoolExecutor.__exit__` は
+    # `shutdown(wait=True)` 相当のため、Ctrl+C があっても**実行中タスクの
+    # 完了を待ち、キューに残った未開始タスクもすべて起動してから**メインスレッド
+    # へ `KeyboardInterrupt` を伝搬する。逐次版は「Ctrl+C でその場で抜けていた」
+    # のと挙動が違うが、定期実行はスケジューラから無人で起動するもので、人が
+    # Ctrl+C する場面が運用にないため打ち切りの仕組みは入れていない
+    # （実行中に人が止める必要が出た時点で運用設計の問題なので、分岐を足さない）
+    with ThreadPoolExecutor(
+        max_workers=MAX_WORKERS, thread_name_prefix="sf-downloader"
+    ) as executor:
+        # `targets` の順（=管理表順）に `result()` を取り、append 順を管理表順に
+        # 揃える。`as_completed()` を使うと完了順になり、`saved` / `failed` の
+        # 並びが実行ごとに変わってしまう
+        futures = [executor.submit(_run_one, entry) for entry in targets]
+        for entry, future in zip(targets, futures, strict=True):
+            try:
+                path = future.result()
+            except Exception as e:
+                # 想定外（バグ）。Future に持たせていたものが再送出される
+                unexpected_errors.append((entry.key, e))
+                continue
+            if path is not None:
+                saved.append(path)
+            else:
+                failed.append(entry.key)
+    return saved, failed, unexpected_errors
 
 
 def file_path_of(entry: ReportEntry) -> Path:
