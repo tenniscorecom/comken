@@ -1,15 +1,20 @@
-"""comken/__init__.py — comken 全体の基盤 API を公開するパッケージ。
+"""comken/__init__.py — comken の基本入口。
 
-「comken 直下」は、どんなプロジェクトからでも使える土台だけを置く場所。
-利用者は ``from comken import ...`` だけで必要なものに届く形にする。
-部品は ``comken.core`` から集め、ここから facade として再輸出する。
+「comken 直下」には、**何をするプロジェクトかに関係なく使う**土台だけを置く。
+設定・ログ・実行モードの7個で、それ以外の部品は ``comken.core`` から取る
+（``from comken.core import FileFinder``）。
 
-toolbox / services は facade には上げない。``from comken.toolbox.excel import ExcelWriter``
+書くときは ``from comken import X`` が第一選択。そこに無いものだけ
+``from comken.core import Y`` で取る（仕様書 4.32）。
+
+toolbox / services はこの2階層に上げない。``from comken.toolbox.excel import ExcelWriter``
 のように深いパスのままで十分で、そこには「どの機能群に依存しているか」が読める意味があるため。
 """
 
 # バージョンの定義はここ1箇所だけ（pyproject.toml は dynamic version でここを参照する）
-__version__ = "0.8.0"
+# リリースタグ（v0.9.0 等）と必ず一致させる。config が起動時にこの値をログへ出すので、
+# ズレると「どのタグが動いているか」がログから追えなくなる。
+__version__ = "0.9.0"
 
 # ── バイトコードキャッシュをローカルに逃がす ─────────────────────────────────
 # comken は共有サーバー上の1か所を直接参照する運用（PYTHONPATH で参照）。
