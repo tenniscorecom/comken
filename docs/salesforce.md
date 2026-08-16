@@ -18,7 +18,25 @@
 
 ## 認証フロー
 
-**既定は Refresh Token Flow。** 組織クラスをそのまま使えばこの方式になる。
+### 用語: 画面は Consumer、コードは client
+
+同じものが場所によって3通りの名前で出てくる。**値は同じ**なので、対応だけ押さえる。
+
+| どこ | 名前 | 例 |
+|---|---|---|
+| Salesforce の画面（ECA の設定） | **Consumer Key / Consumer Secret** | 画面からコピーする |
+| comken のコード・DPAPI のキー名 | **client_id / client_secret** | `sandbox_client_id` |
+| ローテーション API のレスポンス | **consumerKey / consumerSecret** | `rotation.py` が受け取る |
+
+comken の中は `client_id` / `client_secret` に統一している（OAuth の標準的な呼び名）。
+Salesforce 側の名前が出てくるのは**画面からコピーするときと、ローテーション API の
+レスポンスを読むときだけ**で、`rotation.py` が境界で `client_id` へ変換している。
+
+認証方式（Client Credentials / Refresh Token）による名前の違いは**ない**。
+
+### 既定は Refresh Token Flow
+
+組織クラスをそのまま使えばこの方式になる。
 
 Client Credentials Flow は `client_secret` だけでアクセストークンを取れてしまうため、
 **本番では使わない**（判断の根拠は [Salesforce 認証の判断根拠](salesforce-authentication.md)）。
@@ -37,7 +55,7 @@ from comken.toolbox.salesforce.sites import Sandbox
 from comken.toolbox.salesforce.oauth_refresh import OAuth
 
 auth = OAuth(
-    client_id="Consumer Key",
+    client_id="Consumer Key の値",   # 画面の Consumer Key をここへ
     refresh_token="DPAPIから取得した値",
     domain_url="https://example.my.salesforce.com",
     client_secret="Require Secret for Refresh Token Flow が有効な場合のみ",

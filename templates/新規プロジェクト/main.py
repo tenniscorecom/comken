@@ -9,7 +9,7 @@ main.py — エントリポイント
 
 import logging
 
-from comken import setup_logging
+from comken import config, setup_logging
 from comken.exceptions import ComkenError
 
 from src.run import run
@@ -18,6 +18,11 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> None:
+    # config.ini に必要な項目がそろっているかを最初に確かめる。
+    # 途中まで動いてから足りないと分かるより、動き出す前に全部まとめて出す。
+    # 使う項目を増やしたらここにも足す（消しても動くが、エラーが遅くなる）
+    config.require("REPORT.OUTPUT_FOLDER")
+
     # 設定の読み取りも処理も src/run.py に書く。ここは呼ぶだけにしておく
     run()
 

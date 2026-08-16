@@ -16,6 +16,7 @@ from comken.exceptions import (
     ConfigCreatedFromExampleError,
     ConfigError,
     ConfigLowerCaseNameError,
+    ConfigRequiredKeysMissingError,
 )
 
 
@@ -608,3 +609,56 @@ class TestCleanupStaleTmp:
 
         assert not stale.exists()
         assert (tmp_path / "src" / "config.pyi").exists()
+
+
+class TestRequire:
+    """config.require() は足りない項目をまとめて報告する。"""
+
+    def _write(self, tmp_path, text):
+        path = tmp_path / "config.ini"
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def test_passes_when_all_keys_exist(self, tmp_path, monkeypatch):
+        """そろっていれば何も起きない。"""
+        path = self._write(tmp_path, "[FILES]\nINPUT_CSV = C:\\作業\\in.csv\n")
+        monkeypatch.chdir(tmp_path)
+        config_module.read(path)
+
+        config_module.require("FILES.INPUT_CSV")
+
+    def test_reports_every_missing_key_at_once(self, tmp_path, monkeypatch):
+        """足りないものを1つずつではなく、全部並べて報告する。
+
+        1つ直して実行、また別で止まる、を繰り返すと書く人が何度も往復する。
+        """
+        path = self._write(tmp_path, "[FILES]\nINPUT_CSV = C:\\作業\\in.csv\n")
+        monkeypatch.chdir(tmp_path)
+        config_module.read(path)
+
+        with pytest.raises(ConfigRequiredKeysMissingError) as e:
+            config_module.require("FILES.INPUT_CSV", "REPORT.OUTPUT_FOLDER", "MAIL.TO")
+
+        message = str(e.value)
+        assert "REPORT.OUTPUT_FOLDER" in message
+        assert "MAIL.TO" in message
+        assert "FILES.INPUT_CSV" not in message, "足りている項目は出さない"
+
+    def test_message_points_at_the_file_to_edit(self, tmp_path, monkeypatch):
+        """どのファイルへ足すのかを示す（複数プロジェクトを行き来しても迷わない）。"""
+        path = self._write(tmp_path, "[FILES]\nINPUT_CSV = C:\\作業\\in.csv\n")
+        monkeypatch.chdir(tmp_path)
+        config_module.read(path)
+
+        with pytest.raises(ConfigRequiredKeysMissingError) as e:
+            config_module.require("REPORT.OUTPUT_FOLDER")
+
+        assert str(path.resolve()) in str(e.value)
+
+    def test_is_case_insensitive_in_the_argument(self, tmp_path, monkeypatch):
+        """引数の大文字小文字は問わない（config.ini 側は大文字が強制される）。"""
+        path = self._write(tmp_path, "[FILES]\nINPUT_CSV = C:\\作業\\in.csv\n")
+        monkeypatch.chdir(tmp_path)
+        config_module.read(path)
+
+        config_module.require("files.input_csv")

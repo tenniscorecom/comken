@@ -1915,6 +1915,25 @@ config.ini のセクション名・キー名に小文字がある
 def __init__(self, path: Path | str, wrong: list[str]) -> None:
 ```
 
+### `ConfigRequiredKeysMissingError`
+
+```text
+class ConfigRequiredKeysMissingError(ConfigError):
+```
+
+#### 説明
+
+config.ini に必須の項目がない
+
+対処:
+    エラーに表示された項目を config.ini へ追加する
+
+#### `__init__`
+
+```text
+def __init__(self, missing: list[str], path: Path) -> None:
+```
+
 ### `ConfigSectionNotFoundError`
 
 ```text

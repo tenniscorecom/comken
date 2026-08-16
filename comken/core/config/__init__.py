@@ -40,6 +40,7 @@ from ...exceptions import (
     ConfigCreatedFromExampleError,
     ConfigFileNotFoundError,
     ConfigLowerCaseNameError,
+    ConfigRequiredKeysMissingError,
     ConfigSectionNotFoundError,
 )
 
@@ -134,6 +135,7 @@ class Config:
 
         _validate_upper_case(cfg, Path(path))
 
+        self._path = Path(path).resolve()
         self._mappings: dict[str, dict[str, str]] = {}
         for section in cfg.sections():
             if _is_mapping_section(section):
@@ -212,6 +214,47 @@ def mapping(section: str) -> dict[str, str]:
     if _singleton is None:
         _singleton = Config()
     return _singleton.mapping(section)
+
+
+def require(*names: str) -> None:
+    """config.ini に必要な項目がそろっているかを、起動時にまとめて確かめる。
+
+    足りないものを1つずつ見つけるのではなく、**全部集めて一度に報告する**。
+    1つ直して実行、また別の項目で止まる、を繰り返すと、config.ini を書く人が
+    何回も往復することになるため。
+
+    使い方（main.py の最初で呼ぶ）:
+
+        from comken import config
+
+        config.require("FILES.INPUT_CSV", "REPORT.OUTPUT_FOLDER")
+
+    Args:
+        *names: ``"SECTION.KEY"`` の形で書いた項目名。大文字小文字は問わない。
+
+    Raises:
+        ConfigRequiredKeysMissingError: 1つでも足りない場合。
+            足りない項目を全部並べて報告する。
+        ConfigFileNotFoundError: config.ini が無い場合。
+        ConfigCreatedFromExampleError: example から作成した場合。
+    """
+    global _singleton
+    if _singleton is None:
+        _singleton = Config()
+    missing = []
+    for name in names:
+        section, _, key = name.partition(".")
+        try:
+            # 無いセクションは ConfigSectionNotFoundError になる（既定値を返さない）ので、
+            # ここで受けて「足りないもの」へ積む。1件目で止めずに最後まで数える。
+            namespace = getattr(_singleton, section.strip().upper())
+        except ConfigSectionNotFoundError:
+            missing.append(name.strip().upper())
+            continue
+        if not hasattr(namespace, key.strip().upper()):
+            missing.append(name.strip().upper())
+    if missing:
+        raise ConfigRequiredKeysMissingError(missing, _singleton._path)
 
 
 def __getattr__(name: str) -> types.SimpleNamespace:

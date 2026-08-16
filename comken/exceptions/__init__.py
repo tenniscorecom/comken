@@ -139,6 +139,7 @@ from .config import (
     ConfigError,
     ConfigFileNotFoundError,
     ConfigLowerCaseNameError,
+    ConfigRequiredKeysMissingError,
     ConfigSectionNotFoundError,
 )
 from .credential import (
@@ -268,6 +269,7 @@ __all__ = [
     "ConfigFileNotFoundError",
     "ConfigCreatedFromExampleError",
     "ConfigLowerCaseNameError",
+    "ConfigRequiredKeysMissingError",
     "ConfigSectionNotFoundError",
     "UnsupportedFileSuffixError",
     "OutlookError",
