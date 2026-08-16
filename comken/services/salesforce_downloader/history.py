@@ -33,21 +33,12 @@
 import csv
 import datetime
 import logging
-import threading
 import uuid
 from pathlib import Path
 
 from ...core.clock import now, today
 
 logger = logging.getLogger(__name__)
-
-# `_append()` を **同一プロセス内の複数スレッドから同時に呼ばれても**
-# 行が混ざらないようにするための排他。
-# **プロセス間の排他は持たない**——複数プロジェクトが別プロセスから同時に書く形は
-# もとから想定済みで（ファイルの冒頭 docstring 参照）、そちらはプロセス設計側で
-# 避ける運用。プロセス内だけ守れば、Salesforce 定期取得をスレッド並列化したときに
-# 履歴 CSV の行が崩れる事故を防げる
-_APPEND_LOCK = threading.Lock()
 
 # 履歴CSVの列。順序は出力ファイルそのものなので、追加・並び替えは全プロジェクトの
 # 既存履歴を読む処理へ影響する（互換性ポリシーに従う）
@@ -206,26 +197,14 @@ def _append(path: Path, row: list) -> None:
 
     Excel が読めるよう UTF-8 BOM 付きにする。newline="" は csv モジュールの作法
     （Windows で空行が入るのを防ぐ）。
-
-    **同一プロセス内の複数スレッドから同時に呼ばれても安全**にするため、
-    `_APPEND_LOCK` で囲む。守るのは2つ:
-
-    - `is_new = not path.exists()` の **TOCTOU**。排他しないと、2つのスレッドが
-      同時に「ファイルが無い」と判定して、どちらも見出し行を書いてしまう
-    - `csv.writer.writerow()` の途中で割り込まれると、**1行がバイト列として
-      混ざる**（`writerow` は内部で複数回 `write` する）
-
-    プロセス間の排他は持たない（モジュール冒頭のコメント参照）。ファイル
-    ロックや `fcntl` 相当を入れると、共有サーバー越しの挙動が読みづらくなるため。
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    with _APPEND_LOCK:
-        is_new = not path.exists()
-        with path.open("a", encoding="utf-8-sig", newline="") as f:
-            writer = csv.writer(f)
-            if is_new:
-                writer.writerow(COLUMNS)
-            writer.writerow(row)
+    is_new = not path.exists()
+    with path.open("a", encoding="utf-8-sig", newline="") as f:
+        writer = csv.writer(f)
+        if is_new:
+            writer.writerow(COLUMNS)
+        writer.writerow(row)
 
 
 def new_temp_name(path: Path) -> Path:

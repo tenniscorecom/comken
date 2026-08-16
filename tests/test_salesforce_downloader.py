@@ -7,8 +7,6 @@ MASTER_PATH / HISTORY_PATH は `monkeypatch.setattr` で一時ディレクトリ
 差し替える。利用側の API には管理表や履歴のパスを渡せない（設計判断）。
 """
 
-import csv
-import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -683,139 +681,16 @@ class TestDownloadScheduled:
 
         assert [path.name.split("_")[0] for path in folder.glob("*.csv")] == ["1002"]
 
-    def test_records_the_trigger_as_scheduled(self, paths):
-        with patch(
-            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
-        ):
-            download_scheduled("定期実行")
-        assert _history_rows(paths)[-1]["実行方式"] == "定期"
-
-
-class TestDownloadScheduledParallel:
-    """download_scheduled() の並列実行と、スレッド並列で守るべき性質の検証。
-
-    スレッドで並列に走らせていることを前提としたテスト。Barrier で「同時に走って
-    いなければ落ちる」ことを確認し、履歴 CSV が崩れないこと・想定内の失敗を
-    管理表順で扱うこと・想定外を全件待ってから送出すること・戻り値の順序、
-    および「対象 0 件」を確かめる。
-    """
-
-    def test_runs_tasks_concurrently(self, tmp_path, monkeypatch):
-        """ワーカーが同時に走る（全員が揃うまで待てることで確認）。逐次ならタイムアウト。"""
+    def test_unexpected_error_stops_the_run_immediately(self, tmp_path, monkeypatch):
+        """想定外（`TypeError` など）はその場で抜ける。`ScheduledDownloadFailedError` には
+        変換しない（非エンジニアが「もう一度実行してみる」を繰り返すだけになるため）。"""
         folder = tmp_path / "保存先"
         folder.mkdir()
         master = make_master(
             tmp_path / "管理表.xlsx",
             [
-                [1001, "並列A", URL_A, "定期", str(folder), "有効"],
-                [1002, "並列B", URL_B, "定期", str(folder), "有効"],
-                [1003, "並列C", URL_A, "定期", str(folder), "有効"],
-            ],
-        )
-        monkeypatch.setattr(service_module, "MASTER_PATH", master)
-        monkeypatch.setattr(service_module, "HISTORY_PATH", tmp_path / "履歴.csv")
-
-        # 3 件同時に Salesforce に問い合わせに行くこと。`Barrier(3, timeout=5)` を
-        # 通過できれば 3 スレッドが同時に走っている。逐次なら 2 件目で止まり、
-        # タイムアウトして `BrokenBarrierError` になる
-        barrier = threading.Barrier(3, timeout=5)
-
-        def _wait_for_others(url):
-            barrier.wait()
-            return fake_salesforce()
-
-        with patch(
-            "comken.services.salesforce_downloader.service.site_for",
-            side_effect=_wait_for_others,
-        ):
-            saved = download_scheduled()
-        # 戻り値は管理表順
-        assert [path.name.split("_")[0] for path in saved] == ["1001", "1002", "1003"]
-
-    def test_history_rows_are_not_mangled_under_parallel_writes(self, tmp_path, monkeypatch):
-        """並列で複数件取得しても履歴が壊れない（行数一致、見出し1個、管理番号が揃う）。"""
-        folder = tmp_path / "保存先"
-        folder.mkdir()
-        master = make_master(
-            tmp_path / "管理表.xlsx",
-            [
-                [1001, "並列A", URL_A, "定期", str(folder), "有効"],
-                [1002, "並列B", URL_B, "定期", str(folder), "有効"],
-                [1003, "並列C", URL_A, "定期", str(folder), "有効"],
-                [1004, "並列D", URL_B, "定期", str(folder), "有効"],
-                [1005, "並列E", URL_A, "定期", str(folder), "有効"],
-            ],
-        )
-        monkeypatch.setattr(service_module, "MASTER_PATH", master)
-        monkeypatch.setattr(service_module, "HISTORY_PATH", tmp_path / "履歴.csv")
-
-        with patch(
-            "comken.services.salesforce_downloader.service.site_for",
-            return_value=fake_salesforce(),
-        ):
-            download_scheduled()
-
-        # 見出し行が1個で、データ行が5件。管理番号がすべて揃う。
-        # `csv.DictReader` は見出しを飛ばして残りを返すので、データ行数が直接出る。
-        # 見出し行が二重に書かれたり、列が混ざったりすると数値がズレる
-        with (tmp_path / "履歴.csv").open(encoding="utf-8-sig", newline="") as f:
-            rows = list(csv.DictReader(f))
-        assert len(rows) == 5
-        assert sorted(int(row["管理番号"]) for row in rows) == [1001, 1002, 1003, 1004, 1005]
-        # 全件「成功」として記録されている
-        assert all(row["成否"] == "成功" for row in rows)
-
-    def test_one_known_failure_keeps_the_rest_and_lists_failed_in_master_order(
-        self, tmp_path, monkeypatch
-    ):
-        """想定内失敗（フォルダ無し＝ReportFolderNotFoundError）が1件あっても
-        他は取得され、`failed` の管理番号は**管理表順**に並ぶ。"""
-        folder = tmp_path / "保存先"
-        folder.mkdir()
-        missing = tmp_path / "無いフォルダ"
-        master = make_master(
-            tmp_path / "管理表.xlsx",
-            [
-                [1001, "落ちるA", URL_A, "定期", str(missing), "有効"],
-                [1002, "通るB", URL_B, "定期", str(folder), "有効"],
-                [1003, "落ちるC", URL_A, "定期", str(missing), "有効"],
-                [1004, "通るD", URL_B, "定期", str(folder), "有効"],
-            ],
-        )
-        monkeypatch.setattr(service_module, "MASTER_PATH", master)
-        monkeypatch.setattr(service_module, "HISTORY_PATH", tmp_path / "履歴.csv")
-        with (
-            patch(
-                "comken.services.salesforce_downloader.service.site_for",
-                return_value=fake_salesforce(),
-            ),
-            pytest.raises(ScheduledDownloadFailedError) as exc_info,
-        ):
-            download_scheduled()
-        # 管理表順: 1001 → 1003。完了順だと 1003 → 1001 になりうる
-        assert exc_info.value.failed == [1001, 1003]
-        # 成功したものは保存されている（フォルダ無しの管理番号のファイルは無い）
-        names = sorted(path.name.split("_")[0] for path in folder.glob("*.csv"))
-        assert names == ["1002", "1004"]
-
-    def test_unexpected_error_waits_for_all_and_other_files_are_saved(self, tmp_path, monkeypatch):
-        """想定外例外（TypeError）は**全件の完了を待ってから**そのまま送出される。
-        成功した他のレポートは保存済み。
-
-        仕様変更（逐次版 → 並列版）: 逐次版は「想定外で**その場で**抜ける」だった
-        （先に進むタスクは保存されない）が、並列版は投入済みの全件が走り終わるまで
-        待ってから送出する。**管理表順で最初の想定外**がそのまま送出される点を
-        `match="想定外1"` で確認する（複数件の想定外のうち 2 件目以降は送出されず、
-        ログのみ）。
-        """
-        folder = tmp_path / "保存先"
-        folder.mkdir()
-        master = make_master(
-            tmp_path / "管理表.xlsx",
-            [
-                [1001, "想定外A", URL_A, "定期", str(folder), "有効"],
-                [1002, "通るB", URL_B, "定期", str(folder), "有効"],
-                [1003, "想定外C", URL_A, "定期", str(folder), "有効"],
+                [1001, "想定外", URL_A, "定期", str(folder), "有効"],
+                [1002, "通る方", URL_B, "定期", str(folder), "有効"],
             ],
         )
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -823,12 +698,10 @@ class TestDownloadScheduledParallel:
 
         site = MagicMock()
         client = MagicMock()
-        # 管理表順 (1001, 1002, 1003) で 想定外・成功・想定外。`BrokenBarrierError`
-        # のような「管理表順でない完了順」にならないよう side_effect はキューで回す
+        # 1001 のレポートを取るときだけ想定外を投げる
         client.__enter__.return_value.report.run.side_effect = [
-            TypeError("想定外1"),
+            TypeError("想定外"),
             ROWS,
-            TypeError("想定外2"),
         ]
         site.return_value = client
 
@@ -837,107 +710,19 @@ class TestDownloadScheduledParallel:
                 "comken.services.salesforce_downloader.service.site_for",
                 return_value=site,
             ),
-            pytest.raises(TypeError, match="想定外1"),
+            pytest.raises(TypeError),
         ):
             download_scheduled()
-        # 全件待ってから送出しているので、1002 は保存済み（管理表順で最初の
-        # TypeError がそのまま送出される）
-        assert [path.name.split("_")[0] for path in folder.glob("*.csv")] == ["1002"]
+        # 想定外で止めたので、2件目は保存されない
+        # （続けた結果の ScheduledDownloadFailedError ではないことを確認）
+        assert list(folder.glob("*.csv")) == []
 
-    def test_returned_paths_are_in_master_order_not_completion_order(self, tmp_path, monkeypatch):
-        """戻り値 `saved` は管理表順（完了順ではなく）。
-
-        `threading.Event` で各タスクに「完了してよい合図」を送るので、`time.sleep`
-        ベースのテストと違って完了順を**決定論的に**操作できる（CI / 低速マシン
-        でも安定する）。
-        """
-        folder = tmp_path / "保存先"
-        folder.mkdir()
-        master = make_master(
-            tmp_path / "管理表.xlsx",
-            [
-                [1001, "一番目", URL_A, "定期", str(folder), "有効"],
-                [1002, "二番目", URL_B, "定期", str(folder), "有効"],
-                [1003, "三番目", URL_A, "定期", str(folder), "有効"],
-                [1004, "四番目", URL_B, "定期", str(folder), "有効"],
-            ],
-        )
-        monkeypatch.setattr(service_module, "MASTER_PATH", master)
-        monkeypatch.setattr(service_module, "HISTORY_PATH", tmp_path / "履歴.csv")
-
-        # 管理番号 → 完了合図 Event。同じ URL の中で「管理番号が小さい順」に
-        # 完了させる制御は _run 内の first_seen で行う
-        go = {
-            1001: threading.Event(),
-            1002: threading.Event(),
-            1003: threading.Event(),
-            1004: threading.Event(),
-        }
-        first_seen = {URL_A: threading.Event(), URL_B: threading.Event()}
-
-        site = MagicMock()
-        client = MagicMock()
-
-        def _run(report_id):
-            url = URL_A if report_id == "00O5g00000ABCDE" else URL_B
-            if not first_seen[url].is_set():
-                first_seen[url].set()
-                # URL_A → 1001, URL_B → 1002 を「管理番号が小さい方」と決め打ち
-                key = 1001 if url == URL_A else 1002
-            else:
-                key = 1003 if url == URL_A else 1004
-            assert go[key].wait(5), f"完了合図が送られませんでした: {key}"
-            return ROWS
-
-        client.__enter__.return_value.report.run.side_effect = _run
-        site.return_value = client
-
-        # 完了順を管理表順と異なるものにする: 1004 → 1002 → 1003 → 1001 の順に
-        # Event を発火する。`download_scheduled` は別スレッドで走らせ、メインスレッド
-        # で Event を操作する
-        result: dict[str, list[str]] = {}
-
-        def _run_under_test() -> None:
-            with patch("comken.services.salesforce_downloader.service.site_for", return_value=site):
-                saved = download_scheduled()
-            result["keys"] = [path.name.split("_")[0] for path in saved]
-
-        thread = threading.Thread(target=_run_under_test)
-        thread.start()
-        # 4 件すべてが submit されて wait に入るまで待つ
-        for evt in first_seen.values():
-            assert evt.wait(5), "タスクが submit されませんでした"
-        # 完了順を管理表順と逆にする
-        go[1004].set()
-        go[1002].set()
-        go[1003].set()
-        go[1001].set()
-        thread.join(timeout=10)
-        assert not thread.is_alive(), "download_scheduled がタイムアウトしました"
-        # 管理表順（投入順）に並んでいる
-        assert result["keys"] == ["1001", "1002", "1003", "1004"]
-
-    def test_returns_empty_list_when_no_targets(self, tmp_path, monkeypatch):
-        """対象が 0 件（全部「個別」か「無効」）のときは例外を出さず空リスト。"""
-        folder = tmp_path / "保存先"
-        folder.mkdir()
-        master = make_master(
-            tmp_path / "管理表.xlsx",
-            [
-                [1001, "個別のみ", URL_A, "個別", str(folder), "有効"],
-                [1002, "無効のみ", URL_B, "定期", str(folder), "無効"],
-            ],
-        )
-        monkeypatch.setattr(service_module, "MASTER_PATH", master)
-        monkeypatch.setattr(service_module, "HISTORY_PATH", tmp_path / "履歴.csv")
-        # site_for が呼ばれないことを確認するため、`patch` を使わず、
-        # そのまま呼ぶと site_for が動く設定にしておく（呼ばれなければ OK）
+    def test_records_the_trigger_as_scheduled(self, paths):
         with patch(
-            "comken.services.salesforce_downloader.service.site_for",
-            side_effect=AssertionError("site_for が呼ばれてはいけない"),
+            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
-            saved = download_scheduled()
-        assert saved == []
+            download_scheduled("定期実行")
+        assert _history_rows(paths)[-1]["実行方式"] == "定期"
 
 
 def _history_rows(paths: dict) -> list[dict]:

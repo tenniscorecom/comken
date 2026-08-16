@@ -208,6 +208,3 @@ class ScheduledDownloadFailedError(DownloaderError):
             f"定期取得で {len(failed_keys)} 件が失敗しました: {keys}\n"
             f"失敗した理由は履歴を確認してください: {history_path}"
         )
-        # 失敗した管理番号を属性でも持たせる。メッセージからの正規表現で抜くより
-        # 直接こちらを読んだほうが確実で、テストや自動処理からも扱いやすい
-        self.failed = failed_keys
