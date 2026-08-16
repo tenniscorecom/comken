@@ -20,9 +20,9 @@ PYTHONPATH で参照する運用なので、**ここで吸収すれば comken �
 社内ライブラリの正式版が出てこのファイルが不要になったら、次を消せば完了する
 （comken の他のモジュールはこのファイルに依存していない）:
 
-    1. このファイル（comken/run.py）
+    1. このファイル（comken/toolbox/rpa.py）
     2. comken/exceptions/rpa.py と、comken/exceptions/__init__.py の RpaError の記述
-    3. tests/test_run.py
+    3. tests/test_rpa.py
     4. ERRORS.md / templates/新規プロジェクト/docs/ERRORS.md / README.md /
        仕様書.md の、社内 RPA 基盤に関する記述
 

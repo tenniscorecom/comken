@@ -50,9 +50,14 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 
 ## 使うときの約束
 
-- **`comken` 直下から import してよいのは `config` / `Config` と実行モードの4関数
-  （`dry_run` / `is_dry_run` / `debug` / `is_debug`）だけ。** それ以外は
-  `from comken.toolbox.excel import ExcelWriter` のように機能パッケージを明示する（依存が import 行で分かる）
+- **`from comken import ...` で取れるのは、何をするプロジェクトでも使う7個だけ。**
+  `config` / `Config`（設定）、`setup_logging`（ログ）、実行モードの4関数
+  （`dry_run` / `is_dry_run` / `debug` / `is_debug`）
+- **部品は `from comken.core import ...` から取る。** ファイル検索・日時・文字列・差分・
+  計測など23個（`FileFinder` / `copy_file` / `today` / `Timer` / `retry` など）
+- **機能は `from comken.toolbox.excel import ExcelWriter` のように機能パッケージを明示する**
+  （どの機能群に依存しているかが import 行で分かる）
+- **書くときは `from comken import X` が第一選択。** そこに無いものだけ `from comken.core import Y`
 - **ファイル・ブラウザ・COM は `with` で開く。** 途中で失敗しても閉じられる
 - **エラーは細かい方から受ける。** 個別（`SheetNotFoundError`）→ 分野（`ExcelError`）→
   全体（`ComkenError`）の3段。階層は[仕様書「例外体系」](docs/仕様書.md#5-例外体系)
@@ -61,20 +66,16 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 
 ## パッケージの構成
 
-comken は置き場所を3つに分けている。**どこに置くかは「そのモジュールをどう説明できるか」で決まる。**
+comken は置き場所を4つに分けている。**どこに置くかは「そのモジュールをどう説明できるか」で決まる。**
 
 | 場所 | 基準 | 中身 |
 |---|---|---|
-| `comken` 直下 | **何を操作するかに関係なく使う** | 設定・実行モード・ログ・状態・例外・定数 |
-| `comken.toolbox` | **「〜を操作する／〜と通信する」で説明できる** | Excel・CSV・Access・Outlook・Windows・ブラウザ・Salesforce・社内 RPA 基盤・ファイル・認証情報 |
+| `comken` 直下 | **何を操作するかに関係なく使う** | 設定・ログ・実行モード・例外・定数 |
+| `comken.core` | **外にあるものを触らない部品** | ファイル検索・操作・圧縮・命名／日時・文字列・差分・待機・リトライ・計測・状態 |
+| `comken.toolbox` | **「〜を操作する／〜と通信する」で説明できる** | Excel・CSV・Access・Outlook・Windows・ブラウザ・Salesforce・社内 RPA 基盤・認証情報・管理表 |
 | `comken.services` | **社内の管理表や規約を知らないと説明できない** | Salesforce レポートの集約ダウンローダー |
 
-```python
-from comken import config, dry_run          # 直下（土台）
-from comken.exceptions import ComkenError
-from comken.toolbox.excel import ExcelWriter                        # 部品
-from comken.services.salesforce_downloader import download_report   # 社内の仕組み
-```
+import の書き方は上の「[使うときの約束](#使うときの約束)」を参照。
 
 社内 RPA 基盤のラッパー（`comken.toolbox.rpa`）が toolbox にあるのは、**相手が社内のものでも
 「呼び出すための部品」だから**。社内固有かどうかではなく、部品か仕組みかで分けている。
@@ -101,8 +102,7 @@ from comken.services.salesforce_downloader import download_report   # 社内の�
 | [Salesforce レポートの集約取得](docs/salesforce-downloader.md) | 管理表（Excel）に沿ってレポートを取得し、履歴を残す（どのプロジェクトが何を使っているかが分かる） |
 | [Salesforce認証の判断根拠](docs/salesforce-authentication.md) | ECA・Client Credentials Flowを選んだ理由と公式資料 |
 | [credentials（DPAPI）](docs/credentials.md) | パスワード・client_secret の暗号化保存（Windows ユーザーに紐付く） |
-| [utils.files](docs/utils-files.md) | ファイル検索・操作・圧縮・標準フォルダ取得・ファイル名の組み立て |
-| [utils](docs/utils-files.md) | データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時取得 |
+| [core（部品）](docs/utils-files.md) | `from comken.core import ...` で取る23個。ファイル検索・操作・圧縮・ファイル名の組み立て／データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時 |
 
 ## 定数クラス一覧
 
@@ -178,7 +178,8 @@ PCの環境変数を変更したくない場合は、各プロジェクトのル
 ```bat
 pushd \\server\share\tools\comken
 git fetch --tags
-git checkout v0.8.0
+git tag -l                 :: 出ているタグを確認する
+git checkout v0.9.0        :: 切り替えたいタグ（上で確認した最新版）
 popd
 ```
 
@@ -432,19 +433,38 @@ logger.info("CSV読み込み完了: %d件", len(rows))
 
 ```mermaid
 graph LR
-    comken --> config["Config\n設定ファイル"]
-    comken --> runtime["runtime\n実行モード"]
-    comken --> constants["constants\n公開定数"]
-    comken --> exceptions["exceptions\n例外体系"]
-    comken --> utils["utils\n比較・テキスト・待機・日時"]
-    utils --> files["utils.files\n検索・操作・圧縮・パス・命名"]
-    comken --> excel["excel\nExcel"]
-    comken --> csv["csv\nCSV"]
-    comken --> windows["windows\nCOM / Window"]
-    comken --> browser["browser\nブラウザ"]
-    comken --> salesforce["salesforce\nSalesforce API"]
+    subgraph L0["comken 直下 — 全層が使う共通語彙"]
+        exceptions["exceptions\n例外体系"]
+        constants["constants\n公開定数"]
+        runtime["runtime\n実行モード"]
+    end
+    subgraph L1["comken.core — 外を触らない部品（23個）"]
+        config["config\n設定ファイル"]
+        logger["logger\nログ設定"]
+        state["state\n状態の永続化"]
+        clock["clock\n日時"]
+        text["text\n正規化"]
+        data["data\n差分・型変換"]
+        corefiles["files\n検索・操作・圧縮・命名"]
+    end
+    subgraph L2["comken.toolbox — 外を触る道具"]
+        excel["excel\nExcel"]
+        csv["csv\nCSV"]
+        access["access\nAccess"]
+        outlook["outlook\nOutlook"]
+        windows["windows\nCOM / Window / Paths"]
+        browser["browser\nブラウザ"]
+        salesforce["salesforce\nSalesforce API"]
+        credentials["credentials\n認証情報（DPAPI）"]
+        mastertable["master_table\n管理表"]
+    end
+    subgraph L3["comken.services — 社内の仕組み"]
+        downloader["salesforce_downloader\nレポート集約取得"]
+    end
+    L1 --> L0
+    L2 --> L1
+    L3 --> L2
     salesforce --> sites["salesforce.sites\n組織ごとのクラス"]
-    comken --> credentials["credentials\n認証情報（DPAPI）"]
     salesforce --> credentials
 ```
 
@@ -477,7 +497,7 @@ flowchart LR
 ```mermaid
 flowchart LR
     A["config.ini"] -->|Config| B["設定読み込み"]
-    B -->|EdgeDriver| C["ブラウザ起動"]
+    B -->|Browsers| C["ブラウザ起動"]
     C -->|SitePage| D["画面操作"]
 ```
 
