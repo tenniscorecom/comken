@@ -4,9 +4,9 @@ import logging
 from pathlib import Path
 
 from comken.constants import Color, Encoding, FileFormat, SortBy
-from comken.logger import setup_logging
+from comken.core.logger import setup_logging
+from comken.core.utils.files import FileFinder
 from comken.toolbox.csv import CsvReader, CsvWriter
-from comken.toolbox.utils.files import FileFinder
 
 HERE = Path(__file__).parent
 OUTPUT_FOLDER = HERE / "output" / "constants"

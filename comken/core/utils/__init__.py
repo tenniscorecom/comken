@@ -1,4 +1,4 @@
-"""comken/toolbox/utils/__init__.py — 汎用的なデータ・時間・文字列操作 API を公開するパッケージ。"""
+"""comken/core/utils/__init__.py — 汎用的なデータ・時間・文字列操作 API を公開するパッケージ。"""
 
 from .data import DiffResult, RowChange, diff_row, diff_rows
 from .retry import retry

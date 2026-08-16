@@ -5,7 +5,7 @@ from unittest.mock import Mock, call, patch
 
 import pytest
 
-from comken.exceptions.salesforce import SalesforceCredentialRotationError
+from comken.exceptions import SalesforceCredentialRotationError
 from comken.toolbox.salesforce.rotation import SalesforceCredentialRotator
 
 TODAY = datetime.date(2026, 8, 13)

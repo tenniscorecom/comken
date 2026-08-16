@@ -71,6 +71,10 @@ Returns:
 Raises:
     ConfigSectionNotFoundError: 指定したマッピングセクションがない場合。
 
+### `config`
+
+定義を解決できませんでした。
+
 ### `dry_run`
 
 ```text
@@ -132,6 +136,648 @@ def is_debug() -> bool:
 #### 説明
 
 デバッグモードが有効か返す。
+
+
+## `from comken.core.utils import ...`
+
+### `diff_row`
+
+```text
+def diff_row(before: dict, after: dict) -> dict[str, tuple]:
+```
+
+#### 説明
+
+1行同士を比較し、値が異なる列だけを {列名: (変更前, 変更後)} で返す。
+
+CSV の str と Excel の数値は同一視する（"1000" と 1000 は差分にならない）。
+片方にしか存在しない列は、もう片方を None として比較する。
+
+先頭ゼロ付きの文字列（社員番号 "0001" 等）は数値化しない。
+"0001" と 1 は別の値として差分になる（先頭ゼロの消失を検出できる）。
+Args:
+    before: 変更前の行（辞書）。
+    after: 変更後の行（辞書）。
+
+Returns:
+    {列名: (変更前の値, 変更後の値)} の辞書。値は元の型のまま返す。
+
+### `diff_rows`
+
+```text
+def diff_rows(before: list[dict], after: list[dict], key: str) -> DiffResult:
+```
+
+#### 説明
+
+2つのデータセットをキー列で突合し、差分を返す。
+
+CSV と Excel をまたいだ比較にも使える（"1000" と 1000 は同一視される）。
+キーが重複する場合は後の行が優先される。
+Args:
+    before: 変更前のデータ（辞書のリスト）。
+    after: 変更後のデータ（辞書のリスト）。
+    key: 行を一意に識別するキー列名。
+
+Returns:
+    DiffResult（added / removed / changed）。
+
+Raises:
+    ColumnNotFoundError: key で指定した列が存在しない場合。
+
+### `DiffResult`
+
+```text
+class DiffResult:
+```
+
+#### 説明
+
+diff_rows の結果。
+
+### `RowChange`
+
+```text
+class RowChange:
+```
+
+#### 説明
+
+diff_rows が返す「変更のあった行」の情報。
+
+### `wait`
+
+```text
+class wait:
+```
+
+#### 説明
+
+待機ユーティリティ。インスタンス化せず静的メソッドで使う。
+
+#### `seconds`
+
+```text
+@staticmethod
+def seconds(n: float) -> None:
+```
+
+##### 説明
+
+指定した秒数だけ待つ。
+
+Args:
+    n: 待機秒数。小数も指定できる（例: 0.5）。
+
+#### `minutes`
+
+```text
+@staticmethod
+def minutes(n: float) -> None:
+```
+
+##### 説明
+
+指定した分数だけ待つ。
+
+Args:
+    n: 待機分数。小数も指定できる（例: 0.5 → 30秒）。
+
+#### `until`
+
+```text
+@staticmethod
+def until(condition: Callable[[], bool], timeout: float=60, interval: float=1.0) -> bool:
+```
+
+##### 説明
+
+条件が True になるまで繰り返し確認する。
+
+Args:
+    condition: 引数なしで呼び出せる callable。True を返したら待機終了。
+    timeout: 最大待機秒数（デフォルト: 60秒）。
+    interval: 確認間隔（秒）（デフォルト: 1秒）。
+
+Returns:
+    True: 条件が満たされた。
+    False: タイムアウトした（条件は満たされなかった）。
+
+### `normalize`
+
+```text
+def normalize(text: str) -> str:
+```
+
+#### 説明
+
+文字列を NFKC 形式に正規化する。
+
+主な変換:
+    - 全角英数字・記号 → 半角（ａ→a, １→1, （→(, ．→.）
+    - 半角カタカナ     → 全角カタカナ（ｱ→ア, ｶﾞ→ガ）
+    - 合字             → 展開（㌔→km, ㍉→mm）
+
+Args:
+    text: 正規化する文字列。
+
+Returns:
+    正規化後の文字列。
+
+### `strip_spaces`
+
+```text
+def strip_spaces(text: str) -> str:
+```
+
+#### 説明
+
+前後の半角・全角スペースを除去する。
+
+str.strip() は全角スペース（U+3000）を除去しないため、
+業務データの氏名・住所フィールドで使うのに向いている。
+
+Args:
+    text: 処理する文字列。
+
+Returns:
+    前後のスペースを除去した文字列。
+
+### `remove_spaces`
+
+```text
+def remove_spaces(text: str) -> str:
+```
+
+#### 説明
+
+文字列中の半角・全角スペースをすべて除去する。
+
+電話番号・郵便番号など、スペースを含んではいけない値の正規化に使う。
+
+Args:
+    text: 処理する文字列。
+
+Returns:
+    スペースを除去した文字列。
+
+### `retry`
+
+```text
+def retry(times: int=3, wait: float=1.0, on: tuple=(Exception,)) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
+```
+
+#### 説明
+
+失敗したら wait 秒空けて実行し直すデコレータ。
+
+Args:
+    times: 合計の実行回数（デフォルト: 3。「3回試して全部失敗ならエラー」）。
+    wait: 失敗から次の実行までの待機秒数（デフォルト: 1秒）。
+    on: リトライ対象の例外のタプル（デフォルト: すべての例外）。
+        ここに含まれない例外は即座にそのまま出る。
+
+Raises:
+    最後の実行で出た例外（times 回すべて失敗した場合）。
+
+### `Timer`
+
+```text
+class Timer:
+```
+
+#### 説明
+
+処理時間を計測して INFO ログに出す。with・デコレータ両対応。
+
+Attributes:
+    elapsed: 経過秒数（float）。with を抜けた後に参照できる。
+
+#### `__init__`
+
+```text
+def __init__(self, name: str='処理') -> None:
+```
+
+##### 説明
+
+Args:
+    name: ログに出す処理名（例: "CSV読み込み"）。
+
+### `measure`
+
+```text
+def measure(func: Callable[_P, _R]) -> Callable[_P, _R]:
+```
+
+#### 説明
+
+デバッグモード時だけ処理時間を DEBUG ログに出すデコレータ。
+
+ライブラリの主要処理に付いており、with comken.debug(): の範囲では
+「どの処理に何秒かかったか」を DEBUG ログに出す。
+プロジェクト側の関数に付けてもよい。
+
+Timer との使い分け:
+    - Timer: 常にログに出したい・経過秒数を値として使いたい場合
+    - measure: 普段は出さず、調査のときだけ with debug(): で出したい場合
+
+### `now`
+
+```text
+def now() -> datetime.datetime:
+```
+
+#### 説明
+
+タイムゾーン付きの現在時刻（この PC のローカル時刻）を返す。
+
+### `today`
+
+```text
+def today() -> datetime.date:
+```
+
+#### 説明
+
+この PC のローカルの今日の日付を返す。
+
+
+## `from comken.core.utils.files import ...`
+
+### `FileFinder`
+
+```text
+class FileFinder:
+```
+
+#### 説明
+
+フォルダからファイルを探して取得する。
+
+見つからないときは既定で FileNotFoundError を投げる
+（業務スクリプトでは「ファイルがない＝処理を止める」がほとんどのため）。
+処理を続けたい場合は required=False を指定すると None または空リストを返す。
+
+#### `__init__`
+
+```text
+def __init__(self, folder: str | Path) -> None:
+```
+
+#### `today`
+
+```text
+def today(self, pattern: str='*.xlsx', date_format: str='%Y%m%d', required: bool=True) -> Path | None:
+```
+
+##### 説明
+
+ファイル名に今日の日付を含むファイルを返す。
+
+複数ある場合は更新日時が最も新しいもの。年月で探すなら date_format="%Y%m"。
+
+Raises:
+    FileNotFoundError: required=True で該当ファイルがない場合。
+
+#### `latest`
+
+```text
+def latest(self, pattern: str='*.xlsx', by: str=SortBy.NAME, required: bool=True) -> Path | None:
+```
+
+##### 説明
+
+最新のファイルを返す。既定はファイル名の辞書順で最後のもの。
+
+"20260711_売上.xlsx" のような日付プレフィックス命名を想定しており、
+コピーや再保存で更新日時が変わっても影響を受けない。
+
+注意: 文字列比較のため、ゼロ埋めしていない連番（report_9 と report_10）は
+9 の方が「最新」と判定される。連番命名なら by=SortBy.UPDATED を使うこと。
+
+Raises:
+    FileNotFoundError: required=True で該当ファイルがない場合。
+    ValueError: by に SortBy.NAME / SortBy.UPDATED 以外を指定した場合。
+
+#### `dated`
+
+```text
+def dated(self, pattern: str='*.xlsx', required: bool=True) -> list[Path]:
+```
+
+##### 説明
+
+ファイル名に日付が入っているファイルを、日付の新しい順で返す。
+
+日付として認識するのは 20260729 / 2026-07-29 / 2026_07_29 / 2026.07.29。
+実在しない日付や、前後を数字で挟まれた数字（伝票番号の一部など）は対象外。
+同じ日付なら更新日時の新しい順。詳しくは date_in_name を参照。
+
+Raises:
+    FileNotFoundError: required=True で該当ファイルがない場合。
+
+### `date_in_name`
+
+```text
+def date_in_name(name: str) -> datetime.date | None:
+```
+
+#### 説明
+
+ファイル名に含まれる最初の日付を返す。日付が無ければ None。
+
+1つのファイル名に日付が複数あるときは、先に出てくる方を使う。
+ファイル名の日付とファイル内容の日付を突き合わせる業務で使うため公開している。
+
+### `Paths`
+
+```text
+class Paths:
+```
+
+#### 説明
+
+よく使うフォルダのパスを返すユーティリティ。インスタンス化せず静的メソッドで使う。
+
+Desktop / Downloads は OneDrive の「既知のフォルダーの移動」で
+C:\Users\xxx 直下にないことがあるため、レジストリから実際の場所を取得する。
+
+#### `downloads`
+
+```text
+@staticmethod
+def downloads() -> Path:
+```
+
+##### 説明
+
+ダウンロードフォルダのパスを返す。
+
+#### `desktop`
+
+```text
+@staticmethod
+def desktop() -> Path:
+```
+
+##### 説明
+
+デスクトップのパスを返す（OneDrive リダイレクトにも追従する）。
+
+#### `temp_dir`
+
+```text
+@staticmethod
+def temp_dir() -> Path:
+```
+
+##### 説明
+
+システムの一時フォルダのパスを返す。
+
+### `move_file`
+
+```text
+def move_file(src: str | Path, dst: str | Path) -> Path:
+```
+
+#### 説明
+
+ファイルを移動する。
+
+shutil.move の分かりにくい点をなくしたラッパー:
+    - dst が既存フォルダなら、その中に同名で移動する
+    - それ以外はファイルパスとして扱う（親フォルダがなければ自動作成する）
+    - 移動先に同名ファイルがあれば上書きする
+Args:
+    src: 移動するファイルのパス。
+    dst: 移動先（フォルダ、またはファイルパス）。
+
+Returns:
+    移動後のファイルパス。
+
+### `copy_file`
+
+```text
+def copy_file(src: str | Path, dst: str | Path) -> Path:
+```
+
+#### 説明
+
+ファイルをコピーする（更新日時などの属性も保持する）。
+
+ルールは move_file と同じ:
+    - dst が既存フォルダなら、その中に同名でコピーする
+    - それ以外はファイルパスとして扱う（親フォルダがなければ自動作成する）
+    - コピー先に同名ファイルがあれば上書きする
+
+Args:
+    src: コピーするファイルのパス。
+    dst: コピー先（フォルダ、またはファイルパス）。
+
+Returns:
+    コピー後のファイルパス。
+
+### `local_copy`
+
+```text
+@contextmanager
+def local_copy(path: str | Path) -> Iterator[Path]:
+```
+
+#### 説明
+
+ネットワーク上のファイルをローカルにコピーし、処理後に自動削除する。
+
+NAS やネットワークドライブ上の大きなファイルを直接開くと遅い場合や、
+win32com（Excel COM）でネットワークファイルが不安定な場合に使う。
+
+テンポラリファイルの保存先: C:\Users\<ユーザー名>\AppData\Local\Temp\
+with ブロックを抜けると自動削除される（例外が発生した場合も削除される）。
+Args:
+    path: コピー元のファイルパス（ネットワークパス・UNCパス・マップドドライブ）。
+
+Yields:
+    ローカルのテンポラリファイルパス（Path）。
+
+### `zip_folder`
+
+```text
+@measure
+def zip_folder(folder: str | Path, dst: str | Path | None=None) -> Path:
+```
+
+#### 説明
+
+フォルダの中身をまるごと zip に圧縮する（サブフォルダも含む）。
+
+Args:
+    folder: 圧縮するフォルダ。
+    dst: 出力する zip のパス。省略するとフォルダの隣に「フォルダ名.zip」。
+         親フォルダがなければ自動作成される。既存の zip は上書きされる。
+
+Returns:
+    作成した zip のパス。
+
+Raises:
+    FileNotFoundError: folder が存在しない場合。
+
+### `zip_files`
+
+```text
+def zip_files(files: Sequence[str | Path], dst: str | Path) -> Path:
+```
+
+#### 説明
+
+ファイルを選んで zip に圧縮する（zip 内はフラットに並ぶ）。
+
+Args:
+    files: 圧縮するファイルパスのリスト。
+    dst: 出力する zip のパス。親フォルダがなければ自動作成される。
+
+Returns:
+    作成した zip のパス。
+
+Raises:
+    FileNotFoundError: files の中に存在しないファイルがある場合。
+    ValueError: zip 内で同じ名前になるファイルが複数ある場合。
+
+### `unzip`
+
+```text
+@measure
+def unzip(src: str | Path, dst: str | Path | None=None) -> Path:
+```
+
+#### 説明
+
+zip を展開する。
+
+Windows のエクスプローラーで作られた zip（ファイル名が cp932）も
+文字化けせずに展開できる（UTF-8 の zip はそのまま正しく読まれる）。
+
+Args:
+    src: 展開する zip のパス。
+    dst: 展開先フォルダ。省略すると zip の隣に同名フォルダ（data.zip → data\）。
+         同名ファイルがあれば上書きされる。
+
+Returns:
+    展開先フォルダのパス。
+
+### `DateNameBuilder`
+
+```text
+class DateNameBuilder:
+```
+
+#### 説明
+
+今日の日付を付けたファイル名を組み立てる。
+
+日付はファイル名の属性ではなく「付け方」なので、コンストラクタではなく
+prefix() / suffix() の呼び出し時に決める。
+
+#### `__init__`
+
+```text
+def __init__(self, name: str, ext: str='.xlsx') -> None:
+```
+
+##### 説明
+
+Args:
+    name: ファイル名（拡張子なし）。
+    ext: 拡張子（デフォルト: ".xlsx"）。ドットなしで渡しても補完される。
+
+#### `plain`
+
+```text
+def plain(self) -> str:
+```
+
+##### 説明
+
+日付なしのファイル名を返す。
+
+#### `prefix`
+
+```text
+def prefix(self, date_format: str='%Y%m%d') -> str:
+```
+
+##### 説明
+
+今日の日付を前に付けたファイル名を返す（例: 20260711_売上レポート.xlsx）。
+
+#### `suffix`
+
+```text
+def suffix(self, date_format: str='%Y%m%d') -> str:
+```
+
+##### 説明
+
+今日の日付を後ろに付けたファイル名を返す（例: 売上レポート_20260711.xlsx）。
+
+
+## `from comken.core.utils.files.naming import ...`
+
+### `DateNameBuilder`
+
+```text
+class DateNameBuilder:
+```
+
+#### 説明
+
+今日の日付を付けたファイル名を組み立てる。
+
+日付はファイル名の属性ではなく「付け方」なので、コンストラクタではなく
+prefix() / suffix() の呼び出し時に決める。
+
+#### `__init__`
+
+```text
+def __init__(self, name: str, ext: str='.xlsx') -> None:
+```
+
+##### 説明
+
+Args:
+    name: ファイル名（拡張子なし）。
+    ext: 拡張子（デフォルト: ".xlsx"）。ドットなしで渡しても補完される。
+
+#### `plain`
+
+```text
+def plain(self) -> str:
+```
+
+##### 説明
+
+日付なしのファイル名を返す。
+
+#### `prefix`
+
+```text
+def prefix(self, date_format: str='%Y%m%d') -> str:
+```
+
+##### 説明
+
+今日の日付を前に付けたファイル名を返す（例: 20260711_売上レポート.xlsx）。
+
+#### `suffix`
+
+```text
+def suffix(self, date_format: str='%Y%m%d') -> str:
+```
+
+##### 説明
+
+今日の日付を後ろに付けたファイル名を返す（例: 売上レポート_20260711.xlsx）。
 
 
 ## `from comken.exceptions import ...`
@@ -4877,648 +5523,6 @@ Raises:
     SalesforceSiteNotFoundError: 登録済みのどの組織にも当てはまらない場合。
 
 
-## `from comken.toolbox.utils import ...`
-
-### `diff_row`
-
-```text
-def diff_row(before: dict, after: dict) -> dict[str, tuple]:
-```
-
-#### 説明
-
-1行同士を比較し、値が異なる列だけを {列名: (変更前, 変更後)} で返す。
-
-CSV の str と Excel の数値は同一視する（"1000" と 1000 は差分にならない）。
-片方にしか存在しない列は、もう片方を None として比較する。
-
-先頭ゼロ付きの文字列（社員番号 "0001" 等）は数値化しない。
-"0001" と 1 は別の値として差分になる（先頭ゼロの消失を検出できる）。
-Args:
-    before: 変更前の行（辞書）。
-    after: 変更後の行（辞書）。
-
-Returns:
-    {列名: (変更前の値, 変更後の値)} の辞書。値は元の型のまま返す。
-
-### `diff_rows`
-
-```text
-def diff_rows(before: list[dict], after: list[dict], key: str) -> DiffResult:
-```
-
-#### 説明
-
-2つのデータセットをキー列で突合し、差分を返す。
-
-CSV と Excel をまたいだ比較にも使える（"1000" と 1000 は同一視される）。
-キーが重複する場合は後の行が優先される。
-Args:
-    before: 変更前のデータ（辞書のリスト）。
-    after: 変更後のデータ（辞書のリスト）。
-    key: 行を一意に識別するキー列名。
-
-Returns:
-    DiffResult（added / removed / changed）。
-
-Raises:
-    ColumnNotFoundError: key で指定した列が存在しない場合。
-
-### `DiffResult`
-
-```text
-class DiffResult:
-```
-
-#### 説明
-
-diff_rows の結果。
-
-### `RowChange`
-
-```text
-class RowChange:
-```
-
-#### 説明
-
-diff_rows が返す「変更のあった行」の情報。
-
-### `wait`
-
-```text
-class wait:
-```
-
-#### 説明
-
-待機ユーティリティ。インスタンス化せず静的メソッドで使う。
-
-#### `seconds`
-
-```text
-@staticmethod
-def seconds(n: float) -> None:
-```
-
-##### 説明
-
-指定した秒数だけ待つ。
-
-Args:
-    n: 待機秒数。小数も指定できる（例: 0.5）。
-
-#### `minutes`
-
-```text
-@staticmethod
-def minutes(n: float) -> None:
-```
-
-##### 説明
-
-指定した分数だけ待つ。
-
-Args:
-    n: 待機分数。小数も指定できる（例: 0.5 → 30秒）。
-
-#### `until`
-
-```text
-@staticmethod
-def until(condition: Callable[[], bool], timeout: float=60, interval: float=1.0) -> bool:
-```
-
-##### 説明
-
-条件が True になるまで繰り返し確認する。
-
-Args:
-    condition: 引数なしで呼び出せる callable。True を返したら待機終了。
-    timeout: 最大待機秒数（デフォルト: 60秒）。
-    interval: 確認間隔（秒）（デフォルト: 1秒）。
-
-Returns:
-    True: 条件が満たされた。
-    False: タイムアウトした（条件は満たされなかった）。
-
-### `normalize`
-
-```text
-def normalize(text: str) -> str:
-```
-
-#### 説明
-
-文字列を NFKC 形式に正規化する。
-
-主な変換:
-    - 全角英数字・記号 → 半角（ａ→a, １→1, （→(, ．→.）
-    - 半角カタカナ     → 全角カタカナ（ｱ→ア, ｶﾞ→ガ）
-    - 合字             → 展開（㌔→km, ㍉→mm）
-
-Args:
-    text: 正規化する文字列。
-
-Returns:
-    正規化後の文字列。
-
-### `strip_spaces`
-
-```text
-def strip_spaces(text: str) -> str:
-```
-
-#### 説明
-
-前後の半角・全角スペースを除去する。
-
-str.strip() は全角スペース（U+3000）を除去しないため、
-業務データの氏名・住所フィールドで使うのに向いている。
-
-Args:
-    text: 処理する文字列。
-
-Returns:
-    前後のスペースを除去した文字列。
-
-### `remove_spaces`
-
-```text
-def remove_spaces(text: str) -> str:
-```
-
-#### 説明
-
-文字列中の半角・全角スペースをすべて除去する。
-
-電話番号・郵便番号など、スペースを含んではいけない値の正規化に使う。
-
-Args:
-    text: 処理する文字列。
-
-Returns:
-    スペースを除去した文字列。
-
-### `retry`
-
-```text
-def retry(times: int=3, wait: float=1.0, on: tuple=(Exception,)) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
-```
-
-#### 説明
-
-失敗したら wait 秒空けて実行し直すデコレータ。
-
-Args:
-    times: 合計の実行回数（デフォルト: 3。「3回試して全部失敗ならエラー」）。
-    wait: 失敗から次の実行までの待機秒数（デフォルト: 1秒）。
-    on: リトライ対象の例外のタプル（デフォルト: すべての例外）。
-        ここに含まれない例外は即座にそのまま出る。
-
-Raises:
-    最後の実行で出た例外（times 回すべて失敗した場合）。
-
-### `Timer`
-
-```text
-class Timer:
-```
-
-#### 説明
-
-処理時間を計測して INFO ログに出す。with・デコレータ両対応。
-
-Attributes:
-    elapsed: 経過秒数（float）。with を抜けた後に参照できる。
-
-#### `__init__`
-
-```text
-def __init__(self, name: str='処理') -> None:
-```
-
-##### 説明
-
-Args:
-    name: ログに出す処理名（例: "CSV読み込み"）。
-
-### `measure`
-
-```text
-def measure(func: Callable[_P, _R]) -> Callable[_P, _R]:
-```
-
-#### 説明
-
-デバッグモード時だけ処理時間を DEBUG ログに出すデコレータ。
-
-ライブラリの主要処理に付いており、with comken.debug(): の範囲では
-「どの処理に何秒かかったか」を DEBUG ログに出す。
-プロジェクト側の関数に付けてもよい。
-
-Timer との使い分け:
-    - Timer: 常にログに出したい・経過秒数を値として使いたい場合
-    - measure: 普段は出さず、調査のときだけ with debug(): で出したい場合
-
-### `now`
-
-```text
-def now() -> datetime.datetime:
-```
-
-#### 説明
-
-タイムゾーン付きの現在時刻（この PC のローカル時刻）を返す。
-
-### `today`
-
-```text
-def today() -> datetime.date:
-```
-
-#### 説明
-
-この PC のローカルの今日の日付を返す。
-
-
-## `from comken.toolbox.utils.files import ...`
-
-### `FileFinder`
-
-```text
-class FileFinder:
-```
-
-#### 説明
-
-フォルダからファイルを探して取得する。
-
-見つからないときは既定で FileNotFoundError を投げる
-（業務スクリプトでは「ファイルがない＝処理を止める」がほとんどのため）。
-処理を続けたい場合は required=False を指定すると None または空リストを返す。
-
-#### `__init__`
-
-```text
-def __init__(self, folder: str | Path) -> None:
-```
-
-#### `today`
-
-```text
-def today(self, pattern: str='*.xlsx', date_format: str='%Y%m%d', required: bool=True) -> Path | None:
-```
-
-##### 説明
-
-ファイル名に今日の日付を含むファイルを返す。
-
-複数ある場合は更新日時が最も新しいもの。年月で探すなら date_format="%Y%m"。
-
-Raises:
-    FileNotFoundError: required=True で該当ファイルがない場合。
-
-#### `latest`
-
-```text
-def latest(self, pattern: str='*.xlsx', by: str=SortBy.NAME, required: bool=True) -> Path | None:
-```
-
-##### 説明
-
-最新のファイルを返す。既定はファイル名の辞書順で最後のもの。
-
-"20260711_売上.xlsx" のような日付プレフィックス命名を想定しており、
-コピーや再保存で更新日時が変わっても影響を受けない。
-
-注意: 文字列比較のため、ゼロ埋めしていない連番（report_9 と report_10）は
-9 の方が「最新」と判定される。連番命名なら by=SortBy.UPDATED を使うこと。
-
-Raises:
-    FileNotFoundError: required=True で該当ファイルがない場合。
-    ValueError: by に SortBy.NAME / SortBy.UPDATED 以外を指定した場合。
-
-#### `dated`
-
-```text
-def dated(self, pattern: str='*.xlsx', required: bool=True) -> list[Path]:
-```
-
-##### 説明
-
-ファイル名に日付が入っているファイルを、日付の新しい順で返す。
-
-日付として認識するのは 20260729 / 2026-07-29 / 2026_07_29 / 2026.07.29。
-実在しない日付や、前後を数字で挟まれた数字（伝票番号の一部など）は対象外。
-同じ日付なら更新日時の新しい順。詳しくは date_in_name を参照。
-
-Raises:
-    FileNotFoundError: required=True で該当ファイルがない場合。
-
-### `date_in_name`
-
-```text
-def date_in_name(name: str) -> datetime.date | None:
-```
-
-#### 説明
-
-ファイル名に含まれる最初の日付を返す。日付が無ければ None。
-
-1つのファイル名に日付が複数あるときは、先に出てくる方を使う。
-ファイル名の日付とファイル内容の日付を突き合わせる業務で使うため公開している。
-
-### `Paths`
-
-```text
-class Paths:
-```
-
-#### 説明
-
-よく使うフォルダのパスを返すユーティリティ。インスタンス化せず静的メソッドで使う。
-
-Desktop / Downloads は OneDrive の「既知のフォルダーの移動」で
-C:\Users\xxx 直下にないことがあるため、レジストリから実際の場所を取得する。
-
-#### `downloads`
-
-```text
-@staticmethod
-def downloads() -> Path:
-```
-
-##### 説明
-
-ダウンロードフォルダのパスを返す。
-
-#### `desktop`
-
-```text
-@staticmethod
-def desktop() -> Path:
-```
-
-##### 説明
-
-デスクトップのパスを返す（OneDrive リダイレクトにも追従する）。
-
-#### `temp_dir`
-
-```text
-@staticmethod
-def temp_dir() -> Path:
-```
-
-##### 説明
-
-システムの一時フォルダのパスを返す。
-
-### `move_file`
-
-```text
-def move_file(src: str | Path, dst: str | Path) -> Path:
-```
-
-#### 説明
-
-ファイルを移動する。
-
-shutil.move の分かりにくい点をなくしたラッパー:
-    - dst が既存フォルダなら、その中に同名で移動する
-    - それ以外はファイルパスとして扱う（親フォルダがなければ自動作成する）
-    - 移動先に同名ファイルがあれば上書きする
-Args:
-    src: 移動するファイルのパス。
-    dst: 移動先（フォルダ、またはファイルパス）。
-
-Returns:
-    移動後のファイルパス。
-
-### `copy_file`
-
-```text
-def copy_file(src: str | Path, dst: str | Path) -> Path:
-```
-
-#### 説明
-
-ファイルをコピーする（更新日時などの属性も保持する）。
-
-ルールは move_file と同じ:
-    - dst が既存フォルダなら、その中に同名でコピーする
-    - それ以外はファイルパスとして扱う（親フォルダがなければ自動作成する）
-    - コピー先に同名ファイルがあれば上書きする
-
-Args:
-    src: コピーするファイルのパス。
-    dst: コピー先（フォルダ、またはファイルパス）。
-
-Returns:
-    コピー後のファイルパス。
-
-### `local_copy`
-
-```text
-@contextmanager
-def local_copy(path: str | Path) -> Iterator[Path]:
-```
-
-#### 説明
-
-ネットワーク上のファイルをローカルにコピーし、処理後に自動削除する。
-
-NAS やネットワークドライブ上の大きなファイルを直接開くと遅い場合や、
-win32com（Excel COM）でネットワークファイルが不安定な場合に使う。
-
-テンポラリファイルの保存先: C:\Users\<ユーザー名>\AppData\Local\Temp\
-with ブロックを抜けると自動削除される（例外が発生した場合も削除される）。
-Args:
-    path: コピー元のファイルパス（ネットワークパス・UNCパス・マップドドライブ）。
-
-Yields:
-    ローカルのテンポラリファイルパス（Path）。
-
-### `zip_folder`
-
-```text
-@measure
-def zip_folder(folder: str | Path, dst: str | Path | None=None) -> Path:
-```
-
-#### 説明
-
-フォルダの中身をまるごと zip に圧縮する（サブフォルダも含む）。
-
-Args:
-    folder: 圧縮するフォルダ。
-    dst: 出力する zip のパス。省略するとフォルダの隣に「フォルダ名.zip」。
-         親フォルダがなければ自動作成される。既存の zip は上書きされる。
-
-Returns:
-    作成した zip のパス。
-
-Raises:
-    FileNotFoundError: folder が存在しない場合。
-
-### `zip_files`
-
-```text
-def zip_files(files: Sequence[str | Path], dst: str | Path) -> Path:
-```
-
-#### 説明
-
-ファイルを選んで zip に圧縮する（zip 内はフラットに並ぶ）。
-
-Args:
-    files: 圧縮するファイルパスのリスト。
-    dst: 出力する zip のパス。親フォルダがなければ自動作成される。
-
-Returns:
-    作成した zip のパス。
-
-Raises:
-    FileNotFoundError: files の中に存在しないファイルがある場合。
-    ValueError: zip 内で同じ名前になるファイルが複数ある場合。
-
-### `unzip`
-
-```text
-@measure
-def unzip(src: str | Path, dst: str | Path | None=None) -> Path:
-```
-
-#### 説明
-
-zip を展開する。
-
-Windows のエクスプローラーで作られた zip（ファイル名が cp932）も
-文字化けせずに展開できる（UTF-8 の zip はそのまま正しく読まれる）。
-
-Args:
-    src: 展開する zip のパス。
-    dst: 展開先フォルダ。省略すると zip の隣に同名フォルダ（data.zip → data\）。
-         同名ファイルがあれば上書きされる。
-
-Returns:
-    展開先フォルダのパス。
-
-### `DateNameBuilder`
-
-```text
-class DateNameBuilder:
-```
-
-#### 説明
-
-今日の日付を付けたファイル名を組み立てる。
-
-日付はファイル名の属性ではなく「付け方」なので、コンストラクタではなく
-prefix() / suffix() の呼び出し時に決める。
-
-#### `__init__`
-
-```text
-def __init__(self, name: str, ext: str='.xlsx') -> None:
-```
-
-##### 説明
-
-Args:
-    name: ファイル名（拡張子なし）。
-    ext: 拡張子（デフォルト: ".xlsx"）。ドットなしで渡しても補完される。
-
-#### `plain`
-
-```text
-def plain(self) -> str:
-```
-
-##### 説明
-
-日付なしのファイル名を返す。
-
-#### `prefix`
-
-```text
-def prefix(self, date_format: str='%Y%m%d') -> str:
-```
-
-##### 説明
-
-今日の日付を前に付けたファイル名を返す（例: 20260711_売上レポート.xlsx）。
-
-#### `suffix`
-
-```text
-def suffix(self, date_format: str='%Y%m%d') -> str:
-```
-
-##### 説明
-
-今日の日付を後ろに付けたファイル名を返す（例: 売上レポート_20260711.xlsx）。
-
-
-## `from comken.toolbox.utils.files.naming import ...`
-
-### `DateNameBuilder`
-
-```text
-class DateNameBuilder:
-```
-
-#### 説明
-
-今日の日付を付けたファイル名を組み立てる。
-
-日付はファイル名の属性ではなく「付け方」なので、コンストラクタではなく
-prefix() / suffix() の呼び出し時に決める。
-
-#### `__init__`
-
-```text
-def __init__(self, name: str, ext: str='.xlsx') -> None:
-```
-
-##### 説明
-
-Args:
-    name: ファイル名（拡張子なし）。
-    ext: 拡張子（デフォルト: ".xlsx"）。ドットなしで渡しても補完される。
-
-#### `plain`
-
-```text
-def plain(self) -> str:
-```
-
-##### 説明
-
-日付なしのファイル名を返す。
-
-#### `prefix`
-
-```text
-def prefix(self, date_format: str='%Y%m%d') -> str:
-```
-
-##### 説明
-
-今日の日付を前に付けたファイル名を返す（例: 20260711_売上レポート.xlsx）。
-
-#### `suffix`
-
-```text
-def suffix(self, date_format: str='%Y%m%d') -> str:
-```
-
-##### 説明
-
-今日の日付を後ろに付けたファイル名を返す（例: 売上レポート_20260711.xlsx）。
-
-
 ## `from comken.toolbox.windows import ...`
 
 ### `ExcelComHandler`
@@ -5930,70 +5934,3 @@ class SortBy:
 #### 説明
 
 FileFinder.latest() の by 引数に使う定数。
-
-
-## `from comken.logger import ...`
-
-### `setup_logging`
-
-```text
-def setup_logging(to_file: bool=True) -> None:
-```
-
-#### 説明
-
-単体実行向けに、コンソールと日付別ファイルへのログ出力を設定する。
-
-社内 RPA 基盤がログを設定する実行では呼び出す必要はない。すでに root logger に
-ハンドラがある場合は、既存の出力先・書式・レベルを変更せず、そのまま返る。
-
-Args:
-    to_file: True なら ``logs/YYYY-MM-DD.log`` にも UTF-8 で出力する。
-
-
-## `from comken.state import ...`
-
-### `State`
-
-```text
-class State:
-```
-
-#### 説明
-
-プログラムが次回実行へ持ち越す値を state.ini に保存する。
-
-``set()`` は呼び出すたびに UTF-8 で原子的に保存する。dry-run 中に状態を
-書くと、試運転したファイルが本番で処理済みと判断されうるため、ファイルは
-変更せず、書く予定だった内容だけをログへ出す。
-
-保存できる値は、真偽値・整数・小数・文字列・文字列のリスト。
-
-Args:
-    path: state.ini のパス。省略すると実行フォルダ直下の state.ini。
-
-#### `__init__`
-
-```text
-def __init__(self, path: str | Path='state.ini') -> None:
-```
-
-#### `get`
-
-```text
-def get(self, key: str, default: StateValue | None=None) -> StateValue | None:
-```
-
-##### 説明
-
-保存済みの値を返す。無い場合は default を返す。
-
-#### `set`
-
-```text
-def set(self, key: str, value: StateValue) -> None:
-```
-
-##### 説明
-
-値を保存する。dry-run 中はファイルもメモリ上の状態も変更しない。

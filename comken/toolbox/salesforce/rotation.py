@@ -13,10 +13,13 @@ import datetime
 from dataclasses import dataclass
 from pathlib import Path
 
-from ...exceptions import CredentialError, CredentialNotFoundError
-from ...exceptions.salesforce import SalesforceCredentialRotationError
+from ...core.utils.clock import today as local_today
+from ...exceptions import (
+    CredentialError,
+    CredentialNotFoundError,
+    SalesforceCredentialRotationError,
+)
 from ..credentials import load_credential, save_credentials
-from ..utils.clock import today as local_today
 from .client import SalesforceBase
 
 DEFAULT_ROTATION_INTERVAL_DAYS = 60

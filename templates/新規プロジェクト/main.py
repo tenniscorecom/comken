@@ -9,8 +9,8 @@ main.py — エントリポイント
 
 import logging
 
+from comken.core.logger import setup_logging
 from comken.exceptions import ComkenError
-from comken.logger import setup_logging
 
 from src.run import run
 

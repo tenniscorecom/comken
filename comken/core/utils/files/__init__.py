@@ -1,4 +1,4 @@
-"""comken/toolbox/utils/files/__init__.py — ファイル関連機能の公開窓口
+"""comken/core/utils/files/__init__.py — ファイル関連機能の公開窓口
 
 検索・操作・圧縮・パス取得・命名をまとめて公開する。
 """

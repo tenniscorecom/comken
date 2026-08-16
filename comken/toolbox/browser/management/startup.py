@@ -12,8 +12,7 @@ from selenium import webdriver
 from selenium.webdriver.edge.options import Options
 from selenium.webdriver.edge.service import Service
 
-from comken.exceptions import DriverStartError
-
+from ....exceptions import DriverStartError
 from ..download import DownloadDir
 from ..driver import update_driver
 from ..options import BrowserOptions

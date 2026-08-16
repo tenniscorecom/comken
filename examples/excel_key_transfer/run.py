@@ -20,10 +20,10 @@
 import logging
 from pathlib import Path
 
+from comken.core.utils import diff_rows
 from comken.exceptions import CsvRowDuplicateKeyError
 from comken.toolbox.csv import CsvReader, CsvWriter
 from comken.toolbox.excel import ExcelWriter
-from comken.toolbox.utils import diff_rows
 
 HERE = Path(__file__).parent
 OUTPUT_FOLDER = HERE / "output"

@@ -16,13 +16,13 @@ from typing import Self
 
 import win32com.client
 
+from ...core.utils.clock import now
 from ...exceptions import (
     ClassicOutlookNotAvailableError,
     OutlookAttachmentNotFoundError,
     OutlookFolderNotFoundError,
 )
 from ...runtime import dry_run_log, is_dry_run
-from ..utils.clock import now
 
 logger = logging.getLogger(__name__)
 

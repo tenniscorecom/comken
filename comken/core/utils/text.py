@@ -1,4 +1,4 @@
-"""comken/toolbox/utils/text.py — テキスト正規化ユーティリティ
+"""comken/core/utils/text.py — テキスト正規化ユーティリティ
 
 業務データでよくある文字列の揺れを正規化する。
 仕様:

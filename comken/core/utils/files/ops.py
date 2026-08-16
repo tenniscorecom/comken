@@ -1,4 +1,4 @@
-"""comken/toolbox/utils/files/ops.py — ファイルのコピー・移動と一時ファイル管理。"""
+"""comken/core/utils/files/ops.py — ファイルのコピー・移動と一時ファイル管理。"""
 
 import logging
 import shutil

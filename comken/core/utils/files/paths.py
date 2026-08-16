@@ -1,4 +1,4 @@
-"""comken/toolbox/utils/files/paths.py — よく使う標準フォルダのパス取得。"""
+"""comken/core/utils/files/paths.py — よく使う標準フォルダのパス取得。"""
 
 import os
 import tempfile

@@ -3,12 +3,12 @@ from pathlib import Path
 import pytest
 
 from comken import dry_run
+from comken.core.state import State
 from comken.exceptions import (
     StateFileCorruptedError,
     StateLowerCaseNameError,
     StateValueTypeError,
 )
-from comken.state import State
 
 
 class TestState:

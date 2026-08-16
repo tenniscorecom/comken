@@ -3,9 +3,9 @@
 import logging
 from pathlib import Path
 
-import comken.logger as comken_logger
-from comken.logger import setup_logging
-from comken.toolbox.utils import today
+import comken.core.logger as comken_logger
+from comken.core.logger import setup_logging
+from comken.core.utils import today
 
 HERE = Path(__file__).parent
 LOG_FOLDER = HERE / "output" / "logs"

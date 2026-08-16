@@ -1,4 +1,4 @@
-"""comken/state.py — 実行と実行のあいだで状態を持ち越すユーティリティ。
+"""comken/core/state.py — 実行と実行のあいだで状態を持ち越すユーティリティ。
 
 config.ini は人が書く設定なのでプログラムから変更しない。一方、state.ini は
 プログラムが前回の処理結果を保存するために使う。初回に state.ini が無いことは
@@ -11,9 +11,9 @@ import os
 import tempfile
 from pathlib import Path
 
-from .exceptions import StateFileCorruptedError, StateLowerCaseNameError, StateValueTypeError
-from .runtime import dry_run_log, is_dry_run
-from .toolbox.utils.files.ops import cleanup_stale_tmp
+from ..exceptions import StateFileCorruptedError, StateLowerCaseNameError, StateValueTypeError
+from ..runtime import dry_run_log, is_dry_run
+from .utils.files.ops import cleanup_stale_tmp
 
 STATE_SECTION = "STATE"
 

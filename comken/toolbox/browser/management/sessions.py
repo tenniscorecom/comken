@@ -30,13 +30,12 @@ from typing import Self
 
 from selenium import webdriver
 
-from comken.exceptions import (
+from ....core.utils import now
+from ....exceptions import (
     ConcurrentSessionUseError,
     SessionClosedError,
     SessionNotStartedError,
 )
-from comken.toolbox.utils import now
-
 from ..download import DownloadDir
 from ..locator import Locator
 from ..options import BrowserOptions

@@ -1,4 +1,4 @@
-"""comken/toolbox/utils/retry.py — リトライデコレータ
+"""comken/core/utils/retry.py — リトライデコレータ
 
 一時的な失敗（クリックが要素に遮られた、ネットワークが一瞬切れた等）を
 自動でやり直すためのデコレータ。

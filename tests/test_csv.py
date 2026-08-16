@@ -10,8 +10,8 @@ from unittest.mock import patch
 
 import pytest
 
+import comken.core.utils
 import comken.toolbox.csv
-import comken.toolbox.utils
 from comken.constants import Encoding
 from comken.exceptions import (
     ColumnNotFoundError,
@@ -93,7 +93,7 @@ class TestCsvPublicApi:
     """CSV の公開 API と依存境界を確認する。"""
 
     def test_utils_does_not_export_col_to_num(self):
-        for package in (comken.toolbox.csv, comken.toolbox.utils):
+        for package in (comken.toolbox.csv, comken.core.utils):
             assert "col_to_num" not in package.__all__
             assert not hasattr(package, "col_to_num")
 

@@ -52,13 +52,12 @@ from contextlib import ExitStack
 from pathlib import Path
 from typing import Self, TypeVar
 
-from comken.exceptions import (
+from ....exceptions import (
     BrowsersClosedError,
     BrowsersNotStartedError,
     SessionNameConflictError,
     SessionNotFoundError,
 )
-
 from ..download import DownloadDir
 from ..options import BrowserOptions
 from .sessions import BrowserSession

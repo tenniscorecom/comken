@@ -241,7 +241,7 @@ with comken.dry_run():
 自作関数の処理時間も同じ仕組みで計測できる（デバッグモード中だけログに出る）:
 
 ```python
-from comken.toolbox.utils import measure
+from comken.core.utils import measure
 
 @measure
 def build_report():
@@ -268,14 +268,14 @@ config.read(r"C:\作業\config.ini")
 ```
 
 > **補完（Pylance）:** config を初めて読むと、config.ini から補完用スタブ
-> `typings/comken/`（config.pyi + __init__.pyi）が自動生成される。VS Code + Pylance で
-> `config.SECTION.KEY` が型付き補完される（typings/ は .gitignore 推奨）。
-> ツール実行前にスタブだけ先に作りたいときは `python -m comken.config`。
+> `typings/comken/core/`（config.pyi）と `typings/comken/__init__.pyi` が自動生成される。
+> VS Code + Pylance で `config.SECTION.KEY` が型付き補完される（typings/ は .gitignore 推奨）。
+> ツール実行前にスタブだけ先に作りたいときは `python -m comken.core.config`。
 
 明示的にインスタンスを持ちたい場合（テストや複数 ini の読み分けに）:
 
 ```python
-from comken.config import Config
+from comken.core.config import Config
 
 config = Config()                      # カレントディレクトリの config.ini
 config = Config("path/to/config.ini")  # パスを指定する場合
@@ -355,7 +355,7 @@ for ループが文字単位になる事故が起きる）。
 まだ一度も実行していない状態で先にスタブだけ作りたい場合は手動で生成できる:
 
 ```
-python -m comken.config
+python -m comken.core.config
 ```
 
 生成された `typings/` は手で編集せず、`.gitignore` に含める（自動生成物）。
@@ -371,7 +371,7 @@ python -m comken.config
 使い分ける。人が調整した設定をプログラムが上書きする事故を防ぐため、両者は混ぜない。
 
 ```python
-from comken.state import State
+from comken.core.state import State
 
 state = State()                         # 実行フォルダ直下の state.ini
 last_file = state.get("LAST_FILE")     # 無ければ None
@@ -402,7 +402,7 @@ RPA 基盤を通さず `python main.py` で単体実行するときだけ、先�
 
 ```python
 # main.py（単体実行する場合だけ）
-from comken.logger import setup_logging
+from comken.core.logger import setup_logging
 
 setup_logging()  # コンソールと logs/YYYY-MM-DD.log（UTF-8）へ出力
 # setup_logging(to_file=False)  # コンソールだけに出力する場合

@@ -1,4 +1,4 @@
-"""comken/toolbox/utils/timer.py — 処理時間の計測
+"""comken/core/utils/timer.py — 処理時間の計測
 
 「どこが遅いのか」を調べるためのユーティリティ。with とデコレータの両方で使える。
 結果は logging（INFO）に出る。出力先・フォーマット・レベルは社内の共通ライブラリ側で設定する。

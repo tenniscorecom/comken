@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from comken.core.utils.clock import today
 from comken.exceptions import (
     EmptyReportError,
     InvalidReportUrlError,
@@ -40,7 +41,6 @@ from comken.services.salesforce_downloader.__main__ import main as cli
 from comken.services.salesforce_downloader.master import EXAMPLES
 from comken.toolbox.csv import CsvReader
 from comken.toolbox.excel import ExcelWriter
-from comken.toolbox.utils.clock import today
 
 URL_A = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE/view"
 URL_B = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000FGHIJ/view"

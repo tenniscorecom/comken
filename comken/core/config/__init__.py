@@ -1,4 +1,4 @@
-"""comken/config/__init__.py — INI ファイル読み込みユーティリティ
+"""comken/core/config/__init__.py — INI ファイル読み込みユーティリティ
 
 config.ini を読み込み、config.SECTION.KEY の形式でアクセスできる Config クラスを提供する。
 
@@ -12,7 +12,7 @@ config.ini を読み込み、config.SECTION.KEY の形式でアクセスでき�
 
 明示的にインスタンスを持ちたい場合（従来どおり）:
 
-    from comken.config import Config
+    from comken.core.config import Config
     config = Config()                 # または Config("path/to/config.ini")
 
 エディタの補完候補:
@@ -22,7 +22,7 @@ config.ini を読み込み、config.SECTION.KEY の形式でアクセスでき�
 
     まだ一度も実行していない状態で先にスタブだけ作りたい場合は手動で生成する:
 
-        python -m comken.config
+        python -m comken.core.config
 
 ※ ブラウザの設定は config.ini ではなく BrowserOptions のインスタンス
    （src/browser_options.py）で行う。config はブラウザ設定を持たない。
@@ -36,8 +36,8 @@ import types
 from pathlib import Path
 from typing import NoReturn
 
-from .. import __version__
-from ..exceptions import (
+from ... import __version__
+from ...exceptions import (
     ConfigCreatedFromExampleError,
     ConfigFileNotFoundError,
     ConfigLowerCaseNameError,
@@ -200,7 +200,7 @@ def read(path: str | Path = "config.ini") -> Config:
         path = config.FILES.INPUT_FOLDER
 
     Returns:
-        読み込んだ Config インスタンス（以後 comken.config が返すもの）。
+        読み込んだ Config インスタンス（以後 comken.core.config が返すもの）。
     """
     global _singleton
     _singleton = Config(path)
@@ -216,7 +216,7 @@ def mapping(section: str) -> dict[str, str]:
 
 
 def __getattr__(name: str) -> types.SimpleNamespace:
-    # PEP 562: `comken.config.FILES` のようにモジュール属性として見つからない名前で呼ばれる。
+    # PEP 562: `comken.core.config.FILES` のようにモジュール属性として見つからない名前で呼ばれる。
     # セクションは大文字なので、大文字名のときだけ遅延シングルトンへ委譲する
     # （Config / read などの実体は通常の属性解決で見つかるためここには来ない）。
     if name.isupper():
@@ -224,7 +224,7 @@ def __getattr__(name: str) -> types.SimpleNamespace:
         if _singleton is None:
             _singleton = Config()  # 初回アクセス時にカレントの config.ini を読む
         return getattr(_singleton, name)
-    raise AttributeError(f"module 'comken.config' has no attribute {name!r}")
+    raise AttributeError(f"module 'comken.core.config' has no attribute {name!r}")
 
 
 # ── 内部ヘルパー：ini 値の型変換 ───────────────────────────────────────────────

@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-import comken.config as config_module
-from comken.config import Config
+import comken.core.config as config_module
+from comken.core.config import Config
 from comken.exceptions import (
     ConfigCreatedFromExampleError,
     ConfigError,
@@ -37,7 +37,7 @@ class TestConfigBasic:
         ini.write_text("[S]\nK = value\n", encoding="utf-8")
         monkeypatch.setattr(config_module, "_is_version_logged", False)
 
-        with caplog.at_level(logging.INFO, logger="comken.config"):
+        with caplog.at_level(logging.INFO, logger="comken.core.config"):
             Config(ini)
             Config(ini)
 
@@ -355,7 +355,7 @@ class TestModuleSingleton:
     @pytest.fixture(autouse=True)
     def reset_singleton(self):
         """テスト間でグローバルなシングルトンを持ち越さない。"""
-        import comken.config as config_mod
+        import comken.core.config as config_mod
 
         config_mod._singleton = None
         yield
@@ -363,7 +363,7 @@ class TestModuleSingleton:
 
     def test_read_points_at_given_ini(self, tmp_path):
         """config.read(path) で指定した config.ini のセクションにアクセスできる。"""
-        import comken.config as config_mod
+        import comken.core.config as config_mod
 
         ini = tmp_path / "myconf.ini"
         ini.write_text("[FILES]\nINPUT_FOLDER = C:\\work\\input\n", encoding="utf-8")
@@ -373,7 +373,7 @@ class TestModuleSingleton:
 
     def test_lazy_default_reads_cwd(self, tmp_path, monkeypatch):
         """read を呼ばない場合、初回アクセス時にカレントの config.ini を読む。"""
-        import comken.config as config_mod
+        import comken.core.config as config_mod
 
         (tmp_path / "config.ini").write_text("[REPORT]\nMAX = 5\n", encoding="utf-8")
         monkeypatch.chdir(tmp_path)
@@ -382,7 +382,7 @@ class TestModuleSingleton:
 
     def test_unknown_lowercase_attr_raises(self):
         """大文字でない未知の属性は通常の AttributeError（config.ini を読みに行かない）。"""
-        import comken.config as config_mod
+        import comken.core.config as config_mod
 
         with pytest.raises(AttributeError):
             _ = config_mod.nonexistent
@@ -404,7 +404,7 @@ class TestGenerateStub:
 
     def test_generates_typed_sections(self, ini, tmp_path):
         """セクションごとのクラスと型注釈が生成されることを確認する。"""
-        from comken.config.stubs import generate_stub
+        from comken.core.config.stubs import generate_stub
 
         out = generate_stub(ini, tmp_path / "config.pyi")
         text = out.read_text(encoding="utf-8")
@@ -419,7 +419,7 @@ class TestGenerateStub:
 
     def test_config_class_references_sections(self, ini, tmp_path):
         """Config クラスが各セクションクラスを属性に持つことを確認する。"""
-        from comken.config.stubs import generate_stub
+        from comken.core.config.stubs import generate_stub
 
         text = generate_stub(ini, tmp_path / "config.pyi").read_text(encoding="utf-8")
 
@@ -429,7 +429,7 @@ class TestGenerateStub:
 
     def test_mapping_section_uses_dictionary_api_only(self, tmp_path):
         """動的な列名は列挙せず、辞書取得 API の型だけをスタブに出す。"""
-        from comken.config.stubs import generate_stub
+        from comken.core.config.stubs import generate_stub
 
         ini = tmp_path / "config.ini"
         ini.write_text("[COLUMN_MAPPING]\n受注No = 受注番号\n", encoding="utf-8")
@@ -444,11 +444,11 @@ class TestGenerateStub:
 
         出力先は config.ini の場所基準なので、どこから実行しても同じ場所に生成される。
         """
-        from comken.config.stubs import generate_stub
+        from comken.core.config.stubs import generate_stub
 
         (tmp_path / "src").mkdir()
         (tmp_path / "src" / "config.py").write_text(
-            "from comken.config import Config\nCONFIG = Config()\n", encoding="utf-8"
+            "from comken.core.config import Config\nCONFIG = Config()\n", encoding="utf-8"
         )
 
         out = generate_stub(ini)
@@ -457,30 +457,32 @@ class TestGenerateStub:
         assert out.exists()
 
     def test_no_src_generates_typings(self, ini, tmp_path, monkeypatch):
-        """src/config.py がない場合は typings/comken/ にスタブ一式が生成される。
+        """src/config.py がない場合は typings/comken/core/ にスタブ一式が生成される。
 
         from comken import config 方式（src/config.py なし）でも補完が効くように、
-        Pylance の typings 上書き用スタブ（config.pyi + __init__.pyi）を作る。
+        Pylance の typings 上書き用スタブ（comken/core/config.pyi + __init__.pyi）を作る。
         """
-        from comken.config.stubs import generate_stub
+        from comken.core.config.stubs import generate_stub
 
         monkeypatch.chdir(tmp_path)
         out = generate_stub(ini)
 
-        assert out == tmp_path / "typings" / "comken" / "config.pyi"
+        assert out == tmp_path / "typings" / "comken" / "core" / "config.pyi"
         assert out.exists()
         assert (tmp_path / "typings" / "comken" / "__init__.pyi").exists()
-        # config.pyi は module レベルにセクションを持つ（from comken import config 用）
+        # config.pyi は module レベルにセクションを持つ（from comken.core.config 用）
         text = out.read_text(encoding="utf-8")
         assert "BROWSER: _BROWSER" in text
-        # __init__.pyi は comken の公開 API を再エクスポートする
+        # __init__.pyi は公開 API と config の属性型を直接宣言する
         init_text = (tmp_path / "typings" / "comken" / "__init__.pyi").read_text(encoding="utf-8")
         assert "dry_run as dry_run" in init_text
         assert "is_debug as is_debug" in init_text
+        assert "BROWSER: _BROWSER" in init_text
+        assert "config: _ConfigFacade" in init_text
 
     def test_missing_ini_raises(self, tmp_path):
         """config.ini がない場合は ConfigError になることを確認する。"""
-        from comken.config.stubs import generate_stub
+        from comken.core.config.stubs import generate_stub
 
         with pytest.raises(ConfigError):
             generate_stub(tmp_path / "config.ini", tmp_path / "config.pyi")
@@ -489,7 +491,7 @@ class TestGenerateStub:
         """生成されたスタブが Python として構文エラーにならないことを確認する。"""
         import ast
 
-        from comken.config.stubs import generate_stub
+        from comken.core.config.stubs import generate_stub
 
         text = generate_stub(ini, tmp_path / "config.pyi").read_text(encoding="utf-8")
         ast.parse(text)  # 構文エラーなら例外になる
@@ -505,7 +507,7 @@ class TestAutoStub:
         ini.write_text("[REPORT]\nCOUNT = 10\n", encoding="utf-8")
         (tmp_path / "src").mkdir()
         (tmp_path / "src" / "config.py").write_text(
-            "from comken.config import Config\nCONFIG = Config()\n", encoding="utf-8"
+            "from comken.core.config import Config\nCONFIG = Config()\n", encoding="utf-8"
         )
         return ini, tmp_path / "src" / "config.pyi"
 
@@ -559,7 +561,7 @@ class TestCleanupStaleTmp:
         """古い .tmp は削除され、新しい .tmp（並行実行中の可能性）は残ることを確認する。"""
         import os
 
-        from comken.toolbox.utils.files.ops import cleanup_stale_tmp
+        from comken.core.utils.files.ops import cleanup_stale_tmp
 
         target = tmp_path / "config.pyi"
         stale = tmp_path / "config.pyi.99999.tmp"
@@ -577,7 +579,7 @@ class TestCleanupStaleTmp:
         """対象と無関係のファイルは削除されないことを確認する。"""
         import os
 
-        from comken.toolbox.utils.files.ops import cleanup_stale_tmp
+        from comken.core.utils.files.ops import cleanup_stale_tmp
 
         target = tmp_path / "config.pyi"
         other = tmp_path / "data.csv"
@@ -596,7 +598,7 @@ class TestCleanupStaleTmp:
         ini.write_text("[S]\nK = v\n", encoding="utf-8")
         (tmp_path / "src").mkdir()
         (tmp_path / "src" / "config.py").write_text(
-            "from comken.config import Config\nCONFIG = Config()\n", encoding="utf-8"
+            "from comken.core.config import Config\nCONFIG = Config()\n", encoding="utf-8"
         )
         stale = tmp_path / "src" / "config.pyi.12345.tmp"
         stale.write_text("残骸", encoding="utf-8")

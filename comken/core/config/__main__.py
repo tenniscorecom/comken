@@ -1,4 +1,4 @@
-"""comken/config/__main__.py — ``python -m comken.config`` で補完用スタブを生成する。"""
+"""comken/core/config/__main__.py — ``python -m comken.core.config`` で補完用スタブを生成する。"""
 
 from .stubs import generate_stub
 

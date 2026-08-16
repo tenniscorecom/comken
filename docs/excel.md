@@ -40,7 +40,7 @@ with ExcelReader(NAS_PATH, local_copy_threshold_mb=0) as f:
 win32com は `ExcelReader` / `ExcelWriter` の自動コピー機能がないため、`local_copy` を使う。
 
 ```python
-from comken.toolbox.utils.files import local_copy
+from comken.core.utils.files import local_copy
 from comken.toolbox.windows.handler import ExcelComHandler
 
 NAS_PATH = r"\\nas-server\share\data.xlsx"

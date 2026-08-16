@@ -44,6 +44,7 @@ import logging
 import time
 from pathlib import Path
 
+from ...core.utils.files import DateNameBuilder
 from ...exceptions import (
     ComkenError,
     EmptyReportError,
@@ -57,7 +58,6 @@ from ...exceptions import (
 )
 from ...toolbox.csv import CsvReader, CsvWriter
 from ...toolbox.salesforce.sites import site_for
-from ...toolbox.utils.files import DateNameBuilder
 from . import history
 from .master import ReportEntry, load_master, shared_report_ids
 

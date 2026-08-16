@@ -1,10 +1,10 @@
-"""comken/logger.py — 単体実行するプロジェクト向けのログ設定。"""
+"""comken/core/logger.py — 単体実行するプロジェクト向けのログ設定。"""
 
 import logging
 from pathlib import Path
 
-from .runtime import is_debug
-from .toolbox.utils.clock import today
+from ..runtime import is_debug
+from .utils.clock import today
 
 __all__ = ["setup_logging"]
 

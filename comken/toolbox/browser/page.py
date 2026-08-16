@@ -45,8 +45,7 @@ from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 
-from comken.exceptions import ElementNotFoundError
-
+from ...exceptions import ElementNotFoundError
 from .locator import Locator
 from .management import BrowserSession
 

@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
-from comken.exceptions.salesforce import SalesforceAuthError
+from comken.exceptions import SalesforceAuthError
 from comken.toolbox.salesforce.__main__ import main
 
 

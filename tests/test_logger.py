@@ -5,7 +5,7 @@ from datetime import date
 
 import pytest
 
-from comken.logger import setup_logging
+from comken.core.logger import setup_logging
 
 
 @pytest.fixture
@@ -33,7 +33,7 @@ class TestSetupLogging:
         """コンソールとファイルの両方へ出力するハンドラを追加する。"""
         isolated_root_logger.handlers.clear()
         monkeypatch.chdir(tmp_path)
-        monkeypatch.setattr("comken.logger.today", lambda: date(2026, 8, 13))
+        monkeypatch.setattr("comken.core.logger.today", lambda: date(2026, 8, 13))
 
         setup_logging()
 
@@ -62,7 +62,7 @@ class TestSetupLogging:
         """日本語を UTF-8 のファイルへ文字化けせず出力する。"""
         isolated_root_logger.handlers.clear()
         monkeypatch.chdir(tmp_path)
-        monkeypatch.setattr("comken.logger.today", lambda: date(2026, 8, 13))
+        monkeypatch.setattr("comken.core.logger.today", lambda: date(2026, 8, 13))
         log_path = tmp_path / "logs" / "2026-08-13.log"
 
         setup_logging()

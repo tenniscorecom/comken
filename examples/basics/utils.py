@@ -2,8 +2,8 @@
 
 import logging
 
-from comken.logger import setup_logging
-from comken.toolbox.utils import (
+from comken.core.logger import setup_logging
+from comken.core.utils import (
     DiffResult,
     RowChange,
     diff_rows,

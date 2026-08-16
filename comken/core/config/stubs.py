@@ -1,24 +1,24 @@
-"""comken/config/stubs.py — config.ini からエディタ補完用スタブ（.pyi）を生成する
+"""comken/core/config/stubs.py — config.ini からエディタ補完用スタブ（.pyi）を生成する
 
 Config の属性（config.SECTION.KEY）は config.ini から実行時に動的に作られるため、
 そのままではエディタが補完できない。ここで config.ini の内容を型付きの .pyi に書き出し、
 補完を効かせる。設定値の読み込みとはモジュール内で責務を分けている。
 
 - Config() を呼ぶたびに update_stub() が自動で走る（config パッケージから呼ばれる）
-- コードを書く前に手動で作りたい場合は generate_stub()（`python -m comken.config`）
+- コードを書く前に手動で作りたい場合は generate_stub()（`python -m comken.core.config`）
 """
 
 import configparser
 import os
 from pathlib import Path
 
-from ..exceptions import ConfigFileNotFoundError
-from ..toolbox.utils.files.ops import cleanup_stale_tmp
+from ...exceptions import ConfigFileNotFoundError
+from ..utils.files.ops import cleanup_stale_tmp
 from . import _is_mapping_section, _parse_value
 
 _STUB_HEADER = '''"""config.ini から自動生成されたエディタ補完用スタブ。手で編集しない。
 
-Config() を呼ぶたびに自動更新される（手動生成: python -m comken.config）。
+Config() を呼ぶたびに自動更新される（手動生成: python -m comken.core.config）。
 """
 '''
 
@@ -31,13 +31,14 @@ def generate_stub(
     通常は Config() を呼ぶたびに自動更新されるため、手動で実行する必要はない。
     「コードをまだ書いていないが先にスタブだけ作りたい」場合に使う:
 
-        python -m comken.config
+        python -m comken.core.config
 
     Args:
         ini_path: 読み込む config.ini のパス。
         output_path: スタブの出力先。省略時は config.ini と同じ場所を基準に決める
                      （src/config.py があれば src/config.pyi、無ければ
-                     typings/comken/ に from comken import config 用のスタブ）。
+                     typings/comken/core/ に from comken.core.config 用 / from comken
+                     用 のスタブ）。
 
     Returns:
         生成したスタブファイルのパス（typings 方式では config.pyi のパス）。
@@ -64,10 +65,10 @@ def generate_stub(
         stub_path.write_text(_build_stub_content(cfg), encoding="utf-8")
         return stub_path
 
-    # src/config.py が無い → from comken import config 方式の typings スタブ一式
+    # src/config.py が無い → typings スタブ一式
     project_dir = Path(ini_path).resolve().parent
     _write_typings_stubs(project_dir, cfg)
-    return project_dir / "typings" / "comken" / "config.pyi"
+    return project_dir / "typings" / "comken" / "core" / "config.pyi"
 
 
 def update_stub(cfg: configparser.ConfigParser, ini_path: str | Path) -> None:
@@ -75,8 +76,8 @@ def update_stub(cfg: configparser.ConfigParser, ini_path: str | Path) -> None:
 
     - src/config.py（または config.py）がある → その隣に config.pyi（class スタブ）。
       `from src.config import config` / `from .config import config` の補完に効く
-    - どちらもない → typings/comken/config.pyi（module スタブ）。
-      `from comken import config` の補完に効く（Pylance の typings 上書き機能を利用）
+    - どちらもない → typings/comken/core/config.pyi（module スタブ）。
+      `from comken.core.config import ...` の補完に効く（Pylance の typings 上書き機能を利用）
     - 内容が変わっていなければ書き込まない（無駄なファイル更新をしない）
     """
     stub_path = _resolve_stub_path(ini_path)
@@ -87,15 +88,16 @@ def update_stub(cfg: configparser.ConfigParser, ini_path: str | Path) -> None:
 
 
 def _write_typings_stubs(project_dir: Path, cfg: configparser.ConfigParser) -> None:
-    """`from comken import config` 方式向けの補完スタブ一式を書く。
+    """`from comken.core.config` 方式向けの補完スタブ一式を書く。
 
     Pylance の typings 上書きを使う。config.pyi だけだと comken の他の公開シンボル
     （実行モード関数等）が解決できなくなるため、__init__.pyi で本物の comken を
     再エクスポートして両立させる。
     """
+    comken_core_typings = project_dir / "typings" / "comken" / "core"
     comken_typings = project_dir / "typings" / "comken"
-    _write_stub_atomic(comken_typings / "config.pyi", _build_module_stub_content(cfg))
-    _write_stub_atomic(comken_typings / "__init__.pyi", _build_package_init_stub())
+    _write_stub_atomic(comken_core_typings / "config.pyi", _build_module_stub_content(cfg))
+    _write_stub_atomic(comken_typings / "__init__.pyi", _build_package_init_stub(cfg))
 
 
 def _write_stub_atomic(stub_path: Path, content: str) -> None:
@@ -159,11 +161,11 @@ def _build_stub_content(cfg: configparser.ConfigParser) -> str:
 
 
 def _build_module_stub_content(cfg: configparser.ConfigParser) -> str:
-    """typings/comken/config.pyi 用の module スタブを組み立てる。
+    """typings/comken/core/config.pyi 用の module スタブを組み立てる。
 
-    `from comken import config` の config（= comken.config モジュール）の型を
-    プロジェクトの config.ini に合わせて上書きし、config.SECTION.KEY を補完させる。
-    comken.config の公開シンボル（Config / read）も宣言して他の import を壊さない。
+    `from comken.core.config import ...` の型をプロジェクトの config.ini に
+    合わせて上書きし、config.SECTION.KEY を補完させる。公開シンボル
+    （Config / read）も宣言して他の import を壊さない。
     """
     section_lines: list[str] = []
     module_attrs: list[str] = []
@@ -196,10 +198,10 @@ def _build_module_stub_content(cfg: configparser.ConfigParser) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _build_package_init_stub() -> str:
+def _build_package_init_stub(cfg: configparser.ConfigParser) -> str:
     """typings/comken/__init__.pyi を組み立てる。
 
-    config.pyi で comken.config を上書きすると、そのままでは comken 直下の
+    core/config.pyi で comken.core.config を上書きすると、そのままでは comken 直下の
     公開シンボル（実行モード関数等）が解決できなくなる。ここで本物の comken の
     __all__ を、定義元サブモジュールから再エクスポートして両立させる。
     comken の公開 API を内省して作るので、comken 側が増えても追従する。
@@ -217,6 +219,24 @@ def _build_package_init_stub() -> str:
         names = sorted(by_module[module])
         inner = "".join(f"    {name} as {name},\n" for name in names)
         lines.append(f"from {module} import (\n{inner})")
+    config_attrs: list[str] = []
+    for section in cfg.sections():
+        if _is_mapping_section(section):
+            continue
+        class_name = f"_{section.upper()}"
+        config_attrs.append(f"    {section.upper()}: {class_name}")
+        lines.append(f"class {class_name}:")
+        options = cfg.options(section)
+        if not options:
+            lines.append("    pass")
+        for key in options:
+            value = _parse_value(cfg, section, key)
+            lines.append(f"    {key.upper()}: {_stub_type_name(value)}")
+        lines.append("")
+    lines.append("class _ConfigFacade:")
+    lines.extend(config_attrs or ["    pass"])
+    lines.append("")
+    lines.append("config: _ConfigFacade")
     lines.append("")
     lines.append("__version__: str")
     return "\n".join(lines) + "\n"

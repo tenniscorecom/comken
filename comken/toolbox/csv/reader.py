@@ -10,6 +10,8 @@ from collections import Counter
 from pathlib import Path
 
 from ...constants import Encoding
+from ...core.utils.data import col_to_num
+from ...core.utils.timer import measure
 from ...exceptions import (
     CsvCellReferenceError,
     CsvColumnNotFoundError,
@@ -19,8 +21,6 @@ from ...exceptions import (
     CsvRowNotFoundError,
     EncodingDetectionError,
 )
-from ..utils.data import col_to_num
-from ..utils.timer import measure
 from .base import CsvBase
 
 

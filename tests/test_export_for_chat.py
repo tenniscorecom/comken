@@ -16,7 +16,7 @@ def test_api_text_contains_full_csv_reader_docstring() -> None:
 
 
 def test_find_definition_follows_nested_reexport() -> None:
-    package_file = export_for_chat.PACKAGE_ROOT / "toolbox" / "utils" / "files" / "__init__.py"
+    package_file = export_for_chat.PACKAGE_ROOT / "core" / "utils" / "files" / "__init__.py"
 
     definition = export_for_chat._find_definition(package_file, "DateNameBuilder")
 

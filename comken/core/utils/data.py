@@ -1,9 +1,8 @@
-"""comken/toolbox/utils/data.py — データ変換・比較ユーティリティ"""
+"""comken/core/utils/data.py — データ変換・比較ユーティリティ"""
 
 from dataclasses import dataclass
 
-from ...exceptions import KeyColumnNotFoundError
-from ...exceptions.column import InvalidColumnError
+from ...exceptions import InvalidColumnError, KeyColumnNotFoundError
 
 
 def col_to_num(letter: str) -> int:

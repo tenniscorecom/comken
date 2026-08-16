@@ -13,7 +13,8 @@ import pytest
 from openpyxl import Workbook, load_workbook
 
 import comken.toolbox.excel
-from comken.config import Config
+from comken.core.config import Config
+from comken.core.utils.data import col_to_num
 from comken.exceptions import (
     ComkenError,
     ExcelError,
@@ -29,7 +30,6 @@ from comken.exceptions import (
     UnsupportedFileSuffixError,
 )
 from comken.toolbox.excel import ExcelReader, ExcelWriter
-from comken.toolbox.utils.data import col_to_num
 from comken.toolbox.windows.handler import ExcelComHandler
 
 

@@ -10,7 +10,7 @@
 import logging
 from pathlib import Path
 
-from comken.logger import setup_logging
+from comken.core.logger import setup_logging
 from comken.toolbox.csv import CsvReader
 
 HERE = Path(__file__).parent

@@ -112,7 +112,7 @@ def latest_report(mail: Outlook) -> str:
 `MailMessage` は読み取り専用で、書き換えられない。
 値を読むだけのものなので、これを変更しても Outlook 側のメールは変わらない。
 
-`received_at` は必ずタイムゾーンつきなので、`comken.toolbox.utils.now()` とそのまま比較できる。
+`received_at` は必ずタイムゾーンつきなので、`comken.core.utils.now()` とそのまま比較できる。
 
 > **添付ファイルの中身は取り出せない。** `has_attachments` で有無は分かるが、
 > 保存するメソッドは用意していない。添付を取り込む必要が出たら、

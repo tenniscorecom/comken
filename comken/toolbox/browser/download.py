@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from typing import Self
 
-from comken.exceptions import DownloadTimeoutError
+from ...exceptions import DownloadTimeoutError
 
 logger = logging.getLogger(__name__)
 
