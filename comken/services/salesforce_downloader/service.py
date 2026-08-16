@@ -189,12 +189,10 @@ def download_scheduled(project: str = "定期実行") -> list[Path]:
     targets = [entry for entry in entries.values() if entry.is_scheduled and entry.enabled]
     logger.info("定期取得の対象: %d 件", len(targets))
 
-    # 全部の完了を待ってから失敗を判定する設計。逐次版と異なり、**想定外例外も
-    # ここでは送出してしまわない**。既に投入済みのタスクを「途中で打ち切ると
-    # Salesforce への問い合わせが走りっぱなしになる」ため、全件終わってから送る。
-    # 戻り値の順序を管理表順で揃えるため、`future.result()` は投入順（=管理表順）に
-    # 取る。`as_completed()` を使うと「終わった順」になり、`saved` と `failed` の
-    # 並びが毎回変わってしまう
+    # 全部の完了を待ってから失敗を判定する。逐次版と違い、**想定外例外もここでは
+    # 送出してしまわない**——投入済みのタスクを途中で打ち切っても、走り出した
+    # Salesforce への問い合わせは止まらず、履歴だけが中途半端に残るため。
+    # 順序を管理表順に揃える理由と方法は `_run_parallel()` 側に書いてある
     saved, failed, unexpected_errors = _run_parallel(targets, project, history.TRIGGER_SCHEDULED)
 
     # 想定外はログに出したうえで、管理表順で最初のものをそのまま送出する。
