@@ -58,19 +58,28 @@ from .sites.kintai import Kintai
 
 def main() -> None:
     with Kintai() as kintai:
-        print(kintai.to(LoginPage).login("user01", "password").unfilled_days())
+        login_page = kintai.go_login()
+        home = login_page.login("user01", "password")
+        print(home.unfilled_days())
 ```
 
-`to(LoginPage)` でログイン画面へ移り、`login(...)` が返すのは次の画面。
-**画面の流れがそのまま1行に並ぶ。** `LoginPage(session)` のように
-画面クラスへセッションを渡し直す必要はない。
+`go_login()` でログイン画面へ、`login(...)` で次の画面へ。
+**変数名も画面の名前になる**ので、いまどこにいるかが読める。
+`LoginPage(session)` のように画面クラスへセッションを渡し直す必要はない。
 起動の形は Salesforce の `with Sandbox() as sf:` と同じ。
+
+1行に繋げてもよい。一度きりの流れなら、こちらが短い。
+
+```python
+with Kintai() as kintai:
+    print(kintai.go_login().login("user01", "password").unfilled_days())
+```
 
 途中の画面を変数に取れば、そこから何度も操作できる。
 
 ```python
 with Kintai() as kintai:
-    home = kintai.to(LoginPage).login("user01", "password")
+    home = kintai.go_login().login("user01", "password")
     unfilled = home.unfilled_days()
     home.enter_attendance(unfilled[0]).save()
 ```
@@ -102,8 +111,8 @@ with Browsers() as browsers:
     kintai = browsers.launch(Kintai)
     keiri = browsers.launch(Keiri)          # ← 増えるのはこの行だけ
 
-    unfilled = kintai.to(LoginPage).login(USER, PW).unfilled_days()
-    pending = keiri.to(LoginPage).login(USER, PW).pending_rows()
+    unfilled = kintai.go_login().login(USER, PW).unfilled_days()
+    pending = keiri.go_login().login(USER, PW).pending_rows()
 ```
 
 サイトが2つ以上になったら `Browsers` を使う。1つだけなら `with Kintai() as kintai:` で足りる。
@@ -148,9 +157,9 @@ with Browsers() as browsers:
     kintai = browsers.launch(Kintai)
     keiri = browsers.launch(Keiri)
 
-    kintai_task = browsers.run_task(lambda: kintai.to(LoginPage).login(USER, PW).unfilled_days(), label="勤怠")
+    kintai_task = browsers.run_task(lambda: kintai.go_login().login(USER, PW).unfilled_days(), label="勤怠")
 
-    pending = keiri.to(LoginPage).login(USER, PW).pending_rows()   # 勤怠の読み込み中にこちらが進む
+    pending = keiri.go_login().login(USER, PW).pending_rows()   # 勤怠の読み込み中にこちらが進む
 
     unfilled = kintai_task.wait()                       # 戻って結果を受け取る
 ```
@@ -189,8 +198,8 @@ with Browsers() as browsers:
 
 ```python
 unfilled, pending = browsers.parallel(
-    lambda: kintai.to(LoginPage).login(USER, PW).unfilled_days(),
-    lambda: keiri.to(LoginPage).login(USER, PW).pending_rows(),
+    lambda: kintai.go_login().login(USER, PW).unfilled_days(),
+    lambda: keiri.go_login().login(USER, PW).pending_rows(),
 )
 ```
 
@@ -204,9 +213,9 @@ unfilled, pending = browsers.parallel(
 早く気づけるほうが安全なため。
 
 ```python
-kintai_task = browsers.run_task(lambda: kintai.to(LoginPage).login(USER, PW).unfilled_days())
-keiri.to(LoginPage).login(USER, PW).pending_rows()   # ⭕ 別のブラウザなので問題ない
-kintai.to(LoginPage).login(USER, PW)                  # ❌ 裏で使っている勤怠を触っている
+kintai_task = browsers.run_task(lambda: kintai.go_login().login(USER, PW).unfilled_days())
+keiri.go_login().login(USER, PW).pending_rows()   # ⭕ 別のブラウザなので問題ない
+kintai.go_login().login(USER, PW)                  # ❌ 裏で使っている勤怠を触っている
 ```
 
 `wait()` を呼び忘れたまま `with` を抜けても、ブラウザを閉じる前に処理の終了は待つ。
@@ -267,18 +276,24 @@ class Kintai(SiteBase):
     # 画面の操作はここに書かない。画面クラスの仕事にする
 ```
 
-**サイトクラスには値だけ置く。** 画面の操作は画面クラスの仕事にする。
-ここに `login()` のような近道を作ることもできるが、そうすると
-「どこへ着くのか」がメソッドの中に潰れて、型注釈を読まないと分からなくなる。
+**行ける画面は `go_〇〇()` で書く。**
 
-    with Kintai() as kintai:
-        home = kintai.to(LoginPage).login(USER, PW)
+```python
+class Kintai(SiteBase):
+    NAME = "kintai"
+    BASE_URL = "https://kintai.example.co.jp"
+    OPTIONS = KintaiOptions
 
-`to(LoginPage)` でログイン画面へ移り、`login()` で次の画面へ。
-**どこを通ってどこへ着いたかが左から右に読める。**
+    def go_login(self) -> LoginPage:
+        """ログイン画面を開く。"""
+        return self.to(LoginPage).go("/login")
+```
 
-毎回2段書くのが煩わしければ、サイトクラスに近道を足してよい。
-その場合も名前は「行き先」が分かる形にする（`go_login()` など）。
+`go_〇〇()` があるものにしか行けない、と**コードが遷移図になる**。
+書く量は増えるが、増えた分だけ「ここからどこへ行けるか」が確定する。
+
+飛び方（URL を直接開くか、画面のリンクを押すか）はメソッドの中に隠す。
+呼ぶ側からはどちらも同じに見える。
 
 ### 4. 画面に共通のクラスを作る
 
@@ -329,7 +344,26 @@ class LoginPage(KintaiPage):
 `TYPE_CHECKING` を合わせる）。
 
 **画面が変わるメソッドは、遷移先の画面クラスを返す。** 呼ぶ側が画面の流れを
-コードのまま追えるようになる:
+コードのまま追えるようになる。
+
+画面から画面へのリンクも `go_〇〇()` で書く。**その画面から行ける先だけが並ぶ**ので、
+補完を見れば「ここから次はどこへ行けるか」が分かる:
+
+```python
+class HomePage(KintaiPage):
+    ATTENDANCE_MENU = Locator.css("a[href='/attendance']")
+
+    def go_attendance(self) -> "AttendancePage":
+        """勤怠入力画面へ移る。"""
+        from .attendance_page import AttendancePage
+
+        self.click(self.ATTENDANCE_MENU)
+        return self.to(AttendancePage)
+```
+
+`to()` は行き先の型を切り替えるだけで、ブラウザは動かさない。
+実際に動かすのは `go("/path")` かリンクのクリックで、**それを `go_〇〇()` の中に隠す**。
+呼ぶ側は「URL で飛ぶのか、押して飛ぶのか」を知らなくてよい。
 
 ```python
 home = LoginPage(session).login(user_id, password)
@@ -529,8 +563,8 @@ with Browsers() as browsers:
     kintai = browsers.launch(Kintai)
     keiri = browsers.launch(Keiri)      # ← 増えるのはこの行だけ
 
-    kintai_days = kintai.to(LoginPage).login(USER, PW).unfilled_days()
-    keiri_rows = keiri.to(LoginPage).login(USER, PW).pending_rows()
+    kintai_days = kintai.go_login().login(USER, PW).unfilled_days()
+    keiri_rows = keiri.go_login().login(USER, PW).pending_rows()
 ```
 
 `SiteBase.NAME` が、ダウンロードフォルダ・ログイン状態・ログのファイル名を分ける鍵になる。
@@ -553,9 +587,9 @@ with Browsers() as browsers:
     kintai = browsers.launch(Kintai)
     keiri = browsers.launch(Keiri)
 
-    kintai_task = browsers.run_task(lambda: kintai.to(LoginPage).login(USER, PW).unfilled_days(), label="勤怠")
+    kintai_task = browsers.run_task(lambda: kintai.go_login().login(USER, PW).unfilled_days(), label="勤怠")
 
-    pending = keiri.to(LoginPage).login(USER, PW).pending_rows()   # 勤怠の読み込み中にこちらが進む
+    pending = keiri.go_login().login(USER, PW).pending_rows()   # 勤怠の読み込み中にこちらが進む
 
     unfilled = kintai_task.wait()                       # 戻って結果を受け取る
 ```
@@ -572,8 +606,8 @@ with Browsers() as browsers:
 
 ```python
 unfilled, pending = browsers.parallel(
-    lambda: kintai.to(LoginPage).login(USER, PW).unfilled_days(),
-    lambda: keiri.to(LoginPage).login(USER, PW).pending_rows(),
+    lambda: kintai.go_login().login(USER, PW).unfilled_days(),
+    lambda: keiri.go_login().login(USER, PW).pending_rows(),
 )
 ```
 

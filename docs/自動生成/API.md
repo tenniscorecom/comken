@@ -3883,8 +3883,12 @@ def to(self, page_class: type[P]) -> P:
 画面クラスは動かすのにブラウザ（`BrowserSession`）を要るが、
 **それを呼ぶ側に書かせない**ためのもの。
 
-    with Kintai() as kintai:
-        home = kintai.to(LoginPage).login(user_id, password)
+    def go_login(self) -> LoginPage:
+        return self.to(LoginPage).go("/login")
+
+**行き先の型を切り替えるだけで、ブラウザは動かさない。** 実際に動かすのは
+`Page.go("/path")` かリンクのクリックで、それを `go_〇〇()` の中に隠す。
+こうしておくと、その画面から行ける先が `go_〇〇()` の一覧になる。
 
 `Page.to()` と同じ名前にそろえてある。サイトから最初の画面へ移るのも、
 画面から次の画面へ移るのも、利用側から見れば同じ「移る」なので、
