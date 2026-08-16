@@ -1,3 +1,9 @@
+# 改行は「リポジトリには LF、作業ツリーは各 PC の core.autocrlf 任せ」で統一する。
+# ここに書いておくと、設定の違う PC やツールが LF で書き戻しても
+# 「LF will be replaced by CRLF」の警告と差分ノイズが出ない。
+* text=auto
+
 # bat は CP932(Shift-JIS)・CRLF で統一する（cmd.exe が CP932 で読むため）。
-# git の改行・エンコーディング変換で壊さない。
+# git の改行・エンコーディング変換で壊さない。**上の text=auto より後に書く**
+# （.gitattributes は後の行が勝つため、順序を入れ替えると bat が LF になる）。
 *.bat -text
