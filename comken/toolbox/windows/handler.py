@@ -30,13 +30,11 @@ from ...exceptions import (
     FileFormatMismatchError,
     MacroError,
     RowTransferError,
-    TransferDestinationColumnNotFoundError,
-    TransferKeyColumnNotFoundError,
-    TransferSourceColumnNotFoundError,
     _warn_coerce,
 )
 from ..utils.data import column_number
 from ..utils.files.base import FileBase
+from ..utils.transfer import mapping_columns, normalize_lookup_key
 
 logger = logging.getLogger(__name__)
 
@@ -50,15 +48,6 @@ def _normalize_com_rows(values: Any, is_single_row: bool) -> tuple[tuple[Any, ..
     if values and not isinstance(values[0], tuple):
         return (values,)
     return values
-
-
-def _normalized_lookup_key(value: Any) -> str | None:
-    """COM が整数セルを float にする差を吸収し、照合キーを返す。"""
-    if value is None or str(value).strip() == "":
-        return None
-    if isinstance(value, float) and value.is_integer():
-        value = int(value)
-    return str(value).strip()
 
 
 def _consecutive_update_runs(
@@ -95,38 +84,6 @@ def _write_com_updates(ws: Any, output_by_column: dict[int, list[tuple[int, obje
                         ).Value = value
                     except Exception as error:
                         raise RowTransferError(row_number, error) from error
-
-
-def _mapping_columns(
-    headers: tuple[Any, ...],
-    key_column_name: str,
-    lookup: dict[str, dict],
-    mapping: dict[str, str],
-) -> tuple[dict[str, int], dict[str, int]]:
-    """列名の対応関係を検証し、照合列と転記先の列番号を返す。"""
-    header_names = [str(header) for header in headers if header is not None]
-    header_columns = {
-        str(header): column for column, header in enumerate(headers, start=1) if header is not None
-    }
-    if key_column_name not in header_columns:
-        raise TransferKeyColumnNotFoundError(key_column_name, header_names)
-
-    missing_destinations = [name for name in mapping.values() if name not in header_columns]
-    if missing_destinations:
-        raise TransferDestinationColumnNotFoundError(missing_destinations, header_names)
-
-    lookup_rows = list(lookup.values())
-    source_columns = set(lookup_rows[0]) if lookup_rows else set()
-    for lookup_row in lookup_rows[1:]:
-        source_columns.intersection_update(lookup_row)
-    missing_sources = [name for name in mapping if name not in source_columns]
-    if missing_sources:
-        raise TransferSourceColumnNotFoundError(missing_sources, sorted(source_columns))
-
-    destination_columns = {
-        source: header_columns[destination] for source, destination in mapping.items()
-    }
-    return header_columns, destination_columns
 
 
 _SUFFIX_TO_FORMAT = {
@@ -363,7 +320,7 @@ class ExcelComHandler(FileBase):
         last_col = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
         header_values = _block_values(ws, int(header_row), int(header_row), last_col)
         headers = header_values[0] if header_values else ()
-        header_columns, destination_columns = _mapping_columns(headers, key_col, lookup, mapping)
+        header_columns, destination_columns = mapping_columns(headers, key_col, lookup, mapping)
         logger.info("シート「%s」: 最終行 %d行", sheet_name, last_row)
         if last_row <= int(header_row):
             return 0
@@ -382,7 +339,7 @@ class ExcelComHandler(FileBase):
                     continue
 
                 key_value = row_values[header_columns[key_col] - 1]
-                lookup_key = _normalized_lookup_key(key_value)
+                lookup_key = normalize_lookup_key(key_value)
                 if lookup_key is None:
                     continue
                 lookup_row = lookup.get(lookup_key)
@@ -438,7 +395,7 @@ class ExcelComHandler(FileBase):
             row = first_row + row_offset
             try:
                 key_value = row_values[key_col_num - 1]
-                lookup_key = _normalized_lookup_key(key_value)
+                lookup_key = normalize_lookup_key(key_value)
                 if lookup_key is None:
                     continue
                 lookup_row = lookup.get(lookup_key)

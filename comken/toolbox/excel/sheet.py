@@ -17,13 +17,11 @@ from ...exceptions import (
     InvalidTableNameError,
     TableAlreadyExistsError,
     TableNotFoundError,
-    TransferDestinationColumnNotFoundError,
-    TransferKeyColumnNotFoundError,
-    TransferSourceColumnNotFoundError,
     _warn_coerce,
 )
 from ..utils.data import column_number
 from ..utils.timer import measure
+from ..utils.transfer import mapping_columns, normalize_lookup_key
 
 logger = logging.getLogger(__name__)
 
@@ -125,11 +123,10 @@ class Sheet:
         matched = 0
         for row in range(int(start_row), self.ws.max_row + 1):
             key_value = self.ws.cell(row=row, column=key_col_num).value
-            if key_value is None or str(key_value).strip() == "":
+            lookup_key = normalize_lookup_key(key_value)
+            if lookup_key is None:
                 continue
-            if isinstance(key_value, float) and key_value.is_integer():
-                key_value = int(key_value)
-            lookup_row = lookup.get(str(key_value).strip())
+            lookup_row = lookup.get(lookup_key)
             if lookup_row is None:
                 continue
             for source, destination_column in destination_columns.items():
@@ -163,40 +160,17 @@ class Sheet:
             self.ws.cell(row=int(header_row), column=column).value
             for column in range(1, self.ws.max_column + 1)
         ]
-        header_names = [str(header) for header in headers if header is not None]
-        header_columns = {
-            str(header): column
-            for column, header in enumerate(headers, start=1)
-            if header is not None
-        }
-
-        if key_col not in header_columns:
-            raise TransferKeyColumnNotFoundError(key_col, header_names)
-
-        missing_destinations = [name for name in mapping.values() if name not in header_columns]
-        if missing_destinations:
-            raise TransferDestinationColumnNotFoundError(missing_destinations, header_names)
-
-        lookup_rows = list(lookup.values())
-        source_columns = set(lookup_rows[0]) if lookup_rows else set()
-        for lookup_row in lookup_rows[1:]:
-            source_columns.intersection_update(lookup_row)
-        missing_sources = [name for name in mapping if name not in source_columns]
-        if missing_sources:
-            raise TransferSourceColumnNotFoundError(missing_sources, sorted(source_columns))
-
-        destination_columns = {
-            source: header_columns[destination] for source, destination in mapping.items()
-        }
+        header_columns, destination_columns = mapping_columns(
+            tuple(headers), key_col, lookup, mapping
+        )
         logger.info("シート「%s」: 最終行 %d行", self.ws.title, self.ws.max_row)
         matched = 0
         for row in range(int(header_row) + 1, self.ws.max_row + 1):
             key_value = self.ws.cell(row=row, column=header_columns[key_col]).value
-            if key_value is None or str(key_value).strip() == "":
+            lookup_key = normalize_lookup_key(key_value)
+            if lookup_key is None:
                 continue
-            if isinstance(key_value, float) and key_value.is_integer():
-                key_value = int(key_value)
-            lookup_row = lookup.get(str(key_value).strip())
+            lookup_row = lookup.get(lookup_key)
             if lookup_row is None:
                 logger.debug("%d行目: キー「%s」が lookup に存在しません", row, key_value)
                 continue
