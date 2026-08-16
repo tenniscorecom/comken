@@ -30,7 +30,6 @@ from comken.core import DateNameBuilder, FileFinder, date_in_name
 FOLDER = r"\\nas-server\share"
 
 # 今日の日付付きファイル名を組み立てる
-DateNameBuilder("売上レポート").plain()                # → "売上レポート.xlsx"
 DateNameBuilder("売上レポート").prefix()               # → "20260711_売上レポート.xlsx"
 DateNameBuilder("売上レポート").suffix()               # → "売上レポート_20260711.xlsx"
 DateNameBuilder("ログ", ext=".csv").prefix()           # → "20260711_ログ.csv"

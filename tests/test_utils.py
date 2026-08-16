@@ -174,10 +174,6 @@ class TestDateNameBuilder:
     prefix / suffix / 拡張子 / 日付フォーマットの組み合わせを確認する。
     """
 
-    def test_plain(self):
-        """plain() は日付なしのファイル名を返す。"""
-        assert DateNameBuilder("レポート").plain() == "レポート.xlsx"
-
     def test_prefix(self):
         """prefix() は YYYYMMDD を前に付ける。"""
         today_text = today().strftime("%Y%m%d")
@@ -195,7 +191,8 @@ class TestDateNameBuilder:
 
     def test_ext_without_dot_is_normalized(self):
         """ext をドットなしで渡しても補完されることを確認する。"""
-        assert DateNameBuilder("ログ", ext="csv").plain() == "ログ.csv"
+        today_text = today().strftime("%Y%m%d")
+        assert DateNameBuilder("ログ", ext="csv").prefix() == f"{today_text}_ログ.csv"
 
     def test_yyyymm_format(self):
         """date_format="%Y%m" にすると年月のみになる。月次ファイルに使う。"""

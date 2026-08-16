@@ -181,16 +181,6 @@ Args:
     name: ファイル名（拡張子なし）。
     ext: 拡張子（デフォルト: ".xlsx"）。ドットなしで渡しても補完される。
 
-#### `plain`
-
-```text
-def plain(self) -> str:
-```
-
-##### 説明
-
-日付なしのファイル名を返す。
-
 #### `prefix`
 
 ```text
@@ -976,16 +966,6 @@ Args:
     name: ファイル名（拡張子なし）。
     ext: 拡張子（デフォルト: ".xlsx"）。ドットなしで渡しても補完される。
 
-#### `plain`
-
-```text
-def plain(self) -> str:
-```
-
-##### 説明
-
-日付なしのファイル名を返す。
-
 #### `prefix`
 
 ```text
@@ -1033,16 +1013,6 @@ def __init__(self, name: str, ext: str='.xlsx') -> None:
 Args:
     name: ファイル名（拡張子なし）。
     ext: 拡張子（デフォルト: ".xlsx"）。ドットなしで渡しても補完される。
-
-#### `plain`
-
-```text
-def plain(self) -> str:
-```
-
-##### 説明
-
-日付なしのファイル名を返す。
 
 #### `prefix`
 

@@ -20,10 +20,6 @@ class DateNameBuilder:
         self._name = name
         self._ext = ext if ext.startswith(".") else f".{ext}"
 
-    def plain(self) -> str:
-        """日付なしのファイル名を返す。"""
-        return f"{self._name}{self._ext}"
-
     def prefix(self, date_format: str = "%Y%m%d") -> str:
         """今日の日付を前に付けたファイル名を返す（例: 20260711_売上レポート.xlsx）。"""
         return f"{self._current_time(date_format)}_{self._name}{self._ext}"
