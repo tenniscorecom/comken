@@ -81,7 +81,11 @@ groups = reader.group_by("担当者")
 **ヘッダー行がない CSV** は `headers` で列名を付ける（1行目からデータとして読まれる）。
 
 ```python
-# 中身: "A001,1000\nA002,2000\n" （ヘッダーなし）
+# no_header.csv の中身（見出し行がなく、1行目からデータ）:
+#
+#   A001,1000
+#   A002,2000
+
 reader = CsvReader("no_header.csv", headers=["注文番号", "金額"])
 reader.read_rows()
 # → [{"注文番号": "A001", "金額": "1000"}, {"注文番号": "A002", "金額": "2000"}]

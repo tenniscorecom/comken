@@ -130,3 +130,57 @@ class TestOutlook:
         message = next(outlook.read_messages())
         assert isinstance(message, MailMessage)
         assert message.received_at.tzinfo is not None
+
+
+class TestReceivedAttachmentsAndLinksAreNotReachable:
+    """受信メールの添付とリンクへ、プログラムから到達できないことを固定する。
+
+    社内ルールで受信メールの添付とリンクを開くことは禁止されている（仕様書 4.17）。
+    プログラムから開けてしまうと、人が守っているルールを自動処理が迂回することになり、
+    しかも自動なので誰も気づかない。
+
+    禁止を文章だけに置くと、必要になった誰かが善意で足してしまう。
+    ここで「生えていないこと」を検証して、足された瞬間に落とす。
+    """
+
+    # 受信物を取り出す・開く意図の名前。save_draft の attachments 引数（送る側）は対象外
+    FORBIDDEN = (
+        "save_attachment",
+        "save_attachments",
+        "download_attachment",
+        "download_attachments",
+        "extract_attachment",
+        "extract_attachments",
+        "open_attachment",
+        "open_attachments",
+        "get_attachment",
+        "get_attachments",
+        "open_link",
+        "open_links",
+        "open_url",
+    )
+
+    def test_outlook_has_no_attachment_or_link_opening_methods(self):
+        """Outlook に受信添付・リンクを開くメソッドを足していない。"""
+        for name in self.FORBIDDEN:
+            assert not hasattr(Outlook, name), (
+                f"Outlook.{name}() は実装しない（仕様書 4.17）。"
+                "添付の中身が要るなら、共有サーバー経由での受け渡しを送信元へ依頼する"
+            )
+
+    def test_mail_message_exposes_only_the_presence_of_attachments(self):
+        """MailMessage は添付の有無だけを持ち、添付そのものへは到達させない。"""
+        fields = set(MailMessage.__dataclass_fields__)
+
+        assert "has_attachments" in fields
+        assert not [f for f in fields if f != "has_attachments" and "attach" in f], (
+            "MailMessage に添付そのものを持たせない（仕様書 4.17）。"
+            f"現在のフィールド: {sorted(fields)}"
+        )
+
+    def test_mail_message_has_no_attachment_accessor(self):
+        """MailMessage 側にも添付を取り出すメソッドを足していない。"""
+        for name in self.FORBIDDEN:
+            assert not hasattr(MailMessage, name), (
+                f"MailMessage.{name}() は実装しない（仕様書 4.17）"
+            )
