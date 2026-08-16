@@ -1,6 +1,6 @@
 """comken/core/files/finder.py — フォルダ内のファイル検索
 
-使い方は docs/utils-files.md を参照。
+使い方は docs/core.md を参照。
 """
 
 import datetime

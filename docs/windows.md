@@ -89,6 +89,21 @@ with RegistryHandler(win32con.HKEY_CURRENT_USER, r"Software\MyApp") as r:
     value = r.read(SETTING_KEY)
 ```
 
+### よく使うフォルダ（Paths）
+
+`Path(__file__).parent / ".." / "Downloads"` のような組み立てをしなくてよい。
+Desktop / Downloads は **OneDrive の「既知のフォルダーの移動」にも追従する**
+（レジストリから実際の場所を取得するため、`C:\Users\xxx\OneDrive\Desktop` に
+リダイレクトされている環境でも正しいパスが返る）。
+
+```python
+from comken.toolbox.windows import Paths
+
+Paths.downloads()   # → C:\Users\xxx\Downloads
+Paths.desktop()     # → C:\Users\xxx\OneDrive\Desktop（リダイレクトされている場合）
+Paths.temp_dir()    # → C:\Users\xxx\AppData\Local\Temp
+```
+
 ### Excel 孤立プロセスの後始末（is_excel_running / kill_excel）
 
 COM 経由の Excel 自動化は、クラッシュ等で EXCEL.EXE が画面に見えないまま裏に残ることがある。

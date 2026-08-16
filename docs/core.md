@@ -1,10 +1,12 @@
-# ファイル操作
+# core（部品）
 
 [README（ドキュメントの入口）へ戻る](../README.md)
 
-README の「ファイル名・ファイル取得ユーティリティ」から移した、モジュールを使うときの詳しい説明です。
+`from comken.core import ...` で取る部品の詳しい説明です。
+**特定のアプリや外部サービスを触らない**ものだけがここに入る
+（Excel・CSV・ブラウザなどは `comken.toolbox`、Windows のフォルダ取得は [Windows 操作](windows.md)）。
 
-## ファイル名・ファイル取得ユーティリティ
+## ファイルを探す・動かす
 
 ### ファイルの移動・コピー（move_file / copy_file）
 
@@ -97,20 +99,6 @@ for change in result.changed:
     print(change.after)    # → 変更後の行全体
 ```
 
-### よく使うフォルダ（Paths）
-
-`Path(__file__).parent / ".." / "Downloads"` のような組み立てをしなくてよい。
-Desktop / Downloads は **OneDrive の「既知のフォルダーの移動」にも追従する**
-（レジストリから実際の場所を取得するため、`C:\Users\xxx\OneDrive\Desktop` に
-リダイレクトされている環境でも正しいパスが返る）。
-
-```python
-from comken.toolbox.windows import Paths
-
-Paths.downloads()   # → C:\Users\xxx\Downloads
-Paths.desktop()     # → C:\Users\xxx\OneDrive\Desktop（リダイレクトされている場合）
-Paths.temp_dir()    # → C:\Users\xxx\AppData\Local\Temp
-```
 
 ### 待機（wait）
 
