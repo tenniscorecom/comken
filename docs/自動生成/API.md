@@ -2666,6 +2666,30 @@ class SiteConfigError(BrowserError):
 def __init__(self, site_cls: type, missing: str) -> None:
 ```
 
+### `SiteNotStartedError`
+
+```text
+class SiteNotStartedError(BrowserError):
+```
+
+#### 説明
+
+まだ起動していないサイトの画面を作ろうとした
+
+`with` に入る前、または閉じた後に `page()` を呼ぶとここで止まる。
+ブラウザが無い状態で画面クラスを作ると、最初の操作まで失敗が遅れる。
+
+発生箇所: SiteBase.page()
+
+対処:
+    `with Kintai() as kintai:` の中で使う
+
+#### `__init__`
+
+```text
+def __init__(self, site: type) -> None:
+```
+
 ### `ElementNotFoundError`
 
 ```text
@@ -3830,6 +3854,47 @@ Attributes:
 def __init__(self, session: BrowserSession | None=None) -> None:
 ```
 
+#### `downloads`
+
+```text
+@property
+def downloads(self) -> DownloadDir:
+```
+
+##### 説明
+
+このサイトのダウンロード先。完了待ちに使う。
+
+    files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
+
+Raises:
+    SiteNotStartedError: まだ起動していない場合。
+
+#### `page`
+
+```text
+def page(self, page_class: type[P]) -> P:
+```
+
+##### 説明
+
+このサイトの画面クラスを作る。
+
+画面クラスは動かすのにブラウザ（`BrowserSession`）を要るが、
+**それを呼ぶ側に書かせない**ためのもの。
+
+    def login(self, user_id: str, password: str) -> HomePage:
+        return self.page(LoginPage).login(user_id, password)
+
+`LoginPage(self.session)` と書いても同じだが、そう書くと
+「セッションとは何か」を知らないとサイトクラスを書けなくなる。
+
+Args:
+    page_class: 作りたい画面クラス（`Page` のサブクラス）。
+
+Returns:
+    そのサイトのブラウザに紐づいた画面クラスのインスタンス。
+
 #### `close`
 
 ```text
@@ -3902,6 +3967,26 @@ Args:
     session: Browsers.launch() で起動したセッション。
     wait_seconds: 要素待機のタイムアウト秒数。
                   省略時はセッションの設定（BrowserOptions.WAIT_SECONDS）を引き継ぐ。
+
+#### `to`
+
+```text
+def to(self, page_class: type[P]) -> P:
+```
+
+##### 説明
+
+遷移先の画面クラスを作る（同じブラウザを引き継ぐ）。
+
+画面が変わるメソッドの最後で使う。
+
+    def login(self, user_id: str, password: str) -> HomePage:
+        self.click(self.LOGIN_BUTTON)
+        return self.to(HomePage)
+
+`HomePage(self.session)` と書いても同じだが、そう書くと画面クラスを
+1つ足すたびに「セッションとは何か」が顔を出す。画面の遷移を書きたい
+だけの人が、ブラウザの持ち方まで知らずに済むようにする。
 
 #### `open`
 

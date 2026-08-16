@@ -125,6 +125,7 @@ from .browser import (
     SessionNotFoundError,
     SessionNotStartedError,
     SiteConfigError,
+    SiteNotStartedError,
 )
 from .column import (
     ColumnNotFoundError,
@@ -307,6 +308,7 @@ __all__ = [
     "SessionNameConflictError",
     "SessionNotFoundError",
     "SiteConfigError",
+    "SiteNotStartedError",
     "ElementNotFoundError",
     "PopupTabNotOpenedError",
     "DownloadTimeoutError",

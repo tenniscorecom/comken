@@ -37,7 +37,7 @@ import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Self
+from typing import Self, TypeVar
 
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.common.action_chains import ActionChains
@@ -50,6 +50,10 @@ from .locator import Locator
 from .management import BrowserSession
 
 logger = logging.getLogger(__name__)
+
+
+# to() が「渡したクラスをそのまま返す」ことを型で示す
+P = TypeVar("P", bound="Page")
 
 
 class Page:
@@ -72,6 +76,21 @@ class Page:
         self.session = session
         self._wait_seconds = wait_seconds if wait_seconds is not None else session.wait_seconds
         self._wait = WebDriverWait(session.raw, self._wait_seconds)
+
+    def to(self, page_class: type[P]) -> P:
+        """遷移先の画面クラスを作る（同じブラウザを引き継ぐ）。
+
+        画面が変わるメソッドの最後で使う。
+
+            def login(self, user_id: str, password: str) -> HomePage:
+                self.click(self.LOGIN_BUTTON)
+                return self.to(HomePage)
+
+        `HomePage(self.session)` と書いても同じだが、そう書くと画面クラスを
+        1つ足すたびに「セッションとは何か」が顔を出す。画面の遷移を書きたい
+        だけの人が、ブラウザの持ち方まで知らずに済むようにする。
+        """
+        return page_class(self.session)
 
     # ------------------------------------------------------------ 画面の移動
 

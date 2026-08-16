@@ -199,6 +199,25 @@ class SessionNameConflictError(BrowserError):
         )
 
 
+class SiteNotStartedError(BrowserError):
+    """まだ起動していないサイトの画面を作ろうとした
+
+    `with` に入る前、または閉じた後に `page()` を呼ぶとここで止まる。
+    ブラウザが無い状態で画面クラスを作ると、最初の操作まで失敗が遅れる。
+
+    発生箇所: SiteBase.page()
+
+    対処:
+        `with Kintai() as kintai:` の中で使う
+    """
+
+    def __init__(self, site: type) -> None:
+        super().__init__(
+            f"{site.__name__} はまだ起動していません。"
+            f"`with {site.__name__}() as site:` の中で使ってください。"
+        )
+
+
 class SiteConfigError(BrowserError):
     """`SiteBase` サブクラスの設定が不足している
 

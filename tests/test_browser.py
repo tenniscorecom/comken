@@ -30,6 +30,7 @@ from comken.exceptions import (
     SessionNotFoundError,
     SessionNotStartedError,
     SiteConfigError,
+    SiteNotStartedError,
 )
 from comken.toolbox import browser
 from comken.toolbox.browser import (
@@ -1232,3 +1233,69 @@ class TestSiteStandsAlone:
         kintai = Kintai()
         kintai.close()
         kintai.close()
+
+
+class TestSessionIsNotExposedToCallers:
+    """利用側に session を書かせずに済むことを固める。
+
+    session はブラウザの持ち方という内部の都合で、サイトや画面を書く人が
+    知らなくてよい。page() / to() があれば書かずに済む。
+    """
+
+    @staticmethod
+    def _fake_browser(monkeypatch):
+        """Edge を起動せずに、起動済みと同じ状態にする。"""
+
+        def enter(self):
+            self._driver = MagicMock()
+            return self
+
+        monkeypatch.setattr(BrowserSession, "__enter__", enter)
+        monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *a: None)
+
+    def test_site_creates_pages_without_session(self, monkeypatch):
+        """SiteBase.page() で画面クラスを作れる。"""
+        self._fake_browser(monkeypatch)
+
+        class Kintai(SiteBase):
+            NAME = "kintai"
+
+        with Kintai() as kintai:
+            page = kintai.page(Page)
+
+            assert isinstance(page, Page)
+            assert page.session is kintai.session
+
+    def test_page_moves_to_the_next_page_without_session(self, monkeypatch):
+        """Page.to() で遷移先の画面クラスを作れる。"""
+        self._fake_browser(monkeypatch)
+
+        class Kintai(SiteBase):
+            NAME = "kintai"
+
+        class HomePage(Page):
+            pass
+
+        with Kintai() as kintai:
+            home = kintai.page(Page).to(HomePage)
+
+            assert isinstance(home, HomePage)
+            assert home.session is kintai.session
+
+    def test_page_before_start_is_rejected(self):
+        """起動前に page() を呼んだら、最初の操作を待たずに止める。"""
+
+        class Kintai(SiteBase):
+            NAME = "kintai"
+
+        with pytest.raises(SiteNotStartedError):
+            Kintai().page(Page)
+
+    def test_downloads_before_start_is_rejected(self):
+        """起動前に downloads を触ったら止める。"""
+
+        class Kintai(SiteBase):
+            NAME = "kintai"
+
+        with pytest.raises(SiteNotStartedError):
+            _ = Kintai().downloads

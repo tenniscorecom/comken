@@ -35,7 +35,7 @@ Edge を自動で動かして、社内システムから情報を取ったり入
 | 土台（直接は使わない） | `SalesforceBase` | `SiteBase` |
 | 対象ごとのクラス | `Sandbox(SalesforceBase)` | `Kintai(SiteBase)` |
 | 固有の値の置き場 | `DOMAIN_URL` / `CREDENTIAL_PREFIX` | `NAME` / `BASE_URL` / `OPTIONS` |
-| 機能は継承せず持たせる | `.auth` / `.report` / `.metrics` | `.session`（`BrowserSession`） |
+| 機能は継承せず持たせる | `.auth` / `.report` / `.metrics` | `.page(画面クラス)` で画面を作る |
 | 単体で使う入口 | `with Sandbox() as sf:` | `with Kintai() as kintai:` |
 | 複数まとめて扱う入口 | `sites/` の `site_for()` | `Browsers` |
 | 画面／機能の分割 | `.report` / `.metrics` | `Page` のサブクラス |
@@ -265,7 +265,7 @@ class Kintai(SiteBase):
 
     def login(self, user_id: str, password: str) -> "HomePage":
         """ログインして、ログイン後の画面を返す。"""
-        return LoginPage(self.session).login(user_id, password)
+        return self.page(LoginPage).login(user_id, password)
 ```
 
 **入口の操作だけをサイトクラスに置く。** 画面ごとの操作は画面クラスへ。
@@ -312,7 +312,7 @@ class LoginPage(KintaiPage):
         self.input(self.USER_ID, user_id)
         self.input(self.PASSWORD, password)
         self.click(self.LOGIN_BUTTON)
-        return HomePage(self.session)
+        return self.to(HomePage)
 ```
 
 遷移先の import をメソッドの中に置いているのは、画面クラス同士が互いを参照して
@@ -413,7 +413,7 @@ def ensure_login(self, user_id: str, password: str) -> "HomePage":
     self.go("/")
     if self.has_element(self.USER_ID):
         return self.login(user_id, password)
-    return HomePage(self.session)
+    return self.to(HomePage)
 ```
 
 ---
@@ -428,8 +428,8 @@ from comken.core import move_file
 with Browsers() as browsers:
     kintai = browsers.launch(Kintai)
 
-    HomePage(kintai.session).export_csv()
-    files = kintai.session.download_dir.wait()          # .crdownload が消えるまで待つ
+    kintai.page(HomePage).export_csv()
+    files = kintai.downloads.wait()                     # .crdownload が消えるまで待つ
     move_file(files[0], r"C:\作業\output")       # with の中で移動する
 ```
 
@@ -520,8 +520,8 @@ with Browsers() as browsers:
     kintai = browsers.launch(Kintai)
     keiri = browsers.launch(Keiri)      # ← 増えるのはこの行だけ
 
-    kintai_days = KintaiFlow(kintai.session).unfilled_days()
-    keiri_rows = KeiriFlow(keiri.session).pending_rows()
+    kintai_days = kintai.login(USER, PW).unfilled_days()
+    keiri_rows = keiri.login(USER, PW).pending_rows()
 ```
 
 `SiteBase.NAME` が、ダウンロードフォルダ・ログイン状態・ログのファイル名を分ける鍵になる。
@@ -653,8 +653,8 @@ from comken.toolbox.browser import Browsers
 with Browsers() as browsers:
     kintai = browsers.launch(Kintai)
 
-    HomePage(kintai.session).export_csv()
-    files = kintai.session.download_dir.wait()          # .crdownload が消えるまで待つ
+    kintai.page(HomePage).export_csv()
+    files = kintai.downloads.wait()                     # .crdownload が消えるまで待つ
     move_file(files[0], r"C:\作業\output")       # with の中で移動する
 ```
 
@@ -685,7 +685,7 @@ class LoginPage(SitePage):
         self.input(self.USERNAME, username)
         self.input(self.PASSWORD, password)
         self.click(self.LOGIN_BTN)
-        return DashboardPage(self.session)      # 遷移先の画面クラスを返す
+        return self.to(DashboardPage)           # 遷移先の画面クラスを返す
 ```
 
 **操作メソッド一覧**（すべて `Locator` を受け取る）:

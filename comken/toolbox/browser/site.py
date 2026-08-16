@@ -32,13 +32,19 @@ r"""comken/toolbox/browser/site.py — サイトを表す SiteBase 基底クラ�
 # 定義中（クラス内）の BrowserSession / Browsers を型注釈に使うため、注釈の評価を遅延する。
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, TypeVar
 
-from ...exceptions import SiteConfigError
+from ...exceptions import SiteConfigError, SiteNotStartedError
+from .download import DownloadDir
 from .options import BrowserOptions
 
 if TYPE_CHECKING:
     from .management import Browsers, BrowserSession
+    from .page import Page
+
+# page() が「渡したクラスをそのまま返す」ことを型で示す。
+# これがないと補完が Page 止まりになり、画面ごとのメソッドが出ない
+P = TypeVar("P", bound="Page")
 
 
 class SiteBase:
@@ -89,6 +95,41 @@ class SiteBase:
             self._browsers.__exit__(exc_type, exc_val, exc_tb)
             self._browsers = None
         self.session = None
+
+    @property
+    def downloads(self) -> DownloadDir:
+        """このサイトのダウンロード先。完了待ちに使う。
+
+            files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
+
+        Raises:
+            SiteNotStartedError: まだ起動していない場合。
+        """
+        if self.session is None:
+            raise SiteNotStartedError(self.__class__)
+        return self.session.download_dir
+
+    def page(self, page_class: type[P]) -> P:
+        """このサイトの画面クラスを作る。
+
+        画面クラスは動かすのにブラウザ（`BrowserSession`）を要るが、
+        **それを呼ぶ側に書かせない**ためのもの。
+
+            def login(self, user_id: str, password: str) -> HomePage:
+                return self.page(LoginPage).login(user_id, password)
+
+        `LoginPage(self.session)` と書いても同じだが、そう書くと
+        「セッションとは何か」を知らないとサイトクラスを書けなくなる。
+
+        Args:
+            page_class: 作りたい画面クラス（`Page` のサブクラス）。
+
+        Returns:
+            そのサイトのブラウザに紐づいた画面クラスのインスタンス。
+        """
+        if self.session is None:
+            raise SiteNotStartedError(self.__class__)
+        return page_class(self.session)
 
     def close(self) -> None:
         """Browsers から渡されたセッションは触らず、自分で起動したブラウザだけ閉じる。
