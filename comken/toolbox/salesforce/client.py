@@ -93,7 +93,7 @@ class SalesforceBase:
         prefix: str = "",
         domain_url: str = "",
         org_name: str = "",
-        auth: _OAuth | None = None,
+        auth: _OAuth | type[_OAuth] | None = None,
     ) -> None:
         """DPAPI に保管した認証情報を読み、選択中の OAuth 方式で接続する。
 
@@ -106,8 +106,11 @@ class SalesforceBase:
                 本番とテストを切り替えるときだけ渡す。
             domain_url: My Domain の URL。省略時はクラスの DOMAIN_URL。
             org_name: 計測ログに出す組織の呼び名。省略時はクラス名を使う。
-            auth: 認証方式を差し替えるとき（テスト・JWT 等）に渡す。
-                指定時は prefix / domain_url を使わない。
+            auth: 認証方式を差し替えるときに渡す。**クラスを渡せば**
+                DPAPI から組み立てる（値を手で並べなくてよい）。
+                    Sandbox(auth=ClientCredentialsAuth)   # 開発中だけ
+                作成済みのインスタンスを渡すこともできる（テスト・JWT 等）。
+                その場合だけ prefix / domain_url は使われない。
 
         Raises:
             InvalidCredentialNameError: システム名が空、または使えない文字を含む場合。
@@ -116,10 +119,17 @@ class SalesforceBase:
             SalesforceAuthError: 認証に失敗した場合。
             SalesforceConnectionError: ネットワークの問題で接続できない場合。
         """
-        self.auth = auth or OAuth.from_credentials(
-            domain_url or self.DOMAIN_URL,
-            prefix or self.CREDENTIAL_PREFIX,
-        )
+        # 認証方式のクラスを渡されたら、組み立ては省略せず DPAPI から作る。
+        # 値を手で並べる書き方（ClientCredentialsAuth(cid, secret, url)）を
+        # 利用側に強いないため。既定（None）も同じ経路を通る。
+        if auth is None:
+            auth = OAuth
+        if isinstance(auth, type):
+            auth = auth.from_credentials(
+                domain_url or self.DOMAIN_URL,
+                prefix or self.CREDENTIAL_PREFIX,
+            )
+        self.auth = auth
         self.metrics = ApiMetrics(org_name or type(self).__name__)
         self.report = ReportApi(self)
 

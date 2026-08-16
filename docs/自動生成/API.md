@@ -5256,7 +5256,7 @@ Attributes:
 #### `__init__`
 
 ```text
-def __init__(self, *, prefix: str='', domain_url: str='', org_name: str='', auth: _OAuth | None=None) -> None:
+def __init__(self, *, prefix: str='', domain_url: str='', org_name: str='', auth: _OAuth | type[_OAuth] | None=None) -> None:
 ```
 
 ##### 説明
@@ -5272,8 +5272,11 @@ Args:
         本番とテストを切り替えるときだけ渡す。
     domain_url: My Domain の URL。省略時はクラスの DOMAIN_URL。
     org_name: 計測ログに出す組織の呼び名。省略時はクラス名を使う。
-    auth: 認証方式を差し替えるとき（テスト・JWT 等）に渡す。
-        指定時は prefix / domain_url を使わない。
+    auth: 認証方式を差し替えるときに渡す。**クラスを渡せば**
+        DPAPI から組み立てる（値を手で並べなくてよい）。
+            Sandbox(auth=ClientCredentialsAuth)   # 開発中だけ
+        作成済みのインスタンスを渡すこともできる（テスト・JWT 等）。
+        その場合だけ prefix / domain_url は使われない。
 
 Raises:
     InvalidCredentialNameError: システム名が空、または使えない文字を含む場合。

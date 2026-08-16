@@ -133,3 +133,48 @@ class TestPluggableSalesforceAuth:
         ):
             assert client.query("SELECT Id FROM Account") == []
         assert auth.fetch.call_count == 2
+
+
+class TestAuthClassIsBuiltFromCredentials:
+    """auth に「クラス」を渡したら DPAPI から組み立てる。
+
+    利用側に ClientCredentialsAuth(cid, secret, url) と値を並べさせないため。
+    既定（auth 省略）と同じ経路を通る。
+    """
+
+    def test_passing_a_class_reads_dpapi_with_the_class_prefix(self, monkeypatch):
+        """Sandbox(auth=ClientCredentialsAuth) が CREDENTIAL_PREFIX で DPAPI を引く。"""
+        called = {}
+
+        class _FakeAuth:
+            @classmethod
+            def from_credentials(cls, domain_url, prefix):
+                called["domain_url"] = domain_url
+                called["prefix"] = prefix
+                return cls()
+
+            def fetch(self):
+                return "TOKEN", DOMAIN_URL
+
+        with patch("comken.toolbox.salesforce.client.requests.Session"):
+            SalesforceBase(
+                auth=_FakeAuth, domain_url=DOMAIN_URL, prefix="sandbox", org_name="sandbox"
+            )
+
+        assert called == {"domain_url": DOMAIN_URL, "prefix": "sandbox"}
+
+    def test_passing_an_instance_is_used_as_is(self, monkeypatch):
+        """作成済みインスタンスはそのまま使う（prefix / domain_url を見ない）。"""
+
+        class _FakeAuth:
+            @classmethod
+            def from_credentials(cls, domain_url, prefix):  # 呼ばれたら失敗
+                raise AssertionError("インスタンスを渡したら from_credentials は呼ばない")
+
+            def fetch(self):
+                return "TOKEN", DOMAIN_URL
+
+        with patch("comken.toolbox.salesforce.client.requests.Session"):
+            sf = SalesforceBase(auth=_FakeAuth(), org_name="sandbox")
+
+        assert isinstance(sf.auth, _FakeAuth)
