@@ -5,20 +5,27 @@ rem ‚±‚ÌƒŠƒ|ƒWƒgƒŠ‚ÌêŠ‚ğAŒ»İ‚Ì Windows ƒ†[ƒU[‚Ì PYTHONPATH ‚Æ PATH ‚É’Ç‰Á‚
 rem ˆê“xÀs‚µ‚Ä‚¨‚­‚ÆAŠeƒvƒƒWƒFƒNƒg‚Ì Às.bat ‚ª comken ‚ÌêŠ‚ğ’m‚ç‚È‚­‚Ä‚à“®‚«‚Ü‚·‚µA
 rem `comken init` ‚Æ’Z‚­‘Å‚Ä‚é‚æ‚¤‚É‚È‚è‚Ü‚·B
 rem
-rem “n‚µ•ûi2‚Â‚Ì‚¤‚¿‚Ì‚Ç‚¿‚ç‚©j:
-rem   setup_comken.bat                  © ‚±‚Ì bat ©g‚ÌƒtƒHƒ‹ƒ_i%~dp0j‚ğg‚¤
-rem   setup_comken.bat C:\dev\original_libs   © ˆø”‚Å comken ‚ÌêŠ‚ğ–¾¦‚·‚é
-rem comken ‚ÌêŠ‚ğŸ‚Ì‡‚Å’T‚·iŒ©‚Â‚©‚Á‚½“_‚ÅŠm’èAŒã‚ë‚ÍŒ©‚È‚¢j:
-rem   1. ‘æ1ˆø”‚Å–¾¦‚³‚ê‚½ƒpƒX \\ •Ê‚ÌêŠ‚ğw’è‚µ‚½‚¢‚Æ‚«
-rem   2. ‚±‚Ì bat ©g‚ÌƒtƒHƒ‹ƒ_i%~dp0j\\ ƒŠƒ|ƒWƒgƒŠ’¼‰º‚É’u‚¢‚½ê‡‚Ì³‹K‚Ì’u‚«êŠ
-rem   3. Œ»İ‚Ì PYTHONPATH ‚ÌŠeƒGƒ“ƒgƒŠ \\ ƒZƒbƒgƒAƒbƒvÏ‚İ‚Ì PC ‚Å bat ‚¾‚¯èŒ³‚É‚ ‚éê‡
-rem ”»’è‚Í‚Ç‚ÌŒó•â‚à `<Œó•â>\comken\__init__.py` ‚Ì‘¶İ‚Ås‚¤iƒtƒHƒ‹ƒ_–¼‚Å‚Í”»’è‚µ‚È‚¢jB
-rem ‚±‚Ì’TõƒƒWƒbƒN‚Í comken.bat ‚É‚à“¯‚¶‚à‚Ì‚ğÚ‚¹‚Ä‚ ‚éi‹¤’Ê bat ‚ğì‚é‚Æ‚»‚¿‚ç‚à
-rem ˆê‚É‚¿•à‚©‚È‚¢‚Æ“®‚©‚È‚­‚È‚é‚½‚ßAd•¡‚ğ‹–—e‚µ‚Ä‚¢‚éjB
+rem ============================================================
+rem  š ”z‚é‘O‚ÉA‚±‚±‚Ö comken ‚ÌêŠ‚ğ‘‚¢‚Ä‚­‚¾‚³‚¢
+rem     i‹ó‚Ì‚Ü‚Ü‚È‚çA‚±‚Ì bat ©g‚ÌƒtƒHƒ‹ƒ_‚ğg‚¢‚Ü‚·B
+rem       comken ‚ÌƒŠƒ|ƒWƒgƒŠ’¼‰º‚É’u‚¢‚ÄÀs‚·‚é‚È‚ç‚»‚Ì‚Ü‚Ü‚Å‚æ‚¢j
+rem
+rem     —á: set "COMKEN_ROOT_FIXED=\\server\share\tools\comken"
+rem ============================================================
+set "COMKEN_ROOT_FIXED="
 
-rem --- ’iŠK 1: ‘æ1ˆø” ---
-if not "%~1"=="" (
-  call :_test_comken "%~1"
+rem comken ‚ÌêŠ‚ğŸ‚Ì‡‚Å’T‚·iŒ©‚Â‚©‚Á‚½“_‚ÅŠm’èAŒã‚ë‚ÍŒ©‚È‚¢j:
+rem   1. ã‚É‘‚¢‚½ŒÅ’è’l \\ ŠePC‚Ö”z‚é‚Æ‚«‚Í‚±‚±‚É‘‚¢‚Ä‚¨‚­
+rem   2. ‚±‚Ì bat ©g‚ÌƒtƒHƒ‹ƒ_i%~dp0j\\ ƒŠƒ|ƒWƒgƒŠ’¼‰º‚É’u‚¢‚½ê‡‚Ì³‹K‚Ì’u‚«êŠ
+rem ”»’è‚Í‚Ç‚¿‚ç‚à `<Œó•â>\comken\__init__.py` ‚Ì‘¶İ‚Ås‚¤iƒtƒHƒ‹ƒ_–¼‚Å‚Í”»’è‚µ‚È‚¢jB
+rem
+rem **PYTHONPATH ‚©‚ç‚Í’T‚³‚È‚¢B** ‚±‚Ì bat ‚Í PYTHONPATH ‚Æ PATH ‚ğu‚±‚ê‚©‚ç’Ê‚·v‚½‚ß‚Ì
+rem ‚à‚Ì‚È‚Ì‚ÅA’Ê‚Á‚Ä‚¢‚È‚¢‘O’ñ‚Å“®‚©‚È‚¯‚ê‚Î‚È‚ç‚È‚¢B’Ê‚Á‚Ä‚¢‚È‚¢‚©‚çÀs‚·‚é‚Ì‚É
+rem ‚»‚±‚©‚ç’T‚·‚Ì‚Í‹Ø‚ª’Ê‚ç‚È‚¢icomken.bat ‚Í’Ê‚Á‚Ä‚¢‚é‘O’ñ‚È‚Ì‚Å PYTHONPATH ‚ğŒ©‚éjB
+
+rem --- ’iŠK 1: ã‚É‘‚¢‚½ŒÅ’è’l ---
+if defined COMKEN_ROOT_FIXED (
+  call :_test_comken "%COMKEN_ROOT_FIXED%"
   if not errorlevel 1 goto :_comken_found
 )
 
@@ -26,26 +33,19 @@ rem --- ’iŠK 2: bat ©g‚ÌƒtƒHƒ‹ƒ_ ---
 for %%I in ("%~dp0.") do call :_test_comken "%%~fI"
 if not errorlevel 1 goto :_comken_found
 
-rem --- ’iŠK 3: Œ»İ‚Ì PYTHONPATHi–¢İ’è‚È‚çƒXƒLƒbƒvj ---
-if defined PYTHONPATH (
-  for %%P in ("%PYTHONPATH:;=" "%") do (
-    call :_test_comken "%%~P"
-    if not errorlevel 1 goto :_comken_found
-  )
-)
-
-rem ‚Ç‚ê‚àŒ©‚Â‚©‚ç‚È‚©‚Á‚½
+rem ‚Ç‚¿‚ç‚É‚à–³‚©‚Á‚½
 echo [ƒGƒ‰[] comken ‚ªŒ©‚Â‚©‚è‚Ü‚¹‚ñB
-echo   Ÿ‚Ì3‚©Š‚ğ‡‚É’T‚µ‚Ü‚µ‚½iæ“ª‚ÉŒ©‚Â‚©‚Á‚½‚à‚Ì‚ªg‚í‚ê‚Ü‚·j:
-echo     1. ‘æ1ˆø”‚Å“n‚³‚ê‚½ƒpƒX: %~1
+echo   Ÿ‚Ì2‚©Š‚ğ‡‚É’T‚µ‚Ü‚µ‚½:
+echo     1. ‚±‚Ì bat ‚É‘‚¢‚Ä‚ ‚éŒÅ’è’l: %COMKEN_ROOT_FIXED%
 echo     2. ‚±‚Ì bat ©g‚ÌƒtƒHƒ‹ƒ_
-echo     3. ŠÂ‹«•Ï” PYTHONPATHi; ‹æØ‚èj
-echo   comken ‚ÌêŠ‚ğˆø”‚Å“n‚µ‚Ä‚­‚¾‚³‚¢i—áj:
-echo     setup_comken.bat "C:\dev\original_libs"
-echo     setup_comken.bat "\\server\share\tools\comken"
+echo.
+echo   ‘Îˆ‚ÍŸ‚Ì‚Ç‚¿‚ç‚©‚Å‚·:
+echo     - ‚±‚Ì bat ‚ğ comken ‚ÌƒŠƒ|ƒWƒgƒŠ’¼‰ºicomken ƒtƒHƒ‹ƒ_‚Æ“¯‚¶êŠj‚Ö’u‚¢‚ÄÀs‚·‚é
+echo     - ‚±‚Ì bat ‚ğƒeƒLƒXƒgƒGƒfƒBƒ^‚ÅŠJ‚«Aã‚Ì‚Ù‚¤‚É‚ ‚é
+echo       set "COMKEN_ROOT_FIXED=" ‚Ì = ‚ÌŒã‚ë‚Ö comken ‚ÌêŠ‚ğ‘‚¢‚Ä‚©‚çÀs‚·‚é
+echo         —á: set "COMKEN_ROOT_FIXED=\\server\share\tools\comken"
 pause
 exit /b 1
-
 rem --- Œ©‚Â‚©‚Á‚½ƒ‹[ƒg‚ğŠm’è ---
 :_comken_found
 rem ‰½‚ğ“o˜^‚·‚é‚©‚ğæ‚ÉŒ©‚¹‚éBUNC ƒpƒXi\\ƒT[ƒo[–¼\...j‚Å‚à“o˜^‚Í‚Å‚«‚é‚ªA

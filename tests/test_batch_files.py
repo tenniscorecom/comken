@@ -111,50 +111,60 @@ def test_batch_file_checks_comken_before_running(path: Path):
     assert r"%COMKEN_ROOT%\comken\__init__.py" in text, "comken の存在を確かめていない"
 
 
+# comken の場所を「bat 自身のフォルダ以外」から知る手段。**bat ごとに違う。**
+# setup は PYTHONPATH を「これから通す」側なので、そこから探してはいけない。
+# プロジェクト側へ配る bat（実行・認証情報の登録）は、もともと先頭の固定値を書き換えて使う。
+_SECOND_SOURCE = {
+    "comken.bat": (r'%PYTHONPATH:;=" "%', "環境変数 PYTHONPATH の走査"),
+    "setup_comken.bat": ('set "COMKEN_ROOT_FIXED=', "bat に書いておく固定値"),
+    "実行.bat": ('set "COMKEN_ROOT=', "bat に書いておく固定値"),
+    "認証情報の登録.bat": ('set "COMKEN_ROOT=', "bat に書いておく固定値"),
+}
+
+
 @pytest.mark.parametrize("path", _BAT_FILES, ids=lambda p: p.name)
 def test_batch_file_does_not_rely_on_dp0_alone(path: Path):
     """bat が comken の場所を %~dp0 だけから判定していないこと。
 
     リポジトリの直下以外（デスクトップ・任意の作業フォルダ）に bat を
     コピーしても動くためには、`%~dp0` 以外からも comken を見つけられる
-    手段を持っていなければならない。
+    手段を持っていなければならない。その手段は bat ごとに違う（下記）。
     """
     text = _read(path)
     # comken を探さない bat は対象外
     if r"comken\__init__.py" not in text:
         return
-    # bat の探索系ロジックが入っているサイン
-    for phrase, meaning in [
-        ("%~dp0", "bat 自身のフォルダ"),
-        ("PYTHONPATH", "環境変数 PYTHONPATH"),
-    ]:
-        assert phrase in text, f"{path.name} は comken の場所を {meaning} からしか探していない"
+    assert "%~dp0" in text, f"{path.name} は bat 自身のフォルダを見ていない"
+    expected = _SECOND_SOURCE.get(path.name)
+    assert expected, f"{path.name} の2つ目の手段が未定義。_SECOND_SOURCE に追記すること"
+    phrase, meaning = expected
+    assert phrase in text, f"{path.name} は comken の場所を「{meaning}」から探していない"
 
 
-def test_setup_comken_accepts_a_path_argument():
-    """setup_comken.bat は第1引数で comken の場所を受け取れる。
+def test_setup_comken_does_not_search_pythonpath():
+    """**setup_comken.bat は PYTHONPATH から comken を探さない。**
 
-    リポジトリ外に bat を置いた場合に、引数で明示する導線が残っているかを
-    見る（引数を渡すと `%~1` が展開される）。
+    この bat は PYTHONPATH と PATH を「これから通す」ためのもの。
+    通っていないから実行するのに、そこから探すのは筋が通らない。
+    （`comken.bat` は通っている前提で動くので、PYTHONPATH を見てよい）
     """
-    path = _ROOT / "setup_comken.bat"
-    text = _read(path)
-    assert "%~1" in text, "setup_comken.bat は第1引数を受け取れる形であるべき"
+    text = _read(_ROOT / "setup_comken.bat")
+    assert r'%PYTHONPATH:;=" "%' not in text, (
+        "setup_comken.bat が PYTHONPATH を探索している。"
+        "通すための bat が、通っている前提で探してはいけない。"
+    )
 
 
-def test_pythonpath_search_is_implemented_in_comken_locators():
-    """comken の場所を探す 2 本の bat は、PYTHONPATH を `;` 区切りで走査する。
+def test_comken_bat_searches_pythonpath():
+    """comken.bat は PYTHONPATH を `;` 区切りで走査する。
 
-    リポジトリ外に bat がある状況（%~dp0 が comken 直下でない）で、
-    既に PYTHONPATH に入っていればそこから見つけられる必要がある。
-    `%PYTHONPATH:;=" "%` という cmd.exe のイディオムが使われていることで
-    「`;` で split して for に流す」実装があることを固定する
-    （cmd.exe 側の慣用句で、書き方が変わると bat が壊れる）。
+    セットアップ済みの PC で bat だけ手元にある状況（`%~dp0` が comken 直下でない）
+    でも comken を見つけられる必要がある。`%PYTHONPATH:;=" "%` という cmd.exe の
+    イディオムが使われていることで「`;` で split して for に流す」実装を固定する
+    （慣用句なので、書き方が変わると bat が壊れる）。
     """
-    for name in ("comken.bat", "setup_comken.bat"):
-        path = _ROOT / name
-        text = _read(path)
-        assert r'%PYTHONPATH:;=" "%' in text, (
-            f"{name} は PYTHONPATH を走査していない。"
-            "bat を comken の外に置いたとき、comken を見つけられない。"
-        )
+    text = _read(_ROOT / "comken.bat")
+    assert r'%PYTHONPATH:;=" "%' in text, (
+        "comken.bat は PYTHONPATH を走査していない。"
+        "bat を comken の外に置いたとき、comken を見つけられない。"
+    )
