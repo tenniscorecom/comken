@@ -337,3 +337,38 @@ def test_documented_protected_files_exist(doc):
         assert (_ROOT / candidate).exists(), (
             f"{doc.relative_to(_ROOT)}: 配置手順が実在しないファイルを指しています: {path_text}"
         )
+
+
+def test_deployment_targets_still_exist_in_the_code():
+    """`docs/配置.md` が「ここを書き換える」と言っている行が、いまもコードにあること。
+
+    配置手順の表には、書き換える定数と**いまの値**（`DOMAIN_URL = "https://example--..."`）が
+    書いてある。コードから消えたり名前が変わったりすると、会社で手が止まる。
+    実際 2026-08-15 に社内固有の値をコード直書きへ戻したとき、**手順の側だけ
+    `comken/settings.py` を指したまま**残っていた。
+
+    **行番号では検査しない。** 一度は行番号を書いたが、コードを触るたびにズレる
+    （2026-08-18 に実際ズレて、この検査が捕まえた）。ここでは
+    「その文字列がファイルのどこかにあるか」だけを見る。
+    """
+    doc = _ROOT / "docs" / "配置.md"
+    text = doc.read_text(encoding="utf-8")
+
+    current: Path | None = None
+    checked = 0
+    for line in text.splitlines():
+        heading = re.match(r"^#+\s+[\d\-.]*\s*`([^`]+\.py)`", line)
+        if heading:
+            current = _ROOT / heading.group(1)
+            continue
+        row = re.match(r"^\|\s*[^|]+\|\s*`([^`]+)`", line)
+        if not row or current is None:
+            continue
+        snippet = row.group(1)
+        assert current.exists(), f"配置.md が指すファイルがありません: {current}"
+        source = current.read_text(encoding="utf-8")
+        assert snippet in source, (
+            f"配置.md が書き換え対象に挙げている行が {current.name} にありません: {snippet[:40]}"
+        )
+        checked += 1
+    assert checked >= 5, f"検査が素通りしている（{checked} 件しか見ていない）"
