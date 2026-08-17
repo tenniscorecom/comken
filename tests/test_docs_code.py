@@ -310,3 +310,25 @@ def test_markdown_relative_links_resolve(doc):
                 else {_anchor(heading) for heading in _HEADING.findall(linked_text)}
             )
             assert anchor in linked_headings, f"{doc}: アンカーがありません: {target}"
+
+
+@pytest.mark.parametrize("doc", _DOCS, ids=lambda path: str(path.relative_to(_ROOT)))
+def test_documented_protected_files_exist(doc):
+    """配置手順に書いた「保護するファイル」が実在すること。
+
+    `git update-index --skip-worktree <path>` は、**配置のときに人が打つコマンド**。
+    ここに実在しないファイルが残っていると、その場で `fatal: Unable to mark file`
+    になって手が止まる。実際、社内固有の値の置き場所を `settings.py` から
+    コード直書きへ戻したあと（2026-08-15）、手順の側だけ古い名前のまま残っていた。
+
+    撤去済み名の検出（`_REMOVED_NAMES`）では捕まえられない。あちらは「その名前を
+    使うな」の検査で、**設計の経緯として過去の名前に触れる文章まで落としてしまう**
+    （やめた案を履歴として残すのは、このリポジトリでは資産のほう）。
+    ここでは「手順に出てくるパスが今もあるか」だけを見る。
+    """
+    text = doc.read_text(encoding="utf-8")
+    for path_text in re.findall(r"git update-index --skip-worktree\s+(\S+)", text):
+        target = _ROOT / path_text.strip("`\"'")
+        assert target.exists(), (
+            f"{doc.relative_to(_ROOT)}: 配置手順が実在しないファイルを指しています: {path_text}"
+        )
