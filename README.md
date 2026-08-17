@@ -217,7 +217,7 @@ PCの環境変数を変更したくない場合は、各プロジェクトのル
 pushd \\server\share\tools\comken
 git fetch --tags
 git tag -l                 :: 出ているタグを確認する
-git checkout v0.11.2       :: 切り替えたいタグ（上で確認した最新版）
+git checkout v0.11.3       :: 切り替えたいタグ（上で確認した最新版）
 popd
 ```
 
