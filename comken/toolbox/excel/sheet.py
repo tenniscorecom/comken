@@ -13,10 +13,10 @@ from openpyxl.utils.cell import range_boundaries
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.worksheet.worksheet import Worksheet
 
-from ...core.data import column_number
-from ...core.timer import measure
-from ...core.transfer import mapping_columns, normalize_lookup_key
-from ...exceptions import (
+from comken.core.data import column_number
+from comken.core.timer import measure
+from comken.core.transfer import mapping_columns, normalize_lookup_key
+from comken.exceptions import (
     InvalidTableNameError,
     TableAlreadyExistsError,
     TableNotFoundError,

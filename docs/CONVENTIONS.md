@@ -158,8 +158,18 @@ OUTPUT_FOLDER = C:\work\out  ; ← 値は自由
 | ルール | 理由 |
 |---|---|
 | 名前を提供するパッケージまで明示して import する | ファイルの先頭だけで依存範囲が分かる |
+| **相対 import を使わない**（`from .X` / `from ..X` は禁止） | `from ....exceptions import ...` のようにドットを数えないと依存先が分からない状況を無くす。必ず `from comken.X.Y import Z` のように**パッケージルートからの絶対パス**で書く |
 | ワイルドカード import（`import *`）は禁止 | 使っている名前がどこから来たか追えなくなる |
 | 並び順は「標準ライブラリ → サードパーティ → 自分のコード」 | Ruff の `I` が自動で整列する |
+
+**相対 import を禁止する理由:** comken は保守する人が Python に詳しいとは限らないので、
+「短く賢いコード」より「半年後に読めるコード」を取る。`from .foo` / `from ..foo` / `from ...foo` /
+`from ....foo` のように深さで書き分けられると、読むたびにドットを数えて現在のパッケージとの
+階層関係を確かめることになる。**深さで使い分けない**（「1個までは相対、2個以上は絶対」の
+ような境目は作らない）。**1つの規約に統一する** — 全部絶対 import で書く。
+
+**守られ方:** Ruff の `TID`（flake8-tidy-imports）が
+`ban-relative-imports = "all"` で検知する。書き忘れても `ruff check` で落ちる。
 
 ```python
 # 良い（機能を提供するパッケージが分かる）
@@ -167,6 +177,10 @@ from パッケージ.excel import ExcelReader, ExcelWriter
 
 # 悪い（どの機能群に依存しているか分からない）
 from パッケージ import ExcelWriter, FileFinder
+
+# 悪い（ドットを数えないと依存先が分からない）
+from ..foo import Bar
+from ....exceptions import BazError
 
 # 悪い（使う名前と依存範囲が分からない）
 from パッケージ.utils.files import *

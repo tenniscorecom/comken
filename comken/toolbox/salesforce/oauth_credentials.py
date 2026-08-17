@@ -8,8 +8,8 @@ from typing import Self
 
 import requests
 
-from ...core.timer import measure
-from ...exceptions import SalesforceAuthError, SalesforceConnectionError
+from comken.core.timer import measure
+from comken.exceptions import SalesforceAuthError, SalesforceConnectionError
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ class OAuth:
     @classmethod
     def from_credentials(cls, domain_url: str, prefix: str) -> Self:
         """DPAPIに保存したclient_idとclient_secretから認証を作る。"""
-        from ..credentials import Credentials
+        from comken.toolbox.credentials import Credentials
 
         credentials = Credentials(prefix)
         return cls(credentials.client_id, credentials.client_secret, domain_url)

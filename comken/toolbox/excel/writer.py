@@ -10,16 +10,12 @@ from typing import Self
 
 from openpyxl import Workbook
 
-from ...core.files.base import FileBase
-from ...core.timer import measure
-from ...exceptions import (
-    LastSheetDeletionError,
-    SheetAlreadyExistsError,
-    SheetNotFoundError,
-)
-from ...runtime import dry_run_log, is_dry_run
-from .base import ExcelBase
-from .sheet import Sheet
+from comken.core.files.base import FileBase
+from comken.core.timer import measure
+from comken.exceptions import LastSheetDeletionError, SheetAlreadyExistsError, SheetNotFoundError
+from comken.runtime import dry_run_log, is_dry_run
+from comken.toolbox.excel.base import ExcelBase
+from comken.toolbox.excel.sheet import Sheet
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +159,7 @@ class ExcelWriter(ExcelBase):
                         例: "Module1.UpdateData"
             save: True（デフォルト）ならマクロ実行後に元ファイルへ保存する。
         """
-        from ..windows.handler import ExcelComHandler
+        from comken.toolbox.windows.handler import ExcelComHandler
 
         # local_copy の一時コピーではなく元ファイルに対して実行・保存する
         with ExcelComHandler(self._original_path) as com:

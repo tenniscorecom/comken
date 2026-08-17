@@ -6,7 +6,7 @@ Salesforce との通信そのものの失敗は salesforce.py の例外を使う
 
 from pathlib import Path
 
-from .base import ComkenError
+from comken.exceptions.base import ComkenError
 
 
 class DownloaderError(ComkenError):

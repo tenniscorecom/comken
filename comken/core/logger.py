@@ -3,8 +3,8 @@
 import logging
 from pathlib import Path
 
-from ..runtime import is_debug
-from .clock import today
+from comken.core.clock import today
+from comken.runtime import is_debug
 
 __all__ = ["setup_logging"]
 

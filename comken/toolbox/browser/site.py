@@ -36,18 +36,18 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, ClassVar, TypeVar
 
-from ...exceptions import (
+from comken.exceptions import (
     SiteAlreadyInLibraryError,
     SiteConfigError,
     SiteNotStartedError,
     SiteOwnerRequiredError,
 )
-from .download import DownloadDir
-from .options import BrowserOptions
+from comken.toolbox.browser.download import DownloadDir
+from comken.toolbox.browser.options import BrowserOptions
 
 if TYPE_CHECKING:
-    from .management import Browsers, BrowserSession
-    from .page import Page
+    from comken.toolbox.browser.management import Browsers, BrowserSession
+    from comken.toolbox.browser.page import Page
 
 # page() が「渡したクラスをそのまま返す」ことを型で示す。
 # これがないと補完が Page 止まりになり、画面ごとのメソッドが出ない
@@ -94,7 +94,7 @@ class SiteBase:
 
     def __enter__(self) -> SiteBase:
         # 循環インポートを避けるため、使う直前に取り出す
-        from .management import Browsers
+        from comken.toolbox.browser.management import Browsers
 
         if not self.NAME:
             raise SiteConfigError(self.__class__, "NAME")
@@ -214,7 +214,7 @@ def _check_not_in_library(cls: type[SiteBase]) -> None:
     「取り出して使う import パス」まで案内する。
     """
     # 循環 import 回避のため、ここで import する（`site.py` が `sites` を import する形になる）
-    from .sites import SITES
+    from comken.toolbox.browser.sites import SITES
 
     for library_cls in SITES:
         if library_cls.NAME == cls.NAME:

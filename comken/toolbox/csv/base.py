@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ...core.files.base import FileBase
+from comken.core.files.base import FileBase
 
 
 class CsvBase(FileBase):

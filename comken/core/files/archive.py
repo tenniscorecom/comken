@@ -10,7 +10,7 @@ import zipfile
 from collections.abc import Sequence
 from pathlib import Path
 
-from ..timer import measure
+from comken.core.timer import measure
 
 logger = logging.getLogger(__name__)
 

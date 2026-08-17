@@ -5,7 +5,7 @@
 
 from pathlib import Path
 
-from .base import ComkenError
+from comken.exceptions.base import ComkenError
 
 
 class MasterTableError(ComkenError):

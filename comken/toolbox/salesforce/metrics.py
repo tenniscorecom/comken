@@ -16,7 +16,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ...core.clock import now
+from comken.core.clock import now
 
 logger = logging.getLogger(__name__)
 

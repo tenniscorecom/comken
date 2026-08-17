@@ -28,8 +28,8 @@ Windows ログオンユーザーに紐付けて暗号化して保管する。
     CREDENTIALS_PATH   保存先のパス
 """
 
-from .importer import import_json
-from .store import (
+from comken.toolbox.credentials.importer import import_json
+from comken.toolbox.credentials.store import (
     CREDENTIALS_PATH,
     Credentials,
     delete_credential,

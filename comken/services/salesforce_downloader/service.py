@@ -44,8 +44,8 @@ import logging
 import time
 from pathlib import Path
 
-from ...core.files import DateNameBuilder
-from ...exceptions import (
+from comken.core.files import DateNameBuilder
+from comken.exceptions import (
     ComkenError,
     EmptyReportError,
     ReportDisabledError,
@@ -56,10 +56,10 @@ from ...exceptions import (
     ScheduledReportNotDownloadedError,
     ScheduledReportNotRegisteredError,
 )
-from ...toolbox.csv import CsvReader, CsvWriter
-from ...toolbox.salesforce.sites import site_for
-from . import history
-from .master import ReportEntry, load_master, shared_report_ids
+from comken.services.salesforce_downloader import history
+from comken.services.salesforce_downloader.master import ReportEntry, load_master, shared_report_ids
+from comken.toolbox.csv import CsvReader, CsvWriter
+from comken.toolbox.salesforce.sites import site_for
 
 logger = logging.getLogger(__name__)
 

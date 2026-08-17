@@ -12,9 +12,9 @@ import configparser
 import os
 from pathlib import Path
 
-from ...exceptions import ConfigFileNotFoundError
-from ..files.ops import cleanup_stale_tmp
-from . import _is_mapping_section, _parse_value
+from comken.core.config import _is_mapping_section, _parse_value
+from comken.core.files.ops import cleanup_stale_tmp
+from comken.exceptions import ConfigFileNotFoundError
 
 _STUB_HEADER = '''"""config.ini から自動生成されたエディタ補完用スタブ。手で編集しない。
 

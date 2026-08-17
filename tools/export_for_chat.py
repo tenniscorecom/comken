@@ -167,10 +167,24 @@ def _all_names(tree: ast.Module) -> list[str]:
 
 
 def _source_for_import(package_file: Path, node: ast.ImportFrom) -> Path | None:
-    """相対 import の参照先 Python ファイルを返す。"""
-    if node.level != 1 or not node.module:
+    """import の参照先 Python ファイルを返す（絶対 import / 相対 import 両方）。"""
+    if not node.module:
         return None
-    source = package_file.parent.joinpath(*node.module.split("."))
+    if node.level == 0:
+        # 絶対 import。PACKAGE_ROOT からの相対として解決する
+        if node.module == "comken":
+            source = PACKAGE_ROOT
+        elif node.module.startswith("comken."):
+            source = PACKAGE_ROOT.joinpath(*node.module[len("comken.") :].split("."))
+        else:
+            # comken 配下以外の import はこのツールでは追わない
+            return None
+    else:
+        # 相対 import。package_file から level-1 階層上を起点に解決する
+        base = package_file.parent
+        for _ in range(node.level - 1):
+            base = base.parent
+        source = base.joinpath(*node.module.split("."))
     module_path = source.with_suffix(".py")
     package_path = source / "__init__.py"
     if module_path.exists():

@@ -9,8 +9,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from ...runtime import dry_run_log, is_dry_run
-from ..timer import measure
+from comken.core.timer import measure
+from comken.runtime import dry_run_log, is_dry_run
 
 logger = logging.getLogger(__name__)
 

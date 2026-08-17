@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from ..exceptions import InvalidColumnError, KeyColumnNotFoundError
+from comken.exceptions import InvalidColumnError, KeyColumnNotFoundError
 
 
 def col_to_num(letter: str) -> int:

@@ -16,14 +16,14 @@ from typing import Self
 
 import win32com.client
 
-from ...core.clock import now
-from ...core.timer import measure
-from ...exceptions import (
+from comken.core.clock import now
+from comken.core.timer import measure
+from comken.exceptions import (
     ClassicOutlookNotAvailableError,
     OutlookAttachmentNotFoundError,
     OutlookFolderNotFoundError,
 )
-from ...runtime import dry_run_log, is_dry_run
+from comken.runtime import dry_run_log, is_dry_run
 
 logger = logging.getLogger(__name__)
 

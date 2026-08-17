@@ -15,7 +15,7 @@ NOTE: 公開 API ではない。利用者が直接呼ぶことは想定してい
 
 from typing import Any
 
-from ..exceptions import (
+from comken.exceptions import (
     TransferDestinationColumnNotFoundError,
     TransferKeyColumnNotFoundError,
     TransferSourceColumnNotFoundError,

@@ -24,9 +24,9 @@ import argparse
 import sys
 from pathlib import Path
 
-from ...exceptions import CredentialError
-from .importer import import_json, split_credential_name
-from .store import CREDENTIALS_PATH, delete_credential, list_names
+from comken.exceptions import CredentialError
+from comken.toolbox.credentials.importer import import_json, split_credential_name
+from comken.toolbox.credentials.store import CREDENTIALS_PATH, delete_credential, list_names
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -75,7 +75,7 @@ def _run_gui(args: argparse.Namespace) -> None:
     tkinter の import を関数の中に置くのは、画面を使わないコマンド
     （import / list / delete）が GUI の無い環境でも動くようにするため。
     """
-    from .gui import main as open_window
+    from comken.toolbox.credentials.gui import main as open_window
 
     open_window()
 

@@ -13,14 +13,14 @@ import datetime
 from dataclasses import dataclass
 from pathlib import Path
 
-from ...core.clock import today as local_today
-from ...exceptions import (
+from comken.core.clock import today as local_today
+from comken.exceptions import (
     CredentialError,
     CredentialNotFoundError,
     SalesforceCredentialRotationError,
 )
-from ..credentials import load_credential, save_credentials
-from .client import SalesforceBase
+from comken.toolbox.credentials import load_credential, save_credentials
+from comken.toolbox.salesforce.client import SalesforceBase
 
 DEFAULT_ROTATION_INTERVAL_DAYS = 60
 ROTATION_COMPONENT = "credential_rotation"

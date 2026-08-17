@@ -33,7 +33,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-from ..exceptions import RpaLibraryNotFoundError
+from comken.exceptions import RpaLibraryNotFoundError
 
 logger = logging.getLogger(__name__)
 

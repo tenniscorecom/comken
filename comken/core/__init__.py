@@ -12,30 +12,30 @@
 ``from comken.core import ...`` を toolbox 内部から行うことも許容する。
 """
 
-from .clock import now as now
-from .clock import today as today
-from .data import DiffResult as DiffResult
-from .data import RowChange as RowChange
-from .data import diff_row as diff_row
-from .data import diff_rows as diff_rows
-from .files.archive import unzip as unzip
-from .files.archive import zip_files as zip_files
-from .files.archive import zip_folder as zip_folder
-from .files.finder import FileFinder as FileFinder
-from .files.finder import date_in_name as date_in_name
-from .files.naming import DateNameBuilder as DateNameBuilder
-from .files.ops import copy_file as copy_file
-from .files.ops import local_copy as local_copy
-from .files.ops import move_file as move_file
-from .files.ops import project_dir as project_dir
-from .retry import retry as retry
-from .state import State as State
-from .text import normalize as normalize
-from .text import remove_spaces as remove_spaces
-from .text import strip_spaces as strip_spaces
-from .timer import Timer as Timer
-from .timer import measure as measure
-from .wait import wait as wait
+from comken.core.clock import now as now
+from comken.core.clock import today as today
+from comken.core.data import DiffResult as DiffResult
+from comken.core.data import RowChange as RowChange
+from comken.core.data import diff_row as diff_row
+from comken.core.data import diff_rows as diff_rows
+from comken.core.files.archive import unzip as unzip
+from comken.core.files.archive import zip_files as zip_files
+from comken.core.files.archive import zip_folder as zip_folder
+from comken.core.files.finder import FileFinder as FileFinder
+from comken.core.files.finder import date_in_name as date_in_name
+from comken.core.files.naming import DateNameBuilder as DateNameBuilder
+from comken.core.files.ops import copy_file as copy_file
+from comken.core.files.ops import local_copy as local_copy
+from comken.core.files.ops import move_file as move_file
+from comken.core.files.ops import project_dir as project_dir
+from comken.core.retry import retry as retry
+from comken.core.state import State as State
+from comken.core.text import normalize as normalize
+from comken.core.text import remove_spaces as remove_spaces
+from comken.core.text import strip_spaces as strip_spaces
+from comken.core.timer import Timer as Timer
+from comken.core.timer import measure as measure
+from comken.core.wait import wait as wait
 
 __all__ = [
     "DateNameBuilder",

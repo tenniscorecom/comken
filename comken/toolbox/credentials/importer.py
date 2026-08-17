@@ -25,8 +25,8 @@ JSON の形式（システム名ごとに項目をまとめる）:
 import json
 from pathlib import Path
 
-from ...exceptions import CredentialImportError
-from .store import save_credentials
+from comken.exceptions import CredentialImportError
+from comken.toolbox.credentials.store import save_credentials
 
 _NAME_SEPARATOR = "_"
 _FIELD_PART_COUNT = 2

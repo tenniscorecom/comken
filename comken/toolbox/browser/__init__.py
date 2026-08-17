@@ -21,12 +21,12 @@
     BackgroundTask  Browsers.run_task() が返す取っ手。wait() で結果を受け取る
 """
 
-from .download import DownloadDir
-from .locator import Locator
-from .management import BackgroundTask, Browsers, BrowserSession
-from .options import BrowserOptions
-from .page import Page, SitePage
-from .site import SiteBase
+from comken.toolbox.browser.download import DownloadDir
+from comken.toolbox.browser.locator import Locator
+from comken.toolbox.browser.management import BackgroundTask, Browsers, BrowserSession
+from comken.toolbox.browser.options import BrowserOptions
+from comken.toolbox.browser.page import Page, SitePage
+from comken.toolbox.browser.site import SiteBase
 
 __all__ = [
     "Browsers",

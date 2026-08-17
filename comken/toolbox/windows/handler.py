@@ -22,12 +22,12 @@ import win32com.client
 import win32con
 import win32gui
 
-from ...constants import FileFormat
-from ...core.data import column_number
-from ...core.files.base import FileBase
-from ...core.files.ops import copy_to_local_if_large
-from ...core.transfer import mapping_columns, normalize_lookup_key
-from ...exceptions import (
+from comken.constants import FileFormat
+from comken.core.data import column_number
+from comken.core.files.base import FileBase
+from comken.core.files.ops import copy_to_local_if_large
+from comken.core.transfer import mapping_columns, normalize_lookup_key
+from comken.exceptions import (
     EmptyHeaderCellError,
     ExcelApplicationNotAvailableError,
     ExcelFileNotFoundError,
@@ -37,7 +37,7 @@ from ...exceptions import (
     RowTransferError,
     _warn_coerce,
 )
-from ...runtime import dry_run_log, is_dry_run
+from comken.runtime import dry_run_log, is_dry_run
 
 logger = logging.getLogger(__name__)
 

@@ -9,10 +9,10 @@ import re
 from collections import Counter
 from pathlib import Path
 
-from ...constants import Encoding
-from ...core.data import col_to_num
-from ...core.timer import measure
-from ...exceptions import (
+from comken.constants import Encoding
+from comken.core.data import col_to_num
+from comken.core.timer import measure
+from comken.exceptions import (
     CsvCellReferenceError,
     CsvColumnNotFoundError,
     CsvHeadersTooFewError,
@@ -21,7 +21,7 @@ from ...exceptions import (
     CsvRowNotFoundError,
     EncodingDetectionError,
 )
-from .base import CsvBase
+from comken.toolbox.csv.base import CsvBase
 
 
 class CsvReader(CsvBase):

@@ -10,8 +10,8 @@ from typing import Self
 
 import requests
 
-from ...core.timer import measure
-from ...exceptions import SalesforceAuthError, SalesforceConnectionError
+from comken.core.timer import measure
+from comken.exceptions import SalesforceAuthError, SalesforceConnectionError
 
 AUTHORIZATION_PATH = "/services/oauth2/authorize"
 AUTHORIZATION_CODE_GRANT = "authorization_code"
@@ -42,7 +42,7 @@ class OAuth:
     @classmethod
     def from_credentials(cls, domain_url: str, prefix: str) -> Self:
         """DPAPIに保存したOAuth資格情報から認証を作る。"""
-        from ..credentials import Credentials, save_credential
+        from comken.toolbox.credentials import Credentials, save_credential
 
         credentials = Credentials(prefix)
 

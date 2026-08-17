@@ -14,9 +14,9 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from ...exceptions import CredentialError, CredentialNotFoundError
-from .importer import credential_name, import_json
-from .store import (
+from comken.exceptions import CredentialError, CredentialNotFoundError
+from comken.toolbox.credentials.importer import credential_name, import_json
+from comken.toolbox.credentials.store import (
     CREDENTIAL_NAME_PATTERN,
     CREDENTIALS_PATH,
     delete_credential,

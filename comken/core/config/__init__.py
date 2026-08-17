@@ -36,7 +36,7 @@ import types
 from pathlib import Path
 from typing import NoReturn
 
-from ...exceptions import (
+from comken.exceptions import (
     ConfigCreatedFromExampleError,
     ConfigFileNotFoundError,
     ConfigLowerCaseNameError,
@@ -151,7 +151,7 @@ class Config:
         # エディタ補完用スタブ（src/config.pyi）を自動更新する。
         # config.ini を変更してもスタブが古くならない（失敗しても本処理は止めない）。
         # スタブ生成は別モジュールへ分離しており、遅延 import で循環を避ける
-        from .stubs import update_stub
+        from comken.core.config.stubs import update_stub
 
         update_stub(cfg, path)
         _log_version_once()
@@ -285,7 +285,7 @@ def _log_version_once() -> None:
         # 親パッケージ側の __version__ は comken/__init__.py で定義されるため、
         # モジュール先頭で `from ... import __version__` すると import 順序に
         # 依存した循環が起きる。関数の内側で取る形にすることで循環を断つ。
-        from ... import __version__
+        from comken import __version__
 
         logger.info("comken v%s", __version__)
         _is_version_logged = True

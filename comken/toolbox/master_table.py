@@ -64,14 +64,14 @@ from typing import Any, ClassVar, Self
 from openpyxl.styles import Font, PatternFill
 from openpyxl.worksheet.datavalidation import DataValidation
 
-from ..constants import Color
-from ..exceptions import (
+from comken.constants import Color
+from comken.exceptions import (
     MasterColumnNotFoundError,
     MasterDuplicateValueError,
     MasterRowValueError,
     MasterSheetNotDefinedError,
 )
-from .excel import ExcelReader, ExcelWriter
+from comken.toolbox.excel import ExcelReader, ExcelWriter
 
 # フィールドの metadata に入れるときのキー
 _SPEC_KEY = "comken_master_column"

@@ -25,8 +25,8 @@ import re
 import time
 from typing import TYPE_CHECKING
 
-from ...core.timer import measure
-from ...exceptions import (
+from comken.core.timer import measure
+from comken.exceptions import (
     SalesforceReportExecutionError,
     SalesforceReportFormatError,
     SalesforceReportIdNotFoundError,
@@ -34,7 +34,7 @@ from ...exceptions import (
 )
 
 if TYPE_CHECKING:  # 実行時は import しない（client と相互参照になるため）
-    from .client import SalesforceBase
+    from comken.toolbox.salesforce.client import SalesforceBase
 
 logger = logging.getLogger(__name__)
 

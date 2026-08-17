@@ -14,19 +14,19 @@ from typing import Self
 
 import win32com.client
 
-from ...constants import Encoding
-from ...core.clock import now
-from ...core.files.base import FileBase
-from ...core.files.naming import DateNameBuilder
-from ...core.timer import measure
-from ...exceptions import (
+from comken.constants import Encoding
+from comken.core.clock import now
+from comken.core.files.base import FileBase
+from comken.core.files.naming import DateNameBuilder
+from comken.core.timer import measure
+from comken.exceptions import (
     AccessBackupError,
     AccessFileNotFoundError,
     AccessLocalCopyError,
     AccessRoutineError,
     AccessSourceNotFoundError,
 )
-from ...runtime import dry_run_log, is_dry_run
+from comken.runtime import dry_run_log, is_dry_run
 
 logger = logging.getLogger(__name__)
 

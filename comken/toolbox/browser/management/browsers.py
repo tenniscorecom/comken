@@ -53,19 +53,19 @@ from contextlib import ExitStack
 from pathlib import Path
 from typing import Self, TypeVar
 
-from ....core.timer import measure
-from ....exceptions import (
+from comken.core.timer import measure
+from comken.exceptions import (
     BrowsersClosedError,
     BrowsersNotStartedError,
     SessionNameConflictError,
     SessionNotFoundError,
     SiteConfigError,
 )
-from ..download import DownloadDir
-from ..options import BrowserOptions
-from ..site import SiteBase
-from .sessions import BrowserSession
-from .tasks import BackgroundTask
+from comken.toolbox.browser.download import DownloadDir
+from comken.toolbox.browser.management.sessions import BrowserSession
+from comken.toolbox.browser.management.tasks import BackgroundTask
+from comken.toolbox.browser.options import BrowserOptions
+from comken.toolbox.browser.site import SiteBase
 
 logger = logging.getLogger(__name__)
 

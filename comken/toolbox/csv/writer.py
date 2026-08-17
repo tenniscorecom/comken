@@ -9,9 +9,9 @@ import logging
 import tempfile
 from pathlib import Path
 
-from ...constants import Encoding
-from ...runtime import dry_run_log, is_dry_run
-from .base import CsvBase
+from comken.constants import Encoding
+from comken.runtime import dry_run_log, is_dry_run
+from comken.toolbox.csv.base import CsvBase
 
 logger = logging.getLogger(__name__)
 

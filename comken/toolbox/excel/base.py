@@ -18,10 +18,10 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.utils.cell import range_boundaries
 from openpyxl.worksheet.worksheet import Worksheet
 
-from ...core.files.base import FileBase
-from ...core.files.ops import copy_to_local_if_large
-from ...core.timer import measure
-from ...exceptions import (
+from comken.core.files.base import FileBase
+from comken.core.files.ops import copy_to_local_if_large
+from comken.core.timer import measure
+from comken.exceptions import (
     EmptyHeaderCellError,
     ExcelFileNotFoundError,
     ExcelHeadersTooFewError,
@@ -240,7 +240,7 @@ class ExcelBase(FileBase):
         except Exception as e:
             logger.debug("openpyxl での読み込みに失敗（%s）。win32com にフォールバックします", e)
 
-        from ..windows.handler import ExcelComHandler
+        from comken.toolbox.windows.handler import ExcelComHandler
 
         with ExcelComHandler(self._working_path) as com:
             return com.read_rows(sheet_name, min_row)

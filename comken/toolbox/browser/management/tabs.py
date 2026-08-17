@@ -12,8 +12,8 @@ from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support.ui import WebDriverWait
 
-from ....exceptions import PopupTabNotOpenedError
-from ..locator import Locator
+from comken.exceptions import PopupTabNotOpenedError
+from comken.toolbox.browser.locator import Locator
 
 logger = logging.getLogger(__name__)
 

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from .base import ExcelBase
+from comken.toolbox.excel.base import ExcelBase
 
 
 class ExcelReader(ExcelBase):

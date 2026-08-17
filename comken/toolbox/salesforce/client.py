@@ -25,21 +25,21 @@ from typing import Protocol, Self
 
 import requests
 
-from ...core.timer import measure
-from ...exceptions import (
+from comken.core.timer import measure
+from comken.exceptions import (
     SalesforceConnectionError,
     SalesforceExternalIdMissingError,
     SalesforceRequestError,
     SiteOwnerRequiredError,
 )
-from ...runtime import dry_run_log, is_dry_run
-from .metrics import ApiMetrics, RetryReason
+from comken.runtime import dry_run_log, is_dry_run
+from comken.toolbox.salesforce.metrics import ApiMetrics, RetryReason
 
 # 既定は Refresh Token Flow。Client Credentials Flow は client_secret だけで
 # アクセストークンを取れてしまい、漏えいしたときに実行ユーザーとして操作されるため
 # 使わない（→ docs/salesforce-authentication.md）。
-from .oauth_refresh import OAuth
-from .report import ReportApi
+from comken.toolbox.salesforce.oauth_refresh import OAuth
+from comken.toolbox.salesforce.report import ReportApi
 
 logger = logging.getLogger(__name__)
 

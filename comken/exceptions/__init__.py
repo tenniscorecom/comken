@@ -106,7 +106,7 @@ ComkenError
 カテゴリ基底クラスはまとめて捕捉するために使い、直接送出しない。
 """
 
-from .access import (
+from comken.exceptions.access import (
     AccessBackupError,
     AccessError,
     AccessFileNotFoundError,
@@ -114,8 +114,8 @@ from .access import (
     AccessRoutineError,
     AccessSourceNotFoundError,
 )
-from .base import ComkenError, SiteOwnerRequiredError
-from .browser import (
+from comken.exceptions.base import ComkenError, SiteOwnerRequiredError
+from comken.exceptions.browser import (
     BrowserError,
     BrowsersClosedError,
     BrowsersNotStartedError,
@@ -132,7 +132,7 @@ from .browser import (
     SiteConfigError,
     SiteNotStartedError,
 )
-from .column import (
+from comken.exceptions.column import (
     ColumnNotFoundError,
     CsvColumnNotFoundError,
     ExcelColumnNotFoundError,
@@ -142,7 +142,7 @@ from .column import (
     TransferKeyColumnNotFoundError,
     TransferSourceColumnNotFoundError,
 )
-from .config import (
+from comken.exceptions.config import (
     ConfigCreatedFromExampleError,
     ConfigError,
     ConfigFileNotFoundError,
@@ -150,7 +150,7 @@ from .config import (
     ConfigRequiredKeysMissingError,
     ConfigSectionNotFoundError,
 )
-from .credential import (
+from comken.exceptions.credential import (
     CredentialDecryptionError,
     CredentialError,
     CredentialImportError,
@@ -158,7 +158,7 @@ from .credential import (
     CredentialStoreCorruptedError,
     InvalidCredentialNameError,
 )
-from .csv import (
+from comken.exceptions.csv import (
     CsvCellReferenceError,
     CsvError,
     CsvHeadersTooFewError,
@@ -167,7 +167,7 @@ from .csv import (
     CsvRowNotFoundError,
     EncodingDetectionError,
 )
-from .downloader import (
+from comken.exceptions.downloader import (
     DownloaderError,
     EmptyReportError,
     InvalidReportUrlError,
@@ -179,7 +179,7 @@ from .downloader import (
     ScheduledReportNotDownloadedError,
     ScheduledReportNotRegisteredError,
 )
-from .excel import (
+from comken.exceptions.excel import (
     EmptyHeaderCellError,
     ExcelApplicationNotAvailableError,
     ExcelError,
@@ -196,25 +196,22 @@ from .excel import (
     TableNotAvailableInReadOnlyError,
     TableNotFoundError,
 )
-from .file import UnsupportedFileSuffixError
-from .master_table import (
+from comken.exceptions.file import UnsupportedFileSuffixError
+from comken.exceptions.master_table import (
     MasterColumnNotFoundError,
     MasterDuplicateValueError,
     MasterRowValueError,
     MasterSheetNotDefinedError,
     MasterTableError,
 )
-from .outlook import (
+from comken.exceptions.outlook import (
     ClassicOutlookNotAvailableError,
     OutlookAttachmentNotFoundError,
     OutlookError,
     OutlookFolderNotFoundError,
 )
-from .rpa import (
-    RpaError,
-    RpaLibraryNotFoundError,
-)
-from .salesforce import (
+from comken.exceptions.rpa import RpaError, RpaLibraryNotFoundError
+from comken.exceptions.salesforce import (
     SalesforceAuthError,
     SalesforceConnectionError,
     SalesforceCredentialRotationError,
@@ -227,13 +224,13 @@ from .salesforce import (
     SalesforceRequestError,
     SalesforceSiteNotFoundError,
 )
-from .state import (
+from comken.exceptions.state import (
     StateError,
     StateFileCorruptedError,
     StateLowerCaseNameError,
     StateValueTypeError,
 )
-from .warning import _warn_coerce as _warn_coerce
+from comken.exceptions.warning import _warn_coerce as _warn_coerce
 
 __all__ = [
     "ComkenError",

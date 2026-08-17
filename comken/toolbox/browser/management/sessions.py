@@ -30,18 +30,14 @@ from typing import Self
 
 from selenium import webdriver
 
-from ....core.clock import now
-from ....core.timer import measure
-from ....exceptions import (
-    ConcurrentSessionUseError,
-    SessionClosedError,
-    SessionNotStartedError,
-)
-from ..download import DownloadDir
-from ..locator import Locator
-from ..options import BrowserOptions
-from .startup import start_driver
-from .tabs import _TabManager
+from comken.core.clock import now
+from comken.core.timer import measure
+from comken.exceptions import ConcurrentSessionUseError, SessionClosedError, SessionNotStartedError
+from comken.toolbox.browser.download import DownloadDir
+from comken.toolbox.browser.locator import Locator
+from comken.toolbox.browser.management.startup import start_driver
+from comken.toolbox.browser.management.tabs import _TabManager
+from comken.toolbox.browser.options import BrowserOptions
 
 logger = logging.getLogger(__name__)
 

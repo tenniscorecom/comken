@@ -15,8 +15,8 @@ import time
 from pathlib import Path
 from typing import Self
 
-from ...core.timer import measure
-from ...exceptions import DownloadTimeoutError
+from comken.core.timer import measure
+from comken.exceptions import DownloadTimeoutError
 
 logger = logging.getLogger(__name__)
 

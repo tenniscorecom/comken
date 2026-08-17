@@ -37,8 +37,8 @@ from pathlib import Path
 import pywintypes
 import win32crypt
 
-from ...core.files.ops import cleanup_stale_tmp
-from ...exceptions import (
+from comken.core.files.ops import cleanup_stale_tmp
+from comken.exceptions import (
     CredentialDecryptionError,
     CredentialNotFoundError,
     CredentialStoreCorruptedError,

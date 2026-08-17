@@ -48,8 +48,13 @@ r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポー�
 ここに入れたものは利用者が付いた後だと外せなくなるため（後から動かせる方向へ倒す）。
 """
 
-from .master import ReportEntry, load_master, shared_report_ids
-from .service import download_report, download_scheduled, file_path_of, get_scheduled_report
+from comken.services.salesforce_downloader.master import ReportEntry, load_master, shared_report_ids
+from comken.services.salesforce_downloader.service import (
+    download_report,
+    download_scheduled,
+    file_path_of,
+    get_scheduled_report,
+)
 
 __all__ = [
     "download_report",

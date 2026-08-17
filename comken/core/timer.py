@@ -89,7 +89,7 @@ def measure(func: Callable[_P, _R]) -> Callable[_P, _R]:
     @functools.wraps(func)
     def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
         """デバッグ中だけ対象関数の出入りを記録する。"""
-        from ..runtime import is_debug
+        from comken.runtime import is_debug
 
         if not is_debug():
             return func(*args, **kwargs)

@@ -25,7 +25,7 @@ BrowserError
 ログだけを見る人が原因にたどり着けるようにするため。
 """
 
-from .base import ComkenError
+from comken.exceptions.base import ComkenError
 
 
 class BrowserError(ComkenError):

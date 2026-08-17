@@ -28,9 +28,9 @@ r"""comken/services/salesforce_downloader/master.py — レポート管理表の
 from dataclasses import dataclass
 from pathlib import Path
 
-from ...exceptions import InvalidReportUrlError, SalesforceReportIdNotFoundError
-from ...toolbox.master_table import MasterRow, column
-from ...toolbox.salesforce import report_id_from_url
+from comken.exceptions import InvalidReportUrlError, SalesforceReportIdNotFoundError
+from comken.toolbox.master_table import MasterRow, column
+from comken.toolbox.salesforce import report_id_from_url
 
 # 「実行方式」に書ける値
 SCHEDULED = "定期"

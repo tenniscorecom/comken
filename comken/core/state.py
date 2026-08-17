@@ -11,9 +11,9 @@ import os
 import tempfile
 from pathlib import Path
 
-from ..exceptions import StateFileCorruptedError, StateLowerCaseNameError, StateValueTypeError
-from ..runtime import dry_run_log, is_dry_run
-from .files.ops import cleanup_stale_tmp
+from comken.core.files.ops import cleanup_stale_tmp
+from comken.exceptions import StateFileCorruptedError, StateLowerCaseNameError, StateValueTypeError
+from comken.runtime import dry_run_log, is_dry_run
 
 STATE_SECTION = "STATE"
 

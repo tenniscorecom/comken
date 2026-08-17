@@ -33,7 +33,7 @@ line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "UP", "SIM", "PTH", "C4", "C90", "LOG", "G", "T20", "DTZ", "RUF"]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "PTH", "C4", "C90", "LOG", "G", "T20", "DTZ", "RUF", "TID"]
 ignore = [
     # 日本語のコード・コメント・docstring を「紛らわしい文字」として大量に誤検知するため
     "RUF001", "RUF002", "RUF003",
@@ -46,6 +46,11 @@ ignore = [
 # （呼び出しの結果を共有してしまう「可変デフォルト」には当たらない）
 extend-immutable-calls = ["comken.toolbox.master_table.column"]
 
+[tool.ruff.lint.flake8-tidy-imports]
+# 相対 import は禁止。ドットを数える作業を残さないため。
+# 必ず `from comken.X import Y` のようにパッケージルートから書く（CONVENTIONS.md 参照）
+ban-relative-imports = "all"
+
 [tool.ruff.lint.per-file-ignores]
 # 管理者・利用者が結果を画面で確認する CLI ツールでは print が出力手段になる。
 "comken/core/config/__main__.py" = ["T20"]
@@ -53,6 +58,11 @@ extend-immutable-calls = ["comken.toolbox.master_table.column"]
 "comken/toolbox/salesforce/__main__.py" = ["T20"]
 "comken/services/salesforce_downloader/__main__.py" = ["T20"]
 "examples/sample_login/run.py" = ["T20"]
+# examples/ は comken を使う側のサンプルコードで、内部が独自の小さなパッケージ
+# 構成（例: examples/sample_login/）を持つ。comken 本体の規約で縛ると
+# 「サンプルを comken パッケージとして動かす」前提を押し付けることになるため、
+# ここでは TID（相対 import 禁止）のみ外す。comken 本体側の規約は引き続き適用する。
+"examples/**/*.py" = ["TID"]
 
 [tool.pytest.ini_options]
 # tools/ のスクリプト（export_for_chat など）をテストから import できるようにする。

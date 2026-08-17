@@ -30,9 +30,9 @@ client_id / client_secret は DPAPI から読む（`comken.toolbox.credentials`�
 
 from urllib.parse import urlsplit
 
-from ....exceptions import SalesforceSiteNotFoundError
-from ..client import SalesforceBase
-from .sandbox import Sandbox
+from comken.exceptions import SalesforceSiteNotFoundError
+from comken.toolbox.salesforce.client import SalesforceBase
+from comken.toolbox.salesforce.sites.sandbox import Sandbox
 
 # 登録済みの組織。URL からどの組織へつなぐかを引くのに使う。
 # **組織を増やしたらここにも足す。** 足し忘れると、その組織の URL だけが

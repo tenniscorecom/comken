@@ -1,6 +1,6 @@
 """comken/core/files/naming/date.py — 日付を付けたファイル名の組み立て。"""
 
-from ...clock import now
+from comken.core.clock import now
 
 
 class DateNameBuilder:

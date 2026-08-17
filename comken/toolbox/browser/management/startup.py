@@ -12,10 +12,10 @@ from selenium import webdriver
 from selenium.webdriver.edge.options import Options
 from selenium.webdriver.edge.service import Service
 
-from ....exceptions import DriverStartError
-from ..download import DownloadDir
-from ..driver import update_driver
-from ..options import BrowserOptions
+from comken.exceptions import DriverStartError
+from comken.toolbox.browser.download import DownloadDir
+from comken.toolbox.browser.driver import update_driver
+from comken.toolbox.browser.options import BrowserOptions
 
 logger = logging.getLogger(__name__)
 
