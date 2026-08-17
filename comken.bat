@@ -4,27 +4,44 @@ rem comken の入口。`comken init [プロジェクト名]` で、新しいプロジェクトの雛形を
 rem この bat の場所を PYTHONPATH へ一時的に足してから Python を起動するので、
 rem 共有サーバー上の comken を参照している環境でもそのまま動きます。
 rem PATH に登録していない PC では、フルパスで指定してください。
+rem
+rem comken の場所は次の順で探す（見つかった時点で確定、後ろは見ない）:
+rem   1. この bat 自身のフォルダ（%~dp0）―― リポジトリ直下に置いた場合の正規の置き場所
+rem   2. 現在の PYTHONPATH の各エントリ ―― セットアップ済みの PC で bat だけ手元にある場合
+rem 判定はどの候補も `<候補>\comken\__init__.py` の存在で行う（フォルダ名では判定しない）。
+rem この探索ロジックは setup_comken.bat にも同じものを載せてある（共通 bat を作ると
+rem そちらも一緒に持ち歩かないと動かなくなるため、重複を許容している）。
 
-rem comken の場所を確定（%~dp0 から末尾の \ を除いた絶対パス）
-for %%I in ("%~dp0.") do set "COMKEN_ROOT=%%~fI"
+rem --- 段階 1: bat 自身のフォルダ ---
+for %%I in ("%~dp0.") do call :_test_comken "%%~fI"
+if not errorlevel 1 goto :_comken_found
 
+rem --- 段階 2: 現在の PYTHONPATH（未設定ならスキップ） ---
+if defined PYTHONPATH (
+  for %%P in ("%PYTHONPATH:;=" "%") do (
+    call :_test_comken "%%~P"
+    if not errorlevel 1 goto :_comken_found
+  )
+)
+
+rem どちらも見つからなかった
+echo [エラー] 共有ライブラリ comken が見つかりません。
+echo   探した手順:
+echo     1. この bat 自身のフォルダ
+echo     2. 環境変数 PYTHONPATH（; 区切り）
+echo   comken の場所を引数で渡して setup_comken.bat を実行してください（例）:
+echo     setup_comken.bat "C:\dev\original_libs"
+echo     setup_comken.bat "\\server\share\tools\comken"
+exit /b 1
+
+rem --- 見つかったルートを確定 ---
+:_comken_found
 rem python が見つからないときは、その旨を名指しで表示する。
 rem popd や pause を使わずにそのまま返すので、スケジューラや RPA 基盤から
 rem 呼んだときも成否が正しく伝わる。
 where python >nul 2>&1 || (
   echo [エラー] Python が見つかりません。
   echo   このパソコンに Python がインストールされているか、管理者に確認してください。
-  exit /b 1
-)
-
-rem comken がここにあるかを先に確かめる。共有サーバーへつながらないうちに
-rem 進めると、後ろで出るエラーが `ModuleNotFoundError: comken` だけになり、
-rem 原因が分かりにくい
-if not exist "%COMKEN_ROOT%\comken\__init__.py" (
-  echo [エラー] 共有ライブラリ comken が見つかりません。
-  echo     確認した場所: %COMKEN_ROOT%
-  echo   - 共有サーバーに接続できているか確認してください
-  echo   - この bat は comken のリポジトリ直下に置いて実行してください
   exit /b 1
 )
 
@@ -65,4 +82,12 @@ exit /b 1
 :too_many_args
 echo [エラー] 引数が多すぎます。
 echo 使い方: comken init [プロジェクト名]
+exit /b 1
+
+rem --- comken の場所をひとつ試し、見つかれば COMKEN_ROOT に確定する ---
+rem 見つかったら errorlevel 0 / COMKEN_ROOT は確定値。見つからなければ 1 / COMKEN_ROOT は空。
+:_test_comken
+set "COMKEN_ROOT=%~1"
+if exist "%COMKEN_ROOT%\comken\__init__.py" exit /b 0
+set "COMKEN_ROOT="
 exit /b 1

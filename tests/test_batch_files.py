@@ -109,3 +109,52 @@ def test_batch_file_checks_comken_before_running(path: Path):
     if "PYTHONPATH" not in text:
         return  # comken を使わない bat は対象外
     assert r"%COMKEN_ROOT%\comken\__init__.py" in text, "comken の存在を確かめていない"
+
+
+@pytest.mark.parametrize("path", _BAT_FILES, ids=lambda p: p.name)
+def test_batch_file_does_not_rely_on_dp0_alone(path: Path):
+    """bat が comken の場所を %~dp0 だけから判定していないこと。
+
+    リポジトリの直下以外（デスクトップ・任意の作業フォルダ）に bat を
+    コピーしても動くためには、`%~dp0` 以外からも comken を見つけられる
+    手段を持っていなければならない。
+    """
+    text = _read(path)
+    # comken を探さない bat は対象外
+    if r"comken\__init__.py" not in text:
+        return
+    # bat の探索系ロジックが入っているサイン
+    for phrase, meaning in [
+        ("%~dp0", "bat 自身のフォルダ"),
+        ("PYTHONPATH", "環境変数 PYTHONPATH"),
+    ]:
+        assert phrase in text, f"{path.name} は comken の場所を {meaning} からしか探していない"
+
+
+def test_setup_comken_accepts_a_path_argument():
+    """setup_comken.bat は第1引数で comken の場所を受け取れる。
+
+    リポジトリ外に bat を置いた場合に、引数で明示する導線が残っているかを
+    見る（引数を渡すと `%~1` が展開される）。
+    """
+    path = _ROOT / "setup_comken.bat"
+    text = _read(path)
+    assert "%~1" in text, "setup_comken.bat は第1引数を受け取れる形であるべき"
+
+
+def test_pythonpath_search_is_implemented_in_comken_locators():
+    """comken の場所を探す 2 本の bat は、PYTHONPATH を `;` 区切りで走査する。
+
+    リポジトリ外に bat がある状況（%~dp0 が comken 直下でない）で、
+    既に PYTHONPATH に入っていればそこから見つけられる必要がある。
+    `%PYTHONPATH:;=" "%` という cmd.exe のイディオムが使われていることで
+    「`;` で split して for に流す」実装があることを固定する
+    （cmd.exe 側の慣用句で、書き方が変わると bat が壊れる）。
+    """
+    for name in ("comken.bat", "setup_comken.bat"):
+        path = _ROOT / name
+        text = _read(path)
+        assert r'%PYTHONPATH:;=" "%' in text, (
+            f"{name} は PYTHONPATH を走査していない。"
+            "bat を comken の外に置いたとき、comken を見つけられない。"
+        )
