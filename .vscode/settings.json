@@ -1,0 +1,41 @@
+{
+  // comken 本体を編集するときの設定。**利用プロジェクト側の設定とは別物**
+  // （そちらは templates/新規プロジェクト/.vscode/settings.json が雛形になる）。
+  //
+  // ここには `python.analysis.extraPaths` を書かない。このリポジトリ自身が
+  // comken のルートなので、開いているフォルダから解決できる。
+
+  // tools/ と tests/ を import 解決の対象に入れる。
+  // tests は conftest 経由で tools/export_for_chat.py を import する（pyproject の
+  // pythonpath 設定と揃える）。ここに書かないと、編集中だけ「解決できません」になる。
+  "python.analysis.extraPaths": ["tools"],
+
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    }
+  },
+  "ruff.enable": true,
+
+  // pyproject.toml の line-length と揃える
+  "editor.rulers": [100],
+
+  // テストは pytest。VS Code のテストパネルから実行できるようにする
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestArgs": ["tests"],
+
+  // bat は CP932 で保存する（cmd.exe が CP932 として読むため。UTF-8 だと日本語が化ける）。
+  // tests/test_batch_files.py がこれを検証している
+  "[bat]": {
+    "files.encoding": "shiftjis"
+  },
+
+  // 生成物は編集しない（tools/export_for_chat.py が作り直す）
+  "files.readonlyInclude": {
+    "docs/自動生成/**": true
+  }
+}
