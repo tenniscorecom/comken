@@ -3059,7 +3059,7 @@ class ReportNotRegisteredError(DownloaderError):
 
 指定した管理番号が管理表に無い
 
-管理番号はコードに定数で書く（CUSTOMER_LIST = 1001）。管理表から行を消したり、
+管理番号はコードに定数で書く（CUSTOMER_LIST = "1001"）。管理表から行を消したり、
 番号を打ち間違えたりすると、どのレポートを指しているか決められない。
 
 発生箇所: comken.services.salesforce_downloader の download_report()
@@ -3071,7 +3071,7 @@ class ReportNotRegisteredError(DownloaderError):
 #### `__init__`
 
 ```text
-def __init__(self, report_key: int, registered: list[int], master_path: Path) -> None:
+def __init__(self, report_key: str, registered: list[str], master_path: Path) -> None:
 ```
 
 ### `ReportDisabledError`
@@ -3096,7 +3096,7 @@ class ReportDisabledError(DownloaderError):
 #### `__init__`
 
 ```text
-def __init__(self, report_key: int, summary: str, master_path: Path) -> None:
+def __init__(self, report_key: str, summary: str, master_path: Path) -> None:
 ```
 
 ### `InvalidReportUrlError`
@@ -3119,7 +3119,7 @@ class InvalidReportUrlError(DownloaderError):
 #### `__init__`
 
 ```text
-def __init__(self, report_key: int, url: str, reason: str) -> None:
+def __init__(self, report_key: str, url: str, reason: str) -> None:
 ```
 
 ### `ScheduledReportNotRegisteredError`
@@ -3144,7 +3144,7 @@ get_scheduled_report() は「決まった時刻に取っておいたものを受
 #### `__init__`
 
 ```text
-def __init__(self, report_key: int, summary: str, schedule: str, master_path: Path) -> None:
+def __init__(self, report_key: str, summary: str, schedule: str, master_path: Path) -> None:
 ```
 
 ### `ScheduledReportNotDownloadedError`
@@ -3173,7 +3173,7 @@ class ScheduledReportNotDownloadedError(DownloaderError):
 #### `__init__`
 
 ```text
-def __init__(self, report_key: int, summary: str, history_path: Path) -> None:
+def __init__(self, report_key: str, summary: str, history_path: Path) -> None:
 ```
 
 ### `ReportFileMissingError`
@@ -3197,7 +3197,7 @@ class ReportFileMissingError(DownloaderError):
 #### `__init__`
 
 ```text
-def __init__(self, report_key: int, path: Path) -> None:
+def __init__(self, report_key: str, path: Path) -> None:
 ```
 
 ### `EmptyReportError`
@@ -3222,7 +3222,7 @@ class EmptyReportError(DownloaderError):
 #### `__init__`
 
 ```text
-def __init__(self, report_key: int, summary: str, url: str) -> None:
+def __init__(self, report_key: str, summary: str, url: str) -> None:
 ```
 
 ### `ReportFolderNotFoundError`
@@ -3247,7 +3247,7 @@ class ReportFolderNotFoundError(DownloaderError):
 #### `__init__`
 
 ```text
-def __init__(self, report_key: int, folder: Path) -> None:
+def __init__(self, report_key: str, folder: Path) -> None:
 ```
 
 ### `ScheduledDownloadFailedError`
@@ -3273,7 +3273,7 @@ class ScheduledDownloadFailedError(DownloaderError):
 #### `__init__`
 
 ```text
-def __init__(self, failed_keys: list[int], history_path: Path) -> None:
+def __init__(self, failed_keys: list[str], history_path: Path) -> None:
 ```
 
 
@@ -3282,7 +3282,7 @@ def __init__(self, failed_keys: list[int], history_path: Path) -> None:
 ### `download_report`
 
 ```text
-def download_report(report_key: int, project: str='') -> CsvReader:
+def download_report(report_key: str, project: str='') -> CsvReader:
 ```
 
 #### 説明
@@ -3292,7 +3292,7 @@ def download_report(report_key: int, project: str='') -> CsvReader:
 **必ず Salesforce へ問い合わせる。** 今日すでに取っていても取り直す。
 
 Args:
-    report_key: 管理表の管理番号（例: 1001）。
+    report_key: 管理表の管理番号（例: "1001"）。
     project: 呼び出し元の名前。履歴に残るので、入れておくと後から追える。
 
 Returns:
@@ -3307,7 +3307,7 @@ Raises:
 ### `get_scheduled_report`
 
 ```text
-def get_scheduled_report(report_key: int, project: str='') -> CsvReader:
+def get_scheduled_report(report_key: str, project: str='') -> CsvReader:
 ```
 
 #### 説明
@@ -3315,7 +3315,7 @@ def get_scheduled_report(report_key: int, project: str='') -> CsvReader:
 定期取得しておいたファイルを `CsvReader` で返す。**取りに行かない。**
 
 Args:
-    report_key: 管理表の管理番号（例: 1001）。
+    report_key: 管理表の管理番号（例: "1001"）。
     project: 呼び出し元の名前（履歴には残さないが、例外の調査に使えるよう受け取る）。
 
 Returns:
@@ -3372,7 +3372,7 @@ def file_path_of(entry: ReportEntry) -> Path:
 ### `load_master`
 
 ```text
-def load_master(path: str | Path | None=None) -> dict[int, ReportEntry]:
+def load_master(path: str | Path | None=None) -> dict[str, ReportEntry]:
 ```
 
 #### 説明
@@ -3388,7 +3388,7 @@ Returns:
 ### `shared_report_ids`
 
 ```text
-def shared_report_ids(entries: dict[int, ReportEntry]) -> dict[str, list[int]]:
+def shared_report_ids(entries: dict[str, ReportEntry]) -> dict[str, list[str]]:
 ```
 
 #### 説明

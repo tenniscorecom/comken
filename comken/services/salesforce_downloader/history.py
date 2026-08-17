@@ -82,7 +82,7 @@ def _stage(value: bool | None) -> str:
 def record(
     path: str | Path,
     *,
-    report_key: int,
+    report_key: str,
     summary: str,
     report_id: str,
     url: str,
@@ -155,7 +155,7 @@ def record(
 
 def downloaded_today(
     path: str | Path,
-    report_key: int,
+    report_key: str,
     trigger: str = TRIGGER_SCHEDULED,
     date: datetime.date | None = None,
 ) -> bool:

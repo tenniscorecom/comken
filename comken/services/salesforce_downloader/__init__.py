@@ -6,8 +6,8 @@ r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポー�
 
     from comken.services.salesforce_downloader import download_report, get_scheduled_report
 
-    CUSTOMER_LIST = 1001          # プロジェクトごとに、意味の分かる名前で定数にする
-    SALES_RESULT = 1003
+    CUSTOMER_LIST = "1001"        # プロジェクトごとに、意味の分かる名前で定数にする
+    SALES_RESULT = "1003"
 
     rows = download_report(CUSTOMER_LIST).read_rows()                  # 今すぐ取りに行く
     by_code = get_scheduled_report(SALES_RESULT).index("顧客コード")    # 定期取得済みを受け取る

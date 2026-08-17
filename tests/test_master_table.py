@@ -27,16 +27,17 @@ class Item(MasterRow):
 
     SHEET_NAME = "一覧"
 
-    key: int = column("ID", unique=True, help="管理番号")
+    key: str = column("ID", unique=True, help="管理番号")
     name: str = column("名前", help="人が読んで分かる名前")
     source: Path = column("コピー元", help="共有サーバー上のファイル")
     mode: str = column("方式", choices=("毎日", "手動"), help="毎日は自動で取ります")
-    enabled: bool = column("有効", help="「有効」か「無効」と書いてください")
+    enabled: bool = column("有効", choices=("○", "×"), help="「○」か「×」と書いてください")
+    note: str = column("備考", default="", help="編集者の覚え書き")
 
 
-HEADERS = ["ID", "名前", "コピー元", "方式", "有効"]
-ROW_A = [1001, "受注一覧", r"\\server\受注\data.csv", "毎日", "有効"]
-ROW_B = [1002, "在庫", r"\\server\在庫\data.csv", "手動", "無効"]
+HEADERS = ["ID", "名前", "コピー元", "方式", "有効", "備考"]
+ROW_A = ["1001", "受注一覧", r"\\server\受注\data.csv", "毎日", "○", ""]
+ROW_B = ["1002", "在庫", r"\\server\在庫\data.csv", "手動", "×", ""]
 
 
 def make_sheet(path: Path, rows: list[list], headers: list[str] | None = None) -> Path:
@@ -54,25 +55,25 @@ class TestLoad:
 
     def test_reads_rows_with_declared_types(self, tmp_path):
         items = Item.load(make_sheet(tmp_path / "一覧.xlsx", [ROW_A, ROW_B]))
-        assert [item.key for item in items] == [1001, 1002]
+        assert [item.key for item in items] == ["1001", "1002"]
         assert isinstance(items[0].source, Path)  # 型注釈のとおり Path になる
         assert items[0].enabled is True
-        assert items[1].enabled is False  # 「無効」は False
+        assert items[1].enabled is False  # 「×」は False
 
     def test_blank_rows_are_skipped(self, tmp_path):
         """表の下に残った空行は読み飛ばす。"""
-        items = Item.load(make_sheet(tmp_path / "一覧.xlsx", [ROW_A, [None] * 5]))
+        items = Item.load(make_sheet(tmp_path / "一覧.xlsx", [ROW_A, [None] * 6]))
         assert len(items) == 1
 
     def test_blank_in_required_column_raises(self, tmp_path):
         """既定値の無い列が空欄なら止める（→ 理由は TestBlankPolicy）。"""
-        row = [1001, "受注一覧", r"\\server\a.csv", "毎日", None]
+        row = ["1001", "受注一覧", r"\\server\a.csv", "毎日", None, ""]
         with pytest.raises(MasterRowValueError):
             Item.load(make_sheet(tmp_path / "一覧.xlsx", [row]))
 
     def test_blank_without_default_raises(self, tmp_path):
         """既定値の無い列が空なら、その行と列を示して止める。"""
-        row = [1001, None, r"\\server\a.csv", "毎日", "有効"]
+        row = ["1001", None, r"\\server\a.csv", "毎日", "○", ""]
         with pytest.raises(MasterRowValueError) as e:
             Item.load(make_sheet(tmp_path / "一覧.xlsx", [row]))
         assert "2 行目" in str(e.value)  # 見出しが1行目なので、最初のデータは2行目
@@ -87,30 +88,54 @@ class TestValidation:
     """非エンジニアが編集する表なので、どこが変かを示して止める。"""
 
     def test_value_outside_choices_raises(self, tmp_path):
-        row = [1001, "受注一覧", r"\\server\a.csv", "毎週", "有効"]
+        row = ["1001", "受注一覧", r"\\server\a.csv", "毎週", "○", ""]
         with pytest.raises(MasterRowValueError) as e:
             Item.load(make_sheet(tmp_path / "一覧.xlsx", [row]))
         assert "「毎日」か「手動」" in str(e.value)  # 書ける値を示す
 
     def test_non_numeric_key_raises(self, tmp_path):
-        row = ["A001", "受注一覧", r"\\server\a.csv", "毎日", "有効"]
-        with pytest.raises(MasterRowValueError) as e:
-            Item.load(make_sheet(tmp_path / "一覧.xlsx", [row]))
-        assert "数字" in str(e.value)
+        row = ["A001", "受注一覧", r"\\server\a.csv", "毎日", "○", ""]
+        # str 型の key 列は「数字」を要求しない（むしろ数字以外も使える）。
+        # 代わりに、重複していないことの検証として、別のシナリオで確認する
+        items = Item.load(make_sheet(tmp_path / "一覧.xlsx", [row]))
+        assert items[0].key == "A001"
+
+    def test_numeric_string_key_is_preserved(self, tmp_path):
+        """Excel が `1001` を数値セルで返すとき、`"1001"` として読める。"""
+        # openpyxl 経由で、数値セル（float）として `1001` を書く
+        from openpyxl import Workbook
+
+        path = tmp_path / "一覧.xlsx"
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "一覧"
+        ws.append(HEADERS)
+        ws.append([1001, "受注一覧", r"\\server\a.csv", "毎日", "○", ""])
+        wb.save(path)
+
+        items = Item.load(path)
+        assert items[0].key == "1001"  # "1001.0" ではない
 
     def test_duplicate_unique_value_raises(self, tmp_path):
-        rows = [ROW_A, [1001, "別の名前", r"\\server\b.csv", "手動", "有効"]]
+        rows = [ROW_A, ["1001", "別の名前", r"\\server\b.csv", "手動", "○", ""]]
         with pytest.raises(MasterDuplicateValueError) as e:
             Item.load(make_sheet(tmp_path / "一覧.xlsx", rows))
         assert "ID" in str(e.value)
 
     def test_missing_header_raises_with_existing_headers(self, tmp_path):
         """見出しを変えられたら、今ある見出しを示して止める。"""
-        headers = ["ID", "名称", "コピー元", "方式", "有効"]  # 「名前」を「名称」に変えた
+        headers = ["ID", "名称", "コピー元", "方式", "有効", "備考"]  # 「名前」を「名称」に変えた
         with pytest.raises(MasterColumnNotFoundError) as e:
             Item.load(make_sheet(tmp_path / "一覧.xlsx", [ROW_A], headers))
         assert "名前" in str(e.value)
         assert "名称" in str(e.value)  # 今ある見出しも出す
+
+    def test_value_outside_bool_choices_raises(self, tmp_path):
+        """`enabled` を「○」「×」以外にするとエラー。表記が1つに絞られる。"""
+        row = ["1001", "受注一覧", r"\\server\a.csv", "毎日", "有効", ""]
+        with pytest.raises(MasterRowValueError) as e:
+            Item.load(make_sheet(tmp_path / "一覧.xlsx", [row]))
+        assert "「○」か「×」" in str(e.value)
 
 
 class TestTemplate:
@@ -119,7 +144,7 @@ class TestTemplate:
     def test_generated_template_can_be_loaded(self, tmp_path):
         """**雛形と読み込みで列がズレない**（同じ宣言から作るため）。"""
         example = {
-            "key": 1001,
+            "key": "1001",
             "name": "受注一覧",
             "source": Path(r"\\server\受注\data.csv"),
             "mode": "毎日",
@@ -128,8 +153,8 @@ class TestTemplate:
         path = Item.create_template(tmp_path / "一覧.xlsx", [example])
         items = Item.load(path)
         assert len(items) == 1
-        assert items[0].key == 1001
-        assert items[0].enabled is True  # True は「有効」として書かれ、読み戻せる
+        assert items[0].key == "1001"
+        assert items[0].enabled is True  # True は「○」として書かれ、読み戻せる
 
     def test_bool_choices_round_trip(self, tmp_path):
         """bool 列の独自表記は、雛形へ書いて読み戻しても値が変わらない。"""
@@ -138,12 +163,12 @@ class TestTemplate:
         class WithBoolChoices(MasterRow):
             SHEET_NAME = "一覧"
 
-            key: int = column("ID")
+            key: str = column("ID")
             is_allowed: bool = column("許可", choices=("○", "×"))
 
         examples = [
-            {"key": 1, "is_allowed": True},
-            {"key": 2, "is_allowed": False},
+            {"key": "1", "is_allowed": True},
+            {"key": "2", "is_allowed": False},
         ]
         path = WithBoolChoices.create_template(tmp_path / "一覧.xlsx", examples)
 
@@ -172,7 +197,7 @@ class TestTemplate:
             SHEET_NAME = "一覧"
             GUIDE_INTRO = "1行目\n2行目"
 
-            key: int = column("ID")
+            key: str = column("ID")
 
         path = WithMultilineGuide.create_template(tmp_path / "一覧.xlsx")
         guide = load_workbook(path)["記入方法"]
@@ -183,8 +208,59 @@ class TestTemplate:
 
     def test_table_is_created(self, tmp_path):
         """Excel のテーブルにしておくと、行を足すのが楽になる。"""
-        path = Item.create_template(tmp_path / "一覧.xlsx", [{"key": 1, "name": "a"}])
+        path = Item.create_template(tmp_path / "一覧.xlsx", [{"key": "1", "name": "a"}])
         assert load_workbook(path)["一覧"].tables
+
+    def test_choice_columns_get_dropdown_in_template(self, tmp_path):
+        """`choices` のある列には Excel のドロップダウン（入力規則）が付く。"""
+        path = Item.create_template(tmp_path / "一覧.xlsx", [{"key": "1", "name": "a"}])
+        ws = load_workbook(path)["一覧"]
+        validations = list(ws.data_validations.dataValidation)
+        # 「方式」「有効」の 2 列にドロップダウンが付く。「名前」「コピー元」「ID」「備考」
+        # には付かない
+        ranges = sorted(str(v.sqref) for v in validations)
+        assert ranges == ["D2:D1002", "E2:E1002"]
+        formulas = {str(v.sqref): v.formula1 for v in validations}
+        assert formulas["D2:D1002"] == '"毎日,手動"'
+        assert formulas["E2:E1002"] == '"○,×"'
+
+    def test_non_choice_columns_have_no_dropdown(self, tmp_path):
+        """`choices` を宣言していない列にはドロップダウンが付かない。"""
+        path = Item.create_template(tmp_path / "一覧.xlsx", [{"key": "1", "name": "a"}])
+        ws = load_workbook(path)["一覧"]
+        # 「名前」列（B2:B1002）に validation が無いこと
+        for v in ws.data_validations.dataValidation:
+            assert str(v.sqref) != "B2:B1002"
+
+    def test_template_font_is_noto_sans_jp(self, tmp_path):
+        """雛形（表シート・記入方法シートとも）のフォントが Noto Sans JP。"""
+        from openpyxl import load_workbook
+
+        path = Item.create_template(tmp_path / "一覧.xlsx", [{"key": "1", "name": "a"}])
+        wb = load_workbook(path)
+        cell = wb["一覧"]["A1"]
+        assert cell.font.name == "Noto Sans JP"
+        # ガイドシートの全セルのフォント名も Noto Sans JP
+        guide = wb["記入方法"]
+        for row in guide.iter_rows(min_row=1, max_row=10):
+            for cell in row:
+                assert cell.font.name == "Noto Sans JP"
+
+    def test_example_rows_are_marked_with_note_and_fill(self, tmp_path):
+        """記入例には「備考」に案内文が書いてあり、薄い背景色が付く。"""
+        from openpyxl import load_workbook
+
+        path = Item.create_template(
+            tmp_path / "一覧.xlsx", [{"key": "1", "name": "a", "note": "記入例です"}]
+        )
+        ws = load_workbook(path)["一覧"]
+        # 記入例の備考列に案内文が書かれている
+        assert ws["F2"].value == "記入例です"
+        # 記入例全体に薄い背景色
+        assert (
+            ws["A2"].fill.fgColor.value.endswith("D9D9D9")
+            or ws["A2"].fill.fgColor.rgb == "00D9D9D9"
+        )
 
 
 class TestColumnAdded:
@@ -201,11 +277,11 @@ class TestColumnAdded:
         class WithNewColumn(MasterRow):
             SHEET_NAME = "一覧"
 
-            key: int = column("ID", unique=True)
+            key: str = column("ID", unique=True)
             name: str = column("名前")
             source: Path = column("コピー元")
             mode: str = column("方式", choices=("毎日", "手動"))
-            enabled: bool = column("有効")
+            enabled: bool = column("有効", choices=("○", "×"))
             memo: str = column("備考", default="")  # ← あとから足した列
 
         items = WithNewColumn.load(make_sheet(tmp_path / "一覧.xlsx", [ROW_A]))
@@ -219,11 +295,11 @@ class TestColumnAdded:
         class WithRequiredColumn(MasterRow):
             SHEET_NAME = "一覧"
 
-            key: int = column("ID", unique=True)
+            key: str = column("ID", unique=True)
             name: str = column("名前")
             source: Path = column("コピー元")
             mode: str = column("方式", choices=("毎日", "手動"))
-            enabled: bool = column("有効")
+            enabled: bool = column("有効", choices=("○", "×"))
             owner: str = column("担当", help="この一覧の持ち主")  # 既定値なし
 
         with pytest.raises(MasterColumnNotFoundError) as e:
@@ -235,7 +311,7 @@ class TestColumnAdded:
         headers = [*HEADERS, "使わない列"]
         rows = [[*ROW_A, "なにか"]]
         items = Item.load(make_sheet(tmp_path / "一覧.xlsx", rows, headers))
-        assert items[0].key == 1001
+        assert items[0].key == "1001"
 
 
 class TestHeaderAccess:
@@ -267,10 +343,10 @@ class TestBlankPolicy:
         class Strict(MasterRow):
             SHEET_NAME = "一覧"
 
-            key: int = column("ID")
-            enabled: bool = column("有効")  # 既定値を持たせない
+            key: str = column("ID")
+            enabled: bool = column("有効", choices=("○", "×"))  # 既定値を持たせない
 
-        path = make_sheet(tmp_path / "一覧.xlsx", [[1001, None]], ["ID", "有効"])
+        path = make_sheet(tmp_path / "一覧.xlsx", [["1001", None]], ["ID", "有効"])
         with pytest.raises(MasterRowValueError) as e:
             Strict.load(path)
         assert "有効" in str(e.value)
@@ -282,10 +358,10 @@ class TestBlankPolicy:
         class WithMemo(MasterRow):
             SHEET_NAME = "一覧"
 
-            key: int = column("ID")
+            key: str = column("ID")
             memo: str = column("備考", default="")
 
-        path = make_sheet(tmp_path / "一覧.xlsx", [[1001, None]], ["ID", "備考"])
+        path = make_sheet(tmp_path / "一覧.xlsx", [["1001", None]], ["ID", "備考"])
         assert WithMemo.load(path)[0].memo == ""
 
 
@@ -306,7 +382,7 @@ class TestFormula:
         sheet.title = "一覧"
         sheet.append(["ID", "名前", "コピー元", "方式", "有効", "サーバー"])
         sheet.append(
-            [1001, "受注一覧", r'=CONCATENATE(F2,"\data.csv")', "毎日", "有効", r"\server\受注"]
+            ["1001", "受注一覧", r'=CONCATENATE(F2,"\data.csv")', "毎日", "○", r"\server\受注"]
         )
         book.save(path)
         return path

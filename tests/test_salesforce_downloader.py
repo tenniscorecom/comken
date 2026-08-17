@@ -46,10 +46,10 @@ URL_A = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/0
 URL_B = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000FGHIJ/view"
 ROWS = [{"名前": "山田", "金額": "100"}, {"名前": "鈴木", "金額": "200"}]
 
-HEADERS = ["ID", "概要", "Salesforce URL", "実行方式", "保存先", "有効"]
+HEADERS = ["ID", "概要", "Salesforce URL", "実行方式", "保存先", "有効", "備考"]
 # `0件あり` 列を足した見出し。列が無い管理表でも既定 `×` で読めることを確かめる
-# ため、`paths` fixture は 6 列のままで固定する
-HEADERS_WITH_ALLOW_EMPTY = [*HEADERS, "0件あり"]
+# ため、`paths` fixture は 7 列のままで固定する
+HEADERS_WITH_ALLOW_EMPTY = [*HEADERS[:6], "0件あり", "備考"]
 
 
 def make_master(path: Path, rows: list[list]) -> Path:
@@ -90,9 +90,9 @@ def paths(tmp_path, monkeypatch):
     master = make_master(
         tmp_path / "レポート管理表.xlsx",
         [
-            [1001, "顧客一覧", URL_A, "定期", str(folder), "有効"],
-            [1002, "売上実績", URL_B, "個別", str(folder), "有効"],
-            [1003, "停止中", URL_B, "定期", str(folder), "無効"],
+            ["1001", "顧客一覧", URL_A, "定期", str(folder), "○", ""],
+            ["1002", "売上実績", URL_B, "個別", str(folder), "○", ""],
+            ["1003", "停止中", URL_B, "定期", str(folder), "×", ""],
         ],
     )
     history_path = tmp_path / "ダウンロード履歴.csv"
@@ -118,26 +118,26 @@ class TestLoadMaster:
 
     def test_reads_rows_and_extracts_report_id(self, paths):
         entries = load_master(paths["master_path"])
-        assert list(entries) == [1001, 1002, 1003]
+        assert list(entries) == ["1001", "1002", "1003"]
         # Salesforce のレポート ID は URL から取り出す（人には入力させない）
-        assert entries[1001].report_id == "00O5g00000ABCDE"
-        assert entries[1001].is_scheduled
-        assert not entries[1002].is_scheduled
-        assert not entries[1003].enabled
+        assert entries["1001"].report_id == "00O5g00000ABCDE"
+        assert entries["1001"].is_scheduled
+        assert not entries["1002"].is_scheduled
+        assert not entries["1003"].enabled
 
     def test_blank_rows_are_skipped(self, tmp_path):
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [[1001, "顧客一覧", URL_A, "定期", str(tmp_path), "有効"], [None] * 6],
+            [["1001", "顧客一覧", URL_A, "定期", str(tmp_path), "○", ""], [None] * 7],
         )
-        assert list(load_master(master)) == [1001]
+        assert list(load_master(master)) == ["1001"]
 
     def test_duplicate_key_raises(self, tmp_path):
         master = make_master(
             tmp_path / "管理表.xlsx",
             [
-                [1001, "顧客一覧", URL_A, "定期", str(tmp_path), "有効"],
-                [1001, "別の名前", URL_B, "個別", str(tmp_path), "有効"],
+                ["1001", "顧客一覧", URL_A, "定期", str(tmp_path), "○", ""],
+                ["1001", "別の名前", URL_B, "個別", str(tmp_path), "○", ""],
             ],
         )
         with pytest.raises(MasterDuplicateValueError):
@@ -146,7 +146,7 @@ class TestLoadMaster:
     def test_url_without_report_id_raises_with_row_number(self, tmp_path):
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [[1001, "顧客一覧", "https://example.com/", "定期", str(tmp_path), "有効"]],
+            [["1001", "顧客一覧", "https://example.com/", "定期", str(tmp_path), "○", ""]],
         )
         with pytest.raises(InvalidReportUrlError) as e:
             load_master(master)
@@ -155,19 +155,19 @@ class TestLoadMaster:
     def test_unknown_schedule_raises(self, tmp_path):
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [[1001, "顧客一覧", URL_A, "毎日", str(tmp_path), "有効"]],
+            [["1001", "顧客一覧", URL_A, "毎日", str(tmp_path), "○", ""]],
         )
         with pytest.raises(MasterRowValueError) as e:
             load_master(master)
         assert "実行方式" in str(e.value)
 
-    def test_non_numeric_key_raises(self, tmp_path):
+    def test_non_numeric_key_is_allowed(self, tmp_path):
+        """str 型の `key` なので、文字列の ID もそのまま使える。"""
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["A001", "顧客一覧", URL_A, "定期", str(tmp_path), "有効"]],
+            [["A001", "顧客一覧", URL_A, "定期", str(tmp_path), "○", ""]],
         )
-        with pytest.raises(MasterRowValueError):
-            load_master(master)
+        assert list(load_master(master)) == ["A001"]
 
 
 class TestSharedReportIds:
@@ -176,13 +176,13 @@ class TestSharedReportIds:
     def test_detects_reports_used_by_multiple_keys(self, paths):
         entries = load_master(paths["master_path"])
         shared = shared_report_ids(entries)
-        # 1002 と 1003 が同じ URL（＝同じレポート）を指している
-        assert shared == {"00O5g00000FGHIJ": [1002, 1003]}
+        # "1002" と "1003" が同じ URL（＝同じレポート）を指している
+        assert shared == {"00O5g00000FGHIJ": ["1002", "1003"]}
 
     def test_unique_reports_are_not_listed(self, tmp_path):
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [[1001, "顧客一覧", URL_A, "定期", str(tmp_path), "有効"]],
+            [["1001", "顧客一覧", URL_A, "定期", str(tmp_path), "○", ""]],
         )
         assert shared_report_ids(load_master(master)) == {}
 
@@ -194,7 +194,7 @@ class TestDownloadReport:
         with patch(
             "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
-            reader = download_report(1001, "案件集計")
+            reader = download_report("1001", "案件集計")
         assert reader.path.is_file()
         assert reader.read_rows() == ROWS
 
@@ -206,7 +206,7 @@ class TestDownloadReport:
         with patch(
             "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
-            reader = download_report(1001)
+            reader = download_report("1001")
         stamp = today().strftime("%Y%m%d")
         assert reader.path.name == f"1001_顧客一覧_{stamp}.csv"
 
@@ -214,17 +214,17 @@ class TestDownloadReport:
         """今日すでに取っていても取り直す（明示的な最新取得なので）。"""
         site = fake_salesforce()
         with patch("comken.services.salesforce_downloader.service.site_for", return_value=site):
-            download_report(1001)
-            download_report(1001)
+            download_report("1001")
+            download_report("1001")
         assert site.return_value.__enter__.return_value.report.run.call_count == 2
 
     def test_unregistered_key_raises(self, paths):
         with pytest.raises(ReportNotRegisteredError):
-            download_report(9999)
+            download_report("9999")
 
     def test_disabled_report_raises(self, paths):
         with pytest.raises(ReportDisabledError):
-            download_report(1003)
+            download_report("1003")
 
     def test_empty_report_raises_and_saves_nothing(self, paths):
         with (
@@ -234,14 +234,14 @@ class TestDownloadReport:
             ),
             pytest.raises(EmptyReportError),
         ):
-            download_report(1001)
+            download_report("1001")
         assert list(paths["folder"].glob("*.csv")) == []
 
     def test_missing_folder_raises_and_is_not_created(self, tmp_path, monkeypatch):
         missing = tmp_path / "無いフォルダ"
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [[1001, "顧客一覧", URL_A, "定期", str(missing), "有効"]],
+            [["1001", "顧客一覧", URL_A, "定期", str(missing), "○", ""]],
         )
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
         monkeypatch.setattr(service_module, "HISTORY_PATH", tmp_path / "履歴.csv")
@@ -252,14 +252,14 @@ class TestDownloadReport:
             ),
             pytest.raises(ReportFolderNotFoundError),
         ):
-            download_report(1001)
+            download_report("1001")
         assert not missing.exists()
 
     def test_no_temporary_file_is_left_behind(self, paths):
         with patch(
             "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
-            download_report(1001)
+            download_report("1001")
         assert list(paths["folder"].glob("~*")) == []
 
 
@@ -270,7 +270,7 @@ class TestHistory:
         with patch(
             "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
-            download_report(1001, "案件集計")
+            download_report("1001", "案件集計")
         row = _history_rows(paths)[-1]
         assert row["管理番号"] == "1001"
         assert row["プロジェクト"] == "案件集計"
@@ -290,7 +290,7 @@ class TestHistory:
             ),
             pytest.raises(EmptyReportError),
         ):
-            download_report(1001, "案件集計")
+            download_report("1001", "案件集計")
         row = _history_rows(paths)[-1]
         assert row["成否"] == "失敗"
         # 0 行でも Salesforce への問い合わせは成功している点が重要
@@ -303,13 +303,13 @@ class TestHistory:
         with patch(
             "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
-            download_report(1001)  # 個別として記録される
+            download_report("1001")  # 個別として記録される
         # 個別に取っただけでは「本日の定期取得が済んだ」ことにはならない
-        assert not history.downloaded_today(paths["history_path"], 1001)
-        assert history.downloaded_today(paths["history_path"], 1001, history.TRIGGER_ON_DEMAND)
+        assert not history.downloaded_today(paths["history_path"], "1001")
+        assert history.downloaded_today(paths["history_path"], "1001", history.TRIGGER_ON_DEMAND)
 
     def test_missing_history_file_is_not_downloaded(self, tmp_path):
-        assert not history.downloaded_today(tmp_path / "無い.csv", 1001)
+        assert not history.downloaded_today(tmp_path / "無い.csv", "1001")
 
     # ── 履歴の5ケース（4. の表に対応する個別テスト）────────────────────
     def test_history_when_folder_is_missing(self, tmp_path, monkeypatch):
@@ -318,7 +318,7 @@ class TestHistory:
         missing = tmp_path / "無いフォルダ"
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [[1001, "顧客一覧", URL_A, "定期", str(missing), "有効"]],
+            [["1001", "顧客一覧", URL_A, "定期", str(missing), "○", ""]],
         )
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -330,7 +330,7 @@ class TestHistory:
             ),
             pytest.raises(ReportFolderNotFoundError),
         ):
-            download_report(1001)
+            download_report("1001")
         rows = CsvReader(history_path).read_rows()
         assert len(rows) == 1
         row = rows[0]
@@ -348,7 +348,7 @@ class TestHistory:
         folder.mkdir()
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [[1001, "顧客一覧", URL_A, "定期", str(folder), "有効"]],
+            [["1001", "顧客一覧", URL_A, "定期", str(folder), "○", ""]],
         )
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -368,7 +368,7 @@ class TestHistory:
             ),
             pytest.raises(SalesforceRequestError),
         ):
-            download_report(1001)
+            download_report("1001")
         rows = CsvReader(history_path).read_rows()
         assert len(rows) == 1
         row = rows[0]
@@ -387,7 +387,7 @@ class TestHistory:
             ),
             pytest.raises(EmptyReportError),
         ):
-            download_report(1001)
+            download_report("1001")
         row = _history_rows(paths)[-1]
         assert row["成否"] == "失敗"
         assert row["Salesforce取得結果"] == "成功"
@@ -401,7 +401,7 @@ class TestHistory:
         folder.mkdir()
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [[1001, "顧客一覧", URL_A, "定期", str(folder), "有効"]],
+            [["1001", "顧客一覧", URL_A, "定期", str(folder), "○", ""]],
         )
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -423,7 +423,7 @@ class TestHistory:
             ),
             pytest.raises(OSError),
         ):
-            download_report(1001)
+            download_report("1001")
         rows = CsvReader(history_path).read_rows()
         assert len(rows) == 1
         row = rows[0]
@@ -438,7 +438,7 @@ class TestHistory:
         with patch(
             "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
-            download_report(1001)
+            download_report("1001")
         row = _history_rows(paths)[-1]
         assert row["成否"] == "成功"
         assert row["原因区分"] == ""
@@ -448,7 +448,7 @@ class TestHistory:
         missing = tmp_path / "無いフォルダ"
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [[1001, "顧客一覧", URL_A, "定期", str(missing), "有効"]],
+            [["1001", "顧客一覧", URL_A, "定期", str(missing), "○", ""]],
         )
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -460,7 +460,7 @@ class TestHistory:
             ),
             pytest.raises(ReportFolderNotFoundError),
         ):
-            download_report(1001)
+            download_report("1001")
         row = CsvReader(history_path).read_rows()[-1]
         assert row["原因区分"] == "設定"
 
@@ -472,7 +472,7 @@ class TestHistory:
         folder.mkdir()
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [[1001, "顧客一覧", URL_A, "定期", str(folder), "有効"]],
+            [["1001", "顧客一覧", URL_A, "定期", str(folder), "○", ""]],
         )
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -492,7 +492,7 @@ class TestHistory:
             ),
             pytest.raises(SalesforceRequestError),
         ):
-            download_report(1001)
+            download_report("1001")
         row = CsvReader(history_path).read_rows()[-1]
         assert row["原因区分"] == "Salesforce"
 
@@ -510,7 +510,7 @@ class TestHistory:
             ),
             pytest.raises(EmptyReportError),
         ):
-            download_report(1001)
+            download_report("1001")
         row = _history_rows(paths)[-1]
         assert row["原因区分"] == "データなし"
 
@@ -520,7 +520,7 @@ class TestHistory:
         folder.mkdir()
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [[1001, "顧客一覧", URL_A, "定期", str(folder), "有効"]],
+            [["1001", "顧客一覧", URL_A, "定期", str(folder), "○", ""]],
         )
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -538,7 +538,7 @@ class TestHistory:
             ),
             pytest.raises(OSError),
         ):
-            download_report(1001)
+            download_report("1001")
         row = CsvReader(history_path).read_rows()[-1]
         assert row["原因区分"] == "ファイル"
 
@@ -548,7 +548,7 @@ class TestHistory:
         folder.mkdir()
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [[1001, "顧客一覧", URL_A, "定期", str(folder), "有効"]],
+            [["1001", "顧客一覧", URL_A, "定期", str(folder), "○", ""]],
         )
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -566,7 +566,7 @@ class TestHistory:
             ),
             pytest.raises(TypeError),
         ):
-            download_report(1001)
+            download_report("1001")
         row = CsvReader(history_path).read_rows()[-1]
         assert row["原因区分"] == "プログラム"
 
@@ -579,7 +579,7 @@ class TestGetScheduledReport:
             "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
             download_scheduled("定期実行")
-        reader = get_scheduled_report(1001)
+        reader = get_scheduled_report("1001")
         assert reader.path.is_file()
         assert reader.read_rows() == ROWS
 
@@ -590,30 +590,30 @@ class TestGetScheduledReport:
             download_scheduled("定期実行")
         site = fake_salesforce()
         with patch("comken.services.salesforce_downloader.service.site_for", return_value=site):
-            get_scheduled_report(1001)
+            get_scheduled_report("1001")
         site.assert_not_called()
 
     def test_on_demand_report_raises(self, paths):
         """管理表で「個別」のものは、定期取得済みとして受け取れない。"""
         with pytest.raises(ScheduledReportNotRegisteredError):
-            get_scheduled_report(1002)
+            get_scheduled_report("1002")
 
     def test_not_downloaded_yet_raises(self, paths):
         with pytest.raises(ScheduledReportNotDownloadedError):
-            get_scheduled_report(1001)
+            get_scheduled_report("1001")
 
     def test_missing_file_raises_even_if_history_says_downloaded(self, paths):
         with patch(
             "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
             download_scheduled("定期実行")
-        file_path_of(load_master(paths["master_path"])[1001]).unlink()
+        file_path_of(load_master(paths["master_path"])["1001"]).unlink()
         with pytest.raises(ReportFileMissingError):
-            get_scheduled_report(1001)
+            get_scheduled_report("1001")
 
     def test_unregistered_key_raises(self, paths):
         with pytest.raises(ReportNotRegisteredError):
-            get_scheduled_report(9999)
+            get_scheduled_report("9999")
 
 
 class TestDownloadScheduled:
@@ -624,7 +624,7 @@ class TestDownloadScheduled:
             "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
             saved = download_scheduled()
-        # 1001 だけ（1002 は個別、1003 は無効）
+        # "1001" だけ（"1002" は個別、"1003" は無効）
         assert [path.name.split("_")[0] for path in saved] == ["1001"]
 
     def test_one_failure_does_not_stop_the_rest(self, tmp_path, monkeypatch):
@@ -633,8 +633,8 @@ class TestDownloadScheduled:
         master = make_master(
             tmp_path / "管理表.xlsx",
             [
-                [1001, "落ちる方", URL_A, "定期", str(tmp_path / "無い"), "有効"],
-                [1002, "通る方", URL_B, "定期", str(folder), "有効"],
+                ["1001", "落ちる方", URL_A, "定期", str(tmp_path / "無い"), "○", ""],
+                ["1002", "通る方", URL_B, "定期", str(folder), "○", ""],
             ],
         )
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -647,7 +647,7 @@ class TestDownloadScheduled:
             pytest.raises(ScheduledDownloadFailedError),
         ):
             download_scheduled()
-        # 1001 で失敗しても 1002 は保存されている（続けたうえで最後に知らせる）
+        # "1001" で失敗しても "1002" は保存されている（続けたうえで最後に知らせる）
         assert [path.name.split("_")[0] for path in folder.glob("*.csv")] == ["1002"]
 
     def test_os_error_does_not_stop_the_rest(self, tmp_path, monkeypatch):
@@ -656,8 +656,8 @@ class TestDownloadScheduled:
         master = make_master(
             tmp_path / "管理表.xlsx",
             [
-                [1001, "書込失敗", URL_A, "定期", str(folder), "有効"],
-                [1002, "取得成功", URL_B, "定期", str(folder), "有効"],
+                ["1001", "書込失敗", URL_A, "定期", str(folder), "○", ""],
+                ["1002", "取得成功", URL_B, "定期", str(folder), "○", ""],
             ],
         )
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -689,8 +689,8 @@ class TestDownloadScheduled:
         master = make_master(
             tmp_path / "管理表.xlsx",
             [
-                [1001, "想定外", URL_A, "定期", str(folder), "有効"],
-                [1002, "通る方", URL_B, "定期", str(folder), "有効"],
+                ["1001", "想定外", URL_A, "定期", str(folder), "○", ""],
+                ["1002", "通る方", URL_B, "定期", str(folder), "○", ""],
             ],
         )
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -742,7 +742,7 @@ class TestAllowEmpty:
         folder.mkdir()
         master = make_master_with_allow_empty(
             tmp_path / "管理表.xlsx",
-            [[1001, "顧客一覧", URL_A, "定期", str(folder), "有効", "×"]],
+            [["1001", "顧客一覧", URL_A, "定期", str(folder), "○", "×", ""]],
         )
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -755,7 +755,7 @@ class TestAllowEmpty:
             ),
             pytest.raises(EmptyReportError),
         ):
-            download_report(1001)
+            download_report("1001")
 
         # ファイルは作られない
         assert list(folder.glob("*.csv")) == []
@@ -776,7 +776,7 @@ class TestAllowEmpty:
         folder.mkdir()
         master = make_master_with_allow_empty(
             tmp_path / "管理表.xlsx",
-            [[1001, "顧客一覧", URL_A, "定期", str(folder), "有効", "○"]],
+            [["1001", "顧客一覧", URL_A, "定期", str(folder), "○", "○", ""]],
         )
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -786,7 +786,7 @@ class TestAllowEmpty:
             "comken.services.salesforce_downloader.service.site_for",
             return_value=fake_salesforce([]),
         ):
-            reader = download_report(1001)  # 例外にならない
+            reader = download_report("1001")  # 例外にならない
 
         # 空ファイルが作られる（ただし 0 バイトでよい）
         saved = list(folder.glob("*.csv"))
@@ -809,7 +809,7 @@ class TestAllowEmpty:
         folder.mkdir()
         master = make_master_with_allow_empty(
             tmp_path / "管理表.xlsx",
-            [[1001, "顧客一覧", URL_A, "定期", str(folder), "有効", "○"]],
+            [["1001", "顧客一覧", URL_A, "定期", str(folder), "○", "○", ""]],
         )
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -819,7 +819,7 @@ class TestAllowEmpty:
             "comken.services.salesforce_downloader.service.site_for",
             return_value=fake_salesforce([]),
         ):
-            reader = download_report(1001)
+            reader = download_report("1001")
 
         # `CsvReader` は 0 バイトでも例外を出さず、空の行リストを返す
         assert reader.read_rows() == []
@@ -832,7 +832,7 @@ class TestAllowEmpty:
         folder.mkdir()
         master = make_master_with_allow_empty(
             tmp_path / "管理表.xlsx",
-            [[1001, "顧客一覧", URL_A, "定期", str(folder), "有効", "○"]],
+            [["1001", "顧客一覧", URL_A, "定期", str(folder), "○", "○", ""]],
         )
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -844,7 +844,7 @@ class TestAllowEmpty:
         ):
             download_scheduled()
 
-        reader = get_scheduled_report(1001)
+        reader = get_scheduled_report("1001")
         assert reader.path.is_file()
         assert reader.read_rows() == []
 
@@ -852,17 +852,17 @@ class TestAllowEmpty:
         """4. `0件あり` の列が無い管理表でも読める（既定 `×` として扱われる）。"""
         folder = tmp_path / "保存先"
         folder.mkdir()
-        # 6 列のまま = `0件あり` 列が無い管理表
+        # 7 列のまま = `0件あり` 列が無い管理表
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [[1001, "顧客一覧", URL_A, "定期", str(folder), "有効"]],
+            [["1001", "顧客一覧", URL_A, "定期", str(folder), "○", ""]],
         )
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
         monkeypatch.setattr(service_module, "HISTORY_PATH", history_path)
 
         entries = load_master(master)
-        assert entries[1001].allow_empty is False  # 既定値
+        assert entries["1001"].allow_empty is False  # 既定値
 
         # 0 行のときは従来どおり `EmptyReportError`（列が無い管理表を
         # 後付けで読む既存プロジェクトを壊さないため）
@@ -873,14 +873,14 @@ class TestAllowEmpty:
             ),
             pytest.raises(EmptyReportError),
         ):
-            download_report(1001)
+            download_report("1001")
         assert list(folder.glob("*.csv")) == []
 
     def test_invalid_allow_empty_value_raises(self, tmp_path):
         """5. `0件あり` に `○` `×` 以外を書くとエラーになる（choices で弾く）。"""
         master = make_master_with_allow_empty(
             tmp_path / "管理表.xlsx",
-            [[1001, "顧客一覧", URL_A, "定期", str(tmp_path), "有効", "△"]],
+            [["1001", "顧客一覧", URL_A, "定期", str(tmp_path), "○", "△", ""]],
         )
         with pytest.raises(MasterRowValueError) as e:
             load_master(master)
@@ -897,15 +897,15 @@ class TestAllowEmpty:
         master = make_master_with_allow_empty(
             tmp_path / "管理表.xlsx",
             [
-                [1001, "空でもOK", URL_A, "定期", str(folder), "有効", "○"],
-                [1002, "普通のレポート", URL_B, "定期", str(folder), "有効", "×"],
+                ["1001", "空でもOK", URL_A, "定期", str(folder), "○", "○", ""],
+                ["1002", "普通のレポート", URL_B, "定期", str(folder), "○", "×", ""],
             ],
         )
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
         monkeypatch.setattr(service_module, "HISTORY_PATH", history_path)
 
-        # 1001 は 0 行、1002 は通常データを返す
+        # "1001" は 0 行、"1002" は通常データを返す
         site = MagicMock()
         client = MagicMock()
 
@@ -918,17 +918,17 @@ class TestAllowEmpty:
         with patch("comken.services.salesforce_downloader.service.site_for", return_value=site):
             saved = download_scheduled()  # 例外にならない
 
-        # 両方とも保存される（1001 は空ファイル、1002 は通常の CSV）
+        # 両方とも保存される（"1001" は空ファイル、"1002" は通常の CSV）
         names = sorted(path.name.split("_")[0] for path in saved)
         assert names == ["1001", "1002"]
-        # 履歴を確認: 1001 は成功・0件、1002 も成功・2件
+        # 履歴を確認: "1001" は成功・0件、"1002" も成功・2件
         rows = CsvReader(history_path).read_rows()
-        by_key = {int(row["管理番号"]): row for row in rows}
-        assert by_key[1001]["成否"] == "成功"
-        assert by_key[1001]["取得件数"] == "0"
-        assert by_key[1001]["原因区分"] == ""
-        assert by_key[1002]["成否"] == "成功"
-        assert by_key[1002]["取得件数"] == "2"
+        by_key = {row["管理番号"]: row for row in rows}
+        assert by_key["1001"]["成否"] == "成功"
+        assert by_key["1001"]["取得件数"] == "0"
+        assert by_key["1001"]["原因区分"] == ""
+        assert by_key["1002"]["成否"] == "成功"
+        assert by_key["1002"]["取得件数"] == "2"
 
 
 class TestTemplate:
@@ -938,9 +938,9 @@ class TestTemplate:
         """雛形の記入例が、そのまま load_master() を通る（列名の食い違いが起きない）。"""
         path = ReportEntry.create_template(tmp_path / "レポート管理表.xlsx", EXAMPLES)
         entries = load_master(path)
-        assert list(entries) == [1001, 1002]
-        assert entries[1001].is_scheduled
-        assert not entries[1002].is_scheduled
+        assert list(entries) == ["1001", "1002"]
+        assert entries["1001"].is_scheduled
+        assert not entries["1002"].is_scheduled
 
     def test_examples_point_at_different_reports(self, tmp_path):
         """記入例が同じレポートを指していると、check が重複として報告してしまう。"""
@@ -981,7 +981,7 @@ class TestCommandLine:
     def test_check_returns_failure_for_a_broken_master(self, tmp_path, capsys):
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [[1001, "顧客一覧", "https://example.com/", "定期", str(tmp_path), "有効"]],
+            [["1001", "顧客一覧", "https://example.com/", "定期", str(tmp_path), "○", ""]],
         )
         assert cli(["check", str(master)]) == 1
         assert "エラー:" in capsys.readouterr().err

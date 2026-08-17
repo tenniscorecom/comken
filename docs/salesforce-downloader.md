@@ -21,8 +21,8 @@
 ```python
 from comken.services.salesforce_downloader import download_report, get_scheduled_report
 
-CUSTOMER_LIST = 1001      # 管理表の「ID」。意味の分かる名前を付ける
-SALES_RESULT = 1003
+CUSTOMER_LIST = "1001"    # 管理表の「ID」。意味の分かる名前を付ける
+SALES_RESULT = "1003"
 
 rows = download_report(CUSTOMER_LIST, "案件集計").read_rows()
 # 全行が要らなければ download_report(CUSTOMER_LIST).path  で場所だけ取る
@@ -30,7 +30,7 @@ by_code = get_scheduled_report(SALES_RESULT).index("顧客コード")
 ```
 
 **プロジェクトのコードに Salesforce の URL もレポート ID も書かない。** 書くのは管理番号だけ。
-参照先の Salesforce レポートを差し替えても、`CUSTOMER_LIST = 1001` はそのままでよい。
+参照先の Salesforce レポートを差し替えても、`CUSTOMER_LIST = "1001"` はそのままでよい。
 
 戻り値は `CsvReader`（`comken.toolbox.csv.CsvReader`）。`read_rows()` / `index()` /
 `filter()` などがそのまま使えて、`CsvWriter` の文字コード（UTF-8 BOM 付き）を
@@ -102,20 +102,21 @@ python -m comken.services.salesforce_downloader check レポート管理表.xlsx
 `comken/services/salesforce_downloader/master.py` にあり、読み込み・検証・雛形生成の
 仕組みは [管理表（master_table）](master-table.md) が持つ。
 
-| ID | 概要 | Salesforce URL | 実行方式 | 保存先 | 有効 | 0件あり |
-|---|---|---|---|---|---|---|
-| 1001 | 顧客一覧 | https://.../Report/00O5g00000ABCDE/view | 定期 | `\\server\A\input` | 有効 | × |
-| 1002 | 売上実績 | https://.../Report/00O5g00000FGHIJ/view | 個別 | `\\server\B\input` | 有効 | ○ |
+| ID | 概要 | Salesforce URL | 実行方式 | 保存先 | 有効 | 0件あり | 備考 |
+|---|---|---|---|---|---|---|---|
+| 1001 | 顧客一覧 | https://.../Report/00O5g00000ABCDE/view | 定期 | `\\server\A\input` | ○ | × | |
+| 1002 | 売上実績 | https://.../Report/00O5g00000FGHIJ/view | 個別 | `\\server\B\input` | ○ | ○ | |
 
 | 列 | 何を書くか |
 |---|---|
-| **ID** | 社内で決める管理番号（1001, 1002…）。**Salesforce のレポート ID ではない** |
+| **ID** | 社内で決める管理番号（`1001`, `CUST-01` など）。**Salesforce のレポート ID ではない**。前ゼロ（`0001`）や記号入りも使える |
 | **概要** | 人が読んで分かる説明。保存するファイル名にも使う |
 | **Salesforce URL** | レポートを開いたときのアドレスを**そのまま貼る** |
-| **実行方式** | `定期`（毎日まとめて取る）か `個別`（呼ばれたときだけ） |
+| **実行方式** | `定期`（毎日まとめて取る）か `個別`（呼ばれたときだけ）。**雛形ではドロップダウンから選べる** |
 | **保存先** | 落としたファイルを置くフォルダ |
-| **有効** | 使わなくなったら `無効`。行は消さない（履歴との対応が残る） |
+| **有効** | `○` か `×`。**雛形ではドロップダウンから選べる**。行は消さない（履歴との対応が残る） |
 | **0件あり** | その日のデータが 0 件になることがあるレポートなら `○`。`×` のときに 0 件だとエラーになります（[「0 件の扱い」](#0-件の扱い) 参照） |
+| **備考** | 編集者の覚え書き（任意） |
 
 ### Salesforce のレポート ID は入力させない
 
@@ -125,7 +126,8 @@ URL を貼れば `report_id_from_url()` が取り出す。ID を人が抜き出�
 ### ID は Salesforce のレポートが変わっても変えない
 
 `1001 → Report X` を `1001 → Report Y` に差し替えても、**利用側のコードは変えない**。
-管理番号は「同じ意味のデータ」を指す論理的な番号で、参照先とは独立している。
+管理番号は「同じ意味のデータ」を指す論理的な番号で、参照先とは独立している。管理番号は
+**文字列**として扱う（前ゼロ `0001` や意味のある記号 `CUST-01` などを許可するため）。
 
 ### 同じレポートを複数の管理番号が指している場合
 
@@ -136,7 +138,7 @@ URL を貼れば `report_id_from_url()` が取り出す。ID を人が抜き出�
 from comken.services.salesforce_downloader import load_master, shared_report_ids
 
 shared_report_ids(load_master(MASTER_PATH))
-# → {"00O5g00000FGHIJ": [1002, 1003]}   1002 と 1003 が同じレポートを見ている
+# → {"00O5g00000FGHIJ": ["1002", "1003"]}   "1002" と "1003" が同じレポートを見ている
 ```
 
 ---

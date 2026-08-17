@@ -26,11 +26,12 @@ class Item(MasterRow):
     SHEET_NAME = "一覧"
     PATH = Path(r"\\server\share\コピー一覧.xlsx")   # 省略可（load(パス) で渡してもよい）
 
-    key: int = column("ID", unique=True, help="社内で決める管理番号")
+    key: str = column("ID", unique=True, help="社内で決める管理番号")
     name: str = column("名前", help="人が読んで分かる名前")
     source: Path = column("コピー元", help="共有サーバー上のファイル")
     mode: str = column("方式", choices=("毎日", "手動"), help="毎日は自動で取ります")
-    enabled: bool = column("有効", help="「有効」か「無効」と書いてください")
+    enabled: bool = column("有効", choices=("○", "×"), help="「○」か「×」と書いてください")
+    note: str = column("備考", default="", help="編集者の覚え書き")
 ```
 
 ```python
@@ -47,6 +48,7 @@ for item in Item.load():        # 読む（型変換・検証込み）
 |---|---|
 | `item.name` | 「名前」列 |
 | `item.source`（`Path` 型） | 「コピー元」列 |
+| `item.note` | 「備考」列（既定値ありの列は **見出しごと無くても読める**） |
 
 ---
 
@@ -57,12 +59,16 @@ for item in Item.load():        # 読む（型変換・検証込み）
 | 第1引数 | **Excel の見出し**（必須） |
 | `help` | 何を書く列かの説明。**「記入方法」シートとエラーメッセージに出る** |
 | `unique` | 同じ値が2つ以上あればエラー（管理番号など） |
-| `choices` | 書ける値を限る（`("毎日", "手動")`） |
+| `choices` | 書ける値を限る（`("毎日", "手動")`）。**雛形では自動でドロップダウンが付き**、`help` と組み合わせて入力時メッセージとエラーメッセージも出る |
 | `default` | 空欄のときの値。**省略すると空欄はエラー**（下の「空欄の扱い」を参照） |
 
 **型は注釈から決まります**（`int` / `str` / `bool` / `Path`）。`bool` は「有効」「○」「yes」などを
 True として読みます。bool 列に2つの `choices` を指定すると、雛形の記入例では1つ目を True、
-2つ目を False の表記として書き出します。指定しなければ従来どおり「有効」「無効」です。
+2つ目を False の表記として書き出します。**`enabled` のような「真偽の列」は `choices=("○", "×")` を
+指定して表記を1つに絞ってください**（「有効/無効」と混在させないため）。指定がなければ「有効」「無効」になります。
+
+`str` 型の列は **Excel が数値で返しても `"1001"` のように整数文字列として読める**（`1001.0` 化しない）。
+前ゼロ（`0001`）や記号入り（`CUST-01`）の管理番号もそのまま使える。
 
 ---
 
@@ -140,11 +146,16 @@ True として読みます。bool 列に2つの `choices` を指定すると、�
 ## 雛形（`create_template`）
 
 - 記入例を入れられる（**空の表を渡されるより、1行埋まっているほうが何をどう書くか伝わる**）
+- 記入例の行に「備考」欄の案内文 + 薄い背景色を付けて「**消してよい行**」と分かるようにする
+- **`choices` を宣言した列には自動で Excel の入力規則（ドロップダウン）が付く**。
+  `help` から組み立てた入力時メッセージと、`choices` からのエラーメッセージも出る
 - **「記入方法」シート**が付く。列ごとに `help` と「空欄にできるか／書ける値」が並ぶ
 - Excel のテーブルにする・列幅を整える・見出しを固定する
+- **雛形全体のフォントは Noto Sans JP**（Windows 標準ではないため、未導入 PC では Excel が
+  代替フォントで代替表示する。動作には影響しない）
 
 ```python
-Item.create_template(path, examples=[{"key": 1001, "name": "受注一覧", ...}])
+Item.create_template(path, examples=[{"key": "1001", "name": "受注一覧", ...}])
 ```
 
 ### 「記入方法」シートの冒頭に案内を出す
@@ -192,7 +203,7 @@ ReportEntry.headers()           # → ["ID", "概要", "Salesforce URL", ...]（
 ## 使っているところ
 
 - [Salesforce レポートの集約取得](salesforce-downloader.md) — `ReportEntry` が
-  管理表（ID / 概要 / Salesforce URL / 実行方式 / 保存先 / 有効）を宣言している
+  管理表（ID / 概要 / Salesforce URL / 実行方式 / 保存先 / 有効 / 0件あり / 備考）を宣言している
 
 ---
 

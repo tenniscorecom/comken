@@ -2,7 +2,7 @@ r"""comken/services/salesforce_downloader/service.py — 取得の本体。
 
     from comken.services.salesforce_downloader import download_report, get_scheduled_report
 
-    CUSTOMER_LIST = 1001          # 各プロジェクトで、意味の分かる名前を付ける
+    CUSTOMER_LIST = "1001"        # 各プロジェクトで、意味の分かる名前を付ける
 
     rows = download_report(CUSTOMER_LIST).read_rows()        # 今すぐ Salesforce から取る
     by_code = get_scheduled_report(CUSTOMER_LIST).index("顧客コード")   # 定期取得済みを読む
@@ -25,7 +25,7 @@ r"""comken/services/salesforce_downloader/service.py — 取得の本体。
 使い道がないため（役割の違いが戻り値の型に出ている）。
 
 プロジェクト側のコードに Salesforce の URL もレポート ID も現れない。管理表の
-参照先を差し替えても、`CUSTOMER_LIST = 1001` はそのままでよい。
+参照先を差し替えても、`CUSTOMER_LIST = "1001"` はそのままでよい。
 
 このファイルが持つもの:
 - 1件を取得して保存し履歴に残す流れ
@@ -82,13 +82,13 @@ _FORBIDDEN_IN_NAME = '\\/:*?"<>|'
 _SUMMARY_LIMIT = 30
 
 
-def download_report(report_key: int, project: str = "") -> CsvReader:
+def download_report(report_key: str, project: str = "") -> CsvReader:
     """今すぐ Salesforce から取得して保存し、そのファイルを `CsvReader` で返す。
 
     **必ず Salesforce へ問い合わせる。** 今日すでに取っていても取り直す。
 
     Args:
-        report_key: 管理表の管理番号（例: 1001）。
+        report_key: 管理表の管理番号（例: "1001"）。
         project: 呼び出し元の名前。履歴に残るので、入れておくと後から追える。
 
     Returns:
@@ -105,11 +105,11 @@ def download_report(report_key: int, project: str = "") -> CsvReader:
     return CsvReader(path)
 
 
-def get_scheduled_report(report_key: int, project: str = "") -> CsvReader:
+def get_scheduled_report(report_key: str, project: str = "") -> CsvReader:
     """定期取得しておいたファイルを `CsvReader` で返す。**取りに行かない。**
 
     Args:
-        report_key: 管理表の管理番号（例: 1001）。
+        report_key: 管理表の管理番号（例: "1001"）。
         project: 呼び出し元の名前（履歴には残さないが、例外の調査に使えるよう受け取る）。
 
     Returns:
@@ -164,7 +164,7 @@ def download_scheduled(project: str = "定期実行") -> list[Path]:
     logger.info("定期取得の対象: %d 件", len(targets))
 
     saved: list[Path] = []
-    failed: list[int] = []
+    failed: list[str] = []
     for entry in targets:
         try:
             saved.append(_download(entry, project, history.TRIGGER_SCHEDULED, HISTORY_PATH))
@@ -200,7 +200,7 @@ def file_path_of(entry: ReportEntry) -> Path:
     return entry.folder / DateNameBuilder(name, SUFFIX).suffix()
 
 
-def _find(report_key: int, master_path: Path) -> ReportEntry:
+def _find(report_key: str, master_path: Path) -> ReportEntry:
     """管理表から1行を引く。無効なものはここで止める。"""
     entries = load_master(master_path)
     entry = entries.get(report_key)
@@ -362,7 +362,7 @@ def _write_empty_csv(path: Path) -> None:
             logger.warning("一時ファイルを削除できませんでした: %s（%s）", tmp_path, e)
 
 
-def _warn_shared_reports(entries: dict[int, ReportEntry]) -> None:
+def _warn_shared_reports(entries: dict[str, ReportEntry]) -> None:
     """同じ Salesforce レポートを複数の管理番号が指していればログに出す。
 
     エラーにはしない（意図している場合もある）。**気づけるようにするだけ**。

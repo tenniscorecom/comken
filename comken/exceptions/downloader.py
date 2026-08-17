@@ -20,7 +20,7 @@ class DownloaderError(ComkenError):
 class ReportNotRegisteredError(DownloaderError):
     """指定した管理番号が管理表に無い
 
-    管理番号はコードに定数で書く（CUSTOMER_LIST = 1001）。管理表から行を消したり、
+    管理番号はコードに定数で書く（CUSTOMER_LIST = "1001"）。管理表から行を消したり、
     番号を打ち間違えたりすると、どのレポートを指しているか決められない。
 
     発生箇所: comken.services.salesforce_downloader の download_report()
@@ -30,7 +30,7 @@ class ReportNotRegisteredError(DownloaderError):
         新しく使うレポートは、先に管理表へ登録する
     """
 
-    def __init__(self, report_key: int, registered: list[int], master_path: Path) -> None:
+    def __init__(self, report_key: str, registered: list[str], master_path: Path) -> None:
         known = "、".join(str(key) for key in registered) or "（登録なし）"
         super().__init__(
             f"管理表に登録されていない管理番号です: {report_key}\n"
@@ -50,7 +50,7 @@ class InvalidReportUrlError(DownloaderError):
         Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す
     """
 
-    def __init__(self, report_key: int, url: str, reason: str) -> None:
+    def __init__(self, report_key: str, url: str, reason: str) -> None:
         super().__init__(
             f"管理番号 {report_key} の Salesforce URL が正しくありません: {url}\n{reason}"
         )
@@ -69,7 +69,7 @@ class ReportDisabledError(DownloaderError):
         使わないなら、呼び出し側のコードから消す
     """
 
-    def __init__(self, report_key: int, summary: str, master_path: Path) -> None:
+    def __init__(self, report_key: str, summary: str, master_path: Path) -> None:
         super().__init__(
             f"このレポートは無効になっています: {report_key}（{summary}）\n"
             f"管理表: {master_path}\n"
@@ -90,7 +90,7 @@ class ScheduledReportNotRegisteredError(DownloaderError):
         使うときに毎回取りに行くなら、download_report() を呼ぶ
     """
 
-    def __init__(self, report_key: int, summary: str, schedule: str, master_path: Path) -> None:
+    def __init__(self, report_key: str, summary: str, schedule: str, master_path: Path) -> None:
         super().__init__(
             f"定期取得の対象ではありません: {report_key}（{summary}）\n"
             f"管理表の「実行方式」は「{schedule}」になっています: {master_path}\n"
@@ -116,7 +116,7 @@ class ScheduledReportNotDownloadedError(DownloaderError):
         その場で取得する（そのぶん Salesforce への呼び出しが増える）
     """
 
-    def __init__(self, report_key: int, summary: str, history_path: Path) -> None:
+    def __init__(self, report_key: str, summary: str, history_path: Path) -> None:
         super().__init__(
             f"本日の定期取得がまだ済んでいません: {report_key}（{summary}）\n"
             f"履歴: {history_path}\n"
@@ -137,7 +137,7 @@ class ReportFileMissingError(DownloaderError):
         download_report() で取り直す
     """
 
-    def __init__(self, report_key: int, path: Path) -> None:
+    def __init__(self, report_key: str, path: Path) -> None:
         super().__init__(
             f"履歴では取得済みですが、ファイルが見つかりません: {report_key}\n"
             f"{path}\n"
@@ -158,7 +158,7 @@ class EmptyReportError(DownloaderError):
         本当に 0 件の日であれば、空の CSV を保存先へ手で置く
     """
 
-    def __init__(self, report_key: int, summary: str, url: str) -> None:
+    def __init__(self, report_key: str, summary: str, url: str) -> None:
         super().__init__(
             f"レポートの明細が 0 行でした: {report_key}（{summary}）\n"
             f"{url}\n"
@@ -179,7 +179,7 @@ class ReportFolderNotFoundError(DownloaderError):
         つながっているか・権限があるかも確認する
     """
 
-    def __init__(self, report_key: int, folder: Path) -> None:
+    def __init__(self, report_key: str, folder: Path) -> None:
         super().__init__(
             f"保存先のフォルダがありません: {report_key}\n"
             f"{folder}\n"
@@ -202,7 +202,7 @@ class ScheduledDownloadFailedError(DownloaderError):
         急いで必要なものは download_report() でその場で取得する
     """
 
-    def __init__(self, failed_keys: list[int], history_path: Path) -> None:
+    def __init__(self, failed_keys: list[str], history_path: Path) -> None:
         keys = "、".join(str(key) for key in failed_keys)
         super().__init__(
             f"定期取得で {len(failed_keys)} 件が失敗しました: {keys}\n"
