@@ -25,7 +25,7 @@ Client Credentials Flow は `client_secret` だけでアクセストークンを
     with Sandbox(auth=ClientCredentialsAuth(cid, secret, domain)) as sf:  # 開発時だけ
         ...
 
-設計の背景は docs/salesforce-authentication.md を参照。
+設計の背景は docs/開発/salesforce-authentication.md を参照。
 
     SalesforceBase         1組織ぶんの API クライアントの土台（組織クラスで継承する）
     ReportApi              レポート API。SalesforceBase.report が持っている

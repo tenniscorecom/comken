@@ -3,7 +3,7 @@ r"""comken/toolbox/browser/sites/__init__.py — ライブラリ公認のブラ�
 `SiteBase` を継承したサイトクラスのうち、**複数プロジェクトから共通で参照される
 社内システム**をここに置く。プロジェクト側で個別に使うサイトは置かない
 （プロジェクト側の `src/sites/` に置く。判断基準は
-`docs/ライブラリ開発規約.md` の「サイト／組織クラスを昇格させる基準」を参照）。
+`docs/開発/ライブラリ開発規約.md` の「サイト／組織クラスを昇格させる基準」を参照）。
 
     from comken.toolbox.browser.sites import SITES    # 公認サイトの一覧
     from comken.toolbox.browser.sites import Kintai  # 個別 import も可

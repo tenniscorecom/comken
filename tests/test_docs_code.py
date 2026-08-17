@@ -340,7 +340,7 @@ def test_documented_protected_files_exist(doc):
 
 
 def test_deployment_targets_still_exist_in_the_code():
-    """`docs/配置.md` が「ここを書き換える」と言っている行が、いまもコードにあること。
+    """`docs/運用/配置.md` が「ここを書き換える」と言っている行が、いまもコードにあること。
 
     配置手順の表には、書き換える定数と**いまの値**（`DOMAIN_URL = "https://example--..."`）が
     書いてある。コードから消えたり名前が変わったりすると、会社で手が止まる。
@@ -351,7 +351,7 @@ def test_deployment_targets_still_exist_in_the_code():
     （2026-08-18 に実際ズレて、この検査が捕まえた）。ここでは
     「その文字列がファイルのどこかにあるか」だけを見る。
     """
-    doc = _ROOT / "docs" / "配置.md"
+    doc = _ROOT / "docs" / "運用" / "配置.md"
     text = doc.read_text(encoding="utf-8")
 
     current: Path | None = None

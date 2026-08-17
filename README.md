@@ -41,15 +41,15 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 | 引数・戻り値・例外を正確に知る | [公開 API](docs/自動生成/API.md)（**自動生成**） |
 | エラーが出た | [エラー対応ガイド](docs/ERRORS.md)（エラー表は **自動生成**） |
 | 動くコードを見る | [examples](examples/README.md) |
-| なぜこの設計なのか知る | [仕様書](docs/仕様書.md) |
-| コードを書く規約 | [共通コーディング規約](docs/CONVENTIONS.md) |
-| comken 本体を直す | [ライブラリ開発規約](docs/ライブラリ開発規約.md) |
-| 開発してリリースする | [仕様書「開発とリリース」](docs/仕様書.md#開発とリリース)（タグを打つ → 共有サーバーで checkout） |
-| **共有サーバーへ配置する** | [配置](docs/配置.md)（**どのファイルの何行目を、何に書き換えるか**まで） |
-| **次に何をやるか** | [これからやること](docs/これからやること.md)（配置・実機確認・判断待ち） |
+| なぜこの設計なのか知る | [仕様書](docs/開発/仕様書.md) |
+| コードを書く規約 | [共通コーディング規約](docs/開発/CONVENTIONS.md) |
+| comken 本体を直す | [ライブラリ開発規約](docs/開発/ライブラリ開発規約.md) |
+| 開発してリリースする | [仕様書「開発とリリース」](docs/開発/仕様書.md#開発とリリース)（タグを打つ → 共有サーバーで checkout） |
+| **共有サーバーへ配置する** | [配置](docs/運用/配置.md)（**どのファイルの何行目を、何に書き換えるか**まで） |
+| **次に何をやるか** | [これからやること](docs/運用/これからやること.md)（配置・実機確認・判断待ち） |
 | comken を使うツールを作る | `comken init プロジェクト名` で雛形を作る（作られた `README.md` が中を案内する） |
-| コードを読む・レビューする | [コードリーディングガイド](docs/コードリーディングガイド.md) |
-| Git を社内に説明する | [Git 社内プレゼン用ネタ](docs/Git社内プレゼン.md)（GitHub なしでやれることの羅列・デモの台本・想定質問） |
+| コードを読む・レビューする | [コードリーディングガイド](docs/開発/コードリーディングガイド.md) |
+| Git を社内に説明する | [Git 社内プレゼン用ネタ](docs/運用/Git社内プレゼン.md)（GitHub なしでやれることの羅列・デモの台本・想定質問） |
 
 ## 使うときの約束
 
@@ -63,7 +63,7 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 - **書くときは `from comken import X` が第一選択。** そこに無いものだけ `from comken.core import Y`
 - **ファイル・ブラウザ・COM は `with` で開く。** 途中で失敗しても閉じられる
 - **エラーは細かい方から受ける。** 個別（`SheetNotFoundError`）→ 分野（`ExcelError`）→
-  全体（`ComkenError`）の3段。階層は[仕様書「例外体系」](docs/仕様書.md#5-例外体系)
+  全体（`ComkenError`）の3段。階層は[仕様書「例外体系」](docs/開発/仕様書.md#5-例外体系)
 - **機密は config.ini に書かない。** [認証情報](docs/credentials.md)（DPAPI）に入れ、
   config.ini にはキー名だけ書く
 
@@ -104,7 +104,7 @@ import の書き方は上の「[使うときの約束](#使うときの約束)�
 | [Salesforce（requests）](docs/salesforce.md) | Salesforce の SOQL・レコード操作・レポート取得・API 使用量の計測 |
 | [管理表（Excel を設定として使う）](docs/master-table.md) | 行が増える設定を Excel の表で持ち、型付きの行として読む（雛形・検証つき） |
 | [Salesforce レポートの集約取得](docs/salesforce-downloader.md) | 管理表（Excel）に沿ってレポートを取得し、履歴を残す（どのプロジェクトが何を使っているかが分かる） |
-| [Salesforce認証の判断根拠](docs/salesforce-authentication.md) | ECA・Refresh Token Flow を既定にした理由と公式資料 |
+| [Salesforce認証の判断根拠](docs/開発/salesforce-authentication.md) | ECA・Refresh Token Flow を既定にした理由と公式資料 |
 | [credentials（DPAPI）](docs/credentials.md) | パスワード・client_secret の暗号化保存（Windows ユーザーに紐付く） |
 | [core（部品）](docs/core.md) | `from comken.core import ...` で取る24個。ファイル検索・操作・圧縮・ファイル名の組み立て／データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時 |
 
@@ -197,7 +197,7 @@ set "COMKEN_ROOT_FIXED=\\server\share\tools\comken"
 
 | 埋まるもの | 入るファイル |
 |---|---|
-| **プロジェクト名** | `main.py`（社内 RPA 基盤へ渡す名前）・`docs/仕様書.md`・`docs/使い方.md` |
+| **プロジェクト名** | `main.py`（社内 RPA 基盤へ渡す名前）・`docs/開発/仕様書.md`・`docs/使い方.md` |
 | **comken の場所** | `実行.bat`・`認証情報の登録.bat`（実行時の `PYTHONPATH`）・`.vscode/settings.json`（補完と定義ジャンプ） |
 | — | `README.md` から、ひな形の説明（作り終えたら消す節）が取り除かれる |
 
@@ -227,7 +227,7 @@ set "COMKEN_ROOT_FIXED=\\server\share\tools\comken"
 2. **`config.ini` を書き換える**。`[RUN] DRY_RUN` は最初 `True` のままでよい
    （書き込みをせず、何をするつもりかだけログに出る）
 3. **`src/run.py` の `run()` に処理を書く**
-4. **`docs/使い方.md`・`docs/仕様書.md` の「（ここを書く）」を埋める**
+4. **`docs/使い方.md`・`docs/開発/仕様書.md` の「（ここを書く）」を埋める**
 5. 通ったら `config.ini` の `DRY_RUN` を `False` にして本番
 
 **comken の場所を後から変えたくなったら**、`実行.bat` と `.vscode/settings.json` の
@@ -257,7 +257,7 @@ PCの環境変数を変更したくない場合は、各プロジェクトのル
 
 ### 共有サーバーの comken を更新する
 
-共有サーバーのチェックアウトを、**リリース済みのタグへ切り替える**（→ [開発とリリース](docs/仕様書.md#開発とリリース)）。
+共有サーバーのチェックアウトを、**リリース済みのタグへ切り替える**（→ [開発とリリース](docs/開発/仕様書.md#開発とリリース)）。
 
 ```bat
 pushd \\server\share\tools\comken
@@ -278,7 +278,7 @@ git update-index --skip-worktree comken/services/salesforce_downloader/service.p
 
 これで手元の書き換えが消えず、うっかり push することもない。comken 側でこの3ファイルを
 変更したときは切り替えが止まるので、そのときだけ `--no-skip-worktree` で解除して
-手で合わせ、また設定し直す（→ [仕様書](docs/仕様書.md#配置時に書き換える3ファイル)）。
+手で合わせ、また設定し直す（→ [仕様書](docs/開発/仕様書.md#配置時に書き換える3ファイル)）。
 
 **切り替えた瞬間に、次に import した全プロジェクトが新しい版になる。** 更新のたびの
 配布作業はない。問題が出たら前のタグへ戻せば、同じように全プロジェクトが戻る。

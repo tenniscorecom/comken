@@ -239,5 +239,5 @@ APIからstaged credentialsを作成できるため、新旧資格情報を切�
 
 ## 関連文書
 
-- [salesforce.md](salesforce.md) — Salesforce連携全体の設計と使い方
-- [credentials.md](credentials.md) — comkenでの認証情報保管
+- [salesforce.md](../salesforce.md) — Salesforce連携全体の設計と使い方
+- [credentials.md](../credentials.md) — comkenでの認証情報保管

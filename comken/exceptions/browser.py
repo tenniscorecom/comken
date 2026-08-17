@@ -277,7 +277,7 @@ class SiteAlreadyInLibraryError(BrowserError):
     対処:
         ライブラリから `from comken.toolbox.browser.sites import <クラス名>` で取り出して使う。
         プロジェクト側の定義は消す。ライブラリへ昇格する基準は
-        `docs/ライブラリ開発規約.md` を参照。
+        `docs/開発/ライブラリ開発規約.md` を参照。
     """
 
     def __init__(self, site_cls: type, library_cls: type) -> None:

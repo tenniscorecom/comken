@@ -23,7 +23,7 @@ class SiteOwnerRequiredError(ComkenError):
         サブクラスに `OWNER = "プロジェクト名 / 担当者"` を1行追加する。
         ライブラリ（`comken.toolbox.browser.sites/` または
         `comken.toolbox.salesforce.sites/`）に入れるべきサイトかは
-        `docs/ライブラリ開発規約.md` の「サイト／組織クラスを昇格させる基準」を
+        `docs/開発/ライブラリ開発規約.md` の「サイト／組織クラスを昇格させる基準」を
         参照して判断する。ライブラリに昇格したい場合はライブラリ管理者へ連絡する。
     """
 
@@ -37,7 +37,7 @@ class SiteOwnerRequiredError(ComkenError):
             "ライブラリ管理者が把握するために使います。\n"
             "なお、ライブラリ本体（comken.toolbox.browser.sites/ または\n"
             'comken.toolbox.salesforce.sites/）に置くサイトは OWNER = "comken" にします。\n'
-            "プロジェクト側に置くかライブラリに昇格するかの基準は docs/ライブラリ開発規約.md\n"
+            "プロジェクト側に置くかライブラリに昇格するかの基準は docs/開発/ライブラリ開発規約.md\n"
             "の「サイト／組織クラスを昇格させる基準」を参照してください。\n"
             "ライブラリに昇格したい場合は、ライブラリ管理者へ連絡してください。"
         )

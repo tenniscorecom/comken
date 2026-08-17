@@ -3,11 +3,11 @@
 [README（ドキュメントの入口）へ戻る](../README.md)
 
 認証方式を社内へ説明するときは、公式資料と判断理由をまとめた
-[Salesforce authentication decisions](salesforce-authentication.md) を参照する。
+[Salesforce authentication decisions](開発/salesforce-authentication.md) を参照する。
 
 背景: Salesforce Sandbox 1組織から、レポートとレコードを API で取得したい。
 本書には現行仕様と、保守に必要な設計理由だけを記載する。
-関連: [ライブラリ開発規約](ライブラリ開発規約.md)
+関連: [ライブラリ開発規約](開発/ライブラリ開発規約.md)
 
 > [!note] 組織名の書き方
 > このリポジトリは公開しているため、**実際の組織名・サイト名は書かない**。
@@ -39,7 +39,7 @@ Salesforce 側の名前が出てくるのは**画面からコピーするとき�
 組織クラスをそのまま使えばこの方式になる。
 
 Client Credentials Flow は `client_secret` だけでアクセストークンを取れてしまうため、
-**本番では使わない**（判断の根拠は [Salesforce 認証の判断根拠](salesforce-authentication.md)）。
+**本番では使わない**（判断の根拠は [Salesforce 認証の判断根拠](開発/salesforce-authentication.md)）。
 開発中に手元で動かすときだけ `auth=` で明示的に渡す。
 
 | 使う場面 | 書き方 |
@@ -74,7 +74,7 @@ with Sandbox(auth=auth) as sf:
 ### 開発中だけ Client Credentials Flow を使う
 
 初回の対話的な認可を挟まずに動かせるので、動作確認の回転が速い。
-**本番では使わない**（→ [判断の根拠](salesforce-authentication.md#2-なぜ-refresh-token-flow-を既定にするのか)）。
+**本番では使わない**（→ [判断の根拠](開発/salesforce-authentication.md#2-なぜ-refresh-token-flow-を既定にするのか)）。
 
 ```python
 from comken.toolbox.salesforce import ClientCredentialsAuth
@@ -146,7 +146,7 @@ SalesforceBase                     HTTP の土台。_request() が唯一の通�
 
 `OWNER` は「プロジェクト名 / 担当者」の形式で必ず書く（起動時に検査される）。
 ライブラリへ昇格したクラスは `OWNER = "comken"` にする。昇格の基準は
-[ライブラリ開発規約](ライブラリ開発規約.md#サイト組織クラスを昇格させる基準) を参照。
+[ライブラリ開発規約](開発/ライブラリ開発規約.md#サイト組織クラスを昇格させる基準) を参照。
 
 **なぜレポートを継承にしないか。** `SfReport` を `SalesforceBase` のサブクラスにすると、
 `Sandbox` は `SfReport` ではないためレポートを呼べず、多重継承に追い込まれる。
@@ -417,7 +417,7 @@ client_id / client_secret を読む（[credentials](credentials.md#credentials)�
 
 書き込み系（`insert` / `update` / `upsert` / `delete`）は `dry_run` を尊重する。
 使い方の一覧は [README](../README.md#モジュール一覧)、
-認証の判断根拠は [salesforce-authentication.md](salesforce-authentication.md) を参照。
+認証の判断根拠は [salesforce-authentication.md](開発/salesforce-authentication.md) を参照。
 
 ---
 

@@ -83,7 +83,7 @@ _FORBIDDEN_IN_NAME = '\\/:*?"<>|'
 _SUMMARY_LIMIT = 30
 
 # 履歴の「原因区分」列に出す5値。運用する人が履歴からすぐ「誰が動くか」を判断できるように、
-# 抽象クラス名ではなく誰が直すかで分ける（設計判断は docs/仕様書.md 4.28 参照）
+# 抽象クラス名ではなく誰が直すかで分ける（設計判断は docs/開発/仕様書.md 4.28 参照）
 CAUSE_CONFIG = "設定"
 CAUSE_SALESFORCE = "Salesforce"
 CAUSE_EMPTY_DATA = "データなし"

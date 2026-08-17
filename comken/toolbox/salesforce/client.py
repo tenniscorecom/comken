@@ -37,7 +37,7 @@ from comken.toolbox.salesforce.metrics import ApiMetrics, RetryReason
 
 # 既定は Refresh Token Flow。Client Credentials Flow は client_secret だけで
 # アクセストークンを取れてしまい、漏えいしたときに実行ユーザーとして操作されるため
-# 使わない（→ docs/salesforce-authentication.md）。
+# 使わない（→ docs/開発/salesforce-authentication.md）。
 from comken.toolbox.salesforce.oauth_refresh import OAuth
 from comken.toolbox.salesforce.report import ReportApi
 
