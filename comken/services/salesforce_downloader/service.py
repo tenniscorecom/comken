@@ -210,60 +210,79 @@ def _find(report_key: str, master_path: Path) -> ReportEntry:
     return entry
 
 
+class _Attempt:
+    """1件の取得（フォルダ確認 → 取得 → 保存）を取り持つ文脈。
+
+    履歴を書く関数に毎回同じ5つの値を渡す煩雑さを消すための箱。
+    コンストラクタで文脈を1回だけ受け取り、開始時刻もここで `time.perf_counter()`
+    で記録する。`record_*()` は履歴とログを書くだけ。`_download()` 側の
+    `try/except` はそのまま（失敗の段階と原因区分は `_failure_row()` が
+    例外の型だけから決める）。
+    """
+
+    def __init__(
+        self,
+        entry: ReportEntry,
+        project: str,
+        trigger: str,
+        history_path: Path,
+    ) -> None:
+        self._entry = entry
+        self._project = project
+        self._trigger = trigger
+        self._history_path = history_path
+        self._started = time.perf_counter()
+
+    def record_failure(self, exc: BaseException) -> None:
+        """失敗時の履歴とログ。"""
+        row = _failure_row(exc, time.perf_counter() - self._started)
+        # 値を計算した場所（ここ）で、ログにも書く。`_download()` 抜けたあと
+        # 別の層で「同じ値」を再利用することはない（後付けで属性を渡さない）
+        logger.error("取得に失敗しました: %s（%s / 区分=%s）", self._entry.key, exc, row.cause)
+        history.record(
+            self._history_path,
+            entry=self._entry,
+            project=self._project,
+            trigger=self._trigger,
+            row=row,
+        )
+
+    def record_success(self, path: Path, rows: list[dict]) -> None:
+        """成功時の履歴とログ。"""
+        seconds = time.perf_counter() - self._started
+        row = HistoryRow(
+            succeeded=True,
+            fetched_from_salesforce=True,
+            saved_to_file=True,
+            file_name=path.name,
+            row_count=len(rows),
+            seconds=seconds,
+        )
+        if rows:
+            logger.info("取得しました: %s（%d 行 / %.1f 秒）", path, len(rows), seconds)
+        else:
+            logger.info("取得しました: %s（0 件 / 0件ありのため正常）", path)
+        history.record(
+            self._history_path,
+            entry=self._entry,
+            project=self._project,
+            trigger=self._trigger,
+            row=row,
+        )
+
+
 def _download(entry: ReportEntry, project: str, trigger: str, history_path: Path) -> Path:
     """1件を取得して保存し、成否を履歴に残す。"""
-    started = time.perf_counter()
+    attempt = _Attempt(entry, project, trigger, history_path)
     try:
         _require_folder(entry)
         rows = _fetch(entry)
         path = _save(entry, rows)
     except Exception as exc:
-        _record_failure(entry, project, trigger, history_path, exc, started)
+        attempt.record_failure(exc)
         raise
-    _record_success(entry, project, trigger, history_path, path, rows, started)
+    attempt.record_success(path, rows)
     return path
-
-
-def _record_failure(
-    entry: ReportEntry,
-    project: str,
-    trigger: str,
-    history_path: Path,
-    exc: BaseException,
-    started: float,
-) -> None:
-    """失敗時の履歴とログ。`_download()` から呼ばれる。"""
-    row = _failure_row(exc, time.perf_counter() - started)
-    # 値を計算した場所（ここ）で、ログにも書く。`_download()` 抜けたあと
-    # 別の層で「同じ値」を再利用することはない（後付けで属性を渡さない）
-    logger.error("取得に失敗しました: %s（%s / 区分=%s）", entry.key, exc, row.cause)
-    history.record(history_path, entry=entry, project=project, trigger=trigger, row=row)
-
-
-def _record_success(
-    entry: ReportEntry,
-    project: str,
-    trigger: str,
-    history_path: Path,
-    path: Path,
-    rows: list[dict],
-    started: float,
-) -> None:
-    """成功時の履歴とログ。`_download()` から呼ばれる。"""
-    seconds = time.perf_counter() - started
-    row = HistoryRow(
-        succeeded=True,
-        fetched_from_salesforce=True,
-        saved_to_file=True,
-        file_name=path.name,
-        row_count=len(rows),
-        seconds=seconds,
-    )
-    if rows:
-        logger.info("取得しました: %s（%d 行 / %.1f 秒）", path, len(rows), seconds)
-    else:
-        logger.info("取得しました: %s（0 件 / 0件ありのため正常）", path)
-    history.record(history_path, entry=entry, project=project, trigger=trigger, row=row)
 
 
 def _require_folder(entry: ReportEntry) -> None:
