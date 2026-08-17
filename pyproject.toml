@@ -51,6 +51,15 @@ extend-immutable-calls = ["comken.toolbox.master_table.column"]
 # 必ず `from comken.X import Y` のようにパッケージルートから書く（CONVENTIONS.md 参照）
 ban-relative-imports = "all"
 
+[tool.ruff.lint.mccabe]
+# 分岐の絡み合いの上限。**select に C90 を入れても、ここが無いと効かない**
+# （2026-08-17 に、有効にしたつもりで動いていないのを見つけた）。
+#
+# 10 は「いま全部通る一番きつい値」。測ったら最大が 10 だったので、
+# **これ以上ややこしくなった時点で落ちる**。長いだけの関数は落とさない——
+# 単調に並んでいるコードは読めるので、問題は分岐が絡むほう。
+max-complexity = 10
+
 [tool.ruff.lint.per-file-ignores]
 # 管理者・利用者が結果を画面で確認する CLI ツールでは print が出力手段になる。
 "comken/core/config/__main__.py" = ["T20"]
