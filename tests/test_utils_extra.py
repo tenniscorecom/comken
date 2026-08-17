@@ -10,7 +10,7 @@ import zipfile
 
 import pytest
 
-from comken.core.files import unzip, zip_files, zip_folder
+from comken.core.files import atomic_write, unzip, zip_files, zip_folder
 from comken.core.retry import retry
 from comken.core.timer import Timer
 
@@ -261,3 +261,103 @@ class TestUnzip:
         dst = unzip(src, tmp_path / "out")
 
         assert (dst / "帳票.txt").read_text(encoding="utf-8") == "OK"
+
+
+class TestAtomicWrite:
+    """atomic_write（一時ファイル経由の安全な書き込み）のテスト。
+
+    「置き換え中にプロセスが落ちても中途半端にならない」前提を固める。
+    書き終わるまで ``path`` は触らず、最後に ``os.replace`` で一括入れ替えする
+    ことで、``path`` を読んでいる側が半端な状態を見ないようにする。
+    """
+
+    def test_replaces_path_after_block_succeeds(self, tmp_path):
+        """ブロック内で書いた内容が、ブロック終了後に path へ反映される。"""
+        target = tmp_path / "out" / "config.ini"
+        target.parent.mkdir()
+
+        with atomic_write(target) as tmp:
+            tmp.write_text("new", encoding="utf-8")
+
+        assert target.read_text(encoding="utf-8") == "new"
+
+    def test_creates_parent_folder_when_missing(self, tmp_path):
+        """親フォルダが無ければ自動作成する（5か所すべてが前提としていた）。"""
+        target = tmp_path / "深い" / "階層" / "out.ini"
+
+        with atomic_write(target) as tmp:
+            tmp.write_text("x", encoding="utf-8")
+
+        assert target.exists()
+
+    def test_overwrites_existing_target(self, tmp_path):
+        """置き換え先に既存ファイルがあれば上書きする。"""
+        target = tmp_path / "config.ini"
+        target.write_text("old", encoding="utf-8")
+
+        with atomic_write(target) as tmp:
+            tmp.write_text("new", encoding="utf-8")
+
+        assert target.read_text(encoding="utf-8") == "new"
+
+    def test_leaves_target_untouched_when_block_raises(self, tmp_path):
+        """ブロック内で例外が出ると、置き換え先はそのまま元の状態を保つ。"""
+        target = tmp_path / "config.ini"
+        target.write_text("before", encoding="utf-8")
+
+        class _Boom(Exception):
+            pass
+
+        with pytest.raises(_Boom), atomic_write(target) as tmp:
+            tmp.write_text("after", encoding="utf-8")
+            raise _Boom
+
+        assert target.read_text(encoding="utf-8") == "before"
+
+    def test_does_not_leave_temp_file_when_block_raises(self, tmp_path):
+        """ブロック内で例外が出ると、一時ファイルがフォルダに残らない。"""
+        target = tmp_path / "config.ini"
+        target.write_text("before", encoding="utf-8")
+
+        class _Boom(Exception):
+            pass
+
+        with (
+            pytest.raises(_Boom),
+            atomic_write(target) as tmp,
+        ):
+            tmp.write_text("after", encoding="utf-8")
+            raise _Boom
+
+        # ~config.ini.<uuid>.tmp が残っていないこと
+        leftovers = [p for p in tmp_path.iterdir() if p.name.startswith("~config.ini.")]
+        assert leftovers == []
+
+    def test_does_not_leave_temp_file_when_replace_fails(self, tmp_path, monkeypatch):
+        """``os.replace`` が失敗しても一時ファイルが残らない。"""
+        target = tmp_path / "config.ini"
+        target.write_text("before", encoding="utf-8")
+
+        def fail_replace(_self, _other):
+            raise OSError("replace failed")
+
+        monkeypatch.setattr("pathlib.Path.replace", fail_replace)
+
+        with (
+            pytest.raises(OSError, match="replace failed"),
+            atomic_write(target) as tmp,
+        ):
+            tmp.write_text("after", encoding="utf-8")
+
+        assert target.read_text(encoding="utf-8") == "before"
+        leftovers = [p for p in tmp_path.iterdir() if p.name.startswith("~config.ini.")]
+        assert leftovers == []
+
+    def test_temp_file_lives_in_target_folder(self, tmp_path):
+        """一時ファイルは同じフォルダに作られる（``os.replace`` は同一ドライブ必須）。"""
+        target = tmp_path / "out" / "config.ini"
+        target.parent.mkdir()
+
+        with atomic_write(target) as tmp:
+            assert tmp.parent == target.parent
+            tmp.write_text("x", encoding="utf-8")

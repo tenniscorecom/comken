@@ -5,11 +5,11 @@
 """
 
 import logging
-import tempfile
 import zipfile
 from collections.abc import Sequence
 from pathlib import Path
 
+from comken.core.files.atomic import atomic_write
 from comken.core.timer import measure
 
 logger = logging.getLogger(__name__)
@@ -34,27 +34,18 @@ def zip_folder(folder: str | Path, dst: str | Path | None = None) -> Path:
     if not folder.is_dir():
         raise FileNotFoundError(f"フォルダが見つかりません: {folder}")
     dst = Path(dst) if dst else folder.parent / f"{folder.name}.zip"
-    dst.parent.mkdir(parents=True, exist_ok=True)
 
-    # NOTE: os.replace を確実に使えるよう、一時ファイルは出力先と同じフォルダに作る。
-    # NOTE: アーカイバがパスへ書けるよう、名前を確保して即座に閉じる。
-    tmp = tempfile.NamedTemporaryFile(  # noqa: SIM115
-        dir=dst.parent, suffix=".tmp", delete=False
-    )
-    tmp_path = Path(tmp.name)
-    tmp.close()
-    try:
-        with zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            for path in sorted(folder.rglob("*")):
-                if (
-                    path.is_file()
-                    and path.resolve() != dst.resolve()
-                    and path.resolve() != tmp_path.resolve()
-                ):
-                    zf.write(path, path.relative_to(folder))
-        tmp_path.replace(dst)
-    finally:
-        tmp_path.unlink(missing_ok=True)
+    with (
+        atomic_write(dst) as tmp,
+        zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zf,
+    ):
+        for path in sorted(folder.rglob("*")):
+            if (
+                path.is_file()
+                and path.resolve() != dst.resolve()
+                and path.resolve() != tmp.resolve()
+            ):
+                zf.write(path, path.relative_to(folder))
     return dst
 
 
@@ -87,22 +78,13 @@ def zip_files(files: Sequence[str | Path], dst: str | Path) -> Path:
         )
 
     dst = Path(dst)
-    dst.parent.mkdir(parents=True, exist_ok=True)
 
-    # NOTE: os.replace を確実に使えるよう、一時ファイルは出力先と同じフォルダに作る。
-    # NOTE: アーカイバがパスへ書けるよう、名前を確保して即座に閉じる。
-    tmp = tempfile.NamedTemporaryFile(  # noqa: SIM115
-        dir=dst.parent, suffix=".tmp", delete=False
-    )
-    tmp_path = Path(tmp.name)
-    tmp.close()
-    try:
-        with zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            for path in paths:
-                zf.write(path, path.name)
-        tmp_path.replace(dst)
-    finally:
-        tmp_path.unlink(missing_ok=True)
+    with (
+        atomic_write(dst) as tmp,
+        zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zf,
+    ):
+        for path in paths:
+            zf.write(path, path.name)
     return dst
 
 

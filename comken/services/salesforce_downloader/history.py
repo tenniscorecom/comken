@@ -12,7 +12,6 @@
 import csv
 import datetime
 import logging
-import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -179,13 +178,3 @@ def _append(path: Path, values: list) -> None:
         if is_new:
             writer.writerow(COLUMNS)
         writer.writerow(values)
-
-
-def new_temp_name(path: Path) -> Path:
-    """同じフォルダに作る一時ファイル名（毎回変える）。
-
-    - 同時に走っても互いを壊さないよう、名前に乱数を入れる
-    - **`~` で始める**ので、使う側が「1001_*.csv」で探しても拾わない
-    - 拡張子は元のまま（CsvWriter は .csv 以外を受け付けない）
-    """
-    return path.with_name(f"~{path.stem}.{uuid.uuid4().hex}{path.suffix}")

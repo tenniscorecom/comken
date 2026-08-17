@@ -7,10 +7,9 @@ config.ini は人が書く設定なのでプログラムから変更しない。
 
 import configparser
 import json
-import os
-import tempfile
 from pathlib import Path
 
+from comken.core.files.atomic import atomic_write
 from comken.core.files.ops import cleanup_stale_tmp
 from comken.exceptions import StateFileCorruptedError, StateLowerCaseNameError, StateValueTypeError
 from comken.runtime import dry_run_log, is_dry_run
@@ -78,29 +77,16 @@ class State:
             raise StateFileCorruptedError(self._path.resolve()) from error
 
     def _write(self, values: dict[str, StateValue]) -> None:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
         cleanup_stale_tmp(self._path)
         parser = _new_parser()
         parser[STATE_SECTION] = {
             key: json.dumps(value, ensure_ascii=False) for key, value in values.items()
         }
-        temporary_path: Path | None = None
-        try:
-            with tempfile.NamedTemporaryFile(
-                mode="w",
-                encoding="utf-8",
-                newline="",
-                dir=self._path.parent,
-                prefix=f"{self._path.name}.{os.getpid()}.",
-                suffix=".tmp",
-                delete=False,
-            ) as temporary:
-                temporary_path = Path(temporary.name)
-                parser.write(temporary)
-            temporary_path.replace(self._path)
-        finally:
-            if temporary_path is not None:
-                temporary_path.unlink(missing_ok=True)
+        with (
+            atomic_write(self._path) as tmp,
+            tmp.open(mode="w", encoding="utf-8", newline="") as file,
+        ):
+            parser.write(file)
 
     @staticmethod
     def _validate_key(key: str) -> None:

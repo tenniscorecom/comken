@@ -44,7 +44,7 @@ import logging
 import time
 from pathlib import Path
 
-from comken.core.files import DateNameBuilder
+from comken.core.files import DateNameBuilder, atomic_write
 from comken.exceptions import (
     ComkenError,
     EmptyReportError,
@@ -331,15 +331,8 @@ def _write_csv(path: Path, rows: list[dict]) -> None:
     複数のプロジェクトが同時に呼ぶので、直接書くと**読んでいる最中のファイルが
     半端な状態**になりうる。同じフォルダ内の置き換えは一度に入れ替わる。
     """
-    tmp_path = history.new_temp_name(path)
-    try:
-        CsvWriter(tmp_path, list(rows[0])).write_rows(rows)
-        tmp_path.replace(path)
-    finally:
-        try:
-            tmp_path.unlink(missing_ok=True)
-        except OSError as e:
-            logger.warning("一時ファイルを削除できませんでした: %s（%s）", tmp_path, e)
+    with atomic_write(path) as tmp:
+        CsvWriter(tmp, list(rows[0])).write_rows(rows)
 
 
 def _write_empty_csv(path: Path) -> None:
@@ -349,16 +342,9 @@ def _write_empty_csv(path: Path) -> None:
     **`_write_csv()` と同じ「一時ファイル→置き換え」の作法**を維持する:
     まとめて一気に入れ替わる／失敗時に残骸を残さない。
     """
-    tmp_path = history.new_temp_name(path)
-    try:
+    with atomic_write(path) as tmp:
         # 0 バイトで作成（CSV のほうが BOM 付きなので、空ファイルでも BOM は付けない）
-        tmp_path.write_bytes(b"")
-        tmp_path.replace(path)
-    finally:
-        try:
-            tmp_path.unlink(missing_ok=True)
-        except OSError as e:
-            logger.warning("一時ファイルを削除できませんでした: %s（%s）", tmp_path, e)
+        tmp.write_bytes(b"")
 
 
 def _warn_shared_reports(entries: dict[str, ReportEntry]) -> None:
