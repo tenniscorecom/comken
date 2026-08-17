@@ -67,13 +67,13 @@ Downloader 側に複雑なスケジュール（土日祝を除く等）は持た
 Salesforce につなげないと、あとの確認が全部できない。**ここが先**。
 
 ```bat
-python -m comken.toolbox.credentials import 認証情報.json
+python -m comken cred import 認証情報.json
 ```
 
 登録できたら、つながるかを確かめる（**副作用のないコマンド**）。
 
 ```bat
-python -m comken.toolbox.salesforce check
+python -m comken sf check
 ```
 
 詳細は [認証情報](credentials.md#登録初回だけ) と
@@ -92,7 +92,7 @@ python -m comken.toolbox.salesforce check
 `MASTER_PATH` に書いた場所へ、そのまま作る。
 
 ```bat
-python -m comken.services.salesforce_downloader init "\\実際のサーバー\share\tools\salesforce\レポート管理表.xlsx"
+python -m comken report init "\\実際のサーバー\share\tools\salesforce\レポート管理表.xlsx"
 ```
 
 **すでにあるファイルは上書きしない**（記入済みの管理表を消さないため）。
@@ -118,7 +118,7 @@ python -m comken.services.salesforce_downloader init "\\実際のサーバー\sh
 ### 5. 書き方を確かめる
 
 ```bat
-python -m comken.services.salesforce_downloader check "\\実際のサーバー\share\tools\salesforce\レポート管理表.xlsx"
+python -m comken report check "\\実際のサーバー\share\tools\salesforce\レポート管理表.xlsx"
 ```
 
 **Salesforce へはつながない。** 記入内容の検査だけなので、何度でも安全に流せる。
@@ -152,7 +152,7 @@ print(len(reader.read_rows()))  # 行数
 ### 雛形を作る
 
 ```bat
-python -m comken.services.salesforce_downloader init レポート管理表.xlsx
+python -m comken report init レポート管理表.xlsx
 ```
 
 記入例2行と、各列の書き方をまとめた**「記入方法」シート**が入った状態で作られる。
@@ -166,7 +166,7 @@ python -m comken.services.salesforce_downloader init レポート管理表.xlsx
 ### 編集したあとに確かめる
 
 ```bat
-python -m comken.services.salesforce_downloader check レポート管理表.xlsx
+python -m comken report check レポート管理表.xlsx
 ```
 
 ```

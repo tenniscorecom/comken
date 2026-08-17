@@ -5,7 +5,7 @@ Config の属性（config.SECTION.KEY）は config.ini から実行時に動的�
 補完を効かせる。設定値の読み込みとはモジュール内で責務を分けている。
 
 - Config() を呼ぶたびに update_stub() が自動で走る（config パッケージから呼ばれる）
-- コードを書く前に手動で作りたい場合は generate_stub()（`python -m comken.core.config`）
+- コードを書く前に手動で作りたい場合は generate_stub()（`python -m comken config`）
 """
 
 import configparser
@@ -18,7 +18,7 @@ from comken.exceptions import ConfigFileNotFoundError
 
 _STUB_HEADER = '''"""config.ini から自動生成されたエディタ補完用スタブ。手で編集しない。
 
-Config() を呼ぶたびに自動更新される（手動生成: python -m comken.core.config）。
+Config() を呼ぶたびに自動更新される（手動生成: python -m comken config）。
 """
 '''
 
@@ -31,7 +31,7 @@ def generate_stub(
     通常は Config() を呼ぶたびに自動更新されるため、手動で実行する必要はない。
     「コードをまだ書いていないが先にスタブだけ作りたい」場合に使う:
 
-        python -m comken.core.config
+        python -m comken config
 
     Args:
         ini_path: 読み込む config.ini のパス。

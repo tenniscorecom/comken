@@ -27,7 +27,7 @@ from comken.toolbox.credentials import (
     save_credential,
     save_credentials,
 )
-from comken.toolbox.credentials.__main__ import main
+from comken.toolbox.credentials.cli import main
 
 SECRET = "s3cret-値-🔑"  # 日本語と絵文字を含めて UTF-8 の往復も確かめる
 

@@ -22,7 +22,7 @@ config.ini を読み込み、config.SECTION.KEY の形式でアクセスでき�
 
     まだ一度も実行していない状態で先にスタブだけ作りたい場合は手動で生成する:
 
-        python -m comken.core.config
+        python -m comken config
 
 ※ ブラウザの設定は config.ini ではなく BrowserOptions のインスタンス
    （src/browser_options.py）で行う。config はブラウザ設定を持たない。

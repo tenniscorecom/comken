@@ -115,7 +115,6 @@ def test_batch_file_checks_comken_before_running(path: Path):
 # setup は PYTHONPATH を「これから通す」側なので、そこから探してはいけない。
 # プロジェクト側へ配る bat（実行・認証情報の登録）は、もともと先頭の固定値を書き換えて使う。
 _SECOND_SOURCE = {
-    "comken.bat": (r'%PYTHONPATH:;=" "%', "環境変数 PYTHONPATH の走査"),
     "setup_comken.bat": ('set "COMKEN_ROOT_FIXED=', "bat に書いておく固定値"),
     "実行.bat": ('set "COMKEN_ROOT=', "bat に書いておく固定値"),
     "認証情報の登録.bat": ('set "COMKEN_ROOT=', "bat に書いておく固定値"),
@@ -189,27 +188,11 @@ def test_setup_comken_preserves_value_kind():
 def test_setup_comken_does_not_search_pythonpath():
     """**setup_comken.bat は PYTHONPATH から comken を探さない。**
 
-    この bat は PYTHONPATH と PATH を「これから通す」ためのもの。
+    この bat は PYTHONPATH を「これから通す」ためのもの。
     通っていないから実行するのに、そこから探すのは筋が通らない。
-    （`comken.bat` は通っている前提で動くので、PYTHONPATH を見てよい）
     """
     text = _read(_ROOT / "setup_comken.bat")
     assert r'%PYTHONPATH:;=" "%' not in text, (
         "setup_comken.bat が PYTHONPATH を探索している。"
         "通すための bat が、通っている前提で探してはいけない。"
-    )
-
-
-def test_comken_bat_searches_pythonpath():
-    """comken.bat は PYTHONPATH を `;` 区切りで走査する。
-
-    セットアップ済みの PC で bat だけ手元にある状況（`%~dp0` が comken 直下でない）
-    でも comken を見つけられる必要がある。`%PYTHONPATH:;=" "%` という cmd.exe の
-    イディオムが使われていることで「`;` で split して for に流す」実装を固定する
-    （慣用句なので、書き方が変わると bat が壊れる）。
-    """
-    text = _read(_ROOT / "comken.bat")
-    assert r'%PYTHONPATH:;=" "%' in text, (
-        "comken.bat は PYTHONPATH を走査していない。"
-        "bat を comken の外に置いたとき、comken を見つけられない。"
     )

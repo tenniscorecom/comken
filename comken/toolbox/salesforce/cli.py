@@ -1,15 +1,19 @@
-"""comken/toolbox/salesforce/__main__.py — 接続と資格情報ローテーションの確認コマンド
+"""comken/toolbox/salesforce/cli.py — 接続と資格情報ローテーションの確認コマンド
 
-    python -m comken.toolbox.salesforce check
-    python -m comken.toolbox.salesforce report --report-id 00O...
-    python -m comken.toolbox.salesforce app    --app-id 1CE...
-    python -m comken.toolbox.salesforce rotate --app-id 1CE... --stage-only
+    python -m comken sf check
+    python -m comken sf report --report-id 00O...
+    python -m comken sf app    --app-id 1CE...
+    python -m comken sf rotate --app-id 1CE... --stage-only
+
+**このモジュールは `comken/__main__.py` から呼ばれる。** `main(argv)` を直接
+呼ぶすと（テスト等）動くが、`python -m comken.toolbox.salesforce` は
+もう動かない（入口は `python -m comken` に集約）。
 
 つなぎ先は組織クラス（`sites/`）の DOMAIN_URL と CREDENTIAL_PREFIX。
 別の組織・別の登録を試すときだけ `--domain` / `--prefix` で上書きする。
 
 client_id / client_secret は **DPAPI に登録したものを読む**。コマンドラインに秘密の値は渡さない。
-先に `python -m comken.toolbox.credentials import 認証情報.json` で登録しておく。
+先に `python -m comken cred import 認証情報.json` で登録しておく。
 
 External Client App の consumer secret を REST API から回せるか（＝ローテーションを
 自分たちで回せるか）は組織の設定に依存し、レスポンスの項目名も公開資料で確認できていない。
@@ -53,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="python -m comken.toolbox.salesforce",
+        prog="python -m comken sf",
         description="Salesforce への接続と、資格情報ローテーションの可否を確かめる",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -158,7 +162,7 @@ def _run_rotate(args: argparse.Namespace) -> None:
         )
         rotator.rotate_if_due()
     print("ローテーションしました。新しい secret は DPAPI に保存済みです。")
-    print("  確認: python -m comken.toolbox.credentials list")
+    print("  確認: python -m comken cred list")
 
 
 def _stage_only(args: argparse.Namespace) -> None:
@@ -209,5 +213,6 @@ def _print_shape(body: object, indent: str = "  ") -> None:
             print(f"{indent}{key}: {value!r}")
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+# このモジュールは `python -m comken.toolbox.salesforce` からは実行しない
+# （入口は `python -m comken` に集約）。直接呼ぶのはテスト等だけで、
+# CLI としての起動は `comken/__main__.py` から `main(argv)` を呼ぶ形になる。

@@ -4,8 +4,8 @@ config.ini に平文で書けない値（client_secret・パスワード・ト�
 Windows ログオンユーザーに紐付けて暗号化して保管する。
 
     # 登録（初回だけ。1台なら画面から、何台にも配るなら平文 JSON を用意して取り込む）
-    python -m comken.toolbox.credentials gui
-    python -m comken.toolbox.credentials import 認証情報.json
+    python -m comken cred gui
+    python -m comken cred import 認証情報.json
 
     # 使う側
     from comken.toolbox.credentials import Credentials

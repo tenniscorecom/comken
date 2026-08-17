@@ -51,6 +51,10 @@ def test_all_comken_modules_start_docstring_with_their_path() -> None:
     """全モジュールを開いた瞬間に、どのファイルの説明か判断できる。"""
     missing = []
     for path in sorted((_ROOT / "comken").rglob("*.py")):
+        # `templates/` はプロジェクト雛形として配布される素のファイル群。
+        # comken パッケージの一部ではないので対象外
+        if "templates" in path.parts:
+            continue
         relative_path = path.relative_to(_ROOT).as_posix()
         docstring = ast.get_docstring(ast.parse(path.read_text(encoding="utf-8")), clean=False)
         first_line = docstring.splitlines()[0] if docstring else ""
@@ -63,6 +67,10 @@ def test_all_named_comken_classes_and_functions_have_docstrings() -> None:
     """利用者が名前から辿るクラス・関数には説明を必須にする。"""
     missing = []
     for path in sorted((_ROOT / "comken").rglob("*.py")):
+        # `templates/` は雛形ファイル群。雛形内に作られたクラスの docstring は
+        # 利用者向けではなくサンプル用のため、対象外
+        if "templates" in path.parts:
+            continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):

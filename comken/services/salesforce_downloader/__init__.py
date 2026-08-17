@@ -26,8 +26,8 @@ r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポー�
 
 管理表の雛形作成と検査はコマンドからも呼べる（保守用。業務の定期実行ではない）:
 
-    python -m comken.services.salesforce_downloader init レポート管理表.xlsx
-    python -m comken.services.salesforce_downloader check レポート管理表.xlsx
+    python -m comken report init レポート管理表.xlsx
+    python -m comken report check レポート管理表.xlsx
 
 ---
 

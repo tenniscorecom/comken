@@ -144,20 +144,22 @@ import の書き方は上の「[使うときの約束](#使うときの約束)�
 
 comken は共有サーバー上の1か所を**直接参照する**（ローカルへのコピー・同期はしない）。
 
-リポジトリ直下にあるのは**入口の2本だけ**：`setup_comken.bat`（初回に1回だけ実行）と
-`comken.bat`（`comken init` として呼ばれる本体）。それ以外の場所（テンプレ・スクリプト・
-ドキュメント）は Python から直接呼ばれるもので、ダブルクリックする入口ではない。
+リポジトリ直下にある入口は **`setup_comken.bat` 1本だけ**（初回に1回だけ実行）。
+CLI の入口は **`python -m comken`** に集約したので、`comken.bat` はもう要らない
+（→ 仕様書 3.5）。それ以外の場所（テンプレ・スクリプト・ドキュメント）は
+Python から直接呼ばれるもので、ダブルクリックする入口ではない。
 
-**入口の2本はリポジトリ直下が正規の置き場所**だが、**デスクトップや手元の作業フォルダ
-など、どこに置いても動く**。comken の場所は次の順で自動判定し、最初に見つかったものを
-採用する（判定はどの候補でも `<候補>\comken\__init__.py` の存在で行う）。
+**`setup_comken.bat` はリポジトリ直下が正規の置き場所**だが、**デスクトップや手元の
+作業フォルダなど、どこに置いても動く**。comken の場所は次の順で自動判定し、
+最初に見つかったものを採用する（判定はどの候補でも `<候補>\comken\__init__.py` の
+存在で行う）。
 
-| 優先 | `setup_comken.bat` | `comken.bat` |
-|---|---|---|
-| 1 | **bat の先頭に書いた固定値** | bat 自身のフォルダ（`%~dp0`） |
-| 2 | bat 自身のフォルダ（`%~dp0`） | 現在の `PYTHONPATH` の各エントリ |
+| 優先 | `setup_comken.bat` |
+|---|---|
+| 1 | **bat の先頭に書いた固定値** |
+| 2 | bat 自身のフォルダ（`%~dp0`） |
 
-**`setup_comken.bat` は `PYTHONPATH` から探さない。** この bat は `PYTHONPATH` と `PATH` を
+**`setup_comken.bat` は `PYTHONPATH` から探さない。** この bat は `PYTHONPATH` を
 **これから通す**ためのもので、通っていない前提で動かなければならない。通っていないから
 実行するのに、そこから探すのは筋が通らない。代わりに、**bat を配る前に先頭へ場所を書く**:
 
@@ -169,23 +171,23 @@ set "COMKEN_ROOT_FIXED=\\server\share\tools\comken"
 （各プロジェクトの `実行.bat` が先頭に `COMKEN_ROOT` を書くのと同じ考え方）。
 リポジトリ直下に置いて実行するなら、**空のままでよい**。
 
-`comken.bat` のほうは `setup_comken.bat` を一度走らせた後に使うものなので、
-`PYTHONPATH` から辿れる。引数は `init` の名前に使うため、場所の指定には使わない。
+`setup_comken.bat` が登録するのは **`PYTHONPATH` だけ**（`comken.bat` が無くなったので
+`PATH` への登録は不要）。
 
 ### セットアップ手順（新しい PC ではじめにやること）
 
 1. リポジトリ直下の `setup_comken.bat` を実行する
-   → このフォルダが現在の Windows ユーザーの `PYTHONPATH` と `PATH` に追加される。
+   → このフォルダが現在の Windows ユーザーの `PYTHONPATH` に追加される。
    既に同じパスが登録済みなら重複追加しない。bat 自身の場所から comken を見つけるので、
    **リポジトリ直下で実行するなら編集は不要**（別の場所から配って実行させるときだけ、
    bat の先頭の `COMKEN_ROOT_FIXED` に場所を書く）
 2. **新しくターミナル（コマンドプロンプト／PowerShell／VS Code のターミナル）を開く**
    → 環境変数の変更は、そのターミナルを起動した瞬間から取り込まれる。
-   セットアップ後に開いているターミナルでは PATH が古いままなので、`comken` と打っても
-   "見つからない" になる（コマンドプロンプトを新しく開けば直る）
-3. プロジェクトを作りたいフォルダへ `cd` して、`comken init プロジェクト名` を実行
-   → 現在のフォルダにプロジェクトの雛形がコピーされる。名前を省いて `comken init` と
-   打つと、名前を聞かれる（`comken` だけで打つと使い方が出る）
+   セットアップ後に開いているターミナルでは PYTHONPATH が古いままなので、`python -m comken` が
+   `ModuleNotFoundError: comken` になる（新しいターミナルを開けば直る）
+3. プロジェクトを作りたいフォルダへ `cd` して、`python -m comken init プロジェクト名` を実行
+   → 現在のフォルダにプロジェクトの雛形がコピーされる。名前を省いて `python -m comken init` と
+   打つと、名前を聞かれる（`python -m comken --help` で全コマンドの一覧が出る）
 
 共有フォルダを移動した場合は、Windows のユーザー環境変数から古いパスを削除し、
 移動後の `setup_comken.bat` を再実行する。管理者権限は不要。
@@ -193,7 +195,8 @@ set "COMKEN_ROOT_FIXED=\\server\share\tools\comken"
 ### `comken init` で何が作られるか
 
 **打った場所に、プロジェクト名のフォルダが1つ**できる。中身は
-`templates/新規プロジェクト/` 一式で、次の3つが自動で埋まる。
+`comken/templates/新規プロジェクト/` 一式（パッケージに同梱されている）で、
+次の3つが自動で埋まる。
 
 | 埋まるもの | 入るファイル |
 |---|---|
@@ -240,9 +243,9 @@ set "COMKEN_ROOT_FIXED=\\server\share\tools\comken"
 ### プロジェクトごとに設定する
 
 PCの環境変数を変更したくない場合は、各プロジェクトのルートに
-`templates/新規プロジェクト/実行.bat`をコピーし、先頭の`COMKEN_ROOT`を共有サーバー上の
+`comken/templates/新規プロジェクト/実行.bat`をコピーし、先頭の`COMKEN_ROOT`を共有サーバー上の
 リポジトリルートに合わせる。この方法ではバッチの実行中だけ`PYTHONPATH`を設定する。
-（`comken init` で作ったプロジェクトには、この`実行.bat` が場所入りで最初から入る）
+（`python -m comken init` で作ったプロジェクトには、この`実行.bat` が場所入りで最初から入る）
 
 ### bat が何をしているか
 
@@ -368,7 +371,7 @@ config.read(r"C:\作業\config.ini")
 > **補完（Pylance）:** config を初めて読むと、config.ini から補完用スタブ
 > `typings/comken/core/`（config.pyi）と `typings/comken/__init__.pyi` が自動生成される。
 > VS Code + Pylance で `config.SECTION.KEY` が型付き補完される（typings/ は .gitignore 推奨）。
-> ツール実行前にスタブだけ先に作りたいときは `python -m comken.core.config`。
+> ツール実行前にスタブだけ先に作りたいときは `python -m comken config`。
 
 明示的にインスタンスを持ちたい場合（テストや複数 ini の読み分けに）:
 
@@ -453,7 +456,7 @@ for ループが文字単位になる事故が起きる）。
 まだ一度も実行していない状態で先にスタブだけ作りたい場合は手動で生成できる:
 
 ```
-python -m comken.core.config
+python -m comken config
 ```
 
 生成された `typings/` は手で編集せず、`.gitignore` に含める（自動生成物）。

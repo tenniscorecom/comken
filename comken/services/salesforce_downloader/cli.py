@@ -1,7 +1,11 @@
-r"""comken/services/salesforce_downloader/__main__.py — 管理表まわりの保守コマンド。
+r"""comken/services/salesforce_downloader/cli.py — 管理表まわりの保守コマンド。
 
-    python -m comken.services.salesforce_downloader init レポート管理表.xlsx   雛形を作る
-    python -m comken.services.salesforce_downloader check                       管理表を検査する
+    python -m comken report init レポート管理表.xlsx   雛形を作る
+    python -m comken report check                       管理表を検査する
+
+**このモジュールは `comken/__main__.py` から呼ばれる。** `main(argv)` を直接
+呼べば（テスト等）動くが、`python -m comken.services.salesforce_downloader`
+はもう動かない（入口は `python -m comken` に集約）。
 
 **これは保守用のコマンドで、業務の定期実行ではない。** 毎日の取得は個別プロジェクトから
 `download_scheduled()` を呼ぶ（ライブラリには**実行される単位を置かない**）。
@@ -46,7 +50,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="python -m comken.services.salesforce_downloader",
+        prog="python -m comken report",
         description="Salesforce レポート管理表の雛形作成と検査",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -101,5 +105,6 @@ def _run_check(args: argparse.Namespace) -> None:
         print(f"  {report_id}: {names}")
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+# このモジュールは `python -m comken.services.salesforce_downloader` からは実行しない
+# （入口は `python -m comken` に集約）。直接呼ぶのはテスト等だけで、
+# CLI としての起動は `comken/__main__.py` から `main(argv)` を呼ぶ形になる。

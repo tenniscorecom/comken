@@ -37,7 +37,7 @@ class CredentialNotFoundError(CredentialError):
 
     対処:
         表示された登録済みキー名と見比べる。
-        無ければ `python -m comken.toolbox.credentials import 認証情報.json` で取り込む
+        無ければ `python -m comken cred import 認証情報.json` で取り込む
     """
 
     def __init__(self, name: str, registered: list[str]) -> None:
@@ -46,7 +46,7 @@ class CredentialNotFoundError(CredentialError):
             f"登録済みのキー名:\n{known}"
             if registered
             else "まだ1件も登録されていません。次のコマンドで取り込んでください。\n"
-            "  python -m comken.toolbox.credentials import 認証情報.json"
+            "  python -m comken cred import 認証情報.json"
         )
         super().__init__(f"認証情報が登録されていません: {name}\n{detail}")
 
@@ -95,7 +95,7 @@ class CredentialStoreCorruptedError(CredentialError):
             f"（{detail}）\n"
             "復号はできているので、実行アカウントの問題ではありません。\n"
             "このファイルを削除して、もう一度取り込み直してください。\n"
-            "  python -m comken.toolbox.credentials import 認証情報.json"
+            "  python -m comken cred import 認証情報.json"
         )
 
 

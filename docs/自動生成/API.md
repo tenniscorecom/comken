@@ -2202,7 +2202,7 @@ class CredentialNotFoundError(CredentialError):
 
 対処:
     表示された登録済みキー名と見比べる。
-    無ければ `python -m comken.toolbox.credentials import 認証情報.json` で取り込む
+    無ければ `python -m comken cred import 認証情報.json` で取り込む
 
 #### `__init__`
 

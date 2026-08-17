@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 
 # ── 配置するときに実際の場所へ書き換える（公開リポジトリなので仮名にしてある）──
 # レポート管理表（Excel）。非エンジニアが編集する。雛形は次のコマンドで作れる:
-#     python -m comken.services.salesforce_downloader init レポート管理表.xlsx
+#     python -m comken report init レポート管理表.xlsx
 # **config ファイルへは外出ししない。** 利用側がパスを渡せるようにすると、
 # プロジェクト側に定数を持たせて管理表と食い違う事故が起きる（場所を変えるなら
 # ここ1か所を変える）。設定ファイルに集約する案は試して戻した

@@ -15,7 +15,7 @@ client_id と client_secret だけ・トークンだけ、といった構成に�
       他人にコピーされても中身は読まれない
 
 登録は JSON を取り込む形で行う（comken.toolbox.credentials.importer）:
-    python -m comken.toolbox.credentials import 認証情報.json
+    python -m comken cred import 認証情報.json
 
 使い方（コード側）:
     from comken.toolbox.credentials import Credentials

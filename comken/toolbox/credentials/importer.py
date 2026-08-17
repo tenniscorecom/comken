@@ -5,7 +5,7 @@
 平文はその場で消す** という流れにする。
 
     認証情報.json（平文・一時的に置く）
-            ↓  python -m comken.toolbox.credentials import 認証情報.json
+            ↓  python -m comken cred import 認証情報.json
     %USERPROFILE%\\.comken\\credentials.dat（DPAPI 暗号化）
             ↓
     Credentials("site_a").client_id

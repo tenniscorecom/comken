@@ -1,9 +1,9 @@
 @echo off
 setlocal
 rem comken をこのパソコンで使えるようにします（初回に1回だけ）。
-rem このリポジトリの場所を、現在の Windows ユーザーの PYTHONPATH と PATH に追加します。
-rem 一度実行しておくと、各プロジェクトの 実行.bat が comken の場所を知らなくても動きますし、
-rem `comken init` と短く打てるようになります。
+rem このリポジトリの場所を、現在の Windows ユーザーの PYTHONPATH に追加します。
+rem 一度実行しておくと、各プロジェクトの 実行.bat が comken の場所を知らなくても動きます。
+rem 入口は `python -m comken` に集約したので、PATH への登録は不要になりました。
 rem
 rem ============================================================
 rem  ★ 配る前に、ここへ comken の場所を書いてください
@@ -19,9 +19,9 @@ rem   1. 上に書いた固定値 ―― 各PCへ配るときはここに書いておく
 rem   2. この bat 自身のフォルダ（%~dp0）―― リポジトリ直下に置いた場合の正規の置き場所
 rem 判定はどちらも `<候補>\comken\__init__.py` の存在で行う（フォルダ名では判定しない）。
 rem
-rem **PYTHONPATH からは探さない。** この bat は PYTHONPATH と PATH を「これから通す」ための
+rem **PYTHONPATH からは探さない。** この bat は PYTHONPATH を「これから通す」ための
 rem ものなので、通っていない前提で動かなければならない。通っていないから実行するのに
-rem そこから探すのは筋が通らない（comken.bat は通っている前提なので PYTHONPATH を見る）。
+rem そこから探すのは筋が通らない。
 
 rem --- 段階 1: 上に書いた固定値 ---
 if defined COMKEN_ROOT_FIXED (
@@ -50,12 +50,11 @@ rem --- 見つかったルートを確定 ---
 :_comken_found
 rem 何を登録するかを先に見せる。UNC パス（\\サーバー名\...）でも登録はできるが、
 rem 意図しない場所を登録すると、そのPCが以後ずっとそこを見に行くことになる
-echo 次の場所を PYTHONPATH と PATH に追加します:
+echo 次の場所を PYTHONPATH に追加します:
 echo     %COMKEN_ROOT%
 echo.
 
-rem PYTHONPATH と PATH の両方に「無ければ追加」。登録結果は1行で伝える。
-rem どちらか片方だけ既登録でも、もう片方は追加する（1回の実行で済ませる）。
+rem PYTHONPATH に「無ければ追加」。登録結果は1行で伝える。
 rem
 rem **生の値を、元の型のまま書く。**
 rem   [Environment]::GetEnvironmentVariable('Path','User') は %USERPROFILE% などを
@@ -70,18 +69,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "  Set-ItemProperty -Path 'HKCU:\Environment' -Name $name -Value $value -Type $kind" ^
   "};" ^
   "$py = _Read 'PYTHONPATH';" ^
-  "$path = _Read 'Path';" ^
   "$added = @();" ^
   "if (-not ($py | Where-Object { $_.ToString() -ieq $root })) { _Write 'PYTHONPATH' (($py + $root) -join ';'); $added += 'PYTHONPATH' };" ^
-  "if (-not ($path | Where-Object { $_.ToString() -ieq $root })) { _Write 'Path' (($path + $root) -join ';'); $added += 'PATH' };" ^
   "if ($added.Count -eq 0) { Write-Host '既に登録済みでした。' }" ^
   "else { Write-Host ('追加しました: ' + ($added -join ', ') + ' / ' + $root) }"
 set "EXIT_CODE=%ERRORLEVEL%"
 
 rem 環境変数の変更を他プロセスへ通知する（Explorer から起動したターミナル等）。
 rem Set-ItemProperty はレジストリを書くだけで WM_SETTINGCHANGE を送らないので、
-rem setx を1つ呼んでブロードキャストを誘発する。**PATH/PYTHONPATH を setx で書かないこと**
-rem （1024 文字制限で切り捨てられ PATH が壊れる。短い変数を1つ書くためだけに使う）。
+rem setx を1つ呼んでブロードキャストを誘発する。**PYTHONPATH を setx で書かないこと**
+rem （1024 文字制限で切り捨てられ PYTHONPATH が壊れる。短い変数を1つ書くためだけに使う）。
 if "%EXIT_CODE%"=="0" setx COMKEN_ROOT_REGISTERED "1" >nul
 
 if not "%EXIT_CODE%"=="0" (
@@ -91,7 +88,7 @@ if not "%EXIT_CODE%"=="0" (
 ) else (
   echo.
   echo 新しいコマンドプロンプト（または開き直した VS Code）から有効になります。
-  echo `comken init プロジェクト名` で雛形を作れます。
+  echo `python -m comken init プロジェクト名` で雛形を作れます。
 )
 pause
 

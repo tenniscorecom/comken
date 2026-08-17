@@ -1,6 +1,6 @@
 """comken/toolbox/credentials/gui.py — 認証情報の登録画面（GUI）
 
-    python -m comken.toolbox.credentials gui
+    python -m comken cred gui
 
 tkinter（Python 標準ライブラリ）製。ターミナルを使わない人向けの入口で、
 コマンドでできること（登録・取り込み・一覧・削除）を1つの画面にまとめたもの。

@@ -311,11 +311,11 @@ with site() as sf:
 
 ```bat
 :: 1. 登録（開いた画面で sandbox / client_id・client_secret を入れる。平文のファイルは作らない）
-python -m comken.toolbox.credentials gui
+python -m comken cred gui
 
 :: 2. つないでみる
-python -m comken.toolbox.salesforce check
-python -m comken.toolbox.salesforce report --report-id 00O...
+python -m comken sf check
+python -m comken sf report --report-id 00O...
 ```
 
 既定では `Sandbox.CREDENTIAL_PREFIX` の `sandbox_client_id` / `sandbox_client_secret` が

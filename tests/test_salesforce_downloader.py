@@ -37,7 +37,7 @@ from comken.services.salesforce_downloader import (
     shared_report_ids,
 )
 from comken.services.salesforce_downloader import service as service_module
-from comken.services.salesforce_downloader.__main__ import main as cli
+from comken.services.salesforce_downloader.cli import main as cli
 from comken.services.salesforce_downloader.master import EXAMPLES
 from comken.toolbox.csv import CsvReader
 from comken.toolbox.excel import ExcelWriter

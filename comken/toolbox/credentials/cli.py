@@ -1,9 +1,13 @@
-"""comken/toolbox/credentials/__main__.py — 認証情報の管理コマンド
+"""comken/toolbox/credentials/cli.py — 認証情報の管理コマンド
 
-    python -m comken.toolbox.credentials gui                     登録画面を開く
-    python -m comken.toolbox.credentials import 認証情報.json   平文 JSON を取り込む
-    python -m comken.toolbox.credentials list            登録済みの認証情報を接頭辞別に表示する
-    python -m comken.toolbox.credentials delete site_a_client_id 1件削除する
+    python -m comken cred gui                       登録画面を開く
+    python -m comken cred import 認証情報.json      平文 JSON を取り込む
+    python -m comken cred list                      登録済みの認証情報を接頭辞別に表示する
+    python -m comken cred delete site_a_client_id   1件削除する
+
+**このモジュールは `comken/__main__.py` から呼ばれる。** `main(argv)` を直接
+呼ぶすと（テスト等）動くが、`python -m comken.toolbox.credentials` は
+もう動かない（入口は `python -m comken` に集約）。
 
 **登録の入口は2つある。** 1台で登録するときは `gui`（平文のファイルを作らずに済む）。
 たくさんの PC へ同じ値を配るときは `import`（手入力の工程が要らない）。
@@ -42,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="python -m comken.toolbox.credentials",
+        prog="python -m comken cred",
         description=f"認証情報を暗号化して保存する（保存先: {CREDENTIALS_PATH}）",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -125,5 +129,6 @@ def _run_delete(args: argparse.Namespace) -> None:
     print(f"削除しました: {args.name}")
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+# このモジュールは `python -m comken.toolbox.credentials` からは実行しない
+# （入口は `python -m comken` に集約）。直接呼ぶのはテスト等だけで、
+# CLI としての起動は `comken/__main__.py` から `main(argv)` を呼ぶ形になる。

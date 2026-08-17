@@ -40,6 +40,17 @@ def _component(module: str) -> str | None:
     return parts[1]
 
 
+def _is_skippable(path: Path) -> bool:
+    """層ルールの検査対象から外すファイルか。
+
+    - `__main__.py` は CLI 入口で層の外から呼ぶので対象外
+    - `templates/` は配布される雛形ファイル群で comken パッケージの一部ではない
+    """
+    if path.name == "__main__.py":
+        return True
+    return "templates" in path.parts
+
+
 def _resolve_import(
     module: str, node: ast.Import | ast.ImportFrom, *, is_package: bool
 ) -> list[str]:
@@ -61,32 +72,16 @@ def test_imports_follow_layer_direction() -> None:
     violations: list[str] = []
 
     for path in PACKAGE_ROOT.rglob("*.py"):
-        module = _module_name(path)
-        source = _component(module)
-        if source is None:
+        if _is_skippable(path):
             continue
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        for node in ast.walk(tree):
-            if not isinstance(node, (ast.Import, ast.ImportFrom)):
+        for violation in _collect_violations(path):
+            if violation is None:
                 continue
-            for imported_module in _resolve_import(
-                module, node, is_package=path.name == "__init__.py"
-            ):
-                target = _component(imported_module)
-                if target is None or target == source:
-                    continue
-                edge = (source, target)
-                source_layer = LAYERS[source.split(".")[0]]
-                target_layer = LAYERS[target.split(".")[0]]
-                if source_layer == target_layer and edge in ALLOWED_SAME_LAYER:
-                    found_same_layer.add(edge)
-                    continue
-                if target_layer >= source_layer:
-                    relative_path = path.relative_to(REPOSITORY_ROOT)
-                    violations.append(
-                        f"{relative_path}:{node.lineno}: 禁止された依存 {source} → {target}。"
-                        "下の層だけを import するか、設計を見直してください。"
-                    )
+            kind, payload = violation
+            if kind == "violation":
+                violations.append(payload)
+            elif kind == "allowed":
+                found_same_layer.add(payload)
 
     unused = ALLOWED_SAME_LAYER - found_same_layer
     for source, target in sorted(unused):
@@ -96,3 +91,52 @@ def test_imports_follow_layer_direction() -> None:
         )
 
     assert not violations, "\n" + "\n".join(violations)
+
+
+def _collect_violations(path: Path) -> list[tuple[str, str | tuple[str, str]]]:
+    """ファイル1つ分の import を調べて、違反または許可エッジを yield する。
+
+    Returns:
+        各 import について ``("violation", message)`` または
+        ``("allowed", (source, target))`` を yield する。
+        検査対象外のモジュール・import 形式は None 相当（yield しない）。
+    """
+    module = _module_name(path)
+    source = _component(module)
+    if source is None:
+        return []
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    results: list[tuple[str, str | tuple[str, str]]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Import, ast.ImportFrom)):
+            continue
+        for imported_module in _resolve_import(module, node, is_package=path.name == "__init__.py"):
+            outcome = _classify_edge(source, imported_module, node, path)
+            if outcome is not None:
+                results.append(outcome)
+    return results
+
+
+def _classify_edge(
+    source: str,
+    imported_module: str,
+    node: ast.Import | ast.ImportFrom,
+    path: Path,
+) -> tuple[str, str | tuple[str, str]] | None:
+    """1つの import について、違反か許可かを判定する。"""
+    target = _component(imported_module)
+    if target is None or target == source:
+        return None
+    edge = (source, target)
+    source_layer = LAYERS[source.split(".")[0]]
+    target_layer = LAYERS[target.split(".")[0]]
+    if source_layer == target_layer and edge in ALLOWED_SAME_LAYER:
+        return ("allowed", edge)
+    if target_layer >= source_layer:
+        relative_path = path.relative_to(REPOSITORY_ROOT)
+        return (
+            "violation",
+            f"{relative_path}:{node.lineno}: 禁止された依存 {source} → {target}。"
+            "下の層だけを import するか、設計を見直してください。",
+        )
+    return None
