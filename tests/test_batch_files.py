@@ -141,6 +141,51 @@ def test_batch_file_does_not_rely_on_dp0_alone(path: Path):
     assert phrase in text, f"{path.name} は comken の場所を「{meaning}」から探していない"
 
 
+def test_setup_comken_does_not_use_setx_for_long_vars():
+    """**setup_comken.bat は setx で PATH / PYTHONPATH を書かない。**
+
+    setx は 1024 文字を超える値を切り捨てる（この PC のユーザー PATH は実測 2102 文字）。
+    そのため PATH と PYTHONPATH は Set-ItemProperty で書き、setx は通知目的だけに使う。
+    `setx` の直後に `PATH` や `PYTHONPATH` が続く形になっていれば、setx で書いている。
+    """
+    text = _read(_ROOT / "setup_comken.bat")
+    # rem コメント内を除外するため、行頭にある `setx` コマンドだけ拾う
+    for m in re.finditer(r"(?m)^\s*setx\s+(.+)$", text):
+        target = m.group(1).split()[0]  # setx の次に書いた変数名（先頭のトークン）
+        assert target.upper() not in {"PATH", "PYTHONPATH"}, (
+            f"setup_comken.bat が setx で {target} を書いている。"
+            "1024 文字制限で切り捨てられるので、setx には短い変数だけを渡してください。"
+        )
+
+
+def test_setup_comken_preserves_raw_value():
+    """**setup_comken.bat は値を展開せずに読む。**
+
+    `DoNotExpandEnvironmentNames` を渡して読まないと、`GetEnvironmentVariable` や
+    `GetValue` が `%USERPROFILE%` などを絶対パスへ展開し、書き戻しで元表記を失う。
+    この PC の多くのユーザー PATH は `REG_EXPAND_SZ` で `%USERPROFILE%...` を持つので、
+    展開せずに読むことが必須。
+    """
+    text = _read(_ROOT / "setup_comken.bat")
+    assert "DoNotExpandEnvironmentNames" in text, (
+        "setup_comken.bat が DoNotExpandEnvironmentNames を使っていない。"
+        "値を展開せずに読む実装にしてください。"
+    )
+
+
+def test_setup_comken_preserves_value_kind():
+    """**setup_comken.bat は値の型（REG_SZ / REG_EXPAND_SZ）を保つ。**
+
+    `GetValueKind` で現在の型を調べ、同じ型で書き戻す。型が REG_SZ に変わると、
+    値に残った `%変数%` が展開されなくなる。
+    """
+    text = _read(_ROOT / "setup_comken.bat")
+    assert "GetValueKind" in text, (
+        "setup_comken.bat が GetValueKind を使っていない。"
+        "元の型を保って書き戻す実装にしてください。"
+    )
+
+
 def test_setup_comken_does_not_search_pythonpath():
     """**setup_comken.bat は PYTHONPATH から comken を探さない。**
 

@@ -56,16 +56,33 @@ echo.
 
 rem PYTHONPATH と PATH の両方に「無ければ追加」。登録結果は1行で伝える。
 rem どちらか片方だけ既登録でも、もう片方は追加する（1回の実行で済ませる）。
+rem
+rem **生の値を、元の型のまま書く。**
+rem   [Environment]::GetEnvironmentVariable('Path','User') は %USERPROFILE% などを
+rem   絶対パスへ展開した値を返し、それを書き戻すと型が REG_SZ に変わる。
+rem   元の REG_EXPAND_SZ ではその %変数% が機能しなくなるため、HKCU を直接読み書きする。
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$root = $env:COMKEN_ROOT;" ^
-  "$py = @([Environment]::GetEnvironmentVariable('PYTHONPATH','User') -split ';' | Where-Object { $_ });" ^
-  "$path = @([Environment]::GetEnvironmentVariable('Path','User') -split ';' | Where-Object { $_ });" ^
+  "$key = Get-Item 'HKCU:\Environment';" ^
+  "function _Read($name){ $raw = $key.GetValue($name, '', 'DoNotExpandEnvironmentNames'); if ($raw) { $raw -split ';' | Where-Object { $_ } } else { @() } };" ^
+  "function _Write($name, $value){" ^
+  "  $kind = $key.GetValueKind($name); if (-not $kind) { $kind = 'String' };" ^
+  "  Set-ItemProperty -Path 'HKCU:\Environment' -Name $name -Value $value -Type $kind" ^
+  "};" ^
+  "$py = _Read 'PYTHONPATH';" ^
+  "$path = _Read 'Path';" ^
   "$added = @();" ^
-  "if ($py -notcontains $root) { [Environment]::SetEnvironmentVariable('PYTHONPATH', (($py + $root) -join ';'), 'User'); $added += 'PYTHONPATH' };" ^
-  "if ($path -notcontains $root) { [Environment]::SetEnvironmentVariable('Path', (($path + $root) -join ';'), 'User'); $added += 'PATH' };" ^
+  "if (-not ($py | Where-Object { $_.ToString() -ieq $root })) { _Write 'PYTHONPATH' (($py + $root) -join ';'); $added += 'PYTHONPATH' };" ^
+  "if (-not ($path | Where-Object { $_.ToString() -ieq $root })) { _Write 'Path' (($path + $root) -join ';'); $added += 'PATH' };" ^
   "if ($added.Count -eq 0) { Write-Host '既に登録済みでした。' }" ^
   "else { Write-Host ('追加しました: ' + ($added -join ', ') + ' / ' + $root) }"
 set "EXIT_CODE=%ERRORLEVEL%"
+
+rem 環境変数の変更を他プロセスへ通知する（Explorer から起動したターミナル等）。
+rem Set-ItemProperty はレジストリを書くだけで WM_SETTINGCHANGE を送らないので、
+rem setx を1つ呼んでブロードキャストを誘発する。**PATH/PYTHONPATH を setx で書かないこと**
+rem （1024 文字制限で切り捨てられ PATH が壊れる。短い変数を1つ書くためだけに使う）。
+if "%EXIT_CODE%"=="0" setx COMKEN_ROOT_REGISTERED "1" >nul
 
 if not "%EXIT_CODE%"=="0" (
   echo.
