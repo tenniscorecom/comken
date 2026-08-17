@@ -328,7 +328,12 @@ def test_documented_protected_files_exist(doc):
     """
     text = doc.read_text(encoding="utf-8")
     for path_text in re.findall(r"git update-index --skip-worktree\s+(\S+)", text):
-        target = _ROOT / path_text.strip("`\"'")
-        assert target.exists(), (
+        candidate = path_text.strip("`\"'")
+        # **リポジトリ内のパスを指しているものだけ**を見る。コマンドの説明で
+        # `--skip-worktree ファイル` のように書いてある箇所（Git の使い方を
+        # 紹介する文章など）まで実在を求めると、説明が書けなくなる
+        if not candidate.startswith(("comken/", "tools/", "templates/", "tests/", "docs/")):
+            continue
+        assert (_ROOT / candidate).exists(), (
             f"{doc.relative_to(_ROOT)}: 配置手順が実在しないファイルを指しています: {path_text}"
         )
