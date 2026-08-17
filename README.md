@@ -197,7 +197,7 @@ set "COMKEN_ROOT_FIXED=\\server\share\tools\comken"
 
 | 埋まるもの | 入るファイル |
 |---|---|
-| **プロジェクト名** | `main.py`（社内 RPA 基盤へ渡す名前）・`docs/開発/仕様書.md`・`docs/使い方.md` |
+| **プロジェクト名** | `main.py`（社内 RPA 基盤へ渡す名前）・`docs/仕様書.md`・`docs/使い方.md` |
 | **comken の場所** | `実行.bat`・`認証情報の登録.bat`（実行時の `PYTHONPATH`）・`.vscode/settings.json`（補完と定義ジャンプ） |
 | — | `README.md` から、ひな形の説明（作り終えたら消す節）が取り除かれる |
 
@@ -227,7 +227,7 @@ set "COMKEN_ROOT_FIXED=\\server\share\tools\comken"
 2. **`config.ini` を書き換える**。`[RUN] DRY_RUN` は最初 `True` のままでよい
    （書き込みをせず、何をするつもりかだけログに出る）
 3. **`src/run.py` の `run()` に処理を書く**
-4. **`docs/使い方.md`・`docs/開発/仕様書.md` の「（ここを書く）」を埋める**
+4. **`docs/使い方.md`・`docs/仕様書.md` の「（ここを書く）」を埋める**
 5. 通ったら `config.ini` の `DRY_RUN` を `False` にして本番
 
 **comken の場所を後から変えたくなったら**、`実行.bat` と `.vscode/settings.json` の
