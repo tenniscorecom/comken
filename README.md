@@ -310,7 +310,7 @@ python tools\set_comken_root.py \\新サーバー\share\tools\comken F:\案件 -
 ```python
 import comken
 
-comken.__version__        # → "0.7.0"
+comken.__version__        # → "0.11.3"
 
 # デバッグモード: @measure を付けたメソッドの出入りを DEBUG ログに記録する。
 # ログは関数ごとに「開始」「完了 ○秒」（例外時は「中断 ○秒」）の2行。
