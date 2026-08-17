@@ -281,14 +281,20 @@ class TestAtomicWrite:
 
         assert target.read_text(encoding="utf-8") == "new"
 
-    def test_creates_parent_folder_when_missing(self, tmp_path):
-        """親フォルダが無ければ自動作成する（5か所すべてが前提としていた）。"""
-        target = tmp_path / "深い" / "階層" / "out.ini"
+    def test_does_not_create_parent_folder(self, tmp_path):
+        """**親フォルダは勝手に作らない。** 無ければそのまま失敗する。
 
-        with atomic_write(target) as tmp:
+        書き間違えたパスへ勝手にフォルダを作ると、**誰も見ない場所へ
+        出力し続けても気づけない**（保存先を勝手に作らない、という
+        Downloader の判断と同じ理由）。作る必要があるなら呼ぶ側が明示する。
+        """
+        target = tmp_path / "存在しない" / "out.ini"
+
+        with pytest.raises(FileNotFoundError), atomic_write(target) as tmp:
             tmp.write_text("x", encoding="utf-8")
 
-        assert target.exists()
+        assert not target.exists()
+        assert not target.parent.exists(), "親フォルダを勝手に作っている"
 
     def test_overwrites_existing_target(self, tmp_path):
         """置き換え先に既存ファイルがあれば上書きする。"""

@@ -34,6 +34,8 @@ def zip_folder(folder: str | Path, dst: str | Path | None = None) -> Path:
     if not folder.is_dir():
         raise FileNotFoundError(f"フォルダが見つかりません: {folder}")
     dst = Path(dst) if dst else folder.parent / f"{folder.name}.zip"
+    # 出力先の親フォルダはここで用意する。atomic_write は勝手に作らない
+    dst.parent.mkdir(parents=True, exist_ok=True)
 
     with (
         atomic_write(dst) as tmp,
@@ -78,6 +80,8 @@ def zip_files(files: Sequence[str | Path], dst: str | Path) -> Path:
         )
 
     dst = Path(dst)
+    # 出力先の親フォルダはここで用意する。atomic_write は勝手に作らない
+    dst.parent.mkdir(parents=True, exist_ok=True)
 
     with (
         atomic_write(dst) as tmp,

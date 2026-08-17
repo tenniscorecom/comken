@@ -77,6 +77,8 @@ class State:
             raise StateFileCorruptedError(self._path.resolve()) from error
 
     def _write(self, values: dict[str, StateValue]) -> None:
+        # 置き場所はここで用意する。atomic_write は勝手に作らない
+        self._path.parent.mkdir(parents=True, exist_ok=True)
         cleanup_stale_tmp(self._path)
         parser = _new_parser()
         parser[STATE_SECTION] = {
