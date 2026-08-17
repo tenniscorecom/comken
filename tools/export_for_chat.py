@@ -1,12 +1,16 @@
 """comken の公開 API ドキュメント、エラー対応ガイド、貼り付け用資料を生成する。
 
+**このファイルは開発用**（リポジトリ直下の ``tools/`` にあり、配布されない）。
+``comken/tools/`` に同梱されて ``python -m comken init`` から呼ばれる
+``new_project.py`` とは役割が違うので、混同しないこと。
+
 通常は各パッケージの ``__all__`` をたどり、型ヒント付き署名と docstring 全文を
 ``docs/自動生成/API.md`` へ書き出す。添付できない環境では ``--max-chars`` を指定すると、
 従来どおり資料を文字数の目安で分割して ``貼り付け用/`` へ出力する。
 
 使い方:
-    python export_for_chat.py
-    python export_for_chat.py --max-chars 20000
+    python tools/export_for_chat.py
+    python tools/export_for_chat.py --max-chars 20000
 """
 
 import argparse

@@ -1,5 +1,9 @@
 r"""set_comken_root.py — 各プロジェクトが見ている comken の場所をまとめて変える。
 
+**このファイルは開発用**（リポジトリ直下の ``tools/`` にあり、配布されない）。
+``comken/tools/`` に同梱されて ``python -m comken init`` から呼ばれる
+``new_project.py`` とは役割が違うので、混同しないこと。
+
 共有サーバー上の comken を別の場所へ移すと、利用プロジェクト側の**1プロジェクトにつき
 3か所**（実行.bat・認証情報の登録.bat・.vscode/settings.json）が
 古い場所を指したままになる。プロジェクトが増えるほど手で直すのは現実的でなくなり、
@@ -7,9 +11,9 @@ r"""set_comken_root.py — 各プロジェクトが見ている comken の場所
 settings.json を忘れると、動くのに補完だけ効かないという分かりにくい状態になる。
 
 使い方:
-    python set_comken_root.py \\新サーバー\share\tools\comken           確認だけ
-    python set_comken_root.py \\新サーバー\share\tools\comken --apply   実際に書き換える
-    python set_comken_root.py \\新サーバー\share\tools\comken F:\案件 --apply
+    python tools/set_comken_root.py \\新サーバー\share\tools\comken           確認だけ
+    python tools/set_comken_root.py \\新サーバー\share\tools\comken --apply   実際に書き換える
+    python tools/set_comken_root.py \\新サーバー\share\tools\comken F:\案件 --apply
 
 **既定は確認だけで、--apply を付けたときにだけ書き換える。** 打ち間違えたまま
 何十ファイルも書き換えると、元がどこを指していたか分からなくなる。先に一覧を見て、
