@@ -1,42 +1,23 @@
 """comken/services/salesforce_downloader/history.py — ダウンロード履歴の記録。
 
-**管理表とは別のファイルにする。** 管理表は人が Excel で編集し、履歴はプログラムが
-書き足す。同じファイルにすると、人が開いている間はプログラムが保存できず、
-履歴が飛ぶか管理表が壊れる。書く主体が違うものは分ける。
-
-**CSV に追記する。** 複数のプロジェクトが同時に呼ぶので、Excel を開いて保存し直す
-方式だと壊れる。CSV への追記なら1行ずつ足すだけで済み、見るときは Excel で開ける。
-
-この履歴から、あとで次のことが分かる。
-
-- どのプロジェクトが、どのレポートを、どれくらいの頻度で使っているか
-- 同じ Salesforce レポートを複数のプロジェクトが取りに行っていないか
-- Salesforce へ実際に何回問い合わせたか（＝ API をどれだけ使っているか）
-- 失敗がいつ・何回起きているか、どの段階で失敗したか
+**管理表とは別のファイルにする。** 書く主体が違う（管理表は人、履歴はプログラム）ので
+分けないと、人が開いている間にプログラムが保存できず履歴が飛ぶ。**CSV に追記する。**
+複数のプロジェクトが同時に走るので、Excel を開いて保存し直す方式だと壊れる。
 
 成功／失敗の判断と各段階の結果（Salesforce への問い合わせ、保存）は呼ぶ側
-（`service.py`）が決めて、ここは受け取った値を1行に書くだけ。履歴を集計・分析
-したい場合は、利用プロジェクト側でこの CSV を `CsvReader` で読む。
-
-このファイルが持つもの:
-- 履歴CSVの列を決める
-- 1行追記する
-- その日の定期取得が成功しているかを履歴から答える
-
-ここに書かないもの:
-- 成功／失敗の判断 → 呼ぶ側（service.py）が決めて渡す。ここは受け取った結果を書くだけ
-- 履歴の集計・分析（月別の件数、失敗の多いレポートの抽出など）
-  → 利用プロジェクトで、この CSV を CsvReader で読んで集計する
-- 取得や保存そのもの → service.py
+（`service.py`）が決めて、ここは受け取った値を1行に書くだけ。集計は利用側で
+この CSV を `CsvReader` で読む。
 """
 
 import csv
 import datetime
 import logging
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 
 from comken.core.clock import now, today
+from comken.services.salesforce_downloader.master import ReportEntry
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +38,8 @@ COLUMNS = (
     "ファイル名",
     "取得件数",
     "処理秒数",
-    "原因区分",  # 成功時は空。失敗時のみ、設定 / Salesforce / ファイル / プログラムの4値
+    # 成功時は空。失敗時のみ、設定 / Salesforce / ファイル / データなし / プログラムの5値
+    "原因区分",
     "エラーコード",  # 例外クラス名。成功時・到達しなかった段階は空
     "エラー内容",
 )
@@ -72,6 +54,26 @@ TRIGGER_ON_DEMAND = "個別"
 _TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
+@dataclass(frozen=True)
+class HistoryRow:
+    """履歴1行の「呼び出し側が組み立てる部分」。履歴の列と1対1。
+
+    `entry` の5列（管理番号・概要・レポートID・URL・保存先）は `record()` 側で
+    取り出す。`fetched_from_salesforce` / `saved_to_file` は `True` / `False` /
+    `None` の3状態で、未到達は `None`。
+    """
+
+    succeeded: bool
+    fetched_from_salesforce: bool | None
+    saved_to_file: bool | None
+    file_name: str = ""
+    row_count: int | None = None
+    seconds: float = 0.0
+    cause: str = ""
+    error_code: str = ""
+    error: str = ""
+
+
 def _stage(value: bool | None) -> str:
     """3状態（成功／失敗／未到達）を履歴の文字列に変換する。"""
     if value is None:
@@ -82,22 +84,10 @@ def _stage(value: bool | None) -> str:
 def record(
     path: str | Path,
     *,
-    report_key: str,
-    summary: str,
-    report_id: str,
-    url: str,
+    entry: ReportEntry,
     project: str,
     trigger: str,
-    succeeded: bool,
-    fetched_from_salesforce: bool | None,
-    saved_to_file: bool | None,
-    folder: Path | None = None,
-    file_name: str = "",
-    row_count: int | None = None,
-    seconds: float | None = None,
-    cause: str = "",
-    error_code: str = "",
-    error: str = "",
+    row: HistoryRow,
 ) -> None:
     """履歴を1行追記する。ファイルが無ければ見出し行から作る。
 
@@ -106,49 +96,33 @@ def record(
 
     Args:
         path: 履歴 CSV のパス。
-        report_key: 管理番号。
-        summary: 概要（管理表の説明）。
-        report_id: Salesforce のレポート ID。
-        url: レポートの URL。
+        entry: 管理表1行。管理番号・概要・レポートID・URL・保存先はこの中身を履歴に出す。
         project: 呼び出したプロジェクト名。
         trigger: TRIGGER_SCHEDULED か TRIGGER_ON_DEMAND。
-        succeeded: 全体の成否。
-        fetched_from_salesforce: Salesforce への問い合わせ結果（True=成功 / False=失敗 /
-            None=その段階まで到達しなかった）。
-        saved_to_file: ファイル保存の結果（True=成功 / False=失敗 /
-            None=その段階まで到達しなかった）。
-        folder: 保存先フォルダ。
-        file_name: 保存したファイル名。
-        row_count: 取得できた件数。
-        seconds: かかった秒数。
-        cause: 失敗の原因区分（`設定` / `Salesforce` / `ファイル` / `プログラム`）。
-            成功時は空文字。判定は呼ぶ側（`service.py`）が行う。
-        error_code: 例外クラス名（`ERRORS.md` と1対1で引ける）。成功時・到達しなかった
-            段階は空文字。
-        error: 失敗した場合のエラー内容。
+        row: 履歴1行の本体（成否・各段階の結果・件数・エラー）。
     """
     path = Path(path)
-    row = [
+    values = [
         now().strftime(_TIMESTAMP_FORMAT),
-        report_key,
-        summary,
-        report_id,
-        url,
+        entry.key,
+        entry.summary,
+        entry.report_id,
+        entry.url,
         project,
         trigger,
-        SUCCESS if succeeded else FAILURE,
-        _stage(fetched_from_salesforce),
-        _stage(saved_to_file),
-        str(folder) if folder else "",
-        file_name,
-        "" if row_count is None else row_count,
-        "" if seconds is None else f"{seconds:.2f}",
-        cause,
-        error_code,
-        error.replace("\n", " "),  # 1行1レコードを保つ
+        SUCCESS if row.succeeded else FAILURE,
+        _stage(row.fetched_from_salesforce),
+        _stage(row.saved_to_file),
+        str(entry.folder),
+        row.file_name,
+        "" if row.row_count is None else row.row_count,
+        f"{row.seconds:.2f}",
+        row.cause,
+        row.error_code,
+        row.error.replace("\n", " "),  # 1行1レコードを保つ
     ]
     try:
-        _append(path, row)
+        _append(path, values)
     except OSError as e:
         logger.warning("履歴を記録できませんでした: %s（%s）", path, e)
 
@@ -192,7 +166,7 @@ def downloaded_today(
     return False
 
 
-def _append(path: Path, row: list) -> None:
+def _append(path: Path, values: list) -> None:
     """1行を追記する。見出し行はファイルを作るときだけ書く。
 
     Excel が読めるよう UTF-8 BOM 付きにする。newline="" は csv モジュールの作法
@@ -204,7 +178,7 @@ def _append(path: Path, row: list) -> None:
         writer = csv.writer(f)
         if is_new:
             writer.writerow(COLUMNS)
-        writer.writerow(row)
+        writer.writerow(values)
 
 
 def new_temp_name(path: Path) -> Path:

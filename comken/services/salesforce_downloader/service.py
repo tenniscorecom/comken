@@ -57,6 +57,7 @@ from comken.exceptions import (
     ScheduledReportNotRegisteredError,
 )
 from comken.services.salesforce_downloader import history
+from comken.services.salesforce_downloader.history import HistoryRow
 from comken.services.salesforce_downloader.master import ReportEntry, load_master, shared_report_ids
 from comken.toolbox.csv import CsvReader, CsvWriter
 from comken.toolbox.salesforce.sites import site_for
@@ -80,6 +81,14 @@ SUFFIX = ".csv"
 _FORBIDDEN_IN_NAME = '\\/:*?"<>|'
 # 概要が長いとパスが伸びすぎるので、ファイル名に使うのはこの長さまで
 _SUMMARY_LIMIT = 30
+
+# 履歴の「原因区分」列に出す5値。運用する人が履歴からすぐ「誰が動くか」を判断できるように、
+# 抽象クラス名ではなく誰が直すかで分ける（設計判断は docs/仕様書.md 4.28 参照）
+CAUSE_CONFIG = "設定"
+CAUSE_SALESFORCE = "Salesforce"
+CAUSE_EMPTY_DATA = "データなし"
+CAUSE_FILE = "ファイル"
+CAUSE_PROGRAM = "プログラム"
 
 
 def download_report(report_key: str, project: str = "") -> CsvReader:
@@ -139,23 +148,13 @@ def get_scheduled_report(report_key: str, project: str = "") -> CsvReader:
 def download_scheduled(project: str = "定期実行") -> list[Path]:
     """管理表で「定期」かつ有効なレポートをまとめて取得する。
 
-    定期実行のプロジェクトから呼ぶ。**1件失敗しても残りは続ける** ——
-    5本のうち1本が落ちたときに全部やり直すと、手で用意する手間が5本ぶんになる。
-
-    戻り値は `list[Path]` のままで **`CsvReader` を返さない**。定期取得の呼び出し側は
-    中身を読まず「取らせる」のが目的なので、reader を並べても使い道がないため
-    （役割の違いが戻り値の型に出ている）。
-
-    Args:
-        project: 履歴に残す呼び出し元の名前。
-
-    Returns:
-        取得できたファイルのパス。
+    定期実行のプロジェクトから呼ぶ。**1件失敗しても残りは続ける**。戻り値は `list[Path]`
+    のままで `CsvReader` を返さない（定期取得の呼び出し側は中身を読まないため）。
 
     Raises:
-        ScheduledDownloadFailedError: 1件でも取得できなかった場合。
-            **取得できたものは保存したうえで**送出する。ログだけに出して正常終了すると、
-            スケジューラや RPA 基盤から見て成功と区別が付かない。
+        ScheduledDownloadFailedError: 1件でも取得できなかった場合。**取得できたものは
+            保存したうえで**送出する。ログだけに出して正常終了すると、スケジューラや
+            RPA 基盤から見て成功と区別が付かない。
     """
     entries = load_master(MASTER_PATH)
     _warn_shared_reports(entries)
@@ -212,102 +211,69 @@ def _find(report_key: str, master_path: Path) -> ReportEntry:
 
 
 def _download(entry: ReportEntry, project: str, trigger: str, history_path: Path) -> Path:
-    """1件を取得して保存し、成否を履歴に残す。
-
-    履歴の各段階（Salesforce への問い合わせ、保存）は別々に書き出す。
-    0 行のとき `Salesforce取得結果 = 成功` になるのが要点で、
-    **Salesforce との通信は成功していて、レポートの中身が空だった**ことを
-    区別できるようにするため（4. の表を参照）。
-    """
-    path = file_path_of(entry)
+    """1件を取得して保存し、成否を履歴に残す。"""
     started = time.perf_counter()
-    # 各段階の結果を組み立ててから履歴を書く。途中で例外になっても、どこまで
-    # 進んだかが履歴に残る
-    fetched_from_salesforce: bool | None = None
-    saved_to_file: bool | None = None
-    rows: list[dict] = []
     try:
-        if not entry.folder.is_dir():
-            # 作らずに失敗させる。無いのは書き間違いのことが多く、勝手に作ると
-            # 誰も読まない場所へ置き続けることになる
-            raise ReportFolderNotFoundError(entry.key, entry.folder)
-
-        try:
-            rows = _fetch(entry)
-        except Exception:
-            fetched_from_salesforce = False
-            raise
-        fetched_from_salesforce = True
-        if not rows:
-            # 問い合わせは成功したが明細が無い。**0件あり × なら失敗扱い、○ なら正常終了**
-            if not entry.allow_empty:
-                raise EmptyReportError(entry.key, entry.summary, entry.url)
-            # 0件あり ○ のとき: 空の CSV を置く。`CsvReader` は 0 バイトでも例外に
-            # ならず `read_rows() == []` を返すので、利用側は 0 件を自然に扱える
-            # （salesforce-downloader.md の「0 件の扱い」節参照）。
-            # ヘッダー行は敢えて入れない（Salesforce のメタデータからしか取れず、
-            # `report.run()` は `list[dict]` 形式を返すため取り出せない）。
-            # 一時ファイル経由の置き換えは `_write_csv()` と同じ作法を踏襲する
-            try:
-                _write_empty_csv(path)
-            except Exception:
-                saved_to_file = False
-                raise
-            saved_to_file = True
-        else:
-            try:
-                _write_csv(path, rows)
-            except Exception:
-                saved_to_file = False
-                raise
-            saved_to_file = True
-    except Exception as e:
-        cause = _classify_cause(e, fetched_from_salesforce, saved_to_file)
-        history.record(
-            history_path,
-            report_key=entry.key,
-            summary=entry.summary,
-            report_id=entry.report_id,
-            url=entry.url,
-            project=project,
-            trigger=trigger,
-            succeeded=False,
-            fetched_from_salesforce=fetched_from_salesforce,
-            saved_to_file=saved_to_file,
-            folder=entry.folder,
-            seconds=time.perf_counter() - started,
-            cause=cause,
-            error_code=type(e).__name__,
-            error=str(e),
-        )
-        # 値を計算した場所（ここ）で、ログにも書く。`_download()` を抜けたあと
-        # 別の層で「同じ値」を再利用することはない（後付けで属性を渡さない）
-        logger.error("取得に失敗しました: %s（%s / 区分=%s）", entry.key, e, cause)
+        _require_folder(entry)
+        rows = _fetch(entry)
+        path = _save(entry, rows)
+    except Exception as exc:
+        _record_failure(entry, project, trigger, history_path, exc, started)
         raise
+    _record_success(entry, project, trigger, history_path, path, rows, started)
+    return path
 
+
+def _record_failure(
+    entry: ReportEntry,
+    project: str,
+    trigger: str,
+    history_path: Path,
+    exc: BaseException,
+    started: float,
+) -> None:
+    """失敗時の履歴とログ。`_download()` から呼ばれる。"""
+    row = _failure_row(exc, time.perf_counter() - started)
+    # 値を計算した場所（ここ）で、ログにも書く。`_download()` 抜けたあと
+    # 別の層で「同じ値」を再利用することはない（後付けで属性を渡さない）
+    logger.error("取得に失敗しました: %s（%s / 区分=%s）", entry.key, exc, row.cause)
+    history.record(history_path, entry=entry, project=project, trigger=trigger, row=row)
+
+
+def _record_success(
+    entry: ReportEntry,
+    project: str,
+    trigger: str,
+    history_path: Path,
+    path: Path,
+    rows: list[dict],
+    started: float,
+) -> None:
+    """成功時の履歴とログ。`_download()` から呼ばれる。"""
     seconds = time.perf_counter() - started
-    history.record(
-        history_path,
-        report_key=entry.key,
-        summary=entry.summary,
-        report_id=entry.report_id,
-        url=entry.url,
-        project=project,
-        trigger=trigger,
+    row = HistoryRow(
         succeeded=True,
-        fetched_from_salesforce=fetched_from_salesforce,
-        saved_to_file=saved_to_file,
-        folder=entry.folder,
+        fetched_from_salesforce=True,
+        saved_to_file=True,
         file_name=path.name,
         row_count=len(rows),
         seconds=seconds,
-        cause="",
     )
     if rows:
         logger.info("取得しました: %s（%d 行 / %.1f 秒）", path, len(rows), seconds)
     else:
         logger.info("取得しました: %s（0 件 / 0件ありのため正常）", path)
-    return path
+    history.record(history_path, entry=entry, project=project, trigger=trigger, row=row)
+
+
+def _require_folder(entry: ReportEntry) -> None:
+    """保存先フォルダが無ければ `ReportFolderNotFoundError`。**勝手に作らない。**
+
+    作らずに失敗させる。無いのは書き間違いのことが多く、勝手に作ると
+    誰も読まない場所へ置き続けることになる。
+    """
+    if not entry.folder.is_dir():
+        raise ReportFolderNotFoundError(entry.key, entry.folder)
 
 
 def _fetch(entry: ReportEntry) -> list[dict]:
@@ -322,6 +288,24 @@ def _fetch(entry: ReportEntry) -> list[dict]:
         return salesforce.report.run(entry.report_id)
 
 
+def _save(entry: ReportEntry, rows: list[dict]) -> Path:
+    """行数と `allow_empty` に応じて保存先へ書き込み、書き終わったパスを返す。
+
+    0 行・`allow_empty` × → `EmptyReportError`（=失敗）／○ → 空 CSV を置く。
+    ヘッダー行は敢えて入れない（Salesforce のメタデータからしか取れず、
+    `report.run()` は `list[dict]` 形式を返すため取り出せない）。
+    """
+    path = file_path_of(entry)
+    if not rows:
+        # 問い合わせは成功したが明細が無い。**0件あり × なら失敗扱い、○ なら正常終了**
+        if not entry.allow_empty:
+            raise EmptyReportError(entry.key, entry.summary, entry.url)
+        _write_empty_csv(path)
+    else:
+        _write_csv(path, rows)
+    return path
+
+
 def _write_csv(path: Path, rows: list[dict]) -> None:
     """一時ファイルへ書いてから置き換える。
 
@@ -334,9 +318,8 @@ def _write_csv(path: Path, rows: list[dict]) -> None:
         tmp_path.replace(path)
     finally:
         try:
-            tmp_path.unlink(missing_ok=True)  # 途中で失敗したときに残骸を残さない
+            tmp_path.unlink(missing_ok=True)
         except OSError as e:
-            # 後始末の失敗で、取得・保存時に起きた本来の例外を上書きしない
             logger.warning("一時ファイルを削除できませんでした: %s（%s）", tmp_path, e)
 
 
@@ -345,14 +328,11 @@ def _write_empty_csv(path: Path) -> None:
 
     `CsvWriter` はヘッダー行を必須にしているため、0 行のときは直接書く。
     **`_write_csv()` と同じ「一時ファイル→置き換え」の作法**を維持する:
-    - 同時に走っても読んでいる側のファイルが半端な状態にならない
-    - 途中で失敗したら一時ファイルを残さない（`finally` で削除）
+    まとめて一気に入れ替わる／失敗時に残骸を残さない。
     """
     tmp_path = history.new_temp_name(path)
     try:
-        # 0 バイトで作成（encoding は CsvWriter と同じ UTF-8 BOM 付きで揃える。
-        # 空ファイルなので中身は無いが、BOM だけ書くと後続の CsvReader で
-        # 1文字目の判定が面倒になるため、書かない）
+        # 0 バイトで作成（CSV のほうが BOM 付きなので、空ファイルでも BOM は付けない）
         tmp_path.write_bytes(b"")
         tmp_path.replace(path)
     finally:
@@ -382,54 +362,37 @@ def _safe_summary(summary: str) -> str:
     return cleaned[:_SUMMARY_LIMIT] or "レポート"
 
 
-# 履歴の「原因区分」列に出す5値。運用する人が履歴からすぐ「誰が動くか」を判断できるように、
-# 抽象クラス名ではなく誰が直すかで分ける（設計判断は docs/仕様書.md 4.28 参照）
-CAUSE_CONFIG = "設定"
-CAUSE_SALESFORCE = "Salesforce"
-CAUSE_EMPTY_DATA = "データなし"
-CAUSE_FILE = "ファイル"
-CAUSE_PROGRAM = "プログラム"
+def _failure_row(exc: BaseException, seconds: float) -> HistoryRow:
+    """失敗時の履歴1行を、**例外の型だけから**組み立てる。
 
+    `fetched` / `saved` は `_download()` の何処で失敗したかを例外で判別する。
+    判定順は上から5行（狭い条件から順に評価）:
 
-def _classify_cause(
-    error: BaseException,
-    fetched_from_salesforce: bool | None,
-    saved_to_file: bool | None,
-) -> str:
-    """失敗の原因区分を、例外と「どこまで進んだか」だけから決める。
+    1. `ReportFolderNotFoundError` → 取得段階の前（保存先フォルダ検査で停止）
+    2. `EmptyReportError` → 取得は成功、保存は未到達（0件 × 一意）
+    3. `OSError` → 保存段階（書き込み・権限・共有サーバー断）
+    4. その他の `ComkenError` → 取得段階（Salesforce 通信と認証）
+    5. それ以外 → プログラム（comken 側の想定外）
 
-    **例外クラス名との対応表を持たない。** 例外を増やすたびに更新漏れが起き、
-    `ERRORS.md` と二重管理になる。代わりに、履歴に残している3状態
-    (`fetched_from_salesforce` / `saved_to_file`) と例外の種類だけから機械的に決める
-    （上から順に評価する5行）。
-
-    1. `ComkenError` でも `OSError` でもない → **`プログラム`**（comken 側の想定外＝バグ）
-    2. 保存段階で落ちた（`saved_to_file` が `False`）→ **`ファイル`**（共有サーバー・権限）
-    3. **取得は成功したが保存に進まなかった（`fetched_from_salesforce` が `True` かつ
-       `saved_to_file` が `None`）→ `データなし`**
-       （「0件あり が × なのに 0 行だった」一意。理由は下コメント参照）
-    4. 取得段階で落ちた（`fetched_from_salesforce` が `False`）→ **`Salesforce`**
-       （問い合わせ・通信の失敗）
-    5. それ以外（取得段階に入る前に落ちた）→ **`設定`**（管理表の書き方や保存先フォルダ）
-
-    **3 が 0 件を一意に指す理由**: 取得成功（`fetched_from_salesforce = True`）を
-    確定させてから保存の `try` に入るまでの間に発生しうる例外は `EmptyReportError`
-    だけ。`EmptyReportError` は保存の `try` を開く**前**に `raise` されるため、
-    この経路で `saved_to_file` は必ず `None` のままである（保存段階に到達していない
-    から `False` になりようがない）。
-    つまり `True + None` という組合せは 0 件失敗しか取り得ず、例外クラス名を書かずに
-    段階だけで特定できる。
-
-    1. の条件は `download_scheduled()` が捕捉しない例外と**まったく同じ**で、
-    「ダウンロード側で握りつぶす範囲」と「履歴側で『バグ』と書く範囲」を1か所の判断で
-    一致させている。2箇所で別々に書かないための対応関係。
+    4. は `download_scheduled()` が捕捉する範囲と一致。1か所の判断で
+    「握りつぶす範囲」と「履歴側でバグと書く範囲」を揃える。
     """
-    if not isinstance(error, (ComkenError, OSError)):
-        return CAUSE_PROGRAM
-    if saved_to_file is False:
-        return CAUSE_FILE
-    if fetched_from_salesforce is True and saved_to_file is None:
-        return CAUSE_EMPTY_DATA
-    if fetched_from_salesforce is False:
-        return CAUSE_SALESFORCE
-    return CAUSE_CONFIG
+    if isinstance(exc, ReportFolderNotFoundError):
+        fetched, saved, cause = None, None, CAUSE_CONFIG
+    elif isinstance(exc, EmptyReportError):
+        fetched, saved, cause = True, None, CAUSE_EMPTY_DATA
+    elif isinstance(exc, OSError):
+        fetched, saved, cause = True, False, CAUSE_FILE
+    elif isinstance(exc, ComkenError):
+        fetched, saved, cause = False, None, CAUSE_SALESFORCE
+    else:
+        fetched, saved, cause = False, None, CAUSE_PROGRAM
+    return HistoryRow(
+        succeeded=False,
+        fetched_from_salesforce=fetched,
+        saved_to_file=saved,
+        seconds=seconds,
+        cause=cause,
+        error_code=type(exc).__name__,
+        error=str(exc),
+    )
