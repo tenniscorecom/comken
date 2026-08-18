@@ -257,16 +257,37 @@ src/
 **サイトクラスと画面共通クラスは別物。** サイトクラスは「どのサイトか」を表し、
 画面共通クラスは「その画面群に共通の操作」を持つ。
 
-### 2. サイトクラスとオプションクラスを ``site.py`` に書く
+### 2. サイトクラスを ``site.py`` に書く
 
-**``〇〇Site`` と ``〇〇SiteOptions`` は必ずセットで、同じ ``site.py`` に置く**
-（フォルダが同じならファイルを分ける理由が無く、``site.py`` を開けば
-NAME / BASE_URL / OPTIONS が全部見える方が分かりやすい）。
+**起動オプション（``OPTIONS``）は既定のままでよければ書かなくてよい。**
+変えたいときだけ、同じ ``site.py`` に ``〇〇SiteOptions`` を作って
+``OPTIONS = 〇〇SiteOptions`` を ``〇〇Site`` に置く（フォルダが同じなら
+ファイルを分ける理由が無い）。設定できる項目は ``print(BrowserOptions())`` で
+一覧できる（既定値との差分に `*` が付く）。
 
 ブラウザ設定は **config.ini ではなくこのファイル（サイト側の Python）** に書く。
 「環境で変わる非機密の値」ではなく「コードの一部」として扱うため。
 
 **ここが利用側の入口になる。** 固有の値と、最初にやる操作をここへ集める。
+
+```python
+from comken.toolbox.browser import SiteBase
+
+from .pages.login_page import LoginPage
+
+
+class Kintai(SiteBase):
+    """勤怠システム。"""
+
+    NAME = "kintai"
+    BASE_URL = "https://kintai.example.co.jp"
+    OWNER = "勤怠 / 担当者"
+
+    # 画面の操作はここに書かない。画面クラスの仕事にする
+```
+
+オプションを変えたいとき（ダウンロード先・待ち時間・ログイン状態の保持など）は
+同じ ``site.py`` に ``KintaiOptions`` を足す:
 
 ```python
 from comken.toolbox.browser import BrowserOptions, SiteBase
@@ -288,11 +309,7 @@ class Kintai(SiteBase):
     BASE_URL = "https://kintai.example.co.jp"
     OPTIONS = KintaiOptions
     OWNER = "勤怠 / 担当者"
-
-    # 画面の操作はここに書かない。画面クラスの仕事にする
 ```
-
-設定できる項目は `print(KintaiOptions())` で一覧できる（既定値との差分に `*` が付く）。
 
 **行ける画面は `go_〇〇()` で書く。**
 
@@ -300,7 +317,6 @@ class Kintai(SiteBase):
 class Kintai(SiteBase):
     NAME = "kintai"
     BASE_URL = "https://kintai.example.co.jp"
-    OPTIONS = KintaiOptions
     OWNER = "勤怠 / 担当者"
 
     def go_login(self) -> LoginPage:
@@ -674,7 +690,27 @@ class KintaiOptions(BrowserOptions):
 | `PROFILE_ROOT` | ログイン状態を残すフォルダ。指定するとシークレットモードは自動で外れる |
 | `DOWNLOAD_DIR` | ダウンロード先。セッション名のサブフォルダに自動で分かれる |
 | `WAIT_SECONDS` | 要素待機のタイムアウト秒数 |
+| `HEADLESS` | `True` で画面を出さずに動かす |
 | `SUPPRESS_EXTERNAL_LOGS` | ドライバーと Edge の標準出力を抑える。調査時だけ `False` にする |
+
+**よく変える項目の書き方**:
+
+```python
+from comken.toolbox.browser import BrowserOptions
+from comken.toolbox.windows import Paths
+
+
+class KintaiOptions(BrowserOptions):
+    HEADLESS = True                       # 画面を出さずに動かす
+    DOWNLOAD_DIR = r"C:\作業\downloads"   # サイト名のサブフォルダへ自動で分かれる
+    # 標準のフォルダへ入れるなら Paths を使う（OneDrive で場所が移されていても
+    # 実際の場所に付いていける）
+    # DOWNLOAD_DIR = Paths.downloads()    # ほかに desktop() / temp_dir()
+    WAIT_SECONDS = 20                     # 要素待機のタイムアウト秒
+
+    # 指定するとログイン状態が次回も残る（サイトごとに別フォルダへ自動で分かれる）
+    PROFILE_ROOT = r"C:\作業\browser_profiles"
+```
 
 設定できる項目の一覧と現在値は `print()` で確認できる:
 

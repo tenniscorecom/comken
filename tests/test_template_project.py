@@ -305,14 +305,16 @@ def test_no_relative_imports_in_generated_src(generated: Path) -> None:
 def test_example_site_has_pages_directory_and_imports_it(generated: Path) -> None:
     """``src/sites/example/site.py`` と ``src/sites/example/pages/login_page.py`` が
     実在し、``site.py`` が ``pages`` から import していること、
-    かつ ``site.py`` に BrowserOptions のサブクラスが同居していること。
+    かつ ``NAME`` / ``BASE_URL`` / ``OWNER`` と ``go_〇〇()`` の見本が
+    ``site.py`` に残っていること。
 
     「何を防いでいるか」: 雛形が ``sites/<サイト名>/`` 完結型であることを利用者に
     見せるには、見本の ``site.py`` が ``pages`` を import していないと
     「画面クラスはどう書くの？」が伝わらない。``login_page.py`` が無いと
     書き写すべき最小形が目の前に残らない（コメントだけだと半年後に消える）。
-    ``site.py`` に BrowserOptions のサブクラスが無いと「設定はどこに書くの？」が
-    伝わらず、``options.py`` を別ファイルに作り直す回帰が起きる。
+    ``NAME`` / ``BASE_URL`` / ``OWNER`` と ``go_〇〇()`` が無いと、見本が
+    空っぽになってコピーするものがなくなる（2026-08-18: 起動オプションを
+    雛形から外した結果、見本がスカスカになる回帰をここで防ぐ）。
     """
     site_py = generated / "src" / "sites" / "example" / "site.py"
     login_py = generated / "src" / "sites" / "example" / "pages" / "login_page.py"
@@ -327,7 +329,7 @@ def test_example_site_has_pages_directory_and_imports_it(generated: Path) -> Non
     )
     assert not options_py.is_file(), (
         f"雛形に {options_py.relative_to(generated)} が残っている"
-        "（BrowserOptions のサブクラスは site.py に同居させ、options.py は作らない）"
+        "（設定は site.py 内に書く。options.py を別ファイルで作らない）"
     )
 
     site_text = _read(site_py)
@@ -339,13 +341,18 @@ def test_example_site_has_pages_directory_and_imports_it(generated: Path) -> Non
         f"{site_py.relative_to(generated)} が src.sites.example.pages から "
         "import していない（pages/ 配下を見本として使えない状態）"
     )
+    # 雛形の ExampleSite から書き写すべき最小形がそろっているか。
+    # OPTIONS は省略可（既定で動く）なので、ここでは要求しない。
+    for attr in ("NAME", "BASE_URL", "OWNER"):
+        assert re.search(
+            rf"^\s*{attr}\s*=",
+            site_text,
+            re.MULTILINE,
+        ), f"{site_py.relative_to(generated)} に {attr} の定義が無い（見本がスカスカになっている）"
     assert re.search(
-        r"class\s+\w+\s*\(\s*BrowserOptions\s*\)\s*:",
+        r"def\s+go_\w+\s*\(\s*self",
         site_text,
-    ), (
-        f"{site_py.relative_to(generated)} に BrowserOptions のサブクラスが "
-        "定義されていない（site.py に同居させること）"
-    )
+    ), f"{site_py.relative_to(generated)} に go_〇〇() の見本が無く、遷移図の書き方が伝わらない"
 
 
 # ── 9. .vscode/settings.json と 実行.bat・認証情報の登録.bat が同じ comken の場所を指す ─────────

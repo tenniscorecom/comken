@@ -8,16 +8,17 @@ r"""comken/toolbox/browser/sitebase.py — サイトを表す SiteBase 基底ク
 扱うときは `with Browsers() as browsers: kintai = browsers.launch(Kintai)`。
 どちらの出口でも SiteBase インスタンスが返り、`.session` で BrowserSession に繋がる。
 
-    from comken.toolbox.browser import Browsers, SiteBase, BrowserOptions
-
-    class KintaiOptions(BrowserOptions):
-        DOWNLOAD_DIR = r"C:\work\downloads"
+    from comken.toolbox.browser import Browsers, SiteBase
 
     class Kintai(SiteBase):
         NAME = "kintai"
         BASE_URL = "https://kintai.example.co.jp"
-        OPTIONS = KintaiOptions
         OWNER = "勤怠 / 小栗"
+
+        # 起動オプションは既定のままでよければ OPTIONS を書かなくてよい。
+        # 変えたいときだけ BrowserOptions のサブクラスをこのファイルに作って
+        # OPTIONS = 〇〇 を置く（書ける項目は print(BrowserOptions()) で一覧できる）
+        # OPTIONS = KintaiOptions
 
     # 1サイトだけ
     with Kintai() as kintai:
