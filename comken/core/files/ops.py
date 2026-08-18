@@ -32,13 +32,31 @@ def project_dir() -> Path:
     `python <絶対パス>\\main.py` と呼ぶ。**カレントではなくスクリプトの場所**を
     返すのはそのためで、config.ini・state.ini・logs/ もこれを基準にしている。
 
-    対話実行（REPL）や pytest、`python -m 〇〇` から呼ぶと、その実行環境の場所を返す。
-    バッチとして動かす前提の関数なので、そこは想定していない。
+    ``sys.argv[0]`` が想定外の値になるケースのフォールバック:
+    - ``sys.argv[0] == ""`` : 対話実行（REPL）。``Path.cwd()`` を返す
+    - ``sys.argv[0]`` が ``-m`` で起動されたパッケージ名を含む形
+      （例: ``.../python -m comken`` など）: ``Path.cwd()`` を返す
+    - ``sys.argv[0]`` が解決できない: ``Path.cwd()`` を返す
 
     Returns:
-        実行スクリプトのあるフォルダ。
+        実行スクリプトのあるフォルダ。**想定外のときは ``Path.cwd()`` に
+        フォールバック**して例外で止まらないようにする（state.ini / logs/
+        の置き場所が「現在の作業フォルダ」になる）。
     """
-    return Path(sys.argv[0]).resolve().parent
+    argv0 = sys.argv[0] if sys.argv and sys.argv[0] else ""
+    if not argv0:
+        # 対話実行（REPL）は sys.argv が空
+        return Path.cwd()
+    script_path = Path(argv0)
+    if not script_path.is_absolute():
+        # `python -m comken ...` 形式で起動すると sys.argv[0] がモジュール名
+        # になる（例: "comken"）。絶対パスにできないのでカレントにフォールバック
+        return Path.cwd()
+    try:
+        return script_path.resolve().parent
+    except OSError:
+        # ファイルが存在しないなどで resolve できないときもフォールバック
+        return Path.cwd()
 
 
 @measure
