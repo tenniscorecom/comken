@@ -279,8 +279,9 @@ class KintaiOptions(BrowserOptions):
 ```python
 from comken.toolbox.browser import SiteBase
 
-from ..browser_options import KintaiOptions
-from ..pages.kintai.login_page import LoginPage
+# 同じ sites/kintai/ の中にあるので、隣を指すだけで済む
+from .options import KintaiOptions
+from .pages.login_page import LoginPage
 
 
 class Kintai(SiteBase):
@@ -787,16 +788,25 @@ class LoginPage(SitePage):
 
 `examples/sample_login/` に動作するサンプルがある（他モジュールのサンプルは examples/README.md 参照）。
 
+**上の「1サイト＝1フォルダ」で書いてある**ので、形の見本としてそのまま真似できる。
+
 ```
 examples/sample_login/
-├── pages/
-│   ├── login_page.py # ログイン画面
-│   └── secure_page.py # ログイン後の画面
-├── browser_options.py # BrowserOptions のカスタマイズ
-├── config.ini.example # 設定ファイルのテンプレート
-├── config.py # config のシングルトン（config = Config()）
-└── run.py # 実行スクリプト
+├── sites/
+│   └── sample/            # このフォルダだけ見ればサンプルサイトのことが分かる
+│       ├── site.py        # サイトクラス（NAME・BASE_URL・go_login）
+│       ├── options.py     # このサイトの BrowserOptions
+│       └── pages/
+│           ├── app_page.py    # このサイトの画面に共通
+│           ├── login_page.py  # ログイン画面
+│           └── secure_page.py # ログイン後の画面
+├── config.ini.example     # 設定ファイルのテンプレート
+├── config.py              # config のシングルトン（config = Config()）
+└── run.py                 # 実行スクリプト
 ```
+
+サイトを増やすときは `sites/<サイト名>/` をもう1つ作るだけで、
+既にあるサイトのファイルには触らない。
 
 実行:
 

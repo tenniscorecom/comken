@@ -1,5 +1,8 @@
 """
-sample_site.py — サンプルサイトの SiteBase クラス。
+sites/sample/site.py — サンプルサイトの SiteBase クラス。
+
+このサイトのものは sites/sample/ の中で完結する（site.py・options.py・pages/）。
+サイトを増やすときは sites/<サイト名>/ をもう1つ作る。
 
 1サイトにつき1クラスを作って、固有の値をそこに集める。
 行ける画面は `go_〇〇()` で書き、コードがそのまま遷移図になるようにする
@@ -8,7 +11,7 @@ sample_site.py — サンプルサイトの SiteBase クラス。
 
 from comken.toolbox.browser import SiteBase
 
-from .browser_options import SampleBrowserOptions
+from .options import SampleBrowserOptions
 from .pages.login_page import LoginPage
 
 
