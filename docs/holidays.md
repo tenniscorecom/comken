@@ -87,6 +87,7 @@ source = CabinetOfficeCsvSource(
 | `is_business_day(d, *, calendar)` | カレンダー指定で営業日かを返すモジュールレベル関数        |
 | `CabinetOfficeCsvSource`          | 内閣府 CSV を URL + キャッシュで取得する `HolidaySource`   |
 | `ComkenMasterTableSource`         | 社内管理表の「会社休日」シートを読む `HolidaySource`        |
+| `ComputedHolidaySource`           | 計算で祝日の和集合を返す `HolidaySource`（mokejp/holidays_jp MIT 由来） |
 | `HolidayCalendarError` 系         | 例外（`HolidayCalendarFetchError` / `SourceError` / `FormatError` / `ExpiredError`） |
 
 `HolidayCalendar.is_business_day` はキーワード専用 `skip_weekends=True` を持ち、

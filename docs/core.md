@@ -205,6 +205,69 @@ DEBUG ExcelWriter.save: 完了 1.234秒
 （DPAPI のトークン・client_secret などの秘密の値がログへ載る危険があるため）。
 「どのファイルで止まったか」を知りたいときは呼び出し側がログへ出す。
 
+### ファイル出現待ち（wait_for_file）
+
+業務自動化で頻出する「共有サーバーから CSV が落ちてくるのを待つ」「RPA 基盤が
+ファイルを置くのを待つ」を 1 関数で済ませる。
+
+```python
+from comken.core.file import wait_for_file
+
+path = wait_for_file(
+    folder=r"\\server\share\input",
+    name_pattern="data_*.csv",
+    timeout=60.0,        # 最大待機秒数 (既定 60 秒)
+    poll_interval=1.0,   # 再検索間隔 (既定 1 秒)
+)
+# → 見つかったファイルのうち mtime が最新の Path を返す
+
+# 見つからないときは FileNotFoundError
+```
+
+`FileFinder.latest()` は1 回探すだけなので「無ければ待つ」はこちらを使う。
+
+### 業務結果を統一する型（Result）
+
+成功・警告・空・スキップなど「想定内の業務結果」を統一的に扱う。
+
+```python
+from comken.core.result import Result, ok, warn, empty, skip
+
+def process() -> Result:
+    rows = read_rows()
+    if not rows:
+        return empty("対象データなし")
+    if some_warning:
+        return warn("3件処理したが1件スキップ", warnings=[...], count=3)
+    return ok("3件処理しました", count=3)
+```
+
+| ヘルパー | 用途 |
+|---|---|
+| `ok(message, *, count, data)` | 成功 |
+| `warn(message, *, warnings, count, data)` | 警告付き成功（`has_warning=True`） |
+| `empty(message, *, count)` | データ無し（正常終了） |
+| `skip(message)` | スキップ（正常終了） |
+
+**想定外のエラーは Exception のまま流す**。Result は「想定内の業務結果」
+だけを受け持ち、ライブラリ利用者が投げる例外は握りつぶさない。
+
+### run_id（コンテキスト変数で実行処理を識別）
+
+1 回の実行処理を UUID で識別し、ログに `[RUN:xxxxx]` プレフィックスを付ける。
+
+```python
+from comken.core.logger import setup_logging
+from comken.core.logging_run_id import new_run_id
+
+setup_logging()
+run_id = new_run_id()    # UUID4 の先頭 8 文字を ContextVar に保存
+logger.info("処理開始")  # → [RUN:xxxxx] 2026-08-19 10:00:00 INFO ...: 処理開始
+```
+
+`contextvars.ContextVar` を使うため、`concurrent.futures` / `asyncio` でも各タスクで
+別々の run_id が乗る。
+
 ### zip 圧縮・展開（zip_folder / zip_files / unzip）
 
 Windows のエクスプローラーで作られた zip（日本語ファイル名）も文字化けせず展開できる。
