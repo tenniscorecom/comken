@@ -168,12 +168,13 @@ def _run_init(args: argparse.Namespace, _remaining: list[str]) -> int:
     print(f"作成しました: {target}")
     print(f"comken の場所: {python_library}")
     print(
-        "  （認証情報の登録.bat と .vscode/settings.json に書きました。"
-        "違う場合は両方を直してください）"
+        "  （実行.bat と 認証情報の登録.bat と .vscode/settings.json に書きました。"
+        "違う場合は3つとも直してください）"
     )
     print()
     print("次にやること:")
-    print("  1. python main.py を1度動かすと config.ini が作られるので、値を書き換える")
+    print("  1. 実行.bat を1度動かすか python main.py を実行すると config.ini が作られる")
+    print("     ので、値を書き換える")
     print("  2. src/run.py の run() に処理を書く")
     print("  3. docs/使い方.md・docs/仕様書.md の（ここを書く）を埋める")
     return 0

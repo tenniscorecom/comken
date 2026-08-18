@@ -1,8 +1,9 @@
 @echo off
 setlocal
-rem 認証情報（client_secret・パスワード・トークン）の登録画面を開きます。
-rem ターミナルから起動してください（`pause` を入れていないので、画面は一瞬で閉じる）。
-rem 入れた値は Windows の DPAPI で暗号化して保存され、登録した Windows ユーザー・その PC でしか読めません。
+rem このツールの起動用。ターミナルから `実行.bat` を叩くか、`python main.py` を直接実行してください。
+rem **RPA 基盤から呼び出すときの入口でもある。** 終了コードをそのまま返すので、
+rem スケジューラや RPA が成否を判断できる（pause を入れていないのは、無人実行で止まらないようにするため）。
+rem comken を別の場所へ移したときは、ここと .vscode\settings.json の両方を直してください。
 
 rem comken の場所。PC に恒久登録していない場合だけ、ここが使われる
 set "PYTHON_LIBRARY=\\server\share\tools"
@@ -42,15 +43,16 @@ if not exist "%PYTHON_LIBRARY%\comken\__init__.py" (
 )
 
 :run
-python -m comken.toolbox.credentials gui
+python main.py
 rem 終了コードは popd より前に控える（popd が成功すると 0 で上書きされる）
 set "EXIT_CODE=%ERRORLEVEL%"
 popd
 
 if not "%EXIT_CODE%"=="0" (
   echo.
-  echo [失敗] 登録画面を開けませんでした（終了コード %EXIT_CODE%）。
-  echo   エラーの内容は画面の上のほうに出ています。
+  echo [失敗] 処理を中断しました（終了コード %EXIT_CODE%）。
+  echo   エラーの内容は画面の上のほうに出ています。logs フォルダにも残っています。
+  echo   分からないときは、この画面をスクリーンショットして管理者へ送ってください。
 )
 
 rem 終了コードをそのまま返す。スケジューラや RPA 基盤が成否を判断できるようにする

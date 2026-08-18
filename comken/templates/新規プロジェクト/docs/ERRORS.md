@@ -15,7 +15,7 @@
 
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
-| `ModuleNotFoundError: No module named 'comken'` | 共有サーバーの comken を読み込めない | 共有サーバーに繋がっているか確認する。繋がっているならこの PC の `PYTHONPATH` に comken の場所が入っているかを管理者に確認する（1度 `setup_comken.bat` を実行すれば通る） |
+| `ModuleNotFoundError: No module named 'comken'` | 共有サーバーの comken を読み込めない | 共有サーバーに繋がっているか確認する。繋がっているなら `実行.bat` の `PYTHON_LIBRARY` の場所が正しいかを管理者に確認する |
 
 ---
 
@@ -66,7 +66,7 @@
 | `CsvColumnNotFoundError` | CSV の列見出しが見つからない | CSV の1行目を確認する |
 | `KeyColumnNotFoundError` | 比較に使うキー列が見つからない | Excel・CSV の列名を確認する |
 | `InvalidColumnError` | 列の指定が正しくない（打ち間違いなど） | 列は番号（1, 2, …）か列記号（"A", "AA"）で指定する |
-| `RpaLibraryNotFoundError` | 社内ライブラリを読み込めない | PYTHONPATH に社内ライブラリが入っているか確認する。バージョンが変わった場合は管理者へ連絡する |
+| `RpaLibraryNotFoundError` | 社内ライブラリを読み込めない | 実行.bat の PYTHONPATH に社内ライブラリが入っているか確認する。バージョンが変わった場合は管理者へ連絡する |
 | `ConfigFileNotFoundError` | config.ini も config.ini.example も見当たらない | config.ini.example がプロジェクトにあるか確認する。無い場合は雛形（`comken/templates/新規プロジェクト/config.ini.example`）から取り直す |
 | `ConfigCreatedFromExampleError` | config.ini が無かったので example から作った | 作られた config.ini の値を書き換えて、もう一度実行する |
 | `ConfigLowerCaseNameError` | config.ini のセクション名・キー名に小文字がある | 表示された名前を大文字に書き換える（`[files]` → `[FILES]`） |

@@ -201,7 +201,7 @@ set "PYTHON_LIBRARY_FIXED=\\server\share\tools\comken"
 | 埋まるもの | 入るファイル |
 |---|---|
 | **プロジェクト名** | `main.py`（社内 RPA 基盤へ渡す名前）・`docs/仕様書.md`・`docs/使い方.md` |
-| **comken の場所** | `認証情報の登録.bat`（実行時の `PYTHONPATH`）・`.vscode/settings.json`（補完と定義ジャンプ） |
+| **comken の場所** | `実行.bat`・`認証情報の登録.bat`（実行時の `PYTHONPATH`）・`.vscode/settings.json`（補完と定義ジャンプ） |
 | — | `README.md` から、ひな形の説明（作り終えたら消す節）が取り除かれる |
 
 ```
@@ -216,24 +216,25 @@ set "PYTHON_LIBRARY_FIXED=\\server\share\tools\comken"
     仕様書.md               エンジニアが読む
     ERRORS.md              エラー別の対処
   config.ini.example       設定の見本（config.ini は初回実行時に作られる）
+  実行.bat                  起動用（ターミナルから叩く。`pause` 無し＝無人実行向け）
   認証情報の登録.bat          ID・パスワードの登録画面
   .vscode/                 補完と推奨拡張
 ```
 
-**`config.ini` は作られない。** 初回に `python main.py` を動かすと example からコピーされ、
-**そこで終了コード 1 で止まる**（値を書き換えないまま本番が動くのを防ぐため）。
+**`config.ini` は作られない。** 初回に `実行.bat` を動かす（または `python main.py` を実行する）と
+example からコピーされ、**そこで終了コード 1 で止まる**（値を書き換えないまま本番が動くのを防ぐため）。
 
 ### 作ったあと、最初にやること
 
-1. **`python main.py` を1度動かす** → `config.ini` が作られて止まる
+1. **`実行.bat` を1度動かす**（または `python main.py` を実行する）→ `config.ini` が作られて止まる
 2. **`config.ini` を書き換える**。`[RUN] DRY_RUN` は最初 `True` のままでよい
    （書き込みをせず、何をするつもりかだけログに出る）
 3. **`src/run.py` の `run()` に処理を書く**
 4. **`docs/使い方.md`・`docs/仕様書.md` の「（ここを書く）」を埋める**
 5. 通ったら `config.ini` の `DRY_RUN` を `False` にして本番
 
-**comken の場所を後から変えたくなったら**、`認証情報の登録.bat` と `.vscode/settings.json` の
-両方を直す（片方だけ直すと「動くのに補完が効かない」状態になって原因が分かりにくい）。
+**comken の場所を後から変えたくなったら**、`実行.bat` と `認証情報の登録.bat` と `.vscode/settings.json` の
+3つを直す（片方だけ直すと「動くのに補完が効かない」状態になって原因が分かりにくい）。
 プロジェクトが増えてから変えるなら `tools/set_python_library.py` でまとめて書き換えられる。
 
 **恒久登録しておくと、各プロジェクトのbatは`PYTHON_LIBRARY`を見に行かない。**
@@ -242,20 +243,21 @@ set "PYTHON_LIBRARY_FIXED=\\server\share\tools\comken"
 ### プロジェクトごとに設定する
 
 PCの環境変数を変更したくない場合は、各プロジェクトのルートに
-`comken/templates/新規プロジェクト/認証情報の登録.bat`をコピーし、先頭の`PYTHON_LIBRARY`を共有サーバー上の
-リポジトリルートに合わせる。この方法ではバッチの実行中だけ`PYTHONPATH`を設定する。
-（`python -m comken init` で作ったプロジェクトには、このbat が場所入りで最初から入る）
+`comken/templates/新規プロジェクト/実行.bat`（または `認証情報の登録.bat`）をコピーし、
+先頭の`PYTHON_LIBRARY`を共有サーバー上のリポジトリルートに合わせる。この方法ではバッチの実行中だけ`PYTHONPATH`を設定する。
+（`python -m comken init` で作ったプロジェクトには、この bat が場所入りで最初から入る）
 
 ### bat が何をしているか
 
-`認証情報の登録.bat`は、この順で動く。
+`実行.bat`・`認証情報の登録.bat` は、この順で動く。
 
 1. **すでに`PYTHONPATH`が通っていれば、そのまま処理に入る**（上の恒久登録をした場合）
 2. 通っていなければ、bat に書いてある`PYTHON_LIBRARY`を使う
 3. そこにも comken が無ければ、**さがした場所を表示して止まる**
    （`setup_comken.bat`を使う案内も出す）
 4. 処理の終了コードを**そのまま返す**。スケジューラや RPA 基盤が成否を判断できる
-   （`pause`や`popd`で終わると、失敗しても成功したように見えてしまう）
+   （`pause`や`popd`で終わると、失敗しても成功したように見えてしまう）。
+   `実行.bat` は RPA が絶対パスで起動する運用もあるので、`pause` を入れていない
 
 ### 共有サーバーの comken を更新する
 
@@ -293,8 +295,8 @@ git update-index --skip-worktree comken/services/salesforce_downloader/service.p
 
 ### comken の場所を変えたとき
 
-comken を別の共有フォルダへ移すと、各プロジェクトの**2か所**（認証情報の登録.bat・
-.vscode/settings.json）が古い場所を指したままになる。
+comken を別の共有フォルダへ移すと、各プロジェクトの**3か所**（実行.bat・
+認証情報の登録.bat・.vscode/settings.json）が古い場所を指したままになる。
 プロジェクトが増えるほど手で直すのは現実的でなくなり、直し漏れたものだけが動かなくなる。
 まとめて書き換える。
 

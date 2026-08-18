@@ -185,8 +185,8 @@ def _markdown_paragraphs(text: str) -> list[str]:
 def test_no_manual_copy_instructions_for_config_ini() -> None:
     """「example をコピーして名前を `config.ini` に変える」式の案内が雛形に無いこと。
 
-    「何を防いでいるか」: 実際には `python main.py` を1度動かせば自動で作られる
-    （`ConfigCreatedFromExampleError` で止まる）。Windows は拡張子を隠すので
+    「何を防いでいるか」: 実際には `実行.bat`（または `python main.py`）を1度動かせば
+    自動で作られる（`ConfigCreatedFromExampleError` で止まる）。Windows は拡張子を隠すので
     「コピーして名前を変える」を非エンジニアがやると `config.ini.example - コピー`
     ができて詰まる。**自動で作られるので手コピーは不要**、と README が案内している。
 
@@ -298,11 +298,11 @@ def test_no_relative_imports_in_generated_src(generated: Path) -> None:
     assert not offenders, f"src/ 内に相対 import: {offenders}"
 
 
-# ── 9. .vscode/settings.json と 認証情報の登録.bat が同じ comken の場所を指す ───────────
+# ── 9. .vscode/settings.json と 実行.bat・認証情報の登録.bat が同じ comken の場所を指す ─────────
 
 
 def test_vscode_settings_and_bat_point_to_same_python_library(generated: Path) -> None:
-    """`.vscode/settings.json` と `認証情報の登録.bat` が同じ comken の場所を指すこと。
+    """`.vscode/settings.json` と 2 つの bat が同じ comken の場所を指すこと。
 
     「何を防いでいるか」: 片方だけ古い場所を指していると「実行は通るのに補完だけ
     効かない」状態になり、原因が見つけにくい。create() の注入ロジックをここで
@@ -310,19 +310,19 @@ def test_vscode_settings_and_bat_point_to_same_python_library(generated: Path) -
     片方だけ起きやすいので、両者を読み比べる検査を入れる）。
     """
     settings_text = _read(generated / ".vscode" / "settings.json")
-    bat_text = _read(generated / "認証情報の登録.bat", encoding="cp932")
+    bat_text = _read(generated / "実行.bat", encoding="cp932")
 
     sm = re.search(r'"python\.analysis\.extraPaths":\s*\["([^"]+)"\]', settings_text)
     assert sm, "settings.json に python.analysis.extraPaths が見つからない"
     settings_path = sm.group(1).replace("/", "\\")
 
     bm = re.search(r'set\s+"PYTHON_LIBRARY=([^"]+)"', bat_text)
-    assert bm, "認証情報の登録.bat に PYTHON_LIBRARY の設定が見つからない"
+    assert bm, "実行.bat に PYTHON_LIBRARY の設定が見つからない"
     bat_path = bm.group(1)
 
     assert settings_path == bat_path, (
         f"settings.json は {settings_path!r} を指すのに、"
-        f"認証情報の登録.bat は {bat_path!r} を指している（片方の置換漏れ）"
+        f"実行.bat は {bat_path!r} を指している（片方の置換漏れ）"
     )
 
 
@@ -337,9 +337,9 @@ def test_python_library_is_importable(generated: Path) -> None:
     上の「両者が一致するか」だけでは、**両方が同じ誤った値**のとき通ってしまう。
     パスの中身まで見る必要がある。
     """
-    bat_text = _read(generated / "認証情報の登録.bat", encoding="cp932")
+    bat_text = _read(generated / "実行.bat", encoding="cp932")
     bm = re.search(r'set\s+"PYTHON_LIBRARY=([^"]+)"', bat_text)
-    assert bm, "認証情報の登録.bat に PYTHON_LIBRARY の設定が見つからない"
+    assert bm, "実行.bat に PYTHON_LIBRARY の設定が見つからない"
 
     marker = Path(bm.group(1)) / "comken" / "__init__.py"
     assert marker.is_file(), (
@@ -364,6 +364,7 @@ def test_template_still_has_placeholder_server_path() -> None:
     「実名混入していない」ことの証拠になる。
     """
     suspects = [
+        TEMPLATE_DIR / "実行.bat",
         TEMPLATE_DIR / "認証情報の登録.bat",
         TEMPLATE_DIR / ".vscode" / "settings.json",
     ]

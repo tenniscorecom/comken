@@ -63,7 +63,7 @@ python -m examples.csv_to_excel_report.run
 VS Code のターミナルで **`python -m comken init プロジェクト名`** を実行する
 （`comken/__main__.py` から `comken/tools/new_project.py` を呼ぶ）。
 `python -m comken init`（init のみ）で名前を対話入力することもできる。
-`comken/templates/新規プロジェクト/` の一式（main.py・config.ini.example・認証情報の登録.bat・docs 3種）が
+`comken/templates/新規プロジェクト/` の一式（main.py・config.ini.example・実行.bat・認証情報の登録.bat・docs 3種）が
 その名前で作られる。エントリポイントには社内 RPA 基盤の呼び出しが入った状態で出てくる。
 
 `daily_batch_template` は、その中身に書く**処理の流れ**の参考にする。

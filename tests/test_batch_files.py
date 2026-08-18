@@ -113,9 +113,10 @@ def test_batch_file_checks_comken_before_running(path: Path):
 
 # comken の場所を「bat 自身のフォルダ以外」から知る手段。**bat ごとに違う。**
 # setup は PYTHONPATH を「これから通す」側なので、そこから探してはいけない。
-# プロジェクト側へ配る bat（認証情報の登録）は、もともと先頭の固定値を書き換えて使う。
+# プロジェクト側へ配る bat（実行・認証情報の登録）は、もともと先頭の固定値を書き換えて使う。
 _SECOND_SOURCE = {
     "setup_comken.bat": ('set "PYTHON_LIBRARY_FIXED=', "bat に書いておく固定値"),
+    "実行.bat": ('set "PYTHON_LIBRARY=', "bat に書いておく固定値"),
     "認証情報の登録.bat": ('set "PYTHON_LIBRARY=', "bat に書いておく固定値"),
 }
 
@@ -182,6 +183,41 @@ def test_setup_comken_preserves_value_kind():
         "setup_comken.bat が GetValueKind を使っていない。"
         "元の型を保って書き戻す実装にしてください。"
     )
+
+
+# ── 雛形の bat に pause を入れない ─────────────────────────────────────────────
+# RPA から呼ぶと失敗時に pause で止まり、無人実行がハングする。
+# 「RPA 基盤が python を直接呼ぶ運用」と「RPA が実行.bat を絶対パスで呼ぶ運用」の
+# 両方を許容するため、pause は使わない。認証情報の登録.bat も RPA から呼ばれる
+# 可能性があるので同様に検査する（setup_comken.bat は PC 設定用なので対象外）。
+_PAUSE_FORBIDDEN_BATS = (
+    "実行.bat",
+    "認証情報の登録.bat",
+)
+
+
+@pytest.mark.parametrize("name", _PAUSE_FORBIDDEN_BATS)
+def test_template_bat_has_no_pause(name: str) -> None:
+    """雛形の `実行.bat` / `認証情報の登録.bat` に `pause` コマンドが無いこと。
+
+    「何を防いでいるか」: pause は cmd.exe でキーボード入力を待つコマンド。
+    RPA 基盤やタスクスケジューラから実行すると、pause で止まったまま無人実行が
+    ハングし、次の実行もブロックされうる。失敗時はメッセージを出して
+    終了コードを返すだけにし、呼び出し側で成否を判断できるようにする。
+    rem コメント内に「pause」という単語が出てくるのは除外する。
+    """
+    candidates = list(_ROOT.rglob(name))
+    assert candidates, f"雛形の {name} がリポジトリ内に見つからない"
+    for path in candidates:
+        text = _read(path)
+        for line_no, line in enumerate(text.splitlines(), start=1):
+            stripped = line.lstrip()
+            if stripped.startswith("rem") or stripped.startswith("::"):
+                continue
+            assert "pause" not in stripped.lower(), (
+                f"{path.name}:{line_no} に pause があります。"
+                "RPA から呼ぶと失敗時に無人実行が止まるので、削除してください。"
+            )
 
 
 def test_setup_comken_does_not_search_pythonpath():
