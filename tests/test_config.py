@@ -925,3 +925,338 @@ class TestRequire:
         config_module.read(path)
 
         config_module.require("files.input_csv")
+
+
+class TestConfigCheck:
+    """``python -m comken config --check`` の診断ロジックのテスト。
+
+    どの事故を防いでいるかは comken/core/config/check.py の docstring を参照。
+    """
+
+    def _write(self, tmp_path, text):
+        path = tmp_path / "config.ini"
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    # ── 行頭に空白があるセクション行（いちばん見つけにくい事故） ──────────
+
+    def test_leading_whitespace_on_section_detected(self, tmp_path, capsys):
+        """``  [FILES]`` のように行頭に空白があると指摘が出る。
+
+        防いでいる事故: 報告「``[FILES]`` は config.ini にあるのに無いと言われる」は
+        実際には ``  [FILES]`` と行頭に空白が入っていたケース。configparser は
+        そこをセクションと認識せず、前の値に含めてしまう。
+        """
+        from comken.core.config.check import run_check
+
+        path = self._write(
+            tmp_path,
+            "[RUN]\nDRY_RUN = true\n  [FILES]\nOUTPUT_FOLDER = C:\\work\n",
+        )
+
+        exit_code = run_check(path)
+        out = capsys.readouterr().out
+
+        assert exit_code == 1, "問題が見つかったら終了コードは 1"
+        assert "12行目" not in out  # 行番号が間違っていないこと
+        assert "3行目" in out
+        assert "行頭に空白" in out
+        assert "[FILES]" in out  # 原文を載せている
+        # ``[FILES]`` セクションは認識されないため、認識したセクションには載らない
+        assert "[FILES]" not in out.split("--- 認識したセクション ---")[1]
+
+    def test_full_width_space_on_section_detected(self, tmp_path, capsys):
+        """全角スペースの行頭空白も指摘される。
+
+        防いでいる事故: 非エンジニアが IME 経由で誤って全角スペースを入れるのは
+        かなりよくあるパターンで、半角スペース検出だけだと取り逃がす。
+        """
+        from comken.core.config.check import run_check
+
+        path = self._write(tmp_path, "[RUN]\nK = 1\n　[FILES]\nK2 = 2\n")
+
+        exit_code = run_check(path)
+        out = capsys.readouterr().out
+
+        assert exit_code == 1
+        assert "3行目" in out
+        assert "行頭に空白" in out
+
+    # ── 正常系 ───────────────────────────────────────────────────────────
+
+    def test_clean_config_reports_no_problems(self, tmp_path, capsys):
+        """問題のない config.ini では「気になるところはありません」が出て終了コード 0。
+
+        防いでいる事故: 何も無いときに「指摘 0 件」を出さずに黙ってしまうと、
+        利用者は「何も出ない = 失敗？」と不安になる。
+        """
+        from comken.core.config.check import run_check
+
+        path = self._write(
+            tmp_path,
+            "[RUN]\nDRY_RUN = true\nDEBUG = false\n[FILES]\nOUTPUT_FOLDER = C:\\work\n",
+        )
+
+        exit_code = run_check(path)
+        out = capsys.readouterr().out
+
+        assert exit_code == 0
+        assert "気になるところはありません" in out
+        # 認識したセクションには正しい名前とキーが並ぶ
+        assert "[RUN]" in out
+        assert "DRY_RUN" in out
+        assert "[FILES]" in out
+        assert "OUTPUT_FOLDER" in out
+
+    # ── 値が漏れないこと（最重要の確認） ─────────────────────────────────
+
+    def test_value_is_never_in_output(self, tmp_path, capsys):
+        """**値は絶対に出力しない。**
+
+        防いでいる事故: config.ini には業務情報（顧客名・パス・URL・パスワード）が
+        含まれる。``OUTPUT_FOLDER = C:/秘密`` のような config で ``秘密`` が
+        出力に出ないこと（出る = 情安全事故）。キーは出す。値は出さない。
+        """
+        from comken.core.config.check import run_check
+
+        # 値に含めてはならない文字列を複数埋める
+        secret_marker = "XYZSECRETPASSWORDXYZ"
+        path = self._write(
+            tmp_path,
+            "[FILES]\n"
+            f"OUTPUT_FOLDER = C:/{secret_marker}/work\n"
+            f"REMOTE_URL = https://example.test/{secret_marker}/api\n"
+            f"NOTE = {secret_marker}\n",
+        )
+
+        run_check(path)
+        out = capsys.readouterr().out
+
+        # キーは出す
+        assert "OUTPUT_FOLDER" in out
+        assert "REMOTE_URL" in out
+        # 値は絶対に出さない
+        assert secret_marker not in out, (
+            f"値が漏れています: {secret_marker!r} が出力に含まれています"
+        )
+
+    # ── セクション名に空白が混じる ──────────────────────────────────────
+
+    def test_section_name_with_inner_whitespace(self, tmp_path, capsys):
+        """``[FILES ]`` のようにセクション名に空白が混じっていると指摘が出る。
+
+        防いでいる事故: 空白を落とす実装は入れたが、書いた人には「見た目が
+        違うぞ」と伝えたい（次の編集で再び混入しないようにするため）。
+        """
+        from comken.core.config.check import run_check
+
+        path = self._write(tmp_path, "[FILES ]\nK = v\n")
+
+        exit_code = run_check(path)
+        out = capsys.readouterr().out
+
+        assert exit_code == 1
+        assert "セクション名に空白" in out
+
+    # ── BOM の検出 ────────────────────────────────────────────────────────
+
+    def test_bom_detected(self, tmp_path, capsys):
+        """BOM 付き UTF-8 で保存されていることが分かる。
+
+        防いでいる事故: メモ帳で保存すると BOM が付き、``[FILES]`` がセクションに
+        見えなくなる（見た目は変わらないので気づけない）。
+        """
+        from comken.core.config.check import run_check
+
+        path = tmp_path / "config.ini"
+        path.write_bytes(b"\xef\xbb\xbf[FILES]\nK = v\n")
+
+        exit_code = run_check(path)
+        out = capsys.readouterr().out
+
+        assert exit_code == 0
+        assert "BOM 付き" in out
+        assert "[FILES]" in out  # BOM 込みでもセクションを認識できる
+
+    # ── コメントアウトされた設定行 ──────────────────────────────────────
+
+    def test_commented_out_setting_detected(self, tmp_path, capsys):
+        """``; KEY = 値`` の形で書かれた行は指摘される。
+
+        防いでいる事故: 設定を書いたつもりが ``;`` を外し忘れていて動かない。
+        行番号とキー名だけ出して、値は出さない。
+        """
+        from comken.core.config.check import run_check
+
+        path = self._write(tmp_path, "[FILES]\n; OUTPUT_FOLDER = C:\\work\n")
+
+        exit_code = run_check(path)
+        out = capsys.readouterr().out
+
+        assert exit_code == 1
+        assert "コメントアウト" in out
+        assert "OUTPUT_FOLDER" in out  # キー名は出す
+        assert "C:\\work" not in out  # 値は出さない
+
+    def test_commented_out_setting_with_hash(self, tmp_path, capsys):
+        """``#`` でコメントアウトされた設定行も指摘される。"""
+        from comken.core.config.check import run_check
+
+        path = self._write(tmp_path, "[FILES]\n# OUTPUT_FOLDER = C:\\work\n")
+
+        exit_code = run_check(path)
+        out = capsys.readouterr().out
+
+        assert exit_code == 1
+        assert "コメントアウト" in out
+        assert "OUTPUT_FOLDER" in out
+
+    def test_pure_comment_without_equals_is_not_a_problem(self, tmp_path, capsys):
+        """``; ただのコメント`` は指摘しない（純粋なコメントは問題ない）。"""
+        from comken.core.config.check import run_check
+
+        path = self._write(tmp_path, "[FILES]\n; これはただのメモです\nK = v\n")
+
+        exit_code = run_check(path)
+        out = capsys.readouterr().out
+
+        assert exit_code == 0
+        assert "気になるところはありません" in out
+
+    # ── 重複キー ─────────────────────────────────────────────────────────
+
+    def test_duplicate_key_in_section_detected(self, tmp_path, capsys):
+        """同じセクション内に同じキーが 2 回書かれていると指摘が出る。
+
+        防いでいる事故: configparser は最初の値だけを採用するため、
+        「設定が反映されない」「違う値が読まれている」が起きる。
+        """
+        from comken.core.config.check import run_check
+
+        path = self._write(tmp_path, "[FILES]\nK = first\nK = second\n")
+
+        exit_code = run_check(path)
+        out = capsys.readouterr().out
+
+        assert exit_code == 1
+        assert "同じセクション内で同じキーが 2 回以上" in out
+        assert "K" in out
+
+    # ── セクションが 1 つも無い ──────────────────────────────────────────
+
+    def test_no_sections_detected(self, tmp_path, capsys):
+        """セクションが 1 つも無いときには「認識されませんでした」と出る。
+
+        防いでいる事故: 設定が一切読まれないまま動くため、エラーが別の
+        場所でしか表面化しない。
+        """
+        from comken.core.config.check import run_check
+
+        path = self._write(tmp_path, "; コメントだけのファイル\n")
+
+        exit_code = run_check(path)
+        out = capsys.readouterr().out
+
+        # コメントだけのファイルなので終了コードは 0 のまま、
+        # 「セクションは 1 つも認識されませんでした」を出す
+        assert exit_code == 0
+        assert "セクションは 1 つも認識されませんでした" in out
+
+    # ── 値が複数行になっている疑い ─────────────────────────────────────
+
+    def test_indented_continuation_line_detected(self, tmp_path, capsys):
+        """インデントされた ``KEY = 値`` の行は「前の値の続き」になる旨を指摘。
+
+        防いでいる事故: ユーザーが新しいキーを書いたつもりでインデントを
+        消し忘れて、前の値に吸収される事故。
+        """
+        from comken.core.config.check import run_check
+
+        path = self._write(
+            tmp_path,
+            "[FILES]\nFIRST = value1\n    SECOND = value2\n",
+        )
+
+        exit_code = run_check(path)
+        out = capsys.readouterr().out
+
+        assert exit_code == 1
+        assert "3行目" in out
+        assert "行頭に空白" in out
+        # 値そのものは出さない
+        assert "value1" not in out
+        assert "value2" not in out
+
+    # ── mapping セクションは件数だけ ─────────────────────────────────────
+
+    def test_mapping_section_shows_count_only(self, tmp_path, capsys):
+        """``*_MAPPING`` セクションは列名（業務情報になりうる）ではなく件数だけ表示。"""
+        from comken.core.config.check import run_check
+
+        path = self._write(
+            tmp_path,
+            "[受注_MAPPING]\n受注No = 受注番号\n商品cd = 商品コード\n年度 = 2026\n",
+        )
+
+        exit_code = run_check(path)
+        out = capsys.readouterr().out
+
+        assert exit_code == 0
+        assert "[受注_MAPPING]" in out
+        assert "3件" in out
+        # 列名は出さない
+        assert "受注No" not in out
+        assert "商品cd" not in out
+
+
+class TestConfigCheckCli:
+    """``python -m comken config --check`` の CLI 配線。"""
+
+    def test_default_remains_stub_generation(self, tmp_path, monkeypatch):
+        """``--check`` を付けないときは従来どおりスタブ生成。
+
+        防いでいる事故: 既存の ``python -m comken config`` の挙動を変えて
+        しまうと、社内ドキュメントや手順が壊れる。
+        """
+        from comken.core.config import cli as config_cli
+
+        ini = tmp_path / "config.ini"
+        ini.write_text("[FILES]\nK = v\n", encoding="utf-8")
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "config.py").write_text(
+            "from comken.core.config import Config\nCONFIG = Config()\n",
+            encoding="utf-8",
+        )
+        monkeypatch.chdir(tmp_path)
+
+        exit_code = config_cli.main([])
+
+        assert exit_code == 0
+        # src/config.pyi が生成されている（= スタブ生成が走った）
+        assert (tmp_path / "src" / "config.pyi").exists()
+
+    def test_check_flag_runs_diagnostic(self, tmp_path, capsys):
+        """``--check`` を付けると診断に切り替わる（終了コード 1）。"""
+        from comken.core.config import cli as config_cli
+
+        path = tmp_path / "config.ini"
+        path.write_text("[RUN]\nK = 1\n  [FILES]\nK2 = 2\n", encoding="utf-8")
+
+        exit_code = config_cli.main(["--check", str(path)])
+
+        assert exit_code == 1
+        assert "3行目" in capsys.readouterr().out
+
+    def test_check_flag_without_path_uses_config_ini(self, tmp_path, capsys, monkeypatch):
+        """``--check`` でパスを省略したら ``./config.ini`` を見る。"""
+        from comken.core.config import cli as config_cli
+
+        path = tmp_path / "config.ini"
+        path.write_text("[FILES]\nK = v\n", encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+
+        exit_code = config_cli.main(["--check"])
+
+        # 問題なし → 0
+        assert exit_code == 0
+        assert "[FILES]" in capsys.readouterr().out

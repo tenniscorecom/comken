@@ -462,6 +462,20 @@ python -m comken config
 
 生成された `typings/` は手で編集せず、`.gitignore` に含める（自動生成物）。
 
+**config.ini がおかしいときは `--check` で診断する。**
+
+`[FILES]` が config.ini にあるはずなのに `ConfigSectionNotFoundError` が出る、
+のような事故は ini の見た目では原因が分からないことが多い（行頭に空白が入った、
+`[FILES ]` のように内側に空白がある、等）。`--check` を付けると構造上の
+問題点を **行番号付きで** 指摘してくれる（**値は出力しない**）:
+
+```
+python -m comken config --check                 # 同じフォルダの config.ini を診断
+python -m comken config --check C:\作業\config.ini   # 別フォルダの config.ini を診断
+```
+
+見つかった指摘は 1 件以上あれば終了コード 1、なければ 0 を返す。
+
 なお**ブラウザの設定は config.ini には書かない**。`BrowserOptions` のインスタンス
 （`src/browser_options.py`）で行う（Browser を参照）。
 

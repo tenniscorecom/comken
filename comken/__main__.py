@@ -100,7 +100,7 @@ def _build_parser() -> argparse.ArgumentParser:
     # config
     config_p = subparsers.add_parser(
         "config",
-        help="config.ini からエディタ補完用スタブ（.pyi）を生成",
+        help="config.ini からエディタ補完用スタブ（.pyi）を生成 / 診断（--check）",
         add_help=False,
     )
     config_p.set_defaults(run=_run_config)
@@ -208,14 +208,15 @@ def _run_report(_args: argparse.Namespace, remaining: list[str]) -> int:
     return report_main(remaining)
 
 
-def _run_config(_args: argparse.Namespace, _remaining: list[str]) -> int:
+def _run_config(_args: argparse.Namespace, remaining: list[str]) -> int:
     """``python -m comken config`` の本体。
 
-    旧 ``python -m comken.core.config`` とまったく同じ動作。
+    旧 ``python -m comken.core.config`` とまったく同じ動作（補完スタブ生成）。
+    ``--check <path>`` を付けたときだけ診断に切り替わる（``config_main`` 側に渡す）。
     """
     from comken.core.config.cli import main as config_main
 
-    return config_main()
+    return config_main(remaining)
 
 
 if __name__ == "__main__":
