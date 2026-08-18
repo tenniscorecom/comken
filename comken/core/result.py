@@ -60,11 +60,19 @@ class Result(Generic[T]):
         return len(self.warnings) > 0
 
     def to_dict(self) -> dict[str, Any]:
-        """JSON シリアライズ用の dict。
+        """**JSON にできる形に変換した** dict。``data`` は**意図的に含めない**。
 
-        ``data`` は JSON 化できない型が渡される可能性があるので、ここでは
-        含めない。``warnings`` は list へ変換する (tuple のままだと
-        json.dumps が内部で list へ変換するため、形式を合わせておく)。
+        ``data`` には JSON 化できない型 (bytes / 独自オブジェクト等) や
+        機微な値が渡される可能性があるため、``to_dict()`` の戻り値には
+        含めない。``data`` をログや API レスポンスに載せたい場合は呼び出し側で
+        ``json.dumps(result.to_dict())`` の後に ``result.data`` を別途扱うこと。
+
+        ``warnings`` は tuple のままだと ``json.dumps`` が list へ変換するため、
+        形式を ``list`` に統一しておく。
+
+        Returns:
+            ``{"success": ..., "message": ..., "count": ..., "warnings": [...]}``
+            の dict。``json.dumps()`` でそのまま JSON 化できる形。
         """
         return {
             "success": self.success,

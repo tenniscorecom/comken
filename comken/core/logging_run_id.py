@@ -15,9 +15,26 @@ UUID ベースの run_id をコンテキスト変数へ保存する。
     logging.getLogger(__name__).info("処理開始")
     # → [RUN:xxxxx] 2026-08-19 10:00:00 INFO ...: 処理開始
 
-コンテキスト変数 (``contextvars.ContextVar``) を使うため、
-``concurrent.futures`` や ``asyncio`` で複数処理を走らせても
-各タスクで別々の run_id を持たせられる。
+**「1回の業務実行を1つの run_id で追跡できる」ことを最優先の設計。**
+
+並列実行モデルでの挙動 (``new_run_id()`` を呼ばないときのデフォルト):
+
+- ``concurrent.futures.ThreadPoolExecutor``: 各ワーカースレッドは独立した
+  ``ContextVar`` を持つため、明示的に ``new_run_id()`` を呼ばないと
+  ``current_run_id()`` が ``"-"`` を返す。**各スレッドで別 ID を持たせたい
+  場合はワーカー関数内で ``new_run_id()`` を呼ぶこと**
+- ``concurrent.futures.ProcessPoolExecutor``: ワーカープロセスは
+  完全に独立した Python インタプリタで動くため、**メイン側で呼んだ
+  ``new_run_id()`` は子プロセスへ伝わらない**。各ワーカーで個別に
+  ``new_run_id()`` を呼ぶこと
+- ``asyncio``: ``asyncio.create_task()`` でタスク生成時に
+  ``contextvars.copy_context()`` で親コンテキストが**コピー**される。
+  タスク内で ``new_run_id()`` を呼ばないと**全部同じ run_id** になる。
+  **タスクごとに別 ID を付けたい場合はタスク関数の冒頭で
+  ``new_run_id()`` を呼ぶこと**
+
+「並列処理を走らせれば自動で別 ID」ではないことに注意。自動独立を期待
+したい場合は、各ワーカー / 各タスクの冒頭で ``new_run_id()`` を呼ぶこと。
 """
 
 from __future__ import annotations
@@ -49,6 +66,10 @@ def new_run_id() -> str:
 
     プロセスの開始時に1回だけ呼ぶ想定。同じプロセス内で2回呼ぶと
     2回目以降が上書きされ、それ以降のログは新しい run_id で記録される。
+
+    並列実行でタスクごとに別 ID を持ちたい場合は、各ワーカー関数 /
+    各 asyncio タスク関数の冒頭で ``new_run_id()`` を呼ぶこと (詳細は
+    モジュール docstring を参照)。
     """
     run_id = uuid.uuid4().hex[:_RUN_ID_LENGTH]
     _RUN_ID_VAR.set(run_id)

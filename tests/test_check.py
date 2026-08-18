@@ -184,18 +184,28 @@ class TestFacade:
 
 
 class TestPyright:
-    def test_skip_when_npx_unavailable(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """``npx`` が無い環境では SKIP。"""
-        monkeypatch.setattr(shutil, "which", lambda name: None if name == "npx" else "/bin/true")
+    def test_skip_when_pyright_and_npx_unavailable(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``pyright`` も ``npx`` も無い環境では SKIP。
+
+        BO / オフライン環境向け: ``check_pyright()`` は npm から最新版を
+        ダウンロードしない。PATH に ``pyright`` が無い、かつ ``npx`` も無い
+        ときは SKIP になる。
+        """
+        monkeypatch.setattr(shutil, "which", lambda name: None)
         result = check_pyright(Path.cwd())
         assert result.status == "skip"
-        assert "npx" in result.message
+        assert "pyright" in result.message
 
     def test_ok_when_zero_errors(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-        """pyright が ``0 errors`` を返すなら OK。"""
+        """pyright が ``0 errors`` を返すなら OK。
+
+        ``check_pyright()`` は PATH の ``pyright`` を直接実行する。
+        """
 
         def fake_which(name: str) -> str | None:
-            return "/usr/bin/npx" if name == "npx" else None
+            return "/usr/bin/pyright" if name == "pyright" else None
 
         class FakeProc:
             returncode = 0

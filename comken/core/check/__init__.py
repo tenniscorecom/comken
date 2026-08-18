@@ -246,29 +246,46 @@ def check_pyright(repo_root: Path) -> CheckResult:
     """pyright が ``comken/`` に対して 0 errors を返すか。
 
     ``tests/test_pyright_clean.py`` と同じ判定ロジック。
-    ``npx`` が無い環境では SKIP。
+    **``--yes pyright@latest`` は使わない** (BO / オフライン環境で npm
+    から最新版を取りに行くため動かない)。代わりに以下の優先順で探す:
+
+    1. PATH にある ``pyright`` コマンドを直接実行
+    2. ``npx --no-install pyright`` でローカル npm の pyright を使う
+    3. どちらも無ければ SKIP
     """
+    # 1. PATH の pyright を直接実行
+    pyright = shutil.which("pyright")
+    if pyright is not None:
+        proc = _run_pyright([pyright, "comken/"], repo_root)
+        return _parse_pyright_result(proc)
+
+    # 2. npx --no-install でローカル npm の pyright を使う
     npx = shutil.which("npx")
-    if npx is None:
-        return CheckResult(
-            name="pyright",
-            status="skip",
-            message="npx が無いので pyright を実行できません",
-        )
-    try:
-        proc = subprocess.run(
-            [npx, "--yes", "pyright@latest", "comken/"],
-            cwd=str(repo_root),
-            capture_output=True,
-            text=True,
-            timeout=PYRIGHT_TIMEOUT_SECONDS,
-        )
-    except subprocess.TimeoutExpired:
-        return CheckResult(
-            name="pyright",
-            status="ng",
-            message=f"pyright タイムアウト ({PYRIGHT_TIMEOUT_SECONDS}秒)",
-        )
+    if npx is not None:
+        proc = _run_pyright([npx, "--no-install", "pyright", "comken/"], repo_root)
+        return _parse_pyright_result(proc)
+
+    # 3. どちらも無ければ SKIP
+    return CheckResult(
+        name="pyright",
+        status="skip",
+        message="pyright も npx も無いので pyright を実行できません",
+    )
+
+
+def _run_pyright(cmd: list[str], repo_root: Path) -> subprocess.CompletedProcess[str]:
+    """pyright を subprocess で実行する。タイムアウト例外は呼び出し側で処理する。"""
+    return subprocess.run(
+        cmd,
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        timeout=PYRIGHT_TIMEOUT_SECONDS,
+    )
+
+
+def _parse_pyright_result(proc: subprocess.CompletedProcess[str]) -> CheckResult:
+    """pyright の実行結果を CheckResult に変換する。"""
     output = (proc.stdout or "") + (proc.stderr or "")
     match = re.search(r"(\d+) errors?", output)
     if match is None:
