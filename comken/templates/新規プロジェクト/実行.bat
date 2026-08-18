@@ -1,6 +1,8 @@
 @echo off
 setlocal
 rem このツールの起動用。ダブルクリックで main.py を実行します。
+rem **人が手で動かすためのもの。** 社内 RPA 基盤から動かすときは使いません
+rem （RPA が python を直接呼び、PYTHONPATH も PC 側で通っているため）。
 rem comken を別の場所へ移したときは、ここと .vscode\settings.json の両方を直してください。
 
 rem comken の場所。PC に恒久登録していない場合だけ、ここが使われる

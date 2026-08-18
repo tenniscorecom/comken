@@ -26,7 +26,13 @@ comken を別の場所へ移したときだけ、`実行.bat` と `.vscode/setti
 
 ## 実行
 
-- `実行.bat` をダブルクリック（または `python main.py`）
+**人が手で動かすとき**は `実行.bat` をダブルクリック（または `python main.py`）。
+
+**社内 RPA 基盤から動かすときは `実行.bat` を使わない。** RPA が
+`python <このフォルダ>\main.py` を直接呼ぶ。PYTHONPATH は PC 側で通っているので、
+bat が肩代わりしている PYTHONPATH の設定も要らない。
+そのときは `main.py` の末尾のコメント（社内 RPA 基盤から実行する場合）に従って
+`main.py` を書き換える。
 
 ---
 
