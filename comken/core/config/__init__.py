@@ -70,19 +70,63 @@ def _create_from_example(path: Path) -> Path | None:
     return path.resolve()
 
 
-def _validate_upper_case(cfg: configparser.ConfigParser, path: Path) -> None:
+def _build_section_map(cfg: configparser.ConfigParser) -> dict[str, str]:
+    """config.ini のセクション名から前後の空白（全角含む）を落として、整理した対応表を作る。
+
+    configparser は `[FILES ]` と `[FILES]` を別セクションとして扱うため、
+    手書きで空白が混じるとセクションが分かれてしまう。空白を落とした名前で
+    アクセスさせることで、書かれた綴りに左右されず `config.FILES` で読めるようにする。
+
+    Returns:
+        落とした後のセクション名 → 元の cfg.sections() 内のセクション名。
+        **空白を落とした結果が同じになるセクションが複数ある場合、最初に見つかった
+        方だけを採用する**。衝突が起きると読み手が書いたセクションのうち
+        どちらが生きているか分からなくなるため、logger.warning で WARN を出す。
+
+    空文字列になったセクション名（`[]` や `[   ]`）はスキップする。
+    """
+    section_map: dict[str, str] = {}
+    for original in cfg.sections():
+        stripped = original.strip()
+        if not stripped:  # 全て空白しかないセクション名は丸ごと無視する
+            continue
+        if stripped in section_map:
+            logger.warning(
+                "config.ini のセクション [%s] と [%s] は前後の空白を落とすと"
+                "同じ名前になるため、先に書かれた [%s] を採用し"
+                " [%s] は読み込みません。",
+                section_map[stripped],
+                original,
+                section_map[stripped],
+                original,
+            )
+            continue
+        section_map[stripped] = original
+    return section_map
+
+
+def _validate_upper_case(
+    cfg: configparser.ConfigParser, path: Path, section_map: dict[str, str]
+) -> None:
     """セクション名・キー名が大文字で書かれているか確かめる。
 
     小文字で書かれていても読み込み自体は成功し、大文字に直して保持されるため、
     小文字のままアクセスしたときに初めて「そんなセクションはない」と言われる。
     書いた場所から遠いエラーになるので、読み込んだ時点で止める。
+
+    空白を落とした後の名前で判定する。`[files]` の小文字検知を `ConfigSectionNotFoundError`
+    の空白落としで誤って見逃すことがないように。
     """
-    wrong = [f"[{s}] → [{s.upper()}]" for s in cfg.sections() if s != s.upper()]
+    wrong = [
+        f"[{s_strip}] → [{s_strip.upper()}]"
+        for s_strip in section_map
+        if s_strip != s_strip.upper()
+    ]
     wrong += [
-        f"[{s}] の {k} → {k.upper()}"
-        for s in cfg.sections()
-        if not _is_mapping_section(s)
-        for k in cfg.options(s)
+        f"[{section_map[s_strip]}] の {k} → {k.upper()}"
+        for s_strip in section_map
+        if not _is_mapping_section(s_strip)
+        for k in cfg.options(section_map[s_strip])
         if k != k.upper()
     ]
     if wrong:
@@ -139,27 +183,45 @@ class Config:
                 raise ConfigCreatedFromExampleError(created)
             raise ConfigFileNotFoundError(Path(path).resolve())
 
-        _validate_upper_case(cfg, Path(path))
-
+        # 2026-08-18 の依頼「セクションがあるのに無いと言われる」対応:
+        # configparser はセクション名の前後の空白（全角スペース含む）を落とさないため、
+        # 手書きで `[FILES ]` のように書くと別セクション扱いになり、書いた人と
+        # 読む側で名前が一致しなくなる。空白を落とした名前でアクセスさせる。
+        # 重複したら黙って捨てずに WARNING を出している（同じ値が読まれているか
+        # 利用者が疑わざるを得なくなるため）。
         self._path = Path(path).resolve()
-        self._mappings: dict[str, dict[str, str]] = {}
-        for section in cfg.sections():
-            if _is_mapping_section(section):
-                self._mappings[section] = {
-                    key: cfg.get(section, key).strip() for key in cfg.options(section)
-                }
-                continue
-            ns = types.SimpleNamespace(
-                **{k.upper(): _parse_value(cfg, section, k) for k in cfg.options(section)}
-            )
-            setattr(self, section.upper(), ns)
+        section_map = _build_section_map(cfg)
+        # ↑の関数で空文字だけのセクション名は除外しているため、ここで len==0 でも
+        # 例外にはせず空の Config として返す（下の mapping 更新が起きないだけ）。
+        if section_map:
+            # 大文字小文字チェックは「落とした後の名前」で行う（小文字の検出は
+            # 空白除去と独立なので、検出の意味は変わらない）。
+            _validate_upper_case(cfg, Path(path), section_map)
+            self._mappings = {}
+            for stripped_section, original_section in section_map.items():
+                if _is_mapping_section(stripped_section):
+                    self._mappings[stripped_section] = {
+                        key.strip(): cfg.get(original_section, key).strip()
+                        for key in cfg.options(original_section)
+                    }
+                    continue
+                # configparser はキー名の前後空白を既に落とすので、二重 strip は不要
+                ns = types.SimpleNamespace(
+                    **{
+                        key.upper(): _parse_value(cfg, original_section, key)
+                        for key in cfg.options(original_section)
+                    }
+                )
+                setattr(self, stripped_section.upper(), ns)
+        else:
+            self._mappings = {}
 
         # エディタ補完用スタブ（src/config.pyi）を自動更新する。
         # config.ini を変更してもスタブが古くならない（失敗しても本処理は止めない）。
         # スタブ生成は別モジュールへ分離しており、遅延 import で循環を避ける
         from comken.core.config.stubs import update_stub
 
-        update_stub(cfg, path)
+        update_stub(cfg, path, section_map)
         _log_version_once()
 
     def mapping(self, section: str) -> dict[str, str]:
@@ -174,18 +236,38 @@ class Config:
         Raises:
             ConfigSectionNotFoundError: 指定したマッピングセクションがない場合。
         """
+        # 引数のセクション名も呼び出し側の書き揺れに合わせて前後空白を落とす。
+        # configparser のセクション名は空白が落ちないため、ここで揃える。
+        stripped = section.strip()
         try:
-            return self._mappings[section]
+            return self._mappings[stripped]
         except KeyError:
-            raise ConfigSectionNotFoundError(section, list(self._mappings)) from None
+            raise ConfigSectionNotFoundError(stripped, list(self._mappings), self._path) from None
 
     def __getattr__(self, name: str) -> NoReturn:
         # 通常の属性（設定済みセクション）は __dict__ にあり、ここには来ない。
         # 未定義セクションのアクセスだけがここに来るので、分かりやすいエラーにする。
         if name.startswith("_"):  # copy/pickle 等の内部属性探索は通常の AttributeError に
             raise AttributeError(name)
+        # セクション名は大文字と決まっている（ConfigLowerCaseNameError で読み込み時に止める）。
+        # 小文字始まりが __getattr__ に来るのは、`Config(path).require(...)` のように
+        # モジュール関数を取り違えているケースがほとんど。ConfigSectionNotFoundError の
+        # 「セクションがありません」は完全な的外れなので、 AttributeError に変えて
+        # 「セクションの話ではない」と気付けるようにする。
+        if name and name[0].islower():
+            if name in {"require", "read", "mapping"}:
+                raise AttributeError(
+                    f"{name!r} は Config のメソッドではなく、comken のモジュール関数です。"
+                    "`from comken import config` してから "
+                    f"`config.{name}(...)` のように呼び出してください。"
+                )
+            raise AttributeError(
+                f"Config に {name!r} という属性（セクション）はありません。"
+                "config.ini のセクション名は大文字なので、"
+                "小文字で始まる名前はセクションではありません。"
+            )
         sections = [k for k in vars(self) if k.isupper()]
-        raise ConfigSectionNotFoundError(name, sections)
+        raise ConfigSectionNotFoundError(name, sections, self._path)
 
 
 # ── `from comken import config` 用の遅延シングルトン ──────────────────────────

@@ -348,6 +348,145 @@ class TestConfigMissingSection:
         with pytest.raises(ConfigError, match="セクションがありません"):
             _ = config.NOPE
 
+    def test_missing_section_lists_the_file_read(self, tmp_path):
+        """未定義セクションのエラーに「読んだ config.ini のパス」を含める。
+
+        防いでいるバグ: 2026-08-18 に「プロジェクト基準」に変えた後、利用者が
+        見ている config.ini と違うファイルを読んでいると、原因の切り分けが
+        つかなくなる（例: `python src/run.py` で起動すると src/ 配下を
+        探しに行く）。パスを出しておけば「読んだのはこのファイル」とすぐ分かる。
+        """
+        from comken.exceptions import ConfigSectionNotFoundError
+
+        ini = tmp_path / "config.ini"
+        ini.write_text("[REPORT]\nK = v\n", encoding="utf-8")
+        config = Config(ini)
+        with pytest.raises(ConfigSectionNotFoundError) as exc:
+            _ = config.FILES
+        assert str(ini.resolve()) in str(exc.value)
+
+
+class TestConfigSectionWhitespace:
+    """config.ini のセクション名・キー名に前後の空白が混じっても読めるか。
+
+    非エンジニアが手で編集すると `[FILES ]` や ` DRY_RUN ` を書きうるところを、
+    落とす前に「セクションがありません」「キーが見つかりません」になると、
+    一致しているように見える設定でエラーになる。空白を落として照合する。
+    """
+
+    @pytest.mark.parametrize(
+        "header",
+        ["[FILES ]", "[ FILES]", "[FILES　]", "[　FILES]", "[FILES 　]"],
+    )
+    def test_section_with_whitespace_is_readable(self, tmp_path, header):
+        """前後に空白（全角・半角・混在）があっても config.FILES で読める。
+
+        防いでいるバグ: 報告「`[FILES]` は config.ini にあるのに無いと言われる」は
+        実際には `[FILES ]` と末尾に空白が入っていた。書式エラーの種類を
+        ユーザーが見分けられないため、空白を黙って落として通す。
+        """
+        ini = tmp_path / "config.ini"
+        ini.write_text(f"{header}\nOUTPUT_FOLDER = C:\\work\n", encoding="utf-8")
+
+        config = Config(ini)
+
+        assert Path("C:\\work") == config.FILES.OUTPUT_FOLDER
+
+    @pytest.mark.parametrize(
+        "key",
+        ["OUTPUT_FOLDER ", " OUTPUT_FOLDER", "OUTPUT_FOLDER　", "　OUTPUT_FOLDER"],
+    )
+    def test_key_with_whitespace_is_readable(self, tmp_path, key):
+        """キー名の前後に空白（全角・半角）があっても config.FILES.KEY で読める。"""
+        ini = tmp_path / "config.ini"
+        ini.write_text(f"[FILES]\n{key} = C:\\work\n", encoding="utf-8")
+
+        config = Config(ini)
+
+        assert Path("C:\\work") == config.FILES.OUTPUT_FOLDER
+
+    def test_value_is_not_double_stripped(self, tmp_path):
+        """値の前後空白は configparser が処理済みなので、二重に落とさない。
+
+        防いでいるバグ: 値 `  C:\\work  ` の内側空白（意図的なもの）までは
+        落とさない。値のトリムは configparser 側に任せる。
+        """
+        ini = tmp_path / "config.ini"
+        # 設定値自体は configparser が前後トリムするので、ここではトリム済みの値を書き、
+        # 値が壊れていないこと（= "C:\\work"）を確認する。
+        ini.write_text("[FILES]\nNAME = C:\\work\n", encoding="utf-8")
+
+        config = Config(ini)
+
+        assert Path("C:\\work") == config.FILES.NAME
+
+    def test_duplicate_section_after_stripping_warns(self, tmp_path, caplog):
+        """`[FILES]` と `[FILES ]` のように、空白を落としたら衝突する場合は黙って捨てない。
+
+        防いでいるバグ: どっちか片方を黙って採用すると、利用者は
+        「書かれているとおりに読まれているか」を疑わざるを得なくなる。
+        少なくとも WARNING を出して、警告ログから原因が追えるようにする。
+        """
+        ini = tmp_path / "config.ini"
+        ini.write_text(
+            "[FILES]\nFIRST = value1\n\n[FILES ]\nSECOND = value2\n",
+            encoding="utf-8",
+        )
+
+        with caplog.at_level(logging.WARNING, logger="comken.core.config"):
+            config = Config(ini)
+
+        # 片方は生きているので FILES セクションは読める
+        assert hasattr(config, "FILES")
+        # 衝突が起きたことが WARNING で分かる
+        assert any(
+            "FILES" in record.getMessage() and record.levelno == logging.WARNING
+            for record in caplog.records
+        )
+
+
+class TestConfigMethodNameTypo:
+    """`Config(path).require(...)` のような、メソッド名の取り違えを検出して案内する。"""
+
+    def test_lowercase_typo_raises_attribute_error(self, tmp_path):
+        """小文字始まり（=セクション名ではあり得ない名前）は ConfigSectionNotFoundError ではない。
+
+        `Config(path).require(...)` と書くと `require` がセクション名として
+        解釈され「[require] セクションがありません」という的外れなエラーになる。
+        `__getattr__` が何でも拾うための罠。AttributeError にして、
+        「セクションの話ではない」と気付けるようにする。
+        """
+        ini = tmp_path / "config.ini"
+        ini.write_text("[FILES]\nK = v\n", encoding="utf-8")
+        config = Config(ini)
+
+        with pytest.raises(AttributeError) as exc:
+            _ = config.read  # モジュール関数 `read` をインスタンスから呼んだ
+        # セクションの話ではないことを示す（"セクションがありません" ではない）
+        assert "セクション" not in str(exc.value)
+
+    def test_require_typo_message_suggests_module_function(self, tmp_path):
+        """`require` を呼ばれたときは「モジュール関数である」と案内する。
+
+        `from comken import config; config.require(...)` が正解なので、
+        エラーメッセージにモジュール関数であることを書いて誘導する。
+        """
+        ini = tmp_path / "config.ini"
+        ini.write_text("[FILES]\nK = v\n", encoding="utf-8")
+        config = Config(ini)
+
+        with pytest.raises(AttributeError, match="モジュール関数"):
+            _ = config.require
+
+    def test_unknown_lowercase_name_mentions_section_is_uppercase(self, tmp_path):
+        """未知の小文字名には「セクションは大文字」と書いて、方向を教える。"""
+        ini = tmp_path / "config.ini"
+        ini.write_text("[FILES]\nK = v\n", encoding="utf-8")
+        config = Config(ini)
+
+        with pytest.raises(AttributeError, match="大文字"):
+            _ = config.something_custom
+
 
 class TestConfigCreatedFromExample:
     """config.ini が無いときの example からの作成のテスト。"""

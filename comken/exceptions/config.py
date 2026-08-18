@@ -70,12 +70,23 @@ class ConfigSectionNotFoundError(ConfigError):
     発生箇所: Config.__getattr__()
 
     対処:
-        表示されたセクション名を config.ini に追加する
+        メッセージに表示された **「読んだファイル」のパス** が、編集している
+        config.ini と一致するかを確認する（2026-08-18 にプロジェクトの場所を
+        基準にするように変えてから、起動方法によって別の config.ini を読む
+        ことがあるため）。パスが正しければ、表示されたセクション名を
+        config.ini に追加する
     """
 
-    def __init__(self, name: str, existing: list[str]) -> None:
+    def __init__(self, name: str, existing: list[str], path: Path | str | None = None) -> None:
+        # 2026-08-18 に「プロジェクトのフォルダ基準」に変える前は path を出さなくて
+        # よかった。変えた後は「利用者が見ている config.ini」と違う場所を
+        # 読んでいることがある（例: `python src/run.py` で起動すると src/ 配下を
+        # 探しに行く）。だから path を必ず添えて、利用者が diff を取れるようにする。
+        # path は configparser 等の挙動確認用に None を許容するが、内部利用では
+        # 必ず Config が知っている _path を渡す。
+        location = f"\n読んだファイル: {path}" if path is not None else ""
         super().__init__(
-            f"config.ini に [{name}] セクションがありません。\n"
+            f"config.ini に [{name}] セクションがありません。{location}\n"
             f"存在するセクション: {existing}\n"
             "セクション名の綴りと、config.ini に定義されているかを確認してください。"
         )

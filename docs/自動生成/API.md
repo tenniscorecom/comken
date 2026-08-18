@@ -2064,12 +2064,16 @@ config.ini の必要な節がない
 発生箇所: Config.__getattr__()
 
 対処:
-    表示されたセクション名を config.ini に追加する
+    メッセージに表示された **「読んだファイル」のパス** が、編集している
+    config.ini と一致するかを確認する（2026-08-18 にプロジェクトの場所を
+    基準にするように変えてから、起動方法によって別の config.ini を読む
+    ことがあるため）。パスが正しければ、表示されたセクション名を
+    config.ini に追加する
 
 #### `__init__`
 
 ```text
-def __init__(self, name: str, existing: list[str]) -> None:
+def __init__(self, name: str, existing: list[str], path: Path | str | None=None) -> None:
 ```
 
 ### `UnsupportedFileSuffixError`

@@ -51,27 +51,36 @@ def generate_stub(
     if not loaded:
         raise ConfigFileNotFoundError(Path(ini_path).resolve())
 
+    # 実行時の Config と同じセクション名（前後空白落とし済み）で補完スタブを出す。
+    from comken.core.config import _build_section_map
+
+    section_map = _build_section_map(cfg)
+
     if output_path is not None:
         # 出力先を明示した場合は class スタブ（src/config.pyi 形式）を書く
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(_build_stub_content(cfg), encoding="utf-8")
+        output_path.write_text(_build_stub_content(cfg, section_map), encoding="utf-8")
         return output_path
 
     stub_path = _resolve_stub_path(ini_path)
     if stub_path is not None:
         # src/config.py（または config.py）がある → その隣に class スタブ
         stub_path.parent.mkdir(parents=True, exist_ok=True)
-        stub_path.write_text(_build_stub_content(cfg), encoding="utf-8")
+        stub_path.write_text(_build_stub_content(cfg, section_map), encoding="utf-8")
         return stub_path
 
     # src/config.py が無い → typings スタブ一式
     project_dir = Path(ini_path).resolve().parent
-    _write_typings_stubs(project_dir, cfg)
+    _write_typings_stubs(project_dir, cfg, section_map)
     return project_dir / "typings" / "comken" / "core" / "config.pyi"
 
 
-def update_stub(cfg: configparser.ConfigParser, ini_path: str | Path) -> None:
+def update_stub(
+    cfg: configparser.ConfigParser,
+    ini_path: str | Path,
+    section_map: dict[str, str] | None = None,
+) -> None:
     """スタブを自動更新する（Config() から呼ばれる。失敗しても本処理は止めない）。
 
     - src/config.py（または config.py）がある → その隣に config.pyi（class スタブ）。
@@ -79,25 +88,43 @@ def update_stub(cfg: configparser.ConfigParser, ini_path: str | Path) -> None:
     - どちらもない → typings/comken/core/config.pyi（module スタブ）。
       `from comken.core.config import ...` の補完に効く（Pylance の typings 上書き機能を利用）
     - 内容が変わっていなければ書き込まない（無駄なファイル更新をしない）
+
+    section_map に空白を落とした対応表を渡すと、実行時と同じセクション名で
+    補完スタブを出せる。省略時は Config と整合させるため内部で再計算する。
     """
+    if section_map is None:
+        from comken.core.config import _build_section_map
+
+        section_map = _build_section_map(cfg)
     stub_path = _resolve_stub_path(ini_path)
     if stub_path is not None:
-        _write_stub_atomic(stub_path, _build_stub_content(cfg))
+        _write_stub_atomic(stub_path, _build_stub_content(cfg, section_map))
         return
-    _write_typings_stubs(Path(ini_path).resolve().parent, cfg)
+    _write_typings_stubs(Path(ini_path).resolve().parent, cfg, section_map)
 
 
-def _write_typings_stubs(project_dir: Path, cfg: configparser.ConfigParser) -> None:
+def _write_typings_stubs(
+    project_dir: Path,
+    cfg: configparser.ConfigParser,
+    section_map: dict[str, str] | None = None,
+) -> None:
     """`from comken.core.config` 方式向けの補完スタブ一式を書く。
 
     Pylance の typings 上書きを使う。config.pyi だけだと comken の他の公開シンボル
     （実行モード関数等）が解決できなくなるため、__init__.pyi で本物の comken を
     再エクスポートして両立させる。
     """
+    if section_map is None:
+        from comken.core.config import _build_section_map
+
+        section_map = _build_section_map(cfg)
     comken_core_typings = project_dir / "typings" / "comken" / "core"
     comken_typings = project_dir / "typings" / "comken"
-    _write_stub_atomic(comken_core_typings / "config.pyi", _build_module_stub_content(cfg))
-    _write_stub_atomic(comken_typings / "__init__.pyi", _build_package_init_stub(cfg))
+    _write_stub_atomic(
+        comken_core_typings / "config.pyi",
+        _build_module_stub_content(cfg, section_map),
+    )
+    _write_stub_atomic(comken_typings / "__init__.pyi", _build_package_init_stub(cfg, section_map))
 
 
 def _write_stub_atomic(stub_path: Path, content: str) -> None:
@@ -129,22 +156,22 @@ def _stub_type_name(value: bool | int | float | Path | list | str) -> str:
     return type(value).__name__
 
 
-def _build_stub_content(cfg: configparser.ConfigParser) -> str:
+def _build_stub_content(cfg: configparser.ConfigParser, section_map: dict[str, str]) -> str:
     """読み込み済みの ConfigParser からスタブファイルの中身を組み立てる。"""
     section_lines: list[str] = []
     config_attrs: list[str] = []
-    for section in cfg.sections():
+    for stripped_section, original_section in section_map.items():
         # マッピングのキーは列名という動的データなので、属性としてスタブに列挙しない。
-        if _is_mapping_section(section):
+        if _is_mapping_section(stripped_section):
             continue
-        class_name = f"_{section.upper()}"
-        config_attrs.append(f"    {section.upper()}: {class_name}")
+        class_name = f"_{stripped_section.upper()}"
+        config_attrs.append(f"    {stripped_section.upper()}: {class_name}")
         section_lines.append(f"class {class_name}:")
-        options = cfg.options(section)
+        options = cfg.options(original_section)
         if not options:
             section_lines.append("    pass")
         for key in options:
-            value = _parse_value(cfg, section, key)
+            value = _parse_value(cfg, original_section, key)
             section_lines.append(f"    {key.upper()}: {_stub_type_name(value)}")
         section_lines.append("")
 
@@ -160,7 +187,7 @@ def _build_stub_content(cfg: configparser.ConfigParser) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _build_module_stub_content(cfg: configparser.ConfigParser) -> str:
+def _build_module_stub_content(cfg: configparser.ConfigParser, section_map: dict[str, str]) -> str:
     """typings/comken/core/config.pyi 用の module スタブを組み立てる。
 
     `from comken.core.config import ...` の型をプロジェクトの config.ini に
@@ -169,18 +196,18 @@ def _build_module_stub_content(cfg: configparser.ConfigParser) -> str:
     """
     section_lines: list[str] = []
     module_attrs: list[str] = []
-    for section in cfg.sections():
+    for stripped_section, original_section in section_map.items():
         # マッピングは mapping() で辞書として読むため、動的な列名を補完候補にしない。
-        if _is_mapping_section(section):
+        if _is_mapping_section(stripped_section):
             continue
-        class_name = f"_{section.upper()}"
-        module_attrs.append(f"{section.upper()}: {class_name}")
+        class_name = f"_{stripped_section.upper()}"
+        module_attrs.append(f"{stripped_section.upper()}: {class_name}")
         section_lines.append(f"class {class_name}:")
-        options = cfg.options(section)
+        options = cfg.options(original_section)
         if not options:
             section_lines.append("    pass")
         for key in options:
-            value = _parse_value(cfg, section, key)
+            value = _parse_value(cfg, original_section, key)
             section_lines.append(f"    {key.upper()}: {_stub_type_name(value)}")
         section_lines.append("")
 
@@ -198,7 +225,7 @@ def _build_module_stub_content(cfg: configparser.ConfigParser) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _build_package_init_stub(cfg: configparser.ConfigParser) -> str:
+def _build_package_init_stub(cfg: configparser.ConfigParser, section_map: dict[str, str]) -> str:
     """typings/comken/__init__.pyi を組み立てる。
 
     core/config.pyi で comken.core.config を上書きすると、そのままでは comken 直下の
@@ -223,17 +250,17 @@ def _build_package_init_stub(cfg: configparser.ConfigParser) -> str:
         inner = "".join(f"    {name} as {name},\n" for name in names)
         lines.append(f"from {module} import (\n{inner})")
     config_attrs: list[str] = []
-    for section in cfg.sections():
-        if _is_mapping_section(section):
+    for stripped_section, original_section in section_map.items():
+        if _is_mapping_section(stripped_section):
             continue
-        class_name = f"_{section.upper()}"
-        config_attrs.append(f"    {section.upper()}: {class_name}")
+        class_name = f"_{stripped_section.upper()}"
+        config_attrs.append(f"    {stripped_section.upper()}: {class_name}")
         lines.append(f"class {class_name}:")
-        options = cfg.options(section)
+        options = cfg.options(original_section)
         if not options:
             lines.append("    pass")
         for key in options:
-            value = _parse_value(cfg, section, key)
+            value = _parse_value(cfg, original_section, key)
             lines.append(f"    {key.upper()}: {_stub_type_name(value)}")
         lines.append("")
     lines.append("class _ConfigFacade:")
