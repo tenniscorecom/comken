@@ -197,13 +197,14 @@ class Config:
 _singleton: Config | None = None
 
 
-def read(path: str | Path = "config.ini") -> Config:
-    """`from comken import config` が読む config.ini の場所を指定する（省略時は config.ini）。
+def read(path: str | Path | None = None) -> Config:
+    """`from comken import config` が読む config.ini の場所を指定する。
 
-    config.ini がカレントディレクトリ以外にある場合に、config を使う前に呼ぶ:
+    省略するとプロジェクトのフォルダ（main.py の場所）の config.ini を読む。
+    それ以外の場所にある場合に、config を使う前に呼ぶ:
 
         from comken import config
-        config.read(r"C:\\作業\\config.ini")   # 場所を指定（省略すればカレントの config.ini）
+        config.read(r"C:\\作業\\config.ini")   # 省略すればプロジェクトの config.ini
         path = config.FILES.INPUT_FOLDER
 
     Returns:
