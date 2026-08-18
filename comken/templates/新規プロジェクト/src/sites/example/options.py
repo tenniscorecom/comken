@@ -1,21 +1,21 @@
 """
-src/browser_options.py — このプロジェクトのブラウザ設定
+src/sites/example/options.py — このサイト（example）のブラウザ設定
 
 comken の BrowserOptions のデフォルトから、変えたい項目だけ上書きする。
 ブラウザ設定は「環境で変わる非機密の値」ではなく「コードの一部」なので、
-config.ini ではなくこのファイル（src/ 内の Python）で持つ。
+config.ini ではなくこのファイル（sites/<サイト名>/ 内の Python）で持つ。
 
-ブラウザ操作を使わないプロジェクトでは、このファイルは削除してよい。
+**ブラウザ操作を使わないプロジェクトでは、``src/sites/`` フォルダごと削除してよい。**
+（site.py・options.py・pages/ を1つずつ消すより、フォルダ1つを消すほうが確実）
 
-サイトが複数あるときは、サイトごとに SiteBase サブクラスを src/site.py に作って、
-それぞれ OPTIONS をこの BrowserOptions のサブクラスに向ける。
-起動オプション・ダウンロード先・ログイン状態はサイトごとに独立するので、
-片方の設定がもう片方へ影響しない。
+サイトを増やすときは ``src/sites/<サイト名>/`` をもう1つ作って、その中に
+``options.py`` を置く。1サイト＝1フォルダなので、起動オプション・ダウンロード先・
+ログイン状態はサイトごとに独立する（片方の設定がもう片方へ影響しない）。
 
 使い方（呼ぶ側）:
     from comken.toolbox.browser import Browsers
 
-    from src.site import ExampleSite
+    from src.sites.example.site import ExampleSite
 
     with Browsers() as browsers:
         site = browsers.launch(ExampleSite)

@@ -56,13 +56,14 @@ def generated(tmp_path: Path) -> Path:
 
 
 def test_generated_python_files_compile(generated: Path) -> None:
-    """main.py と src/*.py が構文エラーなくコンパイルできること。
+    """main.py と src/**/*.py が構文エラーなくコンパイルできること。
 
     「何を防いでいるか」: テンプレートの書き換え時に構文が壊れていたら、
     プロジェクトを作った瞬間に ImportError や SyntaxError で詰まる。
-    初手で捕まえる。
+    初手で捕まえる。`sites/<サイト名>/pages/` 配下まで再帰的に見るので、
+    フォルダを分けても検査がすり抜けない。
     """
-    py_files = [generated / "main.py", *sorted((generated / "src").glob("*.py"))]
+    py_files = [generated / "main.py", *sorted((generated / "src").rglob("*.py"))]
     assert py_files, "検査対象の .py が見つからない（src/ が空？）"
     for path in py_files:
         try:
@@ -296,6 +297,40 @@ def test_no_relative_imports_in_generated_src(generated: Path) -> None:
             if stripped.startswith("from .") or stripped.startswith("from .."):
                 offenders.append((path, i, line.strip()))
     assert not offenders, f"src/ 内に相対 import: {offenders}"
+
+
+# ── 8.5 雛形が sites/ 完結型で、見本として pages/ を含む ────────────────────────
+
+
+def test_example_site_has_pages_directory_and_imports_it(generated: Path) -> None:
+    """``src/sites/example/site.py`` と ``src/sites/example/pages/login_page.py`` が
+    実在し、``site.py`` が ``pages`` から import していること。
+
+    「何を防いでいるか」: 雛形が ``sites/<サイト名>/`` 完結型であることを利用者に
+    見せるには、見本の ``site.py`` が ``pages`` を import していないと
+    「画面クラスはどう書くの？」が伝わらない。``login_page.py`` が無いと
+    書き写すべき最小形が目の前に残らない（コメントだけだと半年後に消える）。
+    """
+    site_py = generated / "src" / "sites" / "example" / "site.py"
+    login_py = generated / "src" / "sites" / "example" / "pages" / "login_page.py"
+    assert site_py.is_file(), (
+        f"雛形に {site_py.relative_to(generated)} が無い"
+        "（sites/<サイト名>/site.py の形に揃えること）"
+    )
+    assert login_py.is_file(), (
+        f"雛形に {login_py.relative_to(generated)} が無い"
+        "（画面クラスの最小見本を pages/ に置くこと）"
+    )
+
+    site_text = _read(site_py)
+    assert re.search(
+        r"^from\s+\S+\.sites\.example\.pages(\.\S+)?\s+import\s+",
+        site_text,
+        re.MULTILINE,
+    ), (
+        f"{site_py.relative_to(generated)} が src.sites.example.pages から "
+        "import していない（pages/ 配下を見本として使えない状態）"
+    )
 
 
 # ── 9. .vscode/settings.json と 実行.bat・認証情報の登録.bat が同じ comken の場所を指す ─────────
