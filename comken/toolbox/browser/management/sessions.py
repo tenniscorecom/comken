@@ -26,7 +26,7 @@ import threading
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Self
+from typing import TYPE_CHECKING, Self
 
 from selenium import webdriver
 
@@ -34,6 +34,11 @@ from comken.core.clock import now
 from comken.core.timer import measure
 from comken.exceptions import ConcurrentSessionUseError, SessionClosedError, SessionNotStartedError
 from comken.toolbox.browser.download import DownloadDir
+
+if TYPE_CHECKING:
+    # SiteBase はこのモジュールを使う側にいる。実行時に import すると循環するので、
+    # 型注釈のためだけに読み込む
+    from comken.toolbox.browser.site import SiteBase
 from comken.toolbox.browser.locator import Locator
 from comken.toolbox.browser.management.startup import start_driver
 from comken.toolbox.browser.management.tabs import _TabManager
@@ -90,6 +95,10 @@ class BrowserSession:
         self._profile_dir = profile_dir
         self._driver: webdriver.Edge | None = None
         self._is_closed = False
+        # SitePage.BASE_URL が未設定のときの参照先。起動した側（Browsers.launch /
+        # SiteBase.__enter__）があとから結びつける。ここで宣言しておかないと、
+        # 外から代入している箇所が「属性が無い」と警告される
+        self._site: SiteBase | None = None
 
         # 同じセッションを2スレッドから同時に操作していないかを見張る。
         # RLock なので、同じスレッドの中で操作がネストしても止まらない
