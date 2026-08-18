@@ -12,6 +12,8 @@ from selenium import webdriver
 from selenium.webdriver.edge.options import Options
 from selenium.webdriver.edge.service import Service
 
+from typing import Any
+
 from comken.exceptions import DriverStartError
 from comken.toolbox.browser.download import DownloadDir
 from comken.toolbox.browser.driver import update_driver
@@ -24,7 +26,9 @@ START_RETRY_COUNT = 1
 
 def create_service(driver_path: Path, suppress_logs: bool) -> Service:
     """Seleniumの版に合うログ指定でEdgeDriverのServiceを作る。"""
-    kwargs: dict[str, str] = {"executable_path": str(driver_path)}
+    # dict[str, str] にすると、型チェッカーが「**kwargs はどのパラメータにも str を
+    # 渡しうる」と読んで port（int）や env と衝突する。渡すのは下の2つだけ
+    kwargs: dict[str, Any] = {"executable_path": str(driver_path)}
     if suppress_logs:
         # Selenium 4.11で引数名が変わったため、社内に残る旧版にも合わせる。
         parameter_names = inspect.signature(Service).parameters
