@@ -28,13 +28,13 @@ import sys
 from pathlib import Path
 
 from comken.exceptions import ComkenError
+from comken.services.salesforce_downloader._paths import MASTER_PATH
 from comken.services.salesforce_downloader.master import (
     EXAMPLES,
     ReportEntry,
     load_master,
     shared_report_ids,
 )
-from comken.services.salesforce_downloader.service import MASTER_PATH
 
 
 def main(argv: list[str] | None = None) -> int:

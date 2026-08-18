@@ -1,4 +1,4 @@
-"""Salesforce レポートの集約取得を、Salesforce をモックして検証する。
+"""Salesforce レポートの集約取得（取りに行く側）を、Salesforce をモックして検証する。
 
 管理表（Excel）と履歴（CSV）は tmp_path に本物を作り、実際に読み書きさせる。
 Salesforce への通信だけを差し替える。
@@ -12,30 +12,25 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from comken.core.clock import today
 from comken.exceptions import (
     EmptyReportError,
     InvalidReportUrlError,
     MasterDuplicateValueError,
     MasterRowValueError,
     ReportDisabledError,
-    ReportFileMissingError,
     ReportFolderNotFoundError,
     ReportNotRegisteredError,
     ScheduledDownloadFailedError,
-    ScheduledReportNotDownloadedError,
-    ScheduledReportNotRegisteredError,
 )
 from comken.services.salesforce_downloader import (
     ReportEntry,
     download_report,
     download_scheduled,
-    file_path_of,
-    get_scheduled_report,
     history,
     load_master,
     shared_report_ids,
 )
+from comken.services.salesforce_downloader import provider as provider_module
 from comken.services.salesforce_downloader import service as service_module
 from comken.services.salesforce_downloader.cli import main as cli
 from comken.services.salesforce_downloader.master import EXAMPLES
@@ -80,10 +75,12 @@ def make_master_with_allow_empty(path: Path, rows: list[list]) -> Path:
 
 @pytest.fixture
 def paths(tmp_path, monkeypatch):
-    """管理表・履歴・保存先をまとめて用意し、モジュール定数へ注入する。
+    """管理表・履歴・保存先をまとめて用意し、共有定数へ注入する。
 
     テスト関数側に `master_path=` / `history_path=` を渡さなくて済むように、
-    `service_module.MASTER_PATH` / `HISTORY_PATH` を tmp_path 配下の値へ差し替える。
+    `_paths.MASTER_PATH` / `_paths.HISTORY_PATH` を tmp_path 配下の値へ
+    差し替える。`service.py` と `provider.py` は import 時に独自のローカル束縛を
+    作るので、両方の属性も同期する。
     """
     folder = tmp_path / "保存先"
     folder.mkdir()
@@ -96,8 +93,15 @@ def paths(tmp_path, monkeypatch):
         ],
     )
     history_path = tmp_path / "ダウンロード履歴.csv"
+    monkeypatch.setattr("comken.services.salesforce_downloader._paths.MASTER_PATH", master)
+    monkeypatch.setattr("comken.services.salesforce_downloader._paths.HISTORY_PATH", history_path)
+    # `service.MASTER_PATH` は `from ... import MASTER_PATH` で再束縛されているので、
+    # `_paths` の差し替えだけでは反映されない。明示的に同じ値を入れる
     monkeypatch.setattr(service_module, "MASTER_PATH", master)
     monkeypatch.setattr(service_module, "HISTORY_PATH", history_path)
+    # `provider` も `_paths` から import で束縛しているので同期する
+    monkeypatch.setattr(provider_module, "MASTER_PATH", master)
+    monkeypatch.setattr(provider_module, "HISTORY_PATH", history_path)
     return {
         "master_path": master,
         "history_path": history_path,
@@ -201,14 +205,6 @@ class TestDownloadReport:
     def test_csv_reader_path_is_inherited_from_file_base(self, paths):
         reader = CsvReader(paths["history_path"])
         assert reader.path == paths["history_path"]
-
-    def test_file_name_has_key_and_summary_and_date(self, paths):
-        with patch(
-            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
-        ):
-            reader = download_report("1001")
-        stamp = today().strftime("%Y%m%d")
-        assert reader.path.name == f"1001_顧客一覧_{stamp}.csv"
 
     def test_fetches_again_even_if_already_downloaded_today(self, paths):
         """今日すでに取っていても取り直す（明示的な最新取得なので）。"""
@@ -571,51 +567,6 @@ class TestHistory:
         assert row["原因区分"] == "プログラム"
 
 
-class TestGetScheduledReport:
-    """get_scheduled_report() は取りに行かない。"""
-
-    def test_returns_the_file_downloaded_by_the_scheduled_run(self, paths):
-        with patch(
-            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
-        ):
-            download_scheduled("定期実行")
-        reader = get_scheduled_report("1001")
-        assert reader.path.is_file()
-        assert reader.read_rows() == ROWS
-
-    def test_does_not_call_salesforce(self, paths):
-        with patch(
-            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
-        ):
-            download_scheduled("定期実行")
-        site = fake_salesforce()
-        with patch("comken.services.salesforce_downloader.service.site_for", return_value=site):
-            get_scheduled_report("1001")
-        site.assert_not_called()
-
-    def test_on_demand_report_raises(self, paths):
-        """管理表で「個別」のものは、定期取得済みとして受け取れない。"""
-        with pytest.raises(ScheduledReportNotRegisteredError):
-            get_scheduled_report("1002")
-
-    def test_not_downloaded_yet_raises(self, paths):
-        with pytest.raises(ScheduledReportNotDownloadedError):
-            get_scheduled_report("1001")
-
-    def test_missing_file_raises_even_if_history_says_downloaded(self, paths):
-        with patch(
-            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
-        ):
-            download_scheduled("定期実行")
-        file_path_of(load_master(paths["master_path"])["1001"]).unlink()
-        with pytest.raises(ReportFileMissingError):
-            get_scheduled_report("1001")
-
-    def test_unregistered_key_raises(self, paths):
-        with pytest.raises(ReportNotRegisteredError):
-            get_scheduled_report("9999")
-
-
 class TestDownloadScheduled:
     """定期取得は「定期」かつ有効なものだけを対象にする。"""
 
@@ -835,14 +786,22 @@ class TestAllowEmpty:
             [["1001", "顧客一覧", URL_A, "定期", str(folder), "○", "○", ""]],
         )
         history_path = tmp_path / "履歴.csv"
+        monkeypatch.setattr("comken.services.salesforce_downloader._paths.MASTER_PATH", master)
+        monkeypatch.setattr(
+            "comken.services.salesforce_downloader._paths.HISTORY_PATH", history_path
+        )
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
         monkeypatch.setattr(service_module, "HISTORY_PATH", history_path)
+        monkeypatch.setattr(provider_module, "MASTER_PATH", master)
+        monkeypatch.setattr(provider_module, "HISTORY_PATH", history_path)
 
         with patch(
             "comken.services.salesforce_downloader.service.site_for",
             return_value=fake_salesforce([]),
         ):
             download_scheduled()
+
+        from comken.services.salesforce_downloader import get_scheduled_report
 
         reader = get_scheduled_report("1001")
         assert reader.path.is_file()
@@ -951,7 +910,7 @@ class TestTemplate:
         """非エンジニアが1枚で分かるよう、記入方法のシートを付ける。"""
         from openpyxl import load_workbook
 
-        path = ReportEntry.create_template(tmp_path / "管理表.xlsx", EXAMPLES)
+        path = ReportEntry.create_template(tmp_path / "レポート管理表.xlsx", EXAMPLES)
         assert "記入方法" in load_workbook(path).sheetnames
 
 

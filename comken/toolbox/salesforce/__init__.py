@@ -52,13 +52,12 @@ from comken.toolbox.salesforce.client import SalesforceBase
 from comken.toolbox.salesforce.metrics import ApiMetrics, ApiUsage, ComponentStat, RetryReason
 from comken.toolbox.salesforce.oauth_credentials import ClientCredentialsAuth
 from comken.toolbox.salesforce.oauth_refresh import RefreshTokenAuth
-from comken.toolbox.salesforce.report import ReportApi, report_id_from_url
+from comken.toolbox.salesforce.report import ReportApi
 from comken.toolbox.salesforce.rotation import SalesforceCredentialRotator
 
 __all__ = [
     "SalesforceBase",
     "ReportApi",
-    "report_id_from_url",
     "ClientCredentialsAuth",
     "RefreshTokenAuth",
     "ApiMetrics",

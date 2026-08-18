@@ -25,16 +25,44 @@ r"""comken/services/salesforce_downloader/master.py — レポート管理表の
 - 取得・保存・履歴 → service.py / history.py
 """
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from comken.exceptions import InvalidReportUrlError, SalesforceReportIdNotFoundError
 from comken.toolbox.master_table import MasterRow, column
-from comken.toolbox.salesforce import report_id_from_url
 
 # 「実行方式」に書ける値
 SCHEDULED = "定期"
 ON_DEMAND = "個別"
+
+# 同期: `comken.toolbox.salesforce.report.report_id_from_url()` と同じ正規表現。
+# master.py は `requests` に依存しない（BO 環境でも動かせる）ように、
+# `comken.toolbox.salesforce` を経由せず同じ実装をここに置く。
+# 仕様を変えたら **両方を** 直すこと（`docs/運用/これからやること.md` 参照）。
+_REPORT_ID_PATTERN = re.compile(r"\b(00O[A-Za-z0-9]{12}(?:[A-Za-z0-9]{3})?)\b")
+
+
+def report_id_from_url(text: str) -> str:
+    """レポートの URL からレポート ID を取り出す。
+
+    ネットワークは使わず、URL 文字列を正規表現で解析する。
+    `comken.toolbox.salesforce.report.report_id_from_url()` と同等。
+
+    Args:
+        text: レポートの URL、またはレポート ID。前後の空白は無視する。
+
+    Returns:
+        レポート ID（15 桁または 18 桁）。
+
+    Raises:
+        SalesforceReportIdNotFoundError: レポート ID が見つからない場合。
+    """
+    matched = _REPORT_ID_PATTERN.search(text.strip())
+    if matched is None:
+        raise SalesforceReportIdNotFoundError(text)
+    return matched.group(1)
+
 
 # 記入例（雛形に入れる）。2行目は別のレポートにする——同じ URL を並べると、
 # check が「同じレポートを指している」と報告してしまう

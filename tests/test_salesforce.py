@@ -26,8 +26,8 @@ from comken.toolbox.salesforce import (
     ApiMetrics,
     ClientCredentialsAuth,
     SalesforceBase,
-    report_id_from_url,
 )
+from comken.toolbox.salesforce.report import report_id_from_url
 from comken.toolbox.salesforce.sites import SITES, Sandbox, site_for
 
 DOMAIN_URL = "https://example.my.salesforce.com"

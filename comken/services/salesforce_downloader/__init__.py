@@ -6,7 +6,7 @@ r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポー�
 
     from comken.services.salesforce_downloader import download_report, get_scheduled_report
 
-    CUSTOMER_LIST = "1001"        # プロジェクトごとに、意味の分かる名前で定数にする
+    CUSTOMER_LIST = "1001"        # プロジェクトごとに、意味の分かる名前を付ける
     SALES_RESULT = "1003"
 
     rows = download_report(CUSTOMER_LIST).read_rows()                  # 今すぐ取りに行く
@@ -46,22 +46,64 @@ r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポー�
 
 迷ったら入れない。プロジェクト側に書いたものは後から共通へ引き上げられるが、
 ここに入れたものは利用者が付いた後だと外せなくなるため（後から動かせる方向へ倒す）。
+
+---
+
+**`__init__.py` 経由の import で `requests` を読ませない設計。**
+
+`service.py` を import すると `requests` が必要になる。BO 環境のように
+`requests` が入っていないところで `get_scheduled_report` /
+`file_path_of` / `load_master` / `shared_report_ids` / `ReportEntry`
+だけ動かせるよう、`__getattr__` (PEP 562) で遅延 import する。
+
+`download_report` / `download_scheduled` を import したときだけ `service.py`
+が読み込まれ、`requests` がロードされる。
 """
 
-from comken.services.salesforce_downloader.master import ReportEntry, load_master, shared_report_ids
-from comken.services.salesforce_downloader.service import (
-    download_report,
-    download_scheduled,
-    file_path_of,
-    get_scheduled_report,
+from comken.services.salesforce_downloader.master import (
+    ReportEntry,
+    load_master,
+    shared_report_ids,
 )
 
 __all__ = [
     "download_report",
-    "get_scheduled_report",
     "download_scheduled",
+    "get_scheduled_report",
     "file_path_of",
     "load_master",
     "shared_report_ids",
     "ReportEntry",
 ]
+
+# 遅延 import する対象。値はその属性が定義されているサブモジュールの絶対パス。
+# import 時に service.py を読み込むと requests が要るので、必要なときにだけ読む。
+_LAZY_TARGETS: dict[str, str] = {
+    "download_report": "comken.services.salesforce_downloader.service",
+    "download_scheduled": "comken.services.salesforce_downloader.service",
+    "get_scheduled_report": "comken.services.salesforce_downloader.provider",
+    "file_path_of": "comken.services.salesforce_downloader.provider",
+}
+
+
+def __getattr__(name: str) -> object:
+    """`from ... import X` の X を必要になったタイミングでだけ import する。
+
+    Raises:
+        AttributeError: 定義されていない属性を要求したとき。
+    """
+    module_name = _LAZY_TARGETS.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    # 2回目以降は module ロードをスキップして globals() から返す (PEP 562 の慣例)
+    import importlib
+
+    module = importlib.import_module(module_name)
+    value = getattr(module, name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    """`dir(comken.services.salesforce_downloader)` で遅延対象も返す。"""
+    return sorted(set(__all__) | set(_LAZY_TARGETS))

@@ -182,7 +182,7 @@ with Sandbox() as sf:
 未登録の組織や ID を含まない URL は例外になるため、誤った組織へ接続したまま処理を続けない。
 
 ```python
-from comken.toolbox.salesforce import report_id_from_url
+from comken.toolbox.salesforce.report import report_id_from_url
 from comken.toolbox.salesforce.sites import site_for
 
 report_url = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O000000000001/view"

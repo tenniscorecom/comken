@@ -2557,7 +2557,8 @@ class SalesforceReportIdNotFoundError(SalesforceError):
 管理表にはレポートの URL をそのまま貼れるようにしてあるが、
 貼られたものが Salesforce のレポート URL でないと ID を取り出せない。
 
-発生箇所: comken.toolbox.salesforce.report_id_from_url()
+発生箇所: comken.toolbox.salesforce.report_id_from_url() /
+          comken.services.salesforce_downloader.master.report_id_from_url()
 
 対処:
     Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す
@@ -3536,6 +3537,7 @@ Returns:
 
 Raises:
     ReportNotRegisteredError: 管理表に無い管理番号の場合。
+    ReportDisabledError: 管理表で無効になっている場合。
     ScheduledReportNotRegisteredError: 管理表で「個別」になっている場合。
     ScheduledReportNotDownloadedError: 本日の定期取得がまだ済んでいない場合。
     ReportFileMissingError: 履歴では取得済みだが、ファイルが無い場合。
@@ -6494,31 +6496,6 @@ Raises:
     SalesforceReportFormatError: 明細（TABULAR）形式でない場合。
     SalesforceReportExecutionError: Salesforce 側で実行が失敗した場合。
     TimeoutError: 制限時間内に完了しなかった場合。
-
-### `report_id_from_url`
-
-```text
-def report_id_from_url(text: str) -> str:
-```
-
-#### 説明
-
-レポートの URL からレポート ID を取り出す。ID をそのまま渡してもよい。
-
-管理表（レポート一覧の CSV・Excel）には**画面のアドレスをそのまま貼れる**ようにする。
-人が ID の部分だけを抜き出す工程を挟むと、そこで写し間違いが起きるため。
-
-    https://example.my.salesforce.com/lightning/r/Report/00O5g00000ABCDEfgh/view
-    → 00O5g00000ABCDEfgh
-
-Args:
-    text: レポートの URL、またはレポート ID。前後の空白は無視する。
-
-Returns:
-    レポート ID（15 桁または 18 桁）。
-
-Raises:
-    SalesforceReportIdNotFoundError: レポート ID が見つからない場合。
 
 ### `ClientCredentialsAuth`
 

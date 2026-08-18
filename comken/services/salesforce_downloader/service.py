@@ -29,8 +29,7 @@ r"""comken/services/salesforce_downloader/service.py — 取得の本体。
 
 このファイルが持つもの:
 - 1件を取得して保存し履歴に残す流れ
-- 保存先パスの決め方
-- 管理表・履歴の置き場所（`MASTER_PATH`・`HISTORY_PATH`）
+- Salesforce への問い合わせ
 
 ここに書かないもの:
 - 「このプロジェクトのときは」という分岐 → 利用プロジェクト
@@ -38,49 +37,31 @@ r"""comken/services/salesforce_downloader/service.py — 取得の本体。
 - 管理表にどんな列があるか → master.py
 - 履歴にどんな列があるか → history.py
 - Salesforce の認証・API の叩き方 → comken/toolbox/salesforce/
+- 取得済みファイルの取り出し（`get_scheduled_report` / `file_path_of`）→ provider.py
+- 管理表・履歴の置き場所（`MASTER_PATH` / `HISTORY_PATH`）→ _paths.py
+- 管理表から1行を引く `_find()` → provider.py（`requests` を経由しない側に置く）
 """
 
 import logging
 import time
 from pathlib import Path
 
-from comken.core.files import DateNameBuilder, atomic_write
+from comken.core.files import atomic_write
 from comken.exceptions import (
     ComkenError,
     EmptyReportError,
-    ReportDisabledError,
-    ReportFileMissingError,
     ReportFolderNotFoundError,
-    ReportNotRegisteredError,
     ScheduledDownloadFailedError,
-    ScheduledReportNotDownloadedError,
-    ScheduledReportNotRegisteredError,
 )
 from comken.services.salesforce_downloader import history
+from comken.services.salesforce_downloader._paths import HISTORY_PATH, MASTER_PATH
 from comken.services.salesforce_downloader.history import HistoryRow
 from comken.services.salesforce_downloader.master import ReportEntry, load_master, shared_report_ids
+from comken.services.salesforce_downloader.provider import _find, file_path_of
 from comken.toolbox.csv import CsvReader, CsvWriter
 from comken.toolbox.salesforce.sites import site_for
 
 logger = logging.getLogger(__name__)
-
-# ── 配置するときに実際の場所へ書き換える（公開リポジトリなので仮名にしてある）──
-# レポート管理表（Excel）。非エンジニアが編集する。雛形は次のコマンドで作れる:
-#     python -m comken report init レポート管理表.xlsx
-# **config ファイルへは外出ししない。** 利用側がパスを渡せるようにすると、
-# プロジェクト側に定数を持たせて管理表と食い違う事故が起きる（場所を変えるなら
-# ここ1か所を変える）。設定ファイルに集約する案は試して戻した
-# （仕様書 8章「配置時に書き換える3ファイル」）。
-MASTER_PATH = Path(r"\\server\share\tools\salesforce\レポート管理表.xlsx")
-
-# ダウンロード履歴（CSV）。プログラムが追記する（人は編集しない）
-HISTORY_PATH = Path(r"\\server\share\tools\salesforce\ダウンロード履歴.csv")
-
-SUFFIX = ".csv"
-# ファイル名に使えない文字。概要をファイル名に混ぜるので、ここで落とす
-_FORBIDDEN_IN_NAME = '\\/:*?"<>|'
-# 概要が長いとパスが伸びすぎるので、ファイル名に使うのはこの長さまで
-_SUMMARY_LIMIT = 30
 
 # 履歴の「原因区分」列に出す5値。運用する人が履歴からすぐ「誰が動くか」を判断できるように、
 # 抽象クラス名ではなく誰が直すかで分ける（設計判断は docs/開発/仕様書.md 4.28 参照）
@@ -111,37 +92,6 @@ def download_report(report_key: str, project: str = "") -> CsvReader:
     """
     entry = _find(report_key, MASTER_PATH)
     path = _download(entry, project, history.TRIGGER_ON_DEMAND, HISTORY_PATH)
-    return CsvReader(path)
-
-
-def get_scheduled_report(report_key: str, project: str = "") -> CsvReader:
-    """定期取得しておいたファイルを `CsvReader` で返す。**取りに行かない。**
-
-    Args:
-        report_key: 管理表の管理番号（例: "1001"）。
-        project: 呼び出し元の名前（履歴には残さないが、例外の調査に使えるよう受け取る）。
-
-    Returns:
-        定期取得で保存されたファイルを読み取る `CsvReader`。ファイルパスは `.path` で取れる。
-
-    Raises:
-        ReportNotRegisteredError: 管理表に無い管理番号の場合。
-        ScheduledReportNotRegisteredError: 管理表で「個別」になっている場合。
-        ScheduledReportNotDownloadedError: 本日の定期取得がまだ済んでいない場合。
-        ReportFileMissingError: 履歴では取得済みだが、ファイルが無い場合。
-    """
-    entry = _find(report_key, MASTER_PATH)
-    if not entry.is_scheduled:
-        raise ScheduledReportNotRegisteredError(
-            entry.key, entry.summary, entry.schedule, MASTER_PATH
-        )
-    if not history.downloaded_today(HISTORY_PATH, entry.key):
-        raise ScheduledReportNotDownloadedError(entry.key, entry.summary, HISTORY_PATH)
-
-    path = file_path_of(entry)
-    if not path.is_file():
-        raise ReportFileMissingError(entry.key, path)
-    logger.info("定期取得済みのファイルを使います: %s", path)
     return CsvReader(path)
 
 
@@ -186,28 +136,6 @@ def download_scheduled(project: str = "定期実行") -> list[Path]:
         # 続けたぶん、最後に必ず知らせる（終了コードで落ちたことが分かるように）
         raise ScheduledDownloadFailedError(failed, HISTORY_PATH)
     return saved
-
-
-def file_path_of(entry: ReportEntry) -> Path:
-    """そのレポートを保存するパス。
-
-    ファイル名は「管理番号_概要_日付」。**管理番号を先頭に置く**のは、概要や
-    参照先の Salesforce レポートが変わっても、番号は変わらないため。概要を入れるのは、
-    保存先を人が直接見たときに何のファイルか分かるようにするため。
-    """
-    name = f"{entry.key}_{_safe_summary(entry.summary)}"
-    return entry.folder / DateNameBuilder(name, SUFFIX).suffix()
-
-
-def _find(report_key: str, master_path: Path) -> ReportEntry:
-    """管理表から1行を引く。無効なものはここで止める。"""
-    entries = load_master(master_path)
-    entry = entries.get(report_key)
-    if entry is None:
-        raise ReportNotRegisteredError(report_key, sorted(entries), master_path)
-    if not entry.enabled:
-        raise ReportDisabledError(entry.key, entry.summary, master_path)
-    return entry
 
 
 class _Attempt:
@@ -359,12 +287,6 @@ def _warn_shared_reports(entries: dict[str, ReportEntry]) -> None:
             "、".join(str(key) for key in keys),
             report_id,
         )
-
-
-def _safe_summary(summary: str) -> str:
-    """概要をファイル名に使える形にする。"""
-    cleaned = "".join(char for char in summary if char not in _FORBIDDEN_IN_NAME).strip()
-    return cleaned[:_SUMMARY_LIMIT] or "レポート"
 
 
 def _failure_row(exc: BaseException, seconds: float) -> HistoryRow:
