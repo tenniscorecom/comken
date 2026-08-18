@@ -8,7 +8,7 @@
 - **雛形を直接** — 生成前から間違っているもの（コピー手作業の案内や
   セクション名のズレ、相対 import）を捕まえる
 - **tmp_path に create() した結果** — 生成後の姿で見えるズレ
-  （`（プロジェクト名）` の置換漏れ、`COMKEN_ROOT` の片方置換漏れ）を捕まえる
+  （`（プロジェクト名）` の置換漏れ、`PYTHON_LIBRARY` の片方置換漏れ）を捕まえる
 
 「雛形のファイルを直接読むだけでは、置換後の姿を見逃す」ため、create() の
 出力に対する検証も必ず行う。
@@ -40,7 +40,7 @@ def _read(path: Path, encoding: str = "utf-8") -> str:
 def _generated(tmp_path: Path, project_name: str = "売上集計") -> Path:
     """テンプレートを tmp_path に展開する（create() の呼び出し）。
 
-    comken_root には **comken パッケージの親**（＝ PYTHONPATH へ入れる場所）を渡す。
+    python_library には **comken パッケージの親**（＝ PYTHONPATH へ入れる場所）を渡す。
     create() の既定値と同じで、生成物の注入ロジックを本番と同じ経路で動かす。
     """
     return new_project_mod.create(project_name, tmp_path, _ROOT)
@@ -301,7 +301,7 @@ def test_no_relative_imports_in_generated_src(generated: Path) -> None:
 # ── 9. .vscode/settings.json と 実行.bat が同じ comken の場所を指す ───────────
 
 
-def test_vscode_settings_and_bat_point_to_same_comken_root(generated: Path) -> None:
+def test_vscode_settings_and_bat_point_to_same_python_library(generated: Path) -> None:
     """`.vscode/settings.json` と `実行.bat` が同じ comken の場所を指すこと。
 
     「何を防いでいるか」: 片方だけ古い場所を指していると「実行は通るのに補完だけ
@@ -316,8 +316,8 @@ def test_vscode_settings_and_bat_point_to_same_comken_root(generated: Path) -> N
     assert sm, "settings.json に python.analysis.extraPaths が見つからない"
     settings_path = sm.group(1).replace("/", "\\")
 
-    bm = re.search(r'set\s+"COMKEN_ROOT=([^"]+)"', bat_text)
-    assert bm, "実行.bat に COMKEN_ROOT の設定が見つからない"
+    bm = re.search(r'set\s+"PYTHON_LIBRARY=([^"]+)"', bat_text)
+    assert bm, "実行.bat に PYTHON_LIBRARY の設定が見つからない"
     bat_path = bm.group(1)
 
     assert settings_path == bat_path, (
@@ -326,24 +326,24 @@ def test_vscode_settings_and_bat_point_to_same_comken_root(generated: Path) -> N
     )
 
 
-def test_comken_root_is_importable(generated: Path) -> None:
-    """`COMKEN_ROOT` が **import comken できる場所**（パッケージの親）を指すこと。
+def test_python_library_is_importable(generated: Path) -> None:
+    """`PYTHON_LIBRARY` が **import comken できる場所**（パッケージの親）を指すこと。
 
     「何を防いでいるか」: 2026-08-18 に、パッケージ自身
     （`...\\original_libs\\comken`）を指していた。PYTHONPATH へ入れても
-    `import comken` は通らず、生成した bat は `%COMKEN_ROOT%\\comken\\__init__.py`
+    `import comken` は通らず、生成した bat は `%PYTHON_LIBRARY%\\comken\\__init__.py`
     の実在を確かめるので **必ず「comken が見つかりません」で止まる**状態だった。
 
     上の「両者が一致するか」だけでは、**両方が同じ誤った値**のとき通ってしまう。
     パスの中身まで見る必要がある。
     """
     bat_text = _read(generated / "実行.bat", encoding="cp932")
-    bm = re.search(r'set\s+"COMKEN_ROOT=([^"]+)"', bat_text)
-    assert bm, "実行.bat に COMKEN_ROOT の設定が見つからない"
+    bm = re.search(r'set\s+"PYTHON_LIBRARY=([^"]+)"', bat_text)
+    assert bm, "実行.bat に PYTHON_LIBRARY の設定が見つからない"
 
     marker = Path(bm.group(1)) / "comken" / "__init__.py"
     assert marker.is_file(), (
-        f"COMKEN_ROOT が import できない場所を指している: {bm.group(1)}\n"
+        f"PYTHON_LIBRARY が import できない場所を指している: {bm.group(1)}\n"
         f"（{marker} が無い。comken パッケージ自身ではなく、その親を指すこと）"
     )
 

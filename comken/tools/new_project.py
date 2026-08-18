@@ -5,7 +5,7 @@
 
 **このファイルはパッケージに同梱されている（配布される）。** ``comken init``
 （``comken/__main__.py`` から）はここを呼ぶ。リポジトリ直下の ``tools/`` に
-入っている開発用スクリプト（``export_for_chat.py`` / ``set_comken_root.py``）
+入っている開発用スクリプト（``export_for_chat.py`` / ``set_python_library.py``）
 とは役割が違うので、混同しないこと。
 
 使い方:
@@ -24,7 +24,7 @@ TEMPLATE_DIR = ROOT / "templates" / "新規プロジェクト"
 
 # PYTHONPATH へ入れる場所は **comken パッケージそのものではなく、その親**。
 # import comken できるのは親を通したときで、パッケージ自身を通しても読めない。
-# 生成する bat も %COMKEN_ROOT%\comken\__init__.py の実在を確かめる（＝親を期待する）
+# 生成する bat も %PYTHON_LIBRARY%\comken\__init__.py の実在を確かめる（＝親を期待する）
 IMPORT_ROOT = ROOT.parent
 
 # コピーしないもの（開発ツールが作るキャッシュと、実行時の生成物）
@@ -50,10 +50,10 @@ NAMED_FILES = ("main.py", "docs/仕様書.md", "docs/使い方.md")
 
 # ひな形に書いてある comken の場所。実際の場所に置き換える。
 # comken パッケージの**親**（PYTHONPATH へ入れる場所）を指す
-PLACEHOLDER_COMKEN_ROOT = r"\\server\share\tools"
+PLACEHOLDER_PYTHON_LIBRARY = r"\\server\share\tools"
 
 # comken の場所を書いてあるファイル。bat は \ 区切り、settings.json は JSON なので / 区切り。
-COMKEN_ROOT_FILES = (
+PYTHON_LIBRARY_FILES = (
     "実行.bat",
     "認証情報の登録.bat",
     ".vscode/settings.json",
@@ -76,16 +76,16 @@ def _fill_project_name(target: Path, project_name: str) -> None:
             path.write_text(text.replace(PLACEHOLDER_NAME, project_name), encoding="utf-8")
 
 
-def _fill_comken_root(target: Path, comken_root: Path) -> None:
+def _fill_python_library(target: Path, python_library: Path) -> None:
     """ひな形に書いてある comken の場所を、実際の場所に置き換える。
 
     実行.bat（実行時の PYTHONPATH）と .vscode/settings.json（VS Code の補完・定義ジャンプ）で
     同じ場所が要る。手で両方を直す形にすると片方を忘れ、動くのに補完だけ効かない状態になる。
     忘れようがないよう、ここでまとめて入れる。
     """
-    slash_placeholder = PLACEHOLDER_COMKEN_ROOT.replace("\\", "/")
-    slash_root = str(comken_root).replace("\\", "/")
-    for name in COMKEN_ROOT_FILES:
+    slash_placeholder = PLACEHOLDER_PYTHON_LIBRARY.replace("\\", "/")
+    slash_root = str(python_library).replace("\\", "/")
+    for name in PYTHON_LIBRARY_FILES:
         path = target / name
         if not path.is_file():
             continue
@@ -93,7 +93,7 @@ def _fill_comken_root(target: Path, comken_root: Path) -> None:
         text = path.read_text(encoding=encoding)
         # JSON は \ が特殊文字なので / 区切りで書いてある。先に / 版を replace する
         text = text.replace(slash_placeholder, slash_root)
-        text = text.replace(PLACEHOLDER_COMKEN_ROOT, str(comken_root))
+        text = text.replace(PLACEHOLDER_PYTHON_LIBRARY, str(python_library))
         path.write_text(text, encoding=encoding)
 
 
@@ -107,7 +107,7 @@ def _strip_template_notes(readme: Path, project_name: str) -> None:
     readme.write_text(head.replace(PLACEHOLDER_NAME, project_name), encoding="utf-8")
 
 
-def create(project_name: str, into: Path, comken_root: Path = IMPORT_ROOT) -> Path:
+def create(project_name: str, into: Path, python_library: Path = IMPORT_ROOT) -> Path:
     """ひな形をコピーして、新しいプロジェクトのフォルダを作る。"""
     if not TEMPLATE_DIR.is_dir():
         raise FileNotFoundError(f"ひな形が見つかりません: {TEMPLATE_DIR}")
@@ -123,7 +123,7 @@ def create(project_name: str, into: Path, comken_root: Path = IMPORT_ROOT) -> Pa
     shutil.copytree(TEMPLATE_DIR, target, ignore=IGNORED)
     _strip_template_notes(target / "README.md", project_name)
     _fill_project_name(target, project_name)
-    _fill_comken_root(target, comken_root)
+    _fill_python_library(target, python_library)
 
     # NOTE: config.ini はここでは作らない。初回実行時に comken が
     #       config.ini.example から作って確認を促す（作り忘れの受け皿はそちらに一本化）。
@@ -145,7 +145,7 @@ def main() -> None:
         help="作成先のフォルダ（省略すると今いるフォルダ）",
     )
     parser.add_argument(
-        "--comken-root",
+        "--python-library",
         type=Path,
         default=IMPORT_ROOT,
         help="PYTHONPATH へ入れる場所（comken パッケージの親）",
@@ -155,14 +155,14 @@ def main() -> None:
     # 非エンジニアがダブルクリックで使うため、想定内の失敗は traceback を見せない。
     # OSError で受けるのは、使えない文字（: * ?）をフォルダ名に入れた場合も拾うため。
     try:
-        target = create(args.project_name, args.into, args.comken_root)
+        target = create(args.project_name, args.into, args.python_library)
     except OSError as e:
         print(f"[!] {e}")
         print(r'[!] フォルダ名に使えない文字（\ / : * ? " < > |）が無いか確認してください。')
         raise SystemExit(1) from None
 
     print(f"作成しました: {target}")
-    print(f"comken の場所: {args.comken_root}")
+    print(f"comken の場所: {args.python_library}")
     print("  （実行.bat と .vscode/settings.json に入れました。違う場合は両方を直してください）")
     print("")
     print("次にやること:")

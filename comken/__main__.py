@@ -60,7 +60,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="作成先のフォルダ（省略すると今いるフォルダ）",
     )
     init.add_argument(
-        "--comken-root",
+        "--python-library",
         type=Path,
         default=None,
         help=(
@@ -154,9 +154,9 @@ def _run_init(args: argparse.Namespace, _remaining: list[str]) -> int:
         name = name.strip()
 
     # PYTHONPATH へ入れるのは comken パッケージの親（__main__.py は comken/ の中にある）
-    comken_root = args.comken_root or Path(__file__).resolve().parent.parent
+    python_library = args.python_library or Path(__file__).resolve().parent.parent
     try:
-        target = create_project(name, args.into, comken_root)
+        target = create_project(name, args.into, python_library)
     except OSError as e:
         print(f"[!] {e}", file=sys.stderr)
         print(
@@ -166,7 +166,7 @@ def _run_init(args: argparse.Namespace, _remaining: list[str]) -> int:
         return 1
 
     print(f"作成しました: {target}")
-    print(f"comken の場所: {comken_root}")
+    print(f"comken の場所: {python_library}")
     print("  （実行.bat と .vscode/settings.json に入れました。違う場合は両方を直してください）")
     print()
     print("次にやること:")

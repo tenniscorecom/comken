@@ -20,7 +20,7 @@ comken（社内共通ライブラリ）を使った業務自動化ツールで�
 
 1. `実行.bat` を1度動かす。`config.ini.example` から `config.ini` が作られるので、値を書き換える
 
-comken の場所（`COMKEN_ROOT`）は作成時に入っているので、通常は触らなくてよい。
+comken の場所（`PYTHON_LIBRARY`）は作成時に入っているので、通常は触らなくてよい。
 comken を別の場所へ移したときだけ、`実行.bat` と `.vscode/settings.json` の**両方**を直す
 （前者は実行用、後者は VS Code の補完・定義ジャンプ用。片方だけ直すと、動くのに補完が効かなくなる）。
 

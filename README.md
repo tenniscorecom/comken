@@ -164,11 +164,11 @@ Python から直接呼ばれるもので、ダブルクリックする入口で�
 実行するのに、そこから探すのは筋が通らない。代わりに、**bat を配る前に先頭へ場所を書く**:
 
 ```bat
-set "COMKEN_ROOT_FIXED=\\server\share\tools\comken"
+set "PYTHON_LIBRARY_FIXED=\\server\share\tools\comken"
 ```
 
 これで、この bat 1枚を各 PC へ配って「実行してください」と言うだけで済む
-（各プロジェクトの `実行.bat` が先頭に `COMKEN_ROOT` を書くのと同じ考え方）。
+（各プロジェクトの `実行.bat` が先頭に `PYTHON_LIBRARY` を書くのと同じ考え方）。
 リポジトリ直下に置いて実行するなら、**空のままでよい**。
 
 `setup_comken.bat` が登録するのは **`PYTHONPATH` だけ**（`comken.bat` が無くなったので
@@ -180,7 +180,7 @@ set "COMKEN_ROOT_FIXED=\\server\share\tools\comken"
    → このフォルダが現在の Windows ユーザーの `PYTHONPATH` に追加される。
    既に同じパスが登録済みなら重複追加しない。bat 自身の場所から comken を見つけるので、
    **リポジトリ直下で実行するなら編集は不要**（別の場所から配って実行させるときだけ、
-   bat の先頭の `COMKEN_ROOT_FIXED` に場所を書く）
+   bat の先頭の `PYTHON_LIBRARY_FIXED` に場所を書く）
 2. **新しくターミナル（コマンドプロンプト／PowerShell／VS Code のターミナル）を開く**
    → 環境変数の変更は、そのターミナルを起動した瞬間から取り込まれる。
    セットアップ後に開いているターミナルでは PYTHONPATH が古いままなので、`python -m comken` が
@@ -235,15 +235,15 @@ set "COMKEN_ROOT_FIXED=\\server\share\tools\comken"
 
 **comken の場所を後から変えたくなったら**、`実行.bat` と `.vscode/settings.json` の
 両方を直す（片方だけ直すと「動くのに補完が効かない」状態になって原因が分かりにくい）。
-プロジェクトが増えてから変えるなら `tools/set_comken_root.py` でまとめて書き換えられる。
+プロジェクトが増えてから変えるなら `tools/set_python_library.py` でまとめて書き換えられる。
 
-**恒久登録しておくと、各プロジェクトの`実行.bat`は`COMKEN_ROOT`を見に行かない。**
+**恒久登録しておくと、各プロジェクトの`実行.bat`は`PYTHON_LIBRARY`を見に行かない。**
 共有サーバーの場所が変わっても、プロジェクト側の bat を1つも直さずに済む。
 
 ### プロジェクトごとに設定する
 
 PCの環境変数を変更したくない場合は、各プロジェクトのルートに
-`comken/templates/新規プロジェクト/実行.bat`をコピーし、先頭の`COMKEN_ROOT`を共有サーバー上の
+`comken/templates/新規プロジェクト/実行.bat`をコピーし、先頭の`PYTHON_LIBRARY`を共有サーバー上の
 リポジトリルートに合わせる。この方法ではバッチの実行中だけ`PYTHONPATH`を設定する。
 （`python -m comken init` で作ったプロジェクトには、この`実行.bat` が場所入りで最初から入る）
 
@@ -252,7 +252,7 @@ PCの環境変数を変更したくない場合は、各プロジェクトのル
 `実行.bat`（`認証情報の登録.bat`も同じ）は、この順で動く。
 
 1. **すでに`PYTHONPATH`が通っていれば、そのまま`main.py`を動かす**（上の恒久登録をした場合）
-2. 通っていなければ、bat に書いてある`COMKEN_ROOT`を使う
+2. 通っていなければ、bat に書いてある`PYTHON_LIBRARY`を使う
 3. そこにも comken が無ければ、**さがした場所を表示して止まる**
    （`setup_comken.bat`を使う案内も出す）
 4. 処理の終了コードを**そのまま返す**。スケジューラや RPA 基盤が成否を判断できる
@@ -300,8 +300,8 @@ comken を別の共有フォルダへ移すと、各プロジェクトの**3か�
 まとめて書き換える。
 
 ```bat
-python tools\set_comken_root.py \\新サーバー\share\tools\comken F:\案件           :: 確認だけ
-python tools\set_comken_root.py \\新サーバー\share\tools\comken F:\案件 --apply   :: 書き換える
+python tools\set_python_library.py \\新サーバー\share\tools\comken F:\案件           :: 確認だけ
+python tools\set_python_library.py \\新サーバー\share\tools\comken F:\案件 --apply   :: 書き換える
 ```
 
 **--apply を付けるまで何も書き換えない。** 先に「どのファイルが、どこから、どこへ」

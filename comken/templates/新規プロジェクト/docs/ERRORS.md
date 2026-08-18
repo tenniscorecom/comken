@@ -15,7 +15,7 @@
 
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
-| `ModuleNotFoundError: No module named 'comken'` | 共有サーバーの comken を読み込めない | 共有サーバーに繋がっているか確認する。繋がっているなら `実行.bat` の `COMKEN_ROOT` の場所が正しいかを管理者に確認する |
+| `ModuleNotFoundError: No module named 'comken'` | 共有サーバーの comken を読み込めない | 共有サーバーに繋がっているか確認する。繋がっているなら `実行.bat` の `PYTHON_LIBRARY` の場所が正しいかを管理者に確認する |
 
 ---
 

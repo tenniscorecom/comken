@@ -10,9 +10,9 @@ rem  ★ 配る前に、ここへ comken の場所を書いてください
 rem     （空のままなら、この bat 自身のフォルダを使います。
 rem       comken のリポジトリ直下に置いて実行するならそのままでよい）
 rem
-rem     例: set "COMKEN_ROOT_FIXED=\\server\share\tools\comken"
+rem     例: set "PYTHON_LIBRARY_FIXED=\\server\share\tools\comken"
 rem ============================================================
-set "COMKEN_ROOT_FIXED="
+set "PYTHON_LIBRARY_FIXED="
 
 rem comken の場所を次の順で探す（見つかった時点で確定、後ろは見ない）:
 rem   1. 上に書いた固定値 ―― 各PCへ配るときはここに書いておく
@@ -24,8 +24,8 @@ rem ものなので、通っていない前提で動かなければならない。通っていないから実行する
 rem そこから探すのは筋が通らない。
 
 rem --- 段階 1: 上に書いた固定値 ---
-if defined COMKEN_ROOT_FIXED (
-  call :_test_comken "%COMKEN_ROOT_FIXED%"
+if defined PYTHON_LIBRARY_FIXED (
+  call :_test_comken "%PYTHON_LIBRARY_FIXED%"
   if not errorlevel 1 goto :_comken_found
 )
 
@@ -36,14 +36,14 @@ if not errorlevel 1 goto :_comken_found
 rem どちらにも無かった
 echo [エラー] comken が見つかりません。
 echo   次の2か所を順に探しました:
-echo     1. この bat に書いてある固定値: %COMKEN_ROOT_FIXED%
+echo     1. この bat に書いてある固定値: %PYTHON_LIBRARY_FIXED%
 echo     2. この bat 自身のフォルダ
 echo.
 echo   対処は次のどちらかです:
 echo     - この bat を comken のリポジトリ直下（comken フォルダと同じ場所）へ置いて実行する
 echo     - この bat をテキストエディタで開き、上のほうにある
-echo       set "COMKEN_ROOT_FIXED=" の = の後ろへ comken の場所を書いてから実行する
-echo         例: set "COMKEN_ROOT_FIXED=\\server\share\tools\comken"
+echo       set "PYTHON_LIBRARY_FIXED=" の = の後ろへ comken の場所を書いてから実行する
+echo         例: set "PYTHON_LIBRARY_FIXED=\\server\share\tools\comken"
 pause
 exit /b 1
 rem --- 見つかったルートを確定 ---
@@ -51,7 +51,7 @@ rem --- 見つかったルートを確定 ---
 rem 何を登録するかを先に見せる。UNC パス（\\サーバー名\...）でも登録はできるが、
 rem 意図しない場所を登録すると、そのPCが以後ずっとそこを見に行くことになる
 echo 次の場所を PYTHONPATH に追加します:
-echo     %COMKEN_ROOT%
+echo     %PYTHON_LIBRARY%
 echo.
 
 rem PYTHONPATH に「無ければ追加」。登録結果は1行で伝える。
@@ -61,7 +61,7 @@ rem   [Environment]::GetEnvironmentVariable('Path','User') は %USERPROFILE% など
 rem   絶対パスへ展開した値を返し、それを書き戻すと型が REG_SZ に変わる。
 rem   元の REG_EXPAND_SZ ではその %変数% が機能しなくなるため、HKCU を直接読み書きする。
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$root = $env:COMKEN_ROOT;" ^
+  "$root = $env:PYTHON_LIBRARY;" ^
   "$key = Get-Item 'HKCU:\Environment';" ^
   "function _Read($name){ $raw = $key.GetValue($name, '', 'DoNotExpandEnvironmentNames'); if ($raw) { $raw -split ';' | Where-Object { $_ } } else { @() } };" ^
   "function _Write($name, $value){" ^
@@ -79,7 +79,7 @@ rem 環境変数の変更を他プロセスへ通知する（Explorer から起動したターミナル等）。
 rem Set-ItemProperty はレジストリを書くだけで WM_SETTINGCHANGE を送らないので、
 rem setx を1つ呼んでブロードキャストを誘発する。**PYTHONPATH を setx で書かないこと**
 rem （1024 文字制限で切り捨てられ PYTHONPATH が壊れる。短い変数を1つ書くためだけに使う）。
-if "%EXIT_CODE%"=="0" setx COMKEN_ROOT_REGISTERED "1" >nul
+if "%EXIT_CODE%"=="0" setx PYTHON_LIBRARY_REGISTERED "1" >nul
 
 if not "%EXIT_CODE%"=="0" (
   echo.
@@ -94,10 +94,10 @@ pause
 
 endlocal & exit /b %EXIT_CODE%
 
-rem --- comken の場所をひとつ試し、見つかれば COMKEN_ROOT に確定する ---
-rem 見つかったら errorlevel 0 / COMKEN_ROOT は確定値。見つからなければ 1 / COMKEN_ROOT は空。
+rem --- comken の場所をひとつ試し、見つかれば PYTHON_LIBRARY に確定する ---
+rem 見つかったら errorlevel 0 / PYTHON_LIBRARY は確定値。見つからなければ 1 / PYTHON_LIBRARY は空。
 :_test_comken
-set "COMKEN_ROOT=%~1"
-if exist "%COMKEN_ROOT%\comken\__init__.py" exit /b 0
-set "COMKEN_ROOT="
+set "PYTHON_LIBRARY=%~1"
+if exist "%PYTHON_LIBRARY%\comken\__init__.py" exit /b 0
+set "PYTHON_LIBRARY="
 exit /b 1

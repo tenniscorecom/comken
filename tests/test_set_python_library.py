@@ -1,10 +1,10 @@
 """comken の場所をまとめて書き換えるツールのテスト。
 
-リポジトリのルートで python -m pytest tests/test_set_comken_root.py -v
+リポジトリのルートで python -m pytest tests/test_set_python_library.py -v
 """
 
 import pytest
-from set_comken_root import main
+from set_python_library import main
 
 OLD_ROOT = r"\\old\share\tools\comken"
 NEW_ROOT = r"\\new\share\tools\comken"
@@ -13,8 +13,8 @@ BAT_TEMPLATE = """@echo off
 setlocal
 rem このツールの起動用。日本語のコメントが化けないことも確かめる。
 
-set "COMKEN_ROOT={root}"
-set "PYTHONPATH=%COMKEN_ROOT%;%PYTHONPATH%"
+set "PYTHON_LIBRARY={root}"
+set "PYTHONPATH=%PYTHON_LIBRARY%;%PYTHONPATH%"
 
 pushd "%~dp0"
 python main.py
@@ -55,7 +55,7 @@ class TestApply:
     def test_bat_points_to_the_new_place(self, tmp_path):
         folder = _project(tmp_path, "案件A")
         assert main([NEW_ROOT, str(folder), "--apply"]) == 0
-        assert f'set "COMKEN_ROOT={NEW_ROOT}"' in _bat_text(folder)
+        assert f'set "PYTHON_LIBRARY={NEW_ROOT}"' in _bat_text(folder)
         assert OLD_ROOT not in _bat_text(folder)
 
     def test_settings_json_uses_forward_slashes(self, tmp_path):

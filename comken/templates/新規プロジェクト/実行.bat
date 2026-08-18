@@ -4,7 +4,7 @@ rem このツールの起動用。ダブルクリックで main.py を実行します。
 rem comken を別の場所へ移したときは、ここと .vscode\settings.json の両方を直してください。
 
 rem comken の場所。PC に恒久登録していない場合だけ、ここが使われる
-set "COMKEN_ROOT=\\server\share\tools"
+set "PYTHON_LIBRARY=\\server\share\tools"
 
 rem 共有フォルダ（\\サーバー名\...）から起動されても動くよう pushd を使う（cd は UNC 不可）
 pushd "%~dp0" || (
@@ -26,16 +26,16 @@ python -c "import comken" >nul 2>&1
 if not errorlevel 1 goto :run
 
 rem 通っていないので、この bat に書いてある場所を使う
-set "PYTHONPATH=%COMKEN_ROOT%;%PYTHONPATH%"
+set "PYTHONPATH=%PYTHON_LIBRARY%;%PYTHONPATH%"
 
 rem 一番多い失敗を先に名指しで出す。ここで止めないと、後から出る Python のエラーが
 rem 「ModuleNotFoundError: comken」だけになり、原因が共有サーバーだと分からない
-if not exist "%COMKEN_ROOT%\comken\__init__.py" (
+if not exist "%PYTHON_LIBRARY%\comken\__init__.py" (
   echo [エラー] 共通ライブラリ comken が見つかりません。
-  echo     さがした場所: %COMKEN_ROOT%
+  echo     さがした場所: %PYTHON_LIBRARY%
   echo.
   echo   - 共有サーバーにつながっているか確認してください
-  echo   - つながっているなら、この bat の COMKEN_ROOT が正しいか確認してください
+  echo   - つながっているなら、この bat の PYTHON_LIBRARY が正しいか確認してください
   echo   - このパソコンで何度も使うなら、comken のフォルダにある
   echo     setup_comken.bat を1回実行しておくと、以後この bat を直さずに済みます
   popd

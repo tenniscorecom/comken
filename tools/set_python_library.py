@@ -1,4 +1,4 @@
-r"""set_comken_root.py — 各プロジェクトが見ている comken の場所をまとめて変える。
+r"""set_python_library.py — 各プロジェクトが見ている comken の場所をまとめて変える。
 
 **このファイルは開発用**（リポジトリ直下の ``tools/`` にあり、配布されない）。
 ``comken/tools/`` に同梱されて ``python -m comken init`` から呼ばれる
@@ -11,9 +11,9 @@ r"""set_comken_root.py — 各プロジェクトが見ている comken の場所
 settings.json を忘れると、動くのに補完だけ効かないという分かりにくい状態になる。
 
 使い方:
-    python tools/set_comken_root.py \\新サーバー\share\tools\comken           確認だけ
-    python tools/set_comken_root.py \\新サーバー\share\tools\comken --apply   実際に書き換える
-    python tools/set_comken_root.py \\新サーバー\share\tools\comken F:\案件 --apply
+    python tools/set_python_library.py \\新サーバー\share\tools\comken           確認だけ
+    python tools/set_python_library.py \\新サーバー\share\tools\comken --apply   実際に書き換える
+    python tools/set_python_library.py \\新サーバー\share\tools\comken F:\案件 --apply
 
 **既定は確認だけで、--apply を付けたときにだけ書き換える。** 打ち間違えたまま
 何十ファイルも書き換えると、元がどこを指していたか分からなくなる。先に一覧を見て、
@@ -30,15 +30,15 @@ from pathlib import Path
 
 # comken の場所を書いてあるファイル。bat は \ 区切り、settings.json は JSON なので / 区切り。
 # 新しく場所を書くファイルを増やしたら、ここにも足す（足し忘れるとそこだけ古いままになる）
-COMKEN_ROOT_FILES = (
+PYTHON_LIBRARY_FILES = (
     "実行.bat",
     "認証情報の登録.bat",
     ".vscode/settings.json",
 )
 
-# bat の `set "COMKEN_ROOT=..."` の値だけを置き換える。キー名で特定するので、
+# bat の `set "PYTHON_LIBRARY=..."` の値だけを置き換える。キー名で特定するので、
 # 今そこに何が書かれていても拾える
-BAT_PATTERN = re.compile(r'(set\s+"COMKEN_ROOT=)([^"]*)(")')
+BAT_PATTERN = re.compile(r'(set\s+"PYTHON_LIBRARY=)([^"]*)(")')
 
 # settings.json の extraPaths のうち、comken を指している要素だけを置き換える。
 # 他のパスを一緒に足している場合に巻き込まないよう、末尾が comken のものに限る
@@ -50,7 +50,7 @@ def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     folders = args.folders or [Path.cwd()]
 
-    changes = _collect_changes(folders, args.comken_root)
+    changes = _collect_changes(folders, args.python_library)
     if not changes:
         print("書き換える対象が見つかりませんでした。")  # noqa: T201
         print(f"探した場所: {'、'.join(str(folder) for folder in folders)}")  # noqa: T201
@@ -67,18 +67,18 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     for path, _, _ in changes:
-        _write(path, args.comken_root)
+        _write(path, args.python_library)
     print(f"\n{len(changes)} ファイルを書き換えました。")  # noqa: T201
     return 0
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="python set_comken_root.py",
+        prog="python set_python_library.py",
         description="各プロジェクトが見ている comken の場所をまとめて変える",
     )
     parser.add_argument(
-        "comken_root", help=r"新しい comken の場所（例: \\server\share\tools\comken）"
+        "python_library", help=r"新しい comken の場所（例: \\server\share\tools\comken）"
     )
     parser.add_argument(
         "folders",
@@ -94,7 +94,7 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _collect_changes(folders: list[Path], comken_root: str) -> list[tuple[Path, str, str]]:
+def _collect_changes(folders: list[Path], python_library: str) -> list[tuple[Path, str, str]]:
     """書き換えが必要なファイルを (パス, 今の値, 新しい値) で集める。
 
     すでに新しい場所を指しているファイルは対象にしない。「何ファイル変わるか」を
@@ -107,7 +107,7 @@ def _collect_changes(folders: list[Path], comken_root: str) -> list[tuple[Path, 
             if path in seen:  # 探すフォルダが入れ子でも二重に数えない
                 continue
             seen.add(path)
-            old_root, new_root = _roots_of(path, comken_root)
+            old_root, new_root = _roots_of(path, python_library)
             if old_root is not None and old_root != new_root:
                 changes.append((path, old_root, new_root))
     return changes
@@ -116,7 +116,7 @@ def _collect_changes(folders: list[Path], comken_root: str) -> list[tuple[Path, 
 def _find_targets(folder: Path) -> list[Path]:
     """フォルダの下から、comken の場所を書いているファイルを探す。"""
     found: list[Path] = []
-    for name in COMKEN_ROOT_FILES:
+    for name in PYTHON_LIBRARY_FILES:
         # 直下と、その下のプロジェクトフォルダの両方を見る（プロジェクトの中で実行しても、
         # プロジェクトを並べた親フォルダで実行しても同じように使える）
         found.extend(sorted(folder.glob(name)))
@@ -124,27 +124,27 @@ def _find_targets(folder: Path) -> list[Path]:
     return found
 
 
-def _roots_of(path: Path, comken_root: str) -> tuple[str | None, str]:
+def _roots_of(path: Path, python_library: str) -> tuple[str | None, str]:
     """そのファイルが今指している場所と、書き込むべき値を返す。"""
-    pattern, new_root = _pattern_and_root(path, comken_root)
+    pattern, new_root = _pattern_and_root(path, python_library)
     matched = pattern.search(path.read_text(encoding=_encoding_of(path)))
     return (matched.group(2) if matched else None), new_root
 
 
-def _write(path: Path, comken_root: str) -> None:
+def _write(path: Path, python_library: str) -> None:
     """そのファイルの comken の場所を書き換える。"""
-    pattern, new_root = _pattern_and_root(path, comken_root)
+    pattern, new_root = _pattern_and_root(path, python_library)
     encoding = _encoding_of(path)
     text = pattern.sub(lambda m: f"{m.group(1)}{new_root}{m.group(3)}", path.read_text(encoding))
     path.write_text(text, encoding=encoding)
 
 
-def _pattern_and_root(path: Path, comken_root: str) -> tuple[re.Pattern[str], str]:
+def _pattern_and_root(path: Path, python_library: str) -> tuple[re.Pattern[str], str]:
     """ファイルの種類ごとの、探す形と書き込む値。"""
     if path.suffix.lower() == ".json":
         # JSON では \ が特殊文字なので区切りは / で書く
-        return JSON_PATTERN, comken_root.replace("\\", "/")
-    return BAT_PATTERN, comken_root
+        return JSON_PATTERN, python_library.replace("\\", "/")
+    return BAT_PATTERN, python_library
 
 
 def _encoding_of(path: Path) -> str:
