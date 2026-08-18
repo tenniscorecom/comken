@@ -237,15 +237,13 @@ kintai.go_login().login(USER, PW)                  # ❌ 裏で使っている�
 src/
   sites/
     kintai/                 ← このフォルダだけ見れば勤怠のことが分かる
-      site.py               ← サイトクラス（NAME・BASE_URL・入口の操作）
-      options.py            ← このサイトの BrowserOptions
+      site.py               ← サイトクラス＋このサイトの BrowserOptions
       pages/
         kintai_page.py      ← このサイトの画面に共通（セレクター・共通処理）
         login_page.py       ← 画面ごと
         home_page.py
     keiri/                  ← 別のサイトはまるごと別フォルダ
       site.py
-      options.py
       pages/
 ```
 
@@ -259,29 +257,28 @@ src/
 **サイトクラスと画面共通クラスは別物。** サイトクラスは「どのサイトか」を表し、
 画面共通クラスは「その画面群に共通の操作」を持つ。
 
-### 2. オプションクラスを足す
+### 2. サイトクラスとオプションクラスを ``site.py`` に書く
 
-```python
-from comken.toolbox.browser import BrowserOptions
+**``〇〇Site`` と ``〇〇SiteOptions`` は必ずセットで、同じ ``site.py`` に置く**
+（フォルダが同じならファイルを分ける理由が無く、``site.py`` を開けば
+NAME / BASE_URL / OPTIONS が全部見える方が分かりやすい）。
 
-
-class KintaiOptions(BrowserOptions):
-    DOWNLOAD_DIR = r"C:\作業\downloads"
-    WAIT_SECONDS = 20
-```
-
-設定できる項目は `print(KintaiOptions())` で一覧できる（既定値との差分に `*` が付く）。
-
-### 3. サイトクラスを作る
+ブラウザ設定は **config.ini ではなくこのファイル（サイト側の Python）** に書く。
+「環境で変わる非機密の値」ではなく「コードの一部」として扱うため。
 
 **ここが利用側の入口になる。** 固有の値と、最初にやる操作をここへ集める。
 
 ```python
-from comken.toolbox.browser import SiteBase
+from comken.toolbox.browser import BrowserOptions, SiteBase
 
-# 同じ sites/kintai/ の中にあるので、隣を指すだけで済む
-from .options import KintaiOptions
 from .pages.login_page import LoginPage
+
+
+class KintaiOptions(BrowserOptions):
+    """このサイトの BrowserOptions。変えたい項目だけ上書きする。"""
+
+    DOWNLOAD_DIR = r"C:\作業\downloads"
+    WAIT_SECONDS = 20
 
 
 class Kintai(SiteBase):
@@ -294,6 +291,8 @@ class Kintai(SiteBase):
 
     # 画面の操作はここに書かない。画面クラスの仕事にする
 ```
+
+設定できる項目は `print(KintaiOptions())` で一覧できる（既定値との差分に `*` が付く）。
 
 **行ける画面は `go_〇〇()` で書く。**
 
@@ -315,7 +314,7 @@ class Kintai(SiteBase):
 飛び方（URL を直接開くか、画面のリンクを押すか）はメソッドの中に隠す。
 呼ぶ側からはどちらも同じに見える。
 
-### 4. 画面に共通のクラスを作る
+### 3. 画面に共通のクラスを作る
 
 ```python
 from comken.toolbox.browser import Locator, SitePage
@@ -333,7 +332,7 @@ class KintaiPage(SitePage):
         return self.read_text(self.ERROR_MESSAGE)
 ```
 
-### 5. 画面ごとのクラスを作る
+### 4. 画面ごとのクラスを作る
 
 セレクターは**クラスの先頭にまとめる**。画面の HTML が変わったとき、直す場所が一箇所に集まる。
 
@@ -779,8 +778,7 @@ class LoginPage(SitePage):
 examples/sample_login/
 ├── sites/
 │   └── sample/            # このフォルダだけ見ればサンプルサイトのことが分かる
-│       ├── site.py        # サイトクラス（NAME・BASE_URL・go_login）
-│       ├── options.py     # このサイトの BrowserOptions
+│       ├── site.py        # サイトクラス＋このサイトの BrowserOptions
 │       └── pages/
 │           ├── app_page.py    # このサイトの画面に共通
 │           ├── login_page.py  # ログイン画面

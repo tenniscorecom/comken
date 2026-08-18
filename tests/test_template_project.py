@@ -304,15 +304,19 @@ def test_no_relative_imports_in_generated_src(generated: Path) -> None:
 
 def test_example_site_has_pages_directory_and_imports_it(generated: Path) -> None:
     """``src/sites/example/site.py`` と ``src/sites/example/pages/login_page.py`` が
-    実在し、``site.py`` が ``pages`` から import していること。
+    実在し、``site.py`` が ``pages`` から import していること、
+    かつ ``site.py`` に BrowserOptions のサブクラスが同居していること。
 
     「何を防いでいるか」: 雛形が ``sites/<サイト名>/`` 完結型であることを利用者に
     見せるには、見本の ``site.py`` が ``pages`` を import していないと
     「画面クラスはどう書くの？」が伝わらない。``login_page.py`` が無いと
     書き写すべき最小形が目の前に残らない（コメントだけだと半年後に消える）。
+    ``site.py`` に BrowserOptions のサブクラスが無いと「設定はどこに書くの？」が
+    伝わらず、``options.py`` を別ファイルに作り直す回帰が起きる。
     """
     site_py = generated / "src" / "sites" / "example" / "site.py"
     login_py = generated / "src" / "sites" / "example" / "pages" / "login_page.py"
+    options_py = generated / "src" / "sites" / "example" / "options.py"
     assert site_py.is_file(), (
         f"雛形に {site_py.relative_to(generated)} が無い"
         "（sites/<サイト名>/site.py の形に揃えること）"
@@ -320,6 +324,10 @@ def test_example_site_has_pages_directory_and_imports_it(generated: Path) -> Non
     assert login_py.is_file(), (
         f"雛形に {login_py.relative_to(generated)} が無い"
         "（画面クラスの最小見本を pages/ に置くこと）"
+    )
+    assert not options_py.is_file(), (
+        f"雛形に {options_py.relative_to(generated)} が残っている"
+        "（BrowserOptions のサブクラスは site.py に同居させ、options.py は作らない）"
     )
 
     site_text = _read(site_py)
@@ -330,6 +338,13 @@ def test_example_site_has_pages_directory_and_imports_it(generated: Path) -> Non
     ), (
         f"{site_py.relative_to(generated)} が src.sites.example.pages から "
         "import していない（pages/ 配下を見本として使えない状態）"
+    )
+    assert re.search(
+        r"class\s+\w+\s*\(\s*BrowserOptions\s*\)\s*:",
+        site_text,
+    ), (
+        f"{site_py.relative_to(generated)} に BrowserOptions のサブクラスが "
+        "定義されていない（site.py に同居させること）"
     )
 
 
