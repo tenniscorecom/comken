@@ -422,6 +422,27 @@ def date_in_name(name: str) -> datetime.date | None:
 1つのファイル名に日付が複数あるときは、先に出てくる方を使う。
 ファイル名の日付とファイル内容の日付を突き合わせる業務で使うため公開している。
 
+### `delete_file`
+
+```text
+@measure
+def delete_file(path: str | Path, missing_ok: bool=False) -> None:
+```
+
+#### 説明
+
+ファイルを削除する。dry-run ではログを出してスキップする。
+
+削除は不可逆なので、削除したファイルのパスを INFO ログに残す。
+dry-run のときもログだけ出して、実際には消さない。
+
+Args:
+    path: 削除するファイルのパス。
+    missing_ok: True なら対象ファイルが存在しなくても例外を送出しない。
+
+Raises:
+    FileNotFoundError: ファイルが存在せず missing_ok が False の場合。
+
 ### `diff_row`
 
 ```text
@@ -960,6 +981,27 @@ Args:
 
 Returns:
     コピー後のファイルパス。
+
+### `delete_file`
+
+```text
+@measure
+def delete_file(path: str | Path, missing_ok: bool=False) -> None:
+```
+
+#### 説明
+
+ファイルを削除する。dry-run ではログを出してスキップする。
+
+削除は不可逆なので、削除したファイルのパスを INFO ログに残す。
+dry-run のときもログだけ出して、実際には消さない。
+
+Args:
+    path: 削除するファイルのパス。
+    missing_ok: True なら対象ファイルが存在しなくても例外を送出しない。
+
+Raises:
+    FileNotFoundError: ファイルが存在せず missing_ok が False の場合。
 
 ### `local_copy`
 

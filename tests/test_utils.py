@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 import pytest
 
+from comken import dry_run
 from comken.constants import SortBy
 from comken.core.clock import now, today
 from comken.core.data import diff_row, diff_rows
@@ -22,6 +23,7 @@ from comken.core.files import (
     FileFinder,
     copy_file,
     date_in_name,
+    delete_file,
     move_file,
 )
 from comken.core.files.ops import copy_to_local_if_large, project_dir
@@ -168,6 +170,45 @@ class TestCopyFile:
 
         assert result == src
         assert src.read_text(encoding="utf-8") == "data"
+
+
+class TestDeleteFile:
+    """delete_file のテスト。"""
+
+    def test_deletes_existing_file(self, tmp_path):
+        """存在するファイルを削除する。"""
+        target = tmp_path / "report.xlsx"
+        target.write_text("data", encoding="utf-8")
+
+        delete_file(target)
+
+        assert not target.exists()
+
+    def test_raises_when_missing_and_missing_ok_is_false(self, tmp_path):
+        """missing_ok=False で対象が無いと FileNotFoundError。"""
+        missing = tmp_path / "ghost.xlsx"
+
+        with pytest.raises(FileNotFoundError):
+            delete_file(missing)
+
+    def test_missing_ok_true_silently_succeeds(self, tmp_path):
+        """missing_ok=True なら対象がなくても例外を出さない。"""
+        missing = tmp_path / "ghost.xlsx"
+
+        delete_file(missing, missing_ok=True)
+
+        assert not missing.exists()
+
+    def test_dry_run_skips_actual_delete(self, tmp_path):
+        """dry-run では実ファイルを消さず、ログを出す。"""
+        target = tmp_path / "report.xlsx"
+        target.write_text("data", encoding="utf-8")
+
+        with dry_run():
+            delete_file(target)
+
+        assert target.exists()  # dry-run では消えない
+        assert target.read_text(encoding="utf-8") == "data"
 
 
 class TestCopyToLocalIfLarge:

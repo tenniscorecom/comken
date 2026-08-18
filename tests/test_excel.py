@@ -1322,6 +1322,27 @@ class TestExcelComHandlerLocalCopy:
         handler._wb.Save.assert_not_called()
         handler._wb.SaveAs.assert_not_called()
 
+    def test_save_as_dry_run_does_not_call_com(self, tmp_path):
+        """save_as も dry-run では SaveAs を呼ばない（save() と同じ扱い）。"""
+        handler = ExcelComHandler.__new__(ExcelComHandler)
+        handler._wb = MagicMock(FileFormat=51)
+        handler._original_path = tmp_path / "data.xlsx"
+
+        with dry_run():
+            handler.save_as(tmp_path / "out.xlsx")
+
+        handler._wb.SaveAs.assert_not_called()
+
+    def test_save_as_dry_run_raises_on_format_mismatch(self, tmp_path):
+        """dry-run でも拡張子と FileFormat の不一致はエラーにする。"""
+        handler = ExcelComHandler.__new__(ExcelComHandler)
+        handler._wb = MagicMock(FileFormat=51)  # xlsx 形式
+
+        with dry_run(), pytest.raises(FileFormatMismatchError, match="xlsm"):
+            handler.save_as(tmp_path / "out.xlsm")
+
+        handler._wb.SaveAs.assert_not_called()
+
     def test_close_removes_local_copy(self, tmp_path):
         """``close()`` は Excel を閉じた後にローカルコピーを削除する。"""
         original = tmp_path / "data.xlsx"

@@ -192,6 +192,29 @@ def copy_file(src: str | Path, dst: str | Path) -> Path:
     return target
 
 
+@measure
+def delete_file(path: str | Path, missing_ok: bool = False) -> None:
+    """ファイルを削除する。dry-run ではログを出してスキップする。
+
+    削除は不可逆なので、削除したファイルのパスを INFO ログに残す。
+    dry-run のときもログだけ出して、実際には消さない。
+
+    Args:
+        path: 削除するファイルのパス。
+        missing_ok: True なら対象ファイルが存在しなくても例外を送出しない。
+
+    Raises:
+        FileNotFoundError: ファイルが存在せず missing_ok が False の場合。
+    """
+    path = Path(path)
+    if is_dry_run():
+        dry_run_log("ファイルを削除: %s", path)
+        return
+    # NOTE: ファイル削除は不可逆なので、何を消したかは INFO で残す
+    path.unlink(missing_ok=missing_ok)
+    logger.info("ファイルを削除しました: %s", path)
+
+
 def cleanup_stale_tmp(target: str | Path, max_age_seconds: float = 3600) -> None:
     """アトミック書き込みで残った一時ファイルの残骸を削除する（ライブラリ内部用）。
 

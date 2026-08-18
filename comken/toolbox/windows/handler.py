@@ -511,6 +511,10 @@ class ExcelComHandler(FileBase):
             suffix_format = _SUFFIX_TO_FORMAT.get(save_path.suffix.lower())
             if suffix_format is not None and suffix_format != file_format:
                 raise FileFormatMismatchError(save_path.suffix)
+        if is_dry_run():
+            # パスワードは秘匿値なのでログには出さない（save_path のみ）
+            dry_run_log("Excel を別名保存: %s", save_path)
+            return
         # NOTE: FileFormat を省略して SaveAs すると Password / WriteResPassword が
         # 反映されないことがあるため、必ず明示して渡す
         self._wb.SaveAs(

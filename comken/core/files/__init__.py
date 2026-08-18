@@ -10,7 +10,7 @@ from comken.core.files.archive import unzip, zip_files, zip_folder
 from comken.core.files.atomic import atomic_write
 from comken.core.files.finder import FileFinder, date_in_name
 from comken.core.files.naming import DateNameBuilder
-from comken.core.files.ops import copy_file, local_copy, move_file, project_dir
+from comken.core.files.ops import copy_file, delete_file, local_copy, move_file, project_dir
 
 __all__ = [
     "FileFinder",
@@ -18,6 +18,7 @@ __all__ = [
     "move_file",
     "project_dir",
     "copy_file",
+    "delete_file",
     "local_copy",
     "zip_folder",
     "zip_files",

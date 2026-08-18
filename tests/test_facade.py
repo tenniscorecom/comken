@@ -46,7 +46,7 @@ def test_facade_only_seven_names() -> None:
 
 
 def test_core_exposes_parts() -> None:
-    """comken.core は部品24個を公開し、その全てが実際に取れる。
+    """comken.core は部品25個を公開し、その全てが実際に取れる。
 
     増えるべき時: core に部品を足して、利用側から使わせるとき。
     ここに書かないと `from comken.core import ...` で届かない。
@@ -60,6 +60,7 @@ def test_core_exposes_parts() -> None:
         "Timer",
         "copy_file",
         "date_in_name",
+        "delete_file",
         "diff_row",
         "diff_rows",
         "local_copy",
