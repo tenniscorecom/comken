@@ -15,9 +15,11 @@
 """
 
 import configparser
+import os
 import re
 import subprocess
 import sys
+from functools import partial
 from pathlib import Path
 
 import pytest
@@ -376,3 +378,42 @@ def test_template_still_has_placeholder_server_path() -> None:
         "（実在のサーバー名に置換されていないか確認すること）: "
         f"{offenders}"
     )
+
+
+# ── 12. カレントが別の場所でも、プロジェクト側の config.ini を読む ─────────────
+
+
+def test_runs_from_another_working_directory(generated: Path, tmp_path: Path) -> None:
+    r"""**カレントを別の場所にしたまま** `python <絶対パス>\main.py` で動くこと。
+
+    「何を防いでいるか」: 社内 RPA 基盤は C:\ など別の場所をカレントにして
+    絶対パスで main.py を呼ぶ。config.ini・state.ini・logs/ がカレント基準だと
+    C:\config.ini を探し、C:\logs\ へ書いてしまう（2026-08-18 まで実際にそうだった）。
+
+    1回目は config.ini が作られて止まり、2回目に run() まで進む。**どちらも
+    生成先のフォルダに対して起きる**ことを見る。
+    """
+    elsewhere = tmp_path / "別のカレント"
+    elsewhere.mkdir()
+    env = {**os.environ, "PYTHONPATH": str(_ROOT), "PYTHONIOENCODING": "utf-8"}
+    run = partial(
+        subprocess.run,
+        [sys.executable, str(generated / "main.py")],
+        cwd=elsewhere,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+    )
+
+    first = run()
+    assert (generated / "config.ini").is_file(), (
+        f"config.ini がプロジェクト側に作られていない:\n{first.stdout}\n{first.stderr}"
+    )
+    assert not (elsewhere / "config.ini").exists(), "カレント側に config.ini を作っている"
+
+    second = run()
+    assert second.returncode == 0, f"2回目が失敗した:\n{second.stdout}\n{second.stderr}"
+    assert (generated / "logs").is_dir(), "logs がプロジェクト側に作られていない"
+    assert not (elsewhere / "logs").exists(), "カレント側に logs を作っている"

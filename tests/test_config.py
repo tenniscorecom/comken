@@ -6,6 +6,7 @@ Config クラスのテスト。
 """
 
 import logging
+import sys
 from pathlib import Path
 
 import pytest
@@ -86,10 +87,20 @@ class TestConfigBasic:
         assert config.SERVICE.USERNAME == "user@example.com"
         assert config.REPORT.FOLDER == "output"
 
-    def test_default_path_is_config_ini(self, tmp_path, monkeypatch):
-        """パス省略時にカレントディレクトリの config.ini を読むことを確認する。"""
-        monkeypatch.chdir(tmp_path)
+    def test_default_path_is_project_dir(self, tmp_path, monkeypatch):
+        """パス省略時に**プロジェクトのフォルダ**（main.py の場所）の config.ini を読む。
+
+        社内 RPA 基盤は C:\\ など別の場所をカレントにして
+        `python <絶対パス>\\main.py` と呼ぶ。カレント基準にすると
+        C:\\config.ini を探しに行ってしまうので、実行したスクリプトの場所を見る。
+        """
+        # カレントは別の場所に置いたまま、スクリプトの場所だけ tmp_path にする
+        other = tmp_path / "別のカレント"
+        other.mkdir()
+        monkeypatch.chdir(other)
+        monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
         (tmp_path / "config.ini").write_text("[S]\nK = v\n", encoding="utf-8")
+
         config = Config()
         assert config.S.K == "v"
 
@@ -372,12 +383,15 @@ class TestModuleSingleton:
         config_mod.read(ini)
         assert Path("C:\\work\\input") == config_mod.FILES.INPUT_FOLDER
 
-    def test_lazy_default_reads_cwd(self, tmp_path, monkeypatch):
-        """read を呼ばない場合、初回アクセス時にカレントの config.ini を読む。"""
+    def test_lazy_default_reads_project_dir(self, tmp_path, monkeypatch):
+        """read を呼ばない場合、初回アクセス時にプロジェクトの config.ini を読む。"""
         import comken.core.config as config_mod
 
+        other = tmp_path / "別のカレント"
+        other.mkdir()
         (tmp_path / "config.ini").write_text("[REPORT]\nMAX = 5\n", encoding="utf-8")
-        monkeypatch.chdir(tmp_path)
+        monkeypatch.chdir(other)
+        monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
 
         assert config_mod.REPORT.MAX == 5
 

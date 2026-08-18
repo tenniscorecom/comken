@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, Self
 from selenium import webdriver
 
 from comken.core.clock import now
+from comken.core.files.ops import project_dir
 from comken.core.timer import measure
 from comken.exceptions import ConcurrentSessionUseError, SessionClosedError, SessionNotStartedError
 from comken.toolbox.browser.download import DownloadDir
@@ -177,7 +178,7 @@ class BrowserSession:
         """
         with self._operating("save_screenshot"):
             timestamp = now().strftime("%Y%m%d_%H%M%S")
-            path = Path("logs") / f"{prefix}_{self.name}_{timestamp}.png"
+            path = project_dir() / "logs" / f"{prefix}_{self.name}_{timestamp}.png"
             path.parent.mkdir(parents=True, exist_ok=True)
             self._require_driver().save_screenshot(str(path))
             return path
@@ -318,7 +319,7 @@ class BrowserSession:
             return
         try:
             timestamp = now().strftime("%Y%m%d_%H%M%S")
-            path = Path("logs") / f"error_{self.name}_{timestamp}.png"
+            path = project_dir() / "logs" / f"error_{self.name}_{timestamp}.png"
             path.parent.mkdir(parents=True, exist_ok=True)
             self._driver.save_screenshot(str(path))
             logger.error("エラー時の画面を保存しました: %s", path.resolve())

@@ -1,6 +1,7 @@
 """単体実行向けログ設定のテスト。"""
 
 import logging
+import sys
 from datetime import date
 
 import pytest
@@ -33,6 +34,8 @@ class TestSetupLogging:
         """コンソールとファイルの両方へ出力するハンドラを追加する。"""
         isolated_root_logger.handlers.clear()
         monkeypatch.chdir(tmp_path)
+        # ログは project_dir()（main.py の場所）へ出る。chdir だけでは向き先が変わらない
+        monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
         monkeypatch.setattr("comken.core.logger.today", lambda: date(2026, 8, 13))
 
         setup_logging()
@@ -62,6 +65,8 @@ class TestSetupLogging:
         """日本語を UTF-8 のファイルへ文字化けせず出力する。"""
         isolated_root_logger.handlers.clear()
         monkeypatch.chdir(tmp_path)
+        # ログは project_dir()（main.py の場所）へ出る。chdir だけでは向き先が変わらない
+        monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
         monkeypatch.setattr("comken.core.logger.today", lambda: date(2026, 8, 13))
         log_path = tmp_path / "logs" / "2026-08-13.log"
 
@@ -77,6 +82,8 @@ class TestSetupLogging:
         """to_file=False では logs フォルダもファイルも作らない。"""
         isolated_root_logger.handlers.clear()
         monkeypatch.chdir(tmp_path)
+        # ログは project_dir()（main.py の場所）へ出る。chdir だけでは向き先が変わらない
+        monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
 
         setup_logging(to_file=False)
 

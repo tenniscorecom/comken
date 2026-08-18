@@ -36,6 +36,7 @@ import types
 from pathlib import Path
 from typing import NoReturn
 
+from comken.core.files.ops import project_dir
 from comken.exceptions import (
     ConfigCreatedFromExampleError,
     ConfigFileNotFoundError,
@@ -114,11 +115,16 @@ class Config:
 
     """
 
-    def __init__(self, path: str | Path = "config.ini") -> None:
+    def __init__(self, path: str | Path | None = None) -> None:
         """
         Args:
-            path: config.ini のパス。省略するとカレントディレクトリの config.ini を読む。
+            path: config.ini のパス。省略するとプロジェクトのフォルダ
+                （main.py の場所）の config.ini を読む。
         """
+        # 社内 RPA 基盤は C:\ など別の場所をカレントにして
+        # `python <絶対パス>\main.py` と呼ぶ。カレント基準だと C:\config.ini を探してしまう
+        if path is None:
+            path = project_dir() / "config.ini"
         cfg = configparser.ConfigParser(interpolation=None)
         # configparser は既定でキー名を小文字に潰すため、書かれたとおりの綴りを保つ。
         # これがないと「大文字で書かれていたか」を判定できない（_validate_upper_case）。

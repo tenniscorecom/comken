@@ -1,14 +1,17 @@
 """comken/core/logger.py — 単体実行するプロジェクト向けのログ設定。"""
 
 import logging
-from pathlib import Path
 
 from comken.core.clock import today
+from comken.core.files.ops import project_dir
 from comken.runtime import is_debug
 
 __all__ = ["setup_logging"]
 
-LOG_DIR = Path("logs")
+# 出す場所は **カレントではなくプロジェクトのフォルダ**（main.py の場所）。
+# 社内 RPA 基盤は C:\ など別の場所をカレントにして呼ぶので、カレント基準だと
+# C:\logs\ に書いてしまう。module 読み込み時ではなく、呼ぶ時に決める
+LOG_DIR_NAME = "logs"
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
@@ -31,8 +34,9 @@ def setup_logging(to_file: bool = True) -> None:
     handlers: list[logging.Handler] = [logging.StreamHandler()]
 
     if to_file:
-        LOG_DIR.mkdir(parents=True, exist_ok=True)
-        log_path = LOG_DIR / f"{today().isoformat()}.log"
+        log_dir = project_dir() / LOG_DIR_NAME
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_path = log_dir / f"{today().isoformat()}.log"
         handlers.append(logging.FileHandler(log_path, encoding="utf-8"))
 
     for handler in handlers:

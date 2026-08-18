@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 
 from comken.core.files.atomic import atomic_write
-from comken.core.files.ops import cleanup_stale_tmp
+from comken.core.files.ops import cleanup_stale_tmp, project_dir
 from comken.exceptions import StateFileCorruptedError, StateLowerCaseNameError, StateValueTypeError
 from comken.runtime import dry_run_log, is_dry_run
 
@@ -31,11 +31,14 @@ class State:
     保存できる値は、真偽値・整数・小数・文字列・文字列のリスト。
 
     Args:
-        path: state.ini のパス。省略すると実行フォルダ直下の state.ini。
+        path: state.ini のパス。省略するとプロジェクトのフォルダ（main.py の場所）の
+              state.ini。
     """
 
-    def __init__(self, path: str | Path = "state.ini") -> None:
-        self._path = Path(path)
+    def __init__(self, path: str | Path | None = None) -> None:
+        # 社内 RPA 基盤は C:\ など別の場所をカレントにして
+        # `python <絶対パス>\main.py` と呼ぶ。カレント基準だと C:\state.ini になってしまう
+        self._path = Path(path) if path is not None else project_dir() / "state.ini"
         self._values = self._read()
 
     def get(self, key: str, default: StateValue | None = None) -> StateValue | None:
