@@ -115,11 +115,11 @@ class Page:
         """
         with self.session._operating(f"click({locator})"):
             if index == 0:
-                condition = EC.element_to_be_clickable(tuple(locator))
+                condition = EC.element_to_be_clickable(locator)
                 self._until(condition, locator, "クリックでき").click()
                 return
             elements = self._until(
-                EC.presence_of_all_elements_located(tuple(locator)), locator, "見つかり"
+                EC.presence_of_all_elements_located(locator), locator, "見つかり"
             )
             elements[index].click()
 
@@ -134,14 +134,14 @@ class Page:
         """要素の表示文字を返す。"""
         with self.session._operating(f"read_text({locator})"):
             return self._until(
-                EC.visibility_of_element_located(tuple(locator)), locator, "表示され"
+                EC.visibility_of_element_located(locator), locator, "表示され"
             ).text
 
     def read_texts(self, locator: Locator) -> list[str]:
         """一致する全要素の表示文字をリストで返す（一覧表の全行を読むときなど）。"""
         with self.session._operating(f"read_texts({locator})"):
             elements = self._until(
-                EC.presence_of_all_elements_located(tuple(locator)), locator, "見つかり"
+                EC.presence_of_all_elements_located(locator), locator, "見つかり"
             )
             return [element.text for element in elements]
 
@@ -154,7 +154,7 @@ class Page:
         """
         with self.session._operating(f"read_attribute({locator}, {name})"):
             element = self._until(
-                EC.presence_of_element_located(tuple(locator)), locator, "見つかり"
+                EC.presence_of_element_located(locator), locator, "見つかり"
             )
             return element.get_attribute(name)
 
@@ -184,7 +184,7 @@ class Page:
         """要素が画面に入るまでスクロールする。"""
         with self.session._operating(f"scroll_to({locator})"):
             element = self._until(
-                EC.presence_of_element_located(tuple(locator)), locator, "見つかり"
+                EC.presence_of_element_located(locator), locator, "見つかり"
             )
             self.session.raw.execute_script("arguments[0].scrollIntoView(true);", element)
 
@@ -215,12 +215,12 @@ class Page:
     def wait_visible(self, locator: Locator) -> None:
         """要素が表示されるまで待つ（画面が開くのを待つときなど）。"""
         with self.session._operating(f"wait_visible({locator})"):
-            self._until(EC.visibility_of_element_located(tuple(locator)), locator, "表示され")
+            self._until(EC.visibility_of_element_located(locator), locator, "表示され")
 
     def wait_invisible(self, locator: Locator) -> None:
         """要素が消えるまで待つ（読み込み中の表示が消えるのを待つときなど）。"""
         with self.session._operating(f"wait_invisible({locator})"):
-            self._until(EC.invisibility_of_element_located(tuple(locator)), locator, "消え")
+            self._until(EC.invisibility_of_element_located(locator), locator, "消え")
 
     # ------------------------------------------------------------ 警告ダイアログ
 
@@ -258,7 +258,7 @@ class Page:
         """
         with self.session._operating(f"frame({locator})"):
             self._until(
-                EC.frame_to_be_available_and_switch_to_it(tuple(locator)), locator, "切り替えられ"
+                EC.frame_to_be_available_and_switch_to_it(locator), locator, "切り替えられ"
             )
             try:
                 yield self
@@ -272,7 +272,7 @@ class Page:
         よく使うものはこのクラスにメソッドとして足すこと。
         """
         with self.session._operating(f"find_element({locator})"):
-            return self._until(EC.presence_of_element_located(tuple(locator)), locator, "見つかり")
+            return self._until(EC.presence_of_element_located(locator), locator, "見つかり")
 
     def find_elements(self, locator: Locator) -> list[WebElement]:
         """一致する全要素を WebElement のリストで返す。1件見つかるまで待つ。
@@ -302,7 +302,7 @@ class Page:
         """
         with self.session._operating(f"find_elements({locator})"):
             return self._until(
-                EC.presence_of_all_elements_located(tuple(locator)), locator, "見つかり"
+                EC.presence_of_all_elements_located(locator), locator, "見つかり"
             )
 
     def execute_script(self, script: str, *args: object) -> object:
@@ -330,7 +330,7 @@ class Page:
 
     def _visible(self, locator: Locator) -> WebElement:
         """表示されるまで待って要素を返す。"""
-        return self._until(EC.visibility_of_element_located(tuple(locator)), locator, "表示され")
+        return self._until(EC.visibility_of_element_located(locator), locator, "表示され")
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(session={self.session.name!r})"
