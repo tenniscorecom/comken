@@ -23,6 +23,7 @@ from comken.exceptions import (
 from comken.toolbox.holidays import (
     CabinetOfficeCsvSource,
     ComkenMasterTableSource,
+    ComputedHolidaySource,
     Holiday,
     HolidayCalendar,
     HolidaySource,
@@ -672,6 +673,7 @@ class TestNoImplicitRequests:
             "comken.toolbox.holidays.exceptions",
             "comken.toolbox.holidays.sources",
             "comken.toolbox.holidays.sources.cabinet_office",
+            "comken.toolbox.holidays.sources.computed",
             "comken.toolbox.holidays.sources.master_table",
         ):
             sys.modules.pop(name, None)
@@ -682,3 +684,247 @@ class TestNoImplicitRequests:
             "requests が import 時に読込まれています。"
             "CabinetOfficeCsvSource._download 内で遅延 import してください。"
         )
+
+
+# ── ComputedHolidaySource ───────────────────────────────────────────────
+
+
+class TestComputedHolidaySource:
+    """``ComputedHolidaySource`` の出力（mokejp/holidays_jp のアルゴリズム）。"""
+
+    def test_computed_returns_all_2026_holidays(self) -> None:
+        """2026 年の祝日全部を個別に assert する。"""
+        source = ComputedHolidaySource(from_year=2026, to_year=2026)
+        holidays = {h.date: h.name for h in source.load()}
+        expected = {
+            _dt.date(2026, 1, 1): "元日",
+            _dt.date(2026, 1, 12): "成人の日",
+            _dt.date(2026, 2, 11): "建国記念の日",
+            _dt.date(2026, 3, 20): "春分の日",
+            _dt.date(2026, 4, 29): "昭和の日",
+            _dt.date(2026, 5, 3): "憲法記念日",
+            _dt.date(2026, 5, 4): "みどりの日",
+            _dt.date(2026, 5, 5): "こどもの日",
+            _dt.date(2026, 7, 20): "海の日",
+            _dt.date(2026, 8, 11): "山の日",
+            _dt.date(2026, 9, 21): "敬老の日",
+            _dt.date(2026, 9, 22): "国民の休日",
+            _dt.date(2026, 9, 23): "秋分の日",
+            _dt.date(2026, 10, 12): "スポーツの日",
+            _dt.date(2026, 11, 3): "文化の日",
+            _dt.date(2026, 11, 23): "勤労感謝の日",
+        }
+        for date_, name in expected.items():
+            assert date_ in holidays, f"{date_} が祝日として含まれていません"
+            assert holidays[date_] == name, (
+                f"{date_} の名称が {holidays[date_]!r} になっています（期待: {name!r}）"
+            )
+
+    def test_computed_returns_all_2020_special_cases(self) -> None:
+        """2020 年のオリンピック特例（海の日 7/23、スポーツ 7/24、山の日 8/10）。"""
+        source = ComputedHolidaySource(from_year=2020, to_year=2020)
+        holidays = {h.date: h.name for h in source.load()}
+        assert holidays[_dt.date(2020, 7, 23)] == "海の日"
+        assert holidays[_dt.date(2020, 7, 24)] == "スポーツの日"
+        assert holidays[_dt.date(2020, 8, 10)] == "山の日"
+        # 2020/10/12 がスポーツの日になっていないこと（移動済み）
+        assert holidays.get(_dt.date(2020, 10, 12)) is None
+
+    def test_computed_2020_summer_olympics_moves(self) -> None:
+        """2020 年の特例が「移動」していることを確認（前後の年との差分）。"""
+        # 2019 年は 7月 第3月曜 = 7/15 が海の日
+        cal_2019 = {h.date: h.name for h in ComputedHolidaySource(from_year=2019, to_year=2019).load()}
+        assert cal_2019[_dt.date(2019, 7, 15)] == "海の日"
+        # 2021 年は 7月 第3月曜 = 7/19 が海の日（オリンピック特例の解除）
+        cal_2021 = {h.date: h.name for h in ComputedHolidaySource(from_year=2021, to_year=2021).load()}
+        assert cal_2021[_dt.date(2021, 7, 19)] == "海の日"
+        # 2020 年だけ 7/23
+        cal_2020 = {h.date: h.name for h in ComputedHolidaySource(from_year=2020, to_year=2020).load()}
+        assert cal_2020[_dt.date(2020, 7, 23)] == "海の日"
+
+    def test_computed_substitute_holiday(self) -> None:
+        """日曜と重なった祝日の振替（例: 2029/2/11 が日曜 → 2/12 が振替）。"""
+        source = ComputedHolidaySource(from_year=2029, to_year=2029)
+        holidays = {h.date: h.name for h in source.load()}
+        assert holidays[_dt.date(2029, 2, 11)] == "建国記念の日"
+        assert holidays[_dt.date(2029, 2, 12)] == "振替休日"
+
+    def test_computed_substitute_holiday_with_consecutive_holiday(self) -> None:
+        """振替先が祝日に重なるときは先送りされる（2026/5/3 が日曜 → 5/6 が振替）。"""
+        source = ComputedHolidaySource(from_year=2026, to_year=2026)
+        holidays = {h.date: h.name for h in source.load()}
+        # 5/3 (Sun) 憲法記念日 → 5/4 (Mon) みどりの日、5/5 (Tue) こどもの日 なので 5/6 が振替
+        assert holidays[_dt.date(2026, 5, 6)] == "振替休日"
+
+    def test_computed_national_holiday_silver_week(self) -> None:
+        """9 月の 2 祝日に挟まれた平日がシルバーウィークとして国民の休日になる。"""
+        source = ComputedHolidaySource(from_year=2026, to_year=2026)
+        holidays = {h.date: h.name for h in source.load()}
+        # 2026/9/21 (Mon) 敬老の日、2026/9/22 (Tue) 国民の休日、2026/9/23 (Wed) 秋分の日
+        assert holidays[_dt.date(2026, 9, 21)] == "敬老の日"
+        assert holidays[_dt.date(2026, 9, 22)] == "国民の休日"
+        assert holidays[_dt.date(2026, 9, 23)] == "秋分の日"
+
+    def test_computed_vernal_equinox_2026(self) -> None:
+        """2026 年の春分の日は 3/20。"""
+        source = ComputedHolidaySource(from_year=2026, to_year=2026)
+        holidays = {h.date: h.name for h in source.load()}
+        assert holidays[_dt.date(2026, 3, 20)] == "春分の日"
+
+    def test_computed_emperors_birthday_changes(self) -> None:
+        """天皇誕生日の日付が年で変わる（1989-2018 = 12/23、2020- = 2/23）。"""
+        cal_2010 = {h.date: h.name for h in ComputedHolidaySource(from_year=2010, to_year=2010).load()}
+        cal_2024 = {h.date: h.name for h in ComputedHolidaySource(from_year=2024, to_year=2024).load()}
+        # 平成: 12/23
+        assert cal_2010[_dt.date(2010, 12, 23)] == "天皇誕生日"
+        # 令和: 2/23
+        assert cal_2024[_dt.date(2024, 2, 23)] == "天皇誕生日"
+        # 2019 は変則（天皇の即位の日 = 5/1、即位礼正殿の儀 = 10/22）
+        cal_2019 = {h.date: h.name for h in ComputedHolidaySource(from_year=2019, to_year=2019).load()}
+        assert cal_2019[_dt.date(2019, 5, 1)] == "天皇の即位の日"
+        assert cal_2019[_dt.date(2019, 10, 22)] == "即位礼正殿の儀の行われる日"
+
+    def test_computed_adults_day_history(self) -> None:
+        """成人の日は 1999 = 1/15、2000 = 1月 第2月曜。"""
+        cal_1999 = {h.date: h.name for h in ComputedHolidaySource(from_year=1999, to_year=1999).load()}
+        cal_2000 = {h.date: h.name for h in ComputedHolidaySource(from_year=2000, to_year=2000).load()}
+        assert cal_1999[_dt.date(1999, 1, 15)] == "成人の日"
+        # 2000/1/10 (Mon) が第2月曜
+        assert cal_2000[_dt.date(2000, 1, 10)] == "成人の日"
+
+
+# ── ComputedHolidaySource の会社休日 ──────────────────────────────────
+
+
+class TestComputedCompanyHolidays:
+    """``COMPANY_HOLIDAYS`` の 3 形式（単発 / 期間 / 特定年のみ）。"""
+
+    @staticmethod
+    def _with_company_holidays(monkeypatch: pytest.MonkeyPatch, entries: list[tuple]) -> ComputedHolidaySource:
+        """テスト用の ``COMPANY_HOLIDAYS`` を ``monkeypatch`` で差し込んで source を返す。
+
+        ``TestNoImplicitRequests`` が ``sys.modules`` を再生成するため、
+        このテストヘルパーでは毎回 ``computed`` モジュールを**今現在のインスタンス**で取り直す
+        （古い参照が残っていると monkeypatch が反映されない）。
+        """
+        import importlib
+
+        import comken.toolbox.holidays.sources.computed as computed_module
+
+        # ``TestNoImplicitRequests`` が sys.modules を再構築している場合に備え、
+        # 今ロード済みのモジュールを取得し直す
+        computed_module = importlib.reload(computed_module)
+        monkeypatch.setattr(computed_module, "COMPANY_HOLIDAYS", entries)
+        # ``ComputedHolidaySource`` も同じモジュールのクラスなので再ロード後のクラスを返す
+        return computed_module.ComputedHolidaySource(from_year=2026, to_year=2026)
+
+    def test_computed_company_holidays_single(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """単発会社の休日 (int 月, int 日, name) が ``year`` 年で出てくる。"""
+        source = self._with_company_holidays(monkeypatch, [(4, 1, "創立記念日")])
+        holidays = {h.date: h.name for h in source.load()}
+        assert holidays[_dt.date(2026, 4, 1)] == "創立記念日"
+
+    def test_computed_company_holidays_range_year_crossing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """12/29 - 1/3 を年またぎで正しく展開（両端部分の両方を含む）。"""
+        source = self._with_company_holidays(
+            monkeypatch, [(12, 29, 1, 3, "年末年始休暇")]
+        )
+        holidays = {h.date: h.name for h in source.load()}
+        # 12/29, 12/30, 12/31 と 1/1, 1/2, 1/3 が全部「年末年始休暇」になる
+        for day in (29, 30, 31):
+            assert holidays[_dt.date(2026, 12, day)] == "年末年始休暇"
+        for day in (1, 2, 3):
+            assert holidays[_dt.date(2026, 1, day)] == "年末年始休暇"
+
+    def test_computed_company_holidays_range_same_year(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """同年内 (8/13 - 8/16) を展開する。"""
+        source = self._with_company_holidays(monkeypatch, [(8, 13, 8, 16, "夏季休暇")])
+        holidays = {h.date: h.name for h in source.load()}
+        for day in (13, 14, 15, 16):
+            assert holidays[_dt.date(2026, 8, day)] == "夏季休暇"
+
+    def test_computed_company_holidays_specific_year(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """特定年のみ (_dt.date, _dt.date, name) 形式。"""
+        entries = [(_dt.date(2026, 11, 4), _dt.date(2026, 11, 5), "臨時休業")]
+        source = self._with_company_holidays(monkeypatch, entries)
+        holidays = {h.date: h.name for h in source.load()}
+        assert holidays[_dt.date(2026, 11, 4)] == "臨時休業"
+        assert holidays[_dt.date(2026, 11, 5)] == "臨時休業"
+        # 他の年には適用されない（2027 には出ない）。
+        # monkeypatch は ``_with_company_holidays`` の中で既に同じ ``entries`` が
+        # 設定されているので、2027 用の source を作っても 11/4 は出ないはず。
+        source_2027 = ComputedHolidaySource(from_year=2027, to_year=2027)
+        holidays_2027 = {h.date: h.name for h in source_2027.load()}
+        assert holidays_2027.get(_dt.date(2027, 11, 4)) is None
+
+    def test_computed_default_company_holidays_is_empty(self) -> None:
+        """既定の ``COMPANY_HOLIDAYS`` は空（=追加なしで動かせる）。"""
+        from comken.toolbox.holidays.sources.computed import COMPANY_HOLIDAYS
+
+        assert COMPANY_HOLIDAYS == []
+
+
+# ── ComputedHolidaySource の制約 ───────────────────────────────────────
+
+
+class TestComputedSourceConstraints:
+    """``ComputedHolidaySource`` の運用上の制約（純粋計算・range 検証）。"""
+
+    def test_computed_does_not_load_requests(self) -> None:
+        """``ComputedHolidaySource`` は ``requests`` を import しない（純粋計算）。
+
+        ``requests`` を ``sys.modules`` から抜いた状態でソースを import し、
+        ``load()`` を実行しても ``requests`` が読み込まれないことを確認する。
+        """
+        import sys
+
+        # requests を消してからソースを import
+        sys.modules.pop("requests", None)
+        from comken.toolbox.holidays.sources.computed import (  # noqa: F401
+            ComputedHolidaySource,
+        )
+
+        assert "requests" not in sys.modules, (
+            "computed.py は requests を import すべきではない"
+            "（純粋計算で動くソース）。"
+        )
+
+        # load() を呼んでも requests は読まれない
+        ComputedHolidaySource(from_year=2026, to_year=2026).load()
+        assert "requests" not in sys.modules
+
+    def test_computed_rejects_inverted_range(self) -> None:
+        """``from_year > to_year`` は ``ValueError``。"""
+        with pytest.raises(ValueError):
+            ComputedHolidaySource(from_year=2030, to_year=2020)
+
+    def test_computed_warns_outside_high_precision_range(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """高精度範囲外 (1948-2099) を指定すると WARNING が残る。"""
+        with caplog.at_level(logging.WARNING, logger="comken.toolbox.holidays.sources.computed"):
+            ComputedHolidaySource(from_year=1940, to_year=2099)
+            ComputedHolidaySource(from_year=1948, to_year=2105)
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warnings) >= 1
+        assert any("高精度" in r.getMessage() for r in warnings)
+
+    def test_computed_default_range_is_1948_to_2099(self) -> None:
+        """既定範囲は 1948-2099（タスク仕様）。"""
+        source = ComputedHolidaySource()
+        holidays = source.load()
+        # 範囲内に 1949 年の元日 (1948 は祝日法施行後で祝日なし) が出る
+        assert Holiday(date=_dt.date(1949, 1, 1), name="元日") in holidays
+        # 範囲内に 2099 年の祝日が複数出る
+        assert any(h.date.year == 2099 for h in holidays)
+        # 2100 年は出ない（高精度範囲外）
+        assert not any(h.date.year == 2100 for h in holidays)
+

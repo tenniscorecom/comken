@@ -27,16 +27,18 @@ def test_facade_paths_module_does_not_exist() -> None:
     assert "Paths" not in comken.__all__
 
 
-def test_facade_only_seven_names() -> None:
-    """facade は土台7個だけ。増えた名前が入っていないことを保証する。
+def test_facade_only_eight_names() -> None:
+    """facade は土台8個だけ。増えた名前が入っていないことを保証する。
 
     増えるべき時: 新しい土台（プロジェクト横断で必須）を足したとき。
     ここに書いたら AGENTS.md の「土台」欄にも書く。
     """
     expected = {
         "Config",
+        "DoctorResult",
         "config",
         "debug",
+        "doctor",
         "dry_run",
         "is_debug",
         "is_dry_run",

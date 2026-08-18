@@ -45,11 +45,13 @@ from comken.toolbox.holidays.exceptions import (
     HolidayCalendarSourceError,
 )
 from comken.toolbox.holidays.sources.cabinet_office import CabinetOfficeCsvSource
+from comken.toolbox.holidays.sources.computed import ComputedHolidaySource
 from comken.toolbox.holidays.sources.master_table import ComkenMasterTableSource
 
 __all__ = [
     "CabinetOfficeCsvSource",
     "ComkenMasterTableSource",
+    "ComputedHolidaySource",
     "EXPIRING_WARNING_DAYS",
     "Holiday",
     "HolidayCalendar",

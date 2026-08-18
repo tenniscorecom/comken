@@ -72,6 +72,21 @@ Returns:
 Raises:
     ConfigSectionNotFoundError: 指定したマッピングセクションがない場合。
 
+### `DoctorResult`
+
+```text
+class DoctorResult:
+```
+
+#### 説明
+
+doctor の 1 検査項目の結果。
+
+Attributes:
+    name: 検査名（例: "comken.version" / "deps.openpyxl" / "share.master_path"）。
+    status: 結果（"ok" / "ng" / "skip" のいずれか）。
+    message: 人が読むための1行メッセージ。**秘密の値は載せない**。
+
 ### `config`
 
 定義を解決できませんでした。
@@ -91,6 +106,24 @@ def debug(enabled: bool=True) -> Iterator[None]:
 
 Args:
     enabled: True で有効（デフォルト）。False ならブロック内だけ無効。
+
+### `doctor`
+
+```text
+def doctor() -> list['DoctorResult']:
+```
+
+#### 説明
+
+環境・依存・設定・接続をまとめて検査する（ライブラリ関数）。
+
+戻り値は `DoctorResult` のリスト。CLI は ``python -m comken doctor``、
+ライブラリ利用者は ``from comken import doctor`` で呼べる。
+
+検査は独立して動く（1 個失敗しても残りは続ける）。Salesforce は
+資格情報が無ければ SKIP し、`requests` を import しない経路を選ぶ
+（BO 環境対応、テスト `test_does_not_load_requests_for_skipped_salesforce`
+で守られる）。
 
 ### `dry_run`
 
@@ -802,6 +835,34 @@ Returns:
 
 Raises:
     FileNotFoundError: folder が存在しない場合。
+
+
+## `from comken.core.doctor import ...`
+
+### `DoctorResult`
+
+```text
+class DoctorResult:
+```
+
+#### 説明
+
+doctor の 1 検査項目の結果。
+
+Attributes:
+    name: 検査名（例: "comken.version" / "deps.openpyxl" / "share.master_path"）。
+    status: 結果（"ok" / "ng" / "skip" のいずれか）。
+    message: 人が読むための1行メッセージ。**秘密の値は載せない**。
+
+### `summarize`
+
+```text
+def summarize(results: list[DoctorResult]) -> tuple[int, int, int]:
+```
+
+#### 説明
+
+``(ok, ng, skip)`` の件数を返す。
 
 
 ## `from comken.core.files import ...`
@@ -3495,84 +3556,19 @@ def __init__(self, failed_keys: list[str], history_path: Path) -> None:
 
 ### `download_report`
 
-```text
-def download_report(report_key: str, project: str='') -> CsvReader:
-```
-
-#### 説明
-
-今すぐ Salesforce から取得して保存し、そのファイルを `CsvReader` で返す。
-
-**必ず Salesforce へ問い合わせる。** 今日すでに取っていても取り直す。
-
-Args:
-    report_key: 管理表の管理番号（例: "1001"）。
-    project: 呼び出し元の名前。履歴に残るので、入れておくと後から追える。
-
-Returns:
-    保存したファイルを読み取る `CsvReader`。ファイルパスは `.path` で取れる。
-
-Raises:
-    ReportNotRegisteredError: 管理表に無い管理番号の場合。
-    ReportDisabledError: 管理表で無効になっている場合。
-    ReportFolderNotFoundError: 保存先のフォルダが無い場合。
-    EmptyReportError: 明細が 0 行だった場合。
-
-### `get_scheduled_report`
-
-```text
-def get_scheduled_report(report_key: str, project: str='') -> CsvReader:
-```
-
-#### 説明
-
-定期取得しておいたファイルを `CsvReader` で返す。**取りに行かない。**
-
-Args:
-    report_key: 管理表の管理番号（例: "1001"）。
-    project: 呼び出し元の名前（履歴には残さないが、例外の調査に使えるよう受け取る）。
-
-Returns:
-    定期取得で保存されたファイルを読み取る `CsvReader`。ファイルパスは `.path` で取れる。
-
-Raises:
-    ReportNotRegisteredError: 管理表に無い管理番号の場合。
-    ReportDisabledError: 管理表で無効になっている場合。
-    ScheduledReportNotRegisteredError: 管理表で「個別」になっている場合。
-    ScheduledReportNotDownloadedError: 本日の定期取得がまだ済んでいない場合。
-    ReportFileMissingError: 履歴では取得済みだが、ファイルが無い場合。
+定義を解決できませんでした。
 
 ### `download_scheduled`
 
-```text
-def download_scheduled(project: str='定期実行') -> list[Path]:
-```
+定義を解決できませんでした。
 
-#### 説明
+### `get_scheduled_report`
 
-管理表で「定期」かつ有効なレポートをまとめて取得する。
-
-定期実行のプロジェクトから呼ぶ。**1件失敗しても残りは続ける**。戻り値は `list[Path]`
-のままで `CsvReader` を返さない（定期取得の呼び出し側は中身を読まないため）。
-
-Raises:
-    ScheduledDownloadFailedError: 1件でも取得できなかった場合。**取得できたものは
-        保存したうえで**送出する。ログだけに出して正常終了すると、スケジューラや
-        RPA 基盤から見て成功と区別が付かない。
+定義を解決できませんでした。
 
 ### `file_path_of`
 
-```text
-def file_path_of(entry: ReportEntry) -> Path:
-```
-
-#### 説明
-
-そのレポートを保存するパス。
-
-ファイル名は「管理番号_概要_日付」。**管理番号を先頭に置く**のは、概要や
-参照先の Salesforce レポートが変わっても、番号は変わらないため。概要を入れるのは、
-保存先を人が直接見たときに何のファイルか分かるようにするため。
+定義を解決できませんでした。
 
 ### `load_master`
 
@@ -5801,6 +5797,49 @@ def load(self) -> list[Holiday]:
 ##### 説明
 
 管理表から会社休日を読み取り、``Holiday`` のリストを返す。
+
+### `ComputedHolidaySource`
+
+```text
+class ComputedHolidaySource(HolidaySource):
+```
+
+#### 説明
+
+計算で祝日の和集合を返すソース。
+
+``HolidaySource`` Protocol を実装する。``load()`` で ``Iterable[Holiday]`` を返す。
+``CabinetOfficeCsvSource`` と並列に置いて、
+``from_sources([Cabinet, Computed])`` のように和集合で運用する
+（``HolidayCalendar`` 側の先勝ち WARNING ログが衝突をハンドリングする）。
+
+このソースは **純粋計算のみ** — 外部通信・ファイル読み込みは一切しない。
+社内 BO 環境（オフライン・pip 制限）でもそのまま動く。
+
+Args:
+    from_year: 対象範囲の開始年。省略時は ``DEFAULT_FROM_YEAR`` (1948)。
+    to_year: 対象範囲の終了年。省略時は ``DEFAULT_TO_YEAR`` (2099)。
+        範囲外でも祝日計算は走るが、春分／秋分の近似精度が下がる旨を
+        WARNING ログで知らせる。
+
+#### `__init__`
+
+```text
+def __init__(self, *, from_year: int | None=None, to_year: int | None=None) -> None:
+```
+
+#### `load`
+
+```text
+def load(self) -> list[Holiday]:
+```
+
+##### 説明
+
+対象年の範囲について計算した祝日をまとめて返す。
+
+Returns:
+    日付順に並んだ ``Holiday`` のリスト。
 
 ### `EXPIRING_WARNING_DAYS`
 

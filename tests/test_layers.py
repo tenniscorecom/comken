@@ -45,9 +45,11 @@ def _is_skippable(path: Path) -> bool:
     """層ルールの検査対象から外すファイルか。
 
     - `__main__.py` は CLI 入口で層の外から呼ぶので対象外
+    - `cli.py` は `__main__.py` と同じく CLI 入口。`__main__.py` から委譲
+      されるだけで、ライブラリとして import される層ではないため対象外
     - `templates/` は配布される雛形ファイル群で comken パッケージの一部ではない
     """
-    if path.name == "__main__.py":
+    if path.name in ("__main__.py", "cli.py"):
         return True
     return "templates" in path.parts
 

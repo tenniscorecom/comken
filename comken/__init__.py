@@ -1,7 +1,7 @@
 """comken/__init__.py — comken の基本入口。
 
 「comken 直下」には、**何をするプロジェクトかに関係なく使う**土台だけを置く。
-設定・ログ・実行モードの7個で、それ以外の部品は ``comken.core`` から取る
+設定・ログ・実行モード・環境診断の8個で、それ以外の部品は ``comken.core`` から取る
 （``from comken.core import FileFinder``）。
 
 書くときは ``from comken import X`` が第一選択。そこに無いものだけ
@@ -33,13 +33,17 @@ if _sys.pycache_prefix is None and not _os.environ.get("PYTHONPYCACHEPREFIX"):
 
 from comken.core import config as config
 from comken.core.config import Config as Config
+from comken.core.doctor import DoctorResult as DoctorResult
+from comken.core.doctor.cli import doctor as doctor
 from comken.core.logger import setup_logging as setup_logging
 from comken.runtime import debug, dry_run, is_debug, is_dry_run
 
 __all__ = [
     "Config",
+    "DoctorResult",
     "config",
     "debug",
+    "doctor",
     "dry_run",
     "is_debug",
     "is_dry_run",

@@ -87,3 +87,11 @@ pythonpath = ["tools"]
 # 会社 PC では --skip-worktree で実名に書き換えて動くため、ここで除外しても
 # 機能には影響しない (このファイルは実機確認でも import しない)。
 exclude = ["comken/toolbox/rpa.py"]
+
+# __init__.py が `__getattr__` (PEP 562) で遅延公開している属性は
+# pyright の static analysis からは見つからず、`__all__` に書いた名前が
+# "モジュールに存在しない" と reportUnsupportedDunderAll で警告される。
+# 動的 import の設計 (comken.services.salesforce_downloader が代表)
+# 自体は正しいため、警告を抑制する。`__all__` 自体は M3 が触る箇所なので
+# 整合性はテスト (tests/test_docs_code.py など) で別途担保する。
+reportUnsupportedDunderAll = false
