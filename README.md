@@ -108,6 +108,7 @@ import の書き方は上の「[使うときの約束](#使うときの約束)�
 | [credentials（DPAPI）](docs/credentials.md) | パスワード・client_secret の暗号化保存（Windows ユーザーに紐付く） |
 | [祝日判定](docs/holidays.md) | 内閣府の祝日 CSV（CP932）+ 社内管理表の会社休日をマージして営業日判定 |
 | [core（部品）](docs/core.md) | `from comken.core import ...` で取る24個。ファイル検索・操作・圧縮・ファイル名の組み立て／データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時 |
+| 診断 (`doctor` / `check`) | `python -m comken doctor` で環境の切り分け、`python -m comken check` でプロジェクトの健全性検査 |
 
 ## 定数クラス一覧
 
@@ -350,6 +351,40 @@ def build_report():
 雛形プロジェクトでは `config.RUN.DEBUG` で `with debug():` の on/off を切り替えられる。
 止まったときに非エンジニアが自分で「デバッグモードで再実行」できるよう、
 `config.ini` からのスイッチを前提にしている。
+
+---
+
+## 診断 (`python -m comken doctor` / `check`)
+
+### `doctor` — 環境の切り分け
+
+「comken が動かない」を 1 コマンドで切り分ける。
+
+```
+python -m comken doctor
+```
+
+検査項目: comken のバージョン / Python バージョン / comken の場所 / 依存モジュール
+(openpyxl / selenium / pywin32 / requests) / `[RUN]` セクション残存 /
+配置時に書き換える 3 ファイル (rpa.py / sandbox.py / service.py) が仮名のまま /
+共有サーバー (MASTER_PATH / HISTORY_PATH) へ届くか / Salesforce 認証情報があるか。
+**秘密の値 (config.ini の値・DPAPI のトークン) は出力しない。**
+
+終了コードは NG があるとき 1、なければ 0。
+
+### `check` — プロジェクトの健全性
+
+comken を更新したことで既存プロジェクトが壊れていないか確認する。
+
+```
+python -m comken check              # カレントディレクトリ
+python -m comken check C:\案件集計   # 対象プロジェクト
+```
+
+検査項目: `config.ini` の `[COMKEN] VERSION` と現在バージョン / `comken.__all__`
+の import 全部 / deprecated な旧名がプロジェクトで使われていないか /
+公開 facade の件数 / pyright の 0 errors 維持。
+バージョン不一致や deprecation 使用が見つかれば終了コード 1。
 
 ---
 
