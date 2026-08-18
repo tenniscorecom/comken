@@ -22,9 +22,39 @@ FutureWarning を使う理由:
             warn_renamed("OldClass", "NewClass")
             return NewClass
         raise AttributeError(name)
+
+``python -m comken check`` は ``deprecated_names()`` の辞書を読み、
+プロジェクト側のソースをスキャンして旧名が残っていないか確認する。
+ここに追加したキーは ``check`` の検査対象になる（自動的に反映される）。
 """
 
 import warnings
+
+__all__ = ["deprecated_names", "warn_renamed"]
+
+
+# 廃止予定 API の旧名 → 新名 のマッピング。
+# 新しいエントリを足すときは、``warn_renamed`` を呼び出すラッパーも
+# 旧名のまま残し、``check`` が旧名を検出したら警告ログで気づけるようにする。
+# 例::
+#
+#     def __getattr__(name):
+#         if name == "OldName":
+#             warn_renamed("OldName", "new_name")
+#             return new_name
+#         raise AttributeError(name)
+_DEPRECATED_NAMES: dict[str, str] = {}
+
+
+def deprecated_names() -> dict[str, str]:
+    """廃止予定の名前の ``{旧名: 新名}`` を返す（コピー）。
+
+    ``comken check`` がプロジェクト側のソースをスキャンして、
+    旧名が残っていないかを確認するために公開する。戻り値は dict の
+    コピーなので呼び出し側で変更しても ``_DEPRECATED_NAMES`` には
+    影響しない。
+    """
+    return dict(_DEPRECATED_NAMES)
 
 
 def warn_renamed(old_name: str, new_name: str) -> None:

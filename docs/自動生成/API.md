@@ -326,6 +326,51 @@ def dated(self, pattern: str='*.xlsx', required: bool=True) -> list[Path]:
 Raises:
     FileNotFoundError: required=True で該当ファイルがない場合。
 
+### `Result`
+
+```text
+class Result(Generic[T]):
+```
+
+#### 説明
+
+業務結果を統一的に返す型。
+
+想定内の業務結果（成功・警告・空・スキップ）を Result で返す。
+想定外のエラーは Exception のまま流す (握りつぶさない)。
+
+Attributes:
+    success: 想定内かどうかの成否。警告付き成功も含む正常終了なら True。
+    message: 人が読むための1行メッセージ。
+    count: 処理件数などの数値情報。省略時 0。
+    warnings: 警告メッセージのタプル。1個でもあれば ``has_warning`` が True。
+    data: 呼び出し側が結果を運ぶための任意の値（任意型）。
+
+#### `has_warning`
+
+```text
+@property
+def has_warning(self) -> bool:
+```
+
+##### 説明
+
+警告があるかどうか。
+
+#### `to_dict`
+
+```text
+def to_dict(self) -> dict[str, Any]:
+```
+
+##### 説明
+
+JSON シリアライズ用の dict。
+
+``data`` は JSON 化できない型が渡される可能性があるので、ここでは
+含めない。``warnings`` は list へ変換する (tuple のままだと
+json.dumps が内部で list へ変換するため、形式を合わせておく)。
+
 ### `RowChange`
 
 ```text
@@ -508,6 +553,20 @@ Returns:
 Raises:
     ColumnNotFoundError: key で指定した列が存在しない場合。
 
+### `empty`
+
+```text
+def empty(message: str='対象データなし', *, count: int=0) -> Result:
+```
+
+#### 説明
+
+空の Result (正常終了・データ無し)。
+
+Args:
+    message: 人が読むための1行メッセージ。省略時は ``"対象データなし"``。
+    count: 処理件数（省略時 0）。
+
 ### `local_copy`
 
 ```text
@@ -585,6 +644,21 @@ Args:
 
 Returns:
     移動後のファイルパス。
+
+### `ok`
+
+```text
+def ok(message: str='', *, count: int=0, data: Any=None) -> Result:
+```
+
+#### 説明
+
+成功 Result を作る。
+
+Args:
+    message: 人が読むための1行メッセージ（省略可）。
+    count: 処理件数などの数値情報（省略時 0）。
+    data: 呼び出し側が結果を運ぶための任意の値（省略可）。
 
 ### `project_dir`
 
@@ -683,6 +757,19 @@ Args:
 
 Raises:
     最後の実行で出た例外（times 回すべて失敗した場合）。
+
+### `skip`
+
+```text
+def skip(message: str) -> Result:
+```
+
+#### 説明
+
+スキップ Result (今回は処理しなかった)。success=True (スキップは正常)。
+
+Args:
+    message: 人が読むための1行メッセージ。省略不可。
 
 ### `strip_spaces`
 
@@ -793,6 +880,48 @@ Returns:
     True: 条件が満たされた。
     False: タイムアウトした（条件は満たされなかった）。
 
+### `wait_for_file`
+
+```text
+def wait_for_file(folder: str | Path, name_pattern: str, timeout: float=DEFAULT_TIMEOUT_SECONDS, poll_interval: float=DEFAULT_POLL_INTERVAL_SECONDS) -> Path:
+```
+
+#### 説明
+
+``folder`` 内で ``name_pattern`` にマッチするファイルが出現するまで待つ。
+
+1度でも見つかれば、その時点で mtime が最新のファイルを返して終了する。
+``poll_interval`` 秒ごとに再検索し、``timeout`` 秒経っても見つからなければ
+``FileNotFoundError`` を送出する。
+
+Args:
+    folder: 監視するフォルダ。
+    name_pattern: ファイル名の glob パターン（例: ``"data_*.csv"``）。
+    timeout: 最大待機秒数。デフォルトは 60 秒。
+    poll_interval: 再検索の間隔秒数。デフォルトは 1 秒。
+
+Returns:
+    見つかったファイルのうち mtime が最新のもの。
+
+Raises:
+    FileNotFoundError: ``timeout`` 秒経っても該当ファイルが見つからなかった場合。
+
+### `warn`
+
+```text
+def warn(message: str, *, warnings: Sequence[str]=(), count: int=0, data: Any=None) -> Result:
+```
+
+#### 説明
+
+警告付き成功 Result を作る。success=True だが warnings が付く。
+
+Args:
+    message: 人が読むための1行メッセージ。
+    warnings: 警告メッセージの列。空でも Result は生成できる。
+    count: 処理件数などの数値情報（省略時 0）。
+    data: 呼び出し側が結果を運ぶための任意の値（省略可）。
+
 ### `zip_files`
 
 ```text
@@ -837,6 +966,89 @@ Raises:
     FileNotFoundError: folder が存在しない場合。
 
 
+## `from comken.core.check import ...`
+
+### `CheckResult`
+
+```text
+class CheckResult:
+```
+
+#### 説明
+
+check の 1 検査項目の結果。
+
+Attributes:
+    name: 検査名（例: "version" / "imports" / "deprecations" / "facade" / "pyright"）。
+    status: 結果（"ok" / "ng" / "skip" のいずれか）。
+    message: 人が読むための1行メッセージ。
+    details: 検査の細目（import の各名前・deprecated 使用箇所など）。
+        1 行に収まらないとき ``message`` の下に並べて出す。
+
+### `check_deprecations`
+
+```text
+def check_deprecations(project_path: Path) -> CheckResult:
+```
+
+#### 説明
+
+deprecated な API がプロジェクトのソースで使われていないか。
+
+### `check_facade`
+
+```text
+def check_facade() -> CheckResult:
+```
+
+#### 説明
+
+公開 API ファサード (comken.__all__) の件数が期待値と一致するか。
+
+### `check_imports`
+
+```text
+def check_imports() -> CheckResult:
+```
+
+#### 説明
+
+``comken.__all__`` の各名前を ``from comken import X`` で読めるか。
+
+### `check_pyright`
+
+```text
+def check_pyright(repo_root: Path) -> CheckResult:
+```
+
+#### 説明
+
+pyright が ``comken/`` に対して 0 errors を返すか。
+
+``tests/test_pyright_clean.py`` と同じ判定ロジック。
+``npx`` が無い環境では SKIP。
+
+### `check_version`
+
+```text
+def check_version(project_path: Path) -> CheckResult:
+```
+
+#### 説明
+
+config.ini の ``[COMKEN] VERSION`` と現在の comken バージョンを比べる。
+
+### `summarize`
+
+```text
+def summarize(results: list[CheckResult]) -> tuple[int, int, int]:
+```
+
+#### 説明
+
+``(ok, ng, skip)`` の件数を返す。
+
+
 ## `from comken.core.doctor import ...`
 
 ### `DoctorResult`
@@ -863,6 +1075,35 @@ def summarize(results: list[DoctorResult]) -> tuple[int, int, int]:
 #### 説明
 
 ``(ok, ng, skip)`` の件数を返す。
+
+
+## `from comken.core.file import ...`
+
+### `wait_for_file`
+
+```text
+def wait_for_file(folder: str | Path, name_pattern: str, timeout: float=DEFAULT_TIMEOUT_SECONDS, poll_interval: float=DEFAULT_POLL_INTERVAL_SECONDS) -> Path:
+```
+
+#### 説明
+
+``folder`` 内で ``name_pattern`` にマッチするファイルが出現するまで待つ。
+
+1度でも見つかれば、その時点で mtime が最新のファイルを返して終了する。
+``poll_interval`` 秒ごとに再検索し、``timeout`` 秒経っても見つからなければ
+``FileNotFoundError`` を送出する。
+
+Args:
+    folder: 監視するフォルダ。
+    name_pattern: ファイル名の glob パターン（例: ``"data_*.csv"``）。
+    timeout: 最大待機秒数。デフォルトは 60 秒。
+    poll_interval: 再検索の間隔秒数。デフォルトは 1 秒。
+
+Returns:
+    見つかったファイルのうち mtime が最新のもの。
+
+Raises:
+    FileNotFoundError: ``timeout`` 秒経っても該当ファイルが見つからなかった場合。
 
 
 ## `from comken.core.files import ...`
@@ -7241,3 +7482,35 @@ class SortBy:
 #### 説明
 
 FileFinder.latest() の by 引数に使う定数。
+
+
+## `from comken.deprecation import ...`
+
+### `deprecated_names`
+
+```text
+def deprecated_names() -> dict[str, str]:
+```
+
+#### 説明
+
+廃止予定の名前の ``{旧名: 新名}`` を返す（コピー）。
+
+``comken check`` がプロジェクト側のソースをスキャンして、
+旧名が残っていないかを確認するために公開する。戻り値は dict の
+コピーなので呼び出し側で変更しても ``_DEPRECATED_NAMES`` には
+影響しない。
+
+### `warn_renamed`
+
+```text
+def warn_renamed(old_name: str, new_name: str) -> None:
+```
+
+#### 説明
+
+旧名が使われたときに、新しい名前への書き換えを促す警告を出す。
+
+Args:
+    old_name: 変更前の名前（関数名・クラス名・引数名など）。
+    new_name: 変更後の名前。

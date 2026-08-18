@@ -11,6 +11,7 @@
     python -m comken report init レポート管理表.xlsx  管理表の雛形
     python -m comken config                          補完用スタブ生成
     python -m comken doctor                          環境の切り分け診断 (依存・設定・接続)
+    python -m comken check [path]                    プロジェクトの健全性検査
 
 ``sf`` / ``cred`` は ``salesforce`` / ``credentials`` の別名
 （``argparse`` の ``add_parser(..., aliases=[...])``）。
@@ -113,6 +114,14 @@ def _build_parser() -> argparse.ArgumentParser:
         add_help=False,
     )
     doctor.set_defaults(run=_run_doctor)
+
+    # check
+    check_p = subparsers.add_parser(
+        "check",
+        help="プロジェクト健全性検査 (バージョン・import・deprecation・facade・pyright)",
+        add_help=False,
+    )
+    check_p.set_defaults(run=_run_check)
 
     return parser
 
@@ -237,6 +246,13 @@ def _run_doctor(_args: argparse.Namespace, remaining: list[str]) -> int:
     from comken.core.doctor.cli import main as doctor_main
 
     return doctor_main(remaining)
+
+
+def _run_check(_args: argparse.Namespace, remaining: list[str]) -> int:
+    """``python -m comken check [path]`` の本体。"""
+    from comken.core.check.cli import main as check_main
+
+    return check_main(remaining)
 
 
 if __name__ == "__main__":
