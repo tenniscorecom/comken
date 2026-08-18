@@ -1,0 +1,175 @@
+"""comken/toolbox/holidays/sources/cabinet_office.py — 内閣府 CSV ソース。
+
+内閣府の ``syukujitsu.csv`` を URL から取得し、``cache_dir`` にキャッシュする。
+TTL 経過で再取得し、TTL 内ならキャッシュを読む。
+
+取得に失敗した場合、キャッシュが残っていれば**警告ログのみでキャッシュを返す**
+（オフライン運用の PC でも、1度落としてあれば動き続ける）。
+キャッシュも無い場合は ``HolidayCalendarFetchError`` を上げる。
+
+requests は import 時ではなく ``load()`` 内で遅延 import する。
+これにより ``comken.toolbox.holidays`` を import するだけのコードは
+requests の存在に影響を受けない（社内 BO 環境で pip 制限がある場面向け）。
+"""
+
+import datetime as _dt
+import logging
+import time as _time
+from pathlib import Path
+
+from comken.exceptions import HolidayCalendarFetchError, HolidayCalendarFormatError
+from comken.toolbox.holidays.calendar import Holiday, HolidaySource
+
+logger = logging.getLogger(__name__)
+
+# 内閣府の祝日 CSV。CP932（Shift_JIS）で配布されている
+DEFAULT_URL = "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv"
+
+# 既定のキャッシュ先（呼び出し側で明示されたらそちらを優先）
+DEFAULT_CACHE_PATH = Path.home() / ".comken" / "holidays" / "syukujitsu.csv"
+
+# 既定の TTL（秒）。1 日に 1 回取り直しがあれば十分なので 24h
+DEFAULT_TTL_SECONDS = 24 * 60 * 60
+
+
+class CabinetOfficeCsvSource(HolidaySource):
+    """内閣府の ``syukujitsu.csv`` をダウンロードして ``Holiday`` の iterable を返す。
+
+    Args:
+        url: 内閣府の CSV の URL。既定は ``syukujitsu.csv`` の配布 URL。
+        cache_path: ダウンロードした CSV の保存先。既定は ``~/.comken/holidays/syukujitsu.csv``。
+        ttl_seconds: キャッシュの有効期限（秒）。経過していたら再取得する。
+        encoding: CSV の文字コード。CP932（Shift_JIS）のままで良い。
+        fetch_timeout_seconds: requests.get() のタイムアウト秒数。
+    """
+
+    def __init__(
+        self,
+        url: str = DEFAULT_URL,
+        cache_path: Path | str | None = None,
+        *,
+        ttl_seconds: int = DEFAULT_TTL_SECONDS,
+        encoding: str = "cp932",
+        fetch_timeout_seconds: float = 30.0,
+    ) -> None:
+        self._url = url
+        self._cache_path = Path(cache_path) if cache_path is not None else DEFAULT_CACHE_PATH
+        self._ttl_seconds = ttl_seconds
+        self._encoding = encoding
+        self._fetch_timeout = fetch_timeout_seconds
+
+    def load(self) -> list[Holiday]:
+        """キャッシュを確認してから、必要に応じてダウンロードして ``Holiday`` を返す。
+
+        Returns:
+            内閣府の祝日を日付順に並べた ``Holiday`` のリスト。
+
+        Raises:
+            HolidayCalendarFetchError: ダウンロードもキャッシュも読めない場合。
+        """
+        cached_bytes = self._read_cache_if_fresh()
+        if cached_bytes is not None:
+            return self._decode(cached_bytes)
+
+        try:
+            fresh_bytes = self._download()
+        except HolidayCalendarFetchError as error:
+            # 取得失敗時はキャッシュにフォールバック（あれば）
+            stale_bytes = self._read_cache_bytes()
+            if stale_bytes is not None:
+                logger.warning(
+                    "内閣府 CSV の取得に失敗したためキャッシュで代用します: %s",
+                    error,
+                )
+                return self._decode(stale_bytes)
+            raise
+
+        self._write_cache(fresh_bytes)
+        return self._decode(fresh_bytes)
+
+    # ── キャッシュ I/O ───────────────────────────────────────────────────────
+
+    def _read_cache_if_fresh(self) -> bytes | None:
+        """キャッシュが存在し、かつ TTL 内ならそのバイト列を返す。"""
+        if not self._cache_path.exists():
+            return None
+        age = _time.time() - self._cache_path.stat().st_mtime
+        if age > self._ttl_seconds:
+            logger.debug("キャッシュが古いため再取得します: %s", self._cache_path)
+            return None
+        logger.debug("キャッシュを使用します: %s", self._cache_path)
+        return self._cache_path.read_bytes()
+
+    def _read_cache_bytes(self) -> bytes | None:
+        """TTL を無視してキャッシュを読む。取得失敗時のフォールバック専用。"""
+        if not self._cache_path.exists():
+            return None
+        return self._cache_path.read_bytes()
+
+    def _write_cache(self, raw_bytes: bytes) -> None:
+        """取得したバイト列をキャッシュに書き込む（ディレクトリが無ければ作る）。"""
+        self._cache_path.parent.mkdir(parents=True, exist_ok=True)
+        # 既存ファイルを上書き（同名・同内容のとき mtime だけ更新するのを避けるため、
+        # 一度消してから書く）
+        if self._cache_path.exists():
+            self._cache_path.unlink()
+        self._cache_path.write_bytes(raw_bytes)
+
+    # ── ダウンロード ─────────────────────────────────────────────────────────
+
+    def _download(self) -> bytes:
+        """requests で内閣府の CSV を取得する。失敗時は HolidayCalendarFetchError。"""
+        # 遅延 import: requests はオフライン環境で入っていないことがあるため、
+        # 使うときだけ import し、無い環境では HolidayCalendarFetchError に変える。
+        try:
+            import requests  # type: ignore[import-not-found]
+        except ImportError as error:
+            raise HolidayCalendarFetchError(
+                self._url,
+                "requests ライブラリがインストールされていません。",
+            ) from error
+
+        try:
+            response = requests.get(self._url, timeout=self._fetch_timeout)
+            response.raise_for_status()
+        except requests.RequestException as error:  # type: ignore[attr-defined]
+            raise HolidayCalendarFetchError(self._url, str(error)) from error
+
+        return response.content
+
+    # ── デコード ─────────────────────────────────────────────────────────────
+
+    def _decode(self, raw_bytes: bytes) -> list[Holiday]:
+        """ダウンロードしたバイト列を ``Holiday`` のリストに変換する。"""
+        # CP932 で復号する。失敗時は文字コード違いとして FormatError にする
+        try:
+            text = raw_bytes.decode(self._encoding)
+        except UnicodeDecodeError as error:
+            raise HolidayCalendarFetchError(
+                self._url,
+                f"文字コード {self._encoding} で復号できませんでした: {error}",
+            ) from error
+
+        # csv_source は標準ライブラリだけで動くのでここで直接 import
+        from comken.toolbox.holidays.csv_source import parse_cabinet_office_text
+
+        try:
+            return parse_cabinet_office_text(text, source=self._url)
+        except HolidayCalendarFormatError as error:
+            raise HolidayCalendarFetchError(
+                self._url,
+                f"ダウンロードした内容を内閣府 CSV として解釈できません: {error}",
+            ) from error
+
+
+__all__ = ["CabinetOfficeCsvSource", "DEFAULT_URL", "DEFAULT_CACHE_PATH", "DEFAULT_TTL_SECONDS"]
+
+
+def _build_default_cache_path() -> Path:
+    """既定のキャッシュパスを組み立てる（テストで monkeypatch しやすいように分離）。"""
+    return DEFAULT_CACHE_PATH
+
+
+def _today() -> _dt.date:
+    """テストの差し替え用に ``datetime.date`` の生成を 1か所に集める。"""
+    return _dt.date.today()  # noqa: DTZ011  # ローカルタイムの日付を意図的に取得

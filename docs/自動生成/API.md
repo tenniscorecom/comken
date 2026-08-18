@@ -3151,6 +3151,117 @@ state に保存できない型の値が渡された
 def __init__(self, value: object) -> None:
 ```
 
+### `HolidayCalendarError`
+
+```text
+class HolidayCalendarError(ComkenError):
+```
+
+#### 説明
+
+祝日カレンダーに関するエラー
+
+対処:
+    画面に表示された具体的なエラー名を上の表から探す
+
+### `HolidayCalendarFetchError`
+
+```text
+class HolidayCalendarFetchError(HolidayCalendarError):
+```
+
+#### 説明
+
+内閣府の祝日 CSV を取得できない
+
+オフライン環境・社内ネットワークの制約・内閣府サイトの保守などの理由で
+ダウンロードが失敗する。**ただしキャッシュが残っている場合は警告ログのみで動く**
+（cached フラグで運用側が検知できる）。
+
+発生箇所: comken.toolbox.holidays.sources.cabinet_office の CabinetOfficeCsvSource
+
+対処:
+    ネットワーク接続と社内プロキシの設定を確認する。
+    それでも直らない場合は、保存済みのキャッシュで当面動かすか、
+    管理表（Excel）に会社休日を登録して代用する
+
+#### `__init__`
+
+```text
+def __init__(self, url: str, reason: str) -> None:
+```
+
+### `HolidayCalendarSourceError`
+
+```text
+class HolidayCalendarSourceError(HolidayCalendarError):
+```
+
+#### 説明
+
+祝日データの読み取りに失敗した
+
+内閣府の CSV 形式が変わった・社内管理表のシート名が違う・列が無い・
+文字化けしたなどの理由で、祝日を 1件も抽出できない場合に上げる。
+
+発生箇所: comken.toolbox.holidays の csv_source / sources/master_table
+
+対処:
+    内閣府の CSV の場合: 内閣府の仕様変更。管理者へ連絡する
+    管理表の場合: シート名と列名（"日付" / "名称"）を確認する
+
+#### `__init__`
+
+```text
+def __init__(self, source: str, reason: str) -> None:
+```
+
+### `HolidayCalendarFormatError`
+
+```text
+class HolidayCalendarFormatError(HolidayCalendarSourceError):
+```
+
+#### 説明
+
+内閣府 CSV 以外のファイルや壊れたファイルを内閣府 CSV として読み込もうとした
+
+発生箇所: comken.toolbox.holidays.csv_source の load_cabinet_office_csv
+
+対処:
+    内閣府の syukujitsu.csv を直接取得し直す。文字コードは CP932 (Shift_JIS)
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path | str, detail: str) -> None:
+```
+
+### `HolidayCalendarExpiredError`
+
+```text
+class HolidayCalendarExpiredError(HolidayCalendarError):
+```
+
+#### 説明
+
+祝日データの収録期間が今日の業務日付を超えている
+
+収録最終日 <= 今日になると「今日以降が祝日かどうか判定できない」ため、
+期限切れを専用例外で知らせる。
+
+発生箇所: comken.toolbox.holidays.calendar の HolidayCalendar
+
+対処:
+    内閣府の祝日 CSV を更新する（自動取得の場合は次の実行で反映される）、
+    または管理表に直近の祝日を追加する
+
+#### `__init__`
+
+```text
+def __init__(self, today: object, last_known: object) -> None:
+```
+
 ### `DownloaderError`
 
 ```text
@@ -5627,6 +5738,432 @@ def is_empty(self) -> bool:
 ##### 説明
 
 シートに値が1つもないか返す。
+
+
+## `from comken.toolbox.holidays import ...`
+
+### `CabinetOfficeCsvSource`
+
+```text
+class CabinetOfficeCsvSource(HolidaySource):
+```
+
+#### 説明
+
+内閣府の ``syukujitsu.csv`` をダウンロードして ``Holiday`` の iterable を返す。
+
+Args:
+    url: 内閣府の CSV の URL。既定は ``syukujitsu.csv`` の配布 URL。
+    cache_path: ダウンロードした CSV の保存先。既定は ``~/.comken/holidays/syukujitsu.csv``。
+    ttl_seconds: キャッシュの有効期限（秒）。経過していたら再取得する。
+    encoding: CSV の文字コード。CP932（Shift_JIS）のままで良い。
+    fetch_timeout_seconds: requests.get() のタイムアウト秒数。
+
+#### `__init__`
+
+```text
+def __init__(self, url: str=DEFAULT_URL, cache_path: Path | str | None=None, *, ttl_seconds: int=DEFAULT_TTL_SECONDS, encoding: str='cp932', fetch_timeout_seconds: float=30.0) -> None:
+```
+
+#### `load`
+
+```text
+def load(self) -> list[Holiday]:
+```
+
+##### 説明
+
+キャッシュを確認してから、必要に応じてダウンロードして ``Holiday`` を返す。
+
+Returns:
+    内閣府の祝日を日付順に並べた ``Holiday`` のリスト。
+
+Raises:
+    HolidayCalendarFetchError: ダウンロードもキャッシュも読めない場合。
+
+### `ComkenMasterTableSource`
+
+```text
+class ComkenMasterTableSource(HolidaySource):
+```
+
+#### 説明
+
+社内管理表の「会社休日」シートを読んで ``Holiday`` の iterable を返す。
+
+Args:
+    path: 管理表（Excel）のパス。
+    sheet_name: 読み取り対象のシート名。既定は ``"会社休日"``。
+    date_column: 日付が入っている列の見出し。既定は ``"日付"``。
+    name_column: 名称が入っている列の見出し。既定は ``"名称"``。
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path | str, *, sheet_name: str=DEFAULT_SHEET_NAME, date_column: str=DATE_COLUMN_HEADER, name_column: str=NAME_COLUMN_HEADER) -> None:
+```
+
+#### `load`
+
+```text
+def load(self) -> list[Holiday]:
+```
+
+##### 説明
+
+管理表から会社休日を読み取り、``Holiday`` のリストを返す。
+
+### `EXPIRING_WARNING_DAYS`
+
+公開定数。
+
+### `Holiday`
+
+```text
+class Holiday:
+```
+
+#### 説明
+
+祝日の1件。日付と名称だけを運ぶシンプルな箱。
+
+Attributes:
+    date: 祝日の日付（時刻・タイムゾーンは持たない業務日付）。
+    name: 祝日の日本語名称（例: "建国記念の日"）。
+
+### `HolidayCalendar`
+
+```text
+class HolidayCalendar:
+```
+
+#### 説明
+
+祝日を保持し、営業日判定を行うカレンダー本体。
+
+同じ日付に複数の祝日が登録された場合は**先勝ち**で WARNING ログを出す
+（内閣府と管理表の重複は珍しくないが、黙って採用するとどちらが正かを
+後から追えなくなる）。
+
+期限切れの警告（``EXPIRING_WARNING_DAYS`` を切った日）は **同じ日に
+1回だけ**出す。同じ日に ``is_business_day`` が何回呼ばれても
+ログが埋もれないため。
+
+#### `__init__`
+
+```text
+def __init__(self, holidays: Iterable[Holiday]) -> None:
+```
+
+##### 説明
+
+``Holiday`` の iterable から ``{日付: Holiday}`` の索引を作る。
+
+Args:
+    holidays: 祝日の iterable。同じ日付が複数含まれていたら先勝ちで WARNING。
+
+#### `from_csv`
+
+```text
+@classmethod
+def from_csv(cls, path: str | Path, *, encoding: str='cp932') -> 'HolidayCalendar':
+```
+
+##### 説明
+
+内閣府の ``syukujitsu.csv`` を直接読む最短ルート。
+
+Args:
+    path: CSV のパス。CP932（Shift_JIS）固定。
+    encoding: 文字コード。通常は ``cp932`` のままで良い。
+
+Returns:
+    読み込み結果から作った ``HolidayCalendar``。
+
+#### `from_sources`
+
+```text
+@classmethod
+def from_sources(cls, sources: Iterable[HolidaySource]) -> 'HolidayCalendar':
+```
+
+##### 説明
+
+複数の ``HolidaySource`` を合体させる（内閣府 + 管理表など）。
+
+Args:
+    sources: ``load()`` を持つ ``HolidaySource`` の iterable。
+        同じ日付が複数ソースにあれば **最初のソースの Holiday** が優先される。
+
+Returns:
+    全ソースを結合した ``HolidayCalendar``。
+
+#### `is_holiday`
+
+```text
+def is_holiday(self, target: _dt.date) -> bool:
+```
+
+##### 説明
+
+``target`` が祝日（または休日）なら ``True``。
+
+#### `holidays_in`
+
+```text
+def holidays_in(self, start: _dt.date, end: _dt.date) -> list[Holiday]:
+```
+
+##### 説明
+
+``start <= 日付 <= end`` の範囲に入る祝日を、日付順に返す。
+
+Args:
+    start: 範囲開始（含む）。
+    end: 範囲終了（含む）。
+
+Returns:
+    範囲内の ``Holiday`` を日付昇順で並べたリスト。
+    該当が無ければ空リスト。
+
+#### `is_business_day`
+
+```text
+def is_business_day(self, target: _dt.date, *, skip_weekends: bool=True) -> bool:
+```
+
+##### 説明
+
+``target`` が営業日なら ``True``。
+
+``skip_weekends=True``（既定）なら土曜・日曜も休業扱いにする。
+``False`` を渡すと、土曜・日曜であっても祝日でなければ「営業日」と
+判定される（振替休日を平日扱いするシナリオ向け）。
+
+「収録済み最終日 <= target」のときは期限切れを WARNING ログで 1度だけ
+通知する。判定自体は通常どおり行う（誤って平日扱いにならないよう、
+**収録範囲外は祝日ではない側に倒す**）。
+
+#### `next_business_day`
+
+```text
+def next_business_day(self, target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
+```
+
+##### 説明
+
+``target`` より後で最初の営業日（``is_business_day`` が True になる日）を返す。
+
+収録範囲外でも日付は進むが、祝日判定は「祝日ではない」と扱う。
+期限切れの警告は ``next_business_day`` の入口で 1度だけ出す。
+
+#### `expires_after`
+
+```text
+def expires_after(self, target: _dt.date) -> bool:
+```
+
+##### 説明
+
+``target`` が収録済み最終日以降（＝「収録期限を過ぎた」）なら ``True``。
+
+「収録済み最終日 <= target」を期限切れとみなす。等号を含めるのは、
+「収録最終日ぴったり」を「期限の境目」として扱うため（最終日当日は
+収録済みの祝日として判定できるが、それ以降は収録外）。
+
+#### `days_until_expiry`
+
+```text
+def days_until_expiry(self, today: _dt.date) -> int:
+```
+
+##### 説明
+
+``today`` から収録最終日までの日数。最終日を過ぎていれば負の値。
+
+Args:
+    today: 「今日」とみなす日付。
+
+Returns:
+    ``last_known - today`` の日数差。収録済み祝日が無いと ``-1``。
+
+#### `last_known_date`
+
+```text
+def last_known_date(self) -> _dt.date | None:
+```
+
+##### 説明
+
+収録済み祝日のうち最も新しい日付。無ければ ``None``。
+
+#### `holiday_names`
+
+```text
+def holiday_names(self, target: _dt.date) -> Sequence[str]:
+```
+
+##### 説明
+
+``target`` に登録された祝日名称のリスト（同日が複数あれば複数）。
+
+#### `all_holidays`
+
+```text
+def all_holidays(self) -> list[Holiday]:
+```
+
+##### 説明
+
+保持している祝日を日付順に並べたリストを返す。
+
+### `HolidayCalendarError`
+
+```text
+class HolidayCalendarError(ComkenError):
+```
+
+#### 説明
+
+祝日カレンダーに関するエラー
+
+対処:
+    画面に表示された具体的なエラー名を上の表から探す
+
+### `HolidayCalendarExpiredError`
+
+```text
+class HolidayCalendarExpiredError(HolidayCalendarError):
+```
+
+#### 説明
+
+祝日データの収録期間が今日の業務日付を超えている
+
+収録最終日 <= 今日になると「今日以降が祝日かどうか判定できない」ため、
+期限切れを専用例外で知らせる。
+
+発生箇所: comken.toolbox.holidays.calendar の HolidayCalendar
+
+対処:
+    内閣府の祝日 CSV を更新する（自動取得の場合は次の実行で反映される）、
+    または管理表に直近の祝日を追加する
+
+#### `__init__`
+
+```text
+def __init__(self, today: object, last_known: object) -> None:
+```
+
+### `HolidayCalendarFetchError`
+
+```text
+class HolidayCalendarFetchError(HolidayCalendarError):
+```
+
+#### 説明
+
+内閣府の祝日 CSV を取得できない
+
+オフライン環境・社内ネットワークの制約・内閣府サイトの保守などの理由で
+ダウンロードが失敗する。**ただしキャッシュが残っている場合は警告ログのみで動く**
+（cached フラグで運用側が検知できる）。
+
+発生箇所: comken.toolbox.holidays.sources.cabinet_office の CabinetOfficeCsvSource
+
+対処:
+    ネットワーク接続と社内プロキシの設定を確認する。
+    それでも直らない場合は、保存済みのキャッシュで当面動かすか、
+    管理表（Excel）に会社休日を登録して代用する
+
+#### `__init__`
+
+```text
+def __init__(self, url: str, reason: str) -> None:
+```
+
+### `HolidayCalendarFormatError`
+
+```text
+class HolidayCalendarFormatError(HolidayCalendarSourceError):
+```
+
+#### 説明
+
+内閣府 CSV 以外のファイルや壊れたファイルを内閣府 CSV として読み込もうとした
+
+発生箇所: comken.toolbox.holidays.csv_source の load_cabinet_office_csv
+
+対処:
+    内閣府の syukujitsu.csv を直接取得し直す。文字コードは CP932 (Shift_JIS)
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path | str, detail: str) -> None:
+```
+
+### `HolidayCalendarSourceError`
+
+```text
+class HolidayCalendarSourceError(HolidayCalendarError):
+```
+
+#### 説明
+
+祝日データの読み取りに失敗した
+
+内閣府の CSV 形式が変わった・社内管理表のシート名が違う・列が無い・
+文字化けしたなどの理由で、祝日を 1件も抽出できない場合に上げる。
+
+発生箇所: comken.toolbox.holidays の csv_source / sources/master_table
+
+対処:
+    内閣府の CSV の場合: 内閣府の仕様変更。管理者へ連絡する
+    管理表の場合: シート名と列名（"日付" / "名称"）を確認する
+
+#### `__init__`
+
+```text
+def __init__(self, source: str, reason: str) -> None:
+```
+
+### `HolidaySource`
+
+```text
+class HolidaySource(Protocol):
+```
+
+#### 説明
+
+祝日を 1セット取り出せる仕組みの共通インタフェース。
+
+内阁府の ``CabinetOfficeCsvSource`` と、社内の ``ComkenMasterTableSource`` の両方が
+これを実装するため、利用側は入手経路を意識せずに ``from_sources`` に渡せる。
+
+この Protocol はメソッドの型を ``Iterable[Holiday]`` に固定する。
+``load()`` を呼んだその瞬間に取得が走る（キャッシュは実装側で持つ）のが
+一貫していて読みやすい。実装が iterable を返したい場合は
+中で ``list()`` してから返してもよい。
+
+#### `load`
+
+```text
+def load(self) -> Iterable[Holiday]:
+```
+
+### `is_business_day`
+
+```text
+def is_business_day(target: _dt.date, *, calendar: HolidayCalendar, skip_weekends: bool=True) -> bool:
+```
+
+#### 説明
+
+``calendar`` を介さずに使える簡易判定。
+
+``calendar`` をキーワード専用にして、呼び出し側がうっかり位置引数で
+日付とカレンダーを取り違える事故を防ぐ。
 
 
 ## `from comken.toolbox.outlook import ...`

@@ -93,6 +93,11 @@ ComkenError
 │   ├── StateFileCorruptedError
 │   ├── StateLowerCaseNameError
 │   └── StateValueTypeError
+├── HolidayCalendarError
+│   ├── HolidayCalendarFetchError
+│   ├── HolidayCalendarSourceError
+│   │   └── HolidayCalendarFormatError
+│   └── HolidayCalendarExpiredError
 └── DownloaderError
 │   ├── ReportNotRegisteredError
 │   ├── ReportDisabledError
@@ -199,6 +204,13 @@ from comken.exceptions.excel import (
     TableNotFoundError,
 )
 from comken.exceptions.file import UnsupportedFileSuffixError
+from comken.exceptions.holiday import (
+    HolidayCalendarError,
+    HolidayCalendarExpiredError,
+    HolidayCalendarFetchError,
+    HolidayCalendarFormatError,
+    HolidayCalendarSourceError,
+)
 from comken.exceptions.master_table import (
     MasterColumnNotFoundError,
     MasterDuplicateValueError,
@@ -328,6 +340,11 @@ __all__ = [
     "StateFileCorruptedError",
     "StateLowerCaseNameError",
     "StateValueTypeError",
+    "HolidayCalendarError",
+    "HolidayCalendarFetchError",
+    "HolidayCalendarSourceError",
+    "HolidayCalendarFormatError",
+    "HolidayCalendarExpiredError",
     "DownloaderError",
     "ReportNotRegisteredError",
     "ReportDisabledError",

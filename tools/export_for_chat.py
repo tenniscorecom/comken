@@ -58,6 +58,7 @@ ERROR_CATEGORIES = (
             exceptions.RpaError,
             exceptions.SalesforceError,
             exceptions.CredentialError,
+            exceptions.HolidayCalendarError,
         ),
     ),
     ErrorCategory("ブラウザ（Edge 自動操作）のエラー", (exceptions.BrowserError,)),

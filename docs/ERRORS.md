@@ -129,6 +129,11 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `StateFileCorruptedError` | state.ini が壊れていて読み取れない | 内容を直す。直せない場合は別名に変更して、空の状態から再実行する |
 | `StateLowerCaseNameError` | state のキー名に小文字がある | 表示されたキー名を大文字に直す（`last_file` → `LAST_FILE`） |
 | `StateValueTypeError` | state に保存できない型の値が渡された | 真偽値・整数・小数・文字列・文字列のリストのいずれかに変更する |
+| `HolidayCalendarError` | 祝日カレンダーに関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
+| `HolidayCalendarFetchError` | 内閣府の祝日 CSV を取得できない | ネットワーク接続と社内プロキシの設定を確認する。それでも直らない場合は、保存済みのキャッシュで当面動かすか、管理表（Excel）に会社休日を登録して代用する |
+| `HolidayCalendarSourceError` | 祝日データの読み取りに失敗した | 内閣府の CSV の場合: 内閣府の仕様変更。管理者へ連絡する管理表の場合: シート名と列名（"日付" / "名称"）を確認する |
+| `HolidayCalendarFormatError` | 内閣府 CSV 以外のファイルや壊れたファイルを内閣府 CSV として読み込もうとした | 内閣府の syukujitsu.csv を直接取得し直す。文字コードは CP932 (Shift_JIS) |
+| `HolidayCalendarExpiredError` | 祝日データの収録期間が今日の業務日付を超えている | 内閣府の祝日 CSV を更新する（自動取得の場合は次の実行で反映される）、または管理表に直近の祝日を追加する |
 | `ReportNotRegisteredError` | 指定した管理番号が管理表に無い | 管理表を開いて、その管理番号の行があるか確認する。新しく使うレポートは、先に管理表へ登録する |
 | `ReportDisabledError` | 管理表で「無効」になっているレポートを取ろうとした | また使うなら管理表の「有効」を「有効」に戻す。使わないなら、呼び出し側のコードから消す |
 | `InvalidReportUrlError` | 管理表の URL から Salesforce のレポート ID を取り出せない | Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す |

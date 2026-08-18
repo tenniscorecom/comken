@@ -36,7 +36,7 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
 |---|---|
 | はじめて使う | この README の「[はじめて使う人へ](#はじめて使う人へ)」 |
 | 何が用意されているか探す | このREADMEの「[モジュール一覧](#モジュール一覧)」 |
-| モジュールの使い方を知る | [CSV](docs/csv.md)・[Excel](docs/excel.md)・[Access](docs/access.md)・[Outlook](docs/outlook.md)・[Windows](docs/windows.md)・[ブラウザ](docs/browser.md)・[Salesforce](docs/salesforce.md)・[レポートの集約取得](docs/salesforce-downloader.md)・[管理表](docs/master-table.md)・[core の部品](docs/core.md)・[認証情報](docs/credentials.md) |
+| モジュールの使い方を知る | [CSV](docs/csv.md)・[Excel](docs/excel.md)・[Access](docs/access.md)・[Outlook](docs/outlook.md)・[Windows](docs/windows.md)・[ブラウザ](docs/browser.md)・[Salesforce](docs/salesforce.md)・[レポートの集約取得](docs/salesforce-downloader.md)・[管理表](docs/master-table.md)・[core の部品](docs/core.md)・[認証情報](docs/credentials.md)・[祝日判定](docs/holidays.md) |
 | **初めて外部システムにつなぐ** | ID とパスワードの[登録](docs/credentials.md#登録初回だけ) → [Salesforce につないで確かめる](docs/salesforce.md#つないで確かめるコマンド) |
 | 引数・戻り値・例外を正確に知る | [公開 API](docs/自動生成/API.md)（**自動生成**） |
 | エラーが出た | [エラー対応ガイド](docs/ERRORS.md)（エラー表は **自動生成**） |
@@ -106,6 +106,7 @@ import の書き方は上の「[使うときの約束](#使うときの約束)�
 | [Salesforce レポートの集約取得](docs/salesforce-downloader.md) | 管理表（Excel）に沿ってレポートを取得し、履歴を残す（どのプロジェクトが何を使っているかが分かる） |
 | [Salesforce認証の判断根拠](docs/開発/salesforce-authentication.md) | ECA・Refresh Token Flow を既定にした理由と公式資料 |
 | [credentials（DPAPI）](docs/credentials.md) | パスワード・client_secret の暗号化保存（Windows ユーザーに紐付く） |
+| [祝日判定](docs/holidays.md) | 内閣府の祝日 CSV（CP932）+ 社内管理表の会社休日をマージして営業日判定 |
 | [core（部品）](docs/core.md) | `from comken.core import ...` で取る24個。ファイル検索・操作・圧縮・ファイル名の組み立て／データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時 |
 
 ## 定数クラス一覧
