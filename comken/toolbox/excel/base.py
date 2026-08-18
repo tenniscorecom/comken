@@ -12,7 +12,7 @@ import logging
 from collections.abc import Generator
 from contextlib import closing
 from pathlib import Path
-from typing import Any, Self
+from typing import Any, Self, cast
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils.cell import range_boundaries
@@ -278,7 +278,11 @@ class ExcelBase(FileBase):
         if table_name not in ws.tables:
             raise TableNotFoundError(table_name, list(ws.tables))
         table = ws.tables[table_name]
-        min_col, header_row, max_col, last_row = range_boundaries(table.ref)
+        # table.ref は構造化テーブルを作るときに comken が "A1:B3" 形式で必ず設定する
+        # ため None にならない
+        min_col, header_row, max_col, last_row = cast(
+            tuple[int, int, int, int], range_boundaries(table.ref)
+        )
         # 集計行があるテーブルは、最終行から totalsRowCount 行分をデータから省く。
         totals_count = int(getattr(table, "totalsRowCount", 0) or 0)
         data_last_row = last_row - totals_count if totals_count else last_row

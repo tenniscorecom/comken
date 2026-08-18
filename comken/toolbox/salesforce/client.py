@@ -61,6 +61,11 @@ RETRY_WAIT_SECONDS = 2
 class _OAuth(Protocol):
     """Salesforceクライアントが認証方式へ求める最小インターフェース。"""
 
+    @classmethod
+    def from_credentials(cls, domain_url: str, prefix: str) -> Self:
+        """認証情報からインスタンスを組み立てる（具象クラスごとに実装する）。"""
+        ...
+
     def fetch(self) -> tuple[str, str]:
         """アクセストークンとinstance_urlを返す。"""
         ...
@@ -346,6 +351,9 @@ class SalesforceBase:
         """
         start = time.perf_counter()
         is_reauthenticated = False
+        # range(1, MAX_ATTEMPTS + 1) は必ず1回以上回るため、response は必ず束縛される。
+        # pyright にはこのループ不変条件が見えないので、Optional で宣言してループ後に絞り込む
+        response: requests.Response | None = None
         for attempt in range(1, MAX_ATTEMPTS + 1):
             # instance_url は再認証で変わりうるので、毎回組み立て直す
             response = self._send(method, self._request_url(path), body)
@@ -377,6 +385,8 @@ class SalesforceBase:
 
             break
 
+        # ループ不変条件により response は必ず束縛済み。型スタブ上は None の可能性が残るため絞り込む
+        assert response is not None
         is_error = response.status_code >= HTTP_BAD_REQUEST
         self.metrics.record_call(component, time.perf_counter() - start, is_error=is_error)
 

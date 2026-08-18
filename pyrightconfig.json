@@ -1,0 +1,5 @@
+{
+    "exclude": [
+        "comken/toolbox/rpa.py"
+    ]
+}

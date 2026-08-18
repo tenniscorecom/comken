@@ -1,7 +1,7 @@
 """comken/exceptions/warning.py — 型変換時に使う警告。"""
 
 import warnings
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 _T = TypeVar("_T")
 
@@ -27,4 +27,6 @@ def _warn_coerce(value: Any, expected: type[_T], param: str, stacklevel: int = 3
             UserWarning,
             stacklevel=stacklevel,
         )
-    return expected(value)
+    # expected(value) は呼び出し側で型が確定した状態で渡されるため、pyright が「型 _T は
+    # 引数を取らない」と誤検知する。実行時は呼び出し側で str/int などの具体型を渡されるため安全
+    return cast(_T, expected(value))  # type: ignore[call-arg]

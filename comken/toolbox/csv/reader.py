@@ -7,7 +7,9 @@ import csv
 import io
 import re
 from collections import Counter
+from collections.abc import Sequence
 from pathlib import Path
+from typing import cast
 
 from comken.constants import Encoding
 from comken.core.data import col_to_num
@@ -56,7 +58,9 @@ class CsvReader(CsvBase):
         """
         super().__init__(path, encoding)
         self._headers = headers
-        self._fieldnames: list[str] | None = None
+        # csv.DictReader.fieldnames の型スタブは Sequence[str] | None。
+        # 読み出しは in 演算子しかしないため list[str] | None より緩い型で受ける
+        self._fieldnames: Sequence[str] | None = None
         self._cache: list[dict[str, str]] | None = None
 
     def _load(self) -> list[dict[str, str]]:
@@ -92,7 +96,8 @@ class CsvReader(CsvBase):
             return  # データがなければ検証できない（空の結果を返す側に任せる）
         missing = [col for col in columns if col not in self._fieldnames]
         if missing:
-            raise CsvColumnNotFoundError(missing, self._fieldnames)
+            # CsvColumnNotFoundError は list[str] を要求するため、Sequence[str] を list にキャスト
+            raise CsvColumnNotFoundError(missing, cast(list[str], self._fieldnames))
 
     def _read_text(self) -> str:
         """ファイルを読み、文字コードを判定してテキストとして返す。

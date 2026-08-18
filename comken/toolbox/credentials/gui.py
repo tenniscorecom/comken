@@ -13,6 +13,7 @@ tkinter（Python 標準ライブラリ）製。ターミナルを使わない人
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
+from typing import cast
 
 from comken.exceptions import CredentialError, CredentialNotFoundError
 from comken.toolbox.credentials.importer import credential_name, import_json
@@ -180,9 +181,10 @@ class CredentialsApp:
             return
 
         try:
-            save_credential(name, value, self._path)
+            # build_credential_name() は error が None のとき name を str で返す契約
+            save_credential(cast(str, name), value, self._path)
             # 読み直せることまで確かめる。桁数を出せば、貼り間違いはここで気づける
-            length = len(load_credential(name, self._path))
+            length = len(load_credential(cast(str, name), self._path))
         except CredentialError as e:
             messagebox.showerror("登録できませんでした", str(e), parent=self.root)
             return

@@ -59,7 +59,7 @@ import dataclasses
 from collections.abc import Iterator
 from dataclasses import dataclass, field, fields
 from pathlib import Path
-from typing import Any, ClassVar, Self
+from typing import Any, ClassVar, Self, cast
 
 from openpyxl.styles import Font, PatternFill
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -402,8 +402,11 @@ class MasterRow:
         `column()` を使っていないフィールドは、**名前をそのまま見出しにする**
         （見出しと同じ名前が使えるなら、宣言は型注釈だけで済む）。
         """
+        # fields() は Protocol[DataclassInstance] を要求するが、MasterRow 本体は dataclass で
+        # なく Protocol の構造的条件を満たさない。cls は実行時には必ず dataclass 派生のため
+        # type へキャストしてエラーを消す。利用側は docstring 冒頭の通り @dataclass を付ける
         found = []
-        for item in fields(cls):
+        for item in fields(cast(type, cls)):
             spec = item.metadata.get(_SPEC_KEY) or ColumnSpec(header=item.name)
             found.append((item.name, spec, item.type))
         return found
@@ -443,7 +446,9 @@ def _require_headers(cls: type[MasterRow], raw: dict, source: Path) -> None:
 
 def _default_of(cls: type[MasterRow], name: str) -> Any:
     """そのフィールドの既定値（無ければ MISSING）。"""
-    for item in fields(cls):
+    # fields() は Protocol[DataclassInstance] を要求するが、MasterRow 本体は Protocol の構造的条件を
+    # 満たさない。cls は実行時には必ず dataclass 派生のため type へキャストしてエラーを消す
+    for item in fields(cast(type, cls)):
         if item.name == name:
             return item.default
     return dataclasses.MISSING

@@ -37,10 +37,11 @@ import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Self, TypeVar
+from typing import Self, TypeVar, cast
 
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.alert import Alert
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
@@ -221,17 +222,18 @@ class Page:
     def alert_accept(self) -> None:
         """ブラウザの確認ダイアログで OK を押す。出るまで待つ。"""
         with self.session._operating("alert_accept"):
-            self._until(EC.alert_is_present(), "alert", "現れ").accept()
+            # EC.alert_is_present() の戻り Alert を pyright が bool と推論するため、Alert に直す
+            cast(Alert, self._until(EC.alert_is_present(), "alert", "現れ")).accept()
 
     def alert_dismiss(self) -> None:
         """ブラウザの確認ダイアログでキャンセルを押す。出るまで待つ。"""
         with self.session._operating("alert_dismiss"):
-            self._until(EC.alert_is_present(), "alert", "現れ").dismiss()
+            cast(Alert, self._until(EC.alert_is_present(), "alert", "現れ")).dismiss()
 
     def read_alert_text(self) -> str:
         """ブラウザの確認ダイアログの文言を返す。出るまで待つ。"""
         with self.session._operating("read_alert_text"):
-            return self._until(EC.alert_is_present(), "alert", "現れ").text
+            return cast(Alert, self._until(EC.alert_is_present(), "alert", "現れ")).text
 
     # ------------------------------------------------------------ 逃げ道
 

@@ -46,4 +46,7 @@ class ExampleSite(SiteBase):
         遷移図になる。ログイン画面を増やしたくなったら、ここに `go_〇〇()` を
         足していく（例: `go_top()`, `go_admin()` ...）。
         """
-        return self.to(LoginPage).go("/login")
+        # 雛形の LoginPage は Page を継承しているため `go()` を持たない。BASE_URL からの
+        # 相対パスを組み立てて Page.open() で開く（SitePage を作ったあとの共通基底では
+        # `self.to(LoginPage).go("/login")` 形に書き換えてよい）
+        return self.to(LoginPage).open(self.BASE_URL + "/login")

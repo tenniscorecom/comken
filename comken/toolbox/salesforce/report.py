@@ -164,6 +164,9 @@ class ReportApi:
             if status == "Success":
                 return self._parse(data, report_id, allow_truncated)
             if status == "Error":
+                # data の dict への絞り込みは関数内で完結させる（再判定せず typing 用に分岐）
+                if not isinstance(data, dict):
+                    raise SalesforceReportExecutionError(report_id, "詳細情報なし")
                 detail = str(data.get("error", data.get("message", "詳細情報なし")))
                 raise SalesforceReportExecutionError(report_id, detail)
             time.sleep(POLL_INTERVAL_SECONDS)

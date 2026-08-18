@@ -112,7 +112,10 @@ class ExcelWriter(ExcelBase):
         instance._working_path = instance._original_path
         instance._headers = None
         instance._wb = Workbook()
-        instance._wb.active.title = sheet_name
+        # 新規 Workbook() は必ず既定で1枚のアクティブシートを持つため None にはならない
+        active = instance._wb.active
+        if active is not None:
+            active.title = sheet_name
         return instance
 
     @measure

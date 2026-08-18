@@ -46,7 +46,9 @@ from comken.exceptions import (
 )
 
 # 保存先フォルダ名はパッケージ名に自動追従する（パッケージ名を変更しても書き換え不要）
-_PACKAGE_NAME = __package__.split(".")[0]
+# __package__ は実行時に必ず設定されているが、pyright の型スタブでは str | None のため
+# フォールバックを添える（None のとき __name__ から先頭セグメントを取り出す）
+_PACKAGE_NAME = (__package__ or __name__.split(".", 1)[0]).split(".")[0]
 
 CREDENTIALS_PATH = Path.home() / f".{_PACKAGE_NAME}" / "credentials.dat"
 

@@ -6,7 +6,9 @@ ExcelWriter.sheet() から取得し、セル書き込み・行書き込み・列
 
 import logging
 import re
+from typing import cast
 
+from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.utils.cell import range_boundaries
@@ -188,8 +190,11 @@ class Sheet:
         スタイルを変えたい場合は .ws から openpyxl を直接使用する。
         """
         _validate_table_name(name)
+        # Worksheet.parent は Workbook を指す。ExcelBase 経由で取得したシートなので
+        # None にはならない
+        parent = cast(Workbook, self.ws.parent)
         workbook_table_names = [
-            table_name for worksheet in self.ws.parent.worksheets for table_name in worksheet.tables
+            table_name for worksheet in parent.worksheets for table_name in worksheet.tables
         ]
         if name.casefold() in {table_name.casefold() for table_name in workbook_table_names}:
             raise TableAlreadyExistsError(name)
@@ -213,7 +218,11 @@ class Sheet:
         if not rows:
             return
         table = self._table(name)
-        min_col, header_row, max_col, last_row = range_boundaries(table.ref)
+        # table.ref は構造化テーブルを作るときに comken が "A1:B3" 形式で必ず設定する
+        # ため None にならない
+        min_col, header_row, max_col, last_row = cast(
+            tuple[int, int, int, int], range_boundaries(table.ref)
+        )
         headers = [
             self.ws.cell(row=header_row, column=col).value for col in range(min_col, max_col + 1)
         ]
@@ -231,7 +240,9 @@ class Sheet:
     def clear_table(self, name: str) -> None:
         """構造化テーブルのデータ行だけを消す（見出し行は残す）。"""
         table = self._table(name)
-        min_col, header_row, max_col, last_row = range_boundaries(table.ref)
+        min_col, header_row, max_col, last_row = cast(
+            tuple[int, int, int, int], range_boundaries(table.ref)
+        )
         if last_row > header_row:
             for row in self.ws.iter_rows(
                 min_row=header_row + 1,
@@ -255,7 +266,9 @@ class Sheet:
         ``[@列名]`` の構造化参照はテーブル内のセルでのみ有効。
         """
         table = self._table(name)
-        min_col, header_row, max_col, _ = range_boundaries(table.ref)
+        min_col, header_row, max_col, _ = cast(
+            tuple[int, int, int, int], range_boundaries(table.ref)
+        )
         headers = [
             self.ws.cell(row=header_row, column=col).value for col in range(min_col, max_col + 1)
         ]
