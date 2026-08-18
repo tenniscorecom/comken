@@ -53,8 +53,9 @@ NAMED_FILES = ("main.py", "docs/仕様書.md", "docs/使い方.md")
 PLACEHOLDER_PYTHON_LIBRARY = r"\\server\share\tools"
 
 # comken の場所を書いてあるファイル。bat は \ 区切り、settings.json は JSON なので / 区切り。
+# 雛形には `認証情報の登録.bat` しか無い。`実行.bat` は RPA 基盤が `python main.py` を
+# 直接呼ぶ運用になったため外した（プロジェクト側に PYTHONPATH を設定する bat が要らない）。
 PYTHON_LIBRARY_FILES = (
-    "実行.bat",
     "認証情報の登録.bat",
     ".vscode/settings.json",
 )
@@ -79,8 +80,9 @@ def _fill_project_name(target: Path, project_name: str) -> None:
 def _fill_python_library(target: Path, python_library: Path) -> None:
     """ひな形に書いてある comken の場所を、実際の場所に置き換える。
 
-    実行.bat（実行時の PYTHONPATH）と .vscode/settings.json（VS Code の補完・定義ジャンプ）で
-    同じ場所が要る。手で両方を直す形にすると片方を忘れ、動くのに補完だけ効かない状態になる。
+    認証情報の登録.bat（実行時の PYTHONPATH）と .vscode/settings.json
+    （VS Code の補完・定義ジャンプ）で同じ場所が要る。手で両方を直す形にすると
+    片方を忘れ、動くのに補完だけ効かない状態になる。
     忘れようがないよう、ここでまとめて入れる。
     """
     slash_placeholder = PLACEHOLDER_PYTHON_LIBRARY.replace("\\", "/")
@@ -163,10 +165,13 @@ def main() -> None:
 
     print(f"作成しました: {target}")
     print(f"comken の場所: {args.python_library}")
-    print("  （実行.bat と .vscode/settings.json に入れました。違う場合は両方を直してください）")
+    print(
+        "  （認証情報の登録.bat と .vscode/settings.json に書きました。"
+        "違う場合は両方を直してください）"
+    )
     print("")
     print("次にやること:")
-    print("  1. 実行.bat を1度動かすと config.ini が作られるので、値を書き換える")
+    print("  1. python main.py を1度動かすと config.ini が作られるので、値を書き換える")
     print("  2. src/run.py の run() に処理を書く")
     print("  3. docs/使い方.md・docs/仕様書.md の（ここを書く）を埋める")
 

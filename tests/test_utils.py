@@ -846,8 +846,8 @@ class TestProjectDir:
     def test_is_independent_of_the_current_directory(self, tmp_path, monkeypatch):
         """カレントディレクトリを移動しても結果が変わらない。
 
-        `実行.bat` はプロジェクト直下から動かすが、RPA 基盤や
-        タスクスケジューラ経由だとカレントが別の場所になることがある。
+        RPA 基盤やタスクスケジューラ経由だと
+        カレントが別の場所になることがある。
         """
         script = tmp_path / "main.py"
         script.touch()

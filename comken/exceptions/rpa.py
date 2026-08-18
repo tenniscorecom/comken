@@ -17,7 +17,7 @@ class RpaLibraryNotFoundError(RpaError):
     発生箇所: comken.toolbox.rpa.backoffice() / comken.toolbox.rpa.intranet()
 
     対処:
-        実行.bat の PYTHONPATH に社内ライブラリが入っているか確認する。
+        PYTHONPATH に社内ライブラリが入っているか確認する。
         バージョンが変わった場合は管理者へ連絡する
     """
 

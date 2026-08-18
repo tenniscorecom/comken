@@ -44,13 +44,14 @@ config.ini の例（セクション名・キー名は大文字で書く）:
 #### `__init__`
 
 ```text
-def __init__(self, path: str | Path='config.ini') -> None:
+def __init__(self, path: str | Path | None=None) -> None:
 ```
 
 ##### 説明
 
 Args:
-    path: config.ini のパス。省略するとカレントディレクトリの config.ini を読む。
+    path: config.ini のパス。省略するとプロジェクトのフォルダ
+        （main.py の場所）の config.ini を読む。
 
 #### `mapping`
 
@@ -332,12 +333,13 @@ class State:
 保存できる値は、真偽値・整数・小数・文字列・文字列のリスト。
 
 Args:
-    path: state.ini のパス。省略すると実行フォルダ直下の state.ini。
+    path: state.ini のパス。省略するとプロジェクトのフォルダ（main.py の場所）の
+          state.ini。
 
 #### `__init__`
 
 ```text
-def __init__(self, path: str | Path='state.ini') -> None:
+def __init__(self, path: str | Path | None=None) -> None:
 ```
 
 #### `get`
@@ -563,7 +565,11 @@ def project_dir() -> Path:
 入力元・出力先は config.ini に書くのが基本なので、これが要るのは
 **プロジェクトに同梱したファイルを読む**ような場面に限られる。
 
-対話実行（REPL）や pytest から呼ぶと、その実行環境の場所を返す。
+社内 RPA 基盤は `C:\` など別の場所をカレントにして
+`python <絶対パス>\main.py` と呼ぶ。**カレントではなくスクリプトの場所**を
+返すのはそのためで、config.ini・state.ini・logs/ もこれを基準にしている。
+
+対話実行（REPL）や pytest、`python -m 〇〇` から呼ぶと、その実行環境の場所を返す。
 バッチとして動かす前提の関数なので、そこは想定していない。
 
 Returns:
@@ -922,7 +928,11 @@ def project_dir() -> Path:
 入力元・出力先は config.ini に書くのが基本なので、これが要るのは
 **プロジェクトに同梱したファイルを読む**ような場面に限られる。
 
-対話実行（REPL）や pytest から呼ぶと、その実行環境の場所を返す。
+社内 RPA 基盤は `C:\` など別の場所をカレントにして
+`python <絶対パス>\main.py` と呼ぶ。**カレントではなくスクリプトの場所**を
+返すのはそのためで、config.ini・state.ini・logs/ もこれを基準にしている。
+
+対話実行（REPL）や pytest、`python -m 〇〇` から呼ぶと、その実行環境の場所を返す。
 バッチとして動かす前提の関数なので、そこは想定していない。
 
 Returns:
@@ -2177,7 +2187,7 @@ class RpaLibraryNotFoundError(RpaError):
 発生箇所: comken.toolbox.rpa.backoffice() / comken.toolbox.rpa.intranet()
 
 対処:
-    実行.bat の PYTHONPATH に社内ライブラリが入っているか確認する。
+    PYTHONPATH に社内ライブラリが入っているか確認する。
     バージョンが変わった場合は管理者へ連絡する
 
 #### `__init__`

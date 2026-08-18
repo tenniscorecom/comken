@@ -18,20 +18,19 @@ comken（社内共通ライブラリ）を使った業務自動化ツールで�
 
 ## セットアップ（初回だけ）
 
-1. `実行.bat` を1度動かす。`config.ini.example` から `config.ini` が作られるので、値を書き換える
+1. `python main.py` を1度動かす。`config.ini.example` から `config.ini` が作られるので、値を書き換える
 
 comken の場所（`PYTHON_LIBRARY`）は作成時に入っているので、通常は触らなくてよい。
-comken を別の場所へ移したときだけ、`実行.bat` と `.vscode/settings.json` の**両方**を直す
+comken を別の場所へ移したときだけ、`認証情報の登録.bat` と `.vscode/settings.json` の**両方**を直す
 （前者は実行用、後者は VS Code の補完・定義ジャンプ用。片方だけ直すと、動くのに補完が効かなくなる）。
 
 ## 実行
 
-**人が手で動かすとき**は `実行.bat` をダブルクリック（または `python main.py`）。
+**人が手で動かすとき**は `python main.py` を実行する。
 
-**社内 RPA 基盤から動かすときは `実行.bat` を使わない。** RPA が
-`python <このフォルダ>\main.py` を直接呼ぶ。PYTHONPATH は PC 側で通っているので、
-bat が肩代わりしている PYTHONPATH の設定も要らない。
-そのときは `main.py` の末尾のコメント（社内 RPA 基盤から実行する場合）に従って
+**社内 RPA 基盤から動かすとき**も `python <このフォルダ>\main.py` を直接呼ぶ形になる。
+PYTHONPATH は PC 側で通っているので、bat が肩代わりしていた PYTHONPATH の設定は要らない。
+RPA 基盤から呼び出すときは `main.py` の末尾のコメント（社内 RPA 基盤から実行する場合）に従って
 `main.py` を書き換える。
 
 ---

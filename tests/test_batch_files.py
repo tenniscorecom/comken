@@ -113,10 +113,9 @@ def test_batch_file_checks_comken_before_running(path: Path):
 
 # comken の場所を「bat 自身のフォルダ以外」から知る手段。**bat ごとに違う。**
 # setup は PYTHONPATH を「これから通す」側なので、そこから探してはいけない。
-# プロジェクト側へ配る bat（実行・認証情報の登録）は、もともと先頭の固定値を書き換えて使う。
+# プロジェクト側へ配る bat（認証情報の登録）は、もともと先頭の固定値を書き換えて使う。
 _SECOND_SOURCE = {
     "setup_comken.bat": ('set "PYTHON_LIBRARY_FIXED=', "bat に書いておく固定値"),
-    "実行.bat": ('set "PYTHON_LIBRARY=', "bat に書いておく固定値"),
     "認証情報の登録.bat": ('set "PYTHON_LIBRARY=', "bat に書いておく固定値"),
 }
 

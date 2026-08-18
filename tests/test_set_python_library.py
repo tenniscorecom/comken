@@ -31,10 +31,10 @@ SETTINGS_TEMPLATE = """{{
 
 
 def _project(parent, name, root=OLD_ROOT):
-    """実行.bat と .vscode/settings.json を持つプロジェクトを1つ作る。"""
+    """認証情報の登録.bat と .vscode/settings.json を持つプロジェクトを1つ作る。"""
     folder = parent / name
     (folder / ".vscode").mkdir(parents=True)
-    (folder / "実行.bat").write_text(BAT_TEMPLATE.format(root=root), encoding="cp932")
+    (folder / "認証情報の登録.bat").write_text(BAT_TEMPLATE.format(root=root), encoding="cp932")
     (folder / ".vscode" / "settings.json").write_text(
         SETTINGS_TEMPLATE.format(root=root.replace("\\", "/")), encoding="utf-8"
     )
@@ -42,7 +42,7 @@ def _project(parent, name, root=OLD_ROOT):
 
 
 def _bat_text(folder):
-    return (folder / "実行.bat").read_text(encoding="cp932")
+    return (folder / "認証情報の登録.bat").read_text(encoding="cp932")
 
 
 def _settings_text(folder):
@@ -69,7 +69,7 @@ class TestApply:
         folder = _project(tmp_path, "案件A")
         main([NEW_ROOT, str(folder), "--apply"])
         assert "日本語のコメントが化けない" in _bat_text(folder)
-        assert (folder / "実行.bat").read_bytes().decode("cp932")  # CP932 として読める
+        assert (folder / "認証情報の登録.bat").read_bytes().decode("cp932")  # CP932 として読める
 
     def test_all_projects_under_the_folder(self, tmp_path):
         """プロジェクトを並べた親フォルダを渡すと、その下を全部書き換える。"""
