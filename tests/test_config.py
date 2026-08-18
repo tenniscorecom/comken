@@ -381,6 +381,17 @@ class TestConfigMissingSection:
         message = str(exc.value)
         assert "もしかして: [FILE]" in message
 
+    def test_missing_section_suggests_transposed_name(self, tmp_path):
+        """隣り合う 2 文字の入れ替わりも 1 回の編集として候補に出す。"""
+        from comken.exceptions import ConfigSectionNotFoundError
+
+        ini = tmp_path / "config.ini"
+        ini.write_text("[FILSE]\nK = 1\n", encoding="utf-8")
+        config = Config(ini)
+        with pytest.raises(ConfigSectionNotFoundError) as exc:
+            _ = config.FILES
+        assert "もしかして: [FILSE]" in str(exc.value)
+
     def test_missing_section_suggests_japanese_close_name(self, tmp_path):
         """日本語セクション名でも近い候補を出す（``受注_MAPPING`` ↔ ``受注_MAPPNG``）。
 
@@ -452,6 +463,26 @@ class TestConfigMissingKey:
         with pytest.raises(ConfigKeyNotFoundError) as exc:
             _ = config.FILES.OUTPUT_FOLER
         assert "もしかして: OUTPUT_FOLDER" in str(exc.value)
+
+    def test_missing_key_rejects_distance_three_name(self, tmp_path):
+        """距離3の INPUT_FOLDER は候補にせず OUTPUT_FOLDER だけを示す。
+
+        防いでいる事故: difflib の類似比率は文字列長に依存するため、
+        OUTPUT_FOLER に対して INPUT_FOLDER と OUTPUT_FOLDER を両方拾う。
+        """
+        from comken.exceptions import ConfigKeyNotFoundError
+
+        ini = tmp_path / "config.ini"
+        ini.write_text(
+            "[FILES]\nINPUT_FOLDER = C:\\in\nOUTPUT_FOLDER = C:\\out\n",
+            encoding="utf-8",
+        )
+        config = Config(ini)
+        with pytest.raises(ConfigKeyNotFoundError) as exc:
+            _ = config.FILES.OUTPUT_FOLER
+        message = str(exc.value)
+        suggestion_lines = [line for line in message.splitlines() if line.startswith("もしかして:")]
+        assert suggestion_lines == ["もしかして: OUTPUT_FOLDER"]
 
     def test_missing_key_no_suggestion_when_no_close_match(self, tmp_path):
         """近いキー名が無いときは「もしかして」の行を出さない。"""

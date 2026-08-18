@@ -61,8 +61,8 @@ class _SectionNamespace(types.SimpleNamespace):
     """config.ini のセクションを表す名前空間。
 
     存在しないキーへのアクセスを ``ConfigKeyNotFoundError`` に変換し、
-    「もしかして」の候補（そのセクションにあるキー一覧から
-    ``difflib.get_close_matches``）とセクション名を添える。
+    「もしかして」の候補（そのセクションにあるキー一覧から編集距離で判定）
+    とセクション名を添える。
 
     ``ConfigKeyNotFoundError`` は ``AttributeError`` も多重継承しているので、
     ``hasattr(namespace, key)`` は従来どおり False を返す。
