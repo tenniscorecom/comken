@@ -161,12 +161,13 @@ class ExcelComHandler(FileBase):
             self._original_path, local_copy_threshold_mb
         )
         self._headers = headers
-        self._wb = None
+        # COM オブジェクトは型を持たず、閉じたあとは None になる（Access と同じ）
+        self._wb: Any = None
         # DispatchEx は常に新規の Excel プロセスを起動する。
         # Dispatch だとユーザーが開いている Excel に接続してしまい、
         # Visible=False で画面を消したり close() の Quit で相手のブックを閉じる事故が起きる
         try:
-            self._excel = win32com.client.DispatchEx("Excel.Application")
+            self._excel: Any = win32com.client.DispatchEx("Excel.Application")
         except Exception as e:
             # Excel が入っていない PC では com_error がそのまま出て原因が分からない
             self._cleanup_tmp()

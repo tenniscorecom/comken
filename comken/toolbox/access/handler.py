@@ -10,7 +10,7 @@ import tempfile
 from collections.abc import Iterator
 from datetime import timedelta
 from pathlib import Path
-from typing import Self
+from typing import Any, Self
 
 import win32com.client
 
@@ -88,7 +88,9 @@ class AccessDatabase(FileBase):
             self._path.parent / BACKUP_FOLDER_NAME if backup_dir is None else Path(backup_dir)
         )
         self._temporary_directory: tempfile.TemporaryDirectory[str] | None = None
-        self._access = None
+        # COM オブジェクトは型を持たず、閉じたあとは None になる。
+        # 注釈が無いと型チェッカーが None 側だけを見て「DoCmd は無い」と言う
+        self._access: Any = None
         should_backup = not local_copy if backup is None else backup
 
         if should_backup:

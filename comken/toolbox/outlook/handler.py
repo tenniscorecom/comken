@@ -12,7 +12,7 @@ import logging
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Self
+from typing import Any, Self
 
 import win32com.client
 
@@ -56,10 +56,11 @@ class Outlook:
         try:
             # NOTE: Outlook はシングルインスタンスで、利用者が開いているものを操作する。
             # Excel / Access と違い DispatchEx で別プロセスを作らない。
-            self._application = win32com.client.Dispatch("Outlook.Application")
+            # COM オブジェクトは型を持たず、閉じたあとは None になる（Access と同じ）
+            self._application: Any = win32com.client.Dispatch("Outlook.Application")
         except Exception as error:
             raise ClassicOutlookNotAvailableError() from error
-        self._namespace = self._application.GetNamespace("MAPI")
+        self._namespace: Any = self._application.GetNamespace("MAPI")
 
     def __enter__(self) -> Self:
         return self
