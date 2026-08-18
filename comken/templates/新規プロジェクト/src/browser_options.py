@@ -33,6 +33,10 @@ class ExampleSiteOptions(BrowserOptions):
 
     # HEADLESS = True                       # 画面を出さずに動かす
     # DOWNLOAD_DIR = r"C:\作業\downloads"    # サイト名のサブフォルダへ自動で分かれる
+    #
+    # 標準のフォルダへ入れるなら Paths を使う（OneDrive で場所が移されていても
+    # 実際の場所に付いていける）。from comken.toolbox.windows import Paths
+    # DOWNLOAD_DIR = Paths.downloads()       # ほかに desktop() / temp_dir()
     # WAIT_SECONDS = 20                      # 要素待機のタイムアウト秒
 
     # Edge の自動更新でドライバーと食い違ったとき、ここから自動でコピーして直す

@@ -26,9 +26,15 @@ class BrowserOptions:
     """
 
     # ── ドライバー設定 ──
-    DRIVER_PATH: str = r"C:\Users\Public\Documents\msedgedriver.exe"
+    DRIVER_PATH: str | Path = r"C:\Users\Public\Documents\edgedriver_win64\msedgedriver.exe"
     WAIT_SECONDS: int = 10
-    DOWNLOAD_DIR: str | None = None  # None = 一時フォルダを自動作成（セッション終了時に削除）
+
+    # None = 一時フォルダを自動作成（セッション終了時に削除）。
+    # フォルダを指定するときは Paths を使うと、OneDrive でダウンロードや
+    # デスクトップの場所が移されていても実際の場所に付いていける:
+    #     from comken.toolbox.windows import Paths
+    #     DOWNLOAD_DIR = Paths.downloads()   # ほかに desktop() / temp_dir()
+    DOWNLOAD_DIR: str | Path | None = None
     # 調査時にドライバーと Edge 自身のログが必要な場合だけ False にする。
     # comken の logging によるログには影響しない
     SUPPRESS_EXTERNAL_LOGS: bool = True
@@ -36,14 +42,14 @@ class BrowserOptions:
     # Edge は自動更新で上がるが msedgedriver.exe は上がらないため、
     # バージョン不一致で起動に失敗したときはこのフォルダから自動でコピーして上書きする。
     # None にすると自動更新せず、不一致のまま起動エラーになる
-    DRIVER_SOURCE_DIR: str | None = None
+    DRIVER_SOURCE_DIR: str | Path | None = None
 
     # ── ログイン状態の永続化 ──
     # 指定すると Cookie とログイン状態がフォルダに残り、次回起動時のログインを省略できる。
     # 実際に使われるのは PROFILE_ROOT/<セッション名>/ で、セッションごとに自動で分かれる
     # （同じフォルダを2つの Edge が同時に開くと起動に失敗するため、共有させない）。
     # None にすると毎回まっさらな状態で起動する
-    PROFILE_ROOT: str | None = None
+    PROFILE_ROOT: str | Path | None = None
 
     # 属性名 → 実際の Chrome 引数
     _BOOL_ARGS: ClassVar[dict[str, str]] = {
