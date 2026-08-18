@@ -6,8 +6,8 @@
 import pytest
 from set_python_library import main
 
-OLD_ROOT = r"\\old\share\tools\comken"
-NEW_ROOT = r"\\new\share\tools\comken"
+OLD_ROOT = r"\\old\share\tools"
+NEW_ROOT = r"\\new\share\tools"
 
 BAT_TEMPLATE = """@echo off
 setlocal
@@ -67,7 +67,7 @@ class TestApply:
         """JSON では \\ が特殊文字なので / 区切りで書く。"""
         folder = _project(tmp_path, "案件A")
         main([NEW_ROOT, str(folder), "--apply"])
-        assert '["//new/share/tools/comken"]' in _settings_text(folder)
+        assert '["//new/share/tools"]' in _settings_text(folder)
 
     def test_japanese_comments_survive(self, tmp_path):
         """bat は CP932 のまま書き戻す（日本語のコメントが化けない）。"""
@@ -91,14 +91,14 @@ class TestApply:
         folder = _project(tmp_path, "案件A")
         settings = folder / ".vscode" / "settings.json"
         settings.write_text(
-            '{\n  "python.analysis.extraPaths": ["//old/share/tools/comken", "./src"]\n}\n',
+            '{\n  "python.analysis.extraPaths": ["//old/share/tools", "./src"]\n}\n',
             encoding="utf-8",
         )
 
         main([NEW_ROOT, str(folder), "--apply"])
 
         text = _settings_text(folder)
-        assert "//new/share/tools/comken" in text
+        assert "//new/share/tools" in text
         assert "./src" in text
 
 

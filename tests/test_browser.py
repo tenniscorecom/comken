@@ -8,10 +8,8 @@ CI でも手元でも安定しないため、ここでは扱わない。
 import inspect
 import logging
 import os
-import shutil
 import threading
 import time
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -44,7 +42,6 @@ from comken.toolbox.browser import (
     SiteBase,
     SitePage,
 )
-from comken.toolbox.browser.driver import _major, _pick_source, _replace_driver
 from comken.toolbox.browser.management.browsers import Browsers as InternalBrowsers
 from comken.toolbox.browser.management.sessions import BrowserSession as InternalBrowserSession
 from comken.toolbox.browser.management.startup import _build_driver, create_service
@@ -727,111 +724,6 @@ class TestOptionsBuild:
         args = BrowserOptions().build()
 
         assert not any(a.startswith("--user-agent=") for a in args)
-
-
-class TestDriverUpdate:
-    """msedgedriver の自動更新のテスト。"""
-
-    def test_major_version(self):
-        """メジャーバージョンだけを取り出す。"""
-        assert _major("131.0.2903.86") == "131"
-        assert _major("131") == "131"
-
-    def test_prefers_file_directly_in_source_dir(self, tmp_path):
-        """配布フォルダ直下にあれば、それを最優先で使う。"""
-        direct = tmp_path / "msedgedriver.exe"
-        direct.write_bytes(b"direct")
-        nested = tmp_path / "131.0.2903.86"
-        nested.mkdir()
-        (nested / "msedgedriver.exe").write_bytes(b"nested")
-
-        assert _pick_source(tmp_path, "131.0.2903.86") == direct
-
-    def test_prefers_matching_major_version_folder(self, tmp_path):
-        """直下に無ければ、Edge のメジャーバージョンを含むパスを選ぶ。"""
-        for version in ("130.0.2849.68", "131.0.2903.86"):
-            folder = tmp_path / version
-            folder.mkdir()
-            (folder / "msedgedriver.exe").write_bytes(b"x")
-
-        picked = _pick_source(tmp_path, "131.0.2903.86")
-
-        assert picked.parent.name == "131.0.2903.86"
-
-    def test_does_not_match_partial_version_number(self, tmp_path):
-        """メジャー 13 が 131 のフォルダに誤って一致しない。"""
-        folder = tmp_path / "131.0.2903.86"
-        folder.mkdir()
-        (folder / "msedgedriver.exe").write_bytes(b"x")
-
-        # 一致するものが無いので、最新のものへフォールバックする（例外にはしない）
-        assert _pick_source(tmp_path, "13.0.0.0").parent.name == "131.0.2903.86"
-
-    def test_ignores_version_in_source_dir_own_path(self, tmp_path, caplog):
-        """配布フォルダ自身のパスに含まれる数字では、一致と判定しない。
-
-        \\\\サーバー\\ツール131\\ のような親フォルダがあると、配下のどのドライバーも
-        メジャー131に一致したことになり、不一致に気づけないまま使われてしまう。
-        """
-        source_dir = tmp_path / "ツール131"
-        folder = source_dir / "130.0.2849.68"
-        folder.mkdir(parents=True)
-        (folder / "msedgedriver.exe").write_bytes(b"x")
-
-        with caplog.at_level(logging.WARNING):
-            picked = _pick_source(source_dir, "131.0.2903.86")
-
-        # 選ぶファイルは1つしかないが、「一致した」ではなく
-        # 「一致が無いので最新で代用した」と扱われる必要がある
-        assert picked.parent.name == "130.0.2849.68"
-        assert "見つからない" in caplog.text
-
-    def test_raises_when_no_driver_found(self, tmp_path):
-        """配布フォルダに1つも無ければ FileNotFoundError になる。"""
-        with pytest.raises(FileNotFoundError):
-            _pick_source(tmp_path, "131.0.2903.86")
-
-    def test_replaces_via_temporary_file(self, tmp_path, monkeypatch):
-        """更新は一時ファイル経由で行い、途中の壊れた exe を残さない。
-
-        共有フォルダから直接上書きすると、失敗したときに中途半端なファイルが
-        残り、別のプロセスがそれを掴んでしまう。
-        """
-        source = tmp_path / "source" / "msedgedriver.exe"
-        source.parent.mkdir()
-        source.write_bytes(b"new-driver")
-        target = tmp_path / "bin" / "msedgedriver.exe"
-        target.parent.mkdir()
-        target.write_bytes(b"old-driver")
-
-        copied = []
-        real_copy = shutil.copy2
-
-        def record_copy(src, dst):
-            copied.append(Path(dst).name)
-            return real_copy(src, dst)
-
-        monkeypatch.setattr("comken.toolbox.browser.driver.shutil.copy2", record_copy)
-
-        _replace_driver(source, target)
-
-        assert target.read_bytes() == b"new-driver"
-        assert copied and copied[0] != target.name  # いったん別名へ書いている
-        assert list(target.parent.iterdir()) == [target]  # 一時ファイルが残らない
-
-    def test_reports_locked_driver_with_guidance(self, tmp_path, monkeypatch):
-        """掴まれていて置き換えられない場合は、対処を添えて知らせる。"""
-        source = tmp_path / "msedgedriver.exe"
-        source.write_bytes(b"new-driver")
-        target = tmp_path / "bin" / "msedgedriver.exe"
-
-        monkeypatch.setattr(
-            "comken.toolbox.browser.driver.shutil.copy2",
-            MagicMock(side_effect=PermissionError("使用中")),
-        )
-
-        with pytest.raises(PermissionError, match="実行中の自動化"):
-            _replace_driver(source, target)
 
 
 class TestRemovedNames:

@@ -11,9 +11,9 @@ r"""set_python_library.py — 各プロジェクトが見ている comken の場
 settings.json を忘れると、動くのに補完だけ効かないという分かりにくい状態になる。
 
 使い方:
-    python tools/set_python_library.py \\新サーバー\share\tools\comken           確認だけ
-    python tools/set_python_library.py \\新サーバー\share\tools\comken --apply   実際に書き換える
-    python tools/set_python_library.py \\新サーバー\share\tools\comken F:\案件 --apply
+    python tools/set_python_library.py \\新サーバー\share\tools           確認だけ
+    python tools/set_python_library.py \\新サーバー\share\tools --apply   実際に書き換える
+    python tools/set_python_library.py \\新サーバー\share\tools F:\案件 --apply
 
 **既定は確認だけで、--apply を付けたときにだけ書き換える。** 打ち間違えたまま
 何十ファイルも書き換えると、元がどこを指していたか分からなくなる。先に一覧を見て、
@@ -40,9 +40,10 @@ PYTHON_LIBRARY_FILES = (
 # 今そこに何が書かれていても拾える
 BAT_PATTERN = re.compile(r'(set\s+"PYTHON_LIBRARY=)([^"]*)(")')
 
-# settings.json の extraPaths のうち、comken を指している要素だけを置き換える。
-# 他のパスを一緒に足している場合に巻き込まないよう、末尾が comken のものに限る
-JSON_PATTERN = re.compile(r'("python\.analysis\.extraPaths"\s*:\s*\[\s*")([^"]*/comken)(")')
+# settings.json の extraPaths の**最初の要素**を置き換える。
+# 雛形は extraPaths に comken の親パスしか書かないので「先頭だけ見れば十分」。
+# 別の要素が後ろに並んでいても巻き込まないため
+JSON_PATTERN = re.compile(r'("python\.analysis\.extraPaths"\s*:\s*\[\s*")([^"]+)(")')
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -77,9 +78,7 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="python set_python_library.py",
         description="各プロジェクトが見ている comken の場所をまとめて変える",
     )
-    parser.add_argument(
-        "python_library", help=r"新しい comken の場所（例: \\server\share\tools\comken）"
-    )
+    parser.add_argument("python_library", help=r"新しい comken の場所（例: \\server\share\tools）")
     parser.add_argument(
         "folders",
         nargs="*",

@@ -39,11 +39,6 @@ class BrowserOptions:
     # comken の logging によるログには影響しない
     SUPPRESS_EXTERNAL_LOGS: bool = True
 
-    # Edge は自動更新で上がるが msedgedriver.exe は上がらないため、
-    # バージョン不一致で起動に失敗したときはこのフォルダから自動でコピーして上書きする。
-    # None にすると自動更新せず、不一致のまま起動エラーになる
-    DRIVER_SOURCE_DIR: str | Path | None = None
-
     # ── ログイン状態の永続化 ──
     # 指定すると Cookie とログイン状態がフォルダに残り、次回起動時のログインを省略できる。
     # 実際に使われるのは PROFILE_ROOT/<セッション名>/ で、セッションごとに自動で分かれる
@@ -144,7 +139,6 @@ class BrowserOptions:
         # None のときに何が起きるかは属性ごとに違うため、表示も個別に用意する
         none_meanings = {
             "DOWNLOAD_DIR": "None（一時フォルダを自動作成し、終了時に削除）",
-            "DRIVER_SOURCE_DIR": "None（ドライバーの自動更新なし）",
             "PROFILE_ROOT": "None（毎回まっさらな状態で起動）",
         }
         lines.append("  ── ドライバー設定 ──")
@@ -152,7 +146,6 @@ class BrowserOptions:
             "DRIVER_PATH",
             "WAIT_SECONDS",
             "DOWNLOAD_DIR",
-            "DRIVER_SOURCE_DIR",
             "SUPPRESS_EXTERNAL_LOGS",
         ):
             current = getattr(self, attr)

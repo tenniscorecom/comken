@@ -301,8 +301,8 @@ comken を別の共有フォルダへ移すと、各プロジェクトの**3か�
 まとめて書き換える。
 
 ```bat
-python tools\set_python_library.py \\新サーバー\share\tools\comken F:\案件           :: 確認だけ
-python tools\set_python_library.py \\新サーバー\share\tools\comken F:\案件 --apply   :: 書き換える
+python tools\set_python_library.py \\新サーバー\share\tools F:\案件           :: 確認だけ
+python tools\set_python_library.py \\新サーバー\share\tools F:\案件 --apply   :: 書き換える
 ```
 
 **--apply を付けるまで何も書き換えない。** 先に「どのファイルが、どこから、どこへ」

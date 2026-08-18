@@ -1,7 +1,4 @@
-"""comken/toolbox/browser/management/startup.py — Edgeの起動と初期化を担う
-
-起動に失敗した場合のドライバー更新もここで扱う。
-"""
+"""comken/toolbox/browser/management/startup.py — Edgeの起動と初期化を担う"""
 
 import inspect
 import logging
@@ -15,12 +12,9 @@ from selenium.webdriver.edge.service import Service
 
 from comken.exceptions import DriverStartError
 from comken.toolbox.browser.download import DownloadDir
-from comken.toolbox.browser.driver import update_driver
 from comken.toolbox.browser.options import BrowserOptions
 
 logger = logging.getLogger(__name__)
-
-START_RETRY_COUNT = 1
 
 
 def create_service(driver_path: Path, suppress_logs: bool) -> Service:
@@ -41,30 +35,15 @@ def start_driver(
     profile_dir: Path | None,
     download_dir: DownloadDir,
 ) -> webdriver.Edge:
-    """Edgeを起動し、必要な場合だけドライバー更新後に一度再試行する。"""
+    """Edgeを起動する。失敗したら一時フォルダを片付けてから例外を送出する。"""
     driver_path = Path(options_config.DRIVER_PATH)
-    source_dir = options_config.DRIVER_SOURCE_DIR
-
-    for attempt in range(START_RETRY_COUNT + 1):
-        try:
-            return _build_driver(driver_path, options_config, profile_dir, download_dir)
-        except Exception as error:
-            is_last_attempt = attempt == START_RETRY_COUNT
-            if is_last_attempt or source_dir is None:
-                download_dir.__exit__(None, None, None)
-                raise DriverStartError(str(driver_path), error) from error
-
-            logger.warning("ブラウザの起動に失敗しました。ドライバーの更新を試みます: %s", error)
-            try:
-                is_updated = update_driver(driver_path, Path(source_dir))
-            except Exception as update_error:
-                download_dir.__exit__(None, None, None)
-                raise DriverStartError(str(driver_path), update_error) from error
-            if not is_updated:
-                download_dir.__exit__(None, None, None)
-                raise DriverStartError(str(driver_path), error) from error
-
-    raise AssertionError("unreachable")
+    try:
+        return _build_driver(driver_path, options_config, profile_dir, download_dir)
+    except Exception as error:
+        # 一時フォルダを残さない。download_dir は with 想定だが、__enter__ 失敗時は
+        # ここで __exit__ を呼んで後始末する必要がある
+        download_dir.__exit__(None, None, None)
+        raise DriverStartError(str(driver_path), error) from error
 
 
 def _build_driver(

@@ -26,13 +26,12 @@ browser/
 ├── management/                ブラウザーと非同期処理の管理
 │   ├── browsers.py            複数ブラウザーをまとめて起動・終了する
 │   ├── sessions.py           1サイト分のWebDriverと排他制御
-│   ├── startup.py            Edgeの起動・初期化・ドライバー更新
+│   ├── startup.py            Edgeの起動・初期化
 │   ├── tasks.py              裏で動かした処理の結果・例外を受け取る
 │   └── tabs.py               1セッション内のタブを開閉する
 ├── page.py                    Page Objectの共通操作
 ├── locator.py                 画面要素の指定方法
 ├── download.py                ダウンロード先と完了待ち
-└── driver.py                  EdgeDriverの取得・更新
 ```
 
 ## 処理の流れ
@@ -57,7 +56,7 @@ Browsers.start / parallel
 |---|---|
 | ブラウザーを追加・終了する流れ | `management/browsers.py` |
 | Edgeの起動・終了、同時操作の防止 | `management/sessions.py` |
-| Edge起動失敗、起動引数、ドライバー更新 | `management/startup.py`、`driver.py` |
+| Edge起動失敗、起動引数 | `management/startup.py` |
 | 複数サイトの並列処理 | `management/browsers.py`、`management/tasks.py` |
 | ポップアップ、複数タブ読み込み | `management/tabs.py` |
 | クリック、入力、待機 | `page.py` |

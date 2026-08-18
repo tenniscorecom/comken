@@ -39,8 +39,5 @@ class ExampleSiteOptions(BrowserOptions):
     # DOWNLOAD_DIR = Paths.downloads()       # ほかに desktop() / temp_dir()
     # WAIT_SECONDS = 20                      # 要素待機のタイムアウト秒
 
-    # Edge の自動更新でドライバーと食い違ったとき、ここから自動でコピーして直す
-    # DRIVER_SOURCE_DIR = r"\\共有サーバー\ツール\msedgedriver"
-
     # 指定するとログイン状態が次回も残る（サイトごとに別フォルダへ自動で分かれる）
     # PROFILE_ROOT = r"C:\作業\browser_profiles"

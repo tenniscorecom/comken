@@ -533,18 +533,9 @@ with session.popup_tab():            # 開いたタブへ移る
 
 Windows Update で Edge だけが新しくなり、`msedgedriver.exe` が取り残されると起きる。
 
-`DRIVER_SOURCE_DIR` に社内の配布フォルダを設定しておけば、
-起動に失敗したときに自動でコピーして直し、もう一度起動を試みる。
-
-```python
-class KintaiOptions(BrowserOptions):
-    DRIVER_SOURCE_DIR = r"\\共有サーバー\ツール\msedgedriver"
-```
-
-配布フォルダは、次のどちらの置き方でもよい:
-
-- 直下に `msedgedriver.exe` を1つ置く（最新をここに上書きする運用）
-- `131.0.2903.86\msedgedriver.exe` のようにバージョン別フォルダに置く
+comken は自動更新を行わない。**バージョンが合わなくなった場合は、利用者側で
+`DRIVER_PATH` の `msedgedriver.exe` を Edge のバージョンに合わせて差し替えてから、
+もう一度実行する。**
 
 「上書きできません」と出る場合は、別の実行が `msedgedriver.exe` を掴んだままになっている。
 実行中の自動化をすべて終了してから、もう一度実行する。
@@ -681,7 +672,6 @@ class KintaiOptions(BrowserOptions):
 | 項目 | 役割 |
 |---|---|
 | `DRIVER_PATH` | 使う msedgedriver.exe のパス |
-| `DRIVER_SOURCE_DIR` | ドライバーの配布フォルダ。起動に失敗したとき、ここから自動でコピーして直す |
 | `PROFILE_ROOT` | ログイン状態を残すフォルダ。指定するとシークレットモードは自動で外れる |
 | `DOWNLOAD_DIR` | ダウンロード先。セッション名のサブフォルダに自動で分かれる |
 | `WAIT_SECONDS` | 要素待機のタイムアウト秒数 |
@@ -693,11 +683,6 @@ class KintaiOptions(BrowserOptions):
 print(BrowserOptions())    # 既定値を表示
 print(KintaiOptions())     # 既定値からの変更箇所に * が付く
 ```
-
-**ドライバーの自動更新**: Windows Update で Edge だけが新しくなると
-`msedgedriver.exe` が取り残されて起動できなくなる。`DRIVER_SOURCE_DIR` を設定しておくと、
-起動に失敗した時点で配布フォルダから合うバージョンをコピーし、もう一度起動を試みる。
-配布フォルダは直下に置く形でも、バージョン別サブフォルダでもよい。
 
 ---
 
