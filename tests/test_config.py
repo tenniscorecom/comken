@@ -1501,3 +1501,472 @@ class TestConfigCheckCli:
         # 問題なし → 0
         assert exit_code == 0
         assert "[FILES]" in capsys.readouterr().out
+
+
+class TestScanCodeUsage:
+    """``python -m comken config --check`` の AST 走査テスト。
+
+    「手で同期するものは必ずズレる」を機械で防ぐ。
+    どの事故を防いでいるかは ``comken/core/config/scan.py`` の docstring を参照。
+    """
+
+    @staticmethod
+    def _setup(tmp_path, *, ini_text, main_text=None, src_text=None, extra_files=None):
+        """テスト用プロジェクトを ``tmp_path`` に組み立てる。
+
+        Args:
+            tmp_path: pytest の一時ディレクトリ。
+            ini_text: config.ini の内容。
+            main_text: ``main.py`` の内容。省略時は main.py を作らない。
+            src_text: ``src/run.py`` の内容。省略時は ``src/run.py`` を作らない。
+            extra_files: 追加で作る ``(パス, 内容)`` のイテラブル。
+        """
+        ini = tmp_path / "config.ini"
+        ini.write_text(ini_text, encoding="utf-8")
+        if main_text is not None:
+            (tmp_path / "main.py").write_text(main_text, encoding="utf-8")
+        if src_text is not None:
+            (tmp_path / "src").mkdir()
+            (tmp_path / "src" / "run.py").write_text(src_text, encoding="utf-8")
+        if extra_files:
+            for rel, content in extra_files:
+                full = tmp_path / rel
+                full.parent.mkdir(parents=True, exist_ok=True)
+                full.write_text(content, encoding="utf-8")
+        return ini
+
+    def test_used_key_in_ini_reports_ok(self, tmp_path, capsys):
+        """``config.FILES.OUTPUT_FOLDER`` が config.ini にあれば ``OK``。
+
+        防いでいる事故: コードと config.ini が両方正しく書けているときは何も
+        警告を出さない（ノイズを出さない）。
+        """
+        from comken.core.config.check import run_check
+
+        ini = self._setup(
+            tmp_path,
+            ini_text="[FILES]\nOUTPUT_FOLDER = C:\\work\n",
+            src_text="from comken import config\nx = config.FILES.OUTPUT_FOLDER\n",
+        )
+
+        exit_code = run_check(ini)
+
+        out = capsys.readouterr().out
+        assert exit_code == 0
+        assert "--- コードで使っている設定 ---" in out
+        assert "FILES.OUTPUT_FOLDER" in out
+        assert "OK" in out
+        # 「無い」警告は出ない
+        assert "★" not in out
+
+    def test_used_key_missing_in_ini_reports_missing_and_exit_1(self, tmp_path, capsys):
+        """``config.FILES.OUTPUT_FOLDER`` が config.ini に無ければ ★ と終了コード 1。
+
+        防いでいる事故: 動かすと ``ConfigKeyNotFoundError`` で止まるが、
+        ``--check`` で見つかれば CI で先に止められる。
+        """
+        from comken.core.config.check import run_check
+
+        # セクションはあるがキーが無いケースで「config.ini にありません」を出す
+        ini = self._setup(
+            tmp_path,
+            ini_text="[FILES]\nINPUT_CSV = C:\\work\\in.csv\n",
+            src_text="from comken import config\nx = config.FILES.OUTPUT_FOLDER\n",
+        )
+
+        exit_code = run_check(ini)
+
+        out = capsys.readouterr().out
+        assert exit_code == 1, "config.ini に無い項目があれば終了コードは 1"
+        assert "FILES.OUTPUT_FOLDER" in out
+        assert "★" in out
+        assert "config.ini にありません" in out
+
+    def test_used_section_missing_reports_missing_section(self, tmp_path, capsys):
+        """セクションが config.ini に無いときは別メッセージで指摘する。
+
+        ``ConfigSectionNotFoundError`` と ``ConfigKeyNotFoundError`` を
+        利用者が区別できるように。
+        """
+        from comken.core.config.check import run_check
+
+        ini = self._setup(
+            tmp_path,
+            ini_text="[RUN]\nDRY_RUN = true\n",
+            src_text="from comken import config\nx = config.REPORT.SHEET_NAME\n",
+        )
+
+        exit_code = run_check(ini)
+
+        out = capsys.readouterr().out
+        assert exit_code == 1
+        assert "REPORT.SHEET_NAME" in out
+        assert "[REPORT] セクションがありません" in out
+
+    def test_other_attr_is_not_picked_up(self, tmp_path, capsys):
+        """``other.FILES.KEY`` は拾わない（変数名が ``config`` でないため）。
+
+        防いでいる事故: 別モジュールの同名属性を誤検出しない。
+        """
+        from comken.core.config.check import run_check
+
+        ini = self._setup(
+            tmp_path,
+            ini_text="[FILES]\nKEY = v\n",
+            src_text=(
+                "from comken import config\n"
+                "\n"
+                "class other:\n"
+                "    FILES = type('S', (), {'KEY': None})()\n"
+                "\n"
+                "x = other.FILES.KEY  # config ではないので拾わない\n"
+            ),
+        )
+
+        exit_code = run_check(ini)
+
+        out = capsys.readouterr().out
+        # 拾わないので「コードで使っている設定」節も出ない（usages が空）
+        assert "--- コードで使っている設定 ---" not in out
+        assert exit_code == 0
+
+    def test_mapping_and_read_are_not_picked_up_as_usages(self, tmp_path, capsys):
+        """``config.mapping(...)`` / ``config.read(...)`` は config 参照ではない。
+
+        ``config.SECTION``（キーまで無い）や ``config.<メソッド>(...)`` は拾わない。
+        拾ってしまうと ``config.mapping`` を「セクション」と誤認してしまう。
+        """
+        from comken.core.config.check import run_check
+
+        ini = self._setup(
+            tmp_path,
+            ini_text="[RUN]\nDRY_RUN = true\n",
+            src_text=(
+                "from comken import config\n"
+                "\n"
+                "config.mapping('RECEIVE_MAPPING')\n"
+                "config.read('foo.ini')\n"
+                "config.require('RUN.DRY_RUN')\n"
+                "if config.RUN.DRY_RUN:\n"
+                "    pass\n"
+            ),
+        )
+
+        exit_code = run_check(ini)
+
+        out = capsys.readouterr().out
+        # メソッド呼び出しが usages に混入しない（OK 行は RUN.DRY_RUN の 1 行だけ）
+        assert "RECEIVE_MAPPING" not in out
+        assert "foo.ini" not in out
+        # 「無い」警告は出ない（RUN.DRY_RUN は ini に存在するため）
+        assert "★" not in out
+        # require には書かれているが uses と一致するので食い違いなし
+        assert "--- require() との食い違い ---" in out
+        assert "食い違いはありません" in out
+        assert exit_code == 0
+
+    def test_project_without_src_still_runs(self, tmp_path, capsys):
+        """``src/`` が無いプロジェクトでも ``main.py`` だけ走査される。
+
+        防いでいる事故: 雛形を改造して ``src/`` を消したプロジェクトで
+        ``--check`` が壊れる（手で ``cd`` して叩けない）。
+        """
+        from comken.core.config.check import run_check
+
+        ini = self._setup(
+            tmp_path,
+            ini_text="[RUN]\nDRY_RUN = true\n",
+            main_text="from comken import config\nconfig.RUN.DRY_RUN\n",
+        )
+        # src/ を作らない
+
+        exit_code = run_check(ini)
+
+        out = capsys.readouterr().out
+        assert exit_code == 0
+        assert "main.py" in out
+        assert "OK" in out
+
+    def test_no_main_py_no_src_section_is_skipped(self, tmp_path, capsys):
+        """``main.py`` も ``src/`` も無いプロジェクトでは節を出さない。
+
+        防いでいる事故: config.ini 単独で使うプロジェクト（雛形なしの手書き
+        config.ini）で「ファイルが 1 つも無い」とエラー扱いにして動かない。
+        """
+        from comken.core.config.check import run_check
+
+        ini = self._setup(tmp_path, ini_text="[RUN]\nDRY_RUN = true\n")
+
+        exit_code = run_check(ini)
+
+        out = capsys.readouterr().out
+        assert exit_code == 0
+        # 走査結果が無いので節は出ない
+        assert "--- コードで使っている設定 ---" not in out
+        assert "--- require() との食い違い ---" not in out
+
+    def test_value_never_appears_in_output(self, tmp_path, capsys):
+        """**コード走査の出力にも値を絶対に載せない。**
+
+        config.ini とソース両方に業務情報が含まれる可能性があるため、
+        AST 走査の節でも値は出さない（名前と行番号だけ）。
+        """
+        from comken.core.config.check import run_check
+
+        secret = "XYZSECRETPATHZYX"
+        ini = self._setup(
+            tmp_path,
+            ini_text=f"[FILES]\nOUTPUT_FOLDER = C:\\\\{secret}\\\\work\n",
+            src_text=(
+                "from comken import config\n"
+                f"x = config.FILES.OUTPUT_FOLDER  # uses secret = {secret}\n"
+            ),
+        )
+
+        run_check(ini)
+        out = capsys.readouterr().out
+
+        assert "OUTPUT_FOLDER" in out  # キー名は出す
+        assert secret not in out, "値が漏れています"
+
+
+class TestScanRequireMismatch:
+    """``config.require()`` と AST 走査結果の食い違いを報告する挙動のテスト。"""
+
+    def _setup(self, tmp_path, *, ini_text, main_text=None, src_text=None):
+        ini = tmp_path / "config.ini"
+        ini.write_text(ini_text, encoding="utf-8")
+        if main_text is not None:
+            (tmp_path / "main.py").write_text(main_text, encoding="utf-8")
+        if src_text is not None:
+            (tmp_path / "src").mkdir()
+            (tmp_path / "src" / "run.py").write_text(src_text, encoding="utf-8")
+        return ini
+
+    def test_used_but_not_in_require_warns(self, tmp_path, capsys):
+        """``require()`` に書かれていないのに使われていると警告。
+
+        防いでいる事故: ``require()`` の本来の目的は「動く前にまとめて出す」
+        こと。漏れていると途中で ``ConfigKeyNotFoundError`` で止まる。
+        """
+        from comken.core.config.check import run_check
+
+        ini = self._setup(
+            tmp_path,
+            ini_text="[FILES]\nOUTPUT_FOLDER = C:\\work\n",
+            main_text=(
+                "from comken import config\n"
+                "config.require('FILES.OUTPUT_FOLDER')\n"
+                "x = config.FILES.OUTPUT_FOLDER\n"
+            ),
+        )
+
+        # FILES.OUTPUT_FOLDER が require に書かれているが、 RUN.DEBUG が無い。
+        # require には無いが使われている項目（FILES.OUTPUT_FOLDER 以外）があると
+        # 警告される。FILES.OUTPUT_FOLDER は require に書かれているので警告なし。
+        run_check(ini)
+
+        out = capsys.readouterr().out
+        # 警告は出るが、終了コードは 0 のまま（require の食い違いは警告レベル）
+        assert "--- require() との食い違い ---" in out
+
+    def test_in_require_but_not_used_warns_without_changing_exit_code(self, tmp_path, capsys):
+        """``require()`` に書かれているが使われていない項目も警告。
+
+        防いでいる事故: ``require()`` のリストが古いままだと、起動時に
+        止まらなくなる。終了コードは変えない（将来使う前提で先に書く運用もあるため）。
+        """
+        from comken.core.config.check import run_check
+
+        ini = self._setup(
+            tmp_path,
+            ini_text="[RUN]\nDRY_RUN = true\nDEBUG = false\n",
+            main_text=(
+                "from comken import config\n"
+                "config.require('RUN.DRY_RUN', 'RUN.DEBUG')\n"
+                "if config.RUN.DRY_RUN:\n"
+                "    pass\n"
+                # RUN.DEBUG は require にあるが使われていない\n"
+            ),
+        )
+
+        exit_code = run_check(ini)
+        out = capsys.readouterr().out
+
+        # require の食い違いは警告のみで終了コードは変えない
+        assert exit_code == 0, "require 食い違いだけでは終了コードは上げない"
+        assert "RUN.DEBUG" in out
+        assert "require() に書かれていますが未使用です" in out
+
+    def test_matched_require_and_usage_no_warning(self, tmp_path, capsys):
+        """``require()`` と使用箇所が一致すれば警告なし。"""
+        from comken.core.config.check import run_check
+
+        ini = self._setup(
+            tmp_path,
+            ini_text="[RUN]\nDRY_RUN = true\n",
+            main_text=(
+                "from comken import config\n"
+                "config.require('RUN.DRY_RUN')\n"
+                "if config.RUN.DRY_RUN:\n"
+                "    pass\n"
+            ),
+        )
+
+        exit_code = run_check(ini)
+        out = capsys.readouterr().out
+
+        assert exit_code == 0
+        assert "--- require() との食い違い ---" in out
+        assert "食い違いはありません" in out
+
+    def test_variable_passed_to_require_is_skipped(self, tmp_path, capsys):
+        """``require(keys)`` のように変数を渡している場合は諦める（拾えない）。
+
+        拾えないときは ``require()`` 側に何もないのと同じ扱いになるため、
+        **AST が拾えた使用箇所側は「require に書かれていない」と報告される**
+        （これが現実の挙動。``docstring`` にも「動的アクセスは拾えない」と
+        書いてある）。
+        """
+        from comken.core.config.check import run_check
+
+        ini = self._setup(
+            tmp_path,
+            ini_text="[RUN]\nDRY_RUN = true\n",
+            main_text=(
+                "from comken import config\n"
+                "keys = ['RUN.DRY_RUN']\n"
+                "config.require(keys)  # 変数を渡しているので AST からは拾えない\n"
+                "if config.RUN.DRY_RUN:\n"
+                "    pass\n"
+            ),
+        )
+
+        exit_code = run_check(ini)
+        out = capsys.readouterr().out
+
+        assert exit_code == 0
+        assert "--- require() との食い違い ---" in out
+        # 拾えないので require 側は空、使用箇所側はある → 「require に書かれていない」
+        assert "使われているのに require() に書かれていません" in out
+
+
+class TestScanExcludedDirs:
+    """``src/`` 配下の特定ディレクトリは走査対象から除外する。"""
+
+    def test_venv_and_tests_are_skipped(self, tmp_path, capsys):
+        """``.venv`` / ``typings`` / ``tests`` は走査対象外。
+
+        防いでいる事故: テストや型スタブが ``config.SECTION.KEY`` を
+        持っていると、誤って「使われている」と報告されてしまう。
+        """
+        from comken.core.config.check import run_check
+
+        ini_text = "[RUN]\nDRY_RUN = true\n"
+        main_text = "from comken import config\nif config.RUN.DRY_RUN:\n    pass\n"
+        # src/run.py は本物の処理
+        src_text = (
+            "from comken import config\n"
+            "x = config.FILES.OUTPUT_FOLDER  # これは config.ini に無い\n"
+        )
+        # tests/ は拾わない
+        tests_text = (
+            "from comken import config\nx = config.TESTS_MUST_BE_IGNORED.ANYTHING  # 拾われない\n"
+        )
+        # .venv/ も拾わない
+        venv_text = (
+            "from comken import config\nx = config.VENV_MUST_BE_IGNORED.ANYTHING  # 拾われない\n"
+        )
+
+        ini = tmp_path / "config.ini"
+        ini.write_text(ini_text, encoding="utf-8")
+        (tmp_path / "main.py").write_text(main_text, encoding="utf-8")
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "run.py").write_text(src_text, encoding="utf-8")
+        (tmp_path / "tests").mkdir()
+        (tmp_path / "tests" / "test_x.py").write_text(tests_text, encoding="utf-8")
+        (tmp_path / ".venv").mkdir()
+        (tmp_path / ".venv" / "lib.py").write_text(venv_text, encoding="utf-8")
+
+        run_check(ini)
+        out = capsys.readouterr().out
+
+        # src/run.py の FILES.OUTPUT_FOLDER は検出される（★になる）
+        assert "FILES.OUTPUT_FOLDER" in out
+        # tests/ と .venv/ のファイルは検出されない
+        assert "TESTS_MUST_BE_IGNORED" not in out
+        assert "VENV_MUST_BE_IGNORED" not in out
+
+
+class TestScanModule:
+    """``comken.core.config.scan`` を直接叩く単体テスト。"""
+
+    def test_collect_scan_targets_finds_main_and_src(self, tmp_path):
+        """``main.py`` と ``src/**/*.py`` を見つけ、不要なディレクトリは省く。"""
+        from comken.core.config.scan import collect_scan_targets
+
+        (tmp_path / "main.py").write_text("x = 1\n", encoding="utf-8")
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "run.py").write_text("x = 1\n", encoding="utf-8")
+        (tmp_path / "src" / "__pycache__").mkdir()
+        (tmp_path / "src" / "__pycache__" / "cached.py").write_text("x = 1\n", encoding="utf-8")
+        (tmp_path / "src" / "sites").mkdir()
+        (tmp_path / "src" / "sites" / "site.py").write_text("x = 1\n", encoding="utf-8")
+        (tmp_path / "tests").mkdir()
+        (tmp_path / "tests" / "test_x.py").write_text("x = 1\n", encoding="utf-8")
+
+        targets = collect_scan_targets(tmp_path)
+
+        names = [p.relative_to(tmp_path).as_posix() for p in targets]
+        assert "main.py" in names
+        assert "src/run.py" in names
+        assert "src/sites/site.py" in names
+        # __pycache__ は除外
+        assert "src/__pycache__/cached.py" not in names
+        # tests は除外
+        assert "tests/test_x.py" not in names
+
+    def test_collect_scan_targets_empty_when_no_main_no_src(self, tmp_path):
+        """``main.py`` も ``src/`` も無いときは空リスト。"""
+        from comken.core.config.scan import collect_scan_targets
+
+        targets = collect_scan_targets(tmp_path)
+
+        assert targets == []
+
+    def test_scan_project_collects_usages_and_requires(self, tmp_path):
+        """``scan_project`` が usages / requires を返す。"""
+        from comken.core.config.scan import scan_project
+
+        (tmp_path / "main.py").write_text(
+            "from comken import config\n"
+            "config.require('RUN.DRY_RUN', 'FILES.OUTPUT_FOLDER')\n"
+            "x = config.RUN.DRY_RUN\n"
+            "y = config.FILES.OUTPUT_FOLDER\n",
+            encoding="utf-8",
+        )
+
+        result = scan_project(tmp_path)
+
+        names = {f"{u.section.upper()}.{u.key.upper()}" for u in result.usages}
+        assert names == {"RUN.DRY_RUN", "FILES.OUTPUT_FOLDER"}
+        assert result.required_names == {"RUN.DRY_RUN", "FILES.OUTPUT_FOLDER"}
+
+    def test_scan_project_handles_syntax_error_gracefully(self, tmp_path):
+        """構文エラーが含まれるファイルは走査全体を止めない。"""
+        from comken.core.config.scan import scan_project
+
+        (tmp_path / "main.py").write_text(
+            "from comken import config\nx = config.RUN.DRY_RUN\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "src").mkdir()
+        # 構文エラー（中途半端な Python）
+        (tmp_path / "src" / "broken.py").write_text("def ()\n", encoding="utf-8")
+
+        result = scan_project(tmp_path)
+
+        # broken.py は無視、main.py は拾う
+        names = {f"{u.section.upper()}.{u.key.upper()}" for u in result.usages}
+        assert names == {"RUN.DRY_RUN"}
+        assert all("broken" not in u.path.as_posix() for u in result.usages)
