@@ -133,9 +133,7 @@ class Page:
     def read_text(self, locator: Locator) -> str:
         """要素の表示文字を返す。"""
         with self.session._operating(f"read_text({locator})"):
-            return self._until(
-                EC.visibility_of_element_located(locator), locator, "表示され"
-            ).text
+            return self._until(EC.visibility_of_element_located(locator), locator, "表示され").text
 
     def read_texts(self, locator: Locator) -> list[str]:
         """一致する全要素の表示文字をリストで返す（一覧表の全行を読むときなど）。"""
@@ -153,9 +151,7 @@ class Page:
             name: 属性名（例: "href", "value", "checked"）。
         """
         with self.session._operating(f"read_attribute({locator}, {name})"):
-            element = self._until(
-                EC.presence_of_element_located(locator), locator, "見つかり"
-            )
+            element = self._until(EC.presence_of_element_located(locator), locator, "見つかり")
             return element.get_attribute(name)
 
     def select_text(self, locator: Locator, text: str) -> None:
@@ -183,9 +179,7 @@ class Page:
     def scroll_to(self, locator: Locator) -> None:
         """要素が画面に入るまでスクロールする。"""
         with self.session._operating(f"scroll_to({locator})"):
-            element = self._until(
-                EC.presence_of_element_located(locator), locator, "見つかり"
-            )
+            element = self._until(EC.presence_of_element_located(locator), locator, "見つかり")
             self.session.raw.execute_script("arguments[0].scrollIntoView(true);", element)
 
     def scroll_bottom(self) -> None:
@@ -257,9 +251,7 @@ class Page:
             自分自身。中では今までどおりメソッドを呼べる。
         """
         with self.session._operating(f"frame({locator})"):
-            self._until(
-                EC.frame_to_be_available_and_switch_to_it(locator), locator, "切り替えられ"
-            )
+            self._until(EC.frame_to_be_available_and_switch_to_it(locator), locator, "切り替えられ")
             try:
                 yield self
             finally:
@@ -301,9 +293,7 @@ class Page:
                                   読み込み前に呼ぶと「まだ出ていない」を「0件」と読み違える。
         """
         with self.session._operating(f"find_elements({locator})"):
-            return self._until(
-                EC.presence_of_all_elements_located(locator), locator, "見つかり"
-            )
+            return self._until(EC.presence_of_all_elements_located(locator), locator, "見つかり")
 
     def execute_script(self, script: str, *args: object) -> object:
         """JavaScript を実行して戻り値を返す。
