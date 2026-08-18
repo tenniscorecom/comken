@@ -38,7 +38,7 @@ from comken.toolbox.browser.download import DownloadDir
 if TYPE_CHECKING:
     # SiteBase はこのモジュールを使う側にいる。実行時に import すると循環するので、
     # 型注釈のためだけに読み込む
-    from comken.toolbox.browser.site import SiteBase
+    from comken.toolbox.browser.sitebase import SiteBase
 from comken.toolbox.browser.locator import Locator
 from comken.toolbox.browser.management.startup import start_driver
 from comken.toolbox.browser.management.tabs import _TabManager

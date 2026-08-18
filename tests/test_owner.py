@@ -24,7 +24,7 @@ from comken.toolbox.browser.management.sessions import BrowserSession
 from comken.toolbox.salesforce import ClientCredentialsAuth
 from comken.toolbox.salesforce.client import SalesforceBase
 
-BROWSER_LOGGER = "comken.toolbox.browser.site"
+BROWSER_LOGGER = "comken.toolbox.browser.sitebase"
 SALESFORCE_LOGGER = "comken.toolbox.salesforce.client"
 DOMAIN_URL = "https://example.my.salesforce.com"
 # 免除の確認に使う、comken 配下に見せかけるモジュール名

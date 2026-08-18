@@ -1,4 +1,4 @@
-r"""comken/toolbox/browser/site.py — サイトを表す SiteBase 基底クラス。
+r"""comken/toolbox/browser/sitebase.py — サイトを表す SiteBase 基底クラス。
 
 1サイトにつき1クラスを作って、固有の値をそこに集める。設計の骨格は
 `comken.toolbox.salesforce.SalesforceBase` と同じ。読み書き両方を知っていれば、

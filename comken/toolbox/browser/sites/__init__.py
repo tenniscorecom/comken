@@ -25,7 +25,7 @@ r"""comken/toolbox/browser/sites/__init__.py — ライブラリ公認のブラ�
 にすること」と案内するだけで、自動的に `SITES` には入らない。
 """
 
-from comken.toolbox.browser.site import SiteBase
+from comken.toolbox.browser.sitebase import SiteBase
 
 # ライブラリ公認サイトの一覧。最初に空で置いておき、昇格するサイトが出てきたら
 # ここで追加していく。**プロジェクト側で同じ NAME のクラスを作ると、

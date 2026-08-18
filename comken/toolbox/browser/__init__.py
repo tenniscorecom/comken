@@ -26,7 +26,7 @@ from comken.toolbox.browser.locator import Locator
 from comken.toolbox.browser.management import BackgroundTask, Browsers, BrowserSession
 from comken.toolbox.browser.options import BrowserOptions
 from comken.toolbox.browser.page import Page, SitePage
-from comken.toolbox.browser.site import SiteBase
+from comken.toolbox.browser.sitebase import SiteBase
 
 __all__ = [
     "Browsers",

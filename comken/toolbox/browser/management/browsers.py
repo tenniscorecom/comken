@@ -65,7 +65,7 @@ from comken.toolbox.browser.download import DownloadDir
 from comken.toolbox.browser.management.sessions import BrowserSession
 from comken.toolbox.browser.management.tasks import BackgroundTask
 from comken.toolbox.browser.options import BrowserOptions
-from comken.toolbox.browser.site import SiteBase
+from comken.toolbox.browser.sitebase import SiteBase
 
 logger = logging.getLogger(__name__)
 

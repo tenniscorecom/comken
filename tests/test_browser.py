@@ -63,7 +63,7 @@ class TestPublicApi:
 
     def test_exports_site_class_from_browser_package(self):
         """SiteBase も comken.toolbox.browser から import できる公開クラス。"""
-        from comken.toolbox.browser.site import SiteBase as InternalSite
+        from comken.toolbox.browser.sitebase import SiteBase as InternalSite
 
         assert SiteBase is InternalSite
         assert "SiteBase" in set(browser.__all__)
