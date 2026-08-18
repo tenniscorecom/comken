@@ -164,7 +164,7 @@ Python から直接呼ばれるもので、ダブルクリックする入口で�
 実行するのに、そこから探すのは筋が通らない。代わりに、**bat を配る前に先頭へ場所を書く**:
 
 ```bat
-set "PYTHON_LIBRARY_FIXED=\\server\share\tools\comken"
+set "PYTHON_LIBRARY=\\server\share\tools"
 ```
 
 これで、この bat 1枚を各 PC へ配って「実行してください」と言うだけで済む
@@ -180,7 +180,7 @@ set "PYTHON_LIBRARY_FIXED=\\server\share\tools\comken"
    → このフォルダが現在の Windows ユーザーの `PYTHONPATH` に追加される。
    既に同じパスが登録済みなら重複追加しない。bat 自身の場所から comken を見つけるので、
    **リポジトリ直下で実行するなら編集は不要**（別の場所から配って実行させるときだけ、
-   bat の先頭の `PYTHON_LIBRARY_FIXED` に場所を書く）
+   bat の先頭の `PYTHON_LIBRARY` に場所を書く）
 2. **新しくターミナル（コマンドプロンプト／PowerShell／VS Code のターミナル）を開く**
    → 環境変数の変更は、そのターミナルを起動した瞬間から取り込まれる。
    セットアップ後に開いているターミナルでは PYTHONPATH が古いままなので、`python -m comken` が
