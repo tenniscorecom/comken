@@ -15,20 +15,20 @@ config.ini ではなくこのファイル（src/ 内の Python）で持つ。
 使い方（呼ぶ側）:
     from comken.toolbox.browser import Browsers
 
-    from .site import Kintai
+    from src.site import ExampleSite
 
     with Browsers() as browsers:
-        kintai = browsers.launch(Kintai)
-        kintai.go_login()                    # 行ける画面は go_〇〇() で書く
+        site = browsers.launch(ExampleSite)
+        site.go_login()                    # 行ける画面は go_〇〇() で書く
 """
 
 from comken.toolbox.browser import BrowserOptions
 
 
-class KintaiOptions(BrowserOptions):
+class ExampleSiteOptions(BrowserOptions):
     """サイトごとに1クラス作り、変えたい項目だけ上書きする。
 
-    設定できる項目とその値は print(KintaiOptions()) で一覧できる。
+    設定できる項目とその値は print(ExampleSiteOptions()) で一覧できる。
     """
 
     # HEADLESS = True                       # 画面を出さずに動かす

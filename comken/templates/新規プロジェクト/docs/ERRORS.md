@@ -3,8 +3,7 @@
 エラーが出たら、**黒い画面（コンソール）の一番下あたりに出ている「エラー名」**をこの表から探してください。
 エラー名は `SheetNotFoundError` のような英語の単語です。
 
-> このファイルは comken の雛形です。プロジェクトで使うときはルートにコピーし、
-> そのプロジェクト固有のエラーと対処を追記してください。
+> **このプロジェクトで出たエラーと対処を、下の表に追記してください。**
 
 ---
 
@@ -68,7 +67,7 @@
 | `KeyColumnNotFoundError` | 比較に使うキー列が見つからない | Excel・CSV の列名を確認する |
 | `InvalidColumnError` | 列の指定が正しくない（打ち間違いなど） | 列は番号（1, 2, …）か列記号（"A", "AA"）で指定する |
 | `RpaLibraryNotFoundError` | 社内ライブラリを読み込めない | 実行.bat の PYTHONPATH に社内ライブラリが入っているか確認する。バージョンが変わった場合は管理者へ連絡する |
-| `ConfigFileNotFoundError` | config.ini が見つからない | config.ini.example をコピーして config.ini を作る |
+| `ConfigFileNotFoundError` | config.ini も config.ini.example も見当たらない | config.ini.example がプロジェクトにあるか確認する。無い場合は雛形（`comken/templates/新規プロジェクト/config.ini.example`）から取り直す |
 | `ConfigCreatedFromExampleError` | config.ini が無かったので example から作った | 作られた config.ini の値を書き換えて、もう一度実行する |
 | `ConfigLowerCaseNameError` | config.ini のセクション名・キー名に小文字がある | 表示された名前を大文字に書き換える（`[files]` → `[FILES]`） |
 | `ConfigSectionNotFoundError` | config.ini の必要な節がない | 表示されたセクション名を config.ini に追加する |
