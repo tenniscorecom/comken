@@ -27,8 +27,6 @@ _REMOVED_NAMES = (
     "pdf",
     "setup_logger",
     "ExcelFile",
-    "set_dry_run",
-    "set_debug",
     "FileNameBuilder",
     "cleanup_stale_tmp",
     "transfer_by_key",

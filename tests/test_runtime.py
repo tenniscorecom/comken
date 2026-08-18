@@ -226,3 +226,195 @@ class TestDiffLeadingZero:
         from comken.core.data import diff_row
 
         assert diff_row({"社員番号": "0001"}, {"社員番号": "0001"}) == {}
+
+
+# ---------------------------------------------------------------------------
+# 環境変数 / setter によるモード切替（v0.12.0 で追加）
+# ---------------------------------------------------------------------------
+
+import comken.runtime as _runtime  # noqa: E402  — 末尾に置く
+
+
+@pytest.fixture(autouse=True)
+def _reset_runtime_overrides(monkeypatch):
+    """各テストの前後で override と環境変数を初期状態へ戻す。
+
+    環境変数を unset すると「未設定 → False」が確実に確認できる。
+    override は内部の _dry_run_override / _debug_override を直接 None へ戻す
+    （テスト間で値が漏れないように）。
+    """
+    monkeypatch.delenv("COMKEN_DRY_RUN", raising=False)
+    monkeypatch.delenv("COMKEN_DEBUG", raising=False)
+    _runtime._dry_run_override = None
+    _runtime._debug_override = None
+    yield
+    _runtime._dry_run_override = None
+    _runtime._debug_override = None
+
+
+class TestDryRunFromEnv:
+    """環境変数 COMKEN_DRY_RUN による dry-run 解決。"""
+
+    def test_default_is_false(self):
+        """環境変数未設定 + オーバーライドなし → False。"""
+        assert comken.is_dry_run() is False
+
+    def test_env_1_is_true(self, monkeypatch):
+        """COMKEN_DRY_RUN=1 で True。"""
+        monkeypatch.setenv("COMKEN_DRY_RUN", "1")
+        assert comken.is_dry_run() is True
+
+    def test_env_0_is_false(self, monkeypatch):
+        """COMKEN_DRY_RUN=0 で False（"0" は真とみなさない）。"""
+        monkeypatch.setenv("COMKEN_DRY_RUN", "0")
+        assert comken.is_dry_run() is False
+
+    def test_env_true_yes_on(self, monkeypatch):
+        """COMKEN_DRY_RUN=true / yes / on を True 扱い。"""
+        for value in ["true", "yes", "on", "TRUE", "Yes", "ON"]:
+            monkeypatch.setenv("COMKEN_DRY_RUN", value)
+            assert comken.is_dry_run() is True, f"expected True for {value!r}"
+
+    def test_env_empty_is_false(self, monkeypatch):
+        """空文字は False 扱い（「設定はあるが off」）。"""
+        monkeypatch.setenv("COMKEN_DRY_RUN", "")
+        assert comken.is_dry_run() is False
+
+    def test_env_unknown_value_is_false(self, monkeypatch):
+        """真とみなす集合以外は False。"""
+        monkeypatch.setenv("COMKEN_DRY_RUN", "maybe")
+        assert comken.is_dry_run() is False
+
+
+class TestDryRunSetter:
+    """set_dry_run と context manager による上書き。"""
+
+    def test_set_true_overrides_env(self, monkeypatch):
+        """set_dry_run(True) は環境変数の False を上書きする。"""
+        monkeypatch.setenv("COMKEN_DRY_RUN", "0")
+        _runtime.set_dry_run(True)
+        assert comken.is_dry_run() is True
+
+    def test_set_false_overrides_env(self, monkeypatch):
+        """set_dry_run(False) は環境変数の True を上書きする。"""
+        monkeypatch.setenv("COMKEN_DRY_RUN", "1")
+        _runtime.set_dry_run(False)
+        assert comken.is_dry_run() is False
+
+    def test_set_none_returns_to_env(self, monkeypatch):
+        """set_dry_run(None) で解除し、以降は環境変数に従う。"""
+        monkeypatch.setenv("COMKEN_DRY_RUN", "1")
+        _runtime.set_dry_run(True)  # 真の値を一時的に設定
+        _runtime.set_dry_run(None)  # 解除
+        assert comken.is_dry_run() is True  # 環境変数 (1) が生きる
+
+    def test_set_none_returns_to_default_when_env_unset(self):
+        """set_dry_run(None) で解除、環境変数未設定なら False。"""
+        _runtime.set_dry_run(True)
+        _runtime.set_dry_run(None)
+        assert comken.is_dry_run() is False
+
+    def test_context_manager_restores_previous(self):
+        """with dry_run() を抜けたら元の状態（unset → 環境変数）に戻る。"""
+        assert comken.is_dry_run() is False
+        with comken.dry_run():
+            assert comken.is_dry_run() is True
+        assert comken.is_dry_run() is False
+
+    def test_context_manager_restores_setter_value(self, monkeypatch):
+        """外側で set_dry_run(True) した状態を、with 抜けた後に復元。"""
+        monkeypatch.setenv("COMKEN_DRY_RUN", "0")
+        _runtime.set_dry_run(True)
+        with comken.dry_run(False):
+            assert comken.is_dry_run() is False
+        # ブロック前の setter (True) に戻る
+        assert comken.is_dry_run() is True
+        # setter を解除すると環境変数の False が効く
+        _runtime.set_dry_run(None)
+        assert comken.is_dry_run() is False
+
+    def test_context_manager_restores_on_exception(self):
+        """ブロック内で例外が出ても元の状態へ戻る。"""
+        assert comken.is_dry_run() is False
+        with pytest.raises(RuntimeError), comken.dry_run():
+            assert comken.is_dry_run() is True
+            raise RuntimeError
+        assert comken.is_dry_run() is False
+
+    def test_nested_context_managers(self):
+        """入れ子の context manager が内側→外側の順に復元する。"""
+        assert comken.is_dry_run() is False
+        with comken.dry_run():
+            assert comken.is_dry_run() is True
+            with comken.dry_run(False):
+                assert comken.is_dry_run() is False
+            assert comken.is_dry_run() is True
+        assert comken.is_dry_run() is False
+
+
+class TestDebugFromEnv:
+    """環境変数 COMKEN_DEBUG による debug 解決。"""
+
+    def test_default_is_false(self):
+        """環境変数未設定 + オーバーライドなし → False。"""
+        assert comken.is_debug() is False
+
+    def test_env_1_is_true(self, monkeypatch):
+        """COMKEN_DEBUG=1 で True。"""
+        monkeypatch.setenv("COMKEN_DEBUG", "1")
+        assert comken.is_debug() is True
+
+    def test_env_true_yes_on(self, monkeypatch):
+        """COMKEN_DEBUG=true / yes / on を True 扱い。"""
+        for value in ["true", "yes", "on"]:
+            monkeypatch.setenv("COMKEN_DEBUG", value)
+            assert comken.is_debug() is True, f"expected True for {value!r}"
+
+    def test_env_zero_is_false(self, monkeypatch):
+        """COMKEN_DEBUG=0 は False。"""
+        monkeypatch.setenv("COMKEN_DEBUG", "0")
+        assert comken.is_debug() is False
+
+
+class TestDebugSetter:
+    """set_debug と context manager による上書き。"""
+
+    def test_set_true_overrides_env(self, monkeypatch):
+        """set_debug(True) は環境変数を上書き。"""
+        monkeypatch.setenv("COMKEN_DEBUG", "0")
+        _runtime.set_debug(True)
+        assert comken.is_debug() is True
+
+    def test_set_none_returns_to_env(self, monkeypatch):
+        """set_debug(None) で解除し、以降は環境変数に従う。"""
+        monkeypatch.setenv("COMKEN_DEBUG", "1")
+        _runtime.set_debug(False)
+        _runtime.set_debug(None)
+        assert comken.is_debug() is True
+
+    def test_context_manager_restores_previous(self):
+        """with debug() を抜けたら元の状態に戻る。"""
+        assert comken.is_debug() is False
+        with comken.debug():
+            assert comken.is_debug() is True
+        assert comken.is_debug() is False
+
+    def test_context_manager_restores_on_exception(self):
+        """ブロック内で例外が出ても元の状態へ戻る。"""
+        assert comken.is_debug() is False
+        with pytest.raises(RuntimeError), comken.debug():
+            assert comken.is_debug() is True
+            raise RuntimeError
+        assert comken.is_debug() is False
+
+
+class TestPackageReExports:
+    """新 setter は comken.runtime 配下に置く（facade は少数のまま保つ方針）。"""
+
+    def test_set_dry_run_lives_in_runtime_module(self):
+        """comken.runtime.set_dry_run が callable。"""
+        assert callable(_runtime.set_dry_run)
+
+    def test_set_debug_lives_in_runtime_module(self):
+        """comken.runtime.set_debug が callable。"""
+        assert callable(_runtime.set_debug)

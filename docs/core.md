@@ -182,8 +182,8 @@ print(t.elapsed)              # 経過秒数を値として使える
 ### デバッグ用 measure（`comken.debug()` 中だけログ）
 
 `Timer` は**常に**ログが出る。`measure` は `with comken.debug():` ブロック内でのみ
-DEBUG ログが出る。普段は無音で、止まったときだけ `config.RUN.DEBUG = True` にして
-再実行すれば、どの処理で止まったかが後から分かる。
+DEBUG ログが出る。普段は無音で、止まったときだけ環境変数 `COMKEN_DEBUG=1` を
+付けて再実行すれば、どの処理で止まったかが後から分かる。
 
 ```python
 from comken.core import measure
