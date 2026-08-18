@@ -1,5 +1,4 @@
-"""
-app_page.py — このサンプルサイト共通の SitePage
+"""comken/toolbox/browser/sites/sample/pages/app_page.py — このサンプルサイト共通の SitePage
 
 【使い方ガイド】
 ---------------------------------------------------------------------------

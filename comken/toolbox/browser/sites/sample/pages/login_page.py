@@ -1,5 +1,4 @@
-"""
-login_page.py — ログイン画面
+"""comken/toolbox/browser/sites/sample/pages/login_page.py — ログイン画面
 
 【Page Object の書き方】
   - 画面に存在する要素のセレクターは Locator のクラス変数としてクラス上部に定義する
@@ -20,12 +19,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from comken.toolbox.browser import Locator
-
-from .app_page import AppPage
+from comken.toolbox.browser.sites.sample.pages.app_page import AppPage
 
 if TYPE_CHECKING:
     # IDE の補完・型チェック用。ランタイムでは import されない
-    from .secure_page import SecurePage
+    from comken.toolbox.browser.sites.sample.pages.secure_page import SecurePage
 
 
 class LoginPage(AppPage):
@@ -46,7 +44,7 @@ class LoginPage(AppPage):
             secure = login_page.login("user", "pass")
             print(secure.get_heading())
         """
-        from .secure_page import SecurePage  # ランタイム用（循環参照を避けるためここでインポート）
+        from comken.toolbox.browser.sites.sample.pages.secure_page import SecurePage
 
         self.input(self.USERNAME, username)
         self.input(self.PASSWORD, password)

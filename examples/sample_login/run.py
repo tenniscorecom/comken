@@ -9,7 +9,7 @@
 """
 
 from comken.toolbox.browser import Browsers
-from examples.sample_login.sites.sample.site import SampleSite
+from comken.toolbox.browser.sites import SampleSite
 
 USERNAME = "tomsmith"
 PASSWORD = "SuperSecretPassword!"

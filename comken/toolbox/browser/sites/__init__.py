@@ -4,6 +4,7 @@ r"""comken/toolbox/browser/sites/__init__.py — ライブラリ公認のブラ�
 社内システム**をここに置く。プロジェクト側で個別に使うサイトは置かない
 （プロジェクト側の `src/sites/` に置く。判断基準は
 `docs/開発/ライブラリ開発規約.md` の「サイト／組織クラスを昇格させる基準」を参照）。
+サンプルサイト（`sample/`）は書き方の見本であり、社内システムではない。
 
     from comken.toolbox.browser.sites import SITES    # 公認サイトの一覧
     from comken.toolbox.browser.sites import Kintai  # 個別 import も可
@@ -26,10 +27,12 @@ r"""comken/toolbox/browser/sites/__init__.py — ライブラリ公認のブラ�
 """
 
 from comken.toolbox.browser.sitebase import SiteBase
+from comken.toolbox.browser.sites.sample.site import SampleSite
 
 # ライブラリ公認サイトの一覧。最初に空で置いておき、昇格するサイトが出てきたら
 # ここで追加していく。**プロジェクト側で同じ NAME のクラスを作ると、
 # 起動時に `SiteAlreadyInLibraryError` で止まる。**
+# SampleSite は社内システムではなく書き方の見本なので、SITES には含めない。
 SITES: tuple[type[SiteBase], ...] = ()
 
-__all__ = ["SITES"]
+__all__ = ["SITES", "SampleSite"]

@@ -806,25 +806,27 @@ class LoginPage(SitePage):
 
 ### サンプル実装
 
-`examples/sample_login/` に動作するサンプルがある（他モジュールのサンプルは examples/README.md 参照）。
+`comken/toolbox/browser/sites/sample/` にサイト実装の見本があり、
+`examples/sample_login/` から import して動かせる
+（他モジュールのサンプルは examples/README.md 参照）。
 
 **上の「1サイト＝1フォルダ」で書いてある**ので、形の見本としてそのまま真似できる。
 
 ```
+comken/toolbox/browser/sites/sample/
+├── site.py                 # サイトクラス＋このサイトの BrowserOptions
+└── pages/
+    ├── app_page.py         # このサイトの画面に共通
+    ├── login_page.py       # ログイン画面
+    └── secure_page.py      # ログイン後の画面
+
 examples/sample_login/
-├── sites/
-│   └── sample/            # このフォルダだけ見ればサンプルサイトのことが分かる
-│       ├── site.py        # サイトクラス＋このサイトの BrowserOptions
-│       └── pages/
-│           ├── app_page.py    # このサイトの画面に共通
-│           ├── login_page.py  # ログイン画面
-│           └── secure_page.py # ログイン後の画面
 ├── config.ini.example     # 設定ファイルのテンプレート
 ├── config.py              # config のシングルトン（config = Config()）
-└── run.py                 # 実行スクリプト
+└── run.py                 # ライブラリ内の SampleSite を使う実行スクリプト
 ```
 
-サイトを増やすときは `sites/<サイト名>/` をもう1つ作るだけで、
+プロジェクト側でサイトを増やすときは `sites/<サイト名>/` をもう1つ作るだけで、
 既にあるサイトのファイルには触らない。
 
 実行:
@@ -840,4 +842,5 @@ python -m examples.sample_login.run
 
 - [公開 API](自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外
 - [エラー対応ガイド](ERRORS.md#ブラウザedge-自動操作のエラー) — エラー名から対処を引く
-- `examples/sample_login/` — 動くサンプル一式
+- `comken/toolbox/browser/sites/sample/` — サイト実装の見本
+- `examples/sample_login/` — `SampleSite` を使う実行例

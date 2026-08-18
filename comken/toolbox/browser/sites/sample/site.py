@@ -1,5 +1,4 @@
-"""
-sites/sample/site.py — サンプルサイトの SiteBase クラス。
+"""comken/toolbox/browser/sites/sample/site.py — サンプルサイトの SiteBase クラス。
 
 このサイトのものは sites/sample/ の中で完結する（site.py・pages/）。
 サイトを増やすときは sites/<サイト名>/ をもう1つ作る。
@@ -17,8 +16,7 @@ Python）に書き、設定できる項目は ``print(SampleBrowserOptions())`` 
 """
 
 from comken.toolbox.browser import BrowserOptions, SiteBase
-
-from .pages.login_page import LoginPage
+from comken.toolbox.browser.sites.sample.pages.login_page import LoginPage
 
 
 class SampleBrowserOptions(BrowserOptions):
@@ -44,7 +42,7 @@ class SampleSite(SiteBase):
     NAME = "sample"
     BASE_URL = "https://the-internet.herokuapp.com"
     OPTIONS = SampleBrowserOptions
-    OWNER = "sample_login / サンプル"
+    OWNER = "comken"
 
     def go_login(self) -> LoginPage:
         """ログイン画面を開く。"""

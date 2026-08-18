@@ -4683,6 +4683,26 @@ True になっていても、結果や例外を受け取るには wait() を呼�
 
 公開定数。
 
+### `SampleSite`
+
+```text
+class SampleSite(SiteBase):
+```
+
+#### 説明
+
+the-internet.herokuapp.com 用の SiteBase。
+
+#### `go_login`
+
+```text
+def go_login(self) -> LoginPage:
+```
+
+##### 説明
+
+ログイン画面を開く。
+
 
 ## `from comken.toolbox.credentials import ...`
 

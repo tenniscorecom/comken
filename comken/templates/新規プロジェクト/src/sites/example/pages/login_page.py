@@ -36,7 +36,7 @@ class LoginPage(Page):
 
     Page を直接継承しているのは、この雛形に「サイト共通の基底クラス」を
     まだ作っていないから。1サイト目を立ち上げたあと、
-    examples/sample_login/sites/sample/pages/app_page.py のように
+    comken/toolbox/browser/sites/sample/pages/app_page.py のように
     `SitePage` を継承した共通クラス（例: `AppPage`）を作って、
     ここに切り替えるとよい。
     """

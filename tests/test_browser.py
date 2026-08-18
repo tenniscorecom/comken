@@ -46,6 +46,7 @@ from comken.toolbox.browser.management.browsers import Browsers as InternalBrows
 from comken.toolbox.browser.management.sessions import BrowserSession as InternalBrowserSession
 from comken.toolbox.browser.management.startup import _build_driver, create_service
 from comken.toolbox.browser.management.tasks import BackgroundTask as InternalBackgroundTask
+from comken.toolbox.browser.sites import SITES, SampleSite
 
 
 class TestPublicApi:
@@ -58,12 +59,13 @@ class TestPublicApi:
         assert BackgroundTask is InternalBackgroundTask
         assert {"Browsers", "BrowserSession", "BackgroundTask"} <= set(browser.__all__)
 
-    def test_exports_site_class_from_browser_package(self):
-        """SiteBase も comken.toolbox.browser から import できる公開クラス。"""
-        from comken.toolbox.browser.sitebase import SiteBase as InternalSite
-
-        assert SiteBase is InternalSite
-        assert "SiteBase" in set(browser.__all__)
+    def test_exports_sample_site_without_registering_as_library_site(self):
+        """サンプルサイトを公開しつつ、社内システムの一覧には登録しない。"""
+        assert SampleSite.NAME
+        assert SampleSite.BASE_URL
+        assert SampleSite.OWNER
+        # 見本を公認サイト扱いして、同じ NAME の利用側サイトを衝突させる回帰を防ぐ。
+        assert SampleSite not in SITES
 
 
 def _make_session(tmp_path, name: str = "test") -> BrowserSession:
