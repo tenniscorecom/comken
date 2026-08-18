@@ -231,17 +231,30 @@ kintai.go_login().login(USER, PW)                  # ❌ 裏で使っている�
 
 ### 1. ファイルを作る
 
+**1サイト＝1フォルダにして、そのサイトのものを全部その中に入れる。**
+
 ```
 src/
-  browser_options.py        ← サイトごとのオプションクラスを足す
   sites/
-    kintai.py               ← サイトクラス（NAME・BASE_URL・入口の操作）
-  pages/
-    kintai/
-      kintai_page.py        ← このサイトの画面に共通（セレクター・共通処理）
-      login_page.py         ← 画面ごと
-      home_page.py
+    kintai/                 ← このフォルダだけ見れば勤怠のことが分かる
+      site.py               ← サイトクラス（NAME・BASE_URL・入口の操作）
+      options.py            ← このサイトの BrowserOptions
+      pages/
+        kintai_page.py      ← このサイトの画面に共通（セレクター・共通処理）
+        login_page.py       ← 画面ごと
+        home_page.py
+    keiri/                  ← 別のサイトはまるごと別フォルダ
+      site.py
+      options.py
+      pages/
 ```
+
+サイト名が出てくるのは**フォルダ名の1回だけ**。`sites/` と `pages/` を並べて
+サイト名を2箇所に書く形にすると、増やすときも消すときも2箇所を触ることになる。
+**サイトを1つ消すなら、フォルダを1つ消せば終わり**にしておく。
+
+**サイトが1つだけのうちは、フォルダを分けなくてよい**（`comken init` が作る雛形は
+`src/site.py` と `src/browser_options.py` のまま）。2つ目が出てきた時点で上の形へ移す。
 
 **サイトクラスと画面共通クラスは別物。** サイトクラスは「どのサイトか」を表し、
 画面共通クラスは「その画面群に共通の操作」を持つ。

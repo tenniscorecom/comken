@@ -560,7 +560,7 @@ graph LR
         credentials["credentials\n認証情報（DPAPI）"]
         mastertable["master_table\n管理表"]
     end
-    subgraph L3["comken.services — 社内の仕組み"]
+    subgraph L3["comken.services — 社内の決まりに沿った手順"]
         downloader["salesforce_downloader\nレポート集約取得"]
     end
     L1 --> L0
