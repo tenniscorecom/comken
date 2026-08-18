@@ -7,12 +7,11 @@ import inspect
 import logging
 import os
 from pathlib import Path
+from typing import Any
 
 from selenium import webdriver
 from selenium.webdriver.edge.options import Options
 from selenium.webdriver.edge.service import Service
-
-from typing import Any
 
 from comken.exceptions import DriverStartError
 from comken.toolbox.browser.download import DownloadDir
