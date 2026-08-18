@@ -22,6 +22,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE_DIR = ROOT / "templates" / "新規プロジェクト"
 
+# PYTHONPATH へ入れる場所は **comken パッケージそのものではなく、その親**。
+# import comken できるのは親を通したときで、パッケージ自身を通しても読めない。
+# 生成する bat も %COMKEN_ROOT%\comken\__init__.py の実在を確かめる（＝親を期待する）
+IMPORT_ROOT = ROOT.parent
+
 # コピーしないもの（開発ツールが作るキャッシュと、実行時の生成物）
 IGNORED = shutil.ignore_patterns(
     "__pycache__",
@@ -44,7 +49,8 @@ PLACEHOLDER_NAME = "（プロジェクト名）"
 NAMED_FILES = ("main.py", "docs/仕様書.md", "docs/使い方.md")
 
 # ひな形に書いてある comken の場所。実際の場所に置き換える。
-PLACEHOLDER_COMKEN_ROOT = r"\\server\share\tools\comken"
+# comken パッケージの**親**（PYTHONPATH へ入れる場所）を指す
+PLACEHOLDER_COMKEN_ROOT = r"\\server\share\tools"
 
 # comken の場所を書いてあるファイル。bat は \ 区切り、settings.json は JSON なので / 区切り。
 COMKEN_ROOT_FILES = (
@@ -101,7 +107,7 @@ def _strip_template_notes(readme: Path, project_name: str) -> None:
     readme.write_text(head.replace(PLACEHOLDER_NAME, project_name), encoding="utf-8")
 
 
-def create(project_name: str, into: Path, comken_root: Path = ROOT) -> Path:
+def create(project_name: str, into: Path, comken_root: Path = IMPORT_ROOT) -> Path:
     """ひな形をコピーして、新しいプロジェクトのフォルダを作る。"""
     if not TEMPLATE_DIR.is_dir():
         raise FileNotFoundError(f"ひな形が見つかりません: {TEMPLATE_DIR}")
@@ -141,8 +147,8 @@ def main() -> None:
     parser.add_argument(
         "--comken-root",
         type=Path,
-        default=ROOT,
-        help="comken の場所（省略するとこのスクリプトがある場所）",
+        default=IMPORT_ROOT,
+        help="PYTHONPATH へ入れる場所（comken パッケージの親）",
     )
     args = parser.parse_args()
 

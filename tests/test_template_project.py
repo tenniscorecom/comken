@@ -38,10 +38,10 @@ def _read(path: Path, encoding: str = "utf-8") -> str:
 def _generated(tmp_path: Path, project_name: str = "売上集計") -> Path:
     """テンプレートを tmp_path に展開する（create() の呼び出し）。
 
-    `_ROOT / "comken"` を comken_root に渡しているのは create() 側の既定値と同じで、
-    生成物の comken_root 注入ロジックを本番と同じ経路で動かすため。
+    comken_root には **comken パッケージの親**（＝ PYTHONPATH へ入れる場所）を渡す。
+    create() の既定値と同じで、生成物の注入ロジックを本番と同じ経路で動かす。
     """
-    return new_project_mod.create(project_name, tmp_path, _ROOT / "comken")
+    return new_project_mod.create(project_name, tmp_path, _ROOT)
 
 
 @pytest.fixture
@@ -321,6 +321,28 @@ def test_vscode_settings_and_bat_point_to_same_comken_root(generated: Path) -> N
     assert settings_path == bat_path, (
         f"settings.json は {settings_path!r} を指すのに、"
         f"実行.bat は {bat_path!r} を指している（片方の置換漏れ）"
+    )
+
+
+def test_comken_root_is_importable(generated: Path) -> None:
+    """`COMKEN_ROOT` が **import comken できる場所**（パッケージの親）を指すこと。
+
+    「何を防いでいるか」: 2026-08-18 に、パッケージ自身
+    （`...\\original_libs\\comken`）を指していた。PYTHONPATH へ入れても
+    `import comken` は通らず、生成した bat は `%COMKEN_ROOT%\\comken\\__init__.py`
+    の実在を確かめるので **必ず「comken が見つかりません」で止まる**状態だった。
+
+    上の「両者が一致するか」だけでは、**両方が同じ誤った値**のとき通ってしまう。
+    パスの中身まで見る必要がある。
+    """
+    bat_text = _read(generated / "実行.bat", encoding="cp932")
+    bm = re.search(r'set\s+"COMKEN_ROOT=([^"]+)"', bat_text)
+    assert bm, "実行.bat に COMKEN_ROOT の設定が見つからない"
+
+    marker = Path(bm.group(1)) / "comken" / "__init__.py"
+    assert marker.is_file(), (
+        f"COMKEN_ROOT が import できない場所を指している: {bm.group(1)}\n"
+        f"（{marker} が無い。comken パッケージ自身ではなく、その親を指すこと）"
     )
 
 

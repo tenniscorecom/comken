@@ -153,7 +153,8 @@ def _run_init(args: argparse.Namespace, _remaining: list[str]) -> int:
             return 1
         name = name.strip()
 
-    comken_root = args.comken_root or Path(__file__).resolve().parent
+    # PYTHONPATH へ入れるのは comken パッケージの親（__main__.py は comken/ の中にある）
+    comken_root = args.comken_root or Path(__file__).resolve().parent.parent
     try:
         target = create_project(name, args.into, comken_root)
     except OSError as e:

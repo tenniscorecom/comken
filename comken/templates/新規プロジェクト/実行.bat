@@ -4,7 +4,7 @@ rem このツールの起動用。ダブルクリックで main.py を実行します。
 rem comken を別の場所へ移したときは、ここと .vscode\settings.json の両方を直してください。
 
 rem comken の場所。PC に恒久登録していない場合だけ、ここが使われる
-set "COMKEN_ROOT=\\server\share\tools\comken"
+set "COMKEN_ROOT=\\server\share\tools"
 
 rem 共有フォルダ（\\サーバー名\...）から起動されても動くよう pushd を使う（cd は UNC 不可）
 pushd "%~dp0" || (

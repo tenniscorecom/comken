@@ -5,7 +5,7 @@ rem ダブルクリックで起動してください。入れた値は Windows の DPAPI で暗号化して保
 rem 登録した Windows ユーザー・その PC でしか読めません。
 
 rem comken の場所。PC に恒久登録していない場合だけ、ここが使われる
-set "COMKEN_ROOT=\\server\share\tools\comken"
+set "COMKEN_ROOT=\\server\share\tools"
 
 rem 共有フォルダ（\\サーバー名\...）から起動されても動くよう pushd を使う（cd は UNC 不可）
 pushd "%~dp0" || (
