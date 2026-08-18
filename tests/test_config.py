@@ -5,6 +5,7 @@ Config クラスのテスト。
     リポジトリのルートで python -m pytest tests/ -v
 """
 
+import ast
 import logging
 import sys
 from pathlib import Path
@@ -19,6 +20,83 @@ from comken.exceptions import (
     ConfigLowerCaseNameError,
     ConfigRequiredKeysMissingError,
 )
+
+# .pyi 内で「型注釈に書かれた Name」が、その .pyi の import か組み込みで
+# すべて解決できているか検査するヘルパー。Path のような外部名を書き出しながら
+# import を忘れる「静かに補完が落ちる」バグを捕まえるのが目的。
+_BUILTIN_TYPE_NAMES = {
+    "bool",
+    "int",
+    "float",
+    "str",
+    "list",
+    "dict",
+    "tuple",
+    "set",
+    "type",
+    "object",
+    "None",
+    "bytes",
+    "complex",
+    "frozenset",
+}
+
+
+def _collect_annotation_names(tree: ast.AST) -> set[str]:
+    """AST ツリーから型注釈（AnnAssign / arg / 戻り値）に現れる Name を集める。"""
+    used: set[str] = set()
+
+    def walk(node: ast.AST) -> None:
+        if isinstance(node, ast.Name):
+            used.add(node.id)
+        elif isinstance(node, ast.Subscript):
+            walk(node.value)
+            walk(node.slice)
+        elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+            # `str | Path` のような union 表現
+            walk(node.left)
+            walk(node.right)
+        elif isinstance(node, ast.Tuple):
+            for elt in node.elts:
+                walk(elt)
+        # ast.Constant / ast.Attribute は型注釈で Name として解決される対象ではないので無視
+
+    for node in ast.walk(tree):
+        ann = _annotation_of(node)
+        if ann is not None:
+            walk(ann)
+    return used
+
+
+def _annotation_of(node: ast.AST) -> ast.AST | None:
+    """指定ノードが持つ型注釈（あれば）を返す。なければ None。"""
+    if isinstance(node, ast.AnnAssign):
+        return node.annotation
+    if isinstance(node, ast.arg):
+        return node.annotation
+    if isinstance(node, ast.FunctionDef):
+        return node.returns
+    return None
+
+
+def _assert_stub_self_contained(text: str) -> None:
+    """スタブ内で import / 定義されていない型名があったらテストを失敗させる。"""
+    tree = ast.parse(text)
+    imported: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                imported.add(alias.asname or alias.name)
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                imported.add(alias.asname or alias.name.split(".")[0])
+    defined = {node.name for node in tree.body if isinstance(node, ast.ClassDef)}
+    used = _collect_annotation_names(tree)
+
+    missing = used - _BUILTIN_TYPE_NAMES - imported - defined
+    assert not missing, (
+        f"スタブ内で import も定義もない型: {sorted(missing)}\n--- スタブ全体 ---\n{text}"
+    )
 
 
 class TestConfigMissingFile:
@@ -510,6 +588,38 @@ class TestGenerateStub:
 
         text = generate_stub(ini, tmp_path / "config.pyi").read_text(encoding="utf-8")
         ast.parse(text)  # 構文エラーなら例外になる
+
+    def test_package_init_stub_is_self_contained(self, ini, tmp_path, monkeypatch):
+        """typings/comken/__init__.pyi はそれ自身で完結していること（型名が import 済み）。
+
+        防いでいるバグ: スタブ生成で Path を書きながら import を忘れると、
+        pyright / Pylance が Path を `Unknown` と判定して補完が静かに落ちる。
+        bool や str は組み込みなので解決してしまい、Path 型のキーがないと
+        このバグは表面化しない（だから INPUT_FOLDER = C:\\work\\input を含む
+        ini フィクスチャを材料に使う）。
+        """
+        from comken.core.config.stubs import generate_stub
+
+        monkeypatch.chdir(tmp_path)
+        generate_stub(ini)
+        init_text = (tmp_path / "typings" / "comken" / "__init__.pyi").read_text(encoding="utf-8")
+
+        # INPUT_FOLDER: Path は fixture で Path 型になる前提。
+        # バグがあれば下の assert で "Path" が missing として拾われる
+        assert "INPUT_FOLDER: Path" in init_text, (
+            "このテストは Path 型のキーを含む config.ini を前提とする"
+        )
+        _assert_stub_self_contained(init_text)
+
+    def test_class_stub_is_self_contained(self, ini, tmp_path):
+        """src/config.pyi（class スタブ）も型名が import 済みであること。
+
+        `__init__.pyi` と同じ抜けが class スタブでも起きていないか確かめる回帰テスト。
+        """
+        from comken.core.config.stubs import generate_stub
+
+        text = generate_stub(ini, tmp_path / "config.pyi").read_text(encoding="utf-8")
+        _assert_stub_self_contained(text)
 
 
 class TestAutoStub:

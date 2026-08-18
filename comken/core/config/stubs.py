@@ -214,7 +214,10 @@ def _build_package_init_stub(cfg: configparser.ConfigParser) -> str:
         if module.startswith("comken."):
             by_module.setdefault(module, []).append(name)
 
-    lines = [_STUB_HEADER]
+    # Path はセクション属性の型注釈に出るため常に import する。
+    # 入れないと Path 型のキーが `Unknown` として解決され、補完が静かに落ちる
+    # （bool や str は組み込みなので解決してしまい、Path だけ抜けが出る）。
+    lines = [_STUB_HEADER, "from pathlib import Path\n", ""]
     for module in sorted(by_module):
         names = sorted(by_module[module])
         inner = "".join(f"    {name} as {name},\n" for name in names)
