@@ -32,11 +32,8 @@ def project_dir() -> Path:
     `python <絶対パス>\\main.py` と呼ぶ。**カレントではなくスクリプトの場所**を
     返すのはそのためで、config.ini・state.ini・logs/ もこれを基準にしている。
 
-    対話実行（REPL）や pytest から呼ぶと、その実行環境の場所を返す。
+    対話実行（REPL）や pytest、`python -m 〇〇` から呼ぶと、その実行環境の場所を返す。
     バッチとして動かす前提の関数なので、そこは想定していない。
-    **`python -m 〇〇` で動かすと、そのモジュールの場所を返す**
-    （`python -m comken` なら comken パッケージ自身）。CLI から使うときは
-    カレントを基準にすること。
 
     Returns:
         実行スクリプトのあるフォルダ。
