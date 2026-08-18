@@ -15,6 +15,7 @@
 | ``; KEY = 値`` で **コメントアウト** されたまま | 設定を書いたつもりが無効 |
 | 同じセクション内に **同じキーが 2 回** | configparser が弾く |
 | **セクションが 1 つも認識されない** | configparser が黙って空になる |
+| 似たセクション名・キー名が **2 つ並んでいる** | 片方は古い設定で意図せず残っている／タイポ |
 
 **値は一切出力しない。** config.ini には業務情報（顧客名・パス・URL）が含まれるため、
 このモジュールが出すのは「セクション名」「キー名」「行番号」「元の行」だけ。
@@ -24,6 +25,7 @@ from __future__ import annotations
 
 import configparser
 from dataclasses import dataclass, field
+from difflib import SequenceMatcher
 from pathlib import Path
 
 # 行頭の空白として扱う文字。半角スペース・タブに加えて全角スペースも対象。
@@ -37,6 +39,11 @@ _COMMENT_CHARS = (";", "#")
 # ここで import せず判定式を書くのは、循環 import を避けるため
 # （config/__init__.py がこのモジュールを import できるようにする）。
 _MAPPING_SUFFIX = "MAPPING"
+
+# 似た名前が 2 つ並んでいるときの警告しきい値。``SequenceMatcher.ratio()``
+# の 0 〜 1 で、0.85 だと「ほぼ同じだが 1〜2 文字違う」程度。``INPUT_FOLDER``
+# と ``OUTPUT_FOLDER`` のような正しいペアは 0.6 程度なので誤検知しない。
+_SIMILAR_NAME_CUTOFF = 0.85
 
 
 @dataclass(frozen=True)
@@ -137,6 +144,42 @@ def check_config(path: str | Path) -> CheckResult:
             )
         )
 
+    # 似た名前のペアを 1 つずつ指摘する。``[FILES]`` と ``[FILE]`` のように
+    # 1 文字違いで両方あると、片方は古い設定で意図せず残っている可能性が高い。
+    # ただし ``INPUT_FOLDER`` と ``OUTPUT_FOLDER`` のような正しいペアは
+    # 0.85 のしきい値で素通りするため、誤検知にはならない。
+    for a, b, ratio in _similar_pairs(list(sections)):
+        problems.append(
+            CheckProblem(
+                line_no=0,
+                snippet="",
+                message=(
+                    f"似た名前のセクションが 2 つあります。"
+                    f"[{a}] と [{b}]（類似度 {ratio:.0%}）。"
+                    "片方は古い設定で意図せず残っている／タイポの可能性が高いです。"
+                    "意図して両方があるなら、この指摘は無視して構いません"
+                ),
+            )
+        )
+    for stripped_section, keys in sections.items():
+        # マッピングセクションのキー（列名）は業務情報になりうるため、
+        # ここで列挙するとチェック自体が情報漏洩になる。スキップする
+        if stripped_section.endswith(_MAPPING_SUFFIX):
+            continue
+        for a, b, ratio in _similar_pairs(keys):
+            problems.append(
+                CheckProblem(
+                    line_no=0,
+                    snippet="",
+                    message=(
+                        f"[{stripped_section}] セクション内に似た名前のキーが 2 つあります。"
+                        f"{a} と {b}（類似度 {ratio:.0%}）。"
+                        "片方は古い設定で意図せず残っている／タイポの可能性が高いです。"
+                        "意図して両方があるなら、この指摘は無視して構いません"
+                    ),
+                )
+            )
+
     return CheckResult(
         path=path,
         bom=bom,
@@ -144,6 +187,26 @@ def check_config(path: str | Path) -> CheckResult:
         sections=sections,
         total_lines=len(lines),
     )
+
+
+def _similar_pairs(names: list[str]) -> list[tuple[str, str, float]]:
+    """``names`` の中で、互いの ``SequenceMatcher.ratio()`` がしきい値以上のペアを返す。
+
+    返り値は ``(a, b, ratio)`` のリスト。``a < b`` の辞書順に整列して、
+    ``(a, b)`` と ``(b, a)`` の両方は出さない（同ペアは最初の組合せ 1 回だけ）。
+    マッピングセクションは列名が業務情報になりうるため、判定材料には
+    使わない（呼び出し側で sections から除外する想定）。
+
+    しきい値は 0.85 — ``FILES`` と ``FILE`` の 1 文字違いを拾いつつ、
+    ``INPUT_FOLDER`` と ``OUTPUT_FOLDER`` のような正しいペアは素通りする。
+    """
+    found: list[tuple[str, str, float]] = []
+    for i, a in enumerate(names):
+        for b in names[i + 1 :]:
+            ratio = SequenceMatcher(None, a, b).ratio()
+            if ratio >= _SIMILAR_NAME_CUTOFF:
+                found.append((a, b, ratio))
+    return found
 
 
 def _check_line(line_no: int, line: str, problems: list[CheckProblem]) -> None:

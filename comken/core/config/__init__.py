@@ -40,6 +40,7 @@ from comken.core.files.ops import project_dir
 from comken.exceptions import (
     ConfigCreatedFromExampleError,
     ConfigFileNotFoundError,
+    ConfigKeyNotFoundError,
     ConfigLowerCaseNameError,
     ConfigRequiredKeysMissingError,
     ConfigSectionNotFoundError,
@@ -54,6 +55,38 @@ MAPPING_SECTION_SUFFIX = "MAPPING"
 def _is_mapping_section(section: str) -> bool:
     """列名の対応表として扱うセクションかを返す。"""
     return section.endswith(MAPPING_SECTION_SUFFIX)
+
+
+class _SectionNamespace(types.SimpleNamespace):
+    """config.ini のセクションを表す名前空間。
+
+    存在しないキーへのアクセスを ``ConfigKeyNotFoundError`` に変換し、
+    「もしかして」の候補（そのセクションにあるキー一覧から
+    ``difflib.get_close_matches``）とセクション名を添える。
+
+    ``ConfigKeyNotFoundError`` は ``AttributeError`` も多重継承しているので、
+    ``hasattr(namespace, key)`` は従来どおり False を返す。
+    ``require()`` が ``hasattr`` でキー存在を確かめているため、この挙動を
+    壊すと「あるはずのキーが無い」と報告されてしまう。
+    """
+
+    def __init__(
+        self, section: str, keys: list[str], path: Path | None = None, **kwargs: object
+    ) -> None:
+        super().__init__(**kwargs)
+        # SimpleNamespace の __dict__ へ直接入れる（setattr を経由しないことで、
+        # うっかり独自の __setattr__ を定義してもここだけは通るようにしておく）。
+        object.__setattr__(self, "_section", section)
+        object.__setattr__(self, "_keys", keys)
+        object.__setattr__(self, "_path", path)
+
+    def __getattr__(self, name: str) -> NoReturn:
+        # dunder / private は通常の AttributeError にする。pickle・copy・hasattr・
+        # len() 等は dunder を期待しているので、こちらを KeyError 系に潰すと
+        # 別のところで壊れる
+        if name.startswith("_"):
+            raise AttributeError(name)
+        raise ConfigKeyNotFoundError(self._section, name, self._keys, self._path)
 
 
 def _create_from_example(path: Path) -> Path | None:
@@ -206,11 +239,12 @@ class Config:
                     }
                     continue
                 # configparser はキー名の前後空白を既に落とすので、二重 strip は不要
-                ns = types.SimpleNamespace(
-                    **{
-                        key.upper(): _parse_value(cfg, original_section, key)
-                        for key in cfg.options(original_section)
-                    }
+                options = cfg.options(original_section)
+                ns = _SectionNamespace(
+                    section=stripped_section.upper(),
+                    keys=[key.upper() for key in options],
+                    path=self._path,
+                    **{key.upper(): _parse_value(cfg, original_section, key) for key in options},
                 )
                 setattr(self, stripped_section.upper(), ns)
         else:

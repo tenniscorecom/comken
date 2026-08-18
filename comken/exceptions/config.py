@@ -1,5 +1,6 @@
 """comken/exceptions/config.py — 設定ファイルに関する例外。"""
 
+import difflib
 from pathlib import Path
 
 from comken.exceptions.base import ComkenError
@@ -64,6 +65,19 @@ class ConfigLowerCaseNameError(ConfigError):
         )
 
 
+def _suggest_close_matches(name: str, existing: list[str]) -> list[str]:
+    """名前に対して既存候補から近いものを最大2件まで返す。
+
+    difflib.get_close_matches は候補が短いと似た判定が緩くなるため、
+    cutoff は 0.7 程度にする（1 文字違いのタイポは拾いたいが、
+    ``FILE`` と ``FILSE`` が両方候補にあるときに ``FILES`` だけを
+    教えるためのバランス）。
+    """
+    if not existing:
+        return []
+    return difflib.get_close_matches(name, existing, n=2, cutoff=0.7)
+
+
 class ConfigSectionNotFoundError(ConfigError):
     """config.ini の必要な節がない
 
@@ -87,10 +101,52 @@ class ConfigSectionNotFoundError(ConfigError):
         # path は configparser 等の挙動確認用に None を許容するが、内部利用では
         # 必ず Config が知っている _path を渡す。
         location = f"\n読んだファイル: {path}" if path is not None else ""
+        # 防いでいる事故: セクション名を 1 文字タイポすると「セクションがありません」
+        # とだけ出て、近い名前（FILE と FILES のように 1 文字違い）が目視で
+        # 並んでいるのにも気付けない。difflib.get_close_matches で候補を出し、
+        # 「もしかして」を添える。候補が無ければ何も足さない（誤誘導しない）。
+        suggestion = _suggest_close_matches(name, existing)
+        suggestion_line = f"\nもしかして: [{suggestion[0]}]" if len(suggestion) == 1 else ""
+        if len(suggestion) >= 2:
+            suggestion_line = f"\nもしかして: [{suggestion[0]}], [{suggestion[1]}]"
         super().__init__(
             f"config.ini に [{name}] セクションがありません。{location}\n"
-            f"存在するセクション: {existing}\n"
+            f"存在するセクション: {existing}{suggestion_line}\n"
             "セクション名の綴りと、config.ini に定義されているかを確認してください。"
+        )
+
+
+class ConfigKeyNotFoundError(ConfigError, AttributeError):
+    """config.ini のセクションに必要なキーがない
+
+    発生箇所: Config 内の SimpleNamespace への属性アクセス
+
+    対処:
+        メッセージに表示された **「読んだファイル」のパス** が、編集している
+        config.ini と一致するかを確認する。パスが正しければ、表示された
+        キー名を該当セクションへ追加する。**セクション名は合っているが
+        キー名を 1 文字タイポした** とき（FILES.OUTPUT_FOLER 等）は、
+        「もしかして」に近いキー名が出るので、それを config.ini に書き直す
+    """
+
+    def __init__(
+        self,
+        section: str,
+        name: str,
+        existing: list[str],
+        path: Path | str | None = None,
+    ) -> None:
+        # セクション名エラーと同じ理屈で「読んだファイル」を添える。
+        # キー名エラーはタイポ由来のことが大半なので、候補は常時計算する。
+        location = f"\n読んだファイル: {path}" if path is not None else ""
+        suggestion = _suggest_close_matches(name, existing)
+        suggestion_line = f"\nもしかして: {suggestion[0]}" if len(suggestion) == 1 else ""
+        if len(suggestion) >= 2:
+            suggestion_line = f"\nもしかして: {suggestion[0]}, {suggestion[1]}"
+        super().__init__(
+            f"config.ini の [{section}] セクションに {name} キーがありません。{location}\n"
+            f"存在するキー: {existing}{suggestion_line}\n"
+            "キー名の綴りと、config.ini に定義されているかを確認してください。"
         )
 
 

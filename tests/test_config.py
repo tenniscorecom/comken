@@ -365,6 +365,124 @@ class TestConfigMissingSection:
             _ = config.FILES
         assert str(ini.resolve()) in str(exc.value)
 
+    def test_missing_section_suggests_close_name(self, tmp_path):
+        """タイポ（FILES / FILE のような 1 文字違い）に「もしかして」で候補を出す。
+
+        防いでいる事故: セクション名を 1 文字タイポすると「セクションがありません」
+        とだけ出て、近い名前が既存セクション一覧に並んでいても気付けない。
+        """
+        from comken.exceptions import ConfigSectionNotFoundError
+
+        ini = tmp_path / "config.ini"
+        ini.write_text("[RUN]\nK = 1\n[FILE]\nK = 2\n[REPORT]\nK = 3\n", encoding="utf-8")
+        config = Config(ini)
+        with pytest.raises(ConfigSectionNotFoundError) as exc:
+            _ = config.FILES
+        message = str(exc.value)
+        assert "もしかして: [FILE]" in message
+
+    def test_missing_section_suggests_japanese_close_name(self, tmp_path):
+        """日本語セクション名でも近い候補を出す（``受注_MAPPING`` ↔ ``受注_MAPPNG``）。
+
+        防いでいる事故: difflib は ASCII でも日本語でも動くが、誤って
+        日本語だけカットオフが厳しくなっている実装にされることがある。
+        """
+        from comken.exceptions import ConfigSectionNotFoundError
+
+        ini = tmp_path / "config.ini"
+        ini.write_text("[受注_MAPPNG]\n年度 = 2026\n[RUN]\nK = v\n", encoding="utf-8")
+        config = Config(ini)
+        with pytest.raises(ConfigSectionNotFoundError) as exc:
+            _ = config.受注_MAPPING
+        assert "もしかして: [受注_MAPPNG]" in str(exc.value)
+
+    def test_missing_section_no_suggestion_line_when_no_close_match(self, tmp_path):
+        """近い名前が無いときは「もしかして」の行を出さない（誤誘導しない）。
+
+        防いでいる事故: 候補が無いのに「もしかして: []」のような空行を
+        出してしまうと、利用者は「候補が無いのか、表示バグなのか」が
+        判別できない。候補が無ければ行ごと出さない。
+        """
+        from comken.exceptions import ConfigSectionNotFoundError
+
+        ini = tmp_path / "config.ini"
+        ini.write_text("[RUN]\nK = v\n[REPORT]\nK = v\n[BROWSER]\nK = v\n", encoding="utf-8")
+        config = Config(ini)
+        with pytest.raises(ConfigSectionNotFoundError) as exc:
+            _ = config.FILES
+        message = str(exc.value)
+        assert "もしかして" not in message
+
+
+class TestConfigMissingKey:
+    """セクション内のキー名のタイポを ``ConfigKeyNotFoundError`` で案内する。
+
+    旧来は ``SimpleNamespace`` の素の ``AttributeError`` だったが、原因の
+    切り分けがつかないので、``ConfigSectionNotFoundError`` と同じ形式で
+    「読んだファイル」と「もしかして」を添える。
+    """
+
+    def test_missing_key_raises_config_error(self, tmp_path):
+        """未定義キーへのアクセスは ``AttributeError`` ではなく comken 例外になる。
+
+        ``hasattr(namespace, key)`` が従来どおり False を返せるように
+        ``AttributeError`` も多重継承している（``require()`` が依存）。
+        """
+        from comken.exceptions import ConfigKeyNotFoundError
+
+        ini = tmp_path / "config.ini"
+        ini.write_text("[FILES]\nOUTPUT_FOLDER = C:\\work\n", encoding="utf-8")
+        config = Config(ini)
+        with pytest.raises(ConfigKeyNotFoundError) as exc:
+            _ = config.FILES.OUTPUT_FOLER
+        # セクション名・キー名・ファイルパスが読める形で出ている
+        assert "[FILES]" in str(exc.value)
+        assert "OUTPUT_FOLER" in str(exc.value)
+        assert str(ini.resolve()) in str(exc.value)
+        # AttributeError でもあるので hasattr() は False を返す
+        assert hasattr(config.FILES, "OUTPUT_FOLER") is False
+
+    def test_missing_key_suggests_close_name(self, tmp_path):
+        """キー名の 1 文字違いに「もしかして」で候補を出す。"""
+        from comken.exceptions import ConfigKeyNotFoundError
+
+        ini = tmp_path / "config.ini"
+        ini.write_text("[FILES]\nOUTPUT_FOLDER = C:\\work\n", encoding="utf-8")
+        config = Config(ini)
+        with pytest.raises(ConfigKeyNotFoundError) as exc:
+            _ = config.FILES.OUTPUT_FOLER
+        assert "もしかして: OUTPUT_FOLDER" in str(exc.value)
+
+    def test_missing_key_no_suggestion_when_no_close_match(self, tmp_path):
+        """近いキー名が無いときは「もしかして」の行を出さない。"""
+        from comken.exceptions import ConfigKeyNotFoundError
+
+        ini = tmp_path / "config.ini"
+        ini.write_text("[FILES]\nINPUT_CSV = x\n", encoding="utf-8")
+        config = Config(ini)
+        with pytest.raises(ConfigKeyNotFoundError) as exc:
+            _ = config.FILES.OUTPUT_FOLDER
+        assert "もしかして" not in str(exc.value)
+
+    def test_require_still_treats_missing_key_as_missing(self, tmp_path, monkeypatch):
+        """``hasattr()`` が False を返すので ``require()`` の既存挙動は変えない。
+
+        ``ConfigKeyNotFoundError`` を ``AttributeError`` の多重継承にした
+        のはこのため。``require()`` は ``hasattr(namespace, key)`` で
+        キー存在を確かめているので、``hasattr`` が例外を伝搬すると
+        「足りないもの」を1件も報告できなくなる。
+        """
+        import comken.core.config as config_module
+
+        ini = tmp_path / "config.ini"
+        ini.write_text("[FILES]\nINPUT_CSV = C:\\in.csv\n", encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+        config_module.read(ini)
+
+        with pytest.raises(ConfigRequiredKeysMissingError) as exc:
+            config_module.require("FILES.OUTPUT_FOLDER")
+        assert "FILES.OUTPUT_FOLDER" in str(exc.value)
+
 
 class TestConfigSectionWhitespace:
     """config.ini のセクション名・キー名に前後の空白が混じっても読めるか。
@@ -1207,6 +1325,98 @@ class TestConfigCheck:
         # 列名は出さない
         assert "受注No" not in out
         assert "商品cd" not in out
+
+    # ── 似たセクション名・キー名が 2 つある ──────────────────────
+
+    def test_similar_section_names_detected(self, tmp_path, capsys):
+        """``[FILES]`` と ``[FILE]`` のように 1 文字違いで両方あると指摘が出る。
+
+        防いでいる事故: 古いセクション名を消すのを忘れて新しい名前と
+        2 つ並んでいると、片方しか使われない。実行時はエラーにならないので
+        発見が遅れる。
+        """
+        from comken.core.config.check import run_check
+
+        path = self._write(
+            tmp_path,
+            "[FILES]\nINPUT_FOLDER = C:\\work\n[FILE]\nOUTPUT_FOLDER = C:\\work\n",
+        )
+
+        exit_code = run_check(path)
+        out = capsys.readouterr().out
+
+        assert exit_code == 1
+        assert "似た名前のセクション" in out
+        assert "[FILES]" in out and "[FILE]" in out
+        # 値は出さない（業務情報保護）
+        assert "C:\\work" not in out
+
+    def test_input_output_folder_pair_is_not_flagged(self, tmp_path, capsys):
+        """``INPUT_FOLDER`` と ``OUTPUT_FOLDER`` は正しいペアなので指摘しない。
+
+        防いでいる事故: 誤検知が多いと「チェックが鬱陶しい」になり、
+        利用者が警告を無視するようになる。0.85 のしきい値で意図的な
+        ペアを通す。
+        """
+        from comken.core.config.check import run_check
+
+        path = self._write(
+            tmp_path,
+            "[FILES]\nINPUT_FOLDER = C:\\in\nOUTPUT_FOLDER = C:\\out\n",
+        )
+
+        exit_code = run_check(path)
+        out = capsys.readouterr().out
+
+        assert exit_code == 0
+        assert "気になるところはありません" in out
+        assert "似た名前" not in out
+
+    def test_similar_keys_inside_section_detected(self, tmp_path, capsys):
+        """セクション内のキー名も 1 文字違いを拾う（タイポ疑い）。
+
+        防いでいる事故: ``OUTPUT_FOLER`` と ``OUTPUT_FOLDER`` が両方あると、
+        前者は読まれないまま気付かない。
+        """
+        from comken.core.config.check import run_check
+
+        path = self._write(
+            tmp_path,
+            "[FILES]\nOUTPUT_FOLER = C:\\typo\nOUTPUT_FOLDER = C:\\work\n",
+        )
+
+        exit_code = run_check(path)
+        out = capsys.readouterr().out
+
+        assert exit_code == 1
+        assert "似た名前のキー" in out
+        assert "OUTPUT_FOLER" in out and "OUTPUT_FOLDER" in out
+        # 値は出さない
+        assert "C:\\typo" not in out
+        assert "C:\\work" not in out
+
+    def test_similar_mapping_keys_are_not_checked(self, tmp_path, capsys):
+        """``*_MAPPING`` セクション内のキー（列名）は類似検知しない。
+
+        防いでいる事故: 列名は業務情報になりうるので、類似検知の材料に
+        使うと「似た列名がある」と出すためだけに業務情報が露出する。
+        """
+        from comken.core.config.check import run_check
+
+        path = self._write(
+            tmp_path,
+            "[COLUMN_MAPPING]\n"
+            "受注No = 受注番号\n"
+            "受注NO = 受注No2\n",  # 似たキー名が並ぶが、列名なので触らない
+        )
+
+        exit_code = run_check(path)
+        out = capsys.readouterr().out
+
+        assert exit_code == 0
+        assert "似た名前" not in out
+        # 列名は出さない
+        assert "受注No" not in out
 
 
 class TestConfigCheckCli:

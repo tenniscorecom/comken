@@ -2078,6 +2078,31 @@ config.ini の必要な節がない
 def __init__(self, name: str, existing: list[str], path: Path | str | None=None) -> None:
 ```
 
+### `ConfigKeyNotFoundError`
+
+```text
+class ConfigKeyNotFoundError(ConfigError, AttributeError):
+```
+
+#### 説明
+
+config.ini のセクションに必要なキーがない
+
+発生箇所: Config 内の SimpleNamespace への属性アクセス
+
+対処:
+    メッセージに表示された **「読んだファイル」のパス** が、編集している
+    config.ini と一致するかを確認する。パスが正しければ、表示された
+    キー名を該当セクションへ追加する。**セクション名は合っているが
+    キー名を 1 文字タイポした** とき（FILES.OUTPUT_FOLER 等）は、
+    「もしかして」に近いキー名が出るので、それを config.ini に書き直す
+
+#### `__init__`
+
+```text
+def __init__(self, section: str, name: str, existing: list[str], path: Path | str | None=None) -> None:
+```
+
 ### `UnsupportedFileSuffixError`
 
 ```text
