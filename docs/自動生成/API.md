@@ -1101,11 +1101,19 @@ def atomic_write(path: str | Path) -> Iterator[Path]:
 ブロック内では **出力先ファイル（``path``）に触らない** こと。同じプロセスが
 読んでいる最中に置換が走ると、読んでいる側が半端な状態を見る可能性がある。
 
+**親フォルダは作らない。** 無ければそのまま失敗する。書き間違えたパスへ
+勝手にフォルダを作ると、**誰も見ない場所へ出力し続けても気づけない**
+（保存先を勝手に作らない、という Downloader の判断と同じ理由）。
+作る必要があるなら、**呼ぶ側が明示的に** `path.parent.mkdir(...)` する。
+
 Args:
-    path: 最終的に置きたいファイルのパス。親フォルダが無ければ作成する。
+    path: 最終的に置きたいファイルのパス。**親フォルダは存在している前提**。
 
 Yields:
     一時ファイルのパス。
+
+Raises:
+    FileNotFoundError: 親フォルダが無い場合。
 
 
 ## `from comken.core.files.naming import ...`
@@ -1964,7 +1972,7 @@ config.ini が見つからない
 発生箇所: Config.__init__() / generate_stub()
 
 対処:
-    config.ini.example をコピーして config.ini を作る
+    config.ini.example が同じ場所にあるか確認する（あれば実行し直すだけで作られる）
 
 #### `__init__`
 

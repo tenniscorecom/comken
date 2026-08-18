@@ -98,7 +98,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `TransferDestinationColumnNotFoundError` | 列名転記で、Excel の転記先列が見つからない | Excel のヘッダー行と config.ini のマッピング右側を確認する |
 | `TransferSourceColumnNotFoundError` | 列名転記で、lookup の転記元列が見つからない | 転記元データと config.ini のマッピング左側を確認する |
 | `InvalidColumnError` | 列の指定が正しくない（打ち間違いなど） | 列は番号（1, 2, …）か列記号（"A", "AA"）で指定する |
-| `ConfigFileNotFoundError` | config.ini が見つからない | config.ini.example をコピーして config.ini を作る |
+| `ConfigFileNotFoundError` | config.ini が見つからない | config.ini.example が同じ場所にあるか確認する（あれば実行し直すだけで作られる） |
 | `ConfigCreatedFromExampleError` | config.ini が無かったので example から作った | 作られた config.ini の値を書き換えて、もう一度実行する |
 | `ConfigLowerCaseNameError` | config.ini のセクション名・キー名に小文字がある | 表示された名前を大文字に書き換える（`[files]` → `[FILES]`） |
 | `ConfigRequiredKeysMissingError` | config.ini に必須の項目がない | エラーに表示された項目を config.ini へ追加する |

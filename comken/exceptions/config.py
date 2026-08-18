@@ -19,13 +19,16 @@ class ConfigFileNotFoundError(ConfigError):
     発生箇所: Config.__init__() / generate_stub()
 
     対処:
-        config.ini.example をコピーして config.ini を作る
+        config.ini.example が同じ場所にあるか確認する（あれば実行し直すだけで作られる）
     """
 
     def __init__(self, path: Path | str) -> None:
+        # config.ini.example があれば ConfigCreatedFromExampleError の側へ行く。
+        # ここへ来たということは example も無いので、「コピーして作る」は案内できない
         super().__init__(
             f"config.ini が見つかりません: {path}\n"
-            "config.ini.example をコピーして config.ini を作成してください。"
+            "同じ場所に config.ini.example があるか確認してください。"
+            "あれば、もう一度実行するだけで config.ini が作られます。"
         )
 
 

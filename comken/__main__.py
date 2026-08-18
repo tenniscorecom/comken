@@ -75,7 +75,7 @@ def _build_parser() -> argparse.ArgumentParser:
     salesforce = subparsers.add_parser(
         "salesforce",
         aliases=["sf"],
-        help="Salesforce 接続と資格情報ローテーションの確認",
+        help="Salesforce 接続と資格情報の確認 → check / report / app / rotate",
         add_help=False,
     )
     salesforce.set_defaults(run=_run_salesforce, _prog="python -m comken sf")
@@ -84,7 +84,7 @@ def _build_parser() -> argparse.ArgumentParser:
     credentials = subparsers.add_parser(
         "credentials",
         aliases=["cred"],
-        help="認証情報の登録・参照・削除（DPAPI）",
+        help="認証情報の登録・参照・削除（DPAPI） → gui / import / list / delete",
         add_help=False,
     )
     credentials.set_defaults(run=_run_credentials, _prog="python -m comken cred")
@@ -92,7 +92,7 @@ def _build_parser() -> argparse.ArgumentParser:
     # report
     report = subparsers.add_parser(
         "report",
-        help="Salesforce レポート管理表（Excel）の雛形作成と検査",
+        help="Salesforce レポート管理表（Excel） → init / check",
         add_help=False,
     )
     report.set_defaults(run=_run_report)
