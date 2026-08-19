@@ -165,7 +165,7 @@ def test_does_not_load_requests_for_skipped_salesforce(
     )
     # Salesforce 関連のモジュールを一旦取り除く（テスト後に復元）
     saved_requests = sys.modules.pop("requests", None)
-    saved_salesforce = sys.modules.pop("comken.toolbox.salesforce.client", None)
+    saved_salesforce = sys.modules.pop("comken.toolbox.salesforce.direct.client", None)
     saved_sites = sys.modules.pop("comken.toolbox.salesforce.sites", None)
     saved_sandbox = sys.modules.pop("comken.toolbox.salesforce.sites.sandbox", None)
     try:
@@ -174,7 +174,7 @@ def test_does_not_load_requests_for_skipped_salesforce(
 
         list_names_fn, sandbox_cls = _resolve_salesforce_deps()
         assert sandbox_cls is None  # list_names が空なら salesforce を import しない
-        assert "comken.toolbox.salesforce.client" not in sys.modules
+        assert "comken.toolbox.salesforce.direct.client" not in sys.modules
         assert "requests" not in sys.modules
 
         # runner の純粋関数も直接確かめる（資格情報ゼロ + sandbox_cls=None）
@@ -186,7 +186,7 @@ def test_does_not_load_requests_for_skipped_salesforce(
         if saved_requests is not None:
             sys.modules["requests"] = saved_requests
         if saved_salesforce is not None:
-            sys.modules["comken.toolbox.salesforce.client"] = saved_salesforce
+            sys.modules["comken.toolbox.salesforce.direct.client"] = saved_salesforce
         if saved_sites is not None:
             sys.modules["comken.toolbox.salesforce.sites"] = saved_sites
         if saved_sandbox is not None:
@@ -213,7 +213,7 @@ def test_does_not_load_requests_for_skipped_salesforce(
     )
     # Salesforce 関連のモジュールを一旦取り除く（テスト後に復元）
     saved_requests = sys.modules.pop("requests", None)
-    saved_salesforce = sys.modules.pop("comken.toolbox.salesforce.client", None)
+    saved_salesforce = sys.modules.pop("comken.toolbox.salesforce.direct.client", None)
     saved_sites = sys.modules.pop("comken.toolbox.salesforce.sites", None)
     saved_sandbox = sys.modules.pop("comken.toolbox.salesforce.sites.sandbox", None)
     try:
@@ -223,7 +223,7 @@ def test_does_not_load_requests_for_skipped_salesforce(
         list_names_fn, names, sandbox_cls = _resolve_salesforce_deps()
         assert names == []
         assert sandbox_cls is None  # list_names が空なら salesforce を import しない
-        assert "comken.toolbox.salesforce.client" not in sys.modules
+        assert "comken.toolbox.salesforce.direct.client" not in sys.modules
         assert "requests" not in sys.modules
 
         # runner の純粋関数も直接確かめる（資格情報ゼロ + sandbox_cls=None）
@@ -235,7 +235,7 @@ def test_does_not_load_requests_for_skipped_salesforce(
         if saved_requests is not None:
             sys.modules["requests"] = saved_requests
         if saved_salesforce is not None:
-            sys.modules["comken.toolbox.salesforce.client"] = saved_salesforce
+            sys.modules["comken.toolbox.salesforce.direct.client"] = saved_salesforce
         if saved_sites is not None:
             sys.modules["comken.toolbox.salesforce.sites"] = saved_sites
         if saved_sandbox is not None:

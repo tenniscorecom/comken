@@ -20,5 +20,11 @@
     }
   },
   "ruff.enable": true,
-  "editor.rulers": [100]
+  "editor.rulers": [100],
+
+  // bat は CP932 で開く（cmd.exe が CP932 として読むため。UTF-8 だと日本語が化ける）。
+  // ルート側の .vscode/settings.json と同じ設定
+  "[bat]": {
+    "files.encoding": "shiftjis"
+  }
 }

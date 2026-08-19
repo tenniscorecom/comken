@@ -22,10 +22,10 @@ from comken.exceptions import (
 from comken.toolbox.browser import Browsers, SiteBase
 from comken.toolbox.browser.management.sessions import BrowserSession
 from comken.toolbox.salesforce import ClientCredentialsAuth
-from comken.toolbox.salesforce.client import SalesforceBase
+from comken.toolbox.salesforce.direct.client import SalesforceBase
 
 BROWSER_LOGGER = "comken.toolbox.browser.sitebase"
-SALESFORCE_LOGGER = "comken.toolbox.salesforce.client"
+SALESFORCE_LOGGER = "comken.toolbox.salesforce.direct.client"
 DOMAIN_URL = "https://example.my.salesforce.com"
 # 免除の確認に使う、comken 配下に見せかけるモジュール名
 COMKEN_BROWSER_MODULE = "comken.toolbox.browser.sites.fake"
@@ -59,9 +59,9 @@ def _salesforce_http():
     session = MagicMock()
     session.headers = {}
     with (
-        patch("comken.toolbox.salesforce.client.requests.Session", return_value=session),
+        patch("comken.toolbox.salesforce.direct.client.requests.Session", return_value=session),
         patch(
-            "comken.toolbox.salesforce.oauth_credentials.requests.post",
+            "comken.toolbox.salesforce.direct.oauth_credentials.requests.post",
             return_value=_token_response(),
         ),
     ):
@@ -262,7 +262,7 @@ class TestSalesforceBaseOwner:
             CREDENTIAL_PREFIX = "test_org"
 
         with (
-            patch("comken.toolbox.salesforce.oauth_credentials.requests.post") as post,
+            patch("comken.toolbox.salesforce.direct.oauth_credentials.requests.post") as post,
             pytest.raises(SiteOwnerRequiredError),
         ):
             Org(auth=ClientCredentialsAuth("CID", "CSECRET", DOMAIN_URL))

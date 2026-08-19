@@ -48,12 +48,17 @@ except ImportError as e:  # pragma: no cover
         "comken.toolbox.salesforce を import しなければ影響を受けません。"
     ) from e
 
-from comken.toolbox.salesforce.client import SalesforceBase
-from comken.toolbox.salesforce.metrics import ApiMetrics, ApiUsage, ComponentStat, RetryReason
-from comken.toolbox.salesforce.oauth_credentials import ClientCredentialsAuth
-from comken.toolbox.salesforce.oauth_refresh import RefreshTokenAuth
-from comken.toolbox.salesforce.report import ReportApi
-from comken.toolbox.salesforce.rotation import SalesforceCredentialRotator
+from comken.toolbox.salesforce.direct.client import SalesforceBase
+from comken.toolbox.salesforce.direct.metrics import (
+    ApiMetrics,
+    ApiUsage,
+    ComponentStat,
+    RetryReason,
+)
+from comken.toolbox.salesforce.direct.oauth_credentials import ClientCredentialsAuth
+from comken.toolbox.salesforce.direct.oauth_refresh import RefreshTokenAuth
+from comken.toolbox.salesforce.direct.report import ReportApi
+from comken.toolbox.salesforce.direct.rotation import SalesforceCredentialRotator
 
 __all__ = [
     "SalesforceBase",

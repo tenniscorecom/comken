@@ -355,7 +355,7 @@ def test_example_site_has_pages_directory_and_imports_it(generated: Path) -> Non
     ), f"{site_py.relative_to(generated)} に go_〇〇() の見本が無く、遷移図の書き方が伝わらない"
 
 
-# ── 9. .vscode/settings.json と 実行.bat・認証情報の登録.bat が同じ comken の場所を指す ─────────
+# ── 9. .vscode/settings.json と 実行.bat が同じ comken の場所を指す ─────────────
 
 
 def test_vscode_settings_and_bat_point_to_same_python_library(generated: Path) -> None:
@@ -419,10 +419,12 @@ def test_template_still_has_placeholder_server_path() -> None:
     社内ライブラリ名が入るとそのまま外へ出てしまう。create() はここへ実際の
     comken の場所を書き込む前提なので、プレースホルダが残っていること自体が
     「実名混入していない」ことの証拠になる。
+
+    `認証情報の登録.bat` はサーバーの場所を**そもそも書かない**ので、この検査の
+    対象にしない（代わりに下の test_credentials_bat_has_no_server_path で見る）。
     """
     suspects = [
         TEMPLATE_DIR / "実行.bat",
-        TEMPLATE_DIR / "認証情報の登録.bat",
         TEMPLATE_DIR / ".vscode" / "settings.json",
     ]
     offenders: list[Path] = []
@@ -434,6 +436,26 @@ def test_template_still_has_placeholder_server_path() -> None:
         "雛形にプレースホルダ \\\\server\\share が無い"
         "（実在のサーバー名に置換されていないか確認すること）: "
         f"{offenders}"
+    )
+
+
+def test_credentials_bat_has_no_server_path() -> None:
+    """`認証情報の登録.bat` に共有サーバーのパスが1つも出てこないこと。
+
+    「何を防いでいるか」: この bat は `python -m comken init` が作ったプロジェクトに
+    入るので、comken への PATH は既に通っている。だからサーバーの場所を書く必要が
+    なく、書かないことで実名の混入経路そのものを閉じている。
+
+    上の「プレースホルダが残っているか」という確かめ方はここでは使えない。
+    プレースホルダが無いこと自体は正常なので、その検査だと**実在のサーバー名を
+    書き込まれても通ってしまい**、公開リポジトリへの流出を止められない。
+    UNC パス（`\\\\` 始まり）が出てこないことを直接見る。
+    """
+    path = TEMPLATE_DIR / "認証情報の登録.bat"
+    text = _read(path, encoding="cp932")
+    assert "\\\\" not in text, (
+        f"{path.name} に共有サーバーのパスらしき記述がある"
+        "（この bat は PATH が通っている前提なので、サーバーの場所を書かない）"
     )
 
 

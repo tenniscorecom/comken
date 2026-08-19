@@ -1,4 +1,4 @@
-"""comken/toolbox/salesforce/report.py — レポート API
+r"""comken/toolbox/salesforce/direct/report.py — レポート API
 
 レポート ID を渡して、明細行を [{列名: 値}, ...] で受け取る。
 
@@ -34,7 +34,7 @@ from comken.exceptions import (
 )
 
 if TYPE_CHECKING:  # 実行時は import しない（client と相互参照になるため）
-    from comken.toolbox.salesforce.client import SalesforceBase
+    from comken.toolbox.salesforce.direct.client import SalesforceBase
 
 logger = logging.getLogger(__name__)
 

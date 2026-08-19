@@ -15,6 +15,10 @@ from comken.toolbox.salesforce import (
 DOMAIN_URL = "https://example.my.salesforce.com"
 INSTANCE_URL = "https://instance.my.salesforce.com"
 
+# 認証は必ずここを通るので、差し替え先はこの1本だけ。毎回フルパスを書くと
+# 行が長くなるうえ、モジュールを移したときの直し漏れが起きやすい
+_REQUESTS_POST = "comken.toolbox.salesforce.direct.oauth_refresh.requests.post"
+
 
 class _TestSalesforce(SalesforceBase):
     """認証方式の差し替えを検証するための組織クラス。"""
@@ -48,7 +52,7 @@ class TestRefreshTokenAuth:
         response = _response(
             {"access_token": "ACCESS", "instance_url": INSTANCE_URL, "refresh_token": "REFRESH"}
         )
-        with patch("comken.toolbox.salesforce.oauth_refresh.requests.post", return_value=response):
+        with patch(_REQUESTS_POST, return_value=response):
             auth = RefreshTokenAuth.exchange_code(
                 "CID",
                 "SECRET",
@@ -65,9 +69,7 @@ class TestRefreshTokenAuth:
         response = _response(
             {"access_token": "ACCESS", "instance_url": INSTANCE_URL, "refresh_token": "ROTATED"}
         )
-        with patch(
-            "comken.toolbox.salesforce.oauth_refresh.requests.post", return_value=response
-        ) as post:
+        with patch(_REQUESTS_POST, return_value=response) as post:
             result = RefreshTokenAuth(
                 "CID", "REFRESH", DOMAIN_URL, on_refresh_token=saved_tokens.append
             ).fetch()
@@ -77,9 +79,7 @@ class TestRefreshTokenAuth:
 
     def test_refresh_sends_secret_when_required(self):
         response = _response({"access_token": "ACCESS", "instance_url": INSTANCE_URL})
-        with patch(
-            "comken.toolbox.salesforce.oauth_refresh.requests.post", return_value=response
-        ) as post:
+        with patch(_REQUESTS_POST, return_value=response) as post:
             RefreshTokenAuth(
                 "CID",
                 "REFRESH",
@@ -91,7 +91,7 @@ class TestRefreshTokenAuth:
     def test_auth_error_redacts_refresh_token(self):
         response = MagicMock(status_code=400, text="invalid REFRESH")
         with (
-            patch("comken.toolbox.salesforce.oauth_refresh.requests.post", return_value=response),
+            patch(_REQUESTS_POST, return_value=response),
             pytest.raises(SalesforceAuthError) as raised,
         ):
             RefreshTokenAuth("CID", "REFRESH", DOMAIN_URL).fetch()
@@ -130,7 +130,7 @@ class TestPluggableSalesforceAuth:
         success.json.return_value = {"done": True, "records": []}
         session.request.side_effect = [unauthorized, success]
         with (
-            patch("comken.toolbox.salesforce.client.requests.Session", return_value=session),
+            patch("comken.toolbox.salesforce.direct.client.requests.Session", return_value=session),
             _TestSalesforce(auth=auth) as client,
         ):
             assert client.query("SELECT Id FROM Account") == []
@@ -158,7 +158,7 @@ class TestAuthClassIsBuiltFromCredentials:
             def fetch(self):
                 return "TOKEN", DOMAIN_URL
 
-        with patch("comken.toolbox.salesforce.client.requests.Session"):
+        with patch("comken.toolbox.salesforce.direct.client.requests.Session"):
             SalesforceBase(
                 auth=_FakeAuth, domain_url=DOMAIN_URL, prefix="sandbox", org_name="sandbox"
             )
@@ -176,7 +176,7 @@ class TestAuthClassIsBuiltFromCredentials:
             def fetch(self):
                 return "TOKEN", DOMAIN_URL
 
-        with patch("comken.toolbox.salesforce.client.requests.Session"):
+        with patch("comken.toolbox.salesforce.direct.client.requests.Session"):
             sf = SalesforceBase(auth=_FakeAuth(), org_name="sandbox")
 
         assert isinstance(sf.auth, _FakeAuth)

@@ -36,7 +36,7 @@ from comken.toolbox.master_table import MasterRow, column
 SCHEDULED = "定期"
 ON_DEMAND = "個別"
 
-# 同期: `comken.toolbox.salesforce.report.report_id_from_url()` と同じ正規表現。
+# 同期: `comken.toolbox.salesforce.direct.report.report_id_from_url()` と同じ正規表現。
 # master.py は `requests` に依存しない（BO 環境でも動かせる）ように、
 # `comken.toolbox.salesforce` を経由せず同じ実装をここに置く。
 # 仕様を変えたら **両方を** 直すこと（`docs/運用/これからやること.md` 参照）。
@@ -47,7 +47,7 @@ def report_id_from_url(text: str) -> str:
     """レポートの URL からレポート ID を取り出す。
 
     ネットワークは使わず、URL 文字列を正規表現で解析する。
-    `comken.toolbox.salesforce.report.report_id_from_url()` と同等。
+    `comken.toolbox.salesforce.direct.report.report_id_from_url()` と同等。
 
     Args:
         text: レポートの URL、またはレポート ID。前後の空白は無視する。

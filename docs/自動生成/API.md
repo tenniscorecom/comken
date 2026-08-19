@@ -86,6 +86,8 @@ Attributes:
     name: 検査名（例: "comken.version" / "deps.openpyxl" / "share.master_path"）。
     status: 結果（"ok" / "ng" / "skip" のいずれか）。
     message: 人が読むための1行メッセージ。**秘密の値は載せない**。
+    details: 検査の細目。1 行に収まらないとき ``message`` の下に並べて出す。
+        デフォルトは空タプル (大半の検査は ``message`` 1 行で完結する)。
 
 ### `config`
 
@@ -365,11 +367,19 @@ def to_dict(self) -> dict[str, Any]:
 
 ##### 説明
 
-JSON シリアライズ用の dict。
+**JSON にできる形に変換した** dict。``data`` は**意図的に含めない**。
 
-``data`` は JSON 化できない型が渡される可能性があるので、ここでは
-含めない。``warnings`` は list へ変換する (tuple のままだと
-json.dumps が内部で list へ変換するため、形式を合わせておく)。
+``data`` には JSON 化できない型 (bytes / 独自オブジェクト等) や
+機微な値が渡される可能性があるため、``to_dict()`` の戻り値には
+含めない。``data`` をログや API レスポンスに載せたい場合は呼び出し側で
+``json.dumps(result.to_dict())`` の後に ``result.data`` を別途扱うこと。
+
+``warnings`` は tuple のままだと ``json.dumps`` が list へ変換するため、
+形式を ``list`` に統一しておく。
+
+Returns:
+    ``{"success": ..., "message": ..., "count": ..., "warnings": [...]}``
+    の dict。``json.dumps()`` でそのまま JSON 化できる形。
 
 ### `RowChange`
 
@@ -684,11 +694,16 @@ def project_dir() -> Path:
 `python <絶対パス>\main.py` と呼ぶ。**カレントではなくスクリプトの場所**を
 返すのはそのためで、config.ini・state.ini・logs/ もこれを基準にしている。
 
-対話実行（REPL）や pytest、`python -m 〇〇` から呼ぶと、その実行環境の場所を返す。
-バッチとして動かす前提の関数なので、そこは想定していない。
+``sys.argv[0]`` が想定外の値になるケースのフォールバック:
+- ``sys.argv[0] == ""`` : 対話実行（REPL）。``Path.cwd()`` を返す
+- ``sys.argv[0]`` が ``-m`` で起動されたパッケージ名を含む形
+  （例: ``.../python -m comken`` など）: ``Path.cwd()`` を返す
+- ``sys.argv[0]`` が解決できない: ``Path.cwd()`` を返す
 
 Returns:
-    実行スクリプトのあるフォルダ。
+    実行スクリプトのあるフォルダ。**想定外のときは ``Path.cwd()`` に
+    フォールバック**して例外で止まらないようにする（state.ini / logs/
+    の置き場所が「現在の作業フォルダ」になる）。
 
 ### `normalize`
 
@@ -752,11 +767,20 @@ def retry(times: int=3, wait: float=1.0, on: tuple=(Exception,)) -> Callable[[Ca
 Args:
     times: 合計の実行回数（デフォルト: 3。「3回試して全部失敗ならエラー」）。
     wait: 失敗から次の実行までの待機秒数（デフォルト: 1秒）。
-    on: リトライ対象の例外のタプル（デフォルト: すべての例外）。
-        ここに含まれない例外は即座にそのまま出る。
+    on: リトライ対象の例外のタプル（デフォルト: すべての Exception 系）。
+        ``Exception`` のサブクラスを指定する。**``BaseException`` 系
+        （``KeyboardInterrupt`` / ``SystemExit``）は ``on`` に含まれていても
+        リトライしない**（Ctrl+C で止められることを保証するため）。
+        ``on`` に含まれない例外は即座にそのまま出る。
 
 Raises:
+    ValueError: times が正の整数でない、または wait が負の値。
     最後の実行で出た例外（times 回すべて失敗した場合）。
+
+Note:
+    入力値検証で ``ValueError`` を投げる。``times`` を 0 以下にしたいケースは
+    ループ自体を不要としているので、黙って 1 にするのではなく例外で知らせる
+    （誤って ``times=None`` を渡して 1 回しか実行されない事故を防ぐ）。
 
 ### `skip`
 
@@ -883,6 +907,7 @@ Returns:
 ### `wait_for_file`
 
 ```text
+@measure
 def wait_for_file(folder: str | Path, name_pattern: str, timeout: float=DEFAULT_TIMEOUT_SECONDS, poll_interval: float=DEFAULT_POLL_INTERVAL_SECONDS) -> Path:
 ```
 
@@ -893,6 +918,12 @@ def wait_for_file(folder: str | Path, name_pattern: str, timeout: float=DEFAULT_
 1度でも見つかれば、その時点で mtime が最新のファイルを返して終了する。
 ``poll_interval`` 秒ごとに再検索し、``timeout`` 秒経っても見つからなければ
 ``FileNotFoundError`` を送出する。
+
+**この関数は「ファイルが存在するまで待つ」機能であり、
+「ファイルへの書き込み完了を待つ」機能ではない。** 作成直後のファイルは
+書き込み途中で ``is_file()`` が True になる。後続処理が読む前に
+ファイルサイズや mtime が安定したかを確認したい場合は呼び出し側で
+対処すること。
 
 Args:
     folder: 監視するフォルダ。
@@ -1026,7 +1057,12 @@ def check_pyright(repo_root: Path) -> CheckResult:
 pyright が ``comken/`` に対して 0 errors を返すか。
 
 ``tests/test_pyright_clean.py`` と同じ判定ロジック。
-``npx`` が無い環境では SKIP。
+**``--yes pyright@latest`` は使わない** (BO / オフライン環境で npm
+から最新版を取りに行くため動かない)。代わりに以下の優先順で探す:
+
+1. PATH にある ``pyright`` コマンドを直接実行
+2. ``npx --no-install pyright`` でローカル npm の pyright を使う
+3. どちらも無ければ SKIP
 
 ### `check_version`
 
@@ -1065,6 +1101,8 @@ Attributes:
     name: 検査名（例: "comken.version" / "deps.openpyxl" / "share.master_path"）。
     status: 結果（"ok" / "ng" / "skip" のいずれか）。
     message: 人が読むための1行メッセージ。**秘密の値は載せない**。
+    details: 検査の細目。1 行に収まらないとき ``message`` の下に並べて出す。
+        デフォルトは空タプル (大半の検査は ``message`` 1 行で完結する)。
 
 ### `summarize`
 
@@ -1077,36 +1115,52 @@ def summarize(results: list[DoctorResult]) -> tuple[int, int, int]:
 ``(ok, ng, skip)`` の件数を返す。
 
 
-## `from comken.core.file import ...`
+## `from comken.core.files import ...`
 
-### `wait_for_file`
+### `DateNameBuilder`
 
 ```text
-def wait_for_file(folder: str | Path, name_pattern: str, timeout: float=DEFAULT_TIMEOUT_SECONDS, poll_interval: float=DEFAULT_POLL_INTERVAL_SECONDS) -> Path:
+class DateNameBuilder:
 ```
 
 #### 説明
 
-``folder`` 内で ``name_pattern`` にマッチするファイルが出現するまで待つ。
+今日の日付を付けたファイル名を組み立てる。
 
-1度でも見つかれば、その時点で mtime が最新のファイルを返して終了する。
-``poll_interval`` 秒ごとに再検索し、``timeout`` 秒経っても見つからなければ
-``FileNotFoundError`` を送出する。
+日付はファイル名の属性ではなく「付け方」なので、コンストラクタではなく
+prefix() / suffix() の呼び出し時に決める。
+
+#### `__init__`
+
+```text
+def __init__(self, name: str, ext: str='.xlsx') -> None:
+```
+
+##### 説明
 
 Args:
-    folder: 監視するフォルダ。
-    name_pattern: ファイル名の glob パターン（例: ``"data_*.csv"``）。
-    timeout: 最大待機秒数。デフォルトは 60 秒。
-    poll_interval: 再検索の間隔秒数。デフォルトは 1 秒。
+    name: ファイル名（拡張子なし）。
+    ext: 拡張子（デフォルト: ".xlsx"）。ドットなしで渡しても補完される。
 
-Returns:
-    見つかったファイルのうち mtime が最新のもの。
+#### `prefix`
 
-Raises:
-    FileNotFoundError: ``timeout`` 秒経っても該当ファイルが見つからなかった場合。
+```text
+def prefix(self, date_format: str='%Y%m%d') -> str:
+```
 
+##### 説明
 
-## `from comken.core.files import ...`
+今日の日付を前に付けたファイル名を返す（例: 20260711_売上レポート.xlsx）。
+
+#### `suffix`
+
+```text
+def suffix(self, date_format: str='%Y%m%d') -> str:
+```
+
+##### 説明
+
+今日の日付を後ろに付けたファイル名を返す（例: 売上レポート_20260711.xlsx）。
 
 ### `FileFinder`
 
@@ -1183,6 +1237,61 @@ def dated(self, pattern: str='*.xlsx', required: bool=True) -> list[Path]:
 Raises:
     FileNotFoundError: required=True で該当ファイルがない場合。
 
+### `atomic_write`
+
+```text
+@contextmanager
+def atomic_write(path: str | Path) -> Iterator[Path]:
+```
+
+#### 説明
+
+出力先と同じフォルダに一時ファイルを作り、ブロック終了時に置き換える。
+
+ブロック内で起きた例外や、置き換える前の中断（プロセス停止など）に対しては、
+**一時ファイルを片付けてから** 例外をそのまま上位へ返す。置き換え先が
+既に存在する場合は ``os.replace`` で上書きされる。
+
+ブロック内では **出力先ファイル（``path``）に触らない** こと。同じプロセスが
+読んでいる最中に置換が走ると、読んでいる側が半端な状態を見る可能性がある。
+
+**親フォルダは作らない。** 無ければそのまま失敗する。書き間違えたパスへ
+勝手にフォルダを作ると、**誰も見ない場所へ出力し続けても気づけない**
+（保存先を勝手に作らない、という Downloader の判断と同じ理由）。
+作る必要があるなら、**呼ぶ側が明示的に** `path.parent.mkdir(...)` する。
+
+Args:
+    path: 最終的に置きたいファイルのパス。**親フォルダは存在している前提**。
+
+Yields:
+    一時ファイルのパス。
+
+Raises:
+    FileNotFoundError: 親フォルダが無い場合。
+
+### `copy_file`
+
+```text
+@measure
+def copy_file(src: str | Path, dst: str | Path) -> Path:
+```
+
+#### 説明
+
+ファイルをコピーする（更新日時などの属性も保持する）。
+
+ルールは move_file と同じ:
+    - dst が既存フォルダなら、その中に同名でコピーする
+    - それ以外はファイルパスとして扱う（親フォルダがなければ自動作成する）
+    - コピー先に同名ファイルがあれば上書きする
+
+Args:
+    src: コピーするファイルのパス。
+    dst: コピー先（フォルダ、またはファイルパス）。
+
+Returns:
+    コピー後のファイルパス。
+
 ### `date_in_name`
 
 ```text
@@ -1195,6 +1304,49 @@ def date_in_name(name: str) -> datetime.date | None:
 
 1つのファイル名に日付が複数あるときは、先に出てくる方を使う。
 ファイル名の日付とファイル内容の日付を突き合わせる業務で使うため公開している。
+
+### `delete_file`
+
+```text
+@measure
+def delete_file(path: str | Path, missing_ok: bool=False) -> None:
+```
+
+#### 説明
+
+ファイルを削除する。dry-run ではログを出してスキップする。
+
+削除は不可逆なので、削除したファイルのパスを INFO ログに残す。
+dry-run のときもログだけ出して、実際には消さない。
+
+Args:
+    path: 削除するファイルのパス。
+    missing_ok: True なら対象ファイルが存在しなくても例外を送出しない。
+
+Raises:
+    FileNotFoundError: ファイルが存在せず missing_ok が False の場合。
+
+### `local_copy`
+
+```text
+@contextmanager
+def local_copy(path: str | Path) -> Iterator[Path]:
+```
+
+#### 説明
+
+ネットワーク上のファイルをローカルにコピーし、処理後に自動削除する。
+
+NAS やネットワークドライブ上の大きなファイルを直接開くと遅い場合や、
+win32com（Excel COM）でネットワークファイルが不安定な場合に使う。
+
+テンポラリファイルの保存先: C:\Users\<ユーザー名>\AppData\Local\Temp\
+with ブロックを抜けると自動削除される（例外が発生した場合も削除される）。
+Args:
+    path: コピー元のファイルパス（ネットワークパス・UNCパス・マップドドライブ）。
+
+Yields:
+    ローカルのテンポラリファイルパス（Path）。
 
 ### `move_file`
 
@@ -1242,120 +1394,16 @@ def project_dir() -> Path:
 `python <絶対パス>\main.py` と呼ぶ。**カレントではなくスクリプトの場所**を
 返すのはそのためで、config.ini・state.ini・logs/ もこれを基準にしている。
 
-対話実行（REPL）や pytest、`python -m 〇〇` から呼ぶと、その実行環境の場所を返す。
-バッチとして動かす前提の関数なので、そこは想定していない。
+``sys.argv[0]`` が想定外の値になるケースのフォールバック:
+- ``sys.argv[0] == ""`` : 対話実行（REPL）。``Path.cwd()`` を返す
+- ``sys.argv[0]`` が ``-m`` で起動されたパッケージ名を含む形
+  （例: ``.../python -m comken`` など）: ``Path.cwd()`` を返す
+- ``sys.argv[0]`` が解決できない: ``Path.cwd()`` を返す
 
 Returns:
-    実行スクリプトのあるフォルダ。
-
-### `copy_file`
-
-```text
-@measure
-def copy_file(src: str | Path, dst: str | Path) -> Path:
-```
-
-#### 説明
-
-ファイルをコピーする（更新日時などの属性も保持する）。
-
-ルールは move_file と同じ:
-    - dst が既存フォルダなら、その中に同名でコピーする
-    - それ以外はファイルパスとして扱う（親フォルダがなければ自動作成する）
-    - コピー先に同名ファイルがあれば上書きする
-
-Args:
-    src: コピーするファイルのパス。
-    dst: コピー先（フォルダ、またはファイルパス）。
-
-Returns:
-    コピー後のファイルパス。
-
-### `delete_file`
-
-```text
-@measure
-def delete_file(path: str | Path, missing_ok: bool=False) -> None:
-```
-
-#### 説明
-
-ファイルを削除する。dry-run ではログを出してスキップする。
-
-削除は不可逆なので、削除したファイルのパスを INFO ログに残す。
-dry-run のときもログだけ出して、実際には消さない。
-
-Args:
-    path: 削除するファイルのパス。
-    missing_ok: True なら対象ファイルが存在しなくても例外を送出しない。
-
-Raises:
-    FileNotFoundError: ファイルが存在せず missing_ok が False の場合。
-
-### `local_copy`
-
-```text
-@contextmanager
-def local_copy(path: str | Path) -> Iterator[Path]:
-```
-
-#### 説明
-
-ネットワーク上のファイルをローカルにコピーし、処理後に自動削除する。
-
-NAS やネットワークドライブ上の大きなファイルを直接開くと遅い場合や、
-win32com（Excel COM）でネットワークファイルが不安定な場合に使う。
-
-テンポラリファイルの保存先: C:\Users\<ユーザー名>\AppData\Local\Temp\
-with ブロックを抜けると自動削除される（例外が発生した場合も削除される）。
-Args:
-    path: コピー元のファイルパス（ネットワークパス・UNCパス・マップドドライブ）。
-
-Yields:
-    ローカルのテンポラリファイルパス（Path）。
-
-### `zip_folder`
-
-```text
-@measure
-def zip_folder(folder: str | Path, dst: str | Path | None=None) -> Path:
-```
-
-#### 説明
-
-フォルダの中身をまるごと zip に圧縮する（サブフォルダも含む）。
-
-Args:
-    folder: 圧縮するフォルダ。
-    dst: 出力する zip のパス。省略するとフォルダの隣に「フォルダ名.zip」。
-         親フォルダがなければ自動作成される。既存の zip は上書きされる。
-
-Returns:
-    作成した zip のパス。
-
-Raises:
-    FileNotFoundError: folder が存在しない場合。
-
-### `zip_files`
-
-```text
-def zip_files(files: Sequence[str | Path], dst: str | Path) -> Path:
-```
-
-#### 説明
-
-ファイルを選んで zip に圧縮する（zip 内はフラットに並ぶ）。
-
-Args:
-    files: 圧縮するファイルパスのリスト。
-    dst: 出力する zip のパス。親フォルダがなければ自動作成される。
-
-Returns:
-    作成した zip のパス。
-
-Raises:
-    FileNotFoundError: files の中に存在しないファイルがある場合。
-    ValueError: zip 内で同じ名前になるファイルが複数ある場合。
+    実行スクリプトのあるフォルダ。**想定外のときは ``Path.cwd()`` に
+    フォールバック**して例外で止まらないようにする（state.ini / logs/
+    の置き場所が「現在の作業フォルダ」になる）。
 
 ### `unzip`
 
@@ -1379,82 +1427,48 @@ Args:
 Returns:
     展開先フォルダのパス。
 
-### `DateNameBuilder`
+### `zip_files`
 
 ```text
-class DateNameBuilder:
+def zip_files(files: Sequence[str | Path], dst: str | Path) -> Path:
 ```
 
 #### 説明
 
-今日の日付を付けたファイル名を組み立てる。
-
-日付はファイル名の属性ではなく「付け方」なので、コンストラクタではなく
-prefix() / suffix() の呼び出し時に決める。
-
-#### `__init__`
-
-```text
-def __init__(self, name: str, ext: str='.xlsx') -> None:
-```
-
-##### 説明
+ファイルを選んで zip に圧縮する（zip 内はフラットに並ぶ）。
 
 Args:
-    name: ファイル名（拡張子なし）。
-    ext: 拡張子（デフォルト: ".xlsx"）。ドットなしで渡しても補完される。
+    files: 圧縮するファイルパスのリスト。
+    dst: 出力する zip のパス。親フォルダがなければ自動作成される。
 
-#### `prefix`
-
-```text
-def prefix(self, date_format: str='%Y%m%d') -> str:
-```
-
-##### 説明
-
-今日の日付を前に付けたファイル名を返す（例: 20260711_売上レポート.xlsx）。
-
-#### `suffix`
-
-```text
-def suffix(self, date_format: str='%Y%m%d') -> str:
-```
-
-##### 説明
-
-今日の日付を後ろに付けたファイル名を返す（例: 売上レポート_20260711.xlsx）。
-
-### `atomic_write`
-
-```text
-@contextmanager
-def atomic_write(path: str | Path) -> Iterator[Path]:
-```
-
-#### 説明
-
-出力先と同じフォルダに一時ファイルを作り、ブロック終了時に置き換える。
-
-ブロック内で起きた例外や、置き換える前の中断（プロセス停止など）に対しては、
-**一時ファイルを片付けてから** 例外をそのまま上位へ返す。置き換え先が
-既に存在する場合は ``os.replace`` で上書きされる。
-
-ブロック内では **出力先ファイル（``path``）に触らない** こと。同じプロセスが
-読んでいる最中に置換が走ると、読んでいる側が半端な状態を見る可能性がある。
-
-**親フォルダは作らない。** 無ければそのまま失敗する。書き間違えたパスへ
-勝手にフォルダを作ると、**誰も見ない場所へ出力し続けても気づけない**
-（保存先を勝手に作らない、という Downloader の判断と同じ理由）。
-作る必要があるなら、**呼ぶ側が明示的に** `path.parent.mkdir(...)` する。
-
-Args:
-    path: 最終的に置きたいファイルのパス。**親フォルダは存在している前提**。
-
-Yields:
-    一時ファイルのパス。
+Returns:
+    作成した zip のパス。
 
 Raises:
-    FileNotFoundError: 親フォルダが無い場合。
+    FileNotFoundError: files の中に存在しないファイルがある場合。
+    ValueError: zip 内で同じ名前になるファイルが複数ある場合。
+
+### `zip_folder`
+
+```text
+@measure
+def zip_folder(folder: str | Path, dst: str | Path | None=None) -> Path:
+```
+
+#### 説明
+
+フォルダの中身をまるごと zip に圧縮する（サブフォルダも含む）。
+
+Args:
+    folder: 圧縮するフォルダ。
+    dst: 出力する zip のパス。省略するとフォルダの隣に「フォルダ名.zip」。
+         親フォルダがなければ自動作成される。既存の zip は上書きされる。
+
+Returns:
+    作成した zip のパス。
+
+Raises:
+    FileNotFoundError: folder が存在しない場合。
 
 
 ## `from comken.core.files.naming import ...`
@@ -2859,7 +2873,7 @@ class SalesforceReportIdNotFoundError(SalesforceError):
 管理表にはレポートの URL をそのまま貼れるようにしてあるが、
 貼られたものが Salesforce のレポート URL でないと ID を取り出せない。
 
-発生箇所: comken.toolbox.salesforce.report_id_from_url() /
+発生箇所: comken.toolbox.salesforce.direct.report.report_id_from_url() /
           comken.services.salesforce_downloader.master.report_id_from_url()
 
 対処:
@@ -5092,6 +5106,42 @@ True になっていても、結果や例外を受け取るには wait() を呼�
 ### `SITES`
 
 公開定数。
+
+### `SampleSite`
+
+```text
+class SampleSite(SiteBase):
+```
+
+#### 説明
+
+the-internet.herokuapp.com 用の SiteBase。
+
+#### `go_login`
+
+```text
+def go_login(self) -> LoginPage:
+```
+
+##### 説明
+
+ログイン画面を開く。
+
+
+## `from comken.toolbox.browser.sites.sample import ...`
+
+### `SampleBrowserOptions`
+
+```text
+class SampleBrowserOptions(BrowserOptions):
+```
+
+#### 説明
+
+sample_login 用のブラウザオプション。
+
+デフォルト（BrowserOptions）から変更したいものだけ上書きする。
+全オプションのデフォルト値は comken/toolbox/browser/options.py を参照。
 
 ### `SampleSite`
 

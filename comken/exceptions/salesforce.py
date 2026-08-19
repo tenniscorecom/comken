@@ -169,7 +169,7 @@ class SalesforceReportIdNotFoundError(SalesforceError):
     管理表にはレポートの URL をそのまま貼れるようにしてあるが、
     貼られたものが Salesforce のレポート URL でないと ID を取り出せない。
 
-    発生箇所: comken.toolbox.salesforce.report_id_from_url() /
+    発生箇所: comken.toolbox.salesforce.direct.report.report_id_from_url() /
               comken.services.salesforce_downloader.master.report_id_from_url()
 
     対処:

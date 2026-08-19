@@ -52,7 +52,7 @@ API クライアント側は認証方式を知らずに済む。
 
 ```python
 from comken.toolbox.salesforce.sites import Sandbox
-from comken.toolbox.salesforce.oauth_refresh import OAuth
+from comken.toolbox.salesforce.direct.oauth_refresh import OAuth
 
 auth = OAuth(
     client_id="Consumer Key の値",   # 画面の Consumer Key をここへ
@@ -182,7 +182,7 @@ with Sandbox() as sf:
 未登録の組織や ID を含まない URL は例外になるため、誤った組織へ接続したまま処理を続けない。
 
 ```python
-from comken.toolbox.salesforce.report import report_id_from_url
+from comken.toolbox.salesforce.direct.report import report_id_from_url
 from comken.toolbox.salesforce.sites import site_for
 
 report_url = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O000000000001/view"

@@ -1,4 +1,4 @@
-"""comken/toolbox/salesforce/oauth_refresh.py — Refresh Token Flow"""
+"""comken/toolbox/salesforce/direct/oauth_refresh.py — Refresh Token Flow"""
 
 # 定義中の OAuth を戻り値の型注釈に使うため、注釈の評価を遅延する。
 from __future__ import annotations

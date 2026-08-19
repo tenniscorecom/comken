@@ -38,7 +38,7 @@ def _resolve_salesforce_deps() -> tuple:
     - ``names``: 上記を呼んだ結果（空リストなら Salesforce は import しない）
     - ``sandbox_cls``: Salesforce 組織クラス。**資格情報が空のときは import しない**
       ので ``None`` になる（BO 環境で ``requests`` が無いときに
-      ``salesforce.client`` を読み込まないため）
+      ``salesforce.direct.client`` を読み込まないため）
     """
     # モジュールを import してから属性経由で関数を取る。
     # こうすると `comken.toolbox.credentials.list_names` を
