@@ -59,8 +59,6 @@ _EXPECTED_FACADE_NAMES = frozenset(
         "debug",
         "doctor",
         "dry_run",
-        "is_debug",
-        "is_dry_run",
         "setup_logging",
     }
 )

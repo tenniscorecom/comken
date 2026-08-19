@@ -12,9 +12,9 @@ toolbox / services はこの2階層に上げない。``from comken.toolbox.excel
 """
 
 # バージョンの定義はここ1箇所だけ（pyproject.toml は dynamic version でここを参照する）
-# リリースタグ（v0.11.3 等）と必ず一致させる。config が起動時にこの値をログへ出すので、
+# リリースタグ（v1.2.0 等）と必ず一致させる。config が起動時にこの値をログへ出すので、
 # ズレると「どのタグが動いているか」がログから追えなくなる。
-__version__ = "0.11.3"
+__version__ = "1.2.0"
 
 # ── バイトコードキャッシュをローカルに逃がす ─────────────────────────────────
 # comken は共有サーバー上の1か所を直接参照する運用（PYTHONPATH で参照）。
@@ -36,7 +36,7 @@ from comken.core.config import Config as Config
 from comken.core.doctor import DoctorResult as DoctorResult
 from comken.core.doctor.cli import doctor as doctor
 from comken.core.logger import setup_logging as setup_logging
-from comken.runtime import debug, dry_run, is_debug, is_dry_run
+from comken.runtime import debug, dry_run
 
 __all__ = [
     "Config",
@@ -45,7 +45,5 @@ __all__ = [
     "debug",
     "doctor",
     "dry_run",
-    "is_debug",
-    "is_dry_run",
     "setup_logging",
 ]
