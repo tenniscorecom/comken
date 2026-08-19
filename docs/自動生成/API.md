@@ -74,20 +74,7 @@ Raises:
 
 ### `DoctorResult`
 
-```text
-class DoctorResult:
-```
-
-#### 説明
-
-doctor の 1 検査項目の結果。
-
-Attributes:
-    name: 検査名（例: "comken.version" / "deps.openpyxl" / "share.master_path"）。
-    status: 結果（"ok" / "ng" / "skip" のいずれか）。
-    message: 人が読むための1行メッセージ。**秘密の値は載せない**。
-    details: 検査の細目。1 行に収まらないとき ``message`` の下に並べて出す。
-        デフォルトは空タプル (大半の検査は ``message`` 1 行で完結する)。
+公開定数。
 
 ### `config`
 
@@ -112,7 +99,7 @@ Args:
 ### `doctor`
 
 ```text
-def doctor() -> list['DoctorResult']:
+def doctor() -> list[DoctorResult]:
 ```
 
 #### 説明
@@ -906,14 +893,14 @@ class CheckResult:
 
 #### 説明
 
-check の 1 検査項目の結果。
+検査 1 項目の結果。
 
 Attributes:
-    name: 検査名（例: "version" / "imports" / "deprecations" / "facade" / "pyright"）。
+    name: 検査名（例: "version" / "deps.openpyxl" / "share.master_path"）。
     status: 結果（"ok" / "ng" / "skip" のいずれか）。
-    message: 人が読むための1行メッセージ。
-    details: 検査の細目（import の各名前・deprecated 使用箇所など）。
-        1 行に収まらないとき ``message`` の下に並べて出す。
+    message: 人が読むための1行メッセージ。**秘密の値は載せない**。
+    details: 検査の細目。1 行に収まらないとき ``message`` の下に並べて出す。
+        デフォルトは空タプル（大半の検査は ``message`` 1 行で完結する）。
 
 ### `check_deprecations`
 
@@ -933,7 +920,10 @@ def check_facade() -> CheckResult:
 
 #### 説明
 
-公開 API ファサード (comken.__all__) の件数が期待値と一致するか。
+公開 API ファサード (comken.__all__) の名前が期待どおりか。
+
+件数ではなく**名前の集合**を比べる。件数だけだと、1 つ消して 1 つ足した
+ときに数が変わらず通ってしまい、公開 API の破壊を検出できない。
 
 ### `check_imports`
 
@@ -988,25 +978,12 @@ def summarize(results: list[CheckResult]) -> tuple[int, int, int]:
 
 ### `DoctorResult`
 
-```text
-class DoctorResult:
-```
-
-#### 説明
-
-doctor の 1 検査項目の結果。
-
-Attributes:
-    name: 検査名（例: "comken.version" / "deps.openpyxl" / "share.master_path"）。
-    status: 結果（"ok" / "ng" / "skip" のいずれか）。
-    message: 人が読むための1行メッセージ。**秘密の値は載せない**。
-    details: 検査の細目。1 行に収まらないとき ``message`` の下に並べて出す。
-        デフォルトは空タプル (大半の検査は ``message`` 1 行で完結する)。
+公開定数。
 
 ### `summarize`
 
 ```text
-def summarize(results: list[DoctorResult]) -> tuple[int, int, int]:
+def summarize(results: list[CheckResult]) -> tuple[int, int, int]:
 ```
 
 #### 説明

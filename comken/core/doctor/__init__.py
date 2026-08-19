@@ -16,6 +16,6 @@ runner.py（純粋検査）に置くと core → toolbox / services の層違反
 cli は CLI 入口なので依存してもよい。
 """
 
-from comken.core.doctor.runner import DoctorResult, summarize
+from comken.core.result import DoctorResult, summarize
 
 __all__ = ["DoctorResult", "summarize"]

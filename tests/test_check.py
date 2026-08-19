@@ -173,11 +173,32 @@ class TestDeprecations:
 
 
 class TestFacade:
-    def test_matches_expected_count(self) -> None:
-        """ファサードの件数が期待値と一致している。"""
+    def test_matches_expected_names(self) -> None:
+        """ファサードの名前が期待どおりそろっている。"""
         result = check_facade()
         assert result.status == "ok"
-        assert "9個" in result.message
+
+
+    def test_detects_swapped_name_without_count_change(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """**件数が変わらない入れ替わり**を検出する。
+
+        「何を防いでいるか」: 件数だけを比べていると、公開 API を 1 つ消して
+        1 つ足したときに 9 個のまま素通りする。「公開 API が壊れていないか」を
+        確かめる仕組みが、いちばん見つけたい壊れ方を見逃していた。
+        """
+        import comken
+
+        swapped = [n for n in comken.__all__ if n != "Config"] + ["Foo"]
+        assert len(swapped) == len(comken.__all__)  # 件数は変わらない
+        monkeypatch.setattr(comken, "__all__", swapped)
+
+        result = check_facade()
+
+        assert result.status == "ng"
+        assert any("Config" in d for d in result.details)
+        assert any("Foo" in d for d in result.details)
 
 
 # ── pyright ───────────────────────────────────────────────────────────────────

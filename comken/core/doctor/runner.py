@@ -11,10 +11,10 @@ from __future__ import annotations
 import configparser
 import logging
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 
 import comken
+from comken.core.result import DoctorResult
 
 logger = logging.getLogger(__name__)
 
@@ -40,22 +40,6 @@ MIN_PYTHON = (3, 11)
 _RUN_SECTION_NAME = "RUN"
 
 
-@dataclass(frozen=True)
-class DoctorResult:
-    """doctor の 1 検査項目の結果。
-
-    Attributes:
-        name: 検査名（例: "comken.version" / "deps.openpyxl" / "share.master_path"）。
-        status: 結果（"ok" / "ng" / "skip" のいずれか）。
-        message: 人が読むための1行メッセージ。**秘密の値は載せない**。
-        details: 検査の細目。1 行に収まらないとき ``message`` の下に並べて出す。
-            デフォルトは空タプル (大半の検査は ``message`` 1 行で完結する)。
-    """
-
-    name: str
-    status: str
-    message: str
-    details: tuple[str, ...] = ()
 
 
 # ── comken 自体の情報 ────────────────────────────────────────────────────────
@@ -285,12 +269,3 @@ def check_salesforce(
     )
 
 
-# ── 集約 ──────────────────────────────────────────────────────────────────────
-
-
-def summarize(results: list[DoctorResult]) -> tuple[int, int, int]:
-    """``(ok, ng, skip)`` の件数を返す。"""
-    ok = sum(1 for r in results if r.status == "ok")
-    ng = sum(1 for r in results if r.status == "ng")
-    skip = sum(1 for r in results if r.status == "skip")
-    return ok, ng, skip

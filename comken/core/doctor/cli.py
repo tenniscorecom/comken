@@ -43,7 +43,7 @@ def _resolve_salesforce_deps() -> tuple:
     # モジュールを import してから属性経由で関数を取る。
     # こうすると `comken.toolbox.credentials.list_names` を
     # monkeypatch したときに、それが反映される。
-    from comken.toolbox import credentials as credentials_module  # noqa: PLC0415
+    from comken.toolbox import credentials as credentials_module
 
     list_names_fn = credentials_module.list_names
 
@@ -77,7 +77,7 @@ def _resolve_share_paths() -> tuple[Path, Path]:
     return Path(MASTER_PATH), Path(HISTORY_PATH)
 
 
-def doctor() -> list["DoctorResult"]:
+def doctor() -> list[DoctorResult]:
     """環境・依存・設定・接続をまとめて検査する（ライブラリ関数）。
 
     戻り値は `DoctorResult` のリスト。CLI は ``python -m comken doctor``、
@@ -96,8 +96,8 @@ def doctor() -> list["DoctorResult"]:
         check_dependency,
         check_history_path,
         check_master_path,
-        check_pywin32,
         check_python_version,
+        check_pywin32,
         check_rpa_placeholder,
         check_run_section,
         check_salesforce,
@@ -158,7 +158,7 @@ def doctor() -> list["DoctorResult"]:
 from comken.core.doctor.runner import DoctorResult  # noqa: E402  # 関数内利用
 
 
-def DoctorResult_ok_skip(name: str, message: str) -> "DoctorResult":
+def DoctorResult_ok_skip(name: str, message: str) -> DoctorResult:
     """SKIP の DoctorResult を作る小さなヘルパー（`doctor()` 内専用）。"""
     return DoctorResult(name, "skip", message)
 
@@ -170,7 +170,7 @@ def DoctorResult_ok_skip(name: str, message: str) -> "DoctorResult":
 def main(argv: list[str] | None = None) -> int:
     """コマンドを実行して終了コードを返す（0=全 OK / 1=NG あり）。"""
     args = _build_parser().parse_args(argv if argv is not None else sys.argv[1:])
-    from comken.core.doctor.runner import summarize
+    from comken.core.result import summarize
 
     results = doctor()
     ok, ng, skip = summarize(results)

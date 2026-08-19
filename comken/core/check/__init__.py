@@ -10,7 +10,7 @@
 | ``version`` | config.ini に書いた期待バージョンと comken の現在バージョンが一致するか |
 | ``imports`` | ``comken.__all__`` の各名前を ``from comken import X`` で読めるか |
 | ``deprecations`` | ``deprecated_names()`` の旧名がプロジェクトで使われていないか |
-| ``facade`` | ``comken.__all__`` の件数が期待値 (``_EXPECTED_FACADE_COUNT``) と一致するか |
+| ``facade`` | ``comken.__all__`` の**名前**が期待どおりか (件数ではなく集合で比べる) |
 | ``pyright`` | pyright が ``comken/`` に対して 0 errors を返すか |
 
 各検査は独立した純粋関数が ``CheckResult`` を返す。CLI 入口は
@@ -24,10 +24,10 @@ import logging
 import re
 import shutil
 import subprocess
-from dataclasses import dataclass
 from pathlib import Path
 
 import comken
+from comken.core.result import CheckResult, summarize
 from comken.deprecation import deprecated_names
 
 logger = logging.getLogger(__name__)
@@ -47,11 +47,23 @@ __all__ = [
 _VERSION_SECTION = "COMKEN"
 _VERSION_KEY = "VERSION"
 
-# 公開 API ファサード (comken.__all__) の期待件数。
-# ``tests/test_facade.py::test_facade_only_eight_names`` の ``expected`` 集合
-# の要素数と一致させる (``Config`` / ``DoctorResult`` / ``config`` / ``debug`` /
-# ``doctor`` / ``dry_run`` / ``is_debug`` / ``is_dry_run`` / ``setup_logging``)
-_EXPECTED_FACADE_COUNT = 9
+# 公開 API ファサード (comken.__all__) に並ぶべき名前。
+# **件数ではなく名前で比べる。** 件数だけ見ていると、1 つ消して 1 つ足したときに
+# 数が変わらず素通りしてしまい、「公開 API が壊れていないか」を確かめられない。
+# ``tests/test_facade.py`` の ``expected`` 集合と一致させる
+_EXPECTED_FACADE_NAMES = frozenset(
+    {
+        "Config",
+        "DoctorResult",
+        "config",
+        "debug",
+        "doctor",
+        "dry_run",
+        "is_debug",
+        "is_dry_run",
+        "setup_logging",
+    }
+)
 
 # pyright のタイムアウト。``tests/test_pyright_clean.py`` と同じ 600 秒。
 PYRIGHT_TIMEOUT_SECONDS = 600
@@ -64,22 +76,6 @@ _NO_DEPRECATIONS_REGISTERED = "deprecated API の登録なし"
 _NO_DEPRECATIONS_USED = "使われている deprecated API: なし"
 
 
-@dataclass(frozen=True)
-class CheckResult:
-    """check の 1 検査項目の結果。
-
-    Attributes:
-        name: 検査名（例: "version" / "imports" / "deprecations" / "facade" / "pyright"）。
-        status: 結果（"ok" / "ng" / "skip" のいずれか）。
-        message: 人が読むための1行メッセージ。
-        details: 検査の細目（import の各名前・deprecated 使用箇所など）。
-            1 行に収まらないとき ``message`` の下に並べて出す。
-    """
-
-    name: str
-    status: str
-    message: str
-    details: tuple[str, ...] = ()
 
 
 # ── version ───────────────────────────────────────────────────────────────────
@@ -224,18 +220,30 @@ def _name_used_in_source(text: str, name: str) -> bool:
 
 
 def check_facade() -> CheckResult:
-    """公開 API ファサード (comken.__all__) の件数が期待値と一致するか。"""
-    actual = len(comken.__all__)
-    if actual == _EXPECTED_FACADE_COUNT:
+    """公開 API ファサード (comken.__all__) の名前が期待どおりか。
+
+    件数ではなく**名前の集合**を比べる。件数だけだと、1 つ消して 1 つ足した
+    ときに数が変わらず通ってしまい、公開 API の破壊を検出できない。
+    """
+    actual = frozenset(comken.__all__)
+    if actual == _EXPECTED_FACADE_NAMES:
         return CheckResult(
             name="facade",
             status="ok",
-            message=f"{actual}個 (期待: {_EXPECTED_FACADE_COUNT}個)",
+            message=f"{len(actual)}個すべて期待どおり",
         )
+    missing = sorted(_EXPECTED_FACADE_NAMES - actual)
+    extra = sorted(actual - _EXPECTED_FACADE_NAMES)
+    details: list[str] = []
+    if missing:
+        details.append(f"消えた名前: {'、'.join(missing)}")
+    if extra:
+        details.append(f"増えた名前: {'、'.join(extra)}")
     return CheckResult(
         name="facade",
         status="ng",
-        message=f"{actual}個 (期待: {_EXPECTED_FACADE_COUNT}個)",
+        message=f"{len(actual)}個 (期待: {len(_EXPECTED_FACADE_NAMES)}個)",
+        details=tuple(details),
     )
 
 
@@ -308,12 +316,3 @@ def _parse_pyright_result(proc: subprocess.CompletedProcess[str]) -> CheckResult
     )
 
 
-# ── summarize ─────────────────────────────────────────────────────────────────
-
-
-def summarize(results: list[CheckResult]) -> tuple[int, int, int]:
-    """``(ok, ng, skip)`` の件数を返す。"""
-    ok = sum(1 for r in results if r.status == "ok")
-    ng = sum(1 for r in results if r.status == "ng")
-    skip = sum(1 for r in results if r.status == "skip")
-    return ok, ng, skip
