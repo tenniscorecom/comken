@@ -51,12 +51,14 @@ class CabinetOfficeCsvSource(HolidaySource):
         ttl_seconds: int = DEFAULT_TTL_SECONDS,
         encoding: str = "cp932",
         fetch_timeout_seconds: float = 30.0,
+        refresh_timeout_seconds: float = 0.5,
     ) -> None:
         self._url = url
         self._cache_path = Path(cache_path) if cache_path is not None else DEFAULT_CACHE_PATH
         self._ttl_seconds = ttl_seconds
         self._encoding = encoding
         self._fetch_timeout = fetch_timeout_seconds
+        self._refresh_timeout = refresh_timeout_seconds
 
     def load(self) -> list[Holiday]:
         """キャッシュを確認してから、必要に応じてダウンロードして ``Holiday`` を返す。
@@ -75,6 +77,39 @@ class CabinetOfficeCsvSource(HolidaySource):
             fresh_bytes = self._download()
         except HolidayCalendarFetchError as error:
             # 取得失敗時はキャッシュにフォールバック（あれば）
+            stale_bytes = self._read_cache_bytes()
+            if stale_bytes is not None:
+                logger.warning(
+                    "内閣府 CSV の取得に失敗したためキャッシュで代用します: %s",
+                    error,
+                )
+                return self._decode(stale_bytes)
+            raise
+
+        self._write_cache(fresh_bytes)
+        return self._decode(fresh_bytes)
+
+    def refresh(self) -> list[Holiday]:
+        """TTL を無視して内閣府から強制再取得する（業務フローを止めない短時間タイムアウト）。
+
+        ``HolidayCalendar.is_business_day(target)`` などでターゲットが
+        今年/来年で内閣府 CSV に該当データが無い場合に呼ばれる。
+        **タイムアウトは ``refresh_timeout_seconds``（既定 0.5 秒）** にして、
+        ネットワークが遅い環境でも業務を止めない。
+
+        取得できなくても例外は投げず、**キャッシュがあれば警告ログを出して
+        キャッシュで代用**する（``load()`` と同じ挙動）。キャッシュも無い
+        ときだけ ``HolidayCalendarFetchError`` を送出する。
+
+        Returns:
+            内閣府の祝日を日付順に並べた ``Holiday`` のリスト。
+
+        Raises:
+            HolidayCalendarFetchError: ダウンロードに失敗し、キャッシュも無い場合。
+        """
+        try:
+            fresh_bytes = self._download(self._refresh_timeout)
+        except HolidayCalendarFetchError as error:
             stale_bytes = self._read_cache_bytes()
             if stale_bytes is not None:
                 logger.warning(
@@ -117,8 +152,14 @@ class CabinetOfficeCsvSource(HolidaySource):
 
     # ── ダウンロード ─────────────────────────────────────────────────────────
 
-    def _download(self) -> bytes:
-        """requests で内閣府の CSV を取得する。失敗時は HolidayCalendarFetchError。"""
+    def _download(self, timeout: float | None = None) -> bytes:
+        """requests で内閣府の CSV を取得する。失敗時は HolidayCalendarFetchError。
+
+        ``timeout`` を省略すると ``fetch_timeout_seconds`` を使う。``refresh()``
+        側からは短い ``refresh_timeout_seconds`` を渡せる。
+        """
+        if timeout is None:
+            timeout = self._fetch_timeout
         # 遅延 import: requests はオフライン環境で入っていないことがあるため、
         # 使うときだけ import し、無い環境では HolidayCalendarFetchError に変える。
         try:
@@ -130,7 +171,7 @@ class CabinetOfficeCsvSource(HolidaySource):
             ) from error
 
         try:
-            response = requests.get(self._url, timeout=self._fetch_timeout)
+            response = requests.get(self._url, timeout=timeout)
             response.raise_for_status()
         except requests.RequestException as error:  # type: ignore[attr-defined]
             raise HolidayCalendarFetchError(self._url, str(error)) from error

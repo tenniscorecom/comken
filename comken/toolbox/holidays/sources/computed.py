@@ -195,12 +195,28 @@ def _emperors_birthday(year: int) -> Holiday | None:
 
 
 def _equinox_holidays(year: int) -> list[Holiday]:
-    """春分・秋分の日を返す。"""
+    """春分・秋分の日を返す。
+
+    **近似式のため内閣府発表と ±1 日前後する可能性がある。** ``approximate=True``
+    を付けて、``HolidayCalendar`` 側で WARNING ログが出せるようにする。
+    """
     holidays: list[Holiday] = []
     if year >= 1949:
-        holidays.append(Holiday(_dt.date(year, 3, _vernal_equinox_day(year)), "春分の日"))
+        holidays.append(
+            Holiday(
+                _dt.date(year, 3, _vernal_equinox_day(year)),
+                "春分の日",
+                approximate=True,
+            )
+        )
     if year >= 1948:
-        holidays.append(Holiday(_dt.date(year, 9, _autumnal_equinox_day(year)), "秋分の日"))
+        holidays.append(
+            Holiday(
+                _dt.date(year, 9, _autumnal_equinox_day(year)),
+                "秋分の日",
+                approximate=True,
+            )
+        )
     return holidays
 
 

@@ -976,3 +976,189 @@ class TestCompanyHolidays:
         assert Holiday(date=_dt.date(2027, 1, 2), name="年末年始休暇") in holidays
         assert Holiday(date=_dt.date(2027, 1, 3), name="年末年始休暇") in holidays
 
+
+class TestApproximateHoliday:
+    """``Holiday.approximate`` 属性の挙動。
+
+    計算式由来の暫定値（春分の日・秋分の日）だけ ``approximate=True`` を
+    付けて、業務フローを止めずに WARNING ログで気づけるようにする。
+    """
+
+    def test_default_approximate_is_false(self) -> None:
+        """``Holiday`` の ``approximate`` は既定で False。"""
+        assert Holiday(date=_dt.date(2026, 1, 1), name="元日").approximate is False
+
+    def test_computed_marks_only_equinox_as_approximate(self) -> None:
+        """Computed の春分の日・秋分の日のみ ``approximate=True``。
+
+        固定パターン（ハッピーマンデー・固定日・振替休日・国民の休日・
+        会社休日）は ``approximate=False`` のままで、計算結果として
+        確実なものは警告を出さない。
+        """
+        holidays = ComputedHolidaySource(from_year=2026, to_year=2026).load()
+        for h in holidays:
+            if h.name in ("春分の日", "秋分の日"):
+                assert h.approximate is True, f"{h} に approximate が付いていません"
+            else:
+                assert h.approximate is False, f"{h} に approximate が付いています"
+
+
+class TestCabinetOfficeRefresh:
+    """``CabinetOfficeCsvSource.refresh()`` の挙動。"""
+
+    def test_refresh_default_timeout_is_half_second(self) -> None:
+        """``refresh()`` は既定で 0.5 秒タイムアウト（業務フローを止めないため）。"""
+        assert CabinetOfficeCsvSource()._refresh_timeout == 0.5
+
+    def test_refresh_returns_holidays_on_success(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """``refresh()`` は内閣府取得に成功すると ``Holiday`` のリストを返しキャッシュへ書く。"""
+        source = CabinetOfficeCsvSource(cache_path=tmp_path / "syukujitsu.csv")
+        # fixture のバイト列を返す
+        fresh_bytes = FIXTURE_PATH.read_bytes()
+        monkeypatch.setattr(source, "_download", lambda timeout=None: fresh_bytes)
+
+        holidays = source.refresh()
+
+        assert any(h.name == "元日" for h in holidays)
+        # キャッシュに書かれている
+        assert (tmp_path / "syukujitsu.csv").exists()
+
+    def test_refresh_falls_back_to_cache_on_fetch_error(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """内閣府取得失敗時にキャッシュがあれば警告ログを出してキャッシュで代用。"""
+        from comken.exceptions import HolidayCalendarFetchError
+
+        cache_path = tmp_path / "syukujitsu.csv"
+        cache_path.write_bytes(FIXTURE_PATH.read_bytes())
+        source = CabinetOfficeCsvSource(cache_path=cache_path)
+
+        def fail(timeout: float | None = None) -> bytes:
+            raise HolidayCalendarFetchError("https://example/", "timeout")
+
+        monkeypatch.setattr(source, "_download", fail)
+
+        holidays = source.refresh()
+
+        assert any(h.name == "元日" for h in holidays)
+
+
+class TestHolidayCalendarCascade:
+    """``HolidayCalendar.from_sources()`` のカスケード動作。"""
+
+    def test_cabinet_office_failure_falls_back_to_computed(self) -> None:
+        """内閣府失敗 → Computed にフォールバック（カスケード）。
+
+        オフライン BO 環境で内閣府が取得できなくても、Computed が
+        固定パターンの祝日を返すため業務が止まらない。
+        """
+        from comken.exceptions import HolidayCalendarFetchError
+
+        class FailingCabinet:
+            def load(self):
+                raise HolidayCalendarFetchError("https://example/", "network")
+
+        calendar = HolidayCalendar.from_sources([
+            FailingCabinet(),
+            ComputedHolidaySource(from_year=2026, to_year=2026),
+        ])
+
+        # Computed の固定パターンの祝日が反映されている
+        assert any(h.name == "憲法記念日" for h in calendar.all_holidays())
+
+    def test_all_sources_failure_raises_last_error(self) -> None:
+        """全 source が失敗したら最後の ``HolidayCalendarFetchError`` を送出。"""
+        from comken.exceptions import HolidayCalendarFetchError
+
+        class Failing:
+            def load(self):
+                raise HolidayCalendarFetchError("https://example/", "fail")
+
+        with pytest.raises(HolidayCalendarFetchError):
+            HolidayCalendar.from_sources([Failing(), Failing()])
+
+
+class TestHolidayCalendarRefresh:
+    """``HolidayCalendar.is_holiday()`` の内閣府強制再取得と approximate 警告。"""
+
+    def test_is_holiday_calls_refresh_for_current_year(self) -> None:
+        """ターゲットが今年のとき内閣府 refresh を試みる。"""
+        called = {"count": 0}
+
+        class FakeCabinet:
+            def refresh(self):
+                called["count"] += 1
+                return []
+
+            def load(self):
+                return []
+
+        calendar = HolidayCalendar.from_sources([
+            FakeCabinet(),
+            ComputedHolidaySource(from_year=2026, to_year=2026),
+        ])
+        this_year = _dt.date.today().year
+        calendar.is_holiday(_dt.date(this_year, 1, 1))
+        assert called["count"] >= 1
+
+    def test_is_holiday_does_not_refresh_for_old_year(self) -> None:
+        """去年以前は refresh を試まない（内閣府 CSV には無いはずなので）。"""
+        called = {"count": 0}
+
+        class FakeCabinet:
+            def refresh(self):
+                called["count"] += 1
+                return []
+
+            def load(self):
+                return []
+
+        calendar = HolidayCalendar.from_sources([
+            FakeCabinet(),
+            ComputedHolidaySource(from_year=2026, to_year=2026),
+        ])
+        calendar.is_holiday(_dt.date(2020, 1, 1))  # 2020 年（過去）
+        assert called["count"] == 0
+
+    def test_is_holiday_warns_on_approximate(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """``approximate=True`` の Holiday を返すときに WARNING ログが出る。
+
+        春分の日・秋分の日は内閣府発表と ±1 日前後する可能性があるので、
+        ユーザーに気づかせる。
+        """
+        calendar = HolidayCalendar.from_sources([
+            ComputedHolidaySource(from_year=2026, to_year=2026),
+        ])
+        # 春分の日 (approximate=True)
+        with caplog.at_level(logging.WARNING, logger="comken.toolbox.holidays.calendar"):
+            calendar.is_holiday(_dt.date(2026, 3, 20))
+        assert any(
+            "計算式による暫定値" in r.getMessage() for r in caplog.records
+        )
+
+    def test_refresh_only_once_per_year(self) -> None:
+        """同じ年には 1 回しか refresh を試まない（重複防止）。"""
+        called = {"count": 0}
+
+        class FakeCabinet:
+            def refresh(self):
+                called["count"] += 1
+                return []
+
+            def load(self):
+                return []
+
+        calendar = HolidayCalendar.from_sources([
+            FakeCabinet(),
+            ComputedHolidaySource(from_year=2026, to_year=2026),
+        ])
+        this_year = _dt.date.today().year
+        calendar.is_holiday(_dt.date(this_year, 1, 1))
+        calendar.is_holiday(_dt.date(this_year, 6, 15))
+        calendar.is_holiday(_dt.date(this_year, 12, 31))
+        assert called["count"] == 1
+
