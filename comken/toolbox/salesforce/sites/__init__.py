@@ -32,14 +32,16 @@ from urllib.parse import urlsplit
 
 from comken.exceptions import SalesforceSiteNotFoundError
 from comken.toolbox.salesforce.direct.client import SalesforceBase
+from comken.toolbox.salesforce.sites.developer import Developer
+from comken.toolbox.salesforce.sites.production import Production
 from comken.toolbox.salesforce.sites.sandbox import Sandbox
 
 # 登録済みの組織。URL からどの組織へつなぐかを引くのに使う。
 # **組織を増やしたらここにも足す。** 足し忘れると、その組織の URL だけが
 # SalesforceSiteNotFoundError になる（黙って別組織へつなぐことはない）
-SITES: tuple[type[SalesforceBase], ...] = (Sandbox,)
+SITES: tuple[type[SalesforceBase], ...] = (Sandbox, Production, Developer)
 
-__all__ = ["SITES", "Sandbox", "site_for"]
+__all__ = ["SITES", "Sandbox", "Production", "Developer", "site_for"]
 
 
 def site_for(url: str) -> type[SalesforceBase]:
