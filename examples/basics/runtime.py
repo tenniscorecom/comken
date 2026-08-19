@@ -3,7 +3,7 @@
 import logging
 from pathlib import Path
 
-from comken import debug, dry_run, is_debug, is_dry_run, setup_logging
+from comken import debug, dry_run, setup_logging
 from comken.core import copy_file
 
 HERE = Path(__file__).parent
@@ -20,12 +20,13 @@ def main() -> None:
     SOURCE_PATH.write_text("確認用", encoding="utf-8")
     DRY_RUN_PATH.unlink(missing_ok=True)
 
+    logger.info("ブロック外（既定の状態）に入ります")
     with debug():
-        logger.info("debug ブロック内: %s", is_debug())
-    logger.info("debug ブロック外: %s", is_debug())
+        logger.info("debug ブロック内です")
+    logger.info("debug ブロックを抜けました")
 
     with dry_run():
-        logger.info("dry-run ブロック内: %s", is_dry_run())
+        logger.info("dry-run ブロック内です")
         copy_file(SOURCE_PATH, DRY_RUN_PATH)
     logger.info("dry-run の出力ファイルあり: %s", DRY_RUN_PATH.exists())
 
