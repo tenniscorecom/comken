@@ -1464,4 +1464,91 @@ class TestExcelBaseLocalCopyCleanup:
         ):
             ExcelReader(original)
 
-        assert not local.exists()
+
+class TestExcelWriterSavePassword:
+    """ExcelWriter.save() のパスワード保存まわり。"""
+
+    def test_save_without_password_does_not_use_com(
+        self, tmp_path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """パスワードなしでは ExcelComHandler を起動しないこと。"""
+        path = tmp_path / "book.xlsx"
+        with ExcelWriter.create(path) as writer:
+            writer.sheet("Sheet1").write_cell(row=1, col=1, value="値")
+            with patch("comken.toolbox.windows.handler.ExcelComHandler") as com_cls:
+                writer.save()
+                com_cls.assert_not_called()
+        assert path.exists()
+
+    def test_save_with_password_calls_com_handler_with_passwords(self, tmp_path) -> None:
+        """パスワードありでは ExcelComHandler.save_as() が read_pw / write_pw 付きで呼ばれる。"""
+        path = tmp_path / "book.xlsx"
+        with ExcelWriter.create(path) as writer:
+            writer.sheet("Sheet1").write_cell(row=1, col=1, value="値")
+            with patch("comken.toolbox.windows.handler.ExcelComHandler") as com_cls:
+                com_instance = MagicMock()
+                com_instance.save_as.side_effect = lambda *args, **kwargs: path.touch()
+                com_cls.return_value.__enter__.return_value = com_instance
+                writer.save(read_pw="r", write_pw="w")
+                com_instance.save_as.assert_called_once()
+                _, kwargs = com_instance.save_as.call_args
+                assert kwargs["read_pw"] == "r"
+                assert kwargs["write_pw"] == "w"
+        assert path.exists()
+
+    def test_password_save_uses_matching_suffix_in_tmp(self, tmp_path) -> None:
+        """パスワード保存時の一時ファイルは save_path と同じ拡張子を持つこと。
+
+        COM は拡張子で形式を判定するため、.xlsm を .tmp で保存すると
+        FileFormatMismatchError で失敗する（実際に起きたバグ）。
+        """
+        path = tmp_path / "book.xlsm"
+        with ExcelWriter.create(path) as writer:
+            writer.sheet("Sheet1").write_cell(row=1, col=1, value="値")
+            with patch("comken.toolbox.windows.handler.ExcelComHandler") as com_cls:
+                com_instance = MagicMock()
+                com_instance.save_as.side_effect = lambda *args, **kwargs: path.touch()
+                com_cls.return_value.__enter__.return_value = com_instance
+                writer.save(write_pw="w")
+                tmp_path_arg = Path(com_cls.call_args.args[0])
+                assert tmp_path_arg.suffix == ".xlsm"
+        assert path.exists()
+
+    def test_save_dry_run_creates_no_files_and_no_com(
+        self, tmp_path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """dry-run では保存せず、COM も起動せず、パスワードはログに残らないこと。"""
+        path = tmp_path / "book.xlsx"
+        with (
+            dry_run(),
+            patch("comken.toolbox.windows.handler.ExcelComHandler") as com_cls,
+            ExcelWriter.create(path) as writer,
+        ):
+            writer.sheet("Sheet1").write_cell(row=1, col=1, value="値")
+            writer.save(read_pw="secret", write_pw="secret")
+            com_cls.assert_not_called()
+        assert not path.exists()
+        # パスワードがログに出ていないこと（秘匿値の漏洩を防ぐ）
+        for record in caplog.records:
+            assert "secret" not in record.getMessage()
+
+    def test_save_raises_when_file_missing(self, tmp_path, monkeypatch) -> None:
+        """保存後にファイルが無いと ExcelSaveNotCompletedError を投げること。"""
+        from comken.exceptions import ExcelSaveNotCompletedError
+
+        path = tmp_path / "book.xlsx"
+        with ExcelWriter.create(path) as writer:
+            writer.sheet("Sheet1").write_cell(row=1, col=1, value="値")
+            # save_path だけ False にして、保存後の exists() チェックを失敗させる。
+            # ピンポイントで上書きしないと parent.exists() なども巻き込む
+            # （openpyxl や tempfile が mkdir を試みると失敗するため）
+            real_exists = Path.exists
+
+            def fake_exists(self, *args, **kwargs):
+                if str(self) == str(path):
+                    return False
+                return real_exists(self, *args, **kwargs)
+
+            monkeypatch.setattr(Path, "exists", fake_exists)
+            with pytest.raises(ExcelSaveNotCompletedError):
+                writer.save()

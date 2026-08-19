@@ -3,6 +3,7 @@
 ComkenError
 ├── SiteOwnerRequiredError          SiteBase / SalesforceBase に OWNER が未設定
 ├── UnsupportedFileSuffixError
+├── FileDeletionError
 ├── AccessError
 │   ├── AccessFileNotFoundError
 │   ├── AccessBackupError
@@ -16,6 +17,7 @@ ComkenError
 ├── ExcelError
 │   ├── ExcelFileNotFoundError
 │   ├── ExcelApplicationNotAvailableError
+│   ├── ExcelSaveNotCompletedError
 │   ├── SheetNotFoundError
 │   ├── SheetAlreadyExistsError
 │   ├── LastSheetDeletionError
@@ -83,7 +85,8 @@ ComkenError
 │   ├── ConfigLowerCaseNameError
 │   ├── ConfigRequiredKeysMissingError
 │   ├── ConfigSectionNotFoundError
-│   └── ConfigKeyNotFoundError
+│   ├── ConfigKeyNotFoundError
+│   └── ConfigInvalidValueError
 ├── MasterTableError
 │   ├── MasterSheetNotDefinedError
 │   ├── MasterColumnNotFoundError
@@ -152,6 +155,7 @@ from comken.exceptions.config import (
     ConfigCreatedFromExampleError,
     ConfigError,
     ConfigFileNotFoundError,
+    ConfigInvalidValueError,
     ConfigKeyNotFoundError,
     ConfigLowerCaseNameError,
     ConfigRequiredKeysMissingError,
@@ -192,6 +196,7 @@ from comken.exceptions.excel import (
     ExcelError,
     ExcelFileNotFoundError,
     ExcelHeadersTooFewError,
+    ExcelSaveNotCompletedError,
     FileFormatMismatchError,
     InvalidTableNameError,
     LastSheetDeletionError,
@@ -203,7 +208,7 @@ from comken.exceptions.excel import (
     TableNotAvailableInReadOnlyError,
     TableNotFoundError,
 )
-from comken.exceptions.file import UnsupportedFileSuffixError
+from comken.exceptions.file import FileDeletionError, UnsupportedFileSuffixError
 from comken.exceptions.holiday import (
     HolidayCalendarError,
     HolidayCalendarExpiredError,
@@ -269,6 +274,7 @@ __all__ = [
     "RowTransferError",
     "EmptyHeaderCellError",
     "ExcelHeadersTooFewError",
+    "ExcelSaveNotCompletedError",
     "FileFormatMismatchError",
     "CsvError",
     "EncodingDetectionError",
@@ -291,8 +297,10 @@ __all__ = [
     "ConfigLowerCaseNameError",
     "ConfigRequiredKeysMissingError",
     "ConfigSectionNotFoundError",
+    "ConfigInvalidValueError",
     "ConfigKeyNotFoundError",
     "UnsupportedFileSuffixError",
+    "FileDeletionError",
     "OutlookError",
     "ClassicOutlookNotAvailableError",
     "OutlookFolderNotFoundError",

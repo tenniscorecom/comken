@@ -12,7 +12,12 @@ from openpyxl import Workbook
 
 from comken.core.files.base import FileBase
 from comken.core.timer import measure
-from comken.exceptions import LastSheetDeletionError, SheetAlreadyExistsError, SheetNotFoundError
+from comken.exceptions import (
+    ExcelSaveNotCompletedError,
+    LastSheetDeletionError,
+    SheetAlreadyExistsError,
+    SheetNotFoundError,
+)
 from comken.runtime import dry_run_log, is_dry_run
 from comken.toolbox.excel.base import ExcelBase
 from comken.toolbox.excel.sheet import Sheet
@@ -119,32 +124,83 @@ class ExcelWriter(ExcelBase):
         return instance
 
     @measure
-    def save(self, path: str | Path | None = None) -> None:
+    def save(
+        self,
+        path: str | Path | None = None,
+        read_pw: str = "",
+        write_pw: str = "",
+    ) -> None:
         """ファイルを保存する。
 
         ローカルコピーで開いている場合も、省略時の保存先は元のファイル
         （一時コピーに保存すると close() でコピーごと消えてしまうため）。
 
+        read_pw / write_pw のどちらかを指定すると、パスワード保護付きの
+        ファイルとして保存する。openpyxl だけではパスワード保存ができないため、
+        Excel COM を経由する。Excel が入っていない環境ではパスワード付き保存は
+        できないため、入っている PC で実行すること。
+
         Args:
             path: 保存先のパス。省略すると開いた元のファイルに上書き保存する。
+            read_pw: 読み取りパスワード。指定するとパスワード保護された
+                     ファイルとして保存する（COM が必要な操作）。
+                     設定した拡張子のファイル形式と中身の形式が一致しないと
+                     Excel 側で警告が出る。
+            write_pw: 書き込みパスワード。指定すると開くときに書き込みパスワード
+                     を要求する形で保存する（COM が必要な操作）。
+
+        Raises:
+            ExcelSaveNotCompletedError: 保存後にファイルが見当たらない場合。
+            ExcelApplicationNotAvailableError: パスワード付きで保存しようとした
+                が、Excel が見つからない環境で実行した場合。
         """
         save_path = Path(path) if path else self._original_path
         if is_dry_run():
+            # パスワードは秘匿値なのでログには出さない（save_path のみ）
             dry_run_log("Excel を保存: %s", save_path)
             return
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        # os.replace は同一ドライブ内で使うため、保存先と同じフォルダに一時ファイルを作る。
-        # NOTE: openpyxl がパスへ保存できるよう、名前を確保して即座に閉じる。
-        tmp = tempfile.NamedTemporaryFile(  # noqa: SIM115
-            dir=save_path.parent, prefix=f".{save_path.name}.", suffix=".tmp", delete=False
-        )
-        tmp_path = Path(tmp.name)
-        tmp.close()
-        try:
-            self._wb.save(tmp_path)
-            tmp_path.replace(save_path)
-        finally:
-            tmp_path.unlink(missing_ok=True)
+        if not read_pw and not write_pw:
+            # パスワードなし — openpyxl のみで完結する既存の経路。
+            # os.replace は同一ドライブ内で使うため、保存先と同じフォルダに一時ファイルを作る。
+            # NOTE: openpyxl がパスへ保存できるよう、名前を確保して即座に閉じる。
+            tmp = tempfile.NamedTemporaryFile(  # noqa: SIM115
+                dir=save_path.parent, prefix=f".{save_path.name}.", suffix=".tmp", delete=False
+            )
+            tmp_path = Path(tmp.name)
+            tmp.close()
+            try:
+                self._wb.save(tmp_path)
+                tmp_path.replace(save_path)
+            finally:
+                tmp_path.unlink(missing_ok=True)
+        else:
+            # パスワードあり — Excel COM 経由で保存する。COM は拡張子で形式を判定するため、
+            # 一時ファイルの拡張子は save_path と同じにしないと（.xlsm を .tmp で保存すると）
+            # FileFormatMismatchError で失敗する。一時ファイルは COM が読んだ後に消す。
+            # NOTE: 一時ファイルを delete_file() で消さない理由 — delete_file() は dry-run を
+            # 尊重してログだけ出すため、確実に消す必要がある場面では直接 unlink する。
+            tmp = tempfile.NamedTemporaryFile(  # noqa: SIM115
+                dir=save_path.parent,
+                prefix=f".{save_path.name}.",
+                suffix=save_path.suffix,
+                delete=False,
+            )
+            tmp_path = Path(tmp.name)
+            tmp.close()
+            try:
+                self._wb.save(tmp_path)
+                from comken.toolbox.windows.handler import ExcelComHandler
+
+                with ExcelComHandler(tmp_path) as com:
+                    com.save_as(save_path, read_pw=read_pw, write_pw=write_pw)
+            finally:
+                tmp_path.unlink(missing_ok=True)
+        # openpyxl と Excel COM は DisplayAlerts=False のとき、保存失敗を静かに通すことがある。
+        # 呼び出し側が「保存できた」と誤認して元ファイルを消す事故を防ぐため、ファイルの存在で
+        # もう一度確かめる。パスワードの有無に関わらず行う。
+        if not save_path.exists():
+            raise ExcelSaveNotCompletedError(save_path)
 
     def run_macro(self, macro_name: str, save: bool = True) -> None:
         """VBA マクロを実行する。内部で win32com（pywin32）を使用する。

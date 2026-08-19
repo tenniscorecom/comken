@@ -76,8 +76,6 @@ _NO_DEPRECATIONS_REGISTERED = "deprecated API の登録なし"
 _NO_DEPRECATIONS_USED = "使われている deprecated API: なし"
 
 
-
-
 # ── version ───────────────────────────────────────────────────────────────────
 
 
@@ -316,5 +314,3 @@ def _parse_pyright_result(proc: subprocess.CompletedProcess[str]) -> CheckResult
         message=f"{count} errors",
         details=(short,),
     )
-
-

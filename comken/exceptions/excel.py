@@ -208,6 +208,24 @@ class FileFormatMismatchError(ExcelError):
         )
 
 
+class ExcelSaveNotCompletedError(ExcelError):
+    """Excel の保存が成功したように見えて、ファイルが無い
+
+    発生箇所: ExcelWriter.save()
+
+    対処:
+        Excel が他で開かれていないか、ディスクの空き容量があるかを確認し、
+        もう一度保存を実行する
+    """
+
+    def __init__(self, path: Path | str) -> None:
+        super().__init__(
+            f"Excel の保存が成功したように見えて、ファイルが見つかりません: {path}\n"
+            "Excel が他で開かれていないか、ディスクの空き容量があるかを確認して、"
+            "もう一度保存を実行してください。"
+        )
+
+
 class ExcelApplicationNotAvailableError(ExcelError):
     """Excel を起動できない
 

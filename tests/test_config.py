@@ -17,6 +17,7 @@ from comken.core.config import Config
 from comken.exceptions import (
     ConfigCreatedFromExampleError,
     ConfigError,
+    ConfigInvalidValueError,
     ConfigLowerCaseNameError,
     ConfigRequiredKeysMissingError,
 )
@@ -1970,3 +1971,73 @@ class TestScanModule:
         names = {f"{u.section.upper()}.{u.key.upper()}" for u in result.usages}
         assert names == {"RUN.DRY_RUN"}
         assert all("broken" not in u.path.as_posix() for u in result.usages)
+
+
+class TestConfigIntValueAndText:
+    """config.int_value() / config.text() の検証。"""
+
+    def test_int_value_returns_int(self, tmp_path):
+        config_module._singleton = None
+        (tmp_path / "config.ini").write_text("[SAMPLE]\nCOUNT = 3\n", encoding="utf-8")
+        config_module.read(tmp_path / "config.ini")
+
+        result = config_module.int_value("SAMPLE.COUNT")
+
+        assert result == 3
+        assert isinstance(result, int)
+
+    def test_int_value_min_max(self, tmp_path):
+        config_module._singleton = None
+        (tmp_path / "config.ini").write_text("[SAMPLE]\nCOUNT = 10\n", encoding="utf-8")
+        config_module.read(tmp_path / "config.ini")
+
+        # 範囲内
+        assert config_module.int_value("SAMPLE.COUNT", minimum=1) == 10
+        assert config_module.int_value("SAMPLE.COUNT", maximum=100) == 10
+        # 範囲外（最小値より小さい / 最大値より大きい）
+        with pytest.raises(ConfigInvalidValueError):
+            config_module.int_value("SAMPLE.COUNT", minimum=11)
+        with pytest.raises(ConfigInvalidValueError):
+            config_module.int_value("SAMPLE.COUNT", maximum=9)
+
+    def test_int_value_type_mismatch(self, tmp_path):
+        config_module._singleton = None
+        (tmp_path / "config.ini").write_text("[SAMPLE]\nNAME = hello\n", encoding="utf-8")
+        config_module.read(tmp_path / "config.ini")
+
+        with pytest.raises(ConfigInvalidValueError, match="整数"):
+            config_module.int_value("SAMPLE.NAME")
+
+    def test_int_value_rejects_bool(self, tmp_path):
+        """true / false は int の subtype だが、bool として明示的に弾く。"""
+        config_module._singleton = None
+        (tmp_path / "config.ini").write_text("[SAMPLE]\nFLAG = true\n", encoding="utf-8")
+        config_module.read(tmp_path / "config.ini")
+
+        with pytest.raises(ConfigInvalidValueError):
+            config_module.int_value("SAMPLE.FLAG")
+
+    def test_text_returns_raw_value(self, tmp_path):
+        """text() は _parse_value と同じ strip 後の値を返す（int などの自動型変換なし）。"""
+        config_module._singleton = None
+        (tmp_path / "config.ini").write_text("[SAMPLE]\nNAME = hello\n", encoding="utf-8")
+        config_module.read(tmp_path / "config.ini")
+
+        assert config_module.text("SAMPLE.NAME") == "hello"
+
+    def test_text_rejects_empty_by_default(self, tmp_path):
+        """前後の空白を除いて空になる値は allow_empty=False ではエラー。"""
+        config_module._singleton = None
+        (tmp_path / "config.ini").write_text("[SAMPLE]\nNAME =   \n", encoding="utf-8")
+        config_module.read(tmp_path / "config.ini")
+
+        with pytest.raises(ConfigInvalidValueError):
+            config_module.text("SAMPLE.NAME")
+
+    def test_text_allow_empty_returns_empty_value(self, tmp_path):
+        """allow_empty=True なら空文字もそのまま返す。"""
+        config_module._singleton = None
+        (tmp_path / "config.ini").write_text("[SAMPLE]\nNAME =\n", encoding="utf-8")
+        config_module.read(tmp_path / "config.ini")
+
+        assert config_module.text("SAMPLE.NAME", allow_empty=True) == ""

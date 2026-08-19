@@ -40,8 +40,6 @@ MIN_PYTHON = (3, 11)
 _RUN_SECTION_NAME = "RUN"
 
 
-
-
 # ── comken 自体の情報 ────────────────────────────────────────────────────────
 
 
@@ -223,8 +221,7 @@ def check_salesforce(
     name_set = set(names)
     key_status = {key: (key in name_set) for key in required_keys}
     details: list[str] = [
-        f"{key}: {'登録済' if registered else '未登録'}"
-        for key, registered in key_status.items()
+        f"{key}: {'登録済' if registered else '未登録'}" for key, registered in key_status.items()
     ]
 
     # 接続テストには client_id / client_secret が必須
@@ -267,5 +264,3 @@ def check_salesforce(
         f"API v{sandbox_cls.API_VERSION}",
         details=tuple(details),
     )
-
-

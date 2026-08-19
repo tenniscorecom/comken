@@ -55,9 +55,7 @@ class HolidayCalendarSourceError(HolidayCalendarError):
     """
 
     def __init__(self, source: str, reason: str) -> None:
-        super().__init__(
-            f"祝日データを読み取れませんでした: {source}\n{reason}"
-        )
+        super().__init__(f"祝日データを読み取れませんでした: {source}\n{reason}")
 
 
 class HolidayCalendarExpiredError(HolidayCalendarError):

@@ -178,7 +178,6 @@ class TestFacade:
         result = check_facade()
         assert result.status == "ok"
 
-
     def test_detects_swapped_name_without_count_change(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -205,9 +204,7 @@ class TestFacade:
 
 
 class TestPyright:
-    def test_skip_when_pyright_and_npx_unavailable(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_skip_when_pyright_and_npx_unavailable(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """``pyright`` も ``npx`` も無い環境では SKIP。
 
         BO / オフライン環境向け: ``check_pyright()`` は npm から最新版を

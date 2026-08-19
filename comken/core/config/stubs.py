@@ -220,6 +220,13 @@ def _build_module_stub_content(cfg: configparser.ConfigParser, section_map: dict
     lines.append("")
     lines.append("def read(path: str | Path = ...) -> Config: ...")
     lines.append("def mapping(section: str) -> dict[str, str]: ...")
+    # int_value / text は config のモジュール関数。`from comken.core.config import ...` 形式で
+    # 利用側の補完が効くようにスタブにも並べる（stubs.py 全行程のお決まり）
+    lines.append(
+        "def int_value(name: str, *, "
+        "minimum: int | None = ..., maximum: int | None = ...) -> int: ..."
+    )
+    lines.append("def text(name: str, *, allow_empty: bool = ...) -> str: ...")
     lines.append("")
     lines.extend(module_attrs)
     return "\n".join(lines) + "\n"

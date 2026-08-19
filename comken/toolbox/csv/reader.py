@@ -26,6 +26,50 @@ from comken.exceptions import (
 from comken.toolbox.csv.base import CsvBase
 
 
+def index_files(paths: Sequence[str | Path], key_col: str) -> dict[str, dict[str, str]]:
+    """複数 CSV を 1つの lookup 辞書へまとめる。
+
+    各ファイルを ``CsvReader(path).index(key_col)`` で読み、1つの辞書にマージして
+    返す。ファイルを跨いで同じキーが見つかった場合は ``CsvRowDuplicateKeyError``
+    を投げて停止する。**黙って後勝ちにしない**: どちらを採用したか分からないまま
+    突合が進むと結果が静かにブレるため。
+
+    1ファイル内の重複は ``CsvReader.index()`` がそのまま例外を上げるので、ここで
+    別途チェックしない。
+
+    Args:
+        paths: 対象 CSV ファイルパスのシーケンス。順序は結果の辞書に反映されない
+               （キーで引ける形式のため）。
+        key_col: インデックスに使う列名。
+
+    Returns:
+        ``{キー: 行データ}`` のマージ済み辞書。
+
+    Raises:
+        CsvRowDuplicateKeyError: ファイルを跨いで同じキーが見つかった場合。
+            ``duplicates`` には ``{キー: 出現ファイル数}`` の dict、
+            ``path`` には対象ファイルを区切って並べた文字列を乗せる。
+    """
+    seen_counts: Counter[str] = Counter()
+    result: dict[str, dict[str, str]] = {}
+    for path in paths:
+        for key, row in CsvReader(path).index(key_col).items():
+            seen_counts[key] += 1
+            if key not in result:
+                result[key] = row
+    duplicates = {key: count for key, count in seen_counts.items() if count > 1}
+    if duplicates:
+        # 既存 CsvRowDuplicateKeyError を再利用（新規例外を増やさない）。
+        # path には対象ファイルを区切って並べた文字列を渡し、どのファイル同士で
+        # 衝突したか利用者が特定できるようにする
+        raise CsvRowDuplicateKeyError(
+            key_col,
+            duplicates,
+            ", ".join(str(Path(p)) for p in paths),
+        )
+    return result
+
+
 class CsvReader(CsvBase):
     """CSV ファイルの読み込みユーティリティ。
 

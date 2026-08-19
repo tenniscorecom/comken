@@ -178,8 +178,7 @@ class HolidayCalendar:
         # 呼ばれたときに内閣府への強制再取得を指示するため。
         instance = cls(merged)
         instance._refreshable_sources = [
-            s for s in sources_list
-            if isinstance(s, RefreshableHolidaySource)
+            s for s in sources_list if isinstance(s, RefreshableHolidaySource)
         ]
         return instance
 
@@ -198,8 +197,7 @@ class HolidayCalendar:
             return False
         if holiday.approximate:
             logger.warning(
-                "祝日 %s 「%s」 は計算式による暫定値です。"
-                "実際とは ±1 日前後する可能性があります。",
+                "祝日 %s 「%s」 は計算式による暫定値です。実際とは ±1 日前後する可能性があります。",
                 target.isoformat(),
                 holiday.name,
             )
@@ -329,7 +327,7 @@ class HolidayCalendar:
         """
         if not self._refreshable_sources:
             return
-        today_year = _dt.date.today().year
+        today_year = _dt.date.today().year  # noqa: DTZ011
         if target.year not in (today_year, today_year + 1):
             return
         if today_year in self._refreshed_keys:

@@ -218,3 +218,21 @@ class ConfigRequiredKeysMissingError(ConfigError):
             f"config.ini に必要な項目がありません。\n{items}\n"
             f"このファイルへ追加してください: {path}"
         )
+
+
+class ConfigInvalidValueError(ConfigError):
+    """config.ini の値が想定と違う
+
+    発生箇所: config.int_value() / config.text()
+
+    対処:
+        表示されたセクション・キーの値を、表示された形式に書き換える
+    """
+
+    def __init__(self, section: str, key: str, value: object, expected: str) -> None:
+        # 非エンジニアが config.ini を直せる文面にする。「想定と違う」とだけ書くと
+        # どこを直せばよいか分からないため、表示される現在の値と「こう書くべき」を添える
+        super().__init__(
+            f"config.ini の [{section}] の {key} の値が想定と違います: {value!r}\n"
+            f"この項目は {expected} で書いてください。"
+        )

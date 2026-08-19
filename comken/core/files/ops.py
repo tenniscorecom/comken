@@ -5,11 +5,12 @@ import shutil
 import sys
 import tempfile
 import time
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
 from comken.core.timer import measure
+from comken.exceptions import FileDeletionError
 from comken.runtime import dry_run_log, is_dry_run
 
 logger = logging.getLogger(__name__)
@@ -231,6 +232,42 @@ def delete_file(path: str | Path, missing_ok: bool = False) -> None:
     # NOTE: ファイル削除は不可逆なので、何を消したかは INFO で残す
     path.unlink(missing_ok=missing_ok)
     logger.info("ファイルを削除しました: %s", path)
+
+
+def delete_files(paths: Iterable[str | Path], missing_ok: bool = True) -> None:
+    """複数のファイルをまとめて削除する。1件目で失敗しても残りは削除する。
+
+    各ファイルは ``delete_file()`` に委譲するため、dry-run 対応（ログを出して
+    スキップ・dry-run 外で実際に削除）と、「何を消したか」の INFO ログがそのまま効く。
+
+    削除できなかったファイルはあきらめずに全部試したうえで、``FileDeletionError`` に
+    まとめて乗せて返す。呼び出し側が「消せたものは消したい」場面で使われる想定。
+    1件目で例外を投げて止まると、消せたはずの別ファイルまで消さずに終わってしまう。
+
+    Args:
+        paths: 削除対象ファイルのパス（Iterable。str / Path 混在可）。
+        missing_ok: True（既定）なら対象が存在しない場合は失敗扱いにしない。
+
+    Raises:
+        FileDeletionError: 1件以上のファイルを削除できなかった場合。
+            残ったパスは ``.remaining`` で読める。
+    """
+    remaining: list[Path] = []
+    for path in paths:
+        try:
+            delete_file(path, missing_ok=missing_ok)
+        except FileNotFoundError:
+            # missing_ok=False & 対象無し は想定外（呼び出し側が「確実に存在する」と
+            # 表明したのに無いケース）。権限・排他と区別するためそのまま伝播する。
+            # remaining に混ぜて返すのは利用者から見ると原因が分からなくなる
+            raise
+        except OSError as e:
+            # ERROR ログは1件ずつ残し、最後にまとめて例外で報告する。
+            # 1件目で例外を上げて残りを失うと、利用者がファイル単位の追跡をできなくなる
+            logger.error("ファイルを削除できませんでした: %s (%s)", path, e)
+            remaining.append(Path(path))
+    if remaining:
+        raise FileDeletionError(remaining)
 
 
 def cleanup_stale_tmp(target: str | Path, max_age_seconds: float = 3600) -> None:

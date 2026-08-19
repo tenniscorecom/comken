@@ -63,6 +63,7 @@ def test_core_exposes_parts() -> None:
         "copy_file",
         "date_in_name",
         "delete_file",
+        "delete_files",
         "diff_row",
         "diff_rows",
         "local_copy",

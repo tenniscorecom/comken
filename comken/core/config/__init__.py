@@ -40,6 +40,7 @@ from comken.core.files.ops import project_dir
 from comken.exceptions import (
     ConfigCreatedFromExampleError,
     ConfigFileNotFoundError,
+    ConfigInvalidValueError,
     ConfigKeyNotFoundError,
     ConfigLowerCaseNameError,
     ConfigRequiredKeysMissingError,
@@ -337,6 +338,96 @@ def mapping(section: str) -> dict[str, str]:
     if _singleton is None:
         _singleton = Config()
     return _singleton.mapping(section)
+
+
+def int_value(name: str, *, minimum: int | None = None, maximum: int | None = None) -> int:
+    """config.ini の値を int として読み、範囲を確かめて返す。
+
+    整数に変換できない・範囲外なら ``ConfigInvalidValueError`` を投げる。
+    セクションやキーが無い場合は ``ConfigSectionNotFoundError`` /
+    ``ConfigKeyNotFoundError`` がそのまま飛ぶ（もう一度 config.ini を開いて
+    書き足してもらう必要があるため、型違いと同じ例外に潰さない）。
+
+    Args:
+        name: ``"SECTION.KEY"`` 形式。require() と同じドット区切り文字列。
+        minimum: 許容する最小値（含む）。省略なら下限なし。
+        maximum: 許容する最大値（含む）。省略なら上限なし。
+
+    Raises:
+        ConfigInvalidValueError: 整数が無い／範囲外。
+        ConfigSectionNotFoundError: name のセクションが無い。
+        ConfigKeyNotFoundError: name のキーが無い。
+    """
+    section, _, key = name.partition(".")
+    raw = _get_singleton_value(section, key)
+    # bool は int のサブクラスのため、先に型判定する。「true / false」を整数として
+    # 通してしまうと、分かりにくい事故になる（int_value として 0/1 を期待している箇所で
+    # 設定ミスの true/false が混ざる）
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        raise ConfigInvalidValueError(section.strip().upper(), key.strip().upper(), raw, "整数")
+    if minimum is not None and raw < minimum:
+        raise ConfigInvalidValueError(
+            section.strip().upper(), key.strip().upper(), raw, f"{minimum} 以上の整数"
+        )
+    if maximum is not None and raw > maximum:
+        raise ConfigInvalidValueError(
+            section.strip().upper(), key.strip().upper(), raw, f"{maximum} 以下の整数"
+        )
+    return raw
+
+
+def text(name: str, *, allow_empty: bool = False) -> str:
+    """config.ini の値を文字列として読み、空欄を確かめて返す。
+
+    戻り値は ``_parse_value`` と同じ扱い（``configparser`` がパース時に
+    前後の空白を trim した結果）。``_parse_value`` とは違って型変換を挟まない
+    ため、 ``int_value`` のように int 化を強制せずに ``str`` として取り出せる。
+
+    空判定にだけ ``strip()`` を使う。``allow_empty=False``（既定）で、前後の
+    空白を除いた結果が空のときは ``ConfigInvalidValueError``。
+
+    Args:
+        name: ``"SECTION.KEY"`` 形式。
+        allow_empty: True なら空欄も許容する。False（既定）なら前後の空白を
+                     除いた結果が空のとき ``ConfigInvalidValueError``。
+
+    Raises:
+        ConfigInvalidValueError: 文字列以外の値／空欄。
+        ConfigSectionNotFoundError: name のセクションが無い。
+        ConfigKeyNotFoundError: name のキーが無い。
+    """
+    section, _, key = name.partition(".")
+    raw = _get_singleton_value(section, key)
+    if not isinstance(raw, str):
+        raise ConfigInvalidValueError(section.strip().upper(), key.strip().upper(), raw, "文字列")
+    if not allow_empty and not raw.strip():
+        raise ConfigInvalidValueError(
+            section.strip().upper(),
+            key.strip().upper(),
+            raw,
+            "空白以外の文字（前後の空白だけでない文字列）",
+        )
+    return raw
+
+
+def _get_singleton_value(section: str, key: str) -> object:
+    """遅延シングルトンから SECTION.KEY の生値を取り出す（内部ヘルパー）。
+
+    Args:
+        section: セクション名（前後の空白除去＋大文字化は呼び出し側の責務）。
+        key: キー名（前後の空白除去＋大文字化は呼び出し側の責務）。
+
+    Raises:
+        ConfigSectionNotFoundError: セクションが無い。
+        ConfigKeyNotFoundError: キーが無い。
+    """
+    global _singleton
+    if _singleton is None:
+        # 初回呼び出し時にまとめて config.ini を読む。
+        # 個別の read() が要るのはテストで `from comken import config` してから
+        # config.read(path) を呼ぶ運用だけで、その場合もここで上書きされる
+        _singleton = Config()
+    return getattr(getattr(_singleton, section.strip().upper()), key.strip().upper())
 
 
 def require(*names: str) -> None:

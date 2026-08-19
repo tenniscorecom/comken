@@ -9,6 +9,7 @@ lazy に振り分ける。
 sys.modules で確認する。`download_report` / `download_scheduled` のような
 service.py 側の関数を import したときは、service.py が読み込まれて良い。
 """
+
 import sys
 
 import pytest
@@ -29,6 +30,7 @@ def test_get_scheduled_report_does_not_load_service(monkeypatch: pytest.MonkeyPa
     """`get_scheduled_report` を import しても `service` は読み込まれない。"""
     _drop_service(monkeypatch)
     from comken.services.salesforce_downloader import get_scheduled_report  # noqa: F401
+
     assert "comken.services.salesforce_downloader.service" not in sys.modules, (
         "get_scheduled_report の import で service まで読み込まれている。"
         "__init__.py の __getattr__ が service を引いている可能性"
@@ -39,6 +41,7 @@ def test_file_path_of_does_not_load_service(monkeypatch: pytest.MonkeyPatch) -> 
     """`file_path_of` も同様。"""
     _drop_service(monkeypatch)
     from comken.services.salesforce_downloader import file_path_of  # noqa: F401
+
     assert "comken.services.salesforce_downloader.service" not in sys.modules
 
 
@@ -46,6 +49,7 @@ def test_load_master_does_not_load_service(monkeypatch: pytest.MonkeyPatch) -> N
     """`load_master` は master 側に常駐する関数。service は要らない。"""
     _drop_service(monkeypatch)
     from comken.services.salesforce_downloader import load_master  # noqa: F401
+
     assert "comken.services.salesforce_downloader.service" not in sys.modules
 
 
@@ -53,6 +57,7 @@ def test_report_entry_does_not_load_service(monkeypatch: pytest.MonkeyPatch) -> 
     """`ReportEntry` も master 側に常駐。"""
     _drop_service(monkeypatch)
     from comken.services.salesforce_downloader import ReportEntry  # noqa: F401
+
     assert "comken.services.salesforce_downloader.service" not in sys.modules
 
 
@@ -60,6 +65,7 @@ def test_shared_report_ids_does_not_load_service(monkeypatch: pytest.MonkeyPatch
     """`shared_report_ids` も master 側。"""
     _drop_service(monkeypatch)
     from comken.services.salesforce_downloader import shared_report_ids  # noqa: F401
+
     assert "comken.services.salesforce_downloader.service" not in sys.modules
 
 
@@ -75,10 +81,12 @@ def test_download_report_does_not_crash(monkeypatch: pytest.MonkeyPatch) -> None
     ここでは「import 経路が壊れていない」ことだけを確認する。
     """
     from comken.services.salesforce_downloader import download_report
+
     assert download_report is not None
 
 
 def test_download_scheduled_does_not_crash(monkeypatch: pytest.MonkeyPatch) -> None:
     """`download_scheduled` も同様。"""
     from comken.services.salesforce_downloader import download_scheduled
+
     assert download_scheduled is not None

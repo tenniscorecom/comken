@@ -28,7 +28,7 @@ from comken.core.files import (
 )
 from comken.core.files.ops import copy_to_local_if_large, project_dir
 from comken.core.text import normalize, remove_spaces, strip_spaces
-from comken.core.wait import wait_minutes, wait_seconds, wait_until
+from comken.core.wait import wait_seconds, wait_until
 from comken.exceptions import ColumnNotFoundError, DownloadTimeoutError
 from comken.toolbox.browser.download import DownloadDir
 from comken.toolbox.windows import Paths

@@ -55,9 +55,7 @@ def wait_minutes(n: float) -> None:
     time.sleep(n * 60)
 
 
-def wait_until(
-    condition: Callable[[], bool], timeout: float = 60, interval: float = 1.0
-) -> bool:
+def wait_until(condition: Callable[[], bool], timeout: float = 60, interval: float = 1.0) -> bool:
     """条件が True になるまで繰り返し確認する。
 
     Args:

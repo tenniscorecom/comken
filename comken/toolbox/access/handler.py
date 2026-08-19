@@ -16,8 +16,8 @@ import win32com.client
 
 from comken.constants import Encoding
 from comken.core.clock import now
-from comken.core.files.base import FileBase
 from comken.core.files import DateNameBuilder
+from comken.core.files.base import FileBase
 from comken.core.timer import measure
 from comken.exceptions import (
     AccessBackupError,

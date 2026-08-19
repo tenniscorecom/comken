@@ -1241,6 +1241,31 @@ Args:
 Raises:
     FileNotFoundError: ファイルが存在せず missing_ok が False の場合。
 
+### `delete_files`
+
+```text
+def delete_files(paths: Iterable[str | Path], missing_ok: bool=True) -> None:
+```
+
+#### 説明
+
+複数のファイルをまとめて削除する。1件目で失敗しても残りは削除する。
+
+各ファイルは ``delete_file()`` に委譲するため、dry-run 対応（ログを出して
+スキップ・dry-run 外で実際に削除）と、「何を消したか」の INFO ログがそのまま効く。
+
+削除できなかったファイルはあきらめずに全部試したうえで、``FileDeletionError`` に
+まとめて乗せて返す。呼び出し側が「消せたものは消したい」場面で使われる想定。
+1件目で例外を投げて止まると、消せたはずの別ファイルまで消さずに終わってしまう。
+
+Args:
+    paths: 削除対象ファイルのパス（Iterable。str / Path 混在可）。
+    missing_ok: True（既定）なら対象が存在しない場合は失敗扱いにしない。
+
+Raises:
+    FileDeletionError: 1件以上のファイルを削除できなかった場合。
+        残ったパスは ``.remaining`` で読める。
+
 ### `local_copy`
 
 ```text
@@ -1825,6 +1850,28 @@ class ExcelHeadersTooFewError(ExcelError):
 def __init__(self, expected: int, actual: int) -> None:
 ```
 
+### `ExcelSaveNotCompletedError`
+
+```text
+class ExcelSaveNotCompletedError(ExcelError):
+```
+
+#### 説明
+
+Excel の保存が成功したように見えて、ファイルが無い
+
+発生箇所: ExcelWriter.save()
+
+対処:
+    Excel が他で開かれていないか、ディスクの空き容量があるかを確認し、
+    もう一度保存を実行する
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path | str) -> None:
+```
+
 ### `FileFormatMismatchError`
 
 ```text
@@ -2290,6 +2337,27 @@ config.ini の必要な節がない
 def __init__(self, name: str, existing: list[str], path: Path | str | None=None) -> None:
 ```
 
+### `ConfigInvalidValueError`
+
+```text
+class ConfigInvalidValueError(ConfigError):
+```
+
+#### 説明
+
+config.ini の値が想定と違う
+
+発生箇所: config.int_value() / config.text()
+
+対処:
+    表示されたセクション・キーの値を、表示された形式に書き換える
+
+#### `__init__`
+
+```text
+def __init__(self, section: str, key: str, value: object, expected: str) -> None:
+```
+
 ### `ConfigKeyNotFoundError`
 
 ```text
@@ -2332,6 +2400,31 @@ class UnsupportedFileSuffixError(ComkenError):
 
 ```text
 def __init__(self, path: Path, suffixes: tuple[str, ...]) -> None:
+```
+
+### `FileDeletionError`
+
+```text
+class FileDeletionError(ComkenError):
+```
+
+#### 説明
+
+ファイルを削除できなかった
+
+発生箇所: comken.core.files.delete_files()
+
+対処:
+    他のプロセスがファイルを掴んでいないか、読み取り専用になっていないかを確認して
+    もう一度実行する。消せたファイルは消えている
+
+Attributes:
+    remaining: 削除できなかったファイルのパス一覧。
+
+#### `__init__`
+
+```text
+def __init__(self, remaining: list[Path]) -> None:
 ```
 
 ### `OutlookError`
@@ -5442,6 +5535,37 @@ Args:
 Notes:
     複数の PC から同じ CSV へ同時に追記する使い方は想定していない。
 
+### `index_files`
+
+```text
+def index_files(paths: Sequence[str | Path], key_col: str) -> dict[str, dict[str, str]]:
+```
+
+#### 説明
+
+複数 CSV を 1つの lookup 辞書へまとめる。
+
+各ファイルを ``CsvReader(path).index(key_col)`` で読み、1つの辞書にマージして
+返す。ファイルを跨いで同じキーが見つかった場合は ``CsvRowDuplicateKeyError``
+を投げて停止する。**黙って後勝ちにしない**: どちらを採用したか分からないまま
+突合が進むと結果が静かにブレるため。
+
+1ファイル内の重複は ``CsvReader.index()`` がそのまま例外を上げるので、ここで
+別途チェックしない。
+
+Args:
+    paths: 対象 CSV ファイルパスのシーケンス。順序は結果の辞書に反映されない
+           （キーで引ける形式のため）。
+    key_col: インデックスに使う列名。
+
+Returns:
+    ``{キー: 行データ}`` のマージ済み辞書。
+
+Raises:
+    CsvRowDuplicateKeyError: ファイルを跨いで同じキーが見つかった場合。
+        ``duplicates`` には ``{キー: 出現ファイル数}`` の dict、
+        ``path`` には対象ファイルを区切って並べた文字列を乗せる。
+
 
 ## `from comken.toolbox.excel import ...`
 
@@ -5583,7 +5707,7 @@ Args:
 
 ```text
 @measure
-def save(self, path: str | Path | None=None) -> None:
+def save(self, path: str | Path | None=None, read_pw: str='', write_pw: str='') -> None:
 ```
 
 ##### 説明
@@ -5593,8 +5717,24 @@ def save(self, path: str | Path | None=None) -> None:
 ローカルコピーで開いている場合も、省略時の保存先は元のファイル
 （一時コピーに保存すると close() でコピーごと消えてしまうため）。
 
+read_pw / write_pw のどちらかを指定すると、パスワード保護付きの
+ファイルとして保存する。openpyxl だけではパスワード保存ができないため、
+Excel COM を経由する。Excel が入っていない環境ではパスワード付き保存は
+できないため、入っている PC で実行すること。
+
 Args:
     path: 保存先のパス。省略すると開いた元のファイルに上書き保存する。
+    read_pw: 読み取りパスワード。指定するとパスワード保護された
+             ファイルとして保存する（COM が必要な操作）。
+             設定した拡張子のファイル形式と中身の形式が一致しないと
+             Excel 側で警告が出る。
+    write_pw: 書き込みパスワード。指定すると開くときに書き込みパスワード
+             を要求する形で保存する（COM が必要な操作）。
+
+Raises:
+    ExcelSaveNotCompletedError: 保存後にファイルが見当たらない場合。
+    ExcelApplicationNotAvailableError: パスワード付きで保存しようとした
+        が、Excel が見つからない環境で実行した場合。
 
 #### `run_macro`
 
@@ -5905,7 +6045,7 @@ Args:
 #### `__init__`
 
 ```text
-def __init__(self, url: str=DEFAULT_URL, cache_path: Path | str | None=None, *, ttl_seconds: int=DEFAULT_TTL_SECONDS, encoding: str='cp932', fetch_timeout_seconds: float=30.0) -> None:
+def __init__(self, url: str=DEFAULT_URL, cache_path: Path | str | None=None, *, ttl_seconds: int=DEFAULT_TTL_SECONDS, encoding: str='cp932', fetch_timeout_seconds: float=30.0, refresh_timeout_seconds: float=0.5) -> None:
 ```
 
 #### `load`
@@ -5923,6 +6063,31 @@ Returns:
 
 Raises:
     HolidayCalendarFetchError: ダウンロードもキャッシュも読めない場合。
+
+#### `refresh`
+
+```text
+def refresh(self) -> list[Holiday]:
+```
+
+##### 説明
+
+TTL を無視して内閣府から強制再取得する（業務フローを止めない短時間タイムアウト）。
+
+``HolidayCalendar.is_business_day(target)`` などでターゲットが
+今年/来年で内閣府 CSV に該当データが無い場合に呼ばれる。
+**タイムアウトは ``refresh_timeout_seconds``（既定 0.5 秒）** にして、
+ネットワークが遅い環境でも業務を止めない。
+
+取得できなくても例外は投げず、**キャッシュがあれば警告ログを出して
+キャッシュで代用**する（``load()`` と同じ挙動）。キャッシュも無い
+ときだけ ``HolidayCalendarFetchError`` を送出する。
+
+Returns:
+    内閣府の祝日を日付順に並べた ``Holiday`` のリスト。
+
+Raises:
+    HolidayCalendarFetchError: ダウンロードに失敗し、キャッシュも無い場合。
 
 ### `ComkenMasterTableSource`
 
@@ -6016,6 +6181,11 @@ class Holiday:
 Attributes:
     date: 祝日の日付（時刻・タイムゾーンは持たない業務日付）。
     name: 祝日の日本語名称（例: "建国記念の日"）。
+    approximate: ``True`` なら、計算式など内閣府発表と ±1 日前後する
+        可能性がある値。``HolidayCalendar.is_holiday`` などで該当 Holiday
+        を返したときに WARNING ログを出して、業務フローを止めずに気づける
+        ようにする。デフォルトは ``False``（内閣府 CSV 由来または確実な
+        計算結果）。
 
 ### `HolidayCalendar`
 
@@ -6077,12 +6247,22 @@ def from_sources(cls, sources: Iterable[HolidaySource]) -> 'HolidayCalendar':
 
 複数の ``HolidaySource`` を合体させる（内閣府 + 管理表など）。
 
+**カスケード動作**: 前の source が ``HolidayCalendarFetchError``
+（内閣府の取得失敗・``requests`` 不在など）を投げたら次の source へ
+フォールバックする。**内閣府が取れない環境で Computed に切り替えたい**
+ケース（オフライン BO 環境・期限切れ）を想定。
+全部失敗したら最後の ``HolidayCalendarFetchError`` をそのまま送出。
+
 Args:
     sources: ``load()`` を持つ ``HolidaySource`` の iterable。
         同じ日付が複数ソースにあれば **最初のソースの Holiday** が優先される。
 
 Returns:
     全ソースを結合した ``HolidayCalendar``。
+
+Raises:
+    HolidayCalendarFetchError: 全 source が ``HolidayCalendarFetchError``
+        を投げた場合、最後のエラーをそのまま送出する。
 
 #### `is_holiday`
 
@@ -6093,6 +6273,10 @@ def is_holiday(self, target: _dt.date) -> bool:
 ##### 説明
 
 ``target`` が祝日（または休日）なら ``True``。
+
+ターゲットが今年/来年なら、内閣府 source への強制再取得を試みる
+（今年中に 1 回だけ。失敗時はサイレント）。
+計算式由来の暫定値（``approximate=True``）を返すときは WARNING ログ。
 
 #### `holidays_in`
 

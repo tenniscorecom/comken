@@ -45,9 +45,7 @@ def retry(
     # 想定と違うパラメータで動かないようにするため。silent な max(1) は避け、
     # 期待と違う設定は明示的に失敗させる。
     if not isinstance(times, int) or isinstance(times, bool) or times < 1:
-        raise ValueError(
-            f"times は 1 以上の整数で指定してください (got {times!r})"
-        )
+        raise ValueError(f"times は 1 以上の整数で指定してください (got {times!r})")
     if wait < 0:
         raise ValueError(f"wait は 0 以上で指定してください (got {wait!r})")
 

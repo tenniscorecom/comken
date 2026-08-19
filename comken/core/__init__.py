@@ -26,6 +26,7 @@ from comken.core.files.finder import date_in_name as date_in_name
 from comken.core.files.name import DateNameBuilder as DateNameBuilder
 from comken.core.files.ops import copy_file as copy_file
 from comken.core.files.ops import delete_file as delete_file
+from comken.core.files.ops import delete_files as delete_files
 from comken.core.files.ops import local_copy as local_copy
 from comken.core.files.ops import move_file as move_file
 from comken.core.files.ops import project_dir as project_dir
@@ -52,6 +53,7 @@ __all__ = [
     "copy_file",
     "date_in_name",
     "delete_file",
+    "delete_files",
     "diff_row",
     "diff_rows",
     "local_copy",

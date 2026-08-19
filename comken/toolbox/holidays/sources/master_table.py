@@ -102,11 +102,7 @@ def _rows_to_holidays(
         )
 
     first_row = rows[0]
-    missing = [
-        column
-        for column in (date_column, name_column)
-        if column not in first_row
-    ]
+    missing = [column for column in (date_column, name_column) if column not in first_row]
     if missing:
         raise HolidayCalendarSourceError(
             str(path),

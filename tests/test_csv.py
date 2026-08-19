@@ -476,3 +476,50 @@ class TestCsvWriterTransactionalWrite:
                 [{"名前": "佐藤"}, {"名前": "😀"}]
             )
         assert path.read_text(encoding="cp932") == original
+
+
+class TestIndexFiles:
+    """index_files() のテスト。複数 CSV を 1つの lookup 辞書へまとめる。"""
+
+    def test_merges_two_files(self, tmp_path):
+        """複数ファイルを 1つの辞書にマージして返すこと。"""
+        from comken.toolbox.csv import index_files
+
+        path_a = tmp_path / "a.csv"
+        path_b = tmp_path / "b.csv"
+        path_a.write_text("注文番号,金額\nA001,1000\n", encoding="utf-8")
+        path_b.write_text("注文番号,金額\nB001,2000\n", encoding="utf-8")
+
+        result = index_files([path_a, path_b], "注文番号")
+
+        assert set(result) == {"A001", "B001"}
+        assert result["A001"]["金額"] == "1000"
+        assert result["B001"]["金額"] == "2000"
+
+    def test_raises_on_cross_file_duplicate(self, tmp_path):
+        """ファイルを跨いで同じキーがあれば CsvRowDuplicateKeyError で停止すること。"""
+        from comken.toolbox.csv import index_files
+
+        path_a = tmp_path / "a.csv"
+        path_b = tmp_path / "b.csv"
+        path_a.write_text("注文番号,金額\nA001,1000\n", encoding="utf-8")
+        path_b.write_text("注文番号,金額\nA001,2000\n", encoding="utf-8")
+
+        with pytest.raises(CsvRowDuplicateKeyError) as excinfo:
+            index_files([path_a, path_b], "注文番号")
+
+        message = str(excinfo.value)
+        assert "A001" in message
+        # どちらのファイルが衝突したか利用者が特定できる
+        assert str(path_a) in message
+        assert str(path_b) in message
+
+    def test_propagates_in_file_duplicate(self, tmp_path):
+        """1ファイル内の重複は CsvReader.index() がそのまま例外にすること。"""
+        from comken.toolbox.csv import index_files
+
+        path_a = tmp_path / "a.csv"
+        path_a.write_text("注文番号,金額\nA001,1000\nA001,2000\n", encoding="utf-8")
+
+        with pytest.raises(CsvRowDuplicateKeyError):
+            index_files([path_a], "注文番号")

@@ -240,7 +240,7 @@ class TestNextBusinessDay:
         cal = _fixture_calendar()
         # 2024-01-01 は祝日かつ月曜 → 翌営業は 2024-01-02 の火曜
         assert cal.next_business_day(_dt.date(2024, 1, 1), skip_weekends=False) == _dt.date(
-2024, 1, 2
+            2024, 1, 2
         )
 
 
@@ -292,9 +292,7 @@ class TestExpiringWarning:
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         """残り 30 日未満のとき WARNING が出る（同じ日で 1度だけ）。"""
-        cal = HolidayCalendar(
-            [Holiday(date=_dt.date(2024, 5, 5), name="こどもの日")]
-        )
+        cal = HolidayCalendar([Holiday(date=_dt.date(2024, 5, 5), name="こどもの日")])
         today = _dt.date(2024, 4, 20)  # 残り 15 日
         with caplog.at_level(logging.WARNING, logger="comken.toolbox.holidays.calendar"):
             cal.is_business_day(today)
@@ -307,21 +305,15 @@ class TestExpiringWarning:
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         """30日以上先なら警告は出ない。"""
-        cal = HolidayCalendar(
-            [Holiday(date=_dt.date(2025, 5, 5), name="こどもの日")]
-        )
+        cal = HolidayCalendar([Holiday(date=_dt.date(2025, 5, 5), name="こどもの日")])
         today = _dt.date(2024, 1, 1)
         with caplog.at_level(logging.WARNING, logger="comken.toolbox.holidays.calendar"):
             cal.is_business_day(today)
         assert not [r for r in caplog.records if r.levelno == logging.WARNING]
 
-    def test_warning_not_repeated_on_next_day(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_warning_not_repeated_on_next_day(self, caplog: pytest.LogCaptureFixture) -> None:
         """翌日にもう一度 ``is_business_day`` を呼ぶと、その日では 1度だけ出る。"""
-        cal = HolidayCalendar(
-            [Holiday(date=_dt.date(2024, 5, 5), name="こどもの日")]
-        )
+        cal = HolidayCalendar([Holiday(date=_dt.date(2024, 5, 5), name="こどもの日")])
         with caplog.at_level(logging.WARNING, logger="comken.toolbox.holidays.calendar"):
             cal.is_business_day(_dt.date(2024, 4, 20))  # 残り 15 日 → 警告
             cal.is_business_day(_dt.date(2024, 4, 21))  # 残り 14 日 → 警告（この日では 1度目）
@@ -355,9 +347,7 @@ class TestFromSources:
         assert _dt.date(2024, 1, 1) in dates
         assert _dt.date(2024, 11, 4) in dates
 
-    def test_first_source_wins_on_duplicate_date(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_first_source_wins_on_duplicate_date(self, caplog: pytest.LogCaptureFixture) -> None:
         """同じ日付が複数のソースにあるとき、先勝ち + 警告ログ。"""
         from comken.toolbox.holidays.csv_source import parse_cabinet_office_text
 
@@ -372,9 +362,7 @@ class TestFromSources:
                 return parse_cabinet_office_text(self._text, source="inline")
 
         with caplog.at_level(logging.WARNING, logger="comken.toolbox.holidays.calendar"):
-            cal = HolidayCalendar.from_sources(
-                [_InlineSource(sample_a), _InlineSource(sample_b)]
-            )
+            cal = HolidayCalendar.from_sources([_InlineSource(sample_a), _InlineSource(sample_b)])
         names = tuple(cal.holiday_names(_dt.date(2024, 1, 1)))
         # 先勝ちなので「内閣府」の名称が残る
         assert names == ("元日（内閣府）",)
@@ -409,9 +397,8 @@ class TestModuleLevelFunction:
     def test_delegates_to_calendar(self) -> None:
         """``HolidayCalendar.is_business_day`` に委譲する。"""
         cal = _fixture_calendar()
-        assert (
-            is_business_day(_dt.date(2024, 1, 2), calendar=cal)
-            == cal.is_business_day(_dt.date(2024, 1, 2))
+        assert is_business_day(_dt.date(2024, 1, 2), calendar=cal) == cal.is_business_day(
+            _dt.date(2024, 1, 2)
         )
         # 祝日側は ``False``
         assert is_business_day(_dt.date(2024, 1, 1), calendar=cal) is False
@@ -444,7 +431,9 @@ class TestCabinetOfficeCsvSource:
     def test_uses_cache_when_fresh(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """TTL 内ならキャッシュをそのまま使う（ダウンロードを呼ばない）。"""
         cache = tmp_path / "cache.csv"
-        cache.write_bytes("国民の祝日・休日月日,国民の祝日・休日名称\n2024-01-01,元日\n".encode("cp932"))
+        cache.write_bytes(
+            "国民の祝日・休日月日,国民の祝日・休日名称\n2024-01-01,元日\n".encode("cp932")
+        )
         # mtime を今に更新
         import os
 
@@ -485,8 +474,8 @@ class TestCabinetOfficeCsvSource:
         # 昔 (2000年) の mtime にして TTL 経過を表現する
         os.utime(cache, (946684800, 946684800))
 
-        body = (
-            "国民の祝日・休日月日,国民の祝日・休日名称\n2024-02-11,建国記念の日\n".encode("cp932")
+        body = "国民の祝日・休日月日,国民の祝日・休日名称\n2024-02-11,建国記念の日\n".encode(
+            "cp932"
         )
         called = {"count": 0}
 
@@ -649,9 +638,7 @@ class TestExceptionHierarchy:
             ),
         ],
     )
-    def test_isinstance_of_base(
-        self, exception: HolidayCalendarError, expected_name: str
-    ) -> None:
+    def test_isinstance_of_base(self, exception: HolidayCalendarError, expected_name: str) -> None:
         """全ての個別例外が ``HolidayCalendarError`` および ``ComkenError`` の派生。"""
         assert isinstance(exception, HolidayCalendarError)
         assert isinstance(exception, Exception)
@@ -837,9 +824,7 @@ class TestComputedCompanyHolidays:
         # ``ComputedHolidaySource`` も同じモジュールのクラスなので再ロード後のクラスを返す
         return computed_module.ComputedHolidaySource(from_year=2026, to_year=2026)
 
-    def test_computed_company_holidays_single(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_computed_company_holidays_single(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """単発会社の休日 (int 月, int 日, name) が ``year`` 年で出てくる。"""
         source = self._with_company_holidays(monkeypatch, [(4, 1, "創立記念日")])
         holidays = {h.date: h.name for h in source.load()}
@@ -849,9 +834,7 @@ class TestComputedCompanyHolidays:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """12/29 - 1/3 を年またぎで正しく展開（両端部分の両方を含む）。"""
-        source = self._with_company_holidays(
-            monkeypatch, [(12, 29, 1, 3, "年末年始休暇")]
-        )
+        source = self._with_company_holidays(monkeypatch, [(12, 29, 1, 3, "年末年始休暇")])
         holidays = {h.date: h.name for h in source.load()}
         # 12/29, 12/30, 12/31 と 1/1, 1/2, 1/3 が全部「年末年始休暇」になる
         for day in (29, 30, 31):
@@ -868,9 +851,7 @@ class TestComputedCompanyHolidays:
         for day in (13, 14, 15, 16):
             assert holidays[_dt.date(2026, 8, day)] == "夏季休暇"
 
-    def test_computed_company_holidays_specific_year(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_computed_company_holidays_specific_year(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """特定年のみ (_dt.date, _dt.date, name) 形式。"""
         entries = [(_dt.date(2026, 11, 4), _dt.date(2026, 11, 5), "臨時休業")]
         source = self._with_company_holidays(monkeypatch, entries)
@@ -918,8 +899,7 @@ class TestComputedSourceConstraints:
         )
 
         assert "requests" not in sys.modules, (
-            "computed.py は requests を import すべきではない"
-            "（純粋計算で動くソース）。"
+            "computed.py は requests を import すべきではない（純粋計算で動くソース）。"
         )
 
         # load() を呼んでも requests は読まれない
@@ -1060,10 +1040,12 @@ class TestHolidayCalendarCascade:
             def load(self):
                 raise HolidayCalendarFetchError("https://example/", "network")
 
-        calendar = HolidayCalendar.from_sources([
-            FailingCabinet(),
-            ComputedHolidaySource(from_year=2026, to_year=2026),
-        ])
+        calendar = HolidayCalendar.from_sources(
+            [
+                FailingCabinet(),
+                ComputedHolidaySource(from_year=2026, to_year=2026),
+            ]
+        )
 
         # Computed の固定パターンの祝日が反映されている
         assert any(h.name == "憲法記念日" for h in calendar.all_holidays())
@@ -1095,11 +1077,13 @@ class TestHolidayCalendarRefresh:
             def load(self):
                 return []
 
-        calendar = HolidayCalendar.from_sources([
-            FakeCabinet(),
-            ComputedHolidaySource(from_year=2026, to_year=2026),
-        ])
-        this_year = _dt.date.today().year
+        calendar = HolidayCalendar.from_sources(
+            [
+                FakeCabinet(),
+                ComputedHolidaySource(from_year=2026, to_year=2026),
+            ]
+        )
+        this_year = _dt.date.today().year  # noqa: DTZ011
         calendar.is_holiday(_dt.date(this_year, 1, 1))
         assert called["count"] >= 1
 
@@ -1115,30 +1099,30 @@ class TestHolidayCalendarRefresh:
             def load(self):
                 return []
 
-        calendar = HolidayCalendar.from_sources([
-            FakeCabinet(),
-            ComputedHolidaySource(from_year=2026, to_year=2026),
-        ])
+        calendar = HolidayCalendar.from_sources(
+            [
+                FakeCabinet(),
+                ComputedHolidaySource(from_year=2026, to_year=2026),
+            ]
+        )
         calendar.is_holiday(_dt.date(2020, 1, 1))  # 2020 年（過去）
         assert called["count"] == 0
 
-    def test_is_holiday_warns_on_approximate(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_is_holiday_warns_on_approximate(self, caplog: pytest.LogCaptureFixture) -> None:
         """``approximate=True`` の Holiday を返すときに WARNING ログが出る。
 
         春分の日・秋分の日は内閣府発表と ±1 日前後する可能性があるので、
         ユーザーに気づかせる。
         """
-        calendar = HolidayCalendar.from_sources([
-            ComputedHolidaySource(from_year=2026, to_year=2026),
-        ])
+        calendar = HolidayCalendar.from_sources(
+            [
+                ComputedHolidaySource(from_year=2026, to_year=2026),
+            ]
+        )
         # 春分の日 (approximate=True)
         with caplog.at_level(logging.WARNING, logger="comken.toolbox.holidays.calendar"):
             calendar.is_holiday(_dt.date(2026, 3, 20))
-        assert any(
-            "計算式による暫定値" in r.getMessage() for r in caplog.records
-        )
+        assert any("計算式による暫定値" in r.getMessage() for r in caplog.records)
 
     def test_refresh_only_once_per_year(self) -> None:
         """同じ年には 1 回しか refresh を試まない（重複防止）。"""
@@ -1152,13 +1136,14 @@ class TestHolidayCalendarRefresh:
             def load(self):
                 return []
 
-        calendar = HolidayCalendar.from_sources([
-            FakeCabinet(),
-            ComputedHolidaySource(from_year=2026, to_year=2026),
-        ])
-        this_year = _dt.date.today().year
+        calendar = HolidayCalendar.from_sources(
+            [
+                FakeCabinet(),
+                ComputedHolidaySource(from_year=2026, to_year=2026),
+            ]
+        )
+        this_year = _dt.date.today().year  # noqa: DTZ011
         calendar.is_holiday(_dt.date(this_year, 1, 1))
         calendar.is_holiday(_dt.date(this_year, 6, 15))
         calendar.is_holiday(_dt.date(this_year, 12, 31))
         assert called["count"] == 1
-
