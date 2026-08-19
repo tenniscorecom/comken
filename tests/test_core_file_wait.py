@@ -95,6 +95,72 @@ class TestWaitForFile:
                 poll_interval=0.1,
             )
 
+    def test_missing_folder_fails_immediately(self, tmp_path: Path) -> None:
+        """フォルダが無いときは待たずに即座に失敗し、フォルダの不在だと分かる。
+
+        「何を防いでいるか」: ``Path.glob()`` は存在しないフォルダでも例外を
+        出さず空を返すので、区別しないと「共有サーバーが切れている」も
+        「ファイルがまだ来ていない」と同じ形で timeout 後に失敗し、
+        原因究明が遅れる。フォルダの不在は待っても直らない。
+        """
+        missing = tmp_path / "no_such_folder"
+
+        start = time.monotonic()
+        with pytest.raises(FileNotFoundError) as exc_info:
+            wait_for_file(missing, "data_*.csv", timeout=5.0, poll_interval=0.1)
+        elapsed = time.monotonic() - start
+
+        # timeout を待たずに返る（待っていたら 5 秒かかる）
+        assert elapsed < 1.0
+        # 「ファイルが無い」ではなく「フォルダが無い」と言っている
+        assert "フォルダ" in str(exc_info.value)
+        assert "data_*.csv" not in str(exc_info.value)
+
+    def test_file_given_as_folder_raises_not_a_directory(self, tmp_path: Path) -> None:
+        """``folder`` にファイルを渡したら ``NotADirectoryError``。"""
+        not_a_folder = tmp_path / "data.csv"
+        not_a_folder.write_text("x", encoding="utf-8")
+
+        with pytest.raises(NotADirectoryError):
+            wait_for_file(not_a_folder, "*.csv", timeout=5.0, poll_interval=0.1)
+
+    def test_timeout_message_points_at_the_file_not_the_folder(self, tmp_path: Path) -> None:
+        """フォルダはあるのに来ない場合は、フォルダではなくファイルの話をする。
+
+        フォルダ不在との言い分けができていることを、両方向から固定する。
+        """
+        with pytest.raises(FileNotFoundError) as exc_info:
+            wait_for_file(tmp_path, "missing_*.csv", timeout=0.5, poll_interval=0.1)
+
+        message = str(exc_info.value)
+        assert "missing_*.csv" in message
+        assert "監視するフォルダがありません" not in message
+
+    def test_folder_disappearing_while_waiting_is_reported_as_missing_folder(
+        self, tmp_path: Path
+    ) -> None:
+        """待っている間にフォルダが消えたら、ファイルではなくフォルダの不在を知らせる。
+
+        共有サーバーが待機中に切れたケース。timeout まで待った末に
+        「ファイルが来ない」と言われると、原因を取り違える。
+        """
+        watched = tmp_path / "input"
+        watched.mkdir()
+
+        def remove_later() -> None:
+            time.sleep(0.2)
+            watched.rmdir()
+
+        thread = threading.Thread(target=remove_later)
+        thread.start()
+        try:
+            with pytest.raises(FileNotFoundError) as exc_info:
+                wait_for_file(watched, "data_*.csv", timeout=1.0, poll_interval=0.1)
+        finally:
+            thread.join()
+
+        assert "監視するフォルダがありません" in str(exc_info.value)
+
     def test_accepts_string_path(self, tmp_path: Path) -> None:
         """``folder`` には str も受け付ける (Path に変換される)。"""
         target = tmp_path / "data.csv"

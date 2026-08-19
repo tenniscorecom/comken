@@ -830,6 +830,13 @@ def wait_for_file(folder: str | Path, name_pattern: str, timeout: float=DEFAULT_
 ファイルサイズや mtime が安定したかを確認したい場合は呼び出し側で
 対処すること。
 
+**フォルダが無い場合は待たずに即座に失敗する。** ``Path.glob()`` は
+存在しないフォルダでも例外を出さず空を返すので、そのまま回すと
+「共有サーバーが切れている」「パスを打ち間違えた」も
+「ファイルがまだ来ていない」と同じ形で ``timeout`` 秒後に失敗し、
+原因が分からなくなる。フォルダの不在は待っても直らないので、
+ここで区別して即座に知らせる。
+
 Args:
     folder: 監視するフォルダ。
     name_pattern: ファイル名の glob パターン（例: ``"data_*.csv"``）。
@@ -840,6 +847,9 @@ Returns:
     見つかったファイルのうち mtime が最新のもの。
 
 Raises:
+    FileNotFoundError: 監視するフォルダが存在しない場合（待たずに即座）。
+        待っている間にフォルダが消えた場合も同じ（``timeout`` 到達時）。
+    NotADirectoryError: ``folder`` にフォルダではなくファイルを渡した場合。
     FileNotFoundError: ``timeout`` 秒経っても該当ファイルが見つからなかった場合。
 
 ### `zip_files`

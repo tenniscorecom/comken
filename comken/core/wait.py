@@ -104,6 +104,13 @@ def wait_for_file(
     ファイルサイズや mtime が安定したかを確認したい場合は呼び出し側で
     対処すること。
 
+    **フォルダが無い場合は待たずに即座に失敗する。** ``Path.glob()`` は
+    存在しないフォルダでも例外を出さず空を返すので、そのまま回すと
+    「共有サーバーが切れている」「パスを打ち間違えた」も
+    「ファイルがまだ来ていない」と同じ形で ``timeout`` 秒後に失敗し、
+    原因が分からなくなる。フォルダの不在は待っても直らないので、
+    ここで区別して即座に知らせる。
+
     Args:
         folder: 監視するフォルダ。
         name_pattern: ファイル名の glob パターン（例: ``"data_*.csv"``）。
@@ -114,9 +121,13 @@ def wait_for_file(
         見つかったファイルのうち mtime が最新のもの。
 
     Raises:
+        FileNotFoundError: 監視するフォルダが存在しない場合（待たずに即座）。
+            待っている間にフォルダが消えた場合も同じ（``timeout`` 到達時）。
+        NotADirectoryError: ``folder`` にフォルダではなくファイルを渡した場合。
         FileNotFoundError: ``timeout`` 秒経っても該当ファイルが見つからなかった場合。
     """
     folder_path = Path(folder)
+    _ensure_watchable_folder(folder_path)
     # 期限は最初に1度だけ計算する (``time.sleep`` 中もカウントが進むように
     # するため、``monotonic`` を使って壁時計の変更に影響されないようにしている)
     deadline = time.monotonic() + timeout
@@ -125,7 +136,30 @@ def wait_for_file(
         if matched:
             return max(matched, key=lambda p: p.stat().st_mtime)
         if time.monotonic() >= deadline:
+            # 待っている間にフォルダごと消えた（共有サーバーが切れた等）場合は、
+            # 「ファイルが来ない」ではなくそちらを知らせる
+            _ensure_watchable_folder(folder_path)
             raise FileNotFoundError(
                 f"ファイルが見つかりません: {folder_path}\\{name_pattern} ({timeout}秒待ちました)"
             )
         time.sleep(poll_interval)
+
+
+def _ensure_watchable_folder(folder_path: Path) -> None:
+    """監視できるフォルダかを確かめる。駄目なら理由の分かる例外を投げる。
+
+    Raises:
+        FileNotFoundError: フォルダが存在しない。
+        NotADirectoryError: 存在するがフォルダではない（ファイルだった）。
+    """
+    if folder_path.is_dir():
+        return
+    if folder_path.exists():
+        raise NotADirectoryError(
+            f"フォルダではありません: {folder_path}\n"
+            "監視するフォルダを指定してください（ファイルは指定できません）。"
+        )
+    raise FileNotFoundError(
+        f"監視するフォルダがありません: {folder_path}\n"
+        "共有サーバーにつながっているか、パスが正しいかを確認してください。"
+    )
