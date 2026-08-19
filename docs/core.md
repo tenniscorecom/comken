@@ -226,32 +226,6 @@ path = wait_for_file(
 
 `FileFinder.latest()` は1 回探すだけなので「無ければ待つ」はこちらを使う。
 
-### 業務結果を統一する型（Result）
-
-成功・警告・空・スキップなど「想定内の業務結果」を統一的に扱う。
-
-```python
-from comken.core.result import Result, ok, warn, empty, skip
-
-def process() -> Result:
-    rows = read_rows()
-    if not rows:
-        return empty("対象データなし")
-    if some_warning:
-        return warn("3件処理したが1件スキップ", warnings=[...], count=3)
-    return ok("3件処理しました", count=3)
-```
-
-| ヘルパー | 用途 |
-|---|---|
-| `ok(message, *, count, data)` | 成功 |
-| `warn(message, *, warnings, count, data)` | 警告付き成功（`has_warning=True`） |
-| `empty(message, *, count)` | データ無し（正常終了） |
-| `skip(message)` | スキップ（正常終了） |
-
-**想定外のエラーは Exception のまま流す**。Result は「想定内の業務結果」
-だけを受け持ち、ライブラリ利用者が投げる例外は握りつぶさない。
-
 ### run_id（コンテキスト変数で実行処理を識別）
 
 1 回の実行処理を UUID で識別し、ログに `[RUN:xxxxx]` プレフィックスを付ける。

@@ -328,59 +328,6 @@ def dated(self, pattern: str='*.xlsx', required: bool=True) -> list[Path]:
 Raises:
     FileNotFoundError: required=True で該当ファイルがない場合。
 
-### `Result`
-
-```text
-class Result(Generic[T]):
-```
-
-#### 説明
-
-業務結果を統一的に返す型。
-
-想定内の業務結果（成功・警告・空・スキップ）を Result で返す。
-想定外のエラーは Exception のまま流す (握りつぶさない)。
-
-Attributes:
-    success: 想定内かどうかの成否。警告付き成功も含む正常終了なら True。
-    message: 人が読むための1行メッセージ。
-    count: 処理件数などの数値情報。省略時 0。
-    warnings: 警告メッセージのタプル。1個でもあれば ``has_warning`` が True。
-    data: 呼び出し側が結果を運ぶための任意の値（任意型）。
-
-#### `has_warning`
-
-```text
-@property
-def has_warning(self) -> bool:
-```
-
-##### 説明
-
-警告があるかどうか。
-
-#### `to_dict`
-
-```text
-def to_dict(self) -> dict[str, Any]:
-```
-
-##### 説明
-
-**JSON にできる形に変換した** dict。``data`` は**意図的に含めない**。
-
-``data`` には JSON 化できない型 (bytes / 独自オブジェクト等) や
-機微な値が渡される可能性があるため、``to_dict()`` の戻り値には
-含めない。``data`` をログや API レスポンスに載せたい場合は呼び出し側で
-``json.dumps(result.to_dict())`` の後に ``result.data`` を別途扱うこと。
-
-``warnings`` は tuple のままだと ``json.dumps`` が list へ変換するため、
-形式を ``list`` に統一しておく。
-
-Returns:
-    ``{"success": ..., "message": ..., "count": ..., "warnings": [...]}``
-    の dict。``json.dumps()`` でそのまま JSON 化できる形。
-
 ### `RowChange`
 
 ```text
@@ -563,20 +510,6 @@ Returns:
 Raises:
     ColumnNotFoundError: key で指定した列が存在しない場合。
 
-### `empty`
-
-```text
-def empty(message: str='対象データなし', *, count: int=0) -> Result:
-```
-
-#### 説明
-
-空の Result (正常終了・データ無し)。
-
-Args:
-    message: 人が読むための1行メッセージ。省略時は ``"対象データなし"``。
-    count: 処理件数（省略時 0）。
-
 ### `local_copy`
 
 ```text
@@ -654,21 +587,6 @@ Args:
 
 Returns:
     移動後のファイルパス。
-
-### `ok`
-
-```text
-def ok(message: str='', *, count: int=0, data: Any=None) -> Result:
-```
-
-#### 説明
-
-成功 Result を作る。
-
-Args:
-    message: 人が読むための1行メッセージ（省略可）。
-    count: 処理件数などの数値情報（省略時 0）。
-    data: 呼び出し側が結果を運ぶための任意の値（省略可）。
 
 ### `project_dir`
 
@@ -781,19 +699,6 @@ Note:
     入力値検証で ``ValueError`` を投げる。``times`` を 0 以下にしたいケースは
     ループ自体を不要としているので、黙って 1 にするのではなく例外で知らせる
     （誤って ``times=None`` を渡して 1 回しか実行されない事故を防ぐ）。
-
-### `skip`
-
-```text
-def skip(message: str) -> Result:
-```
-
-#### 説明
-
-スキップ Result (今回は処理しなかった)。success=True (スキップは正常)。
-
-Args:
-    message: 人が読むための1行メッセージ。省略不可。
 
 ### `strip_spaces`
 
@@ -936,22 +841,6 @@ Returns:
 
 Raises:
     FileNotFoundError: ``timeout`` 秒経っても該当ファイルが見つからなかった場合。
-
-### `warn`
-
-```text
-def warn(message: str, *, warnings: Sequence[str]=(), count: int=0, data: Any=None) -> Result:
-```
-
-#### 説明
-
-警告付き成功 Result を作る。success=True だが warnings が付く。
-
-Args:
-    message: 人が読むための1行メッセージ。
-    warnings: 警告メッセージの列。空でも Result は生成できる。
-    count: 処理件数などの数値情報（省略時 0）。
-    data: 呼び出し側が結果を運ぶための任意の値（省略可）。
 
 ### `zip_files`
 
