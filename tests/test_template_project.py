@@ -387,7 +387,7 @@ def test_python_library_is_importable(generated: Path) -> None:
     """`PYTHON_LIBRARY` が **import comken できる場所**（パッケージの親）を指すこと。
 
     「何を防いでいるか」: 2026-08-18 に、パッケージ自身
-    （`...\\original_libs\\comken`）を指していた。PYTHONPATH へ入れても
+    （`...\\comken\\comken`）を指していた。PYTHONPATH へ入れても
     `import comken` は通らず、生成した bat は `%PYTHON_LIBRARY%\\comken\\__init__.py`
     の実在を確かめるので **必ず「comken が見つかりません」で止まる**状態だった。
 

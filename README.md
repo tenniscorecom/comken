@@ -1,4 +1,4 @@
-# original_libs
+# comken
 
 業務自動化で使う Python 共通ライブラリ。
 
@@ -319,7 +319,7 @@ python tools\set_python_library.py \\新サーバー\share\tools F:\案件 --app
 ```python
 import comken
 
-comken.__version__        # → "1.2.0"
+comken.__version__        # → "1.0.0"
 
 # デバッグモード: `with debug():` ブロック内でのみ @measure が DEBUG ログを出す。
 with comken.debug():
