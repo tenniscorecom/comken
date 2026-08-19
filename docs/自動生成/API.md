@@ -89,12 +89,7 @@ def debug(enabled: bool=True) -> Iterator[None]:
 
 #### 説明
 
-ブロック内だけデバッグモードを指定した状態にする。
-
-終了時に元の状態（プロセスの setter 値、または環境変数）に戻す。
-
-Args:
-    enabled: True で有効（デフォルト）。False ならブロック内だけ無効。
+ブロック内だけデバッグモードにする。
 
 ### `doctor`
 
@@ -123,48 +118,10 @@ def dry_run(enabled: bool=True) -> Iterator[None]:
 
 #### 説明
 
-ブロック内だけ dry-run モードを指定した状態にする。
-
-終了時に元の状態（プロセスの setter 値、または環境変数）に戻す。
-ブロック内で `set_dry_run(None)` を呼んだ場合は None に戻る
-（環境変数に従う）。
+ブロック内だけ dry-run モードにする。
 
 Args:
     enabled: True で有効（デフォルト）。False ならブロック内だけ無効。
-             外側が dry-run 中でも、このブロックでは通常どおり書き込む。
-
-### `is_debug`
-
-```text
-def is_debug() -> bool:
-```
-
-#### 説明
-
-デバッグモードが有効か返す。
-
-優先順位: プロセスの setter > 環境変数 (COMKEN_DEBUG) > 既定値 False。
-
-有効にすると、`@measure` を付けたメソッドの出入りを DEBUG ログに
-記録する。業務バッチが外部待ち（ブラウザ・HTTP・Excel COM・共有サーバー）
-で止まったとき、ログの末尾が「開始」の行で止まっていれば、そこが
-停止位置だと分かる。
-
-### `is_dry_run`
-
-```text
-def is_dry_run() -> bool:
-```
-
-#### 説明
-
-dry-run モードが有効か返す。
-
-優先順位: プロセスの setter > 環境変数 (COMKEN_DRY_RUN) > 既定値 False。
-
-有効にすると、外部に影響する操作（ファイル書き込み、Salesforce 送信、
-state.ini 書き込み等）を実行せず、何をするはずだったかを INFO ログ
-（[DRY-RUN] プレフィックス付き）に出す。読み取りは通常どおり実行される。
 
 ### `setup_logging`
 
@@ -451,6 +408,31 @@ Args:
 
 Raises:
     FileNotFoundError: ファイルが存在せず missing_ok が False の場合。
+
+### `delete_files`
+
+```text
+def delete_files(paths: Iterable[str | Path], missing_ok: bool=True) -> None:
+```
+
+#### 説明
+
+複数のファイルをまとめて削除する。1件目で失敗しても残りは削除する。
+
+各ファイルは ``delete_file()`` に委譲するため、dry-run 対応（ログを出して
+スキップ・dry-run 外で実際に削除）と、「何を消したか」の INFO ログがそのまま効く。
+
+削除できなかったファイルはあきらめずに全部試したうえで、``FileDeletionError`` に
+まとめて乗せて返す。呼び出し側が「消せたものは消したい」場面で使われる想定。
+1件目で例外を投げて止まると、消せたはずの別ファイルまで消さずに終わってしまう。
+
+Args:
+    paths: 削除対象ファイルのパス（Iterable。str / Path 混在可）。
+    missing_ok: True（既定）なら対象が存在しない場合は失敗扱いにしない。
+
+Raises:
+    FileDeletionError: 1件以上のファイルを削除できなかった場合。
+        残ったパスは ``.remaining`` で読める。
 
 ### `diff_row`
 

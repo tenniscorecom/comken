@@ -229,11 +229,11 @@ example からコピーされ、**そこで終了コード 1 で止まる**（�
 ### 作ったあと、最初にやること
 
 1. **`実行.bat` を1度動かす**（または `python main.py` を実行する）→ `config.ini` が作られて止まる
-2. **`config.ini` を書き換える**。`[RUN] DRY_RUN` は最初 `True` のままでよい
-   （書き込みをせず、何をするつもりかだけログに出る）
+2. **`config.ini` を書き換える**。dry-run で動かしたいときは `with comken.dry_run():`
+   を `main.py` で `main()` を囲む形にして、まず dry-run で 1 回試す。
+   戻しは `with` ブロックを外すだけ
 3. **`src/run.py` の `run()` に処理を書く**
 4. **`docs/使い方.md`・`docs/仕様書.md` の「（ここを書く）」を埋める**
-5. 通ったら `config.ini` の `DRY_RUN` を `False` にして本番
 
 **comken の場所を後から変えたくなったら**、`実行.bat` と `認証情報の登録.bat` と `.vscode/settings.json` の
 3つを直す（片方だけ直すと「動くのに補完が効かない」状態になって原因が分かりにくい）。
@@ -313,17 +313,15 @@ python tools\set_python_library.py \\新サーバー\share\tools F:\案件 --app
 
 ## 実行モード（バージョン / デバッグ / dry-run）
 
+実行モードの切り替えは **`with dry_run():` / `with debug():` の context manager だけ**。
+`config.ini` も環境変数も setter も読まない。`with` ブロックが唯一の手段。
+
 ```python
 import comken
 
-comken.__version__        # → "0.11.3"
+comken.__version__        # → "1.2.0"
 
-# デバッグモード: @measure を付けたメソッドの出入りを DEBUG ログに記録する。
-# ログは関数ごとに「開始」「完了 ○秒」（例外時は「中断 ○秒」）の2行。
-# 主目的は「どの処理で止まったか」を後から特定できるようにすること。
-# 業務バッチが外部待ちで止まったとき、ログの末尾が「開始」の行で止まっていれば
-# そこが停止位置だと分かる（終了時にしかログを出さないと止まった処理の痕跡は
-# 永久に残らない）。副次的に各メソッドの所要時間も分かる。
+# デバッグモード: `with debug():` ブロック内でのみ @measure が DEBUG ログを出す。
 with comken.debug():
     run()
 
@@ -348,9 +346,9 @@ def build_report():
 自動で引数を出す形になっていると、いつか秘密の値がログへ載る危険があるため）。
 「どのファイルで止まったか」を知りたいときは、呼び出し側が処理対象をログに出す。
 
-雛形プロジェクトでは `config.RUN.DEBUG` で `with debug():` の on/off を切り替えられる。
-止まったときに非エンジニアが自分で「デバッグモードで再実行」できるよう、
-`config.ini` からのスイッチを前提にしている。
+雛形プロジェクトでは `with comken.debug():` を `main()` を囲む形で
+`main.py` に書き、止めたい処理単位で on/off する。`config.ini` の旧 `[RUN] DEBUG`
+セクションは v0.12.0 で廃止済み。
 
 ---
 

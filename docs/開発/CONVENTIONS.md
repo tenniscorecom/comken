@@ -132,12 +132,18 @@ OUTPUT_FOLDER = C:\work\out  ; ← 値は自由
 
 | セクション | 中身 | いつ書くか |
 |---|---|---|
-| `[RUN]` | 実行の仕方（`DRY_RUN` など） | 常に |
 | `[FILES]` | 入力元・出力先のパス。**フォルダもファイルもここ** | 常に |
 | `[CSV]` | CSV の読み書き設定（文字コード・日付書式など） | 使うときだけ |
 | `[BROWSER]` | ブラウザの設定（`HEADLESS` など） | 使うときだけ |
 | `[CREDENTIALS]` | 認証情報のシステム名（値そのものは DPAPI） | 使うときだけ |
 | `[〇〇_MAPPING]` | 列の対応表。ここだけ**キーを実物どおり**に書く | 使うときだけ |
+
+> **`[RUN]` は廃止済み（v0.12.0 / v1.1.0 で完全削除）。** dry-run / debug は
+> `with dry_run():` / `with debug():` ブロックで切り替える。**環境変数も
+> setter も CLI オプションも使わない**（`is_dry_run` / `is_debug` は
+> 内部用のみで公開 facade には載せていない）。`config.ini` に `[RUN]` が
+> 残っていると `python -m comken doctor` の `check_run_section` で NG が
+> 出るので、そのまま残っていても気付ける。
 
 **出力先を `[REPORT]` のような用途名で分けない。** 用途ごとにセクションを作ると、
 帳票・集計・退避…と際限なく増え、「今書きたい値はどこか」が毎回変わる。
@@ -145,7 +151,7 @@ OUTPUT_FOLDER = C:\work\out  ; ← 値は自由
 
 足りないものが出たら、**セクションを足す前に上のどれかへ収まらないかを見る**。
 
-必須項目は `config.require("RUN.DRY_RUN", "FILES.OUTPUT_FOLDER")` のように
+必須項目は `config.require("FILES.OUTPUT_FOLDER")` のように
 起動時にまとめて確かめる。足りないものを1つずつ見つけて往復させない。
 
 ---
