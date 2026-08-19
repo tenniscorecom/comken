@@ -211,10 +211,10 @@ DEBUG ExcelWriter.save: 完了 1.234秒
 ファイルを置くのを待つ」を 1 関数で済ませる。
 
 ```python
-from comken.core.files import wait_for_file
+from comken.core.wait import wait_for_file
 
 path = wait_for_file(
-    folder=r"\\server\share\input",
+    folder=r"\\server\\share\\input",
     name_pattern="data_*.csv",
     timeout=60.0,        # 最大待機秒数 (既定 60 秒)
     poll_interval=1.0,   # 再検索間隔 (既定 1 秒)

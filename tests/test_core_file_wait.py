@@ -1,6 +1,7 @@
-"""``comken.core.files.wait`` のテスト。
+"""``comken.core.wait`` の ``wait_for_file`` テスト。
 
-ファイル出現待ちの挙動を検証する。
+ファイル出現待ちの挙動を検証する (Phase 4 で ``core.files.wait`` として
+追加されたが、``core.wait`` に統合された)。
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from comken.core.files.wait import wait_for_file
+from comken.core.wait import wait_for_file
 
 
 class TestWaitForFile:
@@ -112,12 +113,6 @@ class TestFacadeExports:
         assert hasattr(comken.core, "wait_for_file")
         assert "wait_for_file" in comken.core.__all__
         assert callable(comken.core.wait_for_file)
-
-    def test_from_comken_core_files(self) -> None:
-        """``comken.core.files`` からも取得できる。"""
-        from comken.core.files import wait_for_file as direct
-
-        assert direct is wait_for_file
 
     def test_does_not_leak_to_comken_top(self) -> None:
         """comken 直下には漏らさない（facade 拡張方針に従う）。"""
