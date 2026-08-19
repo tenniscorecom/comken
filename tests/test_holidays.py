@@ -706,7 +706,12 @@ class TestComputedHolidaySource:
         source = ComputedHolidaySource(from_year=2026, to_year=2026)
         holidays = {h.date: h.name for h in source.load()}
         expected = {
-            _dt.date(2026, 1, 1): "元日",
+            # 1/1, 1/2, 1/3 は「年末年始休暇」（COMPANY_HOLIDAYS が
+            # 元日を上書きする）年跨ぎの会社休日を 1 年単位で展開すると、
+            # 12/29-1/3 が連続休業として ``year`` 年側に揃う。
+            _dt.date(2026, 1, 1): "年末年始休暇",
+            _dt.date(2026, 1, 2): "年末年始休暇",
+            _dt.date(2026, 1, 3): "年末年始休暇",
             _dt.date(2026, 1, 12): "成人の日",
             _dt.date(2026, 2, 11): "建国記念の日",
             _dt.date(2026, 3, 20): "春分の日",
@@ -722,6 +727,9 @@ class TestComputedHolidaySource:
             _dt.date(2026, 10, 12): "スポーツの日",
             _dt.date(2026, 11, 3): "文化の日",
             _dt.date(2026, 11, 23): "勤労感謝の日",
+            _dt.date(2026, 12, 29): "年末年始休暇",
+            _dt.date(2026, 12, 30): "年末年始休暇",
+            _dt.date(2026, 12, 31): "年末年始休暇",
         }
         for date_, name in expected.items():
             assert date_ in holidays, f"{date_} が祝日として含まれていません"
@@ -876,11 +884,17 @@ class TestComputedCompanyHolidays:
         holidays_2027 = {h.date: h.name for h in source_2027.load()}
         assert holidays_2027.get(_dt.date(2027, 11, 4)) is None
 
-    def test_computed_default_company_holidays_is_empty(self) -> None:
-        """既定の ``COMPANY_HOLIDAYS`` は空（=追加なしで動かせる）。"""
+    def test_computed_default_company_holidays_is_year_end_and_new_year(self) -> None:
+        """既定の ``COMPANY_HOLIDAYS`` は年末年始休暇 (12/29 - 1/3) のみ。
+
+        暫定デフォルトとして入れている。会社の正式な休日カレンダーが
+        決まったら、ここを編集すればそのまま反映される。
+        """
         from comken.toolbox.holidays.sources.computed import COMPANY_HOLIDAYS
 
-        assert COMPANY_HOLIDAYS == []
+        assert COMPANY_HOLIDAYS == [
+            (12, 29, 1, 3, "年末年始休暇"),
+        ]
 
 
 # ── ComputedHolidaySource の制約 ───────────────────────────────────────
@@ -938,4 +952,27 @@ class TestComputedSourceConstraints:
         assert any(h.date.year == 2099 for h in holidays)
         # 2100 年は出ない（高精度範囲外）
         assert not any(h.date.year == 2100 for h in holidays)
+
+
+class TestCompanyHolidays:
+    """``COMPANY_HOLIDAYS`` の展開を確認する。
+
+    ``computed.py`` 冒頭のリストに休日を追加すると、そのまま ``Holiday`` に
+    反映される。「会社都合で休みにしている日」がソースコードを開いた瞬間に
+    分かる構造であることを保証する。
+    """
+
+    def test_year_end_and_new_year_holiday_default_present(self) -> None:
+        """既定で 12/29 - 1/3 が「年末年始休暇」として休業扱いになる。
+
+        12/29, 12/30, 12/31, 1/1, 1/2, 1/3 の 6 日間が ``Holiday`` に
+        入ることを確認する。年跨ぎ（12→1）が正しく展開されるかも兼ねる。
+        """
+        holidays = ComputedHolidaySource().load()
+        assert Holiday(date=_dt.date(2026, 12, 29), name="年末年始休暇") in holidays
+        assert Holiday(date=_dt.date(2026, 12, 30), name="年末年始休暇") in holidays
+        assert Holiday(date=_dt.date(2026, 12, 31), name="年末年始休暇") in holidays
+        assert Holiday(date=_dt.date(2027, 1, 1), name="年末年始休暇") in holidays
+        assert Holiday(date=_dt.date(2027, 1, 2), name="年末年始休暇") in holidays
+        assert Holiday(date=_dt.date(2027, 1, 3), name="年末年始休暇") in holidays
 
