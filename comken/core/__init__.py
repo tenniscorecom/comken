@@ -23,7 +23,7 @@ from comken.core.files.archive import zip_files as zip_files
 from comken.core.files.archive import zip_folder as zip_folder
 from comken.core.files.finder import FileFinder as FileFinder
 from comken.core.files.finder import date_in_name as date_in_name
-from comken.core.files.naming import DateNameBuilder as DateNameBuilder
+from comken.core.files.name import DateNameBuilder as DateNameBuilder
 from comken.core.files.ops import copy_file as copy_file
 from comken.core.files.ops import delete_file as delete_file
 from comken.core.files.ops import local_copy as local_copy
@@ -36,8 +36,10 @@ from comken.core.text import remove_spaces as remove_spaces
 from comken.core.text import strip_spaces as strip_spaces
 from comken.core.timer import Timer as Timer
 from comken.core.timer import measure as measure
-from comken.core.wait import wait as wait
 from comken.core.wait import wait_for_file as wait_for_file
+from comken.core.wait import wait_minutes as wait_minutes
+from comken.core.wait import wait_seconds as wait_seconds
+from comken.core.wait import wait_until as wait_until
 from comken.core.wait import wait_until_stable as wait_until_stable
 
 __all__ = [
@@ -63,8 +65,10 @@ __all__ = [
     "strip_spaces",
     "today",
     "unzip",
-    "wait",
     "wait_for_file",
+    "wait_minutes",
+    "wait_seconds",
+    "wait_until",
     "wait_until_stable",
     "zip_files",
     "zip_folder",

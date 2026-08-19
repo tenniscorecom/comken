@@ -738,64 +738,6 @@ Args:
 Returns:
     展開先フォルダのパス。
 
-### `wait`
-
-```text
-class wait:
-```
-
-#### 説明
-
-待機ユーティリティ。インスタンス化せず静的メソッドで使う。
-
-#### `seconds`
-
-```text
-@staticmethod
-def seconds(n: float) -> None:
-```
-
-##### 説明
-
-指定した秒数だけ待つ。
-
-Args:
-    n: 待機秒数。小数も指定できる（例: 0.5）。
-
-#### `minutes`
-
-```text
-@staticmethod
-def minutes(n: float) -> None:
-```
-
-##### 説明
-
-指定した分数だけ待つ。
-
-Args:
-    n: 待機分数。小数も指定できる（例: 0.5 → 30秒）。
-
-#### `until`
-
-```text
-@staticmethod
-def until(condition: Callable[[], bool], timeout: float=60, interval: float=1.0) -> bool:
-```
-
-##### 説明
-
-条件が True になるまで繰り返し確認する。
-
-Args:
-    condition: 引数なしで呼び出せる callable。True を返したら待機終了。
-    timeout: 最大待機秒数（デフォルト: 60秒）。
-    interval: 確認間隔（秒）（デフォルト: 1秒）。
-
-Returns:
-    True: 条件が満たされた。
-    False: タイムアウトした（条件は満たされなかった）。
-
 ### `wait_for_file`
 
 ```text
@@ -847,6 +789,51 @@ Raises:
         ``stable_for`` の待機中にファイルが消えた場合も同じ。
     TimeoutError: ファイルは見つかったが、``timeout`` までに書き込みが
         終わらなかった場合（``stable_for`` を指定したときだけ起きる）。
+
+### `wait_minutes`
+
+```text
+def wait_minutes(n: float) -> None:
+```
+
+#### 説明
+
+指定した分数だけ待つ。
+
+Args:
+    n: 待機分数。小数も指定できる（例: 0.5 → 30秒）。
+
+### `wait_seconds`
+
+```text
+def wait_seconds(n: float) -> None:
+```
+
+#### 説明
+
+指定した秒数だけ待つ。
+
+Args:
+    n: 待機秒数。小数も指定できる（例: 0.5）。
+
+### `wait_until`
+
+```text
+def wait_until(condition: Callable[[], bool], timeout: float=60, interval: float=1.0) -> bool:
+```
+
+#### 説明
+
+条件が True になるまで繰り返し確認する。
+
+Args:
+    condition: 引数なしで呼び出せる callable。True を返したら待機終了。
+    timeout: 最大待機秒数（デフォルト: 60秒）。
+    interval: 確認間隔（秒）（デフォルト: 1秒）。
+
+Returns:
+    True: 条件が満たされた。
+    False: タイムアウトした（条件は満たされなかった）。
 
 ### `wait_until_stable`
 
@@ -1397,54 +1384,6 @@ Returns:
 
 Raises:
     FileNotFoundError: folder が存在しない場合。
-
-
-## `from comken.core.files.naming import ...`
-
-### `DateNameBuilder`
-
-```text
-class DateNameBuilder:
-```
-
-#### 説明
-
-今日の日付を付けたファイル名を組み立てる。
-
-日付はファイル名の属性ではなく「付け方」なので、コンストラクタではなく
-prefix() / suffix() の呼び出し時に決める。
-
-#### `__init__`
-
-```text
-def __init__(self, name: str, ext: str='.xlsx') -> None:
-```
-
-##### 説明
-
-Args:
-    name: ファイル名（拡張子なし）。
-    ext: 拡張子（デフォルト: ".xlsx"）。ドットなしで渡しても補完される。
-
-#### `prefix`
-
-```text
-def prefix(self, date_format: str='%Y%m%d') -> str:
-```
-
-##### 説明
-
-今日の日付を前に付けたファイル名を返す（例: 20260711_売上レポート.xlsx）。
-
-#### `suffix`
-
-```text
-def suffix(self, date_format: str='%Y%m%d') -> str:
-```
-
-##### 説明
-
-今日の日付を後ろに付けたファイル名を返す（例: 売上レポート_20260711.xlsx）。
 
 
 ## `from comken.exceptions import ...`

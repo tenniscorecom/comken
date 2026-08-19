@@ -12,7 +12,7 @@ from comken.core import (
     remove_spaces,
     retry,
     strip_spaces,
-    wait,
+    wait_until,
 )
 
 RETRY_COUNT = 2
@@ -45,7 +45,7 @@ def main() -> None:
         return "成功"
 
     logger.info("retry: %s（%d 回目）", unstable_operation(), attempts)
-    logger.info("wait.until: %s", wait.until(lambda: True, timeout=0))
+    logger.info("wait_until: %s", wait_until(lambda: True, timeout=0))
     logger.info(
         "正規化: %s / 前後空白: %s / 全空白: %s",
         normalize("ＡＢＣ１２３"),

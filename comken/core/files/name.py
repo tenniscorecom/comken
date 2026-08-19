@@ -1,4 +1,13 @@
-"""comken/core/files/naming/date.py — 日付を付けたファイル名の組み立て。"""
+"""comken/core/files/name.py — ファイル名の組み立て。
+
+命名方式を追加するときは、ここに追記する（1ファイル内でクラスを増やす）。
+UUID・タイムスタンプ・ランダム値・連番などは標準ライブラリで十分なため、
+comken ではラップしない方針（薄いラッパーを増やさない）。
+現状は ``DateNameBuilder`` のみ。
+
+``core/files/naming/`` パッケージから ``name.py`` 単一ファイルに集約した
+経緯は、命名レビュー（2026-08-19）を参照。
+"""
 
 from comken.core.clock import now
 

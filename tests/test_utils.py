@@ -28,7 +28,7 @@ from comken.core.files import (
 )
 from comken.core.files.ops import copy_to_local_if_large, project_dir
 from comken.core.text import normalize, remove_spaces, strip_spaces
-from comken.core.wait import wait
+from comken.core.wait import wait_minutes, wait_seconds, wait_until
 from comken.exceptions import ColumnNotFoundError, DownloadTimeoutError
 from comken.toolbox.browser.download import DownloadDir
 from comken.toolbox.windows import Paths
@@ -813,7 +813,7 @@ class TestWait:
         import time
 
         start = time.monotonic()
-        wait.seconds(0.05)
+        wait_seconds(0.05)
         assert time.monotonic() - start >= 0.04
 
     def test_until_returns_true_when_condition_met(self):
@@ -824,16 +824,16 @@ class TestWait:
             counter[0] += 1
             return counter[0] >= 3
 
-        assert wait.until(condition, timeout=5, interval=0.01) is True
+        assert wait_until(condition, timeout=5, interval=0.01) is True
 
     def test_until_returns_false_on_timeout(self):
         """until() はタイムアウトすると False を返すことを確認する（エラーではない）。"""
-        result = wait.until(lambda: False, timeout=0.05, interval=0.01)
+        result = wait_until(lambda: False, timeout=0.05, interval=0.01)
         assert result is False
 
     def test_until_checks_at_least_once(self):
         """timeout=0 でも条件は最低1回確認されることを確認する。"""
-        assert wait.until(lambda: True, timeout=0) is True
+        assert wait_until(lambda: True, timeout=0) is True
 
 
 class TestPaths:
