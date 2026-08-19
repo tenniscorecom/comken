@@ -995,9 +995,11 @@ def check_pyright(repo_root: Path) -> CheckResult:
 
 pyright が ``comken/`` に対して 0 errors を返すか。
 
-``tests/test_pyright_clean.py`` と同じ判定ロジック。
-**``--yes pyright@latest`` は使わない** (BO / オフライン環境で npm
-から最新版を取りに行くため動かない)。代わりに以下の優先順で探す:
+出力から件数を読み取る判定は ``tests/test_pyright_clean.py`` と同じだが、
+**pyright の探し方は違う**。テスト側は開発機でしか動かないので
+``npx --yes pyright@latest`` でよいが、こちらは利用者が BO / オフライン
+環境で打つコマンドなので、**npm から最新版を取りに行ってはいけない**。
+代わりに以下の優先順で探す:
 
 1. PATH にある ``pyright`` コマンドを直接実行
 2. ``npx --no-install pyright`` でローカル npm の pyright を使う

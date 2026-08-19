@@ -13,7 +13,6 @@ import sys
 
 import pytest
 
-
 # ─────────────────────────────────────────────────────────────────────
 # service を import しないことが正しい関数 (provider / master 側)
 # ─────────────────────────────────────────────────────────────────────
@@ -75,11 +74,11 @@ def test_download_report_does_not_crash(monkeypatch: pytest.MonkeyPatch) -> None
     service.py を読むので `requests` が sys.modules に入る前提だが、
     ここでは「import 経路が壊れていない」ことだけを確認する。
     """
-    from comken.services.salesforce_downloader import download_report  # noqa: F401
+    from comken.services.salesforce_downloader import download_report
     assert download_report is not None
 
 
 def test_download_scheduled_does_not_crash(monkeypatch: pytest.MonkeyPatch) -> None:
     """`download_scheduled` も同様。"""
-    from comken.services.salesforce_downloader import download_scheduled  # noqa: F401
+    from comken.services.salesforce_downloader import download_scheduled
     assert download_scheduled is not None

@@ -11,9 +11,9 @@ import sys
 import types
 from pathlib import Path
 
-import comken
 import pytest
 
+import comken
 
 # ── comken 自体の情報 ────────────────────────────────────────────────────────
 
@@ -172,55 +172,7 @@ def test_does_not_load_requests_for_skipped_salesforce(
         # cli 内部の遅延 import が走っても、list_names が空なので salesforce は import されない
         from comken.core.doctor.cli import _resolve_salesforce_deps
 
-        list_names_fn, sandbox_cls = _resolve_salesforce_deps()
-        assert sandbox_cls is None  # list_names が空なら salesforce を import しない
-        assert "comken.toolbox.salesforce.direct.client" not in sys.modules
-        assert "requests" not in sys.modules
-
-        # runner の純粋関数も直接確かめる（資格情報ゼロ + sandbox_cls=None）
-        from comken.core.doctor.runner import check_salesforce
-
-        result = check_salesforce(list_names_fn, sandbox_cls)
-        assert result.status == "skip"
-    finally:
-        if saved_requests is not None:
-            sys.modules["requests"] = saved_requests
-        if saved_salesforce is not None:
-            sys.modules["comken.toolbox.salesforce.direct.client"] = saved_salesforce
-        if saved_sites is not None:
-            sys.modules["comken.toolbox.salesforce.sites"] = saved_sites
-        if saved_sandbox is not None:
-            sys.modules["comken.toolbox.salesforce.sites.sandbox"] = saved_sandbox
-
-
-def test_does_not_load_requests_for_skipped_salesforce(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Salesforce を skip するときに ``requests`` を import しない（BO 環境対応）。
-
-    認証情報が無いなら Salesforce まで進まず SKIP で返るのが正しい。
-    Salesforce の client.py は冒頭で ``import requests`` するため、ここで
-    import されたら BO 環境（``requests`` が入っていない）で ``doctor`` が
-    落ちることになる。
-
-    cli.py の `_resolve_salesforce_deps()` は資格情報が空なら Salesforce を
-    import しない作りなので、それを直接確かめる。
-    """
-    # 資格情報 0 件状態を再現。`list_names` を空リスト関数で差し替える
-    monkeypatch.setattr(
-        "comken.toolbox.credentials.list_names",
-        lambda *args, **kwargs: [],
-    )
-    # Salesforce 関連のモジュールを一旦取り除く（テスト後に復元）
-    saved_requests = sys.modules.pop("requests", None)
-    saved_salesforce = sys.modules.pop("comken.toolbox.salesforce.direct.client", None)
-    saved_sites = sys.modules.pop("comken.toolbox.salesforce.sites", None)
-    saved_sandbox = sys.modules.pop("comken.toolbox.salesforce.sites.sandbox", None)
-    try:
-        # cli 内部の遅延 import が走っても、list_names が空なので salesforce は import されない
-        from comken.core.doctor.cli import _resolve_salesforce_deps
-
-        list_names_fn, names, sandbox_cls = _resolve_salesforce_deps()
+        _list_names_fn, names, sandbox_cls = _resolve_salesforce_deps()
         assert names == []
         assert sandbox_cls is None  # list_names が空なら salesforce を import しない
         assert "comken.toolbox.salesforce.direct.client" not in sys.modules

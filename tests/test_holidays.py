@@ -36,6 +36,15 @@ FIXTURE_PATH = Path(__file__).parent / "fixtures" / "holidays" / "syukujitsu_sam
 # ── Holiday データクラス ──────────────────────────────────────────────────
 
 
+def _computed_calendar(year: int) -> dict[_dt.date, str]:
+    """その年の ``{日付: 祝日名}`` を計算で作る。
+
+    ``ComputedHolidaySource(from_year=..., to_year=...)`` を毎回書くと 1 行が
+    100 桁を超えて折り返しが増え、「何年を見ているのか」が読み取りにくくなる。
+    """
+    return {h.date: h.name for h in ComputedHolidaySource(from_year=year, to_year=year).load()}
+
+
 class TestHolidayDataclass:
     """``Holiday`` の不変性・ハッシュ可能性を確認する。"""
 
@@ -733,13 +742,13 @@ class TestComputedHolidaySource:
     def test_computed_2020_summer_olympics_moves(self) -> None:
         """2020 年の特例が「移動」していることを確認（前後の年との差分）。"""
         # 2019 年は 7月 第3月曜 = 7/15 が海の日
-        cal_2019 = {h.date: h.name for h in ComputedHolidaySource(from_year=2019, to_year=2019).load()}
+        cal_2019 = _computed_calendar(2019)
         assert cal_2019[_dt.date(2019, 7, 15)] == "海の日"
         # 2021 年は 7月 第3月曜 = 7/19 が海の日（オリンピック特例の解除）
-        cal_2021 = {h.date: h.name for h in ComputedHolidaySource(from_year=2021, to_year=2021).load()}
+        cal_2021 = _computed_calendar(2021)
         assert cal_2021[_dt.date(2021, 7, 19)] == "海の日"
         # 2020 年だけ 7/23
-        cal_2020 = {h.date: h.name for h in ComputedHolidaySource(from_year=2020, to_year=2020).load()}
+        cal_2020 = _computed_calendar(2020)
         assert cal_2020[_dt.date(2020, 7, 23)] == "海の日"
 
     def test_computed_substitute_holiday(self) -> None:
@@ -773,21 +782,21 @@ class TestComputedHolidaySource:
 
     def test_computed_emperors_birthday_changes(self) -> None:
         """天皇誕生日の日付が年で変わる（1989-2018 = 12/23、2020- = 2/23）。"""
-        cal_2010 = {h.date: h.name for h in ComputedHolidaySource(from_year=2010, to_year=2010).load()}
-        cal_2024 = {h.date: h.name for h in ComputedHolidaySource(from_year=2024, to_year=2024).load()}
+        cal_2010 = _computed_calendar(2010)
+        cal_2024 = _computed_calendar(2024)
         # 平成: 12/23
         assert cal_2010[_dt.date(2010, 12, 23)] == "天皇誕生日"
         # 令和: 2/23
         assert cal_2024[_dt.date(2024, 2, 23)] == "天皇誕生日"
         # 2019 は変則（天皇の即位の日 = 5/1、即位礼正殿の儀 = 10/22）
-        cal_2019 = {h.date: h.name for h in ComputedHolidaySource(from_year=2019, to_year=2019).load()}
+        cal_2019 = _computed_calendar(2019)
         assert cal_2019[_dt.date(2019, 5, 1)] == "天皇の即位の日"
         assert cal_2019[_dt.date(2019, 10, 22)] == "即位礼正殿の儀の行われる日"
 
     def test_computed_adults_day_history(self) -> None:
         """成人の日は 1999 = 1/15、2000 = 1月 第2月曜。"""
-        cal_1999 = {h.date: h.name for h in ComputedHolidaySource(from_year=1999, to_year=1999).load()}
-        cal_2000 = {h.date: h.name for h in ComputedHolidaySource(from_year=2000, to_year=2000).load()}
+        cal_1999 = _computed_calendar(1999)
+        cal_2000 = _computed_calendar(2000)
         assert cal_1999[_dt.date(1999, 1, 15)] == "成人の日"
         # 2000/1/10 (Mon) が第2月曜
         assert cal_2000[_dt.date(2000, 1, 10)] == "成人の日"
@@ -800,7 +809,9 @@ class TestComputedCompanyHolidays:
     """``COMPANY_HOLIDAYS`` の 3 形式（単発 / 期間 / 特定年のみ）。"""
 
     @staticmethod
-    def _with_company_holidays(monkeypatch: pytest.MonkeyPatch, entries: list[tuple]) -> ComputedHolidaySource:
+    def _with_company_holidays(
+        monkeypatch: pytest.MonkeyPatch, entries: list[tuple]
+    ) -> ComputedHolidaySource:
         """テスト用の ``COMPANY_HOLIDAYS`` を ``monkeypatch`` で差し込んで source を返す。
 
         ``TestNoImplicitRequests`` が ``sys.modules`` を再生成するため、
@@ -888,7 +899,7 @@ class TestComputedSourceConstraints:
 
         # requests を消してからソースを import
         sys.modules.pop("requests", None)
-        from comken.toolbox.holidays.sources.computed import (  # noqa: F401
+        from comken.toolbox.holidays.sources.computed import (
             ComputedHolidaySource,
         )
 
