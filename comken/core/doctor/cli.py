@@ -22,6 +22,8 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from comken.core.timer import measure
+
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -164,6 +166,7 @@ def DoctorResult_ok_skip(name: str, message: str) -> "DoctorResult":
 # ── CLI 本体 ─────────────────────────────────────────────────────────────────
 
 
+@measure
 def main(argv: list[str] | None = None) -> int:
     """コマンドを実行して終了コードを返す（0=全 OK / 1=NG あり）。"""
     args = _build_parser().parse_args(argv if argv is not None else sys.argv[1:])

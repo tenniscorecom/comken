@@ -241,3 +241,141 @@ APIからstaged credentialsを作成できるため、新旧資格情報を切�
 
 - [salesforce.md](../salesforce.md) — Salesforce連携全体の設計と使い方
 - [credentials.md](../credentials.md) — comkenでの認証情報保管
+
+---
+
+# Refresh Token 認証のやり方 (how to)
+
+開発環境で **Refresh Token Flow** の認証を通すまでの手順。
+本番の無人実行に入る前に 1 度だけ実行する対話的なフロー。
+
+## 0. 前提
+
+- comken がインストールされている (本ドキュメントが同封の v0.10.0 以降)
+- Salesforce 側で **External Client App (ECA)** が作成済み
+  - 「OAuth 設定」ページで **Authorization Code + Refresh Token Flow を有効化**
+  - 「Client Credentials Flow」は **無効化** (既定) — 共存させると secret 単独漏えいの入口が残る
+  - 「Refresh Token Rotation」を有効化 (推奨)
+  - 「Require Secret for Refresh Token Flow」を **無効化** (comken の既定)
+  - Callback URL に `http://localhost:8080/callback` を設定 (後述の `http_server` 方式)
+- comken を実行する Windows ユーザーと、ECA を作成した管理者が別の場合は事前に連携
+
+## 1. ECA の client_id / client_secret を DPAPI に登録
+
+まず `client_id` と `client_secret` を comken の資格情報ストアに入れる。
+
+```powershell
+python -m comken cred gui
+```
+
+- **キー名**: `<prefix>_client_id` (例: `sandbox_client_id`)
+- **値**: ECA の「Consumer Key」 (Salesforce 画面でコピー)
+- 続けて **`<prefix>_client_secret`** を「Consumer Secret」で登録
+- **prefix** は組織クラス (例: `Sandbox`) の `CREDENTIAL_PREFIX` と揃える
+  - デフォルトは組織名そのまま (`sandbox` / `production` など)
+
+登録したかは `python -m comken cred list` で確認できる。
+
+## 2. 初回認可 (authorization_url)
+
+ブラウザで ECA に「comken がこの組織にアクセスしていい」と 1 回だけ承認する。
+
+```powershell
+python -c "from comken.toolbox.salesforce.sites import Sandbox; print(Sandbox().authorization_url())"
+```
+
+- 表示された URL をブラウザで開く
+- Salesforce のログイン画面で ECA を許可する組織のユーザーでログイン
+- 「Allow」 (許可) をクリック
+- ブラウザを `http://localhost:8080/callback?code=...` にリダイレクト
+- **その callback URL の `code=` 以降の文字列**をメモ
+
+この `code` は 10 分で失効する。すぐ次の手順で使う。
+
+## 3. code を refresh_token に交換
+
+```powershell
+python -c "from comken.toolbox.salesforce.sites import Sandbox; print(Sandbox().exchange_code(input('code: ')))"
+```
+
+- `code:` プロンプトに 2 でメモした文字列を貼り付け
+- 出力は **refresh_token を含む JSON** になる (`access_token`, `refresh_token`, `instance_url`)
+
+## 4. refresh_token を DPAPI に登録
+
+```powershell
+python -m comken cred gui
+```
+
+- **キー名**: `<prefix>_refresh_token`
+- **値**: 3 で取得した `refresh_token` フィールド
+
+## 5. 動作確認
+
+```powershell
+python -m comken.toolbox.salesforce check
+```
+
+- 0 エラーなら OK
+- 401 が返ったら、`<prefix>_refresh_token` が **古い/期限切れ**の可能性。
+  手順 2 からやり直す (Refresh Token Rotation を有効にしていれば、再認可時に **新しい refresh_token** が返るので 4 も更新する)
+
+## 6. 無人実行への移行
+
+ここまでの設定が完了すれば、`Sandbox()` をそのまま使うスクリプトは
+**誰もログインしていない状態でも** 動く:
+
+```python
+from comken.toolbox.salesforce.sites import Sandbox
+
+with Sandbox() as sf:
+    rows = sf.query("SELECT Id, Name FROM Account LIMIT 10")
+```
+
+`client_id` / `client_secret` / `refresh_token` のいずれかが **コードに現れない** ことが
+この手順のゴール。**Windows DPAPI** に守られた値だけが、組織を操作する。
+
+## 7. 失効時の対応
+
+`refresh_token` を revoke / 失効させたい:
+
+1. ECA 画面で「Revoke」操作
+2. もしくは ECA を作り直す
+3. **手順 2 からやり直す**
+
+Refresh Token Rotation を有効にしている場合、**`comken` が新しい `refresh_token` を
+受け取ったタイミングで DPAPI に自動で書き戻す** (`auth.py` 内の `save_credential()`)。
+運用としてやることは増えない。
+
+## 8. Client Credentials Flow を使う場合 (開発中だけ)
+
+Refresh Token Flow の **対になる形**で、初回認可が要らない代わりに
+`client_secret` 単独で操作できる (本番で使わない理由は
+`docs/開発/salesforce-authentication.md` の冒頭を参照):
+
+```python
+from comken.toolbox.salesforce import ClientCredentialsAuth
+from comken.toolbox.salesforce.sites import Sandbox
+
+with Sandbox(auth=ClientCredentialsAuth(
+    client_id=...,
+    client_secret=...,
+    domain="login.salesforce.com",
+)) as sf:
+    ...
+```
+
+**本番では使わない。** 動作確認の回転を速くしたい開発中だけ。
+
+## 9. トラブルシュート
+
+| 症状 | 確認 |
+|---|---|
+| `INVALID_CLIENT_ID` | `python -m comken cred list` で `<prefix>_client_id` を確認。ECA の Consumer Key と一致するか |
+| `INVALID_CLIENT_SECRET` | 同様に `<prefix>_client_secret` を確認 |
+| `INVALID_AUTH_CODE` | authorization_url で取得した `code` を 10 分以上放置した。手順 2 からやり直す |
+| `UNSUPPORTED_GRANT_TYPE` | ECA のフロー設定で Authorization Code + Refresh Token Flow を有効にしているか |
+| `INVALID_REFRESH_TOKEN` | refresh_token を revoke 済み。手順 2 からやり直す |
+| 401 が返る (refresh_token は新しい) | ECA で「Manage Refresh Tokens」を開き、過去トークンの状態を確認 |
+| 連携アプリが見つからない | ECA のパッケージ / 組織を確認。`Sandbox.DOMAIN_URL` と一致するか |
+

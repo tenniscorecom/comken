@@ -25,6 +25,8 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
+from comken.core.timer import measure
+
 logger = logging.getLogger(__name__)
 
 __all__ = ["wait", "wait_for_file"]
@@ -83,6 +85,7 @@ DEFAULT_TIMEOUT_SECONDS = 60.0
 DEFAULT_POLL_INTERVAL_SECONDS = 1.0
 
 
+@measure
 def wait_for_file(
     folder: str | Path,
     name_pattern: str,

@@ -25,6 +25,7 @@ from comken.core.check import (
     check_version,
     summarize,
 )
+from comken.core.timer import measure
 
 
 def run_all(project_path: Path) -> list[CheckResult]:
@@ -40,6 +41,7 @@ def run_all(project_path: Path) -> list[CheckResult]:
     ]
 
 
+@measure
 def main(argv: list[str] | None = None) -> int:
     """CLI 本体。終了コード (0=全 OK / 1=NG あり) を返す。"""
     args = _build_parser().parse_args(argv if argv is not None else sys.argv[1:])
