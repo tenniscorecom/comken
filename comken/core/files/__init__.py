@@ -11,18 +11,20 @@ from comken.core.files.atomic import atomic_write
 from comken.core.files.finder import FileFinder, date_in_name
 from comken.core.files.naming import DateNameBuilder
 from comken.core.files.ops import copy_file, delete_file, local_copy, move_file, project_dir
+from comken.core.files.wait import wait_for_file
 
 __all__ = [
+    "DateNameBuilder",
     "FileFinder",
-    "date_in_name",
-    "move_file",
-    "project_dir",
+    "atomic_write",
     "copy_file",
+    "date_in_name",
     "delete_file",
     "local_copy",
-    "zip_folder",
-    "zip_files",
+    "move_file",
+    "project_dir",
     "unzip",
-    "DateNameBuilder",
-    "atomic_write",
+    "wait_for_file",
+    "zip_files",
+    "zip_folder",
 ]

@@ -18,7 +18,7 @@ from comken.core.data import DiffResult as DiffResult
 from comken.core.data import RowChange as RowChange
 from comken.core.data import diff_row as diff_row
 from comken.core.data import diff_rows as diff_rows
-from comken.core.file.wait import wait_for_file as wait_for_file
+from comken.core.files.wait import wait_for_file as wait_for_file
 from comken.core.files.archive import unzip as unzip
 from comken.core.files.archive import zip_files as zip_files
 from comken.core.files.archive import zip_folder as zip_folder

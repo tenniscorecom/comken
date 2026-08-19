@@ -1,11 +1,11 @@
-r"""comken/core/file/wait.py — ファイル出現待ち
+r"""comken/core/files/wait.py — ファイル出現待ち
 
 業務自動化では「共有サーバーからCSVが落ちてくるのを待つ」「RPA基盤が
 ファイルを置くのを待つ」など、**次の処理に進む前にファイルが揃っているか
 確かめたい**場面が頻出する。``FileFinder.latest()`` は1回探すだけなので、
 「無ければ待つ」には `wait_for_file` を使う。
 
-    from comken.core.file import wait_for_file
+    from comken.core.files import wait_for_file
 
     path = wait_for_file(
         folder=r"\\server\share\input",

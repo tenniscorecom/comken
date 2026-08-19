@@ -1,4 +1,4 @@
-"""``comken.core.file.wait`` のテスト。
+"""``comken.core.files.wait`` のテスト。
 
 ファイル出現待ちの挙動を検証する。
 """
@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from comken.core.file.wait import wait_for_file
+from comken.core.files.wait import wait_for_file
 
 
 class TestWaitForFile:
@@ -113,9 +113,9 @@ class TestFacadeExports:
         assert "wait_for_file" in comken.core.__all__
         assert callable(comken.core.wait_for_file)
 
-    def test_from_comken_core_file(self) -> None:
-        """``comken.core.file`` からも取得できる。"""
-        from comken.core.file import wait_for_file as direct
+    def test_from_comken_core_files(self) -> None:
+        """``comken.core.files`` からも取得できる。"""
+        from comken.core.files import wait_for_file as direct
 
         assert direct is wait_for_file
 
