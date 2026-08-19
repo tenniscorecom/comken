@@ -78,6 +78,7 @@ def test_core_exposes_parts() -> None:
         "unzip",
         "wait",
         "wait_for_file",
+        "wait_until_stable",
         "zip_files",
         "zip_folder",
     }

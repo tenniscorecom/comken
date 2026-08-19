@@ -38,6 +38,7 @@ from comken.core.timer import Timer as Timer
 from comken.core.timer import measure as measure
 from comken.core.wait import wait as wait
 from comken.core.wait import wait_for_file as wait_for_file
+from comken.core.wait import wait_until_stable as wait_until_stable
 
 __all__ = [
     "DateNameBuilder",
@@ -64,6 +65,7 @@ __all__ = [
     "unzip",
     "wait",
     "wait_for_file",
+    "wait_until_stable",
     "zip_files",
     "zip_folder",
 ]

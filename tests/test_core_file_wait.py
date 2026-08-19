@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from comken.core.wait import wait_for_file
+from comken.core.wait import wait_for_file, wait_until_stable
 
 
 class TestWaitForFile:
@@ -186,3 +186,122 @@ class TestFacadeExports:
 
         assert "wait_for_file" not in comken.__all__
         assert not hasattr(comken, "wait_for_file")
+
+
+class TestWaitUntilStable:
+    def test_returns_when_size_and_mtime_stop_changing(self, tmp_path: Path) -> None:
+        """書き込みが止まったら返る。"""
+        target = tmp_path / "data.csv"
+        target.write_text("done", encoding="utf-8")
+
+        result = wait_until_stable(target, stable_for=0.2, timeout=5.0, poll_interval=0.05)
+
+        assert result == target
+
+    def test_waits_while_the_file_is_still_growing(self, tmp_path: Path) -> None:
+        """書き込み中は返らず、書き終わってから返る。
+
+        「何を防いでいるか」: 作成直後のファイルは書き込み途中でも
+        ``is_file()`` が True になるので、存在だけを見て読むと
+        途中までの内容を掴む。
+        """
+        target = tmp_path / "growing.csv"
+        target.write_text("row1\n", encoding="utf-8")
+        finished_at: list[float] = []
+
+        def keep_writing() -> None:
+            for i in range(2, 6):
+                time.sleep(0.1)
+                with target.open("a", encoding="utf-8") as f:
+                    f.write(f"row{i}\n")
+            finished_at.append(time.monotonic())
+
+        thread = threading.Thread(target=keep_writing)
+        thread.start()
+        try:
+            wait_until_stable(target, stable_for=0.2, timeout=5.0, poll_interval=0.05)
+            returned_at = time.monotonic()
+        finally:
+            thread.join()
+
+        # 書き終わってから返っている（途中で返っていない）
+        assert returned_at > finished_at[0]
+        assert target.read_text(encoding="utf-8").count("row") == 5
+
+    def test_raises_timeout_error_while_still_being_written(self, tmp_path: Path) -> None:
+        """timeout までに書き終わらなければ ``TimeoutError``。
+
+        ファイルは有るので ``FileNotFoundError`` ではない。
+        「無い」と「書き終わらない」を取り違えないよう、型で分けている。
+        """
+        target = tmp_path / "endless.csv"
+        target.write_text("x", encoding="utf-8")
+        stop = threading.Event()
+
+        def keep_writing() -> None:
+            while not stop.is_set():
+                time.sleep(0.05)
+                with target.open("a", encoding="utf-8") as f:
+                    f.write("x")
+
+        thread = threading.Thread(target=keep_writing)
+        thread.start()
+        try:
+            with pytest.raises(TimeoutError):
+                wait_until_stable(target, stable_for=0.5, timeout=0.6, poll_interval=0.05)
+        finally:
+            stop.set()
+            thread.join()
+
+    def test_missing_file_raises_file_not_found(self, tmp_path: Path) -> None:
+        """ファイルが無ければ ``FileNotFoundError``。"""
+        with pytest.raises(FileNotFoundError):
+            wait_until_stable(tmp_path / "nope.csv", stable_for=0.1, timeout=1.0)
+
+    def test_zero_stable_for_returns_immediately(self, tmp_path: Path) -> None:
+        """``stable_for=0`` は待たずにそのまま返す（完了待ちを切る指定）。"""
+        target = tmp_path / "data.csv"
+        target.write_text("x", encoding="utf-8")
+
+        start = time.monotonic()
+        result = wait_until_stable(target, stable_for=0, timeout=5.0, poll_interval=1.0)
+
+        assert result == target
+        assert time.monotonic() - start < 0.5
+
+
+class TestWaitForFileWithStableFor:
+    def test_stable_for_waits_for_the_write_to_finish(self, tmp_path: Path) -> None:
+        """``stable_for`` を渡すと、見つけたうえで書き込み完了まで待つ。"""
+        target = tmp_path / "data_1.csv"
+
+        def write_slowly() -> None:
+            target.write_text("row1\n", encoding="utf-8")
+            for i in range(2, 5):
+                time.sleep(0.1)
+                with target.open("a", encoding="utf-8") as f:
+                    f.write(f"row{i}\n")
+
+        thread = threading.Thread(target=write_slowly)
+        thread.start()
+        try:
+            result = wait_for_file(
+                tmp_path, "data_*.csv", timeout=5.0, poll_interval=0.05, stable_for=0.2
+            )
+        finally:
+            thread.join()
+
+        assert result == target
+        # 全部書き終わってから返っている
+        assert result.read_text(encoding="utf-8").count("row") == 4
+
+    def test_default_does_not_wait_for_the_write(self, tmp_path: Path) -> None:
+        """既定 (``stable_for`` 省略) は従来どおり、見つけた時点で返す。"""
+        target = tmp_path / "data_1.csv"
+        target.write_text("x", encoding="utf-8")
+
+        start = time.monotonic()
+        result = wait_for_file(tmp_path, "data_*.csv", timeout=5.0, poll_interval=1.0)
+
+        assert result == target
+        assert time.monotonic() - start < 0.5

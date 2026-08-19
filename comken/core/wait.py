@@ -29,7 +29,7 @@ from comken.core.timer import measure
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["wait", "wait_for_file"]
+__all__ = ["wait", "wait_for_file", "wait_until_stable"]
 
 
 class wait:
@@ -83,6 +83,9 @@ class wait:
 DEFAULT_TIMEOUT_SECONDS = 60.0
 # デフォルトの再検索間隔。短すぎると I/O が無駄に増える。
 DEFAULT_POLL_INTERVAL_SECONDS = 1.0
+# 書き込み完了とみなすまでに、サイズと更新時刻が変わらないでいてほしい秒数。
+# 短すぎると、書き込み側が一瞬止まっただけで「完成した」と誤判定する。
+DEFAULT_STABLE_FOR_SECONDS = 2.0
 
 
 @measure
@@ -91,6 +94,7 @@ def wait_for_file(
     name_pattern: str,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
     poll_interval: float = DEFAULT_POLL_INTERVAL_SECONDS,
+    stable_for: float = 0.0,
 ) -> Path:
     """``folder`` 内で ``name_pattern`` にマッチするファイルが出現するまで待つ。
 
@@ -98,11 +102,14 @@ def wait_for_file(
     ``poll_interval`` 秒ごとに再検索し、``timeout`` 秒経っても見つからなければ
     ``FileNotFoundError`` を送出する。
 
-    **この関数は「ファイルが存在するまで待つ」機能であり、
-    「ファイルへの書き込み完了を待つ」機能ではない。** 作成直後のファイルは
-    書き込み途中で ``is_file()`` が True になる。後続処理が読む前に
-    ファイルサイズや mtime が安定したかを確認したい場合は呼び出し側で
-    対処すること。
+    **既定では「ファイルが存在するまで」しか待たない。** 作成直後のファイルは
+    書き込み途中でも ``is_file()`` が True になるので、そのまま読むと
+    途中までの内容を掴むことがある。**書き込み完了まで待つには
+    ``stable_for`` を指定する**（サイズと更新時刻がその秒数変わらなければ
+    書き終わったとみなす）::
+
+        path = wait_for_file(folder, "data_*.csv", stable_for=2.0)
+        # → 見つけたうえで、2 秒間サイズも更新時刻も変わらなくなってから返る
 
     **フォルダが無い場合は待たずに即座に失敗する。** ``Path.glob()`` は
     存在しないフォルダでも例外を出さず空を返すので、そのまま回すと
@@ -114,8 +121,11 @@ def wait_for_file(
     Args:
         folder: 監視するフォルダ。
         name_pattern: ファイル名の glob パターン（例: ``"data_*.csv"``）。
-        timeout: 最大待機秒数。デフォルトは 60 秒。
+        timeout: 最大待機秒数。デフォルトは 60 秒。**探す時間と書き込み完了を
+            待つ時間の合計**にかかる（``stable_for`` を足しても倍にはならない）。
         poll_interval: 再検索の間隔秒数。デフォルトは 1 秒。
+        stable_for: 書き込み完了とみなすまでに、サイズと更新時刻が変わらないで
+            いてほしい秒数。既定の ``0.0`` は「完了を待たない」（見つけた時点で返す）。
 
     Returns:
         見つかったファイルのうち mtime が最新のもの。
@@ -125,6 +135,9 @@ def wait_for_file(
             待っている間にフォルダが消えた場合も同じ（``timeout`` 到達時）。
         NotADirectoryError: ``folder`` にフォルダではなくファイルを渡した場合。
         FileNotFoundError: ``timeout`` 秒経っても該当ファイルが見つからなかった場合。
+            ``stable_for`` の待機中にファイルが消えた場合も同じ。
+        TimeoutError: ファイルは見つかったが、``timeout`` までに書き込みが
+            終わらなかった場合（``stable_for`` を指定したときだけ起きる）。
     """
     folder_path = Path(folder)
     _ensure_watchable_folder(folder_path)
@@ -134,7 +147,8 @@ def wait_for_file(
     while True:
         matched = [p for p in folder_path.glob(name_pattern) if p.is_file()]
         if matched:
-            return max(matched, key=lambda p: p.stat().st_mtime)
+            found = max(matched, key=lambda p: p.stat().st_mtime)
+            return _wait_until_stable(found, stable_for, poll_interval, deadline)
         if time.monotonic() >= deadline:
             # 待っている間にフォルダごと消えた（共有サーバーが切れた等）場合は、
             # 「ファイルが来ない」ではなくそちらを知らせる
@@ -163,3 +177,91 @@ def _ensure_watchable_folder(folder_path: Path) -> None:
         f"監視するフォルダがありません: {folder_path}\n"
         "共有サーバーにつながっているか、パスが正しいかを確認してください。"
     )
+
+
+@measure
+def wait_until_stable(
+    path: str | Path,
+    stable_for: float = DEFAULT_STABLE_FOR_SECONDS,
+    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    poll_interval: float = DEFAULT_POLL_INTERVAL_SECONDS,
+) -> Path:
+    r"""ファイルへの書き込みが終わるまで待つ。
+
+    サイズと更新時刻を ``poll_interval`` 秒ごとに見て、``stable_for`` 秒のあいだ
+    どちらも変わらなければ「書き終わった」とみなして返す。共有サーバーへ
+    他のシステムが置きにくるファイルを、途中まで読んでしまうのを防ぐ。
+
+        path = wait_until_stable(r"\\server\share\in\data.csv", stable_for=2.0)
+        rows = read_csv(path)      # 全部書き終わってから読む
+
+    **サイズと更新時刻でしか判断できないので、確実ではない。** 書き込み側が
+    ``stable_for`` より長く止まると、途中でも「書き終わった」と判定する。
+    ネットワークが不安定な共有フォルダでは ``stable_for`` を長めに取る。
+
+    **書き込み側を自分で書けるなら、この関数より
+    「別名で書いてから rename する」ほうが確実**（``comken.core.files`` の
+    atomic 系がその形）。rename は一瞬で終わるので、読む側が途中の状態を
+    見ることがない。この関数は**書き込み側に手を出せないとき**の手段。
+
+    Args:
+        path: 監視するファイル。
+        stable_for: サイズと更新時刻が変わらないでいてほしい秒数。デフォルトは 2 秒。
+            ``0`` 以下を渡すと待たずにそのまま返す。
+        timeout: 最大待機秒数。デフォルトは 60 秒。
+        poll_interval: 確認の間隔秒数。デフォルトは 1 秒。
+
+    Returns:
+        書き込みが終わったとみなせるファイルの ``Path``。
+
+    Raises:
+        FileNotFoundError: ファイルが無い場合。待っている間に消えた場合も同じ。
+        TimeoutError: ``timeout`` までに書き込みが終わらなかった場合。
+    """
+    file_path = Path(path)
+    deadline = time.monotonic() + timeout
+    return _wait_until_stable(file_path, stable_for, poll_interval, deadline)
+
+
+def _wait_until_stable(
+    file_path: Path,
+    stable_for: float,
+    poll_interval: float,
+    deadline: float,
+) -> Path:
+    """``deadline`` まで待って、サイズと更新時刻が落ち着いたら ``file_path`` を返す。
+
+    ``wait_for_file`` と ``wait_until_stable`` で期限の持ち方が違う（前者は
+    探す時間と共通、後者は自前）ので、期限だけを引数で受け取る形にしている。
+    """
+    if stable_for <= 0:
+        return file_path
+
+    # (サイズ, 更新時刻) が変わらないまま stable_for 秒たったら書き終わりとみなす。
+    # 更新時刻はナノ秒で見る (秒単位だと、1 秒以内の連続書き込みを取りこぼす)
+    last_seen: tuple[int, int] | None = None
+    unchanged_since = 0.0
+    while True:
+        try:
+            stat = file_path.stat()
+        except FileNotFoundError as e:
+            raise FileNotFoundError(
+                f"待っている間にファイルが消えました: {file_path}\n"
+                "別の処理が移動または削除していないか確認してください。"
+            ) from e
+
+        current = (stat.st_size, stat.st_mtime_ns)
+        now = time.monotonic()
+        if current != last_seen:
+            last_seen = current
+            unchanged_since = now
+        elif now - unchanged_since >= stable_for:
+            return file_path
+
+        if now >= deadline:
+            raise TimeoutError(
+                f"書き込みが終わりません: {file_path}"
+                f" (サイズ {stat.st_size} バイトのまま {stable_for} 秒を待てませんでした)\n"
+                "書き込み側が止まっていないか、timeout を延ばすかを確認してください。"
+            )
+        time.sleep(poll_interval)

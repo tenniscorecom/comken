@@ -235,6 +235,40 @@ path = wait_for_file(
 「ファイルがまだ来ていない」と同じ形で 60 秒後に失敗し、原因が分からなくなる。
 待っている間にフォルダごと消えた場合も、`timeout` 到達時にそちらを知らせる。
 
+### 書き込み完了待ち（wait_until_stable / stable_for）
+
+**ファイルが「存在する」ことと「書き終わっている」ことは別。** 作成直後の
+ファイルは書き込み途中でも `is_file()` が True になるので、そのまま読むと
+途中までの内容を掴むことがある。他システムが共有サーバーへ置きにくる
+ファイルを読むときは、書き込み完了まで待つ。
+
+```python
+from comken.core.wait import wait_for_file, wait_until_stable
+
+# 探すのと同時に、書き込み完了まで待つ
+path = wait_for_file(folder, "data_*.csv", stable_for=2.0)
+
+# すでにパスが分かっているとき
+path = wait_until_stable(r"\\server\share\in\data.csv", stable_for=2.0)
+```
+
+サイズと更新時刻を見て、`stable_for` 秒どちらも変わらなければ書き終わったとみなす。
+`timeout` は**探す時間と完了待ちの合計**にかかる（`stable_for` を足しても倍にならない）。
+
+| 状況 | 例外 |
+|---|---|
+| ファイルが無い / 待っている間に消えた | `FileNotFoundError` |
+| ファイルは有るが `timeout` までに書き終わらない | `TimeoutError` |
+
+**サイズと更新時刻でしか判断できないので確実ではない。** 書き込み側が
+`stable_for` より長く止まると、途中でも「書き終わった」と判定する。
+不安定な共有フォルダでは `stable_for` を長めに取る。
+
+**書き込み側を自分で書けるなら、この関数より「別名で書いてから rename する」
+ほうが確実**（`core/files` の atomic 系がその形）。rename は一瞬で終わるので、
+読む側が途中の状態を見ることがない。`wait_until_stable` は**書き込み側に
+手を出せないとき**の手段。
+
 `FileFinder.latest()` は1 回探すだけなので「無ければ待つ」はこちらを使う。
 
 ### run_id（コンテキスト変数で実行処理を識別）

@@ -800,7 +800,7 @@ Returns:
 
 ```text
 @measure
-def wait_for_file(folder: str | Path, name_pattern: str, timeout: float=DEFAULT_TIMEOUT_SECONDS, poll_interval: float=DEFAULT_POLL_INTERVAL_SECONDS) -> Path:
+def wait_for_file(folder: str | Path, name_pattern: str, timeout: float=DEFAULT_TIMEOUT_SECONDS, poll_interval: float=DEFAULT_POLL_INTERVAL_SECONDS, stable_for: float=0.0) -> Path:
 ```
 
 #### 説明
@@ -811,11 +811,14 @@ def wait_for_file(folder: str | Path, name_pattern: str, timeout: float=DEFAULT_
 ``poll_interval`` 秒ごとに再検索し、``timeout`` 秒経っても見つからなければ
 ``FileNotFoundError`` を送出する。
 
-**この関数は「ファイルが存在するまで待つ」機能であり、
-「ファイルへの書き込み完了を待つ」機能ではない。** 作成直後のファイルは
-書き込み途中で ``is_file()`` が True になる。後続処理が読む前に
-ファイルサイズや mtime が安定したかを確認したい場合は呼び出し側で
-対処すること。
+**既定では「ファイルが存在するまで」しか待たない。** 作成直後のファイルは
+書き込み途中でも ``is_file()`` が True になるので、そのまま読むと
+途中までの内容を掴むことがある。**書き込み完了まで待つには
+``stable_for`` を指定する**（サイズと更新時刻がその秒数変わらなければ
+書き終わったとみなす）::
+
+    path = wait_for_file(folder, "data_*.csv", stable_for=2.0)
+    # → 見つけたうえで、2 秒間サイズも更新時刻も変わらなくなってから返る
 
 **フォルダが無い場合は待たずに即座に失敗する。** ``Path.glob()`` は
 存在しないフォルダでも例外を出さず空を返すので、そのまま回すと
@@ -827,8 +830,11 @@ def wait_for_file(folder: str | Path, name_pattern: str, timeout: float=DEFAULT_
 Args:
     folder: 監視するフォルダ。
     name_pattern: ファイル名の glob パターン（例: ``"data_*.csv"``）。
-    timeout: 最大待機秒数。デフォルトは 60 秒。
+    timeout: 最大待機秒数。デフォルトは 60 秒。**探す時間と書き込み完了を
+        待つ時間の合計**にかかる（``stable_for`` を足しても倍にはならない）。
     poll_interval: 再検索の間隔秒数。デフォルトは 1 秒。
+    stable_for: 書き込み完了とみなすまでに、サイズと更新時刻が変わらないで
+        いてほしい秒数。既定の ``0.0`` は「完了を待たない」（見つけた時点で返す）。
 
 Returns:
     見つかったファイルのうち mtime が最新のもの。
@@ -838,6 +844,50 @@ Raises:
         待っている間にフォルダが消えた場合も同じ（``timeout`` 到達時）。
     NotADirectoryError: ``folder`` にフォルダではなくファイルを渡した場合。
     FileNotFoundError: ``timeout`` 秒経っても該当ファイルが見つからなかった場合。
+        ``stable_for`` の待機中にファイルが消えた場合も同じ。
+    TimeoutError: ファイルは見つかったが、``timeout`` までに書き込みが
+        終わらなかった場合（``stable_for`` を指定したときだけ起きる）。
+
+### `wait_until_stable`
+
+```text
+@measure
+def wait_until_stable(path: str | Path, stable_for: float=DEFAULT_STABLE_FOR_SECONDS, timeout: float=DEFAULT_TIMEOUT_SECONDS, poll_interval: float=DEFAULT_POLL_INTERVAL_SECONDS) -> Path:
+```
+
+#### 説明
+
+ファイルへの書き込みが終わるまで待つ。
+
+サイズと更新時刻を ``poll_interval`` 秒ごとに見て、``stable_for`` 秒のあいだ
+どちらも変わらなければ「書き終わった」とみなして返す。共有サーバーへ
+他のシステムが置きにくるファイルを、途中まで読んでしまうのを防ぐ。
+
+    path = wait_until_stable(r"\\server\share\in\data.csv", stable_for=2.0)
+    rows = read_csv(path)      # 全部書き終わってから読む
+
+**サイズと更新時刻でしか判断できないので、確実ではない。** 書き込み側が
+``stable_for`` より長く止まると、途中でも「書き終わった」と判定する。
+ネットワークが不安定な共有フォルダでは ``stable_for`` を長めに取る。
+
+**書き込み側を自分で書けるなら、この関数より
+「別名で書いてから rename する」ほうが確実**（``comken.core.files`` の
+atomic 系がその形）。rename は一瞬で終わるので、読む側が途中の状態を
+見ることがない。この関数は**書き込み側に手を出せないとき**の手段。
+
+Args:
+    path: 監視するファイル。
+    stable_for: サイズと更新時刻が変わらないでいてほしい秒数。デフォルトは 2 秒。
+        ``0`` 以下を渡すと待たずにそのまま返す。
+    timeout: 最大待機秒数。デフォルトは 60 秒。
+    poll_interval: 確認の間隔秒数。デフォルトは 1 秒。
+
+Returns:
+    書き込みが終わったとみなせるファイルの ``Path``。
+
+Raises:
+    FileNotFoundError: ファイルが無い場合。待っている間に消えた場合も同じ。
+    TimeoutError: ``timeout`` までに書き込みが終わらなかった場合。
 
 ### `zip_files`
 
