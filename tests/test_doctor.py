@@ -252,3 +252,84 @@ def test_doctor_is_exposed_from_comken_facade() -> None:
     assert "doctor" in comken.__all__
     assert "DoctorResult" in comken.__all__
     assert callable(comken.doctor)
+
+
+# ── Salesforce クレデンシャル可視化 (Phase 4 改善) ──────────────────────
+
+
+def _fake_sandbox() -> type:
+    """テスト用の最小限の Sandbox クラス。"""
+
+    class _FakeSandbox:
+        CREDENTIAL_PREFIX = "sandbox"
+        API_VERSION = "60.0"
+
+        def __init__(self) -> None:
+            pass
+
+        def __enter__(self) -> _FakeSandbox:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def data_path(self, path: str) -> str:
+            return path
+
+        def request(self, *args: object, **kwargs: object) -> dict:
+            return {}
+
+    return _FakeSandbox
+
+
+def test_salesforce_details_show_registered_keys() -> None:
+    """3 つのキーが全部登録済なら details に「登録済」が並ぶ。"""
+    from comken.core.doctor.runner import check_salesforce
+
+    result = check_salesforce(
+        names=["sandbox_client_id", "sandbox_client_secret", "sandbox_refresh_token"],
+        sandbox_cls=_fake_sandbox(),
+    )
+    assert result.status == "ok"
+    assert all("登録済" in line for line in result.details)
+    assert any("sandbox_client_id: 登録済" in line for line in result.details)
+    assert any("sandbox_client_secret: 登録済" in line for line in result.details)
+    assert any("sandbox_refresh_token: 登録済" in line for line in result.details)
+
+
+def test_salesforce_ng_when_refresh_token_missing() -> None:
+    """refresh_token だけ未登録なら NG + details に「未登録」が見える。"""
+    from comken.core.doctor.runner import check_salesforce
+
+    result = check_salesforce(
+        names=["sandbox_client_id", "sandbox_client_secret"],
+        sandbox_cls=_fake_sandbox(),
+    )
+    assert result.status == "ng"
+    assert "refresh_token" in result.message
+    assert "初回認可" in result.message
+    assert any("sandbox_refresh_token: 未登録" in line for line in result.details)
+    assert any("sandbox_client_id: 登録済" in line for line in result.details)
+
+
+def test_salesforce_skip_when_client_id_or_secret_missing() -> None:
+    """client_id / client_secret が未登録なら SKIP (接続テスト不可)。"""
+    from comken.core.doctor.runner import check_salesforce
+
+    result = check_salesforce(
+        names=["sandbox_refresh_token"],
+        sandbox_cls=_fake_sandbox(),
+    )
+    assert result.status == "skip"
+    assert "未登録" in result.message
+    assert any("sandbox_client_id: 未登録" in line for line in result.details)
+    assert any("sandbox_client_secret: 未登録" in line for line in result.details)
+
+
+def test_salesforce_skip_when_no_credentials_and_no_sandbox_cls() -> None:
+    """sandbox_cls も None なら SKIP (Salesforce モジュール不在)。"""
+    from comken.core.doctor.runner import check_salesforce
+
+    result = check_salesforce(names=[], sandbox_cls=None)
+    assert result.status == "skip"
+    assert result.details == ()

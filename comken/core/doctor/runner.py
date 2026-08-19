@@ -48,11 +48,14 @@ class DoctorResult:
         name: 検査名（例: "comken.version" / "deps.openpyxl" / "share.master_path"）。
         status: 結果（"ok" / "ng" / "skip" のいずれか）。
         message: 人が読むための1行メッセージ。**秘密の値は載せない**。
+        details: 検査の細目。1 行に収まらないとき ``message`` の下に並べて出す。
+            デフォルトは空タプル (大半の検査は ``message`` 1 行で完結する)。
     """
 
     name: str
     status: str
     message: str
+    details: tuple[str, ...] = ()
 
 
 # ── comken 自体の情報 ────────────────────────────────────────────────────────
@@ -196,6 +199,12 @@ def check_salesforce(
     受け取って検査する。**資格情報が無いとき sandbox_cls は ``None``** で
     渡される（BO 環境で ``requests`` を import しないため）。
 
+    どのキーを DPAPI に登録すべきかは組織クラスの ``CREDENTIAL_PREFIX`` から
+    組み立てる (Refresh Token Flow 前提):
+    ``<prefix>_client_id`` / ``<prefix>_client_secret`` / ``<prefix>_refresh_token``
+    の 3 個。各キーの登録状態を ``details`` に 1 行ずつ返すので、
+    **どれが未登録でセットアップが途中か**を 1 回の doctor 実行で把握できる。
+
     Args:
         names: DPAPI に登録された認証情報のキー名一覧。空なら SKIP。
         sandbox_cls: 組織の Salesforce クラス（例: ``Sandbox``）。
@@ -203,6 +212,7 @@ def check_salesforce(
 
     Returns:
         ``DoctorResult``。status は ok / ng / skip のいずれか。
+        ``details`` に ``<prefix>_<key>: 登録済 / 未登録`` を 1 行ずつ。
     """
     # 認証情報が無いなら SKIP（Salesforce 接続には進まない）
     if not names:
@@ -219,12 +229,38 @@ def check_salesforce(
             "Salesforce モジュールが見つかりません",
         )
 
+    # Refresh Token Flow に必要な 3 つのキーを組み立てる
     prefix = sandbox_cls.CREDENTIAL_PREFIX
-    if not any(n.startswith(prefix) for n in names):
+    required_keys = (
+        f"{prefix}_client_id",
+        f"{prefix}_client_secret",
+        f"{prefix}_refresh_token",
+    )
+    name_set = set(names)
+    key_status = {key: (key in name_set) for key in required_keys}
+    details: list[str] = [
+        f"{key}: {'登録済' if registered else '未登録'}"
+        for key, registered in key_status.items()
+    ]
+
+    # 接続テストには client_id / client_secret が必須
+    has_id_secret = key_status[f"{prefix}_client_id"] and key_status[f"{prefix}_client_secret"]
+    if not has_id_secret:
         return DoctorResult(
             "salesforce.connectivity",
             "skip",
-            "認証情報なし (DPAPI に登録が無い、または BO 環境)",
+            f"{prefix} の client_id / client_secret が未登録",
+            details=tuple(details),
+        )
+
+    # refresh_token が無いと Refresh Token Flow は走らない
+    # (client_credentials 経由に切り替えていない限り) ので NG
+    if not key_status[f"{prefix}_refresh_token"]:
+        return DoctorResult(
+            "salesforce.connectivity",
+            "ng",
+            f"{prefix}_refresh_token が未登録 (初回認可が必要です)",
+            details=tuple(details),
         )
 
     # 認証情報があるので、実際に繋いで確かめる。
@@ -234,9 +270,19 @@ def check_salesforce(
     except Exception as e:
         # 接続失敗は NG。メッセージは1行目だけ（スタックトレースは出さない）
         msg = str(e).splitlines()[0] if str(e) else type(e).__name__
-        return DoctorResult("salesforce.connectivity", "ng", msg[:200])
+        return DoctorResult(
+            "salesforce.connectivity",
+            "ng",
+            msg[:200],
+            details=tuple(details),
+        )
 
-    return DoctorResult("salesforce.connectivity", "ok", f"API v{sandbox_cls.API_VERSION}")
+    return DoctorResult(
+        "salesforce.connectivity",
+        "ok",
+        f"API v{sandbox_cls.API_VERSION}",
+        details=tuple(details),
+    )
 
 
 # ── 集約 ──────────────────────────────────────────────────────────────────────
