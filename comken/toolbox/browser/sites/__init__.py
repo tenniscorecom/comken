@@ -27,7 +27,7 @@ r"""comken/toolbox/browser/sites/__init__.py — ライブラリ公認のブラ�
 """
 
 from comken.toolbox.browser.sitebase import SiteBase
-from comken.toolbox.browser.sites.sample.site import SampleSite
+from comken.toolbox.browser.sites.sample import SampleSite
 
 # ライブラリ公認サイトの一覧。最初に空で置いておき、昇格するサイトが出てきたら
 # ここで追加していく。**プロジェクト側で同じ NAME のクラスを作ると、
