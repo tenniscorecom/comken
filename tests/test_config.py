@@ -858,7 +858,9 @@ class TestGenerateStub:
         # __init__.pyi は公開 API と config の属性型を直接宣言する
         init_text = (tmp_path / "typings" / "comken" / "__init__.pyi").read_text(encoding="utf-8")
         assert "dry_run as dry_run" in init_text
-        assert "is_debug as is_debug" in init_text
+        # is_debug / is_dry_run は facade から外れたため、スタブにも出ないことを確認
+        assert "is_debug" not in init_text
+        assert "is_dry_run" not in init_text
         assert "BROWSER: _BROWSER" in init_text
         assert "config: _ConfigFacade" in init_text
 
