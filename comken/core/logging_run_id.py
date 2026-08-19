@@ -17,24 +17,39 @@ UUID ベースの run_id をコンテキスト変数へ保存する。
 
 **「1回の業務実行を1つの run_id で追跡できる」ことを最優先の設計。**
 
-並列実行モデルでの挙動 (``new_run_id()`` を呼ばないときのデフォルト):
+**スレッドを使うと run_id が引き継がれない。** ``ContextVar`` は
+スレッドごとに独立していて、新しいスレッドは親のコピーではなく**空の
+コンテキスト**から始まる。メインで ``new_run_id()`` を呼んでも、
+``ThreadPoolExecutor`` のワーカーでは ``current_run_id()`` が ``"-"`` に
+なり、**並列部分のログだけ run_id が消える**。1回の業務実行を1つの
+run_id で追い切るには、コンテキストごと渡す::
 
-- ``concurrent.futures.ThreadPoolExecutor``: 各ワーカースレッドは独立した
-  ``ContextVar`` を持つため、明示的に ``new_run_id()`` を呼ばないと
-  ``current_run_id()`` が ``"-"`` を返す。**各スレッドで別 ID を持たせたい
-  場合はワーカー関数内で ``new_run_id()`` を呼ぶこと**
+    import contextvars
+
+    ctx = contextvars.copy_context()
+    with ThreadPoolExecutor() as ex:
+        ex.submit(ctx.run, worker, arg)     # 親の run_id がワーカーへ伝わる
+
+並列実行モデルごとの挙動 (``new_run_id()`` を呼ばないときのデフォルト):
+
+- ``concurrent.futures.ThreadPoolExecutor``: そのスレッドで最初に走る
+  タスクは ``"-"``。ただし **ThreadPoolExecutor はスレッドを使い回す**ので、
+  あるタスクが ``new_run_id()`` を呼ぶと、**同じスレッドで次に走るタスクは
+  その run_id を引き継ぐ**（呼んでいないのに前の実行の ID が付く）。
+  タスク単位で ID を分けるなら、**全タスクの冒頭で必ず ``new_run_id()`` を
+  呼ぶ**（一部だけ呼ぶ形が一番危ない）
 - ``concurrent.futures.ProcessPoolExecutor``: ワーカープロセスは
   完全に独立した Python インタプリタで動くため、**メイン側で呼んだ
-  ``new_run_id()`` は子プロセスへ伝わらない**。各ワーカーで個別に
-  ``new_run_id()`` を呼ぶこと
-- ``asyncio``: ``asyncio.create_task()`` でタスク生成時に
-  ``contextvars.copy_context()`` で親コンテキストが**コピー**される。
-  タスク内で ``new_run_id()`` を呼ばないと**全部同じ run_id** になる。
-  **タスクごとに別 ID を付けたい場合はタスク関数の冒頭で
-  ``new_run_id()`` を呼ぶこと**
+  ``new_run_id()`` は子プロセスへ伝わらない**（``copy_context()`` でも
+  渡せない）。各ワーカーで個別に ``new_run_id()`` を呼ぶこと
+- ``asyncio``: ``asyncio.create_task()`` がタスク生成時に親コンテキストを
+  **コピー**するので、**呼ばなければ親と同じ run_id** になる（業務実行を
+  1つの ID で追う用途では、これが望ましい既定）。タスク内で
+  ``new_run_id()`` を呼んだ場合、コピーなので**親や兄弟タスクへは漏れない**
 
-「並列処理を走らせれば自動で別 ID」ではないことに注意。自動独立を期待
-したい場合は、各ワーカー / 各タスクの冒頭で ``new_run_id()`` を呼ぶこと。
+「並列処理を走らせれば自動で別 ID」ではない。逆に「並列処理を走らせても
+自動で同じ ID」でもない（スレッド・プロセスは伝わらない）。どちらを期待
+するかを決めて、上のとおり明示的に書くこと。
 """
 
 from __future__ import annotations
