@@ -1,5 +1,6 @@
 """comken/exceptions/excel.py — Excel 操作に関する例外。"""
 
+from collections.abc import Sequence
 from pathlib import Path
 
 from comken.exceptions.base import ComkenError
@@ -155,6 +156,22 @@ class EmptyHeaderCellError(ExcelError):
         super().__init__(
             f"ヘッダー行に空のセルがあります。列番号: {columns}\n"
             "Excelの1行目（ヘッダー行）を確認してください。"
+        )
+
+
+class DuplicateHeaderCellError(ExcelError):
+    """Excel の見出し名が重複している
+
+    発生箇所: Sheet.read_rows_as_dicts()
+
+    対処:
+        Excel の見出し名を重複しない名前に変更する
+    """
+
+    def __init__(self, headers: Sequence[object]) -> None:
+        super().__init__(
+            f"ヘッダー行に同じ見出しがあります: {headers}\n"
+            "Excelの見出し名を重複しない名前に変更してください。"
         )
 
 

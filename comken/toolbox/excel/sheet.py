@@ -23,6 +23,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 from comken.core.data import column_number
 from comken.core.timer import measure
 from comken.exceptions import (
+    DuplicateHeaderCellError,
     EmptyHeaderCellError,
     InvalidTableNameError,
     TableAlreadyExistsError,
@@ -119,21 +120,41 @@ class Sheet:
             header_row: ヘッダーが存在する行番号（デフォルト: 1）。
 
         Returns:
-            [{"列名": 値, ...}, ...] の形式のリスト。
+            [{"列名": 値, ...}, ...] の形式のリスト。全セルが空の行は除外される。
 
         Raises:
-            ExcelError: ヘッダー行に空のセルがある場合。
+            ExcelError: データが存在する列の見出しが空、または見出し名が重複する場合。
         """
         all_rows = list(self.ws.iter_rows(min_row=int(header_row), values_only=True))
         if not all_rows:
             return []
+        # 書式だけ設定された末尾列は表の列ではない。値が存在する最後の列までに絞る。
+        last_value_column = max(
+            (
+                index
+                for row in all_rows
+                for index, value in enumerate(row, start=1)
+                if value is not None
+            ),
+            default=0,
+        )
+        all_rows = [row[:last_value_column] for row in all_rows]
         headers = all_rows[0]
         if all(header is None for header in headers):
             return []
         empty_columns = [index + 1 for index, header in enumerate(headers) if header is None]
         if empty_columns:
             raise EmptyHeaderCellError(empty_columns)
-        return [dict(zip(headers, row, strict=False)) for row in all_rows[1:]]
+        duplicate_headers = [
+            header for header in dict.fromkeys(headers) if headers.count(header) > 1
+        ]
+        if duplicate_headers:
+            raise DuplicateHeaderCellError(duplicate_headers)
+        return [
+            dict(zip(headers, row, strict=False))
+            for row in all_rows[1:]
+            if not all(value is None for value in row)
+        ]
 
     def rows(self, header_row: int = 1) -> Iterator[dict]:
         """列名でアクセスできる行を、for文で順に返す。
@@ -144,11 +165,12 @@ class Sheet:
 
     @measure
     def copy_to(self, destination: ExcelWriter, name: str | None = None) -> Sheet:
-        """シート全体を別の ExcelWriter へコピーする。
+        """シートのセル内容と基本レイアウトを別の ExcelWriter へコピーする。
 
         値・数式・セル書式・列幅・行高・結合セル・ウィンドウ固定・
         オートフィルターをコピーする。画像・グラフなどの描画オブジェクトは
-        openpyxl の制約により対象外。
+        openpyxl の制約により対象外。印刷設定、条件付き書式、入力規則、
+        構造化テーブルなどもコピーしない。
         """
         copied = destination.add_sheet(name or self.ws.title)
         for row in self.ws.iter_rows():

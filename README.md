@@ -96,7 +96,8 @@ CSV の転記先は ``CsvWriter(path, fieldnames=list(mapping.values()))`` と�
 ``CsvReader.rows()`` と ``Sheet.rows()`` は、どちらも1件を列名付き辞書として返す。
 1件ずつ加工・除外するときは ``run(transform)`` を使い、辞書、``None``、
 ``Transfer.STOP`` をそれぞれ転記、skip、打ち切りの合図として返す。
-列対応ではなくExcelシート全体を複製するときは ``Sheet.copy_to()`` を使う。
+列対応ではなくExcelシートのセル内容と基本レイアウトを複製するときは
+``Sheet.copy_to()`` を使う（画像・グラフ・印刷設定等は対象外）。
 
 | モジュール | 概要 |
 |---|---|

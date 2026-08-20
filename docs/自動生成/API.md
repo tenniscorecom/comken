@@ -1546,6 +1546,27 @@ Excel の見出しに空欄がある
 def __init__(self, columns: list[int]) -> None:
 ```
 
+### `DuplicateHeaderCellError`
+
+```text
+class DuplicateHeaderCellError(ExcelError):
+```
+
+#### 説明
+
+Excel の見出し名が重複している
+
+発生箇所: Sheet.read_rows_as_dicts()
+
+対処:
+    Excel の見出し名を重複しない名前に変更する
+
+#### `__init__`
+
+```text
+def __init__(self, headers: Sequence[object]) -> None:
+```
+
 ### `ExcelHeadersTooFewError`
 
 ```text
@@ -3527,7 +3548,8 @@ def run(self, transform: Transform | None=None) -> int:
 
 ``transform`` は転記元1件のコピーを受け取る。辞書を返すとその内容を転記し、
 ``None`` を返すとその件を除外し、``Transfer.STOP`` を返すと以降を処理しない。
-省略時は全件をそのまま転記する。
+省略時は全件をそのまま転記する。mapping の転記元列が行に存在しない場合は、
+空値で続行せず例外で停止する。
 
 
 ## `from comken.toolbox.access import ...`
@@ -5622,10 +5644,10 @@ Args:
     header_row: ヘッダーが存在する行番号（デフォルト: 1）。
 
 Returns:
-    [{"列名": 値, ...}, ...] の形式のリスト。
+    [{"列名": 値, ...}, ...] の形式のリスト。全セルが空の行は除外される。
 
 Raises:
-    ExcelError: ヘッダー行に空のセルがある場合。
+    ExcelError: データが存在する列の見出しが空、または見出し名が重複する場合。
 
 #### `rows`
 
@@ -5648,11 +5670,12 @@ def copy_to(self, destination: ExcelWriter, name: str | None=None) -> Sheet:
 
 ##### 説明
 
-シート全体を別の ExcelWriter へコピーする。
+シートのセル内容と基本レイアウトを別の ExcelWriter へコピーする。
 
 値・数式・セル書式・列幅・行高・結合セル・ウィンドウ固定・
 オートフィルターをコピーする。画像・グラフなどの描画オブジェクトは
-openpyxl の制約により対象外。
+openpyxl の制約により対象外。印刷設定、条件付き書式、入力規則、
+構造化テーブルなどもコピーしない。
 
 #### `add_table`
 

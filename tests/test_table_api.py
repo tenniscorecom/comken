@@ -7,7 +7,8 @@ import pytest
 from openpyxl import Workbook
 from openpyxl.styles import Font
 
-from comken.exceptions.table import TransferMappingError
+from comken.exceptions import DuplicateHeaderCellError, TransferSourceColumnNotFoundError
+from comken.exceptions.table import TransferMappingError, TransferRowError
 from comken.runtime import debug
 from comken.toolbox import Transfer
 from comken.toolbox.csv import CsvReader, CsvWriter
@@ -43,6 +44,49 @@ def test_transfer_can_filter_edit_and_stop_rows(tmp_path) -> None:
 def test_transfer_requires_mapping(tmp_path) -> None:
     with pytest.raises(TransferMappingError):
         Transfer(CsvReader(tmp_path / "source.csv"), CsvWriter(tmp_path / "out.csv", []), {})
+
+
+def test_transfer_rejects_missing_source_column(tmp_path) -> None:
+    source_path = tmp_path / "source.csv"
+    source_path.write_text("ID\n1\n", encoding="utf-8")
+    with pytest.raises(TransferSourceColumnNotFoundError):
+        Transfer(
+            CsvReader(source_path),
+            CsvWriter(tmp_path / "out.csv", ["名前"]),
+            {"氏名": "名前"},
+        ).run()
+
+
+def test_transfer_rejects_invalid_transform_result(tmp_path) -> None:
+    source_path = tmp_path / "source.csv"
+    source_path.write_text("ID\n1\n", encoding="utf-8")
+    with pytest.raises(TransferRowError):
+        Transfer(
+            CsvReader(source_path),
+            CsvWriter(tmp_path / "out.csv", ["ID"]),
+            {"ID": "ID"},
+        ).run(lambda row: "invalid")  # type: ignore[arg-type, return-value]
+
+
+def test_sheet_rows_ignores_empty_rows_and_styled_trailing_columns(tmp_path) -> None:
+    path = tmp_path / "source.xlsx"
+    with ExcelWriter.create(path) as book:
+        sheet = book.sheet("Sheet1")
+        sheet.write_row(1, ["ID", "名前"])
+        sheet.write_row(2, [1, "山田"])
+        sheet.ws.cell(3, 1).value = None
+        sheet.ws.cell(1, 3).number_format = "0"
+        assert list(sheet.rows()) == [{"ID": 1, "名前": "山田"}]
+
+
+def test_sheet_rows_rejects_duplicate_headers(tmp_path) -> None:
+    path = tmp_path / "source.xlsx"
+    with ExcelWriter.create(path) as book:
+        sheet = book.sheet("Sheet1")
+        sheet.write_row(1, ["ID", "ID"])
+        sheet.write_row(2, [1, 2])
+        with pytest.raises(DuplicateHeaderCellError):
+            list(sheet.rows())
 
 
 def test_transfer_with_no_matches_writes_csv_header(tmp_path) -> None:

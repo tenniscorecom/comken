@@ -138,11 +138,13 @@ with ExcelWriter("data.xlsx") as f:
     for source in f.sheet("Sheet1").rows():
         logger.info("業務用ID=%s", source["業務用ID"])
 
-# 値・数式・基本書式・列幅・行高・結合セルなどを含むシート全体コピー
+# 値・数式・基本書式・列幅・行高・結合セルなどのコピー
 with ExcelWriter("source.xlsx") as source_book:
     with ExcelWriter.create("destination.xlsx", "既定") as destination_book:
         source_book.sheet("Sheet1").copy_to(destination_book, "複製")
         destination_book.save()
+
+# 画像・グラフ・印刷設定・条件付き書式・入力規則・構造化テーブルは対象外
 
 # シートの追加・リネーム・削除
 with ExcelWriter.create(r"C:\作業\report.xlsx") as f:

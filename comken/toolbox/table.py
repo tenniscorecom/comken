@@ -6,7 +6,8 @@ from enum import Enum, auto
 from typing import Final
 
 from comken.core.timer import measure
-from comken.exceptions.table import TransferMappingError
+from comken.exceptions import TransferSourceColumnNotFoundError
+from comken.exceptions.table import TransferMappingError, TransferRowError
 from comken.toolbox.csv import CsvReader, CsvWriter
 from comken.toolbox.excel import Sheet
 
@@ -53,7 +54,8 @@ class Transfer:
 
         ``transform`` は転記元1件のコピーを受け取る。辞書を返すとその内容を転記し、
         ``None`` を返すとその件を除外し、``Transfer.STOP`` を返すと以降を処理しない。
-        省略時は全件をそのまま転記する。
+        省略時は全件をそのまま転記する。mapping の転記元列が行に存在しない場合は、
+        空値で続行せず例外で停止する。
         """
         logger.debug(
             "Transfer開始: 転記元=%s 転記先=%s マッピング列数=%d",
@@ -74,6 +76,14 @@ class Transfer:
                 break
             if candidate is None:
                 continue
+            if not isinstance(candidate, Mapping):
+                raise TransferRowError(
+                    read_count,
+                    "transform は辞書、None、Transfer.STOP のいずれかを返してください。",
+                )
+            missing = [source for source in self._mapping if source not in candidate]
+            if missing:
+                raise TransferSourceColumnNotFoundError(missing, list(candidate))
             destination_rows.append(
                 {
                     destination: candidate.get(source)

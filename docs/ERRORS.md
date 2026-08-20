@@ -56,6 +56,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `TableNotAvailableInReadOnlyError` | read_only で開いたブックからテーブル名で読めない | ExcelReader を ``tables=True`` で開き直す。例: ``ExcelReader(path, tables=True)`` のように指定する。 |
 | `MacroError` | Excel のマクロが失敗した | Excel をすべて閉じて再実行する。続く場合は管理者へ |
 | `EmptyHeaderCellError` | Excel の見出しに空欄がある | Excel の1行目の空欄を埋める |
+| `DuplicateHeaderCellError` | Excel の見出し名が重複している | Excel の見出し名を重複しない名前に変更する |
 | `ExcelHeadersTooFewError` | 指定した見出し数が列数より少ない | 管理者へ連絡する |
 | `ExcelSaveNotCompletedError` | Excel の保存が成功したように見えて、ファイルが無い | Excel が他で開かれていないか、ディスクの空き容量があるかを確認し、もう一度保存を実行する |
 | `FileFormatMismatchError` | 保存拡張子と形式が合わない | 管理者へ連絡する |

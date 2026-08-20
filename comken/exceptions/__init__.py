@@ -182,6 +182,7 @@ from comken.exceptions.downloader import (
     ScheduledReportNotRegisteredError,
 )
 from comken.exceptions.excel import (
+    DuplicateHeaderCellError,
     EmptyHeaderCellError,
     ExcelApplicationNotAvailableError,
     ExcelError,
@@ -261,6 +262,7 @@ __all__ = [
     "TableNotAvailableInReadOnlyError",
     "MacroError",
     "EmptyHeaderCellError",
+    "DuplicateHeaderCellError",
     "ExcelHeadersTooFewError",
     "ExcelSaveNotCompletedError",
     "FileFormatMismatchError",
