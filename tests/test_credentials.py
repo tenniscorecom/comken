@@ -34,7 +34,7 @@ SECRET = "s3cret-値-🔑"  # 日本語と絵文字を含めて UTF-8 の往復�
 
 @pytest.fixture
 def store(tmp_path) -> Path:
-    return tmp_path / "credentials.dat"
+    return tmp_path / "credentials.enc"
 
 
 class TestSaveAndLoad:
