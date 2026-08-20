@@ -1,4 +1,4 @@
-r"""comken/toolbox/salesforce/direct/client.py — Salesforce API クライアント
+r"""comken/toolbox/salesforce/client.py — Salesforce API クライアント
 
 1インスタンスが1組織を受け持つ。**このクラスは直接使わず、組織ごとに継承する**
 （`comken/salesforce/sites/`）。組織の My Domain の URL と認証情報のシステム名は
@@ -33,14 +33,13 @@ from comken.exceptions import (
     SiteOwnerRequiredError,
 )
 from comken.runtime import dry_run_log, is_dry_run
-from comken.toolbox.salesforce.direct.metrics import ApiMetrics, RetryReason
+from comken.toolbox.salesforce.metrics import ApiMetrics, RetryReason
 
 # 既定は Refresh Token Flow。Client Credentials Flow は client_secret だけで
 # アクセストークンを取れてしまい、漏えいしたときに実行ユーザーとして操作されるため
 # 使わない（→ docs/開発/salesforce-authentication.md）。
-from comken.toolbox.salesforce.direct.oauth_refresh import RefreshTokenOAuth
-from comken.toolbox.salesforce.direct.report import ReportApi
-from comken.toolbox.salesforce.sitebase import SiteBase
+from comken.toolbox.salesforce.oauth_refresh import RefreshTokenOAuth
+from comken.toolbox.salesforce.report import ReportApi
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +71,7 @@ class _OAuth(Protocol):
         ...
 
 
-class SalesforceBase(SiteBase):
+class SalesforceBase:
     """Salesforce の 1 組織に対する API クライアント（組織クラスの土台）。
 
     DOMAIN_URL と CREDENTIAL_PREFIX を持つサブクラスを作って使う。

@@ -7,10 +7,10 @@
 ここに置く。共通の操作は `SalesforceBase` 側にあるので書かない。
 """
 
-from comken.toolbox.salesforce.direct.adapter import DirectSiteBase
+from comken.toolbox.salesforce.client import SalesforceBase
 
 
-class Sandbox(DirectSiteBase):
+class Sandbox(SalesforceBase):
     """Sandbox 組織のクライアント。
 
     使い方:

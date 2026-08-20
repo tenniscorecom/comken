@@ -17,7 +17,7 @@ INSTANCE_URL = "https://instance.my.salesforce.com"
 
 # 認証は必ずここを通るので、差し替え先はこの1本だけ。毎回フルパスを書くと
 # 行が長くなるうえ、モジュールを移したときの直し漏れが起きやすい
-_REQUESTS_POST = "comken.toolbox.salesforce.direct.oauth_refresh.requests.post"
+_REQUESTS_POST = "comken.toolbox.salesforce.oauth_refresh.requests.post"
 
 
 class _TestSalesforce(SalesforceBase):
@@ -130,7 +130,7 @@ class TestPluggableSalesforceAuth:
         success.json.return_value = {"done": True, "records": []}
         session.request.side_effect = [unauthorized, success]
         with (
-            patch("comken.toolbox.salesforce.direct.client.requests.Session", return_value=session),
+            patch("comken.toolbox.salesforce.client.requests.Session", return_value=session),
             _TestSalesforce(auth=auth) as client,
         ):
             assert client.query("SELECT Id FROM Account") == []
@@ -158,7 +158,7 @@ class TestAuthClassIsBuiltFromCredentials:
             def fetch(self):
                 return "TOKEN", DOMAIN_URL
 
-        with patch("comken.toolbox.salesforce.direct.client.requests.Session"):
+        with patch("comken.toolbox.salesforce.client.requests.Session"):
             SalesforceBase(
                 auth=_FakeAuth, domain_url=DOMAIN_URL, prefix="sandbox", org_name="sandbox"
             )
@@ -176,7 +176,7 @@ class TestAuthClassIsBuiltFromCredentials:
             def fetch(self):
                 return "TOKEN", DOMAIN_URL
 
-        with patch("comken.toolbox.salesforce.direct.client.requests.Session"):
+        with patch("comken.toolbox.salesforce.client.requests.Session"):
             sf = SalesforceBase(auth=_FakeAuth(), org_name="sandbox")
 
         assert isinstance(sf.auth, _FakeAuth)

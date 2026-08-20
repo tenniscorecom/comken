@@ -1,4 +1,4 @@
-r"""comken/toolbox/salesforce/direct/rotation.py — Salesforce 認証情報の定期ローテーション
+r"""comken/toolbox/salesforce/rotation.py — Salesforce 認証情報の定期ローテーション
 
 ローテーションは既定で無効。同じ ECA を複数 PC で使う場合、有効にしてよいのは1台だけ。
 DPAPI は Windows ユーザーと PC に紐付くため、実行した PC だけが新しい secret を持ち、
@@ -20,7 +20,7 @@ from comken.exceptions import (
     SalesforceCredentialRotationError,
 )
 from comken.toolbox.credentials import load_credential, save_credentials
-from comken.toolbox.salesforce.direct.client import SalesforceBase
+from comken.toolbox.salesforce.client import SalesforceBase
 
 DEFAULT_ROTATION_INTERVAL_DAYS = 60
 ROTATION_COMPONENT = "credential_rotation"

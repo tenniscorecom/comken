@@ -45,26 +45,24 @@ except ImportError:
     # `rotation` 等）で `import requests` が走り、その時点で ImportError が出る
     _requests = None  # type: ignore[assignment]
 
-from comken.toolbox.salesforce.direct.metrics import (
+from comken.toolbox.salesforce.metrics import (
     ApiMetrics,
     ApiUsage,
     ComponentStat,
     RetryReason,
 )
-from comken.toolbox.salesforce.direct.report import ReportApi
+from comken.toolbox.salesforce.report import ReportApi
 
 # `requests` を直接 import するモジュールは遅延ロードする。`_url` のような
 # requests 非依存モジュールだけ使う場合（BO 環境）にパッケージ全体を
 # import 可能にするため
 _LAZY_TARGETS: dict[str, str] = {
-    "SalesforceBase": "comken.toolbox.salesforce.direct.client",
-    "ClientCredentialsAuth": "comken.toolbox.salesforce.direct.oauth_credentials",
-    "RefreshTokenAuth": "comken.toolbox.salesforce.direct.oauth_refresh",
-    "ClientCredentialsOAuth": "comken.toolbox.salesforce.direct.oauth_credentials",
-    "RefreshTokenOAuth": "comken.toolbox.salesforce.direct.oauth_refresh",
-    "SalesforceCredentialRotator": "comken.toolbox.salesforce.direct.rotation",
-    "SiteBase": "comken.toolbox.salesforce.sitebase",
-    "DirectSiteBase": "comken.toolbox.salesforce.direct.adapter",
+    "SalesforceBase": "comken.toolbox.salesforce.client",
+    "ClientCredentialsAuth": "comken.toolbox.salesforce.oauth_credentials",
+    "RefreshTokenAuth": "comken.toolbox.salesforce.oauth_refresh",
+    "ClientCredentialsOAuth": "comken.toolbox.salesforce.oauth_credentials",
+    "RefreshTokenOAuth": "comken.toolbox.salesforce.oauth_refresh",
+    "SalesforceCredentialRotator": "comken.toolbox.salesforce.rotation",
 }
 
 
@@ -92,8 +90,6 @@ def __dir__() -> list[str]:
 
 __all__ = [
     "SalesforceBase",
-    "SiteBase",
-    "DirectSiteBase",
     "ReportApi",
     "ClientCredentialsAuth",
     "RefreshTokenAuth",

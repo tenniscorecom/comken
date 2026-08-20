@@ -189,7 +189,7 @@ def _run_salesforce(_args: argparse.Namespace, remaining: list[str]) -> int:
     `python -m comken init` すら打てなくなるのは困る。`comken/toolbox/rpa.py` が
     社内ライブラリの import を関数内に置いているのと同じ理由。
     """
-    from comken.toolbox.salesforce.direct.cli import main as sf_main
+    from comken.toolbox.salesforce.cli import main as sf_main
 
     return sf_main(remaining)
 

@@ -6,13 +6,13 @@ from unittest.mock import Mock, call, patch
 import pytest
 
 from comken.exceptions import SalesforceCredentialRotationError
-from comken.toolbox.salesforce.direct.rotation import SalesforceCredentialRotator
+from comken.toolbox.salesforce.rotation import SalesforceCredentialRotator
 
 TODAY = datetime.date(2026, 8, 13)
 
 # 差し替え先はすべてこのモジュールの中。毎回フルパスを書くと行が長くなるうえ、
 # モジュールを移したときの直し漏れが起きやすい
-_ROTATION = "comken.toolbox.salesforce.direct.rotation"
+_ROTATION = "comken.toolbox.salesforce.rotation"
 
 
 def _client() -> Mock:

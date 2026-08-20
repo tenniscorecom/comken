@@ -1,4 +1,4 @@
-"""comken/toolbox/salesforce/direct/oauth_credentials.py — Client Credentials Flow"""
+"""comken/toolbox/salesforce/oauth_credentials.py — Client Credentials Flow"""
 
 # 定義中の ClientCredentialsOAuth を戻り値の型注釈に使うため、注釈の評価を遅延する。
 from __future__ import annotations
