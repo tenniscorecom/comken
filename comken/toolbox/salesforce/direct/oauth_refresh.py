@@ -1,6 +1,6 @@
 """comken/toolbox/salesforce/direct/oauth_refresh.py — Refresh Token Flow"""
 
-# 定義中の OAuth を戻り値の型注釈に使うため、注釈の評価を遅延する。
+# 定義中の RefreshTokenOAuth を戻り値の型注釈に使うため、注釈の評価を遅延する。
 from __future__ import annotations
 
 import secrets
@@ -21,7 +21,7 @@ TOKEN_PATH = "/services/oauth2/token"
 TIMEOUT_SECONDS = 60
 
 
-class OAuth:
+class RefreshTokenOAuth:
     """保存済み refresh_token でアクセストークンを更新する。"""
 
     def __init__(
@@ -168,7 +168,7 @@ def _token_pair(body: dict) -> tuple[str, str]:
         raise SalesforceAuthError(200, "認証レスポンスの形式が不正です") from e
 
 
-# 方式を明示して直接使いたい場合の互換名。切替用の名前はOAuth。
-RefreshTokenAuth = OAuth
+# 既存の呼び出し側との互換用 public 名（OAuth 公開名は廃止）
+RefreshTokenAuth = RefreshTokenOAuth
 
-__all__ = ["OAuth", "RefreshTokenAuth"]
+__all__ = ["RefreshTokenAuth"]

@@ -1,6 +1,6 @@
 """comken/toolbox/salesforce/direct/oauth_credentials.py — Client Credentials Flow"""
 
-# 定義中の OAuth を戻り値の型注釈に使うため、注釈の評価を遅延する。
+# 定義中の ClientCredentialsOAuth を戻り値の型注釈に使うため、注釈の評価を遅延する。
 from __future__ import annotations
 
 import logging
@@ -18,7 +18,7 @@ GRANT_TYPE = "client_credentials"
 TIMEOUT_SECONDS = 60
 
 
-class OAuth:
+class ClientCredentialsOAuth:
     """client_id と client_secret でアクセストークンを取得する。"""
 
     def __init__(self, client_id: str, client_secret: str, domain_url: str) -> None:
@@ -65,7 +65,7 @@ class OAuth:
         return access_token, instance_url
 
 
-# 既存コードとの互換名。新しいコードではOAuthを使う。
-ClientCredentialsAuth = OAuth
+# 既存の呼び出し側との互換用 public 名（OAuth 公開名は廃止）
+ClientCredentialsAuth = ClientCredentialsOAuth
 
-__all__ = ["OAuth", "ClientCredentialsAuth"]
+__all__ = ["ClientCredentialsAuth"]

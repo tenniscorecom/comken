@@ -5,7 +5,6 @@ r"""comken/toolbox/salesforce/direct/__init__.py — Salesforce direct パッケ
 `oauth_credentials.py` / `oauth_refresh.py` / `rotation.py` / `metrics.py` /
 `report.py` / `cli.py` を移設済み (2026-08-19)。
 
-将来、社内に**公式の Salesforce API ライブラリ**が用意されたら、
-このディレクトリを **薄いラッパー** に置き換えてもよい (設計メモ
-``Projects/comken-設計メモ_salesforce-wrap.md`` 参照)。
+公式の社内 Salesforce API ライブラリへ切り替える必要が生じた場合は
+``Projects/comken-設計メモ_salesforce-wrap.md`` を参照。
 """

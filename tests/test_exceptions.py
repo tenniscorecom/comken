@@ -38,6 +38,12 @@ def test_original_libs_error_is_not_exposed() -> None:
     assert not hasattr(comken.exceptions, "OriginalLibsError")
 
 
+def test_all_declared_names_are_resolvable() -> None:
+    """`__all__` のすべての名前がモジュール属性として取得できる。"""
+    missing = [name for name in comken.exceptions.__all__ if not hasattr(comken.exceptions, name)]
+    assert missing == [], f"`__all__` に未定義の名前があります: {missing}"
+
+
 @pytest.mark.parametrize(
     ("error", "base", "message"),
     [

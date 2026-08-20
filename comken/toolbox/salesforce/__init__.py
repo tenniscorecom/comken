@@ -38,27 +38,55 @@ Client Credentials Flow は `client_secret` だけでアクセストークンを
 """
 
 try:
-    import requests as _requests  # noqa: F401  # 依存の有無をここで確かめるだけ
-except ImportError as e:  # pragma: no cover
-    raise ImportError(
-        "comken.toolbox.salesforce は requests を使います。requests が入っていません。\n"
-        "オフライン環境では、共有フォルダの wheel から\n"
-        "  pip install --no-index --find-links <wheel置き場> requests\n"
-        "で入れてください。requests を使わない機能（Excel・CSV 等）は\n"
-        "comken.toolbox.salesforce を import しなければ影響を受けません。"
-    ) from e
+    import requests as _requests  # 依存の有無をここで確かめるだけ
+except ImportError:
+    # requests がない環境でもこのパッケージを import だけはできるようにする。
+    # 実際に API を叩く経路（`oauth_credentials` / `oauth_refresh` / `client` /
+    # `rotation` 等）で `import requests` が走り、その時点で ImportError が出る
+    _requests = None  # type: ignore[assignment]
 
-from comken.toolbox.salesforce.direct.client import SalesforceBase
 from comken.toolbox.salesforce.direct.metrics import (
     ApiMetrics,
     ApiUsage,
     ComponentStat,
     RetryReason,
 )
-from comken.toolbox.salesforce.direct.oauth_credentials import ClientCredentialsAuth
-from comken.toolbox.salesforce.direct.oauth_refresh import RefreshTokenAuth
 from comken.toolbox.salesforce.direct.report import ReportApi
-from comken.toolbox.salesforce.direct.rotation import SalesforceCredentialRotator
+
+# `requests` を直接 import するモジュールは遅延ロードする。`_url` のような
+# requests 非依存モジュールだけ使う場合（BO 環境）にパッケージ全体を
+# import 可能にするため
+_LAZY_TARGETS: dict[str, str] = {
+    "SalesforceBase": "comken.toolbox.salesforce.direct.client",
+    "ClientCredentialsAuth": "comken.toolbox.salesforce.direct.oauth_credentials",
+    "RefreshTokenAuth": "comken.toolbox.salesforce.direct.oauth_refresh",
+    "ClientCredentialsOAuth": "comken.toolbox.salesforce.direct.oauth_credentials",
+    "RefreshTokenOAuth": "comken.toolbox.salesforce.direct.oauth_refresh",
+    "SalesforceCredentialRotator": "comken.toolbox.salesforce.direct.rotation",
+}
+
+
+def __getattr__(name: str) -> object:
+    """`from ... import X` の X を必要になったタイミングでだけ import する。
+
+    Raises:
+        AttributeError: 定義されていない属性を要求したとき。
+    """
+    module_name = _LAZY_TARGETS.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    import importlib
+
+    module = importlib.import_module(module_name)
+    value = getattr(module, name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    """`dir(comken.toolbox.salesforce)` で遅延対象も返す。"""
+    return sorted(set(__all__) | set(_LAZY_TARGETS))
+
 
 __all__ = [
     "SalesforceBase",

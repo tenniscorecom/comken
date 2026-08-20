@@ -38,7 +38,7 @@ from comken.toolbox.salesforce.direct.metrics import ApiMetrics, RetryReason
 # 既定は Refresh Token Flow。Client Credentials Flow は client_secret だけで
 # アクセストークンを取れてしまい、漏えいしたときに実行ユーザーとして操作されるため
 # 使わない（→ docs/開発/salesforce-authentication.md）。
-from comken.toolbox.salesforce.direct.oauth_refresh import OAuth
+from comken.toolbox.salesforce.direct.oauth_refresh import RefreshTokenOAuth
 from comken.toolbox.salesforce.direct.report import ReportApi
 
 logger = logging.getLogger(__name__)
@@ -113,8 +113,9 @@ class SalesforceBase:
     ) -> None:
         """DPAPI に保管した認証情報を読み、選択中の OAuth 方式で接続する。
 
-        読み込む項目は client.py が import している OAuth 方式で決まる。
-        Client Credentials 方式は client_id / client_secret、Refresh Token 方式は
+        読み込む項目は client.py が import している OAuth 方式（既定は
+        RefreshTokenOAuth）で決まる。Client Credentials 方式は
+        client_id / client_secret、Refresh Token 方式は
         client_id / client_secret / refresh_token を使う。
 
         Args:
@@ -144,7 +145,7 @@ class SalesforceBase:
         # 値を手で並べる書き方（ClientCredentialsAuth(cid, secret, url)）を
         # 利用側に強いないため。既定（None）も同じ経路を通る。
         if auth is None:
-            auth = OAuth
+            auth = RefreshTokenOAuth
         if isinstance(auth, type):
             auth = auth.from_credentials(
                 domain_url or self.DOMAIN_URL,
