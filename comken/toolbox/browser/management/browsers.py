@@ -207,6 +207,7 @@ class Browsers:
         if name in self._sessions:
             raise SessionNameConflictError(name)
 
+        logger.debug("ブラウザセッション起動開始: %s", name)
         resolved_options = _resolve_options(options)
         session = BrowserSession(
             name=name,
@@ -218,6 +219,7 @@ class Browsers:
         # ExitStack に預けた時点で、この with を抜けるときの終了が保証される
         self._stack.enter_context(session)
         self._sessions[name] = session
+        logger.debug("ブラウザセッション起動完了: %s", name)
         return session
 
     def run_task(self, task: Callable[[], T], label: str = "") -> BackgroundTask[T]:

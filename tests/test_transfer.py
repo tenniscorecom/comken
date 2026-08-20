@@ -191,13 +191,13 @@ class TestOpenpyxlAndComHandlersShareBehavior:
 
     @staticmethod
     def _run_mapping_columns_via_handler(headers, key_col, lookup, mapping):
-        """ExcelComHandler.transfer_by_mapping を経由せず、検証関数だけ呼び出す。"""
+        """ExcelComHandler._transfer_by_mapping を経由せず、検証関数だけ呼び出す。"""
         # 実体の検証は mapping_columns() を使うように移行済みなので、
         # 両者が同じ関数を参照していることを直接呼び出して担保する。
         return mapping_columns(headers, key_col, lookup, mapping)
 
     def test_openpyxl_sheet_uses_shared_validation(self):
-        """Sheet.transfer_by_mapping() が共通関数 mapping_columns を経由することを確認する。"""
+        """Sheet._transfer_by_mapping() が共通関数 mapping_columns を経由することを確認する。"""
         # Sheet のモジュールから mapping_columns が参照できていることだけ確認する。
         from comken.toolbox.excel import sheet as sheet_module
 
@@ -251,7 +251,7 @@ class TestTransferBehaviorsViaOpenpyxl:
         lookup = {"A001": {"顧客名": "株式会社A"}}
 
         with ExcelWriter(wb_path) as f:
-            matched = f.sheet("T").transfer_by_letter(
+            matched = f.sheet("T")._transfer_by_letter(
                 key_col="A", lookup=lookup, mapping={"顧客名": "B"}
             )
 
@@ -276,14 +276,14 @@ class TestTransferBehaviorsViaOpenpyxl:
         lookup = {"1001": {"顧客名": "株式会社A"}}
 
         with ExcelWriter(wb_path) as f:
-            matched = f.sheet("T").transfer_by_letter(
+            matched = f.sheet("T")._transfer_by_letter(
                 key_col="A", lookup=lookup, mapping={"顧客名": "B"}
             )
 
         assert matched == 3
 
-    def test_transfer_by_mapping_raises_transfer_key_column_not_found(self, tmp_path):
-        """transfer_by_mapping でキー列が無いと TransferKeyColumnNotFoundError が出る。"""
+    def test__transfer_by_mapping_raises_transfer_key_column_not_found(self, tmp_path):
+        """_transfer_by_mapping でキー列が無いと TransferKeyColumnNotFoundError が出る。"""
         from openpyxl import Workbook
 
         wb_path = tmp_path / "key.xlsx"
@@ -298,7 +298,7 @@ class TestTransferBehaviorsViaOpenpyxl:
             ExcelWriter(wb_path) as f,
             pytest.raises(TransferKeyColumnNotFoundError),
         ):
-            f.sheet("T").transfer_by_mapping(
+            f.sheet("T")._transfer_by_mapping(
                 key_col="存在しないキー",
                 lookup={"A001": {"x": 1}},
                 mapping={"x": "顧客名"},
@@ -343,7 +343,7 @@ class TestTransferBehaviorsViaCom:
         handler.last_row = MagicMock(return_value=1)
 
         with pytest.raises(TransferKeyColumnNotFoundError):
-            handler.transfer_by_mapping(
+            handler._transfer_by_mapping(
                 sheet_name="T",
                 key_col="存在しないキー",
                 lookup={"A001": {"x": 1}},

@@ -83,8 +83,12 @@ class ExcelBase(FileBase):
         # マクロ入りブック（.xlsm/.xlsb）は keep_vba=True で開かないと save() で VBA が消える
         keep_vba = self._original_path.suffix.lower() in (".xlsm", ".xlsb", ".xltm")
         try:
+            logger.debug("Excel読み込み開始: %s", self._working_path)
             self._wb: Workbook = load_workbook(
                 self._working_path, data_only=data_only, read_only=read_only, keep_vba=keep_vba
+            )
+            logger.debug(
+                "Excel読み込み完了: %s シート数=%d", self._working_path, len(self._wb.sheetnames)
             )
         except Exception:
             if self._tmp is not None:
@@ -147,17 +151,20 @@ class ExcelBase(FileBase):
             ExcelError: ヘッダー行に空のセルがある場合（headers 未指定時のみ）、
                         または headers の列数がシートの列数より少ない場合。
         """
+        logger.debug("Excel行データ取得開始: シート=%s", sheet_name)
         ws = self._sheet(sheet_name)
         if self._headers is not None:
             all_rows = list(ws.iter_rows(min_row=1, values_only=True))
             if all_rows and len(all_rows[0]) > len(self._headers):
                 raise ExcelHeadersTooFewError(len(self._headers), len(all_rows[0]))
-            return [
+            rows = [
                 # headers が実データ列より多い場合は、従来どおり余った見出しを含めない。
                 dict(zip(self._headers, row, strict=False))
                 for row in all_rows
                 if not all(c is None for c in row)
             ]
+            logger.debug("Excel行データ取得完了: シート=%s 件数=%d", sheet_name, len(rows))
+            return rows
         all_rows = list(ws.iter_rows(min_row=int(header_row), values_only=True))
         if not all_rows:
             return []
@@ -168,7 +175,9 @@ class ExcelBase(FileBase):
         if none_cols:
             raise EmptyHeaderCellError(none_cols)
         # openpyxl の行幅差は末尾空セルによるため、見出しとの対応範囲だけ辞書化する。
-        return [dict(zip(file_headers, row, strict=False)) for row in all_rows[1:]]
+        rows = [dict(zip(file_headers, row, strict=False)) for row in all_rows[1:]]
+        logger.debug("Excel行データ取得完了: シート=%s 件数=%d", sheet_name, len(rows))
+        return rows
 
     def rows(self, sheet_name: str, header_row: int = 1):
         """列名でアクセスできる行を、for文で順に返す。"""

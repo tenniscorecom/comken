@@ -34,7 +34,7 @@ comken の使い方を「動くコード」で覚えるためのサンプル。
 | # | フォルダ | 内容 | 主に使うモジュール | 実行条件 |
 |---|---|---|---|---|
 | 1 | csv_to_excel_report | CSV を読んで Excel レポートを作る | CsvReader / ExcelWriter / Sheet / Color | なし（同梱データで動く） |
-| 2 | excel_key_transfer | CSV を参照して Excel に転記（XLOOKUP 的転記と SUMIF 的集計転記） | CsvReader.index / group_by / transfer_by_letter / diff_rows | なし（データを自動生成） |
+| 2 | excel_key_transfer | CSV を加工して Excel に列マッピング転記 | Transfer / CsvReader.group_by / diff_rows | なし（データを自動生成） |
 | 3 | csv_diff_report | 昨日と今日の CSV の差分を色付き Excel レポートに | diff_rows / CsvWriter / set_fill | なし（データを自動生成） |
 | 4 | csv_date_move | CSV の日付列とファイル名の日付が一致したファイルを移動 | CsvReader.first / date_in_name / dry_run | config.ini の作成 |
 | 5 | daily_batch_template | 日次バッチの流れ（入力を探す → 加工 → Excel 出力） | comken.toolbox.rpa / FileFinder / ExcelWriter | config.ini + 社内ライブラリ |

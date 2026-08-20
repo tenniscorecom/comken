@@ -90,6 +90,9 @@ import の書き方は上の「[使うときの約束](#使うときの約束)�
 
 表データを扱う基本入口は ``from comken.toolbox import CSV, Excel, Transfer``。
 CSV と Excel はどちらも ``for row in table.rows():`` で列名付き辞書を返す。
+列転記は ``Transfer(source, destination, mapping).run()`` で全件を処理する。
+1件ずつ加工・除外するときは ``run(transform)`` を使い、辞書、``None``、
+``Transfer.STOP`` をそれぞれ転記、skip、打ち切りの合図として返す。
 
 | モジュール | 概要 |
 |---|---|

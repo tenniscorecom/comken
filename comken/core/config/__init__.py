@@ -10,7 +10,7 @@ config.ini を読み込み、config.SECTION.KEY の形式でアクセスでき�
     → 初回アクセス時にプロジェクトディレクトリの config.ini を1度だけ読む（遅延読み込み）。
       別の場所にある config.ini を読むときは ``Config(path)`` を直接使う。
 
-明示的にインスタンスを持ちたい場合（従来どおり）:
+明示的にインスタンスを持ちたい場合:
 
     from comken.core.config import Config
     config = Config()                 # または Config("path/to/config.ini")
@@ -89,7 +89,7 @@ class _SectionNamespace(types.SimpleNamespace):
     とセクション名を添える。
 
     ``ConfigKeyNotFoundError`` は ``AttributeError`` も多重継承しているので、
-    ``hasattr(namespace, key)`` は従来どおり False を返す。
+    ``hasattr(namespace, key)`` は False を返す。
     この挙動を壊すと「あるはずのキーが無い」と ``hasattr`` 利用者が誤判定するため、
     キーが無いときは必ず例外を返す。
     """
@@ -240,7 +240,6 @@ class Config:
                 raise ConfigCreatedFromExampleError(created)
             raise ConfigFileNotFoundError(Path(path).resolve())
 
-        # 2026-08-18 の依頼「セクションがあるのに無いと言われる」対応:
         # configparser はセクション名の前後の空白（全角スペース含む）を落とさないため、
         # 手書きで `[FILES ]` のように書くと別セクション扱いになり、書いた人と
         # 読む側で名前が一致しなくなる。空白を落とした名前でアクセスさせる。
@@ -370,7 +369,7 @@ def _parse_value(
         5. 小数に変換できる → float（ただし nan / inf は文字列のまま）
         6. それ以外 → str
 
-    文字列として使いたい数値（例: シート名 "2024"）はコード側で str() に変換する。
+    文字列として使いたい数値（例: 管理番号 "123"）はコード側で str() に変換する。
     先頭ゼロ（電話番号 "0521234567"・社員番号 "007" 等）は int にすると桁落ちするため
     文字列で返す。nan / inf は float() が受理してしまうので数値化しない。
     """

@@ -91,6 +91,7 @@ class CsvWriter(CsvBase):
             rows: 書き込む行のリスト（辞書のリスト）。
         """
         self._warn_unknown_keys(rows)
+        logger.debug("CSV書き込み開始: %s 件数=%d", self._path, len(rows))
         if is_dry_run():
             dry_run_log("CSV に %d 行書き込み（上書き）: %s", len(rows), self._path)
             return
@@ -108,6 +109,7 @@ class CsvWriter(CsvBase):
                 writer.writeheader()
                 writer.writerows(rows)
             tmp_path.replace(self._path)
+            logger.debug("CSV書き込み完了: %s 件数=%d", self._path, len(rows))
         finally:
             tmp_path.unlink(missing_ok=True)
 

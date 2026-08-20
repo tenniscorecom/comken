@@ -274,7 +274,7 @@ class TestExcelComHandlerTransferByKey:
         handler._sheet = MagicMock(return_value=sheet)
         handler.last_row = MagicMock(return_value=5)
 
-        matched = handler.transfer_by_letter(
+        matched = handler._transfer_by_letter(
             "Sheet1",
             key_col="A",
             lookup={
@@ -324,7 +324,7 @@ class TestExcelComHandlerTransferByKey:
         handler.last_row = MagicMock(return_value=3)
 
         with pytest.raises(ExcelError, match="3行目"):
-            handler.transfer_by_letter(
+            handler._transfer_by_letter(
                 "Sheet1",
                 key_col="A",
                 lookup={"1001": {"値": "A"}, "1002": {"値": "B"}},
@@ -537,7 +537,7 @@ class TestReadRowsAsDictsWithHeaders:
 
 
 class TestTransferByKey:
-    """Sheet.transfer_by_letter（openpyxl 版のキー突合転記）のテスト。"""
+    """Sheet._transfer_by_letter（openpyxl 版のキー突合転記）のテスト。"""
 
     @pytest.fixture
     def transfer_excel(self, tmp_path):
@@ -561,7 +561,7 @@ class TestTransferByKey:
         }
 
         with ExcelWriter(transfer_excel) as f:
-            matched = f.sheet("T_data").transfer_by_letter(
+            matched = f.sheet("T_data")._transfer_by_letter(
                 key_col="A", lookup=lookup, mapping={"顧客名": "B", "金額": "C"}
             )
             f.save()
@@ -578,7 +578,7 @@ class TestTransferByKey:
         lookup = {"A001": {"顧客名": "株式会社A"}}
 
         with ExcelWriter(transfer_excel) as f:
-            matched = f.sheet("T_data").transfer_by_letter(
+            matched = f.sheet("T_data")._transfer_by_letter(
                 key_col="A", lookup=lookup, mapping={"顧客名": "B"}
             )
             f.save()
@@ -602,7 +602,7 @@ class TestTransferByKey:
         lookup = {"1001": {"顧客名": "株式会社C"}}
 
         with ExcelWriter(path) as f:
-            matched = f.sheet("T_data").transfer_by_letter(
+            matched = f.sheet("T_data")._transfer_by_letter(
                 key_col="A", lookup=lookup, mapping={"顧客名": "B"}
             )
             f.save()
@@ -617,7 +617,7 @@ class TestTransferByKey:
         lookup = {"A001": {"顧客名": "株式会社A"}}
 
         with ExcelWriter(transfer_excel) as f:
-            matched = f.sheet("T_data").transfer_by_letter(
+            matched = f.sheet("T_data")._transfer_by_letter(
                 key_col=1, lookup=lookup, mapping={"顧客名": "B"}
             )
 
@@ -626,11 +626,11 @@ class TestTransferByKey:
     def test_raises_on_missing_sheet(self, transfer_excel):
         """存在しないシートを指定すると SheetNotFoundError になることを確認する。"""
         with ExcelWriter(transfer_excel) as f, pytest.raises(SheetNotFoundError):
-            f.sheet("存在しない").transfer_by_letter(key_col="A", lookup={}, mapping={})
+            f.sheet("存在しない")._transfer_by_letter(key_col="A", lookup={}, mapping={})
 
 
 class TestTransferByMapping:
-    """Sheet.transfer_by_mapping（列名で指定するキー突合転記）のテスト。"""
+    """Sheet._transfer_by_mapping（列名で指定するキー突合転記）のテスト。"""
 
     @pytest.fixture
     def transfer_excel(self, tmp_path):
@@ -641,7 +641,7 @@ class TestTransferByMapping:
         ws.append(["A001", None, None])
         ws.append(["A002", None, None])
         ws.append(["Z999", None, None])
-        path = tmp_path / "transfer_by_mapping.xlsx"
+        path = tmp_path / "_transfer_by_mapping.xlsx"
         wb.save(path)
         return path
 
@@ -657,7 +657,7 @@ class TestTransferByMapping:
         config_mapping = Config(ini).受注_MAPPING
 
         with ExcelWriter(transfer_excel) as f:
-            matched = f.sheet("T_data").transfer_by_mapping(
+            matched = f.sheet("T_data")._transfer_by_mapping(
                 key_col="受注番号", lookup=lookup, mapping=config_mapping
             )
             f.save()
@@ -676,7 +676,7 @@ class TestTransferByMapping:
         with ExcelWriter(transfer_excel) as f:
             sheet = f.sheet("T_data")
             with pytest.raises(TransferDestinationColumnNotFoundError) as error:
-                sheet.transfer_by_mapping(
+                sheet._transfer_by_mapping(
                     key_col="受注番号",
                     lookup=lookup,
                     mapping={"取引先": "顧客名", "金額": "存在しない列"},
@@ -696,7 +696,7 @@ class TestTransferByMapping:
         lookup = {"A001": {"取引先": "株式会社A"}}
 
         with ExcelWriter(transfer_excel) as f, pytest.raises(TransferSourceColumnNotFoundError):
-            f.sheet("T_data").transfer_by_mapping(
+            f.sheet("T_data")._transfer_by_mapping(
                 key_col="受注番号",
                 lookup=lookup,
                 mapping={"取引先": "顧客名", "金額": "請求額"},
@@ -704,7 +704,7 @@ class TestTransferByMapping:
 
     def test_missing_key_column_raises(self, transfer_excel):
         with ExcelWriter(transfer_excel) as f, pytest.raises(TransferKeyColumnNotFoundError):
-            f.sheet("T_data").transfer_by_mapping(
+            f.sheet("T_data")._transfer_by_mapping(
                 key_col="存在しないキー",
                 lookup={"A001": {"取引先": "株式会社A"}},
                 mapping={"取引先": "顧客名"},
@@ -721,7 +721,7 @@ class TestTransferByMapping:
         wb.save(path)
 
         with ExcelWriter(path) as f:
-            matched = f.sheet("T_data").transfer_by_mapping(
+            matched = f.sheet("T_data")._transfer_by_mapping(
                 key_col="受注番号",
                 lookup={"A001": {"取引先": "株式会社A"}},
                 mapping={"取引先": "顧客名"},
@@ -865,7 +865,7 @@ class TestSheetApiBoundary:
             "set_column_width",
             "set_number_format",
             "set_bold",
-            "transfer_by_letter",
+            "_transfer_by_letter",
         )
         with ExcelWriter.create(tmp_path / "boundary.xlsx") as writer:
             assert not [name for name in names if hasattr(writer, name)]

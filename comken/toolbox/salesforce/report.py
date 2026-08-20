@@ -120,6 +120,7 @@ class ReportApi:
             SalesforceReportFormatError: 明細（TABULAR）形式でない場合。
         """
         path = f"{self._base_path()}/{report_id}"
+        logger.debug("Salesforce Report取得開始: Report ID=%s", report_id)
         if filters:
             data, _ = self._client.request(
                 "POST",
@@ -129,7 +130,10 @@ class ReportApi:
             )
         else:
             data, _ = self._client.request("GET", path, component=COMPONENT)
-        return self._parse(data, report_id, allow_truncated)
+        logger.debug("Salesforce APIレスポンス受信: Report ID=%s", report_id)
+        rows = self._parse(data, report_id, allow_truncated)
+        logger.debug("Salesforce Report取得完了: Report ID=%s 件数=%d", report_id, len(rows))
+        return rows
 
     @measure
     def run_async(

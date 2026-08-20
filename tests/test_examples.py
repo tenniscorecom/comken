@@ -59,10 +59,9 @@ class TestBasicExamples:
         monkeypatch.setattr(column_mapping, "OUTPUT_PATH", tmp_path / "請求一覧.xlsx")
         column_mapping.main()
 
-        workbook = load_workbook(column_mapping.OUTPUT_PATH)
-        for sheet_name in (column_mapping.CODE_SHEET, column_mapping.CONFIG_SHEET):
-            assert workbook[sheet_name]["B2"].value == "株式会社アルファ"
-            assert workbook[sheet_name]["C2"].value == "12000"
+        worksheet = load_workbook(column_mapping.OUTPUT_PATH).active
+        assert worksheet["A2"].value == "株式会社アルファ"
+        assert worksheet["B2"].value == "12000"
 
     def test_state(self, tmp_path, monkeypatch):
         from examples.basics import state
@@ -157,7 +156,7 @@ class TestExcelKeyTransfer:
     def test_transfers_matched_rows(self, transferred):
         """マスタにあるキーだけ転記される。"""
         assert transferred["A001"][1] == "株式会社アルファ"
-        assert transferred["Z999"][1] in (None, "")
+        assert "Z999" not in transferred
 
     def test_sums_multiple_detail_rows(self, transferred):
         """1対多の明細は合計して転記される（後の行で上書きしない）。"""

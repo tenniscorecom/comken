@@ -12,8 +12,6 @@ __all__ = ["setup_logging"]
 # 社内 RPA 基盤は C:\ など別の場所をカレントにして呼ぶので、カレント基準だと
 # C:\logs\ に書いてしまう。module 読み込み時ではなく、呼ぶ時に決める
 LOG_DIR_NAME = "logs"
-# ``[RUN:xxxxx]`` は ``RunIdFilter`` が LogRecord に ``run_id`` を入れるため
-# に必要。run_id 未設定のときは ``"-"`` が出るので、フォーマット位置は常に揃う
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
@@ -33,8 +31,6 @@ def setup_logging(to_file: bool = True) -> None:
         return
 
     formatter = logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT)
-    # run_id を LogRecord に注入するフィルター。format string が ``%(run_id)s``
-    # を要求するので、ハンドラへ必ず付ける
     handlers: list[logging.Handler] = [logging.StreamHandler()]
 
     if to_file:

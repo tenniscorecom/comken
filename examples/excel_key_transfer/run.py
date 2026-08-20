@@ -19,9 +19,11 @@
 
 import logging
 from pathlib import Path
+from typing import Any
 
 from comken.core import diff_rows
 from comken.exceptions import CsvRowDuplicateKeyError
+from comken.toolbox import CSV, Excel, Transfer
 from comken.toolbox.csv import CsvReader, CsvWriter
 from comken.toolbox.excel import ExcelWriter
 
@@ -33,8 +35,6 @@ INVOICE_XLSX = OUTPUT_FOLDER / "請求一覧.xlsx"
 
 SHEET = "Sheet1"
 KEY = "注文番号"
-KEY_COL = "A"  # Excel 側でキー（注文番号）が入っている列
-CUSTOMER_COL = "B"
 AMOUNT_COL = "C"
 AMOUNT = "金額"
 TOTAL = "合計金額"
@@ -56,12 +56,6 @@ DETAIL_ROWS = [
     {"注文番号": "A003", "商品": "ボール", "金額": "4500"},
 ]
 
-# マスタにも明細にもない注文番号（転記されずスキップされることを確認する用）
-MISSING_KEY = "Z999"
-
-# Excel 側は「注文番号だけ入っていて、顧客名・合計金額が空」という状態を作る
-INVOICE_KEYS = ["A001", "A002", "A003", MISSING_KEY]
-
 logger = logging.getLogger(__name__)
 
 
@@ -70,14 +64,9 @@ def create_sample_files() -> None:
     CsvWriter(MASTER_CSV, fieldnames=list(MASTER_ROWS[0].keys())).write_rows(MASTER_ROWS)
     CsvWriter(DETAIL_CSV, fieldnames=list(DETAIL_ROWS[0].keys())).write_rows(DETAIL_ROWS)
 
-    with ExcelWriter.create(INVOICE_XLSX) as f:
-        s = f.sheet(SHEET)
-        s.write_table([{"注文番号": key, "顧客名": "", TOTAL: ""} for key in INVOICE_KEYS])
-        f.save()
-
 
 def total_by_key() -> dict[str, dict[str, int]]:
-    """明細をキーごとに合計し、transfer_by_letter に渡せる形にする。
+    """明細をキーごとに合計し、転記元へ追加できる形にする。
 
     group_by() は {キー: 行のリスト} を返すので、転記に使うには
     {キー: {列名: 値}} へ組み直す。SUMIF を Python で書いているのと同じことをしている。
@@ -90,24 +79,24 @@ def total_by_key() -> dict[str, dict[str, int]]:
 def main() -> None:
     create_sample_files()
 
-    # ── 1対1のマスタ: index() でキーから1行を引く ─────────────────────────
-    # → {"A001": {"注文番号": "A001", "顧客名": "株式会社アルファ"}, ...}
-    customers = CsvReader(MASTER_CSV).index(KEY)
-
     # ── 1対多の明細: group_by() でまとめてから集計する ────────────────────
     totals = total_by_key()
     logger.info("明細の合計: %s", {key: value[TOTAL] for key, value in totals.items()})
 
-    with ExcelWriter(INVOICE_XLSX) as f:
-        before = f.read_rows_as_dicts(SHEET)  # 検証用に転記前の状態を控えておく
-        s = f.sheet(SHEET)
+    before: list[dict[str, Any]] = []
 
-        # キー列の値で lookup を引き、一致した行に書き込む。
-        # 空行・キーが空の行・lookup にないキーの行は自動でスキップされる
-        matched = s.transfer_by_letter(
-            key_col=KEY_COL, lookup=customers, mapping={"顧客名": CUSTOMER_COL}
-        )
-        s.transfer_by_letter(key_col=KEY_COL, lookup=totals, mapping={TOTAL: AMOUNT_COL})
+    def add_total(source: dict[str, Any]) -> dict[str, Any] | None:
+        total = totals.get(source[KEY])
+        if total is None:
+            return None
+        return {**source, **total}
+
+    mapping = {KEY: KEY, "顧客名": "顧客名", TOTAL: TOTAL}
+    with CSV(MASTER_CSV) as source, Excel(INVOICE_XLSX) as destination:
+        matched = Transfer(source, destination, mapping).run(add_total)
+
+    with ExcelWriter(INVOICE_XLSX) as f:
+        s = f.sheet(SHEET)
 
         for row in range(2, s.last_row + 1):
             s.set_number_format(row=row, col=AMOUNT_COL, fmt=AMOUNT_FORMAT)
@@ -116,7 +105,7 @@ def main() -> None:
 
         after = f.read_rows_as_dicts(SHEET)
 
-    logger.info("%d 件転記した（マスタにない %s はスキップ）", matched, MISSING_KEY)
+    logger.info("%d 件転記した", matched)
 
     # 転記前後を突合して、どの行のどの列が書き換わったかを確認する
     result = diff_rows(before, after, key=KEY)

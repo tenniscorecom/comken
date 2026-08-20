@@ -86,7 +86,7 @@ class KeyColumnNotFoundError(ColumnNotFoundError):
 class TransferKeyColumnNotFoundError(ColumnNotFoundError):
     """列名転記で、Excel のキー列が見つからない
 
-    発生箇所: Sheet.transfer_by_mapping()
+    発生箇所: Sheet._transfer_by_mapping()
 
     対処:
         Excel のヘッダー行と key_col の列名を確認する
@@ -103,7 +103,7 @@ class TransferKeyColumnNotFoundError(ColumnNotFoundError):
 class TransferDestinationColumnNotFoundError(ColumnNotFoundError):
     """列名転記で、Excel の転記先列が見つからない
 
-    発生箇所: Sheet.transfer_by_mapping()
+    発生箇所: Sheet._transfer_by_mapping()
 
     対処:
         Excel のヘッダー行と config.ini のマッピング右側を確認する
@@ -120,7 +120,7 @@ class TransferDestinationColumnNotFoundError(ColumnNotFoundError):
 class TransferSourceColumnNotFoundError(ColumnNotFoundError):
     """列名転記で、lookup の転記元列が見つからない
 
-    発生箇所: Sheet.transfer_by_mapping()
+    発生箇所: Sheet._transfer_by_mapping()
 
     対処:
         転記元データと config.ini のマッピング左側を確認する

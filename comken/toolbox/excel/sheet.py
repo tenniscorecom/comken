@@ -124,7 +124,7 @@ class Sheet:
         return copied
 
     @measure
-    def transfer_by_letter(
+    def _transfer_by_letter(
         self,
         key_col: int | str,
         lookup: dict[str, dict],
@@ -134,7 +134,7 @@ class Sheet:
         """列記号で転記先を指定し、キーが一致した行へ値を転記する。
 
         ヘッダーがない、または列位置が仕様として固定された Excel に使う。
-        ヘッダー名で列を指定できる帳票には transfer_by_mapping() を使う。
+        ヘッダー名で列を指定できる帳票には _transfer_by_mapping() を使う。
         mapping は両メソッド共通で ``{転記元の列名: 転記先}`` の向き。
         """
         key_col_num = column_number(key_col)
@@ -157,7 +157,7 @@ class Sheet:
         return matched
 
     @measure
-    def transfer_by_mapping(
+    def _transfer_by_mapping(
         self,
         key_col: str,
         lookup: dict[str, dict],
@@ -168,7 +168,7 @@ class Sheet:
 
         ``config.SECTION_MAPPING`` （``MappingDict``）の戻り値を変換せずに渡せる。
         mapping の向きは ``{転記元の列名: 転記先の列名}`` で、左が元、右が先。
-        ヘッダーがない、または列位置が固定された帳票には transfer_by_letter() を使う。
+        ヘッダーがない、または列位置が固定された帳票には _transfer_by_letter() を使う。
         転記を始める前にキー列・転記先列・転記元列をすべて検証する。
 
         渡された ``lookup`` の中で「転記から外したい行」がある場合は、

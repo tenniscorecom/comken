@@ -7,12 +7,15 @@ config.ini は人が書く設定なのでプログラムから変更しない。
 
 import configparser
 import json
+import logging
 from pathlib import Path
 
 from comken.core.files.atomic import atomic_write
 from comken.core.files.ops import cleanup_stale_tmp, project_dir
 from comken.exceptions import StateFileCorruptedError, StateLowerCaseNameError, StateValueTypeError
 from comken.runtime import dry_run_log, is_dry_run
+
+logger = logging.getLogger(__name__)
 
 STATE_SECTION = "STATE"
 
@@ -60,7 +63,9 @@ class State:
         self._values = updated_values
 
     def _read(self) -> dict[str, StateValue]:
+        logger.debug("State読み込み開始: %s", self._path)
         if not self._path.exists():
+            logger.debug("State読み込み完了: ファイルなし")
             return {}
         parser = _new_parser()
         try:
@@ -75,11 +80,13 @@ class State:
                 if not _is_state_value(value):
                     raise StateFileCorruptedError(self._path.resolve())
                 values[key] = value
+            logger.debug("State読み込み完了: 件数=%d", len(values))
             return values
         except (configparser.Error, UnicodeError, json.JSONDecodeError) as error:
             raise StateFileCorruptedError(self._path.resolve()) from error
 
     def _write(self, values: dict[str, StateValue]) -> None:
+        logger.debug("State書き込み開始: %s 件数=%d", self._path, len(values))
         # 置き場所はここで用意する。atomic_write は勝手に作らない
         self._path.parent.mkdir(parents=True, exist_ok=True)
         cleanup_stale_tmp(self._path)
@@ -92,6 +99,7 @@ class State:
             tmp.open(mode="w", encoding="utf-8", newline="") as file,
         ):
             parser.write(file)
+        logger.debug("State書き込み完了: %s 件数=%d", self._path, len(values))
 
     @staticmethod
     def _validate_key(key: str) -> None:

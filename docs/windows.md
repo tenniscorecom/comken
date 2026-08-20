@@ -46,24 +46,8 @@ with ExcelComHandler("data.xlsx") as h:
     # h.save_as("output.csv", file_format=FileFormat.CSV)
 ```
 
-**キー突合で転記する（XLOOKUP 的転記）:**
-
-キー列の値で lookup を引き、一致した行に列マッピングに従って値を書き込む。
-空行・キーが空の行・lookup にないキーの行は自動でスキップされる。
-通常は openpyxl 版（`Sheet.transfer_by_letter`）の方が速い（Excel セクション参照）。
-
-```python
-lookup = CsvReader("data.csv").index("注文番号")
-# → {"A001": {"注文番号": "A001", "顧客名": "株式会社A", ...}, ...}
-
-MAPPING = {"顧客名": "A", "金額": "B"}  # lookup の列名 → Excel の列レター
-
-with ExcelComHandler("data.xlsx") as h:
-    matched = h.transfer_by_letter(SHEET, key_col="Q", lookup=lookup, mapping=MAPPING)
-    h.save_as("output.xlsx")
-
-print(f"{matched}件転記した")
-```
+列マッピングによる CSV / Excel 間の転記には ``comken.toolbox.Transfer`` を使う。
+Excel COM は、パスワード保存やマクロなど COM が必要な操作に限定する。
 
 ### WindowHandler
 

@@ -155,6 +155,7 @@ class ExcelWriter(ExcelBase):
                 が、Excel が見つからない環境で実行した場合。
         """
         save_path = Path(path) if path else self._original_path
+        logger.debug("Excel書き込み開始: %s", save_path)
         if is_dry_run():
             # パスワードは秘匿値なのでログには出さない（save_path のみ）
             dry_run_log("Excel を保存: %s", save_path)
@@ -201,6 +202,7 @@ class ExcelWriter(ExcelBase):
         # もう一度確かめる。パスワードの有無に関わらず行う。
         if not save_path.exists():
             raise ExcelSaveNotCompletedError(save_path)
+        logger.debug("Excel書き込み完了: %s", save_path)
 
     def run_macro(self, macro_name: str, save: bool = True) -> None:
         """VBA マクロを実行する。内部で win32com（pywin32）を使用する。

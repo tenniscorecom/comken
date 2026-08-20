@@ -4,11 +4,14 @@
 """
 
 import datetime
+import logging
 import re
 from pathlib import Path
 
 from comken.core.clock import today
 from comken.core.timer import measure
+
+logger = logging.getLogger(__name__)
 
 # ファイル名に含まれる日付らしい数字（20260729 / 2026-07-29 / 2026_07_29 / 2026.07.29）。
 # 前後を数字で挟まれたものは日付とみなさない（社員番号・伝票番号の一部を拾わないため）
@@ -39,11 +42,16 @@ class DateFileFinder:
             prefix.format(self._date) if "{:" in prefix else f"{prefix}{self._date:%Y%m%d}"
         )
         expected_name = f"{dated_prefix}{extension}"
+        logger.debug(
+            "日付付きファイル検索開始: フォルダ=%s ファイル名=%s", self._folder, expected_name
+        )
         matches = [
             path for path in self._folder.iterdir() if path.is_file() and path.name == expected_name
         ]
         if matches:
+            logger.debug("日付付きファイル検索完了: 件数=%d", len(matches))
             return matches[0]
+        logger.debug("日付付きファイル検索完了: 件数=0")
         if required:
             raise FileNotFoundError(
                 f"日付付きファイルが見つかりません: {self._folder / expected_name}"

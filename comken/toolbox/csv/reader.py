@@ -5,6 +5,7 @@ CsvReader クラスを通じて CSV ファイルの読み込み・検索・抽�
 
 import csv
 import io
+import logging
 import re
 from collections import Counter
 from collections.abc import Sequence
@@ -24,6 +25,8 @@ from comken.exceptions import (
     EncodingDetectionError,
 )
 from comken.toolbox.csv.base import CsvBase
+
+logger = logging.getLogger(__name__)
 
 
 def index_files(paths: Sequence[str | Path], key_col: str) -> dict[str, dict[str, str]]:
@@ -116,7 +119,9 @@ class CsvReader(CsvBase):
         # 同じインスタンスで複数メソッドを呼んでもファイルを読むのは1回だけにする
         # （read_rows() の後に index() を呼ぶ等で毎回 IO するのを防ぐ）
         if self._cache is not None:
+            logger.debug("CSV読込済みデータを再利用: 件数=%d", len(self._cache))
             return self._cache
+        logger.debug("CSV読み込み開始: %s", self._path)
         # headers 指定時は1行目をヘッダーではなくデータとして扱う
         reader = csv.DictReader(io.StringIO(self._read_text()), fieldnames=self._headers)
         rows = list(reader)
@@ -125,6 +130,7 @@ class CsvReader(CsvBase):
         if self._headers is not None and any(None in row for row in rows):
             raise CsvHeadersTooFewError(len(self._headers), self._path)
         self._cache = rows
+        logger.debug("CSV読み込み完了: %s 件数=%d", self._path, len(rows))
         return rows
 
     def _validate_columns(self, columns: list[str]) -> None:
@@ -295,7 +301,7 @@ class CsvReader(CsvBase):
     def index(self, key_col: str) -> dict[str, dict[str, str]]:
         """key_col をキーにした {キー: 行} の辞書を返す。
 
-        Excel との突合（transfer_by_mapping の lookup）など、キーで1行を引く用途に使う。
+        Excel との突合（_transfer_by_mapping の lookup）など、キーで1行を引く用途に使う。
         キーが重複していれば CsvRowDuplicateKeyError。重複が普通のデータは group_by() を使う。
 
         Raises:

@@ -1535,7 +1535,7 @@ class RowTransferError(ExcelError):
 
 Excel の行転記に失敗した
 
-発生箇所: ExcelComHandler.transfer_by_mapping()
+発生箇所: ExcelComHandler._transfer_by_mapping()
 
 対処:
     表示された行番号のデータを確認する
@@ -1881,7 +1881,7 @@ class TransferKeyColumnNotFoundError(ColumnNotFoundError):
 
 列名転記で、Excel のキー列が見つからない
 
-発生箇所: Sheet.transfer_by_mapping()
+発生箇所: Sheet._transfer_by_mapping()
 
 対処:
     Excel のヘッダー行と key_col の列名を確認する
@@ -1902,7 +1902,7 @@ class TransferDestinationColumnNotFoundError(ColumnNotFoundError):
 
 列名転記で、Excel の転記先列が見つからない
 
-発生箇所: Sheet.transfer_by_mapping()
+発生箇所: Sheet._transfer_by_mapping()
 
 対処:
     Excel のヘッダー行と config.ini のマッピング右側を確認する
@@ -1923,7 +1923,7 @@ class TransferSourceColumnNotFoundError(ColumnNotFoundError):
 
 列名転記で、lookup の転記元列が見つからない
 
-発生箇所: Sheet.transfer_by_mapping()
+発生箇所: Sheet._transfer_by_mapping()
 
 対処:
     転記元データと config.ini のマッピング左側を確認する
@@ -3585,7 +3585,7 @@ def rows(self) -> Iterator[Row]:
 #### `write_rows`
 
 ```text
-def write_rows(self, rows: Iterable[Mapping[str, object]]) -> None:
+def write_rows(self, rows: Iterable[Mapping[str, object]], columns: Iterable[str] | None=None) -> None:
 ```
 
 ##### 説明
@@ -3621,7 +3621,7 @@ def rows(self) -> Iterator[Row]:
 #### `write_rows`
 
 ```text
-def write_rows(self, rows: Iterable[Mapping[str, object]]) -> None:
+def write_rows(self, rows: Iterable[Mapping[str, object]], columns: Iterable[str] | None=None) -> None:
 ```
 
 ##### 説明
@@ -3654,25 +3654,20 @@ class Transfer:
 def __init__(self, source: CSV | Excel, destination: CSV | Excel, mapping: Mapping[str, str]) -> None:
 ```
 
-#### `rows`
-
-```text
-def rows(self) -> Iterator[Row]:
-```
-
-##### 説明
-
-転記前に選別・加工できる転記元行のコピーを返す。
-
 #### `run`
 
 ```text
-def run(self, rows: Iterable[Mapping[str, object]] | None=None) -> int:
+@measure
+def run(self, transform: Transform | None=None) -> int:
 ```
 
 ##### 説明
 
-指定行をマッピングして転記し、転記件数を返す。
+転記元を加工・選別して転記し、転記件数を返す。
+
+``transform`` は転記元1件のコピーを受け取る。辞書を返すとその内容を転記し、
+``None`` を返すとその件を除外し、``Transfer.STOP`` を返すと以降を処理しない。
+省略時は全件をそのまま転記する。
 
 
 ## `from comken.toolbox.access import ...`
@@ -5345,7 +5340,7 @@ def index(self, key_col: str) -> dict[str, dict[str, str]]:
 
 key_col をキーにした {キー: 行} の辞書を返す。
 
-Excel との突合（transfer_by_mapping の lookup）など、キーで1行を引く用途に使う。
+Excel との突合（_transfer_by_mapping の lookup）など、キーで1行を引く用途に使う。
 キーが重複していれば CsvRowDuplicateKeyError。重複が普通のデータは group_by() を使う。
 
 Raises:
@@ -5762,47 +5757,6 @@ def copy_to(self, destination, name: str | None=None) -> 'Sheet':
 ##### 説明
 
 このシートの値・数式・基本書式を別の ExcelWriter へコピーする。
-
-#### `transfer_by_letter`
-
-```text
-@measure
-def transfer_by_letter(self, key_col: int | str, lookup: dict[str, dict], mapping: dict[str, int | str], start_row: int=2) -> int:
-```
-
-##### 説明
-
-列記号で転記先を指定し、キーが一致した行へ値を転記する。
-
-ヘッダーがない、または列位置が仕様として固定された Excel に使う。
-ヘッダー名で列を指定できる帳票には transfer_by_mapping() を使う。
-mapping は両メソッド共通で ``{転記元の列名: 転記先}`` の向き。
-
-#### `transfer_by_mapping`
-
-```text
-@measure
-def transfer_by_mapping(self, key_col: str, lookup: dict[str, dict], mapping: dict[str, str], header_row: int=1) -> int:
-```
-
-##### 説明
-
-列名で転記先を指定し、キーが一致した行へ値を転記する。
-
-``config.SECTION_MAPPING`` （``MappingDict``）の戻り値を変換せずに渡せる。
-mapping の向きは ``{転記元の列名: 転記先の列名}`` で、左が元、右が先。
-ヘッダーがない、または列位置が固定された帳票には transfer_by_letter() を使う。
-転記を始める前にキー列・転記先列・転記元列をすべて検証する。
-
-渡された ``lookup`` の中で「転記から外したい行」がある場合は、
-呼び出し側で ``lookup`` を絞り込んでから渡す（``for k, v in lookup.items()``
-での dict comprehension で十分）。
-
-Args:
-    key_col: 転記先 Excel で照合に使う列名。
-    lookup: キーから転記元の行データを引く辞書。
-    mapping: 転記元の列名から転記先の列名への対応表。
-    header_row: 転記先 Excel のヘッダー行番号（1始まり）。
 
 #### `add_table`
 
@@ -7012,50 +6966,6 @@ Args:
 Returns:
     最終行の行番号（1始まり）。
 
-#### `transfer_by_mapping`
-
-```text
-def transfer_by_mapping(self, sheet_name: str, key_col: str, lookup: dict[str, dict], mapping: dict[str, str], header_row: int=1) -> int:
-```
-
-##### 説明
-
-列名で指定し、キーが一致した行に値を転記する（XLOOKUP 的転記）。
-
-Excel の各行についてキー列の値を lookup のキーと突合し、
-一致したら mapping に従って値を書き込む。
-空行・キーが空の行・lookup に存在しないキーの行はスキップする。
-
-Sheet.transfer_by_mapping() と同じ引数・対応表の向きであり、数式の再計算や
-パスワード付き保存など COM が必要なブックに限ってこちらを使う。
-ヘッダーがない、または列位置が固定された帳票には transfer_by_letter() を使う。
-Args:
-    sheet_name: シート名。
-    key_col: 転記先 Excel で照合に使う列名。
-    lookup: {キーの値: {列名: 値}} の辞書。CsvReader.index() 等で作る。
-    mapping: {転記元の列名: 転記先の列名} の辞書。
-    header_row: 転記先 Excel のヘッダー行番号（1始まり）。
-
-Returns:
-    転記した行数。
-
-Raises:
-    ExcelError: 行の処理に失敗した場合（メッセージに行番号を含む）。
-
-#### `transfer_by_letter`
-
-```text
-def transfer_by_letter(self, sheet_name: str, key_col: int | str, lookup: dict[str, dict], mapping: dict[str, int | str], start_row: int=2) -> int:
-```
-
-##### 説明
-
-列記号で指定し、キーが一致した行へ値を転記する。
-
-ヘッダーがない、または列位置が仕様として固定された Excel に使う。
-ヘッダー名で指定できる帳票には transfer_by_mapping() を使う。
-mapping は両メソッド共通で ``{転記元の列名: 転記先}`` の向き。
-
 #### `run_macro`
 
 ```text
@@ -7084,7 +6994,7 @@ NAS 上のファイルをローカルコピーして開いている場合も、�
 （一時コピーに保存すると close() でコピーごと消えるため）。
 動作は ExcelWriter.save() と同じ考え方（開いた場所ではなく、元の場所へ保存）。
 close() は保存せずに閉じる（SaveChanges=False）ため、
-write_cell や transfer_by_mapping での変更を残す場合は必ず呼ぶこと。
+write_cell や _transfer_by_mapping での変更を残す場合は必ず呼ぶこと。
 
 Raises:
     FileFormatMismatchError: 保存先の拡張子がワークブックの形式と食い違う場合。

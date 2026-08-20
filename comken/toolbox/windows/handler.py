@@ -314,7 +314,7 @@ class ExcelComHandler(FileBase):
         ws = self._sheet(sheet_name)
         return ws.UsedRange.Row + ws.UsedRange.Rows.Count - 1
 
-    def transfer_by_mapping(
+    def _transfer_by_mapping(
         self,
         sheet_name: str,
         key_col: str,
@@ -328,9 +328,9 @@ class ExcelComHandler(FileBase):
         一致したら mapping に従って値を書き込む。
         空行・キーが空の行・lookup に存在しないキーの行はスキップする。
 
-        Sheet.transfer_by_mapping() と同じ引数・対応表の向きであり、数式の再計算や
+        Sheet._transfer_by_mapping() と同じ引数・対応表の向きであり、数式の再計算や
         パスワード付き保存など COM が必要なブックに限ってこちらを使う。
-        ヘッダーがない、または列位置が固定された帳票には transfer_by_letter() を使う。
+        ヘッダーがない、または列位置が固定された帳票には _transfer_by_letter() を使う。
         Args:
             sheet_name: シート名。
             key_col: 転記先 Excel で照合に使う列名。
@@ -389,7 +389,7 @@ class ExcelComHandler(FileBase):
         logger.info("転記完了: %d件一致（シート: %s）", matched, sheet_name)
         return matched
 
-    def transfer_by_letter(
+    def _transfer_by_letter(
         self,
         sheet_name: str,
         key_col: int | str,
@@ -400,7 +400,7 @@ class ExcelComHandler(FileBase):
         """列記号で指定し、キーが一致した行へ値を転記する。
 
         ヘッダーがない、または列位置が仕様として固定された Excel に使う。
-        ヘッダー名で指定できる帳票には transfer_by_mapping() を使う。
+        ヘッダー名で指定できる帳票には _transfer_by_mapping() を使う。
         mapping は両メソッド共通で ``{転記元の列名: 転記先}`` の向き。
         """
         ws = self._sheet(sheet_name)
@@ -458,7 +458,7 @@ class ExcelComHandler(FileBase):
         （一時コピーに保存すると close() でコピーごと消えるため）。
         動作は ExcelWriter.save() と同じ考え方（開いた場所ではなく、元の場所へ保存）。
         close() は保存せずに閉じる（SaveChanges=False）ため、
-        write_cell や transfer_by_mapping での変更を残す場合は必ず呼ぶこと。
+        write_cell や _transfer_by_mapping での変更を残す場合は必ず呼ぶこと。
 
         Raises:
             FileFormatMismatchError: 保存先の拡張子がワークブックの形式と食い違う場合。

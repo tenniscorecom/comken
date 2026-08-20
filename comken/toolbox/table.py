@@ -1,15 +1,27 @@
 """comken/toolbox/table.py — CSV・Excelを同じ表データとして扱う入口。"""
 
-from collections.abc import Iterable, Iterator, Mapping
+import logging
+from collections.abc import Callable, Iterable, Iterator, Mapping
+from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Self
+from typing import Any, Final, Self
 
 from comken.constants import Encoding
+from comken.core.timer import measure
 from comken.exceptions.table import TableNotOpenError, TransferMappingError
 from comken.toolbox.csv import CsvReader, CsvWriter
 from comken.toolbox.excel import ExcelWriter, Sheet
 
 Row = dict[str, Any]
+
+
+class _TransferControl(Enum):
+    STOP = auto()
+
+
+Transform = Callable[[Row], Mapping[str, object] | None | _TransferControl]
+
+logger = logging.getLogger(__name__)
 
 
 class CSV:
@@ -29,13 +41,15 @@ class CSV:
         """各行を列名でアクセスできる辞書として返す。"""
         yield from CsvReader(self.path, encoding=self._encoding).rows()
 
-    def write_rows(self, rows: Iterable[Mapping[str, object]]) -> None:
+    def write_rows(
+        self, rows: Iterable[Mapping[str, object]], columns: Iterable[str] | None = None
+    ) -> None:
         """行をCSVへ上書き保存する。列順は最初の行に合わせる。"""
         materialized = [dict(row) for row in rows]
-        if materialized:
-            CsvWriter(self.path, list(materialized[0]), encoding=self._encoding).write_rows(
-                materialized
-            )
+        if not materialized and columns is None:
+            return
+        fieldnames = list(columns) if columns is not None else list(materialized[0])
+        CsvWriter(self.path, fieldnames, encoding=self._encoding).write_rows(materialized)
 
 
 class Excel:
@@ -62,14 +76,20 @@ class Excel:
         """各行を列名でアクセスできる辞書として返す。"""
         yield from self._require_book().rows(self._sheet_name)
 
-    def write_rows(self, rows: Iterable[Mapping[str, object]]) -> None:
+    def write_rows(
+        self, rows: Iterable[Mapping[str, object]], columns: Iterable[str] | None = None
+    ) -> None:
         """選択中のシートへ列名と行を書き込む。"""
         materialized = [dict(row) for row in rows]
+        if not materialized and columns is None:
+            return
+        sheet = self._require_book().sheet(self._sheet_name)
+        sheet.ws.delete_rows(1, sheet.ws.max_row)
         if materialized:
-            sheet = self._require_book().sheet(self._sheet_name)
-            sheet.ws.delete_rows(1, sheet.ws.max_row)
             sheet.write_table(materialized)
-            self._is_dirty = True
+        elif columns is not None:
+            sheet.write_row(1, list(columns))
+        self._is_dirty = True
 
     def sheet(self, name: str | None = None) -> Sheet:
         """セルや書式を操作するシートを返す。"""
@@ -85,6 +105,8 @@ class Excel:
 class Transfer:
     """列マッピングに従って表データを一方向へ転記する。"""
 
+    STOP: Final = _TransferControl.STOP
+
     def __init__(
         self, source: CSV | Excel, destination: CSV | Excel, mapping: Mapping[str, str]
     ) -> None:
@@ -94,19 +116,48 @@ class Transfer:
         self._destination = destination
         self._mapping = dict(mapping)
 
-    def rows(self) -> Iterator[Row]:
-        """転記前に選別・加工できる転記元行のコピーを返す。"""
-        for source_row in self._source.rows():
-            yield dict(source_row)
+    @measure
+    def run(self, transform: Transform | None = None) -> int:
+        """転記元を加工・選別して転記し、転記件数を返す。
 
-    def run(self, rows: Iterable[Mapping[str, object]] | None = None) -> int:
-        """指定行をマッピングして転記し、転記件数を返す。"""
-        source_rows = rows if rows is not None else self.rows()
-        destination_rows = [
-            {destination: row.get(source) for source, destination in self._mapping.items()}
-            for row in source_rows
-        ]
-        self._destination.write_rows(destination_rows)
+        ``transform`` は転記元1件のコピーを受け取る。辞書を返すとその内容を転記し、
+        ``None`` を返すとその件を除外し、``Transfer.STOP`` を返すと以降を処理しない。
+        省略時は全件をそのまま転記する。
+        """
+        logger.debug(
+            "Transfer開始: 転記元=%s 転記先=%s マッピング列数=%d",
+            type(self._source).__name__,
+            type(self._destination).__name__,
+            len(self._mapping),
+        )
+        logger.debug("転記元データ取得開始")
+        source_rows = self._source.rows()
+        destination_rows: list[Row] = []
+        read_count = 0
+        for source_row in source_rows:
+            read_count += 1
+            candidate: Mapping[str, object] | None | _TransferControl = dict(source_row)
+            if transform is not None:
+                candidate = transform(dict(source_row))
+            if candidate is self.STOP:
+                logger.debug("転記元データ取得を停止: 取得件数=%d", read_count)
+                break
+            if candidate is None:
+                continue
+            destination_rows.append(
+                {
+                    destination: candidate.get(source)
+                    for source, destination in self._mapping.items()
+                }
+            )
+        logger.debug(
+            "転記元データ取得完了: 取得件数=%d 転記対象件数=%d",
+            read_count,
+            len(destination_rows),
+        )
+        logger.debug("転記先書き込み開始: 件数=%d", len(destination_rows))
+        self._destination.write_rows(destination_rows, self._mapping.values())
+        logger.debug("Transfer完了: 転記件数=%d", len(destination_rows))
         return len(destination_rows)
 
 

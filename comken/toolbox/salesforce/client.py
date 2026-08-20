@@ -220,6 +220,7 @@ class SalesforceBase:
             レコードの辞書のリスト。
         """
         records: list[dict] = []
+        logger.debug("Salesforce SOQL取得開始")
         path = self.data_path(f"/query?q={urllib.parse.quote(soql)}")
         while path:
             result, _ = self.request("GET", path, component="query")
@@ -230,6 +231,7 @@ class SalesforceBase:
                 records.append(record)
             # done が真なら次のページは無い
             path = "" if result.get("done", True) else result.get("nextRecordsUrl", "")
+        logger.debug("Salesforce SOQL取得完了: 件数=%d", len(records))
         return records
 
     # ------------------------------------------------------------------- CRUD
