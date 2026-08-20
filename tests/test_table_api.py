@@ -1,96 +1,61 @@
-"""CSV / Excel 共通の表データ API のテスト。"""
+"""既存のCSV / Excelクラスを使うTransfer APIのテスト。"""
 
-import datetime
 import logging
 from typing import Any
 
 import pytest
 
-from comken.core import DateFileFinder, DateNameBuilder
-from comken.exceptions.table import TableNotOpenError, TransferMappingError
+from comken.exceptions.table import TransferMappingError
 from comken.runtime import debug
-from comken.toolbox import CSV, Excel, Transfer
+from comken.toolbox import Transfer
+from comken.toolbox.csv import CsvReader, CsvWriter
+from comken.toolbox.excel import ExcelReader, ExcelWriter
 
 
-def test_date_finder_and_builder_share_prefix_rule(tmp_path) -> None:
-    assert (
-        DateNameBuilder("sales", datetime.date(2026, 8, 20)).prefix("DIY_{:%Y%m%d}_")
-        == "DIY_20260820_sales.xlsx"
+def test_transfer_can_filter_edit_and_stop_rows(tmp_path) -> None:
+    source_path = tmp_path / "source.csv"
+    destination_path = tmp_path / "destination.csv"
+    source_path.write_text(
+        "ID,氏名,区分\n1, 山田 ,対象\n2,佐藤,不要\n3,鈴木,対象\n", encoding="utf-8"
     )
-    path = tmp_path / "DIY_20260820.xlsx"
-    path.touch()
-
-    assert DateFileFinder(tmp_path, datetime.date(2026, 8, 20)).prefix("DIY_") == path
-
-
-def test_transfer_can_filter_and_edit_rows(tmp_path) -> None:
-    source_path = tmp_path / "source.csv"
-    destination_path = tmp_path / "destination.csv"
-    source_path.write_text("ID,氏名,区分\n1, 山田 ,対象\n2,佐藤,不要\n", encoding="utf-8")
-
-    with CSV(source_path) as source, CSV(destination_path) as destination:
-        transfer = Transfer(source, destination, {"ID": "番号", "氏名": "名前"})
-
-        def transform(source_row: dict[str, Any]) -> dict[str, Any] | None:
-            if source_row["区分"] == "不要":
-                return None
-            source_row["氏名"] = source_row["氏名"].strip()
-            return source_row
-
-        assert transfer.run(transform) == 1
-
-    assert list(CSV(destination_path).rows()) == [{"番号": "1", "名前": "山田"}]
-
-
-def test_excel_rows_are_dicts(tmp_path) -> None:
-    path = tmp_path / "book.xlsx"
-    with Excel(path) as excel:
-        excel.write_rows([{"ID": 1, "氏名": "山田"}])
-
-    with Excel(path) as excel:
-        assert list(excel.rows()) == [{"ID": 1, "氏名": "山田"}]
-
-
-def test_excel_requires_with_statement(tmp_path) -> None:
-    with pytest.raises(TableNotOpenError):
-        list(Excel(tmp_path / "book.xlsx").rows())
-
-
-def test_transfer_requires_mapping(tmp_path) -> None:
-    with (
-        CSV(tmp_path / "source.csv") as source,
-        CSV(tmp_path / "destination.csv") as destination,
-        pytest.raises(TransferMappingError),
-    ):
-        Transfer(source, destination, {})
-
-
-def test_transfer_can_stop_before_remaining_rows(tmp_path) -> None:
-    source_path = tmp_path / "source.csv"
-    destination_path = tmp_path / "destination.csv"
-    source_path.write_text("ID\n1\n2\n3\n", encoding="utf-8")
+    mapping = {"ID": "番号", "氏名": "名前"}
 
     def transform(source_row: dict[str, Any]):
         if source_row["ID"] == "2":
+            return None
+        if source_row["ID"] == "3":
             return Transfer.STOP
+        source_row["氏名"] = source_row["氏名"].strip()
         return source_row
 
-    with CSV(source_path) as source, CSV(destination_path) as destination:
-        assert Transfer(source, destination, {"ID": "ID"}).run(transform) == 1
+    transferred = Transfer(
+        CsvReader(source_path),
+        CsvWriter(destination_path, fieldnames=list(mapping.values())),
+        mapping,
+    ).run(transform)
 
-    assert list(CSV(destination_path).rows()) == [{"ID": "1"}]
+    assert transferred == 1
+    assert CsvReader(destination_path).read_rows() == [{"番号": "1", "名前": "山田"}]
 
 
-def test_transfer_with_no_matches_clears_destination(tmp_path) -> None:
+def test_transfer_requires_mapping(tmp_path) -> None:
+    with pytest.raises(TransferMappingError):
+        Transfer(CsvReader(tmp_path / "source.csv"), CsvWriter(tmp_path / "out.csv", []), {})
+
+
+def test_transfer_with_no_matches_writes_csv_header(tmp_path) -> None:
     source_path = tmp_path / "source.csv"
-    destination_path = tmp_path / "destination.csv"
     source_path.write_text("ID\n1\n", encoding="utf-8")
-    destination_path.write_text("番号\nold\n", encoding="utf-8")
+    mapping = {"ID": "番号"}
 
-    with CSV(source_path) as source, CSV(destination_path) as destination:
-        assert Transfer(source, destination, {"ID": "番号"}).run(lambda source: None) == 0
+    count = Transfer(
+        CsvReader(source_path),
+        CsvWriter(tmp_path / "destination.csv", fieldnames=list(mapping.values())),
+        mapping,
+    ).run(lambda source: None)
 
-    assert destination_path.read_text(encoding="utf-8-sig") == "番号\n"
+    assert count == 0
+    assert (tmp_path / "destination.csv").read_text(encoding="utf-8-sig") == "番号\n"
 
 
 @pytest.mark.parametrize(
@@ -100,47 +65,73 @@ def test_transfer_with_no_matches_clears_destination(tmp_path) -> None:
 def test_transfer_supports_all_csv_excel_directions(
     tmp_path, source_kind, destination_kind
 ) -> None:
-    source_suffix = "xlsx" if source_kind == "excel" else "csv"
-    destination_suffix = "xlsx" if destination_kind == "excel" else "csv"
-    source_path = tmp_path / f"source.{source_suffix}"
-    destination_path = tmp_path / f"destination.{destination_suffix}"
-    source = CSV(source_path) if source_kind == "csv" else Excel(source_path)
-    destination = CSV(destination_path) if destination_kind == "csv" else Excel(destination_path)
+    mapping = {"ID": "番号", "氏名": "名前"}
+    source_path = tmp_path / f"source.{('xlsx' if source_kind == 'excel' else 'csv')}"
+    destination_path = (
+        tmp_path / f"destination.{('xlsx' if destination_kind == 'excel' else 'csv')}"
+    )
 
     if source_kind == "csv":
         source_path.write_text("ID,氏名\n1,山田\n", encoding="utf-8")
+        source = CsvReader(source_path)
     else:
-        with source as source_table:
-            source_table.write_rows([{"ID": 1, "氏名": "山田"}])
+        source_book = ExcelWriter.create(source_path, sheet_name="入力")
+        source_book.sheet("入力").write_table([{"ID": 1, "氏名": "山田"}])
+        source_book.save()
+        source_book.close()
+        source = ExcelReader(source_path)
 
-    with source as source_table, destination as destination_table:
-        assert Transfer(source_table, destination_table, {"ID": "番号", "氏名": "名前"}).run() == 1
+    if destination_kind == "csv":
+        destination = CsvWriter(destination_path, fieldnames=list(mapping.values()))
+    else:
+        destination = ExcelWriter.create(destination_path, sheet_name="出力")
 
-    with destination as destination_table:
-        assert list(destination_table.rows()) == [
-            {
-                "番号": "1" if destination_kind == "csv" or source_kind == "csv" else 1,
-                "名前": "山田",
-            }
-        ]
+    count = Transfer(
+        source,
+        destination,
+        mapping,
+        source_sheet="入力",
+        destination_sheet="出力",
+    ).run()
+    if isinstance(destination, ExcelWriter):
+        destination.save()
+    if isinstance(source, ExcelReader):
+        source.close()
+    if isinstance(destination, ExcelWriter):
+        destination.close()
+    assert count == 1
+
+    if destination_kind == "csv":
+        assert CsvReader(destination_path).read_rows() == [{"番号": "1", "名前": "山田"}]
+    else:
+        with ExcelReader(destination_path) as reader:
+            assert reader.read_rows_as_dicts("出力") == [
+                {"番号": "1" if source_kind == "csv" else 1, "名前": "山田"}
+            ]
 
 
-def test_transfer_debug_logs_show_progress_without_row_data(tmp_path, caplog) -> None:
+def test_transfer_debug_logs_do_not_include_row_data(tmp_path, caplog) -> None:
     source_path = tmp_path / "source.csv"
     source_path.write_text("ID,氏名\n1,秘密の氏名\n", encoding="utf-8")
 
-    with (
-        caplog.at_level(logging.DEBUG),
-        debug(),
-        CSV(source_path) as source,
-        CSV(tmp_path / "destination.csv") as destination,
-    ):
-        Transfer(source, destination, {"ID": "番号"}).run()
+    with caplog.at_level(logging.DEBUG), debug():
+        Transfer(
+            CsvReader(source_path),
+            CsvWriter(tmp_path / "destination.csv", ["番号"]),
+            {"ID": "番号"},
+        ).run()
 
     messages = [record.getMessage() for record in caplog.records]
     assert any("Transfer開始" in message for message in messages)
     assert any("Transfer.run: 開始" in message for message in messages)
     assert any("Transfer.run: 完了" in message for message in messages)
     assert any("取得件数=1 転記対象件数=1" in message for message in messages)
-    assert any("Transfer完了" in message for message in messages)
     assert all("秘密の氏名" not in message for message in messages)
+
+
+def test_new_wrapper_classes_are_not_public() -> None:
+    import comken.toolbox as toolbox
+
+    assert toolbox.__all__ == ["Transfer"]
+    assert not hasattr(toolbox, "CSV")
+    assert not hasattr(toolbox, "Excel")

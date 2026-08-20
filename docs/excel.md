@@ -144,13 +144,17 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:
 # config.ini の列名マッピングで CSV → Excel 転記
 # config.ini の [受注_MAPPING] は「取引先 = 顧客名」「金額 = 請求額」と書く
 from comken import Config
-from comken.toolbox import CSV, Excel, Transfer
+from comken.toolbox import Transfer
+from comken.toolbox.csv import CsvReader
+from comken.toolbox.excel import ExcelWriter
 
 config = Config()
 mapping = config.受注_MAPPING
 
-with CSV("data.csv") as source, Excel("data.xlsx") as destination:
-    matched = Transfer(source, destination, mapping).run()
+source = CsvReader("data.csv")
+with ExcelWriter.create("data.xlsx", "売上") as destination:
+    matched = Transfer(source, destination, mapping, destination_sheet="売上").run()
+    destination.save()
 
 # 背景色の設定（よく使う色は Color 定数で指定できる）
 from comken.constants import Color

@@ -3556,88 +3556,6 @@ def is_scheduled(self) -> bool:
 
 ## `from comken.toolbox import ...`
 
-### `CSV`
-
-```text
-class CSV:
-```
-
-#### 説明
-
-CSVを列名付きの行として読み書きする。
-
-#### `__init__`
-
-```text
-def __init__(self, path: str | Path, encoding: str=Encoding.AUTO) -> None:
-```
-
-#### `rows`
-
-```text
-def rows(self) -> Iterator[Row]:
-```
-
-##### 説明
-
-各行を列名でアクセスできる辞書として返す。
-
-#### `write_rows`
-
-```text
-def write_rows(self, rows: Iterable[Mapping[str, object]], columns: Iterable[str] | None=None) -> None:
-```
-
-##### 説明
-
-行をCSVへ上書き保存する。列順は最初の行に合わせる。
-
-### `Excel`
-
-```text
-class Excel:
-```
-
-#### 説明
-
-Excelの1シートを列名付きの行として読み書きする。
-
-#### `__init__`
-
-```text
-def __init__(self, path: str | Path, sheet: str='Sheet1') -> None:
-```
-
-#### `rows`
-
-```text
-def rows(self) -> Iterator[Row]:
-```
-
-##### 説明
-
-各行を列名でアクセスできる辞書として返す。
-
-#### `write_rows`
-
-```text
-def write_rows(self, rows: Iterable[Mapping[str, object]], columns: Iterable[str] | None=None) -> None:
-```
-
-##### 説明
-
-選択中のシートへ列名と行を書き込む。
-
-#### `sheet`
-
-```text
-def sheet(self, name: str | None=None) -> Sheet:
-```
-
-##### 説明
-
-セルや書式を操作するシートを返す。
-
 ### `Transfer`
 
 ```text
@@ -3646,12 +3564,18 @@ class Transfer:
 
 #### 説明
 
-列マッピングに従って表データを一方向へ転記する。
+既存のCSV・Excelクラス間で、列マッピングに従って行を転記する。
+
+CSVの転記先は、転記先の列名と順序が一致するように
+``CsvWriter(path, fieldnames=list(mapping.values()))`` と構築する。
+Excelを転記元または転記先にする場合は、該当するシート名を
+``source_sheet`` / ``destination_sheet`` へ指定する。
+転記先が ``ExcelWriter`` の場合、保存は呼び出し側で ``save()`` する。
 
 #### `__init__`
 
 ```text
-def __init__(self, source: CSV | Excel, destination: CSV | Excel, mapping: Mapping[str, str]) -> None:
+def __init__(self, source: Source, destination: Destination, mapping: Mapping[str, str], *, source_sheet: str='Sheet1', destination_sheet: str='Sheet1') -> None:
 ```
 
 #### `run`

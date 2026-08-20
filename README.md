@@ -88,9 +88,10 @@ import の書き方は上の「[使うときの約束](#使うときの約束)�
 
 ## モジュール一覧
 
-表データを扱う基本入口は ``from comken.toolbox import CSV, Excel, Transfer``。
-CSV と Excel はどちらも ``for row in table.rows():`` で列名付き辞書を返す。
-列転記は ``Transfer(source, destination, mapping).run()`` で全件を処理する。
+表データの読み書きには既存の ``CsvReader`` / ``CsvWriter`` と
+``ExcelReader`` / ``ExcelWriter`` を使う。列転記は、それらを
+``Transfer(source, destination, mapping).run()`` に渡して全件を処理する。
+CSV の転記先は ``CsvWriter(path, fieldnames=list(mapping.values()))`` と作る。
 1件ずつ加工・除外するときは ``run(transform)`` を使い、辞書、``None``、
 ``Transfer.STOP`` をそれぞれ転記、skip、打ち切りの合図として返す。
 
@@ -98,7 +99,7 @@ CSV と Excel はどちらも ``for row in table.rows():`` で列名付き辞書
 |---|---|
 | Config | INI ファイルの読み込み |
 | DateFileFinder / DateNameBuilder | 日付付きファイルの検索・命名 |
-| CSV / Excel / Transfer | 表データの読み書きと列マッピング転記 |
+| Transfer | 既存の CSV / Excel クラス間の列マッピング転記 |
 | runtime | `with debug():` / `with dry_run():` による実行モード |
 | constants | CSV・Excel・ファイル検索で使う公開定数 |
 | exceptions | comken 固有の例外（エラー名別に対処可能） |

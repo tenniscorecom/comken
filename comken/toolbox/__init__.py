@@ -16,6 +16,6 @@ Excel・CSV・Access・Outlook・Windows・ブラウザ・Salesforce・社内 RP
 - **社内の決まりに沿って部品を組み合わせた仕組み** は comken/services/ に置く。
 """
 
-from comken.toolbox.table import CSV, Excel, Transfer
+from comken.toolbox.table import Transfer
 
-__all__ = ["CSV", "Excel", "Transfer"]
+__all__ = ["Transfer"]

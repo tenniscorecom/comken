@@ -4,8 +4,9 @@ import logging
 from pathlib import Path
 
 from comken import Config, setup_logging
-from comken.toolbox import CSV, Excel, Transfer
-from comken.toolbox.csv import CsvWriter
+from comken.toolbox import Transfer
+from comken.toolbox.csv import CsvReader, CsvWriter
+from comken.toolbox.excel import ExcelWriter
 
 HERE = Path(__file__).parent
 OUTPUT_FOLDER = HERE / "output"
@@ -30,8 +31,11 @@ def main() -> None:
     # ``config.SECTION_MAPPING`` は ``MappingDict``（dict 互換）。未知の列は ``None`` を返す。
     config_mapping = Config(CONFIG_PATH).受注_MAPPING
 
-    with CSV(SOURCE_CSV) as source, Excel(OUTPUT_PATH) as destination:
-        transferred = Transfer(source, destination, config_mapping).run()
+    mapping = dict(config_mapping)
+    source = CsvReader(SOURCE_CSV)
+    with ExcelWriter.create(OUTPUT_PATH) as destination:
+        transferred = Transfer(source, destination, mapping).run()
+        destination.save()
 
     logger.info("設定の列対応: %s（左: 転記元 → 右: 転記先）", config_mapping)
     logger.info("Excel 転記: %s（%d 件）", OUTPUT_PATH, transferred)

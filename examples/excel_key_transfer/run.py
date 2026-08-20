@@ -23,7 +23,7 @@ from typing import Any
 
 from comken.core import diff_rows
 from comken.exceptions import CsvRowDuplicateKeyError
-from comken.toolbox import CSV, Excel, Transfer
+from comken.toolbox import Transfer
 from comken.toolbox.csv import CsvReader, CsvWriter
 from comken.toolbox.excel import ExcelWriter
 
@@ -92,8 +92,10 @@ def main() -> None:
         return {**source, **total}
 
     mapping = {KEY: KEY, "顧客名": "顧客名", TOTAL: TOTAL}
-    with CSV(MASTER_CSV) as source, Excel(INVOICE_XLSX) as destination:
+    source = CsvReader(MASTER_CSV)
+    with ExcelWriter.create(INVOICE_XLSX) as destination:
         matched = Transfer(source, destination, mapping).run(add_total)
+        destination.save()
 
     with ExcelWriter(INVOICE_XLSX) as f:
         s = f.sheet(SHEET)
