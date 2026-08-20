@@ -24,7 +24,7 @@ class SiteBase(Protocol):
 
     実装は以下の 2 系統が将来切り替わる:
     - `DirectSiteBase` (`comken.toolbox.salesforce.direct.adapter`) — comken オリジナル
-    - `InternalSiteBase` (`comken.toolbox.salesforce.internal`)       — 社内ライブラリ用 (future)
+    - `InternalSiteBase` (`comken.toolbox.salesforce._internal`) — 社内ライブラリ版 (future)
     """
 
     # 組織で固定の値。config.ini には置かない (環境で変わる値だけを config.ini へ)

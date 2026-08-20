@@ -5,6 +5,9 @@ comken オリジナル (`direct/`) の `SalesforceBase` を `SiteBase` 共通
 (`sites/sandbox.py` 等) の継承元を `SalesforceBase` 直接から
 `DirectSiteBase` に置き換えるだけで、「direct 版か社内ライブラリ版か」
 をサブクラス切替で組めるようになる。
+
+社内ライブラリ版 (future) は `comken.toolbox.salesforce._internal` 配下。
+利用者からは見えない接頭辞で管理している。
 """
 
 from comken.toolbox.salesforce.direct.client import SalesforceBase
