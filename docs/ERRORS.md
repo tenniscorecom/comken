@@ -142,6 +142,8 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `EmptyReportError` | レポートは実行できたが明細が 0 行だった | Salesforce の画面で同じレポートを開き、本当に 0 件か確認する。本当に 0 件の日であれば、空の CSV を保存先へ手で置く |
 | `ReportFolderNotFoundError` | 管理表に書かれた保存先のフォルダが無い | 管理表の「保存先」を確認する。共有フォルダなら、つながっているか・権限があるかも確認する |
 | `ScheduledDownloadFailedError` | 定期取得で1件以上が失敗した | 履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。急いで必要なものは download_report() でその場で取得する |
+| `TransferDestinationRowMissingError` | 転記先に対応する行がない状態で transform がその行を操作した | destination_row が None か確認し、新規行を処理するか Transfer.SKIP を返す |
+| `TransferDestinationMultipleMatchError` | 転記先のキーに一致する行が複数ある | mapping の先頭列に対応する転記先列の値を一意にする |
 | `FileNotFoundError` | ファイルが見つからない | ファイルの置き場所と名前を確認する。「今日の日付のファイル」を探す処理なら、今日のファイルが作られているか確認する |
 
 ## ブラウザ（Edge 自動操作）のエラー

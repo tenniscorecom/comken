@@ -166,7 +166,9 @@ mapping = config.受注_MAPPING
 
 source = CsvReader("data.csv")
 with ExcelWriter.create("data.xlsx", "売上") as destination:
-    matched = Transfer(source, destination.sheet("売上"), mapping).run()
+    matched = Transfer(source, destination.sheet("売上"), mapping).run(
+        transform=lambda source_row, destination_row: None
+    )
     destination.save()
 
 # 背景色の設定（よく使う色は Color 定数で指定できる）

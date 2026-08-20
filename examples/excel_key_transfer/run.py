@@ -85,16 +85,17 @@ def main() -> None:
 
     before: list[dict[str, Any]] = []
 
-    def add_total(source: dict[str, Any]) -> dict[str, Any] | None:
+    def add_total(source: dict[str, Any], _destination_row: dict[str, Any] | None) -> Any:
         total = totals.get(source[KEY])
         if total is None:
-            return None
-        return {**source, **total}
+            return Transfer.SKIP
+        source.update(total)
+        return None
 
     mapping = {KEY: KEY, "顧客名": "顧客名", TOTAL: TOTAL}
     source = CsvReader(MASTER_CSV)
     with ExcelWriter.create(INVOICE_XLSX) as destination:
-        matched = Transfer(source, destination.sheet(SHEET), mapping).run(add_total)
+        matched = Transfer(source, destination.sheet(SHEET), mapping).run(transform=add_total)
         destination.save()
 
     with ExcelWriter(INVOICE_XLSX) as f:

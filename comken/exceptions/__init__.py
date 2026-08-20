@@ -27,6 +27,7 @@ ComkenError
 │   ├── TableNotAvailableInReadOnlyError
 │   ├── MacroError
 │   ├── EmptyHeaderCellError
+│   ├── DuplicateHeaderCellError
 │   ├── ExcelHeadersTooFewError
 │   └── FileFormatMismatchError
 ├── CsvError
@@ -71,6 +72,8 @@ ComkenError
 │   ├── PopupTabNotOpenedError
 │   └── DownloadTimeoutError
 ├── InvalidColumnError
+├── TransferDestinationRowMissingError
+├── TransferDestinationMultipleMatchError
 ├── ColumnNotFoundError
 │   ├── ExcelColumnNotFoundError
 │   ├── CsvColumnNotFoundError
@@ -240,6 +243,10 @@ from comken.exceptions.state import (
     StateLowerCaseNameError,
     StateValueTypeError,
 )
+from comken.exceptions.table import (
+    TransferDestinationMultipleMatchError,
+    TransferDestinationRowMissingError,
+)
 
 __all__ = [
     "ComkenError",
@@ -349,4 +356,6 @@ __all__ = [
     "EmptyReportError",
     "ReportFolderNotFoundError",
     "ScheduledDownloadFailedError",
+    "TransferDestinationRowMissingError",
+    "TransferDestinationMultipleMatchError",
 ]

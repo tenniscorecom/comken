@@ -39,8 +39,41 @@ class TransferRowError(TableError):
     発生箇所: Transfer.run()
 
     対処:
-        transform から辞書、None、Transfer.STOP のいずれかを返す
+        通常は何も返さず、1件を除外する場合は Transfer.SKIP、全体を止める場合は Transfer.STOP を返す
     """
 
     def __init__(self, row_number: int, reason: str) -> None:
         super().__init__(f"転記元の{row_number}件目を処理できません。{reason}")
+
+
+class TransferDestinationRowMissingError(ComkenError):
+    """転記先に対応する行がない状態で transform がその行を操作した
+
+    発生箇所: Transfer.run()
+
+    対処:
+        destination_row が None か確認し、新規行を処理するか Transfer.SKIP を返す
+    """
+
+    def __init__(self, row_number: int) -> None:
+        super().__init__(
+            f"転記元の{row_number}件目に対応する転記先行がありません。"
+            "destination_row が None か確認し、新規行を処理するか "
+            "Transfer.SKIP を返してください。"
+        )
+
+
+class TransferDestinationMultipleMatchError(ComkenError):
+    """転記先のキーに一致する行が複数ある
+
+    発生箇所: Transfer.run()
+
+    対処:
+        mapping の先頭列に対応する転記先列の値を一意にする
+    """
+
+    def __init__(self, key_column: str, key: object) -> None:
+        super().__init__(
+            f"転記先列「{key_column}」のキー「{key}」に一致する行が複数あります。"
+            "転記先のキーを一意にしてください。"
+        )

@@ -3421,6 +3421,48 @@ class ScheduledDownloadFailedError(DownloaderError):
 def __init__(self, failed_keys: list[str], history_path: Path) -> None:
 ```
 
+### `TransferDestinationRowMissingError`
+
+```text
+class TransferDestinationRowMissingError(ComkenError):
+```
+
+#### 説明
+
+転記先に対応する行がない状態で transform がその行を操作した
+
+発生箇所: Transfer.run()
+
+対処:
+    destination_row が None か確認し、新規行を処理するか Transfer.SKIP を返す
+
+#### `__init__`
+
+```text
+def __init__(self, row_number: int) -> None:
+```
+
+### `TransferDestinationMultipleMatchError`
+
+```text
+class TransferDestinationMultipleMatchError(ComkenError):
+```
+
+#### 説明
+
+転記先のキーに一致する行が複数ある
+
+発生箇所: Transfer.run()
+
+対処:
+    mapping の先頭列に対応する転記先列の値を一意にする
+
+#### `__init__`
+
+```text
+def __init__(self, key_column: str, key: object) -> None:
+```
+
 
 ## `from comken.services.salesforce_downloader import ...`
 
@@ -3539,17 +3581,16 @@ def __init__(self, source: Source, destination: Destination, mapping: Mapping[st
 
 ```text
 @measure
-def run(self, transform: Transform | None=None) -> int:
+def run(self, *, transform: Transform) -> int:
 ```
 
 ##### 説明
 
 転記元を加工・選別して転記し、転記件数を返す。
 
-``transform`` は転記元1件のコピーを受け取る。辞書を返すとその内容を転記し、
-``None`` を返すとその件を除外し、``Transfer.STOP`` を返すと以降を処理しない。
-省略時は全件をそのまま転記する。mapping の転記元列が行に存在しない場合は、
-空値で続行せず例外で停止する。
+``transform`` は転記元行と、mapping の先頭列で一致した既存の転記先行を受け取る。
+一致する行がなければ転記先行は ``None``。行はコピーせず渡すため直接変更できる。
+通常は何も返さず、``Transfer.SKIP`` で1件を除外し、``Transfer.STOP`` で全体を止める。
 
 
 ## `from comken.toolbox.access import ...`

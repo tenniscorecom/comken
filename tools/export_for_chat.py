@@ -68,6 +68,8 @@ DIRECT_ERROR_CATEGORIES = {
     exceptions.InvalidColumnError: "ファイル・設定などのエラー",
     exceptions.SiteOwnerRequiredError: "ファイル・設定などのエラー",
     exceptions.FileDeletionError: "ファイル・設定などのエラー",
+    exceptions.TransferDestinationRowMissingError: "ファイル・設定などのエラー",
+    exceptions.TransferDestinationMultipleMatchError: "ファイル・設定などのエラー",
 }
 SUPPLEMENTAL_ERRORS = {
     "Access のエラー": (
@@ -225,7 +227,10 @@ def _find_definition(path: Path, name: str) -> tuple[Path, ast.AST] | None:
     return None
 
 
-def _doc_lines(node: ast.AST, heading_level: int) -> list[str]:
+def _doc_lines(
+    node: ast.AsyncFunctionDef | ast.FunctionDef | ast.ClassDef | ast.Module,
+    heading_level: int,
+) -> list[str]:
     """docstring 全文を Markdown の節として返す。"""
     docstring = ast.get_docstring(node, clean=True)
     if not docstring:

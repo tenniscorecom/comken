@@ -7,7 +7,12 @@ import pytest
 from openpyxl import Workbook
 from openpyxl.styles import Font
 
-from comken.exceptions import DuplicateHeaderCellError, TransferSourceColumnNotFoundError
+from comken.exceptions import (
+    DuplicateHeaderCellError,
+    TransferDestinationMultipleMatchError,
+    TransferDestinationRowMissingError,
+    TransferSourceColumnNotFoundError,
+)
 from comken.exceptions.table import TransferMappingError, TransferRowError
 from comken.runtime import debug
 from comken.toolbox import Transfer
@@ -23,19 +28,19 @@ def test_transfer_can_filter_edit_and_stop_rows(tmp_path) -> None:
     )
     mapping = {"ID": "番号", "氏名": "名前"}
 
-    def transform(source_row: dict[str, Any]):
+    def transform(source_row: dict[str, Any], destination_row: dict[str, Any] | None):
+        assert destination_row is None
         if source_row["ID"] == "2":
-            return None
+            return Transfer.SKIP
         if source_row["ID"] == "3":
             return Transfer.STOP
         source_row["氏名"] = source_row["氏名"].strip()
-        return source_row
 
     transferred = Transfer(
         CsvReader(source_path),
         CsvWriter(destination_path, fieldnames=list(mapping.values())),
         mapping,
-    ).run(transform)
+    ).run(transform=transform)
 
     assert transferred == 1
     assert CsvReader(destination_path).read_rows() == [{"番号": "1", "名前": "山田"}]
@@ -54,7 +59,7 @@ def test_transfer_rejects_missing_source_column(tmp_path) -> None:
             CsvReader(source_path),
             CsvWriter(tmp_path / "out.csv", ["名前"]),
             {"氏名": "名前"},
-        ).run()
+        ).run(transform=lambda source, destination: None)
 
 
 def test_transfer_rejects_invalid_transform_result(tmp_path) -> None:
@@ -65,7 +70,77 @@ def test_transfer_rejects_invalid_transform_result(tmp_path) -> None:
             CsvReader(source_path),
             CsvWriter(tmp_path / "out.csv", ["ID"]),
             {"ID": "ID"},
-        ).run(lambda row: "invalid")  # type: ignore[arg-type, return-value]
+        ).run(transform=lambda source, destination: "invalid")  # type: ignore[return-value]
+
+
+def test_transfer_passes_rows_by_reference_and_writes_destination_change(tmp_path) -> None:
+    source_path = tmp_path / "source.csv"
+    destination_path = tmp_path / "destination.csv"
+    source_path.write_text("ID,氏名\n1,山田\n", encoding="utf-8")
+    destination_path.write_text("番号,名前\n1,変更前\n", encoding="utf-8")
+    received: list[dict[str, Any]] = []
+
+    def transform(source_row: dict[str, Any], destination_row: dict[str, Any] | None) -> None:
+        assert destination_row is not None
+        destination_row["名前"] = source_row["氏名"]
+        received.append(destination_row)
+
+    count = Transfer(
+        CsvReader(source_path),
+        CsvWriter(destination_path, ["番号", "名前"]),
+        {"ID": "番号", "氏名": "名前"},
+    ).run(transform=transform)
+
+    assert count == 1
+    assert received[0]["名前"] == "山田"
+    assert CsvReader(destination_path).read_rows() == [{"番号": "1", "名前": "山田"}]
+
+
+def test_transfer_explains_type_error_caused_by_missing_destination_row(tmp_path) -> None:
+    source_path = tmp_path / "source.csv"
+    source_path.write_text("ID\n1\n", encoding="utf-8")
+
+    def transform(source_row: dict[str, Any], destination_row: dict[str, Any] | None) -> None:
+        destination_row["番号"] = source_row["ID"]  # type: ignore[index]
+
+    with pytest.raises(TransferDestinationRowMissingError) as exc_info:
+        Transfer(
+            CsvReader(source_path),
+            CsvWriter(tmp_path / "destination.csv", ["番号"]),
+            {"ID": "番号"},
+        ).run(transform=transform)
+
+    assert "destination_row が None" in str(exc_info.value)
+    assert isinstance(exc_info.value.__cause__, TypeError)
+
+
+def test_transfer_keeps_unrelated_type_error(tmp_path) -> None:
+    source_path = tmp_path / "source.csv"
+    source_path.write_text("ID\n1\n", encoding="utf-8")
+
+    def transform(source_row: dict[str, Any], destination_row: dict[str, Any] | None) -> None:
+        1 + source_row["ID"]  # type: ignore[operator]
+
+    with pytest.raises(TypeError, match="unsupported operand"):
+        Transfer(
+            CsvReader(source_path),
+            CsvWriter(tmp_path / "destination.csv", ["番号"]),
+            {"ID": "番号"},
+        ).run(transform=transform)
+
+
+def test_transfer_rejects_multiple_destination_matches(tmp_path) -> None:
+    source_path = tmp_path / "source.csv"
+    destination_path = tmp_path / "destination.csv"
+    source_path.write_text("ID\n1\n", encoding="utf-8")
+    destination_path.write_text("番号,名前\n1,山田\n1,佐藤\n", encoding="utf-8")
+
+    with pytest.raises(TransferDestinationMultipleMatchError):
+        Transfer(
+            CsvReader(source_path),
+            CsvWriter(destination_path, ["番号", "名前"]),
+            {"ID": "番号"},
+        ).run(transform=lambda source_row, destination_row: None)
 
 
 def test_sheet_rows_ignores_empty_rows_and_styled_trailing_columns(tmp_path) -> None:
@@ -98,7 +173,7 @@ def test_transfer_with_no_matches_writes_csv_header(tmp_path) -> None:
         CsvReader(source_path),
         CsvWriter(tmp_path / "destination.csv", fieldnames=list(mapping.values())),
         mapping,
-    ).run(lambda source: None)
+    ).run(transform=lambda source, destination: Transfer.SKIP)
 
     assert count == 0
     assert (tmp_path / "destination.csv").read_text(encoding="utf-8-sig") == "番号\n"
@@ -136,7 +211,9 @@ def test_transfer_supports_all_csv_excel_directions(
         destination_book = ExcelWriter.create(destination_path, sheet_name="出力")
         destination = destination_book.sheet("出力")
 
-    count = Transfer(source, destination, mapping).run()
+    count = Transfer(source, destination, mapping).run(
+        transform=lambda source_row, destination_row: None
+    )
     if destination_kind == "excel":
         assert destination_book is not None
         destination_book.save()
@@ -210,7 +287,7 @@ def test_transfer_debug_logs_do_not_include_row_data(tmp_path, caplog) -> None:
             CsvReader(source_path),
             CsvWriter(tmp_path / "destination.csv", ["番号"]),
             {"ID": "番号"},
-        ).run()
+        ).run(transform=lambda source_row, destination_row: None)
 
     messages = [record.getMessage() for record in caplog.records]
     assert any("Transfer開始" in message for message in messages)
