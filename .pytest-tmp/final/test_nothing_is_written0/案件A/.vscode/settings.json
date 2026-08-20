@@ -1,5 +1,0 @@
-{
-  // comken の場所を VS Code に教える。
-  "python.analysis.extraPaths": ["//old/share/tools"],
-  "ruff.enable": true
-}

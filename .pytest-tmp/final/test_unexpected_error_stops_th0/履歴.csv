@@ -1,2 +1,0 @@
-﻿実行日時,管理番号,概要,レポートID,URL,プロジェクト,実行方式,成否,Salesforce取得結果,保存結果,保存先,ファイル名,取得件数,処理秒数,原因区分,エラーコード,エラー内容
-2026-08-20 22:46:25,1001,想定外,00O5g00000ABCDE,https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE/view,定期実行,定期,失敗,失敗,,F:\dev\comken\.pytest-tmp\final\test_unexpected_error_stops_th0\保存先,,,0.00,プログラム,TypeError,想定外
