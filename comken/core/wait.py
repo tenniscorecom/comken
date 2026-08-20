@@ -95,7 +95,6 @@ def wait_for_file(
     name_pattern: str,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
     poll_interval: float = DEFAULT_POLL_INTERVAL_SECONDS,
-    stable_for: float = 0.0,
 ) -> Path:
     """``folder`` 内で ``name_pattern`` にマッチするファイルが出現するまで待つ。
 
@@ -103,14 +102,12 @@ def wait_for_file(
     ``poll_interval`` 秒ごとに再検索し、``timeout`` 秒経っても見つからなければ
     ``FileNotFoundError`` を送出する。
 
-    **既定では「ファイルが存在するまで」しか待たない。** 作成直後のファイルは
-    書き込み途中でも ``is_file()`` が True になるので、そのまま読むと
-    途中までの内容を掴むことがある。**書き込み完了まで待つには
-    ``stable_for`` を指定する**（サイズと更新時刻がその秒数変わらなければ
-    書き終わったとみなす）::
+    **「ファイルが存在するまで」しか待たない。** 作成直後のファイルは
+    書き込み途中でも ``is_file()`` が True になるので、書き込み完了まで
+    待ってから読みたいときは ``wait_until_stable()`` を続けて呼ぶ::
 
-        path = wait_for_file(folder, "data_*.csv", stable_for=2.0)
-        # → 見つけたうえで、2 秒間サイズも更新時刻も変わらなくなってから返る
+        path = wait_for_file(folder, "data_*.csv")
+        path = wait_until_stable(path)   # サイズが落ち着くまで待つ
 
     **フォルダが無い場合は待たずに即座に失敗する。** ``Path.glob()`` は
     存在しないフォルダでも例外を出さず空を返すので、そのまま回すと
@@ -122,11 +119,8 @@ def wait_for_file(
     Args:
         folder: 監視するフォルダ。
         name_pattern: ファイル名の glob パターン（例: ``"data_*.csv"``）。
-        timeout: 最大待機秒数。デフォルトは 60 秒。**探す時間と書き込み完了を
-            待つ時間の合計**にかかる（``stable_for`` を足しても倍にはならない）。
+        timeout: 最大待機秒数。デフォルトは 60 秒。
         poll_interval: 再検索の間隔秒数。デフォルトは 1 秒。
-        stable_for: 書き込み完了とみなすまでに、サイズと更新時刻が変わらないで
-            いてほしい秒数。既定の ``0.0`` は「完了を待たない」（見つけた時点で返す）。
 
     Returns:
         見つかったファイルのうち mtime が最新のもの。
@@ -136,9 +130,6 @@ def wait_for_file(
             待っている間にフォルダが消えた場合も同じ（``timeout`` 到達時）。
         NotADirectoryError: ``folder`` にフォルダではなくファイルを渡した場合。
         FileNotFoundError: ``timeout`` 秒経っても該当ファイルが見つからなかった場合。
-            ``stable_for`` の待機中にファイルが消えた場合も同じ。
-        TimeoutError: ファイルは見つかったが、``timeout`` までに書き込みが
-            終わらなかった場合（``stable_for`` を指定したときだけ起きる）。
     """
     folder_path = Path(folder)
     _ensure_watchable_folder(folder_path)
@@ -148,8 +139,7 @@ def wait_for_file(
     while True:
         matched = [p for p in folder_path.glob(name_pattern) if p.is_file()]
         if matched:
-            found = max(matched, key=lambda p: p.stat().st_mtime)
-            return _wait_until_stable(found, stable_for, poll_interval, deadline)
+            return max(matched, key=lambda p: p.stat().st_mtime)
         if time.monotonic() >= deadline:
             # 待っている間にフォルダごと消えた（共有サーバーが切れた等）場合は、
             # 「ファイルが来ない」ではなくそちらを知らせる

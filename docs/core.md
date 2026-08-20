@@ -246,15 +246,17 @@ path = wait_for_file(
 ```python
 from comken.core.wait import wait_for_file, wait_until_stable
 
-# 探すのと同時に、書き込み完了まで待つ
-path = wait_for_file(folder, "data_*.csv", stable_for=2.0)
+# 見つけたら、そのまま完了まで待つ
+path = wait_for_file(folder, "data_*.csv")
+path = wait_until_stable(path)
 
 # すでにパスが分かっているとき
 path = wait_until_stable(r"\\server\share\in\data.csv", stable_for=2.0)
 ```
 
 サイズと更新時刻を見て、`stable_for` 秒どちらも変わらなければ書き終わったとみなす。
-`timeout` は**探す時間と完了待ちの合計**にかかる（`stable_for` を足しても倍にならない）。
+`timeout` は **`wait_for_file` と `wait_until_stable` で別々に指定する**
+（後者に合算されることはない）。
 
 | 状況 | 例外 |
 |---|---|
