@@ -6,7 +6,6 @@ ExcelWriter.sheet() から取得し、セル書き込み・行書き込み・列
 
 import logging
 import re
-from collections.abc import Callable
 from typing import cast
 
 from openpyxl import Workbook
@@ -145,7 +144,6 @@ class Sheet:
         lookup: dict[str, dict],
         mapping: dict[str, str],
         header_row: int = 1,
-        skip_if: Callable[[dict[str, object]], bool] | None = None,
     ) -> int:
         """列名で転記先を指定し、キーが一致した行へ値を転記する。
 
@@ -154,14 +152,15 @@ class Sheet:
         ヘッダーがない、または列位置が固定された帳票には transfer_by_letter() を使う。
         転記を始める前にキー列・転記先列・転記元列をすべて検証する。
 
+        渡された ``lookup`` の中で「転記から外したい行」がある場合は、
+        呼び出し側で ``lookup`` を絞り込んでから渡す（``for k, v in lookup.items()``
+        での dict comprehension で十分）。
+
         Args:
             key_col: 転記先 Excel で照合に使う列名。
             lookup: キーから転記元の行データを引く辞書。
             mapping: 転記元の列名から転記先の列名への対応表。
             header_row: 転記先 Excel のヘッダー行番号（1始まり）。
-            skip_if: 転記元 ``lookup_row`` を受けて True ならその行をスキップする。
-                「区分が「対象外」の行は転記しない」のように使う。None なら常に
-                スキップしない（既定動作）。
         """
         headers = [
             self.ws.cell(row=int(header_row), column=column).value
@@ -172,7 +171,6 @@ class Sheet:
         )
         logger.info("シート「%s」: 最終行 %d行", self.ws.title, self.ws.max_row)
         matched = 0
-        skipped = 0
         for row in range(int(header_row) + 1, self.ws.max_row + 1):
             key_value = self.ws.cell(row=row, column=header_columns[key_col]).value
             lookup_key = normalize_lookup_key(key_value)
@@ -182,22 +180,10 @@ class Sheet:
             if lookup_row is None:
                 logger.debug("%d行目: キー「%s」が lookup に存在しません", row, key_value)
                 continue
-            if skip_if is not None and skip_if(lookup_row):
-                logger.debug("%d行目: skip_if で除外", row)
-                skipped += 1
-                continue
             for source, destination_column in destination_columns.items():
                 self.ws.cell(row=row, column=destination_column).value = lookup_row[source]
             matched += 1
-        if skipped:
-            logger.info(
-                "転記完了: %d件一致 / %d件スキップ（シート: %s）",
-                matched,
-                skipped,
-                self.ws.title,
-            )
-        else:
-            logger.info("転記完了: %d件一致（シート: %s）", matched, self.ws.title)
+        logger.info("転記完了: %d件一致（シート: %s）", matched, self.ws.title)
         return matched
 
     # ------------------------------------------------------------ 構造化テーブル

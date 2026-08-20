@@ -734,54 +734,6 @@ class TestTransferByMapping:
         assert wb["T_data"]["B3"].value == "株式会社A"
         wb.close()
 
-    def test_skip_if_excludes_rows_matching_predicate(self, transfer_excel):
-        """lookup の列が指定値のとき、その行をスキップする。"""
-        lookup = {
-            "A001": {"取引先": "株式会社A", "区分": "対象外"},
-            "A002": {"取引先": "株式会社B", "区分": "対象"},
-            "A003": {"取引先": "株式会社C", "区分": "対象外"},
-        }
-
-        with ExcelWriter(transfer_excel) as f:
-            matched = f.sheet("T_data").transfer_by_mapping(
-                key_col="受注番号",
-                lookup=lookup,
-                mapping={"取引先": "顧客名"},
-                skip_if=lambda row: row.get("区分") == "対象外",
-            )
-            f.save()
-
-        # 対象外はスキップ、対象 1 件だけ転記
-        assert matched == 1
-        wb = load_workbook(transfer_excel)
-        ws = wb["T_data"]
-        assert ws["B2"].value is None  # A001（対象外）は書かれない
-        assert ws["B3"].value == "株式会社B"  # A002 だけ書く
-        assert ws["B4"].value is None  # A003（対象外）は書かれない
-        wb.close()
-
-    def test_skip_if_none_does_not_exclude_any_row(self, transfer_excel):
-        """skip_if=None なら従来通り全件が転記される。"""
-        lookup = {
-            "A001": {"取引先": "株式会社A", "区分": "対象外"},
-            "A002": {"取引先": "株式会社B", "区分": "対象"},
-        }
-
-        with ExcelWriter(transfer_excel) as f:
-            matched = f.sheet("T_data").transfer_by_mapping(
-                key_col="受注番号",
-                lookup=lookup,
-                mapping={"取引先": "顧客名"},
-            )
-            f.save()
-
-        assert matched == 2
-        wb = load_workbook(transfer_excel)
-        ws = wb["T_data"]
-        assert ws["B2"].value == "株式会社A"
-        assert ws["B3"].value == "株式会社B"
-        wb.close()
-
 
 class TestSheetWrapper:
     """Sheet（シート単位の高レベルラッパー）のテスト。"""
