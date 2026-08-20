@@ -90,7 +90,7 @@ def file_path_of(entry: ReportEntry) -> Path:
     保存先を人が直接見たときに何のファイルか分かるようにするため。
     """
     name = f"{entry.key}_{_safe_summary(entry.summary)}"
-    return entry.folder / DateNameBuilder(name, SUFFIX).suffix()
+    return entry.folder / DateNameBuilder(name, ext=SUFFIX).suffix()
 
 
 def _find(report_key: str, master_path: Path) -> ReportEntry:

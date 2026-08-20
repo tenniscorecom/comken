@@ -35,7 +35,7 @@ def main() -> None:
     logger.info("日付入りファイル（新しい順）: %s", [path.name for path in dated_files])
     logger.info("名前順の最新: %s", finder.latest("*.csv", by=SortBy.NAME).name)
 
-    builder = DateNameBuilder("売上レポート", "csv")
+    builder = DateNameBuilder("売上レポート", ext="csv")
     copied = copy_file(dated_files[0], OUTPUT_FOLDER / builder.suffix())
     moved = move_file(dated_files[1], archive_folder / dated_files[1].name)
     logger.info("コピー: %s / 移動: %s", copied.name, moved.name)

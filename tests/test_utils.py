@@ -337,6 +337,34 @@ class TestDateNameBuilder:
             == f"{formatted}_レポート.xlsx"
         )
 
+    def test_constructor_with_date_object(self):
+        """コンストラクタに date を渡すとその日付で組み立てられる。"""
+        assert (
+            DateNameBuilder("レポート", datetime.date(2026, 8, 20)).prefix()
+            == "20260820_レポート.xlsx"
+        )
+        assert (
+            DateNameBuilder("レポート", datetime.date(2026, 8, 20)).suffix()
+            == "レポート_20260820.xlsx"
+        )
+
+    def test_constructor_with_datetime_object(self):
+        """コンストラクタに datetime を渡しても date として扱われる（時刻部分は無視）。"""
+        assert (
+            DateNameBuilder(
+                "レポート",
+                datetime.datetime(2026, 8, 20, 9, 30, 45),  # noqa: DTZ001
+            ).prefix()
+            == "20260820_レポート.xlsx"
+        )
+
+    def test_constructor_with_date_and_custom_format(self):
+        """コンストラクタの日付と prefix のフォーマット指定を組み合わせできる。"""
+        assert (
+            DateNameBuilder("月次", datetime.date(2026, 8, 20)).prefix(date_format="%Y-%m")
+            == "2026-08_月次.xlsx"
+        )
+
 
 class TestFileFinderToday:
     """FileFinder.today() のテスト。

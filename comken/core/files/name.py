@@ -9,6 +9,8 @@ comken ではラップしない方針（薄いラッパーを増やさない）�
 経緯は、命名レビュー（2026-08-19）を参照。
 """
 
+from datetime import date, datetime
+
 from comken.core.clock import now
 
 
@@ -18,25 +20,43 @@ class DateNameBuilder:
     日付はファイル名の属性ではなく「付け方」なので、コンストラクタではなく
     prefix() / suffix() の呼び出し時に決める。
 
+    日付はコンストラクタで固定できる。テストや過去日付のファイル名を組み立てる
+    ときは ``date(2026, 8, 20)`` 等を渡す。省略時は呼び出し時点の日付。
     """
 
-    def __init__(self, name: str, ext: str = ".xlsx") -> None:
+    def __init__(
+        self,
+        name: str,
+        for_date: date | datetime | None = None,
+        ext: str = ".xlsx",
+    ) -> None:
         """
         Args:
             name: ファイル名（拡張子なし）。
+            for_date: ファイル名に付ける日付。``None``（既定）なら呼び出し時点の日付。
+                ``date`` / ``datetime`` どちらも受け付ける（``datetime`` は内部で
+                ``.date()`` に変換）。
             ext: 拡張子（デフォルト: ".xlsx"）。ドットなしで渡しても補完される。
         """
         self._name = name
+        self._date = _resolve_date(for_date)
         self._ext = ext if ext.startswith(".") else f".{ext}"
 
     def prefix(self, date_format: str = "%Y%m%d") -> str:
         """今日の日付を前に付けたファイル名を返す（例: 20260711_売上レポート.xlsx）。"""
-        return f"{self._current_time(date_format)}_{self._name}{self._ext}"
+        return f"{self._date.strftime(date_format)}_{self._name}{self._ext}"
 
     def suffix(self, date_format: str = "%Y%m%d") -> str:
         """今日の日付を後ろに付けたファイル名を返す（例: 売上レポート_20260711.xlsx）。"""
-        return f"{self._name}_{self._current_time(date_format)}{self._ext}"
+        return f"{self._name}_{self._date.strftime(date_format)}{self._ext}"
 
-    @staticmethod
-    def _current_time(date_format: str) -> str:
-        return now().strftime(date_format)
+
+def _resolve_date(value: date | datetime | None) -> date | datetime:
+    """``for_date`` 引数を正規化する。``None`` のときは ``now()`` をそのまま返す
+    （秒単位まで含めたフォーマットに対応するため ``date`` には丸めない）。
+    """
+    if value is None:
+        return now()
+    if isinstance(value, datetime):
+        return value
+    return value
