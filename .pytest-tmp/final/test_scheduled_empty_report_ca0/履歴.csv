@@ -1,0 +1,2 @@
+﻿実行日時,管理番号,概要,レポートID,URL,プロジェクト,実行方式,成否,Salesforce取得結果,保存結果,保存先,ファイル名,取得件数,処理秒数,原因区分,エラーコード,エラー内容
+2026-08-20 22:46:25,1001,顧客一覧,00O5g00000ABCDE,https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE/view,定期実行,定期,成功,成功,成功,F:\dev\comken\.pytest-tmp\final\test_scheduled_empty_report_ca0\保存先,1001_顧客一覧_20260820.csv,0,0.00,,,

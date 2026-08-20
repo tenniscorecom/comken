@@ -44,7 +44,6 @@ from comken.exceptions import (
     ConfigFileNotFoundError,
     ConfigKeyNotFoundError,
     ConfigLowerCaseNameError,
-    ConfigRequiredKeysMissingError,
     ConfigSectionNotFoundError,
 )
 
@@ -91,8 +90,8 @@ class _SectionNamespace(types.SimpleNamespace):
 
     ``ConfigKeyNotFoundError`` は ``AttributeError`` も多重継承しているので、
     ``hasattr(namespace, key)`` は従来どおり False を返す。
-    ``require()`` が ``hasattr`` でキー存在を確かめているため、この挙動を
-    壊すと「あるはずのキーが無い」と報告されてしまう。
+    この挙動を壊すと「あるはずのキーが無い」と ``hasattr`` 利用者が誤判定するため、
+    キーが無いときは必ず例外を返す。
     """
 
     def __init__(
@@ -295,17 +294,11 @@ class Config:
         if name.startswith("_"):  # copy/pickle 等の内部属性探索は通常の AttributeError に
             raise AttributeError(name)
         # セクション名は大文字と決まっている（ConfigLowerCaseNameError で読み込み時に止める）。
-        # 小文字始まりが __getattr__ に来るのは、`Config(path).require(...)` のように
-        # モジュール関数を取り違えているケースがほとんど。ConfigSectionNotFoundError の
+        # 小文字始まりが __getattr__ に来るのは、`Config(path).save()` のような
+        # 存在しないメソッドを呼んでいるケースがほとんど。ConfigSectionNotFoundError の
         # 「セクションがありません」は完全な的外れなので、 AttributeError に変えて
         # 「セクションの話ではない」と気付けるようにする。
         if name and name[0].islower():
-            if name in {"require"}:
-                raise AttributeError(
-                    f"{name!r} は Config のメソッドではなく、comken のモジュール関数です。"
-                    "`from comken import config` してから "
-                    f"`config.{name}(...)` のように呼び出してください。"
-                )
             raise AttributeError(
                 f"Config に {name!r} という属性（セクション）はありません。"
                 "config.ini のセクション名は大文字なので、"
@@ -333,51 +326,10 @@ class Config:
 MappingDict = _LenientDict
 
 
-def require(*names: str) -> None:
-    """config.ini に必要な項目がそろっているかを、起動時にまとめて確かめる。
-
-    足りないものを1つずつ見つけるのではなく、**全部集めて一度に報告する**。
-    1つ直して実行、また別の項目で止まる、を繰り返すと、config.ini を書く人が
-    何回も往復することになるため。
-
-    使い方（main.py の最初で呼ぶ）:
-
-        from comken import config
-
-        config.require("FILES.INPUT_CSV", "REPORT.OUTPUT_FOLDER")
-
-    Args:
-        *names: ``"SECTION.KEY"`` の形で書いた項目名。大文字小文字は問わない。
-
-    Raises:
-        ConfigRequiredKeysMissingError: 1つでも足りない場合。
-            足りない項目を全部並べて報告する。
-        ConfigFileNotFoundError: config.ini が無い場合。
-        ConfigCreatedFromExampleError: example から作成した場合。
-    """
-    # 専用 global 変数なしで `__getattr__` と同じ初期化方針を使う。
-    # `Config()` を直接呼んでプロジェクトの config.ini を読む。
-    config_instance = Config()
-    missing = []
-    for name in names:
-        section, _, key = name.partition(".")
-        try:
-            # 無いセクションは ConfigSectionNotFoundError になる（既定値を返さない）ので、
-            # ここで受けて「足りないもの」へ積む。1件目で止めずに最後まで数える。
-            namespace = getattr(config_instance, section.strip().upper())
-        except ConfigSectionNotFoundError:
-            missing.append(name.strip().upper())
-            continue
-        if not hasattr(namespace, key.strip().upper()):
-            missing.append(name.strip().upper())
-    if missing:
-        raise ConfigRequiredKeysMissingError(missing, config_instance._path)
-
-
 def __getattr__(name: str) -> types.SimpleNamespace:
     # PEP 562: `comken.core.config.FILES` のようにモジュール属性として見つからない名前で呼ばれる。
     # セクションは大文字なので、大文字名のときだけ Config() を生成して委譲する
-    # （Config / MappingDict / require などの実体は通常の属性解決で見つかるためここには来ない）。
+    # （Config / MappingDict などの実体は通常の属性解決で見つかるためここには来ない）。
     if name.isupper():
         return getattr(Config(), name)
     raise AttributeError(f"module 'comken.core.config' has no attribute {name!r}")

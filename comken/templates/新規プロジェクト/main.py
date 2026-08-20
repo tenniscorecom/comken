@@ -9,7 +9,7 @@ main.py — エントリポイント
 
 import logging
 
-from comken import config, debug, setup_logging
+from comken import debug, setup_logging
 from comken.exceptions import ComkenError
 
 from src.run import run
@@ -26,10 +26,8 @@ if __name__ == "__main__":
     # 単体で動かすので、ログの出力先をここで用意する（コンソールと logs/YYYY-MM-DD.log）。
     setup_logging()
     try:
-        # config.ini に必要な項目がそろっているかを最初に確かめる。
-        # 途中まで動いてから足りないと分かるより、動き出す前に全部まとめて出す。
-        # 使う項目を増やしたらここにも足す（消しても動くが、エラーが遅くなる）
-        config.require("FILES.OUTPUT_FOLDER")
+        # config.ini の項目が足りない場合は src/run.py 内で `config.XXX.YYY` を
+        # 参照した時点で ConfigKeyNotFoundError が出る（事前チェック不要）。
 
         with debug():
             main()

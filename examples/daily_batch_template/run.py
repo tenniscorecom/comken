@@ -17,7 +17,7 @@
 
 import logging
 
-from comken.core import DateNameBuilder, FileFinder
+from comken.core import DateFileFinder, DateNameBuilder
 from comken.exceptions import ComkenError
 from comken.toolbox.csv import CsvReader
 from comken.toolbox.excel import ExcelWriter
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 def main() -> None:
     # 入力フォルダから「今日の日付が名前に入ったファイル」を探す。
     # required=False にすると見つからないとき None が返る（エラーにせずスキップ運用できる）
-    source = FileFinder(config.FILES.INPUT_FOLDER).today(pattern=INPUT_PATTERN, required=False)
+    source = DateFileFinder(config.FILES.INPUT_FOLDER).prefix("", extension="csv", required=False)
     if source is None:
         logger.info("本日分の入力ファイルがないため何もしません")
         return

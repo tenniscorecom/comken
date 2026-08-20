@@ -83,7 +83,6 @@ ComkenError
 │   ├── ConfigFileNotFoundError
 │   ├── ConfigCreatedFromExampleError
 │   ├── ConfigLowerCaseNameError
-│   ├── ConfigRequiredKeysMissingError
 │   ├── ConfigSectionNotFoundError
 │   └── ConfigKeyNotFoundError
 ├── MasterTableError
@@ -156,7 +155,6 @@ from comken.exceptions.config import (
     ConfigFileNotFoundError,
     ConfigKeyNotFoundError,
     ConfigLowerCaseNameError,
-    ConfigRequiredKeysMissingError,
     ConfigSectionNotFoundError,
 )
 from comken.exceptions.credential import (
@@ -292,7 +290,6 @@ __all__ = [
     "ConfigFileNotFoundError",
     "ConfigCreatedFromExampleError",
     "ConfigLowerCaseNameError",
-    "ConfigRequiredKeysMissingError",
     "ConfigSectionNotFoundError",
     "ConfigKeyNotFoundError",
     "UnsupportedFileSuffixError",

@@ -202,18 +202,3 @@ class ConfigKeyNotFoundError(ConfigError, AttributeError):
             f"存在するキー: {existing}{suggestion_line}\n"
             "キー名の綴りと、config.ini に定義されているかを確認してください。"
         )
-
-
-class ConfigRequiredKeysMissingError(ConfigError):
-    """config.ini に必須の項目がない
-
-    対処:
-        エラーに表示された項目を config.ini へ追加する
-    """
-
-    def __init__(self, missing: list[str], path: Path) -> None:
-        items = "\n".join(f"  - {name}" for name in missing)
-        super().__init__(
-            f"config.ini に必要な項目がありません。\n{items}\n"
-            f"このファイルへ追加してください: {path}"
-        )

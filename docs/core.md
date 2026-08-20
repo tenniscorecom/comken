@@ -273,22 +273,6 @@ path = wait_until_stable(r"\\server\share\in\data.csv", stable_for=2.0)
 
 `FileFinder.latest()` は1 回探すだけなので「無ければ待つ」はこちらを使う。
 
-### run_id（コンテキスト変数で実行処理を識別）
-
-1 回の実行処理を UUID で識別し、ログに `[RUN:xxxxx]` プレフィックスを付ける。
-
-```python
-from comken.core.logger import setup_logging
-from comken.core.logging_run_id import new_run_id
-
-setup_logging()
-run_id = new_run_id()    # UUID4 の先頭 8 文字を ContextVar に保存
-logger.info("処理開始")  # → [RUN:xxxxx] 2026-08-19 10:00:00 INFO ...: 処理開始
-```
-
-`contextvars.ContextVar` を使うため、`concurrent.futures` / `asyncio` でも各タスクで
-別々の run_id が乗る。
-
 ### zip 圧縮・展開（zip_folder / zip_files / unzip）
 
 Windows のエクスプローラーで作られた zip（日本語ファイル名）も文字化けせず展開できる。

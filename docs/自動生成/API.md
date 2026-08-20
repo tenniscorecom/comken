@@ -135,12 +135,15 @@ Args:
 #### `prefix`
 
 ```text
-def prefix(self, date_format: str='%Y%m%d') -> str:
+def prefix(self, prefix: str='{:%Y%m%d}_') -> str:
 ```
 
 ##### 説明
 
-今日の日付を前に付けたファイル名を返す（例: 20260711_売上レポート.xlsx）。
+prefix + 日付 + ベース名を返す。
+
+``prefix("DIY_{:%Y%m%d}_")`` のように日付の位置と書式を指定する。
+日付書式を含まない prefix には ``YYYYMMDD`` を末尾へ補う。
 
 #### `suffix`
 
@@ -152,6 +155,36 @@ def suffix(self, date_format: str='%Y%m%d') -> str:
 
 今日の日付を後ろに付けたファイル名を返す（例: 売上レポート_20260711.xlsx）。
 
+### `DateFileFinder`
+
+```text
+class DateFileFinder:
+```
+
+#### 説明
+
+指定した名前と日付を持つファイルを探す。
+
+#### `__init__`
+
+```text
+def __init__(self, folder: str | Path, for_date: datetime.date | None=None) -> None:
+```
+
+#### `prefix`
+
+```text
+@measure
+def prefix(self, prefix: str, extension: str='.xlsx', required: bool=True) -> Path | None:
+```
+
+##### 説明
+
+``prefix + YYYYMMDD + 拡張子`` に一致するファイルを返す。
+
+prefix に ``{:%Y-%m-%d}`` のような日付書式があれば、その位置へ日付を
+入れる。書式がなければ末尾へ ``YYYYMMDD`` を付ける。
+
 ### `DiffResult`
 
 ```text
@@ -161,81 +194,6 @@ class DiffResult:
 #### 説明
 
 diff_rows の結果。
-
-### `FileFinder`
-
-```text
-class FileFinder:
-```
-
-#### 説明
-
-フォルダからファイルを探して取得する。
-
-見つからないときは既定で FileNotFoundError を投げる
-（業務スクリプトでは「ファイルがない＝処理を止める」がほとんどのため）。
-処理を続けたい場合は required=False を指定すると None または空リストを返す。
-
-#### `__init__`
-
-```text
-def __init__(self, folder: str | Path) -> None:
-```
-
-#### `today`
-
-```text
-@measure
-def today(self, pattern: str='*.xlsx', date_format: str='%Y%m%d', required: bool=True) -> Path | None:
-```
-
-##### 説明
-
-ファイル名に今日の日付を含むファイルを返す。
-
-複数ある場合は更新日時が最も新しいもの。年月で探すなら date_format="%Y%m"。
-
-Raises:
-    FileNotFoundError: required=True で該当ファイルがない場合。
-
-#### `latest`
-
-```text
-@measure
-def latest(self, pattern: str='*.xlsx', by: str=SortBy.NAME, required: bool=True) -> Path | None:
-```
-
-##### 説明
-
-最新のファイルを返す。既定はファイル名の辞書順で最後のもの。
-
-"20260711_売上.xlsx" のような日付プレフィックス命名を想定しており、
-コピーや再保存で更新日時が変わっても影響を受けない。
-
-注意: 文字列比較のため、ゼロ埋めしていない連番（report_9 と report_10）は
-9 の方が「最新」と判定される。連番命名なら by=SortBy.UPDATED を使うこと。
-
-Raises:
-    FileNotFoundError: required=True で該当ファイルがない場合。
-    ValueError: by に SortBy.NAME / SortBy.UPDATED 以外を指定した場合。
-
-#### `dated`
-
-```text
-@measure
-def dated(self, pattern: str='*.xlsx', required: bool=True) -> list[Path]:
-```
-
-##### 説明
-
-ファイル名に日付が入っているファイルを、日付の新しい順で返す。
-
-日付として認識するのは 20260729 / 2026-07-29 / 2026_07_29 / 2026.07.29。
-実在しない日付や、前後を数字で挟まれた数字（伝票番号の一部など）は対象外。
-同じ日付なら更新日時の新しい順。詳しくは date_in_name を参照。
-
-Raises:
-    FileNotFoundError: required=True で該当ファイルがない場合。
 
 ### `RowChange`
 
@@ -560,12 +518,12 @@ Returns:
 ### `normalize`
 
 ```text
-def normalize(text: str) -> str:
+def normalize(value: object) -> str:
 ```
 
 #### 説明
 
-文字列を NFKC 形式に正規化する。
+表データの値を比較しやすい文字列へ正規化する。
 
 主な変換:
     - 全角英数字・記号 → 半角（ａ→a, １→1, （→(, ．→.）
@@ -573,7 +531,7 @@ def normalize(text: str) -> str:
     - 合字             → 展開（㌔→km, ㍉→mm）
 
 Args:
-    text: 正規化する文字列。
+    value: Excel / CSV から得た値。``None`` は空文字として扱う。
 
 Returns:
     正規化後の文字列。
@@ -882,12 +840,15 @@ Args:
 #### `prefix`
 
 ```text
-def prefix(self, date_format: str='%Y%m%d') -> str:
+def prefix(self, prefix: str='{:%Y%m%d}_') -> str:
 ```
 
 ##### 説明
 
-今日の日付を前に付けたファイル名を返す（例: 20260711_売上レポート.xlsx）。
+prefix + 日付 + ベース名を返す。
+
+``prefix("DIY_{:%Y%m%d}_")`` のように日付の位置と書式を指定する。
+日付書式を含まない prefix には ``YYYYMMDD`` を末尾へ補う。
 
 #### `suffix`
 
@@ -899,80 +860,35 @@ def suffix(self, date_format: str='%Y%m%d') -> str:
 
 今日の日付を後ろに付けたファイル名を返す（例: 売上レポート_20260711.xlsx）。
 
-### `FileFinder`
+### `DateFileFinder`
 
 ```text
-class FileFinder:
+class DateFileFinder:
 ```
 
 #### 説明
 
-フォルダからファイルを探して取得する。
-
-見つからないときは既定で FileNotFoundError を投げる
-（業務スクリプトでは「ファイルがない＝処理を止める」がほとんどのため）。
-処理を続けたい場合は required=False を指定すると None または空リストを返す。
+指定した名前と日付を持つファイルを探す。
 
 #### `__init__`
 
 ```text
-def __init__(self, folder: str | Path) -> None:
+def __init__(self, folder: str | Path, for_date: datetime.date | None=None) -> None:
 ```
 
-#### `today`
+#### `prefix`
 
 ```text
 @measure
-def today(self, pattern: str='*.xlsx', date_format: str='%Y%m%d', required: bool=True) -> Path | None:
+def prefix(self, prefix: str, extension: str='.xlsx', required: bool=True) -> Path | None:
 ```
 
 ##### 説明
 
-ファイル名に今日の日付を含むファイルを返す。
+``prefix + YYYYMMDD + 拡張子`` に一致するファイルを返す。
 
-複数ある場合は更新日時が最も新しいもの。年月で探すなら date_format="%Y%m"。
-
-Raises:
-    FileNotFoundError: required=True で該当ファイルがない場合。
-
-#### `latest`
-
-```text
-@measure
-def latest(self, pattern: str='*.xlsx', by: str=SortBy.NAME, required: bool=True) -> Path | None:
-```
-
-##### 説明
-
-最新のファイルを返す。既定はファイル名の辞書順で最後のもの。
-
-"20260711_売上.xlsx" のような日付プレフィックス命名を想定しており、
-コピーや再保存で更新日時が変わっても影響を受けない。
-
-注意: 文字列比較のため、ゼロ埋めしていない連番（report_9 と report_10）は
-9 の方が「最新」と判定される。連番命名なら by=SortBy.UPDATED を使うこと。
-
-Raises:
-    FileNotFoundError: required=True で該当ファイルがない場合。
-    ValueError: by に SortBy.NAME / SortBy.UPDATED 以外を指定した場合。
-
-#### `dated`
-
-```text
-@measure
-def dated(self, pattern: str='*.xlsx', required: bool=True) -> list[Path]:
-```
-
-##### 説明
-
-ファイル名に日付が入っているファイルを、日付の新しい順で返す。
-
-日付として認識するのは 20260729 / 2026-07-29 / 2026_07_29 / 2026.07.29。
-実在しない日付や、前後を数字で挟まれた数字（伝票番号の一部など）は対象外。
-同じ日付なら更新日時の新しい順。詳しくは date_in_name を参照。
-
-Raises:
-    FileNotFoundError: required=True で該当ファイルがない場合。
+prefix に ``{:%Y-%m-%d}`` のような日付書式があれば、その位置へ日付を
+入れる。書式がなければ末尾へ ``YYYYMMDD`` を付ける。
 
 ### `atomic_write`
 
@@ -2111,25 +2027,6 @@ config.ini のセクション名・キー名に小文字がある
 
 ```text
 def __init__(self, path: Path | str, wrong: list[str]) -> None:
-```
-
-### `ConfigRequiredKeysMissingError`
-
-```text
-class ConfigRequiredKeysMissingError(ConfigError):
-```
-
-#### 説明
-
-config.ini に必須の項目がない
-
-対処:
-    エラーに表示された項目を config.ini へ追加する
-
-#### `__init__`
-
-```text
-def __init__(self, missing: list[str], path: Path) -> None:
 ```
 
 ### `ConfigSectionNotFoundError`
@@ -3655,6 +3552,127 @@ def is_scheduled(self) -> bool:
 ##### 説明
 
 定期取得の対象か。
+
+
+## `from comken.toolbox import ...`
+
+### `CSV`
+
+```text
+class CSV:
+```
+
+#### 説明
+
+CSVを列名付きの行として読み書きする。
+
+#### `__init__`
+
+```text
+def __init__(self, path: str | Path, encoding: str=Encoding.AUTO) -> None:
+```
+
+#### `rows`
+
+```text
+def rows(self) -> Iterator[Row]:
+```
+
+##### 説明
+
+各行を列名でアクセスできる辞書として返す。
+
+#### `write_rows`
+
+```text
+def write_rows(self, rows: Iterable[Mapping[str, object]]) -> None:
+```
+
+##### 説明
+
+行をCSVへ上書き保存する。列順は最初の行に合わせる。
+
+### `Excel`
+
+```text
+class Excel:
+```
+
+#### 説明
+
+Excelの1シートを列名付きの行として読み書きする。
+
+#### `__init__`
+
+```text
+def __init__(self, path: str | Path, sheet: str='Sheet1') -> None:
+```
+
+#### `rows`
+
+```text
+def rows(self) -> Iterator[Row]:
+```
+
+##### 説明
+
+各行を列名でアクセスできる辞書として返す。
+
+#### `write_rows`
+
+```text
+def write_rows(self, rows: Iterable[Mapping[str, object]]) -> None:
+```
+
+##### 説明
+
+選択中のシートへ列名と行を書き込む。
+
+#### `sheet`
+
+```text
+def sheet(self, name: str | None=None) -> Sheet:
+```
+
+##### 説明
+
+セルや書式を操作するシートを返す。
+
+### `Transfer`
+
+```text
+class Transfer:
+```
+
+#### 説明
+
+列マッピングに従って表データを一方向へ転記する。
+
+#### `__init__`
+
+```text
+def __init__(self, source: CSV | Excel, destination: CSV | Excel, mapping: Mapping[str, str]) -> None:
+```
+
+#### `rows`
+
+```text
+def rows(self) -> Iterator[Row]:
+```
+
+##### 説明
+
+転記前に選別・加工できる転記元行のコピーを返す。
+
+#### `run`
+
+```text
+def run(self, rows: Iterable[Mapping[str, object]] | None=None) -> int:
+```
+
+##### 説明
+
+指定行をマッピングして転記し、転記件数を返す。
 
 
 ## `from comken.toolbox.access import ...`
@@ -5211,6 +5229,16 @@ Args:
 Returns:
     辞書のリスト。columns 指定時は指定列のみ含む。
 
+#### `rows`
+
+```text
+def rows(self, columns: list[str] | None=None):
+```
+
+##### 説明
+
+列名でアクセスできる行を、for文で順に返す。
+
 #### `cell`
 
 ```text
@@ -5724,6 +5752,16 @@ Args:
     rows: 辞書のリスト（キーが列名になる）。
     start_row: ヘッダー行の行番号（1始まり）。
     headers: 列の並び順。省略すると最初の行のキー順。
+
+#### `copy_to`
+
+```text
+def copy_to(self, destination, name: str | None=None) -> 'Sheet':
+```
+
+##### 説明
+
+このシートの値・数式・基本書式を別の ExcelWriter へコピーする。
 
 #### `transfer_by_letter`
 

@@ -176,6 +176,10 @@ class CsvReader(CsvBase):
         self._validate_columns(columns)
         return [{col: row[col] for col in columns} for row in data]
 
+    def rows(self, columns: list[str] | None = None):
+        """列名でアクセスできる行を、for文で順に返す。"""
+        yield from self.read_rows(columns)
+
     def cell(self, ref: str) -> str:
         """Excel 風のセル参照で、CSV の1セルを返す。
 

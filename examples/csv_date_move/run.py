@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 
 from comken import Config, dry_run
-from comken.core import FileFinder, date_in_name, move_file
+from comken.core import date_in_name, move_file
 from comken.toolbox.csv import CsvReader
 
 HERE = Path(__file__).parent
@@ -32,7 +32,11 @@ def move_matching_files(
     """内容とファイル名の日付が一致する CSV だけを移動する。"""
     processed_count = 0
     skipped_count = 0
-    paths = FileFinder(input_folder).dated(pattern, required=False)
+    paths = sorted(
+        (path for path in input_folder.glob(pattern) if date_in_name(path.name)),
+        key=lambda path: date_in_name(path.name),
+        reverse=True,
+    )
 
     for path in paths:
         try:

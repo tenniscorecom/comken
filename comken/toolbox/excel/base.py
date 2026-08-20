@@ -170,6 +170,10 @@ class ExcelBase(FileBase):
         # openpyxl の行幅差は末尾空セルによるため、見出しとの対応範囲だけ辞書化する。
         return [dict(zip(file_headers, row, strict=False)) for row in all_rows[1:]]
 
+    def rows(self, sheet_name: str, header_row: int = 1):
+        """列名でアクセスできる行を、for文で順に返す。"""
+        yield from self.read_rows_as_dicts(sheet_name, header_row)
+
     def iter_rows(
         self, sheet_name: str, min_row: int = 2
     ) -> Generator[tuple[Any, ...], None, None]:

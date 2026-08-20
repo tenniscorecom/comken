@@ -12,8 +12,8 @@
 import unicodedata
 
 
-def normalize(text: str) -> str:
-    """文字列を NFKC 形式に正規化する。
+def normalize(value: object) -> str:
+    """表データの値を比較しやすい文字列へ正規化する。
 
     主な変換:
         - 全角英数字・記号 → 半角（ａ→a, １→1, （→(, ．→.）
@@ -21,12 +21,14 @@ def normalize(text: str) -> str:
         - 合字             → 展開（㌔→km, ㍉→mm）
 
     Args:
-        text: 正規化する文字列。
+        value: Excel / CSV から得た値。``None`` は空文字として扱う。
 
     Returns:
         正規化後の文字列。
     """
-    return unicodedata.normalize("NFKC", text)
+    if value is None:
+        return ""
+    return unicodedata.normalize("NFKC", str(value)).strip()
 
 
 def strip_spaces(text: str) -> str:

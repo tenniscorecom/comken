@@ -4,11 +4,10 @@ import logging
 from pathlib import Path
 
 from comken import setup_logging
-from comken.constants import SortBy
 from comken.core import (
     DateNameBuilder,
-    FileFinder,
     copy_file,
+    date_in_name,
     move_file,
     unzip,
     zip_files,
@@ -29,11 +28,15 @@ def main() -> None:
     for name in ("売上_2026-08-11.csv", "売上_20260812.csv", "売上_日付なし.csv"):
         (input_folder / name).write_text("注文番号,金額\nA001,12000\n", encoding="utf-8")
 
-    finder = FileFinder(input_folder)
-    # dated() は更新日時でなく、ファイル名に含まれる業務日付の新しい順に返す。
-    dated_files = finder.dated(pattern="売上_*.csv")
+    dated_files = sorted(
+        (path for path in input_folder.glob("売上_*.csv") if date_in_name(path.name)),
+        key=lambda path: date_in_name(path.name),
+        reverse=True,
+    )
     logger.info("日付入りファイル（新しい順）: %s", [path.name for path in dated_files])
-    logger.info("名前順の最新: %s", finder.latest("*.csv", by=SortBy.NAME).name)
+    logger.info(
+        "名前順の最新: %s", max(input_folder.glob("*.csv"), key=lambda path: path.name).name
+    )
 
     builder = DateNameBuilder("売上レポート", ext="csv")
     copied = copy_file(dated_files[0], OUTPUT_FOLDER / builder.suffix())

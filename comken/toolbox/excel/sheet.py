@@ -6,6 +6,7 @@ ExcelWriter.sheet() から取得し、セル書き込み・行書き込み・列
 
 import logging
 import re
+from copy import copy
 from typing import cast
 
 from openpyxl import Workbook
@@ -103,6 +104,24 @@ class Sheet:
         self.write_row(int(start_row), headers)
         for i, row in enumerate(rows, start=int(start_row) + 1):
             self.write_row(i, [row.get(h, "") for h in headers])
+
+    def copy_to(self, destination, name: str | None = None) -> "Sheet":
+        """このシートの値・数式・基本書式を別の ExcelWriter へコピーする。"""
+        copied = destination.add_sheet(name or self.ws.title)
+        for row in self.ws.iter_rows():
+            for cell in row:
+                target = copied.ws[cell.coordinate]
+                target.value = cell.value
+                if cell.has_style:
+                    target.font = copy(cell.font)
+                    target.fill = copy(cell.fill)
+                    target.border = copy(cell.border)
+                    target.alignment = copy(cell.alignment)
+                    target.number_format = cell.number_format
+                    target.protection = copy(cell.protection)
+        for column, dimension in self.ws.column_dimensions.items():
+            copied.ws.column_dimensions[column].width = dimension.width
+        return copied
 
     @measure
     def transfer_by_letter(

@@ -7,7 +7,6 @@ import datetime
 import re
 from pathlib import Path
 
-from comken.constants import SortBy
 from comken.core.clock import today
 from comken.core.timer import measure
 
@@ -16,103 +15,40 @@ from comken.core.timer import measure
 _DATE_IN_NAME = re.compile(r"(?<!\d)([0-9]{4})([-_.]?)([0-9]{2})\2([0-9]{2})(?!\d)")
 
 
-class FileFinder:
-    """フォルダからファイルを探して取得する。
+class DateFileFinder:
+    """指定した名前と日付を持つファイルを探す。"""
 
-    見つからないときは既定で FileNotFoundError を投げる
-    （業務スクリプトでは「ファイルがない＝処理を止める」がほとんどのため）。
-    処理を続けたい場合は required=False を指定すると None または空リストを返す。
-    """
-
-    def __init__(self, folder: str | Path) -> None:
+    def __init__(self, folder: str | Path, for_date: datetime.date | None = None) -> None:
         self._folder = Path(folder)
+        self._date = for_date or today()
 
     @measure
-    def today(
+    def prefix(
         self,
-        pattern: str = "*.xlsx",
-        date_format: str = "%Y%m%d",
+        prefix: str,
+        extension: str = ".xlsx",
         required: bool = True,
     ) -> Path | None:
-        """ファイル名に今日の日付を含むファイルを返す。
+        """``prefix + YYYYMMDD + 拡張子`` に一致するファイルを返す。
 
-        複数ある場合は更新日時が最も新しいもの。年月で探すなら date_format="%Y%m"。
-
-        Raises:
-            FileNotFoundError: required=True で該当ファイルがない場合。
+        prefix に ``{:%Y-%m-%d}`` のような日付書式があれば、その位置へ日付を
+        入れる。書式がなければ末尾へ ``YYYYMMDD`` を付ける。
         """
-        today_text = today().strftime(date_format)
-        matched = [p for p in self._folder.glob(pattern) if p.is_file() and today_text in p.name]
-        if not matched:
-            if required:
-                raise FileNotFoundError(
-                    f"今日の日付（{today_text}）を含むファイルが見つかりません: "
-                    f"{self._folder}\\{pattern}"
-                )
-            return None
-        return max(matched, key=lambda p: p.stat().st_mtime)
-
-    @measure
-    def latest(
-        self,
-        pattern: str = "*.xlsx",
-        by: str = SortBy.NAME,
-        required: bool = True,
-    ) -> Path | None:
-        """最新のファイルを返す。既定はファイル名の辞書順で最後のもの。
-
-        "20260711_売上.xlsx" のような日付プレフィックス命名を想定しており、
-        コピーや再保存で更新日時が変わっても影響を受けない。
-
-        注意: 文字列比較のため、ゼロ埋めしていない連番（report_9 と report_10）は
-        9 の方が「最新」と判定される。連番命名なら by=SortBy.UPDATED を使うこと。
-
-        Raises:
-            FileNotFoundError: required=True で該当ファイルがない場合。
-            ValueError: by に SortBy.NAME / SortBy.UPDATED 以外を指定した場合。
-        """
-        if by not in (SortBy.NAME, SortBy.UPDATED):
-            raise ValueError(f"by には SortBy.NAME か SortBy.UPDATED を指定してください: {by}")
-
-        files = [path for path in self._folder.glob(pattern) if path.is_file()]
-        if not files:
-            if required:
-                raise FileNotFoundError(f"ファイルが見つかりません: {self._folder}\\{pattern}")
-            return None
-        if by == SortBy.UPDATED:
-            return max(files, key=lambda p: p.stat().st_mtime)
-        return max(files, key=lambda p: p.name)
-
-    @measure
-    def dated(self, pattern: str = "*.xlsx", required: bool = True) -> list[Path]:
-        """ファイル名に日付が入っているファイルを、日付の新しい順で返す。
-
-        日付として認識するのは 20260729 / 2026-07-29 / 2026_07_29 / 2026.07.29。
-        実在しない日付や、前後を数字で挟まれた数字（伝票番号の一部など）は対象外。
-        同じ日付なら更新日時の新しい順。詳しくは date_in_name を参照。
-
-        Raises:
-            FileNotFoundError: required=True で該当ファイルがない場合。
-        """
-        dated_files = []
-        for path in self._folder.glob(pattern):
-            if not path.is_file():
-                continue
-            date = date_in_name(path.name)
-            if date is not None:
-                dated_files.append((date, path))
-
-        if not dated_files:
-            if required:
-                raise FileNotFoundError(
-                    f"日付が入ったファイルが見つかりません: {self._folder}\\{pattern}\n"
-                    "ファイル名に 20260729 や 2026-07-29 のような日付が"
-                    "含まれているか確認してください。"
-                )
-            return []
-
-        dated_files.sort(key=lambda pair: (pair[0], pair[1].stat().st_mtime), reverse=True)
-        return [path for _, path in dated_files]
+        extension = extension if extension.startswith(".") else f".{extension}"
+        dated_prefix = (
+            prefix.format(self._date) if "{:" in prefix else f"{prefix}{self._date:%Y%m%d}"
+        )
+        expected_name = f"{dated_prefix}{extension}"
+        matches = [
+            path for path in self._folder.iterdir() if path.is_file() and path.name == expected_name
+        ]
+        if matches:
+            return matches[0]
+        if required:
+            raise FileNotFoundError(
+                f"日付付きファイルが見つかりません: {self._folder / expected_name}"
+            )
+        return None
 
 
 def date_in_name(name: str) -> datetime.date | None:

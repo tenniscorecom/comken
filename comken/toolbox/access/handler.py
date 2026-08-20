@@ -285,7 +285,7 @@ class AccessDatabase(FileBase):
 
         backup_path = backup_folder / DateNameBuilder(
             self._path.stem, ext=self._path.suffix
-        ).prefix(date_format=BACKUP_DATE_FORMAT)
+        ).prefix(f"{{:{BACKUP_DATE_FORMAT}}}_")
         try:
             backup_folder.mkdir(parents=True, exist_ok=True)
             _remove_expired_backups(backup_folder, self._path, backup_days)
@@ -315,9 +315,7 @@ class AccessDatabase(FileBase):
 
 
 def _reserve_backup_path(folder: Path, source: Path) -> Path:
-    filename = DateNameBuilder(source.stem, ext=source.suffix).prefix(
-        date_format=BACKUP_DATE_FORMAT
-    )
+    filename = DateNameBuilder(source.stem, ext=source.suffix).prefix(f"{{:{BACKUP_DATE_FORMAT}}}_")
     sequence = 2
     candidate = folder / filename
     while True:

@@ -21,7 +21,7 @@ from comken.core.data import diff_rows as diff_rows
 from comken.core.files.archive import unzip as unzip
 from comken.core.files.archive import zip_files as zip_files
 from comken.core.files.archive import zip_folder as zip_folder
-from comken.core.files.finder import FileFinder as FileFinder
+from comken.core.files.finder import DateFileFinder as DateFileFinder
 from comken.core.files.finder import date_in_name as date_in_name
 from comken.core.files.name import DateNameBuilder as DateNameBuilder
 from comken.core.files.ops import copy_file as copy_file
@@ -44,8 +44,8 @@ from comken.core.wait import wait_until_stable as wait_until_stable
 
 __all__ = [
     "DateNameBuilder",
+    "DateFileFinder",
     "DiffResult",
-    "FileFinder",
     "RowChange",
     "State",
     "Timer",

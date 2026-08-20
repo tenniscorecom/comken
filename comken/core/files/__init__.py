@@ -8,7 +8,7 @@
 
 from comken.core.files.archive import unzip, zip_files, zip_folder
 from comken.core.files.atomic import atomic_write
-from comken.core.files.finder import FileFinder, date_in_name
+from comken.core.files.finder import DateFileFinder, date_in_name
 from comken.core.files.name import DateNameBuilder
 from comken.core.files.ops import (
     copy_file,
@@ -21,7 +21,7 @@ from comken.core.files.ops import (
 
 __all__ = [
     "DateNameBuilder",
-    "FileFinder",
+    "DateFileFinder",
     "atomic_write",
     "copy_file",
     "date_in_name",

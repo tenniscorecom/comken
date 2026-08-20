@@ -1,0 +1,2 @@
+﻿実行日時,管理番号,概要,レポートID,URL,プロジェクト,実行方式,成否,Salesforce取得結果,保存結果,保存先,ファイル名,取得件数,処理秒数,原因区分,エラーコード,エラー内容
+2026-08-20 22:46:25,1001,顧客一覧,00O5g00000ABCDE,https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE/view,,個別,失敗,失敗,,F:\dev\comken\.pytest-tmp\final\test_history_when_salesforce_c0\保存先,,,0.00,Salesforce,SalesforceRequestError,Salesforce API がエラーを返しました（HTTP 500）: GET /report boom オブジェクト名・項目名・レコード Id と、実行ユーザーの権限を確認してください。

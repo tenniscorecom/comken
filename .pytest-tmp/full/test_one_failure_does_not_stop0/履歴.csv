@@ -1,0 +1,3 @@
+﻿実行日時,管理番号,概要,レポートID,URL,プロジェクト,実行方式,成否,Salesforce取得結果,保存結果,保存先,ファイル名,取得件数,処理秒数,原因区分,エラーコード,エラー内容
+2026-08-20 22:39:44,1001,落ちる方,00O5g00000ABCDE,https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE/view,定期実行,定期,失敗,,,F:\dev\comken\.pytest-tmp\full\test_one_failure_does_not_stop0\無い,,,0.00,設定,ReportFolderNotFoundError,保存先のフォルダがありません: 1001 F:\dev\comken\.pytest-tmp\full\test_one_failure_does_not_stop0\無い 管理表の「保存先」を確認してください。 共有フォルダの場合は、つながっているか（権限があるか）も確認してください。
+2026-08-20 22:39:44,1002,通る方,00O5g00000FGHIJ,https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000FGHIJ/view,定期実行,定期,成功,成功,成功,F:\dev\comken\.pytest-tmp\full\test_one_failure_does_not_stop0\保存先,1002_通る方_20260820.csv,2,0.00,,,

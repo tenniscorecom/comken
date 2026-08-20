@@ -18,7 +18,6 @@ from comken.exceptions import (
     ConfigCreatedFromExampleError,
     ConfigError,
     ConfigLowerCaseNameError,
-    ConfigRequiredKeysMissingError,
 )
 
 # .pyi 内で「型注釈に書かれた Name」が、その .pyi の import か組み込みで
@@ -437,7 +436,7 @@ class TestConfigMissingKey:
         """未定義キーへのアクセスは ``AttributeError`` ではなく comken 例外になる。
 
         ``hasattr(namespace, key)`` が従来どおり False を返せるように
-        ``AttributeError`` も多重継承している（``require()`` が依存）。
+        ``AttributeError`` も多重継承している。
         """
         from comken.exceptions import ConfigKeyNotFoundError
 
@@ -494,26 +493,6 @@ class TestConfigMissingKey:
         with pytest.raises(ConfigKeyNotFoundError) as exc:
             _ = config.FILES.OUTPUT_FOLDER
         assert "もしかして" not in str(exc.value)
-
-    def test_require_still_treats_missing_key_as_missing(self, tmp_path, monkeypatch):
-        """``hasattr()`` が False を返すので ``require()`` の既存挙動は変えない。
-
-        ``ConfigKeyNotFoundError`` を ``AttributeError`` の多重継承にした
-        のはこのため。``require()`` は ``hasattr(namespace, key)`` で
-        キー存在を確かめているので、``hasattr`` が例外を伝搬すると
-        「足りないもの」を1件も報告できなくなる。
-        """
-        import comken.core.config as config_module
-
-        ini = tmp_path / "config.ini"
-        ini.write_text("[FILES]\nINPUT_CSV = C:\\in.csv\n", encoding="utf-8")
-        # ``require()`` は内部で ``Config()`` を呼ぶため、project_dir() が
-        # tmp_path を指すように sys.argv を差し替える。
-        monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
-
-        with pytest.raises(ConfigRequiredKeysMissingError) as exc:
-            config_module.require("FILES.OUTPUT_FOLDER")
-        assert "FILES.OUTPUT_FOLDER" in str(exc.value)
 
 
 class TestConfigSectionWhitespace:
@@ -596,15 +575,15 @@ class TestConfigSectionWhitespace:
 
 
 class TestConfigMethodNameTypo:
-    """`Config(path).require(...)` のような、メソッド名の取り違えを検出して案内する。"""
+    """`Config(path).save()` のような、メソッド名の取り違えを検出して案内する。"""
 
     def test_lowercase_typo_raises_attribute_error(self, tmp_path):
         """小文字始まり（=セクション名ではあり得ない名前）は ConfigSectionNotFoundError ではない。
 
-        `Config(path).require(...)` と書くと `require` がセクション名として
-        解釈され「[require] セクションがありません」という的外れなエラーになる。
-        `__getattr__` が何でも拾うための罠。AttributeError にして、
-        「セクションの話ではない」と気付けるようにする。
+        `Config(path).save()` のように存在しないメソッドを呼ぶと、
+        `save` がセクション名として解釈され「[save] セクションがありません」という
+        的外れなエラーになる。`__getattr__` が何でも拾うための罠。
+        AttributeError にして、「セクションの話ではない」と気付けるようにする。
         """
         ini = tmp_path / "config.ini"
         ini.write_text("[FILES]\nK = v\n", encoding="utf-8")
@@ -614,19 +593,6 @@ class TestConfigMethodNameTypo:
         # （ConfigSectionNotFoundError ではない = セクション名として解釈されない）
         with pytest.raises(AttributeError):
             _ = config.read  # Config には存在しない小文字名を attribute として引いた
-
-    def test_require_typo_message_suggests_module_function(self, tmp_path):
-        """`require` を呼ばれたときは「モジュール関数である」と案内する。
-
-        `from comken import config; config.require(...)` が正解なので、
-        エラーメッセージにモジュール関数であることを書いて誘導する。
-        """
-        ini = tmp_path / "config.ini"
-        ini.write_text("[FILES]\nK = v\n", encoding="utf-8")
-        config = Config(ini)
-
-        with pytest.raises(AttributeError, match="モジュール関数"):
-            _ = config.require
 
     def test_unknown_lowercase_name_mentions_section_is_uppercase(self, tmp_path):
         """未知の小文字名には「セクションは大文字」と書いて、方向を教える。"""
@@ -1020,57 +986,6 @@ class TestCleanupStaleTmp:
 
         assert not stale.exists()
         assert (tmp_path / "src" / "config.pyi").exists()
-
-
-class TestRequire:
-    """config.require() は足りない項目をまとめて報告する。"""
-
-    def _write(self, tmp_path, text):
-        path = tmp_path / "config.ini"
-        path.write_text(text, encoding="utf-8")
-        return path
-
-    def test_passes_when_all_keys_exist(self, tmp_path, monkeypatch):
-        """そろっていれば何も起きない。"""
-        self._write(tmp_path, "[FILES]\nINPUT_CSV = C:\\作業\\in.csv\n")
-        # ``require()`` 内で ``Config()`` を呼ぶので、project_dir() が tmp_path を
-        # 指すように sys.argv を差し替える。
-        monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
-
-        config_module.require("FILES.INPUT_CSV")
-
-    def test_reports_every_missing_key_at_once(self, tmp_path, monkeypatch):
-        """足りないものを1つずつではなく、全部並べて報告する。
-
-        1つ直して実行、また別で止まる、を繰り返すと書く人が何度も往復する。
-        """
-        self._write(tmp_path, "[FILES]\nINPUT_CSV = C:\\作業\\in.csv\n")
-        monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
-
-        with pytest.raises(ConfigRequiredKeysMissingError) as e:
-            config_module.require("FILES.INPUT_CSV", "REPORT.OUTPUT_FOLDER", "MAIL.TO")
-
-        message = str(e.value)
-        assert "REPORT.OUTPUT_FOLDER" in message
-        assert "MAIL.TO" in message
-        assert "FILES.INPUT_CSV" not in message, "足りている項目は出さない"
-
-    def test_message_points_at_the_file_to_edit(self, tmp_path, monkeypatch):
-        """どのファイルへ足すのかを示す（複数プロジェクトを行き来しても迷わない）。"""
-        path = self._write(tmp_path, "[FILES]\nINPUT_CSV = C:\\作業\\in.csv\n")
-        monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
-
-        with pytest.raises(ConfigRequiredKeysMissingError) as e:
-            config_module.require("REPORT.OUTPUT_FOLDER")
-
-        assert str(path.resolve()) in str(e.value)
-
-    def test_is_case_insensitive_in_the_argument(self, tmp_path, monkeypatch):
-        """引数の大文字小文字は問わない（config.ini 側は大文字が強制される）。"""
-        self._write(tmp_path, "[FILES]\nINPUT_CSV = C:\\作業\\in.csv\n")
-        monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
-
-        config_module.require("files.input_csv")
 
 
 class TestLenientDict:

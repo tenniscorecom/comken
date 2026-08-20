@@ -4,8 +4,7 @@ import logging
 from pathlib import Path
 
 from comken import setup_logging
-from comken.constants import Color, Encoding, FileFormat, SortBy
-from comken.core import FileFinder
+from comken.constants import Color, Encoding, FileFormat
 from comken.toolbox.csv import CsvReader, CsvWriter
 
 HERE = Path(__file__).parent
@@ -22,10 +21,10 @@ def main() -> None:
         [{"社員番号": "001", "氏名": "山田"}]
     )
     rows = CsvReader(CSV_PATH, encoding=Encoding.AUTO).read_rows()
-    latest = FileFinder(OUTPUT_FOLDER).latest("*.csv", by=SortBy.UPDATED)
+    latest = max(OUTPUT_FOLDER.glob("*.csv"), key=lambda path: path.stat().st_mtime)
 
     logger.info("Encoding: %s（%d 件）", Encoding.UTF8_SIG, len(rows))
-    logger.info("SortBy: %s（%s）", SortBy.UPDATED, latest.name)
+    logger.info("更新日時が最新のCSV: %s", latest.name)
     logger.info("Color: %s（Excel の色指定）", Color.LIGHT_BLUE)
     logger.info("FileFormat: %s（Excel COM の xlsx 保存形式）", FileFormat.XLSX)
 

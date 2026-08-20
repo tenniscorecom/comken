@@ -102,7 +102,6 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `ConfigFileNotFoundError` | config.ini が見つからない | config.ini.example が同じ場所にあるか確認する（あれば実行し直すだけで作られる） |
 | `ConfigCreatedFromExampleError` | config.ini が無かったので example から作った | 作られた config.ini の値を書き換えて、もう一度実行する |
 | `ConfigLowerCaseNameError` | config.ini のセクション名・キー名に小文字がある | 表示された名前を大文字に書き換える（`[files]` → `[FILES]`） |
-| `ConfigRequiredKeysMissingError` | config.ini に必須の項目がない | エラーに表示された項目を config.ini へ追加する |
 | `ConfigSectionNotFoundError` | config.ini の必要な節がない | メッセージに表示された **「読んだファイル」のパス** が、編集しているconfig.ini と一致するかを確認する（2026-08-18 にプロジェクトの場所を基準にするように変えてから、起動方法によって別の config.ini を読むことがあるため）。パスが正しければ、表示されたセクション名をconfig.ini に追加する。**見た目では原因が分からない場合**（行頭に空白が混入していた等）はエディタで行頭空白・全角スペースを確認する |
 | `ConfigKeyNotFoundError` | config.ini のセクションに必要なキーがない | メッセージに表示された **「読んだファイル」のパス** が、編集しているconfig.ini と一致するかを確認する。パスが正しければ、表示されたキー名を該当セクションへ追加する。**セクション名は合っているがキー名を 1 文字タイポした** とき（FILES.OUTPUT_FOLER 等）は、「もしかして」に近いキー名が出るので、それを config.ini に書き直す |
 | `UnsupportedFileSuffixError` | 対応外の拡張子が指定された | CSV / Excel の対応する拡張子のファイルを指定する |

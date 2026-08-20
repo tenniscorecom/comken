@@ -6,7 +6,6 @@ utils モジュールのテスト。
 """
 
 import datetime
-import os
 import sys
 import time
 from pathlib import Path
@@ -15,12 +14,10 @@ from unittest.mock import patch
 import pytest
 
 from comken import dry_run
-from comken.constants import SortBy
 from comken.core.clock import now, today
 from comken.core.data import diff_row, diff_rows
 from comken.core.files import (
     DateNameBuilder,
-    FileFinder,
     copy_file,
     date_in_name,
     delete_file,
@@ -327,15 +324,12 @@ class TestDateNameBuilder:
     def test_yyyymm_format(self):
         """date_format="%Y%m" にすると年月のみになる。月次ファイルに使う。"""
         ym = today().strftime("%Y%m")
-        assert DateNameBuilder("月次").prefix(date_format="%Y%m") == f"{ym}_月次.xlsx"
+        assert DateNameBuilder("月次").prefix("{:%Y%m}_") == f"{ym}_月次.xlsx"
 
     def test_custom_date_format(self):
         """任意の strftime フォーマットを指定できる。"""
         formatted = today().strftime("%Y-%m-%d")
-        assert (
-            DateNameBuilder("レポート").prefix(date_format="%Y-%m-%d")
-            == f"{formatted}_レポート.xlsx"
-        )
+        assert DateNameBuilder("レポート").prefix("{:%Y-%m-%d}_") == f"{formatted}_レポート.xlsx"
 
     def test_constructor_with_date_object(self):
         """コンストラクタに date を渡すとその日付で組み立てられる。"""
@@ -361,199 +355,9 @@ class TestDateNameBuilder:
     def test_constructor_with_date_and_custom_format(self):
         """コンストラクタの日付と prefix のフォーマット指定を組み合わせできる。"""
         assert (
-            DateNameBuilder("月次", datetime.date(2026, 8, 20)).prefix(date_format="%Y-%m")
+            DateNameBuilder("月次", datetime.date(2026, 8, 20)).prefix("{:%Y-%m}_")
             == "2026-08_月次.xlsx"
         )
-
-
-class TestFileFinderToday:
-    """FileFinder.today() のテスト。
-
-    フォルダ内から今日の日付を含むファイルを取得する。
-    tmp_path は pytest が提供するテスト用の一時フォルダで、テスト後に自動削除される。
-    """
-
-    def test_finds_today_file(self, tmp_path):
-        """今日の日付を含むファイルが見つかる。"""
-        today_text = today().strftime("%Y%m%d")
-        target = tmp_path / f"{today_text}_売上.xlsx"
-        target.touch()
-
-        assert FileFinder(tmp_path).today() == target
-
-    def test_raises_when_not_found(self, tmp_path):
-        """今日の日付を含むファイルが存在しない場合は FileNotFoundError になる。"""
-        (tmp_path / "20200101_古いファイル.xlsx").touch()
-
-        with pytest.raises(FileNotFoundError):
-            FileFinder(tmp_path).today()
-
-    def test_returns_none_when_not_required(self, tmp_path):
-        """required=False なら見つからなくても None を返す。"""
-        assert FileFinder(tmp_path).today(required=False) is None
-
-    def test_yyyymm_format(self, tmp_path):
-        """date_format="%Y%m" で年月のみのファイル名を検索できる。"""
-        ym = today().strftime("%Y%m")
-        target = tmp_path / f"{ym}_月次.xlsx"
-        target.touch()
-
-        assert FileFinder(tmp_path).today(date_format="%Y%m") == target
-
-    def test_csv_pattern(self, tmp_path):
-        """pattern="*.csv" にすると CSV ファイルのみ検索対象になる。"""
-        today_text = today().strftime("%Y%m%d")
-        target = tmp_path / f"{today_text}_ログ.csv"
-        target.touch()
-
-        assert FileFinder(tmp_path).today(pattern="*.csv") == target
-
-    def test_returns_latest_when_multiple(self, tmp_path):
-        """今日のファイルが複数ある場合、更新日時が最も新しいものを返す。"""
-        today_text = today().strftime("%Y%m%d")
-        old = tmp_path / f"{today_text}_v1.xlsx"
-        new = tmp_path / f"{today_text}_v2.xlsx"
-        old.touch()
-        new.touch()
-        os.utime(old, (0, 0))  # old の更新日時を過去（Unix エポック）に設定
-
-        assert FileFinder(tmp_path).today() == new
-
-    def test_ignores_matching_folder(self, tmp_path):
-        """名前が一致してもフォルダは検索結果に含めない。"""
-        today_text = today().strftime("%Y%m%d")
-        (tmp_path / f"{today_text}_売上.xlsx").mkdir()
-
-        assert FileFinder(tmp_path).today(required=False) is None
-
-
-class TestFileFinderLatest:
-    """FileFinder.latest() のテスト。
-
-    デフォルトはファイル名の辞書順で最後のファイルを取得する。
-    """
-
-    def test_finds_latest_by_name(self, tmp_path):
-        """ファイル名の辞書順で最後のファイルを返す（更新日時は影響しない）。"""
-        name_new = tmp_path / "20260711_売上.xlsx"
-        name_old = tmp_path / "20260101_売上.xlsx"
-        name_new.touch()
-        name_old.touch()
-        os.utime(name_new, (0, 0))  # 名前上の最新の方を、更新日時では最古にする
-
-        assert FileFinder(tmp_path).latest() == name_new
-
-    def test_finds_latest_by_updated(self, tmp_path):
-        """by="updated" なら更新日時が最も新しいファイルを返す。"""
-        name_new = tmp_path / "20260711_売上.xlsx"
-        name_old = tmp_path / "20260101_売上.xlsx"
-        name_new.touch()
-        name_old.touch()
-        os.utime(name_new, (0, 0))  # 名前上の最新の方を、更新日時では最古にする
-
-        assert FileFinder(tmp_path).latest(by=SortBy.UPDATED) == name_old
-
-    def test_invalid_by_raises(self, tmp_path):
-        """by に不正な値を指定すると ValueError になる。"""
-        with pytest.raises(ValueError):
-            FileFinder(tmp_path).latest(by="date")
-
-    def test_raises_when_empty(self, tmp_path):
-        """対象ファイルが存在しない場合は FileNotFoundError になる。"""
-        with pytest.raises(FileNotFoundError):
-            FileFinder(tmp_path).latest()
-
-    def test_returns_none_when_not_required(self, tmp_path):
-        """required=False なら見つからなくても None を返す。"""
-        assert FileFinder(tmp_path).latest(required=False) is None
-
-    def test_csv_pattern(self, tmp_path):
-        """pattern="*.csv" で CSV のみ対象にできる。xlsx は無視される。"""
-        (tmp_path / "data.xlsx").touch()
-        target = tmp_path / "data.csv"
-        target.touch()
-
-        assert FileFinder(tmp_path).latest(pattern="*.csv") == target
-
-    def test_ignores_matching_folder(self, tmp_path):
-        """パターンに一致してもフォルダは検索結果に含めない。"""
-        (tmp_path / "売上.xlsx").mkdir()
-
-        assert FileFinder(tmp_path).latest(required=False) is None
-
-
-class TestFileFinderDated:
-    """FileFinder.dated() のテスト。"""
-
-    def test_returns_files_in_date_descending_order(self, tmp_path):
-        """ファイル名の日付が新しい順で返る。"""
-        old = tmp_path / "売上_20260101.xlsx"
-        new = tmp_path / "売上_20260729.xlsx"
-        old.touch()
-        new.touch()
-
-        assert FileFinder(tmp_path).dated() == [new, old]
-
-    @pytest.mark.parametrize(
-        "date_text",
-        ["20260729", "2026-07-29", "2026_07_29", "2026.07.29"],
-    )
-    def test_recognizes_supported_date_formats(self, tmp_path, date_text):
-        """対応する4種類の日付表記を認識する。"""
-        target = tmp_path / f"日本語レポート_{date_text}.xlsx"
-        target.touch()
-
-        assert FileFinder(tmp_path).dated() == [target]
-
-    @pytest.mark.parametrize(
-        "name",
-        [
-            "日付なし.xlsx",
-            "不正日付_20261345.xlsx",
-            "伝票120260729001.xlsx",
-            "区切り不一致_2026-07_29.xlsx",
-            "全角数字_２０２６０７２９.xlsx",
-        ],
-    )
-    def test_ignores_names_without_valid_supported_date(self, tmp_path, name):
-        """日付でない数字や未対応の表記を検索結果に含めない。"""
-        (tmp_path / name).touch()
-
-        assert FileFinder(tmp_path).dated(required=False) == []
-
-    def test_ignores_matching_folder(self, tmp_path):
-        """日付表記を含む名前でもフォルダは検索結果に含めない。"""
-        (tmp_path / "売上_20260729.xlsx").mkdir()
-
-        assert FileFinder(tmp_path).dated(required=False) == []
-
-    def test_same_date_is_ordered_by_updated_time(self, tmp_path):
-        """同じ日付なら更新日時が新しい順で返る。"""
-        old = tmp_path / "売上_20260729_v1.xlsx"
-        new = tmp_path / "売上_20260729_v2.xlsx"
-        old.touch()
-        new.touch()
-        os.utime(old, (0, 0))
-
-        assert FileFinder(tmp_path).dated() == [new, old]
-
-    def test_returns_empty_list_when_not_required(self, tmp_path):
-        """required=False なら該当ファイルがなくても空リストを返す。"""
-        assert FileFinder(tmp_path).dated(required=False) == []
-
-    def test_raises_when_required_file_is_not_found(self, tmp_path):
-        """required=True なら該当ファイルがないと FileNotFoundError になる。"""
-        with pytest.raises(FileNotFoundError, match="ファイル名に 20260729"):
-            FileFinder(tmp_path).dated()
-
-    def test_uses_first_date_when_name_contains_multiple_dates(self, tmp_path):
-        """名前に日付が複数ある場合は先に現れる日付で並べる。"""
-        first_is_old = tmp_path / "20260101_比較_20261231.xlsx"
-        middle = tmp_path / "20260729_売上.xlsx"
-        first_is_old.touch()
-        middle.touch()
-
-        assert FileFinder(tmp_path).dated() == [middle, first_is_old]
 
 
 class TestDownloadDir:

@@ -4,7 +4,6 @@ import logging
 
 from comken.core.clock import today
 from comken.core.files.ops import project_dir
-from comken.core.logging_run_id import RunIdFilter
 from comken.runtime import is_debug
 
 __all__ = ["setup_logging"]
@@ -15,7 +14,7 @@ __all__ = ["setup_logging"]
 LOG_DIR_NAME = "logs"
 # ``[RUN:xxxxx]`` は ``RunIdFilter`` が LogRecord に ``run_id`` を入れるため
 # に必要。run_id 未設定のときは ``"-"`` が出るので、フォーマット位置は常に揃う
-LOG_FORMAT = "[RUN:%(run_id)s] %(asctime)s %(levelname)s %(name)s: %(message)s"
+LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
@@ -36,7 +35,6 @@ def setup_logging(to_file: bool = True) -> None:
     formatter = logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT)
     # run_id を LogRecord に注入するフィルター。format string が ``%(run_id)s``
     # を要求するので、ハンドラへ必ず付ける
-    run_id_filter = RunIdFilter()
     handlers: list[logging.Handler] = [logging.StreamHandler()]
 
     if to_file:
@@ -47,7 +45,6 @@ def setup_logging(to_file: bool = True) -> None:
 
     for handler in handlers:
         handler.setFormatter(formatter)
-        handler.addFilter(run_id_filter)
         root_logger.addHandler(handler)
 
     # 詳細な処理時間を調べるデバッグモードでは、DEBUG ログも見えるようにする。

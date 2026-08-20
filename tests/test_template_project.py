@@ -98,36 +98,6 @@ def test_generated_project_passes_ruff(generated: Path) -> None:
         )
 
 
-# ── 3. main.py の config.require のキーが config.ini.example に実在する ──────
-
-
-def test_main_py_require_keys_exist_in_config_example(generated: Path) -> None:
-    """main.py の config.require(...) に書いたキーが config.ini.example に実在する。
-
-    「何を防いでいるか」: 片方だけ増やすと「途中まで動いてから ConfigRequiredKeysMissingError」
-    になり、原因が見えにくい。テンプレ段階で食い違いを検出する。
-    """
-    main_text = _read(generated / "main.py")
-    example_text = _read(generated / "config.ini.example")
-
-    match = re.search(r"config\.require\(([^)]+)\)", main_text)
-    assert match, "main.py に config.require(...) が見つからない"
-    keys = re.findall(r'"([^"]+)"', match.group(1))
-
-    parser = configparser.ConfigParser()
-    parser.read_string(example_text)
-    for key in keys:
-        section, _, name = key.partition(".")
-        assert parser.has_section(section), (
-            f"main.py の config.require は {key!r} を要求するが、"
-            f"config.ini.example に [{section}] が無い"
-        )
-        assert parser.has_option(section, name), (
-            f"main.py の config.require は {key!r} を要求するが、"
-            f"config.ini.example の [{section}] に {name} が無い"
-        )
-
-
 # ── 4. docs/仕様書.md の設定表に書いた [SECTION] + KEY が example に実在する ─
 
 

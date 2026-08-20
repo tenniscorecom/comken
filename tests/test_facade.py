@@ -51,8 +51,8 @@ def test_core_exposes_parts() -> None:
     """
     expected = {
         "DateNameBuilder",
+        "DateFileFinder",
         "DiffResult",
-        "FileFinder",
         "RowChange",
         "State",
         "Timer",

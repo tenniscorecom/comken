@@ -88,9 +88,14 @@ import の書き方は上の「[使うときの約束](#使うときの約束)�
 
 ## モジュール一覧
 
+表データを扱う基本入口は ``from comken.toolbox import CSV, Excel, Transfer``。
+CSV と Excel はどちらも ``for row in table.rows():`` で列名付き辞書を返す。
+
 | モジュール | 概要 |
 |---|---|
 | Config | INI ファイルの読み込み |
+| DateFileFinder / DateNameBuilder | 日付付きファイルの検索・命名 |
+| CSV / Excel / Transfer | 表データの読み書きと列マッピング転記 |
 | runtime | `with debug():` / `with dry_run():` による実行モード |
 | constants | CSV・Excel・ファイル検索で使う公開定数 |
 | exceptions | comken 固有の例外（エラー名別に対処可能） |

@@ -42,9 +42,16 @@ class DateNameBuilder:
         self._date = _resolve_date(for_date)
         self._ext = ext if ext.startswith(".") else f".{ext}"
 
-    def prefix(self, date_format: str = "%Y%m%d") -> str:
-        """今日の日付を前に付けたファイル名を返す（例: 20260711_売上レポート.xlsx）。"""
-        return f"{self._date.strftime(date_format)}_{self._name}{self._ext}"
+    def prefix(self, prefix: str = "{:%Y%m%d}_") -> str:
+        """prefix + 日付 + ベース名を返す。
+
+        ``prefix("DIY_{:%Y%m%d}_")`` のように日付の位置と書式を指定する。
+        日付書式を含まない prefix には ``YYYYMMDD`` を末尾へ補う。
+        """
+        dated_prefix = (
+            prefix.format(self._date) if "{:" in prefix else f"{prefix}{self._date:%Y%m%d}_"
+        )
+        return f"{dated_prefix}{self._name}{self._ext}"
 
     def suffix(self, date_format: str = "%Y%m%d") -> str:
         """今日の日付を後ろに付けたファイル名を返す（例: 売上レポート_20260711.xlsx）。"""

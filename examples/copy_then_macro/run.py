@@ -26,7 +26,7 @@ import logging
 from pathlib import Path
 
 from comken import setup_logging
-from comken.core import FileFinder, copy_file
+from comken.core import DateFileFinder, copy_file
 from comken.toolbox.excel import ExcelWriter
 
 # 受け取り元・作業場所・配り先。共有フォルダは遅く、Excel が掴んだままになることもあるので、
@@ -48,7 +48,7 @@ def main() -> None:
 
     # 1. 当日のデータを受け取る。ファイル名に日付が入っている前提で選ぶ。
     #    見つからなければここで例外になる（bat と違い、古いファイルで先へ進まない）
-    source = FileFinder(SOURCE_FOLDER).today(pattern="*.xlsx")
+    source = DateFileFinder(SOURCE_FOLDER).prefix("", extension="xlsx")
     logger.info("受信ファイル: %s", source.name)
 
     # 2. 作業フォルダへコピーする。同名があれば上書きされる
