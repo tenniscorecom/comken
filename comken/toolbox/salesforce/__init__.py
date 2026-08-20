@@ -63,6 +63,8 @@ _LAZY_TARGETS: dict[str, str] = {
     "ClientCredentialsOAuth": "comken.toolbox.salesforce.direct.oauth_credentials",
     "RefreshTokenOAuth": "comken.toolbox.salesforce.direct.oauth_refresh",
     "SalesforceCredentialRotator": "comken.toolbox.salesforce.direct.rotation",
+    "SiteBase": "comken.toolbox.salesforce.sitebase",
+    "DirectSiteBase": "comken.toolbox.salesforce.direct.adapter",
 }
 
 
@@ -90,6 +92,8 @@ def __dir__() -> list[str]:
 
 __all__ = [
     "SalesforceBase",
+    "SiteBase",
+    "DirectSiteBase",
     "ReportApi",
     "ClientCredentialsAuth",
     "RefreshTokenAuth",

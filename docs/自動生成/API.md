@@ -6528,206 +6528,15 @@ class MailMessage:
 
 ### `SalesforceBase`
 
-```text
-class SalesforceBase:
-```
+定義を解決できませんでした。
 
-#### 説明
+### `SiteBase`
 
-Salesforce の 1 組織に対する API クライアント（組織クラスの土台）。
+定義を解決できませんでした。
 
-DOMAIN_URL と CREDENTIAL_PREFIX を持つサブクラスを作って使う。
-認証情報は DPAPI から読むので、呼び出し側のコードに秘密の値が現れない。
+### `DirectSiteBase`
 
-使い方:
-    with Sandbox() as sf:
-        records = sf.query("SELECT Id, Name FROM Account")
-        rows = sf.report.run("00O000000000001")
-        sf.metrics.log_summary()
-
-Attributes:
-    report: レポート API（sf.report.run(...)）。
-    metrics: API 呼び出しの計測（sf.metrics.log_summary()）。
-
-#### `__init__`
-
-```text
-def __init__(self, *, prefix: str='', domain_url: str='', org_name: str='', auth: _OAuth | type[_OAuth] | None=None) -> None:
-```
-
-##### 説明
-
-DPAPI に保管した認証情報を読み、選択中の OAuth 方式で接続する。
-
-読み込む項目は client.py が import している OAuth 方式で決まる。
-Client Credentials 方式は client_id / client_secret、Refresh Token 方式は
-client_id / client_secret / refresh_token を使う。
-
-Args:
-    prefix: 認証情報のシステム名。省略時はクラスの CREDENTIAL_PREFIX。
-        本番とテストを切り替えるときだけ渡す。
-    domain_url: My Domain の URL。省略時はクラスの DOMAIN_URL。
-    org_name: 計測ログに出す組織の呼び名。省略時はクラス名を使う。
-    auth: 認証方式を差し替えるときに渡す。**クラスを渡せば**
-        DPAPI から組み立てる（値を手で並べなくてよい）。
-            Sandbox(auth=ClientCredentialsAuth)   # 開発中だけ
-        作成済みのインスタンスを渡すこともできる（テスト・JWT 等）。
-        その場合だけ prefix / domain_url は使われない。
-
-Raises:
-    InvalidCredentialNameError: システム名が空、または使えない文字を含む場合。
-    CredentialNotFoundError: 選択方式に必要な認証情報が未登録の場合。
-    CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
-    SalesforceAuthError: 認証に失敗した場合。
-    SalesforceConnectionError: ネットワークの問題で接続できない場合。
-
-#### `close`
-
-```text
-def close(self) -> None:
-```
-
-##### 説明
-
-HTTP セッションを閉じる。with を使う場合は自動で呼ばれる。
-
-#### `query`
-
-```text
-@measure
-def query(self, soql: str) -> list[dict]:
-```
-
-##### 説明
-
-SOQL クエリを実行してレコードを返す（全件取得・ページ送り自動）。
-
-レポート API と違って**行数の上限がない**ので、
-2000 行を超えるデータはこちらで取る。
-
-Args:
-    soql: 実行する SOQL クエリ文字列。
-
-Returns:
-    レコードの辞書のリスト。
-
-#### `get`
-
-```text
-@measure
-def get(self, object_name: str, record_id: str) -> dict:
-```
-
-##### 説明
-
-レコードを1件取得する。
-
-Args:
-    object_name: オブジェクトの API 参照名（例: "Account"）。
-    record_id: レコードの Id。
-
-#### `insert`
-
-```text
-@measure
-def insert(self, object_name: str, data: dict) -> str:
-```
-
-##### 説明
-
-レコードを作成して Id を返す。
-
-Args:
-    object_name: オブジェクトの API 参照名。
-    data: 作成するレコードの項目と値。
-
-#### `update`
-
-```text
-@measure
-def update(self, object_name: str, record_id: str, data: dict) -> None:
-```
-
-##### 説明
-
-レコードを更新する。
-
-Args:
-    object_name: オブジェクトの API 参照名。
-    record_id: 更新するレコードの Id。
-    data: 更新する項目と値。
-
-#### `upsert`
-
-```text
-@measure
-def upsert(self, object_name: str, external_id_field: str, data: dict) -> None:
-```
-
-##### 説明
-
-外部 ID で upsert する（一致すれば更新、なければ作成）。
-
-Args:
-    object_name: オブジェクトの API 参照名。
-    external_id_field: 外部 ID 項目の API 参照名（例: "ExternalId__c"）。
-    data: 項目と値。external_id_field の値を含めること。
-
-Raises:
-    SalesforceExternalIdMissingError: data に external_id_field が無い場合。
-
-#### `delete`
-
-```text
-@measure
-def delete(self, object_name: str, record_id: str) -> None:
-```
-
-##### 説明
-
-レコードを削除する。
-
-Args:
-    object_name: オブジェクトの API 参照名。
-    record_id: 削除するレコードの Id。
-
-#### `request`
-
-```text
-def request(self, method: str, path: str, body: dict | None=None, component: str='other') -> tuple[dict | list | str | None, dict]:
-```
-
-##### 説明
-
-REST API を呼び、(レスポンス本文, レスポンスヘッダー) を返す。
-
-すべての API 呼び出しがここを通る。計測と、401 のときの再認証もここで行う。
-通常は query() / get() 等を使い、このメソッドは
-ライブラリに無い API を叩くときだけ使う。
-
-Args:
-    method: HTTP メソッド（GET / POST / PATCH / DELETE）。
-    path: "/services/data/..." から始まるパス。
-    body: JSON で送る辞書（省略可）。
-    component: 計測での呼び出し元の区別（"query" / "crud" / "report"）。
-
-Raises:
-    SalesforceRequestError: API がエラーを返した場合。
-    SalesforceConnectionError: ネットワークの問題で接続できない場合。
-
-#### `data_path`
-
-```text
-def data_path(self, path: str) -> str:
-```
-
-##### 説明
-
-REST API のバージョン付きパスを組み立てる。
-
-ライブラリに無い API を request() で叩くときに使う。
-
-    sf.request("GET", sf.data_path("/limits"))
+定義を解決できませんでした。
 
 ### `ReportApi`
 
@@ -6810,11 +6619,11 @@ Raises:
 
 ### `ClientCredentialsAuth`
 
-公開定数。
+定義を解決できませんでした。
 
 ### `RefreshTokenAuth`
 
-公開定数。
+定義を解決できませんでした。
 
 ### `ApiMetrics`
 
@@ -6954,33 +6763,7 @@ class RetryReason:
 
 ### `SalesforceCredentialRotator`
 
-```text
-class SalesforceCredentialRotator:
-```
-
-#### 説明
-
-ECA の資格情報を、期限到来時だけ安全な順序でローテーションする。
-
-``is_enabled`` は config.ini の明示設定から渡す。既定で無効なのは、DPAPI が
-Windows ユーザーと PC に紐付き、同じ ECA を使う他 PC へ新 secret を配れないため。
-同じ ECA を複数 PC で使う場合、有効にしてよいのは1台だけである。
-
-#### `__init__`
-
-```text
-def __init__(self, client: SalesforceBase, app_id: str, credential_prefix: str, is_enabled: bool=False, interval_days: int=DEFAULT_ROTATION_INTERVAL_DAYS, credential_path: Path | None=None) -> None:
-```
-
-#### `rotate_if_due`
-
-```text
-def rotate_if_due(self, today: datetime.date | None=None) -> bool:
-```
-
-##### 説明
-
-有効かつ指定日数を過ぎていれば実行し、実行したかを返す。
+定義を解決できませんでした。
 
 
 ## `from comken.toolbox.salesforce.sites import ...`
@@ -6992,7 +6775,7 @@ def rotate_if_due(self, today: datetime.date | None=None) -> bool:
 ### `Sandbox`
 
 ```text
-class Sandbox(SalesforceBase):
+class Sandbox(DirectSiteBase):
 ```
 
 #### 説明
@@ -7019,7 +6802,7 @@ def opportunities(self) -> list[dict]:
 ### `Production`
 
 ```text
-class Production(SalesforceBase):
+class Production(DirectSiteBase):
 ```
 
 #### 説明
@@ -7046,7 +6829,7 @@ def opportunities(self) -> list[dict]:
 ### `Developer`
 
 ```text
-class Developer(SalesforceBase):
+class Developer(DirectSiteBase):
 ```
 
 #### 説明

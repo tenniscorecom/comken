@@ -40,6 +40,7 @@ from comken.toolbox.salesforce.direct.metrics import ApiMetrics, RetryReason
 # 使わない（→ docs/開発/salesforce-authentication.md）。
 from comken.toolbox.salesforce.direct.oauth_refresh import RefreshTokenOAuth
 from comken.toolbox.salesforce.direct.report import ReportApi
+from comken.toolbox.salesforce.sitebase import SiteBase
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,7 @@ class _OAuth(Protocol):
         ...
 
 
-class SalesforceBase:
+class SalesforceBase(SiteBase):
     """Salesforce の 1 組織に対する API クライアント（組織クラスの土台）。
 
     DOMAIN_URL と CREDENTIAL_PREFIX を持つサブクラスを作って使う。
