@@ -3505,14 +3505,13 @@ class Transfer:
 
 CSVの転記先は、転記先の列名と順序が一致するように
 ``CsvWriter(path, fieldnames=list(mapping.values()))`` と構築する。
-Excelを転記元または転記先にする場合は、該当するシート名を
-``source_sheet`` / ``destination_sheet`` へ指定する。
-転記先が ``ExcelWriter`` の場合、保存は呼び出し側で ``save()`` する。
+Excelを転記元または転記先にする場合は、``ExcelWriter.sheet()`` で取得した
+``Sheet`` を渡す。Excelファイルの保存は呼び出し側で ``save()`` する。
 
 #### `__init__`
 
 ```text
-def __init__(self, source: Source, destination: Destination, mapping: Mapping[str, str], *, source_sheet: str='Sheet1', destination_sheet: str='Sheet1') -> None:
+def __init__(self, source: Source, destination: Destination, mapping: Mapping[str, str]) -> None:
 ```
 
 #### `run`
@@ -5609,15 +5608,51 @@ Args:
     start_row: ヘッダー行の行番号（1始まり）。
     headers: 列の並び順。省略すると最初の行のキー順。
 
-#### `copy_to`
+#### `read_rows_as_dicts`
 
 ```text
-def copy_to(self, destination, name: str | None=None) -> 'Sheet':
+def read_rows_as_dicts(self, header_row: int=1) -> list[dict]:
 ```
 
 ##### 説明
 
-このシートの値・数式・基本書式を別の ExcelWriter へコピーする。
+ヘッダー行をキーとした辞書のリストで返す。
+
+Args:
+    header_row: ヘッダーが存在する行番号（デフォルト: 1）。
+
+Returns:
+    [{"列名": 値, ...}, ...] の形式のリスト。
+
+Raises:
+    ExcelError: ヘッダー行に空のセルがある場合。
+
+#### `rows`
+
+```text
+def rows(self, header_row: int=1) -> Iterator[dict]:
+```
+
+##### 説明
+
+列名でアクセスできる行を、for文で順に返す。
+
+``CsvReader.rows()`` と同じく、1件を列名付き辞書として扱える。
+
+#### `copy_to`
+
+```text
+@measure
+def copy_to(self, destination: ExcelWriter, name: str | None=None) -> Sheet:
+```
+
+##### 説明
+
+シート全体を別の ExcelWriter へコピーする。
+
+値・数式・セル書式・列幅・行高・結合セル・ウィンドウ固定・
+オートフィルターをコピーする。画像・グラフなどの描画オブジェクトは
+openpyxl の制約により対象外。
 
 #### `add_table`
 

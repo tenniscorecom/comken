@@ -89,11 +89,14 @@ import の書き方は上の「[使うときの約束](#使うときの約束)�
 ## モジュール一覧
 
 表データの読み書きには既存の ``CsvReader`` / ``CsvWriter`` と
-``ExcelReader`` / ``ExcelWriter`` を使う。列転記は、それらを
+``ExcelWriter`` / ``Sheet`` を使う。列転記では CSV は Reader / Writer を直接渡し、
+Excel は ``ExcelWriter.sheet()`` で取得した Sheet を
 ``Transfer(source, destination, mapping).run()`` に渡して全件を処理する。
 CSV の転記先は ``CsvWriter(path, fieldnames=list(mapping.values()))`` と作る。
+``CsvReader.rows()`` と ``Sheet.rows()`` は、どちらも1件を列名付き辞書として返す。
 1件ずつ加工・除外するときは ``run(transform)`` を使い、辞書、``None``、
 ``Transfer.STOP`` をそれぞれ転記、skip、打ち切りの合図として返す。
+列対応ではなくExcelシート全体を複製するときは ``Sheet.copy_to()`` を使う。
 
 | モジュール | 概要 |
 |---|---|

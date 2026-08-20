@@ -4,10 +4,14 @@ ExcelWriter.sheet() から取得し、セル書き込み・行書き込み・列
 ヘッダー固定などをシート単位で行う（sheet_name を毎回渡さなくてよい）。
 """
 
+# 型注釈だけで ExcelWriter を参照し、実行時の循環 import を避けるため遅延評価する。
+from __future__ import annotations
+
 import logging
 import re
+from collections.abc import Iterator
 from copy import copy
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
@@ -17,12 +21,17 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.worksheet.worksheet import Worksheet
 
 from comken.core.data import column_number
+from comken.core.timer import measure
 from comken.exceptions import (
+    EmptyHeaderCellError,
     InvalidTableNameError,
     TableAlreadyExistsError,
     TableNotFoundError,
 )
 from comken.exceptions.warning import _warn_coerce
+
+if TYPE_CHECKING:
+    from comken.toolbox.excel.writer import ExcelWriter
 
 logger = logging.getLogger(__name__)
 
@@ -103,8 +112,44 @@ class Sheet:
         for i, row in enumerate(rows, start=int(start_row) + 1):
             self.write_row(i, [row.get(h, "") for h in headers])
 
-    def copy_to(self, destination, name: str | None = None) -> "Sheet":
-        """このシートの値・数式・基本書式を別の ExcelWriter へコピーする。"""
+    def read_rows_as_dicts(self, header_row: int = 1) -> list[dict]:
+        """ヘッダー行をキーとした辞書のリストで返す。
+
+        Args:
+            header_row: ヘッダーが存在する行番号（デフォルト: 1）。
+
+        Returns:
+            [{"列名": 値, ...}, ...] の形式のリスト。
+
+        Raises:
+            ExcelError: ヘッダー行に空のセルがある場合。
+        """
+        all_rows = list(self.ws.iter_rows(min_row=int(header_row), values_only=True))
+        if not all_rows:
+            return []
+        headers = all_rows[0]
+        if all(header is None for header in headers):
+            return []
+        empty_columns = [index + 1 for index, header in enumerate(headers) if header is None]
+        if empty_columns:
+            raise EmptyHeaderCellError(empty_columns)
+        return [dict(zip(headers, row, strict=False)) for row in all_rows[1:]]
+
+    def rows(self, header_row: int = 1) -> Iterator[dict]:
+        """列名でアクセスできる行を、for文で順に返す。
+
+        ``CsvReader.rows()`` と同じく、1件を列名付き辞書として扱える。
+        """
+        yield from self.read_rows_as_dicts(header_row)
+
+    @measure
+    def copy_to(self, destination: ExcelWriter, name: str | None = None) -> Sheet:
+        """シート全体を別の ExcelWriter へコピーする。
+
+        値・数式・セル書式・列幅・行高・結合セル・ウィンドウ固定・
+        オートフィルターをコピーする。画像・グラフなどの描画オブジェクトは
+        openpyxl の制約により対象外。
+        """
         copied = destination.add_sheet(name or self.ws.title)
         for row in self.ws.iter_rows():
             for cell in row:
@@ -119,6 +164,12 @@ class Sheet:
                     target.protection = copy(cell.protection)
         for column, dimension in self.ws.column_dimensions.items():
             copied.ws.column_dimensions[column].width = dimension.width
+        for row_number, dimension in self.ws.row_dimensions.items():
+            copied.ws.row_dimensions[row_number].height = dimension.height
+        for merged_range in self.ws.merged_cells.ranges:
+            copied.ws.merge_cells(str(merged_range))
+        copied.ws.freeze_panes = self.ws.freeze_panes
+        copied.ws.auto_filter.ref = self.ws.auto_filter.ref
         return copied
 
     # ------------------------------------------------------------ 構造化テーブル

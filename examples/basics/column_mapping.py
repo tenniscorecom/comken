@@ -34,7 +34,7 @@ def main() -> None:
     mapping = dict(config_mapping)
     source = CsvReader(SOURCE_CSV)
     with ExcelWriter.create(OUTPUT_PATH) as destination:
-        transferred = Transfer(source, destination, mapping).run()
+        transferred = Transfer(source, destination.sheet("Sheet1"), mapping).run()
         destination.save()
 
     logger.info("設定の列対応: %s（左: 転記元 → 右: 転記先）", config_mapping)

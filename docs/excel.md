@@ -133,6 +133,17 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:
     s.freeze_header()
     f.save()
 
+# CSVと同じ形で、1件ずつ列名付き辞書として読む
+with ExcelWriter("data.xlsx") as f:
+    for source in f.sheet("Sheet1").rows():
+        logger.info("業務用ID=%s", source["業務用ID"])
+
+# 値・数式・基本書式・列幅・行高・結合セルなどを含むシート全体コピー
+with ExcelWriter("source.xlsx") as source_book:
+    with ExcelWriter.create("destination.xlsx", "既定") as destination_book:
+        source_book.sheet("Sheet1").copy_to(destination_book, "複製")
+        destination_book.save()
+
 # シートの追加・リネーム・削除
 with ExcelWriter.create(r"C:\作業\report.xlsx") as f:
     s = f.add_sheet("集計")
@@ -153,7 +164,7 @@ mapping = config.受注_MAPPING
 
 source = CsvReader("data.csv")
 with ExcelWriter.create("data.xlsx", "売上") as destination:
-    matched = Transfer(source, destination, mapping, destination_sheet="売上").run()
+    matched = Transfer(source, destination.sheet("売上"), mapping).run()
     destination.save()
 
 # 背景色の設定（よく使う色は Color 定数で指定できる）
@@ -303,7 +314,7 @@ with ExcelWriter("売上.xlsx") as f:                   # 既存を触る
 | 大量行を読む | `iter_rows()` で1行ずつ処理する（全行をメモリに乗せない） |
 | NAS 上の大きいファイル | `local_copy_threshold_mb` の自動ローカルコピーに任せる（デフォルト10MB） |
 | 大量行への書き込み | 1セルずつ書かず、行は `Sheet.write_rows()`、見出し＋データは `Sheet.write_table()` でまとめて書く |
-| CSV / Excel 間の列転記が大量行 | `Transfer(source, destination, mapping).run()` を使う |
+| CSV / Excel 間の列転記が大量行 | CSV は Reader / Writer、Excel は `Sheet` を `Transfer(source, destination, mapping).run()` へ渡す |
 
 ---
 

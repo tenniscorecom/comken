@@ -94,7 +94,7 @@ def main() -> None:
     mapping = {KEY: KEY, "顧客名": "顧客名", TOTAL: TOTAL}
     source = CsvReader(MASTER_CSV)
     with ExcelWriter.create(INVOICE_XLSX) as destination:
-        matched = Transfer(source, destination, mapping).run(add_total)
+        matched = Transfer(source, destination.sheet(SHEET), mapping).run(add_total)
         destination.save()
 
     with ExcelWriter(INVOICE_XLSX) as f:

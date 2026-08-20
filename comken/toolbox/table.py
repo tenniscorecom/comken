@@ -8,13 +8,13 @@ from typing import Final
 from comken.core.timer import measure
 from comken.exceptions.table import TransferMappingError
 from comken.toolbox.csv import CsvReader, CsvWriter
-from comken.toolbox.excel import ExcelReader, ExcelWriter
+from comken.toolbox.excel import Sheet
 
 logger = logging.getLogger(__name__)
 
 Row = dict[str, object]
-Source = CsvReader | ExcelReader | ExcelWriter
-Destination = CsvWriter | ExcelWriter
+Source = CsvReader | Sheet
+Destination = CsvWriter | Sheet
 
 
 class _TransferControl(Enum):
@@ -29,9 +29,8 @@ class Transfer:
 
     CSVの転記先は、転記先の列名と順序が一致するように
     ``CsvWriter(path, fieldnames=list(mapping.values()))`` と構築する。
-    Excelを転記元または転記先にする場合は、該当するシート名を
-    ``source_sheet`` / ``destination_sheet`` へ指定する。
-    転記先が ``ExcelWriter`` の場合、保存は呼び出し側で ``save()`` する。
+    Excelを転記元または転記先にする場合は、``ExcelWriter.sheet()`` で取得した
+    ``Sheet`` を渡す。Excelファイルの保存は呼び出し側で ``save()`` する。
     """
 
     STOP: Final = _TransferControl.STOP
@@ -41,17 +40,12 @@ class Transfer:
         source: Source,
         destination: Destination,
         mapping: Mapping[str, str],
-        *,
-        source_sheet: str = "Sheet1",
-        destination_sheet: str = "Sheet1",
     ) -> None:
         if not mapping:
             raise TransferMappingError
         self._source = source
         self._destination = destination
         self._mapping = dict(mapping)
-        self._source_sheet = source_sheet
-        self._destination_sheet = destination_sheet
 
     @measure
     def run(self, transform: Transform | None = None) -> int:
@@ -70,7 +64,7 @@ class Transfer:
         logger.debug("転記元データ取得開始")
         destination_rows: list[Row] = []
         read_count = 0
-        for source_row in _read_source_rows(self._source, self._source_sheet):
+        for source_row in _read_source_rows(self._source):
             read_count += 1
             candidate: Mapping[str, object] | None | _TransferControl = source_row
             if transform is not None:
@@ -94,7 +88,6 @@ class Transfer:
         logger.debug("転記先書き込み開始: 件数=%d", len(destination_rows))
         _write_destination_rows(
             self._destination,
-            self._destination_sheet,
             destination_rows,
             list(self._mapping.values()),
         )
@@ -102,27 +95,23 @@ class Transfer:
         return len(destination_rows)
 
 
-def _read_source_rows(source: Source, sheet_name: str) -> list[Row]:
-    if isinstance(source, CsvReader):
-        return [dict(row) for row in source.read_rows()]
-    return [dict(row) for row in source.read_rows_as_dicts(sheet_name)]
+def _read_source_rows(source: Source) -> list[Row]:
+    return [dict(row) for row in source.rows()]
 
 
 def _write_destination_rows(
     destination: Destination,
-    sheet_name: str,
     rows: list[Row],
     columns: list[str],
 ) -> None:
     if isinstance(destination, CsvWriter):
         destination.write_rows(rows)
         return
-    sheet = destination.sheet(sheet_name)
-    sheet.ws.delete_rows(1, sheet.ws.max_row)
+    destination.ws.delete_rows(1, destination.ws.max_row)
     if rows:
-        sheet.write_table(rows, headers=columns)
+        destination.write_table(rows, headers=columns)
     else:
-        sheet.write_row(1, columns)
+        destination.write_row(1, columns)
 
 
 __all__ = ["Transfer"]
