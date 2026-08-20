@@ -144,8 +144,7 @@ class ConfigSectionNotFoundError(ConfigError):
         基準にするように変えてから、起動方法によって別の config.ini を読む
         ことがあるため）。パスが正しければ、表示されたセクション名を
         config.ini に追加する。**見た目では原因が分からない場合**（行頭に
-        空白が混入していた等）は ``python -m comken config --check`` で
-        構造上の問題点を指摘してもらえる
+        空白が混入していた等）はエディタで行頭空白・全角スペースを確認する
     """
 
     def __init__(self, name: str, existing: list[str], path: Path | str | None = None) -> None:

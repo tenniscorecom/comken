@@ -247,7 +247,6 @@ from comken.exceptions.state import (
     StateLowerCaseNameError,
     StateValueTypeError,
 )
-from comken.exceptions.warning import _warn_coerce as _warn_coerce
 
 __all__ = [
     "ComkenError",

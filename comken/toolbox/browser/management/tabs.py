@@ -12,6 +12,7 @@ from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support.ui import WebDriverWait
 
+from comken.core.timer import measure
 from comken.exceptions import PopupTabNotOpenedError
 from comken.toolbox.browser.locator import Locator
 
@@ -71,6 +72,7 @@ class _TabManager:
             if original in self._driver.window_handles:
                 self._driver.switch_to.window(original)
 
+    @measure
     def _open_in_background(self, url: str) -> str | None:
         before = set(self._driver.window_handles)
         self._driver.execute_script("window.open(arguments[0], '_blank');", url)
@@ -131,6 +133,7 @@ class _TabManager:
         except Exception:
             logger.warning("別タブの後始末に失敗しました: %s", self._session_name, exc_info=True)
 
+    @measure
     def _wait_for_new_tab(self, original: str, seconds: int) -> None:
         try:
             WebDriverWait(self._driver, seconds).until(

@@ -182,7 +182,7 @@ with Sandbox() as sf:
 未登録の組織や ID を含まない URL は例外になるため、誤った組織へ接続したまま処理を続けない。
 
 ```python
-from comken.toolbox.salesforce.direct.report import report_id_from_url
+from comken.toolbox.salesforce.report import report_id_from_url
 from comken.toolbox.salesforce.sites import site_for
 
 report_url = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O000000000001/view"
@@ -325,15 +325,16 @@ python -m comken sf report --report-id 00O...
 
 | コマンド | すること | Salesforce 側への影響 |
 |---|---|---|
-| `check` | 接続してみる | なし |
+| `check` | 接続してみる（`/limits` の GET） | なし |
 | `report` | レポートを実行し、行数と列名を出す（`--rows N` で中身も） | なし（読むだけ） |
-| `app` | ECA の資格情報を取り、項目名を出す | なし |
 | `rotate --stage-only` | 新しい secret を発行するところまで | **発行される**が切り替わらない |
 | `rotate` | DPAPI へ保存して切り替える | **旧 secret は猶予後に無効** |
 
-`app` と `rotate --stage-only` は、**REST API から consumer secret を回せるか**と
+`rotate --stage-only` は、**REST API から consumer secret を回せるか**と
 **応答の項目名**を実機で確かめるためにある（公開資料で確認できていないため）。
-値そのものは画面に出さず、項目名と桁数だけを表示する。
+`--stage-only` は staged POST までで止めるが、Salesforce 側で**新しい secret が発行される**
+点に注意。値そのものは画面に出さず、項目名と桁数だけを表示する。
+v1.0.0 で `check --app-id` は削除済み（ECA の `consumerId` だけ取れても用途が限られるため）。
 
 ## 実装を使うときの早見
 

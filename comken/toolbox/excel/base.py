@@ -28,8 +28,8 @@ from comken.exceptions import (
     SheetNotFoundError,
     TableNotAvailableInReadOnlyError,
     TableNotFoundError,
-    _warn_coerce,
 )
+from comken.exceptions.warning import _warn_coerce
 
 logger = logging.getLogger(__name__)
 

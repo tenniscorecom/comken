@@ -31,11 +31,10 @@ from pathlib import Path
 from comken.exceptions import InvalidReportUrlError, SalesforceReportIdNotFoundError
 from comken.toolbox.master_table import MasterRow, column
 
-# URL 解析は `comken.toolbox.salesforce._url` の共通実装を使う。
+# URL 解析は `comken.toolbox.salesforce.report` の `report_id_from_url` を使う。
 # master.py は `requests` に依存しない（BO 環境でも動かせる）ため、
-# OAuth 通信系を import しない `_url` だけを参照する。
-# 仕様を変えたら **`_url.py` を** 直すこと。
-from comken.toolbox.salesforce._url import report_id_from_url
+# OAuth 通信系を import しない report.py の URL 解析だけを参照する
+from comken.toolbox.salesforce.report import report_id_from_url
 
 # 「実行方式」に書ける値
 SCHEDULED = "定期"

@@ -26,8 +26,8 @@ from comken.exceptions import (
     MacroError,
     RowTransferError,
     SheetNotFoundError,
-    _warn_coerce,
 )
+from comken.exceptions.warning import _warn_coerce
 
 
 def test_excel_formula_error_is_not_exposed() -> None:

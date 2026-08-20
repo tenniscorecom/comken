@@ -4,7 +4,7 @@
 純粋な部品だけを置く。logger / state / config / clock / text / data / files などが
 ここに入る。外に触る道具は toolbox に置く。
 
-利用者は、``comken`` 直下にない部品を ``from comken.core import ...`` で取る。
+利用者は、``comken`` 直下にない30個の部品を ``from comken.core import ...`` で取る。
 ``comken`` 直下と ``comken.core`` に同じ名前は公開しない。
 
 ただし toolbox / services パッケージの内部実装（filesystem / レジストリ等を
@@ -38,7 +38,6 @@ from comken.core.text import strip_spaces as strip_spaces
 from comken.core.timer import Timer as Timer
 from comken.core.timer import measure as measure
 from comken.core.wait import wait_for_file as wait_for_file
-from comken.core.wait import wait_minutes as wait_minutes
 from comken.core.wait import wait_seconds as wait_seconds
 from comken.core.wait import wait_until as wait_until
 from comken.core.wait import wait_until_stable as wait_until_stable
@@ -68,7 +67,6 @@ __all__ = [
     "today",
     "unzip",
     "wait_for_file",
-    "wait_minutes",
     "wait_seconds",
     "wait_until",
     "wait_until_stable",

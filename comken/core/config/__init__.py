@@ -26,10 +26,6 @@ config.ini を読み込み、config.SECTION.KEY の形式でアクセスでき�
     Config() を呼ぶたびに補完用のスタブ（src/config.pyi）が自動更新されるため、
     一度スクリプトを実行すれば config.SECTION.KEY が型付きで補完されるようになる。
 
-    まだ一度も実行していない状態で先にスタブだけ作りたい場合は手動で生成する:
-
-        python -m comken config
-
 ※ ブラウザの設定は config.ini ではなく BrowserOptions のインスタンス
    （src/browser_options.py）で行う。config はブラウザ設定を持たない。
 """

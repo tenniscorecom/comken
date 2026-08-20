@@ -6,6 +6,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
+.pytest-tmp/         # pytest --basetemp で使う作業ディレクトリ（権限エラーを避けるため手動指定）
 *.pyc
 .venv/
 venv/

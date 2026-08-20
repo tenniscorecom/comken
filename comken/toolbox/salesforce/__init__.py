@@ -53,7 +53,7 @@ from comken.toolbox.salesforce.metrics import (
 )
 from comken.toolbox.salesforce.report import ReportApi
 
-# `requests` を直接 import するモジュールは遅延ロードする。`_url` のような
+# `requests` を直接 import するモジュールは遅延ロードする。`report` のような
 # requests 非依存モジュールだけ使う場合（BO 環境）にパッケージ全体を
 # import 可能にするため
 _LAZY_TARGETS: dict[str, str] = {

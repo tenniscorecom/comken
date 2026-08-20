@@ -1,4 +1,10 @@
-"""comken/core/files/base.py — 1つのファイルを扱うクラスに共通する薄い基底クラス。"""
+"""comken/core/files/base.py — 1つのファイルを扱うクラスに共通する薄い基底クラス。
+
+ExcelBase（``toolbox/excel/base.py``）・CsvBase（``toolbox/csv/base.py``）など、
+「1つのファイルを読み書きするクラス」の共通祖先。サブクラス側で ``SUFFIXES``
+を宣言しておくと、``__init__`` で拡張子を自動で検証して
+``UnsupportedFileSuffixError`` を投げる。
+"""
 
 from pathlib import Path
 
@@ -6,7 +12,15 @@ from comken.exceptions.file import UnsupportedFileSuffixError
 
 
 class FileBase:
-    """パスの正規化と拡張子検証だけを提供する。"""
+    """パス正規化と拡張子検証だけを提供する基底クラス。
+
+    サブクラスで ``SUFFIXES`` に許可する拡張子のタプルを宣言する
+    （空タプルのままなら検証しない）。``__init__`` で ``path`` を ``Path`` に直し、
+    拡張子が ``SUFFIXES`` に無ければ ``UnsupportedFileSuffixError`` を投げる。
+
+    利用側は ``self._path`` ではなく ``self.path`` プロパティで読む。
+    （``_path`` は将来 Path 以外の形に差し替える余地として、サブクラスから触らないため）
+    """
 
     SUFFIXES: tuple[str, ...] = ()
 

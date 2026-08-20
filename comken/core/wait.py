@@ -14,15 +14,17 @@
         poll_interval=1.0,
     )
 
-``wait_seconds()`` / ``wait_minutes()`` / ``wait_until()`` は「時間 Sleep /
-条件ポーリング / タイムアウト管理」の汎用プリミティブで、ファイルと無関係。
+``wait_seconds()`` / ``wait_until()`` は「時間 Sleep / 条件ポーリング /
+タイムアウト管理」の汎用プリミティブで、ファイルと無関係。
 ``wait_for_file`` はその上に特化させたラッパーだが、``core.wait`` に置くことで
 「待つ系が 2 箇所に散らばる」状態を防ぐ (``core.files.wait`` は作らない)。
 
 **全関数化した経緯 (2026-08-19・命名レビュー)**: 以前は `wait` クラス
 （staticmethod のみ）に `seconds` / `minutes` / `until` を入れていたが、
 クラスと関数が混在し、`wait.seconds()` / `wait_for_file()` のように呼び分けが
-分かりにくかった。v1.0.0 で 5 関数に統一し、補完候補を `wait_` で揃えた。
+分かりにくかった。v1.0.0 で4関数に統一し、補完候補を `wait_` で揃えた。
+`wait_minutes` は `time.sleep(n * 60)` の1行ラッパーで、利用が無かったため
+含めていない。`wait_seconds(n * 60)` で代替する。
 """
 
 import logging
@@ -34,7 +36,7 @@ from comken.core.timer import measure
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["wait_for_file", "wait_minutes", "wait_seconds", "wait_until", "wait_until_stable"]
+__all__ = ["wait_for_file", "wait_seconds", "wait_until", "wait_until_stable"]
 
 
 def wait_seconds(n: float) -> None:
@@ -44,15 +46,6 @@ def wait_seconds(n: float) -> None:
         n: 待機秒数。小数も指定できる（例: 0.5）。
     """
     time.sleep(n)
-
-
-def wait_minutes(n: float) -> None:
-    """``n`` 分待機する。
-
-    Args:
-        n: 待機分数。小数も指定できる（例: 0.5 → 30秒）。
-    """
-    time.sleep(n * 60)
 
 
 def wait_until(condition: Callable[[], bool], timeout: float = 60, interval: float = 1.0) -> bool:

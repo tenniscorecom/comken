@@ -22,8 +22,8 @@ from comken.exceptions import (
     InvalidTableNameError,
     TableAlreadyExistsError,
     TableNotFoundError,
-    _warn_coerce,
 )
+from comken.exceptions.warning import _warn_coerce
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +178,11 @@ class Sheet:
                 continue
             lookup_row = lookup.get(lookup_key)
             if lookup_row is None:
-                logger.debug("%d行目: キー「%s」が lookup に存在しません", row, key_value)
+                logger.debug(
+                    "%d行目: キー型 %s が lookup に存在しません",
+                    row,
+                    type(key_value).__name__,
+                )
                 continue
             for source, destination_column in destination_columns.items():
                 self.ws.cell(row=row, column=destination_column).value = lookup_row[source]

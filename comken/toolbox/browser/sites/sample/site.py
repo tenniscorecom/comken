@@ -20,7 +20,7 @@ from comken.toolbox.browser.sites.sample.pages.login_page import LoginPage
 
 
 class SampleBrowserOptions(BrowserOptions):
-    """sample_login 用のブラウザオプション。
+    """サンプルサイト用のブラウザオプション。
 
     デフォルト（BrowserOptions）から変更したいものだけ上書きする。
     全オプションのデフォルト値は comken/toolbox/browser/options.py を参照。

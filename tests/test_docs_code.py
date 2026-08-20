@@ -14,10 +14,13 @@ import export_for_chat
 import pytest
 
 _ROOT = Path(__file__).resolve().parent.parent
+# pytest --basetemp で指定した作業ディレクトリ（.pytest-tmp/）はテスト用の一時領域で、
+# リポジトリのドキュメントとしては存在しないので走査対象外にする。
+# test_batch_files.py と同じ除外セットを使う。
 _DOCS = [
     path
     for path in _ROOT.rglob("*.md")
-    if ".git" not in path.parts and path.name != "CODEX_TASK.md"
+    if ".git" not in path.parts and ".pytest-tmp" not in path.parts and path.name != "CODEX_TASK.md"
 ]
 
 _CODE_BLOCK = re.compile(r"```python\n(.*?)```", re.DOTALL)

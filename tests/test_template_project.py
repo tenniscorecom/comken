@@ -299,60 +299,28 @@ def test_no_relative_imports_in_generated_src(generated: Path) -> None:
     assert not offenders, f"src/ 内に相対 import: {offenders}"
 
 
-# ── 8.5 雛形が sites/ 完結型で、見本として pages/ を含む ────────────────────────
+# ── 8.5 雛形に src/sites/ を含めない（2026-08-20 Phase 5 の最小化） ────────────
 
 
-def test_example_site_has_pages_directory_and_imports_it(generated: Path) -> None:
-    """``src/sites/example/site.py`` と ``src/sites/example/pages/login_page.py`` が
-    実在し、``site.py`` が ``pages`` から import していること、
-    かつ ``NAME`` / ``BASE_URL`` / ``OWNER`` と ``go_〇〇()`` の見本が
-    ``site.py`` に残っていること。
+def test_template_has_no_src_sites_directory(generated: Path) -> None:
+    """雛形に ``src/sites/`` が含まれていないこと。
 
-    「何を防いでいるか」: 雛形が ``sites/<サイト名>/`` 完結型であることを利用者に
-    見せるには、見本の ``site.py`` が ``pages`` を import していないと
-    「画面クラスはどう書くの？」が伝わらない。``login_page.py`` が無いと
-    書き写すべき最小形が目の前に残らない（コメントだけだと半年後に消える）。
-    ``NAME`` / ``BASE_URL`` / ``OWNER`` と ``go_〇〇()`` が無いと、見本が
-    空っぽになってコピーするものがなくなる（2026-08-18: 起動オプションを
-    雛形から外した結果、見本がスカスカになる回帰をここで防ぐ）。
+    「何を防いでいるか」: 2026-08-20 の Phase 5 で雛形最小化のため
+    ``src/sites/example/`` 配下のサンプルを削除した。ブラウザ操作を使うか
+    どうかはプロジェクトごとに違うので、雛形には入れず、必要になった時点で
+    ``docs/browser.md`` を参照してプロジェクト側で追加する運用にした。
+    ここに ``src/sites/`` が復活する回帰をここで防ぐ。
+
+    ブラウザ操作の見本（書き方・最小形）はライブラリ側の
+    ``comken/toolbox/browser/sites/sample/`` に残っているので、雛形側で持つ
+    必要はない。
     """
-    site_py = generated / "src" / "sites" / "example" / "site.py"
-    login_py = generated / "src" / "sites" / "example" / "pages" / "login_page.py"
-    options_py = generated / "src" / "sites" / "example" / "options.py"
-    assert site_py.is_file(), (
-        f"雛形に {site_py.relative_to(generated)} が無い"
-        "（sites/<サイト名>/site.py の形に揃えること）"
+    sites_dir = generated / "src" / "sites"
+    assert not sites_dir.exists(), (
+        f"雛形に {sites_dir.relative_to(generated)} が残っている"
+        "（Phase 5 で雛形最小化のため削除済み。再度入れたい場合は docs/browser.md "
+        "を参照し、ブラウザ操作を使うプロジェクト側で個別に追加すること）"
     )
-    assert login_py.is_file(), (
-        f"雛形に {login_py.relative_to(generated)} が無い"
-        "（画面クラスの最小見本を pages/ に置くこと）"
-    )
-    assert not options_py.is_file(), (
-        f"雛形に {options_py.relative_to(generated)} が残っている"
-        "（設定は site.py 内に書く。options.py を別ファイルで作らない）"
-    )
-
-    site_text = _read(site_py)
-    assert re.search(
-        r"^from\s+\S+\.sites\.example\.pages(\.\S+)?\s+import\s+",
-        site_text,
-        re.MULTILINE,
-    ), (
-        f"{site_py.relative_to(generated)} が src.sites.example.pages から "
-        "import していない（pages/ 配下を見本として使えない状態）"
-    )
-    # 雛形の ExampleSite から書き写すべき最小形がそろっているか。
-    # OPTIONS は省略可（既定で動く）なので、ここでは要求しない。
-    for attr in ("NAME", "BASE_URL", "OWNER"):
-        assert re.search(
-            rf"^\s*{attr}\s*=",
-            site_text,
-            re.MULTILINE,
-        ), f"{site_py.relative_to(generated)} に {attr} の定義が無い（見本がスカスカになっている）"
-    assert re.search(
-        r"def\s+go_\w+\s*\(\s*self",
-        site_text,
-    ), f"{site_py.relative_to(generated)} に go_〇〇() の見本が無く、遷移図の書き方が伝わらない"
 
 
 # ── 9. .vscode/settings.json と 実行.bat が同じ comken の場所を指す ─────────────

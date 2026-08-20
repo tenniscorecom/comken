@@ -729,19 +729,6 @@ Raises:
     NotADirectoryError: ``folder`` にフォルダではなくファイルを渡した場合。
     FileNotFoundError: ``timeout`` 秒経っても該当ファイルが見つからなかった場合。
 
-### `wait_minutes`
-
-```text
-def wait_minutes(n: float) -> None:
-```
-
-#### 説明
-
-``n`` 分待機する。
-
-Args:
-    n: 待機分数。小数も指定できる（例: 0.5 → 30秒）。
-
 ### `wait_seconds`
 
 ```text
@@ -2163,8 +2150,7 @@ config.ini の必要な節がない
     基準にするように変えてから、起動方法によって別の config.ini を読む
     ことがあるため）。パスが正しければ、表示されたセクション名を
     config.ini に追加する。**見た目では原因が分からない場合**（行頭に
-    空白が混入していた等）は ``python -m comken config --check`` で
-    構造上の問題点を指摘してもらえる
+    空白が混入していた等）はエディタで行頭空白・全角スペースを確認する
 
 #### `__init__`
 
@@ -2647,7 +2633,7 @@ class SalesforceReportIdNotFoundError(SalesforceError):
 管理表にはレポートの URL をそのまま貼れるようにしてあるが、
 貼られたものが Salesforce のレポート URL でないと ID を取り出せない。
 
-発生箇所: comken.toolbox.salesforce.direct.report.report_id_from_url() /
+発生箇所: comken.toolbox.salesforce.report.report_id_from_url() /
           comken.services.salesforce_downloader.master.report_id_from_url()
 
 対処:
@@ -4066,6 +4052,7 @@ def page_source(self) -> str:
 #### `save_screenshot`
 
 ```text
+@measure
 def save_screenshot(self, prefix: str='screenshot') -> Path:
 ```
 
@@ -4950,7 +4937,7 @@ class SampleBrowserOptions(BrowserOptions):
 
 #### 説明
 
-sample_login 用のブラウザオプション。
+サンプルサイト用のブラウザオプション。
 
 デフォルト（BrowserOptions）から変更したいものだけ上書きする。
 全オプションのデフォルト値は comken/toolbox/browser/options.py を参照。
@@ -5377,6 +5364,7 @@ Args:
 #### `write_rows`
 
 ```text
+@measure
 def write_rows(self, rows: list[dict]) -> None:
 ```
 
@@ -5392,6 +5380,7 @@ Args:
 #### `append_row`
 
 ```text
+@measure
 def append_row(self, row: dict) -> None:
 ```
 
@@ -5410,6 +5399,7 @@ Notes:
 #### `append_rows`
 
 ```text
+@measure
 def append_rows(self, rows: list[dict]) -> None:
 ```
 

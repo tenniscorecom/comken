@@ -104,19 +104,18 @@ for change in result.changed:
 `time.sleep` の代わりに単位を明示して書ける。「条件が満たされるまで待つ」もループを書かずに済む。
 
 ```python
-from comken.core import wait
+from comken.core import wait_seconds, wait_until
 
-wait.seconds(3)     # 3秒待つ
-wait.seconds(0.5)   # 0.5秒待つ
-wait.minutes(1)     # 1分待つ
+wait_seconds(3)     # 3秒待つ
+wait_seconds(0.5)   # 0.5秒待つ
 
 # 条件が True になるまで待つ（デフォルト: 最大60秒・1秒間隔）
-ok = wait.until(lambda: Path(r"C:\作業\result.xlsx").exists())
+ok = wait_until(lambda: Path(r"C:\作業\result.xlsx").exists())
 if not ok:
     raise TimeoutError("ファイルが生成されませんでした")
 
 # タイムアウト・間隔を変える場合
-ok = wait.until(lambda: 条件, timeout=120, interval=2)
+ok = wait_until(lambda: 条件, timeout=120, interval=2)
 ```
 
 ### テキスト正規化（normalize / strip_spaces / remove_spaces)

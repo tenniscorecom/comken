@@ -9,7 +9,7 @@ main.py — エントリポイント
 
 import logging
 
-from comken import config, setup_logging
+from comken import config, debug, setup_logging
 from comken.exceptions import ComkenError
 
 from src.run import run
@@ -31,7 +31,8 @@ if __name__ == "__main__":
         # 使う項目を増やしたらここにも足す（消しても動くが、エラーが遅くなる）
         config.require("FILES.OUTPUT_FOLDER")
 
-        main()
+        with debug():
+            main()
     except ComkenError as e:
         # comken のエラーはメッセージに対処法が入っている（docs/ERRORS.md も参照）
         logger.error("処理を中断しました: %s", e)

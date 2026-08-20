@@ -167,6 +167,7 @@ class BrowserSession:
         with self._operating("page_source"):
             return self._require_driver().page_source
 
+    @measure
     def save_screenshot(self, prefix: str = "screenshot") -> Path:
         """今の画面を logs/ に PNG で保存し、そのパスを返す。
 

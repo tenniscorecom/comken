@@ -251,7 +251,9 @@ src/
 サイト名を2箇所に書く形にすると、増やすときも消すときも2箇所を触ることになる。
 **サイトを1つ消すなら、フォルダを1つ消せば終わり**にしておく。
 
-`comken init` が作る雛形は**最初からこの形**になっている（`src/sites/example/`）。
+`comken init` が作る雛形には `src/sites/` は**含まれていない**。ブラウザ操作を使う
+プロジェクトでは、この節の形に合わせて `src/sites/<サイト名>/` を自分で追加する
+（書き方の見本はライブラリ側の `comken/toolbox/browser/sites/sample/` にある）。
 サイトを増やすには、`src/sites/<サイト名>/` を隣にもう1つ作るだけ。
 
 **サイトクラスと画面共通クラスは別物。** サイトクラスは「どのサイトか」を表し、
@@ -806,9 +808,8 @@ class LoginPage(SitePage):
 
 ### サンプル実装
 
-`comken/toolbox/browser/sites/sample/` にサイト実装の見本があり、
-`examples/sample_login/` から import して動かせる
-（他モジュールのサンプルは examples/README.md 参照）。
+`comken/toolbox/browser/sites/sample/` にサイト実装の見本がある
+（実行スクリプトの例は examples/README.md 参照）。
 
 **上の「1サイト＝1フォルダ」で書いてある**ので、形の見本としてそのまま真似できる。
 
@@ -819,22 +820,12 @@ comken/toolbox/browser/sites/sample/
     ├── app_page.py         # このサイトの画面に共通
     ├── login_page.py       # ログイン画面
     └── secure_page.py      # ログイン後の画面
-
-examples/sample_login/
-├── config.ini.example     # 設定ファイルのテンプレート
-├── config.py              # config のシングルトン（config = Config()）
-└── run.py                 # ライブラリ内の SampleSite を使う実行スクリプト
 ```
 
 プロジェクト側でサイトを増やすときは `sites/<サイト名>/` をもう1つ作るだけで、
 既にあるサイトのファイルには触らない。
 
-実行:
-
-```bash
-# リポジトリのルートで
-python -m examples.sample_login.run
-```
+実行スクリプトの例は `examples/README.md` を参照（Edge + msedgedriver が必要）。
 
 ---
 
@@ -843,4 +834,3 @@ python -m examples.sample_login.run
 - [公開 API](自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外
 - [エラー対応ガイド](ERRORS.md#ブラウザedge-自動操作のエラー) — エラー名から対処を引く
 - `comken/toolbox/browser/sites/sample/` — サイト実装の見本
-- `examples/sample_login/` — `SampleSite` を使う実行例

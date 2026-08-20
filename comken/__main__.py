@@ -9,7 +9,6 @@
     python -m comken sf report --report-id 00O...    レポートを実行
     python -m comken cred import 認証情報.json        認証情報を取り込み
     python -m comken report init レポート管理表.xlsx  管理表の雛形
-    python -m comken config                          補完用スタブ生成
 
 ``sf`` / ``cred`` は ``salesforce`` / ``credentials`` の別名
 （``argparse`` の ``add_parser(..., aliases=[...])``）。
@@ -75,7 +74,7 @@ def _build_parser() -> argparse.ArgumentParser:
     salesforce = subparsers.add_parser(
         "salesforce",
         aliases=["sf"],
-        help="Salesforce 接続と資格情報の確認 → check / report / app / rotate",
+        help="Salesforce 接続と資格情報の確認 → check / report / rotate",
         add_help=False,
     )
     salesforce.set_defaults(run=_run_salesforce, _prog="python -m comken sf")
@@ -96,14 +95,6 @@ def _build_parser() -> argparse.ArgumentParser:
         add_help=False,
     )
     report.set_defaults(run=_run_report)
-
-    # config
-    config_p = subparsers.add_parser(
-        "config",
-        help="config.ini からエディタ補完用スタブ（.pyi）を生成 / 診断（--check）",
-        add_help=False,
-    )
-    config_p.set_defaults(run=_run_config)
 
     return parser
 
@@ -206,17 +197,6 @@ def _run_report(_args: argparse.Namespace, remaining: list[str]) -> int:
     from comken.services.salesforce_downloader.cli import main as report_main
 
     return report_main(remaining)
-
-
-def _run_config(_args: argparse.Namespace, remaining: list[str]) -> int:
-    """``python -m comken config`` の本体。
-
-    旧 ``python -m comken.core.config`` とまったく同じ動作（補完スタブ生成）。
-    ``--check <path>`` を付けたときだけ診断に切り替わる（``config_main`` 側に渡す）。
-    """
-    from comken.core.config.cli import main as config_main
-
-    return config_main(remaining)
 
 
 if __name__ == "__main__":

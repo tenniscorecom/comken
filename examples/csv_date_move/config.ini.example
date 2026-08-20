@@ -9,7 +9,3 @@ OUTPUT_FOLDER = C:\作業\output
 DATE_COLUMN = 日付
 DATE_FORMAT = %Y/%m/%d
 PATTERN = *.csv
-
-[RUN]
-; 本番前は true のまま実行し、ログで移動対象を確認する。
-DRY_RUN = true

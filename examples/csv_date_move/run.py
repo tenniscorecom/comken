@@ -76,8 +76,7 @@ def move_matching_files(
 
 def main() -> None:
     config = Config(CONFIG_PATH)
-    # 本番前は DRY_RUN=true にして、移動せずログだけで対象を確認する。
-    with dry_run(config.RUN.DRY_RUN):
+    with dry_run():
         move_matching_files(
             config.FILES.INPUT_FOLDER,
             config.FILES.OUTPUT_FOLDER,

@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 
 from comken.constants import Encoding
+from comken.core.timer import measure
 from comken.runtime import dry_run_log, is_dry_run
 from comken.toolbox.csv.base import CsvBase
 
@@ -80,6 +81,7 @@ class CsvWriter(CsvBase):
         writer.writerows(rows)
         buffer.getvalue().encode(self._encoding)
 
+    @measure
     def write_rows(self, rows: list[dict]) -> None:
         """ファイルを新規作成（または上書き）して全行を書き込む。
 
@@ -109,6 +111,7 @@ class CsvWriter(CsvBase):
         finally:
             tmp_path.unlink(missing_ok=True)
 
+    @measure
     def append_row(self, row: dict) -> None:
         """既存ファイルの末尾に1行追記する。
 
@@ -132,6 +135,7 @@ class CsvWriter(CsvBase):
                 writer.writeheader()
             writer.writerow(row)
 
+    @measure
     def append_rows(self, rows: list[dict]) -> None:
         """既存ファイルの末尾に複数行追記する。
 

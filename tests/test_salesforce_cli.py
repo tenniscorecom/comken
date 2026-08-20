@@ -17,22 +17,28 @@ def _client(**kwargs) -> MagicMock:
 
 class TestPrintShape:
     def test_hides_secret_values(self, capsys):
-        """応答に含まれる秘密の値を画面へ出さない。"""
+        """応答に含まれる秘密の値を画面へ出さない。
+
+        ``sf app`` は v1.0.0 で削除済み。``_print_shape`` は
+        ``sf rotate --stage-only`` の staged 作成応答で確認する
+        （``--stage-only`` は staged POST までで止めるため、副作用は限定される）。
+        """
         client = _client()
-        client.request.return_value = (
-            {"id": "STG1", "consumerKey": "KEY-VALUE", "consumerSecret": "SECRET-VALUE"},
-            {},
-        )
+        client.request.side_effect = [
+            ({"consumerId": "CID"}, {}),
+            ({"id": "STG1", "consumerKey": "KEY-VALUE", "consumerSecret": "SECRET-VALUE"}, {}),
+        ]
         with patch("comken.toolbox.salesforce.cli.Sandbox", return_value=client):
             main(
                 [
-                    "app",
+                    "rotate",
                     "--domain",
                     "https://x.my.salesforce.com",
                     "--prefix",
                     "site_a",
                     "--app-id",
                     "1CE",
+                    "--stage-only",
                 ]
             )
 
@@ -137,3 +143,23 @@ class TestErrors:
 
         assert code == 1
         assert "エラー:" in capsys.readouterr().err
+
+
+class TestCheck:
+    def test_only_limits_no_app_id_argument(self, capsys):
+        """``sf check`` は ``--app-id`` を受け取らず、/limits の GET だけ実行する。
+
+        v1.0.0 で ``--app-id`` 経路を削除したため、``--app-id`` を渡すと argparse が
+        「unrecognized arguments: --app-id」で exit code 2 を返す。
+        """
+        client = _client()
+        client.request.return_value = ({}, {})
+        with patch("comken.toolbox.salesforce.cli.Sandbox", return_value=client):
+            code = main(["check", "--domain", "https://x", "--prefix", "site_a"])
+
+        assert code == 0
+        methods_paths = [(call.args[0], call.args[1]) for call in client.request.call_args_list]
+        assert methods_paths == [("GET", client.data_path("/limits"))]
+        out = capsys.readouterr().out
+        assert "接続できました" in out
+        assert "consumerId" not in out

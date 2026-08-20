@@ -36,12 +36,10 @@ comken の使い方を「動くコード」で覚えるためのサンプル。
 | 1 | csv_to_excel_report | CSV を読んで Excel レポートを作る | CsvReader / ExcelWriter / Sheet / Color | なし（同梱データで動く） |
 | 2 | excel_key_transfer | CSV を参照して Excel に転記（XLOOKUP 的転記と SUMIF 的集計転記） | CsvReader.index / group_by / transfer_by_letter / diff_rows | なし（データを自動生成） |
 | 3 | csv_diff_report | 昨日と今日の CSV の差分を色付き Excel レポートに | diff_rows / CsvWriter / set_fill | なし（データを自動生成） |
-| 4 | sample_login | ライブラリ内の `SampleSite` を使うブラウザ自動化（Page Object Model の一式） | Browsers / Page / Locator | Edge + msedgedriver |
-| 5 | csv_date_move | CSV の日付列とファイル名の日付が一致したファイルを移動 | CsvReader.first / date_in_name / dry_run | config.ini の作成 |
-| 6 | daily_batch_template | 日次バッチの流れ（入力を探す → 加工 → Excel 出力） | comken.toolbox.rpa / FileFinder / ExcelWriter | config.ini + 社内ライブラリ |
-| 7 | access_export | Access マクロで整形 → CSV 出力 → Excel 帳票 | AccessDatabase / CsvReader / ExcelWriter | Microsoft Access + パス設定 |
-| 8 | outlook_inbox | 受信メール → CSV → 結果メールの下書き | Outlook / MailMessage / CsvWriter | Classic Outlook |
-| 9 | copy_then_macro | 当日ファイルをコピー → Excel マクロ → 配布 | FileFinder / ExcelWriter.run_macro / copy_file | Microsoft Excel + パス設定 |
+| 4 | csv_date_move | CSV の日付列とファイル名の日付が一致したファイルを移動 | CsvReader.first / date_in_name / dry_run | config.ini の作成 |
+| 5 | daily_batch_template | 日次バッチの流れ（入力を探す → 加工 → Excel 出力） | comken.toolbox.rpa / FileFinder / ExcelWriter | config.ini + 社内ライブラリ |
+| 6 | outlook_inbox | 受信メール → CSV → 結果メールの下書き | Outlook / MailMessage / CsvWriter | Classic Outlook |
+| 7 | copy_then_macro | 当日ファイルをコピー → Excel マクロ → 配布 | FileFinder / ExcelWriter.run_macro / copy_file | Microsoft Excel + パス設定 |
 
 ### 実行方法
 
@@ -51,7 +49,7 @@ python -m examples.csv_to_excel_report.run
 ```
 
 - 1〜3 は外部システム・ネット接続なしでそのまま動く。出力は各フォルダの `output/` に入る
-- 4〜10 は各フォルダの Python ファイル冒頭に書いてある事前準備を済ませてから実行する
+- 4〜8 は各フォルダの Python ファイル冒頭に書いてある事前準備を済ませてから実行する
 
 > **run.py という名前について**: 実プロジェクトのエントリポイントは規約どおり `main.py`（CONVENTIONS.md 参照）。
 > examples 内は複数のサンプルが同居し `python -m examples.<フォルダ名>.run` とモジュール実行するため、
@@ -71,5 +69,5 @@ VS Code のターミナルで **`python -m comken init プロジェクト名`** 
 エラー処理・ログ・config.ini の書き方が入っている。
 
 ブラウザ自動化のツールなら、`comken/toolbox/browser/sites/sample/pages/` にある
-`SampleSite` の Page Object Model 構成を合わせて使う。`sample_login` は、そのライブラリ内の
-サンプルサイトを import して動かす実行例になっている。
+`SampleSite` の Page Object Model 構成を合わせて使う。サンプルサイトの
+動かし方は `docs/browser.md` を参照。

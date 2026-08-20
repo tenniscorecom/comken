@@ -5,7 +5,6 @@ r"""comken/toolbox/salesforce/cli.py — 接続と資格情報ローテーショ
 
     python -m comken sf check
     python -m comken sf report --report-id 00O...
-    python -m comken sf app    --app-id 1CE...
     python -m comken sf rotate --app-id 1CE... --stage-only
 
 **このモジュールは `comken/__main__.py` から呼ばれる。** `main(argv)` を直接
@@ -20,14 +19,13 @@ client_id / client_secret は **DPAPI に登録したものを読む**。コマ�
 
 External Client App の consumer secret を REST API から回せるか（＝ローテーションを
 自分たちで回せるか）は組織の設定に依存し、レスポンスの項目名も公開資料で確認できていない。
-そのため段階を分けてある。`app` と `--stage-only` は Salesforce 側の
-切り替えを起こさないので、まずそこまでで形を確かめる。
+そのため段階を分けてある。`--stage-only` は Salesforce 側の切り替えを起こさないので、
+まずそこまでで形を確かめる。
 
 | コマンド | 何が起きるか |
 |---|---|
-| `check` | 接続するだけ。副作用なし |
+| `check` | `/limits` の GET で接続確認（副作用なし） |
 | `report` | レポートを実行して行数と列名を表示する。読み取りだけ |
-| `app` | 資格情報を取得して項目名を表示するだけ。副作用なし |
 | `rotate --stage-only` | **新しい secret が発行される**が、切り替えない |
 | `rotate` | DPAPI へ保存し Salesforce 側を切り替える。**旧 secret は猶予後に無効** |
 """
@@ -80,11 +78,6 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     report.set_defaults(run=_run_report)
 
-    app = subparsers.add_parser("app", help="ECA の資格情報を取得して項目名を見る（副作用なし）")
-    _add_common_arguments(app)
-    app.add_argument("--app-id", required=True, help="External Client App の ID")
-    app.set_defaults(run=_run_app)
-
     rotate = subparsers.add_parser("rotate", help="資格情報をローテーションする")
     _add_common_arguments(rotate)
     rotate.add_argument("--app-id", required=True, help="External Client App の ID")
@@ -112,6 +105,13 @@ def _open(args: argparse.Namespace) -> Sandbox:
 
 
 def _run_check(args: argparse.Namespace) -> None:
+    """``/limits`` を GET して接続を確認する（副作用なし）。
+
+    ``--app-id`` で ECA の consumerId まで踏み込む経路は v1.0.0 で削除した。
+    ECA の資格情報 API は ``client_id`` / ``client_secret`` / ``refresh_token``
+    を返さないため、SF 側の実際の値は画面で確認するしかなく、CLI で
+    ``consumerId`` だけ取れても用途が限られるため。
+    """
     with _open(args) as sf:
         sf.request("GET", sf.data_path("/limits"), component=ROTATION_COMPONENT)
         print(f"接続できました（API v{sf.API_VERSION}）")
@@ -129,21 +129,6 @@ def _run_report(args: argparse.Namespace) -> None:
         print(f"  {column}")
     for row in rows[: args.rows]:
         print(f"  {row}")
-
-
-def _run_app(args: argparse.Namespace) -> None:
-    with _open(args) as sf:
-        body, _ = sf.request(
-            "GET",
-            sf.data_path(f"/apps/oauth/credentials/{args.app_id}"),
-            component=ROTATION_COMPONENT,
-        )
-        print("資格情報の応答:")
-        _print_shape(body)
-        # 実際にローテーションで使う関数に通し、この組織の応答で動くかを確かめる
-        from comken.toolbox.salesforce.rotation import _consumer_id_of
-
-        print(f"\nconsumerId を取り出せました: {_consumer_id_of(body)}")
 
 
 def _run_rotate(args: argparse.Namespace) -> None:

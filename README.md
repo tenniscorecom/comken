@@ -57,7 +57,7 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
   `config` / `Config`（設定）、`setup_logging`（ログ）、実行モードの2関数
   （`dry_run` / `debug`）
 - **部品は `from comken.core import ...` から取る。** ファイル検索・日時・文字列・差分・
-  計測など24個（`FileFinder` / `copy_file` / `project_dir` / `today` / `Timer` / `retry` など）
+  計測など30個（`FileFinder` / `copy_file` / `project_dir` / `today` / `Timer` / `retry` など）
 - **機能は `from comken.toolbox.excel import ExcelWriter` のように機能パッケージを明示する**
   （どの機能群に依存しているかが import 行で分かる）
 - **書くときは `from comken import X` が第一選択。** そこに無いものだけ `from comken.core import Y`
@@ -107,7 +107,7 @@ import の書き方は上の「[使うときの約束](#使うときの約束)�
 | [Salesforce認証の判断根拠](docs/開発/salesforce-authentication.md) | ECA・Refresh Token Flow を既定にした理由と公式資料 |
 | [credentials（DPAPI）](docs/credentials.md) | パスワード・client_secret の暗号化保存（Windows ユーザーに紐付く） |
 | [祝日判定](docs/holidays.md) | 内閣府の祝日 CSV（CP932）+ 社内管理表の会社休日をマージして営業日判定 |
-| [core（部品）](docs/core.md) | `from comken.core import ...` で取る24個。ファイル検索・操作・圧縮・ファイル名の組み立て／データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時 |
+| [core（部品）](docs/core.md) | `from comken.core import ...` で取る30個。ファイル検索・操作・圧縮・ファイル名の組み立て／データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時 |
 
 ## 定数クラス一覧
 
@@ -376,7 +376,7 @@ folder = local_config.REPORT.OUTPUT_FOLDER
 > **補完（Pylance）:** config を初めて読むと、config.ini から補完用スタブ
 > `typings/comken/core/`（config.pyi）と `typings/comken/__init__.pyi` が自動生成される。
 > VS Code + Pylance で `config.SECTION.KEY` が型付き補完される（typings/ は .gitignore 推奨）。
-> ツール実行前にスタブだけ先に作りたいときは `python -m comken config`。
+> スタブの手動生成 CLI（`python -m comken config`）は v1.0.0 で削除済み。Config() を一度呼ぶだけで自動更新される。
 
 明示的にインスタンスを持ちたい場合（テストや複数 ini の読み分けに）:
 
@@ -458,27 +458,10 @@ for ループが文字単位になる事故が起きる）。
 （config.pyi + `__init__.pyi`）が自動生成される。VS Code + Pylance がこれを読み、
 セクション・キーが型付きで補完される（config.ini を変更すると次の実行で更新される）。
 
-まだ一度も実行していない状態で先にスタブだけ作りたい場合は手動で生成できる:
-
-```
-python -m comken config
-```
+まだ一度も実行していない状態で先にスタブだけ作りたい場合は `from comken import config`
+を1度実行すれば自動生成される（`Config()` 初期化時に `typings/comken/` が更新される）。
 
 生成された `typings/` は手で編集せず、`.gitignore` に含める（自動生成物）。
-
-**config.ini がおかしいときは `--check` で診断する。**
-
-`[FILES]` が config.ini にあるはずなのに `ConfigSectionNotFoundError` が出る、
-のような事故は ini の見た目では原因が分からないことが多い（行頭に空白が入った、
-`[FILES ]` のように内側に空白がある、等）。`--check` を付けると構造上の
-問題点を **行番号付きで** 指摘してくれる（**値は出力しない**）:
-
-```
-python -m comken config --check                 # 同じフォルダの config.ini を診断
-python -m comken config --check C:\作業\config.ini   # 別フォルダの config.ini を診断
-```
-
-見つかった指摘は 1 件以上あれば終了コード 1、なければ 0 を返す。
 
 なお**ブラウザの設定は config.ini には書かない**。`BrowserOptions` のインスタンス
 （`src/browser_options.py`）で行う（Browser を参照）。
@@ -558,7 +541,7 @@ graph LR
         runtime["runtime\n実行モード"]
         deprecation["deprecation\n旧名の警告"]
     end
-    subgraph L1["comken.core — 外を触らない部品（24個）"]
+    subgraph L1["comken.core — 外を触らない部品（30個）"]
         config["config\n設定ファイル"]
         logger["logger\nログ設定"]
         state["state\n状態の永続化"]

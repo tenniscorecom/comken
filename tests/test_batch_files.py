@@ -14,7 +14,12 @@ from pathlib import Path
 import pytest
 
 _ROOT = Path(__file__).resolve().parent.parent
-_BAT_FILES = sorted(path for path in _ROOT.rglob("*.bat") if ".git" not in path.parts)
+# `.pytest-tmp/` は pytest が `--basetemp` に使う一時ディレクトリ（自動生成された
+# テスト用 bat が置かれる）で、本物の検査対象ではない。`.git` と同様に除外する。
+_EXCLUDED_DIRS = (".git", ".pytest-tmp")
+_BAT_FILES = sorted(
+    path for path in _ROOT.rglob("*.bat") if not any(part in _EXCLUDED_DIRS for part in path.parts)
+)
 
 
 def _read(path: Path) -> str:
