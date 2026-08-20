@@ -17,7 +17,6 @@ from comken.core.config import Config
 from comken.exceptions import (
     ConfigCreatedFromExampleError,
     ConfigError,
-    ConfigInvalidValueError,
     ConfigLowerCaseNameError,
     ConfigRequiredKeysMissingError,
 )
@@ -211,7 +210,7 @@ class TestConfigMapping:
             encoding="utf-8",
         )
 
-        assert Config(ini).mapping("受注_MAPPING") == {
+        assert dict(Config(ini).受注_MAPPING) == {
             "受注No": "受注番号",
             "Web受注": "Web受付",
             "商品cd": "商品コード",
@@ -222,7 +221,7 @@ class TestConfigMapping:
         ini = tmp_path / "config.ini"
         ini.write_text("[MAPPING]\n年度 = 2026\n", encoding="utf-8")
 
-        mapping = Config(ini).mapping("MAPPING")
+        mapping = Config(ini).MAPPING
 
         assert mapping["年度"] == "2026"
         assert isinstance(mapping["年度"], str)
@@ -234,7 +233,7 @@ class TestConfigMapping:
             encoding="utf-8",
         )
 
-        assert Config(ini).mapping("MAPPING") == {
+        assert dict(Config(ini).MAPPING) == {
             "担当者・部署": "担当部署",
             "金額(税込)": "税込金額",
             "№": "番号",
@@ -249,7 +248,7 @@ class TestConfigMapping:
         config = Config(ini)
 
         assert config.REPORT.YEAR == 2026
-        assert config.mapping("COLUMN_MAPPING") == {"受注No": "受注番号"}
+        assert dict(config.COLUMN_MAPPING) == {"受注No": "受注番号"}
 
     @pytest.mark.parametrize("key", ["受注No", "Web受注", "商品cd", "No"])
     def test_normal_section_still_rejects_mixed_case_key(self, tmp_path, key):
@@ -508,8 +507,9 @@ class TestConfigMissingKey:
 
         ini = tmp_path / "config.ini"
         ini.write_text("[FILES]\nINPUT_CSV = C:\\in.csv\n", encoding="utf-8")
-        monkeypatch.chdir(tmp_path)
-        config_module.read(ini)
+        # ``require()`` は内部で ``Config()`` を呼ぶため、project_dir() が
+        # tmp_path を指すように sys.argv を差し替える。
+        monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
 
         with pytest.raises(ConfigRequiredKeysMissingError) as exc:
             config_module.require("FILES.OUTPUT_FOLDER")
@@ -610,10 +610,10 @@ class TestConfigMethodNameTypo:
         ini.write_text("[FILES]\nK = v\n", encoding="utf-8")
         config = Config(ini)
 
-        with pytest.raises(AttributeError) as exc:
-            _ = config.read  # モジュール関数 `read` をインスタンスから呼んだ
-        # セクションの話ではないことを示す（"セクションがありません" ではない）
-        assert "セクション" not in str(exc.value)
+        # Config のメソッドでもセクション名でもない名前は AttributeError になる
+        # （ConfigSectionNotFoundError ではない = セクション名として解釈されない）
+        with pytest.raises(AttributeError):
+            _ = config.read  # Config には存在しない小文字名を attribute として引いた
 
     def test_require_typo_message_suggests_module_function(self, tmp_path):
         """`require` を呼ばれたときは「モジュール関数である」と案内する。
@@ -729,29 +729,15 @@ class TestConfigListConversion:
 
 
 class TestModuleSingleton:
-    """`from comken import config` の遅延シングルトンのテスト。"""
+    """`from comken import config` の遅延シングルトンのテスト。
 
-    @pytest.fixture(autouse=True)
-    def reset_singleton(self):
-        """テスト間でグローバルなシングルトンを持ち越さない。"""
-        import comken.core.config as config_mod
-
-        config_mod._singleton = None
-        yield
-        config_mod._singleton = None
-
-    def test_read_points_at_given_ini(self, tmp_path):
-        """config.read(path) で指定した config.ini のセクションにアクセスできる。"""
-        import comken.core.config as config_mod
-
-        ini = tmp_path / "myconf.ini"
-        ini.write_text("[FILES]\nINPUT_FOLDER = C:\\work\\input\n", encoding="utf-8")
-
-        config_mod.read(ini)
-        assert Path("C:\\work\\input") == config_mod.FILES.INPUT_FOLDER
+    `__getattr__` 経由で `Config()` を生成してセクションへアクセスする。
+    `_singleton` のような専用 global 変数は持たない（__getattr__ がその都度
+    `Config()` を呼ぶ設計）。
+    """
 
     def test_lazy_default_reads_project_dir(self, tmp_path, monkeypatch):
-        """read を呼ばない場合、初回アクセス時にプロジェクトの config.ini を読む。"""
+        """初回アクセス時にプロジェクトの config.ini を読む。"""
         import comken.core.config as config_mod
 
         other = tmp_path / "別のカレント"
@@ -810,16 +796,26 @@ class TestGenerateStub:
         assert "config: Config" in text
 
     def test_mapping_section_uses_dictionary_api_only(self, tmp_path):
-        """動的な列名は列挙せず、辞書取得 API の型だけをスタブに出す。"""
+        """動的な列名は列挙せず、``MappingDict[str, str | None]`` として露出する。
+
+        ``*_MAPPING`` セクションはキーが動的な列名なので個別クラスに列挙しないが、
+        ``MappingDict`` 経由で ``config.SECTION_MAPPING["未知の列"] is None`` の
+        判定が書けるよう、 ``MappingDict[str, str | None]`` 属性としてスタブに出す。
+        """
         from comken.core.config.stubs import generate_stub
 
         ini = tmp_path / "config.ini"
         ini.write_text("[COLUMN_MAPPING]\n受注No = 受注番号\n", encoding="utf-8")
         text = generate_stub(ini, tmp_path / "config.pyi").read_text(encoding="utf-8")
 
+        # 動的な列名はスタブに列挙しない（補完しても無意味な候補が出るだけ）
         assert "受注No" not in text
-        assert "COLUMN_MAPPING" not in text
-        assert "def mapping(self, section: str) -> dict[str, str]" in text
+        # ``*_MAPPING`` は ``MappingDict`` として attr 露出する
+        assert "COLUMN_MAPPING: MappingDict[str, str | None]" in text
+        # ``MappingDict`` の ``__missing__`` は ``None`` を返す
+        assert "def __missing__(self, key: str) -> str | None" in text
+        # ``Config.mapping()`` メソッドは廃止（``config.SECTION_MAPPING`` で読む）
+        assert "def mapping(self" not in text
 
     def test_default_output_is_src_config_pyi(self, ini, tmp_path):
         """src/config.py があるプロジェクトでは src/config.pyi に出力されることを確認する。
@@ -1036,9 +1032,10 @@ class TestRequire:
 
     def test_passes_when_all_keys_exist(self, tmp_path, monkeypatch):
         """そろっていれば何も起きない。"""
-        path = self._write(tmp_path, "[FILES]\nINPUT_CSV = C:\\作業\\in.csv\n")
-        monkeypatch.chdir(tmp_path)
-        config_module.read(path)
+        self._write(tmp_path, "[FILES]\nINPUT_CSV = C:\\作業\\in.csv\n")
+        # ``require()`` 内で ``Config()`` を呼ぶので、project_dir() が tmp_path を
+        # 指すように sys.argv を差し替える。
+        monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
 
         config_module.require("FILES.INPUT_CSV")
 
@@ -1047,9 +1044,8 @@ class TestRequire:
 
         1つ直して実行、また別で止まる、を繰り返すと書く人が何度も往復する。
         """
-        path = self._write(tmp_path, "[FILES]\nINPUT_CSV = C:\\作業\\in.csv\n")
-        monkeypatch.chdir(tmp_path)
-        config_module.read(path)
+        self._write(tmp_path, "[FILES]\nINPUT_CSV = C:\\作業\\in.csv\n")
+        monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
 
         with pytest.raises(ConfigRequiredKeysMissingError) as e:
             config_module.require("FILES.INPUT_CSV", "REPORT.OUTPUT_FOLDER", "MAIL.TO")
@@ -1062,8 +1058,7 @@ class TestRequire:
     def test_message_points_at_the_file_to_edit(self, tmp_path, monkeypatch):
         """どのファイルへ足すのかを示す（複数プロジェクトを行き来しても迷わない）。"""
         path = self._write(tmp_path, "[FILES]\nINPUT_CSV = C:\\作業\\in.csv\n")
-        monkeypatch.chdir(tmp_path)
-        config_module.read(path)
+        monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
 
         with pytest.raises(ConfigRequiredKeysMissingError) as e:
             config_module.require("REPORT.OUTPUT_FOLDER")
@@ -1072,9 +1067,8 @@ class TestRequire:
 
     def test_is_case_insensitive_in_the_argument(self, tmp_path, monkeypatch):
         """引数の大文字小文字は問わない（config.ini 側は大文字が強制される）。"""
-        path = self._write(tmp_path, "[FILES]\nINPUT_CSV = C:\\作業\\in.csv\n")
-        monkeypatch.chdir(tmp_path)
-        config_module.read(path)
+        self._write(tmp_path, "[FILES]\nINPUT_CSV = C:\\作業\\in.csv\n")
+        monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
 
         config_module.require("files.input_csv")
 
@@ -1633,11 +1627,11 @@ class TestScanCodeUsage:
         assert "--- コードで使っている設定 ---" not in out
         assert exit_code == 0
 
-    def test_mapping_and_read_are_not_picked_up_as_usages(self, tmp_path, capsys):
-        """``config.mapping(...)`` / ``config.read(...)`` は config 参照ではない。
+    def test_method_calls_are_not_picked_up_as_usages(self, tmp_path, capsys):
+        """``config.<メソッド>(...)`` は config 参照として拾わない。
 
         ``config.SECTION``（キーまで無い）や ``config.<メソッド>(...)`` は拾わない。
-        拾ってしまうと ``config.mapping`` を「セクション」と誤認してしまう。
+        拾ってしまうと ``config.require`` 等を「セクション」と誤認してしまう。
         """
         from comken.core.config.check import run_check
 
@@ -1647,8 +1641,6 @@ class TestScanCodeUsage:
             src_text=(
                 "from comken import config\n"
                 "\n"
-                "config.mapping('RECEIVE_MAPPING')\n"
-                "config.read('foo.ini')\n"
                 "config.require('RUN.DRY_RUN')\n"
                 "if config.RUN.DRY_RUN:\n"
                 "    pass\n"
@@ -1658,9 +1650,6 @@ class TestScanCodeUsage:
         exit_code = run_check(ini)
 
         out = capsys.readouterr().out
-        # メソッド呼び出しが usages に混入しない（OK 行は RUN.DRY_RUN の 1 行だけ）
-        assert "RECEIVE_MAPPING" not in out
-        assert "foo.ini" not in out
         # 「無い」警告は出ない（RUN.DRY_RUN は ini に存在するため）
         assert "★" not in out
         # require には書かれているが uses と一致するので食い違いなし
@@ -1975,71 +1964,203 @@ class TestScanModule:
         assert all("broken" not in u.path.as_posix() for u in result.usages)
 
 
-class TestConfigIntValueAndText:
-    """config.int_value() / config.text() の検証。"""
+class TestLenientDict:
+    """_LenientDict の振る舞いテスト。
 
-    def test_int_value_returns_int(self, tmp_path):
-        config_module._singleton = None
-        (tmp_path / "config.ini").write_text("[SAMPLE]\nCOUNT = 3\n", encoding="utf-8")
-        config_module.read(tmp_path / "config.ini")
+    ``*_MAPPING`` セクションは列名が動的データなので補完が効かない。
+    「列があるかないか」を ``is None`` で判別できるようにするため、
+    ``_LenientDict`` は ``__missing__`` で ``None`` を返す。
+    dict のサブクラスなので、 ``items()`` / ``keys()`` / ``values()`` 等の
+    既存 API はそのまま動く（後方互換）。
+    """
 
-        result = config_module.int_value("SAMPLE.COUNT")
+    def test_unknown_key_returns_none(self):
+        """存在しないキーへアクセスすると ``None`` を返す（KeyError ではない）。"""
+        from comken.core.config import _LenientDict
 
-        assert result == 3
-        assert isinstance(result, int)
+        ld = _LenientDict({"known": "value"})
 
-    def test_int_value_min_max(self, tmp_path):
-        config_module._singleton = None
-        (tmp_path / "config.ini").write_text("[SAMPLE]\nCOUNT = 10\n", encoding="utf-8")
-        config_module.read(tmp_path / "config.ini")
+        assert ld["unknown"] is None
+        assert ld[""] is None
 
-        # 範囲内
-        assert config_module.int_value("SAMPLE.COUNT", minimum=1) == 10
-        assert config_module.int_value("SAMPLE.COUNT", maximum=100) == 10
-        # 範囲外（最小値より小さい / 最大値より大きい）
-        with pytest.raises(ConfigInvalidValueError):
-            config_module.int_value("SAMPLE.COUNT", minimum=11)
-        with pytest.raises(ConfigInvalidValueError):
-            config_module.int_value("SAMPLE.COUNT", maximum=9)
+    def test_known_key_returns_configured_string(self):
+        """config.ini に書かれたとおりの文字列を返す。"""
+        from comken.core.config import _LenientDict
 
-    def test_int_value_type_mismatch(self, tmp_path):
-        config_module._singleton = None
-        (tmp_path / "config.ini").write_text("[SAMPLE]\nNAME = hello\n", encoding="utf-8")
-        config_module.read(tmp_path / "config.ini")
+        ld = _LenientDict({"受注No": "受注番号", "Web受注": "Web受付"})
 
-        with pytest.raises(ConfigInvalidValueError, match="整数"):
-            config_module.int_value("SAMPLE.NAME")
+        assert ld["受注No"] == "受注番号"
+        assert ld["Web受注"] == "Web受付"
+        # dict の API もそのまま動く（後方互換）
+        assert set(ld.keys()) == {"受注No", "Web受注"}
+        assert dict(ld) == {"受注No": "受注番号", "Web受注": "Web受付"}
 
-    def test_int_value_rejects_bool(self, tmp_path):
-        """true / false は int の subtype だが、bool として明示的に弾く。"""
-        config_module._singleton = None
-        (tmp_path / "config.ini").write_text("[SAMPLE]\nFLAG = true\n", encoding="utf-8")
-        config_module.read(tmp_path / "config.ini")
+    def test_is_dict_subclass(self):
+        """``_LenientDict`` は dict のサブクラス（型判定の後方互換）。"""
+        from comken.core.config import _LenientDict
 
-        with pytest.raises(ConfigInvalidValueError):
-            config_module.int_value("SAMPLE.FLAG")
+        ld = _LenientDict()
 
-    def test_text_returns_raw_value(self, tmp_path):
-        """text() は _parse_value と同じ strip 後の値を返す（int などの自動型変換なし）。"""
-        config_module._singleton = None
-        (tmp_path / "config.ini").write_text("[SAMPLE]\nNAME = hello\n", encoding="utf-8")
-        config_module.read(tmp_path / "config.ini")
+        assert isinstance(ld, dict)
+        # 空 dict として初期化もできる
+        assert dict(ld) == {}
 
-        assert config_module.text("SAMPLE.NAME") == "hello"
+    def test_missing_returns_none_for_arbitrary_type(self):
+        """``__missing__`` の戻り値型は ``None`` 固定（str | None の None 側）。"""
+        from comken.core.config import _LenientDict
 
-    def test_text_rejects_empty_by_default(self, tmp_path):
-        """前後の空白を除いて空になる値は allow_empty=False ではエラー。"""
-        config_module._singleton = None
-        (tmp_path / "config.ini").write_text("[SAMPLE]\nNAME =   \n", encoding="utf-8")
-        config_module.read(tmp_path / "config.ini")
+        ld = _LenientDict({"a": "1"})
 
-        with pytest.raises(ConfigInvalidValueError):
-            config_module.text("SAMPLE.NAME")
+        # ``is None`` で判別できることが本質（``None`` 以外の falsy 値は作らない）
+        result = ld["missing"]
+        assert result is None
 
-    def test_text_allow_empty_returns_empty_value(self, tmp_path):
-        """allow_empty=True なら空文字もそのまま返す。"""
-        config_module._singleton = None
-        (tmp_path / "config.ini").write_text("[SAMPLE]\nNAME =\n", encoding="utf-8")
-        config_module.read(tmp_path / "config.ini")
 
-        assert config_module.text("SAMPLE.NAME", allow_empty=True) == ""
+class TestMappingAttributeAccess:
+    """Config インスタンスに ``*_MAPPING`` を attribute として露出する回帰テスト。
+
+    依頼: 「``config.SECTION_MAPPING`` で dict を取得し、 ``is None`` で
+    列の有無を判別したい」。 ``_SectionNamespace`` ではなく ``_LenientDict``
+    を ``setattr`` で直接 attribute 化することで、補完の静かに落ちる
+    ケース（Pylance が ``Unknown`` と判定する）を防ぐ。
+    """
+
+    def test_config_attribute_is_lenient_dict(self, tmp_path):
+        """``Config(...).SECTION_MAPPING`` が ``_LenientDict`` として返る。"""
+        from comken.core.config import _LenientDict
+
+        ini = tmp_path / "config.ini"
+        ini.write_text(
+            "[COLUMN_MAPPING]\n受注No = 受注番号\nWeb受注 = Web受付\n",
+            encoding="utf-8",
+        )
+        cfg = Config(ini)
+
+        assert isinstance(cfg.COLUMN_MAPPING, _LenientDict)
+        assert cfg.COLUMN_MAPPING["受注No"] == "受注番号"
+        # 未知の列は ``None``（KeyError ではない）
+        assert cfg.COLUMN_MAPPING["存在しない列"] is None
+
+    def test_attribute_supports_dict_api(self, tmp_path):
+        """``Config.SECTION_MAPPING`` は dict 互換 API（items/keys/values/get）が使える。"""
+        ini = tmp_path / "config.ini"
+        ini.write_text("[COLUMN_MAPPING]\n受注No = 受注番号\n", encoding="utf-8")
+        cfg = Config(ini)
+
+        result = cfg.COLUMN_MAPPING
+
+        assert isinstance(result, dict)  # 後方互換
+        assert result["受注No"] == "受注番号"
+        assert result.get("存在しない列") is None
+        assert list(result.items()) == [("受注No", "受注番号")]
+        # 未知キーは ``None`` を返す
+        assert result["未知の列"] is None
+
+
+class TestMappingDictPublicType:
+    """``MappingDict`` 公開型の import と ``_LenientDict`` との同一性を検証。
+
+    公開 API として ``MappingDict`` を ``from comken.core.config import MappingDict``
+    できるようにし、 ``_LenientDict`` は実装詳細（``_`` プレフィックス）として
+    残している。両者は同じ dict のサブクラス（実行時の型も同一）。
+    """
+
+    def test_mapping_dict_is_importable(self):
+        """``from comken.core.config import MappingDict`` できる。"""
+        from comken.core.config import MappingDict
+
+        assert MappingDict is not None
+
+    def test_mapping_dict_is_lenient_dict(self):
+        """``MappingDict`` は ``_LenientDict`` のエイリアス（型判定で同一）。"""
+        from comken.core.config import MappingDict, _LenientDict
+
+        assert MappingDict is _LenientDict
+        # ``__missing__`` の振る舞いも同一（None を返す）
+        instance = MappingDict({"known": "v"})
+        assert instance["unknown"] is None
+
+    def test_singleton_attribute_is_mapping_dict(self, tmp_path, monkeypatch):
+        """遅延シングルトン経由（``from comken import config``）でも ``MappingDict`` が返る。"""
+        from comken.core.config import MappingDict
+
+        ini = tmp_path / "config.ini"
+        ini.write_text("[COLUMN_MAPPING]\n受注No = 受注番号\n", encoding="utf-8")
+        # ``__getattr__`` 経由で ``Config()`` を呼ぶため、project_dir() が
+        # tmp_path を指すように sys.argv を差し替える。
+        monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
+
+        assert isinstance(config_module.COLUMN_MAPPING, MappingDict)
+        assert config_module.COLUMN_MAPPING["受注No"] == "受注番号"
+        assert config_module.COLUMN_MAPPING["unknown"] is None
+
+
+class TestStubIncludesMappingDict:
+    """スタブ生成後の .pyi に ``MappingDict`` と ``*_MAPPING`` attr が含まれることを検証。
+
+    補完が効くようにするには、 ``*_MAPPING`` セクションが「スタブから消える」
+    のではなく「 ``MappingDict[str, str | None]`` 型として残る」必要がある。
+    これが消えると Pylance が ``Unknown`` 扱いして、 ``is None`` 判定が書けなくなる。
+    """
+
+    def test_class_stub_exposes_mapping_attr_and_dict_type(self, tmp_path):
+        """src/config.pyi（class スタブ）に ``MappingDict`` と attr が含まれる。"""
+        from comken.core.config.stubs import generate_stub
+
+        ini = tmp_path / "config.ini"
+        ini.write_text("[COLUMN_MAPPING]\n受注No = 受注番号\n", encoding="utf-8")
+        text = generate_stub(ini, tmp_path / "config.pyi").read_text(encoding="utf-8")
+
+        # ``MappingDict`` の型定義が存在し、 ``__missing__`` が ``None`` を返す
+        assert "class MappingDict(dict[str, str | None]):" in text
+        assert "def __missing__(self, key: str) -> str | None" in text
+        # ``*_MAPPING`` セクションは attr として露出する
+        assert "COLUMN_MAPPING: MappingDict[str, str | None]" in text
+        # ``Config.mapping()`` メソッドは廃止（``config.SECTION_MAPPING`` で読む）
+        assert "def mapping(self" not in text
+
+    def test_module_stub_exposes_mapping_attr(self, tmp_path, monkeypatch):
+        """typings/comken/core/config.pyi に ``MappingDict`` attr が含まれる。"""
+        from comken.core.config.stubs import generate_stub
+
+        monkeypatch.chdir(tmp_path)
+        ini = tmp_path / "config.ini"
+        ini.write_text("[COLUMN_MAPPING]\n受注No = 受注番号\n", encoding="utf-8")
+        generate_stub(ini)
+        text = (tmp_path / "typings" / "comken" / "core" / "config.pyi").read_text(encoding="utf-8")
+
+        assert "class MappingDict(dict[str, str | None]):" in text
+        assert "COLUMN_MAPPING: MappingDict[str, str | None]" in text
+        # module 関数 ``mapping()`` も廃止
+        assert "def mapping(section:" not in text
+
+    def test_package_init_stub_exposes_mapping_attr(self, tmp_path, monkeypatch):
+        """typings/comken/__init__.pyi に ``MappingDict`` attr が含まれる。"""
+        from comken.core.config.stubs import generate_stub
+
+        monkeypatch.chdir(tmp_path)
+        ini = tmp_path / "config.ini"
+        ini.write_text("[COLUMN_MAPPING]\n受注No = 受注番号\n", encoding="utf-8")
+        generate_stub(ini)
+        text = (tmp_path / "typings" / "comken" / "__init__.pyi").read_text(encoding="utf-8")
+
+        assert "class MappingDict(dict[str, str | None]):" in text
+        assert "COLUMN_MAPPING: MappingDict[str, str | None]" in text
+
+    def test_mapping_dict_attr_coexists_with_normal_section(self, tmp_path):
+        """``*_MAPPING`` と通常セクションが同じ ini に共存しても両方のスタブが正しく出る。"""
+        from comken.core.config.stubs import generate_stub
+
+        ini = tmp_path / "config.ini"
+        ini.write_text(
+            "[REPORT]\nYEAR = 2026\n\n[COLUMN_MAPPING]\n受注No = 受注番号\n",
+            encoding="utf-8",
+        )
+        text = generate_stub(ini, tmp_path / "config.pyi").read_text(encoding="utf-8")
+
+        # 通常セクションは従来どおりクラス化される
+        assert "class _REPORT:" in text
+        assert "    YEAR: int" in text
+        assert "    REPORT: _REPORT" in text
+        # ``*_MAPPING`` は ``MappingDict`` として並ぶ
+        assert "COLUMN_MAPPING: MappingDict[str, str | None]" in text

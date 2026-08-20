@@ -14,7 +14,6 @@ SOURCE_CSV = OUTPUT_FOLDER / "受注.csv"
 OUTPUT_PATH = OUTPUT_FOLDER / "請求一覧.xlsx"
 CODE_SHEET = "コードで指定"
 CONFIG_SHEET = "設定で指定"
-MAPPING_SECTION = "受注_MAPPING"
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +33,8 @@ def main() -> None:
     code_mapping = {"取引先": "顧客名", "金額": "請求額"}
     # 部署や拠点、年度で列名が変わり、現場で変更する必要がある場合だけ設定へ出す。
     # 設定変更はテストに守られない業務ルール変更でもあるため、運用時に確認が必要になる。
-    config_mapping = Config(CONFIG_PATH).mapping(MAPPING_SECTION)
+    # ``config.SECTION_MAPPING`` は ``MappingDict``（dict 互換）。未知の列は ``None`` を返す。
+    config_mapping = Config(CONFIG_PATH).受注_MAPPING
 
     with ExcelWriter.create(OUTPUT_PATH, sheet_name=CODE_SHEET) as writer:
         writer.add_sheet(CONFIG_SHEET)

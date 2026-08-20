@@ -148,7 +148,7 @@ from comken.toolbox.csv import CsvReader
 
 config = Config()
 lookup = CsvReader("data.csv").index("注文番号")
-mapping = config.mapping("受注_MAPPING")
+mapping = config.受注_MAPPING
 
 with ExcelWriter("data.xlsx") as f:
     matched = f.sheet(SHEET).transfer_by_mapping(

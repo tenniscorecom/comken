@@ -161,10 +161,14 @@ def _build_stub_content(cfg: configparser.ConfigParser, section_map: dict[str, s
     section_lines: list[str] = []
     config_attrs: list[str] = []
     for stripped_section, original_section in section_map.items():
-        # マッピングのキーは列名という動的データなので、属性としてスタブに列挙しない。
-        if _is_mapping_section(stripped_section):
-            continue
         class_name = f"_{stripped_section.upper()}"
+        if _is_mapping_section(stripped_section):
+            # ``*_MAPPING`` セクションはキーが動的な列名なので個別クラスを作らず、
+            # ``MappingDict[str, str | None]`` として属性に並べる。``MappingDict`` は
+            # ``dict`` のサブクラスで ``__missing__`` が ``None`` を返すため、
+            # ``config.SECTION_MAPPING["未知の列"] is None`` の判定がそのまま型で書ける。
+            config_attrs.append(f"    {stripped_section.upper()}: MappingDict[str, str | None]")
+            continue
         config_attrs.append(f"    {stripped_section.upper()}: {class_name}")
         section_lines.append(f"class {class_name}:")
         options = cfg.options(original_section)
@@ -176,12 +180,22 @@ def _build_stub_content(cfg: configparser.ConfigParser, section_map: dict[str, s
         section_lines.append("")
 
     # Path は Config.__init__ のシグネチャでも使うため常に import する
-    lines = [_STUB_HEADER, "from pathlib import Path\n", "from typing import NoReturn\n", ""]
+    lines = [
+        _STUB_HEADER,
+        "from pathlib import Path\n",
+        "from typing import NoReturn\n",
+        "",
+        # ``MappingDict`` は実行時の ``_LenientDict`` を ``.pyi`` 側で表現する型。
+        # ``dict[str, str | None]`` の ``__missing__`` は ``None`` を返すので、
+        # ``config.SECTION_MAPPING["未知の列"] is None`` の判定が型レベルで書ける。
+        "class MappingDict(dict[str, str | None]):\n"
+        "    def __missing__(self, key: str) -> str | None: ...\n",
+        "",
+    ]
     lines.extend(section_lines)
     lines.append("class Config:")
     lines.extend(config_attrs or ["    pass"])
     lines.append("    def __init__(self, path: str | Path = ...) -> None: ...")
-    lines.append("    def mapping(self, section: str) -> dict[str, str]: ...")
     lines.append("")
     lines.append("config: Config")
     return "\n".join(lines) + "\n"
@@ -197,10 +211,13 @@ def _build_module_stub_content(cfg: configparser.ConfigParser, section_map: dict
     section_lines: list[str] = []
     module_attrs: list[str] = []
     for stripped_section, original_section in section_map.items():
-        # マッピングは mapping() で辞書として読むため、動的な列名を補完候補にしない。
-        if _is_mapping_section(stripped_section):
-            continue
         class_name = f"_{stripped_section.upper()}"
+        if _is_mapping_section(stripped_section):
+            # ``*_MAPPING`` は ``MappingDict[str, str | None]`` で宣言する（実行時は
+            # ``_LenientDict`` = dict のサブクラス）。``__missing__`` で ``None`` を
+            # 返すため ``module.SECTION_MAPPING["列"] is None`` の判定が書ける。
+            module_attrs.append(f"{stripped_section.upper()}: MappingDict[str, str | None]")
+            continue
         module_attrs.append(f"{stripped_section.upper()}: {class_name}")
         section_lines.append(f"class {class_name}:")
         options = cfg.options(original_section)
@@ -211,22 +228,20 @@ def _build_module_stub_content(cfg: configparser.ConfigParser, section_map: dict
             section_lines.append(f"    {key.upper()}: {_stub_type_name(value)}")
         section_lines.append("")
 
-    lines = [_STUB_HEADER, "from pathlib import Path\n", "from typing import NoReturn\n", ""]
+    lines = [
+        _STUB_HEADER,
+        "from pathlib import Path\n",
+        "from typing import NoReturn\n",
+        "",
+        # ``MappingDict`` は実行時の ``_LenientDict`` を ``.pyi`` 側で表現する型。
+        "class MappingDict(dict[str, str | None]):\n"
+        "    def __missing__(self, key: str) -> str | None: ...\n",
+        "",
+    ]
     lines.extend(section_lines)
     lines.append("class Config:")
     lines.append("    def __init__(self, path: str | Path = ...) -> None: ...")
-    lines.append("    def mapping(self, section: str) -> dict[str, str]: ...")
     lines.append("    def __getattr__(self, name: str) -> NoReturn: ...")
-    lines.append("")
-    lines.append("def read(path: str | Path = ...) -> Config: ...")
-    lines.append("def mapping(section: str) -> dict[str, str]: ...")
-    # int_value / text は config のモジュール関数。`from comken.core.config import ...` 形式で
-    # 利用側の補完が効くようにスタブにも並べる（stubs.py 全行程のお決まり）
-    lines.append(
-        "def int_value(name: str, *, "
-        "minimum: int | None = ..., maximum: int | None = ...) -> int: ..."
-    )
-    lines.append("def text(name: str, *, allow_empty: bool = ...) -> str: ...")
     lines.append("")
     lines.extend(module_attrs)
     return "\n".join(lines) + "\n"
@@ -256,11 +271,21 @@ def _build_package_init_stub(cfg: configparser.ConfigParser, section_map: dict[s
         names = sorted(by_module[module])
         inner = "".join(f"    {name} as {name},\n" for name in names)
         lines.append(f"from {module} import (\n{inner})")
+    # ``MappingDict`` は実行時の ``_LenientDict`` を ``.pyi`` 側で表現する型。
+    # ここで宣言しないと ``config.SECTION_MAPPING`` が ``Unknown`` として解決され、
+    # Pylance 補完が静かに落ちる。
+    lines.append(
+        "class MappingDict(dict[str, str | None]):\n"
+        "    def __missing__(self, key: str) -> str | None: ...\n"
+    )
+    lines.append("")
     config_attrs: list[str] = []
     for stripped_section, original_section in section_map.items():
-        if _is_mapping_section(stripped_section):
-            continue
         class_name = f"_{stripped_section.upper()}"
+        if _is_mapping_section(stripped_section):
+            # ``*_MAPPING`` は ``MappingDict[str, str | None]`` として facade に並べる。
+            config_attrs.append(f"    {stripped_section.upper()}: MappingDict[str, str | None]")
+            continue
         config_attrs.append(f"    {stripped_section.upper()}: {class_name}")
         lines.append(f"class {class_name}:")
         options = cfg.options(original_section)

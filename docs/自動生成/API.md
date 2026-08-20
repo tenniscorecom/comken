@@ -53,25 +53,6 @@ Args:
     path: config.ini のパス。省略するとプロジェクトのフォルダ
         （main.py の場所）の config.ini を読む。
 
-#### `mapping`
-
-```text
-def mapping(self, section: str) -> dict[str, str]:
-```
-
-##### 説明
-
-マッピングセクションを列名が書かれたままの辞書で返す。
-
-Args:
-    section: `MAPPING` で終わるセクション名。
-
-Returns:
-    転記元の列名をキー、転記先の列名を値とする辞書。
-
-Raises:
-    ConfigSectionNotFoundError: 指定したマッピングセクションがない場合。
-
 ### `config`
 
 定義を解決できませんでした。
@@ -2189,27 +2170,6 @@ config.ini の必要な節がない
 
 ```text
 def __init__(self, name: str, existing: list[str], path: Path | str | None=None) -> None:
-```
-
-### `ConfigInvalidValueError`
-
-```text
-class ConfigInvalidValueError(ConfigError):
-```
-
-#### 説明
-
-config.ini の値が想定と違う
-
-発生箇所: config.int_value() / config.text()
-
-対処:
-    表示されたセクション・キーの値を、表示された形式に書き換える
-
-#### `__init__`
-
-```text
-def __init__(self, section: str, key: str, value: object, expected: str) -> None:
 ```
 
 ### `ConfigKeyNotFoundError`
@@ -5801,10 +5761,14 @@ def transfer_by_mapping(self, key_col: str, lookup: dict[str, dict], mapping: di
 
 列名で転記先を指定し、キーが一致した行へ値を転記する。
 
-config.mapping("..._MAPPING") の戻り値を変換せずに渡せる。
+``config.SECTION_MAPPING`` （``MappingDict``）の戻り値を変換せずに渡せる。
 mapping の向きは ``{転記元の列名: 転記先の列名}`` で、左が元、右が先。
 ヘッダーがない、または列位置が固定された帳票には transfer_by_letter() を使う。
 転記を始める前にキー列・転記先列・転記元列をすべて検証する。
+
+渡された ``lookup`` の中で「転記から外したい行」がある場合は、
+呼び出し側で ``lookup`` を絞り込んでから渡す（``for k, v in lookup.items()``
+での dict comprehension で十分）。
 
 Args:
     key_col: 転記先 Excel で照合に使う列名。
@@ -6530,14 +6494,6 @@ class MailMessage:
 
 定義を解決できませんでした。
 
-### `SiteBase`
-
-定義を解決できませんでした。
-
-### `DirectSiteBase`
-
-定義を解決できませんでした。
-
 ### `ReportApi`
 
 ```text
@@ -6775,7 +6731,7 @@ class RetryReason:
 ### `Sandbox`
 
 ```text
-class Sandbox(DirectSiteBase):
+class Sandbox(SalesforceBase):
 ```
 
 #### 説明
@@ -6802,7 +6758,7 @@ def opportunities(self) -> list[dict]:
 ### `Production`
 
 ```text
-class Production(DirectSiteBase):
+class Production(SalesforceBase):
 ```
 
 #### 説明
@@ -6829,7 +6785,7 @@ def opportunities(self) -> list[dict]:
 ### `Developer`
 
 ```text
-class Developer(DirectSiteBase):
+class Developer(SalesforceBase):
 ```
 
 #### 説明

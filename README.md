@@ -366,8 +366,11 @@ from comken import config
 folder = config.REPORT.OUTPUT_FOLDER
 path = config.FILES.INPUT_FOLDER / "支店A.csv"
 
-# config.ini が別の場所にある場合は、最初に使う前に読む場所を指定する
-config.read(r"C:\作業\config.ini")
+# config.ini が別の場所にあるときは Config(path) を直接呼んで使う
+from comken.core.config import Config
+
+local_config = Config(r"C:\作業\config.ini")
+folder = local_config.REPORT.OUTPUT_FOLDER
 ```
 
 > **補完（Pylance）:** config を初めて読むと、config.ini から補完用スタブ
@@ -409,7 +412,7 @@ config.REPORT.TEMPLATE_PATH # → str
 ```
 
 ```python
-mapping = config.mapping("受注_MAPPING")
+mapping = config.受注_MAPPING
 # → {"受注No": "受注番号", "商品cd": "商品コード", "年度": "2026"}
 ```
 

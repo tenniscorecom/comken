@@ -654,7 +654,7 @@ class TestTransferByMapping:
         }
         ini = tmp_path / "config.ini"
         ini.write_text("[受注_MAPPING]\n取引先 = 顧客名\n金額 = 請求額\n", encoding="utf-8")
-        config_mapping = Config(ini).mapping("受注_MAPPING")
+        config_mapping = Config(ini).受注_MAPPING
 
         with ExcelWriter(transfer_excel) as f:
             matched = f.sheet("T_data").transfer_by_mapping(

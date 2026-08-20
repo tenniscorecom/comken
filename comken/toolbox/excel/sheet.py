@@ -147,7 +147,7 @@ class Sheet:
     ) -> int:
         """列名で転記先を指定し、キーが一致した行へ値を転記する。
 
-        config.mapping("..._MAPPING") の戻り値を変換せずに渡せる。
+        ``config.SECTION_MAPPING`` （``MappingDict``）の戻り値を変換せずに渡せる。
         mapping の向きは ``{転記元の列名: 転記先の列名}`` で、左が元、右が先。
         ヘッダーがない、または列位置が固定された帳票には transfer_by_letter() を使う。
         転記を始める前にキー列・転記先列・転記元列をすべて検証する。

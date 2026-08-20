@@ -7,13 +7,19 @@ config.ini を読み込み、config.SECTION.KEY の形式でアクセスでき�
     from comken import config
     path = config.FILES.INPUT_FOLDER / config.FILES.CSV_EAST
 
-    → 初回アクセス時にカレントディレクトリの config.ini を1度だけ読む（遅延読み込み）。
-      config.ini が別の場所にある場合は、最初に使う前に config.read("パス") を呼ぶ。
+    → 初回アクセス時にプロジェクトディレクトリの config.ini を1度だけ読む（遅延読み込み）。
+      別の場所にある config.ini を読むときは ``Config(path)`` を直接使う。
 
 明示的にインスタンスを持ちたい場合（従来どおり）:
 
     from comken.core.config import Config
     config = Config()                 # または Config("path/to/config.ini")
+
+列名の対応表セクション（``[*_MAPPING]``）は ``config.SECTION_MAPPING`` で dict 互換
+オブジェクトとして読める。存在しない列は ``None`` を返すため、
+``config.SECTION_MAPPING["列名"] is None`` で「列があるかないか」を判別できる。
+公開型は ``MappingDict``（``from comken.core.config import MappingDict``）で、
+``_LenientDict`` は内部実装。
 
 エディタの補完候補:
     属性は実行時に動的に作られるため、そのままではエディタが補完できないが、
@@ -40,7 +46,6 @@ from comken.core.files.ops import project_dir
 from comken.exceptions import (
     ConfigCreatedFromExampleError,
     ConfigFileNotFoundError,
-    ConfigInvalidValueError,
     ConfigKeyNotFoundError,
     ConfigLowerCaseNameError,
     ConfigRequiredKeysMissingError,
@@ -56,6 +61,29 @@ MAPPING_SECTION_SUFFIX = "MAPPING"
 def _is_mapping_section(section: str) -> bool:
     """列名の対応表として扱うセクションかを返す。"""
     return section.endswith(MAPPING_SECTION_SUFFIX)
+
+
+class _LenientDict(dict):
+    """``MappingDict`` の内部実装（``MappingDict = _LenientDict``）。
+
+    公開型は ``MappingDict``（``from comken.core.config import MappingDict``）。
+    ``_LenientDict`` は実装詳細で、 ``_`` プレフィックスは「comken 内部用」を示す。
+    ``Config.__init__`` が ``setattr(self, SECTION, ld)`` で公開 attribute に
+    昇格させ、利用者は ``config.SECTION_MAPPING`` でこの dict 互換オブジェクトに触れる。
+
+    存在しないキーへアクセスしたとき ``None`` を返す（通常の dict は KeyError）。
+    config.ini の ``*_MAPPING`` セクションは列名が動的なので、補完が効かない。
+    「列があるかないか」を ``is None`` で判別できるようにするために ``__missing__``
+    で ``None`` を返す。dict のサブクラスなので、既存呼び出し（``for k, v in
+    CONFIG.SECTION_MAPPING.items()`` など）はそのまま動く。
+
+    スタブ（.pyi）では ``MappingDict[str, str | None]`` という型として露出する。
+    実行時はこの ``_LenientDict`` インスタンスが返る（isinstance で ``dict`` 判定も
+    互換）。
+    """
+
+    def __missing__(self, key: str) -> None:  # type: ignore[override]
+        return None
 
 
 class _SectionNamespace(types.SimpleNamespace):
@@ -226,7 +254,7 @@ class Config:
         self._path = Path(path).resolve()
         section_map = _build_section_map(cfg)
         # ↑の関数で空文字だけのセクション名は除外しているため、ここで len==0 でも
-        # 例外にはせず空の Config として返す（下の mapping 更新が起きないだけ）。
+        # 例外にはせず空の Config として返す（下の _mappings 更新が起きないだけ）。
         if section_map:
             # 大文字小文字チェックは「落とした後の名前」で行う（小文字の検出は
             # 空白除去と独立なので、検出の意味は変わらない）。
@@ -234,10 +262,16 @@ class Config:
             self._mappings = {}
             for stripped_section, original_section in section_map.items():
                 if _is_mapping_section(stripped_section):
-                    self._mappings[stripped_section] = {
-                        key.strip(): cfg.get(original_section, key).strip()
+                    # ``*_MAPPING`` は列名が動的なので ``_SectionNamespace`` ではなく
+                    # ``_LenientDict`` で attribute 化する。``Config.SECTION_MAPPING["未知の列名"]``
+                    # を ``None`` で判別できるようにするため ``__missing__`` で ``None`` を返す。
+                    # dict のサブクラスなので ``isinstance(x, dict)`` が True（後方互換）。
+                    ld = _LenientDict(
+                        (key.strip(), cfg.get(original_section, key).strip())
                         for key in cfg.options(original_section)
-                    }
+                    )
+                    self._mappings[stripped_section] = ld
+                    setattr(self, stripped_section.upper(), ld)
                     continue
                 # configparser はキー名の前後空白を既に落とすので、二重 strip は不要
                 options = cfg.options(original_section)
@@ -259,26 +293,6 @@ class Config:
         update_stub(cfg, path, section_map)
         _log_version_once()
 
-    def mapping(self, section: str) -> dict[str, str]:
-        """マッピングセクションを列名が書かれたままの辞書で返す。
-
-        Args:
-            section: `MAPPING` で終わるセクション名。
-
-        Returns:
-            転記元の列名をキー、転記先の列名を値とする辞書。
-
-        Raises:
-            ConfigSectionNotFoundError: 指定したマッピングセクションがない場合。
-        """
-        # 引数のセクション名も呼び出し側の書き揺れに合わせて前後空白を落とす。
-        # configparser のセクション名は空白が落ちないため、ここで揃える。
-        stripped = section.strip()
-        try:
-            return self._mappings[stripped]
-        except KeyError:
-            raise ConfigSectionNotFoundError(stripped, list(self._mappings), self._path) from None
-
     def __getattr__(self, name: str) -> NoReturn:
         # 通常の属性（設定済みセクション）は __dict__ にあり、ここには来ない。
         # 未定義セクションのアクセスだけがここに来るので、分かりやすいエラーにする。
@@ -290,7 +304,7 @@ class Config:
         # 「セクションがありません」は完全な的外れなので、 AttributeError に変えて
         # 「セクションの話ではない」と気付けるようにする。
         if name and name[0].islower():
-            if name in {"require", "read", "mapping"}:
+            if name in {"require"}:
                 raise AttributeError(
                     f"{name!r} は Config のメソッドではなく、comken のモジュール関数です。"
                     "`from comken import config` してから "
@@ -310,124 +324,17 @@ class Config:
 # config.SECTION.KEY への初回アクセス時にカレントディレクトリの config.ini を
 # 1度だけ読む（import 時ではないので、config.ini を持たないプロジェクトやテストで
 # comken を import しても失敗しない）。
+#
+# `__getattr__` で初回呼び出し時に `Config()` を生成し委譲する。専用 global 変数
+# は持たず、__getattr__ のたびに `Config()` を呼ぶ（configparser の読み込みは
+# 軽量なので、シングルトン管理のための状態を持たない方を採る）。
 
-_singleton: Config | None = None
-
-
-def read(path: str | Path | None = None) -> Config:
-    """`from comken import config` が読む config.ini の場所を指定する。
-
-    省略するとプロジェクトのフォルダ（main.py の場所）の config.ini を読む。
-    それ以外の場所にある場合に、config を使う前に呼ぶ:
-
-        from comken import config
-        config.read(r"C:\\作業\\config.ini")   # 省略すればプロジェクトの config.ini
-        path = config.FILES.INPUT_FOLDER
-
-    Returns:
-        読み込んだ Config インスタンス（以後 comken.core.config が返すもの）。
-    """
-    global _singleton
-    _singleton = Config(path)
-    return _singleton
-
-
-def mapping(section: str) -> dict[str, str]:
-    """遅延シングルトンからマッピングセクションを辞書で返す。"""
-    global _singleton
-    if _singleton is None:
-        _singleton = Config()
-    return _singleton.mapping(section)
-
-
-def int_value(name: str, *, minimum: int | None = None, maximum: int | None = None) -> int:
-    """config.ini の値を int として読み、範囲を確かめて返す。
-
-    整数に変換できない・範囲外なら ``ConfigInvalidValueError`` を投げる。
-    セクションやキーが無い場合は ``ConfigSectionNotFoundError`` /
-    ``ConfigKeyNotFoundError`` がそのまま飛ぶ（もう一度 config.ini を開いて
-    書き足してもらう必要があるため、型違いと同じ例外に潰さない）。
-
-    Args:
-        name: ``"SECTION.KEY"`` 形式。require() と同じドット区切り文字列。
-        minimum: 許容する最小値（含む）。省略なら下限なし。
-        maximum: 許容する最大値（含む）。省略なら上限なし。
-
-    Raises:
-        ConfigInvalidValueError: 整数が無い／範囲外。
-        ConfigSectionNotFoundError: name のセクションが無い。
-        ConfigKeyNotFoundError: name のキーが無い。
-    """
-    section, _, key = name.partition(".")
-    raw = _get_singleton_value(section, key)
-    # bool は int のサブクラスのため、先に型判定する。「true / false」を整数として
-    # 通してしまうと、分かりにくい事故になる（int_value として 0/1 を期待している箇所で
-    # 設定ミスの true/false が混ざる）
-    if isinstance(raw, bool) or not isinstance(raw, int):
-        raise ConfigInvalidValueError(section.strip().upper(), key.strip().upper(), raw, "整数")
-    if minimum is not None and raw < minimum:
-        raise ConfigInvalidValueError(
-            section.strip().upper(), key.strip().upper(), raw, f"{minimum} 以上の整数"
-        )
-    if maximum is not None and raw > maximum:
-        raise ConfigInvalidValueError(
-            section.strip().upper(), key.strip().upper(), raw, f"{maximum} 以下の整数"
-        )
-    return raw
-
-
-def text(name: str, *, allow_empty: bool = False) -> str:
-    """config.ini の値を文字列として読み、空欄を確かめて返す。
-
-    戻り値は ``_parse_value`` と同じ扱い（``configparser`` がパース時に
-    前後の空白を trim した結果）。``_parse_value`` とは違って型変換を挟まない
-    ため、 ``int_value`` のように int 化を強制せずに ``str`` として取り出せる。
-
-    空判定にだけ ``strip()`` を使う。``allow_empty=False``（既定）で、前後の
-    空白を除いた結果が空のときは ``ConfigInvalidValueError``。
-
-    Args:
-        name: ``"SECTION.KEY"`` 形式。
-        allow_empty: True なら空欄も許容する。False（既定）なら前後の空白を
-                     除いた結果が空のとき ``ConfigInvalidValueError``。
-
-    Raises:
-        ConfigInvalidValueError: 文字列以外の値／空欄。
-        ConfigSectionNotFoundError: name のセクションが無い。
-        ConfigKeyNotFoundError: name のキーが無い。
-    """
-    section, _, key = name.partition(".")
-    raw = _get_singleton_value(section, key)
-    if not isinstance(raw, str):
-        raise ConfigInvalidValueError(section.strip().upper(), key.strip().upper(), raw, "文字列")
-    if not allow_empty and not raw.strip():
-        raise ConfigInvalidValueError(
-            section.strip().upper(),
-            key.strip().upper(),
-            raw,
-            "空白以外の文字（前後の空白だけでない文字列）",
-        )
-    return raw
-
-
-def _get_singleton_value(section: str, key: str) -> object:
-    """遅延シングルトンから SECTION.KEY の生値を取り出す（内部ヘルパー）。
-
-    Args:
-        section: セクション名（前後の空白除去＋大文字化は呼び出し側の責務）。
-        key: キー名（前後の空白除去＋大文字化は呼び出し側の責務）。
-
-    Raises:
-        ConfigSectionNotFoundError: セクションが無い。
-        ConfigKeyNotFoundError: キーが無い。
-    """
-    global _singleton
-    if _singleton is None:
-        # 初回呼び出し時にまとめて config.ini を読む。
-        # 個別の read() が要るのはテストで `from comken import config` してから
-        # config.read(path) を呼ぶ運用だけで、その場合もここで上書きされる
-        _singleton = Config()
-    return getattr(getattr(_singleton, section.strip().upper()), key.strip().upper())
+# 公開型 ``MappingDict`` = 実装 ``_LenientDict``。
+# ``*_MAPPING`` セクションの戻り値は dict 互換（``isinstance(x, dict)`` が True）
+# だが、 ``__missing__`` が ``None`` を返すため ``SECTION_MAPPING["未知の列"] is None``
+# という判定がそのまま書ける。利用者向けの名前は ``MappingDict`` で、 ``_LenientDict``
+# は内部実装として ``_`` プレフィックスで残す。
+MappingDict = _LenientDict
 
 
 def require(*names: str) -> None:
@@ -452,34 +359,31 @@ def require(*names: str) -> None:
         ConfigFileNotFoundError: config.ini が無い場合。
         ConfigCreatedFromExampleError: example から作成した場合。
     """
-    global _singleton
-    if _singleton is None:
-        _singleton = Config()
+    # 専用 global 変数なしで `__getattr__` と同じ初期化方針を使う。
+    # `Config()` を直接呼んでプロジェクトの config.ini を読む。
+    config_instance = Config()
     missing = []
     for name in names:
         section, _, key = name.partition(".")
         try:
             # 無いセクションは ConfigSectionNotFoundError になる（既定値を返さない）ので、
             # ここで受けて「足りないもの」へ積む。1件目で止めずに最後まで数える。
-            namespace = getattr(_singleton, section.strip().upper())
+            namespace = getattr(config_instance, section.strip().upper())
         except ConfigSectionNotFoundError:
             missing.append(name.strip().upper())
             continue
         if not hasattr(namespace, key.strip().upper()):
             missing.append(name.strip().upper())
     if missing:
-        raise ConfigRequiredKeysMissingError(missing, _singleton._path)
+        raise ConfigRequiredKeysMissingError(missing, config_instance._path)
 
 
 def __getattr__(name: str) -> types.SimpleNamespace:
     # PEP 562: `comken.core.config.FILES` のようにモジュール属性として見つからない名前で呼ばれる。
-    # セクションは大文字なので、大文字名のときだけ遅延シングルトンへ委譲する
-    # （Config / read などの実体は通常の属性解決で見つかるためここには来ない）。
+    # セクションは大文字なので、大文字名のときだけ Config() を生成して委譲する
+    # （Config / MappingDict / require などの実体は通常の属性解決で見つかるためここには来ない）。
     if name.isupper():
-        global _singleton
-        if _singleton is None:
-            _singleton = Config()  # 初回アクセス時にカレントの config.ini を読む
-        return getattr(_singleton, name)
+        return getattr(Config(), name)
     raise AttributeError(f"module 'comken.core.config' has no attribute {name!r}")
 
 
