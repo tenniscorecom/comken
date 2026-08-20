@@ -26,7 +26,6 @@ from comken.constants import FileFormat
 from comken.core.data import column_number
 from comken.core.files.base import FileBase
 from comken.core.files.ops import copy_to_local_if_large
-from comken.core.transfer import mapping_columns, normalize_lookup_key
 from comken.exceptions import (
     EmptyHeaderCellError,
     ExcelApplicationNotAvailableError,
@@ -34,60 +33,11 @@ from comken.exceptions import (
     ExcelHeadersTooFewError,
     FileFormatMismatchError,
     MacroError,
-    RowTransferError,
 )
 from comken.exceptions.warning import _warn_coerce
 from comken.runtime import dry_run_log, is_dry_run
 
 logger = logging.getLogger(__name__)
-
-
-def _normalize_com_rows(values: Any, is_single_row: bool) -> tuple[tuple[Any, ...], ...]:
-    """COM の Range.Value を常に行のタプルへ揃える。"""
-    if not is_single_row:
-        return values
-    if not isinstance(values, tuple):
-        return ((values,),)
-    if values and not isinstance(values[0], tuple):
-        return (values,)
-    return values
-
-
-def _consecutive_update_runs(
-    updates: list[tuple[int, object]],
-) -> list[list[tuple[int, object]]]:
-    """連続した行への更新を、COM で一括書き込みできる単位へ分ける。"""
-    runs: list[list[tuple[int, object]]] = []
-    run_start = 0
-    while run_start < len(updates):
-        run_end = run_start + 1
-        while run_end < len(updates) and updates[run_end][0] == updates[run_end - 1][0] + 1:
-            run_end += 1
-        runs.append(updates[run_start:run_end])
-        run_start = run_end
-    return runs
-
-
-def _write_com_updates(ws: Any, output_by_column: dict[int, list[tuple[int, object]]]) -> None:
-    """列ごとの更新を一括で書き、失敗した範囲だけセル単位へフォールバックする。"""
-    for destination_column_number, updates in output_by_column.items():
-        for run in _consecutive_update_runs(updates):
-            target = ws.Range(
-                ws.Cells(run[0][0], destination_column_number),
-                ws.Cells(run[-1][0], destination_column_number),
-            )
-            try:
-                target.Value = tuple((value,) for _, value in run)
-            except Exception:
-                for row_number, value in run:
-                    try:
-                        ws.Range(
-                            ws.Cells(row_number, destination_column_number),
-                            ws.Cells(row_number, destination_column_number),
-                        ).Value = value
-                    except Exception as error:
-                        raise RowTransferError(row_number, error) from error
-
 
 _SUFFIX_TO_FORMAT = {
     ".xlsx": FileFormat.XLSX,
@@ -314,131 +264,6 @@ class ExcelComHandler(FileBase):
         ws = self._sheet(sheet_name)
         return ws.UsedRange.Row + ws.UsedRange.Rows.Count - 1
 
-    def _transfer_by_mapping(
-        self,
-        sheet_name: str,
-        key_col: str,
-        lookup: dict[str, dict],
-        mapping: dict[str, str],
-        header_row: int = 1,
-    ) -> int:
-        """列名で指定し、キーが一致した行に値を転記する（XLOOKUP 的転記）。
-
-        Excel の各行についてキー列の値を lookup のキーと突合し、
-        一致したら mapping に従って値を書き込む。
-        空行・キーが空の行・lookup に存在しないキーの行はスキップする。
-
-        Sheet._transfer_by_mapping() と同じ引数・対応表の向きであり、数式の再計算や
-        パスワード付き保存など COM が必要なブックに限ってこちらを使う。
-        ヘッダーがない、または列位置が固定された帳票には _transfer_by_letter() を使う。
-        Args:
-            sheet_name: シート名。
-            key_col: 転記先 Excel で照合に使う列名。
-            lookup: {キーの値: {列名: 値}} の辞書。CsvReader.index() 等で作る。
-            mapping: {転記元の列名: 転記先の列名} の辞書。
-            header_row: 転記先 Excel のヘッダー行番号（1始まり）。
-
-        Returns:
-            転記した行数。
-
-        Raises:
-            ExcelError: 行の処理に失敗した場合（メッセージに行番号を含む）。
-        """
-        ws = self._sheet(sheet_name)
-        last_row = self.last_row(sheet_name)
-        last_col = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
-        header_values = _block_values(ws, int(header_row), int(header_row), last_col)
-        headers = header_values[0] if header_values else ()
-        header_columns, destination_columns = mapping_columns(headers, key_col, lookup, mapping)
-        logger.info("シート「%s」: 最終行 %d行", sheet_name, last_row)
-        if last_row <= int(header_row):
-            return 0
-        first_row = int(header_row) + 1
-        values = ws.Range(ws.Cells(first_row, 1), ws.Cells(last_row, last_col)).Value
-        values = _normalize_com_rows(values, first_row == last_row)
-
-        matched = 0
-        output_by_column: dict[int, list[tuple[int, object]]] = {
-            col_num: [] for col_num in destination_columns.values()
-        }
-        for row_offset, row_values in enumerate(values):
-            row = first_row + row_offset
-            try:
-                if all(value is None for value in row_values):
-                    continue
-
-                key_value = row_values[header_columns[key_col] - 1]
-                lookup_key = normalize_lookup_key(key_value)
-                if lookup_key is None:
-                    continue
-                lookup_row = lookup.get(lookup_key)
-                if lookup_row is None:
-                    logger.debug("%d行目: キー「%s」が lookup に存在しません", row, key_value)
-                    continue
-
-                for source, col_num in destination_columns.items():
-                    output_by_column[col_num].append((row, lookup_row[source]))
-                logger.debug("%d行目: 転記完了（キー: %s）", row, key_value)
-                matched += 1
-
-            except Exception as error:
-                raise RowTransferError(row, error) from error
-
-        _write_com_updates(ws, output_by_column)
-
-        logger.info("転記完了: %d件一致（シート: %s）", matched, sheet_name)
-        return matched
-
-    def _transfer_by_letter(
-        self,
-        sheet_name: str,
-        key_col: int | str,
-        lookup: dict[str, dict],
-        mapping: dict[str, int | str],
-        start_row: int = 2,
-    ) -> int:
-        """列記号で指定し、キーが一致した行へ値を転記する。
-
-        ヘッダーがない、または列位置が仕様として固定された Excel に使う。
-        ヘッダー名で指定できる帳票には _transfer_by_mapping() を使う。
-        mapping は両メソッド共通で ``{転記元の列名: 転記先}`` の向き。
-        """
-        ws = self._sheet(sheet_name)
-        last_row = self.last_row(sheet_name)
-        key_col_num = column_number(key_col)
-        destination_columns = {
-            column_number(destination): source for source, destination in mapping.items()
-        }
-        if last_row < int(start_row):
-            return 0
-        first_row = int(start_row)
-        last_col = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
-        read_last_col = max(last_col, key_col_num, *destination_columns)
-        values = ws.Range(ws.Cells(first_row, 1), ws.Cells(last_row, read_last_col)).Value
-        values = _normalize_com_rows(values, first_row == last_row)
-        matched = 0
-        output_by_column: dict[int, list[tuple[int, object]]] = {
-            column: [] for column in destination_columns
-        }
-        for row_offset, row_values in enumerate(values):
-            row = first_row + row_offset
-            try:
-                key_value = row_values[key_col_num - 1]
-                lookup_key = normalize_lookup_key(key_value)
-                if lookup_key is None:
-                    continue
-                lookup_row = lookup.get(lookup_key)
-                if lookup_row is None:
-                    continue
-                for destination_column, source in destination_columns.items():
-                    output_by_column[destination_column].append((row, lookup_row.get(source, "")))
-                matched += 1
-            except Exception as error:
-                raise RowTransferError(row, error) from error
-        _write_com_updates(ws, output_by_column)
-        logger.info("転記完了: %d件一致（シート: %s）", matched, sheet_name)
-        return matched
-
     def run_macro(self, macro_name: str) -> None:
         """VBA マクロを実行する。
 
@@ -458,7 +283,7 @@ class ExcelComHandler(FileBase):
         （一時コピーに保存すると close() でコピーごと消えるため）。
         動作は ExcelWriter.save() と同じ考え方（開いた場所ではなく、元の場所へ保存）。
         close() は保存せずに閉じる（SaveChanges=False）ため、
-        write_cell や _transfer_by_mapping での変更を残す場合は必ず呼ぶこと。
+        write_cell での変更を残す場合は必ず呼ぶこと。
 
         Raises:
             FileFormatMismatchError: 保存先の拡張子がワークブックの形式と食い違う場合。

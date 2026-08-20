@@ -1525,27 +1525,6 @@ Excel のマクロが失敗した
 def __init__(self, name: str, detail: Exception) -> None:
 ```
 
-### `RowTransferError`
-
-```text
-class RowTransferError(ExcelError):
-```
-
-#### 説明
-
-Excel の行転記に失敗した
-
-発生箇所: ExcelComHandler._transfer_by_mapping()
-
-対処:
-    表示された行番号のデータを確認する
-
-#### `__init__`
-
-```text
-def __init__(self, row: int, detail: Exception) -> None:
-```
-
 ### `EmptyHeaderCellError`
 
 ```text
@@ -1871,48 +1850,6 @@ class KeyColumnNotFoundError(ColumnNotFoundError):
 def __init__(self, key: str, existing: list[str]) -> None:
 ```
 
-### `TransferKeyColumnNotFoundError`
-
-```text
-class TransferKeyColumnNotFoundError(ColumnNotFoundError):
-```
-
-#### 説明
-
-列名転記で、Excel のキー列が見つからない
-
-発生箇所: Sheet._transfer_by_mapping()
-
-対処:
-    Excel のヘッダー行と key_col の列名を確認する
-
-#### `__init__`
-
-```text
-def __init__(self, column: str, existing: list[str]) -> None:
-```
-
-### `TransferDestinationColumnNotFoundError`
-
-```text
-class TransferDestinationColumnNotFoundError(ColumnNotFoundError):
-```
-
-#### 説明
-
-列名転記で、Excel の転記先列が見つからない
-
-発生箇所: Sheet._transfer_by_mapping()
-
-対処:
-    Excel のヘッダー行と config.ini のマッピング右側を確認する
-
-#### `__init__`
-
-```text
-def __init__(self, columns: list[str], existing: list[str]) -> None:
-```
-
 ### `TransferSourceColumnNotFoundError`
 
 ```text
@@ -1923,7 +1860,7 @@ class TransferSourceColumnNotFoundError(ColumnNotFoundError):
 
 列名転記で、lookup の転記元列が見つからない
 
-発生箇所: Sheet._transfer_by_mapping()
+発生箇所: 転記元の列を検証する処理
 
 対処:
     転記元データと config.ini のマッピング左側を確認する
@@ -5264,7 +5201,7 @@ def index(self, key_col: str) -> dict[str, dict[str, str]]:
 
 key_col をキーにした {キー: 行} の辞書を返す。
 
-Excel との突合（_transfer_by_mapping の lookup）など、キーで1行を引く用途に使う。
+キーで1行を引く用途に使う。
 キーが重複していれば CsvRowDuplicateKeyError。重複が普通のデータは group_by() を使う。
 
 Raises:
@@ -6918,7 +6855,7 @@ NAS 上のファイルをローカルコピーして開いている場合も、�
 （一時コピーに保存すると close() でコピーごと消えるため）。
 動作は ExcelWriter.save() と同じ考え方（開いた場所ではなく、元の場所へ保存）。
 close() は保存せずに閉じる（SaveChanges=False）ため、
-write_cell や _transfer_by_mapping での変更を残す場合は必ず呼ぶこと。
+write_cell での変更を残す場合は必ず呼ぶこと。
 
 Raises:
     FileFormatMismatchError: 保存先の拡張子がワークブックの形式と食い違う場合。

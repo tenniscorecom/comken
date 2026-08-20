@@ -32,7 +32,6 @@
 | `ExcelFileNotFoundError` | Excel ファイルが見つからない | ファイルの置き場所と名前を確認する |
 | `ExcelColumnNotFoundError` | Excel の列見出しが見つからない | Excel の1行目を確認する |
 | `MacroError` | Excel のマクロが失敗した | Excel をすべて閉じて再実行する。続く場合は管理者へ |
-| `RowTransferError` | Excel の行転記に失敗した | 表示された行番号のデータを確認する |
 | `EmptyHeaderCellError` | Excel の見出しに空欄がある | Excel の1行目の空欄を埋める |
 | `ExcelHeadersTooFewError` | 指定した見出し数が列数より少ない | 管理者へ連絡する |
 

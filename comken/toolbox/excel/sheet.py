@@ -17,8 +17,6 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.worksheet.worksheet import Worksheet
 
 from comken.core.data import column_number
-from comken.core.timer import measure
-from comken.core.transfer import mapping_columns, normalize_lookup_key
 from comken.exceptions import (
     InvalidTableNameError,
     TableAlreadyExistsError,
@@ -122,92 +120,6 @@ class Sheet:
         for column, dimension in self.ws.column_dimensions.items():
             copied.ws.column_dimensions[column].width = dimension.width
         return copied
-
-    @measure
-    def _transfer_by_letter(
-        self,
-        key_col: int | str,
-        lookup: dict[str, dict],
-        mapping: dict[str, int | str],
-        start_row: int = 2,
-    ) -> int:
-        """列記号で転記先を指定し、キーが一致した行へ値を転記する。
-
-        ヘッダーがない、または列位置が仕様として固定された Excel に使う。
-        ヘッダー名で列を指定できる帳票には _transfer_by_mapping() を使う。
-        mapping は両メソッド共通で ``{転記元の列名: 転記先}`` の向き。
-        """
-        key_col_num = column_number(key_col)
-        destination_columns = {
-            source: column_number(destination) for source, destination in mapping.items()
-        }
-        matched = 0
-        for row in range(int(start_row), self.ws.max_row + 1):
-            key_value = self.ws.cell(row=row, column=key_col_num).value
-            lookup_key = normalize_lookup_key(key_value)
-            if lookup_key is None:
-                continue
-            lookup_row = lookup.get(lookup_key)
-            if lookup_row is None:
-                continue
-            for source, destination_column in destination_columns.items():
-                self.ws.cell(row=row, column=destination_column).value = lookup_row.get(source, "")
-            matched += 1
-        logger.info("転記完了: %d件一致（シート: %s）", matched, self.ws.title)
-        return matched
-
-    @measure
-    def _transfer_by_mapping(
-        self,
-        key_col: str,
-        lookup: dict[str, dict],
-        mapping: dict[str, str],
-        header_row: int = 1,
-    ) -> int:
-        """列名で転記先を指定し、キーが一致した行へ値を転記する。
-
-        ``config.SECTION_MAPPING`` （``MappingDict``）の戻り値を変換せずに渡せる。
-        mapping の向きは ``{転記元の列名: 転記先の列名}`` で、左が元、右が先。
-        ヘッダーがない、または列位置が固定された帳票には _transfer_by_letter() を使う。
-        転記を始める前にキー列・転記先列・転記元列をすべて検証する。
-
-        渡された ``lookup`` の中で「転記から外したい行」がある場合は、
-        呼び出し側で ``lookup`` を絞り込んでから渡す（``for k, v in lookup.items()``
-        での dict comprehension で十分）。
-
-        Args:
-            key_col: 転記先 Excel で照合に使う列名。
-            lookup: キーから転記元の行データを引く辞書。
-            mapping: 転記元の列名から転記先の列名への対応表。
-            header_row: 転記先 Excel のヘッダー行番号（1始まり）。
-        """
-        headers = [
-            self.ws.cell(row=int(header_row), column=column).value
-            for column in range(1, self.ws.max_column + 1)
-        ]
-        header_columns, destination_columns = mapping_columns(
-            tuple(headers), key_col, lookup, mapping
-        )
-        logger.info("シート「%s」: 最終行 %d行", self.ws.title, self.ws.max_row)
-        matched = 0
-        for row in range(int(header_row) + 1, self.ws.max_row + 1):
-            key_value = self.ws.cell(row=row, column=header_columns[key_col]).value
-            lookup_key = normalize_lookup_key(key_value)
-            if lookup_key is None:
-                continue
-            lookup_row = lookup.get(lookup_key)
-            if lookup_row is None:
-                logger.debug(
-                    "%d行目: キー型 %s が lookup に存在しません",
-                    row,
-                    type(key_value).__name__,
-                )
-                continue
-            for source, destination_column in destination_columns.items():
-                self.ws.cell(row=row, column=destination_column).value = lookup_row[source]
-            matched += 1
-        logger.info("転記完了: %d件一致（シート: %s）", matched, self.ws.title)
-        return matched
 
     # ------------------------------------------------------------ 構造化テーブル
     def add_table(self, name: str, ref: str) -> None:

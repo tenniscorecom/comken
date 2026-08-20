@@ -26,7 +26,6 @@ ComkenError
 │   ├── TableNotFoundError
 │   ├── TableNotAvailableInReadOnlyError
 │   ├── MacroError
-│   ├── RowTransferError
 │   ├── EmptyHeaderCellError
 │   ├── ExcelHeadersTooFewError
 │   └── FileFormatMismatchError
@@ -76,8 +75,6 @@ ComkenError
 │   ├── ExcelColumnNotFoundError
 │   ├── CsvColumnNotFoundError
 │   ├── KeyColumnNotFoundError
-│   ├── TransferKeyColumnNotFoundError
-│   ├── TransferDestinationColumnNotFoundError
 │   └── TransferSourceColumnNotFoundError
 ├── ConfigError
 │   ├── ConfigFileNotFoundError
@@ -145,8 +142,6 @@ from comken.exceptions.column import (
     ExcelColumnNotFoundError,
     InvalidColumnError,
     KeyColumnNotFoundError,
-    TransferDestinationColumnNotFoundError,
-    TransferKeyColumnNotFoundError,
     TransferSourceColumnNotFoundError,
 )
 from comken.exceptions.config import (
@@ -197,7 +192,6 @@ from comken.exceptions.excel import (
     InvalidTableNameError,
     LastSheetDeletionError,
     MacroError,
-    RowTransferError,
     SheetAlreadyExistsError,
     SheetNotFoundError,
     TableAlreadyExistsError,
@@ -266,7 +260,6 @@ __all__ = [
     "TableNotFoundError",
     "TableNotAvailableInReadOnlyError",
     "MacroError",
-    "RowTransferError",
     "EmptyHeaderCellError",
     "ExcelHeadersTooFewError",
     "ExcelSaveNotCompletedError",
@@ -282,8 +275,6 @@ __all__ = [
     "ExcelColumnNotFoundError",
     "CsvColumnNotFoundError",
     "KeyColumnNotFoundError",
-    "TransferKeyColumnNotFoundError",
-    "TransferDestinationColumnNotFoundError",
     "TransferSourceColumnNotFoundError",
     "InvalidColumnError",
     "ConfigError",

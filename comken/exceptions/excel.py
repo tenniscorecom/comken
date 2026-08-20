@@ -142,22 +142,6 @@ class MacroError(ExcelError):
         )
 
 
-class RowTransferError(ExcelError):
-    """Excel の行転記に失敗した
-
-    発生箇所: ExcelComHandler._transfer_by_mapping()
-
-    対処:
-        表示された行番号のデータを確認する
-    """
-
-    def __init__(self, row: int, detail: Exception) -> None:
-        super().__init__(
-            f"Excel {row}行目の転記中にエラーが発生しました。"
-            f"該当行を確認してください。（詳細: {detail}）"
-        )
-
-
 class EmptyHeaderCellError(ExcelError):
     """Excel の見出しに空欄がある
 

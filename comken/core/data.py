@@ -125,7 +125,6 @@ def _normalize(value) -> str:
     そのまま == で比べると「"1000" と 1000」が差分扱いになってしまう。
     None は ""、整数値の float（1000.0）は int（1000）を経由して文字列にする。
 
-    NOTE: `utils/transfer.normalize_lookup_key()` は照合キー用で別物。
     こちらは行の比較用で None を "" に揃える役割を持つ。
     """
     if value is None:

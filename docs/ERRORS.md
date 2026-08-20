@@ -55,7 +55,6 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `TableNotFoundError` | 指定したテーブルがシートにない | エラーに表示された既存テーブル名を確認する |
 | `TableNotAvailableInReadOnlyError` | read_only で開いたブックからテーブル名で読めない | ExcelReader を ``tables=True`` で開き直す。例: ``ExcelReader(path, tables=True)`` のように指定する。 |
 | `MacroError` | Excel のマクロが失敗した | Excel をすべて閉じて再実行する。続く場合は管理者へ |
-| `RowTransferError` | Excel の行転記に失敗した | 表示された行番号のデータを確認する |
 | `EmptyHeaderCellError` | Excel の見出しに空欄がある | Excel の1行目の空欄を埋める |
 | `ExcelHeadersTooFewError` | 指定した見出し数が列数より少ない | 管理者へ連絡する |
 | `ExcelSaveNotCompletedError` | Excel の保存が成功したように見えて、ファイルが無い | Excel が他で開かれていないか、ディスクの空き容量があるかを確認し、もう一度保存を実行する |
@@ -95,8 +94,6 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `ExcelColumnNotFoundError` | Excel の列見出しが見つからない | Excel の1行目を確認する |
 | `CsvColumnNotFoundError` | CSV の列見出しが見つからない | CSV の1行目を確認する |
 | `KeyColumnNotFoundError` | 比較に使うキー列が見つからない | Excel・CSV の列名を確認する |
-| `TransferKeyColumnNotFoundError` | 列名転記で、Excel のキー列が見つからない | Excel のヘッダー行と key_col の列名を確認する |
-| `TransferDestinationColumnNotFoundError` | 列名転記で、Excel の転記先列が見つからない | Excel のヘッダー行と config.ini のマッピング右側を確認する |
 | `TransferSourceColumnNotFoundError` | 列名転記で、lookup の転記元列が見つからない | 転記元データと config.ini のマッピング左側を確認する |
 | `InvalidColumnError` | 列の指定が正しくない（打ち間違いなど） | 列は番号（1, 2, …）か列記号（"A", "AA"）で指定する |
 | `ConfigFileNotFoundError` | config.ini が見つからない | config.ini.example が同じ場所にあるか確認する（あれば実行し直すだけで作られる） |

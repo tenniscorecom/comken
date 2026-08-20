@@ -90,8 +90,6 @@ def test_core_does_not_expose_internal_helpers() -> None:
     forbidden = (
         "FileBase",
         "cleanup_stale_tmp",
-        "mapping_columns",
-        "normalize_lookup_key",
         "col_to_num",
         "column_number",
     )

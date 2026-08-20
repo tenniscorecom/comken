@@ -15,7 +15,6 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 
 import comken.toolbox.excel
 from comken import dry_run
-from comken.core.config import Config
 from comken.core.data import col_to_num
 from comken.exceptions import (
     ComkenError,
@@ -30,9 +29,6 @@ from comken.exceptions import (
     TableAlreadyExistsError,
     TableNotAvailableInReadOnlyError,
     TableNotFoundError,
-    TransferDestinationColumnNotFoundError,
-    TransferKeyColumnNotFoundError,
-    TransferSourceColumnNotFoundError,
     UnsupportedFileSuffixError,
 )
 from comken.toolbox.excel import ExcelReader, ExcelWriter
@@ -235,101 +231,6 @@ class TestExcelComHandlerColumn:
 
         assert sheet.Cells.call_args_list == [((2, expected),), ((2, expected),)]
         assert sheet.Cells.return_value.Value == "書込値"
-
-
-class TestExcelComHandlerTransferByKey:
-    def test_reads_and_writes_ranges_in_bulk(self) -> None:
-        source = (
-            (1001.0, "旧顧客", "旧金額"),
-            (1002.0, "旧顧客続き", "旧金額続き"),
-            (None, "数式を想定した未一致値", 0),
-            ("A002", "旧顧客2", "旧金額2"),
-        )
-        written: dict[tuple[int, int, int], tuple] = {}
-
-        class FakeRange:
-            def __init__(self, start: tuple[int, int], end: tuple[int, int]) -> None:
-                self.start = start
-                self.end = end
-
-            @property
-            def Value(self):
-                return source
-
-            @Value.setter
-            def Value(self, value) -> None:
-                written[(self.start[0], self.end[0], self.start[1])] = value
-
-        sheet = MagicMock()
-        sheet.Cells.side_effect = lambda row, col: (row, col)
-        sheet.Range.side_effect = lambda start, end: FakeRange(start, end)
-        sheet.UsedRange = SimpleNamespace(
-            Row=1,
-            Column=1,
-            Rows=SimpleNamespace(Count=5),
-            Columns=SimpleNamespace(Count=3),
-        )
-
-        handler = ExcelComHandler.__new__(ExcelComHandler)
-        handler._sheet = MagicMock(return_value=sheet)
-        handler.last_row = MagicMock(return_value=5)
-
-        matched = handler._transfer_by_letter(
-            "Sheet1",
-            key_col="A",
-            lookup={
-                "1001": {"顧客名": "株式会社A", "金額": 1000},
-                "1002": {"顧客名": "株式会社C", "金額": 1500},
-                "A002": {"顧客名": "株式会社B", "金額": 2000},
-            },
-            mapping={"顧客名": "B", "金額": "C"},
-        )
-
-        assert matched == 3
-        assert written[(2, 3, 2)] == (("株式会社A",), ("株式会社C",))
-        assert written[(5, 5, 2)] == (("株式会社B",),)
-        assert written[(2, 3, 3)] == ((1000,), (1500,))
-        assert written[(5, 5, 3)] == ((2000,),)
-        assert not any(start == 4 for start, _, _ in written)
-        assert sheet.Range.call_count == 5
-
-    def test_write_error_identifies_row(self) -> None:
-        source = ((1001.0,), (1002.0,))
-
-        class FailingRange:
-            def __init__(self, start: tuple[int, int], end: tuple[int, int]) -> None:
-                self.start = start
-                self.end = end
-
-            @property
-            def Value(self):
-                return source
-
-            @Value.setter
-            def Value(self, value) -> None:
-                if self.start[0] != self.end[0] or self.start[0] == 3:
-                    raise TypeError("書き込み不可")
-
-        sheet = MagicMock()
-        sheet.Cells.side_effect = lambda row, col: (row, col)
-        sheet.Range.side_effect = lambda start, end: FailingRange(start, end)
-        sheet.UsedRange = SimpleNamespace(
-            Row=1,
-            Column=1,
-            Rows=SimpleNamespace(Count=3),
-            Columns=SimpleNamespace(Count=1),
-        )
-        handler = ExcelComHandler.__new__(ExcelComHandler)
-        handler._sheet = MagicMock(return_value=sheet)
-        handler.last_row = MagicMock(return_value=3)
-
-        with pytest.raises(ExcelError, match="3行目"):
-            handler._transfer_by_letter(
-                "Sheet1",
-                key_col="A",
-                lookup={"1001": {"値": "A"}, "1002": {"値": "B"}},
-                mapping={"値": "B"},
-            )
 
 
 class TestExcelComHandlerBulkRead:
@@ -536,205 +437,6 @@ class TestReadRowsAsDictsWithHeaders:
         assert rows[1]["注文番号"] == "A002"
 
 
-class TestTransferByKey:
-    """Sheet._transfer_by_letter（openpyxl 版のキー突合転記）のテスト。"""
-
-    @pytest.fixture
-    def transfer_excel(self, tmp_path):
-        """転記先の Excel（キー列 A、転記先列 B・C）を作成して返す。"""
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "T_data"
-        ws.append(["注文番号", "顧客名", "金額"])
-        ws.append(["A001", None, None])
-        ws.append(["A002", None, None])
-        ws.append(["Z999", None, None])  # lookup に存在しないキー
-        path = tmp_path / "transfer.xlsx"
-        wb.save(path)
-        return path
-
-    def test_transfers_matching_rows(self, transfer_excel):
-        """キーが一致した行に値が転記され、件数が返ることを確認する。"""
-        lookup = {
-            "A001": {"顧客名": "株式会社A", "金額": "1000"},
-            "A002": {"顧客名": "株式会社B", "金額": "2000"},
-        }
-
-        with ExcelWriter(transfer_excel) as f:
-            matched = f.sheet("T_data")._transfer_by_letter(
-                key_col="A", lookup=lookup, mapping={"顧客名": "B", "金額": "C"}
-            )
-            f.save()
-
-        assert matched == 2
-        wb = load_workbook(transfer_excel)
-        ws = wb["T_data"]
-        assert ws.cell(row=2, column=2).value == "株式会社A"
-        assert ws.cell(row=3, column=3).value == "2000"
-        wb.close()
-
-    def test_skips_missing_keys(self, transfer_excel):
-        """lookup にないキーの行は転記されずスキップされることを確認する。"""
-        lookup = {"A001": {"顧客名": "株式会社A"}}
-
-        with ExcelWriter(transfer_excel) as f:
-            matched = f.sheet("T_data")._transfer_by_letter(
-                key_col="A", lookup=lookup, mapping={"顧客名": "B"}
-            )
-            f.save()
-
-        assert matched == 1
-        wb = load_workbook(transfer_excel)
-        ws = wb["T_data"]
-        assert ws.cell(row=4, column=2).value is None  # Z999 の行は未転記
-        wb.close()
-
-    def test_float_integer_key_matches_csv_string(self, tmp_path):
-        """数値キー（1001.0）が CSV 側の文字列キー "1001" と突合できることを確認する。"""
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "T_data"
-        ws.append(["注文番号", "顧客名"])
-        ws.append([1001.0, None])
-        path = tmp_path / "float_key.xlsx"
-        wb.save(path)
-
-        lookup = {"1001": {"顧客名": "株式会社C"}}
-
-        with ExcelWriter(path) as f:
-            matched = f.sheet("T_data")._transfer_by_letter(
-                key_col="A", lookup=lookup, mapping={"顧客名": "B"}
-            )
-            f.save()
-
-        assert matched == 1
-        wb = load_workbook(path)
-        assert wb["T_data"].cell(row=2, column=2).value == "株式会社C"
-        wb.close()
-
-    def test_key_col_accepts_column_number(self, transfer_excel):
-        """key_col を列レターではなく列番号（1）で指定できることを確認する。"""
-        lookup = {"A001": {"顧客名": "株式会社A"}}
-
-        with ExcelWriter(transfer_excel) as f:
-            matched = f.sheet("T_data")._transfer_by_letter(
-                key_col=1, lookup=lookup, mapping={"顧客名": "B"}
-            )
-
-        assert matched == 1
-
-    def test_raises_on_missing_sheet(self, transfer_excel):
-        """存在しないシートを指定すると SheetNotFoundError になることを確認する。"""
-        with ExcelWriter(transfer_excel) as f, pytest.raises(SheetNotFoundError):
-            f.sheet("存在しない")._transfer_by_letter(key_col="A", lookup={}, mapping={})
-
-
-class TestTransferByMapping:
-    """Sheet._transfer_by_mapping（列名で指定するキー突合転記）のテスト。"""
-
-    @pytest.fixture
-    def transfer_excel(self, tmp_path):
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "T_data"
-        ws.append(["受注番号", "顧客名", "請求額"])
-        ws.append(["A001", None, None])
-        ws.append(["A002", None, None])
-        ws.append(["Z999", None, None])
-        path = tmp_path / "_transfer_by_mapping.xlsx"
-        wb.save(path)
-        return path
-
-    def test_transfers_config_mapping_in_source_to_destination_direction(
-        self, transfer_excel, tmp_path
-    ):
-        lookup = {
-            "A001": {"取引先": "株式会社A", "金額": 1000},
-            "A002": {"取引先": "株式会社B", "金額": 2000},
-        }
-        ini = tmp_path / "config.ini"
-        ini.write_text("[受注_MAPPING]\n取引先 = 顧客名\n金額 = 請求額\n", encoding="utf-8")
-        config_mapping = Config(ini).受注_MAPPING
-
-        with ExcelWriter(transfer_excel) as f:
-            matched = f.sheet("T_data")._transfer_by_mapping(
-                key_col="受注番号", lookup=lookup, mapping=config_mapping
-            )
-            f.save()
-
-        assert matched == 2
-        wb = load_workbook(transfer_excel)
-        ws = wb["T_data"]
-        assert ws["B2"].value == "株式会社A"
-        assert ws["C3"].value == 2000
-        assert ws["B4"].value is None
-        wb.close()
-
-    def test_missing_destination_raises_before_any_cell_or_file_is_changed(self, transfer_excel):
-        lookup = {"A001": {"取引先": "株式会社A", "金額": 1000}}
-
-        with ExcelWriter(transfer_excel) as f:
-            sheet = f.sheet("T_data")
-            with pytest.raises(TransferDestinationColumnNotFoundError) as error:
-                sheet._transfer_by_mapping(
-                    key_col="受注番号",
-                    lookup=lookup,
-                    mapping={"取引先": "顧客名", "金額": "存在しない列"},
-                )
-            assert sheet.ws["B2"].value is None
-
-        wb = load_workbook(transfer_excel)
-        assert wb["T_data"]["B2"].value is None
-        wb.close()
-        assert str(error.value) == (
-            "転記先の列がExcelに見つかりません: 存在しない列\n"
-            "転記先に存在する列: 受注番号, 顧客名, 請求額\n"
-            "Excelのヘッダー行と config.ini のマッピング右側を確認してください。"
-        )
-
-    def test_missing_source_raises_before_transfer(self, transfer_excel):
-        lookup = {"A001": {"取引先": "株式会社A"}}
-
-        with ExcelWriter(transfer_excel) as f, pytest.raises(TransferSourceColumnNotFoundError):
-            f.sheet("T_data")._transfer_by_mapping(
-                key_col="受注番号",
-                lookup=lookup,
-                mapping={"取引先": "顧客名", "金額": "請求額"},
-            )
-
-    def test_missing_key_column_raises(self, transfer_excel):
-        with ExcelWriter(transfer_excel) as f, pytest.raises(TransferKeyColumnNotFoundError):
-            f.sheet("T_data")._transfer_by_mapping(
-                key_col="存在しないキー",
-                lookup={"A001": {"取引先": "株式会社A"}},
-                mapping={"取引先": "顧客名"},
-            )
-
-    def test_uses_header_row_other_than_first(self, tmp_path):
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "T_data"
-        ws.append(["帳票タイトル"])
-        ws.append(["受注番号", "顧客名"])
-        ws.append(["A001", None])
-        path = tmp_path / "header_row_2.xlsx"
-        wb.save(path)
-
-        with ExcelWriter(path) as f:
-            matched = f.sheet("T_data")._transfer_by_mapping(
-                key_col="受注番号",
-                lookup={"A001": {"取引先": "株式会社A"}},
-                mapping={"取引先": "顧客名"},
-                header_row=2,
-            )
-            f.save()
-
-        assert matched == 1
-        wb = load_workbook(path)
-        assert wb["T_data"]["B3"].value == "株式会社A"
-        wb.close()
-
-
 class TestSheetWrapper:
     """Sheet（シート単位の高レベルラッパー）のテスト。"""
 
@@ -865,7 +567,6 @@ class TestSheetApiBoundary:
             "set_column_width",
             "set_number_format",
             "set_bold",
-            "_transfer_by_letter",
         )
         with ExcelWriter.create(tmp_path / "boundary.xlsx") as writer:
             assert not [name for name in names if hasattr(writer, name)]

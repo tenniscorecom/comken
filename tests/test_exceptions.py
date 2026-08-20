@@ -24,7 +24,6 @@ from comken.exceptions import (
     FileFormatMismatchError,
     KeyColumnNotFoundError,
     MacroError,
-    RowTransferError,
     SheetNotFoundError,
 )
 from comken.exceptions.warning import _warn_coerce
@@ -50,7 +49,6 @@ def test_all_declared_names_are_resolvable() -> None:
         (ExcelFileNotFoundError("book.xlsx"), ExcelError, "book.xlsx"),
         (SheetNotFoundError("集計", ["Sheet1"]), ExcelError, "集計"),
         (MacroError("Module1.Run", "失敗"), ExcelError, "Module1.Run"),
-        (RowTransferError(3, "不正値"), ExcelError, "3行目"),
         (EmptyHeaderCellError([2]), ExcelError, "列番号: [2]"),
         (ExcelHeadersTooFewError(2, 3), ExcelError, "2列"),
         (FileFormatMismatchError(".csv"), ExcelError, ".csv"),
