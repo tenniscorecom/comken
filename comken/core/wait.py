@@ -38,7 +38,7 @@ __all__ = ["wait_for_file", "wait_minutes", "wait_seconds", "wait_until", "wait_
 
 
 def wait_seconds(n: float) -> None:
-    """指定した秒数だけ待つ。
+    """``n`` 秒待機する。
 
     Args:
         n: 待機秒数。小数も指定できる（例: 0.5）。
@@ -47,7 +47,7 @@ def wait_seconds(n: float) -> None:
 
 
 def wait_minutes(n: float) -> None:
-    """指定した分数だけ待つ。
+    """``n`` 分待機する。
 
     Args:
         n: 待機分数。小数も指定できる（例: 0.5 → 30秒）。
@@ -56,7 +56,7 @@ def wait_minutes(n: float) -> None:
 
 
 def wait_until(condition: Callable[[], bool], timeout: float = 60, interval: float = 1.0) -> bool:
-    """条件が True になるまで繰り返し確認する。
+    """``condition`` が True になるまで待つ。
 
     Args:
         condition: 引数なしで呼び出せる callable。True を返したら待機終了。
