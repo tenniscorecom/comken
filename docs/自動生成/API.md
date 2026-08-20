@@ -72,10 +72,6 @@ Returns:
 Raises:
     ConfigSectionNotFoundError: 指定したマッピングセクションがない場合。
 
-### `DoctorResult`
-
-公開定数。
-
 ### `config`
 
 定義を解決できませんでした。
@@ -90,24 +86,6 @@ def debug(enabled: bool=True) -> Iterator[None]:
 #### 説明
 
 ブロック内だけデバッグモードにする。
-
-### `doctor`
-
-```text
-def doctor() -> list[DoctorResult]:
-```
-
-#### 説明
-
-環境・依存・設定・接続をまとめて検査する（ライブラリ関数）。
-
-戻り値は `DoctorResult` のリスト。CLI は ``python -m comken doctor``、
-ライブラリ利用者は ``from comken import doctor`` で呼べる。
-
-検査は独立して動く（1 個失敗しても残りは続ける）。Salesforce は
-資格情報が無ければ SKIP し、`requests` を import しない経路を選ぶ
-（BO 環境対応、テスト `test_does_not_load_requests_for_skipped_salesforce`
-で守られる）。
 
 ### `dry_run`
 
@@ -155,16 +133,22 @@ class DateNameBuilder:
 日付はファイル名の属性ではなく「付け方」なので、コンストラクタではなく
 prefix() / suffix() の呼び出し時に決める。
 
+日付はコンストラクタで固定できる。テストや過去日付のファイル名を組み立てる
+ときは ``date(2026, 8, 20)`` 等を渡す。省略時は呼び出し時点の日付。
+
 #### `__init__`
 
 ```text
-def __init__(self, name: str, ext: str='.xlsx') -> None:
+def __init__(self, name: str, for_date: date | datetime | None=None, ext: str='.xlsx') -> None:
 ```
 
 ##### 説明
 
 Args:
     name: ファイル名（拡張子なし）。
+    for_date: ファイル名に付ける日付。``None``（既定）なら呼び出し時点の日付。
+        ``date`` / ``datetime`` どちらも受け付ける（``datetime`` は内部で
+        ``.date()`` に変換）。
     ext: 拡張子（デフォルト: ".xlsx"）。ドットなしで渡しても補完される。
 
 #### `prefix`
@@ -724,7 +708,7 @@ Returns:
 
 ```text
 @measure
-def wait_for_file(folder: str | Path, name_pattern: str, timeout: float=DEFAULT_TIMEOUT_SECONDS, poll_interval: float=DEFAULT_POLL_INTERVAL_SECONDS, stable_for: float=0.0) -> Path:
+def wait_for_file(folder: str | Path, name_pattern: str, timeout: float=DEFAULT_TIMEOUT_SECONDS, poll_interval: float=DEFAULT_POLL_INTERVAL_SECONDS) -> Path:
 ```
 
 #### 説明
@@ -735,14 +719,12 @@ def wait_for_file(folder: str | Path, name_pattern: str, timeout: float=DEFAULT_
 ``poll_interval`` 秒ごとに再検索し、``timeout`` 秒経っても見つからなければ
 ``FileNotFoundError`` を送出する。
 
-**既定では「ファイルが存在するまで」しか待たない。** 作成直後のファイルは
-書き込み途中でも ``is_file()`` が True になるので、そのまま読むと
-途中までの内容を掴むことがある。**書き込み完了まで待つには
-``stable_for`` を指定する**（サイズと更新時刻がその秒数変わらなければ
-書き終わったとみなす）::
+**「ファイルが存在するまで」しか待たない。** 作成直後のファイルは
+書き込み途中でも ``is_file()`` が True になるので、書き込み完了まで
+待ってから読みたいときは ``wait_until_stable()`` を続けて呼ぶ::
 
-    path = wait_for_file(folder, "data_*.csv", stable_for=2.0)
-    # → 見つけたうえで、2 秒間サイズも更新時刻も変わらなくなってから返る
+    path = wait_for_file(folder, "data_*.csv")
+    path = wait_until_stable(path)   # サイズが落ち着くまで待つ
 
 **フォルダが無い場合は待たずに即座に失敗する。** ``Path.glob()`` は
 存在しないフォルダでも例外を出さず空を返すので、そのまま回すと
@@ -754,11 +736,8 @@ def wait_for_file(folder: str | Path, name_pattern: str, timeout: float=DEFAULT_
 Args:
     folder: 監視するフォルダ。
     name_pattern: ファイル名の glob パターン（例: ``"data_*.csv"``）。
-    timeout: 最大待機秒数。デフォルトは 60 秒。**探す時間と書き込み完了を
-        待つ時間の合計**にかかる（``stable_for`` を足しても倍にはならない）。
+    timeout: 最大待機秒数。デフォルトは 60 秒。
     poll_interval: 再検索の間隔秒数。デフォルトは 1 秒。
-    stable_for: 書き込み完了とみなすまでに、サイズと更新時刻が変わらないで
-        いてほしい秒数。既定の ``0.0`` は「完了を待たない」（見つけた時点で返す）。
 
 Returns:
     見つかったファイルのうち mtime が最新のもの。
@@ -768,9 +747,6 @@ Raises:
         待っている間にフォルダが消えた場合も同じ（``timeout`` 到達時）。
     NotADirectoryError: ``folder`` にフォルダではなくファイルを渡した場合。
     FileNotFoundError: ``timeout`` 秒経っても該当ファイルが見つからなかった場合。
-        ``stable_for`` の待機中にファイルが消えた場合も同じ。
-    TimeoutError: ファイルは見つかったが、``timeout`` までに書き込みが
-        終わらなかった場合（``stable_for`` を指定したときだけ起きる）。
 
 ### `wait_minutes`
 
@@ -780,7 +756,7 @@ def wait_minutes(n: float) -> None:
 
 #### 説明
 
-指定した分数だけ待つ。
+``n`` 分待機する。
 
 Args:
     n: 待機分数。小数も指定できる（例: 0.5 → 30秒）。
@@ -793,7 +769,7 @@ def wait_seconds(n: float) -> None:
 
 #### 説明
 
-指定した秒数だけ待つ。
+``n`` 秒待機する。
 
 Args:
     n: 待機秒数。小数も指定できる（例: 0.5）。
@@ -806,7 +782,7 @@ def wait_until(condition: Callable[[], bool], timeout: float=60, interval: float
 
 #### 説明
 
-条件が True になるまで繰り返し確認する。
+``condition`` が True になるまで待つ。
 
 Args:
     condition: 引数なしで呼び出せる callable。True を返したら待機終了。
@@ -902,116 +878,6 @@ Raises:
     FileNotFoundError: folder が存在しない場合。
 
 
-## `from comken.core.check import ...`
-
-### `CheckResult`
-
-```text
-class CheckResult:
-```
-
-#### 説明
-
-検査 1 項目の結果。
-
-Attributes:
-    name: 検査名（例: "version" / "deps.openpyxl" / "share.master_path"）。
-    status: 結果（"ok" / "ng" / "skip" のいずれか）。
-    message: 人が読むための1行メッセージ。**秘密の値は載せない**。
-    details: 検査の細目。1 行に収まらないとき ``message`` の下に並べて出す。
-        デフォルトは空タプル（大半の検査は ``message`` 1 行で完結する）。
-
-### `check_deprecations`
-
-```text
-def check_deprecations(project_path: Path) -> CheckResult:
-```
-
-#### 説明
-
-deprecated な API がプロジェクトのソースで使われていないか。
-
-### `check_facade`
-
-```text
-def check_facade() -> CheckResult:
-```
-
-#### 説明
-
-公開 API ファサード (comken.__all__) の名前が期待どおりか。
-
-件数ではなく**名前の集合**を比べる。件数だけだと、1 つ消して 1 つ足した
-ときに数が変わらず通ってしまい、公開 API の破壊を検出できない。
-
-### `check_imports`
-
-```text
-def check_imports() -> CheckResult:
-```
-
-#### 説明
-
-``comken.__all__`` の各名前を ``from comken import X`` で読めるか。
-
-### `check_pyright`
-
-```text
-def check_pyright(repo_root: Path) -> CheckResult:
-```
-
-#### 説明
-
-pyright が ``comken/`` に対して 0 errors を返すか。
-
-出力から件数を読み取る判定は ``tests/test_pyright_clean.py`` と同じだが、
-**pyright の探し方は違う**。テスト側は開発機でしか動かないので
-``npx --yes pyright@latest`` でよいが、こちらは利用者が BO / オフライン
-環境で打つコマンドなので、**npm から最新版を取りに行ってはいけない**。
-代わりに以下の優先順で探す:
-
-1. PATH にある ``pyright`` コマンドを直接実行
-2. ``npx --no-install pyright`` でローカル npm の pyright を使う
-3. どちらも無ければ SKIP
-
-### `check_version`
-
-```text
-def check_version(project_path: Path) -> CheckResult:
-```
-
-#### 説明
-
-config.ini の ``[COMKEN] VERSION`` と現在の comken バージョンを比べる。
-
-### `summarize`
-
-```text
-def summarize(results: list[CheckResult]) -> tuple[int, int, int]:
-```
-
-#### 説明
-
-``(ok, ng, skip)`` の件数を返す。
-
-
-## `from comken.core.doctor import ...`
-
-### `DoctorResult`
-
-公開定数。
-
-### `summarize`
-
-```text
-def summarize(results: list[CheckResult]) -> tuple[int, int, int]:
-```
-
-#### 説明
-
-``(ok, ng, skip)`` の件数を返す。
-
-
 ## `from comken.core.files import ...`
 
 ### `DateNameBuilder`
@@ -1027,16 +893,22 @@ class DateNameBuilder:
 日付はファイル名の属性ではなく「付け方」なので、コンストラクタではなく
 prefix() / suffix() の呼び出し時に決める。
 
+日付はコンストラクタで固定できる。テストや過去日付のファイル名を組み立てる
+ときは ``date(2026, 8, 20)`` 等を渡す。省略時は呼び出し時点の日付。
+
 #### `__init__`
 
 ```text
-def __init__(self, name: str, ext: str='.xlsx') -> None:
+def __init__(self, name: str, for_date: date | datetime | None=None, ext: str='.xlsx') -> None:
 ```
 
 ##### 説明
 
 Args:
     name: ファイル名（拡張子なし）。
+    for_date: ファイル名に付ける日付。``None``（既定）なら呼び出し時点の日付。
+        ``date`` / ``datetime`` どちらも受け付ける（``datetime`` は内部で
+        ``.date()`` に変換）。
     ext: 拡張子（デフォルト: ".xlsx"）。ドットなしで渡しても補完される。
 
 #### `prefix`
@@ -5070,6 +4942,44 @@ def go_login(self) -> LoginPage:
 ログイン画面を開く。
 
 
+## `from comken.toolbox.browser.sites.login_site import ...`
+
+### `LoginBrowserOptions`
+
+```text
+class LoginBrowserOptions(BrowserOptions):
+```
+
+#### 説明
+
+login_site 用のブラウザオプション。
+
+デフォルト（BrowserOptions）から変更したいものだけ上書きする。
+全オプションのデフォルト値は comken/toolbox/browser/options.py を参照。
+
+### `LoginSite`
+
+```text
+class LoginSite(SiteBase):
+```
+
+#### 説明
+
+login_site 雛形用の SiteBase。
+
+URL や要素セレクタは example の値のまま。利用プロジェクト側で継承して書き換える。
+
+#### `go_login`
+
+```text
+def go_login(self) -> LoginPage:
+```
+
+##### 説明
+
+ログイン画面を開く。
+
+
 ## `from comken.toolbox.browser.sites.sample import ...`
 
 ### `SampleBrowserOptions`
@@ -5094,6 +5004,44 @@ class SampleSite(SiteBase):
 #### 説明
 
 the-internet.herokuapp.com 用の SiteBase。
+
+#### `go_login`
+
+```text
+def go_login(self) -> LoginPage:
+```
+
+##### 説明
+
+ログイン画面を開く。
+
+
+## `from comken.toolbox.browser.sites.table_site import ...`
+
+### `TableBrowserOptions`
+
+```text
+class TableBrowserOptions(BrowserOptions):
+```
+
+#### 説明
+
+table_site 用のブラウザオプション。
+
+デフォルト（BrowserOptions）から変更したいものだけ上書きする。
+全オプションのデフォルト値は comken/toolbox/browser/options.py を参照。
+
+### `TableSite`
+
+```text
+class TableSite(SiteBase):
+```
+
+#### 説明
+
+table_site 雛形用の SiteBase。
+
+URL や要素セレクタは example の値のまま。利用プロジェクト側で継承して書き換える。
 
 #### `go_login`
 
@@ -7068,6 +7016,60 @@ def opportunities(self) -> list[dict]:
 2000 行を超えると SalesforceReportTruncatedError で止まる。
 超えるようになったら、期間で区切るか SOQL へ移す。
 
+### `Production`
+
+```text
+class Production(SalesforceBase):
+```
+
+#### 説明
+
+Production 組織のクライアント。
+
+使い方:
+    with Production() as sf:
+        rows = sf.opportunities()
+
+#### `opportunities`
+
+```text
+def opportunities(self) -> list[dict]:
+```
+
+##### 説明
+
+案件一覧レポートの明細を返す。
+
+2000 行を超えると SalesforceReportTruncatedError で止まる。
+超えるようになったら、期間で区切るか SOQL へ移す。
+
+### `Developer`
+
+```text
+class Developer(SalesforceBase):
+```
+
+#### 説明
+
+Developer 組織のクライアント。
+
+使い方:
+    with Developer() as sf:
+        rows = sf.opportunities()
+
+#### `opportunities`
+
+```text
+def opportunities(self) -> list[dict]:
+```
+
+##### 説明
+
+案件一覧レポートの明細を返す。
+
+2000 行を超えると SalesforceReportTruncatedError で止まる。
+超えるようになったら、期間で区切るか SOQL へ移す。
+
 ### `site_for`
 
 ```text
@@ -7579,10 +7581,8 @@ def deprecated_names() -> dict[str, str]:
 
 廃止予定の名前の ``{旧名: 新名}`` を返す（コピー）。
 
-``comken check`` がプロジェクト側のソースをスキャンして、
-旧名が残っていないかを確認するために公開する。戻り値は dict の
-コピーなので呼び出し側で変更しても ``_DEPRECATED_NAMES`` には
-影響しない。
+戻り値は dict のコピーなので呼び出し側で変更しても ``_DEPRECATED_NAMES``
+には影響しない。
 
 ### `warn_renamed`
 

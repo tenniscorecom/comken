@@ -142,8 +142,7 @@ OUTPUT_FOLDER = C:\work\out  ; ← 値は自由
 > `with dry_run():` / `with debug():` ブロックで切り替える。**環境変数も
 > setter も CLI オプションも使わない**（`is_dry_run` / `is_debug` は
 > 内部用のみで公開 facade には載せていない）。`config.ini` に `[RUN]` が
-> 残っていると `python -m comken doctor` の `check_run_section` で NG が
-> 出るので、そのまま残っていても気付ける。
+> 残っていないかは `ruff` や目視で確認する。
 
 **出力先を `[REPORT]` のような用途名で分けない。** 用途ごとにセクションを作ると、
 帳票・集計・退避…と際限なく増え、「今書きたい値はどこか」が毎回変わる。
