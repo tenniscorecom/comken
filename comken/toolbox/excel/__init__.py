@@ -1,7 +1,3 @@
-"""comken/toolbox/excel/__init__.py — Excel の読み書き API を公開するパッケージ。"""
+"""comken/toolbox/excel/__init__.py — Excel API の公開入口。"""
 
-from comken.toolbox.excel.reader import ExcelReader
-from comken.toolbox.excel.sheet import Sheet
-from comken.toolbox.excel.writer import ExcelWriter
-
-__all__ = ["ExcelReader", "ExcelWriter", "Sheet"]
+__all__: list[str] = []
