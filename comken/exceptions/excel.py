@@ -14,6 +14,20 @@ class ExcelError(ComkenError):
     """
 
 
+class DataSheetAccessError(ExcelError):
+    """データシートと表示用シートの責務に反する操作をした。
+
+    対処:
+        data_ で始まるシートは table()、それ以外はセル・範囲 API で操作する
+    """
+
+    def __init__(self, sheet_name: str, operation: str) -> None:
+        super().__init__(
+            f"シート「{sheet_name}」では {operation} を使用できません。\n"
+            "データシートは table()、表示用シートはセル・範囲 API で操作してください。"
+        )
+
+
 class ExcelFileNotFoundError(ExcelError):
     """Excel ファイルが見つからない
 

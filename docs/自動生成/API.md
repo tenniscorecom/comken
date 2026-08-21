@@ -1315,6 +1315,25 @@ Excel に関するエラー
 対処:
     画面に表示された具体的なエラー名を上の表から探す
 
+### `DataSheetAccessError`
+
+```text
+class DataSheetAccessError(ExcelError):
+```
+
+#### 説明
+
+データシートと表示用シートの責務に反する操作をした。
+
+対処:
+    data_ で始まるシートは table()、それ以外はセル・範囲 API で操作する
+
+#### `__init__`
+
+```text
+def __init__(self, sheet_name: str, operation: str) -> None:
+```
+
 ### `ExcelFileNotFoundError`
 
 ```text
@@ -5100,6 +5119,52 @@ Raises:
 
 ## `from comken.toolbox.csv import ...`
 
+### `CSV`
+
+```text
+class CSV:
+```
+
+#### 説明
+
+CSV ファイルをヘッダー付きのデータ領域として読み書きする。
+
+#### `__init__`
+
+```text
+def __init__(self, source: str | Path, *, encoding: str=Encoding.UTF8_SIG) -> None:
+```
+
+#### `read`
+
+```text
+def read(self) -> list[dict[str, Value]]:
+```
+
+##### 説明
+
+全行を読み、推測した型の値を持つ辞書で返す。
+
+#### `replace`
+
+```text
+def replace(self, rows: list[dict[str, Value]]) -> None:
+```
+
+##### 説明
+
+ファイルのデータ領域を全置換する。
+
+#### `count`
+
+```text
+def count(self) -> int:
+```
+
+##### 説明
+
+データ行数を返す。
+
 ### `CsvReader`
 
 ```text
@@ -5395,6 +5460,365 @@ Raises:
 
 ## `from comken.toolbox.excel import ...`
 
+### `Excel`
+
+```text
+class Excel:
+```
+
+#### 説明
+
+Excel ワークブックを開き、シート単位の操作を提供する。
+
+#### `__init__`
+
+```text
+def __init__(self, source: str | Path, *, data_prefix: str='data_') -> None:
+```
+
+#### `sheet`
+
+```text
+def sheet(self, name: str) -> 'Sheet':
+```
+
+##### 説明
+
+名前でシートを取得する。未存在の新規ブックでは最初のシートを改名する。
+
+#### `list_data_sheets`
+
+```text
+def list_data_sheets(self) -> list[str]:
+```
+
+##### 説明
+
+データシート名をブック内の順序で返す。
+
+#### `close`
+
+```text
+def close(self, *, save: bool=True) -> None:
+```
+
+##### 説明
+
+変更を保存してワークブックを閉じる。
+
+### `Sheet`
+
+```text
+class Sheet:
+```
+
+#### 説明
+
+Excel シートのデータ領域または表示領域を操作する。
+
+#### `__init__`
+
+```text
+def __init__(self, excel: Excel, worksheet: Worksheet, data_prefix: str) -> None:
+```
+
+#### `is_data_sheet`
+
+```text
+@property
+def is_data_sheet(self) -> bool:
+```
+
+##### 説明
+
+プレフィックス付きのデータシートか返す。
+
+#### `table`
+
+```text
+def table(self) -> 'ExcelTable':
+```
+
+##### 説明
+
+データシート全体を扱うテーブルを返す。
+
+#### `write_value`
+
+```text
+def write_value(self, cell: str, value: Any) -> None:
+```
+
+##### 説明
+
+セルへ値を書き込む。
+
+#### `read_value`
+
+```text
+def read_value(self, cell: str) -> Any:
+```
+
+##### 説明
+
+セルの値を読む。
+
+#### `write_formula`
+
+```text
+def write_formula(self, cell: str, formula: str) -> None:
+```
+
+##### 説明
+
+セルへ数式を書き込む。
+
+#### `read_formula`
+
+```text
+def read_formula(self, cell: str) -> str:
+```
+
+##### 説明
+
+セルの数式を読む。数式でなければ空文字を返す。
+
+#### `write_range`
+
+```text
+def write_range(self, cell_range: str, values: list[list[Any]]) -> None:
+```
+
+##### 説明
+
+指定範囲へ二次元の値を書き込む。
+
+#### `read_range`
+
+```text
+def read_range(self, cell_range: str) -> list[dict[str, Value]]:
+```
+
+##### 説明
+
+指定範囲の先頭行を見出しとして辞書のリストで読む。
+
+#### `get_used_range`
+
+```text
+def get_used_range(self) -> tuple[str, str]:
+```
+
+##### 説明
+
+使用範囲の左上と右下のセル参照を返す。
+
+#### `set_row_height`
+
+```text
+def set_row_height(self, row: int, height: float) -> None:
+```
+
+##### 説明
+
+行の高さを設定する。
+
+#### `set_column_width`
+
+```text
+def set_column_width(self, col: str, width: float) -> None:
+```
+
+##### 説明
+
+列の幅を設定する。
+
+#### `hide_row`
+
+```text
+def hide_row(self, row: int) -> None:
+```
+
+##### 説明
+
+行を非表示にする。
+
+#### `show_row`
+
+```text
+def show_row(self, row: int) -> None:
+```
+
+##### 説明
+
+行を表示する。
+
+#### `hide_column`
+
+```text
+def hide_column(self, col: str) -> None:
+```
+
+##### 説明
+
+列を非表示にする。
+
+#### `show_column`
+
+```text
+def show_column(self, col: str) -> None:
+```
+
+##### 説明
+
+列を表示する。
+
+#### `insert_row`
+
+```text
+def insert_row(self, row: int) -> None:
+```
+
+##### 説明
+
+行を挿入する。
+
+#### `delete_row`
+
+```text
+def delete_row(self, row: int) -> None:
+```
+
+##### 説明
+
+行を削除する。
+
+#### `insert_column`
+
+```text
+def insert_column(self, col: str) -> None:
+```
+
+##### 説明
+
+列を挿入する。
+
+#### `delete_column`
+
+```text
+def delete_column(self, col: str) -> None:
+```
+
+##### 説明
+
+列を削除する。
+
+#### `format`
+
+```text
+def format(self, cell: str, **kwargs: Any) -> None:
+```
+
+##### 説明
+
+セルのフォントと表示形式を設定する。
+
+#### `set_background`
+
+```text
+def set_background(self, cell: str, color: str) -> None:
+```
+
+##### 説明
+
+セルの背景色を設定する。
+
+#### `set_border`
+
+```text
+def set_border(self, cell: str, **kwargs: Any) -> None:
+```
+
+##### 説明
+
+セルの四辺へ同じ罫線を設定する。
+
+#### `merge_cells`
+
+```text
+def merge_cells(self, cell_range: str) -> None:
+```
+
+##### 説明
+
+セル範囲を結合する。
+
+#### `unmerge_cells`
+
+```text
+def unmerge_cells(self, cell_range: str) -> None:
+```
+
+##### 説明
+
+セル範囲の結合を解除する。
+
+#### `freeze_panes`
+
+```text
+def freeze_panes(self, cell: str) -> None:
+```
+
+##### 説明
+
+指定セルを基準にウィンドウ枠を固定する。
+
+### `ExcelTable`
+
+```text
+class ExcelTable:
+```
+
+#### 説明
+
+データシート全体を1つのテーブルとして操作する。
+
+#### `__init__`
+
+```text
+def __init__(self, excel: Excel, worksheet: Worksheet) -> None:
+```
+
+#### `read`
+
+```text
+def read(self) -> list[dict[str, Value]]:
+```
+
+##### 説明
+
+データシート全体を辞書のリストで読む。
+
+#### `replace`
+
+```text
+def replace(self, rows: list[dict[str, Value]]) -> None:
+```
+
+##### 説明
+
+データシート全体を置き換える。
+
+#### `count`
+
+```text
+def count(self) -> int:
+```
+
+##### 説明
+
+データ行数を返す。
+
 ### `ExcelReader`
 
 ```text
@@ -5584,279 +6008,6 @@ Args:
     macro_name: 実行するマクロ名。"モジュール名.プロシージャ名" の形式で指定する。
                 例: "Module1.UpdateData"
     save: True（デフォルト）ならマクロ実行後に元ファイルへ保存する。
-
-### `Sheet`
-
-```text
-class Sheet:
-```
-
-#### 説明
-
-1枚のワークシートのラッパー。ExcelWriter.sheet() から取得する。
-
-ここにないシート操作は .ws から生の openpyxl Worksheet を使える。
-
-#### `__init__`
-
-```text
-def __init__(self, ws: Worksheet) -> None:
-```
-
-#### `write_cell`
-
-```text
-def write_cell(self, row: int, col: int | str, value) -> None:
-```
-
-##### 説明
-
-行番号と列番号・列記号を指定してセルに値を書き込む。
-
-#### `write_row`
-
-```text
-def write_row(self, row: int, values: list, start_col: int=1) -> None:
-```
-
-##### 説明
-
-1行に値を横並びで書き込む。
-
-Args:
-    row: 行番号（1始まり）。
-    values: 書き込む値のリスト（左から順に並ぶ）。
-    start_col: 開始列番号（1始まり。デフォルト: A列から）。
-
-#### `write_rows`
-
-```text
-def write_rows(self, start_row: int, rows: list[list], start_col: int=1) -> None:
-```
-
-##### 説明
-
-複数行をまとめて書き込む。
-
-Args:
-    start_row: 開始行番号（1始まり）。
-    rows: 行のリスト（値のリストのリスト）。
-    start_col: 開始列番号（1始まり）。
-
-#### `append_row`
-
-```text
-def append_row(self, values: list) -> None:
-```
-
-##### 説明
-
-最終行の下に1行追記する（空シートなら1行目に書く）。
-
-#### `write_table`
-
-```text
-def write_table(self, rows: list[dict], start_row: int=1, headers: list[str] | None=None) -> None:
-```
-
-##### 説明
-
-ヘッダー行 + データ行の値を書き込む（構造化テーブルにはしない）。
-
-CsvReader.read_rows() や read_rows_as_dicts() の結果をそのまま渡せる。
-Excel の構造化テーブルにする場合は、書き込み後に add_table() を呼ぶ。
-
-Args:
-    rows: 辞書のリスト（キーが列名になる）。
-    start_row: ヘッダー行の行番号（1始まり）。
-    headers: 列の並び順。省略すると最初の行のキー順。
-
-#### `read_rows_as_dicts`
-
-```text
-def read_rows_as_dicts(self, header_row: int=1) -> list[dict]:
-```
-
-##### 説明
-
-ヘッダー行をキーとした辞書のリストで返す。
-
-Args:
-    header_row: ヘッダーが存在する行番号（デフォルト: 1）。
-
-Returns:
-    [{"列名": 値, ...}, ...] の形式のリスト。全セルが空の行は除外される。
-
-Raises:
-    ExcelError: データが存在する列の見出しが空、または見出し名が重複する場合。
-
-#### `rows`
-
-```text
-def rows(self, header_row: int=1) -> Iterator[dict]:
-```
-
-##### 説明
-
-列名でアクセスできる行を、for文で順に返す。
-
-``CsvReader.rows()`` と同じく、1件を列名付き辞書として扱える。
-
-#### `copy_to`
-
-```text
-@measure
-def copy_to(self, destination: ExcelWriter, name: str | None=None) -> Sheet:
-```
-
-##### 説明
-
-シートのセル内容と基本レイアウトを別の ExcelWriter へコピーする。
-
-値・数式・セル書式・列幅・行高・結合セル・ウィンドウ固定・
-オートフィルターをコピーする。画像・グラフなどの描画オブジェクトは
-openpyxl の制約により対象外。印刷設定、条件付き書式、入力規則、
-構造化テーブルなどもコピーしない。
-
-#### `add_table`
-
-```text
-def add_table(self, name: str, ref: str) -> None:
-```
-
-##### 説明
-
-指定範囲を Excel の構造化テーブルにする。
-
-write_table() は値だけを書き、このメソッドは既存の値をテーブルにする。
-スタイルを変えたい場合は .ws から openpyxl を直接使用する。
-
-#### `append_to_table`
-
-```text
-def append_to_table(self, name: str, rows: list[dict]) -> None:
-```
-
-##### 説明
-
-構造化テーブルの末尾にデータ行を追記する。
-
-openpyxl は計算列を自動入力しない。数式の列がある場合は、
-``{"税込": "=[@金額]*1.1"}`` のように行データへ数式文字列を含める。
-``[@列名]`` の構造化参照はテーブル内のセルでのみ有効。
-
-#### `clear_table`
-
-```text
-def clear_table(self, name: str) -> None:
-```
-
-##### 説明
-
-構造化テーブルのデータ行だけを消す（見出し行は残す）。
-
-#### `replace_table`
-
-```text
-def replace_table(self, name: str, rows: list[dict]) -> None:
-```
-
-##### 説明
-
-構造化テーブルのデータ行をすべて入れ替える。
-
-openpyxl は計算列を自動入力しない。数式の列がある場合は、
-``{"税込": "=[@金額]*1.1"}`` のように行データへ数式文字列を含める。
-``[@列名]`` の構造化参照はテーブル内のセルでのみ有効。
-
-#### `set_fill`
-
-```text
-def set_fill(self, row: int, col: int | str, color: str) -> None:
-```
-
-##### 説明
-
-セルの背景色を16進 RGB（# なし）で設定する。
-
-#### `set_column_width`
-
-```text
-def set_column_width(self, col: int | str, width: float) -> None:
-```
-
-##### 説明
-
-列番号または列記号を指定して列幅を設定する。
-
-#### `set_number_format`
-
-```text
-def set_number_format(self, row: int, col: int | str, fmt: str) -> None:
-```
-
-##### 説明
-
-セルの数値フォーマットを設定する。
-
-#### `set_bold`
-
-```text
-def set_bold(self, row: int, col: int | str, bold: bool=True) -> None:
-```
-
-##### 説明
-
-セルの太字を設定または解除する。
-
-#### `auto_width`
-
-```text
-def auto_width(self, min_width: float=8, max_width: float=60) -> None:
-```
-
-##### 説明
-
-全列の幅を内容に合わせて調整する（全角文字は2文字ぶんで計算）。
-
-Args:
-    min_width: 最小の列幅（内容が短くても これより狭くしない）。
-    max_width: 最大の列幅（長文があっても これより広げない）。
-
-#### `freeze_header`
-
-```text
-def freeze_header(self, rows: int=1) -> None:
-```
-
-##### 説明
-
-ヘッダー行を固定する（スクロールしても見出しが消えない）。
-
-Args:
-    rows: 固定する行数（デフォルト: 1行目のみ）。
-
-#### `last_row`
-
-```text
-@property
-def last_row(self) -> int:
-```
-
-##### 説明
-
-データがある最終行の番号（1始まり）。空シートでも 1 が返る点に注意。
-
-#### `is_empty`
-
-```text
-@property
-def is_empty(self) -> bool:
-```
-
-##### 説明
-
-シートに値が1つもないか返す。
 
 
 ## `from comken.toolbox.holidays import ...`

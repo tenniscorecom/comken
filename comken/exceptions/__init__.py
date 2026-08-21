@@ -15,6 +15,7 @@ ComkenError
 │   ├── OutlookFolderNotFoundError
 │   └── OutlookAttachmentNotFoundError
 ├── ExcelError
+│   ├── DataSheetAccessError
 │   ├── ExcelFileNotFoundError
 │   ├── ExcelApplicationNotAvailableError
 │   ├── ExcelSaveNotCompletedError
@@ -185,6 +186,7 @@ from comken.exceptions.downloader import (
     ScheduledReportNotRegisteredError,
 )
 from comken.exceptions.excel import (
+    DataSheetAccessError,
     DuplicateHeaderCellError,
     EmptyHeaderCellError,
     ExcelApplicationNotAvailableError,
@@ -258,6 +260,7 @@ __all__ = [
     "AccessRoutineError",
     "AccessSourceNotFoundError",
     "ExcelError",
+    "DataSheetAccessError",
     "ExcelFileNotFoundError",
     "ExcelApplicationNotAvailableError",
     "SheetNotFoundError",
