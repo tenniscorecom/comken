@@ -65,6 +65,7 @@ from comken.services.salesforce_downloader.master import (
     load_master,
     shared_report_ids,
 )
+from comken.services.salesforce_downloader.schedule import ScheduleRule
 
 __all__ = [
     "download_report",
@@ -74,6 +75,7 @@ __all__ = [
     "load_master",
     "shared_report_ids",
     "ReportEntry",
+    "ScheduleRule",
 ]
 
 # 遅延 import する対象。値はその属性が定義されているサブモジュールの絶対パス。
