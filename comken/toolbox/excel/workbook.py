@@ -1,41 +1,66 @@
 """comken/toolbox/excel/workbook.py — Excel ブックとデータ領域を操作する。"""
 
-from copy import copy
 from datetime import datetime
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Self, TypeAlias, cast
 
 from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Border, PatternFill, Side
-from openpyxl.utils import column_index_from_string, get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
+from comken.core.files import copy_to_local_if_large
 from comken.exceptions import (
-    DataSheetAccessError,
-    DuplicateHeaderCellError,
     EmptyHeaderCellError,
     SheetNotFoundError,
 )
+from comken.runtime import dry_run_log, is_dry_run
+from comken.toolbox.excel.sheet import Sheet
 
 Value: TypeAlias = str | int | float | bool | datetime
 _EXCEL_SUFFIXES = {".xlsx", ".xlsm", ".xltx", ".xltm"}
+_FORCED_LOCAL_COPY_THRESHOLD_MB = 0.000001
 
 
 class Excel:
     """Excel ワークブックを開き、シート単位の操作を提供する。"""
 
-    def __init__(self, source: str | Path, *, data_prefix: str = "data_") -> None:
+    def __init__(
+        self,
+        source: str | Path,
+        *,
+        data_prefix: str = "data_",
+        read_only: bool = False,
+        local_copy: bool = False,
+    ) -> None:
+        """ブックをOpenPyXLで開く。
+
+        利用者がエンジンを選ぶ必要はない。通常操作はOpenPyXLを使い、未計算の
+        数式値の読取りとVBA実行だけ、一時的にExcel COMへ昇格する。
+        ``local_copy=True`` でも正常終了時の保存先は元ファイルになる。
+
+        ``read_only``、dry-run、またはwithブロックが例外で終わった場合は保存しない。
+        """
         self.path = Path(source)
         self._data_prefix = data_prefix
+        self._read_only = read_only
+        self._local_copy_path: Path | None = None
         self._is_closed = False
         self._is_dirty = False
-        if self.path.exists():
+        if local_copy and self.path.exists():
+            self._working_path, self._local_copy_path = copy_to_local_if_large(
+                self.path, threshold_mb=_FORCED_LOCAL_COPY_THRESHOLD_MB
+            )
+        else:
+            self._working_path = self.path
+        if self._working_path.exists():
             self._workbook = load_workbook(
-                self.path,
+                self._working_path,
+                read_only=read_only,
                 keep_vba=self.path.suffix.casefold() in {".xlsm", ".xltm"},
             )
         else:
+            if read_only:
+                raise FileNotFoundError(self.path)
             self._workbook = Workbook()
 
     def __enter__(self) -> Self:
@@ -67,273 +92,148 @@ class Excel:
         return [name for name in self._workbook.sheetnames if name.startswith(self._data_prefix)]
 
     def close(self, *, save: bool = True) -> None:
-        """変更を保存してワークブックを閉じる。"""
+        """ブックを閉じる。通常はwithの正常終了時に変更を自動保存する。"""
         if self._is_closed:
             return
-        if save and self._is_dirty:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            self._workbook.save(self.path)
-        self._workbook.close()
-        self._is_closed = True
+        try:
+            if save and self._is_dirty:
+                self.save()
+        finally:
+            self._workbook.close()
+            self._is_closed = True
+            if self._local_copy_path is not None:
+                self._local_copy_path.unlink(missing_ok=True)
+
+    def save(self) -> None:
+        """変更を元ファイルへ保存する。
+
+        既存コードのために残しているが、通常はwithの正常終了時に自動保存される。
+        read-onlyとdry-runではファイルを変更しない。
+        """
+        self._ensure_open()
+        if self._read_only or not self._is_dirty:
+            return
+        if is_dry_run():
+            dry_run_log("Excel を保存: %s", self.path)
+            return
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._workbook.save(self.path)
+        self._is_dirty = False
+
+    def run_macro(self, macro_name: str) -> None:
+        """Excel COMへ一時的に昇格してVBAマクロを実行する。
+
+        COMには元ファイルではなく作業ファイルを渡す。ローカルコピー利用時にも、
+        例外終了なら元ファイルを変更しないというwithの契約を守るためである。
+        """
+        self._ensure_writable("run_macro")
+        if is_dry_run():
+            dry_run_log("Excel マクロを実行: %s (%s)", macro_name, self.path)
+            return
+        self._prepare_com_working_copy()
+        self._sync_working_file()
+        from comken.toolbox.windows.handler import ExcelComHandler
+
+        with ExcelComHandler(self._working_path, local_copy_threshold_mb=0) as excel_com:
+            excel_com.run_macro(macro_name)
+            excel_com.save()
+        self._reload_workbook()
+        self._is_dirty = True
+
+    def read_computed_rows(self, sheet_name: str, min_row: int = 2) -> list[tuple[Any, ...]]:
+        """数式の計算結果を行単位で読む。未計算の数式がある場合だけCOMへ昇格する。"""
+        rows, needs_com = self._cached_rows(sheet_name, min_row)
+        if not needs_com:
+            return rows
+        # 書込み後の計算読取りでも、後続処理が例外なら元ファイルを変えない。
+        # COMへ同期する先を一時コピーへ切り替えてから保存する。
+        if self._is_dirty:
+            self._prepare_com_working_copy()
+        self._sync_working_file()
+        from comken.toolbox.windows.handler import ExcelComHandler
+
+        with ExcelComHandler(self._working_path, local_copy_threshold_mb=0) as excel_com:
+            return excel_com.read_rows(sheet_name, min_row)
+
+    def read_computed_rows_as_dicts(
+        self, sheet_name: str, header_row: int = 1
+    ) -> list[dict[str, Any]]:
+        """見出し行をキーに計算結果を読む。未計算時だけCOMへ昇格する。"""
+        rows = self.read_computed_rows(sheet_name, header_row)
+        if not rows:
+            return []
+        headers = rows[0]
+        empty_columns = [index for index, header in enumerate(headers, start=1) if header is None]
+        if empty_columns:
+            raise EmptyHeaderCellError(empty_columns)
+        return [dict(zip(headers, row, strict=False)) for row in rows[1:]]
 
     def _ensure_open(self) -> None:
         if self._is_closed:
             raise RuntimeError("Excel はすでに閉じています。with ブロック内で操作してください。")
 
     def _mark_dirty(self) -> None:
-        self._ensure_open()
+        self._ensure_writable("書き込み")
         self._is_dirty = True
+
+    def _ensure_writable(self, operation: str) -> None:
+        self._ensure_open()
+        if self._read_only:
+            raise RuntimeError(f"read_only=True のExcelでは{operation}できません。")
+
+    def _sync_working_file(self) -> None:
+        """COMへ渡す前に現在状態を作業ファイルへ同期する。"""
+        if self._is_dirty:
+            self._workbook.save(self._working_path)
+
+    def _prepare_com_working_copy(self) -> None:
+        """マクロの変更を正常終了まで元ファイルから隔離する作業コピーを用意する。"""
+        if self._local_copy_path is not None:
+            return
+        if self.path.exists():
+            self._working_path, self._local_copy_path = copy_to_local_if_large(
+                self.path, threshold_mb=_FORCED_LOCAL_COPY_THRESHOLD_MB
+            )
+            return
+        self._working_path = self.path
+
+    def _reload_workbook(self) -> None:
+        self._workbook.close()
+        self._workbook = load_workbook(
+            self._working_path,
+            keep_vba=self.path.suffix.casefold() in {".xlsm", ".xltm"},
+        )
+
+    def _cached_rows(self, sheet_name: str, min_row: int) -> tuple[list[tuple[Any, ...]], bool]:
+        """キャッシュ値と数式を並べ、値がない数式だけをCOM昇格対象にする。"""
+        cached_workbook = load_workbook(self._working_path, data_only=True, read_only=True)
+        try:
+            formula_sheet = self._workbook[sheet_name]
+            cached_sheet = cached_workbook[sheet_name]
+            max_column = formula_sheet.max_column
+            rows: list[tuple[Any, ...]] = []
+            needs_com = False
+            for row_number in range(min_row, formula_sheet.max_row + 1):
+                cached_row = tuple(
+                    cached_sheet.cell(row=row_number, column=column).value
+                    for column in range(1, max_column + 1)
+                )
+                rows.append(cached_row)
+                for column, cached_value in enumerate(cached_row, start=1):
+                    formula = formula_sheet.cell(row=row_number, column=column).value
+                    is_uncalculated_formula = (
+                        isinstance(formula, str)
+                        and formula.startswith("=")
+                        # OpenPyXLで何かを書いた後は、既存キャッシュが残っていても
+                        # 現在の値に対応する保証がないのでExcelで再計算する。
+                        and (cached_value is None or self._is_dirty)
+                    )
+                    if is_uncalculated_formula:
+                        needs_com = True
+            return rows, needs_com
+        finally:
+            cached_workbook.close()
 
     def _is_pristine_workbook(self) -> bool:
         worksheet = cast(Worksheet, self._workbook.active)
         return len(self._workbook.worksheets) == 1 and worksheet["A1"].value is None
-
-
-class Sheet:
-    """Excel シートのデータ領域または表示領域を操作する。"""
-
-    def __init__(self, excel: Excel, worksheet: Worksheet, data_prefix: str) -> None:
-        self._excel = excel
-        self._worksheet = worksheet
-        self._data_prefix = data_prefix
-
-    @property
-    def is_data_sheet(self) -> bool:
-        """プレフィックス付きのデータシートか返す。"""
-        return self._worksheet.title.startswith(self._data_prefix)
-
-    def table(self) -> "ExcelTable":
-        """データシート全体を扱うテーブルを返す。"""
-        if not self.is_data_sheet:
-            raise DataSheetAccessError(self._worksheet.title, "table")
-        return ExcelTable(self._excel, self._worksheet)
-
-    def write_value(self, cell: str, value: Any) -> None:
-        """セルへ値を書き込む。"""
-        self._ensure_display_sheet("write_value")
-        self._worksheet[cell] = value
-        self._excel._mark_dirty()
-
-    def read_value(self, cell: str) -> Any:
-        """セルの値を読む。"""
-        self._ensure_display_sheet("read_value")
-        return _blank(self._worksheet[cell].value)
-
-    def write_formula(self, cell: str, formula: str) -> None:
-        """セルへ数式を書き込む。"""
-        self.write_value(cell, formula)
-
-    def read_formula(self, cell: str) -> str:
-        """セルの数式を読む。数式でなければ空文字を返す。"""
-        value = self.read_value(cell)
-        return value if isinstance(value, str) and value.startswith("=") else ""
-
-    def write_range(self, cell_range: str, values: list[list[Any]]) -> None:
-        """指定範囲へ二次元の値を書き込む。"""
-        self._ensure_display_sheet("write_range")
-        cells = self._worksheet[cell_range]
-        has_different_size = len(cells) != len(values) or any(
-            len(row) != len(value_row) for row, value_row in zip(cells, values, strict=False)
-        )
-        if has_different_size:
-            raise ValueError("指定範囲と values の行数・列数が一致しません。")
-        for cell_row, value_row in zip(cells, values, strict=True):
-            for cell, value in zip(cell_row, value_row, strict=True):
-                cell.value = value
-        self._excel._mark_dirty()
-
-    def read_range(self, cell_range: str) -> list[dict[str, Value]]:
-        """指定範囲の先頭行を見出しとして辞書のリストで読む。"""
-        self._ensure_display_sheet("read_range")
-        rows = [[_blank(cell.value) for cell in row] for row in self._worksheet[cell_range]]
-        if not rows:
-            return []
-        headers = [str(value) for value in rows[0]]
-        return [dict(zip(headers, row, strict=True)) for row in rows[1:]]
-
-    def get_used_range(self) -> tuple[str, str]:
-        """使用範囲の左上と右下のセル参照を返す。"""
-        self._ensure_display_sheet("get_used_range")
-        return "A1", f"{get_column_letter(self._worksheet.max_column)}{self._worksheet.max_row}"
-
-    def set_row_height(self, row: int, height: float) -> None:
-        """行の高さを設定する。"""
-        self._ensure_display_sheet("set_row_height")
-        self._worksheet.row_dimensions[row].height = height
-        self._excel._mark_dirty()
-
-    def set_column_width(self, col: str, width: float) -> None:
-        """列の幅を設定する。"""
-        self._ensure_display_sheet("set_column_width")
-        self._worksheet.column_dimensions[col].width = width
-        self._excel._mark_dirty()
-
-    def hide_row(self, row: int) -> None:
-        """行を非表示にする。"""
-        self._set_row_hidden(row, True)
-
-    def show_row(self, row: int) -> None:
-        """行を表示する。"""
-        self._set_row_hidden(row, False)
-
-    def hide_column(self, col: str) -> None:
-        """列を非表示にする。"""
-        self._set_column_hidden(col, True)
-
-    def show_column(self, col: str) -> None:
-        """列を表示する。"""
-        self._set_column_hidden(col, False)
-
-    def insert_row(self, row: int) -> None:
-        """行を挿入する。"""
-        self._ensure_display_sheet("insert_row")
-        self._worksheet.insert_rows(row)
-        self._excel._mark_dirty()
-
-    def delete_row(self, row: int) -> None:
-        """行を削除する。"""
-        self._ensure_display_sheet("delete_row")
-        self._worksheet.delete_rows(row)
-        self._excel._mark_dirty()
-
-    def insert_column(self, col: str) -> None:
-        """列を挿入する。"""
-        self._ensure_display_sheet("insert_column")
-        self._worksheet.insert_cols(column_index_from_string(col))
-        self._excel._mark_dirty()
-
-    def delete_column(self, col: str) -> None:
-        """列を削除する。"""
-        self._ensure_display_sheet("delete_column")
-        self._worksheet.delete_cols(column_index_from_string(col))
-        self._excel._mark_dirty()
-
-    def format(self, cell: str, **kwargs: Any) -> None:
-        """セルのフォントと表示形式を設定する。"""
-        self._ensure_display_sheet("format")
-        target = self._worksheet[cell]
-        font_keys = {"bold", "italic", "size", "name", "color"}
-        font_values = {key: value for key, value in kwargs.items() if key in font_keys}
-        unknown = set(kwargs) - font_keys - {"number_format"}
-        if unknown:
-            raise TypeError(f"format() で使用できない引数です: {sorted(unknown)}")
-        if font_values:
-            font = copy(target.font)
-            for key, value in font_values.items():
-                setattr(font, key, value)
-            target.font = font
-        if "number_format" in kwargs:
-            target.number_format = str(kwargs["number_format"])
-        self._excel._mark_dirty()
-
-    def set_background(self, cell: str, color: str) -> None:
-        """セルの背景色を設定する。"""
-        self._ensure_display_sheet("set_background")
-        self._worksheet[cell].fill = PatternFill("solid", fgColor=color.removeprefix("#"))
-        self._excel._mark_dirty()
-
-    def set_border(self, cell: str, **kwargs: Any) -> None:
-        """セルの四辺へ同じ罫線を設定する。"""
-        self._ensure_display_sheet("set_border")
-        style: Any = str(kwargs.pop("style", "thin"))
-        color = str(kwargs.pop("color", "000000")).removeprefix("#")
-        if kwargs:
-            raise TypeError(f"set_border() で使用できない引数です: {sorted(kwargs)}")
-        side = Side(style=style, color=color)
-        self._worksheet[cell].border = Border(left=side, right=side, top=side, bottom=side)
-        self._excel._mark_dirty()
-
-    def merge_cells(self, cell_range: str) -> None:
-        """セル範囲を結合する。"""
-        self._ensure_display_sheet("merge_cells")
-        self._worksheet.merge_cells(cell_range)
-        self._excel._mark_dirty()
-
-    def unmerge_cells(self, cell_range: str) -> None:
-        """セル範囲の結合を解除する。"""
-        self._ensure_display_sheet("unmerge_cells")
-        self._worksheet.unmerge_cells(cell_range)
-        self._excel._mark_dirty()
-
-    def freeze_panes(self, cell: str) -> None:
-        """指定セルを基準にウィンドウ枠を固定する。"""
-        self._ensure_display_sheet("freeze_panes")
-        self._worksheet.freeze_panes = cell
-        self._excel._mark_dirty()
-
-    def _ensure_display_sheet(self, operation: str) -> None:
-        self._excel._ensure_open()
-        if self.is_data_sheet:
-            raise DataSheetAccessError(self._worksheet.title, operation)
-
-    def _set_row_hidden(self, row: int, is_hidden: bool) -> None:
-        self._ensure_display_sheet("hide/show_row")
-        self._worksheet.row_dimensions[row].hidden = is_hidden
-        self._excel._mark_dirty()
-
-    def _set_column_hidden(self, col: str, is_hidden: bool) -> None:
-        self._ensure_display_sheet("hide/show_column")
-        self._worksheet.column_dimensions[col].hidden = is_hidden
-        self._excel._mark_dirty()
-
-
-class ExcelTable:
-    """データシート全体を1つのテーブルとして操作する。"""
-
-    def __init__(self, excel: Excel, worksheet: Worksheet) -> None:
-        self._excel = excel
-        self._worksheet = worksheet
-
-    def read(self) -> list[dict[str, Value]]:
-        """データシート全体を辞書のリストで読む。"""
-        self._excel._ensure_open()
-        rows = list(self._worksheet.iter_rows(values_only=True))
-        if not rows or all(value is None for value in rows[0]):
-            return []
-        last_column = max(
-            (
-                index
-                for row in rows
-                for index, value in enumerate(row, start=1)
-                if value is not None
-            ),
-            default=0,
-        )
-        headers = list(rows[0][:last_column])
-        empty_columns = [index for index, header in enumerate(headers, start=1) if header is None]
-        if empty_columns:
-            raise EmptyHeaderCellError(empty_columns)
-        duplicate_headers = [
-            header for header in dict.fromkeys(headers) if headers.count(header) > 1
-        ]
-        if duplicate_headers:
-            raise DuplicateHeaderCellError(duplicate_headers)
-        return [
-            {
-                str(header): _blank(value)
-                for header, value in zip(headers, row[:last_column], strict=True)
-            }
-            for row in rows[1:]
-            if any(value is not None for value in row[:last_column])
-        ]
-
-    def replace(self, rows: list[dict[str, Value]]) -> None:
-        """データシート全体を置き換える。"""
-        self._excel._ensure_open()
-        self._worksheet.delete_rows(1, self._worksheet.max_row)
-        if rows:
-            headers = list(rows[0])
-            for column, header in enumerate(headers, start=1):
-                self._worksheet.cell(row=1, column=column, value=header)
-            for row_number, row in enumerate(rows, start=2):
-                for column, header in enumerate(headers, start=1):
-                    self._worksheet.cell(row=row_number, column=column, value=row.get(header, ""))
-        self._excel._mark_dirty()
-
-    def count(self) -> int:
-        """データ行数を返す。"""
-        return len(self.read())
-
-
-def _blank(value: Any) -> Value:
-    return "" if value is None else value

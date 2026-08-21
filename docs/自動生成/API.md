@@ -82,15 +82,29 @@ def dry_run(enabled: bool=True) -> Iterator[None]:
 Args:
     enabled: True で有効（デフォルト）。False ならブロック内だけ無効。
 
-### `setup_logging`
+### `Backoffice`
 
 ```text
-def setup_logging(site: type[LoggerSite]) -> None:
+class Backoffice(LoggerSite):
 ```
 
 #### 説明
 
-指定した社内環境向けに root logger を設定する。
+バックオフィス環境のログ設定。
+
+### `Intranet`
+
+```text
+class Intranet(LoggerSite):
+```
+
+#### 説明
+
+イントラネット環境のログ設定。
+
+### `comken_logger`
+
+定義を解決できませんでした。
 
 
 ## `from comken.core import ...`
@@ -1165,25 +1179,33 @@ class Intranet(LoggerSite):
 
 イントラネット環境のログ設定。
 
-### `setup_logging`
+### `setup`
 
 ```text
-def setup_logging(site: type[LoggerSite]) -> None:
+def setup(site: type[LoggerSite]) -> None:
 ```
 
 #### 説明
 
-指定した社内環境向けに root logger を設定する。
+site の指定に従い root logger を設定する。
+
+PID は同じ端末で同時に動くプロセスを見分ける値であり、保存先を選ぶ端末名とは
+用途が異なる。Formatter の固定値として渡し、ログ呼び出し側へ負担を増やさない。
 
 ### `local`
 
 ```text
-def local(*, console_level: int=INFO, file_level: int=INFO, path: str | Path | None=None) -> logging.Logger:
+def local(*, console_level: int=logging.INFO, file_level: int=logging.INFO, path: str | Path | None=None) -> None:
 ```
 
 #### 説明
 
-単体実行用 logger を作成して返す。複数回の呼び出しも許可する。
+ローカル実行用に root logger を設定する。
+
+``path`` はファイル名ではなく保存先フォルダ。省略時は ``project_dir()`` で
+起動スクリプトのプロジェクトを求め、その ``logs`` を使う。``setup()`` の直後なら
+console handler を再利用して local file handler だけを足す。それ以外の設定済み状態は、
+二重出力や出力先の取り違えを防ぐため ``LoggingAlreadyConfiguredError`` にする。
 
 ### `DEBUG`
 
@@ -1198,6 +1220,10 @@ def local(*, console_level: int=INFO, file_level: int=INFO, path: str | Path | N
 公開定数。
 
 ### `ERROR`
+
+公開定数。
+
+### `getLogger`
 
 公開定数。
 
@@ -3546,12 +3572,32 @@ class LoggingAlreadyConfiguredError(ComkenError):
 root logger がすでに設定されている
 
 対処:
-    setup_logging() はアプリの入口で1回だけ呼ぶ。実行基盤がログを設定する場合は呼ばない。
+    setup() または local() はアプリの入口で1回だけ呼ぶ。
+    実行基盤がログを設定する場合は呼ばない。
 
 #### `__init__`
 
 ```text
 def __init__(self) -> None:
+```
+
+### `LoggerHostNotConfiguredError`
+
+```text
+class LoggerHostNotConfiguredError(ComkenError):
+```
+
+#### 説明
+
+実行端末のログ保存先が LoggerSite に登録されていない
+
+対処:
+    対象サイトの LOG_FOLDERS に、エラーに表示された端末名と保存先フォルダを登録する。
+
+#### `__init__`
+
+```text
+def __init__(self, hostname: str, site_name: str) -> None:
 ```
 
 
@@ -5545,8 +5591,18 @@ Excel ワークブックを開き、シート単位の操作を提供する。
 #### `__init__`
 
 ```text
-def __init__(self, source: str | Path, *, data_prefix: str='data_') -> None:
+def __init__(self, source: str | Path, *, data_prefix: str='data_', read_only: bool=False, local_copy: bool=False) -> None:
 ```
+
+##### 説明
+
+ブックをOpenPyXLで開く。
+
+利用者がエンジンを選ぶ必要はない。通常操作はOpenPyXLを使い、未計算の
+数式値の読取りとVBA実行だけ、一時的にExcel COMへ昇格する。
+``local_copy=True`` でも正常終了時の保存先は元ファイルになる。
+
+``read_only``、dry-run、またはwithブロックが例外で終わった場合は保存しない。
 
 #### `sheet`
 
@@ -5576,7 +5632,53 @@ def close(self, *, save: bool=True) -> None:
 
 ##### 説明
 
-変更を保存してワークブックを閉じる。
+ブックを閉じる。通常はwithの正常終了時に変更を自動保存する。
+
+#### `save`
+
+```text
+def save(self) -> None:
+```
+
+##### 説明
+
+変更を元ファイルへ保存する。
+
+既存コードのために残しているが、通常はwithの正常終了時に自動保存される。
+read-onlyとdry-runではファイルを変更しない。
+
+#### `run_macro`
+
+```text
+def run_macro(self, macro_name: str) -> None:
+```
+
+##### 説明
+
+Excel COMへ一時的に昇格してVBAマクロを実行する。
+
+COMには元ファイルではなく作業ファイルを渡す。ローカルコピー利用時にも、
+例外終了なら元ファイルを変更しないというwithの契約を守るためである。
+
+#### `read_computed_rows`
+
+```text
+def read_computed_rows(self, sheet_name: str, min_row: int=2) -> list[tuple[Any, ...]]:
+```
+
+##### 説明
+
+数式の計算結果を行単位で読む。未計算の数式がある場合だけCOMへ昇格する。
+
+#### `read_computed_rows_as_dicts`
+
+```text
+def read_computed_rows_as_dicts(self, sheet_name: str, header_row: int=1) -> list[dict[str, Any]]:
+```
+
+##### 説明
+
+見出し行をキーに計算結果を読む。未計算時だけCOMへ昇格する。
 
 ### `Sheet`
 
