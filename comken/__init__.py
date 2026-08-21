@@ -32,8 +32,10 @@ if _sys.pycache_prefix is None and not _os.environ.get("PYTHONPYCACHEPREFIX"):
 # ────────────────────────────────────────────────────────────────────────────
 
 from comken.core import config as config
+from comken.core import logger as comken_logger
 from comken.core.config import Config as Config
-from comken.core.logger import setup_logging as setup_logging
+from comken.core.logger import Backoffice as Backoffice
+from comken.core.logger import Intranet as Intranet
 from comken.runtime import debug, dry_run
 
 __all__ = [
@@ -41,5 +43,7 @@ __all__ = [
     "config",
     "debug",
     "dry_run",
-    "setup_logging",
+    "Backoffice",
+    "Intranet",
+    "comken_logger",
 ]

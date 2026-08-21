@@ -27,8 +27,8 @@ def test_facade_paths_module_does_not_exist() -> None:
     assert "Paths" not in comken.__all__
 
 
-def test_facade_only_five_names() -> None:
-    """facade は土台5個だけ。増えた名前が入っていないことを保証する。
+def test_facade_only_expected_names() -> None:
+    """facade は意図した土台だけ。増えた名前が入っていないことを保証する。
 
     増えるべき時: 新しい土台（プロジェクト横断で必須）を足したとき。
     ここに書いたら AGENTS.md の「土台」欄にも書く。
@@ -38,7 +38,9 @@ def test_facade_only_five_names() -> None:
         "config",
         "debug",
         "dry_run",
-        "setup_logging",
+        "Backoffice",
+        "Intranet",
+        "comken_logger",
     }
     assert set(comken.__all__) == expected
 
@@ -113,8 +115,11 @@ def test_facade_attributes_resolve_to_real_objects() -> None:
     assert comken.config is not None
     # クラス
     assert comken.Config is not None
-    # 関数
-    assert callable(comken.setup_logging)
+    # ログ設定モジュール
+    assert comken.comken_logger is comken.core.logger
+    assert comken.comken_logger.getLogger is __import__("logging").getLogger
+    assert comken.Backoffice is comken.core.logger.Backoffice
+    assert comken.Intranet is comken.core.logger.Intranet
     # contextmanager（with で使える callable）
     assert callable(comken.debug)
     assert callable(comken.dry_run)

@@ -7,15 +7,12 @@ main.py — エントリポイント
 社内 RPA 基盤から動かす場合は、下の「社内 RPA 基盤から実行する場合」を参照。
 """
 
-import logging
-
-from comken import debug
-from comken.core.logger import local
+from comken import comken_logger, debug
 from comken.exceptions import ComkenError
 
 from src.run import run
 
-logger = logging.getLogger(__name__)
+logger = comken_logger.getLogger(__name__)
 
 
 def main() -> None:
@@ -24,8 +21,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    # 単体で動かすので、ログの出力先をここで用意する（コンソールと logs/YYYY-MM-DD.log）。
-    logger = local()
+    # 単体で動かすので、ログの出力先をここで用意する（コンソールと logs/local-YYYY-MM-DD.log）。
+    comken_logger.local()
     try:
         # config.ini の項目が足りない場合は src/run.py 内で `config.XXX.YYY` を
         # 参照した時点で ConfigKeyNotFoundError が出る（事前チェック不要）。
@@ -50,7 +47,7 @@ if __name__ == "__main__":
 #
 # 上の `local()` と `main()` の2行を、次の形に差し替える。
 # 基盤が設定の初期化・時間計測・ログ設定をしてから main を呼ぶので、
-# local() は呼ばない（呼んでも二重設定にはならないが、基盤の設定が正になる）。
+# local() は呼ばない（基盤のログと二重設定になるため）。
 #
 # dry-run / debug を一時的に有効化したい場合は、`main()` を `with dry_run():` /
 # `with debug():` で囲む形にする（プロセス全体への setter は用意していない）。

@@ -3,6 +3,7 @@
 ComkenError
 ├── SiteOwnerRequiredError          SiteBase / SalesforceBase に OWNER が未設定
 ├── LoggingAlreadyConfiguredError   root logger が設定済み
+├── LoggerHostNotConfiguredError     実行端末のログ保存先が未登録
 ├── UnsupportedFileSuffixError
 ├── FileDeletionError
 ├── AccessError
@@ -213,7 +214,7 @@ from comken.exceptions.holiday import (
     HolidayCalendarFormatError,
     HolidayCalendarSourceError,
 )
-from comken.exceptions.logger import LoggingAlreadyConfiguredError
+from comken.exceptions.logger import LoggerHostNotConfiguredError, LoggingAlreadyConfiguredError
 from comken.exceptions.master_table import (
     MasterColumnNotFoundError,
     MasterDuplicateValueError,
@@ -364,4 +365,5 @@ __all__ = [
     "TransferDestinationRowMissingError",
     "TransferDestinationMultipleMatchError",
     "LoggingAlreadyConfiguredError",
+    "LoggerHostNotConfiguredError",
 ]
