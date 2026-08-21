@@ -3,7 +3,7 @@
 import logging
 from collections.abc import Callable, Mapping
 from enum import Enum, auto
-from typing import Final, cast
+from typing import Any, Final, cast
 
 from comken.core.timer import measure
 from comken.exceptions import TransferSourceColumnNotFoundError
@@ -13,14 +13,14 @@ from comken.exceptions.table import (
     TransferMappingError,
     TransferRowError,
 )
-from comken.toolbox.csv import CsvReader, CsvWriter
-from comken.toolbox.excel import Sheet
+from comken.toolbox.csv import CSV, CsvReader, CsvWriter
+from comken.toolbox.excel import ExcelTable
 
 logger = logging.getLogger(__name__)
 
 Row = dict[str, object]
-Source = CsvReader | Sheet
-Destination = CsvWriter | Sheet
+Source = CsvReader | CSV | ExcelTable
+Destination = CsvWriter | CSV | ExcelTable
 
 
 class _TransferControl(Enum):
@@ -32,12 +32,12 @@ Transform = Callable[[Row, Row | None], None | _TransferControl]
 
 
 class Transfer:
-    """既存のCSV・Excelクラス間で、列マッピングに従って行を転記する。
+    """CSV・Excelのデータ領域間で、列マッピングに従って行を転記する。
 
     CSVの転記先は、転記先の列名と順序が一致するように
     ``CsvWriter(path, fieldnames=list(mapping.values()))`` と構築する。
-    Excelを転記元または転記先にする場合は、``ExcelWriter.sheet()`` で取得した
-    ``Sheet`` を渡す。Excelファイルの保存は呼び出し側で ``save()`` する。
+    新 API では ``CSV`` または ``Excel.sheet(...).table()`` で取得した
+    ``ExcelTable`` を渡す。既存の ``CsvReader`` / ``CsvWriter`` も利用できる。
     """
 
     SKIP: Final = _TransferControl.SKIP
@@ -117,14 +117,15 @@ class Transfer:
         _write_destination_rows(
             self._destination,
             destination_rows,
-            list(self._mapping.values()),
         )
         logger.debug("Transfer完了: 転記件数=%d", transferred_count)
         return transferred_count
 
 
 def _read_source_rows(source: Source) -> list[Row]:
-    return list(source.rows())
+    if isinstance(source, CsvReader):
+        return [cast(Row, row) for row in source.rows()]
+    return [cast(Row, row) for row in source.read()]
 
 
 def _read_destination_rows(destination: Destination) -> list[Row]:
@@ -132,7 +133,7 @@ def _read_destination_rows(destination: Destination) -> list[Row]:
         if not destination.path.exists() or destination.path.stat().st_size == 0:
             return []
         return [cast(Row, row) for row in CsvReader(destination.path).rows()]
-    return list(destination.rows())
+    return [cast(Row, row) for row in destination.read()]
 
 
 def _index_destination_rows(rows: list[Row], key_column: str) -> dict[object, Row]:
@@ -155,15 +156,13 @@ def _is_none_row_access_error(error: TypeError) -> bool:
 def _write_destination_rows(
     destination: Destination,
     rows: list[Row],
-    columns: list[str],
 ) -> None:
     if isinstance(destination, CsvWriter):
         destination.write_rows(rows)
         return
-    if rows:
-        destination.write_table(rows, headers=columns)
-    else:
-        destination.write_row(1, columns)
+    # Transfer の transform は object を受け入れる既存契約のため、各保存先の
+    # Value 型との境界でのみ型を狭める。実際の不正値は保存ライブラリが報告する。
+    destination.replace(cast(Any, rows))
 
 
 __all__ = ["Transfer"]

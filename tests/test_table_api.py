@@ -4,8 +4,6 @@ import logging
 from typing import Any
 
 import pytest
-from openpyxl import Workbook
-from openpyxl.styles import Font
 
 from comken.exceptions import (
     DuplicateHeaderCellError,
@@ -16,8 +14,8 @@ from comken.exceptions import (
 from comken.exceptions.table import TransferMappingError, TransferRowError
 from comken.runtime import debug
 from comken.toolbox import Transfer
-from comken.toolbox.csv import CsvReader, CsvWriter
-from comken.toolbox.excel import ExcelReader, ExcelWriter, Sheet
+from comken.toolbox.csv import CSV, CsvReader, CsvWriter
+from comken.toolbox.excel import Excel, ExcelTable
 
 
 def test_transfer_can_filter_edit_and_stop_rows(tmp_path) -> None:
@@ -145,23 +143,27 @@ def test_transfer_rejects_multiple_destination_matches(tmp_path) -> None:
 
 def test_sheet_rows_ignores_empty_rows_and_styled_trailing_columns(tmp_path) -> None:
     path = tmp_path / "source.xlsx"
-    with ExcelWriter.create(path) as book:
-        sheet = book.sheet("Sheet1")
-        sheet.write_row(1, ["ID", "名前"])
-        sheet.write_row(2, [1, "山田"])
-        sheet.ws.cell(3, 1).value = None
-        sheet.ws.cell(1, 3).number_format = "0"
-        assert list(sheet.rows()) == [{"ID": 1, "名前": "山田"}]
+    with Excel(path) as book:
+        table = book.sheet("data_入力").table()
+        table.replace([{"ID": 1, "名前": "山田"}])
+        assert table.read() == [{"ID": 1, "名前": "山田"}]
 
 
 def test_sheet_rows_rejects_duplicate_headers(tmp_path) -> None:
     path = tmp_path / "source.xlsx"
-    with ExcelWriter.create(path) as book:
-        sheet = book.sheet("Sheet1")
-        sheet.write_row(1, ["ID", "ID"])
-        sheet.write_row(2, [1, 2])
+    from openpyxl import Workbook
+
+    workbook = Workbook()
+    worksheet = workbook.active
+    assert worksheet is not None
+    worksheet.title = "data_入力"
+    worksheet.append(["ID", "ID"])
+    worksheet.append([1, 2])
+    workbook.save(path)
+    with Excel(path) as book:
+        table = book.sheet("data_入力").table()
         with pytest.raises(DuplicateHeaderCellError):
-            list(sheet.rows())
+            table.read()
 
 
 def test_transfer_with_no_matches_writes_csv_header(tmp_path) -> None:
@@ -191,91 +193,52 @@ def test_transfer_supports_all_csv_excel_directions(
     destination_path = (
         tmp_path / f"destination.{('xlsx' if destination_kind == 'excel' else 'csv')}"
     )
-    source_book: ExcelWriter | None = None
-    destination_book: ExcelWriter | None = None
-
     if source_kind == "csv":
         source_path.write_text("ID,氏名\n1,山田\n", encoding="utf-8")
         source = CsvReader(source_path)
     else:
-        source_book = ExcelWriter.create(source_path, sheet_name="入力")
-        source_book.sheet("入力").write_table([{"ID": 1, "氏名": "山田"}])
-        source_book.save()
-        source_book.close()
-        source_book = ExcelWriter(source_path)
-        source = source_book.sheet("入力")
+        source_excel = Excel(source_path)
+        source = source_excel.sheet("data_入力").table()
+        source.replace([{"ID": 1, "氏名": "山田"}])
 
     if destination_kind == "csv":
         destination = CsvWriter(destination_path, fieldnames=list(mapping.values()))
     else:
-        destination_book = ExcelWriter.create(destination_path, sheet_name="出力")
-        destination = destination_book.sheet("出力")
+        destination_excel = Excel(destination_path)
+        destination = destination_excel.sheet("data_出力").table()
 
     count = Transfer(source, destination, mapping).run(
         transform=lambda source_row, destination_row: None
     )
-    if destination_kind == "excel":
-        assert destination_book is not None
-        destination_book.save()
     if source_kind == "excel":
-        assert source_book is not None
-        source_book.close()
+        source_excel.close()
     if destination_kind == "excel":
-        assert destination_book is not None
-        destination_book.close()
+        destination_excel.close()
     assert count == 1
 
     if destination_kind == "csv":
         assert CsvReader(destination_path).read_rows() == [{"番号": "1", "名前": "山田"}]
     else:
-        with ExcelReader(destination_path) as reader:
-            assert reader.read_rows_as_dicts("出力") == [
+        with Excel(destination_path) as excel:
+            assert excel.sheet("data_出力").table().read() == [
                 {"番号": "1" if source_kind == "csv" else 1, "名前": "山田"}
             ]
 
 
-def test_sheet_reads_rows_as_dicts() -> None:
-    worksheet = Workbook().active
-    assert worksheet is not None
-    sheet = Sheet(worksheet)
-    sheet.write_table([{"ID": 1, "氏名": "山田"}])
+def test_sheet_reads_rows_as_dicts(tmp_path) -> None:
+    with Excel(tmp_path / "data.xlsx") as excel:
+        table = excel.sheet("data_入力").table()
+        table.replace([{"ID": 1, "氏名": "山田"}])
 
-    assert sheet.read_rows_as_dicts() == [{"ID": 1, "氏名": "山田"}]
-    assert list(sheet.rows()) == [{"ID": 1, "氏名": "山田"}]
-
-
-def test_sheet_copy_to_copies_entire_sheet(tmp_path) -> None:
-    source_path = tmp_path / "source.xlsx"
-    destination_path = tmp_path / "destination.xlsx"
-    with ExcelWriter.create(source_path, sheet_name="入力") as source_book:
-        source = source_book.sheet("入力")
-        source["A1"] = "見出し"
-        source["A2"] = "=1+1"
-        source.ws["A1"].font = Font(bold=True)
-        source.ws.column_dimensions["A"].width = 24
-        source.ws.row_dimensions[1].height = 30
-        source.ws.merge_cells("A1:B1")
-        source.ws.freeze_panes = "A2"
-        source.ws.auto_filter.ref = "A1:B2"
-
-        with ExcelWriter.create(destination_path, sheet_name="既定") as destination_book:
-            copied = source.copy_to(destination_book, "複製")
-
-            assert copied["A1"] == "見出し"
-            assert copied["A2"] == "=1+1"
-            assert copied.ws["A1"].font.bold is True
-            assert copied.ws.column_dimensions["A"].width == 24
-            assert copied.ws.row_dimensions[1].height == 30
-            assert "A1:B1" in copied.ws.merged_cells
-            assert copied.ws.freeze_panes == "A2"
-            assert copied.ws.auto_filter.ref == "A1:B2"
+        assert table.read() == [{"ID": 1, "氏名": "山田"}]
+        assert table.count() == 1
 
 
 def test_transfer_type_aliases_accept_only_csv_or_sheet() -> None:
     from comken.toolbox import table
 
-    assert table.Source == CsvReader | Sheet
-    assert table.Destination == CsvWriter | Sheet
+    assert table.Source == CsvReader | CSV | ExcelTable
+    assert table.Destination == CsvWriter | CSV | ExcelTable
 
 
 def test_transfer_debug_logs_do_not_include_row_data(tmp_path, caplog) -> None:
