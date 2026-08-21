@@ -61,17 +61,23 @@ from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any, ClassVar, Self, cast
 
+from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill
+from openpyxl.utils import get_column_letter
+from openpyxl.workbook.workbook import Workbook
 from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.worksheet.table import Table
+from openpyxl.worksheet.worksheet import Worksheet
 
 from comken.constants import Color
 from comken.exceptions import (
+    ExcelApplicationNotAvailableError,
     MasterColumnNotFoundError,
     MasterDuplicateValueError,
     MasterRowValueError,
     MasterSheetNotDefinedError,
 )
-from comken.toolbox.excel import ExcelReader, ExcelWriter
+from comken.toolbox.excel import Excel
 
 # フィールドの metadata に入れるときのキー
 _SPEC_KEY = "comken_master_column"
@@ -175,11 +181,19 @@ class MasterRow:
         if source is None:
             raise MasterSheetNotDefinedError(cls.__name__)
 
-        # **人が数式で値を組み立てることがある**（保存先を連結する等）。そのまま読むと
-        # '=CONCATENATE(...)' が値として通ってしまい、エラーにもならず変な結果で処理が進む。
-        # 計算結果を読む（キャッシュが無いときだけ Excel を起動して計算させる）
-        with ExcelReader(source) as book:
-            raw_rows = book.read_computed_rows_as_dicts(cls.SHEET_NAME)
+        # 既存の管理表は data_ プレフィックスを使っていないため、このブックでは
+        # すべてのシートをデータシートとして扱う。
+        with Excel(source, data_prefix="") as excel:
+            raw_rows = excel.sheet(cls.SHEET_NAME).table().read()
+        if any(
+            isinstance(value, str) and value.startswith("=")
+            for raw_row in raw_rows
+            for value in raw_row.values()
+        ):
+            raise ExcelApplicationNotAvailableError(
+                source,
+                RuntimeError("管理表に未計算の数式があります"),
+            )
 
         rows: list[Self] = []
         seen: dict[str, set] = {}
@@ -237,46 +251,53 @@ class MasterRow:
         columns = cls._columns()
         headers = [spec.header for _, spec, _ in columns]
         rows = [
-            [
-                _to_cell(example.get(name, ""), spec, value_type)
+            {
+                spec.header: _to_cell(example.get(name, ""), spec, value_type)
                 for name, spec, value_type in columns
-            ]
+            }
             for example in (examples or [])
         ]
 
-        with ExcelWriter.create(path, cls.SHEET_NAME) as book:
-            sheet = book.sheet(cls.SHEET_NAME)
-            sheet.write_row(1, headers)
-            for offset, row in enumerate(rows):
-                sheet.write_row(offset + _FIRST_DATA_ROW, row)
-            if headers:
-                last_column = _column_letter(len(headers))
-                sheet.add_table(_table_name(cls), f"A1:{last_column}{len(rows) + 1}")
+        # replace() は空リストでは見出しを書かないため、空の雛形では仮の1行を
+        # 書いてから装飾時に削除する。
+        replacement_rows = rows or [dict.fromkeys(headers, "")]
+        with Excel(path, data_prefix="") as excel:
+            excel.sheet(cls.SHEET_NAME).table().replace(replacement_rows)
+
+        book = load_workbook(path)
+        sheet = book[cls.SHEET_NAME]
+        if not rows:
+            sheet.delete_rows(_FIRST_DATA_ROW)
+        if headers:
+            last_column = _column_letter(len(headers))
+            table_range = f"A1:{last_column}{len(rows) + 1}"
+            sheet.add_table(Table(displayName=_table_name(cls), ref=table_range))
 
             # **全セルに雛形用のフォントを当てる。** 既存のフォント属性（太字など）は
             # そのまま使い回し、`name` だけ書き換える（後勝ちで上書きすると太字まで消える）
-            cls._apply_template_font(sheet, len(rows))
-            # **`choices` がある列にドロップダウンを付ける。** データ行の先頭から
-            # 十分な行数ぶんの範囲に適用し、あとから行を足しても効くようにする
-            cls._apply_choice_validations(sheet.ws, columns, len(rows))
+        cls._apply_template_font(sheet, len(rows))
+        # **`choices` がある列にドロップダウンを付ける。** データ行の先頭から
+        # 十分な行数ぶんの範囲に適用し、あとから行を足しても効くようにする
+        cls._apply_choice_validations(sheet, columns, len(rows))
 
-            sheet.auto_width()
-            sheet.freeze_header()
+        _auto_width(sheet)
+        sheet.freeze_panes = "A2"
 
-            # 記入例の行に薄い背景色を付ける。**本物のデータと見分けが付く**ように
-            # するための目印で、エラー行に見える色は避ける（強すぎる色は業務側が
-            # 「何か起きたのか」と不安になるため）
-            for offset in range(len(rows)):
-                row_number = _FIRST_DATA_ROW + offset
-                for col in range(1, len(headers) + 1):
-                    sheet.ws.cell(row=row_number, column=col).fill = _EXAMPLE_FILL
+        # 記入例の行に薄い背景色を付ける。**本物のデータと見分けが付く**ように
+        # するための目印で、エラー行に見える色は避ける（強すぎる色は業務側が
+        # 「何か起きたのか」と不安になるため）
+        for offset in range(len(rows)):
+            row_number = _FIRST_DATA_ROW + offset
+            for col in range(1, len(headers) + 1):
+                sheet.cell(row=row_number, column=col).fill = _EXAMPLE_FILL
 
-            cls._write_guide(book)
-            book.save()
+        cls._write_guide(book)
+        book.save(path)
+        book.close()
         return path
 
     @classmethod
-    def _apply_template_font(cls, sheet: Any, example_count: int) -> None:
+    def _apply_template_font(cls, sheet: Worksheet, example_count: int) -> None:
         """雛形（表シート）の全セルに雛形用のフォント名を設定する。
 
         既存の設定（太字など）は `Font` オブジェクトをそのまま使い回し、`name` だけを
@@ -284,15 +305,15 @@ class MasterRow:
         見出し書式（太字）を崩さない。**
         """
         last_row = max(_FIRST_DATA_ROW + example_count - 1, 1)
-        for row in sheet.ws.iter_rows(
-            min_row=1, max_row=last_row, min_col=1, max_col=sheet.ws.max_column
+        for row in sheet.iter_rows(
+            min_row=1, max_row=last_row, min_col=1, max_col=sheet.max_column
         ):
             for cell in row:
                 _set_template_font(cell)
 
     @classmethod
     def _apply_choice_validations(
-        cls, ws: Any, columns: list[tuple[str, ColumnSpec, type]], example_count: int
+        cls, ws: Worksheet, columns: list[tuple[str, ColumnSpec, type]], example_count: int
     ) -> None:
         """`choices` を宣言した列に Excel の入力規則（ドロップダウン）を付ける。
 
@@ -328,7 +349,7 @@ class MasterRow:
             ws.add_data_validation(validation)
 
     @classmethod
-    def _write_guide(cls, book: ExcelWriter) -> None:
+    def _write_guide(cls, book: Workbook) -> None:
         """「記入方法」シートを書く。非エンジニアが1枚で分かるようにする。
 
         `GUIDE_INTRO` が設定されていれば冒頭（見出しより上）に書き出す。
@@ -339,15 +360,16 @@ class MasterRow:
         したのと同じフォント名に揃える）。`set_bold` で付けた太字も保持される
         よう、**太字設定 → フォント適用** の順で行う。
         """
-        sheet = book.add_sheet("記入方法")
+        sheet = book.create_sheet("記入方法")
         # 冒頭の説明文。設定が無ければ何も書かない（空の欄を増やさない）
         if cls.GUIDE_INTRO:
-            sheet.write_row(1, [cls.GUIDE_INTRO])
+            sheet.cell(row=1, column=1, value=cls.GUIDE_INTRO)
             # 改行を含む説明文も1セルなので、空ける行数は変えない
             header_row = 3
         else:
             header_row = 1
-        sheet.write_row(header_row, ["列", "何を書くか", "書けない場合"])
+        for column, value in enumerate(("列", "何を書くか", "書けない場合"), start=1):
+            sheet.cell(row=header_row, column=column, value=value)
         for offset, (name, spec, value_type) in enumerate(cls._columns(), start=1):
             row_number = header_row + offset
             required = _default_of(cls, name) is dataclasses.MISSING
@@ -356,19 +378,21 @@ class MasterRow:
                 note = f"「{'」か「'.join(spec.choices)}」と書いてください"
             elif value_type is bool:
                 note = "「○」か「×」と書いてください"
-            sheet.write_row(row_number, [spec.header, spec.help, note])
+            for column, value in enumerate((spec.header, spec.help, note), start=1):
+                sheet.cell(row=row_number, column=column, value=value)
 
         last = header_row + len(cls._columns()) + 2
-        sheet.write_row(last, ["注意", "1行目の見出しは変えないでください（列名で読みます）", ""])
-        sheet.write_row(last + 1, ["", "記入例の行は、実際に使うときに消してください", ""])
-        for letter in ("A", "B", "C"):
-            sheet.set_bold(header_row, letter)
-        sheet.auto_width(max_width=80)
-        sheet.freeze_header(header_row)
+        sheet.cell(row=last, column=1, value="注意")
+        sheet.cell(row=last, column=2, value="1行目の見出しは変えないでください（列名で読みます）")
+        sheet.cell(row=last + 1, column=2, value="記入例の行は、実際に使うときに消してください")
+        for column in range(1, 4):
+            sheet.cell(row=header_row, column=column).font = Font(bold=True)
+        _auto_width(sheet, max_width=80)
+        sheet.freeze_panes = f"A{header_row + 1}"
 
         # 太字属性を**保ったまま**フォント名を差し替える。先に `set_bold` してから
         # `_set_template_font` を呼ぶことで、既存の `bold=True` を引き継げる
-        for row in sheet.ws.iter_rows():
+        for row in sheet.iter_rows():
             for cell in row:
                 _set_template_font(cell)
 
@@ -548,3 +572,12 @@ def _set_template_font(cell: Any) -> None:
         italic=existing.italic,
         color=existing.color,
     )
+
+
+def _auto_width(sheet: Worksheet, *, max_width: int | None = None) -> None:
+    """セル内容に合わせて列幅を設定する。"""
+    for column_index, cells in enumerate(sheet.iter_cols(), start=1):
+        width = max((len(str(cell.value or "")) for cell in cells), default=0) + 2
+        if max_width is not None:
+            width = min(width, max_width)
+        sheet.column_dimensions[get_column_letter(column_index)].width = width

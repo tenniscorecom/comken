@@ -6,19 +6,18 @@
 内閣府の CSV とマージして使う前提で、``HolidayCalendar.from_sources`` に
 ``CabinetOfficeCsvSource`` と一緒に渡すのを主な使い方とする。
 
-読み取りは ``comken.toolbox.excel.ExcelReader`` を使い、
+読み取りは ``comken.toolbox.excel.Excel`` を使い、
 「日付」「名称」の列を必須とする。列が無いシートは
 ``HolidayCalendarSourceError`` で止める（誤って別のシートを読まないため）。
 """
 
 import datetime as _dt
 import logging
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from openpyxl.utils.exceptions import InvalidFileException
-
 from comken.exceptions import HolidayCalendarSourceError
-from comken.toolbox.excel import ExcelReader
+from comken.toolbox.excel import Excel
 from comken.toolbox.holidays.calendar import Holiday, HolidaySource
 
 logger = logging.getLogger(__name__)
@@ -61,15 +60,10 @@ class ComkenMasterTableSource(HolidaySource):
                 "管理表のファイルが存在しません。パスが正しいか確認してください。",
             )
         try:
-            reader = ExcelReader(self._path)
-        except (FileNotFoundError, InvalidFileException, OSError) as error:
-            raise HolidayCalendarSourceError(
-                str(self._path),
-                f"管理表を開けません: {error}",
-            ) from error
-
-        try:
-            rows = reader.read_rows_as_dicts(self._sheet_name)
+            # 既存の管理表は data_ プレフィックスを使っていないため、このブックでは
+            # すべてのシートをデータシートとして扱う。
+            with Excel(self._path, data_prefix="") as excel:
+                rows = excel.sheet(self._sheet_name).table().read()
         except Exception as error:  # SheetNotFoundError 等をまとめて拾う
             raise HolidayCalendarSourceError(
                 str(self._path),
@@ -86,7 +80,7 @@ class ComkenMasterTableSource(HolidaySource):
 
 
 def _rows_to_holidays(
-    rows: list[dict[str, object]],
+    rows: Sequence[Mapping[str, object]],
     *,
     path: Path,
     sheet_name: str,

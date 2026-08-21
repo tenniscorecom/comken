@@ -17,7 +17,7 @@ from comken.exceptions import (
     MasterRowValueError,
     MasterSheetNotDefinedError,
 )
-from comken.toolbox.excel import ExcelWriter
+from comken.toolbox.excel import Excel
 from comken.toolbox.master_table import MasterRow, column
 
 
@@ -41,12 +41,10 @@ ROW_B = ["1002", "在庫", r"\\server\在庫\data.csv", "手動", "×", ""]
 
 
 def make_sheet(path: Path, rows: list[list], headers: list[str] | None = None) -> Path:
-    with ExcelWriter.create(path, "一覧") as book:
-        sheet = book.sheet("一覧")
-        sheet.write_row(1, headers or HEADERS)
-        for offset, row in enumerate(rows):
-            sheet.write_row(offset + 2, row)
-        book.save()
+    actual_headers = headers or HEADERS
+    table_rows = [dict(zip(actual_headers, row, strict=False)) for row in rows]
+    with Excel(path, data_prefix="") as excel:
+        excel.sheet("一覧").table().replace(table_rows)
     return path
 
 
