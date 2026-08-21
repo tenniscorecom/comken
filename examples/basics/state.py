@@ -3,8 +3,9 @@
 import logging
 from pathlib import Path
 
-from comken import dry_run, setup_logging
+from comken import dry_run
 from comken.core import State
+from comken.core.logger import local
 
 HERE = Path(__file__).parent
 STATE_PATH = HERE / "output" / "state.ini"
@@ -31,5 +32,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    setup_logging(to_file=False)
+    logger = local()
     main()

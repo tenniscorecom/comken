@@ -9,7 +9,8 @@ main.py — エントリポイント
 
 import logging
 
-from comken import debug, setup_logging
+from comken import debug
+from comken.core.logger import local
 from comken.exceptions import ComkenError
 
 from src.run import run
@@ -24,7 +25,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     # 単体で動かすので、ログの出力先をここで用意する（コンソールと logs/YYYY-MM-DD.log）。
-    setup_logging()
+    logger = local()
     try:
         # config.ini の項目が足りない場合は src/run.py 内で `config.XXX.YYY` を
         # 参照した時点で ConfigKeyNotFoundError が出る（事前チェック不要）。
@@ -47,9 +48,9 @@ if __name__ == "__main__":
 # カレントは C:\ など別の場所になるが、config.ini・logs はこのフォルダを基準に
 # 探すので、そのままで動く（comken の project_dir() がその役目）。
 #
-# 上の `setup_logging()` と `main()` の2行を、次の形に差し替える。
+# 上の `local()` と `main()` の2行を、次の形に差し替える。
 # 基盤が設定の初期化・時間計測・ログ設定をしてから main を呼ぶので、
-# setup_logging() は呼ばない（呼んでも二重設定にはならないが、基盤の設定が正になる）。
+# local() は呼ばない（呼んでも二重設定にはならないが、基盤の設定が正になる）。
 #
 # dry-run / debug を一時的に有効化したい場合は、`main()` を `with dry_run():` /
 # `with debug():` で囲む形にする（プロセス全体への setter は用意していない）。

@@ -145,6 +145,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `ScheduledDownloadFailedError` | 定期取得で1件以上が失敗した | 履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。急いで必要なものは download_report() でその場で取得する |
 | `TransferDestinationRowMissingError` | 転記先に対応する行がない状態で transform がその行を操作した | destination_row が None か確認し、新規行を処理するか Transfer.SKIP を返す |
 | `TransferDestinationMultipleMatchError` | 転記先のキーに一致する行が複数ある | mapping の先頭列に対応する転記先列の値を一意にする |
+| `LoggingAlreadyConfiguredError` | root logger がすでに設定されている | setup_logging() はアプリの入口で1回だけ呼ぶ。実行基盤がログを設定する場合は呼ばない。 |
 | `FileNotFoundError` | ファイルが見つからない | ファイルの置き場所と名前を確認する。「今日の日付のファイル」を探す処理なら、今日のファイルが作られているか確認する |
 
 ## ブラウザ（Edge 自動操作）のエラー

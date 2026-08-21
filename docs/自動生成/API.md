@@ -85,18 +85,12 @@ Args:
 ### `setup_logging`
 
 ```text
-def setup_logging(to_file: bool=True) -> None:
+def setup_logging(site: type[LoggerSite]) -> None:
 ```
 
 #### 説明
 
-単体実行向けに、コンソールと日付別ファイルへのログ出力を設定する。
-
-社内 RPA 基盤がログを設定する実行では呼び出す必要はない。すでに root logger に
-ハンドラがある場合は、既存の出力先・書式・レベルを変更せず、そのまま返る。
-
-Args:
-    to_file: True なら ``logs/YYYY-MM-DD.log`` にも UTF-8 で出力する。
+指定した社内環境向けに root logger を設定する。
 
 
 ## `from comken.core import ...`
@@ -1147,6 +1141,65 @@ Returns:
 
 Raises:
     FileNotFoundError: folder が存在しない場合。
+
+
+## `from comken.core.logger import ...`
+
+### `Backoffice`
+
+```text
+class Backoffice(LoggerSite):
+```
+
+#### 説明
+
+バックオフィス環境のログ設定。
+
+### `Intranet`
+
+```text
+class Intranet(LoggerSite):
+```
+
+#### 説明
+
+イントラネット環境のログ設定。
+
+### `setup_logging`
+
+```text
+def setup_logging(site: type[LoggerSite]) -> None:
+```
+
+#### 説明
+
+指定した社内環境向けに root logger を設定する。
+
+### `local`
+
+```text
+def local(*, console_level: int=INFO, file_level: int=INFO, path: str | Path | None=None) -> logging.Logger:
+```
+
+#### 説明
+
+単体実行用 logger を作成して返す。複数回の呼び出しも許可する。
+
+### `DEBUG`
+
+公開定数。
+
+### `INFO`
+
+公開定数。
+
+### `WARNING`
+
+公開定数。
+
+### `ERROR`
+
+公開定数。
 
 
 ## `from comken.exceptions import ...`
@@ -3482,6 +3535,25 @@ class TransferDestinationMultipleMatchError(ComkenError):
 def __init__(self, key_column: str, key: object) -> None:
 ```
 
+### `LoggingAlreadyConfiguredError`
+
+```text
+class LoggingAlreadyConfiguredError(ComkenError):
+```
+
+#### 説明
+
+root logger がすでに設定されている
+
+対処:
+    setup_logging() はアプリの入口で1回だけ呼ぶ。実行基盤がログを設定する場合は呼ばない。
+
+#### `__init__`
+
+```text
+def __init__(self) -> None:
+```
+
 
 ## `from comken.services.salesforce_downloader import ...`
 
@@ -3583,12 +3655,12 @@ class Transfer:
 
 #### 説明
 
-既存のCSV・Excelクラス間で、列マッピングに従って行を転記する。
+CSV・Excelのデータ領域間で、列マッピングに従って行を転記する。
 
 CSVの転記先は、転記先の列名と順序が一致するように
 ``CsvWriter(path, fieldnames=list(mapping.values()))`` と構築する。
-Excelを転記元または転記先にする場合は、``ExcelWriter.sheet()`` で取得した
-``Sheet`` を渡す。Excelファイルの保存は呼び出し側で ``save()`` する。
+新 API では ``CSV`` または ``Excel.sheet(...).table()`` で取得した
+``ExcelTable`` を渡す。既存の ``CsvReader`` / ``CsvWriter`` も利用できる。
 
 #### `__init__`
 
@@ -5818,196 +5890,6 @@ def count(self) -> int:
 ##### 説明
 
 データ行数を返す。
-
-### `ExcelReader`
-
-```text
-class ExcelReader(ExcelBase):
-```
-
-#### 説明
-
-Excel ブックを読み取り専用で開くクラス。
-
-read_only=True で開くため、大きなブックもメモリ効率よく速く読み取れる。
-書き込みメソッドを持たないので、誤って元ファイルを書き換える事故を防げる。
-
-#### `__init__`
-
-```text
-def __init__(self, path: str | Path, data_only: bool=False, local_copy_threshold_mb: float=10, headers: list[str] | None=None, tables: bool=False) -> None:
-```
-
-##### 説明
-
-Args:
-    path: Excel ファイルのパス。
-    data_only: True にすると数式セルのキャッシュ値を読む（read_computed_rows 推奨）。
-    local_copy_threshold_mb: この MB 以上のファイルはローカルにコピーしてから開く。
-        NAS・ネットワークドライブのファイルが遅い・不安定な場合に有効。
-        0 を指定するとローカルコピーを無効化できる。
-    headers: ヘッダー行がない Excel の場合に、列名のリストをここで付ける。
-        指定すると read_rows_as_dicts() は全行をデータとして読む。
-    tables: True にするとテーブル名で読むために read_only=False で開く。
-        大きなブックでもメモリ効率が下がる点に注意。
-        read_only モードでは openpyxl がテーブル定義を読めないため、
-        read_table() を呼ぶときに必要。
-
-### `ExcelWriter`
-
-```text
-class ExcelWriter(ExcelBase):
-```
-
-#### 説明
-
-Excel ブックの読み取り・書き込み・保存を行うクラス。
-
-読み取りメソッドも継承しているため、データを読んでから Sheet で
-書き換える処理を1つのブックで完結できる。
-
-#### `__init__`
-
-```text
-def __init__(self, path: str | Path, data_only: bool=False, local_copy_threshold_mb: float=10, headers: list[str] | None=None) -> None:
-```
-
-##### 説明
-
-Args:
-    path: Excel ファイルのパス。
-    data_only: True にすると数式セルのキャッシュ値を読む（read_computed_rows 推奨）。
-    local_copy_threshold_mb: この MB 以上のファイルはローカルにコピーしてから開く。
-        NAS・ネットワークドライブのファイルが遅い・不安定な場合に有効。
-        0 を指定するとローカルコピーを無効化できる。
-    headers: ヘッダー行がない Excel の場合に、列名のリストをここで付ける。
-        指定すると read_rows_as_dicts() は全行をデータとして読む。
-
-#### `sheet`
-
-```text
-def sheet(self, name: str) -> Sheet:
-```
-
-##### 説明
-
-シートの高レベルラッパーを返す（シート単位でセル・行を書き込む）。
-
-Args:
-    name: シート名。
-
-Raises:
-    SheetNotFoundError: 指定したシートが存在しない場合。
-
-#### `add_sheet`
-
-```text
-def add_sheet(self, name: str, index: int | None=None) -> Sheet:
-```
-
-##### 説明
-
-シートを追加し、そのまま書き込める Sheet を返す。
-
-Args:
-    name: 追加するシート名。
-    index: 挿入位置（0始まり）。省略時は末尾。
-
-Raises:
-    SheetAlreadyExistsError: 同名のシートが既に存在する場合。
-
-#### `rename_sheet`
-
-```text
-def rename_sheet(self, old_name: str, new_name: str) -> None:
-```
-
-##### 説明
-
-シート名を変更する。
-
-#### `delete_sheet`
-
-```text
-def delete_sheet(self, name: str) -> None:
-```
-
-##### 説明
-
-シートを削除する。
-
-シートを削除すると、そのシートを参照している数式が ``#REF!`` になる。
-削除する前に、他のシートから参照されていないか確認すること。
-
-#### `create`
-
-```text
-@classmethod
-def create(cls, path: str | Path, sheet_name: str='Sheet1') -> Self:
-```
-
-##### 説明
-
-新規ブックを作る（ファイルはまだ作られず、save() で path に保存される）。
-Args:
-    path: save() で保存されるパス。親フォルダがなければ保存時に自動作成される。
-    sheet_name: 最初のシートの名前（デフォルト: "Sheet1"）。
-
-#### `save`
-
-```text
-@measure
-def save(self, path: str | Path | None=None, read_pw: str='', write_pw: str='') -> None:
-```
-
-##### 説明
-
-ファイルを保存する。
-
-ローカルコピーで開いている場合も、省略時の保存先は元のファイル
-（一時コピーに保存すると close() でコピーごと消えてしまうため）。
-
-read_pw / write_pw のどちらかを指定すると、パスワード保護付きの
-ファイルとして保存する。openpyxl だけではパスワード保存ができないため、
-Excel COM を経由する。Excel が入っていない環境ではパスワード付き保存は
-できないため、入っている PC で実行すること。
-
-Args:
-    path: 保存先のパス。省略すると開いた元のファイルに上書き保存する。
-    read_pw: 読み取りパスワード。指定するとパスワード保護された
-             ファイルとして保存する（COM が必要な操作）。
-             設定した拡張子のファイル形式と中身の形式が一致しないと
-             Excel 側で警告が出る。
-    write_pw: 書き込みパスワード。指定すると開くときに書き込みパスワード
-             を要求する形で保存する（COM が必要な操作）。
-
-Raises:
-    ExcelSaveNotCompletedError: 保存後にファイルが見当たらない場合。
-    ExcelApplicationNotAvailableError: パスワード付きで保存しようとした
-        が、Excel が見つからない環境で実行した場合。
-
-#### `run_macro`
-
-```text
-def run_macro(self, macro_name: str, save: bool=True) -> None:
-```
-
-##### 説明
-
-VBA マクロを実行する。内部で win32com（pywin32）を使用する。
-
-COM は保存せずに閉じる仕様のため、save=True（デフォルト）で実行後に
-元ファイルへ保存する。マクロがブックを変更しても保存しないと結果は破棄される。
-
-WARNING: このメソッドは COM で元ファイルを直接編集する。openpyxl 側
-    （Sheet で行った書き込み等）の未保存の変更とは独立で、run_macro の後に f.save() を
-    呼ぶと openpyxl の内容で上書きされマクロの結果が消える。
-    マクロと openpyxl 書き込みを混在させないこと。
-
-Args:
-    macro_name: 実行するマクロ名。"モジュール名.プロシージャ名" の形式で指定する。
-                例: "Module1.UpdateData"
-    save: True（デフォルト）ならマクロ実行後に元ファイルへ保存する。
 
 
 ## `from comken.toolbox.holidays import ...`

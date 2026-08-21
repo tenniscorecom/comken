@@ -135,7 +135,6 @@ transform は転記元行と、mapping の先頭列で一致した既存の転�
 | `FileFormat` | `from comken.constants import FileFormat` | Excel COM の別名保存形式 | `save_as(path, file_format=FileFormat.CSV)` |
 
 ---
-
 ## 機能の追加・変更の要望
 
 「このエンコーディングを `Encoding` に追加してほしい」「この色を `Color` に追加してほしい」など、
@@ -512,17 +511,23 @@ POSITION = 42
 
 ## Logger
 
-ログの設定（出力先・フォーマット・レベル）は社内の共通ライブラリ側で行う。
-comken と利用プロジェクトは、各モジュールで標準の `logging.getLogger(__name__)` を使うだけでよい。
-RPA 基盤を通さず `python main.py` で単体実行するときだけ、先頭で `setup_logging()` を呼ぶ。
-明示的に呼んだ場合も、すでに設定済みなら既存のログ設定には触れない。
+社内環境では `setup_logging()` に環境クラスを渡し、root logger を設定する。
+すでに root logger が設定済みの場合や2回呼んだ場合は、二重出力を防ぐため例外になる。
 
 ```python
-# main.py（単体実行する場合だけ）
-from comken import setup_logging
+from comken.core.logger import Backoffice, setup_logging
 
-setup_logging()  # コンソールと logs/YYYY-MM-DD.log（UTF-8）へ出力
-# setup_logging(to_file=False)  # コンソールだけに出力する場合
+setup_logging(Backoffice)
+```
+
+RPA 基盤を通さず単体実行するときは、`local()` が返す名前付き logger を使う。
+
+```python
+# main.py
+from comken.core.logger import DEBUG, local
+
+logger = local(console_level=DEBUG)
+logger.info("処理開始")  # コンソールと logs/local-YYYY-MM-DD.log（UTF-8）へ出力
 ```
 
 ```python
@@ -621,3 +626,4 @@ flowchart LR
 ```
 
 ---
+

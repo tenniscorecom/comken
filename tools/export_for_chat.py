@@ -70,6 +70,7 @@ DIRECT_ERROR_CATEGORIES = {
     exceptions.FileDeletionError: "ファイル・設定などのエラー",
     exceptions.TransferDestinationRowMissingError: "ファイル・設定などのエラー",
     exceptions.TransferDestinationMultipleMatchError: "ファイル・設定などのエラー",
+    exceptions.LoggingAlreadyConfiguredError: "ファイル・設定などのエラー",
 }
 SUPPLEMENTAL_ERRORS = {
     "Access のエラー": (

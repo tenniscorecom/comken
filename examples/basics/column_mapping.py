@@ -3,7 +3,8 @@
 import logging
 from pathlib import Path
 
-from comken import Config, setup_logging
+from comken import Config
+from comken.core.logger import local
 from comken.toolbox import Transfer
 from comken.toolbox.csv import CsvReader, CsvWriter
 from comken.toolbox.excel import ExcelWriter
@@ -44,5 +45,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    setup_logging(to_file=False)
+    logger = local()
     main()

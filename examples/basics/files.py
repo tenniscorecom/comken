@@ -3,7 +3,6 @@
 import logging
 from pathlib import Path
 
-from comken import setup_logging
 from comken.core import (
     DateNameBuilder,
     copy_file,
@@ -12,6 +11,7 @@ from comken.core import (
     unzip,
     zip_files,
 )
+from comken.core.logger import local
 
 HERE = Path(__file__).parent
 OUTPUT_FOLDER = HERE / "output" / "files"
@@ -49,5 +49,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    setup_logging(to_file=False)
+    logger = local()
     main()

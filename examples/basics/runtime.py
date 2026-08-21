@@ -3,8 +3,9 @@
 import logging
 from pathlib import Path
 
-from comken import debug, dry_run, setup_logging
+from comken import debug, dry_run
 from comken.core import copy_file
+from comken.core.logger import local
 
 HERE = Path(__file__).parent
 OUTPUT_FOLDER = HERE / "output"
@@ -35,5 +36,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    setup_logging(to_file=False)
+    logger = local()
     main()

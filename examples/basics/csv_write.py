@@ -8,7 +8,7 @@
 import logging
 from pathlib import Path
 
-from comken import setup_logging
+from comken.core.logger import local
 from comken.toolbox.csv import CsvReader, CsvWriter
 
 HERE = Path(__file__).parent
@@ -34,5 +34,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    setup_logging(to_file=False)
+    logger = local()
     main()
