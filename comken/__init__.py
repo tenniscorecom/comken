@@ -7,7 +7,7 @@
 書くときは ``from comken import X`` が第一選択。そこに無いものだけ
 ``from comken.core import Y`` で取る（仕様書 4.32）。
 
-toolbox / services はこの2階層に上げない。``from comken.toolbox.excel import ExcelWriter``
+toolbox / services はこの2階層に上げない。``from comken.toolbox.excel import Excel``
 のように深いパスのままで十分で、そこには「どの機能群に依存しているか」が読める意味があるため。
 """
 

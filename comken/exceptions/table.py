@@ -14,11 +14,23 @@ class TableError(ComkenError):
 
 
 class InvalidTableInputError(TableError):
-    """Table API に対応しない入力が渡された。"""
+    """Table API に対応しない入力が渡された。
+
+    発生箇所: Table / CSV / ExcelTable
+
+    対処:
+        columns、rows、types の型と列名を確認する
+    """
 
 
 class InvalidTableOperationError(TableError):
-    """Table API で実行できない操作が指定された。"""
+    """Table API で実行できない操作が指定された。
+
+    発生箇所: Table / CSV / ExcelTable
+
+    対処:
+        対象が読み取り専用でないか、指定したテーブル名が正しいか確認する
+    """
 
 
 class TableNotOpenError(TableError):

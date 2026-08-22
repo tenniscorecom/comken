@@ -62,7 +62,9 @@ class Excel:
         if self._working_path.exists():
             self._workbook = load_workbook(
                 self._working_path,
-                read_only=read_only,
+                # openpyxlのReadOnlyWorksheetはExcelテーブル定義を公開しないため、
+                # Table APIをread_onlyでも利用できるよう通常Worksheetで開く。
+                read_only=False,
                 keep_vba=self.path.suffix.casefold() in {".xlsm", ".xltm"},
             )
         else:
@@ -110,12 +112,12 @@ class Excel:
             if len(names) != 1:
                 raise SheetNotFoundError("データシート省略", names)
             name = names[0]
-        return self.sheet(self._with_data_prefix(name))
+        return self.sheet(self._with_python_prefix(name))
 
     def create_data_sheet(self, name: str) -> "Sheet":
         """指定名の空のデータシートを作成する。"""
         self._ensure_writable("create_data_sheet")
-        full_name = self._with_data_prefix(name)
+        full_name = self._with_python_prefix(name)
         if full_name in self._workbook.sheetnames:
             raise SheetAlreadyExistsError(full_name)
         worksheet = self._workbook.create_sheet(full_name)
@@ -132,7 +134,7 @@ class Excel:
         if sheet_name is None:
             sheet_name = self.data_sheet()._worksheet.title
         else:
-            sheet_name = self._with_data_prefix(sheet_name)
+            sheet_name = self._with_python_prefix(sheet_name)
         rows = self.read_computed_rows_as_dicts(sheet_name, 1)
         columns = [str(column) for column in rows[0]] if rows else []
         normalized_rows = [
@@ -294,7 +296,7 @@ class Excel:
     def _is_data_sheet_name(self, name: str) -> bool:
         return name.startswith(self.PY_PREFIX)
 
-    def _with_data_prefix(self, name: str) -> str:
+    def _with_python_prefix(self, name: str) -> str:
         """利用者が短い名前を書いたとき、Python管理用の名前を補う。"""
         if self._is_data_sheet_name(name):
             return name

@@ -2,7 +2,7 @@
 
 
 class Encoding:
-    """CsvReader / CsvWriter の encoding 引数に使う定数。"""
+    """CSV の encoding 引数に使う定数。"""
 
     AUTO = "auto"
     UTF8_SIG = "utf-8-sig"

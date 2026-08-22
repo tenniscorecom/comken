@@ -100,7 +100,9 @@ class ExcelTable:
         ]
         if not any(headers):
             raise InvalidTableOperationError("列のないTableはExcelテーブルにできません。")
-        for row_number, row in enumerate([dict.fromkeys(headers, ""), *rows], min_row):
+        for column, header in enumerate(headers, min_col):
+            self._worksheet.cell(row=min_row, column=column, value=header)
+        for row_number, row in enumerate(rows, min_row + 1):
             for column, header in enumerate(headers, min_col):
                 self._worksheet.cell(row=row_number, column=column, value=row.get(header, ""))
         new_max_row = min_row + max(len(rows), 1)

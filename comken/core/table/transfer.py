@@ -54,6 +54,7 @@ class Transfer:
         self.write_keys = [write_key] if isinstance(write_key, str) else list(write_key)
         if len(self.read_keys) != len(self.write_keys):
             raise TransferMappingError
+        self._working_table: Table | None = None
 
     def transfer_rows(self) -> Iterator[tuple[Row, Row | None]]:
         """readを基準に、キーで対応付けた行を順番に返す。
@@ -62,11 +63,17 @@ class Transfer:
         ``(read_row, None)`` として返します。これは新規行を追加するかを
         利用者が条件分岐で判断できるようにするためです。
         """
-        write_index = self._write_index()
+        self.read._check_columns(self.read_keys)
+        self.write._check_columns(self.write_keys)
+        if self._working_table is None:
+            self._working_table = Table(
+                self.write.columns, self.write.read(), types=self.write.types
+            )
+        write_index = self._working_index()
         for read_row in self.read.read():
             key = self._row_key(read_row, self.read_keys)
             write_row = write_index.get(key)
-            yield read_row, None if write_row is None else dict(write_row)
+            yield read_row, write_row
 
     def matched_rows(self) -> Iterator[tuple[Row, Row]]:
         """readとwriteの両方に存在する行だけを返す。"""
@@ -80,14 +87,18 @@ class Transfer:
         このメソッドは、現在の公開APIでは ``run()`` の結果を明示的に
         取得するための名前として用意しています。入力Tableは変更しません。
         """
-        return self.run()
+        if self._working_table is None:
+            return self.run()
+        return self._working_table
 
     def run(self, *, transform: Transform | None = None) -> Table:
         """転記結果の新しい Table を返す。"""
+        self._working_table = None
         self.read._check_columns([*self.read_keys, *self.mapping.keys()])
         self.write._check_columns([*self.write_keys, *self.mapping.values()])
         # write をコピーしてから加工するため、元の Table は転記後もそのまま残る。
         result_table = Table(self.write.columns, self.write.read(), types=self.write.types)
+        self._working_table = result_table
         index: dict[tuple[Any, ...], Row] = {}
         for write_row in result_table:
             key = tuple(write_row[column] for column in self.write_keys)
@@ -109,8 +120,6 @@ class Transfer:
                 break
             if control is self.SKIP or control is False:
                 continue
-            if control is self.STOP:
-                break
             if control is not self.APPLY and control is not None:
                 raise TransferRowError(
                     0, "transformはTrue、False、APPLY、SKIP、STOPのいずれかを返してください。"
@@ -125,6 +134,20 @@ class Transfer:
         self.write._check_columns(self.write_keys)
         index: dict[tuple[Any, ...], Row] = {}
         for write_row in self.write.read():
+            key = self._row_key(write_row, self.write_keys)
+            if key in index:
+                raise TransferDestinationMultipleMatchError(
+                    ",".join(self.write_keys), key
+                )
+            index[key] = write_row
+        return index
+
+    def _working_index(self) -> dict[tuple[Any, ...], Row]:
+        """作業中のTableを複合キーで検索できる辞書にする。"""
+        if self._working_table is None:
+            return {}
+        index: dict[tuple[Any, ...], Row] = {}
+        for write_row in self._working_table:
             key = self._row_key(write_row, self.write_keys)
             if key in index:
                 raise TransferDestinationMultipleMatchError(

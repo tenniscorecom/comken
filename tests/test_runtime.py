@@ -175,12 +175,11 @@ class TestDryRun:
 
     def test_excel_save_skipped(self, tmp_path, caplog):
         """dry-run 中は Excel が保存されないことを確認する。"""
-        from comken.toolbox.excel import ExcelWriter
+        from comken.toolbox.excel import Excel
 
         path = tmp_path / "out.xlsx"
-        with comken.dry_run(), caplog.at_level(logging.INFO), ExcelWriter.create(path) as f:
-            f.sheet("Sheet1")["A1"] = "test"
-            f.save()
+        with comken.dry_run(), caplog.at_level(logging.INFO), Excel(path) as excel:
+            excel.sheet("Sheet1").write_value("A1", "test")
 
         assert not path.exists()
         assert "[DRY-RUN]" in caplog.text

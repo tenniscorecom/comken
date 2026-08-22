@@ -4,8 +4,8 @@ Excel・CSV・Access・Outlook・Windows・ブラウザ・Salesforce・社内 RP
 **外にあるものを触る道具**をここに置く。相手が社内のものかどうかは問わない
 （社内 RPA 基盤も「呼び出すための部品」なのでここに入る）。
 
-    from comken.toolbox.excel import ExcelWriter
-    from comken.toolbox.csv import CsvReader
+    from comken.toolbox.excel import Excel
+    from comken.toolbox.csv import CSV
 
 ここに置かないもの:
 

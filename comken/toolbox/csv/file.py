@@ -9,7 +9,7 @@ from typing import Self, TypeAlias
 
 from comken.constants import Encoding
 from comken.core.table.model import Table
-from comken.exceptions.table import InvalidTableInputError
+from comken.exceptions.table import InvalidTableInputError, InvalidTableOperationError
 
 Value: TypeAlias = str | int | float | bool | datetime
 
@@ -74,6 +74,8 @@ class CSV:
 
     def replace(self, rows: list[dict[str, Value]] | Table) -> None:
         """ファイルのデータ領域を全置換する。"""
+        if self._read_only:
+            raise InvalidTableOperationError("read_only=True のCSVには書き込めません。")
         if not isinstance(rows, (list, Table)):
             raise InvalidTableInputError("CSV の置換には Table または行リストを指定してください。")
         table = (
@@ -90,6 +92,7 @@ class CSV:
         self.replace(table)
 
     def save(self) -> None:
+        """保留中のTableをCSVファイルへ保存する。"""
         # replace はメモリ上で準備し、save または正常終了した with でだけファイルへ反映する。
         if self._pending is not None and not self._read_only and not self._dry_run:
             self._write(self._pending)

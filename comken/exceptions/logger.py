@@ -1,4 +1,4 @@
-"""ログ設定に関する例外。"""
+"""comken/exceptions/logger.py — ログ設定に関する例外。"""
 
 from comken.exceptions.base import ComkenError
 

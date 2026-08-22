@@ -18,9 +18,10 @@
 import logging
 
 from comken.core import DateFileFinder, DateNameBuilder
+from comken.core.table import Table
 from comken.exceptions import ComkenError
 from comken.toolbox.csv import CsvReader
-from comken.toolbox.excel import ExcelWriter
+from comken.toolbox.excel import Excel
 from comken.toolbox.rpa import backoffice  # イントラネットのツールなら intranet に変える
 
 from .config import config
@@ -48,12 +49,10 @@ def main() -> None:
     # ↑↑↑ ここまで ↑↑↑
 
     output_path = config.FILES.OUTPUT_FOLDER / DateNameBuilder(BATCH_NAME).prefix()
-    with ExcelWriter.create(output_path) as f:
-        s = f.sheet(SHEET)
-        s.write_table(rows)
-        s.auto_width()
-        s.freeze_header()
-        f.save()
+    with Excel(output_path) as excel:
+        excel.create_data_sheet("売上").create_table(
+            "売上", Table(list(rows[0]) if rows else [], rows)
+        )
     logger.info("出力: %s", output_path)
     logger.info("%s 完了（%d 件）", BATCH_NAME, len(rows))
 

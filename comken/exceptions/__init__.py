@@ -75,6 +75,9 @@ ComkenError
 │   ├── PopupTabNotOpenedError
 │   └── DownloadTimeoutError
 ├── InvalidColumnError
+├── TableError
+│   ├── InvalidTableInputError
+│   └── InvalidTableOperationError
 ├── TransferDestinationRowMissingError
 ├── TransferDestinationMultipleMatchError
 ├── ColumnNotFoundError

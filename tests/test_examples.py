@@ -37,7 +37,7 @@ class TestBasicExamples:
         monkeypatch.setattr(excel_read, "EXCEL_PATH", excel_path)
         excel_read.main()
 
-        assert load_workbook(excel_path, read_only=True)[excel_read.SHEET_NAME].max_row == 3
+        assert load_workbook(excel_path, read_only=True)["PY_在庫"].max_row == 3
 
     def test_excel_write(self, tmp_path, monkeypatch):
         from examples.basics import excel_write
@@ -48,7 +48,7 @@ class TestBasicExamples:
 
         worksheet = load_workbook(output_path)[excel_write.SHEET_NAME]
         assert worksheet.freeze_panes == "A2"
-        assert excel_write.TABLE_NAME in worksheet.tables
+        assert worksheet["D4"].value == 4300
 
     def test_column_mapping(self, tmp_path, monkeypatch):
         from examples.basics import column_mapping
@@ -59,9 +59,9 @@ class TestBasicExamples:
         monkeypatch.setattr(column_mapping, "OUTPUT_PATH", tmp_path / "請求一覧.xlsx")
         column_mapping.main()
 
-        worksheet = load_workbook(column_mapping.OUTPUT_PATH).active
-        assert worksheet["A2"].value == "株式会社アルファ"
-        assert worksheet["B2"].value == "12000"
+        worksheet = load_workbook(column_mapping.OUTPUT_PATH)["PY_請求一覧"]
+        assert worksheet["B2"].value == "株式会社アルファ"
+        assert worksheet["C2"].value == 12000
 
     def test_state(self, tmp_path, monkeypatch):
         from examples.basics import state

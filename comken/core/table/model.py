@@ -1,4 +1,4 @@
-"""保存先を持たない、初学者向けの表データモデル。
+"""comken/core/table/model.py — 保存先を持たない、初学者向けの表データモデル。
 
 Table はメモリ上の行だけを担当します。CSV や Excel の保存処理をここへ
 入れないことで、加工処理とファイル I/O の責任を分けています。
@@ -39,6 +39,7 @@ class Table:
         }
 
     def read(self) -> list[dict[str, Any]]:
+        """現在の行をコピーして返す。元のTableは変更しない。"""
         return [dict(row) for row in self.rows]
 
     def __iter__(self):
@@ -53,35 +54,43 @@ class Table:
         return super().__eq__(other)
 
     def replace(self, rows: list[dict]) -> "Table":
+        """表の全行を置き換え、同じTableを返す。"""
         self.rows = [self._normalize(row) for row in rows]
         return self
 
     def append(self, rows: list[dict] | dict) -> "Table":
+        """1行または複数行を末尾へ追加する。"""
         values = [rows] if isinstance(rows, dict) else rows
         self.rows.extend(self._normalize(row) for row in values)
         return self
 
     def count(self) -> int:
+        """行数を返す。"""
         return len(self.rows)
 
     def select(self, *columns: str) -> "Table":
+        """指定した列だけを持つ新しいTableを返す。"""
         self._check_columns(columns)
         return Table(
             list(columns), [{column: row[column] for column in columns} for row in self.rows]
         )
 
     def filter(self, predicate: Callable[[dict], bool]) -> "Table":
+        """条件に一致する行だけを持つ新しいTableを返す。"""
         return Table(self.columns, [row for row in self.rows if predicate(row)], types=self.types)
 
     def column(self, name: str) -> list[Any]:
+        """指定列の値を順番どおりに返す。"""
         self._check_columns([name])
         return [row[name] for row in self.rows]
 
     def index(self, key: str) -> dict[Any, dict]:
+        """指定列をキーにした辞書を返す。"""
         self._check_columns([key])
         return {row[key]: row for row in self.rows}
 
     def group_by(self, key: str) -> dict[Any, "Table"]:
+        """指定列の値ごとにTableを分けて返す。"""
         grouped: dict[Any, list[dict]] = {}
         for row in self.rows:
             grouped.setdefault(row[key], []).append(row)
@@ -90,6 +99,7 @@ class Table:
         }
 
     def merge(self, other: "Table", *, on: str, how: str = "left") -> "Table":
+        """キー列で別のTableを結合し、新しいTableを返す。"""
         if how not in {"left", "inner"}:
             raise TableError("merge は left または inner のみ対応します。")
         right_index = other.index(on)

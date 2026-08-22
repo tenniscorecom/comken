@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from comken.core.table import Table
 from comken.exceptions import DataSheetAccessError
 from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Excel
@@ -41,19 +42,21 @@ class TestExcelTable:
         path = tmp_path / "data.xlsx"
         rows = [{"id": 1, "name": "", "enabled": True}]
 
-        with Excel(path) as excel:
-            table = excel.sheet("data_Users").table()
-            table.replace(rows)
+        types = {"id": int, "enabled": lambda value: str(value).casefold() == "true"}
+        with Excel(path, types=types) as excel:
+            table = excel.create_data_sheet("Users").create_table(
+                "Users", Table(["id", "name", "enabled"], rows)
+            )
             assert table.count() == 1
-            assert table.read() == rows
+            assert table.read().read() == rows
 
-        with Excel(path) as excel:
-            assert excel.list_data_sheets() == ["data_Users"]
-            assert excel.sheet("data_Users").table().read() == rows
+        with Excel(path, types=types) as excel:
+            assert excel.list_data_sheets() == ["PY_Users"]
+            assert excel.data_sheet("Users").table().read().read() == rows
 
     def test_data_sheet_rejects_cell_access(self, tmp_path) -> None:
         with Excel(tmp_path / "data.xlsx") as excel:
-            sheet = excel.sheet("data_Users")
+            sheet = excel.create_data_sheet("Users")
 
             with pytest.raises(DataSheetAccessError):
                 sheet.write_value("A1", "禁止")

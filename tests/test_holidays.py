@@ -574,16 +574,14 @@ class TestComkenMasterTableSource:
 
     @staticmethod
     def _write_master(path: Path, rows: list[tuple[str, str]]) -> Path:
-        from openpyxl import Workbook
+        from comken.core.table import Table
+        from comken.toolbox.excel import Excel
 
-        workbook = Workbook()
-        worksheet = workbook.active
-        assert worksheet is not None  # 新規 Workbook は必ず 1 枚持つ
-        worksheet.title = "会社休日"
-        worksheet.append(["日付", "名称"])
-        for date_str, name in rows:
-            worksheet.append([date_str, name])
-        workbook.save(path)
+        table_rows = [{"日付": date_str, "名称": name} for date_str, name in rows]
+        with Excel(path) as excel:
+            excel.create_data_sheet("会社休日").create_table(
+                "会社休日", Table(["日付", "名称"], table_rows)
+            )
         return path
 
     def test_loads_company_holidays(self, tmp_path: Path) -> None:

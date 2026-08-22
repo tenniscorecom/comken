@@ -3,7 +3,7 @@
 
 comken の最初の一歩としてまず動かすサンプル。
 CSV の読み込み・絞り込み・集計（CsvReader）と、
-Excel レポートの作成・見た目調整（ExcelWriter.create + Sheet）を通しで行う。
+Excel レポートの作成・見た目調整（Excel + Sheet）を通しで行う。
 
 実行方法:
     リポジトリのルートで python -m examples.csv_to_excel_report.run
@@ -18,7 +18,7 @@ from pathlib import Path
 from comken.constants import Color
 from comken.core import DateNameBuilder
 from comken.toolbox.csv import CsvReader
-from comken.toolbox.excel import ExcelWriter
+from comken.toolbox.excel import Excel
 
 # 入出力はこのフォルダ内で完結させる（サンプル用。実プロジェクトではパスは config.ini に書く）
 HERE = Path(__file__).parent
@@ -56,22 +56,21 @@ def main() -> None:
     # 「売上レポート_20260713.xlsx」のような日付付きファイル名を組み立てる
     output_path = OUTPUT_FOLDER / DateNameBuilder("売上レポート").suffix()
 
-    with ExcelWriter.create(output_path) as f:
-        s = f.sheet(SHEET)
-        s.write_table(excel_rows)  # ヘッダー行 + データ行をまとめて書く
-        s.append_row(["合計", "", "", "", total])  # 最終行の下に追記
+    with Excel(output_path) as excel:
+        sheet = excel.sheet(SHEET)
+        headers = list(excel_rows[0])
+        values = [headers, *[[row[header] for header in headers] for row in excel_rows]]
+        values.append(["合計", *([""] * (len(headers) - 2)), total])
+        sheet.write_range(f"A1:E{len(values)}", values)
 
         # 見た目の調整（ヘッダー色付け・合計行の強調・列幅・ヘッダー固定）
         column_count = len(excel_rows[0])
         for col in range(1, column_count + 1):
-            s.set_fill(row=HEADER_ROW, col=col, color=Color.LIGHT_BLUE)
-        s.set_bold(row=s.last_row, col=1)
-        s.set_bold(row=s.last_row, col=column_count)
-        s.set_number_format(row=s.last_row, col=column_count, fmt=AMOUNT_FORMAT)
-        s.auto_width()
-        s.freeze_header()
-
-        f.save()  # save() を呼ぶまでファイルには書き込まれない
+            sheet.set_background(f"{chr(64 + col)}{HEADER_ROW}", Color.LIGHT_BLUE)
+        last_row = len(values)
+        sheet.format(f"A{last_row}", bold=True)
+        sheet.format(f"E{last_row}", bold=True, number_format=AMOUNT_FORMAT)
+        sheet.freeze_panes("A2")
 
     logger.info("レポート出力: %s", output_path)
 

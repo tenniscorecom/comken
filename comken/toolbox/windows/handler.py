@@ -6,7 +6,7 @@ pywin32 を使った Windows 固有操作を提供する。
 - WindowHandler: ウィンドウの検索・前面表示
 - RegistryHandler: レジストリ値の読み取り
 
-通常の Excel 読み書きは excel/writer.py の ExcelWriter（openpyxl）を使うこと。
+通常の Excel 読み書きは excel の Excel（openpyxl）を使うこと。
 ExcelComHandler は数式やマクロが必要な場面に限定して使う。
 """
 
@@ -96,7 +96,7 @@ class ExcelComHandler(FileBase):
                 NAS やネットワークドライブのファイルが遅い・不安定な場合に有効。
                 0 を指定するとローカルコピーを無効化できる
                 （社内ルールでローカルコピーが禁止されている環境向け。
-                ExcelReader / ExcelWriter と挙動を揃えるためのオプトアウト）。
+                Excel と挙動を揃えるためのオプトアウト）。
                 マクロ起動が UNC / 共有サーバー上のファイルを参照する場合、
                 コピー元では見つからないことがある。そのときは
                 ``local_copy_threshold_mb=0`` を指定して元の場所で開く。
@@ -225,7 +225,7 @@ class ExcelComHandler(FileBase):
         header_values = _block_values(ws, header_row, header_row, last_col)
         file_headers = list(header_values[0]) if header_values else []
         if not file_headers or all(h is None for h in file_headers):
-            return []  # 空シート（ExcelWriter 側と挙動を揃える）
+            return []  # 空シート（Excel 側と挙動を揃える）
         none_cols = [i + 1 for i, h in enumerate(file_headers) if h is None]
         if none_cols:
             raise EmptyHeaderCellError(none_cols)
@@ -281,7 +281,7 @@ class ExcelComHandler(FileBase):
 
         NAS 上のファイルをローカルコピーして開いている場合も、保存先は元のファイル
         （一時コピーに保存すると close() でコピーごと消えるため）。
-        動作は ExcelWriter.save() と同じ考え方（開いた場所ではなく、元の場所へ保存）。
+        動作は Excel.save() と同じ考え方（開いた場所ではなく、元の場所へ保存）。
         close() は保存せずに閉じる（SaveChanges=False）ため、
         write_cell での変更を残す場合は必ず呼ぶこと。
 
@@ -298,7 +298,7 @@ class ExcelComHandler(FileBase):
             return
         # ローカルコピーで開いているときは SaveAs で元ファイルへ。
         # FileFormat を明示しないと xlOpenXMLWorkbook 固定になり、.xlsm などの
-        # マクロ付きブックが壊れる（ExcelWriter の save_as() と同じ理由）。
+        # マクロ付きブックが壊れるため、同じパスへの上書きは避ける。
         file_format = self._wb.FileFormat
         suffix_format = _SUFFIX_TO_FORMAT.get(original.suffix.lower())
         if suffix_format is not None and suffix_format != file_format:

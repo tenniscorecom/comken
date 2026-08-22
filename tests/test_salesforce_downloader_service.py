@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from comken.core.table import Table
 from comken.exceptions import (
     EmptyReportError,
     InvalidReportUrlError,
@@ -35,7 +36,7 @@ from comken.services.salesforce_downloader import service as service_module
 from comken.services.salesforce_downloader.cli import main as cli
 from comken.services.salesforce_downloader.master import EXAMPLES
 from comken.toolbox.csv import CsvReader
-from comken.toolbox.excel import ExcelWriter
+from comken.toolbox.excel import Excel
 
 URL_A = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE/view"
 URL_B = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000FGHIJ/view"
@@ -49,12 +50,9 @@ HEADERS_WITH_ALLOW_EMPTY = [*HEADERS[:6], "0件あり", "備考"]
 
 def make_master(path: Path, rows: list[list]) -> Path:
     """管理表（Excel）を作る。"""
-    with ExcelWriter.create(path, "管理表") as book:
-        sheet = book.sheet("管理表")
-        sheet.write_row(1, HEADERS)
-        for offset, row in enumerate(rows):
-            sheet.write_row(offset + 2, row)
-        book.save()
+    table_rows = [dict(zip(HEADERS, row, strict=True)) for row in rows]
+    with Excel(path) as book:
+        book.create_data_sheet("管理表").create_table("管理表", Table(HEADERS, table_rows))
     return path
 
 
@@ -64,12 +62,11 @@ def make_master_with_allow_empty(path: Path, rows: list[list]) -> Path:
     テスト1, 2, 3, 5, 6 で使う。テスト4（列が無くても読める）はあえて `make_master` の
     6 列版を使うので、ここでは7列版を別途用意する。
     """
-    with ExcelWriter.create(path, "管理表") as book:
-        sheet = book.sheet("管理表")
-        sheet.write_row(1, HEADERS_WITH_ALLOW_EMPTY)
-        for offset, row in enumerate(rows):
-            sheet.write_row(offset + 2, row)
-        book.save()
+    table_rows = [dict(zip(HEADERS_WITH_ALLOW_EMPTY, row, strict=True)) for row in rows]
+    with Excel(path) as book:
+        book.create_data_sheet("管理表").create_table(
+            "管理表", Table(HEADERS_WITH_ALLOW_EMPTY, table_rows)
+        )
     return path
 
 

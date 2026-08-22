@@ -283,6 +283,226 @@ def __init__(self, name: str='処理') -> None:
 Args:
     name: ログに出す処理名（例: "CSV読み込み"）。
 
+### `Table`
+
+```text
+class Table:
+```
+
+#### 説明
+
+列と辞書行をメモリで扱う表。
+
+CSVやExcelに直接依存しないため、加工処理をファイルI/Oから分離できます。
+``types`` は入力時に明示された列だけを変換し、暗黙の型推測は行いません。
+
+#### `__init__`
+
+```text
+def __init__(self, columns: list[str] | tuple[str, ...], rows: list[dict[str, Any]], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
+```
+
+#### `read`
+
+```text
+def read(self) -> list[dict[str, Any]]:
+```
+
+##### 説明
+
+現在の行をコピーして返す。元のTableは変更しない。
+
+#### `replace`
+
+```text
+def replace(self, rows: list[dict]) -> 'Table':
+```
+
+##### 説明
+
+表の全行を置き換え、同じTableを返す。
+
+#### `append`
+
+```text
+def append(self, rows: list[dict] | dict) -> 'Table':
+```
+
+##### 説明
+
+1行または複数行を末尾へ追加する。
+
+#### `count`
+
+```text
+def count(self) -> int:
+```
+
+##### 説明
+
+行数を返す。
+
+#### `select`
+
+```text
+def select(self, *columns: str) -> 'Table':
+```
+
+##### 説明
+
+指定した列だけを持つ新しいTableを返す。
+
+#### `filter`
+
+```text
+def filter(self, predicate: Callable[[dict], bool]) -> 'Table':
+```
+
+##### 説明
+
+条件に一致する行だけを持つ新しいTableを返す。
+
+#### `column`
+
+```text
+def column(self, name: str) -> list[Any]:
+```
+
+##### 説明
+
+指定列の値を順番どおりに返す。
+
+#### `index`
+
+```text
+def index(self, key: str) -> dict[Any, dict]:
+```
+
+##### 説明
+
+指定列をキーにした辞書を返す。
+
+#### `group_by`
+
+```text
+def group_by(self, key: str) -> dict[Any, 'Table']:
+```
+
+##### 説明
+
+指定列の値ごとにTableを分けて返す。
+
+#### `merge`
+
+```text
+def merge(self, other: 'Table', *, on: str, how: str='left') -> 'Table':
+```
+
+##### 説明
+
+キー列で別のTableを結合し、新しいTableを返す。
+
+#### `concat`
+
+```text
+def concat(self, other: 'Table') -> 'Table':
+```
+
+##### 説明
+
+同じ列定義の表を縦に連結する。
+
+列の順番は異なっていても構わないが、列名の集合が異なる表は
+別のデータとして扱う。列不足を空欄で補うと、入力ミスに気づけず
+データ欠落につながるため、ここでは明示的にエラーにする。
+
+### `TableComparison`
+
+```text
+class TableComparison:
+```
+
+#### 説明
+
+readとwriteの比較結果を、方向が分かる名前で保持する。
+
+### `Transfer`
+
+```text
+class Transfer:
+```
+
+#### 説明
+
+read の行を write のコピーへ転記する。
+
+``read`` と ``write`` は入力として扱い、どちらも直接変更しません。
+``mapping`` は「read 側の列名: write 側の列名」で、転記のルールと一緒に
+コンストラクターへ渡します。保存は担当せず、結果の Table を呼び出し側へ返します。
+
+#### `__init__`
+
+```text
+def __init__(self, read: Table, write: Table, mapping: Mapping[str, str], *, read_key: str | Sequence[str] | None=None, write_key: str | Sequence[str] | None=None) -> None:
+```
+
+#### `transfer_rows`
+
+```text
+def transfer_rows(self) -> Iterator[tuple[Row, Row | None]]:
+```
+
+##### 説明
+
+readを基準に、キーで対応付けた行を順番に返す。
+
+write側に同じキーがない場合も、転記元の行を落とさず
+``(read_row, None)`` として返します。これは新規行を追加するかを
+利用者が条件分岐で判断できるようにするためです。
+
+#### `matched_rows`
+
+```text
+def matched_rows(self) -> Iterator[tuple[Row, Row]]:
+```
+
+##### 説明
+
+readとwriteの両方に存在する行だけを返す。
+
+#### `result`
+
+```text
+def result(self) -> Table:
+```
+
+##### 説明
+
+転記処理の結果を新しいTableとして返す。
+
+このメソッドは、現在の公開APIでは ``run()`` の結果を明示的に
+取得するための名前として用意しています。入力Tableは変更しません。
+
+#### `run`
+
+```text
+def run(self, *, transform: Transform | None=None) -> Table:
+```
+
+##### 説明
+
+転記結果の新しい Table を返す。
+
+### `compare_tables`
+
+```text
+def compare_tables(read: Table, write: Table, *, read_key: str | Sequence[str], write_key: str | Sequence[str]) -> TableComparison:
+```
+
+#### 説明
+
+2つのTableをキーで比較し、4種類のTableに分けて返す。
+
 ### `copy_file`
 
 ```text
@@ -953,6 +1173,42 @@ Args:
 Returns:
     コピー後のファイルパス。
 
+### `copy_to_local_if_large`
+
+```text
+@measure
+def copy_to_local_if_large(path: str | Path, threshold_mb: float) -> tuple[Path, Path | None]:
+```
+
+#### 説明
+
+ファイルサイズが閾値を超えていればローカルへコピーして、そのパスを返す。
+
+NAS・ネットワークドライブ上のファイルを openpyxl や win32com が開くときに
+遅い・不安定になる事があり、社内ルールで許可されていればローカルへコピーして
+安定化させる。``threshold_mb=0`` を指定すればコピーせず元のまま返す
+（社内ルールでローカルコピーが禁止されている場合のオプトアウト）。
+
+返り値は ``(working_path, tmp_path_or_None)``。第2要素が ``None`` 以外の
+ときは呼び出し側がローカルコピーの所有者となり、不要になったら
+``tmp_path.unlink(missing_ok=True)`` で削除する。
+``local_copy`` のような ``with`` ブロックでの自動削除はしない
+（openpyxl / win32com は ``close()`` までパスを保持する必要があるため、
+スコープがクラス側に寄る）。
+
+この関数は ``__all__`` に入れない。利用者が直接呼ぶことは想定せず、
+ExcelBase / ExcelComHandler などクラス側の自動コピールーチンが使う。
+
+Args:
+    path: 元のファイルパス。
+    threshold_mb: この値（MB）を**超える**ファイルはコピーする。
+                  0 を指定するとコピーしない。
+
+Returns:
+    (working_path, tmp_path_or_None) のタプル。
+    コピーしたときは ``(ローカルコピーへのPath, そのPath)``、
+    コピーしなかったときは ``(元のパス, None)``。
+
 ### `date_in_name`
 
 ```text
@@ -1226,6 +1482,229 @@ console handler を再利用して local file handler だけを足す。それ�
 ### `getLogger`
 
 公開定数。
+
+
+## `from comken.core.table import ...`
+
+### `Table`
+
+```text
+class Table:
+```
+
+#### 説明
+
+列と辞書行をメモリで扱う表。
+
+CSVやExcelに直接依存しないため、加工処理をファイルI/Oから分離できます。
+``types`` は入力時に明示された列だけを変換し、暗黙の型推測は行いません。
+
+#### `__init__`
+
+```text
+def __init__(self, columns: list[str] | tuple[str, ...], rows: list[dict[str, Any]], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
+```
+
+#### `read`
+
+```text
+def read(self) -> list[dict[str, Any]]:
+```
+
+##### 説明
+
+現在の行をコピーして返す。元のTableは変更しない。
+
+#### `replace`
+
+```text
+def replace(self, rows: list[dict]) -> 'Table':
+```
+
+##### 説明
+
+表の全行を置き換え、同じTableを返す。
+
+#### `append`
+
+```text
+def append(self, rows: list[dict] | dict) -> 'Table':
+```
+
+##### 説明
+
+1行または複数行を末尾へ追加する。
+
+#### `count`
+
+```text
+def count(self) -> int:
+```
+
+##### 説明
+
+行数を返す。
+
+#### `select`
+
+```text
+def select(self, *columns: str) -> 'Table':
+```
+
+##### 説明
+
+指定した列だけを持つ新しいTableを返す。
+
+#### `filter`
+
+```text
+def filter(self, predicate: Callable[[dict], bool]) -> 'Table':
+```
+
+##### 説明
+
+条件に一致する行だけを持つ新しいTableを返す。
+
+#### `column`
+
+```text
+def column(self, name: str) -> list[Any]:
+```
+
+##### 説明
+
+指定列の値を順番どおりに返す。
+
+#### `index`
+
+```text
+def index(self, key: str) -> dict[Any, dict]:
+```
+
+##### 説明
+
+指定列をキーにした辞書を返す。
+
+#### `group_by`
+
+```text
+def group_by(self, key: str) -> dict[Any, 'Table']:
+```
+
+##### 説明
+
+指定列の値ごとにTableを分けて返す。
+
+#### `merge`
+
+```text
+def merge(self, other: 'Table', *, on: str, how: str='left') -> 'Table':
+```
+
+##### 説明
+
+キー列で別のTableを結合し、新しいTableを返す。
+
+#### `concat`
+
+```text
+def concat(self, other: 'Table') -> 'Table':
+```
+
+##### 説明
+
+同じ列定義の表を縦に連結する。
+
+列の順番は異なっていても構わないが、列名の集合が異なる表は
+別のデータとして扱う。列不足を空欄で補うと、入力ミスに気づけず
+データ欠落につながるため、ここでは明示的にエラーにする。
+
+### `TableComparison`
+
+```text
+class TableComparison:
+```
+
+#### 説明
+
+readとwriteの比較結果を、方向が分かる名前で保持する。
+
+### `Transfer`
+
+```text
+class Transfer:
+```
+
+#### 説明
+
+read の行を write のコピーへ転記する。
+
+``read`` と ``write`` は入力として扱い、どちらも直接変更しません。
+``mapping`` は「read 側の列名: write 側の列名」で、転記のルールと一緒に
+コンストラクターへ渡します。保存は担当せず、結果の Table を呼び出し側へ返します。
+
+#### `__init__`
+
+```text
+def __init__(self, read: Table, write: Table, mapping: Mapping[str, str], *, read_key: str | Sequence[str] | None=None, write_key: str | Sequence[str] | None=None) -> None:
+```
+
+#### `transfer_rows`
+
+```text
+def transfer_rows(self) -> Iterator[tuple[Row, Row | None]]:
+```
+
+##### 説明
+
+readを基準に、キーで対応付けた行を順番に返す。
+
+write側に同じキーがない場合も、転記元の行を落とさず
+``(read_row, None)`` として返します。これは新規行を追加するかを
+利用者が条件分岐で判断できるようにするためです。
+
+#### `matched_rows`
+
+```text
+def matched_rows(self) -> Iterator[tuple[Row, Row]]:
+```
+
+##### 説明
+
+readとwriteの両方に存在する行だけを返す。
+
+#### `result`
+
+```text
+def result(self) -> Table:
+```
+
+##### 説明
+
+転記処理の結果を新しいTableとして返す。
+
+このメソッドは、現在の公開APIでは ``run()`` の結果を明示的に
+取得するための名前として用意しています。入力Tableは変更しません。
+
+#### `run`
+
+```text
+def run(self, *, transform: Transform | None=None) -> Table:
+```
+
+##### 説明
+
+転記結果の新しい Table を返す。
+
+### `compare_tables`
+
+```text
+def compare_tables(read: Table, write: Table, *, read_key: str | Sequence[str], write_key: str | Sequence[str]) -> TableComparison:
+```
+
+#### 説明
+
+2つのTableをキーで比較し、4種類のTableに分けて返す。
 
 
 ## `from comken.exceptions import ...`
@@ -1593,8 +2072,7 @@ read_only で開いたブックからテーブル名で読めない
 発生箇所: ExcelBase.read_table()
 
 対処:
-    ExcelReader を ``tables=True`` で開き直す。
-    例: ``ExcelReader(path, tables=True)`` のように指定する。
+    Excel を ``read_only=False`` で開き直す。
 
 #### `__init__`
 
@@ -1696,7 +2174,7 @@ class ExcelSaveNotCompletedError(ExcelError):
 
 Excel の保存が成功したように見えて、ファイルが無い
 
-発生箇所: ExcelWriter.save()
+発生箇所: Excel.save()
 
 対処:
     Excel が他で開かれていないか、ディスクの空き容量があるかを確認し、
@@ -3014,7 +3492,7 @@ class MasterSheetNotDefinedError(MasterTableError):
 
 `load()` を引数なしで呼ぶには、クラス変数 `PATH` に既定の場所を書いておく必要がある。
 
-発生箇所: comken.toolbox.master_table の load()
+発生箇所: comken.services.salesforce_downloader.report_master の load()
 
 対処:
     `load(パス)` のようにファイルを渡すか、クラスに PATH を書く（コードの直し方の話なので、
@@ -3039,7 +3517,7 @@ class MasterColumnNotFoundError(MasterTableError):
 見出しの行を書き換えた・列を消した・別のシートを見ている、のいずれか。
 **プログラムは見出しの名前で列を探す**ので、見出しが変わると読めなくなる。
 
-発生箇所: comken.toolbox.master_table の load()
+発生箇所: comken.services.salesforce_downloader.report_master の load()
 
 対処:
     管理表の1行目（見出し）を元に戻す。消してしまった場合は、
@@ -3063,7 +3541,7 @@ class MasterRowValueError(MasterTableError):
 
 数字を書く列に文字が入っている、決まった書き方以外を書いた、空にできない列が空、など。
 
-発生箇所: comken.toolbox.master_table の load()
+発生箇所: comken.services.salesforce_downloader.report_master の load()
 
 対処:
     メッセージに出ている行と列を、管理表で確認して直す
@@ -3087,7 +3565,7 @@ class MasterDuplicateValueError(MasterTableError):
 管理番号のように「1つに決まる」ことが前提の列で重複すると、
 どの行を指しているか決められない。
 
-発生箇所: comken.toolbox.master_table の load()
+発生箇所: comken.services.salesforce_downloader.report_master の load()
 
 対処:
     管理表を開いて、重複している値のどちらかを別の値に変える
@@ -3561,6 +4039,51 @@ class TransferDestinationMultipleMatchError(ComkenError):
 def __init__(self, key_column: str, key: object) -> None:
 ```
 
+### `TableError`
+
+```text
+class TableError(ComkenError):
+```
+
+#### 説明
+
+表データの読み書き・転記に関するエラー
+
+発生箇所: Transfer
+
+対処:
+    画面に表示された具体的なエラー内容を確認する
+
+### `InvalidTableInputError`
+
+```text
+class InvalidTableInputError(TableError):
+```
+
+#### 説明
+
+Table API に対応しない入力が渡された。
+
+発生箇所: Table / CSV / ExcelTable
+
+対処:
+    columns、rows、types の型と列名を確認する
+
+### `InvalidTableOperationError`
+
+```text
+class InvalidTableOperationError(TableError):
+```
+
+#### 説明
+
+Table API で実行できない操作が指定された。
+
+発生箇所: Table / CSV / ExcelTable
+
+対処:
+    対象が読み取り専用でないか、指定したテーブル名が正しいか確認する
+
 ### `LoggingAlreadyConfiguredError`
 
 ```text
@@ -3690,8 +4213,182 @@ def is_scheduled(self) -> bool:
 
 定期取得の対象か。
 
+### `ScheduleRule`
+
+```text
+class ScheduleRule:
+```
+
+#### 説明
+
+取得スケジュール管理表の1行。
+
+#### `from_row`
+
+```text
+@classmethod
+def from_row(cls, row: Mapping[str, object]) -> 'ScheduleRule':
+```
+
+##### 説明
+
+日本語カラム名の辞書からスケジュールを作る。
+
+#### `is_due`
+
+```text
+def is_due(self, now: dt.datetime, *, holidays: set[dt.date] | frozenset[dt.date]=frozenset()) -> bool:
+```
+
+##### 説明
+
+指定時刻にこのスケジュールを実行すべきか判定する。
+
+#### `job_key`
+
+```text
+def job_key(self, target_date: dt.date) -> str:
+```
+
+##### 説明
+
+履歴で取得済みか判定するキーを返す。
+
 
 ## `from comken.toolbox import ...`
+
+### `Table`
+
+```text
+class Table:
+```
+
+#### 説明
+
+列と辞書行をメモリで扱う表。
+
+CSVやExcelに直接依存しないため、加工処理をファイルI/Oから分離できます。
+``types`` は入力時に明示された列だけを変換し、暗黙の型推測は行いません。
+
+#### `__init__`
+
+```text
+def __init__(self, columns: list[str] | tuple[str, ...], rows: list[dict[str, Any]], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
+```
+
+#### `read`
+
+```text
+def read(self) -> list[dict[str, Any]]:
+```
+
+##### 説明
+
+現在の行をコピーして返す。元のTableは変更しない。
+
+#### `replace`
+
+```text
+def replace(self, rows: list[dict]) -> 'Table':
+```
+
+##### 説明
+
+表の全行を置き換え、同じTableを返す。
+
+#### `append`
+
+```text
+def append(self, rows: list[dict] | dict) -> 'Table':
+```
+
+##### 説明
+
+1行または複数行を末尾へ追加する。
+
+#### `count`
+
+```text
+def count(self) -> int:
+```
+
+##### 説明
+
+行数を返す。
+
+#### `select`
+
+```text
+def select(self, *columns: str) -> 'Table':
+```
+
+##### 説明
+
+指定した列だけを持つ新しいTableを返す。
+
+#### `filter`
+
+```text
+def filter(self, predicate: Callable[[dict], bool]) -> 'Table':
+```
+
+##### 説明
+
+条件に一致する行だけを持つ新しいTableを返す。
+
+#### `column`
+
+```text
+def column(self, name: str) -> list[Any]:
+```
+
+##### 説明
+
+指定列の値を順番どおりに返す。
+
+#### `index`
+
+```text
+def index(self, key: str) -> dict[Any, dict]:
+```
+
+##### 説明
+
+指定列をキーにした辞書を返す。
+
+#### `group_by`
+
+```text
+def group_by(self, key: str) -> dict[Any, 'Table']:
+```
+
+##### 説明
+
+指定列の値ごとにTableを分けて返す。
+
+#### `merge`
+
+```text
+def merge(self, other: 'Table', *, on: str, how: str='left') -> 'Table':
+```
+
+##### 説明
+
+キー列で別のTableを結合し、新しいTableを返す。
+
+#### `concat`
+
+```text
+def concat(self, other: 'Table') -> 'Table':
+```
+
+##### 説明
+
+同じ列定義の表を縦に連結する。
+
+列の順番は異なっていても構わないが、列名の集合が異なる表は
+別のデータとして扱う。列不足を空欄で補うと、入力ミスに気づけず
+データ欠落につながるため、ここでは明示的にエラーにする。
 
 ### `Transfer`
 
@@ -3701,33 +4398,64 @@ class Transfer:
 
 #### 説明
 
-CSV・Excelのデータ領域間で、列マッピングに従って行を転記する。
+read の行を write のコピーへ転記する。
 
-CSVの転記先は、転記先の列名と順序が一致するように
-``CsvWriter(path, fieldnames=list(mapping.values()))`` と構築する。
-新 API では ``CSV`` または ``Excel.sheet(...).table()`` で取得した
-``ExcelTable`` を渡す。既存の ``CsvReader`` / ``CsvWriter`` も利用できる。
+``read`` と ``write`` は入力として扱い、どちらも直接変更しません。
+``mapping`` は「read 側の列名: write 側の列名」で、転記のルールと一緒に
+コンストラクターへ渡します。保存は担当せず、結果の Table を呼び出し側へ返します。
 
 #### `__init__`
 
 ```text
-def __init__(self, source: Source, destination: Destination, mapping: Mapping[str, str]) -> None:
+def __init__(self, read: Table, write: Table, mapping: Mapping[str, str], *, read_key: str | Sequence[str] | None=None, write_key: str | Sequence[str] | None=None) -> None:
 ```
 
-#### `run`
+#### `transfer_rows`
 
 ```text
-@measure
-def run(self, *, transform: Transform) -> int:
+def transfer_rows(self) -> Iterator[tuple[Row, Row | None]]:
 ```
 
 ##### 説明
 
-転記元を加工・選別して転記し、転記件数を返す。
+readを基準に、キーで対応付けた行を順番に返す。
 
-``transform`` は転記元行と、mapping の先頭列で一致した既存の転記先行を受け取る。
-一致する行がなければ転記先行は ``None``。行はコピーせず渡すため直接変更できる。
-通常は何も返さず、``Transfer.SKIP`` で1件を除外し、``Transfer.STOP`` で全体を止める。
+write側に同じキーがない場合も、転記元の行を落とさず
+``(read_row, None)`` として返します。これは新規行を追加するかを
+利用者が条件分岐で判断できるようにするためです。
+
+#### `matched_rows`
+
+```text
+def matched_rows(self) -> Iterator[tuple[Row, Row]]:
+```
+
+##### 説明
+
+readとwriteの両方に存在する行だけを返す。
+
+#### `result`
+
+```text
+def result(self) -> Table:
+```
+
+##### 説明
+
+転記処理の結果を新しいTableとして返す。
+
+このメソッドは、現在の公開APIでは ``run()`` の結果を明示的に
+取得するための名前として用意しています。入力Tableは変更しません。
+
+#### `run`
+
+```text
+def run(self, *, transform: Transform | None=None) -> Table:
+```
+
+##### 説明
+
+転記結果の新しい Table を返す。
 
 
 ## `from comken.toolbox.access import ...`
@@ -5247,31 +5975,54 @@ class CSV:
 
 CSV ファイルをヘッダー付きのデータ領域として読み書きする。
 
+CsvReader/CsvWriter の個別操作をまとめ、ExcelTable と同じ「行の集合」として
+Transfer へ渡せる境界を提供する。
+
 #### `__init__`
 
 ```text
-def __init__(self, source: str | Path, *, encoding: str=Encoding.UTF8_SIG) -> None:
+def __init__(self, source: str | Path, *, encoding: str=Encoding.UTF8_SIG, types=None, read_only: bool=False, dry_run: bool=False) -> None:
 ```
 
 #### `read`
 
 ```text
-def read(self) -> list[dict[str, Value]]:
+def read(self) -> Table:
 ```
 
 ##### 説明
 
-全行を読み、推測した型の値を持つ辞書で返す。
+全行を読み、指定された列だけを変換したTableを返す。
 
 #### `replace`
 
 ```text
-def replace(self, rows: list[dict[str, Value]]) -> None:
+def replace(self, rows: list[dict[str, Value]] | Table) -> None:
 ```
 
 ##### 説明
 
 ファイルのデータ領域を全置換する。
+
+#### `write`
+
+```text
+def write(self, table: Table) -> None:
+```
+
+##### 説明
+
+Tableを保存対象として受け取る。確定はsaveまたはwith正常終了で行う。
+
+#### `save`
+
+```text
+def save(self) -> None:
+```
+
+##### 説明
+
+保留中のTableをCSVファイルへ保存する。
 
 #### `count`
 
@@ -5591,7 +6342,7 @@ Excel ワークブックを開き、シート単位の操作を提供する。
 #### `__init__`
 
 ```text
-def __init__(self, source: str | Path, *, data_prefix: str='data_', read_only: bool=False, local_copy: bool=False) -> None:
+def __init__(self, source: str | Path, *, types: Mapping[str, Callable[[Any], Any]] | None=None, read_only: bool=False, local_copy: bool=False) -> None:
 ```
 
 ##### 説明
@@ -5607,12 +6358,32 @@ def __init__(self, source: str | Path, *, data_prefix: str='data_', read_only: b
 #### `sheet`
 
 ```text
-def sheet(self, name: str) -> 'Sheet':
+def sheet(self, name: str | None=None) -> 'Sheet':
 ```
 
 ##### 説明
 
 名前でシートを取得する。未存在の新規ブックでは最初のシートを改名する。
+
+#### `data_sheet`
+
+```text
+def data_sheet(self, name: str | None=None) -> 'Sheet':
+```
+
+##### 説明
+
+データシートを取得する。名前を省略できるのは1枚のときだけ。
+
+#### `create_data_sheet`
+
+```text
+def create_data_sheet(self, name: str) -> 'Sheet':
+```
+
+##### 説明
+
+指定名の空のデータシートを作成する。
 
 #### `list_data_sheets`
 
@@ -5623,6 +6394,16 @@ def list_data_sheets(self) -> list[str]:
 ##### 説明
 
 データシート名をブック内の順序で返す。
+
+#### `read_with_com`
+
+```text
+def read_with_com(self, sheet_name: str | None=None):
+```
+
+##### 説明
+
+Excel COMで計算結果を読み、Tableとして返す。
 
 #### `close`
 
@@ -5693,7 +6474,7 @@ Excel シートのデータ領域または表示領域を操作する。
 #### `__init__`
 
 ```text
-def __init__(self, excel: Excel, worksheet: Worksheet, data_prefix: str) -> None:
+def __init__(self, excel: 'Excel', worksheet: Worksheet) -> None:
 ```
 
 #### `is_data_sheet`
@@ -5710,12 +6491,25 @@ def is_data_sheet(self) -> bool:
 #### `table`
 
 ```text
-def table(self) -> 'ExcelTable':
+def table(self, name: str | None=None) -> ExcelTable:
 ```
 
 ##### 説明
 
 データシート全体を扱うテーブルを返す。
+
+#### `create_table`
+
+```text
+def create_table(self, name: str, table: 'Table', start_cell: str='A1') -> ExcelTable:
+```
+
+##### 説明
+
+Python管理用の実テーブルを新規作成する。
+
+``start_cell`` は見出しの左上セルです。作成直後の Table はメモリ上の
+現在値で、Excel ファイルへの保存は Excel の save/with 契約で後から行います。
 
 #### `write_value`
 
@@ -5770,7 +6564,7 @@ def write_range(self, cell_range: str, values: list[list[Any]]) -> None:
 #### `read_range`
 
 ```text
-def read_range(self, cell_range: str) -> list[dict[str, Value]]:
+def read_range(self, cell_range: str) -> list[dict[str, Any]]:
 ```
 
 ##### 説明
@@ -5815,7 +6609,10 @@ def hide_row(self, row: int) -> None:
 
 ##### 説明
 
-行を非表示にする。
+指定した行を非表示にする。
+
+行の表示設定はデータ表の内容ではなく画面レイアウトなので、データシート
+ではなく表示シートに限定している。
 
 #### `show_row`
 
@@ -5825,7 +6622,7 @@ def show_row(self, row: int) -> None:
 
 ##### 説明
 
-行を表示する。
+指定した行の非表示を解除する。
 
 #### `hide_column`
 
@@ -5835,7 +6632,7 @@ def hide_column(self, col: str) -> None:
 
 ##### 説明
 
-列を非表示にする。
+指定した列を非表示にする。
 
 #### `show_column`
 
@@ -5845,7 +6642,7 @@ def show_column(self, col: str) -> None:
 
 ##### 説明
 
-列を表示する。
+指定した列の非表示を解除する。
 
 #### `insert_row`
 
@@ -5855,7 +6652,7 @@ def insert_row(self, row: int) -> None:
 
 ##### 説明
 
-行を挿入する。
+指定位置に表示用の行を挿入する。
 
 #### `delete_row`
 
@@ -5865,7 +6662,7 @@ def delete_row(self, row: int) -> None:
 
 ##### 説明
 
-行を削除する。
+指定位置の表示用の行を削除する。
 
 #### `insert_column`
 
@@ -5875,7 +6672,7 @@ def insert_column(self, col: str) -> None:
 
 ##### 説明
 
-列を挿入する。
+指定位置に表示用の列を挿入する。
 
 #### `delete_column`
 
@@ -5885,7 +6682,7 @@ def delete_column(self, col: str) -> None:
 
 ##### 説明
 
-列を削除する。
+指定位置の表示用の列を削除する。
 
 #### `format`
 
@@ -5915,7 +6712,7 @@ def set_border(self, cell: str, **kwargs: Any) -> None:
 
 ##### 説明
 
-セルの四辺へ同じ罫線を設定する。
+セルの四辺に同じ境界線を設定する。
 
 #### `merge_cells`
 
@@ -5925,7 +6722,7 @@ def merge_cells(self, cell_range: str) -> None:
 
 ##### 説明
 
-セル範囲を結合する。
+指定範囲のセルを結合する。
 
 #### `unmerge_cells`
 
@@ -5935,7 +6732,7 @@ def unmerge_cells(self, cell_range: str) -> None:
 
 ##### 説明
 
-セル範囲の結合を解除する。
+指定範囲のセル結合を解除する。
 
 #### `freeze_panes`
 
@@ -5945,7 +6742,7 @@ def freeze_panes(self, cell: str) -> None:
 
 ##### 説明
 
-指定セルを基準にウィンドウ枠を固定する。
+指定セルより上・左の領域を固定表示する。
 
 ### `ExcelTable`
 
@@ -5957,31 +6754,47 @@ class ExcelTable:
 
 データシート全体を1つのテーブルとして操作する。
 
+Sheet の表示操作と分けることで、表データの読み書きがレイアウト変更へ
+意図せず影響されないようにしている。
+
 #### `__init__`
 
 ```text
-def __init__(self, excel: Excel, worksheet: Worksheet) -> None:
+def __init__(self, excel: 'Excel', worksheet: Worksheet, name: str | None=None) -> None:
 ```
 
 #### `read`
 
 ```text
-def read(self) -> list[dict[str, Value]]:
+def read(self) -> Table:
 ```
 
 ##### 説明
 
-データシート全体を辞書のリストで読む。
+Excelテーブルの実際の定義範囲だけを読み、値を返す。
+
+シートの使用範囲ではなく Excel が保持する ``ref`` を使うため、表の外に
+ある無関係なセルを現在の Table に混ぜません。
 
 #### `replace`
 
 ```text
-def replace(self, rows: list[dict[str, Value]]) -> None:
+def replace(self, rows: list[dict[str, Value]] | Table) -> None:
 ```
 
 ##### 説明
 
 データシート全体を置き換える。
+
+#### `write`
+
+```text
+def write(self, table: Table) -> None:
+```
+
+##### 説明
+
+Tableをデータシートへ書き込む。保存はExcelの契約に従う。
 
 #### `count`
 
@@ -6946,7 +7759,7 @@ Args:
         NAS やネットワークドライブのファイルが遅い・不安定な場合に有効。
         0 を指定するとローカルコピーを無効化できる
         （社内ルールでローカルコピーが禁止されている環境向け。
-        ExcelReader / ExcelWriter と挙動を揃えるためのオプトアウト）。
+        Excel と挙動を揃えるためのオプトアウト）。
         マクロ起動が UNC / 共有サーバー上のファイルを参照する場合、
         コピー元では見つからないことがある。そのときは
         ``local_copy_threshold_mb=0`` を指定して元の場所で開く。
@@ -7087,7 +7900,7 @@ def save(self) -> None:
 
 NAS 上のファイルをローカルコピーして開いている場合も、保存先は元のファイル
 （一時コピーに保存すると close() でコピーごと消えるため）。
-動作は ExcelWriter.save() と同じ考え方（開いた場所ではなく、元の場所へ保存）。
+動作は Excel.save() と同じ考え方（開いた場所ではなく、元の場所へ保存）。
 close() は保存せずに閉じる（SaveChanges=False）ため、
 write_cell での変更を残す場合は必ず呼ぶこと。
 
@@ -7308,7 +8121,7 @@ class Encoding:
 
 #### 説明
 
-CsvReader / CsvWriter の encoding 引数に使う定数。
+CSV の encoding 引数に使う定数。
 
 ### `Color`
 

@@ -19,7 +19,7 @@ from pathlib import Path
 from comken.constants import Color
 from comken.core import DateNameBuilder, diff_rows
 from comken.toolbox.csv import CsvReader, CsvWriter
-from comken.toolbox.excel import ExcelWriter
+from comken.toolbox.excel import Excel
 
 HERE = Path(__file__).parent
 OUTPUT_FOLDER = HERE / "output"
@@ -94,15 +94,17 @@ def main() -> None:
         report_rows.append({STATUS_COL: STATUS_CHANGED, DETAIL_COL: detail, **change.after})
 
     output_path = OUTPUT_FOLDER / DateNameBuilder("差分レポート").suffix()
-    with ExcelWriter.create(output_path) as f:
-        s = f.sheet(SHEET)
-        s.write_table(report_rows, headers=REPORT_HEADERS)
+    with Excel(output_path) as excel:
+        sheet = excel.sheet(SHEET)
+        values = [
+            REPORT_HEADERS,
+            *[[row.get(header, "") for header in REPORT_HEADERS] for row in report_rows],
+        ]
+        sheet.write_range(f"A1:E{len(values)}", values)
         # 区分セルを色分けする（データはヘッダーの次の行から始まる）
         for i, row in enumerate(report_rows, start=HEADER_ROW + 1):
-            s.set_fill(row=i, col=1, color=FILL_COLORS[row[STATUS_COL]])
-        s.auto_width()
-        s.freeze_header()
-        f.save()
+            sheet.set_background(f"A{i}", FILL_COLORS[row[STATUS_COL]])
+        sheet.freeze_panes("A2")
 
     logger.info("差分レポート出力: %s", output_path)
 

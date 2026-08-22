@@ -127,6 +127,9 @@ def test_transfer_rows_and_compare_tables_are_directional() -> None:
 
     assert list(transfer.transfer_rows())[1][1] is None
     assert len(list(transfer.matched_rows())) == 1
+    rows = list(transfer.transfer_rows())
+    rows[0][1]["value"] = "edited"
+    assert transfer.result().read()[0]["value"] == "edited"
     comparison = compare_tables(read, write, read_key="id", write_key="id")
     assert comparison.only_in_read.read() == [{"id": "2", "value": "read-only"}]
     assert comparison.only_in_write.read() == [{"id": "3", "value": "write-only"}]

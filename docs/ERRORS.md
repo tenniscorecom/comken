@@ -54,7 +54,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `InvalidTableNameError` | Excel で使えないテーブル名を指定した | 空白・数字始まり・セル参照のような名前を避ける |
 | `TableAlreadyExistsError` | 同じ名前のテーブルが既にある | 別のテーブル名を指定する |
 | `TableNotFoundError` | 指定したテーブルがシートにない | エラーに表示された既存テーブル名を確認する |
-| `TableNotAvailableInReadOnlyError` | read_only で開いたブックからテーブル名で読めない | ExcelReader を ``tables=True`` で開き直す。例: ``ExcelReader(path, tables=True)`` のように指定する。 |
+| `TableNotAvailableInReadOnlyError` | read_only で開いたブックからテーブル名で読めない | Excel を ``read_only=False`` で開き直す。 |
 | `MacroError` | Excel のマクロが失敗した | Excel をすべて閉じて再実行する。続く場合は管理者へ |
 | `EmptyHeaderCellError` | Excel の見出しに空欄がある | Excel の1行目の空欄を埋める |
 | `DuplicateHeaderCellError` | Excel の見出し名が重複している | Excel の見出し名を重複しない名前に変更する |
@@ -145,7 +145,8 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `ScheduledDownloadFailedError` | 定期取得で1件以上が失敗した | 履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。急いで必要なものは download_report() でその場で取得する |
 | `TransferDestinationRowMissingError` | 転記先に対応する行がない状態で transform がその行を操作した | destination_row が None か確認し、新規行を処理するか Transfer.SKIP を返す |
 | `TransferDestinationMultipleMatchError` | 転記先のキーに一致する行が複数ある | mapping の先頭列に対応する転記先列の値を一意にする |
-| `LoggingAlreadyConfiguredError` | root logger がすでに設定されている | setup_logging() はアプリの入口で1回だけ呼ぶ。実行基盤がログを設定する場合は呼ばない。 |
+| `LoggingAlreadyConfiguredError` | root logger がすでに設定されている | setup() または local() はアプリの入口で1回だけ呼ぶ。実行基盤がログを設定する場合は呼ばない。 |
+| `LoggerHostNotConfiguredError` | 実行端末のログ保存先が LoggerSite に登録されていない | 対象サイトの LOG_FOLDERS に、エラーに表示された端末名と保存先フォルダを登録する。 |
 | `FileNotFoundError` | ファイルが見つからない | ファイルの置き場所と名前を確認する。「今日の日付のファイル」を探す処理なら、今日のファイルが作られているか確認する |
 
 ## ブラウザ（Edge 自動操作）のエラー
@@ -168,6 +169,13 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `DownloadTimeoutError` | ダウンロードが終わらない | ネットワークの状態を確認して再実行する。大きいファイルなら時間がかかっているだけのこともある |
 | `WebDriverException` | ブラウザ操作の一般的なエラー | Edge のウィンドウをすべて閉じて再実行する |
 
+## Table のエラー
+
+| エラー名 | 意味 | 自分でできる対処 |
+|---|---|---|
+| `InvalidTableInputError` | Table API に対応しない入力が渡された。 | columns、rows、types の型と列名を確認する |
+| `InvalidTableOperationError` | Table API で実行できない操作が指定された。 | 対象が読み取り専用でないか、指定したテーブル名が正しいか確認する |
+
 ## 分類（まとめて捕捉する用）
 
 次の名前は、似たエラーをプログラム側でまとめて扱うための分類です。
@@ -188,3 +196,4 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `SalesforceError` | Salesforce に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `CredentialError` | 認証情報の保存・取得に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `BrowserError` | ブラウザ操作に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
+| `TableError` | 表データの読み書き・転記に関するエラー | 画面に表示された具体的なエラー内容を確認する |

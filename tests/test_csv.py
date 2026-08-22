@@ -422,7 +422,7 @@ class TestCsvWriter:
     def test_creates_parent_folder(self, tmp_path):
         """親フォルダがなくても自動作成して書き込めることを確認する。
 
-        （ExcelWriter.save と同じ挙動）
+        （Excel.save と同じ挙動）
         """
         path = tmp_path / "reports" / "2026" / "output.csv"
 

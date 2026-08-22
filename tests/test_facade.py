@@ -80,8 +80,12 @@ def test_core_exposes_parts() -> None:
         "wait_until",
         "wait_until_stable",
         "zip_files",
-        "zip_folder",
-    }
+            "zip_folder",
+            "Table",
+            "TableComparison",
+            "Transfer",
+            "compare_tables",
+        }
     assert set(comken.core.__all__) == expected
     for name in comken.core.__all__:
         assert hasattr(comken.core, name), f"公開名 {name} が comken.core から取れない"

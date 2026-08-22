@@ -52,7 +52,7 @@ class CsvWriter(CsvBase):
         self._fieldnames = fieldnames
 
     def _open(self, mode: str):
-        """親フォルダを作ってからファイルを開く（ExcelWriter.save と挙動を揃える）。"""
+        """親フォルダを作ってからファイルを開く（Excel.save と挙動を揃える）。"""
         self._path.parent.mkdir(parents=True, exist_ok=True)
         return self._path.open(mode, encoding=self._encoding, newline="")
 

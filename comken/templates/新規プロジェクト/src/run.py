@@ -22,17 +22,14 @@ def run() -> None:
 
     # ── ここに処理を書く ──────────────────────────────────────────────
     # 例:
-    #   from comken.toolbox.csv import CsvReader
-    #   from comken.toolbox.excel import ExcelWriter
     #   from comken.core import DateNameBuilder
+    #   from comken.toolbox.csv import CSV
+    #   from comken.toolbox.excel import Excel
     #
-    #   rows = CsvReader(config.FILES.INPUT_CSV).read_rows()
+    #   table = CSV(config.FILES.INPUT_CSV, read_only=True).read()
     #   out = output_folder / DateNameBuilder("レポート").prefix()
-    #   with ExcelWriter.create(out) as f:
-    #       s = f.sheet(SHEET)
-    #       s.write_table(rows)
-    #       s.auto_width()
-    #       f.save()
+    #   with Excel(out) as excel:
+    #       excel.create_data_sheet(SHEET).create_table(SHEET, table)
     #   logger.info("出力しました: %s", out)
     # ──────────────────────────────────────────────────────────────────
     logger.info("run() を実装してください（出力先: %s）", output_folder)

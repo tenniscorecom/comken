@@ -15,17 +15,16 @@
 最初の1本はこれだけで書ける（CSV を読んで Excel レポートを作る例）:
 
 ```python
-from comken.toolbox.csv import CsvReader
-from comken.toolbox.excel import ExcelWriter
+from comken.core.table import Table
+from comken.toolbox.csv import CSV
+from comken.toolbox.excel import Excel
 
-rows = CsvReader(r"C:\作業\data.csv").read_rows()      # CSV を読む（1行 = 1辞書）
+rows = CSV(r"C:\作業\data.csv", read_only=True).read().read()
 
-with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作る
-    s = f.sheet("Sheet1")
-    s.write_table(rows)                            # ヘッダー + データをまとめて書く
-    s.auto_width()                                 # 列幅を整える
-    s.freeze_header()                              # 1行目を固定
-    f.save()
+with Excel(r"C:\作業\report.xlsx") as excel:
+    excel.create_data_sheet("結果").create_table(
+        "結果", Table(list(rows[0]), rows) if rows else Table(["結果"], [])
+    )
 ```
 
 ## ドキュメントの地図
@@ -58,7 +57,7 @@ with ExcelWriter.create(r"C:\作業\report.xlsx") as f:  # 新規 Excel を作�
   （`dry_run` / `debug`）
 - **部品は `from comken.core import ...` から取る。** ファイル検索・日時・文字列・差分・
   計測など30個（`FileFinder` / `copy_file` / `project_dir` / `today` / `Timer` / `retry` など）
-- **機能は `from comken.toolbox.excel import ExcelWriter` のように機能パッケージを明示する**
+- **表データは `CSV` / `Excel` と `Table` を使い、ファイル形式に依存しない処理にする**
   （どの機能群に依存しているかが import 行で分かる）
 - **書くときは `from comken import X` が第一選択。** そこに無いものだけ `from comken.core import Y`
 - **ファイル・ブラウザ・COM は `with` で開く。** 途中で失敗しても閉じられる
@@ -88,15 +87,10 @@ import の書き方は上の「[使うときの約束](#使うときの約束)�
 
 ## モジュール一覧
 
-表データの読み書きには既存の ``CsvReader`` / ``CsvWriter`` と
-``ExcelWriter`` / ``Sheet`` を使う。列転記では CSV は Reader / Writer を直接渡し、
-Excel は ``ExcelWriter.sheet()`` で取得した Sheet を
-``Transfer(source, destination, mapping).run(transform=...)`` に渡して全件を処理する。
-CSV の転記先は ``CsvWriter(path, fieldnames=list(mapping.values()))`` と作る。
-``CsvReader.rows()`` と ``Sheet.rows()`` は、どちらも1件を列名付き辞書として返す。
-transform は転記元行と、mapping の先頭列で一致した既存の転記先行（なければ ``None``）を
-参照で受け取る。行は直接変更し、通常は何も返さない。``Transfer.SKIP`` は1件の除外、
-``Transfer.STOP`` は全体の打ち切りを表す。
+表データは ``Table`` に統一する。CSV は ``CSV.read()``、Excel は
+``Excel.data_sheet().table().read()`` で ``Table`` を取得し、転記は
+``Transfer(read, write, mapping=...).run()`` で新しい ``Table`` を返す。
+保存は CSV / Excel の ``with`` を正常終了した時に行う。
 列対応ではなくExcelシートのセル内容と基本レイアウトを複製するときは
 ``Sheet.copy_to()`` を使う（画像・グラフ・印刷設定等は対象外）。
 

@@ -62,6 +62,7 @@ ERROR_CATEGORIES = (
         ),
     ),
     ErrorCategory("ブラウザ（Edge 自動操作）のエラー", (exceptions.BrowserError,)),
+    ErrorCategory("Table のエラー", (exceptions.TableError,)),
 )
 DIRECT_ERROR_CATEGORIES = {
     exceptions.UnsupportedFileSuffixError: "ファイル・設定などのエラー",
@@ -71,6 +72,7 @@ DIRECT_ERROR_CATEGORIES = {
     exceptions.TransferDestinationRowMissingError: "ファイル・設定などのエラー",
     exceptions.TransferDestinationMultipleMatchError: "ファイル・設定などのエラー",
     exceptions.LoggingAlreadyConfiguredError: "ファイル・設定などのエラー",
+    exceptions.LoggerHostNotConfiguredError: "ファイル・設定などのエラー",
 }
 SUPPLEMENTAL_ERRORS = {
     "Access のエラー": (
@@ -109,6 +111,7 @@ CLASSIFICATION_ERRORS = (
     exceptions.SalesforceError,
     exceptions.CredentialError,
     exceptions.BrowserError,
+    exceptions.TableError,
 )
 
 BUNDLES: dict[str, tuple[str, list[str]]] = {

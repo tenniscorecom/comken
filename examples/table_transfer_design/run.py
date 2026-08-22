@@ -3,10 +3,10 @@
 ここでは Excel や CSV の実装を入れず、データ操作の形だけを確認する。
 CSV / Excel のアダプターは、最終的に Table を返す想定。
 """
+# ruff: noqa: T201
 
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
-
 
 Row = dict[str, Any]
 Transform = Callable[[Row, Row | None], object]

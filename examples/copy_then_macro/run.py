@@ -27,7 +27,7 @@ from pathlib import Path
 
 from comken.core import DateFileFinder, copy_file
 from comken.core.logger import local
-from comken.toolbox.excel import ExcelWriter
+from comken.toolbox.excel import Excel
 
 # 受け取り元・作業場所・配り先。共有フォルダは遅く、Excel が掴んだままになることもあるので、
 # **作業はローカルでやって、結果だけ配る**（bat が copy を2回書いていたのと同じ理由）
@@ -58,7 +58,7 @@ def main() -> None:
     # 3. マクロを動かす。ブックを変更するマクロなので保存まで行う（既定で保存する）。
     #    .xlsm は keep_vba で開くので、保存しても VBA が消えない
     book_path = WORK_FOLDER / BOOK_NAME
-    with ExcelWriter(book_path) as book:
+    with Excel(book_path) as book:
         book.run_macro(MACRO_NAME)
     logger.info("マクロを実行: %s", MACRO_NAME)
 

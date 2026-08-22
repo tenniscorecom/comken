@@ -13,11 +13,12 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> None:
-    # 社内 RPA 基盤がログを設定済みなら呼ばない。既存ハンドラがあれば何もしない。
-    handlers_before = len(logging.getLogger().handlers)
-    logger = local()
-    handlers_after = len(logging.getLogger().handlers)
-    logger.info("設定済みの場合は維持: ハンドラ数 %d → %d", handlers_before, handlers_after)
+    # ログ設定はプログラムの入口で一度だけ行い、mainの再実行では既存設定を使う。
+    root = logging.getLogger()
+    logger = logging.getLogger(__name__)
+    if not root.handlers:
+        local(path=LOG_FOLDER)
+    logger.info("設定済みのログへ出力します")
     logger.info("ログは UTF-8 で出力: %s", LOG_FOLDER / f"{today().isoformat()}.log")
 
 

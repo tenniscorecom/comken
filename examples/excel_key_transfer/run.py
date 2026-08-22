@@ -22,10 +22,9 @@ from pathlib import Path
 from typing import Any
 
 from comken.core import diff_rows
-from comken.exceptions import CsvRowDuplicateKeyError
-from comken.toolbox import Transfer
-from comken.toolbox.csv import CsvReader, CsvWriter
-from comken.toolbox.excel import ExcelWriter
+from comken.core.table import Table, Transfer
+from comken.toolbox.csv import CSV
+from comken.toolbox.excel import Excel
 
 HERE = Path(__file__).parent
 OUTPUT_FOLDER = HERE / "output"
@@ -61,8 +60,10 @@ logger = logging.getLogger(__name__)
 
 def create_sample_files() -> None:
     """入力になる CSV / Excel を生成する（サンプルを自己完結させるための準備処理）。"""
-    CsvWriter(MASTER_CSV, fieldnames=list(MASTER_ROWS[0].keys())).write_rows(MASTER_ROWS)
-    CsvWriter(DETAIL_CSV, fieldnames=list(DETAIL_ROWS[0].keys())).write_rows(DETAIL_ROWS)
+    with CSV(MASTER_CSV) as csv_file:
+        csv_file.write(Table(list(MASTER_ROWS[0]), MASTER_ROWS))
+    with CSV(DETAIL_CSV) as csv_file:
+        csv_file.write(Table(list(DETAIL_ROWS[0]), DETAIL_ROWS))
 
 
 def total_by_key() -> dict[str, dict[str, int]]:
@@ -71,9 +72,11 @@ def total_by_key() -> dict[str, dict[str, int]]:
     group_by() は {キー: 行のリスト} を返すので、転記に使うには
     {キー: {列名: 値}} へ組み直す。SUMIF を Python で書いているのと同じことをしている。
     """
-    groups = CsvReader(DETAIL_CSV).group_by(KEY)
+    groups = CSV(DETAIL_CSV, read_only=True).read().group_by(KEY)
     # CSV の値は常に str。Excel 上で数値として集計できるよう int にしてから渡す
-    return {key: {TOTAL: sum(int(row[AMOUNT]) for row in rows)} for key, rows in groups.items()}
+    return {
+        key: {TOTAL: sum(int(row[AMOUNT]) for row in table.read())} for key, table in groups.items()
+    }
 
 
 def main() -> None:
@@ -93,22 +96,31 @@ def main() -> None:
         return None
 
     mapping = {KEY: KEY, "顧客名": "顧客名", TOTAL: TOTAL}
-    source = CsvReader(MASTER_CSV)
-    with ExcelWriter.create(INVOICE_XLSX) as destination:
-        matched = Transfer(source, destination.sheet(SHEET), mapping).run(transform=add_total)
-        destination.save()
+    source = CSV(MASTER_CSV, read_only=True).read()
+    source = Table(
+        [KEY, "顧客名", TOTAL],
+        [{**row, **totals.get(row[KEY], {})} for row in source.read()],
+    )
+    destination = Table(
+        [KEY, "顧客名", TOTAL],
+        [{KEY: row[KEY]} for row in source.read()],
+    )
+    transferred = Transfer(
+        source,
+        destination,
+        mapping=mapping,
+        read_key=KEY,
+        write_key=KEY,
+    ).run(transform=add_total)
+    after = transferred.read()
+    with Excel(INVOICE_XLSX) as excel:
+        sheet = excel.sheet(SHEET)
+        values = [transferred.columns, *[list(row.values()) for row in after]]
+        sheet.write_range(f"A1:C{len(values)}", values)
+        for row in range(2, len(values) + 1):
+            sheet.format(f"{AMOUNT_COL}{row}", number_format=AMOUNT_FORMAT)
 
-    with ExcelWriter(INVOICE_XLSX) as f:
-        s = f.sheet(SHEET)
-
-        for row in range(2, s.last_row + 1):
-            s.set_number_format(row=row, col=AMOUNT_COL, fmt=AMOUNT_FORMAT)
-        s.auto_width()
-        f.save()  # 書き込み後は save() を忘れずに
-
-        after = f.read_rows_as_dicts(SHEET)
-
-    logger.info("%d 件転記した", matched)
+    logger.info("%d 件転記した", transferred.count())
 
     # 転記前後を突合して、どの行のどの列が書き換わったかを確認する
     result = diff_rows(before, after, key=KEY)
@@ -116,20 +128,6 @@ def main() -> None:
         logger.info("変更 %s: %s", change.key, change.columns)
 
     logger.info("転記結果: %s", INVOICE_XLSX)
-
-    _show_why_group_by_is_needed()
-
-
-def _show_why_group_by_is_needed() -> None:
-    """明細に index() を使うとどうなるかを実際に見せる（説明用）。
-
-    黙って後の行で上書きすると、A001 の金額が「最後の1件（グリップ 1500円）」になり、
-    合計 61500 円のはずが 1500 円で出てしまう。気づけないので例外で止める。
-    """
-    try:
-        CsvReader(DETAIL_CSV).index(KEY)
-    except CsvRowDuplicateKeyError as e:
-        logger.info("明細に index() を使うと止まる（想定どおり）: %s", e)
 
 
 if __name__ == "__main__":

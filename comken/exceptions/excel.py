@@ -130,14 +130,13 @@ class TableNotAvailableInReadOnlyError(ExcelError):
     発生箇所: ExcelBase.read_table()
 
     対処:
-        ExcelReader を ``tables=True`` で開き直す。
-        例: ``ExcelReader(path, tables=True)`` のように指定する。
+        Excel を ``read_only=False`` で開き直す。
     """
 
     def __init__(self, path: Path | str) -> None:
         super().__init__(
             f"テーブル定義を名前で読むには read_only=False で開く必要があります: {path}\n"
-            "ExcelReader(path, tables=True) で開き直してください。"
+            "Excel(path, read_only=False) で開き直してください。"
         )
 
 
@@ -226,7 +225,7 @@ class FileFormatMismatchError(ExcelError):
 class ExcelSaveNotCompletedError(ExcelError):
     """Excel の保存が成功したように見えて、ファイルが無い
 
-    発生箇所: ExcelWriter.save()
+    発生箇所: Excel.save()
 
     対処:
         Excel が他で開かれていないか、ディスクの空き容量があるかを確認し、

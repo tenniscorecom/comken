@@ -26,8 +26,9 @@ if TYPE_CHECKING:
 
 
 class Sheet:
-    PY_TABLE_PREFIX = "PY_T_"
     """Excel シートのデータ領域または表示領域を操作する。"""
+
+    PY_TABLE_PREFIX = "PY_T_"
 
     def __init__(self, excel: "Excel", worksheet: Worksheet) -> None:
         self._excel = excel

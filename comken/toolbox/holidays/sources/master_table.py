@@ -60,10 +60,8 @@ class ComkenMasterTableSource(HolidaySource):
                 "管理表のファイルが存在しません。パスが正しいか確認してください。",
             )
         try:
-            # 既存の管理表は data_ プレフィックスを使っていないため、このブックでは
-            # すべてのシートをデータシートとして扱う。
-            with Excel(self._path, data_prefix="") as excel:
-                rows = excel.sheet(self._sheet_name).table().read()
+            with Excel(self._path, read_only=True) as excel:
+                rows = excel.data_sheet(self._sheet_name).table().read().read()
         except Exception as error:  # SheetNotFoundError 等をまとめて拾う
             raise HolidayCalendarSourceError(
                 str(self._path),
