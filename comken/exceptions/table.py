@@ -13,6 +13,14 @@ class TableError(ComkenError):
     """
 
 
+class InvalidTableInputError(TableError):
+    """Table API に対応しない入力が渡された。"""
+
+
+class InvalidTableOperationError(TableError):
+    """Table API で実行できない操作が指定された。"""
+
+
 class TableNotOpenError(TableError):
     """表を with 文で開かずに操作した。"""
 

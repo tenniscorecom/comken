@@ -1,5 +1,6 @@
 """comken/toolbox/excel/workbook.py — Excel ブックとデータ領域を操作する。"""
 
+from collections.abc import Callable, Mapping
 from datetime import datetime
 from pathlib import Path
 from types import TracebackType
@@ -11,10 +12,12 @@ from openpyxl.worksheet.worksheet import Worksheet
 from comken.core.files import copy_to_local_if_large
 from comken.exceptions import (
     EmptyHeaderCellError,
+    SheetAlreadyExistsError,
     SheetNotFoundError,
 )
 from comken.runtime import dry_run_log, is_dry_run
 from comken.toolbox.excel.sheet import Sheet
+from comken.toolbox.table_model import Table
 
 Value: TypeAlias = str | int | float | bool | datetime
 _EXCEL_SUFFIXES = {".xlsx", ".xlsm", ".xltx", ".xltm"}
@@ -24,11 +27,13 @@ _FORCED_LOCAL_COPY_THRESHOLD_MB = 0.000001
 class Excel:
     """Excel ワークブックを開き、シート単位の操作を提供する。"""
 
+    PY_PREFIX = "PY_"
+
     def __init__(
         self,
         source: str | Path,
         *,
-        data_prefix: str = "data_",
+        types: Mapping[str, Callable[[Any], Any]] | None = None,
         read_only: bool = False,
         local_copy: bool = False,
     ) -> None:
@@ -41,12 +46,14 @@ class Excel:
         ``read_only``、dry-run、またはwithブロックが例外で終わった場合は保存しない。
         """
         self.path = Path(source)
-        self._data_prefix = data_prefix
+        self._types = dict(types or {})
         self._read_only = read_only
         self._local_copy_path: Path | None = None
         self._is_closed = False
         self._is_dirty = False
         if local_copy and self.path.exists():
+            # ネットワーク上のブックを直接扱うと OpenPyXL/Excel の I/O が不安定に
+            # なることがある。作業中だけローカルを使い、保存時に元のパスへ戻す。
             self._working_path, self._local_copy_path = copy_to_local_if_large(
                 self.path, threshold_mb=_FORCED_LOCAL_COPY_THRESHOLD_MB
             )
@@ -73,23 +80,71 @@ class Excel:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        # 例外時に保存すると、途中までの変更で元ファイルを壊す可能性がある。
+        # read_only と dry-run の扱いは close() 側へ集約している。
         self.close(save=exc_type is None)
 
-    def sheet(self, name: str) -> "Sheet":
+    def sheet(self, name: str | None = None) -> "Sheet":
         """名前でシートを取得する。未存在の新規ブックでは最初のシートを改名する。"""
         self._ensure_open()
+        if name is None:
+            display_sheets = [
+                sheet for sheet in self._workbook.sheetnames if not self._is_data_sheet_name(sheet)
+            ]
+            if len(display_sheets) != 1:
+                raise SheetNotFoundError("省略", display_sheets)
+            name = display_sheets[0]
         if name not in self._workbook.sheetnames:
             if not self.path.exists() and self._is_pristine_workbook():
                 cast(Worksheet, self._workbook.active).title = name
                 self._is_dirty = True
             else:
                 raise SheetNotFoundError(name, self._workbook.sheetnames)
-        return Sheet(self, self._workbook[name], self._data_prefix)
+        return Sheet(self, self._workbook[name])
+
+    def data_sheet(self, name: str | None = None) -> "Sheet":
+        """データシートを取得する。名前を省略できるのは1枚のときだけ。"""
+        self._ensure_open()
+        names = self.list_data_sheets()
+        if name is None:
+            if len(names) != 1:
+                raise SheetNotFoundError("データシート省略", names)
+            name = names[0]
+        return self.sheet(self._with_data_prefix(name))
+
+    def create_data_sheet(self, name: str) -> "Sheet":
+        """指定名の空のデータシートを作成する。"""
+        self._ensure_writable("create_data_sheet")
+        full_name = self._with_data_prefix(name)
+        if full_name in self._workbook.sheetnames:
+            raise SheetAlreadyExistsError(full_name)
+        worksheet = self._workbook.create_sheet(full_name)
+        self._mark_dirty()
+        return Sheet(self, worksheet)
 
     def list_data_sheets(self) -> list[str]:
         """データシート名をブック内の順序で返す。"""
         self._ensure_open()
-        return [name for name in self._workbook.sheetnames if name.startswith(self._data_prefix)]
+        return [name for name in self._workbook.sheetnames if self._is_data_sheet_name(name)]
+
+    def read_with_com(self, sheet_name: str | None = None):
+        """Excel COMで計算結果を読み、Tableとして返す。"""
+        if sheet_name is None:
+            sheet_name = self.data_sheet()._worksheet.title
+        else:
+            sheet_name = self._with_data_prefix(sheet_name)
+        rows = self.read_computed_rows_as_dicts(sheet_name, 1)
+        columns = [str(column) for column in rows[0]] if rows else []
+        normalized_rows = [
+            {
+                str(column): value
+                if str(column) in self._types or value is None
+                else str(value)
+                for column, value in row.items()
+            }
+            for row in (rows[1:] if rows else [])
+        ]
+        return Table(columns, normalized_rows, types=self._types)
 
     def close(self, *, save: bool = True) -> None:
         """ブックを閉じる。通常はwithの正常終了時に変更を自動保存する。"""
@@ -237,3 +292,12 @@ class Excel:
     def _is_pristine_workbook(self) -> bool:
         worksheet = cast(Worksheet, self._workbook.active)
         return len(self._workbook.worksheets) == 1 and worksheet["A1"].value is None
+
+    def _is_data_sheet_name(self, name: str) -> bool:
+        return name.startswith(self.PY_PREFIX)
+
+    def _with_data_prefix(self, name: str) -> str:
+        """利用者が短い名前を書いたとき、Python管理用の名前を補う。"""
+        if self._is_data_sheet_name(name):
+            return name
+        return f"{self.PY_PREFIX}{name}"

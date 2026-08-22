@@ -4,7 +4,7 @@ New Outlook は COM サーバーを持たないため非対応。認証とネッ
 Graph API や、pst ファイルの直接読み取りによる代替も提供しない。
 """
 
-# 定義中の Outlook を戻り値の型注釈に使うため、注釈の評価を遅延する。
+# Outlook のメソッド注釈がクラス定義後の名前を参照するため、循環を避けて遅延評価する。
 from __future__ import annotations
 
 import datetime

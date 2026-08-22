@@ -8,6 +8,8 @@ from types import TracebackType
 from typing import Self, TypeAlias
 
 from comken.constants import Encoding
+from comken.exceptions.table import InvalidTableInputError
+from comken.toolbox.table_model import Table
 
 Value: TypeAlias = str | int | float | bool | datetime
 
@@ -17,11 +19,27 @@ _DATETIME_FORMATS = ("%Y/%m/%d", "%Y-%m-%d", "%Y/%m/%d %H:%M:%S", "%Y-%m-%d %H:%
 
 
 class CSV:
-    """CSV ファイルをヘッダー付きのデータ領域として読み書きする。"""
+    """CSV ファイルをヘッダー付きのデータ領域として読み書きする。
 
-    def __init__(self, source: str | Path, *, encoding: str = Encoding.UTF8_SIG) -> None:
+    CsvReader/CsvWriter の個別操作をまとめ、ExcelTable と同じ「行の集合」として
+    Transfer へ渡せる境界を提供する。
+    """
+
+    def __init__(
+        self,
+        source: str | Path,
+        *,
+        encoding: str = Encoding.UTF8_SIG,
+        types=None,
+        read_only: bool = False,
+        dry_run: bool = False,
+    ) -> None:
         self.path = Path(source)
         self._encoding = encoding
+        self._types = dict(types or {})
+        self._read_only = read_only
+        self._dry_run = dry_run
+        self._pending: Table | None = None
 
     def __enter__(self) -> Self:
         return self
@@ -32,26 +50,58 @@ class CSV:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
-        return None
+        if (
+            exc_type is None
+            and not (self._read_only or self._dry_run)
+            and self._pending is not None
+        ):
+            self._write(self._pending)
 
-    def read(self) -> list[dict[str, Value]]:
-        """全行を読み、推測した型の値を持つ辞書で返す。"""
+    def read(self) -> Table:
+        """全行を読み、指定された列だけを変換したTableを返す。"""
+        if self._pending is not None:
+            # replace/write の結果は保存前でも、同じ処理中の「現在の Table」として読める。
+            return self._pending
         if not self.path.exists() or self.path.stat().st_size == 0:
-            return []
+            return Table([], [], types=self._types)
         with self.path.open("r", encoding=self._encoding, newline="") as file:
             reader = csv.DictReader(file)
-            return [
-                {str(key): _convert_value(value) for key, value in row.items() if key is not None}
-                for row in reader
+            columns = [str(column) for column in reader.fieldnames or []]
+            rows = [
+                {str(key): value for key, value in row.items() if key is not None} for row in reader
             ]
+            return Table(columns, rows, types=self._types)
 
-    def replace(self, rows: list[dict[str, Value]]) -> None:
+    def replace(self, rows: list[dict[str, Value]] | Table) -> None:
         """ファイルのデータ領域を全置換する。"""
+        if not isinstance(rows, (list, Table)):
+            raise InvalidTableInputError("CSV の置換には Table または行リストを指定してください。")
+        table = (
+            rows
+            if isinstance(rows, Table)
+            else Table(list(rows[0]) if rows else [], rows, types=self._types)
+        )
+        self._pending = table
+        # replace は計画を作るだけにする。途中で例外が起きたときに、
+        # それまでの一部だけがファイルへ残ると復旧しにくいためである。
+
+    def write(self, table: Table) -> None:
+        """Tableを保存対象として受け取る。確定はsaveまたはwith正常終了で行う。"""
+        self.replace(table)
+
+    def save(self) -> None:
+        # replace はメモリ上で準備し、save または正常終了した with でだけファイルへ反映する。
+        if self._pending is not None and not self._read_only and not self._dry_run:
+            self._write(self._pending)
+            self._pending = None
+
+    def _write(self, table: Table) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        rows = table.read()
         if not rows:
             self.path.write_text("", encoding=self._encoding)
             return
-        headers = list(rows[0])
+        headers = table.columns
         with self.path.open("w", encoding=self._encoding, newline="") as file:
             writer = csv.DictWriter(file, fieldnames=headers, extrasaction="raise")
             writer.writeheader()
@@ -59,7 +109,7 @@ class CSV:
 
     def count(self) -> int:
         """データ行数を返す。"""
-        return len(self.read())
+        return len(self._pending) if self._pending is not None else len(self.read())
 
 
 def _convert_value(value: str | None) -> Value:

@@ -17,5 +17,6 @@ Excel・CSV・Access・Outlook・Windows・ブラウザ・Salesforce・社内 RP
 """
 
 from comken.toolbox.table import Transfer
+from comken.toolbox.table_model import Table
 
-__all__ = ["Transfer"]
+__all__ = ["Table", "Transfer"]

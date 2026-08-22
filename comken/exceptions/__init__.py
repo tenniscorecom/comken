@@ -249,6 +249,9 @@ from comken.exceptions.state import (
     StateValueTypeError,
 )
 from comken.exceptions.table import (
+    InvalidTableInputError,
+    InvalidTableOperationError,
+    TableError,
     TransferDestinationMultipleMatchError,
     TransferDestinationRowMissingError,
 )
@@ -364,6 +367,9 @@ __all__ = [
     "ScheduledDownloadFailedError",
     "TransferDestinationRowMissingError",
     "TransferDestinationMultipleMatchError",
+    "TableError",
+    "InvalidTableInputError",
+    "InvalidTableOperationError",
     "LoggingAlreadyConfiguredError",
     "LoggerHostNotConfiguredError",
 ]

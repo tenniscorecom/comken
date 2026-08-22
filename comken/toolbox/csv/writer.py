@@ -93,6 +93,8 @@ class CsvWriter(CsvBase):
         self._warn_unknown_keys(rows)
         logger.debug("CSV書き込み開始: %s 件数=%d", self._path, len(rows))
         if is_dry_run():
+            # 入力検証とログは通常実行と同じにし、ファイル変更だけを止める。
+            # そうしないと dry-run では本番時に初めて列ミスが発覚するため。
             dry_run_log("CSV に %d 行書き込み（上書き）: %s", len(rows), self._path)
             return
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -127,6 +129,7 @@ class CsvWriter(CsvBase):
         """
         self._warn_unknown_keys([row])
         if is_dry_run():
+            # 追記も書込みだけを抑止し、呼び出し側が実行計画をログで確認できるようにする。
             dry_run_log("CSV に 1 行追記: %s", self._path)
             return
         self._validate_encoding([row])
@@ -151,6 +154,7 @@ class CsvWriter(CsvBase):
         """
         self._warn_unknown_keys(rows)
         if is_dry_run():
+            # 複数行追記も同じ dry-run 契約にそろえ、上書き・追記で挙動を分けない。
             dry_run_log("CSV に %d 行追記: %s", len(rows), self._path)
             return
         self._validate_encoding(rows)

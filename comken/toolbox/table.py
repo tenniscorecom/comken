@@ -1,168 +1,100 @@
-"""comken/toolbox/table.py — 既存のCSV・Excelクラス間で行を転記する。"""
+"""メモリ上の Table 同士を転記する。"""
 
-import logging
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from enum import Enum, auto
-from typing import Any, Final, cast
+from typing import Any, Final
 
-from comken.core.timer import measure
-from comken.exceptions import TransferSourceColumnNotFoundError
 from comken.exceptions.table import (
+    InvalidTableInputError,
     TransferDestinationMultipleMatchError,
-    TransferDestinationRowMissingError,
     TransferMappingError,
     TransferRowError,
 )
-from comken.toolbox.csv import CSV, CsvReader, CsvWriter
-from comken.toolbox.excel import ExcelTable
+from comken.toolbox.table_model import Table
 
-logger = logging.getLogger(__name__)
-
-Row = dict[str, object]
-Source = CsvReader | CSV | ExcelTable
-Destination = CsvWriter | CSV | ExcelTable
+Row = dict[str, Any]
 
 
-class _TransferControl(Enum):
+class _Control(Enum):
     SKIP = auto()
     STOP = auto()
 
 
-Transform = Callable[[Row, Row | None], None | _TransferControl]
+Transform = Callable[[Row, Row | None], None | _Control]
 
 
 class Transfer:
-    """CSV・Excelのデータ領域間で、列マッピングに従って行を転記する。
+    """Tableを入出力にして、キーで行を更新または追加する。
 
-    CSVの転記先は、転記先の列名と順序が一致するように
-    ``CsvWriter(path, fieldnames=list(mapping.values()))`` と構築する。
-    新 API では ``CSV`` または ``Excel.sheet(...).table()`` で取得した
-    ``ExcelTable`` を渡す。既存の ``CsvReader`` / ``CsvWriter`` も利用できる。
+    保存は担当しない。呼び出し側が最後にCSVやExcelへTableを書き込むため、
+    転記途中の例外でファイルが半端な状態になることを防げる。
     """
 
-    SKIP: Final = _TransferControl.SKIP
-    STOP: Final = _TransferControl.STOP
+    SKIP: Final = _Control.SKIP
+    STOP: Final = _Control.STOP
 
     def __init__(
         self,
-        source: Source,
-        destination: Destination,
-        mapping: Mapping[str, str],
+        source: Table,
+        destination: Table,
+        mapping: Mapping[str, str] | None = None,
+        *,
+        read_key: str | Sequence[str] | None = None,
+        write_key: str | Sequence[str] | None = None,
     ) -> None:
-        if not mapping:
+        if not isinstance(source, Table) or not isinstance(destination, Table):
+            raise InvalidTableInputError("Transferの入出力にはTableを指定してください。")
+        if read_key is None or write_key is None:
             raise TransferMappingError
-        self._source = source
-        self._destination = destination
-        self._mapping = dict(mapping)
+        self.source, self.destination = source, destination
+        self.mapping = dict(mapping or {})
+        self.read_keys = [read_key] if isinstance(read_key, str) else list(read_key)
+        self.write_keys = [write_key] if isinstance(write_key, str) else list(write_key)
+        if len(self.read_keys) != len(self.write_keys):
+            raise TransferMappingError
 
-    @measure
-    def run(self, *, transform: Transform) -> int:
-        """転記元を加工・選別して転記し、転記件数を返す。
-
-        ``transform`` は転記元行と、mapping の先頭列で一致した既存の転記先行を受け取る。
-        一致する行がなければ転記先行は ``None``。行はコピーせず渡すため直接変更できる。
-        通常は何も返さず、``Transfer.SKIP`` で1件を除外し、``Transfer.STOP`` で全体を止める。
-        """
-        logger.debug(
-            "Transfer開始: 転記元=%s 転記先=%s マッピング列数=%d",
-            type(self._source).__name__,
-            type(self._destination).__name__,
-            len(self._mapping),
-        )
-        logger.debug("転記元データ取得開始")
-        destination_rows = _read_destination_rows(self._destination)
-        source_key_column, destination_key_column = next(iter(self._mapping.items()))
-        destination_index = _index_destination_rows(destination_rows, destination_key_column)
-        read_count = 0
-        transferred_count = 0
-        for source_row in _read_source_rows(self._source):
-            read_count += 1
-            if source_key_column not in source_row:
-                raise TransferSourceColumnNotFoundError([source_key_column], list(source_row))
-            destination_row = destination_index.get(source_row[source_key_column])
-            try:
-                result = transform(source_row, destination_row)
-            except TypeError as error:
-                if destination_row is None and _is_none_row_access_error(error):
-                    raise TransferDestinationRowMissingError(read_count) from error
-                raise
+    def run(  # noqa: C901
+        self,
+        *,
+        transform: Transform | None = None,
+        mapping: Mapping[str, str] | None = None,
+    ) -> Table:
+        """転記し、更新後の転記先Tableを返す。"""
+        transfer_mapping = dict(mapping or self.mapping)
+        if not transfer_mapping:
+            raise TransferMappingError
+        self.source._check_columns([*self.read_keys, *transfer_mapping.keys()])
+        self.destination._check_columns([*self.write_keys, *transfer_mapping.values()])
+        # 複合キーも tuple にすると、キー列の組み合わせ単位で更新・追加を判断できる。
+        index: dict[tuple[Any, ...], Row] = {}
+        for row in self.destination:
+            key = tuple(row[column] for column in self.write_keys)
+            if key in index:
+                raise TransferDestinationMultipleMatchError(",".join(self.write_keys), key)
+            index[key] = row
+        for source_row in self.source:
+            key = tuple(source_row[column] for column in self.read_keys)
+            destination_row = index.get(key)
+            result = transform(source_row, destination_row) if transform else None
             if result is self.STOP:
-                logger.debug("転記元データ取得を停止: 取得件数=%d", read_count)
                 break
             if result is self.SKIP:
                 continue
             if result is not None:
-                raise TransferRowError(
-                    read_count,
-                    "transform は辞書を返す必要はありません。通常は None（return なし）、"
-                    "1件を除外する場合は Transfer.SKIP、全体を止める場合は "
-                    "Transfer.STOP を返してください。",
-                )
-            missing = [source for source in self._mapping if source not in source_row]
-            if missing:
-                raise TransferSourceColumnNotFoundError(missing, list(source_row))
+                raise TransferRowError(0, "transformはNone、SKIP、STOPのいずれかを返してください。")
             if destination_row is None:
-                destination_row = {
-                    destination: source_row[source] for source, destination in self._mapping.items()
-                }
-                destination_rows.append(destination_row)
-                destination_index[source_row[source_key_column]] = destination_row
-            transferred_count += 1
-        logger.debug(
-            "転記元データ取得完了: 取得件数=%d 転記対象件数=%d",
-            read_count,
-            transferred_count,
-        )
-        logger.debug("転記先書き込み開始: 件数=%d", len(destination_rows))
-        _write_destination_rows(
-            self._destination,
-            destination_rows,
-        )
-        logger.debug("Transfer完了: 転記件数=%d", transferred_count)
-        return transferred_count
-
-
-def _read_source_rows(source: Source) -> list[Row]:
-    if isinstance(source, CsvReader):
-        return [cast(Row, row) for row in source.rows()]
-    return [cast(Row, row) for row in source.read()]
-
-
-def _read_destination_rows(destination: Destination) -> list[Row]:
-    if isinstance(destination, CsvWriter):
-        if not destination.path.exists() or destination.path.stat().st_size == 0:
-            return []
-        return [cast(Row, row) for row in CsvReader(destination.path).rows()]
-    return [cast(Row, row) for row in destination.read()]
-
-
-def _index_destination_rows(rows: list[Row], key_column: str) -> dict[object, Row]:
-    index: dict[object, Row] = {}
-    for row in rows:
-        key = row.get(key_column)
-        if key in index:
-            raise TransferDestinationMultipleMatchError(key_column, key)
-        index[key] = row
-    return index
-
-
-def _is_none_row_access_error(error: TypeError) -> bool:
-    message = str(error)
-    return "'NoneType' object is not subscriptable" in message or (
-        "'NoneType' object does not support item assignment" in message
-    )
-
-
-def _write_destination_rows(
-    destination: Destination,
-    rows: list[Row],
-) -> None:
-    if isinstance(destination, CsvWriter):
-        destination.write_rows(rows)
-        return
-    # Transfer の transform は object を受け入れる既存契約のため、各保存先の
-    # Value 型との境界でのみ型を狭める。実際の不正値は保存ライブラリが報告する。
-    destination.replace(cast(Any, rows))
+                destination_row = dict.fromkeys(self.destination.columns, "")
+                for source_key, destination_key in zip(
+                    self.read_keys, self.write_keys, strict=True
+                ):
+                    destination_row[destination_key] = source_row[source_key]
+                self.destination.append(destination_row)
+                # Table.append は型変換した行を保持するので、その実体を以後更新する。
+                destination_row = self.destination.rows[-1]
+                index[key] = destination_row
+            for source_column, destination_column in transfer_mapping.items():
+                destination_row[destination_column] = source_row[source_column]
+        return self.destination
 
 
 __all__ = ["Transfer"]
