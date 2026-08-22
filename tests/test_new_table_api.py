@@ -2,7 +2,7 @@
 
 import pytest
 
-from comken.core.table import Table, Transfer
+from comken.core.table import Table, Transfer, compare_tables
 from comken.exceptions.table import TableError, TransferDestinationMultipleMatchError
 from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Excel
@@ -72,12 +72,15 @@ def test_transfer_supports_composite_update_add_and_duplicate() -> None:
         ],
     )
     destination = Table(["group", "id", "value"], [{"group": "A", "id": 1, "value": "old"}])
-    result = Transfer(source, destination, read_key=["group", "id"], write_key=["group", "id"]).run(
-        mapping={"value": "value"}
-    )
+    result = Transfer(
+        source,
+        destination,
+        {"value": "value"},
+        read_key=["group", "id"],
+        write_key=["group", "id"],
+    ).run()
     assert result.read() == [
         {"group": "A", "id": 1, "value": "new"},
-        {"group": "B", "id": 2, "value": "add"},
     ]
 
     duplicate = Table(
@@ -88,17 +91,43 @@ def test_transfer_supports_composite_update_add_and_duplicate() -> None:
         ],
     )
     with pytest.raises(TransferDestinationMultipleMatchError):
-        Transfer(source, duplicate, read_key=["group", "id"], write_key=["group", "id"]).run(
-            mapping={"value": "value"}
-        )
+        Transfer(
+            source,
+            duplicate,
+            {"value": "value"},
+            read_key=["group", "id"],
+            write_key=["group", "id"],
+        ).run()
 
 
 def test_transfer_returns_updated_table_without_mapping_items(tmp_path) -> None:
     source = Table(["id", "name"], [{"id": 1, "name": "山田"}])
     destination = Table(["id", "name"], [{"id": 1, "name": "旧"}])
 
-    updated = Transfer(source, destination, read_key="id", write_key="id").run(
-        mapping={"name": "name"}
-    )
+    original_source = source.read()
+    original_destination = destination.read()
+    updated = Transfer(source, destination, {"name": "name"}, read_key="id", write_key="id").run()
 
     assert updated.read() == [{"id": 1, "name": "山田"}]
+    assert updated is not destination
+    assert source.read() == original_source
+    assert destination.read() == original_destination
+
+
+def test_transfer_rows_and_compare_tables_are_directional() -> None:
+    read = Table(
+        ["id", "value"],
+        [{"id": "1", "value": "new"}, {"id": "2", "value": "read-only"}],
+    )
+    write = Table(
+        ["id", "value"],
+        [{"id": "1", "value": "old"}, {"id": "3", "value": "write-only"}],
+    )
+    transfer = Transfer(read, write, {"value": "value"}, read_key="id", write_key="id")
+
+    assert list(transfer.transfer_rows())[1][1] is None
+    assert len(list(transfer.matched_rows())) == 1
+    comparison = compare_tables(read, write, read_key="id", write_key="id")
+    assert comparison.only_in_read.read() == [{"id": "2", "value": "read-only"}]
+    assert comparison.only_in_write.read() == [{"id": "3", "value": "write-only"}]
+    assert comparison.changed.count() == 1

@@ -32,6 +32,8 @@ from comken.core.files.ops import move_file as move_file
 from comken.core.files.ops import project_dir as project_dir
 from comken.core.retry import retry as retry
 from comken.core.state import State as State
+from comken.core.table.comparison import TableComparison as TableComparison
+from comken.core.table.comparison import compare_tables as compare_tables
 from comken.core.table.model import Table as Table
 from comken.core.table.transfer import Transfer as Transfer
 from comken.core.text import normalize as normalize
@@ -52,7 +54,9 @@ __all__ = [
     "State",
     "Timer",
     "Table",
+    "TableComparison",
     "Transfer",
+    "compare_tables",
     "copy_file",
     "date_in_name",
     "delete_file",
