@@ -10,6 +10,7 @@ from openpyxl.worksheet.table import Table as OpenPyXLTable
 from openpyxl.worksheet.table import TableStyleInfo
 from openpyxl.worksheet.worksheet import Worksheet
 
+from comken.core.table.model import Table
 from comken.exceptions import (
     DataSheetAccessError,
     InvalidTableInputError,
@@ -18,11 +19,10 @@ from comken.exceptions import (
     TableNotFoundError,
 )
 from comken.toolbox.excel.table import ExcelTable
-from comken.toolbox.table_model import Table
 
 if TYPE_CHECKING:
+    from comken.core.table.model import Table
     from comken.toolbox.excel.workbook import Excel
-    from comken.toolbox.table_model import Table
 
 
 class Sheet:
@@ -53,9 +53,7 @@ class Sheet:
             )
         return ExcelTable(self._excel, self._worksheet, name)
 
-    def create_table(
-        self, name: str, table: "Table", start_cell: str = "A1"
-    ) -> ExcelTable:
+    def create_table(self, name: str, table: "Table", start_cell: str = "A1") -> ExcelTable:
         """Python管理用の実テーブルを新規作成する。
 
         ``start_cell`` は見出しの左上セルです。作成直後の Table はメモリ上の

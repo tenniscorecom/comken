@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from openpyxl import load_workbook
 
+from comken.core.table import Table
 from comken.exceptions import (
     ExcelApplicationNotAvailableError,
     MasterColumnNotFoundError,
@@ -17,8 +18,8 @@ from comken.exceptions import (
     MasterRowValueError,
     MasterSheetNotDefinedError,
 )
+from comken.services.salesforce_downloader.report_master import MasterRow, column
 from comken.toolbox.excel import Excel
-from comken.toolbox.master_table import MasterRow, column
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -29,7 +30,7 @@ class Item(MasterRow):
 
     key: str = column("ID", unique=True, help="管理番号")
     name: str = column("名前", help="人が読んで分かる名前")
-    source: Path = column("コピー元", help="共有サーバー上のファイル")
+    source: Path = column("コピー元", help="共有サーバー上のファイル")  # noqa: RUF009
     mode: str = column("方式", choices=("毎日", "手動"), help="毎日は自動で取ります")
     enabled: bool = column("有効", choices=("○", "×"), help="「○」か「×」と書いてください")
     note: str = column("備考", default="", help="編集者の覚え書き")
@@ -43,8 +44,8 @@ ROW_B = ["1002", "在庫", r"\\server\在庫\data.csv", "手動", "×", ""]
 def make_sheet(path: Path, rows: list[list], headers: list[str] | None = None) -> Path:
     actual_headers = headers or HEADERS
     table_rows = [dict(zip(actual_headers, row, strict=False)) for row in rows]
-    with Excel(path, data_prefix="") as excel:
-        excel.sheet("一覧").table().replace(table_rows)
+    with Excel(path) as excel:
+        excel.create_data_sheet("一覧").create_table("一覧", Table(actual_headers, table_rows))
     return path
 
 
@@ -101,15 +102,10 @@ class TestValidation:
     def test_numeric_string_key_is_preserved(self, tmp_path):
         """Excel が `1001` を数値セルで返すとき、`"1001"` として読める。"""
         # openpyxl 経由で、数値セル（float）として `1001` を書く
-        from openpyxl import Workbook
-
-        path = tmp_path / "一覧.xlsx"
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "一覧"
-        ws.append(HEADERS)
-        ws.append([1001, "受注一覧", r"\\server\a.csv", "毎日", "○", ""])
-        wb.save(path)
+        path = make_sheet(
+            tmp_path / "一覧.xlsx",
+            [[1001, "受注一覧", r"\\server\a.csv", "毎日", "○", ""]],
+        )
 
         items = Item.load(path)
         assert items[0].key == "1001"  # "1001.0" ではない
@@ -170,13 +166,13 @@ class TestTemplate:
         ]
         path = WithBoolChoices.create_template(tmp_path / "一覧.xlsx", examples)
 
-        sheet = load_workbook(path)["一覧"]
+        sheet = load_workbook(path)["PY_一覧"]
         assert [sheet["B2"].value, sheet["B3"].value] == ["○", "×"]
         assert [row.is_allowed for row in WithBoolChoices.load(path)] == [True, False]
 
     def test_headers_are_written_in_declaration_order(self, tmp_path):
         path = Item.create_template(tmp_path / "一覧.xlsx")
-        sheet = load_workbook(path)["一覧"]
+        sheet = load_workbook(path)["PY_一覧"]
         assert [cell.value for cell in sheet[1]] == HEADERS
 
     def test_guide_sheet_lists_every_column(self, tmp_path):
@@ -207,12 +203,12 @@ class TestTemplate:
     def test_table_is_created(self, tmp_path):
         """Excel のテーブルにしておくと、行を足すのが楽になる。"""
         path = Item.create_template(tmp_path / "一覧.xlsx", [{"key": "1", "name": "a"}])
-        assert load_workbook(path)["一覧"].tables
+        assert "PY_T_Item" in load_workbook(path)["PY_一覧"].tables
 
     def test_choice_columns_get_dropdown_in_template(self, tmp_path):
         """`choices` のある列には Excel のドロップダウン（入力規則）が付く。"""
         path = Item.create_template(tmp_path / "一覧.xlsx", [{"key": "1", "name": "a"}])
-        ws = load_workbook(path)["一覧"]
+        ws = load_workbook(path)["PY_一覧"]
         validations = list(ws.data_validations.dataValidation)
         # 「方式」「有効」の 2 列にドロップダウンが付く。「名前」「コピー元」「ID」「備考」
         # には付かない
@@ -225,7 +221,7 @@ class TestTemplate:
     def test_non_choice_columns_have_no_dropdown(self, tmp_path):
         """`choices` を宣言していない列にはドロップダウンが付かない。"""
         path = Item.create_template(tmp_path / "一覧.xlsx", [{"key": "1", "name": "a"}])
-        ws = load_workbook(path)["一覧"]
+        ws = load_workbook(path)["PY_一覧"]
         # 「名前」列（B2:B1002）に validation が無いこと
         for v in ws.data_validations.dataValidation:
             assert str(v.sqref) != "B2:B1002"
@@ -236,7 +232,7 @@ class TestTemplate:
 
         path = Item.create_template(tmp_path / "一覧.xlsx", [{"key": "1", "name": "a"}])
         wb = load_workbook(path)
-        cell = wb["一覧"]["A1"]
+        cell = wb["PY_一覧"]["A1"]
         assert cell.font.name == "Noto Sans JP"
         # ガイドシートの全セルのフォント名も Noto Sans JP
         guide = wb["記入方法"]
@@ -251,7 +247,7 @@ class TestTemplate:
         path = Item.create_template(
             tmp_path / "一覧.xlsx", [{"key": "1", "name": "a", "note": "記入例です"}]
         )
-        ws = load_workbook(path)["一覧"]
+        ws = load_workbook(path)["PY_一覧"]
         # 記入例の備考列に案内文が書かれている
         assert ws["F2"].value == "記入例です"
         # 記入例全体に薄い背景色
@@ -277,7 +273,7 @@ class TestColumnAdded:
 
             key: str = column("ID", unique=True)
             name: str = column("名前")
-            source: Path = column("コピー元")
+            source: Path = column("コピー元")  # noqa: RUF009
             mode: str = column("方式", choices=("毎日", "手動"))
             enabled: bool = column("有効", choices=("○", "×"))
             memo: str = column("備考", default="")  # ← あとから足した列
@@ -295,7 +291,7 @@ class TestColumnAdded:
 
             key: str = column("ID", unique=True)
             name: str = column("名前")
-            source: Path = column("コピー元")
+            source: Path = column("コピー元")  # noqa: RUF009
             mode: str = column("方式", choices=("毎日", "手動"))
             enabled: bool = column("有効", choices=("○", "×"))
             owner: str = column("担当", help="この一覧の持ち主")  # 既定値なし
@@ -373,16 +369,11 @@ class TestFormula:
     """
 
     def _with_formula(self, path: Path) -> Path:
-        from openpyxl import Workbook
-
-        book = Workbook()
-        sheet = book.active
-        sheet.title = "一覧"
-        sheet.append(["ID", "名前", "コピー元", "方式", "有効", "サーバー"])
-        sheet.append(
-            ["1001", "受注一覧", r'=CONCATENATE(F2,"\data.csv")', "毎日", "○", r"\server\受注"]
-        )
+        make_sheet(path, [["1001", "受注一覧", "", "毎日", "○", r"\server\受注"]])
+        book = load_workbook(path)
+        book["PY_一覧"]["C2"] = r'=CONCATENATE(F2,"\data.csv")'
         book.save(path)
+        book.close()
         return path
 
     def test_formula_is_never_taken_as_a_value(self, tmp_path):

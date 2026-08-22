@@ -21,7 +21,7 @@ class MasterSheetNotDefinedError(MasterTableError):
 
     `load()` を引数なしで呼ぶには、クラス変数 `PATH` に既定の場所を書いておく必要がある。
 
-    発生箇所: comken.toolbox.master_table の load()
+    発生箇所: comken.services.salesforce_downloader.report_master の load()
 
     対処:
         `load(パス)` のようにファイルを渡すか、クラスに PATH を書く（コードの直し方の話なので、
@@ -41,7 +41,7 @@ class MasterColumnNotFoundError(MasterTableError):
     見出しの行を書き換えた・列を消した・別のシートを見ている、のいずれか。
     **プログラムは見出しの名前で列を探す**ので、見出しが変わると読めなくなる。
 
-    発生箇所: comken.toolbox.master_table の load()
+    発生箇所: comken.services.salesforce_downloader.report_master の load()
 
     対処:
         管理表の1行目（見出し）を元に戻す。消してしまった場合は、
@@ -62,7 +62,7 @@ class MasterRowValueError(MasterTableError):
 
     数字を書く列に文字が入っている、決まった書き方以外を書いた、空にできない列が空、など。
 
-    発生箇所: comken.toolbox.master_table の load()
+    発生箇所: comken.services.salesforce_downloader.report_master の load()
 
     対処:
         メッセージに出ている行と列を、管理表で確認して直す
@@ -80,7 +80,7 @@ class MasterDuplicateValueError(MasterTableError):
     管理番号のように「1つに決まる」ことが前提の列で重複すると、
     どの行を指しているか決められない。
 
-    発生箇所: comken.toolbox.master_table の load()
+    発生箇所: comken.services.salesforce_downloader.report_master の load()
 
     対処:
         管理表を開いて、重複している値のどちらかを別の値に変える

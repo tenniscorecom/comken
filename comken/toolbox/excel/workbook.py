@@ -10,6 +10,7 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
 from comken.core.files import copy_to_local_if_large
+from comken.core.table.model import Table
 from comken.exceptions import (
     EmptyHeaderCellError,
     SheetAlreadyExistsError,
@@ -17,7 +18,6 @@ from comken.exceptions import (
 )
 from comken.runtime import dry_run_log, is_dry_run
 from comken.toolbox.excel.sheet import Sheet
-from comken.toolbox.table_model import Table
 
 Value: TypeAlias = str | int | float | bool | datetime
 _EXCEL_SUFFIXES = {".xlsx", ".xlsm", ".xltx", ".xltm"}
@@ -137,9 +137,7 @@ class Excel:
         columns = [str(column) for column in rows[0]] if rows else []
         normalized_rows = [
             {
-                str(column): value
-                if str(column) in self._types or value is None
-                else str(value)
+                str(column): value if str(column) in self._types or value is None else str(value)
                 for column, value in row.items()
             }
             for row in (rows[1:] if rows else [])

@@ -1,4 +1,4 @@
-r"""comken/toolbox/master_table.py — Excel の表を設定として読む。
+r"""comken/services/salesforce_downloader/report_master.py — Excel の表を設定として読む。
 
 **非エンジニアが Excel で編集する一覧**を、型付きの行として読み込む。
 「どのレポートを取るか」「どのファイルをコピーするか」のように**行が増えていく設定**は、
@@ -9,7 +9,7 @@ config.ini より表のほうが扱いやすい（並べ替え・フィルタ・
     from dataclasses import dataclass
     from pathlib import Path
 
-    from comken.toolbox.master_table import MasterRow, column
+    from comken.services.salesforce_downloader.report_master import MasterRow, column
 
 
     @dataclass(frozen=True, kw_only=True)
@@ -66,10 +66,10 @@ from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.workbook.workbook import Workbook
 from openpyxl.worksheet.datavalidation import DataValidation
-from openpyxl.worksheet.table import Table
 from openpyxl.worksheet.worksheet import Worksheet
 
 from comken.constants import Color
+from comken.core.table.model import Table as CoreTable
 from comken.exceptions import (
     ExcelApplicationNotAvailableError,
     MasterColumnNotFoundError,
@@ -181,10 +181,8 @@ class MasterRow:
         if source is None:
             raise MasterSheetNotDefinedError(cls.__name__)
 
-        # 既存の管理表は data_ プレフィックスを使っていないため、このブックでは
-        # すべてのシートをデータシートとして扱う。
-        with Excel(source, data_prefix="") as excel:
-            raw_rows = excel.sheet(cls.SHEET_NAME).table().read()
+        with Excel(source) as excel:
+            raw_rows = excel.data_sheet(cls.SHEET_NAME).table().read().read()
         if any(
             isinstance(value, str) and value.startswith("=")
             for raw_row in raw_rows
@@ -258,23 +256,17 @@ class MasterRow:
             for example in (examples or [])
         ]
 
-        # replace() は空リストでは見出しを書かないため、空の雛形では仮の1行を
-        # 書いてから装飾時に削除する。
-        replacement_rows = rows or [dict.fromkeys(headers, "")]
-        with Excel(path, data_prefix="") as excel:
-            excel.sheet(cls.SHEET_NAME).table().replace(replacement_rows)
+        # 空の雛形でも Excel テーブルを成立させるため、API が要求する見出しだけを
+        # 持つ Table を作る。実データが無い場合の仮行は create_table が保持しない。
+        template_table = CoreTable(headers, rows)
+        with Excel(path) as excel:
+            excel.create_data_sheet(cls.SHEET_NAME).create_table(cls.__name__, template_table)
 
         book = load_workbook(path)
-        sheet = book[cls.SHEET_NAME]
-        if not rows:
-            sheet.delete_rows(_FIRST_DATA_ROW)
-        if headers:
-            last_column = _column_letter(len(headers))
-            table_range = f"A1:{last_column}{len(rows) + 1}"
-            sheet.add_table(Table(displayName=_table_name(cls), ref=table_range))
+        sheet = book[f"PY_{cls.SHEET_NAME}"]
 
-            # **全セルに雛形用のフォントを当てる。** 既存のフォント属性（太字など）は
-            # そのまま使い回し、`name` だけ書き換える（後勝ちで上書きすると太字まで消える）
+        # **全セルに雛形用のフォントを当てる。** 既存のフォント属性（太字など）は
+        # そのまま使い回し、`name` だけ書き換える（後勝ちで上書きすると太字まで消える）
         cls._apply_template_font(sheet, len(rows))
         # **`choices` がある列にドロップダウンを付ける。** データ行の先頭から
         # 十分な行数ぶんの範囲に適用し、あとから行を足しても効くようにする
@@ -544,12 +536,6 @@ def _column_letter(index: int) -> str:
         index, remainder = divmod(index - 1, 26)
         letters = chr(ord("A") + remainder) + letters
     return letters
-
-
-def _table_name(cls: type) -> str:
-    """Excel のテーブル名（英数字とアンダースコアだけにする）。"""
-    name = "".join(char if char.isalnum() or char == "_" else "_" for char in cls.__name__)
-    return name if name[:1].isalpha() else f"T_{name}"
 
 
 def iter_columns(cls: type[MasterRow]) -> Iterator[tuple[str, ColumnSpec, type]]:

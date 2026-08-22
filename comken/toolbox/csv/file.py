@@ -1,4 +1,4 @@
-"""comken/toolbox/csv/table.py — CSV ファイルを1つのデータ領域として扱う。"""
+"""comken/toolbox/csv/file.py — CSV ファイルを1つのデータ領域として扱う。"""
 
 import csv
 import re
@@ -8,8 +8,8 @@ from types import TracebackType
 from typing import Self, TypeAlias
 
 from comken.constants import Encoding
+from comken.core.table.model import Table
 from comken.exceptions.table import InvalidTableInputError
-from comken.toolbox.table_model import Table
 
 Value: TypeAlias = str | int | float | bool | datetime
 

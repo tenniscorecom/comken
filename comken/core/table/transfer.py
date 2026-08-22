@@ -4,13 +4,13 @@ from collections.abc import Callable, Mapping, Sequence
 from enum import Enum, auto
 from typing import Any, Final
 
+from comken.core.table.model import Table
 from comken.exceptions.table import (
     InvalidTableInputError,
     TransferDestinationMultipleMatchError,
     TransferMappingError,
     TransferRowError,
 )
-from comken.toolbox.table_model import Table
 
 Row = dict[str, Any]
 

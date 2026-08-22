@@ -2,8 +2,8 @@
 
 import pytest
 
+from comken.core.table import Table, Transfer
 from comken.exceptions.table import TableError, TransferDestinationMultipleMatchError
-from comken.toolbox import Table, Transfer
 from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Excel
 
@@ -47,9 +47,9 @@ def test_csv_reads_pending_table_and_does_not_save_after_exception(tmp_path) -> 
     path.write_text("id,date\n1,2026-08-22\n", encoding="utf-8-sig")
 
     with pytest.raises(RuntimeError), CSV(path, types={"id": int}) as csv_file:
-            csv_file.replace([{"id": 2, "date": "2026-08-23"}])
-            assert csv_file.read().read() == [{"id": 2, "date": "2026-08-23"}]
-            raise RuntimeError
+        csv_file.replace([{"id": 2, "date": "2026-08-23"}])
+        assert csv_file.read().read() == [{"id": 2, "date": "2026-08-23"}]
+        raise RuntimeError
     assert "2026-08-22" in path.read_text(encoding="utf-8-sig")
 
 
@@ -64,23 +64,29 @@ def test_excel_create_table_uses_start_cell_and_its_actual_ref(tmp_path) -> None
 
 
 def test_transfer_supports_composite_update_add_and_duplicate() -> None:
-    source = Table(["group", "id", "value"], [
-        {"group": "A", "id": 1, "value": "new"},
-        {"group": "B", "id": 2, "value": "add"},
-    ])
+    source = Table(
+        ["group", "id", "value"],
+        [
+            {"group": "A", "id": 1, "value": "new"},
+            {"group": "B", "id": 2, "value": "add"},
+        ],
+    )
     destination = Table(["group", "id", "value"], [{"group": "A", "id": 1, "value": "old"}])
-    result = Transfer(
-        source, destination, read_key=["group", "id"], write_key=["group", "id"]
-    ).run(mapping={"value": "value"})
+    result = Transfer(source, destination, read_key=["group", "id"], write_key=["group", "id"]).run(
+        mapping={"value": "value"}
+    )
     assert result.read() == [
         {"group": "A", "id": 1, "value": "new"},
         {"group": "B", "id": 2, "value": "add"},
     ]
 
-    duplicate = Table(["group", "id", "value"], [
-        {"group": "A", "id": 1, "value": "one"},
-        {"group": "A", "id": 1, "value": "two"},
-    ])
+    duplicate = Table(
+        ["group", "id", "value"],
+        [
+            {"group": "A", "id": 1, "value": "one"},
+            {"group": "A", "id": 1, "value": "two"},
+        ],
+    )
     with pytest.raises(TransferDestinationMultipleMatchError):
         Transfer(source, duplicate, read_key=["group", "id"], write_key=["group", "id"]).run(
             mapping={"value": "value"}

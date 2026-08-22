@@ -1,7 +1,8 @@
 r"""comken/services/salesforce_downloader/master.py — レポート管理表の列を決める。
 
 **このファイルにあるのは「社内の取り決め」だけ。** Excel を読む・検証する・雛形を作る
-仕組みは `comken.toolbox.master_table` にあり、ここは**どんな列があるか**を宣言する。
+仕組みは `comken.services.salesforce_downloader.report_master` にあり、ここは
+**どんな列があるか**を宣言する。
 
     | ID   | 概要     | Salesforce URL              | 実行方式 | 保存先              | 有効 |
     |------|----------|-----------------------------|----------|---------------------|------|
@@ -21,7 +22,7 @@ r"""comken/services/salesforce_downloader/master.py — レポート管理表の
 - URL からレポートIDを取り出すこと
 
 ここに書かないもの:
-- Excel をどう読むか・どう検証するか → comken/toolbox/master_table.py
+- Excel をどう読むか・どう検証するか → report_master.py
 - 取得・保存・履歴 → service.py / history.py
 """
 
@@ -29,7 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from comken.exceptions import InvalidReportUrlError, SalesforceReportIdNotFoundError
-from comken.toolbox.master_table import MasterRow, column
+from comken.services.salesforce_downloader.report_master import MasterRow, column
 
 # URL 解析は `comken.toolbox.salesforce.report` の `report_id_from_url` を使う。
 # master.py は `requests` に依存しない（BO 環境でも動かせる）ため、
@@ -105,7 +106,7 @@ class ReportEntry(MasterRow):
         help=f"「{SCHEDULED}」は毎日決まった時刻にまとめて取ります。"
         f"「{ON_DEMAND}」は、使うプログラムから呼ばれたときだけ取ります",
     )
-    folder: Path = column(
+    folder: Path = column(  # noqa: RUF009
         "保存先",
         help="落としたファイルを置くフォルダ。フォルダが無いとエラーになります"
         "（打ち間違いに気づけるよう、勝手には作りません）",

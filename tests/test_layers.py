@@ -14,11 +14,7 @@ LAYERS = {
 }
 
 ALLOWED_SAME_LAYER = {
-    ("toolbox", "toolbox.table"),  # 既存CSV / Excel間の転記入口
-    ("toolbox.table", "toolbox.csv"),  # 転記は既存CSV実装へ委譲する
-    ("toolbox.table", "toolbox.excel"),  # 転記は既存Excel実装へ委譲する
     ("toolbox.excel", "toolbox.windows"),  # 既存数式・マクロ時の COM フォールバック
-    ("toolbox.master_table", "toolbox.excel"),  # 管理表は Excel の表を読む
     ("toolbox.salesforce", "toolbox.credentials"),  # Salesforce の認証情報を安全に保存する
     ("toolbox.holidays", "toolbox.excel"),  # 管理表の「会社休日」シートを Excel で読む
 }

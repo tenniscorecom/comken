@@ -6,12 +6,12 @@ from typing import TYPE_CHECKING, TypeAlias
 from openpyxl.utils.cell import range_boundaries
 from openpyxl.worksheet.worksheet import Worksheet
 
+from comken.core.table.model import Table
 from comken.exceptions import (
     DuplicateHeaderCellError,
     EmptyHeaderCellError,
     InvalidTableOperationError,
 )
-from comken.toolbox.table_model import Table
 
 if TYPE_CHECKING:
     from comken.toolbox.excel.workbook import Excel
