@@ -17,6 +17,50 @@ class DownloaderError(ComkenError):
     """
 
 
+class HistoryWriteError(DownloaderError):
+    """必須のダウンロード履歴を記録できなかった
+
+    対処:
+        履歴CSVの保存先、共有サーバー接続、書込み権限を確認する
+    """
+
+    def __init__(self, path: Path, reason: str, *, original: BaseException | None = None) -> None:
+        original_text = f"\n元の処理の失敗: {original}" if original is not None else ""
+        super().__init__(f"ダウンロード履歴を記録できませんでした: {path}\n{reason}{original_text}")
+
+
+class HistoryLockTimeoutError(DownloaderError):
+    """ダウンロード履歴の排他ロックを待っても取得できなかった
+
+    対処:
+        同時実行中の処理が終わるのを待って再実行する。繰り返す場合は共有サーバーを確認する
+    """
+
+    def __init__(self, path: Path, timeout: float) -> None:
+        super().__init__(
+            f"ダウンロード履歴を利用できませんでした: {path}\n"
+            f"履歴のロックを {timeout:.1f} 秒待っても取得できませんでした"
+        )
+
+
+class HistoryHeaderMismatchError(DownloaderError):
+    """ダウンロード履歴CSVの見出しが現在の定義と一致しない
+
+    対処:
+        履歴CSVの1行目を確認する。列を手で変更していた場合は元へ戻し、
+        古い形式の履歴なら別名へ退避してから再実行する
+    """
+
+    def __init__(self, path: Path, actual: tuple[str, ...], expected: tuple[str, ...]) -> None:
+        actual_text = "、".join(actual) or "（見出しなし）"
+        expected_text = "、".join(expected)
+        super().__init__(
+            f"ダウンロード履歴の見出しが正しくありません: {path}\n"
+            f"現在: {actual_text}\n"
+            f"必要: {expected_text}"
+        )
+
+
 class ReportNotRegisteredError(DownloaderError):
     """指定した管理番号が管理表に無い
 
@@ -77,13 +121,13 @@ class ReportDisabledError(DownloaderError):
         )
 
 
-class ScheduledReportNotRegisteredError(DownloaderError):
-    """定期取得の対象として登録されていないレポートを、定期取得済みとして受け取ろうとした
+class CachedReportNotRegisteredError(DownloaderError):
+    """定期取得の対象ではないレポートのキャッシュを読もうとした
 
-    get_scheduled_report() は「決まった時刻に取っておいたものを受け取る」関数。
+    cached_report() は「定期実行が取っておいた本日のデータを受け取る」関数。
     管理表で「個別」になっているレポートは誰も取りに行かないので、いつまでも揃わない。
 
-    発生箇所: comken.services.salesforce_downloader の get_scheduled_report()
+    発生箇所: comken.services.salesforce_downloader の cached_report()
 
     対処:
         毎日決まった時刻に取るなら、管理表の「実行方式」を「定期」にする。
@@ -99,49 +143,29 @@ class ScheduledReportNotRegisteredError(DownloaderError):
         )
 
 
-class ScheduledReportNotDownloadedError(DownloaderError):
-    """本日の定期取得がまだ済んでいない
+class CachedReportNotFoundError(DownloaderError):
+    """本日の定期取得キャッシュが見つからない
 
     定期取得の時刻より前に呼ばれた、定期取得が失敗した、その日に管理表へ
     追加されて今日の分に間に合わなかった、のいずれか。
 
-    **勝手に Salesforce へ取りに行かない。** get_scheduled_report() は
+    **勝手に Salesforce へ取りに行かない。** cached_report() は
     「取っておいたものを受け取る」関数で、取りに行く関数ではない。
     ここで自動的に取りに行くと、定期取得が動いていないことに誰も気づかなくなる。
 
-    発生箇所: comken.services.salesforce_downloader の get_scheduled_report()
+    発生箇所: comken.services.salesforce_downloader の cached_report()
 
     対処:
-        定期取得の実行結果を確認する。急ぐ場合は download_report() で
-        その場で取得する（そのぶん Salesforce への呼び出しが増える）
+        Salesforce からCSVを手動取得し、画面に表示された正確なパス・ファイル名で置いて、
+        同じ python main.py を再実行する
     """
 
-    def __init__(self, report_key: str, summary: str, history_path: Path) -> None:
+    def __init__(self, report_key: str, summary: str, cache_path: Path) -> None:
         super().__init__(
-            f"本日の定期取得がまだ済んでいません: {report_key}（{summary}）\n"
-            f"履歴: {history_path}\n"
-            "定期取得の実行結果を確認してください。\n"
-            "急ぐ場合は download_report() でその場で取得できます。"
-        )
-
-
-class ReportFileMissingError(DownloaderError):
-    """履歴では取得済みだが、保存先にファイルが無い
-
-    取得の後で人が消した・移動した・保存先の設定を変えた、のいずれか。
-
-    発生箇所: comken.services.salesforce_downloader の get_scheduled_report()
-
-    対処:
-        保存先のフォルダを確認する。消してしまった場合は
-        download_report() で取り直す
-    """
-
-    def __init__(self, report_key: str, path: Path) -> None:
-        super().__init__(
-            f"履歴では取得済みですが、ファイルが見つかりません: {report_key}\n"
-            f"{path}\n"
-            "消した・移動した場合は download_report() で取り直してください。"
+            f"本日の定期取得キャッシュが見つかりません: {report_key}（{summary}）\n"
+            "SalesforceからCSVを手動取得し、次の正確なパス・ファイル名で置いてください:\n"
+            f"{cache_path}\n"
+            "配置後、同じ python main.py を再実行してください。"
         )
 
 
@@ -155,7 +179,7 @@ class EmptyReportError(DownloaderError):
 
     対処:
         Salesforce の画面で同じレポートを開き、本当に 0 件か確認する。
-        本当に 0 件の日であれば、空の CSV を保存先へ手で置く
+        0 件が正常に起こるレポートなら、管理表の「0件あり」を「○」にする。
     """
 
     def __init__(self, report_key: str, summary: str, url: str) -> None:

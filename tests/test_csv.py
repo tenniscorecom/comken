@@ -1,525 +1,189 @@
-"""
-CsvReader クラスのテスト。
+"""CSV API の読み書き・保留・失敗時保護の契約を確認する。"""
 
-実行方法:
-    リポジトリのルートで python -m pytest tests/ -v
-"""
-
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-import comken.toolbox.csv
 from comken.constants import Encoding
+from comken.core import Table
 from comken.exceptions import (
-    ColumnNotFoundError,
-    CsvCellReferenceError,
-    CsvColumnNotFoundError,
-    CsvError,
-    CsvNoDataRowsError,
-    CsvRowDuplicateKeyError,
-    CsvRowNotFoundError,
+    CsvColumnsRequiredError,
+    CsvFileNotFoundError,
+    CsvHeaderMissingError,
+    CsvInvalidHeaderError,
+    CsvRowLengthError,
+    EncodingDetectionError,
+    InvalidTableOperationError,
+    TableRowColumnsError,
+    TableTypeConversionError,
     UnsupportedFileSuffixError,
 )
-from comken.toolbox.csv import CsvReader, CsvWriter
+from comken.toolbox import csv as csv_package
+from comken.toolbox.csv import CSV
 
 
-@pytest.fixture
-def sample_csv(tmp_path):
-    """テスト用 CSV ファイルを作成して返す。"""
-    content = "注文番号,金額,担当者\nA001,1000,山田\nA002,2000,山田\nA003,3000,佐藤\n"
-    path = tmp_path / "data.csv"
-    path.write_text(content, encoding="utf-8-sig")
-    return path
+class TestCSV:
+    def test_public_api_contains_only_csv(self) -> None:
+        assert csv_package.__all__ == ["CSV"]
+        for removed in ("Csv" + "Reader", "Csv" + "Writer", "Csv" + "Base", "index" + "_files"):
+            assert not hasattr(csv_package, removed)
 
+    def test_reads_strings_by_default_and_only_converts_requested_columns(self, tmp_path) -> None:
+        path = tmp_path / "data.csv"
+        path.write_text("id,name\n1,山田\n", encoding="utf-8-sig")
+        assert CSV(path).read().read() == [{"id": "1", "name": "山田"}]
+        assert CSV(path, types={"id": int}).read().read() == [{"id": 1, "name": "山田"}]
 
-class TestCsvReaderRows:
-    """rows() のテスト。"""
+    def test_auto_reads_cp932(self, tmp_path) -> None:
+        path = tmp_path / "data.csv"
+        path.write_text("名前\n山田\n", encoding="cp932")
+        assert CSV(path, encoding=Encoding.AUTO).read().column("名前") == ["山田"]
 
-    def test_path_is_path(self, tmp_path: Path) -> None:
-        reader = CsvReader(str(tmp_path / "data.csv"))
-        assert reader.path == tmp_path / "data.csv"
-        assert isinstance(reader.path, Path)
+    def test_columns_treats_first_row_as_data(self, tmp_path) -> None:
+        path = tmp_path / "data.csv"
+        path.write_text("A001,1000\n", encoding="utf-8-sig")
+        table = CSV(path, columns=["注文番号", "金額"]).read()
+        assert table.read() == [{"注文番号": "A001", "金額": "1000"}]
 
-    def test_rejects_non_csv_suffix(self, tmp_path: Path) -> None:
+    def test_append_is_saved_only_on_normal_with_exit(self, tmp_path) -> None:
+        path = tmp_path / "data.csv"
+        path.write_text("id\n1\n", encoding="utf-8-sig")
+        with pytest.raises(RuntimeError), CSV(path) as csv_file:
+            csv_file.append({"id": "2"})
+            raise RuntimeError
+        assert CSV(path).read().column("id") == ["1"]
+        with CSV(path) as csv_file:
+            csv_file.append({"id": "2"})
+        assert CSV(path).read().column("id") == ["1", "2"]
+
+    def test_replace_accepts_table(self, tmp_path) -> None:
+        path = tmp_path / "data.csv"
+        with CSV(path) as csv_file:
+            csv_file.replace(Table(["id"], [{"id": "1"}]))
+        assert CSV(path).read().read() == [{"id": "1"}]
+
+    def test_rejects_non_csv_suffix(self, tmp_path) -> None:
         with pytest.raises(UnsupportedFileSuffixError):
-            CsvReader(tmp_path / "data.txt")
+            CSV(tmp_path / "data.txt")
 
-    def test_returns_all_rows(self, sample_csv):
-        """全行を辞書のリストで返すことを確認する。"""
-        rows = CsvReader(sample_csv).read_rows()
-        assert len(rows) == 3
-        assert rows[0] == {"注文番号": "A001", "金額": "1000", "担当者": "山田"}
-
-    def test_columns_filter(self, sample_csv):
-        """columns 指定時は指定列のみ返すことを確認する。"""
-        rows = CsvReader(sample_csv).read_rows(columns=["注文番号", "金額"])
-        assert rows[0] == {"注文番号": "A001", "金額": "1000"}
-        assert "担当者" not in rows[0]
-
-
-class TestCsvReaderCell:
-    """cell() のテスト。"""
-
-    def test_counts_header_as_first_row(self, sample_csv):
-        assert CsvReader(sample_csv).cell("A2") == "A001"
-
-    def test_returns_empty_string_for_empty_cell(self, tmp_path):
+    def test_auto_reads_utf8_bom_without_bom_in_header(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
-        path.write_text("日付,備考\n2026/07/29,\n", encoding="utf-8")
+        path.write_text("id,name\n1,山田\n", encoding="utf-8-sig")
+        assert CSV(path, encoding=Encoding.AUTO).read().read() == [{"id": "1", "name": "山田"}]
 
-        assert CsvReader(path).cell("B2") == ""
-
-    def test_reads_multiple_letter_column(self, tmp_path):
-        path = tmp_path / "wide.csv"
-        path.write_text(",".join([*map(str, range(1, 27)), "27"]) + "\n", encoding="utf-8")
-
-        assert CsvReader(path).cell("AA1") == "27"
-
-    @pytest.mark.parametrize("ref", ["", "2A", "A0", "A-1"])
-    def test_rejects_invalid_reference(self, sample_csv, ref):
-        with pytest.raises(CsvCellReferenceError):
-            CsvReader(sample_csv).cell(ref)
-
-    @pytest.mark.parametrize("ref", ["A99", "Z2"])
-    def test_rejects_out_of_range_reference(self, sample_csv, ref):
-        with pytest.raises(CsvCellReferenceError):
-            CsvReader(sample_csv).cell(ref)
-
-
-class TestCsvPublicApi:
-    """CSV の公開 API と依存境界を確認する。"""
-
-    def test_utils_does_not_export_col_to_num(self):
-        # col_to_num は comken.core.data 内の内部実装。facade には出さない
-        # （core.data は `__all__` を持たない内部モジュール）。
-        assert "col_to_num" not in comken.__all__
-        assert "col_to_num" not in comken.toolbox.csv.__all__
-
-    def test_csv_does_not_import_excel(self):
-        csv_dir = Path(__file__).resolve().parents[1] / "comken" / "csv"
-        source = "\n".join(path.read_text(encoding="utf-8") for path in csv_dir.glob("*.py"))
-
-        assert "from ..excel" not in source
-        assert "from comken.toolbox.excel" not in source
-
-
-class TestCsvReaderFirst:
-    """first() のテスト。"""
-
-    def test_returns_first_data_row_value(self, sample_csv):
-        assert CsvReader(sample_csv).first("金額") == "1000"
-
-    def test_returns_empty_string_for_empty_cell(self, tmp_path):
+    def test_auto_rejects_unknown_encoding_with_csv_exception(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
-        path.write_text("日付,備考\n2026/07/29,\n", encoding="utf-8")
-
-        assert CsvReader(path).first("備考") == ""
-
-    def test_raises_on_missing_column(self, sample_csv):
-        with pytest.raises(CsvColumnNotFoundError):
-            CsvReader(sample_csv).first("価格")
-
-    def test_raises_when_no_data_rows(self, tmp_path):
-        path = tmp_path / "header_only.csv"
-        path.write_text("日付,備考\n", encoding="utf-8")
-
-        with pytest.raises(CsvNoDataRowsError, match="ヘッダー行の下"):
-            CsvReader(path).first("日付")
-
-    def test_returns_same_value_when_column_position_changes(self, tmp_path):
-        original = tmp_path / "original.csv"
-        reordered = tmp_path / "reordered.csv"
-        original.write_text("日付,備考\n2026/07/29,確定\n", encoding="utf-8")
-        reordered.write_text("備考,日付\n確定,2026/07/29\n", encoding="utf-8")
-
-        assert CsvReader(original).first("日付") == "2026/07/29"
-        assert CsvReader(reordered).first("日付") == "2026/07/29"
-
-
-class TestCsvReaderFind:
-    """find() のテスト。"""
-
-    def test_finds_existing_row(self, sample_csv):
-        """キーに一致する行を返すことを確認する。"""
-        row = CsvReader(sample_csv).find("注文番号", "A001")
-        assert row is not None
-        assert row["金額"] == "1000"
-
-    def test_raises_when_not_found(self, sample_csv):
-        """見つからない場合は既定で例外になることを確認する。"""
-        with pytest.raises(CsvRowNotFoundError) as exc:
-            CsvReader(sample_csv).find("注文番号", "Z999")
-        # 非エンジニアが自力で直せるよう、探した列と値がメッセージに出ること
-        assert "注文番号" in str(exc.value)
-        assert "Z999" in str(exc.value)
-
-    def test_returns_none_when_not_required(self, sample_csv):
-        """required=False なら見つからなくても None を返すことを確認する。"""
-        assert CsvReader(sample_csv).find("注文番号", "Z999", required=False) is None
-
-    def test_returns_first_match(self, sample_csv):
-        """複数一致する場合は最初の行を返すことを確認する。"""
-        row = CsvReader(sample_csv).find("担当者", "山田")
-        assert row["注文番号"] == "A001"
-
-
-class TestCsvReaderFilter:
-    """filter() のテスト。"""
-
-    def test_returns_matching_rows(self, sample_csv):
-        """条件に一致する全行を返すことを確認する。"""
-        rows = CsvReader(sample_csv).filter("担当者", "山田")
-        assert len(rows) == 2
-        assert all(r["担当者"] == "山田" for r in rows)
-
-    def test_returns_empty_list_when_not_found(self, sample_csv):
-        """一致しない場合は空リストを返すことを確認する。"""
-        rows = CsvReader(sample_csv).filter("担当者", "存在しない人")
-        assert rows == []
-
-
-class TestCsvReaderColumn:
-    """column() のテスト。"""
-
-    def test_returns_column_values(self, sample_csv):
-        """指定列の値一覧を返すことを確認する。"""
-        values = CsvReader(sample_csv).column("金額")
-        assert values == ["1000", "2000", "3000"]
-
-
-class TestCsvReaderIndex:
-    """index() のテスト。"""
-
-    def test_returns_dict_keyed_by_column(self, sample_csv):
-        """キー列で辞書化されることを確認する。"""
-        lookup = CsvReader(sample_csv).index("注文番号")
-        assert "A001" in lookup
-        assert lookup["A001"]["金額"] == "1000"
-
-    def test_all_rows_indexed(self, sample_csv):
-        """全行がインデックスに含まれることを確認する。"""
-        lookup = CsvReader(sample_csv).index("注文番号")
-        assert len(lookup) == 3
-
-    def test_duplicate_key_raises(self, tmp_path):
-        """キーが重複していたら例外になることを確認する。"""
-        # 黙って後勝ちにすると、転記結果が静かに変わって気づけない。
-        path = tmp_path / "dup.csv"
-        path.write_text("注文番号,金額\nA001,1000\nA001,2000\nA002,3000\n", encoding="utf-8")
-
-        with pytest.raises(CsvRowDuplicateKeyError) as exc:
-            CsvReader(path).index("注文番号")
-
-        message = str(exc.value)
-        assert "A001（2件）" in message  # どのキーが何件あるか出す
-        assert "A002" not in message  # 重複していないキーは出さない
-        assert "group_by" in message  # 重複を前提にする場合の行き先を示す
-
-    def test_duplicate_message_is_truncated(self, tmp_path):
-        """重複が多数でもメッセージが読める長さに収まることを確認する。"""
-        rows = "".join(f"K{i:03},1\nK{i:03},2\n" for i in range(8))
-        path = tmp_path / "many.csv"
-        path.write_text(f"注文番号,金額\n{rows}", encoding="utf-8")
-
-        with pytest.raises(CsvRowDuplicateKeyError) as exc:
-            CsvReader(path).index("注文番号")
-
-        assert "ほか3件" in str(exc.value)
-
-
-class TestCsvReaderGroupBy:
-    """group_by() のテスト。"""
-
-    def test_groups_rows_by_key(self, tmp_path):
-        """同じキーの行がまとめられることを確認する。"""
-        path = tmp_path / "dup.csv"
-        path.write_text("注文番号,金額\nA001,1000\nA001,2000\nA002,3000\n", encoding="utf-8")
-
-        groups = CsvReader(path).group_by("注文番号")
-
-        assert [row["金額"] for row in groups["A001"]] == ["1000", "2000"]
-        assert len(groups["A002"]) == 1
-
-    def test_keeps_file_order(self, tmp_path):
-        """ファイルの並び順が保たれることを確認する。"""
-        path = tmp_path / "order.csv"
-        path.write_text("注文番号,行\nA,1\nB,2\nA,3\n", encoding="utf-8")
-
-        groups = CsvReader(path).group_by("注文番号")
-
-        assert list(groups) == ["A", "B"]
-        assert [row["行"] for row in groups["A"]] == ["1", "3"]
-
-    def test_unknown_column_raises(self, sample_csv):
-        """存在しない列名は index() と同じエラーになることを確認する。"""
-        with pytest.raises(CsvColumnNotFoundError):
-            CsvReader(sample_csv).group_by("受注番号")
-
-
-class TestCsvReaderHeaders:
-    """ヘッダーなし CSV（headers 引数）のテスト。"""
-
-    def test_reads_headerless_csv(self, tmp_path):
-        """headers で列名を付けると、1行目からデータとして読めることを確認する。"""
-        path = tmp_path / "no_header.csv"
-        path.write_text("A001,1000\nA002,2000\n", encoding="utf-8")
-
-        rows = CsvReader(path, headers=["注文番号", "金額"]).read_rows()
-
-        assert len(rows) == 2
-        assert rows[0]["注文番号"] == "A001"
-        assert rows[1]["金額"] == "2000"
-
-    def test_index_works_with_headers(self, tmp_path):
-        """headers 指定でも index() で突合用辞書を作れることを確認する。"""
-        path = tmp_path / "no_header.csv"
-        path.write_text("A001,1000\nA002,2000\n", encoding="utf-8")
-
-        lookup = CsvReader(path, headers=["注文番号", "金額"]).index("注文番号")
-
-        assert lookup["A002"]["金額"] == "2000"
-
-    def test_headers_too_few_raises(self, tmp_path):
-        """headers の列数が CSV の列数より少ないと CsvError になることを確認する。
-
-        （DictReader が余った列を None キーに押し込み、黙ってデータが迷子になるため）
-        """
-        path = tmp_path / "no_header.csv"
-        path.write_text("A001,1000,山田\n", encoding="utf-8")  # 実際は3列
-
-        with pytest.raises(CsvError, match="列数"):
-            CsvReader(path, headers=["注文番号", "金額"]).read_rows()
-
-
-class TestCsvReaderColumnValidation:
-    """存在しない列名の検証テスト。
-
-    列名が間違っていると「黙って0件」ではなく ColumnNotFoundError になる
-    （非エンジニアがヘッダーを変更したときに気づけるようにする）。
-    """
-
-    def test_find_raises_on_missing_column(self, sample_csv):
-        """find で存在しない列名を指定するとエラーになる。"""
-        with pytest.raises(ColumnNotFoundError, match="存在する列"):
-            CsvReader(sample_csv).find("存在しない列", "A001")
-
-    def test_index_raises_on_missing_column(self, sample_csv):
-        """index で存在しない列名を指定するとエラーになる。"""
-        with pytest.raises(ColumnNotFoundError):
-            CsvReader(sample_csv).index("受注番号")  # 正しくは「注文番号」
-
-    def test_column_raises_on_missing_column(self, sample_csv):
-        """column で存在しない列名を指定するとエラーになる。"""
-        with pytest.raises(ColumnNotFoundError):
-            CsvReader(sample_csv).column("価格")
-
-    def test_rows_columns_raises_on_missing_column(self, sample_csv):
-        """rows(columns=...) に存在しない列名が含まれるとエラーになる。"""
-        with pytest.raises(ColumnNotFoundError):
-            CsvReader(sample_csv).read_rows(columns=["注文番号", "存在しない列"])
-
-    def test_header_only_raises_on_missing_column(self, tmp_path):
-        """ヘッダーだけの CSV でも存在しない列名を検出する。"""
-        path = tmp_path / "header_only.csv"
-        path.write_text("注文番号,金額\n", encoding="utf-8-sig")
-        with pytest.raises(ColumnNotFoundError):
-            CsvReader(path).read_rows(columns=["存在しない列"])
-
-
-class TestCsvReaderEncoding:
-    """文字コードのテスト。"""
-
-    def test_reads_cp932(self, tmp_path):
-        """Shift-JIS（cp932）のファイルを明示指定で読み込めることを確認する。"""
-        path = tmp_path / "sjis.csv"
-        path.write_bytes("番号,名前\n1,山田\n".encode("cp932"))
-        rows = CsvReader(path, encoding="cp932").read_rows()
-        assert rows[0]["名前"] == "山田"
-
-    def test_auto_detects_utf8_sig(self, tmp_path):
-        """自動判定（デフォルト）で BOM 付き UTF-8 を読めることを確認する。"""
-        path = tmp_path / "utf8.csv"
-        path.write_text("番号,名前\n1,山田\n", encoding="utf-8-sig")
-
-        rows = CsvReader(path).read_rows()
-        assert rows[0]["名前"] == "山田"
-        assert "番号" in rows[0]  # BOM がキーに混入していない
-
-    def test_auto_detects_cp932(self, tmp_path):
-        """自動判定（デフォルト）で Shift-JIS を読めることを確認する。"""
-        path = tmp_path / "sjis.csv"
-        path.write_bytes("番号,名前\n1,鈴木\n".encode("cp932"))
-
-        rows = CsvReader(path).read_rows()
-        assert rows[0]["名前"] == "鈴木"
-
-    def test_auto_raises_when_unknown_encoding(self, tmp_path):
-        """UTF-8 でも CP932 でも読めないファイルは CsvError になることを確認する。"""
-        path = tmp_path / "unknown.csv"
-        path.write_bytes(b"\x81\x20\x81\x20")  # どちらの文字コードでも不正なバイト列
-
-        with pytest.raises(CsvError):
-            CsvReader(path).read_rows()
-
-
-class TestCsvWriter:
-    """CsvWriter のテスト。"""
-
-    def test_write_rows_creates_file_with_header(self, tmp_path):
-        """write_rows でヘッダー付きの CSV が作られることを確認する。"""
-        path = tmp_path / "output.csv"
-        rows = [{"注文番号": "A001", "金額": "1000"}, {"注文番号": "A002", "金額": "2000"}]
-
-        CsvWriter(path, fieldnames=["注文番号", "金額"]).write_rows(rows)
-
-        result = CsvReader(path).read_rows()
-        assert len(result) == 2
-        assert result[0] == {"注文番号": "A001", "金額": "1000"}
-
-    def test_append_row_adds_to_existing_file(self, tmp_path):
-        """append_row で既存ファイルの末尾に追記されることを確認する。"""
-        path = tmp_path / "output.csv"
-        writer = CsvWriter(path, fieldnames=["注文番号", "金額"])
-        writer.write_rows([{"注文番号": "A001", "金額": "1000"}])
-
-        writer.append_row({"注文番号": "A002", "金額": "2000"})
-
-        result = CsvReader(path).read_rows()
-        assert len(result) == 2
-        assert result[1]["注文番号"] == "A002"
-
-    def test_append_row_creates_file_with_header_when_missing(self, tmp_path):
-        """ファイルがない状態の append_row はヘッダー付きで新規作成されることを確認する。"""
-        path = tmp_path / "new.csv"
-
-        CsvWriter(path, fieldnames=["注文番号"]).append_row({"注文番号": "A001"})
-
-        result = CsvReader(path).read_rows()
-        assert result == [{"注文番号": "A001"}]
-
-    def test_append_writes_header_when_file_is_empty(self, tmp_path):
-        """0バイトのファイルが残っていてもヘッダーから書き直すことを確認する。"""
-        # 前回の実行が途中で落ちると空ファイルが残る。見出し無しで追記すると
-        # 後で読んだときに1行目がデータ扱いになり、静かに間違う。
-        path = tmp_path / "empty.csv"
-        path.touch()
-
-        CsvWriter(path, fieldnames=["注文番号"]).append_row({"注文番号": "A001"})
-
-        assert CsvReader(path).read_rows() == [{"注文番号": "A001"}]
-
-    def test_append_rows_writes_header_when_file_is_empty(self, tmp_path):
-        """append_rows も同様に空ファイルへヘッダーから書くことを確認する。"""
-        path = tmp_path / "empty.csv"
-        path.touch()
-
-        CsvWriter(path, fieldnames=["注文番号"]).append_rows([{"注文番号": "A001"}])
-
-        assert CsvReader(path).read_rows() == [{"注文番号": "A001"}]
-
-    def test_creates_parent_folder(self, tmp_path):
-        """親フォルダがなくても自動作成して書き込めることを確認する。
-
-        （Excel.save と同じ挙動）
-        """
-        path = tmp_path / "reports" / "2026" / "output.csv"
-
-        CsvWriter(path, fieldnames=["注文番号"]).write_rows([{"注文番号": "A001"}])
-
-        assert path.exists()
-
-    def test_auto_encoding_falls_back_to_utf8_sig(self, tmp_path):
-        """Encoding.AUTO を渡すと UTF8_SIG として書き込まれることを確認する。
-
-        （素通しすると open() の "unknown encoding: auto" という不親切なエラーになる。
-        CsvReader と同じ定数を渡し回しても落ちないようにフォールバックする）
-        """
-        path = tmp_path / "output.csv"
-
-        CsvWriter(path, fieldnames=["名前"], encoding=Encoding.AUTO).write_rows([{"名前": "山田"}])
-
-        assert path.read_bytes().startswith(b"\xef\xbb\xbf")  # UTF-8 BOM
-        assert CsvReader(path).read_rows() == [{"名前": "山田"}]
-
-
-class TestCsvWriterTransactionalWrite:
-    """CsvWriter.write_rows() の既存ファイル保護を確認する。"""
-
-    def test_write_failure_preserves_existing_file(self, tmp_path):
-        """一時ファイルへの書き込み失敗時に既存 CSV を変更しない。"""
-        path = tmp_path / "output.csv"
-        original = "注文番号\nOLD\n"
+        path.write_bytes(b"\x81\x20\x81\x20")
+        with pytest.raises(EncodingDetectionError):
+            CSV(path, encoding=Encoding.AUTO).read()
+
+    def test_headerless_rejects_rows_with_too_many_columns(self, tmp_path) -> None:
+        path = tmp_path / "data.csv"
+        path.write_text("A001,1000,山田\n", encoding="utf-8-sig")
+        with pytest.raises(CsvRowLengthError, match="1行目"):
+            CSV(path, columns=["id", "amount"]).read()
+
+    def test_read_only_rejects_replace_and_does_not_save(self, tmp_path) -> None:
+        path = tmp_path / "data.csv"
+        path.write_text("id\nold\n", encoding="utf-8-sig")
+        with pytest.raises(InvalidTableOperationError), CSV(path, read_only=True) as csv_file:
+            csv_file.replace([{"id": "new"}])
+        assert CSV(path).read().column("id") == ["old"]
+
+    def test_dry_run_does_not_save(self, tmp_path) -> None:
+        path = tmp_path / "data.csv"
+        path.write_text("id\nold\n", encoding="utf-8-sig")
+        with CSV(path, dry_run=True) as csv_file:
+            csv_file.replace([{"id": "new"}])
+            assert csv_file.read().column("id") == ["new"]
+            csv_file.save()
+        assert CSV(path).read().column("id") == ["old"]
+
+    def test_pending_read_is_visible_before_save(self, tmp_path) -> None:
+        path = tmp_path / "data.csv"
+        with CSV(path) as csv_file:
+            csv_file.replace([{"id": "1"}])
+            assert csv_file.read().read() == [{"id": "1"}]
+            assert not path.exists()
+
+    def test_append_requires_matching_columns(self, tmp_path) -> None:
+        path = tmp_path / "data.csv"
+        path.write_text("id,name\n1,A\n", encoding="utf-8-sig")
+        with pytest.raises(TableRowColumnsError), CSV(path) as csv_file:
+            csv_file.append({"id": "2"})
+
+    def test_append_table_requires_matching_columns(self, tmp_path) -> None:
+        path = tmp_path / "data.csv"
+        path.write_text("id\n1\n", encoding="utf-8-sig")
+        with pytest.raises(TableRowColumnsError), CSV(path) as csv_file:
+            csv_file.append(Table(["name"], [{"name": "A"}]))
+
+    def test_save_writes_header_and_creates_parent(self, tmp_path) -> None:
+        path = tmp_path / "nested" / "data.csv"
+        with CSV(path) as csv_file:
+            csv_file.replace([{"id": "1"}])
+            csv_file.save()
+        assert path.read_text(encoding="utf-8-sig") == "id\n1\n"
+
+    def test_types_only_convert_declared_columns(self, tmp_path) -> None:
+        path = tmp_path / "data.csv"
+        path.write_text("id,amount\n001,2\n", encoding="utf-8-sig")
+        table = CSV(path, types={"amount": int}).read()
+        assert table.read() == [{"id": "001", "amount": 2}]
+
+    def test_type_conversion_error_reports_row_and_column(self, tmp_path) -> None:
+        path = tmp_path / "data.csv"
+        path.write_text("id,amount\n1,invalid\n", encoding="utf-8-sig")
+        with pytest.raises(TableTypeConversionError, match="1件目、列「amount」"):
+            CSV(path, types={"amount": int}).read()
+
+    def test_write_failure_preserves_existing_file(self, tmp_path) -> None:
+        path = tmp_path / "data.csv"
+        original = "id\nold\n"
         path.write_text(original, encoding="utf-8-sig")
-        writer = CsvWriter(path, fieldnames=["注文番号"])
-
         with (
-            patch(
-                "comken.toolbox.csv.writer.csv.DictWriter.writerows",
-                side_effect=OSError("write failed"),
-            ),
+            patch("csv.DictWriter.writerows", side_effect=OSError("write failed")),
             pytest.raises(OSError, match="write failed"),
+            CSV(path) as csv_file,
         ):
-            writer.write_rows([{"注文番号": "NEW"}])
-
+            csv_file.replace([{"id": "new"}])
+            csv_file.save()
         assert path.read_text(encoding="utf-8-sig") == original
-        assert list(path.parent.glob(f".{path.name}.*.tmp")) == []
 
-    def test_append_encoding_failure_preserves_existing_file(self, tmp_path):
-        """追記内容を変換できない場合は既存 CSV を一切変更しない。"""
-        path = tmp_path / "output.csv"
-        original = "名前\n山田\n"
-        path.write_text(original, encoding="cp932")
-        with pytest.raises(UnicodeEncodeError):
-            CsvWriter(path, fieldnames=["名前"], encoding="cp932").append_rows(
-                [{"名前": "佐藤"}, {"名前": "😀"}]
-            )
-        assert path.read_text(encoding="cp932") == original
+    @pytest.mark.parametrize("text", ["id,\n1,A\n", "id,id\n1,2\n"])
+    def test_rejects_invalid_headers(self, tmp_path, text) -> None:
+        path = tmp_path / "data.csv"
+        path.write_text(text, encoding="utf-8-sig")
+        with pytest.raises(CsvInvalidHeaderError):
+            CSV(path).read()
 
+    @pytest.mark.parametrize("text", ["id,name\n1\n", "id,name\n1,A,extra\n"])
+    def test_rejects_wrong_data_width(self, tmp_path, text) -> None:
+        path = tmp_path / "data.csv"
+        path.write_text(text, encoding="utf-8-sig")
+        with pytest.raises(CsvRowLengthError, match="2行目"):
+            CSV(path).read()
 
-class TestIndexFiles:
-    """index_files() のテスト。複数 CSV を 1つの lookup 辞書へまとめる。"""
+    def test_missing_and_zero_byte_have_dedicated_errors(self, tmp_path) -> None:
+        path = tmp_path / "data.csv"
+        with pytest.raises(CsvFileNotFoundError):
+            CSV(path).read()
+        path.touch()
+        with pytest.raises(CsvHeaderMissingError):
+            CSV(path).read()
+        assert CSV(path, columns=["id"]).read() == []
 
-    def test_merges_two_files(self, tmp_path):
-        """複数ファイルを 1つの辞書にマージして返すこと。"""
-        from comken.toolbox.csv import index_files
+    def test_utf8_bom_only_has_missing_header_error(self, tmp_path) -> None:
+        path = tmp_path / "bom_only.csv"
+        path.write_bytes(b"\xef\xbb\xbf")
+        with pytest.raises(CsvHeaderMissingError):
+            CSV(path).read()
 
-        path_a = tmp_path / "a.csv"
-        path_b = tmp_path / "b.csv"
-        path_a.write_text("注文番号,金額\nA001,1000\n", encoding="utf-8")
-        path_b.write_text("注文番号,金額\nB001,2000\n", encoding="utf-8")
-
-        result = index_files([path_a, path_b], "注文番号")
-
-        assert set(result) == {"A001", "B001"}
-        assert result["A001"]["金額"] == "1000"
-        assert result["B001"]["金額"] == "2000"
-
-    def test_raises_on_cross_file_duplicate(self, tmp_path):
-        """ファイルを跨いで同じキーがあれば CsvRowDuplicateKeyError で停止すること。"""
-        from comken.toolbox.csv import index_files
-
-        path_a = tmp_path / "a.csv"
-        path_b = tmp_path / "b.csv"
-        path_a.write_text("注文番号,金額\nA001,1000\n", encoding="utf-8")
-        path_b.write_text("注文番号,金額\nA001,2000\n", encoding="utf-8")
-
-        with pytest.raises(CsvRowDuplicateKeyError) as excinfo:
-            index_files([path_a, path_b], "注文番号")
-
-        message = str(excinfo.value)
-        assert "A001" in message
-        # どちらのファイルが衝突したか利用者が特定できる
-        assert str(path_a) in message
-        assert str(path_b) in message
-
-    def test_propagates_in_file_duplicate(self, tmp_path):
-        """1ファイル内の重複は CsvReader.index() がそのまま例外にすること。"""
-        from comken.toolbox.csv import index_files
-
-        path_a = tmp_path / "a.csv"
-        path_a.write_text("注文番号,金額\nA001,1000\nA001,2000\n", encoding="utf-8")
-
-        with pytest.raises(CsvRowDuplicateKeyError):
-            index_files([path_a], "注文番号")
+    def test_replace_empty_preserves_columns_or_requires_them(self, tmp_path) -> None:
+        existing = tmp_path / "existing.csv"
+        existing.write_text("id\n1\n", encoding="utf-8-sig")
+        with CSV(existing) as csv_file:
+            csv_file.replace([])
+        assert existing.read_text(encoding="utf-8-sig") == "id\n"
+        with pytest.raises(CsvColumnsRequiredError), CSV(tmp_path / "new.csv") as csv_file:
+            csv_file.replace([])

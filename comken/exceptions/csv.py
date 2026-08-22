@@ -16,7 +16,7 @@ class CsvError(ComkenError):
 class EncodingDetectionError(CsvError):
     """CSV の文字コードを判定できない
 
-    発生箇所: CsvReader._read_text()
+    発生箇所: CSV.read()
 
     対処:
         CSV の保存形式を確認し、管理者へ連絡する
@@ -25,93 +25,68 @@ class EncodingDetectionError(CsvError):
     def __init__(self, path: Path | str) -> None:
         super().__init__(
             "文字コードを判定できませんでした（UTF-8 / CP932 のどちらでも読めません）: "
-            f"{path}\nCsvReader(path, encoding='文字コード名') で明示してください。"
+            f"{path}\nCSV(path, encoding='文字コード名') で明示してください。"
         )
 
 
-class CsvHeadersTooFewError(CsvError):
-    """指定した見出し数が CSV の列数より少ない
-
-    発生箇所: CsvReader._load()
+class CsvFileNotFoundError(CsvError):
+    """読み込む CSV ファイルが存在しない
 
     対処:
-        管理者へ連絡する
+        パスを確認する。新規出力は columns を指定して write / replace する
     """
 
-    def __init__(self, expected: int, path: Path | str) -> None:
-        super().__init__(
-            f"headers の列数（{expected}列）が CSV の列数より少ないため、"
-            f"はみ出した列のデータが失われます: {path}\n"
-            "headers にすべての列名を指定してください。"
-        )
+    def __init__(self, path: Path | str) -> None:
+        super().__init__(f"CSV ファイルが見つかりません: {path}")
 
 
-class CsvNoDataRowsError(CsvError):
-    """CSV に見出し以外のデータ行がない
-
-    発生箇所: CsvReader.first()
+class CsvHeaderMissingError(CsvError):
+    """CSV に見出し行がない
 
     対処:
-        見出し行の下にデータが1行以上あるか確認する
+        見出し行を追加するか、ヘッダーなし CSV なら columns を指定する
     """
 
     def __init__(self, path: Path | str) -> None:
         super().__init__(
-            f"CSV にデータ行がありません: {path}\n"
-            "ヘッダー行の下に、読み取るデータが1行以上あることを確認してください。"
+            f"CSV に見出し行がありません: {path}\n"
+            "columns を指定するか、見出し行を追加してください。"
         )
 
 
-class CsvRowNotFoundError(CsvError):
-    """キーに一致する行が CSV に無い
-
-    発生箇所: CsvReader.find()
+class CsvInvalidHeaderError(CsvError):
+    """CSV の見出しに空欄または重複がある
 
     対処:
-        探している値の書き方（前後の空白・全角半角・ゼロ埋め）を元データと見比べる
+        CSV の1行目にある空欄または重複した見出しを直す
     """
 
-    def __init__(self, key_col: str, value: str, path: Path | str) -> None:
+    def __init__(self, path: Path | str, reason: str) -> None:
+        super().__init__(f"CSV の見出しが不正です: {path}\n{reason}")
+
+
+class CsvRowLengthError(CsvError):
+    """CSV のデータ行の列数が見出し数と一致しない
+
+    対処:
+        表示された行の区切り文字と値の数を確認する
+    """
+
+    def __init__(self, path: Path | str, line_number: int, expected: int, actual: int) -> None:
         super().__init__(
-            f"「{key_col}」が「{value}」の行が見つかりません: {path}\n"
-            "値の書き方（前後の空白・全角半角・ゼロ埋め）が元データと合っているか確認してください。\n"
-            "この行が無くても処理を続けてよい場合は find(..., required=False) を指定します。"
+            f"CSV の{line_number}行目は列数が一致しません: {path}\n"
+            f"見出しは{expected}列、データは{actual}列です。"
         )
 
 
-class CsvRowDuplicateKeyError(CsvError):
-    """キーにする列に同じ値が複数ある
-
-    発生箇所: CsvReader.index()
+class CsvColumnsRequiredError(CsvError):
+    """空の新規 CSV に出力する列を決定できない
 
     対処:
-        表示された値の行を元データで確認し、重複を取り除く。重複が正しいデータなら管理者へ連絡する
+        CSV(columns=[...]) または Table(columns, []) で列を指定する
     """
 
-    def __init__(self, key_col: str, duplicates: dict[str, int], path: Path | str) -> None:
-        # 件数が多いと読めないので先頭だけ出す。全部出しても直す手がかりは増えない。
-        shown = list(duplicates.items())[:5]
-        detail = "、".join(f"{key}（{count}件）" for key, count in shown)
-        if len(duplicates) > len(shown):
-            detail += f" ほか{len(duplicates) - len(shown)}件"
+    def __init__(self, path: Path | str) -> None:
         super().__init__(
-            f"「{key_col}」が重複しています: {detail}\n{path}\n"
-            "キーが1件に決まらないと、突合の結果が変わってしまいます。"
-            "元データの重複を取り除くか、重複を前提にする場合は group_by() を使ってください。"
-        )
-
-
-class CsvCellReferenceError(CsvError):
-    """CSV のセル位置（例: A2）の指定が正しくない、または範囲外
-
-    発生箇所: CsvReader.cell()
-
-    対処:
-        表示されたセル位置と、CSV の行数・列数を確認する
-    """
-
-    def __init__(self, ref: str, path: Path | str, detail: str) -> None:
-        super().__init__(
-            f"CSV のセル「{ref}」を読み取れませんでした: {path}\n"
-            f"{detail}。A1 や B2 のように、CSV を開いたときに存在するセルを指定してください。"
+            f"空の新規 CSV の列を決定できません: {path}\nCSV(columns=[...]) を指定してください。"
         )

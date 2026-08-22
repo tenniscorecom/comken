@@ -125,7 +125,7 @@ import の書き方は上の「[使うときの約束](#使うときの約束)�
 |---|---|---|---|
 | `Color` | `from comken.constants import Color` | セルの背景色 | `set_fill(color=Color.RED)` |
 | `SortBy` | `from comken.constants import SortBy` | FileFinder.latest の並び順 | `latest(by=SortBy.UPDATED)` |
-| `Encoding` | `from comken.constants import Encoding` | CSV の文字コード | `CsvReader(path, encoding=Encoding.CP932)` |
+| `Encoding` | `from comken.constants import Encoding` | CSV の文字コード | `CSV(path, encoding=Encoding.CP932)` |
 | `FileFormat` | `from comken.constants import FileFormat` | Excel COM の別名保存形式 | `save_as(path, file_format=FileFormat.CSV)` |
 
 ---
@@ -620,4 +620,3 @@ flowchart LR
 ```
 
 ---
-

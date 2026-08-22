@@ -5,14 +5,12 @@
 `comken.toolbox.salesforce` に依存しないことで、`requests` の入っていない環境でも
 このモジュールだけを使えるようにする。
 
-    from comken.services.salesforce_downloader import get_scheduled_report
+    from comken.services.salesforce_downloader import cached_report
 
-    rows = get_scheduled_report("1001").read_rows()
+    rows = cached_report("1001").read().read()
 
-戻り値を `CsvReader` にした理由は、利用側が `read_rows()` / `index()` / `filter()`
-をそのまま使えること、そして **CsvWriter が何の文字コードで書いたかを利用側が
-知らなくてよくなる**こと。`CsvReader` は最初のメソッド呼び出しまでファイルを読まない
-（遅延読み込み）ので、パスだけ欲しい場合は `.path` で取れる。
+戻り値は `CSV`。行の検索・抽出・索引化は `read()` で得た `Table` で行う。
+パスだけ欲しい場合は `.path` で取れる。
 
 このファイルが持つもの:
 - 定期取得済みのファイルを返す
@@ -29,16 +27,14 @@ from pathlib import Path
 
 from comken.core.files import DateNameBuilder
 from comken.exceptions import (
+    CachedReportNotFoundError,
+    CachedReportNotRegisteredError,
     ReportDisabledError,
-    ReportFileMissingError,
     ReportNotRegisteredError,
-    ScheduledReportNotDownloadedError,
-    ScheduledReportNotRegisteredError,
 )
-from comken.services.salesforce_downloader._paths import HISTORY_PATH, MASTER_PATH
-from comken.services.salesforce_downloader.history import downloaded_today
+from comken.services.salesforce_downloader._paths import MASTER_PATH
 from comken.services.salesforce_downloader.master import ReportEntry, load_master
-from comken.toolbox.csv import CsvReader
+from comken.toolbox.csv import CSV
 
 logger = logging.getLogger(__name__)
 
@@ -50,47 +46,50 @@ _FORBIDDEN_IN_NAME = '\\/:*?"<>|'
 _SUMMARY_LIMIT = 30
 
 
-def get_scheduled_report(report_key: str, project: str = "") -> CsvReader:
-    """定期取得しておいたファイルを `CsvReader` で返す。**取りに行かない。**
+def cached_report(report_key: str, project: str = "") -> CSV:
+    """本日の定期取得キャッシュを `CSV` で返す。**取りに行かない。**
 
     Args:
         report_key: 管理表の管理番号（例: "1001"）。
         project: 呼び出し元の名前（履歴には残さないが、例外の調査に使えるよう受け取る）。
 
     Returns:
-        定期取得で保存されたファイルを読み取る `CsvReader`。ファイルパスは `.path` で取れる。
+        本日の最新キャッシュを読み取る `CSV`。ファイルパスは `.path` で取れる。
 
     Raises:
         ReportNotRegisteredError: 管理表に無い管理番号の場合。
         ReportDisabledError: 管理表で無効になっている場合。
-        ScheduledReportNotRegisteredError: 管理表で「個別」になっている場合。
-        ScheduledReportNotDownloadedError: 本日の定期取得がまだ済んでいない場合。
-        ReportFileMissingError: 履歴では取得済みだが、ファイルが無い場合。
+        CachedReportNotRegisteredError: 管理表で「個別」になっている場合。
+        CachedReportNotFoundError: 本日のキャッシュが無い場合。
     """
     entry = _find(report_key, MASTER_PATH)
     if not entry.is_scheduled:
-        raise ScheduledReportNotRegisteredError(
-            entry.key, entry.summary, entry.schedule, MASTER_PATH
-        )
-    if not downloaded_today(HISTORY_PATH, entry.key):
-        raise ScheduledReportNotDownloadedError(entry.key, entry.summary, HISTORY_PATH)
-
-    path = file_path_of(entry)
+        raise CachedReportNotRegisteredError(entry.key, entry.summary, entry.schedule, MASTER_PATH)
+    path = _daily_cache_path_of(entry)
     if not path.is_file():
-        raise ReportFileMissingError(entry.key, path)
-    logger.info("定期取得済みのファイルを使います: %s", path)
-    return CsvReader(path)
+        raise CachedReportNotFoundError(entry.key, entry.summary, path)
+    logger.info("本日の定期取得キャッシュを使います: %s", path)
+    return CSV(path, read_only=True, columns=[] if path.stat().st_size == 0 else None)
 
 
 def file_path_of(entry: ReportEntry) -> Path:
     """そのレポートを保存するパス。
 
-    ファイル名は「管理番号_概要_日付」。**管理番号を先頭に置く**のは、概要や
+    ファイル名は「管理番号_概要_日付_時刻_マイクロ秒」。**管理番号を先頭に置く**のは、概要や
     参照先の Salesforce レポートが変わっても、番号は変わらないため。概要を入れるのは、
     保存先を人が直接見たときに何のファイルか分かるようにするため。
     """
     name = f"{entry.key}_{_safe_summary(entry.summary)}"
-    return entry.folder / DateNameBuilder(name, ext=SUFFIX).suffix()
+    return entry.folder / DateNameBuilder(name, ext=SUFFIX).suffix("%Y%m%d_%H%M%S_%f")
+
+
+def _daily_cache_path_of(entry: ReportEntry) -> Path:
+    """定期取得の当日最新キャッシュに使う固定パスを返す。
+
+    時刻を含めないことで、同日に何度取得しても読む側が同じパスを直接確認できる。
+    """
+    name = f"{entry.key}_{_safe_summary(entry.summary)}"
+    return entry.folder / DateNameBuilder(name, ext=SUFFIX).suffix("%Y%m%d")
 
 
 def _find(report_key: str, master_path: Path) -> ReportEntry:

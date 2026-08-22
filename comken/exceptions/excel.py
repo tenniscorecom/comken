@@ -240,6 +240,34 @@ class ExcelSaveNotCompletedError(ExcelError):
         )
 
 
+class ExcelSaveValidationError(ExcelError):
+    """保存予定のExcelファイルを再度開けず、安全に置き換えられない。
+
+    対処:
+        元ファイルは保持される。空き容量とExcel形式を確認して再実行する
+    """
+
+    def __init__(self, path: Path | str, detail: object) -> None:
+        super().__init__(
+            f"保存予定のExcelファイルを検証できませんでした: {path}\n"
+            f"元ファイルは変更していません。（詳細: {detail}）"
+        )
+
+
+class ExcelMacroPreservationError(ExcelError):
+    """保存予定のブックからVBAプロジェクトが欠落または変化した。
+
+    対処:
+        元ファイルは保持される。管理者に連絡し、Excel実機で保存方法を確認する
+    """
+
+    def __init__(self, path: Path | str) -> None:
+        super().__init__(
+            f"VBAを保持できないためExcelを保存しませんでした: {path}\n"
+            "元ファイルは変更していません。管理者に連絡してください。"
+        )
+
+
 class ExcelApplicationNotAvailableError(ExcelError):
     """Excel を起動できない
 

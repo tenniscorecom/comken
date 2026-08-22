@@ -20,7 +20,7 @@ class _Control(Enum):
     STOP = auto()
 
 
-Transform = Callable[[Row, Row | None], bool | None | _Control]
+Transform = Callable[[Row, Row | None], bool | _Control]
 
 
 class Transfer:
@@ -115,18 +115,35 @@ class Transfer:
             working_row = dict(write_row)
             for read_column, write_column in self.mapping.items():
                 working_row[write_column] = read_row[read_column]
-            control = transform(read_row, working_row) if transform else self.APPLY
+            control = self._run_transform(transform, read_row, working_row, row_number)
             if control is self.STOP:
                 break
             if control is self.SKIP or control is False:
                 continue
-            if control is not self.APPLY and control is not None:
+            if control is not self.APPLY:
                 raise TransferRowError(
                     row_number,
                     "transformはTrue、False、APPLY、SKIP、STOPのいずれかを返してください。",
                 )
             write_row.update(working_row)
         return result_table
+
+    def _run_transform(
+        self,
+        transform: Transform | None,
+        read_row: Row,
+        working_row: Row,
+        row_number: int,
+    ) -> bool | _Control:
+        """利用者 callback の失敗へ転記元行の文脈を加える。"""
+        if transform is None:
+            return self.APPLY
+        try:
+            return transform(read_row, working_row)
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except Exception as exc:
+            raise TransferRowError(row_number, f"transform の実行に失敗しました: {exc}") from exc
 
     def _write_index(self) -> dict[tuple[Any, ...], Row]:
         """writeの行を複合キーで検索できる辞書にする。"""

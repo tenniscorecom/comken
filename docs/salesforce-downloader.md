@@ -11,7 +11,7 @@
         ↓                                      ↑
   comken.services.salesforce_downloader  ──→ Salesforce
         ↓
-  各プロジェクト（download_report / get_scheduled_report）
+  各プロジェクト（download_report / cached_report）
 ```
 
 ---
@@ -19,25 +19,28 @@
 ## 使う側
 
 ```python
-from comken.services.salesforce_downloader import download_report, get_scheduled_report
+from comken.services.salesforce_downloader import (
+    cached_report,
+    download_report,
+)
 
 CUSTOMER_LIST = "1001"    # 管理表の「ID」。意味の分かる名前を付ける
 SALES_RESULT = "1003"
 
-rows = download_report(CUSTOMER_LIST, "案件集計").read_rows()
+rows = download_report(CUSTOMER_LIST, "案件集計").read().read()
 # 全行が要らなければ download_report(CUSTOMER_LIST).path  で場所だけ取る
-by_code = get_scheduled_report(SALES_RESULT).index("顧客コード")
+by_code = cached_report(SALES_RESULT).read().index("顧客コード")
 ```
 
 **プロジェクトのコードに Salesforce の URL もレポート ID も書かない。** 書くのは管理番号だけ。
 参照先の Salesforce レポートを差し替えても、`CUSTOMER_LIST = "1001"` はそのままでよい。
 
-戻り値は `CsvReader`（`comken.toolbox.csv.CsvReader`）。`read_rows()` / `index()` /
-`filter()` などがそのまま使えて、`CsvWriter` の文字コード（UTF-8 BOM 付き）を
-意識しなくてよい。ファイルパスだけ欲しいときは `.path`。`CsvReader` は最初の
+戻り値は `CSV`（`comken.toolbox.csv.CSV`）。`read()` で得た `Table` の
+`index()` / `filter()` などが使えて、CSV の文字コードを意識しなくてよい。
+ファイルパスだけ欲しいときは `.path`。`CSV` は最初の
 メソッド呼び出しまでファイルを読まない（遅延読み込み）ので、パス取得では読み込みは走らない。
 
-`download_scheduled()` は `list[Path]` のままで **`CsvReader` を返さない**。定期取得の
+`download_scheduled()` は `list[Path]` のままで **`CSV` を返さない**。定期取得の
 呼び出し側は中身を読まず「取らせる」のが目的なので、reader を並べても使い道がないため
 （役割の違いが戻り値の型に出ている）。
 
@@ -46,15 +49,16 @@ by_code = get_scheduled_report(SALES_RESULT).index("顧客コード")
 | | 意味 | Salesforce へ問い合わせるか |
 |---|---|---|
 | `download_report(ID)` | **今この瞬間に取りに行く** | **必ず行く**（今日すでに取っていても取り直す） |
-| `get_scheduled_report(ID)` | **定期取得しておいたものを受け取る** | **行かない**（無ければ例外） |
+| `cached_report(ID)` | **本日の定期取得キャッシュを受け取る** | **行かない**（無ければ例外） |
 
-`get_scheduled_report()` は取りに行く関数ではない。まだ取れていなければ
-`ScheduledReportNotDownloadedError` で止まる。**ここで自動的に取りに行くと、定期取得が
+`cached_report()` は取りに行く関数ではない。本日の固定キャッシュが無ければ
+`CachedReportNotFoundError` で止まる。**ここで自動的に取りに行くと、定期取得が
 動いていないことに誰も気づかなくなる**ため。急ぐときは `download_report()` を呼ぶ。
 
-1日に何度も最新が必要なプロジェクトは、`download_report()` を必要なときに呼ぶ。
-Downloader 側に複雑なスケジュール（土日祝を除く等）は持たせない——それは
-**呼び出す側のスケジュールにもともとある**ので、二重に持つと必ずズレる。
+利用プロジェクトがその場の最新値を必要とするときは、`download_report()` を呼ぶ。
+定期キャッシュを1日に複数回更新したいときは、呼び出す側のスケジューラから
+`download_scheduled()` を必要な時刻に実行する。Downloader 自身には複雑な
+スケジュール（土日祝を除く等）を持たせない——呼び出す側と二重に持つと必ずズレるため。
 
 ---
 
@@ -132,7 +136,7 @@ from comken.services.salesforce_downloader import download_report
 
 reader = download_report("1001")
 print(reader.path)              # 保存されたファイル
-print(len(reader.read_rows()))  # 行数
+print(reader.read().count())    # 行数
 ```
 
 ここまで通れば、**保存先にファイルができ、履歴（CSV）に1行増えている**。
@@ -233,15 +237,17 @@ shared_report_ids(load_master(MASTER_PATH))
 ## 保存されるファイル
 
 ```
-<保存先>\1001_顧客一覧_20260814.csv
+<保存先>\1001_顧客一覧_20260814_091530_123456.csv
 ```
 
 **管理番号が先頭**なのは、概要や参照先の Salesforce レポートが変わっても番号は変わらないため。
 概要を入れるのは、保存先を人が直接見たときに何のファイルか分かるようにするため。
+時刻はマイクロ秒まで付け、同じ日に複数回取得しても前のファイルを残す。万一名前が
+衝突した場合も連番を付け、既存ファイルを上書きしない。
 
 - **0 行のときは、`0件あり` 列の指定で動きが変わる。** `×` のときは何も作らず失敗
-  （`EmptyReportError`）。`○` のときは空ファイルを作る。利用側の `CsvReader.read_rows()`
-  は空ファイルでも `[]` を返すので、利用側は 0 件をそのまま扱える
+  （`EmptyReportError`）。`○` のときは空ファイルを作る。Downloader が返す `CSV` は
+  空ファイルを列なしの空 `Table` として返すので、利用側は 0 件をそのまま扱える
   （[「0 件の扱い」](#0-件の扱い) 参照）
 - **保存先のフォルダが無ければ作らない。** 書き間違いのことが多く、勝手に作ると
   誰も読まない場所へ置き続けることになる
@@ -263,7 +269,7 @@ shared_report_ids(load_master(MASTER_PATH))
 | `0件あり` | 0 行のときの動き | 履歴の `成否` | 履歴の `原因区分` |
 |---|---|---|---|
 | `×`（既定） | `EmptyReportError` を送出。ファイルは作らない | 失敗 | `データなし` |
-| `○` | 空ファイルを作る。利用側は `read_rows() == []` を受け取る | 成功 | （空） |
+| `○` | 空ファイルを作る。利用側は `read().read() == []` を受け取る | 成功 | （空） |
 
 **既定値は `×`**（厳しい側に倒れる）。書き忘れると従来どおり 0 件で失敗する
 ＝**誤報が出るだけでデータは失われない**。`○` にするか `×` のままかは、運用する人が
@@ -273,7 +279,7 @@ shared_report_ids(load_master(MASTER_PATH))
 - 普段は必ずデータがある（無いならレポートか管理表が間違っている）→ `×` のまま
 
 ヘッダー行は敢えて入れない（Salesforce のメタデータからしか取れず、
-`report.run()` は `list[dict]` 形式で返すため）。0 バイトのファイルでも `CsvReader` は
+`report.run()` は `list[dict]` 形式で返すため）。0 バイトのファイルでも `CSV` は
 例外を出さず空の行リストを返すので、利用側は「0 件ならループが 0 回」を自然に書ける。
 
 ---
@@ -342,8 +348,17 @@ def _classify_cause(error, fetched_from_salesforce, saved_to_file):
 0 行のときに `Salesforce取得結果 = 成功` になるのが要点。**Salesforce との通信は成功して
 いて、レポートの中身が空だった**ことを区別するため（通信障害と空データの区別が付く）。
 
-**記録に失敗しても呼び出し元の処理は止めない。** 履歴は後から振り返るためのもの。
-取得できたのに履歴が書けないという理由で業務を止める理由がない。
+**履歴は必須。** 見出し作成・1行追記・読み取りは同じ排他ロックを使う。別プロセスが
+同時実行しても行の途中を読まず、一定時間ロックを取れない場合や書込みに失敗した場合は
+専用例外（`HistoryLockTimeoutError` / `HistoryWriteError`）で処理を止める。既存履歴の
+見出しが現在の列定義と完全一致しない場合も、列ずれした行を追記せず
+`HistoryHeaderMismatchError` で止める。
+
+### キャッシュが無い場合
+
+`cached_report()` の例外には、本日の固定キャッシュを置く正確なパスとファイル名が表示される。
+急いで復旧するときは Salesforce からCSVを手動取得し、その表示どおりの場所へ置いてから、
+同じ `python main.py` を再実行する。手動配置したファイルの登録や履歴化は行わない。
 
 この履歴から、あとで次のことが分かる。
 
@@ -352,8 +367,9 @@ def _classify_cause(error, fetched_from_salesforce, saved_to_file):
 - Salesforce へ実際に何回問い合わせたか（＝ API をどれだけ使っているか）
 - 失敗がいつ・何回起きているか、どの段階で失敗したか
 
-「本日の定期取得が済んでいるか」も履歴で判定する。保存先に今日の日付のファイルがあっても、
-**それが定期取得で置かれたのか、誰かが個別に取ったのか、手で置いたのかは分からない**ため。
+`cached_report()` は履歴を検索しない。管理表から本日の固定キャッシュパスを計算し、
+その1ファイルだけを確認する。フォルダ全体を走査しないため、時刻付き保管ファイルが
+増えても読み取り時間は増えない。
 
 ---
 
@@ -372,7 +388,7 @@ def run() -> None:
 ```
 
 `download_scheduled()` の戻り値は `list[Path]`（保存できたファイルのパス）。中身を読みたい
-プロジェクトは `download_report()` か `get_scheduled_report()` を1件ずつ使う。
+プロジェクトは `download_report()` か `cached_report()` を1件ずつ使う。
 
 **1件失敗しても残りは続ける——ただし想定した失敗に限る。** 5本のうち1本が落ちたときに
 全部やり直すと、手で用意する手間が5本ぶんになる。`ComkenError`（`docs/ERRORS.md` に
@@ -392,9 +408,8 @@ def run() -> None:
 | `ReportDisabledError` | 管理表で「無効」になっている | 使うなら「有効」に戻す |
 | `DuplicateReportKeyError` | 管理表に同じ管理番号が2つある | どちらかの番号を変える |
 | `InvalidReportEntryError` | 行の書き方が正しくない | メッセージの行と列を直す |
-| `ScheduledReportNotRegisteredError` | 「個別」のものを定期取得済みとして受け取ろうとした | 「定期」にするか `download_report()` を使う |
-| `ScheduledReportNotDownloadedError` | 本日の定期取得がまだ | 定期取得の結果を確認する |
-| `ReportFileMissingError` | 履歴では取得済みだがファイルが無い | `download_report()` で取り直す |
+| `CachedReportNotRegisteredError` | 「個別」のもののキャッシュを受け取ろうとした | 「定期」にするか `download_report()` を使う |
+| `CachedReportNotFoundError` | 本日の固定キャッシュが無い | 表示された正確なパスへCSVを置き、同じ処理を再実行する |
 | `EmptyReportError` | 明細が 0 行（管理表の `0件あり` が `×`） | その日 0 件が普通なら管理表を `○` に。指している Salesforce レポートが違う可能性がある |
 | `ReportFolderNotFoundError` | 保存先のフォルダが無い | 管理表の「保存先」を確認する |
 | `ScheduledDownloadFailedError` | 定期取得で1件以上が失敗した | 履歴の「エラーコード」「エラー内容」で理由を確認する |
@@ -407,7 +422,7 @@ def run() -> None:
 
 ## 配置するときの設定
 
-管理表と履歴の場所は `comken/services/salesforce_downloader/service.py` に書いてある。
+管理表と履歴の場所は `comken/services/salesforce_downloader/_paths.py` に書いてある。
 配置するときに実際の場所へ書き換える。
 
 ```python
@@ -419,7 +434,7 @@ HISTORY_PATH = Path(r"\\実際のサーバー\share\tools\salesforce\ダウン�
 [仕様書「配置時に書き換える3ファイル」](開発/仕様書.md#配置時に書き換える3ファイル)を参照。
 
 **利用側の API から `master_path=` / `history_path=` を渡せない。** この2つの定数は
-`service.py` で一元管理する。プロジェクト側に同名のパス定数を作ると、
+`_paths.py` で一元管理する。プロジェクト側に同名のパス定数を作ると、
 管理表を直したのに出力先が変わらず、しかもエラーにもならない事故が起きる
 （境界を破った典型例）。
 
@@ -434,10 +449,10 @@ HISTORY_PATH = Path(r"\\実際のサーバー\share\tools\salesforce\ダウン�
 | 保存先を変える | 管理表の「保存先」 |
 | 取る時刻・曜日を変える、月末だけにする | 呼び出す側のスケジューラ |
 | 取ったCSVを加工する・DBへ入れる・通知する | 利用プロジェクト |
-| ファイル名の付け方を変える | `service.py` の `file_path_of()` ← **全プロジェクトに効く** |
+| ファイル名の付け方を変える | `provider.py` の `file_path_of()` ← **全プロジェクトに効く** |
 | 履歴に列を足す | `history.py` ← **全プロジェクトに効く** |
 | 管理表に列を足す | `master.py` の `ReportEntry` |
-| 管理表・履歴の置き場所を変える | `service.py` の `MASTER_PATH` / `HISTORY_PATH` |
+| 管理表・履歴の置き場所を変える | `_paths.py` の `MASTER_PATH` / `HISTORY_PATH` |
 | Salesforce の認証・API の叩き方を変える | `comken/toolbox/salesforce/`（Downloader ではない） |
 | 接続先の組織を足す | `comken/toolbox/salesforce/sites/` |
 

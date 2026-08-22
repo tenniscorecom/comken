@@ -20,7 +20,7 @@ import logging
 from comken.core import DateFileFinder, DateNameBuilder
 from comken.core.table import Table
 from comken.exceptions import ComkenError
-from comken.toolbox.csv import CsvReader
+from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Excel
 from comken.toolbox.rpa import backoffice  # イントラネットのツールなら intranet に変える
 
@@ -41,7 +41,7 @@ def main() -> None:
         logger.info("本日分の入力ファイルがないため何もしません")
         return
 
-    rows = CsvReader(source).read_rows()
+    rows = CSV(source).read().read()
     logger.info("読み込み: %s（%d 件）", source.name, len(rows))
 
     # ↓↓↓ ここに実際の加工処理を書く（絞り込み・突合・集計など） ↓↓↓

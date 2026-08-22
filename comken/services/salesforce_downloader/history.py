@@ -6,19 +6,18 @@
 
 成功／失敗の判断と各段階の結果（Salesforce への問い合わせ、保存）は呼ぶ側
 （`service.py`）が決めて、ここは受け取った値を1行に書くだけ。集計は利用側で
-この CSV を `CsvReader` で読む。
+この CSV を `CSV.read()` で読む。
 """
 
 import csv
 import datetime
-import logging
 from dataclasses import dataclass
 from pathlib import Path
 
 from comken.core.clock import now, today
+from comken.exceptions import HistoryHeaderMismatchError, HistoryWriteError
+from comken.services.salesforce_downloader.history_file_lock import HistoryFileLock
 from comken.services.salesforce_downloader.master import ReportEntry
-
-logger = logging.getLogger(__name__)
 
 # 履歴CSVの列。順序は出力ファイルそのものなので、追加・並び替えは全プロジェクトの
 # 既存履歴を読む処理へ影響する（互換性ポリシーに従う）
@@ -90,14 +89,13 @@ def record(
 ) -> None:
     """履歴を1行追記する。ファイルが無ければ見出し行から作る。
 
-    **記録に失敗しても、呼び出し元の処理は止めない。** 履歴は後から振り返るための
-    ものなので、取得できたのに履歴が書けないというだけで業務を止める理由がない。
+    履歴は取得結果の根拠になる必須データなので、記録できなければ処理を失敗させる。
 
     Args:
         path: 履歴 CSV のパス。
         entry: 管理表1行。管理番号・概要・レポートID・URL・保存先はこの中身を履歴に出す。
         project: 呼び出したプロジェクト名。
-        trigger: TRIGGER_SCHEDULED か TRIGGER_ON_DEMAND。
+        trigger: TRIGGER_SCHEDULED、TRIGGER_ON_DEMAND のいずれか。
         row: 履歴1行の本体（成否・各段階の結果・件数・エラー）。
     """
     path = Path(path)
@@ -121,9 +119,12 @@ def record(
         row.error.replace("\n", " "),  # 1行1レコードを保つ
     ]
     try:
-        _append(path, values)
-    except OSError as e:
-        logger.warning("履歴を記録できませんでした: %s（%s）", path, e)
+        with HistoryFileLock(path):
+            _append(path, values)
+    except HistoryWriteError:
+        raise
+    except OSError as exc:
+        raise HistoryWriteError(path, str(exc)) from exc
 
 
 def downloaded_today(
@@ -148,21 +149,43 @@ def downloaded_today(
         その日に成功した記録があれば True。履歴が無ければ False。
     """
     path = Path(path)
-    if not path.is_file():
-        return False
+    return bool(successful_files_today(path, report_key, (trigger,), date))
 
+
+def successful_files_today(
+    path: str | Path,
+    report_key: str,
+    triggers: tuple[str, ...] = (TRIGGER_SCHEDULED,),
+    date: datetime.date | None = None,
+) -> list[Path]:
+    """本日の成功履歴に記録された保存先とファイル名を、新しい順で返す。
+
+    読み取りにも追記と同じロックを使うため、別プロセスが書いている途中の行を読まない。
+    実ファイルの存在確認は呼び出し側で行い、古い成功ファイルへ遡れるよう全候補を返す。
+    """
+    history_path = Path(path)
+    if not history_path.is_file():
+        return []
     target = (date or today()).strftime("%Y-%m-%d")
     key_text = str(report_key)
-    with path.open("r", encoding="utf-8-sig", newline="") as f:
-        for row in csv.DictReader(f):
+    matches: list[Path] = []
+    with (
+        HistoryFileLock(history_path),
+        history_path.open("r", encoding="utf-8-sig", newline="") as f,
+    ):
+        reader = csv.DictReader(f)
+        _require_expected_header(history_path, reader.fieldnames)
+        for row in reader:
             if (
                 row.get("実行日時", "").startswith(target)
                 and row.get("管理番号", "") == key_text
-                and row.get("実行方式", "") == trigger
+                and row.get("実行方式", "") in triggers
                 and row.get("成否", "") == SUCCESS
+                and row.get("保存結果", "") == SUCCESS
+                and row.get("ファイル名", "")
             ):
-                return True
-    return False
+                matches.append(Path(row.get("保存先", "")) / row["ファイル名"])
+    return list(reversed(matches))
 
 
 def _append(path: Path, values: list) -> None:
@@ -172,9 +195,24 @@ def _append(path: Path, values: list) -> None:
     （Windows で空行が入るのを防ぐ）。
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    is_new = not path.exists()
+    is_new = not path.exists() or path.stat().st_size == 0
+    if not is_new:
+        _validate_existing_header(path)
     with path.open("a", encoding="utf-8-sig", newline="") as f:
         writer = csv.writer(f)
         if is_new:
             writer.writerow(COLUMNS)
         writer.writerow(values)
+
+
+def _validate_existing_header(path: Path) -> None:
+    """追記前に見出しを確認し、違う列へ値をずらして書く事故を防ぐ。"""
+    with path.open("r", encoding="utf-8-sig", newline="") as f:
+        _require_expected_header(path, next(csv.reader(f), None))
+
+
+def _require_expected_header(path: Path, actual: list[str] | None) -> None:
+    """履歴の見出しが現在の列定義と完全一致しなければ止める。"""
+    actual_columns = tuple(actual or ())
+    if actual_columns != COLUMNS:
+        raise HistoryHeaderMismatchError(path, actual_columns, COLUMNS)

@@ -21,6 +21,8 @@ ComkenError
 │   ├── ExcelFileNotFoundError
 │   ├── ExcelApplicationNotAvailableError
 │   ├── ExcelSaveNotCompletedError
+│   ├── ExcelSaveValidationError
+│   ├── ExcelMacroPreservationError
 │   ├── SheetNotFoundError
 │   ├── SheetAlreadyExistsError
 │   ├── LastSheetDeletionError
@@ -35,11 +37,11 @@ ComkenError
 │   └── FileFormatMismatchError
 ├── CsvError
 │   ├── EncodingDetectionError
-│   ├── CsvHeadersTooFewError
-│   ├── CsvNoDataRowsError
-│   ├── CsvRowNotFoundError
-│   ├── CsvRowDuplicateKeyError
-│   └── CsvCellReferenceError
+│   ├── CsvFileNotFoundError
+│   ├── CsvHeaderMissingError
+│   ├── CsvInvalidHeaderError
+│   ├── CsvRowLengthError
+│   └── CsvColumnsRequiredError
 ├── RpaError
 │   └── RpaLibraryNotFoundError
 ├── CredentialError
@@ -79,12 +81,15 @@ ComkenError
 │   ├── InvalidTableInputError
 │   ├── InvalidTableOperationError
 │   ├── TableColumnNotFoundError
-│   └── TableDuplicateKeyError
+│   ├── TableDuplicateKeyError
+│   ├── TableMergeColumnCollisionError
+│   ├── TableMergeSuffixError
+│   ├── TableRowColumnsError
+│   └── TableTypeConversionError
 ├── TransferDestinationRowMissingError
 ├── TransferDestinationMultipleMatchError
 ├── ColumnNotFoundError
 │   ├── ExcelColumnNotFoundError
-│   ├── CsvColumnNotFoundError
 │   ├── KeyColumnNotFoundError
 │   └── TransferSourceColumnNotFoundError
 ├── ConfigError
@@ -108,12 +113,14 @@ ComkenError
 │   │   └── HolidayCalendarFormatError
 │   └── HolidayCalendarExpiredError
 └── DownloaderError
+│   ├── HistoryWriteError
+│   ├── HistoryLockTimeoutError
+│   ├── HistoryHeaderMismatchError
+│   ├── CachedReportNotFoundError
+│   ├── CachedReportNotRegisteredError
 │   ├── ReportNotRegisteredError
 │   ├── ReportDisabledError
 │   ├── InvalidReportUrlError
-│   ├── ScheduledReportNotRegisteredError
-│   ├── ScheduledReportNotDownloadedError
-│   ├── ReportFileMissingError
 │   ├── EmptyReportError
 │   ├── ReportFolderNotFoundError
 │   └── ScheduledDownloadFailedError
@@ -149,7 +156,6 @@ from comken.exceptions.browser import (
 )
 from comken.exceptions.column import (
     ColumnNotFoundError,
-    CsvColumnNotFoundError,
     ExcelColumnNotFoundError,
     InvalidColumnError,
     KeyColumnNotFoundError,
@@ -172,25 +178,27 @@ from comken.exceptions.credential import (
     InvalidCredentialNameError,
 )
 from comken.exceptions.csv import (
-    CsvCellReferenceError,
+    CsvColumnsRequiredError,
     CsvError,
-    CsvHeadersTooFewError,
-    CsvNoDataRowsError,
-    CsvRowDuplicateKeyError,
-    CsvRowNotFoundError,
+    CsvFileNotFoundError,
+    CsvHeaderMissingError,
+    CsvInvalidHeaderError,
+    CsvRowLengthError,
     EncodingDetectionError,
 )
 from comken.exceptions.downloader import (
+    CachedReportNotFoundError,
+    CachedReportNotRegisteredError,
     DownloaderError,
     EmptyReportError,
+    HistoryHeaderMismatchError,
+    HistoryLockTimeoutError,
+    HistoryWriteError,
     InvalidReportUrlError,
     ReportDisabledError,
-    ReportFileMissingError,
     ReportFolderNotFoundError,
     ReportNotRegisteredError,
     ScheduledDownloadFailedError,
-    ScheduledReportNotDownloadedError,
-    ScheduledReportNotRegisteredError,
 )
 from comken.exceptions.excel import (
     DataSheetAccessError,
@@ -200,7 +208,9 @@ from comken.exceptions.excel import (
     ExcelError,
     ExcelFileNotFoundError,
     ExcelHeadersTooFewError,
+    ExcelMacroPreservationError,
     ExcelSaveNotCompletedError,
+    ExcelSaveValidationError,
     FileFormatMismatchError,
     InvalidTableNameError,
     LastSheetDeletionError,
@@ -259,6 +269,10 @@ from comken.exceptions.table import (
     TableColumnNotFoundError,
     TableDuplicateKeyError,
     TableError,
+    TableMergeColumnCollisionError,
+    TableMergeSuffixError,
+    TableRowColumnsError,
+    TableTypeConversionError,
     TransferDestinationMultipleMatchError,
     TransferDestinationRowMissingError,
 )
@@ -287,18 +301,19 @@ __all__ = [
     "EmptyHeaderCellError",
     "DuplicateHeaderCellError",
     "ExcelHeadersTooFewError",
+    "ExcelMacroPreservationError",
     "ExcelSaveNotCompletedError",
+    "ExcelSaveValidationError",
     "FileFormatMismatchError",
     "CsvError",
     "EncodingDetectionError",
-    "CsvHeadersTooFewError",
-    "CsvNoDataRowsError",
-    "CsvRowNotFoundError",
-    "CsvRowDuplicateKeyError",
-    "CsvCellReferenceError",
+    "CsvFileNotFoundError",
+    "CsvHeaderMissingError",
+    "CsvInvalidHeaderError",
+    "CsvRowLengthError",
+    "CsvColumnsRequiredError",
     "ColumnNotFoundError",
     "ExcelColumnNotFoundError",
-    "CsvColumnNotFoundError",
     "KeyColumnNotFoundError",
     "TransferSourceColumnNotFoundError",
     "InvalidColumnError",
@@ -363,12 +378,14 @@ __all__ = [
     "HolidayCalendarFormatError",
     "HolidayCalendarExpiredError",
     "DownloaderError",
+    "HistoryWriteError",
+    "HistoryLockTimeoutError",
+    "HistoryHeaderMismatchError",
+    "CachedReportNotFoundError",
+    "CachedReportNotRegisteredError",
     "ReportNotRegisteredError",
     "ReportDisabledError",
     "InvalidReportUrlError",
-    "ScheduledReportNotRegisteredError",
-    "ScheduledReportNotDownloadedError",
-    "ReportFileMissingError",
     "EmptyReportError",
     "ReportFolderNotFoundError",
     "ScheduledDownloadFailedError",
@@ -379,6 +396,10 @@ __all__ = [
     "InvalidTableOperationError",
     "TableColumnNotFoundError",
     "TableDuplicateKeyError",
+    "TableMergeColumnCollisionError",
+    "TableMergeSuffixError",
+    "TableRowColumnsError",
+    "TableTypeConversionError",
     "LoggingAlreadyConfiguredError",
     "LoggerHostNotConfiguredError",
 ]

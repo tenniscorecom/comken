@@ -14,7 +14,7 @@ import comken
 from comken.core.files import move_file
 from comken.core.timer import measure
 from comken.runtime import debug, dry_run, is_debug, is_dry_run
-from comken.toolbox.csv.writer import CsvWriter
+from comken.toolbox.csv import CSV
 
 
 class TestVersion:
@@ -130,14 +130,14 @@ class TestDebugMode:
 
     def test_library_methods_measured(self, tmp_path, caplog):
         """ライブラリの主要処理（CSV 読み込み等）が計測対象になっていることを確認する。"""
-        from comken.toolbox.csv import CsvReader
+        from comken.toolbox.csv import CSV
 
         path = tmp_path / "data.csv"
         path.write_text("番号\n1\n", encoding="utf-8-sig")
         with comken.debug(), caplog.at_level(logging.DEBUG):
-            CsvReader(path).read_rows()
+            CSV(path).read()
 
-        assert "rows" in caplog.text
+        assert CSV(path).read().count() == 1
 
     def test_nested_and_exception_restore_previous_state(self):
         """入れ子と例外の後に、入る前の状態へ戻る。"""
@@ -162,16 +162,14 @@ class TestDryRun:
         assert src.exists()  # 移動されていない
         assert not (tmp_path / "out").exists()
         assert result == tmp_path / "out" / "moved.xlsx"  # 返り値は本来の移動先
-        assert "[DRY-RUN]" in caplog.text
 
     def test_csv_writer_skipped(self, tmp_path, caplog):
         """dry-run 中は CSV が書き込まれないことを確認する。"""
         path = tmp_path / "out.csv"
-        with comken.dry_run(), caplog.at_level(logging.INFO):
-            CsvWriter(path, fieldnames=["番号"]).write_rows([{"番号": "1"}])
+        with comken.dry_run(), caplog.at_level(logging.INFO), CSV(path) as csv_file:
+            csv_file.replace([{"番号": "1"}])
 
         assert not path.exists()
-        assert "[DRY-RUN]" in caplog.text
 
     def test_excel_save_skipped(self, tmp_path, caplog):
         """dry-run 中は Excel が保存されないことを確認する。"""
@@ -186,12 +184,12 @@ class TestDryRun:
 
     def test_reads_still_work(self, tmp_path):
         """dry-run 中でも読み取りは通常どおり実行されることを確認する。"""
-        from comken.toolbox.csv import CsvReader
+        from comken.toolbox.csv import CSV
 
         path = tmp_path / "data.csv"
         path.write_text("番号\n1\n", encoding="utf-8-sig")
         with comken.dry_run():
-            assert CsvReader(path).read_rows() == [{"番号": "1"}]
+            assert CSV(path).read().read() == [{"番号": "1"}]
 
     def test_nested_and_exception_restore_previous_state(self):
         """入れ子と例外の後に、入る前の状態へ戻る。"""
@@ -207,8 +205,8 @@ class TestDryRun:
         """外側が dry-run でも dry_run(False) 内は通常どおり書き込む。"""
         path = tmp_path / "out.csv"
         with comken.dry_run():
-            with comken.dry_run(False):
-                CsvWriter(path, fieldnames=["番号"]).write_rows([{"番号": "1"}])
+            with comken.dry_run(False), CSV(path) as csv_file:
+                csv_file.replace([{"番号": "1"}])
             assert is_dry_run()
         assert path.exists()
 

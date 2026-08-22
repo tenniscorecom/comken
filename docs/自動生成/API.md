@@ -395,7 +395,7 @@ def group_by(self, key: str) -> dict[Any, 'Table']:
 #### `merge`
 
 ```text
-def merge(self, other: 'Table', *, on: str, how: str='left') -> 'Table':
+def merge(self, other: 'Table', *, on: str, how: str='left', suffixes: tuple[str, str]=('_read', '_write')) -> 'Table':
 ```
 
 ##### 説明
@@ -1598,7 +1598,7 @@ def group_by(self, key: str) -> dict[Any, 'Table']:
 #### `merge`
 
 ```text
-def merge(self, other: 'Table', *, on: str, how: str='left') -> 'Table':
+def merge(self, other: 'Table', *, on: str, how: str='left', suffixes: tuple[str, str]=('_read', '_write')) -> 'Table':
 ```
 
 ##### 説明
@@ -2164,6 +2164,25 @@ class ExcelHeadersTooFewError(ExcelError):
 def __init__(self, expected: int, actual: int) -> None:
 ```
 
+### `ExcelMacroPreservationError`
+
+```text
+class ExcelMacroPreservationError(ExcelError):
+```
+
+#### 説明
+
+保存予定のブックからVBAプロジェクトが欠落または変化した。
+
+対処:
+    元ファイルは保持される。管理者に連絡し、Excel実機で保存方法を確認する
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path | str) -> None:
+```
+
 ### `ExcelSaveNotCompletedError`
 
 ```text
@@ -2184,6 +2203,25 @@ Excel の保存が成功したように見えて、ファイルが無い
 
 ```text
 def __init__(self, path: Path | str) -> None:
+```
+
+### `ExcelSaveValidationError`
+
+```text
+class ExcelSaveValidationError(ExcelError):
+```
+
+#### 説明
+
+保存予定のExcelファイルを再度開けず、安全に置き換えられない。
+
+対処:
+    元ファイルは保持される。空き容量とExcel形式を確認して再実行する
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path | str, detail: object) -> None:
 ```
 
 ### `FileFormatMismatchError`
@@ -2230,7 +2268,7 @@ class EncodingDetectionError(CsvError):
 
 CSV の文字コードを判定できない
 
-発生箇所: CsvReader._read_text()
+発生箇所: CSV.read()
 
 対処:
     CSV の保存形式を確認し、管理者へ連絡する
@@ -2241,41 +2279,18 @@ CSV の文字コードを判定できない
 def __init__(self, path: Path | str) -> None:
 ```
 
-### `CsvHeadersTooFewError`
+### `CsvFileNotFoundError`
 
 ```text
-class CsvHeadersTooFewError(CsvError):
+class CsvFileNotFoundError(CsvError):
 ```
 
 #### 説明
 
-指定した見出し数が CSV の列数より少ない
-
-発生箇所: CsvReader._load()
+読み込む CSV ファイルが存在しない
 
 対処:
-    管理者へ連絡する
-
-#### `__init__`
-
-```text
-def __init__(self, expected: int, path: Path | str) -> None:
-```
-
-### `CsvNoDataRowsError`
-
-```text
-class CsvNoDataRowsError(CsvError):
-```
-
-#### 説明
-
-CSV に見出し以外のデータ行がない
-
-発生箇所: CsvReader.first()
-
-対処:
-    見出し行の下にデータが1行以上あるか確認する
+    パスを確認する。新規出力は columns を指定して write / replace する
 
 #### `__init__`
 
@@ -2283,67 +2298,80 @@ CSV に見出し以外のデータ行がない
 def __init__(self, path: Path | str) -> None:
 ```
 
-### `CsvRowNotFoundError`
+### `CsvHeaderMissingError`
 
 ```text
-class CsvRowNotFoundError(CsvError):
+class CsvHeaderMissingError(CsvError):
 ```
 
 #### 説明
 
-キーに一致する行が CSV に無い
-
-発生箇所: CsvReader.find()
+CSV に見出し行がない
 
 対処:
-    探している値の書き方（前後の空白・全角半角・ゼロ埋め）を元データと見比べる
+    見出し行を追加するか、ヘッダーなし CSV なら columns を指定する
 
 #### `__init__`
 
 ```text
-def __init__(self, key_col: str, value: str, path: Path | str) -> None:
+def __init__(self, path: Path | str) -> None:
 ```
 
-### `CsvRowDuplicateKeyError`
+### `CsvInvalidHeaderError`
 
 ```text
-class CsvRowDuplicateKeyError(CsvError):
+class CsvInvalidHeaderError(CsvError):
 ```
 
 #### 説明
 
-キーにする列に同じ値が複数ある
-
-発生箇所: CsvReader.index()
+CSV の見出しに空欄または重複がある
 
 対処:
-    表示された値の行を元データで確認し、重複を取り除く。重複が正しいデータなら管理者へ連絡する
+    CSV の1行目にある空欄または重複した見出しを直す
 
 #### `__init__`
 
 ```text
-def __init__(self, key_col: str, duplicates: dict[str, int], path: Path | str) -> None:
+def __init__(self, path: Path | str, reason: str) -> None:
 ```
 
-### `CsvCellReferenceError`
+### `CsvRowLengthError`
 
 ```text
-class CsvCellReferenceError(CsvError):
+class CsvRowLengthError(CsvError):
 ```
 
 #### 説明
 
-CSV のセル位置（例: A2）の指定が正しくない、または範囲外
-
-発生箇所: CsvReader.cell()
+CSV のデータ行の列数が見出し数と一致しない
 
 対処:
-    表示されたセル位置と、CSV の行数・列数を確認する
+    表示された行の区切り文字と値の数を確認する
 
 #### `__init__`
 
 ```text
-def __init__(self, ref: str, path: Path | str, detail: str) -> None:
+def __init__(self, path: Path | str, line_number: int, expected: int, actual: int) -> None:
+```
+
+### `CsvColumnsRequiredError`
+
+```text
+class CsvColumnsRequiredError(CsvError):
+```
+
+#### 説明
+
+空の新規 CSV に出力する列を決定できない
+
+対処:
+    CSV(columns=[...]) または Table(columns, []) で列を指定する
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path | str) -> None:
 ```
 
 ### `ColumnNotFoundError`
@@ -2390,40 +2418,6 @@ Excel の列見出しが見つからない
 
 ```text
 def __init__(self, columns: list[str]) -> None:
-```
-
-### `CsvColumnNotFoundError`
-
-```text
-class CsvColumnNotFoundError(ColumnNotFoundError):
-```
-
-#### 説明
-
-CSV の列見出しが見つからない
-
-非エンジニアが列名を変更したときに分かりやすいメッセージを出すために使う。
-
-発生箇所: CsvReader._validate_columns()
-
-使い方:
-    from comken.exceptions import CsvColumnNotFoundError
-
-    REQUIRED_COLUMNS = ["日付", "担当者", "金額"]
-
-    def validate_columns(rows: list[dict[str, str]], required: list[str]) -> None:
-        existing = list(rows[0])
-        missing = [column for column in required if column not in existing]
-        if missing:
-            raise CsvColumnNotFoundError(missing, existing)
-
-対処:
-    CSV の1行目を確認する
-
-#### `__init__`
-
-```text
-def __init__(self, columns: list[str], existing: list[str]) -> None:
 ```
 
 ### `KeyColumnNotFoundError`
@@ -3770,6 +3764,118 @@ Salesforce レポートの集約取得に関するエラー
 対処:
     画面に表示された具体的なエラー名を上の表から探す
 
+### `HistoryWriteError`
+
+```text
+class HistoryWriteError(DownloaderError):
+```
+
+#### 説明
+
+必須のダウンロード履歴を記録できなかった
+
+対処:
+    履歴CSVの保存先、共有サーバー接続、書込み権限を確認する
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path, reason: str, *, original: BaseException | None=None) -> None:
+```
+
+### `HistoryLockTimeoutError`
+
+```text
+class HistoryLockTimeoutError(DownloaderError):
+```
+
+#### 説明
+
+ダウンロード履歴の排他ロックを待っても取得できなかった
+
+対処:
+    同時実行中の処理が終わるのを待って再実行する。繰り返す場合は共有サーバーを確認する
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path, timeout: float) -> None:
+```
+
+### `HistoryHeaderMismatchError`
+
+```text
+class HistoryHeaderMismatchError(DownloaderError):
+```
+
+#### 説明
+
+ダウンロード履歴CSVの見出しが現在の定義と一致しない
+
+対処:
+    履歴CSVの1行目を確認する。列を手で変更していた場合は元へ戻し、
+    古い形式の履歴なら別名へ退避してから再実行する
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path, actual: tuple[str, ...], expected: tuple[str, ...]) -> None:
+```
+
+### `CachedReportNotFoundError`
+
+```text
+class CachedReportNotFoundError(DownloaderError):
+```
+
+#### 説明
+
+本日の定期取得キャッシュが見つからない
+
+定期取得の時刻より前に呼ばれた、定期取得が失敗した、その日に管理表へ
+追加されて今日の分に間に合わなかった、のいずれか。
+
+**勝手に Salesforce へ取りに行かない。** cached_report() は
+「取っておいたものを受け取る」関数で、取りに行く関数ではない。
+ここで自動的に取りに行くと、定期取得が動いていないことに誰も気づかなくなる。
+
+発生箇所: comken.services.salesforce_downloader の cached_report()
+
+対処:
+    Salesforce からCSVを手動取得し、画面に表示された正確なパス・ファイル名で置いて、
+    同じ python main.py を再実行する
+
+#### `__init__`
+
+```text
+def __init__(self, report_key: str, summary: str, cache_path: Path) -> None:
+```
+
+### `CachedReportNotRegisteredError`
+
+```text
+class CachedReportNotRegisteredError(DownloaderError):
+```
+
+#### 説明
+
+定期取得の対象ではないレポートのキャッシュを読もうとした
+
+cached_report() は「定期実行が取っておいた本日のデータを受け取る」関数。
+管理表で「個別」になっているレポートは誰も取りに行かないので、いつまでも揃わない。
+
+発生箇所: comken.services.salesforce_downloader の cached_report()
+
+対処:
+    毎日決まった時刻に取るなら、管理表の「実行方式」を「定期」にする。
+    使うときに毎回取りに行くなら、download_report() を呼ぶ
+
+#### `__init__`
+
+```text
+def __init__(self, report_key: str, summary: str, schedule: str, master_path: Path) -> None:
+```
+
 ### `ReportNotRegisteredError`
 
 ```text
@@ -3843,84 +3949,6 @@ class InvalidReportUrlError(DownloaderError):
 def __init__(self, report_key: str, url: str, reason: str) -> None:
 ```
 
-### `ScheduledReportNotRegisteredError`
-
-```text
-class ScheduledReportNotRegisteredError(DownloaderError):
-```
-
-#### 説明
-
-定期取得の対象として登録されていないレポートを、定期取得済みとして受け取ろうとした
-
-get_scheduled_report() は「決まった時刻に取っておいたものを受け取る」関数。
-管理表で「個別」になっているレポートは誰も取りに行かないので、いつまでも揃わない。
-
-発生箇所: comken.services.salesforce_downloader の get_scheduled_report()
-
-対処:
-    毎日決まった時刻に取るなら、管理表の「実行方式」を「定期」にする。
-    使うときに毎回取りに行くなら、download_report() を呼ぶ
-
-#### `__init__`
-
-```text
-def __init__(self, report_key: str, summary: str, schedule: str, master_path: Path) -> None:
-```
-
-### `ScheduledReportNotDownloadedError`
-
-```text
-class ScheduledReportNotDownloadedError(DownloaderError):
-```
-
-#### 説明
-
-本日の定期取得がまだ済んでいない
-
-定期取得の時刻より前に呼ばれた、定期取得が失敗した、その日に管理表へ
-追加されて今日の分に間に合わなかった、のいずれか。
-
-**勝手に Salesforce へ取りに行かない。** get_scheduled_report() は
-「取っておいたものを受け取る」関数で、取りに行く関数ではない。
-ここで自動的に取りに行くと、定期取得が動いていないことに誰も気づかなくなる。
-
-発生箇所: comken.services.salesforce_downloader の get_scheduled_report()
-
-対処:
-    定期取得の実行結果を確認する。急ぐ場合は download_report() で
-    その場で取得する（そのぶん Salesforce への呼び出しが増える）
-
-#### `__init__`
-
-```text
-def __init__(self, report_key: str, summary: str, history_path: Path) -> None:
-```
-
-### `ReportFileMissingError`
-
-```text
-class ReportFileMissingError(DownloaderError):
-```
-
-#### 説明
-
-履歴では取得済みだが、保存先にファイルが無い
-
-取得の後で人が消した・移動した・保存先の設定を変えた、のいずれか。
-
-発生箇所: comken.services.salesforce_downloader の get_scheduled_report()
-
-対処:
-    保存先のフォルダを確認する。消してしまった場合は
-    download_report() で取り直す
-
-#### `__init__`
-
-```text
-def __init__(self, report_key: str, path: Path) -> None:
-```
-
 ### `EmptyReportError`
 
 ```text
@@ -3938,7 +3966,7 @@ class EmptyReportError(DownloaderError):
 
 対処:
     Salesforce の画面で同じレポートを開き、本当に 0 件か確認する。
-    本当に 0 件の日であれば、空の CSV を保存先へ手で置く
+    0 件が正常に起こるレポートなら、管理表の「0件あり」を「○」にする。
 
 #### `__init__`
 
@@ -4126,6 +4154,82 @@ Table の索引または比較に使うキーが重複している。
 def __init__(self, columns: list[str], key: object) -> None:
 ```
 
+### `TableMergeColumnCollisionError`
+
+```text
+class TableMergeColumnCollisionError(TableError):
+```
+
+#### 説明
+
+Table.merge() で生成する列名が既存の列名と衝突する。
+
+対処:
+    suffixes を変更し、結合後のすべての列名が一意になるようにする
+
+#### `__init__`
+
+```text
+def __init__(self, columns: list[str]) -> None:
+```
+
+### `TableMergeSuffixError`
+
+```text
+class TableMergeSuffixError(TableError):
+```
+
+#### 説明
+
+Table.merge() の suffixes が列名を安全に作れない。
+
+対処:
+    空でなく互いに異なる2つの文字列を suffixes に指定する
+
+#### `__init__`
+
+```text
+def __init__(self) -> None:
+```
+
+### `TableRowColumnsError`
+
+```text
+class TableRowColumnsError(TableError):
+```
+
+#### 説明
+
+行の列名が Table.columns と一致しない
+
+対処:
+    不足列と余分な列を直す。列を絞る場合は select() を使う
+
+#### `__init__`
+
+```text
+def __init__(self, row_number: int, missing: list[str], extra: list[str]) -> None:
+```
+
+### `TableTypeConversionError`
+
+```text
+class TableTypeConversionError(TableError):
+```
+
+#### 説明
+
+Table の値を指定型へ変換できない
+
+対処:
+    表示された行番号・列名の値を、指定した型へ変換できる内容に直す
+
+#### `__init__`
+
+```text
+def __init__(self, row_number: int, column: str, value: object) -> None:
+```
+
 ### `LoggingAlreadyConfiguredError`
 
 ```text
@@ -4176,7 +4280,7 @@ def __init__(self, hostname: str, site_name: str) -> None:
 
 定義を解決できませんでした。
 
-### `get_scheduled_report`
+### `cached_report`
 
 定義を解決できませんでした。
 
@@ -4411,7 +4515,7 @@ def group_by(self, key: str) -> dict[Any, 'Table']:
 #### `merge`
 
 ```text
-def merge(self, other: 'Table', *, on: str, how: str='left') -> 'Table':
+def merge(self, other: 'Table', *, on: str, how: str='left', suffixes: tuple[str, str]=('_read', '_write')) -> 'Table':
 ```
 
 ##### 説明
@@ -6015,15 +6119,15 @@ class CSV:
 
 #### 説明
 
-CSV ファイルをヘッダー付きのデータ領域として読み書きする。
+CSV ファイルを1つのデータ領域として読み書きする。
 
-CsvReader/CsvWriter の個別操作をまとめ、ExcelTable と同じ「行の集合」として
-Transfer へ渡せる境界を提供する。
+Table と同じ「行の集合」として Transfer へ渡せる境界を提供する。
+ヘッダーのないファイルは ``columns`` で列名を指定する。
 
 #### `__init__`
 
 ```text
-def __init__(self, source: str | Path, *, encoding: str=Encoding.UTF8_SIG, types: Mapping[str, Callable[[Any], Any]] | None=None, read_only: bool=False, dry_run: bool=False) -> None:
+def __init__(self, source: str | Path, *, encoding: str=Encoding.AUTO, columns: list[str] | None=None, types: Mapping[str, Callable[[Any], Any]] | None=None, read_only: bool=False, dry_run: bool=False) -> None:
 ```
 
 #### `read`
@@ -6056,6 +6160,16 @@ def write(self, table: Table) -> None:
 
 Tableを保存対象として受け取る。確定はsaveまたはwith正常終了で行う。
 
+#### `append`
+
+```text
+def append(self, rows: list[dict[str, Value]] | dict[str, Value] | Table) -> None:
+```
+
+##### 説明
+
+行を保留中のTableへ追加する。確定はsaveまたはwith正常終了で行う。
+
 #### `save`
 
 ```text
@@ -6076,298 +6190,6 @@ def count(self) -> int:
 
 データ行数を返す。
 
-### `CsvReader`
-
-```text
-class CsvReader(CsvBase):
-```
-
-#### 説明
-
-CSV ファイルの読み込みユーティリティ。
-
-ヘッダー行をキーにした辞書のリストとして扱う。
-読み込みは最初のメソッド呼び出し時に行い、同じインスタンス内では結果を再利用する。
-
-#### `__init__`
-
-```text
-def __init__(self, path: str | Path, encoding: str=Encoding.AUTO, headers: list[str] | None=None) -> None:
-```
-
-##### 説明
-
-Args:
-    path: CSV ファイルのパス。
-    encoding: 文字コード。Encoding.AUTO（デフォルト）は UTF-8（BOM付き含む）→
-              CP932（Shift-JIS）の順に自動判定する。
-              明示したい場合は Encoding.UTF8_SIG / Encoding.CP932 を指定する。
-    headers: ヘッダー行がない CSV の場合に、列名のリストをここで付ける。
-             指定すると1行目からデータとして読む。
-             例: CsvReader("data.csv", headers=["注文番号", "金額", "担当者"])
-
-#### `read_rows`
-
-```text
-@measure
-def read_rows(self, columns: list[str] | None=None) -> list[dict[str, str]]:
-```
-
-##### 説明
-
-全行を返す。
-
-Args:
-    columns: 取得する列名のリスト。省略すると全列を返す。
-
-Returns:
-    辞書のリスト。columns 指定時は指定列のみ含む。
-
-#### `rows`
-
-```text
-def rows(self, columns: list[str] | None=None):
-```
-
-##### 説明
-
-列名でアクセスできる行を、for文で順に返す。
-
-#### `cell`
-
-```text
-def cell(self, ref: str) -> str:
-```
-
-##### 説明
-
-Excel 風のセル参照で、CSV の1セルを返す。
-
-ヘッダー付き辞書を作る ``_load()`` とは別に生の行を読むため、
-列名や ``headers`` の指定には依存しない。ヘッダー行も1行目として数える。
-列の位置に依存するため、上流で列が増減すると別の値を読む可能性がある。
-ヘッダーがある CSV では、列の位置が変わっても壊れない ``first()`` を推奨する。
-
-Args:
-    ref: A1、B2 のような1始まりのセル参照。
-
-Returns:
-    セルの文字列。空セルの場合は空文字。
-
-Raises:
-    CsvCellReferenceError: 参照が不正、またはCSVの範囲外の場合。
-
-#### `first`
-
-```text
-def first(self, column: str) -> str:
-```
-
-##### 説明
-
-ヘッダー名で列を指定し、最初のデータ行の値を返す。
-
-ヘッダーがある CSV では、列の位置が変わっても壊れないこのメソッドを推奨する。
-ヘッダーがない、または位置で決まっている CSV では ``cell("A2")`` を使う。
-
-Args:
-    column: 取得する列名。
-
-Returns:
-    最初のデータ行にある指定列の文字列。空セルの場合は空文字。
-
-Raises:
-    CsvColumnNotFoundError: 指定した列名が存在しない場合。
-    CsvNoDataRowsError: データ行が1行もない場合。
-
-#### `find`
-
-```text
-def find(self, key_col: str, value: str, required: bool=True) -> dict[str, str] | None:
-```
-
-##### 説明
-
-key_col が value に一致する最初の行を返す。
-
-見つからないときは既定で CsvRowNotFoundError。
-「無くても処理を続けたい」場合だけ required=False にすると None を返す。
-
-Raises:
-    CsvRowNotFoundError: required=True で該当行がない場合。
-
-#### `filter`
-
-```text
-def filter(self, key_col: str, value: str) -> list[dict[str, str]]:
-```
-
-##### 説明
-
-key_col が value に一致する全行を返す。
-
-Args:
-    key_col: 検索対象の列名。
-    value: 検索する値。
-
-Returns:
-    一致した行の辞書のリスト。一致しない場合は空リスト。
-
-#### `column`
-
-```text
-def column(self, col_name: str) -> list[str]:
-```
-
-##### 説明
-
-指定列の値一覧を返す。
-
-Args:
-    col_name: 取得する列名。
-
-Returns:
-    列の値のリスト（ヘッダー行を除く）。
-
-#### `index`
-
-```text
-def index(self, key_col: str) -> dict[str, dict[str, str]]:
-```
-
-##### 説明
-
-key_col をキーにした {キー: 行} の辞書を返す。
-
-キーで1行を引く用途に使う。
-キーが重複していれば CsvRowDuplicateKeyError。重複が普通のデータは group_by() を使う。
-
-Raises:
-    CsvRowDuplicateKeyError: キーが重複している場合。
-
-#### `group_by`
-
-```text
-def group_by(self, key_col: str) -> dict[str, list[dict[str, str]]]:
-```
-
-##### 説明
-
-key_col をキーにした {キー: 行のリスト} の辞書を返す。
-
-同じキーの行が複数あるデータを、キーごとにまとめたいときに使う。
-1件だけ引きたい（重複しないはずの）データは index() を使う。
-
-### `CsvWriter`
-
-```text
-class CsvWriter(CsvBase):
-```
-
-#### 説明
-
-CSV ファイルへの書き込みユーティリティ。
-
-#### `__init__`
-
-```text
-def __init__(self, path: str | Path, fieldnames: list[str], encoding: str=Encoding.UTF8_SIG) -> None:
-```
-
-##### 説明
-
-Args:
-    path: 書き込み先の CSV ファイルパス。親フォルダがなければ書き込み時に自動作成される。
-    fieldnames: ヘッダー行の列名リスト。書き込み順に影響する。
-    encoding: 文字コード。Excel で開く場合は Encoding.UTF8_SIG（デフォルト）。
-              Shift-JIS が必要な場合は Encoding.CP932 を指定する。
-              Encoding.AUTO は自動判定できない（読み込み専用）ため UTF8_SIG として扱う。
-
-#### `write_rows`
-
-```text
-@measure
-def write_rows(self, rows: list[dict]) -> None:
-```
-
-##### 説明
-
-ファイルを新規作成（または上書き）して全行を書き込む。
-
-既存ファイルがある場合は上書きされる。
-
-Args:
-    rows: 書き込む行のリスト（辞書のリスト）。
-
-#### `append_row`
-
-```text
-@measure
-def append_row(self, row: dict) -> None:
-```
-
-##### 説明
-
-既存ファイルの末尾に1行追記する。
-
-ファイルが存在しない場合はヘッダー付きで新規作成する。
-
-Args:
-    row: 追記する行の辞書。
-
-Notes:
-    複数の PC から同じ CSV へ同時に追記する使い方は想定していない。
-
-#### `append_rows`
-
-```text
-@measure
-def append_rows(self, rows: list[dict]) -> None:
-```
-
-##### 説明
-
-既存ファイルの末尾に複数行追記する。
-
-ファイルが存在しない場合はヘッダー付きで新規作成する。
-
-Args:
-    rows: 追記する行のリスト（辞書のリスト）。
-
-Notes:
-    複数の PC から同じ CSV へ同時に追記する使い方は想定していない。
-
-### `index_files`
-
-```text
-def index_files(paths: Sequence[str | Path], key_col: str) -> dict[str, dict[str, str]]:
-```
-
-#### 説明
-
-複数 CSV を 1つの lookup 辞書へまとめる。
-
-各ファイルを ``CsvReader(path).index(key_col)`` で読み、1つの辞書にマージして
-返す。ファイルを跨いで同じキーが見つかった場合は ``CsvRowDuplicateKeyError``
-を投げて停止する。**黙って後勝ちにしない**: どちらを採用したか分からないまま
-突合が進むと結果が静かにブレるため。
-
-1ファイル内の重複は ``CsvReader.index()`` がそのまま例外を上げるので、ここで
-別途チェックしない。
-
-Args:
-    paths: 対象 CSV ファイルパスのシーケンス。順序は結果の辞書に反映されない
-           （キーで引ける形式のため）。
-    key_col: インデックスに使う列名。
-
-Returns:
-    ``{キー: 行データ}`` のマージ済み辞書。
-
-Raises:
-    CsvRowDuplicateKeyError: ファイルを跨いで同じキーが見つかった場合。
-        ``duplicates`` には ``{キー: 出現ファイル数}`` の dict、
-        ``path`` には対象ファイルを区切って並べた文字列を乗せる。
-
 
 ## `from comken.toolbox.excel import ...`
 
@@ -6384,7 +6206,7 @@ Excel ワークブックを開き、シート単位の操作を提供する。
 #### `__init__`
 
 ```text
-def __init__(self, source: str | Path, *, types: Mapping[str, Callable[[Any], Any]] | None=None, read_only: bool=False, local_copy: bool=False) -> None:
+def __init__(self, source: str | Path, *, types: Mapping[str, Callable[[Any], Any]] | None=None, read_only: bool=False, local_copy: bool | None=None) -> None:
 ```
 
 ##### 説明
@@ -6393,7 +6215,8 @@ def __init__(self, source: str | Path, *, types: Mapping[str, Callable[[Any], An
 
 利用者がエンジンを選ぶ必要はない。通常操作はOpenPyXLを使い、未計算の
 数式値の読取りとVBA実行だけ、一時的にExcel COMへ昇格する。
-``local_copy=True`` でも正常終了時の保存先は元ファイルになる。
+``local_copy=None`` の既定ではUNCパスだけローカルコピーを使う。
+``True`` で強制、``False`` で無効化でき、保存先は常に元ファイルになる。
 
 ``read_only``、dry-run、またはwithブロックが例外で終わった場合は保存しない。
 
@@ -6436,16 +6259,6 @@ def list_data_sheets(self) -> list[str]:
 ##### 説明
 
 データシート名をブック内の順序で返す。
-
-#### `read_with_com`
-
-```text
-def read_with_com(self, sheet_name: str | None=None):
-```
-
-##### 説明
-
-Excel COMで計算結果を読み、Tableとして返す。
 
 #### `close`
 
@@ -6808,7 +6621,7 @@ def __init__(self, excel: 'Excel', worksheet: Worksheet, name: str | None=None) 
 #### `read`
 
 ```text
-def read(self) -> Table:
+def read(self, *, force_com: bool=False) -> Table:
 ```
 
 ##### 説明
@@ -6816,7 +6629,9 @@ def read(self) -> Table:
 Excelテーブルの実際の定義範囲だけを読み、値を返す。
 
 シートの使用範囲ではなく Excel が保持する ``ref`` を使うため、表の外に
-ある無関係なセルを現在の Table に混ぜません。
+ある無関係なセルを現在の Table に混ぜません。数式の計算結果が
+保存されていない場合だけ内部でCOMへ切り替えます。``force_com=True``
+はキャッシュを信頼できないブックをExcel実機で強制再計算します。
 
 #### `replace`
 
@@ -6837,6 +6652,16 @@ def write(self, table: Table) -> None:
 ##### 説明
 
 Tableをデータシートへ書き込む。保存はExcelの契約に従う。
+
+#### `append`
+
+```text
+def append(self, rows: list[dict[str, Value]] | dict[str, Value] | Table) -> None:
+```
+
+##### 説明
+
+Table、1行、または行リストを既存テーブルの末尾へ追加する。
 
 #### `count`
 
@@ -7853,6 +7678,16 @@ Args:
 
 Returns:
     各行を値のタプルにしたリスト。
+
+#### `read_range`
+
+```text
+def read_range(self, sheet_name: str, min_col: int, min_row: int, max_col: int, max_row: int) -> list[tuple[Any, ...]]:
+```
+
+##### 説明
+
+指定シートの矩形範囲だけを計算済みの値で返す。
 
 #### `read_rows_as_dicts`
 

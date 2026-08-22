@@ -7,6 +7,8 @@ from comken.exceptions.table import (
     TableColumnNotFoundError,
     TableDuplicateKeyError,
     TableError,
+    TableMergeColumnCollisionError,
+    TableMergeSuffixError,
     TransferDestinationMultipleMatchError,
     TransferMappingError,
     TransferRowError,
@@ -39,6 +41,50 @@ def test_table_merge_concat_and_group_by() -> None:
     with pytest.raises(TableError):
         left.concat(right)
     assert left.group_by("id")[1].count() == 1
+
+
+def test_table_merge_keeps_overlapping_columns_with_suffixes() -> None:
+    left = Table(["id", "name", "left_only"], [{"id": 1, "name": "旧", "left_only": "L"}])
+    right = Table(
+        ["id", "name", "right_only"],
+        [{"id": 1, "name": "新", "right_only": "R"}],
+    )
+
+    result = left.merge(right, on="id")
+
+    assert result.columns == ["id", "name_read", "left_only", "name_write", "right_only"]
+    assert result.read() == [
+        {"id": 1, "name_read": "旧", "left_only": "L", "name_write": "新", "right_only": "R"}
+    ]
+    assert left.column("name") == ["旧"]
+    assert right.column("name") == ["新"]
+
+
+def test_table_merge_left_fills_unmatched_right_columns() -> None:
+    left = Table(["id", "value"], [{"id": 1, "value": "a"}, {"id": 2, "value": "b"}])
+    right = Table(["id", "label"], [{"id": 1, "label": "A"}])
+
+    assert left.merge(right, on="id").read()[1] == {"id": 2, "value": "b", "label": ""}
+
+
+def test_table_merge_rejects_invalid_suffixes_collision_and_missing_key() -> None:
+    left = Table(["id", "name", "name_read"], [{"id": 1, "name": "a", "name_read": "x"}])
+    right = Table(["id", "name"], [{"id": 1, "name": "b"}])
+    with pytest.raises(TableMergeSuffixError):
+        left.merge(right, on="id", suffixes=("", "_right"))
+    with pytest.raises(TableMergeColumnCollisionError):
+        left.merge(right, on="id")
+    with pytest.raises(TableColumnNotFoundError):
+        left.merge(right, on="missing")
+
+
+def test_table_merge_accepts_custom_suffixes() -> None:
+    read = Table(["id", "name"], [{"id": 1, "name": "old"}])
+    write = Table(["id", "name"], [{"id": 1, "name": "new"}])
+
+    result = read.merge(write, on="id", suffixes=("_before", "_after"))
+
+    assert result.read() == [{"id": 1, "name_before": "old", "name_after": "new"}]
 
 
 def test_csv_is_string_by_default_and_types_are_explicit(tmp_path) -> None:
@@ -128,6 +174,7 @@ def test_transfer_maps_before_transform_and_skipped_changes_are_discarded() -> N
     def transform(_read_row, working_row):
         assert working_row["name"] == "new"
         working_row["name"] = "NEW"
+        return Transfer.APPLY
 
     result = Transfer(source, destination, {"name": "name"}, read_key="id", write_key="id").run(
         transform=transform
@@ -206,7 +253,7 @@ def test_transfer_rejects_missing_key_column_and_reports_source_row_number() -> 
         Transfer(read, write, {"name": "name"}, read_key="missing", write_key="id").run()
     with pytest.raises(TransferRowError, match="転記元の2件目"):
         Transfer(read, write, {"name": "name"}, read_key="id", write_key="id").run(
-            transform=lambda row, _working: "invalid" if row["id"] == 2 else None
+            transform=lambda row, _working: "invalid" if row["id"] == 2 else Transfer.APPLY
         )
 
 

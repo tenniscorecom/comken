@@ -40,36 +40,6 @@ class ExcelColumnNotFoundError(ColumnNotFoundError):
         )
 
 
-class CsvColumnNotFoundError(ColumnNotFoundError):
-    """CSV の列見出しが見つからない
-
-    非エンジニアが列名を変更したときに分かりやすいメッセージを出すために使う。
-
-    発生箇所: CsvReader._validate_columns()
-
-    使い方:
-        from comken.exceptions import CsvColumnNotFoundError
-
-        REQUIRED_COLUMNS = ["日付", "担当者", "金額"]
-
-        def validate_columns(rows: list[dict[str, str]], required: list[str]) -> None:
-            existing = list(rows[0])
-            missing = [column for column in required if column not in existing]
-            if missing:
-                raise CsvColumnNotFoundError(missing, existing)
-
-    対処:
-        CSV の1行目を確認する
-    """
-
-    def __init__(self, columns: list[str], existing: list[str]) -> None:
-        super().__init__(
-            f"CSVに列が見つかりません: {', '.join(columns)}\n"
-            f"存在する列: {', '.join(existing)}\n"
-            "CSVのヘッダー（1行目）が変更されていないか確認してください。"
-        )
-
-
 class KeyColumnNotFoundError(ColumnNotFoundError):
     """比較に使うキー列が見つからない
 

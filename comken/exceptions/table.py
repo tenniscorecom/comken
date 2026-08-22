@@ -33,6 +33,33 @@ class InvalidTableOperationError(TableError):
     """
 
 
+class TableRowColumnsError(TableError):
+    """行の列名が Table.columns と一致しない
+
+    対処:
+        不足列と余分な列を直す。列を絞る場合は select() を使う
+    """
+
+    def __init__(self, row_number: int, missing: list[str], extra: list[str]) -> None:
+        super().__init__(
+            f"Table の{row_number}件目の列名が columns と一致しません。"
+            f"不足列: {missing}、余分な列: {extra}。列を絞る場合は select() を使ってください。"
+        )
+
+
+class TableTypeConversionError(TableError):
+    """Table の値を指定型へ変換できない
+
+    対処:
+        表示された行番号・列名の値を、指定した型へ変換できる内容に直す
+    """
+
+    def __init__(self, row_number: int, column: str, value: object) -> None:
+        super().__init__(
+            f"Table の{row_number}件目、列「{column}」の値「{value}」を型変換できません。"
+        )
+
+
 class TableColumnNotFoundError(TableError):
     """Table に指定された列が存在しない。
 
@@ -58,6 +85,33 @@ class TableDuplicateKeyError(TableError):
     def __init__(self, columns: list[str], key: object) -> None:
         super().__init__(
             f"列「{','.join(columns)}」のキー「{key}」が重複しています。キーを一意にしてください。"
+        )
+
+
+class TableMergeSuffixError(TableError):
+    """Table.merge() の suffixes が列名を安全に作れない。
+
+    対処:
+        空でなく互いに異なる2つの文字列を suffixes に指定する
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            "merge の suffixes には、空でなく互いに異なる2つの文字列を指定してください。"
+        )
+
+
+class TableMergeColumnCollisionError(TableError):
+    """Table.merge() で生成する列名が既存の列名と衝突する。
+
+    対処:
+        suffixes を変更し、結合後のすべての列名が一意になるようにする
+    """
+
+    def __init__(self, columns: list[str]) -> None:
+        super().__init__(
+            f"merge 後の列名が重複します: {columns}。"
+            "suffixes を変更し、すべて異なる列名にしてください。"
         )
 
 

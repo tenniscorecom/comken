@@ -15,6 +15,7 @@ import pytest
 from comken.core.table import Table
 from comken.exceptions import (
     EmptyReportError,
+    HistoryWriteError,
     InvalidReportUrlError,
     MasterDuplicateValueError,
     MasterRowValueError,
@@ -35,7 +36,7 @@ from comken.services.salesforce_downloader import provider as provider_module
 from comken.services.salesforce_downloader import service as service_module
 from comken.services.salesforce_downloader.cli import main as cli
 from comken.services.salesforce_downloader.master import EXAMPLES
-from comken.toolbox.csv import CsvReader
+from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Excel
 
 URL_A = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE/view"
@@ -98,7 +99,6 @@ def paths(tmp_path, monkeypatch):
     monkeypatch.setattr(service_module, "HISTORY_PATH", history_path)
     # `provider` も `_paths` から import で束縛しているので同期する
     monkeypatch.setattr(provider_module, "MASTER_PATH", master)
-    monkeypatch.setattr(provider_module, "HISTORY_PATH", history_path)
     return {
         "master_path": master,
         "history_path": history_path,
@@ -197,10 +197,10 @@ class TestDownloadReport:
         ):
             reader = download_report("1001", "案件集計")
         assert reader.path.is_file()
-        assert reader.read_rows() == ROWS
+        assert reader.read().read() == ROWS
 
     def test_csv_reader_path_is_inherited_from_file_base(self, paths):
-        reader = CsvReader(paths["history_path"])
+        reader = CSV(paths["history_path"])
         assert reader.path == paths["history_path"]
 
     def test_fetches_again_even_if_already_downloaded_today(self, paths):
@@ -209,7 +209,21 @@ class TestDownloadReport:
         with patch("comken.services.salesforce_downloader.service.site_for", return_value=site):
             download_report("1001")
             download_report("1001")
+        saved = list(paths["folder"].glob("1001_*.csv"))
+        assert len(saved) == 2
+        assert saved[0].name != saved[1].name
         assert site.return_value.__enter__.return_value.report.run.call_count == 2
+
+    def test_existing_collision_is_not_overwritten(self, paths, monkeypatch):
+        collision = paths["folder"] / "1001_顧客一覧_fixed.csv"
+        collision.write_text("既存", encoding="utf-8")
+        monkeypatch.setattr(service_module, "file_path_of", lambda unused: collision)
+        with patch(
+            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
+        ):
+            result = download_report("1001")
+        assert collision.read_text(encoding="utf-8") == "既存"
+        assert result.path.name == "1001_顧客一覧_fixed_1.csv"
 
     def test_unregistered_key_raises(self, paths):
         with pytest.raises(ReportNotRegisteredError):
@@ -324,7 +338,7 @@ class TestHistory:
             pytest.raises(ReportFolderNotFoundError),
         ):
             download_report("1001")
-        rows = CsvReader(history_path).read_rows()
+        rows = CSV(history_path).read().read()
         assert len(rows) == 1
         row = rows[0]
         assert row["成否"] == "失敗"
@@ -362,7 +376,7 @@ class TestHistory:
             pytest.raises(SalesforceRequestError),
         ):
             download_report("1001")
-        rows = CsvReader(history_path).read_rows()
+        rows = CSV(history_path).read().read()
         assert len(rows) == 1
         row = rows[0]
         assert row["成否"] == "失敗"
@@ -411,13 +425,13 @@ class TestHistory:
                 return_value=fake_salesforce(),
             ),
             patch(
-                "comken.services.salesforce_downloader.service.CsvWriter.write_rows",
+                "comken.services.salesforce_downloader.service.CSV._write",
                 side_effect=write_error,
             ),
             pytest.raises(OSError),
         ):
             download_report("1001")
-        rows = CsvReader(history_path).read_rows()
+        rows = CSV(history_path).read().read()
         assert len(rows) == 1
         row = rows[0]
         assert row["成否"] == "失敗"
@@ -454,7 +468,7 @@ class TestHistory:
             pytest.raises(ReportFolderNotFoundError),
         ):
             download_report("1001")
-        row = CsvReader(history_path).read_rows()[-1]
+        row = CSV(history_path).read().read()[-1]
         assert row["原因区分"] == "設定"
 
     def test_cause_is_salesforce_when_request_fails(self, tmp_path, monkeypatch):
@@ -486,7 +500,7 @@ class TestHistory:
             pytest.raises(SalesforceRequestError),
         ):
             download_report("1001")
-        row = CsvReader(history_path).read_rows()[-1]
+        row = CSV(history_path).read().read()[-1]
         assert row["原因区分"] == "Salesforce"
 
     def test_cause_is_empty_data_when_report_is_empty(self, paths):
@@ -526,13 +540,13 @@ class TestHistory:
                 return_value=fake_salesforce(),
             ),
             patch(
-                "comken.services.salesforce_downloader.service.CsvWriter.write_rows",
+                "comken.services.salesforce_downloader.service.CSV._write",
                 side_effect=write_error,
             ),
             pytest.raises(OSError),
         ):
             download_report("1001")
-        row = CsvReader(history_path).read_rows()[-1]
+        row = CSV(history_path).read().read()[-1]
         assert row["原因区分"] == "ファイル"
 
     def test_cause_is_program_when_unexpected_error_raises(self, tmp_path, monkeypatch):
@@ -560,7 +574,7 @@ class TestHistory:
             pytest.raises(TypeError),
         ):
             download_report("1001")
-        row = CsvReader(history_path).read_rows()[-1]
+        row = CSV(history_path).read().read()[-1]
         assert row["原因区分"] == "プログラム"
 
 
@@ -596,7 +610,7 @@ class TestDownloadScheduled:
         ):
             download_scheduled()
         # "1001" で失敗しても "1002" は保存されている（続けたうえで最後に知らせる）
-        assert [path.name.split("_")[0] for path in folder.glob("*.csv")] == ["1002"]
+        assert [path.name.split("_")[0] for path in folder.glob("*.csv")] == ["1002", "1002"]
 
     def test_os_error_does_not_stop_the_rest(self, tmp_path, monkeypatch):
         folder = tmp_path / "保存先"
@@ -627,7 +641,27 @@ class TestDownloadScheduled:
         ):
             download_scheduled()
 
-        assert [path.name.split("_")[0] for path in folder.glob("*.csv")] == ["1002"]
+        assert [path.name.split("_")[0] for path in folder.glob("*.csv")] == ["1002", "1002"]
+
+    def test_cache_update_failure_keeps_archive_and_marks_failure(self, paths):
+        with (
+            patch(
+                "comken.services.salesforce_downloader.service.site_for",
+                return_value=fake_salesforce(),
+            ),
+            patch.object(
+                service_module,
+                "_update_daily_cache",
+                side_effect=OSError("キャッシュ更新失敗"),
+            ),
+            pytest.raises(ScheduledDownloadFailedError),
+        ):
+            download_scheduled()
+
+        assert len(list(paths["folder"].glob("1001_*.csv"))) == 1
+        row = _history_rows(paths)[-1]
+        assert row["成否"] == "失敗"
+        assert row["保存結果"] == "失敗"
 
     def test_unexpected_error_stops_the_run_immediately(self, tmp_path, monkeypatch):
         """想定外（`TypeError` など）はその場で抜ける。`ScheduledDownloadFailedError` には
@@ -674,7 +708,35 @@ class TestDownloadScheduled:
 
 
 def _history_rows(paths: dict) -> list[dict]:
-    return CsvReader(paths["history_path"]).read_rows()
+    return CSV(paths["history_path"]).read().read()
+
+
+class TestRequiredHistory:
+    """履歴が書けない場合は、取得結果だけを成功として返さない。"""
+
+    def test_history_write_failure_stops_download(self, paths):
+        with (
+            patch(
+                "comken.services.salesforce_downloader.service.site_for",
+                return_value=fake_salesforce(),
+            ),
+            patch.object(history, "_append", side_effect=OSError("履歴書込み失敗")),
+            pytest.raises(HistoryWriteError),
+        ):
+            download_report("1001")
+
+    def test_original_failure_remains_in_history_error(self, paths):
+        with (
+            patch(
+                "comken.services.salesforce_downloader.service.site_for",
+                return_value=fake_salesforce([]),
+            ),
+            patch.object(history, "_append", side_effect=OSError("履歴書込み失敗")),
+            pytest.raises(HistoryWriteError) as caught,
+        ):
+            download_report("1001")
+        assert "0 行" in str(caught.value)
+        assert caught.value.__cause__ is not None
 
 
 # ── 0件あり / 0 行の扱い ─────────────────────────────────────────────
@@ -708,7 +770,7 @@ class TestAllowEmpty:
         # ファイルは作られない
         assert list(folder.glob("*.csv")) == []
         # 履歴には `データなし` が残る（取得成功・保存未到達の組合せのみ取り得る）
-        row = CsvReader(history_path).read_rows()[-1]
+        row = CSV(history_path).read().read()[-1]
         assert row["成否"] == "失敗"
         assert row["Salesforce取得結果"] == "成功"
         assert row["保存結果"] == ""
@@ -743,7 +805,7 @@ class TestAllowEmpty:
         assert reader.path == saved[0]
 
         # 履歴は成功・取得件数 0・原因区分 空
-        row = CsvReader(history_path).read_rows()[-1]
+        row = CSV(history_path).read().read()[-1]
         assert row["成否"] == "成功"
         assert row["Salesforce取得結果"] == "成功"
         assert row["保存結果"] == "成功"
@@ -752,7 +814,7 @@ class TestAllowEmpty:
         assert row["エラーコード"] == ""
 
     def test_empty_csv_can_be_read_with_no_rows(self, tmp_path, monkeypatch):
-        """3. 2. で作られたファイルを `CsvReader` で読むと `read_rows()` が `[]` を返す。"""
+        """3. 2. で作られたファイルを CSV で読むと空の Table を返す。"""
         folder = tmp_path / "保存先"
         folder.mkdir()
         master = make_master_with_allow_empty(
@@ -769,10 +831,10 @@ class TestAllowEmpty:
         ):
             reader = download_report("1001")
 
-        # `CsvReader` は 0 バイトでも例外を出さず、空の行リストを返す
-        assert reader.read_rows() == []
+        # CSV は 0 バイトでも例外を出さず、空の行リストを返す
+        assert reader.read().read() == []
         # ヘッダー名での索引も空（ヘッダー行が無いので当然）
-        assert reader.index("名前") == {}
+        assert reader.read().read() == []
 
     def test_scheduled_empty_report_can_be_received(self, tmp_path, monkeypatch):
         """0件で成功した定期取得は、本日取得済みとして空のまま受け取れる。"""
@@ -790,7 +852,6 @@ class TestAllowEmpty:
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
         monkeypatch.setattr(service_module, "HISTORY_PATH", history_path)
         monkeypatch.setattr(provider_module, "MASTER_PATH", master)
-        monkeypatch.setattr(provider_module, "HISTORY_PATH", history_path)
 
         with patch(
             "comken.services.salesforce_downloader.service.site_for",
@@ -798,11 +859,11 @@ class TestAllowEmpty:
         ):
             download_scheduled()
 
-        from comken.services.salesforce_downloader import get_scheduled_report
+        from comken.services.salesforce_downloader import cached_report
 
-        reader = get_scheduled_report("1001")
+        reader = cached_report("1001")
         assert reader.path.is_file()
-        assert reader.read_rows() == []
+        assert reader.read().read() == []
 
     def test_master_without_allow_empty_column_defaults_to_no(self, tmp_path, monkeypatch):
         """4. `0件あり` の列が無い管理表でも読める（既定 `×` として扱われる）。"""
@@ -878,7 +939,7 @@ class TestAllowEmpty:
         names = sorted(path.name.split("_")[0] for path in saved)
         assert names == ["1001", "1002"]
         # 履歴を確認: "1001" は成功・0件、"1002" も成功・2件
-        rows = CsvReader(history_path).read_rows()
+        rows = CSV(history_path).read().read()
         by_key = {row["管理番号"]: row for row in rows}
         assert by_key["1001"]["成否"] == "成功"
         assert by_key["1001"]["取得件数"] == "0"

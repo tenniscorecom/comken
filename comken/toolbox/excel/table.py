@@ -10,6 +10,7 @@ from comken.core.table.model import Table
 from comken.exceptions import (
     DuplicateHeaderCellError,
     EmptyHeaderCellError,
+    InvalidTableInputError,
     InvalidTableOperationError,
 )
 
@@ -31,11 +32,13 @@ class ExcelTable:
         self._worksheet = worksheet
         self._name = name
 
-    def read(self) -> Table:
+    def read(self, *, force_com: bool = False) -> Table:
         """Excelテーブルの実際の定義範囲だけを読み、値を返す。
 
         シートの使用範囲ではなく Excel が保持する ``ref`` を使うため、表の外に
-        ある無関係なセルを現在の Table に混ぜません。
+        ある無関係なセルを現在の Table に混ぜません。数式の計算結果が
+        保存されていない場合だけ内部でCOMへ切り替えます。``force_com=True``
+        はキャッシュを信頼できないブックをExcel実機で強制再計算します。
         """
         self._excel._ensure_open()
         if self._name is None:
@@ -53,23 +56,32 @@ class ExcelTable:
             for cell in row
             if isinstance(cell.value, str) and cell.value.startswith("=")
         ]
-        if formula_cells:
-            return self._excel._read_table_with_com(
+        if force_com or (formula_cells and self._excel._is_dirty):
+            rows = self._excel._read_range_with_com(
                 self._worksheet.title, min_col, min_row, max_col, max_row
             )
-        rows = [
-            tuple(cell.value for cell in row)
-            for row in self._worksheet.iter_rows(
-                min_row=min_row, max_row=max_row, min_col=min_col, max_col=max_col
+        elif formula_cells:
+            rows, needs_com = self._excel._cached_range(
+                self._worksheet.title, min_col, min_row, max_col, max_row
             )
-        ]
+            if needs_com:
+                rows = self._excel._read_range_with_com(
+                    self._worksheet.title, min_col, min_row, max_col, max_row
+                )
+        else:
+            # 数式がない表は現在のメモリ上の値を読む。新規ブックはまだ
+            # 作業ファイルが無いため、毎回キャッシュ用ブックを開いてはいけない。
+            rows = [
+                tuple(cell.value for cell in row)
+                for row in self._worksheet.iter_rows(
+                    min_row=min_row, max_row=max_row, min_col=min_col, max_col=max_col
+                )
+            ]
         if not rows or all(value is None for value in rows[0]):
             return Table([], [])
-        last_column = max(
-            (index for row in rows for index, value in enumerate(row, 1) if value is not None),
-            default=0,
-        )
-        headers = list(rows[0][:last_column])
+        # ref が定義する列数をそのまま使う。末尾の空見出しを切り捨てると、
+        # テーブル定義の壊れを見逃し、後ろの列データを失うため。
+        headers = list(rows[0])
         empty_columns = [index for index, header in enumerate(headers, 1) if header is None]
         if empty_columns:
             raise EmptyHeaderCellError(empty_columns)
@@ -87,10 +99,10 @@ class ExcelTable:
                     if str(header) in self._excel._types
                     else str(value)
                 )
-                for header, value in zip(headers, row[:last_column], strict=True)
+                for header, value in zip(headers, row, strict=True)
             }
             for row in rows[1:]
-            if any(value is not None for value in row[:last_column])
+            if any(value is not None for value in row)
         ]
         return Table([str(header) for header in headers], result, types=self._excel._types)
 
@@ -133,6 +145,23 @@ class ExcelTable:
     def write(self, table: Table) -> None:
         """Tableをデータシートへ書き込む。保存はExcelの契約に従う。"""
         self.replace(table)
+
+    def append(self, rows: list[dict[str, Value]] | dict[str, Value] | Table) -> None:
+        """Table、1行、または行リストを既存テーブルの末尾へ追加する。"""
+        self._excel._ensure_writable("append")
+        current = self.read()
+        if isinstance(rows, Table):
+            additions = rows.read()
+        elif isinstance(rows, dict):
+            additions = [rows]
+        elif isinstance(rows, list):
+            additions = rows
+        else:
+            raise InvalidTableInputError(
+                "ExcelTable の追記には Table、1行、または行リストを指定してください。"
+            )
+        current.append(additions)
+        self.replace(current)
 
     def count(self) -> int:
         """データ行数を返す。"""

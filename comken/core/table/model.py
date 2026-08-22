@@ -7,7 +7,15 @@ Table はメモリ上の行だけを担当します。CSV や Excel の保存処
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
-from comken.exceptions.table import TableColumnNotFoundError, TableDuplicateKeyError, TableError
+from comken.exceptions.table import (
+    TableColumnNotFoundError,
+    TableDuplicateKeyError,
+    TableError,
+    TableMergeColumnCollisionError,
+    TableMergeSuffixError,
+    TableRowColumnsError,
+    TableTypeConversionError,
+)
 
 
 class Table:
@@ -28,15 +36,25 @@ class Table:
         if len(self.columns) != len(set(self.columns)):
             raise TableError("列名は重複させられません。")
         self.types = dict(types or {})
-        self.rows = [self._normalize(row) for row in rows]
+        normalized = [self._normalize(row, row_number) for row_number, row in enumerate(rows, 1)]
+        self.rows = normalized
 
-    def _normalize(self, row: Mapping[str, Any]) -> dict[str, Any]:
-        return {
-            column: self.types[column](row.get(column, ""))
-            if column in self.types
-            else row.get(column, "")
-            for column in self.columns
-        }
+    def _normalize(self, row: Mapping[str, Any], row_number: int) -> dict[str, Any]:
+        missing = [column for column in self.columns if column not in row]
+        extra = [column for column in row if column not in self.columns]
+        if missing or extra:
+            raise TableRowColumnsError(row_number, missing, extra)
+        normalized = dict(row)
+        for column, converter in self.types.items():
+            if column not in self.columns:
+                continue
+            try:
+                normalized[column] = converter(row[column])
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except Exception as exc:
+                raise TableTypeConversionError(row_number, column, row[column]) from exc
+        return normalized
 
     def read(self) -> list[dict[str, Any]]:
         """現在の行をコピーして返す。元のTableは変更しない。"""
@@ -56,13 +74,15 @@ class Table:
 
     def replace(self, rows: list[dict]) -> "Table":
         """表の全行を置き換え、同じTableを返す。"""
-        self.rows = [self._normalize(row) for row in rows]
+        self.rows = [self._normalize(row, row_number) for row_number, row in enumerate(rows, 1)]
         return self
 
     def append(self, rows: list[dict] | dict) -> "Table":
         """1行または複数行を末尾へ追加する。"""
         values = [rows] if isinstance(rows, dict) else rows
-        self.rows.extend(self._normalize(row) for row in values)
+        start = len(self.rows) + 1
+        normalized = [self._normalize(row, start + index) for index, row in enumerate(values)]
+        self.rows.extend(normalized)
         return self
 
     def count(self) -> int:
@@ -108,20 +128,59 @@ class Table:
             value: Table(self.columns, rows, types=self.types) for value, rows in grouped.items()
         }
 
-    def merge(self, other: "Table", *, on: str, how: str = "left") -> "Table":
+    def merge(
+        self,
+        other: "Table",
+        *,
+        on: str,
+        how: str = "left",
+        suffixes: tuple[str, str] = ("_read", "_write"),
+    ) -> "Table":
         """キー列で別のTableを結合し、新しいTableを返す。"""
         if how not in {"left", "inner"}:
             raise TableError("merge は left または inner のみ対応します。")
+        self._check_columns([on])
+        other._check_columns([on])
+        if (
+            not isinstance(suffixes, tuple)
+            or len(suffixes) != 2
+            or not all(isinstance(suffix, str) and suffix for suffix in suffixes)
+            or suffixes[0] == suffixes[1]
+        ):
+            raise TableMergeSuffixError()
+
+        overlapping = (set(self.columns) & set(other.columns)) - {on}
+        left_names = {
+            column: f"{column}{suffixes[0]}" if column in overlapping else column
+            for column in self.columns
+        }
+        right_names = {
+            column: f"{column}{suffixes[1]}" if column in overlapping else column
+            for column in other.columns
+            if column != on
+        }
+        columns = [left_names[column] for column in self.columns]
+        columns.extend(right_names[column] for column in other.columns if column != on)
+        duplicates = [column for column in dict.fromkeys(columns) if columns.count(column) > 1]
+        if duplicates:
+            # suffix で既存列を上書きすると値の出所が分からなくなるため、結合前に止める。
+            raise TableMergeColumnCollisionError(duplicates)
+
         right_index = other.index(on)
-        columns = self.columns + [column for column in other.columns if column not in self.columns]
         rows = []
-        for left in self.rows:
-            right = right_index.get(left[on])
-            if right is None and how == "inner":
+        for read_row in self.rows:
+            write_row = right_index.get(read_row[on])
+            if write_row is None and how == "inner":
                 continue
-            rows.append(
-                {column: (right or {}).get(column, left.get(column, "")) for column in columns}
+            merged = {left_names[column]: read_row[column] for column in self.columns}
+            merged.update(
+                {
+                    right_names[column]: write_row[column] if write_row is not None else ""
+                    for column in other.columns
+                    if column != on
+                }
             )
+            rows.append(merged)
         return Table(columns, rows)
 
     def concat(self, other: "Table") -> "Table":
@@ -136,10 +195,7 @@ class Table:
         columns = self.columns
         return Table(
             columns,
-            [
-                {column: row.get(column, "") for column in columns}
-                for row in [*self.rows, *other.rows]
-            ],
+            [{column: row[column] for column in columns} for row in [*self.rows, *other.rows]],
             types=self.types,
         )
 

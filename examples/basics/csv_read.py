@@ -1,5 +1,5 @@
 """
-サンプル: CsvReader の主要な読み取り方法
+サンプル: CSV と Table の主要な読み取り方法
 
 ヘッダー名で安全に値を読む方法、セル位置で読む方法、検索・抽出・索引・グループ化を示す。
 
@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 
 from comken.core.logger import local
-from comken.toolbox.csv import CsvReader
+from comken.toolbox.csv import CSV
 
 HERE = Path(__file__).parent
 CSV_PATH = HERE / "output" / "受注明細.csv"
@@ -28,24 +28,20 @@ def main() -> None:
         "A003,株式会社ガンマ,山田,4300\n",
         encoding="utf-8",
     )
-    reader = CsvReader(CSV_PATH)
-
-    rows = reader.read_rows()
+    table = CSV(CSV_PATH).read()
+    rows = table.read()
     logger.info("全行: %d 件（先頭: %s）", len(rows), rows[0])
 
     # ヘッダーがある CSV は列順が変わっても壊れない first() を選ぶ。
-    logger.info("最初の得意先: %s", reader.first("得意先"))
-    # 帳票仕様で位置が固定された値は、ヘッダーも1行目と数える cell() で読む。
-    logger.info("B2 の値: %s", reader.cell("B2"))
-
-    found = reader.find("注文番号", "A002")
-    logger.info("A002 の担当者: %s", found["担当者"] if found else "")
-    logger.info("山田の受注: %d 件", len(reader.filter("担当者", "山田")))
-    logger.info("金額列: %s", reader.column("金額"))
+    logger.info("最初の得意先: %s", rows[0]["得意先"])
+    found = table.index("注文番号")["A002"]
+    logger.info("A002 の担当者: %s", found["担当者"])
+    logger.info("山田の受注: %d 件", table.filter(lambda row: row["担当者"] == "山田").count())
+    logger.info("金額列: %s", table.column("金額"))
 
     # 重複しない注文番号は index()、複数行あり得る担当者は group_by() を使う。
-    orders = reader.index("注文番号")
-    orders_by_staff = reader.group_by("担当者")
+    orders = table.index("注文番号")
+    orders_by_staff = table.group_by("担当者")
     logger.info("索引 A003: %s / 山田グループ: %d 件", orders["A003"], len(orders_by_staff["山田"]))
 
 

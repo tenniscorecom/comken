@@ -4,19 +4,19 @@ r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポー�
 どのレポートを、どれくらいの頻度で取っているのか**が分からなくなる。取得をここに集約し、
 何を取っているかは管理表（Excel）に、いつ何を取ったかは履歴（CSV）に集める。
 
-    from comken.services.salesforce_downloader import download_report, get_scheduled_report
+    from comken.services.salesforce_downloader import cached_report, download_report
 
     CUSTOMER_LIST = "1001"        # プロジェクトごとに、意味の分かる名前を付ける
     SALES_RESULT = "1003"
 
-    rows = download_report(CUSTOMER_LIST).read_rows()                  # 今すぐ取りに行く
-    by_code = get_scheduled_report(SALES_RESULT).index("顧客コード")    # 定期取得済みを受け取る
+    rows = download_report(CUSTOMER_LIST).read().read()                  # 今すぐ取りに行く
+    by_code = cached_report(SALES_RESULT).read().index("顧客コード")
 
 **プロジェクトのコードに Salesforce の URL もレポート ID も書かない。** 書くのは
 管理番号だけで、参照先の差し替えは管理表を直せば済む（コードは変えない）。
 
-    download_report      今すぐ Salesforce から取得して、ファイルを CsvReader で返す
-    get_scheduled_report 定期取得しておいたファイルを CsvReader で返す（取りに行かない）
+    download_report      今すぐ Salesforce から取得して、ファイルを CSV で返す
+    cached_report        本日の定期取得キャッシュを CSV で返す（取りに行かない）
     download_scheduled   「定期」登録の全件を取得する（定期実行のプロジェクトが呼ぶ）
     file_path_of         そのレポートが保存されるパス
     load_master          管理表を読む
@@ -52,12 +52,12 @@ r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポー�
 **`__init__.py` 経由の import で `requests` を読ませない設計。**
 
 `service.py` を import すると `requests` が必要になる。BO 環境のように
-`requests` が入っていないところで `get_scheduled_report` /
+`requests` が入っていないところで `cached_report` /
 `file_path_of` / `load_master` / `shared_report_ids` / `ReportEntry`
 だけ動かせるよう、`__getattr__` (PEP 562) で遅延 import する。
 
-`download_report` / `download_scheduled` を import したときだけ `service.py`
-が読み込まれ、`requests` がロードされる。
+`download_report` / `download_scheduled` を import したときだけ
+`service.py` が読み込まれ、`requests` がロードされる。
 """
 
 from comken.services.salesforce_downloader.master import (
@@ -70,7 +70,7 @@ from comken.services.salesforce_downloader.schedule import ScheduleRule
 __all__ = [
     "download_report",
     "download_scheduled",
-    "get_scheduled_report",
+    "cached_report",
     "file_path_of",
     "load_master",
     "shared_report_ids",
@@ -83,7 +83,7 @@ __all__ = [
 _LAZY_TARGETS: dict[str, str] = {
     "download_report": "comken.services.salesforce_downloader.service",
     "download_scheduled": "comken.services.salesforce_downloader.service",
-    "get_scheduled_report": "comken.services.salesforce_downloader.provider",
+    "cached_report": "comken.services.salesforce_downloader.provider",
     "file_path_of": "comken.services.salesforce_downloader.provider",
 }
 

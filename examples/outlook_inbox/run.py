@@ -9,7 +9,7 @@
 import logging
 from pathlib import Path
 
-from comken.toolbox.csv import CsvWriter
+from comken.toolbox.csv import CSV
 from comken.toolbox.outlook import Outlook
 
 logger = logging.getLogger(__name__)
@@ -32,10 +32,8 @@ def main() -> None:
             }
             for message in mail.read_messages(subject_contains=SUBJECT_CONTAINS, days=DAYS)
         ]
-        CsvWriter(
-            OUTPUT_CSV,
-            fieldnames=["受信日時", "差出人", "件名", "本文"],
-        ).write_rows(rows)
+        with CSV(OUTPUT_CSV) as csv_file:
+            csv_file.replace(rows)
         mail.save_draft(
             to=DRAFT_TO,
             subject="受信メール処理結果",

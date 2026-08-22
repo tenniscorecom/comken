@@ -14,7 +14,7 @@ from pathlib import Path
 
 from comken import Config, dry_run
 from comken.core import date_in_name, move_file
-from comken.toolbox.csv import CsvReader
+from comken.toolbox.csv import CSV
 
 HERE = Path(__file__).parent
 CONFIG_PATH = HERE / "config.ini"
@@ -40,9 +40,8 @@ def move_matching_files(
 
     for path in paths:
         try:
-            # ヘッダーがない CSV なら CsvReader(path).cell("A2") でも読める。
-            # この例はヘッダーがあるため、列の位置変更に強い first() を使う。
-            date_value = CsvReader(path).first(date_column)
+            # ヘッダー名で読むため、列の位置が変わっても同じ値を取得できる。
+            date_value = CSV(path).read().read()[0][date_column]
             try:
                 # NOTE: CSV に書かれた業務日付の解析であり、タイムゾーンは不要。
                 content_date = datetime.datetime.strptime(  # noqa: DTZ007

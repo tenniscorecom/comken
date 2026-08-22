@@ -67,6 +67,20 @@ def _block_values(ws, first_row: int, last_row: int, last_col: int) -> list[tupl
     return [tuple(row) for row in values]
 
 
+def _range_values(
+    ws: Any, first_row: int, first_col: int, last_row: int, last_col: int
+) -> list[tuple[Any, ...]]:
+    """指定した矩形だけを1回のCOM呼出しで読む。"""
+    if first_row > last_row or first_col > last_col:
+        return []
+    values = ws.Range(ws.Cells(first_row, first_col), ws.Cells(last_row, last_col)).Value
+    if not isinstance(values, tuple):
+        return [(values,)]
+    if values and not isinstance(values[0], tuple):
+        return [values]
+    return [tuple(row) for row in values]
+
+
 class ExcelComHandler(FileBase):
     """win32com を使った Excel 操作クラス。
 
@@ -191,6 +205,14 @@ class ExcelComHandler(FileBase):
         last_row = self.last_row(sheet_name)
         last_col = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
         return _block_values(ws, int(min_row), last_row, last_col)
+
+    def read_range(
+        self, sheet_name: str, min_col: int, min_row: int, max_col: int, max_row: int
+    ) -> list[tuple[Any, ...]]:
+        """指定シートの矩形範囲だけを計算済みの値で返す。"""
+        return _range_values(
+            self._sheet(sheet_name), int(min_row), int(min_col), int(max_row), int(max_col)
+        )
 
     def read_rows_as_dicts(self, sheet_name: str, header_row: int = 1) -> list[dict]:
         """ヘッダー行をキーとした辞書のリストで返す。

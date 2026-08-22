@@ -26,13 +26,13 @@ def _drop_service(monkeypatch: pytest.MonkeyPatch) -> None:
             monkeypatch.delitem(sys.modules, mod_name, raising=False)
 
 
-def test_get_scheduled_report_does_not_load_service(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`get_scheduled_report` を import しても `service` は読み込まれない。"""
+def test_cached_report_does_not_load_service(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`cached_report` を import しても `service` は読み込まれない。"""
     _drop_service(monkeypatch)
-    from comken.services.salesforce_downloader import get_scheduled_report  # noqa: F401
+    from comken.services.salesforce_downloader import cached_report  # noqa: F401
 
     assert "comken.services.salesforce_downloader.service" not in sys.modules, (
-        "get_scheduled_report の import で service まで読み込まれている。"
+        "cached_report の import で service まで読み込まれている。"
         "__init__.py の __getattr__ が service を引いている可能性"
     )
 

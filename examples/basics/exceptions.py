@@ -4,8 +4,8 @@ import logging
 from pathlib import Path
 
 from comken.core.logger import local
-from comken.exceptions import ComkenError, CsvError, CsvRowNotFoundError
-from comken.toolbox.csv import CsvReader
+from comken.exceptions import ComkenError, TableColumnNotFoundError
+from comken.toolbox.csv import CSV
 
 HERE = Path(__file__).parent
 CSV_PATH = HERE / "output" / "例外確認.csv"
@@ -18,18 +18,15 @@ def main() -> None:
     CSV_PATH.write_text("注文番号,金額\nA001,12000\n", encoding="utf-8")
 
     try:
-        CsvReader(CSV_PATH).find("注文番号", "Z999")
-    except CsvRowNotFoundError as error:
+        CSV(CSV_PATH).read().column("存在しない列")
+    except TableColumnNotFoundError as error:
         # この失敗だけ処理を分けたい場合は、個別例外を捕まえる。
         logger.error("個別に捕捉: %s", error)
 
     empty_csv_path = CSV_PATH.with_name("データなし.csv")
     empty_csv_path.write_text("注文番号,金額\n", encoding="utf-8")
     try:
-        CsvReader(empty_csv_path).first("注文番号")
-    except CsvError as error:
-        # CSV の失敗を同じ扱いにするならカテゴリ基底を捕まえる。
-        logger.error("CSV カテゴリで捕捉: %s", error)
+        CSV(empty_csv_path).read().column("存在しない列")
     except ComkenError as error:
         # 機能を問わず処理末尾でまとめるなら ComkenError を使う。
         logger.error("comken 全体で捕捉: %s", error)

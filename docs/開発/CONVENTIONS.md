@@ -55,7 +55,7 @@ Python の作法（PEP 8）に従う。
 
 | 種別 | 規則 | 例 |
 |---|---|---|
-| クラス名 | PascalCase | `ExcelWriter`, `LoginPage`, `CsvMerger` |
+| クラス名 | PascalCase | `Excel`, `LoginPage`, `CsvMerger` |
 | 定数・固定値 | UPPER_SNAKE_CASE | `COL_Q`, `SHEET_NAME`, `WAIT_SECONDS` |
 | 関数・メソッド | snake_case | `read_rows()`, `run_macro()` |
 | 変数 | snake_case | `csv_lookup`, `matched_rows` |
@@ -63,7 +63,7 @@ Python の作法（PEP 8）に従う。
 | フォルダ名 | snake_case | `excel/`, `browser/` |
 | 内部用（外から呼ばない） | `_` プレフィックス | `_sheet()`, `_click()` |
 | config.ini のセクション・キー | UPPER_SNAKE_CASE | `[FILES]`, `OUTPUT_FOLDER` |
-| テストクラス | `Test` + PascalCase | `TestExcelWriter`, `TestCsvReader` |
+| テストクラス | `Test` + PascalCase | `TestExcel`, `TestCSV` |
 | テストメソッド | `test_` + snake_case | `test_reads_all_rows` |
 
 ### 名前の付け方の原則
@@ -195,10 +195,10 @@ OUTPUT_FOLDER = C:\work\out  ; ← 値は自由
 
 ```python
 # 良い（機能を提供するパッケージが分かる）
-from パッケージ.excel import ExcelReader, ExcelWriter
+from パッケージ.excel import Excel, Excel
 
 # 悪い（どの機能群に依存しているか分からない）
-from パッケージ import ExcelWriter, FileFinder
+from パッケージ import Excel, FileFinder
 
 # 悪い（ドットを数えないと依存先が分からない）
 from ..foo import Bar
@@ -237,7 +237,7 @@ logger = logging.getLogger(__name__)    # 3. logger
 
 DEFAULT_TIMEOUT = 30                    # 4. 定数
 
-class CsvReader:                        # 5. 主役の公開クラス
+class CSV:                        # 5. 主役の公開クラス
     ...
 
 def merge_csv(paths: list) -> Path:     # 6. 公開関数
@@ -313,7 +313,7 @@ if file_size > LOCAL_COPY_THRESHOLD_BYTES:
 | **大文字スネークケース** | `SHEET_NAME`, `MAX_RETRY_COUNT` |
 | **場所** | ファイルの先頭またはクラスの先頭（メソッドより上）にまとめる |
 | **計算式はそのまま書く** | `10 * 1024 * 1024`（`10485760` より意味が伝わる） |
-| **選択肢を渡す引数は定数クラスを使う** | `latest(by=SortBy.UPDATED)`, `CsvReader(encoding=Encoding.CP932)`, `set_fill(color=Color.RED)`。生の文字列（`by="updated"`）はマジックナンバーになるので書かない |
+| **選択肢を渡す引数は定数クラスを使う** | `latest(by=SortBy.UPDATED)`, `CSV(encoding=Encoding.CP932)`, `set_fill(color=Color.RED)`。生の文字列（`by="updated"`）はマジックナンバーになるので書かない |
 
 ---
 
@@ -325,7 +325,7 @@ if file_size > LOCAL_COPY_THRESHOLD_BYTES:
 |---|---|---|
 | 決まった値の一覧を名前で持つ（インスタンスを作らない） | ただのクラス属性（**定数クラス**） | `Color.RED`, `SortBy.UPDATED`, `Encoding.CP932` |
 | 複数の値をひとまとまりで持ち運ぶ「データの箱」 | `@dataclass` | 集計結果・検索結果など、名前付きの値のセットを返すとき |
-| 振る舞い（メソッド）が主役のもの | 普通のクラス | `ExcelWriter`, `FileFinder` |
+| 振る舞い（メソッド）が主役のもの | 普通のクラス | `Excel`, `FileFinder` |
 
 ### 定数クラス — 「変わらない値の一覧」を入れる箱
 
@@ -461,15 +461,15 @@ class BrowserSession:
 別コンストラクタが必要なときだけ使う。
 
 ```python
-class ExcelWriter:
+class Excel:
     @classmethod
-    def from_template(cls, template_path: Path, output_path: Path) -> "ExcelWriter":
-        """テンプレートをコピーして新しい ExcelWriter を返す。"""
+    def from_template(cls, template_path: Path, output_path: Path) -> "Excel":
+        """テンプレートをコピーして新しい Excel を返す。"""
         shutil.copy2(template_path, output_path)
         return cls(output_path)
 
 # 呼び出し側
-f = ExcelWriter.from_template(TEMPLATE_PATH, output_path)
+f = Excel.from_template(TEMPLATE_PATH, output_path)
 ```
 
 ### @staticmethod の使いどき
@@ -482,11 +482,11 @@ f = ExcelWriter.from_template(TEMPLATE_PATH, output_path)
 def normalize_key(key: str) -> str:
     return key.strip().upper()
 
-# 例外：CsvReader 専用のバリデーションはクラス内に置く
-class CsvReader:
+# 例外：CSV 専用のバリデーションはクラス内に置く
+class CSV:
     @staticmethod
     def _validate_columns(rows: list[dict], columns: list[str]) -> None:
-        ...  # CsvReader 以外から呼ばれることを想定していない
+        ...  # CSV 以外から呼ばれることを想定していない
 ```
 
 ---
@@ -502,7 +502,7 @@ class CsvReader:
 
 ```python
 # 良い（with 文）
-with ExcelReader("data.xlsx") as f:
+with Excel("data.xlsx") as f:
     rows = f.read_rows_as_dicts("Sheet1")
 
 # with が使えない場合（pywin32 の COM オブジェクト等）
@@ -586,10 +586,10 @@ logger.error("エラーが発生しました", exc_info=True)  # exc_info=True �
 
 ## Excel（openpyxl）
 
-Excel の読み取りだけなら `ExcelReader`、書き込みを伴う場合は `ExcelWriter` を使う。
+Excel の読み取りだけなら `Excel`、書き込みを伴う場合は `Excel` を使う。
 openpyxl を直接触るのはライブラリにない機能が必要なときだけ。
 シートに対する書き込み・書式・構造化テーブル操作は `f.sheet(name)` で取得した
-`Sheet` に集約し、`ExcelWriter` にはブック単位の操作だけを置く。
+`Sheet` に集約し、`Excel` にはブック単位の操作だけを置く。
 
 ### 書式設定は処理ロジックと分離する
 
@@ -758,22 +758,21 @@ tests/
 ### 書き方のパターン
 
 ```python
-class TestCsvReaderFind:
+class TestCSVFind:
     def test_finds_existing_row(self, sample_csv):
         """キーに一致する行を返す。"""
-        row = CsvReader(sample_csv).find("注文番号", "A001")
+        row = CSV(sample_csv).find("注文番号", "A001")
         assert row is not None
         assert row["金額"] == "1000"
 
     def test_returns_none_when_not_found(self, sample_csv):
         """見つからない場合は None を返す。"""
-        row = CsvReader(sample_csv).find("注文番号", "Z999")
+        row = CSV(sample_csv).find("注文番号", "Z999")
         assert row is None
 ```
 
 | ルール | 例 |
 |---|---|
-| テストクラス名は `Test` + 対象クラス名 | `TestExcelWriter`, `TestCsvReader` |
+| テストクラス名は `Test` + 対象クラス名 | `TestExcel`, `TestCSV` |
 | テストメソッド名は `test_` + 何を確認するか | `test_returns_none_when_not_found` |
 | 一時ファイルは `tmp_path` フィクスチャを使う | `def test_something(tmp_path):` |
-

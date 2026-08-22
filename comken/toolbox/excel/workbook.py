@@ -1,20 +1,26 @@
 """comken/toolbox/excel/workbook.py — Excel ブックとデータ領域を操作する。"""
 
+import hashlib
+import shutil
 from collections.abc import Callable, Mapping
 from datetime import datetime
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Self, TypeAlias, cast
+from zipfile import ZipFile
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
-from comken.core.files import copy_to_local_if_large
-from comken.core.table.model import Table
+from comken.core.files import atomic_write, copy_to_local_if_large
 from comken.exceptions import (
     EmptyHeaderCellError,
+    ExcelFileNotFoundError,
+    ExcelMacroPreservationError,
+    ExcelSaveValidationError,
     SheetAlreadyExistsError,
     SheetNotFoundError,
+    UnsupportedFileSuffixError,
 )
 from comken.runtime import dry_run_log, is_dry_run
 from comken.toolbox.excel.sheet import Sheet
@@ -35,23 +41,28 @@ class Excel:
         *,
         types: Mapping[str, Callable[[Any], Any]] | None = None,
         read_only: bool = False,
-        local_copy: bool = False,
+        local_copy: bool | None = None,
     ) -> None:
         """ブックをOpenPyXLで開く。
 
         利用者がエンジンを選ぶ必要はない。通常操作はOpenPyXLを使い、未計算の
         数式値の読取りとVBA実行だけ、一時的にExcel COMへ昇格する。
-        ``local_copy=True`` でも正常終了時の保存先は元ファイルになる。
+        ``local_copy=None`` の既定ではUNCパスだけローカルコピーを使う。
+        ``True`` で強制、``False`` で無効化でき、保存先は常に元ファイルになる。
 
         ``read_only``、dry-run、またはwithブロックが例外で終わった場合は保存しない。
         """
         self.path = Path(source)
+        if self.path.suffix.casefold() not in _EXCEL_SUFFIXES:
+            raise UnsupportedFileSuffixError(self.path, tuple(sorted(_EXCEL_SUFFIXES)))
         self._types = dict(types or {})
         self._read_only = read_only
         self._local_copy_path: Path | None = None
+        self._working_copy_is_stale = False
         self._is_closed = False
         self._is_dirty = False
-        if local_copy and self.path.exists():
+        should_copy = self._is_unc_path(source) if local_copy is None else local_copy
+        if should_copy and self.path.exists():
             # ネットワーク上のブックを直接扱うと OpenPyXL/Excel の I/O が不安定に
             # なることがある。作業中だけローカルを使い、保存時に元のパスへ戻す。
             self._working_path, self._local_copy_path = copy_to_local_if_large(
@@ -69,7 +80,7 @@ class Excel:
             )
         else:
             if read_only:
-                raise FileNotFoundError(self.path)
+                raise ExcelFileNotFoundError(self.path)
             self._workbook = Workbook()
 
     def __enter__(self) -> Self:
@@ -129,48 +140,17 @@ class Excel:
         self._ensure_open()
         return [name for name in self._workbook.sheetnames if self._is_data_sheet_name(name)]
 
-    def read_with_com(self, sheet_name: str | None = None):
-        """Excel COMで計算結果を読み、Tableとして返す。"""
-        if sheet_name is None:
-            sheet_name = self.data_sheet()._worksheet.title
-        else:
-            sheet_name = self._with_python_prefix(sheet_name)
-        rows = self.read_computed_rows(sheet_name, 1)
-        if not rows:
-            return Table([], [])
-        headers = rows[0]
-        empty_columns = [index for index, header in enumerate(headers, start=1) if header is None]
-        if empty_columns:
-            raise EmptyHeaderCellError(empty_columns)
-        columns = [str(column) for column in headers]
-        normalized_rows = [
-            {
-                column: "" if value is None else value if column in self._types else str(value)
-                for column, value in zip(columns, row, strict=False)
-            }
-            for row in rows[1:]
-            if any(value is not None for value in row)
-        ]
-        return Table(columns, normalized_rows, types=self._types)
-
-    def _read_table_with_com(
+    def _read_range_with_com(
         self, sheet_name: str, min_col: int, min_row: int, max_col: int, max_row: int
-    ) -> Table:
+    ) -> list[tuple[Any, ...]]:
         """実テーブル範囲だけをCOMの計算値で読む。"""
-        rows = self.read_computed_rows(sheet_name, min_row)
-        bounded = [row[min_col - 1 : max_col] for row in rows[: max_row - min_row + 1]]
-        if not bounded:
-            return Table([], [])
-        headers = [str(value) for value in bounded[0]]
-        data = [
-            {
-                header: "" if value is None else value if header in self._types else str(value)
-                for header, value in zip(headers, row, strict=True)
-            }
-            for row in bounded[1:]
-            if any(value is not None for value in row)
-        ]
-        return Table(headers, data, types=self._types)
+        if self._is_dirty:
+            self._prepare_com_working_copy()
+        self._sync_working_file()
+        from comken.toolbox.windows.handler import ExcelComHandler
+
+        with ExcelComHandler(self._working_path, local_copy_threshold_mb=0) as excel_com:
+            return excel_com.read_range(sheet_name, min_col, min_row, max_col, max_row)
 
     def close(self, *, save: bool = True) -> None:
         """ブックを閉じる。通常はwithの正常終了時に変更を自動保存する。"""
@@ -198,8 +178,29 @@ class Excel:
             dry_run_log("Excel を保存: %s", self.path)
             return
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._workbook.save(self.path)
+        original_vba = self._vba_digest(self.path)
+        with atomic_write(self.path) as temporary_path:
+            self._workbook.save(temporary_path)
+            verification = None
+            try:
+                verification = load_workbook(
+                    temporary_path,
+                    read_only=True,
+                    keep_vba=self.path.suffix.casefold() in {".xlsm", ".xltm"},
+                )
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except Exception as error:
+                raise ExcelSaveValidationError(self.path, error) from error
+            finally:
+                if verification is not None:
+                    verification.close()
+            if original_vba is not None and self._vba_digest(temporary_path) != original_vba:
+                raise ExcelMacroPreservationError(self.path)
         self._is_dirty = False
+        # 明示 save() 後も with 内でCOM操作を続けられる。次のCOM利用時に
+        # 保存後の原本からローカル作業コピーを同期し、古い値を開かない。
+        self._working_copy_is_stale = self._working_path != self.path
 
     def run_macro(self, macro_name: str) -> None:
         """Excel COMへ一時的に昇格してVBAマクロを実行する。
@@ -264,11 +265,15 @@ class Excel:
 
     def _sync_working_file(self) -> None:
         """COMへ渡す前に現在状態を作業ファイルへ同期する。"""
+        if self._working_copy_is_stale and self.path.exists():
+            shutil.copy2(self.path, self._working_path)
+            self._working_copy_is_stale = False
         working_file_is_empty = (
             not self._working_path.exists() or self._working_path.stat().st_size == 0
         )
         if self._is_dirty or working_file_is_empty:
             self._workbook.save(self._working_path)
+            self._working_copy_is_stale = False
 
     def _prepare_com_working_copy(self) -> None:
         """マクロの変更を正常終了まで元ファイルから隔離する作業コピーを用意する。"""
@@ -278,6 +283,7 @@ class Excel:
             self._working_path, self._local_copy_path = copy_to_local_if_large(
                 self.path, threshold_mb=_FORCED_LOCAL_COPY_THRESHOLD_MB
             )
+            self._working_copy_is_stale = False
             return
         import tempfile
 
@@ -285,6 +291,7 @@ class Excel:
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as temp_file:
             self._working_path = Path(temp_file.name)
         self._local_copy_path = self._working_path
+        self._working_copy_is_stale = False
 
     def _reload_workbook(self) -> None:
         self._workbook.close()
@@ -322,6 +329,64 @@ class Excel:
             return rows, needs_com
         finally:
             cached_workbook.close()
+
+    def _cached_range(
+        self, sheet_name: str, min_col: int, min_row: int, max_col: int, max_row: int
+    ) -> tuple[list[tuple[Any, ...]], bool]:
+        """実テーブル範囲の保存済み計算値と、COM再計算の要否を返す。"""
+        if self._working_copy_is_stale:
+            self._sync_working_file()
+        formula_sheet = self._workbook[sheet_name]
+        if self._is_dirty or not self._working_path.exists():
+            rows = [
+                tuple(
+                    formula_sheet.cell(row=row_number, column=column).value
+                    for column in range(min_col, max_col + 1)
+                )
+                for row_number in range(min_row, max_row + 1)
+            ]
+            needs_com = any(
+                isinstance(value, str) and value.startswith("=") for row in rows for value in row
+            )
+            return rows, needs_com
+        cached_workbook = load_workbook(self._working_path, data_only=True, read_only=True)
+        try:
+            cached_sheet = cached_workbook[sheet_name]
+            rows: list[tuple[Any, ...]] = []
+            needs_com = False
+            for row_number in range(min_row, max_row + 1):
+                row = tuple(
+                    cached_sheet.cell(row=row_number, column=column).value
+                    for column in range(min_col, max_col + 1)
+                )
+                rows.append(row)
+                for column, cached_value in zip(range(min_col, max_col + 1), row, strict=True):
+                    formula = formula_sheet.cell(row=row_number, column=column).value
+                    if (
+                        isinstance(formula, str)
+                        and formula.startswith("=")
+                        and (cached_value is None or self._is_dirty)
+                    ):
+                        needs_com = True
+            return rows, needs_com
+        finally:
+            cached_workbook.close()
+
+    @staticmethod
+    def _is_unc_path(path: str | Path) -> bool:
+        """WindowsのUNC表記かを、ファイルの存在確認なしで判定する。"""
+        return str(path).replace("/", "\\").startswith("\\\\")
+
+    @staticmethod
+    def _vba_digest(path: Path) -> bytes | None:
+        """マクロ付き形式に含まれるVBAバイナリのハッシュを返す。"""
+        if not path.exists() or path.suffix.casefold() not in {".xlsm", ".xltm"}:
+            return None
+        try:
+            with ZipFile(path) as archive:
+                return hashlib.sha256(archive.read("xl/vbaProject.bin")).digest()
+        except KeyError:
+            return None
 
     def _is_pristine_workbook(self) -> bool:
         worksheet = cast(Worksheet, self._workbook.active)

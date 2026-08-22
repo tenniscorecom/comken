@@ -1,25 +1,23 @@
 r"""comken/services/salesforce_downloader/service.py — 取得の本体。
 
-    from comken.services.salesforce_downloader import download_report, get_scheduled_report
+    from comken.services.salesforce_downloader import cached_report, download_report
 
     CUSTOMER_LIST = "1001"        # 各プロジェクトで、意味の分かる名前を付ける
 
-    rows = download_report(CUSTOMER_LIST).read_rows()        # 今すぐ Salesforce から取る
-    by_code = get_scheduled_report(CUSTOMER_LIST).index("顧客コード")   # 定期取得済みを読む
+    rows = download_report(CUSTOMER_LIST).read().read()      # 今すぐ Salesforce から取る
+    by_code = cached_report(CUSTOMER_LIST).read().index("顧客コード")
 
 **2つの関数の意味をはっきり分ける。**
 
 - `download_report()` は「**今この瞬間に取りに行く**」。管理表で定期になっていても、
   今日すでに取っていても、必ず Salesforce へ問い合わせる。呼んだ側が最新を求めている
   のだから、黙って前のものを返さない
-- `get_scheduled_report()` は「**取っておいたものを受け取る**」。取りに行く関数ではない。
+- `cached_report()` は「**取っておいたものを受け取る**」。取りに行く関数ではない。
   まだ取れていなければ例外にする。ここで自動的に取りに行くと、**定期取得が動いて
   いないことに誰も気づかなくなる**
 
-戻り値を `CsvReader` にした理由は、利用側が `read_rows()` / `index()` / `filter()`
-をそのまま使えること、そして **CsvWriter が何の文字コードで書いたかを利用側が
-知らなくてよくなる**こと。`CsvReader` は最初のメソッド呼び出しまでファイルを読まない
-（遅延読み込み）ので、パスだけ欲しい場合は `.path` で取れる（読込みは走らない）。
+戻り値は `CSV`。行の検索・抽出・索引化は `read()` で得た `Table` で行う。
+パスだけ欲しい場合は `.path` で取れる。
 `download_scheduled()` は定期取得したパスのリストを `list[Path]` で返すが、これは
 定期取得の呼び出し側が中身を読まず「取らせる」のが目的なので、reader を並べても
 使い道がないため（役割の違いが戻り値の型に出ている）。
@@ -37,12 +35,13 @@ r"""comken/services/salesforce_downloader/service.py — 取得の本体。
 - 管理表にどんな列があるか → master.py
 - 履歴にどんな列があるか → history.py
 - Salesforce の認証・API の叩き方 → comken/toolbox/salesforce/
-- 取得済みファイルの取り出し（`get_scheduled_report` / `file_path_of`）→ provider.py
+- 取得済みファイルの取り出し（`cached_report` / `file_path_of`）→ provider.py
 - 管理表・履歴の置き場所（`MASTER_PATH` / `HISTORY_PATH`）→ _paths.py
 - 管理表から1行を引く `_find()` → provider.py（`requests` を経由しない側に置く）
 """
 
 import logging
+import shutil
 import time
 from pathlib import Path
 
@@ -50,6 +49,9 @@ from comken.core.files import atomic_write
 from comken.exceptions import (
     ComkenError,
     EmptyReportError,
+    HistoryHeaderMismatchError,
+    HistoryLockTimeoutError,
+    HistoryWriteError,
     ReportFolderNotFoundError,
     ScheduledDownloadFailedError,
 )
@@ -57,8 +59,8 @@ from comken.services.salesforce_downloader import history
 from comken.services.salesforce_downloader._paths import HISTORY_PATH, MASTER_PATH
 from comken.services.salesforce_downloader.history import HistoryRow
 from comken.services.salesforce_downloader.master import ReportEntry, load_master, shared_report_ids
-from comken.services.salesforce_downloader.provider import _find, file_path_of
-from comken.toolbox.csv import CsvReader, CsvWriter
+from comken.services.salesforce_downloader.provider import _daily_cache_path_of, _find, file_path_of
+from comken.toolbox.csv import CSV
 from comken.toolbox.salesforce.sites import site_for
 
 logger = logging.getLogger(__name__)
@@ -72,8 +74,8 @@ CAUSE_FILE = "ファイル"
 CAUSE_PROGRAM = "プログラム"
 
 
-def download_report(report_key: str, project: str = "") -> CsvReader:
-    """今すぐ Salesforce から取得して保存し、そのファイルを `CsvReader` で返す。
+def download_report(report_key: str, project: str = "") -> CSV:
+    """今すぐ Salesforce から取得して保存し、そのファイルを `CSV` で返す。
 
     **必ず Salesforce へ問い合わせる。** 今日すでに取っていても取り直す。
 
@@ -82,7 +84,7 @@ def download_report(report_key: str, project: str = "") -> CsvReader:
         project: 呼び出し元の名前。履歴に残るので、入れておくと後から追える。
 
     Returns:
-        保存したファイルを読み取る `CsvReader`。ファイルパスは `.path` で取れる。
+        保存したファイルを読み取る `CSV`。ファイルパスは `.path` で取れる。
 
     Raises:
         ReportNotRegisteredError: 管理表に無い管理番号の場合。
@@ -92,14 +94,14 @@ def download_report(report_key: str, project: str = "") -> CsvReader:
     """
     entry = _find(report_key, MASTER_PATH)
     path = _download(entry, project, history.TRIGGER_ON_DEMAND, HISTORY_PATH)
-    return CsvReader(path)
+    return CSV(path, read_only=True, columns=[] if path.stat().st_size == 0 else None)
 
 
 def download_scheduled(project: str = "定期実行") -> list[Path]:
     """管理表で「定期」かつ有効なレポートをまとめて取得する。
 
     定期実行のプロジェクトから呼ぶ。**1件失敗しても残りは続ける**。戻り値は `list[Path]`
-    のままで `CsvReader` を返さない（定期取得の呼び出し側は中身を読まないため）。
+    のままで `CSV` を返さない（定期取得の呼び出し側は中身を読まないため）。
 
     Raises:
         ScheduledDownloadFailedError: 1件でも取得できなかった場合。**取得できたものは
@@ -206,8 +208,17 @@ def _download(entry: ReportEntry, project: str, trigger: str, history_path: Path
         _require_folder(entry)
         rows = _fetch(entry)
         path = _save(entry, rows)
+        if trigger == history.TRIGGER_SCHEDULED:
+            _update_daily_cache(entry, path)
     except Exception as exc:
-        attempt.record_failure(exc)
+        try:
+            attempt.record_failure(exc)
+        except (
+            HistoryWriteError,
+            HistoryLockTimeoutError,
+            HistoryHeaderMismatchError,
+        ) as history_exc:
+            raise HistoryWriteError(history_path, str(history_exc), original=exc) from history_exc
         raise
     attempt.record_success(path, rows)
     return path
@@ -242,15 +253,42 @@ def _save(entry: ReportEntry, rows: list[dict]) -> Path:
     ヘッダー行は敢えて入れない（Salesforce のメタデータからしか取れず、
     `report.run()` は `list[dict]` 形式を返すため取り出せない）。
     """
-    path = file_path_of(entry)
-    if not rows:
-        # 問い合わせは成功したが明細が無い。**0件あり × なら失敗扱い、○ なら正常終了**
-        if not entry.allow_empty:
-            raise EmptyReportError(entry.key, entry.summary, entry.url)
-        _write_empty_csv(path)
-    else:
-        _write_csv(path, rows)
+    path = _reserve_path(entry)
+    try:
+        if not rows:
+            # 問い合わせは成功したが明細が無い。**0件あり × なら失敗扱い、○ なら正常終了**
+            if not entry.allow_empty:
+                raise EmptyReportError(entry.key, entry.summary, entry.url)
+            _write_empty_csv(path)
+        else:
+            _write_csv(path, rows)
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
     return path
+
+
+def _reserve_path(entry: ReportEntry) -> Path:
+    """排他的な新規作成で保存名を予約し、既存ファイルを上書きしない。"""
+    base_path = file_path_of(entry)
+    candidate = base_path
+    sequence = 0
+    while True:
+        try:
+            candidate.open("x").close()
+            return candidate
+        except FileExistsError:
+            sequence += 1
+            candidate = base_path.with_stem(f"{base_path.stem}_{sequence}")
+
+
+def _update_daily_cache(entry: ReportEntry, saved_path: Path) -> None:
+    """時刻付き保管ファイルを残したまま、当日最新キャッシュを原子的に更新する。"""
+    cache_path = _daily_cache_path_of(entry)
+    with atomic_write(cache_path) as temporary_path:
+        # レポート全体をメモリへ読み込むと、大きなCSVでメモリ不足になりうる。
+        # ファイル同士をストリームコピーし、書き終わったあとでatomicに入れ替える。
+        shutil.copyfile(saved_path, temporary_path)
 
 
 def _write_csv(path: Path, rows: list[dict]) -> None:
@@ -259,14 +297,14 @@ def _write_csv(path: Path, rows: list[dict]) -> None:
     複数のプロジェクトが同時に呼ぶので、直接書くと**読んでいる最中のファイルが
     半端な状態**になりうる。同じフォルダ内の置き換えは一度に入れ替わる。
     """
-    with atomic_write(path) as tmp:
-        CsvWriter(tmp, list(rows[0])).write_rows(rows)
+    with atomic_write(path) as tmp, CSV(tmp) as csv_file:
+        csv_file.replace(rows)
 
 
 def _write_empty_csv(path: Path) -> None:
     """0 件のレポート用に、空の CSV ファイルを一時ファイル経由で置く。
 
-    `CsvWriter` はヘッダー行を必須にしているため、0 行のときは直接書く。
+    0 行では列名を決められないため、空ファイルを直接書く。
     **`_write_csv()` と同じ「一時ファイル→置き換え」の作法**を維持する:
     まとめて一気に入れ替わる／失敗時に残骸を残さない。
     """

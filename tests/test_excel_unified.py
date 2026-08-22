@@ -6,6 +6,7 @@ import pytest
 from openpyxl import Workbook, load_workbook
 
 from comken import dry_run
+from comken.exceptions import ExcelMacroPreservationError, ExcelSaveValidationError
 from comken.toolbox.excel import Excel
 
 
@@ -67,21 +68,80 @@ class TestExcelAutomaticSave:
         assert _value(path) == "変更後"
         assert copy_path is not None and not copy_path.exists()
 
-
-class TestExcelComPromotion:
-    def test_read_with_com_preserves_header_without_data(self, tmp_path) -> None:
-        path = tmp_path / "header_only.xlsx"
+    def test_explicit_save_resyncs_local_copy_before_later_com_use(self, tmp_path) -> None:
+        path = tmp_path / "local-then-com.xlsx"
         _book(path)
+        with Excel(path, local_copy=True) as excel:
+            copy_path = excel._local_copy_path
+            excel.sheet("Sheet").write_value("A1", "明示保存後")
+            excel.save()
+            assert excel._working_copy_is_stale
+
+            excel._sync_working_file()
+            assert not excel._working_copy_is_stale
+            assert copy_path is not None and _value(copy_path) == "明示保存後"
+
+    def test_invalid_temporary_book_keeps_original(self, tmp_path) -> None:
+        path = tmp_path / "invalid.xlsx"
+        _book(path)
+        original = path.read_bytes()
+        excel = Excel(path)
+        excel.sheet("Sheet").write_value("A1", "変更後")
 
         with (
-            Excel(path) as excel,
-            patch.object(excel, "read_computed_rows", return_value=[("id", "name")]),
+            patch.object(
+                excel._workbook, "save", side_effect=lambda target: target.write_bytes(b"bad")
+            ),
+            pytest.raises(ExcelSaveValidationError),
         ):
-            table = excel.read_with_com("Sheet")
+            excel.save()
+        excel.close(save=False)
 
-        assert table.columns == ["id", "name"]
-        assert table.read() == []
+        assert path.read_bytes() == original
 
+    def test_unc_detection_can_be_explicitly_overridden(self, tmp_path) -> None:
+        assert Excel._is_unc_path(r"\\server\share\book.xlsx")
+        assert not Excel._is_unc_path(r"C:\work\book.xlsx")
+
+        path = tmp_path / "unc-like.xlsx"
+        _book(path)
+        with (
+            patch.object(Excel, "_is_unc_path", return_value=True),
+            patch(
+                "comken.toolbox.excel.workbook.copy_to_local_if_large",
+                return_value=(path, None),
+            ) as copy_local,
+            Excel(path),
+        ):
+            pass
+        copy_local.assert_called_once()
+
+        with (
+            patch.object(Excel, "_is_unc_path", return_value=True),
+            patch("comken.toolbox.excel.workbook.copy_to_local_if_large") as copy_local,
+            Excel(path, local_copy=False),
+        ):
+            pass
+        copy_local.assert_not_called()
+
+    def test_vba_change_in_temporary_book_keeps_original(self, tmp_path) -> None:
+        path = tmp_path / "macro-check.xlsx"
+        _book(path)
+        original = path.read_bytes()
+        excel = Excel(path)
+        excel.sheet("Sheet").write_value("A1", "変更後")
+
+        with (
+            patch.object(excel, "_vba_digest", side_effect=[b"before", b"after"]),
+            pytest.raises(ExcelMacroPreservationError),
+        ):
+            excel.save()
+        excel.close(save=False)
+
+        assert path.read_bytes() == original
+
+
+class TestExcelComPromotion:
     def test_uncomputed_formula_uses_bulk_com_read(self, tmp_path) -> None:
         path = tmp_path / "formula.xlsx"
         workbook = Workbook()

@@ -1,7 +1,7 @@
 """Salesforce レポートの集約取得（読み取る側）を、Salesforce をモックして検証する。
 
-`get_scheduled_report()` / `file_path_of()` は設計上ネットワークを使わない。
-`download_scheduled()` で置かれたファイルを、`get_scheduled_report()` が
+`cached_report()` / `file_path_of()` は設計上ネットワークを使わない。
+`download_scheduled()` で置かれたファイルを、`cached_report()` が
 受け取れるかを確かめる。`service.py` を経由した書き置き（`download_scheduled`）
 が必要なので、`download_scheduled` も import している（テスト専用）。
 
@@ -14,19 +14,17 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from comken.core.clock import today
 from comken.core.table import Table
 from comken.exceptions import (
+    CachedReportNotFoundError,
+    CachedReportNotRegisteredError,
     ReportDisabledError,
-    ReportFileMissingError,
     ReportNotRegisteredError,
-    ScheduledReportNotDownloadedError,
-    ScheduledReportNotRegisteredError,
 )
 from comken.services.salesforce_downloader import (
+    cached_report,
     download_scheduled,
     file_path_of,
-    get_scheduled_report,
     load_master,
 )
 from comken.services.salesforce_downloader import provider as provider_module
@@ -73,7 +71,6 @@ def paths(tmp_path, monkeypatch):
     monkeypatch.setattr(service_module, "HISTORY_PATH", history_path)
     # `provider` もローカル束縛しているので同期する
     monkeypatch.setattr(provider_module, "MASTER_PATH", master)
-    monkeypatch.setattr(provider_module, "HISTORY_PATH", history_path)
     return {
         "master_path": master,
         "history_path": history_path,
@@ -100,8 +97,10 @@ class TestFilePathOf:
             [["1001", "顧客一覧", URL_A, "定期", str(folder), "○", ""]],
         )
         entry = load_master(master)["1001"]
-        stamp = today().strftime("%Y%m%d")
-        assert file_path_of(entry).name == f"1001_顧客一覧_{stamp}.csv"
+        name = file_path_of(entry).name
+        assert name.startswith("1001_顧客一覧_")
+        assert name.endswith(".csv")
+        assert len(name.removesuffix(".csv").rsplit("_", 3)[-1]) == 6
 
     def test_forbidden_characters_in_summary_are_stripped(self, tmp_path):
         """ファイル名に使えない文字（\\/:*?\"<>|）は落とす。"""
@@ -129,21 +128,21 @@ class TestFilePathOf:
         entry = load_master(master)["1001"]
         name = file_path_of(entry).name
         # 管理番号とサフィックスを除いた概要部分が 30 文字以下
-        summary_in_name = name.split("_", 1)[1].rsplit("_", 1)[0]
+        summary_in_name = name.split("_", 1)[1].rsplit("_", 3)[0]
         assert len(summary_in_name) <= 30
 
 
-class TestGetScheduledReport:
-    """get_scheduled_report() は取りに行かない。"""
+class TestCachedReport:
+    """cached_report() は固定パスだけを確認し、Salesforceへ取りに行かない。"""
 
     def test_returns_the_file_downloaded_by_the_scheduled_run(self, paths):
         with patch(
             "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
             download_scheduled("定期実行")
-        reader = get_scheduled_report("1001")
+        reader = cached_report("1001")
         assert reader.path.is_file()
-        assert reader.read_rows() == ROWS
+        assert reader.read().read() == ROWS
 
     def test_does_not_call_salesforce(self, paths):
         with patch(
@@ -152,32 +151,64 @@ class TestGetScheduledReport:
             download_scheduled("定期実行")
         site = fake_salesforce()
         with patch("comken.services.salesforce_downloader.service.site_for", return_value=site):
-            get_scheduled_report("1001")
+            cached_report("1001")
         site.assert_not_called()
+
+    def test_same_day_run_replaces_cache_and_keeps_archives(self, paths):
+        updated_rows = [{"名前": "最新", "金額": "300"}]
+        with patch(
+            "comken.services.salesforce_downloader.service.site_for",
+            return_value=fake_salesforce(),
+        ):
+            download_scheduled()
+        with patch(
+            "comken.services.salesforce_downloader.service.site_for",
+            return_value=fake_salesforce(updated_rows),
+        ):
+            download_scheduled()
+
+        assert cached_report("1001").read().read() == updated_rows
+        assert len(list(paths["folder"].glob("1001_*.csv"))) == 3
 
     def test_on_demand_report_raises(self, paths):
         """管理表で「個別」のものは、定期取得済みとして受け取れない。"""
-        with pytest.raises(ScheduledReportNotRegisteredError):
-            get_scheduled_report("1002")
+        with pytest.raises(CachedReportNotRegisteredError):
+            cached_report("1002")
 
     def test_not_downloaded_yet_raises(self, paths):
-        with pytest.raises(ScheduledReportNotDownloadedError):
-            get_scheduled_report("1001")
+        with pytest.raises(CachedReportNotFoundError) as caught:
+            cached_report("1001")
+        assert "1001_顧客一覧_" in str(caught.value)
+        assert "python main.py" in str(caught.value)
 
-    def test_missing_file_raises_even_if_history_says_downloaded(self, paths):
+    def test_manual_file_at_the_displayed_path_is_used_on_rerun(self, paths):
+        """例外が示した場所へCSVを置けば、登録操作なしで同じ処理を再実行できる。"""
+        with pytest.raises(CachedReportNotFoundError) as caught:
+            cached_report("1001")
+
+        # エラー文の最後から2行目が、利用者へ案内する正確な配置先。
+        # 実際の復旧手順と同じように、そのパスへ手動取得したCSVを置く。
+        cache_path = Path(str(caught.value).splitlines()[-2])
+        cache_path.write_text("名前,金額\n手動配置,999\n", encoding="utf-8")
+
+        assert cached_report("1001").read().read() == [{"名前": "手動配置", "金額": "999"}]
+
+    def test_missing_cache_raises_even_if_archive_exists(self, paths):
         with patch(
             "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
             download_scheduled("定期実行")
-        file_path_of(load_master(paths["master_path"])["1001"]).unlink()
-        with pytest.raises(ReportFileMissingError):
-            get_scheduled_report("1001")
+        # 時刻付き保管ファイルは残し、時刻を含まない当日キャッシュだけを消す。
+        cache_path = provider_module._daily_cache_path_of(load_master(paths["master_path"])["1001"])
+        cache_path.unlink()
+        with pytest.raises(CachedReportNotFoundError):
+            cached_report("1001")
 
     def test_unregistered_key_raises(self, paths):
         with pytest.raises(ReportNotRegisteredError):
-            get_scheduled_report("9999")
+            cached_report("9999")
 
     def test_disabled_report_raises(self, paths):
         """無効なレポートは「定期」指定でも例外（取る前段で止める）。"""
         with pytest.raises(ReportDisabledError):
-            get_scheduled_report("1003")
+            cached_report("1003")

@@ -18,7 +18,7 @@ from pathlib import Path
 
 from comken.constants import Color
 from comken.core import DateNameBuilder, diff_rows
-from comken.toolbox.csv import CsvReader, CsvWriter
+from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Excel
 
 HERE = Path(__file__).parent
@@ -59,16 +59,17 @@ logger = logging.getLogger(__name__)
 
 def create_sample_files() -> None:
     """入力になる CSV を生成する（サンプルを自己完結させるための準備処理）。"""
-    fieldnames = list(YESTERDAY_ROWS[0].keys())
-    CsvWriter(YESTERDAY_CSV, fieldnames=fieldnames).write_rows(YESTERDAY_ROWS)
-    CsvWriter(TODAY_CSV, fieldnames=fieldnames).write_rows(TODAY_ROWS)
+    with CSV(YESTERDAY_CSV) as csv_file:
+        csv_file.replace(YESTERDAY_ROWS)
+    with CSV(TODAY_CSV) as csv_file:
+        csv_file.replace(TODAY_ROWS)
 
 
 def main() -> None:
     create_sample_files()
 
-    before = CsvReader(YESTERDAY_CSV).read_rows()
-    after = CsvReader(TODAY_CSV).read_rows()
+    before = CSV(YESTERDAY_CSV).read().read()
+    after = CSV(TODAY_CSV).read().read()
 
     # キー列で突合して差分を取る（added / removed / changed に分かれて返る）
     result = diff_rows(before, after, key=KEY)

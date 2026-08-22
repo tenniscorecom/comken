@@ -64,6 +64,20 @@ if path is None:
 paths = FileFinder(FOLDER).dated(required=False)
 ```
 
+### 表の結合（Table.merge）
+
+2つの `Table` をキー列で横に結合します。`left`（左側を全件残す）と `inner`
+（両方にある行だけ残す）に対応します。
+
+```python
+result = read_table.merge(write_table, on="顧客ID")
+```
+
+キー以外に同じ列名がある場合、値を黙って上書きするとどちらの表の値か分からなくなるため、
+既定では `read_table` 側を `_read`、`write_table` 側を `_write` にします。キー列は1列だけ残り、片側だけにある列は
+元の名前を保ちます。名前を変える場合は `suffixes=("_before", "_after")` のように指定します。
+入力した2つの `Table` 自体は変更されません。
+
 ### データ比較（diff_row / diff_rows）
 
 CSV・Excel から読んだ行（辞書）同士の差分を取る。for ループを自分で書かなくてよい。
@@ -82,8 +96,8 @@ diff_row(before, after)
 # 差分がなければ {} が返るので、if diff_row(a, b): で「変更あり」を判定できる
 
 # データセット同士の差分（キー列で突合）
-before = CsvReader("昨日.csv").read_rows()
-with ExcelReader("今日.xlsx") as f:
+before = CSV("昨日.csv").read().read()
+with Excel("今日.xlsx") as f:
     after = f.read_rows_as_dicts("Sheet1")
 
 result = diff_rows(before, after, key="社員番号")
@@ -165,7 +179,7 @@ def click_submit():
 from comken.core import Timer
 
 with Timer("CSV読み込み"):
-    rows = CsvReader("data.csv").read_rows()
+    rows = CSV("data.csv").read().read()
 # ログ: CSV読み込み: 3.21秒
 
 @Timer("売上集計")            # デコレータでも使える
@@ -196,8 +210,8 @@ def build_report():
 ログは関数ごとに次の2行（例外時は別の1行）になる:
 
 ```
-DEBUG ExcelWriter.save: 開始
-DEBUG ExcelWriter.save: 完了 1.234秒
+DEBUG Excel.save: 開始
+DEBUG Excel.save: 完了 1.234秒
 ```
 
 主目的は「どの処理で止まったか」を特定すること。終了時にしかログを出さないと、

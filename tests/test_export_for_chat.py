@@ -5,14 +5,12 @@ import ast
 import export_for_chat
 
 
-def test_api_text_contains_full_csv_reader_docstring() -> None:
+def test_api_text_contains_csv_docstring() -> None:
     api_text = export_for_chat._api_text()
 
-    assert "class CsvReader(CsvBase):" in api_text
-    assert "def __init__(self, path: str | Path" in api_text
-    assert "encoding: str=Encoding.AUTO" in api_text
-    assert "CP932（Shift-JIS）の順に自動判定する。" in api_text
-    assert "CsvNoDataRowsError: データ行が1行もない場合。" in api_text
+    assert "class CSV:" in api_text
+    assert "columns: list[str] | None=None" in api_text
+    assert "def append(" in api_text
 
 
 def test_find_definition_follows_nested_reexport() -> None:

@@ -40,7 +40,7 @@ def main() -> None:
     source = CSV(SOURCE_CSV, read_only=True, types={"金額": int}).read()
     destination_table = Table(
         ["注文番号", "顧客名", "請求額"],
-        [{"注文番号": row["注文番号"]} for row in source.read()],
+        [{"注文番号": row["注文番号"], "顧客名": "", "請求額": ""} for row in source.read()],
     )
     transferred = Transfer(
         source,

@@ -94,11 +94,68 @@ class TestExcelTable:
                 "Users", Table(["id"], [{"id": 1}])
             )
             table._worksheet["C2"] = "=1+1"
-            with patch.object(excel, "_read_table_with_com") as read_with_com:
+            with patch.object(excel, "_read_range_with_com") as read_with_com:
                 result = table.read()
 
             assert result.read() == [{"id": "1"}]
             read_with_com.assert_not_called()
+
+    def test_cached_formula_stays_on_openpyxl(self, tmp_path) -> None:
+        path = tmp_path / "cached.xlsx"
+        with Excel(path) as excel:
+            table = excel.create_data_sheet("Users").create_table(
+                "Users", Table(["id", "total"], [{"id": 1, "total": 2}])
+            )
+        with Excel(path) as excel:
+            table = excel.data_sheet("Users").table()
+            # openpyxlではキャッシュ付き数式を作れないため、数式本体と
+            # 保存済み値の組み合わせをそれぞれ明示して分岐を確認する。
+            table._worksheet["B2"] = "=A2*2"
+            with (
+                patch.object(
+                    excel, "_cached_range", return_value=([("id", "total"), (1, 2)], False)
+                ),
+                patch.object(excel, "_read_range_with_com") as read_with_com,
+            ):
+                result = table.read()
+
+        assert result.read() == [{"id": "1", "total": "2"}]
+        read_with_com.assert_not_called()
+
+    def test_uncalculated_formula_automatically_reads_only_table_ref_with_com(
+        self, tmp_path
+    ) -> None:
+        path = tmp_path / "uncalculated.xlsx"
+        with Excel(path) as excel:
+            excel.create_data_sheet("Users").create_table(
+                "Users", Table(["id", "total"], [{"id": 1, "total": "=A2*2"}])
+            )
+
+        with Excel(path) as excel:
+            table = excel.data_sheet("Users").table()
+            with patch.object(
+                excel,
+                "_read_range_with_com",
+                return_value=[("id", "total"), (1, 2)],
+            ) as read_with_com:
+                result = table.read()
+
+        assert result.read() == [{"id": "1", "total": "2"}]
+        read_with_com.assert_called_once_with("PY_Users", 1, 1, 2, 2)
+
+    def test_force_com_reads_only_table_ref(self, tmp_path) -> None:
+        path = tmp_path / "forced.xlsx"
+        with Excel(path) as excel:
+            table = excel.create_data_sheet("Users").create_table(
+                "Users", Table(["id"], [{"id": 1}])
+            )
+            with patch.object(
+                excel, "_read_range_with_com", return_value=[("id",), (2,)]
+            ) as read_with_com:
+                result = table.read(force_com=True)
+
+        assert result.read() == [{"id": "2"}]
+        read_with_com.assert_called_once_with("PY_Users", 1, 1, 1, 2)
 
     def test_display_sheet_rejects_table_access(self, tmp_path) -> None:
         with Excel(tmp_path / "dashboard.xlsx") as excel:

@@ -2,7 +2,7 @@
 サンプル: CSV を読んで Excel レポートを作る
 
 comken の最初の一歩としてまず動かすサンプル。
-CSV の読み込み・絞り込み・集計（CsvReader）と、
+CSV の読み込み・絞り込み・集計（CSV + Table）と、
 Excel レポートの作成・見た目調整（Excel + Sheet）を通しで行う。
 
 実行方法:
@@ -17,7 +17,7 @@ from pathlib import Path
 
 from comken.constants import Color
 from comken.core import DateNameBuilder
-from comken.toolbox.csv import CsvReader
+from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Excel
 
 # 入出力はこのフォルダ内で完結させる（サンプル用。実プロジェクトではパスは config.ini に書く）
@@ -35,18 +35,18 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> None:
-    reader = CsvReader(INPUT_CSV)
+    table = CSV(INPUT_CSV).read()
 
     # 全行を辞書のリストで取得する（1行 = 1辞書。キーはヘッダー名、値はすべて str）
-    rows = reader.read_rows()
+    rows = table.read()
     logger.info("CSV 読み込み: %d 件", len(rows))
 
     # 条件に一致する行だけ絞り込む
-    target_rows = reader.filter("担当者", TARGET_STAFF)
+    target_rows = table.filter(lambda row: row["担当者"] == TARGET_STAFF)
     logger.info("%s の担当分: %d 件", TARGET_STAFF, len(target_rows))
 
     # 列の値一覧を取り出して集計する（CSV の値は str なので数値にしてから足す）
-    total = sum(int(v) for v in reader.column(AMOUNT_COL))
+    total = sum(int(v) for v in table.column(AMOUNT_COL))
     logger.info("全体の合計金額: %s 円", f"{total:,}")
 
     # Excel 側で数値として扱いたい列は、書き込む前に int に変換しておく

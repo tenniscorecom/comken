@@ -59,7 +59,9 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `EmptyHeaderCellError` | Excel の見出しに空欄がある | Excel の1行目の空欄を埋める |
 | `DuplicateHeaderCellError` | Excel の見出し名が重複している | Excel の見出し名を重複しない名前に変更する |
 | `ExcelHeadersTooFewError` | 指定した見出し数が列数より少ない | 管理者へ連絡する |
+| `ExcelMacroPreservationError` | 保存予定のブックからVBAプロジェクトが欠落または変化した。 | 元ファイルは保持される。管理者に連絡し、Excel実機で保存方法を確認する |
 | `ExcelSaveNotCompletedError` | Excel の保存が成功したように見えて、ファイルが無い | Excel が他で開かれていないか、ディスクの空き容量があるかを確認し、もう一度保存を実行する |
+| `ExcelSaveValidationError` | 保存予定のExcelファイルを再度開けず、安全に置き換えられない。 | 元ファイルは保持される。空き容量とExcel形式を確認して再実行する |
 | `FileFormatMismatchError` | 保存拡張子と形式が合わない | 管理者へ連絡する |
 
 ## Access のエラー
@@ -88,13 +90,12 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 |---|---|---|
 | `SiteOwnerRequiredError` | `SiteBase` / `SalesforceBase` のサブクラスに `OWNER` が設定されていない | サブクラスに `OWNER = "プロジェクト名 / 担当者"` を1行追加する。ライブラリ（`comken.toolbox.browser.sites/` または`comken.toolbox.salesforce.sites/`）に入れるべきサイトかは`docs/開発/ライブラリ開発規約.md` の「サイト／組織クラスを昇格させる基準」を参照して判断する。ライブラリに昇格したい場合はライブラリ管理者へ連絡する。 |
 | `EncodingDetectionError` | CSV の文字コードを判定できない | CSV の保存形式を確認し、管理者へ連絡する |
-| `CsvHeadersTooFewError` | 指定した見出し数が CSV の列数より少ない | 管理者へ連絡する |
-| `CsvNoDataRowsError` | CSV に見出し以外のデータ行がない | 見出し行の下にデータが1行以上あるか確認する |
-| `CsvRowNotFoundError` | キーに一致する行が CSV に無い | 探している値の書き方（前後の空白・全角半角・ゼロ埋め）を元データと見比べる |
-| `CsvRowDuplicateKeyError` | キーにする列に同じ値が複数ある | 表示された値の行を元データで確認し、重複を取り除く。重複が正しいデータなら管理者へ連絡する |
-| `CsvCellReferenceError` | CSV のセル位置（例: A2）の指定が正しくない、または範囲外 | 表示されたセル位置と、CSV の行数・列数を確認する |
+| `CsvFileNotFoundError` | 読み込む CSV ファイルが存在しない | パスを確認する。新規出力は columns を指定して write / replace する |
+| `CsvHeaderMissingError` | CSV に見出し行がない | 見出し行を追加するか、ヘッダーなし CSV なら columns を指定する |
+| `CsvInvalidHeaderError` | CSV の見出しに空欄または重複がある | CSV の1行目にある空欄または重複した見出しを直す |
+| `CsvRowLengthError` | CSV のデータ行の列数が見出し数と一致しない | 表示された行の区切り文字と値の数を確認する |
+| `CsvColumnsRequiredError` | 空の新規 CSV に出力する列を決定できない | CSV(columns=[...]) または Table(columns, []) で列を指定する |
 | `ExcelColumnNotFoundError` | Excel の列見出しが見つからない | Excel の1行目を確認する |
-| `CsvColumnNotFoundError` | CSV の列見出しが見つからない | CSV の1行目を確認する |
 | `KeyColumnNotFoundError` | 比較に使うキー列が見つからない | Excel・CSV の列名を確認する |
 | `TransferSourceColumnNotFoundError` | 列名転記で、lookup の転記元列が見つからない | 転記元データと config.ini のマッピング左側を確認する |
 | `InvalidColumnError` | 列の指定が正しくない（打ち間違いなど） | 列は番号（1, 2, …）か列記号（"A", "AA"）で指定する |
@@ -134,13 +135,15 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `HolidayCalendarSourceError` | 祝日データの読み取りに失敗した | 内閣府の CSV の場合: 内閣府の仕様変更。管理者へ連絡する管理表の場合: シート名と列名（"日付" / "名称"）を確認する |
 | `HolidayCalendarFormatError` | 内閣府 CSV 以外のファイルや壊れたファイルを内閣府 CSV として読み込もうとした | 内閣府の syukujitsu.csv を直接取得し直す。文字コードは CP932 (Shift_JIS) |
 | `HolidayCalendarExpiredError` | 祝日データの収録期間が今日の業務日付を超えている | 内閣府の祝日 CSV を更新する（自動取得の場合は次の実行で反映される）、または管理表に直近の祝日を追加する |
+| `HistoryWriteError` | 必須のダウンロード履歴を記録できなかった | 履歴CSVの保存先、共有サーバー接続、書込み権限を確認する |
+| `HistoryLockTimeoutError` | ダウンロード履歴の排他ロックを待っても取得できなかった | 同時実行中の処理が終わるのを待って再実行する。繰り返す場合は共有サーバーを確認する |
+| `HistoryHeaderMismatchError` | ダウンロード履歴CSVの見出しが現在の定義と一致しない | 履歴CSVの1行目を確認する。列を手で変更していた場合は元へ戻し、古い形式の履歴なら別名へ退避してから再実行する |
+| `CachedReportNotFoundError` | 本日の定期取得キャッシュが見つからない | Salesforce からCSVを手動取得し、画面に表示された正確なパス・ファイル名で置いて、同じ python main.py を再実行する |
+| `CachedReportNotRegisteredError` | 定期取得の対象ではないレポートのキャッシュを読もうとした | 毎日決まった時刻に取るなら、管理表の「実行方式」を「定期」にする。使うときに毎回取りに行くなら、download_report() を呼ぶ |
 | `ReportNotRegisteredError` | 指定した管理番号が管理表に無い | 管理表を開いて、その管理番号の行があるか確認する。新しく使うレポートは、先に管理表へ登録する |
 | `ReportDisabledError` | 管理表で「無効」になっているレポートを取ろうとした | また使うなら管理表の「有効」を「有効」に戻す。使わないなら、呼び出し側のコードから消す |
 | `InvalidReportUrlError` | 管理表の URL から Salesforce のレポート ID を取り出せない | Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す |
-| `ScheduledReportNotRegisteredError` | 定期取得の対象として登録されていないレポートを、定期取得済みとして受け取ろうとした | 毎日決まった時刻に取るなら、管理表の「実行方式」を「定期」にする。使うときに毎回取りに行くなら、download_report() を呼ぶ |
-| `ScheduledReportNotDownloadedError` | 本日の定期取得がまだ済んでいない | 定期取得の実行結果を確認する。急ぐ場合は download_report() でその場で取得する（そのぶん Salesforce への呼び出しが増える） |
-| `ReportFileMissingError` | 履歴では取得済みだが、保存先にファイルが無い | 保存先のフォルダを確認する。消してしまった場合はdownload_report() で取り直す |
-| `EmptyReportError` | レポートは実行できたが明細が 0 行だった | Salesforce の画面で同じレポートを開き、本当に 0 件か確認する。本当に 0 件の日であれば、空の CSV を保存先へ手で置く |
+| `EmptyReportError` | レポートは実行できたが明細が 0 行だった | Salesforce の画面で同じレポートを開き、本当に 0 件か確認する。0 件が正常に起こるレポートなら、管理表の「0件あり」を「○」にする。 |
 | `ReportFolderNotFoundError` | 管理表に書かれた保存先のフォルダが無い | 管理表の「保存先」を確認する。共有フォルダなら、つながっているか・権限があるかも確認する |
 | `ScheduledDownloadFailedError` | 定期取得で1件以上が失敗した | 履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。急いで必要なものは download_report() でその場で取得する |
 | `TransferDestinationRowMissingError` | 転記先に対応する行がない状態で transform がその行を操作した | destination_row が None か確認し、新規行を処理するか Transfer.SKIP を返す |
@@ -177,6 +180,10 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `InvalidTableOperationError` | Table API で実行できない操作が指定された。 | 対象が読み取り専用でないか、指定したテーブル名が正しいか確認する |
 | `TableColumnNotFoundError` | Table に指定された列が存在しない。 | Table.columns を確認し、存在する列名を指定する |
 | `TableDuplicateKeyError` | Table の索引または比較に使うキーが重複している。 | キー列の値を一意にしてから処理をやり直す |
+| `TableMergeColumnCollisionError` | Table.merge() で生成する列名が既存の列名と衝突する。 | suffixes を変更し、結合後のすべての列名が一意になるようにする |
+| `TableMergeSuffixError` | Table.merge() の suffixes が列名を安全に作れない。 | 空でなく互いに異なる2つの文字列を suffixes に指定する |
+| `TableRowColumnsError` | 行の列名が Table.columns と一致しない | 不足列と余分な列を直す。列を絞る場合は select() を使う |
+| `TableTypeConversionError` | Table の値を指定型へ変換できない | 表示された行番号・列名の値を、指定した型へ変換できる内容に直す |
 
 ## 分類（まとめて捕捉する用）
 

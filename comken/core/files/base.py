@@ -1,6 +1,6 @@
 """comken/core/files/base.py — 1つのファイルを扱うクラスに共通する薄い基底クラス。
 
-ExcelBase（``toolbox/excel/base.py``）・CsvBase（``toolbox/csv/base.py``）など、
+Excel の内部基底クラスなど、
 「1つのファイルを読み書きするクラス」の共通祖先。サブクラス側で ``SUFFIXES``
 を宣言しておくと、``__init__`` で拡張子を自動で検証して
 ``UnsupportedFileSuffixError`` を投げる。

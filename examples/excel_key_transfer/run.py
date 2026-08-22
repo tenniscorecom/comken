@@ -89,10 +89,10 @@ def main() -> None:
     before: list[dict[str, Any]] = []
 
     def validate_total(_source: dict[str, Any], working_row: dict[str, Any] | None) -> Any:
-        # mapping 適用後の作業行が渡るため、追加加工が不要なら何も変更しない。
+        # mapping 適用後の作業行が渡る。反映する場合も明示的に APPLY を返す。
         if working_row is None or working_row[TOTAL] == "":
             return Transfer.SKIP
-        return None
+        return Transfer.APPLY
 
     mapping = {KEY: KEY, "顧客名": "顧客名", TOTAL: TOTAL}
     source = CSV(MASTER_CSV, read_only=True).read()
@@ -102,7 +102,7 @@ def main() -> None:
     )
     destination = Table(
         [KEY, "顧客名", TOTAL],
-        [{KEY: row[KEY]} for row in source.read()],
+        [{KEY: row[KEY], "顧客名": "", TOTAL: ""} for row in source.read()],
     )
     transferred = Transfer(
         source,

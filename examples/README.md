@@ -9,10 +9,10 @@ comken の使い方を「動くコード」で覚えるためのサンプル。
 
 | ファイル | 内容 | 実行方法 |
 |---|---|---|
-| csv_read.py | CsvReader の検索・抽出・索引・グループ化 | `python -m examples.basics.csv_read` |
-| csv_write.py | CsvWriter の新規作成・1行/複数行追記 | `python -m examples.basics.csv_write` |
-| excel_read.py | ExcelReader の辞書・タプル・逐次読み取り | `python -m examples.basics.excel_read` |
-| excel_write.py | ExcelWriter / Sheet で帳票作成・書式設定 | `python -m examples.basics.excel_write` |
+| csv_read.py | CSV の検索・抽出・索引・グループ化 | `python -m examples.basics.csv_read` |
+| csv_write.py | CSV の新規作成・1行/複数行追記 | `python -m examples.basics.csv_write` |
+| excel_read.py | Excel の辞書・タプル・逐次読み取り | `python -m examples.basics.excel_read` |
+| excel_write.py | Excel / Sheet で帳票作成・書式設定 | `python -m examples.basics.excel_write` |
 | column_mapping.py | コードまたは config.ini の列対応表で Excel へ転記 | `python -m examples.basics.column_mapping` |
 | state.py | 前回の実行結果を次回へ持ち越す | `python -m examples.basics.state` |
 | logger.py | 単体実行向けのログ設定 | `python -m examples.basics.logger` |
@@ -33,13 +33,13 @@ comken の使い方を「動くコード」で覚えるためのサンプル。
 
 | # | フォルダ | 内容 | 主に使うモジュール | 実行条件 |
 |---|---|---|---|---|
-| 1 | csv_to_excel_report | CSV を読んで Excel レポートを作る | CsvReader / ExcelWriter / Sheet / Color | なし（同梱データで動く） |
-| 2 | excel_key_transfer | CSV を加工して Excel に列マッピング転記 | Transfer / CsvReader.group_by / diff_rows | なし（データを自動生成） |
-| 3 | csv_diff_report | 昨日と今日の CSV の差分を色付き Excel レポートに | diff_rows / CsvWriter / set_fill | なし（データを自動生成） |
-| 4 | csv_date_move | CSV の日付列とファイル名の日付が一致したファイルを移動 | CsvReader.first / date_in_name / dry_run | config.ini の作成 |
-| 5 | daily_batch_template | 日次バッチの流れ（入力を探す → 加工 → Excel 出力） | comken.toolbox.rpa / FileFinder / ExcelWriter | config.ini + 社内ライブラリ |
-| 6 | outlook_inbox | 受信メール → CSV → 結果メールの下書き | Outlook / MailMessage / CsvWriter | Classic Outlook |
-| 7 | copy_then_macro | 当日ファイルをコピー → Excel マクロ → 配布 | FileFinder / ExcelWriter.run_macro / copy_file | Microsoft Excel + パス設定 |
+| 1 | csv_to_excel_report | CSV を読んで Excel レポートを作る | CSV / Excel / Sheet / Color | なし（同梱データで動く） |
+| 2 | excel_key_transfer | CSV を加工して Excel に列マッピング転記 | Transfer / CSV.group_by / diff_rows | なし（データを自動生成） |
+| 3 | csv_diff_report | 昨日と今日の CSV の差分を色付き Excel レポートに | diff_rows / CSV / set_fill | なし（データを自動生成） |
+| 4 | csv_date_move | CSV の日付列とファイル名の日付が一致したファイルを移動 | CSV.first / date_in_name / dry_run | config.ini の作成 |
+| 5 | daily_batch_template | 日次バッチの流れ（入力を探す → 加工 → Excel 出力） | comken.toolbox.rpa / FileFinder / Excel | config.ini + 社内ライブラリ |
+| 6 | outlook_inbox | 受信メール → CSV → 結果メールの下書き | Outlook / MailMessage / CSV | Classic Outlook |
+| 7 | copy_then_macro | 当日ファイルをコピー → Excel マクロ → 配布 | FileFinder / Excel.run_macro / copy_file | Microsoft Excel + パス設定 |
 
 ### 実行方法
 
