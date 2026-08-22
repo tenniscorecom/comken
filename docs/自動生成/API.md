@@ -2143,6 +2143,25 @@ Excel の見出し名が重複している
 def __init__(self, headers: Sequence[object]) -> None:
 ```
 
+### `EmptyExcelTableError`
+
+```text
+class EmptyExcelTableError(ExcelError):
+```
+
+#### 説明
+
+Excel テーブル定義はあるが、データまたはヘッダが空の場合。
+
+対処:
+    Excel のテーブル定義範囲を確認し、ヘッダ行とデータ行を正しく設定する
+
+#### `__init__`
+
+```text
+def __init__(self, sheet_name: str, reason: str) -> None:
+```
+
 ### `ExcelHeadersTooFewError`
 
 ```text

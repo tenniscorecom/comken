@@ -188,6 +188,19 @@ class DuplicateHeaderCellError(ExcelError):
         )
 
 
+class EmptyExcelTableError(ExcelError):
+    """Excel テーブル定義はあるが、データまたはヘッダが空の場合。
+
+    対処:
+        Excel のテーブル定義範囲を確認し、ヘッダ行とデータ行を正しく設定する
+    """
+
+    def __init__(self, sheet_name: str, reason: str) -> None:
+        self.sheet_name = sheet_name
+        self.reason = reason
+        super().__init__(f"Excel テーブル「{sheet_name}」が空です: {reason}")
+
+
 class ExcelHeadersTooFewError(ExcelError):
     """指定した見出し数が列数より少ない
 

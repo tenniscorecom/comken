@@ -9,6 +9,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 from comken.core.table.model import Table
 from comken.exceptions import (
     DuplicateHeaderCellError,
+    EmptyExcelTableError,
     EmptyHeaderCellError,
     InvalidTableInputError,
     InvalidTableOperationError,
@@ -77,8 +78,10 @@ class ExcelTable:
                     min_row=min_row, max_row=max_row, min_col=min_col, max_col=max_col
                 )
             ]
-        if not rows or all(value is None for value in rows[0]):
-            return Table([], [])
+        if not rows:
+            raise EmptyExcelTableError(self._worksheet.title, "データがありません")
+        if all(value is None for value in rows[0]):
+            raise EmptyExcelTableError(self._worksheet.title, "ヘッダ行が空です")
         # ref が定義する列数をそのまま使う。末尾の空見出しを切り捨てると、
         # テーブル定義の壊れを見逃し、後ろの列データを失うため。
         headers = list(rows[0])

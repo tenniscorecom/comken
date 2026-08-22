@@ -33,6 +33,7 @@ ComkenError
 │   ├── MacroError
 │   ├── EmptyHeaderCellError
 │   ├── DuplicateHeaderCellError
+│   ├── EmptyExcelTableError
 │   ├── ExcelHeadersTooFewError
 │   └── FileFormatMismatchError
 ├── CsvError
@@ -203,6 +204,7 @@ from comken.exceptions.downloader import (
 from comken.exceptions.excel import (
     DataSheetAccessError,
     DuplicateHeaderCellError,
+    EmptyExcelTableError,
     EmptyHeaderCellError,
     ExcelApplicationNotAvailableError,
     ExcelError,
@@ -300,6 +302,7 @@ __all__ = [
     "MacroError",
     "EmptyHeaderCellError",
     "DuplicateHeaderCellError",
+    "EmptyExcelTableError",
     "ExcelHeadersTooFewError",
     "ExcelMacroPreservationError",
     "ExcelSaveNotCompletedError",

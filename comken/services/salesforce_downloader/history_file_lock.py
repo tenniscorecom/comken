@@ -3,6 +3,7 @@
 import msvcrt
 import time
 from pathlib import Path
+from types import TracebackType
 from typing import BinaryIO
 
 from comken.exceptions import HistoryLockTimeoutError
@@ -43,7 +44,12 @@ class HistoryFileLock:
                     raise HistoryLockTimeoutError(self._path, self._timeout) from exc
                 time.sleep(LOCK_RETRY_SECONDS)
 
-    def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         if self._file is None:
             return
         try:
