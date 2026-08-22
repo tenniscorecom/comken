@@ -4084,6 +4084,48 @@ Table API で実行できない操作が指定された。
 対処:
     対象が読み取り専用でないか、指定したテーブル名が正しいか確認する
 
+### `TableColumnNotFoundError`
+
+```text
+class TableColumnNotFoundError(TableError):
+```
+
+#### 説明
+
+Table に指定された列が存在しない。
+
+発生箇所: Table
+
+対処:
+    Table.columns を確認し、存在する列名を指定する
+
+#### `__init__`
+
+```text
+def __init__(self, columns: list[str]) -> None:
+```
+
+### `TableDuplicateKeyError`
+
+```text
+class TableDuplicateKeyError(TableError):
+```
+
+#### 説明
+
+Table の索引または比較に使うキーが重複している。
+
+発生箇所: Table.index() / Table.merge() / compare_tables()
+
+対処:
+    キー列の値を一意にしてから処理をやり直す
+
+#### `__init__`
+
+```text
+def __init__(self, columns: list[str], key: object) -> None:
+```
+
 ### `LoggingAlreadyConfiguredError`
 
 ```text
@@ -5981,7 +6023,7 @@ Transfer へ渡せる境界を提供する。
 #### `__init__`
 
 ```text
-def __init__(self, source: str | Path, *, encoding: str=Encoding.UTF8_SIG, types=None, read_only: bool=False, dry_run: bool=False) -> None:
+def __init__(self, source: str | Path, *, encoding: str=Encoding.UTF8_SIG, types: Mapping[str, Callable[[Any], Any]] | None=None, read_only: bool=False, dry_run: bool=False) -> None:
 ```
 
 #### `read`

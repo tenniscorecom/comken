@@ -1,9 +1,11 @@
 """CSV / Excel のデータ領域 API のテスト。"""
 
 from datetime import UTC, datetime
+from unittest.mock import patch
 
 import pytest
 
+from comken import dry_run
 from comken.core.table import Table
 from comken.exceptions import DataSheetAccessError
 from comken.toolbox.csv import CSV
@@ -30,11 +32,23 @@ class TestCSV:
 
     def test_replace_empty_makes_empty_table(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
-        CSV(path).replace([{"id": 1}])
+        with CSV(path) as csv_file:
+            csv_file.replace([{"id": 1}])
 
-        CSV(path).replace([])
+        with CSV(path) as csv_file:
+            csv_file.replace([])
 
-        assert CSV(path).read() == []
+        assert CSV(path).read().read() == []
+
+    def test_empty_table_preserves_header_and_dry_run_does_not_save(self, tmp_path) -> None:
+        path = tmp_path / "data.csv"
+        with CSV(path) as csv_file:
+            csv_file.replace(Table(["id", "name"], []))
+        assert CSV(path).read().columns == ["id", "name"]
+
+        with dry_run(), CSV(path) as csv_file:
+            csv_file.replace(Table(["changed"], []))
+        assert CSV(path).read().columns == ["id", "name"]
 
 
 class TestExcelTable:
@@ -60,6 +74,31 @@ class TestExcelTable:
 
             with pytest.raises(DataSheetAccessError):
                 sheet.write_value("A1", "禁止")
+
+    def test_empty_replace_clears_old_rows_and_shrunk_columns(self, tmp_path) -> None:
+        path = tmp_path / "data.xlsx"
+        with Excel(path) as excel:
+            table = excel.create_data_sheet("Users").create_table(
+                "Users", Table(["id", "name"], [{"id": 1, "name": "A"}, {"id": 2, "name": "B"}])
+            )
+            table.replace(Table(["id"], []))
+            assert table.read().columns == ["id"]
+            assert table.read().read() == []
+            assert table._worksheet["B1"].value is None
+            assert table._worksheet["B2"].value is None
+
+    def test_table_read_ignores_formula_outside_actual_ref(self, tmp_path) -> None:
+        path = tmp_path / "bounded.xlsx"
+        with Excel(path) as excel:
+            table = excel.create_data_sheet("Users").create_table(
+                "Users", Table(["id"], [{"id": 1}])
+            )
+            table._worksheet["C2"] = "=1+1"
+            with patch.object(excel, "_read_table_with_com") as read_with_com:
+                result = table.read()
+
+            assert result.read() == [{"id": "1"}]
+            read_with_com.assert_not_called()
 
     def test_display_sheet_rejects_table_access(self, tmp_path) -> None:
         with Excel(tmp_path / "dashboard.xlsx") as excel:

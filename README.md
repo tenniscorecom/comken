@@ -595,18 +595,18 @@ graph LR
 ```mermaid
 flowchart LR
     A["NAS\nExcel"] -->|FileFinder.today| B["ファイルパス取得"]
-    B -->|ExcelWriter| C["データ読み込み"]
+    B -->|Excel| C["Table読み込み"]
     C --> D["データ加工"]
-    D -->|write_cell + save| E["Excel出力"]
+    D -->|write / with正常終了| E["Excel出力"]
 ```
 
 ### CSV を読んで Excel レポートを作る
 
 ```mermaid
 flowchart LR
-    A["CSVファイル"] -->|CsvReader| B["データ読み込み"]
-    B -->|filter / index| C["絞り込み・突合"]
-    C -->|ExcelWriter| D["Excel書き込み"]
+    A["CSVファイル"] -->|CSV.read| B["Table読み込み"]
+    B -->|filter / index / Transfer| C["絞り込み・突合"]
+    C -->|ExcelTable.write| D["Excel書き込み"]
     D --> E["レポート完成"]
 ```
 

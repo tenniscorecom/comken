@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from comken.core.table.model import Table
-from comken.exceptions.table import TransferMappingError
+from comken.exceptions.table import TableDuplicateKeyError, TransferMappingError
 
 Row = dict[str, Any]
 
@@ -32,8 +32,19 @@ def compare_tables(
     write_keys = [write_key] if isinstance(write_key, str) else list(write_key)
     if len(read_keys) != len(write_keys):
         raise TransferMappingError
-    read_index = _index_rows(read.read(), read_keys, read_keys)
-    write_index = _index_rows(write.read(), write_keys, write_keys)
+    read._check_columns(read_keys)
+    write._check_columns(write_keys)
+    read_value_columns = [column for column in read.columns if column not in read_keys]
+    write_value_columns = [column for column in write.columns if column not in write_keys]
+    # 辞書行は列順に依存しないため、同じ列名が揃っていれば比較できる。
+    if set(read_value_columns) != set(write_value_columns):
+        raise TransferMappingError
+    generated_columns = {f"write_{column}" for column in write.columns}
+    if generated_columns.intersection(read.columns):
+        # changed の列名が既存列と衝突すると値を区別できないため、曖昧な結果を返さない。
+        raise TransferMappingError
+    read_index = _index_rows(read.read(), read_keys)
+    write_index = _index_rows(write.read(), write_keys)
     read_only, write_only, changed, same = [], [], [], []
     for key, read_row in read_index.items():
         write_row = write_index.get(key)
@@ -44,10 +55,12 @@ def compare_tables(
         ):
             same.append(read_row)
         else:
-            changed.append({
-                **read_row,
-                **{f"write_{column}": value for column, value in write_row.items()},
-            })
+            changed.append(
+                {
+                    **read_row,
+                    **{f"write_{column}": value for column, value in write_row.items()},
+                }
+            )
     for key, write_row in write_index.items():
         if key not in read_index:
             write_only.append(write_row)
@@ -66,14 +79,12 @@ def _key(row: Row, columns: Sequence[str]) -> tuple[Any, ...]:
     return tuple(row[column] for column in columns)
 
 
-def _index_rows(
-    rows: list[Row], columns: Sequence[str], error_columns: Sequence[str]
-) -> dict[tuple[Any, ...], Row]:
+def _index_rows(rows: list[Row], columns: Sequence[str]) -> dict[tuple[Any, ...], Row]:
     index: dict[tuple[Any, ...], Row] = {}
     for row in rows:
         key = _key(row, columns)
         if key in index:
-            raise TransferMappingError
+            raise TableDuplicateKeyError(list(columns), key)
         index[key] = row
     return index
 

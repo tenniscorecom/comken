@@ -135,16 +135,42 @@ class Excel:
             sheet_name = self.data_sheet()._worksheet.title
         else:
             sheet_name = self._with_python_prefix(sheet_name)
-        rows = self.read_computed_rows_as_dicts(sheet_name, 1)
-        columns = [str(column) for column in rows[0]] if rows else []
+        rows = self.read_computed_rows(sheet_name, 1)
+        if not rows:
+            return Table([], [])
+        headers = rows[0]
+        empty_columns = [index for index, header in enumerate(headers, start=1) if header is None]
+        if empty_columns:
+            raise EmptyHeaderCellError(empty_columns)
+        columns = [str(column) for column in headers]
         normalized_rows = [
             {
-                str(column): value if str(column) in self._types or value is None else str(value)
-                for column, value in row.items()
+                column: "" if value is None else value if column in self._types else str(value)
+                for column, value in zip(columns, row, strict=False)
             }
-            for row in (rows[1:] if rows else [])
+            for row in rows[1:]
+            if any(value is not None for value in row)
         ]
         return Table(columns, normalized_rows, types=self._types)
+
+    def _read_table_with_com(
+        self, sheet_name: str, min_col: int, min_row: int, max_col: int, max_row: int
+    ) -> Table:
+        """実テーブル範囲だけをCOMの計算値で読む。"""
+        rows = self.read_computed_rows(sheet_name, min_row)
+        bounded = [row[min_col - 1 : max_col] for row in rows[: max_row - min_row + 1]]
+        if not bounded:
+            return Table([], [])
+        headers = [str(value) for value in bounded[0]]
+        data = [
+            {
+                header: "" if value is None else value if header in self._types else str(value)
+                for header, value in zip(headers, row, strict=True)
+            }
+            for row in bounded[1:]
+            if any(value is not None for value in row)
+        ]
+        return Table(headers, data, types=self._types)
 
     def close(self, *, save: bool = True) -> None:
         """ブックを閉じる。通常はwithの正常終了時に変更を自動保存する。"""
@@ -238,7 +264,10 @@ class Excel:
 
     def _sync_working_file(self) -> None:
         """COMへ渡す前に現在状態を作業ファイルへ同期する。"""
-        if self._is_dirty:
+        working_file_is_empty = (
+            not self._working_path.exists() or self._working_path.stat().st_size == 0
+        )
+        if self._is_dirty or working_file_is_empty:
             self._workbook.save(self._working_path)
 
     def _prepare_com_working_copy(self) -> None:
@@ -250,7 +279,12 @@ class Excel:
                 self.path, threshold_mb=_FORCED_LOCAL_COPY_THRESHOLD_MB
             )
             return
-        self._working_path = self.path
+        import tempfile
+
+        suffix = self.path.suffix or ".xlsx"
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as temp_file:
+            self._working_path = Path(temp_file.name)
+        self._local_copy_path = self._working_path
 
     def _reload_workbook(self) -> None:
         self._workbook.close()

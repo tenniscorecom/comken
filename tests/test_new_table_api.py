@@ -3,7 +3,14 @@
 import pytest
 
 from comken.core.table import Table, Transfer, compare_tables
-from comken.exceptions.table import TableError, TransferDestinationMultipleMatchError
+from comken.exceptions.table import (
+    TableColumnNotFoundError,
+    TableDuplicateKeyError,
+    TableError,
+    TransferDestinationMultipleMatchError,
+    TransferMappingError,
+    TransferRowError,
+)
 from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Excel
 
@@ -112,6 +119,95 @@ def test_transfer_returns_updated_table_without_mapping_items(tmp_path) -> None:
     assert updated is not destination
     assert source.read() == original_source
     assert destination.read() == original_destination
+
+
+def test_transfer_maps_before_transform_and_skipped_changes_are_discarded() -> None:
+    source = Table(["id", "name"], [{"id": 1, "name": "new"}])
+    destination = Table(["id", "name"], [{"id": 1, "name": "old"}])
+
+    def transform(_read_row, working_row):
+        assert working_row["name"] == "new"
+        working_row["name"] = "NEW"
+
+    result = Transfer(source, destination, {"name": "name"}, read_key="id", write_key="id").run(
+        transform=transform
+    )
+    assert result.read()[0]["name"] == "NEW"
+
+    skipped = Transfer(source, destination, {"name": "name"}, read_key="id", write_key="id").run(
+        transform=lambda _read, row: row.update(name="ignored") or False
+    )
+    assert skipped.read()[0]["name"] == "old"
+
+
+def test_table_public_rows_are_copies_and_duplicate_keys_raise() -> None:
+    table = Table(["id"], [{"id": 1}, {"id": 1}])
+    first = next(iter(table))
+    first["id"] = 2
+    assert table.read()[0]["id"] == 1
+    with pytest.raises(TableDuplicateKeyError):
+        table.index("id")
+
+
+def test_table_filter_predicate_cannot_change_source() -> None:
+    table = Table(["id", "name"], [{"id": 1, "name": "before"}])
+
+    def change_row(row):
+        row["name"] = "changed"
+        return True
+
+    filtered = table.filter(change_row)
+
+    assert table.read() == [{"id": 1, "name": "before"}]
+    assert filtered.read() == [{"id": 1, "name": "before"}]
+
+
+def test_compare_tables_accepts_different_column_order() -> None:
+    read = Table(["id", "name", "area"], [{"id": 1, "name": "A", "area": "東"}])
+    write = Table(["area", "id", "name"], [{"area": "東", "id": 1, "name": "A"}])
+
+    comparison = compare_tables(read, write, read_key="id", write_key="id")
+
+    assert comparison.same.count() == 1
+
+
+def test_compare_tables_accepts_different_key_names() -> None:
+    read = Table(["read_id", "name"], [{"read_id": 1, "name": "A"}])
+    write = Table(["write_id", "name"], [{"write_id": 1, "name": "A"}])
+
+    comparison = compare_tables(read, write, read_key="read_id", write_key="write_id")
+
+    assert comparison.same.read() == [{"read_id": 1, "name": "A"}]
+
+
+@pytest.mark.parametrize("duplicate_side", ["read", "write"])
+def test_compare_tables_rejects_duplicate_keys_on_both_sides(duplicate_side) -> None:
+    unique = Table(["id", "name"], [{"id": 1, "name": "A"}])
+    duplicate = Table(["id", "name"], [{"id": 1, "name": "A"}, {"id": 1, "name": "B"}])
+    read, write = (duplicate, unique) if duplicate_side == "read" else (unique, duplicate)
+
+    with pytest.raises(TableDuplicateKeyError):
+        compare_tables(read, write, read_key="id", write_key="id")
+
+
+def test_compare_tables_rejects_generated_column_collision() -> None:
+    read = Table(["id", "name", "write_name"], [{"id": 1, "name": "A", "write_name": "x"}])
+    write = Table(["id", "name", "write_name"], [{"id": 1, "name": "B", "write_name": "y"}])
+
+    with pytest.raises(TransferMappingError):
+        compare_tables(read, write, read_key="id", write_key="id")
+
+
+def test_transfer_rejects_missing_key_column_and_reports_source_row_number() -> None:
+    read = Table(["id", "name"], [{"id": 1, "name": "A"}, {"id": 2, "name": "B"}])
+    write = Table(["id", "name"], [{"id": 1, "name": "old"}, {"id": 2, "name": "old"}])
+
+    with pytest.raises(TableColumnNotFoundError):
+        Transfer(read, write, {"name": "name"}, read_key="missing", write_key="id").run()
+    with pytest.raises(TransferRowError, match="転記元の2件目"):
+        Transfer(read, write, {"name": "name"}, read_key="id", write_key="id").run(
+            transform=lambda row, _working: "invalid" if row["id"] == 2 else None
+        )
 
 
 def test_transfer_rows_and_compare_tables_are_directional() -> None:

@@ -45,6 +45,18 @@ class ExcelTable:
             self._name = table_names[0]
         excel_table = self._worksheet.tables[self._name]
         min_col, min_row, max_col, max_row = range_boundaries(excel_table.ref)
+        formula_cells = [
+            cell
+            for row in self._worksheet.iter_rows(
+                min_row=min_row + 1, max_row=max_row, min_col=min_col, max_col=max_col
+            )
+            for cell in row
+            if isinstance(cell.value, str) and cell.value.startswith("=")
+        ]
+        if formula_cells:
+            return self._excel._read_table_with_com(
+                self._worksheet.title, min_col, min_row, max_col, max_row
+            )
         rows = [
             tuple(cell.value for cell in row)
             for row in self._worksheet.iter_rows(
@@ -102,13 +114,18 @@ class ExcelTable:
             raise InvalidTableOperationError("列のないTableはExcelテーブルにできません。")
         for column, header in enumerate(headers, min_col):
             self._worksheet.cell(row=min_row, column=column, value=header)
+        self._clear_removed_cells(
+            min_col=min_col,
+            min_row=min_row,
+            old_max_col=max_col,
+            old_max_row=max_row,
+            header_count=len(headers),
+            row_count=len(rows),
+        )
         for row_number, row in enumerate(rows, min_row + 1):
             for column, header in enumerate(headers, min_col):
                 self._worksheet.cell(row=row_number, column=column, value=row.get(header, ""))
         new_max_row = min_row + max(len(rows), 1)
-        for row_number in range(new_max_row + 1, max_row + 1):
-            for column in range(min_col, max_col + 1):
-                self._worksheet.cell(row=row_number, column=column, value=None)
         last_cell = self._worksheet.cell(new_max_row, min_col + len(headers) - 1).coordinate
         excel_table.ref = f"{self._worksheet.cell(min_row, min_col).coordinate}:{last_cell}"
         self._excel._mark_dirty()
@@ -120,3 +137,22 @@ class ExcelTable:
     def count(self) -> int:
         """データ行数を返す。"""
         return len(self.read())
+
+    def _clear_removed_cells(
+        self,
+        *,
+        min_col: int,
+        min_row: int,
+        old_max_col: int,
+        old_max_row: int,
+        header_count: int,
+        row_count: int,
+    ) -> None:
+        """置換後の実テーブル範囲から外れる旧セルを空にする。"""
+        for column in range(min_col + header_count, old_max_col + 1):
+            self._worksheet.cell(row=min_row, column=column).value = None
+        new_max_row = min_row + max(row_count, 1)
+        for row_number in range(min_row + 1, max(old_max_row, new_max_row) + 1):
+            for column in range(min_col, old_max_col + 1):
+                if row_number > min_row + row_count or column >= min_col + header_count:
+                    self._worksheet.cell(row=row_number, column=column).value = None

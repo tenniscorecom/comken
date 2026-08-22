@@ -88,11 +88,10 @@ def main() -> None:
 
     before: list[dict[str, Any]] = []
 
-    def add_total(source: dict[str, Any], _destination_row: dict[str, Any] | None) -> Any:
-        total = totals.get(source[KEY])
-        if total is None:
+    def validate_total(_source: dict[str, Any], working_row: dict[str, Any] | None) -> Any:
+        # mapping 適用後の作業行が渡るため、追加加工が不要なら何も変更しない。
+        if working_row is None or working_row[TOTAL] == "":
             return Transfer.SKIP
-        source.update(total)
         return None
 
     mapping = {KEY: KEY, "顧客名": "顧客名", TOTAL: TOTAL}
@@ -111,7 +110,7 @@ def main() -> None:
         mapping=mapping,
         read_key=KEY,
         write_key=KEY,
-    ).run(transform=add_total)
+    ).run(transform=validate_total)
     after = transferred.read()
     with Excel(INVOICE_XLSX) as excel:
         sheet = excel.sheet(SHEET)

@@ -77,7 +77,9 @@ ComkenError
 ├── InvalidColumnError
 ├── TableError
 │   ├── InvalidTableInputError
-│   └── InvalidTableOperationError
+│   ├── InvalidTableOperationError
+│   ├── TableColumnNotFoundError
+│   └── TableDuplicateKeyError
 ├── TransferDestinationRowMissingError
 ├── TransferDestinationMultipleMatchError
 ├── ColumnNotFoundError
@@ -254,6 +256,8 @@ from comken.exceptions.state import (
 from comken.exceptions.table import (
     InvalidTableInputError,
     InvalidTableOperationError,
+    TableColumnNotFoundError,
+    TableDuplicateKeyError,
     TableError,
     TransferDestinationMultipleMatchError,
     TransferDestinationRowMissingError,
@@ -373,6 +377,8 @@ __all__ = [
     "TableError",
     "InvalidTableInputError",
     "InvalidTableOperationError",
+    "TableColumnNotFoundError",
+    "TableDuplicateKeyError",
     "LoggingAlreadyConfiguredError",
     "LoggerHostNotConfiguredError",
 ]

@@ -33,6 +33,34 @@ class InvalidTableOperationError(TableError):
     """
 
 
+class TableColumnNotFoundError(TableError):
+    """Table に指定された列が存在しない。
+
+    発生箇所: Table
+
+    対処:
+        Table.columns を確認し、存在する列名を指定する
+    """
+
+    def __init__(self, columns: list[str]) -> None:
+        super().__init__(f"存在しない列です: {columns}")
+
+
+class TableDuplicateKeyError(TableError):
+    """Table の索引または比較に使うキーが重複している。
+
+    発生箇所: Table.index() / Table.merge() / compare_tables()
+
+    対処:
+        キー列の値を一意にしてから処理をやり直す
+    """
+
+    def __init__(self, columns: list[str], key: object) -> None:
+        super().__init__(
+            f"列「{','.join(columns)}」のキー「{key}」が重複しています。キーを一意にしてください。"
+        )
+
+
 class TableNotOpenError(TableError):
     """表を with 文で開かずに操作した。"""
 

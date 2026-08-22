@@ -2,14 +2,16 @@
 
 import csv
 import re
+from collections.abc import Callable, Mapping
 from datetime import datetime
 from pathlib import Path
 from types import TracebackType
-from typing import Self, TypeAlias
+from typing import Any, Self, TypeAlias
 
 from comken.constants import Encoding
 from comken.core.table.model import Table
 from comken.exceptions.table import InvalidTableInputError, InvalidTableOperationError
+from comken.runtime import is_dry_run
 
 Value: TypeAlias = str | int | float | bool | datetime
 
@@ -30,7 +32,7 @@ class CSV:
         source: str | Path,
         *,
         encoding: str = Encoding.UTF8_SIG,
-        types=None,
+        types: Mapping[str, Callable[[Any], Any]] | None = None,
         read_only: bool = False,
         dry_run: bool = False,
     ) -> None:
@@ -52,7 +54,7 @@ class CSV:
     ) -> None:
         if (
             exc_type is None
-            and not (self._read_only or self._dry_run)
+            and not (self._read_only or self._dry_run or is_dry_run())
             and self._pending is not None
         ):
             self._write(self._pending)
@@ -94,14 +96,19 @@ class CSV:
     def save(self) -> None:
         """保留中のTableをCSVファイルへ保存する。"""
         # replace はメモリ上で準備し、save または正常終了した with でだけファイルへ反映する。
-        if self._pending is not None and not self._read_only and not self._dry_run:
+        if (
+            self._pending is not None
+            and not self._read_only
+            and not self._dry_run
+            and not is_dry_run()
+        ):
             self._write(self._pending)
             self._pending = None
 
     def _write(self, table: Table) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         rows = table.read()
-        if not rows:
+        if not rows and not table.columns:
             self.path.write_text("", encoding=self._encoding)
             return
         headers = table.columns

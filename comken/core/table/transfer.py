@@ -100,21 +100,21 @@ class Transfer:
         result_table = Table(self.write.columns, self.write.read(), types=self.write.types)
         self._working_table = result_table
         index: dict[tuple[Any, ...], Row] = {}
-        for write_row in result_table:
+        for write_row in result_table._iter_rows_for_update():
             key = tuple(write_row[column] for column in self.write_keys)
             if key in index:
-                raise TransferDestinationMultipleMatchError(
-                    ",".join(self.write_keys), key
-                )
+                raise TransferDestinationMultipleMatchError(",".join(self.write_keys), key)
             index[key] = write_row
         # read() でコピーを取り出すため、transform が行を変更しても入力 read は変わらない。
-        for read_row in self.read.read():
+        for row_number, read_row in enumerate(self.read.read(), start=1):
             key = tuple(read_row[column] for column in self.read_keys)
             write_row = index.get(key)
             if write_row is None:
                 # 新規行の追加は Table.append() の責務にするため、Transferでは扱わない。
                 continue
             working_row = dict(write_row)
+            for read_column, write_column in self.mapping.items():
+                working_row[write_column] = read_row[read_column]
             control = transform(read_row, working_row) if transform else self.APPLY
             if control is self.STOP:
                 break
@@ -122,10 +122,9 @@ class Transfer:
                 continue
             if control is not self.APPLY and control is not None:
                 raise TransferRowError(
-                    0, "transformはTrue、False、APPLY、SKIP、STOPのいずれかを返してください。"
+                    row_number,
+                    "transformはTrue、False、APPLY、SKIP、STOPのいずれかを返してください。",
                 )
-            for read_column, write_column in self.mapping.items():
-                working_row[write_column] = read_row[read_column]
             write_row.update(working_row)
         return result_table
 
@@ -136,9 +135,7 @@ class Transfer:
         for write_row in self.write.read():
             key = self._row_key(write_row, self.write_keys)
             if key in index:
-                raise TransferDestinationMultipleMatchError(
-                    ",".join(self.write_keys), key
-                )
+                raise TransferDestinationMultipleMatchError(",".join(self.write_keys), key)
             index[key] = write_row
         return index
 
@@ -147,12 +144,10 @@ class Transfer:
         if self._working_table is None:
             return {}
         index: dict[tuple[Any, ...], Row] = {}
-        for write_row in self._working_table:
+        for write_row in self._working_table._iter_rows_for_update():
             key = self._row_key(write_row, self.write_keys)
             if key in index:
-                raise TransferDestinationMultipleMatchError(
-                    ",".join(self.write_keys), key
-                )
+                raise TransferDestinationMultipleMatchError(",".join(self.write_keys), key)
             index[key] = write_row
         return index
 

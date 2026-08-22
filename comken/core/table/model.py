@@ -7,7 +7,7 @@ Table はメモリ上の行だけを担当します。CSV や Excel の保存処
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
-from comken.exceptions.table import TableError
+from comken.exceptions.table import TableColumnNotFoundError, TableDuplicateKeyError, TableError
 
 
 class Table:
@@ -43,7 +43,8 @@ class Table:
         return [dict(row) for row in self.rows]
 
     def __iter__(self):
-        return iter(self.rows)
+        """各行のコピーを返す。反復中の変更は元のTableへ反映しない。"""
+        return iter(self.read())
 
     def __len__(self) -> int:
         return len(self.rows)
@@ -77,7 +78,9 @@ class Table:
 
     def filter(self, predicate: Callable[[dict], bool]) -> "Table":
         """条件に一致する行だけを持つ新しいTableを返す。"""
-        return Table(self.columns, [row for row in self.rows if predicate(row)], types=self.types)
+        # predicate は利用者コードなので、誤って行を書き換えても元の Table へ影響させない。
+        rows = [dict(row) for row in self.rows if predicate(dict(row))]
+        return Table(self.columns, rows, types=self.types)
 
     def column(self, name: str) -> list[Any]:
         """指定列の値を順番どおりに返す。"""
@@ -87,10 +90,17 @@ class Table:
     def index(self, key: str) -> dict[Any, dict]:
         """指定列をキーにした辞書を返す。"""
         self._check_columns([key])
-        return {row[key]: row for row in self.rows}
+        result: dict[Any, dict] = {}
+        for row in self.rows:
+            value = row[key]
+            if value in result:
+                raise TableDuplicateKeyError([key], value)
+            result[value] = dict(row)
+        return result
 
     def group_by(self, key: str) -> dict[Any, "Table"]:
         """指定列の値ごとにTableを分けて返す。"""
+        self._check_columns([key])
         grouped: dict[Any, list[dict]] = {}
         for row in self.rows:
             grouped.setdefault(row[key], []).append(row)
@@ -136,4 +146,8 @@ class Table:
     def _check_columns(self, columns: Iterable[str]) -> None:
         missing = [column for column in columns if column not in self.columns]
         if missing:
-            raise TableError(f"存在しない列です: {missing}")
+            raise TableColumnNotFoundError(missing)
+
+    def _iter_rows_for_update(self):
+        """ライブラリ内部で更新する実体行を返す。"""
+        return iter(self.rows)

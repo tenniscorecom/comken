@@ -6,8 +6,9 @@ README の「Windows」から移した、モジュールを使うときの詳し
 
 ## Windows
 
-通常の Excel 読み取りは ExcelReader、書き込みは ExcelWriter（openpyxl）を使うこと。
-ExcelComHandler は既存数式の計算結果・マクロ・パスワード保存が必要な場合に限定して使う。
+通常の Excel 読み書きは `Excel` と `Table` を使う。数式キャッシュが不足すると
+`ExcelTable.read()` が自動で COM に昇格する。`ExcelComHandler` の直接利用は、特殊な
+COM 操作やパスワード保存が必要な場合に限定する。
 
 ### ExcelComHandler
 
