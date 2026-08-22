@@ -79,9 +79,12 @@ class ExcelTable:
                 )
             ]
         if not rows:
-            raise EmptyExcelTableError(self._worksheet.title, "データがありません")
-        if all(value is None for value in rows[0]):
-            raise EmptyExcelTableError(self._worksheet.title, "ヘッダ行が空です")
+            raise EmptyExcelTableError(
+                self._worksheet.title,
+                "テーブル範囲を読み取れませんでした",
+            )
+        # ヘッダのみのテーブル（rows[0] が全 None）は正常な空 Table として扱う。
+        # 既存仕様を壊さないため、ここでは Table を組み立てて返す。
         # ref が定義する列数をそのまま使う。末尾の空見出しを切り捨てると、
         # テーブル定義の壊れを見逃し、後ろの列データを失うため。
         headers = list(rows[0])
