@@ -116,7 +116,11 @@ class TableMergeColumnCollisionError(TableError):
 
 
 class TableNotOpenError(TableError):
-    """表を with 文で開かずに操作した。"""
+    """表を with 文で開かずに操作した。
+
+    対処:
+        ``with`` 文の中で使う（CSV / Excel などは ``__enter__`` で表を開く）
+    """
 
     def __init__(self, table_type: str) -> None:
         super().__init__(f"{table_type} は with 文の中で使ってください。")

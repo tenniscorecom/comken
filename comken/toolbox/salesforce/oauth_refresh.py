@@ -1,4 +1,10 @@
-"""comken/toolbox/salesforce/oauth_refresh.py — Refresh Token Flow"""
+"""comken/toolbox/salesforce/oauth_refresh.py — Refresh Token Flow
+
+初回に認可コードから ``refresh_token`` を取り、以降は ``refresh_token`` で
+アクセストークンを更新し続ける方式。Salesforce 側で refresh_token を
+ローテーションして返してきた場合は、新トークンを ``_save_rotated_token``
+（``from_credentials`` が構築）で DPAPI に保存する。
+"""
 
 # 定義中の RefreshTokenOAuth を戻り値の型注釈に使うため、注釈の評価を遅延する。
 from __future__ import annotations

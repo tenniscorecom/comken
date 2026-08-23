@@ -82,7 +82,7 @@ def parse_cabinet_office_text(text: str, *, source: str = "<text>") -> list[Holi
     """内閣府 CSV の文字列を直接パースする（テストやキャッシュのバイパス用）。
 
     Args:
-        text: 内阁府 CSV の中身。文字コードは呼び出し側で解決済みであること。
+        text: 内閣府 CSV の中身。文字コードは呼び出し側で解決済みであること。
         source: エラーメッセージに出す由来（ファイルパス・URL など）。
 
     Returns:

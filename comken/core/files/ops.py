@@ -76,8 +76,9 @@ def copy_to_local_if_large(path: str | Path, threshold_mb: float) -> tuple[Path,
     （openpyxl / win32com は ``close()`` までパスを保持する必要があるため、
     スコープがクラス側に寄る）。
 
-    この関数は ``__all__`` に入れない。利用者が直接呼ぶことは想定せず、
-    ExcelBase / ExcelComHandler などクラス側の自動コピールーチンが使う。
+    この関数は ``comken.core.files`` の ``__all__`` にのみ入れる
+    （``comken.core`` からは再エクスポートしない）。利用者が直接呼ぶことは
+    想定せず、Excel / ExcelComHandler などクラス側の自動コピールーチンが使う。
 
     Args:
         path: 元のファイルパス。

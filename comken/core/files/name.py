@@ -17,8 +17,9 @@ from comken.core.clock import now
 class DateNameBuilder:
     """今日の日付を付けたファイル名を組み立てる。
 
-    日付はファイル名の属性ではなく「付け方」なので、コンストラクタではなく
-    prefix() / suffix() の呼び出し時に決める。
+    日付は ``__init__`` 時点で確定する。``for_date=None`` のときだけ
+    ``__init__`` 呼び出し時点の日付を使い、``prefix()`` / ``suffix()`` を
+    呼ぶたびに日付を取り直すことはない。
 
     日付はコンストラクタで固定できる。テストや過去日付のファイル名を組み立てる
     ときは ``date(2026, 8, 20)`` 等を渡す。省略時は呼び出し時点の日付。
@@ -33,9 +34,10 @@ class DateNameBuilder:
         """
         Args:
             name: ファイル名（拡張子なし）。
-            for_date: ファイル名に付ける日付。``None``（既定）なら呼び出し時点の日付。
-                ``date`` / ``datetime`` どちらも受け付ける（``datetime`` は内部で
-                ``.date()`` に変換）。
+            for_date: ファイル名に付ける日付。``None``（既定）なら ``__init__``
+                呼び出し時点の日付。``prefix()`` / ``suffix()`` を呼ぶたびに
+                日付を取り直すことはない。``date`` / ``datetime`` どちらも
+                受け付ける（``datetime`` は内部で ``.date()`` に変換）。
             ext: 拡張子（デフォルト: ".xlsx"）。ドットなしで渡しても補完される。
         """
         self._name = name

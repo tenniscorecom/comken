@@ -16,7 +16,8 @@ class ExcelColumnNotFoundError(ColumnNotFoundError):
 
     非エンジニアが列名を変更したときに分かりやすいメッセージを出すために使う。
 
-    発生箇所: 利用側プロジェクトの列検証処理（現在 comken 内からは未送出）
+    発生箇所: 利用側プロジェクトの列検証処理（comken 本体のソースからは
+              送出されない。利用者プロジェクトから送出する想定）
 
     使い方:
         from comken.exceptions import ExcelColumnNotFoundError
