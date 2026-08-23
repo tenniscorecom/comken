@@ -31,7 +31,7 @@ class DataSheetAccessError(ExcelError):
 class ExcelFileNotFoundError(ExcelError):
     """Excel ファイルが見つからない
 
-    発生箇所: ExcelBase.__init__()
+    発生箇所: Excel.__init__() / ExcelComHandler.__init__()
 
     対処:
         ファイルの置き場所と名前を確認する
@@ -47,7 +47,7 @@ class ExcelFileNotFoundError(ExcelError):
 class SheetNotFoundError(ExcelError):
     """指定した名前のシートがない
 
-    発生箇所: ExcelBase._sheet() / ExcelComHandler._sheet()
+    発生箇所: Excel.sheet() / Excel.data_sheet()
 
     対処:
         Excel を開いて、下のシート名（タブ）が変わっていないか確認する。変えた場合は元に戻す
@@ -124,22 +124,6 @@ class TableNotFoundError(ExcelError):
         super().__init__(f"テーブルが見つかりません: {name}  存在するテーブル: {tables}")
 
 
-class TableNotAvailableInReadOnlyError(ExcelError):
-    """read_only で開いたブックからテーブル名で読めない
-
-    発生箇所: ExcelBase.read_table()
-
-    対処:
-        Excel を ``read_only=False`` で開き直す。
-    """
-
-    def __init__(self, path: Path | str) -> None:
-        super().__init__(
-            f"テーブル定義を名前で読むには read_only=False で開く必要があります: {path}\n"
-            "Excel(path, read_only=False) で開き直してください。"
-        )
-
-
 class MacroError(ExcelError):
     """Excel のマクロが失敗した
 
@@ -159,7 +143,8 @@ class MacroError(ExcelError):
 class EmptyHeaderCellError(ExcelError):
     """Excel の見出しに空欄がある
 
-    発生箇所: ExcelBase.read_rows_as_dicts() / ExcelComHandler.read_rows_as_dicts()
+    発生箇所: Excel.read_computed_rows_as_dicts() / ExcelTable.read() /
+             ExcelComHandler.read_rows_as_dicts()
 
     対処:
         Excel の1行目の空欄を埋める
@@ -204,7 +189,7 @@ class EmptyExcelTableError(ExcelError):
 class ExcelHeadersTooFewError(ExcelError):
     """指定した見出し数が列数より少ない
 
-    発生箇所: ExcelBase.read_rows_as_dicts() / ExcelComHandler.read_rows_as_dicts()
+    発生箇所: ExcelComHandler.read_rows_as_dicts()
 
     対処:
         管理者へ連絡する

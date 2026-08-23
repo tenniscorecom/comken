@@ -40,11 +40,4 @@ class FileFormat:
     CSV = 6
 
 
-class SortBy:
-    """FileFinder.latest() の by 引数に使う定数。"""
-
-    NAME = "name"
-    UPDATED = "updated"
-
-
-__all__ = ["Encoding", "Color", "FileFormat", "SortBy"]
+__all__ = ["Encoding", "Color", "FileFormat"]

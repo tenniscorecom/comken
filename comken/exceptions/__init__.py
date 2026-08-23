@@ -37,7 +37,6 @@ ComkenError
 │   ├── InvalidTableNameError
 │   ├── TableAlreadyExistsError
 │   ├── TableNotFoundError
-│   ├── TableNotAvailableInReadOnlyError
 │   ├── MacroError
 │   ├── EmptyHeaderCellError
 │   ├── DuplicateHeaderCellError
@@ -226,7 +225,6 @@ from comken.exceptions.excel import (
     SheetAlreadyExistsError,
     SheetNotFoundError,
     TableAlreadyExistsError,
-    TableNotAvailableInReadOnlyError,
     TableNotFoundError,
 )
 from comken.exceptions.file import FileDeletionError, UnsupportedFileSuffixError
@@ -315,7 +313,6 @@ __all__ = [
     "InvalidTableNameError",
     "TableAlreadyExistsError",
     "TableNotFoundError",
-    "TableNotAvailableInReadOnlyError",
     "MacroError",
     "EmptyHeaderCellError",
     "DuplicateHeaderCellError",
