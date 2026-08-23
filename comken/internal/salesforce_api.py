@@ -1,8 +1,13 @@
-"""comken/internal/salesforce_api.py — 社内 Salesforce API 呼び出しの薄いラッパー。
+"""comken/internal/salesforce_api.py — 社内 Salesforce API 呼び出しの薄い玄関。
 
-``comken.toolbox.salesforce`` の API を薄くラップして ``comken.internal`` 配下から
-使えるようにする。詳細は実装時に詰める。``comken/toolbox/rpa.py`` と同じパターンで、
-社内 ``example_libs.v0000.salesforce`` への薄いラッパーとして機能する。
+``comken.toolbox.salesforce`` の SalesforceBase を介さず、
+``example_libs.v0000.salesforce``（社内ライブラリ）を直接ロードする。
+メソッドは提供しない（下地のみ）。
+
+    with SalesforceApi() as api:
+        api._module.<method>(...)   # 社内ライブラリのメソッドを直接呼ぶ
+
+メソッドのラッパ追加は社内ライブラリの API 仕様確認後に書き足す。
 """
 
 from __future__ import annotations
@@ -13,12 +18,25 @@ SALESFORCE_LIBRARY_NAME = "example_libs.v0000.salesforce"
 
 
 class SalesforceApi:
-    """社内 Salesforce API 呼び出しの薄いラッパー。
+    """社内 Salesforce API 呼び出しの薄い玄関。
+
+    ``example_libs.v0000.salesforce`` を ``comken.internal.base.InternalLibraryBase``
+    経由でロードするコンテキストマネージャ。``__enter__`` でモジュールをロードし、
+    ``__exit__`` で開放する。
+    現状は下地の実装のみで、メソッド（query / report_run / request 等）は
+    提供しない。メソッドの追加は社内ライブラリの API 仕様確認後に書き足す。
 
     使用例::
 
         with SalesforceApi() as api:
-            api.query("SELECT Id FROM Account")
+            api._module.query("SELECT Id FROM Account")  # 直接モジュールアクセス
+
+    社内ライブラリが見つからない場合、
+    ``comken.internal.exceptions.InternalLibraryNotFoundError`` が送出される。
+
+    Raises:
+        InternalLibraryNotFoundError: 社内ライブラリ ``example_libs.v0000.salesforce``
+            が import できない場合。
     """
 
     def __init__(self) -> None:
