@@ -25,5 +25,5 @@ def main() -> None:
 if __name__ == "__main__":
     # 出力先を変えたいときは実行前にフォルダを作って local() を呼ぶ。
     LOG_FOLDER.mkdir(parents=True, exist_ok=True)
-    logger = local()
+    local()
     main()

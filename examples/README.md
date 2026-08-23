@@ -36,7 +36,7 @@ comken の使い方を「動くコード」で覚えるためのサンプル。
 | 1 | csv_to_excel_report | CSV を読んで Excel レポートを作る | CSV / Excel / Sheet / Color | なし（同梱データで動く） |
 | 2 | excel_key_transfer | CSV を加工して Excel に列マッピング転記 | Transfer / CSV.group_by / diff_rows | なし（データを自動生成） |
 | 3 | csv_diff_report | 昨日と今日の CSV の差分を色付き Excel レポートに | diff_rows / CSV / set_fill | なし（データを自動生成） |
-| 4 | csv_date_move | CSV の日付列とファイル名の日付が一致したファイルを移動 | CSV.first / date_in_name / dry_run | config.ini の作成 |
+| 4 | csv_date_move | CSV の日付列とファイル名の日付が一致したファイルを移動 | CSV.read / date_in_name / dry_run | config.ini の作成 |
 | 5 | daily_batch_template | 日次バッチの流れ（入力を探す → 加工 → Excel 出力） | comken.internal.rpa / FileFinder / Excel | config.ini + 社内ライブラリ |
 | 6 | outlook_inbox | 受信メール → CSV → 結果メールの下書き | Outlook / MailMessage / CSV | Classic Outlook |
 | 7 | copy_then_macro | 当日ファイルをコピー → Excel マクロ → 配布 | FileFinder / Excel.run_macro / copy_file | Microsoft Excel + パス設定 |
