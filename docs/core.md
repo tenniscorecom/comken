@@ -25,7 +25,7 @@ copy_file("report.xlsx", r"C:\作業\backup")             # コピー（元フ�
 ### ファイル名の組み立て・検索
 
 ```python
-from comken.core import DateNameBuilder, FileFinder, date_in_name
+from comken.core import DateNameBuilder, DateFileFinder, date_in_name
 
 FOLDER = r"\\nas-server\share"
 
@@ -39,29 +39,27 @@ DateNameBuilder("月次レポート").prefix(date_format="%Y%m") # → "202607_�
 file_date = date_in_name("売上_20260729.csv")            # → datetime.date(2026, 7, 29)
 
 # 今日の日付を含むファイルを取得（見つからなければ FileNotFoundError）
-path = FileFinder(FOLDER).today()                      # YYYYMMDD で探す
-path = FileFinder(FOLDER).today(date_format="%Y%m")    # YYYYMM で探す
+# `prefix + YYYYMMDD + 拡張子` に一致するファイルを返す
+path = DateFileFinder(FOLDER).prefix("売上レポート")               # → 売上レポートYYYYMMDD.xlsx
+path = DateFileFinder(FOLDER).prefix("売上レポート", extension=".csv")
+path = DateFileFinder(FOLDER).prefix("月次レポート", extension=".xlsx")  # 例: 月次レポートYYYYMMDD.xlsx
+# prefix 側に "{:%Y-%m-%d}" のような日付書式を書けば、その位置へ日付が入る
+path = DateFileFinder(FOLDER).prefix("{:%Y-%m-%d}_月次")           # → 2026-07-29_月次.xlsx
 
-# 日付入りファイルをすべて取得（日付の新しい順。同じ日付なら更新日時の新しい順）
-paths = FileFinder(FOLDER).dated()
-paths = FileFinder(FOLDER).dated(pattern="*.csv")       # CSV に絞る場合
-
-# フォルダ内で最新のファイルを取得（見つからなければ FileNotFoundError）
-# デフォルトは「ファイル名の辞書順で最後」= 日付プレフィックス命名なら名前上の最新。
-# コピーや再保存で更新日時が変わっていても影響を受けない
-from comken.constants import SortBy
-
-path = FileFinder(FOLDER).latest()
-path = FileFinder(FOLDER).latest(pattern="*.csv")        # CSV に絞る場合
-path = FileFinder(FOLDER).latest(by=SortBy.UPDATED)      # 更新日時で選びたい場合
+# 別日のファイルを探したいときは for_date を渡す
+import datetime
+path = DateFileFinder(FOLDER, for_date=datetime.date(2026, 7, 29)).prefix("売上レポート")
 
 # 見つからなくても処理を続けたい場合は required=False（None が返る）
-path = FileFinder(FOLDER).today(required=False)
+path = DateFileFinder(FOLDER).prefix("売上レポート", required=False)
 if path is None:
     ...  # スキップ処理など
 
-# dated() は複数件を返すため、required=False で見つからなければ空リスト
-paths = FileFinder(FOLDER).dated(required=False)
+# 日付付きファイルを全件、日付の新しい順で取得（見つからなければ空リスト）
+paths = DateFileFinder(FOLDER).dated("売上レポート")                  # → [売上レポート20260730.xlsx, 売上レポート20260729.xlsx, ...]
+paths = DateFileFinder(FOLDER).dated("売上レポート", extension=".csv")
+# `prefix()` と違い、`prefix` 内の日付書式（{:%Y-%m-%d} 等）は解釈しない
+# `for_date` を指定しても結果は同じ（フォルダ内の全件が対象）
 ```
 
 ### 表の結合（Table.merge）
@@ -98,7 +96,7 @@ diff_row(before, after)
 # データセット同士の差分（キー列で突合）
 before = CSV("昨日.csv").read().read()
 with Excel("今日.xlsx") as f:
-    after = f.read_rows_as_dicts("Sheet1")
+    after = f.read_computed_rows_as_dicts("Sheet1")
 
 result = diff_rows(before, after, key="社員番号")
 result.added    # → after にだけある行のリスト
@@ -285,7 +283,7 @@ path = wait_until_stable(r"\\server\share\in\data.csv", stable_for=2.0)
 読む側が途中の状態を見ることがない。`wait_until_stable` は**書き込み側に
 手を出せないとき**の手段。
 
-`FileFinder.latest()` は1 回探すだけなので「無ければ待つ」はこちらを使う。
+`DateFileFinder.prefix()` は1 回探すだけなので「無ければ待つ」はこちらを使う。
 
 ### zip 圧縮・展開（zip_folder / zip_files / unzip）
 

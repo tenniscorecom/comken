@@ -195,10 +195,10 @@ OUTPUT_FOLDER = C:\work\out  ; ← 値は自由
 
 ```python
 # 良い（機能を提供するパッケージが分かる）
-from パッケージ.excel import Excel, Excel
+from パッケージ.excel import Excel
 
 # 悪い（どの機能群に依存しているか分からない）
-from パッケージ import Excel, FileFinder
+from パッケージ import Excel, DateFileFinder
 
 # 悪い（ドットを数えないと依存先が分からない）
 from ..foo import Bar
@@ -313,7 +313,7 @@ if file_size > LOCAL_COPY_THRESHOLD_BYTES:
 | **大文字スネークケース** | `SHEET_NAME`, `MAX_RETRY_COUNT` |
 | **場所** | ファイルの先頭またはクラスの先頭（メソッドより上）にまとめる |
 | **計算式はそのまま書く** | `10 * 1024 * 1024`（`10485760` より意味が伝わる） |
-| **選択肢を渡す引数は定数クラスを使う** | `latest(by=SortBy.UPDATED)`, `CSV(encoding=Encoding.CP932)`, `set_fill(color=Color.RED)`。生の文字列（`by="updated"`）はマジックナンバーになるので書かない |
+| **選択肢を渡す引数は定数クラスを使う** | `CSV(encoding=Encoding.CP932)`, `set_fill(color=Color.RED)`。生の文字列（`encoding="cp932"`）はマジックナンバーになるので書かない |
 
 ---
 
@@ -323,9 +323,9 @@ if file_size > LOCAL_COPY_THRESHOLD_BYTES:
 
 | やりたいこと | 使うもの | 例 |
 |---|---|---|
-| 決まった値の一覧を名前で持つ（インスタンスを作らない） | ただのクラス属性（**定数クラス**） | `Color.RED`, `SortBy.UPDATED`, `Encoding.CP932` |
+| 決まった値の一覧を名前で持つ（インスタンスを作らない） | ただのクラス属性（**定数クラス**） | `Color.RED`, `Encoding.CP932` |
 | 複数の値をひとまとまりで持ち運ぶ「データの箱」 | `@dataclass` | 集計結果・検索結果など、名前付きの値のセットを返すとき |
-| 振る舞い（メソッド）が主役のもの | 普通のクラス | `Excel`, `FileFinder` |
+| 振る舞い（メソッド）が主役のもの | 普通のクラス | `Excel`, `DateFileFinder` |
 
 ### 定数クラス — 「変わらない値の一覧」を入れる箱
 
@@ -503,7 +503,7 @@ class CSV:
 ```python
 # 良い（with 文）
 with Excel("data.xlsx") as f:
-    rows = f.read_rows_as_dicts("Sheet1")
+    rows = f.read_computed_rows_as_dicts("Sheet1")
 
 # with が使えない場合（pywin32 の COM オブジェクト等）
 excel = None

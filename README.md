@@ -53,7 +53,7 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 ## 使うときの約束
 
 - **`from comken import ...` で取れるのは、何をするプロジェクトでも使う5個だけ。**
-  `config` / `Config`（設定）、`setup_logging`（ログ）、実行モードの2関数
+  `config` / `Config`（設定）、`comken_logger`（ログ）、実行モードの2関数
   （`dry_run` / `debug`）
 - **部品は `from comken.core import ...` から取る。** ファイル検索・日時・文字列・差分・
   計測など30個（`FileFinder` / `copy_file` / `project_dir` / `today` / `Timer` / `retry` など）
@@ -219,8 +219,6 @@ set "PYTHON_LIBRARY=\\server\share\tools"
   main.py                  エントリポイント（実行モードの切り替えと例外の受け口）
   src/
     run.py                 ここに処理を書く
-    site.py                ブラウザを使うときのサイトクラス
-    browser_options.py     ブラウザの設定
   docs/
     使い方.md               業務側の人が読む
     仕様書.md               エンジニアが読む
@@ -507,30 +505,24 @@ POSITION = 42
 
 ## Logger
 
-社内環境では `setup_logging()` に環境クラスを渡し、root logger を設定する。
+社内環境では `setup()` に環境クラスを渡し、root logger を設定する。
 すでに root logger が設定済みの場合や2回呼んだ場合は、二重出力を防ぐため例外になる。
 
 ```python
-from comken.core.logger import Backoffice, setup_logging
+from comken.core.logger import Backoffice, setup
 
-setup_logging(Backoffice)
+setup(Backoffice)
 ```
 
-RPA 基盤を通さず単体実行するときは、`local()` が返す名前付き logger を使う。
+RPA 基盤を通さず単体実行するときは、`local()` で root logger を設定する。
+`local()` は `None` を返さないので、logger は `getLogger(__name__)` で取る。
 
 ```python
 # main.py
-from comken.core.logger import DEBUG, local
+from comken import comken_logger
 
-logger = local(console_level=DEBUG)
-logger.info("処理開始")  # コンソールと logs/local-YYYY-MM-DD.log（UTF-8）へ出力
-```
-
-```python
-# main.py
-import logging
-
-logger = logging.getLogger(__name__)
+comken_logger.local()  # コンソールと logs/local-YYYY-MM-DD.log（UTF-8）へ出力
+logger = comken_logger.getLogger(__name__)
 logger.info("処理開始")
 ```
 
