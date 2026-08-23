@@ -87,7 +87,14 @@ def test_generated_project_passes_ruff(generated: Path) -> None:
     for args in (["check", "."], ["format", "--check", "."]):
         cmd = [sys.executable, "-m", "ruff", *args]
         try:
-            result = subprocess.run(cmd, cwd=generated, capture_output=True, text=True)
+            result = subprocess.run(
+                cmd,
+                cwd=generated,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
         except FileNotFoundError:
             pytest.skip("ruff がインストールされていない")
         if result.returncode == 0:

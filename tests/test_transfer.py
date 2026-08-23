@@ -6,6 +6,7 @@ from comken.core.table import Table, Transfer
 from comken.exceptions.table import (
     InvalidTableInputError,
     TableColumnNotFoundError,
+    TransferDestinationMissingError,
     TransferDestinationMultipleMatchError,
     TransferMappingError,
 )
@@ -13,15 +14,23 @@ from comken.exceptions.table import (
 
 def test_transfer_init_rejects_non_table() -> None:
     """read/write は Table でなければならない。"""
-    not_a_table: object = None
+    not_a_table: object = "not a table"
     with pytest.raises(InvalidTableInputError):
         Transfer(
-            not_a_table, Table(["id"], [{"id": 1}]), {"id": "id"}, read_key="id", write_key="id"
-        )  # type: ignore[arg-type]
+            not_a_table,  # type: ignore[arg-type]
+            Table(["id"], [{"id": 1}]),
+            {"id": "id"},
+            read_key="id",
+            write_key="id",
+        )
     with pytest.raises(InvalidTableInputError):
         Transfer(
-            Table(["id"], [{"id": 1}]), not_a_table, {"id": "id"}, read_key="id", write_key="id"
-        )  # type: ignore[arg-type]
+            Table(["id"], [{"id": 1}]),
+            not_a_table,  # type: ignore[arg-type]
+            {"id": "id"},
+            read_key="id",
+            write_key="id",
+        )
 
 
 def test_transfer_init_requires_mapping_and_keys() -> None:
@@ -48,6 +57,22 @@ def test_transfer_init_rejects_mismatched_key_lengths() -> None:
             read_key=["group", "id"],
             write_key="id",
         )
+
+
+def test_transfer_init_rejects_missing_read_column() -> None:
+    """mapping の read 列が read Table に無ければ TableColumnNotFoundError。"""
+    source = Table(["id", "name"], [{"id": 1, "name": "A"}])
+    destination = Table(["id", "name"], [{"id": 1, "name": "old"}])
+    with pytest.raises(TableColumnNotFoundError):
+        Transfer(source, destination, {"missing": "name"}, read_key="id", write_key="id")
+
+
+def test_transfer_init_rejects_missing_write_column() -> None:
+    """mapping の write 列が write Table に無ければ TableColumnNotFoundError。"""
+    source = Table(["id", "name"], [{"id": 1, "name": "A"}])
+    destination = Table(["id", "name"], [{"id": 1, "name": "old"}])
+    with pytest.raises(TableColumnNotFoundError):
+        Transfer(source, destination, {"name": "missing"}, read_key="id", write_key="id")
 
 
 def test_transfer_transfer_rows_includes_unmatched() -> None:
@@ -85,24 +110,142 @@ def test_transfer_matched_rows_excludes_unmatched() -> None:
     assert write_row == {"id": "1", "value": "old"}
 
 
-def test_transfer_destination_changes_persist_to_working_table() -> None:
-    """利用者が destination[...] = source[...] で書き換えると _working_table に反映される。
+def test_transfer_apply_mapping_copies_by_mapping() -> None:
+    """apply_mapping は mapping に従って read の値を write にコピーする。"""
+    source = Table(["id", "name"], [{"id": 1, "name": "Alice"}])
+    destination = Table(["id", "name"], [{"id": 1, "name": ""}])
+    transfer = Transfer(source, destination, {"name": "name"}, read_key="id", write_key="id")
 
-    Transfer は行を見つけて渡すだけ。書き込みは利用者が普通の Python で書く。
-    その書き換えが内部の作業 Table に反映され、後段の保存処理が同じ実体を読める。
-    """
-    source = Table(["id", "value"], [{"id": "1", "value": "new"}])
-    destination = Table(["id", "value"], [{"id": "1", "value": "old"}])
+    for read_row, write_row in transfer.matched_rows():
+        transfer.apply_mapping(read_row, write_row)
+
+    assert transfer.result().read() == [{"id": 1, "name": "Alice"}]
+
+
+def test_transfer_apply_mapping_supports_different_column_names() -> None:
+    """mapping の read 列と write 列で名前が違っていても転記できる。"""
+    source = Table(["id", "name"], [{"id": 1, "name": "山田"}])
+    destination = Table(["id", "label"], [{"id": 1, "label": "旧"}])
+    transfer = Transfer(source, destination, {"name": "label"}, read_key="id", write_key="id")
+
+    for read_row, write_row in transfer.matched_rows():
+        transfer.apply_mapping(read_row, write_row)
+
+    assert transfer.result().read() == [{"id": 1, "label": "山田"}]
+
+
+def test_transfer_apply_mapping_supports_composite_key() -> None:
+    """複合キーの Table でも apply_mapping で正しく転記できる。"""
+    source = Table(
+        ["group", "id", "value"],
+        [
+            {"group": "A", "id": 1, "value": "new"},
+            {"group": "B", "id": 2, "value": "extra"},
+        ],
+    )
+    destination = Table(
+        ["group", "id", "value"],
+        [{"group": "A", "id": 1, "value": "old"}],
+    )
+    transfer = Transfer(
+        source,
+        destination,
+        {"value": "value"},
+        read_key=["group", "id"],
+        write_key=["group", "id"],
+    )
+
+    for read_row, write_row in transfer.matched_rows():
+        transfer.apply_mapping(read_row, write_row)
+
+    # A-1 だけ転記される。B-2 は write に存在しないので対象にならない。
+    assert transfer.result().read() == [{"group": "A", "id": 1, "value": "new"}]
+
+
+def test_transfer_continue_skips_apply_mapping() -> None:
+    """``continue`` した行は mapping 適用されず、write の値のまま残る。"""
+    source = Table(
+        ["id", "value"],
+        [{"id": 1, "value": "new"}, {"id": 2, "value": "x"}],
+    )
+    destination = Table(
+        ["id", "value"],
+        [{"id": 1, "value": "old"}, {"id": 2, "value": "old2"}],
+    )
+    transfer = Transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
+
+    for read_row, write_row in transfer.matched_rows():
+        # value が "x" のときは転記しない
+        if read_row["value"] == "x":
+            continue
+        transfer.apply_mapping(read_row, write_row)
+
+    # id=1 だけ転記され、id=2 は古い値のまま
+    assert transfer.result().read() == [
+        {"id": 1, "value": "new"},
+        {"id": 2, "value": "old2"},
+    ]
+
+
+def test_transfer_apply_mapping_does_not_mutate_input_tables() -> None:
+    """apply_mapping を呼んでも read / write Table は変わらない。"""
+    source = Table(["id", "value"], [{"id": 1, "value": "new"}])
+    destination = Table(["id", "value"], [{"id": 1, "value": "old"}])
+    original_source = source.read()
+    original_destination = destination.read()
+    transfer = Transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
+
+    for read_row, write_row in transfer.matched_rows():
+        transfer.apply_mapping(read_row, write_row)
+
+    assert source.read() == original_source
+    assert destination.read() == original_destination
+    # 作業 Table 側にだけ変更が反映されている
+    assert transfer.result().read() != original_destination
+
+
+def test_transfer_apply_mapping_with_none_destination_raises() -> None:
+    """apply_mapping に None の write_row を渡すと TransferDestinationMissingError。"""
+    source = Table(["id", "value"], [{"id": 2, "value": "new"}])
+    destination = Table(["id", "value"], [{"id": 1, "value": "old"}])
+    transfer = Transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
+
+    # transfer_rows() の (read_row, None) をそのまま渡すと例外になる
+    for read_row, write_row in transfer.transfer_rows():
+        if write_row is None:
+            with pytest.raises(TransferDestinationMissingError):
+                transfer.apply_mapping(read_row, write_row)
+
+
+def test_transfer_guarding_none_with_transfer_rows_works() -> None:
+    """transfer_rows() で None を弾いてから apply_mapping を呼べる。"""
+    source = Table(["id", "value"], [{"id": 1, "value": "new"}, {"id": 2, "value": "extra"}])
+    destination = Table(["id", "value"], [{"id": 1, "value": "old"}])
+    transfer = Transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
+
+    for read_row, write_row in transfer.transfer_rows():
+        if write_row is None:
+            continue  # 新規行は追加しない
+        transfer.apply_mapping(read_row, write_row)
+
+    # id=2 は write に存在しないので mapping 適用されず、id=1 だけ転記される
+    assert transfer.result().read() == [{"id": 1, "value": "new"}]
+
+
+def test_transfer_destination_changes_persist_to_working_table() -> None:
+    """利用者が write_row[...] = ... で書き換えると _working_table に反映される。"""
+    source = Table(["id", "value"], [{"id": 1, "value": "new"}])
+    destination = Table(["id", "value"], [{"id": 1, "value": "old"}])
     transfer = Transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
 
     for read_row, write_row in transfer.matched_rows():
         write_row["value"] = read_row["value"]
 
     assert transfer._working_table is not None
-    assert transfer._working_table.read() == [{"id": "1", "value": "new"}]
+    assert transfer._working_table.read() == [{"id": 1, "value": "new"}]
     # 入力は不変（書き換えは作業 Table への操作）
-    assert source.read() == [{"id": "1", "value": "new"}]
-    assert destination.read() == [{"id": "1", "value": "old"}]
+    assert source.read() == [{"id": 1, "value": "new"}]
+    assert destination.read() == [{"id": 1, "value": "old"}]
 
 
 def test_transfer_transfer_rows_returns_iterator_and_can_be_reused() -> None:
@@ -199,27 +342,14 @@ def test_transfer_does_not_mutate_input_tables() -> None:
     assert destination.read() == original_destination
 
 
-def test_transfer_with_mapping_different_column_names() -> None:
-    """mapping で read 列名と write 列名が違っていても、書き換えは利用者の dict 操作で吸収する。"""
-    source = Table(["id", "name"], [{"id": 1, "name": "山田"}])
-    destination = Table(["id", "label"], [{"id": 1, "label": "旧"}])
-    transfer = Transfer(source, destination, {"name": "label"}, read_key="id", write_key="id")
-
-    for read_row, write_row in transfer.matched_rows():
-        write_row["label"] = read_row["name"]
-
-    assert transfer._working_table is not None
-    assert transfer._working_table.read() == [{"id": 1, "label": "山田"}]
-
-
 def test_result_returns_modified_table_after_iterator() -> None:
-    """transfer_rows() の変更が result() に反映される。"""
+    """apply_mapping の変更が result() に反映される。"""
     source = Table(["id", "name"], [{"id": 1, "name": "Alice"}])
     destination = Table(["id", "name"], [{"id": 1, "name": ""}])
     transfer = Transfer(source, destination, {"name": "name"}, read_key="id", write_key="id")
 
     for src, dst in transfer.matched_rows():
-        dst["name"] = src["name"].strip()
+        transfer.apply_mapping(src, dst)
 
     result_table = transfer.result()
     assert result_table.read()[0]["name"] == "Alice"
@@ -229,9 +359,7 @@ def test_result_returns_copy_when_iterator_not_called() -> None:
     """result() を最初に呼ぶと write のコピーが返る（変更なし）。"""
     source = Table(["id"], [{"id": 1}])
     destination = Table(["id", "name"], [{"id": 1, "name": "Original"}])
-    transfer = Transfer(
-        source, destination, {"id": "id"}, read_key="id", write_key="id"
-    )
+    transfer = Transfer(source, destination, {"id": "id"}, read_key="id", write_key="id")
 
     result_table = transfer.result()
 

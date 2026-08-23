@@ -92,9 +92,6 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `SiteOwnerRequiredError` | `SiteBase` / `SalesforceBase` のサブクラスに `OWNER` が設定されていない | サブクラスに `OWNER = "プロジェクト名 / 担当者"` を1行追加する。ライブラリ（`comken.toolbox.browser.sites/` または`comken.toolbox.salesforce.sites/`）に入れるべきサイトかは`docs/開発/ライブラリ開発規約.md` の「サイト／組織クラスを昇格させる基準」を参照して判断する。ライブラリに昇格したい場合はライブラリ管理者へ連絡する。 |
 | `InternalLibraryNotFoundError` | 指定した社内ライブラリが見つからない | 社内 LAN 環境から、共有サーバ上の PYTHONPATH が通っているか確認し、指定したライブラリ名のフォルダが存在するか確かめる |
 | `InternalLibraryVersionMismatchError` | 指定したバージョンの社内ライブラリが見つからない | 共有サーバ上の対象ライブラリのバージョンを確認し、呼び出し側の指定と一致しているか確かめる |
-| `RpaError` | 旧 RpaError の後方互換シム。 | 社内 LAN 環境から、共有サーバ上の PYTHONPATH が通っているか確認し、指定したライブラリ名のフォルダが存在するか確かめる。 |
-| `RpaLibraryNotFoundError` | 旧 RpaLibraryNotFoundError の後方互換シム。 | 社内 LAN 環境から、共有サーバ上の PYTHONPATH が通っているか確認し、指定したライブラリ名のフォルダが存在するか確かめる。 |
-| `RpaLibraryVersionMismatchError` | 旧 RpaLibraryVersionMismatchError の後方互換シム。 | 共有サーバ上の対象ライブラリのバージョンを確認し、呼び出し側の指定と一致しているか確かめる。 |
 | `EncodingDetectionError` | CSV の文字コードを判定できない | CSV の保存形式を確認し、管理者へ連絡する |
 | `CsvFileNotFoundError` | 読み込む CSV ファイルが存在しない | パスを確認する。新規出力は columns を指定して write / replace する |
 | `CsvHeaderMissingError` | CSV に見出し行がない | 見出し行を追加するか、ヘッダーなし CSV なら columns を指定する |
@@ -155,6 +152,9 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `LoggingAlreadyConfiguredError` | root logger がすでに設定されている | setup() または local() はアプリの入口で1回だけ呼ぶ。実行基盤がログを設定する場合は呼ばない。 |
 | `LoggerHostNotConfiguredError` | 実行端末のログ保存先が LoggerSite に登録されていない | 対象サイトの LOG_FOLDERS に、エラーに表示された端末名と保存先フォルダを登録する。 |
 | `FileNotFoundError` | ファイルが見つからない | ファイルの置き場所と名前を確認する。「今日の日付のファイル」を探す処理なら、今日のファイルが作られているか確認する |
+| `RpaError` | 旧 RpaError の後方互換シム | 社内 LAN 環境から、共有サーバ上の PYTHONPATH が通っているか確認し、指定したライブラリ名のフォルダが存在するか確かめる。 新名称は``comken.internal.exceptions`` を参照 |
+| `RpaLibraryNotFoundError` | 旧 RpaLibraryNotFoundError の後方互換シム | 社内 LAN 環境から、共有サーバ上の PYTHONPATH が通っているか確認し、指定したライブラリ名のフォルダが存在するか確かめる。 新名称は``comken.internal.exceptions`` を参照 |
+| `RpaLibraryVersionMismatchError` | 旧 RpaLibraryVersionMismatchError の後方互換シム | 共有サーバ上の対象ライブラリのバージョンを確認し、呼び出し側の指定と一致しているか確かめる。新名称は ``comken.internal.exceptions`` を参照 |
 
 ## ブラウザ（Edge 自動操作）のエラー
 
@@ -180,6 +180,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
+| `TransferDestinationMissingError` | Transfer.apply_mapping() に転記先が None で渡された | matched_rows() を使うか、``transfer_rows()`` の ``(read_row, None)``を ``if write_row is None:`` で分岐してから渡す。 新規行を追加する場合は ``Transfer`` の責務ではなく、``Table.append()`` 等で利用者側で対応する。 |
 | `InvalidTableInputError` | Table API に対応しない入力が渡された。 | columns、rows、types の型と列名を確認する |
 | `InvalidTableOperationError` | Table API で実行できない操作が指定された。 | 対象が読み取り専用でないか、指定したテーブル名が正しいか確認する |
 | `TableColumnNotFoundError` | Table に指定された列が存在しない。 | Table.columns を確認し、存在する列名を指定する |

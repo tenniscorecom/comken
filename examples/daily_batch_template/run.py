@@ -20,9 +20,9 @@ import logging
 from comken.core import DateFileFinder, DateNameBuilder
 from comken.core.table import Table
 from comken.exceptions import ComkenError
+from comken.internal.rpa import backoffice  # イントラネットのツールなら intranet に変える
 from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Excel
-from comken.internal.rpa import backoffice  # イントラネットのツールなら intranet に変える
 
 from .config import config
 

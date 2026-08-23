@@ -50,14 +50,14 @@ def main() -> None:
         write_key="注文番号",
     )
     for read_row, write_row in transfer.matched_rows():
-        # mapping の対応関係どおりに転記先に値を流し込む
-        for read_column, write_column in mapping.items():
-            write_row[write_column] = read_row[read_column]
+        # apply_mapping がコンストラクタで渡した mapping を write_row へコピーする
+        transfer.apply_mapping(read_row, write_row)
+    working = transfer.result()
     with Excel(OUTPUT_PATH) as destination:
-        destination.create_data_sheet("請求一覧").create_table("請求一覧", transfer._working_table)
+        destination.create_data_sheet("請求一覧").create_table("請求一覧", working)
 
     logger.info("設定の列対応: %s（左: 転記元 → 右: 転記先）", config_mapping)
-    logger.info("Excel 転記: %s（%d 件）", OUTPUT_PATH, transfer._working_table.count())
+    logger.info("Excel 転記: %s（%d 件）", OUTPUT_PATH, working.count())
 
 
 if __name__ == "__main__":

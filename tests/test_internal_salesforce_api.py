@@ -77,9 +77,7 @@ def test_query_delegates_to_module() -> None:
     """query() は社内モジュールの query() を呼ぶ。"""
     fake_module = MagicMock()
     fake_module.query.return_value = [{"Id": "001"}]
-    with patch(
-        "comken.internal.salesforce_api.InternalLibraryBase"
-    ) as mock_base:
+    with patch("comken.internal.salesforce_api.InternalLibraryBase") as mock_base:
         mock_base.return_value.load.return_value = fake_module
         with SalesforceApi() as api:
             result = api.query("SELECT Id FROM Account")
@@ -91,9 +89,7 @@ def test_report_run_delegates_to_module() -> None:
     """report_run() は社内モジュールの report_run() を呼ぶ。"""
     fake_module = MagicMock()
     fake_module.report_run.return_value = [{"row": 1}]
-    with patch(
-        "comken.internal.salesforce_api.InternalLibraryBase"
-    ) as mock_base:
+    with patch("comken.internal.salesforce_api.InternalLibraryBase") as mock_base:
         mock_base.return_value.load.return_value = fake_module
         with SalesforceApi() as api:
             result = api.report_run("report_id_123")
@@ -105,14 +101,10 @@ def test_request_delegates_to_module() -> None:
     """request() は社内モジュールの request() を呼ぶ。"""
     fake_module = MagicMock()
     fake_module.request.return_value = {"success": True}
-    with patch(
-        "comken.internal.salesforce_api.InternalLibraryBase"
-    ) as mock_base:
+    with patch("comken.internal.salesforce_api.InternalLibraryBase") as mock_base:
         mock_base.return_value.load.return_value = fake_module
         with SalesforceApi() as api:
-            result = api.request(
-                "GET", "/path", component="/v1", body={"key": "value"}
-            )
+            result = api.request("GET", "/path", component="/v1", body={"key": "value"})
     assert result == {"success": True}
     fake_module.request.assert_called_once_with(
         "GET", "/path", component="/v1", body={"key": "value"}
@@ -123,9 +115,7 @@ def test_data_path_delegates_to_module() -> None:
     """data_path() は社内モジュールの data_path() を呼ぶ。"""
     fake_module = MagicMock()
     fake_module.data_path.return_value = "/services/data/v1/path"
-    with patch(
-        "comken.internal.salesforce_api.InternalLibraryBase"
-    ) as mock_base:
+    with patch("comken.internal.salesforce_api.InternalLibraryBase") as mock_base:
         mock_base.return_value.load.return_value = fake_module
         with SalesforceApi() as api:
             result = api.data_path("/path")

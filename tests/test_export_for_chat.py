@@ -1,6 +1,7 @@
 """export_for_chat.py のテスト。"""
 
 import ast
+import os
 import subprocess
 import sys
 
@@ -36,12 +37,15 @@ def test_split_preserves_text() -> None:
 
 
 def test_script_can_import_comken_when_run_directly() -> None:
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
     result = subprocess.run(
         [sys.executable, "tools/export_for_chat.py", "--help"],
         cwd=export_for_chat.ROOT,
         capture_output=True,
         text=True,
         encoding="utf-8",
+        errors="replace",
+        env=env,
         check=False,
     )
 

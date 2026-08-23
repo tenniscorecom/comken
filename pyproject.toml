@@ -31,6 +31,7 @@ comken = ["py.typed"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+extend-exclude = [".pytest-tmp"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "PTH", "C4", "C90", "LOG", "G", "T20", "DTZ", "RUF", "TID"]
@@ -81,11 +82,8 @@ max-complexity = 10
 pythonpath = ["tools"]
 
 [tool.pyright]
-# comken/internal/salesforce_downloader/cli.py は社内 RPA 基盤の import が
-# `example_libs.v0000` という公開用の仮名のため、pyright が解決できない。
-# 設定で除外する。会社 PC では --skip-worktree で実名に書き換えて動くため、
-# ここで除外しても機能には影響しない (このファイルは実機確認でも import しない)。
-exclude = [".pytest-tmp", "comken/internal/salesforce_downloader/cli.py"]
+# pytest が生成する一時パッケージは製品コードではないため、型検査から外す。
+exclude = [".pytest-tmp"]
 
 # __init__.py が `__getattr__` (PEP 562) で遅延公開している属性は
 # pyright の static analysis からは見つからず、`__all__` に書いた名前が

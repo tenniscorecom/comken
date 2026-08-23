@@ -138,7 +138,7 @@ class TransferMappingError(TableError):
 class TransferDestinationMultipleMatchError(ComkenError):
     """転記先のキーに一致する行が複数ある
 
-    発生箇所: Transfer.run()
+    発生箇所: Transfer()
 
     対処:
         mapping の先頭列に対応する転記先列の値を一意にする
@@ -149,3 +149,16 @@ class TransferDestinationMultipleMatchError(ComkenError):
             f"転記先列「{key_column}」のキー「{key}」に一致する行が複数あります。"
             "転記先のキーを一意にしてください。"
         )
+
+
+class TransferDestinationMissingError(TableError):
+    """Transfer.apply_mapping() に転記先が None で渡された
+
+    発生箇所: Transfer.apply_mapping(read_row, write_row)
+
+    対処:
+        matched_rows() を使うか、``transfer_rows()`` の ``(read_row, None)``
+        を ``if write_row is None:`` で分岐してから渡す。 新規行を追加する
+        場合は ``Transfer`` の責務ではなく、``Table.append()`` 等で利用者側で
+        対応する。
+    """

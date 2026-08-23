@@ -1,4 +1,11 @@
-"""comken/core/table/transfer.py — Table 間のキー突合。"""
+"""comken/core/table/transfer.py — Table 間のキー突合。
+
+``Transfer(read, write, mapping, read_key=..., write_key=...)`` を作り、
+``matched_rows()`` / ``transfer_rows()`` で ``for`` ループしながら
+``apply_mapping(read_row, write_row)`` を呼ぶ書き方が公式。
+mapping の列名はコンストラクタで検証するので、typo は早期に例外になる。
+入力 ``read`` / ``write`` は直接変更せず、内部の作業 Table に書き込む。
+"""
 
 from collections.abc import Iterator, Mapping, Sequence
 from typing import Any
@@ -6,6 +13,8 @@ from typing import Any
 from comken.core.table.model import Table
 from comken.exceptions.table import (
     InvalidTableInputError,
+    TableColumnNotFoundError,
+    TransferDestinationMissingError,
     TransferDestinationMultipleMatchError,
     TransferMappingError,
 )
@@ -14,14 +23,25 @@ Row = dict[str, Any]
 
 
 class Transfer:
-    """行を見つづけて渡すところまで。
+    """Table 間のキー突合と転記を行う。
 
-    ``read`` と ``write`` は入力として扱い、どちらも直接変更しません。
-    ``mapping`` は「read 側の列名: write 側の列名」で、
-    コンストラクターへ転記ルールと一緒に渡します。
-    書き込み・追加・スキップ・中断の判定は利用者の Python コードが
-    ``for`` / ``if`` / ``continue`` で書きます。Transfer はそのための
-    「行を見つけて渡す」役割に絞ります。
+    基本的な使い方は次のとおり。 ``mapping`` は「転記元の列名 → 転記先の列名」。
+
+    Example:
+        transfer = Transfer(read_table, write_table, mapping,
+                            read_key="顧客ID", write_key="顧客ID")
+        for read_row, write_row in transfer.matched_rows():
+            if 条件:
+                continue                       # この行は破棄
+            transfer.apply_mapping(read_row, write_row)   # mapping の値をコピー
+            # 必要なら write_row["備考"] = "..." のように追加加工
+        result = transfer.result()             # 変更後の Table
+
+    **条件は ``apply_mapping()`` より前に書くこと。** Python の ``for`` ループは
+    ``continue`` したかどうかを呼び出し側に伝えないため、ループ内で
+    ``apply_mapping()`` を呼ばずに ``continue`` した行は、作業 Table へ反映されない。
+    条件判定を ``apply_mapping()`` の後ろに書くと、``continue`` しても mapping が
+    適用済みとなり破棄できないので、判定は必ず ``apply_mapping()`` の前に置く。
     """
 
     def __init__(
@@ -43,15 +63,27 @@ class Transfer:
         self.write_keys = [write_key] if isinstance(write_key, str) else list(write_key)
         if len(self.read_keys) != len(self.write_keys):
             raise TransferMappingError
-        # transfer_rows() のための作業Table。matched_rows() は同じ実体を読む。
+        # mapping の列名 typo を早期に検知する。実行時の KeyError を未然に防ぐため。
+        # 表を引かない素の mapping 検証はここで済ませておく。
+        read_existing = list(self.read.columns)
+        write_existing = list(self.write.columns)
+        missing_read = [column for column in self.mapping if column not in read_existing]
+        if missing_read:
+            raise TableColumnNotFoundError(missing_read)
+        missing_write = [column for column in self.mapping.values() if column not in write_existing]
+        if missing_write:
+            raise TableColumnNotFoundError(missing_write)
+        # 作業 Table は最初のイテレーションで生成する。入力には触らない。
         self._working_table: Table | None = None
 
     def transfer_rows(self) -> Iterator[tuple[Row, Row | None]]:
-        """転記元の全行を返す。
+        """転記元の全行を ``(read_row, write_row)`` で返す。
 
-        転記先に存在しない行も ``(read_row, None)`` として返します。
-        新規行の追加が必要かどうかは利用者が ``if destination is None: continue`` で
-        その場で判定できるようにするためです。
+        転記先に存在しない行は ``(read_row, None)`` として返す。新規行の追加が
+        必要かどうかは利用者が ``if write_row is None: ...`` で判定する。
+        書き込みは ``apply_mapping(read_row, write_row)`` を中心に行い、
+        必要な列だけを ``write_row[write_col] = read_row[read_col]`` の形で
+        個別に上書きする。 結果は ``result()`` で取り出す。
         """
         self.read._check_columns(self.read_keys)
         self.write._check_columns(self.write_keys)
@@ -66,27 +98,55 @@ class Transfer:
             yield read_row, write_row
 
     def matched_rows(self) -> Iterator[tuple[Row, Row]]:
-        """両方に存在する行だけを返す。
+        """両方に存在する行だけを ``(read_row, write_row)`` で返す。
 
-        転記先に存在しない行（``destination`` が ``None``）は含みません。
+        転記先に存在しない行（``destination`` が ``None``）は含まない。
         """
         for read_row, write_row in self.transfer_rows():
             if write_row is not None:
                 yield read_row, write_row
 
+    def apply_mapping(self, read_row: Row, write_row: Row | None) -> None:
+        """コンストラクタで渡された ``mapping`` どおりに値を ``write_row`` へコピーする。
+
+        mapping の read 列 / write 列は ``__init__`` で存在を検証済みなので、
+        ここで再びキー存在を確かめない。 ``write_row`` が ``None`` の場合
+        （``transfer_rows()`` の ``(read_row, None)`` をそのまま渡した場合など）は
+        転記先の行が無いので ``TransferDestinationMissingError`` で停止する。
+
+        入力 ``read`` / ``write`` には触れない。書き込みは Transfer 内部の
+        作業 Table に紐づいた ``write_row`` に対して行う。
+
+        Args:
+            read_row: 転記元の行。
+            write_row: 転記先の行。 ``matched_rows()`` の戻り値か、
+                ``transfer_rows()`` の戻り値で ``None`` でないもの。
+
+        Raises:
+            TransferDestinationMissingError: ``write_row`` が ``None`` のとき。
+        """
+        if write_row is None:
+            raise TransferDestinationMissingError(
+                "apply_mapping に None の転記先行を渡しました。"
+                "transfer_rows() が返した (read_row, None) は write 側に対応行が無い行です。"
+                "matched_rows() を使うか、None を確認してから渡してください。"
+            )
+        # mapping は __init__ で検証済み。辞書のキー参照が KeyError になる心配はない。
+        for read_column, write_column in self.mapping.items():
+            write_row[write_column] = read_row[read_column]
+
     def result(self) -> Table:
         """変更後の Table を返す。
 
-        ``transfer_rows()`` / ``matched_rows()`` のイテレーション中に ``destination``
-        に対して行った変更が反映された作業用 Table を返します。
-        初回呼び出し前に ``result()`` を呼ぶと ``write`` のコピー（変更なし）を
-        返します。``transfer_rows()`` か ``matched_rows()`` を先にイテレートしてから
-        呼ぶと、利用者の変更が反映された Table が得られます。
+        ``transfer_rows()`` / ``matched_rows()`` のイテレーション中に ``write_row``
+        に対して行った変更が反映された作業用 Table を返す。 イテレータを 1 度も
+        進めないうちに ``result()`` を呼ぶと ``write`` のコピー（変更なし）が返る。
 
         Example:
-            transfer = Transfer(source, destination, mapping)
+            transfer = Transfer(source, destination, mapping,
+                                read_key="顧客ID", write_key="顧客ID")
             for source_row, destination_row in transfer.matched_rows():
-                destination_row["顧客名"] = source_row["顧客名"]
+                transfer.apply_mapping(source_row, destination_row)
             final_table = transfer.result()  # 変更後の Table
         """
         if self._working_table is None:
@@ -98,9 +158,9 @@ class Transfer:
         return self._working_table
 
     def _working_index(self) -> dict[tuple[Any, ...], Row]:
-        """作業中のTableを複合キーで検索できる辞書にする。
+        """作業中の Table を複合キーで検索できる辞書にする。
 
-        transfer_rows() のキー検索専用。複数の行が同じキーに当たる場合は
+        ``transfer_rows()`` のキー検索専用。同じキーに複数の行が当たる場合は
         曖昧な更新をさせないために例外で止める。
         """
         if self._working_table is None:

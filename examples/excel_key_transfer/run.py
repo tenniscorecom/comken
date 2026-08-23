@@ -104,13 +104,17 @@ def main() -> None:
         write_key=KEY,
     )
     for read_row, write_row in transfer.matched_rows():
-        # mapping を適用（同じ列名のときでも write_row に値をコピーする）
-        for read_column, write_column in mapping.items():
-            write_row[write_column] = read_row[read_column]
-        # 適用後に TOTAL が空のマスタは明細がないためスキップ（continue でその行だけ破棄）
-        if write_row[TOTAL] == "":
+        # 条件は apply_mapping() より前に書く。 ``read_row[TOTAL]`` を見て
+        # 明細が無い行を適用前にスキップする。 この位置で continue した行は
+        # transfer の作業 Table へ反映されない（``apply_mapping`` を呼ばないため、
+        # write_row への書き込みも起こらない）。
+        if read_row[TOTAL] == "":
+            # TOTAL が空のマスタは明細がないため、この行は転記しない。
+            # write_row の TOTAL は初期値 ``""`` のまま残り、``working`` へも反映されない。
             continue
-    working = transfer._working_table
+        # apply_mapping がコンストラクタで渡した mapping を write_row へコピーする
+        transfer.apply_mapping(read_row, write_row)
+    working = transfer.result()
     after = working.read()
     with Excel(INVOICE_XLSX) as excel:
         sheet = excel.sheet(SHEET)

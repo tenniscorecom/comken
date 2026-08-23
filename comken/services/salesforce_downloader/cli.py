@@ -4,7 +4,7 @@ r"""comken/services/salesforce_downloader/cli.py — 管理表まわりの保守
     python -m comken report check                       管理表を検査する
 
 **このモジュールは `comken/__main__.py` から呼ばれる。** `main(argv)` を直接
-呼べば（テスト等）動くが、`python -m comken.internal.salesforce_downloader`
+呼べば（テスト等）動くが、`python -m comken.services.salesforce_downloader`
 はもう動かない（入口は `python -m comken` に集約）。
 
 # ruff: noqa: T201  # CLI は print を使う（logging より読みやすい）
@@ -109,6 +109,6 @@ def _run_check(args: argparse.Namespace) -> None:
         print(f"  {report_id}: {names}")
 
 
-# このモジュールは `python -m comken.internal.salesforce_downloader` からは実行しない
+# このモジュールは `python -m comken.services.salesforce_downloader` からは実行しない
 # （入口は `python -m comken` に集約）。直接呼ぶのはテスト等だけで、
 # CLI としての起動は `comken/__main__.py` から `main(argv)` を呼ぶ形になる。

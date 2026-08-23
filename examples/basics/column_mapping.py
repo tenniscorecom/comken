@@ -50,10 +50,9 @@ def main() -> None:
         write_key="注文番号",
     )
     for read_row, write_row in transfer.matched_rows():
-        # mapping の対応関係どおりに転記先に値を流し込む
-        for read_column, write_column in mapping.items():
-            write_row[write_column] = read_row[read_column]
-    working = transfer._working_table
+        # apply_mapping がコンストラクタで渡した mapping を write_row へコピーする
+        transfer.apply_mapping(read_row, write_row)
+    working = transfer.result()
     with Excel(OUTPUT_PATH) as destination:
         destination.create_data_sheet("請求一覧").create_table("請求一覧", working)
 

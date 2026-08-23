@@ -9,7 +9,7 @@
 ```
 レポート管理表.xlsx（人が編集）        ダウンロード履歴.csv（プログラムが追記）
         ↓                                      ↑
-  comken.internal.salesforce_downloader  ──→ Salesforce
+  comken.services.salesforce_downloader  ──→ Salesforce
         ↓
   各プロジェクト（download_report / cached_report）
 ```
@@ -19,7 +19,7 @@
 ## 使う側
 
 ```python
-from comken.internal.salesforce_downloader import (
+from comken.services.salesforce_downloader import (
     cached_report,
     download_report,
 )
@@ -132,7 +132,7 @@ python -m comken report check "\\実際のサーバー\share\tools\salesforce\�
 いきなり定期実行に入れず、**1件で通しを確かめる**。管理表に書いた管理番号を渡す。
 
 ```python
-from comken.internal.salesforce_downloader import download_report
+from comken.services.salesforce_downloader import download_report
 
 reader = download_report("1001")
 print(reader.path)              # 保存されたファイル
@@ -226,7 +226,7 @@ URL を貼れば `report_id_from_url()` が取り出す。ID を人が抜き出�
 コードから調べることもできる。
 
 ```python
-from comken.internal.salesforce_downloader import load_master, shared_report_ids
+from comken.services.salesforce_downloader import load_master, shared_report_ids
 
 shared_report_ids(load_master(MASTER_PATH))
 # → {"00O5g00000FGHIJ": ["1002", "1003"]}   "1002" と "1003" が同じレポートを見ている
@@ -381,7 +381,7 @@ comken に置くのは呼ばれる側だけにする。
 定期実行のプロジェクト側で、これを呼ぶだけでよい。
 
 ```python
-from comken.internal.salesforce_downloader import download_scheduled
+from comken.services.salesforce_downloader import download_scheduled
 
 def run() -> None:
     download_scheduled("定期実行")   # 管理表で「定期」かつ有効なものを全部取る

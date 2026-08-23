@@ -50,12 +50,15 @@ class TestInternalLibraryBase:
             assert target.load() is sentinel
 
     def test_load_raises_not_found(self) -> None:
-        """`load` は ImportError を `InternalLibraryNotFoundError` に変換する。"""
+        """`load` は対象モジュール不在を `InternalLibraryNotFoundError` に変換する。"""
         target = InternalLibraryBase("example_libs.v0000.missing")
         with (
             mock.patch(
                 "comken.internal.base.importlib.import_module",
-                side_effect=ImportError("not found"),
+                side_effect=ModuleNotFoundError(
+                    "No module named 'example_libs.v0000.missing'",
+                    name="example_libs.v0000.missing",
+                ),
             ),
             pytest.raises(InternalLibraryNotFoundError) as caught,
         ):
@@ -81,7 +84,10 @@ class TestInternalLibraryBase:
             mock.patch("comken.internal.base.importlib.util.find_spec", return_value=None),
             mock.patch(
                 "comken.internal.base.importlib.import_module",
-                side_effect=ImportError("nope"),
+                side_effect=ModuleNotFoundError(
+                    "No module named 'example_libs.v0000.rpa'",
+                    name="example_libs.v0000.rpa",
+                ),
             ),
             mock.patch.object(base_module.logger, "warning") as warning,
             pytest.raises(InternalLibraryNotFoundError),
@@ -135,10 +141,14 @@ class TestFindInternalLibrary:
         with mock.patch("comken.internal.base.importlib.import_module", return_value=sentinel):
             assert find_internal_library("example_libs.v0000.rpa") is sentinel
 
-    def test_returns_none_when_import_fails(self) -> None:
+    def test_returns_none_when_target_missing(self) -> None:
+        """対象モジュール自体が無いときは None。"""
         with mock.patch(
             "comken.internal.base.importlib.import_module",
-            side_effect=ImportError("nope"),
+            side_effect=ModuleNotFoundError(
+                "No module named 'example_libs.v0000.missing'",
+                name="example_libs.v0000.missing",
+            ),
         ):
             assert find_internal_library("example_libs.v0000.missing") is None
 
@@ -161,3 +171,140 @@ def test_internal_library_base_keeps_traceback_signature() -> None:
     # 第3引数が traceback として None を受け付けられる型ヒントを持つ
     params = list(sig.parameters.values())
     assert len(params) >= 3
+
+
+# ── 親パッケージ不在と内部依存不足の区別 ─────────────────────────────────────
+
+
+def test_find_spec_returns_false_when_parent_package_missing() -> None:
+    """親パッケージ（``example_libs``）自体が無い場合は False。
+
+    `find_spec` は親が無いと ``ModuleNotFoundError`` を送出するため、
+    例外を握り潰して False を返す実装になっている必要がある。
+    """
+    # 実際に存在しないパスを渡す。モックではなく本物の find_spec を使う。
+    target = InternalLibraryBase("nonexistent_parent.v0000.rpa")
+    assert target.find_spec() is False
+
+
+def test_is_internal_library_available_false_when_parent_missing() -> None:
+    """``is_internal_library_available`` も親が無いと False。"""
+    assert is_internal_library_available("nonexistent_parent.v0000.rpa") is False
+
+
+def test_load_propagates_dependency_import_error() -> None:
+    """モジュール本体は見つかるが内部依存が無ければ元の ImportError を伝搬する。
+
+    対象ライブラリ不在と誤変換しないための契約。 ``find_spec`` でモジュールが
+    見つかるケースをシミュレートし、 ``import_module`` が依存不足で失敗した
+    場合に ``InternalLibraryNotFoundError`` ではなく元の例外が上がることを確認する。
+    """
+    target = InternalLibraryBase("example_libs.v0000.rpa")
+    with (
+        mock.patch(
+            "comken.internal.base.importlib.import_module",
+            side_effect=ModuleNotFoundError(
+                "No module named 'example_libs.v0000.subdep'",
+                name="example_libs.v0000.subdep",  # 内部依存名（library_name の親部分ではない）
+            ),
+        ),
+        pytest.raises(ModuleNotFoundError) as caught,
+    ):
+        target.load()
+    # 内部依存の ModuleNotFoundError はそのまま上がる
+    assert caught.value.name == "example_libs.v0000.subdep"
+
+
+def test_find_internal_library_propagates_dependency_import_error() -> None:
+    """``find_internal_library`` も依存不足なら None ではなく元の ImportError を返す。"""
+    with (
+        mock.patch(
+            "comken.internal.base.importlib.import_module",
+            side_effect=ModuleNotFoundError(
+                "No module named 'example_libs.v0000.subdep'",
+                name="example_libs.v0000.subdep",
+            ),
+        ),
+        pytest.raises(ModuleNotFoundError) as caught,
+    ):
+        find_internal_library("example_libs.v0000.rpa")
+    assert caught.value.name == "example_libs.v0000.subdep"
+
+
+def test_load_returns_internal_library_not_found_for_missing_target() -> None:
+    """対象モジュール自体が無いときは ``InternalLibraryNotFoundError`` に変換する。"""
+    target = InternalLibraryBase("example_libs.v0000.missing")
+    with (
+        mock.patch(
+            "comken.internal.base.importlib.import_module",
+            side_effect=ModuleNotFoundError(
+                "No module named 'example_libs.v0000.missing'",
+                name="example_libs.v0000.missing",
+            ),
+        ),
+        pytest.raises(InternalLibraryNotFoundError) as caught,
+    ):
+        target.load()
+    assert caught.value.library_name == "example_libs.v0000.missing"
+
+
+def test_find_internal_library_returns_none_for_missing_target() -> None:
+    """対象モジュール自体が無いときは ``None`` を返す。"""
+    with mock.patch(
+        "comken.internal.base.importlib.import_module",
+        side_effect=ModuleNotFoundError(
+            "No module named 'example_libs.v0000.missing'",
+            name="example_libs.v0000.missing",
+        ),
+    ):
+        assert find_internal_library("example_libs.v0000.missing") is None
+
+
+def test_load_returns_not_found_when_parent_package_is_missing() -> None:
+    """対象の親パッケージが無い場合も利用者向けの NotFound に変換する。"""
+    target = InternalLibraryBase("example_libs.v0000.rpa")
+    with (
+        mock.patch(
+            "comken.internal.base.importlib.import_module",
+            side_effect=ModuleNotFoundError(
+                "No module named 'example_libs'",
+                name="example_libs",
+            ),
+        ),
+        pytest.raises(InternalLibraryNotFoundError),
+    ):
+        target.load()
+
+
+def test_find_spec_propagates_dependency_module_not_found() -> None:
+    """``find_spec`` 自体が起こる ``ModuleNotFoundError`` のうち、内部依存由来は
+    そのまま伝搬する。 対象モジュール（または親）と別の name のときだけ例外を投げる。
+    """
+    target = InternalLibraryBase("example_libs.v0000.rpa")
+    with (
+        mock.patch(
+            "comken.internal.base.importlib.util.find_spec",
+            side_effect=ModuleNotFoundError(
+                "No module named 'example_libs.v0000.subdep'",
+                name="example_libs.v0000.subdep",
+            ),
+        ),
+        pytest.raises(ModuleNotFoundError) as caught,
+    ):
+        target.find_spec()
+    assert caught.value.name == "example_libs.v0000.subdep"
+
+
+def test_find_spec_false_when_parent_only_missing() -> None:
+    """``find_spec`` 自体が ``ModuleNotFoundError`` を投げ、name が library_name の
+    親部分に該当する場合（``library_name.startswith(missing + '.')``）は False を返す。
+    """
+    target = InternalLibraryBase("example_libs.v0000.rpa")
+    with mock.patch(
+        "comken.internal.base.importlib.util.find_spec",
+        side_effect=ModuleNotFoundError(
+            "No module named 'example_libs'",
+            name="example_libs",
+        ),
+    ):
+        assert target.find_spec() is False
