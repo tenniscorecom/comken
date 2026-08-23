@@ -10,14 +10,15 @@ LAYERS = {
     "deprecation": 0,
     "core": 1,
     "toolbox": 2,
-    "internal": 2,
-    "services": 3,
+    "internal": 3,
+    "services": 4,
 }
 
 ALLOWED_SAME_LAYER = {
     ("toolbox.excel", "toolbox.windows"),  # 既存数式・マクロ時の COM フォールバック
     ("toolbox.salesforce", "toolbox.credentials"),  # Salesforce の認証情報を安全に保存する
     ("toolbox.holidays", "toolbox.excel"),  # 管理表の「会社休日」シートを Excel で読む
+    ("exceptions", "internal"),  # comken.exceptions が comken.internal の例外を re-export する
 }
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -134,6 +135,9 @@ def _classify_edge(
     source_layer = LAYERS[source.split(".")[0]]
     target_layer = LAYERS[target.split(".")[0]]
     if source_layer == target_layer and edge in ALLOWED_SAME_LAYER:
+        return ("allowed", edge)
+    if source_layer < target_layer and edge in ALLOWED_SAME_LAYER:
+        # 上向き依存だが許可エッジにある（例: comken.exceptions が comken.internal の例外を re-export する）
         return ("allowed", edge)
     if target_layer >= source_layer:
         relative_path = path.relative_to(REPOSITORY_ROOT)

@@ -4,11 +4,20 @@ from comken.exceptions import ComkenError
 
 
 class InternalLibraryError(ComkenError):
-    """社内ライブラリの呼び出しに失敗したときの基底例外。"""
+    """社内ライブラリの呼び出しに失敗したときの基底例外
+
+    対処:
+        画面に表示された具体的なエラー名（NotFound / VersionMismatch）を上の表から探す
+    """
 
 
 class InternalLibraryNotFoundError(InternalLibraryError):
-    """指定した社内ライブラリが見つからない場合。"""
+    """指定した社内ライブラリが見つからない
+
+    対処:
+        社内 LAN 環境から、共有サーバ上の PYTHONPATH が通っているか確認し、
+        指定したライブラリ名のフォルダが存在するか確かめる
+    """
 
     def __init__(self, library_name: str) -> None:
         self.library_name = library_name
@@ -19,7 +28,12 @@ class InternalLibraryNotFoundError(InternalLibraryError):
 
 
 class InternalLibraryVersionMismatchError(InternalLibraryError):
-    """指定したバージョンの社内ライブラリが見つからない場合。"""
+    """指定したバージョンの社内ライブラリが見つからない
+
+    対処:
+        共有サーバ上の対象ライブラリのバージョンを確認し、
+        呼び出し側の指定と一致しているか確かめる
+    """
 
     def __init__(self, library_name: str, required_version: str) -> None:
         self.library_name = library_name

@@ -2,6 +2,9 @@
 
 ComkenError
 ├── SiteOwnerRequiredError          SiteBase / SalesforceBase に OWNER が未設定
+├── InternalLibraryError
+│   ├── InternalLibraryNotFoundError         指定した社内ライブラリが見つからない
+│   └── InternalLibraryVersionMismatchError  指定したバージョンの社内ライブラリが見つからない
 ├── LoggingAlreadyConfiguredError   root logger が設定済み
 ├── LoggerHostNotConfiguredError     実行端末のログ保存先が未登録
 ├── UnsupportedFileSuffixError
@@ -275,10 +278,18 @@ from comken.exceptions.table import (
     TransferDestinationMultipleMatchError,
     TransferDestinationRowMissingError,
 )
+from comken.internal.exceptions import (
+    InternalLibraryError,
+    InternalLibraryNotFoundError,
+    InternalLibraryVersionMismatchError,
+)
 
 __all__ = [
     "ComkenError",
     "SiteOwnerRequiredError",
+    "InternalLibraryError",
+    "InternalLibraryNotFoundError",
+    "InternalLibraryVersionMismatchError",
     "AccessError",
     "AccessBackupError",
     "AccessFileNotFoundError",

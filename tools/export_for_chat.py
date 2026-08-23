@@ -63,6 +63,7 @@ ERROR_CATEGORIES = (
             exceptions.SalesforceError,
             exceptions.CredentialError,
             exceptions.HolidayCalendarError,
+            exceptions.InternalLibraryError,
         ),
     ),
     ErrorCategory("ブラウザ（Edge 自動操作）のエラー", (exceptions.BrowserError,)),
@@ -115,6 +116,7 @@ CLASSIFICATION_ERRORS = (
     exceptions.CredentialError,
     exceptions.BrowserError,
     exceptions.TableError,
+    exceptions.InternalLibraryError,
 )
 
 BUNDLES: dict[str, tuple[str, list[str]]] = {

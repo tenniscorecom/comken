@@ -1752,6 +1752,59 @@ class SiteOwnerRequiredError(ComkenError):
 def __init__(self, site_cls: type, base_cls_name: str) -> None:
 ```
 
+### `InternalLibraryError`
+
+```text
+class InternalLibraryError(ComkenError):
+```
+
+#### 説明
+
+社内ライブラリの呼び出しに失敗したときの基底例外
+
+対処:
+    画面に表示された具体的なエラー名（NotFound / VersionMismatch）を上の表から探す
+
+### `InternalLibraryNotFoundError`
+
+```text
+class InternalLibraryNotFoundError(InternalLibraryError):
+```
+
+#### 説明
+
+指定した社内ライブラリが見つからない
+
+対処:
+    社内 LAN 環境から、共有サーバ上の PYTHONPATH が通っているか確認し、
+    指定したライブラリ名のフォルダが存在するか確かめる
+
+#### `__init__`
+
+```text
+def __init__(self, library_name: str) -> None:
+```
+
+### `InternalLibraryVersionMismatchError`
+
+```text
+class InternalLibraryVersionMismatchError(InternalLibraryError):
+```
+
+#### 説明
+
+指定したバージョンの社内ライブラリが見つからない
+
+対処:
+    共有サーバ上の対象ライブラリのバージョンを確認し、
+    呼び出し側の指定と一致しているか確かめる
+
+#### `__init__`
+
+```text
+def __init__(self, library_name: str, required_version: str) -> None:
+```
+
 ### `AccessError`
 
 ```text
@@ -2739,41 +2792,6 @@ class OutlookAttachmentNotFoundError(OutlookError):
 
 ```text
 def __init__(self, path: Path) -> None:
-```
-
-### `RpaError`
-
-```text
-class RpaError(ComkenError):
-```
-
-#### 説明
-
-社内 RPA 基盤の呼び出しに関するエラー
-
-対処:
-    画面に表示された具体的なエラー名を上の表から探す
-
-### `RpaLibraryNotFoundError`
-
-```text
-class RpaLibraryNotFoundError(RpaError):
-```
-
-#### 説明
-
-社内ライブラリを読み込めない
-
-発生箇所: comken.toolbox.rpa.backoffice() / comken.toolbox.rpa.intranet()
-
-対処:
-    実行.bat の PYTHONPATH に社内ライブラリが入っているか確認する。
-    バージョンが変わった場合は管理者へ連絡する
-
-#### `__init__`
-
-```text
-def __init__(self, module_path: str, detail: Exception) -> None:
 ```
 
 ### `CredentialError`
@@ -4351,7 +4369,10 @@ class InternalLibraryError(ComkenError):
 
 #### 説明
 
-社内ライブラリの呼び出しに失敗したときの基底例外。
+社内ライブラリの呼び出しに失敗したときの基底例外
+
+対処:
+    画面に表示された具体的なエラー名（NotFound / VersionMismatch）を上の表から探す
 
 ### `InternalLibraryNotFoundError`
 
@@ -4361,7 +4382,11 @@ class InternalLibraryNotFoundError(InternalLibraryError):
 
 #### 説明
 
-指定した社内ライブラリが見つからない場合。
+指定した社内ライブラリが見つからない
+
+対処:
+    社内 LAN 環境から、共有サーバ上の PYTHONPATH が通っているか確認し、
+    指定したライブラリ名のフォルダが存在するか確かめる
 
 #### `__init__`
 
@@ -4377,7 +4402,11 @@ class InternalLibraryVersionMismatchError(InternalLibraryError):
 
 #### 説明
 
-指定したバージョンの社内ライブラリが見つからない場合。
+指定したバージョンの社内ライブラリが見つからない
+
+対処:
+    共有サーバ上の対象ライブラリのバージョンを確認し、
+    呼び出し側の指定と一致しているか確かめる
 
 #### `__init__`
 
@@ -4404,6 +4433,137 @@ def find_internal_library(library_name: str) -> ModuleType | None:
 #### 説明
 
 社内ライブラリを import して返す。無ければ None。
+
+
+## `from comken.internal.salesforce_downloader import ...`
+
+### `download_report`
+
+定義を解決できませんでした。
+
+### `download_scheduled`
+
+定義を解決できませんでした。
+
+### `cached_report`
+
+定義を解決できませんでした。
+
+### `file_path_of`
+
+定義を解決できませんでした。
+
+### `load_master`
+
+```text
+def load_master(path: str | Path | None=None) -> dict[str, ReportEntry]:
+```
+
+#### 説明
+
+管理表を読んで、管理番号をキーにした辞書を返す。
+
+Args:
+    path: 管理表（Excel）のパス。
+
+Returns:
+    {管理番号: ReportEntry}。管理表に並んでいる順を保つ。
+
+### `shared_report_ids`
+
+```text
+def shared_report_ids(entries: dict[str, ReportEntry]) -> dict[str, list[str]]:
+```
+
+#### 説明
+
+同じ Salesforce レポートを指している管理番号を返す。
+
+**同じレポートを複数のプロジェクトが別々の管理番号で使っている**ことが分かる。
+エラーにはしない——意図してそうしている場合（保存先を分けたい等）もあるため、
+気づけるようにするだけにする。
+
+Returns:
+    {Salesforce のレポート ID: [管理番号, ...]}。2つ以上のものだけ。
+
+### `ReportEntry`
+
+```text
+class ReportEntry(MasterRow):
+```
+
+#### 説明
+
+レポート管理表の1行。
+
+#### `report_id`
+
+```text
+@property
+def report_id(self) -> str:
+```
+
+##### 説明
+
+URL から取り出した Salesforce のレポート ID。
+
+**行番号ではなく管理番号で示す。** 空行を飛ばして読むので行番号はズレうるが、
+管理番号なら管理表を検索して一発で見つかる。
+
+Raises:
+    InvalidReportUrlError: URL からレポート ID を取り出せない場合。
+
+#### `is_scheduled`
+
+```text
+@property
+def is_scheduled(self) -> bool:
+```
+
+##### 説明
+
+定期取得の対象か。
+
+### `ScheduleRule`
+
+```text
+class ScheduleRule:
+```
+
+#### 説明
+
+取得スケジュール管理表の1行。
+
+#### `from_row`
+
+```text
+@classmethod
+def from_row(cls, row: Mapping[str, object]) -> 'ScheduleRule':
+```
+
+##### 説明
+
+日本語カラム名の辞書からスケジュールを作る。
+
+#### `is_due`
+
+```text
+def is_due(self, now: dt.datetime, *, holidays: set[dt.date] | frozenset[dt.date]=frozenset()) -> bool:
+```
+
+##### 説明
+
+指定時刻にこのスケジュールを実行すべきか判定する。
+
+#### `job_key`
+
+```text
+def job_key(self, target_date: dt.date) -> str:
+```
+
+##### 説明
+
+履歴で取得済みか判定するキーを返す。
 
 
 ## `from comken.services.salesforce_downloader import ...`
