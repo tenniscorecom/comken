@@ -89,7 +89,8 @@ import の書き方は上の「[使うときの約束](#使うときの約束)�
 
 表データは ``Table`` に統一する。CSV は ``CSV.read()``、Excel は
 ``Excel.data_sheet().table().read()`` で ``Table`` を取得し、転記は
-``Transfer(read, write, mapping=...).run()`` で新しい ``Table`` を返す。
+``Transfer(read, write, mapping=...)`` を作り ``matched_rows()`` /
+``transfer_rows()`` の ``for`` で加工する。
 保存は CSV / Excel の ``with`` を正常終了した時に行う。
 列対応ではなくExcelシートのセル内容と基本レイアウトを複製するときは
 ``Sheet.copy_to()`` を使う（画像・グラフ・印刷設定等は対象外）。

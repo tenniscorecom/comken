@@ -42,18 +42,23 @@ def main() -> None:
         ["注文番号", "顧客名", "請求額"],
         [{"注文番号": row["注文番号"], "顧客名": "", "請求額": ""} for row in source.read()],
     )
-    transferred = Transfer(
+    transfer = Transfer(
         source,
         destination_table,
         mapping=mapping,
         read_key="注文番号",
         write_key="注文番号",
-    ).run()
+    )
+    for read_row, write_row in transfer.matched_rows():
+        # mapping の対応関係どおりに転記先に値を流し込む
+        for read_column, write_column in mapping.items():
+            write_row[write_column] = read_row[read_column]
+    working = transfer._working_table
     with Excel(OUTPUT_PATH) as destination:
-        destination.create_data_sheet("請求一覧").create_table("請求一覧", transferred)
+        destination.create_data_sheet("請求一覧").create_table("請求一覧", working)
 
     logger.info("設定の列対応: %s（左: 転記元 → 右: 転記先）", config_mapping)
-    logger.info("Excel 転記: %s（%d 件）", OUTPUT_PATH, transferred.count())
+    logger.info("Excel 転記: %s（%d 件）", OUTPUT_PATH, working.count())
 
 
 if __name__ == "__main__":

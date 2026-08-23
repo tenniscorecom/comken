@@ -445,11 +445,14 @@ class Transfer:
 
 #### 説明
 
-read の行を write のコピーへ転記する。
+行を見つづけて渡すところまで。
 
 ``read`` と ``write`` は入力として扱い、どちらも直接変更しません。
-``mapping`` は「read 側の列名: write 側の列名」で、転記のルールと一緒に
-コンストラクターへ渡します。保存は担当せず、結果の Table を呼び出し側へ返します。
+``mapping`` は「read 側の列名: write 側の列名」で、
+コンストラクターへ転記ルールと一緒に渡します。
+書き込み・追加・スキップ・中断の判定は利用者の Python コードが
+``for`` / ``if`` / ``continue`` で書きます。Transfer はそのための
+「行を見つけて渡す」役割に絞ります。
 
 #### `__init__`
 
@@ -465,11 +468,11 @@ def transfer_rows(self) -> Iterator[tuple[Row, Row | None]]:
 
 ##### 説明
 
-readを基準に、キーで対応付けた行を順番に返す。
+転記元の全行を返す。
 
-write側に同じキーがない場合も、転記元の行を落とさず
-``(read_row, None)`` として返します。これは新規行を追加するかを
-利用者が条件分岐で判断できるようにするためです。
+転記先に存在しない行も ``(read_row, None)`` として返します。
+新規行の追加が必要かどうかは利用者が ``if destination is None: continue`` で
+その場で判定できるようにするためです。
 
 #### `matched_rows`
 
@@ -479,32 +482,9 @@ def matched_rows(self) -> Iterator[tuple[Row, Row]]:
 
 ##### 説明
 
-readとwriteの両方に存在する行だけを返す。
+両方に存在する行だけを返す。
 
-転記先に存在しない行（``destination_row`` が ``None``）は含みません。
-
-#### `result`
-
-```text
-def result(self) -> Table:
-```
-
-##### 説明
-
-転記処理の結果を新しいTableとして返す。
-
-このメソッドは、現在の公開APIでは ``run()`` の結果を明示的に
-取得するための名前として用意しています。入力Tableは変更しません。
-
-#### `run`
-
-```text
-def run(self, *, transform: Transform | None=None) -> Table:
-```
-
-##### 説明
-
-転記結果の新しい Table を返す。
+転記先に存在しない行（``destination`` が ``None``）は含みません。
 
 ### `compare_tables`
 
@@ -1661,11 +1641,14 @@ class Transfer:
 
 #### 説明
 
-read の行を write のコピーへ転記する。
+行を見つづけて渡すところまで。
 
 ``read`` と ``write`` は入力として扱い、どちらも直接変更しません。
-``mapping`` は「read 側の列名: write 側の列名」で、転記のルールと一緒に
-コンストラクターへ渡します。保存は担当せず、結果の Table を呼び出し側へ返します。
+``mapping`` は「read 側の列名: write 側の列名」で、
+コンストラクターへ転記ルールと一緒に渡します。
+書き込み・追加・スキップ・中断の判定は利用者の Python コードが
+``for`` / ``if`` / ``continue`` で書きます。Transfer はそのための
+「行を見つけて渡す」役割に絞ります。
 
 #### `__init__`
 
@@ -1681,11 +1664,11 @@ def transfer_rows(self) -> Iterator[tuple[Row, Row | None]]:
 
 ##### 説明
 
-readを基準に、キーで対応付けた行を順番に返す。
+転記元の全行を返す。
 
-write側に同じキーがない場合も、転記元の行を落とさず
-``(read_row, None)`` として返します。これは新規行を追加するかを
-利用者が条件分岐で判断できるようにするためです。
+転記先に存在しない行も ``(read_row, None)`` として返します。
+新規行の追加が必要かどうかは利用者が ``if destination is None: continue`` で
+その場で判定できるようにするためです。
 
 #### `matched_rows`
 
@@ -1695,44 +1678,9 @@ def matched_rows(self) -> Iterator[tuple[Row, Row]]:
 
 ##### 説明
 
-readとwriteの両方に存在する行だけを返す。
+両方に存在する行だけを返す。
 
-転記先に存在しない行（``destination_row`` が ``None``）は含みません。
-
-#### `result`
-
-```text
-def result(self) -> Table:
-```
-
-##### 説明
-
-転記処理の結果を新しいTableとして返す。
-
-このメソッドは、現在の公開APIでは ``run()`` の結果を明示的に
-取得するための名前として用意しています。入力Tableは変更しません。
-
-#### `run`
-
-```text
-def run(self, *, transform: Transform | None=None) -> Table:
-```
-
-##### 説明
-
-転記結果の新しい Table を返す。
-
-### `TransferResult`
-
-```text
-class TransferResult(Enum):
-```
-
-#### 説明
-
-transform コールバックの戻り値。
-
-APPLY / SKIP / STOP のいずれかを返す。
+転記先に存在しない行（``destination`` が ``None``）は含みません。
 
 ### `compare_tables`
 
@@ -4145,27 +4093,6 @@ class ScheduledDownloadFailedError(DownloaderError):
 def __init__(self, failed_keys: list[str], history_path: Path) -> None:
 ```
 
-### `TransferDestinationRowMissingError`
-
-```text
-class TransferDestinationRowMissingError(ComkenError):
-```
-
-#### 説明
-
-転記先に対応する行がない状態で transform がその行を操作した
-
-発生箇所: Transfer.run()
-
-対処:
-    destination_row が None か確認し、新規行を処理するか Transfer.SKIP を返す
-
-#### `__init__`
-
-```text
-def __init__(self, row_number: int) -> None:
-```
-
 ### `TransferDestinationMultipleMatchError`
 
 ```text
@@ -4185,69 +4112,6 @@ class TransferDestinationMultipleMatchError(ComkenError):
 
 ```text
 def __init__(self, key_column: str, key: object) -> None:
-```
-
-### `TransferRowError`
-
-```text
-class TransferRowError(TableError):
-```
-
-#### 説明
-
-transform が処理規約に合わない値を返した
-
-発生箇所: Transfer.run()
-
-対処:
-    通常は何も返さず、1件を除外する場合は Transfer.SKIP、全体を止める場合は Transfer.STOP を返す
-
-#### `__init__`
-
-```text
-def __init__(self, row_number: int, reason: str) -> None:
-```
-
-### `TransferTransformError`
-
-```text
-class TransferTransformError(TransferRowError):
-```
-
-#### 説明
-
-transform コールバック内で例外が発生した
-
-発生箇所: Transfer.run()
-
-対処:
-    エラーメッセージに表示された転記元の行番号・キー・元の例外を確認する
-
-#### `__init__`
-
-```text
-def __init__(self, row_number: int, key: tuple, source_row: dict | None, original: Exception) -> None:
-```
-
-### `InvalidTransferResultError`
-
-```text
-class InvalidTransferResultError(TransferRowError):
-```
-
-#### 説明
-
-transform の戻り値が TransferResult でない
-
-発生箇所: Transfer.run()
-
-対処:
-    transform は TransferResult.APPLY / SKIP / STOP のいずれかを返す
-
-#### `__init__`
-
-```text
-def __init__(self, row_number: int, value: object) -> None:
 ```
 
 ### `TableError`
@@ -4866,11 +4730,14 @@ class Transfer:
 
 #### 説明
 
-read の行を write のコピーへ転記する。
+行を見つづけて渡すところまで。
 
 ``read`` と ``write`` は入力として扱い、どちらも直接変更しません。
-``mapping`` は「read 側の列名: write 側の列名」で、転記のルールと一緒に
-コンストラクターへ渡します。保存は担当せず、結果の Table を呼び出し側へ返します。
+``mapping`` は「read 側の列名: write 側の列名」で、
+コンストラクターへ転記ルールと一緒に渡します。
+書き込み・追加・スキップ・中断の判定は利用者の Python コードが
+``for`` / ``if`` / ``continue`` で書きます。Transfer はそのための
+「行を見つけて渡す」役割に絞ります。
 
 #### `__init__`
 
@@ -4886,11 +4753,11 @@ def transfer_rows(self) -> Iterator[tuple[Row, Row | None]]:
 
 ##### 説明
 
-readを基準に、キーで対応付けた行を順番に返す。
+転記元の全行を返す。
 
-write側に同じキーがない場合も、転記元の行を落とさず
-``(read_row, None)`` として返します。これは新規行を追加するかを
-利用者が条件分岐で判断できるようにするためです。
+転記先に存在しない行も ``(read_row, None)`` として返します。
+新規行の追加が必要かどうかは利用者が ``if destination is None: continue`` で
+その場で判定できるようにするためです。
 
 #### `matched_rows`
 
@@ -4900,32 +4767,9 @@ def matched_rows(self) -> Iterator[tuple[Row, Row]]:
 
 ##### 説明
 
-readとwriteの両方に存在する行だけを返す。
+両方に存在する行だけを返す。
 
-転記先に存在しない行（``destination_row`` が ``None``）は含みません。
-
-#### `result`
-
-```text
-def result(self) -> Table:
-```
-
-##### 説明
-
-転記処理の結果を新しいTableとして返す。
-
-このメソッドは、現在の公開APIでは ``run()`` の結果を明示的に
-取得するための名前として用意しています。入力Tableは変更しません。
-
-#### `run`
-
-```text
-def run(self, *, transform: Transform | None=None) -> Table:
-```
-
-##### 説明
-
-転記結果の新しい Table を返す。
+転記先に存在しない行（``destination`` が ``None``）は含みません。
 
 
 ## `from comken.toolbox.access import ...`

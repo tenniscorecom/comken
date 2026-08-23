@@ -355,14 +355,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 @dataclass
-class TransferResult:
+class ReportSummary:
     output_path: Path
     matched: int
     skipped: int
 
-result = TransferResult(Path("out.xlsx"), matched=120, skipped=3)
+result = ReportSummary(Path("out.xlsx"), matched=120, skipped=3)
 result.matched          # → 120（result["matched"] より typo に強い・IDE 補完が効く）
-print(result)           # → TransferResult(output_path=..., matched=120, skipped=3) と自動で見やすく出る
+print(result)           # → ReportSummary(output_path=..., matched=120, skipped=3) と自動で見やすく出る
 ```
 
 - 返す値が **2個まで**ならタプルでよい（`return output_path, matched`）。**3個以上**になったら dataclass を検討する。

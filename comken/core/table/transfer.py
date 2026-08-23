@@ -1,47 +1,28 @@
-"""comken/core/table/transfer.py — Table 間の非破壊転記。"""
+"""comken/core/table/transfer.py — Table 間のキー突合。"""
 
-from collections.abc import Callable, Iterator, Mapping, Sequence
-from enum import Enum, auto
-from typing import Any, Final
+from collections.abc import Iterator, Mapping, Sequence
+from typing import Any
 
 from comken.core.table.model import Table
 from comken.exceptions.table import (
     InvalidTableInputError,
-    InvalidTransferResultError,
     TransferDestinationMultipleMatchError,
-    TransferDestinationRowMissingError,
     TransferMappingError,
-    TransferTransformError,
 )
 
 Row = dict[str, Any]
 
 
-class TransferResult(Enum):
-    """transform コールバックの戻り値。
-
-    APPLY / SKIP / STOP のいずれかを返す。
-    """
-
-    APPLY = auto()  # 転記を適用
-    SKIP = auto()  # この行をスキップ
-    STOP = auto()  # 転記処理自体を中断
-
-
-Transform = Callable[[Row, Row | None], TransferResult]
-
-
 class Transfer:
-    """read の行を write のコピーへ転記する。
+    """行を見つづけて渡すところまで。
 
     ``read`` と ``write`` は入力として扱い、どちらも直接変更しません。
-    ``mapping`` は「read 側の列名: write 側の列名」で、転記のルールと一緒に
-    コンストラクターへ渡します。保存は担当せず、結果の Table を呼び出し側へ返します。
+    ``mapping`` は「read 側の列名: write 側の列名」で、
+    コンストラクターへ転記ルールと一緒に渡します。
+    書き込み・追加・スキップ・中断の判定は利用者の Python コードが
+    ``for`` / ``if`` / ``continue`` で書きます。Transfer はそのための
+    「行を見つけて渡す」役割に絞ります。
     """
-
-    APPLY: Final = TransferResult.APPLY
-    SKIP: Final = TransferResult.SKIP
-    STOP: Final = TransferResult.STOP
 
     def __init__(
         self,
@@ -62,14 +43,15 @@ class Transfer:
         self.write_keys = [write_key] if isinstance(write_key, str) else list(write_key)
         if len(self.read_keys) != len(self.write_keys):
             raise TransferMappingError
+        # transfer_rows() のための作業Table。matched_rows() は同じ実体を読む。
         self._working_table: Table | None = None
 
     def transfer_rows(self) -> Iterator[tuple[Row, Row | None]]:
-        """readを基準に、キーで対応付けた行を順番に返す。
+        """転記元の全行を返す。
 
-        write側に同じキーがない場合も、転記元の行を落とさず
-        ``(read_row, None)`` として返します。これは新規行を追加するかを
-        利用者が条件分岐で判断できるようにするためです。
+        転記先に存在しない行も ``(read_row, None)`` として返します。
+        新規行の追加が必要かどうかは利用者が ``if destination is None: continue`` で
+        その場で判定できるようにするためです。
         """
         self.read._check_columns(self.read_keys)
         self.write._check_columns(self.write_keys)
@@ -84,103 +66,20 @@ class Transfer:
             yield read_row, write_row
 
     def matched_rows(self) -> Iterator[tuple[Row, Row]]:
-        """readとwriteの両方に存在する行だけを返す。
+        """両方に存在する行だけを返す。
 
-        転記先に存在しない行（``destination_row`` が ``None``）は含みません。
+        転記先に存在しない行（``destination`` が ``None``）は含みません。
         """
         for read_row, write_row in self.transfer_rows():
             if write_row is not None:
                 yield read_row, write_row
 
-    def result(self) -> Table:
-        """転記処理の結果を新しいTableとして返す。
-
-        このメソッドは、現在の公開APIでは ``run()`` の結果を明示的に
-        取得するための名前として用意しています。入力Tableは変更しません。
-        """
-        if self._working_table is None:
-            return self.run()
-        return self._working_table
-
-    def run(self, *, transform: Transform | None = None) -> Table:
-        """転記結果の新しい Table を返す。"""
-        self._working_table = None
-        self.read._check_columns([*self.read_keys, *self.mapping.keys()])
-        self.write._check_columns([*self.write_keys, *self.mapping.values()])
-        # write をコピーしてから加工するため、元の Table は転記後もそのまま残る。
-        result_table = Table(self.write.columns, self.write.read(), types=self.write.types)
-        self._working_table = result_table
-        for row_number, (read_row, write_row) in enumerate(self.transfer_rows(), start=1):
-            key = tuple(read_row[column] for column in self.read_keys)
-            control = self._process_row(read_row, write_row, transform, row_number, key)
-            if control is TransferResult.STOP:
-                break
-        return result_table
-
-    def _process_row(
-        self,
-        read_row: Row,
-        write_row: Row | None,
-        transform: Transform | None,
-        row_number: int,
-        key: tuple,
-    ) -> TransferResult:
-        """1行ごとに transform の判定結果を見て「どうするか」を実行する。"""
-        if write_row is None:
-            return self._process_unmatched_row(read_row, transform, row_number, key)
-        working_row = self._build_working_row(write_row, read_row)
-        control = self._run_transform(transform, read_row, working_row, row_number, key)
-        if control is TransferResult.APPLY:
-            write_row.update(working_row)
-        return control
-
-    def _process_unmatched_row(
-        self,
-        read_row: Row,
-        transform: Transform | None,
-        row_number: int,
-        key: tuple,
-    ) -> TransferResult:
-        """転記先に存在しない行の処理を決める。"""
-        # transform が無いときは未マッチ行を黙ってスキップする(後方互換)。
-        if transform is None:
-            return TransferResult.SKIP
-        control = self._run_transform(transform, read_row, None, row_number, key)
-        if control is TransferResult.APPLY:
-            # 反映先がないので新規行を追加する責務は呼び出し側
-            raise TransferDestinationRowMissingError(row_number)
-        return control
-
-    def _build_working_row(self, write_row: Row, read_row: Row) -> Row:
-        """write_row を壊さずに mapping を適用した作業行を返す。"""
-        working_row = dict(write_row)
-        for read_column, write_column in self.mapping.items():
-            working_row[write_column] = read_row[read_column]
-        return working_row
-
-    def _run_transform(
-        self,
-        transform: Transform | None,
-        read_row: Row,
-        working_row: Row | None,
-        row_number: int,
-        key: tuple,
-    ) -> TransferResult:
-        """利用者 callback の失敗へ転記元行の文脈を加える。"""
-        if transform is None:
-            return TransferResult.APPLY
-        try:
-            result = transform(read_row, working_row)
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except Exception as exc:
-            raise TransferTransformError(row_number, key, read_row, exc) from exc
-        if not isinstance(result, TransferResult):
-            raise InvalidTransferResultError(row_number, result)
-        return result
-
     def _working_index(self) -> dict[tuple[Any, ...], Row]:
-        """作業中のTableを複合キーで検索できる辞書にする。"""
+        """作業中のTableを複合キーで検索できる辞書にする。
+
+        transfer_rows() のキー検索専用。複数の行が同じキーに当たる場合は
+        曖昧な更新をさせないために例外で止める。
+        """
         if self._working_table is None:
             return {}
         index: dict[tuple[Any, ...], Row] = {}
@@ -197,4 +96,4 @@ class Transfer:
         return tuple(row[column] for column in columns)
 
 
-__all__ = ["Transfer", "TransferResult"]
+__all__ = ["Transfer"]

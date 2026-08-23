@@ -39,6 +39,5 @@ class InternalLibraryVersionMismatchError(InternalLibraryError):
         self.library_name = library_name
         self.required_version = required_version
         super().__init__(
-            f"社内ライブラリ {library_name!r} のバージョン {required_version!r} が"
-            "見つかりません。"
+            f"社内ライブラリ {library_name!r} のバージョン {required_version!r} が見つかりません。"
         )

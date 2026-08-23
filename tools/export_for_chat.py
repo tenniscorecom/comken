@@ -74,7 +74,6 @@ DIRECT_ERROR_CATEGORIES = {
     exceptions.InvalidColumnError: "ファイル・設定などのエラー",
     exceptions.SiteOwnerRequiredError: "ファイル・設定などのエラー",
     exceptions.FileDeletionError: "ファイル・設定などのエラー",
-    exceptions.TransferDestinationRowMissingError: "ファイル・設定などのエラー",
     exceptions.TransferDestinationMultipleMatchError: "ファイル・設定などのエラー",
     exceptions.LoggingAlreadyConfiguredError: "ファイル・設定などのエラー",
     exceptions.LoggerHostNotConfiguredError: "ファイル・設定などのエラー",

@@ -1,36 +1,65 @@
-"""現行の Table / Transfer を使う、非破壊転記の最小例。"""
-# ruff: noqa: T201
+"""サンプル: 列マッピングをコードと config.ini の2通りから渡す。"""
 
-from typing import Any
+import logging
+from pathlib import Path
 
+from comken import Config
+from comken.core.logger import local
 from comken.core.table import Table, Transfer
+from comken.toolbox.csv import CSV
+from comken.toolbox.excel import Excel
 
-Row = dict[str, Any]
+HERE = Path(__file__).parent
+OUTPUT_FOLDER = HERE / "output"
+CONFIG_PATH = OUTPUT_FOLDER / "config.ini"
+SOURCE_CSV = OUTPUT_FOLDER / "受注.csv"
+OUTPUT_PATH = OUTPUT_FOLDER / "請求一覧.xlsx"
+
+logger = logging.getLogger(__name__)
 
 
 def main() -> None:
-    read = Table(
-        ["顧客ID", "住所", "対象"], [{"顧客ID": "A001", "住所": "東京都", "対象": "対象外"}]
+    OUTPUT_FOLDER.mkdir(parents=True, exist_ok=True)
+    CONFIG_PATH.write_text(
+        "[受注_MAPPING]\n取引先 = 顧客名\n金額 = 請求額\n",
+        encoding="utf-8",
     )
-    write = Table(
-        ["お客様ID", "住所", "備考"], [{"お客様ID": "A001", "住所": "旧住所", "備考": ""}]
+    with CSV(SOURCE_CSV) as source_csv:
+        source_csv.write(
+            Table(
+                ["注文番号", "取引先", "金額"],
+                [{"注文番号": "A001", "取引先": "株式会社アルファ", "金額": 12000}],
+            )
+        )
+    # 部署や拠点で列名が変わり、現場で変更する必要がある場合だけ設定へ出す。
+    # 設定変更はテストに守られない業務ルール変更でもあるため、運用時に確認が必要になる。
+    # ``config.SECTION_MAPPING`` は ``MappingDict``（dict 互換）。未知の列は ``None`` を返す。
+    config_mapping = Config(CONFIG_PATH).受注_MAPPING
+
+    mapping = dict(config_mapping)
+    source = CSV(SOURCE_CSV, read_only=True, types={"金額": int}).read()
+    destination_table = Table(
+        ["注文番号", "顧客名", "請求額"],
+        [{"注文番号": row["注文番号"], "顧客名": "", "請求額": ""} for row in source.read()],
     )
-
-    def transform(read_row: Row, working_row: Row | None) -> object | None:
-        if working_row is None or read_row["対象"] == "対象":
-            return Transfer.SKIP
-        working_row["備考"] = "CSVから更新"
-        return None
-
-    result = Transfer(read, write, {"住所": "住所"}, read_key="顧客ID", write_key="お客様ID").run(
-        transform=transform
+    transfer = Transfer(
+        source,
+        destination_table,
+        mapping=mapping,
+        read_key="注文番号",
+        write_key="注文番号",
     )
-    print("転記結果:", result.read())
-    print("入力は不変:", read.read(), write.read())
+    for read_row, write_row in transfer.matched_rows():
+        # mapping の対応関係どおりに転記先に値を流し込む
+        for read_column, write_column in mapping.items():
+            write_row[write_column] = read_row[read_column]
+    with Excel(OUTPUT_PATH) as destination:
+        destination.create_data_sheet("請求一覧").create_table("請求一覧", transfer._working_table)
 
-    master = Table(["顧客ID", "担当者"], [{"顧客ID": "A001", "担当者": "山田"}])
-    print("結合結果:", read.merge(master, on="顧客ID").read())
+    logger.info("設定の列対応: %s（左: 転記元 → 右: 転記先）", config_mapping)
+    logger.info("Excel 転記: %s（%d 件）", OUTPUT_PATH, transfer._working_table.count())
 
 
 if __name__ == "__main__":
+    logger = local()
     main()

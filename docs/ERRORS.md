@@ -151,7 +151,6 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `EmptyReportError` | レポートは実行できたが明細が 0 行だった | Salesforce の画面で同じレポートを開き、本当に 0 件か確認する。0 件が正常に起こるレポートなら、管理表の「0件あり」を「○」にする。 |
 | `ReportFolderNotFoundError` | 管理表に書かれた保存先のフォルダが無い | 管理表の「保存先」を確認する。共有フォルダなら、つながっているか・権限があるかも確認する |
 | `ScheduledDownloadFailedError` | 定期取得で1件以上が失敗した | 履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。急いで必要なものは download_report() でその場で取得する |
-| `TransferDestinationRowMissingError` | 転記先に対応する行がない状態で transform がその行を操作した | destination_row が None か確認し、新規行を処理するか Transfer.SKIP を返す |
 | `TransferDestinationMultipleMatchError` | 転記先のキーに一致する行が複数ある | mapping の先頭列に対応する転記先列の値を一意にする |
 | `LoggingAlreadyConfiguredError` | root logger がすでに設定されている | setup() または local() はアプリの入口で1回だけ呼ぶ。実行基盤がログを設定する場合は呼ばない。 |
 | `LoggerHostNotConfiguredError` | 実行端末のログ保存先が LoggerSite に登録されていない | 対象サイトの LOG_FOLDERS に、エラーに表示された端末名と保存先フォルダを登録する。 |
@@ -181,9 +180,6 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
-| `TransferRowError` | transform が処理規約に合わない値を返した | 通常は何も返さず、1件を除外する場合は Transfer.SKIP、全体を止める場合は Transfer.STOP を返す |
-| `TransferTransformError` | transform コールバック内で例外が発生した | エラーメッセージに表示された転記元の行番号・キー・元の例外を確認する |
-| `InvalidTransferResultError` | transform の戻り値が TransferResult でない | transform は TransferResult.APPLY / SKIP / STOP のいずれかを返す |
 | `InvalidTableInputError` | Table API に対応しない入力が渡された。 | columns、rows、types の型と列名を確認する |
 | `InvalidTableOperationError` | Table API で実行できない操作が指定された。 | 対象が読み取り専用でないか、指定したテーブル名が正しいか確認する |
 | `TableColumnNotFoundError` | Table に指定された列が存在しない。 | Table.columns を確認し、存在する列名を指定する |

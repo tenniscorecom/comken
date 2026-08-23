@@ -19,7 +19,6 @@
 
 import logging
 from pathlib import Path
-from typing import Any
 
 from comken.core import diff_rows
 from comken.core.table import Table, Transfer
@@ -86,14 +85,6 @@ def main() -> None:
     totals = total_by_key()
     logger.info("明細の合計: %s", {key: value[TOTAL] for key, value in totals.items()})
 
-    before: list[dict[str, Any]] = []
-
-    def validate_total(_source: dict[str, Any], working_row: dict[str, Any] | None) -> Any:
-        # mapping 適用後の作業行が渡る。反映する場合も明示的に APPLY を返す。
-        if working_row is None or working_row[TOTAL] == "":
-            return Transfer.SKIP
-        return Transfer.APPLY
-
     mapping = {KEY: KEY, "顧客名": "顧客名", TOTAL: TOTAL}
     source = CSV(MASTER_CSV, read_only=True).read()
     source = Table(
@@ -104,22 +95,31 @@ def main() -> None:
         [KEY, "顧客名", TOTAL],
         [{KEY: row[KEY], "顧客名": "", TOTAL: ""} for row in source.read()],
     )
-    transferred = Transfer(
+    before = destination.read()
+    transfer = Transfer(
         source,
         destination,
         mapping=mapping,
         read_key=KEY,
         write_key=KEY,
-    ).run(transform=validate_total)
-    after = transferred.read()
+    )
+    for read_row, write_row in transfer.matched_rows():
+        # mapping を適用（同じ列名のときでも write_row に値をコピーする）
+        for read_column, write_column in mapping.items():
+            write_row[write_column] = read_row[read_column]
+        # 適用後に TOTAL が空のマスタは明細がないためスキップ（continue でその行だけ破棄）
+        if write_row[TOTAL] == "":
+            continue
+    working = transfer._working_table
+    after = working.read()
     with Excel(INVOICE_XLSX) as excel:
         sheet = excel.sheet(SHEET)
-        values = [transferred.columns, *[list(row.values()) for row in after]]
+        values = [working.columns, *[list(row.values()) for row in after]]
         sheet.write_range(f"A1:C{len(values)}", values)
         for row in range(2, len(values) + 1):
             sheet.format(f"{AMOUNT_COL}{row}", number_format=AMOUNT_FORMAT)
 
-    logger.info("%d 件転記した", transferred.count())
+    logger.info("%d 件転記した", working.count())
 
     # 転記前後を突合して、どの行のどの列が書き換わったかを確認する
     result = diff_rows(before, after, key=KEY)

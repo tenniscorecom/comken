@@ -135,38 +135,6 @@ class TransferMappingError(TableError):
         super().__init__("mapping には転記元列と転記先列を指定してください。")
 
 
-class TransferRowError(TableError):
-    """transform が処理規約に合わない値を返した
-
-    発生箇所: Transfer.run()
-
-    対処:
-        通常は何も返さず、1件を除外する場合は Transfer.SKIP、全体を止める場合は Transfer.STOP を返す
-    """
-
-    def __init__(self, row_number: int, reason: str) -> None:
-        super().__init__(f"転記元の{row_number}件目を処理できません。{reason}")
-
-
-class TransferDestinationRowMissingError(ComkenError):
-    """転記先に対応する行がない状態で transform がその行を操作した
-
-    発生箇所: Transfer.run()
-
-    対処:
-        destination_row が None か確認し、新規行を処理するか Transfer.SKIP を返す
-    """
-
-    def __init__(self, row_number: int) -> None:
-        super().__init__(
-            f"転記元の{row_number}件目には対応する転記先行がありません"
-            "（destination_row が None）。"
-            "Transfer.APPLY を返すには write 側に行を追加する必要があります。"
-            "write に行を追加してから APPLY を返すか、"
-            "Transfer.SKIP を返してこの行をスキップしてください。"
-        )
-
-
 class TransferDestinationMultipleMatchError(ComkenError):
     """転記先のキーに一致する行が複数ある
 
@@ -180,47 +148,4 @@ class TransferDestinationMultipleMatchError(ComkenError):
         super().__init__(
             f"転記先列「{key_column}」のキー「{key}」に一致する行が複数あります。"
             "転記先のキーを一意にしてください。"
-        )
-
-
-class TransferTransformError(TransferRowError):
-    """transform コールバック内で例外が発生した
-
-    発生箇所: Transfer.run()
-
-    対処:
-        エラーメッセージに表示された転記元の行番号・キー・元の例外を確認する
-    """
-
-    def __init__(
-        self,
-        row_number: int,
-        key: tuple,
-        source_row: dict | None,
-        original: Exception,
-    ) -> None:
-        self.row_number = row_number
-        self.key = key
-        self.source_row = source_row
-        self.original = original
-        super().__init__(
-            row_number,
-            f"transform の実行に失敗しました(行{row_number}、キー {key}): {original!r}",
-        )
-
-
-class InvalidTransferResultError(TransferRowError):
-    """transform の戻り値が TransferResult でない
-
-    発生箇所: Transfer.run()
-
-    対処:
-        transform は TransferResult.APPLY / SKIP / STOP のいずれかを返す
-    """
-
-    def __init__(self, row_number: int, value: object) -> None:
-        self.value = value
-        super().__init__(
-            row_number,
-            f"transform の戻り値は TransferResult を返してください: {value!r}",
         )
