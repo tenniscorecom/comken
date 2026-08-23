@@ -1,4 +1,4 @@
-r"""comken/internal/salesforce_downloader/report_master.py — Excel の表を設定として読む。
+r"""comken/services/salesforce_downloader/report_master.py — Excel の表を設定として読む。
 
 **非エンジニアが Excel で編集する一覧**を、型付きの行として読み込む。
 「どのレポートを取るか」「どのファイルをコピーするか」のように**行が増えていく設定**は、
@@ -9,7 +9,7 @@ config.ini より表のほうが扱いやすい（並べ替え・フィルタ・
     from dataclasses import dataclass
     from pathlib import Path
 
-    from comken.internal.salesforce_downloader.report_master import MasterRow, column
+    from comken.services.salesforce_downloader.report_master import MasterRow, column
 
 
     @dataclass(frozen=True, kw_only=True)

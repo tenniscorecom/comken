@@ -210,3 +210,30 @@ def test_transfer_with_mapping_different_column_names() -> None:
 
     assert transfer._working_table is not None
     assert transfer._working_table.read() == [{"id": 1, "label": "山田"}]
+
+
+def test_result_returns_modified_table_after_iterator() -> None:
+    """transfer_rows() の変更が result() に反映される。"""
+    source = Table(["id", "name"], [{"id": 1, "name": "Alice"}])
+    destination = Table(["id", "name"], [{"id": 1, "name": ""}])
+    transfer = Transfer(source, destination, {"name": "name"}, read_key="id", write_key="id")
+
+    for src, dst in transfer.matched_rows():
+        dst["name"] = src["name"].strip()
+
+    result_table = transfer.result()
+    assert result_table.read()[0]["name"] == "Alice"
+
+
+def test_result_returns_copy_when_iterator_not_called() -> None:
+    """result() を最初に呼ぶと write のコピーが返る（変更なし）。"""
+    source = Table(["id"], [{"id": 1}])
+    destination = Table(["id", "name"], [{"id": 1, "name": "Original"}])
+    transfer = Transfer(
+        source, destination, {"id": "id"}, read_key="id", write_key="id"
+    )
+
+    result_table = transfer.result()
+
+    # transfer_rows() を呼んでいないので、write のコピー（変更なし）
+    assert result_table.read()[0]["name"] == "Original"

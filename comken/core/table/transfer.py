@@ -74,6 +74,29 @@ class Transfer:
             if write_row is not None:
                 yield read_row, write_row
 
+    def result(self) -> Table:
+        """変更後の Table を返す。
+
+        ``transfer_rows()`` / ``matched_rows()`` のイテレーション中に ``destination``
+        に対して行った変更が反映された作業用 Table を返します。
+        初回呼び出し前に ``result()`` を呼ぶと ``write`` のコピー（変更なし）を
+        返します。``transfer_rows()`` か ``matched_rows()`` を先にイテレートしてから
+        呼ぶと、利用者の変更が反映された Table が得られます。
+
+        Example:
+            transfer = Transfer(source, destination, mapping)
+            for source_row, destination_row in transfer.matched_rows():
+                destination_row["顧客名"] = source_row["顧客名"]
+            final_table = transfer.result()  # 変更後の Table
+        """
+        if self._working_table is None:
+            # transfer_rows() / matched_rows() がまだ呼ばれていないので、
+            # write のコピーを返す（変更なし）。
+            self._working_table = Table(
+                self.write.columns, self.write.read(), types=self.write.types
+            )
+        return self._working_table
+
     def _working_index(self) -> dict[tuple[Any, ...], Row]:
         """作業中のTableを複合キーで検索できる辞書にする。
 

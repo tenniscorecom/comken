@@ -1,4 +1,4 @@
-"""comken/internal/salesforce_downloader/schedule.py — 取得時刻を判定する。"""
+"""comken/services/salesforce_downloader/schedule.py — 取得時刻を判定する。"""
 
 import datetime as dt
 from collections.abc import Mapping

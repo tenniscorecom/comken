@@ -1,4 +1,4 @@
-r"""comken/internal/salesforce_downloader/cli.py — 管理表まわりの保守コマンド。
+r"""comken/services/salesforce_downloader/cli.py — 管理表まわりの保守コマンド。
 
     python -m comken report init レポート管理表.xlsx   雛形を作る
     python -m comken report check                       管理表を検査する
@@ -25,15 +25,15 @@ r"""comken/internal/salesforce_downloader/cli.py — 管理表まわりの保守
 - 取得そのものを行うサブコマンド
 """
 
-# ruff: noqa: T201  # CLI は print を使う（logging より読みやすい）
+# CLI は print を使う（logging より読みやすい）
 
 import argparse
 import sys
 from pathlib import Path
 
 from comken.exceptions import ComkenError
-from comken.internal.salesforce_downloader._paths import MASTER_PATH
-from comken.internal.salesforce_downloader.master import (
+from comken.services.salesforce_downloader._paths import MASTER_PATH
+from comken.services.salesforce_downloader.master import (
     EXAMPLES,
     ReportEntry,
     load_master,

@@ -286,7 +286,7 @@ popd
 ```bat
 git update-index --skip-worktree comken/internal/rpa.py
 git update-index --skip-worktree comken/toolbox/salesforce/sites/sandbox.py
-git update-index --skip-worktree comken/internal/salesforce_downloader/_paths.py
+git update-index --skip-worktree comken/services/salesforce_downloader/_paths.py
 ```
 
 これで手元の書き換えが消えず、うっかり push することもない。comken 側でこの3ファイルを

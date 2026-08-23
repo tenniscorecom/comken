@@ -1,6 +1,6 @@
-r"""comken/internal/salesforce_downloader/service.py — 取得の本体。
+r"""comken/services/salesforce_downloader/service.py — 取得の本体。
 
-    from comken.internal.salesforce_downloader import cached_report, download_report
+    from comken.services.salesforce_downloader import cached_report, download_report
 
     CUSTOMER_LIST = "1001"        # 各プロジェクトで、意味の分かる名前を付ける
 
@@ -55,11 +55,11 @@ from comken.exceptions import (
     ReportFolderNotFoundError,
     ScheduledDownloadFailedError,
 )
-from comken.internal.salesforce_downloader import history
-from comken.internal.salesforce_downloader._paths import HISTORY_PATH, MASTER_PATH
-from comken.internal.salesforce_downloader.history import HistoryRow
-from comken.internal.salesforce_downloader.master import ReportEntry, load_master, shared_report_ids
-from comken.internal.salesforce_downloader.provider import _daily_cache_path_of, _find, file_path_of
+from comken.services.salesforce_downloader import history
+from comken.services.salesforce_downloader._paths import HISTORY_PATH, MASTER_PATH
+from comken.services.salesforce_downloader.history import HistoryRow
+from comken.services.salesforce_downloader.master import ReportEntry, load_master, shared_report_ids
+from comken.services.salesforce_downloader.provider import _daily_cache_path_of, _find, file_path_of
 from comken.toolbox.csv import CSV
 from comken.toolbox.salesforce.sites import site_for
 

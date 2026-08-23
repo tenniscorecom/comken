@@ -1,4 +1,4 @@
-"""comken/internal/salesforce_downloader/_paths.py — 管理表・履歴の置き場所。
+"""comken/services/salesforce_downloader/_paths.py — 管理表・履歴の置き場所。
 
 `service.py`（取りに行く側）と `provider.py`（読み取る側）の両方が読む定数を、
 依存関係を持ち込まない形で共有する。

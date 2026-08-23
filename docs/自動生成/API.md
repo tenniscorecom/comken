@@ -486,6 +486,28 @@ def matched_rows(self) -> Iterator[tuple[Row, Row]]:
 
 転記先に存在しない行（``destination`` が ``None``）は含みません。
 
+#### `result`
+
+```text
+def result(self) -> Table:
+```
+
+##### 説明
+
+変更後の Table を返す。
+
+``transfer_rows()`` / ``matched_rows()`` のイテレーション中に ``destination``
+に対して行った変更が反映された作業用 Table を返します。
+初回呼び出し前に ``result()`` を呼ぶと ``write`` のコピー（変更なし）を
+返します。``transfer_rows()`` か ``matched_rows()`` を先にイテレートしてから
+呼ぶと、利用者の変更が反映された Table が得られます。
+
+Example:
+    transfer = Transfer(source, destination, mapping)
+    for source_row, destination_row in transfer.matched_rows():
+        destination_row["顧客名"] = source_row["顧客名"]
+    final_table = transfer.result()  # 変更後の Table
+
 ### `compare_tables`
 
 ```text
@@ -1681,6 +1703,28 @@ def matched_rows(self) -> Iterator[tuple[Row, Row]]:
 両方に存在する行だけを返す。
 
 転記先に存在しない行（``destination`` が ``None``）は含みません。
+
+#### `result`
+
+```text
+def result(self) -> Table:
+```
+
+##### 説明
+
+変更後の Table を返す。
+
+``transfer_rows()`` / ``matched_rows()`` のイテレーション中に ``destination``
+に対して行った変更が反映された作業用 Table を返します。
+初回呼び出し前に ``result()`` を呼ぶと ``write`` のコピー（変更なし）を
+返します。``transfer_rows()`` か ``matched_rows()`` を先にイテレートしてから
+呼ぶと、利用者の変更が反映された Table が得られます。
+
+Example:
+    transfer = Transfer(source, destination, mapping)
+    for source_row, destination_row in transfer.matched_rows():
+        destination_row["顧客名"] = source_row["顧客名"]
+    final_table = transfer.result()  # 変更後の Table
 
 ### `compare_tables`
 
@@ -4445,7 +4489,7 @@ def find_internal_library(library_name: str) -> ModuleType | None:
 社内ライブラリを import して返す。無ければ None。
 
 
-## `from comken.internal.salesforce_downloader import ...`
+## `from comken.services.salesforce_downloader import ...`
 
 ### `download_report`
 
@@ -4770,6 +4814,28 @@ def matched_rows(self) -> Iterator[tuple[Row, Row]]:
 両方に存在する行だけを返す。
 
 転記先に存在しない行（``destination`` が ``None``）は含みません。
+
+#### `result`
+
+```text
+def result(self) -> Table:
+```
+
+##### 説明
+
+変更後の Table を返す。
+
+``transfer_rows()`` / ``matched_rows()`` のイテレーション中に ``destination``
+に対して行った変更が反映された作業用 Table を返します。
+初回呼び出し前に ``result()`` を呼ぶと ``write`` のコピー（変更なし）を
+返します。``transfer_rows()`` か ``matched_rows()`` を先にイテレートしてから
+呼ぶと、利用者の変更が反映された Table が得られます。
+
+Example:
+    transfer = Transfer(source, destination, mapping)
+    for source_row, destination_row in transfer.matched_rows():
+        destination_row["顧客名"] = source_row["顧客名"]
+    final_table = transfer.result()  # 変更後の Table
 
 
 ## `from comken.toolbox.access import ...`

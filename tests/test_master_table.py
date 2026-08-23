@@ -18,7 +18,7 @@ from comken.exceptions import (
     MasterRowValueError,
     MasterSheetNotDefinedError,
 )
-from comken.internal.salesforce_downloader.report_master import MasterRow, column
+from comken.services.salesforce_downloader.report_master import MasterRow, column
 from comken.toolbox.excel import Excel
 
 

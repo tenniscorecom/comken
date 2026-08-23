@@ -7,12 +7,12 @@ from pathlib import Path
 import pytest
 
 from comken.exceptions import HistoryHeaderMismatchError
-from comken.internal.salesforce_downloader.history import (
+from comken.services.salesforce_downloader.history import (
     HistoryRow,
     record,
     successful_files_today,
 )
-from comken.internal.salesforce_downloader.master import ReportEntry
+from comken.services.salesforce_downloader.master import ReportEntry
 from comken.toolbox.csv import CSV
 
 
