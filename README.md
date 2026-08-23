@@ -89,12 +89,24 @@ import の書き方は上の「[使うときの約束](#使うときの約束)�
 
 表データは ``Table`` に統一する。CSV は ``CSV.read()``、Excel は
 ``Excel.data_sheet().table().read()`` で ``Table`` を取得し、転記は
-``Transfer(read, write, mapping=...)`` を作り ``matched_rows()`` /
-``transfer_rows()`` の ``for`` で加工する。加工は
-``transfer.apply_mapping(read_row, write_row)`` 1 行で済む。
-保存は CSV / Excel の ``with`` を正常終了した時に行う。
+``Transfer(read, write, mapping=...)`` を作って次の 4 つの取り出し口で加工する:
+
+- ``matched_rows()``: 両側にキーが揃う行を ``(read_row, write_row)`` で返す
+- ``transfer_rows()``: read 全行を ``(read_row, write_row | None)`` で返す
+  （write に無い行は ``None``）
+- ``unmatched_read_rows()``: write に無い read 行を返す（追加候補）
+- ``unmatched_write_rows()``: read に無い write 行を返す（破棄候補）
+
+加工は ``transfer.apply_mapping(read_row, write_row)`` 1 行で済み、
+``unmatched_read_rows()`` の行は ``transfer.result().append()`` で
+新規行として追加できる。保存は CSV / Excel の ``with`` を正常終了した時に行う。
 列対応ではなくExcelシートのセル内容と基本レイアウトを複製するときは
 ``Sheet.copy_to()`` を使う（画像・グラフ・印刷設定等は対象外）。
+
+**空キー (``None`` / ``""``) は突合対象外**。``0`` / ``False`` は空ではない。
+空キーは read / write のどちらでも ``unmatched_*`` 側へ流れるため、
+write 側に空キーが複数あっても ``TransferDestinationMultipleMatchError``
+にはならない。
 
 | モジュール | 概要 |
 |---|---|

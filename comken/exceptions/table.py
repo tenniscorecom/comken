@@ -145,7 +145,9 @@ class TransferDestinationMultipleMatchError(ComkenError):
     発生箇所: Transfer()
 
     対処:
-        mapping の先頭列に対応する転記先列の値を一意にする
+        mapping の先頭列に対応する転記先列の値を一意にする。
+        キーが ``None`` か ``""`` の行は突合対象外なので、
+        空欄のキーが複数あってもこの例外は出ない。
     """
 
     def __init__(self, key_column: str, key: object) -> None:

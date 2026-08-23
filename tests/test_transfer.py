@@ -365,3 +365,299 @@ def test_result_returns_copy_when_iterator_not_called() -> None:
 
     # transfer_rows() を呼んでいないので、write のコピー（変更なし）
     assert result_table.read()[0]["name"] == "Original"
+
+
+# ---- 未マッチ行 API（追加） ----
+
+
+def test_unmatched_read_rows_returns_only_rows_missing_in_write() -> None:
+    """unmatched_read_rows() は write に無い read 行だけを返す。"""
+    source = Table(
+        ["id", "value"],
+        [{"id": "1", "value": "new"}, {"id": "2", "value": "extra"}],
+    )
+    destination = Table(["id", "value"], [{"id": "1", "value": "old"}])
+    transfer = Transfer(
+        source, destination, {"value": "value"}, read_key="id", write_key="id"
+    )
+
+    extras = list(transfer.unmatched_read_rows())
+
+    assert extras == [{"id": "2", "value": "extra"}]
+
+
+def test_unmatched_write_rows_returns_only_rows_missing_in_read() -> None:
+    """unmatched_write_rows() は read に無い write 行だけを返す。"""
+    source = Table(["id", "value"], [{"id": "1", "value": "new"}])
+    destination = Table(
+        ["id", "value"],
+        [{"id": "1", "value": "old"}, {"id": "2", "value": "stale"}],
+    )
+    transfer = Transfer(
+        source, destination, {"value": "value"}, read_key="id", write_key="id"
+    )
+
+    extras = list(transfer.unmatched_write_rows())
+
+    assert extras == [{"id": "2", "value": "stale"}]
+
+
+def test_unmatched_write_rows_mutation_reflects_in_result() -> None:
+    """unmatched_write_rows() で書き換えた値が result() にも反映される。"""
+    source = Table(["id", "value"], [{"id": "1", "value": "new"}])
+    destination = Table(
+        ["id", "value"],
+        [{"id": "1", "value": "old"}, {"id": "2", "value": "stale"}],
+    )
+    transfer = Transfer(
+        source, destination, {"value": "value"}, read_key="id", write_key="id"
+    )
+
+    # write にしか無い行の "備考" 列を埋める
+    for write_row in transfer.unmatched_write_rows():
+        write_row["value"] = "破棄予定"
+
+    assert transfer.result().read() == [
+        {"id": "1", "value": "old"},
+        {"id": "2", "value": "破棄予定"},
+    ]
+
+
+def test_blank_key_rows_are_excluded_from_matching() -> None:
+    """空キーは照合に使わず、result() にも転記されない。
+
+    既存バグの例: write 側の空キーが「一致した行」と判定されて
+    TransferDestinationMultipleMatchError で止まる事故を防ぐ。
+    """
+    source = Table(
+        ["id", "name"],
+        [{"id": "", "name": "空白"}, {"id": "1", "name": "正常"}],
+    )
+    destination = Table(
+        ["id", "name"],
+        [{"id": "", "name": ""}, {"id": "1", "name": ""}],
+    )
+    transfer = Transfer(
+        source, destination, {"name": "name"}, read_key="id", write_key="id"
+    )
+
+    # matched_rows は id="1" の1件だけ
+    pairs = list(transfer.matched_rows())
+    assert len(pairs) == 1
+    read_row, write_row = pairs[0]
+    assert read_row["id"] == "1"
+    assert write_row is not None and write_row["id"] == "1"
+
+    # mapping を適用。空キーは result() に初期値のまま残る
+    for src, dst in pairs:
+        transfer.apply_mapping(src, dst)
+
+    # write に転記されたのは id="1" だけ。空キーは転記対象外なので初期値のまま
+    assert transfer.result().read() == [
+        {"id": "", "name": ""},
+        {"id": "1", "name": "正常"},
+    ]
+
+
+def test_unmatched_read_rows_includes_blank_keys() -> None:
+    """read 側の空キー行は unmatched_read_rows() に流れる。"""
+    source = Table(
+        ["id", "name"],
+        [{"id": "", "name": "空白"}],
+    )
+    destination = Table(["id", "name"], [{"id": "1", "name": "既存"}])
+    transfer = Transfer(
+        source, destination, {"name": "name"}, read_key="id", write_key="id"
+    )
+
+    extras = list(transfer.unmatched_read_rows())
+
+    assert extras == [{"id": "", "name": "空白"}]
+
+
+def test_unmatched_write_rows_includes_blank_keys() -> None:
+    """write 側の空キー行は unmatched_write_rows() に流れる。"""
+    source = Table(["id", "name"], [{"id": "1", "name": "新規"}])
+    destination = Table(
+        ["id", "name"],
+        [{"id": "", "name": ""}, {"id": "1", "name": ""}],
+    )
+    transfer = Transfer(
+        source, destination, {"name": "name"}, read_key="id", write_key="id"
+    )
+
+    extras = list(transfer.unmatched_write_rows())
+
+    assert extras == [{"id": "", "name": ""}]
+
+
+def test_none_key_is_treated_as_blank() -> None:
+    """キー値が ``None`` のときも ``""`` と同じ空キー扱い。"""
+    source = Table(
+        ["id", "name"],
+        [{"id": None, "name": "Noneキー"}],
+    )
+    destination = Table(["id", "name"], [{"id": "1", "name": "既存"}])
+    transfer = Transfer(
+        source, destination, {"name": "name"}, read_key="id", write_key="id"
+    )
+
+    # matched_rows も空集合
+    assert list(transfer.matched_rows()) == []
+    # source 側の None は空キー扱いで unmatched_read 側へ流れる
+    assert list(transfer.unmatched_read_rows()) == [{"id": None, "name": "Noneキー"}]
+    # destination 側の "1" は source に無いので unmatched_write 側へ流れる
+    assert list(transfer.unmatched_write_rows()) == [{"id": "1", "name": "既存"}]
+
+
+def test_zero_value_is_a_valid_key() -> None:
+    """``0`` はキーに使っても空キー扱いにならない（数値ゼロ落ち対策）。"""
+    source = Table(["id", "value"], [{"id": 0, "value": "zero-read"}])
+    destination = Table(["id", "value"], [{"id": 0, "value": "zero-write"}])
+    transfer = Transfer(
+        source, destination, {"value": "value"}, read_key="id", write_key="id"
+    )
+
+    pairs = list(transfer.matched_rows())
+
+    assert len(pairs) == 1
+    assert pairs[0][0]["id"] == 0
+    assert pairs[0][1] is not None and pairs[0][1]["id"] == 0
+
+
+def test_composite_key_with_partially_blank_is_blank() -> None:
+    """複合キーは **1要素でも空** なら空扱い（部分空のキーは照合に使えない）。
+
+    write 側に「read と同じ複合キー値（部分空を含む）」を置く。 ``any()`` 実装なら
+    両側のキーが空扱いで ``unmatched_*`` 側へ流れる。 旧 ``all()`` 実装だと
+    部分空のキーは照合対象になり、``("", "1")`` 同士が「一致した」と誤判定される。
+    """
+    source = Table(
+        ["group", "id", "value"],
+        [
+            # 1要素目だけが空 → キーは空扱い
+            {"group": "", "id": "1", "value": "group空"},
+            # 2要素目だけが空 → キーは空扱い
+            {"group": "A", "id": "", "value": "id空"},
+        ],
+    )
+    destination = Table(
+        ["group", "id", "value"],
+        [
+            # 1要素目だけが空 → キーは空扱い。read 側 ("", "1") と同じ値
+            {"group": "", "id": "1", "value": "w-1"},
+            # どちらも空ではない → キーは有効
+            #  空ではない read 行と一致しないので unmatched_write 側へ
+            {"group": "A", "id": "1", "value": "w-2"},
+        ],
+    )
+    transfer = Transfer(
+        source,
+        destination,
+        {"value": "value"},
+        read_key=["group", "id"],
+        write_key=["group", "id"],
+    )
+
+    # 部分空の read 行はすべて unmatched_read 側へ流れる
+    extras_read = list(transfer.unmatched_read_rows())
+    assert {row["value"] for row in extras_read} == {"group空", "id空"}
+    # matched は0件
+    assert list(transfer.matched_rows()) == []
+    # write 側 ("", "1") も空キー扱いなので unmatched_write 側へ流れる
+    extras_write = list(transfer.unmatched_write_rows())
+    assert {row["value"] for row in extras_write} == {"w-1", "w-2"}
+
+
+def test_multiple_blank_write_keys_do_not_raise_multiple_match() -> None:
+    """write 側に空キーが複数あっても例外にならない。
+
+    修正前は同じ空キー（``""``）同士が一致と判定され
+    TransferDestinationMultipleMatchError で止まっていた。
+    """
+    source = Table(["id", "value"], [{"id": "1", "value": "new"}])
+    destination = Table(
+        ["id", "value"],
+        [{"id": "", "value": ""}, {"id": "", "value": ""}, {"id": "1", "value": "old"}],
+    )
+    transfer = Transfer(
+        source, destination, {"value": "value"}, read_key="id", write_key="id"
+    )
+
+    # 例外が出ずに動く
+    pairs = list(transfer.transfer_rows())
+    assert pairs == [
+        ({"id": "1", "value": "new"}, {"id": "1", "value": "old"}),
+    ]
+    # 空キーは unmatched_write_rows() 側へ流れる
+    assert len(list(transfer.unmatched_write_rows())) == 2
+
+
+def test_unmatched_write_rows_works_without_calling_other_iterators() -> None:
+    """unmatched_write_rows() は transfer_rows() / matched_rows() を呼ばずに動く。"""
+    source = Table(["id", "value"], [{"id": "1", "value": "new"}])
+    destination = Table(
+        ["id", "value"],
+        [{"id": "1", "value": "old"}, {"id": "2", "value": "stale"}],
+    )
+    transfer = Transfer(
+        source, destination, {"value": "value"}, read_key="id", write_key="id"
+    )
+
+    extras = list(transfer.unmatched_write_rows())
+
+    assert extras == [{"id": "2", "value": "stale"}]
+
+
+def test_unmatched_read_rows_result_append_appears_in_result() -> None:
+    """unmatched_read_rows() を result().append() すると最終結果へ入る。"""
+    source = Table(
+        ["id", "name"],
+        [{"id": "1", "name": "既存"}, {"id": "2", "name": "新規"}],
+    )
+    destination = Table(
+        ["id", "name"],
+        [{"id": "1", "name": ""}],
+    )
+    transfer = Transfer(
+        source,
+        destination,
+        {"name": "name"},
+        read_key="id",
+        write_key="id",
+    )
+
+    for src, dst in transfer.matched_rows():
+        transfer.apply_mapping(src, dst)
+
+    # 既存行の転記後、write に無い read 行を新規行として追加する
+    for read_row in transfer.unmatched_read_rows():
+        transfer.result().append(dict(read_row))
+
+    assert transfer.result().read() == [
+        {"id": "1", "name": "既存"},
+        {"id": "2", "name": "新規"},
+    ]
+
+
+def test_transfer_methods_do_not_mutate_input_tables() -> None:
+    """unmatched_* を呼んでも read / write Table は変わらない。"""
+    source = Table(
+        ["id", "value"],
+        [{"id": "1", "value": "new"}, {"id": "2", "value": "extra"}],
+    )
+    destination = Table(
+        ["id", "value"],
+        [{"id": "1", "value": "old"}, {"id": "3", "value": "stale"}],
+    )
+    original_source = source.read()
+    original_destination = destination.read()
+    transfer = Transfer(
+        source, destination, {"value": "value"}, read_key="id", write_key="id"
+    )
+
+    list(transfer.unmatched_read_rows())
+    list(transfer.unmatched_write_rows())
+
+    assert source.read() == original_source
+    assert destination.read() == original_destination

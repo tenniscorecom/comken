@@ -481,7 +481,14 @@ class Transfer:
 
 Table 間のキー突合と転記を行う。
 
-基本的な使い方は次のとおり。 ``mapping`` は「転記元の列名 → 転記先の列名」。
+基本的な用法は次のとおり。 ``mapping`` は「転記元の列名 → 転記先の列名」。
+4つの取り出し口を使い分けて、read / write を行単位で加工する:
+
+- ``matched_rows()``: 両方にキーが揃う行を ``(read_row, write_row)`` で返す
+- ``transfer_rows()``: read 全行を ``(read_row, write_row | None)`` で返す
+  （write に無い行は ``None``）
+- ``unmatched_read_rows()``: write に無い read 行だけを返す（追加候補）
+- ``unmatched_write_rows()``: read に無い write 行だけを返す（破棄候補）
 
 Example:
     transfer = Transfer(read_table, write_table, mapping,
@@ -491,13 +498,29 @@ Example:
             continue                       # この行は破棄
         transfer.apply_mapping(read_row, write_row)   # mapping の値をコピー
         # 必要なら write_row["備考"] = "..." のように追加加工
-    result = transfer.result()             # 変更後の Table
+    # write に無い read 行は result() に追加していく（新規行の追加）
+    for read_row in transfer.unmatched_read_rows():
+        transfer.result().append({
+            "顧客ID": read_row["顧客ID"],
+            "顧客名": read_row["取引先"],
+            "請求額": read_row["金額"],
+            "備考": "新規追加",
+        })
+    # read に無い write 行は「転記元に無し」と書き換える（result() に出るので別途 filter する）
+    for write_row in transfer.unmatched_write_rows():
+        write_row["備考"] = "転記元に無し"
 
 **条件は ``apply_mapping()`` より前に書くこと。** Python の ``for`` ループは
 ``continue`` したかどうかを呼び出し側に伝えないため、ループ内で
 ``apply_mapping()`` を呼ばずに ``continue`` した行は、作業 Table へ反映されない。
 条件判定を ``apply_mapping()`` の後ろに書くと、``continue`` しても mapping が
 適用済みとなり破棄できないので、判定は必ず ``apply_mapping()`` の前に置く。
+
+**空キー (``None`` / ``""``) は突合対象外**。 値が無いキーは read 側・write 側の
+どちらでも照合に使わず、``unmatched_read_rows()`` /
+``unmatched_write_rows()`` 側へ流れる。 ``0`` や ``False`` は空ではない
+（数値・bool の 0 落ち判定を避けるため）。 複合キーは **1要素でも空** なら
+空とみなす。
 
 #### `__init__`
 
@@ -532,6 +555,46 @@ def matched_rows(self) -> Iterator[tuple[Row, Row]]:
 両方に存在する行だけを ``(read_row, write_row)`` で返す。
 
 転記先に存在しない行（``destination`` が ``None``）は含まない。
+
+#### `unmatched_read_rows`
+
+```text
+def unmatched_read_rows(self) -> Iterator[Row]:
+```
+
+##### 説明
+
+write に対応が無い read 行だけを返す（追加候補）。
+
+戻り値は ``Table.read()`` と同じく **read 行のコピー**。
+返された行を ``write_row["列名"] = ...`` のように書き換えても ``read`` には
+影響しない。 ``result().append()`` に渡して write の作業 Table へ追加する
+（新規行として書き込むために ``dict(...)`` で再コピーするのを忘れずに）。
+
+空キー (``None`` / ``""``) の read 行もここに含む。 キーが空なので
+照合に使えず、必ず write には対応が無いため。
+
+``transfer_rows()`` / ``matched_rows()`` を呼ばずに呼んでも動く。
+
+#### `unmatched_write_rows`
+
+```text
+def unmatched_write_rows(self) -> Iterator[Row]:
+```
+
+##### 説明
+
+read に対応が無い write 行だけを返す（破棄候補）。
+
+戻り値は ``matched_rows()`` が返す ``write_row`` と同じく **作業 Table の
+実体行**。 返された ``write_row`` を ``write_row["備考"] = "破棄予定"`` の
+ように書き換えると ``result()`` の戻り値へ反映される。 ``result().append()``
+などに渡して追加する使い方ではないので注意。
+
+空キー (``None`` / ``""``) の write 行もここに含む。 キーが空なので
+照合に使えず、必ず read には対応が無いため。
+
+``transfer_rows()`` / ``matched_rows()`` を呼ばずに呼んでも動く。
 
 #### `apply_mapping`
 
@@ -1769,7 +1832,14 @@ class Transfer:
 
 Table 間のキー突合と転記を行う。
 
-基本的な使い方は次のとおり。 ``mapping`` は「転記元の列名 → 転記先の列名」。
+基本的な用法は次のとおり。 ``mapping`` は「転記元の列名 → 転記先の列名」。
+4つの取り出し口を使い分けて、read / write を行単位で加工する:
+
+- ``matched_rows()``: 両方にキーが揃う行を ``(read_row, write_row)`` で返す
+- ``transfer_rows()``: read 全行を ``(read_row, write_row | None)`` で返す
+  （write に無い行は ``None``）
+- ``unmatched_read_rows()``: write に無い read 行だけを返す（追加候補）
+- ``unmatched_write_rows()``: read に無い write 行だけを返す（破棄候補）
 
 Example:
     transfer = Transfer(read_table, write_table, mapping,
@@ -1779,13 +1849,29 @@ Example:
             continue                       # この行は破棄
         transfer.apply_mapping(read_row, write_row)   # mapping の値をコピー
         # 必要なら write_row["備考"] = "..." のように追加加工
-    result = transfer.result()             # 変更後の Table
+    # write に無い read 行は result() に追加していく（新規行の追加）
+    for read_row in transfer.unmatched_read_rows():
+        transfer.result().append({
+            "顧客ID": read_row["顧客ID"],
+            "顧客名": read_row["取引先"],
+            "請求額": read_row["金額"],
+            "備考": "新規追加",
+        })
+    # read に無い write 行は「転記元に無し」と書き換える（result() に出るので別途 filter する）
+    for write_row in transfer.unmatched_write_rows():
+        write_row["備考"] = "転記元に無し"
 
 **条件は ``apply_mapping()`` より前に書くこと。** Python の ``for`` ループは
 ``continue`` したかどうかを呼び出し側に伝えないため、ループ内で
 ``apply_mapping()`` を呼ばずに ``continue`` した行は、作業 Table へ反映されない。
 条件判定を ``apply_mapping()`` の後ろに書くと、``continue`` しても mapping が
 適用済みとなり破棄できないので、判定は必ず ``apply_mapping()`` の前に置く。
+
+**空キー (``None`` / ``""``) は突合対象外**。 値が無いキーは read 側・write 側の
+どちらでも照合に使わず、``unmatched_read_rows()`` /
+``unmatched_write_rows()`` 側へ流れる。 ``0`` や ``False`` は空ではない
+（数値・bool の 0 落ち判定を避けるため）。 複合キーは **1要素でも空** なら
+空とみなす。
 
 #### `__init__`
 
@@ -1820,6 +1906,46 @@ def matched_rows(self) -> Iterator[tuple[Row, Row]]:
 両方に存在する行だけを ``(read_row, write_row)`` で返す。
 
 転記先に存在しない行（``destination`` が ``None``）は含まない。
+
+#### `unmatched_read_rows`
+
+```text
+def unmatched_read_rows(self) -> Iterator[Row]:
+```
+
+##### 説明
+
+write に対応が無い read 行だけを返す（追加候補）。
+
+戻り値は ``Table.read()`` と同じく **read 行のコピー**。
+返された行を ``write_row["列名"] = ...`` のように書き換えても ``read`` には
+影響しない。 ``result().append()`` に渡して write の作業 Table へ追加する
+（新規行として書き込むために ``dict(...)`` で再コピーするのを忘れずに）。
+
+空キー (``None`` / ``""``) の read 行もここに含む。 キーが空なので
+照合に使えず、必ず write には対応が無いため。
+
+``transfer_rows()`` / ``matched_rows()`` を呼ばずに呼んでも動く。
+
+#### `unmatched_write_rows`
+
+```text
+def unmatched_write_rows(self) -> Iterator[Row]:
+```
+
+##### 説明
+
+read に対応が無い write 行だけを返す（破棄候補）。
+
+戻り値は ``matched_rows()`` が返す ``write_row`` と同じく **作業 Table の
+実体行**。 返された ``write_row`` を ``write_row["備考"] = "破棄予定"`` の
+ように書き換えると ``result()`` の戻り値へ反映される。 ``result().append()``
+などに渡して追加する使い方ではないので注意。
+
+空キー (``None`` / ``""``) の write 行もここに含む。 キーが空なので
+照合に使えず、必ず read には対応が無いため。
+
+``transfer_rows()`` / ``matched_rows()`` を呼ばずに呼んでも動く。
 
 #### `apply_mapping`
 
@@ -4228,7 +4354,9 @@ class TransferDestinationMultipleMatchError(ComkenError):
 発生箇所: Transfer()
 
 対処:
-    mapping の先頭列に対応する転記先列の値を一意にする
+    mapping の先頭列に対応する転記先列の値を一意にする。
+    キーが ``None`` か ``""`` の行は突合対象外なので、
+    空欄のキーが複数あってもこの例外は出ない。
 
 #### `__init__`
 
@@ -4886,7 +5014,14 @@ class Transfer:
 
 Table 間のキー突合と転記を行う。
 
-基本的な使い方は次のとおり。 ``mapping`` は「転記元の列名 → 転記先の列名」。
+基本的な用法は次のとおり。 ``mapping`` は「転記元の列名 → 転記先の列名」。
+4つの取り出し口を使い分けて、read / write を行単位で加工する:
+
+- ``matched_rows()``: 両方にキーが揃う行を ``(read_row, write_row)`` で返す
+- ``transfer_rows()``: read 全行を ``(read_row, write_row | None)`` で返す
+  （write に無い行は ``None``）
+- ``unmatched_read_rows()``: write に無い read 行だけを返す（追加候補）
+- ``unmatched_write_rows()``: read に無い write 行だけを返す（破棄候補）
 
 Example:
     transfer = Transfer(read_table, write_table, mapping,
@@ -4896,13 +5031,29 @@ Example:
             continue                       # この行は破棄
         transfer.apply_mapping(read_row, write_row)   # mapping の値をコピー
         # 必要なら write_row["備考"] = "..." のように追加加工
-    result = transfer.result()             # 変更後の Table
+    # write に無い read 行は result() に追加していく（新規行の追加）
+    for read_row in transfer.unmatched_read_rows():
+        transfer.result().append({
+            "顧客ID": read_row["顧客ID"],
+            "顧客名": read_row["取引先"],
+            "請求額": read_row["金額"],
+            "備考": "新規追加",
+        })
+    # read に無い write 行は「転記元に無し」と書き換える（result() に出るので別途 filter する）
+    for write_row in transfer.unmatched_write_rows():
+        write_row["備考"] = "転記元に無し"
 
 **条件は ``apply_mapping()`` より前に書くこと。** Python の ``for`` ループは
 ``continue`` したかどうかを呼び出し側に伝えないため、ループ内で
 ``apply_mapping()`` を呼ばずに ``continue`` した行は、作業 Table へ反映されない。
 条件判定を ``apply_mapping()`` の後ろに書くと、``continue`` しても mapping が
 適用済みとなり破棄できないので、判定は必ず ``apply_mapping()`` の前に置く。
+
+**空キー (``None`` / ``""``) は突合対象外**。 値が無いキーは read 側・write 側の
+どちらでも照合に使わず、``unmatched_read_rows()`` /
+``unmatched_write_rows()`` 側へ流れる。 ``0`` や ``False`` は空ではない
+（数値・bool の 0 落ち判定を避けるため）。 複合キーは **1要素でも空** なら
+空とみなす。
 
 #### `__init__`
 
@@ -4937,6 +5088,46 @@ def matched_rows(self) -> Iterator[tuple[Row, Row]]:
 両方に存在する行だけを ``(read_row, write_row)`` で返す。
 
 転記先に存在しない行（``destination`` が ``None``）は含まない。
+
+#### `unmatched_read_rows`
+
+```text
+def unmatched_read_rows(self) -> Iterator[Row]:
+```
+
+##### 説明
+
+write に対応が無い read 行だけを返す（追加候補）。
+
+戻り値は ``Table.read()`` と同じく **read 行のコピー**。
+返された行を ``write_row["列名"] = ...`` のように書き換えても ``read`` には
+影響しない。 ``result().append()`` に渡して write の作業 Table へ追加する
+（新規行として書き込むために ``dict(...)`` で再コピーするのを忘れずに）。
+
+空キー (``None`` / ``""``) の read 行もここに含む。 キーが空なので
+照合に使えず、必ず write には対応が無いため。
+
+``transfer_rows()`` / ``matched_rows()`` を呼ばずに呼んでも動く。
+
+#### `unmatched_write_rows`
+
+```text
+def unmatched_write_rows(self) -> Iterator[Row]:
+```
+
+##### 説明
+
+read に対応が無い write 行だけを返す（破棄候補）。
+
+戻り値は ``matched_rows()`` が返す ``write_row`` と同じく **作業 Table の
+実体行**。 返された ``write_row`` を ``write_row["備考"] = "破棄予定"`` の
+ように書き換えると ``result()`` の戻り値へ反映される。 ``result().append()``
+などに渡して追加する使い方ではないので注意。
+
+空キー (``None`` / ``""``) の write 行もここに含む。 キーが空なので
+照合に使えず、必ず read には対応が無いため。
+
+``transfer_rows()`` / ``matched_rows()`` を呼ばずに呼んでも動く。
 
 #### `apply_mapping`
 

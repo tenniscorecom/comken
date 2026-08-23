@@ -25,7 +25,14 @@ Row = dict[str, Any]
 class Transfer:
     """Table 間のキー突合と転記を行う。
 
-    基本的な使い方は次のとおり。 ``mapping`` は「転記元の列名 → 転記先の列名」。
+    基本的な用法は次のとおり。 ``mapping`` は「転記元の列名 → 転記先の列名」。
+    4つの取り出し口を使い分けて、read / write を行単位で加工する:
+
+    - ``matched_rows()``: 両方にキーが揃う行を ``(read_row, write_row)`` で返す
+    - ``transfer_rows()``: read 全行を ``(read_row, write_row | None)`` で返す
+      （write に無い行は ``None``）
+    - ``unmatched_read_rows()``: write に無い read 行だけを返す（追加候補）
+    - ``unmatched_write_rows()``: read に無い write 行だけを返す（破棄候補）
 
     Example:
         transfer = Transfer(read_table, write_table, mapping,
@@ -35,13 +42,29 @@ class Transfer:
                 continue                       # この行は破棄
             transfer.apply_mapping(read_row, write_row)   # mapping の値をコピー
             # 必要なら write_row["備考"] = "..." のように追加加工
-        result = transfer.result()             # 変更後の Table
+        # write に無い read 行は result() に追加していく（新規行の追加）
+        for read_row in transfer.unmatched_read_rows():
+            transfer.result().append({
+                "顧客ID": read_row["顧客ID"],
+                "顧客名": read_row["取引先"],
+                "請求額": read_row["金額"],
+                "備考": "新規追加",
+            })
+        # read に無い write 行は「転記元に無し」と書き換える（result() に出るので別途 filter する）
+        for write_row in transfer.unmatched_write_rows():
+            write_row["備考"] = "転記元に無し"
 
     **条件は ``apply_mapping()`` より前に書くこと。** Python の ``for`` ループは
     ``continue`` したかどうかを呼び出し側に伝えないため、ループ内で
     ``apply_mapping()`` を呼ばずに ``continue`` した行は、作業 Table へ反映されない。
     条件判定を ``apply_mapping()`` の後ろに書くと、``continue`` しても mapping が
     適用済みとなり破棄できないので、判定は必ず ``apply_mapping()`` の前に置く。
+
+    **空キー (``None`` / ``""``) は突合対象外**。 値が無いキーは read 側・write 側の
+    どちらでも照合に使わず、``unmatched_read_rows()`` /
+    ``unmatched_write_rows()`` 側へ流れる。 ``0`` や ``False`` は空ではない
+    （数値・bool の 0 落ち判定を避けるため）。 複合キーは **1要素でも空** なら
+    空とみなす。
     """
 
     def __init__(
@@ -87,10 +110,7 @@ class Transfer:
         """
         self.read._check_columns(self.read_keys)
         self.write._check_columns(self.write_keys)
-        if self._working_table is None:
-            self._working_table = Table(
-                self.write.columns, self.write.read(), types=self.write.types
-            )
+        self._ensure_working_table()
         write_index = self._working_index()
         for read_row in self.read.read():
             key = self._row_key(read_row, self.read_keys)
@@ -105,6 +125,49 @@ class Transfer:
         for read_row, write_row in self.transfer_rows():
             if write_row is not None:
                 yield read_row, write_row
+
+    def unmatched_read_rows(self) -> Iterator[Row]:
+        """write に対応が無い read 行だけを返す（追加候補）。
+
+        戻り値は ``Table.read()`` と同じく **read 行のコピー**。
+        返された行を ``write_row["列名"] = ...`` のように書き換えても ``read`` には
+        影響しない。 ``result().append()`` に渡して write の作業 Table へ追加する
+        （新規行として書き込むために ``dict(...)`` で再コピーするのを忘れずに）。
+
+        空キー (``None`` / ``""``) の read 行もここに含む。 キーが空なので
+        照合に使えず、必ず write には対応が無いため。
+
+        ``transfer_rows()`` / ``matched_rows()`` を呼ばずに呼んでも動く。
+        """
+        for read_row, write_row in self.transfer_rows():
+            if write_row is None:
+                yield read_row
+
+    def unmatched_write_rows(self) -> Iterator[Row]:
+        """read に対応が無い write 行だけを返す（破棄候補）。
+
+        戻り値は ``matched_rows()`` が返す ``write_row`` と同じく **作業 Table の
+        実体行**。 返された ``write_row`` を ``write_row["備考"] = "破棄予定"`` の
+        ように書き換えると ``result()`` の戻り値へ反映される。 ``result().append()``
+        などに渡して追加する使い方ではないので注意。
+
+        空キー (``None`` / ``""``) の write 行もここに含む。 キーが空なので
+        照合に使えず、必ず read には対応が無いため。
+
+        ``transfer_rows()`` / ``matched_rows()`` を呼ばずに呼んでも動く。
+        """
+        self.read._check_columns(self.read_keys)
+        self.write._check_columns(self.write_keys)
+        self._ensure_working_table()
+        read_keys = {
+            self._row_key(read_row, self.read_keys)
+            for read_row in self.read.read()
+            if not self._is_blank_key(self._row_key(read_row, self.read_keys))
+        }
+        for write_row in self._working_table._iter_rows_for_update():
+            key = self._row_key(write_row, self.write_keys)
+            if self._is_blank_key(key) or key not in read_keys:
+                yield write_row
 
     def apply_mapping(self, read_row: Row, write_row: Row | None) -> None:
         """コンストラクタで渡された ``mapping`` どおりに値を ``write_row`` へコピーする。
@@ -149,9 +212,13 @@ class Transfer:
                 transfer.apply_mapping(source_row, destination_row)
             final_table = transfer.result()  # 変更後の Table
         """
+        return self._ensure_working_table()
+
+    def _ensure_working_table(self) -> Table:
+        """作業 Table を必要になった時点で 1 度だけ作って返す。"""
         if self._working_table is None:
             # transfer_rows() / matched_rows() がまだ呼ばれていないので、
-            # write のコピーを返す（変更なし）。
+            # write のコピーを作る（変更なし）。
             self._working_table = Table(
                 self.write.columns, self.write.read(), types=self.write.types
             )
@@ -161,13 +228,17 @@ class Transfer:
         """作業中の Table を複合キーで検索できる辞書にする。
 
         ``transfer_rows()`` のキー検索専用。同じキーに複数の行が当たる場合は
-        曖昧な更新をさせないために例外で止める。
+        曖昧な更新をさせないために例外で止める。 空キー (``None`` / ``""``) は
+        突合対象外なので index に入れない。
         """
         if self._working_table is None:
             return {}
         index: dict[tuple[Any, ...], Row] = {}
         for write_row in self._working_table._iter_rows_for_update():
             key = self._row_key(write_row, self.write_keys)
+            if self._is_blank_key(key):
+                # 空キーは照合に使わない。unmatched_write_rows() 側へ流れる。
+                continue
             if key in index:
                 raise TransferDestinationMultipleMatchError(",".join(self.write_keys), key)
             index[key] = write_row
@@ -177,6 +248,15 @@ class Transfer:
     def _row_key(row: Row, columns: Sequence[str]) -> tuple[Any, ...]:
         """複数キーを順序付きの1つの比較値へまとめる。"""
         return tuple(row[column] for column in columns)
+
+    @staticmethod
+    def _is_blank_key(key: tuple[Any, ...]) -> bool:
+        """空キー判定。 ``None`` か ``""`` のときだけ空とみなす。
+
+        ``0`` / ``False`` は空ではない（数値・bool のゼロ落ち判定を避けるため）。
+        複合キーは **1要素でも空** なら空とみなす（部分空のキーは照合に使えないため）。
+        """
+        return any(value is None or value == "" for value in key)
 
 
 __all__ = ["Transfer"]
