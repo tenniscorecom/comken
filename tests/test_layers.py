@@ -10,6 +10,7 @@ LAYERS = {
     "deprecation": 0,
     "core": 1,
     "toolbox": 2,
+    "internal": 2,
     "services": 3,
 }
 

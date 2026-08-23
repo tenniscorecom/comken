@@ -30,6 +30,7 @@ class InternalLibraryBase:
 
     @property
     def library_name(self) -> str:
+        """社内ライブラリの正式名称(例: ``example_libs.v0000.rpa``)を返す。"""
         return self._library_name
 
     def find_spec(self) -> bool:

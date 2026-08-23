@@ -4289,6 +4289,123 @@ def __init__(self, hostname: str, site_name: str) -> None:
 ```
 
 
+## `from comken.internal import ...`
+
+### `InternalLibraryBase`
+
+```text
+class InternalLibraryBase:
+```
+
+#### 説明
+
+社内ライブラリのモジュールを束ねるラッパークラス。
+
+利用例::
+
+    with InternalLibraryBase("example_libs.v0000.rpa") as rpa:
+        rpa.backoffice(main, "project")
+
+#### `__init__`
+
+```text
+def __init__(self, library_name: str) -> None:
+```
+
+#### `library_name`
+
+```text
+@property
+def library_name(self) -> str:
+```
+
+##### 説明
+
+社内ライブラリの正式名称(例: ``example_libs.v0000.rpa``)を返す。
+
+#### `find_spec`
+
+```text
+def find_spec(self) -> bool:
+```
+
+##### 説明
+
+社内ライブラリが import 可能なら True。
+
+#### `load`
+
+```text
+def load(self) -> ModuleType:
+```
+
+##### 説明
+
+社内ライブラリを import して返す。失敗時は InternalLibraryNotFoundError。
+
+### `InternalLibraryError`
+
+```text
+class InternalLibraryError(ComkenError):
+```
+
+#### 説明
+
+社内ライブラリの呼び出しに失敗したときの基底例外。
+
+### `InternalLibraryNotFoundError`
+
+```text
+class InternalLibraryNotFoundError(InternalLibraryError):
+```
+
+#### 説明
+
+指定した社内ライブラリが見つからない場合。
+
+#### `__init__`
+
+```text
+def __init__(self, library_name: str) -> None:
+```
+
+### `InternalLibraryVersionMismatchError`
+
+```text
+class InternalLibraryVersionMismatchError(InternalLibraryError):
+```
+
+#### 説明
+
+指定したバージョンの社内ライブラリが見つからない場合。
+
+#### `__init__`
+
+```text
+def __init__(self, library_name: str, required_version: str) -> None:
+```
+
+### `is_internal_library_available`
+
+```text
+def is_internal_library_available(library_name: str) -> bool:
+```
+
+#### 説明
+
+社内ライブラリが import 可能なら True。
+
+### `find_internal_library`
+
+```text
+def find_internal_library(library_name: str) -> ModuleType | None:
+```
+
+#### 説明
+
+社内ライブラリを import して返す。無ければ None。
+
+
 ## `from comken.services.salesforce_downloader import ...`
 
 ### `download_report`
