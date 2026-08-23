@@ -1,6 +1,8 @@
 """export_for_chat.py のテスト。"""
 
 import ast
+import subprocess
+import sys
 
 import export_for_chat
 
@@ -31,3 +33,16 @@ def test_split_preserves_text() -> None:
 
     assert "".join(chunks) == text
     assert len(chunks) == 3
+
+
+def test_script_can_import_comken_when_run_directly() -> None:
+    result = subprocess.run(
+        [sys.executable, "tools/export_for_chat.py", "--help"],
+        cwd=export_for_chat.ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr

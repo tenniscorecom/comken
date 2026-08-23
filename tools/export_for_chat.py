@@ -17,13 +17,18 @@ import argparse
 import ast
 import inspect
 import shutil
+import sys
 from dataclasses import dataclass
+from importlib import import_module
 from pathlib import Path
 
-import comken.exceptions as exceptions
-
-# このファイルは tools/ にあるので、リポジトリのルートは1つ上
+# スクリプトとして実行すると sys.path の先頭は tools/ になるため、
+# comken を import する前にリポジトリルートを探索対象へ加える。
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+exceptions = import_module("comken.exceptions")
+
 PACKAGE_ROOT = ROOT / "comken"
 API_OUTPUT_PATH = ROOT / "docs" / "自動生成" / "API.md"
 ERRORS_OUTPUT_PATH = ROOT / "docs" / "ERRORS.md"
