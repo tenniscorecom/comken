@@ -43,8 +43,6 @@ ComkenError
 │   ├── CsvInvalidHeaderError
 │   ├── CsvRowLengthError
 │   └── CsvColumnsRequiredError
-├── RpaError
-│   └── RpaLibraryNotFoundError
 ├── CredentialError
 │   ├── InvalidCredentialNameError
 │   ├── CredentialNotFoundError
@@ -245,7 +243,6 @@ from comken.exceptions.outlook import (
     OutlookError,
     OutlookFolderNotFoundError,
 )
-from comken.exceptions.rpa import RpaError, RpaLibraryNotFoundError
 from comken.exceptions.salesforce import (
     SalesforceAuthError,
     SalesforceConnectionError,
@@ -332,8 +329,6 @@ __all__ = [
     "ClassicOutlookNotAvailableError",
     "OutlookFolderNotFoundError",
     "OutlookAttachmentNotFoundError",
-    "RpaError",
-    "RpaLibraryNotFoundError",
     "CredentialError",
     "InvalidCredentialNameError",
     "CredentialNotFoundError",

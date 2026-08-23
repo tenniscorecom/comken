@@ -79,7 +79,7 @@ comken は置き場所を4つに分けている。**どこに置くかは「そ�
 
 import の書き方は上の「[使うときの約束](#使うときの約束)」を参照。
 
-社内 RPA 基盤のラッパー（`comken.toolbox.rpa`）が toolbox にあるのは、**相手が社内のものでも
+社内 RPA 基盤のラッパー（`comken.internal.rpa`）が internal にあるのは、**相手が社内のものでも
 「呼び出すための部品」だから**。社内固有かどうかではなく、部品か仕組みかで分けている。
 
 **実行される単位（定期実行のバッチなど）は comken に置かない。** それは個別プロジェクトの
@@ -283,7 +283,7 @@ popd
 配置したときに1回だけ設定する。
 
 ```bat
-git update-index --skip-worktree comken/toolbox/rpa.py
+git update-index --skip-worktree comken/internal/rpa.py
 git update-index --skip-worktree comken/toolbox/salesforce/sites/sandbox.py
 git update-index --skip-worktree comken/services/salesforce_downloader/service.py
 ```
