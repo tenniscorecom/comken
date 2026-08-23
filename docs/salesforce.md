@@ -51,10 +51,17 @@ Client Credentials Flow は `client_secret` だけでアクセストークンを
 API クライアント側は認証方式を知らずに済む。
 
 ```python
+from comken.toolbox.credentials import save_credential
+from comken.toolbox.salesforce.oauth_refresh import RefreshTokenOAuth
 from comken.toolbox.salesforce.sites import Sandbox
-from comken.toolbox.salesforce.direct.oauth_refresh import OAuth
 
-auth = OAuth(
+PREFIX = "sandbox"  # DPAPI に保存したときのキー名の頭
+
+def save_rotated_token(new_token: str) -> None:
+    # ローテーションで返ってきた新しい refresh_token を DPAPI へ書き戻す
+    save_credential(f"{PREFIX}_refresh_token", new_token)
+
+auth = RefreshTokenOAuth(
     client_id="Consumer Key の値",   # 画面の Consumer Key をここへ
     refresh_token="DPAPIから取得した値",
     domain_url="https://example.my.salesforce.com",
@@ -65,7 +72,7 @@ with Sandbox(auth=auth) as sf:
     records = sf.query("SELECT Id FROM Account")
 ```
 
-初回だけ `OAuth.authorization_url()` の URL をブラウザで開き、戻された `state` を
+初回だけ `RefreshTokenOAuth.authorization_url()` の URL をブラウザで開き、戻された `state` を
 照合してから `exchange_code()` へ code を渡す。ライブラリはローカル HTTP サーバーや
 ブラウザを勝手に起動しない。レスポンスに新しい refresh token が含まれた場合は
 `on_refresh_token` が呼ばれるので、その場で DPAPI へ保存する。コールバックを省略すると

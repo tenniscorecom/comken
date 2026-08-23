@@ -281,7 +281,7 @@ python -m comken cred gui
 ブラウザで ECA に「comken がこの組織にアクセスしていい」と 1 回だけ承認する。
 
 ```powershell
-python -c "from comken.toolbox.salesforce.sites import Sandbox; print(Sandbox().authorization_url())"
+python -c "from comken.toolbox.credentials import Credentials; from comken.toolbox.salesforce.oauth_refresh import RefreshTokenOAuth; from comken.toolbox.salesforce.sites import Sandbox; prefix = Sandbox.CREDENTIAL_PREFIX; client_id = Credentials(prefix).client_id; url, _ = RefreshTokenOAuth.authorization_url(client_id, 'http://localhost:8080/callback', Sandbox.DOMAIN_URL); print(url)"
 ```
 
 - 表示された URL をブラウザで開く
@@ -295,7 +295,7 @@ python -c "from comken.toolbox.salesforce.sites import Sandbox; print(Sandbox().
 ## 3. code を refresh_token に交換
 
 ```powershell
-python -c "from comken.toolbox.salesforce.sites import Sandbox; print(Sandbox().exchange_code(input('code: ')))"
+python -c "from comken.toolbox.credentials import Credentials; from comken.toolbox.salesforce.oauth_refresh import RefreshTokenOAuth; from comken.toolbox.salesforce.sites import Sandbox; from comken.toolbox.credentials import save_credential; prefix = Sandbox.CREDENTIAL_PREFIX; creds = Credentials(prefix); auth = RefreshTokenOAuth.exchange_code(creds.client_id, creds.client_secret, input('code: '), 'http://localhost:8080/callback', Sandbox.DOMAIN_URL, on_refresh_token=lambda t: save_credential(f'{prefix}_refresh_token', t)); print('refresh_token を DPAPI に保存しました')"
 ```
 
 - `code:` プロンプトに 2 でメモした文字列を貼り付け
@@ -313,7 +313,7 @@ python -m comken cred gui
 ## 5. 動作確認
 
 ```powershell
-python -m comken.toolbox.salesforce check
+python -m comken sf check
 ```
 
 - 0 エラーなら OK
@@ -344,7 +344,7 @@ with Sandbox() as sf:
 3. **手順 2 からやり直す**
 
 Refresh Token Rotation を有効にしている場合、**`comken` が新しい `refresh_token` を
-受け取ったタイミングで DPAPI に自動で書き戻す** (`auth.py` 内の `save_credential()`)。
+受け取ったタイミングで DPAPI に自動で書き戻す** (`oauth_refresh.py` 内の `save_credential()`)。
 運用としてやることは増えない。
 
 ## 8. Client Credentials Flow を使う場合 (開発中だけ)
@@ -360,7 +360,7 @@ from comken.toolbox.salesforce.sites import Sandbox
 with Sandbox(auth=ClientCredentialsAuth(
     client_id=...,
     client_secret=...,
-    domain="login.salesforce.com",
+    domain_url="login.salesforce.com",
 )) as sf:
     ...
 ```

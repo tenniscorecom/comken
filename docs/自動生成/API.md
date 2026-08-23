@@ -68,6 +68,9 @@ def debug(enabled: bool=True) -> Iterator[None]:
 
 ブロック内だけデバッグモードにする。
 
+Args:
+    enabled: True で有効（デフォルト）。False ならブロック内だけ無効。
+
 ### `dry_run`
 
 ```text
@@ -119,8 +122,9 @@ class DateNameBuilder:
 
 今日の日付を付けたファイル名を組み立てる。
 
-日付はファイル名の属性ではなく「付け方」なので、コンストラクタではなく
-prefix() / suffix() の呼び出し時に決める。
+日付は ``__init__`` 時点で確定する。``for_date=None`` のときだけ
+``__init__`` 呼び出し時点の日付を使い、``prefix()`` / ``suffix()`` を
+呼ぶたびに日付を取り直すことはない。
 
 日付はコンストラクタで固定できる。テストや過去日付のファイル名を組み立てる
 ときは ``date(2026, 8, 20)`` 等を渡す。省略時は呼び出し時点の日付。
@@ -135,9 +139,10 @@ def __init__(self, name: str, for_date: date | datetime | None=None, ext: str='.
 
 Args:
     name: ファイル名（拡張子なし）。
-    for_date: ファイル名に付ける日付。``None``（既定）なら呼び出し時点の日付。
-        ``date`` / ``datetime`` どちらも受け付ける（``datetime`` は内部で
-        ``.date()`` に変換）。
+    for_date: ファイル名に付ける日付。``None``（既定）なら ``__init__``
+        呼び出し時点の日付。``prefix()`` / ``suffix()`` を呼ぶたびに
+        日付を取り直すことはない。``date`` / ``datetime`` どちらも
+        受け付ける（``datetime`` は内部で ``.date()`` に変換）。
     ext: 拡張子（デフォルト: ".xlsx"）。ドットなしで渡しても補完される。
 
 #### `prefix`
@@ -649,7 +654,7 @@ def diff_row(before: dict, after: dict) -> dict[str, tuple]:
 1行同士を比較し、値が異なる列だけを {列名: (変更前, 変更後)} で返す。
 
 CSV の str と Excel の数値は同一視する（"1000" と 1000 は差分にならない）。
-片方にしか存在しない列は、もう片方を None として比較する。
+片方にしか存在しない列は、もう片方を空文字（``""``）に揃えて比較する。
 
 先頭ゼロ付きの文字列（社員番号 "0001" 等）は数値化しない。
 "0001" と 1 は別の値として差分になる（先頭ゼロの消失を検出できる）。
@@ -681,7 +686,7 @@ Returns:
     DiffResult（added / removed / changed）。
 
 Raises:
-    ColumnNotFoundError: key で指定した列が存在しない場合。
+    KeyColumnNotFoundError: key で指定した列が存在しない場合。
 
 ### `local_copy`
 
@@ -1097,8 +1102,9 @@ class DateNameBuilder:
 
 今日の日付を付けたファイル名を組み立てる。
 
-日付はファイル名の属性ではなく「付け方」なので、コンストラクタではなく
-prefix() / suffix() の呼び出し時に決める。
+日付は ``__init__`` 時点で確定する。``for_date=None`` のときだけ
+``__init__`` 呼び出し時点の日付を使い、``prefix()`` / ``suffix()`` を
+呼ぶたびに日付を取り直すことはない。
 
 日付はコンストラクタで固定できる。テストや過去日付のファイル名を組み立てる
 ときは ``date(2026, 8, 20)`` 等を渡す。省略時は呼び出し時点の日付。
@@ -1113,9 +1119,10 @@ def __init__(self, name: str, for_date: date | datetime | None=None, ext: str='.
 
 Args:
     name: ファイル名（拡張子なし）。
-    for_date: ファイル名に付ける日付。``None``（既定）なら呼び出し時点の日付。
-        ``date`` / ``datetime`` どちらも受け付ける（``datetime`` は内部で
-        ``.date()`` に変換）。
+    for_date: ファイル名に付ける日付。``None``（既定）なら ``__init__``
+        呼び出し時点の日付。``prefix()`` / ``suffix()`` を呼ぶたびに
+        日付を取り直すことはない。``date`` / ``datetime`` どちらも
+        受け付ける（``datetime`` は内部で ``.date()`` に変換）。
     ext: 拡張子（デフォルト: ".xlsx"）。ドットなしで渡しても補完される。
 
 #### `prefix`
@@ -1249,8 +1256,9 @@ NAS・ネットワークドライブ上のファイルを openpyxl や win32com 
 （openpyxl / win32com は ``close()`` までパスを保持する必要があるため、
 スコープがクラス側に寄る）。
 
-この関数は ``__all__`` に入れない。利用者が直接呼ぶことは想定せず、
-ExcelBase / ExcelComHandler などクラス側の自動コピールーチンが使う。
+この関数は ``comken.core.files`` の ``__all__`` にのみ入れる
+（``comken.core`` からは再エクスポートしない）。利用者が直接呼ぶことは
+想定せず、Excel / ExcelComHandler などクラス側の自動コピールーチンが使う。
 
 Args:
     path: 元のファイルパス。
@@ -2061,7 +2069,7 @@ class ExcelFileNotFoundError(ExcelError):
 
 Excel ファイルが見つからない
 
-発生箇所: ExcelBase.__init__()
+発生箇所: Excel.__init__() / ExcelComHandler.__init__()
 
 対処:
     ファイルの置き場所と名前を確認する
@@ -2112,7 +2120,7 @@ class SheetNotFoundError(ExcelError):
 
 指定した名前のシートがない
 
-発生箇所: ExcelBase._sheet() / ExcelComHandler._sheet()
+発生箇所: Excel.sheet() / Excel.data_sheet()
 
 対処:
     Excel を開いて、下のシート名（タブ）が変わっていないか確認する。変えた場合は元に戻す
@@ -2228,7 +2236,7 @@ class TableNotAvailableInReadOnlyError(ExcelError):
 
 read_only で開いたブックからテーブル名で読めない
 
-発生箇所: ExcelBase.read_table()
+発生箇所: 実装に対応箇所なし (現在未使用の例外クラス)
 
 対処:
     Excel を ``read_only=False`` で開き直す。
@@ -2270,7 +2278,7 @@ class EmptyHeaderCellError(ExcelError):
 
 Excel の見出しに空欄がある
 
-発生箇所: ExcelBase.read_rows_as_dicts() / ExcelComHandler.read_rows_as_dicts()
+発生箇所: Excel.read_computed_rows_as_dicts() / ExcelTable.read() / ExcelComHandler.read_rows_as_dicts()
 
 対処:
     Excel の1行目の空欄を埋める
@@ -2331,7 +2339,7 @@ class ExcelHeadersTooFewError(ExcelError):
 
 指定した見出し数が列数より少ない
 
-発生箇所: ExcelBase.read_rows_as_dicts() / ExcelComHandler.read_rows_as_dicts()
+発生箇所: ExcelComHandler.read_rows_as_dicts()
 
 対処:
     管理者へ連絡する
@@ -2577,7 +2585,8 @@ Excel の列見出しが見つからない
 
 非エンジニアが列名を変更したときに分かりやすいメッセージを出すために使う。
 
-発生箇所: 利用側プロジェクトの列検証処理（現在 comken 内からは未送出）
+発生箇所: 利用側プロジェクトの列検証処理（comken 本体のソースからは
+          送出されない。利用者プロジェクトから送出する想定）
 
 使い方:
     from comken.exceptions import ExcelColumnNotFoundError
@@ -3201,8 +3210,8 @@ class SalesforceReportIdNotFoundError(SalesforceError):
 管理表にはレポートの URL をそのまま貼れるようにしてあるが、
 貼られたものが Salesforce のレポート URL でないと ID を取り出せない。
 
-発生箇所: comken.toolbox.salesforce.report.report_id_from_url() /
-          comken.services.salesforce_downloader.master.report_id_from_url()
+発生箇所: comken.toolbox.salesforce.report.report_id_from_url()
+         （comken.services.salesforce_downloader.master 経由）
 
 対処:
     Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す
@@ -7361,7 +7370,7 @@ def holiday_names(self, target: _dt.date) -> Sequence[str]:
 
 ##### 説明
 
-``target`` に登録された祝日名称のリスト（同日が複数あれば複数）。
+``target`` に登録された祝日名称のタプル（同日が複数あれば複数要素）。
 
 #### `all_holidays`
 
@@ -7494,7 +7503,7 @@ class HolidaySource(Protocol):
 
 祝日を 1セット取り出せる仕組みの共通インタフェース。
 
-内阁府の ``CabinetOfficeCsvSource`` と、社内の ``ComkenMasterTableSource`` の両方が
+内閣府の ``CabinetOfficeCsvSource`` と、社内の ``ComkenMasterTableSource`` の両方が
 これを実装するため、利用側は入手経路を意識せずに ``from_sources`` に渡せる。
 
 この Protocol はメソッドの型を ``Iterable[Holiday]`` に固定する。
