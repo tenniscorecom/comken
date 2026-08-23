@@ -189,10 +189,10 @@ class DuplicateHeaderCellError(ExcelError):
 
 
 class EmptyExcelTableError(ExcelError):
-    """Excel テーブル定義はあるが、データまたはヘッダが空の場合。
+    """Excel テーブル定義はあるが、定義範囲を1行も読み取れない。
 
     対処:
-        Excel のテーブル定義範囲を確認し、ヘッダ行とデータ行を正しく設定する
+        Excel のテーブル定義範囲を確認する
     """
 
     def __init__(self, sheet_name: str, reason: str) -> None:
