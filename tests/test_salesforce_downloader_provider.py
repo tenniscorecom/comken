@@ -21,14 +21,14 @@ from comken.exceptions import (
     ReportDisabledError,
     ReportNotRegisteredError,
 )
-from comken.services.salesforce_downloader import (
+from comken.internal.salesforce_downloader import (
     cached_report,
     download_scheduled,
     file_path_of,
     load_master,
 )
-from comken.services.salesforce_downloader import provider as provider_module
-from comken.services.salesforce_downloader import service as service_module
+from comken.internal.salesforce_downloader import provider as provider_module
+from comken.internal.salesforce_downloader import service as service_module
 from comken.toolbox.excel import Excel
 
 URL_A = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE/view"
@@ -65,8 +65,8 @@ def paths(tmp_path, monkeypatch):
         ],
     )
     history_path = tmp_path / "ダウンロード履歴.csv"
-    monkeypatch.setattr("comken.services.salesforce_downloader._paths.MASTER_PATH", master)
-    monkeypatch.setattr("comken.services.salesforce_downloader._paths.HISTORY_PATH", history_path)
+    monkeypatch.setattr("comken.internal.salesforce_downloader._paths.MASTER_PATH", master)
+    monkeypatch.setattr("comken.internal.salesforce_downloader._paths.HISTORY_PATH", history_path)
     monkeypatch.setattr(service_module, "MASTER_PATH", master)
     monkeypatch.setattr(service_module, "HISTORY_PATH", history_path)
     # `provider` もローカル束縛しているので同期する
@@ -137,7 +137,7 @@ class TestCachedReport:
 
     def test_returns_the_file_downloaded_by_the_scheduled_run(self, paths):
         with patch(
-            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
+            "comken.internal.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
             download_scheduled("定期実行")
         reader = cached_report("1001")
@@ -146,23 +146,23 @@ class TestCachedReport:
 
     def test_does_not_call_salesforce(self, paths):
         with patch(
-            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
+            "comken.internal.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
             download_scheduled("定期実行")
         site = fake_salesforce()
-        with patch("comken.services.salesforce_downloader.service.site_for", return_value=site):
+        with patch("comken.internal.salesforce_downloader.service.site_for", return_value=site):
             cached_report("1001")
         site.assert_not_called()
 
     def test_same_day_run_replaces_cache_and_keeps_archives(self, paths):
         updated_rows = [{"名前": "最新", "金額": "300"}]
         with patch(
-            "comken.services.salesforce_downloader.service.site_for",
+            "comken.internal.salesforce_downloader.service.site_for",
             return_value=fake_salesforce(),
         ):
             download_scheduled()
         with patch(
-            "comken.services.salesforce_downloader.service.site_for",
+            "comken.internal.salesforce_downloader.service.site_for",
             return_value=fake_salesforce(updated_rows),
         ):
             download_scheduled()
@@ -195,7 +195,7 @@ class TestCachedReport:
 
     def test_missing_cache_raises_even_if_archive_exists(self, paths):
         with patch(
-            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
+            "comken.internal.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
             download_scheduled("定期実行")
         # 時刻付き保管ファイルは残し、時刻を含まない当日キャッシュだけを消す。

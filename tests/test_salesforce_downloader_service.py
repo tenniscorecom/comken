@@ -24,7 +24,7 @@ from comken.exceptions import (
     ReportNotRegisteredError,
     ScheduledDownloadFailedError,
 )
-from comken.services.salesforce_downloader import (
+from comken.internal.salesforce_downloader import (
     ReportEntry,
     download_report,
     download_scheduled,
@@ -32,10 +32,10 @@ from comken.services.salesforce_downloader import (
     load_master,
     shared_report_ids,
 )
-from comken.services.salesforce_downloader import provider as provider_module
-from comken.services.salesforce_downloader import service as service_module
-from comken.services.salesforce_downloader.cli import main as cli
-from comken.services.salesforce_downloader.master import EXAMPLES
+from comken.internal.salesforce_downloader import provider as provider_module
+from comken.internal.salesforce_downloader import service as service_module
+from comken.internal.salesforce_downloader.cli import main as cli
+from comken.internal.salesforce_downloader.master import EXAMPLES
 from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Excel
 
@@ -91,8 +91,8 @@ def paths(tmp_path, monkeypatch):
         ],
     )
     history_path = tmp_path / "ダウンロード履歴.csv"
-    monkeypatch.setattr("comken.services.salesforce_downloader._paths.MASTER_PATH", master)
-    monkeypatch.setattr("comken.services.salesforce_downloader._paths.HISTORY_PATH", history_path)
+    monkeypatch.setattr("comken.internal.salesforce_downloader._paths.MASTER_PATH", master)
+    monkeypatch.setattr("comken.internal.salesforce_downloader._paths.HISTORY_PATH", history_path)
     # `service.MASTER_PATH` は `from ... import MASTER_PATH` で再束縛されているので、
     # `_paths` の差し替えだけでは反映されない。明示的に同じ値を入れる
     monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -193,7 +193,7 @@ class TestDownloadReport:
 
     def test_saves_file_and_returns_csv_reader(self, paths):
         with patch(
-            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
+            "comken.internal.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
             reader = download_report("1001", "案件集計")
         assert reader.path.is_file()
@@ -206,7 +206,7 @@ class TestDownloadReport:
     def test_fetches_again_even_if_already_downloaded_today(self, paths):
         """今日すでに取っていても取り直す（明示的な最新取得なので）。"""
         site = fake_salesforce()
-        with patch("comken.services.salesforce_downloader.service.site_for", return_value=site):
+        with patch("comken.internal.salesforce_downloader.service.site_for", return_value=site):
             download_report("1001")
             download_report("1001")
         saved = list(paths["folder"].glob("1001_*.csv"))
@@ -219,7 +219,7 @@ class TestDownloadReport:
         collision.write_text("既存", encoding="utf-8")
         monkeypatch.setattr(service_module, "file_path_of", lambda unused: collision)
         with patch(
-            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
+            "comken.internal.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
             result = download_report("1001")
         assert collision.read_text(encoding="utf-8") == "既存"
@@ -236,7 +236,7 @@ class TestDownloadReport:
     def test_empty_report_raises_and_saves_nothing(self, paths):
         with (
             patch(
-                "comken.services.salesforce_downloader.service.site_for",
+                "comken.internal.salesforce_downloader.service.site_for",
                 return_value=fake_salesforce([]),
             ),
             pytest.raises(EmptyReportError),
@@ -254,7 +254,7 @@ class TestDownloadReport:
         monkeypatch.setattr(service_module, "HISTORY_PATH", tmp_path / "履歴.csv")
         with (
             patch(
-                "comken.services.salesforce_downloader.service.site_for",
+                "comken.internal.salesforce_downloader.service.site_for",
                 return_value=fake_salesforce(),
             ),
             pytest.raises(ReportFolderNotFoundError),
@@ -264,7 +264,7 @@ class TestDownloadReport:
 
     def test_no_temporary_file_is_left_behind(self, paths):
         with patch(
-            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
+            "comken.internal.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
             download_report("1001")
         assert list(paths["folder"].glob("~*")) == []
@@ -275,7 +275,7 @@ class TestHistory:
 
     def test_success_is_recorded_with_project_and_counts(self, paths):
         with patch(
-            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
+            "comken.internal.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
             download_report("1001", "案件集計")
         row = _history_rows(paths)[-1]
@@ -292,7 +292,7 @@ class TestHistory:
     def test_failure_is_recorded(self, paths):
         with (
             patch(
-                "comken.services.salesforce_downloader.service.site_for",
+                "comken.internal.salesforce_downloader.service.site_for",
                 return_value=fake_salesforce([]),
             ),
             pytest.raises(EmptyReportError),
@@ -308,7 +308,7 @@ class TestHistory:
 
     def test_downloaded_today_only_counts_the_matching_trigger(self, paths):
         with patch(
-            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
+            "comken.internal.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
             download_report("1001")  # 個別として記録される
         # 個別に取っただけでは「本日の定期取得が済んだ」ことにはならない
@@ -332,7 +332,7 @@ class TestHistory:
         monkeypatch.setattr(service_module, "HISTORY_PATH", history_path)
         with (
             patch(
-                "comken.services.salesforce_downloader.service.site_for",
+                "comken.internal.salesforce_downloader.service.site_for",
                 return_value=fake_salesforce(),
             ),
             pytest.raises(ReportFolderNotFoundError),
@@ -370,7 +370,7 @@ class TestHistory:
 
         with (
             patch(
-                "comken.services.salesforce_downloader.service.site_for",
+                "comken.internal.salesforce_downloader.service.site_for",
                 return_value=site,
             ),
             pytest.raises(SalesforceRequestError),
@@ -389,7 +389,7 @@ class TestHistory:
         保存結果=空 / エラーコード=EmptyReportError（通信は成功していて中身が空、という区別）。"""
         with (
             patch(
-                "comken.services.salesforce_downloader.service.site_for",
+                "comken.internal.salesforce_downloader.service.site_for",
                 return_value=fake_salesforce([]),
             ),
             pytest.raises(EmptyReportError),
@@ -421,11 +421,11 @@ class TestHistory:
 
         with (
             patch(
-                "comken.services.salesforce_downloader.service.site_for",
+                "comken.internal.salesforce_downloader.service.site_for",
                 return_value=fake_salesforce(),
             ),
             patch(
-                "comken.services.salesforce_downloader.service.CSV._write",
+                "comken.internal.salesforce_downloader.service.CSV._write",
                 side_effect=write_error,
             ),
             pytest.raises(OSError),
@@ -443,7 +443,7 @@ class TestHistory:
     def test_cause_is_blank_on_success(self, paths):
         """成功時は原因区分が空文字。"""
         with patch(
-            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
+            "comken.internal.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
             download_report("1001")
         row = _history_rows(paths)[-1]
@@ -462,7 +462,7 @@ class TestHistory:
         monkeypatch.setattr(service_module, "HISTORY_PATH", history_path)
         with (
             patch(
-                "comken.services.salesforce_downloader.service.site_for",
+                "comken.internal.salesforce_downloader.service.site_for",
                 return_value=fake_salesforce(),
             ),
             pytest.raises(ReportFolderNotFoundError),
@@ -494,7 +494,7 @@ class TestHistory:
 
         with (
             patch(
-                "comken.services.salesforce_downloader.service.site_for",
+                "comken.internal.salesforce_downloader.service.site_for",
                 return_value=site,
             ),
             pytest.raises(SalesforceRequestError),
@@ -512,7 +512,7 @@ class TestHistory:
         """
         with (
             patch(
-                "comken.services.salesforce_downloader.service.site_for",
+                "comken.internal.salesforce_downloader.service.site_for",
                 return_value=fake_salesforce([]),
             ),
             pytest.raises(EmptyReportError),
@@ -536,11 +536,11 @@ class TestHistory:
         write_error = OSError("書き込み失敗")
         with (
             patch(
-                "comken.services.salesforce_downloader.service.site_for",
+                "comken.internal.salesforce_downloader.service.site_for",
                 return_value=fake_salesforce(),
             ),
             patch(
-                "comken.services.salesforce_downloader.service.CSV._write",
+                "comken.internal.salesforce_downloader.service.CSV._write",
                 side_effect=write_error,
             ),
             pytest.raises(OSError),
@@ -568,7 +568,7 @@ class TestHistory:
 
         with (
             patch(
-                "comken.services.salesforce_downloader.service.site_for",
+                "comken.internal.salesforce_downloader.service.site_for",
                 return_value=site,
             ),
             pytest.raises(TypeError),
@@ -583,7 +583,7 @@ class TestDownloadScheduled:
 
     def test_only_enabled_scheduled_reports_are_downloaded(self, paths):
         with patch(
-            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
+            "comken.internal.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
             saved = download_scheduled()
         # "1001" だけ（"1002" は個別、"1003" は無効）
@@ -603,7 +603,7 @@ class TestDownloadScheduled:
         monkeypatch.setattr(service_module, "HISTORY_PATH", tmp_path / "履歴.csv")
         with (
             patch(
-                "comken.services.salesforce_downloader.service.site_for",
+                "comken.internal.salesforce_downloader.service.site_for",
                 return_value=fake_salesforce(),
             ),
             pytest.raises(ScheduledDownloadFailedError),
@@ -633,7 +633,7 @@ class TestDownloadScheduled:
 
         with (
             patch(
-                "comken.services.salesforce_downloader.service.site_for",
+                "comken.internal.salesforce_downloader.service.site_for",
                 return_value=fake_salesforce(),
             ),
             patch.object(service_module, "_write_csv", side_effect=fail_first_write),
@@ -646,7 +646,7 @@ class TestDownloadScheduled:
     def test_cache_update_failure_keeps_archive_and_marks_failure(self, paths):
         with (
             patch(
-                "comken.services.salesforce_downloader.service.site_for",
+                "comken.internal.salesforce_downloader.service.site_for",
                 return_value=fake_salesforce(),
             ),
             patch.object(
@@ -689,7 +689,7 @@ class TestDownloadScheduled:
 
         with (
             patch(
-                "comken.services.salesforce_downloader.service.site_for",
+                "comken.internal.salesforce_downloader.service.site_for",
                 return_value=site,
             ),
             pytest.raises(TypeError),
@@ -701,7 +701,7 @@ class TestDownloadScheduled:
 
     def test_records_the_trigger_as_scheduled(self, paths):
         with patch(
-            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
+            "comken.internal.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
             download_scheduled("定期実行")
         assert _history_rows(paths)[-1]["実行方式"] == "定期"
@@ -717,7 +717,7 @@ class TestRequiredHistory:
     def test_history_write_failure_stops_download(self, paths):
         with (
             patch(
-                "comken.services.salesforce_downloader.service.site_for",
+                "comken.internal.salesforce_downloader.service.site_for",
                 return_value=fake_salesforce(),
             ),
             patch.object(history, "_append", side_effect=OSError("履歴書込み失敗")),
@@ -728,7 +728,7 @@ class TestRequiredHistory:
     def test_original_failure_remains_in_history_error(self, paths):
         with (
             patch(
-                "comken.services.salesforce_downloader.service.site_for",
+                "comken.internal.salesforce_downloader.service.site_for",
                 return_value=fake_salesforce([]),
             ),
             patch.object(history, "_append", side_effect=OSError("履歴書込み失敗")),
@@ -760,7 +760,7 @@ class TestAllowEmpty:
 
         with (
             patch(
-                "comken.services.salesforce_downloader.service.site_for",
+                "comken.internal.salesforce_downloader.service.site_for",
                 return_value=fake_salesforce([]),
             ),
             pytest.raises(EmptyReportError),
@@ -793,7 +793,7 @@ class TestAllowEmpty:
         monkeypatch.setattr(service_module, "HISTORY_PATH", history_path)
 
         with patch(
-            "comken.services.salesforce_downloader.service.site_for",
+            "comken.internal.salesforce_downloader.service.site_for",
             return_value=fake_salesforce([]),
         ):
             reader = download_report("1001")  # 例外にならない
@@ -826,7 +826,7 @@ class TestAllowEmpty:
         monkeypatch.setattr(service_module, "HISTORY_PATH", history_path)
 
         with patch(
-            "comken.services.salesforce_downloader.service.site_for",
+            "comken.internal.salesforce_downloader.service.site_for",
             return_value=fake_salesforce([]),
         ):
             reader = download_report("1001")
@@ -845,21 +845,21 @@ class TestAllowEmpty:
             [["1001", "顧客一覧", URL_A, "定期", str(folder), "○", "○", ""]],
         )
         history_path = tmp_path / "履歴.csv"
-        monkeypatch.setattr("comken.services.salesforce_downloader._paths.MASTER_PATH", master)
+        monkeypatch.setattr("comken.internal.salesforce_downloader._paths.MASTER_PATH", master)
         monkeypatch.setattr(
-            "comken.services.salesforce_downloader._paths.HISTORY_PATH", history_path
+            "comken.internal.salesforce_downloader._paths.HISTORY_PATH", history_path
         )
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
         monkeypatch.setattr(service_module, "HISTORY_PATH", history_path)
         monkeypatch.setattr(provider_module, "MASTER_PATH", master)
 
         with patch(
-            "comken.services.salesforce_downloader.service.site_for",
+            "comken.internal.salesforce_downloader.service.site_for",
             return_value=fake_salesforce([]),
         ):
             download_scheduled()
 
-        from comken.services.salesforce_downloader import cached_report
+        from comken.internal.salesforce_downloader import cached_report
 
         reader = cached_report("1001")
         assert reader.path.is_file()
@@ -885,7 +885,7 @@ class TestAllowEmpty:
         # 後付けで読む既存プロジェクトを壊さないため）
         with (
             patch(
-                "comken.services.salesforce_downloader.service.site_for",
+                "comken.internal.salesforce_downloader.service.site_for",
                 return_value=fake_salesforce([]),
             ),
             pytest.raises(EmptyReportError),
@@ -932,7 +932,7 @@ class TestAllowEmpty:
         client.__enter__.return_value.report.run.side_effect = _run
         site.return_value = client
 
-        with patch("comken.services.salesforce_downloader.service.site_for", return_value=site):
+        with patch("comken.internal.salesforce_downloader.service.site_for", return_value=site):
             saved = download_scheduled()  # 例外にならない
 
         # 両方とも保存される（"1001" は空ファイル、"1002" は通常の CSV）

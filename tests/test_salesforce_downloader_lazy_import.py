@@ -1,4 +1,4 @@
-"""comken.services.salesforce_downloader の `__init__.py` が lazy import することを保証する。
+"""comken.internal.salesforce_downloader の `__init__.py` が lazy import することを保証する。
 
 BO 環境で `requests` が無いときでも、provider.py の関数だけ動かせる形が
 設計の本意 (`Projects/comken-設計メモ_SF-downloader分割.md`)。`__init__.py` が
@@ -22,16 +22,16 @@ import pytest
 def _drop_service(monkeypatch: pytest.MonkeyPatch) -> None:
     """sys.modules から service サブモジュールを取り除く。"""
     for mod_name in list(sys.modules):
-        if mod_name == "comken.services.salesforce_downloader.service":
+        if mod_name == "comken.internal.salesforce_downloader.service":
             monkeypatch.delitem(sys.modules, mod_name, raising=False)
 
 
 def test_cached_report_does_not_load_service(monkeypatch: pytest.MonkeyPatch) -> None:
     """`cached_report` を import しても `service` は読み込まれない。"""
     _drop_service(monkeypatch)
-    from comken.services.salesforce_downloader import cached_report  # noqa: F401
+    from comken.internal.salesforce_downloader import cached_report  # noqa: F401
 
-    assert "comken.services.salesforce_downloader.service" not in sys.modules, (
+    assert "comken.internal.salesforce_downloader.service" not in sys.modules, (
         "cached_report の import で service まで読み込まれている。"
         "__init__.py の __getattr__ が service を引いている可能性"
     )
@@ -40,33 +40,33 @@ def test_cached_report_does_not_load_service(monkeypatch: pytest.MonkeyPatch) ->
 def test_file_path_of_does_not_load_service(monkeypatch: pytest.MonkeyPatch) -> None:
     """`file_path_of` も同様。"""
     _drop_service(monkeypatch)
-    from comken.services.salesforce_downloader import file_path_of  # noqa: F401
+    from comken.internal.salesforce_downloader import file_path_of  # noqa: F401
 
-    assert "comken.services.salesforce_downloader.service" not in sys.modules
+    assert "comken.internal.salesforce_downloader.service" not in sys.modules
 
 
 def test_load_master_does_not_load_service(monkeypatch: pytest.MonkeyPatch) -> None:
     """`load_master` は master 側に常駐する関数。service は要らない。"""
     _drop_service(monkeypatch)
-    from comken.services.salesforce_downloader import load_master  # noqa: F401
+    from comken.internal.salesforce_downloader import load_master  # noqa: F401
 
-    assert "comken.services.salesforce_downloader.service" not in sys.modules
+    assert "comken.internal.salesforce_downloader.service" not in sys.modules
 
 
 def test_report_entry_does_not_load_service(monkeypatch: pytest.MonkeyPatch) -> None:
     """`ReportEntry` も master 側に常駐。"""
     _drop_service(monkeypatch)
-    from comken.services.salesforce_downloader import ReportEntry  # noqa: F401
+    from comken.internal.salesforce_downloader import ReportEntry  # noqa: F401
 
-    assert "comken.services.salesforce_downloader.service" not in sys.modules
+    assert "comken.internal.salesforce_downloader.service" not in sys.modules
 
 
 def test_shared_report_ids_does_not_load_service(monkeypatch: pytest.MonkeyPatch) -> None:
     """`shared_report_ids` も master 側。"""
     _drop_service(monkeypatch)
-    from comken.services.salesforce_downloader import shared_report_ids  # noqa: F401
+    from comken.internal.salesforce_downloader import shared_report_ids  # noqa: F401
 
-    assert "comken.services.salesforce_downloader.service" not in sys.modules
+    assert "comken.internal.salesforce_downloader.service" not in sys.modules
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -80,13 +80,13 @@ def test_download_report_does_not_crash(monkeypatch: pytest.MonkeyPatch) -> None
     service.py を読むので `requests` が sys.modules に入る前提だが、
     ここでは「import 経路が壊れていない」ことだけを確認する。
     """
-    from comken.services.salesforce_downloader import download_report
+    from comken.internal.salesforce_downloader import download_report
 
     assert download_report is not None
 
 
 def test_download_scheduled_does_not_crash(monkeypatch: pytest.MonkeyPatch) -> None:
     """`download_scheduled` も同様。"""
-    from comken.services.salesforce_downloader import download_scheduled
+    from comken.internal.salesforce_downloader import download_scheduled
 
     assert download_scheduled is not None

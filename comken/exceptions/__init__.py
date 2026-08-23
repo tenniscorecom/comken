@@ -4,7 +4,10 @@ ComkenError
 ├── SiteOwnerRequiredError          SiteBase / SalesforceBase に OWNER が未設定
 ├── InternalLibraryError
 │   ├── InternalLibraryNotFoundError         指定した社内ライブラリが見つからない
-│   └── InternalLibraryVersionMismatchError  指定したバージョンの社内ライブラリが見つからない
+│   │   └── RpaLibraryNotFoundError           旧 InternalLibraryNotFoundError の別名
+│   ├── InternalLibraryVersionMismatchError  指定したバージョンの社内ライブラリが見つからない
+│   │   └── RpaLibraryVersionMismatchError    旧 InternalLibraryVersionMismatchError の別名
+│   └── RpaError                              旧 InternalLibraryError の別名
 ├── LoggingAlreadyConfiguredError   root logger が設定済み
 ├── LoggerHostNotConfiguredError     実行端末のログ保存先が未登録
 ├── UnsupportedFileSuffixError
@@ -246,6 +249,11 @@ from comken.exceptions.outlook import (
     OutlookError,
     OutlookFolderNotFoundError,
 )
+from comken.exceptions.rpa import (  # 後方互換用エイリアス
+    RpaError,
+    RpaLibraryNotFoundError,
+    RpaLibraryVersionMismatchError,
+)
 from comken.exceptions.salesforce import (
     SalesforceAuthError,
     SalesforceConnectionError,
@@ -290,6 +298,9 @@ __all__ = [
     "InternalLibraryError",
     "InternalLibraryNotFoundError",
     "InternalLibraryVersionMismatchError",
+    "RpaError",
+    "RpaLibraryNotFoundError",
+    "RpaLibraryVersionMismatchError",
     "AccessError",
     "AccessBackupError",
     "AccessFileNotFoundError",
