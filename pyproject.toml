@@ -85,7 +85,7 @@ pythonpath = ["tools"]
 # 公開用の仮名のため、pyright が解決できない。設定で除外する。
 # 会社 PC では --skip-worktree で実名に書き換えて動くため、ここで除外しても
 # 機能には影響しない (このファイルは実機確認でも import しない)。
-exclude = [".pytest-tmp", "comken/toolbox/rpa.py"]
+exclude = [".pytest-tmp", "comken/toolbox/rpa.py", "comken/internal/salesforce_downloader/cli.py"]
 
 # __init__.py が `__getattr__` (PEP 562) で遅延公開している属性は
 # pyright の static analysis からは見つからず、`__all__` に書いた名前が
