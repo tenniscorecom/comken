@@ -141,9 +141,19 @@ class ExcelTable:
         for row_number, row in enumerate(rows, min_row + 1):
             for column, header in enumerate(headers, min_col):
                 self._worksheet.cell(row=row_number, column=column, value=row.get(header, ""))
-        new_max_row = min_row + max(len(rows), 1)
-        last_cell = self._worksheet.cell(new_max_row, min_col + len(headers) - 1).coordinate
-        excel_table.ref = f"{self._worksheet.cell(min_row, min_col).coordinate}:{last_cell}"
+        # openpyxl の range_boundaries() は返り値の各要素を int | None と推論されるが、
+        # Excel テーブル ref は validated 済みの範囲なので None にはならない。
+        # assert でランタイムを担保し、type: ignore で openpyxl の型スタブ不正確さを吸収する。
+        ref = excel_table.ref
+        range_boundaries_result = range_boundaries(ref)
+        assert range_boundaries_result is not None, f"Invalid Excel table ref: {ref}"
+        min_col, min_row, max_col, max_row = range_boundaries_result  # type: ignore[reportAssignmentType]
+        new_max_row = min_row + max(len(rows), 1)  # type: ignore[reportOptionalOperand]
+        last_cell = self._worksheet.cell(  # type: ignore[reportCallIssue, reportArgumentType]
+            new_max_row,
+            min_col + len(headers) - 1,  # type: ignore[reportOptionalOperand]
+        ).coordinate
+        excel_table.ref = f"{self._worksheet.cell(min_row, min_col).coordinate}:{last_cell}"  # type: ignore[reportCallIssue, reportArgumentType]
         self._excel._mark_dirty()
 
     def write(self, table: Table) -> None:

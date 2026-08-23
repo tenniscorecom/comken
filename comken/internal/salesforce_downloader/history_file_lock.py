@@ -1,4 +1,4 @@
-"""comken/services/salesforce_downloader/history_file_lock.py — 履歴CSVの排他制御。"""
+"""comken/internal/salesforce_downloader/history_file_lock.py — 履歴CSVの排他制御。"""
 
 import msvcrt
 import time

@@ -22,7 +22,7 @@ from comken.core.table import Table
 from comken.exceptions import ComkenError
 from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Excel
-from comken.toolbox.rpa import backoffice  # イントラネットのツールなら intranet に変える
+from comken.internal.rpa import backoffice  # イントラネットのツールなら intranet に変える
 
 from .config import config
 

@@ -9,7 +9,7 @@
 ```
 レポート管理表.xlsx（人が編集）        ダウンロード履歴.csv（プログラムが追記）
         ↓                                      ↑
-  comken.services.salesforce_downloader  ──→ Salesforce
+  comken.internal.salesforce_downloader  ──→ Salesforce
         ↓
   各プロジェクト（download_report / cached_report）
 ```
@@ -19,7 +19,7 @@
 ## 使う側
 
 ```python
-from comken.services.salesforce_downloader import (
+from comken.internal.salesforce_downloader import (
     cached_report,
     download_report,
 )
@@ -85,7 +85,7 @@ python -m comken sf check
 
 ### 2. 管理表の置き場所を決める
 
-**先に決める。** 場所は `comken/services/salesforce_downloader/service.py` の
+**先に決める。** 場所は `comken/internal/salesforce_downloader/service.py` の
 `MASTER_PATH` に書いてあり、**配置のときに書き換える3ファイルの1つ**
 （→ [配置するときの設定](#配置するときの設定)）。
 
@@ -132,7 +132,7 @@ python -m comken report check "\\実際のサーバー\share\tools\salesforce\�
 いきなり定期実行に入れず、**1件で通しを確かめる**。管理表に書いた管理番号を渡す。
 
 ```python
-from comken.services.salesforce_downloader import download_report
+from comken.internal.salesforce_downloader import download_report
 
 reader = download_report("1001")
 print(reader.path)              # 保存されたファイル
@@ -190,7 +190,7 @@ python -m comken report check レポート管理表.xlsx
 ### 列
 
 シート名は `管理表`。1行目が見出し。列の宣言は
-`comken/services/salesforce_downloader/master.py` にあり、読み込み・検証・雛形生成の
+`comken/internal/salesforce_downloader/master.py` にあり、読み込み・検証・雛形生成の
 仕組みは [管理表（master_table）](master-table.md) が持つ。
 
 | ID | 概要 | Salesforce URL | 実行方式 | 保存先 | 有効 | 0件あり | 備考 |
@@ -226,7 +226,7 @@ URL を貼れば `report_id_from_url()` が取り出す。ID を人が抜き出�
 コードから調べることもできる。
 
 ```python
-from comken.services.salesforce_downloader import load_master, shared_report_ids
+from comken.internal.salesforce_downloader import load_master, shared_report_ids
 
 shared_report_ids(load_master(MASTER_PATH))
 # → {"00O5g00000FGHIJ": ["1002", "1003"]}   "1002" と "1003" が同じレポートを見ている
@@ -381,7 +381,7 @@ comken に置くのは呼ばれる側だけにする。
 定期実行のプロジェクト側で、これを呼ぶだけでよい。
 
 ```python
-from comken.services.salesforce_downloader import download_scheduled
+from comken.internal.salesforce_downloader import download_scheduled
 
 def run() -> None:
     download_scheduled("定期実行")   # 管理表で「定期」かつ有効なものを全部取る
@@ -422,7 +422,7 @@ def run() -> None:
 
 ## 配置するときの設定
 
-管理表と履歴の場所は `comken/services/salesforce_downloader/_paths.py` に書いてある。
+管理表と履歴の場所は `comken/internal/salesforce_downloader/_paths.py` に書いてある。
 配置するときに実際の場所へ書き換える。
 
 ```python

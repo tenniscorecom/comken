@@ -1,10 +1,10 @@
-r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポートの集約取得。
+r"""comken/internal/salesforce_downloader/__init__.py — Salesforce レポートの集約取得。
 
 各プロジェクトが個別に Salesforce からレポートを落としていると、**どのプロジェクトが
 どのレポートを、どれくらいの頻度で取っているのか**が分からなくなる。取得をここに集約し、
 何を取っているかは管理表（Excel）に、いつ何を取ったかは履歴（CSV）に集める。
 
-    from comken.services.salesforce_downloader import cached_report, download_report
+    from comken.internal.salesforce_downloader import cached_report, download_report
 
     CUSTOMER_LIST = "1001"        # プロジェクトごとに、意味の分かる名前を付ける
     SALES_RESULT = "1003"
@@ -60,12 +60,12 @@ r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポー�
 `service.py` が読み込まれ、`requests` がロードされる。
 """
 
-from comken.services.salesforce_downloader.master import (
+from comken.internal.salesforce_downloader.master import (
     ReportEntry,
     load_master,
     shared_report_ids,
 )
-from comken.services.salesforce_downloader.schedule import ScheduleRule
+from comken.internal.salesforce_downloader.schedule import ScheduleRule
 
 __all__ = [
     "download_report",
@@ -81,10 +81,10 @@ __all__ = [
 # 遅延 import する対象。値はその属性が定義されているサブモジュールの絶対パス。
 # import 時に service.py を読み込むと requests が要るので、必要なときにだけ読む。
 _LAZY_TARGETS: dict[str, str] = {
-    "download_report": "comken.services.salesforce_downloader.service",
-    "download_scheduled": "comken.services.salesforce_downloader.service",
-    "cached_report": "comken.services.salesforce_downloader.provider",
-    "file_path_of": "comken.services.salesforce_downloader.provider",
+    "download_report": "comken.internal.salesforce_downloader.service",
+    "download_scheduled": "comken.internal.salesforce_downloader.service",
+    "cached_report": "comken.internal.salesforce_downloader.provider",
+    "file_path_of": "comken.internal.salesforce_downloader.provider",
 }
 
 
@@ -107,5 +107,5 @@ def __getattr__(name: str) -> object:
 
 
 def __dir__() -> list[str]:
-    """`dir(comken.services.salesforce_downloader)` で遅延対象も返す。"""
+    """`dir(comken.internal.salesforce_downloader)` で遅延対象も返す。"""
     return sorted(set(__all__) | set(_LAZY_TARGETS))

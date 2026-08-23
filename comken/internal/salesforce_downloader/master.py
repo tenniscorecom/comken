@@ -1,7 +1,7 @@
-r"""comken/services/salesforce_downloader/master.py — レポート管理表の列を決める。
+r"""comken/internal/salesforce_downloader/master.py — レポート管理表の列を決める。
 
 **このファイルにあるのは「社内の取り決め」だけ。** Excel を読む・検証する・雛形を作る
-仕組みは `comken.services.salesforce_downloader.report_master` にあり、ここは
+仕組みは `comken.internal.salesforce_downloader.report_master` にあり、ここは
 **どんな列があるか**を宣言する。
 
     | ID   | 概要     | Salesforce URL              | 実行方式 | 保存先              | 有効 |
@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from comken.exceptions import InvalidReportUrlError, SalesforceReportIdNotFoundError
-from comken.services.salesforce_downloader.report_master import MasterRow, column
+from comken.internal.salesforce_downloader.report_master import MasterRow, column
 
 # URL 解析は `comken.toolbox.salesforce.report` の `report_id_from_url` を使う。
 # master.py は `requests` に依存しない（BO 環境でも動かせる）ため、

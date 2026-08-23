@@ -1,11 +1,11 @@
-"""comken/services/salesforce_downloader/provider.py — 取得済みファイルの取り出し。
+"""comken/internal/salesforce_downloader/provider.py — 取得済みファイルの取り出し。
 
 「取りに行く」関数ではなく「既に取ってあるものを受け取る」関数を置く場所。
 **import 時に `requests` を読まない**（BO 環境で動かす前提）。
 `comken.toolbox.salesforce` に依存しないことで、`requests` の入っていない環境でも
 このモジュールだけを使えるようにする。
 
-    from comken.services.salesforce_downloader import cached_report
+    from comken.internal.salesforce_downloader import cached_report
 
     rows = cached_report("1001").read().read()
 
@@ -32,8 +32,8 @@ from comken.exceptions import (
     ReportDisabledError,
     ReportNotRegisteredError,
 )
-from comken.services.salesforce_downloader._paths import MASTER_PATH
-from comken.services.salesforce_downloader.master import ReportEntry, load_master
+from comken.internal.salesforce_downloader._paths import MASTER_PATH
+from comken.internal.salesforce_downloader.master import ReportEntry, load_master
 from comken.toolbox.csv import CSV
 
 logger = logging.getLogger(__name__)

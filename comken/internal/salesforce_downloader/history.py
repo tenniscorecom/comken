@@ -1,4 +1,4 @@
-"""comken/services/salesforce_downloader/history.py — ダウンロード履歴の記録。
+"""comken/internal/salesforce_downloader/history.py — ダウンロード履歴の記録。
 
 **管理表とは別のファイルにする。** 書く主体が違う（管理表は人、履歴はプログラム）ので
 分けないと、人が開いている間にプログラムが保存できず履歴が飛ぶ。**CSV に追記する。**
@@ -16,8 +16,8 @@ from pathlib import Path
 
 from comken.core.clock import now, today
 from comken.exceptions import HistoryHeaderMismatchError, HistoryWriteError
-from comken.services.salesforce_downloader.history_file_lock import HistoryFileLock
-from comken.services.salesforce_downloader.master import ReportEntry
+from comken.internal.salesforce_downloader.history_file_lock import HistoryFileLock
+from comken.internal.salesforce_downloader.master import ReportEntry
 
 # 履歴CSVの列。順序は出力ファイルそのものなので、追加・並び替えは全プロジェクトの
 # 既存履歴を読む処理へ影響する（互換性ポリシーに従う）
