@@ -137,7 +137,6 @@ def _classify_edge(
     if source_layer == target_layer and edge in ALLOWED_SAME_LAYER:
         return ("allowed", edge)
     if source_layer < target_layer and edge in ALLOWED_SAME_LAYER:
-        # 上向き依存だが許可エッジにある（例: comken.exceptions が comken.internal の例外を re-export する）
         return ("allowed", edge)
     if target_layer >= source_layer:
         relative_path = path.relative_to(REPOSITORY_ROOT)
