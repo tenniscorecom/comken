@@ -159,9 +159,11 @@ class TransferDestinationRowMissingError(ComkenError):
 
     def __init__(self, row_number: int) -> None:
         super().__init__(
-            f"転記元の{row_number}件目に対応する転記先行がありません。"
-            "destination_row が None か確認し、新規行を処理するか "
-            "Transfer.SKIP を返してください。"
+            f"転記元の{row_number}件目には対応する転記先行がありません"
+            "（destination_row が None）。"
+            "Transfer.APPLY を返すには write 側に行を追加する必要があります。"
+            "write に行を追加してから APPLY を返すか、"
+            "Transfer.SKIP を返してこの行をスキップしてください。"
         )
 
 
@@ -203,7 +205,7 @@ class TransferTransformError(TransferRowError):
         self.original = original
         super().__init__(
             row_number,
-            f"transform の実行に失敗しました(行{row_number}、キー {key}): {original}",
+            f"transform の実行に失敗しました(行{row_number}、キー {key}): {original!r}",
         )
 
 

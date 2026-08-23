@@ -372,6 +372,28 @@ def test_transform_destination_none_apply_raises_missing_error() -> None:
         )
 
 
+def test_destination_row_missing_error_message_explains_remediation() -> None:
+    """TransferDestinationRowMissingError のメッセージが行番号・原因・対処法を伝えること。"""
+    read = Table(["id", "value"], [{"id": "42", "value": "new"}])
+    write = Table(["id", "value"], [])
+
+    def transform(_read: dict, working: dict | None) -> TransferResult:
+        return Transfer.APPLY
+
+    with pytest.raises(TransferDestinationRowMissingError) as exc_info:
+        Transfer(read, write, {"value": "value"}, read_key="id", write_key="id").run(
+            transform=transform
+        )
+
+    message = str(exc_info.value)
+    # 業務側（非エンジニア）が見て「何が起きているか」「次に何をすべきか」が分かる文言か
+    assert "1件目" in message  # 行番号（enumerate の連番）
+    assert "destination_row" in message  # 原因のキーワード
+    assert "None" in message  # destination_row が None であることの明示
+    assert "APPLY" in message  # APPLY がこのエラーの引き金であることの明示
+    assert "SKIP" in message  # 代替手段としての SKIP
+
+
 def test_transform_result_enum_required() -> None:
     """transform が bool 値を返すと InvalidTransferResultError。"""
     read = Table(["id", "value"], [{"id": "1", "value": "new"}])
@@ -427,3 +449,30 @@ def test_transform_exception_chains_original() -> None:
     assert isinstance(cause, BoomError)
     assert isinstance(cause, Exception)
     assert getattr(cause, "specific", None) == "boom-detail"
+
+
+def test_transform_error_message_omits_full_row() -> None:
+    """TransferTransformError のメッセージに read_row 全体（dict）を含めないこと。
+
+    業務側でログを見たときに巨大データが流れるのを避けるため。
+    行番号・キー・元の例外は最低限必要。
+    """
+    read = Table(["id", "value"], [{"id": "1", "value": "new"}])
+    write = Table(["id", "value"], [{"id": "1", "value": "old"}])
+
+    def explode(_read: dict, _working: dict | None) -> TransferResult:
+        raise ValueError("kaboom")
+
+    with pytest.raises(TransferTransformError) as exc_info:
+        Transfer(read, write, {"value": "value"}, read_key="id", write_key="id").run(
+            transform=explode
+        )
+
+    message = str(exc_info.value)
+    # read_row の dict 全体はメッセージに含めない
+    assert "{'id'" not in message
+    assert '"id"' not in message or "'1'" in message  # キーは載せるが、行データは載せない
+    # 必要な情報は残す
+    assert "1件目" in message  # 行番号
+    assert "1" in message  # キー
+    assert "kaboom" in message  # 元の例外メッセージ

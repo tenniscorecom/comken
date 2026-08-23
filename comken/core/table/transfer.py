@@ -28,14 +28,6 @@ class TransferResult(Enum):
     STOP = auto()  # 転記処理自体を中断
 
 
-class _RowAction(Enum):
-    """run() 内部の1行ごとの処理結果。TransferResult と同じ意味だが STOP と非STOP を分離する。"""
-
-    APPLY = auto()
-    SKIP = auto()
-    STOP = auto()
-
-
 Transform = Callable[[Row, Row | None], TransferResult]
 
 
@@ -120,8 +112,8 @@ class Transfer:
         self._working_table = result_table
         for row_number, (read_row, write_row) in enumerate(self.transfer_rows(), start=1):
             key = tuple(read_row[column] for column in self.read_keys)
-            action = self._process_row(read_row, write_row, transform, row_number, key)
-            if action is _RowAction.STOP:
+            control = self._process_row(read_row, write_row, transform, row_number, key)
+            if control is TransferResult.STOP:
                 break
         return result_table
 
@@ -132,7 +124,7 @@ class Transfer:
         transform: Transform | None,
         row_number: int,
         key: tuple,
-    ) -> "_RowAction":
+    ) -> TransferResult:
         """1行ごとに transform の判定結果を見て「どうするか」を実行する。"""
         if write_row is None:
             return self._process_unmatched_row(read_row, transform, row_number, key)
@@ -140,7 +132,7 @@ class Transfer:
         control = self._run_transform(transform, read_row, working_row, row_number, key)
         if control is TransferResult.APPLY:
             write_row.update(working_row)
-        return self._action_for(control)
+        return control
 
     def _process_unmatched_row(
         self,
@@ -148,25 +140,16 @@ class Transfer:
         transform: Transform | None,
         row_number: int,
         key: tuple,
-    ) -> "_RowAction":
+    ) -> TransferResult:
         """転記先に存在しない行の処理を決める。"""
         # transform が無いときは未マッチ行を黙ってスキップする(後方互換)。
         if transform is None:
-            return _RowAction.SKIP
+            return TransferResult.SKIP
         control = self._run_transform(transform, read_row, None, row_number, key)
         if control is TransferResult.APPLY:
             # 反映先がないので新規行を追加する責務は呼び出し側
             raise TransferDestinationRowMissingError(row_number)
-        return self._action_for(control)
-
-    @staticmethod
-    def _action_for(control: TransferResult) -> "_RowAction":
-        """TransferResult を内部の _RowAction に変換する。"""
-        if control is TransferResult.STOP:
-            return _RowAction.STOP
-        if control is TransferResult.SKIP:
-            return _RowAction.SKIP
-        return _RowAction.APPLY
+        return control
 
     def _build_working_row(self, write_row: Row, read_row: Row) -> Row:
         """write_row を壊さずに mapping を適用した作業行を返す。"""
