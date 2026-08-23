@@ -62,7 +62,11 @@ def dry_run(enabled: bool = True) -> Iterator[None]:
 
 @contextmanager
 def debug(enabled: bool = True) -> Iterator[None]:
-    """ブロック内だけデバッグモードにする。"""
+    """ブロック内だけデバッグモードにする。
+
+    Args:
+        enabled: True で有効（デフォルト）。False ならブロック内だけ無効。
+    """
     global _debug
     previous = _debug
     _debug = enabled

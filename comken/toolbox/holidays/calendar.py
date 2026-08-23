@@ -46,7 +46,7 @@ class Holiday:
 class HolidaySource(Protocol):
     """祝日を 1セット取り出せる仕組みの共通インタフェース。
 
-    内阁府の ``CabinetOfficeCsvSource`` と、社内の ``ComkenMasterTableSource`` の両方が
+    内閣府の ``CabinetOfficeCsvSource`` と、社内の ``ComkenMasterTableSource`` の両方が
     これを実装するため、利用側は入手経路を意識せずに ``from_sources`` に渡せる。
 
     この Protocol はメソッドの型を ``Iterable[Holiday]`` に固定する。
@@ -292,7 +292,7 @@ class HolidayCalendar:
         return max(self._holidays.keys())
 
     def holiday_names(self, target: _dt.date) -> Sequence[str]:
-        """``target`` に登録された祝日名称のリスト（同日が複数あれば複数）。"""
+        """``target`` に登録された祝日名称のタプル（同日が複数あれば複数要素）。"""
         holiday = self._holidays.get(target)
         if holiday is None:
             return ()

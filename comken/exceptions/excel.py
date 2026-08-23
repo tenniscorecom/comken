@@ -31,7 +31,7 @@ class DataSheetAccessError(ExcelError):
 class ExcelFileNotFoundError(ExcelError):
     """Excel ファイルが見つからない
 
-    発生箇所: ExcelBase.__init__()
+    発生箇所: Excel.__init__() / ExcelComHandler.__init__()
 
     対処:
         ファイルの置き場所と名前を確認する
@@ -47,7 +47,7 @@ class ExcelFileNotFoundError(ExcelError):
 class SheetNotFoundError(ExcelError):
     """指定した名前のシートがない
 
-    発生箇所: ExcelBase._sheet() / ExcelComHandler._sheet()
+    発生箇所: Excel.sheet() / Excel.data_sheet()
 
     対処:
         Excel を開いて、下のシート名（タブ）が変わっていないか確認する。変えた場合は元に戻す
@@ -127,7 +127,7 @@ class TableNotFoundError(ExcelError):
 class TableNotAvailableInReadOnlyError(ExcelError):
     """read_only で開いたブックからテーブル名で読めない
 
-    発生箇所: ExcelBase.read_table()
+    発生箇所: 実装に対応箇所なし (現在未使用の例外クラス)
 
     対処:
         Excel を ``read_only=False`` で開き直す。
@@ -159,7 +159,7 @@ class MacroError(ExcelError):
 class EmptyHeaderCellError(ExcelError):
     """Excel の見出しに空欄がある
 
-    発生箇所: ExcelBase.read_rows_as_dicts() / ExcelComHandler.read_rows_as_dicts()
+    発生箇所: Excel.read_computed_rows_as_dicts() / ExcelTable.read() / ExcelComHandler.read_rows_as_dicts()
 
     対処:
         Excel の1行目の空欄を埋める
@@ -204,7 +204,7 @@ class EmptyExcelTableError(ExcelError):
 class ExcelHeadersTooFewError(ExcelError):
     """指定した見出し数が列数より少ない
 
-    発生箇所: ExcelBase.read_rows_as_dicts() / ExcelComHandler.read_rows_as_dicts()
+    発生箇所: ExcelComHandler.read_rows_as_dicts()
 
     対処:
         管理者へ連絡する

@@ -1,4 +1,12 @@
-"""comken/toolbox/salesforce/oauth_credentials.py — Client Credentials Flow"""
+"""comken/toolbox/salesforce/oauth_credentials.py — Client Credentials Flow
+
+``client_id`` と ``client_secret`` だけでアクセストークンを取りに行く方式。
+リフレッシュトークンを使わないため、運用負荷が低い（失効・再認可の手続きが要らない）。
+
+**client_secret だけでアクセストークンが取れてしまう点に注意。** Salesforce 側
+（ECA）で「Run As」を有効にしておかないと、アクセスが API 実行ユーザー由来ではなく
+接続アプリ所有者の権限で走る。``comken sf rotate`` で secret をローテーションできる。
+"""
 
 # 定義中の ClientCredentialsOAuth を戻り値の型注釈に使うため、注釈の評価を遅延する。
 from __future__ import annotations

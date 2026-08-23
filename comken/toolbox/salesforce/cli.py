@@ -1,6 +1,3 @@
-# このファイルは CLI 入口。`print` で結果を出すのが仕事なので
-# ファイル全体で T201（print 検出）を許可する
-# ruff: noqa: T201
 r"""comken/toolbox/salesforce/cli.py — 接続と資格情報ローテーションの確認コマンド
 
     python -m comken sf check
@@ -29,6 +26,10 @@ External Client App の consumer secret を REST API から回せるか（＝ロ
 | `rotate --stage-only` | **新しい secret が発行される**が、切り替えない |
 | `rotate` | DPAPI へ保存し Salesforce 側を切り替える。**旧 secret は猶予後に無効** |
 """
+
+# このファイルは CLI 入口。`print` で結果を出すのが仕事なので
+# ファイル全体で T201（print 検出）を許可する
+# ruff: noqa: T201
 
 import argparse
 import sys

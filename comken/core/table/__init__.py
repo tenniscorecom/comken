@@ -1,7 +1,7 @@
-"""comken/core/table/__init__.py — Pure in-memory table operations.
+"""comken/core/table/__init__.py — メモリ上の Table 同士の純粋な操作。
 
-The package contains the data model and Table-to-Table transfer. File-specific
-adapters stay in toolbox so saving behavior is visible at the boundary.
+データモデルと Table 間の転記（Transfer）を置く。ファイル I/O を含む
+アダプタは toolbox 側に置き、保存の挙動が境界で見えるようにする。
 """
 
 from comken.core.table.comparison import TableComparison, compare_tables

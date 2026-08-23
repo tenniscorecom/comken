@@ -38,7 +38,7 @@ def diff_row(before: dict, after: dict) -> dict[str, tuple]:
     """1行同士を比較し、値が異なる列だけを {列名: (変更前, 変更後)} で返す。
 
     CSV の str と Excel の数値は同一視する（"1000" と 1000 は差分にならない）。
-    片方にしか存在しない列は、もう片方を None として比較する。
+    片方にしか存在しない列は、もう片方を空文字（``""``）に揃えて比較する。
 
     先頭ゼロ付きの文字列（社員番号 "0001" 等）は数値化しない。
     "0001" と 1 は別の値として差分になる（先頭ゼロの消失を検出できる）。
@@ -61,7 +61,7 @@ def diff_row(before: dict, after: dict) -> dict[str, tuple]:
 class RowChange:
     """diff_rows が返す「変更のあった行」の情報。"""
 
-    key: str  # キー列の値
+    key: str  # キー列の複合キー（複数列指定時は複合キーとして扱われる）
     before: dict  # 変更前の行全体
     after: dict  # 変更後の行全体
     columns: dict[str, tuple]  # 変わった列だけ {列名: (変更前, 変更後)}
@@ -94,7 +94,7 @@ def diff_rows(
         DiffResult（added / removed / changed）。
 
     Raises:
-        ColumnNotFoundError: key で指定した列が存在しない場合。
+        KeyColumnNotFoundError: key で指定した列が存在しない場合。
     """
     for rows in (before, after):
         if rows and key not in rows[0]:

@@ -12,8 +12,9 @@
     from comken.internal.exceptions import InternalLibraryNotFoundError
 
 旧例外は新例外の **同じクラスそのもの** として解決されるよう
-サブクラス関係を維持している。 そのため ``except RpaLibraryNotFoundError`` で
-新しい ``InternalLibraryNotFoundError`` も捕捉できる。
+``__getattr__`` で同じクラスオブジェクトを返すシムを維持している。
+そのため ``except RpaLibraryNotFoundError`` で
+新しい ``InternalLibraryNotFoundError`` も捕捉できる（``is`` 比較で同一になる）。
 """
 
 import warnings
