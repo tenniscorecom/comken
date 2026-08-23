@@ -85,7 +85,7 @@ python -m comken sf check
 
 ### 2. 管理表の置き場所を決める
 
-**先に決める。** 場所は `comken/internal/salesforce_downloader/service.py` の
+**先に決める。** 場所は `comken/services/salesforce_downloader/service.py` の
 `MASTER_PATH` に書いてあり、**配置のときに書き換える3ファイルの1つ**
 （→ [配置するときの設定](#配置するときの設定)）。
 
@@ -190,7 +190,7 @@ python -m comken report check レポート管理表.xlsx
 ### 列
 
 シート名は `管理表`。1行目が見出し。列の宣言は
-`comken/internal/salesforce_downloader/master.py` にあり、読み込み・検証・雛形生成の
+`comken/services/salesforce_downloader/master.py` にあり、読み込み・検証・雛形生成の
 仕組みは [管理表（master_table）](master-table.md) が持つ。
 
 | ID | 概要 | Salesforce URL | 実行方式 | 保存先 | 有効 | 0件あり | 備考 |
@@ -422,7 +422,7 @@ def run() -> None:
 
 ## 配置するときの設定
 
-管理表と履歴の場所は `comken/internal/salesforce_downloader/_paths.py` に書いてある。
+管理表と履歴の場所は `comken/services/salesforce_downloader/_paths.py` に書いてある。
 配置するときに実際の場所へ書き換える。
 
 ```python
