@@ -181,6 +181,9 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
+| `TransferRowError` | transform が処理規約に合わない値を返した | 通常は何も返さず、1件を除外する場合は Transfer.SKIP、全体を止める場合は Transfer.STOP を返す |
+| `TransferTransformError` | transform コールバック内で例外が発生した | エラーメッセージに表示された転記元の行番号・キー・元の例外を確認する |
+| `InvalidTransferResultError` | transform の戻り値が TransferResult でない | transform は TransferResult.APPLY / SKIP / STOP のいずれかを返す |
 | `InvalidTableInputError` | Table API に対応しない入力が渡された。 | columns、rows、types の型と列名を確認する |
 | `InvalidTableOperationError` | Table API で実行できない操作が指定された。 | 対象が読み取り専用でないか、指定したテーブル名が正しいか確認する |
 | `TableColumnNotFoundError` | Table に指定された列が存在しない。 | Table.columns を確認し、存在する列名を指定する |

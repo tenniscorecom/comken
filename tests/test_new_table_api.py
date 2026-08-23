@@ -2,16 +2,19 @@
 
 import pytest
 
-from comken.core.table import Table, Transfer, compare_tables
+from comken.core.table import Table, Transfer, TransferResult, compare_tables
 from comken.exceptions.table import (
+    InvalidTransferResultError,
     TableColumnNotFoundError,
     TableDuplicateKeyError,
     TableError,
     TableMergeColumnCollisionError,
     TableMergeSuffixError,
     TransferDestinationMultipleMatchError,
+    TransferDestinationRowMissingError,
     TransferMappingError,
     TransferRowError,
+    TransferTransformError,
 )
 from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Excel
@@ -181,8 +184,13 @@ def test_transfer_maps_before_transform_and_skipped_changes_are_discarded() -> N
     )
     assert result.read()[0]["name"] == "NEW"
 
+    def skip_transform(_read: dict, row: dict | None) -> TransferResult:
+        assert row is not None  # 既存行の場合は必ず working_row が渡される
+        row["name"] = "ignored"
+        return Transfer.SKIP
+
     skipped = Transfer(source, destination, {"name": "name"}, read_key="id", write_key="id").run(
-        transform=lambda _read, row: row.update(name="ignored") or False
+        transform=skip_transform
     )
     assert skipped.read()[0]["name"] == "old"
 
@@ -251,9 +259,15 @@ def test_transfer_rejects_missing_key_column_and_reports_source_row_number() -> 
 
     with pytest.raises(TableColumnNotFoundError):
         Transfer(read, write, {"name": "name"}, read_key="missing", write_key="id").run()
+
+    def return_invalid(row: dict, _working: dict | None) -> object:
+        if row["id"] == 2:
+            return "invalid"  # わざと TransferResult 以外の値を返す
+        return Transfer.APPLY
+
     with pytest.raises(TransferRowError, match="転記元の2件目"):
         Transfer(read, write, {"name": "name"}, read_key="id", write_key="id").run(
-            transform=lambda row, _working: "invalid" if row["id"] == 2 else Transfer.APPLY
+            transform=return_invalid  # type: ignore[arg-type]
         )
 
 
@@ -271,9 +285,145 @@ def test_transfer_rows_and_compare_tables_are_directional() -> None:
     assert list(transfer.transfer_rows())[1][1] is None
     assert len(list(transfer.matched_rows())) == 1
     rows = list(transfer.transfer_rows())
-    rows[0][1]["value"] = "edited"
+    matched = rows[0][1]
+    assert matched is not None
+    matched["value"] = "edited"
     assert transfer.result().read()[0]["value"] == "edited"
     comparison = compare_tables(read, write, read_key="id", write_key="id")
     assert comparison.only_in_read.read() == [{"id": "2", "value": "read-only"}]
     assert comparison.only_in_write.read() == [{"id": "3", "value": "write-only"}]
     assert comparison.changed.count() == 1
+
+
+def test_transfer_rows_includes_unmatched() -> None:
+    read = Table(
+        ["id", "value"],
+        [{"id": "1", "value": "new"}, {"id": "2", "value": "extra"}],
+    )
+    write = Table(["id", "value"], [{"id": "1", "value": "old"}])
+
+    pairs = list(
+        Transfer(read, write, {"value": "value"}, read_key="id", write_key="id").transfer_rows()
+    )
+
+    assert pairs == [
+        ({"id": "1", "value": "new"}, {"id": "1", "value": "old"}),
+        ({"id": "2", "value": "extra"}, None),
+    ]
+
+
+def test_matched_rows_excludes_unmatched() -> None:
+    read = Table(
+        ["id", "value"],
+        [{"id": "1", "value": "new"}, {"id": "2", "value": "extra"}],
+    )
+    write = Table(["id", "value"], [{"id": "1", "value": "old"}])
+
+    pairs = list(
+        Transfer(read, write, {"value": "value"}, read_key="id", write_key="id").matched_rows()
+    )
+
+    assert len(pairs) == 1
+    read_row, write_row = pairs[0]
+    assert write_row is not None
+    assert read_row == {"id": "1", "value": "new"}
+    assert write_row == {"id": "1", "value": "old"}
+
+
+def test_transform_with_destination_row_none() -> None:
+    """destination_row が None の場合、transform にそのまま None が渡される。"""
+    read = Table(
+        ["id", "value"],
+        [{"id": "1", "value": "new"}, {"id": "2", "value": "no-destination"}],
+    )
+    write = Table(["id", "value"], [{"id": "1", "value": "old"}])
+
+    seen: list[dict | None] = []
+
+    def transform(_read: dict, working: dict | None) -> TransferResult:
+        # append は作業行そのもの。テスト側で見た瞬間の値を比較するために copy する。
+        seen.append(dict(working) if working is not None else None)
+        if working is None:
+            return Transfer.SKIP
+        working["value"] = "UPDATED"
+        return Transfer.APPLY
+
+    result = Transfer(read, write, {"value": "value"}, read_key="id", write_key="id").run(
+        transform=transform
+    )
+
+    assert seen[0] == {"id": "1", "value": "new"}
+    assert seen[1] is None
+    assert result.read() == [{"id": "1", "value": "UPDATED"}]
+
+
+def test_transform_destination_none_apply_raises_missing_error() -> None:
+    """destination_row が None のとき APPLY を返すと TransferDestinationRowMissingError。"""
+    read = Table(["id", "value"], [{"id": "1", "value": "new"}])
+    write = Table(["id", "value"], [])
+
+    def transform(_read: dict, working: dict | None) -> TransferResult:
+        assert working is None
+        return Transfer.APPLY
+
+    with pytest.raises(TransferDestinationRowMissingError):
+        Transfer(read, write, {"value": "value"}, read_key="id", write_key="id").run(
+            transform=transform
+        )
+
+
+def test_transform_result_enum_required() -> None:
+    """transform が bool 値を返すと InvalidTransferResultError。"""
+    read = Table(["id", "value"], [{"id": "1", "value": "new"}])
+    write = Table(["id", "value"], [{"id": "1", "value": "old"}])
+
+    def returns_bool(_read: dict, _working: dict | None) -> bool:  # type: ignore[return-value]
+        return True
+
+    with pytest.raises(InvalidTransferResultError, match="転記元の1件目"):
+        Transfer(read, write, {"value": "value"}, read_key="id", write_key="id").run(
+            transform=returns_bool  # type: ignore[arg-type]
+        )
+
+
+def test_invalid_transfer_result_raises() -> None:
+    """transform が文字列など規約外の値を返すと InvalidTransferResultError。"""
+    read = Table(["id", "value"], [{"id": "1", "value": "new"}])
+    write = Table(["id", "value"], [{"id": "1", "value": "old"}])
+
+    def returns_str(_read: dict, _working: dict | None) -> object:
+        # わざと TransferResult 以外の値を返す
+        return "APPLY"
+
+    with pytest.raises(InvalidTransferResultError, match="転記元の1件目"):
+        Transfer(read, write, {"value": "value"}, read_key="id", write_key="id").run(
+            transform=returns_str  # type: ignore[arg-type]
+        )
+
+
+def test_transform_exception_chains_original() -> None:
+    """transform 内の例外は TransferTransformError に包まれ、__cause__ に元の例外を保持する。"""
+    read = Table(["id", "value"], [{"id": "1", "value": "new"}])
+    write = Table(["id", "value"], [{"id": "1", "value": "old"}])
+
+    class BoomError(Exception):
+        def __init__(self, message: str) -> None:
+            super().__init__(message)
+            self.specific = "boom-detail"
+
+    def explode(_read: dict, _working: dict | None) -> TransferResult:
+        raise BoomError("kaboom")
+
+    with pytest.raises(TransferTransformError) as exc_info:
+        Transfer(read, write, {"value": "value"}, read_key="id", write_key="id").run(
+            transform=explode
+        )
+
+    error = exc_info.value
+    assert error.row_number == 1
+    assert error.key == ("1",)
+    assert error.source_row == {"id": "1", "value": "new"}
+    cause = error.__cause__
+    assert isinstance(cause, BoomError)
+    assert isinstance(cause, Exception)
+    assert getattr(cause, "specific", None) == "boom-detail"

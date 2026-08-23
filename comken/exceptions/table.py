@@ -179,3 +179,46 @@ class TransferDestinationMultipleMatchError(ComkenError):
             f"転記先列「{key_column}」のキー「{key}」に一致する行が複数あります。"
             "転記先のキーを一意にしてください。"
         )
+
+
+class TransferTransformError(TransferRowError):
+    """transform コールバック内で例外が発生した
+
+    発生箇所: Transfer.run()
+
+    対処:
+        エラーメッセージに表示された転記元の行番号・キー・元の例外を確認する
+    """
+
+    def __init__(
+        self,
+        row_number: int,
+        key: tuple,
+        source_row: dict | None,
+        original: Exception,
+    ) -> None:
+        self.row_number = row_number
+        self.key = key
+        self.source_row = source_row
+        self.original = original
+        super().__init__(
+            row_number,
+            f"transform の実行に失敗しました(行{row_number}、キー {key}): {original}",
+        )
+
+
+class InvalidTransferResultError(TransferRowError):
+    """transform の戻り値が TransferResult でない
+
+    発生箇所: Transfer.run()
+
+    対処:
+        transform は TransferResult.APPLY / SKIP / STOP のいずれかを返す
+    """
+
+    def __init__(self, row_number: int, value: object) -> None:
+        self.value = value
+        super().__init__(
+            row_number,
+            f"transform の戻り値は TransferResult を返してください: {value!r}",
+        )

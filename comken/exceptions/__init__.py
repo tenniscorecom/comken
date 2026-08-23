@@ -90,7 +90,10 @@ ComkenError
 │   ├── TableMergeColumnCollisionError
 │   ├── TableMergeSuffixError
 │   ├── TableRowColumnsError
-│   └── TableTypeConversionError
+│   ├── TableTypeConversionError
+│   └── TransferRowError
+│   │   ├── InvalidTransferResultError
+│   │   └── TransferTransformError
 ├── TransferDestinationRowMissingError
 ├── TransferDestinationMultipleMatchError
 ├── ColumnNotFoundError
@@ -276,6 +279,7 @@ from comken.exceptions.state import (
 from comken.exceptions.table import (
     InvalidTableInputError,
     InvalidTableOperationError,
+    InvalidTransferResultError,
     TableColumnNotFoundError,
     TableDuplicateKeyError,
     TableError,
@@ -285,6 +289,8 @@ from comken.exceptions.table import (
     TableTypeConversionError,
     TransferDestinationMultipleMatchError,
     TransferDestinationRowMissingError,
+    TransferRowError,
+    TransferTransformError,
 )
 from comken.internal.exceptions import (
     InternalLibraryError,
@@ -411,6 +417,9 @@ __all__ = [
     "ScheduledDownloadFailedError",
     "TransferDestinationRowMissingError",
     "TransferDestinationMultipleMatchError",
+    "TransferRowError",
+    "TransferTransformError",
+    "InvalidTransferResultError",
     "TableError",
     "InvalidTableInputError",
     "InvalidTableOperationError",

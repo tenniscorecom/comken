@@ -302,6 +302,17 @@ CSVやExcelに直接依存しないため、加工処理をファイルI/Oから
 def __init__(self, columns: list[str] | tuple[str, ...], rows: list[dict[str, Any]], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
 ```
 
+#### `rows`
+
+```text
+@property
+def rows(self) -> list[dict[str, Any]]:
+```
+
+##### 説明
+
+行のコピーを返す（読み取り専用）。
+
 #### `read`
 
 ```text
@@ -469,6 +480,8 @@ def matched_rows(self) -> Iterator[tuple[Row, Row]]:
 ##### 説明
 
 readとwriteの両方に存在する行だけを返す。
+
+転記先に存在しない行（``destination_row`` が ``None``）は含みません。
 
 #### `result`
 
@@ -1505,6 +1518,17 @@ CSVやExcelに直接依存しないため、加工処理をファイルI/Oから
 def __init__(self, columns: list[str] | tuple[str, ...], rows: list[dict[str, Any]], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
 ```
 
+#### `rows`
+
+```text
+@property
+def rows(self) -> list[dict[str, Any]]:
+```
+
+##### 説明
+
+行のコピーを返す（読み取り専用）。
+
 #### `read`
 
 ```text
@@ -1673,6 +1697,8 @@ def matched_rows(self) -> Iterator[tuple[Row, Row]]:
 
 readとwriteの両方に存在する行だけを返す。
 
+転記先に存在しない行（``destination_row`` が ``None``）は含みません。
+
 #### `result`
 
 ```text
@@ -1695,6 +1721,18 @@ def run(self, *, transform: Transform | None=None) -> Table:
 ##### 説明
 
 転記結果の新しい Table を返す。
+
+### `TransferResult`
+
+```text
+class TransferResult(Enum):
+```
+
+#### 説明
+
+transform コールバックの戻り値。
+
+APPLY / SKIP / STOP のいずれかを返す。
 
 ### `compare_tables`
 
@@ -4149,6 +4187,69 @@ class TransferDestinationMultipleMatchError(ComkenError):
 def __init__(self, key_column: str, key: object) -> None:
 ```
 
+### `TransferRowError`
+
+```text
+class TransferRowError(TableError):
+```
+
+#### 説明
+
+transform が処理規約に合わない値を返した
+
+発生箇所: Transfer.run()
+
+対処:
+    通常は何も返さず、1件を除外する場合は Transfer.SKIP、全体を止める場合は Transfer.STOP を返す
+
+#### `__init__`
+
+```text
+def __init__(self, row_number: int, reason: str) -> None:
+```
+
+### `TransferTransformError`
+
+```text
+class TransferTransformError(TransferRowError):
+```
+
+#### 説明
+
+transform コールバック内で例外が発生した
+
+発生箇所: Transfer.run()
+
+対処:
+    エラーメッセージに表示された転記元の行番号・キー・元の例外を確認する
+
+#### `__init__`
+
+```text
+def __init__(self, row_number: int, key: tuple, source_row: dict | None, original: Exception) -> None:
+```
+
+### `InvalidTransferResultError`
+
+```text
+class InvalidTransferResultError(TransferRowError):
+```
+
+#### 説明
+
+transform の戻り値が TransferResult でない
+
+発生箇所: Transfer.run()
+
+対処:
+    transform は TransferResult.APPLY / SKIP / STOP のいずれかを返す
+
+#### `__init__`
+
+```text
+def __init__(self, row_number: int, value: object) -> None:
+```
+
 ### `TableError`
 
 ```text
@@ -4632,6 +4733,17 @@ CSVやExcelに直接依存しないため、加工処理をファイルI/Oから
 def __init__(self, columns: list[str] | tuple[str, ...], rows: list[dict[str, Any]], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
 ```
 
+#### `rows`
+
+```text
+@property
+def rows(self) -> list[dict[str, Any]]:
+```
+
+##### 説明
+
+行のコピーを返す（読み取り専用）。
+
 #### `read`
 
 ```text
@@ -4789,6 +4901,8 @@ def matched_rows(self) -> Iterator[tuple[Row, Row]]:
 ##### 説明
 
 readとwriteの両方に存在する行だけを返す。
+
+転記先に存在しない行（``destination_row`` が ``None``）は含みません。
 
 #### `result`
 

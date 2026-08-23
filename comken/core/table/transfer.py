@@ -7,20 +7,36 @@ from typing import Any, Final
 from comken.core.table.model import Table
 from comken.exceptions.table import (
     InvalidTableInputError,
+    InvalidTransferResultError,
     TransferDestinationMultipleMatchError,
+    TransferDestinationRowMissingError,
     TransferMappingError,
-    TransferRowError,
+    TransferTransformError,
 )
 
 Row = dict[str, Any]
 
 
-class _Control(Enum):
+class TransferResult(Enum):
+    """transform コールバックの戻り値。
+
+    APPLY / SKIP / STOP のいずれかを返す。
+    """
+
+    APPLY = auto()  # 転記を適用
+    SKIP = auto()  # この行をスキップ
+    STOP = auto()  # 転記処理自体を中断
+
+
+class _RowAction(Enum):
+    """run() 内部の1行ごとの処理結果。TransferResult と同じ意味だが STOP と非STOP を分離する。"""
+
+    APPLY = auto()
     SKIP = auto()
     STOP = auto()
 
 
-Transform = Callable[[Row, Row | None], bool | _Control]
+Transform = Callable[[Row, Row | None], TransferResult]
 
 
 class Transfer:
@@ -31,9 +47,9 @@ class Transfer:
     コンストラクターへ渡します。保存は担当せず、結果の Table を呼び出し側へ返します。
     """
 
-    SKIP: Final = _Control.SKIP
-    STOP: Final = _Control.STOP
-    APPLY: Final = True
+    APPLY: Final = TransferResult.APPLY
+    SKIP: Final = TransferResult.SKIP
+    STOP: Final = TransferResult.STOP
 
     def __init__(
         self,
@@ -76,7 +92,10 @@ class Transfer:
             yield read_row, write_row
 
     def matched_rows(self) -> Iterator[tuple[Row, Row]]:
-        """readとwriteの両方に存在する行だけを返す。"""
+        """readとwriteの両方に存在する行だけを返す。
+
+        転記先に存在しない行（``destination_row`` が ``None``）は含みません。
+        """
         for read_row, write_row in self.transfer_rows():
             if write_row is not None:
                 yield read_row, write_row
@@ -99,62 +118,83 @@ class Transfer:
         # write をコピーしてから加工するため、元の Table は転記後もそのまま残る。
         result_table = Table(self.write.columns, self.write.read(), types=self.write.types)
         self._working_table = result_table
-        index: dict[tuple[Any, ...], Row] = {}
-        for write_row in result_table._iter_rows_for_update():
-            key = tuple(write_row[column] for column in self.write_keys)
-            if key in index:
-                raise TransferDestinationMultipleMatchError(",".join(self.write_keys), key)
-            index[key] = write_row
-        # read() でコピーを取り出すため、transform が行を変更しても入力 read は変わらない。
-        for row_number, read_row in enumerate(self.read.read(), start=1):
+        for row_number, (read_row, write_row) in enumerate(self.transfer_rows(), start=1):
             key = tuple(read_row[column] for column in self.read_keys)
-            write_row = index.get(key)
-            if write_row is None:
-                # 新規行の追加は Table.append() の責務にするため、Transferでは扱わない。
-                continue
-            working_row = dict(write_row)
-            for read_column, write_column in self.mapping.items():
-                working_row[write_column] = read_row[read_column]
-            control = self._run_transform(transform, read_row, working_row, row_number)
-            if control is self.STOP:
+            action = self._process_row(read_row, write_row, transform, row_number, key)
+            if action is _RowAction.STOP:
                 break
-            if control is self.SKIP or control is False:
-                continue
-            if control is not self.APPLY:
-                raise TransferRowError(
-                    row_number,
-                    "transformはTrue、False、APPLY、SKIP、STOPのいずれかを返してください。",
-                )
-            write_row.update(working_row)
         return result_table
+
+    def _process_row(
+        self,
+        read_row: Row,
+        write_row: Row | None,
+        transform: Transform | None,
+        row_number: int,
+        key: tuple,
+    ) -> "_RowAction":
+        """1行ごとに transform の判定結果を見て「どうするか」を実行する。"""
+        if write_row is None:
+            return self._process_unmatched_row(read_row, transform, row_number, key)
+        working_row = self._build_working_row(write_row, read_row)
+        control = self._run_transform(transform, read_row, working_row, row_number, key)
+        if control is TransferResult.APPLY:
+            write_row.update(working_row)
+        return self._action_for(control)
+
+    def _process_unmatched_row(
+        self,
+        read_row: Row,
+        transform: Transform | None,
+        row_number: int,
+        key: tuple,
+    ) -> "_RowAction":
+        """転記先に存在しない行の処理を決める。"""
+        # transform が無いときは未マッチ行を黙ってスキップする(後方互換)。
+        if transform is None:
+            return _RowAction.SKIP
+        control = self._run_transform(transform, read_row, None, row_number, key)
+        if control is TransferResult.APPLY:
+            # 反映先がないので新規行を追加する責務は呼び出し側
+            raise TransferDestinationRowMissingError(row_number)
+        return self._action_for(control)
+
+    @staticmethod
+    def _action_for(control: TransferResult) -> "_RowAction":
+        """TransferResult を内部の _RowAction に変換する。"""
+        if control is TransferResult.STOP:
+            return _RowAction.STOP
+        if control is TransferResult.SKIP:
+            return _RowAction.SKIP
+        return _RowAction.APPLY
+
+    def _build_working_row(self, write_row: Row, read_row: Row) -> Row:
+        """write_row を壊さずに mapping を適用した作業行を返す。"""
+        working_row = dict(write_row)
+        for read_column, write_column in self.mapping.items():
+            working_row[write_column] = read_row[read_column]
+        return working_row
 
     def _run_transform(
         self,
         transform: Transform | None,
         read_row: Row,
-        working_row: Row,
+        working_row: Row | None,
         row_number: int,
-    ) -> bool | _Control:
+        key: tuple,
+    ) -> TransferResult:
         """利用者 callback の失敗へ転記元行の文脈を加える。"""
         if transform is None:
-            return self.APPLY
+            return TransferResult.APPLY
         try:
-            return transform(read_row, working_row)
+            result = transform(read_row, working_row)
         except (KeyboardInterrupt, SystemExit):
             raise
         except Exception as exc:
-            raise TransferRowError(row_number, f"transform の実行に失敗しました: {exc}") from exc
-
-    def _write_index(self) -> dict[tuple[Any, ...], Row]:
-        """writeの行を複合キーで検索できる辞書にする。"""
-        self.write._check_columns(self.write_keys)
-        index: dict[tuple[Any, ...], Row] = {}
-        for write_row in self.write.read():
-            key = self._row_key(write_row, self.write_keys)
-            if key in index:
-                raise TransferDestinationMultipleMatchError(",".join(self.write_keys), key)
-            index[key] = write_row
-        return index
+            raise TransferTransformError(row_number, key, read_row, exc) from exc
+        if not isinstance(result, TransferResult):
+            raise InvalidTransferResultError(row_number, result)
+        return result
 
     def _working_index(self) -> dict[tuple[Any, ...], Row]:
         """作業中のTableを複合キーで検索できる辞書にする。"""
@@ -174,4 +214,4 @@ class Transfer:
         return tuple(row[column] for column in columns)
 
 
-__all__ = ["Transfer"]
+__all__ = ["Transfer", "TransferResult"]
