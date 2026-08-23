@@ -1,13 +1,11 @@
 """comken/internal/salesforce_api.py — 社内 Salesforce API 呼び出しの薄い玄関。
 
-``comken.toolbox.salesforce`` の SalesforceBase を介さず、
-``example_libs.v0000.salesforce``（社内ライブラリ）を直接ロードする。
-メソッドは提供しない（下地のみ）。
-
-    with SalesforceApi() as api:
-        api._module.<method>(...)   # 社内ライブラリのメソッドを直接呼ぶ
-
-メソッドのラッパ追加は社内ライブラリの API 仕様確認後に書き足す。
+``comken.toolbox.salesforce.SalesforceBase`` と同等の API を提供する薄いラッパ。
+認証（Auth Refresh Token / Rotation / Metrics）は toolbox/salesforce 側に残し、
+本クラスは社内ライブラリ ``example_libs.v0000.salesforce`` のメソッドを呼ぶ
+ラッパとして機能する。
+最終的には社内ライブラリを comken に直接取り込むため、バージョンチェックは
+実装しない（社内ライブラリの存在自体が一時的）。
 """
 
 from __future__ import annotations
@@ -23,13 +21,17 @@ class SalesforceApi:
     ``example_libs.v0000.salesforce`` を ``comken.internal.base.InternalLibraryBase``
     経由でロードするコンテキストマネージャ。``__enter__`` でモジュールをロードし、
     ``__exit__`` で開放する。
-    現状は下地の実装のみで、メソッド（query / report_run / request 等）は
-    提供しない。メソッドの追加は社内ライブラリの API 仕様確認後に書き足す。
 
     使用例::
 
         with SalesforceApi() as api:
-            api._module.query("SELECT Id FROM Account")  # 直接モジュールアクセス
+            rows = api.query("SELECT Id, Name FROM Account")
+
+    認証（Auth Refresh Token / Rotation / Metrics）は toolbox/salesforce 側に
+    集約しており、本クラスでは扱わない。
+
+    Attributes:
+        CREDENTIAL_PREFIX: 認証情報のキー名の頭（社内ライブラリ用）。
 
     社内ライブラリが見つからない場合、
     ``comken.internal.exceptions.InternalLibraryNotFoundError`` が送出される。
@@ -39,8 +41,11 @@ class SalesforceApi:
             が import できない場合。
     """
 
+    CREDENTIAL_PREFIX = "SALESFORCE"
+
     def __init__(self) -> None:
         self._library = InternalLibraryBase(SALESFORCE_LIBRARY_NAME)
+        self._module: object | None = None
 
     def __enter__(self) -> SalesforceApi:
         self._module = self._library.load()
@@ -48,6 +53,88 @@ class SalesforceApi:
 
     def __exit__(self, *args: object) -> None:
         self._module = None
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        component: str = "",
+        body: dict | None = None,
+    ) -> dict:
+        """社内ライブラリ経由で HTTP リクエストを送り、JSON を返す。
+
+        Args:
+            method: HTTP メソッド（GET / POST / PATCH / DELETE）。
+            path: API のパス。
+            component: 計測での呼び出し元の区別。
+            body: JSON で送る辞書（省略可）。
+
+        Returns:
+            レスポンスの JSON を辞書に変換したもの。
+
+        Raises:
+            RuntimeError: ``with`` ブロック外で呼ばれた場合。
+        """
+        if self._module is None:
+            raise RuntimeError(
+                "SalesforceApi は 'with' ブロック内で使用してください。"
+            )
+        return self._module.request(method, path, component=component, body=body)  # type: ignore[attr-defined]
+
+    def data_path(self, path: str) -> str:
+        """data API のエンドポイント URL を返す。
+
+        Args:
+            path: API の相対パス。
+
+        Returns:
+            バージョン付きのエンドポイント URL。
+
+        Raises:
+            RuntimeError: ``with`` ブロック外で呼ばれた場合。
+        """
+        if self._module is None:
+            raise RuntimeError(
+                "SalesforceApi は 'with' ブロック内で使用してください。"
+            )
+        return self._module.data_path(path)
+
+    def query(self, soql: str) -> list[dict]:
+        """SOQL クエリを実行し、結果を list[dict] で返す。
+
+        Args:
+            soql: 実行する SOQL クエリ文字列。
+
+        Returns:
+            レコードの辞書のリスト。
+
+        Raises:
+            RuntimeError: ``with`` ブロック外で呼ばれた場合。
+        """
+        if self._module is None:
+            raise RuntimeError(
+                "SalesforceApi は 'with' ブロック内で使用してください。"
+            )
+        return self._module.query(soql)
+
+    def report_run(self, report_id: str) -> list[dict]:
+        """レポートを実行し、結果を list[dict] で返す。
+
+        Args:
+            report_id: 実行するレポートの Id。
+
+        Returns:
+            レポート結果の辞書のリスト。
+
+        Raises:
+            RuntimeError: ``with`` ブロック外で呼ばれた場合。
+        """
+        if self._module is None:
+            raise RuntimeError(
+                "SalesforceApi は 'with' ブロック内で使用してください。"
+            )
+        return self._module.report_run(report_id)
 
 
 __all__ = ["SalesforceApi", "SALESFORCE_LIBRARY_NAME"]
