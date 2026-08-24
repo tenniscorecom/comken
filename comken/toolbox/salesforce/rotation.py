@@ -26,13 +26,6 @@ DEFAULT_ROTATION_INTERVAL_DAYS = 60
 ROTATION_COMPONENT = "credential_rotation"
 
 
-@dataclass(frozen=True)
-class _StagedCredentials:
-    staged_id: str
-    consumer_key: str
-    consumer_secret: str
-
-
 class SalesforceCredentialRotator:
     """ECA の資格情報を、期限到来時だけ安全な順序でローテーションする。
 
@@ -120,6 +113,13 @@ class SalesforceCredentialRotator:
 
     def _credential_name(self, suffix: str) -> str:
         return f"{self._credential_prefix}_{suffix}"
+
+
+@dataclass(frozen=True)
+class _StagedCredentials:
+    staged_id: str
+    consumer_key: str
+    consumer_secret: str
 
 
 def _staged_credentials_of(response: dict | list | str | None) -> _StagedCredentials:

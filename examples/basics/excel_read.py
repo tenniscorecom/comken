@@ -35,7 +35,7 @@ def main() -> None:
         )
 
     with Excel(EXCEL_PATH, read_only=True) as excel:
-        records = excel.data_sheet(SHEET_NAME).table().read().read()
+        records = excel.data_sheet(SHEET_NAME).table().read()
 
     logger.info("辞書で読んだ先頭行: %s", records[0])
     logger.info("読み取り: %d 件", len(records))

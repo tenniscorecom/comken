@@ -60,7 +60,7 @@ def test_replace_on_empty_table_adds_first_data_row(tmp_path) -> None:
         # テーブルへ ``replace()`` する場合の経路を検証する。 ``new_max_row`` が
         # ``min_row + max(len(rows), 1)`` で 1 行分に丸められる分岐を通る。
         table.replace(Table(["id", "name"], [{"id": 1, "name": "A"}]))
-        assert table.read().read() == [{"id": "1", "name": "A"}]
+        assert table.read() == [{"id": "1", "name": "A"}]
         # ref は A1:B2（ヘッダ + 1 行）に収まる。assert 経路を通っていないことを
         # 副次的に確かめるため、openpyxl の ref 文字列で ref の形を見る
         excel_table = excel.data_sheet("Users").table()._worksheet.tables["PY_T_Users"]
@@ -97,4 +97,4 @@ def test_replace_with_empty_rows_keeps_existing_headers(tmp_path) -> None:
         # ``assert`` 経路を踏まずに ref が更新されることを確認する
         table.replace([])
         assert table.read().columns == ["id", "name"]
-        assert table.read().read() == []
+        assert table.read() == []

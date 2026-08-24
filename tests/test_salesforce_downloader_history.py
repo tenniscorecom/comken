@@ -49,7 +49,7 @@ def test_concurrent_appends_keep_one_header_and_complete_rows(tmp_path) -> None:
         list(executor.map(append, range(40)))
 
     with CSV(history_path) as csv_file:
-        rows = csv_file.read().read()
+        rows = csv_file.read()
     assert len(rows) == 40
     assert {row["プロジェクト"] for row in rows} == {str(index) for index in range(40)}
 
@@ -62,7 +62,7 @@ def test_process_appends_keep_one_header_and_complete_rows(tmp_path) -> None:
         pool.map(_append_from_process, arguments)
 
     with CSV(history_path) as csv_file:
-        rows = csv_file.read().read()
+        rows = csv_file.read()
     assert len(rows) == 12
     assert {row["プロジェクト"] for row in rows} == {str(index) for index in range(12)}
 

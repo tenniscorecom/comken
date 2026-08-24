@@ -52,37 +52,6 @@ _SUFFIX_TO_FORMAT = {
 }
 
 
-def _block_values(ws, first_row: int, last_row: int, last_col: int) -> list[tuple]:
-    """シートの矩形範囲をまとめて読み、行ごとのタプルにして返す。
-
-    セルを1つずつ読むと COM の往復が「行数 × 列数」になり、数万行では実用にならない。
-    Range で一度に読めば往復は1回で済む。
-    """
-    if first_row > last_row or last_col < 1:
-        return []
-    values = ws.Range(ws.Cells(first_row, 1), ws.Cells(last_row, last_col)).Value
-    # Range.Value は1セルだけの範囲でスカラーを返すため、行のタプルの形にそろえる。
-    if not isinstance(values, tuple):
-        return [(values,)]
-    if not isinstance(values[0], tuple):
-        return [values]
-    return [tuple(row) for row in values]
-
-
-def _range_values(
-    ws: Any, first_row: int, first_col: int, last_row: int, last_col: int
-) -> list[tuple[Any, ...]]:
-    """指定した矩形だけを1回のCOM呼出しで読む。"""
-    if first_row > last_row or first_col > last_col:
-        return []
-    values = ws.Range(ws.Cells(first_row, first_col), ws.Cells(last_row, last_col)).Value
-    if not isinstance(values, tuple):
-        return [(values,)]
-    if values and not isinstance(values[0], tuple):
-        return [values]
-    return [tuple(row) for row in values]
-
-
 class ExcelCOMHandler(FileBase):
     """win32com を使った Excel 操作クラス。
 
@@ -488,3 +457,34 @@ class RegistryHandler:
     def close(self) -> None:
         """レジストリキーを閉じる。with 文を使う場合は自動で呼ばれる。"""
         win32api.RegCloseKey(self._key)
+
+
+def _block_values(ws, first_row: int, last_row: int, last_col: int) -> list[tuple]:
+    """シートの矩形範囲をまとめて読み、行ごとのタプルにして返す。
+
+    セルを1つずつ読むと COM の往復が「行数 × 列数」になり、数万行では実用にならない。
+    Range で一度に読めば往復は1回で済む。
+    """
+    if first_row > last_row or last_col < 1:
+        return []
+    values = ws.Range(ws.Cells(first_row, 1), ws.Cells(last_row, last_col)).Value
+    # Range.Value は1セルだけの範囲でスカラーを返すため、行のタプルの形にそろえる。
+    if not isinstance(values, tuple):
+        return [(values,)]
+    if not isinstance(values[0], tuple):
+        return [values]
+    return [tuple(row) for row in values]
+
+
+def _range_values(
+    ws: Any, first_row: int, first_col: int, last_row: int, last_col: int
+) -> list[tuple[Any, ...]]:
+    """指定した矩形だけを1回のCOM呼出しで読む。"""
+    if first_row > last_row or first_col > last_col:
+        return []
+    values = ws.Range(ws.Cells(first_row, first_col), ws.Cells(last_row, last_col)).Value
+    if not isinstance(values, tuple):
+        return [(values,)]
+    if values and not isinstance(values[0], tuple):
+        return [values]
+    return [tuple(row) for row in values]

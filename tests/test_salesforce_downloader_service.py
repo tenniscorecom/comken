@@ -344,7 +344,7 @@ class TestHistory:
         ):
             download_report("1001")
         with CSV(history_path) as csv_file:
-            rows = csv_file.read().read()
+            rows = csv_file.read()
             assert len(rows) == 1
             row = rows[0]
             assert row["成否"] == "失敗"
@@ -383,7 +383,7 @@ class TestHistory:
         ):
             download_report("1001")
         with CSV(history_path) as csv_file:
-            rows = csv_file.read().read()
+            rows = csv_file.read()
             assert len(rows) == 1
             row = rows[0]
             assert row["成否"] == "失敗"
@@ -439,7 +439,7 @@ class TestHistory:
         ):
             download_report("1001")
         with CSV(history_path) as csv_file:
-            rows = csv_file.read().read()
+            rows = csv_file.read()
             assert len(rows) == 1
             row = rows[0]
             assert row["成否"] == "失敗"
@@ -477,7 +477,7 @@ class TestHistory:
         ):
             download_report("1001")
         with CSV(history_path) as csv_file:
-            row = csv_file.read().read()[-1]
+            row = csv_file.read()[-1]
             assert row["原因区分"] == "設定"
 
     def test_cause_is_salesforce_when_request_fails(self, tmp_path, monkeypatch):
@@ -510,7 +510,7 @@ class TestHistory:
         ):
             download_report("1001")
         with CSV(history_path) as csv_file:
-            row = csv_file.read().read()[-1]
+            row = csv_file.read()[-1]
             assert row["原因区分"] == "Salesforce"
 
     def test_cause_is_empty_data_when_report_is_empty(self, paths):
@@ -557,7 +557,7 @@ class TestHistory:
         ):
             download_report("1001")
         with CSV(history_path) as csv_file:
-            row = csv_file.read().read()[-1]
+            row = csv_file.read()[-1]
             assert row["原因区分"] == "ファイル"
 
     def test_cause_is_program_when_unexpected_error_raises(self, tmp_path, monkeypatch):
@@ -586,7 +586,7 @@ class TestHistory:
         ):
             download_report("1001")
         with CSV(history_path) as csv_file:
-            row = csv_file.read().read()[-1]
+            row = csv_file.read()[-1]
             assert row["原因区分"] == "プログラム"
 
 
@@ -721,7 +721,7 @@ class TestDownloadScheduled:
 
 def _history_rows(paths: dict) -> list[dict]:
     with CSV(paths["history_path"]) as csv_file:
-        return csv_file.read().read()
+        return csv_file.read()
 
 
 class TestRequiredHistory:
@@ -784,7 +784,7 @@ class TestAllowEmpty:
         assert list(folder.glob("*.csv")) == []
         # 履歴には `データなし` が残る（取得成功・保存未到達の組合せのみ取り得る）
         with CSV(history_path) as csv_file:
-            row = csv_file.read().read()[-1]
+            row = csv_file.read()[-1]
             assert row["成否"] == "失敗"
             assert row["Salesforce取得結果"] == "成功"
             assert row["保存結果"] == ""
@@ -819,7 +819,7 @@ class TestAllowEmpty:
 
         # 履歴は成功・取得件数 0・原因区分 空
         with CSV(history_path) as csv_file:
-            row = csv_file.read().read()[-1]
+            row = csv_file.read()[-1]
             assert row["成否"] == "成功"
             assert row["Salesforce取得結果"] == "成功"
             assert row["保存結果"] == "成功"
@@ -954,7 +954,7 @@ class TestAllowEmpty:
         assert names == ["1001", "1002"]
         # 履歴を確認: "1001" は成功・0件、"1002" も成功・2件
         with CSV(history_path) as csv_file:
-            rows = csv_file.read().read()
+            rows = csv_file.read()
             by_key = {row["管理番号"]: row for row in rows}
             assert by_key["1001"]["成否"] == "成功"
             assert by_key["1001"]["取得件数"] == "0"

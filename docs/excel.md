@@ -12,7 +12,7 @@ with Excel("顧客.xlsx") as excel:
     )
 
 with Excel("顧客.xlsx", read_only=True) as excel:
-    rows = excel.data_sheet("顧客").table().read().read()
+    rows = excel.data_sheet("顧客").table().read()
 ```
 
 ## データシートとテーブル

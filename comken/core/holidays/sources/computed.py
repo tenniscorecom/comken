@@ -43,6 +43,66 @@ DEFAULT_TO_YEAR: Final = 2099
 # ── ヘルパー ──────────────────────────────────────────────────────────────
 
 
+# ── 公開クラス ────────────────────────────────────────────────────────────
+
+
+class ComputedHolidaySource(HolidaySource):
+    """計算で祝日の和集合を返すソース。
+
+    ``HolidaySource`` Protocol を実装する。``load()`` で ``Iterable[Holiday]`` を返す。
+    ``CabinetOfficeCSVSource`` と並列に置いて、
+    ``from_sources([Cabinet, Computed])`` のように和集合で運用する
+    （``HolidayCalendar`` 側の先勝ち WARNING ログが衝突をハンドリングする）。
+
+    このソースは **純粋計算のみ** — 外部通信・ファイル読み込みは一切しない。
+    社内 BO 環境（オフライン・pip 制限）でもそのまま動く。
+
+    Args:
+        from_year: 対象範囲の開始年。省略時は ``DEFAULT_FROM_YEAR`` (1948)。
+        to_year: 対象範囲の終了年。省略時は ``DEFAULT_TO_YEAR`` (2099)。
+            範囲外でも祝日計算は走るが、春分／秋分の近似精度が下がる旨を
+            WARNING ログで知らせる。
+    """
+
+    def __init__(
+        self,
+        *,
+        from_year: int | None = None,
+        to_year: int | None = None,
+    ) -> None:
+        self._from_year = from_year if from_year is not None else DEFAULT_FROM_YEAR
+        self._to_year = to_year if to_year is not None else DEFAULT_TO_YEAR
+        if self._from_year > self._to_year:
+            raise ValueError(
+                f"from_year ({self._from_year}) が to_year ({self._to_year}) より大きいです。"
+            )
+        if self._from_year < DEFAULT_FROM_YEAR or self._to_year > DEFAULT_TO_YEAR:
+            logger.warning(
+                "ComputedHolidaySource の対象範囲 (%d-%d) は高精度範囲 (%d-%d) を"
+                "超えています。春分・秋分の近似精度が下がるため、"
+                "内閣府 CSV などの確定ソースと併用してください。",
+                self._from_year,
+                self._to_year,
+                DEFAULT_FROM_YEAR,
+                DEFAULT_TO_YEAR,
+            )
+
+    def load(self) -> list[Holiday]:
+        """対象年の範囲について計算した祝日をまとめて返す。
+
+        Returns:
+            日付順に並んだ ``Holiday`` のリスト。
+        """
+        all_holidays: list[Holiday] = []
+        for year in range(self._from_year, self._to_year + 1):
+            yearly = _base_holidays_for_year(year)
+            yearly = _add_substitute_holidays(yearly, year)
+            yearly = _add_national_holidays(yearly, year)
+            all_holidays.extend(yearly)
+
+        return sorted(all_holidays, key=lambda h: h.date)
+
+
 def _vernal_equinox_day(year: int) -> int:
     """春分日を近似計算する（``mokejp/holidays_jp`` と同アルゴリズム）。
 
@@ -290,66 +350,6 @@ def _add_national_holidays(holidays: list[Holiday], year: int) -> list[Holiday]:
         occupied.add(sandwiched)
 
     return result
-
-
-# ── 公開クラス ────────────────────────────────────────────────────────────
-
-
-class ComputedHolidaySource(HolidaySource):
-    """計算で祝日の和集合を返すソース。
-
-    ``HolidaySource`` Protocol を実装する。``load()`` で ``Iterable[Holiday]`` を返す。
-    ``CabinetOfficeCSVSource`` と並列に置いて、
-    ``from_sources([Cabinet, Computed])`` のように和集合で運用する
-    （``HolidayCalendar`` 側の先勝ち WARNING ログが衝突をハンドリングする）。
-
-    このソースは **純粋計算のみ** — 外部通信・ファイル読み込みは一切しない。
-    社内 BO 環境（オフライン・pip 制限）でもそのまま動く。
-
-    Args:
-        from_year: 対象範囲の開始年。省略時は ``DEFAULT_FROM_YEAR`` (1948)。
-        to_year: 対象範囲の終了年。省略時は ``DEFAULT_TO_YEAR`` (2099)。
-            範囲外でも祝日計算は走るが、春分／秋分の近似精度が下がる旨を
-            WARNING ログで知らせる。
-    """
-
-    def __init__(
-        self,
-        *,
-        from_year: int | None = None,
-        to_year: int | None = None,
-    ) -> None:
-        self._from_year = from_year if from_year is not None else DEFAULT_FROM_YEAR
-        self._to_year = to_year if to_year is not None else DEFAULT_TO_YEAR
-        if self._from_year > self._to_year:
-            raise ValueError(
-                f"from_year ({self._from_year}) が to_year ({self._to_year}) より大きいです。"
-            )
-        if self._from_year < DEFAULT_FROM_YEAR or self._to_year > DEFAULT_TO_YEAR:
-            logger.warning(
-                "ComputedHolidaySource の対象範囲 (%d-%d) は高精度範囲 (%d-%d) を"
-                "超えています。春分・秋分の近似精度が下がるため、"
-                "内閣府 CSV などの確定ソースと併用してください。",
-                self._from_year,
-                self._to_year,
-                DEFAULT_FROM_YEAR,
-                DEFAULT_TO_YEAR,
-            )
-
-    def load(self) -> list[Holiday]:
-        """対象年の範囲について計算した祝日をまとめて返す。
-
-        Returns:
-            日付順に並んだ ``Holiday`` のリスト。
-        """
-        all_holidays: list[Holiday] = []
-        for year in range(self._from_year, self._to_year + 1):
-            yearly = _base_holidays_for_year(year)
-            yearly = _add_substitute_holidays(yearly, year)
-            yearly = _add_national_holidays(yearly, year)
-            all_holidays.extend(yearly)
-
-        return sorted(all_holidays, key=lambda h: h.date)
 
 
 __all__ = ["ComputedHolidaySource", "DEFAULT_FROM_YEAR", "DEFAULT_TO_YEAR"]

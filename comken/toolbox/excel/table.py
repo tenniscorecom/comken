@@ -22,26 +22,6 @@ if TYPE_CHECKING:
 Value: TypeAlias = str | int | float | bool | datetime
 
 
-def _table_boundaries(excel_table_ref: str) -> tuple[int, int, int, int]:
-    """Excel テーブル ref を int 4 要素 ``(min_col, min_row, max_col, max_row)`` へ正規化する。
-
-    openpyxl の ``range_boundaries()`` は返り値を ``tuple[int | None, ...]`` と推論するが、
-    Excel テーブル ref は validated 済みの範囲なので通常 ``None`` にはならない。
-    呼び出し側で None を意識せずに済むよう、ここで ``int`` へ揃えて返す。
-
-    もし ``None`` が現れた場合のフォールバックは 0 とする。空テーブルを置換した結果として
-    ref の各値が 0 に丸まっても、その直後の ``cell(...)`` 呼び出しが「先頭セル」として
-    動くので、利用者に見える不整合は出ない（発注元の判断）。
-    """
-    min_col, min_row, max_col, max_row = range_boundaries(excel_table_ref)
-    return (
-        0 if min_col is None else min_col,
-        0 if min_row is None else min_row,
-        0 if max_col is None else max_col,
-        0 if max_row is None else max_row,
-    )
-
-
 class ExcelTable:
     """データシート全体を1つのテーブルとして操作する。
 
@@ -243,3 +223,23 @@ class ExcelTable:
             for column in range(min_col, old_max_col + 1):
                 if row_number > min_row + row_count or column >= min_col + header_count:
                     self._worksheet.cell(row=row_number, column=column).value = None
+
+
+def _table_boundaries(excel_table_ref: str) -> tuple[int, int, int, int]:
+    """Excel テーブル ref を int 4 要素 ``(min_col, min_row, max_col, max_row)`` へ正規化する。
+
+    openpyxl の ``range_boundaries()`` は返り値を ``tuple[int | None, ...]`` と推論するが、
+    Excel テーブル ref は validated 済みの範囲なので通常 ``None`` にはならない。
+    呼び出し側で None を意識せずに済むよう、ここで ``int`` へ揃えて返す。
+
+    もし ``None`` が現れた場合のフォールバックは 0 とする。空テーブルを置換した結果として
+    ref の各値が 0 に丸まっても、その直後の ``cell(...)`` 呼び出しが「先頭セル」として
+    動くので、利用者に見える不整合は出ない（発注元の判断）。
+    """
+    min_col, min_row, max_col, max_row = range_boundaries(excel_table_ref)
+    return (
+        0 if min_col is None else min_col,
+        0 if min_row is None else min_row,
+        0 if max_col is None else max_col,
+        0 if max_row is None else max_row,
+    )

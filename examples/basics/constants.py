@@ -20,7 +20,7 @@ def main() -> None:
     with CSV(CSV_PATH, encoding=Encoding.UTF8_SIG) as csv_file:
         csv_file.replace([{"社員番号": "001", "氏名": "山田"}])
     with CSV(CSV_PATH, encoding=Encoding.AUTO) as csv_file:
-        rows = csv_file.read().read()
+        rows = csv_file.read()
     latest = max(OUTPUT_FOLDER.glob("*.csv"), key=lambda path: path.stat().st_mtime)
 
     logger.info("Encoding: %s（%d 件）", Encoding.UTF8_SIG, len(rows))

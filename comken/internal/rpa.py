@@ -19,12 +19,6 @@ logger = logging.getLogger(__name__)
 RPA_LIBRARY_NAME = f"{INTERNAL_LIBRARY_ROOT}.rpa"
 
 
-def _call(rpa: ModuleType, target: str, main: Callable[[], Any], project_name: str) -> Any:
-    """社内 RPA 基盤の入口を呼ぶ。"""
-    logger.info("%s で %s を開始します", target, project_name)
-    return getattr(rpa, target).rpta(main, project_name)
-
-
 @measure
 def backoffice(main: Callable[[], Any], project_name: str) -> Any:
     """バックオフィスの RPA として main を実行する。"""
@@ -37,6 +31,12 @@ def intranet(main: Callable[[], Any], project_name: str) -> Any:
     """イントラネットの RPA として main を実行する。"""
     with InternalLibraryBase(RPA_LIBRARY_NAME) as rpa:
         return _call(rpa, "intranet", main, project_name)
+
+
+def _call(rpa: ModuleType, target: str, main: Callable[[], Any], project_name: str) -> Any:
+    """社内 RPA 基盤の入口を呼ぶ。"""
+    logger.info("%s で %s を開始します", target, project_name)
+    return getattr(rpa, target).rpta(main, project_name)
 
 
 __all__ = ["backoffice", "intranet", "RPA_LIBRARY_NAME"]

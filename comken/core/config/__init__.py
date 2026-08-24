@@ -67,6 +67,141 @@ _is_version_logged = False
 MAPPING_SECTION_SUFFIX = "MAPPING"
 
 
+class Config:
+    """config.ini を読み込み、config.SECTION.KEY の形式でアクセスできるクラス。
+
+    値の型変換（_parse_value の変換順と同じ）:
+        - true / false → bool
+        - [a, b, c] → list[str]
+        - 絶対パス（C:\\ / \\\\ / /）→ Path
+        - 整数 → int
+        - 小数 → float
+        - それ以外 → str
+
+    数値を文字列として使いたい場合はコード側で str() に変換する。
+
+    config.ini の例（セクション名・キー名は大文字で書く）:
+        [BROWSER]
+        WAIT_SECONDS = 10
+        HEADLESS = false
+
+        [FILES]
+        INPUT_FOLDER = C:\\作業\\input
+
+        [REPORT]
+        TARGET_SHEETS = [支店A, 支店B, 集計]
+
+    """
+
+    def __init__(self, path: str | Path | None = None) -> None:
+        """
+        Args:
+            path: config.ini のパス。省略するとプロジェクトのフォルダ
+                （main.py の場所）の config.ini を読む。
+        """
+        # 社内 RPA 基盤は C:\ など別の場所をカレントにして
+        # `python <絶対パス>\main.py` と呼ぶ。カレント基準だと C:\config.ini を探してしまう
+        if path is None:
+            path = project_dir() / "config.ini"
+        cfg = configparser.ConfigParser(interpolation=None)
+        # configparser は既定でキー名を小文字に潰すため、書かれたとおりの綴りを保つ。
+        # これがないと「大文字で書かれていたか」を判定できない（_validate_upper_case）。
+        # `str` 型を callable として代入しているが、configparser の型スタブが
+        # method slot を許容せず pyright が「No overloaded function matches」と
+        # 誤検知するため残す。実行時は `str("FOO") == "FOO"` で identity として動く。
+        cfg.optionxform = str  # type: ignore[method-assign]
+        # utf-8-sig: メモ帳等で保存すると BOM 付き UTF-8 になるため（BOM なしも読める）
+        loaded = cfg.read(path, encoding="utf-8-sig")
+        if not loaded:
+            # configparser はファイルがなくても黙って空になるため、明示的にエラーにする
+            # （後で config.FILES 等が分かりにくい AttributeError になるのを防ぐ）
+            created = _create_from_example(Path(path))
+            if created is not None:
+                raise ConfigCreatedFromExampleError(created)
+            raise ConfigFileNotFoundError(Path(path).resolve())
+
+        # configparser はセクション名の前後の空白（全角スペース含む）を落とさないため、
+        # 手書きで `[FILES ]` のように書くと別セクション扱いになり、書いた人と
+        # 読む側で名前が一致しなくなる。空白を落とした名前でアクセスさせる。
+        # 重複したら黙って捨てずに WARNING を出している（同じ値が読まれているか
+        # 利用者が疑わざるを得なくなるため）。
+        self._path = Path(path).resolve()
+        section_map = _build_section_map(cfg)
+        # ↑の関数で空文字だけのセクション名は除外しているため、ここで len==0 でも
+        # 例外にはせず空の Config として返す（下の _mappings 更新が起きないだけ）。
+        if section_map:
+            # 大文字小文字チェックは「落とした後の名前」で行う（小文字の検出は
+            # 空白除去と独立なので、検出の意味は変わらない）。
+            _validate_upper_case(cfg, Path(path), section_map)
+            self._mappings = {}
+            for stripped_section, original_section in section_map.items():
+                if _is_mapping_section(stripped_section):
+                    # ``*_MAPPING`` は列名が動的なので ``_SectionNamespace`` ではなく
+                    # ``_LenientDict`` で attribute 化する。``Config.SECTION_MAPPING["未知の列名"]``
+                    # を ``None`` で判別できるようにするため ``__missing__`` で ``None`` を返す。
+                    # dict のサブクラスなので ``isinstance(x, dict)`` が True（後方互換）。
+                    #
+                    # 値は ``_LenientDict`` 生成前に全件走査して空欄（前後の空白だけの
+                    # 値も含む）と ``=`` 無しの行（``cfg.get()`` が ``None`` を返す）を
+                    # 集める。空欄のキーは **まとめて** 例外に乗せる（1 件ずつ直させる
+                    # と「次はどれだっけ」のループに落ちるため）。 ``READ_PASSWORD =``
+                    # のように通常セクションで空欄を「設定しない」として使う書き方は
+                    # ここで **対象外**（``_is_mapping_section`` の中だけで検知する）。
+                    options = cfg.options(original_section)
+                    pairs: list[tuple[str, str]] = []
+                    empty_keys: list[str] = []
+                    for key in options:
+                        value = cfg.get(original_section, key)
+                        if value is None or value.strip() == "":
+                            empty_keys.append(key)
+                        else:
+                            pairs.append((key.strip(), value.strip()))
+                    if empty_keys:
+                        raise ConfigMappingEmptyValueError(self._path, stripped_section, empty_keys)
+                    ld = _LenientDict(pairs)
+                    self._mappings[stripped_section] = ld
+                    setattr(self, stripped_section.upper(), ld)
+                    continue
+                # configparser はキー名の前後空白を既に落とすので、二重 strip は不要
+                options = cfg.options(original_section)
+                ns = _SectionNamespace(
+                    section=stripped_section.upper(),
+                    keys=[key.upper() for key in options],
+                    path=self._path,
+                    **{key.upper(): _parse_value(cfg, original_section, key) for key in options},
+                )
+                setattr(self, stripped_section.upper(), ns)
+        else:
+            self._mappings = {}
+
+        # エディタ補完用スタブ（src/config.pyi）を自動更新する。
+        # config.ini を変更してもスタブが古くならない（失敗しても本処理は止めない）。
+        # スタブ生成は別モジュールへ分離しており、遅延 import で循環を避ける
+        from comken.core.config.stubs import update_stub
+
+        update_stub(cfg, path, section_map)
+        _log_version_once()
+
+    def __getattr__(self, name: str) -> NoReturn:
+        # 通常の属性（設定済みセクション）は __dict__ にあり、ここには来ない。
+        # 未定義セクションのアクセスだけがここに来るので、分かりやすいエラーにする。
+        if name.startswith("_"):  # copy/pickle 等の内部属性探索は通常の AttributeError に
+            raise AttributeError(name)
+        # セクション名は大文字と決まっている（ConfigLowerCaseNameError で読み込み時に止める）。
+        # 小文字始まりが __getattr__ に来るのは、`Config(path).save()` のような
+        # 存在しないメソッドを呼んでいるケースがほとんど。ConfigSectionNotFoundError の
+        # 「セクションがありません」は完全な的外れなので、 AttributeError に変えて
+        # 「セクションの話ではない」と気付けるようにする。
+        if name and name[0].islower():
+            raise AttributeError(
+                f"Config に {name!r} という属性（セクション）はありません。"
+                "config.ini のセクション名は大文字なので、"
+                "小文字で始まる名前はセクションではありません。"
+            )
+        sections = [k for k in vars(self) if k.isupper()]
+        raise ConfigSectionNotFoundError(name, sections, self._path)
+
+
 def _is_mapping_section(section: str) -> bool:
     """列名の対応表として扱うセクションかを返す。"""
     return section.endswith(MAPPING_SECTION_SUFFIX)
@@ -222,141 +357,6 @@ def _validate_upper_case(
     ]
     if wrong:
         raise ConfigLowerCaseNameError(path.resolve(), wrong)
-
-
-class Config:
-    """config.ini を読み込み、config.SECTION.KEY の形式でアクセスできるクラス。
-
-    値の型変換（_parse_value の変換順と同じ）:
-        - true / false → bool
-        - [a, b, c] → list[str]
-        - 絶対パス（C:\\ / \\\\ / /）→ Path
-        - 整数 → int
-        - 小数 → float
-        - それ以外 → str
-
-    数値を文字列として使いたい場合はコード側で str() に変換する。
-
-    config.ini の例（セクション名・キー名は大文字で書く）:
-        [BROWSER]
-        WAIT_SECONDS = 10
-        HEADLESS = false
-
-        [FILES]
-        INPUT_FOLDER = C:\\作業\\input
-
-        [REPORT]
-        TARGET_SHEETS = [支店A, 支店B, 集計]
-
-    """
-
-    def __init__(self, path: str | Path | None = None) -> None:
-        """
-        Args:
-            path: config.ini のパス。省略するとプロジェクトのフォルダ
-                （main.py の場所）の config.ini を読む。
-        """
-        # 社内 RPA 基盤は C:\ など別の場所をカレントにして
-        # `python <絶対パス>\main.py` と呼ぶ。カレント基準だと C:\config.ini を探してしまう
-        if path is None:
-            path = project_dir() / "config.ini"
-        cfg = configparser.ConfigParser(interpolation=None)
-        # configparser は既定でキー名を小文字に潰すため、書かれたとおりの綴りを保つ。
-        # これがないと「大文字で書かれていたか」を判定できない（_validate_upper_case）。
-        # `str` 型を callable として代入しているが、configparser の型スタブが
-        # method slot を許容せず pyright が「No overloaded function matches」と
-        # 誤検知するため残す。実行時は `str("FOO") == "FOO"` で identity として動く。
-        cfg.optionxform = str  # type: ignore[method-assign]
-        # utf-8-sig: メモ帳等で保存すると BOM 付き UTF-8 になるため（BOM なしも読める）
-        loaded = cfg.read(path, encoding="utf-8-sig")
-        if not loaded:
-            # configparser はファイルがなくても黙って空になるため、明示的にエラーにする
-            # （後で config.FILES 等が分かりにくい AttributeError になるのを防ぐ）
-            created = _create_from_example(Path(path))
-            if created is not None:
-                raise ConfigCreatedFromExampleError(created)
-            raise ConfigFileNotFoundError(Path(path).resolve())
-
-        # configparser はセクション名の前後の空白（全角スペース含む）を落とさないため、
-        # 手書きで `[FILES ]` のように書くと別セクション扱いになり、書いた人と
-        # 読む側で名前が一致しなくなる。空白を落とした名前でアクセスさせる。
-        # 重複したら黙って捨てずに WARNING を出している（同じ値が読まれているか
-        # 利用者が疑わざるを得なくなるため）。
-        self._path = Path(path).resolve()
-        section_map = _build_section_map(cfg)
-        # ↑の関数で空文字だけのセクション名は除外しているため、ここで len==0 でも
-        # 例外にはせず空の Config として返す（下の _mappings 更新が起きないだけ）。
-        if section_map:
-            # 大文字小文字チェックは「落とした後の名前」で行う（小文字の検出は
-            # 空白除去と独立なので、検出の意味は変わらない）。
-            _validate_upper_case(cfg, Path(path), section_map)
-            self._mappings = {}
-            for stripped_section, original_section in section_map.items():
-                if _is_mapping_section(stripped_section):
-                    # ``*_MAPPING`` は列名が動的なので ``_SectionNamespace`` ではなく
-                    # ``_LenientDict`` で attribute 化する。``Config.SECTION_MAPPING["未知の列名"]``
-                    # を ``None`` で判別できるようにするため ``__missing__`` で ``None`` を返す。
-                    # dict のサブクラスなので ``isinstance(x, dict)`` が True（後方互換）。
-                    #
-                    # 値は ``_LenientDict`` 生成前に全件走査して空欄（前後の空白だけの
-                    # 値も含む）と ``=`` 無しの行（``cfg.get()`` が ``None`` を返す）を
-                    # 集める。空欄のキーは **まとめて** 例外に乗せる（1 件ずつ直させる
-                    # と「次はどれだっけ」のループに落ちるため）。 ``READ_PASSWORD =``
-                    # のように通常セクションで空欄を「設定しない」として使う書き方は
-                    # ここで **対象外**（``_is_mapping_section`` の中だけで検知する）。
-                    options = cfg.options(original_section)
-                    pairs: list[tuple[str, str]] = []
-                    empty_keys: list[str] = []
-                    for key in options:
-                        value = cfg.get(original_section, key)
-                        if value is None or value.strip() == "":
-                            empty_keys.append(key)
-                        else:
-                            pairs.append((key.strip(), value.strip()))
-                    if empty_keys:
-                        raise ConfigMappingEmptyValueError(self._path, stripped_section, empty_keys)
-                    ld = _LenientDict(pairs)
-                    self._mappings[stripped_section] = ld
-                    setattr(self, stripped_section.upper(), ld)
-                    continue
-                # configparser はキー名の前後空白を既に落とすので、二重 strip は不要
-                options = cfg.options(original_section)
-                ns = _SectionNamespace(
-                    section=stripped_section.upper(),
-                    keys=[key.upper() for key in options],
-                    path=self._path,
-                    **{key.upper(): _parse_value(cfg, original_section, key) for key in options},
-                )
-                setattr(self, stripped_section.upper(), ns)
-        else:
-            self._mappings = {}
-
-        # エディタ補完用スタブ（src/config.pyi）を自動更新する。
-        # config.ini を変更してもスタブが古くならない（失敗しても本処理は止めない）。
-        # スタブ生成は別モジュールへ分離しており、遅延 import で循環を避ける
-        from comken.core.config.stubs import update_stub
-
-        update_stub(cfg, path, section_map)
-        _log_version_once()
-
-    def __getattr__(self, name: str) -> NoReturn:
-        # 通常の属性（設定済みセクション）は __dict__ にあり、ここには来ない。
-        # 未定義セクションのアクセスだけがここに来るので、分かりやすいエラーにする。
-        if name.startswith("_"):  # copy/pickle 等の内部属性探索は通常の AttributeError に
-            raise AttributeError(name)
-        # セクション名は大文字と決まっている（ConfigLowerCaseNameError で読み込み時に止める）。
-        # 小文字始まりが __getattr__ に来るのは、`Config(path).save()` のような
-        # 存在しないメソッドを呼んでいるケースがほとんど。ConfigSectionNotFoundError の
-        # 「セクションがありません」は完全な的外れなので、 AttributeError に変えて
-        # 「セクションの話ではない」と気付けるようにする。
-        if name and name[0].islower():
-            raise AttributeError(
-                f"Config に {name!r} という属性（セクション）はありません。"
-                "config.ini のセクション名は大文字なので、"
-                "小文字で始まる名前はセクションではありません。"
-            )
-        sections = [k for k in vars(self) if k.isupper()]
-        raise ConfigSectionNotFoundError(name, sections, self._path)
 
 
 # ── `from comken import config` 用の遅延シングルトン ──────────────────────────

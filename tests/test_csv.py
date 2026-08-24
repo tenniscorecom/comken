@@ -33,9 +33,9 @@ class TestCSV:
         path = tmp_path / "data.csv"
         path.write_text("id,name\n1,山田\n", encoding="utf-8-sig")
         with CSV(path) as csv_file:
-            assert csv_file.read().read() == [{"id": "1", "name": "山田"}]
+            assert csv_file.read() == [{"id": "1", "name": "山田"}]
         with CSV(path, types={"id": int}) as csv_file:
-            assert csv_file.read().read() == [{"id": 1, "name": "山田"}]
+            assert csv_file.read() == [{"id": 1, "name": "山田"}]
 
     def test_auto_reads_cp932(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
@@ -68,7 +68,7 @@ class TestCSV:
         with CSV(path) as csv_file:
             csv_file.replace(Table(["id"], [{"id": "1"}]))
         with CSV(path) as csv_file:
-            assert csv_file.read().read() == [{"id": "1"}]
+            assert csv_file.read() == [{"id": "1"}]
 
     def test_rejects_non_csv_suffix(self, tmp_path) -> None:
         with pytest.raises(UnsupportedFileSuffixError):
@@ -78,7 +78,7 @@ class TestCSV:
         path = tmp_path / "data.csv"
         path.write_text("id,name\n1,山田\n", encoding="utf-8-sig")
         with CSV(path, encoding=Encoding.AUTO) as csv_file:
-            assert csv_file.read().read() == [{"id": "1", "name": "山田"}]
+            assert csv_file.read() == [{"id": "1", "name": "山田"}]
 
     def test_auto_rejects_unknown_encoding_with_csv_exception(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
@@ -117,7 +117,7 @@ class TestCSV:
         path = tmp_path / "data.csv"
         with CSV(path) as csv_file:
             csv_file.replace([{"id": "1"}])
-            assert csv_file.read().read() == [{"id": "1"}]
+            assert csv_file.read() == [{"id": "1"}]
             assert not path.exists()
 
     def test_append_requires_matching_columns(self, tmp_path) -> None:

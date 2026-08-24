@@ -85,7 +85,7 @@ diff_row(before, after)
 
 # データセット同士の差分（キー列で突合）
 with CSV("昨日.csv") as csv_file:
-    before = csv_file.read().read()
+    before = csv_file.read()
 with Excel("今日.xlsx") as f:
     after = f.read_computed_rows_as_dicts("Sheet1")
 
@@ -168,7 +168,7 @@ def click_submit():
 from comken.core import Timer
 
 with Timer("CSV読み込み"), CSV("data.csv") as csv_file:
-    rows = csv_file.read().read()
+    rows = csv_file.read()
 # ログ: CSV読み込み: 3.21秒
 
 @Timer("売上集計")            # デコレータでも使える

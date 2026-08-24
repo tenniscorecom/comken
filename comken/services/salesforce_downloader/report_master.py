@@ -183,7 +183,7 @@ class MasterRow:
             raise MasterSheetNotDefinedError(cls.__name__)
 
         with Excel(source) as excel:
-            raw_rows = excel.data_sheet(cls.SHEET_NAME).table().read().read()
+            raw_rows = excel.data_sheet(cls.SHEET_NAME).table().read()
         if any(
             isinstance(value, str) and value.startswith("=")
             for raw_row in raw_rows

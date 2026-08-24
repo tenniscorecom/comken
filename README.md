@@ -20,7 +20,7 @@ from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Excel
 
 with CSV(r"C:\作業\data.csv", read_only=True) as csv_file:
-    rows = csv_file.read().read()
+    rows = csv_file.read()
 
 with Excel(r"C:\作業\report.xlsx") as excel:
     excel.create_data_sheet("結果").create_table(

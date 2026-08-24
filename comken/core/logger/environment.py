@@ -33,6 +33,80 @@ COMKEN_HANDLER_NAMES = frozenset(
 )
 
 
+def setup_logging(site: type[LoggerSite], *, allow_existing: bool = False) -> None:
+    """site の指定に従い root logger を設定する。
+
+    PID は同じ端末で同時に動くプロセスを見分ける値であり、保存先を選ぶ端末名とは
+    用途が異なる。Formatter の固定値として渡し、ログ呼び出し側へ負担を増やさない。
+
+    ``setup_local_logging()`` が先に走っている場合（root に console と local
+    ファイルだけがある場合）は console を再利用し、environment ファイルだけを
+    追加する。逆順（``setup_logging()`` が先）では通常どおり console と
+    environment ファイルを追加する。両方がすでに走っている場合は
+    ``LoggingAlreadyConfiguredError`` を送出して、二重出力を防ぐ。
+
+    comken 以外の handler が root に混ざっている場合は ``LoggingConflictError``
+    を送出する。既存 handler の出力先やレベルを勝手に変えてしまうため。
+    ``allow_existing=True`` を指定すると、その判定を**警告ログだけ**に留めて処理を
+    続行する（comken の handler が両方走っているケースは許可しない — 何が3つ目に
+    なるか曖昧になり、誤って出力に気付くのが遅れるため）。
+    """
+    root_logger = logging.getLogger()
+    existing = root_logger.handlers[:]
+    external_allowed = _guard_root_handlers(existing, side="setup", allow_existing=allow_existing)
+
+    site.check_owner()
+    # ファイルを作る前に止める。空のフォルダが現場へ残ると
+    # 「設定忘れか、運用で消すのか」が判断できなくなるため。
+    if not site.LOG_ROOT:
+        raise LogRootNotConfiguredError(site)
+    # 登録は大文字／小文字どちらでもよく、運用取得側も大小揺れるので
+    # キー側も問い合わせ側も小文字化した上で照合する。
+    hostname = socket.gethostname().lower()
+    folder_name = next(
+        (value for key, value in site.LOG_FOLDER_NAMES.items() if key.lower() == hostname),
+        None,
+    )
+    # 未登録、または値にパス区切りが含まれている場合は _etc_ 扱い。
+    # 後者は Path の `/` 演算子が絶対パス値を見ると LOG_ROOT を捨てて
+    # 別の場所へ書き込む罠なので、未登録としてガードする。
+    if not folder_name or "/" in folder_name or "\\" in folder_name:
+        folder_name = ETC_FOLDER_NAME
+    log_dir = Path(site.LOG_ROOT) / folder_name
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / f"{site.NAME}-{today().isoformat()}.log"
+
+    formatter = logging.Formatter(
+        LOG_FORMAT,
+        datefmt=DATE_FORMAT,
+        defaults={"pid": os.getpid()},
+    )
+
+    if LOCAL_HANDLER_NAME in {h.name for h in existing}:
+        # setup_local_logging() が既に console を備えている。console は使い回して
+        # environment ファイルだけを追加する（重複出力を避ける）。console のレベルは
+        # setup_local_logging() が決めた値をそのまま使う。
+        console_handler = next(h for h in existing if h.name == CONSOLE_HANDLER_NAME)
+    else:
+        console_handler = logging.StreamHandler()
+        console_handler.set_name(CONSOLE_HANDLER_NAME)
+        console_handler.setLevel(logging.INFO)
+        console_handler.setFormatter(formatter)
+        root_logger.addHandler(console_handler)
+    environment_file_handler = logging.FileHandler(log_path, encoding="utf-8")
+    environment_file_handler.set_name(ENVIRONMENT_HANDLER_NAME)
+    environment_file_handler.setLevel(logging.INFO)
+    environment_file_handler.setFormatter(formatter)
+    root_logger.addHandler(environment_file_handler)
+
+    root_logger.setLevel(_compute_root_level(root_logger.handlers))
+
+    # 警告は comken の handler を root に追加し終えてから出す。先に出すと
+    # 警告が comken のログファイルに残らず、何と共存したか追跡できなくなる。
+    if external_allowed:
+        _warn_external_handlers_allowed("setup_logging()", existing)
+
+
 def _compute_root_level(handlers: list[logging.Handler]) -> int:
     """comken 管理下の handler のうち最も低いレベルを返す。"""
     levels = [h.level for h in handlers if h.name in COMKEN_HANDLER_NAMES]
@@ -146,77 +220,3 @@ def _warn_external_handlers_allowed(func_name: str, handlers: list[logging.Handl
         func_name,
         "; ".join(external_descriptions) if external_descriptions else "(なし)",
     )
-
-
-def setup_logging(site: type[LoggerSite], *, allow_existing: bool = False) -> None:
-    """site の指定に従い root logger を設定する。
-
-    PID は同じ端末で同時に動くプロセスを見分ける値であり、保存先を選ぶ端末名とは
-    用途が異なる。Formatter の固定値として渡し、ログ呼び出し側へ負担を増やさない。
-
-    ``setup_local_logging()`` が先に走っている場合（root に console と local
-    ファイルだけがある場合）は console を再利用し、environment ファイルだけを
-    追加する。逆順（``setup_logging()`` が先）では通常どおり console と
-    environment ファイルを追加する。両方がすでに走っている場合は
-    ``LoggingAlreadyConfiguredError`` を送出して、二重出力を防ぐ。
-
-    comken 以外の handler が root に混ざっている場合は ``LoggingConflictError``
-    を送出する。既存 handler の出力先やレベルを勝手に変えてしまうため。
-    ``allow_existing=True`` を指定すると、その判定を**警告ログだけ**に留めて処理を
-    続行する（comken の handler が両方走っているケースは許可しない — 何が3つ目に
-    なるか曖昧になり、誤って出力に気付くのが遅れるため）。
-    """
-    root_logger = logging.getLogger()
-    existing = root_logger.handlers[:]
-    external_allowed = _guard_root_handlers(existing, side="setup", allow_existing=allow_existing)
-
-    site.check_owner()
-    # ファイルを作る前に止める。空のフォルダが現場へ残ると
-    # 「設定忘れか、運用で消すのか」が判断できなくなるため。
-    if not site.LOG_ROOT:
-        raise LogRootNotConfiguredError(site)
-    # 登録は大文字／小文字どちらでもよく、運用取得側も大小揺れるので
-    # キー側も問い合わせ側も小文字化した上で照合する。
-    hostname = socket.gethostname().lower()
-    folder_name = next(
-        (value for key, value in site.LOG_FOLDER_NAMES.items() if key.lower() == hostname),
-        None,
-    )
-    # 未登録、または値にパス区切りが含まれている場合は _etc_ 扱い。
-    # 後者は Path の `/` 演算子が絶対パス値を見ると LOG_ROOT を捨てて
-    # 別の場所へ書き込む罠なので、未登録としてガードする。
-    if not folder_name or "/" in folder_name or "\\" in folder_name:
-        folder_name = ETC_FOLDER_NAME
-    log_dir = Path(site.LOG_ROOT) / folder_name
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_path = log_dir / f"{site.NAME}-{today().isoformat()}.log"
-
-    formatter = logging.Formatter(
-        LOG_FORMAT,
-        datefmt=DATE_FORMAT,
-        defaults={"pid": os.getpid()},
-    )
-
-    if LOCAL_HANDLER_NAME in {h.name for h in existing}:
-        # setup_local_logging() が既に console を備えている。console は使い回して
-        # environment ファイルだけを追加する（重複出力を避ける）。console のレベルは
-        # setup_local_logging() が決めた値をそのまま使う。
-        console_handler = next(h for h in existing if h.name == CONSOLE_HANDLER_NAME)
-    else:
-        console_handler = logging.StreamHandler()
-        console_handler.set_name(CONSOLE_HANDLER_NAME)
-        console_handler.setLevel(logging.INFO)
-        console_handler.setFormatter(formatter)
-        root_logger.addHandler(console_handler)
-    environment_file_handler = logging.FileHandler(log_path, encoding="utf-8")
-    environment_file_handler.set_name(ENVIRONMENT_HANDLER_NAME)
-    environment_file_handler.setLevel(logging.INFO)
-    environment_file_handler.setFormatter(formatter)
-    root_logger.addHandler(environment_file_handler)
-
-    root_logger.setLevel(_compute_root_level(root_logger.handlers))
-
-    # 警告は comken の handler を root に追加し終えてから出す。先に出すと
-    # 警告が comken のログファイルに残らず、何と共存したか追跡できなくなる。
-    if external_allowed:
-        _warn_external_handlers_allowed("setup_logging()", existing)

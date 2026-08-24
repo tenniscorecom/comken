@@ -146,7 +146,7 @@ def test_replace_without_formula_succeeds(tmp_path: Path) -> None:
     with Excel(path) as excel:
         table = excel.create_data_sheet("顧客").create_table("顧客", Table(["ID"], [{"ID": "001"}]))
         table.replace([{"ID": "002"}])
-        assert table.read().read() == [{"ID": "002"}]
+        assert table.read() == [{"ID": "002"}]
 
 
 def test_replace_only_checks_data_rows_not_header(tmp_path: Path) -> None:

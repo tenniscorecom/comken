@@ -39,7 +39,7 @@ class TestCSV:
             csv_file.replace([])
 
         with CSV(path) as csv_file:
-            assert csv_file.read().read() == []
+            assert csv_file.read() == []
 
     def test_empty_table_preserves_header_and_dry_run_does_not_save(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
@@ -65,11 +65,11 @@ class TestExcelTable:
                 "Users", Table(["id", "name", "enabled"], rows)
             )
             assert table.count() == 1
-            assert table.read().read() == rows
+            assert table.read() == rows
 
         with Excel(path, types=types) as excel:
             assert excel.list_data_sheets() == ["PY_Users"]
-            assert excel.data_sheet("Users").table().read().read() == rows
+            assert excel.data_sheet("Users").table().read() == rows
 
     def test_data_sheet_rejects_cell_access(self, tmp_path) -> None:
         with Excel(tmp_path / "data.xlsx") as excel:
@@ -86,7 +86,7 @@ class TestExcelTable:
             )
             table.replace(Table(["id"], []))
             assert table.read().columns == ["id"]
-            assert table.read().read() == []
+            assert table.read() == []
             assert table._worksheet["B1"].value is None
             assert table._worksheet["B2"].value is None
 

@@ -190,7 +190,7 @@ class TestDryRun:
         path = tmp_path / "data.csv"
         path.write_text("番号\n1\n", encoding="utf-8-sig")
         with comken.dry_run(), CSV(path) as csv_file:
-            assert csv_file.read().read() == [{"番号": "1"}]
+            assert csv_file.read() == [{"番号": "1"}]
 
     def test_nested_and_exception_restore_previous_state(self):
         """入れ子と例外の後に、入る前の状態へ戻る。"""

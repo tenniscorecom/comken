@@ -143,26 +143,6 @@ def wait_for_file(
         time.sleep(poll_interval)
 
 
-def _ensure_watchable_folder(folder_path: Path) -> None:
-    """監視できるフォルダかを確かめる。駄目なら理由の分かる例外を投げる。
-
-    Raises:
-        FileNotFoundError: フォルダが存在しない。
-        NotADirectoryError: 存在するがフォルダではない（ファイルだった）。
-    """
-    if folder_path.is_dir():
-        return
-    if folder_path.exists():
-        raise NotADirectoryError(
-            f"フォルダではありません: {folder_path}\n"
-            "監視するフォルダを指定してください（ファイルは指定できません）。"
-        )
-    raise FileNotFoundError(
-        f"監視するフォルダがありません: {folder_path}\n"
-        "共有サーバーにつながっているか、パスが正しいかを確認してください。"
-    )
-
-
 @measure
 def wait_until_stable(
     path: str | Path,
@@ -205,6 +185,26 @@ def wait_until_stable(
     file_path = Path(path)
     deadline = time.monotonic() + timeout
     return _wait_until_stable(file_path, stable_for, poll_interval, deadline)
+
+
+def _ensure_watchable_folder(folder_path: Path) -> None:
+    """監視できるフォルダかを確かめる。駄目なら理由の分かる例外を投げる。
+
+    Raises:
+        FileNotFoundError: フォルダが存在しない。
+        NotADirectoryError: 存在するがフォルダではない（ファイルだった）。
+    """
+    if folder_path.is_dir():
+        return
+    if folder_path.exists():
+        raise NotADirectoryError(
+            f"フォルダではありません: {folder_path}\n"
+            "監視するフォルダを指定してください（ファイルは指定できません）。"
+        )
+    raise FileNotFoundError(
+        f"監視するフォルダがありません: {folder_path}\n"
+        "共有サーバーにつながっているか、パスが正しいかを確認してください。"
+    )
 
 
 def _wait_until_stable(

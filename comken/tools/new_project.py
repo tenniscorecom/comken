@@ -63,54 +63,6 @@ PYTHON_LIBRARY_FILES = (
 )
 
 
-def _encoding_of(path: Path) -> str:
-    """そのファイルの文字コード。bat は cmd.exe に合わせて CP932。"""
-    return "cp932" if path.suffix.lower() == ".bat" else "utf-8"
-
-
-def _fill_project_name(target: Path, project_name: str) -> None:
-    """ひな形の（プロジェクト名）を実際の名前に置き換える。"""
-    for name in NAMED_FILES:
-        path = target / name
-        if not path.is_file():
-            continue
-        text = path.read_text(encoding="utf-8-sig")
-        if PLACEHOLDER_NAME in text:
-            path.write_text(text.replace(PLACEHOLDER_NAME, project_name), encoding="utf-8")
-
-
-def _fill_python_library(target: Path, python_library: Path) -> None:
-    """ひな形に書いてある comken の場所を、実際の場所に置き換える。
-
-    実行.bat と 認証情報の登録.bat（実行時の PYTHONPATH）と .vscode/settings.json
-    （VS Code の補完・定義ジャンプ）で同じ場所が要る。手で両方を直す形にすると
-    片方を忘れ、動くのに補完だけ効かない状態になる。
-    忘れようがないよう、ここでまとめて入れる。
-    """
-    slash_placeholder = PLACEHOLDER_PYTHON_LIBRARY.replace("\\", "/")
-    slash_root = str(python_library).replace("\\", "/")
-    for name in PYTHON_LIBRARY_FILES:
-        path = target / name
-        if not path.is_file():
-            continue
-        encoding = _encoding_of(path)
-        text = path.read_text(encoding=encoding)
-        # JSON は \ が特殊文字なので / 区切りで書いてある。先に / 版を replace する
-        text = text.replace(slash_placeholder, slash_root)
-        text = text.replace(PLACEHOLDER_PYTHON_LIBRARY, str(python_library))
-        path.write_text(text, encoding=encoding)
-
-
-def _strip_template_notes(readme: Path, project_name: str) -> None:
-    """README からひな形向けの節を落とし、プロジェクト名を入れる。"""
-    text = readme.read_text(encoding="utf-8-sig")
-    head, separator, _ = text.partition(TEMPLATE_ONLY_HEADING)
-    if separator:
-        # 節の直前の区切り線（---）も一緒に落とす
-        head = head.rstrip().removesuffix("---").rstrip() + "\n"
-    readme.write_text(head.replace(PLACEHOLDER_NAME, project_name), encoding="utf-8")
-
-
 def create(project_name: str, into: Path, python_library: Path = IMPORT_ROOT) -> Path:
     """ひな形をコピーして、新しいプロジェクトのフォルダを作る。"""
     if not TEMPLATE_DIR.is_dir():
@@ -177,6 +129,54 @@ def main() -> None:
     print("     ので、値を書き換える")
     print("  2. src/run.py の run() に処理を書く")
     print("  3. docs/使い方.md・docs/仕様書.md の（ここを書く）を埋める")
+
+
+def _encoding_of(path: Path) -> str:
+    """そのファイルの文字コード。bat は cmd.exe に合わせて CP932。"""
+    return "cp932" if path.suffix.lower() == ".bat" else "utf-8"
+
+
+def _fill_project_name(target: Path, project_name: str) -> None:
+    """ひな形の（プロジェクト名）を実際の名前に置き換える。"""
+    for name in NAMED_FILES:
+        path = target / name
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8-sig")
+        if PLACEHOLDER_NAME in text:
+            path.write_text(text.replace(PLACEHOLDER_NAME, project_name), encoding="utf-8")
+
+
+def _fill_python_library(target: Path, python_library: Path) -> None:
+    """ひな形に書いてある comken の場所を、実際の場所に置き換える。
+
+    実行.bat と 認証情報の登録.bat（実行時の PYTHONPATH）と .vscode/settings.json
+    （VS Code の補完・定義ジャンプ）で同じ場所が要る。手で両方を直す形にすると
+    片方を忘れ、動くのに補完だけ効かない状態になる。
+    忘れようがないよう、ここでまとめて入れる。
+    """
+    slash_placeholder = PLACEHOLDER_PYTHON_LIBRARY.replace("\\", "/")
+    slash_root = str(python_library).replace("\\", "/")
+    for name in PYTHON_LIBRARY_FILES:
+        path = target / name
+        if not path.is_file():
+            continue
+        encoding = _encoding_of(path)
+        text = path.read_text(encoding=encoding)
+        # JSON は \ が特殊文字なので / 区切りで書いてある。先に / 版を replace する
+        text = text.replace(slash_placeholder, slash_root)
+        text = text.replace(PLACEHOLDER_PYTHON_LIBRARY, str(python_library))
+        path.write_text(text, encoding=encoding)
+
+
+def _strip_template_notes(readme: Path, project_name: str) -> None:
+    """README からひな形向けの節を落とし、プロジェクト名を入れる。"""
+    text = readme.read_text(encoding="utf-8-sig")
+    head, separator, _ = text.partition(TEMPLATE_ONLY_HEADING)
+    if separator:
+        # 節の直前の区切り線（---）も一緒に落とす
+        head = head.rstrip().removesuffix("---").rstrip() + "\n"
+    readme.write_text(head.replace(PLACEHOLDER_NAME, project_name), encoding="utf-8")
 
 
 if __name__ == "__main__":

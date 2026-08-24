@@ -58,6 +58,7 @@ MAX_ATTEMPTS = 3
 RETRY_WAIT_SECONDS = 2
 
 
+# NOTE: SalesforceBase の型注釈を実行時に評価するため、_OAuth は公開クラスより前に置く。
 class _OAuth(Protocol):
     """Salesforceクライアントが認証方式へ求める最小インターフェース。"""
 

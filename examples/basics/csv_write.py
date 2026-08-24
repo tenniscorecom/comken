@@ -30,7 +30,7 @@ def main() -> None:
         csv_file.append([{"日時": "2026-08-13 12:00", "担当者": "佐藤", "処理件数": 7}])
 
     with CSV(OUTPUT_PATH) as csv_file:
-        rows = csv_file.read().read()
+        rows = csv_file.read()
     logger.info("CSV 出力: %s（%d 件）", OUTPUT_PATH, len(rows))
 
 

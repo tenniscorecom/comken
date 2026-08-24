@@ -59,6 +59,13 @@ class Table:
         """現在の行をコピーして返す。元のTableは変更しない。"""
         return [dict(row) for row in self._rows]
 
+    def __getitem__(self, index: int) -> dict[str, Any]:
+        """指定位置の行をコピーして返す。
+
+        返るのはコピーなので、``table[0]["列"] = x`` と書いても Table は変わらない。
+        """
+        return dict(self._rows[index])
+
     def __iter__(self):
         """各行のコピーを返す。反復中の変更は元のTableへ反映しない。"""
         return iter(self.read())

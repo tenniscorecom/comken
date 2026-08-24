@@ -74,13 +74,6 @@ class HistoryRow:
     error: str = ""
 
 
-def _stage(value: bool | None) -> str:
-    """3状態（成功／失敗／未到達）を履歴の文字列に変換する。"""
-    if value is None:
-        return ""
-    return SUCCESS if value else FAILURE
-
-
 @measure
 def record(
     path: str | Path,
@@ -191,6 +184,13 @@ def successful_files_today(
             ):
                 matches.append(Path(row.get("保存先", "")) / row["ファイル名"])
     return list(reversed(matches))
+
+
+def _stage(value: bool | None) -> str:
+    """3状態（成功／失敗／未到達）を履歴の文字列に変換する。"""
+    if value is None:
+        return ""
+    return SUCCESS if value else FAILURE
 
 
 def _append(path: Path, values: list) -> None:

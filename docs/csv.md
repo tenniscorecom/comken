@@ -7,7 +7,7 @@ from comken.toolbox.csv import CSV
 
 with CSV("顧客.csv") as csv:
     table = csv.read()
-    rows = table.read()
+    rows = [dict(row, 氏名=row["氏名"].strip()) for row in table]
     table.replace(rows)
 ```
 

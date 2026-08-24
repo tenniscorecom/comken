@@ -23,7 +23,7 @@ def test_excel_creates_and_reads_python_table(tmp_path) -> None:
         sheet = excel.create_data_sheet("顧客")
         sheet.create_table("顧客", Table(["ID", "名前"], [{"ID": "001", "名前": "山田"}]))
     with Excel(path, read_only=True) as excel:
-        assert excel.data_sheet("顧客").table().read().read() == [{"ID": "001", "名前": "山田"}]
+        assert excel.data_sheet("顧客").table().read() == [{"ID": "001", "名前": "山田"}]
 
 
 def test_excel_replaces_table_without_saving_until_context_exit(tmp_path) -> None:
@@ -33,9 +33,9 @@ def test_excel_replaces_table_without_saving_until_context_exit(tmp_path) -> Non
     with Excel(path) as excel:
         table = excel.data_sheet("顧客").table()
         table.replace([{"ID": "002"}])
-        assert table.read().read() == [{"ID": "002"}]
+        assert table.read() == [{"ID": "002"}]
     with Excel(path, read_only=True) as excel:
-        assert excel.data_sheet("顧客").table().read().read() == [{"ID": "002"}]
+        assert excel.data_sheet("顧客").table().read() == [{"ID": "002"}]
 
 
 def test_excel_rejects_ambiguous_table_name(tmp_path) -> None:
@@ -247,5 +247,5 @@ class TestCreateTableNameValidation:
         path = tmp_path / "book.xlsx"
         with Excel(path) as excel:
             table = excel.create_data_sheet("S").create_table("顧客", Table(["ID"], [{"ID": "1"}]))
-            rows = table.read().read()
+            rows = table.read()
         assert rows == [{"ID": "1"}]

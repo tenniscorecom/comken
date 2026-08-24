@@ -30,6 +30,34 @@ from comken.tools.new_project import create as create_project
 _DEFAULT_INTO = Path.cwd
 
 
+def main(argv: list[str] | None = None) -> int:
+    """コマンドを実行して終了コードを返す（0=成功 / 1=失敗）。"""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    parser = _build_parser()
+
+    # 引数が無いときはトップの help を出して終わる。
+    # argparse には渡さない（サブコマンド必須をここで満たせないため）。
+    if not argv:
+        parser.print_help()
+        return 0
+
+    # 先頭が -h/--help のときはトップの help を出して終わる。
+    if argv[0] in ("-h", "--help"):
+        parser.print_help()
+        return 0
+
+    # サブコマンドの help（例: `sf --help` / `sf check --help`）は
+    # parse_known_args でサブコマンドまで消費した残り（`-h`/`--help`）を
+    # 下流の parser に渡せば、各サブコマンドの parser が処理する。
+    args, remaining = parser.parse_known_args(argv)
+    try:
+        result = args.run(args, remaining)
+    except ComkenError as e:
+        print(f"エラー: {e}", file=sys.stderr)
+        return 1
+    return 0 if result is None else int(result)
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m comken",
@@ -97,34 +125,6 @@ def _build_parser() -> argparse.ArgumentParser:
     report.set_defaults(run=_run_report)
 
     return parser
-
-
-def main(argv: list[str] | None = None) -> int:
-    """コマンドを実行して終了コードを返す（0=成功 / 1=失敗）。"""
-    argv = list(sys.argv[1:] if argv is None else argv)
-    parser = _build_parser()
-
-    # 引数が無いときはトップの help を出して終わる。
-    # argparse には渡さない（サブコマンド必須をここで満たせないため）。
-    if not argv:
-        parser.print_help()
-        return 0
-
-    # 先頭が -h/--help のときはトップの help を出して終わる。
-    if argv[0] in ("-h", "--help"):
-        parser.print_help()
-        return 0
-
-    # サブコマンドの help（例: `sf --help` / `sf check --help`）は
-    # parse_known_args でサブコマンドまで消費した残り（`-h`/`--help`）を
-    # 下流の parser に渡せば、各サブコマンドの parser が処理する。
-    args, remaining = parser.parse_known_args(argv)
-    try:
-        result = args.run(args, remaining)
-    except ComkenError as e:
-        print(f"エラー: {e}", file=sys.stderr)
-        return 1
-    return 0 if result is None else int(result)
 
 
 # ── 各サブコマンドの実体 ─────────────────────────────────────────────────────

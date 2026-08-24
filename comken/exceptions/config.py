@@ -128,11 +128,6 @@ class ConfigLowerCaseNameError(ConfigError):
         )
 
 
-def _suggest_close_matches(name: str, existing: list[str]) -> list[str]:
-    """名前に対して既存候補から近いものを最大2件まで返す。"""
-    return find_close_names(name, existing)
-
-
 class ConfigSectionNotFoundError(ConfigError):
     """config.ini の必要な節がない
 
@@ -239,3 +234,8 @@ class ConfigMappingEmptyValueError(ConfigError):
             "\n左右に値を書いたうえで、もう一度実行してください。"
             "\n例: ご依頼番号 = 受付番号"
         )
+
+
+def _suggest_close_matches(name: str, existing: list[str]) -> list[str]:
+    """名前に対して既存候補から近いものを最大2件まで返す。"""
+    return find_close_names(name, existing)
