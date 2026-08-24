@@ -13,8 +13,9 @@ from __future__ import annotations
 from typing import Any
 
 from comken.internal.base import InternalLibraryBase
+from comken.internal.names import INTERNAL_LIBRARY_ROOT
 
-SALESFORCE_LIBRARY_NAME = "example_libs.v0000.salesforce"
+SALESFORCE_LIBRARY_NAME = f"{INTERNAL_LIBRARY_ROOT}.salesforce"
 
 
 class SalesforceAPI:

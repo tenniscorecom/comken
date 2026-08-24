@@ -136,3 +136,22 @@ def test_rpa_project_name_is_passed_through() -> None:
         backoffice(lambda: None, "my-project")
     args, _ = rpa.backoffice.rpta.call_args
     assert args[1] == "my-project"
+
+
+# ── 共通定数からの組み立て ────────────────────────────────────────────
+
+
+def test_rpa_library_name_is_built_from_internal_root() -> None:
+    """`RPA_LIBRARY_NAME` は `INTERNAL_LIBRARY_ROOT` から組み立てられている。
+
+    共通定数を書き換えれば両名が追随する契約を確認するため、 ``f-string`` で
+    連結した結果と完全一致することを確かめる。
+    """
+    from comken.internal.names import INTERNAL_LIBRARY_ROOT
+    from comken.internal.salesforce_api import SALESFORCE_LIBRARY_NAME
+
+    # 期待値を左辺に置く（SIM300 対策）。
+    assert f"{INTERNAL_LIBRARY_ROOT}.rpa" == RPA_LIBRARY_NAME
+    assert f"{INTERNAL_LIBRARY_ROOT}.salesforce" == SALESFORCE_LIBRARY_NAME
+    # 共通定数を差し替えると両名が同時に変わる（書き換え漏れの検知）
+    assert SALESFORCE_LIBRARY_NAME.startswith(INTERNAL_LIBRARY_ROOT + ".")

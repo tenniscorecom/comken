@@ -11,10 +11,11 @@ from collections.abc import Callable
 from typing import Any
 
 from comken.internal.base import InternalLibraryBase, ModuleType
+from comken.internal.names import INTERNAL_LIBRARY_ROOT
 
 logger = logging.getLogger(__name__)
 
-RPA_LIBRARY_NAME = "example_libs.v0000.rpa"
+RPA_LIBRARY_NAME = f"{INTERNAL_LIBRARY_ROOT}.rpa"
 
 
 def _call(rpa: ModuleType, target: str, main: Callable[[], Any], project_name: str) -> Any:
