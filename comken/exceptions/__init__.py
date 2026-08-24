@@ -28,6 +28,7 @@ ComkenError
 │   ├── ExcelSaveNotCompletedError
 │   ├── ExcelSaveValidationError
 │   ├── ExcelMacroPreservationError
+│   ├── ExcelReadOnlyOperationError
 │   ├── SheetNotFoundError
 │   ├── SheetAlreadyExistsError
 │   ├── SheetNameError
@@ -88,6 +89,7 @@ ComkenError
 │   ├── TableDuplicateKeyError
 │   ├── TableRowColumnsError
 │   ├── TableTypeConversionError
+│   ├── TableNotOpenError
 │   └── TransferDestinationMissingError
 ├── TransferDestinationMultipleMatchError
 ├── ColumnNotFoundError
@@ -215,6 +217,7 @@ from comken.exceptions.excel import (
     ExcelFileNotFoundError,
     ExcelHeadersTooFewError,
     ExcelMacroPreservationError,
+    ExcelReadOnlyOperationError,
     ExcelSaveNotCompletedError,
     ExcelSaveValidationError,
     FileFormatMismatchError,
@@ -283,6 +286,7 @@ from comken.exceptions.table import (
     TableColumnNotFoundError,
     TableDuplicateKeyError,
     TableError,
+    TableNotOpenError,
     TableRowColumnsError,
     TableTypeConversionError,
     TransferDestinationMissingError,
@@ -323,6 +327,7 @@ __all__ = [
     "EmptyExcelTableError",
     "ExcelHeadersTooFewError",
     "ExcelMacroPreservationError",
+    "ExcelReadOnlyOperationError",
     "ExcelSaveNotCompletedError",
     "ExcelSaveValidationError",
     "FileFormatMismatchError",
@@ -412,6 +417,7 @@ __all__ = [
     "ReportFolderNotFoundError",
     "ScheduledDownloadFailedError",
     "TransferDestinationMultipleMatchError",
+    "TableNotOpenError",
     "TransferDestinationMissingError",
     "TableError",
     "InvalidTableInputError",

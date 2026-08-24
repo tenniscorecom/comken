@@ -38,17 +38,20 @@ class TestCSV:
         with CSV(path) as csv_file:
             csv_file.replace([])
 
-        assert CSV(path).read().read() == []
+        with CSV(path) as csv_file:
+            assert csv_file.read().read() == []
 
     def test_empty_table_preserves_header_and_dry_run_does_not_save(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
         with CSV(path) as csv_file:
             csv_file.replace(Table(["id", "name"], []))
-        assert CSV(path).read().columns == ["id", "name"]
+        with CSV(path) as csv_file:
+            assert csv_file.read().columns == ["id", "name"]
 
         with dry_run(), CSV(path) as csv_file:
             csv_file.replace(Table(["changed"], []))
-        assert CSV(path).read().columns == ["id", "name"]
+        with CSV(path) as csv_file:
+            assert csv_file.read().columns == ["id", "name"]
 
 
 class TestExcelTable:

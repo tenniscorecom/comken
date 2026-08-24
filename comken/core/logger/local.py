@@ -47,9 +47,7 @@ def setup_local_logging(
     """
     root_logger = logging.getLogger()
     existing = root_logger.handlers[:]
-    external_allowed = _guard_root_handlers(
-        existing, side="local", allow_existing=allow_existing
-    )
+    external_allowed = _guard_root_handlers(existing, side="local", allow_existing=allow_existing)
 
     project_path = project_dir()
     log_path = Path(path) if path is not None else project_path / "logs"

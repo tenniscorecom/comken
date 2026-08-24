@@ -28,7 +28,8 @@ def main() -> None:
         "A003,株式会社ガンマ,山田,4300\n",
         encoding="utf-8",
     )
-    table = CSV(CSV_PATH).read()
+    with CSV(CSV_PATH) as csv_file:
+        table = csv_file.read()
     rows = table.read()
     logger.info("全行: %d 件（先頭: %s）", len(rows), rows[0])
 

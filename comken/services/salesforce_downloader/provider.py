@@ -7,10 +7,10 @@
 
     from comken.services.salesforce_downloader import cached_report
 
-    rows = cached_report("1001").read().read()
+    rows = cached_report("1001").read()
 
-戻り値は `CSV`。行の検索・抽出・索引化は `read()` で得た `Table` で行う。
-パスだけ欲しい場合は `.path` で取れる。
+戻り値は `Table`。行の検索・抽出・索引化は Table の API でできる。
+パスだけ欲しい場合は `cached_report_path()` を使う。
 
 このファイルが持つもの:
 - 定期取得済みのファイルを返す
@@ -26,6 +26,7 @@ import logging
 from pathlib import Path
 
 from comken.core.files import DateNameBuilder
+from comken.core.table.model import Table
 from comken.core.timer import measure
 from comken.exceptions import (
     CachedReportNotFoundError,
@@ -48,15 +49,15 @@ _SUMMARY_LIMIT = 30
 
 
 @measure
-def cached_report(report_key: str, project: str = "") -> CSV:
-    """本日の定期取得キャッシュを `CSV` で返す。**取りに行かない。**
+def cached_report(report_key: str, project: str = "") -> Table:
+    """本日の定期取得キャッシュを `Table` で返す。**取りに行かない。**
 
     Args:
         report_key: 管理表の管理番号（例: "1001"）。
         project: 呼び出し元の名前（履歴には残さないが、例外の調査に使えるよう受け取る）。
 
     Returns:
-        本日の最新キャッシュを読み取る `CSV`。ファイルパスは `.path` で取れる。
+        本日の最新キャッシュから読み取った `Table`。
 
     Raises:
         ReportNotRegisteredError: 管理表に無い管理番号の場合。
@@ -71,7 +72,31 @@ def cached_report(report_key: str, project: str = "") -> CSV:
     if not path.is_file():
         raise CachedReportNotFoundError(entry.key, entry.summary, path)
     logger.info("本日の定期取得キャッシュを使います: %s", path)
-    return CSV(path, read_only=True, columns=[] if path.stat().st_size == 0 else None)
+    with CSV(path, read_only=True, columns=[] if path.stat().st_size == 0 else None) as csv_file:
+        return csv_file.read()
+
+
+@measure
+def cached_report_path(report_key: str) -> Path:
+    """本日の定期取得キャッシュが置かれるパスを返す。中身は読まない。
+
+    ファイル自体を別のツールに渡したいときに使う。**取りに行かない。**
+
+    Args:
+        report_key: 管理表の管理番号（例: "1001"）。
+
+    Returns:
+        本日の最新キャッシュとして使われる `Path`。
+
+    Raises:
+        ReportNotRegisteredError: 管理表に無い管理番号の場合。
+        ReportDisabledError: 管理表で無効になっている場合。
+        CachedReportNotRegisteredError: 管理表で「個別」になっている場合。
+    """
+    entry = _find(report_key, MASTER_PATH)
+    if not entry.is_scheduled:
+        raise CachedReportNotRegisteredError(entry.key, entry.summary, entry.schedule, MASTER_PATH)
+    return _daily_cache_path_of(entry)
 
 
 def file_path_of(entry: ReportEntry) -> Path:

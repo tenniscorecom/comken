@@ -136,9 +136,7 @@ def _format_external_handlers(handlers: list[logging.Handler]) -> list[str]:
     return lines
 
 
-def _warn_external_handlers_allowed(
-    func_name: str, handlers: list[logging.Handler]
-) -> None:
+def _warn_external_handlers_allowed(func_name: str, handlers: list[logging.Handler]) -> None:
     """``allow_existing=True`` で外部 handler を残したまま処理を進めた事実を警告ログに残す。"""
     external_descriptions = _format_external_handlers(handlers)
     logging.getLogger().warning(
@@ -170,9 +168,7 @@ def setup_logging(site: type[LoggerSite], *, allow_existing: bool = False) -> No
     """
     root_logger = logging.getLogger()
     existing = root_logger.handlers[:]
-    external_allowed = _guard_root_handlers(
-        existing, side="setup", allow_existing=allow_existing
-    )
+    external_allowed = _guard_root_handlers(existing, side="setup", allow_existing=allow_existing)
 
     site.check_owner()
     # ファイルを作る前に止める。空のフォルダが現場へ残ると

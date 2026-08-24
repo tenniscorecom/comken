@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 from comken.core.timer import measure
+from comken.exceptions import TableNotOpenError
 from comken.internal.base import InternalLibraryBase
 from comken.internal.names import INTERNAL_LIBRARY_ROOT
 
@@ -81,10 +82,10 @@ class SalesforceAPI:
             レスポンスの JSON を辞書に変換したもの。
 
         Raises:
-            RuntimeError: ``with`` ブロック外で呼ばれた場合。
+            TableNotOpenError: ``with`` ブロック外で呼ばれた場合。
         """
         if self._module is None:
-            raise RuntimeError("SalesforceAPI は 'with' ブロック内で使用してください。")
+            raise TableNotOpenError("SalesforceAPI")
         return self._module.request(method, path, component=component, body=body)
 
     def data_path(self, path: str) -> str:
@@ -97,10 +98,10 @@ class SalesforceAPI:
             バージョン付きのエンドポイント URL。
 
         Raises:
-            RuntimeError: ``with`` ブロック外で呼ばれた場合。
+            TableNotOpenError: ``with`` ブロック外で呼ばれた場合。
         """
         if self._module is None:
-            raise RuntimeError("SalesforceAPI は 'with' ブロック内で使用してください。")
+            raise TableNotOpenError("SalesforceAPI")
         return self._module.data_path(path)
 
     @measure
@@ -114,10 +115,10 @@ class SalesforceAPI:
             レコードの辞書のリスト。
 
         Raises:
-            RuntimeError: ``with`` ブロック外で呼ばれた場合。
+            TableNotOpenError: ``with`` ブロック外で呼ばれた場合。
         """
         if self._module is None:
-            raise RuntimeError("SalesforceAPI は 'with' ブロック内で使用してください。")
+            raise TableNotOpenError("SalesforceAPI")
         return self._module.query(soql)
 
     @measure
@@ -131,10 +132,10 @@ class SalesforceAPI:
             レポート結果の辞書のリスト。
 
         Raises:
-            RuntimeError: ``with`` ブロック外で呼ばれた場合。
+            TableNotOpenError: ``with`` ブロック外で呼ばれた場合。
         """
         if self._module is None:
-            raise RuntimeError("SalesforceAPI は 'with' ブロック内で使用してください。")
+            raise TableNotOpenError("SalesforceAPI")
         return self._module.report_run(report_id)
 
 

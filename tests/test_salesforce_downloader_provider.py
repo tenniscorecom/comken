@@ -23,6 +23,7 @@ from comken.exceptions import (
 )
 from comken.services.salesforce_downloader import (
     cached_report,
+    cached_report_path,
     download_scheduled,
     file_path_of,
     load_master,
@@ -140,9 +141,9 @@ class TestCachedReport:
             "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
             download_scheduled("定期実行")
-        reader = cached_report("1001")
-        assert reader.path.is_file()
-        assert reader.read().read() == ROWS
+        table = cached_report("1001")
+        assert cached_report_path("1001").is_file()
+        assert table.read() == ROWS
 
     def test_does_not_call_salesforce(self, paths):
         with patch(
@@ -167,7 +168,7 @@ class TestCachedReport:
         ):
             download_scheduled()
 
-        assert cached_report("1001").read().read() == updated_rows
+        assert cached_report("1001").read() == updated_rows
         assert len(list(paths["folder"].glob("1001_*.csv"))) == 3
 
     def test_on_demand_report_raises(self, paths):
@@ -191,7 +192,7 @@ class TestCachedReport:
         cache_path = Path(str(caught.value).splitlines()[-2])
         cache_path.write_text("名前,金額\n手動配置,999\n", encoding="utf-8")
 
-        assert cached_report("1001").read().read() == [{"名前": "手動配置", "金額": "999"}]
+        assert cached_report("1001").read() == [{"名前": "手動配置", "金額": "999"}]
 
     def test_missing_cache_raises_even_if_archive_exists(self, paths):
         with patch(

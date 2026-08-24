@@ -41,7 +41,8 @@ def move_matching_files(
     for path in paths:
         try:
             # ヘッダー名で読むため、列の位置が変わっても同じ値を取得できる。
-            date_value = CSV(path).read().read()[0][date_column]
+            with CSV(path) as csv_file:
+                date_value = csv_file.read().read()[0][date_column]
             try:
                 # NOTE: CSV に書かれた業務日付の解析であり、タイムゾーンは不要。
                 content_date = datetime.datetime.strptime(  # noqa: DTZ007

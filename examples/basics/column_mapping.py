@@ -37,7 +37,8 @@ def main() -> None:
     config_mapping = Config(CONFIG_PATH).受注_MAPPING
 
     mapping = dict(config_mapping)
-    source = CSV(SOURCE_CSV, read_only=True, types={"金額": int}).read()
+    with CSV(SOURCE_CSV, read_only=True, types={"金額": int}) as source_csv:
+        source = source_csv.read()
     destination_table = Table(
         ["注文番号", "顧客名", "請求額"],
         [{"注文番号": row["注文番号"], "顧客名": "", "請求額": ""} for row in source.read()],

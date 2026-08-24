@@ -18,10 +18,12 @@ from comken.exceptions import (
     EmptyHeaderCellError,
     ExcelFileNotFoundError,
     ExcelMacroPreservationError,
+    ExcelReadOnlyOperationError,
     ExcelSaveValidationError,
     SheetAlreadyExistsError,
     SheetNameError,
     SheetNotFoundError,
+    TableNotOpenError,
     UnsupportedFileSuffixError,
 )
 from comken.runtime import dry_run_log, is_dry_run
@@ -45,10 +47,12 @@ class Excel:
         read_only: bool = False,
         local_copy: bool | None = None,
     ) -> None:
-        """ブックをOpenPyXLで開く。
+        """設定を保持する。**ブックは開かない**。
 
-        利用者がエンジンを選ぶ必要はない。通常操作はOpenPyXLを使い、未計算の
-        数式値の読取りとVBA実行だけ、一時的にExcel COMへ昇格する。
+        ``with`` の中で ``__enter__`` が呼ばれたとき、はじめてブックを開く。
+        読み取り専用で開くか、書き込み用に開くかは引数 ``read_only`` で
+        切り替える。利用者がエンジンを選ぶ必要はない。通常操作はOpenPyXLを使い、
+        未計算の数式値の読取りとVBA実行だけ、一時的にExcel COMへ昇格する。
         ``local_copy=None`` の既定ではUNCパスだけローカルコピーを使う。
         ``True`` で強制、``False`` で無効化でき、保存先は常に元ファイルになる。
 
@@ -59,12 +63,19 @@ class Excel:
             raise UnsupportedFileSuffixError(self.path, tuple(sorted(_EXCEL_SUFFIXES)))
         self._types = dict(types or {})
         self._read_only = read_only
+        self._local_copy_required = self._is_unc_path(source) if local_copy is None else local_copy
         self._local_copy_path: Path | None = None
+        self._working_path: Path = self.path
         self._working_copy_is_stale = False
+        self._is_open = False
         self._is_closed = False
         self._is_dirty = False
-        should_copy = self._is_unc_path(source) if local_copy is None else local_copy
-        if should_copy and self.path.exists():
+
+    def __enter__(self) -> Self:
+        # 既に開いている状態で再度入ってきた場合は、二重にブックを開かない。
+        if self._is_open and not self._is_closed:
+            return self
+        if self._local_copy_required and self.path.exists():
             # ネットワーク上のブックを直接扱うと OpenPyXL/Excel の I/O が不安定に
             # なることがある。作業中だけローカルを使い、保存時に元のパスへ戻す。
             self._working_path, self._local_copy_path = copy_to_local_if_large(
@@ -81,12 +92,11 @@ class Excel:
                 keep_vba=self.path.suffix.casefold() in {".xlsm", ".xltm"},
             )
         else:
-            if read_only:
+            if self._read_only:
                 raise ExcelFileNotFoundError(self.path)
             self._workbook = Workbook()
-
-    def __enter__(self) -> Self:
-        self._ensure_open()
+        self._is_open = True
+        self._is_closed = False
         return self
 
     def __exit__(
@@ -173,7 +183,7 @@ class Excel:
 
     def close(self, *, save: bool = True) -> None:
         """ブックを閉じる。通常はwithの正常終了時に変更を自動保存する。"""
-        if self._is_closed:
+        if self._is_closed or not self._is_open:
             return
         try:
             if save and self._is_dirty:
@@ -181,6 +191,7 @@ class Excel:
         finally:
             self._workbook.close()
             self._is_closed = True
+            self._is_open = False
             if self._local_copy_path is not None:
                 self._local_copy_path.unlink(missing_ok=True)
 
@@ -246,6 +257,7 @@ class Excel:
     @measure
     def read_computed_rows(self, sheet_name: str, min_row: int = 2) -> list[tuple[Any, ...]]:
         """数式の計算結果を行単位で読む。未計算の数式がある場合だけCOMへ昇格する。"""
+        self._ensure_open()
         rows, needs_com = self._cached_rows(sheet_name, min_row)
         if not needs_com:
             return rows
@@ -273,8 +285,8 @@ class Excel:
         return [dict(zip(headers, row, strict=False)) for row in rows[1:]]
 
     def _ensure_open(self) -> None:
-        if self._is_closed:
-            raise RuntimeError("Excel はすでに閉じています。with ブロック内で操作してください。")
+        if not self._is_open or self._is_closed:
+            raise TableNotOpenError("Excel")
 
     def _mark_dirty(self) -> None:
         self._ensure_writable("書き込み")
@@ -283,7 +295,7 @@ class Excel:
     def _ensure_writable(self, operation: str) -> None:
         self._ensure_open()
         if self._read_only:
-            raise RuntimeError(f"read_only=True のExcelでは{operation}できません。")
+            raise ExcelReadOnlyOperationError(operation)
 
     def _sync_working_file(self) -> None:
         """COMへ渡す前に現在状態を作業ファイルへ同期する。"""

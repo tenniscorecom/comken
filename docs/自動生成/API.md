@@ -3742,6 +3742,32 @@ class ExcelMacroPreservationError(ExcelError):
 def __init__(self, path: Path | str) -> None:
 ```
 
+### `ExcelReadOnlyOperationError`
+
+```text
+class ExcelReadOnlyOperationError(ExcelError):
+```
+
+#### 説明
+
+read_only=True の Excel に書き込もうとした。
+
+Excel(path, read_only=True) は読み取り専用なので、保存やシート作成を
+行う create_sheet / create_data_sheet / run_macro 系の API は使えない。
+
+発生箇所: Excel.create_data_sheet() / Excel.create_sheet() /
+         Excel.run_macro()
+
+対処:
+    read_only=False で開き直すか、書き込みが要らない操作かを
+    見直す（読み取りだけなら Excel(path, read_only=True) で十分）
+
+#### `__init__`
+
+```text
+def __init__(self, operation: str) -> None:
+```
+
 ### `ExcelSaveNotCompletedError`
 
 ```text
@@ -5655,6 +5681,25 @@ class TransferDestinationMultipleMatchError(ComkenError):
 def __init__(self, key_column: str, key: object) -> None:
 ```
 
+### `TableNotOpenError`
+
+```text
+class TableNotOpenError(TableError):
+```
+
+#### 説明
+
+表を with 文で開かずに操作した。
+
+対処:
+    ``with`` 文の中で使う（CSV / Excel などは ``__enter__`` で表を開く）
+
+#### `__init__`
+
+```text
+def __init__(self, table_type: str) -> None:
+```
+
 ### `TransferDestinationMissingError`
 
 ```text
@@ -6024,11 +6069,19 @@ None を返す。 モジュール内の依存不足は ImportError としてそ�
 
 定義を解決できませんでした。
 
+### `download_report_path`
+
+定義を解決できませんでした。
+
 ### `download_scheduled`
 
 定義を解決できませんでした。
 
 ### `cached_report`
+
+定義を解決できませんでした。
+
+### `cached_report_path`
 
 定義を解決できませんでした。
 
@@ -8068,10 +8121,12 @@ def __init__(self, source: str | Path, *, types: Mapping[str, Callable[[Any], An
 
 ##### 説明
 
-ブックをOpenPyXLで開く。
+設定を保持する。**ブックは開かない**。
 
-利用者がエンジンを選ぶ必要はない。通常操作はOpenPyXLを使い、未計算の
-数式値の読取りとVBA実行だけ、一時的にExcel COMへ昇格する。
+``with`` の中で ``__enter__`` が呼ばれたとき、はじめてブックを開く。
+読み取り専用で開くか、書き込み用に開くかは引数 ``read_only`` で
+切り替える。利用者がエンジンを選ぶ必要はない。通常操作はOpenPyXLを使い、
+未計算の数式値の読取りとVBA実行だけ、一時的にExcel COMへ昇格する。
 ``local_copy=None`` の既定ではUNCパスだけローカルコピーを使う。
 ``True`` で強制、``False`` で無効化でき、保存先は常に元ファイルになる。
 

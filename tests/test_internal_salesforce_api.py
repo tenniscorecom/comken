@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from comken.exceptions import TableNotOpenError
 from comken.internal.exceptions import InternalLibraryNotFoundError
 from comken.internal.salesforce_api import SALESFORCE_LIBRARY_NAME, SalesforceAPI
 
@@ -129,13 +130,13 @@ def test_credential_prefix_constant() -> None:
 
 
 def test_methods_raise_outside_with_block() -> None:
-    """with ブロック外でメソッドを呼ぶと RuntimeError。"""
+    """with ブロック外でメソッドを呼ぶと TableNotOpenError。"""
     api = SalesforceAPI()
-    with pytest.raises(RuntimeError):
+    with pytest.raises(TableNotOpenError):
         api.query("SELECT Id FROM Account")
-    with pytest.raises(RuntimeError):
+    with pytest.raises(TableNotOpenError):
         api.report_run("report_id")
-    with pytest.raises(RuntimeError):
+    with pytest.raises(TableNotOpenError):
         api.request("GET", "/path")
-    with pytest.raises(RuntimeError):
+    with pytest.raises(TableNotOpenError):
         api.data_path("/path")

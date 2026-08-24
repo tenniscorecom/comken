@@ -4,8 +4,8 @@ r"""comken/services/salesforce_downloader/service.py — 取得の本体。
 
     CUSTOMER_LIST = "1001"        # 各プロジェクトで、意味の分かる名前を付ける
 
-    rows = download_report(CUSTOMER_LIST).read().read()      # 今すぐ Salesforce から取る
-    by_code = cached_report(CUSTOMER_LIST).read().index("顧客コード")
+    rows = download_report(CUSTOMER_LIST).read()            # 今すぐ Salesforce から取る
+    by_code = cached_report(CUSTOMER_LIST).index("顧客コード")
 
 **2つの関数の意味をはっきり分ける。**
 
@@ -16,8 +16,8 @@ r"""comken/services/salesforce_downloader/service.py — 取得の本体。
   まだ取れていなければ例外にする。ここで自動的に取りに行くと、**定期取得が動いて
   いないことに誰も気づかなくなる**
 
-戻り値は `CSV`。行の検索・抽出・索引化は `read()` で得た `Table` で行う。
-パスだけ欲しい場合は `.path` で取れる。
+戻り値は `Table`。行の検索・抽出・索引化は Table の API でできる。
+パスだけ欲しい場合は `download_report_path()` / `cached_report_path()` を使う。
 `download_scheduled()` は定期取得したパスのリストを `list[Path]` で返すが、これは
 定期取得の呼び出し側が中身を読まず「取らせる」のが目的なので、reader を並べても
 使い道がないため（役割の違いが戻り値の型に出ている）。
@@ -46,6 +46,7 @@ import time
 from pathlib import Path
 
 from comken.core.files import atomic_write
+from comken.core.table.model import Table
 from comken.core.timer import measure
 from comken.exceptions import (
     ComkenError,
@@ -76,8 +77,8 @@ CAUSE_PROGRAM = "プログラム"
 
 
 @measure
-def download_report(report_key: str, project: str = "") -> CSV:
-    """今すぐ Salesforce から取得して保存し、そのファイルを `CSV` で返す。
+def download_report(report_key: str, project: str = "") -> Table:
+    """今すぐ Salesforce から取得して保存し、中身を `Table` で返す。
 
     **必ず Salesforce へ問い合わせる。** 今日すでに取っていても取り直す。
 
@@ -86,7 +87,7 @@ def download_report(report_key: str, project: str = "") -> CSV:
         project: 呼び出し元の名前。履歴に残るので、入れておくと後から追える。
 
     Returns:
-        保存したファイルを読み取る `CSV`。ファイルパスは `.path` で取れる。
+        保存したファイルから読み取った `Table`。
 
     Raises:
         ReportNotRegisteredError: 管理表に無い管理番号の場合。
@@ -96,7 +97,30 @@ def download_report(report_key: str, project: str = "") -> CSV:
     """
     entry = _find(report_key, MASTER_PATH)
     path = _download(entry, project, history.TRIGGER_ON_DEMAND, HISTORY_PATH)
-    return CSV(path, read_only=True, columns=[] if path.stat().st_size == 0 else None)
+    with CSV(path, read_only=True, columns=[] if path.stat().st_size == 0 else None) as csv_file:
+        return csv_file.read()
+
+
+@measure
+def download_report_path(report_key: str) -> Path:
+    """今すぐ Salesforce から取得して保存し、そのパスを返す。中身は読まない。
+
+    ファイル自体を別のツールに渡したいときに使う。**必ず Salesforce へ問い合わせる。**
+
+    Args:
+        report_key: 管理表の管理番号（例: "1001"）。
+
+    Returns:
+        保存した CSV の `Path`。
+
+    Raises:
+        ReportNotRegisteredError: 管理表に無い管理番号の場合。
+        ReportDisabledError: 管理表で無効になっている場合。
+        ReportFolderNotFoundError: 保存先のフォルダが無い場合。
+        EmptyReportError: 明細が 0 行だった場合。
+    """
+    entry = _find(report_key, MASTER_PATH)
+    return _download(entry, "", history.TRIGGER_ON_DEMAND, HISTORY_PATH)
 
 
 @measure

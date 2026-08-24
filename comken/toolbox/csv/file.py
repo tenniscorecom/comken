@@ -9,8 +9,8 @@ from typing import Any, Self, TypeAlias
 
 from comken.constants import Encoding
 from comken.core.files import atomic_write
-from comken.core.timer import measure
 from comken.core.table.model import Table
+from comken.core.timer import measure
 from comken.exceptions.csv import (
     CSVColumnsRequiredError,
     CSVFileNotFoundError,
@@ -20,7 +20,11 @@ from comken.exceptions.csv import (
     EncodingDetectionError,
 )
 from comken.exceptions.file import UnsupportedFileSuffixError
-from comken.exceptions.table import InvalidTableInputError, InvalidTableOperationError
+from comken.exceptions.table import (
+    InvalidTableInputError,
+    InvalidTableOperationError,
+    TableNotOpenError,
+)
 from comken.runtime import is_dry_run
 
 Value: TypeAlias = str | int | float | bool
@@ -52,8 +56,11 @@ class CSV:
         self._read_only = read_only
         self._dry_run = dry_run
         self._pending: Table | None = None
+        # ``with`` の中だけで操作させるため、開いたかどうかを追跡する。
+        self._is_open = False
 
     def __enter__(self) -> Self:
+        self._is_open = True
         return self
 
     def __exit__(
@@ -68,10 +75,16 @@ class CSV:
             and self._pending is not None
         ):
             self._write(self._pending)
+        self._is_open = False
+
+    def _ensure_open(self) -> None:
+        if not self._is_open:
+            raise TableNotOpenError("CSV")
 
     @measure
     def read(self) -> Table:
         """全行を読み、指定された列だけを変換したTableを返す。"""
+        self._ensure_open()
         if self._pending is not None:
             # replace/write の結果は保存前でも、同じ処理中の「現在の Table」として読める。
             return self._pending
@@ -118,6 +131,7 @@ class CSV:
 
     def replace(self, rows: list[dict[str, Value]] | Table) -> None:
         """ファイルのデータ領域を全置換する。"""
+        self._ensure_open()
         if self._read_only:
             raise InvalidTableOperationError("read_only=True のCSVには書き込めません。")
         if not isinstance(rows, (list, Table)):
@@ -146,6 +160,7 @@ class CSV:
 
     def append(self, rows: list[dict[str, Value]] | dict[str, Value] | Table) -> None:
         """行を保留中のTableへ追加する。確定はsaveまたはwith正常終了で行う。"""
+        self._ensure_open()
         if self._read_only:
             raise InvalidTableOperationError("read_only=True のCSVには書き込めません。")
         if self._pending is not None or self.path.exists():
@@ -170,6 +185,7 @@ class CSV:
     @measure
     def save(self) -> None:
         """保留中のTableをCSVファイルへ保存する。"""
+        self._ensure_open()
         # replace はメモリ上で準備し、save または正常終了した with でだけファイルへ反映する。
         if (
             self._pending is not None
@@ -198,4 +214,5 @@ class CSV:
 
     def count(self) -> int:
         """データ行数を返す。"""
+        self._ensure_open()
         return len(self._pending) if self._pending is not None else len(self.read())

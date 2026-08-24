@@ -85,17 +85,17 @@ class TestExcelAutomaticSave:
         path = tmp_path / "invalid.xlsx"
         _book(path)
         original = path.read_bytes()
-        excel = Excel(path)
-        excel.sheet("Sheet").write_value("A1", "変更後")
+        with Excel(path) as excel:
+            excel.sheet("Sheet").write_value("A1", "変更後")
 
-        with (
-            patch.object(
-                excel._workbook, "save", side_effect=lambda target: target.write_bytes(b"bad")
-            ),
-            pytest.raises(ExcelSaveValidationError),
-        ):
-            excel.save()
-        excel.close(save=False)
+            with (
+                patch.object(
+                    excel._workbook, "save", side_effect=lambda target: target.write_bytes(b"bad")
+                ),
+                pytest.raises(ExcelSaveValidationError),
+            ):
+                excel.save()
+            excel.close(save=False)
 
         assert path.read_bytes() == original
 
@@ -128,15 +128,15 @@ class TestExcelAutomaticSave:
         path = tmp_path / "macro-check.xlsx"
         _book(path)
         original = path.read_bytes()
-        excel = Excel(path)
-        excel.sheet("Sheet").write_value("A1", "変更後")
+        with Excel(path) as excel:
+            excel.sheet("Sheet").write_value("A1", "変更後")
 
-        with (
-            patch.object(excel, "_vba_digest", side_effect=[b"before", b"after"]),
-            pytest.raises(ExcelMacroPreservationError),
-        ):
-            excel.save()
-        excel.close(save=False)
+            with (
+                patch.object(excel, "_vba_digest", side_effect=[b"before", b"after"]),
+                pytest.raises(ExcelMacroPreservationError),
+            ):
+                excel.save()
+            excel.close(save=False)
 
         assert path.read_bytes() == original
 

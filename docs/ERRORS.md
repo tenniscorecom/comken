@@ -61,6 +61,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `EmptyExcelTableError` | Excel テーブル定義はあるが、定義範囲を1行も読み取れない。 | Excel のテーブル定義範囲を確認する |
 | `ExcelHeadersTooFewError` | 指定した見出し数が列数より少ない | 管理者へ連絡する |
 | `ExcelMacroPreservationError` | 保存予定のブックからVBAプロジェクトが欠落または変化した。 | 元ファイルは保持される。管理者に連絡し、Excel実機で保存方法を確認する |
+| `ExcelReadOnlyOperationError` | read_only=True の Excel に書き込もうとした。 | read_only=False で開き直すか、書き込みが要らない操作かを見直す（読み取りだけなら Excel(path, read_only=True) で十分） |
 | `ExcelSaveNotCompletedError` | Excel の保存が成功したように見えて、ファイルが無い | Excel が他で開かれていないか、ディスクの空き容量があるかを確認し、もう一度保存を実行する |
 | `ExcelSaveValidationError` | 保存予定のExcelファイルを再度開けず、安全に置き換えられない。 | 元ファイルは保持される。空き容量とExcel形式を確認して再実行する |
 | `FileFormatMismatchError` | 保存拡張子と形式が合わない | 管理者へ連絡する |
@@ -181,6 +182,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
+| `TableNotOpenError` | 表を with 文で開かずに操作した。 | ``with`` 文の中で使う（CSV / Excel などは ``__enter__`` で表を開く） |
 | `TransferDestinationMissingError` | Transfer.apply_mapping() に転記先が None で渡された | matched_rows() を使うか、``transfer_rows()`` の ``(read_row, None)``を ``if write_row is None:`` で分岐してから渡す。 新規行を追加する場合は ``Transfer`` の責務ではなく、``Table.append()`` 等で利用者側で対応する。 |
 | `InvalidTableInputError` | Table API に対応しない入力が渡された。 | columns、rows、types の型と列名を確認する |
 | `InvalidTableOperationError` | Table API で実行できない操作が指定された。 | 対象が読み取り専用でないか、指定したテーブル名が正しいか確認する |

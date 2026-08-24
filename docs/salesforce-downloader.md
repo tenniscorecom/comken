@@ -21,15 +21,17 @@
 ```python
 from comken.services.salesforce_downloader import (
     cached_report,
+    cached_report_path,
     download_report,
+    download_report_path,
 )
 
 CUSTOMER_LIST = "1001"    # 管理表の「ID」。意味の分かる名前を付ける
 SALES_RESULT = "1003"
 
-rows = download_report(CUSTOMER_LIST, "案件集計").read().read()
-# 全行が要らなければ download_report(CUSTOMER_LIST).path  で場所だけ取る
-by_code = cached_report(SALES_RESULT).read().index("顧客コード")
+rows = download_report(CUSTOMER_LIST, "案件集計").read()
+# 全行が要らなければ download_report_path(CUSTOMER_LIST) で場所だけ取る
+by_code = cached_report(SALES_RESULT).index("顧客コード")
 ```
 
 **プロジェクトのコードに Salesforce の URL もレポート ID も書かない。** 書くのは管理番号だけ。
@@ -132,11 +134,11 @@ python -m comken report check "\\実際のサーバー\share\tools\salesforce\�
 いきなり定期実行に入れず、**1件で通しを確かめる**。管理表に書いた管理番号を渡す。
 
 ```python
-from comken.services.salesforce_downloader import download_report
+from comken.services.salesforce_downloader import download_report, download_report_path
 
-reader = download_report("1001")
-print(reader.path)              # 保存されたファイル
-print(reader.read().count())    # 行数
+table = download_report("1001")
+print(table.count())            # 行数
+print(download_report_path("1001"))  # 保存されたファイルのパス
 ```
 
 ここまで通れば、**保存先にファイルができ、履歴（CSV）に1行増えている**。

@@ -19,7 +19,8 @@ def main() -> None:
     # 定数なら IDE の補完が効き、"utf8-sgi" のような打ち間違いを防げる。
     with CSV(CSV_PATH, encoding=Encoding.UTF8_SIG) as csv_file:
         csv_file.replace([{"社員番号": "001", "氏名": "山田"}])
-    rows = CSV(CSV_PATH, encoding=Encoding.AUTO).read().read()
+    with CSV(CSV_PATH, encoding=Encoding.AUTO) as csv_file:
+        rows = csv_file.read().read()
     latest = max(OUTPUT_FOLDER.glob("*.csv"), key=lambda path: path.stat().st_mtime)
 
     logger.info("Encoding: %s（%d 件）", Encoding.UTF8_SIG, len(rows))

@@ -71,7 +71,8 @@ def total_by_key() -> dict[str, dict[str, int]]:
     group_by() は {キー: 行のリスト} を返すので、転記に使うには
     {キー: {列名: 値}} へ組み直す。SUMIF を Python で書いているのと同じことをしている。
     """
-    groups = CSV(DETAIL_CSV, read_only=True).read().group_by(KEY)
+    with CSV(DETAIL_CSV, read_only=True) as csv_file:
+        groups = csv_file.read().group_by(KEY)
     # CSV の値は常に str。Excel 上で数値として集計できるよう int にしてから渡す
     return {
         key: {TOTAL: sum(int(row[AMOUNT]) for row in table.read())} for key, table in groups.items()
@@ -86,7 +87,8 @@ def main() -> None:
     logger.info("明細の合計: %s", {key: value[TOTAL] for key, value in totals.items()})
 
     mapping = {KEY: KEY, "顧客名": "顧客名", TOTAL: TOTAL}
-    source = CSV(MASTER_CSV, read_only=True).read()
+    with CSV(MASTER_CSV, read_only=True) as csv_file:
+        source = csv_file.read()
     source = Table(
         [KEY, "顧客名", TOTAL],
         [{**row, **totals.get(row[KEY], {})} for row in source.read()],

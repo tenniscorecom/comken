@@ -314,9 +314,7 @@ class Config:
                         else:
                             pairs.append((key.strip(), value.strip()))
                     if empty_keys:
-                        raise ConfigMappingEmptyValueError(
-                            self._path, stripped_section, empty_keys
-                        )
+                        raise ConfigMappingEmptyValueError(self._path, stripped_section, empty_keys)
                     ld = _LenientDict(pairs)
                     self._mappings[stripped_section] = ld
                     setattr(self, stripped_section.upper(), ld)

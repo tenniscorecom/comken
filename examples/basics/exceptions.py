@@ -18,7 +18,8 @@ def main() -> None:
     CSV_PATH.write_text("注文番号,金額\nA001,12000\n", encoding="utf-8")
 
     try:
-        CSV(CSV_PATH).read().column("存在しない列")
+        with CSV(CSV_PATH) as csv_file:
+            csv_file.read().column("存在しない列")
     except TableColumnNotFoundError as error:
         # この失敗だけ処理を分けたい場合は、個別例外を捕まえる。
         logger.error("個別に捕捉: %s", error)
@@ -26,7 +27,8 @@ def main() -> None:
     empty_csv_path = CSV_PATH.with_name("データなし.csv")
     empty_csv_path.write_text("注文番号,金額\n", encoding="utf-8")
     try:
-        CSV(empty_csv_path).read().column("存在しない列")
+        with CSV(empty_csv_path) as csv_file:
+            csv_file.read().column("存在しない列")
     except ComkenError as error:
         # 機能を問わず処理末尾でまとめるなら ComkenError を使う。
         logger.error("comken 全体で捕捉: %s", error)

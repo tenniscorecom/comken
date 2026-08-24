@@ -579,9 +579,7 @@ class TestLoggingConflict:
             isolated_logging.removeHandler(external)
             external.close()
 
-    def test_setup_allow_existing_proceeds_with_warning(
-        self, tmp_path, monkeypatch
-    ):
+    def test_setup_allow_existing_proceeds_with_warning(self, tmp_path, monkeypatch):
         """allow_existing=True なら外部ハンドラーがあっても処理が続行し、警告ログが出る。
 
         ``isolated_logging`` を使うと ``root.handlers.clear()`` で他テスト用の
@@ -620,9 +618,7 @@ class TestLoggingConflict:
             root_logger.setLevel(original_level)
             external.close()
 
-    def test_local_allow_existing_proceeds_with_warning(
-        self, tmp_path, monkeypatch
-    ):
+    def test_local_allow_existing_proceeds_with_warning(self, tmp_path, monkeypatch):
         """setup_local_logging() でも allow_existing=True なら外部ハンドラーが
         あっても処理が続行し警告が出る。
 
@@ -697,9 +693,7 @@ class TestLoggingConflict:
             isolated_logging.removeHandler(external)
             external.close()
 
-    def test_conflict_message_tells_to_contact_admin(
-        self, isolated_logging, tmp_path, monkeypatch
-    ):
+    def test_conflict_message_tells_to_contact_admin(self, isolated_logging, tmp_path, monkeypatch):
         """LoggingConflictError のメッセージが「管理者へ連絡」する旨を含む。
 
         連絡先そのものは環境ごとに違うので書かないが、「管理者へ」が
@@ -733,9 +727,7 @@ class TestLoggingConflict:
         named_stream.set_name("external.library")
         file_without_name = logging.FileHandler(os.devnull, encoding="utf-8")
 
-        lines = _format_external_handlers(
-            [stream_without_name, named_stream, file_without_name]
-        )
+        lines = _format_external_handlers([stream_without_name, named_stream, file_without_name])
         assert len(lines) == 3
         for line in lines:
             assert line.count("name=") == 1, line
@@ -749,9 +741,7 @@ class TestLoggingConflict:
         assert "name=None" not in lines[2]
         assert "path=" in lines[2]
 
-    def test_setup_allow_existing_writes_warning_to_comken_log_file(
-        self, tmp_path, monkeypatch
-    ):
+    def test_setup_allow_existing_writes_warning_to_comken_log_file(self, tmp_path, monkeypatch):
         """allow_existing=True のとき、警告が comken のログファイルに書かれている。
 
         警告が ``_guard_root_handlers()`` の中で出ていた旧実装では、警告時点では
@@ -777,8 +767,7 @@ class TestLoggingConflict:
             file_handler = next(
                 h
                 for h in root_logger.handlers
-                if isinstance(h, logging.FileHandler)
-                and h.name == ENVIRONMENT_HANDLER_NAME
+                if isinstance(h, logging.FileHandler) and h.name == ENVIRONMENT_HANDLER_NAME
             )
             file_handler.flush()
             text = Path(file_handler.baseFilename).read_text(encoding="utf-8")
@@ -795,9 +784,7 @@ class TestLoggingConflict:
             root_logger.setLevel(original_level)
             external.close()
 
-    def test_local_allow_existing_writes_warning_to_comken_log_file(
-        self, tmp_path, monkeypatch
-    ):
+    def test_local_allow_existing_writes_warning_to_comken_log_file(self, tmp_path, monkeypatch):
         """setup_local_logging() でも allow_existing=True の警告が comken のログファイルに残る。"""
         root_logger = logging.getLogger()
         original_handlers = root_logger.handlers[:]
@@ -815,8 +802,7 @@ class TestLoggingConflict:
             file_handler = next(
                 h
                 for h in root_logger.handlers
-                if isinstance(h, logging.FileHandler)
-                and h.name == LOCAL_HANDLER_NAME
+                if isinstance(h, logging.FileHandler) and h.name == LOCAL_HANDLER_NAME
             )
             file_handler.flush()
             text = Path(file_handler.baseFilename).read_text(encoding="utf-8")

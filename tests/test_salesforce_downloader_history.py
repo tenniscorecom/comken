@@ -48,7 +48,8 @@ def test_concurrent_appends_keep_one_header_and_complete_rows(tmp_path) -> None:
     with ThreadPoolExecutor(max_workers=8) as executor:
         list(executor.map(append, range(40)))
 
-    rows = CSV(history_path).read().read()
+    with CSV(history_path) as csv_file:
+        rows = csv_file.read().read()
     assert len(rows) == 40
     assert {row["プロジェクト"] for row in rows} == {str(index) for index in range(40)}
 
@@ -60,7 +61,8 @@ def test_process_appends_keep_one_header_and_complete_rows(tmp_path) -> None:
     with get_context("spawn").Pool(processes=4) as pool:
         pool.map(_append_from_process, arguments)
 
-    rows = CSV(history_path).read().read()
+    with CSV(history_path) as csv_file:
+        rows = csv_file.read().read()
     assert len(rows) == 12
     assert {row["プロジェクト"] for row in rows} == {str(index) for index in range(12)}
 

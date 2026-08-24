@@ -35,7 +35,8 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> None:
-    table = CSV(INPUT_CSV).read()
+    with CSV(INPUT_CSV) as csv_file:
+        table = csv_file.read()
 
     # 全行を辞書のリストで取得する（1行 = 1辞書。キーはヘッダー名、値はすべて str）
     rows = table.read()

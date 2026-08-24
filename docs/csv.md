@@ -19,7 +19,8 @@ CSVを連結する場合は、列名の集合が完全に同じ `Table` 同士�
 列名を指定します。
 
 ```python
-table = CSV("ヘッダーなし.csv", columns=["顧客ID", "氏名"]).read()
+with CSV("ヘッダーなし.csv", columns=["顧客ID", "氏名"]) as csv:
+    table = csv.read()
 ```
 
 `columns` を省略した CSV は先頭行を列名として扱います。空の見出し、重複する見出し、

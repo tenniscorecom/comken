@@ -29,7 +29,8 @@ def main() -> None:
         csv_file.append({"日時": "2026-08-13 11:00", "担当者": "山田", "処理件数": 5})
         csv_file.append([{"日時": "2026-08-13 12:00", "担当者": "佐藤", "処理件数": 7}])
 
-    rows = CSV(OUTPUT_PATH).read().read()
+    with CSV(OUTPUT_PATH) as csv_file:
+        rows = csv_file.read().read()
     logger.info("CSV 出力: %s（%d 件）", OUTPUT_PATH, len(rows))
 
 

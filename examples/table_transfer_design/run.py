@@ -58,7 +58,8 @@ def main() -> None:
 
     # 転記先 Table には、mapping に無い「備考」列も入れておく
     # （apply_mapping の後に write_row["備考"] = ... で計算して埋める）
-    source = CSV(SOURCE_CSV, read_only=True, types={"金額": int}).read()
+    with CSV(SOURCE_CSV, read_only=True, types={"金額": int}) as csv_file:
+        source = csv_file.read()
     destination_table = Table(
         ["注文番号", "顧客名", "請求額", "備考"],
         [

@@ -26,7 +26,9 @@ from comken.exceptions import (
 )
 from comken.services.salesforce_downloader import (
     ReportEntry,
+    cached_report_path,
     download_report,
+    download_report_path,
     download_scheduled,
     history,
     load_master,
@@ -191,17 +193,18 @@ class TestSharedReportIds:
 class TestDownloadReport:
     """download_report() は必ず Salesforce へ取りに行く。"""
 
-    def test_saves_file_and_returns_csv_reader(self, paths):
+    def test_saves_file_and_returns_table(self, paths):
         with patch(
             "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
-            reader = download_report("1001", "案件集計")
-        assert reader.path.is_file()
-        assert reader.read().read() == ROWS
+            table = download_report("1001", "案件集計")
+            saved = download_report_path("1001")
+        assert saved.is_file()
+        assert table.read() == ROWS
 
-    def test_csv_reader_path_is_inherited_from_file_base(self, paths):
-        reader = CSV(paths["history_path"])
-        assert reader.path == paths["history_path"]
+    def test_csv_path_is_accessible_after_construction(self, paths):
+        with CSV(paths["history_path"]) as csv_file:
+            assert csv_file.path == paths["history_path"]
 
     def test_fetches_again_even_if_already_downloaded_today(self, paths):
         """今日すでに取っていても取り直す（明示的な最新取得なので）。"""
@@ -221,9 +224,11 @@ class TestDownloadReport:
         with patch(
             "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
         ):
-            result = download_report("1001")
+            download_report("1001")
         assert collision.read_text(encoding="utf-8") == "既存"
-        assert result.path.name == "1001_顧客一覧_fixed_1.csv"
+        # もう1つ作られたファイル = 衝突回避で _1 が付いたファイル
+        archive = paths["folder"] / "1001_顧客一覧_fixed_1.csv"
+        assert archive.exists()
 
     def test_unregistered_key_raises(self, paths):
         with pytest.raises(ReportNotRegisteredError):
@@ -338,13 +343,14 @@ class TestHistory:
             pytest.raises(ReportFolderNotFoundError),
         ):
             download_report("1001")
-        rows = CSV(history_path).read().read()
-        assert len(rows) == 1
-        row = rows[0]
-        assert row["成否"] == "失敗"
-        assert row["Salesforce取得結果"] == ""
-        assert row["保存結果"] == ""
-        assert row["エラーコード"] == "ReportFolderNotFoundError"
+        with CSV(history_path) as csv_file:
+            rows = csv_file.read().read()
+            assert len(rows) == 1
+            row = rows[0]
+            assert row["成否"] == "失敗"
+            assert row["Salesforce取得結果"] == ""
+            assert row["保存結果"] == ""
+            assert row["エラーコード"] == "ReportFolderNotFoundError"
 
     def test_history_when_salesforce_call_fails(self, tmp_path, monkeypatch):
         """Salesforce への問い合わせが失敗 → 成否=失敗 / Salesforce取得結果=失敗 /
@@ -376,13 +382,14 @@ class TestHistory:
             pytest.raises(SalesforceRequestError),
         ):
             download_report("1001")
-        rows = CSV(history_path).read().read()
-        assert len(rows) == 1
-        row = rows[0]
-        assert row["成否"] == "失敗"
-        assert row["Salesforce取得結果"] == "失敗"
-        assert row["保存結果"] == ""
-        assert row["エラーコード"] == "SalesforceRequestError"
+        with CSV(history_path) as csv_file:
+            rows = csv_file.read().read()
+            assert len(rows) == 1
+            row = rows[0]
+            assert row["成否"] == "失敗"
+            assert row["Salesforce取得結果"] == "失敗"
+            assert row["保存結果"] == ""
+            assert row["エラーコード"] == "SalesforceRequestError"
 
     def test_history_when_report_is_empty(self, paths):
         """取得できたが 0 行だった → 成否=失敗 / Salesforce取得結果=成功 /
@@ -431,13 +438,14 @@ class TestHistory:
             pytest.raises(OSError),
         ):
             download_report("1001")
-        rows = CSV(history_path).read().read()
-        assert len(rows) == 1
-        row = rows[0]
-        assert row["成否"] == "失敗"
-        assert row["Salesforce取得結果"] == "成功"
-        assert row["保存結果"] == "失敗"
-        assert row["エラーコード"] == "OSError"
+        with CSV(history_path) as csv_file:
+            rows = csv_file.read().read()
+            assert len(rows) == 1
+            row = rows[0]
+            assert row["成否"] == "失敗"
+            assert row["Salesforce取得結果"] == "成功"
+            assert row["保存結果"] == "失敗"
+            assert row["エラーコード"] == "OSError"
 
     # ── 「原因区分」列（4区分 + 成功時の空文字）─────────────────────
     def test_cause_is_blank_on_success(self, paths):
@@ -468,8 +476,9 @@ class TestHistory:
             pytest.raises(ReportFolderNotFoundError),
         ):
             download_report("1001")
-        row = CSV(history_path).read().read()[-1]
-        assert row["原因区分"] == "設定"
+        with CSV(history_path) as csv_file:
+            row = csv_file.read().read()[-1]
+            assert row["原因区分"] == "設定"
 
     def test_cause_is_salesforce_when_request_fails(self, tmp_path, monkeypatch):
         """Salesforce への問い合わせが失敗 → 「Salesforce」。"""
@@ -500,8 +509,9 @@ class TestHistory:
             pytest.raises(SalesforceRequestError),
         ):
             download_report("1001")
-        row = CSV(history_path).read().read()[-1]
-        assert row["原因区分"] == "Salesforce"
+        with CSV(history_path) as csv_file:
+            row = csv_file.read().read()[-1]
+            assert row["原因区分"] == "Salesforce"
 
     def test_cause_is_empty_data_when_report_is_empty(self, paths):
         """取得できたが 0 行 → 「データなし」（取得は成功・保存未到達を一意に指す区分）。
@@ -546,8 +556,9 @@ class TestHistory:
             pytest.raises(OSError),
         ):
             download_report("1001")
-        row = CSV(history_path).read().read()[-1]
-        assert row["原因区分"] == "ファイル"
+        with CSV(history_path) as csv_file:
+            row = csv_file.read().read()[-1]
+            assert row["原因区分"] == "ファイル"
 
     def test_cause_is_program_when_unexpected_error_raises(self, tmp_path, monkeypatch):
         """_fetch() が TypeError を投げる（comken 側のバグ想定）→ 「プログラム」。"""
@@ -574,8 +585,9 @@ class TestHistory:
             pytest.raises(TypeError),
         ):
             download_report("1001")
-        row = CSV(history_path).read().read()[-1]
-        assert row["原因区分"] == "プログラム"
+        with CSV(history_path) as csv_file:
+            row = csv_file.read().read()[-1]
+            assert row["原因区分"] == "プログラム"
 
 
 class TestDownloadScheduled:
@@ -708,7 +720,8 @@ class TestDownloadScheduled:
 
 
 def _history_rows(paths: dict) -> list[dict]:
-    return CSV(paths["history_path"]).read().read()
+    with CSV(paths["history_path"]) as csv_file:
+        return csv_file.read().read()
 
 
 class TestRequiredHistory:
@@ -770,12 +783,13 @@ class TestAllowEmpty:
         # ファイルは作られない
         assert list(folder.glob("*.csv")) == []
         # 履歴には `データなし` が残る（取得成功・保存未到達の組合せのみ取り得る）
-        row = CSV(history_path).read().read()[-1]
-        assert row["成否"] == "失敗"
-        assert row["Salesforce取得結果"] == "成功"
-        assert row["保存結果"] == ""
-        assert row["エラーコード"] == "EmptyReportError"
-        assert row["原因区分"] == "データなし"
+        with CSV(history_path) as csv_file:
+            row = csv_file.read().read()[-1]
+            assert row["成否"] == "失敗"
+            assert row["Salesforce取得結果"] == "成功"
+            assert row["保存結果"] == ""
+            assert row["エラーコード"] == "EmptyReportError"
+            assert row["原因区分"] == "データなし"
 
     def test_empty_report_with_allow_empty_yes_succeeds_and_writes_empty_file(
         self, tmp_path, monkeypatch
@@ -796,22 +810,22 @@ class TestAllowEmpty:
             "comken.services.salesforce_downloader.service.site_for",
             return_value=fake_salesforce([]),
         ):
-            reader = download_report("1001")  # 例外にならない
+            download_report("1001")  # 例外にならない
 
         # 空ファイルが作られる（ただし 0 バイトでよい）
         saved = list(folder.glob("*.csv"))
         assert len(saved) == 1
         assert saved[0].read_bytes() == b""
-        assert reader.path == saved[0]
 
         # 履歴は成功・取得件数 0・原因区分 空
-        row = CSV(history_path).read().read()[-1]
-        assert row["成否"] == "成功"
-        assert row["Salesforce取得結果"] == "成功"
-        assert row["保存結果"] == "成功"
-        assert row["取得件数"] == "0"
-        assert row["原因区分"] == ""
-        assert row["エラーコード"] == ""
+        with CSV(history_path) as csv_file:
+            row = csv_file.read().read()[-1]
+            assert row["成否"] == "成功"
+            assert row["Salesforce取得結果"] == "成功"
+            assert row["保存結果"] == "成功"
+            assert row["取得件数"] == "0"
+            assert row["原因区分"] == ""
+            assert row["エラーコード"] == ""
 
     def test_empty_csv_can_be_read_with_no_rows(self, tmp_path, monkeypatch):
         """3. 2. で作られたファイルを CSV で読むと空の Table を返す。"""
@@ -829,12 +843,12 @@ class TestAllowEmpty:
             "comken.services.salesforce_downloader.service.site_for",
             return_value=fake_salesforce([]),
         ):
-            reader = download_report("1001")
+            table = download_report("1001")
 
         # CSV は 0 バイトでも例外を出さず、空の行リストを返す
-        assert reader.read().read() == []
+        assert table.read() == []
         # ヘッダー名での索引も空（ヘッダー行が無いので当然）
-        assert reader.read().read() == []
+        assert table.read() == []
 
     def test_scheduled_empty_report_can_be_received(self, tmp_path, monkeypatch):
         """0件で成功した定期取得は、本日取得済みとして空のまま受け取れる。"""
@@ -862,8 +876,8 @@ class TestAllowEmpty:
         from comken.services.salesforce_downloader import cached_report
 
         reader = cached_report("1001")
-        assert reader.path.is_file()
-        assert reader.read().read() == []
+        assert cached_report_path("1001").is_file()
+        assert reader.read() == []
 
     def test_master_without_allow_empty_column_defaults_to_no(self, tmp_path, monkeypatch):
         """4. `0件あり` の列が無い管理表でも読める（既定 `×` として扱われる）。"""
@@ -939,13 +953,14 @@ class TestAllowEmpty:
         names = sorted(path.name.split("_")[0] for path in saved)
         assert names == ["1001", "1002"]
         # 履歴を確認: "1001" は成功・0件、"1002" も成功・2件
-        rows = CSV(history_path).read().read()
-        by_key = {row["管理番号"]: row for row in rows}
-        assert by_key["1001"]["成否"] == "成功"
-        assert by_key["1001"]["取得件数"] == "0"
-        assert by_key["1001"]["原因区分"] == ""
-        assert by_key["1002"]["成否"] == "成功"
-        assert by_key["1002"]["取得件数"] == "2"
+        with CSV(history_path) as csv_file:
+            rows = csv_file.read().read()
+            by_key = {row["管理番号"]: row for row in rows}
+            assert by_key["1001"]["成否"] == "成功"
+            assert by_key["1001"]["取得件数"] == "0"
+            assert by_key["1001"]["原因区分"] == ""
+            assert by_key["1002"]["成否"] == "成功"
+            assert by_key["1002"]["取得件数"] == "2"
 
 
 class TestTemplate:

@@ -69,8 +69,10 @@ from comken.services.salesforce_downloader.schedule import ScheduleRule
 
 __all__ = [
     "download_report",
+    "download_report_path",
     "download_scheduled",
     "cached_report",
+    "cached_report_path",
     "file_path_of",
     "load_master",
     "shared_report_ids",
@@ -82,8 +84,10 @@ __all__ = [
 # import 時に service.py を読み込むと requests が要るので、必要なときにだけ読む。
 _LAZY_TARGETS: dict[str, str] = {
     "download_report": "comken.services.salesforce_downloader.service",
+    "download_report_path": "comken.services.salesforce_downloader.service",
     "download_scheduled": "comken.services.salesforce_downloader.service",
     "cached_report": "comken.services.salesforce_downloader.provider",
+    "cached_report_path": "comken.services.salesforce_downloader.provider",
     "file_path_of": "comken.services.salesforce_downloader.provider",
 }
 

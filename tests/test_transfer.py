@@ -378,9 +378,7 @@ def test_unmatched_only_in_read_returns_rows_missing_in_write() -> None:
         [{"id": "1", "value": "new"}, {"id": "2", "value": "extra"}],
     )
     destination = Table(["id", "value"], [{"id": "1", "value": "old"}])
-    transfer = Transfer(
-        source, destination, {"value": "value"}, read_key="id", write_key="id"
-    )
+    transfer = Transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
 
     extras = transfer.unmatched().only_in_read.read()
 
@@ -394,9 +392,7 @@ def test_unmatched_only_in_write_returns_rows_missing_in_read() -> None:
         ["id", "value"],
         [{"id": "1", "value": "old"}, {"id": "2", "value": "stale"}],
     )
-    transfer = Transfer(
-        source, destination, {"value": "value"}, read_key="id", write_key="id"
-    )
+    transfer = Transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
 
     extras = transfer.unmatched().only_in_write
 
@@ -410,9 +406,7 @@ def test_unmatched_only_in_write_mutation_reflects_in_result() -> None:
         ["id", "value"],
         [{"id": "1", "value": "old"}, {"id": "2", "value": "stale"}],
     )
-    transfer = Transfer(
-        source, destination, {"value": "value"}, read_key="id", write_key="id"
-    )
+    transfer = Transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
 
     # write にしか無い行の "備考" 列を埋める
     for write_row in transfer.unmatched().only_in_write:
@@ -438,9 +432,7 @@ def test_blank_key_rows_are_excluded_from_matching() -> None:
         ["id", "name"],
         [{"id": "", "name": ""}, {"id": "1", "name": ""}],
     )
-    transfer = Transfer(
-        source, destination, {"name": "name"}, read_key="id", write_key="id"
-    )
+    transfer = Transfer(source, destination, {"name": "name"}, read_key="id", write_key="id")
 
     # matched_rows は id="1" の1件だけ
     pairs = list(transfer.matched_rows())
@@ -467,9 +459,7 @@ def test_unmatched_only_in_read_includes_blank_keys() -> None:
         [{"id": "", "name": "空白"}],
     )
     destination = Table(["id", "name"], [{"id": "1", "name": "既存"}])
-    transfer = Transfer(
-        source, destination, {"name": "name"}, read_key="id", write_key="id"
-    )
+    transfer = Transfer(source, destination, {"name": "name"}, read_key="id", write_key="id")
 
     extras = transfer.unmatched().only_in_read.read()
 
@@ -483,9 +473,7 @@ def test_unmatched_only_in_write_includes_blank_keys() -> None:
         ["id", "name"],
         [{"id": "", "name": ""}, {"id": "1", "name": ""}],
     )
-    transfer = Transfer(
-        source, destination, {"name": "name"}, read_key="id", write_key="id"
-    )
+    transfer = Transfer(source, destination, {"name": "name"}, read_key="id", write_key="id")
 
     extras = transfer.unmatched().only_in_write
 
@@ -499,9 +487,7 @@ def test_none_key_is_treated_as_blank() -> None:
         [{"id": None, "name": "Noneキー"}],
     )
     destination = Table(["id", "name"], [{"id": "1", "name": "既存"}])
-    transfer = Transfer(
-        source, destination, {"name": "name"}, read_key="id", write_key="id"
-    )
+    transfer = Transfer(source, destination, {"name": "name"}, read_key="id", write_key="id")
 
     # matched_rows も空集合
     assert list(transfer.matched_rows()) == []
@@ -516,9 +502,7 @@ def test_zero_value_is_a_valid_key() -> None:
     """``0`` はキーに使っても空キー扱いにならない（数値ゼロ落ち対策）。"""
     source = Table(["id", "value"], [{"id": 0, "value": "zero-read"}])
     destination = Table(["id", "value"], [{"id": 0, "value": "zero-write"}])
-    transfer = Transfer(
-        source, destination, {"value": "value"}, read_key="id", write_key="id"
-    )
+    transfer = Transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
 
     pairs = list(transfer.matched_rows())
 
@@ -583,9 +567,7 @@ def test_multiple_blank_write_keys_do_not_raise_multiple_match() -> None:
         ["id", "value"],
         [{"id": "", "value": ""}, {"id": "", "value": ""}, {"id": "1", "value": "old"}],
     )
-    transfer = Transfer(
-        source, destination, {"value": "value"}, read_key="id", write_key="id"
-    )
+    transfer = Transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
 
     # 例外が出ずに動く
     pairs = list(transfer.transfer_rows())
@@ -603,9 +585,7 @@ def test_unmatched_works_without_calling_other_iterators() -> None:
         ["id", "value"],
         [{"id": "1", "value": "old"}, {"id": "2", "value": "stale"}],
     )
-    transfer = Transfer(
-        source, destination, {"value": "value"}, read_key="id", write_key="id"
-    )
+    transfer = Transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
 
     extras = transfer.unmatched().only_in_write
 
@@ -656,9 +636,7 @@ def test_transfer_methods_do_not_mutate_input_tables() -> None:
     )
     original_source = source.read()
     original_destination = destination.read()
-    transfer = Transfer(
-        source, destination, {"value": "value"}, read_key="id", write_key="id"
-    )
+    transfer = Transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
 
     unmatched = transfer.unmatched()
     list(unmatched.only_in_read.read())
@@ -759,9 +737,7 @@ def test_unmatched_only_in_read_mutation_does_not_affect_inputs_or_result() -> N
         [{"id": "1", "value": "new"}, {"id": "2", "value": "extra"}],
     )
     destination = Table(["id", "value"], [{"id": "1", "value": "old"}])
-    transfer = Transfer(
-        source, destination, {"value": "value"}, read_key="id", write_key="id"
-    )
+    transfer = Transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
 
     only_in_read = transfer.unmatched().only_in_read
     # Table を iterate すると Table.__iter__ が dict(row) for row in self._rows の

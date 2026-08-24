@@ -311,3 +311,21 @@ class ExcelApplicationNotAvailableError(ExcelError):
             "数式の計算結果を読むときだけ Excel が必要です。"
             "数式をやめて値で書いてもらえば、Excel なしで動きます。"
         )
+
+
+class ExcelReadOnlyOperationError(ExcelError):
+    """read_only=True の Excel に書き込もうとした。
+
+    Excel(path, read_only=True) は読み取り専用なので、保存やシート作成を
+    行う create_sheet / create_data_sheet / run_macro 系の API は使えない。
+
+    発生箇所: Excel.create_data_sheet() / Excel.create_sheet() /
+             Excel.run_macro()
+
+    対処:
+        read_only=False で開き直すか、書き込みが要らない操作かを
+        見直す（読み取りだけなら Excel(path, read_only=True) で十分）
+    """
+
+    def __init__(self, operation: str) -> None:
+        super().__init__(f"read_only=True のExcelでは{operation}できません。")

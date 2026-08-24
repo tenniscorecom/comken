@@ -6,9 +6,11 @@ from comken.core.table import Table
 from comken.exceptions import (
     DataSheetAccessError,
     ExcelFileNotFoundError,
+    ExcelReadOnlyOperationError,
     InvalidTableOperationError,
     SheetAlreadyExistsError,
     SheetNameError,
+    TableNotOpenError,
     UnsupportedFileSuffixError,
 )
 from comken.toolbox.excel import Excel
@@ -69,8 +71,9 @@ def test_excel_table_append_accepts_row_list_and_table(tmp_path) -> None:
 
 
 def test_excel_rejects_missing_read_only_file_and_non_excel_suffix(tmp_path) -> None:
-    with pytest.raises(ExcelFileNotFoundError):
-        Excel(tmp_path / "missing.xlsx", read_only=True)
+    path = tmp_path / "missing.xlsx"
+    with pytest.raises(ExcelFileNotFoundError), Excel(path, read_only=True):
+        pass
     with pytest.raises(UnsupportedFileSuffixError):
         Excel(tmp_path / "book.csv")
 
@@ -124,7 +127,7 @@ def test_create_sheet_rejects_read_only_workbook(tmp_path) -> None:
     path = tmp_path / "book.xlsx"
     with Excel(path) as excel:
         excel.create_sheet("集計")
-    with Excel(path, read_only=True) as excel, pytest.raises(RuntimeError):
+    with Excel(path, read_only=True) as excel, pytest.raises(ExcelReadOnlyOperationError):
         excel.create_sheet("別のシート")
 
 
@@ -201,3 +204,16 @@ def test_openpyxl_side_rejects_unknown_style_with_clear_message() -> None:
 
     with pytest.raises(ValueError, match="Value must be one of"):
         Side(style="thinn", color="000000")
+
+
+def test_excel_outside_with_block_raises_table_not_open_error(tmp_path) -> None:
+    path = tmp_path / "book.xlsx"
+    excel = Excel(path)
+    with pytest.raises(TableNotOpenError, match="Excel"):
+        excel.list_data_sheets()
+    with pytest.raises(TableNotOpenError, match="Excel"):
+        excel.data_sheet("顧客")
+    with pytest.raises(TableNotOpenError, match="Excel"):
+        excel.create_sheet("集計")
+    with pytest.raises(TableNotOpenError, match="Excel"):
+        excel.save()

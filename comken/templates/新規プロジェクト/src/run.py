@@ -26,7 +26,8 @@ def run() -> None:
     #   from comken.toolbox.csv import CSV
     #   from comken.toolbox.excel import Excel
     #
-    #   table = CSV(config.FILES.INPUT_CSV, read_only=True).read()
+    #   with CSV(config.FILES.INPUT_CSV, read_only=True) as csv_file:
+    #       table = csv_file.read()
     #   out = output_folder / DateNameBuilder("レポート").prefix()
     #   with Excel(out) as excel:
     #       excel.create_data_sheet(SHEET).create_table(SHEET, table)
