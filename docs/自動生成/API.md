@@ -506,7 +506,7 @@ Example:
 
 **条件は ``apply_mapping()`` より前に書くこと。** Python の ``for`` ループは
 ``continue`` したかどうかを呼び出し側に伝えないため、ループ内で
-``apply_mapping()`` を呼ばずに ``continue`` した行は、作業行へ反映されない。
+``apply_mapping()`` を呼ばずに ``continue`` した行は、作業 Table へ反映されない。
 条件判定を ``apply_mapping()`` の後ろに書くと、``continue`` しても mapping が
 適用済みとなり破棄できないので、判定は必ず ``apply_mapping()`` の前に置く。
 
@@ -580,8 +580,8 @@ def unmatched_write_rows(self) -> Iterator[Row]:
 
 read に対応が無い write 行だけを返す（破棄候補）。
 
-戻り値は ``matched_rows()`` が返す ``write_row`` と同じく **作業行の
-実体 dict**。 返された ``write_row`` を ``write_row["備考"] = "破棄予定"`` の
+戻り値は ``matched_rows()`` が返す ``write_row`` と同じく **作業 Table の
+実体行**。 返された ``write_row`` を ``write_row["備考"] = "破棄予定"`` の
 ように書き換えると ``result()`` の戻り値へ反映される。 ``result().append()``
 などに渡して追加する使い方ではないので注意。
 
@@ -606,7 +606,7 @@ mapping の read 列 / write 列は ``__init__`` で存在を検証済みなの�
 転記先の行が無いので ``TransferDestinationMissingError`` で停止する。
 
 入力 ``read`` / ``write`` には触れない。書き込みは Transfer 内部の
-作業行に紐づいた ``write_row`` に対して行う。
+作業 Table に紐づいた ``write_row`` に対して行う。
 
 Args:
     read_row: 転記元の行。
@@ -627,12 +627,14 @@ def result(self) -> Table:
 変更後の Table を返す。
 
 ``transfer_rows()`` / ``matched_rows()`` のイテレーション中に ``write_row``
-に対して行った変更が反映された作業行を ``Table`` に包んで返す。 初回呼び出し
-で Table を作ってキャッシュし、以降は **同じインスタンスを返し続ける**。
-``result().append(...)`` のように破壊的に加工した場合、後続の ``result()``
-呼び出しにも反映される（``examples/table_transfer_design/run.py`` が
-この書き方に依存している）。 イテレータを 1 度も進めないうちに ``result()``
-を呼ぶと ``write`` のコピー（変更なし）が返る。
+に対して行った変更が反映された作業用 Table を返す。 イテレータを 1 度も
+進めないうちに ``result()`` を呼ぶと ``write`` のコピー（変更なし）が返る。
+
+``result()`` は同じ作業 Table インスタンスを返し続けるので、
+``result().append(...)`` のように破壊的に加工した場合や、 ``result()`` を
+呼んだ後に ``unmatched_write_rows()`` の ``write_row`` を書き換えた場合も、
+後続の ``result().read()`` 呼び出しに反映される（``Table._iter_rows_for_update``
+経由で実体 dict を共有しているため）。
 
 Example:
     transfer = Transfer(source, destination, mapping,
@@ -1622,7 +1624,7 @@ comken 共通のクラス。OWNER は ``"comken"``。
 ### `setup`
 
 ```text
-def setup(site: type[LoggerSite]) -> None:
+def setup(site: type[LoggerSite], *, allow_existing: bool=False) -> None:
 ```
 
 #### 説明
@@ -1635,13 +1637,18 @@ PID は同じ端末で同時に動くプロセスを見分ける値であり、�
 ``local()`` が先に走っている場合（root に console と local ファイルだけがある
 場合）は console を再利用し、environment ファイルだけを追加する。逆順（setup() が
 先）では通常どおり console と environment ファイルを追加する。両方がすでに
-走っている、または関係のない handler が混ざっている場合は ``LoggingAlreadyConfiguredError``
-を送出して、二重出力や出力先の取り違えを防ぐ。
+走っている場合は ``LoggingAlreadyConfiguredError`` を送出して、二重出力を防ぐ。
+
+comken 以外の handler が root に混ざっている場合は ``LoggingConflictError``
+を送出する。既存 handler の出力先やレベルを勝手に変えてしまうため。
+``allow_existing=True`` を指定すると、その判定を**警告ログだけ**に留めて処理を
+続行する（comken の handler が両方走っているケースは許可しない — 何が3つ目に
+なるか曖昧になり、誤って出力に気付くのが遅れるため）。
 
 ### `local`
 
 ```text
-def local(*, console_level: int=logging.INFO, file_level: int=logging.INFO, path: str | Path | None=None) -> None:
+def local(*, console_level: int=logging.INFO, file_level: int=logging.INFO, path: str | Path | None=None, allow_existing: bool=False) -> None:
 ```
 
 #### 説明
@@ -1653,8 +1660,13 @@ def local(*, console_level: int=logging.INFO, file_level: int=logging.INFO, path
 直後（root に console と environment ファイルだけがある状態）でも、``setup()``
 と組み合わせず単独でも呼べる。``setup()`` 直後なら console を使い回して
 local ファイルだけを追加し、単独なら console と local ファイルの 2 種を追加する。
+
 ``setup()`` と ``local()`` が両方走った状態や、関係のない handler が混ざって
 いる場合は ``LoggingAlreadyConfiguredError`` を送出して二重出力を防ぐ。
+comken 以外（他ライブラリ由来）の handler が混ざっている場合は
+``LoggingConflictError`` を送出し、既存 handler の出力先やレベルを勝手に
+変えてしまうことを防ぐ。``allow_existing=True`` を指定すると、その判定を
+**警告ログだけ**に留めて処理を続行する。
 
 ### `DEBUG`
 
@@ -1864,7 +1876,7 @@ Example:
 
 **条件は ``apply_mapping()`` より前に書くこと。** Python の ``for`` ループは
 ``continue`` したかどうかを呼び出し側に伝えないため、ループ内で
-``apply_mapping()`` を呼ばずに ``continue`` した行は、作業行へ反映されない。
+``apply_mapping()`` を呼ばずに ``continue`` した行は、作業 Table へ反映されない。
 条件判定を ``apply_mapping()`` の後ろに書くと、``continue`` しても mapping が
 適用済みとなり破棄できないので、判定は必ず ``apply_mapping()`` の前に置く。
 
@@ -1938,8 +1950,8 @@ def unmatched_write_rows(self) -> Iterator[Row]:
 
 read に対応が無い write 行だけを返す（破棄候補）。
 
-戻り値は ``matched_rows()`` が返す ``write_row`` と同じく **作業行の
-実体 dict**。 返された ``write_row`` を ``write_row["備考"] = "破棄予定"`` の
+戻り値は ``matched_rows()`` が返す ``write_row`` と同じく **作業 Table の
+実体行**。 返された ``write_row`` を ``write_row["備考"] = "破棄予定"`` の
 ように書き換えると ``result()`` の戻り値へ反映される。 ``result().append()``
 などに渡して追加する使い方ではないので注意。
 
@@ -1964,7 +1976,7 @@ mapping の read 列 / write 列は ``__init__`` で存在を検証済みなの�
 転記先の行が無いので ``TransferDestinationMissingError`` で停止する。
 
 入力 ``read`` / ``write`` には触れない。書き込みは Transfer 内部の
-作業行に紐づいた ``write_row`` に対して行う。
+作業 Table に紐づいた ``write_row`` に対して行う。
 
 Args:
     read_row: 転記元の行。
@@ -1985,12 +1997,14 @@ def result(self) -> Table:
 変更後の Table を返す。
 
 ``transfer_rows()`` / ``matched_rows()`` のイテレーション中に ``write_row``
-に対して行った変更が反映された作業行を ``Table`` に包んで返す。 初回呼び出し
-で Table を作ってキャッシュし、以降は **同じインスタンスを返し続ける**。
-``result().append(...)`` のように破壊的に加工した場合、後続の ``result()``
-呼び出しにも反映される（``examples/table_transfer_design/run.py`` が
-この書き方に依存している）。 イテレータを 1 度も進めないうちに ``result()``
-を呼ぶと ``write`` のコピー（変更なし）が返る。
+に対して行った変更が反映された作業用 Table を返す。 イテレータを 1 度も
+進めないうちに ``result()`` を呼ぶと ``write`` のコピー（変更なし）が返る。
+
+``result()`` は同じ作業 Table インスタンスを返し続けるので、
+``result().append(...)`` のように破壊的に加工した場合や、 ``result()`` を
+呼んだ後に ``unmatched_write_rows()`` の ``write_row`` を書き換えた場合も、
+後続の ``result().read()`` 呼び出しに反映される（``Table._iter_rows_for_update``
+経由で実体 dict を共有しているため）。
 
 Example:
     transfer = Transfer(source, destination, mapping,
@@ -4556,6 +4570,39 @@ root logger がすでに設定されている
 def __init__(self) -> None:
 ```
 
+### `LoggingConflictError`
+
+```text
+class LoggingConflictError(ComkenError):
+```
+
+#### 説明
+
+root logger に comken 以外の handler が設定されている
+
+他ライブラリが先に root logger を設定した状態で ``setup()`` / ``local()`` を
+呼ぶと、comken が既存 handler の出力先やレベルを勝手に変えてしまう。
+「何がどう混ざっているのか」を運用担当者にそのまま見せられるよう、
+既存 handler の正体を判別できる範囲でメッセージに並べる。
+
+この例外は ``setup()`` / ``local()`` の呼び方では解決しない。利用者が
+コードを直しても他ライブラリの root logger 設定を止められないので、
+上が運用側へ通知されることを前提にした例外。
+
+対処:
+    上の handler 一覧をそのままライブラリの管理者へ連絡してください
+    （連絡先は環境ごとに異なるので、ここには書かない）。
+    やむを得ず共存させたい場合は、呼び出し時に ``allow_existing=True``
+    を指定すれば処理は続きますが、comken のハンドラーが追加されることで
+    既存ライブラリのログが**二重**に出たり、出力先が想定と変わる可能性
+    があります。
+
+#### `__init__`
+
+```text
+def __init__(self, handlers: list[str]) -> None:
+```
+
 ### `LogRootNotConfiguredError`
 
 ```text
@@ -5030,7 +5077,7 @@ Example:
 
 **条件は ``apply_mapping()`` より前に書くこと。** Python の ``for`` ループは
 ``continue`` したかどうかを呼び出し側に伝えないため、ループ内で
-``apply_mapping()`` を呼ばずに ``continue`` した行は、作業行へ反映されない。
+``apply_mapping()`` を呼ばずに ``continue`` した行は、作業 Table へ反映されない。
 条件判定を ``apply_mapping()`` の後ろに書くと、``continue`` しても mapping が
 適用済みとなり破棄できないので、判定は必ず ``apply_mapping()`` の前に置く。
 
@@ -5104,8 +5151,8 @@ def unmatched_write_rows(self) -> Iterator[Row]:
 
 read に対応が無い write 行だけを返す（破棄候補）。
 
-戻り値は ``matched_rows()`` が返す ``write_row`` と同じく **作業行の
-実体 dict**。 返された ``write_row`` を ``write_row["備考"] = "破棄予定"`` の
+戻り値は ``matched_rows()`` が返す ``write_row`` と同じく **作業 Table の
+実体行**。 返された ``write_row`` を ``write_row["備考"] = "破棄予定"`` の
 ように書き換えると ``result()`` の戻り値へ反映される。 ``result().append()``
 などに渡して追加する使い方ではないので注意。
 
@@ -5130,7 +5177,7 @@ mapping の read 列 / write 列は ``__init__`` で存在を検証済みなの�
 転記先の行が無いので ``TransferDestinationMissingError`` で停止する。
 
 入力 ``read`` / ``write`` には触れない。書き込みは Transfer 内部の
-作業行に紐づいた ``write_row`` に対して行う。
+作業 Table に紐づいた ``write_row`` に対して行う。
 
 Args:
     read_row: 転記元の行。
@@ -5151,12 +5198,14 @@ def result(self) -> Table:
 変更後の Table を返す。
 
 ``transfer_rows()`` / ``matched_rows()`` のイテレーション中に ``write_row``
-に対して行った変更が反映された作業行を ``Table`` に包んで返す。 初回呼び出し
-で Table を作ってキャッシュし、以降は **同じインスタンスを返し続ける**。
-``result().append(...)`` のように破壊的に加工した場合、後続の ``result()``
-呼び出しにも反映される（``examples/table_transfer_design/run.py`` が
-この書き方に依存している）。 イテレータを 1 度も進めないうちに ``result()``
-を呼ぶと ``write`` のコピー（変更なし）が返る。
+に対して行った変更が反映された作業用 Table を返す。 イテレータを 1 度も
+進めないうちに ``result()`` を呼ぶと ``write`` のコピー（変更なし）が返る。
+
+``result()`` は同じ作業 Table インスタンスを返し続けるので、
+``result().append(...)`` のように破壊的に加工した場合や、 ``result()`` を
+呼んだ後に ``unmatched_write_rows()`` の ``write_row`` を書き換えた場合も、
+後続の ``result().read()`` 呼び出しに反映される（``Table._iter_rows_for_update``
+経由で実体 dict を共有しているため）。
 
 Example:
     transfer = Transfer(source, destination, mapping,

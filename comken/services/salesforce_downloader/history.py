@@ -11,6 +11,7 @@
 
 import csv
 import datetime
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -211,7 +212,7 @@ def _validate_existing_header(path: Path) -> None:
         _require_expected_header(path, next(csv.reader(f), None))
 
 
-def _require_expected_header(path: Path, actual: list[str] | None) -> None:
+def _require_expected_header(path: Path, actual: Sequence[str] | None) -> None:
     """履歴の見出しが現在の列定義と完全一致しなければ止める。"""
     actual_columns = tuple(actual or ())
     if actual_columns != COLUMNS:

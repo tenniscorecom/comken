@@ -150,6 +150,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `ScheduledDownloadFailedError` | 定期取得で1件以上が失敗した | 履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。急いで必要なものは download_report() でその場で取得する |
 | `TransferDestinationMultipleMatchError` | 転記先のキーに一致する行が複数ある | mapping の先頭列に対応する転記先列の値を一意にする。キーが ``None`` か ``""`` の行は突合対象外なので、空欄のキーが複数あってもこの例外は出ない。 |
 | `LoggingAlreadyConfiguredError` | root logger がすでに設定されている | setup() または local() はアプリの入口で1回だけ呼ぶ。実行基盤がログを設定する場合は呼ばない。 |
+| `LoggingConflictError` | root logger に comken 以外の handler が設定されている | 上の handler 一覧をそのままライブラリの管理者へ連絡してください（連絡先は環境ごとに異なるので、ここには書かない）。やむを得ず共存させたい場合は、呼び出し時に ``allow_existing=True``を指定すれば処理は続きますが、comken のハンドラーが追加されることで既存ライブラリのログが**二重**に出たり、出力先が想定と変わる可能性があります。 |
 | `LogRootNotConfiguredError` | LoggerSite の LOG_ROOT が設定されていない | サブクラスに ``LOG_ROOT = "\\server\share\logs"`` を1行追加する（絶対パスまたは UNC 文字列。LOG_FOLDER_NAMES のフォルダ名はこの下に作られる）。 |
 | `FileNotFoundError` | ファイルが見つからない | ファイルの置き場所と名前を確認する。「今日の日付のファイル」を探す処理なら、今日のファイルが作られているか確認する |
 

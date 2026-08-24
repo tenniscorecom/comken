@@ -17,6 +17,7 @@ from comken.core.logger.environment import (
     ENVIRONMENT_HANDLER_NAME,
     ETC_FOLDER_NAME,
     LOCAL_HANDLER_NAME,
+    _format_external_handlers,
 )
 from comken.core.logger.environment import (
     setup as environment_setup,
@@ -24,11 +25,23 @@ from comken.core.logger.environment import (
 from comken.core.logger.site import LoggerSite
 from comken.exceptions import (
     LoggingAlreadyConfiguredError,
+    LoggingConflictError,
     LogRootNotConfiguredError,
     SiteOwnerRequiredError,
 )
 
 local_module = importlib.import_module("comken.core.logger.local")
+
+
+class _LogCapture(logging.Handler):
+    """テスト用に root ログをメモリへ捕捉するハンドラー。"""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
 
 
 @pytest.fixture
@@ -91,7 +104,7 @@ class TestSetup:
     def test_existing_handler_raises(self, isolated_logging):
         isolated_logging.handlers.clear()
         isolated_logging.addHandler(logging.StreamHandler())
-        with pytest.raises(LoggingAlreadyConfiguredError):
+        with pytest.raises(LoggingConflictError):
             setup(Backoffice)
 
     def test_missing_owner_raises(self, isolated_logging):
@@ -349,7 +362,7 @@ class TestLocal:
         isolated_logging.addHandler(unknown_file_handler)
 
         try:
-            with pytest.raises(LoggingAlreadyConfiguredError):
+            with pytest.raises(LoggingConflictError):
                 local()
         finally:
             isolated_logging.removeHandler(unknown_file_handler)
@@ -362,7 +375,7 @@ class TestLocal:
         external.set_name("external.library")
         isolated_logging.addHandler(external)
         try:
-            with pytest.raises(LoggingAlreadyConfiguredError):
+            with pytest.raises(LoggingConflictError):
                 setup(Backoffice)
         finally:
             isolated_logging.removeHandler(external)
@@ -377,7 +390,7 @@ class TestLocal:
     def test_external_handler_raises_at_local(self, isolated_logging):
         isolated_logging.addHandler(logging.StreamHandler())
         try:
-            with pytest.raises(LoggingAlreadyConfiguredError):
+            with pytest.raises(LoggingConflictError):
                 local()
         finally:
             for h in isolated_logging.handlers[:]:
@@ -479,3 +492,340 @@ class TestOwner:
 
     def test_intranet_owner_is_comken(self):
         assert Intranet.OWNER == "comken"
+
+
+class TestLoggingConflict:
+    """他ライブラリの handler が root に混ざっているときの振る舞い。"""
+
+    def test_setup_raises_logging_conflict_with_external_handler(
+        self, isolated_logging, tmp_path, monkeypatch
+    ):
+        """外部ハンドラーがある状態で setup() を呼ぶと LoggingConflictError。"""
+        _prepare_site(monkeypatch, tmp_path)
+        external = logging.StreamHandler()
+        external.set_name("external.library")
+        isolated_logging.addHandler(external)
+        try:
+            with pytest.raises(LoggingConflictError):
+                setup(Backoffice)
+        finally:
+            isolated_logging.removeHandler(external)
+            external.close()
+
+    def test_conflict_message_contains_handler_class_name(
+        self, isolated_logging, tmp_path, monkeypatch
+    ):
+        """例外メッセージに既存ハンドラーのクラス名が含まれる。"""
+        _prepare_site(monkeypatch, tmp_path)
+        external = logging.StreamHandler()
+        external.set_name("external.library")
+        isolated_logging.addHandler(external)
+        try:
+            with pytest.raises(LoggingConflictError) as excinfo:
+                setup(Backoffice)
+            assert "StreamHandler" in str(excinfo.value)
+            assert "external.library" in str(excinfo.value)
+        finally:
+            isolated_logging.removeHandler(external)
+            external.close()
+
+    def test_conflict_message_contains_filehandler_path(
+        self, isolated_logging, tmp_path, monkeypatch
+    ):
+        """FileHandler が混ざっている場合、出力先のパスがメッセージに含まれる。"""
+        _prepare_site(monkeypatch, tmp_path)
+        external_path = tmp_path / "external.log"
+        external = logging.FileHandler(external_path, encoding="utf-8")
+        external.set_name("external.library")
+        isolated_logging.addHandler(external)
+        try:
+            with pytest.raises(LoggingConflictError) as excinfo:
+                setup(Backoffice)
+            assert "FileHandler" in str(excinfo.value)
+            assert str(external_path) in str(excinfo.value)
+        finally:
+            isolated_logging.removeHandler(external)
+            external.close()
+
+    def test_local_raises_logging_conflict_with_external_handler(self, isolated_logging):
+        """外部ハンドラーがある状態で local() を呼んでも LoggingConflictError。"""
+        external = logging.StreamHandler()
+        external.set_name("external.library")
+        isolated_logging.addHandler(external)
+        try:
+            with pytest.raises(LoggingConflictError):
+                local()
+        finally:
+            isolated_logging.removeHandler(external)
+            external.close()
+
+    def test_local_conflict_message_contains_handler_info(self, isolated_logging):
+        """local() でも例外メッセージに既存ハンドラーの情報が含まれる。"""
+        external = logging.StreamHandler()
+        external.set_name("external.library")
+        isolated_logging.addHandler(external)
+        try:
+            with pytest.raises(LoggingConflictError) as excinfo:
+                local()
+            assert "StreamHandler" in str(excinfo.value)
+            assert "external.library" in str(excinfo.value)
+        finally:
+            isolated_logging.removeHandler(external)
+            external.close()
+
+    def test_setup_allow_existing_proceeds_with_warning(
+        self, tmp_path, monkeypatch
+    ):
+        """allow_existing=True なら外部ハンドラーがあっても処理が続行し、警告ログが出る。
+
+        ``isolated_logging`` を使うと ``root.handlers.clear()`` で他テスト用の
+        handler も外れてしまうので、ここでは手動で root.handlers を退避・復元し、
+        自前の ``CaptureHandler`` を一時的に root に追加してログを記録する。
+        """
+        root_logger = logging.getLogger()
+        original_handlers = root_logger.handlers[:]
+        original_level = root_logger.level
+        root_logger.handlers.clear()
+        external = logging.StreamHandler()
+        external.set_name("external.library")
+        capture = _LogCapture()
+        capture.setLevel(logging.WARNING)
+        try:
+            _prepare_site(monkeypatch, tmp_path)
+            root_logger.addHandler(external)
+            root_logger.addHandler(capture)
+
+            setup(Backoffice, allow_existing=True)
+
+            # comken の handler が両方追加されている
+            assert {h.name for h in root_logger.handlers} >= {
+                CONSOLE_HANDLER_NAME,
+                ENVIRONMENT_HANDLER_NAME,
+            }
+            # 外部ハンドラーはそのまま残っている
+            assert external in root_logger.handlers
+            # 警告ログに記録されている
+            warning_texts = [record.getMessage() for record in capture.records]
+            assert any("allow_existing=True" in t for t in warning_texts)
+            assert any("external.library" in t for t in warning_texts)
+        finally:
+            root_logger.handlers.clear()
+            root_logger.handlers.extend(original_handlers)
+            root_logger.setLevel(original_level)
+            external.close()
+
+    def test_local_allow_existing_proceeds_with_warning(
+        self, tmp_path, monkeypatch
+    ):
+        """local() でも allow_existing=True なら外部ハンドラーがあっても処理が続行し警告が出る。
+
+        詳細は ``test_setup_allow_existing_proceeds_with_warning`` を参照。
+        """
+        root_logger = logging.getLogger()
+        original_handlers = root_logger.handlers[:]
+        original_level = root_logger.level
+        root_logger.handlers.clear()
+        external = logging.StreamHandler()
+        external.set_name("external.library")
+        capture = _LogCapture()
+        capture.setLevel(logging.WARNING)
+        try:
+            self._prepare_local(monkeypatch, tmp_path)
+            root_logger.addHandler(external)
+            root_logger.addHandler(capture)
+
+            local(allow_existing=True)
+
+            assert {h.name for h in root_logger.handlers} >= {
+                CONSOLE_HANDLER_NAME,
+                LOCAL_HANDLER_NAME,
+            }
+            assert external in root_logger.handlers
+            warning_texts = [record.getMessage() for record in capture.records]
+            assert any("allow_existing=True" in t for t in warning_texts)
+        finally:
+            root_logger.handlers.clear()
+            root_logger.handlers.extend(original_handlers)
+            root_logger.setLevel(original_level)
+            external.close()
+
+    def test_setup_allow_existing_still_raises_when_already_called(
+        self, isolated_logging, tmp_path, monkeypatch
+    ):
+        """allow_existing=True でも comken が1度呼ばれた状態では例外のまま。"""
+        _prepare_site(monkeypatch, tmp_path)
+        setup(Backoffice)
+
+        with pytest.raises(LoggingAlreadyConfiguredError):
+            setup(Backoffice, allow_existing=True)
+
+    def test_local_allow_existing_still_raises_when_local_already_called(
+        self, isolated_logging, tmp_path, monkeypatch
+    ):
+        """allow_existing=True でも local() を2回呼ぶと例外のまま。"""
+        TestLocal()._prepare(monkeypatch, tmp_path)
+        local()
+
+        with pytest.raises(LoggingAlreadyConfiguredError):
+            local(allow_existing=True)
+
+    def test_conflict_message_mentions_allow_existing_workaround(
+        self, isolated_logging, tmp_path, monkeypatch
+    ):
+        """LoggingConflictError のメッセージが ``allow_existing=True`` での共存手段に言及する。
+
+        利用者が次に何をすればよいか分からないと現場で詰まるので、メッセージ内に
+        エスケープハッチ (allow_existing=True) への言及があることを保証する。
+        """
+        _prepare_site(monkeypatch, tmp_path)
+        external = logging.StreamHandler()
+        external.set_name("external.library")
+        isolated_logging.addHandler(external)
+        try:
+            with pytest.raises(LoggingConflictError) as excinfo:
+                setup(Backoffice)
+            message = str(excinfo.value)
+            assert "allow_existing=True" in message
+        finally:
+            isolated_logging.removeHandler(external)
+            external.close()
+
+    def test_conflict_message_tells_to_contact_admin(
+        self, isolated_logging, tmp_path, monkeypatch
+    ):
+        """LoggingConflictError のメッセージが「管理者へ連絡」する旨を含む。
+
+        連絡先そのものは環境ごとに違うので書かないが、「管理者へ」が
+        含まれていることを保証する（この例外は利用者コードでは解決しないため）。
+        """
+        _prepare_site(monkeypatch, tmp_path)
+        external = logging.StreamHandler()
+        external.set_name("external.library")
+        isolated_logging.addHandler(external)
+        try:
+            with pytest.raises(LoggingConflictError) as excinfo:
+                setup(Backoffice)
+            message = str(excinfo.value)
+            assert "管理者" in message
+        finally:
+            isolated_logging.removeHandler(external)
+            external.close()
+
+    def test_format_external_handlers_emits_name_field_only_once(self):
+        """_format_external_handlers() の各行で ``name=`` が1回しか現れない。
+
+        旧実装では ``handler.name=None`` の StreamHandler に対して ``name=None`` と
+        ``name=(未設定)`` が両方出ていた。名前が空のときの表記は handler の種類に
+        よらず ``name=(未設定)`` に揃える（``set_name()`` を呼ばないライブラリが
+        多く、``None`` がそのまま出ると読み手が戸惑うため）。``FileHandler`` は
+        そのうえで ``path=`` を添える。
+        """
+        # StreamHandler / FileHandler は set_name を呼ばないと name は None のまま。
+        stream_without_name = logging.StreamHandler()
+        named_stream = logging.StreamHandler()
+        named_stream.set_name("external.library")
+        file_without_name = logging.FileHandler(os.devnull, encoding="utf-8")
+
+        lines = _format_external_handlers(
+            [stream_without_name, named_stream, file_without_name]
+        )
+        assert len(lines) == 3
+        for line in lines:
+            assert line.count("name=") == 1, line
+        # 未設定の StreamHandler は日本語表記に統一されている。
+        assert "name=(未設定)" in lines[0]
+        assert "name=None" not in lines[0]
+        # 名前付きはクォート付きで出る。
+        assert "name='external.library'" in lines[1]
+        # FileHandler も名前が空なら同じ表記。そのうえで出力先を添える。
+        assert "name=(未設定)" in lines[2]
+        assert "name=None" not in lines[2]
+        assert "path=" in lines[2]
+
+    def test_setup_allow_existing_writes_warning_to_comken_log_file(
+        self, tmp_path, monkeypatch
+    ):
+        """allow_existing=True のとき、警告が comken のログファイルに書かれている。
+
+        警告が ``_guard_root_handlers()`` の中で出ていた旧実装では、警告時点では
+        comken の FileHandler がまだ root に付いていないため、ログファイルへ
+        記録されず「何と共存したか」追跡できなかった。修正後は comken の
+        handler を root に追加し終えてから警告が出るので、ファイルに警告が
+        残ること自体が順序の証左になる。
+        """
+        root_logger = logging.getLogger()
+        original_handlers = root_logger.handlers[:]
+        original_level = root_logger.level
+        root_logger.handlers.clear()
+        external = logging.StreamHandler()
+        external.set_name("external.library")
+        external_descriptions = _format_external_handlers([external])
+        try:
+            _prepare_site(monkeypatch, tmp_path)
+            root_logger.addHandler(external)
+
+            setup(Backoffice, allow_existing=True)
+
+            # comken のファイル handler を取得し、ファイルを読み込む。
+            file_handler = next(
+                h
+                for h in root_logger.handlers
+                if isinstance(h, logging.FileHandler)
+                and h.name == ENVIRONMENT_HANDLER_NAME
+            )
+            file_handler.flush()
+            text = Path(file_handler.baseFilename).read_text(encoding="utf-8")
+            assert "WARNING" in text or "root logger に comken 以外" in text
+            assert "allow_existing=True" in text
+            assert "external.library" in text
+            # ファイルに書かれた警告本文が、_format_external_handlers() の
+            # 出力した行を含むことを確認（共食いではなく整合した内容が出ること）。
+            for description in external_descriptions:
+                assert description in text
+        finally:
+            root_logger.handlers.clear()
+            root_logger.handlers.extend(original_handlers)
+            root_logger.setLevel(original_level)
+            external.close()
+
+    def test_local_allow_existing_writes_warning_to_comken_log_file(
+        self, tmp_path, monkeypatch
+    ):
+        """local() でも allow_existing=True の警告が comken のログファイルに残る。"""
+        root_logger = logging.getLogger()
+        original_handlers = root_logger.handlers[:]
+        original_level = root_logger.level
+        root_logger.handlers.clear()
+        external = logging.StreamHandler()
+        external.set_name("external.library")
+        external_descriptions = _format_external_handlers([external])
+        try:
+            self._prepare_local(monkeypatch, tmp_path)
+            root_logger.addHandler(external)
+
+            local(allow_existing=True)
+
+            file_handler = next(
+                h
+                for h in root_logger.handlers
+                if isinstance(h, logging.FileHandler)
+                and h.name == LOCAL_HANDLER_NAME
+            )
+            file_handler.flush()
+            text = Path(file_handler.baseFilename).read_text(encoding="utf-8")
+            assert "allow_existing=True" in text
+            assert "external.library" in text
+            for description in external_descriptions:
+                assert description in text
+        finally:
+            root_logger.handlers.clear()
+            root_logger.handlers.extend(original_handlers)
+            root_logger.setLevel(original_level)
+            external.close()
+
+    @staticmethod
+    def _prepare_local(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """local() 用のテスト準備（TestLocal._prepare を流用）。"""
+        logging.getLogger().handlers.clear()
+        monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
+        monkeypatch.setattr(local_module, "today", lambda: date(2026, 8, 21))

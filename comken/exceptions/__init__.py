@@ -6,6 +6,7 @@ ComkenError
 │   ├── InternalLibraryNotFoundError         指定した社内ライブラリが見つからない
 │   └── InternalLibraryVersionMismatchError  指定したバージョンの社内ライブラリが見つからない
 ├── LoggingAlreadyConfiguredError   root logger が設定済み
+├── LoggingConflictError            root logger に他ライブラリの handler が混ざっている
 ├── LogRootNotConfiguredError       LoggerSite の LOG_ROOT が未設定
 ├── UnsupportedFileSuffixError
 ├── FileDeletionError
@@ -230,7 +231,11 @@ from comken.exceptions.holiday import (
     HolidayCalendarFormatError,
     HolidayCalendarSourceError,
 )
-from comken.exceptions.logger import LoggingAlreadyConfiguredError, LogRootNotConfiguredError
+from comken.exceptions.logger import (
+    LoggingAlreadyConfiguredError,
+    LoggingConflictError,
+    LogRootNotConfiguredError,
+)
 from comken.exceptions.master_table import (
     MasterColumnNotFoundError,
     MasterDuplicateValueError,
@@ -404,5 +409,6 @@ __all__ = [
     "TableRowColumnsError",
     "TableTypeConversionError",
     "LoggingAlreadyConfiguredError",
+    "LoggingConflictError",
     "LogRootNotConfiguredError",
 ]

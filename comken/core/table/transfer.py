@@ -158,13 +158,13 @@ class Transfer:
         """
         self.read._check_columns(self.read_keys)
         self.write._check_columns(self.write_keys)
-        self._ensure_working_table()
+        working_table = self._ensure_working_table()
         read_keys = {
             self._row_key(read_row, self.read_keys)
             for read_row in self.read.read()
             if not self._is_blank_key(self._row_key(read_row, self.read_keys))
         }
-        for write_row in self._working_table._iter_rows_for_update():
+        for write_row in working_table._iter_rows_for_update():
             key = self._row_key(write_row, self.write_keys)
             if self._is_blank_key(key) or key not in read_keys:
                 yield write_row

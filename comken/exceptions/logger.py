@@ -17,6 +17,41 @@ class LoggingAlreadyConfiguredError(ComkenError):
         )
 
 
+class LoggingConflictError(ComkenError):
+    """root logger に comken 以外の handler が設定されている
+
+    他ライブラリが先に root logger を設定した状態で ``setup()`` / ``local()`` を
+    呼ぶと、comken が既存 handler の出力先やレベルを勝手に変えてしまう。
+    「何がどう混ざっているのか」を運用担当者にそのまま見せられるよう、
+    既存 handler の正体を判別できる範囲でメッセージに並べる。
+
+    この例外は ``setup()`` / ``local()`` の呼び方では解決しない。利用者が
+    コードを直しても他ライブラリの root logger 設定を止められないので、
+    上が運用側へ通知されることを前提にした例外。
+
+    対処:
+        上の handler 一覧をそのままライブラリの管理者へ連絡してください
+        （連絡先は環境ごとに異なるので、ここには書かない）。
+        やむを得ず共存させたい場合は、呼び出し時に ``allow_existing=True``
+        を指定すれば処理は続きますが、comken のハンドラーが追加されることで
+        既存ライブラリのログが**二重**に出たり、出力先が想定と変わる可能性
+        があります。
+    """
+
+    def __init__(self, handlers: list[str]) -> None:
+        bullet = "\n".join(f"  - {line}" for line in handlers) if handlers else "  - (なし)"
+        super().__init__(
+            "root logger に comken 以外の handler が設定されているため、"
+            "setup() / local() を進められません。\n"
+            f"{bullet}\n"
+            "これは setup() / local() の呼び出し回数では解決しません。"
+            "上の一覧をそのままライブラリの管理者へ連絡してください。\n"
+            "やむを得ず共存させたい場合は allow_existing=True を指定すれば"
+            "処理は続行しますが、comken のハンドラーが追加されることで"
+            "既存ライブラリのログが二重に出たり、出力先が想定と変わる可能性があります。"
+        )
+
+
 class LogRootNotConfiguredError(ComkenError):
     """LoggerSite の LOG_ROOT が設定されていない
 
