@@ -60,9 +60,9 @@ logger = logging.getLogger(__name__)
 def create_sample_files() -> None:
     """入力になる CSV / Excel を生成する（サンプルを自己完結させるための準備処理）。"""
     with CSV(MASTER_CSV) as csv_file:
-        csv_file.write(Table(list(MASTER_ROWS[0]), MASTER_ROWS))
+        csv_file.replace(Table(list(MASTER_ROWS[0]), MASTER_ROWS))
     with CSV(DETAIL_CSV) as csv_file:
-        csv_file.write(Table(list(DETAIL_ROWS[0]), DETAIL_ROWS))
+        csv_file.replace(Table(list(DETAIL_ROWS[0]), DETAIL_ROWS))
 
 
 def total_by_key() -> dict[str, dict[str, int]]:

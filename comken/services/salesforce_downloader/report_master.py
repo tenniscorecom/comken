@@ -56,7 +56,6 @@ Excel の見出しで、スペースを含む見出し（`Salesforce URL`）も�
 """
 
 import dataclasses
-from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar, Self
@@ -557,11 +556,6 @@ def _column_letter(index: int) -> str:
         index, remainder = divmod(index - 1, 26)
         letters = chr(ord("A") + remainder) + letters
     return letters
-
-
-def iter_columns(cls: type[MasterRow]) -> Iterator[tuple[str, ColumnSpec, type]]:
-    """宣言された列を順に返す（雛形やドキュメントを作るとき用）。"""
-    yield from cls._columns()
 
 
 def _set_template_font(cell: Any) -> None:

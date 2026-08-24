@@ -54,23 +54,6 @@ class KeyColumnNotFoundError(ColumnNotFoundError):
         super().__init__(f"キー列が見つかりません: {key}\n存在する列: {', '.join(existing)}")
 
 
-class TransferSourceColumnNotFoundError(ColumnNotFoundError):
-    """列名転記で、lookup の転記元列が見つからない
-
-    発生箇所: 転記元の列を検証する処理
-
-    対処:
-        転記元データと config.ini のマッピング左側を確認する
-    """
-
-    def __init__(self, columns: list[str], existing: list[str]) -> None:
-        super().__init__(
-            f"転記元の列がlookupに見つかりません: {', '.join(columns)}\n"
-            f"転記元に存在する列: {', '.join(existing)}\n"
-            "CSVなどの転記元データと config.ini のマッピング左側を確認してください。"
-        )
-
-
 class InvalidColumnError(ComkenError):
     """列の指定が正しくない（打ち間違いなど）
 

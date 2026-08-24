@@ -34,6 +34,7 @@ from comken.exceptions import (
     ExcelHeadersTooFewError,
     FileFormatMismatchError,
     MacroError,
+    WindowNotFoundError,
 )
 from comken.exceptions.warning import _warn_coerce
 from comken.runtime import dry_run_log, is_dry_run
@@ -435,11 +436,11 @@ class WindowHandler:
             title: 検索するウィンドウのタイトル（完全一致）。
 
         Raises:
-            RuntimeError: ウィンドウが見つからない場合。
+            WindowNotFoundError: ウィンドウが見つからない場合。
         """
         self._hwnd = win32gui.FindWindow(None, title)
         if self._hwnd == 0:
-            raise RuntimeError(f"ウィンドウが見つかりません: {title}")
+            raise WindowNotFoundError(title)
 
     @measure
     def activate(self) -> None:

@@ -133,7 +133,7 @@ COMPANY_HOLIDAYS_EXTRA: Final[tuple[_dt.date, ...]] = ()
 | `CabinetOfficeCSVSource`          | 内閣府 CSV を URL + キャッシュで取得する `HolidaySource`   |
 | `ComputedHolidaySource`           | 計算で祝日の和集合を返す `HolidaySource`（mokejp/holidays_jp MIT 由来） |
 | `CompanyHolidaySource`            | 会社独自の休業日（コード直書き）の `HolidaySource`         |
-| `HolidayCalendarError` 系         | 例外（`HolidayCalendarFetchError` / `HolidayCalendarSourceError` / `HolidayCalendarFormatError` / `HolidayCalendarExpiredError` / `BusinessDayNotFoundError`） |
+| `HolidayCalendarError` 系         | 例外（`HolidayCalendarFetchError` / `HolidayCalendarSourceError` / `HolidayCalendarFormatError` / `BusinessDayNotFoundError`） |
 
 `HolidayCalendar.is_business_day` はキーワード専用 `skip_weekends=True` を持ち、
 `False` にすると土曜・日曜でも祝日でなければ「営業日」と判定する

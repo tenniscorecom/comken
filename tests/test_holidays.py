@@ -34,7 +34,6 @@ from comken.core.holidays.sources.computed import ComputedHolidaySource
 from comken.exceptions import (
     BusinessDayNotFoundError,
     HolidayCalendarError,
-    HolidayCalendarExpiredError,
     HolidayCalendarFetchError,
     HolidayCalendarFormatError,
     HolidayCalendarSourceError,
@@ -545,10 +544,6 @@ class TestExceptionHierarchy:
             (HolidayCalendarFetchError("u", "r"), "HolidayCalendarFetchError"),
             (HolidayCalendarSourceError("s", "r"), "HolidayCalendarSourceError"),
             (HolidayCalendarFormatError("p", "d"), "HolidayCalendarFormatError"),
-            (
-                HolidayCalendarExpiredError(_dt.date(2024, 1, 1), _dt.date(2023, 1, 1)),
-                "HolidayCalendarExpiredError",
-            ),
         ],
     )
     def test_isinstance_of_base(self, exception: HolidayCalendarError, expected_name: str) -> None:

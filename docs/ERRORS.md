@@ -51,7 +51,6 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `SheetNotFoundError` | 指定した名前のシートがない | Excel を開いて、下のシート名（タブ）が変わっていないか確認する。変えた場合は元に戻す |
 | `SheetAlreadyExistsError` | 同じ名前のシートが既にある | 別のシート名を指定するか、既存のシート名を変更する |
 | `SheetNameError` | 表示用シートに使えない名前を ``create_sheet`` に渡した | 予約接頭辞 ``PY_`` を除いた名前を ``create_sheet`` に渡すか、データシートとして作る場合は ``create_data_sheet`` を使う |
-| `LastSheetDeletionError` | ブックの最後のシートを削除しようとした | 先に別のシートを追加してから削除する |
 | `InvalidTableNameError` | Excel で使えないテーブル名を指定した | 空白・数字始まり・セル参照のような名前を避ける |
 | `TableAlreadyExistsError` | 同じ名前のテーブルが既にある | 別のテーブル名を指定する |
 | `TableNotFoundError` | 指定したテーブルがシートにない | エラーに表示された既存テーブル名を確認する |
@@ -62,7 +61,6 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `ExcelHeadersTooFewError` | 指定した見出し数が列数より少ない | 管理者へ連絡する |
 | `ExcelMacroPreservationError` | 保存予定のブックからVBAプロジェクトが欠落または変化した。 | 元ファイルは保持される。管理者に連絡し、Excel実機で保存方法を確認する |
 | `ExcelReadOnlyOperationError` | read_only=True の Excel に書き込もうとした。 | read_only=False で開き直すか、書き込みが要らない操作かを見直す（読み取りだけなら Excel(path, read_only=True) で十分） |
-| `ExcelSaveNotCompletedError` | Excel の保存が成功したように見えて、ファイルが無い | Excel が他で開かれていないか、ディスクの空き容量があるかを確認し、もう一度保存を実行する |
 | `ExcelSaveValidationError` | 保存予定のExcelファイルを再度開けず、安全に置き換えられない。 | 元ファイルは保持される。空き容量とExcel形式を確認して再実行する |
 | `FileFormatMismatchError` | 保存拡張子と形式が合わない | 管理者へ連絡する |
 
@@ -101,7 +99,6 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `CSVColumnsRequiredError` | 空の新規 CSV に出力する列を決定できない | CSV(columns=[...]) または Table(columns, []) で列を指定する |
 | `ExcelColumnNotFoundError` | Excel の列見出しが見つからない | Excel の1行目を確認する |
 | `KeyColumnNotFoundError` | 比較に使うキー列が見つからない | Excel・CSV の列名を確認する |
-| `TransferSourceColumnNotFoundError` | 列名転記で、lookup の転記元列が見つからない | 転記元データと config.ini のマッピング左側を確認する |
 | `InvalidColumnError` | 列の指定が正しくない（打ち間違いなど） | 列は番号（1, 2, …）か列記号（"A", "AA"）で指定する |
 | `ConfigFileNotFoundError` | config.ini が見つからない | config.ini.example が同じ場所にあるか確認する（あれば実行し直すだけで作られる） |
 | `ConfigCreatedFromExampleError` | config.ini が無かったので example から作った | 作られた config.ini の値を書き換えて、もう一度実行する |
@@ -140,7 +137,6 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `HolidayCalendarFetchError` | 内閣府の祝日 CSV を取得できない | ネットワーク接続と社内プロキシの設定を確認する。それでも直らない場合は、保存済みのキャッシュで当面動かすか、管理表（Excel）に会社休日を登録して代用する |
 | `HolidayCalendarSourceError` | 祝日データの読み取りに失敗した | 内閣府の CSV の場合: 内閣府の仕様変更。管理者へ連絡する |
 | `HolidayCalendarFormatError` | 内閣府 CSV 以外のファイルや壊れたファイルを内閣府 CSV として読み込もうとした | 内閣府の syukujitsu.csv を直接取得し直す。文字コードは CP932 (Shift_JIS) |
-| `HolidayCalendarExpiredError` | 祝日データの収録期間が今日の業務日付を超えている | 内閣府の祝日 CSV を更新する（自動取得の場合は次の実行で反映される） |
 | `HistoryWriteError` | 必須のダウンロード履歴を記録できなかった | 履歴CSVの保存先、共有サーバー接続、書込み権限を確認する |
 | `HistoryLockTimeoutError` | ダウンロード履歴の排他ロックを待っても取得できなかった | 同時実行中の処理が終わるのを待って再実行する。繰り返す場合は共有サーバーを確認する |
 | `HistoryHeaderMismatchError` | ダウンロード履歴CSVの見出しが現在の定義と一致しない | 履歴CSVの1行目を確認する。列を手で変更していた場合は元へ戻し、古い形式の履歴なら別名へ退避してから再実行する |
@@ -190,6 +186,12 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `TableDuplicateKeyError` | Table の索引または比較に使うキーが重複している。 | キー列の値を一意にしてから処理をやり直す |
 | `TableRowColumnsError` | 行の列名が Table.columns と一致しない | 不足列と余分な列を直す。列を絞る場合は select() を使う |
 | `TableTypeConversionError` | Table の値を指定型へ変換できない | 表示された行番号・列名の値を、指定した型へ変換できる内容に直す |
+
+## Windows 操作のエラー
+
+| エラー名 | 意味 | 自分でできる対処 |
+|---|---|---|
+| `WindowNotFoundError` | 指定したウィンドウが見つからない | 対象ウィンドウが開いているか、タイトル（完全一致）が想定どおりかを確認する |
 
 ## 分類（まとめて捕捉する用）
 

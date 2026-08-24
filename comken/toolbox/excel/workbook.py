@@ -199,8 +199,10 @@ class Excel:
     def save(self) -> None:
         """変更を元ファイルへ保存する。
 
-        既存コードのために残しているが、通常はwithの正常終了時に自動保存される。
-        read-onlyとdry-runではファイルを変更しない。
+        長い処理の途中で確定したいときに使う。``with`` を分けて閉じ開きすると、
+        共有サーバー上のファイルではロックや同期の問題を自分で作り出すことになるため、
+        この経路を残している。``save()`` の後に変更がなければ ``with`` 終了時に
+        再保存はしない（``_is_dirty`` で判定）。
         """
         self._ensure_open()
         if self._read_only or not self._is_dirty:

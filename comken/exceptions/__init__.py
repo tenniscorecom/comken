@@ -25,14 +25,12 @@ ComkenError
 │   ├── DataSheetAccessError
 │   ├── ExcelFileNotFoundError
 │   ├── ExcelApplicationNotAvailableError
-│   ├── ExcelSaveNotCompletedError
 │   ├── ExcelSaveValidationError
 │   ├── ExcelMacroPreservationError
 │   ├── ExcelReadOnlyOperationError
 │   ├── SheetNotFoundError
 │   ├── SheetAlreadyExistsError
 │   ├── SheetNameError
-│   ├── LastSheetDeletionError
 │   ├── InvalidTableNameError
 │   ├── TableAlreadyExistsError
 │   ├── TableNotFoundError
@@ -94,8 +92,7 @@ ComkenError
 ├── TransferDestinationMultipleMatchError
 ├── ColumnNotFoundError
 │   ├── ExcelColumnNotFoundError
-│   ├── KeyColumnNotFoundError
-│   └── TransferSourceColumnNotFoundError
+│   └── KeyColumnNotFoundError
 ├── ConfigError
 │   ├── ConfigFileNotFoundError
 │   ├── ConfigCreatedFromExampleError
@@ -112,11 +109,11 @@ ComkenError
 │   ├── StateFileCorruptedError
 │   ├── StateLowerCaseNameError
 │   └── StateValueTypeError
+├── WindowNotFoundError
 ├── HolidayCalendarError
 │   ├── HolidayCalendarFetchError
 │   ├── HolidayCalendarSourceError
 │   │   └── HolidayCalendarFormatError
-│   ├── HolidayCalendarExpiredError
 │   └── BusinessDayNotFoundError
 └── DownloaderError
 │   ├── HistoryWriteError
@@ -165,7 +162,6 @@ from comken.exceptions.column import (
     ExcelColumnNotFoundError,
     InvalidColumnError,
     KeyColumnNotFoundError,
-    TransferSourceColumnNotFoundError,
 )
 from comken.exceptions.config import (
     ConfigCreatedFromExampleError,
@@ -218,11 +214,9 @@ from comken.exceptions.excel import (
     ExcelHeadersTooFewError,
     ExcelMacroPreservationError,
     ExcelReadOnlyOperationError,
-    ExcelSaveNotCompletedError,
     ExcelSaveValidationError,
     FileFormatMismatchError,
     InvalidTableNameError,
-    LastSheetDeletionError,
     MacroError,
     SheetAlreadyExistsError,
     SheetNameError,
@@ -238,7 +232,6 @@ from comken.exceptions.file import (
 from comken.exceptions.holiday import (
     BusinessDayNotFoundError,
     HolidayCalendarError,
-    HolidayCalendarExpiredError,
     HolidayCalendarFetchError,
     HolidayCalendarFormatError,
     HolidayCalendarSourceError,
@@ -292,6 +285,7 @@ from comken.exceptions.table import (
     TransferDestinationMissingError,
     TransferDestinationMultipleMatchError,
 )
+from comken.exceptions.windows import WindowNotFoundError
 from comken.internal.exceptions import (
     InternalLibraryError,
     InternalLibraryNotFoundError,
@@ -317,7 +311,6 @@ __all__ = [
     "SheetNotFoundError",
     "SheetAlreadyExistsError",
     "SheetNameError",
-    "LastSheetDeletionError",
     "InvalidTableNameError",
     "TableAlreadyExistsError",
     "TableNotFoundError",
@@ -328,7 +321,6 @@ __all__ = [
     "ExcelHeadersTooFewError",
     "ExcelMacroPreservationError",
     "ExcelReadOnlyOperationError",
-    "ExcelSaveNotCompletedError",
     "ExcelSaveValidationError",
     "FileFormatMismatchError",
     "CSVError",
@@ -341,7 +333,6 @@ __all__ = [
     "ColumnNotFoundError",
     "ExcelColumnNotFoundError",
     "KeyColumnNotFoundError",
-    "TransferSourceColumnNotFoundError",
     "InvalidColumnError",
     "ConfigError",
     "ConfigFileNotFoundError",
@@ -403,7 +394,6 @@ __all__ = [
     "HolidayCalendarFetchError",
     "HolidayCalendarSourceError",
     "HolidayCalendarFormatError",
-    "HolidayCalendarExpiredError",
     "DownloaderError",
     "HistoryWriteError",
     "HistoryLockTimeoutError",
@@ -429,4 +419,5 @@ __all__ = [
     "LoggingAlreadyConfiguredError",
     "LoggingConflictError",
     "LogRootNotConfiguredError",
+    "WindowNotFoundError",
 ]

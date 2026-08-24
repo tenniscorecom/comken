@@ -42,7 +42,7 @@ def main() -> None:
     # - A002: 両側にあり・金額 = 0（continue でスキップ）
     # - A003: read だけ（only_in_read 側で追加）
     with CSV(SOURCE_CSV) as source_csv:
-        source_csv.write(
+        source_csv.replace(
             Table(
                 ["注文番号", "取引先", "金額"],
                 [

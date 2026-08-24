@@ -48,5 +48,5 @@ result = result.filter(lambda row: row["備考"] != "")
 **空キー (`None` / `""`) は突合対象外**。 `0` や `False` は空ではない。
 空キーは read 側・write 側のどちらでも照合に使われず、`unmatched()` 側へ流れる。
 
-CSV や Excel へ保存するときは、結果を `CSV.write()` / `ExcelTable.write()` へ渡す。
+CSV や Excel へ保存するときは、結果を `CSV.replace()` / `ExcelTable.replace()` へ渡す。
 `with` を正常終了した場合だけ自動保存される。

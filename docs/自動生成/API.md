@@ -652,17 +652,6 @@ CSVやExcelに直接依存しないため、加工処理をファイルI/Oから
 def __init__(self, columns: list[str] | tuple[str, ...], rows: list[dict[str, Any]], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
 ```
 
-#### `rows`
-
-```text
-@property
-def rows(self) -> list[dict[str, Any]]:
-```
-
-##### 説明
-
-行のコピーを返す（読み取り専用）。
-
 #### `read`
 
 ```text
@@ -2467,30 +2456,6 @@ class HolidayCalendarError(ComkenError):
 対処:
     画面に表示された具体的なエラー名を上の表から探す
 
-### `HolidayCalendarExpiredError`
-
-```text
-class HolidayCalendarExpiredError(HolidayCalendarError):
-```
-
-#### 説明
-
-祝日データの収録期間が今日の業務日付を超えている
-
-収録最終日 <= 今日になると「今日以降が祝日かどうか判定できない」ため、
-期限切れを専用例外で知らせる。
-
-発生箇所: comken.core.holidays.calendar の HolidayCalendar
-
-対処:
-    内閣府の祝日 CSV を更新する（自動取得の場合は次の実行で反映される）
-
-#### `__init__`
-
-```text
-def __init__(self, today: object, last_known: object) -> None:
-```
-
 ### `HolidayCalendarFetchError`
 
 ```text
@@ -2872,17 +2837,6 @@ CSVやExcelに直接依存しないため、加工処理をファイルI/Oから
 ```text
 def __init__(self, columns: list[str] | tuple[str, ...], rows: list[dict[str, Any]], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
 ```
-
-#### `rows`
-
-```text
-@property
-def rows(self) -> list[dict[str, Any]]:
-```
-
-##### 説明
-
-行のコピーを返す（読み取り専用）。
 
 #### `read`
 
@@ -3543,25 +3497,6 @@ class SheetNameError(ExcelError):
 def __init__(self, name: str) -> None:
 ```
 
-### `LastSheetDeletionError`
-
-```text
-class LastSheetDeletionError(ExcelError):
-```
-
-#### 説明
-
-ブックの最後のシートを削除しようとした
-
-対処:
-    先に別のシートを追加してから削除する
-
-#### `__init__`
-
-```text
-def __init__(self, name: str) -> None:
-```
-
 ### `InvalidTableNameError`
 
 ```text
@@ -3766,28 +3701,6 @@ Excel(path, read_only=True) は読み取り専用なので、保存やシート�
 
 ```text
 def __init__(self, operation: str) -> None:
-```
-
-### `ExcelSaveNotCompletedError`
-
-```text
-class ExcelSaveNotCompletedError(ExcelError):
-```
-
-#### 説明
-
-Excel の保存が成功したように見えて、ファイルが無い
-
-発生箇所: Excel.save()
-
-対処:
-    Excel が他で開かれていないか、ディスクの空き容量があるかを確認し、
-    もう一度保存を実行する
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path | str) -> None:
 ```
 
 ### `ExcelSaveValidationError`
@@ -4025,27 +3938,6 @@ class KeyColumnNotFoundError(ColumnNotFoundError):
 
 ```text
 def __init__(self, key: str, existing: list[str]) -> None:
-```
-
-### `TransferSourceColumnNotFoundError`
-
-```text
-class TransferSourceColumnNotFoundError(ColumnNotFoundError):
-```
-
-#### 説明
-
-列名転記で、lookup の転記元列が見つからない
-
-発生箇所: 転記元の列を検証する処理
-
-対処:
-    転記元データと config.ini のマッピング左側を確認する
-
-#### `__init__`
-
-```text
-def __init__(self, columns: list[str], existing: list[str]) -> None:
 ```
 
 ### `InvalidColumnError`
@@ -5360,30 +5252,6 @@ class HolidayCalendarFormatError(HolidayCalendarSourceError):
 def __init__(self, path: Path | str, detail: str) -> None:
 ```
 
-### `HolidayCalendarExpiredError`
-
-```text
-class HolidayCalendarExpiredError(HolidayCalendarError):
-```
-
-#### 説明
-
-祝日データの収録期間が今日の業務日付を超えている
-
-収録最終日 <= 今日になると「今日以降が祝日かどうか判定できない」ため、
-期限切れを専用例外で知らせる。
-
-発生箇所: comken.core.holidays.calendar の HolidayCalendar
-
-対処:
-    内閣府の祝日 CSV を更新する（自動取得の場合は次の実行で反映される）
-
-#### `__init__`
-
-```text
-def __init__(self, today: object, last_known: object) -> None:
-```
-
 ### `DownloaderError`
 
 ```text
@@ -5920,6 +5788,27 @@ LoggerSite の LOG_ROOT が設定されていない
 def __init__(self, site_cls: type) -> None:
 ```
 
+### `WindowNotFoundError`
+
+```text
+class WindowNotFoundError(ComkenError):
+```
+
+#### 説明
+
+指定したウィンドウが見つからない
+
+発生箇所: ``WindowHandler.__init__``
+
+対処:
+    対象ウィンドウが開いているか、タイトル（完全一致）が想定どおりかを確認する
+
+#### `__init__`
+
+```text
+def __init__(self, title: str) -> None:
+```
+
 
 ## `from comken.internal import ...`
 
@@ -6223,17 +6112,6 @@ CSVやExcelに直接依存しないため、加工処理をファイルI/Oから
 ```text
 def __init__(self, columns: list[str] | tuple[str, ...], rows: list[dict[str, Any]], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
 ```
-
-#### `rows`
-
-```text
-@property
-def rows(self) -> list[dict[str, Any]]:
-```
-
-##### 説明
-
-行のコピーを返す（読み取り専用）。
 
 #### `read`
 
@@ -8059,16 +7937,6 @@ def replace(self, rows: list[dict[str, Value]] | Table) -> None:
 
 ファイルのデータ領域を全置換する。
 
-#### `write`
-
-```text
-def write(self, table: Table) -> None:
-```
-
-##### 説明
-
-Tableを保存対象として受け取る。確定はsaveまたはwith正常終了で行う。
-
 #### `append`
 
 ```text
@@ -8089,6 +7957,11 @@ def save(self) -> None:
 ##### 説明
 
 保留中のTableをCSVファイルへ保存する。
+
+長い処理の途中で確定したいときに使う。``with`` を分けて閉じ開きすると、
+共有サーバー上のファイルではロックや同期の問題を自分で作り出すことになるため、
+この経路を残している。``save()`` の後は ``_pending = None`` を立て、
+``with`` 終了時にもう一度書き込まないようにしている。
 
 #### `count`
 
@@ -8208,8 +8081,10 @@ def save(self) -> None:
 
 変更を元ファイルへ保存する。
 
-既存コードのために残しているが、通常はwithの正常終了時に自動保存される。
-read-onlyとdry-runではファイルを変更しない。
+長い処理の途中で確定したいときに使う。``with`` を分けて閉じ開きすると、
+共有サーバー上のファイルではロックや同期の問題を自分で作り出すことになるため、
+この経路を残している。``save()`` の後に変更がなければ ``with`` 終了時に
+再保存はしない（``_is_dirty`` で判定）。
 
 #### `run_macro`
 
@@ -8315,16 +8190,6 @@ def read_value(self, cell: str) -> Any:
 ##### 説明
 
 セルの値を読む。
-
-#### `write_formula`
-
-```text
-def write_formula(self, cell: str, formula: str) -> None:
-```
-
-##### 説明
-
-セルへ数式を書き込む。
 
 #### `read_formula`
 
@@ -8600,16 +8465,6 @@ def replace(self, rows: list[dict[str, Value]] | Table) -> None:
 ##### 説明
 
 データシート全体を置き換える。
-
-#### `write`
-
-```text
-def write(self, table: Table) -> None:
-```
-
-##### 説明
-
-Tableをデータシートへ書き込む。保存はExcelの契約に従う。
 
 #### `append`
 
@@ -8985,30 +8840,6 @@ class HolidayCalendarError(ComkenError):
 
 対処:
     画面に表示された具体的なエラー名を上の表から探す
-
-### `HolidayCalendarExpiredError`
-
-```text
-class HolidayCalendarExpiredError(HolidayCalendarError):
-```
-
-#### 説明
-
-祝日データの収録期間が今日の業務日付を超えている
-
-収録最終日 <= 今日になると「今日以降が祝日かどうか判定できない」ため、
-期限切れを専用例外で知らせる。
-
-発生箇所: comken.core.holidays.calendar の HolidayCalendar
-
-対処:
-    内閣府の祝日 CSV を更新する（自動取得の場合は次の実行で反映される）
-
-#### `__init__`
-
-```text
-def __init__(self, today: object, last_known: object) -> None:
-```
 
 ### `HolidayCalendarFetchError`
 
@@ -9962,7 +9793,7 @@ Args:
     title: 検索するウィンドウのタイトル（完全一致）。
 
 Raises:
-    RuntimeError: ウィンドウが見つからない場合。
+    WindowNotFoundError: ウィンドウが見つからない場合。
 
 #### `activate`
 

@@ -172,10 +172,6 @@ class ExcelTable:
         excel_table.ref = f"{self._worksheet.cell(min_row, min_col).coordinate}:{last_cell}"
         self._excel._mark_dirty()
 
-    def write(self, table: Table) -> None:
-        """Tableをデータシートへ書き込む。保存はExcelの契約に従う。"""
-        self.replace(table)
-
     def append(self, rows: list[dict[str, Value]] | dict[str, Value] | Table) -> None:
         """Table、1行、または行リストを既存テーブルの末尾へ追加する。"""
         self._excel._ensure_writable("append")

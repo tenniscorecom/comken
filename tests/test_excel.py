@@ -7,6 +7,7 @@ from comken.exceptions import (
     DataSheetAccessError,
     ExcelFileNotFoundError,
     ExcelReadOnlyOperationError,
+    InvalidTableNameError,
     InvalidTableOperationError,
     SheetAlreadyExistsError,
     SheetNameError,
@@ -217,3 +218,34 @@ def test_excel_outside_with_block_raises_table_not_open_error(tmp_path) -> None:
         excel.create_sheet("集計")
     with pytest.raises(TableNotOpenError, match="Excel"):
         excel.save()
+
+
+class TestCreateTableNameValidation:
+    """``Sheet.create_table`` は Excel が受け付けない名前を ``InvalidTableNameError`` で止める。"""
+
+    @pytest.mark.parametrize(
+        "invalid_name",
+        [
+            pytest.param("", id="empty"),
+            pytest.param("結 果", id="contains-half-width-space"),
+            pytest.param("結　果", id="contains-full-width-space"),
+            pytest.param("1結果", id="starts-with-digit"),
+            pytest.param("A1", id="cell-reference-A1"),
+            pytest.param("R1C1", id="cell-reference-R1C1"),
+            pytest.param("Bad/Name", id="forbidden-slash"),
+            pytest.param("Bad*Name", id="forbidden-asterisk"),
+            pytest.param("Bad[Name", id="forbidden-bracket"),
+            pytest.param("Bad]Name", id="forbidden-close-bracket"),
+        ],
+    )
+    def test_invalid_names_raise(self, tmp_path, invalid_name: str) -> None:
+        path = tmp_path / "book.xlsx"
+        with Excel(path) as excel, pytest.raises(InvalidTableNameError):
+            excel.create_data_sheet("S").create_table(invalid_name, Table(["a"], [{"a": "1"}]))
+
+    def test_valid_japanese_name_is_accepted(self, tmp_path) -> None:
+        path = tmp_path / "book.xlsx"
+        with Excel(path) as excel:
+            table = excel.create_data_sheet("S").create_table("顧客", Table(["ID"], [{"ID": "1"}]))
+            rows = table.read().read()
+        assert rows == [{"ID": "1"}]

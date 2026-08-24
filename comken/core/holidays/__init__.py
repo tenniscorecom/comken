@@ -46,7 +46,6 @@ BusinessDayNotFoundError   月内に該当営業日が無い／探索上限到�
 HolidayCalendarFetchError      内閣府 CSV の取得失敗
 HolidayCalendarSourceError     管理表・CSV 形式の問題
 HolidayCalendarFormatError     内閣府 CSV として解釈できない形式
-HolidayCalendarExpiredError    収録期限切れ
 """
 
 from comken.core.holidays.calendar import (
@@ -74,7 +73,6 @@ from comken.core.holidays.sources.computed import ComputedHolidaySource
 from comken.exceptions import (
     BusinessDayNotFoundError,
     HolidayCalendarError,
-    HolidayCalendarExpiredError,
     HolidayCalendarFetchError,
     HolidayCalendarFormatError,
     HolidayCalendarSourceError,
@@ -89,7 +87,6 @@ __all__ = [
     "Holiday",
     "HolidayCalendar",
     "HolidayCalendarError",
-    "HolidayCalendarExpiredError",
     "HolidayCalendarFetchError",
     "HolidayCalendarFormatError",
     "HolidayCalendarSourceError",

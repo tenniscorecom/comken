@@ -1,5 +1,6 @@
 """comken/toolbox/excel/sheet.py — Excel シートを操作する。"""
 
+import re
 from copy import copy
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -14,6 +15,7 @@ from comken.core.table.model import Table
 from comken.exceptions import (
     DataSheetAccessError,
     InvalidTableInputError,
+    InvalidTableNameError,
     InvalidTableOperationError,
     TableAlreadyExistsError,
     TableNotFoundError,
@@ -41,6 +43,12 @@ BorderStyle = Literal[
     "thick",
     "thin",
 ]
+
+# Excel テーブル名でセル参照と紛らわしい形（A1, R1C1 など）に該当するパターン。
+# 数字始まりは別条件ではじくので、ここでは数字を含まない / 含み得る両方を許容する。
+_CELL_REFERENCE_PATTERN = re.compile(r"^[A-Z]+[0-9]+$|^R[0-9]+C[0-9]+$", re.IGNORECASE)
+# Excel がテーブル名に許さない特殊文字。バッククォート・鉤括弧・パス区切りなどを含む。
+_FORBIDDEN_TABLE_CHARACTERS = frozenset("[]/\\:*?\"<>|'`#%@$&+={}~")
 
 
 class Sheet:
@@ -81,6 +89,7 @@ class Sheet:
         if not self.is_data_sheet:
             raise DataSheetAccessError(self._worksheet.title, "create_table")
         full_name = self._with_table_prefix(name)
+        self._validate_table_name(name)
         if any(full_name in worksheet.tables for worksheet in self._excel._workbook.worksheets):
             raise TableAlreadyExistsError(full_name)
         if not isinstance(table, Table):
@@ -94,14 +103,14 @@ class Sheet:
             raise InvalidTableInputError(f"start_cell が不正です: {start_cell!r}") from None
         for column, header in enumerate(table.columns, start_column_number):
             self._worksheet.cell(start_row, column, header)
-        for row_number, row in enumerate(table.rows, start_row + 1):
+        for row_number, row in enumerate(table.read(), start_row + 1):
             for column, header in enumerate(table.columns, 1):
                 self._worksheet.cell(
                     row_number,
                     start_column_number + column - 1,
                     row.get(header, ""),
                 )
-        end_row = max(start_row + len(table.rows), start_row + 1)
+        end_row = max(start_row + len(table.read()), start_row + 1)
         end_column = start_column_number + len(table.columns) - 1
         # Excel の実テーブル範囲は、無関係なセルではなく見出し・データから計算します。
         ref = f"{start_cell.upper()}:{get_column_letter(end_column)}{end_row}"
@@ -122,6 +131,31 @@ class Sheet:
         """短いテーブル名に、Python管理用の ``PY_T_`` を補う。"""
         return name if name.startswith(Sheet.PY_TABLE_PREFIX) else f"{Sheet.PY_TABLE_PREFIX}{name}"
 
+    @staticmethod
+    def _validate_table_name(name: str) -> None:
+        """Excel のテーブル名の制約に合っているか検証する。
+
+        利用者が ``create_table`` に渡した名前を直接判定する。``PY_T_`` プレフィックスは
+        ``_with_table_prefix`` が補うため、利用者が ``A1`` と書いた時点でセル参照と
+        紛らわしい。Excel が拒否する名前は openpyxl の例外からでは原因が分かりにくいため、
+        ここで先に弾く。
+        """
+        if not name:
+            raise InvalidTableNameError(name)
+        # Excel はテーブル名に空白・制御文字を許さない
+        if any(ch.isspace() for ch in name):
+            raise InvalidTableNameError(name)
+        # 先頭が数字だとセル参照と紛らわしい
+        if name[0].isdigit():
+            raise InvalidTableNameError(name)
+        # Excel がセル参照と解釈し得る形（A1, R1C1 など）を拒否する
+        if _CELL_REFERENCE_PATTERN.fullmatch(name):
+            raise InvalidTableNameError(name)
+        # Excel が許さない特殊文字を拒否する
+        for character in name:
+            if character in _FORBIDDEN_TABLE_CHARACTERS:
+                raise InvalidTableNameError(name)
+
     def write_value(self, cell: str, value: Any) -> None:
         """セルへ値を書き込む。"""
         self._ensure_display_sheet("write_value")
@@ -132,10 +166,6 @@ class Sheet:
         """セルの値を読む。"""
         self._ensure_display_sheet("read_value")
         return "" if self._worksheet[cell].value is None else self._worksheet[cell].value
-
-    def write_formula(self, cell: str, formula: str) -> None:
-        """セルへ数式を書き込む。"""
-        self.write_value(cell, formula)
 
     def read_formula(self, cell: str) -> str:
         """セルの数式を読む。数式でなければ空文字を返す。"""

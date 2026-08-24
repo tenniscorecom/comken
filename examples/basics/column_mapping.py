@@ -25,7 +25,7 @@ def main() -> None:
         encoding="utf-8",
     )
     with CSV(SOURCE_CSV) as source_csv:
-        source_csv.write(
+        source_csv.replace(
             Table(
                 ["注文番号", "取引先", "金額"],
                 [{"注文番号": "A001", "取引先": "株式会社アルファ", "金額": 12000}],

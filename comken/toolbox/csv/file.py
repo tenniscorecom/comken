@@ -154,10 +154,6 @@ class CSV:
         # replace は計画を作るだけにする。途中で例外が起きたときに、
         # それまでの一部だけがファイルへ残ると復旧しにくいためである。
 
-    def write(self, table: Table) -> None:
-        """Tableを保存対象として受け取る。確定はsaveまたはwith正常終了で行う。"""
-        self.replace(table)
-
     def append(self, rows: list[dict[str, Value]] | dict[str, Value] | Table) -> None:
         """行を保留中のTableへ追加する。確定はsaveまたはwith正常終了で行う。"""
         self._ensure_open()
@@ -184,7 +180,13 @@ class CSV:
 
     @measure
     def save(self) -> None:
-        """保留中のTableをCSVファイルへ保存する。"""
+        """保留中のTableをCSVファイルへ保存する。
+
+        長い処理の途中で確定したいときに使う。``with`` を分けて閉じ開きすると、
+        共有サーバー上のファイルではロックや同期の問題を自分で作り出すことになるため、
+        この経路を残している。``save()`` の後は ``_pending = None`` を立て、
+        ``with`` 終了時にもう一度書き込まないようにしている。
+        """
         self._ensure_open()
         # replace はメモリ上で準備し、save または正常終了した with でだけファイルへ反映する。
         if (

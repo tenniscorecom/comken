@@ -29,7 +29,6 @@ from comken.core.holidays.sources.computed import ComputedHolidaySource
 from comken.toolbox.holidays.exceptions import (
     BusinessDayNotFoundError,
     HolidayCalendarError,
-    HolidayCalendarExpiredError,
     HolidayCalendarFetchError,
     HolidayCalendarFormatError,
     HolidayCalendarSourceError,
@@ -44,7 +43,6 @@ __all__ = [
     "Holiday",
     "HolidayCalendar",
     "HolidayCalendarError",
-    "HolidayCalendarExpiredError",
     "HolidayCalendarFetchError",
     "HolidayCalendarFormatError",
     "HolidayCalendarSourceError",

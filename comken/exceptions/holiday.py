@@ -57,27 +57,6 @@ class HolidayCalendarSourceError(HolidayCalendarError):
         super().__init__(f"祝日データを読み取れませんでした: {source}\n{reason}")
 
 
-class HolidayCalendarExpiredError(HolidayCalendarError):
-    """祝日データの収録期間が今日の業務日付を超えている
-
-    収録最終日 <= 今日になると「今日以降が祝日かどうか判定できない」ため、
-    期限切れを専用例外で知らせる。
-
-    発生箇所: comken.core.holidays.calendar の HolidayCalendar
-
-    対処:
-        内閣府の祝日 CSV を更新する（自動取得の場合は次の実行で反映される）
-    """
-
-    def __init__(self, today: object, last_known: object) -> None:
-        super().__init__(
-            f"収録済みの祝日が今日の日付までカバーしていません。\n"
-            f"今日: {today}\n"
-            f"収録最終日: {last_known}\n"
-            "内閣府の祝日 CSV を更新するか、管理表に祝日を追加してください。"
-        )
-
-
 class HolidayCalendarFormatError(HolidayCalendarSourceError):
     """内閣府 CSV 以外のファイルや壊れたファイルを内閣府 CSV として読み込もうとした
 

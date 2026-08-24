@@ -55,11 +55,6 @@ class Table:
                 raise TableTypeConversionError(row_number, column, row[column]) from exc
         return normalized
 
-    @property
-    def rows(self) -> list[dict[str, Any]]:
-        """行のコピーを返す（読み取り専用）。"""
-        return [dict(row) for row in self._rows]
-
     def read(self) -> list[dict[str, Any]]:
         """現在の行をコピーして返す。元のTableは変更しない。"""
         return [dict(row) for row in self._rows]

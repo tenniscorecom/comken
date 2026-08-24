@@ -68,6 +68,7 @@ ERROR_CATEGORIES = (
     ),
     ErrorCategory("ブラウザ（Edge 自動操作）のエラー", (exceptions.BrowserError,)),
     ErrorCategory("Table のエラー", (exceptions.TableError,)),
+    ErrorCategory("Windows 操作のエラー", (exceptions.WindowNotFoundError,)),
 )
 DIRECT_ERROR_CATEGORIES = {
     exceptions.UnsupportedFileSuffixError: "ファイル・設定などのエラー",

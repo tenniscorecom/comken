@@ -90,20 +90,6 @@ class SheetNameError(ExcelError):
         )
 
 
-class LastSheetDeletionError(ExcelError):
-    """ブックの最後のシートを削除しようとした
-
-    対処:
-        先に別のシートを追加してから削除する
-    """
-
-    def __init__(self, name: str) -> None:
-        super().__init__(
-            f"最後のシート「{name}」は削除できません。\n"
-            "先に別のシートを追加してから削除してください。"
-        )
-
-
 class InvalidTableNameError(ExcelError):
     """Excel で使えないテーブル名を指定した
 
@@ -236,24 +222,6 @@ class FileFormatMismatchError(ExcelError):
             f"保存先の拡張子（{suffix}）が元ファイルの形式と一致しません。\n"
             "形式を変換して保存する場合は file_format 引数で FileFormat 定数を"
             "指定してください。（例: file_format=FileFormat.CSV）"
-        )
-
-
-class ExcelSaveNotCompletedError(ExcelError):
-    """Excel の保存が成功したように見えて、ファイルが無い
-
-    発生箇所: Excel.save()
-
-    対処:
-        Excel が他で開かれていないか、ディスクの空き容量があるかを確認し、
-        もう一度保存を実行する
-    """
-
-    def __init__(self, path: Path | str) -> None:
-        super().__init__(
-            f"Excel の保存が成功したように見えて、ファイルが見つかりません: {path}\n"
-            "Excel が他で開かれていないか、ディスクの空き容量があるかを確認して、"
-            "もう一度保存を実行してください。"
         )
 
 
