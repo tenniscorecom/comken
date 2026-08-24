@@ -147,9 +147,9 @@ class Excel:
         if self._is_dirty:
             self._prepare_com_working_copy()
         self._sync_working_file()
-        from comken.toolbox.windows.handler import ExcelComHandler
+        from comken.toolbox.windows.handler import ExcelCOMHandler
 
-        with ExcelComHandler(self._working_path, local_copy_threshold_mb=0) as excel_com:
+        with ExcelCOMHandler(self._working_path, local_copy_threshold_mb=0) as excel_com:
             return excel_com.read_range(sheet_name, min_col, min_row, max_col, max_row)
 
     def close(self, *, save: bool = True) -> None:
@@ -214,9 +214,9 @@ class Excel:
             return
         self._prepare_com_working_copy()
         self._sync_working_file()
-        from comken.toolbox.windows.handler import ExcelComHandler
+        from comken.toolbox.windows.handler import ExcelCOMHandler
 
-        with ExcelComHandler(self._working_path, local_copy_threshold_mb=0) as excel_com:
+        with ExcelCOMHandler(self._working_path, local_copy_threshold_mb=0) as excel_com:
             excel_com.run_macro(macro_name)
             excel_com.save()
         self._reload_workbook()
@@ -232,9 +232,9 @@ class Excel:
         if self._is_dirty:
             self._prepare_com_working_copy()
         self._sync_working_file()
-        from comken.toolbox.windows.handler import ExcelComHandler
+        from comken.toolbox.windows.handler import ExcelCOMHandler
 
-        with ExcelComHandler(self._working_path, local_copy_threshold_mb=0) as excel_com:
+        with ExcelCOMHandler(self._working_path, local_copy_threshold_mb=0) as excel_com:
             return excel_com.read_rows(sheet_name, min_row)
 
     def read_computed_rows_as_dicts(

@@ -11,11 +11,11 @@ from comken.constants import Encoding
 from comken.core.files import atomic_write
 from comken.core.table.model import Table
 from comken.exceptions.csv import (
-    CsvColumnsRequiredError,
-    CsvFileNotFoundError,
-    CsvHeaderMissingError,
-    CsvInvalidHeaderError,
-    CsvRowLengthError,
+    CSVColumnsRequiredError,
+    CSVFileNotFoundError,
+    CSVHeaderMissingError,
+    CSVInvalidHeaderError,
+    CSVRowLengthError,
     EncodingDetectionError,
 )
 from comken.exceptions.file import UnsupportedFileSuffixError
@@ -74,34 +74,34 @@ class CSV:
             # replace/write の結果は保存前でも、同じ処理中の「現在の Table」として読める。
             return self._pending
         if not self.path.exists():
-            raise CsvFileNotFoundError(self.path)
+            raise CSVFileNotFoundError(self.path)
         if self.path.stat().st_size == 0:
             if self._columns is None:
-                raise CsvHeaderMissingError(self.path)
+                raise CSVHeaderMissingError(self.path)
             return Table(self._columns, [], types=self._types)
         raw_rows = list(csv.reader(io.StringIO(self._read_text())))
         if not raw_rows and self._columns is None:
             # UTF-8 BOM は文字ではなく署名なので、BOM だけのファイルにも見出しはない。
-            raise CsvHeaderMissingError(self.path)
+            raise CSVHeaderMissingError(self.path)
         columns = self._columns if self._columns is not None else raw_rows.pop(0)
         self._validate_columns(columns)
         first_data_line = 1 if self._columns is not None else 2
         rows: list[dict[str, str]] = []
         for line_number, values in enumerate(raw_rows, start=first_data_line):
             if len(values) != len(columns):
-                raise CsvRowLengthError(self.path, line_number, len(columns), len(values))
+                raise CSVRowLengthError(self.path, line_number, len(columns), len(values))
             rows.append(dict(zip(columns, values, strict=True)))
         return Table(columns, rows, types=self._types)
 
     def _validate_columns(self, columns: list[str]) -> None:
         if not columns:
-            raise CsvHeaderMissingError(self.path)
+            raise CSVHeaderMissingError(self.path)
         empty = [index for index, column in enumerate(columns, 1) if column == ""]
         if empty:
-            raise CsvInvalidHeaderError(self.path, f"空の見出しがあります（{empty}列目）。")
+            raise CSVInvalidHeaderError(self.path, f"空の見出しがあります（{empty}列目）。")
         duplicates = [column for column in dict.fromkeys(columns) if columns.count(column) > 1]
         if duplicates:
-            raise CsvInvalidHeaderError(self.path, f"重複する見出しがあります: {duplicates}")
+            raise CSVInvalidHeaderError(self.path, f"重複する見出しがあります: {duplicates}")
 
     def _read_text(self) -> str:
         raw = self.path.read_bytes()
@@ -132,7 +132,7 @@ class CSV:
             if columns is None and self.path.exists() and self.path.stat().st_size > 0:
                 columns = self.read().columns
             if columns is None:
-                raise CsvColumnsRequiredError(self.path)
+                raise CSVColumnsRequiredError(self.path)
             table = Table(columns, [], types=self._types)
         self._pending = table
         # replace は計画を作るだけにする。途中で例外が起きたときに、
@@ -151,7 +151,7 @@ class CSV:
         elif self._columns is not None:
             current = Table(self._columns, [], types=self._types)
         else:
-            raise CsvFileNotFoundError(self.path)
+            raise CSVFileNotFoundError(self.path)
         if isinstance(rows, Table):
             additions = rows.read()
         elif isinstance(rows, dict):

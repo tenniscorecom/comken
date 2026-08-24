@@ -28,18 +28,18 @@ import requests
 from comken.core.timer import measure
 from comken.exceptions import (
     SalesforceConnectionError,
-    SalesforceExternalIdMissingError,
+    SalesforceExternalIDMissingError,
     SalesforceRequestError,
     SiteOwnerRequiredError,
 )
 from comken.runtime import dry_run_log, is_dry_run
-from comken.toolbox.salesforce.metrics import ApiMetrics, RetryReason
+from comken.toolbox.salesforce.metrics import APIMetrics, RetryReason
 
 # 既定は Refresh Token Flow。Client Credentials Flow は client_secret だけで
 # アクセストークンを取れてしまい、漏えいしたときに実行ユーザーとして操作されるため
 # 使わない（→ docs/開発/salesforce-authentication.md）。
 from comken.toolbox.salesforce.oauth_refresh import RefreshTokenOAuth
-from comken.toolbox.salesforce.report import ReportApi
+from comken.toolbox.salesforce.report import ReportAPI
 
 logger = logging.getLogger(__name__)
 
@@ -152,8 +152,8 @@ class SalesforceBase:
                 prefix or self.CREDENTIAL_PREFIX,
             )
         self.auth = auth
-        self.metrics = ApiMetrics(org_name or type(self).__name__)
-        self.report = ReportApi(self)
+        self.metrics = APIMetrics(org_name or type(self).__name__)
+        self.report = ReportAPI(self)
 
         self._session = requests.Session()
         self._access_token = ""
@@ -296,13 +296,13 @@ class SalesforceBase:
             data: 項目と値。external_id_field の値を含めること。
 
         Raises:
-            SalesforceExternalIdMissingError: data に external_id_field が無い場合。
+            SalesforceExternalIDMissingError: data に external_id_field が無い場合。
         """
         if is_dry_run():
             dry_run_log("Salesforce %s を upsert（%s）: %s", object_name, external_id_field, data)
             return
         if external_id_field not in data:
-            raise SalesforceExternalIdMissingError(object_name, external_id_field)
+            raise SalesforceExternalIDMissingError(object_name, external_id_field)
         external_id = urllib.parse.quote(str(data[external_id_field]), safe="")
         # 外部 ID は URL 側で指定するため、本文からは取り除く
         body = {key: value for key, value in data.items() if key != external_id_field}

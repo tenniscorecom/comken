@@ -7,13 +7,13 @@ README の「Windows」から移した、モジュールを使うときの詳し
 ## Windows
 
 通常の Excel 読み書きは `Excel` と `Table` を使う。数式キャッシュが不足すると
-`ExcelTable.read()` が自動で COM に昇格する。`ExcelComHandler` の直接利用は、特殊な
+`ExcelTable.read()` が自動で COM に昇格する。`ExcelCOMHandler` の直接利用は、特殊な
 COM 操作やパスワード保存が必要な場合に限定する。
 
-### ExcelComHandler
+### ExcelCOMHandler
 
 ```python
-from comken.toolbox.windows.handler import ExcelComHandler
+from comken.toolbox.windows.handler import ExcelCOMHandler
 
 SHEET = "Sheet1"
 DATA_ROW = 2
@@ -23,7 +23,7 @@ MACRO_NAME = "Module1.UpdateData"
 READ_PW = "読み取りPW"
 WRITE_PW = "書き込みPW"
 
-with ExcelComHandler("data.xlsx") as h:
+with ExcelCOMHandler("data.xlsx") as h:
     value = h.read_cell(SHEET, row=DATA_ROW, col=DATA_COL)
     rows = h.read_rows(SHEET)
     rows = h.read_rows_as_dicts(SHEET)

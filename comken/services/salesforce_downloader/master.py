@@ -29,7 +29,7 @@ r"""comken/services/salesforce_downloader/master.py — レポート管理表の
 from dataclasses import dataclass
 from pathlib import Path
 
-from comken.exceptions import InvalidReportUrlError, SalesforceReportIdNotFoundError
+from comken.exceptions import InvalidReportURLError, SalesforceReportIDNotFoundError
 from comken.services.salesforce_downloader.report_master import MasterRow, column
 
 # URL 解析は `comken.toolbox.salesforce.report` の `report_id_from_url` を使う。
@@ -154,12 +154,12 @@ class ReportEntry(MasterRow):
         管理番号なら管理表を検索して一発で見つかる。
 
         Raises:
-            InvalidReportUrlError: URL からレポート ID を取り出せない場合。
+            InvalidReportURLError: URL からレポート ID を取り出せない場合。
         """
         try:
             return report_id_from_url(self.url)
-        except SalesforceReportIdNotFoundError as e:
-            raise InvalidReportUrlError(self.key, self.url, str(e)) from e
+        except SalesforceReportIDNotFoundError as e:
+            raise InvalidReportURLError(self.key, self.url, str(e)) from e
 
     @property
     def is_scheduled(self) -> bool:

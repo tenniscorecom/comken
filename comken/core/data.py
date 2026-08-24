@@ -9,7 +9,7 @@ def col_to_num(letter: str) -> int:
     """Excel の列レターを列番号に変換する（A→1, B→2, AA→27）。
 
     config.ini に「Q列」のように列レターで書かれた設定を、
-    ExcelComHandler.read_cell() 等の col 引数（数値）に変換するときに使う。
+    ExcelCOMHandler.read_cell() 等の col 引数（数値）に変換するときに使う。
 
     Args:
         letter: 列レター（大文字・小文字どちらでも可。A〜Z または AA〜ZZZ 形式）。

@@ -43,13 +43,13 @@ ComkenError
 │   ├── EmptyExcelTableError
 │   ├── ExcelHeadersTooFewError
 │   └── FileFormatMismatchError
-├── CsvError
+├── CSVError
 │   ├── EncodingDetectionError
-│   ├── CsvFileNotFoundError
-│   ├── CsvHeaderMissingError
-│   ├── CsvInvalidHeaderError
-│   ├── CsvRowLengthError
-│   └── CsvColumnsRequiredError
+│   ├── CSVFileNotFoundError
+│   ├── CSVHeaderMissingError
+│   ├── CSVInvalidHeaderError
+│   ├── CSVRowLengthError
+│   └── CSVColumnsRequiredError
 ├── CredentialError
 │   ├── InvalidCredentialNameError
 │   ├── CredentialNotFoundError
@@ -60,11 +60,11 @@ ComkenError
 │   ├── SalesforceAuthError
 │   ├── SalesforceConnectionError
 │   ├── SalesforceRequestError
-│   ├── SalesforceExternalIdMissingError
+│   ├── SalesforceExternalIDMissingError
 │   ├── SalesforceCredentialRotationError
 │   ├── SalesforceReportTruncatedError
 │   ├── SalesforceReportFormatError
-│   ├── SalesforceReportIdNotFoundError
+│   ├── SalesforceReportIDNotFoundError
 │   ├── SalesforceSiteNotFoundError
 │   └── SalesforceReportExecutionError
 ├── BrowserError
@@ -126,7 +126,7 @@ ComkenError
 │   ├── CachedReportNotRegisteredError
 │   ├── ReportNotRegisteredError
 │   ├── ReportDisabledError
-│   ├── InvalidReportUrlError
+│   ├── InvalidReportURLError
 │   ├── EmptyReportError
 │   ├── ReportFolderNotFoundError
 │   └── ScheduledDownloadFailedError
@@ -184,12 +184,12 @@ from comken.exceptions.credential import (
     InvalidCredentialNameError,
 )
 from comken.exceptions.csv import (
-    CsvColumnsRequiredError,
-    CsvError,
-    CsvFileNotFoundError,
-    CsvHeaderMissingError,
-    CsvInvalidHeaderError,
-    CsvRowLengthError,
+    CSVColumnsRequiredError,
+    CSVError,
+    CSVFileNotFoundError,
+    CSVHeaderMissingError,
+    CSVInvalidHeaderError,
+    CSVRowLengthError,
     EncodingDetectionError,
 )
 from comken.exceptions.downloader import (
@@ -200,7 +200,7 @@ from comken.exceptions.downloader import (
     HistoryHeaderMismatchError,
     HistoryLockTimeoutError,
     HistoryWriteError,
-    InvalidReportUrlError,
+    InvalidReportURLError,
     ReportDisabledError,
     ReportFolderNotFoundError,
     ReportNotRegisteredError,
@@ -254,10 +254,10 @@ from comken.exceptions.salesforce import (
     SalesforceConnectionError,
     SalesforceCredentialRotationError,
     SalesforceError,
-    SalesforceExternalIdMissingError,
+    SalesforceExternalIDMissingError,
     SalesforceReportExecutionError,
     SalesforceReportFormatError,
-    SalesforceReportIdNotFoundError,
+    SalesforceReportIDNotFoundError,
     SalesforceReportTruncatedError,
     SalesforceRequestError,
     SalesforceSiteNotFoundError,
@@ -322,13 +322,13 @@ __all__ = [
     "ExcelSaveNotCompletedError",
     "ExcelSaveValidationError",
     "FileFormatMismatchError",
-    "CsvError",
+    "CSVError",
     "EncodingDetectionError",
-    "CsvFileNotFoundError",
-    "CsvHeaderMissingError",
-    "CsvInvalidHeaderError",
-    "CsvRowLengthError",
-    "CsvColumnsRequiredError",
+    "CSVFileNotFoundError",
+    "CSVHeaderMissingError",
+    "CSVInvalidHeaderError",
+    "CSVRowLengthError",
+    "CSVColumnsRequiredError",
     "ColumnNotFoundError",
     "ExcelColumnNotFoundError",
     "KeyColumnNotFoundError",
@@ -356,11 +356,11 @@ __all__ = [
     "SalesforceAuthError",
     "SalesforceConnectionError",
     "SalesforceRequestError",
-    "SalesforceExternalIdMissingError",
+    "SalesforceExternalIDMissingError",
     "SalesforceCredentialRotationError",
     "SalesforceReportTruncatedError",
     "SalesforceReportFormatError",
-    "SalesforceReportIdNotFoundError",
+    "SalesforceReportIDNotFoundError",
     "SalesforceReportExecutionError",
     "SalesforceSiteNotFoundError",
     "BrowserError",
@@ -400,7 +400,7 @@ __all__ = [
     "CachedReportNotRegisteredError",
     "ReportNotRegisteredError",
     "ReportDisabledError",
-    "InvalidReportUrlError",
+    "InvalidReportURLError",
     "EmptyReportError",
     "ReportFolderNotFoundError",
     "ScheduledDownloadFailedError",

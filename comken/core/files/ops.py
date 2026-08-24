@@ -78,7 +78,7 @@ def copy_to_local_if_large(path: str | Path, threshold_mb: float) -> tuple[Path,
 
     この関数は ``comken.core.files`` の ``__all__`` にのみ入れる
     （``comken.core`` からは再エクスポートしない）。利用者が直接呼ぶことは
-    想定せず、Excel / ExcelComHandler などクラス側の自動コピールーチンが使う。
+    想定せず、Excel / ExcelCOMHandler などクラス側の自動コピールーチンが使う。
 
     Args:
         path: 元のファイルパス。

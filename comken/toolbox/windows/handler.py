@@ -2,12 +2,12 @@
 
 pywin32 を使った Windows 固有操作を提供する。
 
-- ExcelComHandler: 数式の計算結果を読む、VBA マクロを実行する、パスワード付き保存など
+- ExcelCOMHandler: 数式の計算結果を読む、VBA マクロを実行する、パスワード付き保存など
 - WindowHandler: ウィンドウの検索・前面表示
 - RegistryHandler: レジストリ値の読み取り
 
 通常の Excel 読み書きは excel の Excel（openpyxl）を使うこと。
-ExcelComHandler は数式やマクロが必要な場面に限定して使う。
+ExcelCOMHandler は数式やマクロが必要な場面に限定して使う。
 """
 
 # 定義中のハンドラー自身を戻り値の型注釈に使うため、注釈の評価を遅延する。
@@ -81,7 +81,7 @@ def _range_values(
     return [tuple(row) for row in values]
 
 
-class ExcelComHandler(FileBase):
+class ExcelCOMHandler(FileBase):
     """win32com を使った Excel 操作クラス。
 
     openpyxl では対応できない以下の操作に使う:
@@ -217,7 +217,7 @@ class ExcelComHandler(FileBase):
     def read_rows_as_dicts(self, sheet_name: str, header_row: int = 1) -> list[dict]:
         """ヘッダー行をキーとした辞書のリストで返す。
 
-        ヘッダー行がないファイルは ExcelComHandler(path, headers=[...]) で列名を指定すること。
+        ヘッダー行がないファイルは ExcelCOMHandler(path, headers=[...]) で列名を指定すること。
 
         Args:
             sheet_name: シート名。

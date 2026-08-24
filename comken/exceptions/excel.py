@@ -31,7 +31,7 @@ class DataSheetAccessError(ExcelError):
 class ExcelFileNotFoundError(ExcelError):
     """Excel ファイルが見つからない
 
-    発生箇所: Excel.__init__() / ExcelComHandler.__init__()
+    発生箇所: Excel.__init__() / ExcelCOMHandler.__init__()
 
     対処:
         ファイルの置き場所と名前を確認する
@@ -127,7 +127,7 @@ class TableNotFoundError(ExcelError):
 class MacroError(ExcelError):
     """Excel のマクロが失敗した
 
-    発生箇所: ExcelComHandler.run_macro()
+    発生箇所: ExcelCOMHandler.run_macro()
 
     対処:
         Excel をすべて閉じて再実行する。続く場合は管理者へ
@@ -144,7 +144,7 @@ class EmptyHeaderCellError(ExcelError):
     """Excel の見出しに空欄がある
 
     発生箇所: Excel.read_computed_rows_as_dicts() / ExcelTable.read() /
-             ExcelComHandler.read_rows_as_dicts()
+             ExcelCOMHandler.read_rows_as_dicts()
 
     対処:
         Excel の1行目の空欄を埋める
@@ -189,7 +189,7 @@ class EmptyExcelTableError(ExcelError):
 class ExcelHeadersTooFewError(ExcelError):
     """指定した見出し数が列数より少ない
 
-    発生箇所: ExcelComHandler.read_rows_as_dicts()
+    発生箇所: ExcelCOMHandler.read_rows_as_dicts()
 
     対処:
         管理者へ連絡する
@@ -206,7 +206,7 @@ class ExcelHeadersTooFewError(ExcelError):
 class FileFormatMismatchError(ExcelError):
     """保存拡張子と形式が合わない
 
-    発生箇所: ExcelComHandler.save_as()
+    発生箇所: ExcelCOMHandler.save_as()
 
     対処:
         管理者へ連絡する
@@ -277,7 +277,7 @@ class ExcelApplicationNotAvailableError(ExcelError):
 
     **読み書きだけなら Excel は要らない**（openpyxl で動く）。
 
-    発生箇所: comken.toolbox.windows の ExcelComHandler
+    発生箇所: comken.toolbox.windows の ExcelCOMHandler
 
     対処:
         この PC に Excel が入っているか確認する。入れられない PC で動かすなら、

@@ -294,7 +294,7 @@ class TestDeleteFile:
 class TestCopyToLocalIfLarge:
     """copy_to_local_if_large の境界テスト。
 
-    ExcelBase / ExcelComHandler が共通で使うため、ここで境界を固める。
+    ExcelBase / ExcelCOMHandler が共通で使うため、ここで境界を固める。
     """
 
     def test_returns_original_when_under_threshold(self, tmp_path):

@@ -53,7 +53,7 @@ class ComponentStat:
 
 
 @dataclass(frozen=True)
-class ApiUsage:
+class APIUsage:
     """組織の 24 時間 API 消費量（Sforce-Limit-Info ヘッダーの値）。"""
 
     used: int
@@ -61,18 +61,18 @@ class ApiUsage:
 
 
 @dataclass
-class ApiMetrics:
+class APIMetrics:
     """API 呼び出しの計測を貯める。
 
     使い方:
-        metrics = ApiMetrics("sandbox")
+        metrics = APIMetrics("sandbox")
         # …API を呼ぶ…
         metrics.log_summary()
         metrics.append_csv(Path("logs/salesforce_metrics.csv"))
     """
 
     org_name: str
-    api_usage: ApiUsage | None = None
+    api_usage: APIUsage | None = None
     truncated_reports: list[str] = field(default_factory=list)
     _by_component: dict[str, ComponentStat] = field(default_factory=dict)
     _retry_reasons: dict[str, int] = field(default_factory=dict)
@@ -120,7 +120,7 @@ class ApiMetrics:
                 continue
             used, _, limit = value.partition("/")
             if used.isdigit() and limit.isdigit():
-                self.api_usage = ApiUsage(used=int(used), limit=int(limit))
+                self.api_usage = APIUsage(used=int(used), limit=int(limit))
             return
 
     def log_summary(self) -> None:

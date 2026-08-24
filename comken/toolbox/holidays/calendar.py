@@ -46,7 +46,7 @@ class Holiday:
 class HolidaySource(Protocol):
     """祝日を 1セット取り出せる仕組みの共通インタフェース。
 
-    内閣府の ``CabinetOfficeCsvSource`` と、社内の ``ComkenMasterTableSource`` の両方が
+    内閣府の ``CabinetOfficeCSVSource`` と、社内の ``ComkenMasterTableSource`` の両方が
     これを実装するため、利用側は入手経路を意識せずに ``from_sources`` に渡せる。
 
     この Protocol はメソッドの型を ``Iterable[Holiday]`` に固定する。
@@ -62,7 +62,7 @@ class HolidaySource(Protocol):
 
 @runtime_checkable
 class RefreshableHolidaySource(Protocol):
-    """TTL を無視して強制再取得できる祝日 source（例: 内閣府の ``CabinetOfficeCsvSource``）。
+    """TTL を無視して強制再取得できる祝日 source（例: 内閣府の ``CabinetOfficeCSVSource``）。
 
     ``HolidayCalendar`` がターゲットが今年/来年のときに内閣府への
     再取得を試みるためのフック。短いタイムアウト（既定 0.5 秒）で実装する。

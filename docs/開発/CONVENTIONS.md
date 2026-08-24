@@ -80,6 +80,27 @@ Python の作法（PEP 8）に従う。
 Excel の変数名は `ws` / `wb` より `worksheet` / `workbook` を推奨する。その他の、意味を
 推測しないと読めない略語は避ける。
 
+### 略語の扱い（クラス名・例外名）
+
+PEP 8 は CapWords の中で略語を使う場合、**略語の文字をすべて大文字にする**よう推奨している:
+
+> When using abbreviations in CapWords, capitalize all the letters of the abbreviation.
+> Thus `HTTPServerError` is better than `HttpServerError`.
+
+**クラス名・例外名に限り、略語はすべて大文字にする。** 表記の揺れを残さないため、
+同じ略語の小文字始まりと全大文字が文書内で混ざらないよう統一する。
+
+| 種別 | 例 | 備考 |
+|---|---|---|
+| 一般的な略語（クラス名） | `CSVError`, `APIMetrics`, `ExcelCOMHandler`, `InvalidReportURLError`, `CabinetOfficeCSVSource` | すべて大文字 |
+| 複合語の略語（例外名） | `SalesforceExternalIDMissingError`, `SalesforceReportIDNotFoundError` | `ID` も2文字だが大文字 |
+| 固有名詞・ブランド名 | `OAuth`, `DPAPI`, `HTTP` | 固有名詞としての表記をそのまま使う（例: `ClientCredentialsOAuth`） |
+
+snake_case の世界（関数名・変数名・モジュール名・パッケージ名・config キー）は PEP 8
+に従い**略語を小文字のまま**にする。`api_key` を `API_KEY` にしない、`api_usage` を
+`APIUsage` にしない。エラーメッセージ本文の「CSV」「API」も同様にそのまま使う
+（一般語としての略語）。
+
 ### 公開メソッドの動詞
 
 同じ操作には同じ動詞を使う。名詞だけのメソッドや、`js()` のように処理が分からない略称は

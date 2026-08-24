@@ -53,7 +53,7 @@ ERROR_CATEGORIES = (
     ErrorCategory(
         "ファイル・設定などのエラー",
         (
-            exceptions.CsvError,
+            exceptions.CSVError,
             exceptions.ColumnNotFoundError,
             exceptions.ConfigError,
             exceptions.MasterTableError,
@@ -129,7 +129,7 @@ CLASSIFICATION_ERRORS = (
     exceptions.ComkenError,
     exceptions.ExcelError,
     exceptions.AccessError,
-    exceptions.CsvError,
+    exceptions.CSVError,
     exceptions.ColumnNotFoundError,
     exceptions.ConfigError,
     exceptions.StateError,

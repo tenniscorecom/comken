@@ -7,11 +7,11 @@ import pytest
 from comken.constants import Encoding
 from comken.core import Table
 from comken.exceptions import (
-    CsvColumnsRequiredError,
-    CsvFileNotFoundError,
-    CsvHeaderMissingError,
-    CsvInvalidHeaderError,
-    CsvRowLengthError,
+    CSVColumnsRequiredError,
+    CSVFileNotFoundError,
+    CSVHeaderMissingError,
+    CSVInvalidHeaderError,
+    CSVRowLengthError,
     EncodingDetectionError,
     InvalidTableOperationError,
     TableRowColumnsError,
@@ -80,7 +80,7 @@ class TestCSV:
     def test_headerless_rejects_rows_with_too_many_columns(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
         path.write_text("A001,1000,山田\n", encoding="utf-8-sig")
-        with pytest.raises(CsvRowLengthError, match="1行目"):
+        with pytest.raises(CSVRowLengthError, match="1行目"):
             CSV(path, columns=["id", "amount"]).read()
 
     def test_read_only_rejects_replace_and_does_not_save(self, tmp_path) -> None:
@@ -154,29 +154,29 @@ class TestCSV:
     def test_rejects_invalid_headers(self, tmp_path, text) -> None:
         path = tmp_path / "data.csv"
         path.write_text(text, encoding="utf-8-sig")
-        with pytest.raises(CsvInvalidHeaderError):
+        with pytest.raises(CSVInvalidHeaderError):
             CSV(path).read()
 
     @pytest.mark.parametrize("text", ["id,name\n1\n", "id,name\n1,A,extra\n"])
     def test_rejects_wrong_data_width(self, tmp_path, text) -> None:
         path = tmp_path / "data.csv"
         path.write_text(text, encoding="utf-8-sig")
-        with pytest.raises(CsvRowLengthError, match="2行目"):
+        with pytest.raises(CSVRowLengthError, match="2行目"):
             CSV(path).read()
 
     def test_missing_and_zero_byte_have_dedicated_errors(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
-        with pytest.raises(CsvFileNotFoundError):
+        with pytest.raises(CSVFileNotFoundError):
             CSV(path).read()
         path.touch()
-        with pytest.raises(CsvHeaderMissingError):
+        with pytest.raises(CSVHeaderMissingError):
             CSV(path).read()
         assert CSV(path, columns=["id"]).read() == []
 
     def test_utf8_bom_only_has_missing_header_error(self, tmp_path) -> None:
         path = tmp_path / "bom_only.csv"
         path.write_bytes(b"\xef\xbb\xbf")
-        with pytest.raises(CsvHeaderMissingError):
+        with pytest.raises(CSVHeaderMissingError):
             CSV(path).read()
 
     def test_replace_empty_preserves_columns_or_requires_them(self, tmp_path) -> None:
@@ -185,5 +185,5 @@ class TestCSV:
         with CSV(existing) as csv_file:
             csv_file.replace([])
         assert existing.read_text(encoding="utf-8-sig") == "id\n"
-        with pytest.raises(CsvColumnsRequiredError), CSV(tmp_path / "new.csv") as csv_file:
+        with pytest.raises(CSVColumnsRequiredError), CSV(tmp_path / "new.csv") as csv_file:
             csv_file.replace([])

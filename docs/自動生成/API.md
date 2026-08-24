@@ -1379,7 +1379,7 @@ NAS・ネットワークドライブ上のファイルを openpyxl や win32com 
 
 この関数は ``comken.core.files`` の ``__all__`` にのみ入れる
 （``comken.core`` からは再エクスポートしない）。利用者が直接呼ぶことは
-想定せず、Excel / ExcelComHandler などクラス側の自動コピールーチンが使う。
+想定せず、Excel / ExcelCOMHandler などクラス側の自動コピールーチンが使う。
 
 Args:
     path: 元のファイルパス。
@@ -2253,7 +2253,7 @@ class ExcelFileNotFoundError(ExcelError):
 
 Excel ファイルが見つからない
 
-発生箇所: Excel.__init__() / ExcelComHandler.__init__()
+発生箇所: Excel.__init__() / ExcelCOMHandler.__init__()
 
 対処:
     ファイルの置き場所と名前を確認する
@@ -2282,7 +2282,7 @@ Excel が入っていない PC で、Excel 本体が要る操作をしようと�
 
 **読み書きだけなら Excel は要らない**（openpyxl で動く）。
 
-発生箇所: comken.toolbox.windows の ExcelComHandler
+発生箇所: comken.toolbox.windows の ExcelCOMHandler
 
 対処:
     この PC に Excel が入っているか確認する。入れられない PC で動かすなら、
@@ -2420,7 +2420,7 @@ class MacroError(ExcelError):
 
 Excel のマクロが失敗した
 
-発生箇所: ExcelComHandler.run_macro()
+発生箇所: ExcelCOMHandler.run_macro()
 
 対処:
     Excel をすべて閉じて再実行する。続く場合は管理者へ
@@ -2442,7 +2442,7 @@ class EmptyHeaderCellError(ExcelError):
 Excel の見出しに空欄がある
 
 発生箇所: Excel.read_computed_rows_as_dicts() / ExcelTable.read() /
-         ExcelComHandler.read_rows_as_dicts()
+         ExcelCOMHandler.read_rows_as_dicts()
 
 対処:
     Excel の1行目の空欄を埋める
@@ -2503,7 +2503,7 @@ class ExcelHeadersTooFewError(ExcelError):
 
 指定した見出し数が列数より少ない
 
-発生箇所: ExcelComHandler.read_rows_as_dicts()
+発生箇所: ExcelCOMHandler.read_rows_as_dicts()
 
 対処:
     管理者へ連絡する
@@ -2584,7 +2584,7 @@ class FileFormatMismatchError(ExcelError):
 
 保存拡張子と形式が合わない
 
-発生箇所: ExcelComHandler.save_as()
+発生箇所: ExcelCOMHandler.save_as()
 
 対処:
     管理者へ連絡する
@@ -2595,10 +2595,10 @@ class FileFormatMismatchError(ExcelError):
 def __init__(self, suffix: str) -> None:
 ```
 
-### `CsvError`
+### `CSVError`
 
 ```text
-class CsvError(ComkenError):
+class CSVError(ComkenError):
 ```
 
 #### 説明
@@ -2611,7 +2611,7 @@ CSV に関するエラー
 ### `EncodingDetectionError`
 
 ```text
-class EncodingDetectionError(CsvError):
+class EncodingDetectionError(CSVError):
 ```
 
 #### 説明
@@ -2629,10 +2629,10 @@ CSV の文字コードを判定できない
 def __init__(self, path: Path | str) -> None:
 ```
 
-### `CsvFileNotFoundError`
+### `CSVFileNotFoundError`
 
 ```text
-class CsvFileNotFoundError(CsvError):
+class CSVFileNotFoundError(CSVError):
 ```
 
 #### 説明
@@ -2648,10 +2648,10 @@ class CsvFileNotFoundError(CsvError):
 def __init__(self, path: Path | str) -> None:
 ```
 
-### `CsvHeaderMissingError`
+### `CSVHeaderMissingError`
 
 ```text
-class CsvHeaderMissingError(CsvError):
+class CSVHeaderMissingError(CSVError):
 ```
 
 #### 説明
@@ -2667,10 +2667,10 @@ CSV に見出し行がない
 def __init__(self, path: Path | str) -> None:
 ```
 
-### `CsvInvalidHeaderError`
+### `CSVInvalidHeaderError`
 
 ```text
-class CsvInvalidHeaderError(CsvError):
+class CSVInvalidHeaderError(CSVError):
 ```
 
 #### 説明
@@ -2686,10 +2686,10 @@ CSV の見出しに空欄または重複がある
 def __init__(self, path: Path | str, reason: str) -> None:
 ```
 
-### `CsvRowLengthError`
+### `CSVRowLengthError`
 
 ```text
-class CsvRowLengthError(CsvError):
+class CSVRowLengthError(CSVError):
 ```
 
 #### 説明
@@ -2705,10 +2705,10 @@ CSV のデータ行の列数が見出し数と一致しない
 def __init__(self, path: Path | str, line_number: int, expected: int, actual: int) -> None:
 ```
 
-### `CsvColumnsRequiredError`
+### `CSVColumnsRequiredError`
 
 ```text
-class CsvColumnsRequiredError(CsvError):
+class CSVColumnsRequiredError(CSVError):
 ```
 
 #### 説明
@@ -3275,10 +3275,10 @@ Salesforce が処理を断った
 def __init__(self, method: str, path: str, status_code: int, detail: str) -> None:
 ```
 
-### `SalesforceExternalIdMissingError`
+### `SalesforceExternalIDMissingError`
 
 ```text
-class SalesforceExternalIdMissingError(SalesforceError):
+class SalesforceExternalIDMissingError(SalesforceError):
 ```
 
 #### 説明
@@ -3326,7 +3326,7 @@ class SalesforceReportTruncatedError(SalesforceError):
 レポート API は同期・非同期とも 2000 行が上限。非同期にしても超えられない。
 黙って欠けたデータで処理を続けないよう、既定ではこの例外で止める。
 
-発生箇所: comken.toolbox.salesforce.ReportApi.run() / run_async()
+発生箇所: comken.toolbox.salesforce.ReportAPI.run() / run_async()
 
 対処:
     期間を狭めて何回かに分けて実行する。1回で全部必要なら管理者へ連絡する
@@ -3350,7 +3350,7 @@ class SalesforceReportFormatError(SalesforceError):
 集計（サマリ・マトリックス）形式は行の入れ物の構造が変わり、
 そのまま読むと無言で空を返すため、明示的に弾く。
 
-発生箇所: comken.toolbox.salesforce.ReportApi.run() / run_async()
+発生箇所: comken.toolbox.salesforce.ReportAPI.run() / run_async()
 
 対処:
     レポートを明細形式にするか、管理者へ連絡する
@@ -3361,10 +3361,10 @@ class SalesforceReportFormatError(SalesforceError):
 def __init__(self, report_id: str, report_format: str) -> None:
 ```
 
-### `SalesforceReportIdNotFoundError`
+### `SalesforceReportIDNotFoundError`
 
 ```text
-class SalesforceReportIdNotFoundError(SalesforceError):
+class SalesforceReportIDNotFoundError(SalesforceError):
 ```
 
 #### 説明
@@ -3983,7 +3983,7 @@ class HolidayCalendarFetchError(HolidayCalendarError):
 ダウンロードが失敗する。**ただしキャッシュが残っている場合は警告ログのみで動く**
 （cached フラグで運用側が検知できる）。
 
-発生箇所: comken.toolbox.holidays.sources.cabinet_office の CabinetOfficeCsvSource
+発生箇所: comken.toolbox.holidays.sources.cabinet_office の CabinetOfficeCSVSource
 
 対処:
     ネットワーク接続と社内プロキシの設定を確認する。
@@ -4242,10 +4242,10 @@ class ReportDisabledError(DownloaderError):
 def __init__(self, report_key: str, summary: str, master_path: Path) -> None:
 ```
 
-### `InvalidReportUrlError`
+### `InvalidReportURLError`
 
 ```text
-class InvalidReportUrlError(DownloaderError):
+class InvalidReportURLError(DownloaderError):
 ```
 
 #### 説明
@@ -4803,7 +4803,7 @@ URL から取り出した Salesforce のレポート ID。
 管理番号なら管理表を検索して一発で見つかる。
 
 Raises:
-    InvalidReportUrlError: URL からレポート ID を取り出せない場合。
+    InvalidReportURLError: URL からレポート ID を取り出せない場合。
 
 #### `is_scheduled`
 
@@ -7249,10 +7249,10 @@ def count(self) -> int:
 
 ## `from comken.toolbox.holidays import ...`
 
-### `CabinetOfficeCsvSource`
+### `CabinetOfficeCSVSource`
 
 ```text
-class CabinetOfficeCsvSource(HolidaySource):
+class CabinetOfficeCSVSource(HolidaySource):
 ```
 
 #### 説明
@@ -7356,7 +7356,7 @@ class ComputedHolidaySource(HolidaySource):
 計算で祝日の和集合を返すソース。
 
 ``HolidaySource`` Protocol を実装する。``load()`` で ``Iterable[Holiday]`` を返す。
-``CabinetOfficeCsvSource`` と並列に置いて、
+``CabinetOfficeCSVSource`` と並列に置いて、
 ``from_sources([Cabinet, Computed])`` のように和集合で運用する
 （``HolidayCalendar`` 側の先勝ち WARNING ログが衝突をハンドリングする）。
 
@@ -7663,7 +7663,7 @@ class HolidayCalendarFetchError(HolidayCalendarError):
 ダウンロードが失敗する。**ただしキャッシュが残っている場合は警告ログのみで動く**
 （cached フラグで運用側が検知できる）。
 
-発生箇所: comken.toolbox.holidays.sources.cabinet_office の CabinetOfficeCsvSource
+発生箇所: comken.toolbox.holidays.sources.cabinet_office の CabinetOfficeCSVSource
 
 対処:
     ネットワーク接続と社内プロキシの設定を確認する。
@@ -7732,7 +7732,7 @@ class HolidaySource(Protocol):
 
 祝日を 1セット取り出せる仕組みの共通インタフェース。
 
-内閣府の ``CabinetOfficeCsvSource`` と、社内の ``ComkenMasterTableSource`` の両方が
+内閣府の ``CabinetOfficeCSVSource`` と、社内の ``ComkenMasterTableSource`` の両方が
 これを実装するため、利用側は入手経路を意識せずに ``from_sources`` に渡せる。
 
 この Protocol はメソッドの型を ``Iterable[Holiday]`` に固定する。
@@ -7824,10 +7824,10 @@ class MailMessage:
 
 定義を解決できませんでした。
 
-### `ReportApi`
+### `ReportAPI`
 
 ```text
-class ReportApi:
+class ReportAPI:
 ```
 
 #### 説明
@@ -7911,10 +7911,10 @@ Raises:
 
 定義を解決できませんでした。
 
-### `ApiMetrics`
+### `APIMetrics`
 
 ```text
-class ApiMetrics:
+class APIMetrics:
 ```
 
 #### 説明
@@ -7922,7 +7922,7 @@ class ApiMetrics:
 API 呼び出しの計測を貯める。
 
 使い方:
-    metrics = ApiMetrics("sandbox")
+    metrics = APIMetrics("sandbox")
     # …API を呼ぶ…
     metrics.log_summary()
     metrics.append_csv(Path("logs/salesforce_metrics.csv"))
@@ -8017,10 +8017,10 @@ def append_csv(self, path: str | Path) -> None:
 日ごとに追記していくと、API 消費量の推移と切り捨ての発生が追える。
 ファイルが無ければ見出し行から作る。
 
-### `ApiUsage`
+### `APIUsage`
 
 ```text
-class ApiUsage:
+class APIUsage:
 ```
 
 #### 説明
@@ -8167,10 +8167,10 @@ Raises:
 
 ## `from comken.toolbox.windows import ...`
 
-### `ExcelComHandler`
+### `ExcelCOMHandler`
 
 ```text
-class ExcelComHandler(FileBase):
+class ExcelCOMHandler(FileBase):
 ```
 
 #### 説明
@@ -8272,7 +8272,7 @@ def read_rows_as_dicts(self, sheet_name: str, header_row: int=1) -> list[dict]:
 
 ヘッダー行をキーとした辞書のリストで返す。
 
-ヘッダー行がないファイルは ExcelComHandler(path, headers=[...]) で列名を指定すること。
+ヘッダー行がないファイルは ExcelCOMHandler(path, headers=[...]) で列名を指定すること。
 
 Args:
     sheet_name: シート名。

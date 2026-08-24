@@ -32,7 +32,7 @@ DEFAULT_CACHE_PATH = Path.home() / ".comken" / "holidays" / "syukujitsu.csv"
 DEFAULT_TTL_SECONDS = 24 * 60 * 60
 
 
-class CabinetOfficeCsvSource(HolidaySource):
+class CabinetOfficeCSVSource(HolidaySource):
     """内閣府の ``syukujitsu.csv`` をダウンロードして ``Holiday`` の iterable を返す。
 
     Args:
@@ -203,7 +203,7 @@ class CabinetOfficeCsvSource(HolidaySource):
             ) from error
 
 
-__all__ = ["CabinetOfficeCsvSource", "DEFAULT_URL", "DEFAULT_CACHE_PATH", "DEFAULT_TTL_SECONDS"]
+__all__ = ["CabinetOfficeCSVSource", "DEFAULT_URL", "DEFAULT_CACHE_PATH", "DEFAULT_TTL_SECONDS"]
 
 
 def _build_default_cache_path() -> Path:

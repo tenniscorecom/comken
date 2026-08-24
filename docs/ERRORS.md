@@ -92,11 +92,11 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `InternalLibraryNotFoundError` | 指定した社内ライブラリが見つからない | 社内 LAN 環境から、共有サーバ上の PYTHONPATH が通っているか確認し、指定したライブラリ名のフォルダが存在するか確かめる |
 | `InternalLibraryVersionMismatchError` | 指定したバージョンの社内ライブラリが見つからない | 共有サーバ上の対象ライブラリのバージョンを確認し、呼び出し側の指定と一致しているか確かめる |
 | `EncodingDetectionError` | CSV の文字コードを判定できない | CSV の保存形式を確認し、管理者へ連絡する |
-| `CsvFileNotFoundError` | 読み込む CSV ファイルが存在しない | パスを確認する。新規出力は columns を指定して write / replace する |
-| `CsvHeaderMissingError` | CSV に見出し行がない | 見出し行を追加するか、ヘッダーなし CSV なら columns を指定する |
-| `CsvInvalidHeaderError` | CSV の見出しに空欄または重複がある | CSV の1行目にある空欄または重複した見出しを直す |
-| `CsvRowLengthError` | CSV のデータ行の列数が見出し数と一致しない | 表示された行の区切り文字と値の数を確認する |
-| `CsvColumnsRequiredError` | 空の新規 CSV に出力する列を決定できない | CSV(columns=[...]) または Table(columns, []) で列を指定する |
+| `CSVFileNotFoundError` | 読み込む CSV ファイルが存在しない | パスを確認する。新規出力は columns を指定して write / replace する |
+| `CSVHeaderMissingError` | CSV に見出し行がない | 見出し行を追加するか、ヘッダーなし CSV なら columns を指定する |
+| `CSVInvalidHeaderError` | CSV の見出しに空欄または重複がある | CSV の1行目にある空欄または重複した見出しを直す |
+| `CSVRowLengthError` | CSV のデータ行の列数が見出し数と一致しない | 表示された行の区切り文字と値の数を確認する |
+| `CSVColumnsRequiredError` | 空の新規 CSV に出力する列を決定できない | CSV(columns=[...]) または Table(columns, []) で列を指定する |
 | `ExcelColumnNotFoundError` | Excel の列見出しが見つからない | Excel の1行目を確認する |
 | `KeyColumnNotFoundError` | 比較に使うキー列が見つからない | Excel・CSV の列名を確認する |
 | `TransferSourceColumnNotFoundError` | 列名転記で、lookup の転記元列が見つからない | 転記元データと config.ini のマッピング左側を確認する |
@@ -116,11 +116,11 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `SalesforceAuthError` | Salesforce にログインできない | 表示された確認項目を上から順に見る。それでも直らなければ管理者へ連絡する |
 | `SalesforceConnectionError` | Salesforce につながらない | ネットワークの状態を確認して、少し待ってから再実行する |
 | `SalesforceRequestError` | Salesforce が処理を断った | 表示されたメッセージをそのまま添えて管理者へ連絡する（権限か項目名の問題が多い） |
-| `SalesforceExternalIdMissingError` | upsert 用データに外部 ID がない | 管理者へ連絡する |
+| `SalesforceExternalIDMissingError` | upsert 用データに外部 ID がない | 管理者へ連絡する |
 | `SalesforceCredentialRotationError` | consumer key / secret のローテーションを安全に完了できない | Salesforce の ECA 設定・API レスポンス・DPAPI の保存先を確認する |
 | `SalesforceReportTruncatedError` | レポートが上限の 2000 行で切れた（**全件ではない**） | 期間を狭めて何回かに分けて実行する。1回で全部必要なら管理者へ連絡する |
 | `SalesforceReportFormatError` | レポートの形式が対応していない | レポートを明細形式にするか、管理者へ連絡する |
-| `SalesforceReportIdNotFoundError` | レポートの URL からレポート ID を取り出せない | Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す |
+| `SalesforceReportIDNotFoundError` | レポートの URL からレポート ID を取り出せない | Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す |
 | `SalesforceReportExecutionError` | Salesforce 側でレポート実行に失敗した | Salesforce で同じレポートを直接実行し、表示された内容を管理者へ連絡する |
 | `SalesforceSiteNotFoundError` | URL のドメインに対応する組織が登録されていない | URL のドメインを見直す。新しい組織なら管理者へ連絡する（組織クラスの追加が要る） |
 | `MasterTableError` | Excel の管理表に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
@@ -143,7 +143,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `CachedReportNotRegisteredError` | 定期取得の対象ではないレポートのキャッシュを読もうとした | 毎日決まった時刻に取るなら、管理表の「実行方式」を「定期」にする。使うときに毎回取りに行くなら、download_report() を呼ぶ |
 | `ReportNotRegisteredError` | 指定した管理番号が管理表に無い | 管理表を開いて、その管理番号の行があるか確認する。新しく使うレポートは、先に管理表へ登録する |
 | `ReportDisabledError` | 管理表で「無効」になっているレポートを取ろうとした | また使うなら管理表の「有効」を「有効」に戻す。使わないなら、呼び出し側のコードから消す |
-| `InvalidReportUrlError` | 管理表の URL から Salesforce のレポート ID を取り出せない | Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す |
+| `InvalidReportURLError` | 管理表の URL から Salesforce のレポート ID を取り出せない | Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す |
 | `EmptyReportError` | レポートは実行できたが明細が 0 行だった | Salesforce の画面で同じレポートを開き、本当に 0 件か確認する。0 件が正常に起こるレポートなら、管理表の「0件あり」を「○」にする。 |
 | `ReportFolderNotFoundError` | 管理表に書かれた保存先のフォルダが無い | 管理表の「保存先」を確認する。共有フォルダなら、つながっているか・権限があるかも確認する |
 | `ScheduledDownloadFailedError` | 定期取得で1件以上が失敗した | 履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。急いで必要なものは download_report() でその場で取得する |
@@ -200,7 +200,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `ComkenError` | comken が出す固有エラー全体 | 画面に表示された具体的なエラー名を上の表から探す |
 | `ExcelError` | Excel に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `AccessError` | Access に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
-| `CsvError` | CSV に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
+| `CSVError` | CSV に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `ColumnNotFoundError` | Excel・CSV・データ比較で列が見つからないエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `ConfigError` | config.ini に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `StateError` | state.ini に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |

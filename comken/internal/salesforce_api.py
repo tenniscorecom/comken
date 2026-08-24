@@ -17,7 +17,7 @@ from comken.internal.base import InternalLibraryBase
 SALESFORCE_LIBRARY_NAME = "example_libs.v0000.salesforce"
 
 
-class SalesforceApi:
+class SalesforceAPI:
     """社内 Salesforce API 呼び出しの薄い玄関。
 
     ``example_libs.v0000.salesforce`` を ``comken.internal.base.InternalLibraryBase``
@@ -26,7 +26,7 @@ class SalesforceApi:
 
     使用例::
 
-        with SalesforceApi() as api:
+        with SalesforceAPI() as api:
             rows = api.query("SELECT Id, Name FROM Account")
 
     認証（Auth Refresh Token / Rotation / Metrics）は toolbox/salesforce 側に
@@ -52,7 +52,7 @@ class SalesforceApi:
         # 局所的に ``Any`` を使ってメソッド呼び出しを許可する。
         self._module: Any | None = None
 
-    def __enter__(self) -> SalesforceApi:
+    def __enter__(self) -> SalesforceAPI:
         self._module = self._library.load()
         return self
 
@@ -82,7 +82,7 @@ class SalesforceApi:
             RuntimeError: ``with`` ブロック外で呼ばれた場合。
         """
         if self._module is None:
-            raise RuntimeError("SalesforceApi は 'with' ブロック内で使用してください。")
+            raise RuntimeError("SalesforceAPI は 'with' ブロック内で使用してください。")
         return self._module.request(method, path, component=component, body=body)
 
     def data_path(self, path: str) -> str:
@@ -98,7 +98,7 @@ class SalesforceApi:
             RuntimeError: ``with`` ブロック外で呼ばれた場合。
         """
         if self._module is None:
-            raise RuntimeError("SalesforceApi は 'with' ブロック内で使用してください。")
+            raise RuntimeError("SalesforceAPI は 'with' ブロック内で使用してください。")
         return self._module.data_path(path)
 
     def query(self, soql: str) -> list[dict]:
@@ -114,7 +114,7 @@ class SalesforceApi:
             RuntimeError: ``with`` ブロック外で呼ばれた場合。
         """
         if self._module is None:
-            raise RuntimeError("SalesforceApi は 'with' ブロック内で使用してください。")
+            raise RuntimeError("SalesforceAPI は 'with' ブロック内で使用してください。")
         return self._module.query(soql)
 
     def report_run(self, report_id: str) -> list[dict]:
@@ -130,8 +130,8 @@ class SalesforceApi:
             RuntimeError: ``with`` ブロック外で呼ばれた場合。
         """
         if self._module is None:
-            raise RuntimeError("SalesforceApi は 'with' ブロック内で使用してください。")
+            raise RuntimeError("SalesforceAPI は 'with' ブロック内で使用してください。")
         return self._module.report_run(report_id)
 
 
-__all__ = ["SalesforceApi", "SALESFORCE_LIBRARY_NAME"]
+__all__ = ["SalesforceAPI", "SALESFORCE_LIBRARY_NAME"]

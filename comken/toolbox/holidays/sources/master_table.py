@@ -4,7 +4,7 @@
 会社独自の休業日（創立記念日・年末年始の臨時休業など）を読み取る。
 
 内閣府の CSV とマージして使う前提で、``HolidayCalendar.from_sources`` に
-``CabinetOfficeCsvSource`` と一緒に渡すのを主な使い方とする。
+``CabinetOfficeCSVSource`` と一緒に渡すのを主な使い方とする。
 
 読み取りは ``comken.toolbox.excel.Excel`` を使い、
 「日付」「名称」の列を必須とする。列が無いシートは

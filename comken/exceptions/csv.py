@@ -5,7 +5,7 @@ from pathlib import Path
 from comken.exceptions.base import ComkenError
 
 
-class CsvError(ComkenError):
+class CSVError(ComkenError):
     """CSV に関するエラー
 
     対処:
@@ -13,7 +13,7 @@ class CsvError(ComkenError):
     """
 
 
-class EncodingDetectionError(CsvError):
+class EncodingDetectionError(CSVError):
     """CSV の文字コードを判定できない
 
     発生箇所: CSV.read()
@@ -29,7 +29,7 @@ class EncodingDetectionError(CsvError):
         )
 
 
-class CsvFileNotFoundError(CsvError):
+class CSVFileNotFoundError(CSVError):
     """読み込む CSV ファイルが存在しない
 
     対処:
@@ -40,7 +40,7 @@ class CsvFileNotFoundError(CsvError):
         super().__init__(f"CSV ファイルが見つかりません: {path}")
 
 
-class CsvHeaderMissingError(CsvError):
+class CSVHeaderMissingError(CSVError):
     """CSV に見出し行がない
 
     対処:
@@ -54,7 +54,7 @@ class CsvHeaderMissingError(CsvError):
         )
 
 
-class CsvInvalidHeaderError(CsvError):
+class CSVInvalidHeaderError(CSVError):
     """CSV の見出しに空欄または重複がある
 
     対処:
@@ -65,7 +65,7 @@ class CsvInvalidHeaderError(CsvError):
         super().__init__(f"CSV の見出しが不正です: {path}\n{reason}")
 
 
-class CsvRowLengthError(CsvError):
+class CSVRowLengthError(CSVError):
     """CSV のデータ行の列数が見出し数と一致しない
 
     対処:
@@ -79,7 +79,7 @@ class CsvRowLengthError(CsvError):
         )
 
 
-class CsvColumnsRequiredError(CsvError):
+class CSVColumnsRequiredError(CSVError):
     """空の新規 CSV に出力する列を決定できない
 
     対処:

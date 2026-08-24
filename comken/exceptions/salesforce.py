@@ -67,7 +67,7 @@ class SalesforceRequestError(SalesforceError):
         )
 
 
-class SalesforceExternalIdMissingError(SalesforceError):
+class SalesforceExternalIDMissingError(SalesforceError):
     """upsert 用データに外部 ID がない
 
     対処:
@@ -104,7 +104,7 @@ class SalesforceReportTruncatedError(SalesforceError):
     レポート API は同期・非同期とも 2000 行が上限。非同期にしても超えられない。
     黙って欠けたデータで処理を続けないよう、既定ではこの例外で止める。
 
-    発生箇所: comken.toolbox.salesforce.ReportApi.run() / run_async()
+    発生箇所: comken.toolbox.salesforce.ReportAPI.run() / run_async()
 
     対処:
         期間を狭めて何回かに分けて実行する。1回で全部必要なら管理者へ連絡する
@@ -126,7 +126,7 @@ class SalesforceReportFormatError(SalesforceError):
     集計（サマリ・マトリックス）形式は行の入れ物の構造が変わり、
     そのまま読むと無言で空を返すため、明示的に弾く。
 
-    発生箇所: comken.toolbox.salesforce.ReportApi.run() / run_async()
+    発生箇所: comken.toolbox.salesforce.ReportAPI.run() / run_async()
 
     対処:
         レポートを明細形式にするか、管理者へ連絡する
@@ -163,7 +163,7 @@ class SalesforceSiteNotFoundError(SalesforceError):
         )
 
 
-class SalesforceReportIdNotFoundError(SalesforceError):
+class SalesforceReportIDNotFoundError(SalesforceError):
     """レポートの URL からレポート ID を取り出せない
 
     管理表にはレポートの URL をそのまま貼れるようにしてあるが、

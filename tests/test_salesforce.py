@@ -13,17 +13,17 @@ from comken.exceptions import (
     InvalidCredentialNameError,
     SalesforceAuthError,
     SalesforceConnectionError,
-    SalesforceExternalIdMissingError,
+    SalesforceExternalIDMissingError,
     SalesforceReportExecutionError,
     SalesforceReportFormatError,
-    SalesforceReportIdNotFoundError,
+    SalesforceReportIDNotFoundError,
     SalesforceReportTruncatedError,
     SalesforceRequestError,
     SalesforceSiteNotFoundError,
 )
 from comken.toolbox.credentials import save_credentials, store
 from comken.toolbox.salesforce import (
-    ApiMetrics,
+    APIMetrics,
     ClientCredentialsAuth,
     SalesforceBase,
 )
@@ -76,7 +76,7 @@ class TestReportIdFromUrl:
         ],
     )
     def test_raises_when_report_id_is_missing_or_has_an_intermediate_length(self, text):
-        with pytest.raises(SalesforceReportIdNotFoundError):
+        with pytest.raises(SalesforceReportIDNotFoundError):
             report_id_from_url(text)
 
 
@@ -407,7 +407,7 @@ class TestSalesforceCrud:
         """外部 ID 不在は KeyError ではなく利用者向けの個別例外にする。"""
         with (
             _salesforce([]) as (client, session, _),
-            pytest.raises(SalesforceExternalIdMissingError, match="ExternalId__c"),
+            pytest.raises(SalesforceExternalIDMissingError, match="ExternalId__c"),
         ):
             client.upsert("Account", "ExternalId__c", {"Name": "取引先"})
         session.request.assert_not_called()
@@ -699,7 +699,7 @@ class TestApiMetrics:
         """CSV は初回だけ見出しを書き、2回目以降は追記する。"""
         path = tmp_path / "metrics.csv"
         for _ in range(2):
-            metrics = ApiMetrics("site_a")
+            metrics = APIMetrics("site_a")
             metrics.record_call("report", 0.5)
             metrics.append_csv(path)
 
@@ -708,7 +708,7 @@ class TestApiMetrics:
         assert len(lines) == 3, "見出し1行 + データ2行"
 
     def test_records_error_and_retry_counts(self):
-        metrics = ApiMetrics("site_a")
+        metrics = APIMetrics("site_a")
         metrics.record_call("crud", 0.1, is_error=True)
         metrics.record_retry("crud", "再認証")
 
@@ -717,7 +717,7 @@ class TestApiMetrics:
         assert metrics.retry_reason_counts() == {"再認証": 1}
 
     def test_truncated_report_is_not_duplicated(self):
-        metrics = ApiMetrics("site_a")
+        metrics = APIMetrics("site_a")
         metrics.record_truncated_report("00O1")
         metrics.record_truncated_report("00O1")
         assert metrics.truncated_reports == ["00O1"]
@@ -725,12 +725,12 @@ class TestApiMetrics:
     @pytest.mark.parametrize("limit_info", ["", "api-usage=broken", "other=1/2", "api-usage=1"])
     def test_unparsable_limit_info_is_ignored(self, limit_info):
         """解釈できないヘッダーで本処理を止めない。"""
-        metrics = ApiMetrics("site_a")
+        metrics = APIMetrics("site_a")
         metrics.update_api_usage(limit_info)
         assert metrics.api_usage is None
 
     def test_log_summary_reports_usage_percentage(self, caplog):
-        metrics = ApiMetrics("site_a")
+        metrics = APIMetrics("site_a")
         metrics.record_call("query", 1.0)
         metrics.update_api_usage("api-usage=1500/15000")
         with caplog.at_level("INFO"):

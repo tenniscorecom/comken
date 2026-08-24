@@ -21,7 +21,7 @@ from comken.exceptions import (
     HolidayCalendarSourceError,
 )
 from comken.toolbox.holidays import (
-    CabinetOfficeCsvSource,
+    CabinetOfficeCSVSource,
     ComkenMasterTableSource,
     ComputedHolidaySource,
     Holiday,
@@ -410,7 +410,7 @@ class TestModuleLevelFunction:
             is_business_day(_dt.date(2024, 1, 2), cal)  # type: ignore[misc]
 
 
-# ── CabinetOfficeCsvSource ────────────────────────────────────────────────
+# ── CabinetOfficeCSVSource ────────────────────────────────────────────────
 
 
 class _StubResponse:
@@ -426,7 +426,7 @@ class _StubResponse:
 
 
 class TestCabinetOfficeCsvSource:
-    """``CabinetOfficeCsvSource`` のキャッシュ・TTL・フェッチ失敗フォールバック。"""
+    """``CabinetOfficeCSVSource`` のキャッシュ・TTL・フェッチ失敗フォールバック。"""
 
     def test_uses_cache_when_fresh(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """TTL 内ならキャッシュをそのまま使う（ダウンロードを呼ばない）。"""
@@ -458,7 +458,7 @@ class TestCabinetOfficeCsvSource:
             requests_module.get = _fake_get  # type: ignore[attr-defined]
             sys.modules["requests"] = requests_module
 
-        source = CabinetOfficeCsvSource(cache_path=cache, ttl_seconds=60)
+        source = CabinetOfficeCSVSource(cache_path=cache, ttl_seconds=60)
         holidays = list(source.load())
         assert called["count"] == 0, "キャッシュが fresh ならリクエストを呼ばない"
         assert holidays[0].name == "元日"
@@ -492,7 +492,7 @@ class TestCabinetOfficeCsvSource:
             sys.modules["requests"] = requests_module
         monkeypatch.setattr("requests.get", _fake_get)
 
-        source = CabinetOfficeCsvSource(cache_path=cache, ttl_seconds=60)
+        source = CabinetOfficeCSVSource(cache_path=cache, ttl_seconds=60)
         holidays = list(source.load())
         assert called["count"] == 1, "キャッシュが古いとリクエストを呼ぶ"
         assert holidays[0].name == "建国記念の日"
@@ -527,7 +527,7 @@ class TestCabinetOfficeCsvSource:
         sys.modules["requests"] = requests_module
         monkeypatch.setattr("requests.get", _failing_get)
 
-        source = CabinetOfficeCsvSource(cache_path=cache, ttl_seconds=60)
+        source = CabinetOfficeCSVSource(cache_path=cache, ttl_seconds=60)
         with caplog.at_level(
             logging.WARNING,
             logger="comken.toolbox.holidays.sources.cabinet_office",
@@ -561,7 +561,7 @@ class TestCabinetOfficeCsvSource:
         monkeypatch.setattr("requests.get", _failing_get)
 
         cache = tmp_path / "no_cache.csv"
-        source = CabinetOfficeCsvSource(cache_path=cache, ttl_seconds=60)
+        source = CabinetOfficeCSVSource(cache_path=cache, ttl_seconds=60)
         with pytest.raises(HolidayCalendarFetchError):
             list(source.load())
 
@@ -676,7 +676,7 @@ class TestNoImplicitRequests:
 
         assert "requests" not in sys.modules, (
             "requests が import 時に読込まれています。"
-            "CabinetOfficeCsvSource._download 内で遅延 import してください。"
+            "CabinetOfficeCSVSource._download 内で遅延 import してください。"
         )
 
 
@@ -982,17 +982,17 @@ class TestApproximateHoliday:
 
 
 class TestCabinetOfficeRefresh:
-    """``CabinetOfficeCsvSource.refresh()`` の挙動。"""
+    """``CabinetOfficeCSVSource.refresh()`` の挙動。"""
 
     def test_refresh_default_timeout_is_half_second(self) -> None:
         """``refresh()`` は既定で 0.5 秒タイムアウト（業務フローを止めないため）。"""
-        assert CabinetOfficeCsvSource()._refresh_timeout == 0.5
+        assert CabinetOfficeCSVSource()._refresh_timeout == 0.5
 
     def test_refresh_returns_holidays_on_success(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """``refresh()`` は内閣府取得に成功すると ``Holiday`` のリストを返しキャッシュへ書く。"""
-        source = CabinetOfficeCsvSource(cache_path=tmp_path / "syukujitsu.csv")
+        source = CabinetOfficeCSVSource(cache_path=tmp_path / "syukujitsu.csv")
         # fixture のバイト列を返す
         fresh_bytes = FIXTURE_PATH.read_bytes()
         monkeypatch.setattr(source, "_download", lambda timeout=None: fresh_bytes)
@@ -1011,7 +1011,7 @@ class TestCabinetOfficeRefresh:
 
         cache_path = tmp_path / "syukujitsu.csv"
         cache_path.write_bytes(FIXTURE_PATH.read_bytes())
-        source = CabinetOfficeCsvSource(cache_path=cache_path)
+        source = CabinetOfficeCSVSource(cache_path=cache_path)
 
         def fail(timeout: float | None = None) -> bytes:
             raise HolidayCalendarFetchError("https://example/", "timeout")

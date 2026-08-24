@@ -16,7 +16,7 @@ from comken.core.table import Table
 from comken.exceptions import (
     EmptyReportError,
     HistoryWriteError,
-    InvalidReportUrlError,
+    InvalidReportURLError,
     MasterDuplicateValueError,
     MasterRowValueError,
     ReportDisabledError,
@@ -149,7 +149,7 @@ class TestLoadMaster:
             tmp_path / "管理表.xlsx",
             [["1001", "顧客一覧", "https://example.com/", "定期", str(tmp_path), "○", ""]],
         )
-        with pytest.raises(InvalidReportUrlError) as e:
+        with pytest.raises(InvalidReportURLError) as e:
             load_master(master)
         assert "1001" in str(e.value)  # 行番号ではなく管理番号で示す（空行があるとズレるため）
 

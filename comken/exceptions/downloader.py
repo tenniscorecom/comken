@@ -83,7 +83,7 @@ class ReportNotRegisteredError(DownloaderError):
         )
 
 
-class InvalidReportUrlError(DownloaderError):
+class InvalidReportURLError(DownloaderError):
     """管理表の URL から Salesforce のレポート ID を取り出せない
 
     貼られたものが Salesforce のレポート URL でないと、どのレポートか決められない。

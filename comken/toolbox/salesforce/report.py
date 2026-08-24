@@ -29,7 +29,7 @@ from comken.core.timer import measure
 from comken.exceptions import (
     SalesforceReportExecutionError,
     SalesforceReportFormatError,
-    SalesforceReportIdNotFoundError,
+    SalesforceReportIDNotFoundError,
     SalesforceReportTruncatedError,
 )
 
@@ -54,11 +54,11 @@ def report_id_from_url(text: str) -> str:
         レポート ID（15 桁または 18 桁）。
 
     Raises:
-        SalesforceReportIdNotFoundError: レポート ID が見つからない場合。
+        SalesforceReportIDNotFoundError: レポート ID が見つからない場合。
     """
     matched = REPORT_ID_PATTERN.search(text.strip())
     if matched is None:
-        raise SalesforceReportIdNotFoundError(text)
+        raise SalesforceReportIDNotFoundError(text)
     return matched.group(1)
 
 
@@ -67,7 +67,7 @@ if TYPE_CHECKING:  # 実行時は import しない（client と相互参照に�
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["ReportApi", "REPORT_ID_PATTERN", "report_id_from_url"]
+__all__ = ["ReportAPI", "REPORT_ID_PATTERN", "report_id_from_url"]
 
 COMPONENT = "report"
 ROW_LIMIT = 2000
@@ -77,7 +77,7 @@ POLL_INTERVAL_SECONDS = 3
 ASYNC_TIMEOUT_SECONDS = 120
 
 
-class ReportApi:
+class ReportAPI:
     """レポートを実行して明細行を取得する。
 
     `SalesforceBase` が `report` 属性として持っている。単体では作らない。

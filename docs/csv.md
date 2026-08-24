@@ -24,4 +24,4 @@ table = CSV("ヘッダーなし.csv", columns=["顧客ID", "氏名"]).read()
 
 `columns` を省略した CSV は先頭行を列名として扱います。空の見出し、重複する見出し、
 見出しとデータ行の列数不一致は、データを黙って補正せず専用例外で停止します。
-0バイトまたは UTF-8 BOM だけのファイルも見出しがないため、`CsvHeaderMissingError` で停止します。
+0バイトまたは UTF-8 BOM だけのファイルも見出しがないため、`CSVHeaderMissingError` で停止します。

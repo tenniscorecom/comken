@@ -13,7 +13,7 @@ from datetime import date
 from pathlib import Path
 
 from comken.toolbox.holidays import (
-    CabinetOfficeCsvSource,
+    CabinetOfficeCSVSource,
     ComkenMasterTableSource,
     HolidayCalendar,
     is_business_day,
@@ -21,7 +21,7 @@ from comken.toolbox.holidays import (
 
 calendar = HolidayCalendar.from_sources(
     [
-        CabinetOfficeCsvSource(),  # 既定: ~/.comken/holidays/syukujitsu.csv にキャッシュ
+        CabinetOfficeCSVSource(),  # 既定: ~/.comken/holidays/syukujitsu.csv にキャッシュ
         ComkenMasterTableSource(Path(r"\\server\share\管理表.xlsx")),
     ]
 )
@@ -34,7 +34,7 @@ if is_business_day(date.today(), calendar=calendar):
 
 | ソース               | 概要                                                       | 必要なもの                |
 | -------------------- | ---------------------------------------------------------- | ------------------------- |
-| `CabinetOfficeCsvSource`   | 内閣府の `syukujitsu.csv` を URL から取得                  | `requests` （取得時のみ） |
+| `CabinetOfficeCSVSource`   | 内閣府の `syukujitsu.csv` を URL から取得                  | `requests` （取得時のみ） |
 | `ComkenMasterTableSource`  | 社内管理表（Excel）の「会社休日」シート                     | `openpyxl` （既に依存）   |
 
 内閣府 CSV は **CP932（Shift_JIS）** で配布され、列は
@@ -43,15 +43,15 @@ if is_business_day(date.today(), calendar=calendar):
 
 ## キャッシュ
 
-`CabinetOfficeCsvSource` は `~/.comken/holidays/syukujitsu.csv` を既定の
+`CabinetOfficeCSVSource` は `~/.comken/holidays/syukujitsu.csv` を既定の
 キャッシュ先とする（`cache_path` 引数で変更可）。TTL（既定 24 時間）内は
 キャッシュをそのまま使い、TTL 経過時のみダウンロードを試みる。
 **ダウンロードに失敗してもキャッシュが残っていれば警告ログのみで動く**。
 
 ```python
-from comken.toolbox.holidays import CabinetOfficeCsvSource
+from comken.toolbox.holidays import CabinetOfficeCSVSource
 
-source = CabinetOfficeCsvSource(
+source = CabinetOfficeCSVSource(
     cache_path=Path("D:/work/cache/syukujitsu.csv"),
     ttl_seconds=12 * 60 * 60,  # 半日に1回取り直す
 )
@@ -85,7 +85,7 @@ source = CabinetOfficeCsvSource(
 | `HolidayCalendar.from_csv(path)`  | 内閣府 CSV を直接読む最短ルート                             |
 | `HolidayCalendar.from_sources(...)` | 複数の `HolidaySource` をマージするルート                  |
 | `is_business_day(d, *, calendar)` | カレンダー指定で営業日かを返すモジュールレベル関数        |
-| `CabinetOfficeCsvSource`          | 内閣府 CSV を URL + キャッシュで取得する `HolidaySource`   |
+| `CabinetOfficeCSVSource`          | 内閣府 CSV を URL + キャッシュで取得する `HolidaySource`   |
 | `ComkenMasterTableSource`         | 社内管理表の「会社休日」シートを読む `HolidaySource`        |
 | `ComputedHolidaySource`           | 計算で祝日の和集合を返す `HolidaySource`（mokejp/holidays_jp MIT 由来） |
 | `HolidayCalendarError` 系         | 例外（`HolidayCalendarFetchError` / `HolidayCalendarSourceError` / `HolidayCalendarFormatError` / `HolidayCalendarExpiredError`） |

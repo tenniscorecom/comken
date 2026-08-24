@@ -28,11 +28,11 @@ Client Credentials Flow は `client_secret` だけでアクセストークンを
 設計の背景は docs/開発/salesforce-authentication.md を参照。
 
     SalesforceBase         1組織ぶんの API クライアントの土台（組織クラスで継承する）
-    ReportApi              レポート API。SalesforceBase.report が持っている
+    ReportAPI              レポート API。SalesforceBase.report が持っている
     RefreshTokenAuth       Authorization Code + Refresh Token Flow（既定）
     ClientCredentialsAuth  Client Credentials Flow（開発時に auth= で渡す）
-    ApiMetrics             API 呼び出しの計測。SalesforceBase.metrics が持っている
-    ApiUsage               組織の 24 時間 API 消費量
+    APIMetrics             API 呼び出しの計測。SalesforceBase.metrics が持っている
+    APIUsage               組織の 24 時間 API 消費量
     ComponentStat          呼び出し元ごとの集計
     RetryReason            リトライ理由の定数
 """
@@ -46,12 +46,12 @@ except ImportError:
     _requests = None  # type: ignore[assignment]
 
 from comken.toolbox.salesforce.metrics import (
-    ApiMetrics,
-    ApiUsage,
+    APIMetrics,
+    APIUsage,
     ComponentStat,
     RetryReason,
 )
-from comken.toolbox.salesforce.report import ReportApi
+from comken.toolbox.salesforce.report import ReportAPI
 
 # `requests` を直接 import するモジュールは遅延ロードする。`report` のような
 # requests 非依存モジュールだけ使う場合（BO 環境）にパッケージ全体を
@@ -90,11 +90,11 @@ def __dir__() -> list[str]:
 
 __all__ = [
     "SalesforceBase",
-    "ReportApi",
+    "ReportAPI",
     "ClientCredentialsAuth",
     "RefreshTokenAuth",
-    "ApiMetrics",
-    "ApiUsage",
+    "APIMetrics",
+    "APIUsage",
     "ComponentStat",
     "RetryReason",
     "SalesforceCredentialRotator",

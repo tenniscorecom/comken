@@ -57,11 +57,11 @@
 | `TimeoutError` | ダウンロードが終わらない | ネットワークの状態を確認して再実行する |
 | `UnsupportedFileSuffixError` | 対応外の拡張子が指定された | CSV / Excel の対応する拡張子のファイルを指定する |
 | `EncodingDetectionError` | CSV の文字コードを判定できない | CSV の保存形式を確認し、管理者へ連絡する |
-| `CsvFileNotFoundError` | 読み込む CSV ファイルが存在しない | パスを確認する。新規出力は columns を指定して write / replace する |
-| `CsvHeaderMissingError` | CSV に見出し行がない | 見出し行を追加するか、ヘッダーなし CSV なら columns を指定する |
-| `CsvInvalidHeaderError` | CSV の見出しに空欄または重複がある | CSV の1行目にある空欄または重複した見出しを直す |
-| `CsvRowLengthError` | CSV のデータ行の列数が見出し数と一致しない | 表示された行の区切り文字と値の数を確認する |
-| `CsvColumnsRequiredError` | 空の新規 CSV に出力する列を決定できない | CSV(columns=[...]) または Table(columns, []) で列を指定する |
+| `CSVFileNotFoundError` | 読み込む CSV ファイルが存在しない | パスを確認する。新規出力は columns を指定して write / replace する |
+| `CSVHeaderMissingError` | CSV に見出し行がない | 見出し行を追加するか、ヘッダーなし CSV なら columns を指定する |
+| `CSVInvalidHeaderError` | CSV の見出しに空欄または重複がある | CSV の1行目にある空欄または重複した見出しを直す |
+| `CSVRowLengthError` | CSV のデータ行の列数が見出し数と一致しない | 表示された行の区切り文字と値の数を確認する |
+| `CSVColumnsRequiredError` | 空の新規 CSV に出力する列を決定できない | CSV(columns=[...]) または Table(columns, []) で列を指定する |
 | `KeyColumnNotFoundError` | 比較に使うキー列が見つからない | Excel・CSV の列名を確認する |
 | `InvalidColumnError` | 列の指定が正しくない（打ち間違いなど） | 列は番号（1, 2, …）か列記号（"A", "AA"）で指定する |
 | `RpaLibraryNotFoundError` | 社内ライブラリを読み込めない | 実行.bat の PYTHONPATH に社内ライブラリが入っているか確認する。バージョンが変わった場合は管理者へ連絡する |
@@ -83,7 +83,7 @@
 | `ComkenError` | comken が出す固有エラー全体 |
 | `ExcelError` | Excel に関するエラー |
 | `AccessError` | Access に関するエラー |
-| `CsvError` | CSV に関するエラー |
+| `CSVError` | CSV に関するエラー |
 | `ColumnNotFoundError` | Excel・CSV・データ比較で列が見つからないエラー |
 | `ConfigError` | config.ini に関するエラー |
 | `RpaError` | 社内 RPA 基盤の呼び出しに関するエラー |

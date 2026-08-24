@@ -25,7 +25,7 @@ class HolidayCalendarFetchError(HolidayCalendarError):
     ダウンロードが失敗する。**ただしキャッシュが残っている場合は警告ログのみで動く**
     （cached フラグで運用側が検知できる）。
 
-    発生箇所: comken.toolbox.holidays.sources.cabinet_office の CabinetOfficeCsvSource
+    発生箇所: comken.toolbox.holidays.sources.cabinet_office の CabinetOfficeCSVSource
 
     対処:
         ネットワーク接続と社内プロキシの設定を確認する。
