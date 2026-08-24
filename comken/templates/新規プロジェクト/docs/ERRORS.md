@@ -64,7 +64,6 @@
 | `CSVColumnsRequiredError` | 空の新規 CSV に出力する列を決定できない | CSV(columns=[...]) または Table(columns, []) で列を指定する |
 | `KeyColumnNotFoundError` | 比較に使うキー列が見つからない | Excel・CSV の列名を確認する |
 | `InvalidColumnError` | 列の指定が正しくない（打ち間違いなど） | 列は番号（1, 2, …）か列記号（"A", "AA"）で指定する |
-| `RpaLibraryNotFoundError` | 社内ライブラリを読み込めない | 実行.bat の PYTHONPATH に社内ライブラリが入っているか確認する。バージョンが変わった場合は管理者へ連絡する |
 | `ConfigFileNotFoundError` | config.ini も config.ini.example も見当たらない | config.ini.example がプロジェクトにあるか確認する。無い場合は雛形（`comken/templates/新規プロジェクト/config.ini.example`）から取り直す |
 | `ConfigCreatedFromExampleError` | config.ini が無かったので example から作った | 作られた config.ini の値を書き換えて、もう一度実行する |
 | `ConfigLowerCaseNameError` | config.ini のセクション名・キー名に小文字がある | 表示された名前を大文字に書き換える（`[files]` → `[FILES]`） |
@@ -86,7 +85,6 @@
 | `CSVError` | CSV に関するエラー |
 | `ColumnNotFoundError` | Excel・CSV・データ比較で列が見つからないエラー |
 | `ConfigError` | config.ini に関するエラー |
-| `RpaError` | 社内 RPA 基盤の呼び出しに関するエラー |
 
 ---
 

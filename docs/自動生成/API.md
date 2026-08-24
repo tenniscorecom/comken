@@ -8592,33 +8592,3 @@ class FileFormat:
 #### 説明
 
 Workbook.SaveAs に渡す Excel の保存形式定数。
-
-
-## `from comken.deprecation import ...`
-
-### `deprecated_names`
-
-```text
-def deprecated_names() -> dict[str, str]:
-```
-
-#### 説明
-
-廃止予定の名前の ``{旧名: 新名}`` を返す（コピー）。
-
-戻り値は dict のコピーなので呼び出し側で変更しても ``_DEPRECATED_NAMES``
-には影響しない。
-
-### `warn_renamed`
-
-```text
-def warn_renamed(old_name: str, new_name: str) -> None:
-```
-
-#### 説明
-
-旧名が使われたときに、新しい名前への書き換えを促す警告を出す。
-
-Args:
-    old_name: 変更前の名前（関数名・クラス名・引数名など）。
-    new_name: 変更後の名前。

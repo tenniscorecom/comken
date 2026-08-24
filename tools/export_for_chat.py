@@ -93,29 +93,6 @@ SUPPLEMENTAL_ERRORS = {
             "ファイルの置き場所と名前を確認する。「今日の日付のファイル」を探す処理なら、"
             "今日のファイルが作られているか確認する",
         ),
-        # 旧 RpaError 系は ``__getattr__`` シムで実体を返すため、自動生成からは
-        # 除外される。 旧名で非エンジニアがエラーメッセージを読んだとき迷わないよう、
-        # ここで別名エントリとして出力する。
-        (
-            "RpaError",
-            "旧 RpaError の後方互換シム",
-            "社内 LAN 環境から、共有サーバ上の PYTHONPATH が通っているか確認し、"
-            "指定したライブラリ名のフォルダが存在するか確かめる。 新名称は"
-            "``comken.internal.exceptions`` を参照",
-        ),
-        (
-            "RpaLibraryNotFoundError",
-            "旧 RpaLibraryNotFoundError の後方互換シム",
-            "社内 LAN 環境から、共有サーバ上の PYTHONPATH が通っているか確認し、"
-            "指定したライブラリ名のフォルダが存在するか確かめる。 新名称は"
-            "``comken.internal.exceptions`` を参照",
-        ),
-        (
-            "RpaLibraryVersionMismatchError",
-            "旧 RpaLibraryVersionMismatchError の後方互換シム",
-            "共有サーバ上の対象ライブラリのバージョンを確認し、呼び出し側の指定と一致しているか確かめる。"
-            "新名称は ``comken.internal.exceptions`` を参照",
-        ),
     ),
     "ブラウザ（Edge 自動操作）のエラー": (
         (
@@ -372,14 +349,7 @@ def _error_table(
 
 def _errors_generated_text() -> str:
     """公開例外の docstring と継承階層からエラー一覧を組み立てる。"""
-    # 旧 RPA 例外名（``RpaError`` 等）は ``__getattr__`` シム経由で取得するため、
-    # ``getattr`` した瞬間に ``FutureWarning`` が出る。 ここで取得対象から外し、
-    # SUPPLEMENTAL_ERRORS 側で別表として出力する（同じクラスを二重に並べると
-    # 表で重複行が出るため）。
-    legacy_rpa_names = {"RpaError", "RpaLibraryNotFoundError", "RpaLibraryVersionMismatchError"}
-    public_exceptions = [
-        getattr(exceptions, name) for name in exceptions.__all__ if name not in legacy_rpa_names
-    ]
+    public_exceptions = [getattr(exceptions, name) for name in exceptions.__all__]
     concrete_exceptions = []
     for exception in public_exceptions:
         if exception in CLASSIFICATION_ERRORS:

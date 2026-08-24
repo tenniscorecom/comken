@@ -7,7 +7,6 @@ LAYERS = {
     "exceptions": 0,
     "constants": 0,
     "runtime": 0,
-    "deprecation": 0,
     "core": 1,
     "toolbox": 2,
     "internal": 3,
@@ -18,7 +17,6 @@ ALLOWED_SAME_LAYER = {
     ("toolbox.excel", "toolbox.windows"),  # 既存数式・マクロ時の COM フォールバック
     ("toolbox.salesforce", "toolbox.credentials"),  # Salesforce の認証情報を安全に保存する
     ("toolbox.holidays", "toolbox.excel"),  # 管理表の「会社休日」シートを Excel で読む
-    ("toolbox.rpa", "internal"),  # 旧 toolbox.rpa シムが新 comken.internal.rpa を re-export する
     ("exceptions", "internal"),  # comken.exceptions が comken.internal の例外を re-export する
 }
 

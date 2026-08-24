@@ -5,11 +5,6 @@ ComkenError
 ├── InternalLibraryError
 │   ├── InternalLibraryNotFoundError         指定した社内ライブラリが見つからない
 │   └── InternalLibraryVersionMismatchError  指定したバージョンの社内ライブラリが見つからない
-│
-│   旧 RPA 例外名は ``__getattr__`` シム経由で新例外と同一クラスとして公開する
-│   （``RpaError is InternalLibraryError`` などの別名）。 旧名・別名の関係であって
-│   継承関係ではないため、上のツリーには載せない（同じクラスを二重に並べると
-│   親子に見えてしまうため）。 旧名は SUPPLEMENTAL_ERRORS 側で別表として記載する。
 ├── LoggingAlreadyConfiguredError   root logger が設定済み
 ├── LoggerHostNotConfiguredError     実行端末のログ保存先が未登録
 ├── UnsupportedFileSuffixError
@@ -293,10 +288,6 @@ __all__ = [
     "InternalLibraryError",
     "InternalLibraryNotFoundError",
     "InternalLibraryVersionMismatchError",
-    # 旧 RPA 例外名（``RpaError`` 等）は ``__getattr__`` シムで取得できるが、
-    # 新例外と同一クラス（別名）のため ``__all__`` には載せない。 載せると同じ
-    # クラスを二重に並べることになり、ドキュメント生成・``from ... import *``
-    # 経由で重複が見える。 旧名は SUPPLEMENTAL_ERRORS 側で別表として記載する。
     "AccessError",
     "AccessBackupError",
     "AccessFileNotFoundError",
@@ -418,15 +409,3 @@ __all__ = [
     "LoggingAlreadyConfiguredError",
     "LoggerHostNotConfiguredError",
 ]
-
-
-# 旧 RPA 例外名はここで遅延解決する。 import comken.exceptions だけでは
-# 警告を出さず、 ``comken.exceptions.RpaError`` のように名前を取り出したときだけ
-# ``comken.exceptions.rpa.__getattr__`` が FutureWarning を発する。
-def __getattr__(name: str) -> object:
-    """旧 RPA 例外名を遅延 import する。"""
-    if name in {"RpaError", "RpaLibraryNotFoundError", "RpaLibraryVersionMismatchError"}:
-        from comken.exceptions import rpa as _rpa_shim  # 遅延 import: import 時警告を防ぐ
-
-        return getattr(_rpa_shim, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

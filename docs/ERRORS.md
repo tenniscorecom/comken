@@ -151,9 +151,6 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `LoggingAlreadyConfiguredError` | root logger がすでに設定されている | setup() または local() はアプリの入口で1回だけ呼ぶ。実行基盤がログを設定する場合は呼ばない。 |
 | `LoggerHostNotConfiguredError` | 実行端末のログ保存先が LoggerSite に登録されていない | 対象サイトの LOG_FOLDERS に、エラーに表示された端末名と保存先フォルダを登録する。 |
 | `FileNotFoundError` | ファイルが見つからない | ファイルの置き場所と名前を確認する。「今日の日付のファイル」を探す処理なら、今日のファイルが作られているか確認する |
-| `RpaError` | 旧 RpaError の後方互換シム | 社内 LAN 環境から、共有サーバ上の PYTHONPATH が通っているか確認し、指定したライブラリ名のフォルダが存在するか確かめる。 新名称は``comken.internal.exceptions`` を参照 |
-| `RpaLibraryNotFoundError` | 旧 RpaLibraryNotFoundError の後方互換シム | 社内 LAN 環境から、共有サーバ上の PYTHONPATH が通っているか確認し、指定したライブラリ名のフォルダが存在するか確かめる。 新名称は``comken.internal.exceptions`` を参照 |
-| `RpaLibraryVersionMismatchError` | 旧 RpaLibraryVersionMismatchError の後方互換シム | 共有サーバ上の対象ライブラリのバージョンを確認し、呼び出し側の指定と一致しているか確かめる。新名称は ``comken.internal.exceptions`` を参照 |
 
 ## ブラウザ（Edge 自動操作）のエラー
 

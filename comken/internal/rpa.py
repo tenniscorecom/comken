@@ -14,8 +14,6 @@ from comken.internal.base import InternalLibraryBase, ModuleType
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["backoffice", "intranet", "RPA_LIBRARY_NAME"]
-
 RPA_LIBRARY_NAME = "example_libs.v0000.rpa"
 
 
@@ -35,14 +33,6 @@ def intranet(main: Callable[[], Any], project_name: str) -> Any:
     """イントラネットの RPA として main を実行する。"""
     with InternalLibraryBase(RPA_LIBRARY_NAME) as rpa:
         return _call(rpa, "intranet", main, project_name)
-
-
-# 後方互換用: InternalLibraryBase のロード失敗を RPA 専用の例外に変換
-# (旧 RpaLibraryNotFoundError と等価の挙動)
-def _load_rpa() -> Any:
-    """RPA モジュールをロードする。失敗時は InternalLibraryNotFoundError。"""
-    with InternalLibraryBase(RPA_LIBRARY_NAME) as rpa:
-        return rpa
 
 
 __all__ = ["backoffice", "intranet", "RPA_LIBRARY_NAME"]

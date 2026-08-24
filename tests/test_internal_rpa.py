@@ -114,7 +114,7 @@ def test_rpa_module_lists_public_names() -> None:
     public = set(dir(rpa_module))
     for name in ("backoffice", "intranet", "RPA_LIBRARY_NAME"):
         assert name in public
-    # 内部実装（`_call` / `_load_rpa`）は公開名ではないので linter チェックに任せる
+    # 内部実装（`_call`）は公開名ではないので linter チェックに任せる
 
 
 def test_rpa_handles_exception_in_main() -> None:

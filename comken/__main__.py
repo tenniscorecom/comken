@@ -177,7 +177,7 @@ def _run_salesforce(_args: argparse.Namespace, remaining: list[str]) -> int:
     **各コマンドの import は関数の中に置く。** 冒頭でまとめて読むと、
     その環境に無い依存（Salesforce なら `requests`）で **CLI 全体が起動しなくなる**。
     社内には `requests` が入っていない環境があり、そこで
-    `python -m comken init` すら打てなくなるのは困る。`comken/toolbox/rpa.py` が
+    `python -m comken init` すら打てなくなるのは困る。`comken/internal/rpa.py` が
     社内ライブラリの import を関数内に置いているのと同じ理由。
     """
     from comken.toolbox.salesforce.cli import main as sf_main
