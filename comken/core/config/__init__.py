@@ -16,8 +16,13 @@ config.ini を読み込み、config.SECTION.KEY の形式でアクセスでき�
     config = Config()                 # または Config("path/to/config.ini")
 
 列名の対応表セクション（``[*_MAPPING]``）は ``config.SECTION_MAPPING`` で dict 互換
-オブジェクトとして読める。存在しない列は ``None`` を返すため、
-``config.SECTION_MAPPING["列名"] is None`` で「列があるかないか」を判別できる。
+オブジェクトとして読める。型は ``dict[str, str]`` で、中の値は必ず ``str``。
+**列があるかないかを判別したいときは ``in`` を使う**（
+``"列名" in config.SECTION_MAPPING``）。
+``.get("未知の列")`` は ``str | None`` を返すので ``is None`` で判定できる。
+``[*_MAPPING"]["未知の列"]`` を直接読むと、**型上は ``str`` だが実行時は ``None`` が返る**
+（``_LenientDict.__missing__`` の後方互換の動作）。このため ``is None`` 判定は型上
+表現されていない。型と実行時のズレの理由は ``_LenientDict`` の docstring に書いた。
 公開型は ``MappingDict``（``from comken.core.config import MappingDict``）で、
 ``_LenientDict`` は内部実装。
 
@@ -67,7 +72,7 @@ def _is_mapping_section(section: str) -> bool:
     return section.endswith(MAPPING_SECTION_SUFFIX)
 
 
-class _LenientDict(dict):
+class _LenientDict(dict[str, str]):
     """``MappingDict`` の内部実装（``MappingDict = _LenientDict``）。
 
     公開型は ``MappingDict``（``from comken.core.config import MappingDict``）。
@@ -75,18 +80,38 @@ class _LenientDict(dict):
     ``Config.__init__`` が ``setattr(self, SECTION, ld)`` で公開 attribute に
     昇格させ、利用者は ``config.SECTION_MAPPING`` でこの dict 互換オブジェクトに触れる。
 
-    存在しないキーへアクセスしたとき ``None`` を返す（通常の dict は KeyError）。
-    config.ini の ``*_MAPPING`` セクションは列名が動的なので、補完が効かない。
-    「列があるかないか」を ``is None`` で判別できるようにするために ``__missing__``
-    で ``None`` を返す。dict のサブクラスなので、既存呼び出し（``for k, v in
-    CONFIG.SECTION_MAPPING.items()`` など）はそのまま動く。
+    型は ``dict[str, str]`` に揃えた。中身（config.ini で書いた対応表）は
+    ``ConfigMappingEmptyValueError`` で空欄が拒否されているので、**値は必ず ``str``**。
+    dict 互換なので ``for k, v in CONFIG.SECTION_MAPPING.items()`` のような
+    既存呼び出しはそのまま動く（後方互換）。
 
-    スタブ（.pyi）では ``MappingDict[str, str | None]`` という型として露出する。
-    実行時はこの ``_LenientDict`` インスタンスが返る（isinstance で ``dict`` 判定も
-    互換）。
+    **型と実行時の齟齬 — 必ず読むこと:**
+
+    ``__missing__`` は **後方互換のため**残している（``ef215ef`` 以前から
+    存在していた動作を変えるな、という依頼）。dict の ``__missing__`` を
+    オーバーライドしているので、未知のキー ``m["未知の列"]`` で ``KeyError`` ではなく
+    ``None`` が返る。``__getitem__`` のシグネチャは ``dict[str, str]`` の ``str`` を
+    返す形のままなので、 **型上は ``m["未知の列"]`` が ``str`` を返す**ことになって
+    いる（pyright は ``__missing__`` の戻り値を ``__getitem__`` の戻り値型に
+    反映しない）。
+
+    - つまり ``m["未知の列"] is None`` は **型上はエラー**になる
+      （``str`` を ``None`` と比較している）。
+    - 実行時は実際に ``None`` が返るので、テストで書くと **実行は通る**。
+    - 列の有無を判別したいときは ``in`` を使う（**型と実行時が正しく揃う**）:
+      ``"列名" in config.SECTION_MAPPING``
+    - ``is None`` 判定をしたいときは ``.get()`` を使う（戻り値は ``str | None``）:
+      ``config.SECTION_MAPPING.get("列名") is None``
+
+    スタブ（.pyi）でもこの ``_LenientDict`` を ``MappingDict`` として露出する。
+    ``MappingDict[str, str]`` の ``__missing__`` も ``None`` を返す（後方互換）。
     """
 
-    def __missing__(self, key: str) -> str | None:
+    def __missing__(self, _key: str) -> str | None:
+        # ``dict[str, str]`` の ``__getitem__`` の戻り値型は ``str`` のままなので、
+        # この ``str | None`` は ``__missing__`` のシグネチャを広げただけで、
+        # ``m["未知の列"]`` の戻り値型には反映されない。実行時は ``None`` を返す。
+        # 詳細はクラスの docstring の「型と実行時の齟齬」節。
         return None
 
 
@@ -348,9 +373,9 @@ class Config:
 
 # 公開型 ``MappingDict`` = 実装 ``_LenientDict``。
 # ``*_MAPPING`` セクションの戻り値は dict 互換（``isinstance(x, dict)`` が True）
-# だが、 ``__missing__`` が ``None`` を返すため ``SECTION_MAPPING["未知の列"] is None``
-# という判定がそのまま書ける。利用者向けの名前は ``MappingDict`` で、 ``_LenientDict``
-# は内部実装として ``_`` プレフィックスで残す。
+# で、型は ``dict[str, str]``。 ``__missing__`` が ``None`` を返す後方互換の動作は
+# ``_LenientDict`` の docstring に書いた。利用者向けの名前は ``MappingDict`` で、
+# ``_LenientDict`` は内部実装として ``_`` プレフィックスで残す。
 MappingDict = _LenientDict
 
 

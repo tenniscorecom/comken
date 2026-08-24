@@ -882,11 +882,11 @@ class TestGenerateStub:
         assert "config: Config" in text
 
     def test_mapping_section_uses_dictionary_api_only(self, tmp_path):
-        """動的な列名は列挙せず、``MappingDict[str, str | None]`` として露出する。
+        """動的な列名は列挙せず、``MappingDict[str, str]`` として露出する。
 
         ``*_MAPPING`` セクションはキーが動的な列名なので個別クラスに列挙しないが、
         ``MappingDict`` 経由で ``config.SECTION_MAPPING["未知の列"] is None`` の
-        判定が書けるよう、 ``MappingDict[str, str | None]`` 属性としてスタブに出す。
+        判定が書けるよう、 ``MappingDict[str, str]`` 属性としてスタブに出す。
         """
         from comken.core.config.stubs import generate_stub
 
@@ -897,7 +897,7 @@ class TestGenerateStub:
         # 動的な列名はスタブに列挙しない（補完しても無意味な候補が出るだけ）
         assert "受注No" not in text
         # ``*_MAPPING`` は ``MappingDict`` として attr 露出する
-        assert "COLUMN_MAPPING: MappingDict[str, str | None]" in text
+        assert "COLUMN_MAPPING: MappingDict[str, str]" in text
         # ``MappingDict`` の ``__missing__`` は ``None`` を返す
         assert "def __missing__(self, key: str) -> str | None" in text
         # ``Config.mapping()`` メソッドは廃止（``config.SECTION_MAPPING`` で読む）
@@ -1112,8 +1112,9 @@ class TestLenientDict:
     """_LenientDict の振る舞いテスト。
 
     ``*_MAPPING`` セクションは列名が動的データなので補完が効かない。
-    「列があるかないか」を ``is None`` で判別できるようにするため、
-    ``_LenientDict`` は ``__missing__`` で ``None`` を返す。
+    型は ``dict[str, str]``（値は必ず ``str``）。 後方互換のため ``__missing__``
+    が ``None`` を返すので、 ``m["未知の列"]`` は **型上は ``str`` / 実行時は
+    ``None``** という齟齬がある。``in`` か ``.get()`` を使うのが推奨。
     dict のサブクラスなので、 ``items()`` / ``keys()`` / ``values()`` 等の
     既存 API はそのまま動く（後方互換）。
     """
@@ -1150,12 +1151,13 @@ class TestLenientDict:
         assert dict(ld) == {}
 
     def test_missing_returns_none_for_arbitrary_type(self):
-        """``__missing__`` の戻り値型は ``None`` 固定（str | None の None 側）。"""
+        """``__missing__`` は dict[str, str] 派生だが実行時は None を返す（後方互換）。"""
         from comken.core.config import _LenientDict
 
         ld = _LenientDict({"a": "1"})
 
-        # ``is None`` で判別できることが本質（``None`` 以外の falsy 値は作らない）
+        # 実行時は ``None`` を返す（型上は ``str`` なので ``is None`` は型エラーだが、
+        # 後方互換のため None を返し続ける。 ``_LenientDict`` の docstring 参照）。
         result = ld["missing"]
         assert result is None
 
@@ -1243,7 +1245,7 @@ class TestStubIncludesMappingDict:
     """スタブ生成後の .pyi に ``MappingDict`` と ``*_MAPPING`` attr が含まれることを検証。
 
     補完が効くようにするには、 ``*_MAPPING`` セクションが「スタブから消える」
-    のではなく「 ``MappingDict[str, str | None]`` 型として残る」必要がある。
+    のではなく「 ``MappingDict[str, str]`` 型として残る」必要がある。
     これが消えると Pylance が ``Unknown`` 扱いして、 ``is None`` 判定が書けなくなる。
     """
 
@@ -1255,11 +1257,13 @@ class TestStubIncludesMappingDict:
         ini.write_text("[COLUMN_MAPPING]\n受注No = 受注番号\n", encoding="utf-8")
         text = generate_stub(ini, tmp_path / "config.pyi").read_text(encoding="utf-8")
 
-        # ``MappingDict`` の型定義が存在し、 ``__missing__`` が ``None`` を返す
-        assert "class MappingDict(dict[str, str | None]):" in text
+        # ``MappingDict`` の型定義が存在し、 ``__missing__`` が ``str | None`` を返す
+        # （型上 ``dict[str, str]`` 派生でも、 後方互換で ``None`` を返すため wider な
+        # シグネチャになっている。 詳細は ``_LenientDict`` の docstring）
+        assert "class MappingDict(dict[str, str]):" in text
         assert "def __missing__(self, key: str) -> str | None" in text
         # ``*_MAPPING`` セクションは attr として露出する
-        assert "COLUMN_MAPPING: MappingDict[str, str | None]" in text
+        assert "COLUMN_MAPPING: MappingDict[str, str]" in text
         # ``Config.mapping()`` メソッドは廃止（``config.SECTION_MAPPING`` で読む）
         assert "def mapping(self" not in text
 
@@ -1273,8 +1277,8 @@ class TestStubIncludesMappingDict:
         generate_stub(ini)
         text = (tmp_path / "typings" / "comken" / "core" / "config.pyi").read_text(encoding="utf-8")
 
-        assert "class MappingDict(dict[str, str | None]):" in text
-        assert "COLUMN_MAPPING: MappingDict[str, str | None]" in text
+        assert "class MappingDict(dict[str, str]):" in text
+        assert "COLUMN_MAPPING: MappingDict[str, str]" in text
         # module 関数 ``mapping()`` も廃止
         assert "def mapping(section:" not in text
 
@@ -1288,8 +1292,8 @@ class TestStubIncludesMappingDict:
         generate_stub(ini)
         text = (tmp_path / "typings" / "comken" / "__init__.pyi").read_text(encoding="utf-8")
 
-        assert "class MappingDict(dict[str, str | None]):" in text
-        assert "COLUMN_MAPPING: MappingDict[str, str | None]" in text
+        assert "class MappingDict(dict[str, str]):" in text
+        assert "COLUMN_MAPPING: MappingDict[str, str]" in text
 
     def test_mapping_dict_attr_coexists_with_normal_section(self, tmp_path):
         """``*_MAPPING`` と通常セクションが同じ ini に共存しても両方のスタブが正しく出る。"""
@@ -1307,4 +1311,111 @@ class TestStubIncludesMappingDict:
         assert "    YEAR: int" in text
         assert "    REPORT: _REPORT" in text
         # ``*_MAPPING`` は ``MappingDict`` として並ぶ
-        assert "COLUMN_MAPPING: MappingDict[str, str | None]" in text
+        assert "COLUMN_MAPPING: MappingDict[str, str]" in text
+
+
+class TestMappingDictIsDictStrStr:
+    """``MappingDict`` を ``dict[str, str]`` 派生に揃えた後の振る舞い。
+
+    依頼書「``MappingDict`` の型を ``dict[str, str]`` に揃える」のテスト5節:
+
+    1. ``*_MAPPING`` の値が ``str`` として読まれ、 ``.values()`` に ``None`` が混じらない
+    2. 未知のキーを引くと実行時は ``None`` が返る（後方互換）
+    3. ``"列名" in config.SECTION_MAPPING`` で有無を判定できる（推奨する書き方）
+    4. ``.get("未知の列")`` が ``None`` を返す
+    5. 生成スタブに ``MappingDict[str, str]`` が含まれる（``str | None`` ではない）
+    """
+
+    def test_values_are_all_str_no_none(self, tmp_path):
+        """``*_MAPPING`` の値は全て ``str`` として扱われ、 ``.values()`` に ``None`` が混じらない。
+
+        ``ConfigMappingEmptyValueError`` で空欄を拒否しているので、 設定済みの値は
+        必ず ``str``。 ``dict[str, str]`` 派生の意義そのものを確かめる回帰テスト。
+        """
+        ini = tmp_path / "config.ini"
+        ini.write_text(
+            "[TRANSFER_MAPPING]\nお名前 = 氏名\nご住所 = 住所\n",
+            encoding="utf-8",
+        )
+        mapping = Config(ini).TRANSFER_MAPPING
+
+        assert all(isinstance(v, str) for v in mapping.values())
+        assert None not in mapping.values()
+        # ``.values()`` の長さも設定済みのキー数と一致
+        assert len(list(mapping.values())) == 2
+
+    def test_unknown_key_returns_none_at_runtime(self, tmp_path):
+        """未知のキーを引くと実行時は ``None`` が返る（後方互換）。
+
+        型上は ``dict[str, str]`` なので ``m["未知"]`` の戻り値型は ``str`` だが、
+        実行時は ``None`` が返る（ ``_LenientDict.__missing__`` の後方互換動作）。
+        詳細は ``_LenientDict`` の docstring を参照。
+        """
+        ini = tmp_path / "config.ini"
+        ini.write_text("[TRANSFER_MAPPING]\nお名前 = 氏名\n", encoding="utf-8")
+        mapping = Config(ini).TRANSFER_MAPPING
+
+        # 実行時は ``None``
+        assert mapping["未知の列"] is None
+        # 既存のキーでは ``str`` が返る
+        assert mapping["お名前"] == "氏名"
+
+    def test_in_operator_checks_key_existence(self, tmp_path):
+        """``"列名" in config.SECTION_MAPPING`` で有無を判定できる（推奨する書き方）。
+
+        ``in`` は dict の API なので ``dict[str, str]`` の派生でもそのまま使え、
+        型と実行時が正しく揃う（ ``__missing__`` の影響を **受けない**）。
+        ``is None`` 判定よりこちらを推奨する理由は ``_LenientDict`` の
+        docstring を参照。
+        """
+        ini = tmp_path / "config.ini"
+        ini.write_text(
+            "[TRANSFER_MAPPING]\nお名前 = 氏名\nご住所 = 住所\n",
+            encoding="utf-8",
+        )
+        mapping = Config(ini).TRANSFER_MAPPING
+
+        # 存在するキーは True
+        assert "お名前" in mapping
+        assert "ご住所" in mapping
+        # 存在しないキーは False
+        assert "存在しない列" not in mapping
+        # 空文字キーも安全に判定できる（KeyError ではない）
+        assert "" not in mapping
+
+    def test_get_returns_none_for_unknown_key(self, tmp_path):
+        """``.get("未知の列")`` は ``None`` を返す。
+
+        ``dict.get()`` は ``str | None`` を返すので、 ``is None`` 判定が型上も
+        安全に書ける。直接 ``["未知の列"]`` を引くと型上は ``str`` なので、
+        ``is None`` したい場合はこちらを使う。
+        """
+        ini = tmp_path / "config.ini"
+        ini.write_text("[TRANSFER_MAPPING]\nお名前 = 氏名\n", encoding="utf-8")
+        mapping = Config(ini).TRANSFER_MAPPING
+
+        assert mapping.get("未知の列") is None
+        # 既存のキーは ``str`` が返る
+        assert mapping.get("お名前") == "氏名"
+        # デフォルト引数も動く（dict.get の標準動作）
+        assert mapping.get("未知の列", "fallback") == "fallback"
+
+    def test_generated_stub_uses_dict_str_str_not_none(self, tmp_path):
+        """生成スタブに ``MappingDict[str, str]`` が含まれる（ ``str | None`` ではない）。
+
+        依頼前は ``MappingDict[str, str | None]`` だったが、 依頼後は ``dict[str, str]``
+        派生に揃えたため ``str | None`` を外す。スタブが古い書式のまま
+        残っている回帰をここで捕まえる。
+        """
+        from comken.core.config.stubs import generate_stub
+
+        ini = tmp_path / "config.ini"
+        ini.write_text("[COLUMN_MAPPING]\n受注No = 受注番号\n", encoding="utf-8")
+        text = generate_stub(ini, tmp_path / "config.pyi").read_text(encoding="utf-8")
+
+        # 新しい書式に揃っている
+        assert "class MappingDict(dict[str, str]):" in text
+        assert "COLUMN_MAPPING: MappingDict[str, str]" in text
+        # 古い ``str | None`` 形式は残っていない
+        assert "MappingDict[str, str | None]" not in text
+        assert "dict[str, str | None]" not in text

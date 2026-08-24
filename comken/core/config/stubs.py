@@ -164,10 +164,10 @@ def _build_stub_content(cfg: configparser.ConfigParser, section_map: dict[str, s
         class_name = f"_{stripped_section.upper()}"
         if _is_mapping_section(stripped_section):
             # ``*_MAPPING`` セクションはキーが動的な列名なので個別クラスを作らず、
-            # ``MappingDict[str, str | None]`` として属性に並べる。``MappingDict`` は
-            # ``dict`` のサブクラスで ``__missing__`` が ``None`` を返すため、
-            # ``config.SECTION_MAPPING["未知の列"] is None`` の判定がそのまま型で書ける。
-            config_attrs.append(f"    {stripped_section.upper()}: MappingDict[str, str | None]")
+            # ``MappingDict[str, str]`` として属性に並べる。``MappingDict`` は ``dict``
+            # のサブクラスで ``__missing__`` が ``None`` を返す（型と実行時の齟齬の
+            # 詳細は ``_LenientDict`` の docstring を参照）。
+            config_attrs.append(f"    {stripped_section.upper()}: MappingDict[str, str]")
             continue
         config_attrs.append(f"    {stripped_section.upper()}: {class_name}")
         section_lines.append(f"class {class_name}:")
@@ -186,9 +186,10 @@ def _build_stub_content(cfg: configparser.ConfigParser, section_map: dict[str, s
         "from typing import NoReturn\n",
         "",
         # ``MappingDict`` は実行時の ``_LenientDict`` を ``.pyi`` 側で表現する型。
-        # ``dict[str, str | None]`` の ``__missing__`` は ``None`` を返すので、
-        # ``config.SECTION_MAPPING["未知の列"] is None`` の判定が型レベルで書ける。
-        "class MappingDict(dict[str, str | None]):\n"
+        # ``dict[str, str]`` の ``__missing__`` が ``str | None`` を返すので、
+        # ``config.SECTION_MAPPING["未知の列"] is None`` は型エラーになる（``in`` か
+        # ``.get()`` を使う。詳細は ``_LenientDict`` の docstring）。
+        "class MappingDict(dict[str, str]):\n"
         "    def __missing__(self, key: str) -> str | None: ...\n",
         "",
     ]
@@ -213,10 +214,10 @@ def _build_module_stub_content(cfg: configparser.ConfigParser, section_map: dict
     for stripped_section, original_section in section_map.items():
         class_name = f"_{stripped_section.upper()}"
         if _is_mapping_section(stripped_section):
-            # ``*_MAPPING`` は ``MappingDict[str, str | None]`` で宣言する（実行時は
-            # ``_LenientDict`` = dict のサブクラス）。``__missing__`` で ``None`` を
-            # 返すため ``module.SECTION_MAPPING["列"] is None`` の判定が書ける。
-            module_attrs.append(f"{stripped_section.upper()}: MappingDict[str, str | None]")
+            # ``*_MAPPING`` は ``MappingDict[str, str]`` で宣言する（実行時は
+            # ``_LenientDict`` = dict のサブクラス）。型と実行時の齟齬の詳細は
+            # ``_LenientDict`` の docstring を参照。
+            module_attrs.append(f"{stripped_section.upper()}: MappingDict[str, str]")
             continue
         module_attrs.append(f"{stripped_section.upper()}: {class_name}")
         section_lines.append(f"class {class_name}:")
@@ -234,7 +235,8 @@ def _build_module_stub_content(cfg: configparser.ConfigParser, section_map: dict
         "from typing import NoReturn\n",
         "",
         # ``MappingDict`` は実行時の ``_LenientDict`` を ``.pyi`` 側で表現する型。
-        "class MappingDict(dict[str, str | None]):\n"
+        # ``dict[str, str]`` の ``__missing__`` が ``str | None`` を返す。
+        "class MappingDict(dict[str, str]):\n"
         "    def __missing__(self, key: str) -> str | None: ...\n",
         "",
     ]
@@ -275,7 +277,7 @@ def _build_package_init_stub(cfg: configparser.ConfigParser, section_map: dict[s
     # ここで宣言しないと ``config.SECTION_MAPPING`` が ``Unknown`` として解決され、
     # Pylance 補完が静かに落ちる。
     lines.append(
-        "class MappingDict(dict[str, str | None]):\n"
+        "class MappingDict(dict[str, str]):\n"
         "    def __missing__(self, key: str) -> str | None: ...\n"
     )
     lines.append("")
@@ -283,8 +285,8 @@ def _build_package_init_stub(cfg: configparser.ConfigParser, section_map: dict[s
     for stripped_section, original_section in section_map.items():
         class_name = f"_{stripped_section.upper()}"
         if _is_mapping_section(stripped_section):
-            # ``*_MAPPING`` は ``MappingDict[str, str | None]`` として facade に並べる。
-            config_attrs.append(f"    {stripped_section.upper()}: MappingDict[str, str | None]")
+            # ``*_MAPPING`` は ``MappingDict[str, str]`` として facade に並べる。
+            config_attrs.append(f"    {stripped_section.upper()}: MappingDict[str, str]")
             continue
         config_attrs.append(f"    {stripped_section.upper()}: {class_name}")
         lines.append(f"class {class_name}:")
