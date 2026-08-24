@@ -28,6 +28,7 @@ ComkenError
 │   ├── ExcelMacroPreservationError
 │   ├── SheetNotFoundError
 │   ├── SheetAlreadyExistsError
+│   ├── SheetNameError
 │   ├── LastSheetDeletionError
 │   ├── InvalidTableNameError
 │   ├── TableAlreadyExistsError
@@ -218,6 +219,7 @@ from comken.exceptions.excel import (
     LastSheetDeletionError,
     MacroError,
     SheetAlreadyExistsError,
+    SheetNameError,
     SheetNotFoundError,
     TableAlreadyExistsError,
     TableNotFoundError,
@@ -300,6 +302,7 @@ __all__ = [
     "ExcelApplicationNotAvailableError",
     "SheetNotFoundError",
     "SheetAlreadyExistsError",
+    "SheetNameError",
     "LastSheetDeletionError",
     "InvalidTableNameError",
     "TableAlreadyExistsError",

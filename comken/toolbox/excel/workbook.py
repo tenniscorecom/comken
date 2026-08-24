@@ -19,6 +19,7 @@ from comken.exceptions import (
     ExcelMacroPreservationError,
     ExcelSaveValidationError,
     SheetAlreadyExistsError,
+    SheetNameError,
     SheetNotFoundError,
     UnsupportedFileSuffixError,
 )
@@ -132,6 +133,23 @@ class Excel:
         if full_name in self._workbook.sheetnames:
             raise SheetAlreadyExistsError(full_name)
         worksheet = self._workbook.create_sheet(full_name)
+        self._mark_dirty()
+        return Sheet(self, worksheet)
+
+    def create_sheet(self, name: str) -> "Sheet":
+        """指定名の空の表示用シートを作成する。
+
+        ``create_data_sheet`` は ``PY_`` プレフィックスを補ってデータシート専用
+        にするのに対し、こちらは入力名をそのまま使い、表示用の自由配置として
+        読み書きする。書式や自由セル配置が要る帳票は ``create_sheet``、
+        構造化テーブルとして読み書きするなら ``create_data_sheet``。
+        """
+        self._ensure_writable("create_sheet")
+        if self._is_data_sheet_name(name):
+            raise SheetNameError(name)
+        if name in self._workbook.sheetnames:
+            raise SheetAlreadyExistsError(name)
+        worksheet = self._workbook.create_sheet(name)
         self._mark_dirty()
         return Sheet(self, worksheet)
 

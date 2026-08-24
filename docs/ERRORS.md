@@ -50,6 +50,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `ExcelApplicationNotAvailableError` | Excel を起動できない | この PC に Excel が入っているか確認する。入れられない PC で動かすなら、数式ではなく値で書いてもらう（管理表なら、数式の結果を貼り付けてもらう） |
 | `SheetNotFoundError` | 指定した名前のシートがない | Excel を開いて、下のシート名（タブ）が変わっていないか確認する。変えた場合は元に戻す |
 | `SheetAlreadyExistsError` | 同じ名前のシートが既にある | 別のシート名を指定するか、既存のシート名を変更する |
+| `SheetNameError` | 表示用シートに使えない名前を ``create_sheet`` に渡した | 予約接頭辞 ``PY_`` を除いた名前を ``create_sheet`` に渡すか、データシートとして作る場合は ``create_data_sheet`` を使う |
 | `LastSheetDeletionError` | ブックの最後のシートを削除しようとした | 先に別のシートを追加してから削除する |
 | `InvalidTableNameError` | Excel で使えないテーブル名を指定した | 空白・数字始まり・セル参照のような名前を避ける |
 | `TableAlreadyExistsError` | 同じ名前のテーブルが既にある | 別のテーブル名を指定する |

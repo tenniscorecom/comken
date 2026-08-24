@@ -2334,6 +2334,30 @@ class SheetAlreadyExistsError(ExcelError):
 def __init__(self, name: str) -> None:
 ```
 
+### `SheetNameError`
+
+```text
+class SheetNameError(ExcelError):
+```
+
+#### 説明
+
+表示用シートに使えない名前を ``create_sheet`` に渡した
+
+``PY_`` で始まる名前はデータシート用なので ``create_data_sheet`` で作る。
+
+発生箇所: ``Excel.create_sheet()``
+
+対処:
+    予約接頭辞 ``PY_`` を除いた名前を ``create_sheet`` に渡すか、
+    データシートとして作る場合は ``create_data_sheet`` を使う
+
+#### `__init__`
+
+```text
+def __init__(self, name: str) -> None:
+```
+
 ### `LastSheetDeletionError`
 
 ```text
@@ -6822,6 +6846,21 @@ def create_data_sheet(self, name: str) -> 'Sheet':
 ##### 説明
 
 指定名の空のデータシートを作成する。
+
+#### `create_sheet`
+
+```text
+def create_sheet(self, name: str) -> 'Sheet':
+```
+
+##### 説明
+
+指定名の空の表示用シートを作成する。
+
+``create_data_sheet`` は ``PY_`` プレフィックスを補ってデータシート専用
+にするのに対し、こちらは入力名をそのまま使い、表示用の自由配置として
+読み書きする。書式や自由セル配置が要る帳票は ``create_sheet``、
+構造化テーブルとして読み書きするなら ``create_data_sheet``。
 
 #### `list_data_sheets`
 

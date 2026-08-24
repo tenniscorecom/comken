@@ -71,6 +71,25 @@ class SheetAlreadyExistsError(ExcelError):
         )
 
 
+class SheetNameError(ExcelError):
+    """表示用シートに使えない名前を ``create_sheet`` に渡した
+
+    ``PY_`` で始まる名前はデータシート用なので ``create_data_sheet`` で作る。
+
+    発生箇所: ``Excel.create_sheet()``
+
+    対処:
+        予約接頭辞 ``PY_`` を除いた名前を ``create_sheet`` に渡すか、
+        データシートとして作る場合は ``create_data_sheet`` を使う
+    """
+
+    def __init__(self, name: str) -> None:
+        super().__init__(
+            f"シート「{name}」は表示用シートとして作成できません。\n"
+            "「PY_」で始まる名前はデータシート用なので create_data_sheet() を使ってください。"
+        )
+
+
 class LastSheetDeletionError(ExcelError):
     """ブックの最後のシートを削除しようとした
 
