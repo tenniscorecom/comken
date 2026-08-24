@@ -4,7 +4,9 @@
 との違いを示す。 このサンプルでは次の 4 つを取り上げる:
 
 - ``matched_rows()`` の ``for`` ループ内で ``continue`` して、特定条件の行を
-  スキップする（旧 API の ``SKIP`` / ``False`` 相当）
+  スキップする（旧 API の ``SKIP`` / ``False`` 相当）。``Transfer.result()`` は
+  ``continue`` した行も **初期値のまま残った行として含む** ため、最終結果から
+  ``Table.filter()`` で取り除く
 - ``apply_mapping()`` の **前** に条件を書く（後ろだと ``continue`` しても
   mapping が適用済みになる）
 - ``apply_mapping()`` の後に ``write_row["列名"] = ...`` で追加加工する

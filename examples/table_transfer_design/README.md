@@ -30,6 +30,9 @@ for read_row in transfer.unmatched_read_rows():
 # 転記元に無い write 行は「転記元に無し」と印を付けて残す（必要なら後で filter で取り除く）
 for write_row in transfer.unmatched_write_rows():
     write_row["備考"] = "転記元に無し"
+
+# continue した行は備考が空欄のまま残るので、filter で落とす
+result = result.filter(lambda row: row["備考"] != "")
 ```
 
 **条件は `apply_mapping()` より前に書く。** `continue` したかどうかを呼び出し側に
