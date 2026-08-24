@@ -95,6 +95,8 @@ class Backoffice(LoggerSite):
 
 バックオフィス環境のログ設定。
 
+comken 共通のクラス。OWNER は ``"comken"``。
+
 ### `Intranet`
 
 ```text
@@ -104,6 +106,8 @@ class Intranet(LoggerSite):
 #### 説明
 
 イントラネット環境のログ設定。
+
+comken 共通のクラス。OWNER は ``"comken"``。
 
 ### `comken_logger`
 
@@ -1607,6 +1611,8 @@ class Backoffice(LoggerSite):
 
 バックオフィス環境のログ設定。
 
+comken 共通のクラス。OWNER は ``"comken"``。
+
 ### `Intranet`
 
 ```text
@@ -1616,6 +1622,8 @@ class Intranet(LoggerSite):
 #### 説明
 
 イントラネット環境のログ設定。
+
+comken 共通のクラス。OWNER は ``"comken"``。
 
 ### `setup`
 
@@ -1630,6 +1638,12 @@ site の指定に従い root logger を設定する。
 PID は同じ端末で同時に動くプロセスを見分ける値であり、保存先を選ぶ端末名とは
 用途が異なる。Formatter の固定値として渡し、ログ呼び出し側へ負担を増やさない。
 
+``local()`` が先に走っている場合（root に console と local ファイルだけがある
+場合）は console を再利用し、environment ファイルだけを追加する。逆順（setup() が
+先）では通常どおり console と environment ファイルを追加する。両方がすでに
+走っている、または関係のない handler が混ざっている場合は ``LoggingAlreadyConfiguredError``
+を送出して、二重出力や出力先の取り違えを防ぐ。
+
 ### `local`
 
 ```text
@@ -1641,9 +1655,12 @@ def local(*, console_level: int=logging.INFO, file_level: int=logging.INFO, path
 ローカル実行用に root logger を設定する。
 
 ``path`` はファイル名ではなく保存先フォルダ。省略時は ``project_dir()`` で
-起動スクリプトのプロジェクトを求め、その ``logs`` を使う。``setup()`` の直後なら
-console handler を再利用して local file handler だけを足す。それ以外の設定済み状態は、
-二重出力や出力先の取り違えを防ぐため ``LoggingAlreadyConfiguredError`` にする。
+起動スクリプトのプロジェクトを求め、その ``logs`` を使う。``setup()`` の
+直後（root に console と environment ファイルだけがある状態）でも、``setup()``
+と組み合わせず単独でも呼べる。``setup()`` 直後なら console を使い回して
+local ファイルだけを追加し、単独なら console と local ファイルの 2 種を追加する。
+``setup()`` と ``local()`` が両方走った状態や、関係のない handler が混ざって
+いる場合は ``LoggingAlreadyConfiguredError`` を送出して二重出力を防ぐ。
 
 ### `DEBUG`
 
@@ -4589,23 +4606,27 @@ root logger がすでに設定されている
 def __init__(self) -> None:
 ```
 
-### `LoggerHostNotConfiguredError`
+### `LogRootNotConfiguredError`
 
 ```text
-class LoggerHostNotConfiguredError(ComkenError):
+class LogRootNotConfiguredError(ComkenError):
 ```
 
 #### 説明
 
-実行端末のログ保存先が LoggerSite に登録されていない
+LoggerSite の LOG_ROOT が設定されていない
+
+ファイルを作る前にここで止める。空のフォルダが現場へ残ると
+「設定し忘れたのか、運用で消すのか」が判断できなくなるため。
 
 対処:
-    対象サイトの LOG_FOLDERS に、エラーに表示された端末名と保存先フォルダを登録する。
+    サブクラスに ``LOG_ROOT = "\\server\share\logs"`` を1行追加する
+    （絶対パスまたは UNC 文字列。LOG_FOLDER_NAMES のフォルダ名はこの下に作られる）。
 
 #### `__init__`
 
 ```text
-def __init__(self, hostname: str, site_name: str) -> None:
+def __init__(self, site_cls: type) -> None:
 ```
 
 

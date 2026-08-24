@@ -150,7 +150,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `ScheduledDownloadFailedError` | 定期取得で1件以上が失敗した | 履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。急いで必要なものは download_report() でその場で取得する |
 | `TransferDestinationMultipleMatchError` | 転記先のキーに一致する行が複数ある | mapping の先頭列に対応する転記先列の値を一意にする。キーが ``None`` か ``""`` の行は突合対象外なので、空欄のキーが複数あってもこの例外は出ない。 |
 | `LoggingAlreadyConfiguredError` | root logger がすでに設定されている | setup() または local() はアプリの入口で1回だけ呼ぶ。実行基盤がログを設定する場合は呼ばない。 |
-| `LoggerHostNotConfiguredError` | 実行端末のログ保存先が LoggerSite に登録されていない | 対象サイトの LOG_FOLDERS に、エラーに表示された端末名と保存先フォルダを登録する。 |
+| `LogRootNotConfiguredError` | LoggerSite の LOG_ROOT が設定されていない | サブクラスに ``LOG_ROOT = "\\server\share\logs"`` を1行追加する（絶対パスまたは UNC 文字列。LOG_FOLDER_NAMES のフォルダ名はこの下に作られる）。 |
 | `FileNotFoundError` | ファイルが見つからない | ファイルの置き場所と名前を確認する。「今日の日付のファイル」を探す処理なら、今日のファイルが作られているか確認する |
 
 ## ブラウザ（Edge 自動操作）のエラー

@@ -76,7 +76,7 @@ DIRECT_ERROR_CATEGORIES = {
     exceptions.FileDeletionError: "ファイル・設定などのエラー",
     exceptions.TransferDestinationMultipleMatchError: "ファイル・設定などのエラー",
     exceptions.LoggingAlreadyConfiguredError: "ファイル・設定などのエラー",
-    exceptions.LoggerHostNotConfiguredError: "ファイル・設定などのエラー",
+    exceptions.LogRootNotConfiguredError: "ファイル・設定などのエラー",
 }
 SUPPLEMENTAL_ERRORS = {
     "Access のエラー": (

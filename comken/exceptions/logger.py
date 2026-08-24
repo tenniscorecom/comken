@@ -17,15 +17,22 @@ class LoggingAlreadyConfiguredError(ComkenError):
         )
 
 
-class LoggerHostNotConfiguredError(ComkenError):
-    """実行端末のログ保存先が LoggerSite に登録されていない
+class LogRootNotConfiguredError(ComkenError):
+    """LoggerSite の LOG_ROOT が設定されていない
+
+    ファイルを作る前にここで止める。空のフォルダが現場へ残ると
+    「設定し忘れたのか、運用で消すのか」が判断できなくなるため。
 
     対処:
-        対象サイトの LOG_FOLDERS に、エラーに表示された端末名と保存先フォルダを登録する。
+        サブクラスに ``LOG_ROOT = "\\\\server\\share\\logs"`` を1行追加する
+        （絶対パスまたは UNC 文字列。LOG_FOLDER_NAMES のフォルダ名はこの下に作られる）。
     """
 
-    def __init__(self, hostname: str, site_name: str) -> None:
+    def __init__(self, site_cls: type) -> None:
         super().__init__(
-            f"端末 '{hostname}' のログ保存先がサイト '{site_name}' に登録されていません。"
-            "対象サイトの LOG_FOLDERS に端末名と保存先フォルダを登録してください。"
+            f"{site_cls.__name__} に LOG_ROOT が設定されていません。\n"
+            f"  class {site_cls.__name__}(LoggerSite):\n"
+            '      LOG_ROOT = "\\\\server\\share\\logs"   # ← この1行を追加してください\n'
+            "LOG_ROOT はログを保存するルートの絶対パスまたは UNC 文字列です。\n"
+            "LOG_FOLDER_NAMES に書いたフォルダ名はこの LOG_ROOT の下に作られます。"
         )
