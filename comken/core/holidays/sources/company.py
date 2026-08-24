@@ -37,14 +37,10 @@ DEFAULT_TO_YEAR: Final[int] = 2200
 class CompanyHolidaySource(HolidaySource):
     """コードに直書きした会社休日を ``Holiday`` の iterable で返すソース。
 
-    ``HolidaySource`` Protocol を実装する。``ComputedHolidaySource`` の
-    和集合に混ぜる使い方を想定:
-
-        HolidayCalendar.from_sources([
-            ComputedHolidaySource(),
-            BundledCabinetCSVSource(),
-            CompanyHolidaySource(),
-        ])
+    ``HolidaySource`` Protocol を実装する。既定カレンダーは
+    ``default_calendar()`` が組み立てるので、利用者が自分で
+    ``HolidayCalendar.from_sources(...)`` を書く必要はない
+    （使うだけなら ``is_business_day(today())`` と書く）。
 
     国民の祝日（内閣府 CSV / Computed）と重なったときは**先勝ち**で
     採用される（``HolidayCalendar`` 側の挙動）。警告は出さない。

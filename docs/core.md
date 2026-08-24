@@ -290,6 +290,49 @@ unzip(r"C:\作業\data.zip")                           # → C:\作業\data\ に
 
 ---
 
+## 表データ（`Table`） — よく使う操作
+
+`CSV.read()` / `ExcelTable.read()` が返す `Table` は **イミュータブルに見えるが
+内部は行を保持している**。表データを扱うときに覚えておく操作をまとめる
+（網羅は公開 API を参照）。
+
+```python
+from comken.core.table import Table
+
+table = Table(["ID", "氏名"], [{"ID": "001", "氏名": "山田"}, {"ID": "002", "氏名": "鈴木"}])
+
+# 添字で行を取る（**コピー**なので書き換えても Table は変わらない）
+row = table[0]               # → {"ID": "001", "氏名": "山田"}
+row["氏名"] = "変更"          # table[0] は変わらない
+
+# 全行を回す（イテレータもコピーを返す）
+for row in table:
+    print(row["氏名"])
+
+# 行数
+len(table)                   # → 2
+table.count()                # → 2
+
+# 全行を list[dict] で取り出す（コピー）
+rows = table.read()
+```
+
+| やりたいこと | API |
+|---|---|
+| `n` 行目を 1 件取りたい | `table[n]` |
+| 全行を回したい | `for row in table:` |
+| 行数 | `len(table)` または `table.count()` |
+| `list[dict]` で受け取る | `table.read()` |
+| 全行を置き換え | `table.replace(rows)` |
+| 1 行 / 複数行を末尾に追加 | `table.append(row)` / `table.append(rows)` |
+
+`Transfer.unmatched()` の `only_in_read` は `Table`（コピー）、
+`only_in_write` は **作業 Table の実体行**（`list[Row]`）。`only_in_write` の
+行を書き換えると `transfer.result()` に出るので、追加候補を `append()` する前に
+加工できる（[README「モジュール一覧」](../README.md#モジュール一覧) 参照）。
+
+---
+
 ## 関連
 
 - [README](../README.md) — ライブラリ全体の概要と環境構築

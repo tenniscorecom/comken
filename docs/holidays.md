@@ -12,16 +12,20 @@ RPA 置き換えプロジェクトで「いま取るべきレポートか」を�
 
 ## 最短の使い方
 
+ネットワークから内閣府の `syukujitsu.csv` を取ってきたいとき（業務 PC で `requests` が
+使える環境）は次の通り。`CabinetOfficeCSVSource` だけ toolbox 側にある
+（`comken.core` は `requests` を import しないため）。
+
 ```python
 from datetime import date
 from pathlib import Path
 
 from comken.core.holidays import (
-    CabinetOfficeCSVSource,
     CompanyHolidaySource,
     HolidayCalendar,
     is_business_day,
 )
+from comken.toolbox.holidays.sources.cabinet_office import CabinetOfficeCSVSource
 
 calendar = HolidayCalendar.from_sources(
     [
@@ -54,7 +58,7 @@ if is_business_day(date.today(), calendar=calendar):
 `source.refresh()` を呼ぶ。
 
 ```python
-from comken.core.holidays import CabinetOfficeCSVSource
+from comken.toolbox.holidays.sources.cabinet_office import CabinetOfficeCSVSource
 
 source = CabinetOfficeCSVSource(
     cache_path=Path("D:/work/cache/syukujitsu.csv"),
@@ -67,10 +71,25 @@ source = CabinetOfficeCSVSource(
 `HolidayCalendar.is_business_day` などはネットに繋がらずに動くので、
 オフライン PC で requests が無いときも import は成功する。
 
+## 内閣府 CSV の同梱（既定カレンダー）
+
+既定カレンダー（→ [既定カレンダー](#既定カレンダーcalendar-を省略する書き方)）は、
+内閣府の `syukujitsu.csv` を `comken/core/holidays/data/` に**同梱**している。
+業務 PC がオフラインでも `default_calendar()` はそのまま動く。
+
+- **年 1 回手動で更新する**（リポジトリを更新してタグを打つ流れに乗る）
+- TTL による自動再取得はしない（年に数回の更新を毎日取りに行く設定は無駄だった）
+- 収録期限（= 同梱 CSV に書かれた最新日付）が近づくと `EXPIRING_WARNING_DAYS`（既定 30 日）
+  未満で **WARNING ログが 1 度だけ**出る（更新タイミングの検知）
+- 期限を過ぎても止まらず `ComputedHolidaySource`（計算式）でカバーする。
+  春分・秋分のみ内閣府発表日との ±1 日のずれが起きうる
+
 ## 会社休日
 
-会社の休業日は `CompanyHolidaySource` で表す。コードに直書きするため、
+会社の休業日は `CompanyHolidaySource` で表す。**コードに直書きする**ため、
 設定ファイルや管理表を編集する運用負荷が要らない。
+**年が書いてない月日のリスト**で表現するので、**毎年のメンテナンスが要らない**
+のが要点。
 
 ```python
 from comken.core.holidays import CompanyHolidaySource
@@ -95,6 +114,9 @@ COMPANY_HOLIDAYS_EXTRA: Final[tuple[_dt.date, ...]] = ()
 `COMPANY_HOLIDAYS` のキーに `((月, 日), (月, 日), …)` のタプルを書く。
 1 日だけの休業は `((月, 日),)` のように 1 要素のタプルにする。
 年またぎ（12 月 → 1 月）も月日の連なりで書けばそのまま毎年適用される。
+**その年だけ臨時の休み**を足したいときは `COMPANY_HOLIDAYS_EXTRA` に
+`date(2026, 12, 28)` のように年月日で 1 行足す。古くなった行は消してよい
+（消しても過去の判定が変わるだけで、運用に影響しない）。
 
 ## 期限切れの警告
 
@@ -196,7 +218,7 @@ business_day_after(date(2026, 8, 20), calendar=cal)
 
 `business_day_after` 系の探索は最大 `BUSINESS_DAY_SEARCH_LIMIT` 日
 （既定 400 日）で打ち切り、見つからなければ `BusinessDayNotFoundError` を送る。
-祝日データが壊れていたり、社内管理表に会社休日が広範囲に登録されていた
+祝日データが壊れていたり、`CompanyHolidaySource` に休日を広範囲に登録してしまった
 ときの無限ループを防ぐため。
 
 ## 既定カレンダー（`calendar` を省略する書き方）

@@ -2,6 +2,8 @@
 
 CSV は `CSV` クラスで開き、Excelと同じ `Table` を読み書きします。既定ではすべて文字列として読み、必要な列だけ `types` で変換します。
 
+**読み取り専用でも `with` 必須**。`with` を外れたインスタンスを触ると `TableNotOpenError` で停止する。
+
 ```python
 from comken.toolbox.csv import CSV
 
@@ -26,3 +28,9 @@ with CSV("ヘッダーなし.csv", columns=["顧客ID", "氏名"]) as csv:
 `columns` を省略した CSV は先頭行を列名として扱います。空の見出し、重複する見出し、
 見出しとデータ行の列数不一致は、データを黙って補正せず専用例外で停止します。
 0バイトまたは UTF-8 BOM だけのファイルも見出しがないため、`CSVHeaderMissingError` で停止します。
+
+## 関連
+
+- [README](../README.md) — ライブラリ全体の概要
+- [公開 API](自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外
+

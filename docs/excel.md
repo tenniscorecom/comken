@@ -1,6 +1,8 @@
 # Excel API
 
 Excel と CSV は、どちらも `Table` を読み書きする入口です。Excel固有のシート操作だけが `Excel` にあります。
+**読み取り専用も含めて `with` の中でだけ操作する**——`with` を外れた `Sheet` / `Excel` /
+`ExcelTable` を触ると `TableNotOpenError` で止まる（→ [`with` 必須](#with-必須)）。
 
 ```python
 from comken.core.table import Table
@@ -19,9 +21,23 @@ with Excel("顧客.xlsx", read_only=True) as excel:
 
 `create_data_sheet("顧客")` は `PY_顧客` シートを作ります。テーブル名を省略できるのは、そのシートにテーブルが1つだけある場合です。複数ある場合は `table("名前")` と明示します。シート全体を表として扱う機能はありません。
 
+`create_table("名前", table)` に渡す名前は Excel がテーブル名に使えない形式
+（先頭が数字・セル参照と紛らわしい形・空白・特殊文字を含む）で `InvalidTableNameError` が
+出ます。エラーメッセージはそのまま非エンジニアへ届くため、**事前に `help` シートなどで
+命名ルールを書いておく**のが安全です。
+
 ## 表示用シート
 
 帳票のように書式や自由セル配置が必要なシートは `create_sheet("集計")` で作る。シート名はそのまま使われ、`PY_` 接頭辞は付きません。戻り値の `Sheet` ではセル・書式・ウィンドウ固定・列幅・行高などの表示用 API が使えます。`table()` のようなデータシート用 API は `DataSheetAccessError` になります。`create_sheet()` は複数回呼んで何枚でも追加でき、既存テストや管理表の動作は変わりません。
+
+## 数式
+
+- **`read_value` / `read_range` は数式セルで計算結果を返す。** `force_com=True` で
+  キャッシュを無視して Excel 実機で強制再計算できる。
+- **`replace()` / `append()` が数式を潰すときは `TableFormulaOverwriteError` で止まる。**
+  数式を値へ上書きしてよいときだけ `allow_formula_overwrite=True` を明示する
+- 数式そのものを読みたいときは `Sheet.read_formula(cell)` を使う
+  （`read_value` は計算結果を返すため、数式判定には使えない）
 
 ## 保存とCOM
 
@@ -32,3 +48,15 @@ with Excel("顧客.xlsx", read_only=True) as excel:
 `Excel(path)` はUNCパス（`\\server\share\...`）なら作業中だけ自動的にローカルコピーを使います。`local_copy=True` で強制、`local_copy=False` で無効にできます。ローカルコピーの変更は明示的な `save()` または正常終了時だけ元パスへ保存され、処理後に削除されます。
 
 既存ブックは表示用シートとデータシートを分け、Pythonから扱う表には `PY_` シートと `PY_T_` テーブルのプレフィックスを付けます。既存のセル範囲を自動でテーブル化することはありません。
+
+## `with` 必須
+
+`CSV` / `Excel` は**読み取り専用でも `with` 必須**。`with` を外れたインスタンスを触ると
+`TableNotOpenError` で停止する。`Excel` については、`with` を使わないとローカル作業
+コピーが消されず残ってしまう実バグがあるため。
+
+## 関連
+
+- [README](../README.md) — ライブラリ全体の概要
+- [公開 API](自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外
+

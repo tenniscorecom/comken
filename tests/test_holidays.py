@@ -231,7 +231,7 @@ class TestIsBusinessDay:
 
 
 class TestBusinessDayAfter:
-    """``business_day_after``（旧 ``next_business_day``）の挙動。"""
+    """``business_day_after`` の挙動。"""
 
     def test_skips_weekend_and_holiday(self) -> None:
         """週末と祝日の両方を飛ばす。"""
@@ -1409,7 +1409,7 @@ class TestAddBusinessDays:
         # 休日を渡してもそのまま返る（Excel WORKDAY と同じ挙動）
         assert add_business_days(holiday_target, 0, calendar=cal) == holiday_target
 
-    def test_positive_one_returns_next_business_day(self) -> None:
+    def test_positive_one_returns_business_day_after_target(self) -> None:
         """``n == 1`` で ``target`` が営業日でも**翌営業日**を返す（Excel WORKDAY 互換）。
 
         「翌営業日」と「1 営業日後」は別物: 前者は ``business_day_after``、

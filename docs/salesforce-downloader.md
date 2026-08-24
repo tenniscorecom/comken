@@ -29,20 +29,23 @@ from comken.services.salesforce_downloader import (
 CUSTOMER_LIST = "1001"    # 管理表の「ID」。意味の分かる名前を付ける
 SALES_RESULT = "1003"
 
-rows = download_report(CUSTOMER_LIST, "案件集計").read()
-# 全行が要らなければ download_report_path(CUSTOMER_LIST) で場所だけ取る
+table = download_report(CUSTOMER_LIST, "案件集計")
 by_code = cached_report(SALES_RESULT).index("顧客コード")
+# 中身が要らずファイルパスだけ欲しいときは download_report_path() / cached_report_path()
+print(download_report_path(CUSTOMER_LIST))   # 保存した CSV のパス（読み込みは走らない）
 ```
 
 **プロジェクトのコードに Salesforce の URL もレポート ID も書かない。** 書くのは管理番号だけ。
 参照先の Salesforce レポートを差し替えても、`CUSTOMER_LIST = "1001"` はそのままでよい。
 
-戻り値は `CSV`（`comken.toolbox.csv.CSV`）。`read()` で得た `Table` の
-`index()` / `filter()` などが使えて、CSV の文字コードを意識しなくてよい。
-ファイルパスだけ欲しいときは `.path`。`CSV` は最初の
-メソッド呼び出しまでファイルを読まない（遅延読み込み）ので、パス取得では読み込みは走らない。
+戻り値は `Table`（`comken.core.table.model.Table`）。`index()` / `filter()` /
+`replace()` / `append()` など、`Table` の API がそのまま使える。CSV の文字コードは
+意識しなくてよい（中身は `Table` で扱う）。
+ファイルパスだけ欲しいときは `download_report_path()` / `cached_report_path()` を
+別関数として用意している（戻り値は `Path`）。`Table` を経由しないので、
+パスを他ツールへ渡す用途で読み込みは走らない。
 
-`download_scheduled()` は `list[Path]` のままで **`CSV` を返さない**。定期取得の
+`download_scheduled()` は `list[Path]` のままで **`Table` を返さない**。定期取得の
 呼び出し側は中身を読まず「取らせる」のが目的なので、reader を並べても使い道がないため
 （役割の違いが戻り値の型に出ている）。
 
@@ -248,8 +251,8 @@ shared_report_ids(load_master(MASTER_PATH))
 衝突した場合も連番を付け、既存ファイルを上書きしない。
 
 - **0 行のときは、`0件あり` 列の指定で動きが変わる。** `×` のときは何も作らず失敗
-  （`EmptyReportError`）。`○` のときは空ファイルを作る。Downloader が返す `CSV` は
-  空ファイルを列なしの空 `Table` として返すので、利用側は 0 件をそのまま扱える
+  （`EmptyReportError`）。`○` のときは空ファイルを作る。Downloader が返す `Table` は
+  列なしの空 Table として返るので、利用側は 0 件をそのまま扱える
   （[「0 件の扱い」](#0-件の扱い) 参照）
 - **保存先のフォルダが無ければ作らない。** 書き間違いのことが多く、勝手に作ると
   誰も読まない場所へ置き続けることになる
@@ -281,8 +284,8 @@ shared_report_ids(load_master(MASTER_PATH))
 - 普段は必ずデータがある（無いならレポートか管理表が間違っている）→ `×` のまま
 
 ヘッダー行は敢えて入れない（Salesforce のメタデータからしか取れず、
-`report.run()` は `list[dict]` 形式で返すため）。0 バイトのファイルでも `CSV` は
-例外を出さず空の行リストを返すので、利用側は「0 件ならループが 0 回」を自然に書ける。
+`report.run()` は `list[dict]` 形式で返すため）。0 バイトのファイルでも `Table` は
+例外を出さず空 Table を返すので、利用側は「0 件ならループが 0 回」を自然に書ける。
 
 ---
 

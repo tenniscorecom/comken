@@ -168,6 +168,15 @@ write 側に空キーが複数あっても ``TransferDestinationMultipleMatchErr
 
 comken は共有サーバー上の1か所を**直接参照する**（ローカルへのコピー・同期はしない）。
 
+### 1. まず `python -c "import comken; print(comken.__version__)"` が通るか確かめる
+
+多くの PC では `PYTHONPATH` が既に通っている（共用のイメージ配布で設定済みのことがある）。
+**このコマンドが通れば、何もしなくてよい。** この節の残りは読む必要がない。
+
+通らなかったときだけ、次の 2. か 3. に進む。
+
+### 2. `setup_comken.bat` を実行する（既定の置き場所）
+
 リポジトリ直下にある入口は **`setup_comken.bat` 1本だけ**（初回に1回だけ実行）。
 CLI の入口は **`python -m comken`** に集約したので、`comken.bat` はもう要らない
 （→ 仕様書 3.5）。それ以外の場所（テンプレ・スクリプト・ドキュメント）は
@@ -198,7 +207,14 @@ set "PYTHON_LIBRARY=\\server\share\tools"
 `setup_comken.bat` が登録するのは **`PYTHONPATH` だけ**（`comken.bat` が無くなったので
 `PATH` への登録は不要）。
 
-### セットアップ手順（新しい PC ではじめにやること）
+### 3. comken を移設したときの受け皿（既定の置き場所以外へ置くとき）
+
+`setup_comken.bat` を移設先へ置き直すケースは **1. のコマンドが通らなかったとき**と、
+**共有フォルダを移したとき**の2つに使う。共通サーバーへ置いた comken を別の場所へ
+動かした場合、Windows のユーザー環境変数から古いパスを削除し、
+移動後の `setup_comken.bat` を再実行する。管理者権限は不要。
+
+### 4. セットアップ手順（新しい PC ではじめにやること）
 
 1. リポジトリ直下の `setup_comken.bat` を実行する
    → このフォルダが現在の Windows ユーザーの `PYTHONPATH` に追加される。
@@ -212,9 +228,6 @@ set "PYTHON_LIBRARY=\\server\share\tools"
 3. プロジェクトを作りたいフォルダへ `cd` して、`python -m comken init プロジェクト名` を実行
    → 現在のフォルダにプロジェクトの雛形がコピーされる。名前を省いて `python -m comken init` と
    打つと、名前を聞かれる（`python -m comken --help` で全コマンドの一覧が出る）
-
-共有フォルダを移動した場合は、Windows のユーザー環境変数から古いパスを削除し、
-移動後の `setup_comken.bat` を再実行する。管理者権限は不要。
 
 ### `comken init` で何が作られるか
 

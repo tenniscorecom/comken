@@ -4,6 +4,7 @@ r"""comken/core/holidays/__init__.py — 祝日判定ライブラリ。
 「今日が営業日か」「次の営業日」「収録期限の警告」を提供する。
 
     from comken.core.holidays import HolidayCalendar, is_business_day
+    from comken.toolbox.holidays.sources.cabinet_office import CabinetOfficeCSVSource
 
     calendar = HolidayCalendar.from_sources([
         CabinetOfficeCSVSource(cache_path=Path("~/.comken/holidays/syukujitsu.csv")),
