@@ -11,8 +11,6 @@ from comken.exceptions.table import (
     TableColumnNotFoundError,
     TableDuplicateKeyError,
     TableError,
-    TableMergeColumnCollisionError,
-    TableMergeSuffixError,
     TableRowColumnsError,
     TableTypeConversionError,
 )
@@ -133,61 +131,6 @@ class Table:
         return {
             value: Table(self.columns, rows, types=self.types) for value, rows in grouped.items()
         }
-
-    def merge(
-        self,
-        other: "Table",
-        *,
-        on: str,
-        how: str = "left",
-        suffixes: tuple[str, str] = ("_read", "_write"),
-    ) -> "Table":
-        """キー列で別のTableを結合し、新しいTableを返す。"""
-        if how not in {"left", "inner"}:
-            raise TableError("merge は left または inner のみ対応します。")
-        self._check_columns([on])
-        other._check_columns([on])
-        if (
-            not isinstance(suffixes, tuple)
-            or len(suffixes) != 2
-            or not all(isinstance(suffix, str) and suffix for suffix in suffixes)
-            or suffixes[0] == suffixes[1]
-        ):
-            raise TableMergeSuffixError()
-
-        overlapping = (set(self.columns) & set(other.columns)) - {on}
-        left_names = {
-            column: f"{column}{suffixes[0]}" if column in overlapping else column
-            for column in self.columns
-        }
-        right_names = {
-            column: f"{column}{suffixes[1]}" if column in overlapping else column
-            for column in other.columns
-            if column != on
-        }
-        columns = [left_names[column] for column in self.columns]
-        columns.extend(right_names[column] for column in other.columns if column != on)
-        duplicates = [column for column in dict.fromkeys(columns) if columns.count(column) > 1]
-        if duplicates:
-            # suffix で既存列を上書きすると値の出所が分からなくなるため、結合前に止める。
-            raise TableMergeColumnCollisionError(duplicates)
-
-        right_index = other.index(on)
-        rows = []
-        for read_row in self._rows:
-            write_row = right_index.get(read_row[on])
-            if write_row is None and how == "inner":
-                continue
-            merged = {left_names[column]: read_row[column] for column in self.columns}
-            merged.update(
-                {
-                    right_names[column]: write_row[column] if write_row is not None else ""
-                    for column in other.columns
-                    if column != on
-                }
-            )
-            rows.append(merged)
-        return Table(columns, rows)
 
     def concat(self, other: "Table") -> "Table":
         """同じ列定義の表を縦に連結する。

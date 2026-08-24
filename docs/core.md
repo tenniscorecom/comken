@@ -62,20 +62,6 @@ paths = DateFileFinder(FOLDER).dated("売上レポート", extension=".csv")
 # `for_date` を指定しても結果は同じ（フォルダ内の全件が対象）
 ```
 
-### 表の結合（Table.merge）
-
-2つの `Table` をキー列で横に結合します。`left`（左側を全件残す）と `inner`
-（両方にある行だけ残す）に対応します。
-
-```python
-result = read_table.merge(write_table, on="顧客ID")
-```
-
-キー以外に同じ列名がある場合、値を黙って上書きするとどちらの表の値か分からなくなるため、
-既定では `read_table` 側を `_read`、`write_table` 側を `_write` にします。キー列は1列だけ残り、片側だけにある列は
-元の名前を保ちます。名前を変える場合は `suffixes=("_before", "_after")` のように指定します。
-入力した2つの `Table` 自体は変更されません。
-
 ### データ比較（diff_row / diff_rows）
 
 CSV・Excel から読んだ行（辞書）同士の差分を取る。for ループを自分で書かなくてよい。

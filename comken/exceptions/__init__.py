@@ -84,8 +84,6 @@ ComkenError
 │   ├── InvalidTableOperationError
 │   ├── TableColumnNotFoundError
 │   ├── TableDuplicateKeyError
-│   ├── TableMergeColumnCollisionError
-│   ├── TableMergeSuffixError
 │   ├── TableRowColumnsError
 │   ├── TableTypeConversionError
 │   └── TransferDestinationMissingError
@@ -271,8 +269,6 @@ from comken.exceptions.table import (
     TableColumnNotFoundError,
     TableDuplicateKeyError,
     TableError,
-    TableMergeColumnCollisionError,
-    TableMergeSuffixError,
     TableRowColumnsError,
     TableTypeConversionError,
     TransferDestinationMissingError,
@@ -405,8 +401,6 @@ __all__ = [
     "InvalidTableOperationError",
     "TableColumnNotFoundError",
     "TableDuplicateKeyError",
-    "TableMergeColumnCollisionError",
-    "TableMergeSuffixError",
     "TableRowColumnsError",
     "TableTypeConversionError",
     "LoggingAlreadyConfiguredError",

@@ -205,6 +205,12 @@ class Transfer:
         に対して行った変更が反映された作業用 Table を返す。 イテレータを 1 度も
         進めないうちに ``result()`` を呼ぶと ``write`` のコピー（変更なし）が返る。
 
+        ``result()`` は同じ作業 Table インスタンスを返し続けるので、
+        ``result().append(...)`` のように破壊的に加工した場合や、 ``result()`` を
+        呼んだ後に ``unmatched_write_rows()`` の ``write_row`` を書き換えた場合も、
+        後続の ``result().read()`` 呼び出しに反映される（``Table._iter_rows_for_update``
+        経由で実体 dict を共有しているため）。
+
         Example:
             transfer = Transfer(source, destination, mapping,
                                 read_key="顧客ID", write_key="顧客ID")

@@ -76,7 +76,7 @@ class TableColumnNotFoundError(TableError):
 class TableDuplicateKeyError(TableError):
     """Table の索引または比較に使うキーが重複している。
 
-    発生箇所: Table.index() / Table.merge() / compare_tables()
+    発生箇所: Table.index() / compare_tables()
 
     対処:
         キー列の値を一意にしてから処理をやり直す
@@ -85,33 +85,6 @@ class TableDuplicateKeyError(TableError):
     def __init__(self, columns: list[str], key: object) -> None:
         super().__init__(
             f"列「{','.join(columns)}」のキー「{key}」が重複しています。キーを一意にしてください。"
-        )
-
-
-class TableMergeSuffixError(TableError):
-    """Table.merge() の suffixes が列名を安全に作れない。
-
-    対処:
-        空でなく互いに異なる2つの文字列を suffixes に指定する
-    """
-
-    def __init__(self) -> None:
-        super().__init__(
-            "merge の suffixes には、空でなく互いに異なる2つの文字列を指定してください。"
-        )
-
-
-class TableMergeColumnCollisionError(TableError):
-    """Table.merge() で生成する列名が既存の列名と衝突する。
-
-    対処:
-        suffixes を変更し、結合後のすべての列名が一意になるようにする
-    """
-
-    def __init__(self, columns: list[str]) -> None:
-        super().__init__(
-            f"merge 後の列名が重複します: {columns}。"
-            "suffixes を変更し、すべて異なる列名にしてください。"
         )
 
 

@@ -441,16 +441,6 @@ def group_by(self, key: str) -> dict[Any, 'Table']:
 
 指定列の値ごとにTableを分けて返す。
 
-#### `merge`
-
-```text
-def merge(self, other: 'Table', *, on: str, how: str='left', suffixes: tuple[str, str]=('_read', '_write')) -> 'Table':
-```
-
-##### 説明
-
-キー列で別のTableを結合し、新しいTableを返す。
-
 #### `concat`
 
 ```text
@@ -516,7 +506,7 @@ Example:
 
 **条件は ``apply_mapping()`` より前に書くこと。** Python の ``for`` ループは
 ``continue`` したかどうかを呼び出し側に伝えないため、ループ内で
-``apply_mapping()`` を呼ばずに ``continue`` した行は、作業 Table へ反映されない。
+``apply_mapping()`` を呼ばずに ``continue`` した行は、作業行へ反映されない。
 条件判定を ``apply_mapping()`` の後ろに書くと、``continue`` しても mapping が
 適用済みとなり破棄できないので、判定は必ず ``apply_mapping()`` の前に置く。
 
@@ -590,8 +580,8 @@ def unmatched_write_rows(self) -> Iterator[Row]:
 
 read に対応が無い write 行だけを返す（破棄候補）。
 
-戻り値は ``matched_rows()`` が返す ``write_row`` と同じく **作業 Table の
-実体行**。 返された ``write_row`` を ``write_row["備考"] = "破棄予定"`` の
+戻り値は ``matched_rows()`` が返す ``write_row`` と同じく **作業行の
+実体 dict**。 返された ``write_row`` を ``write_row["備考"] = "破棄予定"`` の
 ように書き換えると ``result()`` の戻り値へ反映される。 ``result().append()``
 などに渡して追加する使い方ではないので注意。
 
@@ -616,7 +606,7 @@ mapping の read 列 / write 列は ``__init__`` で存在を検証済みなの�
 転記先の行が無いので ``TransferDestinationMissingError`` で停止する。
 
 入力 ``read`` / ``write`` には触れない。書き込みは Transfer 内部の
-作業 Table に紐づいた ``write_row`` に対して行う。
+作業行に紐づいた ``write_row`` に対して行う。
 
 Args:
     read_row: 転記元の行。
@@ -637,8 +627,12 @@ def result(self) -> Table:
 変更後の Table を返す。
 
 ``transfer_rows()`` / ``matched_rows()`` のイテレーション中に ``write_row``
-に対して行った変更が反映された作業用 Table を返す。 イテレータを 1 度も
-進めないうちに ``result()`` を呼ぶと ``write`` のコピー（変更なし）が返る。
+に対して行った変更が反映された作業行を ``Table`` に包んで返す。 初回呼び出し
+で Table を作ってキャッシュし、以降は **同じインスタンスを返し続ける**。
+``result().append(...)`` のように破壊的に加工した場合、後続の ``result()``
+呼び出しにも反映される（``examples/table_transfer_design/run.py`` が
+この書き方に依存している）。 イテレータを 1 度も進めないうちに ``result()``
+を呼ぶと ``write`` のコピー（変更なし）が返る。
 
 Example:
     transfer = Transfer(source, destination, mapping,
@@ -1805,16 +1799,6 @@ def group_by(self, key: str) -> dict[Any, 'Table']:
 
 指定列の値ごとにTableを分けて返す。
 
-#### `merge`
-
-```text
-def merge(self, other: 'Table', *, on: str, how: str='left', suffixes: tuple[str, str]=('_read', '_write')) -> 'Table':
-```
-
-##### 説明
-
-キー列で別のTableを結合し、新しいTableを返す。
-
 #### `concat`
 
 ```text
@@ -1880,7 +1864,7 @@ Example:
 
 **条件は ``apply_mapping()`` より前に書くこと。** Python の ``for`` ループは
 ``continue`` したかどうかを呼び出し側に伝えないため、ループ内で
-``apply_mapping()`` を呼ばずに ``continue`` した行は、作業 Table へ反映されない。
+``apply_mapping()`` を呼ばずに ``continue`` した行は、作業行へ反映されない。
 条件判定を ``apply_mapping()`` の後ろに書くと、``continue`` しても mapping が
 適用済みとなり破棄できないので、判定は必ず ``apply_mapping()`` の前に置く。
 
@@ -1954,8 +1938,8 @@ def unmatched_write_rows(self) -> Iterator[Row]:
 
 read に対応が無い write 行だけを返す（破棄候補）。
 
-戻り値は ``matched_rows()`` が返す ``write_row`` と同じく **作業 Table の
-実体行**。 返された ``write_row`` を ``write_row["備考"] = "破棄予定"`` の
+戻り値は ``matched_rows()`` が返す ``write_row`` と同じく **作業行の
+実体 dict**。 返された ``write_row`` を ``write_row["備考"] = "破棄予定"`` の
 ように書き換えると ``result()`` の戻り値へ反映される。 ``result().append()``
 などに渡して追加する使い方ではないので注意。
 
@@ -1980,7 +1964,7 @@ mapping の read 列 / write 列は ``__init__`` で存在を検証済みなの�
 転記先の行が無いので ``TransferDestinationMissingError`` で停止する。
 
 入力 ``read`` / ``write`` には触れない。書き込みは Transfer 内部の
-作業 Table に紐づいた ``write_row`` に対して行う。
+作業行に紐づいた ``write_row`` に対して行う。
 
 Args:
     read_row: 転記元の行。
@@ -2001,8 +1985,12 @@ def result(self) -> Table:
 変更後の Table を返す。
 
 ``transfer_rows()`` / ``matched_rows()`` のイテレーション中に ``write_row``
-に対して行った変更が反映された作業用 Table を返す。 イテレータを 1 度も
-進めないうちに ``result()`` を呼ぶと ``write`` のコピー（変更なし）が返る。
+に対して行った変更が反映された作業行を ``Table`` に包んで返す。 初回呼び出し
+で Table を作ってキャッシュし、以降は **同じインスタンスを返し続ける**。
+``result().append(...)`` のように破壊的に加工した場合、後続の ``result()``
+呼び出しにも反映される（``examples/table_transfer_design/run.py`` が
+この書き方に依存している）。 イテレータを 1 度も進めないうちに ``result()``
+を呼ぶと ``write`` のコピー（変更なし）が返る。
 
 Example:
     transfer = Transfer(source, destination, mapping,
@@ -4499,7 +4487,7 @@ class TableDuplicateKeyError(TableError):
 
 Table の索引または比較に使うキーが重複している。
 
-発生箇所: Table.index() / Table.merge() / compare_tables()
+発生箇所: Table.index() / compare_tables()
 
 対処:
     キー列の値を一意にしてから処理をやり直す
@@ -4508,44 +4496,6 @@ Table の索引または比較に使うキーが重複している。
 
 ```text
 def __init__(self, columns: list[str], key: object) -> None:
-```
-
-### `TableMergeColumnCollisionError`
-
-```text
-class TableMergeColumnCollisionError(TableError):
-```
-
-#### 説明
-
-Table.merge() で生成する列名が既存の列名と衝突する。
-
-対処:
-    suffixes を変更し、結合後のすべての列名が一意になるようにする
-
-#### `__init__`
-
-```text
-def __init__(self, columns: list[str]) -> None:
-```
-
-### `TableMergeSuffixError`
-
-```text
-class TableMergeSuffixError(TableError):
-```
-
-#### 説明
-
-Table.merge() の suffixes が列名を安全に作れない。
-
-対処:
-    空でなく互いに異なる2つの文字列を suffixes に指定する
-
-#### `__init__`
-
-```text
-def __init__(self) -> None:
 ```
 
 ### `TableRowColumnsError`
@@ -5025,16 +4975,6 @@ def group_by(self, key: str) -> dict[Any, 'Table']:
 
 指定列の値ごとにTableを分けて返す。
 
-#### `merge`
-
-```text
-def merge(self, other: 'Table', *, on: str, how: str='left', suffixes: tuple[str, str]=('_read', '_write')) -> 'Table':
-```
-
-##### 説明
-
-キー列で別のTableを結合し、新しいTableを返す。
-
 #### `concat`
 
 ```text
@@ -5090,7 +5030,7 @@ Example:
 
 **条件は ``apply_mapping()`` より前に書くこと。** Python の ``for`` ループは
 ``continue`` したかどうかを呼び出し側に伝えないため、ループ内で
-``apply_mapping()`` を呼ばずに ``continue`` した行は、作業 Table へ反映されない。
+``apply_mapping()`` を呼ばずに ``continue`` した行は、作業行へ反映されない。
 条件判定を ``apply_mapping()`` の後ろに書くと、``continue`` しても mapping が
 適用済みとなり破棄できないので、判定は必ず ``apply_mapping()`` の前に置く。
 
@@ -5164,8 +5104,8 @@ def unmatched_write_rows(self) -> Iterator[Row]:
 
 read に対応が無い write 行だけを返す（破棄候補）。
 
-戻り値は ``matched_rows()`` が返す ``write_row`` と同じく **作業 Table の
-実体行**。 返された ``write_row`` を ``write_row["備考"] = "破棄予定"`` の
+戻り値は ``matched_rows()`` が返す ``write_row`` と同じく **作業行の
+実体 dict**。 返された ``write_row`` を ``write_row["備考"] = "破棄予定"`` の
 ように書き換えると ``result()`` の戻り値へ反映される。 ``result().append()``
 などに渡して追加する使い方ではないので注意。
 
@@ -5190,7 +5130,7 @@ mapping の read 列 / write 列は ``__init__`` で存在を検証済みなの�
 転記先の行が無いので ``TransferDestinationMissingError`` で停止する。
 
 入力 ``read`` / ``write`` には触れない。書き込みは Transfer 内部の
-作業 Table に紐づいた ``write_row`` に対して行う。
+作業行に紐づいた ``write_row`` に対して行う。
 
 Args:
     read_row: 転記元の行。
@@ -5211,8 +5151,12 @@ def result(self) -> Table:
 変更後の Table を返す。
 
 ``transfer_rows()`` / ``matched_rows()`` のイテレーション中に ``write_row``
-に対して行った変更が反映された作業用 Table を返す。 イテレータを 1 度も
-進めないうちに ``result()`` を呼ぶと ``write`` のコピー（変更なし）が返る。
+に対して行った変更が反映された作業行を ``Table`` に包んで返す。 初回呼び出し
+で Table を作ってキャッシュし、以降は **同じインスタンスを返し続ける**。
+``result().append(...)`` のように破壊的に加工した場合、後続の ``result()``
+呼び出しにも反映される（``examples/table_transfer_design/run.py`` が
+この書き方に依存している）。 イテレータを 1 度も進めないうちに ``result()``
+を呼ぶと ``write`` のコピー（変更なし）が返る。
 
 Example:
     transfer = Transfer(source, destination, mapping,

@@ -243,7 +243,8 @@ def test_transfer_destination_changes_persist_to_working_table() -> None:
 
     assert transfer._working_table is not None
     assert transfer._working_table.read() == [{"id": 1, "value": "new"}]
-    # 入力は不変（書き換えは作業 Table への操作）
+    assert transfer.result().read() == [{"id": 1, "value": "new"}]
+    # 入力は不変（書き換えは作業行への操作）
     assert source.read() == [{"id": 1, "value": "new"}]
     assert destination.read() == [{"id": 1, "value": "old"}]
 
@@ -257,7 +258,7 @@ def test_transfer_transfer_rows_returns_iterator_and_can_be_reused() -> None:
     first = transfer.transfer_rows()
     assert iter(first) is first
     assert list(first) == [({"id": "1", "value": "new"}, {"id": "1", "value": "old"})]
-    # 同じ呼び出しをもう一度やっても同じ結果（_working_table は最初の呼び出しで固定）
+    # 同じ呼び出しをもう一度やっても同じ結果（_working_rows は最初の呼び出しで固定）
     assert list(transfer.transfer_rows()) == [
         ({"id": "1", "value": "new"}, {"id": "1", "value": "old"})
     ]
@@ -661,3 +662,80 @@ def test_transfer_methods_do_not_mutate_input_tables() -> None:
 
     assert source.read() == original_source
     assert destination.read() == original_destination
+
+
+def test_result_called_before_unmatched_write_rows_mutation_reflects() -> None:
+    """``result()`` を先に呼んでも、その後 ``unmatched_write_rows()`` の ``write_row``
+    を書き換えると ``result()`` 側に反映される（順序非依存）。
+
+    ``Table.__init__`` は ``_normalize`` で行 dict をコピーするため、
+    ``_result_table`` を ``Table(list(cols), self._working_rows, ...)`` で
+    作ると、 ``_working_rows`` 側の dict をいくら書き換えても反映されない。
+    ``Transfer.result()`` は作業 Table を直接返す形にしておき、
+    ``unmatched_write_rows()`` / ``matched_rows()`` の ``write_row`` が
+    ``Table._iter_rows_for_update()`` 経由で作業 Table の実体 dict を参照する
+    ことでこの順序依存を潰す。
+    """
+    source = Table(["id", "v"], [{"id": "A001", "v": "new"}])
+    destination = Table(
+        ["id", "v"],
+        [{"id": "A001", "v": "old"}, {"id": "A099", "v": "stale"}],
+    )
+    transfer = Transfer(source, destination, {"v": "v"}, read_key="id", write_key="id")
+
+    # matched_rows で転記を確定（イテレータを最後まで進める）
+    for read_row, write_row in transfer.matched_rows():
+        transfer.apply_mapping(read_row, write_row)
+
+    # ここで result() を呼ぶ（初回呼び出し）
+    first = transfer.result()
+
+    # その後で unmatched_write_rows の write_row を書き換える
+    for write_row in transfer.unmatched_write_rows():
+        write_row["v"] = "転記元に無し"
+
+    # result() に書き換えが反映されている
+    assert first.read() == [
+        {"id": "A001", "v": "new"},
+        {"id": "A099", "v": "転記元に無し"},
+    ]
+    # 2回目の result() も同じインスタンスで、同じ結果
+    assert transfer.result().read() == first.read()
+
+
+def test_result_called_before_append_reflects_new_rows() -> None:
+    """``result()`` を先に呼んでも、その後の ``result().append(...)`` は反映される。
+
+    順序非依存の回帰テスト（``unmatched_write_rows`` 書き換えと表裏）。
+    """
+    source = Table(
+        ["id", "name"],
+        [{"id": "1", "name": "既存"}, {"id": "2", "name": "新規"}],
+    )
+    destination = Table(
+        ["id", "name"],
+        [{"id": "1", "name": "old"}],
+    )
+    transfer = Transfer(
+        source,
+        destination,
+        {"name": "name"},
+        read_key="id",
+        write_key="id",
+    )
+
+    for src, dst in transfer.matched_rows():
+        transfer.apply_mapping(src, dst)
+
+    # ここで result() を呼ぶ
+    first = transfer.result()
+
+    # その後で新規行を append する
+    for read_row in transfer.unmatched_read_rows():
+        first.append(dict(read_row))
+
+    assert first.read() == [
+        {"id": "1", "name": "既存"},
+        {"id": "2", "name": "新規"},
+    ]
+    assert transfer.result().read() == first.read()

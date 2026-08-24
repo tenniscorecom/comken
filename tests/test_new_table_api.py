@@ -7,11 +7,8 @@ import pytest
 
 from comken.core.table import Table, compare_tables
 from comken.exceptions.table import (
-    TableColumnNotFoundError,
     TableDuplicateKeyError,
     TableError,
-    TableMergeColumnCollisionError,
-    TableMergeSuffixError,
     TransferMappingError,
 )
 from comken.toolbox.csv import CSV
@@ -33,59 +30,13 @@ def test_table_supports_memory_operations() -> None:
     assert table.index("id")[1]["name"] == "山田"
 
 
-def test_table_merge_concat_and_group_by() -> None:
+def test_table_concat_and_group_by() -> None:
     left = Table(["id", "value"], [{"id": 1, "value": "a"}])
     right = Table(["id", "label"], [{"id": 1, "label": "A"}])
 
-    assert left.merge(right, on="id").read() == [{"id": 1, "value": "a", "label": "A"}]
-    assert left.merge(right, on="id", how="inner").count() == 1
     with pytest.raises(TableError):
         left.concat(right)
     assert left.group_by("id")[1].count() == 1
-
-
-def test_table_merge_keeps_overlapping_columns_with_suffixes() -> None:
-    left = Table(["id", "name", "left_only"], [{"id": 1, "name": "旧", "left_only": "L"}])
-    right = Table(
-        ["id", "name", "right_only"],
-        [{"id": 1, "name": "新", "right_only": "R"}],
-    )
-
-    result = left.merge(right, on="id")
-
-    assert result.columns == ["id", "name_read", "left_only", "name_write", "right_only"]
-    assert result.read() == [
-        {"id": 1, "name_read": "旧", "left_only": "L", "name_write": "新", "right_only": "R"}
-    ]
-    assert left.column("name") == ["旧"]
-    assert right.column("name") == ["新"]
-
-
-def test_table_merge_left_fills_unmatched_right_columns() -> None:
-    left = Table(["id", "value"], [{"id": 1, "value": "a"}, {"id": 2, "value": "b"}])
-    right = Table(["id", "label"], [{"id": 1, "label": "A"}])
-
-    assert left.merge(right, on="id").read()[1] == {"id": 2, "value": "b", "label": ""}
-
-
-def test_table_merge_rejects_invalid_suffixes_collision_and_missing_key() -> None:
-    left = Table(["id", "name", "name_read"], [{"id": 1, "name": "a", "name_read": "x"}])
-    right = Table(["id", "name"], [{"id": 1, "name": "b"}])
-    with pytest.raises(TableMergeSuffixError):
-        left.merge(right, on="id", suffixes=("", "_right"))
-    with pytest.raises(TableMergeColumnCollisionError):
-        left.merge(right, on="id")
-    with pytest.raises(TableColumnNotFoundError):
-        left.merge(right, on="missing")
-
-
-def test_table_merge_accepts_custom_suffixes() -> None:
-    read = Table(["id", "name"], [{"id": 1, "name": "old"}])
-    write = Table(["id", "name"], [{"id": 1, "name": "new"}])
-
-    result = read.merge(write, on="id", suffixes=("_before", "_after"))
-
-    assert result.read() == [{"id": 1, "name_before": "old", "name_after": "new"}]
 
 
 def test_csv_is_string_by_default_and_types_are_explicit(tmp_path) -> None:

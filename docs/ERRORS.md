@@ -182,8 +182,6 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `InvalidTableOperationError` | Table API で実行できない操作が指定された。 | 対象が読み取り専用でないか、指定したテーブル名が正しいか確認する |
 | `TableColumnNotFoundError` | Table に指定された列が存在しない。 | Table.columns を確認し、存在する列名を指定する |
 | `TableDuplicateKeyError` | Table の索引または比較に使うキーが重複している。 | キー列の値を一意にしてから処理をやり直す |
-| `TableMergeColumnCollisionError` | Table.merge() で生成する列名が既存の列名と衝突する。 | suffixes を変更し、結合後のすべての列名が一意になるようにする |
-| `TableMergeSuffixError` | Table.merge() の suffixes が列名を安全に作れない。 | 空でなく互いに異なる2つの文字列を suffixes に指定する |
 | `TableRowColumnsError` | 行の列名が Table.columns と一致しない | 不足列と余分な列を直す。列を絞る場合は select() を使う |
 | `TableTypeConversionError` | Table の値を指定型へ変換できない | 表示された行番号・列名の値を、指定した型へ変換できる内容に直す |
 
