@@ -57,9 +57,9 @@ Excel の見出しで、スペースを含む見出し（`Salesforce URL`）も�
 
 import dataclasses
 from collections.abc import Iterator
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, ClassVar, Self, cast
+from typing import Any, ClassVar, Self
 
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill
@@ -412,19 +412,33 @@ class MasterRow:
         return [spec.header for _, spec, _ in cls._columns()]
 
     @classmethod
-    def _columns(cls) -> list[tuple[str, ColumnSpec, type]]:
-        """(Python の名前, 列の決まり, 型) を宣言順で返す。
+    def _columns(cls) -> list[tuple[str, ColumnSpec, Any]]:
+        """(Python の名前, 列の決まり, 型注釈) を宣言順で返す。
 
         `column()` を使っていないフィールドは、**名前をそのまま見出しにする**
         （見出しと同じ名前が使えるなら、宣言は型注釈だけで済む）。
+
+        Returns:
+            ``(name, spec, value_type)`` のリスト。``value_type`` は ``Field.type``
+            の値で、dataclass の型注釈そのもの（class か文字列の前方参照）。
+
+        Raises:
+            TypeError: ``cls`` に ``@dataclass`` が付いていない場合（継承側で
+                付け忘れた）。実行時に ``dataclasses.is_dataclass()`` で守って
+                ``__dataclass_fields__`` を直接読む。
         """
-        # fields() は Protocol[DataclassInstance] を要求するが、MasterRow 本体は dataclass で
-        # なく Protocol の構造的条件を満たさない。cls は実行時には必ず dataclass 派生のため
-        # type へキャストしてエラーを消す。利用側は docstring 冒頭の通り @dataclass を付ける
-        found = []
-        for item in fields(cast(type, cls)):
-            spec = item.metadata.get(_SPEC_KEY) or ColumnSpec(header=item.name)
-            found.append((item.name, spec, item.type))
+        # MasterRow 本体は dataclass ではないが、継承先は必ず @dataclass を付ける
+        # （docstring 冒頭のサンプル参照）。is_dataclass() で守ったうえで
+        # __dataclass_fields__ を直接読めば ``fields()`` のプロトコル合致問題を
+        # 避けつつ、誤用には明示的な例外で気づける
+        if not dataclasses.is_dataclass(cls):
+            raise TypeError(
+                f"{cls.__name__} には @dataclass を付けてください（MasterRow を継承するとき）"
+            )
+        found: list[tuple[str, ColumnSpec, Any]] = []
+        for name, item in cls.__dataclass_fields__.items():
+            spec = item.metadata.get(_SPEC_KEY) or ColumnSpec(header=name)
+            found.append((name, spec, item.type))
         return found
 
     def __init_subclass__(cls, **kwargs) -> None:
@@ -462,10 +476,14 @@ def _require_headers(cls: type[MasterRow], raw: dict, source: Path) -> None:
 
 def _default_of(cls: type[MasterRow], name: str) -> Any:
     """そのフィールドの既定値（無ければ MISSING）。"""
-    # fields() は Protocol[DataclassInstance] を要求するが、MasterRow 本体は Protocol の構造的条件を
-    # 満たさない。cls は実行時には必ず dataclass 派生のため type へキャストしてエラーを消す
-    for item in fields(cast(type, cls)):
-        if item.name == name:
+    if not dataclasses.is_dataclass(cls):
+        # 誤用（MasterRow のまま呼んだ）には読んでも空クラスを返すより、
+        # 何がおかしいかを伝える方が有益
+        raise TypeError(
+            f"{cls.__name__} には @dataclass を付けてください（MasterRow を継承するとき）"
+        )
+    for name_, item in cls.__dataclass_fields__.items():
+        if name_ == name:
             return item.default
     return dataclasses.MISSING
 

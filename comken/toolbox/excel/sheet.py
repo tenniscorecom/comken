@@ -228,21 +228,55 @@ class Sheet:
         self._worksheet.delete_cols(column_index_from_string(col))
         self._excel._mark_dirty()
 
-    def format(self, cell: str, **kwargs: Any) -> None:
-        """セルのフォントと表示形式を設定する。"""
+    def format(
+        self,
+        cell: str,
+        *,
+        bold: bool | None = None,
+        italic: bool | None = None,
+        size: int | None = None,
+        name: str | None = None,
+        color: str | None = None,
+        number_format: str | None = None,
+    ) -> None:
+        """セルのフォントと表示形式を設定する。
+
+        渡した引数だけ反映し、``None`` の項目は既存の値を変えない。**指定しない
+        項目がリセットされることはない**ので、``bold`` だけ書き換えるつもりで
+        ``size`` が初期値に戻る、といった事故が起きない。
+
+        Args:
+            cell: 対象のセル参照 (例: ``"A1"``)。
+            bold: ``True`` で太字、``False`` で解除、``None`` で変更しない。
+            italic: イタリック。``True`` / ``False`` / ``None``。
+            size: フォントサイズ。``None`` のとき変更しない。
+            name: フォント名。``None`` のとき変更しない。
+            color: 16進数 6 桁の色 (``#`` 付きでも可)。``None`` のとき変更しない。
+            number_format: セルの表示形式 (例: ``"0.00"``)。``None`` のとき変更しない。
+
+        Raises:
+            TypeError: セル参照が不正な場合。
+        """
         self._ensure_display_sheet("format")
         target = self._worksheet[cell]
-        font_keys = {"bold", "italic", "size", "name", "color"}
-        unknown = set(kwargs) - font_keys - {"number_format"}
-        if unknown:
-            raise TypeError(f"format() で使用できない引数です: {sorted(unknown)}")
         font = copy(target.font)
-        for key, value in kwargs.items():
-            if key in font_keys:
-                setattr(font, key, value)
-        target.font = font
-        if "number_format" in kwargs:
-            target.number_format = str(kwargs["number_format"])
+        if bold is not None:
+            font.bold = bold
+        if italic is not None:
+            font.italic = italic
+        if size is not None:
+            font.size = size
+        if name is not None:
+            font.name = name
+        if color is not None:
+            # ``set_border()`` と同じく ``#`` 付きを許容する
+            font.color = color.removeprefix("#")
+        if any(value is not None for value in (bold, italic, size, name, color)):
+            # 既存フォントの属性（太字・色など）を保ったまま反映するため、
+            # 1つでもフォント指定があれば必ず書き戻す
+            target.font = font
+        if number_format is not None:
+            target.number_format = str(number_format)
         self._excel._mark_dirty()
 
     def set_background(self, cell: str, color: str) -> None:

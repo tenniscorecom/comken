@@ -293,3 +293,47 @@ class TestExcelComPromotion:
         assert working_path.suffix == ".xlsm"
         handler.assert_called_once_with(working_path, local_copy_threshold_mb=0)
         assert not working_path.exists()
+
+
+class TestSheetFormat:
+    def test_format_sets_only_specified_attributes_and_keeps_others(self, tmp_path) -> None:
+        """``format("A1", bold=True)`` だけでも、他のフォント属性は保持される。"""
+        path = tmp_path / "format-preserve.xlsx"
+        with Excel(path) as excel:
+            sheet = excel.create_sheet("集計")
+            sheet.write_value("A1", "x")
+            # 先に italic とサイズを設定しておき、bold だけの format() で
+            # それらが消えないことを確認する
+            sheet.format("A1", italic=True, size=20, name="Arial")
+            sheet.format("A1", bold=True)
+        with Excel(path, read_only=True) as excel:
+            font = excel.sheet("集計")._worksheet["A1"].font
+            assert font.bold is True
+            assert font.italic is True
+            assert font.size == 20
+            assert font.name == "Arial"
+
+    def test_format_accepts_size_and_number_format_together(self, tmp_path) -> None:
+        """``bold / size / number_format`` を同時に渡せる。"""
+        path = tmp_path / "format-multi.xlsx"
+        with Excel(path) as excel:
+            sheet = excel.create_sheet("集計")
+            sheet.write_value("B1", 12.5)
+            sheet.format("B1", bold=True, size=14, number_format="0.00")
+        with Excel(path, read_only=True) as excel:
+            cell = excel.sheet("集計")._worksheet["B1"]
+            assert cell.font.bold is True
+            assert cell.font.size == 14
+            assert cell.number_format == "0.00"
+
+    def test_format_rejects_unknown_keyword_at_call_time(self) -> None:
+        """未知のキーワードは Python の呼び出し時点で TypeError。"""
+        import inspect
+
+        from comken.toolbox.excel.sheet import Sheet
+
+        sig = inspect.signature(Sheet.format)
+        # format() は名前付きキーワードしか受け付けない（**kwargs は持たない）。
+        # weight を bind しようとすると TypeError になる
+        with pytest.raises(TypeError):
+            sig.bind("A1", weight=2)

@@ -354,42 +354,43 @@ class SalesforceBase:
         """
         start = time.perf_counter()
         is_reauthenticated = False
-        # range(1, MAX_ATTEMPTS + 1) は必ず1回以上回るため、response は必ず束縛される。
-        # pyright にはこのループ不変条件が見えないので、Optional で宣言してループ後に絞り込む
-        response: requests.Response | None = None
-        for attempt in range(1, MAX_ATTEMPTS + 1):
+        # 初回送信をループの前で行い、response を必ず束縛する。
+        # その下のループは 5xx/429 の一時障害だけを拾うので、初回送信と
+        # 合計で最大 MAX_ATTEMPTS 回になる（試行 1..MAX_ATTEMPTS-1 = 2 回まで再試行）。
+        # pyright から見ても response は Optional にならない
+        response = self._send(method, self._request_url(path), body)
+
+        for attempt in range(1, MAX_ATTEMPTS):
+            reason = _retry_reason(response.status_code)
+            if not reason:
+                # 成功、または 4xx のようにリトライしても直らない永続的な失敗
+                break
+            # 5xx と 429 は Salesforce 側の一時的な事情なので、待って試し直す
+            logger.debug(
+                "%s のため %d 秒待って再試行します（%d/%d）: %s",
+                reason,
+                RETRY_WAIT_SECONDS * attempt,
+                attempt,
+                MAX_ATTEMPTS,
+                path,
+            )
+            self.metrics.record_retry(component, reason)
+            time.sleep(RETRY_WAIT_SECONDS * attempt)
             # instance_url は再認証で変わりうるので、毎回組み立て直す
             response = self._send(method, self._request_url(path), body)
 
-            # 401 はトークンが切れただけのことが多い。取り直して1回だけやり直す。
-            # 2回目も 401 なら設定の問題なので、リトライで隠さずエラーにする。
-            if response.status_code == HTTP_UNAUTHORIZED and not is_reauthenticated:
-                logger.debug("401 を受け取ったのでトークンを取り直します: %s", path)
-                self.metrics.record_retry(component, RetryReason.REAUTH)
-                self._authenticate()
-                is_reauthenticated = True
-                # 401 は一時障害の試行回数を消費させず、新しいトークンで直ちに1回だけ再送する
-                response = self._send(method, self._request_url(path), body)
+        # 401 の再認証は試行回数を消費しない別ルート。一時障害のリトライ中に
+        # 出ても、ループの外で1回だけ拾う。既に再認証済み（is_reauthenticated）なら
+        # 何もしない。2回続けて 401 になるのは設定の問題なので、リトライで隠さず
+        # 下の SalesforceRequestError に落とす
+        if response.status_code == HTTP_UNAUTHORIZED and not is_reauthenticated:
+            logger.debug("401 を受け取ったのでトークンを取り直します: %s", path)
+            self.metrics.record_retry(component, RetryReason.REAUTH)
+            self._authenticate()
+            is_reauthenticated = True
+            response = self._send(method, self._request_url(path), body)
 
-            reason = _retry_reason(response.status_code)
-            if reason and attempt < MAX_ATTEMPTS:
-                # 5xx と 429 は Salesforce 側の一時的な事情なので、待って試し直す
-                logger.debug(
-                    "%s のため %d 秒待って再試行します（%d/%d）: %s",
-                    reason,
-                    RETRY_WAIT_SECONDS * attempt,
-                    attempt,
-                    MAX_ATTEMPTS,
-                    path,
-                )
-                self.metrics.record_retry(component, reason)
-                time.sleep(RETRY_WAIT_SECONDS * attempt)
-                continue
-
-            break
-
-        # ループ不変条件により response は必ず束縛済み。型スタブ上は None の可能性が残るため絞り込む
-        assert response is not None
+        # response は初回送信で必ず束縛済み
         is_error = response.status_code >= HTTP_BAD_REQUEST
         self.metrics.record_call(component, time.perf_counter() - start, is_error=is_error)
 

@@ -7195,12 +7195,28 @@ def delete_column(self, col: str) -> None:
 #### `format`
 
 ```text
-def format(self, cell: str, **kwargs: Any) -> None:
+def format(self, cell: str, *, bold: bool | None=None, italic: bool | None=None, size: int | None=None, name: str | None=None, color: str | None=None, number_format: str | None=None) -> None:
 ```
 
 ##### 説明
 
 セルのフォントと表示形式を設定する。
+
+渡した引数だけ反映し、``None`` の項目は既存の値を変えない。**指定しない
+項目がリセットされることはない**ので、``bold`` だけ書き換えるつもりで
+``size`` が初期値に戻る、といった事故が起きない。
+
+Args:
+    cell: 対象のセル参照 (例: ``"A1"``)。
+    bold: ``True`` で太字、``False`` で解除、``None`` で変更しない。
+    italic: イタリック。``True`` / ``False`` / ``None``。
+    size: フォントサイズ。``None`` のとき変更しない。
+    name: フォント名。``None`` のとき変更しない。
+    color: 16進数 6 桁の色 (``#`` 付きでも可)。``None`` のとき変更しない。
+    number_format: セルの表示形式 (例: ``"0.00"``)。``None`` のとき変更しない。
+
+Raises:
+    TypeError: セル参照が不正な場合。
 
 #### `set_background`
 
