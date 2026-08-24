@@ -10,6 +10,7 @@ from comken.exceptions import (
     ComkenError,
     ConfigError,
     ConfigFileNotFoundError,
+    ConfigMappingEmptyValueError,
     ConfigSectionNotFoundError,
     CSVError,
     CSVFileNotFoundError,
@@ -56,6 +57,11 @@ def test_all_declared_names_are_resolvable() -> None:
         (KeyColumnNotFoundError("ID", ["名前"]), ColumnNotFoundError, "ID"),
         (ConfigFileNotFoundError("config.ini"), ConfigError, "config.ini"),
         (ConfigSectionNotFoundError("FILES", ["LOG"]), ConfigError, "[FILES]"),
+        (
+            ConfigMappingEmptyValueError("config.ini", "[T_MAPPING]", ["部署名"]),
+            ConfigError,
+            "[T_MAPPING]",
+        ),
     ],
 )
 def test_individual_error_type_and_message(

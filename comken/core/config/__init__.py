@@ -21,6 +21,14 @@ config.ini を読み込み、config.SECTION.KEY の形式でアクセスでき�
 公開型は ``MappingDict``（``from comken.core.config import MappingDict``）で、
 ``_LenientDict`` は内部実装。
 
+``*_MAPPING`` セクションの **値（対応先）が空欄のときは読み込みエラー**にする
+（``ConfigMappingEmptyValueError``）。空欄のまま進めると「対応列の最初の値が
+空文字列」と解釈されて、業務データが空欄で書き戻される事故になるため、
+書いた人と実行の挙動が乖離しないよう読み込み時点で止める。 ``=`` を
+付け忘れた行（``cfg.get()`` が ``None`` を返す行）もまとめて空欄扱いにする。
+検知は ``*_MAPPING`` に限るため、通常セクションの ``READ_PASSWORD =`` のように
+「設定しない」を示す空欄はそのまま読める。
+
 エディタの補完候補:
     属性は実行時に動的に作られるため、そのままではエディタが補完できないが、
     Config() を呼ぶたびに補完用のスタブ（src/config.pyi）が自動更新されるため、
@@ -44,6 +52,7 @@ from comken.exceptions import (
     ConfigFileNotFoundError,
     ConfigKeyNotFoundError,
     ConfigLowerCaseNameError,
+    ConfigMappingEmptyValueError,
     ConfigSectionNotFoundError,
 )
 
@@ -263,10 +272,27 @@ class Config:
                     # ``_LenientDict`` で attribute 化する。``Config.SECTION_MAPPING["未知の列名"]``
                     # を ``None`` で判別できるようにするため ``__missing__`` で ``None`` を返す。
                     # dict のサブクラスなので ``isinstance(x, dict)`` が True（後方互換）。
-                    ld = _LenientDict(
-                        (key.strip(), cfg.get(original_section, key).strip())
-                        for key in cfg.options(original_section)
-                    )
+                    #
+                    # 値は ``_LenientDict`` 生成前に全件走査して空欄（前後の空白だけの
+                    # 値も含む）と ``=`` 無しの行（``cfg.get()`` が ``None`` を返す）を
+                    # 集める。空欄のキーは **まとめて** 例外に乗せる（1 件ずつ直させる
+                    # と「次はどれだっけ」のループに落ちるため）。 ``READ_PASSWORD =``
+                    # のように通常セクションで空欄を「設定しない」として使う書き方は
+                    # ここで **対象外**（``_is_mapping_section`` の中だけで検知する）。
+                    options = cfg.options(original_section)
+                    pairs: list[tuple[str, str]] = []
+                    empty_keys: list[str] = []
+                    for key in options:
+                        value = cfg.get(original_section, key)
+                        if value is None or value.strip() == "":
+                            empty_keys.append(key)
+                        else:
+                            pairs.append((key.strip(), value.strip()))
+                    if empty_keys:
+                        raise ConfigMappingEmptyValueError(
+                            self._path, stripped_section, empty_keys
+                        )
+                    ld = _LenientDict(pairs)
                     self._mappings[stripped_section] = ld
                     setattr(self, stripped_section.upper(), ld)
                     continue

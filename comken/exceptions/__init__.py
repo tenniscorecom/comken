@@ -98,7 +98,8 @@ ComkenError
 │   ├── ConfigCreatedFromExampleError
 │   ├── ConfigLowerCaseNameError
 │   ├── ConfigSectionNotFoundError
-│   └── ConfigKeyNotFoundError
+│   ├── ConfigKeyNotFoundError
+│   └── ConfigMappingEmptyValueError
 ├── MasterTableError
 │   ├── MasterSheetNotDefinedError
 │   ├── MasterColumnNotFoundError
@@ -168,6 +169,7 @@ from comken.exceptions.config import (
     ConfigFileNotFoundError,
     ConfigKeyNotFoundError,
     ConfigLowerCaseNameError,
+    ConfigMappingEmptyValueError,
     ConfigSectionNotFoundError,
 )
 from comken.exceptions.credential import (
@@ -335,6 +337,7 @@ __all__ = [
     "ConfigLowerCaseNameError",
     "ConfigSectionNotFoundError",
     "ConfigKeyNotFoundError",
+    "ConfigMappingEmptyValueError",
     "UnsupportedFileSuffixError",
     "FileDeletionError",
     "OutlookError",

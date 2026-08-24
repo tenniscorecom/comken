@@ -202,3 +202,40 @@ class ConfigKeyNotFoundError(ConfigError, AttributeError):
             f"存在するキー: {existing}{suggestion_line}\n"
             "キー名の綴りと、config.ini に定義されているかを確認してください。"
         )
+
+
+class ConfigMappingEmptyValueError(ConfigError):
+    """``[*_MAPPING]`` セクションの値が空欄
+
+    発生箇所: Config.__init__()（``*_MAPPING`` の ``_LenientDict`` 組み立て時）
+
+    対処:
+        メッセージに表示された **「読んだファイル」のパス** が、編集している
+        config.ini と一致するかを確認する。パスが正しければ、表示された
+        キー名の両側に値を書いて config.ini を直す（``列名 = 値``）。
+        ``=`` を付け忘れて ``キー`` のように書いた行もここで検出する
+        （``cfg.get()`` が ``None`` を返すので空欄と同じ扱い）。
+        通常セクションの空欄（``READ_PASSWORD =`` のように「設定しない」を
+        示す書き方）はエラーにしないので、``*_MAPPING`` 以外では無視してよい
+    """
+
+    def __init__(
+        self,
+        path: Path | str,
+        section: str,
+        empty_keys: list[str],
+    ) -> None:
+        # 値は configparser 側に前後トリムが任せているので、書かれたキーの
+        # そのままの表記を提示する（利用者が diff を見て直せるように）。
+        # キーが複数あっても 1 メッセージにまとめて出す。1 つ直して再実行、
+        # また 1 つ直して再実行、…のループに落ちると、修正の全体像が見え
+        # なくなり「次はどれだっけ」の状態になるため、最初に見つけた時点で
+        # 全件並べて渡す。
+        keys_line = ", ".join(empty_keys)
+        super().__init__(
+            f"config.ini の [{section}] セクションに、値が空欄のキーがあります。"
+            f"\n読んだファイル: {path}"
+            f"\n値が空欄のキー: {keys_line}"
+            "\n左右に値を書いたうえで、もう一度実行してください。"
+            "\n例: ご依頼番号 = 受付番号"
+        )

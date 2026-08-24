@@ -18,6 +18,7 @@ from comken.exceptions import (
     ConfigCreatedFromExampleError,
     ConfigError,
     ConfigLowerCaseNameError,
+    ConfigMappingEmptyValueError,
 )
 
 # .pyi 内で「型注釈に書かれた Name」が、その .pyi の import か組み込みで
@@ -256,6 +257,125 @@ class TestConfigMapping:
 
         with pytest.raises(ConfigLowerCaseNameError):
             Config(ini)
+
+    def test_empty_value_raises_mapping_empty_error(self, tmp_path):
+        """``[*_MAPPING]`` の値が ``キー =``（空欄）ならエラーにする。
+
+        防いでいる事故: 空欄のまま読み進めて「対応列の最初の値が空文字列」と
+        解釈されて、業務データが空欄で書き戻される。利用者が書いた設定と
+        実行時の挙動が乖離するため、読み込んだ時点で止める。
+        """
+        ini = tmp_path / "config.ini"
+        ini.write_text("[TRANSFER_MAPPING]\n部署名 =\n", encoding="utf-8")
+
+        with pytest.raises(ConfigMappingEmptyValueError) as exc:
+            Config(ini)
+
+        # どこに直すかが分かる要素を全部入れる（ファイル / セクション / キー / 書き方）
+        message = str(exc.value)
+        assert str(ini.resolve()) in message
+        assert "[TRANSFER_MAPPING]" in message
+        assert "部署名" in message
+        assert "左右に値を書いたうえで" in message
+
+    def test_whitespace_only_value_raises_mapping_empty_error(self, tmp_path):
+        """``キー =     ``（空白だけ）も空欄として扱う。
+
+        前後の空白を ``strip()`` した結果空文字になるので、視覚的に何か書いて
+        あるように見えてもエラーにする。configparser 側にトリムを任せている
+        ため、 config の側で再判定する必要がある。
+        """
+        ini = tmp_path / "config.ini"
+        ini.write_text("[TRANSFER_MAPPING]\n部署名 =   　  \n", encoding="utf-8")
+
+        with pytest.raises(ConfigMappingEmptyValueError) as exc:
+            Config(ini)
+        assert "部署名" in str(exc.value)
+
+    def test_missing_equals_sign_raises_mapping_empty_error(self, tmp_path):
+        """``キー``（``=`` 無し）は configparser のパーサ段階で ``ParsingError`` になる。
+
+        依頼書では「 ``cfg.get()`` が ``None`` を返す」と想定していたが、
+        configparser の標準動作では ``=`` 無しの行は **パーサ段階**で
+        ``ParsingError`` になるため、 ``ConfigMappingEmptyValueError`` に
+        届く前に止まる。 「``=`` を付け忘れた」という利用者側の問題は
+        ParsingError でも十分に分かるので、 ``*_MAPPING`` に限らず
+        同じ動作になる（通常セクションでも ParsingError）。
+        「 ``=`` 無しを ``MappingEmptyValueError`` で受け取る」挙動を
+        望むなら、 ``configparser.ConfigParser(allow_no_value=True)`` を
+        有効にする変更が要るため、依頼者の判断を仰ぎたい（実装せず報告）。
+        """
+        import configparser
+
+        ini = tmp_path / "config.ini"
+        ini.write_text("[TRANSFER_MAPPING]\n部署名\n", encoding="utf-8")
+
+        with pytest.raises(configparser.ParsingError) as exc:
+            Config(ini)
+        # ParsingError 経由でも該当行はメッセージに含まれる（行番号付き）。
+        assert "部署名" in str(exc.value)
+
+    def test_multiple_empty_keys_are_listed_in_one_message(self, tmp_path):
+        """空欄が複数あるときは 1 メッセージに全キー名を入れて返す。
+
+        1 件ずつ直させるループに落ちると、非エンジニアは「この部署名を変える
+        のは自分、次は社員番号」と順送りで修正する形になり、全体像が見え
+        なくなる。最初に全部並べることで、 config.ini を 1 回書き換えれば
+        済むことを明示する。
+        """
+        ini = tmp_path / "config.ini"
+        # configparser は ``キー =`` を許容するが、 ``キー `` を空欄値として
+        # 読む。 ``=`` 無しの行は別ケース（上のテスト）で扱う。
+        ini.write_text(
+            "[TRANSFER_MAPPING]\n部署名 =\n社員番号 =\n備考 = 連絡事項\n",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(ConfigMappingEmptyValueError) as exc:
+            Config(ini)
+        message = str(exc.value)
+        # 空欄のキーは両方、値は入っているキーは出ないことを確認
+        assert "部署名" in message
+        assert "社員番号" in message
+        assert "備考" not in message
+        assert "値が空欄のキー" in message
+
+    def test_non_mapping_section_allows_empty_value(self, tmp_path):
+        """``[*_MAPPING]`` 以外の通常セクションでは空欄（``READ_PASSWORD =``）を許可する。
+
+        ``READ_PASSWORD =`` は「パスワードを設定しない」という意味の正しい
+        書き方なので、空欄検知を全セクションに広げると既存の設定が壊れる。
+        ``_is_mapping_section`` が真のときだけ検知するようにしている。
+        """
+        ini = tmp_path / "config.ini"
+        ini.write_text(
+            "[EXCEL]\nREAD_PASSWORD =\nINPUT = C:\\work\n",
+            encoding="utf-8",
+        )
+
+        config = Config(ini)
+
+        # 空欄値がそのまま読める（Password 等の型変換が無いので空文字になる）
+        assert config.EXCEL.READ_PASSWORD == ""
+        assert Path("C:\\work") == config.EXCEL.INPUT
+
+    def test_mapping_section_still_reads_normal_values(self, tmp_path):
+        """正常な ``[*_MAPPING]`` は今までどおり dict として読める。
+
+        既存テスト ``test_preserves_mixed_case_column_names`` などが
+        ``Config(...)`` 経由で同じことを確かめているが、空欄検知を足した
+        経路でも読めることをここで明示する。
+        """
+        ini = tmp_path / "config.ini"
+        ini.write_text(
+            "[TRANSFER_MAPPING]\nご依頼番号 = 受付番号\n商品名 = 商品名\n",
+            encoding="utf-8",
+        )
+
+        mapping = Config(ini).TRANSFER_MAPPING
+
+        assert mapping["ご依頼番号"] == "受付番号"
+        assert mapping["商品名"] == "商品名"
 
 
 class TestConfigBoolConversion:

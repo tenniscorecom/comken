@@ -3002,6 +3002,33 @@ config.ini のセクションに必要なキーがない
 def __init__(self, section: str, name: str, existing: list[str], path: Path | str | None=None) -> None:
 ```
 
+### `ConfigMappingEmptyValueError`
+
+```text
+class ConfigMappingEmptyValueError(ConfigError):
+```
+
+#### 説明
+
+``[*_MAPPING]`` セクションの値が空欄
+
+発生箇所: Config.__init__()（``*_MAPPING`` の ``_LenientDict`` 組み立て時）
+
+対処:
+    メッセージに表示された **「読んだファイル」のパス** が、編集している
+    config.ini と一致するかを確認する。パスが正しければ、表示された
+    キー名の両側に値を書いて config.ini を直す（``列名 = 値``）。
+    ``=`` を付け忘れて ``キー`` のように書いた行もここで検出する
+    （``cfg.get()`` が ``None`` を返すので空欄と同じ扱い）。
+    通常セクションの空欄（``READ_PASSWORD =`` のように「設定しない」を
+    示す書き方）はエラーにしないので、``*_MAPPING`` 以外では無視してよい
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path | str, section: str, empty_keys: list[str]) -> None:
+```
+
 ### `UnsupportedFileSuffixError`
 
 ```text
