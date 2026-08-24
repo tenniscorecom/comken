@@ -162,6 +162,9 @@ class CabinetOfficeCSVSource(HolidaySource):
             timeout = self._fetch_timeout
         # 遅延 import: requests はオフライン環境で入っていないことがあるため、
         # 使うときだけ import し、無い環境では HolidayCalendarFetchError に変える。
+        # 社内 BO 環境はオフラインで pip が使えないため requests の型スタブを
+        # 取得できず、pyright が ``import-not-found`` / ``attr-defined`` を
+        # 誤検知する。実行時は `requests.get(...)` / `RequestException` が動く。
         try:
             import requests  # type: ignore[import-not-found]
         except ImportError as error:

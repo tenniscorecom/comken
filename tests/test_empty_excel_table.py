@@ -48,3 +48,53 @@ def test_read_uses_header_error_when_header_row_is_empty(tmp_path) -> None:
 def test_empty_excel_table_error_is_a_subclass_of_excel_error() -> None:
     """EmptyExcelTableError が ExcelError の派生であることを確認する。"""
     assert issubclass(EmptyExcelTableError, ExcelError)
+
+
+def test_replace_on_empty_table_adds_first_data_row(tmp_path) -> None:
+    """データ行が 0 個の既存テーブルへ ``replace()`` しても例外が出ず、ref が縮む。"""
+    path = tmp_path / "empty.xlsx"
+    with Excel(path) as excel:
+        table = excel.create_data_sheet("Users").create_table("Users", Table(["id", "name"], []))
+        assert table.count() == 0
+        # 既存テストでカバー済みの「後から 0 行で置換」とは別に、最初に 0 行の
+        # テーブルへ ``replace()`` する場合の経路を検証する。 ``new_max_row`` が
+        # ``min_row + max(len(rows), 1)`` で 1 行分に丸められる分岐を通る。
+        table.replace(Table(["id", "name"], [{"id": 1, "name": "A"}]))
+        assert table.read().read() == [{"id": "1", "name": "A"}]
+        # ref は A1:B2（ヘッダ + 1 行）に収まる。assert 経路を通っていないことを
+        # 副次的に確かめるため、openpyxl の ref 文字列で ref の形を見る
+        excel_table = excel.data_sheet("Users").table()._worksheet.tables["PY_T_Users"]
+        assert excel_table.ref == "A1:B2"
+
+
+def test_replace_with_empty_rows_clears_last_cell_beyond_new_ref(tmp_path) -> None:
+    """``replace()`` で行を 0 件にしたとき、旧テーブルの末尾セルをクリアする。"""
+    path = tmp_path / "shrink.xlsx"
+    with Excel(path) as excel:
+        table = excel.create_data_sheet("Users").create_table(
+            "Users",
+            Table(["id", "name"], [{"id": 1, "name": "A"}, {"id": 2, "name": "B"}]),
+        )
+        # 旧 ref は A1:B3。 0 行のテーブルで置換すると ``_clear_removed_cells`` が
+        # 旧 max_row 行の値を空にする。新 ref は A1:A2（A 列のみ、ヘッダ + 1 行）。
+        table.replace(Table(["id"], []))
+        assert table._worksheet["B3"].value is None  # 旧データ末尾の name 列
+        assert table._worksheet["A3"].value is None  # 旧データ末尾の id 列（表外）
+        # 新 ref は「先頭 + 末尾1行」に縮んでいる
+        excel_table = table._worksheet.tables["PY_T_Users"]
+        assert excel_table.ref == "A1:A2"
+
+
+def test_replace_with_empty_rows_keeps_existing_headers(tmp_path) -> None:
+    """``replace([])`` で空リストを渡したとき、既存ヘッダが維持される。"""
+    path = tmp_path / "keep_headers.xlsx"
+    with Excel(path) as excel:
+        table = excel.create_data_sheet("Users").create_table(
+            "Users",
+            Table(["id", "name"], [{"id": 1, "name": "A"}]),
+        )
+        # 引数が ``list`` のときもヘルパー経由の ``_table_boundaries`` を通り、
+        # ``assert`` 経路を踏まずに ref が更新されることを確認する
+        table.replace([])
+        assert table.read().columns == ["id", "name"]
+        assert table.read().read() == []

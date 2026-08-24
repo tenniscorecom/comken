@@ -7188,12 +7188,24 @@ def set_background(self, cell: str, color: str) -> None:
 #### `set_border`
 
 ```text
-def set_border(self, cell: str, **kwargs: Any) -> None:
+def set_border(self, cell: str, *, style: BorderStyle='thin', color: str='000000') -> None:
 ```
 
 ##### 説明
 
 セルの四辺に同じ境界線を設定する。
+
+よく使う ``style``: ``"thin"`` / ``"medium"`` / ``"thick"`` /
+``"dashed"`` / ``"double"``。全種類は ``BorderStyle`` 型を参照。
+
+Args:
+    cell: 対象のセル参照 (例: ``"A1"``)。
+    style: 線の種類。 ``BorderStyle`` で定義したいずれかの値。
+    color: 16進数 6 桁の色 (``#`` 付きでも可)。既定は ``"000000"``。
+
+Raises:
+    ValueError: ``style`` が ``BorderStyle`` のいずれにも該当しない
+        (openpyxl の検証による)。
 
 #### `merge_cells`
 

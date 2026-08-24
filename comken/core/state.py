@@ -109,6 +109,10 @@ class State:
 
 def _new_parser() -> configparser.ConfigParser:
     parser = configparser.ConfigParser(interpolation=None)
+    # configparser の型スタブは method slot への callable 代入を許容せず、
+    # pyright が「No overloaded function matches」と誤検知する。実行時は
+    # `str("FOO") == "FOO"` で identity として動く（社内 BO 環境では
+    # configparser への type stub 提供が無く、自前で書き換えられない）
     parser.optionxform = str  # type: ignore[method-assign]
     return parser
 

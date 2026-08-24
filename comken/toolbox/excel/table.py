@@ -21,6 +21,26 @@ if TYPE_CHECKING:
 Value: TypeAlias = str | int | float | bool | datetime
 
 
+def _table_boundaries(excel_table_ref: str) -> tuple[int, int, int, int]:
+    """Excel テーブル ref を int 4 要素 ``(min_col, min_row, max_col, max_row)`` へ正規化する。
+
+    openpyxl の ``range_boundaries()`` は返り値を ``tuple[int | None, ...]`` と推論するが、
+    Excel テーブル ref は validated 済みの範囲なので通常 ``None`` にはならない。
+    呼び出し側で None を意識せずに済むよう、ここで ``int`` へ揃えて返す。
+
+    もし ``None`` が現れた場合のフォールバックは 0 とする。空テーブルを置換した結果として
+    ref の各値が 0 に丸まっても、その直後の ``cell(...)`` 呼び出しが「先頭セル」として
+    動くので、利用者に見える不整合は出ない（発注元の判断）。
+    """
+    min_col, min_row, max_col, max_row = range_boundaries(excel_table_ref)
+    return (
+        0 if min_col is None else min_col,
+        0 if min_row is None else min_row,
+        0 if max_col is None else max_col,
+        0 if max_row is None else max_row,
+    )
+
+
 class ExcelTable:
     """データシート全体を1つのテーブルとして操作する。
 
@@ -48,7 +68,7 @@ class ExcelTable:
                 raise InvalidTableOperationError("対象テーブルを一意に決められません。")
             self._name = table_names[0]
         excel_table = self._worksheet.tables[self._name]
-        min_col, min_row, max_col, max_row = range_boundaries(excel_table.ref)
+        min_col, min_row, max_col, max_row = _table_boundaries(excel_table.ref)
         formula_cells = [
             cell
             for row in self._worksheet.iter_rows(
@@ -119,7 +139,7 @@ class ExcelTable:
                 raise InvalidTableOperationError("書き込み対象テーブルを一意に決められません。")
             self._name = names[0]
         excel_table = self._worksheet.tables[self._name]
-        min_col, min_row, max_col, max_row = range_boundaries(excel_table.ref)
+        min_col, min_row, max_col, max_row = _table_boundaries(excel_table.ref)
         table = rows if isinstance(rows, Table) else Table(list(rows[0]) if rows else [], rows)
         rows = table.read()
         headers = table.columns or [
@@ -141,19 +161,15 @@ class ExcelTable:
         for row_number, row in enumerate(rows, min_row + 1):
             for column, header in enumerate(headers, min_col):
                 self._worksheet.cell(row=row_number, column=column, value=row.get(header, ""))
-        # openpyxl の range_boundaries() は返り値の各要素を int | None と推論されるが、
-        # Excel テーブル ref は validated 済みの範囲なので None にはならない。
-        # assert でランタイムを担保し、type: ignore で openpyxl の型スタブ不正確さを吸収する。
-        ref = excel_table.ref
-        range_boundaries_result = range_boundaries(ref)
-        assert range_boundaries_result is not None, f"Invalid Excel table ref: {ref}"
-        min_col, min_row, max_col, max_row = range_boundaries_result  # type: ignore[reportAssignmentType]
-        new_max_row = min_row + max(len(rows), 1)  # type: ignore[reportOptionalOperand]
-        last_cell = self._worksheet.cell(  # type: ignore[reportCallIssue, reportArgumentType]
+        # ref を再パースせず上の _table_boundaries() の結果を使い回す。openpyxl の
+        # range_boundaries() は ``tuple[int | None, ...]`` を返すため、ここでは
+        # ヘルパー側で ``int`` へ正規化した値を直接参照する。
+        new_max_row = min_row + max(len(rows), 1)
+        last_cell = self._worksheet.cell(
             new_max_row,
-            min_col + len(headers) - 1,  # type: ignore[reportOptionalOperand]
+            min_col + len(headers) - 1,
         ).coordinate
-        excel_table.ref = f"{self._worksheet.cell(min_row, min_col).coordinate}:{last_cell}"  # type: ignore[reportCallIssue, reportArgumentType]
+        excel_table.ref = f"{self._worksheet.cell(min_row, min_col).coordinate}:{last_cell}"
         self._excel._mark_dirty()
 
     def write(self, table: Table) -> None:

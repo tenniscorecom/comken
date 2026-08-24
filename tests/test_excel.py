@@ -135,3 +135,69 @@ def test_create_sheet_returns_sheet_that_supports_layout_api(tmp_path) -> None:
         # 表示用シートでは table() は DataSheetAccessError
         with pytest.raises(DataSheetAccessError):
             sheet.table()
+
+
+def test_set_border_uses_thin_by_default(tmp_path) -> None:
+    """set_border() は style を省略すると thin が使われる。"""
+    import inspect
+
+    from comken.toolbox.excel.sheet import Sheet
+
+    path = tmp_path / "book.xlsx"
+    with Excel(path) as excel:
+        sheet = excel.create_sheet("集計")
+        sheet.write_value("A1", "x")
+        sheet.set_border("A1")
+    with Excel(path, read_only=True) as excel:
+        cell = excel.sheet("集計")._worksheet["A1"]
+        assert cell.border.left.style == "thin"
+        # openpyxl は 8 桁の ARGB 形式で色を保存する（先頭 2 桁はアルファチャンネル）
+        assert cell.border.left.color.value == "00000000"
+    # 型定義の Literal として受け付ける値の一覧（実行時の網羅チェック）
+    sig = inspect.signature(Sheet.set_border)
+    if sig.parameters["style"].default != "thin":
+        pytest.fail(f"style 既定値が 'thin' ではない: {sig.parameters['style'].default!r}")
+    if sig.parameters["color"].default != "000000":
+        pytest.fail(f"color 既定値が '000000' ではない: {sig.parameters['color'].default!r}")
+
+
+def test_set_border_accepts_style_and_strips_hash(tmp_path) -> None:
+    """style / color を指定でき、color の '#' は落ちる。"""
+    path = tmp_path / "book.xlsx"
+    with Excel(path) as excel:
+        sheet = excel.create_sheet("集計")
+        sheet.write_value("A1", "x")
+        sheet.set_border("A1", style="thick", color="#FF0000")
+    with Excel(path, read_only=True) as excel:
+        cell = excel.sheet("集計")._worksheet["A1"]
+        assert cell.border.left.style == "thick"
+        assert cell.border.right.style == "thick"
+        assert cell.border.top.style == "thick"
+        assert cell.border.bottom.style == "thick"
+        # openpyxl は 8 桁の ARGB 形式で色を保存する（先頭 2 桁はアルファチャンネル）
+        assert cell.border.left.color.value == "00FF0000"
+
+
+def test_set_border_rejects_unknown_keyword() -> None:
+    """未知のキーワードは Python の呼び出し時点で TypeError。"""
+    import inspect
+
+    from comken.toolbox.excel.sheet import Sheet
+
+    sig = inspect.signature(Sheet.set_border)
+    # set_border() は style / color しか受け付けないため、
+    # 未知のキーワードを bind しようとすると TypeError になる。
+    with pytest.raises(TypeError):
+        sig.bind("A1", thickness=2)
+
+
+def test_openpyxl_side_rejects_unknown_style_with_clear_message() -> None:
+    """openpyxl の Side は無効な style を ValueError にして、有効値の一覧を返す。
+
+    comken の Sheet.set_border() は Literal 型でビルド時に不正値を防ぐので、
+    openpyxl 側の例外メッセージはここで直接確認する。
+    """
+    from openpyxl.styles import Side
+
+    with pytest.raises(ValueError, match="Value must be one of"):
+        Side(style="thinn", color="000000")

@@ -77,7 +77,7 @@ class _LenientDict(dict):
     互換）。
     """
 
-    def __missing__(self, key: str) -> None:  # type: ignore[override]
+    def __missing__(self, key: str) -> str | None:
         return None
 
 
@@ -229,6 +229,9 @@ class Config:
         cfg = configparser.ConfigParser(interpolation=None)
         # configparser は既定でキー名を小文字に潰すため、書かれたとおりの綴りを保つ。
         # これがないと「大文字で書かれていたか」を判定できない（_validate_upper_case）。
+        # `str` 型を callable として代入しているが、configparser の型スタブが
+        # method slot を許容せず pyright が「No overloaded function matches」と
+        # 誤検知するため残す。実行時は `str("FOO") == "FOO"` で identity として動く。
         cfg.optionxform = str  # type: ignore[method-assign]
         # utf-8-sig: メモ帳等で保存すると BOM 付き UTF-8 になるため（BOM なしも読める）
         loaded = cfg.read(path, encoding="utf-8-sig")

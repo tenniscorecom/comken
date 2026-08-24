@@ -1,7 +1,7 @@
 """comken/toolbox/excel/sheet.py — Excel シートを操作する。"""
 
 from copy import copy
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from openpyxl.styles import Border, PatternFill, Side
 from openpyxl.utils import column_index_from_string, get_column_letter
@@ -23,6 +23,24 @@ from comken.toolbox.excel.table import ExcelTable
 if TYPE_CHECKING:
     from comken.core.table.model import Table
     from comken.toolbox.excel.workbook import Excel
+
+# openpyxl の Side が受け付ける境界線のスタイル。
+# 値の一覧は openpyxl.styles.Side.style の NoneSet に従う。
+BorderStyle = Literal[
+    "dashDot",
+    "dashDotDot",
+    "dashed",
+    "dotted",
+    "double",
+    "hair",
+    "medium",
+    "mediumDashDot",
+    "mediumDashDotDot",
+    "mediumDashed",
+    "slantDashDot",
+    "thick",
+    "thin",
+]
 
 
 class Sheet:
@@ -233,14 +251,29 @@ class Sheet:
         self._worksheet[cell].fill = PatternFill("solid", fgColor=color.removeprefix("#"))
         self._excel._mark_dirty()
 
-    def set_border(self, cell: str, **kwargs: Any) -> None:
-        """セルの四辺に同じ境界線を設定する。"""
+    def set_border(
+        self,
+        cell: str,
+        *,
+        style: BorderStyle = "thin",
+        color: str = "000000",
+    ) -> None:
+        """セルの四辺に同じ境界線を設定する。
+
+        よく使う ``style``: ``"thin"`` / ``"medium"`` / ``"thick"`` /
+        ``"dashed"`` / ``"double"``。全種類は ``BorderStyle`` 型を参照。
+
+        Args:
+            cell: 対象のセル参照 (例: ``"A1"``)。
+            style: 線の種類。 ``BorderStyle`` で定義したいずれかの値。
+            color: 16進数 6 桁の色 (``#`` 付きでも可)。既定は ``"000000"``。
+
+        Raises:
+            ValueError: ``style`` が ``BorderStyle`` のいずれにも該当しない
+                (openpyxl の検証による)。
+        """
         self._ensure_display_sheet("set_border")
-        style = str(kwargs.pop("style", "thin"))
-        color = str(kwargs.pop("color", "000000")).removeprefix("#")
-        if kwargs:
-            raise TypeError(f"set_border() で使用できない引数です: {sorted(kwargs)}")
-        side = Side(style=style, color=color)
+        side = Side(style=style, color=color.removeprefix("#"))
         self._worksheet[cell].border = Border(left=side, right=side, top=side, bottom=side)
         self._excel._mark_dirty()
 

@@ -37,13 +37,7 @@ Client Credentials Flow は `client_secret` だけでアクセストークンを
     RetryReason            リトライ理由の定数
 """
 
-try:
-    import requests as _requests  # 依存の有無をここで確かめるだけ
-except ImportError:
-    # requests がない環境でもこのパッケージを import だけはできるようにする。
-    # 実際に API を叩く経路（`oauth_credentials` / `oauth_refresh` / `client` /
-    # `rotation` 等）で `import requests` が走り、その時点で ImportError が出る
-    _requests = None  # type: ignore[assignment]
+from types import ModuleType
 
 from comken.toolbox.salesforce.metrics import (
     APIMetrics,
@@ -52,6 +46,16 @@ from comken.toolbox.salesforce.metrics import (
     RetryReason,
 )
 from comken.toolbox.salesforce.report import ReportAPI
+
+# requests の存在チェックだけ先に行う。依存が無い環境でもこのパッケージを
+# import だけはできるようにしておき、実際に API を叩く経路
+# （`oauth_credentials` / `oauth_refresh` / `client` / `rotation` 等）で
+# `import requests` が走った時点で ImportError が出る。
+_requests: ModuleType | None
+try:
+    import requests as _requests  # 依存の有無をここで確かめるだけ
+except ImportError:
+    _requests = None
 
 # `requests` を直接 import するモジュールは遅延ロードする。`report` のような
 # requests 非依存モジュールだけ使う場合（BO 環境）にパッケージ全体を
