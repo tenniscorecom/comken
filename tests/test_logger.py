@@ -261,3 +261,60 @@ class TestLocal:
         text = Path(file_handler.baseFilename).read_text(encoding="utf-8")
         assert f"[pid={os.getpid()}]" in text
         assert "sample.module: done" in text
+
+    def test_root_level_is_min_of_own_handlers_alone(
+        self, isolated_logging, tmp_path, monkeypatch
+    ):
+        """local() 単独呼び出しで root level は INFO（=自分の handler の min）になる。"""
+        self._prepare(monkeypatch, tmp_path)
+        local()
+        assert isolated_logging.level == logging.INFO
+
+    def test_root_level_uses_lower_of_console_and_file(
+        self, isolated_logging, tmp_path, monkeypatch
+    ):
+        """console_level と file_level が異なるとき、root は低い方になる。"""
+        self._prepare(monkeypatch, tmp_path)
+        local(console_level=logging.WARNING, file_level=logging.DEBUG)
+        assert isolated_logging.level == logging.DEBUG
+
+        self._prepare(monkeypatch, tmp_path)
+        local(console_level=logging.DEBUG, file_level=logging.WARNING)
+        assert isolated_logging.level == logging.DEBUG
+
+    def test_external_notset_handler_does_not_make_root_notset(
+        self, isolated_logging, tmp_path, monkeypatch
+    ):
+        """外部の NOTSET ハンドラーが root に追加されても root は NOTSET にならない。
+
+        修正前は root_logger.handlers 全体から min() を取るため、外部の
+        NOTSET(0) ハンドラーが混ざると root が NOTSET に巻き戻され、
+        isEnabledFor() が DEBUG まで通す穴になっていた。
+
+        ここでは local() 内で local_file_handler が root に追加された直後に
+        外部 NOTSET ハンドラーが追加される状況を monkey-patch で再現する
+        （実際の経路: setup 後に import 副作用でハンドラーが足される等）。
+        """
+        _prepare_site(monkeypatch, tmp_path)
+        setup(Backoffice)
+
+        external_handler = logging.StreamHandler()
+        # logging.StreamHandler のデフォルト level は NOTSET(0)。
+        assert external_handler.level == logging.NOTSET
+
+        real_add_handler = isolated_logging.addHandler
+        def patched_add_handler(handler: logging.Handler) -> None:
+            real_add_handler(handler)
+            if handler.name == local_module.LOCAL_HANDLER_NAME:
+                real_add_handler(external_handler)
+        monkeypatch.setattr(isolated_logging, "addHandler", patched_add_handler)
+
+        monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
+        monkeypatch.setattr(local_module, "today", lambda: date(2026, 8, 21))
+        local()
+
+        # 外部ハンドラーが root に付いていることを確認（テスト自体が穴を再現できているか）。
+        assert external_handler in isolated_logging.handlers
+        # 修正前は NOTSET になっていた。修正後は自分の handler の低い方 (INFO) になる。
+        assert isolated_logging.level != logging.NOTSET
+        assert isolated_logging.level == logging.INFO

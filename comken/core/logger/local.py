@@ -74,8 +74,11 @@ def local(
         console_handler.setFormatter(formatter)
         root_logger.addHandler(console_handler)
     root_logger.addHandler(local_file_handler)
-    # root logger 自身で handler が受け取るログを落とさないよう、低い方まで通す。
-    root_logger.setLevel(min(handler.level for handler in root_logger.handlers))
+    # 自分が付けた handler の低い方まで root を通す。root に既に付いている
+    # 他者の handler は対象に含めない — 外部の NOTSET(0) ハンドラーが混ざると
+    # min が 0 を返し、root まで NOTSET に巻き戻されて isEnabledFor() が
+    # DEBUG まで通す穴になるため。
+    root_logger.setLevel(min(console_handler.level, local_file_handler.level))
 
 
 def _has_environment_handlers(handlers: list[logging.Handler]) -> bool:
