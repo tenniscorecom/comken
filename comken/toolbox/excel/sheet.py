@@ -162,14 +162,45 @@ class Sheet:
         self._worksheet[cell] = value
         self._excel._mark_dirty()
 
-    def read_value(self, cell: str) -> Any:
-        """セルの値を読む。"""
+    def read_value(self, cell: str, *, force_com: bool = False) -> Any:
+        """セルの値を読む。数式は計算結果を返す。
+
+        ブックは ``data_only`` 以外の状態で開くため、メモリ上の ``cell.value`` は
+        数式セルでは ``"=SUM(A1:A3)"`` という文字列になる。``read_value`` は
+        数式セルでは保存済み計算値（無ければ COM で再計算）を返す。
+        ``force_com=True`` でキャッシュを無視して Excel 実機で強制再計算させる。
+        """
         self._ensure_display_sheet("read_value")
-        return "" if self._worksheet[cell].value is None else self._worksheet[cell].value
+        raw = self._worksheet[cell].value
+        is_formula = isinstance(raw, str) and raw.startswith("=")
+        if not is_formula and not force_com:
+            return "" if raw is None else raw
+        column, row = coordinate_from_string(cell)
+        column_index = column_index_from_string(column)
+        self._excel._ensure_open()
+        if force_com:
+            rows = self._excel._read_range_with_com(
+                self._worksheet.title, column_index, row, column_index, row
+            )
+            return rows[0][0] if rows else ("" if raw is None else raw)
+        cached_rows, needs_com = self._excel._cached_range(
+            self._worksheet.title, column_index, row, column_index, row
+        )
+        if not needs_com and cached_rows:
+            return cached_rows[0][0]
+        rows = self._excel._read_range_with_com(
+            self._worksheet.title, column_index, row, column_index, row
+        )
+        return rows[0][0] if rows else ("" if raw is None else raw)
 
     def read_formula(self, cell: str) -> str:
-        """セルの数式を読む。数式でなければ空文字を返す。"""
-        value = self.read_value(cell)
+        """セルの数式を読む。数式でなければ空文字を返す。
+
+        ``read_value`` は計算結果を返すため、もう数式の判定には使えない。
+        ワークシートの生の値を直接見る。
+        """
+        self._ensure_display_sheet("read_formula")
+        value = self._worksheet[cell].value
         return value if isinstance(value, str) and value.startswith("=") else ""
 
     def write_range(self, cell_range: str, values: list[list[Any]]) -> None:
@@ -185,13 +216,48 @@ class Sheet:
                 cell.value = value
         self._excel._mark_dirty()
 
-    def read_range(self, cell_range: str) -> list[dict[str, Any]]:
-        """指定範囲の先頭行を見出しとして辞書のリストで読む。"""
+    def read_range(self, cell_range: str, *, force_com: bool = False) -> list[dict[str, Any]]:
+        """指定範囲の先頭行を見出しとして辞書のリストで読む。
+
+        数式セルがある範囲では保存済み計算値、無ければ COM で再計算した値を返す。
+        ``force_com=True`` でキャッシュを無視して Excel 実機で強制再計算させる。
+        """
         self._ensure_display_sheet("read_range")
-        rows = [
-            ["" if cell.value is None else cell.value for cell in row]
-            for row in self._worksheet[cell_range]
-        ]
+        cells = self._worksheet[cell_range]
+        # MultiCellRange は iter_rows 形式で展開して扱う。
+        if hasattr(cells, "min_row"):
+            min_row, min_col = cells.min_row, cells.min_col
+            max_row, max_col = cells.max_row, cells.max_col
+            row_iter = self._worksheet.iter_rows(
+                min_row=min_row, max_row=max_row, min_col=min_col, max_col=max_col
+            )
+        else:
+            row_iter = iter(cells)
+            min_row = min_col = max_row = max_col = 0
+        has_formula = any(
+            isinstance(cell.value, str) and cell.value.startswith("=")
+            for row in row_iter
+            for cell in row
+        )
+        if has_formula or force_com:
+            if force_com:
+                rows = self._excel._read_range_with_com(
+                    self._worksheet.title, min_col, min_row, max_col, max_row
+                )
+            else:
+                cached_rows, needs_com = self._excel._cached_range(
+                    self._worksheet.title, min_col, min_row, max_col, max_row
+                )
+                if needs_com:
+                    rows = self._excel._read_range_with_com(
+                        self._worksheet.title, min_col, min_row, max_col, max_row
+                    )
+                else:
+                    rows = cached_rows
+        else:
+            rows = [
+                tuple("" if cell.value is None else cell.value for cell in row) for row in cells
+            ]
         if not rows:
             return []
         headers = [str(value) for value in rows[0]]

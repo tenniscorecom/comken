@@ -129,6 +129,32 @@ class TableNotFoundError(ExcelError):
         super().__init__(f"テーブルが見つかりません: {name}  存在するテーブル: {tables}")
 
 
+class TableFormulaOverwriteError(ExcelError):
+    """テーブル内の人が入れた数式を値で潰そうとした
+
+    数式セルがあると ``replace()`` / ``append()`` は既定で止まる。
+    黙って値で潰すと、依存セルや集計式が壊れたことに遅れて気づくため。
+
+    発生箇所: ExcelTable.replace() / ExcelTable.append()
+
+    対処:
+        数式を保持したい場合は、``replace()`` のあとに該当セルへ元の数式を
+        書き戻す。意図的に値で潰してよいときだけ ``allow_formula_overwrite=True`` を渡す
+    """
+
+    def __init__(self, table_name: str, locations: Sequence[str]) -> None:
+        sample = ", ".join(locations[:3])
+        suffix = "" if len(locations) <= 3 else f" 他 {len(locations) - 3} 件"
+        self.table_name = table_name
+        self.locations = list(locations)
+        super().__init__(
+            f"Excel テーブル「{table_name}」に数式セルがあります: {sample}{suffix}\n"
+            "replace()/append() は既定で数式を値で潰しません。"
+            "数式を保持する場合は replace のあとに該当セルへ書き戻す、"
+            "または allow_formula_overwrite=True で意図的な上書きを明示してください。"
+        )
+
+
 class MacroError(ExcelError):
     """Excel のマクロが失敗した
 

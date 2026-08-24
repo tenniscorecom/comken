@@ -34,6 +34,7 @@ ComkenError
 │   ├── InvalidTableNameError
 │   ├── TableAlreadyExistsError
 │   ├── TableNotFoundError
+│   ├── TableFormulaOverwriteError
 │   ├── MacroError
 │   ├── EmptyHeaderCellError
 │   ├── DuplicateHeaderCellError
@@ -222,6 +223,7 @@ from comken.exceptions.excel import (
     SheetNameError,
     SheetNotFoundError,
     TableAlreadyExistsError,
+    TableFormulaOverwriteError,
     TableNotFoundError,
 )
 from comken.exceptions.file import (
@@ -313,6 +315,7 @@ __all__ = [
     "SheetNameError",
     "InvalidTableNameError",
     "TableAlreadyExistsError",
+    "TableFormulaOverwriteError",
     "TableNotFoundError",
     "MacroError",
     "EmptyHeaderCellError",

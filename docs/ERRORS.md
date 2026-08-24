@@ -53,6 +53,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `SheetNameError` | 表示用シートに使えない名前を ``create_sheet`` に渡した | 予約接頭辞 ``PY_`` を除いた名前を ``create_sheet`` に渡すか、データシートとして作る場合は ``create_data_sheet`` を使う |
 | `InvalidTableNameError` | Excel で使えないテーブル名を指定した | 空白・数字始まり・セル参照のような名前を避ける |
 | `TableAlreadyExistsError` | 同じ名前のテーブルが既にある | 別のテーブル名を指定する |
+| `TableFormulaOverwriteError` | テーブル内の人が入れた数式を値で潰そうとした | 数式を保持したい場合は、``replace()`` のあとに該当セルへ元の数式を書き戻す。意図的に値で潰してよいときだけ ``allow_formula_overwrite=True`` を渡す |
 | `TableNotFoundError` | 指定したテーブルがシートにない | エラーに表示された既存テーブル名を確認する |
 | `MacroError` | Excel のマクロが失敗した | Excel をすべて閉じて再実行する。続く場合は管理者へ |
 | `EmptyHeaderCellError` | Excel の見出しに空欄がある | Excel の1行目の空欄を埋める |

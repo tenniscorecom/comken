@@ -13,6 +13,7 @@ from comken.exceptions import (
     EmptyHeaderCellError,
     InvalidTableInputError,
     InvalidTableOperationError,
+    TableFormulaOverwriteError,
 )
 
 if TYPE_CHECKING:
@@ -130,8 +131,18 @@ class ExcelTable:
         ]
         return Table([str(header) for header in headers], result, types=self._excel._types)
 
-    def replace(self, rows: list[dict[str, Value]] | Table) -> None:
-        """データシート全体を置き換える。"""
+    def replace(
+        self,
+        rows: list[dict[str, Value]] | Table,
+        *,
+        allow_formula_overwrite: bool = False,
+    ) -> None:
+        """データシート全体を置き換える。
+
+        既存データ部に人が入れた数式があると、既定では ``TableFormulaOverwriteError``
+        で止める。数式を値で潰すと依存セルや集計式が壊れたことに遅れて気づくため。
+        意図的に上書きしてよいときだけ ``allow_formula_overwrite=True`` を渡す。
+        """
         self._excel._ensure_writable("replace")
         if self._name is None:
             names = list(self._worksheet.tables)
@@ -140,6 +151,22 @@ class ExcelTable:
             self._name = names[0]
         excel_table = self._worksheet.tables[self._name]
         min_col, min_row, max_col, max_row = _table_boundaries(excel_table.ref)
+        if not allow_formula_overwrite:
+            # データ部（min_row+1 から max_row）の人が入れた数式を検出する。
+            # 見出し行は通常文字列なので対象外。
+            formula_locations = [
+                cell.coordinate
+                for row in self._worksheet.iter_rows(
+                    min_row=min_row + 1,
+                    max_row=max_row,
+                    min_col=min_col,
+                    max_col=max_col,
+                )
+                for cell in row
+                if isinstance(cell.value, str) and cell.value.startswith("=")
+            ]
+            if formula_locations:
+                raise TableFormulaOverwriteError(self._name, formula_locations)
         table = rows if isinstance(rows, Table) else Table(list(rows[0]) if rows else [], rows)
         rows = table.read()
         headers = table.columns or [
@@ -172,7 +199,12 @@ class ExcelTable:
         excel_table.ref = f"{self._worksheet.cell(min_row, min_col).coordinate}:{last_cell}"
         self._excel._mark_dirty()
 
-    def append(self, rows: list[dict[str, Value]] | dict[str, Value] | Table) -> None:
+    def append(
+        self,
+        rows: list[dict[str, Value]] | dict[str, Value] | Table,
+        *,
+        allow_formula_overwrite: bool = False,
+    ) -> None:
         """Table、1行、または行リストを既存テーブルの末尾へ追加する。"""
         self._excel._ensure_writable("append")
         current = self.read()
@@ -187,7 +219,7 @@ class ExcelTable:
                 "ExcelTable の追記には Table、1行、または行リストを指定してください。"
             )
         current.append(additions)
-        self.replace(current)
+        self.replace(current, allow_formula_overwrite=allow_formula_overwrite)
 
     def count(self) -> int:
         """データ行数を返す。"""

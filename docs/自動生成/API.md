@@ -3535,6 +3535,31 @@ class TableAlreadyExistsError(ExcelError):
 def __init__(self, name: str) -> None:
 ```
 
+### `TableFormulaOverwriteError`
+
+```text
+class TableFormulaOverwriteError(ExcelError):
+```
+
+#### 説明
+
+テーブル内の人が入れた数式を値で潰そうとした
+
+数式セルがあると ``replace()`` / ``append()`` は既定で止まる。
+黙って値で潰すと、依存セルや集計式が壊れたことに遅れて気づくため。
+
+発生箇所: ExcelTable.replace() / ExcelTable.append()
+
+対処:
+    数式を保持したい場合は、``replace()`` のあとに該当セルへ元の数式を
+    書き戻す。意図的に値で潰してよいときだけ ``allow_formula_overwrite=True`` を渡す
+
+#### `__init__`
+
+```text
+def __init__(self, table_name: str, locations: Sequence[str]) -> None:
+```
+
 ### `TableNotFoundError`
 
 ```text
@@ -8184,12 +8209,17 @@ def write_value(self, cell: str, value: Any) -> None:
 #### `read_value`
 
 ```text
-def read_value(self, cell: str) -> Any:
+def read_value(self, cell: str, *, force_com: bool=False) -> Any:
 ```
 
 ##### 説明
 
-セルの値を読む。
+セルの値を読む。数式は計算結果を返す。
+
+ブックは ``data_only`` 以外の状態で開くため、メモリ上の ``cell.value`` は
+数式セルでは ``"=SUM(A1:A3)"`` という文字列になる。``read_value`` は
+数式セルでは保存済み計算値（無ければ COM で再計算）を返す。
+``force_com=True`` でキャッシュを無視して Excel 実機で強制再計算させる。
 
 #### `read_formula`
 
@@ -8200,6 +8230,9 @@ def read_formula(self, cell: str) -> str:
 ##### 説明
 
 セルの数式を読む。数式でなければ空文字を返す。
+
+``read_value`` は計算結果を返すため、もう数式の判定には使えない。
+ワークシートの生の値を直接見る。
 
 #### `write_range`
 
@@ -8214,12 +8247,15 @@ def write_range(self, cell_range: str, values: list[list[Any]]) -> None:
 #### `read_range`
 
 ```text
-def read_range(self, cell_range: str) -> list[dict[str, Any]]:
+def read_range(self, cell_range: str, *, force_com: bool=False) -> list[dict[str, Any]]:
 ```
 
 ##### 説明
 
 指定範囲の先頭行を見出しとして辞書のリストで読む。
+
+数式セルがある範囲では保存済み計算値、無ければ COM で再計算した値を返す。
+``force_com=True`` でキャッシュを無視して Excel 実機で強制再計算させる。
 
 #### `get_used_range`
 
@@ -8459,17 +8495,21 @@ Excelテーブルの実際の定義範囲だけを読み、値を返す。
 #### `replace`
 
 ```text
-def replace(self, rows: list[dict[str, Value]] | Table) -> None:
+def replace(self, rows: list[dict[str, Value]] | Table, *, allow_formula_overwrite: bool=False) -> None:
 ```
 
 ##### 説明
 
 データシート全体を置き換える。
 
+既存データ部に人が入れた数式があると、既定では ``TableFormulaOverwriteError``
+で止める。数式を値で潰すと依存セルや集計式が壊れたことに遅れて気づくため。
+意図的に上書きしてよいときだけ ``allow_formula_overwrite=True`` を渡す。
+
 #### `append`
 
 ```text
-def append(self, rows: list[dict[str, Value]] | dict[str, Value] | Table) -> None:
+def append(self, rows: list[dict[str, Value]] | dict[str, Value] | Table, *, allow_formula_overwrite: bool=False) -> None:
 ```
 
 ##### 説明
