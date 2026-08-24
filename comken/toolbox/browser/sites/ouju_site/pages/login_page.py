@@ -1,4 +1,4 @@
-"""comken/toolbox/browser/sites/login_site/pages/login_page.py — ログイン画面（雛形）
+"""comken/toolbox/browser/sites/ouju_site/pages/login_page.py — ログイン画面（応需システムの雛形）
 
 URL や要素セレクタは example の値のまま。利用プロジェクト側で継承して書き換える。
 """
@@ -9,11 +9,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from comken.toolbox.browser import Locator
-from comken.toolbox.browser.sites.login_site.pages.app_page import AppPage
+from comken.toolbox.browser.sites.ouju_site.pages.app_page import AppPage
 
 if TYPE_CHECKING:
     # IDE の補完・型チェック用。ランタイムでは import されない
-    from comken.toolbox.browser.sites.login_site.pages.secure_page import SecurePage
+    from comken.toolbox.browser.sites.ouju_site.pages.secure_page import SecurePage
 
 
 class LoginPage(AppPage):
@@ -34,7 +34,7 @@ class LoginPage(AppPage):
             secure = login_page.login("user", "pass")
             print(secure.get_heading())
         """
-        from comken.toolbox.browser.sites.login_site.pages.secure_page import SecurePage
+        from comken.toolbox.browser.sites.ouju_site.pages.secure_page import SecurePage
 
         self.input(self.USERNAME, username)
         self.input(self.PASSWORD, password)

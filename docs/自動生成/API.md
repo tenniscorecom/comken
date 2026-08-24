@@ -6447,30 +6447,30 @@ def go_login(self) -> LoginPage:
 ログイン画面を開く。
 
 
-## `from comken.toolbox.browser.sites.login_site import ...`
+## `from comken.toolbox.browser.sites.ouju_site import ...`
 
-### `LoginBrowserOptions`
+### `OujuBrowserOptions`
 
 ```text
-class LoginBrowserOptions(BrowserOptions):
+class OujuBrowserOptions(BrowserOptions):
 ```
 
 #### 説明
 
-login_site 用のブラウザオプション。
+ouju_site 用のブラウザオプション。
 
 デフォルト（BrowserOptions）から変更したいものだけ上書きする。
 全オプションのデフォルト値は comken/toolbox/browser/options.py を参照。
 
-### `LoginSite`
+### `OujuSite`
 
 ```text
-class LoginSite(SiteBase):
+class OujuSite(SiteBase):
 ```
 
 #### 説明
 
-login_site 雛形用の SiteBase。
+ouju_site 雛形用の SiteBase。
 
 URL や要素セレクタは example の値のまま。利用プロジェクト側で継承して書き換える。
 

@@ -1,4 +1,4 @@
-"""comken/toolbox/browser/sites/login_site/pages/secure_page.py — ログイン後の画面（雛形）
+"""comken/toolbox/browser/sites/ouju_site/pages/secure_page.py — ログイン後の画面（雛形）
 
 URL や要素セレクタは example の値のまま。利用プロジェクト側で継承して書き換える。
 """
@@ -9,10 +9,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from comken.toolbox.browser import Locator
-from comken.toolbox.browser.sites.login_site.pages.app_page import AppPage
+from comken.toolbox.browser.sites.ouju_site.pages.app_page import AppPage
 
 if TYPE_CHECKING:
-    from comken.toolbox.browser.sites.login_site.pages.login_page import LoginPage
+    from comken.toolbox.browser.sites.ouju_site.pages.login_page import LoginPage
 
 
 class SecurePage(AppPage):
@@ -27,7 +27,7 @@ class SecurePage(AppPage):
 
     def logout(self) -> LoginPage:
         """ログアウトして LoginPage を返す。"""
-        from comken.toolbox.browser.sites.login_site.pages.login_page import LoginPage
+        from comken.toolbox.browser.sites.ouju_site.pages.login_page import LoginPage
 
         self.click(self.LOGOUT_BTN)
         return self.to(LoginPage)
