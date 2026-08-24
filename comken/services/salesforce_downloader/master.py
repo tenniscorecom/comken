@@ -29,6 +29,7 @@ r"""comken/services/salesforce_downloader/master.py — レポート管理表の
 from dataclasses import dataclass
 from pathlib import Path
 
+from comken.core.timer import measure
 from comken.exceptions import InvalidReportURLError, SalesforceReportIDNotFoundError
 from comken.services.salesforce_downloader.report_master import MasterRow, column
 
@@ -167,6 +168,7 @@ class ReportEntry(MasterRow):
         return self.schedule == SCHEDULED
 
 
+@measure
 def load_master(path: str | Path | None = None) -> dict[str, ReportEntry]:
     """管理表を読んで、管理番号をキーにした辞書を返す。
 

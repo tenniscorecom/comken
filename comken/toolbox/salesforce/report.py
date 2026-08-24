@@ -184,6 +184,45 @@ class ReportAPI:
             "レポートの対象期間を狭めるか、SOQL（query）で取得してください。"
         )
 
+    @measure
+    def describe(self, report_id: str) -> dict:
+        """レポートを実行せず、定義（列・フィルタ・形式）を取得する。
+
+        `run()` / `run_async()` はどちらもレポートを**実行**するため 2000 行の
+        上限と実行枠を消費する。`describe` は実行しないので、上限・実行枠とも
+        気にせず何度でも叩ける。SOQL への移行を下書きするときの情報源として使う。
+
+        レスポンスは API の構造をそのまま返す（`run()` のように
+        `[{列名: 値}]` には畳まない）。用途が SOQL 化の下書きで、
+        必要な項目がまだ定まっていないため、API の返す構造をそのまま渡して
+        呼び出し側で必要な部分を取り出す方針にする。
+
+        Args:
+            report_id: レポート ID。
+
+        Returns:
+            パース済み dict。主要キーは次のとおり:
+
+            - ``reportMetadata``: レポート定義本体
+                - ``detailColumns``: 明細列（レポート用の名前。SOQL の
+                  フィールドパスとは1対1ではない）
+                - ``reportFilters``: フィルタ条件
+                - ``reportBooleanFilter``: フィルタの論理結合
+                - ``reportFormat``: ``TABULAR`` / ``SUMMARY`` / ``MATRIX`` など
+            - ``reportExtendedMetadata``: 列の表示名・ラベルなど
+                - ``detailColumnInfo``: 各列の表示名
+
+            API が dict 以外を返した場合（パース失敗時など）は空 dict。
+
+        Raises:
+            SalesforceRequestError: 通信や認証に失敗した場合（`_client.request` 経由）。
+        """
+        path = f"{self._base_path()}/{report_id}/describe"
+        logger.debug("Salesforce Report describe開始: Report ID=%s", report_id)
+        data, _ = self._client.request("GET", path, component=COMPONENT)
+        logger.debug("Salesforce Report describe完了: Report ID=%s", report_id)
+        return data if isinstance(data, dict) else {}
+
     def _base_path(self) -> str:
         return self._client.data_path("/analytics/reports")
 

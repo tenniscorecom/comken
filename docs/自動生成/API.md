@@ -116,6 +116,53 @@ comken 共通のクラス。OWNER は ``"comken"``。
 
 ## `from comken.core import ...`
 
+### `BUSINESS_DAY_SEARCH_LIMIT`
+
+公開定数。
+
+### `ComputedHolidaySource`
+
+```text
+class ComputedHolidaySource(HolidaySource):
+```
+
+#### 説明
+
+計算で祝日の和集合を返すソース。
+
+``HolidaySource`` Protocol を実装する。``load()`` で ``Iterable[Holiday]`` を返す。
+``CabinetOfficeCSVSource`` と並列に置いて、
+``from_sources([Cabinet, Computed])`` のように和集合で運用する
+（``HolidayCalendar`` 側の先勝ち WARNING ログが衝突をハンドリングする）。
+
+このソースは **純粋計算のみ** — 外部通信・ファイル読み込みは一切しない。
+社内 BO 環境（オフライン・pip 制限）でもそのまま動く。
+
+Args:
+    from_year: 対象範囲の開始年。省略時は ``DEFAULT_FROM_YEAR`` (1948)。
+    to_year: 対象範囲の終了年。省略時は ``DEFAULT_TO_YEAR`` (2099)。
+        範囲外でも祝日計算は走るが、春分／秋分の近似精度が下がる旨を
+        WARNING ログで知らせる。
+
+#### `__init__`
+
+```text
+def __init__(self, *, from_year: int | None=None, to_year: int | None=None) -> None:
+```
+
+#### `load`
+
+```text
+def load(self) -> list[Holiday]:
+```
+
+##### 説明
+
+対象年の範囲について計算した祝日をまとめて返す。
+
+Returns:
+    日付順に並んだ ``Holiday`` のリスト。
+
 ### `DateNameBuilder`
 
 ```text
@@ -133,21 +180,27 @@ class DateNameBuilder:
 日付はコンストラクタで固定できる。テストや過去日付のファイル名を組み立てる
 ときは ``date(2026, 8, 20)`` 等を渡す。省略時は呼び出し時点の日付。
 
+拡張子は **名前の文字列に含めて** 渡す（例: ``DateNameBuilder("ログ.csv")``）。
+拡張子なしの名前は ``FileSuffixMissingError`` を送出して止める。
+
 #### `__init__`
 
 ```text
-def __init__(self, name: str, for_date: date | datetime | None=None, ext: str='.xlsx') -> None:
+def __init__(self, name: str, for_date: date | datetime | None=None) -> None:
 ```
 
 ##### 説明
 
 Args:
-    name: ファイル名（拡張子なし）。
+    name: ファイル名（**拡張子を含む**）。例: ``"売上.xlsx"`` / ``"ログ.csv"``。
+        拡張子が無いと ``FileSuffixMissingError``。
     for_date: ファイル名に付ける日付。``None``（既定）なら ``__init__``
         呼び出し時点の日付。``prefix()`` / ``suffix()`` を呼ぶたびに
         日付を取り直すことはない。``date`` / ``datetime`` どちらも
         受け付ける（``datetime`` は内部で ``.date()`` に変換）。
-    ext: 拡張子（デフォルト: ".xlsx"）。ドットなしで渡しても補完される。
+
+Raises:
+    FileSuffixMissingError: ``name`` に拡張子が含まれていないとき。
 
 #### `prefix`
 
@@ -157,10 +210,11 @@ def prefix(self, prefix: str='{:%Y%m%d}_') -> str:
 
 ##### 説明
 
-prefix + 日付 + ベース名を返す。
+``prefix + 日付 + ベース名 + 拡張子`` を返す（例: ``"20260825_売上.xlsx"``）。
 
 ``prefix("DIY_{:%Y%m%d}_")`` のように日付の位置と書式を指定する。
 日付書式を含まない prefix には ``YYYYMMDD`` を末尾へ補う。
+日付は **拡張子の手前** に入る。
 
 #### `suffix`
 
@@ -170,7 +224,11 @@ def suffix(self, date_format: str='%Y%m%d') -> str:
 
 ##### 説明
 
-今日の日付を後ろに付けたファイル名を返す（例: 売上レポート_20260711.xlsx）。
+今日の日付を後ろに付けたファイル名を返す（例: ``"売上_20260825.xlsx"``）。
+
+日付は **拡張子の手前** に入る。メソッド名 ``suffix()`` と「拡張子（suffix）」が
+紛らわしいため、内部状態は ``_extension``（= 拡張子）と ``_stem``（= 拡張子を除いた
+ベース名）で持つ。``self._extension`` は常にドット付きで ``".xlsx"`` / ``".csv"`` 等。
 
 ### `DateFileFinder`
 
@@ -182,6 +240,9 @@ class DateFileFinder:
 
 指定した名前と日付を持つファイルを探す。
 
+探す名前に **拡張子を含める**（例: ``"売上レポート.csv"``）。拡張子無しの名前を
+渡すと ``FileSuffixMissingError`` で止める。
+
 #### `__init__`
 
 ```text
@@ -192,30 +253,32 @@ def __init__(self, folder: str | Path, for_date: datetime.date | None=None) -> N
 
 ```text
 @measure
-def prefix(self, prefix: str, extension: str='.xlsx', required: bool=True) -> Path | None:
+def prefix(self, name: str, required: bool=True) -> Path | None:
 ```
 
 ##### 説明
 
-``prefix + YYYYMMDD + 拡張子`` に一致するファイルを返す。
+``prefix + 日付 + 拡張子`` に一致するファイルを返す。
 
-prefix に ``{:%Y-%m-%d}`` のような日付書式があれば、その位置へ日付を
-入れる。書式がなければ末尾へ ``YYYYMMDD`` を付ける。
+``name`` に ``{:%Y-%m-%d}`` のような日付書式があれば、その位置へ日付を
+入れる。書式がなければ末尾へ ``YYYYMMDD`` を付ける。日付は **拡張子の手前** に入る。
 
 #### `dated`
 
 ```text
 @measure
-def dated(self, prefix: str, extension: str='.xlsx') -> list[Path]:
+def dated(self, prefix: str) -> list[Path]:
 ```
 
 ##### 説明
 
-``prefix`` で始まり ``extension`` で終わる、日付を含むファイルを全件返す。
+``prefix`` で始まり日付を含むファイルを全件、日付の新しい順で返す。
 
-フォルダ内のファイル名から ``date_in_name`` で日付を取り出し、**日付の新しい順**に
-並べる。同じ日付のときは更新日時が新しい方を先にする。該当するファイルが無ければ
-空リストを返す（例外は出さない）。
+``prefix`` には **拡張子を含む完全なファイル名の一部** を渡す（例:
+``"売上レポート.csv"`` — 拡張子は必須）。フォルダ内のファイル名から
+``date_in_name`` で日付を取り出し、**日付の新しい順** に並べる。同じ日付の
+ときは更新日時が新しい方を先にする。該当するファイルが無ければ空リストを
+返す（例外は出さない）。
 
 ``prefix()`` との違い:
 
@@ -225,11 +288,14 @@ def dated(self, prefix: str, extension: str='.xlsx') -> list[Path]:
 
 Args:
     prefix: ファイル名の先頭（この通りの前方一致。日付書式は解釈しない）。
-    extension: 拡張子。先頭が ``.`` でなければ補う（``xlsx`` も ``.xlsx`` も OK）。
+        拡張子は必須。
 
 Returns:
     日付の新しい順に並んだ ``Path`` のリスト。同じ日付のときは更新日時が新しい順。
     該当するファイルが無ければ空リスト。
+
+Raises:
+    FileSuffixMissingError: ``prefix`` に拡張子が含まれていないとき。
 
 ### `DiffResult`
 
@@ -240,6 +306,251 @@ class DiffResult:
 #### 説明
 
 diff_rows の結果。
+
+### `EXPIRING_WARNING_DAYS`
+
+公開定数。
+
+### `Holiday`
+
+```text
+class Holiday:
+```
+
+#### 説明
+
+祝日の1件。日付と名称だけを運ぶシンプルな箱。
+
+Attributes:
+    date: 祝日の日付（時刻・タイムゾーンは持たない業務日付）。
+    name: 祝日の日本語名称（例: "建国記念の日"）。
+    approximate: ``True`` なら、計算式など内閣府発表と ±1 日前後する
+        可能性がある値。``HolidayCalendar.is_holiday`` などで該当 Holiday
+        を返したときに WARNING ログを出して、業務フローを止めずに気づける
+        ようにする。デフォルトは ``False``（内閣府 CSV 由来または確実な
+        計算結果）。
+
+### `HolidayCalendar`
+
+```text
+class HolidayCalendar:
+```
+
+#### 説明
+
+祝日を保持し、営業日判定を行うカレンダー本体。
+
+同じ日付に複数の祝日が登録された場合は**先勝ち**で採用する
+（内閣府 CSV と会社の年末年始休暇など、複数 source の重複は珍しくない）。
+名称が違う祝日が同じ日に重なっても黙って先を採用する。
+
+期限切れの警告（``EXPIRING_WARNING_DAYS`` を切った日）は **同じ日に
+1回だけ**出す。同じ日に ``is_business_day`` が何回呼ばれても
+ログが埋もれないため。
+
+#### `__init__`
+
+```text
+def __init__(self, holidays: Iterable[Holiday]) -> None:
+```
+
+##### 説明
+
+``Holiday`` の iterable から ``{日付: Holiday}`` の索引を作る。
+
+Args:
+    holidays: 祝日の iterable。同じ日付が複数含まれていたら先勝ちで採用。
+
+#### `from_csv`
+
+```text
+@classmethod
+def from_csv(cls, path: str | Path, *, encoding: str='cp932') -> 'HolidayCalendar':
+```
+
+##### 説明
+
+内閣府の ``syukujitsu.csv`` を直接読む最短ルート。
+
+Args:
+    path: CSV のパス。CP932（Shift_JIS）固定。
+    encoding: 文字コード。通常は ``cp932`` のままで良い。
+
+Returns:
+    読み込み結果から作った ``HolidayCalendar``。
+
+#### `from_sources`
+
+```text
+@classmethod
+def from_sources(cls, sources: Iterable[HolidaySource]) -> 'HolidayCalendar':
+```
+
+##### 説明
+
+複数の ``HolidaySource`` を合体させる（内閣府 + Computed + 会社休日 など）。
+
+**カスケード動作**: 前の source が ``HolidayCalendarFetchError``
+（内閣府の取得失敗・``requests`` 不在など）を投げたら次の source へ
+フォールバックする。**内閣府が取れない環境で Computed に切り替えたい**
+ケース（オフライン BO 環境・期限切れ）を想定。
+全部失敗したら最後の ``HolidayCalendarFetchError`` をそのまま送出。
+
+Args:
+    sources: ``load()`` を持つ ``HolidaySource`` の iterable。
+        同じ日付が複数ソースにあれば **最初のソースの Holiday** が優先される。
+
+Returns:
+    全ソースを結合した ``HolidayCalendar``。
+
+Raises:
+    HolidayCalendarFetchError: 全 source が ``HolidayCalendarFetchError``
+        を投げた場合、最後のエラーをそのまま送出する。
+
+#### `is_holiday`
+
+```text
+def is_holiday(self, target: _dt.date) -> bool:
+```
+
+##### 説明
+
+``target`` が祝日（または休日）なら ``True``。
+
+ターゲットが今年/来年なら、内閣府 source への強制再取得を試みる
+（今年中に 1 回だけ。失敗時はサイレント）。
+計算式由来の暫定値（``approximate=True``）を返すときは WARNING ログ。
+
+#### `holidays_in`
+
+```text
+def holidays_in(self, start: _dt.date, end: _dt.date) -> list[Holiday]:
+```
+
+##### 説明
+
+``start <= 日付 <= end`` の範囲に入る祝日を、日付順に返す。
+
+Args:
+    start: 範囲開始（含む）。
+    end: 範囲終了（含む）。
+
+Returns:
+    範囲内の ``Holiday`` を日付昇順で並べたリスト。
+    該当が無ければ空リスト。
+
+#### `expires_after`
+
+```text
+def expires_after(self, target: _dt.date) -> bool:
+```
+
+##### 説明
+
+``target`` が収録済み最終日以降（＝「収録期限を過ぎた」）なら ``True``。
+
+「収録済み最終日 <= target」を期限切れとみなす。等号を含めるのは、
+「収録最終日ぴったり」を「期限の境目」として扱うため（最終日当日は
+収録済みの祝日として判定できるが、それ以降は収録外）。
+
+#### `days_until_expiry`
+
+```text
+def days_until_expiry(self, today: _dt.date) -> int:
+```
+
+##### 説明
+
+``today`` から収録最終日までの日数。最終日を過ぎていれば負の値。
+
+Args:
+    today: 「今日」とみなす日付。
+
+Returns:
+    ``last_known - today`` の日数差。収録済み祝日が無いと ``-1``。
+
+#### `last_known_date`
+
+```text
+def last_known_date(self) -> _dt.date | None:
+```
+
+##### 説明
+
+収録済み祝日のうち最も新しい日付。無ければ ``None``。
+
+#### `holiday_names`
+
+```text
+def holiday_names(self, target: _dt.date) -> Sequence[str]:
+```
+
+##### 説明
+
+``target`` に登録された祝日名称のタプル（同日が複数あれば複数要素）。
+
+#### `all_holidays`
+
+```text
+def all_holidays(self) -> list[Holiday]:
+```
+
+##### 説明
+
+保持している祝日を日付順に並べたリストを返す。
+
+### `HolidaySource`
+
+```text
+class HolidaySource(Protocol):
+```
+
+#### 説明
+
+祝日を 1セット取り出せる仕組みの共通インタフェース。
+
+内閣府の ``CabinetOfficeCSVSource`` や ``ComputedHolidaySource`` / 会社の
+``CompanyHolidaySource`` の両方がこれを実装するため、利用側は入手経路を
+意識せずに ``from_sources`` に渡せる。
+
+この Protocol はメソッドの型を ``Iterable[Holiday]`` に固定する。
+``load()`` を呼んだその瞬間に取得が走る（キャッシュは実装側で持つ）のが
+一貫していて読みやすい。実装が iterable を返したい場合は
+中で ``list()`` してから返してもよい。
+
+#### `load`
+
+```text
+def load(self) -> Iterable[Holiday]:
+```
+
+##### 説明
+
+祝日セットを取り出して ``Iterable[Holiday]`` で返す。
+
+### `RefreshableHolidaySource`
+
+```text
+class RefreshableHolidaySource(Protocol):
+```
+
+#### 説明
+
+TTL を無視して強制再取得できる祝日 source（例: 内閣府の ``CabinetOfficeCSVSource``）。
+
+``HolidayCalendar`` がターゲットが今年/来年のときに内閣府への
+再取得を試みるためのフック。短いタイムアウト（既定 0.5 秒）で実装する。
+必須ではなく、管理表など再取得が要らない source は実装しなくてよい。
+
+#### `refresh`
+
+```text
+def refresh(self) -> Iterable[Holiday]:
+```
+
+##### 説明
+
+TTL を無視して強制再取得する。
 
 ### `RowChange`
 
@@ -290,6 +601,7 @@ def get(self, key: str, default: StateValue | None=None) -> StateValue | None:
 #### `set`
 
 ```text
+@measure
 def set(self, key: str, value: StateValue) -> None:
 ```
 
@@ -476,13 +788,17 @@ class Transfer:
 Table 間のキー突合と転記を行う。
 
 基本的な用法は次のとおり。 ``mapping`` は「転記元の列名 → 転記先の列名」。
-4つの取り出し口を使い分けて、read / write を行単位で加工する:
+3つの取り出し口を使い分けて、read / write を行単位で加工する:
 
 - ``matched_rows()``: 両方にキーが揃う行を ``(read_row, write_row)`` で返す
+  （**両方とも作業 Table の実体行**）
 - ``transfer_rows()``: read 全行を ``(read_row, write_row | None)`` で返す
-  （write に無い行は ``None``）
-- ``unmatched_read_rows()``: write に無い read 行だけを返す（追加候補）
-- ``unmatched_write_rows()``: read に無い write 行だけを返す（破棄候補）
+  （write に無い行は ``None``、``read_row`` は **コピー**）
+- ``unmatched()``: 突合しなかった行を ``UnmatchedRows`` で返す
+  - ``only_in_read`` は **コピー**（``Table``）。書き換えても ``read`` にも
+    ``result()`` にも影響しない
+  - ``only_in_write`` は **作業 Table の実体行**（``list[Row]``）。書き換えると
+    ``result()`` に反映される
 
 Example:
     transfer = Transfer(read_table, write_table, mapping,
@@ -493,7 +809,7 @@ Example:
         transfer.apply_mapping(read_row, write_row)   # mapping の値をコピー
         # 必要なら write_row["備考"] = "..." のように追加加工
     # write に無い read 行は result() に追加していく（新規行の追加）
-    for read_row in transfer.unmatched_read_rows():
+    for read_row in transfer.unmatched().only_in_read:
         transfer.result().append({
             "顧客ID": read_row["顧客ID"],
             "顧客名": read_row["取引先"],
@@ -501,7 +817,7 @@ Example:
             "備考": "新規追加",
         })
     # read に無い write 行は「転記元に無し」と書き換える（result() に出るので別途 filter する）
-    for write_row in transfer.unmatched_write_rows():
+    for write_row in transfer.unmatched().only_in_write:
         write_row["備考"] = "転記元に無し"
 
 **条件は ``apply_mapping()`` より前に書くこと。** Python の ``for`` ループは
@@ -511,10 +827,9 @@ Example:
 適用済みとなり破棄できないので、判定は必ず ``apply_mapping()`` の前に置く。
 
 **空キー (``None`` / ``""``) は突合対象外**。 値が無いキーは read 側・write 側の
-どちらでも照合に使わず、``unmatched_read_rows()`` /
-``unmatched_write_rows()`` 側へ流れる。 ``0`` や ``False`` は空ではない
-（数値・bool の 0 落ち判定を避けるため）。 複合キーは **1要素でも空** なら
-空とみなす。
+どちらでも照合に使わず、``unmatched()`` 側へ流れる。 ``0`` や ``False`` は
+空ではない（数値・bool の 0 落ち判定を避けるため）。 複合キーは **1要素でも空**
+なら空とみなす。
 
 #### `__init__`
 
@@ -550,43 +865,28 @@ def matched_rows(self) -> Iterator[tuple[Row, Row]]:
 
 転記先に存在しない行（``destination`` が ``None``）は含まない。
 
-#### `unmatched_read_rows`
+#### `unmatched`
 
 ```text
-def unmatched_read_rows(self) -> Iterator[Row]:
+def unmatched(self) -> UnmatchedRows:
 ```
 
 ##### 説明
 
-write に対応が無い read 行だけを返す（追加候補）。
+突合しなかった行を ``UnmatchedRows`` で返す。
 
-戻り値は ``Table.read()`` と同じく **read 行のコピー**。
-返された行を ``write_row["列名"] = ...`` のように書き換えても ``read`` には
-影響しない。 ``result().append()`` に渡して write の作業 Table へ追加する
-（新規行として書き込むために ``dict(...)`` で再コピーするのを忘れずに）。
+``only_in_read`` は write に対応が無い read 行（追加候補）。
+``Table`` として返すので ``.read()`` / ``.filter()`` などの Table 標準の
+インターフェースが使える。 戻り値は ``Table.read()`` と同じく **read 行の
+コピー** で、書き換えても ``read`` にも ``result()`` にも影響しない。
 
-空キー (``None`` / ``""``) の read 行もここに含む。 キーが空なので
-照合に使えず、必ず write には対応が無いため。
-
-``transfer_rows()`` / ``matched_rows()`` を呼ばずに呼んでも動く。
-
-#### `unmatched_write_rows`
-
-```text
-def unmatched_write_rows(self) -> Iterator[Row]:
-```
-
-##### 説明
-
-read に対応が無い write 行だけを返す（破棄候補）。
-
+``only_in_write`` は read に対応が無い write 行（破棄候補）。
 戻り値は ``matched_rows()`` が返す ``write_row`` と同じく **作業 Table の
-実体行**。 返された ``write_row`` を ``write_row["備考"] = "破棄予定"`` の
-ように書き換えると ``result()`` の戻り値へ反映される。 ``result().append()``
-などに渡して追加する使い方ではないので注意。
+実体行**。 ``write_row["備考"] = "破棄予定"`` のように書き換えると
+``result()`` の戻り値へ反映される。
 
-空キー (``None`` / ``""``) の write 行もここに含む。 キーが空なので
-照合に使えず、必ず read には対応が無いため。
+空キー (``None`` / ``""``) の行も両側に含む。 キーが空なので照合に使えず、
+必ず対応が無いため。
 
 ``transfer_rows()`` / ``matched_rows()`` を呼ばずに呼んでも動く。
 
@@ -632,7 +932,7 @@ def result(self) -> Table:
 
 ``result()`` は同じ作業 Table インスタンスを返し続けるので、
 ``result().append(...)`` のように破壊的に加工した場合や、 ``result()`` を
-呼んだ後に ``unmatched_write_rows()`` の ``write_row`` を書き換えた場合も、
+呼んだ後に ``unmatched().only_in_write`` の ``write_row`` を書き換えた場合も、
 後続の ``result().read()`` 呼び出しに反映される（``Table._iter_rows_for_update``
 経由で実体 dict を共有しているため）。
 
@@ -642,6 +942,60 @@ Example:
     for source_row, destination_row in transfer.matched_rows():
         transfer.apply_mapping(source_row, destination_row)
     final_table = transfer.result()  # 変更後の Table
+
+### `add_business_days`
+
+```text
+def add_business_days(target: _dt.date, n: int, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` から ``n`` 営業日後の日付（``n`` が負なら前）。``calendar`` 省略可。
+
+### `business_day_after`
+
+```text
+def business_day_after(target: _dt.date, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` より後で最初の営業日（``target`` 自身を含まない）。
+
+``calendar=None`` のときは**既定カレンダー**を使う。
+
+### `business_day_before`
+
+```text
+def business_day_before(target: _dt.date, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` より前で最初の営業日（``target`` 自身を含まない）。
+
+``calendar=None`` のときは**既定カレンダー**を使う。
+
+### `business_day_on_or_after`
+
+```text
+def business_day_on_or_after(target: _dt.date, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` 以降で最初の営業日（``target`` を含む）。``calendar`` 省略可。
+
+### `business_day_on_or_before`
+
+```text
+def business_day_on_or_before(target: _dt.date, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` 以前で最初の営業日（``target`` を含む）。``calendar`` 省略可。
 
 ### `compare_tables`
 
@@ -684,10 +1038,46 @@ def date_in_name(name: str) -> datetime.date | None:
 
 #### 説明
 
-ファイル名に含まれる最初の日付を返す。日付が無ければ None。
+ファイル名に含まれる **最初の日付** を返す。日付が無ければ None。
 
 1つのファイル名に日付が複数あるときは、先に出てくる方を使う。
 ファイル名の日付とファイル内容の日付を突き合わせる業務で使うため公開している。
+すべての日付が要るときは ``dates_in_name`` を使う。
+
+### `dates_in_name`
+
+```text
+def dates_in_name(name: str) -> list[datetime.date]:
+```
+
+#### 説明
+
+ファイル名に含まれる日付を **すべて** 出現順で返す。無ければ空リスト。
+
+``_DATE_IN_NAME`` 正規表現で日付らしい数字（``20260729`` / ``2026-07-29`` /
+``2026_07_29`` / ``2026.07.29``）を抜き出し、``date`` に変換できたものだけを
+順番に並べる。``20261345`` のように数字は揃っていても日付として成立しないものは
+結果に含まない。
+
+### `default_calendar`
+
+```text
+def default_calendar() -> HolidayCalendar:
+```
+
+#### 説明
+
+既定カレンダーを取得する（**プロセス内で 1回だけ**遅延生成）。
+
+構成は 3 つだけ:
+    1. ``ComputedHolidaySource``（純粋計算。土台）
+    2. 同梱の ``syukujitsu.csv`` を ``load_cabinet_office_csv`` で読む
+       （内閣府の実値。計算式の上書き用）
+    3. ``CompanyHolidaySource``（会社独自の休業日。コード直書き）
+
+**ネットワークには一切出ない。** ``CabinetOfficeCSVSource`` は
+含めない（``comken.core`` は ``requests`` に依存できないし、業務 PC の
+通信制限下でも動く必要があるため）。
 
 ### `delete_file`
 
@@ -780,6 +1170,66 @@ Returns:
 Raises:
     KeyColumnNotFoundError: key で指定した列が存在しない場合。
 
+### `first_business_day_of_month`
+
+```text
+def first_business_day_of_month(target: _dt.date, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` が属する月の最初の営業日。``calendar`` 省略可。
+
+### `is_business_day`
+
+```text
+def is_business_day(target: _dt.date, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> bool:
+```
+
+#### 説明
+
+``target`` が営業日なら ``True``。``calendar`` を省略できる簡易判定。
+
+``calendar=None`` のときは**既定カレンダー**（``default_calendar()``）を使う。
+アプリ側で ``set_default_calendar()`` を呼んでおけば、利用者は
+``HolidayCalendar`` を組み立てなくても「今日が営業日か」を判定できる。
+
+``calendar`` をキーワード専用にして、呼び出し側がうっかり位置引数で
+日付とカレンダーを取り違える事故を防ぐ。
+
+### `last_business_day_of_month`
+
+```text
+def last_business_day_of_month(target: _dt.date, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` が属する月の最後の営業日。``calendar`` 省略可。
+
+### `load_cabinet_office_csv`
+
+```text
+@measure
+def load_cabinet_office_csv(path: str | Path, *, encoding: str=DEFAULT_ENCODING) -> list[Holiday]:
+```
+
+#### 説明
+
+内閣府の syukujitsu.csv を読み取り、祝日のリストを返す。
+
+Args:
+    path: CSV ファイルのパス。存在しない・読めない場合は ``HolidayCalendarFormatError``。
+    encoding: CSV の文字コード。既定は ``cp932``（内閣府の配布形式）。
+
+Returns:
+    日付順に並んだ ``Holiday`` のリスト。
+
+Raises:
+    HolidayCalendarFormatError: ファイルが無い、壊れている、
+        ヘッダーが内閣府のものではない、日付が解釈できないなどの理由で
+        1件も抽出できなかった場合。
+
 ### `local_copy`
 
 ```text
@@ -836,6 +1286,31 @@ Timer との使い分け:
     - Timer: 常にログに出したい・経過秒数を値として使いたい場合
     - measure: 普段は出さず、調査のときだけ with debug(): で出したい場合
 
+### `month_end`
+
+```text
+def month_end(target: datetime.date) -> datetime.date:
+```
+
+#### 説明
+
+``target`` が属する月の最終日を返す。
+
+月ごとの日数・閏年を ``calendar.monthrange`` で正しく扱う。
+
+### `month_start`
+
+```text
+def month_start(target: datetime.date) -> datetime.date:
+```
+
+#### 説明
+
+``target`` が属する月の 1日を返す。
+
+祝日に依存しない純粋な暦計算。営業日計算の前段として
+「その月の最初の営業日を探す」ために使う。
+
 ### `move_file`
 
 ```text
@@ -857,6 +1332,26 @@ Args:
 
 Returns:
     移動後のファイルパス。
+
+### `nth_business_day_of_month`
+
+```text
+def nth_business_day_of_month(target: _dt.date, n: int, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` が属する月の第 ``n`` 営業日（``n`` は 1 始まり）。``calendar`` 省略可。
+
+### `now`
+
+```text
+def now() -> datetime.datetime:
+```
+
+#### 説明
+
+タイムゾーン付きの現在時刻（この PC のローカル時刻）を返す。
 
 ### `project_dir`
 
@@ -914,16 +1409,6 @@ Args:
 Returns:
     正規化後の文字列。
 
-### `now`
-
-```text
-def now() -> datetime.datetime:
-```
-
-#### 説明
-
-タイムゾーン付きの現在時刻（この PC のローカル時刻）を返す。
-
 ### `remove_spaces`
 
 ```text
@@ -969,6 +1454,21 @@ Note:
     入力値検証で ``ValueError`` を投げる。``times`` を 0 以下にしたいケースは
     ループ自体を不要としているので、黙って 1 にするのではなく例外で知らせる
     （誤って ``times=None`` を渡して 1 回しか実行されない事故を防ぐ）。
+
+### `set_default_calendar`
+
+```text
+def set_default_calendar(calendar: HolidayCalendar | None) -> None:
+```
+
+#### 説明
+
+既定カレンダーを差し替える（``None`` を渡すと既定の遅延生成に戻る）。
+
+会社独自の年末年始などを追加したいプロジェクトは、起動時に
+``set_default_calendar(HolidayCalendar.from_sources([...]))`` を一度
+呼んでおけば、利用者は ``is_business_day(target)`` のような
+モジュール関数を直接呼べる。
 
 ### `strip_spaces`
 
@@ -1201,21 +1701,27 @@ class DateNameBuilder:
 日付はコンストラクタで固定できる。テストや過去日付のファイル名を組み立てる
 ときは ``date(2026, 8, 20)`` 等を渡す。省略時は呼び出し時点の日付。
 
+拡張子は **名前の文字列に含めて** 渡す（例: ``DateNameBuilder("ログ.csv")``）。
+拡張子なしの名前は ``FileSuffixMissingError`` を送出して止める。
+
 #### `__init__`
 
 ```text
-def __init__(self, name: str, for_date: date | datetime | None=None, ext: str='.xlsx') -> None:
+def __init__(self, name: str, for_date: date | datetime | None=None) -> None:
 ```
 
 ##### 説明
 
 Args:
-    name: ファイル名（拡張子なし）。
+    name: ファイル名（**拡張子を含む**）。例: ``"売上.xlsx"`` / ``"ログ.csv"``。
+        拡張子が無いと ``FileSuffixMissingError``。
     for_date: ファイル名に付ける日付。``None``（既定）なら ``__init__``
         呼び出し時点の日付。``prefix()`` / ``suffix()`` を呼ぶたびに
         日付を取り直すことはない。``date`` / ``datetime`` どちらも
         受け付ける（``datetime`` は内部で ``.date()`` に変換）。
-    ext: 拡張子（デフォルト: ".xlsx"）。ドットなしで渡しても補完される。
+
+Raises:
+    FileSuffixMissingError: ``name`` に拡張子が含まれていないとき。
 
 #### `prefix`
 
@@ -1225,10 +1731,11 @@ def prefix(self, prefix: str='{:%Y%m%d}_') -> str:
 
 ##### 説明
 
-prefix + 日付 + ベース名を返す。
+``prefix + 日付 + ベース名 + 拡張子`` を返す（例: ``"20260825_売上.xlsx"``）。
 
 ``prefix("DIY_{:%Y%m%d}_")`` のように日付の位置と書式を指定する。
 日付書式を含まない prefix には ``YYYYMMDD`` を末尾へ補う。
+日付は **拡張子の手前** に入る。
 
 #### `suffix`
 
@@ -1238,7 +1745,11 @@ def suffix(self, date_format: str='%Y%m%d') -> str:
 
 ##### 説明
 
-今日の日付を後ろに付けたファイル名を返す（例: 売上レポート_20260711.xlsx）。
+今日の日付を後ろに付けたファイル名を返す（例: ``"売上_20260825.xlsx"``）。
+
+日付は **拡張子の手前** に入る。メソッド名 ``suffix()`` と「拡張子（suffix）」が
+紛らわしいため、内部状態は ``_extension``（= 拡張子）と ``_stem``（= 拡張子を除いた
+ベース名）で持つ。``self._extension`` は常にドット付きで ``".xlsx"`` / ``".csv"`` 等。
 
 ### `DateFileFinder`
 
@@ -1250,6 +1761,9 @@ class DateFileFinder:
 
 指定した名前と日付を持つファイルを探す。
 
+探す名前に **拡張子を含める**（例: ``"売上レポート.csv"``）。拡張子無しの名前を
+渡すと ``FileSuffixMissingError`` で止める。
+
 #### `__init__`
 
 ```text
@@ -1260,30 +1774,32 @@ def __init__(self, folder: str | Path, for_date: datetime.date | None=None) -> N
 
 ```text
 @measure
-def prefix(self, prefix: str, extension: str='.xlsx', required: bool=True) -> Path | None:
+def prefix(self, name: str, required: bool=True) -> Path | None:
 ```
 
 ##### 説明
 
-``prefix + YYYYMMDD + 拡張子`` に一致するファイルを返す。
+``prefix + 日付 + 拡張子`` に一致するファイルを返す。
 
-prefix に ``{:%Y-%m-%d}`` のような日付書式があれば、その位置へ日付を
-入れる。書式がなければ末尾へ ``YYYYMMDD`` を付ける。
+``name`` に ``{:%Y-%m-%d}`` のような日付書式があれば、その位置へ日付を
+入れる。書式がなければ末尾へ ``YYYYMMDD`` を付ける。日付は **拡張子の手前** に入る。
 
 #### `dated`
 
 ```text
 @measure
-def dated(self, prefix: str, extension: str='.xlsx') -> list[Path]:
+def dated(self, prefix: str) -> list[Path]:
 ```
 
 ##### 説明
 
-``prefix`` で始まり ``extension`` で終わる、日付を含むファイルを全件返す。
+``prefix`` で始まり日付を含むファイルを全件、日付の新しい順で返す。
 
-フォルダ内のファイル名から ``date_in_name`` で日付を取り出し、**日付の新しい順**に
-並べる。同じ日付のときは更新日時が新しい方を先にする。該当するファイルが無ければ
-空リストを返す（例外は出さない）。
+``prefix`` には **拡張子を含む完全なファイル名の一部** を渡す（例:
+``"売上レポート.csv"`` — 拡張子は必須）。フォルダ内のファイル名から
+``date_in_name`` で日付を取り出し、**日付の新しい順** に並べる。同じ日付の
+ときは更新日時が新しい方を先にする。該当するファイルが無ければ空リストを
+返す（例外は出さない）。
 
 ``prefix()`` との違い:
 
@@ -1293,11 +1809,14 @@ def dated(self, prefix: str, extension: str='.xlsx') -> list[Path]:
 
 Args:
     prefix: ファイル名の先頭（この通りの前方一致。日付書式は解釈しない）。
-    extension: 拡張子。先頭が ``.`` でなければ補う（``xlsx`` も ``.xlsx`` も OK）。
+        拡張子は必須。
 
 Returns:
     日付の新しい順に並んだ ``Path`` のリスト。同じ日付のときは更新日時が新しい順。
     該当するファイルが無ければ空リスト。
+
+Raises:
+    FileSuffixMissingError: ``prefix`` に拡張子が含まれていないとき。
 
 ### `atomic_write`
 
@@ -1399,10 +1918,26 @@ def date_in_name(name: str) -> datetime.date | None:
 
 #### 説明
 
-ファイル名に含まれる最初の日付を返す。日付が無ければ None。
+ファイル名に含まれる **最初の日付** を返す。日付が無ければ None。
 
 1つのファイル名に日付が複数あるときは、先に出てくる方を使う。
 ファイル名の日付とファイル内容の日付を突き合わせる業務で使うため公開している。
+すべての日付が要るときは ``dates_in_name`` を使う。
+
+### `dates_in_name`
+
+```text
+def dates_in_name(name: str) -> list[datetime.date]:
+```
+
+#### 説明
+
+ファイル名に含まれる日付を **すべて** 出現順で返す。無ければ空リスト。
+
+``_DATE_IN_NAME`` 正規表現で日付らしい数字（``20260729`` / ``2026-07-29`` /
+``2026_07_29`` / ``2026.07.29``）を抜き出し、``date`` に変換できたものだけを
+順番に並べる。``20261345`` のように数字は揃っていても日付として成立しないものは
+結果に含まない。
 
 ### `delete_file`
 
@@ -1595,6 +2130,652 @@ Raises:
     FileNotFoundError: folder が存在しない場合。
 
 
+## `from comken.core.holidays import ...`
+
+### `BUSINESS_DAY_SEARCH_LIMIT`
+
+公開定数。
+
+### `BusinessDayNotFoundError`
+
+```text
+class BusinessDayNotFoundError(HolidayCalendarError):
+```
+
+#### 説明
+
+営業日が見つからなかった
+
+月の途中で「指定した月の営業日数を超える n 番目」を求めたとき、
+その月に営業日が 1 日も無いとき、祝日データ欠落などで 400 日探索しても
+次の営業日にたどり着けなかったときに送る。
+いずれも「カレンダー側がおかしい」または「指定値が暦と合わない」場合に
+起き、業務ロジック側のミスではないので、呼び出し側で握り潰さずユーザーに
+顕在化させる必要がある。
+
+発生箇所: comken.core.holidays.calendar の HolidayCalendar
+    - nth_business_day_of_month（n が月の営業日数超え、または n < 1）
+    - first_business_day_of_month / last_business_day_of_month
+      （その月に営業日が 1 日も無い）
+    - business_day_after / business_day_before /
+      business_day_on_or_after / business_day_on_or_before
+      （400 日の探索上限に達した）
+
+対処:
+    n をその月の営業日数以下に直す、対象月の祝日に過不足がないか
+    確認する、社内管理表（会社休日）が広範囲に登録されていないか確認する
+
+#### `__init__`
+
+```text
+def __init__(self, detail: str) -> None:
+```
+
+### `CompanyHolidaySource`
+
+```text
+class CompanyHolidaySource(HolidaySource):
+```
+
+#### 説明
+
+コードに直書きした会社休日を ``Holiday`` の iterable で返すソース。
+
+``HolidaySource`` Protocol を実装する。``ComputedHolidaySource`` の
+和集合に混ぜる使い方を想定:
+
+    HolidayCalendar.from_sources([
+        ComputedHolidaySource(),
+        BundledCabinetCSVSource(),
+        CompanyHolidaySource(),
+    ])
+
+国民の祝日（内閣府 CSV / Computed）と重なったときは**先勝ち**で
+採用される（``HolidayCalendar`` 側の挙動）。警告は出さない。
+
+このソースは **外部 I/O を一切しない** 純粋な Python 計算。
+社内 BO 環境（オフライン・pip 制限）でもそのまま動く。
+
+Args:
+    from_year: 対象範囲の開始年。省略時は ``DEFAULT_FROM_YEAR`` (1900)。
+    to_year: 対象範囲の終了年。省略時は ``DEFAULT_TO_YEAR`` (2200)。
+
+#### `__init__`
+
+```text
+def __init__(self, *, from_year: int | None=None, to_year: int | None=None) -> None:
+```
+
+#### `load`
+
+```text
+def load(self) -> list[Holiday]:
+```
+
+##### 説明
+
+会社休日を ``Holiday`` のリストで返す。
+
+日付順に並べた状態で返す。国民の祝日と重なっても気にせずそのまま出す
+（``HolidayCalendar`` 側で先勝ち採用される）。
+
+### `ComputedHolidaySource`
+
+```text
+class ComputedHolidaySource(HolidaySource):
+```
+
+#### 説明
+
+計算で祝日の和集合を返すソース。
+
+``HolidaySource`` Protocol を実装する。``load()`` で ``Iterable[Holiday]`` を返す。
+``CabinetOfficeCSVSource`` と並列に置いて、
+``from_sources([Cabinet, Computed])`` のように和集合で運用する
+（``HolidayCalendar`` 側の先勝ち WARNING ログが衝突をハンドリングする）。
+
+このソースは **純粋計算のみ** — 外部通信・ファイル読み込みは一切しない。
+社内 BO 環境（オフライン・pip 制限）でもそのまま動く。
+
+Args:
+    from_year: 対象範囲の開始年。省略時は ``DEFAULT_FROM_YEAR`` (1948)。
+    to_year: 対象範囲の終了年。省略時は ``DEFAULT_TO_YEAR`` (2099)。
+        範囲外でも祝日計算は走るが、春分／秋分の近似精度が下がる旨を
+        WARNING ログで知らせる。
+
+#### `__init__`
+
+```text
+def __init__(self, *, from_year: int | None=None, to_year: int | None=None) -> None:
+```
+
+#### `load`
+
+```text
+def load(self) -> list[Holiday]:
+```
+
+##### 説明
+
+対象年の範囲について計算した祝日をまとめて返す。
+
+Returns:
+    日付順に並んだ ``Holiday`` のリスト。
+
+### `EXPIRING_WARNING_DAYS`
+
+公開定数。
+
+### `Holiday`
+
+```text
+class Holiday:
+```
+
+#### 説明
+
+祝日の1件。日付と名称だけを運ぶシンプルな箱。
+
+Attributes:
+    date: 祝日の日付（時刻・タイムゾーンは持たない業務日付）。
+    name: 祝日の日本語名称（例: "建国記念の日"）。
+    approximate: ``True`` なら、計算式など内閣府発表と ±1 日前後する
+        可能性がある値。``HolidayCalendar.is_holiday`` などで該当 Holiday
+        を返したときに WARNING ログを出して、業務フローを止めずに気づける
+        ようにする。デフォルトは ``False``（内閣府 CSV 由来または確実な
+        計算結果）。
+
+### `HolidayCalendar`
+
+```text
+class HolidayCalendar:
+```
+
+#### 説明
+
+祝日を保持し、営業日判定を行うカレンダー本体。
+
+同じ日付に複数の祝日が登録された場合は**先勝ち**で採用する
+（内閣府 CSV と会社の年末年始休暇など、複数 source の重複は珍しくない）。
+名称が違う祝日が同じ日に重なっても黙って先を採用する。
+
+期限切れの警告（``EXPIRING_WARNING_DAYS`` を切った日）は **同じ日に
+1回だけ**出す。同じ日に ``is_business_day`` が何回呼ばれても
+ログが埋もれないため。
+
+#### `__init__`
+
+```text
+def __init__(self, holidays: Iterable[Holiday]) -> None:
+```
+
+##### 説明
+
+``Holiday`` の iterable から ``{日付: Holiday}`` の索引を作る。
+
+Args:
+    holidays: 祝日の iterable。同じ日付が複数含まれていたら先勝ちで採用。
+
+#### `from_csv`
+
+```text
+@classmethod
+def from_csv(cls, path: str | Path, *, encoding: str='cp932') -> 'HolidayCalendar':
+```
+
+##### 説明
+
+内閣府の ``syukujitsu.csv`` を直接読む最短ルート。
+
+Args:
+    path: CSV のパス。CP932（Shift_JIS）固定。
+    encoding: 文字コード。通常は ``cp932`` のままで良い。
+
+Returns:
+    読み込み結果から作った ``HolidayCalendar``。
+
+#### `from_sources`
+
+```text
+@classmethod
+def from_sources(cls, sources: Iterable[HolidaySource]) -> 'HolidayCalendar':
+```
+
+##### 説明
+
+複数の ``HolidaySource`` を合体させる（内閣府 + Computed + 会社休日 など）。
+
+**カスケード動作**: 前の source が ``HolidayCalendarFetchError``
+（内閣府の取得失敗・``requests`` 不在など）を投げたら次の source へ
+フォールバックする。**内閣府が取れない環境で Computed に切り替えたい**
+ケース（オフライン BO 環境・期限切れ）を想定。
+全部失敗したら最後の ``HolidayCalendarFetchError`` をそのまま送出。
+
+Args:
+    sources: ``load()`` を持つ ``HolidaySource`` の iterable。
+        同じ日付が複数ソースにあれば **最初のソースの Holiday** が優先される。
+
+Returns:
+    全ソースを結合した ``HolidayCalendar``。
+
+Raises:
+    HolidayCalendarFetchError: 全 source が ``HolidayCalendarFetchError``
+        を投げた場合、最後のエラーをそのまま送出する。
+
+#### `is_holiday`
+
+```text
+def is_holiday(self, target: _dt.date) -> bool:
+```
+
+##### 説明
+
+``target`` が祝日（または休日）なら ``True``。
+
+ターゲットが今年/来年なら、内閣府 source への強制再取得を試みる
+（今年中に 1 回だけ。失敗時はサイレント）。
+計算式由来の暫定値（``approximate=True``）を返すときは WARNING ログ。
+
+#### `holidays_in`
+
+```text
+def holidays_in(self, start: _dt.date, end: _dt.date) -> list[Holiday]:
+```
+
+##### 説明
+
+``start <= 日付 <= end`` の範囲に入る祝日を、日付順に返す。
+
+Args:
+    start: 範囲開始（含む）。
+    end: 範囲終了（含む）。
+
+Returns:
+    範囲内の ``Holiday`` を日付昇順で並べたリスト。
+    該当が無ければ空リスト。
+
+#### `expires_after`
+
+```text
+def expires_after(self, target: _dt.date) -> bool:
+```
+
+##### 説明
+
+``target`` が収録済み最終日以降（＝「収録期限を過ぎた」）なら ``True``。
+
+「収録済み最終日 <= target」を期限切れとみなす。等号を含めるのは、
+「収録最終日ぴったり」を「期限の境目」として扱うため（最終日当日は
+収録済みの祝日として判定できるが、それ以降は収録外）。
+
+#### `days_until_expiry`
+
+```text
+def days_until_expiry(self, today: _dt.date) -> int:
+```
+
+##### 説明
+
+``today`` から収録最終日までの日数。最終日を過ぎていれば負の値。
+
+Args:
+    today: 「今日」とみなす日付。
+
+Returns:
+    ``last_known - today`` の日数差。収録済み祝日が無いと ``-1``。
+
+#### `last_known_date`
+
+```text
+def last_known_date(self) -> _dt.date | None:
+```
+
+##### 説明
+
+収録済み祝日のうち最も新しい日付。無ければ ``None``。
+
+#### `holiday_names`
+
+```text
+def holiday_names(self, target: _dt.date) -> Sequence[str]:
+```
+
+##### 説明
+
+``target`` に登録された祝日名称のタプル（同日が複数あれば複数要素）。
+
+#### `all_holidays`
+
+```text
+def all_holidays(self) -> list[Holiday]:
+```
+
+##### 説明
+
+保持している祝日を日付順に並べたリストを返す。
+
+### `HolidayCalendarError`
+
+```text
+class HolidayCalendarError(ComkenError):
+```
+
+#### 説明
+
+祝日カレンダーに関するエラー
+
+対処:
+    画面に表示された具体的なエラー名を上の表から探す
+
+### `HolidayCalendarExpiredError`
+
+```text
+class HolidayCalendarExpiredError(HolidayCalendarError):
+```
+
+#### 説明
+
+祝日データの収録期間が今日の業務日付を超えている
+
+収録最終日 <= 今日になると「今日以降が祝日かどうか判定できない」ため、
+期限切れを専用例外で知らせる。
+
+発生箇所: comken.core.holidays.calendar の HolidayCalendar
+
+対処:
+    内閣府の祝日 CSV を更新する（自動取得の場合は次の実行で反映される）
+
+#### `__init__`
+
+```text
+def __init__(self, today: object, last_known: object) -> None:
+```
+
+### `HolidayCalendarFetchError`
+
+```text
+class HolidayCalendarFetchError(HolidayCalendarError):
+```
+
+#### 説明
+
+内閣府の祝日 CSV を取得できない
+
+オフライン環境・社内ネットワークの制約・内閣府サイトの保守などの理由で
+ダウンロードが失敗する。**ただしキャッシュが残っている場合は警告ログのみで動く**
+（cached フラグで運用側が検知できる）。
+
+発生箇所: comken.toolbox.holidays.sources.cabinet_office の CabinetOfficeCSVSource
+
+対処:
+    ネットワーク接続と社内プロキシの設定を確認する。
+    それでも直らない場合は、保存済みのキャッシュで当面動かすか、
+    管理表（Excel）に会社休日を登録して代用する
+
+#### `__init__`
+
+```text
+def __init__(self, url: str, reason: str) -> None:
+```
+
+### `HolidayCalendarFormatError`
+
+```text
+class HolidayCalendarFormatError(HolidayCalendarSourceError):
+```
+
+#### 説明
+
+内閣府 CSV 以外のファイルや壊れたファイルを内閣府 CSV として読み込もうとした
+
+発生箇所: comken.core.holidays.csv_source の load_cabinet_office_csv
+
+対処:
+    内閣府の syukujitsu.csv を直接取得し直す。文字コードは CP932 (Shift_JIS)
+
+#### `__init__`
+
+```text
+def __init__(self, path: Path | str, detail: str) -> None:
+```
+
+### `HolidayCalendarSourceError`
+
+```text
+class HolidayCalendarSourceError(HolidayCalendarError):
+```
+
+#### 説明
+
+祝日データの読み取りに失敗した
+
+内閣府の CSV 形式が変わった・社内管理表のシート名が違う・列が無い・
+文字化けしたなどの理由で、祝日を 1件も抽出できない場合に上げる。
+
+発生箇所: comken.core.holidays の csv_source
+
+対処:
+    内閣府の CSV の場合: 内閣府の仕様変更。管理者へ連絡する
+
+#### `__init__`
+
+```text
+def __init__(self, source: str, reason: str) -> None:
+```
+
+### `HolidaySource`
+
+```text
+class HolidaySource(Protocol):
+```
+
+#### 説明
+
+祝日を 1セット取り出せる仕組みの共通インタフェース。
+
+内閣府の ``CabinetOfficeCSVSource`` や ``ComputedHolidaySource`` / 会社の
+``CompanyHolidaySource`` の両方がこれを実装するため、利用側は入手経路を
+意識せずに ``from_sources`` に渡せる。
+
+この Protocol はメソッドの型を ``Iterable[Holiday]`` に固定する。
+``load()`` を呼んだその瞬間に取得が走る（キャッシュは実装側で持つ）のが
+一貫していて読みやすい。実装が iterable を返したい場合は
+中で ``list()`` してから返してもよい。
+
+#### `load`
+
+```text
+def load(self) -> Iterable[Holiday]:
+```
+
+##### 説明
+
+祝日セットを取り出して ``Iterable[Holiday]`` で返す。
+
+### `RefreshableHolidaySource`
+
+```text
+class RefreshableHolidaySource(Protocol):
+```
+
+#### 説明
+
+TTL を無視して強制再取得できる祝日 source（例: 内閣府の ``CabinetOfficeCSVSource``）。
+
+``HolidayCalendar`` がターゲットが今年/来年のときに内閣府への
+再取得を試みるためのフック。短いタイムアウト（既定 0.5 秒）で実装する。
+必須ではなく、管理表など再取得が要らない source は実装しなくてよい。
+
+#### `refresh`
+
+```text
+def refresh(self) -> Iterable[Holiday]:
+```
+
+##### 説明
+
+TTL を無視して強制再取得する。
+
+### `add_business_days`
+
+```text
+def add_business_days(target: _dt.date, n: int, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` から ``n`` 営業日後の日付（``n`` が負なら前）。``calendar`` 省略可。
+
+### `business_day_after`
+
+```text
+def business_day_after(target: _dt.date, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` より後で最初の営業日（``target`` 自身を含まない）。
+
+``calendar=None`` のときは**既定カレンダー**を使う。
+
+### `business_day_before`
+
+```text
+def business_day_before(target: _dt.date, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` より前で最初の営業日（``target`` 自身を含まない）。
+
+``calendar=None`` のときは**既定カレンダー**を使う。
+
+### `business_day_on_or_after`
+
+```text
+def business_day_on_or_after(target: _dt.date, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` 以降で最初の営業日（``target`` を含む）。``calendar`` 省略可。
+
+### `business_day_on_or_before`
+
+```text
+def business_day_on_or_before(target: _dt.date, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` 以前で最初の営業日（``target`` を含む）。``calendar`` 省略可。
+
+### `default_calendar`
+
+```text
+def default_calendar() -> HolidayCalendar:
+```
+
+#### 説明
+
+既定カレンダーを取得する（**プロセス内で 1回だけ**遅延生成）。
+
+構成は 3 つだけ:
+    1. ``ComputedHolidaySource``（純粋計算。土台）
+    2. 同梱の ``syukujitsu.csv`` を ``load_cabinet_office_csv`` で読む
+       （内閣府の実値。計算式の上書き用）
+    3. ``CompanyHolidaySource``（会社独自の休業日。コード直書き）
+
+**ネットワークには一切出ない。** ``CabinetOfficeCSVSource`` は
+含めない（``comken.core`` は ``requests`` に依存できないし、業務 PC の
+通信制限下でも動く必要があるため）。
+
+### `first_business_day_of_month`
+
+```text
+def first_business_day_of_month(target: _dt.date, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` が属する月の最初の営業日。``calendar`` 省略可。
+
+### `is_business_day`
+
+```text
+def is_business_day(target: _dt.date, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> bool:
+```
+
+#### 説明
+
+``target`` が営業日なら ``True``。``calendar`` を省略できる簡易判定。
+
+``calendar=None`` のときは**既定カレンダー**（``default_calendar()``）を使う。
+アプリ側で ``set_default_calendar()`` を呼んでおけば、利用者は
+``HolidayCalendar`` を組み立てなくても「今日が営業日か」を判定できる。
+
+``calendar`` をキーワード専用にして、呼び出し側がうっかり位置引数で
+日付とカレンダーを取り違える事故を防ぐ。
+
+### `last_business_day_of_month`
+
+```text
+def last_business_day_of_month(target: _dt.date, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` が属する月の最後の営業日。``calendar`` 省略可。
+
+### `load_cabinet_office_csv`
+
+```text
+@measure
+def load_cabinet_office_csv(path: str | Path, *, encoding: str=DEFAULT_ENCODING) -> list[Holiday]:
+```
+
+#### 説明
+
+内閣府の syukujitsu.csv を読み取り、祝日のリストを返す。
+
+Args:
+    path: CSV ファイルのパス。存在しない・読めない場合は ``HolidayCalendarFormatError``。
+    encoding: CSV の文字コード。既定は ``cp932``（内閣府の配布形式）。
+
+Returns:
+    日付順に並んだ ``Holiday`` のリスト。
+
+Raises:
+    HolidayCalendarFormatError: ファイルが無い、壊れている、
+        ヘッダーが内閣府のものではない、日付が解釈できないなどの理由で
+        1件も抽出できなかった場合。
+
+### `nth_business_day_of_month`
+
+```text
+def nth_business_day_of_month(target: _dt.date, n: int, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` が属する月の第 ``n`` 営業日（``n`` は 1 始まり）。``calendar`` 省略可。
+
+### `set_default_calendar`
+
+```text
+def set_default_calendar(calendar: HolidayCalendar | None) -> None:
+```
+
+#### 説明
+
+既定カレンダーを差し替える（``None`` を渡すと既定の遅延生成に戻る）。
+
+会社独自の年末年始などを追加したいプロジェクトは、起動時に
+``set_default_calendar(HolidayCalendar.from_sources([...]))`` を一度
+呼んでおけば、利用者は ``is_business_day(target)`` のような
+モジュール関数を直接呼べる。
+
+
 ## `from comken.core.logger import ...`
 
 ### `Backoffice`
@@ -1621,10 +2802,10 @@ class Intranet(LoggerSite):
 
 comken 共通のクラス。OWNER は ``"comken"``。
 
-### `setup`
+### `setup_logging`
 
 ```text
-def setup(site: type[LoggerSite], *, allow_existing: bool=False) -> None:
+def setup_logging(site: type[LoggerSite], *, allow_existing: bool=False) -> None:
 ```
 
 #### 説明
@@ -1634,10 +2815,11 @@ site の指定に従い root logger を設定する。
 PID は同じ端末で同時に動くプロセスを見分ける値であり、保存先を選ぶ端末名とは
 用途が異なる。Formatter の固定値として渡し、ログ呼び出し側へ負担を増やさない。
 
-``local()`` が先に走っている場合（root に console と local ファイルだけがある
-場合）は console を再利用し、environment ファイルだけを追加する。逆順（setup() が
-先）では通常どおり console と environment ファイルを追加する。両方がすでに
-走っている場合は ``LoggingAlreadyConfiguredError`` を送出して、二重出力を防ぐ。
+``setup_local_logging()`` が先に走っている場合（root に console と local
+ファイルだけがある場合）は console を再利用し、environment ファイルだけを
+追加する。逆順（``setup_logging()`` が先）では通常どおり console と
+environment ファイルを追加する。両方がすでに走っている場合は
+``LoggingAlreadyConfiguredError`` を送出して、二重出力を防ぐ。
 
 comken 以外の handler が root に混ざっている場合は ``LoggingConflictError``
 を送出する。既存 handler の出力先やレベルを勝手に変えてしまうため。
@@ -1645,10 +2827,10 @@ comken 以外の handler が root に混ざっている場合は ``LoggingConfli
 続行する（comken の handler が両方走っているケースは許可しない — 何が3つ目に
 なるか曖昧になり、誤って出力に気付くのが遅れるため）。
 
-### `local`
+### `setup_local_logging`
 
 ```text
-def local(*, console_level: int=logging.INFO, file_level: int=logging.INFO, path: str | Path | None=None, allow_existing: bool=False) -> None:
+def setup_local_logging(*, console_level: int=logging.INFO, file_level: int=logging.INFO, path: str | Path | None=None, allow_existing: bool=False) -> None:
 ```
 
 #### 説明
@@ -1656,37 +2838,18 @@ def local(*, console_level: int=logging.INFO, file_level: int=logging.INFO, path
 ローカル実行用に root logger を設定する。
 
 ``path`` はファイル名ではなく保存先フォルダ。省略時は ``project_dir()`` で
-起動スクリプトのプロジェクトを求め、その ``logs`` を使う。``setup()`` の
-直後（root に console と environment ファイルだけがある状態）でも、``setup()``
-と組み合わせず単独でも呼べる。``setup()`` 直後なら console を使い回して
-local ファイルだけを追加し、単独なら console と local ファイルの 2 種を追加する。
+起動スクリプトのプロジェクトを求め、その ``logs`` を使う。``setup_logging()`` の
+直後（root に console と environment ファイルだけがある状態）でも、
+``setup_logging()`` と組み合わせず単独でも呼べる。``setup_logging()`` 直後なら
+console を使い回して local ファイルだけを追加し、単独なら console と local
+ファイルの 2 種を追加する。
 
-``setup()`` と ``local()`` が両方走った状態や、関係のない handler が混ざって
-いる場合は ``LoggingAlreadyConfiguredError`` を送出して二重出力を防ぐ。
-comken 以外（他ライブラリ由来）の handler が混ざっている場合は
+``setup_logging()`` と ``setup_local_logging()`` が両方走った状態や、関係のない
+handler が混ざっている場合は ``LoggingAlreadyConfiguredError`` を送出して
+二重出力を防ぐ。comken 以外（他ライブラリ由来）の handler が混ざっている場合は
 ``LoggingConflictError`` を送出し、既存 handler の出力先やレベルを勝手に
 変えてしまうことを防ぐ。``allow_existing=True`` を指定すると、その判定を
 **警告ログだけ**に留めて処理を続行する。
-
-### `DEBUG`
-
-公開定数。
-
-### `INFO`
-
-公開定数。
-
-### `WARNING`
-
-公開定数。
-
-### `ERROR`
-
-公開定数。
-
-### `getLogger`
-
-公開定数。
 
 
 ## `from comken.core.table import ...`
@@ -1846,13 +3009,17 @@ class Transfer:
 Table 間のキー突合と転記を行う。
 
 基本的な用法は次のとおり。 ``mapping`` は「転記元の列名 → 転記先の列名」。
-4つの取り出し口を使い分けて、read / write を行単位で加工する:
+3つの取り出し口を使い分けて、read / write を行単位で加工する:
 
 - ``matched_rows()``: 両方にキーが揃う行を ``(read_row, write_row)`` で返す
+  （**両方とも作業 Table の実体行**）
 - ``transfer_rows()``: read 全行を ``(read_row, write_row | None)`` で返す
-  （write に無い行は ``None``）
-- ``unmatched_read_rows()``: write に無い read 行だけを返す（追加候補）
-- ``unmatched_write_rows()``: read に無い write 行だけを返す（破棄候補）
+  （write に無い行は ``None``、``read_row`` は **コピー**）
+- ``unmatched()``: 突合しなかった行を ``UnmatchedRows`` で返す
+  - ``only_in_read`` は **コピー**（``Table``）。書き換えても ``read`` にも
+    ``result()`` にも影響しない
+  - ``only_in_write`` は **作業 Table の実体行**（``list[Row]``）。書き換えると
+    ``result()`` に反映される
 
 Example:
     transfer = Transfer(read_table, write_table, mapping,
@@ -1863,7 +3030,7 @@ Example:
         transfer.apply_mapping(read_row, write_row)   # mapping の値をコピー
         # 必要なら write_row["備考"] = "..." のように追加加工
     # write に無い read 行は result() に追加していく（新規行の追加）
-    for read_row in transfer.unmatched_read_rows():
+    for read_row in transfer.unmatched().only_in_read:
         transfer.result().append({
             "顧客ID": read_row["顧客ID"],
             "顧客名": read_row["取引先"],
@@ -1871,7 +3038,7 @@ Example:
             "備考": "新規追加",
         })
     # read に無い write 行は「転記元に無し」と書き換える（result() に出るので別途 filter する）
-    for write_row in transfer.unmatched_write_rows():
+    for write_row in transfer.unmatched().only_in_write:
         write_row["備考"] = "転記元に無し"
 
 **条件は ``apply_mapping()`` より前に書くこと。** Python の ``for`` ループは
@@ -1881,10 +3048,9 @@ Example:
 適用済みとなり破棄できないので、判定は必ず ``apply_mapping()`` の前に置く。
 
 **空キー (``None`` / ``""``) は突合対象外**。 値が無いキーは read 側・write 側の
-どちらでも照合に使わず、``unmatched_read_rows()`` /
-``unmatched_write_rows()`` 側へ流れる。 ``0`` や ``False`` は空ではない
-（数値・bool の 0 落ち判定を避けるため）。 複合キーは **1要素でも空** なら
-空とみなす。
+どちらでも照合に使わず、``unmatched()`` 側へ流れる。 ``0`` や ``False`` は
+空ではない（数値・bool の 0 落ち判定を避けるため）。 複合キーは **1要素でも空**
+なら空とみなす。
 
 #### `__init__`
 
@@ -1920,43 +3086,28 @@ def matched_rows(self) -> Iterator[tuple[Row, Row]]:
 
 転記先に存在しない行（``destination`` が ``None``）は含まない。
 
-#### `unmatched_read_rows`
+#### `unmatched`
 
 ```text
-def unmatched_read_rows(self) -> Iterator[Row]:
+def unmatched(self) -> UnmatchedRows:
 ```
 
 ##### 説明
 
-write に対応が無い read 行だけを返す（追加候補）。
+突合しなかった行を ``UnmatchedRows`` で返す。
 
-戻り値は ``Table.read()`` と同じく **read 行のコピー**。
-返された行を ``write_row["列名"] = ...`` のように書き換えても ``read`` には
-影響しない。 ``result().append()`` に渡して write の作業 Table へ追加する
-（新規行として書き込むために ``dict(...)`` で再コピーするのを忘れずに）。
+``only_in_read`` は write に対応が無い read 行（追加候補）。
+``Table`` として返すので ``.read()`` / ``.filter()`` などの Table 標準の
+インターフェースが使える。 戻り値は ``Table.read()`` と同じく **read 行の
+コピー** で、書き換えても ``read`` にも ``result()`` にも影響しない。
 
-空キー (``None`` / ``""``) の read 行もここに含む。 キーが空なので
-照合に使えず、必ず write には対応が無いため。
-
-``transfer_rows()`` / ``matched_rows()`` を呼ばずに呼んでも動く。
-
-#### `unmatched_write_rows`
-
-```text
-def unmatched_write_rows(self) -> Iterator[Row]:
-```
-
-##### 説明
-
-read に対応が無い write 行だけを返す（破棄候補）。
-
+``only_in_write`` は read に対応が無い write 行（破棄候補）。
 戻り値は ``matched_rows()`` が返す ``write_row`` と同じく **作業 Table の
-実体行**。 返された ``write_row`` を ``write_row["備考"] = "破棄予定"`` の
-ように書き換えると ``result()`` の戻り値へ反映される。 ``result().append()``
-などに渡して追加する使い方ではないので注意。
+実体行**。 ``write_row["備考"] = "破棄予定"`` のように書き換えると
+``result()`` の戻り値へ反映される。
 
-空キー (``None`` / ``""``) の write 行もここに含む。 キーが空なので
-照合に使えず、必ず read には対応が無いため。
+空キー (``None`` / ``""``) の行も両側に含む。 キーが空なので照合に使えず、
+必ず対応が無いため。
 
 ``transfer_rows()`` / ``matched_rows()`` を呼ばずに呼んでも動く。
 
@@ -2002,7 +3153,7 @@ def result(self) -> Table:
 
 ``result()`` は同じ作業 Table インスタンスを返し続けるので、
 ``result().append(...)`` のように破壊的に加工した場合や、 ``result()`` を
-呼んだ後に ``unmatched_write_rows()`` の ``write_row`` を書き換えた場合も、
+呼んだ後に ``unmatched().only_in_write`` の ``write_row`` を書き換えた場合も、
 後続の ``result().read()`` 呼び出しに反映される（``Table._iter_rows_for_update``
 経由で実体 dict を共有しているため）。
 
@@ -2012,6 +3163,21 @@ Example:
     for source_row, destination_row in transfer.matched_rows():
         transfer.apply_mapping(source_row, destination_row)
     final_table = transfer.result()  # 変更後の Table
+
+### `UnmatchedRows`
+
+```text
+class UnmatchedRows:
+```
+
+#### 説明
+
+突合しなかった行。
+
+``only_in_read`` は **コピー**（``Table``）。書き換えても ``read`` にも
+``result()`` にも影響しない。
+``only_in_write`` は **作業 Table の実体行**（``list[Row]``）。書き換えると
+``result()`` に反映される。型が違うのはこの違いを表すため。
 
 ### `compare_tables`
 
@@ -3073,6 +4239,28 @@ Attributes:
 def __init__(self, remaining: list[Path]) -> None:
 ```
 
+### `FileSuffixMissingError`
+
+```text
+class FileSuffixMissingError(ComkenError):
+```
+
+#### 説明
+
+ファイル名に拡張子が無い
+
+発生箇所: comken.core.files.DateNameBuilder() / DateFileFinder.prefix() / DateFileFinder.dated()
+
+対処:
+    ファイル名に拡張子（例: ``.csv`` / ``.xlsx``）を含めて指定する。
+    拡張子は名前の文字列にだけ書く。引数 ``ext`` / ``extension`` は廃止済みのため使えない。
+
+#### `__init__`
+
+```text
+def __init__(self, name: str) -> None:
+```
+
 ### `OutlookError`
 
 ```text
@@ -4026,6 +5214,41 @@ state に保存できない型の値が渡された
 def __init__(self, value: object) -> None:
 ```
 
+### `BusinessDayNotFoundError`
+
+```text
+class BusinessDayNotFoundError(HolidayCalendarError):
+```
+
+#### 説明
+
+営業日が見つからなかった
+
+月の途中で「指定した月の営業日数を超える n 番目」を求めたとき、
+その月に営業日が 1 日も無いとき、祝日データ欠落などで 400 日探索しても
+次の営業日にたどり着けなかったときに送る。
+いずれも「カレンダー側がおかしい」または「指定値が暦と合わない」場合に
+起き、業務ロジック側のミスではないので、呼び出し側で握り潰さずユーザーに
+顕在化させる必要がある。
+
+発生箇所: comken.core.holidays.calendar の HolidayCalendar
+    - nth_business_day_of_month（n が月の営業日数超え、または n < 1）
+    - first_business_day_of_month / last_business_day_of_month
+      （その月に営業日が 1 日も無い）
+    - business_day_after / business_day_before /
+      business_day_on_or_after / business_day_on_or_before
+      （400 日の探索上限に達した）
+
+対処:
+    n をその月の営業日数以下に直す、対象月の祝日に過不足がないか
+    確認する、社内管理表（会社休日）が広範囲に登録されていないか確認する
+
+#### `__init__`
+
+```text
+def __init__(self, detail: str) -> None:
+```
+
 ### `HolidayCalendarError`
 
 ```text
@@ -4079,11 +5302,10 @@ class HolidayCalendarSourceError(HolidayCalendarError):
 内閣府の CSV 形式が変わった・社内管理表のシート名が違う・列が無い・
 文字化けしたなどの理由で、祝日を 1件も抽出できない場合に上げる。
 
-発生箇所: comken.toolbox.holidays の csv_source / sources/master_table
+発生箇所: comken.core.holidays の csv_source
 
 対処:
     内閣府の CSV の場合: 内閣府の仕様変更。管理者へ連絡する
-    管理表の場合: シート名と列名（"日付" / "名称"）を確認する
 
 #### `__init__`
 
@@ -4101,7 +5323,7 @@ class HolidayCalendarFormatError(HolidayCalendarSourceError):
 
 内閣府 CSV 以外のファイルや壊れたファイルを内閣府 CSV として読み込もうとした
 
-発生箇所: comken.toolbox.holidays.csv_source の load_cabinet_office_csv
+発生箇所: comken.core.holidays.csv_source の load_cabinet_office_csv
 
 対処:
     内閣府の syukujitsu.csv を直接取得し直す。文字コードは CP932 (Shift_JIS)
@@ -4125,11 +5347,10 @@ class HolidayCalendarExpiredError(HolidayCalendarError):
 収録最終日 <= 今日になると「今日以降が祝日かどうか判定できない」ため、
 期限切れを専用例外で知らせる。
 
-発生箇所: comken.toolbox.holidays.calendar の HolidayCalendar
+発生箇所: comken.core.holidays.calendar の HolidayCalendar
 
 対処:
-    内閣府の祝日 CSV を更新する（自動取得の場合は次の実行で反映される）、
-    または管理表に直近の祝日を追加する
+    内閣府の祝日 CSV を更新する（自動取得の場合は次の実行で反映される）
 
 #### `__init__`
 
@@ -4588,7 +5809,7 @@ class LoggingAlreadyConfiguredError(ComkenError):
 root logger がすでに設定されている
 
 対処:
-    setup() または local() はアプリの入口で1回だけ呼ぶ。
+    setup_logging() または setup_local_logging() はアプリの入口で1回だけ呼ぶ。
     実行基盤がログを設定する場合は呼ばない。
 
 #### `__init__`
@@ -4607,14 +5828,15 @@ class LoggingConflictError(ComkenError):
 
 root logger に comken 以外の handler が設定されている
 
-他ライブラリが先に root logger を設定した状態で ``setup()`` / ``local()`` を
-呼ぶと、comken が既存 handler の出力先やレベルを勝手に変えてしまう。
-「何がどう混ざっているのか」を運用担当者にそのまま見せられるよう、
-既存 handler の正体を判別できる範囲でメッセージに並べる。
+他ライブラリが先に root logger を設定した状態で ``setup_logging()`` /
+``setup_local_logging()`` を呼ぶと、comken が既存 handler の出力先や
+レベルを勝手に変えてしまう。「何がどう混ざっているのか」を運用担当者に
+そのまま見せられるよう、既存 handler の正体を判別できる範囲で
+メッセージに並べる。
 
-この例外は ``setup()`` / ``local()`` の呼び方では解決しない。利用者が
-コードを直しても他ライブラリの root logger 設定を止められないので、
-上が運用側へ通知されることを前提にした例外。
+この例外は ``setup_logging()`` / ``setup_local_logging()`` の呼び方では
+解決しない。利用者がコードを直しても他ライブラリの root logger 設定を
+止められないので、上が運用側へ通知されることを前提にした例外。
 
 対処:
     上の handler 一覧をそのままライブラリの管理者へ連絡してください
@@ -4817,6 +6039,7 @@ None を返す。 モジュール内の依存不足は ImportError としてそ�
 ### `load_master`
 
 ```text
+@measure
 def load_master(path: str | Path | None=None) -> dict[str, ReportEntry]:
 ```
 
@@ -5074,13 +6297,17 @@ class Transfer:
 Table 間のキー突合と転記を行う。
 
 基本的な用法は次のとおり。 ``mapping`` は「転記元の列名 → 転記先の列名」。
-4つの取り出し口を使い分けて、read / write を行単位で加工する:
+3つの取り出し口を使い分けて、read / write を行単位で加工する:
 
 - ``matched_rows()``: 両方にキーが揃う行を ``(read_row, write_row)`` で返す
+  （**両方とも作業 Table の実体行**）
 - ``transfer_rows()``: read 全行を ``(read_row, write_row | None)`` で返す
-  （write に無い行は ``None``）
-- ``unmatched_read_rows()``: write に無い read 行だけを返す（追加候補）
-- ``unmatched_write_rows()``: read に無い write 行だけを返す（破棄候補）
+  （write に無い行は ``None``、``read_row`` は **コピー**）
+- ``unmatched()``: 突合しなかった行を ``UnmatchedRows`` で返す
+  - ``only_in_read`` は **コピー**（``Table``）。書き換えても ``read`` にも
+    ``result()`` にも影響しない
+  - ``only_in_write`` は **作業 Table の実体行**（``list[Row]``）。書き換えると
+    ``result()`` に反映される
 
 Example:
     transfer = Transfer(read_table, write_table, mapping,
@@ -5091,7 +6318,7 @@ Example:
         transfer.apply_mapping(read_row, write_row)   # mapping の値をコピー
         # 必要なら write_row["備考"] = "..." のように追加加工
     # write に無い read 行は result() に追加していく（新規行の追加）
-    for read_row in transfer.unmatched_read_rows():
+    for read_row in transfer.unmatched().only_in_read:
         transfer.result().append({
             "顧客ID": read_row["顧客ID"],
             "顧客名": read_row["取引先"],
@@ -5099,7 +6326,7 @@ Example:
             "備考": "新規追加",
         })
     # read に無い write 行は「転記元に無し」と書き換える（result() に出るので別途 filter する）
-    for write_row in transfer.unmatched_write_rows():
+    for write_row in transfer.unmatched().only_in_write:
         write_row["備考"] = "転記元に無し"
 
 **条件は ``apply_mapping()`` より前に書くこと。** Python の ``for`` ループは
@@ -5109,10 +6336,9 @@ Example:
 適用済みとなり破棄できないので、判定は必ず ``apply_mapping()`` の前に置く。
 
 **空キー (``None`` / ``""``) は突合対象外**。 値が無いキーは read 側・write 側の
-どちらでも照合に使わず、``unmatched_read_rows()`` /
-``unmatched_write_rows()`` 側へ流れる。 ``0`` や ``False`` は空ではない
-（数値・bool の 0 落ち判定を避けるため）。 複合キーは **1要素でも空** なら
-空とみなす。
+どちらでも照合に使わず、``unmatched()`` 側へ流れる。 ``0`` や ``False`` は
+空ではない（数値・bool の 0 落ち判定を避けるため）。 複合キーは **1要素でも空**
+なら空とみなす。
 
 #### `__init__`
 
@@ -5148,43 +6374,28 @@ def matched_rows(self) -> Iterator[tuple[Row, Row]]:
 
 転記先に存在しない行（``destination`` が ``None``）は含まない。
 
-#### `unmatched_read_rows`
+#### `unmatched`
 
 ```text
-def unmatched_read_rows(self) -> Iterator[Row]:
+def unmatched(self) -> UnmatchedRows:
 ```
 
 ##### 説明
 
-write に対応が無い read 行だけを返す（追加候補）。
+突合しなかった行を ``UnmatchedRows`` で返す。
 
-戻り値は ``Table.read()`` と同じく **read 行のコピー**。
-返された行を ``write_row["列名"] = ...`` のように書き換えても ``read`` には
-影響しない。 ``result().append()`` に渡して write の作業 Table へ追加する
-（新規行として書き込むために ``dict(...)`` で再コピーするのを忘れずに）。
+``only_in_read`` は write に対応が無い read 行（追加候補）。
+``Table`` として返すので ``.read()`` / ``.filter()`` などの Table 標準の
+インターフェースが使える。 戻り値は ``Table.read()`` と同じく **read 行の
+コピー** で、書き換えても ``read`` にも ``result()`` にも影響しない。
 
-空キー (``None`` / ``""``) の read 行もここに含む。 キーが空なので
-照合に使えず、必ず write には対応が無いため。
-
-``transfer_rows()`` / ``matched_rows()`` を呼ばずに呼んでも動く。
-
-#### `unmatched_write_rows`
-
-```text
-def unmatched_write_rows(self) -> Iterator[Row]:
-```
-
-##### 説明
-
-read に対応が無い write 行だけを返す（破棄候補）。
-
+``only_in_write`` は read に対応が無い write 行（破棄候補）。
 戻り値は ``matched_rows()`` が返す ``write_row`` と同じく **作業 Table の
-実体行**。 返された ``write_row`` を ``write_row["備考"] = "破棄予定"`` の
-ように書き換えると ``result()`` の戻り値へ反映される。 ``result().append()``
-などに渡して追加する使い方ではないので注意。
+実体行**。 ``write_row["備考"] = "破棄予定"`` のように書き換えると
+``result()`` の戻り値へ反映される。
 
-空キー (``None`` / ``""``) の write 行もここに含む。 キーが空なので
-照合に使えず、必ず read には対応が無いため。
+空キー (``None`` / ``""``) の行も両側に含む。 キーが空なので照合に使えず、
+必ず対応が無いため。
 
 ``transfer_rows()`` / ``matched_rows()`` を呼ばずに呼んでも動く。
 
@@ -5230,7 +6441,7 @@ def result(self) -> Table:
 
 ``result()`` は同じ作業 Table インスタンスを返し続けるので、
 ``result().append(...)`` のように破壊的に加工した場合や、 ``result()`` を
-呼んだ後に ``unmatched_write_rows()`` の ``write_row`` を書き換えた場合も、
+呼んだ後に ``unmatched().only_in_write`` の ``write_row`` を書き換えた場合も、
 後続の ``result().read()`` 呼び出しに反映される（``Table._iter_rows_for_update``
 経由で実体 dict を共有しているため）。
 
@@ -6636,6 +7847,7 @@ Args:
 ### `load_credential`
 
 ```text
+@measure
 def load_credential(name: str, path: Path | None=None) -> str:
 ```
 
@@ -6654,6 +7866,7 @@ Raises:
 ### `save_credential`
 
 ```text
+@measure
 def save_credential(name: str, value: str, path: Path | None=None) -> None:
 ```
 
@@ -6674,6 +7887,7 @@ Raises:
 ### `save_credentials`
 
 ```text
+@measure
 def save_credentials(items: dict[str, str], path: Path | None=None) -> None:
 ```
 
@@ -6697,6 +7911,7 @@ Raises:
 ### `delete_credential`
 
 ```text
+@measure
 def delete_credential(name: str, path: Path | None=None) -> None:
 ```
 
@@ -6711,6 +7926,7 @@ Raises:
 ### `list_names`
 
 ```text
+@measure
 def list_names(path: Path | None=None) -> list[str]:
 ```
 
@@ -6724,6 +7940,7 @@ Raises:
 ### `import_json`
 
 ```text
+@measure
 def import_json(json_path: str | Path, path: Path | None=None) -> list[str]:
 ```
 
@@ -6771,6 +7988,7 @@ def __init__(self, source: str | Path, *, encoding: str=Encoding.AUTO, columns: 
 #### `read`
 
 ```text
+@measure
 def read(self) -> Table:
 ```
 
@@ -6811,6 +8029,7 @@ def append(self, rows: list[dict[str, Value]] | dict[str, Value] | Table) -> Non
 #### `save`
 
 ```text
+@measure
 def save(self) -> None:
 ```
 
@@ -6926,6 +8145,7 @@ def close(self, *, save: bool=True) -> None:
 #### `save`
 
 ```text
+@measure
 def save(self) -> None:
 ```
 
@@ -6939,6 +8159,7 @@ read-onlyとdry-runではファイルを変更しない。
 #### `run_macro`
 
 ```text
+@measure
 def run_macro(self, macro_name: str) -> None:
 ```
 
@@ -6952,6 +8173,7 @@ COMには元ファイルではなく作業ファイルを渡す。ローカル�
 #### `read_computed_rows`
 
 ```text
+@measure
 def read_computed_rows(self, sheet_name: str, min_row: int=2) -> list[tuple[Any, ...]]:
 ```
 
@@ -7357,38 +8579,77 @@ def count(self) -> int:
 
 ## `from comken.toolbox.holidays import ...`
 
+### `BusinessDayNotFoundError`
+
+```text
+class BusinessDayNotFoundError(HolidayCalendarError):
+```
+
+#### 説明
+
+営業日が見つからなかった
+
+月の途中で「指定した月の営業日数を超える n 番目」を求めたとき、
+その月に営業日が 1 日も無いとき、祝日データ欠落などで 400 日探索しても
+次の営業日にたどり着けなかったときに送る。
+いずれも「カレンダー側がおかしい」または「指定値が暦と合わない」場合に
+起き、業務ロジック側のミスではないので、呼び出し側で握り潰さずユーザーに
+顕在化させる必要がある。
+
+発生箇所: comken.core.holidays.calendar の HolidayCalendar
+    - nth_business_day_of_month（n が月の営業日数超え、または n < 1）
+    - first_business_day_of_month / last_business_day_of_month
+      （その月に営業日が 1 日も無い）
+    - business_day_after / business_day_before /
+      business_day_on_or_after / business_day_on_or_before
+      （400 日の探索上限に達した）
+
+対処:
+    n をその月の営業日数以下に直す、対象月の祝日に過不足がないか
+    確認する、社内管理表（会社休日）が広範囲に登録されていないか確認する
+
+#### `__init__`
+
+```text
+def __init__(self, detail: str) -> None:
+```
+
 ### `CabinetOfficeCSVSource`
 
 ```text
-class CabinetOfficeCSVSource(HolidaySource):
+class CabinetOfficeCSVSource(HolidaySource, RefreshableHolidaySource):
 ```
 
 #### 説明
 
 内閣府の ``syukujitsu.csv`` をダウンロードして ``Holiday`` の iterable を返す。
 
+初回 ``load()`` 時にキャッシュが無ければダウンロードし、あればキャッシュを返す。
+``refresh()`` を呼ぶと TTL に関係なく強制再取得する。
+
 Args:
     url: 内閣府の CSV の URL。既定は ``syukujitsu.csv`` の配布 URL。
     cache_path: ダウンロードした CSV の保存先。既定は ``~/.comken/holidays/syukujitsu.csv``。
-    ttl_seconds: キャッシュの有効期限（秒）。経過していたら再取得する。
     encoding: CSV の文字コード。CP932（Shift_JIS）のままで良い。
     fetch_timeout_seconds: requests.get() のタイムアウト秒数。
+    refresh_timeout_seconds: refresh() で使う短いタイムアウト秒数（業務フロー停止を防ぐ）。
 
 #### `__init__`
 
 ```text
-def __init__(self, url: str=DEFAULT_URL, cache_path: Path | str | None=None, *, ttl_seconds: int=DEFAULT_TTL_SECONDS, encoding: str='cp932', fetch_timeout_seconds: float=30.0, refresh_timeout_seconds: float=0.5) -> None:
+def __init__(self, url: str=DEFAULT_URL, cache_path: Path | str | None=None, *, encoding: str='cp932', fetch_timeout_seconds: float=30.0, refresh_timeout_seconds: float=0.5) -> None:
 ```
 
 #### `load`
 
 ```text
+@measure
 def load(self) -> list[Holiday]:
 ```
 
 ##### 説明
 
-キャッシュを確認してから、必要に応じてダウンロードして ``Holiday`` を返す。
+キャッシュがあればそれを、無ければダウンロードして ``Holiday`` を返す。
 
 Returns:
     内閣府の祝日を日付順に並べた ``Holiday`` のリスト。
@@ -7399,6 +8660,7 @@ Raises:
 #### `refresh`
 
 ```text
+@measure
 def refresh(self) -> list[Holiday]:
 ```
 
@@ -7420,38 +8682,6 @@ Returns:
 
 Raises:
     HolidayCalendarFetchError: ダウンロードに失敗し、キャッシュも無い場合。
-
-### `ComkenMasterTableSource`
-
-```text
-class ComkenMasterTableSource(HolidaySource):
-```
-
-#### 説明
-
-社内管理表の「会社休日」シートを読んで ``Holiday`` の iterable を返す。
-
-Args:
-    path: 管理表（Excel）のパス。
-    sheet_name: 読み取り対象のシート名。既定は ``"会社休日"``。
-    date_column: 日付が入っている列の見出し。既定は ``"日付"``。
-    name_column: 名称が入っている列の見出し。既定は ``"名称"``。
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path | str, *, sheet_name: str=DEFAULT_SHEET_NAME, date_column: str=DATE_COLUMN_HEADER, name_column: str=NAME_COLUMN_HEADER) -> None:
-```
-
-#### `load`
-
-```text
-def load(self) -> list[Holiday]:
-```
-
-##### 説明
-
-管理表から会社休日を読み取り、``Holiday`` のリストを返す。
 
 ### `ComputedHolidaySource`
 
@@ -7529,9 +8759,9 @@ class HolidayCalendar:
 
 祝日を保持し、営業日判定を行うカレンダー本体。
 
-同じ日付に複数の祝日が登録された場合は**先勝ち**で WARNING ログを出す
-（内閣府と管理表の重複は珍しくないが、黙って採用するとどちらが正かを
-後から追えなくなる）。
+同じ日付に複数の祝日が登録された場合は**先勝ち**で採用する
+（内閣府 CSV と会社の年末年始休暇など、複数 source の重複は珍しくない）。
+名称が違う祝日が同じ日に重なっても黙って先を採用する。
 
 期限切れの警告（``EXPIRING_WARNING_DAYS`` を切った日）は **同じ日に
 1回だけ**出す。同じ日に ``is_business_day`` が何回呼ばれても
@@ -7548,7 +8778,7 @@ def __init__(self, holidays: Iterable[Holiday]) -> None:
 ``Holiday`` の iterable から ``{日付: Holiday}`` の索引を作る。
 
 Args:
-    holidays: 祝日の iterable。同じ日付が複数含まれていたら先勝ちで WARNING。
+    holidays: 祝日の iterable。同じ日付が複数含まれていたら先勝ちで採用。
 
 #### `from_csv`
 
@@ -7577,7 +8807,7 @@ def from_sources(cls, sources: Iterable[HolidaySource]) -> 'HolidayCalendar':
 
 ##### 説明
 
-複数の ``HolidaySource`` を合体させる（内閣府 + 管理表など）。
+複数の ``HolidaySource`` を合体させる（内閣府 + Computed + 会社休日 など）。
 
 **カスケード動作**: 前の source が ``HolidayCalendarFetchError``
 （内閣府の取得失敗・``requests`` 不在など）を投げたら次の source へ
@@ -7627,37 +8857,6 @@ Args:
 Returns:
     範囲内の ``Holiday`` を日付昇順で並べたリスト。
     該当が無ければ空リスト。
-
-#### `is_business_day`
-
-```text
-def is_business_day(self, target: _dt.date, *, skip_weekends: bool=True) -> bool:
-```
-
-##### 説明
-
-``target`` が営業日なら ``True``。
-
-``skip_weekends=True``（既定）なら土曜・日曜も休業扱いにする。
-``False`` を渡すと、土曜・日曜であっても祝日でなければ「営業日」と
-判定される（振替休日を平日扱いするシナリオ向け）。
-
-「収録済み最終日 <= target」のときは期限切れを WARNING ログで 1度だけ
-通知する。判定自体は通常どおり行う（誤って平日扱いにならないよう、
-**収録範囲外は祝日ではない側に倒す**）。
-
-#### `next_business_day`
-
-```text
-def next_business_day(self, target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
-```
-
-##### 説明
-
-``target`` より後で最初の営業日（``is_business_day`` が True になる日）を返す。
-
-収録範囲外でも日付は進むが、祝日判定は「祝日ではない」と扱う。
-期限切れの警告は ``next_business_day`` の入口で 1度だけ出す。
 
 #### `expires_after`
 
@@ -7745,11 +8944,10 @@ class HolidayCalendarExpiredError(HolidayCalendarError):
 収録最終日 <= 今日になると「今日以降が祝日かどうか判定できない」ため、
 期限切れを専用例外で知らせる。
 
-発生箇所: comken.toolbox.holidays.calendar の HolidayCalendar
+発生箇所: comken.core.holidays.calendar の HolidayCalendar
 
 対処:
-    内閣府の祝日 CSV を更新する（自動取得の場合は次の実行で反映される）、
-    または管理表に直近の祝日を追加する
+    内閣府の祝日 CSV を更新する（自動取得の場合は次の実行で反映される）
 
 #### `__init__`
 
@@ -7794,7 +8992,7 @@ class HolidayCalendarFormatError(HolidayCalendarSourceError):
 
 内閣府 CSV 以外のファイルや壊れたファイルを内閣府 CSV として読み込もうとした
 
-発生箇所: comken.toolbox.holidays.csv_source の load_cabinet_office_csv
+発生箇所: comken.core.holidays.csv_source の load_cabinet_office_csv
 
 対処:
     内閣府の syukujitsu.csv を直接取得し直す。文字コードは CP932 (Shift_JIS)
@@ -7818,11 +9016,10 @@ class HolidayCalendarSourceError(HolidayCalendarError):
 内閣府の CSV 形式が変わった・社内管理表のシート名が違う・列が無い・
 文字化けしたなどの理由で、祝日を 1件も抽出できない場合に上げる。
 
-発生箇所: comken.toolbox.holidays の csv_source / sources/master_table
+発生箇所: comken.core.holidays の csv_source
 
 対処:
     内閣府の CSV の場合: 内閣府の仕様変更。管理者へ連絡する
-    管理表の場合: シート名と列名（"日付" / "名称"）を確認する
 
 #### `__init__`
 
@@ -7840,8 +9037,9 @@ class HolidaySource(Protocol):
 
 祝日を 1セット取り出せる仕組みの共通インタフェース。
 
-内閣府の ``CabinetOfficeCSVSource`` と、社内の ``ComkenMasterTableSource`` の両方が
-これを実装するため、利用側は入手経路を意識せずに ``from_sources`` に渡せる。
+内閣府の ``CabinetOfficeCSVSource`` や ``ComputedHolidaySource`` / 会社の
+``CompanyHolidaySource`` の両方がこれを実装するため、利用側は入手経路を
+意識せずに ``from_sources`` に渡せる。
 
 この Protocol はメソッドの型を ``Iterable[Holiday]`` に固定する。
 ``load()`` を呼んだその瞬間に取得が走る（キャッシュは実装側で持つ）のが
@@ -7858,18 +9056,153 @@ def load(self) -> Iterable[Holiday]:
 
 祝日セットを取り出して ``Iterable[Holiday]`` で返す。
 
-### `is_business_day`
+### `RefreshableHolidaySource`
 
 ```text
-def is_business_day(target: _dt.date, *, calendar: HolidayCalendar, skip_weekends: bool=True) -> bool:
+class RefreshableHolidaySource(Protocol):
 ```
 
 #### 説明
 
-``calendar`` を介さずに使える簡易判定。
+TTL を無視して強制再取得できる祝日 source（例: 内閣府の ``CabinetOfficeCSVSource``）。
+
+``HolidayCalendar`` がターゲットが今年/来年のときに内閣府への
+再取得を試みるためのフック。短いタイムアウト（既定 0.5 秒）で実装する。
+必須ではなく、管理表など再取得が要らない source は実装しなくてよい。
+
+#### `refresh`
+
+```text
+def refresh(self) -> Iterable[Holiday]:
+```
+
+##### 説明
+
+TTL を無視して強制再取得する。
+
+### `add_business_days`
+
+```text
+def add_business_days(target: _dt.date, n: int, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` から ``n`` 営業日後の日付（``n`` が負なら前）。``calendar`` 省略可。
+
+### `business_day_after`
+
+```text
+def business_day_after(target: _dt.date, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` より後で最初の営業日（``target`` 自身を含まない）。
+
+``calendar=None`` のときは**既定カレンダー**を使う。
+
+### `business_day_before`
+
+```text
+def business_day_before(target: _dt.date, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` より前で最初の営業日（``target`` 自身を含まない）。
+
+``calendar=None`` のときは**既定カレンダー**を使う。
+
+### `business_day_on_or_after`
+
+```text
+def business_day_on_or_after(target: _dt.date, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` 以降で最初の営業日（``target`` を含む）。``calendar`` 省略可。
+
+### `business_day_on_or_before`
+
+```text
+def business_day_on_or_before(target: _dt.date, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` 以前で最初の営業日（``target`` を含む）。``calendar`` 省略可。
+
+### `first_business_day_of_month`
+
+```text
+def first_business_day_of_month(target: _dt.date, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` が属する月の最初の営業日。``calendar`` 省略可。
+
+### `is_business_day`
+
+```text
+def is_business_day(target: _dt.date, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> bool:
+```
+
+#### 説明
+
+``target`` が営業日なら ``True``。``calendar`` を省略できる簡易判定。
+
+``calendar=None`` のときは**既定カレンダー**（``default_calendar()``）を使う。
+アプリ側で ``set_default_calendar()`` を呼んでおけば、利用者は
+``HolidayCalendar`` を組み立てなくても「今日が営業日か」を判定できる。
 
 ``calendar`` をキーワード専用にして、呼び出し側がうっかり位置引数で
 日付とカレンダーを取り違える事故を防ぐ。
+
+### `last_business_day_of_month`
+
+```text
+def last_business_day_of_month(target: _dt.date, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` が属する月の最後の営業日。``calendar`` 省略可。
+
+### `load_cabinet_office_csv`
+
+```text
+@measure
+def load_cabinet_office_csv(path: str | Path, *, encoding: str=DEFAULT_ENCODING) -> list[Holiday]:
+```
+
+#### 説明
+
+内閣府の syukujitsu.csv を読み取り、祝日のリストを返す。
+
+Args:
+    path: CSV ファイルのパス。存在しない・読めない場合は ``HolidayCalendarFormatError``。
+    encoding: CSV の文字コード。既定は ``cp932``（内閣府の配布形式）。
+
+Returns:
+    日付順に並んだ ``Holiday`` のリスト。
+
+Raises:
+    HolidayCalendarFormatError: ファイルが無い、壊れている、
+        ヘッダーが内閣府のものではない、日付が解釈できないなどの理由で
+        1件も抽出できなかった場合。
+
+### `nth_business_day_of_month`
+
+```text
+def nth_business_day_of_month(target: _dt.date, n: int, *, calendar: HolidayCalendar | None=None, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` が属する月の第 ``n`` 営業日（``n`` は 1 始まり）。``calendar`` 省略可。
 
 
 ## `from comken.toolbox.outlook import ...`
@@ -8010,6 +9343,46 @@ Raises:
     SalesforceReportFormatError: 明細（TABULAR）形式でない場合。
     SalesforceReportExecutionError: Salesforce 側で実行が失敗した場合。
     TimeoutError: 制限時間内に完了しなかった場合。
+
+#### `describe`
+
+```text
+@measure
+def describe(self, report_id: str) -> dict:
+```
+
+##### 説明
+
+レポートを実行せず、定義（列・フィルタ・形式）を取得する。
+
+`run()` / `run_async()` はどちらもレポートを**実行**するため 2000 行の
+上限と実行枠を消費する。`describe` は実行しないので、上限・実行枠とも
+気にせず何度でも叩ける。SOQL への移行を下書きするときの情報源として使う。
+
+レスポンスは API の構造をそのまま返す（`run()` のように
+`[{列名: 値}]` には畳まない）。用途が SOQL 化の下書きで、
+必要な項目がまだ定まっていないため、API の返す構造をそのまま渡して
+呼び出し側で必要な部分を取り出す方針にする。
+
+Args:
+    report_id: レポート ID。
+
+Returns:
+    パース済み dict。主要キーは次のとおり:
+
+    - ``reportMetadata``: レポート定義本体
+        - ``detailColumns``: 明細列（レポート用の名前。SOQL の
+          フィールドパスとは1対1ではない）
+        - ``reportFilters``: フィルタ条件
+        - ``reportBooleanFilter``: フィルタの論理結合
+        - ``reportFormat``: ``TABULAR`` / ``SUMMARY`` / ``MATRIX`` など
+    - ``reportExtendedMetadata``: 列の表示名・ラベルなど
+        - ``detailColumnInfo``: 各列の表示名
+
+    API が dict 以外を返した場合（パース失敗時など）は空 dict。
+
+Raises:
+    SalesforceRequestError: 通信や認証に失敗した場合（`_client.request` 経由）。
 
 ### `ClientCredentialsAuth`
 
@@ -8315,6 +9688,7 @@ Args:
 #### `read_cell`
 
 ```text
+@measure
 def read_cell(self, sheet_name: str, row: int, col: int | str) -> Any:
 ```
 
@@ -8330,6 +9704,7 @@ Args:
 #### `write_cell`
 
 ```text
+@measure
 def write_cell(self, sheet_name: str, row: int, col: int | str, value) -> None:
 ```
 
@@ -8346,6 +9721,7 @@ Args:
 #### `read_rows`
 
 ```text
+@measure
 def read_rows(self, sheet_name: str, min_row: int=2) -> list[tuple]:
 ```
 
@@ -8363,6 +9739,7 @@ Returns:
 #### `read_range`
 
 ```text
+@measure
 def read_range(self, sheet_name: str, min_col: int, min_row: int, max_col: int, max_row: int) -> list[tuple[Any, ...]]:
 ```
 
@@ -8373,6 +9750,7 @@ def read_range(self, sheet_name: str, min_col: int, min_row: int, max_col: int, 
 #### `read_rows_as_dicts`
 
 ```text
+@measure
 def read_rows_as_dicts(self, sheet_name: str, header_row: int=1) -> list[dict]:
 ```
 
@@ -8397,6 +9775,7 @@ Raises:
 #### `count_non_empty_cells`
 
 ```text
+@measure
 def count_non_empty_cells(self, sheet_name: str, row: int) -> int:
 ```
 
@@ -8417,6 +9796,7 @@ Returns:
 #### `last_row`
 
 ```text
+@measure
 def last_row(self, sheet_name: str) -> int:
 ```
 
@@ -8435,6 +9815,7 @@ Returns:
 #### `run_macro`
 
 ```text
+@measure
 def run_macro(self, macro_name: str) -> None:
 ```
 
@@ -8449,6 +9830,7 @@ Args:
 #### `save`
 
 ```text
+@measure
 def save(self) -> None:
 ```
 
@@ -8468,6 +9850,7 @@ Raises:
 #### `save_as`
 
 ```text
+@measure
 def save_as(self, path: str | Path, read_pw: str='', write_pw: str='', file_format: int | None=None) -> None:
 ```
 
@@ -8489,6 +9872,7 @@ Raises:
 #### `close`
 
 ```text
+@measure
 def close(self) -> None:
 ```
 
@@ -8528,6 +9912,7 @@ Raises:
 #### `activate`
 
 ```text
+@measure
 def activate(self) -> None:
 ```
 
@@ -8538,6 +9923,7 @@ def activate(self) -> None:
 #### `get_title`
 
 ```text
+@measure
 def get_title(self) -> str:
 ```
 
@@ -8570,6 +9956,7 @@ Args:
 #### `read`
 
 ```text
+@measure
 def read(self, value_name: str) -> str:
 ```
 
@@ -8586,6 +9973,7 @@ Returns:
 #### `close`
 
 ```text
+@measure
 def close(self) -> None:
 ```
 
@@ -8642,6 +10030,7 @@ def temp_dir() -> Path:
 ### `is_excel_running`
 
 ```text
+@measure
 def is_excel_running() -> bool:
 ```
 
@@ -8654,6 +10043,7 @@ EXCEL.EXE プロセスが存在するか返す。
 ### `kill_excel`
 
 ```text
+@measure
 def kill_excel() -> bool:
 ```
 

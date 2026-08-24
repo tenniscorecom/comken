@@ -44,8 +44,8 @@ def _classify_root_handlers(
 ) -> tuple[bool, bool, bool, bool]:
     """root logger に付いている handler を分類する。
 
-    判定は純粋関数に閉じ、呼び出し側が ``setup()`` / ``local()`` のどちらから
-    呼ばれても同じ意味の結果を受け取る。raise まではこの関数では行わない。
+    判定は純粋関数に閉じ、呼び出し側が ``setup_logging()`` / ``setup_local_logging()``
+    のどちらから呼ばれても同じ意味の結果を受け取る。raise まではこの関数では行わない。
 
     Returns:
         (has_environment, has_local, has_both, has_external):
@@ -67,14 +67,16 @@ def _guard_root_handlers(
     side: str,
     allow_existing: bool,
 ) -> bool:
-    """``setup()`` / ``local()`` の入口で root logger の状態を検査し、進めるか判定する。
+    """``setup_logging()`` / ``setup_local_logging()`` の入口で root logger の
+    状態を検査し、進めるか判定する。
 
     二重出力や既存 handler の破壊を防ぐための分岐と raise を1か所にまとめる。
     呼び出し側は「自分がどちら側か（``side="setup"`` か ``"local"``）」と
     「外部 handler を許すか（``allow_existing``）」だけを渡す。
-    警告ログへ渡す ``"setup()"`` / ``"local()"`` の表示名は ``side`` から導出し、
-    呼び出し側で二重に書かない。各分岐の理由（なぜ止めるか）は元々の
-    ``setup()`` / ``local()`` 内のコメントを引き継ぎ、情報を落とさない。
+    警告ログへ渡す ``"setup_logging()"`` / ``"setup_local_logging()"`` の表示名は
+    ``side`` から導出し、呼び出し側で二重に書かない。各分岐の理由（なぜ止めるか）は
+    元々の ``setup_logging()`` / ``setup_local_logging()`` 内のコメントを引き継ぎ、
+    情報を落とさない。
 
     ``side`` は ``"setup"`` か ``"local"`` を想定する（呼び出し側で警告を出す
     際の関数名 ``f"{side}()"`` を組み立てる）。
@@ -89,14 +91,14 @@ def _guard_root_handlers(
     has_environment, has_local, has_both, has_external = _classify_root_handlers(handlers)
 
     if has_both:
-        # setup() と local() が両方走った後に再度走ると、ログが画面と各ファイルに
-        # 二重に出たり、出力先がどちらのルールに従うのか曖昧になる。
+        # setup_logging() と setup_local_logging() が両方走った後に再度走ると、ログが
+        # 画面と各ファイルに二重に出たり、出力先がどちらのルールに従うのか曖昧になる。
         raise LoggingAlreadyConfiguredError()
     if side == "setup" and has_environment and not has_local:
-        # setup() 直後の状態。2 回目の setup() は3 つ目を足す操作なので止める。
+        # setup_logging() 直後の状態。2 回目の setup_logging() は3 つ目を足す操作なので止める。
         raise LoggingAlreadyConfiguredError()
     if side == "local" and has_local and not has_environment:
-        # 既に local() が走った後に再度 local() を呼んでいる。
+        # 既に setup_local_logging() が走った後に再度 setup_local_logging() を呼んでいる。
         # 上書きすると既存 handler の出力先やレベルを変えてしまうので止める。
         raise LoggingAlreadyConfiguredError()
     if has_external and not allow_existing:
@@ -148,16 +150,17 @@ def _warn_external_handlers_allowed(
     )
 
 
-def setup(site: type[LoggerSite], *, allow_existing: bool = False) -> None:
+def setup_logging(site: type[LoggerSite], *, allow_existing: bool = False) -> None:
     """site の指定に従い root logger を設定する。
 
     PID は同じ端末で同時に動くプロセスを見分ける値であり、保存先を選ぶ端末名とは
     用途が異なる。Formatter の固定値として渡し、ログ呼び出し側へ負担を増やさない。
 
-    ``local()`` が先に走っている場合（root に console と local ファイルだけがある
-    場合）は console を再利用し、environment ファイルだけを追加する。逆順（setup() が
-    先）では通常どおり console と environment ファイルを追加する。両方がすでに
-    走っている場合は ``LoggingAlreadyConfiguredError`` を送出して、二重出力を防ぐ。
+    ``setup_local_logging()`` が先に走っている場合（root に console と local
+    ファイルだけがある場合）は console を再利用し、environment ファイルだけを
+    追加する。逆順（``setup_logging()`` が先）では通常どおり console と
+    environment ファイルを追加する。両方がすでに走っている場合は
+    ``LoggingAlreadyConfiguredError`` を送出して、二重出力を防ぐ。
 
     comken 以外の handler が root に混ざっている場合は ``LoggingConflictError``
     を送出する。既存 handler の出力先やレベルを勝手に変えてしまうため。
@@ -199,9 +202,9 @@ def setup(site: type[LoggerSite], *, allow_existing: bool = False) -> None:
     )
 
     if LOCAL_HANDLER_NAME in {h.name for h in existing}:
-        # local() が既に console を備えている。console は使い回して environment
-        # ファイルだけを追加する（重複出力を避ける）。console のレベルは
-        # local() が決めた値をそのまま使う。
+        # setup_local_logging() が既に console を備えている。console は使い回して
+        # environment ファイルだけを追加する（重複出力を避ける）。console のレベルは
+        # setup_local_logging() が決めた値をそのまま使う。
         console_handler = next(h for h in existing if h.name == CONSOLE_HANDLER_NAME)
     else:
         console_handler = logging.StreamHandler()
@@ -220,4 +223,4 @@ def setup(site: type[LoggerSite], *, allow_existing: bool = False) -> None:
     # 警告は comken の handler を root に追加し終えてから出す。先に出すと
     # 警告が comken のログファイルに残らず、何と共存したか追跡できなくなる。
     if external_allowed:
-        _warn_external_handlers_allowed("setup()", existing)
+        _warn_external_handlers_allowed("setup_logging()", existing)

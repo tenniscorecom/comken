@@ -54,7 +54,7 @@ def main() -> None:
     excel_rows = [{**row, AMOUNT_COL: int(row[AMOUNT_COL])} for row in rows]
 
     # 「売上レポート_20260713.xlsx」のような日付付きファイル名を組み立てる
-    output_path = OUTPUT_FOLDER / DateNameBuilder("売上レポート").suffix()
+    output_path = OUTPUT_FOLDER / DateNameBuilder("売上レポート.xlsx").suffix()
 
     with Excel(output_path) as excel:
         sheet = excel.sheet(SHEET)

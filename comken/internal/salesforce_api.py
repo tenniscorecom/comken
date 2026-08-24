@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from comken.core.timer import measure
 from comken.internal.base import InternalLibraryBase
 from comken.internal.names import INTERNAL_LIBRARY_ROOT
 
@@ -102,6 +103,7 @@ class SalesforceAPI:
             raise RuntimeError("SalesforceAPI は 'with' ブロック内で使用してください。")
         return self._module.data_path(path)
 
+    @measure
     def query(self, soql: str) -> list[dict]:
         """SOQL クエリを実行し、結果を list[dict] で返す。
 
@@ -118,6 +120,7 @@ class SalesforceAPI:
             raise RuntimeError("SalesforceAPI は 'with' ブロック内で使用してください。")
         return self._module.query(soql)
 
+    @measure
     def report_run(self, report_id: str) -> list[dict]:
         """レポートを実行し、結果を list[dict] で返す。
 

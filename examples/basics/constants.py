@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 
 from comken.constants import Color, Encoding, FileFormat
-from comken.core.logger import local
+from comken.core.logger import setup_local_logging
 from comken.toolbox.csv import CSV
 
 HERE = Path(__file__).parent
@@ -29,5 +29,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    logger = local()
+    logger = setup_local_logging()
     main()

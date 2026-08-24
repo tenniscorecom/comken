@@ -538,6 +538,29 @@ class TestReportApi:
         ):
             client.report.run_async("00O000000000001")
 
+    def test_describe_calls_describe_endpoint(self):
+        """describe は /analytics/reports/{id}/describe を GET で叩く。"""
+        body = _report_body([])
+        with _salesforce([_response(json_body=body)]) as (client, session, _):
+            client.report.describe("00O000000000001")
+
+        method, url = session.request.call_args[0]
+        assert method == "GET"
+        assert url == f"{INSTANCE_URL}{DATA_PREFIX}/analytics/reports/00O000000000001/describe"
+
+    def test_describe_returns_response_unchanged(self):
+        """describe はレスポンス dict をそのまま返す（run() のように [{}] に畳まない）。"""
+        body = _report_body([])
+        with _salesforce([_response(json_body=body)]) as (client, _, _):
+            described = client.report.describe("00O000000000001")
+
+        assert described is body
+
+    def test_describe_returns_empty_dict_when_response_is_not_dict(self):
+        """describe は dict 以外のレスポンスを空 dict に丸める（_parse と同じ考え方）。"""
+        with _salesforce([_response(json_body=["not", "a", "dict"])]) as (client, _, _):
+            assert client.report.describe("00O000000000001") == {}
+
 
 class TestSites:
     def test_sandbox_is_a_salesforce_client(self):

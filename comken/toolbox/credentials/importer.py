@@ -25,6 +25,7 @@ JSON の形式（システム名ごとに項目をまとめる）:
 import json
 from pathlib import Path
 
+from comken.core.timer import measure
 from comken.exceptions import CredentialImportError
 from comken.toolbox.credentials.store import save_credentials
 
@@ -50,6 +51,7 @@ def split_credential_name(name: str) -> tuple[str, str] | None:
     return system, f"{field_first}{_NAME_SEPARATOR}{field_second}"
 
 
+@measure
 def import_json(json_path: str | Path, path: Path | None = None) -> list[str]:
     """平文 JSON を読み、暗号化ファイルへ取り込む。
 

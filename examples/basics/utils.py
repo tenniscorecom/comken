@@ -13,7 +13,7 @@ from comken.core import (
     strip_spaces,
     wait_until,
 )
-from comken.core.logger import local
+from comken.core.logger import setup_local_logging
 
 RETRY_COUNT = 2
 
@@ -56,5 +56,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    logger = local()
+    logger = setup_local_logging()
     main()

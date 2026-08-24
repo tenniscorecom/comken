@@ -10,6 +10,7 @@ ComkenError
 ├── LogRootNotConfiguredError       LoggerSite の LOG_ROOT が未設定
 ├── UnsupportedFileSuffixError
 ├── FileDeletionError
+├── FileSuffixMissingError
 ├── AccessError
 │   ├── AccessFileNotFoundError
 │   ├── AccessBackupError
@@ -113,7 +114,8 @@ ComkenError
 │   ├── HolidayCalendarFetchError
 │   ├── HolidayCalendarSourceError
 │   │   └── HolidayCalendarFormatError
-│   └── HolidayCalendarExpiredError
+│   ├── HolidayCalendarExpiredError
+│   └── BusinessDayNotFoundError
 └── DownloaderError
 │   ├── HistoryWriteError
 │   ├── HistoryLockTimeoutError
@@ -225,8 +227,13 @@ from comken.exceptions.excel import (
     TableAlreadyExistsError,
     TableNotFoundError,
 )
-from comken.exceptions.file import FileDeletionError, UnsupportedFileSuffixError
+from comken.exceptions.file import (
+    FileDeletionError,
+    FileSuffixMissingError,
+    UnsupportedFileSuffixError,
+)
 from comken.exceptions.holiday import (
+    BusinessDayNotFoundError,
     HolidayCalendarError,
     HolidayCalendarExpiredError,
     HolidayCalendarFetchError,
@@ -340,6 +347,7 @@ __all__ = [
     "ConfigMappingEmptyValueError",
     "UnsupportedFileSuffixError",
     "FileDeletionError",
+    "FileSuffixMissingError",
     "OutlookError",
     "ClassicOutlookNotAvailableError",
     "OutlookFolderNotFoundError",
@@ -385,6 +393,7 @@ __all__ = [
     "StateFileCorruptedError",
     "StateLowerCaseNameError",
     "StateValueTypeError",
+    "BusinessDayNotFoundError",
     "HolidayCalendarError",
     "HolidayCalendarFetchError",
     "HolidayCalendarSourceError",

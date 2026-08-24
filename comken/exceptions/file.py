@@ -42,3 +42,23 @@ class FileDeletionError(ComkenError):
             "もう一度実行してください。\n"
             "消せたファイルは既に消えています。"
         )
+
+
+class FileSuffixMissingError(ComkenError):
+    """ファイル名に拡張子が無い
+
+    発生箇所: comken.core.files.DateNameBuilder() / DateFileFinder.prefix() / DateFileFinder.dated()
+
+    対処:
+        ファイル名に拡張子（例: ``.csv`` / ``.xlsx``）を含めて指定する。
+        拡張子は名前の文字列にだけ書く。引数 ``ext`` / ``extension`` は廃止済みのため使えない。
+    """
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        super().__init__(
+            f"ファイル名に拡張子がありません: {name!r}\n"
+            "拡張子（例: '.csv' / '.xlsx'）を含めたファイル名を指定してください。"
+            "拡張子は名前の文字列にだけ書きます。"
+            "引数 ext / extension は廃止済みのため指定できません。"
+        )

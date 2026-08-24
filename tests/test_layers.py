@@ -16,7 +16,6 @@ LAYERS = {
 ALLOWED_SAME_LAYER = {
     ("toolbox.excel", "toolbox.windows"),  # 既存数式・マクロ時の COM フォールバック
     ("toolbox.salesforce", "toolbox.credentials"),  # Salesforce の認証情報を安全に保存する
-    ("toolbox.holidays", "toolbox.excel"),  # 管理表の「会社休日」シートを Excel で読む
     ("exceptions", "internal"),  # comken.exceptions が comken.internal の例外を re-export する
 }
 

@@ -5,6 +5,7 @@ import する書き方を好む利用側のために短い名前で再公開す�
 """
 
 from comken.exceptions import (
+    BusinessDayNotFoundError,
     HolidayCalendarError,
     HolidayCalendarExpiredError,
     HolidayCalendarFetchError,
@@ -13,6 +14,7 @@ from comken.exceptions import (
 )
 
 __all__ = [
+    "BusinessDayNotFoundError",
     "HolidayCalendarError",
     "HolidayCalendarFetchError",
     "HolidayCalendarSourceError",

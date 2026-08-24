@@ -1,4 +1,4 @@
-"""comken/toolbox/holidays/csv_source.py — 内閣府 CSV の読み取り。
+"""comken/core/holidays/csv_source.py — 内閣府 CSV の読み取り。
 
 内閣府の「祝日データ CSV（syukujitsu.csv）」は CP932（Shift_JIS）で配布され、
 1列目に「国民の祝日・休日月日（yyyy-MM-dd）」、2列目に「国民の祝日・休日名称」
@@ -16,21 +16,25 @@ import io
 import logging
 from pathlib import Path
 
+from comken.core.holidays.calendar import Holiday
+from comken.core.timer import measure
 from comken.exceptions import HolidayCalendarFormatError
-from comken.toolbox.holidays.calendar import Holiday
 
 logger = logging.getLogger(__name__)
 
 # 内閣府のヘッダー行1列目（前後の空白は許容）
 _HEADER_FIRST = "国民の祝日・休日月日"
 _HEADER_SECOND = "国民の祝日・休日名称"
-# 内閣府のフォーマット
-_DATE_FORMAT = "%Y-%m-%d"
+# 内閣府のフォーマット。配布 CSV は ``YYYY/M/D``（スラッシュ・ゼロ埋めなし）だが、
+# 配布変更履歴・手書きの差し替えで ``YYYY-MM-DD``（ハイフン・ゼロ埋めあり）が
+# 混ざることもあるので両方を許容する。
+_DATE_FORMATS = ("%Y/%m/%d", "%Y-%m-%d")
 
 # CSV ファイルを読み込むときの文字コード。既定は CP932（Shift_JIS）。
 DEFAULT_ENCODING = "cp932"
 
 
+@measure
 def load_cabinet_office_csv(
     path: str | Path,
     *,
@@ -113,7 +117,7 @@ def _parse_csv_text(text: str, *, source: object) -> list[Holiday]:
             logger.warning("内閣府 CSV の列数が不足しています (%s): %s", source, row)
             continue
         try:
-            parsed = _dt.datetime.strptime(first, _DATE_FORMAT).date()  # noqa: DTZ007  # 業務日付として naive で扱う
+            parsed = _parse_date(first)
         except ValueError:
             # 1行目はヘッダーとは限らないが、日付として読めなければ不正データとして飛ばす
             # （ただし厳格にしたいので 0件なら呼び出し側で FormatError にする）
@@ -124,3 +128,19 @@ def _parse_csv_text(text: str, *, source: object) -> list[Holiday]:
             continue
         holidays.append(Holiday(date=parsed, name=name))
     return holidays
+
+
+def _parse_date(text: str) -> _dt.date:
+    """内閣府 CSV の日付セルを ``datetime.date`` に変換する。
+
+    内閣府の現行配布は ``YYYY/M/D``（スラッシュ・ゼロ埋めなし）が中心だが、
+    過去版・手書き差し替え・テスト fixture では ``YYYY-MM-DD``（ハイフン・
+    ゼロ埋めあり）が混ざるので、両方を受け付ける。すべて失敗したら
+    ``ValueError`` を呼び出し元へそのまま伝搬する。
+    """
+    for fmt in _DATE_FORMATS:
+        try:
+            return _dt.datetime.strptime(text, fmt).date()  # noqa: DTZ007  # 業務日付として naive で扱う
+        except ValueError:
+            continue
+    raise ValueError(f"日付として解釈できません: {text!r}")

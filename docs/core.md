@@ -25,39 +25,43 @@ copy_file("report.xlsx", r"C:\作業\backup")             # コピー（元フ�
 ### ファイル名の組み立て・検索
 
 ```python
-from comken.core import DateNameBuilder, DateFileFinder, date_in_name
+from comken.core import DateNameBuilder, DateFileFinder, date_in_name, dates_in_name
 
 FOLDER = r"\\nas-server\share"
 
 # 今日の日付付きファイル名を組み立てる
-DateNameBuilder("売上レポート").prefix()               # → "20260711_売上レポート.xlsx"
-DateNameBuilder("売上レポート").suffix()               # → "売上レポート_20260711.xlsx"
-DateNameBuilder("ログ", ext=".csv").prefix()           # → "20260711_ログ.csv"
-DateNameBuilder("月次レポート").prefix(date_format="%Y%m") # → "202607_月次レポート.xlsx"
+# 拡張子は **名前の文字列に含めて** 渡す（引数 ext / extension は廃止）
+DateNameBuilder("売上レポート.xlsx").prefix()               # → "20260711_売上レポート.xlsx"
+DateNameBuilder("売上レポート.xlsx").suffix()               # → "売上レポート_20260711.xlsx"
+DateNameBuilder("ログ.csv").prefix()                       # → "20260711_ログ.csv"
+DateNameBuilder("月次レポート.xlsx").prefix("{:%Y%m}_")    # → "202607_月次レポート.xlsx"
+# 拡張子なしの名前は FileSuffixMissingError で止める（黙って ".xlsx" は付けない）
 
 # ファイル名に含まれる最初の日付を取得（なければ None）
 file_date = date_in_name("売上_20260729.csv")            # → datetime.date(2026, 7, 29)
+# ファイル名に含まれる日付を **すべて** 出現順で取得（なければ空リスト）
+all_dates = dates_in_name("一覧_20260801_20260831.xlsx") # → [date(2026, 8, 1), date(2026, 8, 31)]
 
 # 今日の日付を含むファイルを取得（見つからなければ FileNotFoundError）
-# `prefix + YYYYMMDD + 拡張子` に一致するファイルを返す
-path = DateFileFinder(FOLDER).prefix("売上レポート")               # → 売上レポートYYYYMMDD.xlsx
-path = DateFileFinder(FOLDER).prefix("売上レポート", extension=".csv")
-path = DateFileFinder(FOLDER).prefix("月次レポート", extension=".xlsx")  # 例: 月次レポートYYYYMMDD.xlsx
-# prefix 側に "{:%Y-%m-%d}" のような日付書式を書けば、その位置へ日付が入る
-path = DateFileFinder(FOLDER).prefix("{:%Y-%m-%d}_月次")           # → 2026-07-29_月次.xlsx
+# 探す名前には拡張子を含める。`stem + YYYYMMDD + 拡張子` に一致するファイルを返す
+path = DateFileFinder(FOLDER).prefix("売上レポート.xlsx")               # → 売上レポートYYYYMMDD.xlsx
+path = DateFileFinder(FOLDER).prefix("売上レポート.csv")                # → 売上レポートYYYYMMDD.csv
+# name 側に "{:%Y-%m-%d}" のような日付書式を書けば、その位置へ日付が入る
+path = DateFileFinder(FOLDER).prefix("{:%Y-%m-%d}_月次.xlsx")           # → 2026-07-29_月次.xlsx
 
 # 別日のファイルを探したいときは for_date を渡す
 import datetime
-path = DateFileFinder(FOLDER, for_date=datetime.date(2026, 7, 29)).prefix("売上レポート")
+path = DateFileFinder(FOLDER, for_date=datetime.date(2026, 7, 29)).prefix("売上レポート.xlsx")
 
 # 見つからなくても処理を続けたい場合は required=False（None が返る）
-path = DateFileFinder(FOLDER).prefix("売上レポート", required=False)
+path = DateFileFinder(FOLDER).prefix("売上レポート.xlsx", required=False)
 if path is None:
     ...  # スキップ処理など
 
 # 日付付きファイルを全件、日付の新しい順で取得（見つからなければ空リスト）
-paths = DateFileFinder(FOLDER).dated("売上レポート")                  # → [売上レポート20260730.xlsx, 売上レポート20260729.xlsx, ...]
-paths = DateFileFinder(FOLDER).dated("売上レポート", extension=".csv")
+# 第1引数の接頭辞には拡張子を含めてもよく、含めなくてもよい（含める場合は絞り込みになる）
+paths = DateFileFinder(FOLDER).dated("売上レポート.xlsx")                  # → [売上レポート20260730.xlsx, 売上レポート20260729.xlsx, ...]
+paths = DateFileFinder(FOLDER).dated("売上レポート.csv")
 # `prefix()` と違い、`prefix` 内の日付書式（{:%Y-%m-%d} 等）は解釈しない
 # `for_date` を指定しても結果は同じ（フォルダ内の全件が対象）
 ```

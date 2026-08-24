@@ -6,6 +6,6 @@
 
 from comken.core.table.comparison import TableComparison, compare_tables
 from comken.core.table.model import Table
-from comken.core.table.transfer import Transfer
+from comken.core.table.transfer import Transfer, UnmatchedRows
 
-__all__ = ["Table", "TableComparison", "Transfer", "compare_tables"]
+__all__ = ["Table", "TableComparison", "Transfer", "UnmatchedRows", "compare_tables"]

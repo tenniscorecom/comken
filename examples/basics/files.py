@@ -11,7 +11,7 @@ from comken.core import (
     unzip,
     zip_files,
 )
-from comken.core.logger import local
+from comken.core.logger import setup_local_logging
 
 HERE = Path(__file__).parent
 OUTPUT_FOLDER = HERE / "output" / "files"
@@ -38,7 +38,7 @@ def main() -> None:
         "名前順の最新: %s", max(input_folder.glob("*.csv"), key=lambda path: path.name).name
     )
 
-    builder = DateNameBuilder("売上レポート", ext="csv")
+    builder = DateNameBuilder("売上レポート.csv")
     copied = copy_file(dated_files[0], OUTPUT_FOLDER / builder.suffix())
     moved = move_file(dated_files[1], archive_folder / dated_files[1].name)
     logger.info("コピー: %s / 移動: %s", copied.name, moved.name)
@@ -49,5 +49,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    logger = local()
+    logger = setup_local_logging()
     main()

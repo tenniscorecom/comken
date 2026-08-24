@@ -38,6 +38,7 @@ import pywintypes
 import win32crypt
 
 from comken.core.files.ops import cleanup_stale_tmp
+from comken.core.timer import measure
 from comken.exceptions import (
     CredentialDecryptionError,
     CredentialNotFoundError,
@@ -101,6 +102,7 @@ class Credentials:
         return load_credential(f"{self._prefix}_{item}", self._path)
 
 
+@measure
 def save_credential(name: str, value: str, path: Path | None = None) -> None:
     """認証情報を1件、暗号化して保存する。同じキー名は上書きされる。
 
@@ -117,6 +119,7 @@ def save_credential(name: str, value: str, path: Path | None = None) -> None:
     save_credentials({name: value}, path)
 
 
+@measure
 def save_credentials(items: dict[str, str], path: Path | None = None) -> None:
     """認証情報をまとめて暗号化して保存する。同じキー名は上書きされる。
 
@@ -146,6 +149,7 @@ def save_credentials(items: dict[str, str], path: Path | None = None) -> None:
     _save_all(data, path)
 
 
+@measure
 def load_credential(name: str, path: Path | None = None) -> str:
     """保存済みの認証情報を復号して返す。
 
@@ -164,6 +168,7 @@ def load_credential(name: str, path: Path | None = None) -> str:
     return data[name]
 
 
+@measure
 def delete_credential(name: str, path: Path | None = None) -> None:
     """登録済みの認証情報を1件削除する。
 
@@ -179,6 +184,7 @@ def delete_credential(name: str, path: Path | None = None) -> None:
     _save_all(data, path)
 
 
+@measure
 def list_names(path: Path | None = None) -> list[str]:
     """登録済みのキー名一覧を返す（値そのものは返さない）。
 

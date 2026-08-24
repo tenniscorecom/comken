@@ -47,11 +47,10 @@ class HolidayCalendarSourceError(HolidayCalendarError):
     内閣府の CSV 形式が変わった・社内管理表のシート名が違う・列が無い・
     文字化けしたなどの理由で、祝日を 1件も抽出できない場合に上げる。
 
-    発生箇所: comken.toolbox.holidays の csv_source / sources/master_table
+    発生箇所: comken.core.holidays の csv_source
 
     対処:
         内閣府の CSV の場合: 内閣府の仕様変更。管理者へ連絡する
-        管理表の場合: シート名と列名（"日付" / "名称"）を確認する
     """
 
     def __init__(self, source: str, reason: str) -> None:
@@ -64,11 +63,10 @@ class HolidayCalendarExpiredError(HolidayCalendarError):
     収録最終日 <= 今日になると「今日以降が祝日かどうか判定できない」ため、
     期限切れを専用例外で知らせる。
 
-    発生箇所: comken.toolbox.holidays.calendar の HolidayCalendar
+    発生箇所: comken.core.holidays.calendar の HolidayCalendar
 
     対処:
-        内閣府の祝日 CSV を更新する（自動取得の場合は次の実行で反映される）、
-        または管理表に直近の祝日を追加する
+        内閣府の祝日 CSV を更新する（自動取得の場合は次の実行で反映される）
     """
 
     def __init__(self, today: object, last_known: object) -> None:
@@ -83,7 +81,7 @@ class HolidayCalendarExpiredError(HolidayCalendarError):
 class HolidayCalendarFormatError(HolidayCalendarSourceError):
     """内閣府 CSV 以外のファイルや壊れたファイルを内閣府 CSV として読み込もうとした
 
-    発生箇所: comken.toolbox.holidays.csv_source の load_cabinet_office_csv
+    発生箇所: comken.core.holidays.csv_source の load_cabinet_office_csv
 
     対処:
         内閣府の syukujitsu.csv を直接取得し直す。文字コードは CP932 (Shift_JIS)
@@ -91,3 +89,30 @@ class HolidayCalendarFormatError(HolidayCalendarSourceError):
 
     def __init__(self, path: Path | str, detail: str) -> None:
         super().__init__(source=str(path), reason=detail)
+
+
+class BusinessDayNotFoundError(HolidayCalendarError):
+    """営業日が見つからなかった
+
+    月の途中で「指定した月の営業日数を超える n 番目」を求めたとき、
+    その月に営業日が 1 日も無いとき、祝日データ欠落などで 400 日探索しても
+    次の営業日にたどり着けなかったときに送る。
+    いずれも「カレンダー側がおかしい」または「指定値が暦と合わない」場合に
+    起き、業務ロジック側のミスではないので、呼び出し側で握り潰さずユーザーに
+    顕在化させる必要がある。
+
+    発生箇所: comken.core.holidays.calendar の HolidayCalendar
+        - nth_business_day_of_month（n が月の営業日数超え、または n < 1）
+        - first_business_day_of_month / last_business_day_of_month
+          （その月に営業日が 1 日も無い）
+        - business_day_after / business_day_before /
+          business_day_on_or_after / business_day_on_or_before
+          （400 日の探索上限に達した）
+
+    対処:
+        n をその月の営業日数以下に直す、対象月の祝日に過不足がないか
+        確認する、社内管理表（会社休日）が広範囲に登録されていないか確認する
+    """
+
+    def __init__(self, detail: str) -> None:
+        super().__init__(detail)

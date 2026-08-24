@@ -3,7 +3,7 @@
 import logging
 from pathlib import Path
 
-from comken.core.logger import local
+from comken.core.logger import setup_local_logging
 from comken.exceptions import ComkenError, TableColumnNotFoundError
 from comken.toolbox.csv import CSV
 
@@ -36,5 +36,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    logger = local()
+    logger = setup_local_logging()
     main()

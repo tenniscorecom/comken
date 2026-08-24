@@ -1,4 +1,4 @@
-"""サンプル: Transfer の API（matched_rows / unmatched_* / apply_mapping / result）の使い方。
+"""サンプル: Transfer の API（matched_rows / unmatched / apply_mapping / result）の使い方。
 
 `Table / Transfer の設計サンプル` として、基本サンプル（`basics/column_mapping.py`）
 との違いを示す。 このサンプルでは次の 4 つを取り上げる:
@@ -11,9 +11,9 @@
   mapping が適用済みになる）
 - ``apply_mapping()`` の後に ``write_row["列名"] = ...`` で追加加工する
   （mapping に無い列を計算して埋める）
-- ``unmatched_read_rows()`` / ``unmatched_write_rows()`` で、read / write
-  どちらかにしか無い行を扱う。 ``result().append()`` で新規行として追加、
-  ``write_row["備考"] = ...`` で破棄予定であることを示す
+- ``unmatched().only_in_read`` / ``unmatched().only_in_write`` で、
+  read / write どちらかにしか無い行を扱う。 ``result().append()`` で新規行として
+  追加、 ``write_row["備考"] = ...`` で破棄予定であることを示す
 
 CSV / Excel への保存は ``with`` ブロックを正常終了した時に行われる。
 """
@@ -40,7 +40,7 @@ def main() -> None:
     # 4パターンを1回ずつ出すため、read には A001 / A002 / A003 を入れる。
     # - A001: 両側にあり・金額 > 0（通常の転記）
     # - A002: 両側にあり・金額 = 0（continue でスキップ）
-    # - A003: read だけ（unmatched_read_rows 側で追加）
+    # - A003: read だけ（only_in_read 側で追加）
     with CSV(SOURCE_CSV) as source_csv:
         source_csv.write(
             Table(
@@ -91,7 +91,7 @@ def main() -> None:
 
     # 転記先に無い read 行は新規行として追加する
     result = transfer.result()
-    for read_row in transfer.unmatched_read_rows():
+    for read_row in transfer.unmatched().only_in_read:
         logger.info("追加: %s", read_row["注文番号"])
         result.append(
             {
@@ -103,7 +103,7 @@ def main() -> None:
         )
 
     # 転記元に無い write 行は「転記元に無し」と書き換える
-    for write_row in transfer.unmatched_write_rows():
+    for write_row in transfer.unmatched().only_in_write:
         logger.info("転記元に無し: %s", write_row["注文番号"])
         write_row["備考"] = "転記元に無し"
 
@@ -118,5 +118,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    comken_logger.local()
+    comken_logger.setup_local_logging()
     main()

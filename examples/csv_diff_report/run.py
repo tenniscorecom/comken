@@ -94,7 +94,7 @@ def main() -> None:
         detail = " / ".join(f"{col}: {old} → {new}" for col, (old, new) in change.columns.items())
         report_rows.append({STATUS_COL: STATUS_CHANGED, DETAIL_COL: detail, **change.after})
 
-    output_path = OUTPUT_FOLDER / DateNameBuilder("差分レポート").suffix()
+    output_path = OUTPUT_FOLDER / DateNameBuilder("差分レポート.xlsx").suffix()
     with Excel(output_path) as excel:
         sheet = excel.sheet(SHEET)
         values = [

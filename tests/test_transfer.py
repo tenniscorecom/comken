@@ -368,11 +368,11 @@ def test_result_returns_copy_when_iterator_not_called() -> None:
     assert result_table.read()[0]["name"] == "Original"
 
 
-# ---- 未マッチ行 API（追加） ----
+# ---- 未マッチ行 API ----
 
 
-def test_unmatched_read_rows_returns_only_rows_missing_in_write() -> None:
-    """unmatched_read_rows() は write に無い read 行だけを返す。"""
+def test_unmatched_only_in_read_returns_rows_missing_in_write() -> None:
+    """unmatched().only_in_read は write に無い read 行だけを返す。"""
     source = Table(
         ["id", "value"],
         [{"id": "1", "value": "new"}, {"id": "2", "value": "extra"}],
@@ -382,13 +382,13 @@ def test_unmatched_read_rows_returns_only_rows_missing_in_write() -> None:
         source, destination, {"value": "value"}, read_key="id", write_key="id"
     )
 
-    extras = list(transfer.unmatched_read_rows())
+    extras = transfer.unmatched().only_in_read.read()
 
     assert extras == [{"id": "2", "value": "extra"}]
 
 
-def test_unmatched_write_rows_returns_only_rows_missing_in_read() -> None:
-    """unmatched_write_rows() は read に無い write 行だけを返す。"""
+def test_unmatched_only_in_write_returns_rows_missing_in_read() -> None:
+    """unmatched().only_in_write は read に無い write 行だけを返す。"""
     source = Table(["id", "value"], [{"id": "1", "value": "new"}])
     destination = Table(
         ["id", "value"],
@@ -398,13 +398,13 @@ def test_unmatched_write_rows_returns_only_rows_missing_in_read() -> None:
         source, destination, {"value": "value"}, read_key="id", write_key="id"
     )
 
-    extras = list(transfer.unmatched_write_rows())
+    extras = transfer.unmatched().only_in_write
 
     assert extras == [{"id": "2", "value": "stale"}]
 
 
-def test_unmatched_write_rows_mutation_reflects_in_result() -> None:
-    """unmatched_write_rows() で書き換えた値が result() にも反映される。"""
+def test_unmatched_only_in_write_mutation_reflects_in_result() -> None:
+    """unmatched().only_in_write で書き換えた値が result() にも反映される。"""
     source = Table(["id", "value"], [{"id": "1", "value": "new"}])
     destination = Table(
         ["id", "value"],
@@ -415,7 +415,7 @@ def test_unmatched_write_rows_mutation_reflects_in_result() -> None:
     )
 
     # write にしか無い行の "備考" 列を埋める
-    for write_row in transfer.unmatched_write_rows():
+    for write_row in transfer.unmatched().only_in_write:
         write_row["value"] = "破棄予定"
 
     assert transfer.result().read() == [
@@ -460,8 +460,8 @@ def test_blank_key_rows_are_excluded_from_matching() -> None:
     ]
 
 
-def test_unmatched_read_rows_includes_blank_keys() -> None:
-    """read 側の空キー行は unmatched_read_rows() に流れる。"""
+def test_unmatched_only_in_read_includes_blank_keys() -> None:
+    """read 側の空キー行は unmatched().only_in_read に流れる。"""
     source = Table(
         ["id", "name"],
         [{"id": "", "name": "空白"}],
@@ -471,13 +471,13 @@ def test_unmatched_read_rows_includes_blank_keys() -> None:
         source, destination, {"name": "name"}, read_key="id", write_key="id"
     )
 
-    extras = list(transfer.unmatched_read_rows())
+    extras = transfer.unmatched().only_in_read.read()
 
     assert extras == [{"id": "", "name": "空白"}]
 
 
-def test_unmatched_write_rows_includes_blank_keys() -> None:
-    """write 側の空キー行は unmatched_write_rows() に流れる。"""
+def test_unmatched_only_in_write_includes_blank_keys() -> None:
+    """write 側の空キー行は unmatched().only_in_write に流れる。"""
     source = Table(["id", "name"], [{"id": "1", "name": "新規"}])
     destination = Table(
         ["id", "name"],
@@ -487,7 +487,7 @@ def test_unmatched_write_rows_includes_blank_keys() -> None:
         source, destination, {"name": "name"}, read_key="id", write_key="id"
     )
 
-    extras = list(transfer.unmatched_write_rows())
+    extras = transfer.unmatched().only_in_write
 
     assert extras == [{"id": "", "name": ""}]
 
@@ -505,10 +505,11 @@ def test_none_key_is_treated_as_blank() -> None:
 
     # matched_rows も空集合
     assert list(transfer.matched_rows()) == []
-    # source 側の None は空キー扱いで unmatched_read 側へ流れる
-    assert list(transfer.unmatched_read_rows()) == [{"id": None, "name": "Noneキー"}]
-    # destination 側の "1" は source に無いので unmatched_write 側へ流れる
-    assert list(transfer.unmatched_write_rows()) == [{"id": "1", "name": "既存"}]
+    # source 側の None は空キー扱いで only_in_read 側へ流れる
+    result = transfer.unmatched()
+    assert result.only_in_read.read() == [{"id": None, "name": "Noneキー"}]
+    # destination 側の "1" は source に無いので only_in_write 側へ流れる
+    assert result.only_in_write == [{"id": "1", "name": "既存"}]
 
 
 def test_zero_value_is_a_valid_key() -> None:
@@ -530,7 +531,7 @@ def test_composite_key_with_partially_blank_is_blank() -> None:
     """複合キーは **1要素でも空** なら空扱い（部分空のキーは照合に使えない）。
 
     write 側に「read と同じ複合キー値（部分空を含む）」を置く。 ``any()`` 実装なら
-    両側のキーが空扱いで ``unmatched_*`` 側へ流れる。 旧 ``all()`` 実装だと
+    両側のキーが空扱いで ``unmatched()`` 側へ流れる。 旧 ``all()`` 実装だと
     部分空のキーは照合対象になり、``("", "1")`` 同士が「一致した」と誤判定される。
     """
     source = Table(
@@ -548,7 +549,7 @@ def test_composite_key_with_partially_blank_is_blank() -> None:
             # 1要素目だけが空 → キーは空扱い。read 側 ("", "1") と同じ値
             {"group": "", "id": "1", "value": "w-1"},
             # どちらも空ではない → キーは有効
-            #  空ではない read 行と一致しないので unmatched_write 側へ
+            #  空ではない read 行と一致しないので only_in_write 側へ
             {"group": "A", "id": "1", "value": "w-2"},
         ],
     )
@@ -560,13 +561,14 @@ def test_composite_key_with_partially_blank_is_blank() -> None:
         write_key=["group", "id"],
     )
 
-    # 部分空の read 行はすべて unmatched_read 側へ流れる
-    extras_read = list(transfer.unmatched_read_rows())
+    # 部分空の read 行はすべて only_in_read 側へ流れる
+    unmatched = transfer.unmatched()
+    extras_read = unmatched.only_in_read.read()
     assert {row["value"] for row in extras_read} == {"group空", "id空"}
     # matched は0件
     assert list(transfer.matched_rows()) == []
-    # write 側 ("", "1") も空キー扱いなので unmatched_write 側へ流れる
-    extras_write = list(transfer.unmatched_write_rows())
+    # write 側 ("", "1") も空キー扱いなので only_in_write 側へ流れる
+    extras_write = unmatched.only_in_write
     assert {row["value"] for row in extras_write} == {"w-1", "w-2"}
 
 
@@ -590,12 +592,12 @@ def test_multiple_blank_write_keys_do_not_raise_multiple_match() -> None:
     assert pairs == [
         ({"id": "1", "value": "new"}, {"id": "1", "value": "old"}),
     ]
-    # 空キーは unmatched_write_rows() 側へ流れる
-    assert len(list(transfer.unmatched_write_rows())) == 2
+    # 空キーは only_in_write 側へ流れる
+    assert len(transfer.unmatched().only_in_write) == 2
 
 
-def test_unmatched_write_rows_works_without_calling_other_iterators() -> None:
-    """unmatched_write_rows() は transfer_rows() / matched_rows() を呼ばずに動く。"""
+def test_unmatched_works_without_calling_other_iterators() -> None:
+    """unmatched() は transfer_rows() / matched_rows() を呼ばずに動く。"""
     source = Table(["id", "value"], [{"id": "1", "value": "new"}])
     destination = Table(
         ["id", "value"],
@@ -605,13 +607,13 @@ def test_unmatched_write_rows_works_without_calling_other_iterators() -> None:
         source, destination, {"value": "value"}, read_key="id", write_key="id"
     )
 
-    extras = list(transfer.unmatched_write_rows())
+    extras = transfer.unmatched().only_in_write
 
     assert extras == [{"id": "2", "value": "stale"}]
 
 
-def test_unmatched_read_rows_result_append_appears_in_result() -> None:
-    """unmatched_read_rows() を result().append() すると最終結果へ入る。"""
+def test_unmatched_only_in_read_append_appears_in_result() -> None:
+    """unmatched().only_in_read を result().append() すると最終結果へ入る。"""
     source = Table(
         ["id", "name"],
         [{"id": "1", "name": "既存"}, {"id": "2", "name": "新規"}],
@@ -632,7 +634,8 @@ def test_unmatched_read_rows_result_append_appears_in_result() -> None:
         transfer.apply_mapping(src, dst)
 
     # 既存行の転記後、write に無い read 行を新規行として追加する
-    for read_row in transfer.unmatched_read_rows():
+    only_in_read = transfer.unmatched().only_in_read
+    for read_row in only_in_read:
         transfer.result().append(dict(read_row))
 
     assert transfer.result().read() == [
@@ -642,7 +645,7 @@ def test_unmatched_read_rows_result_append_appears_in_result() -> None:
 
 
 def test_transfer_methods_do_not_mutate_input_tables() -> None:
-    """unmatched_* を呼んでも read / write Table は変わらない。"""
+    """unmatched() を呼んでも read / write Table は変わらない。"""
     source = Table(
         ["id", "value"],
         [{"id": "1", "value": "new"}, {"id": "2", "value": "extra"}],
@@ -657,22 +660,23 @@ def test_transfer_methods_do_not_mutate_input_tables() -> None:
         source, destination, {"value": "value"}, read_key="id", write_key="id"
     )
 
-    list(transfer.unmatched_read_rows())
-    list(transfer.unmatched_write_rows())
+    unmatched = transfer.unmatched()
+    list(unmatched.only_in_read.read())
+    list(unmatched.only_in_write)
 
     assert source.read() == original_source
     assert destination.read() == original_destination
 
 
-def test_result_called_before_unmatched_write_rows_mutation_reflects() -> None:
-    """``result()`` を先に呼んでも、その後 ``unmatched_write_rows()`` の ``write_row``
+def test_result_called_before_unmatched_only_in_write_mutation_reflects() -> None:
+    """``result()`` を先に呼んでも、その後 ``unmatched().only_in_write`` の ``write_row``
     を書き換えると ``result()`` 側に反映される（順序非依存）。
 
     ``Table.__init__`` は ``_normalize`` で行 dict をコピーするため、
     ``_result_table`` を ``Table(list(cols), self._working_rows, ...)`` で
     作ると、 ``_working_rows`` 側の dict をいくら書き換えても反映されない。
     ``Transfer.result()`` は作業 Table を直接返す形にしておき、
-    ``unmatched_write_rows()`` / ``matched_rows()`` の ``write_row`` が
+    ``unmatched().only_in_write`` / ``matched_rows()`` の ``write_row`` が
     ``Table._iter_rows_for_update()`` 経由で作業 Table の実体 dict を参照する
     ことでこの順序依存を潰す。
     """
@@ -690,8 +694,8 @@ def test_result_called_before_unmatched_write_rows_mutation_reflects() -> None:
     # ここで result() を呼ぶ（初回呼び出し）
     first = transfer.result()
 
-    # その後で unmatched_write_rows の write_row を書き換える
-    for write_row in transfer.unmatched_write_rows():
+    # その後で only_in_write の write_row を書き換える
+    for write_row in transfer.unmatched().only_in_write:
         write_row["v"] = "転記元に無し"
 
     # result() に書き換えが反映されている
@@ -706,7 +710,7 @@ def test_result_called_before_unmatched_write_rows_mutation_reflects() -> None:
 def test_result_called_before_append_reflects_new_rows() -> None:
     """``result()`` を先に呼んでも、その後の ``result().append(...)`` は反映される。
 
-    順序非依存の回帰テスト（``unmatched_write_rows`` 書き換えと表裏）。
+    順序非依存の回帰テスト（``unmatched().only_in_write`` 書き換えと表裏）。
     """
     source = Table(
         ["id", "name"],
@@ -731,7 +735,8 @@ def test_result_called_before_append_reflects_new_rows() -> None:
     first = transfer.result()
 
     # その後で新規行を append する
-    for read_row in transfer.unmatched_read_rows():
+    only_in_read = transfer.unmatched().only_in_read
+    for read_row in only_in_read:
         first.append(dict(read_row))
 
     assert first.read() == [
@@ -739,3 +744,39 @@ def test_result_called_before_append_reflects_new_rows() -> None:
         {"id": "2", "name": "新規"},
     ]
     assert transfer.result().read() == first.read()
+
+
+def test_unmatched_only_in_read_mutation_does_not_affect_inputs_or_result() -> None:
+    """only_in_read の行を書き換えても read / result() には反映されない。
+
+    only_in_read は ``Table`` で、 ``for read_row in only_in_read:`` のように
+    iterate すると ``Table.__iter__`` がコピーを返すため、書き換えは
+    only_in_read 自体にも反映されない。 これは only_in_write（作業 Table の
+    実体行）と異なる振る舞いで、型が違う理由でもある。
+    """
+    source = Table(
+        ["id", "value"],
+        [{"id": "1", "value": "new"}, {"id": "2", "value": "extra"}],
+    )
+    destination = Table(["id", "value"], [{"id": "1", "value": "old"}])
+    transfer = Transfer(
+        source, destination, {"value": "value"}, read_key="id", write_key="id"
+    )
+
+    only_in_read = transfer.unmatched().only_in_read
+    # Table を iterate すると Table.__iter__ が dict(row) for row in self._rows の
+    # コピーを返すため、書き換えても only_in_read._rows には反映されない。
+    for read_row in only_in_read:
+        read_row["value"] = "書き換え"
+
+    # only_in_read 自体は書き換わっていない
+    assert only_in_read.read() == [{"id": "2", "value": "extra"}]
+    # 元の read は変わらない
+    assert source.read() == [
+        {"id": "1", "value": "new"},
+        {"id": "2", "value": "extra"},
+    ]
+    # result() も変わらない
+    assert transfer.result().read() == [
+        {"id": "1", "value": "old"},
+    ]

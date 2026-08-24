@@ -1,43 +1,33 @@
-r"""comken/toolbox/holidays/__init__.py — 祝日判定ライブラリ。
+r"""comken/toolbox/holidays/__init__.py — 祝日判定ライブラリ（後方互換 re-export）。
 
-内閣府の祝日 CSV をダウンロードしてキャッシュし、
-「今日が営業日か」「次の営業日」「収録期限の警告」を提供する。
+実装本体は ``comken.core.holidays`` 配下にある（外部ライブラリ非依存のため
+``core`` 層へ移設済み）。このモジュールは旧パス
+``from comken.toolbox.holidays import ...`` を壊さないための re-export 層。
 
-    from comken.toolbox.holidays import HolidayCalendar, is_business_day
-
-    calendar = HolidayCalendar.from_sources([
-        CabinetOfficeCSVSource(cache_path=Path("~/.comken/holidays/syukujitsu.csv")),
-        ComkenMasterTableSource(Path(r"\\server\share\管理表.xlsx")),
-    ])
-
-    if is_business_day(date.today(), calendar=calendar):
-        ...  # レポートを取りに行く
-
-遅延 import 禁止の方針どおり、requests はモジュール import 時には読み込まない。
-ネット系の処理は ``sources.cabinet_office.CabinetOfficeCSVSource`` の中だけに閉じ、
-``HolidayCalendar.is_business_day`` 単体ではネットに繋がらずに動く。
-
-HolidayCalendar       祝日セットを保持し判定を行う本体
-HolidaySource         祝日セットを返す仕組みの Protocol
-Holiday               1件の祝日（日付 + 名称）
-is_business_day       ``HolidayCalendar`` を引数に取る簡易判定
-CabinetOfficeCSVSource    内閣府 CSV を URL + キャッシュで取得する ``HolidaySource``
-ComkenMasterTableSource   社内管理表の「会社休日」シートを読む ``HolidaySource``
-HolidayCalendarError  祝日関連の基底例外
-HolidayCalendarFetchError      内閣府 CSV の取得失敗
-HolidayCalendarSourceError     管理表・CSV 形式の問題
-HolidayCalendarFormatError     内閣府 CSV として解釈できない形式
-HolidayCalendarExpiredError    収録期限切れ
+外部ライブラリ（``requests`` / Excel）に依存する source 実装は
+``toolbox`` 側に残してある。
 """
 
-from comken.toolbox.holidays.calendar import (
+from comken.core.holidays import (
     EXPIRING_WARNING_DAYS,
     Holiday,
     HolidayCalendar,
     HolidaySource,
+    RefreshableHolidaySource,
+    add_business_days,
+    business_day_after,
+    business_day_before,
+    business_day_on_or_after,
+    business_day_on_or_before,
+    first_business_day_of_month,
     is_business_day,
+    last_business_day_of_month,
+    load_cabinet_office_csv,
+    nth_business_day_of_month,
 )
+from comken.core.holidays.sources.computed import ComputedHolidaySource
 from comken.toolbox.holidays.exceptions import (
+    BusinessDayNotFoundError,
     HolidayCalendarError,
     HolidayCalendarExpiredError,
     HolidayCalendarFetchError,
@@ -45,12 +35,10 @@ from comken.toolbox.holidays.exceptions import (
     HolidayCalendarSourceError,
 )
 from comken.toolbox.holidays.sources.cabinet_office import CabinetOfficeCSVSource
-from comken.toolbox.holidays.sources.computed import ComputedHolidaySource
-from comken.toolbox.holidays.sources.master_table import ComkenMasterTableSource
 
 __all__ = [
+    "BusinessDayNotFoundError",
     "CabinetOfficeCSVSource",
-    "ComkenMasterTableSource",
     "ComputedHolidaySource",
     "EXPIRING_WARNING_DAYS",
     "Holiday",
@@ -61,5 +49,15 @@ __all__ = [
     "HolidayCalendarFormatError",
     "HolidayCalendarSourceError",
     "HolidaySource",
+    "RefreshableHolidaySource",
+    "add_business_days",
+    "business_day_after",
+    "business_day_before",
+    "business_day_on_or_after",
+    "business_day_on_or_before",
+    "first_business_day_of_month",
     "is_business_day",
+    "last_business_day_of_month",
+    "load_cabinet_office_csv",
+    "nth_business_day_of_month",
 ]

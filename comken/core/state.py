@@ -12,6 +12,7 @@ from pathlib import Path
 
 from comken.core.files.atomic import atomic_write
 from comken.core.files.ops import cleanup_stale_tmp, project_dir
+from comken.core.timer import measure
 from comken.exceptions import StateFileCorruptedError, StateLowerCaseNameError, StateValueTypeError
 from comken.runtime import dry_run_log, is_dry_run
 
@@ -49,6 +50,7 @@ class State:
         self._validate_key(key)
         return self._values.get(key, default)
 
+    @measure
     def set(self, key: str, value: StateValue) -> None:
         """値を保存する。dry-run 中はファイルもメモリ上の状態も変更しない。"""
         self._validate_key(key)

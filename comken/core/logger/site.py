@@ -15,8 +15,9 @@ class LoggerSite:
 
     Attributes:
         NAME: ログファイル名に使う識別子（``"backoffice"`` / ``"intranet"`` など）。
-        LOG_ROOT: ログを保存するルートの**絶対パスまたは UNC**。空文字だと ``setup()``
-            がファイルを書き始める前に ``LogRootNotConfiguredError`` で止まる。
+        LOG_ROOT: ログを保存するルートの**絶対パスまたは UNC**。空文字だと
+            ``setup_logging()`` がファイルを書き始める前に ``LogRootNotConfiguredError``
+            で止まる。
         LOG_FOLDER_NAMES: ``{端末名: その下へ作るフォルダ名}`` の文字列辞書。key は
             ``socket.gethostname()`` の戻り値（小文字化して照合するので
             ``LOG_FOLDER_NAMES`` 側の登録値も大文字で書いてよい）。登録がない、

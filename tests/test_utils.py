@@ -22,13 +22,14 @@ from comken.core.files import (
     DateNameBuilder,
     copy_file,
     date_in_name,
+    dates_in_name,
     delete_file,
     move_file,
 )
 from comken.core.files.ops import copy_to_local_if_large, project_dir
 from comken.core.text import normalize, remove_spaces, strip_spaces
 from comken.core.wait import wait_seconds, wait_until
-from comken.exceptions import ColumnNotFoundError, DownloadTimeoutError
+from comken.exceptions import ColumnNotFoundError, DownloadTimeoutError, FileSuffixMissingError
 from comken.toolbox.browser.download import DownloadDir
 from comken.toolbox.windows import Paths
 
@@ -65,6 +66,20 @@ def test_date_in_name_is_available_from_public_package() -> None:
     assert date_in_name("日付なし.csv") is None
 
 
+def test_dates_in_name_returns_all_dates_in_order() -> None:
+    """ファイル名に複数の日付があるとき、出現順にすべて返す。"""
+    assert dates_in_name("一覧_20260801_20260831.xlsx") == [
+        datetime.date(2026, 8, 1),
+        datetime.date(2026, 8, 31),
+    ]
+    # 1 件のときは 1 要素のリスト
+    assert dates_in_name("売上_20260729.csv") == [datetime.date(2026, 7, 29)]
+    # 日付が無ければ空リスト
+    assert dates_in_name("日付なし.csv") == []
+    # 数字は揃っているが日付として成立しないものは結果に含まない
+    assert dates_in_name("bad_20261345.xlsx") == []
+
+
 class TestDateFileFinder:
     """DateFileFinder.dated() のテスト。"""
 
@@ -74,7 +89,7 @@ class TestDateFileFinder:
         (tmp_path / "売上_20260730.xlsx").write_text("b", encoding="utf-8")
         (tmp_path / "売上_20260729.xlsx").write_text("c", encoding="utf-8")
 
-        result = DateFileFinder(tmp_path).dated("売上_")
+        result = DateFileFinder(tmp_path).dated("売上_.xlsx")
 
         assert [p.name for p in result] == [
             "売上_20260730.xlsx",
@@ -94,16 +109,16 @@ class TestDateFileFinder:
         os.utime(older, (older_ts, older_ts))
         os.utime(newer, (newer_ts, newer_ts))
 
-        result = DateFileFinder(tmp_path).dated("売上_")
+        result = DateFileFinder(tmp_path).dated("売上_.xlsx")
 
         assert [p.name for p in result] == ["売上_20260729.xlsx", "売上_20260729_old.xlsx"]
 
     def test_dated_filters_by_extension(self, tmp_path):
-        """extension で絞れる（``.csv`` を指定したら ``.xlsx`` は返らない）。"""
+        """prefix に拡張子を含めて絞れる（``.csv`` を指定したら ``.xlsx`` は返らない）。"""
         (tmp_path / "売上_20260729.xlsx").write_text("a", encoding="utf-8")
         (tmp_path / "売上_20260729.csv").write_text("b", encoding="utf-8")
 
-        result = DateFileFinder(tmp_path).dated("売上_", extension=".csv")
+        result = DateFileFinder(tmp_path).dated("売上_.csv")
 
         assert [p.name for p in result] == ["売上_20260729.csv"]
 
@@ -114,7 +129,7 @@ class TestDateFileFinder:
         # 数字は揃っているが日付として成立しないものは date_in_name() で None になり除外される
         (tmp_path / "売上_20261345.xlsx").write_text("c", encoding="utf-8")
 
-        result = DateFileFinder(tmp_path).dated("売上_")
+        result = DateFileFinder(tmp_path).dated("売上_.xlsx")
 
         assert [p.name for p in result] == ["売上_20260729.xlsx"]
 
@@ -122,7 +137,7 @@ class TestDateFileFinder:
         """一致するものが無ければ空リスト（例外を投げない）。"""
         (tmp_path / "違う_20260729.xlsx").write_text("a", encoding="utf-8")
 
-        result = DateFileFinder(tmp_path).dated("売上_")
+        result = DateFileFinder(tmp_path).dated("売上_.xlsx")
 
         assert result == []
 
@@ -131,7 +146,7 @@ class TestDateFileFinder:
         (tmp_path / "売上_20260729.xlsx").write_text("a", encoding="utf-8")
         (tmp_path / "原価_20260729.xlsx").write_text("b", encoding="utf-8")
 
-        result = DateFileFinder(tmp_path).dated("売上_")
+        result = DateFileFinder(tmp_path).dated("売上_.xlsx")
 
         assert [p.name for p in result] == ["売上_20260729.xlsx"]
 
@@ -141,7 +156,7 @@ class TestDateFileFinder:
         (tmp_path / "売上_20260730.xlsx").write_text("b", encoding="utf-8")
 
         # for_date は prefix() で使うもの。dated() はフォルダ内の全件が対象で日付は問わない
-        result = DateFileFinder(tmp_path, for_date=datetime.date(2026, 7, 29)).dated("売上_")
+        result = DateFileFinder(tmp_path, for_date=datetime.date(2026, 7, 29)).dated("売上_.xlsx")
 
         assert [p.name for p in result] == ["売上_20260730.xlsx", "売上_20260729.xlsx"]
 
@@ -387,41 +402,43 @@ class TestDateNameBuilder:
     def test_prefix(self):
         """prefix() は YYYYMMDD を前に付ける。"""
         today_text = today().strftime("%Y%m%d")
-        assert DateNameBuilder("レポート").prefix() == f"{today_text}_レポート.xlsx"
+        assert DateNameBuilder("レポート.xlsx").prefix() == f"{today_text}_レポート.xlsx"
 
     def test_suffix(self):
         """suffix() は YYYYMMDD を後ろに付ける。"""
         today_text = today().strftime("%Y%m%d")
-        assert DateNameBuilder("レポート").suffix() == f"レポート_{today_text}.xlsx"
+        assert DateNameBuilder("レポート.xlsx").suffix() == f"レポート_{today_text}.xlsx"
 
-    def test_custom_ext(self):
-        """ext 引数で拡張子を変更できる。"""
+    def test_extension_in_name(self):
+        """拡張子は name の文字列に含めて渡す。"""
         today_text = today().strftime("%Y%m%d")
-        assert DateNameBuilder("ログ", ext=".csv").prefix() == f"{today_text}_ログ.csv"
+        assert DateNameBuilder("ログ.csv").prefix() == f"{today_text}_ログ.csv"
 
-    def test_ext_without_dot_is_normalized(self):
-        """ext をドットなしで渡しても補完されることを確認する。"""
-        today_text = today().strftime("%Y%m%d")
-        assert DateNameBuilder("ログ", ext="csv").prefix() == f"{today_text}_ログ.csv"
+    def test_missing_suffix_raises(self):
+        """拡張子なしの名前は FileSuffixMissingError。"""
+        with pytest.raises(FileSuffixMissingError):
+            DateNameBuilder("ログ")
 
     def test_yyyymm_format(self):
         """date_format="%Y%m" にすると年月のみになる。月次ファイルに使う。"""
         ym = today().strftime("%Y%m")
-        assert DateNameBuilder("月次").prefix("{:%Y%m}_") == f"{ym}_月次.xlsx"
+        assert DateNameBuilder("月次.xlsx").prefix("{:%Y%m}_") == f"{ym}_月次.xlsx"
 
     def test_custom_date_format(self):
         """任意の strftime フォーマットを指定できる。"""
         formatted = today().strftime("%Y-%m-%d")
-        assert DateNameBuilder("レポート").prefix("{:%Y-%m-%d}_") == f"{formatted}_レポート.xlsx"
+        assert (
+            DateNameBuilder("レポート.xlsx").prefix("{:%Y-%m-%d}_") == f"{formatted}_レポート.xlsx"
+        )
 
     def test_constructor_with_date_object(self):
         """コンストラクタに date を渡すとその日付で組み立てられる。"""
         assert (
-            DateNameBuilder("レポート", datetime.date(2026, 8, 20)).prefix()
+            DateNameBuilder("レポート.xlsx", datetime.date(2026, 8, 20)).prefix()
             == "20260820_レポート.xlsx"
         )
         assert (
-            DateNameBuilder("レポート", datetime.date(2026, 8, 20)).suffix()
+            DateNameBuilder("レポート.xlsx", datetime.date(2026, 8, 20)).suffix()
             == "レポート_20260820.xlsx"
         )
 
@@ -429,7 +446,7 @@ class TestDateNameBuilder:
         """コンストラクタに datetime を渡しても date として扱われる（時刻部分は無視）。"""
         assert (
             DateNameBuilder(
-                "レポート",
+                "レポート.xlsx",
                 datetime.datetime(2026, 8, 20, 9, 30, 45),  # noqa: DTZ001
             ).prefix()
             == "20260820_レポート.xlsx"
@@ -438,7 +455,7 @@ class TestDateNameBuilder:
     def test_constructor_with_date_and_custom_format(self):
         """コンストラクタの日付と prefix のフォーマット指定を組み合わせできる。"""
         assert (
-            DateNameBuilder("月次", datetime.date(2026, 8, 20)).prefix("{:%Y-%m}_")
+            DateNameBuilder("月次.xlsx", datetime.date(2026, 8, 20)).prefix("{:%Y-%m}_")
             == "2026-08_月次.xlsx"
         )
 

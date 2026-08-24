@@ -46,6 +46,7 @@ import time
 from pathlib import Path
 
 from comken.core.files import atomic_write
+from comken.core.timer import measure
 from comken.exceptions import (
     ComkenError,
     EmptyReportError,
@@ -74,6 +75,7 @@ CAUSE_FILE = "ファイル"
 CAUSE_PROGRAM = "プログラム"
 
 
+@measure
 def download_report(report_key: str, project: str = "") -> CSV:
     """今すぐ Salesforce から取得して保存し、そのファイルを `CSV` で返す。
 
@@ -97,6 +99,7 @@ def download_report(report_key: str, project: str = "") -> CSV:
     return CSV(path, read_only=True, columns=[] if path.stat().st_size == 0 else None)
 
 
+@measure
 def download_scheduled(project: str = "定期実行") -> list[Path]:
     """管理表で「定期」かつ有効なレポートをまとめて取得する。
 

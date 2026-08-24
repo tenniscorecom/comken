@@ -8,6 +8,7 @@ mapping の列名はコンストラクタで検証するので、typo は早期�
 """
 
 from collections.abc import Iterator, Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from comken.core.table.model import Table
@@ -22,17 +23,35 @@ from comken.exceptions.table import (
 Row = dict[str, Any]
 
 
+@dataclass(frozen=True)
+class UnmatchedRows:
+    """突合しなかった行。
+
+    ``only_in_read`` は **コピー**（``Table``）。書き換えても ``read`` にも
+    ``result()`` にも影響しない。
+    ``only_in_write`` は **作業 Table の実体行**（``list[Row]``）。書き換えると
+    ``result()`` に反映される。型が違うのはこの違いを表すため。
+    """
+
+    only_in_read: Table
+    only_in_write: list[Row]
+
+
 class Transfer:
     """Table 間のキー突合と転記を行う。
 
     基本的な用法は次のとおり。 ``mapping`` は「転記元の列名 → 転記先の列名」。
-    4つの取り出し口を使い分けて、read / write を行単位で加工する:
+    3つの取り出し口を使い分けて、read / write を行単位で加工する:
 
     - ``matched_rows()``: 両方にキーが揃う行を ``(read_row, write_row)`` で返す
+      （**両方とも作業 Table の実体行**）
     - ``transfer_rows()``: read 全行を ``(read_row, write_row | None)`` で返す
-      （write に無い行は ``None``）
-    - ``unmatched_read_rows()``: write に無い read 行だけを返す（追加候補）
-    - ``unmatched_write_rows()``: read に無い write 行だけを返す（破棄候補）
+      （write に無い行は ``None``、``read_row`` は **コピー**）
+    - ``unmatched()``: 突合しなかった行を ``UnmatchedRows`` で返す
+      - ``only_in_read`` は **コピー**（``Table``）。書き換えても ``read`` にも
+        ``result()`` にも影響しない
+      - ``only_in_write`` は **作業 Table の実体行**（``list[Row]``）。書き換えると
+        ``result()`` に反映される
 
     Example:
         transfer = Transfer(read_table, write_table, mapping,
@@ -43,7 +62,7 @@ class Transfer:
             transfer.apply_mapping(read_row, write_row)   # mapping の値をコピー
             # 必要なら write_row["備考"] = "..." のように追加加工
         # write に無い read 行は result() に追加していく（新規行の追加）
-        for read_row in transfer.unmatched_read_rows():
+        for read_row in transfer.unmatched().only_in_read:
             transfer.result().append({
                 "顧客ID": read_row["顧客ID"],
                 "顧客名": read_row["取引先"],
@@ -51,7 +70,7 @@ class Transfer:
                 "備考": "新規追加",
             })
         # read に無い write 行は「転記元に無し」と書き換える（result() に出るので別途 filter する）
-        for write_row in transfer.unmatched_write_rows():
+        for write_row in transfer.unmatched().only_in_write:
             write_row["備考"] = "転記元に無し"
 
     **条件は ``apply_mapping()`` より前に書くこと。** Python の ``for`` ループは
@@ -61,10 +80,9 @@ class Transfer:
     適用済みとなり破棄できないので、判定は必ず ``apply_mapping()`` の前に置く。
 
     **空キー (``None`` / ``""``) は突合対象外**。 値が無いキーは read 側・write 側の
-    どちらでも照合に使わず、``unmatched_read_rows()`` /
-    ``unmatched_write_rows()`` 側へ流れる。 ``0`` や ``False`` は空ではない
-    （数値・bool の 0 落ち判定を避けるため）。 複合キーは **1要素でも空** なら
-    空とみなす。
+    どちらでも照合に使わず、``unmatched()`` 側へ流れる。 ``0`` や ``False`` は
+    空ではない（数値・bool の 0 落ち判定を避けるため）。 複合キーは **1要素でも空**
+    なら空とみなす。
     """
 
     def __init__(
@@ -126,48 +144,51 @@ class Transfer:
             if write_row is not None:
                 yield read_row, write_row
 
-    def unmatched_read_rows(self) -> Iterator[Row]:
-        """write に対応が無い read 行だけを返す（追加候補）。
+    def unmatched(self) -> UnmatchedRows:
+        """突合しなかった行を ``UnmatchedRows`` で返す。
 
-        戻り値は ``Table.read()`` と同じく **read 行のコピー**。
-        返された行を ``write_row["列名"] = ...`` のように書き換えても ``read`` には
-        影響しない。 ``result().append()`` に渡して write の作業 Table へ追加する
-        （新規行として書き込むために ``dict(...)`` で再コピーするのを忘れずに）。
+        ``only_in_read`` は write に対応が無い read 行（追加候補）。
+        ``Table`` として返すので ``.read()`` / ``.filter()`` などの Table 標準の
+        インターフェースが使える。 戻り値は ``Table.read()`` と同じく **read 行の
+        コピー** で、書き換えても ``read`` にも ``result()`` にも影響しない。
 
-        空キー (``None`` / ``""``) の read 行もここに含む。 キーが空なので
-        照合に使えず、必ず write には対応が無いため。
-
-        ``transfer_rows()`` / ``matched_rows()`` を呼ばずに呼んでも動く。
-        """
-        for read_row, write_row in self.transfer_rows():
-            if write_row is None:
-                yield read_row
-
-    def unmatched_write_rows(self) -> Iterator[Row]:
-        """read に対応が無い write 行だけを返す（破棄候補）。
-
+        ``only_in_write`` は read に対応が無い write 行（破棄候補）。
         戻り値は ``matched_rows()`` が返す ``write_row`` と同じく **作業 Table の
-        実体行**。 返された ``write_row`` を ``write_row["備考"] = "破棄予定"`` の
-        ように書き換えると ``result()`` の戻り値へ反映される。 ``result().append()``
-        などに渡して追加する使い方ではないので注意。
+        実体行**。 ``write_row["備考"] = "破棄予定"`` のように書き換えると
+        ``result()`` の戻り値へ反映される。
 
-        空キー (``None`` / ``""``) の write 行もここに含む。 キーが空なので
-        照合に使えず、必ず read には対応が無いため。
+        空キー (``None`` / ``""``) の行も両側に含む。 キーが空なので照合に使えず、
+        必ず対応が無いため。
 
         ``transfer_rows()`` / ``matched_rows()`` を呼ばずに呼んでも動く。
         """
         self.read._check_columns(self.read_keys)
         self.write._check_columns(self.write_keys)
         working_table = self._ensure_working_table()
-        read_keys = {
-            self._row_key(read_row, self.read_keys)
-            for read_row in self.read.read()
-            if not self._is_blank_key(self._row_key(read_row, self.read_keys))
-        }
+        write_index = self._working_index()
+
+        read_only: list[Row] = []
+        read_keys_index: set[tuple[Any, ...]] = set()
+        # read は 1 回だけ走査する。空キー行は write_index にキーが無いため常に
+        # only_in_read 側へ流れる。空でないキーで write に居るキーは read_keys_index に
+        # 積み、only_in_write の判定に使う。
+        for read_row in self.read.read():
+            key = self._row_key(read_row, self.read_keys)
+            if self._is_blank_key(key) or key not in write_index:
+                read_only.append(read_row)
+            else:
+                read_keys_index.add(key)
+
+        # write 側の実体行を ``_iter_rows_for_update()`` 経由で取得する。
+        # ここで返した dict を呼び出し側が書き換えると ``result()`` に反映される。
+        write_only: list[Row] = []
         for write_row in working_table._iter_rows_for_update():
             key = self._row_key(write_row, self.write_keys)
-            if self._is_blank_key(key) or key not in read_keys:
-                yield write_row
+            if self._is_blank_key(key) or key not in read_keys_index:
+                write_only.append(write_row)
+
+        only_in_read = Table(list(self.read.columns), read_only, types=self.read.types)
+        return UnmatchedRows(only_in_read, write_only)
 
     def apply_mapping(self, read_row: Row, write_row: Row | None) -> None:
         """コンストラクタで渡された ``mapping`` どおりに値を ``write_row`` へコピーする。
@@ -207,7 +228,7 @@ class Transfer:
 
         ``result()`` は同じ作業 Table インスタンスを返し続けるので、
         ``result().append(...)`` のように破壊的に加工した場合や、 ``result()`` を
-        呼んだ後に ``unmatched_write_rows()`` の ``write_row`` を書き換えた場合も、
+        呼んだ後に ``unmatched().only_in_write`` の ``write_row`` を書き換えた場合も、
         後続の ``result().read()`` 呼び出しに反映される（``Table._iter_rows_for_update``
         経由で実体 dict を共有しているため）。
 
@@ -243,7 +264,7 @@ class Transfer:
         for write_row in self._working_table._iter_rows_for_update():
             key = self._row_key(write_row, self.write_keys)
             if self._is_blank_key(key):
-                # 空キーは照合に使わない。unmatched_write_rows() 側へ流れる。
+                # 空キーは照合に使わない。unmatched() 側へ流れる。
                 continue
             if key in index:
                 raise TransferDestinationMultipleMatchError(",".join(self.write_keys), key)
@@ -265,4 +286,4 @@ class Transfer:
         return any(value is None or value == "" for value in key)
 
 
-__all__ = ["Transfer"]
+__all__ = ["Transfer", "UnmatchedRows"]

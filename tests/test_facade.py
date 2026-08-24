@@ -52,26 +52,49 @@ def test_core_exposes_parts() -> None:
     ここに書かないと `from comken.core import ...` で届かない。
     """
     expected = {
+        "BUSINESS_DAY_SEARCH_LIMIT",
+        "ComputedHolidaySource",
         "DateNameBuilder",
         "DateFileFinder",
         "DiffResult",
+        "EXPIRING_WARNING_DAYS",
+        "Holiday",
+        "HolidayCalendar",
+        "HolidaySource",
+        "RefreshableHolidaySource",
         "RowChange",
         "State",
         "Timer",
+        "add_business_days",
+        "business_day_after",
+        "business_day_before",
+        "business_day_on_or_after",
+        "business_day_on_or_before",
+        "compare_tables",
         "copy_file",
         "date_in_name",
+        "dates_in_name",
+        "default_calendar",
         "delete_file",
         "delete_files",
         "diff_row",
         "diff_rows",
+        "first_business_day_of_month",
+        "is_business_day",
+        "last_business_day_of_month",
+        "load_cabinet_office_csv",
         "local_copy",
         "measure",
+        "month_end",
+        "month_start",
         "move_file",
+        "nth_business_day_of_month",
         "normalize",
         "now",
         "project_dir",
         "remove_spaces",
         "retry",
+        "set_default_calendar",
         "strip_spaces",
         "today",
         "unzip",
@@ -84,7 +107,6 @@ def test_core_exposes_parts() -> None:
         "Table",
         "TableComparison",
         "Transfer",
-        "compare_tables",
     }
     assert set(comken.core.__all__) == expected
     for name in comken.core.__all__:
@@ -121,7 +143,6 @@ def test_facade_attributes_resolve_to_real_objects() -> None:
     assert comken.Config is not None
     # ログ設定モジュール
     assert comken.comken_logger is comken.core.logger
-    assert comken.comken_logger.getLogger is __import__("logging").getLogger
     assert comken.Backoffice is comken.core.logger.Backoffice
     assert comken.Intranet is comken.core.logger.Intranet
     # contextmanager（with で使える callable）

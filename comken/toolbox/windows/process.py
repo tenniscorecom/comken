@@ -10,9 +10,12 @@ COM 経由の Excel 自動化は、クラッシュや強制終了で EXCEL.EXE �
 import logging
 import subprocess
 
+from comken.core.timer import measure
+
 logger = logging.getLogger(__name__)
 
 
+@measure
 def is_excel_running() -> bool:
     """EXCEL.EXE プロセスが存在するか返す。
 
@@ -26,6 +29,7 @@ def is_excel_running() -> bool:
     return "EXCEL.EXE" in result.stdout
 
 
+@measure
 def kill_excel() -> bool:
     """すべての EXCEL.EXE プロセスを強制終了する。
 

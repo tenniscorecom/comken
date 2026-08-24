@@ -22,7 +22,7 @@ from comken.core.logger.environment import (
 )
 
 
-def local(
+def setup_local_logging(
     *,
     console_level: int = logging.INFO,
     file_level: int = logging.INFO,
@@ -32,14 +32,15 @@ def local(
     """ローカル実行用に root logger を設定する。
 
     ``path`` はファイル名ではなく保存先フォルダ。省略時は ``project_dir()`` で
-    起動スクリプトのプロジェクトを求め、その ``logs`` を使う。``setup()`` の
-    直後（root に console と environment ファイルだけがある状態）でも、``setup()``
-    と組み合わせず単独でも呼べる。``setup()`` 直後なら console を使い回して
-    local ファイルだけを追加し、単独なら console と local ファイルの 2 種を追加する。
+    起動スクリプトのプロジェクトを求め、その ``logs`` を使う。``setup_logging()`` の
+    直後（root に console と environment ファイルだけがある状態）でも、
+    ``setup_logging()`` と組み合わせず単独でも呼べる。``setup_logging()`` 直後なら
+    console を使い回して local ファイルだけを追加し、単独なら console と local
+    ファイルの 2 種を追加する。
 
-    ``setup()`` と ``local()`` が両方走った状態や、関係のない handler が混ざって
-    いる場合は ``LoggingAlreadyConfiguredError`` を送出して二重出力を防ぐ。
-    comken 以外（他ライブラリ由来）の handler が混ざっている場合は
+    ``setup_logging()`` と ``setup_local_logging()`` が両方走った状態や、関係のない
+    handler が混ざっている場合は ``LoggingAlreadyConfiguredError`` を送出して
+    二重出力を防ぐ。comken 以外（他ライブラリ由来）の handler が混ざっている場合は
     ``LoggingConflictError`` を送出し、既存 handler の出力先やレベルを勝手に
     変えてしまうことを防ぐ。``allow_existing=True`` を指定すると、その判定を
     **警告ログだけ**に留めて処理を続行する。
@@ -69,10 +70,10 @@ def local(
     local_file_handler.setFormatter(formatter)
 
     if ENVIRONMENT_HANDLER_NAME in {h.name for h in existing}:
-        # setup() が作った console を使い回し、同じログが画面へ2回出るのを防ぐ。
+        # setup_logging() が作った console を使い回し、同じログが画面へ2回出るのを防ぐ。
         console_handler = next(h for h in existing if h.name == CONSOLE_HANDLER_NAME)
     else:
-        # local() 単独で呼ばれた場合だけ、画面表示用の console も用意する。
+        # setup_local_logging() 単独で呼ばれた場合だけ、画面表示用の console も用意する。
         console_handler = logging.StreamHandler()
         console_handler.set_name(CONSOLE_HANDLER_NAME)
         console_handler.setLevel(console_level)
@@ -89,4 +90,4 @@ def local(
     # 警告は comken の handler を root に追加し終えてから出す。先に出すと
     # 警告が comken のログファイルに残らず、何と共存したか追跡できなくなる。
     if external_allowed:
-        _warn_external_handlers_allowed("local()", existing)
+        _warn_external_handlers_allowed("setup_local_logging()", existing)

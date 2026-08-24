@@ -7,27 +7,29 @@ class LoggingAlreadyConfiguredError(ComkenError):
     """root logger がすでに設定されている
 
     対処:
-        setup() または local() はアプリの入口で1回だけ呼ぶ。
+        setup_logging() または setup_local_logging() はアプリの入口で1回だけ呼ぶ。
         実行基盤がログを設定する場合は呼ばない。
     """
 
     def __init__(self) -> None:
         super().__init__(
-            "root logger はすでに設定されています。setup() または local() は1回だけ呼んでください。"
+            "root logger はすでに設定されています。"
+            "setup_logging() または setup_local_logging() は1回だけ呼んでください。"
         )
 
 
 class LoggingConflictError(ComkenError):
     """root logger に comken 以外の handler が設定されている
 
-    他ライブラリが先に root logger を設定した状態で ``setup()`` / ``local()`` を
-    呼ぶと、comken が既存 handler の出力先やレベルを勝手に変えてしまう。
-    「何がどう混ざっているのか」を運用担当者にそのまま見せられるよう、
-    既存 handler の正体を判別できる範囲でメッセージに並べる。
+    他ライブラリが先に root logger を設定した状態で ``setup_logging()`` /
+    ``setup_local_logging()`` を呼ぶと、comken が既存 handler の出力先や
+    レベルを勝手に変えてしまう。「何がどう混ざっているのか」を運用担当者に
+    そのまま見せられるよう、既存 handler の正体を判別できる範囲で
+    メッセージに並べる。
 
-    この例外は ``setup()`` / ``local()`` の呼び方では解決しない。利用者が
-    コードを直しても他ライブラリの root logger 設定を止められないので、
-    上が運用側へ通知されることを前提にした例外。
+    この例外は ``setup_logging()`` / ``setup_local_logging()`` の呼び方では
+    解決しない。利用者がコードを直しても他ライブラリの root logger 設定を
+    止められないので、上が運用側へ通知されることを前提にした例外。
 
     対処:
         上の handler 一覧をそのままライブラリの管理者へ連絡してください
@@ -42,9 +44,9 @@ class LoggingConflictError(ComkenError):
         bullet = "\n".join(f"  - {line}" for line in handlers) if handlers else "  - (なし)"
         super().__init__(
             "root logger に comken 以外の handler が設定されているため、"
-            "setup() / local() を進められません。\n"
+            "setup_logging() / setup_local_logging() を進められません。\n"
             f"{bullet}\n"
-            "これは setup() / local() の呼び出し回数では解決しません。"
+            "これは setup_logging() / setup_local_logging() の呼び出し回数では解決しません。"
             "上の一覧をそのままライブラリの管理者へ連絡してください。\n"
             "やむを得ず共存させたい場合は allow_existing=True を指定すれば"
             "処理は続行しますが、comken のハンドラーが追加されることで"

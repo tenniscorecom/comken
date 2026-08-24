@@ -9,6 +9,7 @@ from typing import Any, Self, TypeAlias
 
 from comken.constants import Encoding
 from comken.core.files import atomic_write
+from comken.core.timer import measure
 from comken.core.table.model import Table
 from comken.exceptions.csv import (
     CSVColumnsRequiredError,
@@ -68,6 +69,7 @@ class CSV:
         ):
             self._write(self._pending)
 
+    @measure
     def read(self) -> Table:
         """全行を読み、指定された列だけを変換したTableを返す。"""
         if self._pending is not None:
@@ -165,6 +167,7 @@ class CSV:
         current.append(additions)
         self._pending = current
 
+    @measure
     def save(self) -> None:
         """保留中のTableをCSVファイルへ保存する。"""
         # replace はメモリ上で準備し、save または正常終了した with でだけファイルへ反映する。

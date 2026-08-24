@@ -1,4 +1,4 @@
-"""comken/toolbox/holidays/sources/computed.py — 計算で祝日を組み立てるソース。
+"""comken/core/holidays/sources/computed.py — 計算で祝日を組み立てるソース。
 
 内閣府の ``syukujitsu.csv`` に頼らず、祝日法で定義された規則だけで
 ``Holiday`` を組み立てる。`mokejp/holidays_jp` (MIT) のアルゴリズムを
@@ -20,7 +20,9 @@ import しないため、オフラインの社内 BO 環境でもそのまま動
 - 振替休日（2007年改正以降。日曜の祝日を後ろに倒す）
 - 2020 年オリンピック特例（海の日・スポーツの日・山の日）
 - 2019 年 即位関連特例（天皇の即位の日・即位礼正殿の儀の行われる日）
-- 会社休日（ファイル先頭の ``COMPANY_HOLIDAYS`` リストに追加する）
+
+**会社休日**は別ソース ``comken.core.holidays.sources.company`` に切り出してある。
+国民の祝日とは概念が違うので混ぜない。
 """
 
 import datetime as _dt
@@ -28,38 +30,14 @@ import logging
 from itertools import pairwise
 from typing import Final
 
-from comken.toolbox.holidays.calendar import Holiday, HolidaySource
+from comken.core.holidays.calendar import Holiday, HolidaySource
 
 logger = logging.getLogger(__name__)
 
 
-# ─────────────────────────────────────────────────────────────────────
-# 会社休日 (必要に応じてここに追加)
-# ─────────────────────────────────────────────────────────────────────
-# 形式 (3 種類):
-#   1. 単発 (int 月, int 日, str 名称) - 毎年同じ月日
-#   2. 期間 (int 開始月, int 開始日, int 終了月, int 終了日, str 名称) - 毎年繰り返す
-#   3. 特定年のみ (_dt.date, _dt.date, str 名称) - start〜end の 1回だけ
-#
-# 例 (コメントアウトで残す):
-#   (12, 29, 1, 3, "年末年始休暇"),  # 毎年 12/29 - 1/3 (年跨ぎ)
-#   (8, 13, 8, 16, "夏季休暇"),     # 毎年 8/13 - 8/16
-#   (4, 1, "創立記念日"),           # 毎年 4/1
-#   (_dt.date(2025, 11, 4), _dt.date(2025, 11, 5), "臨時休業"),  # 2025 だけ
-#
-# 追加したら tests/test_holidays.py::TestCompanyHolidays にテストも 1件足すこと。
-COMPANY_HOLIDAYS: Final[list[tuple]] = [
-    # 年末年始 (12/29 - 1/3) は暫定デフォルト。
-    # 会社の正式な休日カレンダーではないので、事情に合わせて
-    # ここを編集すればよい。ファイル冒頭に書くことで、
-    # 「会社都合の休み」がソースを開いた瞬間に分かる構造にしている。
-    (12, 29, 1, 3, "年末年始休暇"),  # 毎年 12/29 - 1/3 (年跨ぎ)
-]
-
-
 # 既定の対象範囲。1948-07-20 が祝日法施行日。春分／秋分の近似式は 2099 年までが高精度。
-DEFAULT_FROM_YEAR: Final[int] = 1948
-DEFAULT_TO_YEAR: Final[int] = 2099
+DEFAULT_FROM_YEAR: Final = 1948
+DEFAULT_TO_YEAR: Final = 2099
 
 
 # ── ヘルパー ──────────────────────────────────────────────────────────────
@@ -314,64 +292,6 @@ def _add_national_holidays(holidays: list[Holiday], year: int) -> list[Holiday]:
     return result
 
 
-def _expand_company_holidays(holidays: list[Holiday], year: int) -> list[Holiday]:
-    """``COMPANY_HOLIDAYS`` を ``year`` 年について展開する。
-
-    単発・期間・特定年のみ の 3 形式に対応する。期間指定は年跨ぎ（12/29 - 1/3 など）も
-    サポートし、両端を ``year`` 年の祝日に登録する。
-    """
-    result = list(holidays)
-    for entry in COMPANY_HOLIDAYS:
-        if len(entry) == 3:
-            first, second, name = entry
-            if isinstance(first, _dt.date):
-                # 特定年のみ (_dt.date, _dt.date, name)
-                start, end = first, second
-                current = max(start, _dt.date(year, 1, 1))
-                last = min(end, _dt.date(year, 12, 31))
-                while current <= last:
-                    result.append(Holiday(current, name))
-                    current += _dt.timedelta(days=1)
-            else:
-                # 単発 (int 月, int 日, name) — 毎年繰り返す
-                month = int(first)
-                day = int(second)
-                result.append(Holiday(_dt.date(year, month, day), name))
-        elif len(entry) == 5:
-            m1, d1, m2, d2, name = (
-                int(entry[0]),
-                int(entry[1]),
-                int(entry[2]),
-                int(entry[3]),
-                entry[4],
-            )
-            if (m1, d1) <= (m2, d2):
-                # 同年内
-                start = _dt.date(year, m1, d1)
-                end = _dt.date(year, m2, d2)
-                current = start
-                while current <= end:
-                    result.append(Holiday(current, name))
-                    current += _dt.timedelta(days=1)
-            else:
-                # 年跨ぎ (例: 12/29 - 1/3)。 ``year`` 年の両端部分の両方を含める。
-                cursor = _dt.date(year, m1, d1)
-                while cursor <= _dt.date(year, 12, 31):
-                    result.append(Holiday(cursor, name))
-                    cursor += _dt.timedelta(days=1)
-                cursor = _dt.date(year, 1, 1)
-                end_in_year = _dt.date(year, m2, d2)
-                while cursor <= end_in_year:
-                    result.append(Holiday(cursor, name))
-                    cursor += _dt.timedelta(days=1)
-        else:
-            logger.warning(
-                "COMPANY_HOLIDAYS のエントリ形式が不明です (3要素または5要素): %r",
-                entry,
-            )
-    return result
-
-
 # ── 公開クラス ────────────────────────────────────────────────────────────
 
 
@@ -427,11 +347,9 @@ class ComputedHolidaySource(HolidaySource):
             yearly = _base_holidays_for_year(year)
             yearly = _add_substitute_holidays(yearly, year)
             yearly = _add_national_holidays(yearly, year)
-            yearly = _expand_company_holidays(yearly, year)
             all_holidays.extend(yearly)
 
-        # 日付順にして返す（同日の重複は呼び出し側で WARNING される前提）
         return sorted(all_holidays, key=lambda h: h.date)
 
 
-__all__ = ["ComputedHolidaySource", "COMPANY_HOLIDAYS", "DEFAULT_FROM_YEAR", "DEFAULT_TO_YEAR"]
+__all__ = ["ComputedHolidaySource", "DEFAULT_FROM_YEAR", "DEFAULT_TO_YEAR"]

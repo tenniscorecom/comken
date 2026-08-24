@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 def main() -> None:
     # 入力フォルダから「今日の日付が名前に入ったファイル」を探す。
     # required=False にすると見つからないとき None が返る（エラーにせずスキップ運用できる）
-    source = DateFileFinder(config.FILES.INPUT_FOLDER).prefix("", extension="csv", required=False)
+    source = DateFileFinder(config.FILES.INPUT_FOLDER).prefix(".csv", required=False)
     if source is None:
         logger.info("本日分の入力ファイルがないため何もしません")
         return
@@ -48,7 +48,7 @@ def main() -> None:
 
     # ↑↑↑ ここまで ↑↑↑
 
-    output_path = config.FILES.OUTPUT_FOLDER / DateNameBuilder(BATCH_NAME).prefix()
+    output_path = config.FILES.OUTPUT_FOLDER / DateNameBuilder(f"{BATCH_NAME}.xlsx").prefix()
     with Excel(output_path) as excel:
         excel.create_data_sheet("売上").create_table(
             "売上", Table(list(rows[0]) if rows else [], rows)

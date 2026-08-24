@@ -13,6 +13,7 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
 from comken.core.files import atomic_write, copy_to_local_if_large
+from comken.core.timer import measure
 from comken.exceptions import (
     EmptyHeaderCellError,
     ExcelFileNotFoundError,
@@ -183,6 +184,7 @@ class Excel:
             if self._local_copy_path is not None:
                 self._local_copy_path.unlink(missing_ok=True)
 
+    @measure
     def save(self) -> None:
         """変更を元ファイルへ保存する。
 
@@ -220,6 +222,7 @@ class Excel:
         # 保存後の原本からローカル作業コピーを同期し、古い値を開かない。
         self._working_copy_is_stale = self._working_path != self.path
 
+    @measure
     def run_macro(self, macro_name: str) -> None:
         """Excel COMへ一時的に昇格してVBAマクロを実行する。
 
@@ -240,6 +243,7 @@ class Excel:
         self._reload_workbook()
         self._is_dirty = True
 
+    @measure
     def read_computed_rows(self, sheet_name: str, min_row: int = 2) -> list[tuple[Any, ...]]:
         """数式の計算結果を行単位で読む。未計算の数式がある場合だけCOMへ昇格する。"""
         rows, needs_com = self._cached_rows(sheet_name, min_row)

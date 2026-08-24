@@ -89,22 +89,23 @@ import の書き方は上の「[使うときの約束](#使うときの約束)�
 
 表データは ``Table`` に統一する。CSV は ``CSV.read()``、Excel は
 ``Excel.data_sheet().table().read()`` で ``Table`` を取得し、転記は
-``Transfer(read, write, mapping=...)`` を作って次の 4 つの取り出し口で加工する:
+``Transfer(read, write, mapping=...)`` を作って次の 3 つの取り出し口で加工する:
 
 - ``matched_rows()``: 両側にキーが揃う行を ``(read_row, write_row)`` で返す
 - ``transfer_rows()``: read 全行を ``(read_row, write_row | None)`` で返す
   （write に無い行は ``None``）
-- ``unmatched_read_rows()``: write に無い read 行を返す（追加候補）
-- ``unmatched_write_rows()``: read に無い write 行を返す（破棄候補）
+- ``unmatched()``: 突合しなかった行を ``UnmatchedRows`` で返す
+  - ``only_in_read``: write に無い read 行を返す（追加候補、**コピー**）
+  - ``only_in_write``: read に無い write 行を返す（破棄候補、**作業 Table の実体行**）
 
 加工は ``transfer.apply_mapping(read_row, write_row)`` 1 行で済み、
-``unmatched_read_rows()`` の行は ``transfer.result().append()`` で
+``unmatched().only_in_read`` の行は ``transfer.result().append()`` で
 新規行として追加できる。保存は CSV / Excel の ``with`` を正常終了した時に行う。
 列対応ではなくExcelシートのセル内容と基本レイアウトを複製するときは
 ``Sheet.copy_to()`` を使う（画像・グラフ・印刷設定等は対象外）。
 
 **空キー (``None`` / ``""``) は突合対象外**。``0`` / ``False`` は空ではない。
-空キーは read / write のどちらでも ``unmatched_*`` 側へ流れるため、
+空キーは read / write のどちらでも ``unmatched()`` 側へ流れるため、
 write 側に空キーが複数あっても ``TransferDestinationMultipleMatchError``
 にはならない。
 
@@ -517,24 +518,24 @@ POSITION = 42
 
 ## Logger
 
-社内環境では `setup()` に環境クラスを渡し、root logger を設定する。
+社内環境では `setup_logging()` に環境クラスを渡し、root logger を設定する。
 すでに root logger が設定済みの場合や2回呼んだ場合は、二重出力を防ぐため例外になる。
 
 ```python
-from comken.core.logger import Backoffice, setup
+from comken.core.logger import Backoffice, setup_logging
 
-setup(Backoffice)
+setup_logging(Backoffice)
 ```
 
-RPA 基盤を通さず単体実行するときは、`local()` で root logger を設定する。
-`local()` は `None` を返さないので、logger は `getLogger(__name__)` で取る。
+RPA 基盤を通さず単体実行するときは、`setup_local_logging()` で root logger を設定する。
+`setup_local_logging()` は `None` を返さないので、logger は `getLogger(__name__)` で取る。
 
 ```python
 # main.py
 from comken import comken_logger
 
-comken_logger.local()  # コンソールと logs/local-YYYY-MM-DD.log（UTF-8）へ出力
-logger = comken_logger.getLogger(__name__)
+comken_logger.setup_local_logging()  # コンソールと logs/local-YYYY-MM-DD.log（UTF-8）へ出力
+logger = logging.getLogger(__name__)
 logger.info("処理開始")
 ```
 

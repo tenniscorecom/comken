@@ -70,6 +70,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from comken.constants import Color
 from comken.core.table.model import Table as CoreTable
+from comken.core.timer import measure
 from comken.exceptions import (
     ExcelApplicationNotAvailableError,
     MasterColumnNotFoundError,
@@ -162,6 +163,7 @@ class MasterRow:
 
     # ── 読む ────────────────────────────────────────────────────────────────
     @classmethod
+    @measure
     def load(cls, path: str | Path | None = None) -> list[Self]:
         """表を読んで、行のリストを返す。
 
@@ -228,6 +230,7 @@ class MasterRow:
 
     # ── 雛形を作る ───────────────────────────────────────────────────────────
     @classmethod
+    @measure
     def create_template(cls, path: str | Path, examples: list[dict] | None = None) -> Path:
         """記入例と「記入方法」シートが入った雛形を作る。
 

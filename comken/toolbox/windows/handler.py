@@ -26,6 +26,7 @@ from comken.constants import FileFormat
 from comken.core.data import column_number
 from comken.core.files.base import FileBase
 from comken.core.files.ops import copy_to_local_if_large
+from comken.core.timer import measure
 from comken.exceptions import (
     EmptyHeaderCellError,
     ExcelApplicationNotAvailableError,
@@ -170,6 +171,7 @@ class ExcelCOMHandler(FileBase):
         """シートオブジェクトを返す。"""
         return self._wb.Sheets(_warn_coerce(name, str, "sheet_name", stacklevel=3))
 
+    @measure
     def read_cell(self, sheet_name: str, row: int, col: int | str) -> Any:
         """セルの値を返す（数式の計算結果）。
 
@@ -180,6 +182,7 @@ class ExcelCOMHandler(FileBase):
         """
         return self._sheet(sheet_name).Cells(int(row), column_number(col)).Value
 
+    @measure
     def write_cell(self, sheet_name: str, row: int, col: int | str, value) -> None:
         """セルに値を書き込む。
 
@@ -191,6 +194,7 @@ class ExcelCOMHandler(FileBase):
         """
         self._sheet(sheet_name).Cells(int(row), column_number(col)).Value = value
 
+    @measure
     def read_rows(self, sheet_name: str, min_row: int = 2) -> list[tuple]:
         """指定シートの行データをタプルのリストで返す。
 
@@ -206,6 +210,7 @@ class ExcelCOMHandler(FileBase):
         last_col = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
         return _block_values(ws, int(min_row), last_row, last_col)
 
+    @measure
     def read_range(
         self, sheet_name: str, min_col: int, min_row: int, max_col: int, max_row: int
     ) -> list[tuple[Any, ...]]:
@@ -214,6 +219,7 @@ class ExcelCOMHandler(FileBase):
             self._sheet(sheet_name), int(min_row), int(min_col), int(max_row), int(max_col)
         )
 
+    @measure
     def read_rows_as_dicts(self, sheet_name: str, header_row: int = 1) -> list[dict]:
         """ヘッダー行をキーとした辞書のリストで返す。
 
@@ -256,6 +262,7 @@ class ExcelCOMHandler(FileBase):
             for row in _block_values(ws, header_row + 1, last_row, last_col)
         ]
 
+    @measure
     def count_non_empty_cells(self, sheet_name: str, row: int) -> int:
         """指定行の空でないセル数を返す。
 
@@ -272,6 +279,7 @@ class ExcelCOMHandler(FileBase):
         ws = self._sheet(sheet_name)
         return self._excel.WorksheetFunction.CountA(ws.Rows(int(row)))
 
+    @measure
     def last_row(self, sheet_name: str) -> int:
         """データが存在する最終行の行番号を返す。
 
@@ -286,6 +294,7 @@ class ExcelCOMHandler(FileBase):
         ws = self._sheet(sheet_name)
         return ws.UsedRange.Row + ws.UsedRange.Rows.Count - 1
 
+    @measure
     def run_macro(self, macro_name: str) -> None:
         """VBA マクロを実行する。
 
@@ -298,6 +307,7 @@ class ExcelCOMHandler(FileBase):
         except Exception as e:
             raise MacroError(str(macro_name), e) from e
 
+    @measure
     def save(self) -> None:
         """元のファイルに上書き保存する。
 
@@ -330,6 +340,7 @@ class ExcelCOMHandler(FileBase):
         # 次回の save() は同じファイルに対する Save() にする。
         self._working_path = original
 
+    @measure
     def save_as(
         self,
         path: str | Path,
@@ -371,6 +382,7 @@ class ExcelCOMHandler(FileBase):
             WriteResPassword=write_pw,
         )
 
+    @measure
     def close(self) -> None:
         """Excel を閉じる。with 文を使う場合は自動で呼ばれる。
 
@@ -429,11 +441,13 @@ class WindowHandler:
         if self._hwnd == 0:
             raise RuntimeError(f"ウィンドウが見つかりません: {title}")
 
+    @measure
     def activate(self) -> None:
         """ウィンドウを前面に表示する。最小化されている場合は復元する。"""
         win32gui.ShowWindow(self._hwnd, win32con.SW_RESTORE)
         win32gui.SetForegroundWindow(self._hwnd)
 
+    @measure
     def get_title(self) -> str:
         """ウィンドウのタイトルを返す。"""
         return win32gui.GetWindowText(self._hwnd)
@@ -456,6 +470,7 @@ class RegistryHandler:
     def __exit__(self, *args) -> None:
         self.close()
 
+    @measure
     def read(self, value_name: str) -> str:
         """レジストリ値を読み取る。
 
@@ -468,6 +483,7 @@ class RegistryHandler:
         value, _ = win32api.RegQueryValueEx(self._key, value_name)
         return value
 
+    @measure
     def close(self) -> None:
         """レジストリキーを閉じる。with 文を使う場合は自動で呼ばれる。"""
         win32api.RegCloseKey(self._key)

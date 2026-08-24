@@ -110,6 +110,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `ConfigMappingEmptyValueError` | ``[*_MAPPING]`` セクションの値が空欄 | メッセージに表示された **「読んだファイル」のパス** が、編集しているconfig.ini と一致するかを確認する。パスが正しければ、表示されたキー名の両側に値を書いて config.ini を直す（``列名 = 値``）。``=`` を付け忘れて ``キー`` のように書いた行もここで検出する（``cfg.get()`` が ``None`` を返すので空欄と同じ扱い）。通常セクションの空欄（``READ_PASSWORD =`` のように「設定しない」を示す書き方）はエラーにしないので、``*_MAPPING`` 以外では無視してよい |
 | `UnsupportedFileSuffixError` | 対応外の拡張子が指定された | CSV / Excel の対応する拡張子のファイルを指定する |
 | `FileDeletionError` | ファイルを削除できなかった | 他のプロセスがファイルを掴んでいないか、読み取り専用になっていないかを確認してもう一度実行する。消せたファイルは消えているAttributes:remaining: 削除できなかったファイルのパス一覧。 |
+| `FileSuffixMissingError` | ファイル名に拡張子が無い | ファイル名に拡張子（例: ``.csv`` / ``.xlsx``）を含めて指定する。拡張子は名前の文字列にだけ書く。引数 ``ext`` / ``extension`` は廃止済みのため使えない。 |
 | `InvalidCredentialNameError` | 認証情報のキー名に使えない文字がある | 半角英数字とアンダースコアだけにする（漢字・スペース・記号は使えない） |
 | `CredentialNotFoundError` | 認証情報（パスワード・client_secret など）が登録されていない | 表示された登録済みキー名と見比べる。無ければ `python -m comken cred import 認証情報.json` で取り込む |
 | `CredentialDecryptionError` | 認証情報を復号できない | 登録したときと**同じ Windows アカウント・同じ PC** で実行しているか確認する。タスクスケジューラの実行ユーザー違いが最も多い |
@@ -133,11 +134,12 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `StateFileCorruptedError` | state.ini が壊れていて読み取れない | 内容を直す。直せない場合は別名に変更して、空の状態から再実行する |
 | `StateLowerCaseNameError` | state のキー名に小文字がある | 表示されたキー名を大文字に直す（`last_file` → `LAST_FILE`） |
 | `StateValueTypeError` | state に保存できない型の値が渡された | 真偽値・整数・小数・文字列・文字列のリストのいずれかに変更する |
+| `BusinessDayNotFoundError` | 営業日が見つからなかった | n をその月の営業日数以下に直す、対象月の祝日に過不足がないか確認する、社内管理表（会社休日）が広範囲に登録されていないか確認する |
 | `HolidayCalendarError` | 祝日カレンダーに関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `HolidayCalendarFetchError` | 内閣府の祝日 CSV を取得できない | ネットワーク接続と社内プロキシの設定を確認する。それでも直らない場合は、保存済みのキャッシュで当面動かすか、管理表（Excel）に会社休日を登録して代用する |
-| `HolidayCalendarSourceError` | 祝日データの読み取りに失敗した | 内閣府の CSV の場合: 内閣府の仕様変更。管理者へ連絡する管理表の場合: シート名と列名（"日付" / "名称"）を確認する |
+| `HolidayCalendarSourceError` | 祝日データの読み取りに失敗した | 内閣府の CSV の場合: 内閣府の仕様変更。管理者へ連絡する |
 | `HolidayCalendarFormatError` | 内閣府 CSV 以外のファイルや壊れたファイルを内閣府 CSV として読み込もうとした | 内閣府の syukujitsu.csv を直接取得し直す。文字コードは CP932 (Shift_JIS) |
-| `HolidayCalendarExpiredError` | 祝日データの収録期間が今日の業務日付を超えている | 内閣府の祝日 CSV を更新する（自動取得の場合は次の実行で反映される）、または管理表に直近の祝日を追加する |
+| `HolidayCalendarExpiredError` | 祝日データの収録期間が今日の業務日付を超えている | 内閣府の祝日 CSV を更新する（自動取得の場合は次の実行で反映される） |
 | `HistoryWriteError` | 必須のダウンロード履歴を記録できなかった | 履歴CSVの保存先、共有サーバー接続、書込み権限を確認する |
 | `HistoryLockTimeoutError` | ダウンロード履歴の排他ロックを待っても取得できなかった | 同時実行中の処理が終わるのを待って再実行する。繰り返す場合は共有サーバーを確認する |
 | `HistoryHeaderMismatchError` | ダウンロード履歴CSVの見出しが現在の定義と一致しない | 履歴CSVの1行目を確認する。列を手で変更していた場合は元へ戻し、古い形式の履歴なら別名へ退避してから再実行する |
@@ -150,7 +152,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `ReportFolderNotFoundError` | 管理表に書かれた保存先のフォルダが無い | 管理表の「保存先」を確認する。共有フォルダなら、つながっているか・権限があるかも確認する |
 | `ScheduledDownloadFailedError` | 定期取得で1件以上が失敗した | 履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。急いで必要なものは download_report() でその場で取得する |
 | `TransferDestinationMultipleMatchError` | 転記先のキーに一致する行が複数ある | mapping の先頭列に対応する転記先列の値を一意にする。キーが ``None`` か ``""`` の行は突合対象外なので、空欄のキーが複数あってもこの例外は出ない。 |
-| `LoggingAlreadyConfiguredError` | root logger がすでに設定されている | setup() または local() はアプリの入口で1回だけ呼ぶ。実行基盤がログを設定する場合は呼ばない。 |
+| `LoggingAlreadyConfiguredError` | root logger がすでに設定されている | setup_logging() または setup_local_logging() はアプリの入口で1回だけ呼ぶ。実行基盤がログを設定する場合は呼ばない。 |
 | `LoggingConflictError` | root logger に comken 以外の handler が設定されている | 上の handler 一覧をそのままライブラリの管理者へ連絡してください（連絡先は環境ごとに異なるので、ここには書かない）。やむを得ず共存させたい場合は、呼び出し時に ``allow_existing=True``を指定すれば処理は続きますが、comken のハンドラーが追加されることで既存ライブラリのログが**二重**に出たり、出力先が想定と変わる可能性があります。 |
 | `LogRootNotConfiguredError` | LoggerSite の LOG_ROOT が設定されていない | サブクラスに ``LOG_ROOT = "\\server\share\logs"`` を1行追加する（絶対パスまたは UNC 文字列。LOG_FOLDER_NAMES のフォルダ名はこの下に作られる）。 |
 | `FileNotFoundError` | ファイルが見つからない | ファイルの置き場所と名前を確認する。「今日の日付のファイル」を探す処理なら、今日のファイルが作られているか確認する |

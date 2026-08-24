@@ -10,6 +10,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from comken.core.timer import measure
 from comken.internal.base import InternalLibraryBase, ModuleType
 from comken.internal.names import INTERNAL_LIBRARY_ROOT
 
@@ -24,12 +25,14 @@ def _call(rpa: ModuleType, target: str, main: Callable[[], Any], project_name: s
     return getattr(rpa, target).rpta(main, project_name)
 
 
+@measure
 def backoffice(main: Callable[[], Any], project_name: str) -> Any:
     """バックオフィスの RPA として main を実行する。"""
     with InternalLibraryBase(RPA_LIBRARY_NAME) as rpa:
         return _call(rpa, "backoffice", main, project_name)
 
 
+@measure
 def intranet(main: Callable[[], Any], project_name: str) -> Any:
     """イントラネットの RPA として main を実行する。"""
     with InternalLibraryBase(RPA_LIBRARY_NAME) as rpa:

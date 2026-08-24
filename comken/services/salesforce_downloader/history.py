@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from comken.core.clock import now, today
+from comken.core.timer import measure
 from comken.exceptions import HistoryHeaderMismatchError, HistoryWriteError
 from comken.services.salesforce_downloader.history_file_lock import HistoryFileLock
 from comken.services.salesforce_downloader.master import ReportEntry
@@ -80,6 +81,7 @@ def _stage(value: bool | None) -> str:
     return SUCCESS if value else FAILURE
 
 
+@measure
 def record(
     path: str | Path,
     *,
@@ -128,6 +130,7 @@ def record(
         raise HistoryWriteError(path, str(exc)) from exc
 
 
+@measure
 def downloaded_today(
     path: str | Path,
     report_key: str,
@@ -153,6 +156,7 @@ def downloaded_today(
     return bool(successful_files_today(path, report_key, (trigger,), date))
 
 
+@measure
 def successful_files_today(
     path: str | Path,
     report_key: str,

@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from comken.core import logger
-from comken.core.logger import Backoffice, Intranet, local, setup
+from comken.core.logger import Backoffice, Intranet, setup_local_logging, setup_logging
 from comken.core.logger.environment import (
     CONSOLE_HANDLER_NAME,
     ENVIRONMENT_HANDLER_NAME,
@@ -20,7 +20,7 @@ from comken.core.logger.environment import (
     _format_external_handlers,
 )
 from comken.core.logger.environment import (
-    setup as environment_setup,
+    setup_logging as environment_setup_logging,
 )
 from comken.core.logger.site import LoggerSite
 from comken.exceptions import (
@@ -78,11 +78,11 @@ def _prepare_site(
 
 class TestSetup:
     def test_package_exports_implementation_directly(self):
-        assert logger.setup is environment_setup
+        assert logger.setup_logging is environment_setup_logging
 
     def test_backoffice_adds_root_handlers(self, isolated_logging, tmp_path, monkeypatch):
         log_dir = _prepare_site(monkeypatch, tmp_path)
-        setup(Backoffice)
+        setup_logging(Backoffice)
         assert len(isolated_logging.handlers) == 2
         assert {handler.name for handler in isolated_logging.handlers} == {
             CONSOLE_HANDLER_NAME,
@@ -92,20 +92,20 @@ class TestSetup:
 
     def test_intranet_uses_its_name(self, isolated_logging, tmp_path, monkeypatch):
         log_dir = _prepare_site(monkeypatch, tmp_path)
-        setup(Intranet)
+        setup_logging(Intranet)
         assert (log_dir / "intranet-2026-08-21.log").exists()
 
     def test_second_call_raises(self, isolated_logging, tmp_path, monkeypatch):
         _prepare_site(monkeypatch, tmp_path)
-        setup(Backoffice)
+        setup_logging(Backoffice)
         with pytest.raises(LoggingAlreadyConfiguredError):
-            setup(Backoffice)
+            setup_logging(Backoffice)
 
     def test_existing_handler_raises(self, isolated_logging):
         isolated_logging.handlers.clear()
         isolated_logging.addHandler(logging.StreamHandler())
         with pytest.raises(LoggingConflictError):
-            setup(Backoffice)
+            setup_logging(Backoffice)
 
     def test_missing_owner_raises(self, isolated_logging):
         isolated_logging.handlers.clear()
@@ -114,7 +114,7 @@ class TestSetup:
             NAME = "missing"
 
         with pytest.raises(SiteOwnerRequiredError):
-            setup(OwnerMissing)
+            setup_logging(OwnerMissing)
 
     def test_missing_log_root_raises_before_creating_files(
         self, isolated_logging, tmp_path, monkeypatch
@@ -129,14 +129,14 @@ class TestSetup:
         )
 
         with pytest.raises(LogRootNotConfiguredError):
-            setup(Backoffice)
+            setup_logging(Backoffice)
 
         # 空フォルダすら作られていないことを確認（運用側に空フォルダを残さない）。
         assert list(tmp_path.iterdir()) == []
 
     def test_output_includes_process_id(self, isolated_logging, tmp_path, monkeypatch):
         _prepare_site(monkeypatch, tmp_path)
-        setup(Backoffice)
+        setup_logging(Backoffice)
         logging.getLogger("sample").info("done")
         file_handler = next(
             handler
@@ -165,7 +165,7 @@ class TestSetup:
         )
         monkeypatch.setattr("comken.core.logger.environment.today", lambda: date(2026, 8, 21))
 
-        setup(Backoffice)
+        setup_logging(Backoffice)
 
         assert (tmp_path / "test-folder" / "backoffice-2026-08-21.log").exists()
 
@@ -175,7 +175,7 @@ class TestSetup:
         # 登録側のキーを実際のホスト名（小文字）と別の文字列へ差し替え。
         monkeypatch.setattr(Backoffice, "LOG_FOLDER_NAMES", {"no-such-host": "real-folder"})
 
-        setup(Backoffice)
+        setup_logging(Backoffice)
 
         assert (tmp_path / ETC_FOLDER_NAME / "backoffice-2026-08-21.log").exists()
         # 登録したフォルダには書かれない。
@@ -198,14 +198,14 @@ class TestSetup:
             "LOG_FOLDER_NAMES",
             {hostname: r"C:\wrong\place"},
         )
-        setup(Backoffice)
+        setup_logging(Backoffice)
         # 通常フォルダと C:\wrong\place は作らず、_etc_ に書かれる。
         assert not (tmp_path / "normal-folder").exists()
         assert (tmp_path / ETC_FOLDER_NAME / "backoffice-2026-08-21.log").exists()
 
     def test_writes_japanese_as_utf8(self, isolated_logging, tmp_path, monkeypatch):
         _prepare_site(monkeypatch, tmp_path)
-        setup(Backoffice)
+        setup_logging(Backoffice)
         logging.getLogger("sample").info("処理が完了しました")
         file_handler = next(
             handler
@@ -218,7 +218,7 @@ class TestSetup:
 
 class TestLocal:
     def test_package_exports_implementation_directly(self):
-        assert logger.local is local_module.local
+        assert logger.setup_local_logging is local_module.setup_local_logging
 
     def _prepare(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         logging.getLogger().handlers.clear()
@@ -227,7 +227,7 @@ class TestLocal:
 
     def test_default_path(self, isolated_logging, tmp_path, monkeypatch):
         self._prepare(monkeypatch, tmp_path)
-        local()
+        setup_local_logging()
         assert (tmp_path / "logs" / "local-2026-08-21.log").exists()
         assert {handler.name for handler in isolated_logging.handlers} == {
             CONSOLE_HANDLER_NAME,
@@ -236,7 +236,7 @@ class TestLocal:
 
     def test_console_level_can_be_debug(self, isolated_logging, tmp_path, monkeypatch):
         self._prepare(monkeypatch, tmp_path)
-        result = local(console_level=logger.DEBUG)
+        result = setup_local_logging(console_level=logging.DEBUG)
         stream_handler = next(
             handler
             for handler in isolated_logging.handlers
@@ -254,7 +254,7 @@ class TestLocal:
 
     def test_file_level_can_be_debug(self, isolated_logging, tmp_path, monkeypatch):
         self._prepare(monkeypatch, tmp_path)
-        local(file_level=logger.DEBUG)
+        setup_local_logging(file_level=logging.DEBUG)
         stream_handler = next(
             handler
             for handler in isolated_logging.handlers
@@ -272,17 +272,17 @@ class TestLocal:
     def test_custom_path(self, isolated_logging, tmp_path, monkeypatch):
         self._prepare(monkeypatch, tmp_path)
         custom_path = tmp_path / "custom" / "logs"
-        local(path=custom_path)
+        setup_local_logging(path=custom_path)
         assert (custom_path / "local-2026-08-21.log").exists()
 
     def test_relative_path_uses_project_dir(self, isolated_logging, tmp_path, monkeypatch):
         self._prepare(monkeypatch, tmp_path)
-        local(path="custom-logs")
+        setup_local_logging(path="custom-logs")
         assert (tmp_path / "custom-logs" / "local-2026-08-21.log").exists()
 
     def test_after_setup_reuses_console(self, isolated_logging, tmp_path, monkeypatch):
         log_dir = _prepare_site(monkeypatch, tmp_path)
-        setup(Backoffice)
+        setup_logging(Backoffice)
         console_handler = next(
             handler
             for handler in isolated_logging.handlers
@@ -292,7 +292,7 @@ class TestLocal:
 
         monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
         monkeypatch.setattr(local_module, "today", lambda: date(2026, 8, 21))
-        local(console_level=logging.DEBUG, file_level=logging.WARNING)
+        setup_local_logging(console_level=logging.DEBUG, file_level=logging.WARNING)
 
         assert len(isolated_logging.handlers) == 3
         assert isolated_logging.handlers.count(console_handler) == 1
@@ -306,13 +306,13 @@ class TestLocal:
         assert (log_dir / "backoffice-2026-08-21.log").exists()
 
     def test_local_then_setup_reuses_console(self, isolated_logging, tmp_path, monkeypatch):
-        """local() → setup() の順でも動き、console は二重にならない。"""
+        """setup_local_logging() → setup_logging() の順でも動き、console は二重にならない。"""
         _prepare_site(monkeypatch, tmp_path)
         monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
         monkeypatch.setattr(local_module, "today", lambda: date(2026, 8, 21))
 
-        local(console_level=logging.DEBUG, file_level=logging.WARNING)
-        setup(Backoffice)
+        setup_local_logging(console_level=logging.DEBUG, file_level=logging.WARNING)
+        setup_logging(Backoffice)
 
         assert {handler.name for handler in isolated_logging.handlers} == {
             CONSOLE_HANDLER_NAME,
@@ -326,32 +326,34 @@ class TestLocal:
             h for h in isolated_logging.handlers if h.name == ENVIRONMENT_HANDLER_NAME
         )
         local_handler = next(h for h in isolated_logging.handlers if h.name == LOCAL_HANDLER_NAME)
-        # local() が決めた console_level を setup() が上書きしない。
+        # setup_local_logging() が決めた console_level を setup_logging() が上書きしない。
         assert console_handler.level == logging.DEBUG
         assert environment_handler.level == logging.INFO
         assert local_handler.level == logging.WARNING
 
     def test_setup_then_local_then_setup_raises(self, isolated_logging, tmp_path, monkeypatch):
-        """setup() → local() → setup() の順は 3 つ目を足す操作なので例外。"""
+        """setup_logging() → setup_local_logging() → setup_logging() の順は
+        3 つ目を足す操作なので例外。"""
         _prepare_site(monkeypatch, tmp_path)
-        setup(Backoffice)
+        setup_logging(Backoffice)
         monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
         monkeypatch.setattr(local_module, "today", lambda: date(2026, 8, 21))
-        local()
+        setup_local_logging()
 
         with pytest.raises(LoggingAlreadyConfiguredError):
-            setup(Backoffice)
+            setup_logging(Backoffice)
 
     def test_setup_then_local_then_local_raises(self, isolated_logging, tmp_path, monkeypatch):
-        """setup() → local() → local() の順も 3 つ目を足す操作なので例外。"""
+        """setup_logging() → setup_local_logging() → setup_local_logging() の順も
+        3 つ目を足す操作なので例外。"""
         _prepare_site(monkeypatch, tmp_path)
-        setup(Backoffice)
+        setup_logging(Backoffice)
         monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
         monkeypatch.setattr(local_module, "today", lambda: date(2026, 8, 21))
-        local()
+        setup_local_logging()
 
         with pytest.raises(LoggingAlreadyConfiguredError):
-            local()
+            setup_local_logging()
 
     def test_unknown_handler_configuration_raises(self, isolated_logging):
         console_handler = logging.StreamHandler()
@@ -363,35 +365,37 @@ class TestLocal:
 
         try:
             with pytest.raises(LoggingConflictError):
-                local()
+                setup_local_logging()
         finally:
             isolated_logging.removeHandler(unknown_file_handler)
             unknown_file_handler.close()
 
-    def test_external_handler_raises_at_setup(self, isolated_logging, tmp_path, monkeypatch):
-        """外部ハンドラーが混ざっている状態で setup() を呼ぶと例外。"""
+    def test_external_handler_raises_at_setup_logging(
+        self, isolated_logging, tmp_path, monkeypatch
+    ):
+        """外部ハンドラーが混ざっている状態で setup_logging() を呼ぶと例外。"""
         _prepare_site(monkeypatch, tmp_path)
         external = logging.StreamHandler()
         external.set_name("external.library")
         isolated_logging.addHandler(external)
         try:
             with pytest.raises(LoggingConflictError):
-                setup(Backoffice)
+                setup_logging(Backoffice)
         finally:
             isolated_logging.removeHandler(external)
             external.close()
 
     def test_second_call_raises(self, isolated_logging, tmp_path, monkeypatch):
         self._prepare(monkeypatch, tmp_path)
-        local()
+        setup_local_logging()
         with pytest.raises(LoggingAlreadyConfiguredError):
-            local()
+            setup_local_logging()
 
-    def test_external_handler_raises_at_local(self, isolated_logging):
+    def test_external_handler_raises_at_setup_local_logging(self, isolated_logging):
         isolated_logging.addHandler(logging.StreamHandler())
         try:
             with pytest.raises(LoggingConflictError):
-                local()
+                setup_local_logging()
         finally:
             for h in isolated_logging.handlers[:]:
                 isolated_logging.removeHandler(h)
@@ -399,7 +403,7 @@ class TestLocal:
 
     def test_output_includes_process_id(self, isolated_logging, tmp_path, monkeypatch):
         self._prepare(monkeypatch, tmp_path)
-        local()
+        setup_local_logging()
         module_logger = logging.getLogger("sample.module")
         module_logger.info("done")
         file_handler = next(
@@ -413,9 +417,10 @@ class TestLocal:
         assert "sample.module: done" in text
 
     def test_root_level_is_min_of_own_handlers_alone(self, isolated_logging, tmp_path, monkeypatch):
-        """local() 単独呼び出しで root level は INFO（=自分の handler の min）になる。"""
+        """setup_local_logging() 単独呼び出しで root level は INFO
+        （=自分の handler の min）になる。"""
         self._prepare(monkeypatch, tmp_path)
-        local()
+        setup_local_logging()
         assert isolated_logging.level == logging.INFO
 
     def test_root_level_uses_lower_of_console_and_file(
@@ -423,23 +428,24 @@ class TestLocal:
     ):
         """console_level と file_level が異なるとき、root は低い方になる。"""
         self._prepare(monkeypatch, tmp_path)
-        local(console_level=logging.WARNING, file_level=logging.DEBUG)
+        setup_local_logging(console_level=logging.WARNING, file_level=logging.DEBUG)
         assert isolated_logging.level == logging.DEBUG
 
         self._prepare(monkeypatch, tmp_path)
-        local(console_level=logging.DEBUG, file_level=logging.WARNING)
+        setup_local_logging(console_level=logging.DEBUG, file_level=logging.WARNING)
         assert isolated_logging.level == logging.DEBUG
 
     def test_root_level_after_setup_and_local_is_min_of_three(
         self, isolated_logging, tmp_path, monkeypatch
     ):
-        """setup() と local() が両方走った後は console / environment / local の min。"""
+        """setup_logging() と setup_local_logging() が両方走った後は
+        console / environment / local の min。"""
         _prepare_site(monkeypatch, tmp_path)
         monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
         monkeypatch.setattr(local_module, "today", lambda: date(2026, 8, 21))
 
-        local(console_level=logging.DEBUG, file_level=logging.WARNING)
-        setup(Backoffice)
+        setup_local_logging(console_level=logging.DEBUG, file_level=logging.WARNING)
+        setup_logging(Backoffice)
 
         # INFO (env), DEBUG (console), WARNING (local) → DEBUG
         assert isolated_logging.level == logging.DEBUG
@@ -453,12 +459,12 @@ class TestLocal:
         NOTSET(0) ハンドラーが混ざると root が NOTSET に巻き戻され、
         isEnabledFor() が DEBUG まで通す穴になっていた。
 
-        ここでは local() 内で local_file_handler が root に追加された直後に
+        ここでは setup_local_logging() 内で local_file_handler が root に追加された直後に
         外部 NOTSET ハンドラーが追加される状況を monkey-patch で再現する
         （実際の経路: setup 後に import 副作用でハンドラーが足される等）。
         """
         _prepare_site(monkeypatch, tmp_path)
-        setup(Backoffice)
+        setup_logging(Backoffice)
 
         external_handler = logging.StreamHandler()
         # logging.StreamHandler のデフォルト level は NOTSET(0)。
@@ -475,7 +481,7 @@ class TestLocal:
 
         monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
         monkeypatch.setattr(local_module, "today", lambda: date(2026, 8, 21))
-        local()
+        setup_local_logging()
 
         # 外部ハンドラーが root に付いていることを確認（テスト自体が穴を再現できているか）。
         assert external_handler in isolated_logging.handlers
@@ -500,14 +506,14 @@ class TestLoggingConflict:
     def test_setup_raises_logging_conflict_with_external_handler(
         self, isolated_logging, tmp_path, monkeypatch
     ):
-        """外部ハンドラーがある状態で setup() を呼ぶと LoggingConflictError。"""
+        """外部ハンドラーがある状態で setup_logging() を呼ぶと LoggingConflictError。"""
         _prepare_site(monkeypatch, tmp_path)
         external = logging.StreamHandler()
         external.set_name("external.library")
         isolated_logging.addHandler(external)
         try:
             with pytest.raises(LoggingConflictError):
-                setup(Backoffice)
+                setup_logging(Backoffice)
         finally:
             isolated_logging.removeHandler(external)
             external.close()
@@ -522,7 +528,7 @@ class TestLoggingConflict:
         isolated_logging.addHandler(external)
         try:
             with pytest.raises(LoggingConflictError) as excinfo:
-                setup(Backoffice)
+                setup_logging(Backoffice)
             assert "StreamHandler" in str(excinfo.value)
             assert "external.library" in str(excinfo.value)
         finally:
@@ -540,7 +546,7 @@ class TestLoggingConflict:
         isolated_logging.addHandler(external)
         try:
             with pytest.raises(LoggingConflictError) as excinfo:
-                setup(Backoffice)
+                setup_logging(Backoffice)
             assert "FileHandler" in str(excinfo.value)
             assert str(external_path) in str(excinfo.value)
         finally:
@@ -548,25 +554,25 @@ class TestLoggingConflict:
             external.close()
 
     def test_local_raises_logging_conflict_with_external_handler(self, isolated_logging):
-        """外部ハンドラーがある状態で local() を呼んでも LoggingConflictError。"""
+        """外部ハンドラーがある状態で setup_local_logging() を呼んでも LoggingConflictError。"""
         external = logging.StreamHandler()
         external.set_name("external.library")
         isolated_logging.addHandler(external)
         try:
             with pytest.raises(LoggingConflictError):
-                local()
+                setup_local_logging()
         finally:
             isolated_logging.removeHandler(external)
             external.close()
 
     def test_local_conflict_message_contains_handler_info(self, isolated_logging):
-        """local() でも例外メッセージに既存ハンドラーの情報が含まれる。"""
+        """setup_local_logging() でも例外メッセージに既存ハンドラーの情報が含まれる。"""
         external = logging.StreamHandler()
         external.set_name("external.library")
         isolated_logging.addHandler(external)
         try:
             with pytest.raises(LoggingConflictError) as excinfo:
-                local()
+                setup_local_logging()
             assert "StreamHandler" in str(excinfo.value)
             assert "external.library" in str(excinfo.value)
         finally:
@@ -595,7 +601,7 @@ class TestLoggingConflict:
             root_logger.addHandler(external)
             root_logger.addHandler(capture)
 
-            setup(Backoffice, allow_existing=True)
+            setup_logging(Backoffice, allow_existing=True)
 
             # comken の handler が両方追加されている
             assert {h.name for h in root_logger.handlers} >= {
@@ -617,7 +623,8 @@ class TestLoggingConflict:
     def test_local_allow_existing_proceeds_with_warning(
         self, tmp_path, monkeypatch
     ):
-        """local() でも allow_existing=True なら外部ハンドラーがあっても処理が続行し警告が出る。
+        """setup_local_logging() でも allow_existing=True なら外部ハンドラーが
+        あっても処理が続行し警告が出る。
 
         詳細は ``test_setup_allow_existing_proceeds_with_warning`` を参照。
         """
@@ -630,11 +637,11 @@ class TestLoggingConflict:
         capture = _LogCapture()
         capture.setLevel(logging.WARNING)
         try:
-            self._prepare_local(monkeypatch, tmp_path)
+            self._prepare_setup_local_logging(monkeypatch, tmp_path)
             root_logger.addHandler(external)
             root_logger.addHandler(capture)
 
-            local(allow_existing=True)
+            setup_local_logging(allow_existing=True)
 
             assert {h.name for h in root_logger.handlers} >= {
                 CONSOLE_HANDLER_NAME,
@@ -654,20 +661,20 @@ class TestLoggingConflict:
     ):
         """allow_existing=True でも comken が1度呼ばれた状態では例外のまま。"""
         _prepare_site(monkeypatch, tmp_path)
-        setup(Backoffice)
+        setup_logging(Backoffice)
 
         with pytest.raises(LoggingAlreadyConfiguredError):
-            setup(Backoffice, allow_existing=True)
+            setup_logging(Backoffice, allow_existing=True)
 
     def test_local_allow_existing_still_raises_when_local_already_called(
         self, isolated_logging, tmp_path, monkeypatch
     ):
-        """allow_existing=True でも local() を2回呼ぶと例外のまま。"""
+        """allow_existing=True でも setup_local_logging() を2回呼ぶと例外のまま。"""
         TestLocal()._prepare(monkeypatch, tmp_path)
-        local()
+        setup_local_logging()
 
         with pytest.raises(LoggingAlreadyConfiguredError):
-            local(allow_existing=True)
+            setup_local_logging(allow_existing=True)
 
     def test_conflict_message_mentions_allow_existing_workaround(
         self, isolated_logging, tmp_path, monkeypatch
@@ -683,7 +690,7 @@ class TestLoggingConflict:
         isolated_logging.addHandler(external)
         try:
             with pytest.raises(LoggingConflictError) as excinfo:
-                setup(Backoffice)
+                setup_logging(Backoffice)
             message = str(excinfo.value)
             assert "allow_existing=True" in message
         finally:
@@ -704,7 +711,7 @@ class TestLoggingConflict:
         isolated_logging.addHandler(external)
         try:
             with pytest.raises(LoggingConflictError) as excinfo:
-                setup(Backoffice)
+                setup_logging(Backoffice)
             message = str(excinfo.value)
             assert "管理者" in message
         finally:
@@ -764,7 +771,7 @@ class TestLoggingConflict:
             _prepare_site(monkeypatch, tmp_path)
             root_logger.addHandler(external)
 
-            setup(Backoffice, allow_existing=True)
+            setup_logging(Backoffice, allow_existing=True)
 
             # comken のファイル handler を取得し、ファイルを読み込む。
             file_handler = next(
@@ -791,7 +798,7 @@ class TestLoggingConflict:
     def test_local_allow_existing_writes_warning_to_comken_log_file(
         self, tmp_path, monkeypatch
     ):
-        """local() でも allow_existing=True の警告が comken のログファイルに残る。"""
+        """setup_local_logging() でも allow_existing=True の警告が comken のログファイルに残る。"""
         root_logger = logging.getLogger()
         original_handlers = root_logger.handlers[:]
         original_level = root_logger.level
@@ -800,10 +807,10 @@ class TestLoggingConflict:
         external.set_name("external.library")
         external_descriptions = _format_external_handlers([external])
         try:
-            self._prepare_local(monkeypatch, tmp_path)
+            self._prepare_setup_local_logging(monkeypatch, tmp_path)
             root_logger.addHandler(external)
 
-            local(allow_existing=True)
+            setup_local_logging(allow_existing=True)
 
             file_handler = next(
                 h
@@ -824,8 +831,8 @@ class TestLoggingConflict:
             external.close()
 
     @staticmethod
-    def _prepare_local(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-        """local() 用のテスト準備（TestLocal._prepare を流用）。"""
+    def _prepare_setup_local_logging(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """setup_local_logging() 用のテスト準備（TestLocal._prepare を流用）。"""
         logging.getLogger().handlers.clear()
         monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
         monkeypatch.setattr(local_module, "today", lambda: date(2026, 8, 21))

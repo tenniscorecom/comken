@@ -1,9 +1,13 @@
-# comken.toolbox.holidays — 祝日判定ライブラリ
+# comken.core.holidays — 祝日判定ライブラリ
 
 RPA 置き換えプロジェクトで「いま取るべきレポートか」を判定するために使う、
 内閣府の祝日 CSV を基にした祝日判定ライブラリ。
 
-`HolidayCalendar` 1 個に「内閣府の祝日」と「社内管理表の会社休日」をマージして
+実装本体は `comken.core.holidays/` 配下にある（外部ライブラリに依存しないため
+`core` 層へ移設済み）。`comken.toolbox.holidays` は旧パスからの
+後方互換 re-export のみで、**新規コードでは `comken.core.holidays` を使うこと**。
+
+`HolidayCalendar` 1 個に「内閣府の祝日」と「会社の休業日」をマージして
 持ち、`is_business_day()` でその日が営業日かを判定する。
 
 ## 最短の使い方
@@ -12,9 +16,9 @@ RPA 置き換えプロジェクトで「いま取るべきレポートか」を�
 from datetime import date
 from pathlib import Path
 
-from comken.toolbox.holidays import (
+from comken.core.holidays import (
     CabinetOfficeCSVSource,
-    ComkenMasterTableSource,
+    CompanyHolidaySource,
     HolidayCalendar,
     is_business_day,
 )
@@ -22,7 +26,7 @@ from comken.toolbox.holidays import (
 calendar = HolidayCalendar.from_sources(
     [
         CabinetOfficeCSVSource(),  # 既定: ~/.comken/holidays/syukujitsu.csv にキャッシュ
-        ComkenMasterTableSource(Path(r"\\server\share\管理表.xlsx")),
+        CompanyHolidaySource(),    # コード直書きの会社休日
     ]
 )
 
@@ -35,7 +39,8 @@ if is_business_day(date.today(), calendar=calendar):
 | ソース               | 概要                                                       | 必要なもの                |
 | -------------------- | ---------------------------------------------------------- | ------------------------- |
 | `CabinetOfficeCSVSource`   | 内閣府の `syukujitsu.csv` を URL から取得                  | `requests` （取得時のみ） |
-| `ComkenMasterTableSource`  | 社内管理表（Excel）の「会社休日」シート                     | `openpyxl` （既に依存）   |
+| `ComputedHolidaySource`    | 純粋計算で祝日を組み立てる（mokejp/holidays_jp MIT 由来）  | 標準ライブラリのみ        |
+| `CompanyHolidaySource`     | 会社の休業日をコードに直書きして返す                       | 標準ライブラリのみ        |
 
 内閣府 CSV は **CP932（Shift_JIS）** で配布され、列は
 「国民の祝日・休日月日」「国民の祝日・休日名称」。1 行目はヘッダーなので
@@ -44,21 +49,52 @@ if is_business_day(date.today(), calendar=calendar):
 ## キャッシュ
 
 `CabinetOfficeCSVSource` は `~/.comken/holidays/syukujitsu.csv` を既定の
-キャッシュ先とする（`cache_path` 引数で変更可）。TTL（既定 24 時間）内は
-キャッシュをそのまま使い、TTL 経過時のみダウンロードを試みる。
-**ダウンロードに失敗してもキャッシュが残っていれば警告ログのみで動く**。
+キャッシュ先とする（`cache_path` 引数で変更可）。キャッシュ済みのファイルが
+ある間はネットワークに出ない。**明示的に最新を取り直したいとき**は
+`source.refresh()` を呼ぶ。
 
 ```python
-from comken.toolbox.holidays import CabinetOfficeCSVSource
+from comken.core.holidays import CabinetOfficeCSVSource
 
 source = CabinetOfficeCSVSource(
     cache_path=Path("D:/work/cache/syukujitsu.csv"),
-    ttl_seconds=12 * 60 * 60,  # 半日に1回取り直す
 )
 ```
 
+内閣府のデータは年に数回しか変わらないので、TTL は設けていない。
+「年 1 回手動で同梱 CSV を更新する」運用が基本。
+
 `HolidayCalendar.is_business_day` などはネットに繋がらずに動くので、
 オフライン PC で requests が無いときも import は成功する。
+
+## 会社休日
+
+会社の休業日は `CompanyHolidaySource` で表す。コードに直書きするため、
+設定ファイルや管理表を編集する運用負荷が要らない。
+
+```python
+from comken.core.holidays import CompanyHolidaySource
+
+# 既定で 12/29-1/3 を「年末年始休暇」として休業扱い
+source = CompanyHolidaySource()
+```
+
+休業日を追加するときは `CompanyHolidaySource` と同じディレクトリの
+`company.py` 冒頭の定数を編集する:
+
+```python
+COMPANY_HOLIDAYS: Final[dict[str, tuple[tuple[int, int], ...]]] = {
+    "年末年始休暇": ((12, 29), (12, 30), (12, 31), (1, 1), (1, 2), (1, 3)),
+}
+
+# その年だけの臨時の休み。年月日で書く
+COMPANY_HOLIDAYS_EXTRA: Final[tuple[_dt.date, ...]] = ()
+```
+
+「年末年始休暇」のような**複数日まとめて 1 つ**の名称が要るときは
+`COMPANY_HOLIDAYS` のキーに `((月, 日), (月, 日), …)` のタプルを書く。
+1 日だけの休業は `((月, 日),)` のように 1 要素のタプルにする。
+年またぎ（12 月 → 1 月）も月日の連なりで書けばそのまま毎年適用される。
 
 ## 期限切れの警告
 
@@ -85,21 +121,146 @@ source = CabinetOfficeCSVSource(
 | `HolidayCalendar.from_csv(path)`  | 内閣府 CSV を直接読む最短ルート                             |
 | `HolidayCalendar.from_sources(...)` | 複数の `HolidaySource` をマージするルート                  |
 | `is_business_day(d, *, calendar)` | カレンダー指定で営業日かを返すモジュールレベル関数        |
+| `business_day_after(d, *, calendar)` | `d` より後で最初の営業日（`d` 自身を含まない）            |
+| `business_day_before(d, *, calendar)` | `d` より前で最初の営業日（`d` 自身を含まない）           |
+| `business_day_on_or_after(d, *, calendar)` | `d` 以降で最初の営業日（`d` を含む）           |
+| `business_day_on_or_before(d, *, calendar)` | `d` 以前で最初の営業日（`d` を含む）           |
+| `first_business_day_of_month(d, *, calendar)` | `d` の月の最初の営業日                      |
+| `last_business_day_of_month(d, *, calendar)`  | `d` の月の最後の営業日                      |
+| `nth_business_day_of_month(d, n, *, calendar)` | `d` の月の第 `n` 営業日（`n` は 1 始まり） |
+| `add_business_days(d, n, *, calendar)` | `d` から `n` 営業日後の日付（`n` が負なら前）           |
+| `BUSINESS_DAY_SEARCH_LIMIT`       | 「次の営業日」探索の上限日数（既定 400）                    |
 | `CabinetOfficeCSVSource`          | 内閣府 CSV を URL + キャッシュで取得する `HolidaySource`   |
-| `ComkenMasterTableSource`         | 社内管理表の「会社休日」シートを読む `HolidaySource`        |
 | `ComputedHolidaySource`           | 計算で祝日の和集合を返す `HolidaySource`（mokejp/holidays_jp MIT 由来） |
-| `HolidayCalendarError` 系         | 例外（`HolidayCalendarFetchError` / `HolidayCalendarSourceError` / `HolidayCalendarFormatError` / `HolidayCalendarExpiredError`） |
+| `CompanyHolidaySource`            | 会社独自の休業日（コード直書き）の `HolidaySource`         |
+| `HolidayCalendarError` 系         | 例外（`HolidayCalendarFetchError` / `HolidayCalendarSourceError` / `HolidayCalendarFormatError` / `HolidayCalendarExpiredError` / `BusinessDayNotFoundError`） |
 
 `HolidayCalendar.is_business_day` はキーワード専用 `skip_weekends=True` を持ち、
 `False` にすると土曜・日曜でも祝日でなければ「営業日」と判定する
 （振替休日を平日扱いしたいシナリオ用）。
+このフラグは `business_day_after` / `first_business_day_of_month` など、
+他の営業日オフセット計算にも同じキーワード専用で渡せる。
+
+### 営業日オフセットの選び方
+
+`after` / `before` は「その日を含まない」、`on_or_after` / `on_or_before` は
+「その日を含む」。営業日かどうかにかかわらず、必ずしも「その日が答え」に
+なるわけではないので、要件に合わせて選ぶ。
+
+```python
+from datetime import date
+from comken.core.holidays import (
+    HolidayCalendar,
+    business_day_after,
+    business_day_on_or_before,
+    last_business_day_of_month,
+    nth_business_day_of_month,
+)
+
+cal = HolidayCalendar(...)  # 構築は省略
+
+# 月末の最終営業日（例: 月末が土日祝なら直前の営業日）
+last_business_day_of_month(date(2026, 8, 20), calendar=cal)
+
+# 月初の営業日（例: 1日が土日祝なら翌営業日）
+first_business_day_of_month(date(2026, 8, 20), calendar=cal)
+
+# 第 3 営業日
+nth_business_day_of_month(date(2026, 8, 20), 3, calendar=cal)
+
+# 15 日、休みならその前の営業日
+business_day_on_or_before(date(2026, 8, 15), calendar=cal)
+
+# 8/20 の「翌営業日」。8/20 が営業日でも翌営業日が返る
+business_day_after(date(2026, 8, 20), calendar=cal)
+```
+
+`business_day_after(d)` は `d` 自身が営業日でも翌日以降を返す点に注意。
+「今日から 1 営業日後」を `add_business_days(d, 1)` で書いた場合は、
+`d` が営業日でも翌営業日（n 営業日分進む）が返る。
+「翌営業日」と「1 営業日後」は別物なので、目的に合わせて使い分ける。
+
+| 関数                    | `d` が営業日のとき | `d` が非営業日のとき         |
+| ----------------------- | ------------------ | ---------------------------- |
+| `business_day_after`    | `d` の次の営業日   | `d` より後で最初の営業日     |
+| `business_day_before`   | `d` の前の営業日   | `d` より前で最初の営業日     |
+| `business_day_on_or_after`  | `d` 自身       | `d` 以降で最初の営業日       |
+| `business_day_on_or_before` | `d` 自身       | `d` 以前で最初の営業日       |
+
+「`d` を含むかどうか」だけが違うので、「`d` が営業日のときにスキップして
+ほしくない」ケースは `on_or_*` を選ぶ。
+
+`nth_business_day_of_month` は月の初日から数えて `n` 番目の営業日。
+その月の営業日数を超える `n` を渡すと `BusinessDayNotFoundError`。
+その月に営業日が 1 日も無い月でも `BusinessDayNotFoundError`。
+
+`business_day_after` 系の探索は最大 `BUSINESS_DAY_SEARCH_LIMIT` 日
+（既定 400 日）で打ち切り、見つからなければ `BusinessDayNotFoundError` を送る。
+祝日データが壊れていたり、社内管理表に会社休日が広範囲に登録されていた
+ときの無限ループを防ぐため。
+
+## 既定カレンダー（`calendar` を省略する書き方）
+
+`is_business_day` / `business_day_after` / `last_business_day_of_month` などの
+**モジュール関数版**は `calendar=` を省略できる。省略時は「既定カレンダー」
+が使われ、利用者は `HolidayCalendar` を組み立てずに済む。
+
+```python
+from datetime import date
+from comken.core.holidays import (
+    is_business_day,
+    business_day_after,
+    nth_business_day_of_month,
+)
+
+if is_business_day(date.today()):           # 既定カレンダーで判定
+    ...
+
+nth_business_day_of_month(date.today(), 3)  # 今月の第 3 営業日
+```
+
+既定カレンダーは次の 3 つから組み立てる。**ネットワークには一切出ない。**
+
+1. `ComputedHolidaySource`（純粋計算。土台）
+2. 同梱の `comken/core/holidays/data/syukujitsu.csv`（内閣府の実値。計算式の上書き用）
+3. `CompanyHolidaySource`（会社の休業日。コード直書き）
+
+`CabinetOfficeCSVSource` は `requests` 依存・業務 PC の通信制限に阻まれる
+ため既定には含めない。**`comken.core` は `requests` を import しないので、
+オフライン環境・社内 BO 端末でも `from comken.core import is_business_day`
+がそのまま動く。**
+
+会社独自の年末年始などを追加したいプロジェクトは、起動時に
+`set_default_calendar()` を一度呼んで差し替える。
+
+```python
+from comken.core.holidays import (
+    HolidayCalendar,
+    ComputedHolidaySource,
+    CompanyHolidaySource,
+    set_default_calendar,
+)
+
+# 起動時に 1 回だけ呼ぶ
+my_calendar = HolidayCalendar.from_sources([
+    ComputedHolidaySource(),
+    CompanyHolidaySource(),
+])
+set_default_calendar(my_calendar)
+
+# 以降は calendar= なしで使える
+```
+
+`set_default_calendar(None)` でリセットすると、次回の呼び出しで
+既定の遅延生成に戻る。
 
 ## 注意事項
 
 - **祝日名は業務情報ではない**ため、ドキュメント・ログに出してよい
   （`docs/csv.md` の「値そのもの」の禁止とは別）。
-- 同じ日付に複数の祝日が登録されたときは**先勝ち + WARNING ログ**
-  （内閣府と管理表で重なったときに、後から来た方を黙って捨てない）。
+- 同じ日付に複数の祝日が登録されたときは**先勝ち**で採用される
+  （内閣府 CSV と会社の年末年始休暇など、複数 source が同じ日を
+  返すのは正常な状態）。
 - 内閣府 CSV 以外のファイル（シフト JIS でない・日付列が無いなど）を
   内閣府 CSV として読み込もうとすると `HolidayCalendarFormatError` で止める。
 
