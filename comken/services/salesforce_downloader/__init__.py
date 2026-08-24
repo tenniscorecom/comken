@@ -10,7 +10,7 @@ r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポー�
     SALES_RESULT = "1003"
 
     rows = download_report(CUSTOMER_LIST).read()                  # 今すぐ取りに行く
-    by_code = cached_report(SALES_RESULT).read().index("顧客コード")
+    by_code = cached_report(SALES_RESULT).index("顧客コード")
 
 **プロジェクトのコードに Salesforce の URL もレポート ID も書かない。** 書くのは
 管理番号だけで、参照先の差し替えは管理表を直せば済む（コードは変えない）。

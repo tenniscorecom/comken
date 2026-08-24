@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 
+from comken.core.table.model import Table
 from comken.exceptions import InvalidColumnError, KeyColumnNotFoundError
 
 
@@ -69,42 +70,64 @@ class RowChange:
 
 @dataclass
 class DiffResult:
-    """diff_rows の結果。"""
+    """diff_rows の結果。
 
-    added: list[dict]  # after にだけある行
-    removed: list[dict]  # before にだけある行
-    changed: list[RowChange]  # キーが一致して値が変わった行
+    なぜ added / removed が ``Table`` で changed が ``list[RowChange]`` なのか —
+    ``changed`` の1件は「変更前・変更後・差分列」の3つを抱えており、表の1行に収まらない
+    （同じ列名で2つの値を並べると区別できない）ため ``RowChange`` のリストのままで持つ。
+    一方 ``added`` / ``removed`` は表の行と同じ形なので ``Table`` へ揃え、
+    ``filter`` / ``select`` / ``count`` などの Table 標準の操作が直接使えるようにしてある。
+
+    この ``added`` / ``removed`` と ``TableComparison.only_in_read`` / ``only_in_write``
+    は名前こそ近いが別の系統で、前者は時系列の差分（昨日のデータ → 今日のデータ）、
+    後者は2つの表の突合（read 側と write 側）であり、方向の意味が違う。
+    1つに統一せず、用途が違うものは別の名前で持つのが正しい。``diff_rows`` は
+    時系列の差分なので ``added`` / ``removed`` の語彙を維持する。
+    """
+
+    added: Table  # after にだけある行（after の列構成）
+    removed: Table  # before にだけある行（before の列構成）
+    changed: list[RowChange]  # キーが一致して値が変わった行（変更前・変更後・差分列の3点セット）
 
 
 def diff_rows(
-    before: list[dict],
-    after: list[dict],
+    before: Table | list[dict],
+    after: Table | list[dict],
     key: str,
 ) -> DiffResult:
     """2つのデータセットをキー列で突合し、差分を返す。
 
     CSV と Excel をまたいだ比較にも使える（"1000" と 1000 は同一視される）。
     キーが重複する場合は後の行が優先される。
+
+    ``before`` / ``after`` には ``Table`` または辞書のリストを渡せる。
+    ``CSV.read()`` のように ``Table`` を返す API と組み合わせるときは ``Table`` を、
+    既存の ``list[dict]`` をそのまま渡すときはリストを指定する。戻り値の
+    ``added`` / ``removed`` は ``Table`` になり、``filter`` / ``select`` /
+    ``count`` などの Table 標準の操作が直接使える。
     Args:
-        before: 変更前のデータ（辞書のリスト）。
-        after: 変更後のデータ（辞書のリスト）。
+        before: 変更前のデータ（``Table`` または辞書のリスト）。
+        after: 変更後のデータ（``Table`` または辞書のリスト）。
         key: 行を一意に識別するキー列名。
 
     Returns:
-        DiffResult（added / removed / changed）。
+        DiffResult（``added`` / ``removed`` は ``Table``、``changed`` は ``list[RowChange]``）。
 
     Raises:
         KeyColumnNotFoundError: key で指定した列が存在しない場合。
     """
-    for rows in (before, after):
-        if rows and key not in rows[0]:
-            raise KeyColumnNotFoundError(key, list(rows[0].keys()))
+    before_rows, before_columns = _materialize(before)
+    after_rows, after_columns = _materialize(after)
 
-    before_by_key = {_normalize(row[key]): row for row in before}
-    after_by_key = {_normalize(row[key]): row for row in after}
+    for rows, columns in ((before_rows, before_columns), (after_rows, after_columns)):
+        if rows and key not in columns:
+            raise KeyColumnNotFoundError(key, columns)
 
-    added = [after_by_key[k] for k in after_by_key if k not in before_by_key]
-    removed = [before_by_key[k] for k in before_by_key if k not in after_by_key]
+    before_by_key = {_normalize(row[key]): row for row in before_rows}
+    after_by_key = {_normalize(row[key]): row for row in after_rows}
+
+    added_rows = [after_by_key[k] for k in after_by_key if k not in before_by_key]
+    removed_rows = [before_by_key[k] for k in before_by_key if k not in after_by_key]
     changed = []
     for k in before_by_key:
         if k not in after_by_key:
@@ -115,7 +138,20 @@ def diff_rows(
                 RowChange(key=k, before=before_by_key[k], after=after_by_key[k], columns=columns)
             )
 
-    return DiffResult(added=added, removed=removed, changed=changed)
+    return DiffResult(
+        added=Table(after_columns, added_rows),
+        removed=Table(before_columns, removed_rows),
+        changed=changed,
+    )
+
+
+def _materialize(data: Table | list[dict]) -> tuple[list[dict], list[str]]:
+    """``Table`` / ``list[dict]`` を (行リスト, 列名リスト) に揃える。"""
+    if isinstance(data, Table):
+        return data.read(), list(data.columns)
+    if data:
+        return list(data), list(data[0].keys())
+    return [], []
 
 
 def _normalize(value) -> str:

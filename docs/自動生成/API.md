@@ -307,6 +307,18 @@ class DiffResult:
 
 diff_rows の結果。
 
+なぜ added / removed が ``Table`` で changed が ``list[RowChange]`` なのか —
+``changed`` の1件は「変更前・変更後・差分列」の3つを抱えており、表の1行に収まらない
+（同じ列名で2つの値を並べると区別できない）ため ``RowChange`` のリストのままで持つ。
+一方 ``added`` / ``removed`` は表の行と同じ形なので ``Table`` へ揃え、
+``filter`` / ``select`` / ``count`` などの Table 標準の操作が直接使えるようにしてある。
+
+この ``added`` / ``removed`` と ``TableComparison.only_in_read`` / ``only_in_write``
+は名前こそ近いが別の系統で、前者は時系列の差分（昨日のデータ → 今日のデータ）、
+後者は2つの表の突合（read 側と write 側）であり、方向の意味が違う。
+1つに統一せず、用途が違うものは別の名前で持つのが正しい。``diff_rows`` は
+時系列の差分なので ``added`` / ``removed`` の語彙を維持する。
+
 ### `EXPIRING_WARNING_DAYS`
 
 公開定数。
@@ -1139,7 +1151,7 @@ Returns:
 ### `diff_rows`
 
 ```text
-def diff_rows(before: list[dict], after: list[dict], key: str) -> DiffResult:
+def diff_rows(before: Table | list[dict], after: Table | list[dict], key: str) -> DiffResult:
 ```
 
 #### 説明
@@ -1148,13 +1160,19 @@ def diff_rows(before: list[dict], after: list[dict], key: str) -> DiffResult:
 
 CSV と Excel をまたいだ比較にも使える（"1000" と 1000 は同一視される）。
 キーが重複する場合は後の行が優先される。
+
+``before`` / ``after`` には ``Table`` または辞書のリストを渡せる。
+``CSV.read()`` のように ``Table`` を返す API と組み合わせるときは ``Table`` を、
+既存の ``list[dict]`` をそのまま渡すときはリストを指定する。戻り値の
+``added`` / ``removed`` は ``Table`` になり、``filter`` / ``select`` /
+``count`` などの Table 標準の操作が直接使える。
 Args:
-    before: 変更前のデータ（辞書のリスト）。
-    after: 変更後のデータ（辞書のリスト）。
+    before: 変更前のデータ（``Table`` または辞書のリスト）。
+    after: 変更後のデータ（``Table`` または辞書のリスト）。
     key: 行を一意に識別するキー列名。
 
 Returns:
-    DiffResult（added / removed / changed）。
+    DiffResult（``added`` / ``removed`` は ``Table``、``changed`` は ``list[RowChange]``）。
 
 Raises:
     KeyColumnNotFoundError: key で指定した列が存在しない場合。
