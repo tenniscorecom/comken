@@ -105,24 +105,25 @@ class TestExcelAutomaticSave:
 
         path = tmp_path / "unc-like.xlsx"
         _book(path)
-        with (
-            patch.object(Excel, "_is_unc_path", return_value=True),
-            patch(
-                "comken.toolbox.excel.workbook.copy_to_local_if_large",
-                return_value=(path, None),
-            ) as copy_local,
-            Excel(path),
-        ):
-            pass
-        copy_local.assert_called_once()
 
+        # UNCパス（モック）と判定されたときは、作業コピーが作られる。
         with (
             patch.object(Excel, "_is_unc_path", return_value=True),
-            patch("comken.toolbox.excel.workbook.copy_to_local_if_large") as copy_local,
-            Excel(path, local_copy=False),
+            Excel(path) as excel,
         ):
-            pass
-        copy_local.assert_not_called()
+            assert excel._local_copy_path is not None
+            assert excel._local_copy_path.exists()
+
+        # local_copy=False を明示すれば、作業コピーを使わない。
+        with (
+            patch.object(Excel, "_is_unc_path", return_value=True),
+            Excel(path, local_copy=False) as excel,
+        ):
+            assert excel._local_copy_path is None
+
+        # 通常のパスで UNC判定モックが無効なら、コピーは走らない。
+        with Excel(path) as excel:
+            assert excel._local_copy_path is None
 
     def test_vba_change_in_temporary_book_keeps_original(self, tmp_path) -> None:
         path = tmp_path / "macro-check.xlsx"

@@ -1,7 +1,9 @@
 """comken/toolbox/excel/workbook.py — Excel ブックとデータ領域を操作する。"""
 
 import hashlib
+import os
 import shutil
+import tempfile
 from collections.abc import Callable, Mapping
 from datetime import datetime
 from pathlib import Path
@@ -31,7 +33,20 @@ from comken.toolbox.excel.sheet import Sheet
 
 Value: TypeAlias = str | int | float | bool | datetime
 _EXCEL_SUFFIXES = {".xlsx", ".xlsm", ".xltx", ".xltm"}
-_FORCED_LOCAL_COPY_THRESHOLD_MB = 0.000001
+
+
+def _force_local_copy(path: Path) -> tuple[Path, Path]:
+    """UNCパス上のブックを作業コピーへ複製し、``(working_path, tmp_path)`` を返す。
+
+    ``copy_to_local_if_large`` はサイズでコピーを判定するが、UNCパス指定時
+    （書き込み経路）はサイズに関わらず作業コピーを使うのが要件。保存時に
+    元へ書き戻す関係上、tmp のライフサイクルは呼び出し側が持つ。
+    """
+    fd, name = tempfile.mkstemp(suffix=path.suffix)
+    os.close(fd)
+    tmp_path = Path(name)
+    shutil.copy2(path, tmp_path)
+    return tmp_path, tmp_path
 
 
 class Excel:
@@ -53,8 +68,11 @@ class Excel:
         読み取り専用で開くか、書き込み用に開くかは引数 ``read_only`` で
         切り替える。利用者がエンジンを選ぶ必要はない。通常操作はOpenPyXLを使い、
         未計算の数式値の読取りとVBA実行だけ、一時的にExcel COMへ昇格する。
-        ``local_copy=None`` の既定ではUNCパスだけローカルコピーを使う。
-        ``True`` で強制、``False`` で無効化でき、保存先は常に元ファイルになる。
+        ``local_copy=None`` の既定では、書き込み時にUNCパスのブックだけ
+        一時作業コピーを使う（読み取り専用では UNC でもコピーしない。保存が無いため
+        「作業中だけローカルを使い、保存時に元へ戻す」契約を適用する場面がない）。
+        ``local_copy=True`` で強制、``local_copy=False`` で無効化でき、保存先は常に
+        元ファイルになる。
 
         ``read_only``、dry-run、またはwithブロックが例外で終わった場合は保存しない。
         """
@@ -63,10 +81,29 @@ class Excel:
             raise UnsupportedFileSuffixError(self.path, tuple(sorted(_EXCEL_SUFFIXES)))
         self._types = dict(types or {})
         self._read_only = read_only
-        self._local_copy_required = self._is_unc_path(source) if local_copy is None else local_copy
+        if local_copy is None:
+            # 読み取り専用は保存が無いため作業コピー（=後で元へ書き戻す中間ファイル）が
+            # 要らない。UNC でもネットワーク越しに直接読む（openpyxl の read_only
+            # ストリームはUNC でも安定して動作する）。
+            if read_only:
+                self._local_copy_required = False
+            else:
+                # 書き込み時は UNC でのみ作業コピーを挟む。ローカルドライブは
+                # そもそもネットワーク問題の起きない素の読み書きで十分。
+                self._local_copy_required = self._is_unc_path(source)
+        else:
+            self._local_copy_required = local_copy
         self._local_copy_path: Path | None = None
         self._working_path: Path = self.path
         self._working_copy_is_stale = False
+        # 通常 Workbook は遅延。read_only で stream だけで完結する経路
+        # (``read_computed_rows``) では開かれない。書き込みや Excel テーブル API
+        # が要求されたときだけ遅延オープンする。
+        self._workbook: Workbook | None = None
+        # 数式判定用の read_only ストリーム Workbook。``read_computed_rows`` 系の
+        # ホットパスから zip を 1 度しか読まないようキャッシュする。
+        self._stream_workbook: Workbook | None = None
+        self._stream_workbook_data_only: Workbook | None = None
         self._is_open = False
         self._is_closed = False
         self._is_dirty = False
@@ -76,25 +113,30 @@ class Excel:
         if self._is_open and not self._is_closed:
             return self
         if self._local_copy_required and self.path.exists():
-            # ネットワーク上のブックを直接扱うと OpenPyXL/Excel の I/O が不安定に
-            # なることがある。作業中だけローカルを使い、保存時に元のパスへ戻す。
-            self._working_path, self._local_copy_path = copy_to_local_if_large(
-                self.path, threshold_mb=_FORCED_LOCAL_COPY_THRESHOLD_MB
-            )
+            # NAS・ネットワークドライブ上のブックを直接扱うと OpenPyXL/Excel の I/O が
+            # 不安定になることがある。作業中だけローカルを使い、保存時に元のパスへ戻す。
+            # 仕様書 4.5 では「大きなブック」と書かれているが、UNC ではサイズに関わら
+            # ず全件コピーする（社内で扱うブックは小さく個別閾値を設ける実務的意義が薄い）。
+            self._working_path, self._local_copy_path = _force_local_copy(self.path)
         else:
             self._working_path = self.path
-        if self._working_path.exists():
-            self._workbook = load_workbook(
-                self._working_path,
-                # openpyxlのReadOnlyWorksheetはExcelテーブル定義を公開しないため、
-                # Table APIをread_onlyでも利用できるよう通常Worksheetで開く。
-                read_only=False,
-                keep_vba=self.path.suffix.casefold() in {".xlsm", ".xltm"},
-            )
+        if not self._read_only:
+            # 書き込み用ブックは __enter__ で必ず開く。``read_computed_rows`` のように
+            # メモリ上のセル値を参照する経路があるため。
+            if self._working_path.exists():
+                self._workbook = load_workbook(
+                    self._working_path,
+                    read_only=False,
+                    keep_vba=self.path.suffix.casefold() in {".xlsm", ".xltm"},
+                )
+            else:
+                self._workbook = Workbook()
         else:
-            if self._read_only:
+            # 読み取り専用では Workbook を遅延オープンする。``Sheet.table()`` や
+            # ``excel.sheet(...)._worksheet[...]`` のように通常Worksheetを要求する
+            # 経路は、その時点で ``_ensure_normal_workbook()`` が開く。
+            if not self._working_path.exists():
                 raise ExcelFileNotFoundError(self.path)
-            self._workbook = Workbook()
         self._is_open = True
         self._is_closed = False
         return self
@@ -111,7 +153,7 @@ class Excel:
 
     def sheet(self, name: str | None = None) -> "Sheet":
         """名前でシートを取得する。未存在の新規ブックでは最初のシートを改名する。"""
-        self._ensure_open()
+        self._ensure_normal_workbook()
         if name is None:
             display_sheets = [
                 sheet for sheet in self._workbook.sheetnames if not self._is_data_sheet_name(sheet)
@@ -129,7 +171,7 @@ class Excel:
 
     def data_sheet(self, name: str | None = None) -> "Sheet":
         """データシートを取得する。名前を省略できるのは1枚のときだけ。"""
-        self._ensure_open()
+        self._ensure_normal_workbook()
         names = self.list_data_sheets()
         if name is None:
             if len(names) != 1:
@@ -166,7 +208,7 @@ class Excel:
 
     def list_data_sheets(self) -> list[str]:
         """データシート名をブック内の順序で返す。"""
-        self._ensure_open()
+        self._ensure_normal_workbook()
         return [name for name in self._workbook.sheetnames if self._is_data_sheet_name(name)]
 
     def _read_range_with_com(
@@ -189,11 +231,22 @@ class Excel:
             if save and self._is_dirty:
                 self.save()
         finally:
-            self._workbook.close()
+            if self._workbook is not None:
+                self._workbook.close()
+            self._close_stream_workbook(self._stream_workbook)
+            self._close_stream_workbook(self._stream_workbook_data_only)
+            self._stream_workbook = None
+            self._stream_workbook_data_only = None
             self._is_closed = True
             self._is_open = False
             if self._local_copy_path is not None:
                 self._local_copy_path.unlink(missing_ok=True)
+
+    @staticmethod
+    def _close_stream_workbook(workbook: Workbook | None) -> None:
+        """read_only ストリームの Workbook をクローズする。None なら何もしない。"""
+        if workbook is not None:
+            workbook.close()
 
     @measure
     def save(self) -> None:
@@ -204,7 +257,7 @@ class Excel:
         この経路を残している。``save()`` の後に変更がなければ ``with`` 終了時に
         再保存はしない（``_is_dirty`` で判定）。
         """
-        self._ensure_open()
+        self._ensure_normal_workbook()
         if self._read_only or not self._is_dirty:
             return
         if is_dry_run():
@@ -290,12 +343,34 @@ class Excel:
         if not self._is_open or self._is_closed:
             raise TableNotOpenError("Excel")
 
+    def _ensure_normal_workbook(self) -> None:
+        """通常モード Workbook がまだなら遅延オープンする。
+
+        書き込み用 ``Excel`` では ``__enter__`` で既に開いている。``read_only`` の
+        Excel では ``Sheet.table()`` / セル属性アクセスなど Worksheet を必要とする
+        経路で呼ばれたときだけ開く。``read_only`` 経路の ``read_computed_rows`` は
+        このメソッドを呼ばないため、通常 Workbook を開かない。
+        """
+        self._ensure_open()
+        if self._workbook is not None:
+            return
+        if self._working_path.exists():
+            self._workbook = load_workbook(
+                self._working_path,
+                read_only=False,
+                keep_vba=self.path.suffix.casefold() in {".xlsm", ".xltm"},
+            )
+        else:
+            if self._read_only:
+                raise ExcelFileNotFoundError(self.path)
+            self._workbook = Workbook()
+
     def _mark_dirty(self) -> None:
         self._ensure_writable("書き込み")
         self._is_dirty = True
 
     def _ensure_writable(self, operation: str) -> None:
-        self._ensure_open()
+        self._ensure_normal_workbook()
         if self._read_only:
             raise ExcelReadOnlyOperationError(operation)
 
@@ -316,64 +391,186 @@ class Excel:
         if self._local_copy_path is not None:
             return
         if self.path.exists():
+            # 書き込み経路では UNC かどうかに関係なく作業コピーを用意する（既に使って
+            # いるケースに加え、読み取り専用 Excel でマクロを呼ぶ非常経路もここに来る）。
+            # 仕様書 4.5 と同じくサイズ無制限でコピーする。
             self._working_path, self._local_copy_path = copy_to_local_if_large(
-                self.path, threshold_mb=_FORCED_LOCAL_COPY_THRESHOLD_MB
+                self.path, threshold_mb=0
             )
+            # ``copy_to_local_if_large(threshold_mb=0)`` は ``(src, None)`` を返す
+            # 設計のため、UNC で確実にコピーするために ``_force_local_copy`` で
+            # 取り直す。
+            if self._local_copy_path is None:
+                self._working_path, self._local_copy_path = _force_local_copy(self.path)
             self._working_copy_is_stale = False
             return
-        import tempfile
-
-        suffix = self.path.suffix or ".xlsx"
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as temp_file:
-            self._working_path = Path(temp_file.name)
+        fd, name = tempfile.mkstemp(suffix=self.path.suffix or ".xlsx")
+        os.close(fd)
+        self._working_path = Path(name)
         self._local_copy_path = self._working_path
         self._working_copy_is_stale = False
 
     def _reload_workbook(self) -> None:
-        self._workbook.close()
+        """通常 Workbook と stream Workbook を再読込する（COM でのマクロ実行後など）。"""
+        if self._workbook is not None:
+            self._workbook.close()
+            self._workbook = None
+        self._close_stream_workbook(self._stream_workbook)
+        self._close_stream_workbook(self._stream_workbook_data_only)
+        self._stream_workbook = None
+        self._stream_workbook_data_only = None
         self._workbook = load_workbook(
             self._working_path,
             keep_vba=self.path.suffix.casefold() in {".xlsm", ".xltm"},
         )
 
+    def _open_stream_workbook(self, *, data_only: bool) -> Workbook:
+        """openpyxl の read_only ストリーム Workbook を遅延オープンして返す。
+
+        zip を一度しか読まないよう Workbook をキャッシュし、``close()`` で閉じる。
+        ``data_only`` の違いで別インスタンスを保持する。``_reload_workbook``
+        のタイミングで破棄される。
+        """
+        cache = self._stream_workbook_data_only if data_only else self._stream_workbook
+        if cache is not None:
+            return cache
+        workbook = load_workbook(
+            self._working_path,
+            read_only=True,
+            data_only=data_only,
+            keep_vba=self.path.suffix.casefold() in {".xlsm", ".xltm"},
+        )
+        if data_only:
+            self._stream_workbook_data_only = workbook
+        else:
+            self._stream_workbook = workbook
+        return workbook
+
     def _cached_rows(self, sheet_name: str, min_row: int) -> tuple[list[tuple[Any, ...]], bool]:
-        """キャッシュ値と数式を並べ、値がない数式だけをCOM昇格対象にする。"""
-        cached_workbook = load_workbook(self._working_path, data_only=True, read_only=True)
+        """キャッシュ値と数式を並べ、値がない数式だけをCOM昇格対象にする。
+
+        ``read_only`` の Excel で ``read_computed_rows`` だけを呼ぶ経路では
+        通常 Workbook を開かず、openpyxl のストリーム読みだけで値を取り出す。
+        数式が1つもないブックでは ``data_only=False`` の Workbook を開かない。
+        書き込み後の dirty 時 (``_is_dirty=True``) や作業ファイルがまだ無い
+        新規ブックではメモリ上の Workbook を読む（ストリームは古い値しか
+        持っていないため）。
+        """
+        if self._is_dirty or not self._working_path.exists():
+            return self._cached_rows_from_memory(sheet_name, min_row)
+        return self._cached_rows_from_stream(sheet_name, min_row)
+
+    def _cached_rows_from_memory(
+        self, sheet_name: str, min_row: int
+    ) -> tuple[list[tuple[Any, ...]], bool]:
+        """書き込み直後／新規ブック用: メモリ上の Workbook を読んで値と数式を返す。
+
+        ``Worksheet.iter_rows(values_only=True)`` で行ごとに値を流し、セル単位の
+        ``cell(row, column)`` 呼び出しを避けてオブジェクト生成コストを抑える。
+        """
+        self._ensure_normal_workbook()
+        formula_sheet = self._workbook[sheet_name]
+        rows: list[tuple[Any, ...]] = []
+        needs_com = False
+        for formula_row in formula_sheet.iter_rows(min_row=min_row, values_only=True):
+            row_tuple = tuple(formula_row)
+            rows.append(row_tuple)
+            for value in row_tuple:
+                # OpenPyXL で何かを書いた後は既存キャッシュが残っていても現在の値に
+                # 対応する保証がないので、Excel で再計算する。
+                if (
+                    isinstance(value, str)
+                    and value.startswith("=")
+                    and (value is None or self._is_dirty)
+                ):
+                    needs_com = True
+        return rows, needs_com
+
+    def _cached_rows_from_stream(
+        self, sheet_name: str, min_row: int
+    ) -> tuple[list[tuple[Any, ...]], bool]:
+        """通常時（read_only 含む）はストリームで読む。
+
+        ``ReadOnlyWorksheet.iter_rows(values_only=True)`` で行ごとに値を流す。
+        ``cell(row, column)`` でセルを1つずつ指すと ReadOnlyWorksheet が毎回
+        先頭から走査し直すため、行 × 列で二乗になる。イテレータなら前から1度
+        だけ流すので線形で済む。
+
+        セル値が ``None`` のときだけ ``data_only=False`` の Workbook を遅延
+        オープンして数式かどうかを判定するため、**数式が無いブックでは zip を
+        1 度しか読まない**。判定後に改めて数式側も ``iter_rows`` で同じ行から
+        流し、同じ位置のセルを突き合わせる。
+        """
+        cached_workbook = self._open_stream_workbook(data_only=True)
+        formula_workbook: Workbook | None = None
         try:
-            formula_sheet = self._workbook[sheet_name]
             cached_sheet = cached_workbook[sheet_name]
-            max_column = formula_sheet.max_column
-            rows: list[tuple[Any, ...]] = []
-            needs_com = False
-            for row_number in range(min_row, formula_sheet.max_row + 1):
-                cached_row = tuple(
-                    cached_sheet.cell(row=row_number, column=column).value
-                    for column in range(1, max_column + 1)
-                )
-                rows.append(cached_row)
-                for column, cached_value in enumerate(cached_row, start=1):
-                    formula = formula_sheet.cell(row=row_number, column=column).value
-                    is_uncalculated_formula = (
-                        isinstance(formula, str)
-                        and formula.startswith("=")
-                        # OpenPyXLで何かを書いた後は、既存キャッシュが残っていても
-                        # 現在の値に対応する保証がないのでExcelで再計算する。
-                        and (cached_value is None or self._is_dirty)
-                    )
-                    if is_uncalculated_formula:
-                        needs_com = True
-            return rows, needs_com
+            rows, any_none = self._collect_cached_rows(cached_sheet, min_row)
+            if not any_none:
+                return rows, False
+            formula_workbook = self._open_stream_workbook(data_only=False)
+            formula_sheet = formula_workbook[sheet_name]
+            new_rows, needs_com = self._mark_uncalculated_formulas(rows, formula_sheet, min_row)
+            return new_rows, needs_com
         finally:
             cached_workbook.close()
+            if formula_workbook is not None:
+                formula_workbook.close()
+
+    @staticmethod
+    def _collect_cached_rows(
+        cached_sheet: Worksheet, min_row: int
+    ) -> tuple[list[tuple[Any, ...]], bool]:
+        """``data_only=True`` の値を ``min_row`` から流し、None セルがあるか返す。"""
+        rows: list[tuple[Any, ...]] = []
+        any_none = False
+        for cached_row in cached_sheet.iter_rows(min_row=min_row, values_only=True):
+            row_tuple = tuple(cached_row)
+            rows.append(row_tuple)
+            if not any_none:
+                for value in row_tuple:
+                    if value is None:
+                        any_none = True
+                        break
+        return rows, any_none
+
+    @staticmethod
+    def _mark_uncalculated_formulas(
+        rows: list[tuple[Any, ...]],
+        formula_sheet: Worksheet,
+        min_row: int,
+    ) -> tuple[list[tuple[Any, ...]], bool]:
+        """数式側ストリームを流し、``rows`` の None セルのうち数式を ``needs_com`` に積む。"""
+        new_rows: list[tuple[Any, ...]] = []
+        needs_com = False
+        for cached_row, formula_row in zip(
+            rows, formula_sheet.iter_rows(min_row=min_row, values_only=True), strict=False
+        ):
+            formula_tuple = tuple(formula_row)
+            # cached 側と formula 側で行長が違う場合（末尾の空セル等）に
+            # 備えて cached 側に合わせる。
+            if len(formula_tuple) < len(cached_row):
+                formula_tuple = formula_tuple + (None,) * (len(cached_row) - len(formula_tuple))
+            new_row: list[Any] = []
+            for cached_value, formula_value in zip(cached_row, formula_tuple, strict=False):
+                if (
+                    cached_value is None
+                    and isinstance(formula_value, str)
+                    and formula_value.startswith("=")
+                ):
+                    # 未計算の数式セル: COM で再計算する
+                    needs_com = True
+                new_row.append(cached_value)
+            new_rows.append(tuple(new_row))
+        return new_rows, needs_com
 
     def _cached_range(
         self, sheet_name: str, min_col: int, min_row: int, max_col: int, max_row: int
     ) -> tuple[list[tuple[Any, ...]], bool]:
         """実テーブル範囲の保存済み計算値と、COM再計算の要否を返す。"""
-        if self._working_copy_is_stale:
-            self._sync_working_file()
-        formula_sheet = self._workbook[sheet_name]
         if self._is_dirty or not self._working_path.exists():
+            self._ensure_normal_workbook()
+            formula_sheet = self._workbook[sheet_name]
             rows = [
                 tuple(
                     formula_sheet.cell(row=row_number, column=column).value
@@ -385,28 +582,31 @@ class Excel:
                 isinstance(value, str) and value.startswith("=") for row in rows for value in row
             )
             return rows, needs_com
-        cached_workbook = load_workbook(self._working_path, data_only=True, read_only=True)
+        cached_workbook = self._open_stream_workbook(data_only=True)
+        formula_workbook: Workbook | None = None
         try:
             cached_sheet = cached_workbook[sheet_name]
-            rows: list[tuple[Any, ...]] = []
+            rows = []
             needs_com = False
             for row_number in range(min_row, max_row + 1):
-                row = tuple(
-                    cached_sheet.cell(row=row_number, column=column).value
-                    for column in range(min_col, max_col + 1)
-                )
-                rows.append(row)
-                for column, cached_value in zip(range(min_col, max_col + 1), row, strict=True):
-                    formula = formula_sheet.cell(row=row_number, column=column).value
-                    if (
-                        isinstance(formula, str)
-                        and formula.startswith("=")
-                        and (cached_value is None or self._is_dirty)
-                    ):
-                        needs_com = True
+                row_values = []
+                for column in range(min_col, max_col + 1):
+                    cached_value = cached_sheet.cell(row=row_number, column=column).value
+                    if cached_value is None:
+                        if formula_workbook is None:
+                            formula_workbook = self._open_stream_workbook(data_only=False)
+                        formula_value = (
+                            formula_workbook[sheet_name].cell(row=row_number, column=column).value
+                        )
+                        if isinstance(formula_value, str) and formula_value.startswith("="):
+                            needs_com = True
+                    row_values.append(cached_value)
+                rows.append(tuple(row_values))
             return rows, needs_com
         finally:
             cached_workbook.close()
+            if formula_workbook is not None:
+                formula_workbook.close()
 
     @staticmethod
     def _is_unc_path(path: str | Path) -> bool:
