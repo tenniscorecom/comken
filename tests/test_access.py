@@ -338,6 +338,48 @@ class TestAccessDatabase:
         recordset.GetRows.assert_called_with(1000)
         recordset.Close.assert_called_once()
 
+    def test_read_table_warns_when_rows_exceed_threshold(self, tmp_path, monkeypatch, caplog):
+        database, access = _database(tmp_path)
+        _set_sources(access, ["T_出力"])
+        recordset = access.CurrentDb.return_value.OpenRecordset.return_value
+        recordset.Fields.Count = 1
+        recordset.Fields.Item.return_value = MagicMock(Name="ID")
+        monkeypatch.setattr("comken.toolbox.access.handler._LARGE_TABLE_WARNING_THRESHOLD", 10)
+
+        def fake_read_rows(self, source):
+            for index in range(20):
+                yield {"ID": index}
+
+        monkeypatch.setattr(AccessDatabase, "read_rows", fake_read_rows)
+
+        with caplog.at_level(logging.WARNING, logger="comken.toolbox.access.handler"):
+            result = database.read_table("T_出力")
+
+        assert len(result) == 20
+        assert "AccessDatabase.read_table" in caplog.text
+        assert "20 行" in caplog.text
+        assert "read_rows()" in caplog.text
+
+    def test_read_table_does_not_warn_below_threshold(self, tmp_path, monkeypatch, caplog):
+        database, access = _database(tmp_path)
+        _set_sources(access, ["T_出力"])
+        recordset = access.CurrentDb.return_value.OpenRecordset.return_value
+        recordset.Fields.Count = 1
+        recordset.Fields.Item.return_value = MagicMock(Name="ID")
+        monkeypatch.setattr("comken.toolbox.access.handler._LARGE_TABLE_WARNING_THRESHOLD", 10)
+
+        def fake_read_rows(self, source):
+            for index in range(5):
+                yield {"ID": index}
+
+        monkeypatch.setattr(AccessDatabase, "read_rows", fake_read_rows)
+
+        with caplog.at_level(logging.WARNING, logger="comken.toolbox.access.handler"):
+            result = database.read_table("T_出力")
+
+        assert len(result) == 5
+        assert "大量データは" not in caplog.text
+
     def test_missing_source_lists_existing_names(self, tmp_path):
         database, access = _database(tmp_path)
         _set_sources(access, ["T_顧客"], ["Q_出力"])
