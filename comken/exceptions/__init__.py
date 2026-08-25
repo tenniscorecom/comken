@@ -94,7 +94,8 @@ ComkenError
 ├── TransferDestinationMultipleMatchError
 ├── ColumnNotFoundError
 │   ├── ExcelColumnNotFoundError
-│   └── KeyColumnNotFoundError
+│   ├── KeyColumnNotFoundError
+│   └── TransferSourceColumnNotFoundError
 ├── ConfigError
 │   ├── ConfigFileNotFoundError
 │   ├── ConfigCreatedFromExampleError
@@ -168,6 +169,7 @@ from comken.exceptions.column import (
     ExcelColumnNotFoundError,
     InvalidColumnError,
     KeyColumnNotFoundError,
+    TransferSourceColumnNotFoundError,
 )
 from comken.exceptions.config import (
     ConfigCreatedFromExampleError,
@@ -347,6 +349,7 @@ __all__ = [
     "ColumnNotFoundError",
     "ExcelColumnNotFoundError",
     "KeyColumnNotFoundError",
+    "TransferSourceColumnNotFoundError",
     "InvalidColumnError",
     "ConfigError",
     "ConfigFileNotFoundError",

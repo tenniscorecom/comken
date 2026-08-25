@@ -2139,6 +2139,10 @@ Raises:
 
 ## `from comken.core.holidays import ...`
 
+### `BUNDLED_CSV_PATH`
+
+公開定数。
+
 ### `BUSINESS_DAY_SEARCH_LIMIT`
 
 公開定数。
@@ -4004,6 +4008,31 @@ class KeyColumnNotFoundError(ColumnNotFoundError):
 
 ```text
 def __init__(self, key: str, existing: list[str]) -> None:
+```
+
+### `TransferSourceColumnNotFoundError`
+
+```text
+class TransferSourceColumnNotFoundError(ColumnNotFoundError):
+```
+
+#### 説明
+
+列名転記で、lookup の転記元列が見つからない
+
+comken 本体のソースからは送出されない。利用者プロジェクトから送出する想定。
+例外を定義して import するだけで使え、comken 内の利用は前提としない。
+``ExcelColumnNotFoundError`` と同じ位置づけ。
+
+発生箇所: 利用側プロジェクトの転記元列検証処理
+
+対処:
+    転記元データと config.ini のマッピング左側を確認する
+
+#### `__init__`
+
+```text
+def __init__(self, columns: list[str], existing: list[str]) -> None:
 ```
 
 ### `InvalidColumnError`
@@ -8727,12 +8756,20 @@ class CabinetOfficeCSVSource(HolidaySource, RefreshableHolidaySource):
 
 内閣府の ``syukujitsu.csv`` をダウンロードして ``Holiday`` の iterable を返す。
 
-初回 ``load()`` 時にキャッシュが無ければダウンロードし、あればキャッシュを返す。
-``refresh()`` を呼ぶと TTL に関係なく強制再取得する。
+初回 ``load()`` 時にキャッシュ（= 同梱 CSV）が無ければダウンロードし、
+あればキャッシュを返す。``refresh()`` を呼ぶと TTL に関係なく強制再取得する。
+
+**既定の保存先はライブラリ同梱の CSV**（``BUNDLED_CSV_PATH``）。
+共有サーバーの **読み取り専用チェックアウト** で ``load()`` /
+``refresh()`` を呼ぶと ``PermissionError`` で落ちる。
+そのときは **開発機で取得 → コミット → 共有サーバーへ checkout** で
+配布する（年 1 回の手動更新）。
 
 Args:
     url: 内閣府の CSV の URL。既定は ``syukujitsu.csv`` の配布 URL。
-    cache_path: ダウンロードした CSV の保存先。既定は ``~/.rpa/holidays/syukujitsu.csv``。
+    cache_path: ダウンロードした CSV の保存先。既定は ``BUNDLED_CSV_PATH``
+        （= ``comken/core/holidays/data/syukujitsu.csv``）。PC ごとの
+        キャッシュは廃止したので、通常は変更しない。
     encoding: CSV の文字コード。CP932（Shift_JIS）のままで良い。
     fetch_timeout_seconds: requests.get() のタイムアウト秒数。
     refresh_timeout_seconds: refresh() で使う短いタイムアウト秒数（業務フロー停止を防ぐ）。
@@ -8759,6 +8796,8 @@ Returns:
 
 Raises:
     HolidayCalendarFetchError: ダウンロードもキャッシュも読めない場合。
+        共有サーバーの読み取り専用チェックアウトで ``cache_path``
+        （既定は同梱 CSV）への書き込みに失敗したときもここに来る。
 
 #### `refresh`
 

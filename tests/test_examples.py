@@ -209,3 +209,30 @@ class TestCsvDateMove:
         assert not matching.exists()
         assert mismatching.exists()
         assert not (output_folder / mismatching.name).exists()
+
+
+class TestTableTransferDesign:
+    def test_writes_invoice_with_skip_and_unmatched(self, tmp_path, monkeypatch):
+        """Transfer.matched_rows / unmatched / apply_mapping を使ったサンプルが
+        Excel 出力を作る。matched_rows で continue した行は除かれ、
+        read にしか無い行は新規追加、write にしか無い行は「転記元に無し」と
+        印が付けられる。
+        """
+        from examples.table_transfer_design import run
+
+        monkeypatch.setattr(run, "OUTPUT_FOLDER", tmp_path)
+        monkeypatch.setattr(run, "SOURCE_CSV", tmp_path / "受注.csv")
+        monkeypatch.setattr(run, "OUTPUT_PATH", tmp_path / "請求一覧.xlsx")
+        run.main()
+
+        assert (tmp_path / "請求一覧.xlsx").exists()
+        ws = load_workbook(tmp_path / "請求一覧.xlsx")["PY_請求一覧"]
+        # A001: 通常転記 / A003: 新規追加 / A099: 転記元に無し
+        # A002 は continue でスキップされ備考が空欄、filter で落ちる
+        rows = {r[0]: r for r in ws.iter_rows(min_row=2, values_only=True)}
+        assert set(rows) == {"A001", "A003", "A099"}
+        assert rows["A001"][1] == "株式会社アルファ"
+        assert rows["A001"][2] == 12000
+        assert rows["A001"][3] == "消費税: 1200"
+        assert rows["A003"][3] == "新規追加"
+        assert rows["A099"][3] == "転記元に無し"

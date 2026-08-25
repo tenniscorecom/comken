@@ -54,6 +54,27 @@ class KeyColumnNotFoundError(ColumnNotFoundError):
         super().__init__(f"キー列が見つかりません: {key}\n存在する列: {', '.join(existing)}")
 
 
+class TransferSourceColumnNotFoundError(ColumnNotFoundError):
+    """列名転記で、lookup の転記元列が見つからない
+
+    comken 本体のソースからは送出されない。利用者プロジェクトから送出する想定。
+    例外を定義して import するだけで使え、comken 内の利用は前提としない。
+    ``ExcelColumnNotFoundError`` と同じ位置づけ。
+
+    発生箇所: 利用側プロジェクトの転記元列検証処理
+
+    対処:
+        転記元データと config.ini のマッピング左側を確認する
+    """
+
+    def __init__(self, columns: list[str], existing: list[str]) -> None:
+        super().__init__(
+            f"転記元の列がlookupに見つかりません: {', '.join(columns)}\n"
+            f"転記元に存在する列: {', '.join(existing)}\n"
+            "CSVなどの転記元データと config.ini のマッピング左側を確認してください。"
+        )
+
+
 class InvalidColumnError(ComkenError):
     """列の指定が正しくない（打ち間違いなど）
 
