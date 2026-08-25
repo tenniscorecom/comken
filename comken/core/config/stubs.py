@@ -4,7 +4,13 @@ Config の属性（config.SECTION.KEY）は config.ini から実行時に動的�
 そのままではエディタが補完できない。ここで config.ini の内容を型付きの .pyi に書き出し、
 補完を効かせる。設定値の読み込みとはモジュール内で責務を分けている。
 
-- Config() を呼ぶたびに update_stub() が自動で走る（config パッケージから呼ばれる）
+- ``Config()`` を直接呼ぶたびに ``update_stub()`` が自動で走る。
+  ``from comken import config`` 経由では ``_get_cached_default_config`` が
+  ``(path, mtime_ns, size)`` 単位で再利用するため、初回1回だけ ``Config()`` が
+  走って ``update_stub()`` も1回だけ走る（ループ内で ``config.SECTION.KEY``
+  を呼ぶたびにスタブ書き込みが走る問題を避ける）。
+- ``_write_stub_atomic`` は内容が既存ファイルと同じならディスクに触らないため、
+  連続呼び出しの disk I/O は発生しない
 - コードを書く前に手動で作りたい場合は generate_stub() を直接呼ぶ
   （CLI 入口 `python -m comken config` は v1.0.0 で削除済み）
 """

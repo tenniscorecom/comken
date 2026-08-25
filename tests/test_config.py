@@ -21,6 +21,25 @@ from comken.exceptions import (
     ConfigMappingEmptyValueError,
 )
 
+
+@pytest.fixture(autouse=True)
+def _reset_default_config_cache():
+    """``from comken import config`` 用の遅延シングルトンキャッシュを破棄する。
+
+    `__getattr__` の修正前は ``Config()`` が毎回新規構築されていたため、
+    テスト間のキャッシュリークは顕在化しなかった。修正後は ``_get_cached_default_config``
+    が ``(path, mtime_ns, size)`` 単位で再利用するため、 ``tmp_path`` が
+    テストごとに違う ``config.ini`` を指しても前のキャッシュが残っていると
+    別テストの設定が漏れる。各テストの前後で明示的に破棄して、
+    「テストごとに別の config.ini を読む」形を担保する。
+    """
+    config_module._reset_cached_config()
+    try:
+        yield
+    finally:
+        config_module._reset_cached_config()
+
+
 # .pyi 内で「型注釈に書かれた Name」が、その .pyi の import か組み込みで
 # すべて解決できているか検査するヘルパー。Path のような外部名を書き出しながら
 # import を忘れる「静かに補完が落ちる」バグを捕まえるのが目的。

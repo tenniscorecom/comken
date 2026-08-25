@@ -365,9 +365,24 @@ def _validate_upper_case(
 # 1度だけ読む（import 時ではないので、config.ini を持たないプロジェクトやテストで
 # comken を import しても失敗しない）。
 #
-# `__getattr__` で初回呼び出し時に `Config()` を生成し委譲する。専用 global 変数
-# は持たず、__getattr__ のたびに `Config()` を呼ぶ（configparser の読み込みは
-# 軽量なので、シングルトン管理のための状態を持たない方を採る）。
+# `__getattr__` で初回呼び出し時に `_get_cached_default_config()` 経由で
+# `Config()` を生成し委譲する。生成したインスタンスは **プロセス内で再利用**する
+# （ループ内で `config.SECTION.KEY` を呼ぶたびに `Config()` が新規構築されて
+# config.ini の読み直しと `.pyi` スタブのディスク書き込みが走る問題を避けるため）。
+#
+# キャッシュの無効化条件:
+# - **プロセス内で1回だけ**構築する。``project_dir()`` は ``sys.argv`` を見て
+#   解決するため、テストや別プロセスでは ``sys.argv`` を差し替えれば別 path の
+#   ``config.ini`` が読まれる（同一プロセス内で ``sys.argv`` を変えた場合は、
+#   ``_reset_cached_config()`` を呼んで明示的に破棄する）。
+# - ``Config.ini`` を書き換えても自動では反映されない。反映が必要なときは
+#   内部関数 ``_reset_cached_config()`` を呼んでから再アクセスする。
+#   「ディスクから読む」が必要な操作は明示するのが安全（自動監視にすると
+#   ``path.stat()`` を毎回呼ぶコストが膨らみ、14万回のループが秒未満に
+#   入らないため）。
+# - ``Config(path)`` のようにパスを明示する呼び出しはキャッシュをバイパスする
+#   （呼び出し側が毎回新規インスタンスを欲しがる後方互換のため、共有状態は持たない）。
+# 公開 API は増やしていない（``_reset_cached_config()`` は `_` プレフィックス）。
 
 # 公開型 ``MappingDict`` = 実装 ``_LenientDict``。
 # ``*_MAPPING`` セクションの戻り値は dict 互換（``isinstance(x, dict)`` が True）
@@ -376,14 +391,47 @@ def _validate_upper_case(
 # ``_LenientDict`` は内部実装として ``_`` プレフィックスで残す。
 MappingDict = _LenientDict
 
+# デフォルト ``Config()`` のキャッシュ（``_get_cached_default_config`` から使う）。
+# ``Config`` 自体は下で定義するので、型注釈は文字列にして前方参照にする。
+_cached_config: "Config | None" = None
+
 
 def __getattr__(name: str) -> types.SimpleNamespace:
     # PEP 562: `comken.core.config.FILES` のようにモジュール属性として見つからない名前で呼ばれる。
     # セクションは大文字なので、大文字名のときだけ Config() を生成して委譲する
     # （Config / MappingDict などの実体は通常の属性解決で見つかるためここには来ない）。
     if name.isupper():
-        return getattr(Config(), name)
+        return getattr(_get_cached_default_config(), name)
     raise AttributeError(f"module 'comken.core.config' has no attribute {name!r}")
+
+
+def _get_cached_default_config() -> "Config":
+    """``from comken import config`` 用のデフォルト ``Config`` をキャッシュして返す。
+
+    初回呼び出し時に ``project_dir() / "config.ini"`` から ``Config()`` を構築し、
+    以降は同じインスタンスを返す。 ``project_dir()`` は ``sys.argv`` を見て
+    Windows で ``path.resolve()`` を呼ぶためコストが重い（1 万回呼ぶと秒単位
+    で効いてくる）。毎回呼ぶとそのコストがそのまま ``config.SECTION.KEY`` 1 回
+    あたりに乗ってしまうので、初回のみキャッシュする設計にしている。
+    """
+    global _cached_config
+    if _cached_config is None:
+        _cached_config = Config(project_dir() / "config.ini")
+    return _cached_config
+
+
+def _reset_cached_config() -> None:
+    """``_get_cached_default_config()`` のキャッシュを破棄する（テスト用）。
+
+    テストでは ``tmp_path`` がテストごとに違う ``config.ini`` を指すため、
+    前のテストのキャッシュが残っていると別テストの設定が漏れる。または
+    「``config.ini`` を書き換えたので新しい値を読んでほしい」という場面で
+    手動で反映するために使う。 各テストの冒頭で呼ぶ想定
+    （``tests/test_config.py`` の autouse fixture から）。利用者向けの
+    公開 API ではない。
+    """
+    global _cached_config
+    _cached_config = None
 
 
 # ── 内部ヘルパー：ini 値の型変換 ───────────────────────────────────────────────
