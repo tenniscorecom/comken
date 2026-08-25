@@ -248,6 +248,17 @@ class Excel:
         if workbook is not None:
             workbook.close()
 
+    @staticmethod
+    def _row_is_blank(values: Any) -> bool:
+        """行の全セルが「空」（``None`` または空文字 ``""``）かを返す。
+
+        Excel の ``dimension`` は書式の残ったセルにも広がるため、宣言された
+        範囲をそのまま信じると思わぬ数の空行が返る（症状: 2000 行のブックから
+        30 万行返る）。 ``0`` や ``False`` は値として残す（数値の 0 を落とすと
+        集計が狂うため）。共通判定をここに集約する。
+        """
+        return all(value is None or value == "" for value in values)
+
     @measure
     def save(self) -> None:
         """変更を元ファイルへ保存する。
@@ -467,6 +478,7 @@ class Excel:
 
         ``Worksheet.iter_rows(values_only=True)`` で行ごとに値を流し、セル単位の
         ``cell(row, column)`` 呼び出しを避けてオブジェクト生成コストを抑える。
+        空行（全セルが ``None`` または空文字）はストリーム段階で落とす。
         """
         self._ensure_normal_workbook()
         formula_sheet = self._workbook[sheet_name]
@@ -474,6 +486,9 @@ class Excel:
         needs_com = False
         for formula_row in formula_sheet.iter_rows(min_row=min_row, values_only=True):
             row_tuple = tuple(formula_row)
+            if Excel._row_is_blank(row_tuple):
+                # 空行は tuple 化せずにスキップ
+                continue
             rows.append(row_tuple)
             for value in row_tuple:
                 # OpenPyXL で何かを書いた後は既存キャッシュが残っていても現在の値に
@@ -521,11 +536,21 @@ class Excel:
     def _collect_cached_rows(
         cached_sheet: Worksheet, min_row: int
     ) -> tuple[list[tuple[Any, ...]], bool]:
-        """``data_only=True`` の値を ``min_row`` から流し、None セルがあるか返す。"""
+        """``data_only=True`` の値を ``min_row`` から流し、空行は捨てる。
+
+        「ストリーム段階」で落とす: ``iter_rows`` から yield された行を
+        tuple 化して空行（全セルが ``None`` または空文字）か判定し、空なら
+        メモリに積まずにスキップする。 ``0`` / ``False`` は値として残す。
+        Excel の ``dimension`` が膨らんだブックでも、不要な tuple や dict を
+        残さずに線形時間で返せる。
+        """
         rows: list[tuple[Any, ...]] = []
         any_none = False
         for cached_row in cached_sheet.iter_rows(min_row=min_row, values_only=True):
             row_tuple = tuple(cached_row)
+            if Excel._row_is_blank(row_tuple):
+                # 空行はメモリに積まずにスキップ
+                continue
             rows.append(row_tuple)
             if not any_none:
                 for value in row_tuple:

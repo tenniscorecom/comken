@@ -1,10 +1,12 @@
 """現行のExcel API（Excel / Sheet / ExcelTable）の契約テスト。"""
 
 import pytest
+from openpyxl.styles import PatternFill
 
 from comken.core.table import Table
 from comken.exceptions import (
     DataSheetAccessError,
+    EmptyHeaderCellError,
     ExcelFileNotFoundError,
     ExcelReadOnlyOperationError,
     InvalidTableNameError,
@@ -249,3 +251,133 @@ class TestCreateTableNameValidation:
             table = excel.create_data_sheet("S").create_table("顧客", Table(["ID"], [{"ID": "1"}]))
             rows = table.read()
         assert rows == [{"ID": "1"}]
+
+
+class TestReadComputedRowsDropsBlankRows:
+    """Excel の ``dimension`` が膨らんだブックで空行を返さない契約。
+
+    Excel は行を削除しても書式が残っていると使用範囲（dimension）が縮まない。
+    実務のファイルではよくある状態で、``min_row`` から ``max_row`` まで全部を
+    返すと大量の中身のない行が混ざる。 ``read_computed_rows`` /
+    ``read_computed_rows_as_dicts`` は「全セルが ``None`` または空文字」の行を
+    ストリーム段階で落とす。
+    """
+
+    def test_declared_range_much_larger_than_data_returns_only_data_rows(
+        self, tmp_path
+    ) -> None:
+        """実データ 200 行 / 宣言された範囲 5000 行で、返る行数は 200。"""
+        path = tmp_path / "declared-empty.xlsx"
+        with Excel(path) as excel:
+            sheet = excel.create_sheet("データ")
+            sheet.write_range("A1:B1", [["ID", "名前"]])
+            for index in range(2, 202):
+                sheet.write_value(f"A{index}", str(index - 1))
+                sheet.write_value(f"B{index}", f"ユーザー{index - 1}")
+            # 遠くのセルに書式だけ付けて dimension を膨らませる
+            sheet._worksheet.cell(row=5000, column=40).fill = PatternFill(
+                "solid", fgColor="FFFF00"
+            )
+
+        with Excel(path, read_only=True) as excel:
+            rows = excel.read_computed_rows("データ")
+
+        assert len(rows) == 200
+
+    def test_blank_rows_in_the_middle_are_skipped(self, tmp_path) -> None:
+        """データの途中の空行（None と空文字の両方）は飛ばされる。"""
+        path = tmp_path / "middle-blank.xlsx"
+        with Excel(path) as excel:
+            sheet = excel.create_sheet("データ")
+            sheet.write_range("A1:B1", [["ID", "名前"]])
+            sheet.write_value("A2", "1")
+            sheet.write_value("B2", "A")
+            # 3 行目は空（すべて None）
+            # 4 行目はさらに空（すべて空文字）
+            sheet.write_value("A5", "")
+            sheet.write_value("B5", "")
+            sheet.write_value("A6", "2")
+            sheet.write_value("B6", "B")
+
+        with Excel(path, read_only=True) as excel:
+            rows = excel.read_computed_rows("データ")
+
+        assert rows == [("1", "A"), ("2", "B")]
+
+    def test_zero_and_false_are_kept(self, tmp_path) -> None:
+        """``0`` や ``False`` は値として残る（集計を壊さないため）。"""
+        path = tmp_path / "zero-false.xlsx"
+        with Excel(path) as excel:
+            sheet = excel.create_sheet("データ")
+            sheet.write_range("A1:C1", [["ID", "数量", "有効"]])
+            sheet.write_value("A2", "1")
+            sheet.write_value("B2", 0)
+            sheet.write_value("C2", False)
+
+        with Excel(path, read_only=True) as excel:
+            rows = excel.read_computed_rows("データ")
+
+        assert rows == [("1", 0, False)]
+
+    def test_all_blank_rows_returns_empty_list(self, tmp_path) -> None:
+        """空行だけのシートでは空リストが返る（例外にしない）。"""
+        path = tmp_path / "all-blank.xlsx"
+        with Excel(path) as excel:
+            sheet = excel.create_sheet("データ")
+            sheet.write_value("A1", "ID")
+            # 2 行目以降は空
+
+        with Excel(path, read_only=True) as excel:
+            rows = excel.read_computed_rows("データ")
+
+        assert rows == []
+
+    def test_dicts_path_also_skips_blank_rows(self, tmp_path) -> None:
+        """``read_computed_rows_as_dicts`` も空行を飛ばす。"""
+        path = tmp_path / "blank-dict.xlsx"
+        with Excel(path) as excel:
+            sheet = excel.create_sheet("データ")
+            sheet.write_range("A1:B1", [["ID", "名前"]])
+            sheet.write_value("A2", "1")
+            sheet.write_value("B2", "A")
+            sheet.write_value("A4", "2")
+            sheet.write_value("B4", "B")
+
+        with Excel(path, read_only=True) as excel:
+            dicts = excel.read_computed_rows_as_dicts("データ")
+
+        assert dicts == [{"ID": "1", "名前": "A"}, {"ID": "2", "名前": "B"}]
+
+    def test_empty_header_cell_error_still_fires(self, tmp_path) -> None:
+        """見出し行の空セルは従来どおり ``EmptyHeaderCellError``。"""
+        path = tmp_path / "header-blank.xlsx"
+        with Excel(path) as excel:
+            sheet = excel.create_sheet("データ")
+            sheet.write_value("A1", "ID")
+            # B1 は空の見出し
+            sheet.write_value("A2", "1")
+            sheet.write_value("B2", "A")
+
+        with Excel(path, read_only=True) as excel, pytest.raises(EmptyHeaderCellError):
+            excel.read_computed_rows_as_dicts("データ")
+
+    def test_existing_header_and_data_behavior_unchanged(self, tmp_path) -> None:
+        """通常のブックで見出し + データが期待どおり返ること。"""
+        path = tmp_path / "normal.xlsx"
+        with Excel(path) as excel:
+            sheet = excel.create_sheet("データ")
+            sheet.write_range("A1:B1", [["ID", "名前"]])
+            sheet.write_value("A2", "1")
+            sheet.write_value("B2", "A")
+
+        # ``read_computed_rows`` と ``read_computed_rows_as_dicts`` は内部で
+        # 同じストリーム Workbook を使うため、別々の ``with`` ブロックで呼ぶ。
+        # 同じブロックで 2 回呼ぶと、Workbook のライフサイクル管理との
+        # 兼ね合いで既存の問題（修正前から残っている）が表面化する。
+        with Excel(path, read_only=True) as excel:
+            rows = excel.read_computed_rows("データ")
+        with Excel(path, read_only=True) as excel:
+            dicts = excel.read_computed_rows_as_dicts("データ")
+
+        assert rows == [("1", "A")]
+        assert dicts == [{"ID": "1", "名前": "A"}]
