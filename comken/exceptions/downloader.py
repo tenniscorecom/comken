@@ -232,3 +232,87 @@ class ScheduledDownloadFailedError(DownloaderError):
             f"定期取得で {len(failed_keys)} 件が失敗しました: {keys}\n"
             f"失敗した理由は履歴を確認してください: {history_path}"
         )
+
+
+class UnsupportedScheduleFrequencyError(DownloaderError):
+    """管理表の「取得頻度」に、想定外の値が書かれている
+
+    許容される値は ``1時間ごと`` / ``毎日`` / ``毎週`` / ``毎月`` の4種類。
+    それ以外（手書きのタイポ・想定外の列挙値）が入っていると判定できない。
+
+    発生箇所: comken.services.salesforce_downloader.schedule の is_due()
+
+    対処:
+        管理表の「取得頻度」列の値を ``1時間ごと`` / ``毎日`` / ``毎週`` /
+        ``毎月`` のいずれかに修正する
+    """
+
+    def __init__(self, frequency: str) -> None:
+        super().__init__(
+            f"対応していない取得頻度です: {frequency}\n"
+            "管理表の「取得頻度」列の値を 1時間ごと / 毎日 / 毎週 / 毎月 の"
+            "いずれかに修正してください。"
+        )
+
+
+class ScheduleIntervalMissingError(DownloaderError):
+    """「1時間ごと」の行で、開始・終了・間隔のどれかが抜けている
+
+    1時間おきの判定は「開始時刻から終了時刻までのあいだ、指定分間隔で動く」
+    という形なので、3つの情報がそろうまで動かない。
+
+    発生箇所: comken.services.salesforce_downloader.schedule の is_due()
+
+    対処:
+        管理表の「取得開始時刻」「取得終了時刻」「取得間隔（分）」の3列を
+        すべて埋める
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            "1時間ごとには開始・終了時刻と間隔が必要です\n"
+            "管理表の「取得開始時刻」「取得終了時刻」「取得間隔（分）」の"
+            "3列をすべて埋めてください。"
+        )
+
+
+class ScheduleRequiredValueMissingError(DownloaderError):
+    """管理表の必須列が空になっている
+
+    スケジュールキー・レポートキー・取得頻度のいずれかが空だと、
+    どのレポートをいつ取るか決められない。
+
+    発生箇所: comken.services.salesforce_downloader.schedule の ScheduleRule.from_row()
+
+    対処:
+        管理表の該当行で、表示された列名（スケジュールキー / レポートキー /
+        取得頻度）の値を埋める
+    """
+
+    def __init__(self, column: str) -> None:
+        super().__init__(
+            f"管理表の必須列が空です: {column}\n"
+            "管理表の「スケジュールキー」「レポートキー」「取得頻度」は"
+            "必ず値を入力してください。"
+        )
+
+
+class ScheduleWeekdayInvalidError(DownloaderError):
+    """管理表の「曜日」列に想定外の値が入っている
+
+    許容されるのは月〜日の漢字1文字（「月」「火」「水」「木」「金」「土」「日」）
+    または「〜曜日」の接尾辞付き表記。
+
+    発生箇所: comken.services.salesforce_downloader.schedule の ScheduleRule.from_row()
+
+    対処:
+        管理表の「曜日」列の値を月〜日のいずれかに修正する（「曜日」を付ける
+        形式でも可）
+    """
+
+    def __init__(self, value: object) -> None:
+        super().__init__(
+            f"曜日が正しくありません: {value}\n"
+            "管理表の「曜日」列の値を 月 / 火 / 水 / 木 / 金 / 土 / 日 の"
+            "いずれかに修正してください（「曜日」を付ける形式でも可）。"
+        )

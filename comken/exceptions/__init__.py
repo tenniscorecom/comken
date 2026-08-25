@@ -35,6 +35,7 @@ ComkenError
 │   ├── TableAlreadyExistsError
 │   ├── TableNotFoundError
 │   ├── TableFormulaOverwriteError
+│   ├── TableColumnMismatchError
 │   ├── MacroError
 │   ├── EmptyHeaderCellError
 │   ├── DuplicateHeaderCellError
@@ -127,7 +128,11 @@ ComkenError
 │   ├── InvalidReportURLError
 │   ├── EmptyReportError
 │   ├── ReportFolderNotFoundError
-│   └── ScheduledDownloadFailedError
+│   ├── ScheduledDownloadFailedError
+│   ├── UnsupportedScheduleFrequencyError
+│   ├── ScheduleIntervalMissingError
+│   ├── ScheduleRequiredValueMissingError
+│   └── ScheduleWeekdayInvalidError
 
 カテゴリ基底クラスはまとめて捕捉するために使い、直接送出しない。
 """
@@ -203,6 +208,10 @@ from comken.exceptions.downloader import (
     ReportFolderNotFoundError,
     ReportNotRegisteredError,
     ScheduledDownloadFailedError,
+    ScheduleIntervalMissingError,
+    ScheduleRequiredValueMissingError,
+    ScheduleWeekdayInvalidError,
+    UnsupportedScheduleFrequencyError,
 )
 from comken.exceptions.excel import (
     DataSheetAccessError,
@@ -223,6 +232,7 @@ from comken.exceptions.excel import (
     SheetNameError,
     SheetNotFoundError,
     TableAlreadyExistsError,
+    TableColumnMismatchError,
     TableFormulaOverwriteError,
     TableNotFoundError,
 )
@@ -316,6 +326,7 @@ __all__ = [
     "InvalidTableNameError",
     "TableAlreadyExistsError",
     "TableFormulaOverwriteError",
+    "TableColumnMismatchError",
     "TableNotFoundError",
     "MacroError",
     "EmptyHeaderCellError",
@@ -409,6 +420,10 @@ __all__ = [
     "EmptyReportError",
     "ReportFolderNotFoundError",
     "ScheduledDownloadFailedError",
+    "UnsupportedScheduleFrequencyError",
+    "ScheduleIntervalMissingError",
+    "ScheduleRequiredValueMissingError",
+    "ScheduleWeekdayInvalidError",
     "TransferDestinationMultipleMatchError",
     "TableNotOpenError",
     "TransferDestinationMissingError",

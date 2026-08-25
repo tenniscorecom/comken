@@ -2188,14 +2188,10 @@ class CompanyHolidaySource(HolidaySource):
 
 コードに直書きした会社休日を ``Holiday`` の iterable で返すソース。
 
-``HolidaySource`` Protocol を実装する。``ComputedHolidaySource`` の
-和集合に混ぜる使い方を想定:
-
-    HolidayCalendar.from_sources([
-        ComputedHolidaySource(),
-        BundledCabinetCSVSource(),
-        CompanyHolidaySource(),
-    ])
+``HolidaySource`` Protocol を実装する。既定カレンダーは
+``default_calendar()`` が組み立てるので、利用者が自分で
+``HolidayCalendar.from_sources(...)`` を書く必要はない
+（使うだけなら ``is_business_day(today())`` と書く）。
 
 国民の祝日（内閣府 CSV / Computed）と重なったときは**先勝ち**で
 採用される（``HolidayCalendar`` 側の挙動）。警告は出さない。
@@ -3576,6 +3572,33 @@ class TableFormulaOverwriteError(ExcelError):
 
 ```text
 def __init__(self, table_name: str, locations: Sequence[str]) -> None:
+```
+
+### `TableColumnMismatchError`
+
+```text
+class TableColumnMismatchError(ExcelError):
+```
+
+#### 説明
+
+渡された Table の列が既存テーブルの見出しと一致しない
+
+``replace()`` / ``append()`` は、渡された Table の列を既存の見出しと
+名前で対応付ける。**既存の見出しに無い列名が含まれていた場合は例外**にし、
+黙って無視や位置ズレで書き込まない（書き漏らしに気づくのが遅れるため）。
+
+発生箇所: ExcelTable.replace() / ExcelTable.append()
+
+対処:
+    既存の見出しと一致するように渡す Table の列を修正する。
+    数式で参照される列は渡さない（「金額」のように計算で決まる列を
+    Table に含めない、または数式を保持する前提の列として残す）
+
+#### `__init__`
+
+```text
+def __init__(self, table_name: str, missing: Sequence[str]) -> None:
 ```
 
 ### `TableNotFoundError`
@@ -5567,6 +5590,106 @@ class ScheduledDownloadFailedError(DownloaderError):
 
 ```text
 def __init__(self, failed_keys: list[str], history_path: Path) -> None:
+```
+
+### `UnsupportedScheduleFrequencyError`
+
+```text
+class UnsupportedScheduleFrequencyError(DownloaderError):
+```
+
+#### 説明
+
+管理表の「取得頻度」に、想定外の値が書かれている
+
+許容される値は ``1時間ごと`` / ``毎日`` / ``毎週`` / ``毎月`` の4種類。
+それ以外（手書きのタイポ・想定外の列挙値）が入っていると判定できない。
+
+発生箇所: comken.services.salesforce_downloader.schedule の is_due()
+
+対処:
+    管理表の「取得頻度」列の値を ``1時間ごと`` / ``毎日`` / ``毎週`` /
+    ``毎月`` のいずれかに修正する
+
+#### `__init__`
+
+```text
+def __init__(self, frequency: str) -> None:
+```
+
+### `ScheduleIntervalMissingError`
+
+```text
+class ScheduleIntervalMissingError(DownloaderError):
+```
+
+#### 説明
+
+「1時間ごと」の行で、開始・終了・間隔のどれかが抜けている
+
+1時間おきの判定は「開始時刻から終了時刻までのあいだ、指定分間隔で動く」
+という形なので、3つの情報がそろうまで動かない。
+
+発生箇所: comken.services.salesforce_downloader.schedule の is_due()
+
+対処:
+    管理表の「取得開始時刻」「取得終了時刻」「取得間隔（分）」の3列を
+    すべて埋める
+
+#### `__init__`
+
+```text
+def __init__(self) -> None:
+```
+
+### `ScheduleRequiredValueMissingError`
+
+```text
+class ScheduleRequiredValueMissingError(DownloaderError):
+```
+
+#### 説明
+
+管理表の必須列が空になっている
+
+スケジュールキー・レポートキー・取得頻度のいずれかが空だと、
+どのレポートをいつ取るか決められない。
+
+発生箇所: comken.services.salesforce_downloader.schedule の ScheduleRule.from_row()
+
+対処:
+    管理表の該当行で、表示された列名（スケジュールキー / レポートキー /
+    取得頻度）の値を埋める
+
+#### `__init__`
+
+```text
+def __init__(self, column: str) -> None:
+```
+
+### `ScheduleWeekdayInvalidError`
+
+```text
+class ScheduleWeekdayInvalidError(DownloaderError):
+```
+
+#### 説明
+
+管理表の「曜日」列に想定外の値が入っている
+
+許容されるのは月〜日の漢字1文字（「月」「火」「水」「木」「金」「土」「日」）
+または「〜曜日」の接尾辞付き表記。
+
+発生箇所: comken.services.salesforce_downloader.schedule の ScheduleRule.from_row()
+
+対処:
+    管理表の「曜日」列の値を月〜日のいずれかに修正する（「曜日」を付ける
+    形式でも可）
+
+#### `__init__`
+
+```text
+def __init__(self, value: object) -> None:
 ```
 
 ### `TransferDestinationMultipleMatchError`
@@ -8524,6 +8647,14 @@ def replace(self, rows: list[dict[str, Value]] | Table, *, allow_formula_overwri
 で止める。数式を値で潰すと依存セルや集計式が壊れたことに遅れて気づくため。
 意図的に上書きしてよいときだけ ``allow_formula_overwrite=True`` を渡す。
 
+渡された ``Table`` が **既存の数式列を含まない** 場合、その列はそのまま
+保持される。行が増えたぶんは、既存の数式を
+``openpyxl.formula.translate.Translator`` で下方向へずらして埋める。
+行が減ったぶんは、数式セルの値を消す。
+
+見出しの列は **既存の見出しと名前で対応付ける**。既存の見出しに無い
+列名が含まれていた場合は ``TableColumnMismatchError``。
+
 #### `append`
 
 ```text
@@ -8533,6 +8664,10 @@ def append(self, rows: list[dict[str, Value]] | dict[str, Value] | Table, *, all
 ##### 説明
 
 Table、1行、または行リストを既存テーブルの末尾へ追加する。
+
+既存テーブルに数式列があっても、その列は保持される。渡された行に
+数式列が含まれている場合は ``TableFormulaOverwriteError``
+（``allow_formula_overwrite=True`` で上書き可能）。
 
 #### `count`
 
@@ -8597,7 +8732,7 @@ class CabinetOfficeCSVSource(HolidaySource, RefreshableHolidaySource):
 
 Args:
     url: 内閣府の CSV の URL。既定は ``syukujitsu.csv`` の配布 URL。
-    cache_path: ダウンロードした CSV の保存先。既定は ``~/.comken/holidays/syukujitsu.csv``。
+    cache_path: ダウンロードした CSV の保存先。既定は ``~/.rpa/holidays/syukujitsu.csv``。
     encoding: CSV の文字コード。CP932（Shift_JIS）のままで良い。
     fetch_timeout_seconds: requests.get() のタイムアウト秒数。
     refresh_timeout_seconds: refresh() で使う短いタイムアウト秒数（業務フロー停止を防ぐ）。

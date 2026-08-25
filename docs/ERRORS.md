@@ -54,6 +54,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `InvalidTableNameError` | Excel で使えないテーブル名を指定した | 空白・数字始まり・セル参照のような名前を避ける |
 | `TableAlreadyExistsError` | 同じ名前のテーブルが既にある | 別のテーブル名を指定する |
 | `TableFormulaOverwriteError` | テーブル内の人が入れた数式を値で潰そうとした | 数式を保持したい場合は、``replace()`` のあとに該当セルへ元の数式を書き戻す。意図的に値で潰してよいときだけ ``allow_formula_overwrite=True`` を渡す |
+| `TableColumnMismatchError` | 渡された Table の列が既存テーブルの見出しと一致しない | 既存の見出しと一致するように渡す Table の列を修正する。数式で参照される列は渡さない（「金額」のように計算で決まる列をTable に含めない、または数式を保持する前提の列として残す） |
 | `TableNotFoundError` | 指定したテーブルがシートにない | エラーに表示された既存テーブル名を確認する |
 | `MacroError` | Excel のマクロが失敗した | Excel をすべて閉じて再実行する。続く場合は管理者へ |
 | `EmptyHeaderCellError` | Excel の見出しに空欄がある | Excel の1行目の空欄を埋める |
@@ -149,6 +150,10 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `EmptyReportError` | レポートは実行できたが明細が 0 行だった | Salesforce の画面で同じレポートを開き、本当に 0 件か確認する。0 件が正常に起こるレポートなら、管理表の「0件あり」を「○」にする。 |
 | `ReportFolderNotFoundError` | 管理表に書かれた保存先のフォルダが無い | 管理表の「保存先」を確認する。共有フォルダなら、つながっているか・権限があるかも確認する |
 | `ScheduledDownloadFailedError` | 定期取得で1件以上が失敗した | 履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。急いで必要なものは download_report() でその場で取得する |
+| `UnsupportedScheduleFrequencyError` | 管理表の「取得頻度」に、想定外の値が書かれている | 管理表の「取得頻度」列の値を ``1時間ごと`` / ``毎日`` / ``毎週`` /``毎月`` のいずれかに修正する |
+| `ScheduleIntervalMissingError` | 「1時間ごと」の行で、開始・終了・間隔のどれかが抜けている | 管理表の「取得開始時刻」「取得終了時刻」「取得間隔（分）」の3列をすべて埋める |
+| `ScheduleRequiredValueMissingError` | 管理表の必須列が空になっている | 管理表の該当行で、表示された列名（スケジュールキー / レポートキー /取得頻度）の値を埋める |
+| `ScheduleWeekdayInvalidError` | 管理表の「曜日」列に想定外の値が入っている | 管理表の「曜日」列の値を月〜日のいずれかに修正する（「曜日」を付ける形式でも可） |
 | `TransferDestinationMultipleMatchError` | 転記先のキーに一致する行が複数ある | mapping の先頭列に対応する転記先列の値を一意にする。キーが ``None`` か ``""`` の行は突合対象外なので、空欄のキーが複数あってもこの例外は出ない。 |
 | `LoggingAlreadyConfiguredError` | root logger がすでに設定されている | setup_logging() または setup_local_logging() はアプリの入口で1回だけ呼ぶ。実行基盤がログを設定する場合は呼ばない。 |
 | `LoggingConflictError` | root logger に comken 以外の handler が設定されている | 上の handler 一覧をそのままライブラリの管理者へ連絡してください（連絡先は環境ごとに異なるので、ここには書かない）。やむを得ず共存させたい場合は、呼び出し時に ``allow_existing=True``を指定すれば処理は続きますが、comken のハンドラーが追加されることで既存ライブラリのログが**二重**に出たり、出力先が想定と変わる可能性があります。 |

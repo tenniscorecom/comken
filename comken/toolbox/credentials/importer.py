@@ -6,7 +6,7 @@
 
     認証情報.json（平文・一時的に置く）
             ↓  python -m comken cred import 認証情報.json
-    %USERPROFILE%\\.comken\\credentials.enc（DPAPI 暗号化）
+    %USERPROFILE%\\.rpa\\credentials.enc（DPAPI 暗号化）
             ↓
     Credentials("site_a").client_id
 

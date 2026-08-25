@@ -155,6 +155,32 @@ class TableFormulaOverwriteError(ExcelError):
         )
 
 
+class TableColumnMismatchError(ExcelError):
+    """渡された Table の列が既存テーブルの見出しと一致しない
+
+    ``replace()`` / ``append()`` は、渡された Table の列を既存の見出しと
+    名前で対応付ける。**既存の見出しに無い列名が含まれていた場合は例外**にし、
+    黙って無視や位置ズレで書き込まない（書き漏らしに気づくのが遅れるため）。
+
+    発生箇所: ExcelTable.replace() / ExcelTable.append()
+
+    対処:
+        既存の見出しと一致するように渡す Table の列を修正する。
+        数式で参照される列は渡さない（「金額」のように計算で決まる列を
+        Table に含めない、または数式を保持する前提の列として残す）
+    """
+
+    def __init__(self, table_name: str, missing: Sequence[str]) -> None:
+        self.table_name = table_name
+        self.missing = list(missing)
+        sample = ", ".join(str(name) for name in missing)
+        super().__init__(
+            f"Excel テーブル「{table_name}」の見出しに無い列名が Table に含まれています: {sample}\n"
+            "replace()/append() は既存の見出しと名前で対応付けます。"
+            "既存の見出しと一致するように Table の列を修正してください。"
+        )
+
+
 class MacroError(ExcelError):
     """Excel のマクロが失敗した
 

@@ -5,7 +5,13 @@ from unittest.mock import patch
 import pytest
 
 from comken.core.table import Table
-from comken.exceptions import EmptyExcelTableError, EmptyHeaderCellError, ExcelError
+from comken.exceptions import (
+    EmptyExcelTableError,
+    EmptyHeaderCellError,
+    ExcelError,
+    InvalidTableOperationError,
+    TableColumnMismatchError,
+)
 from comken.toolbox.excel import Excel
 
 
@@ -67,34 +73,41 @@ def test_replace_on_empty_table_adds_first_data_row(tmp_path) -> None:
         assert excel_table.ref == "A1:B2"
 
 
-def test_replace_with_empty_rows_clears_last_cell_beyond_new_ref(tmp_path) -> None:
-    """``replace()`` で行を 0 件にしたとき、旧テーブルの末尾セルをクリアする。"""
+def test_replace_with_empty_rows_raises_when_omitting_non_formula_column(
+    tmp_path,
+) -> None:
+    """``replace()`` で 0 行にしたとき、非数式列を省くと ``TableColumnMismatchError``。"""
     path = tmp_path / "shrink.xlsx"
     with Excel(path) as excel:
         table = excel.create_data_sheet("Users").create_table(
             "Users",
             Table(["id", "name"], [{"id": 1, "name": "A"}, {"id": 2, "name": "B"}]),
         )
-        # 旧 ref は A1:B3。 0 行のテーブルで置換すると ``_clear_removed_cells`` が
-        # 旧 max_row 行の値を空にする。新 ref は A1:A2（A 列のみ、ヘッダ + 1 行）。
-        table.replace(Table(["id"], []))
-        assert table._worksheet["B3"].value is None  # 旧データ末尾の name 列
-        assert table._worksheet["A3"].value is None  # 旧データ末尾の id 列（表外）
-        # 新 ref は「先頭 + 末尾1行」に縮んでいる
-        excel_table = table._worksheet.tables["PY_T_Users"]
-        assert excel_table.ref == "A1:A2"
+        # 旧 ref は A1:B3。非数式列「name」を省いて 0 行で置換しようとすると
+        # データ欠落を防ぐために例外になる。
+        with pytest.raises(TableColumnMismatchError) as exc_info:
+            table.replace(Table(["id"], []))
+        assert "name" in str(exc_info.value)
+        # 既存データはそのまま残っている
+        assert table._worksheet["A2"].value == 1
+        assert table._worksheet["B2"].value == "A"
+        assert table._worksheet["A3"].value == 2
+        assert table._worksheet["B3"].value == "B"
 
 
-def test_replace_with_empty_rows_keeps_existing_headers(tmp_path) -> None:
-    """``replace([])`` で空リストを渡したとき、既存ヘッダが維持される。"""
+def test_replace_with_empty_list_raises(tmp_path) -> None:
+    """``replace([])`` で空リストを渡したときは列無しの Table として例外。"""
     path = tmp_path / "keep_headers.xlsx"
     with Excel(path) as excel:
         table = excel.create_data_sheet("Users").create_table(
             "Users",
             Table(["id", "name"], [{"id": 1, "name": "A"}]),
         )
-        # 引数が ``list`` のときもヘルパー経由の ``_table_boundaries`` を通り、
-        # ``assert`` 経路を踏まずに ref が更新されることを確認する
-        table.replace([])
-        assert table.read().columns == ["id", "name"]
-        assert table.read() == []
+        with pytest.raises(InvalidTableOperationError) as exc_info:
+            table.replace([])
+        assert "列のないTable" in str(exc_info.value)
+        # 既存ヘッダとデータはそのまま残っている
+        assert table._worksheet["A1"].value == "id"
+        assert table._worksheet["B1"].value == "name"
+        assert table._worksheet["A2"].value == 1
+        assert table._worksheet["B2"].value == "A"

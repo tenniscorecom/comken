@@ -29,7 +29,7 @@ from comken.toolbox.holidays.sources.cabinet_office import CabinetOfficeCSVSourc
 
 calendar = HolidayCalendar.from_sources(
     [
-        CabinetOfficeCSVSource(),  # 既定: ~/.comken/holidays/syukujitsu.csv にキャッシュ
+        CabinetOfficeCSVSource(),  # 既定: ~/.rpa/holidays/syukujitsu.csv にキャッシュ
         CompanyHolidaySource(),    # コード直書きの会社休日
     ]
 )
@@ -52,7 +52,7 @@ if is_business_day(date.today(), calendar=calendar):
 
 ## キャッシュ
 
-`CabinetOfficeCSVSource` は `~/.comken/holidays/syukujitsu.csv` を既定の
+`CabinetOfficeCSVSource` は `~/.rpa/holidays/syukujitsu.csv` を既定の
 キャッシュ先とする（`cache_path` 引数で変更可）。キャッシュ済みのファイルが
 ある間はネットワークに出ない。**明示的に最新を取り直したいとき**は
 `source.refresh()` を呼ぶ。

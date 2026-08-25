@@ -7,7 +7,7 @@ import pytest
 
 from comken import dry_run
 from comken.core.table import Table
-from comken.exceptions import DataSheetAccessError
+from comken.exceptions import DataSheetAccessError, TableColumnMismatchError
 from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Excel
 
@@ -78,17 +78,20 @@ class TestExcelTable:
             with pytest.raises(DataSheetAccessError):
                 sheet.write_value("A1", "禁止")
 
-    def test_empty_replace_clears_old_rows_and_shrunk_columns(self, tmp_path) -> None:
+    def test_empty_replace_with_omitted_non_formula_column_raises(self, tmp_path) -> None:
+        """``replace()`` で非数式列を省くと、データ欠落を防ぐため ``TableColumnMismatchError``。"""
         path = tmp_path / "data.xlsx"
         with Excel(path) as excel:
             table = excel.create_data_sheet("Users").create_table(
                 "Users", Table(["id", "name"], [{"id": 1, "name": "A"}, {"id": 2, "name": "B"}])
             )
-            table.replace(Table(["id"], []))
-            assert table.read().columns == ["id"]
-            assert table.read() == []
-            assert table._worksheet["B1"].value is None
-            assert table._worksheet["B2"].value is None
+            with pytest.raises(TableColumnMismatchError) as exc_info:
+                table.replace(Table(["id"], []))
+            # 省かれた非数式列「name」がエラーに含まれている
+            assert "name" in str(exc_info.value)
+            # 既存データはそのまま残っている（上書きされていない）
+            assert table._worksheet["A2"].value == 1
+            assert table._worksheet["B2"].value == "A"
 
     def test_table_read_ignores_formula_outside_actual_ref(self, tmp_path) -> None:
         path = tmp_path / "bounded.xlsx"

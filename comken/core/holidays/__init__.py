@@ -7,7 +7,7 @@ r"""comken/core/holidays/__init__.py — 祝日判定ライブラリ。
     from comken.toolbox.holidays.sources.cabinet_office import CabinetOfficeCSVSource
 
     calendar = HolidayCalendar.from_sources([
-        CabinetOfficeCSVSource(cache_path=Path("~/.comken/holidays/syukujitsu.csv")),
+        CabinetOfficeCSVSource(cache_path=Path("~/.rpa/holidays/syukujitsu.csv")),
         CompanyHolidaySource(),
     ])
 

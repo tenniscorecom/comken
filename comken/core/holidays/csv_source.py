@@ -118,7 +118,7 @@ def _parse_csv_text(text: str, *, source: object) -> list[Holiday]:
             continue
         try:
             parsed = _parse_date(first)
-        except ValueError:
+        except HolidayCalendarFormatError:
             # 1行目はヘッダーとは限らないが、日付として読めなければ不正データとして飛ばす
             # （ただし厳格にしたいので 0件なら呼び出し側で FormatError にする）
             logger.warning("内閣府 CSV の日付を解釈できません (%s): %s", source, first)
@@ -136,11 +136,14 @@ def _parse_date(text: str) -> _dt.date:
     内閣府の現行配布は ``YYYY/M/D``（スラッシュ・ゼロ埋めなし）が中心だが、
     過去版・手書き差し替え・テスト fixture では ``YYYY-MM-DD``（ハイフン・
     ゼロ埋めあり）が混ざるので、両方を受け付ける。すべて失敗したら
-    ``ValueError`` を呼び出し元へそのまま伝搬する。
+    ``HolidayCalendarFormatError`` を呼び出し元へ伝搬する。
     """
     for fmt in _DATE_FORMATS:
         try:
             return _dt.datetime.strptime(text, fmt).date()  # noqa: DTZ007  # 業務日付として naive で扱う
         except ValueError:
             continue
-    raise ValueError(f"日付として解釈できません: {text!r}")
+    raise HolidayCalendarFormatError(
+        "<日付セル>",
+        f"日付として解釈できません: {text!r}",
+    )

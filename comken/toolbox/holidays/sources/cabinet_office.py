@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_URL = "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv"
 
 # 既定のキャッシュ先（呼び出し側で明示されたらそちらを優先）
-DEFAULT_CACHE_PATH = Path.home() / ".comken" / "holidays" / "syukujitsu.csv"
+DEFAULT_CACHE_PATH = Path.home() / ".rpa" / "holidays" / "syukujitsu.csv"
 
 
 class CabinetOfficeCSVSource(HolidaySource, RefreshableHolidaySource):
@@ -42,7 +42,7 @@ class CabinetOfficeCSVSource(HolidaySource, RefreshableHolidaySource):
 
     Args:
         url: 内閣府の CSV の URL。既定は ``syukujitsu.csv`` の配布 URL。
-        cache_path: ダウンロードした CSV の保存先。既定は ``~/.comken/holidays/syukujitsu.csv``。
+        cache_path: ダウンロードした CSV の保存先。既定は ``~/.rpa/holidays/syukujitsu.csv``。
         encoding: CSV の文字コード。CP932（Shift_JIS）のままで良い。
         fetch_timeout_seconds: requests.get() のタイムアウト秒数。
         refresh_timeout_seconds: refresh() で使う短いタイムアウト秒数（業務フロー停止を防ぐ）。

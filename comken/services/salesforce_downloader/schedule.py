@@ -4,6 +4,13 @@ import datetime as dt
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from comken.exceptions import (
+    ScheduleIntervalMissingError,
+    ScheduleRequiredValueMissingError,
+    ScheduleWeekdayInvalidError,
+    UnsupportedScheduleFrequencyError,
+)
+
 FREQUENCY_HOURLY = "1時間ごと"
 FREQUENCY_DAILY = "毎日"
 FREQUENCY_WEEKLY = "毎週"
@@ -60,7 +67,7 @@ class ScheduleRule:
             return self._is_hourly_due(now)
         if self.frequency in {FREQUENCY_DAILY, FREQUENCY_WEEKLY, FREQUENCY_MONTHLY}:
             return self.run_time is not None and now.time() >= self.run_time
-        raise ValueError(f"対応していない取得頻度です: {self.frequency}")
+        raise UnsupportedScheduleFrequencyError(self.frequency)
 
     def job_key(self, target_date: dt.date) -> str:
         """履歴で取得済みか判定するキーを返す。"""
@@ -77,7 +84,7 @@ class ScheduleRule:
 
     def _is_hourly_due(self, now: dt.datetime) -> bool:
         if self.start_time is None or self.end_time is None or not self.interval_minutes:
-            raise ValueError("1時間ごとには開始・終了時刻と間隔が必要です")
+            raise ScheduleIntervalMissingError()
         if now.time() < self.start_time or now.time() > self.end_time:
             return False
         start_minutes = self.start_time.hour * 60 + self.start_time.minute
@@ -88,7 +95,7 @@ class ScheduleRule:
 def _required_text(row: Mapping[str, object], column: str) -> str:
     value = str(row.get(column, "")).strip()
     if not value:
-        raise ValueError(f"{column}は必須です")
+        raise ScheduleRequiredValueMissingError(column)
     return value
 
 
@@ -118,7 +125,7 @@ def _parse_weekday(value: object) -> int | None:
         return None
     text = str(value).strip().removesuffix("曜日")
     if text not in WEEKDAY_NAMES:
-        raise ValueError(f"曜日が正しくありません: {value}")
+        raise ScheduleWeekdayInvalidError(value)
     return WEEKDAY_NAMES.index(text)
 
 

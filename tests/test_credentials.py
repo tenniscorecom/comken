@@ -1,7 +1,7 @@
 """認証情報の暗号化保存を、実際に DPAPI で往復させて検証する。
 
 DPAPI は Windows 標準機能なので、モックせず本物で暗号化・復号する。
-保存先は tmp_path に逃がし、実行環境の %USERPROFILE%\\.comken は触らない。
+保存先は tmp_path に逃がし、実行環境の %USERPROFILE%\\.rpa は触らない。
 """
 
 import json
@@ -28,6 +28,11 @@ from comken.toolbox.credentials import (
     save_credentials,
 )
 from comken.toolbox.credentials.cli import main
+from comken.toolbox.credentials.store import (
+    CREDENTIALS_PATH,
+    LEGACY_CREDENTIALS_PATH,
+    _load_all,
+)
 
 SECRET = "s3cret-値-🔑"  # 日本語と絵文字を含めて UTF-8 の往復も確かめる
 
@@ -278,3 +283,59 @@ class TestCommandLine:
     def test_no_command_exits(self):
         with pytest.raises(SystemExit):
             main([])
+
+
+class TestPathMigration:
+    """~/.comken/credentials.enc → ~/.rpa/credentials.enc の旧→新パス移行。"""
+
+    def test_new_path_is_dot_rpa(self):
+        """既定の保存先が ``~/.rpa/credentials.enc`` である。"""
+        assert CREDENTIALS_PATH == Path.home() / ".rpa" / "credentials.enc"
+        assert LEGACY_CREDENTIALS_PATH == Path.home() / ".comken" / "credentials.enc"
+
+    def test_legacy_file_is_migrated_on_first_read(self, tmp_path, monkeypatch):
+        """新パスが空で旧パスにファイルがあれば、新パスへ移してから読み込む。
+
+        移行はバックグラウンドで静かに行われる（呼び出し側に分かるログは出さない）。
+        """
+        legacy_dir = tmp_path / ".comken"
+        legacy_dir.mkdir()
+        legacy_path = legacy_dir / "credentials.enc"
+        # 旧パスに暗号化ファイルを置く（実 DPAPI で往復できる値）
+        save_credential("site_a_client_id", "A", legacy_path)
+
+        # 新パスを一時ディレクトリ配下に切り替える
+        new_dir = tmp_path / ".rpa"
+        new_path = new_dir / "credentials.enc"
+        monkeypatch.setattr("comken.toolbox.credentials.store.CREDENTIALS_PATH", new_path)
+        monkeypatch.setattr(
+            "comken.toolbox.credentials.store.LEGACY_CREDENTIALS_PATH", legacy_path
+        )
+
+        value = load_credential("site_a_client_id")
+
+        assert value == "A"
+        # 新パスへ移動済み
+        assert new_path.exists()
+        assert not legacy_path.exists()
+
+    def test_existing_new_path_is_not_overwritten(self, tmp_path, monkeypatch):
+        """新パスに既にファイルがある場合は旧ファイルをそのまま残す（上書きしない）。"""
+        legacy_dir = tmp_path / ".comken"
+        legacy_dir.mkdir()
+        legacy_path = legacy_dir / "credentials.enc"
+        save_credential("site_a_client_id", "from-legacy", legacy_path)
+
+        new_dir = tmp_path / ".rpa"
+        new_dir.mkdir()
+        new_path = new_dir / "credentials.enc"
+        save_credential("site_a_client_id", "from-new", new_path)
+
+        monkeypatch.setattr("comken.toolbox.credentials.store.CREDENTIALS_PATH", new_path)
+        monkeypatch.setattr(
+            "comken.toolbox.credentials.store.LEGACY_CREDENTIALS_PATH", legacy_path
+        )
+
+        assert load_credential("site_a_client_id") == "from-new"
+        # 旧ファイルはそのまま残る
+        assert legacy_path.exists()
