@@ -8,7 +8,10 @@ config.ini を読み込み、config.SECTION.KEY の形式でアクセスでき�
     path = config.FILES.INPUT_FOLDER / config.FILES.CSV_EAST
 
     → 初回アクセス時にプロジェクトディレクトリの config.ini を1度だけ読む（遅延読み込み）。
-      別の場所にある config.ini を読むときは ``Config(path)`` を直接使う。
+      別の場所にある config.ini を読むときも ``Config(path)`` でよく、
+      同じパスなら **同じインスタンスが返る**（プロセス内で1度だけ読む。
+      同じパスのファイルを書き換えても自動では反映されない。反映するには
+      ``_reset_cached_config()`` を呼ぶ）。
 
 明示的にインスタンスを持ちたい場合:
 
@@ -36,14 +39,19 @@ config.ini を読み込み、config.SECTION.KEY の形式でアクセスでき�
 
 エディタの補完候補:
     属性は実行時に動的に作られるため、そのままではエディタが補完できないが、
-    Config() を呼ぶたびに補完用のスタブ（src/config.pyi）が自動更新されるため、
-    一度スクリプトを実行すれば config.SECTION.KEY が型付きで補完されるようになる。
+    ``Config()`` を呼ぶと**同じパスにつきプロセス内で 1 回**だけ補完用の
+    スタブ（src/config.pyi）が自動更新される。 1度スクリプトを実行すれば
+    ``config.SECTION.KEY`` が型付きで補完されるようになる。 config.ini を
+    書き換えたら次の実行で追随する（実行中のプロセスはキャッシュ済みなので
+    自動では反映されない。 反映したいときは ``_reset_cached_config()`` を
+    呼ぶか、新しいプロセスを起動する）。
 
 ※ ブラウザの設定は config.ini ではなく BrowserOptions のインスタンス
    （src/browser_options.py）で行う。config はブラウザ設定を持たない。
 """
 
 import configparser
+import functools
 import logging
 import math
 import shutil
@@ -91,18 +99,46 @@ class Config:
         [REPORT]
         TARGET_SHEETS = [支店A, 支店B, 集計]
 
+    ``Config(path)`` は ``Path.resolve()`` 後の絶対パスをキーに **プロセス内で
+    1 度だけ** Config を構築してキャッシュする。 同じパスで 2 回目を呼ぶと
+    同じインスタンスが返る。 **同じパスのファイルを書き換えても反映されない**
+    （反映には ``_reset_cached_config()`` を呼ぶ）。 ``stat()`` による更新確認は
+    しない（業務ツールは実行中の設定変更を想定しない。詳細は
+    ``_get_or_build_config`` の docstring）。
     """
 
+    def __new__(cls, path: str | Path | None = None) -> "Config":
+        # ``__new__`` でキャッシュ済みのインスタンスを返す。 ``__init__`` は
+        # 2 回目以降は何もしない。
+        if path is None:
+            path = project_dir() / "config.ini"
+        # ``Path.resolve()`` は Windows の ``_pathlibres`` 呼び出しで
+        # 1 回 100 マイクロ秒以上かかる。 ``Config(path)`` がホットループで
+        # 呼ばれると秒単位で効くので、 既に絶対パスのときは ``resolve()`` を
+        # 呼ばない（業務では ``tmp_path`` のような絶対 Path を渡すのが
+        # 通常の使い方）。 相対パスは ``resolve()`` で cwd を結合する。
+        p = Path(path)
+        if not p.is_absolute():
+            p = p.resolve()
+        return _get_or_build_config(str(p))
+
     def __init__(self, path: str | Path | None = None) -> None:
-        """
-        Args:
-            path: config.ini のパス。省略するとプロジェクトのフォルダ
-                （main.py の場所）の config.ini を読む。
+        # 実際の構築は ``__new__`` → ``_get_or_build_config`` → ``_initialize`` で
+        # 1 度だけ行われる。 2 回目以降の ``Config(path)`` はキャッシュ済みの
+        # インスタンスが返るため、ここでは何もしない。
+        return
+
+    def _initialize(self, resolved_path: Path) -> None:
+        """``Config.__new__`` から ``_get_or_build_config`` を経由して 1 度だけ呼ばれる。
+
+        ``Config.__init__`` は 2 回目以降の呼び出しで何もしないため、副作用はここに
+        集約する。 テストや業務コードが ``Config(path)`` を何度呼んでも、ここの
+        本体（configparser での読み込み・大文字チェック・スタブ更新）は 1 回しか走らない。
+        スタブ更新は同じパスを 2 度呼んだとき自動では再実行されない（プロセス内 1 回）。
         """
         # 社内 RPA 基盤は C:\ など別の場所をカレントにして
         # `python <絶対パス>\main.py` と呼ぶ。カレント基準だと C:\config.ini を探してしまう
-        if path is None:
-            path = project_dir() / "config.ini"
+        path = resolved_path
         cfg = configparser.ConfigParser(interpolation=None)
         # configparser は既定でキー名を小文字に潰すため、書かれたとおりの綴りを保つ。
         # これがないと「大文字で書かれていたか」を判定できない（_validate_upper_case）。
@@ -115,24 +151,24 @@ class Config:
         if not loaded:
             # configparser はファイルがなくても黙って空になるため、明示的にエラーにする
             # （後で config.FILES 等が分かりにくい AttributeError になるのを防ぐ）
-            created = _create_from_example(Path(path))
+            created = _create_from_example(path)
             if created is not None:
                 raise ConfigCreatedFromExampleError(created)
-            raise ConfigFileNotFoundError(Path(path).resolve())
+            raise ConfigFileNotFoundError(path.resolve())
 
         # configparser はセクション名の前後の空白（全角スペース含む）を落とさないため、
         # 手書きで `[FILES ]` のように書くと別セクション扱いになり、書いた人と
         # 読む側で名前が一致しなくなる。空白を落とした名前でアクセスさせる。
         # 重複したら黙って捨てずに WARNING を出している（同じ値が読まれているか
         # 利用者が疑わざるを得なくなるため）。
-        self._path = Path(path).resolve()
+        self._path = path.resolve()
         section_map = _build_section_map(cfg)
         # ↑の関数で空文字だけのセクション名は除外しているため、ここで len==0 でも
         # 例外にはせず空の Config として返す（下の _mappings 更新が起きないだけ）。
         if section_map:
             # 大文字小文字チェックは「落とした後の名前」で行う（小文字の検出は
             # 空白除去と独立なので、検出の意味は変わらない）。
-            _validate_upper_case(cfg, Path(path), section_map)
+            _validate_upper_case(cfg, path, section_map)
             self._mappings = {}
             for stripped_section, original_section in section_map.items():
                 if _is_mapping_section(stripped_section):
@@ -174,8 +210,12 @@ class Config:
         else:
             self._mappings = {}
 
-        # エディタ補完用スタブ（src/config.pyi）を自動更新する。
-        # config.ini を変更してもスタブが古くならない（失敗しても本処理は止めない）。
+        # エディタ補完用スタブ（src/config.pyi）の自動更新。 1プロセス内で
+        # 1回だけ走る（``Config.__new__`` → ``_get_or_build_config`` の
+        # ``lru_cache`` で本体が再実行されないため）。 同じパスの config.ini を
+        # 書き換えても自動では反映されないが、実務では別プロセスなので問題ない。
+        # ``update_stub`` の中身は「内容が同じなら書かない」ガードを持つ
+        # （``_write_stub_atomic``）ので、副作用は軽い。 失敗しても本処理は止めない。
         # スタブ生成は別モジュールへ分離しており、遅延 import で循環を避ける
         from comken.core.config.stubs import update_stub
 
@@ -359,30 +399,105 @@ def _validate_upper_case(
         raise ConfigLowerCaseNameError(path.resolve(), wrong)
 
 
-# ── `from comken import config` 用の遅延シングルトン ──────────────────────────
+# ── `Config(path)` のプロセス内キャッシュ ────────────────────────────────
 # プロジェクトごとに src/config.py（config = Config()）を書く手間を省く。
 # config.SECTION.KEY への初回アクセス時にカレントディレクトリの config.ini を
 # 1度だけ読む（import 時ではないので、config.ini を持たないプロジェクトやテストで
 # comken を import しても失敗しない）。
 #
-# `__getattr__` で初回呼び出し時に `_get_cached_default_config()` 経由で
-# `Config()` を生成し委譲する。生成したインスタンスは **プロセス内で再利用**する
+# `__getattr__` で初回呼び出し時に `_get_or_build_config` 経由で `Config()` を
+# 生成し委譲する。 生成したインスタンスは **プロセス内で再利用**する
 # （ループ内で `config.SECTION.KEY` を呼ぶたびに `Config()` が新規構築されて
 # config.ini の読み直しと `.pyi` スタブのディスク書き込みが走る問題を避けるため）。
 #
+# `Config(path)` で明示的にパスを渡した場合も同じキャッシュを経由する。 専用
+# global 変数（`_cached_config`）は持たず、**仕組みは1つ**（パス単位の
+# `functools.lru_cache`）。
+#
 # キャッシュの無効化条件:
-# - **プロセス内で1回だけ**構築する。``project_dir()`` は ``sys.argv`` を見て
-#   解決するため、テストや別プロセスでは ``sys.argv`` を差し替えれば別 path の
-#   ``config.ini`` が読まれる（同一プロセス内で ``sys.argv`` を変えた場合は、
-#   ``_reset_cached_config()`` を呼んで明示的に破棄する）。
-# - ``Config.ini`` を書き換えても自動では反映されない。反映が必要なときは
+# - **プロセス内で1回だけ**構築する。 ``Path.resolve()`` 後の絶対パスを
+#   キーにしているので、相対パスと絶対パスは同一視される（``Path.resolve()`` は
+#   Windows の UNC / 8.3 形式の揺れも吸収する）。
+# - **同じパスのファイルを書き換えても反映されない**。 反映が必要なときは
 #   内部関数 ``_reset_cached_config()`` を呼んでから再アクセスする。
 #   「ディスクから読む」が必要な操作は明示するのが安全（自動監視にすると
-#   ``path.stat()`` を毎回呼ぶコストが膨らみ、14万回のループが秒未満に
-#   入らないため）。
-# - ``Config(path)`` のようにパスを明示する呼び出しはキャッシュをバイパスする
-#   （呼び出し側が毎回新規インスタンスを欲しがる後方互換のため、共有状態は持たない）。
+#   ``path.stat()`` を毎回呼ぶコストが膨らむ。 1 回 25 マイクロ秒（Windows）で
+#   あり、 14 万回のループでは 3.5 秒。 共有サーバー上では ``stat()`` が
+#   ネットワーク往復になり更に遅くなる。 業務ツールは実行中の config.ini
+#   書き換えを想定しない）。
+# - **ファイルが存在しないパスはキャッシュしない**（``ConfigFileNotFoundError``
+#   を投げる。 ``functools.lru_cache`` は例外をキャッシュしないので、同じパスで
+#   再試行できる）。
+# - **テスト用に ``_reset_cached_config()`` で全エントリを破棄する**。
+#
+# `from comken import config` 用のデフォルト ``Config`` も `_default_config_path()`
+# で解決したパスを経由するため、**専用 global 変数（`_cached_config`）は持たない**
+# （二重キャッシュを防ぐ）。
 # 公開 API は増やしていない（``_reset_cached_config()`` は `_` プレフィックス）。
+#
+# キャッシュが増え続けないことの担保: ``maxsize=128`` の ``functools.lru_cache``
+# を使う。 業務では 1〜2 種類のパスしか使わないので到達しない。 テストで大量の
+# ``tmp_path`` を読んでも古いエントリは自動的に退避する（手動 evict は不要）。
+
+
+@functools.lru_cache(maxsize=128)
+def _get_or_build_config(resolved_path_str: str) -> "Config":
+    """``Path.resolve()`` 後の絶対パスをキーに、プロセス内で 1 度だけ ``Config`` を構築する。
+
+    同じパスで 2 回目を呼ぶとキャッシュ済みのインスタンスを返す。 ファイル I/O は
+    1 回だけ（``config.ini`` の読み込み・``_validate_upper_case``・スタブ更新）。
+    デフォルト ``Config()``（``from comken import config``）も
+    ``_default_config_path()`` で同じ関数を通る。
+
+    キャッシュの無効化条件（``_reset_cached_config`` の docstring にも書いた）:
+        - **同じパスのファイルを書き換えても反映されない**（``stat()`` による
+          更新確認は意図的に行わない）。 反映が必要なときは ``_reset_cached_config()``
+          を呼んでから ``Config(path)`` する。
+        - ``stat()`` を持たない理由: 1 回 25 マイクロ秒（Windows）＋ 共有サーバー
+          ではネットワーク往復。 業務ツールは実行中の config.ini 書き換えを
+          想定しないので、確認コストを毎回払う利点が無い。
+        - **ファイルが存在しない場合は ``ConfigFileNotFoundError``**（または
+          ``ConfigCreatedFromExampleError``）。 ``functools.lru_cache`` は例外を
+          キャッシュしないので、再試行できる。
+        - ``maxsize=128``: 業務利用では 1〜2 種類のパスしか使わないので到達しない。
+          テストで大量の ``tmp_path`` を読んでもエントリ数が増え続けない（古い
+          エントリは自動的に退避される）。
+
+    Raises:
+        ConfigFileNotFoundError: パスが存在しない場合。
+        ConfigCreatedFromExampleError: ``config.ini`` が無いが ``config.ini.example``
+            があった場合。
+        ConfigLowerCaseNameError: セクション名 / キー名が小文字で書かれていた場合。
+        ConfigMappingEmptyValueError: ``*_MAPPING`` の値が空欄だった場合。
+    """
+    config = object.__new__(Config)
+    config._initialize(Path(resolved_path_str))
+    return config
+
+
+@functools.lru_cache(maxsize=1)
+def _default_config_path() -> str:
+    """``from comken import config`` 用のデフォルト config.ini パスを解決する。
+
+    ``project_dir()`` は ``sys.argv`` を見て ``Path.resolve()`` を呼ぶため、
+    毎回呼ぶと ``config.SECTION.KEY`` 1 回あたりに乗るコストが重い
+    （1 万回呼ぶと秒単位で効いてくる）。 ``lru_cache(maxsize=1)`` で
+    プロセス内 1 回だけ解決する。
+
+    テストで ``sys.argv`` を差し替えた場合は ``_reset_cached_config()`` で
+    キャッシュをクリアする（``_default_config_path.cache_clear()`` も併せて呼ぶ）。
+    """
+    return str(Path(project_dir() / "config.ini").resolve())
+
+
+def __getattr__(name: str) -> types.SimpleNamespace:
+    # PEP 562: `comken.core.config.FILES` のようにモジュール属性として見つからない名前で呼ばれる。
+    # セクションは大文字なので、大文字名のときだけ Config() を生成して委譲する
+    # （Config / MappingDict などの実体は通常の属性解決で見つかるためここには来ない）。
+    if name.isupper():
+        return getattr(_get_or_build_config(_default_config_path()), name)
+    raise AttributeError(f"module 'comken.core.config' has no attribute {name!r}")
+
 
 # 公開型 ``MappingDict`` = 実装 ``_LenientDict``。
 # ``*_MAPPING`` セクションの戻り値は dict 互換（``isinstance(x, dict)`` が True）
@@ -391,47 +506,21 @@ def _validate_upper_case(
 # ``_LenientDict`` は内部実装として ``_`` プレフィックスで残す。
 MappingDict = _LenientDict
 
-# デフォルト ``Config()`` のキャッシュ（``_get_cached_default_config`` から使う）。
-# ``Config`` 自体は下で定義するので、型注釈は文字列にして前方参照にする。
-_cached_config: "Config | None" = None
-
-
-def __getattr__(name: str) -> types.SimpleNamespace:
-    # PEP 562: `comken.core.config.FILES` のようにモジュール属性として見つからない名前で呼ばれる。
-    # セクションは大文字なので、大文字名のときだけ Config() を生成して委譲する
-    # （Config / MappingDict などの実体は通常の属性解決で見つかるためここには来ない）。
-    if name.isupper():
-        return getattr(_get_cached_default_config(), name)
-    raise AttributeError(f"module 'comken.core.config' has no attribute {name!r}")
-
-
-def _get_cached_default_config() -> "Config":
-    """``from comken import config`` 用のデフォルト ``Config`` をキャッシュして返す。
-
-    初回呼び出し時に ``project_dir() / "config.ini"`` から ``Config()`` を構築し、
-    以降は同じインスタンスを返す。 ``project_dir()`` は ``sys.argv`` を見て
-    Windows で ``path.resolve()`` を呼ぶためコストが重い（1 万回呼ぶと秒単位
-    で効いてくる）。毎回呼ぶとそのコストがそのまま ``config.SECTION.KEY`` 1 回
-    あたりに乗ってしまうので、初回のみキャッシュする設計にしている。
-    """
-    global _cached_config
-    if _cached_config is None:
-        _cached_config = Config(project_dir() / "config.ini")
-    return _cached_config
-
 
 def _reset_cached_config() -> None:
-    """``_get_cached_default_config()`` のキャッシュを破棄する（テスト用）。
+    """**すべてのキャッシュを破棄する**（テスト用）。
+
+    破棄対象:
+        - ``_get_or_build_config`` の ``lru_cache``（``Config(path)`` のキャッシュ）
+        - ``_default_config_path`` の ``lru_cache``（デフォルトパス解決のキャッシュ）
 
     テストでは ``tmp_path`` がテストごとに違う ``config.ini`` を指すため、
-    前のテストのキャッシュが残っていると別テストの設定が漏れる。または
-    「``config.ini`` を書き換えたので新しい値を読んでほしい」という場面で
-    手動で反映するために使う。 各テストの冒頭で呼ぶ想定
-    （``tests/test_config.py`` の autouse fixture から）。利用者向けの
+    前のテストのキャッシュが残っていると別テストの設定が漏れる。 各テストの
+    冒頭で呼ぶ想定（``tests/test_config.py`` の autouse fixture から）。 利用者向けの
     公開 API ではない。
     """
-    global _cached_config
-    _cached_config = None
+    _get_or_build_config.cache_clear()
+    _default_config_path.cache_clear()
 
 
 # ── 内部ヘルパー：ini 値の型変換 ───────────────────────────────────────────────

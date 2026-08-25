@@ -1015,7 +1015,15 @@ class TestGenerateStub:
 
 
 class TestAutoStub:
-    """Config() 実行時のスタブ自動更新のテスト。"""
+    """Config() 実行時のスタブ自動更新のテスト。
+
+    ``Config(path)`` は **同じパスにつきプロセス内で 1 回だけ** ``update_stub()`` を
+    走らせる（``functools.lru_cache`` で構築結果を共有するため）。 同一プロセス内では
+    2 度目の ``Config(ini)`` でスタブが再生成されない。 別プロセス（＝実際の使い方）
+    では新しい ``Config()`` 構築が走るので、 config.ini を書き換えると次の実行で
+    スタブも追随する。 この前提に沿ったテストは ``_reset_cached_config()`` で
+    キャッシュを破棄してから ``Config(ini)`` を呼ぶ形になっている。
+    """
 
     @pytest.fixture
     def project(self, tmp_path):
@@ -1038,21 +1046,40 @@ class TestAutoStub:
         assert "COUNT: int" in stub.read_text(encoding="utf-8")
 
     def test_stub_updated_when_ini_changes(self, project):
-        """config.ini を変更して再実行するとスタブに反映されることを確認する。"""
+        """config.ini を変更して**別プロセスで再実行**するとスタブに反映されることを確認する。
+
+        同一プロセス内では ``Config(path)`` がキャッシュ済みのインスタンスを返すため、
+        ``config.ini`` を書き換えても同じパスなら再構築されずスタブも更新されない
+        （これは意図した挙動。 14万回の属性アクセスに対する ``update_stub`` の再実行を
+        避けるため）。 実務では「config.ini を直す → ツールを動かす」は別プロセスなので、
+        キャッシュは効かずスタブは更新される。 ここでその挙動を再現するため、
+        2 回目の ``Config(ini)`` の前に ``_reset_cached_config()`` でキャッシュを破棄する
+        （=「別プロセスで再起動した」のと等価）。
+        """
         ini, stub = project
         Config(ini)
 
         ini.write_text("[REPORT]\nCOUNT = 10\nNAME = 月次\n", encoding="utf-8")
+        config_module._reset_cached_config()
         Config(ini)
 
         assert "NAME: str" in stub.read_text(encoding="utf-8")
 
     def test_broken_stub_is_restored(self, project):
-        """スタブが手で書き換えられていても、次の実行で正しい内容に戻ることを確認する。"""
+        """スタブが手で書き換えられていても、**別プロセスでの再実行**で正しい内容に戻ることを確認する。
+
+        同一プロセス内では ``Config(path)`` がキャッシュ済みのインスタンスを返すため、
+        スタブが壊れた状態のまま ``Config(ini)`` を呼んでも ``update_stub`` は
+        再実行されず、壊れたスタブは直らない（これも意図した挙動）。 実務では
+        別プロセスで再実行されるため、キャッシュが破棄されてから ``update_stub``
+        が走る。 ここでその挙動を再現するため、 2 回目の ``Config(ini)`` の前に
+        ``_reset_cached_config()`` でキャッシュを破棄する。
+        """
         ini, stub = project
         Config(ini)
         stub.write_text("# 壊れた内容", encoding="utf-8")
 
+        config_module._reset_cached_config()
         Config(ini)
 
         assert "COUNT: int" in stub.read_text(encoding="utf-8")

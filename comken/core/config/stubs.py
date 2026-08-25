@@ -4,11 +4,12 @@ Config の属性（config.SECTION.KEY）は config.ini から実行時に動的�
 そのままではエディタが補完できない。ここで config.ini の内容を型付きの .pyi に書き出し、
 補完を効かせる。設定値の読み込みとはモジュール内で責務を分けている。
 
-- ``Config()`` を直接呼ぶたびに ``update_stub()`` が自動で走る。
-  ``from comken import config`` 経由では ``_get_cached_default_config`` が
-  ``(path, mtime_ns, size)`` 単位で再利用するため、初回1回だけ ``Config()`` が
-  走って ``update_stub()`` も1回だけ走る（ループ内で ``config.SECTION.KEY``
-  を呼ぶたびにスタブ書き込みが走る問題を避ける）。
+- ``Config(path)`` を呼ぶと**同じパスにつきプロセス内で 1 回**だけ ``update_stub()``
+  が自動で走る。 ``Config`` は ``Path.resolve()`` 後の絶対パスをキーに
+  ``functools.lru_cache`` で構築結果を共有するので、 ``Config(path)`` /
+  ``from comken import config`` どちらの経路でも、 同じパスは 1 度しか
+  スタブ更新が走らない（ループ内で ``config.SECTION.KEY`` を呼ぶたびに
+  スタブ書き込みが走る問題を避ける）。
 - ``_write_stub_atomic`` は内容が既存ファイルと同じならディスクに触らないため、
   連続呼び出しの disk I/O は発生しない
 - コードを書く前に手動で作りたい場合は generate_stub() を直接呼ぶ
@@ -25,7 +26,8 @@ from comken.exceptions import ConfigFileNotFoundError
 
 _STUB_HEADER = '''"""config.ini から自動生成されたエディタ補完用スタブ。手で編集しない。
 
-Config() を呼ぶたびに自動更新される（手動生成 CLI `python -m comken config` は v1.0.0 で削除済み）。
+Config() を呼ぶたびに同じパスならプロセス内で 1 回だけ自動更新される
+（手動生成 CLI `python -m comken config` は v1.0.0 で削除済み）。
 """
 '''
 
@@ -35,9 +37,10 @@ def generate_stub(
 ) -> Path:
     """config.ini からエディタ補完用の型スタブ（.pyi）を手動生成する。
 
-    通常は Config() を呼ぶたびに自動更新されるため、手動で実行する必要はない。
-    「コードをまだ書いていないが先にスタブだけ作りたい」場合に generate_stub() を
-    直接呼び出す（CLI 入口 `python -m comken config` は v1.0.0 で削除済み）。
+    通常は Config(path) を呼ぶと同じパスにつきプロセス内で 1 回だけ自動更新されるため、
+    手動で実行する必要はない。 「コードをまだ書いていないが先にスタブだけ作りたい」
+    場合に generate_stub() を直接呼び出す（CLI 入口 `python -m comken config` は
+    v1.0.0 で削除済み）。
 
     Args:
         ini_path: 読み込む config.ini のパス。
