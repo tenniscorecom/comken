@@ -51,6 +51,7 @@ _DATE_TEXT_FORMATS: tuple[str, ...] = (
     "%Y-%m-%d",
     "%Y年%m月%d日",
     "%Y/%m/%d %H:%M:%S",
+    "%Y-%m-%dT%H:%M:%S",
 )
 
 

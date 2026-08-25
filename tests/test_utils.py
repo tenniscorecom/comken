@@ -97,6 +97,7 @@ class TestParseCellDate:
         assert parse_cell_date("2026-04-22") == expected
         assert parse_cell_date("2026年04月22日") == expected
         assert parse_cell_date("2026/04/22 00:00:00") == expected
+        assert parse_cell_date("2026-04-22T00:00:00") == expected
 
     def test_strips_surrounding_whitespace(self) -> None:
         """文字列の前後の空白は落として解釈する。"""
