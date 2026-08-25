@@ -4,7 +4,7 @@ r"""comken/services/salesforce_downloader/service.py — 取得の本体。
 
     CUSTOMER_LIST = "1001"        # 各プロジェクトで、意味の分かる名前を付ける
 
-    rows = download_report(CUSTOMER_LIST).read()            # 今すぐ Salesforce から取る
+    rows = download_report(CUSTOMER_LIST).read_rows()       # 今すぐ Salesforce から取る
     by_code = cached_report(CUSTOMER_LIST).index("顧客コード")
 
 **2つの関数の意味をはっきり分ける。**

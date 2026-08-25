@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from comken.core.table import Table
 from comken.core.timer import measure
 from comken.exceptions import TableNotOpenError
 from comken.internal.base import InternalLibraryBase
@@ -105,38 +106,55 @@ class SalesforceAPI:
         return self._module.data_path(path)
 
     @measure
-    def query(self, soql: str) -> list[dict]:
-        """SOQL クエリを実行し、結果を list[dict] で返す。
+    def query(self, soql: str) -> Table:
+        """SOQL クエリを実行し、結果を Table で返す。
+
+        列は SOQL からはメタデータが取れないため、**1 件目から推測**する。
+        0 件のときは列が空の ``Table`` を返す（``records[0]`` からの推測に
+        依存しない）。``toolbox.salesforce.SalesforceBase.query()`` と同じ前提。
 
         Args:
             soql: 実行する SOQL クエリ文字列。
 
         Returns:
-            レコードの辞書のリスト。
+            SOQL の結果を表す ``Table``。
 
         Raises:
             TableNotOpenError: ``with`` ブロック外で呼ばれた場合。
         """
         if self._module is None:
             raise TableNotOpenError("SalesforceAPI")
-        return self._module.query(soql)
+        records = self._module.query(soql)
+        # 0 件のときは ``records[0]`` を見ずに空の列を返す（明示的に書く）
+        columns = list(records[0]) if records else []
+        return Table(columns, records)
 
     @measure
-    def report_run(self, report_id: str) -> list[dict]:
-        """レポートを実行し、結果を list[dict] で返す。
+    def report_run(self, report_id: str) -> Table:
+        """レポートを実行し、結果を Table で返す。
+
+        社内ライブラリ ``example_libs.v0000.salesforce`` の ``report_run`` は
+        ``SalesforceBase.report.run()`` と同じ ``[{表示名: 値}, ...]`` 形式を返す
+        ため、1 件目から列を推測する。0 件のときは列が空の ``Table`` を返す
+        （``records[0]`` からの推測に依存しない）。 ``toolbox.salesforce`` 側の
+        ``run()`` は ``detailColumns`` から列を取れるため列落ちしないが、
+        社内ライブラリ側の戻り値スキーマが同等かどうかは呼び出し側で必要なら
+        確認すること。
 
         Args:
             report_id: 実行するレポートの Id。
 
         Returns:
-            レポート結果の辞書のリスト。
+            レポート結果を表す ``Table``。
 
         Raises:
             TableNotOpenError: ``with`` ブロック外で呼ばれた場合。
         """
         if self._module is None:
             raise TableNotOpenError("SalesforceAPI")
-        return self._module.report_run(report_id)
+        records = self._module.report_run(report_id)
+        columns = list(records[0]) if records else []
+        return Table(columns, records)
 
 
 __all__ = ["SalesforceAPI", "SALESFORCE_LIBRARY_NAME"]

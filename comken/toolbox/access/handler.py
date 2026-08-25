@@ -19,6 +19,7 @@ from comken.core.clock import now
 from comken.core.files import DateNameBuilder
 from comken.core.files.base import FileBase
 from comken.core.timer import measure
+from comken.core.table import Table
 from comken.exceptions import (
     AccessBackupError,
     AccessFileNotFoundError,
@@ -231,6 +232,30 @@ class AccessDatabase(FileBase):
                     yield dict(zip(field_names, values, strict=True))
         finally:
             recordset.Close()
+
+    def read_table(self, source: str) -> Table:
+        """テーブルまたはクエリをメモリ上の ``Table`` として返す。
+
+        全行をメモリへ載せるため、大量データには ``read_rows()`` を使う。
+        表として絞り込み・索引・転記を行う場合の明示的な入口。
+
+        列名は ``read_rows()`` のイテレータから直接取れない（イテレータは
+        行ごとにしか値を返さない）ため、レコードセットを別途開いて列名だけ
+        先に取得する。0 件のときは ``read_rows()`` が空ジェネレータを返すので
+        ``columns`` が空になるが、Access 側にもスキーマ API が無いため
+        「0 件のとき列名が空」なのは仕様として許容する。
+        """
+        # 列名はレコードセットを開いた最初の1回で取れるので、先に取る
+        self._ensure_source(source)
+        recordset = self._access.CurrentDb().OpenRecordset(source)
+        try:
+            field_names = [
+                str(recordset.Fields.Item(index).Name) for index in range(recordset.Fields.Count)
+            ]
+        finally:
+            recordset.Close()
+        rows = list(self.read_rows(source))
+        return Table(field_names, rows)
 
     def table_names(self) -> list[str]:
         """利用可能なテーブルと保存済みクエリの名前を返す。"""

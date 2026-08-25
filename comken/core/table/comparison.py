@@ -43,8 +43,8 @@ def compare_tables(
     if generated_columns.intersection(read.columns):
         # changed の列名が既存列と衝突すると値を区別できないため、曖昧な結果を返さない。
         raise TransferMappingError
-    read_index = _index_rows(read.read(), read_keys)
-    write_index = _index_rows(write.read(), write_keys)
+    read_index = _index_rows(read.read_rows(), read_keys)
+    write_index = _index_rows(write.read_rows(), write_keys)
     read_only, write_only, changed, same = [], [], [], []
     for key, read_row in read_index.items():
         write_row = write_index.get(key)

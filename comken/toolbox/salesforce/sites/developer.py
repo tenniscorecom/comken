@@ -7,6 +7,7 @@
 ここに置く。共通の操作は `SalesforceBase` 側にあるので書かない。
 """
 
+from comken.core.table import Table
 from comken.toolbox.salesforce.client import SalesforceBase
 
 
@@ -38,7 +39,7 @@ class Developer(SalesforceBase):
     # TODO: 配置するときに実際のレポート ID へ置き換える
     REPORT_OPPORTUNITIES = "00O000000000003"
 
-    def opportunities(self) -> list[dict]:
+    def opportunities(self) -> Table:
         """案件一覧レポートの明細を返す。
 
         2000 行を超えると SalesforceReportTruncatedError で止まる。

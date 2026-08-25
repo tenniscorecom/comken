@@ -155,7 +155,7 @@ class ExcelTable:
         )
 
         table = rows if isinstance(rows, Table) else Table(list(rows[0]) if rows else [], rows)
-        rows_list = table.read()
+        rows_list = table.read_rows()
         passed_columns = [str(c) for c in table.columns]
 
         if not any(passed_columns):
@@ -266,7 +266,7 @@ class ExcelTable:
         )
 
         if isinstance(rows, Table):
-            additions = rows.read()
+            additions = rows.read_rows()
             additions_columns = [str(c) for c in rows.columns]
         elif isinstance(rows, dict):
             additions = [rows]

@@ -41,7 +41,7 @@ def main() -> None:
         source = source_csv.read()
     destination_table = Table(
         ["注文番号", "顧客名", "請求額"],
-        [{"注文番号": row["注文番号"], "顧客名": "", "請求額": ""} for row in source.read()],
+        [{"注文番号": row["注文番号"], "顧客名": "", "請求額": ""} for row in source.read_rows()],
     )
     transfer = Transfer(
         source,

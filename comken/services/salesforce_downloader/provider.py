@@ -7,7 +7,7 @@
 
     from comken.services.salesforce_downloader import cached_report
 
-    rows = cached_report("1001").read()
+    rows = cached_report("1001").read_rows()
 
 戻り値は `Table`。行の検索・抽出・索引化は Table の API でできる。
 パスだけ欲しい場合は `cached_report_path()` を使う。

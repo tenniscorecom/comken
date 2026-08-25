@@ -25,6 +25,7 @@ from typing import Protocol, Self
 
 import requests
 
+from comken.core.table import Table
 from comken.core.timer import measure
 from comken.exceptions import (
     SalesforceConnectionError,
@@ -208,17 +209,24 @@ class SalesforceBase:
 
     # ------------------------------------------------------------------ query
     @measure
-    def query(self, soql: str) -> list[dict]:
+    def query(self, soql: str) -> Table:
         """SOQL クエリを実行してレコードを返す（全件取得・ページ送り自動）。
 
         レポート API と違って**行数の上限がない**ので、
         2000 行を超えるデータはこちらで取る。
 
+        列は SOQL からはメタデータが取れないため、**1 件目から推測**する。
+        0 件のときは列が空の ``Table`` を返す（``rows[0]`` からの推測に依存
+        しないため）。なお ``Account.Name`` のようなドット区切りの親子リレーション
+        項目は**そのまま列名にする**（平坦化しない）。``records[0]`` のキーが
+        そのまま列になるため、リレーションを跨いだ項目の取り回しを呼び出し側で
+        揃えておくこと。
+
         Args:
             soql: 実行する SOQL クエリ文字列。
 
         Returns:
-            レコードの辞書のリスト。
+            SOQL の結果を表す ``Table``。
         """
         records: list[dict] = []
         logger.debug("Salesforce SOQL取得開始")
@@ -233,12 +241,20 @@ class SalesforceBase:
             # done が真なら次のページは無い
             path = "" if result.get("done", True) else result.get("nextRecordsUrl", "")
         logger.debug("Salesforce SOQL取得完了: 件数=%d", len(records))
-        return records
+        # 0 件のときは列を空で返す。``list(records[0])`` は 0 件だと例外になるため、
+        # 分岐して空リストを返す（実装の意図を明示するため ``else []`` を付ける）。
+        columns = list(records[0]) if records else []
+        return Table(columns, records)
 
     # ------------------------------------------------------------------- CRUD
     @measure
     def get(self, object_name: str, record_id: str) -> dict:
         """レコードを1件取得する。
+
+        ``sf.report.get(...)`` ではなく ``sf.get(...)``（CRUD）で使う。
+        ``report`` は ``ReportAPI`` インスタンスで名前空間が分かれているため、
+        CRUD の動詞群 ``get`` / ``insert`` / ``update`` / ``upsert`` / ``delete``
+        と揃える目的で ``get`` を採用する。
 
         Args:
             object_name: オブジェクトの API 参照名（例: "Account"）。

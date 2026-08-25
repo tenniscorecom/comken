@@ -780,19 +780,12 @@ tests/
 ### 書き方のパターン
 
 ```python
-class TestCSVFind:
+class TestCSVFindsRow:
     def test_finds_existing_row(self, sample_csv):
         """キーに一致する行を返す。"""
         with CSV(sample_csv) as csv_file:
-            row = csv_file.find("注文番号", "A001")
-        assert row is not None
-        assert row["金額"] == "1000"
-
-    def test_returns_none_when_not_found(self, sample_csv):
-        """見つからない場合は None を返す。"""
-        with CSV(sample_csv) as csv_file:
-            row = csv_file.find("注文番号", "Z999")
-        assert row is None
+            rows_by_key = csv_file.read().index("注文番号")
+        assert rows_by_key["A001"]["金額"] == "1000"
 ```
 
 | ルール | 例 |

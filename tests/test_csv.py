@@ -48,7 +48,7 @@ class TestCSV:
         path.write_text("A001,1000\n", encoding="utf-8-sig")
         with CSV(path, columns=["注文番号", "金額"]) as csv_file:
             table = csv_file.read()
-        assert table.read() == [{"注文番号": "A001", "金額": "1000"}]
+        assert table.read_rows() == [{"注文番号": "A001", "金額": "1000"}]
 
     def test_append_is_saved_only_on_normal_with_exit(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
@@ -144,7 +144,7 @@ class TestCSV:
         path.write_text("id,amount\n001,2\n", encoding="utf-8-sig")
         with CSV(path, types={"amount": int}) as csv_file:
             table = csv_file.read()
-        assert table.read() == [{"id": "001", "amount": 2}]
+        assert table.read_rows() == [{"id": "001", "amount": 2}]
 
     def test_type_conversion_error_reports_row_and_column(self, tmp_path) -> None:
         path = tmp_path / "data.csv"

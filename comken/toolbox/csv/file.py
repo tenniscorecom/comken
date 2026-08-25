@@ -166,7 +166,7 @@ class CSV:
         else:
             raise CSVFileNotFoundError(self.path)
         if isinstance(rows, Table):
-            additions = rows.read()
+            additions = rows.read_rows()
         elif isinstance(rows, dict):
             additions = [rows]
         elif isinstance(rows, list):
@@ -208,7 +208,7 @@ class CSV:
                 return
             writer = csv.DictWriter(file, fieldnames=table.columns, extrasaction="raise")
             writer.writeheader()
-            writer.writerows(table.read())
+            writer.writerows(table.read_rows())
 
     @property
     def _write_encoding(self) -> str:

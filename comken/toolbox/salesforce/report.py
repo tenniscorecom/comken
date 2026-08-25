@@ -25,6 +25,7 @@ import re
 import time
 from typing import TYPE_CHECKING
 
+from comken.core.table import Table
 from comken.core.timer import measure
 from comken.exceptions import (
     SalesforceReportExecutionError,
@@ -99,7 +100,7 @@ class ReportAPI:
         report_id: str,
         filters: list[dict] | None = None,
         allow_truncated: bool = False,
-    ) -> list[dict]:
+    ) -> Table:
         """レポートを同期実行して明細行を返す（上限 2000 行）。
 
         Args:
@@ -112,7 +113,7 @@ class ReportAPI:
                 （欠けたデータで処理が進むのを防ぐため）。
 
         Returns:
-            [{"列の表示名": "値", ...}, ...] のリスト。
+            レポート明細を表す ``Table``。
 
         Raises:
             SalesforceReportTruncatedError: 上限で切り捨てられた場合
@@ -131,9 +132,12 @@ class ReportAPI:
         else:
             data, _ = self._client.request("GET", path, component=COMPONENT)
         logger.debug("Salesforce APIレスポンス受信: Report ID=%s", report_id)
-        rows = self._parse(data, report_id, allow_truncated)
+        labels, rows = self._parse(data, report_id, allow_truncated)
         logger.debug("Salesforce Report取得完了: Report ID=%s 件数=%d", report_id, len(rows))
-        return rows
+        # 列は ``detailColumns`` と ``detailColumnInfo`` から組み立てた表示名を使う。
+        # ``rows[0]`` からの推測だと 0 件のとき列が消えて ``table.column("列名")`` が
+        # ``TableColumnNotFoundError`` で落ちる（日常の「該当0件」で壊れる）。
+        return Table(labels, rows)
 
     @measure
     def run_async(
@@ -141,7 +145,7 @@ class ReportAPI:
         report_id: str,
         filters: list[dict] | None = None,
         allow_truncated: bool = False,
-    ) -> list[dict]:
+    ) -> Table:
         """レポートを非同期実行して明細行を返す（**上限は同期と同じ 2000 行**）。
 
         重いレポートで同期実行がタイムアウトするときに使う。
@@ -170,7 +174,8 @@ class ReportAPI:
             )
             status = data.get("status") if isinstance(data, dict) else None
             if status == "Success":
-                return self._parse(data, report_id, allow_truncated)
+                labels, rows = self._parse(data, report_id, allow_truncated)
+                return Table(labels, rows)
             if status == "Error":
                 # data の dict への絞り込みは関数内で完結させる（再判定せず typing 用に分岐）
                 if not isinstance(data, dict):
@@ -226,10 +231,16 @@ class ReportAPI:
     def _base_path(self) -> str:
         return self._client.data_path("/analytics/reports")
 
-    def _parse(self, data: object, report_id: str, allow_truncated: bool) -> list[dict]:
-        """レポート API のレスポンスを [{表示名: 値}, ...] に変換する。"""
+    def _parse(
+        self, data: object, report_id: str, allow_truncated: bool
+    ) -> tuple[list[str], list[dict]]:
+        """レポート API のレスポンスを ``(表示名の列リスト, [{表示名: 値}, ...])`` に変換する。
+
+        0 件のときでも ``detailColumns`` / ``detailColumnInfo`` から組み立てた
+        ``labels`` を返すため、``Table`` の列情報が落ちない。
+        """
         if not isinstance(data, dict):
-            return []
+            return [], []
 
         metadata = data.get("reportMetadata", {})
         report_format = metadata.get("reportFormat")
@@ -255,6 +266,6 @@ class ReportAPI:
         labels = [column_info.get(column, {}).get("label", column) for column in columns]
 
         rows = data.get("factMap", {}).get(DETAIL_ROWS_KEY, {}).get("rows", [])
-        return [
+        return labels, [
             {label: row["dataCells"][i]["label"] for i, label in enumerate(labels)} for row in rows
         ]

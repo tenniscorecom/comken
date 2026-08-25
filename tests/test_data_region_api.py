@@ -103,7 +103,7 @@ class TestExcelTable:
             with patch.object(excel, "_read_range_with_com") as read_with_com:
                 result = table.read()
 
-            assert result.read() == [{"id": "1"}]
+            assert result.read_rows() == [{"id": "1"}]
             read_with_com.assert_not_called()
 
     def test_cached_formula_stays_on_openpyxl(self, tmp_path) -> None:
@@ -125,7 +125,7 @@ class TestExcelTable:
             ):
                 result = table.read()
 
-        assert result.read() == [{"id": "1", "total": "2"}]
+        assert result.read_rows() == [{"id": "1", "total": "2"}]
         read_with_com.assert_not_called()
 
     def test_uncalculated_formula_automatically_reads_only_table_ref_with_com(
@@ -146,7 +146,7 @@ class TestExcelTable:
             ) as read_with_com:
                 result = table.read()
 
-        assert result.read() == [{"id": "1", "total": "2"}]
+        assert result.read_rows() == [{"id": "1", "total": "2"}]
         read_with_com.assert_called_once_with("PY_Users", 1, 1, 2, 2)
 
     def test_force_com_reads_only_table_ref(self, tmp_path) -> None:
@@ -160,7 +160,7 @@ class TestExcelTable:
             ) as read_with_com:
                 result = table.read(force_com=True)
 
-        assert result.read() == [{"id": "2"}]
+        assert result.read_rows() == [{"id": "2"}]
         read_with_com.assert_called_once_with("PY_Users", 1, 1, 1, 2)
 
     def test_display_sheet_rejects_table_access(self, tmp_path) -> None:

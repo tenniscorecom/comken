@@ -200,7 +200,7 @@ class TestDownloadReport:
             table = download_report("1001", "案件集計")
             saved = download_report_path("1001")
         assert saved.is_file()
-        assert table.read() == ROWS
+        assert table.read_rows() == ROWS
 
     def test_csv_path_is_accessible_after_construction(self, paths):
         with CSV(paths["history_path"]) as csv_file:
@@ -846,9 +846,9 @@ class TestAllowEmpty:
             table = download_report("1001")
 
         # CSV は 0 バイトでも例外を出さず、空の行リストを返す
-        assert table.read() == []
+        assert table.read_rows() == []
         # ヘッダー名での索引も空（ヘッダー行が無いので当然）
-        assert table.read() == []
+        assert table.read_rows() == []
 
     def test_scheduled_empty_report_can_be_received(self, tmp_path, monkeypatch):
         """0件で成功した定期取得は、本日取得済みとして空のまま受け取れる。"""
@@ -877,7 +877,7 @@ class TestAllowEmpty:
 
         reader = cached_report("1001")
         assert cached_report_path("1001").is_file()
-        assert reader.read() == []
+        assert reader.read_rows() == []
 
     def test_master_without_allow_empty_column_defaults_to_no(self, tmp_path, monkeypatch):
         """4. `0件あり` の列が無い管理表でも読める（既定 `×` として扱われる）。"""

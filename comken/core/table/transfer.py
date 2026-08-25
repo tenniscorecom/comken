@@ -130,7 +130,7 @@ class Transfer:
         self.write._check_columns(self.write_keys)
         self._ensure_working_table()
         write_index = self._working_index()
-        for read_row in self.read.read():
+        for read_row in self.read.read_rows():
             key = self._row_key(read_row, self.read_keys)
             write_row = write_index.get(key)
             yield read_row, write_row
@@ -148,8 +148,8 @@ class Transfer:
         """突合しなかった行を ``UnmatchedRows`` で返す。
 
         ``only_in_read`` は write に対応が無い read 行（追加候補）。
-        ``Table`` として返すので ``.read()`` / ``.filter()`` などの Table 標準の
-        インターフェースが使える。 戻り値は ``Table.read()`` と同じく **read 行の
+        ``Table`` として返すので ``.read_rows()`` / ``.filter()`` などの Table 標準の
+        インターフェースが使える。 戻り値は ``Table.read_rows()`` と同じく **read 行の
         コピー** で、書き換えても ``read`` にも ``result()`` にも影響しない。
 
         ``only_in_write`` は read に対応が無い write 行（破棄候補）。
@@ -172,7 +172,7 @@ class Transfer:
         # read は 1 回だけ走査する。空キー行は write_index にキーが無いため常に
         # only_in_read 側へ流れる。空でないキーで write に居るキーは read_keys_index に
         # 積み、only_in_write の判定に使う。
-        for read_row in self.read.read():
+        for read_row in self.read.read_rows():
             key = self._row_key(read_row, self.read_keys)
             if self._is_blank_key(key) or key not in write_index:
                 read_only.append(read_row)
@@ -229,7 +229,7 @@ class Transfer:
         ``result()`` は同じ作業 Table インスタンスを返し続けるので、
         ``result().append(...)`` のように破壊的に加工した場合や、 ``result()`` を
         呼んだ後に ``unmatched().only_in_write`` の ``write_row`` を書き換えた場合も、
-        後続の ``result().read()`` 呼び出しに反映される（``Table._iter_rows_for_update``
+        後続の ``result().read_rows()`` 呼び出しに反映される（``Table._iter_rows_for_update``
         経由で実体 dict を共有しているため）。
 
         Example:
@@ -247,7 +247,7 @@ class Transfer:
             # transfer_rows() / matched_rows() がまだ呼ばれていないので、
             # write のコピーを作る（変更なし）。
             self._working_table = Table(
-                self.write.columns, self.write.read(), types=self.write.types
+                self.write.columns, self.write.read_rows(), types=self.write.types
             )
         return self._working_table
 

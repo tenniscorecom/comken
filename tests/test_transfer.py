@@ -119,7 +119,7 @@ def test_transfer_apply_mapping_copies_by_mapping() -> None:
     for read_row, write_row in transfer.matched_rows():
         transfer.apply_mapping(read_row, write_row)
 
-    assert transfer.result().read() == [{"id": 1, "name": "Alice"}]
+    assert transfer.result().read_rows() == [{"id": 1, "name": "Alice"}]
 
 
 def test_transfer_apply_mapping_supports_different_column_names() -> None:
@@ -131,7 +131,7 @@ def test_transfer_apply_mapping_supports_different_column_names() -> None:
     for read_row, write_row in transfer.matched_rows():
         transfer.apply_mapping(read_row, write_row)
 
-    assert transfer.result().read() == [{"id": 1, "label": "山田"}]
+    assert transfer.result().read_rows() == [{"id": 1, "label": "山田"}]
 
 
 def test_transfer_apply_mapping_supports_composite_key() -> None:
@@ -159,7 +159,7 @@ def test_transfer_apply_mapping_supports_composite_key() -> None:
         transfer.apply_mapping(read_row, write_row)
 
     # A-1 だけ転記される。B-2 は write に存在しないので対象にならない。
-    assert transfer.result().read() == [{"group": "A", "id": 1, "value": "new"}]
+    assert transfer.result().read_rows() == [{"group": "A", "id": 1, "value": "new"}]
 
 
 def test_transfer_continue_skips_apply_mapping() -> None:
@@ -181,7 +181,7 @@ def test_transfer_continue_skips_apply_mapping() -> None:
         transfer.apply_mapping(read_row, write_row)
 
     # id=1 だけ転記され、id=2 は古い値のまま
-    assert transfer.result().read() == [
+    assert transfer.result().read_rows() == [
         {"id": 1, "value": "new"},
         {"id": 2, "value": "old2"},
     ]
@@ -191,17 +191,17 @@ def test_transfer_apply_mapping_does_not_mutate_input_tables() -> None:
     """apply_mapping を呼んでも read / write Table は変わらない。"""
     source = Table(["id", "value"], [{"id": 1, "value": "new"}])
     destination = Table(["id", "value"], [{"id": 1, "value": "old"}])
-    original_source = source.read()
-    original_destination = destination.read()
+    original_source = source.read_rows()
+    original_destination = destination.read_rows()
     transfer = Transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
 
     for read_row, write_row in transfer.matched_rows():
         transfer.apply_mapping(read_row, write_row)
 
-    assert source.read() == original_source
-    assert destination.read() == original_destination
+    assert source.read_rows() == original_source
+    assert destination.read_rows() == original_destination
     # 作業 Table 側にだけ変更が反映されている
-    assert transfer.result().read() != original_destination
+    assert transfer.result().read_rows() != original_destination
 
 
 def test_transfer_apply_mapping_with_none_destination_raises() -> None:
@@ -229,7 +229,7 @@ def test_transfer_guarding_none_with_transfer_rows_works() -> None:
         transfer.apply_mapping(read_row, write_row)
 
     # id=2 は write に存在しないので mapping 適用されず、id=1 だけ転記される
-    assert transfer.result().read() == [{"id": 1, "value": "new"}]
+    assert transfer.result().read_rows() == [{"id": 1, "value": "new"}]
 
 
 def test_transfer_destination_changes_persist_to_working_table() -> None:
@@ -242,11 +242,11 @@ def test_transfer_destination_changes_persist_to_working_table() -> None:
         write_row["value"] = read_row["value"]
 
     assert transfer._working_table is not None
-    assert transfer._working_table.read() == [{"id": 1, "value": "new"}]
-    assert transfer.result().read() == [{"id": 1, "value": "new"}]
+    assert transfer._working_table.read_rows() == [{"id": 1, "value": "new"}]
+    assert transfer.result().read_rows() == [{"id": 1, "value": "new"}]
     # 入力は不変（書き換えは作業行への操作）
-    assert source.read() == [{"id": 1, "value": "new"}]
-    assert destination.read() == [{"id": 1, "value": "old"}]
+    assert source.read_rows() == [{"id": 1, "value": "new"}]
+    assert destination.read_rows() == [{"id": 1, "value": "old"}]
 
 
 def test_transfer_transfer_rows_returns_iterator_and_can_be_reused() -> None:
@@ -333,14 +333,14 @@ def test_transfer_does_not_mutate_input_tables() -> None:
     """Transfer の呼び出しだけで read / write の行は変わらない。"""
     source = Table(["id", "value"], [{"id": "1", "value": "new"}])
     destination = Table(["id", "value"], [{"id": "1", "value": "old"}])
-    original_source = source.read()
-    original_destination = destination.read()
+    original_source = source.read_rows()
+    original_destination = destination.read_rows()
     transfer = Transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
 
     list(transfer.matched_rows())
 
-    assert source.read() == original_source
-    assert destination.read() == original_destination
+    assert source.read_rows() == original_source
+    assert destination.read_rows() == original_destination
 
 
 def test_result_returns_modified_table_after_iterator() -> None:
@@ -353,7 +353,7 @@ def test_result_returns_modified_table_after_iterator() -> None:
         transfer.apply_mapping(src, dst)
 
     result_table = transfer.result()
-    assert result_table.read()[0]["name"] == "Alice"
+    assert result_table.read_rows()[0]["name"] == "Alice"
 
 
 def test_result_returns_copy_when_iterator_not_called() -> None:
@@ -365,7 +365,7 @@ def test_result_returns_copy_when_iterator_not_called() -> None:
     result_table = transfer.result()
 
     # transfer_rows() を呼んでいないので、write のコピー（変更なし）
-    assert result_table.read()[0]["name"] == "Original"
+    assert result_table.read_rows()[0]["name"] == "Original"
 
 
 # ---- 未マッチ行 API ----
@@ -380,7 +380,7 @@ def test_unmatched_only_in_read_returns_rows_missing_in_write() -> None:
     destination = Table(["id", "value"], [{"id": "1", "value": "old"}])
     transfer = Transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
 
-    extras = transfer.unmatched().only_in_read.read()
+    extras = transfer.unmatched().only_in_read.read_rows()
 
     assert extras == [{"id": "2", "value": "extra"}]
 
@@ -412,7 +412,7 @@ def test_unmatched_only_in_write_mutation_reflects_in_result() -> None:
     for write_row in transfer.unmatched().only_in_write:
         write_row["value"] = "破棄予定"
 
-    assert transfer.result().read() == [
+    assert transfer.result().read_rows() == [
         {"id": "1", "value": "old"},
         {"id": "2", "value": "破棄予定"},
     ]
@@ -446,7 +446,7 @@ def test_blank_key_rows_are_excluded_from_matching() -> None:
         transfer.apply_mapping(src, dst)
 
     # write に転記されたのは id="1" だけ。空キーは転記対象外なので初期値のまま
-    assert transfer.result().read() == [
+    assert transfer.result().read_rows() == [
         {"id": "", "name": ""},
         {"id": "1", "name": "正常"},
     ]
@@ -461,7 +461,7 @@ def test_unmatched_only_in_read_includes_blank_keys() -> None:
     destination = Table(["id", "name"], [{"id": "1", "name": "既存"}])
     transfer = Transfer(source, destination, {"name": "name"}, read_key="id", write_key="id")
 
-    extras = transfer.unmatched().only_in_read.read()
+    extras = transfer.unmatched().only_in_read.read_rows()
 
     assert extras == [{"id": "", "name": "空白"}]
 
@@ -493,7 +493,7 @@ def test_none_key_is_treated_as_blank() -> None:
     assert list(transfer.matched_rows()) == []
     # source 側の None は空キー扱いで only_in_read 側へ流れる
     result = transfer.unmatched()
-    assert result.only_in_read.read() == [{"id": None, "name": "Noneキー"}]
+    assert result.only_in_read.read_rows() == [{"id": None, "name": "Noneキー"}]
     # destination 側の "1" は source に無いので only_in_write 側へ流れる
     assert result.only_in_write == [{"id": "1", "name": "既存"}]
 
@@ -547,7 +547,7 @@ def test_composite_key_with_partially_blank_is_blank() -> None:
 
     # 部分空の read 行はすべて only_in_read 側へ流れる
     unmatched = transfer.unmatched()
-    extras_read = unmatched.only_in_read.read()
+    extras_read = unmatched.only_in_read.read_rows()
     assert {row["value"] for row in extras_read} == {"group空", "id空"}
     # matched は0件
     assert list(transfer.matched_rows()) == []
@@ -618,7 +618,7 @@ def test_unmatched_only_in_read_append_appears_in_result() -> None:
     for read_row in only_in_read:
         transfer.result().append(dict(read_row))
 
-    assert transfer.result().read() == [
+    assert transfer.result().read_rows() == [
         {"id": "1", "name": "既存"},
         {"id": "2", "name": "新規"},
     ]
@@ -634,16 +634,16 @@ def test_transfer_methods_do_not_mutate_input_tables() -> None:
         ["id", "value"],
         [{"id": "1", "value": "old"}, {"id": "3", "value": "stale"}],
     )
-    original_source = source.read()
-    original_destination = destination.read()
+    original_source = source.read_rows()
+    original_destination = destination.read_rows()
     transfer = Transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
 
     unmatched = transfer.unmatched()
-    list(unmatched.only_in_read.read())
+    list(unmatched.only_in_read.read_rows())
     list(unmatched.only_in_write)
 
-    assert source.read() == original_source
-    assert destination.read() == original_destination
+    assert source.read_rows() == original_source
+    assert destination.read_rows() == original_destination
 
 
 def test_result_called_before_unmatched_only_in_write_mutation_reflects() -> None:
@@ -677,12 +677,12 @@ def test_result_called_before_unmatched_only_in_write_mutation_reflects() -> Non
         write_row["v"] = "転記元に無し"
 
     # result() に書き換えが反映されている
-    assert first.read() == [
+    assert first.read_rows() == [
         {"id": "A001", "v": "new"},
         {"id": "A099", "v": "転記元に無し"},
     ]
     # 2回目の result() も同じインスタンスで、同じ結果
-    assert transfer.result().read() == first.read()
+    assert transfer.result().read_rows() == first.read_rows()
 
 
 def test_result_called_before_append_reflects_new_rows() -> None:
@@ -717,11 +717,11 @@ def test_result_called_before_append_reflects_new_rows() -> None:
     for read_row in only_in_read:
         first.append(dict(read_row))
 
-    assert first.read() == [
+    assert first.read_rows() == [
         {"id": "1", "name": "既存"},
         {"id": "2", "name": "新規"},
     ]
-    assert transfer.result().read() == first.read()
+    assert transfer.result().read_rows() == first.read_rows()
 
 
 def test_unmatched_only_in_read_mutation_does_not_affect_inputs_or_result() -> None:
@@ -746,13 +746,13 @@ def test_unmatched_only_in_read_mutation_does_not_affect_inputs_or_result() -> N
         read_row["value"] = "書き換え"
 
     # only_in_read 自体は書き換わっていない
-    assert only_in_read.read() == [{"id": "2", "value": "extra"}]
+    assert only_in_read.read_rows() == [{"id": "2", "value": "extra"}]
     # 元の read は変わらない
-    assert source.read() == [
+    assert source.read_rows() == [
         {"id": "1", "value": "new"},
         {"id": "2", "value": "extra"},
     ]
     # result() も変わらない
-    assert transfer.result().read() == [
+    assert transfer.result().read_rows() == [
         {"id": "1", "value": "old"},
     ]

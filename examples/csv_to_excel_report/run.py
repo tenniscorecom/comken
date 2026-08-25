@@ -39,7 +39,7 @@ def main() -> None:
         table = csv_file.read()
 
     # 全行を辞書のリストで取得する（1行 = 1辞書。キーはヘッダー名、値はすべて str）
-    rows = table.read()
+    rows = table.read_rows()
     logger.info("CSV 読み込み: %d 件", len(rows))
 
     # 条件に一致する行だけ絞り込む

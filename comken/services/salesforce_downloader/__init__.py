@@ -9,7 +9,7 @@ r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポー�
     CUSTOMER_LIST = "1001"        # プロジェクトごとに、意味の分かる名前を付ける
     SALES_RESULT = "1003"
 
-    rows = download_report(CUSTOMER_LIST).read()                  # 今すぐ取りに行く
+    rows = download_report(CUSTOMER_LIST).read_rows()             # 今すぐ取りに行く
     by_code = cached_report(SALES_RESULT).index("顧客コード")
 
 **プロジェクトのコードに Salesforce の URL もレポート ID も書かない。** 書くのは

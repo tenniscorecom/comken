@@ -337,7 +337,7 @@ len(table)                   # → 2
 table.count()                # → 2
 
 # 全行を list[dict] で取り出す（コピー）
-rows = table.read()
+rows = table.read_rows()
 ```
 
 | やりたいこと | API |
@@ -345,7 +345,7 @@ rows = table.read()
 | `n` 行目を 1 件取りたい | `table[n]` |
 | 全行を回したい | `for row in table:` |
 | 行数 | `len(table)` または `table.count()` |
-| `list[dict]` で受け取る | `table.read()` |
+| `list[dict]` で受け取る | `table.read_rows()` |
 | 全行を置き換え | `table.replace(rows)` |
 | 1 行 / 複数行を末尾に追加 | `table.append(row)` / `table.append(rows)` |
 

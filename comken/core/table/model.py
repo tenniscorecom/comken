@@ -55,27 +55,29 @@ class Table:
                 raise TableTypeConversionError(row_number, column, row[column]) from exc
         return normalized
 
-    def read(self) -> list[dict[str, Any]]:
+    def read_rows(self) -> list[dict[str, Any]]:
         """現在の行をコピーして返す。元のTableは変更しない。"""
         return [dict(row) for row in self._rows]
 
-    def __getitem__(self, index: int) -> dict[str, Any]:
-        """指定位置の行をコピーして返す。
+    def __getitem__(self, index: int | slice) -> dict[str, Any] | list[dict[str, Any]]:
+        """指定位置の行、または行のスライスをコピーして返す。
 
         返るのはコピーなので、``table[0]["列"] = x`` と書いても Table は変わらない。
         """
+        if isinstance(index, slice):
+            return [dict(row) for row in self._rows[index]]
         return dict(self._rows[index])
 
     def __iter__(self):
         """各行のコピーを返す。反復中の変更は元のTableへ反映しない。"""
-        return iter(self.read())
+        return iter(self.read_rows())
 
     def __len__(self) -> int:
         return len(self._rows)
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, list):
-            return self.read() == other
+            return self.read_rows() == other
         return super().__eq__(other)
 
     def replace(self, rows: list[dict]) -> "Table":
@@ -114,7 +116,7 @@ class Table:
         return [row[name] for row in self._rows]
 
     def index(self, key: str) -> dict[Any, dict]:
-        """指定列をキーにした辞書を返す。"""
+        """指定列をキーにした行の索引を返す。"""
         self._check_columns([key])
         result: dict[Any, dict] = {}
         for row in self._rows:

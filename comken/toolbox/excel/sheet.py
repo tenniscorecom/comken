@@ -103,14 +103,14 @@ class Sheet:
             raise InvalidTableInputError(f"start_cell が不正です: {start_cell!r}") from None
         for column, header in enumerate(table.columns, start_column_number):
             self._worksheet.cell(start_row, column, header)
-        for row_number, row in enumerate(table.read(), start_row + 1):
+        for row_number, row in enumerate(table.read_rows(), start_row + 1):
             for column, header in enumerate(table.columns, 1):
                 self._worksheet.cell(
                     row_number,
                     start_column_number + column - 1,
                     row.get(header, ""),
                 )
-        end_row = max(start_row + len(table.read()), start_row + 1)
+        end_row = max(start_row + len(table.read_rows()), start_row + 1)
         end_column = start_column_number + len(table.columns) - 1
         # Excel の実テーブル範囲は、無関係なセルではなく見出し・データから計算します。
         ref = f"{start_cell.upper()}:{get_column_letter(end_column)}{end_row}"
