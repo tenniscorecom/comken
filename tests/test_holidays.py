@@ -415,11 +415,10 @@ class TestModuleLevelFunction:
     """``is_business_day`` モジュール関数の挙動。"""
 
     def test_delegates_to_calendar(self) -> None:
-        """``HolidayCalendar._is_business_day`` に委譲する。"""
+        """``is_business_day`` は ``calendar`` の ``is_holiday`` 結果を反映する。"""
         cal = _fixture_calendar()
-        assert is_business_day(_dt.date(2024, 1, 2), calendar=cal) == cal._is_business_day(
-            _dt.date(2024, 1, 2)
-        )
+        # 平日（1/2）は営業日
+        assert is_business_day(_dt.date(2024, 1, 2), calendar=cal) is True
         # 祝日側は ``False``
         assert is_business_day(_dt.date(2024, 1, 1), calendar=cal) is False
 
@@ -1248,14 +1247,16 @@ class TestBusinessDayOffsets:
         # 2024-05-06 は月曜だが祝日扱いにした架空カレンダー
         assert business_day_on_or_after(_dt.date(2024, 5, 6), calendar=cal) == _dt.date(2024, 5, 7)
 
-    def test_module_functions_delegate_to_private_methods(self) -> None:
-        """同名モジュール関数は ``HolidayCalendar`` のプライベートメソッドに委譲する。"""
+    def test_module_functions_return_expected_dates(self) -> None:
+        """同名モジュール関数がカレンダー指定で正しい日付を返す。"""
         cal = HolidayCalendar([])
-        d = _dt.date(2024, 5, 6)
-        assert business_day_after(d, calendar=cal) == cal._business_day_after(d)
-        assert business_day_before(d, calendar=cal) == cal._business_day_before(d)
-        assert business_day_on_or_after(d, calendar=cal) == cal._business_day_on_or_after(d)
-        assert business_day_on_or_before(d, calendar=cal) == cal._business_day_on_or_before(d)
+        d = _dt.date(2024, 5, 6)  # 月曜（営業日）
+        # 5/3(金) → 5/6(月) の間で土日を挟むため
+        assert business_day_after(d, calendar=cal) == _dt.date(2024, 5, 7)
+        assert business_day_before(d, calendar=cal) == _dt.date(2024, 5, 3)
+        # on_or_* は target が営業日なら target をそのまま返す
+        assert business_day_on_or_after(d, calendar=cal) == d
+        assert business_day_on_or_before(d, calendar=cal) == d
 
     def test_module_functions_require_keyword_calendar(self) -> None:
         """``calendar`` はキーワード専用（位置引数だと TypeError）。"""
@@ -1316,10 +1317,10 @@ class TestNthBusinessDayOfMonth:
             nth_business_day_of_month(_dt.date(2024, 5, 15), -1, calendar=cal)
 
     def test_module_function_delegates(self) -> None:
-        """同名モジュール関数はプライベートメソッドに委譲する。"""
+        """同名モジュール関数は公開関数として同じ結果を返す。"""
         cal = HolidayCalendar([])
         d = _dt.date(2024, 5, 15)
-        assert nth_business_day_of_month(d, 3, calendar=cal) == cal._nth_business_day_of_month(d, 3)
+        assert nth_business_day_of_month(d, 3, calendar=cal) == _dt.date(2024, 5, 3)
 
 
 class TestFirstAndLastBusinessDayOfMonth:
@@ -1392,11 +1393,12 @@ class TestFirstAndLastBusinessDayOfMonth:
             last_business_day_of_month(_dt.date(2024, 3, 15), calendar=cal)
 
     def test_module_functions_delegate(self) -> None:
-        """同名モジュール関数はプライベートメソッドに委譲する。"""
+        """同名モジュール関数は公開関数として同じ結果を返す。"""
         cal = HolidayCalendar([])
         d = _dt.date(2024, 8, 20)
-        assert first_business_day_of_month(d, calendar=cal) == cal._first_business_day_of_month(d)
-        assert last_business_day_of_month(d, calendar=cal) == cal._last_business_day_of_month(d)
+        # 2024/8 月の営業日: 8/1(木), ..., 8/30(金)。8/31 は土曜なので月末最終は 8/30。
+        assert first_business_day_of_month(d, calendar=cal) == _dt.date(2024, 8, 1)
+        assert last_business_day_of_month(d, calendar=cal) == _dt.date(2024, 8, 30)
 
 
 class TestAddBusinessDays:
@@ -1445,10 +1447,11 @@ class TestAddBusinessDays:
         assert add_business_days(_dt.date(2024, 1, 10), -2, calendar=cal) == _dt.date(2024, 1, 8)
 
     def test_module_function_delegates(self) -> None:
-        """同名モジュール関数はプライベートメソッドに委譲する。"""
+        """同名モジュール関数は公開関数として同じ結果を返す。"""
         cal = HolidayCalendar([])
-        d = _dt.date(2024, 1, 10)
-        assert add_business_days(d, 2, calendar=cal) == cal._add_business_days(d, 2)
+        d = _dt.date(2024, 1, 10)  # 水曜
+        # 2 営業日後 → 1/12 (金、土日を飛ばす)
+        assert add_business_days(d, 2, calendar=cal) == _dt.date(2024, 1, 12)
 
 
 class TestBusinessDaySearchLimit:

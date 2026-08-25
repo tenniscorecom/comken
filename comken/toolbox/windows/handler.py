@@ -26,6 +26,7 @@ from comken.constants import FileFormat
 from comken.core.data import column_number
 from comken.core.files.base import FileBase
 from comken.core.files.ops import copy_to_local_if_large
+from comken.core.table.model import Table
 from comken.core.timer import measure
 from comken.exceptions import (
     EmptyHeaderCellError,
@@ -76,7 +77,7 @@ class ExcelCOMHandler(FileBase):
             path: Excel ファイルのパス。
             password: 読み取りパスワード（パスワード保護されたファイルを開く場合）。
             headers: ヘッダー行がない Excel の場合に、列名のリストをここで付ける。
-                     指定すると read_rows_as_dicts() は全行をデータとして読む。
+                     指定すると ``read()`` は全行をデータとして読む。
             local_copy_threshold_mb: この MB 以上のファイルはローカルにコピーしてから開く。
                 NAS やネットワークドライブのファイルが遅い・不安定な場合に有効。
                 0 を指定するとローカルコピーを無効化できる
@@ -165,7 +166,7 @@ class ExcelCOMHandler(FileBase):
         self._sheet(sheet_name).Cells(int(row), column_number(col)).Value = value
 
     @measure
-    def read_rows(self, sheet_name: str, min_row: int = 2) -> list[tuple]:
+    def read_row_values(self, sheet_name: str, min_row: int = 2) -> list[tuple]:
         """指定シートの行データをタプルのリストで返す。
 
         Args:
@@ -181,7 +182,7 @@ class ExcelCOMHandler(FileBase):
         return _block_values(ws, int(min_row), last_row, last_col)
 
     @measure
-    def read_range(
+    def read_block(
         self, sheet_name: str, min_col: int, min_row: int, max_col: int, max_row: int
     ) -> list[tuple[Any, ...]]:
         """指定シートの矩形範囲だけを計算済みの値で返す。"""
@@ -190,22 +191,23 @@ class ExcelCOMHandler(FileBase):
         )
 
     @measure
-    def read_rows_as_dicts(self, sheet_name: str, header_row: int = 1) -> list[dict]:
-        """ヘッダー行をキーとした辞書のリストで返す。
+    def read(self, sheet_name: str, *, header_row: int = 1) -> Table:
+        """ヘッダー行をキーにした ``Table`` を返す。
 
-        ヘッダー行がないファイルは ExcelCOMHandler(path, headers=[...]) で列名を指定すること。
+        ヘッダー行がないファイルは ``ExcelCOMHandler(path, headers=[...])`` で
+        列名を指定すること。
 
         Args:
             sheet_name: シート名。
             header_row: ヘッダーが存在する行番号（デフォルト: 1）。
-                        __init__ で headers を指定した場合は無視される。
+                ``__init__`` で ``headers`` を指定した場合は無視される。
 
         Returns:
-            [{"列名": 値, ...}, ...] の形式のリスト。全セルが空の行は除外される。
+            シートの内容を表す ``Table``。全セルが空の行は除外される。
 
         Raises:
-            ExcelError: ヘッダー行に空のセルがある場合（headers 未指定時のみ）、
-                        または headers の列数がシートの列数より少ない場合。
+            ExcelError: ヘッダー行に空のセルがある場合（``headers`` 未指定時のみ）、
+                または ``headers`` の列数がシートの列数より少ない場合。
         """
         ws = self._sheet(sheet_name)
         last_row = self.last_row(sheet_name)
@@ -213,24 +215,26 @@ class ExcelCOMHandler(FileBase):
         if self._headers is not None:
             if last_col > len(self._headers):
                 raise ExcelHeadersTooFewError(len(self._headers), last_col)
-            return [
+            data_rows = [
                 # headers が実データ列より多い場合は、従来どおり余った見出しを含めない。
                 dict(zip(self._headers, row, strict=False))
                 for row in _block_values(ws, 1, last_row, last_col)
                 if not all(c is None for c in row)
             ]
+            return Table(list(self._headers), data_rows)
         header_row = int(header_row)
         header_values = _block_values(ws, header_row, header_row, last_col)
         file_headers = list(header_values[0]) if header_values else []
         if not file_headers or all(h is None for h in file_headers):
-            return []  # 空シート（Excel 側と挙動を揃える）
+            return Table([], [])  # 空シート（Excel 側と挙動を揃える）
         none_cols = [i + 1 for i, h in enumerate(file_headers) if h is None]
         if none_cols:
             raise EmptyHeaderCellError(none_cols)
-        return [
+        data_rows = [
             dict(zip(file_headers, row, strict=False))
             for row in _block_values(ws, header_row + 1, last_row, last_col)
         ]
+        return Table(file_headers, data_rows)
 
     @measure
     def count_non_empty_cells(self, sheet_name: str, row: int) -> int:

@@ -87,7 +87,7 @@ diff_row(before, after)
 with CSV("昨日.csv") as csv_file:
     before = csv_file.read()
 with Excel("今日.xlsx") as f:
-    after = f.read_computed_rows_as_dicts("Sheet1")
+    after = f.read("Sheet1")
 
 result = diff_rows(before, after, key="社員番号")
 result.added    # → after にだけある行のリスト

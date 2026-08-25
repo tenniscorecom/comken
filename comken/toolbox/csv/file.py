@@ -1,8 +1,10 @@
 """comken/toolbox/csv/file.py — CSV ファイルを1つのデータ領域として扱う。"""
 
+from __future__ import annotations
+
 import csv
 import io
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Self, TypeAlias
@@ -83,7 +85,13 @@ class CSV:
 
     @measure
     def read(self) -> Table:
-        """全行を読み、指定された列だけを変換したTableを返す。"""
+        """全行を読み、指定された列だけを変換したTableを返す。
+
+        ファイルの内容を**全件メモリに展開**する。行数が大きいファイル
+        （目安: 1 万行を超えるもの）は ``read_rows()`` を使い、1 行ずつ処理する
+        ことでメモリ消費を抑える。``read_rows()`` は列名も返さないので、
+        列名は ``read()`` または ``columns`` 引数で先に取っておく。
+        """
         self._ensure_open()
         if self._pending is not None:
             # replace/write の結果は保存前でも、同じ処理中の「現在の Table」として読める。
@@ -107,6 +115,53 @@ class CSV:
                 raise CSVRowLengthError(self.path, line_number, len(columns), len(values))
             rows.append(dict(zip(columns, values, strict=True)))
         return Table(columns, rows, types=self._types)
+
+    def read_rows(self) -> Iterator[dict[str, str]]:
+        """CSV を 1 行ずつ ``{列名: 値}`` の dict で返すイテレーター。
+
+        ``read()`` と違ってファイル全体を内存に展開しないため、**行数が大きい
+        CSV（数万件以上）**ではこちらを使う。``read()`` と同じく見出し行を
+        自動で解釈し、列名は ``csv.DictReader`` の動作に従う。
+
+        列名は戻り値の dict から直接取れない（イテレーターは順番に値を返す
+        だけ）。先に ``csv.read().columns`` または ``csv.columns`` 引数で
+        列名を取得しておく。
+
+        このメソッドは ``with`` の中でだけ呼ぶこと（``TableNotOpenError``）。
+        文字コードの自動判定（``Encoding.AUTO`` のとき）は ``read()`` と
+        同じ ``_read_text`` を使う。
+        """
+        # generator 関数のため body は ``next()`` まで遅延評価される。
+        # ``with`` 外での呼び出しを即座に ``TableNotOpenError`` で止めるため、
+        # 先に ``_ensure_open`` だけを実行する内部ヘルパーを通す。
+        self._ensure_open()
+        return self._iter_rows()
+
+    def _iter_rows(self) -> Iterator[dict[str, str]]:
+        """``read_rows()`` のジェネレータ本体（事前条件は ``_ensure_open`` が済んでいること）。"""
+        if self._pending is not None:
+            # ``read()`` と同じく保留中の Table を 1 行ずつ返す。読み取り経路で
+            # ``replace`` された結果はここでストリーム消費できる。
+            yield from self._pending.read_rows()
+            return
+        if not self.path.exists():
+            raise CSVFileNotFoundError(self.path)
+        if self.path.stat().st_size == 0:
+            if self._columns is None:
+                raise CSVHeaderMissingError(self.path)
+            return
+        text = self._read_text()
+        if self._columns is None:
+            reader = csv.DictReader(io.StringIO(text))
+            for row in reader:
+                # DictReader は None を含むキー/値を返さないので ``dict(row)`` で十分
+                yield dict(row)
+            return
+        # 列名があらかじめ決まっているときは DictReader の headers を上書きして
+        # ``csv.DictReader`` にヘッダー行を読ませない。残るのはデータ行のみ。
+        reader = csv.DictReader(io.StringIO(text), fieldnames=self._columns)
+        for row in reader:
+            yield dict(row)
 
     def _validate_columns(self, columns: list[str]) -> None:
         if not columns:

@@ -3,6 +3,7 @@
 import datetime as dt
 from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Self
 
 from comken.exceptions import (
     ScheduleIntervalMissingError,
@@ -37,7 +38,7 @@ class ScheduleRule:
     enabled: bool = True
 
     @classmethod
-    def from_row(cls, row: Mapping[str, object]) -> "ScheduleRule":
+    def from_row(cls, row: Mapping[str, object]) -> Self:
         """日本語カラム名の辞書からスケジュールを作る。"""
         return cls(
             schedule_key=_required_text(row, "スケジュールキー"),

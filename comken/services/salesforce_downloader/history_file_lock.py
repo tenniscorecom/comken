@@ -4,7 +4,7 @@ import msvcrt
 import time
 from pathlib import Path
 from types import TracebackType
-from typing import BinaryIO
+from typing import BinaryIO, Self
 
 from comken.exceptions import HistoryLockTimeoutError
 
@@ -25,7 +25,7 @@ class HistoryFileLock:
         self._timeout = timeout
         self._file: BinaryIO | None = None
 
-    def __enter__(self) -> "HistoryFileLock":
+    def __enter__(self) -> Self:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         lock_file = self._path.open("a+b")
         if lock_file.tell() == 0:

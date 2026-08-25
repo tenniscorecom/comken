@@ -37,6 +37,28 @@ class TestCSV:
         with CSV(path, types={"id": int}) as csv_file:
             assert csv_file.read() == [{"id": 1, "name": "山田"}]
 
+    def test_read_rows_streams_dicts_one_at_a_time(self, tmp_path) -> None:
+        """``read_rows()`` は 1 行ずつ dict で流す（全件メモリに載せない）。"""
+        path = tmp_path / "data.csv"
+        path.write_text("id,name\n1,山田\n2,鈴木\n3,佐藤\n", encoding="utf-8-sig")
+        with CSV(path) as csv_file:
+            iterator = csv_file.read_rows()
+            assert next(iterator) == {"id": "1", "name": "山田"}
+            assert next(iterator) == {"id": "2", "name": "鈴木"}
+            assert next(iterator) == {"id": "3", "name": "佐藤"}
+            with pytest.raises(StopIteration):
+                next(iterator)
+
+    def test_read_rows_uses_columns_when_header_is_absent(self, tmp_path) -> None:
+        """``columns`` を指定したときはヘッダー行を読まずにデータだけ流す。"""
+        path = tmp_path / "no-header.csv"
+        path.write_text("A001,1000\nA002,2000\n", encoding="utf-8-sig")
+        with CSV(path, columns=["id", "amount"]) as csv_file:
+            assert list(csv_file.read_rows()) == [
+                {"id": "A001", "amount": "1000"},
+                {"id": "A002", "amount": "2000"},
+            ]
+
     def test_auto_reads_cp932(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
         path.write_text("名前\n山田\n", encoding="cp932")
@@ -218,3 +240,5 @@ class TestCSV:
             CSV(path).save()
         with pytest.raises(TableNotOpenError, match="CSV"):
             CSV(path).count()
+        with pytest.raises(TableNotOpenError, match="CSV"):
+            CSV(path).read_rows()

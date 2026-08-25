@@ -2,7 +2,7 @@
 
 - 読み取り専用では UNC パスでも作業コピー（=ローカルコピー）を作らない。
 - シート経由でしか使わないメソッドでは通常 Workbook を遅延オープンする。
-- ``read_computed_rows`` のような値だけ読む経路では通常 Workbook を開かず、
+- ``_read_computed_rows`` のような値だけ読む経路では通常 Workbook を開かず、
   openpyxl の read_only ストリームだけで完結する。
 - テーブル API（``Sheet.table()``）は read_only でも従来どおり動く。
 
@@ -62,7 +62,7 @@ def test_read_only_normal_workbook_lazy(tmp_path) -> None:
         # __enter__ は終わってもまだ Excel 経由の値参照をしていないので Workbook を遅延。
         assert not load_spy.called
 
-        # stream だけ開くパス（read_computed_rows）で通常 Workbook は開かない
+        # stream だけ開くパス（_read_computed_rows）で通常 Workbook は開かない
         _read_with_excel(path)
         # stream の load_workbook は read_only=True で呼ばれることだけ確認
         assert load_spy.called
@@ -72,16 +72,16 @@ def test_read_only_normal_workbook_lazy(tmp_path) -> None:
 
 
 def _read_with_excel(path) -> int:
-    """ベンチ用ヘルパ：read_computed_rows で行を読む。"""
+    """ベンチ用ヘルパ：_read_computed_rows で行を読む。"""
     total = 0
     with Excel(path, read_only=True) as excel:
-        rows = excel.read_computed_rows("Sheet", min_row=1)
+        rows = excel._read_computed_rows("Sheet", min_row=1)
         total += sum(len(r) for r in rows)
     return total
 
 
 def test_read_only_stream_only_uses_openpyxl_read_only(tmp_path) -> None:
-    """read_only の read_computed_rows は openpyxl load_workbook(read_only=True) だけを使う。"""
+    """read_only の _read_computed_rows は openpyxl load_workbook(read_only=True) だけを使う。"""
     path = tmp_path / "stream.xlsx"
     wb = Workbook()
     wb.active.append(["id", "name"])
@@ -103,7 +103,7 @@ def test_read_only_stream_only_uses_openpyxl_read_only(tmp_path) -> None:
         patch("comken.toolbox.excel.workbook.load_workbook", side_effect=record),
         Excel(path, read_only=True) as excel,
     ):
-        excel.read_computed_rows("Sheet", min_row=1)
+        excel._read_computed_rows("Sheet", min_row=1)
 
     # 通常 Workbook は開かれない（__enter__ で read_only=True のときは遅延）
     assert normal_calls == []
@@ -172,7 +172,7 @@ def test_read_only_cached_rows_no_formula_skips_formula_stream(tmp_path) -> None
         patch.object(Excel, "_open_stream_workbook", counting_open),
         Excel(path, read_only=True) as excel,
     ):
-        rows = excel.read_computed_rows("結果", min_row=1)
+        rows = excel._read_computed_rows("結果", min_row=1)
     assert rows == [("a", "b")]
     # data_only=False ストリームは 1 度も開かれない
     assert formula_workbook_open_count == 0

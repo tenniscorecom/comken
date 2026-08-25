@@ -13,7 +13,7 @@ import logging
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final, Protocol, runtime_checkable
+from typing import Final, Protocol, Self, runtime_checkable
 
 from comken.core.clock import month_end, month_start
 from comken.exceptions import BusinessDayNotFoundError, HolidayCalendarFetchError
@@ -119,7 +119,7 @@ class HolidayCalendar:
         path: str | Path,
         *,
         encoding: str = "cp932",
-    ) -> "HolidayCalendar":
+    ) -> Self:
         """内閣府の ``syukujitsu.csv`` を直接読む最短ルート。
 
         Args:
@@ -136,7 +136,7 @@ class HolidayCalendar:
         return cls(load_cabinet_office_csv(path, encoding=encoding))
 
     @classmethod
-    def from_sources(cls, sources: Iterable[HolidaySource]) -> "HolidayCalendar":
+    def from_sources(cls, sources: Iterable[HolidaySource]) -> Self:
         """複数の ``HolidaySource`` を合体させる（内閣府 + Computed + 会社休日 など）。
 
         **カスケード動作**: 前の source が ``HolidayCalendarFetchError``
@@ -219,223 +219,6 @@ class HolidayCalendar:
             key=lambda h: h.date,
         )
 
-    def _is_business_day(
-        self,
-        target: _dt.date,
-        *,
-        skip_weekends: bool = True,
-    ) -> bool:
-        """``target`` が営業日なら ``True``。
-
-        ``skip_weekends=True``（既定）なら土曜・日曜も休業扱いにする。
-        ``False`` を渡すと、土曜・日曜であっても祝日でなければ「営業日」と
-        判定される（振替休日を平日扱いするシナリオ向け）。
-
-        「収録済み最終日 <= target」のときは期限切れを WARNING ログで 1度だけ
-        通知する。判定自体は通常どおり行う（誤って平日扱いにならないよう、
-        **収録範囲外は祝日ではない側に倒す**）。
-        """
-        self._maybe_warn_expiring(target)
-        if skip_weekends and target.weekday() >= 5:  # 5 = Saturday, 6 = Sunday
-            return False
-        return not self.is_holiday(target)
-
-    def _business_day_after(
-        self,
-        target: _dt.date,
-        *,
-        skip_weekends: bool = True,
-    ) -> _dt.date:
-        """``target`` より後で最初の営業日（``_is_business_day`` が True になる日）を返す。
-
-        ``target`` 自身は含まない（``target`` が営業日でも翌営業日を返す）。
-        収録範囲外でも日付は進むが、祝日判定は「祝日ではない」と扱う。
-        期限切れの警告は ``_business_day_after`` の入口で 1度だけ出す。
-
-        Raises:
-            BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
-                営業日が見つからなかった（祝日データ欠落・社内休日広範囲など）。
-        """
-        self._maybe_warn_expiring(target)
-        return _search_business_day(
-            start=target + _dt.timedelta(days=1),
-            step_days=1,
-            calendar=self,
-            skip_weekends=skip_weekends,
-        )
-
-    def _business_day_before(
-        self,
-        target: _dt.date,
-        *,
-        skip_weekends: bool = True,
-    ) -> _dt.date:
-        """``target`` より前で最初の営業日を返す。
-
-        ``target`` 自身は含まない（``target`` が営業日でも前営業日を返す）。
-
-        Raises:
-            BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
-                営業日が見つからなかった。
-        """
-        return _search_business_day(
-            start=target - _dt.timedelta(days=1),
-            step_days=-1,
-            calendar=self,
-            skip_weekends=skip_weekends,
-        )
-
-    def _business_day_on_or_after(
-        self,
-        target: _dt.date,
-        *,
-        skip_weekends: bool = True,
-    ) -> _dt.date:
-        """``target`` 以降で最初の営業日（``target`` を含む）を返す。
-
-        ``target`` が営業日なら ``target`` をそのまま返す。
-        営業日でなければ、``_business_day_after`` と同じ動きで翌日以降を探す。
-
-        Raises:
-            BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
-                営業日が見つからなかった。
-        """
-        if self._is_business_day(target, skip_weekends=skip_weekends):
-            return target
-        return self._business_day_after(target, skip_weekends=skip_weekends)
-
-    def _business_day_on_or_before(
-        self,
-        target: _dt.date,
-        *,
-        skip_weekends: bool = True,
-    ) -> _dt.date:
-        """``target`` 以前で最初の営業日（``target`` を含む）を返す。
-
-        ``target`` が営業日なら ``target`` をそのまま返す。
-        営業日でなければ、``_business_day_before`` と同じ動きで前日以前を探す。
-
-        Raises:
-            BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
-                営業日が見つからなかった。
-        """
-        if self._is_business_day(target, skip_weekends=skip_weekends):
-            return target
-        return self._business_day_before(target, skip_weekends=skip_weekends)
-
-    def _first_business_day_of_month(
-        self,
-        target: _dt.date,
-        *,
-        skip_weekends: bool = True,
-    ) -> _dt.date:
-        """``target`` が属する月の最初の営業日を返す。
-
-        Raises:
-            BusinessDayNotFoundError: その月に営業日が 1日も無いとき。
-        """
-        start = month_start(target)
-        try:
-            return self._business_day_on_or_after(start, skip_weekends=skip_weekends)
-        except BusinessDayNotFoundError as error:
-            raise BusinessDayNotFoundError(
-                f"{target.year} 年 {target.month} 月に営業日が見つかりません: {error}"
-            ) from error
-
-    def _last_business_day_of_month(
-        self,
-        target: _dt.date,
-        *,
-        skip_weekends: bool = True,
-    ) -> _dt.date:
-        """``target`` が属する月の最後の営業日を返す。
-
-        月末が土日・祝日のときは直前の営業日に遡る（例: 8/31 が日曜なら 8/29 金）。
-
-        Raises:
-            BusinessDayNotFoundError: その月に営業日が 1日も無いとき。
-        """
-        end = month_end(target)
-        try:
-            return self._business_day_on_or_before(end, skip_weekends=skip_weekends)
-        except BusinessDayNotFoundError as error:
-            raise BusinessDayNotFoundError(
-                f"{target.year} 年 {target.month} 月に営業日が見つかりません: {error}"
-            ) from error
-
-    def _nth_business_day_of_month(
-        self,
-        target: _dt.date,
-        n: int,
-        *,
-        skip_weekends: bool = True,
-    ) -> _dt.date:
-        """``target`` が属する月の第 ``n`` 営業日を返す（``n`` は 1 始まり）。
-
-        月の初日から数えて ``n`` 番目の営業日。
-        その月の営業日数を超える ``n`` を渡すと ``BusinessDayNotFoundError``。
-
-        Raises:
-            BusinessDayNotFoundError: ``n`` が 1 未満、またはその月の営業日数を超える。
-        """
-        if n < 1:
-            raise BusinessDayNotFoundError(
-                f"第 n 営業日の n は 1 以上で指定してください（指定値: {n}）"
-            )
-        start = month_start(target)
-        end = month_end(target)
-        cursor = start
-        for _ in range(n):
-            try:
-                cursor = self._business_day_on_or_after(cursor, skip_weekends=skip_weekends)
-            except BusinessDayNotFoundError as error:
-                raise BusinessDayNotFoundError(
-                    f"{target.year} 年 {target.month} 月に {n} 営業日は存在しません: {error}"
-                ) from error
-            if cursor > end:
-                raise BusinessDayNotFoundError(
-                    f"{target.year} 年 {target.month} 月に {n} 営業日は存在しません"
-                    f"（最終営業日: {end}）"
-                )
-            cursor = cursor + _dt.timedelta(days=1)
-        # ループを抜けた時点で ``cursor`` は「n 番目の翌営業日」を指している。
-        # ひとつ戻して返す。
-        return cursor - _dt.timedelta(days=1)
-
-    def _add_business_days(
-        self,
-        target: _dt.date,
-        n: int,
-        *,
-        skip_weekends: bool = True,
-    ) -> _dt.date:
-        """``target`` から ``n`` 営業日後の日付を返す。
-
-        ``n`` が負なら ``|n|`` 営業日**前**を返す。
-        ``n == 0`` のときは ``target`` を**そのまま**返す（``target`` が営業日か
-        どうかを問わない）。これは Excel の ``WORKDAY`` と同じ挙動で、
-        「今日から N 営業日後」を組み立てるときに条件分岐を書かなくて済む。
-
-        例: 2024/5/2（木、祝日前日）に ``_add_business_days(d, 1)`` を呼ぶと
-        2024/5/7（火、5/3〜5/6 が祝日＋土日）を返す。
-
-        Raises:
-            BusinessDayNotFoundError: 探索が ``BUSINESS_DAY_SEARCH_LIMIT`` に達した。
-        """
-        if n == 0:
-            return target
-        # ``target`` を 0 営業日目と数え、``n`` 回「次の（前の）営業日」へ進める。
-        # ``target`` が営業日のとき n=1 で翌日営業日、非営業日のときでも
-        # ``_business_day_after`` が翌営業日にスナップするので結果は同じになる。
-        cursor = target
-        steps = n if n > 0 else -n
-        for _ in range(steps):
-            if n > 0:
-                cursor = self._business_day_after(cursor, skip_weekends=skip_weekends)
-            else:
-                cursor = self._business_day_before(cursor, skip_weekends=skip_weekends)
-        return cursor
-
     def expires_after(self, target: _dt.date) -> bool:
         """``target`` が収録済み最終日以降（＝「収録期限を過ぎた」）なら ``True``。
 
@@ -497,6 +280,11 @@ class HolidayCalendar:
     def _maybe_refresh_for(self, target: _dt.date) -> None:
         """ターゲットが今年/来年なら、今年中に 1 回だけ内閣府に refresh を試みる。
 
+        **既定カレンダー（``default_calendar()``）では ``_refreshable_sources`` が
+        常に空のため、このメソッドは何もしない。** 自動再取得が働くのは、利用者が
+        明示的に ``HolidayCalendar.from_sources([..., CabinetOfficeCSVSource(), ...])``
+        のようにネットワーク対応の ``RefreshableHolidaySource`` を組み込んだときだけ。
+
         キャッシュに ``target`` が無い or ``approximate=True`` (Computed の
         近似式由来) のときに、内閣府に強制再取得を試みる。**今年中に 1 回だけ**
         試す（複数回呼ばれるのを防ぐ）。失敗時はサイレント（既存のキャッシュ
@@ -545,9 +333,20 @@ def is_business_day(
 
     ``calendar`` をキーワード専用にして、呼び出し側がうっかり位置引数で
     日付とカレンダーを取り違える事故を防ぐ。
+
+    ``skip_weekends=True``（既定）なら土曜・日曜も休業扱いにする。
+    ``False`` を渡すと、土曜・日曜であっても祝日でなければ「営業日」と
+    判定される（振替休日を平日扱いするシナリオ向け）。
+
+    「収録済み最終日 <= target」のときは期限切れを WARNING ログで 1度だけ
+    通知する。判定自体は通常どおり行う（誤って平日扱いにならないよう、
+    **収録範囲外は祝日ではない側に倒す**）。
     """
     cal = calendar if calendar is not None else default_calendar()
-    return cal._is_business_day(target, skip_weekends=skip_weekends)
+    cal._maybe_warn_expiring(target)
+    if skip_weekends and target.weekday() >= 5:  # 5 = Saturday, 6 = Sunday
+        return False
+    return not cal.is_holiday(target)
 
 
 def business_day_after(
@@ -558,10 +357,23 @@ def business_day_after(
 ) -> _dt.date:
     """``target`` より後で最初の営業日（``target`` 自身を含まない）。
 
+    ``target`` が営業日でも翌営業日を返す。収録範囲外でも日付は進むが、
+    祝日判定は「祝日ではない」と扱う。期限切れの警告は入口で 1度だけ出す。
+
     ``calendar=None`` のときは**既定カレンダー**を使う。
+
+    Raises:
+        BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
+            営業日が見つからなかった（祝日データ欠落・社内休日広範囲など）。
     """
     cal = calendar if calendar is not None else default_calendar()
-    return cal._business_day_after(target, skip_weekends=skip_weekends)
+    cal._maybe_warn_expiring(target)
+    return _search_business_day(
+        start=target + _dt.timedelta(days=1),
+        step_days=1,
+        calendar=cal,
+        skip_weekends=skip_weekends,
+    )
 
 
 def business_day_before(
@@ -572,10 +384,21 @@ def business_day_before(
 ) -> _dt.date:
     """``target`` より前で最初の営業日（``target`` 自身を含まない）。
 
+    ``target`` が営業日でも前営業日を返す。
+
     ``calendar=None`` のときは**既定カレンダー**を使う。
+
+    Raises:
+        BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
+            営業日が見つからなかった。
     """
     cal = calendar if calendar is not None else default_calendar()
-    return cal._business_day_before(target, skip_weekends=skip_weekends)
+    return _search_business_day(
+        start=target - _dt.timedelta(days=1),
+        step_days=-1,
+        calendar=cal,
+        skip_weekends=skip_weekends,
+    )
 
 
 def business_day_on_or_after(
@@ -584,9 +407,21 @@ def business_day_on_or_after(
     calendar: HolidayCalendar | None = None,
     skip_weekends: bool = True,
 ) -> _dt.date:
-    """``target`` 以降で最初の営業日（``target`` を含む）。``calendar`` 省略可。"""
+    """``target`` 以降で最初の営業日（``target`` を含む）。
+
+    ``target`` が営業日なら ``target`` をそのまま返す。
+    営業日でなければ、``business_day_after`` と同じ動きで翌日以降を探す。
+
+    ``calendar=None`` のときは**既定カレンダー**を使う。
+
+    Raises:
+        BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
+            営業日が見つからなかった。
+    """
     cal = calendar if calendar is not None else default_calendar()
-    return cal._business_day_on_or_after(target, skip_weekends=skip_weekends)
+    if is_business_day(target, calendar=cal, skip_weekends=skip_weekends):
+        return target
+    return business_day_after(target, calendar=cal, skip_weekends=skip_weekends)
 
 
 def business_day_on_or_before(
@@ -595,9 +430,21 @@ def business_day_on_or_before(
     calendar: HolidayCalendar | None = None,
     skip_weekends: bool = True,
 ) -> _dt.date:
-    """``target`` 以前で最初の営業日（``target`` を含む）。``calendar`` 省略可。"""
+    """``target`` 以前で最初の営業日（``target`` を含む）。
+
+    ``target`` が営業日なら ``target`` をそのまま返す。
+    営業日でなければ、``business_day_before`` と同じ動きで前日以前を探す。
+
+    ``calendar=None`` のときは**既定カレンダー**を使う。
+
+    Raises:
+        BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
+            営業日が見つからなかった。
+    """
     cal = calendar if calendar is not None else default_calendar()
-    return cal._business_day_on_or_before(target, skip_weekends=skip_weekends)
+    if is_business_day(target, calendar=cal, skip_weekends=skip_weekends):
+        return target
+    return business_day_before(target, calendar=cal, skip_weekends=skip_weekends)
 
 
 def first_business_day_of_month(
@@ -606,9 +453,21 @@ def first_business_day_of_month(
     calendar: HolidayCalendar | None = None,
     skip_weekends: bool = True,
 ) -> _dt.date:
-    """``target`` が属する月の最初の営業日。``calendar`` 省略可。"""
+    """``target`` が属する月の最初の営業日。
+
+    ``calendar=None`` のときは**既定カレンダー**を使う。
+
+    Raises:
+        BusinessDayNotFoundError: その月に営業日が 1日も無いとき。
+    """
     cal = calendar if calendar is not None else default_calendar()
-    return cal._first_business_day_of_month(target, skip_weekends=skip_weekends)
+    start = month_start(target)
+    try:
+        return business_day_on_or_after(start, calendar=cal, skip_weekends=skip_weekends)
+    except BusinessDayNotFoundError as error:
+        raise BusinessDayNotFoundError(
+            f"{target.year} 年 {target.month} 月に営業日が見つかりません: {error}"
+        ) from error
 
 
 def last_business_day_of_month(
@@ -617,9 +476,23 @@ def last_business_day_of_month(
     calendar: HolidayCalendar | None = None,
     skip_weekends: bool = True,
 ) -> _dt.date:
-    """``target`` が属する月の最後の営業日。``calendar`` 省略可。"""
+    """``target`` が属する月の最後の営業日。
+
+    月末が土日・祝日のときは直前の営業日に遡る（例: 8/31 が日曜なら 8/29 金）。
+
+    ``calendar=None`` のときは**既定カレンダー**を使う。
+
+    Raises:
+        BusinessDayNotFoundError: その月に営業日が 1日も無いとき。
+    """
     cal = calendar if calendar is not None else default_calendar()
-    return cal._last_business_day_of_month(target, skip_weekends=skip_weekends)
+    end = month_end(target)
+    try:
+        return business_day_on_or_before(end, calendar=cal, skip_weekends=skip_weekends)
+    except BusinessDayNotFoundError as error:
+        raise BusinessDayNotFoundError(
+            f"{target.year} 年 {target.month} 月に営業日が見つかりません: {error}"
+        ) from error
 
 
 def nth_business_day_of_month(
@@ -629,9 +502,40 @@ def nth_business_day_of_month(
     calendar: HolidayCalendar | None = None,
     skip_weekends: bool = True,
 ) -> _dt.date:
-    """``target`` が属する月の第 ``n`` 営業日（``n`` は 1 始まり）。``calendar`` 省略可。"""
+    """``target`` が属する月の第 ``n`` 営業日を返す（``n`` は 1 始まり）。
+
+    月の初日から数えて ``n`` 番目の営業日。
+    その月の営業日数を超える ``n`` を渡すと ``BusinessDayNotFoundError``。
+
+    ``calendar=None`` のときは**既定カレンダー**を使う。
+
+    Raises:
+        BusinessDayNotFoundError: ``n`` が 1 未満、またはその月の営業日数を超える。
+    """
     cal = calendar if calendar is not None else default_calendar()
-    return cal._nth_business_day_of_month(target, n, skip_weekends=skip_weekends)
+    if n < 1:
+        raise BusinessDayNotFoundError(
+            f"第 n 営業日の n は 1 以上で指定してください（指定値: {n}）"
+        )
+    start = month_start(target)
+    end = month_end(target)
+    cursor = start
+    for _ in range(n):
+        try:
+            cursor = business_day_on_or_after(cursor, calendar=cal, skip_weekends=skip_weekends)
+        except BusinessDayNotFoundError as error:
+            raise BusinessDayNotFoundError(
+                f"{target.year} 年 {target.month} 月に {n} 営業日は存在しません: {error}"
+            ) from error
+        if cursor > end:
+            raise BusinessDayNotFoundError(
+                f"{target.year} 年 {target.month} 月に {n} 営業日は存在しません"
+                f"（最終営業日: {end}）"
+            )
+        cursor = cursor + _dt.timedelta(days=1)
+    # ループを抜けた時点で ``cursor`` は「n 番目の翌営業日」を指している。
+    # ひとつ戻して返す。
+    return cursor - _dt.timedelta(days=1)
 
 
 def add_business_days(
@@ -641,9 +545,34 @@ def add_business_days(
     calendar: HolidayCalendar | None = None,
     skip_weekends: bool = True,
 ) -> _dt.date:
-    """``target`` から ``n`` 営業日後の日付（``n`` が負なら前）。``calendar`` 省略可。"""
+    """``target`` から ``n`` 営業日後の日付（``n`` が負なら前）。
+
+    ``n == 0`` のときは ``target`` を**そのまま**返す（``target`` が営業日か
+    どうかを問わない）。これは Excel の ``WORKDAY`` と同じ挙動で、
+    「今日から N 営業日後」を組み立てるときに条件分岐を書かなくて済む。
+
+    例: 2024/5/2（木、祝日前日）に ``add_business_days(d, 1)`` を呼ぶと
+    2024/5/7（火、5/3〜5/6 が祝日＋土日）を返す。
+
+    ``calendar=None`` のときは**既定カレンダー**を使う。
+
+    Raises:
+        BusinessDayNotFoundError: 探索が ``BUSINESS_DAY_SEARCH_LIMIT`` に達した。
+    """
     cal = calendar if calendar is not None else default_calendar()
-    return cal._add_business_days(target, n, skip_weekends=skip_weekends)
+    if n == 0:
+        return target
+    # ``target`` を 0 営業日目と数え、``n`` 回「次の（前の）営業日」へ進める。
+    # ``target`` が営業日のとき n=1 で翌日営業日、非営業日のときでも
+    # ``business_day_after`` が翌営業日にスナップするので結果は同じになる。
+    cursor = target
+    steps = n if n > 0 else -n
+    for _ in range(steps):
+        if n > 0:
+            cursor = business_day_after(cursor, calendar=cal, skip_weekends=skip_weekends)
+        else:
+            cursor = business_day_before(cursor, calendar=cal, skip_weekends=skip_weekends)
+    return cursor
 
 
 # ── 既定カレンダー ──────────────────────────────────────────────────────
@@ -739,7 +668,7 @@ def _search_business_day(
         raise ValueError("step_days には 0 以外の値を渡してください")
     cursor = start
     for _ in range(BUSINESS_DAY_SEARCH_LIMIT):
-        if calendar._is_business_day(cursor, skip_weekends=skip_weekends):
+        if is_business_day(cursor, calendar=calendar, skip_weekends=skip_weekends):
             return cursor
         cursor += _dt.timedelta(days=step_days)
     raise BusinessDayNotFoundError(

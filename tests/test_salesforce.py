@@ -561,6 +561,26 @@ class TestReportApi:
         with _salesforce([_response(json_body=["not", "a", "dict"])]) as (client, _, _):
             assert client.report.describe("00O000000000001") == {}
 
+    def test_read_rows_keeps_labels_for_zero_hit_report(self):
+        """``read_rows()`` でも 0 件ヒットのレポートで表示名ラベルを保てる。"""
+        body = _report_body([])
+        with _salesforce([_response(json_body=body)]) as (client, _, _):
+            rows = list(client.report.read_rows("00O000000000001"))
+
+        assert rows == []
+
+    def test_run_keeps_labels_for_zero_hit_report(self):
+        """0 件ヒットのレポートでも ``run()`` は ``detailColumns`` から列を作る。
+
+        ``rows[0]`` からの推測ではなく ``detailColumns`` / ``detailColumnInfo``
+        を使うため、ヒット件数 0 でも列情報が落ちない。
+        """
+        body = _report_body([])
+        with _salesforce([_response(json_body=body)]) as (client, _, _):
+            table = client.report.run("00O000000000001")
+
+        assert table.columns == ["名前", "金額"]
+
 
 class TestSites:
     def test_sandbox_is_a_salesforce_client(self):

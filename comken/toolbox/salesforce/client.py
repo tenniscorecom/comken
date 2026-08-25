@@ -21,6 +21,7 @@ r"""comken/toolbox/salesforce/client.py — Salesforce API クライアント
 import logging
 import time
 import urllib.parse
+from collections.abc import Iterator
 from typing import Protocol, Self
 
 import requests
@@ -209,24 +210,23 @@ class SalesforceBase:
 
     # ------------------------------------------------------------------ query
     @measure
-    def query(self, soql: str) -> Table:
-        """SOQL クエリを実行してレコードを返す（全件取得・ページ送り自動）。
+    def query_rows(self, soql: str) -> Iterator[dict]:
+        """SOQL クエリを実行し ``{項目: 値}`` の dict を 1 件ずつ返す（全件・ページ送り自動）。
 
-        レポート API と違って**行数の上限がない**ので、
-        2000 行を超えるデータはこちらで取る。
+        レポート API と違って**行数の上限がない**ので、2000 行を超えるデータも
+        こちらで取る。``query()`` はこのイテレータを ``Table`` に包む薄い層
+        （順序を「イテレータ先・Table 後」に揃えるため）。
 
-        列は SOQL からはメタデータが取れないため、**1 件目から推測**する。
-        0 件のときは列が空の ``Table`` を返す（``rows[0]`` からの推測に依存
-        しないため）。なお ``Account.Name`` のようなドット区切りの親子リレーション
-        項目は**そのまま列名にする**（平坦化しない）。``records[0]`` のキーが
-        そのまま列になるため、リレーションを跨いだ項目の取り回しを呼び出し側で
-        揃えておくこと。
+        列の情報は SOQL のレスポンスからは取れないため、戻り値からは直接
+        列名が出ない。``query()`` は ``records[0]`` から列を推測するが、
+        これは「1 件以上あるとき」の便宜であって、本物のスキーマではない。
+        列名を厳密に扱いたいときは ``describe`` 系エンドポイントを使うこと。
 
         Args:
             soql: 実行する SOQL クエリ文字列。
 
         Returns:
-            SOQL の結果を表す ``Table``。
+            SOQL のレコードを ``{項目: 値}`` の dict で 1 件ずつ返すイテレータ。
         """
         records: list[dict] = []
         logger.debug("Salesforce SOQL取得開始")
@@ -241,6 +241,27 @@ class SalesforceBase:
             # done が真なら次のページは無い
             path = "" if result.get("done", True) else result.get("nextRecordsUrl", "")
         logger.debug("Salesforce SOQL取得完了: 件数=%d", len(records))
+        yield from records
+
+    @measure
+    def query(self, soql: str) -> Table:
+        """SOQL クエリを実行して ``Table`` を返す（全件取得・ページ送り自動）。
+
+        ``query_rows()`` を呼んで ``Table`` に包むだけの薄い層。
+        列は SOQL からはメタデータが取れないため、**1 件目から推測**する。
+        0 件のときは列が空の ``Table`` を返す（``rows[0]`` からの推測に依存
+        しないため）。なお ``Account.Name`` のようなドット区切りの親子リレーション
+        項目は**そのまま列名にする**（平坦化しない）。``records[0]`` のキーが
+        そのまま列になるため、リレーションを跨いだ項目の取り回しを呼び出し側で
+        揃えておくこと。
+
+        Args:
+            soql: 実行する SOQL クエリ文字列。
+
+        Returns:
+            SOQL の結果を表す ``Table``。
+        """
+        records = list(self.query_rows(soql))
         # 0 件のときは列を空で返す。``list(records[0])`` は 0 件だと例外になるため、
         # 分岐して空リストを返す（実装の意図を明示するため ``else []`` を付ける）。
         columns = list(records[0]) if records else []

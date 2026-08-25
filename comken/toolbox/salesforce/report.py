@@ -23,7 +23,8 @@ from __future__ import annotations
 import logging
 import re
 import time
-from typing import TYPE_CHECKING
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, Any
 
 from comken.core.table import Table
 from comken.core.timer import measure
@@ -78,6 +79,56 @@ POLL_INTERVAL_SECONDS = 3
 ASYNC_TIMEOUT_SECONDS = 120
 
 
+def _parse_report_payload(
+    data: object,
+    report_id: str,
+    allow_truncated: bool,
+    *,
+    metrics: Any | None = None,
+) -> tuple[list[str], list[dict]]:
+    """レポート API のレスポンスを ``(表示名の列リスト, [{表示名: 値}, ...])`` に変換する。
+
+    0 件のときでも ``detailColumns`` / ``detailColumnInfo`` から組み立てた
+    ``labels`` を返すため、``Table`` の列情報が落ちない。
+
+    ``metrics`` は切り捨てを計測するためのフック（``APIMetrics.record_truncated_report``
+    互換のメソッド ``record_truncated_report(report_id)`` を持つオブジェクト）。
+    通常は ``SalesforceBase.metrics`` を渡す。テストや単発呼び出しで None の
+    ときは計測をスキップする。
+    """
+    if not isinstance(data, dict):
+        return [], []
+
+    metadata = data.get("reportMetadata", {})
+    report_format = metadata.get("reportFormat")
+    # 集計レポートは行が factMap のグループ別キーに入るため、明細用のキーを
+    # そのまま読むと無言で空のリストを返してしまう。だから明示的に弾く
+    if report_format and report_format != TABULAR_FORMAT:
+        raise SalesforceReportFormatError(report_id, report_format)
+
+    # allData が偽なら上限で切り捨てられている。全件と誤認させない
+    if data.get("allData") is False:
+        if metrics is not None:
+            metrics.record_truncated_report(report_id)
+        if not allow_truncated:
+            raise SalesforceReportTruncatedError(report_id, ROW_LIMIT)
+        logger.warning(
+            "レポート %s は上限（%d 行）で切り捨てられました。全件ではありません。",
+            report_id,
+            ROW_LIMIT,
+        )
+
+    columns = metadata.get("detailColumns", [])
+    column_info = data.get("reportExtendedMetadata", {}).get("detailColumnInfo", {})
+    # 表示名が取れればそちらを使い、取れなければ内部名のままにする
+    labels = [column_info.get(column, {}).get("label", column) for column in columns]
+
+    rows = data.get("factMap", {}).get(DETAIL_ROWS_KEY, {}).get("rows", [])
+    return labels, [
+        {label: row["dataCells"][i]["label"] for i, label in enumerate(labels)} for row in rows
+    ]
+
+
 class ReportAPI:
     """レポートを実行して明細行を取得する。
 
@@ -87,12 +138,52 @@ class ReportAPI:
             rows = sf.report.run("00O000000000001")
     """
 
-    def __init__(self, client: SalesforceBase) -> None:
+    def __init__(self, client: "SalesforceBase") -> None:
         """
         Args:
             client: このレポート API を使う Salesforce クライアント。
         """
         self._client = client
+
+    @measure
+    def read_rows(
+        self,
+        report_id: str,
+        filters: list[dict] | None = None,
+        allow_truncated: bool = False,
+    ) -> Iterator[dict]:
+        """レポートを同期実行して明細行を 1 行ずつ返す（上限 2000 行）。
+
+        ``run()`` と違い **HTTP 取得直後から ``{列名: 値}`` を 1 件ずつ yield** する。
+        ``run()`` はこのイテレータを ``Table`` に包む薄い層になっている（順序を
+        「イテレータ先・Table 後」に揃えるため）。
+
+        列の情報は HTTP レスポンスの ``detailColumns`` / ``detailColumnInfo`` から
+        組み立てた ``labels`` を内部で取得しているが、戻り値は ``dict`` の
+        イテレータのみ（``Table.columns`` を直接取り出す API ではない）。
+        列名が必要なときは ``read()`` または ``run()`` で ``Table`` を取得する。
+
+        Args:
+            report_id: レポート ID（レポートを開いたときの URL の末尾。15桁 or 18桁）。
+            filters: 絞り込み条件（省略可）。レポート定義の条件を実行時に上書きする。
+            allow_truncated: True にすると、2000 行で切り捨てられても例外にせず
+                警告ログだけを出して、取れた分を返す。**既定は False**
+                （欠けたデータで処理が進むのを防ぐため）。
+
+        Returns:
+            ``{列名: 値}`` の dict を 1 行ずつ返すイテレータ。
+
+        Raises:
+            SalesforceReportTruncatedError: 上限で切り捨てられた場合
+                （allow_truncated=True のときは送出しない）。
+            SalesforceReportFormatError: 明細（TABULAR）形式でない場合。
+        """
+        labels, rows = self._fetch_labels_and_rows(report_id, filters, allow_truncated)
+        # 0 件でも ``labels`` を捨てない（呼び出し側が ``run()`` で ``Table``
+        # を作るときに使う）。``read_rows()`` の戻り値としては dict だけを
+        # 順に流す。
+        for row in rows:
+            yield row
 
     @measure
     def run(
@@ -101,42 +192,22 @@ class ReportAPI:
         filters: list[dict] | None = None,
         allow_truncated: bool = False,
     ) -> Table:
-        """レポートを同期実行して明細行を返す（上限 2000 行）。
+        """レポートを同期実行して明細行を ``Table`` で返す（上限 2000 行）。
+
+        ``read_rows()`` を呼んで ``Table`` に包むだけの薄い層。
+        列は HTTP レスポンスの ``detailColumns`` から組み立てた表示名を使い、
+        **0 件のときも列情報が落ちない**（``detailColumns`` が ``["取引先名", "金額"]``
+        なら、0 件ヒットでも ``Table.columns == ["取引先名", "金額"]``）。
 
         Args:
             report_id: レポート ID（レポートを開いたときの URL の末尾。15桁 or 18桁）。
-            filters: 絞り込み条件（省略可）。レポート定義の条件を実行時に上書きする。
-                例: [{"column": "CREATED_DATE",
-                      "operator": "greaterThan", "value": "2026-01-01"}]
-            allow_truncated: True にすると、2000 行で切り捨てられても例外にせず
-                警告ログだけを出して、取れた分を返す。**既定は False**
-                （欠けたデータで処理が進むのを防ぐため）。
+            filters: 絞り込み条件（省略可）。
+            allow_truncated: ``read_rows()`` と同じ。
 
         Returns:
             レポート明細を表す ``Table``。
-
-        Raises:
-            SalesforceReportTruncatedError: 上限で切り捨てられた場合
-                （allow_truncated=True のときは送出しない）。
-            SalesforceReportFormatError: 明細（TABULAR）形式でない場合。
         """
-        path = f"{self._base_path()}/{report_id}"
-        logger.debug("Salesforce Report取得開始: Report ID=%s", report_id)
-        if filters:
-            data, _ = self._client.request(
-                "POST",
-                path,
-                body={"reportMetadata": {"reportFilters": filters}},
-                component=COMPONENT,
-            )
-        else:
-            data, _ = self._client.request("GET", path, component=COMPONENT)
-        logger.debug("Salesforce APIレスポンス受信: Report ID=%s", report_id)
-        labels, rows = self._parse(data, report_id, allow_truncated)
-        logger.debug("Salesforce Report取得完了: Report ID=%s 件数=%d", report_id, len(rows))
-        # 列は ``detailColumns`` と ``detailColumnInfo`` から組み立てた表示名を使う。
-        # ``rows[0]`` からの推測だと 0 件のとき列が消えて ``table.column("列名")`` が
-        # ``TableColumnNotFoundError`` で落ちる（日常の「該当0件」で壊れる）。
+        labels, rows = self._fetch_labels_and_rows(report_id, filters, allow_truncated)
         return Table(labels, rows)
 
     @measure
@@ -174,10 +245,11 @@ class ReportAPI:
             )
             status = data.get("status") if isinstance(data, dict) else None
             if status == "Success":
-                labels, rows = self._parse(data, report_id, allow_truncated)
+                labels, rows = _parse_report_payload(
+                    data, report_id, allow_truncated, metrics=self._client.metrics
+                )
                 return Table(labels, rows)
             if status == "Error":
-                # data の dict への絞り込みは関数内で完結させる（再判定せず typing 用に分岐）
                 if not isinstance(data, dict):
                     raise SalesforceReportExecutionError(report_id, "詳細情報なし")
                 detail = str(data.get("error", data.get("message", "詳細情報なし")))
@@ -231,41 +303,27 @@ class ReportAPI:
     def _base_path(self) -> str:
         return self._client.data_path("/analytics/reports")
 
-    def _parse(
-        self, data: object, report_id: str, allow_truncated: bool
+    def _fetch_labels_and_rows(
+        self,
+        report_id: str,
+        filters: list[dict] | None,
+        allow_truncated: bool,
     ) -> tuple[list[str], list[dict]]:
-        """レポート API のレスポンスを ``(表示名の列リスト, [{表示名: 値}, ...])`` に変換する。
-
-        0 件のときでも ``detailColumns`` / ``detailColumnInfo`` から組み立てた
-        ``labels`` を返すため、``Table`` の列情報が落ちない。
-        """
-        if not isinstance(data, dict):
-            return [], []
-
-        metadata = data.get("reportMetadata", {})
-        report_format = metadata.get("reportFormat")
-        # 集計レポートは行が factMap のグループ別キーに入るため、明細用のキーを
-        # そのまま読むと無言で空のリストを返してしまう。だから明示的に弾く
-        if report_format and report_format != TABULAR_FORMAT:
-            raise SalesforceReportFormatError(report_id, report_format)
-
-        # allData が偽なら上限で切り捨てられている。全件と誤認させない
-        if data.get("allData") is False:
-            self._client.metrics.record_truncated_report(report_id)
-            if not allow_truncated:
-                raise SalesforceReportTruncatedError(report_id, ROW_LIMIT)
-            logger.warning(
-                "レポート %s は上限（%d 行）で切り捨てられました。全件ではありません。",
-                report_id,
-                ROW_LIMIT,
+        """HTTP 取得とパースを行い ``(labels, rows)`` を返す。"""
+        path = f"{self._base_path()}/{report_id}"
+        logger.debug("Salesforce Report取得開始: Report ID=%s", report_id)
+        if filters:
+            data, _ = self._client.request(
+                "POST",
+                path,
+                body={"reportMetadata": {"reportFilters": filters}},
+                component=COMPONENT,
             )
-
-        columns = metadata.get("detailColumns", [])
-        column_info = data.get("reportExtendedMetadata", {}).get("detailColumnInfo", {})
-        # 表示名が取れればそちらを使い、取れなければ内部名のままにする
-        labels = [column_info.get(column, {}).get("label", column) for column in columns]
-
-        rows = data.get("factMap", {}).get(DETAIL_ROWS_KEY, {}).get("rows", [])
-        return labels, [
-            {label: row["dataCells"][i]["label"] for i, label in enumerate(labels)} for row in rows
-        ]
+        else:
+            data, _ = self._client.request("GET", path, component=COMPONENT)
+        logger.debug("Salesforce APIレスポンス受信: Report ID=%s", report_id)
+        labels, rows = _parse_report_payload(
+            data, report_id, allow_truncated, metrics=self._client.metrics
+        )
+        logger.debug("Salesforce Report取得完了: Report ID=%s 件数=%d", report_id, len(rows))
+        return labels, rows

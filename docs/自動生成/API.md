@@ -669,10 +669,10 @@ CSVやExcelに直接依存しないため、加工処理をファイルI/Oから
 def __init__(self, columns: list[str] | tuple[str, ...], rows: list[dict[str, Any]], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
 ```
 
-#### `read`
+#### `read_rows`
 
 ```text
-def read(self) -> list[dict[str, Any]]:
+def read_rows(self) -> list[dict[str, Any]]:
 ```
 
 ##### 説明
@@ -747,7 +747,7 @@ def index(self, key: str) -> dict[Any, dict]:
 
 ##### 説明
 
-指定列をキーにした辞書を返す。
+指定列をキーにした行の索引を返す。
 
 #### `group_by`
 
@@ -882,8 +882,8 @@ def unmatched(self) -> UnmatchedRows:
 突合しなかった行を ``UnmatchedRows`` で返す。
 
 ``only_in_read`` は write に対応が無い read 行（追加候補）。
-``Table`` として返すので ``.read()`` / ``.filter()`` などの Table 標準の
-インターフェースが使える。 戻り値は ``Table.read()`` と同じく **read 行の
+``Table`` として返すので ``.read_rows()`` / ``.filter()`` などの Table 標準の
+インターフェースが使える。 戻り値は ``Table.read_rows()`` と同じく **read 行の
 コピー** で、書き換えても ``read`` にも ``result()`` にも影響しない。
 
 ``only_in_write`` は read に対応が無い write 行（破棄候補）。
@@ -939,7 +939,7 @@ def result(self) -> Table:
 ``result()`` は同じ作業 Table インスタンスを返し続けるので、
 ``result().append(...)`` のように破壊的に加工した場合や、 ``result()`` を
 呼んだ後に ``unmatched().only_in_write`` の ``write_row`` を書き換えた場合も、
-後続の ``result().read()`` 呼び出しに反映される（``Table._iter_rows_for_update``
+後続の ``result().read_rows()`` 呼び出しに反映される（``Table._iter_rows_for_update``
 経由で実体 dict を共有しているため）。
 
 Example:
@@ -957,7 +957,19 @@ def add_business_days(target: _dt.date, n: int, *, calendar: HolidayCalendar | N
 
 #### 説明
 
-``target`` から ``n`` 営業日後の日付（``n`` が負なら前）。``calendar`` 省略可。
+``target`` から ``n`` 営業日後の日付（``n`` が負なら前）。
+
+``n == 0`` のときは ``target`` を**そのまま**返す（``target`` が営業日か
+どうかを問わない）。これは Excel の ``WORKDAY`` と同じ挙動で、
+「今日から N 営業日後」を組み立てるときに条件分岐を書かなくて済む。
+
+例: 2024/5/2（木、祝日前日）に ``add_business_days(d, 1)`` を呼ぶと
+2024/5/7（火、5/3〜5/6 が祝日＋土日）を返す。
+
+``calendar=None`` のときは**既定カレンダー**を使う。
+
+Raises:
+    BusinessDayNotFoundError: 探索が ``BUSINESS_DAY_SEARCH_LIMIT`` に達した。
 
 ### `business_day_after`
 
@@ -969,7 +981,14 @@ def business_day_after(target: _dt.date, *, calendar: HolidayCalendar | None=Non
 
 ``target`` より後で最初の営業日（``target`` 自身を含まない）。
 
+``target`` が営業日でも翌営業日を返す。収録範囲外でも日付は進むが、
+祝日判定は「祝日ではない」と扱う。期限切れの警告は入口で 1度だけ出す。
+
 ``calendar=None`` のときは**既定カレンダー**を使う。
+
+Raises:
+    BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
+        営業日が見つからなかった（祝日データ欠落・社内休日広範囲など）。
 
 ### `business_day_before`
 
@@ -981,7 +1000,13 @@ def business_day_before(target: _dt.date, *, calendar: HolidayCalendar | None=No
 
 ``target`` より前で最初の営業日（``target`` 自身を含まない）。
 
+``target`` が営業日でも前営業日を返す。
+
 ``calendar=None`` のときは**既定カレンダー**を使う。
+
+Raises:
+    BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
+        営業日が見つからなかった。
 
 ### `business_day_on_or_after`
 
@@ -991,7 +1016,16 @@ def business_day_on_or_after(target: _dt.date, *, calendar: HolidayCalendar | No
 
 #### 説明
 
-``target`` 以降で最初の営業日（``target`` を含む）。``calendar`` 省略可。
+``target`` 以降で最初の営業日（``target`` を含む）。
+
+``target`` が営業日なら ``target`` をそのまま返す。
+営業日でなければ、``business_day_after`` と同じ動きで翌日以降を探す。
+
+``calendar=None`` のときは**既定カレンダー**を使う。
+
+Raises:
+    BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
+        営業日が見つからなかった。
 
 ### `business_day_on_or_before`
 
@@ -1001,7 +1035,16 @@ def business_day_on_or_before(target: _dt.date, *, calendar: HolidayCalendar | N
 
 #### 説明
 
-``target`` 以前で最初の営業日（``target`` を含む）。``calendar`` 省略可。
+``target`` 以前で最初の営業日（``target`` を含む）。
+
+``target`` が営業日なら ``target`` をそのまま返す。
+営業日でなければ、``business_day_before`` と同じ動きで前日以前を探す。
+
+``calendar=None`` のときは**既定カレンダー**を使う。
+
+Raises:
+    BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
+        営業日が見つからなかった。
 
 ### `compare_tables`
 
@@ -1170,7 +1213,8 @@ CSV と Excel をまたいだ比較にも使える（"1000" と 1000 は同一�
 ``CSV.read()`` のように ``Table`` を返す API と組み合わせるときは ``Table`` を、
 既存の ``list[dict]`` をそのまま渡すときはリストを指定する。戻り値の
 ``added`` / ``removed`` は ``Table`` になり、``filter`` / ``select`` /
-``count`` などの Table 標準の操作が直接使える。
+``count`` などの Table 標準の操作が直接使える。Table インスタンスから
+``list[dict]`` を取り出すには ``Table.read_rows()`` を使う。
 Args:
     before: 変更前のデータ（``Table`` または辞書のリスト）。
     after: 変更後のデータ（``Table`` または辞書のリスト）。
@@ -1190,7 +1234,12 @@ def first_business_day_of_month(target: _dt.date, *, calendar: HolidayCalendar |
 
 #### 説明
 
-``target`` が属する月の最初の営業日。``calendar`` 省略可。
+``target`` が属する月の最初の営業日。
+
+``calendar=None`` のときは**既定カレンダー**を使う。
+
+Raises:
+    BusinessDayNotFoundError: その月に営業日が 1日も無いとき。
 
 ### `is_business_day`
 
@@ -1209,6 +1258,14 @@ def is_business_day(target: _dt.date, *, calendar: HolidayCalendar | None=None, 
 ``calendar`` をキーワード専用にして、呼び出し側がうっかり位置引数で
 日付とカレンダーを取り違える事故を防ぐ。
 
+``skip_weekends=True``（既定）なら土曜・日曜も休業扱いにする。
+``False`` を渡すと、土曜・日曜であっても祝日でなければ「営業日」と
+判定される（振替休日を平日扱いするシナリオ向け）。
+
+「収録済み最終日 <= target」のときは期限切れを WARNING ログで 1度だけ
+通知する。判定自体は通常どおり行う（誤って平日扱いにならないよう、
+**収録範囲外は祝日ではない側に倒す**）。
+
 ### `last_business_day_of_month`
 
 ```text
@@ -1217,7 +1274,14 @@ def last_business_day_of_month(target: _dt.date, *, calendar: HolidayCalendar | 
 
 #### 説明
 
-``target`` が属する月の最後の営業日。``calendar`` 省略可。
+``target`` が属する月の最後の営業日。
+
+月末が土日・祝日のときは直前の営業日に遡る（例: 8/31 が日曜なら 8/29 金）。
+
+``calendar=None`` のときは**既定カレンダー**を使う。
+
+Raises:
+    BusinessDayNotFoundError: その月に営業日が 1日も無いとき。
 
 ### `load_cabinet_office_csv`
 
@@ -1353,7 +1417,15 @@ def nth_business_day_of_month(target: _dt.date, n: int, *, calendar: HolidayCale
 
 #### 説明
 
-``target`` が属する月の第 ``n`` 営業日（``n`` は 1 始まり）。``calendar`` 省略可。
+``target`` が属する月の第 ``n`` 営業日を返す（``n`` は 1 始まり）。
+
+月の初日から数えて ``n`` 番目の営業日。
+その月の営業日数を超える ``n`` を渡すと ``BusinessDayNotFoundError``。
+
+``calendar=None`` のときは**既定カレンダー**を使う。
+
+Raises:
+    BusinessDayNotFoundError: ``n`` が 1 未満、またはその月の営業日数を超える。
 
 ### `now`
 
@@ -2641,7 +2713,19 @@ def add_business_days(target: _dt.date, n: int, *, calendar: HolidayCalendar | N
 
 #### 説明
 
-``target`` から ``n`` 営業日後の日付（``n`` が負なら前）。``calendar`` 省略可。
+``target`` から ``n`` 営業日後の日付（``n`` が負なら前）。
+
+``n == 0`` のときは ``target`` を**そのまま**返す（``target`` が営業日か
+どうかを問わない）。これは Excel の ``WORKDAY`` と同じ挙動で、
+「今日から N 営業日後」を組み立てるときに条件分岐を書かなくて済む。
+
+例: 2024/5/2（木、祝日前日）に ``add_business_days(d, 1)`` を呼ぶと
+2024/5/7（火、5/3〜5/6 が祝日＋土日）を返す。
+
+``calendar=None`` のときは**既定カレンダー**を使う。
+
+Raises:
+    BusinessDayNotFoundError: 探索が ``BUSINESS_DAY_SEARCH_LIMIT`` に達した。
 
 ### `business_day_after`
 
@@ -2653,7 +2737,14 @@ def business_day_after(target: _dt.date, *, calendar: HolidayCalendar | None=Non
 
 ``target`` より後で最初の営業日（``target`` 自身を含まない）。
 
+``target`` が営業日でも翌営業日を返す。収録範囲外でも日付は進むが、
+祝日判定は「祝日ではない」と扱う。期限切れの警告は入口で 1度だけ出す。
+
 ``calendar=None`` のときは**既定カレンダー**を使う。
+
+Raises:
+    BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
+        営業日が見つからなかった（祝日データ欠落・社内休日広範囲など）。
 
 ### `business_day_before`
 
@@ -2665,7 +2756,13 @@ def business_day_before(target: _dt.date, *, calendar: HolidayCalendar | None=No
 
 ``target`` より前で最初の営業日（``target`` 自身を含まない）。
 
+``target`` が営業日でも前営業日を返す。
+
 ``calendar=None`` のときは**既定カレンダー**を使う。
+
+Raises:
+    BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
+        営業日が見つからなかった。
 
 ### `business_day_on_or_after`
 
@@ -2675,7 +2772,16 @@ def business_day_on_or_after(target: _dt.date, *, calendar: HolidayCalendar | No
 
 #### 説明
 
-``target`` 以降で最初の営業日（``target`` を含む）。``calendar`` 省略可。
+``target`` 以降で最初の営業日（``target`` を含む）。
+
+``target`` が営業日なら ``target`` をそのまま返す。
+営業日でなければ、``business_day_after`` と同じ動きで翌日以降を探す。
+
+``calendar=None`` のときは**既定カレンダー**を使う。
+
+Raises:
+    BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
+        営業日が見つからなかった。
 
 ### `business_day_on_or_before`
 
@@ -2685,7 +2791,16 @@ def business_day_on_or_before(target: _dt.date, *, calendar: HolidayCalendar | N
 
 #### 説明
 
-``target`` 以前で最初の営業日（``target`` を含む）。``calendar`` 省略可。
+``target`` 以前で最初の営業日（``target`` を含む）。
+
+``target`` が営業日なら ``target`` をそのまま返す。
+営業日でなければ、``business_day_before`` と同じ動きで前日以前を探す。
+
+``calendar=None`` のときは**既定カレンダー**を使う。
+
+Raises:
+    BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
+        営業日が見つからなかった。
 
 ### `default_calendar`
 
@@ -2715,7 +2830,12 @@ def first_business_day_of_month(target: _dt.date, *, calendar: HolidayCalendar |
 
 #### 説明
 
-``target`` が属する月の最初の営業日。``calendar`` 省略可。
+``target`` が属する月の最初の営業日。
+
+``calendar=None`` のときは**既定カレンダー**を使う。
+
+Raises:
+    BusinessDayNotFoundError: その月に営業日が 1日も無いとき。
 
 ### `is_business_day`
 
@@ -2734,6 +2854,14 @@ def is_business_day(target: _dt.date, *, calendar: HolidayCalendar | None=None, 
 ``calendar`` をキーワード専用にして、呼び出し側がうっかり位置引数で
 日付とカレンダーを取り違える事故を防ぐ。
 
+``skip_weekends=True``（既定）なら土曜・日曜も休業扱いにする。
+``False`` を渡すと、土曜・日曜であっても祝日でなければ「営業日」と
+判定される（振替休日を平日扱いするシナリオ向け）。
+
+「収録済み最終日 <= target」のときは期限切れを WARNING ログで 1度だけ
+通知する。判定自体は通常どおり行う（誤って平日扱いにならないよう、
+**収録範囲外は祝日ではない側に倒す**）。
+
 ### `last_business_day_of_month`
 
 ```text
@@ -2742,7 +2870,14 @@ def last_business_day_of_month(target: _dt.date, *, calendar: HolidayCalendar | 
 
 #### 説明
 
-``target`` が属する月の最後の営業日。``calendar`` 省略可。
+``target`` が属する月の最後の営業日。
+
+月末が土日・祝日のときは直前の営業日に遡る（例: 8/31 が日曜なら 8/29 金）。
+
+``calendar=None`` のときは**既定カレンダー**を使う。
+
+Raises:
+    BusinessDayNotFoundError: その月に営業日が 1日も無いとき。
 
 ### `load_cabinet_office_csv`
 
@@ -2775,7 +2910,15 @@ def nth_business_day_of_month(target: _dt.date, n: int, *, calendar: HolidayCale
 
 #### 説明
 
-``target`` が属する月の第 ``n`` 営業日（``n`` は 1 始まり）。``calendar`` 省略可。
+``target`` が属する月の第 ``n`` 営業日を返す（``n`` は 1 始まり）。
+
+月の初日から数えて ``n`` 番目の営業日。
+その月の営業日数を超える ``n`` を渡すと ``BusinessDayNotFoundError``。
+
+``calendar=None`` のときは**既定カレンダー**を使う。
+
+Raises:
+    BusinessDayNotFoundError: ``n`` が 1 未満、またはその月の営業日数を超える。
 
 ### `set_default_calendar`
 
@@ -2890,10 +3033,10 @@ CSVやExcelに直接依存しないため、加工処理をファイルI/Oから
 def __init__(self, columns: list[str] | tuple[str, ...], rows: list[dict[str, Any]], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
 ```
 
-#### `read`
+#### `read_rows`
 
 ```text
-def read(self) -> list[dict[str, Any]]:
+def read_rows(self) -> list[dict[str, Any]]:
 ```
 
 ##### 説明
@@ -2968,7 +3111,7 @@ def index(self, key: str) -> dict[Any, dict]:
 
 ##### 説明
 
-指定列をキーにした辞書を返す。
+指定列をキーにした行の索引を返す。
 
 #### `group_by`
 
@@ -3103,8 +3246,8 @@ def unmatched(self) -> UnmatchedRows:
 突合しなかった行を ``UnmatchedRows`` で返す。
 
 ``only_in_read`` は write に対応が無い read 行（追加候補）。
-``Table`` として返すので ``.read()`` / ``.filter()`` などの Table 標準の
-インターフェースが使える。 戻り値は ``Table.read()`` と同じく **read 行の
+``Table`` として返すので ``.read_rows()`` / ``.filter()`` などの Table 標準の
+インターフェースが使える。 戻り値は ``Table.read_rows()`` と同じく **read 行の
 コピー** で、書き換えても ``read`` にも ``result()`` にも影響しない。
 
 ``only_in_write`` は read に対応が無い write 行（破棄候補）。
@@ -3160,7 +3303,7 @@ def result(self) -> Table:
 ``result()`` は同じ作業 Table インスタンスを返し続けるので、
 ``result().append(...)`` のように破壊的に加工した場合や、 ``result()`` を
 呼んだ後に ``unmatched().only_in_write`` の ``write_row`` を書き換えた場合も、
-後続の ``result().read()`` 呼び出しに反映される（``Table._iter_rows_for_update``
+後続の ``result().read_rows()`` 呼び出しに反映される（``Table._iter_rows_for_update``
 経由で実体 dict を共有しているため）。
 
 Example:
@@ -3689,8 +3832,7 @@ class EmptyHeaderCellError(ExcelError):
 
 Excel の見出しに空欄がある
 
-発生箇所: Excel.read_computed_rows_as_dicts() / ExcelTable.read() /
-         ExcelCOMHandler.read_rows_as_dicts()
+発生箇所: Excel.read() / ExcelTable.read() / ExcelCOMHandler.read()
 
 対処:
     Excel の1行目の空欄を埋める
@@ -3711,7 +3853,7 @@ class DuplicateHeaderCellError(ExcelError):
 
 Excel の見出し名が重複している
 
-発生箇所: Sheet.read_rows_as_dicts()
+発生箇所: Sheet.create_table()
 
 対処:
     Excel の見出し名を重複しない名前に変更する
@@ -3751,7 +3893,7 @@ class ExcelHeadersTooFewError(ExcelError):
 
 指定した見出し数が列数より少ない
 
-発生箇所: ExcelCOMHandler.read_rows_as_dicts()
+発生箇所: ExcelCOMHandler.read()
 
 対処:
     管理者へ連絡する
@@ -6342,10 +6484,10 @@ CSVやExcelに直接依存しないため、加工処理をファイルI/Oから
 def __init__(self, columns: list[str] | tuple[str, ...], rows: list[dict[str, Any]], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
 ```
 
-#### `read`
+#### `read_rows`
 
 ```text
-def read(self) -> list[dict[str, Any]]:
+def read_rows(self) -> list[dict[str, Any]]:
 ```
 
 ##### 説明
@@ -6420,7 +6562,7 @@ def index(self, key: str) -> dict[Any, dict]:
 
 ##### 説明
 
-指定列をキーにした辞書を返す。
+指定列をキーにした行の索引を返す。
 
 #### `group_by`
 
@@ -6545,8 +6687,8 @@ def unmatched(self) -> UnmatchedRows:
 突合しなかった行を ``UnmatchedRows`` で返す。
 
 ``only_in_read`` は write に対応が無い read 行（追加候補）。
-``Table`` として返すので ``.read()`` / ``.filter()`` などの Table 標準の
-インターフェースが使える。 戻り値は ``Table.read()`` と同じく **read 行の
+``Table`` として返すので ``.read_rows()`` / ``.filter()`` などの Table 標準の
+インターフェースが使える。 戻り値は ``Table.read_rows()`` と同じく **read 行の
 コピー** で、書き換えても ``read`` にも ``result()`` にも影響しない。
 
 ``only_in_write`` は read に対応が無い write 行（破棄候補）。
@@ -6602,7 +6744,7 @@ def result(self) -> Table:
 ``result()`` は同じ作業 Table インスタンスを返し続けるので、
 ``result().append(...)`` のように破壊的に加工した場合や、 ``result()`` を
 呼んだ後に ``unmatched().only_in_write`` の ``write_row`` を書き換えた場合も、
-後続の ``result().read()`` 呼び出しに反映される（``Table._iter_rows_for_update``
+後続の ``result().read_rows()`` 呼び出しに反映される（``Table._iter_rows_for_update``
 経由で実体 dict を共有しているため）。
 
 Example:
@@ -6717,6 +6859,25 @@ def read_rows(self, source: str) -> Iterator[dict[str, object]]:
 
 COM 往復を減らすため小さなバッチで取得する。数十万件を ``list`` にすると
 メモリを大量に使うため、CSV が目的なら ``export_csv()`` を使う。
+
+#### `read_table`
+
+```text
+def read_table(self, source: str) -> Table:
+```
+
+##### 説明
+
+テーブルまたはクエリをメモリ上の ``Table`` として返す。
+
+全行をメモリへ載せるため、大量データには ``read_rows()`` を使う。
+表として絞り込み・索引・転記を行う場合の明示的な入口。
+
+列名は ``read_rows()`` のイテレータから直接取れない（イテレータは
+行ごとにしか値を返さない）ため、レコードセットを別途開いて列名だけ
+先に取得する。0 件のときは ``read_rows()`` が空ジェネレータを返すので
+``columns`` が空になるが、Access 側にもスキーマ API が無いため
+「0 件のとき列名が空」なのは仕様として許容する。
 
 #### `table_names`
 
@@ -8156,6 +8317,33 @@ def read(self) -> Table:
 
 全行を読み、指定された列だけを変換したTableを返す。
 
+ファイルの内容を**全件メモリに展開**する。行数が大きいファイル
+（目安: 1 万行を超えるもの）は ``read_rows()`` を使い、1 行ずつ処理する
+ことでメモリ消費を抑える。``read_rows()`` は列名も返さないので、
+列名は ``read()`` または ``columns`` 引数で先に取っておく。
+
+#### `read_rows`
+
+```text
+def read_rows(self) -> Iterator[dict[str, str]]:
+```
+
+##### 説明
+
+CSV を 1 行ずつ ``{列名: 値}`` の dict で返すイテレーター。
+
+``read()`` と違ってファイル全体を内存に展開しないため、**行数が大きい
+CSV（数万件以上）**ではこちらを使う。``read()`` と同じく見出し行を
+自動で解釈し、列名は ``csv.DictReader`` の動作に従う。
+
+列名は戻り値の dict から直接取れない（イテレーターは順番に値を返す
+だけ）。先に ``csv.read().columns`` または ``csv.columns`` 引数で
+列名を取得しておく。
+
+このメソッドは ``with`` の中でだけ呼ぶこと（``TableNotOpenError``）。
+文字コードの自動判定（``Encoding.AUTO`` のとき）は ``read()`` と
+同じ ``_read_text`` を使う。
+
 #### `replace`
 
 ```text
@@ -8359,26 +8547,28 @@ Excel COMへ一時的に昇格してVBAマクロを実行する。
 COMには元ファイルではなく作業ファイルを渡す。ローカルコピー利用時にも、
 例外終了なら元ファイルを変更しないというwithの契約を守るためである。
 
-#### `read_computed_rows`
+#### `read`
 
 ```text
-@measure
-def read_computed_rows(self, sheet_name: str, min_row: int=2) -> list[tuple[Any, ...]]:
+def read(self, sheet_name: str, *, header_row: int=1, force_com: bool=False) -> 'Table':
 ```
 
 ##### 説明
 
-数式の計算結果を行単位で読む。未計算の数式がある場合だけCOMへ昇格する。
+見出し行をキーに計算結果を読み ``Table`` で返す。未計算時だけCOMへ昇格する。
 
-#### `read_computed_rows_as_dicts`
+``header_row`` で見出し行の番号を指定する。既定は 1（先頭行）。
+``force_com=True`` でキャッシュを無視して Excel 実機で強制再計算させる。
+数式の列は ``Table`` 化されない（文字列のまま入るので、必要なら ``Table`` の
+``types`` で ``int`` / ``float`` などに変換すること）。
 
-```text
-def read_computed_rows_as_dicts(self, sheet_name: str, header_row: int=1) -> list[dict[str, Any]]:
-```
+Args:
+    sheet_name: シート名。
+    header_row: 見出し行の番号（1 始まり）。既定は 1。
+    force_com: ``True`` でキャッシュを無視して Excel 実機で強制再計算。
 
-##### 説明
-
-見出し行をキーに計算結果を読む。未計算時だけCOMへ昇格する。
+Returns:
+    シートの内容を表す ``Table``。全セルが空の行は除外される。
 
 ### `Sheet`
 
@@ -8481,12 +8671,12 @@ def write_range(self, cell_range: str, values: list[list[Any]]) -> None:
 #### `read_range`
 
 ```text
-def read_range(self, cell_range: str, *, force_com: bool=False) -> list[dict[str, Any]]:
+def read_range(self, cell_range: str, *, force_com: bool=False) -> 'Table':
 ```
 
 ##### 説明
 
-指定範囲の先頭行を見出しとして辞書のリストで読む。
+指定範囲の先頭行を見出しとして ``Table`` で読む。
 
 数式セルがある範囲では保存済み計算値、無ければ COM で再計算した値を返す。
 ``force_com=True`` でキャッシュを無視して Excel 実機で強制再計算させる。
@@ -9270,7 +9460,19 @@ def add_business_days(target: _dt.date, n: int, *, calendar: HolidayCalendar | N
 
 #### 説明
 
-``target`` から ``n`` 営業日後の日付（``n`` が負なら前）。``calendar`` 省略可。
+``target`` から ``n`` 営業日後の日付（``n`` が負なら前）。
+
+``n == 0`` のときは ``target`` を**そのまま**返す（``target`` が営業日か
+どうかを問わない）。これは Excel の ``WORKDAY`` と同じ挙動で、
+「今日から N 営業日後」を組み立てるときに条件分岐を書かなくて済む。
+
+例: 2024/5/2（木、祝日前日）に ``add_business_days(d, 1)`` を呼ぶと
+2024/5/7（火、5/3〜5/6 が祝日＋土日）を返す。
+
+``calendar=None`` のときは**既定カレンダー**を使う。
+
+Raises:
+    BusinessDayNotFoundError: 探索が ``BUSINESS_DAY_SEARCH_LIMIT`` に達した。
 
 ### `business_day_after`
 
@@ -9282,7 +9484,14 @@ def business_day_after(target: _dt.date, *, calendar: HolidayCalendar | None=Non
 
 ``target`` より後で最初の営業日（``target`` 自身を含まない）。
 
+``target`` が営業日でも翌営業日を返す。収録範囲外でも日付は進むが、
+祝日判定は「祝日ではない」と扱う。期限切れの警告は入口で 1度だけ出す。
+
 ``calendar=None`` のときは**既定カレンダー**を使う。
+
+Raises:
+    BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
+        営業日が見つからなかった（祝日データ欠落・社内休日広範囲など）。
 
 ### `business_day_before`
 
@@ -9294,7 +9503,13 @@ def business_day_before(target: _dt.date, *, calendar: HolidayCalendar | None=No
 
 ``target`` より前で最初の営業日（``target`` 自身を含まない）。
 
+``target`` が営業日でも前営業日を返す。
+
 ``calendar=None`` のときは**既定カレンダー**を使う。
+
+Raises:
+    BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
+        営業日が見つからなかった。
 
 ### `business_day_on_or_after`
 
@@ -9304,7 +9519,16 @@ def business_day_on_or_after(target: _dt.date, *, calendar: HolidayCalendar | No
 
 #### 説明
 
-``target`` 以降で最初の営業日（``target`` を含む）。``calendar`` 省略可。
+``target`` 以降で最初の営業日（``target`` を含む）。
+
+``target`` が営業日なら ``target`` をそのまま返す。
+営業日でなければ、``business_day_after`` と同じ動きで翌日以降を探す。
+
+``calendar=None`` のときは**既定カレンダー**を使う。
+
+Raises:
+    BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
+        営業日が見つからなかった。
 
 ### `business_day_on_or_before`
 
@@ -9314,7 +9538,16 @@ def business_day_on_or_before(target: _dt.date, *, calendar: HolidayCalendar | N
 
 #### 説明
 
-``target`` 以前で最初の営業日（``target`` を含む）。``calendar`` 省略可。
+``target`` 以前で最初の営業日（``target`` を含む）。
+
+``target`` が営業日なら ``target`` をそのまま返す。
+営業日でなければ、``business_day_before`` と同じ動きで前日以前を探す。
+
+``calendar=None`` のときは**既定カレンダー**を使う。
+
+Raises:
+    BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
+        営業日が見つからなかった。
 
 ### `first_business_day_of_month`
 
@@ -9324,7 +9557,12 @@ def first_business_day_of_month(target: _dt.date, *, calendar: HolidayCalendar |
 
 #### 説明
 
-``target`` が属する月の最初の営業日。``calendar`` 省略可。
+``target`` が属する月の最初の営業日。
+
+``calendar=None`` のときは**既定カレンダー**を使う。
+
+Raises:
+    BusinessDayNotFoundError: その月に営業日が 1日も無いとき。
 
 ### `is_business_day`
 
@@ -9343,6 +9581,14 @@ def is_business_day(target: _dt.date, *, calendar: HolidayCalendar | None=None, 
 ``calendar`` をキーワード専用にして、呼び出し側がうっかり位置引数で
 日付とカレンダーを取り違える事故を防ぐ。
 
+``skip_weekends=True``（既定）なら土曜・日曜も休業扱いにする。
+``False`` を渡すと、土曜・日曜であっても祝日でなければ「営業日」と
+判定される（振替休日を平日扱いするシナリオ向け）。
+
+「収録済み最終日 <= target」のときは期限切れを WARNING ログで 1度だけ
+通知する。判定自体は通常どおり行う（誤って平日扱いにならないよう、
+**収録範囲外は祝日ではない側に倒す**）。
+
 ### `last_business_day_of_month`
 
 ```text
@@ -9351,7 +9597,14 @@ def last_business_day_of_month(target: _dt.date, *, calendar: HolidayCalendar | 
 
 #### 説明
 
-``target`` が属する月の最後の営業日。``calendar`` 省略可。
+``target`` が属する月の最後の営業日。
+
+月末が土日・祝日のときは直前の営業日に遡る（例: 8/31 が日曜なら 8/29 金）。
+
+``calendar=None`` のときは**既定カレンダー**を使う。
+
+Raises:
+    BusinessDayNotFoundError: その月に営業日が 1日も無いとき。
 
 ### `load_cabinet_office_csv`
 
@@ -9384,7 +9637,15 @@ def nth_business_day_of_month(target: _dt.date, n: int, *, calendar: HolidayCale
 
 #### 説明
 
-``target`` が属する月の第 ``n`` 営業日（``n`` は 1 始まり）。``calendar`` 省略可。
+``target`` が属する月の第 ``n`` 営業日を返す（``n`` は 1 始まり）。
+
+月の初日から数えて ``n`` 番目の営業日。
+その月の営業日数を超える ``n`` を渡すと ``BusinessDayNotFoundError``。
+
+``calendar=None`` のときは**既定カレンダー**を使う。
+
+Raises:
+    BusinessDayNotFoundError: ``n`` が 1 未満、またはその月の営業日数を超える。
 
 
 ## `from comken.toolbox.outlook import ...`
@@ -9465,7 +9726,7 @@ class ReportAPI:
 #### `__init__`
 
 ```text
-def __init__(self, client: SalesforceBase) -> None:
+def __init__(self, client: 'SalesforceBase') -> None:
 ```
 
 ##### 説明
@@ -9473,39 +9734,70 @@ def __init__(self, client: SalesforceBase) -> None:
 Args:
     client: このレポート API を使う Salesforce クライアント。
 
-#### `run`
+#### `read_rows`
 
 ```text
 @measure
-def run(self, report_id: str, filters: list[dict] | None=None, allow_truncated: bool=False) -> list[dict]:
+def read_rows(self, report_id: str, filters: list[dict] | None=None, allow_truncated: bool=False) -> Iterator[dict]:
 ```
 
 ##### 説明
 
-レポートを同期実行して明細行を返す（上限 2000 行）。
+レポートを同期実行して明細行を 1 行ずつ返す（上限 2000 行）。
+
+``run()`` と違い **HTTP 取得直後から ``{列名: 値}`` を 1 件ずつ yield** する。
+``run()`` はこのイテレータを ``Table`` に包む薄い層になっている（順序を
+「イテレータ先・Table 後」に揃えるため）。
+
+列の情報は HTTP レスポンスの ``detailColumns`` / ``detailColumnInfo`` から
+組み立てた ``labels`` を内部で取得しているが、戻り値は ``dict`` の
+イテレータのみ（``Table.columns`` を直接取り出す API ではない）。
+列名が必要なときは ``read()`` または ``run()`` で ``Table`` を取得する。
 
 Args:
     report_id: レポート ID（レポートを開いたときの URL の末尾。15桁 or 18桁）。
     filters: 絞り込み条件（省略可）。レポート定義の条件を実行時に上書きする。
-        例: [{"column": "CREATED_DATE",
-              "operator": "greaterThan", "value": "2026-01-01"}]
     allow_truncated: True にすると、2000 行で切り捨てられても例外にせず
         警告ログだけを出して、取れた分を返す。**既定は False**
         （欠けたデータで処理が進むのを防ぐため）。
 
 Returns:
-    [{"列の表示名": "値", ...}, ...] のリスト。
+    ``{列名: 値}`` の dict を 1 行ずつ返すイテレータ。
 
 Raises:
     SalesforceReportTruncatedError: 上限で切り捨てられた場合
         （allow_truncated=True のときは送出しない）。
     SalesforceReportFormatError: 明細（TABULAR）形式でない場合。
 
+#### `run`
+
+```text
+@measure
+def run(self, report_id: str, filters: list[dict] | None=None, allow_truncated: bool=False) -> Table:
+```
+
+##### 説明
+
+レポートを同期実行して明細行を ``Table`` で返す（上限 2000 行）。
+
+``read_rows()`` を呼んで ``Table`` に包むだけの薄い層。
+列は HTTP レスポンスの ``detailColumns`` から組み立てた表示名を使い、
+**0 件のときも列情報が落ちない**（``detailColumns`` が ``["取引先名", "金額"]``
+なら、0 件ヒットでも ``Table.columns == ["取引先名", "金額"]``）。
+
+Args:
+    report_id: レポート ID（レポートを開いたときの URL の末尾。15桁 or 18桁）。
+    filters: 絞り込み条件（省略可）。
+    allow_truncated: ``read_rows()`` と同じ。
+
+Returns:
+    レポート明細を表す ``Table``。
+
 #### `run_async`
 
 ```text
 @measure
-def run_async(self, report_id: str, filters: list[dict] | None=None, allow_truncated: bool=False) -> list[dict]:
+def run_async(self, report_id: str, filters: list[dict] | None=None, allow_truncated: bool=False) -> Table:
 ```
 
 ##### 説明
@@ -9738,7 +10030,7 @@ Sandbox 組織のクライアント。
 #### `opportunities`
 
 ```text
-def opportunities(self) -> list[dict]:
+def opportunities(self) -> Table:
 ```
 
 ##### 説明
@@ -9765,7 +10057,7 @@ Production 組織のクライアント。
 #### `opportunities`
 
 ```text
-def opportunities(self) -> list[dict]:
+def opportunities(self) -> Table:
 ```
 
 ##### 説明
@@ -9792,7 +10084,7 @@ Developer 組織のクライアント。
 #### `opportunities`
 
 ```text
-def opportunities(self) -> list[dict]:
+def opportunities(self) -> Table:
 ```
 
 ##### 説明
@@ -9857,7 +10149,7 @@ Args:
     path: Excel ファイルのパス。
     password: 読み取りパスワード（パスワード保護されたファイルを開く場合）。
     headers: ヘッダー行がない Excel の場合に、列名のリストをここで付ける。
-             指定すると read_rows_as_dicts() は全行をデータとして読む。
+             指定すると ``read()`` は全行をデータとして読む。
     local_copy_threshold_mb: この MB 以上のファイルはローカルにコピーしてから開く。
         NAS やネットワークドライブのファイルが遅い・不安定な場合に有効。
         0 を指定するとローカルコピーを無効化できる
@@ -9900,11 +10192,11 @@ Args:
     col: 列番号（1始まり）または列記号（"A" / "AA"）。
     value: 書き込む値。
 
-#### `read_rows`
+#### `read_row_values`
 
 ```text
 @measure
-def read_rows(self, sheet_name: str, min_row: int=2) -> list[tuple]:
+def read_row_values(self, sheet_name: str, min_row: int=2) -> list[tuple]:
 ```
 
 ##### 説明
@@ -9918,41 +10210,42 @@ Args:
 Returns:
     各行を値のタプルにしたリスト。
 
-#### `read_range`
+#### `read_block`
 
 ```text
 @measure
-def read_range(self, sheet_name: str, min_col: int, min_row: int, max_col: int, max_row: int) -> list[tuple[Any, ...]]:
+def read_block(self, sheet_name: str, min_col: int, min_row: int, max_col: int, max_row: int) -> list[tuple[Any, ...]]:
 ```
 
 ##### 説明
 
 指定シートの矩形範囲だけを計算済みの値で返す。
 
-#### `read_rows_as_dicts`
+#### `read`
 
 ```text
 @measure
-def read_rows_as_dicts(self, sheet_name: str, header_row: int=1) -> list[dict]:
+def read(self, sheet_name: str, *, header_row: int=1) -> 'Table':
 ```
 
 ##### 説明
 
-ヘッダー行をキーとした辞書のリストで返す。
+ヘッダー行をキーにした ``Table`` を返す。
 
-ヘッダー行がないファイルは ExcelCOMHandler(path, headers=[...]) で列名を指定すること。
+ヘッダー行がないファイルは ``ExcelCOMHandler(path, headers=[...])`` で
+列名を指定すること。
 
 Args:
     sheet_name: シート名。
     header_row: ヘッダーが存在する行番号（デフォルト: 1）。
-                __init__ で headers を指定した場合は無視される。
+        ``__init__`` で ``headers`` を指定した場合は無視される。
 
 Returns:
-    [{"列名": 値, ...}, ...] の形式のリスト。全セルが空の行は除外される。
+    シートの内容を表す ``Table``。全セルが空の行は除外される。
 
 Raises:
-    ExcelError: ヘッダー行に空のセルがある場合（headers 未指定時のみ）、
-                または headers の列数がシートの列数より少ない場合。
+    ExcelError: ヘッダー行に空のセルがある場合（``headers`` 未指定時のみ）、
+        または ``headers`` の列数がシートの列数より少ない場合。
 
 #### `count_non_empty_cells`
 

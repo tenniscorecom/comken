@@ -150,17 +150,17 @@ class TestExcelComPromotion:
         workbook.active.append([10, "=A2*2"])
         workbook.save(path)
         com = MagicMock()
-        com.__enter__.return_value.read_rows.return_value = [(10, 20)]
+        com.__enter__.return_value.read_row_values.return_value = [(10, 20)]
 
         with (
             patch("comken.toolbox.windows.handler.ExcelCOMHandler", return_value=com) as handler,
             Excel(path) as excel,
         ):
-            rows = excel.read_computed_rows("Sheet")
+            rows = excel._read_computed_rows("Sheet")
 
         assert rows == [(10, 20)]
         handler.assert_called_once_with(path, local_copy_threshold_mb=0)
-        com.__enter__.return_value.read_rows.assert_called_once_with("Sheet", 2)
+        com.__enter__.return_value.read_row_values.assert_called_once_with("Sheet", 2)
 
     def test_formula_free_book_stays_on_openpyxl(self, tmp_path) -> None:
         path = tmp_path / "values.xlsx"
@@ -173,7 +173,7 @@ class TestExcelComPromotion:
             patch("comken.toolbox.windows.handler.ExcelCOMHandler") as handler,
             Excel(path) as excel,
         ):
-            assert excel.read_computed_rows("Sheet") == [(10,)]
+            assert excel._read_computed_rows("Sheet") == [(10,)]
 
         handler.assert_not_called()
 
@@ -186,7 +186,7 @@ class TestExcelComPromotion:
             Excel(path) as excel,
             patch.object(excel, "_cached_rows", return_value=([(20,)], False)),
         ):
-            assert excel.read_computed_rows("Sheet") == [(20,)]
+            assert excel._read_computed_rows("Sheet") == [(20,)]
 
         handler.assert_not_called()
 

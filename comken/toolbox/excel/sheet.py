@@ -23,7 +23,6 @@ from comken.exceptions import (
 from comken.toolbox.excel.table import ExcelTable
 
 if TYPE_CHECKING:
-    from comken.core.table.model import Table
     from comken.toolbox.excel.workbook import Excel
 
 # openpyxl の Side が受け付ける境界線のスタイル。
@@ -80,7 +79,7 @@ class Sheet:
             )
         return ExcelTable(self._excel, self._worksheet, name)
 
-    def create_table(self, name: str, table: "Table", start_cell: str = "A1") -> ExcelTable:
+    def create_table(self, name: str, table: Table, start_cell: str = "A1") -> ExcelTable:
         """Python管理用の実テーブルを新規作成する。
 
         ``start_cell`` は見出しの左上セルです。作成直後の Table はメモリ上の
@@ -216,8 +215,8 @@ class Sheet:
                 cell.value = value
         self._excel._mark_dirty()
 
-    def read_range(self, cell_range: str, *, force_com: bool = False) -> list[dict[str, Any]]:
-        """指定範囲の先頭行を見出しとして辞書のリストで読む。
+    def read_range(self, cell_range: str, *, force_com: bool = False) -> Table:
+        """指定範囲の先頭行を見出しとして ``Table`` で読む。
 
         数式セルがある範囲では保存済み計算値、無ければ COM で再計算した値を返す。
         ``force_com=True`` でキャッシュを無視して Excel 実機で強制再計算させる。
@@ -259,9 +258,10 @@ class Sheet:
                 tuple("" if cell.value is None else cell.value for cell in row) for row in cells
             ]
         if not rows:
-            return []
+            return Table([], [])
         headers = [str(value) for value in rows[0]]
-        return [dict(zip(headers, row, strict=True)) for row in rows[1:]]
+        data_rows = [dict(zip(headers, row, strict=True)) for row in rows[1:]]
+        return Table(headers, data_rows)
 
     def get_used_range(self) -> tuple[str, str]:
         """使用範囲の左上と右下のセル参照を返す。"""

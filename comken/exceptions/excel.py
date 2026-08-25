@@ -200,8 +200,7 @@ class MacroError(ExcelError):
 class EmptyHeaderCellError(ExcelError):
     """Excel の見出しに空欄がある
 
-    発生箇所: Excel.read_computed_rows_as_dicts() / ExcelTable.read() /
-             ExcelCOMHandler.read_rows_as_dicts()
+    発生箇所: Excel.read() / ExcelTable.read() / ExcelCOMHandler.read()
 
     対処:
         Excel の1行目の空欄を埋める
@@ -217,7 +216,7 @@ class EmptyHeaderCellError(ExcelError):
 class DuplicateHeaderCellError(ExcelError):
     """Excel の見出し名が重複している
 
-    発生箇所: Sheet.read_rows_as_dicts()
+    発生箇所: Sheet.create_table()
 
     対処:
         Excel の見出し名を重複しない名前に変更する
@@ -246,7 +245,7 @@ class EmptyExcelTableError(ExcelError):
 class ExcelHeadersTooFewError(ExcelError):
     """指定した見出し数が列数より少ない
 
-    発生箇所: ExcelCOMHandler.read_rows_as_dicts()
+    発生箇所: ExcelCOMHandler.read()
 
     対処:
         管理者へ連絡する

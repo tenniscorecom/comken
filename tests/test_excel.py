@@ -259,8 +259,8 @@ class TestReadComputedRowsDropsBlankRows:
 
     Excel は行を削除しても書式が残っていると使用範囲（dimension）が縮まない。
     実務のファイルではよくある状態で、``min_row`` から ``max_row`` まで全部を
-    返すと大量の中身のない行が混ざる。 ``read_computed_rows`` /
-    ``read_computed_rows_as_dicts`` は「全セルが ``None`` または空文字」の行を
+    返すと大量の中身のない行が混ざる。 ``_read_computed_rows`` /
+    ``read()`` は「全セルが ``None`` または空文字」の行を
     ストリーム段階で落とす。
     """
 
@@ -281,7 +281,7 @@ class TestReadComputedRowsDropsBlankRows:
             )
 
         with Excel(path, read_only=True) as excel:
-            rows = excel.read_computed_rows("データ")
+            rows = excel._read_computed_rows("データ")
 
         assert len(rows) == 200
 
@@ -301,7 +301,7 @@ class TestReadComputedRowsDropsBlankRows:
             sheet.write_value("B6", "B")
 
         with Excel(path, read_only=True) as excel:
-            rows = excel.read_computed_rows("データ")
+            rows = excel._read_computed_rows("データ")
 
         assert rows == [("1", "A"), ("2", "B")]
 
@@ -316,7 +316,7 @@ class TestReadComputedRowsDropsBlankRows:
             sheet.write_value("C2", False)
 
         with Excel(path, read_only=True) as excel:
-            rows = excel.read_computed_rows("データ")
+            rows = excel._read_computed_rows("データ")
 
         assert rows == [("1", 0, False)]
 
@@ -329,12 +329,12 @@ class TestReadComputedRowsDropsBlankRows:
             # 2 行目以降は空
 
         with Excel(path, read_only=True) as excel:
-            rows = excel.read_computed_rows("データ")
+            rows = excel._read_computed_rows("データ")
 
         assert rows == []
 
     def test_dicts_path_also_skips_blank_rows(self, tmp_path) -> None:
-        """``read_computed_rows_as_dicts`` も空行を飛ばす。"""
+        """``read()`` も空行を飛ばす。"""
         path = tmp_path / "blank-dict.xlsx"
         with Excel(path) as excel:
             sheet = excel.create_sheet("データ")
@@ -345,9 +345,9 @@ class TestReadComputedRowsDropsBlankRows:
             sheet.write_value("B4", "B")
 
         with Excel(path, read_only=True) as excel:
-            dicts = excel.read_computed_rows_as_dicts("データ")
+            table = excel.read("データ")
 
-        assert dicts == [{"ID": "1", "名前": "A"}, {"ID": "2", "名前": "B"}]
+        assert table.read_rows() == [{"ID": "1", "名前": "A"}, {"ID": "2", "名前": "B"}]
 
     def test_empty_header_cell_error_still_fires(self, tmp_path) -> None:
         """見出し行の空セルは従来どおり ``EmptyHeaderCellError``。"""
@@ -360,7 +360,7 @@ class TestReadComputedRowsDropsBlankRows:
             sheet.write_value("B2", "A")
 
         with Excel(path, read_only=True) as excel, pytest.raises(EmptyHeaderCellError):
-            excel.read_computed_rows_as_dicts("データ")
+            excel.read("データ")
 
     def test_existing_header_and_data_behavior_unchanged(self, tmp_path) -> None:
         """通常のブックで見出し + データが期待どおり返ること。"""
@@ -371,17 +371,16 @@ class TestReadComputedRowsDropsBlankRows:
             sheet.write_value("A2", "1")
             sheet.write_value("B2", "A")
 
-        # ``read_computed_rows`` と ``read_computed_rows_as_dicts`` は内部で
-        # 同じストリーム Workbook を使うため、別々の ``with`` ブロックで呼ぶ。
-        # 同じブロックで 2 回呼ぶと、Workbook のライフサイクル管理との
-        # 兼ね合いで既存の問題（修正前から残っている）が表面化する。
+        # ``_read_computed_rows`` と ``read`` は内部で同じストリーム Workbook
+        # を使うため、別々の ``with`` ブロックで呼ぶ。同じブロックで 2 回呼ぶと
+        # Workbook のライフサイクル管理との兼ね合いで既存の問題が表面化する。
         with Excel(path, read_only=True) as excel:
-            rows = excel.read_computed_rows("データ")
+            rows = excel._read_computed_rows("データ")
         with Excel(path, read_only=True) as excel:
-            dicts = excel.read_computed_rows_as_dicts("データ")
+            table = excel.read("データ")
 
         assert rows == [("1", "A")]
-        assert dicts == [{"ID": "1", "名前": "A"}]
+        assert table.read_rows() == [{"ID": "1", "名前": "A"}]
 
 
 class TestFindSheet:

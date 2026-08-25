@@ -50,6 +50,8 @@ config.ini を読み込み、config.SECTION.KEY の形式でアクセスでき�
    （src/browser_options.py）で行う。config はブラウザ設定を持たない。
 """
 
+from __future__ import annotations
+
 import configparser
 import functools
 import logging
@@ -107,7 +109,7 @@ class Config:
     ``_get_or_build_config`` の docstring）。
     """
 
-    def __new__(cls, path: str | Path | None = None) -> "Config":
+    def __new__(cls, path: str | Path | None = None) -> Config:
         # ``__new__`` でキャッシュ済みのインスタンスを返す。 ``__init__`` は
         # 2 回目以降は何もしない。
         if path is None:
@@ -458,7 +460,7 @@ def _validate_upper_case(
 
 
 @functools.lru_cache(maxsize=128)
-def _get_or_build_config(resolved_path_str: str) -> "Config":
+def _get_or_build_config(resolved_path_str: str) -> Config:
     """``Path.resolve()`` 後の絶対パスをキーに、プロセス内で 1 度だけ ``Config`` を構築する。
 
     同じパスで 2 回目を呼ぶとキャッシュ済みのインスタンスを返す。 ファイル I/O は

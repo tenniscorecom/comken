@@ -178,5 +178,5 @@ class TestExcelTable:
             sheet.format("A1", bold=True)
             sheet.set_background("A1", "FFFF00")
             sheet.freeze_panes("A2")
-            assert sheet.read_range("A1:B2") == [{"name": "sales", "value": 10}]
+            assert sheet.read_range("A1:B2").read_rows() == [{"name": "sales", "value": 10}]
             assert sheet.get_used_range() == ("A1", "B2")

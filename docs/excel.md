@@ -30,7 +30,9 @@ with Excel("一覧.xlsx", read_only=True) as excel:
     # config の SHEET_NAME = [Sheet1, 一覧] を渡して、使える方を選ぶ
     candidates = config.SOURCE.SHEET_NAME
     sheet_name = excel.find_sheet(*candidates)  # 見つかった str だけ返す
-    rows = excel.read_computed_rows_as_dicts(sheet_name)
+    table = excel.read(sheet_name)  # Table が返る
+    for row in table.read_rows():
+        ...
 ```
 
 `excel.sheet(name)` を経由しない理由は、 `sheet()` が未存在の新規ブックで
@@ -54,7 +56,10 @@ with Excel("一覧.xlsx", read_only=True) as excel:
 ## 数式
 
 - **`read_value` / `read_range` は数式セルで計算結果を返す。** `force_com=True` で
-  キャッシュを無視して Excel 実機で強制再計算できる。
+  キャッシュを無視して Excel 実機で強制再計算できる。`Sheet.read_range` は `Table` を返す。
+- **`Excel.read(sheet_name, *, header_row=1, force_com=False) -> Table`** が
+  シート全体の見出し付き読み取りの公開 API（`read_computed_rows_as_dicts` の後継）。
+  未計算の数式だけ内部でCOMに昇格する。`force_com=True` で強制再計算。
 - **`replace()` / `append()` が数式を潰すときは `TableFormulaOverwriteError` で止まる。**
   数式を値へ上書きしてよいときだけ `allow_formula_overwrite=True` を明示する
 - 数式そのものを読みたいときは `Sheet.read_formula(cell)` を使う

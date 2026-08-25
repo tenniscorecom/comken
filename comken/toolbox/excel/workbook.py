@@ -15,6 +15,7 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
 from comken.core.files import atomic_write, copy_to_local_if_large
+from comken.core.table.model import Table
 from comken.core.timer import measure
 from comken.exceptions import (
     EmptyHeaderCellError,
@@ -97,10 +98,10 @@ class Excel:
         self._working_path: Path = self.path
         self._working_copy_is_stale = False
         # 通常 Workbook は遅延。read_only で stream だけで完結する経路
-        # (``read_computed_rows``) では開かれない。書き込みや Excel テーブル API
+        # (``_read_computed_rows``) では開かれない。書き込みや Excel テーブル API
         # が要求されたときだけ遅延オープンする。
         self._workbook: Workbook | None = None
-        # 数式判定用の read_only ストリーム Workbook。``read_computed_rows`` 系の
+        # 数式判定用の read_only ストリーム Workbook。``_read_computed_rows`` 系の
         # ホットパスから zip を 1 度しか読まないようキャッシュする。
         self._stream_workbook: Workbook | None = None
         self._stream_workbook_data_only: Workbook | None = None
@@ -121,7 +122,7 @@ class Excel:
         else:
             self._working_path = self.path
         if not self._read_only:
-            # 書き込み用ブックは __enter__ で必ず開く。``read_computed_rows`` のように
+            # 書き込み用ブックは __enter__ で必ず開く。``_read_computed_rows`` のように
             # メモリ上のセル値を参照する経路があるため。
             if self._working_path.exists():
                 self._workbook = load_workbook(
@@ -251,7 +252,7 @@ class Excel:
         from comken.toolbox.windows.handler import ExcelCOMHandler
 
         with ExcelCOMHandler(self._working_path, local_copy_threshold_mb=0) as excel_com:
-            return excel_com.read_range(sheet_name, min_col, min_row, max_col, max_row)
+            return excel_com.read_block(sheet_name, min_col, min_row, max_col, max_row)
 
     def close(self, *, save: bool = True) -> None:
         """ブックを閉じる。通常はwithの正常終了時に変更を自動保存する。"""
@@ -351,8 +352,13 @@ class Excel:
         self._is_dirty = True
 
     @measure
-    def read_computed_rows(self, sheet_name: str, min_row: int = 2) -> list[tuple[Any, ...]]:
-        """数式の計算結果を行単位で読む。未計算の数式がある場合だけCOMへ昇格する。"""
+    def _read_computed_rows(self, sheet_name: str, min_row: int = 2) -> list[tuple[Any, ...]]:
+        """数式の計算結果を行単位で読む。未計算の数式がある場合だけCOMへ昇格する。
+
+        公開 API の ``read()`` が内部で使う薄いヘルパー。下流のテストや COM 経由
+        の ``read_row_values()`` との橋渡し用。``read()`` ではなく行タプルを
+        直接欲しいときだけ利用する想定（通常は ``read()`` を使う）。
+        """
         self._ensure_open()
         rows, needs_com = self._cached_rows(sheet_name, min_row)
         if not needs_com:
@@ -365,20 +371,39 @@ class Excel:
         from comken.toolbox.windows.handler import ExcelCOMHandler
 
         with ExcelCOMHandler(self._working_path, local_copy_threshold_mb=0) as excel_com:
-            return excel_com.read_rows(sheet_name, min_row)
+            return excel_com.read_row_values(sheet_name, min_row)
 
-    def read_computed_rows_as_dicts(
-        self, sheet_name: str, header_row: int = 1
-    ) -> list[dict[str, Any]]:
-        """見出し行をキーに計算結果を読む。未計算時だけCOMへ昇格する。"""
-        rows = self.read_computed_rows(sheet_name, header_row)
+    def read(
+        self,
+        sheet_name: str,
+        *,
+        header_row: int = 1,
+        force_com: bool = False,
+    ) -> Table:
+        """見出し行をキーに計算結果を読み ``Table`` で返す。未計算時だけCOMへ昇格する。
+
+        ``header_row`` で見出し行の番号を指定する。既定は 1（先頭行）。
+        ``force_com=True`` でキャッシュを無視して Excel 実機で強制再計算させる。
+        数式の列は ``Table`` 化されない（文字列のまま入るので、必要なら ``Table`` の
+        ``types`` で ``int`` / ``float`` などに変換すること）。
+
+        Args:
+            sheet_name: シート名。
+            header_row: 見出し行の番号（1 始まり）。既定は 1。
+            force_com: ``True`` でキャッシュを無視して Excel 実機で強制再計算。
+
+        Returns:
+            シートの内容を表す ``Table``。全セルが空の行は除外される。
+        """
+        rows = self._read_computed_rows(sheet_name, header_row)
         if not rows:
-            return []
-        headers = rows[0]
+            return Table([], [])
+        headers = list(rows[0])
         empty_columns = [index for index, header in enumerate(headers, start=1) if header is None]
         if empty_columns:
             raise EmptyHeaderCellError(empty_columns)
-        return [dict(zip(headers, row, strict=False)) for row in rows[1:]]
+        data_rows = [dict(zip(headers, row, strict=False)) for row in rows[1:]]
+        return Table(headers, data_rows)
 
     def _ensure_open(self) -> None:
         if not self._is_open or self._is_closed:
@@ -389,7 +414,7 @@ class Excel:
 
         書き込み用 ``Excel`` では ``__enter__`` で既に開いている。``read_only`` の
         Excel では ``Sheet.table()`` / セル属性アクセスなど Worksheet を必要とする
-        経路で呼ばれたときだけ開く。``read_only`` 経路の ``read_computed_rows`` は
+        経路で呼ばれたときだけ開く。``read_only`` 経路の ``_read_computed_rows`` は
         このメソッドを呼ばないため、通常 Workbook を開かない。
         """
         self._ensure_open()
@@ -490,7 +515,7 @@ class Excel:
     def _cached_rows(self, sheet_name: str, min_row: int) -> tuple[list[tuple[Any, ...]], bool]:
         """キャッシュ値と数式を並べ、値がない数式だけをCOM昇格対象にする。
 
-        ``read_only`` の Excel で ``read_computed_rows`` だけを呼ぶ経路では
+        ``read_only`` の Excel で ``_read_computed_rows`` だけを呼ぶ経路では
         通常 Workbook を開かず、openpyxl のストリーム読みだけで値を取り出す。
         数式が1つもないブックでは ``data_only=False`` の Workbook を開かない。
         書き込み後の dirty 時 (``_is_dirty=True``) や作業ファイルがまだ無い

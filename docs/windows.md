@@ -25,8 +25,8 @@ WRITE_PW = "書き込みPW"
 
 with ExcelCOMHandler("data.xlsx") as h:
     value = h.read_cell(SHEET, row=DATA_ROW, col=DATA_COL)
-    rows = h.read_rows(SHEET)
-    rows = h.read_rows_as_dicts(SHEET)
+    rows = h.read_row_values(SHEET)
+    table = h.read(SHEET)
     last_row = h.last_row(SHEET)
 
     if h.count_non_empty_cells(SHEET, row=CHECK_ROW) == 0:
