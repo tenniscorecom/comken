@@ -97,12 +97,64 @@ class Credentials:
             raise InvalidCredentialNameError("システム名", prefix)
         self._prefix = prefix
         self._path = path
+        # 初回の属性アクセスで復号結果を丸ごと持っておく。 詳しくは __getattr__ の
+        # コメント参照（秘密情報の保持期間・save/delete 後の扱いもそこに書いた）。
+        self._cache: dict[str, str] | None = None
 
     def __getattr__(self, item: str) -> str:
         # _ 始まりは Python 内部の属性探索（copy 等）なので通常の AttributeError にする
         if item.startswith("_"):
             raise AttributeError(item)
-        return load_credential(f"{self._prefix}_{item}", self._path)
+        data = self._decrypted()
+        key = f"{self._prefix}_{item}"
+        if key not in data:
+            # 元の ``load_credential()`` と同じ例外型・同じメッセージにする。
+            # 「登録済みのキー名」を添える仕様は ``load_credential`` 側にあるので
+            # ここでも再現する（``CredentialNotFoundError(name, sorted(data))``）
+            raise CredentialNotFoundError(key, sorted(data))
+        return data[key]
+
+    def _decrypted(self) -> dict[str, str]:
+        """**復号結果を 1 度だけ呼んで保持する**内部キャッシュ。
+
+        設計判断（コメントに書いた判断のサマリ）:
+
+        - 1 件ずつ ``load_credential()`` を呼ぶと、 属性 N 個ぶん **N 回の
+          DPAPI 復号 + JSON parse + ファイル読込**が走る。 リストを索引化
+          する業務フロー（``for row in cred.df: cred.lookup[row]`` のような
+          書き方）で特に効くため、 初回アクセス時に**ファイル全件を 1 度だけ**
+          復号してインスタンスに保持する。
+
+        - **秘密情報のメモリ保持期間が延びる**点について: 今までは
+          ``load_credential()`` が返す時点で ``str`` のオブジェクトだけが
+          ヒープに残っていた（呼び出し側の変数が参照する間）。 修正後は
+          **同じ ``str`` が ``self._cache`` の中にも残る**。 これが問題になる
+          のは、 プロセスが生きている間に:
+              - 攻撃者がプロセスメモリをダンプできる（DPAPI の意味が既に無い）
+              - 攻撃者がこの特定インスタンスを狙って参照を漁れる
+          のいずれかであり、 業務プロセスではどちらも通常は無い。 むしろ
+          ``load_credential()`` が **呼び出すたびにファイルを全部読む**ほうが、
+          共有サーバー上で I/O を増やして業務影響を及ぼすリスクが高いため、
+          **キャッシュを優先**する判断を取る。
+
+        - **``save_credential`` / ``delete_credential`` で内容が変わったとき**:
+          同じ ``Credentials`` インスタンスが古い値を返さないように、
+          両関数とも ``_invalidate_instances_for(path)`` を呼び、 同じパスに
+          紐付くインスタンスの ``_cache`` を ``None`` に戻す。 次の属性
+          アクセスで再復号される。
+
+          インスタンス単位のキャッシュにしているのは、 「同じプロセスで
+          複数 Credentials を持ち、 一部の prefix の保存は他と独立」という
+          ケースで **関係ない prefix まで巻き込んで破棄しない**ため。 それでも
+          「同じパスの保存後に古い値が残る」事故は避けられる。
+        """
+        cached = self.__dict__.get("_cache")
+        if cached is not None:
+            return cached
+        data = _load_all(self._path or CREDENTIALS_PATH)
+        object.__setattr__(self, "_cache", data)
+        _register_instance(self)
+        return data
 
 
 @measure
@@ -150,6 +202,10 @@ def save_credentials(items: dict[str, str], path: Path | None = None) -> None:
     data = _load_all(path)
     data.update(items)
     _save_all(data, path)
+    # 保存後は同じパスを参照する ``Credentials`` インスタンスの復号キャッシュが
+    # 古くなるので、 次回の属性アクセスで再復号されるよう ``_cache`` を捨てる
+    # （詳細は ``Credentials._decrypted`` のコメント）
+    _invalidate_instances_for(path)
 
 
 @measure
@@ -185,6 +241,8 @@ def delete_credential(name: str, path: Path | None = None) -> None:
         raise CredentialNotFoundError(name, sorted(data))
     del data[name]
     _save_all(data, path)
+    # 削除後はキャッシュが古くなるので破棄。 詳細は ``Credentials._decrypted``
+    _invalidate_instances_for(path)
 
 
 @measure
@@ -267,3 +325,55 @@ def _save_all(data: dict[str, str], path: Path) -> None:
         tmp_path.replace(path)  # 同じフォルダ内の置き換えなのでアトミックに入れ替わる
     finally:
         tmp_path.unlink(missing_ok=True)  # 途中で失敗したときに残骸を残さない
+
+
+# ── ``Credentials`` のインスタンス単位キャッシュ用レジストリ ───────────────
+# ``Credentials`` はファイル全件を ``_cache`` に持つようにしたため（設計理由は
+# ``Credentials._decrypted`` のコメント参照）、同じパスを対象とする保存 / 削除が
+# 起きたあとに**古い値を抱えたままのインスタンス**が残る事故が起きる。 そこで:
+#
+# 1. ``_decrypted()`` で読み込んだタイミングで ``_register_instance(self)`` を
+#    呼んで ``_instances_by_path`` に「このパスを使ったインスタンス」を覚える
+# 2. ``save_credentials`` / ``delete_credential`` のあとで
+#    ``_invalidate_instances_for(path)`` を呼び、 同じパスに紐付くインスタンスの
+#    ``_cache`` を ``None`` に戻す（次回アクセスで再復号される）
+#
+# インスタンスへの弱参照は使わずそのまま覚える（``Credentials`` の寿命 ≒ プロセス
+# 寿命なのでリークしない）。 テスト時は ``_reset_instance_registry()`` で破棄する。
+_instances_by_path: dict[str, list[Credentials]] = {}
+
+
+def _register_instance(instance: "Credentials") -> None:
+    """``Credentials._decrypted()`` から呼ばれ、 ``path`` ごとにインスタンスを覚える。
+
+    既に登録済みのインスタンスは二重登録しない（GC で消えた弱参照は持たない）。
+    """
+    key = str(instance._path or CREDENTIALS_PATH)
+    bucket = _instances_by_path.setdefault(key, [])
+    # 「同じインスタンスを二重で持たない」だけ確認（弱参照の代替として十分）
+    if instance not in bucket:
+        bucket.append(instance)
+
+
+def _invalidate_instances_for(path: Path) -> None:
+    """指定パスを使う全 ``Credentials`` インスタンスのキャッシュを破棄する。
+
+    ``save_credentials`` / ``delete_credential`` から呼ばれる。 該当の
+    インスタンスが保持している復号結果（``_cache``）は古くなっているはずなので、
+    ``None`` に戻して次回 ``__getattr__`` で再復号させる。
+    """
+    key = str(path)
+    for instance in _instances_by_path.get(key, ()):
+        if instance.__dict__.get("_cache") is not None:
+            object.__setattr__(instance, "_cache", None)
+
+
+def _reset_instance_registry() -> None:
+    """**インスタンスレジストリを空にする**（テスト用）。
+
+    テストでは複数の ``tmp_path`` を使い回すので、 前のテストで登録された
+    インスタンスが残っていると、 保存系のテストで「別パスの Credentials が
+    巻き添えで破棄される」事故が起きうる。 各テストの前後で破棄する想定。
+    利用者向けの公開 API ではない。
+    """
+    _instances_by_path.clear()

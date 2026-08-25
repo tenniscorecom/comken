@@ -23,6 +23,7 @@
 """
 
 import logging
+from collections import OrderedDict
 from pathlib import Path
 
 from comken.core.files import DateNameBuilder
@@ -39,6 +40,28 @@ from comken.services.salesforce_downloader.master import ReportEntry, load_maste
 from comken.toolbox.csv import CSV
 
 logger = logging.getLogger(__name__)
+
+# ── 管理表のプロセス内キャッシュ ──────────────────────────────────────
+# `_find()` が `cached_report` / `cached_report_path` / `download_report` などの
+# 公開 API から呼ばれるたびに `load_master()` を実行すると、**ループの中で
+# レポートを N 件取ると管理表 Excel を N 回開く**ことになる。 管理表は 1 回の
+# 実行中に変わらないので、**解決済み絶対パス**をキーにプロセス内キャッシュを
+# 持つ（``Config(path)`` と同じ考え方:  相対パスと絶対パスを同一視し、
+# ``Path.resolve()`` の Windows UNC / 8.3 形式の揺れも吸収する）。
+#
+# キャッシュの無効化条件:
+# - **同じパスのファイルを書き換えても反映されない**。 ``stat()`` による更新
+#   確認は意図的に行わない（``Config`` と同じ理由:  Windows で 1 回 25
+#   マイクロ秒、共有サーバーではネットワーク往復。 業務ツールは実行中の
+#   管理表の書き換えを想定しない）。
+# - 反映が必要なときは ``_reset_cached_master()`` を呼んでから再アクセスする。
+# - ファイルが存在しないパスはキャッシュせず例外がそのまま上がる
+#   （呼び出し側で ``InvalidReportEntryError`` 等の業務例外に変換される）。
+# - ``_MASTER_CACHE_MAXSIZE``（既定 16）で **FIFO 退避** する:  業務利用では
+#   管理表は 1〜数種類しかなく到達はまず無いが、テストで大量の ``tmp_path`` を
+#   読むケースでエントリが膨らまないための安全弁。
+_MASTER_CACHE_MAXSIZE = 16
+_master_cache: OrderedDict[str, dict[str, ReportEntry]] = OrderedDict()
 
 # ── service.py から移動してきた定数 ──
 SUFFIX = ".csv"
@@ -120,14 +143,52 @@ def _daily_cache_path_of(entry: ReportEntry) -> Path:
 
 
 def _find(report_key: str, master_path: Path) -> ReportEntry:
-    """管理表から1行を引く。無効なものはここで止める。"""
-    entries = load_master(master_path)
+    """管理表から1行を引く。無効なものはここで止める。
+
+    管理表 Excel を読む ``load_master()`` はキャッシュ経由で呼ばれる
+    （プロセス内で同じ解決済みパスなら 1 度しか開かない）。 詳細は
+    モジュール冒頭のキャッシュ設計コメント参照。
+    """
+    entries = _load_master_cached(master_path)
     entry = entries.get(report_key)
     if entry is None:
         raise ReportNotRegisteredError(report_key, sorted(entries), master_path)
     if not entry.enabled:
         raise ReportDisabledError(entry.key, entry.summary, master_path)
     return entry
+
+
+def _load_master_cached(master_path: Path) -> dict[str, ReportEntry]:
+    """``load_master()`` を ``Path.resolve()`` 後の絶対パスでキャッシュする。
+
+    公開 API の ``load_master()`` は Excel を毎回読むシグネチャを残す
+    （呼び出し側がテストで生のアクセスをすることがあるため）。 その
+    公開シグネチャを持ちながら、 ``_find()`` 経由での呼び出しでは
+    Excel を開かないように、この内部関数で ``OrderedDict`` ベースの
+    1段キャッシュに流す。
+    """
+    resolved_key = str(master_path) if master_path.is_absolute() else str(master_path.resolve())
+    cache = _master_cache
+    if resolved_key in cache:
+        cache.move_to_end(resolved_key)
+        return cache[resolved_key]
+    entries = load_master(Path(master_path))
+    cache[resolved_key] = entries
+    cache.move_to_end(resolved_key)
+    if len(cache) > _MASTER_CACHE_MAXSIZE:
+        cache.popitem(last=False)
+    return entries
+
+
+def _reset_cached_master() -> None:
+    """**すべての管理表キャッシュを破棄する**（テスト用）。
+
+    テストでは ``tmp_path`` がテストごとに違う管理表 Excel を指すため、
+    前のテストのキャッシュが残ると別テストの設定が漏れる。 各テストの
+    冒頭で呼ぶ想定（``tests/test_salesforce_downloader_provider.py`` の
+    autouse fixture から）。 利用者向けの公開 API ではない。
+    """
+    _master_cache.clear()
 
 
 def _safe_summary(summary: str) -> str:

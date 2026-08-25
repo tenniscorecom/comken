@@ -832,9 +832,9 @@ class TestPaths:
 
     def test_shell_folder_falls_back_on_missing_value(self, tmp_path):
         """レジストリに値がない場合はデフォルトにフォールバックすることを確認する。"""
-        from comken.toolbox.windows.paths import _shell_folder
+        from comken.toolbox.windows.paths import _read_shell_folder
 
-        assert _shell_folder("存在しない値名", tmp_path) == tmp_path
+        assert _read_shell_folder("存在しない値名", tmp_path) == tmp_path
 
     def test_temp_dir_is_path(self):
         """temp_dir() が Path オブジェクトを返すことを確認する。"""

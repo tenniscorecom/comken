@@ -24,6 +24,10 @@ class DateFileFinder:
 
     探す名前に **拡張子を含める**（例: ``"売上レポート.csv"``）。拡張子無しの名前を
     渡すと ``FileSuffixMissingError`` で止める。
+
+    **注意: ``prefix()`` / ``dated()`` は呼ぶたびにフォルダを走査する**。 同じ結果を
+    何度も使うなら変数に受けること（業務時間中に新しいファイルが降ってくる前提の
+    道具なので、 敢えてキャッシュしていない）。
     """
 
     def __init__(self, folder: str | Path, for_date: datetime.date | None = None) -> None:

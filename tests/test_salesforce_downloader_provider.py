@@ -39,6 +39,22 @@ ROWS = [{"名前": "山田", "金額": "100"}, {"名前": "鈴木", "金額": "2
 HEADERS = ["ID", "概要", "Salesforce URL", "実行方式", "保存先", "有効", "備考"]
 
 
+@pytest.fixture(autouse=True)
+def _reset_master_cache():
+    """管理表のプロセス内キャッシュをテストごとに破棄する。
+
+    `_find()` は ``Path.resolve()`` 後の絶対パスをキーに管理表をキャッシュする
+    ため、 ``tmp_path`` が違うテスト同士はキーが違っていて**普通はリークしない**。
+    ただしモンキーパッチで `_paths.MASTER_PATH` を差し替えた直後に古いキャッシュ
+    を引きずらないよう、念のため明示的に破棄する。
+    """
+    provider_module._reset_cached_master()
+    try:
+        yield
+    finally:
+        provider_module._reset_cached_master()
+
+
 def make_master(path: Path, rows: list[list]) -> Path:
     """管理表（Excel）を作る。"""
     table_rows = [dict(zip(HEADERS, row, strict=True)) for row in rows]
