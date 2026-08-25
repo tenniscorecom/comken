@@ -41,17 +41,18 @@ config.ini の例（セクション名・キー名は大文字で書く）:
     [REPORT]
     TARGET_SHEETS = [支店A, 支店B, 集計]
 
+``Config(path)`` は ``Path.resolve()`` 後の絶対パスをキーに **プロセス内で
+1 度だけ** Config を構築してキャッシュする。 同じパスで 2 回目を呼ぶと
+同じインスタンスが返る。 **同じパスのファイルを書き換えても反映されない**
+（反映には ``_reset_cached_config()`` を呼ぶ）。 ``stat()`` による更新確認は
+しない（業務ツールは実行中の設定変更を想定しない。詳細は
+``_get_or_build_config`` の docstring）。
+
 #### `__init__`
 
 ```text
 def __init__(self, path: str | Path | None=None) -> None:
 ```
-
-##### 説明
-
-Args:
-    path: config.ini のパス。省略するとプロジェクトのフォルダ
-        （main.py の場所）の config.ini を読む。
 
 ### `config`
 
@@ -1415,6 +1416,31 @@ Args:
 
 Returns:
     正規化後の文字列。
+
+### `parse_cell_date`
+
+```text
+def parse_cell_date(value: object) -> datetime.date | None:
+```
+
+#### 説明
+
+セルの値を ``datetime.date`` に変換する。読めなければ `` ``None`` 。
+
+Excel から ``Table`` 行を読むとき、 日付列は
+
+- ``datetime.datetime`` オブジェクト（Excel の日付型セル）
+- ``datetime.date`` オブジェクト
+- 文字列（手入力・他システムからのエクスポート）
+
+のどれでも来うる。 それぞれを ``date`` に揃え、 **読めなかった値は
+``None`` を返す**（例外にはしない）。 利用側は ``None`` を「対象外の行」
+として数えて ``WARNING`` に出す形に向いている（読み込みは止めずに、
+何件スキップしたかだけ報告する業務運用）。
+
+受け付ける書式は ``_DATE_TEXT_FORMATS`` に固定。 新しい書式を足すときは
+ここにタプル要素として追加する（内閣府 CSV の ``_parse_date`` とは別口
+なので、 祝日 CSV の安全弁を緩めない）。
 
 ### `remove_spaces`
 
@@ -8195,8 +8221,11 @@ def __init__(self, source: str | Path, *, types: Mapping[str, Callable[[Any], An
 読み取り専用で開くか、書き込み用に開くかは引数 ``read_only`` で
 切り替える。利用者がエンジンを選ぶ必要はない。通常操作はOpenPyXLを使い、
 未計算の数式値の読取りとVBA実行だけ、一時的にExcel COMへ昇格する。
-``local_copy=None`` の既定ではUNCパスだけローカルコピーを使う。
-``True`` で強制、``False`` で無効化でき、保存先は常に元ファイルになる。
+``local_copy=None`` の既定では、書き込み時にUNCパスのブックだけ
+一時作業コピーを使う（読み取り専用では UNC でもコピーしない。保存が無いため
+「作業中だけローカルを使い、保存時に元へ戻す」契約を適用する場面がない）。
+``local_copy=True`` で強制、``local_copy=False`` で無効化でき、保存先は常に
+元ファイルになる。
 
 ``read_only``、dry-run、またはwithブロックが例外で終わった場合は保存しない。
 
@@ -8209,6 +8238,33 @@ def sheet(self, name: str | None=None) -> 'Sheet':
 ##### 説明
 
 名前でシートを取得する。未存在の新規ブックでは最初のシートを改名する。
+
+#### `find_sheet`
+
+```text
+def find_sheet(self, *candidates: str) -> str:
+```
+
+##### 説明
+
+候補を順に試し、最初に見つかったシートの名前を返す。
+
+「古いファイルと新しいファイルでシート名が違う」「テンプレ更新で
+シート名が変わった」のように、**業務上よくある候補の違い**を 1 行で
+吸収する。 ``Config`` 側で ``SHEET_NAME = [Sheet1, 一覧]`` のように
+候補リストを持っておき、その順番に試したいときに使う。
+
+戻り値は **シート名（``str``）**。``Sheet`` インスタンスが要るときは
+戻ってきた名前を ``self.sheet(name)`` に渡す。
+
+候補が全て見つからないときは、最後の試行の名前で ``SheetNotFoundError``
+を送出する（メッセージにブックに実在するシート名一覧が入るので、
+利用者が config を直せる）。 候補を 1 つも渡さなかったときも、
+同じ例外（候補名が空文字・実在シート一覧入り）で止める。
+
+``self.sheet(name)`` を経由せず ``sheetnames`` の所属判定で済ませる。
+``sheet()`` は未存在の新規ブックで **自動でリネーム**する仕様なので、
+候補違いのときに知らぬ間にブックが変わる事故を防ぐ。
 
 #### `data_sheet`
 

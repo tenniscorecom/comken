@@ -169,6 +169,36 @@ class Excel:
                 raise SheetNotFoundError(name, self._workbook.sheetnames)
         return Sheet(self, self._workbook[name])
 
+    def find_sheet(self, *candidates: str) -> str:
+        """候補を順に試し、最初に見つかったシートの名前を返す。
+
+        「古いファイルと新しいファイルでシート名が違う」「テンプレ更新で
+        シート名が変わった」のように、**業務上よくある候補の違い**を 1 行で
+        吸収する。 ``Config`` 側で ``SHEET_NAME = [Sheet1, 一覧]`` のように
+        候補リストを持っておき、その順番に試したいときに使う。
+
+        戻り値は **シート名（``str``）**。``Sheet`` インスタンスが要るときは
+        戻ってきた名前を ``self.sheet(name)`` に渡す。
+
+        候補が全て見つからないときは、最後の試行の名前で ``SheetNotFoundError``
+        を送出する（メッセージにブックに実在するシート名一覧が入るので、
+        利用者が config を直せる）。 候補を 1 つも渡さなかったときも、
+        同じ例外（候補名が空文字・実在シート一覧入り）で止める。
+
+        ``self.sheet(name)`` を経由せず ``sheetnames`` の所属判定で済ませる。
+        ``sheet()`` は未存在の新規ブックで **自動でリネーム**する仕様なので、
+        候補違いのときに知らぬ間にブックが変わる事故を防ぐ。
+        """
+        self._ensure_normal_workbook()
+        last_error = SheetNotFoundError(
+            "" if not candidates else candidates[-1], self._workbook.sheetnames
+        )
+        for name in candidates:
+            if name in self._workbook.sheetnames:
+                return name
+            last_error = SheetNotFoundError(name, self._workbook.sheetnames)
+        raise last_error
+
     def data_sheet(self, name: str | None = None) -> "Sheet":
         """データシートを取得する。名前を省略できるのは1枚のときだけ。"""
         self._ensure_normal_workbook()

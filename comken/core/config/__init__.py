@@ -112,15 +112,27 @@ class Config:
         # 2 回目以降は何もしない。
         if path is None:
             path = project_dir() / "config.ini"
+        # 入口で **生のパス文字列** をキーに ``_resolve_path_str`` のキャッシュを引く。
         # ``Path.resolve()`` は Windows の ``_pathlibres`` 呼び出しで
         # 1 回 100 マイクロ秒以上かかる。 ``Config(path)`` がホットループで
-        # 呼ばれると秒単位で効くので、 既に絶対パスのときは ``resolve()`` を
-        # 呼ばない（業務では ``tmp_path`` のような絶対 Path を渡すのが
+        # 呼ばれると秒単位で効くので、 既にキャッシュ済みなら ``is_absolute()`` も
+        # ``resolve()`` も呼ばない（業務では ``tmp_path`` のような絶対 Path を渡すのが
         # 通常の使い方）。 相対パスは ``resolve()`` で cwd を結合する。
+        #
+        # **重要**: プロセスの途中でカレントディレクトリが変わると、同じ相対パスが
+        # 別の場所を指すようになるのに、キャッシュは古い解決結果を返す。
+        # 業務ツールが実行中に ``os.chdir`` することはまずないので許容している。
+        # もし ``os.chdir`` を使うなら ``_reset_cached_config()`` を併せて呼ぶこと。
+        raw = str(path)
+        cached = _path_resolution_cache_get(raw)
+        if cached is not None:
+            return _get_or_build_config(cached)
         p = Path(path)
         if not p.is_absolute():
             p = p.resolve()
-        return _get_or_build_config(str(p))
+        resolved_str = str(p)
+        _path_resolution_cache_put(raw, resolved_str)
+        return _get_or_build_config(resolved_str)
 
     def __init__(self, path: str | Path | None = None) -> None:
         # 実際の構築は ``__new__`` → ``_get_or_build_config`` → ``_initialize`` で
@@ -430,14 +442,19 @@ def _validate_upper_case(
 #   再試行できる）。
 # - **テスト用に ``_reset_cached_config()`` で全エントリを破棄する**。
 #
-# `from comken import config` 用のデフォルト ``Config`` も `_default_config_path()`
-# で解決したパスを経由するため、**専用 global 変数（`_cached_config`）は持たない**
-# （二重キャッシュを防ぐ）。
-# 公開 API は増やしていない（``_reset_cached_config()`` は `_` プレフィックス）。
+# 入口で ``Config(path)`` を速くするため、**生のパス文字列 → 解決済み絶対パス** の
+# 1段キャッシュを別に持つ (``_path_resolution_cache``)。 ``Path.resolve()`` 自体が
+# Windows で 1 回 100 マイクロ秒以上かかるため、 同じ相対パスをループ内で何度も
+# 渡すときに見た目の差が大きくならないように挟んでいる。 ``_get_or_build_config``
+# とは別レイヤで、業務ツールの ``Config(path)`` 呼び出しが「``tmp_path`` のような
+# 絶対 Path を渡す」が通常の使い方なら、 ``is_absolute()`` も ``resolve()`` も
+# 呼ばずに済む（ヒット時のコストは ``dict.get`` 1 回ぶん）。
 #
-# キャッシュが増え続けないことの担保: ``maxsize=128`` の ``functools.lru_cache``
-# を使う。 業務では 1〜2 種類のパスしか使わないので到達しない。 テストで大量の
-# ``tmp_path`` を読んでも古いエントリは自動的に退避する（手動 evict は不要）。
+# キャッシュが増え続けないことの担保:
+# - ``_get_or_build_config`` は ``maxsize=128`` の ``functools.lru_cache``。
+# - ``_path_resolution_cache`` は **同じ maxsize の単純な FIFO**。
+#   古いエントリは自動的に退避する。 テストで大量の ``tmp_path`` を読んでも
+#   エントリ数が増え続けない（手動 evict は不要）。
 
 
 @functools.lru_cache(maxsize=128)
@@ -507,12 +524,50 @@ def __getattr__(name: str) -> types.SimpleNamespace:
 MappingDict = _LenientDict
 
 
+# ── 入口キャッシュ（生パス文字列 → 解決済み絶対パス） ─────────────────────
+# ``Config(path)`` の入口で ``is_absolute()`` も ``resolve()`` も呼ばずに済むように、
+# キー = ``str(path)``、値 = 解決済み絶対パスを覚える。 ``_get_or_build_config`` の
+# キャッシュとは独立で、 ``maxsize`` は同じ ``128``。 ``OrderedDict`` の move_to_end
+# で LRU 風に FIFO 退避する（``functools.lru_cache`` 相当の挙動を ``OrderedDict``
+# で持つ）。
+#
+# **相対パスのキャッシュは ``os.chdir`` で無効になる** ことに注意（同じ相対パスが
+# 別の場所を指すようになる）。 業務ツールは実行中に ``os.chdir`` しないので許容
+# している。 ``os.chdir`` を使うなら ``_reset_cached_config()`` を併せて呼ぶこと。
+import collections as _collections
+
+_PATH_RESOLUTION_CACHE_MAXSIZE = 128
+_path_resolution_cache: _collections.OrderedDict[str, str] = _collections.OrderedDict()
+
+
+def _path_resolution_cache_get(raw: str) -> str | None:
+    """``str(path)`` で引いて、ヒットしたら解決済み絶対パスを返す。"""
+    cache = _path_resolution_cache
+    if raw in cache:
+        cache.move_to_end(raw)
+        return cache[raw]
+    return None
+
+
+def _path_resolution_cache_put(raw: str, resolved: str) -> None:
+    """``raw → resolved`` を覚える。 ``maxsize`` を超える分は最も古いものを退避する。"""
+    cache = _path_resolution_cache
+    if raw in cache:
+        cache.move_to_end(raw)
+        cache[raw] = resolved
+        return
+    cache[raw] = resolved
+    if len(cache) > _PATH_RESOLUTION_CACHE_MAXSIZE:
+        cache.popitem(last=False)
+
+
 def _reset_cached_config() -> None:
-    """**すべてのキャッシュを破棄する**（テスト用）。
+    """**すべての庫を破棄する**（テスト用）。
 
     破棄対象:
         - ``_get_or_build_config`` の ``lru_cache``（``Config(path)`` のキャッシュ）
         - ``_default_config_path`` の ``lru_cache``（デフォルトパス解決のキャッシュ）
+        - ``_path_resolution_cache``（生パス文字列 → 解決済み絶対パスのキャッシュ）
 
     テストでは ``tmp_path`` がテストごとに違う ``config.ini`` を指すため、
     前のテストのキャッシュが残っていると別テストの設定が漏れる。 各テストの
@@ -521,6 +576,7 @@ def _reset_cached_config() -> None:
     """
     _get_or_build_config.cache_clear()
     _default_config_path.cache_clear()
+    _path_resolution_cache.clear()
 
 
 # ── 内部ヘルパー：ini 値の型変換 ───────────────────────────────────────────────

@@ -92,6 +92,7 @@ def test_core_exposes_parts() -> None:
         "normalize",
         "now",
         "project_dir",
+        "parse_cell_date",
         "remove_spaces",
         "retry",
         "set_default_calendar",

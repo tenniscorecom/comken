@@ -121,6 +121,29 @@ if not ok:
 ok = wait_until(lambda: 条件, timeout=120, interval=2)
 ```
 
+### セル値→日付（parse_cell_date）
+
+Excel の日付列は **セル値の型がバラバラ**で来る（`datetime.datetime` /
+`datetime.date` / 文字列）。 それぞれを `datetime.date` に揃え、読めなかった値は
+`None` を返す（例外にはしない）。 「読めない行は件数だけ `WARNING` に出して集計から
+外す」業務運用に向いている。
+
+```python
+from comken.core import parse_cell_date
+
+parse_cell_date(datetime.datetime(2026, 4, 22, 12, 30))  # → date(2026, 4, 22)
+parse_cell_date("2026/04/22")                             # → date(2026, 4, 22)
+parse_cell_date("2026年04月22日")                          # → date(2026, 4, 22)
+parse_cell_date("2026/04/22 00:00:00")                    # → date(2026, 4, 22)
+parse_cell_date("日付ではない")                            # → None
+parse_cell_date(None)                                     # → None
+```
+
+受け付ける書式は `clock.py` の `_DATE_TEXT_FORMATS` に固定。 新しい書式を足すときは
+**ここにタプル要素を追加する**。 内閣府祝日 CSV の `_parse_date` は配布フォーマットの
+制約で 2 形式に固定した別口なので、 緩めた場合に「内閣府以外のファイルを取り違えても
+気付かない」事故を防ぐために揃えていない。
+
 ### テキスト正規化（normalize / strip_spaces / remove_spaces)
 
 業務データによくある表記揺れ（全角英数・半角カナ・全角スペース）を揃える。

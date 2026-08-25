@@ -15,7 +15,7 @@ from unittest.mock import patch
 import pytest
 
 from comken import dry_run
-from comken.core.clock import now, today
+from comken.core.clock import now, parse_cell_date, today
 from comken.core.data import diff_row, diff_rows
 from comken.core.files import (
     DateFileFinder,
@@ -59,6 +59,53 @@ class TestClock:
         year, month, day = time.localtime()[:3]
 
         assert today() == datetime.date(year, month, day)
+
+
+class TestParseCellDate:
+    """``comken.core.parse_cell_date`` の契約テスト。
+
+    Excel のセル値は ``datetime.datetime`` / ``datetime.date`` / 文字列の
+    どれでも来うる。 それぞれを ``date`` に揃え、読めなかった値は
+    ``None`` を返す（例外にはしない）。
+    """
+
+    def test_returns_date_for_datetime_value(self) -> None:
+        """Excel の日付型セル（``datetime.datetime``）を ``date`` にして返す。"""
+        assert parse_cell_date(datetime.datetime(2026, 4, 22, 12, 30)) == datetime.date(
+            2026, 4, 22
+        )
+
+    def test_returns_same_date_for_date_value(self) -> None:
+        """``date`` を渡したらそのまま返す。"""
+        assert parse_cell_date(datetime.date(2026, 4, 22)) == datetime.date(2026, 4, 22)
+
+    def test_returns_none_for_empty_cell(self) -> None:
+        """空セル（``None``）と空白だけの文字列は ``None``。"""
+        assert parse_cell_date(None) is None
+        assert parse_cell_date("") is None
+        assert parse_cell_date("   ") is None
+
+    def test_returns_none_for_unreadable_text(self) -> None:
+        """日付として読めない文字列は ``None``（例外にしない）。"""
+        assert parse_cell_date("日付ではない") is None
+        assert parse_cell_date("2026/13/45") is None
+
+    def test_parses_each_supported_text_format(self) -> None:
+        """受け付ける書式を全部試す。"""
+        expected = datetime.date(2026, 4, 22)
+        assert parse_cell_date("2026/04/22") == expected
+        assert parse_cell_date("2026-04-22") == expected
+        assert parse_cell_date("2026年04月22日") == expected
+        assert parse_cell_date("2026/04/22 00:00:00") == expected
+
+    def test_strips_surrounding_whitespace(self) -> None:
+        """文字列の前後の空白は落として解釈する。"""
+        assert parse_cell_date(" 2026/04/22 ") == datetime.date(2026, 4, 22)
+
+    def test_returns_none_for_non_date_objects(self) -> None:
+        """``int`` / ``float`` を渡しても ``None``。"""
+        assert parse_cell_date(20260422) is None
+        assert parse_cell_date(2026.0) is None
 
 
 def test_date_in_name_is_available_from_public_package() -> None:

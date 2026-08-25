@@ -15,6 +15,7 @@
 from comken.core.clock import month_end as month_end
 from comken.core.clock import month_start as month_start
 from comken.core.clock import now as now
+from comken.core.clock import parse_cell_date as parse_cell_date
 from comken.core.clock import today as today
 from comken.core.data import DiffResult as DiffResult
 from comken.core.data import RowChange as RowChange
@@ -114,6 +115,7 @@ __all__ = [
     "now",
     "project_dir",
     "normalize",
+    "parse_cell_date",
     "remove_spaces",
     "retry",
     "set_default_calendar",

@@ -13,6 +13,7 @@ from comken.exceptions import (
     InvalidTableOperationError,
     SheetAlreadyExistsError,
     SheetNameError,
+    SheetNotFoundError,
     TableNotOpenError,
     UnsupportedFileSuffixError,
 )
@@ -381,3 +382,86 @@ class TestReadComputedRowsDropsBlankRows:
 
         assert rows == [("1", "A")]
         assert dicts == [{"ID": "1", "名前": "A"}]
+
+
+class TestFindSheet:
+    """``Excel.find_sheet(*candidates)`` の契約テスト。
+
+    「シート名が違うだけで業務ロジックは共通」という業務ケースを吸収する口。
+    ``延期積上集計`` のように ``SHEET_NAME = [Sheet1, 一覧]`` と候補を並べた
+    config と組み合わせて使う。
+    """
+
+    def test_returns_first_existing_candidate(self, tmp_path) -> None:
+        path = tmp_path / "book.xlsx"
+        with Excel(path) as excel:
+            excel.create_sheet("案件一覧")
+            excel.create_sheet("Sheet1")
+
+        with Excel(path, read_only=True) as excel:
+            # 候補の 1 番目が見つかればそれを返す（順番保持）
+            assert excel.find_sheet("案件一覧", "Sheet1") == "案件一覧"
+            # 1 番目が無く 2 番目が見つかれば 2 番目を返す
+            assert excel.find_sheet("Sheet1", "案件一覧") == "Sheet1"
+
+    def test_returns_name_string_not_sheet_object(self, tmp_path) -> None:
+        """戻り値は ``str``（シート名）で ``Sheet`` ではない。"""
+        path = tmp_path / "book.xlsx"
+        with Excel(path) as excel:
+            excel.create_sheet("案件一覧")
+
+        with Excel(path, read_only=True) as excel:
+            result = excel.find_sheet("案件一覧")
+            assert isinstance(result, str)
+            assert result == "案件一覧"
+
+    def test_raises_sheet_not_found_when_no_candidate_matches(self, tmp_path) -> None:
+        """候補が全部無いとき ``SheetNotFoundError`` をそのまま送出する。"""
+        path = tmp_path / "book.xlsx"
+        with Excel(path) as excel:
+            excel.create_sheet("Sheet1")
+            excel.create_sheet("案件一覧")
+
+        with Excel(path, read_only=True) as excel:
+            with pytest.raises(SheetNotFoundError) as exc:
+                excel.find_sheet("無いA", "無いB")
+            message = str(exc.value)
+            # 最後に試した名前と、ブックに実在するシート名が両方メッセージに含まれる
+            assert "無いB" in message
+            assert "Sheet1" in message
+            assert "案件一覧" in message
+
+    def test_raises_when_no_candidates_given(self, tmp_path) -> None:
+        """候補を 1 つも渡さなかったときも、シート一覧入りの例外で止める。"""
+        path = tmp_path / "book.xlsx"
+        with Excel(path) as excel:
+            excel.create_sheet("Sheet1")
+
+        with Excel(path, read_only=True) as excel:
+            with pytest.raises(SheetNotFoundError) as exc:
+                excel.find_sheet()
+            message = str(exc.value)
+            assert "Sheet1" in message
+
+    def test_does_not_treat_data_sheet_as_existing_candidate(self, tmp_path) -> None:
+        """``PY_`` プレフィックス付きデータシートを候補に入れても、それは「見つかった」とは扱わない。
+
+        業務ロジック上、表示用シートだけを扱うので、データシート名と一致して
+        候補が「在る」と判定されるのは事故（データシートは ``Table`` API で読む）。
+        ``find_sheet`` は ``sheetnames`` の所属だけで判定するため、 ``PY_顧客``
+        を渡すとそのまま返ってしまう点はこのテストで明示する
+        （=データシート名しか無いブックで業務候補が「無い」事故の検知は呼び出し側の責任）。
+        """
+        path = tmp_path / "book.xlsx"
+        with Excel(path) as excel:
+            excel.create_data_sheet("顧客").create_table(
+                "顧客", Table(["ID"], [{"ID": "1"}])
+            )
+
+        with Excel(path, read_only=True) as excel:
+            # ``PY_顧客`` は sheetnames に含まれるので「見つかった」と判定される
+            # （=この API はプレフィックスによる区別をしない）。
+            assert excel.find_sheet("PY_顧客") == "PY_顧客"
+            # 表示用シート名を候補にしても見つからない。
+            with pytest.raises(SheetNotFoundError):
+                excel.find_sheet("案件一覧")

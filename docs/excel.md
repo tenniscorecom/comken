@@ -17,6 +17,27 @@ with Excel("顧客.xlsx", read_only=True) as excel:
     rows = excel.data_sheet("顧客").table().read()
 ```
 
+## シート名を候補から選ぶ
+
+「古い形式と新しい形式でシート名が違う」「テンプレ更新でリネームされた」のように、
+業務ファイルでよくある候補違いを `Excel.find_sheet(*candidates)` で吸収する。
+候補を順に試し、最初に見つかった **シート名（str）** を返す。全部無いときは
+最後の試行で `SheetNotFoundError`（実在シート一覧入り）をそのまま投げる。
+**`Sheet` インスタンスが要るときは戻った名前を `excel.sheet(name)` に渡す。**
+
+```python
+with Excel("一覧.xlsx", read_only=True) as excel:
+    # config の SHEET_NAME = [Sheet1, 一覧] を渡して、使える方を選ぶ
+    candidates = config.SOURCE.SHEET_NAME
+    sheet_name = excel.find_sheet(*candidates)  # 見つかった str だけ返す
+    rows = excel.read_computed_rows_as_dicts(sheet_name)
+```
+
+`excel.sheet(name)` を経由しない理由は、 `sheet()` が未存在の新規ブックで
+**自動でリネーム**するため。候補違いのときに知らぬ間にブックが変わるのを防ぐ。
+データシート（`PY_` プレフィックス付き）を候補に入れても所属判定はそのままなので、
+業務ロジック上は **表示用シート名だけを候補にする** こと。
+
 ## データシートとテーブル
 
 `create_data_sheet("顧客")` は `PY_顧客` シートを作ります。テーブル名を省略できるのは、そのシートにテーブルが1つだけある場合です。複数ある場合は `table("名前")` と明示します。シート全体を表として扱う機能はありません。
