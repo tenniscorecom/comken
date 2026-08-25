@@ -1,13 +1,14 @@
 r"""comken/core/holidays/__init__.py — 祝日判定ライブラリ。
 
-内閣府の祝日 CSV をダウンロードしてキャッシュし、
+内閣府の祝日 CSV を **ライブラリ同梱の 1ファイル**から読み、
 「今日が営業日か」「次の営業日」「収録期限の警告」を提供する。
 
     from comken.core.holidays import HolidayCalendar, is_business_day
-    from comken.toolbox.holidays.sources.cabinet_office import CabinetOfficeCSVSource
 
+    # 内閣府 CSV は ``CabinetOfficeCSVSource``（toolbox 側）で取得して
+    # ``BUNDLED_CSV_PATH`` へ書く。利用プロジェクトでは ``HolidayCalendar``
+    # に会社の休業日を足すだけで動かせる形が基本。
     calendar = HolidayCalendar.from_sources([
-        CabinetOfficeCSVSource(cache_path=Path("~/.rpa/holidays/syukujitsu.csv")),
         CompanyHolidaySource(),
     ])
 
@@ -18,6 +19,11 @@ r"""comken/core/holidays/__init__.py — 祝日判定ライブラリ。
 ネット系の処理は ``sources.cabinet_office.CabinetOfficeCSVSource`` の中だけに閉じ、
 ``HolidayCalendar.is_business_day`` 単体ではネットに繋がらずに動く。
 
+内閣府 CSV は ``BUNDLED_CSV_PATH``（= ``comken/core/holidays/data/syukujitsu.csv``）
+に **git 管理下で同梱** している。**PC ごとのキャッシュは持たない**。
+更新は年 1 回の手動作業（**開発機で内閣府から取得 → コミット → 共有サーバーへ checkout**）。
+``default_calendar()`` と ``CabinetOfficeCSVSource()`` は同じこの 1 ファイルを指す。
+
 営業日の判定関数（``is_business_day`` / ``business_day_after`` /
 ``business_day_on_or_after`` / ``first_business_day_of_month`` など）は
 ``calendar`` を省略できる簡易版も公開している。省略時は **既定カレンダー**
@@ -25,6 +31,7 @@ r"""comken/core/holidays/__init__.py — 祝日判定ライブラリ。
 が使われ、ネットワークには出ない。会社独自の休日を追加したいときは
 ``set_default_calendar()`` で差し替える。
 
+BUNDLED_CSV_PATH             内閣府 CSV を同梱しているパス（正本）。git 管理下。
 HolidayCalendar       祝日セットを保持し判定を行う本体
 HolidaySource         祝日セットを返す仕組みの Protocol
 Holiday               1件の祝日（日付 + 名称）
@@ -39,7 +46,7 @@ nth_business_day_of_month    ``target`` の月の第 n 営業日（n は 1 始�
 add_business_days            ``target`` から n 営業日後（n が負なら前）
 default_calendar             既定カレンダーを取得（プロセス内で 1回だけ遅延生成）
 set_default_calendar         既定カレンダーを差し替える（``None`` でリセット）
-CabinetOfficeCSVSource    内閣府 CSV を URL + キャッシュで取得する ``HolidaySource``
+CabinetOfficeCSVSource    内閣府 CSV を URL から取得して ``BUNDLED_CSV_PATH`` へ書く ``HolidaySource``
 ComputedHolidaySource     計算式で祝日を組み立てる ``HolidaySource``
 CompanyHolidaySource      会社独自の休業日（コード直書き）の ``HolidaySource``
 HolidayCalendarError  祝日関連の基底例外
@@ -50,6 +57,7 @@ HolidayCalendarFormatError     内閣府 CSV として解釈できない形式
 """
 
 from comken.core.holidays.calendar import (
+    BUNDLED_CSV_PATH,
     BUSINESS_DAY_SEARCH_LIMIT,
     EXPIRING_WARNING_DAYS,
     Holiday,
@@ -80,6 +88,7 @@ from comken.exceptions import (
 )
 
 __all__ = [
+    "BUNDLED_CSV_PATH",
     "BUSINESS_DAY_SEARCH_LIMIT",
     "BusinessDayNotFoundError",
     "CompanyHolidaySource",

@@ -18,7 +18,6 @@ RPA 置き換えプロジェクトで「いま取るべきレポートか」を�
 
 ```python
 from datetime import date
-from pathlib import Path
 
 from comken.core.holidays import (
     CompanyHolidaySource,
@@ -29,7 +28,7 @@ from comken.toolbox.holidays.sources.cabinet_office import CabinetOfficeCSVSourc
 
 calendar = HolidayCalendar.from_sources(
     [
-        CabinetOfficeCSVSource(),  # 既定: ~/.rpa/holidays/syukujitsu.csv にキャッシュ
+        CabinetOfficeCSVSource(),  # 既定: 同梱 CSV をそのまま使う
         CompanyHolidaySource(),    # コード直書きの会社休日
     ]
 )
@@ -50,23 +49,37 @@ if is_business_day(date.today(), calendar=calendar):
 「国民の祝日・休日月日」「国民の祝日・休日名称」。1 行目はヘッダーなので
 読み込み時にスキップする。
 
-## キャッシュ
+## 保存先（キャッシュ）
 
-`CabinetOfficeCSVSource` は `~/.rpa/holidays/syukujitsu.csv` を既定の
-キャッシュ先とする（`cache_path` 引数で変更可）。キャッシュ済みのファイルが
-ある間はネットワークに出ない。**明示的に最新を取り直したいとき**は
-`source.refresh()` を呼ぶ。
+**内閣府 CSV は `comken/core/holidays/data/syukujitsu.csv` に同梱** している。
+`CabinetOfficeCSVSource` は **この同梱 CSV を保存先としても使う**（git 管理下の
+1ファイルが正本）。`default_calendar()` も同じファイルを指す。**PC ごとの
+キャッシュは廃止** した（「どの PC のキャッシュがいつのものか」を追えなくなる
+問題を防ぐため）。
+
+`cache_path` 引数を渡せば **別の場所を指定できる**（既定以外を使うケース）。
+ただし通常は変更しない。
 
 ```python
 from comken.toolbox.holidays.sources.cabinet_office import CabinetOfficeCSVSource
 
 source = CabinetOfficeCSVSource(
-    cache_path=Path("D:/work/cache/syukujitsu.csv"),
+    cache_path=Path("D:/work/cache/syukujitsu.csv"),  # 既定以外を使うときだけ
 )
 ```
 
+`source.refresh()` を呼ぶと **同梱 CSV を上書き** する。共有サーバーの
+**読み取り専用チェックアウト** で動かすとここで `PermissionError` で失敗する
+（エラーメッセージに「どこに書こうとしたか」と「年1回の手動更新手順」が
+出る）。通常は次の **年1回の手動更新** に乗せて配布する。
+
+```text
+1. 開発機で内閣府から取得（CabinetOfficeCSVSource().refresh() でも可）
+2. git に差分が出るのでコミット → タグを打つ
+3. 共有サーバー側で checkout
+```
+
 内閣府のデータは年に数回しか変わらないので、TTL は設けていない。
-「年 1 回手動で同梱 CSV を更新する」運用が基本。
 
 `HolidayCalendar.is_business_day` などはネットに繋がらずに動くので、
 オフライン PC で requests が無いときも import は成功する。
@@ -152,7 +165,8 @@ COMPANY_HOLIDAYS_EXTRA: Final[tuple[_dt.date, ...]] = ()
 | `nth_business_day_of_month(d, n, *, calendar)` | `d` の月の第 `n` 営業日（`n` は 1 始まり） |
 | `add_business_days(d, n, *, calendar)` | `d` から `n` 営業日後の日付（`n` が負なら前）           |
 | `BUSINESS_DAY_SEARCH_LIMIT`       | 「次の営業日」探索の上限日数（既定 400）                    |
-| `CabinetOfficeCSVSource`          | 内閣府 CSV を URL + キャッシュで取得する `HolidaySource`   |
+| `BUNDLED_CSV_PATH`                | 内閣府 CSV を同梱しているパス（git 管理下の正本）           |
+| `CabinetOfficeCSVSource`          | 内閣府 CSV を URL から取得して `BUNDLED_CSV_PATH` へ書く `HolidaySource` |
 | `ComputedHolidaySource`           | 計算で祝日の和集合を返す `HolidaySource`（mokejp/holidays_jp MIT 由来） |
 | `CompanyHolidaySource`            | 会社独自の休業日（コード直書き）の `HolidaySource`         |
 | `HolidayCalendarError` 系         | 例外（`HolidayCalendarFetchError` / `HolidayCalendarSourceError` / `HolidayCalendarFormatError` / `BusinessDayNotFoundError`） |

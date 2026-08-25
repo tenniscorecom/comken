@@ -1,6 +1,10 @@
 """comken/toolbox/holidays/sources/cabinet_office.py — 内閣府 CSV ソース。
 
 内閣府の ``syukujitsu.csv`` を URL から取得し、``cache_path`` に保存する。
+**既定の保存先はライブラリ同梱の CSV**（``BUNDLED_CSV_PATH``）。**PC ごとの
+キャッシュは持たない**（git 管理下の 1ファイルに集約することで「どの PC の
+キャッシュがいつのものか」が追えなくなる問題を避ける）。
+
 キャッシュ済みのファイルがあれば毎回ダウンロードせず、``refresh()`` を
 呼んだときだけ強制再取得する。
 
@@ -10,7 +14,10 @@
 
 TTL は設けていない（内閣府の祝日データは年に 1 回しか変わらないため、
 24h ごとに再取得する設定は無駄だった）。「明示的に最新を取りに行きたいとき」
-は ``refresh()`` を使うか、キャッシュファイルを消す。
+は ``refresh()`` を使う。**保存先は固定（``BUNDLED_CSV_PATH``）なので、
+「キャッシュファイルを消す」は使えない**。代わりに ``refresh()`` を使うか、
+**年 1 回の手動更新**（開発機で取得 → コミット → 共有サーバーへ checkout）
+で配布する。
 
 requests は import 時ではなく ``load()`` 内で遅延 import する。
 これにより ``comken.toolbox.holidays`` を import するだけのコードは
@@ -21,6 +28,7 @@ import datetime as _dt
 import logging
 from pathlib import Path
 
+from comken.core.holidays import BUNDLED_CSV_PATH
 from comken.core.holidays.calendar import Holiday, HolidaySource, RefreshableHolidaySource
 from comken.core.timer import measure
 from comken.exceptions import HolidayCalendarFetchError, HolidayCalendarFormatError
@@ -30,19 +38,28 @@ logger = logging.getLogger(__name__)
 # 内閣府の祝日 CSV。CP932（Shift_JIS）で配布されている
 DEFAULT_URL = "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv"
 
-# 既定のキャッシュ先（呼び出し側で明示されたらそちらを優先）
-DEFAULT_CACHE_PATH = Path.home() / ".rpa" / "holidays" / "syukujitsu.csv"
+# 既定の保存先。PC ごとのキャッシュは廃止し、ライブラリ同梱の 1ファイルを
+# 正本にする。``comken.core.holidays`` から公開されているパスをそのまま使う。
+DEFAULT_CACHE_PATH = BUNDLED_CSV_PATH
 
 
 class CabinetOfficeCSVSource(HolidaySource, RefreshableHolidaySource):
     """内閣府の ``syukujitsu.csv`` をダウンロードして ``Holiday`` の iterable を返す。
 
-    初回 ``load()`` 時にキャッシュが無ければダウンロードし、あればキャッシュを返す。
-    ``refresh()`` を呼ぶと TTL に関係なく強制再取得する。
+    初回 ``load()`` 時にキャッシュ（= 同梱 CSV）が無ければダウンロードし、
+    あればキャッシュを返す。``refresh()`` を呼ぶと TTL に関係なく強制再取得する。
+
+    **既定の保存先はライブラリ同梱の CSV**（``BUNDLED_CSV_PATH``）。
+    共有サーバーの **読み取り専用チェックアウト** で ``load()`` /
+    ``refresh()`` を呼ぶと ``PermissionError`` で落ちる。
+    そのときは **開発機で取得 → コミット → 共有サーバーへ checkout** で
+    配布する（年 1 回の手動更新）。
 
     Args:
         url: 内閣府の CSV の URL。既定は ``syukujitsu.csv`` の配布 URL。
-        cache_path: ダウンロードした CSV の保存先。既定は ``~/.rpa/holidays/syukujitsu.csv``。
+        cache_path: ダウンロードした CSV の保存先。既定は ``BUNDLED_CSV_PATH``
+            （= ``comken/core/holidays/data/syukujitsu.csv``）。PC ごとの
+            キャッシュは廃止したので、通常は変更しない。
         encoding: CSV の文字コード。CP932（Shift_JIS）のままで良い。
         fetch_timeout_seconds: requests.get() のタイムアウト秒数。
         refresh_timeout_seconds: refresh() で使う短いタイムアウト秒数（業務フロー停止を防ぐ）。
@@ -72,6 +89,8 @@ class CabinetOfficeCSVSource(HolidaySource, RefreshableHolidaySource):
 
         Raises:
             HolidayCalendarFetchError: ダウンロードもキャッシュも読めない場合。
+                共有サーバーの読み取り専用チェックアウトで ``cache_path``
+                （既定は同梱 CSV）への書き込みに失敗したときもここに来る。
         """
         cached_bytes = self._read_cache_bytes()
         if cached_bytes is not None:
@@ -135,9 +154,23 @@ class CabinetOfficeCSVSource(HolidaySource, RefreshableHolidaySource):
         self._cache_path.parent.mkdir(parents=True, exist_ok=True)
         # 既存ファイルを上書き（同名・同内容のとき mtime だけ更新するのを避けるため、
         # 一度消してから書く）
-        if self._cache_path.exists():
-            self._cache_path.unlink()
-        self._cache_path.write_bytes(raw_bytes)
+        try:
+            if self._cache_path.exists():
+                self._cache_path.unlink()
+            self._cache_path.write_bytes(raw_bytes)
+        except OSError as error:
+            # 共有サーバーの読み取り専用チェックアウトで動かすと
+            # ``PermissionError`` になるので、どこへ書こうとして失敗したかと
+            # 年1回の手動更新手順を伝える形に直す。
+            raise HolidayCalendarFetchError(
+                self._url,
+                f"キャッシュへの書き込みに失敗しました: {self._cache_path}\n"
+                f"{error}\n"
+                "共有サーバーの読み取り専用チェックアウトで動かしていないか"
+                "確認してください。書き込み権限のある場所で実行するか、"
+                "開発機で内閣府 CSV を取得してコミットし、共有サーバーへ"
+                "checkout してください（年1回の手動更新）。",
+            ) from error
 
     # ── ダウンロード ─────────────────────────────────────────────────────────
 

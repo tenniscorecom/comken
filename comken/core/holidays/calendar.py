@@ -651,7 +651,11 @@ def add_business_days(
 # せずに ``is_business_day(target)`` と書ける」ための遅延生成キャッシュ。
 # ネットワークには出ない（``ComputedHolidaySource`` + 同梱 CSV + 会社休日 だけ）。
 
-_DEFAULT_CALENDAR_PATH: Final[Path] = Path(__file__).parent / "data" / "syukujitsu.csv"
+# 内閣府の祝日 CSV を git 管理下に同梱したパス。``default_calendar()`` と
+# ``CabinetOfficeCSVSource`` の既定値が同じファイルを指すように、ここを
+# 単一の正本とする（PC ごとのキャッシュは廃止）。
+# 更新は年 1 回の手動作業（開発機で内閣府から取得 → コミット → 共有サーバーへ配置）。
+BUNDLED_CSV_PATH: Final[Path] = Path(__file__).parent / "data" / "syukujitsu.csv"
 _default_calendar: HolidayCalendar | None = None
 
 
@@ -679,7 +683,7 @@ def default_calendar() -> HolidayCalendar:
         _default_calendar = HolidayCalendar.from_sources(
             [
                 ComputedHolidaySource(),
-                _BundledCabinetCSVSource(_DEFAULT_CALENDAR_PATH),
+                _BundledCabinetCSVSource(BUNDLED_CSV_PATH),
                 CompanyHolidaySource(),
             ]
         )
