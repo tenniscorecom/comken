@@ -51,11 +51,6 @@ from comken.exceptions import (
 # パッケージリネームを契機に保存先を変えない。
 CREDENTIALS_PATH = Path.home() / ".rpa" / "credentials.enc"
 
-# 旧保存先のパッケージ名。移行用に 1 度だけ参照する。
-# DPAPI は「ユーザー × PC」に紐付くため、ファイルを移動するだけで復号できる。
-_LEGACY_PACKAGE_NAME = "comken"
-LEGACY_CREDENTIALS_PATH = Path.home() / f".{_LEGACY_PACKAGE_NAME}" / "credentials.enc"
-
 # キー名に使える文字（半角英数字とアンダースコアのみ）
 # 漢字・スペース・記号はコードや config.ini に書きにくいため弾く
 CREDENTIAL_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")
@@ -261,18 +256,9 @@ def _load_all(path: Path) -> dict[str, str]:
 
     「復号できない」と「復号はできたが中身が壊れている」は対処が違うので、
     別の例外に分ける（前者は実行アカウントの問題、後者は取り込み直し）。
-
-    保存先が既定パス（CREDENTIALS_PATH）のとき、新パスにファイルが無くて
-    旧パス（``~/.comken/credentials.enc``）にあれば、新パスへ1度だけ移す。
-    DPAPI は同じユーザー・同じ PC に紐付くので、ファイル移動だけで復号できる。
     """
     if not path.exists():
-        if path == CREDENTIALS_PATH and LEGACY_CREDENTIALS_PATH.exists():
-            _migrate_legacy_credentials()
-            if not path.exists():
-                return {}
-        else:
-            return {}
+        return {}
     encrypted = path.read_bytes()
     try:
         _, decrypted = win32crypt.CryptUnprotectData(encrypted, None, None, None, 0)
@@ -290,18 +276,6 @@ def _load_all(path: Path) -> dict[str, str]:
     ):
         raise CredentialStoreCorruptedError(path, "キーと値がすべて文字列の形になっていません。")
     return data
-
-
-def _migrate_legacy_credentials() -> None:
-    """旧パス ``~/.comken/credentials.enc`` のファイルを新パスへ移動する。
-
-    移動先の親ディレクトリが無ければ作る。既に新パスにファイルが
-    存在する場合は何もしない（旧ファイルはそのまま残す）。
-    """
-    if CREDENTIALS_PATH.exists():
-        return
-    CREDENTIALS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    LEGACY_CREDENTIALS_PATH.replace(CREDENTIALS_PATH)
 
 
 def _save_all(data: dict[str, str], path: Path) -> None:
