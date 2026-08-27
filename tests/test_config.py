@@ -462,6 +462,89 @@ class TestConfigTypeConversion:
         assert Config(ini).S.NAME == "T_data"
         assert isinstance(Config(ini).S.NAME, str)
 
+    def test_relative_path_with_forward_slash_becomes_path(self, tmp_path):
+        """``./data`` のような相対パス（forward slash）が ``Path`` に変換されることを確認する。
+
+        防いでいる事故: 現状では ``config.FILES.INPUT_FOLDER / name`` の ``/`` で
+        ``TypeError`` になるため、業務コード側で ``str(config.FILES.INPUT_FOLDER)``
+        に直している。 config.ini 側で ``./input`` と書けば最初から ``Path`` で
+        返るので、 ``config.FILES.INPUT_FOLDER / "data.csv"`` がそのまま動く。
+        """
+        ini = tmp_path / "config.ini"
+        ini.write_text("[S]\nINPUT = ./data\n", encoding="utf-8")
+
+        result = Config(ini).S.INPUT
+
+        assert isinstance(result, Path)
+        assert result == (ini.parent / "data").resolve()
+
+    def test_relative_path_with_backslash_becomes_path(self, tmp_path):
+        """``.\\data`` のような相対パス（backslash）も ``Path`` に変換されることを確認する。
+
+        Windows の人は ``.\\input`` と書くほうが多い。 forward slash と同じ扱いで
+        config.ini の親ディレクトリ基準の絶対 ``Path`` に解決する。
+        """
+        ini = tmp_path / "config.ini"
+        ini.write_text("[S]\nINPUT = .\\data\n", encoding="utf-8")
+
+        result = Config(ini).S.INPUT
+
+        assert isinstance(result, Path)
+        assert result == (ini.parent / "data").resolve()
+
+    def test_relative_path_with_subdir_becomes_path(self, tmp_path):
+        """サブディレクトリを含む相対パス（``./input/subfolder``）も ``Path`` 化される。"""
+        ini = tmp_path / "config.ini"
+        ini.write_text("[S]\nINPUT = ./input/subfolder\n", encoding="utf-8")
+
+        result = Config(ini).S.INPUT
+
+        assert isinstance(result, Path)
+        assert result == (ini.parent / "input" / "subfolder").resolve()
+
+    def test_relative_path_parent_dir_becomes_path(self, tmp_path):
+        """``..\\sibling``（親ディレクトリ参照）も ``Path`` 化される。
+
+        config.ini の親を基準に解決される。
+        """
+        ini = tmp_path / "config.ini"
+        ini.write_text("[S]\nINPUT = ..\\sibling\n", encoding="utf-8")
+
+        result = Config(ini).S.INPUT
+
+        assert isinstance(result, Path)
+        assert result == (ini.parent.parent / "sibling").resolve()
+
+    def test_plain_string_without_separator_stays_string(self, tmp_path):
+        """``T_data`` のような区切りなしの文字列は ``Path`` 化されず ``str`` のまま。
+
+        既存テスト ``test_plain_string_stays_string`` と同じ性質を保つための回帰テスト。
+        ``/`` も ``\\`` も含まない値は ``str`` のまま返るので、業務で ID や
+        区分コードとして書いた値が意図せず ``Path`` にならない。
+        """
+        ini = tmp_path / "config.ini"
+        ini.write_text("[S]\nNAME = T_data\n", encoding="utf-8")
+
+        result = Config(ini).S.NAME
+
+        assert isinstance(result, str)
+        assert result == "T_data"
+
+    def test_relative_path_resolved_against_config_ini_parent(self, tmp_path):
+        """config.ini の親を基準に相対パスが解決される。
+
+        ``./input`` と書けば ``<tmp_path> / input`` に解決される。 実行時の
+        カレントディレクトリに左右されないことが重要（社内 RPA 基盤は
+        ``C:\\`` から起動する）。
+        """
+        ini = tmp_path / "config.ini"
+        ini.write_text("[S]\nINPUT = ./input\n", encoding="utf-8")
+        config = Config(ini)
+
+        assert (tmp_path / "input").resolve() == config.S.INPUT
+        # 兄弟フォルダを直接指定しても config.ini の親を基準に解決される
+        assert config.S.INPUT.parent == tmp_path.resolve()
+
     @pytest.mark.parametrize("value", ["007", "0521234567", "-007"])
     def test_leading_zero_stays_string(self, tmp_path, value):
         """先頭ゼロの数字（社員番号・電話番号）は桁落ちを避けて文字列のままを確認する。"""

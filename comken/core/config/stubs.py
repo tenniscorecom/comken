@@ -69,14 +69,20 @@ def generate_stub(
         # 出力先を明示した場合は class スタブ（src/config.pyi 形式）を書く
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(_build_stub_content(cfg, section_map), encoding="utf-8")
+        output_path.write_text(
+            _build_stub_content(cfg, section_map, Path(ini_path).resolve().parent),
+            encoding="utf-8",
+        )
         return output_path
 
     stub_path = _resolve_stub_path(ini_path)
     if stub_path is not None:
         # src/config.py（または config.py）がある → その隣に class スタブ
         stub_path.parent.mkdir(parents=True, exist_ok=True)
-        stub_path.write_text(_build_stub_content(cfg, section_map), encoding="utf-8")
+        stub_path.write_text(
+            _build_stub_content(cfg, section_map, Path(ini_path).resolve().parent),
+            encoding="utf-8",
+        )
         return stub_path
 
     # src/config.py が無い → typings スタブ一式
@@ -107,7 +113,10 @@ def update_stub(
         section_map = _build_section_map(cfg)
     stub_path = _resolve_stub_path(ini_path)
     if stub_path is not None:
-        _write_stub_atomic(stub_path, _build_stub_content(cfg, section_map))
+        _write_stub_atomic(
+            stub_path,
+            _build_stub_content(cfg, section_map, Path(ini_path).resolve().parent),
+        )
         return
     _write_typings_stubs(Path(ini_path).resolve().parent, cfg, section_map)
 
@@ -122,6 +131,9 @@ def _write_typings_stubs(
     Pylance の typings 上書きを使う。config.pyi だけだと comken の他の公開シンボル
     （実行モード関数等）が解決できなくなるため、__init__.pyi で本物の comken を
     再エクスポートして両立させる。
+
+    ``project_dir`` を ``_build_module_stub_content`` / ``_build_package_init_stub``
+    に ``base_dir`` として渡し、相対パスを ``Path`` 型ヒントで出す。
     """
     if section_map is None:
         from comken.core.config import _build_section_map
@@ -131,9 +143,12 @@ def _write_typings_stubs(
     comken_typings = project_dir / "typings" / "comken"
     _write_stub_atomic(
         comken_core_typings / "config.pyi",
-        _build_module_stub_content(cfg, section_map),
+        _build_module_stub_content(cfg, section_map, project_dir),
     )
-    _write_stub_atomic(comken_typings / "__init__.pyi", _build_package_init_stub(cfg, section_map))
+    _write_stub_atomic(
+        comken_typings / "__init__.pyi",
+        _build_package_init_stub(cfg, section_map, project_dir),
+    )
 
 
 def _write_stub_atomic(stub_path: Path, content: str) -> None:
@@ -165,8 +180,18 @@ def _stub_type_name(value: bool | int | float | Path | list | str) -> str:
     return type(value).__name__
 
 
-def _build_stub_content(cfg: configparser.ConfigParser, section_map: dict[str, str]) -> str:
-    """読み込み済みの ConfigParser からスタブファイルの中身を組み立てる。"""
+def _build_stub_content(
+    cfg: configparser.ConfigParser,
+    section_map: dict[str, str],
+    base_dir: Path | None = None,
+) -> str:
+    """読み込み済みの ConfigParser からスタブファイルの中身を組み立てる。
+
+    ``base_dir`` は相対パスを ``Path`` 化するときの基準（config.ini の親）。
+    ``update_stub`` / ``generate_stub`` から呼ばれるので ``ini_path`` 経由で
+    解決済みの親を渡す。実行時の ``Config._initialize`` と同じ判定結果を
+    返すことで、スタブの型ヒントと実行時の型が一致する。
+    """
     section_lines: list[str] = []
     config_attrs: list[str] = []
     for stripped_section, original_section in section_map.items():
@@ -184,7 +209,7 @@ def _build_stub_content(cfg: configparser.ConfigParser, section_map: dict[str, s
         if not options:
             section_lines.append("    pass")
         for key in options:
-            value = _parse_value(cfg, original_section, key)
+            value = _parse_value(cfg, original_section, key, base_dir=base_dir)
             section_lines.append(f"    {key.upper()}: {_stub_type_name(value)}")
         section_lines.append("")
 
@@ -211,7 +236,11 @@ def _build_stub_content(cfg: configparser.ConfigParser, section_map: dict[str, s
     return "\n".join(lines) + "\n"
 
 
-def _build_module_stub_content(cfg: configparser.ConfigParser, section_map: dict[str, str]) -> str:
+def _build_module_stub_content(
+    cfg: configparser.ConfigParser,
+    section_map: dict[str, str],
+    base_dir: Path | None = None,
+) -> str:
     """typings/comken/core/config.pyi 用の module スタブを組み立てる。
 
     `from comken.core.config import ...` の型をプロジェクトの config.ini に
@@ -234,7 +263,7 @@ def _build_module_stub_content(cfg: configparser.ConfigParser, section_map: dict
         if not options:
             section_lines.append("    pass")
         for key in options:
-            value = _parse_value(cfg, original_section, key)
+            value = _parse_value(cfg, original_section, key, base_dir=base_dir)
             section_lines.append(f"    {key.upper()}: {_stub_type_name(value)}")
         section_lines.append("")
 
@@ -258,7 +287,11 @@ def _build_module_stub_content(cfg: configparser.ConfigParser, section_map: dict
     return "\n".join(lines) + "\n"
 
 
-def _build_package_init_stub(cfg: configparser.ConfigParser, section_map: dict[str, str]) -> str:
+def _build_package_init_stub(
+    cfg: configparser.ConfigParser,
+    section_map: dict[str, str],
+    base_dir: Path | None = None,
+) -> str:
     """typings/comken/__init__.pyi を組み立てる。
 
     core/config.pyi で comken.core.config を上書きすると、そのままでは comken 直下の
@@ -303,7 +336,7 @@ def _build_package_init_stub(cfg: configparser.ConfigParser, section_map: dict[s
         if not options:
             lines.append("    pass")
         for key in options:
-            value = _parse_value(cfg, original_section, key)
+            value = _parse_value(cfg, original_section, key, base_dir=base_dir)
             lines.append(f"    {key.upper()}: {_stub_type_name(value)}")
         lines.append("")
     lines.append("class _ConfigFacade:")

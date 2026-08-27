@@ -214,11 +214,21 @@ class Config:
                     continue
                 # configparser はキー名の前後空白を既に落とすので、二重 strip は不要
                 options = cfg.options(original_section)
+                # ``_parse_value`` に config.ini の親ディレクトリを渡し、相対パスを
+                # そこで解決できるようにする（``./input`` → ``<親>/input``）。
+                # ``self._path`` は ``_initialize`` 冒頭で ``path.resolve()`` 済みの
+                # 絶対パスなので ``.parent`` も絶対パス。
+                config_dir = self._path.parent
                 ns = _SectionNamespace(
                     section=stripped_section.upper(),
                     keys=[key.upper() for key in options],
                     path=self._path,
-                    **{key.upper(): _parse_value(cfg, original_section, key) for key in options},
+                    **{
+                        key.upper(): _parse_value(
+                            cfg, original_section, key, base_dir=config_dir
+                        )
+                        for key in options
+                    },
                 )
                 setattr(self, stripped_section.upper(), ns)
         else:
@@ -603,8 +613,31 @@ def _log_version_once() -> None:
         _is_version_logged = True
 
 
+def _looks_like_path(value: str) -> bool:
+    """値がパスとして扱うべき形かを返す。
+
+    - 絶対パス（Windows ドライブ ``C:\\`` / UNC ``\\\\`` / POSIX ``/`` 始まり）
+    - 相対パス（値の中に ``/`` または ``\\`` を含む）
+
+    のいずれかに該当すれば True。 ``T_data`` のように区切りを含まない値は False
+    （文字列のまま返す）。
+
+    **URL スキーム（``://``）を含む値は False を返す。** ``https://example.test/a%20b``
+    のような設定値は URL として ``str`` のまま扱う。 区切り ``/`` だけではパスと
+    区別できないので、 ``://`` を「これは URL だ」と示すマーカーに使う。
+    """
+    if "://" in value:
+        return False
+    if len(value) >= 2 and (value[1:3] == ":\\" or value[:2] == "\\\\" or value[0] == "/"):
+        return True
+    return "/" in value or "\\" in value
+
+
 def _parse_value(
-    cfg: configparser.ConfigParser, section: str, key: str
+    cfg: configparser.ConfigParser,
+    section: str,
+    key: str,
+    base_dir: Path | None = None,
 ) -> bool | int | float | Path | list[str] | str:
     """ini の値を適切な Python 型に変換して返す。
 
@@ -612,9 +645,19 @@ def _parse_value(
         1. true / false（大文字小文字問わず）→ bool
         2. [a, b, c] → list[str]（改行区切りも可）
         3. 絶対パス（C:\\ / \\\\ / / で始まる）→ Path
-        4. 整数に変換できる → int（ただし先頭ゼロの数字は文字列のまま）
-        5. 小数に変換できる → float（ただし nan / inf は文字列のまま）
-        6. それ以外 → str
+        4. 相対パス（値に ``/`` または ``\\`` を含む）→ Path
+           config.ini の親ディレクトリを基準に ``.resolve()`` した Path
+        5. 整数に変換できる → int（ただし先頭ゼロの数字は文字列のまま）
+        6. 小数に変換できる → float（ただし nan / inf は文字列のまま）
+        7. それ以外 → str
+
+    相対パスの解決基準は config.ini の親ディレクトリ（``base_dir``）。
+    業務側で ``config.FILES.INPUT_FOLDER / "data.csv"`` のように ``/`` で
+    連結しても ``TypeError`` にならないよう、 ``./data`` / ``..\\sibling`` の
+    ような値を ``Path`` で返す。 ``base_dir`` が渡せない経路（スタブ生成など
+    で ini パスを引数で受ける場合）は **絶対パスと同じく** ``Path(value)``
+    のまま返す（文字列を ``Path`` 化しない設計のため、誤って ``str`` を
+    ``Path`` にすると「パスらしき値まで全部 Path」になる事故を防ぐ）。
 
     文字列として使いたい数値（例: 管理番号 "123"）はコード側で str() に変換する。
     先頭ゼロ（電話番号 "0521234567"・社員番号 "007" 等）は int にすると桁落ちするため
@@ -631,8 +674,14 @@ def _parse_value(
     if value.startswith("[") and value.endswith("]"):
         return _split_list_items(value[1:-1])
 
-    if len(value) >= 2 and (value[1:3] == ":\\" or value[:2] == "\\\\" or value[0] == "/"):
-        return Path(value)
+    if _looks_like_path(value):
+        path = Path(value)
+        if not path.is_absolute() and base_dir is not None:
+            # 相対パスは config.ini の親ディレクトリを基準に解決する。
+            # 業務ツールで ``./input`` と書けば config.ini と同じ階層の
+            # ``input`` ディレクトリを指す（実行時のカレントに左右されない）。
+            path = (base_dir / path).resolve()
+        return path
 
     # 先頭ゼロの数字は電話番号・社員番号等とみなし、桁落ちを避けて文字列のまま返す
     unsigned = value[1:] if value[:1] in ("+", "-") else value
