@@ -22,6 +22,7 @@ from comken.exceptions import (
     SalesforceSiteNotFoundError,
 )
 from comken.toolbox.credentials import save_credentials, store
+from comken.toolbox.csv import CSV
 from comken.toolbox.salesforce import (
     APIMetrics,
     ClientCredentialsAuth,
@@ -255,6 +256,18 @@ class TestSalesforceQuery:
         assert client.metrics.api_usage.used == 42
         assert client.metrics.api_usage.limit == 15000
 
+    def test_query_csv_saves_the_query_result(self, tmp_path):
+        """query_csv() は query() と同じ結果をそのまま CSV へ保存する。"""
+        response = _response(
+            json_body={"records": [{"Id": "1", "Name": "Acme"}], "done": True}
+        )
+        path = tmp_path / "result.csv"
+        with _salesforce([response]) as (client, _, _):
+            returned_path = client.query_csv("SELECT Id, Name FROM Account", path)
+        assert returned_path == path
+        with CSV(path, read_only=True) as csv_file:
+            assert csv_file.read() == [{"Id": "1", "Name": "Acme"}]
+
 
 class TestSalesforceReauthentication:
     def test_401_triggers_one_retry_with_new_token(self):
@@ -473,6 +486,16 @@ class TestReportApi:
         assert rows == [{"名前": "A社", "金額": "1,000"}, {"名前": "B社", "金額": "2,000"}]
         url = session.request.call_args[0][1]
         assert url == f"{INSTANCE_URL}{DATA_PREFIX}/analytics/reports/00O000000000001"
+
+    def test_run_csv_saves_the_report_result(self, tmp_path):
+        """run_csv() は run() と同じ結果をそのまま CSV へ保存する。"""
+        body = _report_body([("A社", "1000")])
+        path = tmp_path / "report.csv"
+        with _salesforce([_response(json_body=body)]) as (client, _, _):
+            returned_path = client.report.run_csv("00O000000000001", path)
+        assert returned_path == path
+        with CSV(path, read_only=True) as csv_file:
+            assert csv_file.read() == [{"名前": "A社", "金額": "1000"}]
 
     def test_filters_are_posted_as_report_filters(self):
         filters = [{"column": "CREATED_DATE", "operator": "greaterThan", "value": "2026-01-01"}]

@@ -24,6 +24,7 @@ import logging
 import re
 import time
 from collections.abc import Iterator
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from comken.core.table import Table
@@ -34,6 +35,7 @@ from comken.exceptions import (
     SalesforceReportIDNotFoundError,
     SalesforceReportTruncatedError,
 )
+from comken.toolbox.csv import CSV
 
 # レポート ID は接頭辞 00O ＋ 英数字で、15 桁（画面）か 18 桁（API）。
 # URL のどこに入っていても拾えるよう、前後は語の区切りだけを見る
@@ -209,6 +211,35 @@ class ReportAPI:
         """
         labels, rows = self._fetch_labels_and_rows(report_id, filters, allow_truncated)
         return Table(labels, rows)
+
+    @measure
+    def run_csv(
+        self,
+        report_id: str,
+        path: str | Path,
+        filters: list[dict] | None = None,
+        allow_truncated: bool = False,
+    ) -> Path:
+        """レポートを同期実行して、結果をそのまま CSV へ保存する。
+
+        ``run()`` が返す ``Table`` を ``CSV`` へ書き出すだけの薄い層。
+        ``Table`` 自体はファイル I/O を持たない設計（保存先の責任を分ける）ため、
+        レポートを直接 CSV で欲しいだけのときはこちらを使う。
+
+        Args:
+            report_id: レポート ID（レポートを開いたときの URL の末尾。15桁 or 18桁）。
+            path: 保存先の CSV パス（拡張子は ``.csv``）。
+            filters: 絞り込み条件（省略可）。
+            allow_truncated: ``run()`` と同じ。
+
+        Returns:
+            保存した CSV のパス。
+        """
+        table = self.run(report_id, filters, allow_truncated)
+        csv_path = Path(path)
+        with CSV(csv_path) as csv_file:
+            csv_file.replace(table)
+        return csv_path
 
     @measure
     def run_async(

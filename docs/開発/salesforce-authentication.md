@@ -294,23 +294,17 @@ python -c "from comken.toolbox.credentials import Credentials; from comken.toolb
 
 ## 3. code を refresh_token に交換
 
+`prefix=` を渡すだけで、受け取った refresh_token は `from_credentials` と同じ書き戻し先
+（`<prefix>_refresh_token`）へ自動で DPAPI 保存される。書き戻し用の関数を毎回手書きする必要はない。
+
 ```powershell
-python -c "from comken.toolbox.credentials import Credentials; from comken.toolbox.salesforce.oauth_refresh import RefreshTokenOAuth; from comken.toolbox.salesforce.sites import Sandbox; from comken.toolbox.credentials import save_credential; prefix = Sandbox.CREDENTIAL_PREFIX; creds = Credentials(prefix); auth = RefreshTokenOAuth.exchange_code(creds.client_id, creds.client_secret, input('code: '), 'http://localhost:8080/callback', Sandbox.DOMAIN_URL, on_refresh_token=lambda t: save_credential(f'{prefix}_refresh_token', t)); print('refresh_token を DPAPI に保存しました')"
+python -c "from comken.toolbox.credentials import Credentials; from comken.toolbox.salesforce.oauth_refresh import RefreshTokenOAuth; from comken.toolbox.salesforce.sites import Sandbox; prefix = Sandbox.CREDENTIAL_PREFIX; creds = Credentials(prefix); RefreshTokenOAuth.exchange_code(creds.client_id, creds.client_secret, input('code: '), 'http://localhost:8080/callback', Sandbox.DOMAIN_URL, prefix=prefix); print('refresh_token を DPAPI に保存しました')"
 ```
 
 - `code:` プロンプトに 2 でメモした文字列を貼り付け
-- 出力は **refresh_token を含む JSON** になる (`access_token`, `refresh_token`, `instance_url`)
+- 出力の `refresh_token を DPAPI に保存しました` が出れば、`<prefix>_refresh_token` への登録は完了（別途 `cred gui` で登録し直す必要はない）
 
-## 4. refresh_token を DPAPI に登録
-
-```powershell
-python -m comken cred gui
-```
-
-- **キー名**: `<prefix>_refresh_token`
-- **値**: 3 で取得した `refresh_token` フィールド
-
-## 5. 動作確認
+## 4. 動作確認
 
 ```powershell
 python -m comken sf check
@@ -318,9 +312,9 @@ python -m comken sf check
 
 - 0 エラーなら OK
 - 401 が返ったら、`<prefix>_refresh_token` が **古い/期限切れ**の可能性。
-  手順 2 からやり直す (Refresh Token Rotation を有効にしていれば、再認可時に **新しい refresh_token** が返るので 4 も更新する)
+  手順 2 からやり直す (手順 3 が DPAPI への保存まで自動で行うので、やり直すのはここまで)
 
-## 6. 無人実行への移行
+## 5. 無人実行への移行
 
 ここまでの設定が完了すれば、`Sandbox()` をそのまま使うスクリプトは
 **誰もログインしていない状態でも** 動く:
@@ -335,7 +329,7 @@ with Sandbox() as sf:
 `client_id` / `client_secret` / `refresh_token` のいずれかが **コードに現れない** ことが
 この手順のゴール。**Windows DPAPI** に守られた値だけが、組織を操作する。
 
-## 7. 失効時の対応
+## 6. 失効時の対応
 
 `refresh_token` を revoke / 失効させたい:
 
@@ -344,10 +338,10 @@ with Sandbox() as sf:
 3. **手順 2 からやり直す**
 
 Refresh Token Rotation を有効にしている場合、**`comken` が新しい `refresh_token` を
-受け取ったタイミングで DPAPI に自動で書き戻す** (`oauth_refresh.py` 内の `save_credential()`)。
+受け取ったタイミングで DPAPI に自動で書き戻す** (`oauth_refresh.py` の `_default_on_refresh_token()`)。
 運用としてやることは増えない。
 
-## 8. Client Credentials Flow を使う場合 (開発中だけ)
+## 7. Client Credentials Flow を使う場合 (開発中だけ)
 
 Refresh Token Flow の **対になる形**で、初回認可が要らない代わりに
 `client_secret` 単独で操作できる (本番で使わない理由は
@@ -367,7 +361,7 @@ with Sandbox(auth=ClientCredentialsAuth(
 
 **本番では使わない。** 動作確認の回転を速くしたい開発中だけ。
 
-## 9. トラブルシュート
+## 8. トラブルシュート
 
 | 症状 | 確認 |
 |---|---|

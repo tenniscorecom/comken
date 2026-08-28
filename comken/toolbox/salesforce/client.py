@@ -22,6 +22,7 @@ import logging
 import time
 import urllib.parse
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Protocol, Self
 
 import requests
@@ -35,6 +36,7 @@ from comken.exceptions import (
     SiteOwnerRequiredError,
 )
 from comken.runtime import dry_run_log, is_dry_run
+from comken.toolbox.csv import CSV
 from comken.toolbox.salesforce.metrics import APIMetrics, RetryReason
 
 # 既定は Refresh Token Flow。Client Credentials Flow は client_secret だけで
@@ -266,6 +268,27 @@ class SalesforceBase:
         # 分岐して空リストを返す（実装の意図を明示するため ``else []`` を付ける）。
         columns = list(records[0]) if records else []
         return Table(columns, records)
+
+    @measure
+    def query_csv(self, soql: str, path: str | Path) -> Path:
+        """SOQL クエリを実行して、結果をそのまま CSV へ保存する。
+
+        ``query()`` が返す ``Table`` を ``CSV`` へ書き出すだけの薄い層。
+        ``Table`` 自体はファイル I/O を持たない設計（保存先の責任を分ける）ため、
+        SOQL の結果を直接 CSV で欲しいだけのときはこちらを使う。
+
+        Args:
+            soql: 実行する SOQL クエリ文字列。
+            path: 保存先の CSV パス（拡張子は ``.csv``）。
+
+        Returns:
+            保存した CSV のパス。
+        """
+        table = self.query(soql)
+        csv_path = Path(path)
+        with CSV(csv_path) as csv_file:
+            csv_file.replace(table)
+        return csv_path
 
     # ------------------------------------------------------------------- CRUD
     @measure

@@ -2,8 +2,8 @@
 
 初回に認可コードから ``refresh_token`` を取り、以降は ``refresh_token`` で
 アクセストークンを更新し続ける方式。Salesforce 側で refresh_token を
-ローテーションして返してきた場合は、新トークンを ``_save_rotated_token``
-（``from_credentials`` が構築）で DPAPI に保存する。
+ローテーションして返してきた場合は、新トークンを ``_default_on_refresh_token``
+（``from_credentials`` / ``exchange_code(prefix=...)`` が組み立てる）で DPAPI に保存する。
 """
 
 # 定義中の RefreshTokenOAuth を戻り値の型注釈に使うため、注釈の評価を遅延する。
@@ -27,6 +27,21 @@ TOKEN_PATH = "/services/oauth2/token"
 TIMEOUT_SECONDS = 60
 
 
+def _default_on_refresh_token(prefix: str) -> Callable[[str], None]:
+    """新しい refresh_token を DPAPI（``<prefix>_refresh_token``）へ書き戻すコールバックを作る。
+
+    ``from_credentials`` と ``exchange_code(prefix=...)`` の両方が使う、
+    書き戻し先の唯一の定義。
+    """
+
+    def _save(refresh_token: str) -> None:
+        from comken.toolbox.credentials import save_credential
+
+        save_credential(f"{prefix}_refresh_token", refresh_token)
+
+    return _save
+
+
 class RefreshTokenOAuth:
     """保存済み refresh_token でアクセストークンを更新する。"""
 
@@ -48,19 +63,15 @@ class RefreshTokenOAuth:
     @classmethod
     def from_credentials(cls, domain_url: str, prefix: str) -> Self:
         """DPAPIに保存したOAuth資格情報から認証を作る。"""
-        from comken.toolbox.credentials import Credentials, save_credential
+        from comken.toolbox.credentials import Credentials
 
         credentials = Credentials(prefix)
-
-        def _save_rotated_token(refresh_token: str) -> None:
-            save_credential(f"{prefix}_refresh_token", refresh_token)
-
         return cls(
             credentials.client_id,
             credentials.refresh_token,
             domain_url,
             client_secret=credentials.client_secret,
-            on_refresh_token=_save_rotated_token,
+            on_refresh_token=_default_on_refresh_token(prefix),
         )
 
     @measure
@@ -112,9 +123,20 @@ class RefreshTokenOAuth:
         redirect_uri: str,
         domain_url: str,
         *,
+        prefix: str = "",
         on_refresh_token: Callable[[str], None] | None = None,
     ) -> Self:
-        """認可コードを交換し、取得した refresh_token を持つ認証部品を返す。"""
+        """認可コードを交換し、取得した refresh_token を持つ認証部品を返す。
+
+        初回に受け取った refresh_token を DPAPI へ書き戻す処理は、
+        呼び出し側で毎回書かなくてよいよう ``prefix`` を渡すだけで済む
+        （``from_credentials`` と同じ書き戻し先: ``<prefix>_refresh_token``）。
+        独自の保存先を使うときだけ ``on_refresh_token`` を明示的に渡す
+        （その場合は ``prefix`` より優先する）。
+        """
+        resolved_callback = on_refresh_token or (
+            _default_on_refresh_token(prefix) if prefix else None
+        )
         token_request = {
             "grant_type": AUTHORIZATION_CODE_GRANT,
             "client_id": client_id,
@@ -130,14 +152,14 @@ class RefreshTokenOAuth:
         refresh_token = body.get("refresh_token")
         if not isinstance(refresh_token, str) or not refresh_token:
             raise SalesforceAuthError(200, "認証レスポンスに refresh_token がありません")
-        if on_refresh_token is not None:
-            on_refresh_token(refresh_token)
+        if resolved_callback is not None:
+            resolved_callback(refresh_token)
         return cls(
             client_id,
             refresh_token,
             domain_url,
             client_secret=client_secret,
-            on_refresh_token=on_refresh_token,
+            on_refresh_token=resolved_callback,
         )
 
 

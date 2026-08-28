@@ -97,6 +97,47 @@ class TestRefreshTokenAuth:
             RefreshTokenAuth("CID", "REFRESH", DOMAIN_URL).fetch()
         assert "REFRESH" not in str(raised.value)
 
+    def test_exchange_code_with_prefix_saves_to_dpapi_without_explicit_callback(self):
+        """prefix だけ渡せば、書き戻し用の関数を呼び出し側で書かなくても DPAPI へ保存される。"""
+        response = _response(
+            {"access_token": "ACCESS", "instance_url": INSTANCE_URL, "refresh_token": "REFRESH"}
+        )
+        with (
+            patch(_REQUESTS_POST, return_value=response),
+            patch("comken.toolbox.credentials.save_credential") as save_credential,
+        ):
+            RefreshTokenAuth.exchange_code(
+                "CID",
+                "SECRET",
+                "CODE",
+                "https://localhost/callback",
+                DOMAIN_URL,
+                prefix="site_a",
+            )
+        save_credential.assert_called_once_with("site_a_refresh_token", "REFRESH")
+
+    def test_exchange_code_explicit_callback_overrides_prefix(self):
+        """on_refresh_token を明示的に渡したときは prefix の既定より優先されることを確認する。"""
+        saved_tokens: list[str] = []
+        response = _response(
+            {"access_token": "ACCESS", "instance_url": INSTANCE_URL, "refresh_token": "REFRESH"}
+        )
+        with (
+            patch(_REQUESTS_POST, return_value=response),
+            patch("comken.toolbox.credentials.save_credential") as save_credential,
+        ):
+            RefreshTokenAuth.exchange_code(
+                "CID",
+                "SECRET",
+                "CODE",
+                "https://localhost/callback",
+                DOMAIN_URL,
+                prefix="site_a",
+                on_refresh_token=saved_tokens.append,
+            )
+        assert saved_tokens == ["REFRESH"]
+        save_credential.assert_not_called()
+
     def test_from_credentials_saves_rotated_token_to_same_prefix(self):
         credentials = MagicMock(client_id="CID", client_secret="SECRET", refresh_token="REFRESH")
         with (
