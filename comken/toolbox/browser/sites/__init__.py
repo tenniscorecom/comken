@@ -27,12 +27,14 @@ r"""comken/toolbox/browser/sites/__init__.py — ライブラリ公認のブラ�
 """
 
 from comken.toolbox.browser.sitebase import SiteBase
+from comken.toolbox.browser.sites.ntt import NTTHigashi, NTTNishi
 from comken.toolbox.browser.sites.sample import SampleSite
 
 # ライブラリ公認サイトの一覧。最初に空で置いておき、昇格するサイトが出てきたら
 # ここで追加していく。**プロジェクト側で同じ NAME のクラスを作ると、
 # 起動時に `SiteAlreadyInLibraryError` で止まる。**
-# SampleSite は社内システムではなく書き方の見本なので、SITES には含めない。
+# SampleSite・NTTNishi・NTTHigashi は URL がダミーのままなので SITES には含めない
+# （配置時に実際の値へ書き換えたら登録する）。
 SITES: tuple[type[SiteBase], ...] = ()
 
-__all__ = ["SITES", "SampleSite"]
+__all__ = ["SITES", "SampleSite", "NTTNishi", "NTTHigashi"]
