@@ -61,6 +61,7 @@ import types
 from pathlib import Path
 from typing import NoReturn
 
+from comken.core.data import is_true_word
 from comken.core.files.ops import project_dir
 from comken.exceptions import (
     ConfigCreatedFromExampleError,
@@ -666,7 +667,7 @@ def _parse_value(
     value = cfg.get(section, key).strip()
     lower = value.lower()
 
-    if lower == "true":
+    if is_true_word(value):
         return True
     if lower == "false":
         return False

@@ -16,7 +16,7 @@ import pytest
 
 from comken import dry_run
 from comken.core.clock import now, parse_cell_date, today
-from comken.core.data import diff_row, diff_rows
+from comken.core.data import diff_row, diff_rows, is_true_word
 from comken.core.files import (
     DateFileFinder,
     DateNameBuilder,
@@ -730,6 +730,25 @@ class TestDiffRows:
 
         with pytest.raises(ColumnNotFoundError, match="キー列"):
             diff_rows(rows, rows, key="社員番号")
+
+
+class TestIsTrueWord:
+    """is_true_word（"true" 表記の共通判定）のテスト。
+
+    config.ini の bool 変換（tests/test_config.py の TestBoolConversion）と
+    Excel 管理表の「有効」列判定（report_master.py の _to_bool）が、
+    ここで同じ判定を共有している。
+    """
+
+    @pytest.mark.parametrize("text", ["true", "True", "TRUE", "  true  "])
+    def test_true_variants_are_true(self, text):
+        """大文字小文字・前後の空白違いも "true" と認識することを確認する。"""
+        assert is_true_word(text) is True
+
+    @pytest.mark.parametrize("text", ["false", "yes", "1", "on", "有効", "○", ""])
+    def test_other_words_are_not_true(self, text):
+        """"true" 以外の語（config.ini の false、Excel の日本語表記など）は False を確認する。"""
+        assert is_true_word(text) is False
 
 
 class TestNormalize:

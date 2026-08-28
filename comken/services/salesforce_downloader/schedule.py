@@ -11,6 +11,7 @@ from comken.exceptions import (
     ScheduleWeekdayInvalidError,
     UnsupportedScheduleFrequencyError,
 )
+from comken.services.salesforce_downloader.report_master import _to_bool, _to_time
 
 FREQUENCY_HOURLY = "1時間ごと"
 FREQUENCY_DAILY = "毎日"
@@ -44,15 +45,15 @@ class ScheduleRule:
             schedule_key=_required_text(row, "スケジュールキー"),
             report_key=_required_text(row, "レポートキー"),
             frequency=_required_text(row, "取得頻度"),
-            run_time=_parse_time(row.get("取得時刻")),
-            start_time=_parse_time(row.get("取得開始時刻")),
-            end_time=_parse_time(row.get("取得終了時刻")),
+            run_time=_to_time(row.get("取得時刻")),
+            start_time=_to_time(row.get("取得開始時刻")),
+            end_time=_to_time(row.get("取得終了時刻")),
             interval_minutes=_parse_int(row.get("取得間隔（分）")),
             weekday=_parse_weekday(row.get("曜日")),
             day_of_month=_parse_int(row.get("日付")),
-            month_end=_is_yes(row.get("月末指定")),
+            month_end=_to_bool(row.get("月末指定")),
             holiday_policy=_text_or_default(row, "祝日対応", HOLIDAY_SKIP),
-            enabled=_is_yes(row.get("有効")),
+            enabled=_to_bool(row.get("有効")),
         )
 
     def is_due(
@@ -105,16 +106,6 @@ def _text_or_default(row: Mapping[str, object], column: str, default: str) -> st
     return value or default
 
 
-def _parse_time(value: object) -> dt.time | None:
-    if value in (None, ""):
-        return None
-    if isinstance(value, dt.datetime):
-        return value.time().replace(second=0, microsecond=0)
-    if isinstance(value, dt.time):
-        return value.replace(second=0, microsecond=0)
-    return dt.time.fromisoformat(str(value).strip())
-
-
 def _parse_int(value: object) -> int | None:
     if value in (None, ""):
         return None
@@ -128,10 +119,6 @@ def _parse_weekday(value: object) -> int | None:
     if text not in WEEKDAY_NAMES:
         raise ScheduleWeekdayInvalidError(value)
     return WEEKDAY_NAMES.index(text)
-
-
-def _is_yes(value: object) -> bool:
-    return str(value).strip() in {"○", "有効", "はい", "true", "True"}
 
 
 __all__ = ["ScheduleRule"]

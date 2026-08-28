@@ -6,6 +6,23 @@ from comken.core.table.model import Table
 from comken.exceptions import InvalidColumnError, KeyColumnNotFoundError
 
 
+def is_true_word(text: str) -> bool:
+    """英語の "true" 表記かどうかを判定する（大文字小文字は問わない）。
+
+    config.ini の bool 変換と、Excel 管理表（レポート管理表・スケジュール管理表など）の
+    「有効」列判定の両方が使う、共通の "true" 判定。前後の空白は無視する
+    （config.ini 側は事前に ``strip()`` 済みの値を渡す想定だが、
+    Excel のセル値は前後に空白が付いたまま渡ってくることがあるため、ここでも取る）。
+
+    Args:
+        text: 判定する文字列。
+
+    Returns:
+        "true"（大文字小文字問わず）と一致すれば True。
+    """
+    return text.strip().lower() == "true"
+
+
 def col_to_num(letter: str) -> int:
     """Excel の列レターを列番号に変換する（A→1, B→2, AA→27）。
 
