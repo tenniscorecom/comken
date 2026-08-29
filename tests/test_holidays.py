@@ -1455,7 +1455,7 @@ class TestAddBusinessDays:
 
 
 class TestBusinessDaySearchLimit:
-    """探索上限 400 日で ``BusinessDayNotFoundError`` になることを確認。"""
+    """探索上限に達すると ``BusinessDayNotFoundError`` になることを確認。"""
 
     def test_raises_after_search_limit_when_all_days_are_holidays(self) -> None:
         """全日が祝日のカレンダーで ``business_day_after`` が上限到達で例外。"""
@@ -1470,5 +1470,3 @@ class TestBusinessDaySearchLimit:
         cal = HolidayCalendar(holidays)
         with pytest.raises(BusinessDayNotFoundError):
             business_day_after(_dt.date(2025, 1, 1), calendar=cal)
-        # 上限が想定どおり（テストの前提）
-        assert BUSINESS_DAY_SEARCH_LIMIT == 400

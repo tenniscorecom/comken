@@ -25,7 +25,7 @@ EXPIRING_WARNING_DAYS = 30
 
 # 「次の営業日」を探すときの日数上限。祝日データが壊れていたり、社内管理表に
 # 会社休日が広範囲に登録されていたりすると無限ループになるため、必ず上限を切る。
-BUSINESS_DAY_SEARCH_LIMIT = 400
+BUSINESS_DAY_SEARCH_LIMIT = 30
 
 
 @dataclass(frozen=True)
