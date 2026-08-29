@@ -203,9 +203,8 @@ def _build_stub_content(
         class_name = f"_{stripped_section.upper()}"
         if _is_mapping_section(stripped_section):
             # ``*_MAPPING`` セクションはキーが動的な列名なので個別クラスを作らず、
-            # ``MappingDict[str, str]`` として属性に並べる。``MappingDict`` は ``dict``
-            # のサブクラスで ``__missing__`` が ``None`` を返す（型と実行時の齟齬の
-            # 詳細は ``_LenientDict`` の docstring を参照）。
+            # ``MappingDict[str, str]`` として属性に並べる。列の有無は ``in`` か
+            # ``.get()`` で見る（詳細は ``_LenientDict`` の docstring）。
             config_attrs.append(f"    {stripped_section.upper()}: MappingDict[str, str]")
             continue
         config_attrs.append(f"    {stripped_section.upper()}: {class_name}")
@@ -225,11 +224,9 @@ def _build_stub_content(
         "from typing import NoReturn\n",
         "",
         # ``MappingDict`` は実行時の ``_LenientDict`` を ``.pyi`` 側で表現する型。
-        # ``dict[str, str]`` の ``__missing__`` が ``str | None`` を返すので、
-        # ``config.SECTION_MAPPING["未知の列"] is None`` は型エラーになる（``in`` か
-        # ``.get()`` を使う。詳細は ``_LenientDict`` の docstring）。
-        "class MappingDict(dict[str, str]):\n"
-        "    def __missing__(self, key: str) -> str | None: ...\n",
+        # 素の ``dict[str, str]`` と同じ振る舞い（未知キーは ``KeyError``）。
+        # 列の有無は ``in`` か ``.get()`` で見る。
+        "class MappingDict(dict[str, str]):\n    pass\n",
         "",
     ]
     lines.extend(section_lines)
@@ -258,8 +255,8 @@ def _build_module_stub_content(
         class_name = f"_{stripped_section.upper()}"
         if _is_mapping_section(stripped_section):
             # ``*_MAPPING`` は ``MappingDict[str, str]`` で宣言する（実行時は
-            # ``_LenientDict`` = dict のサブクラス）。型と実行時の齟齬の詳細は
-            # ``_LenientDict`` の docstring を参照。
+            # ``_LenientDict`` = dict のサブクラス）。列の有無は ``in`` か
+            # ``.get()`` で見る（詳細は ``_LenientDict`` の docstring）。
             module_attrs.append(f"{stripped_section.upper()}: MappingDict[str, str]")
             continue
         module_attrs.append(f"{stripped_section.upper()}: {class_name}")
@@ -278,9 +275,8 @@ def _build_module_stub_content(
         "from typing import NoReturn\n",
         "",
         # ``MappingDict`` は実行時の ``_LenientDict`` を ``.pyi`` 側で表現する型。
-        # ``dict[str, str]`` の ``__missing__`` が ``str | None`` を返す。
-        "class MappingDict(dict[str, str]):\n"
-        "    def __missing__(self, key: str) -> str | None: ...\n",
+        # 素の ``dict[str, str]`` と同じ振る舞い（未知キーは ``KeyError``）。
+        "class MappingDict(dict[str, str]):\n    pass\n",
         "",
     ]
     lines.extend(section_lines)
@@ -323,10 +319,7 @@ def _build_package_init_stub(
     # ``MappingDict`` は実行時の ``_LenientDict`` を ``.pyi`` 側で表現する型。
     # ここで宣言しないと ``config.SECTION_MAPPING`` が ``Unknown`` として解決され、
     # Pylance 補完が静かに落ちる。
-    lines.append(
-        "class MappingDict(dict[str, str]):\n"
-        "    def __missing__(self, key: str) -> str | None: ...\n"
-    )
+    lines.append("class MappingDict(dict[str, str]):\n    pass\n")
     lines.append("")
     config_attrs: list[str] = []
     for stripped_section, original_section in section_map.items():

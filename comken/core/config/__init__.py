@@ -23,9 +23,7 @@ config.ini を読み込み、config.SECTION.KEY の形式でアクセスでき�
 **列があるかないかを判別したいときは ``in`` を使う**（
 ``"列名" in config.SECTION_MAPPING``）。
 ``.get("未知の列")`` は ``str | None`` を返すので ``is None`` で判定できる。
-``[*_MAPPING"]["未知の列"]`` を直接読むと、**型上は ``str`` だが実行時は ``None`` が返る**
-（``_LenientDict.__missing__`` の後方互換の動作）。このため ``is None`` 判定は型上
-表現されていない。型と実行時のズレの理由は ``_LenientDict`` の docstring に書いた。
+未知のキーを ``["未知の列"]`` で読むと素の ``dict`` と同じく ``KeyError`` になる。
 公開型は ``MappingDict``（``from comken.core.config import MappingDict``）で、
 ``_LenientDict`` は内部実装。
 
@@ -71,6 +69,7 @@ from comken.exceptions import (
     ConfigLowerCaseNameError,
     ConfigMappingEmptyValueError,
     ConfigSectionNotFoundError,
+    ConfigSubclassingNotSupportedError,
 )
 
 logger = logging.getLogger(__name__)
@@ -116,7 +115,19 @@ class Config:
     （反映には ``_reset_cached_config()`` を呼ぶ）。 ``stat()`` による更新確認は
     しない（業務ツールは実行中の設定変更を想定しない。詳細は
     ``_get_or_build_config`` の docstring）。
+
+    **Config は継承できない**。``__new__`` がパス単位でキャッシュ済みの素の
+    ``Config`` を返すため、サブクラスを定義してもサブクラス側で足したメソッドは
+    使えない。``from comken import config`` で ``config.SECTION.KEY`` を直接読むこと。
     """
+
+    def __init_subclass__(cls, **kwargs: object) -> None:
+        # ``Config`` はキャッシュ戦略の都合で継承を想定していない。サブクラス側で
+        # メソッドを足しても ``Config.__new__`` は常に素の ``Config`` を返すため、
+        # 追加したメソッドは ``AttributeError`` になる。黙って壊さず、定義時点で
+        # 例外を出して「``from comken import config`` で読む」形へ誘導する。
+        super().__init_subclass__(**kwargs)
+        raise ConfigSubclassingNotSupportedError(cls.__name__)
 
     def __new__(cls, path: str | Path | None = None) -> Config:
         # ``__new__`` でキャッシュ済みのインスタンスを返す。 ``__init__`` は
@@ -196,9 +207,9 @@ class Config:
             for stripped_section, original_section in section_map.items():
                 if _is_mapping_section(stripped_section):
                     # ``*_MAPPING`` は列名が動的なので ``_SectionNamespace`` ではなく
-                    # ``_LenientDict`` で attribute 化する。``Config.SECTION_MAPPING["未知の列名"]``
-                    # を ``None`` で判別できるようにするため ``__missing__`` で ``None`` を返す。
-                    # dict のサブクラスなので ``isinstance(x, dict)`` が True（後方互換）。
+                    # ``_LenientDict`` で attribute 化する。dict のサブクラスなので
+                    # ``isinstance(x, dict)`` が True（後方互換）。列の有無は ``in`` か
+                    # ``.get()`` で見る（詳細は ``_LenientDict`` の docstring）。
                     #
                     # 値は ``_LenientDict`` 生成前に全件走査して空欄（前後の空白だけの
                     # 値も含む）と ``=`` 無しの行（``cfg.get()`` が ``None`` を返す）を
@@ -291,34 +302,11 @@ class _LenientDict(dict[str, str]):
     dict 互換なので ``for k, v in CONFIG.SECTION_MAPPING.items()`` のような
     既存呼び出しはそのまま動く（後方互換）。
 
-    **型と実行時の齟齬 — 必ず読むこと:**
-
-    ``__missing__`` は **後方互換のため**残している（``ef215ef`` 以前から
-    存在していた動作を変えるな、という依頼）。dict の ``__missing__`` を
-    オーバーライドしているので、未知のキー ``m["未知の列"]`` で ``KeyError`` ではなく
-    ``None`` が返る。``__getitem__`` のシグネチャは ``dict[str, str]`` の ``str`` を
-    返す形のままなので、 **型上は ``m["未知の列"]`` が ``str`` を返す**ことになって
-    いる（pyright は ``__missing__`` の戻り値を ``__getitem__`` の戻り値型に
-    反映しない）。
-
-    - つまり ``m["未知の列"] is None`` は **型上はエラー**になる
-      （``str`` を ``None`` と比較している）。
-    - 実行時は実際に ``None`` が返るので、テストで書くと **実行は通る**。
-    - 列の有無を判別したいときは ``in`` を使う（**型と実行時が正しく揃う**）:
-      ``"列名" in config.SECTION_MAPPING``
-    - ``is None`` 判定をしたいときは ``.get()`` を使う（戻り値は ``str | None``）:
-      ``config.SECTION_MAPPING.get("列名") is None``
-
-    スタブ（.pyi）でもこの ``_LenientDict`` を ``MappingDict`` として露出する。
-    ``MappingDict[str, str]`` の ``__missing__`` も ``None`` を返す（後方互換）。
+    **列の有無は ``in`` か ``.get()`` で見る。** 未知のキーを ``["未知の列"]`` で
+    読むと素の ``dict`` と同じく ``KeyError`` が出る（``__missing__`` は
+    持たない）。型と実行時の値が揃うので、 ``is None`` 判定が必要なケースは
+    ``config.SECTION_MAPPING.get("列名") is None`` を使う。
     """
-
-    def __missing__(self, _key: str) -> str | None:
-        # ``dict[str, str]`` の ``__getitem__`` の戻り値型は ``str`` のままなので、
-        # この ``str | None`` は ``__missing__`` のシグネチャを広げただけで、
-        # ``m["未知の列"]`` の戻り値型には反映されない。実行時は ``None`` を返す。
-        # 詳細はクラスの docstring の「型と実行時の齟齬」節。
-        return None
 
 
 class _SectionNamespace(types.SimpleNamespace):
@@ -537,8 +525,8 @@ def __getattr__(name: str) -> types.SimpleNamespace:
 
 # 公開型 ``MappingDict`` = 実装 ``_LenientDict``。
 # ``*_MAPPING`` セクションの戻り値は dict 互換（``isinstance(x, dict)`` が True）
-# で、型は ``dict[str, str]``。 ``__missing__`` が ``None`` を返す後方互換の動作は
-# ``_LenientDict`` の docstring に書いた。利用者向けの名前は ``MappingDict`` で、
+# で、型は ``dict[str, str]``。列の有無は ``in`` か ``.get()`` で見る
+# （詳細は ``_LenientDict`` の docstring）。利用者向けの名前は ``MappingDict`` で、
 # ``_LenientDict`` は内部実装として ``_`` プレフィックスで残す。
 MappingDict = _LenientDict
 

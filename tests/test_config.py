@@ -1024,8 +1024,8 @@ class TestGenerateStub:
         """動的な列名は列挙せず、``MappingDict[str, str]`` として露出する。
 
         ``*_MAPPING`` セクションはキーが動的な列名なので個別クラスに列挙しないが、
-        ``MappingDict`` 経由で ``config.SECTION_MAPPING["未知の列"] is None`` の
-        判定が書けるよう、 ``MappingDict[str, str]`` 属性としてスタブに出す。
+        ``MappingDict`` 経由で ``in`` / ``.get()`` が書けるよう、
+        ``MappingDict[str, str]`` 属性としてスタブに出す。
         """
         from comken.core.config.stubs import generate_stub
 
@@ -1037,8 +1037,8 @@ class TestGenerateStub:
         assert "受注No" not in text
         # ``*_MAPPING`` は ``MappingDict`` として attr 露出する
         assert "COLUMN_MAPPING: MappingDict[str, str]" in text
-        # ``MappingDict`` の ``__missing__`` は ``None`` を返す
-        assert "def __missing__(self, key: str) -> str | None" in text
+        # ``MappingDict`` は素の ``dict[str, str]`` 派生（ ``__missing__`` は持たない）
+        assert "def __missing__" not in text
         # ``Config.mapping()`` メソッドは廃止（``config.SECTION_MAPPING`` で読む）
         assert "def mapping(self" not in text
 
@@ -1360,21 +1360,22 @@ class TestLenientDict:
     """_LenientDict の振る舞いテスト。
 
     ``*_MAPPING`` セクションは列名が動的データなので補完が効かない。
-    型は ``dict[str, str]``（値は必ず ``str``）。 後方互換のため ``__missing__``
-    が ``None`` を返すので、 ``m["未知の列"]`` は **型上は ``str`` / 実行時は
-    ``None``** という齟齬がある。``in`` か ``.get()`` を使うのが推奨。
-    dict のサブクラスなので、 ``items()`` / ``keys()`` / ``values()`` 等の
-    既存 API はそのまま動く（後方互換）。
+    型は ``dict[str, str]``（値は必ず ``str``）。素の ``dict`` と同じく
+    未知キーは ``KeyError`` が出るので、列の有無は ``in`` か ``.get()`` で
+    見る（推奨）。 ``items()`` / ``keys()`` / ``values()`` 等の既存 API は
+    そのまま動く（後方互換）。
     """
 
-    def test_unknown_key_returns_none(self):
-        """存在しないキーへアクセスすると ``None`` を返す（KeyError ではない）。"""
+    def test_unknown_key_raises_key_error(self):
+        """存在しないキーへアクセスすると素の ``dict`` と同じく ``KeyError``。"""
         from comken.core.config import _LenientDict
 
         ld = _LenientDict({"known": "value"})
 
-        assert ld["unknown"] is None
-        assert ld[""] is None
+        with pytest.raises(KeyError):
+            ld["unknown"]
+        with pytest.raises(KeyError):
+            ld[""]
 
     def test_known_key_returns_configured_string(self):
         """config.ini に書かれたとおりの文字列を返す。"""
@@ -1398,25 +1399,22 @@ class TestLenientDict:
         # 空 dict として初期化もできる
         assert dict(ld) == {}
 
-    def test_missing_returns_none_for_arbitrary_type(self):
-        """``__missing__`` は dict[str, str] 派生だが実行時は None を返す（後方互換）。"""
+    def test_missing_raises_key_error_for_arbitrary_type(self):
+        """未知キーは素の ``dict`` と同じく ``KeyError`` を送出する。"""
         from comken.core.config import _LenientDict
 
         ld = _LenientDict({"a": "1"})
 
-        # 実行時は ``None`` を返す（型上は ``str`` なので ``is None`` は型エラーだが、
-        # 後方互換のため None を返し続ける。 ``_LenientDict`` の docstring 参照）。
-        result = ld["missing"]
-        assert result is None
+        with pytest.raises(KeyError):
+            ld["missing"]
 
 
 class TestMappingAttributeAccess:
     """Config インスタンスに ``*_MAPPING`` を attribute として露出する回帰テスト。
 
-    依頼: 「``config.SECTION_MAPPING`` で dict を取得し、 ``is None`` で
-    列の有無を判別したい」。 ``_SectionNamespace`` ではなく ``_LenientDict``
-    を ``setattr`` で直接 attribute 化することで、補完の静かに落ちる
-    ケース（Pylance が ``Unknown`` と判定する）を防ぐ。
+    ``_SectionNamespace`` ではなく ``_LenientDict`` を ``setattr`` で直接
+    attribute 化することで、補完が静かに落ちるケース（Pylance が ``Unknown`` と
+    判定する）を防ぐ。
     """
 
     def test_config_attribute_is_lenient_dict(self, tmp_path):
@@ -1432,8 +1430,9 @@ class TestMappingAttributeAccess:
 
         assert isinstance(cfg.COLUMN_MAPPING, _LenientDict)
         assert cfg.COLUMN_MAPPING["受注No"] == "受注番号"
-        # 未知の列は ``None``（KeyError ではない）
-        assert cfg.COLUMN_MAPPING["存在しない列"] is None
+        # 未知の列は ``KeyError``
+        with pytest.raises(KeyError):
+            cfg.COLUMN_MAPPING["存在しない列"]
 
     def test_attribute_supports_dict_api(self, tmp_path):
         """``Config.SECTION_MAPPING`` は dict 互換 API（items/keys/values/get）が使える。"""
@@ -1447,8 +1446,9 @@ class TestMappingAttributeAccess:
         assert result["受注No"] == "受注番号"
         assert result.get("存在しない列") is None
         assert list(result.items()) == [("受注No", "受注番号")]
-        # 未知キーは ``None`` を返す
-        assert result["未知の列"] is None
+        # 未知キーは ``KeyError``
+        with pytest.raises(KeyError):
+            result["未知の列"]
 
 
 class TestMappingDictPublicType:
@@ -1470,9 +1470,10 @@ class TestMappingDictPublicType:
         from comken.core.config import MappingDict, _LenientDict
 
         assert MappingDict is _LenientDict
-        # ``__missing__`` の振る舞いも同一（None を返す）
+        # 未知キーは素の ``dict`` と同じく ``KeyError``
         instance = MappingDict({"known": "v"})
-        assert instance["unknown"] is None
+        with pytest.raises(KeyError):
+            instance["unknown"]
 
     def test_singleton_attribute_is_mapping_dict(self, tmp_path, monkeypatch):
         """遅延シングルトン経由（``from comken import config``）でも ``MappingDict`` が返る。"""
@@ -1486,7 +1487,9 @@ class TestMappingDictPublicType:
 
         assert isinstance(config_module.COLUMN_MAPPING, MappingDict)
         assert config_module.COLUMN_MAPPING["受注No"] == "受注番号"
-        assert config_module.COLUMN_MAPPING["unknown"] is None
+        # 未知キーは ``KeyError``
+        with pytest.raises(KeyError):
+            config_module.COLUMN_MAPPING["unknown"]
 
 
 class TestStubIncludesMappingDict:
@@ -1505,11 +1508,10 @@ class TestStubIncludesMappingDict:
         ini.write_text("[COLUMN_MAPPING]\n受注No = 受注番号\n", encoding="utf-8")
         text = generate_stub(ini, tmp_path / "config.pyi").read_text(encoding="utf-8")
 
-        # ``MappingDict`` の型定義が存在し、 ``__missing__`` が ``str | None`` を返す
-        # （型上 ``dict[str, str]`` 派生でも、 後方互換で ``None`` を返すため wider な
-        # シグネチャになっている。 詳細は ``_LenientDict`` の docstring）
+        # ``MappingDict`` は素の ``dict[str, str]`` の派生として表現される
+        # （未知キーは ``KeyError``。 ``__missing__`` は持たない）。
         assert "class MappingDict(dict[str, str]):" in text
-        assert "def __missing__(self, key: str) -> str | None" in text
+        assert "def __missing__" not in text
         # ``*_MAPPING`` セクションは attr として露出する
         assert "COLUMN_MAPPING: MappingDict[str, str]" in text
         # ``Config.mapping()`` メソッドは廃止（``config.SECTION_MAPPING`` で読む）
@@ -1568,7 +1570,7 @@ class TestMappingDictIsDictStrStr:
     依頼書「``MappingDict`` の型を ``dict[str, str]`` に揃える」のテスト5節:
 
     1. ``*_MAPPING`` の値が ``str`` として読まれ、 ``.values()`` に ``None`` が混じらない
-    2. 未知のキーを引くと実行時は ``None`` が返る（後方互換）
+    2. 未知のキーを ``[]`` で読むと素の ``dict`` と同じく ``KeyError`` になる
     3. ``"列名" in config.SECTION_MAPPING`` で有無を判定できる（推奨する書き方）
     4. ``.get("未知の列")`` が ``None`` を返す
     5. 生成スタブに ``MappingDict[str, str]`` が含まれる（``str | None`` ではない）
@@ -1592,19 +1594,19 @@ class TestMappingDictIsDictStrStr:
         # ``.values()`` の長さも設定済みのキー数と一致
         assert len(list(mapping.values())) == 2
 
-    def test_unknown_key_returns_none_at_runtime(self, tmp_path):
-        """未知のキーを引くと実行時は ``None`` が返る（後方互換）。
+    def test_unknown_key_raises_key_error(self, tmp_path):
+        """未知のキーを ``[]`` で読むと素の ``dict`` と同じく ``KeyError`` になる。
 
-        型上は ``dict[str, str]`` なので ``m["未知"]`` の戻り値型は ``str`` だが、
-        実行時は ``None`` が返る（ ``_LenientDict.__missing__`` の後方互換動作）。
-        詳細は ``_LenientDict`` の docstring を参照。
+        ``__missing__`` を持たないので、型と実行時の挙動が揃う（ ``m["未知"]`` の
+        戻り値型は ``str``、未存在のときは ``KeyError``）。 列の有無を見たいときは
+        ``in`` か ``.get()`` を使う。
         """
         ini = tmp_path / "config.ini"
         ini.write_text("[TRANSFER_MAPPING]\nお名前 = 氏名\n", encoding="utf-8")
         mapping = Config(ini).TRANSFER_MAPPING
 
-        # 実行時は ``None``
-        assert mapping["未知の列"] is None
+        with pytest.raises(KeyError):
+            mapping["未知の列"]
         # 既存のキーでは ``str`` が返る
         assert mapping["お名前"] == "氏名"
 
@@ -1612,9 +1614,7 @@ class TestMappingDictIsDictStrStr:
         """``"列名" in config.SECTION_MAPPING`` で有無を判定できる（推奨する書き方）。
 
         ``in`` は dict の API なので ``dict[str, str]`` の派生でもそのまま使え、
-        型と実行時が正しく揃う（ ``__missing__`` の影響を **受けない**）。
-        ``is None`` 判定よりこちらを推奨する理由は ``_LenientDict`` の
-        docstring を参照。
+        型と実行時が正しく揃う。
         """
         ini = tmp_path / "config.ini"
         ini.write_text(
@@ -1635,8 +1635,8 @@ class TestMappingDictIsDictStrStr:
         """``.get("未知の列")`` は ``None`` を返す。
 
         ``dict.get()`` は ``str | None`` を返すので、 ``is None`` 判定が型上も
-        安全に書ける。直接 ``["未知の列"]`` を引くと型上は ``str`` なので、
-        ``is None`` したい場合はこちらを使う。
+        安全に書ける。 ``is None`` 判定をしたいときは ``["..."]`` ではなく
+        ``.get()`` を使う。
         """
         ini = tmp_path / "config.ini"
         ini.write_text("[TRANSFER_MAPPING]\nお名前 = 氏名\n", encoding="utf-8")
@@ -1664,6 +1664,45 @@ class TestMappingDictIsDictStrStr:
         # 新しい書式に揃っている
         assert "class MappingDict(dict[str, str]):" in text
         assert "COLUMN_MAPPING: MappingDict[str, str]" in text
+        # ``__missing__`` は持たない（素の ``dict[str, str]`` と同じ振る舞い）
+        assert "def __missing__" not in text
         # 古い ``str | None`` 形式は残っていない
         assert "MappingDict[str, str | None]" not in text
         assert "dict[str, str | None]" not in text
+
+
+class TestConfigSubclassing:
+    """``Config`` を継承しようとすると ``ConfigSubclassingNotSupportedError`` で
+    はっきり止まることを確かめる回帰テスト。
+
+    ``Config.__new__`` はパス単位でキャッシュ済みの素の ``Config`` を返すため、
+    サブクラス側でメソッドを足しても ``AttributeError`` で黙って壊れる。継承した
+    時点で例外を出し、「代わりに ``from comken import config`` で読む」形へ誘導する。
+    """
+
+    def test_subclassing_raises_with_diagnostic_message(self):
+        """``class AppConfig(Config)`` の定義時点で例外が送出される。
+
+        ``__init_subclass__`` はクラス定義時に走るため、 ``exec`` で安全に
+        失敗を観測する。メッセージに「サブクラス名」「``from comken import config``」
+        「``AttributeError``」の 3 点が含まれることを確かめる（壊れたときに「どう
+        書き直すべきか」が読み取れる形を維持する回帰テスト）。
+        """
+        snippet = (
+            "from comken.core.config import Config\n"
+            "from comken.exceptions import ConfigSubclassingNotSupportedError\n"
+            "captured = None\n"
+            "try:\n"
+            "    class AppConfig(Config):\n"
+            "        pass\n"
+            "except ConfigSubclassingNotSupportedError as exc:\n"
+            "    captured = str(exc)\n"
+        )
+        namespace: dict[str, object] = {}
+        exec(snippet, namespace)
+
+        captured: str | None = namespace["captured"]  # type: ignore[assignment]
+        assert captured is not None, "継承が例外を送出せずにクラス定義が完了した"
+        assert "AppConfig" in captured
+        assert "from comken import config" in captured
+        assert "AttributeError" in captured

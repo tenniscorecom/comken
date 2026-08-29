@@ -236,6 +236,29 @@ class ConfigMappingEmptyValueError(ConfigError):
         )
 
 
+class ConfigSubclassingNotSupportedError(ConfigError):
+    """``Config`` を継承できない
+
+    発生箇所: ``class AppConfig(Config)`` のようなサブクラス定義時
+
+    対処:
+        ``from comken import config`` で ``config.SECTION.KEY`` を直接読む。
+        サブクラスでメソッドを足しても ``Config.__new__`` がパス単位で
+        キャッシュ済みの素の ``Config`` を返すため、 追加したメソッドは
+        ``AttributeError`` になる（キャッシュを ``cls`` 対応にする改修は
+        行わない）。
+    """
+
+    def __init__(self, subclass_name: str) -> None:
+        super().__init__(
+            f"Config は継承できません: {subclass_name}\n"
+            "Config.__new__ はパス単位でキャッシュ済みの Config を返すため、"
+            "AppConfig(path) を呼んでも素の Config が返り、"
+            f"{subclass_name} で足したメソッドは AttributeError になります。\n"
+            "代わりに from comken import config で config.SECTION.KEY を直接読んでください。"
+        )
+
+
 def _suggest_close_matches(name: str, existing: list[str]) -> list[str]:
     """名前に対して既存候補から近いものを最大2件まで返す。"""
     return find_close_names(name, existing)
