@@ -141,6 +141,31 @@ class TestCredentialsAttributes:
         with pytest.raises(AttributeError):
             _ = cred.__deepcopy__
 
+    def test_dropped_credentials_are_garbage_collected_and_registry_does_not_bloat(self, store):
+        """参照を手放した ``Credentials`` が GC された後もレジストリが膨らまない。
+
+        強参照のままだと ``Credentials`` 用済みになっても ``_cache`` の復号済み
+        平文がプロセス終了まで残るため、 ``weakref.WeakSet`` にしている。
+        """
+        import gc
+
+        from comken.toolbox.credentials import store as store_module
+
+        save_credentials({"site_a_client_id": "A", "site_a_client_secret": "S"}, store)
+        # Credentials を呼んでキャッシュを作り、レジストリに登録させる
+        cred = Credentials("site_a", store)
+        assert cred.client_id == "A"
+        bucket_key = str(store)
+        bucket = store_module._instances_by_path[bucket_key]
+        assert len(bucket) == 1
+
+        # 参照を手放して GC を促す
+        del cred
+        gc.collect()
+
+        # WeakSet は参照を持たない要素を自動的に外すため、 レジストリは膨らまない
+        assert len(bucket) == 0
+
 
 class TestDeleteAndList:
     def test_delete_removes_only_that_name(self, store):
