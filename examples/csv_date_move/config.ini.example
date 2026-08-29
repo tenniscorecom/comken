@@ -1,8 +1,9 @@
 ; このファイルを config.ini にコピーし、業務環境に合わせて変更してください。
 
 [FILES]
-INPUT_FOLDER = C:\作業\input
-OUTPUT_FOLDER = C:\作業\output
+; この config.ini からの相対パスで書く（基準は config.ini のフォルダ）
+INPUT_FOLDER = ./input
+OUTPUT_FOLDER = ./output
 
 [CSV]
 ; 日付が入っている列の見出しと書式。業務のファイルに合わせて変更する。

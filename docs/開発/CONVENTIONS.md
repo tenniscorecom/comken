@@ -154,8 +154,18 @@ Python 側のアクセス（`config.BROWSER.HEADLESS`）と表記が完全に一
 ```ini
 [FILES]
 CSV_EAST = 支店A.csv        ; ← 値は自由
-OUTPUT_FOLDER = C:\work\out  ; ← 値は自由
+OUTPUT_FOLDER = ./output    ; ← 値は自由
 ```
+
+### config.ini のパスは「config.ini からの相対パス」で書く
+
+パスは **config.ini からの相対パス** で書くのが既定。基準は config.ini の
+置かれているフォルダ。共有サーバーのように場所が固定のものだけ絶対パス／UNC を
+そのまま書いてよい。
+
+**落とし穴**: 区切り文字を含まない値（`INPUT_FOLDER = input`）は `_looks_like_path`
+の判定（`/` か `\` を含むかで判定する仕様）により **Path にならず str のまま** になる。
+相対パスとして `Path` で扱わせるには **`./input` のように `./` を付ける** こと。
 
 ### セクション名は決まった並びから選ぶ
 
@@ -444,10 +454,10 @@ class DownloadDir:
     def get_path(self): return self._path
 
 # 悪い（計算値のラップに @property を使う）
-class AppConfig(Config):
+class Paths:
     @property
     def csv_east_path(self) -> Path:
-        return Path(self.FILES.INPUT_FOLDER) / self.FILES.CSV_EAST
+        return config.FILES.INPUT_FOLDER / config.FILES.CSV_EAST
 
 # 良い（直接アクセス）
 dl = DownloadDir()
@@ -462,6 +472,11 @@ class BrowserSession:
     def raw(self) -> webdriver.Edge:
         return self._driver  # 外部から raw = xxx と上書きさせない
 ```
+
+> **Config は継承しない。** `Config.__new__` はパス単位でキャッシュ済みの
+> インスタンスを返すため、`AppConfig(path)` を呼んでも素の `Config` が返り、
+> サブクラスで足したメソッドは `AttributeError` になる。常に
+> `from comken import config` で `config.SECTION.KEY` を直接読む。
 
 `@property` の使い分け:
 

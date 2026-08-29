@@ -424,15 +424,17 @@ config = Config("path/to/config.ini")  # パスを指定する場合
 ```ini
 ; config.ini（プロジェクト固有の非機密設定を書く）
 ; セクション名・キー名は大文字で書く（固定値と分かる + Python 側と表記が一致する）
+; パスは **config.ini からの相対パス** で書くのが既定。基準は config.ini の置かれているフォルダ。
+; 共有サーバーのように場所が固定のものだけ絶対パス／UNC をそのまま書いてよい。
 
 [REPORT]
-OUTPUT_FOLDER = C:\作業\reports
+OUTPUT_FOLDER = ./output
 TEMPLATE_PATH = \\nas-server\templates\template.xlsx
 ```
 
 ```python
-config.REPORT.OUTPUT_FOLDER # → str
-config.REPORT.TEMPLATE_PATH # → str
+config.REPORT.OUTPUT_FOLDER # → Path
+config.REPORT.TEMPLATE_PATH # → Path
 ```
 
 **列名の対応表:** セクション名を `MAPPING` で終わらせ、`転記元の列名 = 転記先の列名`

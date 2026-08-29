@@ -5,7 +5,8 @@
 
 [FILES]
 ; 今日の日付が名前に入った CSV（例: 20260713_売上.csv）を置くフォルダ
-INPUT_FOLDER = C:\作業\input
+; この config.ini からの相対パスで書く（基準は config.ini のフォルダ）
+INPUT_FOLDER = ./input
 
 ; 出力先はローカルにする（NAS は読み込み元・モジュール置き場。新規出力先にはしない）
-OUTPUT_FOLDER = C:\作業\reports
+OUTPUT_FOLDER = ./output

@@ -28,9 +28,14 @@
 
 [FILES]
 ; 入力元と出力先（環境によって変わる非機密の値）。
+; パスは **この config.ini からの相対パス** で書くのが既定。基準は config.ini の
+; 置かれているフォルダ（共有サーバーのように場所が固定のものだけ絶対パス／UNC を
+; そのまま書いてよい）。区切り文字を含まない値（例: `INPUT_FOLDER = input`）は
+; Path にならず str のままになるので、相対パスとして扱うには `./input` のように
+; `./` を付ける。
 ; 出力先はローカルにする（NAS は読み込み元・置き場であり、新規出力先にはしない）
-; INPUT_CSV = C:\作業\input\data.csv
-OUTPUT_FOLDER = C:\作業\reports
+; INPUT_CSV = ./input/data.csv
+OUTPUT_FOLDER = ./output
 
 [BROWSER]
 ; ブラウザ自動操作を使う場合。HEADLESS = True で画面を出さずに動かす
