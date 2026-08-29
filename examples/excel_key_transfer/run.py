@@ -75,7 +75,8 @@ def total_by_key() -> dict[str, dict[str, int]]:
         groups = csv_file.read().group_by(KEY)
     # CSV の値は常に str。Excel 上で数値として集計できるよう int にしてから渡す
     return {
-        key: {TOTAL: sum(int(row[AMOUNT]) for row in table.read_rows())} for key, table in groups.items()
+        key: {TOTAL: sum(int(row[AMOUNT]) for row in table.read_rows())}
+        for key, table in groups.items()
     }
 
 

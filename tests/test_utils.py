@@ -71,9 +71,9 @@ class TestParseCellDate:
 
     def test_returns_date_for_datetime_value(self) -> None:
         """Excel の日付型セル（``datetime.datetime``）を ``date`` にして返す。"""
-        assert parse_cell_date(datetime.datetime(2026, 4, 22, 12, 30)) == datetime.date(
-            2026, 4, 22
-        )
+        # Excel の日付セルはタイムゾーンを持たない。naive なまま渡すのが実際の入力
+        cell_value = datetime.datetime(2026, 4, 22, 12, 30)  # noqa: DTZ001
+        assert parse_cell_date(cell_value) == datetime.date(2026, 4, 22)
 
     def test_returns_same_date_for_date_value(self) -> None:
         """``date`` を渡したらそのまま返す。"""
@@ -747,7 +747,7 @@ class TestIsTrueWord:
 
     @pytest.mark.parametrize("text", ["false", "yes", "1", "on", "有効", "○", ""])
     def test_other_words_are_not_true(self, text):
-        """"true" 以外の語（config.ini の false、Excel の日本語表記など）は False を確認する。"""
+        """ "true" 以外の語（config.ini の false、Excel の日本語表記など）は False を確認する。"""
         assert is_true_word(text) is False
 
 

@@ -211,9 +211,7 @@ class TestFormulaColumnPreservation:
             assert table._worksheet["D2"].value == "=B2*C2"
             assert table._worksheet["D3"].value == "=B3*C3"
 
-    def test_replace_extends_formula_with_translated_references(
-        self, tmp_path: Path
-    ) -> None:
+    def test_replace_extends_formula_with_translated_references(self, tmp_path: Path) -> None:
         """行が増えたとき、増えた行の数式列に相対参照が正しくずれた数式が入る。"""
         path = tmp_path / "formula-extend.xlsx"
         self._make_order_table(path)
@@ -279,9 +277,7 @@ class TestFormulaColumnPreservation:
             # 数式はそのまま残っている（上書きされていない）
             assert table._worksheet["D2"].value == "=B2*C2"
 
-    def test_replace_with_allow_overwrite_replaces_formula_cells(
-        self, tmp_path: Path
-    ) -> None:
+    def test_replace_with_allow_overwrite_replaces_formula_cells(self, tmp_path: Path) -> None:
         """``allow_formula_overwrite=True`` なら値で上書きされる。"""
         path = tmp_path / "formula-overwrite-allowed.xlsx"
         self._make_order_table(path)
@@ -313,9 +309,7 @@ class TestFormulaColumnPreservation:
             # 数式列はそのまま残っている
             assert table._worksheet["D2"].value == "=B2*C2"
 
-    def test_replace_with_omitted_non_formula_column_raises_mismatch(
-        self, tmp_path: Path
-    ) -> None:
+    def test_replace_with_omitted_non_formula_column_raises_mismatch(self, tmp_path: Path) -> None:
         """既存にある非数式列を Table から省くと、データ欠落を防ぐため例外。"""
         path = tmp_path / "omit-non-formula.xlsx"
         self._make_order_table(path)
@@ -370,10 +364,6 @@ class TestFormulaColumnPreservation:
             table = excel.create_data_sheet("顧客").create_table(
                 "顧客", Table(["ID", "名前"], [{"ID": "001", "名前": "旧"}])
             )
-            table.replace(
-                Table(
-                    ["ID", "名前"], [{"ID": "002", "名前": "新"}]
-                )
-            )
+            table.replace(Table(["ID", "名前"], [{"ID": "002", "名前": "新"}]))
             assert table._worksheet["A2"].value == "002"
             assert table._worksheet["B2"].value == "新"

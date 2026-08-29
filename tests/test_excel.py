@@ -264,9 +264,7 @@ class TestReadComputedRowsDropsBlankRows:
     ストリーム段階で落とす。
     """
 
-    def test_declared_range_much_larger_than_data_returns_only_data_rows(
-        self, tmp_path
-    ) -> None:
+    def test_declared_range_much_larger_than_data_returns_only_data_rows(self, tmp_path) -> None:
         """実データ 200 行 / 宣言された範囲 5000 行で、返る行数は 200。"""
         path = tmp_path / "declared-empty.xlsx"
         with Excel(path) as excel:
@@ -276,9 +274,7 @@ class TestReadComputedRowsDropsBlankRows:
                 sheet.write_value(f"A{index}", str(index - 1))
                 sheet.write_value(f"B{index}", f"ユーザー{index - 1}")
             # 遠くのセルに書式だけ付けて dimension を膨らませる
-            sheet._worksheet.cell(row=5000, column=40).fill = PatternFill(
-                "solid", fgColor="FFFF00"
-            )
+            sheet._worksheet.cell(row=5000, column=40).fill = PatternFill("solid", fgColor="FFFF00")
 
         with Excel(path, read_only=True) as excel:
             rows = excel._read_computed_rows("データ")
@@ -443,7 +439,7 @@ class TestFindSheet:
             assert "Sheet1" in message
 
     def test_does_not_treat_data_sheet_as_existing_candidate(self, tmp_path) -> None:
-        """``PY_`` プレフィックス付きデータシートを候補に入れても、それは「見つかった」とは扱わない。
+        """``PY_`` 付きデータシートを候補に入れても「見つかった」とは扱わない。
 
         業務ロジック上、表示用シートだけを扱うので、データシート名と一致して
         候補が「在る」と判定されるのは事故（データシートは ``Table`` API で読む）。
@@ -453,9 +449,7 @@ class TestFindSheet:
         """
         path = tmp_path / "book.xlsx"
         with Excel(path) as excel:
-            excel.create_data_sheet("顧客").create_table(
-                "顧客", Table(["ID"], [{"ID": "1"}])
-            )
+            excel.create_data_sheet("顧客").create_table("顧客", Table(["ID"], [{"ID": "1"}]))
 
         with Excel(path, read_only=True) as excel:
             # ``PY_顧客`` は sheetnames に含まれるので「見つかった」と判定される

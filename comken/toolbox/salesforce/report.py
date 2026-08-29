@@ -140,7 +140,7 @@ class ReportAPI:
             rows = sf.report.run("00O000000000001")
     """
 
-    def __init__(self, client: "SalesforceBase") -> None:
+    def __init__(self, client: SalesforceBase) -> None:
         """
         Args:
             client: このレポート API を使う Salesforce クライアント。
@@ -180,12 +180,11 @@ class ReportAPI:
                 （allow_truncated=True のときは送出しない）。
             SalesforceReportFormatError: 明細（TABULAR）形式でない場合。
         """
-        labels, rows = self._fetch_labels_and_rows(report_id, filters, allow_truncated)
+        _labels, rows = self._fetch_labels_and_rows(report_id, filters, allow_truncated)
         # 0 件でも ``labels`` を捨てない（呼び出し側が ``run()`` で ``Table``
         # を作るときに使う）。``read_rows()`` の戻り値としては dict だけを
         # 順に流す。
-        for row in rows:
-            yield row
+        yield from rows
 
     @measure
     def run(

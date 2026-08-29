@@ -158,40 +158,18 @@ class ExcelTable:
         rows_list = table.read_rows()
         passed_columns = [str(c) for c in table.columns]
 
-        if not any(passed_columns):
-            raise InvalidTableOperationError("列のないTableはExcelテーブルにできません。")
+        self._validate_replace_columns(
+            passed_columns=passed_columns,
+            existing_headers=existing_headers,
+            formula_columns=formula_columns,
+            allow_formula_overwrite=allow_formula_overwrite,
+            min_col=min_col,
+            min_row=min_row,
+            max_col=max_col,
+            max_row=max_row,
+        )
 
-        # 既存の見出しに無い列名はエラー（黙って無視しない）
-        missing_in_existing = [c for c in passed_columns if c not in existing_headers]
-        if missing_in_existing:
-            raise TableColumnMismatchError(self._name, missing_in_existing)
-
-        # 既存テーブルから省かれた列は、すべて数式列である必要がある
-        omitted = [c for c in existing_headers if c not in passed_columns]
-        non_formula_omitted = [c for c in omitted if c not in formula_columns]
-        if non_formula_omitted:
-            raise TableColumnMismatchError(self._name, non_formula_omitted)
-
-        # 渡された Table に数式列が含まれているならエラー
-        if not allow_formula_overwrite:
-            formulas_in_passed = [c for c in passed_columns if c in formula_columns]
-            if formulas_in_passed:
-                formula_locations = [
-                    cell.coordinate
-                    for row in self._worksheet.iter_rows(
-                        min_row=min_row + 1,
-                        max_row=max_row,
-                        min_col=min_col,
-                        max_col=max_col,
-                    )
-                    for cell in row
-                    if isinstance(cell.value, str) and cell.value.startswith("=")
-                ]
-                raise TableFormulaOverwriteError(self._name, formula_locations)
-
-        existing_col_by_name = {
-            name: idx for idx, name in enumerate(existing_headers, min_col)
-        }
+        existing_col_by_name = {name: idx for idx, name in enumerate(existing_headers, min_col)}
 
         # 見出し行は渡された列を既存位置に書き込む（位置ではなく名前で対応付ける）
         for col_name in passed_columns:
@@ -202,9 +180,7 @@ class ExcelTable:
         for row_number, row in enumerate(rows_list, min_row + 1):
             for col_name in passed_columns:
                 col_num = existing_col_by_name[col_name]
-                self._worksheet.cell(
-                    row=row_number, column=col_num, value=row.get(col_name, "")
-                )
+                self._worksheet.cell(row=row_number, column=col_num, value=row.get(col_name, ""))
 
         # 数式列の埋め込み・クリア
         self._fill_formula_columns(
@@ -227,9 +203,7 @@ class ExcelTable:
 
         # ref を更新（列幅は変えない）
         last_cell = self._worksheet.cell(new_max_row, max_col).coordinate
-        excel_table.ref = (
-            f"{self._worksheet.cell(min_row, min_col).coordinate}:{last_cell}"
-        )
+        excel_table.ref = f"{self._worksheet.cell(min_row, min_col).coordinate}:{last_cell}"
         self._excel._mark_dirty()
 
     def append(
@@ -318,8 +292,7 @@ class ExcelTable:
             # すべての既存列が数式列。書き込める列が無いので何もしない。
             return
         filtered_current_rows = [
-            {header: row[header] for header in non_formula_columns}
-            for row in current_rows
+            {header: row[header] for header in non_formula_columns} for row in current_rows
         ]
         filtered_additions = [
             {c: row[c] for c in non_formula_columns if c in row} for row in additions
@@ -331,6 +304,63 @@ class ExcelTable:
     def count(self) -> int:
         """データ行数を返す。"""
         return len(self.read())
+
+    def _validate_replace_columns(
+        self,
+        *,
+        passed_columns: list[str],
+        existing_headers: list[str],
+        formula_columns: set[str],
+        allow_formula_overwrite: bool,
+        min_col: int,
+        min_row: int,
+        max_col: int,
+        max_row: int,
+    ) -> None:
+        """``replace`` が書き込む前に、列の対応と数式列の扱いを確かめる。
+
+        書き込みを始めてから列違いに気づくと、途中まで書けたブックが残る。
+        ``replace`` 本体から切り出しているのは、書き込みの流れと検査の流れを
+        混ぜないためで、判定内容はここに集約する。
+
+        Raises:
+            InvalidTableOperationError: 列を1つも持たない ``Table`` を渡した場合。
+            TableColumnMismatchError: 既存の見出しに無い列名が含まれる、または
+                数式列でない既存列が渡された ``Table`` から欠けている場合。
+            TableFormulaOverwriteError: ``allow_formula_overwrite`` が偽のまま
+                数式列を上書きしようとした場合。
+        """
+        if not any(passed_columns):
+            raise InvalidTableOperationError("列のないTableはExcelテーブルにできません。")
+
+        # 既存の見出しに無い列名はエラー（黙って無視しない）
+        missing_in_existing = [c for c in passed_columns if c not in existing_headers]
+        if missing_in_existing:
+            raise TableColumnMismatchError(self._name, missing_in_existing)
+
+        # 既存テーブルから省かれた列は、すべて数式列である必要がある
+        omitted = [c for c in existing_headers if c not in passed_columns]
+        non_formula_omitted = [c for c in omitted if c not in formula_columns]
+        if non_formula_omitted:
+            raise TableColumnMismatchError(self._name, non_formula_omitted)
+
+        # 渡された Table に数式列が含まれているならエラー
+        if allow_formula_overwrite:
+            return
+        if not any(c in formula_columns for c in passed_columns):
+            return
+        formula_locations = [
+            cell.coordinate
+            for row in self._worksheet.iter_rows(
+                min_row=min_row + 1,
+                max_row=max_row,
+                min_col=min_col,
+                max_col=max_col,
+            )
+            for cell in row
+            if isinstance(cell.value, str) and cell.value.startswith("=")
+        ]
+        raise TableFormulaOverwriteError(self._name, formula_locations)
 
     def _detect_formula_columns(
         self,
@@ -349,7 +379,7 @@ class ExcelTable:
         for row in self._worksheet.iter_rows(
             min_row=min_row + 1, max_row=max_row, min_col=min_col, max_col=max_col
         ):
-            for cell, header in zip(row, headers):
+            for cell, header in zip(row, headers, strict=True):
                 if isinstance(cell.value, str) and cell.value.startswith("="):
                     formula_columns.add(header)
         return formula_columns
@@ -422,9 +452,7 @@ class ExcelTable:
                 # 行が増えた: Translator で下方向へコピー
                 translator = Translator(source_cell.value, origin=source_cell.coordinate)
                 for new_row in range(old_max_row + 1, new_max_row + 1):
-                    target_ref = self._worksheet.cell(
-                        row=new_row, column=col_num
-                    ).coordinate
+                    target_ref = self._worksheet.cell(row=new_row, column=col_num).coordinate
                     self._worksheet.cell(
                         row=new_row,
                         column=col_num,

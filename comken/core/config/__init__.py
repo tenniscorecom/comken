@@ -52,6 +52,7 @@ config.ini を読み込み、config.SECTION.KEY の形式でアクセスでき�
 
 from __future__ import annotations
 
+import collections
 import configparser
 import functools
 import logging
@@ -225,9 +226,7 @@ class Config:
                     keys=[key.upper() for key in options],
                     path=self._path,
                     **{
-                        key.upper(): _parse_value(
-                            cfg, original_section, key, base_dir=config_dir
-                        )
+                        key.upper(): _parse_value(cfg, original_section, key, base_dir=config_dir)
                         for key in options
                     },
                 )
@@ -547,10 +546,8 @@ MappingDict = _LenientDict
 # **相対パスのキャッシュは ``os.chdir`` で無効になる** ことに注意（同じ相対パスが
 # 別の場所を指すようになる）。 業務ツールは実行中に ``os.chdir`` しないので許容
 # している。 ``os.chdir`` を使うなら ``_reset_cached_config()`` を併せて呼ぶこと。
-import collections as _collections
-
 _PATH_RESOLUTION_CACHE_MAXSIZE = 128
-_path_resolution_cache: _collections.OrderedDict[str, str] = _collections.OrderedDict()
+_path_resolution_cache: collections.OrderedDict[str, str] = collections.OrderedDict()
 
 
 def _path_resolution_cache_get(raw: str) -> str | None:

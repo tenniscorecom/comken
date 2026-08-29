@@ -46,7 +46,7 @@ nth_business_day_of_month    ``target`` の月の第 n 営業日（n は 1 始�
 add_business_days            ``target`` から n 営業日後（n が負なら前）
 default_calendar             既定カレンダーを取得（プロセス内で 1回だけ遅延生成）
 set_default_calendar         既定カレンダーを差し替える（``None`` でリセット）
-CabinetOfficeCSVSource    内閣府 CSV を URL から取得して ``BUNDLED_CSV_PATH`` へ書く ``HolidaySource``
+CabinetOfficeCSVSource    内閣府 CSV を取得して ``BUNDLED_CSV_PATH`` へ書く ``HolidaySource``
 ComputedHolidaySource     計算式で祝日を組み立てる ``HolidaySource``
 CompanyHolidaySource      会社独自の休業日（コード直書き）の ``HolidaySource``
 HolidayCalendarError  祝日関連の基底例外

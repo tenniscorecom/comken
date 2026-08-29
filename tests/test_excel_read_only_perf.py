@@ -120,9 +120,7 @@ def test_read_only_table_api_works(tmp_path) -> None:
             Table(["ID", "名前"], [{"ID": "001", "名前": "山田"}]),
         )
     with Excel(path, read_only=True) as excel:
-        assert excel.data_sheet("顧客").table().read() == [
-            {"ID": "001", "名前": "山田"}
-        ]
+        assert excel.data_sheet("顧客").table().read() == [{"ID": "001", "名前": "山田"}]
 
 
 def test_read_only_excel_table_opens_workbook_on_demand(tmp_path) -> None:

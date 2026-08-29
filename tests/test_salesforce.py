@@ -258,9 +258,7 @@ class TestSalesforceQuery:
 
     def test_query_csv_saves_the_query_result(self, tmp_path):
         """query_csv() は query() と同じ結果をそのまま CSV へ保存する。"""
-        response = _response(
-            json_body={"records": [{"Id": "1", "Name": "Acme"}], "done": True}
-        )
+        response = _response(json_body={"records": [{"Id": "1", "Name": "Acme"}], "done": True})
         path = tmp_path / "result.csv"
         with _salesforce([response]) as (client, _, _):
             returned_path = client.query_csv("SELECT Id, Name FROM Account", path)
