@@ -17,10 +17,10 @@ Config の属性（config.SECTION.KEY）は config.ini から実行時に動的�
 """
 
 import configparser
-import os
 from pathlib import Path
 
 from comken.core.config import _is_mapping_section, _parse_value
+from comken.core.files.atomic import atomic_write
 from comken.core.files.ops import cleanup_stale_tmp
 from comken.exceptions import ConfigFileNotFoundError
 
@@ -152,16 +152,21 @@ def _write_typings_stubs(
 
 
 def _write_stub_atomic(stub_path: Path, content: str) -> None:
-    """スタブを一時ファイル経由でアトミックに書き込む（内容が同じなら何もしない）。"""
+    """スタブを一時ファイル経由でアトミックに書き込む（内容が同じなら何もしない）。
+
+    書き込み本体は ``atomic_write`` に統一し、``cleanup_stale_tmp`` で前回クラッシュ
+    時の残骸を片付ける。**内容が既存ファイルと同じなら何もしない**（連続呼び出し
+    で毎回ファイル更新しないため）。**読み取り専用フォルダなど ``OSError`` が
+    出ても黙って返す**（補完が更新されないだけで実行に影響させないため）。
+    """
     try:
         if stub_path.exists() and stub_path.read_text(encoding="utf-8") == content:
             return
         stub_path.parent.mkdir(parents=True, exist_ok=True)
-        cleanup_stale_tmp(stub_path)  # 前回クラッシュ時の .tmp 残骸を掃除
-        # 一時ファイル経由で置き換える（複数プロセス同時起動時の書き込み競合対策）
-        tmp_path = stub_path.with_suffix(f"{stub_path.suffix}.{os.getpid()}.tmp")
-        tmp_path.write_text(content, encoding="utf-8")
-        tmp_path.replace(stub_path)
+        cleanup_stale_tmp(stub_path)  # 前回クラッシュ時の残骸を掃除
+        # ``atomic_write`` は親フォルダを作らないので、上の mkdir で存在を保証する
+        with atomic_write(stub_path) as tmp:
+            tmp.write_text(content, encoding="utf-8")
     except OSError:
         pass  # 読み取り専用フォルダ等。補完が更新されないだけで実行には影響しない
 

@@ -31,12 +31,13 @@ client_id と client_secret だけ・トークンだけ、といった構成に�
 
 import json
 import re
-import uuid
+import weakref
 from pathlib import Path
 
 import pywintypes
 import win32crypt
 
+from comken.core.files.atomic import atomic_write
 from comken.core.files.ops import cleanup_stale_tmp
 from comken.core.timer import measure
 from comken.exceptions import (
@@ -281,24 +282,22 @@ def _load_all(path: Path) -> dict[str, str]:
 def _save_all(data: dict[str, str], path: Path) -> None:
     """全キーの辞書を暗号化してファイルに書き込む。
 
-    一時ファイル経由でアトミックに置き換える。書き込み中にクラッシュしても、
-    暗号化ファイルが半端に壊れて全キーが読めなくなることはない。
+    一時ファイル経由でアトミックに置き換える（``atomic_write`` に統一）。
+    書き込み中にクラッシュしても、暗号化ファイルが半端に壊れて全キーが読めなくなる
+    ことはない（「全部入るか、1つも入らないか」の性質が保たれる）。
 
     ただし**書き手が1つであることが前提**。読んで足して書き戻す流れなので、
     2つのプロセスが同時に書くと後から書いたほうが勝ち、片方の追加が消える。
     取り込みは人が1回だけ実行する運用なので、ロックは持たせていない。
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    cleanup_stale_tmp(path)  # 前回クラッシュ時の .tmp 残骸を掃除
+    cleanup_stale_tmp(path)  # 前回クラッシュ時の残骸を掃除
     raw = json.dumps(data, ensure_ascii=False).encode("utf-8")
     encrypted = win32crypt.CryptProtectData(raw, _FILE_DESCRIPTION, None, None, None, 0)
-    # 同時に走っても衝突しないよう、一時ファイル名は毎回変える
-    tmp_path = path.with_suffix(f"{path.suffix}.{uuid.uuid4().hex}.tmp")
-    try:
+    # ``atomic_write`` は親フォルダを作らないので上の mkdir で存在を保証する。
+    # 暗号化済み bytes をそのまま書く（アトミックに丸ごと置き換わる）。
+    with atomic_write(path) as tmp_path:
         tmp_path.write_bytes(encrypted)
-        tmp_path.replace(path)  # 同じフォルダ内の置き換えなのでアトミックに入れ替わる
-    finally:
-        tmp_path.unlink(missing_ok=True)  # 途中で失敗したときに残骸を残さない
 
 
 # ── ``Credentials`` のインスタンス単位キャッシュ用レジストリ ───────────────
@@ -312,21 +311,25 @@ def _save_all(data: dict[str, str], path: Path) -> None:
 #    ``_invalidate_instances_for(path)`` を呼び、 同じパスに紐付くインスタンスの
 #    ``_cache`` を ``None`` に戻す（次回アクセスで再復号される）
 #
-# インスタンスへの弱参照は使わずそのまま覚える（``Credentials`` の寿命 ≒ プロセス
-# 寿命なのでリークしない）。 テスト時は ``_reset_instance_registry()`` で破棄する。
-_instances_by_path: dict[str, list[Credentials]] = {}
+# 以前は ``list[Credentials]`` で強参照していたが、 ``Credentials`` の参照を
+# すべて手放しても GC されず、 ``_cache`` に入った**復号済みの平文がプロセス
+# 終了まで残る**問題があった。 ``weakref.WeakSet`` に変えると、 参照を持たない
+# インスタンスは GC で自然に消え、 レジストリも膨らまない。
+# ``Credentials`` は ``__getattr__`` を定義しているが ``__weakref__`` はクラスメンバ
+# として普通に解決されるため weakref はそのまま使える（ ``__slots__`` は不要）。
+# テスト時は ``_reset_instance_registry()`` で破棄する。
+_instances_by_path: dict[str, weakref.WeakSet["Credentials"]] = {}
 
 
 def _register_instance(instance: "Credentials") -> None:
     """``Credentials._decrypted()`` から呼ばれ、 ``path`` ごとにインスタンスを覚える。
 
-    既に登録済みのインスタンスは二重登録しない（GC で消えた弱参照は持たない）。
+    ``WeakSet`` は同じインスタンスを ``add`` しても 1 つしか持たない（多重登録
+    防止は WeakSet 自体が担保する）。 参照を手放したインスタンスは勝手に消える。
     """
     key = str(instance._path or CREDENTIALS_PATH)
-    bucket = _instances_by_path.setdefault(key, [])
-    # 「同じインスタンスを二重で持たない」だけ確認（弱参照の代替として十分）
-    if instance not in bucket:
-        bucket.append(instance)
+    bucket = _instances_by_path.setdefault(key, weakref.WeakSet())
+    bucket.add(instance)
 
 
 def _invalidate_instances_for(path: Path) -> None:
@@ -335,9 +338,12 @@ def _invalidate_instances_for(path: Path) -> None:
     ``save_credentials`` / ``delete_credential`` から呼ばれる。 該当の
     インスタンスが保持している復号結果（``_cache``）は古くなっているはずなので、
     ``None`` に戻して次回 ``__getattr__`` で再復号させる。
+
+    ``WeakSet`` を直接イテレートすると「GC された瞬間に壊れる」競合が起きる
+    ので、 スナップショット（ ``list(...)`` ）を取ってから走査する。
     """
     key = str(path)
-    for instance in _instances_by_path.get(key, ()):
+    for instance in list(_instances_by_path.get(key, ())):
         if instance.__dict__.get("_cache") is not None:
             object.__setattr__(instance, "_cache", None)
 

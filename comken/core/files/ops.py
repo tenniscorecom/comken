@@ -282,8 +282,8 @@ def cleanup_stale_tmp(target: str | Path, max_age_seconds: float = 3600) -> None
 
 
     アトミック書き込み（一時ファイル + os.replace）は、置換直前にプロセスが
-    強制終了すると「target名.<PID>.tmp」が残ることがある。
-    次回の書き込み時にこれを呼んで、古い残骸だけ片付ける。
+    強制終了すると ``atomic_write`` の命名規則（先頭が ``~``）の一時ファイルが
+    残ることがある。次回の書き込み時にこれを呼んで、古い残骸だけ片付ける。
 
     max_age_seconds より新しいものは、並行実行中の別プロセスが
     書き込み中の可能性があるため消さない（一時ファイルの寿命はミリ秒単位なので、
@@ -296,7 +296,9 @@ def cleanup_stale_tmp(target: str | Path, max_age_seconds: float = 3600) -> None
     target = Path(target)
     # NOTE: ファイルの st_mtime と同じ基準で比較するため time.time() を使う。
     now = time.time()
-    for tmp in target.parent.glob(f"{target.name}.*.tmp"):
+    # ``atomic_write`` は ``~{stem}.{hex}{suffix}`` で一時ファイルを作るので、
+    # 残骸も同じ名前になる。 先頭の ``~`` と拡張子で挟む形に揃える。
+    for tmp in target.parent.glob(f"~{target.stem}.*{target.suffix}"):
         try:
             if now - tmp.stat().st_mtime > max_age_seconds:
                 tmp.unlink()

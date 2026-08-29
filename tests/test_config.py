@@ -1219,19 +1219,24 @@ class TestAutoStub:
 
 
 class TestCleanupStaleTmp:
-    """一時ファイル残骸の自動掃除のテスト。"""
+    """一時ファイル残骸の自動掃除のテスト。
+
+    ``atomic_write`` が ``~{stem}.{hex}{suffix}`` で一時ファイルを作るので、
+    ``cleanup_stale_tmp`` もこの形（先頭 ``~`` + 拡張子）に合わせて拾う。
+    """
 
     def test_old_tmp_removed_fresh_tmp_kept(self, tmp_path):
-        """古い .tmp は削除され、新しい .tmp（並行実行中の可能性）は残ることを確認する。"""
+        """古い残骸（``atomic_write`` 命名）は削除され、新しい残骸は残る。"""
         import os
 
         from comken.core.files.ops import cleanup_stale_tmp
 
         target = tmp_path / "config.pyi"
-        stale = tmp_path / "config.pyi.99999.tmp"
+        # ``atomic_write`` の命名規則 ``~{stem}.{hex}{suffix}`` に合わせた残骸
+        stale = tmp_path / "~config.deadbeef.pyi"
         stale.write_text("残骸", encoding="utf-8")
         os.utime(stale, (0, 0))  # 大昔の更新日時にする
-        fresh = tmp_path / "config.pyi.88888.tmp"
+        fresh = tmp_path / "~config.cafef00d.pyi"
         fresh.write_text("書き込み中かもしれない", encoding="utf-8")
 
         cleanup_stale_tmp(target)
@@ -1255,7 +1260,7 @@ class TestCleanupStaleTmp:
         assert other.exists()
 
     def test_config_cleans_stale_stub_tmp(self, tmp_path):
-        """Config() 実行時にスタブの .tmp 残骸が掃除されることを確認する。"""
+        """Config() 実行時にスタブの残骸が ``atomic_write`` 命名で掃除されることを確認する。"""
         import os
 
         ini = tmp_path / "config.ini"
@@ -1264,7 +1269,8 @@ class TestCleanupStaleTmp:
         (tmp_path / "src" / "config.py").write_text(
             "from comken.core.config import Config\nCONFIG = Config()\n", encoding="utf-8"
         )
-        stale = tmp_path / "src" / "config.pyi.12345.tmp"
+        # ``atomic_write`` の命名規則 ``~{stem}.{hex}{suffix}`` に合わせた残骸
+        stale = tmp_path / "src" / "~config.deadbeef.pyi"
         stale.write_text("残骸", encoding="utf-8")
         os.utime(stale, (0, 0))
 
@@ -1272,6 +1278,29 @@ class TestCleanupStaleTmp:
 
         assert not stale.exists()
         assert (tmp_path / "src" / "config.pyi").exists()
+
+    def test_atomic_write_renamed_orphan_is_cleaned_up(self, tmp_path):
+        """``atomic_write`` が残した ``~`` 付きの残骸を ``cleanup_stale_tmp`` が拾える。
+
+        プロセスが ``os.replace`` の直前に kill されると ``atomic_write`` の
+        命名規則（先頭 ``~``）の一時ファイルが残る。 ``cleanup_stale_tmp`` が
+        その形を実際に消せることを、 ダミーの残骸ファイルで確かめる。
+        """
+        import os
+
+        from comken.core.files.ops import cleanup_stale_tmp
+
+        target = tmp_path / "data.csv"
+        # ``atomic_write`` の命名規則 ``~{stem}.{hex}{suffix}`` のダミー残骸を置く
+        orphan = tmp_path / "~data.deadbeef.csv"
+        orphan.write_text("前回クラッシュ時の残骸", encoding="utf-8")
+        os.utime(orphan, (0, 0))  # 大昔の mtime にする
+
+        # ``cleanup_stale_tmp`` を呼ぶと ``atomic_write`` 命名の残骸を消せる
+        cleanup_stale_tmp(target)
+
+        assert not orphan.exists()
+        assert not target.exists()
 
 
 class TestLenientDict:
