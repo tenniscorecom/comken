@@ -75,6 +75,13 @@ from comken.exceptions import (
 
 logger = logging.getLogger(__name__)
 
+# ── 公開 API ────────────────────────────────────────────────────────────────
+# 利用者が ``from comken.core.config import ...`` で直接取りに来る名前だけを
+# 載せる。 ``Config`` が本体、 ``MappingDict`` は ``[*_MAPPING]`` セクションの
+# dict 互換オブジェクトの公開型。 ``_LenientDict`` は ``_`` プレフィックスで
+# 内部実装なので載せない（``MappingDict = _LenientDict`` で公開型に昇格済み）。
+__all__ = ["Config", "MappingDict"]
+
 _is_version_logged = False
 MAPPING_SECTION_SUFFIX = "MAPPING"
 

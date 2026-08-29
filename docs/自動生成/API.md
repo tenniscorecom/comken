@@ -1796,6 +1796,57 @@ Raises:
     FileNotFoundError: folder が存在しない場合。
 
 
+## `from comken.core.config import ...`
+
+### `Config`
+
+```text
+class Config:
+```
+
+#### 説明
+
+config.ini を読み込み、config.SECTION.KEY の形式でアクセスできるクラス。
+
+値の型変換（_parse_value の変換順と同じ）:
+    - true / false → bool
+    - [a, b, c] → list[str]
+    - 絶対パス（C:\ / \\ / /）→ Path
+    - 整数 → int
+    - 小数 → float
+    - それ以外 → str
+
+数値を文字列として使いたい場合はコード側で str() に変換する。
+
+config.ini の例（セクション名・キー名は大文字で書く）:
+    [BROWSER]
+    WAIT_SECONDS = 10
+    HEADLESS = false
+
+    [FILES]
+    INPUT_FOLDER = ./input
+
+    [REPORT]
+    TARGET_SHEETS = [支店A, 支店B, 集計]
+
+``Config(path)`` は ``Path.resolve()`` 後の絶対パスをキーに **プロセス内で
+1 度だけ** Config を構築してキャッシュする。 同じパスで 2 回目を呼ぶと
+同じインスタンスが返る。 **同じパスのファイルを書き換えても反映されない**
+（反映には ``_reset_cached_config()`` を呼ぶ）。 ``stat()`` による更新確認は
+しない（業務ツールは実行中の設定変更を想定しない。詳細は
+``_get_or_build_config`` の docstring）。
+
+#### `__init__`
+
+```text
+def __init__(self, path: str | Path | None=None) -> None:
+```
+
+### `MappingDict`
+
+公開定数。
+
+
 ## `from comken.core.files import ...`
 
 ### `DateNameBuilder`
