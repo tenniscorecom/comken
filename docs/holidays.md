@@ -164,7 +164,7 @@ COMPANY_HOLIDAYS_EXTRA: Final[tuple[_dt.date, ...]] = ()
 | `last_business_day_of_month(d, *, calendar)`  | `d` の月の最後の営業日                      |
 | `nth_business_day_of_month(d, n, *, calendar)` | `d` の月の第 `n` 営業日（`n` は 1 始まり） |
 | `add_business_days(d, n, *, calendar)` | `d` から `n` 営業日後の日付（`n` が負なら前）           |
-| `BUSINESS_DAY_SEARCH_LIMIT`       | 「次の営業日」探索の上限日数（既定 400）                    |
+| `BUSINESS_DAY_SEARCH_LIMIT`       | 「次の営業日」探索の上限日数（既定 30）                     |
 | `BUNDLED_CSV_PATH`                | 内閣府 CSV を同梱しているパス（git 管理下の正本）           |
 | `CabinetOfficeCSVSource`          | 内閣府 CSV を URL から取得して `BUNDLED_CSV_PATH` へ書く `HolidaySource` |
 | `ComputedHolidaySource`           | 計算で祝日の和集合を返す `HolidaySource`（mokejp/holidays_jp MIT 由来） |
@@ -231,7 +231,7 @@ business_day_after(date(2026, 8, 20), calendar=cal)
 その月に営業日が 1 日も無い月でも `BusinessDayNotFoundError`。
 
 `business_day_after` 系の探索は最大 `BUSINESS_DAY_SEARCH_LIMIT` 日
-（既定 400 日）で打ち切り、見つからなければ `BusinessDayNotFoundError` を送る。
+（既定 30 日）で打ち切り、見つからなければ `BusinessDayNotFoundError` を送る。
 祝日データが壊れていたり、`CompanyHolidaySource` に休日を広範囲に登録してしまった
 ときの無限ループを防ぐため。
 

@@ -4,7 +4,7 @@
 純粋な部品だけを置く。logger / state / config / clock / text / data / files などが
 ここに入る。外に触る道具は toolbox に置く。
 
-利用者は、``comken`` 直下にない30数個の部品を ``from comken.core import ...`` で取る。
+利用者は、``comken`` 直下にない50数個の部品を ``from comken.core import ...`` で取る。
 ``comken`` 直下と ``comken.core`` に同じ名前は公開しない。
 
 ただし toolbox / services パッケージの内部実装（filesystem / レジストリ等を
