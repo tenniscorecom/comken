@@ -75,6 +75,67 @@ with Excel("一覧.xlsx", read_only=True) as excel:
 
 既存ブックは表示用シートとデータシートを分け、Pythonから扱う表には `PY_` シートと `PY_T_` テーブルのプレフィックスを付けます。既存のセル範囲を自動でテーブル化することはありません。
 
+## エンジン切り替え（`engine` 引数）
+
+約31シート＋ピボット十数個のようなブックを openpyxl で開くとピボットキャッシュ XML
+のパースが遅く、同じファイルを Excel COM（pywin32）経由で開くと速い。そのための
+切り替えが `Excel(..., engine="com")`。既定の `engine="openpyxl"` は既存と同じ動作。
+
+```python
+with Excel("重い.xlsx", engine="com", local_copy=False) as excel:
+    for row in excel.read("Sheet1").read_rows():
+        ...
+```
+
+- `engine="com"` のとき `Excel` は内部で `ExcelCOMHandler` を保持する。`__enter__` /
+  `__exit__` で自動的に開き、COM プロセスは `with` 終了時に必ず閉じる。
+- `local_copy` の対応:
+  - `True` → `ExcelCOMHandler(local_copy_threshold_mb=0)` で常時ローカルコピー
+  - `False` → `ExcelCOMHandler(local_copy_threshold_mb=inf)` でコピーしない
+  - `None`（未指定）→ `ExcelCOMHandler` 既定（10 MB 超でコピー）だが、**`__enter__` で
+    一度だけ `UserWarning` を出す**。UNC パスでの事故を減らすため、`local_copy=True`
+    か `False` を明示することが望ましい。
+- `engine="com"` で動く公開 API は薄い範囲のみ: `read()`、`list_sheets()`、
+  `count_sheets()`、`last_row(sheet_name)`、`exists_sheet(name)`、および
+  `excel.com_handler` プロパティ（`run_macro` / `save_as` などの COM 固有 API への
+  エスケープハッチ）。
+- `engine="com"` で `sheet()` / `data_sheet()` / `create_sheet()` / `create_data_sheet()` /
+  `find_sheet()` / `list_data_sheets()` / `save()` / `run_macro()` を呼ぶと
+  `InvalidTableOperationError` で止める（`Sheet` 系は openpyxl 前提のため）。
+- pywin32 が無い PC では `engine="com"` 自体を import 段階で使えない。openpyxl 経路は
+  pywin32 非依存なので、普段は `engine="openpyxl"` のままで良い。
+
+## 既存セル範囲をテーブル化（`convert_range_to_table`）
+
+表示用シート上に既に書き込まれている表を、そのセル値を保ったまま Excel テーブルに
+変換する。`Sheet.create_table()` が「新規 `Table` を書き込んで作る」のに対し、
+こちらは「既存の値をそのまま `ref` として登録する」操作。
+
+```python
+with Excel("帳票.xlsx") as excel:
+    excel.convert_range_to_table(
+        "集計",
+        range="A1:E100",
+        table_name="集計",
+    )
+```
+
+- 安全性判定: 次のいずれかに該当すれば対応する例外で止める。
+  - 見出し行のセルが空 → `EmptyHeaderCellError`
+  - 範囲内に結合セルがある（A2 が発火した「見出し行より前の行」はタイトルとして許容）
+    → `InvalidTableInputError`
+  - 範囲がシートの使用範囲外 → `InvalidTableInputError`
+  - データ行の途中に全セル空の行がある → `InvalidTableInputError`（行番号入り）
+  - 見出し行に重複がある → `DuplicateHeaderCellError`
+  - `table_name` が Excel の命名規則違反 → `InvalidTableNameError`
+  - 同名のテーブルが既に存在 → `TableAlreadyExistsError`
+- `header_row` 未指定時の自動推定は **A2 ルールだけ**: `range` の先頭行に結合セルが
+  あれば次行を見出し行とみなす。それ以外の推定（フォントサイズ差・空白判定など）は
+  行わない。事故を減らすため `header_row` は明示することを推奨。
+- 表示用シート・データシートどちらでも利用可能。`PY_T_` プレフィックスは補わない
+  （指定された名前をそのまま使う）。
+- `engine="com"` で呼ぶと `NotImplementedError`（openpyxl 経路のみ対応）。
+
 ## `with` 必須
 
 `CSV` / `Excel` は**読み取り専用でも `with` 必須**。`with` を外れたインスタンスを触ると
