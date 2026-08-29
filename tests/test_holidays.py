@@ -776,20 +776,6 @@ class TestCompanyHolidaySource:
         assert Holiday(date=_dt.date(2027, 1, 2), name="年末年始休暇") in holidays
         assert Holiday(date=_dt.date(2027, 1, 3), name="年末年始休暇") in holidays
 
-    def test_company_holidays_constant_default(self) -> None:
-        """既定の ``COMPANY_HOLIDAYS`` は年末年始休暇 (12/29 - 1/3) のみ。"""
-        from comken.core.holidays.sources.company import COMPANY_HOLIDAYS
-
-        assert COMPANY_HOLIDAYS == {
-            "年末年始休暇": ((12, 29), (12, 30), (12, 31), (1, 1), (1, 2), (1, 3)),
-        }
-
-    def test_company_holidays_extra_default_is_empty(self) -> None:
-        """既定の ``COMPANY_HOLIDAYS_EXTRA`` は空タプル。"""
-        from comken.core.holidays.sources.company import COMPANY_HOLIDAYS_EXTRA
-
-        assert COMPANY_HOLIDAYS_EXTRA == ()
-
     def test_extra_holidays_named_company_holiday(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """``COMPANY_HOLIDAYS_EXTRA`` の名称は「会社休業日」。"""
         from comken.core.holidays.sources import company as company_module

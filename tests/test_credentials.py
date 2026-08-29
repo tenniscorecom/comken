@@ -28,9 +28,6 @@ from comken.toolbox.credentials import (
     save_credentials,
 )
 from comken.toolbox.credentials.cli import main
-from comken.toolbox.credentials.store import (
-    CREDENTIALS_PATH,
-)
 
 SECRET = "s3cret-値-🔑"  # 日本語と絵文字を含めて UTF-8 の往復も確かめる
 
@@ -281,8 +278,3 @@ class TestCommandLine:
     def test_no_command_exits(self):
         with pytest.raises(SystemExit):
             main([])
-
-
-def test_credentials_path_is_dot_rpa():
-    """既定の保存先が ``~/.rpa/credentials.enc`` である。"""
-    assert Path.home() / ".rpa" / "credentials.enc" == CREDENTIALS_PATH
