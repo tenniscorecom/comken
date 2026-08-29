@@ -140,6 +140,26 @@ class TestDebugMode:
         with CSV(path) as csv_file:
             assert csv_file.read().count() == 1
 
+    def test_measure_on_generator_logs_completion_only_after_consumption(self, caplog):
+        """ジェネレータ関数に ``measure`` を付けた場合、消費し切るまで完了ログを出さない。"""
+
+        @measure
+        def gen_rows():
+            yield from (1, 2, 3)
+
+        with comken.debug(), caplog.at_level(logging.DEBUG, logger="comken.core.timer"):
+            # 呼び出した時点ではログが出ない（本体は ``next()`` まで遅延評価）
+            iterator = gen_rows()
+            assert "gen_rows" not in caplog.text
+
+            # 値を全部消費
+            assert list(iterator) == [1, 2, 3]
+
+            # 全部消費してから「開始」「完了」が出る（中断は出ない）
+        assert "gen_rows: 開始" in caplog.text
+        assert "gen_rows: 完了" in caplog.text
+        assert "gen_rows: 中断" not in caplog.text
+
     def test_nested_and_exception_restore_previous_state(self):
         """入れ子と例外の後に、入る前の状態へ戻る。"""
         assert not is_debug()
