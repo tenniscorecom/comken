@@ -382,7 +382,7 @@ Args:
 
 ```text
 @classmethod
-def from_csv(cls, path: str | Path, *, encoding: str='cp932') -> 'HolidayCalendar':
+def from_csv(cls, path: str | Path, *, encoding: str='cp932') -> Self:
 ```
 
 ##### 説明
@@ -400,7 +400,7 @@ Returns:
 
 ```text
 @classmethod
-def from_sources(cls, sources: Iterable[HolidaySource]) -> 'HolidayCalendar':
+def from_sources(cls, sources: Iterable[HolidaySource]) -> Self:
 ```
 
 ##### 説明
@@ -682,7 +682,7 @@ def read_rows(self) -> list[dict[str, Any]]:
 #### `replace`
 
 ```text
-def replace(self, rows: list[dict]) -> 'Table':
+def replace(self, rows: list[dict]) -> Self:
 ```
 
 ##### 説明
@@ -692,7 +692,7 @@ def replace(self, rows: list[dict]) -> 'Table':
 #### `append`
 
 ```text
-def append(self, rows: list[dict] | dict) -> 'Table':
+def append(self, rows: list[dict] | dict) -> Self:
 ```
 
 ##### 説明
@@ -712,7 +712,7 @@ def count(self) -> int:
 #### `select`
 
 ```text
-def select(self, *columns: str) -> 'Table':
+def select(self, *columns: str) -> Table:
 ```
 
 ##### 説明
@@ -722,7 +722,7 @@ def select(self, *columns: str) -> 'Table':
 #### `filter`
 
 ```text
-def filter(self, predicate: Callable[[dict], bool]) -> 'Table':
+def filter(self, predicate: Callable[[dict], bool]) -> Table:
 ```
 
 ##### 説明
@@ -752,7 +752,7 @@ def index(self, key: str) -> dict[Any, dict]:
 #### `group_by`
 
 ```text
-def group_by(self, key: str) -> dict[Any, 'Table']:
+def group_by(self, key: str) -> dict[Any, Table]:
 ```
 
 ##### 説明
@@ -762,7 +762,7 @@ def group_by(self, key: str) -> dict[Any, 'Table']:
 #### `concat`
 
 ```text
-def concat(self, other: 'Table') -> 'Table':
+def concat(self, other: Table) -> Table:
 ```
 
 ##### 説明
@@ -2433,7 +2433,7 @@ Args:
 
 ```text
 @classmethod
-def from_csv(cls, path: str | Path, *, encoding: str='cp932') -> 'HolidayCalendar':
+def from_csv(cls, path: str | Path, *, encoding: str='cp932') -> Self:
 ```
 
 ##### 説明
@@ -2451,7 +2451,7 @@ Returns:
 
 ```text
 @classmethod
-def from_sources(cls, sources: Iterable[HolidaySource]) -> 'HolidayCalendar':
+def from_sources(cls, sources: Iterable[HolidaySource]) -> Self:
 ```
 
 ##### 説明
@@ -3046,7 +3046,7 @@ def read_rows(self) -> list[dict[str, Any]]:
 #### `replace`
 
 ```text
-def replace(self, rows: list[dict]) -> 'Table':
+def replace(self, rows: list[dict]) -> Self:
 ```
 
 ##### 説明
@@ -3056,7 +3056,7 @@ def replace(self, rows: list[dict]) -> 'Table':
 #### `append`
 
 ```text
-def append(self, rows: list[dict] | dict) -> 'Table':
+def append(self, rows: list[dict] | dict) -> Self:
 ```
 
 ##### 説明
@@ -3076,7 +3076,7 @@ def count(self) -> int:
 #### `select`
 
 ```text
-def select(self, *columns: str) -> 'Table':
+def select(self, *columns: str) -> Table:
 ```
 
 ##### 説明
@@ -3086,7 +3086,7 @@ def select(self, *columns: str) -> 'Table':
 #### `filter`
 
 ```text
-def filter(self, predicate: Callable[[dict], bool]) -> 'Table':
+def filter(self, predicate: Callable[[dict], bool]) -> Table:
 ```
 
 ##### 説明
@@ -3116,7 +3116,7 @@ def index(self, key: str) -> dict[Any, dict]:
 #### `group_by`
 
 ```text
-def group_by(self, key: str) -> dict[Any, 'Table']:
+def group_by(self, key: str) -> dict[Any, Table]:
 ```
 
 ##### 説明
@@ -3126,7 +3126,7 @@ def group_by(self, key: str) -> dict[Any, 'Table']:
 #### `concat`
 
 ```text
-def concat(self, other: 'Table') -> 'Table':
+def concat(self, other: Table) -> Table:
 ```
 
 ##### 説明
@@ -6435,7 +6435,7 @@ class ScheduleRule:
 
 ```text
 @classmethod
-def from_row(cls, row: Mapping[str, object]) -> 'ScheduleRule':
+def from_row(cls, row: Mapping[str, object]) -> Self:
 ```
 
 ##### 説明
@@ -6497,7 +6497,7 @@ def read_rows(self) -> list[dict[str, Any]]:
 #### `replace`
 
 ```text
-def replace(self, rows: list[dict]) -> 'Table':
+def replace(self, rows: list[dict]) -> Self:
 ```
 
 ##### 説明
@@ -6507,7 +6507,7 @@ def replace(self, rows: list[dict]) -> 'Table':
 #### `append`
 
 ```text
-def append(self, rows: list[dict] | dict) -> 'Table':
+def append(self, rows: list[dict] | dict) -> Self:
 ```
 
 ##### 説明
@@ -6527,7 +6527,7 @@ def count(self) -> int:
 #### `select`
 
 ```text
-def select(self, *columns: str) -> 'Table':
+def select(self, *columns: str) -> Table:
 ```
 
 ##### 説明
@@ -6537,7 +6537,7 @@ def select(self, *columns: str) -> 'Table':
 #### `filter`
 
 ```text
-def filter(self, predicate: Callable[[dict], bool]) -> 'Table':
+def filter(self, predicate: Callable[[dict], bool]) -> Table:
 ```
 
 ##### 説明
@@ -6567,7 +6567,7 @@ def index(self, key: str) -> dict[Any, dict]:
 #### `group_by`
 
 ```text
-def group_by(self, key: str) -> dict[Any, 'Table']:
+def group_by(self, key: str) -> dict[Any, Table]:
 ```
 
 ##### 説明
@@ -6577,7 +6577,7 @@ def group_by(self, key: str) -> dict[Any, 'Table']:
 #### `concat`
 
 ```text
-def concat(self, other: 'Table') -> 'Table':
+def concat(self, other: Table) -> Table:
 ```
 
 ##### 説明
@@ -6871,6 +6871,7 @@ def read_table(self, source: str) -> Table:
 テーブルまたはクエリをメモリ上の ``Table`` として返す。
 
 全行をメモリへ載せるため、大量データには ``read_rows()`` を使う。
+``_LARGE_TABLE_WARNING_THRESHOLD`` を超える行を読んだときは警告ログを出す。
 表として絞り込み・索引・転記を行う場合の明示的な入口。
 
 列名は ``read_rows()`` のイテレータから直接取れない（イテレータは
@@ -8005,6 +8006,101 @@ def go_login(self) -> LoginPage:
 
 ログイン画面を開く。
 
+### `NTTNishi`
+
+```text
+class NTTNishi(NTTSiteBase):
+```
+
+#### 説明
+
+NTT西のサイトクラス。
+
+使い方:
+    with NTTNishi() as ntt:
+        secure = ntt.go_login().login(USER, PW)
+
+### `NTTHigashi`
+
+```text
+class NTTHigashi(NTTSiteBase):
+```
+
+#### 説明
+
+NTT東のサイトクラス。
+
+使い方:
+    with NTTHigashi() as ntt:
+        secure = ntt.go_login().login(USER, PW)
+
+
+## `from comken.toolbox.browser.sites.ntt import ...`
+
+### `NTTBrowserOptions`
+
+```text
+class NTTBrowserOptions(BrowserOptions):
+```
+
+#### 説明
+
+NTT西・NTT東で共通のブラウザオプション。
+
+デフォルト（BrowserOptions）から変更したいものだけ上書きする。
+サイトごとに変えたい項目が出てきたら、そのサイトのファイルで
+``NTTBrowserOptions`` を継承したサブクラスを作って ``OPTIONS`` を差し替える。
+
+### `NTTSiteBase`
+
+```text
+class NTTSiteBase(SiteBase):
+```
+
+#### 説明
+
+NTT西・NTT東に共通のサイト操作（ログイン画面を開く、等）。
+
+NAME / BASE_URL はサブクラス（nishi.py / higashi.py）で必ず上書きする。
+
+#### `go_login`
+
+```text
+def go_login(self) -> LoginPage:
+```
+
+##### 説明
+
+ログイン画面を開く。
+
+### `NTTNishi`
+
+```text
+class NTTNishi(NTTSiteBase):
+```
+
+#### 説明
+
+NTT西のサイトクラス。
+
+使い方:
+    with NTTNishi() as ntt:
+        secure = ntt.go_login().login(USER, PW)
+
+### `NTTHigashi`
+
+```text
+class NTTHigashi(NTTSiteBase):
+```
+
+#### 説明
+
+NTT東のサイトクラス。
+
+使い方:
+    with NTTHigashi() as ntt:
+        secure = ntt.go_login().login(USER, PW)
+
 
 ## `from comken.toolbox.browser.sites.ouju_site import ...`
 
@@ -8406,7 +8502,7 @@ Excel ワークブックを開き、シート単位の操作を提供する。
 #### `__init__`
 
 ```text
-def __init__(self, source: str | Path, *, types: Mapping[str, Callable[[Any], Any]] | None=None, read_only: bool=False, local_copy: bool | None=None) -> None:
+def __init__(self, source: str | Path, *, types: Mapping[str, Callable[[Any], Any]] | None=None, read_only: bool=False, local_copy: bool | None=None, engine: Engine='openpyxl') -> None:
 ```
 
 ##### 説明
@@ -8422,6 +8518,14 @@ def __init__(self, source: str | Path, *, types: Mapping[str, Callable[[Any], An
 「作業中だけローカルを使い、保存時に元へ戻す」契約を適用する場面がない）。
 ``local_copy=True`` で強制、``local_copy=False`` で無効化でき、保存先は常に
 元ファイルになる。
+
+``engine`` でブックを開く実装を選べる。``"openpyxl"``（既定）は openpyxl を
+使う通常経路、``"com"`` は pywin32 経由で Excel COM に接続する。
+``"com"`` は約31シート+ピボット十数個のような openpyxl で重いブック、
+または数式・マクロ・COM 固有 API を直接利用したいときに使う。
+``local_copy`` の扱いはエンジンごとに分かれる（``engine='com'`` のときは
+``ExcelCOMHandler`` の ``local_copy_threshold_mb`` に変換する。未指定なら
+``__enter__`` で一度だけ警告する）。
 
 ``read_only``、dry-run、またはwithブロックが例外で終わった場合は保存しない。
 
@@ -8507,6 +8611,109 @@ def list_data_sheets(self) -> list[str]:
 
 データシート名をブック内の順序で返す。
 
+#### `com_handler`
+
+```text
+@property
+def com_handler(self) -> 'ExcelCOMHandler':
+```
+
+##### 説明
+
+engine='com' で開いている内部の ``ExcelCOMHandler`` を返す。
+
+``run_macro`` / ``save_as``（パスワード付き保存）など、Phase 1 で
+共通化しない COM 機能への直接アクセス用。``engine='openpyxl'`` の
+インスタンスで触ると ``InvalidTableOperationError`` で止める。
+
+#### `list_sheets`
+
+```text
+@measure
+def list_sheets(self) -> list[str]:
+```
+
+##### 説明
+
+シート名一覧（表示用・データ用を含む全シート）を返す。
+
+``engine`` によらず同じシグネチャで使える薄い API。``PY_`` プレフィックスの
+データシートもそのまま含める。「``list_``」の動詞は ``list_data_sheets``
+と同じ命名で、シート名一覧を順序通り返す操作のため例外的に許容する。
+
+#### `count_sheets`
+
+```text
+@measure
+def count_sheets(self) -> int:
+```
+
+##### 説明
+
+シート数を返す。
+
+#### `last_row`
+
+```text
+@measure
+def last_row(self, sheet_name: str) -> int:
+```
+
+##### 説明
+
+指定シートの最終データ行の番号を返す（1 始まり）。
+
+openpyxl は ``Worksheet.max_row`` を使う。COM は ``ExcelCOMHandler.last_row``
+の ``UsedRange`` 計算を使う（数式が入ったセルも含む最終行）。
+
+#### `exists_sheet`
+
+```text
+@measure
+def exists_sheet(self, name: str) -> bool:
+```
+
+##### 説明
+
+指定した名前のシートが存在するか返す。
+
+#### `convert_range_to_table`
+
+```text
+def convert_range_to_table(self, sheet_name: str, *, range: str, table_name: str, header_row: int | None=None) -> ExcelTable:
+```
+
+##### 説明
+
+既存のセル範囲を Excel テーブルに変換する。安全に判定できない場合はエラーで止める。
+
+既存のセル値をそのままテーブル化する。``Sheet.create_table`` が「新規に
+``Table`` を書き込んで作る」のに対し、こちらは「既に書き込まれている表を
+Excel テーブルとして登録する」操作。表示用シート・データシートどちらでも
+利用可能で、``PY_T_`` プレフィックスは補わない（指定された名前をそのまま使う）。
+
+自動判定は限定的にする: ``header_row`` 未指定のとき ``range`` の先頭行に
+結合セルがあれば次の行を見出しとする（A2 ルール）。それ以外の推定
+（フォントサイズ差・空白判定など）は行わない。``header_row`` を明示する
+ほうが事故が少ない。
+
+Args:
+    sheet_name: 対象のシート名。
+    range: テーブル化するセル範囲（例: ``"A1:E100"``）。必須。
+    table_name: 登録するテーブル名。Excel の命名規則に従う必要がある。
+    header_row: 見出し行の番号（1 始まり）。``None`` のとき A2 ルールで推定。
+
+Returns:
+    作成された ``ExcelTable``。
+
+Raises:
+    NotImplementedError: ``engine='com'`` で開いたインスタンスで呼ばれたとき。
+    InvalidTableInputError: 範囲・結合・空データ行のいずれかが条件違反のとき。
+    EmptyHeaderCellError: 見出し行に空セルがあるとき。
+    DuplicateHeaderCellError: 見出し行に同じ名前が複数あるとき。
+    InvalidTableNameError: ``table_name`` が Excel の命名規則に合わないとき。
+    TableAlreadyExistsError: 指定したテーブル名が既に存在するとき。
+
 #### `close`
 
 ```text
@@ -8550,7 +8757,7 @@ COMには元ファイルではなく作業ファイルを渡す。ローカル�
 #### `read`
 
 ```text
-def read(self, sheet_name: str, *, header_row: int=1, force_com: bool=False) -> 'Table':
+def read(self, sheet_name: str, *, header_row: int=1, force_com: bool=False) -> Table:
 ```
 
 ##### 説明
@@ -8561,6 +8768,9 @@ def read(self, sheet_name: str, *, header_row: int=1, force_com: bool=False) -> 
 ``force_com=True`` でキャッシュを無視して Excel 実機で強制再計算させる。
 数式の列は ``Table`` 化されない（文字列のまま入るので、必要なら ``Table`` の
 ``types`` で ``int`` / ``float`` などに変換すること）。
+
+engine='com' で開いたブックは、内部で保持している ``ExcelCOMHandler`` に
+そのまま委譲する（COM で再計算済みの値を読む）。
 
 Args:
     sheet_name: シート名。
@@ -8610,7 +8820,7 @@ def table(self, name: str | None=None) -> ExcelTable:
 #### `create_table`
 
 ```text
-def create_table(self, name: str, table: 'Table', start_cell: str='A1') -> ExcelTable:
+def create_table(self, name: str, table: Table, start_cell: str='A1') -> ExcelTable:
 ```
 
 ##### 説明
@@ -8671,7 +8881,7 @@ def write_range(self, cell_range: str, values: list[list[Any]]) -> None:
 #### `read_range`
 
 ```text
-def read_range(self, cell_range: str, *, force_com: bool=False) -> 'Table':
+def read_range(self, cell_range: str, *, force_com: bool=False) -> Table:
 ```
 
 ##### 説明
@@ -9180,7 +9390,7 @@ Args:
 
 ```text
 @classmethod
-def from_csv(cls, path: str | Path, *, encoding: str='cp932') -> 'HolidayCalendar':
+def from_csv(cls, path: str | Path, *, encoding: str='cp932') -> Self:
 ```
 
 ##### 説明
@@ -9198,7 +9408,7 @@ Returns:
 
 ```text
 @classmethod
-def from_sources(cls, sources: Iterable[HolidaySource]) -> 'HolidayCalendar':
+def from_sources(cls, sources: Iterable[HolidaySource]) -> Self:
 ```
 
 ##### 説明
@@ -9793,6 +10003,30 @@ Args:
 Returns:
     レポート明細を表す ``Table``。
 
+#### `run_csv`
+
+```text
+@measure
+def run_csv(self, report_id: str, path: str | Path, filters: list[dict] | None=None, allow_truncated: bool=False) -> Path:
+```
+
+##### 説明
+
+レポートを同期実行して、結果をそのまま CSV へ保存する。
+
+``run()`` が返す ``Table`` を ``CSV`` へ書き出すだけの薄い層。
+``Table`` 自体はファイル I/O を持たない設計（保存先の責任を分ける）ため、
+レポートを直接 CSV で欲しいだけのときはこちらを使う。
+
+Args:
+    report_id: レポート ID（レポートを開いたときの URL の末尾。15桁 or 18桁）。
+    path: 保存先の CSV パス（拡張子は ``.csv``）。
+    filters: 絞り込み条件（省略可）。
+    allow_truncated: ``run()`` と同じ。
+
+Returns:
+    保存した CSV のパス。
+
 #### `run_async`
 
 ```text
@@ -10225,7 +10459,7 @@ def read_block(self, sheet_name: str, min_col: int, min_row: int, max_col: int, 
 
 ```text
 @measure
-def read(self, sheet_name: str, *, header_row: int=1) -> 'Table':
+def read(self, sheet_name: str, *, header_row: int=1) -> Table:
 ```
 
 ##### 説明
