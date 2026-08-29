@@ -92,3 +92,10 @@ exclude = [".pytest-tmp"]
 # 自体は正しいため、警告を抑制する。`__all__` 自体は M3 が触る箇所なので
 # 整合性はテスト (tests/test_docs_code.py など) で別途担保する。
 reportUnsupportedDunderAll = false
+
+[tool.mypy]
+# キャッシュを comken/ パッケージの中ではなくリポジトリ直下へ置く。
+# comken は共有サーバー上の1か所を PYTHONPATH で直接参照する配布形態なので、
+# パッケージ内に .mypy_cache が出来ると配布物と一緒について回る（実測 25MB）。
+# リポジトリ直下に逃がせば .gitignore の .mypy_cache/ で弾ける。
+cache_dir = ".mypy_cache"
