@@ -76,6 +76,12 @@ def _measure_generator_wrapper(func: Callable[..., Any]) -> Callable[..., Any]:
         だけで完了ログが出る事故を防ぐため、本体を包んだジェネレータを返し、
         最初の ``next()`` で開始ログ、消費し切ったら完了ログ、
         例外・``GeneratorExit`` で抜けたら中断ログを出す。
+
+        **「開始」を ``next()`` で本体を呼ぶより前**に出す。 ``query_rows``
+        のように最初の ``yield`` より前に時間のかかる処理を入れる書き方が
+        あるため、 本体の前段を「開始→完了」の計測範囲から外さない。
+        本体が ``next()`` の直後にハングした場合も「開始」ログは既に出ているので、
+        ログの末尾が「開始」で終わっていれば停止位置が分かる。
         """
         from comken.runtime import is_debug
 
@@ -86,20 +92,24 @@ def _measure_generator_wrapper(func: Callable[..., Any]) -> Callable[..., Any]:
             return
 
         name = func.__qualname__
+        # NOTE: 開始ログと start_time は「最初の ``next()`` を呼ぶ前」に出す。
+        # 計測範囲に内側ジェネレータの先頭処理（最初の ``yield`` までの全処理）を
+        # 含めるためで、 ハング時に「開始」ログが出ていることを保証するためでもある。
+        start_time = time.perf_counter()
+        logger.debug("%s: 開始", name)
         inner = func(*args, **kwargs)
         # 外側ラッパー最初の ``next()`` で inner の本体を開始させる。
-        # 呼び出しただけで完了ログが出る事故を防ぐため、開始ログはここで出す。
+        # 開始ログと start_time は外側で既に出しているので、ここで再度出さない。
         try:
             value = next(inner)
         except StopIteration:
             # 本体が yield を一度も呼ばずに終わった（空ジェネレータ）
+            logger.debug("%s: 完了 %.3f秒", name, time.perf_counter() - start_time)
             return
         except BaseException:
-            # next() で例外が上がった = 本体開始直後の失敗（計測時間は 0）
-            logger.debug("%s: 中断 %.3f秒", name, 0.0)
+            # next() で例外が上がった = 本体開始直後の失敗
+            logger.debug("%s: 中断 %.3f秒", name, time.perf_counter() - start_time)
             raise
-        start_time = time.perf_counter()
-        logger.debug("%s: 開始", name)
         while True:
             try:
                 received = yield value

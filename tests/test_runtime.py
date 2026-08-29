@@ -160,6 +160,51 @@ class TestDebugMode:
         assert "gen_rows: 完了" in caplog.text
         assert "gen_rows: 中断" not in caplog.text
 
+    def test_measure_on_generator_includes_time_before_first_yield(self, caplog):
+        """ジェネレータで「最初の ``yield`` の前」に行う処理も計測に含まれる。
+
+        ``query_rows`` のように、全ページを溜めてから ``yield from`` で
+        返す実装は、最初の ``yield`` より前に API 呼び出し等の重い処理を
+        まとめて行う。 ``measure`` はその前段を計測範囲から外してはいけない
+        （ハング位置の特定にも「開始」ログが必須）。
+
+        旧実装 (``start_time`` を ``next(inner)`` 後に取っていた) だと、
+        前段の経過が除外されて完了ログの経過秒数は ``0`` に潰れる。
+        新実装は前段ぶんを含むので、 前段 ``sleep`` ぶん以上の経過秒数が
+        出ることを検証する。
+        """
+        import time
+
+        # 前段の経過（=「最初の ``yield`` までの処理時間」）を表現する秒数。
+        # 短すぎると CI ノイズで false-positive になるので余裕を持つ。
+        PRE_YIELD_SECONDS = 0.05
+
+        @measure
+        def query_like():
+            # 最初の ``yield`` より前に時間のかかる処理を置く（API ページ送りの想定）
+            time.sleep(PRE_YIELD_SECONDS)
+            pre = [0] * 3
+            yield from pre
+
+        with comken.debug(), caplog.at_level(logging.DEBUG, logger="comken.core.timer"):
+            assert list(query_like()) == [0, 0, 0]
+
+        # 完了ログの経過秒数を抽出する
+        complete_log = next(
+            r
+            for r in caplog.records
+            if r.name == "comken.core.timer" and "query_like: 完了" in r.message
+        )
+        completed_seconds = float(complete_log.message.rsplit(" ", 1)[1].rstrip("秒"))
+
+        # 完了ログが前段 ``sleep`` のぶん以上になっていること。
+        # 旧実装だと ``completed_seconds == 0`` になり、ここで落ちる。
+        assert completed_seconds >= PRE_YIELD_SECONDS, (
+            f"完了ログの経過秒数 {completed_seconds} が"
+            f"前段の {PRE_YIELD_SECONDS} 秒を下回っている。"
+            "start_time が next(inner) より後に取られていないか確認すること。"
+        )
+
     def test_nested_and_exception_restore_previous_state(self):
         """入れ子と例外の後に、入る前の状態へ戻る。"""
         assert not is_debug()
