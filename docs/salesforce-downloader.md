@@ -469,8 +469,8 @@ if rule.is_due(datetime.now(), holidays=set()):
 |---|---|---|
 | `ReportNotRegisteredError` | 管理番号が管理表に無い | 管理表に登録する |
 | `ReportDisabledError` | 管理表で「無効」になっている | 使うなら「有効」に戻す |
-| `DuplicateReportKeyError` | 管理表に同じ管理番号が2つある | どちらかの番号を変える |
-| `InvalidReportEntryError` | 行の書き方が正しくない | メッセージの行と列を直す |
+| `MasterDuplicateValueError` | 管理表の unique 列に同じ値が2つある | どちらかの値を変える |
+| `MasterRowValueError` | 管理表の値が型・選択肢に合わない、または空欄にできない | メッセージの行と列を直す |
 | `CachedReportNotRegisteredError` | 「個別」のもののキャッシュを受け取ろうとした | 「定期」にするか `download_report()` を使う |
 | `CachedReportNotFoundError` | 本日の固定キャッシュが無い | 表示された正確なパスへCSVを置き、同じ処理を再実行する |
 | `EmptyReportError` | 明細が 0 行（管理表の `0件あり` が `×`） | その日 0 件が普通なら管理表を `○` に。指している Salesforce レポートが違う可能性がある |

@@ -23,7 +23,7 @@ client_id / client_secret は DPAPI から読む（`comken.toolbox.credentials`�
 > [!warning] 組織名と URL は仮の値
 > **このリポジトリは公開しているので、実際の組織名・URL を書かない。**
 > `Sandbox` の `DOMAIN_URL` はダミーで、共有サーバーへ配置するときに
-> 実際の値へ書き換える（`comken/run.py` の `example_libs.v0000` と同じ扱い）。
+> 実際の値へ書き換える（`comken/internal/salesforce_api.py` の `example_libs.v0000` と同じ扱い）。
 > 書き換えるのは各ファイルの `DOMAIN_URL`・`CREDENTIAL_PREFIX`・`REPORT_*` と、
 > 組織名を出すならクラス名。**実名をこのリポジトリへ書き戻さないこと。**
 """

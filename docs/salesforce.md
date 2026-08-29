@@ -143,9 +143,9 @@ JWT ベアラーフローも**リフレッシュトークンを発行しない**
 
 ```
 SalesforceBase                     HTTP の土台。_request() が唯一の通り道
-  ._oauth   : SfOAuth              トークン取得（JWT 版に差し替え可）
-  ._metrics : SfMetrics            計測
-  .report   : SfReport             レポート API
+  ._oauth   : _OAuth               トークン取得（JWT 版に差し替え可）
+  ._metrics : APIMetrics           計測
+  .report   : ReportAPI            レポート API
   .query() / .get() / .insert() …  SOQL・CRUD
   │
   └─ Sandbox(SalesforceBase)       URL・認証情報名・OWNER・組織固有の処理を持つ
@@ -155,12 +155,12 @@ SalesforceBase                     HTTP の土台。_request() が唯一の通�
 ライブラリへ昇格したクラスは `OWNER = "comken"` にする。昇格の基準は
 [ライブラリ開発規約](開発/ライブラリ開発規約.md#サイト組織クラスを昇格させる基準) を参照。
 
-**なぜレポートを継承にしないか。** `SfReport` を `SalesforceBase` のサブクラスにすると、
-`Sandbox` は `SfReport` ではないためレポートを呼べず、多重継承に追い込まれる。
+**なぜレポートを継承にしないか。** `ReportAPI` を `SalesforceBase` のサブクラスにすると、
+`Sandbox` は `ReportAPI` ではないためレポートを呼べず、多重継承に追い込まれる。
 持たせる形なら `sf.report.run(...)` と `sf.query(...)` が同じインスタンスから出る。
 
 **なぜ認証を継承にしないか。** OAuth は「Salesforce の一種」ではなく「トークンを取る部品」。
-継承すると `SfReport` まで認証コードを引き継いで責務が混ざる。
+継承すると `ReportAPI` まで認証コードを引き継いで責務が混ざる。
 合成にしておけば JWT 版の差し替えが `_oauth` の入れ替えだけで済む。
 
 **なぜ組織は継承にするか。** 基底は HTTP・認証・共通操作の土台であり、直接使わない。
@@ -432,7 +432,7 @@ client_id / client_secret を読む（[credentials](credentials.md#credentials)�
 
 **`Sandbox` と URL・レポート ID は仮の値。** このリポジトリは公開しているため、
 実際の組織名や値は書かず、配置時に `DOMAIN_URL`・`CREDENTIAL_PREFIX`・`REPORT_*` を
-書き換える（`comken/toolbox/rpa.py` の `example_libs.v0000` と同じ扱い）。
+書き換える（`comken/internal/salesforce_api.py` の `example_libs.v0000` と同じ扱い）。
 
 書き込み系（`insert` / `update` / `upsert` / `delete`）は `dry_run` を尊重する。
 使い方の一覧は [README](../README.md#モジュール一覧)、
