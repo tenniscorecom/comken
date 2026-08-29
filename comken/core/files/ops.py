@@ -304,3 +304,17 @@ def cleanup_stale_tmp(target: str | Path, max_age_seconds: float = 3600) -> None
                 tmp.unlink()
         except OSError:
             logger.debug("一時ファイルを削除できませんでした: %s", tmp, exc_info=True)
+
+    # NOTE: 旧命名（``atomic_write`` 統一前の ``_write_stub_atomic`` /
+    # ``_save_all``）の残骸を拾う移行措置。 旧命名は ``{name}.{pid}.tmp`` と
+    # ``{name}.{hex}.tmp`` の2種で、 どちらも ``target.name + .*.tmp`` で拾える。
+    # 既に配布済みの環境に残っている可能性があり、 いつまでも拾い続ける必要は
+    # ないので「一時的な後方互換」として扱う（コメントで明示）。 新規コードは
+    # ``atomic_write`` を使うので、 残骸が無くなり次第この glob は実質的に
+    # 何も拾わなくなる（= 安全に削除できる目安になる）。
+    for tmp in target.parent.glob(f"{target.name}.*.tmp"):
+        try:
+            if now - tmp.stat().st_mtime > max_age_seconds:
+                tmp.unlink()
+        except OSError:
+            logger.debug("一時ファイルを削除できませんでした: %s", tmp, exc_info=True)

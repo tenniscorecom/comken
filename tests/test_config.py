@@ -1302,6 +1302,59 @@ class TestCleanupStaleTmp:
         assert not orphan.exists()
         assert not target.exists()
 
+    def test_legacy_pid_named_orphan_is_cleaned_up(self, tmp_path):
+        """旧命名の残骸 ``{name}.{pid}.tmp`` も拾える（移行措置）。
+
+        ``atomic_write`` 統一前の ``_write_stub_atomic`` が ``{name}.{pid}.tmp``
+        で一時ファイルを作っていた。 既に配布済みの環境にこの命名規則の残骸が
+        残っている可能性があり、 ``cleanup_stale_tmp`` は当面の間それも拾う
+        （``comken/core/files/ops.py`` の実装コメント参照）。
+        """
+        import os
+
+        from comken.core.files.ops import cleanup_stale_tmp
+
+        target = tmp_path / "config.pyi"
+        stale = tmp_path / "config.pyi.12345.tmp"
+        stale.write_text("旧命名の残骸", encoding="utf-8")
+        os.utime(stale, (0, 0))
+
+        cleanup_stale_tmp(target)
+
+        assert not stale.exists()
+
+    def test_legacy_hex_named_orphan_is_cleaned_up(self, tmp_path):
+        """旧命名の残骸 ``{name}.{hex}.tmp`` も拾える（移行措置）。
+
+        ``atomic_write`` 統一前の ``_save_all``（credentials）が
+        ``{name}.{hex}.tmp`` で一時ファイルを作っていた。 上記と同じ理由で
+        ``cleanup_stale_tmp`` が拾う。
+        """
+        import os
+
+        from comken.core.files.ops import cleanup_stale_tmp
+
+        target = tmp_path / "credentials.json"
+        stale = tmp_path / "credentials.json.deadbeef.tmp"
+        stale.write_text("旧命名の残骸", encoding="utf-8")
+        os.utime(stale, (0, 0))
+
+        cleanup_stale_tmp(target)
+
+        assert not stale.exists()
+
+    def test_legacy_orphan_fresh_is_kept(self, tmp_path):
+        """旧命名の新しい一時ファイルは並行実行の可能性があるため残す。"""
+        from comken.core.files.ops import cleanup_stale_tmp
+
+        target = tmp_path / "config.pyi"
+        fresh = tmp_path / "config.pyi.99999.tmp"
+        fresh.write_text("書き込み中かもしれない", encoding="utf-8")
+
+        cleanup_stale_tmp(target)
+
+        assert fresh.exists()
+
 
 class TestLenientDict:
     """_LenientDict の振る舞いテスト。
