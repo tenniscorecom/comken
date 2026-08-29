@@ -703,6 +703,31 @@ class TestBrowsersParallel:
         with Browsers() as browsers:
             assert browsers.parallel() == []
 
+    def test_raises_exception_group_when_two_or_more_fail(self):
+        """2件以上失敗したときは ``ExceptionGroup`` でまとめて送出する。
+
+        Python 3.11+ の ``except*`` で個別に取り出せるのが要件。 1件失敗の
+        ときはそのまま送出する（既存呼び出し側を壊さない）ので、 2件以上で
+        初めて ``ExceptionGroup`` に切り替わる。
+        """
+
+        def fail_a():
+            raise ValueError("A が失敗")
+
+        def fail_b():
+            raise RuntimeError("B が失敗")
+
+        with Browsers() as browsers, pytest.raises(ExceptionGroup) as info:
+            browsers.parallel(fail_a, fail_b)
+
+        # ``except*`` で個別に取り出して、それぞれの中身も残っている
+        value_errors = [e for e in info.value.exceptions if isinstance(e, ValueError)]
+        runtime_errors = [e for e in info.value.exceptions if isinstance(e, RuntimeError)]
+        assert len(value_errors) == 1
+        assert str(value_errors[0]) == "A が失敗"
+        assert len(runtime_errors) == 1
+        assert str(runtime_errors[0]) == "B が失敗"
+
 
 class TestOptionsBuild:
     """起動オプションの組み立てのテスト。"""

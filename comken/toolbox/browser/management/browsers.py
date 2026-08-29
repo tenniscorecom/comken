@@ -296,9 +296,12 @@ class Browsers:
             各処理の戻り値を、渡した順に並べたリスト。
 
         Raises:
-            Exception: いずれかの処理で発生した例外。複数失敗した場合は、
-                       すべてをログに出したうえで、引数の並び順で最初に失敗したものを送出する
-                       （時間的に最初に失敗したものとは限らない）。
+            Exception: 失敗が **1件**のときはその例外をそのまま送出する
+                （既存の呼び出し側を壊さないため）。
+            BaseExceptionGroup[Exception]: 失敗が **2件以上**のときは
+                ``ExceptionGroup`` でまとめて送出する。Python 3.11 以降の
+                ``except*`` で個別に取り出せる。すべての失敗は呼び出し前に
+                ``logger.error`` でログにも出している。
         """
         self._require_in_with("parallel")
         if not tasks:
@@ -320,7 +323,12 @@ class Browsers:
                 errors.append(exc)
 
         if errors:
-            raise errors[0]
+            # 1件ならそのまま（既存の呼び出し側を壊さない）、 2件以上は
+            # ``ExceptionGroup`` でまとめて送出する。Python 3.11 以降は
+            # ``except*`` で個別に取り出せる。
+            if len(errors) == 1:
+                raise errors[0]
+            raise ExceptionGroup("parallel() で複数の処理が失敗しました", errors)
         return results
 
     @property
