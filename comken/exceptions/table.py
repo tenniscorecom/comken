@@ -112,7 +112,7 @@ class TransferMappingError(TableError):
         super().__init__("mapping には転記元列と転記先列を指定してください。")
 
 
-class TransferDestinationMultipleMatchError(ComkenError):
+class TransferDestinationMultipleMatchError(TableError):
     """転記先のキーに一致する行が複数ある
 
     発生箇所: Transfer()

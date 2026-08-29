@@ -36,7 +36,7 @@ config.ini の例（セクション名・キー名は大文字で書く）:
     HEADLESS = false
 
     [FILES]
-    INPUT_FOLDER = C:\作業\input
+    INPUT_FOLDER = ./input
 
     [REPORT]
     TARGET_SHEETS = [支店A, 支店B, 集計]
@@ -1357,6 +1357,11 @@ def measure(func: Callable[_P, _R]) -> Callable[_P, _R]:
 例外は `BaseException` で捕捉し、`raise` で必ず再送出する
 （`KeyboardInterrupt` も拾う。ハングして Ctrl+C で止めたときに
 「どこで待っていたか」が分かるのが狙い）。
+
+ジェネレータ関数に付けた場合は、本体が `next()` で評価され始めるまで
+「開始」を出さない（呼び出しただけで完了ログが出る事故を防ぐ）。専用の
+ラッパーがジェネレータを返し、最初の `next()` で開始、消費し切ったら完了、
+例外や `GeneratorExit` で抜けたら中断を出す。
 
 Timer との使い分け:
     - Timer: 常にログに出したい・経過秒数を値として使いたい場合
@@ -5797,6 +5802,33 @@ class ScheduledDownloadFailedError(DownloaderError):
 def __init__(self, failed_keys: list[str], history_path: Path) -> None:
 ```
 
+### `ReportReservePathLimitError`
+
+```text
+class ReportReservePathLimitError(DownloaderError):
+```
+
+#### 説明
+
+保存ファイル名の連番が上限に達した
+
+`_reserve_path()` は同じフォルダに既存ファイルがあると連番を足して別の
+ファイル名を探す。 上限（ ``RESERVE_PATH_LIMIT`` ）まで試しても確保できない
+のは権限・同期の異常など、運用側に原因があることが多い。
+
+発生箇所: comken.services.salesforce_downloader.service の _reserve_path()
+
+対処:
+    保存先フォルダが想定どおりか確認する。 共有フォルダなら、 古い取得
+    ファイルを退避するか、 別の保存先に変える。 連発する場合は権限・排他
+    制御の設定も見直す
+
+#### `__init__`
+
+```text
+def __init__(self, report_key: str, base_path: Path, limit: int) -> None:
+```
+
 ### `UnsupportedScheduleFrequencyError`
 
 ```text
@@ -5900,7 +5932,7 @@ def __init__(self, value: object) -> None:
 ### `TransferDestinationMultipleMatchError`
 
 ```text
-class TransferDestinationMultipleMatchError(ComkenError):
+class TransferDestinationMultipleMatchError(TableError):
 ```
 
 #### 説明
@@ -7048,9 +7080,12 @@ Returns:
     各処理の戻り値を、渡した順に並べたリスト。
 
 Raises:
-    Exception: いずれかの処理で発生した例外。複数失敗した場合は、
-               すべてをログに出したうえで、引数の並び順で最初に失敗したものを送出する
-               （時間的に最初に失敗したものとは限らない）。
+    Exception: 失敗が **1件**のときはその例外をそのまま送出する
+        （既存の呼び出し側を壊さないため）。
+    BaseExceptionGroup[Exception]: 失敗が **2件以上**のときは
+        ``ExceptionGroup`` でまとめて送出する。Python 3.11 以降の
+        ``except*`` で個別に取り出せる。すべての失敗は呼び出し前に
+        ``logger.error`` でログにも出している。
 
 #### `names`
 
@@ -9936,7 +9971,7 @@ class ReportAPI:
 #### `__init__`
 
 ```text
-def __init__(self, client: 'SalesforceBase') -> None:
+def __init__(self, client: SalesforceBase) -> None:
 ```
 
 ##### 説明
@@ -10413,7 +10448,7 @@ Args:
 
 ```text
 @measure
-def write_cell(self, sheet_name: str, row: int, col: int | str, value) -> None:
+def write_cell(self, sheet_name: str, row: int, col: int | str, value: Any) -> None:
 ```
 
 ##### 説明

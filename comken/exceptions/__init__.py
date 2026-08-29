@@ -90,8 +90,8 @@ ComkenError
 │   ├── TableRowColumnsError
 │   ├── TableTypeConversionError
 │   ├── TableNotOpenError
-│   └── TransferDestinationMissingError
-├── TransferDestinationMultipleMatchError
+│   ├── TransferDestinationMissingError
+│   └── TransferDestinationMultipleMatchError
 ├── ColumnNotFoundError
 │   ├── ExcelColumnNotFoundError
 │   ├── KeyColumnNotFoundError
@@ -129,6 +129,7 @@ ComkenError
 │   ├── InvalidReportURLError
 │   ├── EmptyReportError
 │   ├── ReportFolderNotFoundError
+│   ├── ReportReservePathLimitError
 │   ├── ScheduledDownloadFailedError
 │   ├── UnsupportedScheduleFrequencyError
 │   ├── ScheduleIntervalMissingError
@@ -209,6 +210,7 @@ from comken.exceptions.downloader import (
     ReportDisabledError,
     ReportFolderNotFoundError,
     ReportNotRegisteredError,
+    ReportReservePathLimitError,
     ScheduledDownloadFailedError,
     ScheduleIntervalMissingError,
     ScheduleRequiredValueMissingError,
@@ -423,6 +425,7 @@ __all__ = [
     "EmptyReportError",
     "ReportFolderNotFoundError",
     "ScheduledDownloadFailedError",
+    "ReportReservePathLimitError",
     "UnsupportedScheduleFrequencyError",
     "ScheduleIntervalMissingError",
     "ScheduleRequiredValueMissingError",

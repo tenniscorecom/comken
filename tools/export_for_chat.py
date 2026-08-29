@@ -76,7 +76,6 @@ DIRECT_ERROR_CATEGORIES = {
     exceptions.SiteOwnerRequiredError: "ファイル・設定などのエラー",
     exceptions.FileDeletionError: "ファイル・設定などのエラー",
     exceptions.FileSuffixMissingError: "ファイル・設定などのエラー",
-    exceptions.TransferDestinationMultipleMatchError: "ファイル・設定などのエラー",
     exceptions.LoggingAlreadyConfiguredError: "ファイル・設定などのエラー",
     exceptions.LoggingConflictError: "ファイル・設定などのエラー",
     exceptions.LogRootNotConfiguredError: "ファイル・設定などのエラー",
