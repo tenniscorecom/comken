@@ -109,6 +109,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `ConfigSectionNotFoundError` | config.ini の必要な節がない | メッセージに表示された **「読んだファイル」のパス** が、編集しているconfig.ini と一致するかを確認する（2026-08-18 にプロジェクトの場所を基準にするように変えてから、起動方法によって別の config.ini を読むことがあるため）。パスが正しければ、表示されたセクション名をconfig.ini に追加する。**見た目では原因が分からない場合**（行頭に空白が混入していた等）はエディタで行頭空白・全角スペースを確認する |
 | `ConfigKeyNotFoundError` | config.ini のセクションに必要なキーがない | メッセージに表示された **「読んだファイル」のパス** が、編集しているconfig.ini と一致するかを確認する。パスが正しければ、表示されたキー名を該当セクションへ追加する。**セクション名は合っているがキー名を 1 文字タイポした** とき（FILES.OUTPUT_FOLER 等）は、「もしかして」に近いキー名が出るので、それを config.ini に書き直す |
 | `ConfigMappingEmptyValueError` | ``[*_MAPPING]`` セクションの値が空欄 | メッセージに表示された **「読んだファイル」のパス** が、編集しているconfig.ini と一致するかを確認する。パスが正しければ、表示されたキー名の両側に値を書いて config.ini を直す（``列名 = 値``）。``=`` を付け忘れて ``キー`` のように書いた行もここで検出する（``cfg.get()`` が ``None`` を返すので空欄と同じ扱い）。通常セクションの空欄（``READ_PASSWORD =`` のように「設定しない」を示す書き方）はエラーにしないので、``*_MAPPING`` 以外では無視してよい |
+| `ConfigSubclassingNotSupportedError` | ``Config`` を継承できない | ``from comken import config`` で ``config.SECTION.KEY`` を直接読む。サブクラスでメソッドを足しても ``Config.__new__`` がパス単位でキャッシュ済みの素の ``Config`` を返すため、 追加したメソッドは``AttributeError`` になる（キャッシュを ``cls`` 対応にする改修は行わない）。 |
 | `UnsupportedFileSuffixError` | 対応外の拡張子が指定された | CSV / Excel の対応する拡張子のファイルを指定する |
 | `FileDeletionError` | ファイルを削除できなかった | 他のプロセスがファイルを掴んでいないか、読み取り専用になっていないかを確認してもう一度実行する。消せたファイルは消えているAttributes:remaining: 削除できなかったファイルのパス一覧。 |
 | `FileSuffixMissingError` | ファイル名に拡張子が無い | ファイル名に拡張子（例: ``.csv`` / ``.xlsx``）を含めて指定する。拡張子は名前の文字列にだけ書く。引数 ``ext`` / ``extension`` は廃止済みのため使えない。 |

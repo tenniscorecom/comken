@@ -24,8 +24,8 @@ config.pyi
 
 # ChatGPT 貼り付け用の書き出し（export_for_chat.py がいつでも作り直せる）
 貼り付け用/
-# ChatGPT貼り付け用に物理結合した1ファイル（concat_source.pyが生成）
-comken_all_source.py
+# ChatGPT貼り付け用に物理結合した1ファイル（export_for_chat.py --bundle が生成）
+comken_bundle.md
 
 # プロジェクト設定（テンプレートは config.ini.example を使う）
 config.ini

@@ -48,6 +48,10 @@ config.ini の例（セクション名・キー名は大文字で書く）:
 しない（業務ツールは実行中の設定変更を想定しない。詳細は
 ``_get_or_build_config`` の docstring）。
 
+**Config は継承できない**。``__new__`` がパス単位でキャッシュ済みの素の
+``Config`` を返すため、サブクラスを定義してもサブクラス側で足したメソッドは
+使えない。``from comken import config`` で ``config.SECTION.KEY`` を直接読むこと。
+
 #### `__init__`
 
 ```text
@@ -1835,6 +1839,10 @@ config.ini の例（セクション名・キー名は大文字で書く）:
 （反映には ``_reset_cached_config()`` を呼ぶ）。 ``stat()`` による更新確認は
 しない（業務ツールは実行中の設定変更を想定しない。詳細は
 ``_get_or_build_config`` の docstring）。
+
+**Config は継承できない**。``__new__`` がパス単位でキャッシュ済みの素の
+``Config`` を返すため、サブクラスを定義してもサブクラス側で足したメソッドは
+使えない。``from comken import config`` で ``config.SECTION.KEY`` を直接読むこと。
 
 #### `__init__`
 
@@ -4438,6 +4446,31 @@ class ConfigMappingEmptyValueError(ConfigError):
 
 ```text
 def __init__(self, path: Path | str, section: str, empty_keys: list[str]) -> None:
+```
+
+### `ConfigSubclassingNotSupportedError`
+
+```text
+class ConfigSubclassingNotSupportedError(ConfigError):
+```
+
+#### 説明
+
+``Config`` を継承できない
+
+発生箇所: ``class AppConfig(Config)`` のようなサブクラス定義時
+
+対処:
+    ``from comken import config`` で ``config.SECTION.KEY`` を直接読む。
+    サブクラスでメソッドを足しても ``Config.__new__`` がパス単位で
+    キャッシュ済みの素の ``Config`` を返すため、 追加したメソッドは
+    ``AttributeError`` になる（キャッシュを ``cls`` 対応にする改修は
+    行わない）。
+
+#### `__init__`
+
+```text
+def __init__(self, subclass_name: str) -> None:
 ```
 
 ### `UnsupportedFileSuffixError`

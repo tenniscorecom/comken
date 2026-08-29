@@ -8,9 +8,15 @@
 ``docs/自動生成/API.md`` へ書き出す。添付できない環境では ``--max-chars`` を指定すると、
 従来どおり資料を文字数の目安で分割して ``貼り付け用/`` へ出力する。
 
+``--bundle`` を指定すると、社内の外部 AI へ貼るための 1 ファイル資料
+（``comken_bundle.md``）を生成する。インデックス → 実例 → 実装全文 →
+エラー対応表の順で並び、内部実装を区別せずに使ったサンプルが出にくく
+なっている。
+
 使い方:
     python tools/export_for_chat.py
     python tools/export_for_chat.py --max-chars 20000
+    python tools/export_for_chat.py --bundle
 """
 
 import argparse
@@ -33,9 +39,29 @@ PACKAGE_ROOT = ROOT / "comken"
 API_OUTPUT_PATH = ROOT / "docs" / "自動生成" / "API.md"
 ERRORS_OUTPUT_PATH = ROOT / "docs" / "ERRORS.md"
 LEGACY_OUTPUT_DIR = ROOT / "貼り付け用"
+BUNDLE_OUTPUT_PATH = ROOT / "comken_bundle.md"
 ERRORS_GENERATED_MARKER = (
     "<!-- ここから下は python export_for_chat.py が自動生成する。手で編集しない -->"
 )
+
+# comken/ 配下の .py を連結するときに除外するディレクトリ名。**どの階層でも除外**。
+# rglob のフィルタで弾く。 concat_source.py から引き継いだ除外に加え、
+# ビルド系（build/, dist/, *.egg-info/, .venv/）も追加している。
+EXCLUDED_DIR_NAMES = frozenset(
+    {
+        "__pycache__",
+        ".mypy_cache",
+        ".ruff_cache",
+        ".pytest_cache",
+        "build",
+        "dist",
+        ".venv",
+        "venv",
+    }
+)
+
+# .py 連結時に「ディレクトリ名 + .egg-info で終わるもの」を除外する接尾辞
+_EXCLUDED_DIR_SUFFIXES = (".egg-info",)
 
 
 @dataclass(frozen=True)
@@ -407,8 +433,8 @@ def _write_errors() -> None:
     ERRORS_OUTPUT_PATH.write_text(_merged_errors_text(current), encoding="utf-8")
 
 
-def _bundle_text(title: str, purpose: str, sources: list[str]) -> str:
-    """貼り付け用資料1種類のテキストを組み立てる。"""
+def _legacy_bundle_text(title: str, purpose: str, sources: list[str]) -> str:
+    """貼り付け用資料1種類（``--max-chars`` 向け）のテキストを組み立てる。"""
     parts = [f"# {title}", "", purpose, ""]
     for source in sources:
         if source == "@API":
@@ -444,13 +470,196 @@ def _write_legacy_bundles(max_chars: int) -> None:
         shutil.rmtree(LEGACY_OUTPUT_DIR)
     LEGACY_OUTPUT_DIR.mkdir()
     for title, (purpose, sources) in BUNDLES.items():
-        chunks = _split(_bundle_text(title, purpose, sources), max_chars)
+        chunks = _split(_legacy_bundle_text(title, purpose, sources), max_chars)
         for number, chunk in enumerate(chunks, start=1):
             suffix = "" if len(chunks) == 1 else f"_{number}of{len(chunks)}"
             path = LEGACY_OUTPUT_DIR / f"{title}{suffix}.txt"
             header = "" if number == 1 else f"（{title} の続き {number}/{len(chunks)}）\n\n"
             path.write_text(header + chunk, encoding="utf-8")
             print(f"{path.name}  {len(chunk):,} 文字")  # noqa: T201
+
+
+def _collect_python_files(package_root: Path) -> list[Path]:
+    """``comken/`` 配下の .py を lexical ソートして返す。
+
+    除外ディレクトリ以外の全階層で ``.py`` だけを拾う。``.pyc`` は拡張子で除外される。
+    ``build/`` / ``dist/`` / ``*.egg-info/`` / ``.venv/`` 等のビルド系ディレクトリは
+    rglob のフィルタで除外する。``concat_source.py`` からロジックを引き継ぎ、
+    ビルド系の除外を追加した。
+    """
+    if not package_root.is_dir():
+        raise FileNotFoundError(f"走査対象が見つかりません: {package_root}")
+    files: list[Path] = []
+    for path in sorted(package_root.rglob("*.py")):
+        parts = path.relative_to(package_root).parts
+        if any(part in EXCLUDED_DIR_NAMES for part in parts):
+            continue
+        if any(part.endswith(_EXCLUDED_DIR_SUFFIXES) for part in parts):
+            continue
+        if not path.is_file():
+            continue
+        files.append(path)
+    return files
+
+
+def _concatenate_files(files: list[Path], package_root: Path) -> tuple[str, int, int]:
+    """各ファイルの前に区切りヘッダを差し込み、結合テキストと統計を返す。
+
+    戻り値は (テキスト, 総行数, 総バイト数) 。行数は ``splitlines()`` ベースで数える。
+    ファイル末尾には必ず改行を 1 つ足してから結合する（連結が崩れないように）。
+    """
+    chunks: list[str] = []
+    total_bytes = 0
+    for path in files:
+        relative = path.relative_to(package_root.parent)  # comken/ からの相対パス
+        header = f"# ===== FILE: {relative.as_posix()} =====\n"
+        body = path.read_text(encoding="utf-8")
+        if not body.endswith("\n"):
+            body += "\n"
+        chunks.append(header)
+        chunks.append(body)
+        total_bytes += len(header.encode("utf-8")) + len(body.encode("utf-8"))
+    text = "".join(chunks)
+    line_count = len(text.splitlines())
+    return text, line_count, total_bytes
+
+
+def _verify_internal_library_placeholder() -> None:
+    """社内ライブラリ仮名が保たれているか検証する。
+
+    ``comken/internal/names.py`` の ``INTERNAL_LIBRARY_ROOT`` が
+    ``"example_libs.v0000"`` のまま（仮名から実名へ書き戻されていないこと）
+    を確認する。実名に置き換わっていると、公開リポジトリ経由で社内ライブラリ
+    名が社外へ漏れるため、生成を止める。
+
+    Raises:
+        RuntimeError: 仮名が崩れていた場合。
+    """
+    expected_placeholder = "example_libs.v0000"
+    names_module = import_module("comken.internal.names")
+    actual_root: str = names_module.INTERNAL_LIBRARY_ROOT
+    if actual_root != expected_placeholder:
+        raise RuntimeError(
+            "社内ライブラリ仮名が壊れています。"
+            f"comken/internal/names.py の INTERNAL_LIBRARY_ROOT が {actual_root!r} になっています。"
+            f"期待値: {expected_placeholder!r}。"
+            "comken は公開リポジトリのため、社内ライブラリの実名が混入しないよう"
+            "仮名 ``example_libs.v0000`` を保ってください。"
+        )
+
+
+def _bundle_text() -> str:
+    """社外 AI へ貼るための 1 ファイル資料を組み立てる。
+
+    並び順は **ヘッダ → 公開 API 索引 → 動く実例 (examples/) → 実装全文
+    (comken/) → エラー対応表**。先頭に実装全文を置くと ``_`` 始まりの内部
+    関数を公開 API と区別せずに使ったサンプルが出やすくなるため、索引で
+    存在する名前を固定してから実例で正しい書き方を見せ、最後に全文で細部を
+    裏取る構成にする。
+
+    社内ライブラリ仮名が保たれているかは ``_verify_internal_library_placeholder``
+    で先に検証する（生成途中で発見しても中途半端なファイルが残るのを避ける）。
+    """
+    _verify_internal_library_placeholder()
+
+    api_text = _api_text()
+    errors_text = _errors_generated_text()
+    package_files = _collect_python_files(PACKAGE_ROOT)
+    impl_text, impl_line_count, impl_byte_count = _concatenate_files(package_files, PACKAGE_ROOT)
+
+    # 動く実例: examples/ 配下をすべて .py / README.md の順で並べる。
+    examples_root = ROOT / "examples"
+    examples_chunks: list[str] = []
+    examples_files: list[Path] = []
+    if examples_root.is_dir():
+        # .py と README.md のみを集める。README.md は先頭に置く。
+        readmes = sorted(examples_root.rglob("README.md"))
+        py_files = sorted(path for path in examples_root.rglob("*.py") if path.is_file())
+        for path in readmes + py_files:
+            relative = path.relative_to(ROOT)
+            examples_chunks.append(f"# ===== EXAMPLE: {relative.as_posix()} =====\n")
+            examples_chunks.append(path.read_text(encoding="utf-8"))
+            if not examples_chunks[-1].endswith("\n"):
+                examples_chunks[-1] += "\n"
+            examples_files.append(path)
+
+    parts: list[str] = []
+    parts.append(
+        _bundle_header(api_text, package_files, examples_files, impl_line_count, impl_byte_count)
+    )
+    parts.append("\n---\n\n")
+    parts.append("# 1. 公開 API 索引\n")
+    parts.append(api_text.rstrip())
+    parts.append("\n---\n\n")
+    if examples_chunks:
+        parts.append("# 2. 動く実例（examples/）\n")
+        parts.extend(examples_chunks)
+        parts.append("\n---\n\n")
+    parts.append("# 3. 実装全文（comken/）\n")
+    parts.append(impl_text)
+    parts.append("\n---\n\n")
+    parts.append("# 4. エラー対応表（docs/ERRORS.md）\n")
+    parts.append(errors_text.rstrip())
+    parts.append("\n")
+    return "".join(parts)
+
+
+def _bundle_header(
+    api_text: str,
+    package_files: list[Path],
+    examples_files: list[Path],
+    impl_line_count: int,
+    impl_byte_count: int,
+) -> str:
+    """``comken_bundle.md`` の冒頭に置く「このファイルの読み方」を組み立てる。"""
+    public_api_names = sum(
+        api_text.count(f"### `{name}`") for name in _extract_public_names(api_text)
+    )
+    lines = [
+        "# comken_bundle.md — 社内 AI へ渡す comken 資料",
+        "",
+        "## このファイルの読み方",
+        "",
+        "- comken は業務自動化の共通ライブラリです。",
+        "- このファイル 1 つだけで資料が完結します（API 索引 → 実例 → 実装全文 → エラー対応表）。",
+        "- 公開 API は **第 1 章** の索引に載っているものだけを使ってください。 ``_`` 始まりは"
+        " 内部実装なので使わないこと。",
+        "- 第 2 章は **動く実例** です。サンプルコードを書くときはここを参照してください。",
+        "- 第 3 章は実装全文です。索引に無い名前を勝手に使う前にここで実在を確かめてください。",
+        "- 第 4 章はエラー対応表です。利用者が読む画面の説明と、その例外が送出される条件を"
+        " ここで確認できます。",
+        "",
+        "## 中身のサマリ",
+        "",
+        f"- 公開 API 索引の名前数: {public_api_names}",
+        f"- 動く実例（examples/）のファイル数: {len(examples_files)}",
+        f"- 実装全文（comken/）の .py ファイル数: {len(package_files)}",
+        f"- 実装全文（comken/）の総行数: {impl_line_count:,}",
+        f"- 実装全文（comken/）の総バイト数: {impl_byte_count:,}",
+        "",
+        "再生成: `python tools/export_for_chat.py --bundle`",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def _extract_public_names(api_text: str) -> set[str]:
+    """API 索引テキストから ``### `Name`` 形式で現れる名前を抽出する。"""
+    names: set[str] = set()
+    for line in api_text.splitlines():
+        if line.startswith("### `") and line.endswith("`"):
+            names.add(line.removeprefix("### `").removesuffix("`"))
+    return names
+
+
+def _write_bundle() -> None:
+    """``comken_bundle.md`` を 1 ファイル書き出す。"""
+    text = _bundle_text()
+    BUNDLE_OUTPUT_PATH.write_text(text, encoding="utf-8")
+    print(  # noqa: T201
+        f"{BUNDLE_OUTPUT_PATH.relative_to(ROOT)} を生成しました"
+        f"（{len(text):,} 文字 / {BUNDLE_OUTPUT_PATH.stat().st_size:,} バイト）"
+    )
 
 
 def main() -> None:
@@ -460,6 +669,11 @@ def main() -> None:
         type=int,
         help="指定時だけ、貼り付け用資料をこの文字数の目安で分割して出力する",
     )
+    parser.add_argument(
+        "--bundle",
+        action="store_true",
+        help="指定時だけ、社外 AI 向けの 1 ファイル資料 comken_bundle.md を生成する",
+    )
     args = parser.parse_args()
     API_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     API_OUTPUT_PATH.write_text(_api_text(), encoding="utf-8")
@@ -468,6 +682,8 @@ def main() -> None:
     print(f"{ERRORS_OUTPUT_PATH.relative_to(ROOT)} を生成しました")  # noqa: T201
     if args.max_chars is not None:
         _write_legacy_bundles(args.max_chars)
+    if args.bundle:
+        _write_bundle()
 
 
 if __name__ == "__main__":

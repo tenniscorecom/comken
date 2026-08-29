@@ -50,3 +50,88 @@ def test_script_can_import_comken_when_run_directly() -> None:
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def test_collect_python_files_includes_all_comken_py() -> None:
+    """``comken/`` 配下のすべての .py が収集される（キャッシュ系は除外）。"""
+    files = export_for_chat._collect_python_files(export_for_chat.PACKAGE_ROOT)
+
+    # ``comken/`` 直下のすべての .py が含まれている
+    expected = sorted(export_for_chat.PACKAGE_ROOT.rglob("*.py"))
+    expected = [
+        path
+        for path in expected
+        if path.is_file()
+        and not any(
+            part in export_for_chat.EXCLUDED_DIR_NAMES
+            for part in path.relative_to(export_for_chat.PACKAGE_ROOT).parts
+        )
+    ]
+    assert files == expected
+
+
+def test_concatenate_files_wraps_each_file_with_header() -> None:
+    """各ファイルの前に ``# ===== FILE: ... =====`` のヘッダが入る。"""
+    files = export_for_chat._collect_python_files(export_for_chat.PACKAGE_ROOT)
+
+    text, _, _ = export_for_chat._concatenate_files(files, export_for_chat.PACKAGE_ROOT)
+
+    assert "# ===== FILE:" in text
+    # ヘッダの数はファイル数と一致する
+    assert text.count("# ===== FILE:") == len(files)
+
+
+def test_bundle_text_has_four_chapters_in_order() -> None:
+    """バンドル資料が 4 章をこの順で持っている。"""
+    text = export_for_chat._bundle_text()
+
+    # ヘッダ → 章 1 → 章 2 → 章 3 → 章 4 の順に出現する
+    header_idx = text.find("# comken_bundle.md")
+    api_idx = text.find("# 1. 公開 API 索引")
+    examples_idx = text.find("# 2. 動く実例")
+    impl_idx = text.find("# 3. 実装全文")
+    errors_idx = text.find("# 4. エラー対応表")
+
+    assert header_idx >= 0
+    assert header_idx < api_idx < examples_idx < impl_idx < errors_idx
+
+
+def test_bundle_text_includes_examples_files() -> None:
+    """``examples/`` の代表ファイルがバンドルに含まれている。"""
+    text = export_for_chat._bundle_text()
+
+    # 代表として ``examples/table_transfer_design/README.md`` が含まれる
+    assert "examples/table_transfer_design/README.md" in text
+
+
+def test_bundle_text_includes_all_comken_py_files() -> None:
+    """``comken/`` の .py がすべて含まれている（ファイル数で検証）。"""
+    text = export_for_chat._bundle_text()
+
+    # ``comken/`` 配下の .py がすべてヘッダ付きで入る
+    expected_files = export_for_chat._collect_python_files(export_for_chat.PACKAGE_ROOT)
+    assert text.count("# ===== FILE:") >= len(expected_files)
+
+    # 各ファイルへの相対パスがそのまま入っている
+    for path in expected_files[:5]:  # 全件チェックは冗長なので先頭5件で十分
+        relative = path.relative_to(export_for_chat.PACKAGE_ROOT.parent).as_posix()
+        assert relative in text
+
+
+def test_verify_internal_library_placeholder_passes() -> None:
+    """社内ライブラリ仮名が保たれている間は検証が通る。"""
+    # 現在の ``comken/internal/names.py`` の値は仮名のままなので例外は出ない
+    export_for_chat._verify_internal_library_placeholder()
+
+
+def test_bundle_output_path_constant_exists() -> None:
+    """``BUNDLE_OUTPUT_PATH`` がリポジトリ直下の ``comken_bundle.md`` を指す。"""
+    assert export_for_chat.BUNDLE_OUTPUT_PATH == export_for_chat.ROOT / "comken_bundle.md"
+
+
+def test_excluded_dir_names_includes_build_and_dist() -> None:
+    """ビルド系のディレクトリ名も除外対象に含まれている。"""
+    excluded = export_for_chat.EXCLUDED_DIR_NAMES
+    assert "build" in excluded
+    assert "dist" in excluded
+    assert ".venv" in excluded
