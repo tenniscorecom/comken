@@ -23,7 +23,7 @@ _DOCS = [
     if ".git" not in path.parts and ".pytest-tmp" not in path.parts and path.name != "CODEX_TASK.md"
 ]
 
-_CODE_BLOCK = re.compile(r"```python\n(.*?)```", re.DOTALL)
+_CODE_BLOCK = re.compile(r"```python(\s+skip)?\n(.*?)```", re.DOTALL)
 _MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]*]\(([^)]+)\)")
 _HEADING = re.compile(r"^#{1,6}\s+(.+)$", re.MULTILINE)
 _REMOVED_NAMES = (
@@ -44,7 +44,14 @@ def _python_blocks() -> list:
         if not doc.exists():
             continue
         for i, match in enumerate(_CODE_BLOCK.finditer(doc.read_text(encoding="utf-8"))):
-            blocks.append(pytest.param(match.group(1), id=f"{doc.name}#{i + 1}"))
+            skip_marker = match.group(1) is not None
+            blocks.append(
+                pytest.param(
+                    match.group(2),
+                    skip_marker,
+                    id=f"{doc.name}#{i + 1}",
+                )
+            )
     return blocks
 
 
@@ -83,12 +90,16 @@ def test_all_named_comken_classes_and_functions_have_docstrings() -> None:
     assert not missing, f"docstringがないクラス・関数があります: {missing}"
 
 
-@pytest.mark.parametrize("code", _python_blocks())
-def test_python_code_block_compiles(code):
-    """ドキュメントの ```python ブロックが構文エラーなくコンパイルできる。"""
-    # 抜粋（... で省略した）説明用スニペットは構文が通らないので対象外にする
-    if "..." in code:
-        pytest.skip("説明用の抜粋スニペット")
+@pytest.mark.parametrize("code,skip_marker", _python_blocks())
+def test_python_code_block_compiles(code, skip_marker):
+    """ドキュメントの ```python ブロックが構文エラーなくコンパイルできる。
+
+    抜粋を ``...`` で表現すると正当な ``def load(self) -> Iterable[Holiday]: ...`` のような
+    コードまで素通りするため、 スキップは明示マーカー (``\\`\\`\\`python skip``) で
+    行う。 マーカーが付いたブロックだけスキップし、 それ以外は **全部コンパイル検証** する。
+    """
+    if skip_marker:
+        pytest.skip("ドキュメントで skip マーカーが付いたブロック")
     compile(code, "<doc>", "exec")
 
 

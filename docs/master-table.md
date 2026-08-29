@@ -154,7 +154,7 @@ True として読みます。bool 列に2つの `choices` を指定すると、�
 - **雛形全体のフォントは Noto Sans JP**（Windows 標準ではないため、未導入 PC では Excel が
   代替フォントで代替表示する。動作には影響しない）
 
-```python
+```python skip
 Item.create_template(path, examples=[{"key": "1001", "name": "受注一覧", ...}])
 ```
 

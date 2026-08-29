@@ -18,7 +18,7 @@ python -m examples.table_transfer_design.run
   - `only_in_read`: write に無い read 行（**コピー** / `Table`）
   - `only_in_write`: read に無い write 行（**作業 Table の実体行** / `list[Row]`）
 
-```python
+```python skip
 for read_row, write_row in transfer.matched_rows():
     if 条件:
         continue                          # この行は apply_mapping を呼ばずに終わる
