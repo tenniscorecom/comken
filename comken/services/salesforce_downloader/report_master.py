@@ -186,7 +186,13 @@ class MasterRow:
         if source is None:
             raise MasterSheetNotDefinedError(cls.__name__)
 
-        with Excel(source) as excel:
+        # **読み取り専用で開く。** 書き込みモードだと存在しないパスを渡された
+        # ときに空のブックを新規作成し、その後のテーブル解決が「対象テーブルを
+        # 一意に決められません」で落ちる。管理表は共有サーバー (UNC) に
+        # 置く運用が前提で、現実の失敗は「サーバーが落ちた」「パスが変わった」
+        # 「権限が無い」のいずれか。**業務担当者が画面で見ても原因が分かるよう、
+        # ファイル不在は `ExcelFileNotFoundError` がそのまま上がる経路にする**。
+        with Excel(source, read_only=True) as excel:
             raw_rows = excel.data_sheet(cls.SHEET_NAME).table().read()
         if any(
             isinstance(value, str) and value.startswith("=")
