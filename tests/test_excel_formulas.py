@@ -43,10 +43,13 @@ def _book_with_cached_formulas(
         text = sheet_xml_path.read_text(encoding="utf-8")
         for coord, formula_value in formulas_with_values.items():
             cached = formula_value[1]
+            # openpyxl は lxml が入っていると ``<v></v>``、入っていないと
+            # ``<v />`` を書く。どちらでも拾えるようにしておかないと、
+            # 手元では通って CI（lxml なし）だけ落ちる
             pattern = re.compile(
                 r'(<c r="' + re.escape(coord) + r'"[^/>]*>)'
                 r"(<f[^<]*</f>)"
-                r"(<v[^<]*</v>)"
+                r"(<v[^<]*</v>|<v\s*/>)"
                 r"(</c>)"
             )
             replacement = r"\1\2<v>" + cached + r"</v>\4"
