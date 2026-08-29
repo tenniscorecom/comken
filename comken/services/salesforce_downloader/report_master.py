@@ -447,7 +447,7 @@ class MasterRow:
             found.append((name, spec, item.type))
         return found
 
-    def __init_subclass__(cls, **kwargs) -> None:
+    def __init_subclass__(cls, **kwargs: Any) -> None:
         # dataclass を付け忘れると fields() が空になり、原因の分からない失敗になる。
         # 継承した時点では判定できないので、ここでは何もせず load() 側で確かめる
         super().__init_subclass__(**kwargs)

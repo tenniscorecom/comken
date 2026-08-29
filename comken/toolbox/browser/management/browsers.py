@@ -51,6 +51,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 from pathlib import Path
+from types import TracebackType
 from typing import Self, TypeVar
 
 from comken.core.timer import measure
@@ -110,7 +111,12 @@ class Browsers:
         self._is_started = True
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         # 待っている途中で Ctrl+C を押されても、ブラウザだけは必ず閉じる。
         # ここを try/finally にしないと、待ち合わせで例外が飛んだ時点で
         # 下のブラウザ終了に到達せず、Edge のプロセスが残る

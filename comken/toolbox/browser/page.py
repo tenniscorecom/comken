@@ -34,10 +34,10 @@ time.sleep で待たないこと。待ち時間が読めなくなり、遅いう
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Self, TypeVar, cast
+from typing import Any, Self, TypeVar, cast
 
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.common.action_chains import ActionChains
@@ -309,7 +309,7 @@ class Page:
 
     # ------------------------------------------------------------ 内部処理
 
-    def _until(self, condition, locator: object, description: str):
+    def _until(self, condition: Callable[[Any], Any], locator: object, description: str) -> Any:
         """条件が満たされるまで待つ。時間切れなら、どこで失敗したかを添えて送出する。
 
         selenium の TimeoutException はメッセージにセレクターが入らないため、

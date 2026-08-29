@@ -6,7 +6,7 @@ Table はメモリ上の行だけを担当します。CSV や Excel の保存処
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from typing import Any, Self
 
 from comken.exceptions.table import (
@@ -70,7 +70,7 @@ class Table:
             return [dict(row) for row in self._rows[index]]
         return dict(self._rows[index])
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[dict[str, Any]]:
         """各行のコピーを返す。反復中の変更は元のTableへ反映しない。"""
         return iter(self.read_rows())
 
@@ -102,8 +102,15 @@ class Table:
     def select(self, *columns: str) -> Table:
         """指定した列だけを持つ新しいTableを返す。"""
         self._check_columns(columns)
+        # 選択されなかった列の変換関数まで持ち回らないよう、columns に含まれる
+        # 列だけに絞った types を渡す
+        selected_types = {
+            column: converter for column, converter in self.types.items() if column in columns
+        }
         return Table(
-            list(columns), [{column: row[column] for column in columns} for row in self._rows]
+            list(columns),
+            [{column: row[column] for column in columns} for row in self._rows],
+            types=selected_types,
         )
 
     def filter(self, predicate: Callable[[dict], bool]) -> Table:
@@ -159,6 +166,6 @@ class Table:
         if missing:
             raise TableColumnNotFoundError(missing)
 
-    def _iter_rows_for_update(self):
+    def _iter_rows_for_update(self) -> Iterator[dict[str, Any]]:
         """ライブラリ内部で更新する実体行を返す。"""
         return iter(self._rows)

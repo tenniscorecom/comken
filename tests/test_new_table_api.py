@@ -129,3 +129,20 @@ def test_compare_tables_rejects_generated_column_collision() -> None:
 
     with pytest.raises(TransferMappingError):
         compare_tables(read, write, read_key="id", write_key="id")
+
+
+def test_select_keeps_only_types_for_selected_columns() -> None:
+    """``select()`` は選択されなかった列の変換関数まで持ち回らない。"""
+    table = Table(
+        ["id", "value"],
+        [{"id": "1", "value": "1"}],
+        types={"id": int, "value": int},
+    )
+
+    selected = table.select("id")
+
+    assert selected.read_rows() == [{"id": 1}]
+    # 選択した列の変換関数だけが残る（value の int は持ち越さない）
+    assert selected.types == {"id": int}
+    selected.append({"id": "2"})
+    assert selected.read_rows() == [{"id": 1}, {"id": 2}]

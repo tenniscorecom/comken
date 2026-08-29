@@ -560,6 +560,43 @@ class TestConfigTypeConversion:
         assert value == Config(ini).S.X
 
 
+class TestConfigStrftimeFormat:
+    """strftime 書式が誤って Path に変換されないことの確認。"""
+
+    def test_strftime_with_slashes_stays_string(self, tmp_path):
+        """``%Y/%m/%d`` のような strftime 書式は Path にせず文字列のまま返す。"""
+        ini = tmp_path / "config.ini"
+        ini.write_text("[FMT]\nDATE = %Y/%m/%d\n", encoding="utf-8")
+        value = Config(ini).FMT.DATE
+        assert value == "%Y/%m/%d"
+        assert isinstance(value, str)
+
+    def test_strftime_with_dashes_stays_string(self, tmp_path):
+        """``%Y-%m-%d`` のような strftime 書式は Path にせず文字列のまま返す。"""
+        ini = tmp_path / "config.ini"
+        ini.write_text("[FMT]\nDATE = %Y-%m-%d\n", encoding="utf-8")
+        value = Config(ini).FMT.DATE
+        assert value == "%Y-%m-%d"
+        assert isinstance(value, str)
+
+    def test_strftime_compact_with_underscore_stays_string(self, tmp_path):
+        """``%Y%m%d_%H%M%S`` のような strftime 書式は Path にせず文字列のまま返す。"""
+        ini = tmp_path / "config.ini"
+        ini.write_text("[FMT]\nSTAMP = %Y%m%d_%H%M%S\n", encoding="utf-8")
+        value = Config(ini).FMT.STAMP
+        assert value == "%Y%m%d_%H%M%S"
+        assert isinstance(value, str)
+
+    def test_percent_followed_by_non_alpha_is_still_a_path(self, tmp_path):
+        """``%`` の後が英字でない値はパス判定を続ける。"""
+        ini = tmp_path / "config.ini"
+        ini.write_text("[FMT]\nLABEL = 100%/年\n", encoding="utf-8")
+        value = Config(ini).FMT.LABEL
+        assert isinstance(value, Path)
+        # 相対パスは config.ini の親ディレクトリを基準に resolve される
+        assert value == (tmp_path / "100%/年").resolve()
+
+
 class TestConfigMissingSection:
     def test_missing_section_raises_config_error(self, tmp_path):
         """未定義セクションへのアクセスは素の AttributeError ではなく ConfigError になる。"""

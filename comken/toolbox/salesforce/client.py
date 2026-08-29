@@ -23,6 +23,7 @@ import time
 import urllib.parse
 from collections.abc import Iterator
 from pathlib import Path
+from types import TracebackType
 from typing import Protocol, Self
 
 import requests
@@ -203,7 +204,12 @@ class SalesforceBase:
     def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, *args) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         self.close()
 
     def close(self) -> None:
@@ -414,7 +420,6 @@ class SalesforceBase:
             SalesforceConnectionError: ネットワークの問題で接続できない場合。
         """
         start = time.perf_counter()
-        is_reauthenticated = False
         # 初回送信をループの前で行い、response を必ず束縛する。
         # その下のループは 5xx/429 の一時障害だけを拾うので、初回送信と
         # 合計で最大 MAX_ATTEMPTS 回になる（試行 1..MAX_ATTEMPTS-1 = 2 回まで再試行）。
@@ -441,14 +446,12 @@ class SalesforceBase:
             response = self._send(method, self._request_url(path), body)
 
         # 401 の再認証は試行回数を消費しない別ルート。一時障害のリトライ中に
-        # 出ても、ループの外で1回だけ拾う。既に再認証済み（is_reauthenticated）なら
-        # 何もしない。2回続けて 401 になるのは設定の問題なので、リトライで隠さず
-        # 下の SalesforceRequestError に落とす
-        if response.status_code == HTTP_UNAUTHORIZED and not is_reauthenticated:
+        # 出ても、ループの外で1回だけ拾う（2回続けて 401 になるのは設定の問題
+        # なので、リトライで隠さず下の SalesforceRequestError に落とす）
+        if response.status_code == HTTP_UNAUTHORIZED:
             logger.debug("401 を受け取ったのでトークンを取り直します: %s", path)
             self.metrics.record_retry(component, RetryReason.REAUTH)
             self._authenticate()
-            is_reauthenticated = True
             response = self._send(method, self._request_url(path), body)
 
         # response は初回送信で必ず束縛済み

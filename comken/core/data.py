@@ -172,7 +172,7 @@ def _materialize(data: Table | list[dict]) -> tuple[list[dict], list[str]]:
     return [], []
 
 
-def _normalize(value) -> str:
+def _normalize(value: object) -> str:
     """比較用に値を文字列へ揃える。
 
     CSV は全部 str、Excel は int / float / None で返ってくるため、

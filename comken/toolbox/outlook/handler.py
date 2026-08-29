@@ -12,6 +12,7 @@ import logging
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from types import TracebackType
 from typing import Any, Self
 
 import win32com.client
@@ -65,7 +66,12 @@ class Outlook:
     def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         # NOTE: Excel / Access と違い Quit() は利用者の Outlook まで閉じるため呼ばない。
         self._namespace = None
         self._application = None
@@ -131,7 +137,7 @@ class Outlook:
         draft.Save()
         logger.info("Outlook の下書きフォルダに保存しました: %s", subject)
 
-    def _select_folder(self, folder: str):
+    def _select_folder(self, folder: str) -> Any:
         inbox = self._namespace.GetDefaultFolder(OUTLOOK_INBOX)
         if not folder:
             return inbox
@@ -143,7 +149,7 @@ class Outlook:
                 return folders.Item(name)
         raise OutlookFolderNotFoundError(folder, names)
 
-    def _to_message(self, item) -> MailMessage:
+    def _to_message(self, item: Any) -> MailMessage:
         received_at = item.ReceivedTime
         if received_at.tzinfo is None:
             received_at = received_at.replace(tzinfo=now().tzinfo)
@@ -164,7 +170,7 @@ def _join_recipients(recipients: str | Sequence[str]) -> str:
     return "; ".join(recipients)
 
 
-def _sender_address(item) -> str:
+def _sender_address(item: Any) -> str:
     if getattr(item, "SenderEmailType", "") == "EX":
         exchange_user = item.Sender.GetExchangeUser()
         if exchange_user is not None and exchange_user.PrimarySmtpAddress:

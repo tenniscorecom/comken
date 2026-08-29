@@ -12,6 +12,7 @@ import functools
 import logging
 import time
 from collections.abc import Callable
+from types import TracebackType
 from typing import ParamSpec, Self, TypeVar
 
 logger = logging.getLogger(__name__)
@@ -41,7 +42,12 @@ class Timer:
         self._start = time.perf_counter()
         return self
 
-    def __exit__(self, *args) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         self.elapsed = time.perf_counter() - self._start
         logger.info("%s: %.2f秒", self._name, self.elapsed)
 

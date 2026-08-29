@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from types import TracebackType
 from typing import Any, Self
 
 import win32api
@@ -135,10 +136,15 @@ class ExcelCOMHandler(FileBase):
     def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, *args) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         self.close()
 
-    def _sheet(self, name) -> Any:
+    def _sheet(self, name: str) -> Any:
         """シートオブジェクトを返す。"""
         return self._wb.Sheets(_warn_coerce(name, str, "sheet_name", stacklevel=3))
 
@@ -154,7 +160,7 @@ class ExcelCOMHandler(FileBase):
         return self._sheet(sheet_name).Cells(int(row), column_number(col)).Value
 
     @measure
-    def write_cell(self, sheet_name: str, row: int, col: int | str, value) -> None:
+    def write_cell(self, sheet_name: str, row: int, col: int | str, value: Any) -> None:
         """セルに値を書き込む。
 
         Args:
@@ -441,7 +447,12 @@ class RegistryHandler:
     def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, *args) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         self.close()
 
     @measure
@@ -463,7 +474,7 @@ class RegistryHandler:
         win32api.RegCloseKey(self._key)
 
 
-def _block_values(ws, first_row: int, last_row: int, last_col: int) -> list[tuple]:
+def _block_values(ws: Any, first_row: int, last_row: int, last_col: int) -> list[tuple]:
     """シートの矩形範囲をまとめて読み、行ごとのタプルにして返す。
 
     セルを1つずつ読むと COM の往復が「行数 × 列数」になり、数万行では実用にならない。

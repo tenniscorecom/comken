@@ -684,7 +684,6 @@ __all__ = [
     "HolidayCalendar",
     "HolidaySource",
     "RefreshableHolidaySource",
-    "_BundledCabinetCSVSource",
     "add_business_days",
     "business_day_after",
     "business_day_before",

@@ -13,6 +13,7 @@ import shutil
 import tempfile
 import time
 from pathlib import Path
+from types import TracebackType
 from typing import Self
 
 from comken.core.timer import measure
@@ -70,7 +71,12 @@ class DownloadDir:
     def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, *args) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         # 一時フォルダは自動削除（消し忘れ防止）。path 指定の固定フォルダは残す
         if self._is_temp:
             shutil.rmtree(self.path, ignore_errors=True)

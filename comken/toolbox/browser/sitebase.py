@@ -35,7 +35,7 @@ r"""comken/toolbox/browser/sitebase.py — サイトを表す SiteBase 基底ク
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, TypeVar
+from typing import TYPE_CHECKING, ClassVar, Self, TypeVar
 
 from comken.exceptions import (
     SiteAlreadyInLibraryError,
@@ -93,7 +93,7 @@ class SiteBase:
         # ときは None のままにして、`close()` で持ち物を閉じてしまわないように区別する
         self._browsers: Browsers | None = None
 
-    def __enter__(self) -> SiteBase:
+    def __enter__(self) -> Self:
         # 循環インポートを避けるため、使う直前に取り出す
         from comken.toolbox.browser.management import Browsers
 

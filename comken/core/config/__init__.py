@@ -98,7 +98,7 @@ class Config:
         HEADLESS = false
 
         [FILES]
-        INPUT_FOLDER = C:\\作業\\input
+        INPUT_FOLDER = ./input
 
         [REPORT]
         TARGET_SHEETS = [支店A, 支店B, 集計]
@@ -623,8 +623,17 @@ def _looks_like_path(value: str) -> bool:
     **URL スキーム（``://``）を含む値は False を返す。** ``https://example.test/a%20b``
     のような設定値は URL として ``str`` のまま扱う。 区切り ``/`` だけではパスと
     区別できないので、 ``://`` を「これは URL だ」と示すマーカーに使う。
+
+    **strftime 書式（``%Y/%m/%d`` 等）は False を返す。** ``%`` の直後に英字が続く
+    箇所が 1 つでもあれば strftime 書式とみなす（``://`` と同じ「値の意味を変える
+    マーカー」としての扱い）。
     """
     if "://" in value:
+        return False
+    if any(
+        value[index] == "%" and index + 1 < len(value) and value[index + 1].isalpha()
+        for index in range(len(value))
+    ):
         return False
     if len(value) >= 2 and (value[1:3] == ":\\" or value[:2] == "\\\\" or value[0] == "/"):
         return True

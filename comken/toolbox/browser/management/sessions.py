@@ -26,6 +26,7 @@ import threading
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
+from types import TracebackType
 from typing import TYPE_CHECKING, Self
 
 from selenium import webdriver
@@ -115,7 +116,12 @@ class BrowserSession:
         logger.info("ブラウザを起動しました: %s", self.name)
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         # エラーで抜けるときは、原因調査のために最後の画面を残す
         if exc_type is not None:
             self._save_error_screenshot()

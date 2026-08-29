@@ -76,6 +76,6 @@ def debug(enabled: bool = True) -> Iterator[None]:
         _debug = previous
 
 
-def dry_run_log(action: str, *args) -> None:
+def dry_run_log(action: str, *args: object) -> None:
     """dry-run でスキップした操作をログに出す（ライブラリ内部用）。"""
     logger.info("[DRY-RUN] %s", action % args if args else action)
