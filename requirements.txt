@@ -5,5 +5,7 @@ selenium
 pywin32
 requests
 ; --- 開発用 ---
-ruff
-pytest
+; バージョンは .github/workflows/ci.yml と必ず揃える。
+; ずれると formatter の挙動差で「手元は通るのに CI だけ落ちる」状態になる。
+ruff==0.15.21
+pytest==9.1.1
