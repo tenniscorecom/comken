@@ -146,3 +146,58 @@ def test_select_keeps_only_types_for_selected_columns() -> None:
     assert selected.types == {"id": int}
     selected.append({"id": "2"})
     assert selected.read_rows() == [{"id": 1}, {"id": 2}]
+
+
+def test_table_equals_table_by_content() -> None:
+    """同じ列と全行を持つ ``Table`` は ``==`` で ``True`` になる（同一性ではない）。"""
+    a = Table(["id", "name"], [{"id": 1, "name": "山田"}, {"id": 2, "name": "鈴木"}])
+    b = Table(["id", "name"], [{"id": 1, "name": "山田"}, {"id": 2, "name": "鈴木"}])
+
+    assert a == b
+    assert b == a
+
+
+def test_table_not_equal_when_column_order_differs() -> None:
+    """列の順番が違う ``Table`` は等しくない（``concat`` が列順を揃える設計と揃える）。"""
+    a = Table(["id", "name"], [{"id": 1, "name": "山田"}])
+    b = Table(["name", "id"], [{"name": "山田", "id": 1}])
+
+    assert a != b
+
+
+def test_table_not_equal_when_rows_differ() -> None:
+    """行が違えば等しくない。"""
+    a = Table(["id"], [{"id": 1}])
+    b = Table(["id"], [{"id": 2}])
+
+    assert a != b
+    assert a != b
+
+
+def test_table_equals_ignores_types() -> None:
+    """``types`` は比較に含めない（変換関数は表の中身ではないため）。"""
+    with_types = Table(["id"], [{"id": "1"}], types={"id": int})
+    without_types = Table(["id"], [{"id": 1}])
+
+    # 実行時の値（types 適用後）で比較される = 等しい
+    assert with_types.read_rows() == without_types.read_rows()
+    assert with_types == without_types
+
+
+def test_table_equals_list_still_works() -> None:
+    """``Table == list[dict]`` の経路は今までのとおり動く。"""
+    table = Table(["id", "name"], [{"id": 1, "name": "山田"}])
+
+    assert table == [{"id": 1, "name": "山田"}]
+    assert table != [{"id": 2, "name": "山田"}]
+
+
+def test_table_not_equal_to_unrelated_type() -> None:
+    """``str`` や ``int`` など無関係な型との比較は ``NotImplemented`` を返す。"""
+    table = Table(["id"], [{"id": 1}])
+
+    # ``!=`` は ``NotImplemented`` を ``True``（等しくない）に畳む
+    assert table != "string"
+    assert table != 42
+    # ``==`` も ``NotImplemented`` を ``False`` に畳む
+    assert table != "string"

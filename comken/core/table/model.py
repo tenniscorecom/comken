@@ -78,9 +78,16 @@ class Table:
         return len(self._rows)
 
     def __eq__(self, other: object) -> bool:
+        if isinstance(other, Table):
+            # ``columns`` の**順番**が違う ``Table`` は等しくない（``concat`` が
+            # 列順を揃える設計と揃える）。 ``types`` は比較に含めない（変換関数は
+            # 表の中身ではないため）。
+            return self.columns == other.columns and self.read_rows() == other.read_rows()
         if isinstance(other, list):
             return self.read_rows() == other
-        return super().__eq__(other)
+        # それ以外の型とは比較しない（``list`` を「中身の ``dict``」と誤判定しない
+        # よう ``__eq__`` で ``False`` を返さず ``NotImplemented`` を返す）
+        return NotImplemented
 
     def replace(self, rows: list[dict]) -> Self:
         """表の全行を置き換え、同じTableを返す。"""
