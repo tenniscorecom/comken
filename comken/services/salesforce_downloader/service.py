@@ -55,6 +55,7 @@ from comken.exceptions import (
     HistoryLockTimeoutError,
     HistoryWriteError,
     ReportFolderNotFoundError,
+    ReportReservePathLimitError,
     ScheduledDownloadFailedError,
 )
 from comken.services.salesforce_downloader import history
@@ -74,6 +75,12 @@ CAUSE_SALESFORCE = "Salesforce"
 CAUSE_EMPTY_DATA = "データなし"
 CAUSE_FILE = "ファイル"
 CAUSE_PROGRAM = "プログラム"
+
+# ``_reserve_path`` が連番を足して空きファイル名を探索する回数の上限。
+# ``comken.core.holidays.calendar.BUSINESS_DAY_SEARCH_LIMIT`` と同じ理由で、
+# 共有サーバーの同期・権限異常などで ``FileExistsError`` が返り続けると無限
+# ループになるため、必ず上限を切る。
+RESERVE_PATH_LIMIT = 1000
 
 
 @measure
@@ -296,17 +303,24 @@ def _save(entry: ReportEntry, rows: list[dict]) -> Path:
 
 
 def _reserve_path(entry: ReportEntry) -> Path:
-    """排他的な新規作成で保存名を予約し、既存ファイルを上書きしない。"""
+    """排他的な新規作成で保存名を予約し、既存ファイルを上書きしない。
+
+    同じフォルダに既存ファイルがあると連番（ ``_1`` / ``_2`` …）を足して別の
+    ファイル名を探す。 ``RESERVE_PATH_LIMIT`` を超えると ``ReportReservePathLimitError``
+    を送出する（権限・同期の異常で ``FileExistsError`` が返り続ける無限ループを
+    避けるため）。 ``BUSINESS_DAY_SEARCH_LIMIT`` と同じ考え方で上限を切っている。
+    """
     base_path = file_path_of(entry)
     candidate = base_path
     sequence = 0
-    while True:
+    for _ in range(RESERVE_PATH_LIMIT):
         try:
             candidate.open("x").close()
             return candidate
         except FileExistsError:
             sequence += 1
             candidate = base_path.with_stem(f"{base_path.stem}_{sequence}")
+    raise ReportReservePathLimitError(entry.key, base_path, RESERVE_PATH_LIMIT)
 
 
 def _update_daily_cache(entry: ReportEntry, saved_path: Path) -> None:

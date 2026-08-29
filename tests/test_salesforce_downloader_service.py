@@ -22,6 +22,7 @@ from comken.exceptions import (
     ReportDisabledError,
     ReportFolderNotFoundError,
     ReportNotRegisteredError,
+    ReportReservePathLimitError,
     ScheduledDownloadFailedError,
 )
 from comken.services.salesforce_downloader import (
@@ -229,6 +230,41 @@ class TestDownloadReport:
         # もう1つ作られたファイル = 衝突回避で _1 が付いたファイル
         archive = paths["folder"] / "1001_顧客一覧_fixed_1.csv"
         assert archive.exists()
+
+    def test_reserve_path_raises_when_all_sequential_names_are_taken(self, paths, monkeypatch):
+        """連番の上限に達したら ``ReportReservePathLimitError`` を送出する。
+
+        共有サーバーの権限・同期の異常で ``FileExistsError`` が返り続けると
+        既存実装では無限ループになる。 上限を設けて、運用側に気付ける
+        メッセージを伴った例外で抜ける。
+        """
+        # テスト時間短縮のため、上限を小さい値に下げる
+        monkeypatch.setattr(service_module, "RESERVE_PATH_LIMIT", 5)
+        # ファイル名に日付・時刻が入るので、 file_path_of をモックして固定名にする
+        base = paths["folder"] / "1001_顧客一覧.csv"
+        monkeypatch.setattr(service_module, "file_path_of", lambda unused: base)
+
+        # ベース名と ``_1`` 〜 ``_4`` までの連番を全部作っておく（計5ファイル）。
+        # ``_reserve_path`` は base と ``_1`` 〜 ``_4`` を試して全部 FileExistsError
+        # になると、上限に達して例外を上げる
+        for sequence in range(5):
+            candidate = base if sequence == 0 else paths["folder"] / f"1001_顧客一覧_{sequence}.csv"
+            candidate.write_text("埋まり", encoding="utf-8")
+
+        with (
+            patch(
+                "comken.services.salesforce_downloader.service.site_for",
+                return_value=fake_salesforce(),
+            ),
+            pytest.raises(ReportReservePathLimitError) as caught,
+        ):
+            download_report("1001")
+
+        # メッセージに管理番号・上限値・保存先候補のどれかが含まれていれば、 運用側が
+        # 「どこで何が起きているか」を追える
+        assert "1001" in str(caught.value)
+        assert "5" in str(caught.value)
+        assert str(base) in str(caught.value)
 
     def test_unregistered_key_raises(self, paths):
         with pytest.raises(ReportNotRegisteredError):
