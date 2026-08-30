@@ -58,7 +58,7 @@ def main() -> None:
         destination.create_data_sheet("請求一覧").create_table("請求一覧", working)
 
     logger.info("設定の列対応: %s（左: 転記元 → 右: 転記先）", config_mapping)
-    logger.info("Excel 転記: %s（%d 件）", OUTPUT_PATH, working.count())
+    logger.info("Excel 転記: %s（%d 件）", OUTPUT_PATH, len(working))
 
 
 if __name__ == "__main__":

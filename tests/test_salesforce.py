@@ -479,14 +479,14 @@ class TestReportApi:
         """列は表示名をキーにして返す。"""
         body = _report_body([("A社", "1,000"), ("B社", "2,000")])
         with _salesforce([_response(json_body=body)]) as (client, session, _):
-            rows = client.report.run("00O000000000001")
+            rows = client.report.get("00O000000000001")
 
         assert rows == [{"名前": "A社", "金額": "1,000"}, {"名前": "B社", "金額": "2,000"}]
         url = session.request.call_args[0][1]
         assert url == f"{INSTANCE_URL}{DATA_PREFIX}/analytics/reports/00O000000000001"
 
     def test_run_csv_saves_the_report_result(self, tmp_path):
-        """run_csv() は run() と同じ結果をそのまま CSV へ保存する。"""
+        """run_csv() は get() と同じ結果をそのまま CSV へ保存する。"""
         body = _report_body([("A社", "1000")])
         path = tmp_path / "report.csv"
         with _salesforce([_response(json_body=body)]) as (client, _, _):
@@ -498,7 +498,7 @@ class TestReportApi:
     def test_filters_are_posted_as_report_filters(self):
         filters = [{"column": "CREATED_DATE", "operator": "greaterThan", "value": "2026-01-01"}]
         with _salesforce([_response(json_body=_report_body([]))]) as (client, session, _):
-            client.report.run("00O000000000001", filters=filters)
+            client.report.get("00O000000000001", filters=filters)
 
         assert session.request.call_args[0][0] == "POST"
         expected_body = {"reportMetadata": {"reportFilters": filters}}
@@ -511,13 +511,13 @@ class TestReportApi:
             _salesforce([_response(json_body=body)]) as (client, _, _),
             pytest.raises(SalesforceReportTruncatedError, match=r"(?s)2000 行.*SOQL"),
         ):
-            client.report.run("00O000000000001")
+            client.report.get("00O000000000001")
 
     def test_truncated_report_is_recorded_in_metrics(self):
         """切り捨ては、続行した場合でも計測に残す。"""
         body = _report_body([("A社", "1")], all_data=False)
         with _salesforce([_response(json_body=body)]) as (client, _, _):
-            rows = client.report.run("00O000000000001", allow_truncated=True)
+            rows = client.report.get("00O000000000001", allow_truncated=True)
 
         assert rows == [{"名前": "A社", "金額": "1"}]
         assert client.metrics.truncated_reports == ["00O000000000001"]
@@ -529,14 +529,14 @@ class TestReportApi:
             _salesforce([_response(json_body=body)]) as (client, _, _),
             pytest.raises(SalesforceReportFormatError, match=r"(?s)SUMMARY.*明細"),
         ):
-            client.report.run("00O000000000001")
+            client.report.get("00O000000000001")
 
     def test_missing_label_falls_back_to_internal_name(self):
         """表示名が取れない列は内部名をキーにする。"""
         body = _report_body([("A社", "1")])
         body["reportExtendedMetadata"]["detailColumnInfo"] = {}
         with _salesforce([_response(json_body=body)]) as (client, _, _):
-            assert client.report.run("00O000000000001") == [{"NAME": "A社", "AMOUNT": "1"}]
+            assert client.report.get("00O000000000001") == [{"NAME": "A社", "AMOUNT": "1"}]
 
     def test_async_run_polls_until_success(self):
         """非同期実行は完了までポーリングして結果を返す。"""
@@ -582,23 +582,15 @@ class TestReportApi:
         with _salesforce([_response(json_body=["not", "a", "dict"])]) as (client, _, _):
             assert client.report.describe("00O000000000001") == {}
 
-    def test_read_rows_keeps_labels_for_zero_hit_report(self):
-        """``read_rows()`` でも 0 件ヒットのレポートで表示名ラベルを保てる。"""
-        body = _report_body([])
-        with _salesforce([_response(json_body=body)]) as (client, _, _):
-            rows = list(client.report.read_rows("00O000000000001"))
-
-        assert rows == []
-
-    def test_run_keeps_labels_for_zero_hit_report(self):
-        """0 件ヒットのレポートでも ``run()`` は ``detailColumns`` から列を作る。
+    def test_get_keeps_labels_for_zero_hit_report(self):
+        """0 件ヒットのレポートでも ``get()`` は ``detailColumns`` から列を作る。
 
         ``rows[0]`` からの推測ではなく ``detailColumns`` / ``detailColumnInfo``
         を使うため、ヒット件数 0 でも列情報が落ちない。
         """
         body = _report_body([])
         with _salesforce([_response(json_body=body)]) as (client, _, _):
-            table = client.report.run("00O000000000001")
+            table = client.report.get("00O000000000001")
 
         assert table.columns == ["名前", "金額"]
 

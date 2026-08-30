@@ -157,7 +157,7 @@ SalesforceBase                     HTTP の土台。_request() が唯一の通�
 
 **なぜレポートを継承にしないか。** `ReportAPI` を `SalesforceBase` のサブクラスにすると、
 `Sandbox` は `ReportAPI` ではないためレポートを呼べず、多重継承に追い込まれる。
-持たせる形なら `sf.report.run(...)` と `sf.query(...)` が同じインスタンスから出る。
+持たせる形なら `sf.report.get(...)` と `sf.query(...)` が同じインスタンスから出る。
 
 **なぜ認証を継承にしないか。** OAuth は「Salesforce の一種」ではなく「トークンを取る部品」。
 継承すると `ReportAPI` まで認証コードを引き継いで責務が混ざる。
@@ -181,7 +181,7 @@ DPAPI から読む別コンストラクタを併存させる意味がない。�
 from comken.toolbox.salesforce.sites import Sandbox
 
 with Sandbox() as sf:
-    rows = sf.report.run("00O000000000001")
+    rows = sf.report.get("00O000000000001")
     ...
 ```
 
@@ -197,7 +197,7 @@ site = site_for(report_url)
 report_id = report_id_from_url(report_url)
 
 with site() as sf:
-    rows = sf.report.run(report_id)
+    rows = sf.report.get(report_id)
 ```
 
 ---
@@ -241,7 +241,7 @@ with site() as sf:
 ### 定義だけ取る（describe）
 
 `describe(report_id)` でレポートを**実行せず**に定義を取れる。
-`run()` / `run_async()` と違い、2000 行の上限も実行枠も消費しない。
+`get()` / `run_async()` と違い、2000 行の上限も実行枠も消費しない。
 上の 3 段構えで「3. SOQL へ書き換え」を検討するとき、移行先 SOQL の
 下書き材料として使う。
 
@@ -370,7 +370,7 @@ with Sandbox() as sf:
     new_id = sf.insert("Account", {"Name": "新規取引先"})
     sf.update("Account", record_id=new_id, data={"Name": "更新後"})
 
-    rows = sf.report.run("00O000000000001")                # レポートは上限 2000 行
+    rows = sf.report.get("00O000000000001")                # レポートは上限 2000 行
 
     sf.metrics.log_summary()                               # 使用量を最後にまとめて出す
 ```
@@ -394,7 +394,7 @@ My Domain は `Sandbox.DOMAIN_URL` に置く。`login.salesforce.com` ではこ�
 
 ```python
 # 期間で区切って回避する
-rows = sf.report.run(
+rows = sf.report.get(
     "00O000000000001",
     filters=[{"column": "CREATED_DATE", "operator": "greaterThan", "value": "2026-01-01"}],
 )

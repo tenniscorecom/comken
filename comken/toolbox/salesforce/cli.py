@@ -121,7 +121,7 @@ def _run_check(args: argparse.Namespace) -> None:
 def _run_report(args: argparse.Namespace) -> None:
     """主用途（レポートの読み取り）が通るか確かめる。"""
     with _open(args) as sf:
-        rows = sf.report.run(args.report_id, allow_truncated=True)
+        rows = sf.report.get(args.report_id, allow_truncated=True)
     print(f"{len(rows)} 行 取得しました")
     if not rows:
         return

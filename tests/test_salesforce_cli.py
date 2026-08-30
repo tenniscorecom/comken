@@ -52,7 +52,7 @@ class TestReport:
     def test_shows_row_count_and_columns_without_values(self, capsys):
         """既定では行数と列名だけを出し、中身は出さない。"""
         client = _client()
-        client.report.run.return_value = [{"案件名": "極秘案件", "金額": "1000"}]
+        client.report.get.return_value = [{"案件名": "極秘案件", "金額": "1000"}]
         with patch("comken.toolbox.salesforce.cli.Sandbox", return_value=client):
             code = main(
                 [
@@ -75,7 +75,7 @@ class TestReport:
     def test_shows_values_when_rows_requested(self, capsys):
         """--rows を指定したときだけ中身を出す。"""
         client = _client()
-        client.report.run.return_value = [{"案件名": "案件A"}]
+        client.report.get.return_value = [{"案件名": "案件A"}]
         with patch("comken.toolbox.salesforce.cli.Sandbox", return_value=client):
             main(
                 [

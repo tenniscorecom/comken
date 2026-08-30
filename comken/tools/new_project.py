@@ -7,8 +7,8 @@
 
 **このファイルはパッケージに同梱されている（配布される）。** ``comken init``
 （``comken/__main__.py`` から）はここを呼ぶ。リポジトリ直下の ``tools/`` に
-入っている開発用スクリプト（``export_for_chat.py`` / ``set_python_library.py``）
-とは役割が違うので、混同しないこと。
+入っている開発用スクリプト（``export_for_chat.py``）とは役割が違うので、
+混同しないこと。
 
 使い方:
     python -m comken init 受注取込

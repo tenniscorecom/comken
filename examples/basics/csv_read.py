@@ -37,7 +37,7 @@ def main() -> None:
     logger.info("最初の得意先: %s", rows[0]["得意先"])
     found = table.index("注文番号")["A002"]
     logger.info("A002 の担当者: %s", found["担当者"])
-    logger.info("山田の受注: %d 件", table.filter(lambda row: row["担当者"] == "山田").count())
+    logger.info("山田の受注: %d 件", len(table.filter(lambda row: row["担当者"] == "山田")))
     logger.info("金額列: %s", table.column("金額"))
 
     # 重複しない注文番号は index()、複数行あり得る担当者は group_by() を使う。

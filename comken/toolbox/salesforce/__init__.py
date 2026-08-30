@@ -6,7 +6,7 @@
 
     with Sandbox() as sf:
         records = sf.query("SELECT Id, Name FROM Account")
-        rows = sf.report.run("00O000000000001")
+        rows = sf.report.get("00O000000000001")
         sf.metrics.log_summary()
 
 URL と認証情報のシステム名は組織クラスがクラス定数として持つので、

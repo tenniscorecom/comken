@@ -86,11 +86,11 @@ class SalesforceBase:
     使い方:
         with Sandbox() as sf:
             records = sf.query("SELECT Id, Name FROM Account")
-            rows = sf.report.run("00O000000000001")
+            rows = sf.report.get("00O000000000001")
             sf.metrics.log_summary()
 
     Attributes:
-        report: レポート API（sf.report.run(...)）。
+        report: レポート API（sf.report.get(...)）。
         metrics: API 呼び出しの計測（sf.metrics.log_summary()）。
     """
 
@@ -221,8 +221,9 @@ class SalesforceBase:
     def query_rows(self, soql: str) -> Iterator[dict]:
         """SOQL クエリを実行し ``{項目: 値}`` の dict を 1 件ずつ返す（全件・ページ送り自動）。
 
-        レポート API と違って**行数の上限がない**ので、2000 行を超えるデータも
-        こちらで取る。``query()`` はこのイテレータを ``Table`` に包む薄い層
+        レポートは上限 2000 行だが、SOQL に上限はない。**ページ受信のたびに**
+        ``yield`` するため、全件を溜め込まずに 1 件目からすぐ処理を始められる。
+        ``query()`` はこのイテレータを ``Table`` に包む薄い層
         （順序を「イテレータ先・Table 後」に揃えるため）。
 
         列の情報は SOQL のレスポンスからは取れないため、戻り値からは直接
@@ -236,20 +237,22 @@ class SalesforceBase:
         Returns:
             SOQL のレコードを ``{項目: 値}`` の dict で 1 件ずつ返すイテレータ。
         """
-        records: list[dict] = []
         logger.debug("Salesforce SOQL取得開始")
         path = self.data_path(f"/query?q={urllib.parse.quote(soql)}")
+        # 件数ログは逐次 yield と両立させるため、ページ受信のたびに数える
+        yielded = 0
         while path:
             result, _ = self.request("GET", path, component="query")
             if not isinstance(result, dict):
                 break
-            for record in result.get("records", []):
+            page_records = result.get("records", [])
+            for record in page_records:
                 record.pop("attributes", None)  # メタ情報は業務データに不要
-                records.append(record)
+                yielded += 1
+                yield record
             # done が真なら次のページは無い
             path = "" if result.get("done", True) else result.get("nextRecordsUrl", "")
-        logger.debug("Salesforce SOQL取得完了: 件数=%d", len(records))
-        yield from records
+        logger.debug("Salesforce SOQL取得完了: 件数=%d", yielded)
 
     @measure
     def query(self, soql: str) -> Table:

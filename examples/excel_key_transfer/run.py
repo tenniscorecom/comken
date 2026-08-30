@@ -126,7 +126,7 @@ def main() -> None:
         for row in range(2, len(values) + 1):
             sheet.format(f"{AMOUNT_COL}{row}", number_format=AMOUNT_FORMAT)
 
-    logger.info("%d 件転記した", working.count())
+    logger.info("%d 件転記した", len(working))
 
     # 転記前後を突合して、どの行のどの列が書き換わったかを確認する
     result = diff_rows(before, after, key=KEY)
