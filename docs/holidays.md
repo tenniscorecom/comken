@@ -4,8 +4,8 @@ RPA 置き換えプロジェクトで「いま取るべきレポートか」を�
 内閣府の祝日 CSV を基にした祝日判定ライブラリ。
 
 実装本体は `comken.core.holidays/` 配下にある（外部ライブラリに依存しないため
-`core` 層へ移設済み）。`comken.toolbox.holidays` は旧パスからの
-後方互換 re-export のみで、**新規コードでは `comken.core.holidays` を使うこと**。
+`core` 層へ移設済み）。`comken.toolbox.holidays` には `requests` に依存する
+内閣府 CSV ダウンローダ（`CabinetOfficeCSVSource`）だけを残してある。
 
 `HolidayCalendar` 1 個に「内閣府の祝日」と「会社の休業日」をマージして
 持ち、`is_business_day()` でその日が営業日かを判定する。

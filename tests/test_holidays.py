@@ -1,7 +1,8 @@
-"""comken.core.holidays（および re-export する comken.toolbox.holidays）のテスト。
+"""comken.core.holidays のテスト。
 
 内閣府の祝日 CSV（CP932 エンコード）と会社の休業日ソース、
 ソース Protocol の各経路を横断的に検証する。
+``comken.toolbox.holidays`` 側（``CabinetOfficeCSVSource``）の検証も同じファイルで行う。
 """
 
 from __future__ import annotations
@@ -577,7 +578,6 @@ class TestNoImplicitRequests:
             "comken.core.holidays.sources",
             "comken.core.holidays.sources.computed",
             "comken.core.holidays.sources.company",
-            "comken.toolbox.holidays.exceptions",
             "comken.toolbox.holidays.sources",
             "comken.toolbox.holidays.sources.cabinet_office",
         ):
