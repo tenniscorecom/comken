@@ -68,7 +68,6 @@ max-complexity = 10
 "comken/core/config/check.py" = ["T20"]
 "comken/toolbox/credentials/cli.py" = ["T20"]
 "comken/toolbox/salesforce/direct/cli.py" = ["T20"]
-"comken/services/salesforce_downloader/cli.py" = ["T20"]
 "comken/tools/new_project.py" = ["T20"]
 # examples/ は comken を使う側のサンプルコードで、内部が独自の小さなパッケージ
 # 構成を持つ。comken 本体の規約で縛ると「サンプルを comken パッケージとして動かす」
@@ -88,9 +87,8 @@ exclude = [".pytest-tmp"]
 # __init__.py が `__getattr__` (PEP 562) で遅延公開している属性は
 # pyright の static analysis からは見つからず、`__all__` に書いた名前が
 # "モジュールに存在しない" と reportUnsupportedDunderAll で警告される。
-# 動的 import の設計 (comken.services.salesforce_downloader が代表)
-# 自体は正しいため、警告を抑制する。`__all__` 自体は M3 が触る箇所なので
-# 整合性はテスト (tests/test_docs_code.py など) で別途担保する。
+# 動的 import の設計自体は正しいため、警告を抑制する。`__all__` 自体は
+# M3 が触る箇所なので整合性はテスト (tests/test_docs_code.py など) で別途担保する。
 reportUnsupportedDunderAll = false
 
 [tool.mypy]

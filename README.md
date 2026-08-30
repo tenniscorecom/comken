@@ -36,7 +36,7 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 |---|---|
 | はじめて使う | この README の「[はじめて使う人へ](#はじめて使う人へ)」 |
 | 何が用意されているか探す | このREADMEの「[モジュール一覧](#モジュール一覧)」 |
-| モジュールの使い方を知る | [CSV](docs/csv.md)・[Excel](docs/excel.md)・[Access](docs/access.md)・[Outlook](docs/outlook.md)・[Windows](docs/windows.md)・[ブラウザ](docs/browser.md)・[Salesforce](docs/salesforce.md)・[レポートの集約取得](docs/salesforce-downloader.md)・[管理表](docs/master-table.md)・[core の部品](docs/core.md)・[認証情報](docs/credentials.md)・[祝日判定](docs/holidays.md) |
+| モジュールの使い方を知る | [CSV](docs/csv.md)・[Excel](docs/excel.md)・[Access](docs/access.md)・[Outlook](docs/outlook.md)・[Windows](docs/windows.md)・[ブラウザ](docs/browser.md)・[Salesforce](docs/salesforce.md)・[core の部品](docs/core.md)・[認証情報](docs/credentials.md)・[祝日判定](docs/holidays.md) |
 | **初めて外部システムにつなぐ** | ID とパスワードの[登録](docs/credentials.md#登録初回だけ) → [Salesforce につないで確かめる](docs/salesforce.md#つないで確かめるコマンド) |
 | 引数・戻り値・例外を正確に知る | [公開 API](docs/自動生成/API.md)（**自動生成**） |
 | エラーが出た | [エラー対応ガイド](docs/ERRORS.md)（エラー表は **自動生成**） |
@@ -75,8 +75,7 @@ comken は置き場所を4つに分けている。**どこに置くかは「そ�
 |---|---|---|
 | `comken` 直下 | **何を操作するかに関係なく使う** | 設定・ログ・実行モード・例外・定数 |
 | `comken.core` | **外にあるものを触らない部品** | ファイル検索・操作・圧縮・命名／日時・文字列・差分・待機・リトライ・計測・状態 |
-| `comken.toolbox` | **「〜を操作する／〜と通信する」で説明できる** | Excel・CSV・Access・Outlook・Windows・ブラウザ・Salesforce・社内 RPA 基盤・認証情報・管理表 |
-| `comken.services` | **社内の管理表や規約を知らないと説明できない** | Salesforce レポートの集約ダウンローダー |
+| `comken.toolbox` | **「〜を操作する／〜と通信する」で説明できる** | Excel・CSV・Access・Outlook・Windows・ブラウザ・Salesforce・社内 RPA 基盤・認証情報 |
 
 import の書き方は上の「[使うときの約束](#使うときの約束)」を参照。
 
@@ -126,8 +125,6 @@ write 側に空キーが複数あっても ``TransferDestinationMultipleMatchErr
 | [Browser（Edge）](docs/browser.md) | Edge ブラウザ操作 |
 | [Browser 公認サイト](docs/browser.md) | ライブラリ公認の `SiteBase` サブクラスを集めた置き場（`comken.toolbox.browser.sites`）。プロジェクト横断で再利用するサイトだけ昇格する |
 | [Salesforce（requests）](docs/salesforce.md) | Salesforce の SOQL・レコード操作・レポート取得・API 使用量の計測 |
-| [管理表（Excel を設定として使う）](docs/master-table.md) | 行が増える設定を Excel の表で持ち、型付きの行として読む（雛形・検証つき） |
-| [Salesforce レポートの集約取得](docs/salesforce-downloader.md) | 管理表（Excel）に沿ってレポートを取得し、履歴を残す（どのプロジェクトが何を使っているかが分かる） |
 | [Salesforce認証の判断根拠](docs/開発/salesforce-authentication.md) | ECA・Refresh Token Flow を既定にした理由と公式資料 |
 | [credentials（DPAPI）](docs/credentials.md) | パスワード・client_secret の暗号化保存（Windows ユーザーに紐付く） |
 | [祝日判定](docs/holidays.md) | 内閣府の祝日 CSV（CP932）+ 社内管理表の会社休日をマージして営業日判定 |
@@ -306,18 +303,17 @@ git checkout v0.11.3       :: 切り替えたいタグ（上で確認した最�
 popd
 ```
 
-**社内固有の値を書いた3ファイルは、切り替えで上書きされないようにしておく。**
+**社内固有の値を書いた2ファイルは、切り替えで上書きされないようにしておく。**
 配置したときに1回だけ設定する。
 
 ```bat
 git update-index --skip-worktree comken/internal/rpa.py
 git update-index --skip-worktree comken/toolbox/salesforce/sites/sandbox.py
-git update-index --skip-worktree comken/services/salesforce_downloader/_paths.py
 ```
 
 これで手元の書き換えが消えず、うっかり push することもない。comken 側でこの3ファイルを
 変更したときは切り替えが止まるので、そのときだけ `--no-skip-worktree` で解除して
-手で合わせ、また設定し直す（→ [仕様書](docs/開発/仕様書.md#配置時に書き換える3ファイル)）。
+手で合わせ、また設定し直す（→ [仕様書](docs/開発/仕様書.md#配置時に書き換える2ファイル)）。
 
 **切り替えた瞬間に、次に import した全プロジェクトが新しい版になる。** 更新のたびの
 配布作業はない。問題が出たら前のタグへ戻せば、同じように全プロジェクトが戻る。
@@ -596,14 +592,9 @@ graph LR
         browsersites["browser.sites\nライブラリ公認サイト"]
         salesforce["salesforce\nSalesforce API"]
         credentials["credentials\n認証情報（DPAPI）"]
-        mastertable["master_table\n管理表"]
-    end
-    subgraph L3["comken.services — 社内の決まりに沿った手順"]
-        downloader["salesforce_downloader\nレポート集約取得"]
     end
     L1 --> L0
     L2 --> L1
-    L3 --> L2
     salesforce --> sites["salesforce.sites\n組織ごとのクラス"]
     salesforce --> credentials
     browser --> browsersites

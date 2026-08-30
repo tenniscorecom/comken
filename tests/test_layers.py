@@ -10,7 +10,6 @@ LAYERS = {
     "core": 1,
     "toolbox": 2,
     "internal": 3,
-    "services": 4,
 }
 
 ALLOWED_SAME_LAYER = {

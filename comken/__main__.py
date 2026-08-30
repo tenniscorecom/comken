@@ -8,7 +8,6 @@
     python -m comken sf check                        Salesforce 接続確認
     python -m comken sf report --report-id 00O...    レポートを実行
     python -m comken cred import 認証情報.json        認証情報を取り込み
-    python -m comken report init レポート管理表.xlsx  管理表の雛形
 
 ``sf`` / ``cred`` は ``salesforce`` / ``credentials`` の別名
 （``argparse`` の ``add_parser(..., aliases=[...])``）。
@@ -116,14 +115,6 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     credentials.set_defaults(run=_run_credentials, _prog="python -m comken cred")
 
-    # report
-    report = subparsers.add_parser(
-        "report",
-        help="Salesforce レポート管理表（Excel） → init / check",
-        add_help=False,
-    )
-    report.set_defaults(run=_run_report)
-
     return parser
 
 
@@ -190,13 +181,6 @@ def _run_credentials(_args: argparse.Namespace, remaining: list[str]) -> int:
     from comken.toolbox.credentials.cli import main as cred_main
 
     return cred_main(remaining)
-
-
-def _run_report(_args: argparse.Namespace, remaining: list[str]) -> int:
-    """``python -m comken report ...`` の本体。"""
-    from comken.services.salesforce_downloader.cli import main as report_main
-
-    return report_main(remaining)
 
 
 if __name__ == "__main__":
