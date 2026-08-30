@@ -179,7 +179,7 @@ OUTPUT_FOLDER = ./output    ; ← 値は自由
 | `[CREDENTIALS]` | 認証情報のシステム名（値そのものは DPAPI） | 使うときだけ |
 | `[〇〇_MAPPING]` | 列の対応表。ここだけ**キーを実物どおり**に書く | 使うときだけ |
 
-> **`[RUN]` は廃止済み（v0.12.0 / v1.1.0 で完全削除）。** dry-run / debug は
+> **`[RUN]` は廃止済み（経緯は [仕様書 4.1 節](仕様書.md#4-主要な設計判断) を参照）。** dry-run / debug は
 > `with dry_run():` / `with debug():` ブロックで切り替える。**環境変数も
 > setter も CLI オプションも使わない**（`is_dry_run` / `is_debug` は
 > 内部用のみで公開 facade には載せていない）。`config.ini` に `[RUN]` が
