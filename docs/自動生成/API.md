@@ -4911,7 +4911,8 @@ class SalesforceReportIDNotFoundError(SalesforceError):
 貼られたものが Salesforce のレポート URL でないと ID を取り出せない。
 
 発生箇所: comken.toolbox.salesforce.report.report_id_from_url()
-         （comken.services.salesforce_downloader.master 経由）
+         （呼び出し元の例: comken-salesforce-downloader の master.py。
+         2026-08-30 に comken から分離した別リポジトリ）
 
 対処:
     Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す
