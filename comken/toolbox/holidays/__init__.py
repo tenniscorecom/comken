@@ -1,61 +1,14 @@
-r"""comken/toolbox/holidays/__init__.py — 祝日判定ライブラリ（後方互換 re-export）。
+"""comken/toolbox/holidays/__init__.py — 内閣府 CSV ダウンローダの facade。
 
-実装本体は ``comken.core.holidays`` 配下にある（外部ライブラリ非依存のため
-``core`` 層へ移設済み）。このモジュールは旧パス
-``from comken.toolbox.holidays import ...`` を壊さないための re-export 層。
+祝日計算ロジック本体は ``comken.core.holidays`` 配下にある
+（標準ライブラリのみで動くため ``core`` 層に置いている）。
+toolbox 側には ``requests`` に依存する内閣府 CSV ダウンローダ
+（``CabinetOfficeCSVSource``）だけを残し、ここから再エクスポートする。
 
-外部ライブラリ（``requests`` / Excel）に依存する source 実装は
-``toolbox`` 側に残してある。
+``HolidayCalendar`` / ``is_business_day`` / ``ComputedHolidaySource`` などの
+純粋計算の API は ``comken.core.holidays`` から直接 import すること。
 """
 
-from comken.core.holidays import (
-    EXPIRING_WARNING_DAYS,
-    Holiday,
-    HolidayCalendar,
-    HolidaySource,
-    RefreshableHolidaySource,
-    add_business_days,
-    business_day_after,
-    business_day_before,
-    business_day_on_or_after,
-    business_day_on_or_before,
-    first_business_day_of_month,
-    is_business_day,
-    last_business_day_of_month,
-    load_cabinet_office_csv,
-    nth_business_day_of_month,
-)
-from comken.core.holidays.sources.computed import ComputedHolidaySource
-from comken.toolbox.holidays.exceptions import (
-    BusinessDayNotFoundError,
-    HolidayCalendarError,
-    HolidayCalendarFetchError,
-    HolidayCalendarFormatError,
-    HolidayCalendarSourceError,
-)
 from comken.toolbox.holidays.sources.cabinet_office import CabinetOfficeCSVSource
 
-__all__ = [
-    "BusinessDayNotFoundError",
-    "CabinetOfficeCSVSource",
-    "ComputedHolidaySource",
-    "EXPIRING_WARNING_DAYS",
-    "Holiday",
-    "HolidayCalendar",
-    "HolidayCalendarError",
-    "HolidayCalendarFetchError",
-    "HolidayCalendarFormatError",
-    "HolidayCalendarSourceError",
-    "HolidaySource",
-    "RefreshableHolidaySource",
-    "add_business_days",
-    "business_day_after",
-    "business_day_before",
-    "business_day_on_or_after",
-    "business_day_on_or_before",
-    "first_business_day_of_month",
-    "is_business_day",
-    "last_business_day_of_month",
-    "load_cabinet_office_csv",
-    "nth_business_day_of_month",
-]
+__all__ = ["CabinetOfficeCSVSource"]
