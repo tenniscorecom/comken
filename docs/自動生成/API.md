@@ -703,16 +703,6 @@ def append(self, rows: list[dict] | dict) -> Self:
 
 1行または複数行を末尾へ追加する。
 
-#### `count`
-
-```text
-def count(self) -> int:
-```
-
-##### 説明
-
-行数を返す。
-
 #### `select`
 
 ```text
@@ -3126,16 +3116,6 @@ def append(self, rows: list[dict] | dict) -> Self:
 ##### 説明
 
 1行または複数行を末尾へ追加する。
-
-#### `count`
-
-```text
-def count(self) -> int:
-```
-
-##### 説明
-
-行数を返す。
 
 #### `select`
 
@@ -5980,16 +5960,6 @@ def append(self, rows: list[dict] | dict) -> Self:
 ##### 説明
 
 1行または複数行を末尾へ追加する。
-
-#### `count`
-
-```text
-def count(self) -> int:
-```
-
-##### 説明
-
-行数を返す。
 
 #### `select`
 
@@ -9401,7 +9371,7 @@ class ReportAPI:
 `SalesforceBase` が `report` 属性として持っている。単体では作らない。
 
     with Sandbox() as sf:
-        rows = sf.report.run("00O000000000001")
+        rows = sf.report.get("00O000000000001")
 
 #### `__init__`
 
@@ -9414,53 +9384,17 @@ def __init__(self, client: SalesforceBase) -> None:
 Args:
     client: このレポート API を使う Salesforce クライアント。
 
-#### `read_rows`
+#### `get`
 
 ```text
 @measure
-def read_rows(self, report_id: str, filters: list[dict] | None=None, allow_truncated: bool=False) -> Iterator[dict]:
-```
-
-##### 説明
-
-レポートを同期実行して明細行を 1 行ずつ返す（上限 2000 行）。
-
-``run()`` と違い **HTTP 取得直後から ``{列名: 値}`` を 1 件ずつ yield** する。
-``run()`` はこのイテレータを ``Table`` に包む薄い層になっている（順序を
-「イテレータ先・Table 後」に揃えるため）。
-
-列の情報は HTTP レスポンスの ``detailColumns`` / ``detailColumnInfo`` から
-組み立てた ``labels`` を内部で取得しているが、戻り値は ``dict`` の
-イテレータのみ（``Table.columns`` を直接取り出す API ではない）。
-列名が必要なときは ``read()`` または ``run()`` で ``Table`` を取得する。
-
-Args:
-    report_id: レポート ID（レポートを開いたときの URL の末尾。15桁 or 18桁）。
-    filters: 絞り込み条件（省略可）。レポート定義の条件を実行時に上書きする。
-    allow_truncated: True にすると、2000 行で切り捨てられても例外にせず
-        警告ログだけを出して、取れた分を返す。**既定は False**
-        （欠けたデータで処理が進むのを防ぐため）。
-
-Returns:
-    ``{列名: 値}`` の dict を 1 行ずつ返すイテレータ。
-
-Raises:
-    SalesforceReportTruncatedError: 上限で切り捨てられた場合
-        （allow_truncated=True のときは送出しない）。
-    SalesforceReportFormatError: 明細（TABULAR）形式でない場合。
-
-#### `run`
-
-```text
-@measure
-def run(self, report_id: str, filters: list[dict] | None=None, allow_truncated: bool=False) -> Table:
+def get(self, report_id: str, filters: list[dict] | None=None, allow_truncated: bool=False) -> Table:
 ```
 
 ##### 説明
 
 レポートを同期実行して明細行を ``Table`` で返す（上限 2000 行）。
 
-``read_rows()`` を呼んで ``Table`` に包むだけの薄い層。
 列は HTTP レスポンスの ``detailColumns`` から組み立てた表示名を使い、
 **0 件のときも列情報が落ちない**（``detailColumns`` が ``["取引先名", "金額"]``
 なら、0 件ヒットでも ``Table.columns == ["取引先名", "金額"]``）。
@@ -9468,10 +9402,17 @@ def run(self, report_id: str, filters: list[dict] | None=None, allow_truncated: 
 Args:
     report_id: レポート ID（レポートを開いたときの URL の末尾。15桁 or 18桁）。
     filters: 絞り込み条件（省略可）。
-    allow_truncated: ``read_rows()`` と同じ。
+    allow_truncated: True にすると、2000 行で切り捨てられても例外にせず
+        警告ログだけを出して、取れた分を返す。**既定は False**
+        （欠けたデータで処理が進むのを防ぐため）。
 
 Returns:
     レポート明細を表す ``Table``。
+
+Raises:
+    SalesforceReportTruncatedError: 上限で切り捨てられた場合
+        （allow_truncated=True のときは送出しない）。
+    SalesforceReportFormatError: 明細（TABULAR）形式でない場合。
 
 #### `run_csv`
 
@@ -9484,7 +9425,7 @@ def run_csv(self, report_id: str, path: str | Path, filters: list[dict] | None=N
 
 レポートを同期実行して、結果をそのまま CSV へ保存する。
 
-``run()`` が返す ``Table`` を ``CSV`` へ書き出すだけの薄い層。
+``get()`` が返す ``Table`` を ``CSV`` へ書き出すだけの薄い層。
 ``Table`` 自体はファイル I/O を持たない設計（保存先の責任を分ける）ため、
 レポートを直接 CSV で欲しいだけのときはこちらを使う。
 
@@ -9492,7 +9433,7 @@ Args:
     report_id: レポート ID（レポートを開いたときの URL の末尾。15桁 or 18桁）。
     path: 保存先の CSV パス（拡張子は ``.csv``）。
     filters: 絞り込み条件（省略可）。
-    allow_truncated: ``run()`` と同じ。
+    allow_truncated: ``get()`` と同じ。
 
 Returns:
     保存した CSV のパス。
@@ -9514,7 +9455,7 @@ def run_async(self, report_id: str, filters: list[dict] | None=None, allow_trunc
 Args:
     report_id: レポート ID。
     filters: 絞り込み条件（省略可）。
-    allow_truncated: run() と同じ。
+    allow_truncated: get() と同じ。
 
 Raises:
     SalesforceReportTruncatedError: 上限で切り捨てられた場合。
@@ -9533,11 +9474,11 @@ def describe(self, report_id: str) -> dict:
 
 レポートを実行せず、定義（列・フィルタ・形式）を取得する。
 
-`run()` / `run_async()` はどちらもレポートを**実行**するため 2000 行の
+`get()` / `run_async()` はどちらもレポートを**実行**するため 2000 行の
 上限と実行枠を消費する。`describe` は実行しないので、上限・実行枠とも
 気にせず何度でも叩ける。SOQL への移行を下書きするときの情報源として使う。
 
-レスポンスは API の構造をそのまま返す（`run()` のように
+レスポンスは API の構造をそのまま返す（`get()` のように
 `[{列名: 値}]` には畳まない）。用途が SOQL 化の下書きで、
 必要な項目がまだ定まっていないため、API の返す構造をそのまま渡して
 呼び出し側で必要な部分を取り出す方針にする。

@@ -45,4 +45,4 @@ class Production(SalesforceBase):
         2000 行を超えると SalesforceReportTruncatedError で止まる。
         超えるようになったら、期間で区切るか SOQL へ移す。
         """
-        return self.report.run(self.REPORT_OPPORTUNITIES)
+        return self.report.get(self.REPORT_OPPORTUNITIES)

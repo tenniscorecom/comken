@@ -115,7 +115,7 @@ def main() -> None:
     with Excel(OUTPUT_PATH) as destination:
         destination.create_data_sheet("請求一覧").create_table("請求一覧", result)
 
-    logger.info("Excel 転記: %s（%d 件）", OUTPUT_PATH, result.count())
+    logger.info("Excel 転記: %s（%d 件）", OUTPUT_PATH, len(result))
 
 
 if __name__ == "__main__":

@@ -267,7 +267,8 @@ example からコピーされ、**そこで終了コード 1 で止まる**（�
 
 **comken の場所を後から変えたくなったら**、`実行.bat` と `認証情報の登録.bat` と `.vscode/settings.json` の
 3つを直す（片方だけ直すと「動くのに補完が効かない」状態になって原因が分かりにくい）。
-プロジェクトが増えてから変えるなら `tools/set_python_library.py` でまとめて書き換えられる。
+`tools/set_python_library.py` は v1.0.0 で削除済み — 恒久登録（`setup_comken.bat`）で場所が
+決まっている場合は、そもそも書き換える必要がないため。
 
 **恒久登録しておくと、各プロジェクトのbatは`PYTHON_LIBRARY`を見に行かない。**
 共有サーバーの場所が変わっても、プロジェクト側の bat を1つも直さずに済む。
@@ -326,19 +327,15 @@ git update-index --skip-worktree comken/toolbox/salesforce/sites/sandbox.py
 
 ### comken の場所を変えたとき
 
-comken を別の共有フォルダへ移すと、各プロジェクトの**3か所**（実行.bat・
-認証情報の登録.bat・.vscode/settings.json）が古い場所を指したままになる。
-プロジェクトが増えるほど手で直すのは現実的でなくなり、直し漏れたものだけが動かなくなる。
-まとめて書き換える。
+comken を別の共有フォルダへ移したときは、まず `setup_comken.bat` を新しい共有フォルダで
+再実行する。`setup_comken.bat` による恒久登録に切り替えてあるプロジェクトは、PC 環境変数の
+`PYTHONPATH` が書き換わるだけで、bat や `settings.json` を直す必要はない。
 
-```bat
-python tools\set_python_library.py \\新サーバー\share\tools F:\案件           :: 確認だけ
-python tools\set_python_library.py \\新サーバー\share\tools F:\案件 --apply   :: 書き換える
-```
-
-**--apply を付けるまで何も書き換えない。** 先に「どのファイルが、どこから、どこへ」
-変わるかが出るので、狙ったものだけかを確かめてから実行する。今どこを指していても
-書き換えられるので、置き場所が決まるまで何度でも通してよい。
+古い共有フォルダがプロジェクト側の `実行.bat`/`認証情報の登録.bat` の `PYTHON_LIBRARY` を
+直接指している構成だった場合は、その3か所（bat×2 と `.vscode/settings.json`）を
+手作業で新しい場所に書き換える。bat は cmd.exe に合わせて CP932、`.vscode/settings.json` は
+UTF-8（`\\\\` を `\\` に、`\` を `/` に直して書く）。片方だけ直すと「動くのに補完だけ効かない」
+状態になり、原因の特定が難しくなる。
 
 ## 実行モード（バージョン / デバッグ / dry-run）
 

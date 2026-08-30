@@ -138,7 +138,7 @@ class TestDebugMode:
             csv_file.read()
 
         with CSV(path) as csv_file:
-            assert csv_file.read().count() == 1
+            assert len(csv_file.read()) == 1
 
     def test_measure_on_generator_logs_completion_only_after_consumption(self, caplog):
         """ジェネレータ関数に ``measure`` を付けた場合、消費し切るまで完了ログを出さない。"""

@@ -102,10 +102,6 @@ class Table:
         self._rows.extend(normalized)
         return self
 
-    def count(self) -> int:
-        """行数を返す。"""
-        return len(self._rows)
-
     def select(self, *columns: str) -> Table:
         """指定した列だけを持つ新しいTableを返す。"""
         self._check_columns(columns)

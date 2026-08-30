@@ -28,10 +28,10 @@ def test_table_supports_memory_operations() -> None:
     assert table[0]["id"] == 1
     with pytest.raises(IndexError):
         table[1]
-    assert table.count() == 1
+    assert len(table) == 1
     assert table.column("name") == ["山田"]
     assert table.select("id", "name").read_rows() == [{"id": 1, "name": "山田"}]
-    assert table.filter(lambda row: row["group"] == "A").count() == 1
+    assert len(table.filter(lambda row: row["group"] == "A")) == 1
     assert table.index("id")[1]["name"] == "山田"
 
 
@@ -41,7 +41,7 @@ def test_table_concat_and_group_by() -> None:
 
     with pytest.raises(TableError):
         left.concat(right)
-    assert left.group_by("id")[1].count() == 1
+    assert len(left.group_by("id")[1]) == 1
 
 
 def test_csv_is_string_by_default_and_types_are_explicit(tmp_path) -> None:
@@ -101,7 +101,7 @@ def test_compare_tables_accepts_different_column_order() -> None:
 
     comparison = compare_tables(read, write, read_key="id", write_key="id")
 
-    assert comparison.same.count() == 1
+    assert len(comparison.same) == 1
 
 
 def test_compare_tables_accepts_different_key_names() -> None:

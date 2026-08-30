@@ -134,10 +134,10 @@ class SalesforceAPI:
         """レポートを実行し、結果を Table で返す。
 
         社内ライブラリ ``example_libs.v0000.salesforce`` の ``report_run`` は
-        ``SalesforceBase.report.run()`` と同じ ``[{表示名: 値}, ...]`` 形式を返す
+        ``SalesforceBase.report.get()`` と同じ ``[{表示名: 値}, ...]`` 形式を返す
         ため、1 件目から列を推測する。0 件のときは列が空の ``Table`` を返す
         （``records[0]`` からの推測に依存しない）。 ``toolbox.salesforce`` 側の
-        ``run()`` は ``detailColumns`` から列を取れるため列落ちしないが、
+        ``get()`` は ``detailColumns`` から列を取れるため列落ちしないが、
         社内ライブラリ側の戻り値スキーマが同等かどうかは呼び出し側で必要なら
         確認すること。
 
