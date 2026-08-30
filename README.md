@@ -339,8 +339,9 @@ UTF-8（`\\\\` を `\\` に、`\` を `/` に直して書く）。片方だけ�
 
 ## 実行モード（バージョン / デバッグ / dry-run）
 
-実行モードの切り替えは **`with dry_run():` / `with debug():` の context manager だけ**。
-`config.ini` も環境変数も setter も読まない。`with` ブロックが唯一の手段。
+実行モードの切り替えは **`with dry_run():` / `with debug():` の context manager**。
+**設計上の理由**（`config.ini` を読まない理由・旧 `[RUN]` セクションの廃止経緯など）は
+[**仕様書 4.1 節**](docs/開発/仕様書.md#4-主要な設計判断)を参照。
 
 ```python
 import comken
@@ -373,8 +374,8 @@ def build_report():
 「どのファイルで止まったか」を知りたいときは、呼び出し側が処理対象をログに出す。
 
 雛形プロジェクトでは `with comken.debug():` を `main()` を囲む形で
-`main.py` に書き、止めたい処理単位で on/off する。`config.ini` の旧 `[RUN] DEBUG`
-セクションは v0.12.0 で廃止済み。
+`main.py` に書き、止めたい処理単位で on/off する（`config.ini` の旧 `[RUN]` セクションは
+廃止済みのため、書いても効きません。詳細は[**仕様書 4.1 節**](docs/開発/仕様書.md#4-主要な設計判断)）。
 
 ---
 
@@ -415,10 +416,9 @@ config = Config("path/to/config.ini")  # パスを指定する場合
 ```
 
 ```ini
-; config.ini（プロジェクト固有の非機密設定を書く）
-; セクション名・キー名は大文字で書く（固定値と分かる + Python 側と表記が一致する）
-; パスは **config.ini からの相対パス** で書くのが既定。基準は config.ini の置かれているフォルダ。
-; 共有サーバーのように場所が固定のものだけ絶対パス／UNC をそのまま書いてよい。
+; config.ini（プロジェクト固有の非機密設定を書く）。
+; 命名・配置の規約（セクション名・キー名は大文字、パスは config.ini からの相対パスが既定）は
+; [**CONVENTIONS.md**](docs/開発/CONVENTIONS.md) を参照。
 
 [REPORT]
 OUTPUT_FOLDER = ./output
@@ -512,8 +512,8 @@ state.set("LAST_FILE", "data.csv")    # その場で保存
 ```
 
 `state.ini` が無い初回実行は空の状態で続行する。値は文字列・数値・bool・文字列リストの
-型を保って読み戻せる。壊れたファイルは続きの位置を失わないよう、初回扱いにせずエラーで止まる。
-dry-run 中の `set()` はログだけを出し、本番の「処理済み」判定を変えない。
+型を保って読み戻せる。壊れたファイルは続きの位置を失わないよう、初回扱いにせずエラーで止まる
+（dry-run 中の `set()` の扱いなど、詳細は[**仕様書 4.24 節**](docs/開発/仕様書.md#4-主要な設計判断)）。
 
 実際に保存される内容:
 
@@ -528,7 +528,8 @@ POSITION = 42
 ## Logger
 
 社内環境では `setup_logging()` に環境クラスを渡し、root logger を設定する。
-すでに root logger が設定済みの場合や2回呼んだ場合は、二重出力を防ぐため例外になる。
+二重呼び出し時の挙動や `LOG_ROOT` / `LOG_FOLDER_NAMES` の二段構成など、詳細は
+[**仕様書 4.11 節**](docs/開発/仕様書.md#4-主要な設計判断)を参照。
 
 ```python
 from comken.core.logger import Backoffice, setup_logging
@@ -601,33 +602,6 @@ graph LR
 
 ## 主なユースケース
 
-### NAS の Excel を読んで加工・出力する
-
-```mermaid
-flowchart LR
-    A["NAS\nExcel"] -->|FileFinder.today| B["ファイルパス取得"]
-    B -->|Excel| C["Table読み込み"]
-    C --> D["データ加工"]
-    D -->|write / with正常終了| E["Excel出力"]
-```
-
-### CSV を読んで Excel レポートを作る
-
-```mermaid
-flowchart LR
-    A["CSVファイル"] -->|CSV.read| B["Table読み込み"]
-    B -->|filter / index / Transfer| C["絞り込み・突合"]
-    C -->|ExcelTable.write| D["Excel書き込み"]
-    D --> E["レポート完成"]
-```
-
-### ブラウザを自動操作する
-
-```mermaid
-flowchart LR
-    A["config.ini"] -->|Config| B["設定読み込み"]
-    B -->|Browsers| C["ブラウザ起動"]
-    C -->|SitePage| D["画面操作"]
-```
+動く例は [`examples/README.md`](examples/README.md) の一覧を参照（インストール直後にそのまま動かせる）。
 
 ---
