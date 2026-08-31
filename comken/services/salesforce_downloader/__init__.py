@@ -26,7 +26,7 @@ r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポー�
 
 管理表の検査はコマンドからも呼べる（保守用。業務の定期実行ではない）:
 
-    python -m comken.services.salesforce_downloader check
+    python -m comken sfdl check
 
 ---
 

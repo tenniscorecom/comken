@@ -122,7 +122,7 @@ python -m comken sf check
 ### 5. 書き方を確かめる
 
 ```bat
-python -m comken.services.salesforce_downloader check "\\実際のサーバー\share\tools\salesforce\レポート管理表.xlsx"
+python -m comken sfdl check "\\実際のサーバー\share\tools\salesforce\レポート管理表.xlsx"
 ```
 
 **Salesforce へはつながない。** 記入内容の検査だけなので、何度でも安全に流せる。
@@ -178,7 +178,7 @@ ReportEntry.create_template("レポート管理表.xlsx", EXAMPLES)
 ### 編集したあとに確かめる
 
 ```bat
-python -m comken.services.salesforce_downloader check レポート管理表.xlsx
+python -m comken sfdl check レポート管理表.xlsx
 ```
 
 ```

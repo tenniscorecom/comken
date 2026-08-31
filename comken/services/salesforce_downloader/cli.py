@@ -1,6 +1,10 @@
 r"""comken/services/salesforce_downloader/cli.py — 管理表まわりの保守コマンド。
 
-    python -m comken.services.salesforce_downloader check                       管理表を検査する
+    python -m comken sfdl check                       管理表を検査する
+
+**このモジュール自体に `__main__.py` は置かない。** `python -m comken` から
+`salesforce-downloader`（エイリアス `sfdl`）として振り分けられる形に統一する
+（`toolbox/salesforce` や `toolbox/credentials` も同様に自前の `__main__.py` を持たない）。
 
 **これは保守用のコマンドで、業務の定期実行ではない。** 毎日の取得は個別プロジェクトから
 `download_scheduled()` を呼ぶ（ライブラリには**実行される単位を置かない**）。
@@ -42,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="python -m comken.services.salesforce_downloader",
+        prog="python -m comken sfdl",
         description="Salesforce レポート管理表の検査",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)

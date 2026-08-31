@@ -72,7 +72,6 @@ max-complexity = 10
 "comken/toolbox/credentials/cli.py" = ["T20"]
 "comken/toolbox/salesforce/direct/cli.py" = ["T20"]
 "comken/services/salesforce_downloader/cli.py" = ["T20"]
-"comken/services/salesforce_downloader/__main__.py" = ["T20"]
 "comken/tools/new_project.py" = ["T20"]
 # examples/ は comken を使う側のサンプルコードで、内部が独自の小さなパッケージ
 # 構成を持つ。comken 本体の規約で縛ると「サンプルを comken パッケージとして動かす」

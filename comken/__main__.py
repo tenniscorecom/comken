@@ -8,9 +8,10 @@
     python -m comken sf check                        Salesforce 接続確認
     python -m comken sf report --report-id 00O...    レポートを実行
     python -m comken cred import 認証情報.json        認証情報を取り込み
+    python -m comken sfdl check                      Salesforce レポート管理表の検査
 
-``sf`` / ``cred`` は ``salesforce`` / ``credentials`` の別名
-（``argparse`` の ``add_parser(..., aliases=[...])``）。
+``sf`` / ``cred`` / ``sfdl`` は ``salesforce`` / ``credentials`` /
+``salesforce-downloader`` の別名（``argparse`` の ``add_parser(..., aliases=[...])``）。
 
 サブコマンドの実体は元の ``__main__.py`` に置いたまま呼び出すため、たとえば
 ``python -m comken.toolbox.salesforce check`` のような旧呼び出しも当面は
@@ -115,6 +116,17 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     credentials.set_defaults(run=_run_credentials, _prog="python -m comken cred")
 
+    # salesforce-downloader / sfdl
+    salesforce_downloader = subparsers.add_parser(
+        "salesforce-downloader",
+        aliases=["sfdl"],
+        help="Salesforce レポート管理表の検査 → check",
+        add_help=False,
+    )
+    salesforce_downloader.set_defaults(
+        run=_run_salesforce_downloader, _prog="python -m comken sfdl"
+    )
+
     return parser
 
 
@@ -181,6 +193,17 @@ def _run_credentials(_args: argparse.Namespace, remaining: list[str]) -> int:
     from comken.toolbox.credentials.cli import main as cred_main
 
     return cred_main(remaining)
+
+
+def _run_salesforce_downloader(_args: argparse.Namespace, remaining: list[str]) -> int:
+    """``python -m comken salesforce-downloader ...`` / ``python -m comken sfdl ...`` の本体。
+
+    import を関数内に置く理由は ``_run_salesforce`` と同じ（`requests` が無い環境でも
+    ``python -m comken`` 自体は起動できるようにするため）。
+    """
+    from comken.services.salesforce_downloader.cli import main as sfdl_main
+
+    return sfdl_main(remaining)
 
 
 if __name__ == "__main__":
