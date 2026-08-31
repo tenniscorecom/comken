@@ -104,6 +104,11 @@ ComkenError
 │   ├── ConfigKeyNotFoundError
 │   ├── ConfigMappingEmptyValueError
 │   └── ConfigSubclassingNotSupportedError
+├── MasterTableError
+│   ├── MasterSheetNotDefinedError
+│   ├── MasterColumnNotFoundError
+│   ├── MasterRowValueError
+│   └── MasterDuplicateValueError
 ├── StateError
 │   ├── StateFileCorruptedError
 │   ├── StateLowerCaseNameError
@@ -114,6 +119,23 @@ ComkenError
 │   ├── HolidayCalendarSourceError
 │   │   └── HolidayCalendarFormatError
 │   └── BusinessDayNotFoundError
+└── DownloaderError
+│   ├── HistoryWriteError
+│   ├── HistoryLockTimeoutError
+│   ├── HistoryHeaderMismatchError
+│   ├── CachedReportNotFoundError
+│   ├── CachedReportNotRegisteredError
+│   ├── ReportNotRegisteredError
+│   ├── ReportDisabledError
+│   ├── InvalidReportURLError
+│   ├── EmptyReportError
+│   ├── ReportFolderNotFoundError
+│   ├── ReportReservePathLimitError
+│   ├── ScheduledDownloadFailedError
+│   ├── UnsupportedScheduleFrequencyError
+│   ├── ScheduleIntervalMissingError
+│   ├── ScheduleRequiredValueMissingError
+│   └── ScheduleWeekdayInvalidError
 
 カテゴリ基底クラスはまとめて捕捉するために使い、直接送出しない。
 """
@@ -178,6 +200,25 @@ from comken.exceptions.csv import (
     CSVRowLengthError,
     EncodingDetectionError,
 )
+from comken.exceptions.downloader import (
+    CachedReportNotFoundError,
+    CachedReportNotRegisteredError,
+    DownloaderError,
+    EmptyReportError,
+    HistoryHeaderMismatchError,
+    HistoryLockTimeoutError,
+    HistoryWriteError,
+    InvalidReportURLError,
+    ReportDisabledError,
+    ReportFolderNotFoundError,
+    ReportNotRegisteredError,
+    ReportReservePathLimitError,
+    ScheduledDownloadFailedError,
+    ScheduleIntervalMissingError,
+    ScheduleRequiredValueMissingError,
+    ScheduleWeekdayInvalidError,
+    UnsupportedScheduleFrequencyError,
+)
 from comken.exceptions.excel import (
     DataSheetAccessError,
     DuplicateHeaderCellError,
@@ -217,6 +258,13 @@ from comken.exceptions.logger import (
     LoggingAlreadyConfiguredError,
     LoggingConflictError,
     LogRootNotConfiguredError,
+)
+from comken.exceptions.master_table import (
+    MasterColumnNotFoundError,
+    MasterDuplicateValueError,
+    MasterRowValueError,
+    MasterSheetNotDefinedError,
+    MasterTableError,
 )
 from comken.exceptions.outlook import (
     ClassicOutlookNotAvailableError,
@@ -354,6 +402,11 @@ __all__ = [
     "ElementNotFoundError",
     "PopupTabNotOpenedError",
     "DownloadTimeoutError",
+    "MasterTableError",
+    "MasterSheetNotDefinedError",
+    "MasterColumnNotFoundError",
+    "MasterRowValueError",
+    "MasterDuplicateValueError",
     "StateError",
     "StateFileCorruptedError",
     "StateLowerCaseNameError",
@@ -363,6 +416,23 @@ __all__ = [
     "HolidayCalendarFetchError",
     "HolidayCalendarSourceError",
     "HolidayCalendarFormatError",
+    "DownloaderError",
+    "HistoryWriteError",
+    "HistoryLockTimeoutError",
+    "HistoryHeaderMismatchError",
+    "CachedReportNotFoundError",
+    "CachedReportNotRegisteredError",
+    "ReportNotRegisteredError",
+    "ReportDisabledError",
+    "InvalidReportURLError",
+    "EmptyReportError",
+    "ReportFolderNotFoundError",
+    "ReportReservePathLimitError",
+    "ScheduledDownloadFailedError",
+    "UnsupportedScheduleFrequencyError",
+    "ScheduleIntervalMissingError",
+    "ScheduleRequiredValueMissingError",
+    "ScheduleWeekdayInvalidError",
     "TransferDestinationMultipleMatchError",
     "TableNotOpenError",
     "TransferDestinationMissingError",
