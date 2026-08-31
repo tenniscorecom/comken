@@ -6480,6 +6480,10 @@ def shared_report_ids(entries: dict[str, ReportEntry]) -> dict[str, list[str]]:
 Returns:
     {Salesforce のレポート ID: [管理番号, ...]}。2つ以上のものだけ。
 
+### `write_latest_status`
+
+定義を解決できませんでした。
+
 ### `ReportEntry`
 
 ```text

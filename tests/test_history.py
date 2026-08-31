@@ -9,6 +9,7 @@ import pytest
 from comken.exceptions import HistoryHeaderMismatchError
 from comken.services.salesforce_downloader.history import (
     HistoryRow,
+    read_all,
     record,
     successful_files_today,
 )
@@ -97,6 +98,45 @@ def test_successful_file_requires_both_overall_and_save_success(tmp_path) -> Non
     )
 
     assert successful_files_today(history_path, entry.key) == []
+
+
+def test_read_all_returns_every_row_in_order(tmp_path) -> None:
+    """絞り込みはせず、書かれた順のまま全行を dict で返す。"""
+    history_path = tmp_path / "履歴.csv"
+    entry = _entry(tmp_path)
+    record(
+        history_path,
+        entry=entry,
+        project="P1",
+        trigger="定期",
+        row=HistoryRow(True, True, True, file_name="a.csv"),
+    )
+    record(
+        history_path,
+        entry=entry,
+        project="P2",
+        trigger="定期",
+        row=HistoryRow(True, True, True, file_name="b.csv"),
+    )
+
+    rows = read_all(history_path)
+    assert [row["プロジェクト"] for row in rows] == ["P1", "P2"]
+    assert rows[0]["ファイル名"] == "a.csv"
+    assert rows[1]["ファイル名"] == "b.csv"
+
+
+def test_read_all_returns_empty_when_history_missing(tmp_path) -> None:
+    """履歴が無いときは例外を出さず空リストを返す。"""
+    assert read_all(tmp_path / "無い.csv") == []
+
+
+def test_read_all_rejects_header_mismatch(tmp_path) -> None:
+    """既存の見出しが違う場合、列ずれを読まず明示的に止める。"""
+    history_path = tmp_path / "履歴.csv"
+    history_path.write_text("管理番号,成否\n1000,成功\n", encoding="utf-8-sig")
+
+    with pytest.raises(HistoryHeaderMismatchError):
+        read_all(history_path)
 
 
 def _append_from_process(arguments: tuple[str, str, int]) -> None:

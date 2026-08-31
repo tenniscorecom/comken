@@ -381,6 +381,52 @@ def _classify_cause(error, fetched_from_salesforce, saved_to_file):
 
 ---
 
+## 最新ステータス（Excel）
+
+`download_scheduled()` のたびに、管理表の全エントリについて履歴 CSV から最新
+（実行日時が最大）の行を引いて 1 ファイルへ**上書き**生成する。
+人が読む用の帳票で、**プログラムだけが上書きする**（人は編集しない）ので、
+管理表（Excel）・履歴（CSV）とは別のファイルに置く。分ける理由は履歴と同じ
+（書く主体が違うと、人が開いている間にプログラムが保存できず履歴が飛ぶ）。
+
+**履歴と役割が違う。** 履歴は「全実行の記録」で 1 レポートの最新だけ見たい
+業務側からは探しにくい。最新ステータスは「管理表 × 履歴の最新行」を 1 シート
+にまとめるので、**「今どのレポートが落ちているか」を一覧で把握できる**。
+履歴 CSV には時系列で残るので、後の調査は履歴で行う。
+
+```
+レポート管理表.xlsx（人が編集）        ダウンロード履歴.csv（プログラムが追記）
+        ↓                                      ↓
+        └──────────── write_latest_status() ────┘
+                            ↓
+              最新ステータス.xlsx（上書き生成）
+```
+
+書き出される列:
+
+| 管理番号 | 概要 | 最新実行日時 | 成否 | 原因区分 | エラー内容 |
+|---|---|---|---|---|---|
+
+- **履歴が無い管理番号は「未実行」と表示する。** 対象から落とすと一覧にあるのに
+  結果が載っていないという見落としが起きるため
+- **失敗した行は `Color.PINK` でセルを塗りつぶす。** 帳票を開いた瞬間に
+  「どの管理番号が落ちているか」が視覚で分かる（`report_master.py` の記入例と
+  同じ `PatternFill` を使う）
+- ファイルへ書き込む経路で例外が出ても、`download_scheduled()` の成否判定には
+  影響させない（`ScheduledDownloadFailedError` は本体結果で決まる）。
+  帳票の書き損ねはログに warning を出すだけ
+
+直接呼ぶ必要はない。`download_scheduled()` の最後に自動で上書きされる。
+別のタイミングでも起こしたいときは、直接呼んでもよい。
+
+```python
+from comken.services.salesforce_downloader.latest_status import write_latest_status
+
+write_latest_status()  # 既定のパス（_paths.LATEST_STATUS_PATH）へ書き出す
+```
+
+---
+
 ## 定期取得
 
 **定期実行そのものは comken に置かない。** 実行される単位は個別プロジェクトの仕事で、
@@ -494,13 +540,14 @@ if rule.is_due(datetime.now(), holidays=set()):
 ```python
 MASTER_PATH = Path(r"\\実際のサーバー\share\tools\salesforce\レポート管理表.xlsx")
 HISTORY_PATH = Path(r"\\実際のサーバー\share\tools\salesforce\ダウンロード履歴.csv")
+LATEST_STATUS_PATH = Path(r"\\実際のサーバー\share\tools\salesforce\最新ステータス.xlsx")
 ```
 
 **設定ファイルへ集約せず、使う場所に書く。** 理由と、共有サーバーで書き換えを守る方法は
 comken 側のドキュメントを参照。
 
-**利用側の API から `master_path=` / `history_path=` を渡せない。** この2つの定数は
-`_paths.py` で一元管理する。プロジェクト側に同名のパス定数を作ると、
+**利用側の API から `master_path=` / `history_path=` / `output_path=` を渡せない。**
+この3つの定数は `_paths.py` で一元管理する。プロジェクト側に同名のパス定数を作ると、
 管理表を直したのに出力先が変わらず、しかもエラーにもならない事故が起きる
 （境界を破った典型例）。
 
@@ -518,7 +565,7 @@ comken 側のドキュメントを参照。
 | ファイル名の付け方を変える | `provider.py` の `file_path_of()` ← **全プロジェクトに効く** |
 | 履歴に列を足す | `history.py` ← **全プロジェクトに効く** |
 | 管理表に列を足す | `master.py` の `ReportEntry` |
-| 管理表・履歴の置き場所を変える | `_paths.py` の `MASTER_PATH` / `HISTORY_PATH` |
+| 管理表・履歴・最新ステータスの置き場所を変える | `_paths.py` の `MASTER_PATH` / `HISTORY_PATH` / `LATEST_STATUS_PATH` |
 | Salesforce の認証・API の叩き方を変える | `comken/toolbox/salesforce/`（Downloader ではない） |
 | 接続先の組織を足す | `comken/toolbox/salesforce/sites/` |
 

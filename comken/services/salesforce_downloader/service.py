@@ -59,8 +59,13 @@ from comken.exceptions import (
     ScheduledDownloadFailedError,
 )
 from comken.services.salesforce_downloader import history
-from comken.services.salesforce_downloader._paths import HISTORY_PATH, MASTER_PATH
+from comken.services.salesforce_downloader._paths import (
+    HISTORY_PATH,
+    LATEST_STATUS_PATH,
+    MASTER_PATH,
+)
 from comken.services.salesforce_downloader.history import HistoryRow
+from comken.services.salesforce_downloader.latest_status import write_latest_status
 from comken.services.salesforce_downloader.master import ReportEntry, load_master, shared_report_ids
 from comken.services.salesforce_downloader.provider import _daily_cache_path_of, _find, file_path_of
 from comken.toolbox.csv import CSV
@@ -168,6 +173,20 @@ def download_scheduled(project: str = "定期実行") -> list[Path]:
             failed.append(entry.key)
 
     logger.info("定期取得: %d 件中 %d 件を取得しました。", len(targets), len(saved))
+    # **最新ステータスは別ファイルへ上書きする。** 履歴 CSV は「全実行の記録」で
+    # 1 レポートの最新だけ見たい業務側からは探しにくいので、``download_scheduled()``
+    # のたびに管理表 × 履歴の最新行を 1 シートへまとめる。失敗しても定期取得の
+    # 成否判定には影響させない（``ScheduledDownloadFailedError`` は本体結果で決まる）
+    try:
+        write_latest_status(
+            master_path=MASTER_PATH,
+            history_path=HISTORY_PATH,
+            output_path=LATEST_STATUS_PATH,
+        )
+    except Exception as e:
+        logger.warning(
+            "最新ステータスの更新に失敗しました（定期取得は本体の結果で判定）: %s", e
+        )
     if failed:
         # 続けたぶん、最後に必ず知らせる（終了コードで落ちたことが分かるように）
         raise ScheduledDownloadFailedError(failed, HISTORY_PATH)

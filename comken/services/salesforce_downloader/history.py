@@ -189,6 +189,36 @@ def successful_files_today(
     return list(reversed(matches))
 
 
+@measure
+def read_all(path: str | Path) -> list[dict[str, str]]:
+    """履歴 CSV を全行読んで返す。フィルタはしない。
+
+    **絞り込みは呼び出し側が行う。** 日付・トリガ・成否の組合せは使う側でしか
+    決まらないため、ここでは全件をそのまま ``dict`` のリストで返す。
+    読み取りにも追記と同じロックを使うので、別プロセスが書いている途中の行を
+    読まない。
+
+    ファイルが無ければ空リストを返す。既存の見出しが現在の列定義と合わない場合は
+    ``HistoryHeaderMismatchError`` を投げる。
+
+    Args:
+        path: 履歴 CSV のパス。
+
+    Returns:
+        履歴1行を ``dict`` にしたもの。順序は CSV に書かれたまま。
+    """
+    history_path = Path(path)
+    if not history_path.is_file():
+        return []
+    with (
+        HistoryFileLock(history_path),
+        history_path.open("r", encoding="utf-8-sig", newline="") as f,
+    ):
+        reader = csv.DictReader(f)
+        _require_expected_header(history_path, reader.fieldnames)
+        return [dict(row) for row in reader]
+
+
 def _stage(value: bool | None) -> str:
     """3状態（成功／失敗／未到達）を履歴の文字列に変換する。"""
     if value is None:

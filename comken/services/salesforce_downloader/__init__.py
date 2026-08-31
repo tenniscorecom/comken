@@ -23,6 +23,7 @@ r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポー�
     shared_report_ids    同じ Salesforce レポートを指している管理番号を返す
     ReportEntry          管理表の1行
     ReportEntry.create_template  管理表の雛形（Excel）を作る
+    write_latest_status  全レポートの最新実行結果を 1 つの Excel へ上書き生成する
 
 管理表の検査はコマンドからも呼べる（保守用。業務の定期実行ではない）:
 
@@ -88,6 +89,7 @@ __all__ = [
     "file_path_of",
     "load_master",
     "shared_report_ids",
+    "write_latest_status",
     "ReportEntry",
     "ScheduleRule",
 ]
@@ -101,6 +103,7 @@ _LAZY_TARGETS: dict[str, str] = {
     "cached_report": "comken.services.salesforce_downloader.provider",
     "cached_report_path": "comken.services.salesforce_downloader.provider",
     "file_path_of": "comken.services.salesforce_downloader.provider",
+    "write_latest_status": "comken.services.salesforce_downloader.latest_status",
 }
 
 

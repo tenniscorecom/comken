@@ -21,3 +21,9 @@ MASTER_PATH = Path(r"\\server\share\tools\salesforce\レポート管理表.xlsx"
 
 # ダウンロード履歴（CSV）。プログラムが追記する（人は編集しない）
 HISTORY_PATH = Path(r"\\server\share\tools\salesforce\ダウンロード履歴.csv")
+
+# 全レポートの最新実行結果（Excel）。download_scheduled() のたびに上書き生成する。
+# プログラム専用の帳票（人は編集しない）なので、管理表・履歴CSVとは別ファイルにする。
+# ファイルを分ける理由は history.py のモジュール docstring を参照（書く主体が違うと
+# 人が開いている間にプログラムが保存できず履歴が飛ぶ）
+LATEST_STATUS_PATH = Path(r"\\server\share\tools\salesforce\最新ステータス.xlsx")

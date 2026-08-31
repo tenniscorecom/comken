@@ -68,6 +68,14 @@ def test_shared_report_ids_does_not_load_service(monkeypatch: pytest.MonkeyPatch
     assert "comken.services.salesforce_downloader.service" not in sys.modules
 
 
+def test_write_latest_status_does_not_load_service(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`write_latest_status` は history/master/toolbox.excel だけに依存し、requests は要らない。"""
+    _drop_service(monkeypatch)
+    from comken.services.salesforce_downloader import write_latest_status  # noqa: F401
+
+    assert "comken.services.salesforce_downloader.service" not in sys.modules
+
+
 # ─────────────────────────────────────────────────────────────────────
 # service を import して良い関数 (service 側)
 # ─────────────────────────────────────────────────────────────────────

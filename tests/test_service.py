@@ -96,17 +96,21 @@ def paths(tmp_path, monkeypatch):
         ],
     )
     history_path = tmp_path / "ダウンロード履歴.csv"
+    latest_status = tmp_path / "最新ステータス.xlsx"
     monkeypatch.setattr(_paths_module, "MASTER_PATH", master)
     monkeypatch.setattr(_paths_module, "HISTORY_PATH", history_path)
+    monkeypatch.setattr(_paths_module, "LATEST_STATUS_PATH", latest_status)
     # `service.MASTER_PATH` は `from ... import MASTER_PATH` で再束縛されているので、
     # `_paths` の差し替えだけでは反映されない。明示的に同じ値を入れる
     monkeypatch.setattr(service_module, "MASTER_PATH", master)
     monkeypatch.setattr(service_module, "HISTORY_PATH", history_path)
+    monkeypatch.setattr(service_module, "LATEST_STATUS_PATH", latest_status)
     # `provider` も `_paths` から import で束縛しているので同期する
     monkeypatch.setattr(provider_module, "MASTER_PATH", master)
     return {
         "master_path": master,
         "history_path": history_path,
+        "latest_status_path": latest_status,
         "folder": folder,
     }
 
@@ -756,6 +760,32 @@ class TestDownloadScheduled:
         ):
             download_scheduled("定期実行")
         assert _history_rows(paths)[-1]["実行方式"] == "定期"
+
+    def test_writes_latest_status_after_scheduled_run(self, paths):
+        """定期取得のあとに、管理表×履歴の最新行をまとめた Excel を作る。"""
+        with patch(
+            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
+        ):
+            download_scheduled()
+        assert paths["latest_status_path"].is_file()
+
+    def test_latest_status_failure_does_not_affect_outcome(self, paths, monkeypatch):
+        """write_latest_status() が失敗しても、定期取得の成功／失敗判定に影響させない。"""
+        from comken.services.salesforce_downloader import service as service_module_inner
+
+        def boom(*args, **kwargs):
+            raise OSError("最新ステータスを書けません")
+
+        # `service.py` は `from latest_status import write_latest_status` で
+        # ローカル束縛しているので、呼び出し側を直接差し替える
+        monkeypatch.setattr(service_module_inner, "write_latest_status", boom)
+        with patch(
+            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
+        ):
+            saved = download_scheduled()  # 例外にならず、保存できたファイルが返る
+        assert [path.name.split("_")[0] for path in saved] == ["1001"]
+        # 失敗しても本体結果（成功件数・失敗件数）には反映されない
+        assert not paths["latest_status_path"].exists()
 
 
 def _history_rows(paths: dict) -> list[dict]:
