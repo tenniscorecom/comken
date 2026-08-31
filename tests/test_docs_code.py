@@ -17,7 +17,7 @@ _ROOT = Path(__file__).resolve().parent.parent
 # pytest --basetemp で指定した作業ディレクトリ（.pytest-tmp/）はテスト用の一時領域で、
 # リポジトリのドキュメントとしては存在しないので走査対象外にする。
 # test_batch_files.py と同じ除外セットを使う。
-# ``comken_bundle.md`` も対象外: export_for_chat.py --bundle が生成する物理結合ファイルで、
+# ``comken_bundle.md`` も対象外: export_for_chat.py が既定で生成する物理結合ファイルで、
 # 削除済み名（pdf 等）や相対リンク（../../README.md）を含むため、 ここで検査すると
 # 「中身に含まれる名前すべて」を検査対象にできない（バンドル用の検証は
 # tests/test_export_for_chat.py が別途担う）。

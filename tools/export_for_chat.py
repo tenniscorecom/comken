@@ -4,19 +4,17 @@
 ``comken/tools/`` に同梱されて ``python -m comken init`` から呼ばれる
 ``new_project.py`` とは役割が違うので、混同しないこと。
 
-通常は各パッケージの ``__all__`` をたどり、型ヒント付き署名と docstring 全文を
+各パッケージの ``__all__`` をたどり、型ヒント付き署名と docstring 全文を
 ``docs/自動生成/API.md`` へ書き出す。添付できない環境では ``--max-chars`` を指定すると、
 従来どおり資料を文字数の目安で分割して ``貼り付け用/`` へ出力する。
 
-``--bundle`` を指定すると、社内の外部 AI へ貼るための 1 ファイル資料
-（``comken_bundle.md``）を生成する。インデックス → 実例 → 実装全文 →
-エラー対応表の順で並び、内部実装を区別せずに使ったサンプルが出にくく
-なっている。
+**同時に、社内の外部 AI へ貼るための 1 ファイル資料（``comken_bundle.md``）も
+既定で生成する。** インデックス → 実例 → 実装全文 → エラー対応表の順で並び、
+内部実装を区別せずに使ったサンプルが出にくくなっている。
 
 使い方:
     python tools/export_for_chat.py
     python tools/export_for_chat.py --max-chars 20000
-    python tools/export_for_chat.py --bundle
 """
 
 import argparse
@@ -636,7 +634,7 @@ def _bundle_header(
         f"- 実装全文（comken/）の総行数: {impl_line_count:,}",
         f"- 実装全文（comken/）の総バイト数: {impl_byte_count:,}",
         "",
-        "再生成: `python tools/export_for_chat.py --bundle`",
+        "再生成: `python tools/export_for_chat.py`",
         "",
     ]
     return "\n".join(lines)
@@ -668,11 +666,6 @@ def main() -> None:
         type=int,
         help="指定時だけ、貼り付け用資料をこの文字数の目安で分割して出力する",
     )
-    parser.add_argument(
-        "--bundle",
-        action="store_true",
-        help="指定時だけ、社外 AI 向けの 1 ファイル資料 comken_bundle.md を生成する",
-    )
     args = parser.parse_args()
     API_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     API_OUTPUT_PATH.write_text(_api_text(), encoding="utf-8")
@@ -681,8 +674,7 @@ def main() -> None:
     print(f"{ERRORS_OUTPUT_PATH.relative_to(ROOT)} を生成しました")  # noqa: T201
     if args.max_chars is not None:
         _write_legacy_bundles(args.max_chars)
-    if args.bundle:
-        _write_bundle()
+    _write_bundle()
 
 
 if __name__ == "__main__":
