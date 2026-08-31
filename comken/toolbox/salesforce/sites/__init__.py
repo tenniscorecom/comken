@@ -7,7 +7,7 @@
     from comken.toolbox.salesforce.sites import Sandbox
 
     with Sandbox() as sf:
-        rows = sf.opportunities()
+        rows = sf.report.get("00O...")
 
 URL と認証情報のシステム名はクラス定数なので、呼び出し側は何も渡さなくてよい。
 本番とテストで登録を切り替えるときだけシステム名を渡す:

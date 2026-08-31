@@ -200,7 +200,7 @@ class SalesforceBase:
             return
         logger.info("site=%s owner=%s defined=%s", cls.__name__, cls.OWNER, cls.__module__)
 
-    # 組織クラスのまま返す（with Sandbox() as sf: で sf.opportunities() の補完が効く）
+    # 組織クラスのまま返す（with Sandbox() as sf: で組織固有メソッドの補完が効く）
     def __enter__(self) -> Self:
         return self
 

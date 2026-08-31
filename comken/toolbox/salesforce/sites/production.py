@@ -1,13 +1,11 @@
 """comken/toolbox/salesforce/sites/production.py — Production 組織
 
-※ URL とレポート ID は**ダミー**。配置するときに実際の値へ書き換える
-（詳細は sites/__init__.py）。
+※ URL は**ダミー**。配置するときに実際の値へ書き換える（詳細は sites/__init__.py）。
 
 この組織でしか通じないもの（レポート ID・オブジェクトの API 参照名・独自の手順）を
 ここに置く。共通の操作は `SalesforceBase` 側にあるので書かない。
 """
 
-from comken.core.table import Table
 from comken.toolbox.salesforce.client import SalesforceBase
 
 
@@ -16,7 +14,7 @@ class Production(SalesforceBase):
 
     使い方:
         with Production() as sf:
-            rows = sf.opportunities()
+            rows = sf.report.get("00O...")
     """
 
     # comken 配下の組織クラスは、管理者が昇格を判断した印として OWNER = "comken" を書く。
@@ -34,15 +32,3 @@ class Production(SalesforceBase):
 
     # 組織が対応している API バージョン。既定と違うときだけ上書きする
     # API_VERSION = "67.0"
-
-    # レポート ID は組織ごとに固有で、環境では変わらない
-    # TODO: 配置するときに実際のレポート ID へ置き換える
-    REPORT_OPPORTUNITIES = "00O000000000002"
-
-    def opportunities(self) -> Table:
-        """案件一覧レポートの明細を返す。
-
-        2000 行を超えると SalesforceReportTruncatedError で止まる。
-        超えるようになったら、期間で区切るか SOQL へ移す。
-        """
-        return self.report.get(self.REPORT_OPPORTUNITIES)

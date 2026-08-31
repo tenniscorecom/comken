@@ -621,24 +621,6 @@ class TestSites:
             site = Sandbox(auth=ClientCredentialsAuth("CID", "CSECRET", DOMAIN_URL))
         assert site.metrics.org_name == "Sandbox"
 
-    def test_site_report_uses_its_own_report_id(self):
-        """組織固有のレポート ID がそのまま URL に載る。"""
-        session = MagicMock()
-        session.headers = {}
-        session.request.side_effect = [_response(json_body=_report_body([("A社", "1")]))]
-        with (
-            patch("comken.toolbox.salesforce.client.requests.Session", return_value=session),
-            patch(
-                "comken.toolbox.salesforce.oauth_credentials.requests.post",
-                return_value=_token_response(),
-            ),
-            Sandbox(auth=ClientCredentialsAuth("CID", "CSECRET", DOMAIN_URL)) as sf,
-        ):
-            rows = sf.opportunities()
-
-        assert rows == [{"名前": "A社", "金額": "1"}]
-        assert session.request.call_args[0][1].endswith(f"/{Sandbox.REPORT_OPPORTUNITIES}")
-
 
 class TestSiteFor:
     """レポートの URL から、つなぐ組織を決める（管理表に複数組織が混ざるため）。"""

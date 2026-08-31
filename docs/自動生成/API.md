@@ -9670,20 +9670,7 @@ Sandbox 組織のクライアント。
 
 使い方:
     with Sandbox() as sf:
-        rows = sf.opportunities()
-
-#### `opportunities`
-
-```text
-def opportunities(self) -> Table:
-```
-
-##### 説明
-
-案件一覧レポートの明細を返す。
-
-2000 行を超えると SalesforceReportTruncatedError で止まる。
-超えるようになったら、期間で区切るか SOQL へ移す。
+        rows = sf.report.get("00O...")
 
 ### `Production`
 
@@ -9697,20 +9684,7 @@ Production 組織のクライアント。
 
 使い方:
     with Production() as sf:
-        rows = sf.opportunities()
-
-#### `opportunities`
-
-```text
-def opportunities(self) -> Table:
-```
-
-##### 説明
-
-案件一覧レポートの明細を返す。
-
-2000 行を超えると SalesforceReportTruncatedError で止まる。
-超えるようになったら、期間で区切るか SOQL へ移す。
+        rows = sf.report.get("00O...")
 
 ### `Developer`
 
@@ -9724,20 +9698,7 @@ Developer 組織のクライアント。
 
 使い方:
     with Developer() as sf:
-        rows = sf.opportunities()
-
-#### `opportunities`
-
-```text
-def opportunities(self) -> Table:
-```
-
-##### 説明
-
-案件一覧レポートの明細を返す。
-
-2000 行を超えると SalesforceReportTruncatedError で止まる。
-超えるようになったら、期間で区切るか SOQL へ移す。
+        rows = sf.report.get("00O...")
 
 ### `site_for`
 

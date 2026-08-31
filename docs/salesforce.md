@@ -406,17 +406,17 @@ rows = sf.query("SELECT Name, Amount FROM Opportunity WHERE CreatedDate > 2026-0
 ### 組織（サイト）ごとのクラス
 
 組織は My Domain の URL と固有処理をまとめるため、1組織につき1クラスにする。
-現在は Sandbox 1組織の雛形が `comken/toolbox/salesforce/sites/` に入っている。
+現在は Sandbox / Production / Developer 3組織の雛形が `comken/toolbox/salesforce/sites/` に入っている。
 
 ```python
 from comken.toolbox.salesforce.sites import Sandbox
 
 with Sandbox() as sf:
-    rows = sf.opportunities()
+    rows = sf.report.get("00O...")
 
 # 別の DPAPI 登録へ切り替える場合だけ指定する
 with Sandbox(prefix="sandbox_test") as sf:
-    rows = sf.opportunities()
+    rows = sf.report.get("00O...")
 ```
 
 組織クラスは `CREDENTIAL_PREFIX` を頭に付けたキー名で、DPAPI に保管した
@@ -424,14 +424,16 @@ client_id / client_secret を読む（[credentials](credentials.md#credentials)�
 コードにも config.ini にも秘密の値が現れない。
 
 各クラスには `CREDENTIAL_PREFIX`（認証情報のキー名の頭）・`DOMAIN_URL`（My Domain）・
-`REPORT_*`（その組織のレポート ID）・`OWNER`（プロジェクト名 / 担当者）を持たせる。
+`OWNER`（プロジェクト名 / 担当者）を持たせる。よく使うレポートを固有メソッドで
+包みたいときは `REPORT_*` 定数と、それを読む薄いメソッドをそのクラスへ足す
+（雛形には含めない——使わないレポートIDを埋めても保守の負債にしかならないため）。
 共通の操作は `SalesforceBase` にあるので、書くのは**その組織でしか通じないもの**だけ。
 `OWNER` はライブラリ管理者が重複を把握するために必須で、空だと起動時に
 `SiteOwnerRequiredError` で止まる。
 計測の組織名は指定しなければクラス名になるので、ログで組織を見分けられる。
 
-**`Sandbox` と URL・レポート ID は仮の値。** このリポジトリは公開しているため、
-実際の組織名や値は書かず、配置時に `DOMAIN_URL`・`CREDENTIAL_PREFIX`・`REPORT_*` を
+**`Sandbox` と URL は仮の値。** このリポジトリは公開しているため、
+実際の組織名や値は書かず、配置時に `DOMAIN_URL`・`CREDENTIAL_PREFIX` を
 書き換える（`comken/internal/salesforce_api.py` の `example_libs.v0000` と同じ扱い）。
 
 書き込み系（`insert` / `update` / `upsert` / `delete`）は `dry_run` を尊重する。

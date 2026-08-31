@@ -398,4 +398,4 @@ def test_deployment_targets_still_exist_in_the_code():
             f"配置.md が書き換え対象に挙げている行が {current.name} にありません: {snippet[:40]}"
         )
         checked += 1
-    assert checked >= 5, f"検査が素通りしている（{checked} 件しか見ていない）"
+    assert checked >= 4, f"検査が素通りしている（{checked} 件しか見ていない）"
