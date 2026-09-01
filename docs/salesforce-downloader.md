@@ -577,9 +577,15 @@ if rule.is_due(datetime.now(), holidays=set()):
 配置するときに実際の場所へ書き換える。
 
 ```python
-MASTER_PATH = Path(r"\\実際のサーバー\share\tools\salesforce\レポート管理表.xlsx")
-HISTORY_PATH = Path(r"\\実際のサーバー\share\tools\salesforce\ダウンロード履歴.csv")
-LATEST_STATUS_PATH = Path(r"\\実際のサーバー\share\tools\salesforce\最新ステータス.xlsx")
+SALESFORCE_DOWNLOADER_FOLDER = Path(r"\\実際のサーバー\share\tools\salesforce")
+
+MASTER_FILENAME = "レポート管理表.xlsx"
+HISTORY_FILENAME = "ダウンロード履歴.csv"
+LATEST_STATUS_FILENAME = "最新ステータス.xlsx"
+
+MASTER_PATH = SALESFORCE_DOWNLOADER_FOLDER / MASTER_FILENAME
+HISTORY_PATH = SALESFORCE_DOWNLOADER_FOLDER / HISTORY_FILENAME
+LATEST_STATUS_PATH = SALESFORCE_DOWNLOADER_FOLDER / LATEST_STATUS_FILENAME
 ```
 
 **設定ファイルへ集約せず、使う場所に書く。** 理由と、共有サーバーで書き換えを守る方法は
