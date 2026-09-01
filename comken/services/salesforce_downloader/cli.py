@@ -69,10 +69,10 @@ def _run_check(args: argparse.Namespace) -> None:
     path = args.path or MASTER_PATH
     entries = load_master(path)  # 書き方の誤りはここで例外になる
 
-    scheduled = [entry for entry in entries.values() if entry.is_scheduled and entry.enabled]
+    enabled = [entry for entry in entries.values() if entry.enabled]
     disabled = [entry for entry in entries.values() if not entry.enabled]
     print(f"読めました: {path}")
-    print(f"  登録 {len(entries)} 件（定期 {len(scheduled)} 件 / 無効 {len(disabled)} 件）")
+    print(f"  登録 {len(entries)} 件（有効 {len(enabled)} 件 / 無効 {len(disabled)} 件）")
 
     shared = shared_report_ids(entries)
     if not shared:

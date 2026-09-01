@@ -17,7 +17,6 @@ import pytest
 from comken.core.table import Table
 from comken.exceptions import (
     CachedReportNotFoundError,
-    CachedReportNotRegisteredError,
     ReportDisabledError,
     ReportNotRegisteredError,
 )
@@ -36,7 +35,7 @@ URL_A = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/0
 URL_B = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000FGHIJ/view"
 ROWS = [{"名前": "山田", "金額": "100"}, {"名前": "鈴木", "金額": "200"}]
 
-HEADERS = ["ID", "概要", "Salesforce URL", "実行方式", "保存先", "有効", "備考"]
+HEADERS = ["ID", "概要", "Salesforce URL", "出力形式", "保存先", "有効", "備考"]
 
 
 @pytest.fixture(autouse=True)
@@ -76,9 +75,9 @@ def paths(tmp_path, monkeypatch):
     master = make_master(
         tmp_path / "レポート管理表.xlsx",
         [
-            ["1001", "顧客一覧", URL_A, "定期", str(folder), "○", ""],
-            ["1002", "売上実績", URL_B, "個別", str(folder), "○", ""],
-            ["1003", "停止中", URL_B, "定期", str(folder), "×", ""],
+            ["1001", "顧客一覧", URL_A, "CSV", str(folder), "○", ""],
+            ["1002", "売上実績", URL_B, "Excel", str(folder), "○", ""],
+            ["1003", "停止中", URL_B, "CSV", str(folder), "×", ""],
         ],
     )
     history_path = tmp_path / "ダウンロード履歴.csv"
@@ -95,6 +94,11 @@ def paths(tmp_path, monkeypatch):
     }
 
 
+def _all_master_rows(paths: dict) -> None:
+    """``download_scheduled()`` を全件回すテスト用ヘルパー。"""
+    pass  # 注: この fixture は test_service.py とは独立したものとして 1002 を有効のまま使う
+
+
 def fake_salesforce(rows: list[dict] | None = None) -> MagicMock:
     """report.get() が rows を返す Salesforce クライアント。"""
     client = MagicMock()
@@ -104,14 +108,14 @@ def fake_salesforce(rows: list[dict] | None = None) -> MagicMock:
 
 
 class TestFilePathOf:
-    """file_path_of() は「管理番号_概要_日付.csv」を組み立てるだけの純関数。"""
+    """file_path_of() は「管理番号_概要_日付.{csv|xlsx}」を組み立てるだけの純関数。"""
 
-    def test_file_name_has_key_and_summary_and_date(self, tmp_path):
+    def test_csv_file_name_has_key_and_summary_and_date(self, tmp_path):
         folder = tmp_path / "保存先"
         folder.mkdir()
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", "顧客一覧", URL_A, "定期", str(folder), "○", ""]],
+            [["1001", "顧客一覧", URL_A, "CSV", str(folder), "○", ""]],
         )
         entry = load_master(master)["1001"]
         name = file_path_of(entry).name
@@ -119,13 +123,26 @@ class TestFilePathOf:
         assert name.endswith(".csv")
         assert len(name.removesuffix(".csv").rsplit("_", 3)[-1]) == 6
 
+    def test_excel_file_name_uses_xlsx_suffix(self, tmp_path):
+        """`出力形式=Excel` のレポートは拡張子 `.xlsx` で組み立てる。"""
+        folder = tmp_path / "保存先"
+        folder.mkdir()
+        master = make_master(
+            tmp_path / "管理表.xlsx",
+            [["1001", "顧客一覧", URL_A, "Excel", str(folder), "○", ""]],
+        )
+        entry = load_master(master)["1001"]
+        name = file_path_of(entry).name
+        assert name.startswith("1001_顧客一覧_")
+        assert name.endswith(".xlsx")
+
     def test_forbidden_characters_in_summary_are_stripped(self, tmp_path):
         """ファイル名に使えない文字（\\/:*?\"<>|）は落とす。"""
         folder = tmp_path / "保存先"
         folder.mkdir()
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", "禁則: A/B?C*D", URL_A, "定期", str(folder), "○", ""]],
+            [["1001", "禁則: A/B?C*D", URL_A, "CSV", str(folder), "○", ""]],
         )
         entry = load_master(master)["1001"]
         name = file_path_of(entry).name
@@ -140,7 +157,7 @@ class TestFilePathOf:
         long_summary = "あ" * 50
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", long_summary, URL_A, "定期", str(folder), "○", ""]],
+            [["1001", long_summary, URL_A, "CSV", str(folder), "○", ""]],
         )
         entry = load_master(master)["1001"]
         name = file_path_of(entry).name
@@ -172,6 +189,13 @@ class TestCachedReport:
         site.assert_not_called()
 
     def test_same_day_run_replaces_cache_and_keeps_archives(self, paths):
+        """`paths` fixture の管理表には「スケジュール」シートが無い。
+
+        スケジュール行が無いレポートは ``downloaded_today()`` ベースで
+        1 日 1 回までに制限されるため、**2 回目はスキップ**され、キャッシュは
+        1 回目の取得結果のまま変わらない。代わりに「時刻付き保管ファイルが
+        増え続ける」運用ではないので、保管は 1 回分で止まる。
+        """
         updated_rows = [{"名前": "最新", "金額": "300"}]
         with patch(
             "comken.services.salesforce_downloader.service.site_for",
@@ -183,13 +207,14 @@ class TestCachedReport:
             return_value=fake_salesforce(updated_rows),
         ):
             download_scheduled()
+        # 2 回目はスキップ → キャッシュは 1 回目のデータのまま
+        assert cached_report("1001").read_rows() == ROWS
+        # 1 回目だけ取得 → 保管ファイル 1 件 + 日次キャッシュ 1 件 = 2 件
+        assert len(list(paths["folder"].glob("1001_*.csv"))) == 2
 
-        assert cached_report("1001").read_rows() == updated_rows
-        assert len(list(paths["folder"].glob("1001_*.csv"))) == 3
-
-    def test_on_demand_report_raises(self, paths):
-        """管理表で「個別」のものは、定期取得済みとして受け取れない。"""
-        with pytest.raises(CachedReportNotRegisteredError):
+    def test_excel_format_report_raises_when_cache_is_missing(self, paths):
+        """`出力形式=Excel` のレポートも、キャッシュが無いなら `CachedReportNotFoundError`"""
+        with pytest.raises(CachedReportNotFoundError):
             cached_report("1002")
 
     def test_not_downloaded_yet_raises(self, paths):

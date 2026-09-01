@@ -4,26 +4,30 @@ r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポー�
 どのレポートを、どれくらいの頻度で取っているのか**が分からなくなる。取得をここに集約し、
 何を取っているかは管理表（Excel）に、いつ何を取ったかは履歴（CSV）に集める。
 
-    from comken.services.salesforce_downloader import cached_report, download_report
+    from comken.services.salesforce_downloader import cached_report, download_scheduled
 
     CUSTOMER_LIST = "1001"        # プロジェクトごとに、意味の分かる名前を付ける
     SALES_RESULT = "1003"
 
-    rows = download_report(CUSTOMER_LIST).read_rows()             # 今すぐ取りに行く
+    download_scheduled()            # 定期取得をまとめて実行（1回呼ぶと全件取る）
     by_code = cached_report(SALES_RESULT).index("顧客コード")
 
 **プロジェクトのコードに Salesforce の URL もレポート ID も書かない。** 書くのは
 管理番号だけで、参照先の差し替えは管理表を直せば済む（コードは変えない）。
 
-    download_report      今すぐ Salesforce から取得して、ファイルを CSV で返す
+    download_scheduled   管理表で有効な全レポートをまとめて取得する
     cached_report        本日の定期取得キャッシュを CSV で返す（取りに行かない）
-    download_scheduled   「定期」登録の全件を取得する（定期実行のプロジェクトが呼ぶ）
     file_path_of         そのレポートが保存されるパス
     load_master          管理表を読む
     shared_report_ids    同じ Salesforce レポートを指している管理番号を返す
     ReportEntry          管理表の1行
     ReportEntry.create_template  管理表の雛形（Excel）を作る
     write_latest_status  全レポートの最新実行結果を 1 つの Excel へ上書き生成する
+
+**「今すぐ取りに行く」APIは無い。** 急ぎの取得は権限を持つ人が Salesforce から
+手動ダウンロードするか、`download_scheduled()` をスケジュール外で直接実行する
+（呼び出し側でスケジューラを増やす）。Downloader 側に「今すぐ取りに行く」専用の
+関数を残すと、定期取得が動いていないことに誰も気づかなくなるため。
 
 管理表の検査はコマンドからも呼べる（保守用。業務の定期実行ではない）:
 
@@ -62,15 +66,15 @@ comken 本体側の共有例外（`ComkenError` / `SalesforceReportIDNotFoundErr
 
 ---
 
-**`__init__.py` 経由の import で `requests` を読ませない設計。**
+**`__init__.py` 経由の import で `requests` を読み込ませない設計。**
 
 `service.py` を import すると `requests` が必要になる。BO 環境のように
 `requests` が入っていないところで `cached_report` /
 `file_path_of` / `load_master` / `shared_report_ids` / `ReportEntry`
 だけ動かせるよう、`__getattr__` (PEP 562) で遅延 import する。
 
-`download_report` / `download_scheduled` を import したときだけ
-`service.py` が読み込まれ、`requests` がロードされる。
+`download_scheduled` を import したときだけ `service.py` が読み込まれ、
+`requests` がロードされる。
 """
 
 from comken.services.salesforce_downloader.master import (
@@ -81,8 +85,6 @@ from comken.services.salesforce_downloader.master import (
 from comken.services.salesforce_downloader.schedule import ScheduleRule
 
 __all__ = [
-    "download_report",
-    "download_report_path",
     "download_scheduled",
     "cached_report",
     "cached_report_path",
@@ -97,8 +99,6 @@ __all__ = [
 # 遅延 import する対象。値はその属性が定義されているサブモジュールの絶対パス。
 # import 時に service.py を読み込むと requests が要るので、必要なときにだけ読む。
 _LAZY_TARGETS: dict[str, str] = {
-    "download_report": "comken.services.salesforce_downloader.service",
-    "download_report_path": "comken.services.salesforce_downloader.service",
     "download_scheduled": "comken.services.salesforce_downloader.service",
     "cached_report": "comken.services.salesforce_downloader.provider",
     "cached_report_path": "comken.services.salesforce_downloader.provider",

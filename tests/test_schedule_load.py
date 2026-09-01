@@ -49,7 +49,7 @@ def make_master_with_schedule(
         "ID",
         "概要",
         "Salesforce URL",
-        "実行方式",
+        "出力形式",
         "保存先",
         "有効",
         "備考",

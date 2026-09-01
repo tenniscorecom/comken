@@ -9,7 +9,7 @@
         ↓                                      ↑
   comken.services.salesforce_downloader  ──→ Salesforce
         ↓
-  各プロジェクト（download_report / cached_report）
+  各プロジェクト（cached_report / download_scheduled）
 ```
 
 ---
@@ -20,28 +20,27 @@
 from comken.services.salesforce_downloader import (
     cached_report,
     cached_report_path,
-    download_report,
-    download_report_path,
 )
 
 CUSTOMER_LIST = "1001"    # 管理表の「ID」。意味の分かる名前を付ける
 SALES_RESULT = "1003"
 
-table = download_report(CUSTOMER_LIST, "案件集計")
+# 定期取得は download_scheduled() をスケジュール駆動で呼ぶ。
+# 中身を読みたいプロジェクトは本日キャッシュを cached_report() で受け取る。
 by_code = cached_report(SALES_RESULT).index("顧客コード")
-# 中身が要らずファイルパスだけ欲しいときは download_report_path() / cached_report_path()
-print(download_report_path(CUSTOMER_LIST))   # 保存した CSV のパス（読み込みは走らない）
+# 中身が要らずファイルパスだけ欲しいときは cached_report_path()
+print(cached_report_path(CUSTOMER_LIST))   # 本日の固定キャッシュのパス
 ```
 
 **プロジェクトのコードに Salesforce の URL もレポート ID も書かない。** 書くのは管理番号だけ。
 参照先の Salesforce レポートを差し替えても、`CUSTOMER_LIST = "1001"` はそのままでよい。
 
 戻り値は `Table`（`comken.core.table.model.Table`）。`index()` / `filter()` /
-`replace()` / `append()` など、`Table` の API がそのまま使える。CSV の文字コードは
-意識しなくてよい（中身は `Table` で扱う）。
-ファイルパスだけ欲しいときは `download_report_path()` / `cached_report_path()` を
-別関数として用意している（戻り値は `Path`）。`Table` を経由しないので、
-パスを他ツールへ渡す用途で読み込みは走らない。
+`replace()` / `append()` など、`Table` の API がそのまま使える。CSV / Excel の
+読み込みは中で吸収するので、利用側は中身の形式を意識しなくてよい。
+ファイルパスだけ欲しいときは `cached_report_path()` を別関数として用意している
+（戻り値は `Path`）。`Table` を経由しないので、パスを他ツールへ渡す用途で
+読み込みは走らない。
 
 `download_scheduled()` は `list[Path]` のままで **`Table` を返さない**。定期取得の
 呼び出し側は中身を読まず「取らせる」のが目的なので、reader を並べても使い道がないため
@@ -51,14 +50,16 @@ print(download_report_path(CUSTOMER_LIST))   # 保存した CSV のパス（読�
 
 | | 意味 | Salesforce へ問い合わせるか |
 |---|---|---|
-| `download_report(ID)` | **今この瞬間に取りに行く** | **必ず行く**（今日すでに取っていても取り直す） |
+| `download_scheduled()` | **今この瞬間に、有効な全レポートをまとめて取りに行く** | **行く**（定期取得の入口） |
 | `cached_report(ID)` | **本日の定期取得キャッシュを受け取る** | **行かない**（無ければ例外） |
 
 `cached_report()` は取りに行く関数ではない。本日の固定キャッシュが無ければ
 `CachedReportNotFoundError` で止まる。**ここで自動的に取りに行くと、定期取得が
-動いていないことに誰も気づかなくなる**ため。急ぐときは `download_report()` を呼ぶ。
+動いていないことに誰も気づかなくなる**ため。急いでその場の最新値が必要なときは
+`download_scheduled()` をスケジュール外で直接実行する。Downloader 自身には
+「今すぐ取りに行く」だけの関数を残さない（定期取得が動いていないことに誰も
+気づかなくなるため）。
 
-利用プロジェクトがその場の最新値を必要とするときは、`download_report()` を呼ぶ。
 定期キャッシュを1日に複数回更新したいときは、呼び出す側のスケジューラから
 `download_scheduled()` を必要な時刻に実行する。Downloader 自身には複雑な
 スケジュール（土日祝を除く等）を持たせない——呼び出す側と二重に持つと必ずズレるため。
@@ -104,7 +105,7 @@ python -m comken sf check
 | ID | `1001` |
 | 概要 | `顧客一覧` |
 | Salesforce URL | `https://.../Report/00O.../view` |
-| 実行方式 | `定期` |
+| 出力形式 | `CSV` / `Excel` |
 | 保存先 | `\\server\A\input` |
 | 有効 | `○` |
 | 0件あり | `×` |
@@ -130,21 +131,22 @@ python -m comken sfdl check "\\実際のサーバー\share\tools\salesforce\レ�
 ### 6. 1件だけ取ってみる
 
 いきなり定期実行に入れず、**1件で通しを確かめる**。管理表に書いた管理番号を渡す。
+`download_scheduled()` をそのまま 1 回流すと、管理表の全件を 1 度だけ取って
+くれる（定期実行と「1 件確認」を兼ねる）。
 
 ```python
-from comken.services.salesforce_downloader import download_report, download_report_path
+from comken.services.salesforce_downloader import download_scheduled
 
-table = download_report("1001")
-print(len(table))               # 行数
-print(download_report_path("1001"))  # 保存されたファイルのパス
+saved = download_scheduled("動作確認")
+print(saved)  # 保存されたファイルのパスのリスト
 ```
 
 ここまで通れば、**保存先にファイルができ、履歴（CSV）に1行増えている**。
 
 ### 7. 定期実行に組み込む
 
-`実行方式` を `定期` にしたレポートをまとめて取るのは `download_scheduled()`。
-**時刻を決めるのは呼び出す側**（タスクスケジューラや RPA 基盤）で、管理表には時刻を持たせない
+`download_scheduled()` を、タスクスケジューラや RPA 基盤から定期的に呼ぶ。
+**時刻を決めるのは呼び出す側**で、管理表には時刻を持たせない
 （→ [定期取得](#定期取得)）。
 
 ---
@@ -183,7 +185,7 @@ python -m comken sfdl check レポート管理表.xlsx
 
 ```
 読めました: レポート管理表.xlsx
-  登録 12 件（定期 8 件 / 無効 1 件）
+  登録 12 件（有効 8 件 / 無効 1 件）
 
 同じ Salesforce レポートを指している管理番号があります:
   00O5g00000FGHIJ: 1002（売上実績）、1005（売上実績・別集計）
@@ -201,17 +203,17 @@ python -m comken sfdl check レポート管理表.xlsx
 `comken.services.salesforce_downloader/master.py` にあり、読み込み・検証・雛形生成の
 仕組みは [管理表（master_table）](master-table.md) が持つ。
 
-| ID | 概要 | Salesforce URL | 実行方式 | 保存先 | 有効 | 0件あり | 備考 |
+| ID | 概要 | Salesforce URL | 出力形式 | 保存先 | 有効 | 0件あり | 備考 |
 |---|---|---|---|---|---|---|---|
-| 1001 | 顧客一覧 | https://.../Report/00O5g00000ABCDE/view | 定期 | `\\server\A\input` | ○ | × | |
-| 1002 | 売上実績 | https://.../Report/00O5g00000FGHIJ/view | 個別 | `\\server\B\input` | ○ | ○ | |
+| 1001 | 顧客一覧 | https://.../Report/00O5g00000ABCDE/view | CSV | `\\server\A\input` | ○ | × | |
+| 1002 | 売上実績 | https://.../Report/00O5g00000FGHIJ/view | Excel | `\\server\B\input` | ○ | ○ | |
 
 | 列 | 何を書くか |
 |---|---|
 | **ID** | 社内で決める管理番号（`1001`, `CUST-01` など）。**Salesforce のレポート ID ではない**。前ゼロ（`0001`）や記号入りも使える |
 | **概要** | 人が読んで分かる説明。保存するファイル名にも使う |
 | **Salesforce URL** | レポートを開いたときのアドレスを**そのまま貼る** |
-| **実行方式** | `定期`（毎日まとめて取る）か `個別`（呼ばれたときだけ）。**雛形ではドロップダウンから選べる** |
+| **出力形式** | `CSV` か `Excel`。**雛形ではドロップダウンから選べる**。**既定値は持たせない**（書き忘れが既定値に流れると下流 RPA が期待する形式と食い違う事故になるため） |
 | **保存先** | 落としたファイルを置くフォルダ |
 | **有効** | `○` か `×`。**雛形ではドロップダウンから選べる**。行は消さない（履歴との対応が残る） |
 | **0件あり** | その日のデータが 0 件になることがあるレポートなら `○`。`×` のときに 0 件だとエラーになります（[「0 件の扱い」](#0-件の扱い) 参照） |
@@ -246,12 +248,18 @@ shared_report_ids(load_master(MASTER_PATH))
 
 ```
 <保存先>\1001_顧客一覧_20260814_091530_123456.csv
+<保存先>\1002_売上実績_20260814_091530_123456.xlsx
 ```
 
 **管理番号が先頭**なのは、概要や参照先の Salesforce レポートが変わっても番号は変わらないため。
 概要を入れるのは、保存先を人が直接見たときに何のファイルか分かるようにするため。
 時刻はマイクロ秒まで付け、同じ日に複数回取得しても前のファイルを残す。万一名前が
 衝突した場合も連番を付け、既存ファイルを上書きしない。
+
+**拡張子は管理表の `出力形式` 列に従う**（`CSV` → `.csv` / `Excel` → `.xlsx`）。
+本日の固定キャッシュ（`cached_report()` / `cached_report_path()` が指すファイル）
+も同じ拡張子で書かれるため、Excel 形式のレポートは本日のキャッシュも `.xlsx` で
+読み書きされる。
 
 - **0 行のときは、`0件あり` 列の指定で動きが変わる。** `×` のときは何も作らず失敗
   （`EmptyReportError`）。`○` のときは空ファイルを作る。Downloader が返す `Table` は
@@ -301,10 +309,18 @@ shared_report_ids(load_master(MASTER_PATH))
 記録する列（順序はこの通り）:
 
 ```
-実行日時, 管理番号, 概要, レポートID, URL, プロジェクト, 実行方式, 成否,
+実行日時, 管理番号, スケジュールキー, 概要, レポートID, URL, プロジェクト, 成否,
 Salesforce取得結果, 保存結果, 保存先, ファイル名, 取得件数, 処理秒数,
 原因区分, エラーコード, エラー内容
 ```
+
+`download_scheduled()` 1 本になったので、トリガ列（以前の「実行方式」）は廃止した。
+
+**`スケジュールキー`** はその取得を起動したスケジュール行のキー（管理表「スケジュール」
+シートの `スケジュールキー` 列と同じ値）。**同じスケジュール行の重複実行を防ぐ**
+ための根拠データで、`schedule_succeeded_today()` がこの列を引いている。スケジュール
+行に紐付かないレポートの取得（後方互換）は空文字。失敗履歴は dedup の判定に使わ
+れない（保存失敗で残っていないなら再試行できるべきため）。
 
 `Salesforce取得結果` と `保存結果` は **3状態** を取る（`成功` / `失敗` / 空）。
 空はその段階まで到達しなかったことを表す。`エラーコード` には例外クラス名が入り、
@@ -450,7 +466,7 @@ def run() -> None:
 ```
 
 `download_scheduled()` の戻り値は `list[Path]`（保存できたファイルのパス）。中身を読みたい
-プロジェクトは `download_report()` か `cached_report()` を1件ずつ使う。
+プロジェクトは `cached_report()` を1件ずつ使う。
 
 **1件失敗しても残りは続ける——ただし想定した失敗に限る。** 5本のうち1本が落ちたときに
 全部やり直すと、手で用意する手間が5本ぶんになる。`ComkenError`（メッセージ本文に対処が
@@ -462,7 +478,7 @@ def run() -> None:
 
 ### スケジュール管理表（曜日・時刻の振り分け）
 
-「レポート管理表」の `実行方式 = 定期` かつ `有効` のレポートを、**どの曜日・どの時刻に**
+「レポート管理表」の `有効` なレポートを、**どの曜日・どの時刻に**
 取得するかは、**「スケジュール」シート**（レポート管理表と同じブック内の別シート）で
 管理する。ダウンロード対象と実行タイミングは同じファイルに置くことで、運用者が
 1つのブックだけ開けば確認できるようにする。
@@ -525,8 +541,8 @@ if rule.is_due(datetime.now(), holidays=set()):
 ```
 
 **このシートが管理表に無い管理表でも `load_schedule()` は空リストを返す
-（後方互換）。** 機能を足していない既存のレポートは、`実行方式 = 定期` かつ
-`有効` のままで毎回取得される（後方互換フォールバック）。「スケジュール」シート
+（後方互換）。** 機能を足していない既存のレポートは、`有効` のままで
+毎回取得される（後方互換フォールバック）。「スケジュール」シート
 に何も書いていないレポートは曜日・時刻を絞らず毎回走る、と覚えておけば
 「このレポートは曜日を絞っていないのに、なぜ毎回取れるのか」を見て分かる。
 
@@ -536,10 +552,11 @@ if rule.is_due(datetime.now(), holidays=set()):
 
 - **定期取得のバッチは利用プロジェクト側に置く。** comken は「実行される単位」を
   持たない
-- **何を落とすかはコードに書かない。** レポート管理表で `実行方式 = 定期` かつ
-  `有効` のものが対象で、増減は管理表を直すだけで済む
-- **1日に何度も最新が必要なプロジェクトは、このバッチを増やさない。** その
-  プロジェクト側から `download_report()` を直接呼べばその場で取れる
+- **何を落とすかはコードに書かない。** レポート管理表で `有効` のものが対象で、
+  増減は管理表を直すだけで済む
+- **「今すぐ取りに行く」専用の API は comken に置かない。** 急ぐ取得は
+  権限を持つ人が手動で Salesforce からダウンロードするか、呼び出し側で
+  `download_scheduled()` をスケジュール外で実行する
 - **「土日祝を除く」のようなスケジュールをこのバッチに持たせない。** それは
   呼び出す側の予定に既にあるため
 - **失敗があれば例外で止める。** `ScheduledDownloadFailedError` が送出される。
@@ -557,8 +574,7 @@ if rule.is_due(datetime.now(), holidays=set()):
 | `ReportDisabledError` | 管理表で「無効」になっている | 使うなら「有効」に戻す |
 | `MasterDuplicateValueError` | 管理表の unique 列に同じ値が2つある | どちらかの値を変える |
 | `MasterRowValueError` | 管理表の値が型・選択肢に合わない、または空欄にできない | メッセージの行と列を直す |
-| `CachedReportNotRegisteredError` | 「個別」のもののキャッシュを受け取ろうとした | 「定期」にするか `download_report()` を使う |
-| `CachedReportNotFoundError` | 本日の固定キャッシュが無い | 表示された正確なパスへCSVを置き、同じ処理を再実行する |
+| `CachedReportNotFoundError` | 本日の固定キャッシュが無い | 表示された正確なパスへ CSV を置き、同じ処理を再実行する |
 | `EmptyReportError` | 明細が 0 行（管理表の `0件あり` が `×`） | その日 0 件が普通なら管理表を `○` に。指している Salesforce レポートが違う可能性がある |
 | `ReportFolderNotFoundError` | 保存先のフォルダが無い | 管理表の「保存先」を確認する |
 | `ScheduledDownloadFailedError` | 定期取得で1件以上が失敗した | 履歴の「エラーコード」「エラー内容」で理由を確認する |

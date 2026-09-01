@@ -29,7 +29,7 @@ def _make_master_only(path: Path) -> Path:
         "ID",
         "概要",
         "Salesforce URL",
-        "実行方式",
+        "出力形式",
         "保存先",
         "有効",
         "備考",
@@ -37,7 +37,7 @@ def _make_master_only(path: Path) -> Path:
     master_row = dict(
         zip(
             master_headers,
-            ["1001", "顧客一覧", "https://example.com/a/view", "定期", str(path.parent), "○", ""],
+            ["1001", "顧客一覧", "https://example.com/a/view", "CSV", str(path.parent), "○", ""],
             strict=True,
         )
     )

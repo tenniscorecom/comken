@@ -245,10 +245,6 @@ class ScheduleRule:
             return self.run_time is not None and now.time() >= self.run_time
         raise UnsupportedScheduleFrequencyError(self.frequency)
 
-    def job_key(self, target_date: dt.date) -> str:
-        """履歴で取得済みか判定するキーを返す。"""
-        return f"{self.schedule_key}:{target_date.isoformat()}"
-
     def _date_matches(self, date: dt.date, holidays: set[dt.date] | frozenset[dt.date]) -> bool:
         if self.holiday_policy == HOLIDAY_SKIP and date in holidays:
             return False

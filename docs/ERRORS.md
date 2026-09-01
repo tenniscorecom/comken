@@ -145,14 +145,13 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `HistoryLockTimeoutError` | ダウンロード履歴の排他ロックを待っても取得できなかった | 同時実行中の処理が終わるのを待って再実行する。繰り返す場合は共有サーバーを確認する |
 | `HistoryHeaderMismatchError` | ダウンロード履歴CSVの見出しが現在の定義と一致しない | 履歴CSVの1行目を確認する。列を手で変更していた場合は元へ戻し、古い形式の履歴なら別名へ退避してから再実行する |
 | `CachedReportNotFoundError` | 本日の定期取得キャッシュが見つからない | Salesforce からCSVを手動取得し、画面に表示された正確なパス・ファイル名で置いて、同じ python main.py を再実行する |
-| `CachedReportNotRegisteredError` | 定期取得の対象ではないレポートのキャッシュを読もうとした | 毎日決まった時刻に取るなら、管理表の「実行方式」を「定期」にする。使うときに毎回取りに行くなら、download_report() を呼ぶ |
 | `ReportNotRegisteredError` | 指定した管理番号が管理表に無い | 管理表を開いて、その管理番号の行があるか確認する。新しく使うレポートは、先に管理表へ登録する |
 | `ReportDisabledError` | 管理表で「無効」になっているレポートを取ろうとした | また使うなら管理表の「有効」を「有効」に戻す。使わないなら、呼び出し側のコードから消す |
 | `InvalidReportURLError` | 管理表の URL から Salesforce のレポート ID を取り出せない | Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す |
 | `EmptyReportError` | レポートは実行できたが明細が 0 行だった | Salesforce の画面で同じレポートを開き、本当に 0 件か確認する。0 件が正常に起こるレポートなら、管理表の「0件あり」を「○」にする。 |
 | `ReportFolderNotFoundError` | 管理表に書かれた保存先のフォルダが無い | 管理表の「保存先」を確認する。共有フォルダなら、つながっているか・権限があるかも確認する |
 | `ReportReservePathLimitError` | 保存ファイル名の連番が上限に達した | 保存先フォルダが想定どおりか確認する。 共有フォルダなら、 古い取得ファイルを退避するか、 別の保存先に変える。 連発する場合は権限・排他制御の設定も見直す |
-| `ScheduledDownloadFailedError` | 定期取得で1件以上が失敗した | 履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。急いで必要なものは download_report() でその場で取得する |
+| `ScheduledDownloadFailedError` | 定期取得で1件以上が失敗した | 履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。急いで必要なものは download_scheduled() をスケジュール外で実行する。権限を持つ人が Salesforce から手動でダウンロードしてもよい |
 | `UnsupportedScheduleFrequencyError` | 管理表の「取得頻度」に、想定外の値が書かれている | 管理表の「取得頻度」列の値を ``1時間ごと`` / ``毎日`` / ``毎週`` /``毎月`` のいずれかに修正する |
 | `ScheduleIntervalMissingError` | 「1時間ごと」の行で、開始・終了・間隔のどれかが抜けている | 管理表の「取得開始時刻」「取得終了時刻」「取得間隔（分）」の3列をすべて埋める |
 | `ScheduleRequiredValueMissingError` | 管理表の必須列が空になっている | 管理表の該当行で、表示された列名（スケジュールキー / レポートキー /取得頻度）の値を埋める |

@@ -124,7 +124,6 @@ ComkenError
 │   ├── HistoryLockTimeoutError
 │   ├── HistoryHeaderMismatchError
 │   ├── CachedReportNotFoundError
-│   ├── CachedReportNotRegisteredError
 │   ├── ReportNotRegisteredError
 │   ├── ReportDisabledError
 │   ├── InvalidReportURLError
@@ -204,7 +203,6 @@ from comken.exceptions.csv import (
 )
 from comken.exceptions.downloader import (
     CachedReportNotFoundError,
-    CachedReportNotRegisteredError,
     DownloaderError,
     EmptyReportError,
     HistoryHeaderMismatchError,
@@ -425,7 +423,6 @@ __all__ = [
     "HistoryLockTimeoutError",
     "HistoryHeaderMismatchError",
     "CachedReportNotFoundError",
-    "CachedReportNotRegisteredError",
     "ReportNotRegisteredError",
     "ReportDisabledError",
     "InvalidReportURLError",

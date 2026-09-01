@@ -81,19 +81,12 @@ def test_write_latest_status_does_not_load_service(monkeypatch: pytest.MonkeyPat
 # ─────────────────────────────────────────────────────────────────────
 
 
-def test_download_report_does_not_crash(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`download_report` を import しても AttributeError 等で落ちない。
+def test_download_scheduled_does_not_crash(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`download_scheduled` を import しても AttributeError 等で落ちない。
 
     service.py を読むので `requests` が sys.modules に入る前提だが、
     ここでは「import 経路が壊れていない」ことだけを確認する。
     """
-    from comken.services.salesforce_downloader import download_report
-
-    assert download_report is not None
-
-
-def test_download_scheduled_does_not_crash(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`download_scheduled` も同様。"""
     from comken.services.salesforce_downloader import download_scheduled
 
     assert download_scheduled is not None

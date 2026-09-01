@@ -67,7 +67,7 @@ class ReportNotRegisteredError(DownloaderError):
     管理番号はコードに定数で書く（CUSTOMER_LIST = "1001"）。管理表から行を消したり、
     番号を打ち間違えたりすると、どのレポートを指しているか決められない。
 
-    発生箇所: comken.services.salesforce_downloader の download_report()
+    発生箇所: comken.services.salesforce_downloader の download_scheduled() / cached_report()
 
     対処:
         管理表を開いて、その管理番号の行があるか確認する。
@@ -106,7 +106,7 @@ class ReportDisabledError(DownloaderError):
     使うのをやめたレポートは、行を消さずに「無効」にして履歴との対応を残す。
     無効のものを黙って取りに行くと、やめたはずの取得が続いてしまう。
 
-    発生箇所: comken.services.salesforce_downloader の download_report()
+    発生箇所: comken.services.salesforce_downloader の download_scheduled() / cached_report()
 
     対処:
         また使うなら管理表の「有効」を「有効」に戻す。
@@ -118,28 +118,6 @@ class ReportDisabledError(DownloaderError):
             f"このレポートは無効になっています: {report_key}（{summary}）\n"
             f"管理表: {master_path}\n"
             "また使うなら「有効」列を有効に戻してください。"
-        )
-
-
-class CachedReportNotRegisteredError(DownloaderError):
-    """定期取得の対象ではないレポートのキャッシュを読もうとした
-
-    cached_report() は「定期実行が取っておいた本日のデータを受け取る」関数。
-    管理表で「個別」になっているレポートは誰も取りに行かないので、いつまでも揃わない。
-
-    発生箇所: comken.services.salesforce_downloader の cached_report()
-
-    対処:
-        毎日決まった時刻に取るなら、管理表の「実行方式」を「定期」にする。
-        使うときに毎回取りに行くなら、download_report() を呼ぶ
-    """
-
-    def __init__(self, report_key: str, summary: str, schedule: str, master_path: Path) -> None:
-        super().__init__(
-            f"定期取得の対象ではありません: {report_key}（{summary}）\n"
-            f"管理表の「実行方式」は「{schedule}」になっています: {master_path}\n"
-            "毎日決まった時刻に取るなら「定期」に変えてください。\n"
-            "使うときに毎回取りに行くなら、download_report() を呼んでください。"
         )
 
 
@@ -175,7 +153,7 @@ class EmptyReportError(DownloaderError):
     空のファイルを置くと、使う側は「データが無い日」と「取得が失敗した日」を
     区別できなくなる。0 行のときはファイルを作らず、失敗として扱う。
 
-    発生箇所: comken.services.salesforce_downloader の download_report()
+    発生箇所: comken.services.salesforce_downloader の download_scheduled()
 
     対処:
         Salesforce の画面で同じレポートを開き、本当に 0 件か確認する。
@@ -196,7 +174,7 @@ class ReportFolderNotFoundError(DownloaderError):
     無いフォルダを作らないのは、書き間違いのことが多いため。
     勝手に作ると、誰も読まない場所へ置き続けることになる。
 
-    発生箇所: comken.services.salesforce_downloader の download_report()
+    発生箇所: comken.services.salesforce_downloader の download_scheduled()
 
     対処:
         管理表の「保存先」を確認する。共有フォルダなら、
@@ -247,7 +225,8 @@ class ScheduledDownloadFailedError(DownloaderError):
 
     対処:
         履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。
-        急いで必要なものは download_report() でその場で取得する
+        急いで必要なものは download_scheduled() をスケジュール外で実行する。
+        権限を持つ人が Salesforce から手動でダウンロードしてもよい
     """
 
     def __init__(self, failed_keys: list[str], history_path: Path) -> None:

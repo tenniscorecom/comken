@@ -1,4 +1,4 @@
-"""最新ステータス Excel の生成を検証する。
+﻿"""最新ステータス Excel の生成を検証する。
 
 管理表（Excel）と履歴（CSV）は tmp_path に本物を作り、`write_latest_status()` の
 引数へ直接渡す（`_paths` の共有定数を monkeypatch すると `service.py` 側のローカル
@@ -21,7 +21,7 @@ from comken.toolbox.excel import Excel
 URL_A = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE/view"
 URL_B = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000FGHIJ/view"
 
-HEADERS = ["ID", "概要", "Salesforce URL", "実行方式", "保存先", "有効", "備考"]
+HEADERS = ["ID", "概要", "Salesforce URL", "出力形式", "保存先", "有効", "備考"]
 
 
 def make_master(path: Path, rows: list[list]) -> Path:
@@ -37,7 +37,7 @@ def _entry(folder: Path, *, key: str, summary: str, url: str) -> ReportEntry:
         key=key,
         summary=summary,
         url=url,
-        schedule="定期",
+        output_format="CSV",
         folder=folder,
         enabled=True,
         allow_empty=False,
@@ -75,8 +75,8 @@ class TestWriteLatestStatus:
         master = make_master(
             tmp_path / "レポート管理表.xlsx",
             [
-                ["1001", "顧客一覧", URL_A, "定期", str(folder), "○", ""],
-                ["1002", "売上実績", URL_B, "定期", str(folder), "○", ""],
+                ["1001", "顧客一覧", URL_A, "CSV", str(folder), "○", ""],
+                ["1002", "売上実績", URL_B, "CSV", str(folder), "○", ""],
             ],
         )
         history_path = tmp_path / "ダウンロード履歴.csv"
@@ -89,7 +89,7 @@ class TestWriteLatestStatus:
             history_path,
             entry=entry1,
             project="P",
-            trigger="定期",
+
             row=HistoryRow(
                 succeeded=False,
                 fetched_from_salesforce=False,
@@ -104,7 +104,7 @@ class TestWriteLatestStatus:
             history_path,
             entry=entry1,
             project="P",
-            trigger="定期",
+
             row=HistoryRow(
                 succeeded=True,
                 fetched_from_salesforce=True,
@@ -117,7 +117,7 @@ class TestWriteLatestStatus:
             history_path,
             entry=entry2,
             project="P",
-            trigger="定期",
+
             row=HistoryRow(
                 succeeded=True,
                 fetched_from_salesforce=True,
@@ -130,7 +130,7 @@ class TestWriteLatestStatus:
             history_path,
             entry=entry2,
             project="P",
-            trigger="定期",
+
             row=HistoryRow(
                 succeeded=False,
                 fetched_from_salesforce=True,
@@ -159,8 +159,8 @@ class TestWriteLatestStatus:
         master = make_master(
             tmp_path / "レポート管理表.xlsx",
             [
-                ["1001", "顧客一覧", URL_A, "定期", str(folder), "○", ""],
-                ["1002", "売上実績", URL_B, "定期", str(folder), "○", ""],
+                ["1001", "顧客一覧", URL_A, "CSV", str(folder), "○", ""],
+                ["1002", "売上実績", URL_B, "CSV", str(folder), "○", ""],
             ],
         )
         history_path = tmp_path / "ダウンロード履歴.csv"
@@ -169,7 +169,7 @@ class TestWriteLatestStatus:
             history_path,
             entry=_entry(folder, key="1001", summary="顧客一覧", url=URL_A),
             project="P",
-            trigger="定期",
+
             row=HistoryRow(
                 succeeded=True,
                 fetched_from_salesforce=True,
@@ -193,8 +193,8 @@ class TestWriteLatestStatus:
         master = make_master(
             tmp_path / "レポート管理表.xlsx",
             [
-                ["1001", "顧客一覧", URL_A, "定期", str(folder), "○", ""],
-                ["1002", "売上実績", URL_B, "定期", str(folder), "○", ""],
+                ["1001", "顧客一覧", URL_A, "CSV", str(folder), "○", ""],
+                ["1002", "売上実績", URL_B, "CSV", str(folder), "○", ""],
             ],
         )
         history_path = tmp_path / "ダウンロード履歴.csv"
@@ -202,7 +202,7 @@ class TestWriteLatestStatus:
             history_path,
             entry=_entry(folder, key="1001", summary="顧客一覧", url=URL_A),
             project="P",
-            trigger="定期",
+
             row=HistoryRow(
                 succeeded=True,
                 fetched_from_salesforce=True,
@@ -214,7 +214,7 @@ class TestWriteLatestStatus:
             history_path,
             entry=_entry(folder, key="1002", summary="売上実績", url=URL_B),
             project="P",
-            trigger="定期",
+
             row=HistoryRow(
                 succeeded=False,
                 fetched_from_salesforce=True,
@@ -245,14 +245,14 @@ class TestWriteLatestStatus:
         folder.mkdir()
         master = make_master(
             tmp_path / "レポート管理表.xlsx",
-            [["1001", "顧客一覧", URL_A, "定期", str(folder), "○", ""]],
+            [["1001", "顧客一覧", URL_A, "CSV", str(folder), "○", ""]],
         )
         history_path = tmp_path / "ダウンロード履歴.csv"
         record(
             history_path,
             entry=_entry(folder, key="1001", summary="顧客一覧", url=URL_A),
             project="P",
-            trigger="定期",
+
             row=HistoryRow(
                 succeeded=True,
                 fetched_from_salesforce=True,
@@ -277,3 +277,6 @@ def _rgb(fill) -> str:
     """openpyxl の ``PatternFill`` から、比較しやすい RGB 文字列を返す。"""
     fg = fill.fgColor
     return str(fg.rgb) if fg is not None else ""
+
+
+

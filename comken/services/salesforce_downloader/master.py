@@ -4,9 +4,9 @@ r"""comken/services/salesforce_downloader/master.py — レポート管理表の
 仕組みは `comken.services.salesforce_downloader.report_master` にあり、ここは
 **どんな列があるか**を宣言する。
 
-    | ID   | 概要     | Salesforce URL              | 実行方式 | 保存先              | 有効 |
+    | ID   | 概要     | Salesforce URL              | 出力形式 | 保存先              | 有効 |
     |------|----------|-----------------------------|----------|---------------------|------|
-    | 1001 | 顧客一覧 | https://.../Report/00O.../  | 定期     | \\server\A\input    | 有効 |
+    | 1001 | 顧客一覧 | https://.../Report/00O.../  | CSV      | \\server\A\input    | 有効 |
 
 **Salesforce のレポート ID は入力させない。** URL を貼れば `report_id_from_url()` が
 取り出す。ID を人が抜き出す工程を挟むと、そこで写し間違いが起きるうえ、
@@ -34,9 +34,9 @@ from comken.exceptions import InvalidReportURLError, SalesforceReportIDNotFoundE
 from comken.services.salesforce_downloader.report_master import MasterRow, column
 from comken.toolbox.salesforce.report import report_id_from_url
 
-# 「実行方式」に書ける値
-SCHEDULED = "定期"
-ON_DEMAND = "個別"
+# 「出力形式」に書ける値
+OUTPUT_FORMAT_CSV = "CSV"
+OUTPUT_FORMAT_EXCEL = "Excel"
 
 
 # 記入例（雛形に入れる）。2行目は別のレポートにする——同じ URL を並べると、
@@ -49,7 +49,7 @@ EXAMPLES = [
         "key": "1001",
         "summary": "顧客一覧",
         "url": f"{_DOMAIN}/00O5g00000ABCDE/view",
-        "schedule": SCHEDULED,
+        "output_format": OUTPUT_FORMAT_CSV,
         "folder": r"\\server\案件集計\input",
         "enabled": True,
         "allow_empty": False,  # 普段はデータがあるが、念のため「×」（既定）
@@ -59,7 +59,7 @@ EXAMPLES = [
         "key": "1002",
         "summary": "売上実績",
         "url": f"{_DOMAIN}/00O5g00000FGHIJ/view",
-        "schedule": ON_DEMAND,
+        "output_format": OUTPUT_FORMAT_EXCEL,
         "folder": r"\\server\売上帳票\input",
         "enabled": True,
         "allow_empty": True,  # 「該当データ無し」が普通に起きるレポートの例
@@ -97,11 +97,14 @@ class ReportEntry(MasterRow):
         help="Salesforce でレポートを開いたときのアドレスを、そのまま貼り付けてください。"
         "レポート ID を抜き出す必要はありません",
     )
-    schedule: str = column(
-        "実行方式",
-        choices=(SCHEDULED, ON_DEMAND),
-        help=f"「{SCHEDULED}」は毎日決まった時刻にまとめて取ります。"
-        f"「{ON_DEMAND}」は、使うプログラムから呼ばれたときだけ取ります",
+    # **既定値を持たせない。** 空欄を「CSV」にすると、書き忘れが既定値に流れて
+    # 下流のRPAが期待する形式と食い違う事故になるため。`choices` で `CSV` /
+    # `Excel` のどちらかを必ず選ばせる
+    output_format: str = column(
+        "出力形式",
+        choices=(OUTPUT_FORMAT_CSV, OUTPUT_FORMAT_EXCEL),
+        help=f"「{OUTPUT_FORMAT_CSV}」は CSV 形式で保存します。"
+        f"「{OUTPUT_FORMAT_EXCEL}」は Excel 形式で保存します",
     )
     folder: Path = column(
         "保存先",
@@ -157,11 +160,6 @@ class ReportEntry(MasterRow):
             return report_id_from_url(self.url)
         except SalesforceReportIDNotFoundError as e:
             raise InvalidReportURLError(self.key, self.url, str(e)) from e
-
-    @property
-    def is_scheduled(self) -> bool:
-        """定期取得の対象か。"""
-        return self.schedule == SCHEDULED
 
 
 @measure

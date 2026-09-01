@@ -1,26 +1,29 @@
 r"""comken/services/salesforce_downloader/service.py — 取得の本体。
 
-    from comken.services.salesforce_downloader import cached_report, download_report
+    from comken.services.salesforce_downloader import cached_report, download_scheduled
 
     CUSTOMER_LIST = "1001"        # 各プロジェクトで、意味の分かる名前を付ける
 
-    rows = download_report(CUSTOMER_LIST).read_rows()       # 今すぐ Salesforce から取る
     by_code = cached_report(CUSTOMER_LIST).index("顧客コード")
 
 **2つの関数の意味をはっきり分ける。**
 
-- `download_report()` は「**今この瞬間に取りに行く**」。管理表で定期になっていても、
-  今日すでに取っていても、必ず Salesforce へ問い合わせる。呼んだ側が最新を求めている
-  のだから、黙って前のものを返さない
+- `download_scheduled()` は「**今この瞬間にまとめて取りに行く**」。管理表で
+  `有効` になっているレポートを全て対象に、定期実行のプロジェクトから呼ばれる
 - `cached_report()` は「**取っておいたものを受け取る**」。取りに行く関数ではない。
   まだ取れていなければ例外にする。ここで自動的に取りに行くと、**定期取得が動いて
   いないことに誰も気づかなくなる**
 
 戻り値は `Table`。行の検索・抽出・索引化は Table の API でできる。
-パスだけ欲しい場合は `download_report_path()` / `cached_report_path()` を使う。
+パスだけ欲しい場合は `cached_report_path()` を使う。
 `download_scheduled()` は定期取得したパスのリストを `list[Path]` で返すが、これは
 定期取得の呼び出し側が中身を読まず「取らせる」のが目的なので、reader を並べても
 使い道がないため（役割の違いが戻り値の型に出ている）。
+
+**急いでその場の最新値が必要なときは、`download_scheduled()` をスケジュール外に
+直接実行する。** それ専用のAPIは用意していない。実行タイミングを分ける必要が
+あれば、呼び出し側でスケジューラを増やす。Downloader 側に「今すぐ取りに行く」
+だけの関数を残すと、定期取得が動いていないことに誰も気づかなくなるため。
 
 プロジェクト側のコードに Salesforce の URL もレポート ID も現れない。管理表の
 参照先を差し替えても、`CUSTOMER_LIST = "1001"` はそのままでよい。
@@ -69,10 +72,16 @@ from comken.services.salesforce_downloader._paths import (
 )
 from comken.services.salesforce_downloader.history import HistoryRow
 from comken.services.salesforce_downloader.latest_status import write_latest_status
-from comken.services.salesforce_downloader.master import ReportEntry, load_master, shared_report_ids
-from comken.services.salesforce_downloader.provider import _daily_cache_path_of, _find, file_path_of
+from comken.services.salesforce_downloader.master import (
+    OUTPUT_FORMAT_EXCEL,
+    ReportEntry,
+    load_master,
+    shared_report_ids,
+)
+from comken.services.salesforce_downloader.provider import _daily_cache_path_of, file_path_of
 from comken.services.salesforce_downloader.schedule import ScheduleRule, load_schedule
 from comken.toolbox.csv import CSV
+from comken.toolbox.excel import Excel
 from comken.toolbox.salesforce.sites import site_for
 
 logger = logging.getLogger(__name__)
@@ -93,61 +102,14 @@ RESERVE_PATH_LIMIT = 1000
 
 
 @measure
-def download_report(report_key: str, project: str = "") -> Table:
-    """今すぐ Salesforce から取得して保存し、中身を `Table` で返す。
-
-    **必ず Salesforce へ問い合わせる。** 今日すでに取っていても取り直す。
-
-    Args:
-        report_key: 管理表の管理番号（例: "1001"）。
-        project: 呼び出し元の名前。履歴に残るので、入れておくと後から追える。
-
-    Returns:
-        保存したファイルから読み取った `Table`。
-
-    Raises:
-        ReportNotRegisteredError: 管理表に無い管理番号の場合。
-        ReportDisabledError: 管理表で無効になっている場合。
-        ReportFolderNotFoundError: 保存先のフォルダが無い場合。
-        EmptyReportError: 明細が 0 行だった場合。
-    """
-    entry = _find(report_key, MASTER_PATH)
-    path = _download(entry, project, history.TRIGGER_ON_DEMAND, HISTORY_PATH)
-    with CSV(path, read_only=True) as csv_file:
-        return csv_file.read()
-
-
-@measure
-def download_report_path(report_key: str) -> Path:
-    """今すぐ Salesforce から取得して保存し、そのパスを返す。中身は読まない。
-
-    ファイル自体を別のツールに渡したいときに使う。**必ず Salesforce へ問い合わせる。**
-
-    Args:
-        report_key: 管理表の管理番号（例: "1001"）。
-
-    Returns:
-        保存した CSV の `Path`。
-
-    Raises:
-        ReportNotRegisteredError: 管理表に無い管理番号の場合。
-        ReportDisabledError: 管理表で無効になっている場合。
-        ReportFolderNotFoundError: 保存先のフォルダが無い場合。
-        EmptyReportError: 明細が 0 行だった場合。
-    """
-    entry = _find(report_key, MASTER_PATH)
-    return _download(entry, "", history.TRIGGER_ON_DEMAND, HISTORY_PATH)
-
-
-@measure
 def download_scheduled(project: str = "定期実行") -> list[Path]:
-    """管理表で「定期」かつ有効なレポートをまとめて取得する。
+    """管理表で有効なレポートをまとめて取得する。
 
     定期実行のプロジェクトから呼ぶ。**1件失敗しても残りは続ける**。戻り値は `list[Path]`
     のままで `CSV` を返さない（定期取得の呼び出し側は中身を読まないため）。
 
     **「スケジュール」シート**にこのレポートの行が無いときは、
-    「実行方式=定期 かつ 有効」だけで毎回対象にする（後方互換）。
+    「有効」だけで毎回対象にする（後方互換）。
     この機能追加を境に既存のレポートが突然取得されなくなる事故を防ぐため。
 
     Raises:
@@ -171,20 +133,28 @@ def download_scheduled(project: str = "定期実行") -> list[Path]:
     # 祝日は「今日が祝日か」だけ分かればよいので、1日分の set を作る
     holidays = _todays_holiday_set(current)
 
-    targets = [
-        entry
-        for entry in entries.values()
-        if entry.is_scheduled
-        and entry.enabled
-        and _is_due(entry, rules_by_report, current, holidays)
-    ]
+    targets: list[tuple[ReportEntry, str]] = []
+    for entry in entries.values():
+        if not entry.enabled:
+            continue
+        is_due, schedule_key = _matched_schedule_key(
+            entry, rules_by_report, current, holidays
+        )
+        if is_due:
+            # ``schedule_key`` は取得後に履歴へ記録し、``schedule_succeeded_today()``
+            # が再判定に使う。スケジュール行が無いレポート（後方互換）は空文字
+            targets.append((entry, schedule_key))
     logger.info("定期取得の対象: %d 件", len(targets))
 
     saved: list[Path] = []
     failed: list[str] = []
-    for entry in targets:
+    # 失敗時に ``ScheduledDownloadFailedError`` から ``__cause__`` で辿れるよう、
+    # 直近の捕捉した例外を覚えておく（同じ失敗が複数件あっても、最後の1件だけを
+    # 連鎖させる）。``None`` のままだと「原因例外が無い」ことを示す
+    last_exception: BaseException | None = None
+    for entry, schedule_key in targets:
         try:
-            saved.append(_download(entry, project, history.TRIGGER_SCHEDULED, HISTORY_PATH))
+            saved.append(_download(entry, project, HISTORY_PATH, schedule_key))
         except (ComkenError, OSError) as e:
             # **想定した失敗は続ける。想定していない失敗は止める。**
             # - `ComkenError` は `docs/ERRORS.md` に対処法が載っている想定内の失敗なので続行する
@@ -195,9 +165,10 @@ def download_scheduled(project: str = "定期実行") -> list[Path]:
             #   出てくると、非エンジニアが「もう一度実行してみる」を繰り返すだけなので、
             #   ここでは捕捉せず、その場で落として気づかせる
             # KeyboardInterrupt など処理中断を示す例外は `ComkenError` / `OSError` の
-            # どちらでもないので、これもそのまま抜ける
+            #   どちらでもないので、これもそのまま抜ける
             logger.error("取得に失敗しました: %s（%s）", entry.key, e)
             failed.append(entry.key)
+            last_exception = e
 
     logger.info("定期取得: %d 件中 %d 件を取得しました。", len(targets), len(saved))
     # **最新ステータスは別ファイルへ上書きする。** 履歴 CSV は「全実行の記録」で
@@ -215,37 +186,49 @@ def download_scheduled(project: str = "定期実行") -> list[Path]:
             "最新ステータスの更新に失敗しました（定期取得は本体の結果で判定）: %s", e
         )
     if failed:
-        # 続けたぶん、最後に必ず知らせる（終了コードで落ちたことが分かるように）
-        raise ScheduledDownloadFailedError(failed, HISTORY_PATH)
+        # 続けたぶん、最後に必ず知らせる（終了コードで落ちたことが分かるように）。
+        # 直近の失敗を ``__cause__`` に乗せて送出する（呼び出し側が
+        # ``raise X from original`` 相当の診断情報を得られるようにする）
+        raise ScheduledDownloadFailedError(failed, HISTORY_PATH) from last_exception
     return saved
 
 
 class _Attempt:
     """1件の取得（フォルダ確認 → 取得 → 保存）を取り持つ文脈。
 
-    履歴を書く関数に毎回同じ5つの値を渡す煩雑さを消すための箱。
+    履歴を書く関数に毎回同じ値の組を渡す煩雑さを消すための箱。
     コンストラクタで文脈を1回だけ受け取り、開始時刻もここで `time.perf_counter()`
     で記録する。`record_*()` は履歴とログを書くだけ。`_download()` 側の
     `try/except` はそのまま（失敗の段階と原因区分は `_failure_row()` が
     例外の型だけから決める）。
+
+    履歴の「実行方式」列は **固定で `TRIGGER_SCHEDULED`**（=`定期`）になった。
+    `download_scheduled()` しか残っていないので、トリガは1値しか取らない。
+    引数で渡さずクラス内で固定することで、``_download`` のシグネチャを簡略化した
+    （1値しか渡らない引数を残すのはYAGNI違反）。
+
+    ``schedule_key`` はスケジュール行に紐付く取得で値が入り、スケジュール行が無い
+    レポートの取得（後方互換）は空文字。``_matched_schedule_key()`` が
+    戻り値の第2要素として返した値をそのまま受け取り、``HistoryRow.schedule_key``
+    に詰めて履歴へ書く。
     """
 
     def __init__(
-        self,
-        entry: ReportEntry,
-        project: str,
-        trigger: str,
-        history_path: Path,
+        self, entry: ReportEntry, project: str, history_path: Path, schedule_key: str = ""
     ) -> None:
         self._entry = entry
         self._project = project
-        self._trigger = trigger
         self._history_path = history_path
+        self._schedule_key = schedule_key
         self._started = time.perf_counter()
 
     def record_failure(self, exc: BaseException) -> None:
         """失敗時の履歴とログ。"""
-        row = _failure_row(exc, time.perf_counter() - self._started)
+        row = _failure_row(
+            exc,
+            time.perf_counter() - self._started,
+            schedule_key=self._schedule_key,
+        )
         # 値を計算した場所（ここ）で、ログにも書く。`_download()` 抜けたあと
         # 別の層で「同じ値」を再利用することはない（後付けで属性を渡さない）
         logger.error("取得に失敗しました: %s（%s / 区分=%s）", self._entry.key, exc, row.cause)
@@ -253,7 +236,6 @@ class _Attempt:
             self._history_path,
             entry=self._entry,
             project=self._project,
-            trigger=self._trigger,
             row=row,
         )
 
@@ -267,6 +249,7 @@ class _Attempt:
             file_name=path.name,
             row_count=len(rows),
             seconds=seconds,
+            schedule_key=self._schedule_key,
         )
         if rows:
             logger.info("取得しました: %s（%d 行 / %.1f 秒）", path, len(rows), seconds)
@@ -276,20 +259,23 @@ class _Attempt:
             self._history_path,
             entry=self._entry,
             project=self._project,
-            trigger=self._trigger,
             row=row,
         )
 
 
-def _download(entry: ReportEntry, project: str, trigger: str, history_path: Path) -> Path:
+def _download(
+    entry: ReportEntry,
+    project: str,
+    history_path: Path,
+    schedule_key: str = "",
+) -> Path:
     """1件を取得して保存し、成否を履歴に残す。"""
-    attempt = _Attempt(entry, project, trigger, history_path)
+    attempt = _Attempt(entry, project, history_path, schedule_key)
     try:
         _require_folder(entry)
         table = _fetch(entry)
         path = _save(entry, table)
-        if trigger == history.TRIGGER_SCHEDULED:
-            _update_daily_cache(entry, path)
+        _update_daily_cache(entry, path)
     except Exception as exc:
         try:
             attempt.record_failure(exc)
@@ -298,7 +284,12 @@ def _download(entry: ReportEntry, project: str, trigger: str, history_path: Path
             HistoryLockTimeoutError,
             HistoryHeaderMismatchError,
         ) as history_exc:
-            raise HistoryWriteError(history_path, str(history_exc), original=exc) from history_exc
+            # 元の取得失敗 (`exc`) を ``__cause__`` に乗せて送出する。
+            # 履歴書込み失敗の ``history_exc`` はメッセージに含めて、
+            # ``ScheduledDownloadFailedError`` の連鎖には元の失敗を
+            # 残す（`raise X from history_exc` だと ``history_exc`` が
+            # ``__cause__`` を埋めて元の失敗が辿れなくなる）
+            raise HistoryWriteError(history_path, str(history_exc), original=exc) from exc
         raise
     attempt.record_success(path, table)
     return path
@@ -331,14 +322,18 @@ def _save(entry: ReportEntry, table: Table) -> Path:
 
     0 行・`allow_empty` × → `EmptyReportError`（=失敗）／○ → 空 CSV を置く。
     ``report.get()`` が返す ``Table.columns`` を使うため、0 行でも Salesforce の
-    メタデータから得た見出しを保存する。
+    メタデータから得た見出しを保存する。出力形式は ``entry.output_format`` で
+    ``_write_csv`` / ``_write_excel`` を呼び分ける。
     """
     path = _reserve_path(entry)
     try:
         # 問い合わせは成功したが明細が無い。**0件あり × なら失敗扱い、○ なら正常終了**
         if not table and not entry.allow_empty:
             raise EmptyReportError(entry.key, entry.summary, entry.url)
-        _write_csv(path, table)
+        if entry.output_format == OUTPUT_FORMAT_EXCEL:
+            _write_excel(path, table)
+        else:
+            _write_csv(path, table)
     except Exception:
         path.unlink(missing_ok=True)
         raise
@@ -385,6 +380,34 @@ def _write_csv(path: Path, table: Table) -> None:
         csv_file.replace(table)
 
 
+def _write_excel(path: Path, table: Table) -> None:
+    """一時ファイルへ書いてから置き換える。`comken.toolbox.excel.Excel` を使う。
+
+    CSV と同じく一時ファイル経由で置き換える。複数のプロジェクトが同時に呼ぶので、
+    直接書くと読んでいる最中のファイルが半端な状態になりうる。
+    ``atomic_write`` はバイナリでもそのまま使える（``os.replace`` で同一
+    ボリューム上に置いた一時ファイルを入れ替えるだけ）。
+    `Excel(path)` は `path` が無いとき `__enter__` で新規 `Workbook()` を作るので、
+    既存キャッシュを上書きしたいときも同じ書き味で使える。
+
+    本番では ``salesforce.report.get()`` が ``Table`` を返すが、テストでは
+    モックが ``list[dict]`` を返すことがあるため、``create_table`` の前に
+    ``Table`` へ詰め直す（``comken.toolbox.excel.table.ExcelTable.replace``
+    と同じ寛容な変換パターン）。
+    """
+    table_arg = (
+        table
+        if isinstance(table, Table)
+        else Table(list(table[0]) if table else [], table)
+    )
+    with (
+        atomic_write(path) as tmp,
+        Excel(tmp) as excel,
+    ):
+        sheet = excel.create_data_sheet("Report")
+        sheet.create_table("Report", table_arg)
+
+
 def _warn_shared_reports(entries: dict[str, ReportEntry]) -> None:
     """同じ Salesforce レポートを複数の管理番号が指していればログに出す。
 
@@ -399,21 +422,40 @@ def _warn_shared_reports(entries: dict[str, ReportEntry]) -> None:
         )
 
 
-def _is_due(
+def _matched_schedule_key(
     entry: ReportEntry,
     rules_by_report: dict[str, list[ScheduleRule]],
     current: dt.datetime,
     holidays: set[dt.date],
-) -> bool:
-    """このレポートを今取得すべきか判定する。
+) -> tuple[bool, str]:
+    """このレポートを今取得すべきか、すべきなら根拠のスケジュールキーを返す。
 
-    **スケジュール行が無いレポートは毎回取得（後方互換）。**
-    行がある場合は **いずれかのルールが is_due() で True を返したら**取得する（OR）。
+    戻り値は ``(取得すべきか, スケジュールキー)``。スケジュールキーは、
+    取得すべきだった場合に「どのスケジュール行が根拠になったか」を表し、
+    履歴の ``スケジュールキー`` 列にそのまま記録する。スケジュール行が無い
+    レポート（後方互換）の取得時は空文字を返す。
+
+    判定ロジック:
+
+    - スケジュール行が無いレポートは ``downloaded_today()`` ベースで「今日まだ
+      取れていなければ」取得（後方互換）
+    - スケジュール行がある場合、いずれかの行が ``is_due()`` True で、かつ
+      ``schedule_succeeded_today()`` が False（=今日まだ成功していない）なら取得。
+      複数の行が True を返す場合は最初の一致行のキーを採用
+    - いずれの行も ``is_due()`` False なら False, ""
+    - いずれかの行が ``is_due()`` True でも、今日すでに成功済みなら False, ""
     """
     rules = rules_by_report.get(entry.key)
     if not rules:
-        return True
-    return any(rule.is_due(current, holidays=holidays) for rule in rules)
+        # スケジュール行が無いレポート: ``downloaded_today()`` で 1 日 1 回までに
+        # 制限する（後方互換）。戻り値のキーは空文字
+        return not history.downloaded_today(HISTORY_PATH, entry.key), ""
+    for rule in rules:
+        if rule.is_due(current, holidays=holidays) and not history.schedule_succeeded_today(
+            HISTORY_PATH, rule.schedule_key
+        ):
+            return True, rule.schedule_key
+    return False, ""
 
 
 def _todays_holiday_set(current: dt.datetime) -> set[dt.date]:
@@ -427,7 +469,9 @@ def _todays_holiday_set(current: dt.datetime) -> set[dt.date]:
     return {current.date()} if default_calendar().is_holiday(current.date()) else set()
 
 
-def _failure_row(exc: BaseException, seconds: float) -> HistoryRow:
+def _failure_row(
+    exc: BaseException, seconds: float, schedule_key: str = ""
+) -> HistoryRow:
     """失敗時の履歴1行を、**例外の型だけから**組み立てる。
 
     `fetched` / `saved` は `_download()` の何処で失敗したかを例外で判別する。
@@ -441,6 +485,11 @@ def _failure_row(exc: BaseException, seconds: float) -> HistoryRow:
 
     4. は `download_scheduled()` が捕捉する範囲と一致。1か所の判断で
     「握りつぶす範囲」と「履歴側でバグと書く範囲」を揃える。
+
+    `schedule_key` は成功時と同じく履歴の「スケジュールキー」列へ書くためのもの。
+    dedup 判定は成功行しか見ないが、履歴を後から追ったときに「どのスケジュール行が
+    いつ失敗したか」が追えるよう、`record_success()` と対称にここで渡す
+    （後方互換のため既定値は空文字）。
     """
     if isinstance(exc, ReportFolderNotFoundError):
         fetched, saved, cause = None, None, CAUSE_CONFIG
@@ -460,4 +509,5 @@ def _failure_row(exc: BaseException, seconds: float) -> HistoryRow:
         cause=cause,
         error_code=type(exc).__name__,
         error=str(exc),
+        schedule_key=schedule_key,
     )

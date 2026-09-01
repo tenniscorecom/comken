@@ -11,6 +11,7 @@ from comken.services.salesforce_downloader.history import (
     HistoryRow,
     read_all,
     record,
+    schedule_succeeded_today,
     successful_files_today,
 )
 from comken.services.salesforce_downloader.master import ReportEntry
@@ -24,7 +25,7 @@ def test_concurrent_appends_keep_one_header_and_complete_rows(tmp_path) -> None:
         key="1001",
         summary="顧客一覧",
         url="https://example.com/Report/00O5g00000ABCDE/view",
-        schedule="定期",
+        output_format="CSV",
         folder=tmp_path,
         enabled=True,
         allow_empty=False,
@@ -36,7 +37,6 @@ def test_concurrent_appends_keep_one_header_and_complete_rows(tmp_path) -> None:
             history_path,
             entry=entry,
             project=str(index),
-            trigger="定期",
             row=HistoryRow(
                 succeeded=True,
                 fetched_from_salesforce=True,
@@ -78,7 +78,6 @@ def test_rejects_history_with_different_header(tmp_path) -> None:
             history_path,
             entry=_entry(tmp_path),
             project="追記",
-            trigger="定期",
             row=HistoryRow(True, True, True, file_name="new.csv"),
         )
 
@@ -93,7 +92,6 @@ def test_successful_file_requires_both_overall_and_save_success(tmp_path) -> Non
         history_path,
         entry=entry,
         project="異常な履歴",
-        trigger="定期",
         row=HistoryRow(True, True, False, file_name="not-saved.csv"),
     )
 
@@ -108,14 +106,12 @@ def test_read_all_returns_every_row_in_order(tmp_path) -> None:
         history_path,
         entry=entry,
         project="P1",
-        trigger="定期",
         row=HistoryRow(True, True, True, file_name="a.csv"),
     )
     record(
         history_path,
         entry=entry,
         project="P2",
-        trigger="定期",
         row=HistoryRow(True, True, True, file_name="b.csv"),
     )
 
@@ -139,6 +135,109 @@ def test_read_all_rejects_header_mismatch(tmp_path) -> None:
         read_all(history_path)
 
 
+def test_schedule_succeeded_today_returns_true_after_same_key_success(tmp_path) -> None:
+    """同じスケジュールキーで当日成功した履歴があれば True を返す。"""
+    history_path = tmp_path / "履歴.csv"
+    entry = _entry(tmp_path)
+    record(
+        history_path,
+        entry=entry,
+        project="P",
+        row=HistoryRow(
+            True,
+            True,
+            True,
+            file_name="a.csv",
+            schedule_key="S001",
+        ),
+    )
+    assert schedule_succeeded_today(history_path, "S001") is True
+
+
+def test_schedule_succeeded_today_returns_false_when_no_record(tmp_path) -> None:
+    """履歴が無いとき False を返す。"""
+    assert schedule_succeeded_today(tmp_path / "無い.csv", "S001") is False
+
+
+def test_schedule_succeeded_today_ignores_other_keys(tmp_path) -> None:
+    """別スケジュールキーの成功履歴は True にしない。"""
+    history_path = tmp_path / "履歴.csv"
+    entry = _entry(tmp_path)
+    record(
+        history_path,
+        entry=entry,
+        project="P",
+        row=HistoryRow(
+            True,
+            True,
+            True,
+            file_name="a.csv",
+            schedule_key="S002",
+        ),
+    )
+    assert schedule_succeeded_today(history_path, "S001") is False
+
+
+def test_schedule_succeeded_today_ignores_other_dates(tmp_path) -> None:
+    """昨日の成功履歴は True にしない。"""
+    history_path = tmp_path / "履歴.csv"
+    # まず当日分の空ファイルを作る（`record()` は内部で `now()` を使うため、
+    # 直接 CSV を書いて古い日付の成功履歴を入れる）
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    history_path.write_text(
+        (
+            "実行日時,管理番号,スケジュールキー,概要,レポートID,URL,プロジェクト,"
+            "成否,Salesforce取得結果,保存結果,保存先,ファイル名,取得件数,処理秒数,"
+            "原因区分,エラーコード,エラー内容\n"
+            "2024-01-01 09:00:00,1001,S001,顧客一覧,,,,成功,成功,成功,,a.csv,1,0.10,,,,"
+        ),
+        encoding="utf-8-sig",
+    )
+    assert schedule_succeeded_today(history_path, "S001") is False
+
+
+def test_schedule_succeeded_today_requires_save_success(tmp_path) -> None:
+    """成否=成功でも保存結果=失敗なら True にしない（保存できていないので再試行可）。"""
+    history_path = tmp_path / "履歴.csv"
+    entry = _entry(tmp_path)
+    record(
+        history_path,
+        entry=entry,
+        project="P",
+        row=HistoryRow(
+            True,
+            True,
+            False,
+            file_name="not-saved.csv",
+            schedule_key="S001",
+        ),
+    )
+    assert schedule_succeeded_today(history_path, "S001") is False
+
+
+def test_schedule_succeeded_today_rejects_empty_key(tmp_path) -> None:
+    """空文字のスケジュールキーは何を引いても False を返す。
+
+    呼び出し側で空文字を弾くのが本来の形だが、誤って渡された場合の防御として
+    False を返す（誤マッチで別行と一致させないため）。
+    """
+    history_path = tmp_path / "履歴.csv"
+    entry = _entry(tmp_path)
+    record(
+        history_path,
+        entry=entry,
+        project="P",
+        row=HistoryRow(
+            True,
+            True,
+            True,
+            file_name="a.csv",
+            schedule_key="S001",
+        ),
+    )
+    assert schedule_succeeded_today(history_path, "") is False
+
+
 def _append_from_process(arguments: tuple[str, str, int]) -> None:
     """spawnした子プロセスから履歴を1行追記する。"""
     history_path, folder, index = arguments
@@ -146,7 +245,6 @@ def _append_from_process(arguments: tuple[str, str, int]) -> None:
         history_path,
         entry=_entry(Path(folder)),
         project=str(index),
-        trigger="定期",
         row=HistoryRow(True, True, True, file_name=f"{index}.csv", row_count=index),
     )
 
@@ -157,7 +255,7 @@ def _entry(folder: Path) -> ReportEntry:
         key="1001",
         summary="顧客一覧",
         url="https://example.com/Report/00O5g00000ABCDE/view",
-        schedule="定期",
+        output_format="CSV",
         folder=folder,
         enabled=True,
         allow_empty=False,

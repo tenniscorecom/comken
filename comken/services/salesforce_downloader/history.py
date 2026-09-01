@@ -29,11 +29,14 @@ from comken.services.salesforce_downloader.master import ReportEntry
 COLUMNS = (
     "実行日時",
     "管理番号",
+    # スケジュール行に紐付く取得を記録するキー。スケジュール行が無いレポートの
+    # 取得（後方互換）は空文字。``schedule_succeeded_today()`` がこの列を見て
+    # 「同じスケジュール行を今日すでに実行したか」を判定する
+    "スケジュールキー",
     "概要",
     "レポートID",
     "URL",
     "プロジェクト",
-    "実行方式",
     "成否",
     "Salesforce取得結果",  # 成功 / 失敗 / 空（その段階まで到達しなかった）
     "保存結果",  # 成功 / 失敗 / 空（その段階まで到達しなかった）
@@ -50,9 +53,9 @@ COLUMNS = (
 SUCCESS = "成功"
 FAILURE = "失敗"
 
-# 呼ばれ方。定期実行でまとめて取ったのか、プロジェクトがその場で要求したのか
+# 履歴のトリガ。`download_scheduled()` しか残っていないので、`定期` 1 値だけ。
+# 互換のため名前は残してある（外部ツールが定数名参照に備えて）
 TRIGGER_SCHEDULED = "定期"
-TRIGGER_ON_DEMAND = "個別"
 
 _TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
 
@@ -63,7 +66,8 @@ class HistoryRow:
 
     `entry` の5列（管理番号・概要・レポートID・URL・保存先）は `record()` 側で
     取り出す。`fetched_from_salesforce` / `saved_to_file` は `True` / `False` /
-    `None` の3状態で、未到達は `None`。
+    `None` の3状態で、未到達は `None`。`schedule_key` はスケジュール行に紐付く
+    取得で値が入り、スケジュール行が無いレポートの取得（後方互換）は空文字。
     """
 
     succeeded: bool
@@ -75,6 +79,7 @@ class HistoryRow:
     cause: str = ""
     error_code: str = ""
     error: str = ""
+    schedule_key: str = ""
 
 
 @measure
@@ -83,7 +88,6 @@ def record(
     *,
     entry: ReportEntry,
     project: str,
-    trigger: str,
     row: HistoryRow,
 ) -> None:
     """履歴を1行追記する。ファイルが無ければ見出し行から作る。
@@ -94,18 +98,17 @@ def record(
         path: 履歴 CSV のパス。
         entry: 管理表1行。管理番号・概要・レポートID・URL・保存先はこの中身を履歴に出す。
         project: 呼び出したプロジェクト名。
-        trigger: TRIGGER_SCHEDULED、TRIGGER_ON_DEMAND のいずれか。
         row: 履歴1行の本体（成否・各段階の結果・件数・エラー）。
     """
     path = Path(path)
     values = [
         now().strftime(_TIMESTAMP_FORMAT),
         entry.key,
+        row.schedule_key,
         entry.summary,
         entry.report_id,
         entry.url,
         project,
-        trigger,
         SUCCESS if row.succeeded else FAILURE,
         _stage(row.fetched_from_salesforce),
         _stage(row.saved_to_file),
@@ -136,34 +139,37 @@ def downloaded_today(
     """その日の取得が成功しているかを履歴から調べる。
 
     **ファイルの有無ではなく履歴で判定する。** 保存先に今日の日付のファイルがあっても、
-    それが定期取得で置かれたのか、誰かが個別に取ったのか、手で置いたのかは分からない。
+    それが定期取得で置かれたのか、手で置いたのかは分からない。
     「定期取得が動いているか」を知りたいので、履歴を正とする。
 
     Args:
         path: 履歴 CSV のパス。
         report_key: 管理番号。
-        trigger: 数える呼ばれ方（既定は定期）。
+        trigger: 互換のために残した引数（既定は定期）。`download_scheduled()` 1 本に
+            なった現在、トリガは事実上1値。
         date: 調べる日付。省略すると今日。
 
     Returns:
         その日に成功した記録があれば True。履歴が無ければ False。
     """
     path = Path(path)
-    return bool(successful_files_today(path, report_key, (trigger,), date))
+    return bool(successful_files_today(path, report_key, trigger, date))
 
 
 @measure
 def successful_files_today(
     path: str | Path,
     report_key: str,
-    triggers: tuple[str, ...] = (TRIGGER_SCHEDULED,),
+    trigger: str = TRIGGER_SCHEDULED,
     date: datetime.date | None = None,
 ) -> list[Path]:
     """本日の成功履歴に記録された保存先とファイル名を、新しい順で返す。
 
     読み取りにも追記と同じロックを使うため、別プロセスが書いている途中の行を読まない。
     実ファイルの存在確認は呼び出し側で行い、古い成功ファイルへ遡れるよう全候補を返す。
+    `trigger` 引数は互換のために残している（実行方式列は無くなった）。
     """
+    _ = trigger  # 旧コードでは履歴の「実行方式」列を見ていたが、列を廃止したので未使用
     history_path = Path(path)
     if not history_path.is_file():
         return []
@@ -180,13 +186,65 @@ def successful_files_today(
             if (
                 row.get("実行日時", "").startswith(target)
                 and row.get("管理番号", "") == key_text
-                and row.get("実行方式", "") in triggers
                 and row.get("成否", "") == SUCCESS
                 and row.get("保存結果", "") == SUCCESS
                 and row.get("ファイル名", "")
             ):
                 matches.append(Path(row.get("保存先", "")) / row["ファイル名"])
     return list(reversed(matches))
+
+
+@measure
+def schedule_succeeded_today(
+    path: str | Path,
+    schedule_key: str,
+    date: datetime.date | None = None,
+) -> bool:
+    """指定スケジュールキーが今日すでに成功したかを履歴から返す。
+
+    ``download_scheduled()`` が同じスケジュール行を同日に何度も実行しないように
+    するための判定。**ファイルの有無ではなく履歴で判定する。** 保存先にファイルが
+    あっても、それが定期取得で置かれたのか手で置いたのかは履歴を見ないと分からない。
+    ``実行日時`` が当日で始まり、``成否 == 成功``、``保存結果 == 成功``、
+    かつ ``スケジュールキー == schedule_key`` の行があれば True。
+
+    空文字の ``schedule_key`` では呼ばない前提。呼び出し側 (``service._matched_schedule_key``)
+    で空文字のときはこの関数を呼ばないため。空文字で呼ばれた場合は履歴上どの
+    スケジュールキーとも一致しないため必ず False を返す（誤って空文字を渡しても
+    誤判定しない防御的挙動）。
+
+    Args:
+        path: 履歴 CSV のパス。
+        schedule_key: スケジュール行のキー。
+        date: 調べる日付。省略すると今日。
+
+    Returns:
+        当日に ``schedule_key`` で成功した履歴があれば True。
+    """
+    history_path = Path(path)
+    if not history_path.is_file():
+        return False
+    target = (date or today()).strftime("%Y-%m-%d")
+    key_text = str(schedule_key)
+    if not key_text:
+        # スケジュール行に紐付かないキーを渡された場合は、誤って他行と一致
+        # させないため常に False。呼び出し側で弾くのが本来の形
+        return False
+    with (
+        HistoryFileLock(history_path),
+        history_path.open("r", encoding="utf-8-sig", newline="") as f,
+    ):
+        reader = csv.DictReader(f)
+        _require_expected_header(history_path, reader.fieldnames)
+        for row in reader:
+            if (
+                row.get("実行日時", "").startswith(target)
+                and row.get("スケジュールキー", "") == key_text
+                and row.get("成否", "") == SUCCESS
+                and row.get("保存結果", "") == SUCCESS
+            ):
+                return True
+    return False
 
 
 @measure
