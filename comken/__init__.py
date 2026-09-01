@@ -31,11 +31,11 @@ if _sys.pycache_prefix is None and not _os.environ.get("PYTHONPYCACHEPREFIX"):
     _sys.pycache_prefix = str(_Path(_base) / "comken-pycache")
 # ────────────────────────────────────────────────────────────────────────────
 
-from comken.core import config as config
+from comken.core import config
 from comken.core import logger as comken_logger
-from comken.core.config import Config as Config
-from comken.core.logger import Backoffice as Backoffice
-from comken.core.logger import Intranet as Intranet
+from comken.core.config import Config
+from comken.core.logger import Backoffice
+from comken.core.logger import Intranet
 from comken.runtime import debug, dry_run
 
 __all__ = [
