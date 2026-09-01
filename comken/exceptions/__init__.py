@@ -135,7 +135,9 @@ ComkenError
 │   ├── UnsupportedScheduleFrequencyError
 │   ├── ScheduleIntervalMissingError
 │   ├── ScheduleRequiredValueMissingError
-│   └── ScheduleWeekdayInvalidError
+│   ├── ScheduleWeekdayInvalidError
+│   ├── ScheduleRowValueError
+│   └── ScheduleDuplicateKeyError
 
 カテゴリ基底クラスはまとめて捕捉するために使い、直接送出しない。
 """
@@ -214,8 +216,10 @@ from comken.exceptions.downloader import (
     ReportNotRegisteredError,
     ReportReservePathLimitError,
     ScheduledDownloadFailedError,
+    ScheduleDuplicateKeyError,
     ScheduleIntervalMissingError,
     ScheduleRequiredValueMissingError,
+    ScheduleRowValueError,
     ScheduleWeekdayInvalidError,
     UnsupportedScheduleFrequencyError,
 )
@@ -433,6 +437,8 @@ __all__ = [
     "ScheduleIntervalMissingError",
     "ScheduleRequiredValueMissingError",
     "ScheduleWeekdayInvalidError",
+    "ScheduleRowValueError",
+    "ScheduleDuplicateKeyError",
     "TransferDestinationMultipleMatchError",
     "TableNotOpenError",
     "TransferDestinationMissingError",

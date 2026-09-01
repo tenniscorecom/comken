@@ -157,6 +157,8 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `ScheduleIntervalMissingError` | 「1時間ごと」の行で、開始・終了・間隔のどれかが抜けている | 管理表の「取得開始時刻」「取得終了時刻」「取得間隔（分）」の3列をすべて埋める |
 | `ScheduleRequiredValueMissingError` | 管理表の必須列が空になっている | 管理表の該当行で、表示された列名（スケジュールキー / レポートキー /取得頻度）の値を埋める |
 | `ScheduleWeekdayInvalidError` | 管理表の「曜日」列に想定外の値が入っている | 管理表の「曜日」列の値を月〜日のいずれかに修正する（「曜日」を付ける形式でも可） |
+| `ScheduleRowValueError` | スケジュール管理表の行の値が正しくない | メッセージに出ている行と直したい値を、管理表で確認して直す |
+| `ScheduleDuplicateKeyError` | スケジュール管理表の「スケジュールキー」が重複している | スケジュール管理表を開いて、重複しているスケジュールキーのどちらかを別の値に変える |
 | `LoggingAlreadyConfiguredError` | root logger がすでに設定されている | setup_logging() または setup_local_logging() はアプリの入口で1回だけ呼ぶ。実行基盤がログを設定する場合は呼ばない。 |
 | `LoggingConflictError` | root logger に comken 以外の handler が設定されている | 上の handler 一覧をそのままライブラリの管理者へ連絡してください（連絡先は環境ごとに異なるので、ここには書かない）。やむを得ず共存させたい場合は、呼び出し時に ``allow_existing=True``を指定すれば処理は続きますが、comken のハンドラーが追加されることで既存ライブラリのログが**二重**に出たり、出力先が想定と変わる可能性があります。 |
 | `LogRootNotConfiguredError` | LoggerSite の LOG_ROOT が設定されていない | サブクラスに ``LOG_ROOT = "\\server\share\logs"`` を1行追加する（絶対パスまたは UNC 文字列。LOG_FOLDER_NAMES のフォルダ名はこの下に作られる）。 |

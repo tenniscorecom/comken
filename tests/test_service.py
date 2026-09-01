@@ -7,6 +7,7 @@ MASTER_PATH / HISTORY_PATH は `monkeypatch.setattr` で一時ディレクトリ
 差し替える。利用側の API には管理表や履歴のパスを渡せない（設計判断）。
 """
 
+import datetime as dt
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -786,6 +787,162 @@ class TestDownloadScheduled:
         assert [path.name.split("_")[0] for path in saved] == ["1001"]
         # 失敗しても本体結果（成功件数・失敗件数）には反映されない
         assert not paths["latest_status_path"].exists()
+
+    # ── スケジュール管理表と組み合わせた判定 ──────────────────────────────
+    def test_schedule_sheet_missing_keeps_backward_compatible_behavior(
+        self, tmp_path, monkeypatch
+    ):
+        """「スケジュール」シートが無い管理表は、これまで通り毎回対象になる（後方互換）。
+
+        この機能追加を境に既存のレポートが突然取得されなくなる事故を防ぐ。
+        """
+        folder = tmp_path / "保存先"
+        folder.mkdir()
+        master = make_master(
+            tmp_path / "管理表.xlsx",
+            [["1001", "顧客一覧", URL_A, "定期", str(folder), "○", ""]],
+        )
+        monkeypatch.setattr(service_module, "MASTER_PATH", master)
+        monkeypatch.setattr(service_module, "HISTORY_PATH", tmp_path / "履歴.csv")
+        # 「今」を月曜 09:00 に固定してもスケジュール判定には影響しない
+        fixed_now = dt.datetime(2026, 1, 5, 9, 0)  # noqa: DTZ001 — テスト用に意図的に固定した tz-naive な datetime
+        monkeypatch.setattr(service_module, "clock_now", lambda: fixed_now)
+
+        with patch(
+            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
+        ):
+            saved = download_scheduled()
+        assert [path.name.split("_")[0] for path in saved] == ["1001"]
+
+    def test_schedule_rule_not_due_excludes_report(self, tmp_path, monkeypatch):
+        """スケジュール行が「今は要らない (False)」を返したレポートは対象から外れる。"""
+        folder = tmp_path / "保存先"
+        folder.mkdir()
+        # 水曜 12:00 固定 → 「毎週・月曜・09:00」は曜日不一致で False
+        fixed_now = dt.datetime(2026, 1, 7, 12, 0)  # noqa: DTZ001 — テスト用に意図的に固定した tz-naive な datetime  # noqa: DTZ001 — テスト用に意図的に固定した tz-naive な datetime
+        # 「スケジュール」シートを足した管理表を作る（既存の make_master を使うため、
+        # 直接 Excel を組み立てる）
+        master = make_master_with_schedule(
+            tmp_path / "管理表.xlsx",
+            [["1001", "曜日外し", URL_A, "定期", str(folder), "○", ""]],
+            schedule_rows=[
+                ["S001", "1001", "毎週", "09:00", "月", "取得しない", "○"],
+            ],
+        )
+        monkeypatch.setattr(service_module, "MASTER_PATH", master)
+        monkeypatch.setattr(service_module, "HISTORY_PATH", tmp_path / "履歴.csv")
+        monkeypatch.setattr(service_module, "clock_now", lambda: fixed_now)
+        _patch_default_calendar(monkeypatch, holidays=set())
+
+        with patch(
+            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
+        ):
+            saved = download_scheduled()
+        # スケジュールの判定で外れるので、保存されない
+        assert saved == []
+        assert list(folder.glob("*.csv")) == []
+
+    def test_schedule_rule_due_includes_report(self, tmp_path, monkeypatch):
+        """スケジュール行が「今は要る (True)」を返したレポートは対象に入る。"""
+        folder = tmp_path / "保存先"
+        folder.mkdir()
+        # 水曜 12:00 固定 → 「毎週・水曜・09:00」は `now.time() >= run_time` で True
+        fixed_now = dt.datetime(2026, 1, 7, 12, 0)  # noqa: DTZ001 — テスト用に意図的に固定した tz-naive な datetime
+        master = make_master_with_schedule(
+            tmp_path / "管理表.xlsx",
+            [["1001", "曜日一致", URL_A, "定期", str(folder), "○", ""]],
+            schedule_rows=[
+                ["S001", "1001", "毎週", "09:00", "水", "取得しない", "○"],
+            ],
+        )
+        monkeypatch.setattr(service_module, "MASTER_PATH", master)
+        monkeypatch.setattr(service_module, "HISTORY_PATH", tmp_path / "履歴.csv")
+        monkeypatch.setattr(service_module, "clock_now", lambda: fixed_now)
+        _patch_default_calendar(monkeypatch, holidays=set())
+
+        with patch(
+            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
+        ):
+            saved = download_scheduled()
+        assert [path.name.split("_")[0] for path in saved] == ["1001"]
+
+    def test_multiple_schedule_rules_use_or_semantics(self, tmp_path, monkeypatch):
+        """同じレポートに複数行があり、どれか1つでも is_due() なら対象に入る（OR 条件）。"""
+        folder = tmp_path / "保存先"
+        folder.mkdir()
+        # 水曜 12:00 固定 → 1行目（月曜）は曜日外れ、2行目（水曜）は一致
+        fixed_now = dt.datetime(2026, 1, 7, 12, 0)  # noqa: DTZ001 — テスト用に意図的に固定した tz-naive な datetime
+        master = make_master_with_schedule(
+            tmp_path / "管理表.xlsx",
+            [["1001", "OR判定", URL_A, "定期", str(folder), "○", ""]],
+            schedule_rows=[
+                ["S001", "1001", "毎週", "09:00", "月", "取得しない", "○"],
+                ["S002", "1001", "毎週", "09:00", "水", "取得しない", "○"],
+            ],
+        )
+        monkeypatch.setattr(service_module, "MASTER_PATH", master)
+        monkeypatch.setattr(service_module, "HISTORY_PATH", tmp_path / "履歴.csv")
+        monkeypatch.setattr(service_module, "clock_now", lambda: fixed_now)
+        _patch_default_calendar(monkeypatch, holidays=set())
+
+        with patch(
+            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
+        ):
+            saved = download_scheduled()
+        assert [path.name.split("_")[0] for path in saved] == ["1001"]
+
+
+def _patch_default_calendar(monkeypatch: pytest.MonkeyPatch, *, holidays: set) -> None:
+    """``service.default_calendar()`` を固定の祝日セットを持つ偽物に差し替える。"""
+
+    class _FakeCalendar:
+        def is_holiday(self, date: object) -> bool:
+            return date in holidays
+
+    monkeypatch.setattr(service_module, "default_calendar", lambda: _FakeCalendar())
+
+
+def make_master_with_schedule(
+    path: Path,
+    master_rows: list[list],
+    *,
+    schedule_rows: list[list],
+) -> Path:
+    """レポート管理表 + スケジュールシートの2シート構成のブックを作る。
+
+    ``tests/test_schedule_load.py`` 側でも同じ関数が必要だが、fixture として
+    共有するのが煩雑なので、サービス側のテストはローカルに持つ。
+    """
+    master_headers = [
+        "ID",
+        "概要",
+        "Salesforce URL",
+        "実行方式",
+        "保存先",
+        "有効",
+        "備考",
+    ]
+    schedule_headers = [
+        "スケジュールキー",
+        "レポートキー",
+        "取得頻度",
+        "取得時刻",
+        "曜日",
+        "祝日対応",
+        "有効",
+    ]
+    master_table_rows = [dict(zip(master_headers, row, strict=True)) for row in master_rows]
+    schedule_table_rows = [
+        dict(zip(schedule_headers, row, strict=True)) for row in schedule_rows
+    ]
+    with Excel(path) as book:
+        book.create_data_sheet("管理表").create_table(
+            "管理表", Table(master_headers, master_table_rows)
+        )
+        book.create_data_sheet("スケジュール").create_table(
+            "スケジュール", Table(schedule_headers, schedule_table_rows)
+        )
+    return path
 
 
 def _history_rows(paths: dict) -> list[dict]:

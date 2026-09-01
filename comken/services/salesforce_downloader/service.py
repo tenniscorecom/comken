@@ -40,12 +40,15 @@ r"""comken/services/salesforce_downloader/service.py — 取得の本体。
 - 管理表から1行を引く `_find()` → provider.py（`requests` を経由しない側に置く）
 """
 
+import datetime as dt
 import logging
 import shutil
 import time
 from pathlib import Path
 
+from comken.core.clock import now as clock_now
 from comken.core.files import atomic_write
+from comken.core.holidays import default_calendar
 from comken.core.table.model import Table
 from comken.core.timer import measure
 from comken.exceptions import (
@@ -68,6 +71,7 @@ from comken.services.salesforce_downloader.history import HistoryRow
 from comken.services.salesforce_downloader.latest_status import write_latest_status
 from comken.services.salesforce_downloader.master import ReportEntry, load_master, shared_report_ids
 from comken.services.salesforce_downloader.provider import _daily_cache_path_of, _find, file_path_of
+from comken.services.salesforce_downloader.schedule import ScheduleRule, load_schedule
 from comken.toolbox.csv import CSV
 from comken.toolbox.salesforce.sites import site_for
 
@@ -142,6 +146,10 @@ def download_scheduled(project: str = "定期実行") -> list[Path]:
     定期実行のプロジェクトから呼ぶ。**1件失敗しても残りは続ける**。戻り値は `list[Path]`
     のままで `CSV` を返さない（定期取得の呼び出し側は中身を読まないため）。
 
+    **「スケジュール」シート**にこのレポートの行が無いときは、
+    「実行方式=定期 かつ 有効」だけで毎回対象にする（後方互換）。
+    この機能追加を境に既存のレポートが突然取得されなくなる事故を防ぐため。
+
     Raises:
         ScheduledDownloadFailedError: 1件でも取得できなかった場合。**取得できたものは
             保存したうえで**送出する。ログだけに出して正常終了すると、スケジューラや
@@ -150,7 +158,26 @@ def download_scheduled(project: str = "定期実行") -> list[Path]:
     entries = load_master(MASTER_PATH)
     _warn_shared_reports(entries)
 
-    targets = [entry for entry in entries.values() if entry.is_scheduled and entry.enabled]
+    # スケジュール管理表を読んで、レポートキーで引けるように索引化。**有効行だけ**を
+    # 評価対象にする（無効行は曜日・時刻を足切りする材料にならない）。
+    # シートが無い場合は空リスト（後方互換）
+    schedule_rules = load_schedule(MASTER_PATH)
+    rules_by_report: dict[str, list[ScheduleRule]] = {}
+    for rule in schedule_rules:
+        if rule.enabled:
+            rules_by_report.setdefault(rule.report_key, []).append(rule)
+
+    current = clock_now()
+    # 祝日は「今日が祝日か」だけ分かればよいので、1日分の set を作る
+    holidays = _todays_holiday_set(current)
+
+    targets = [
+        entry
+        for entry in entries.values()
+        if entry.is_scheduled
+        and entry.enabled
+        and _is_due(entry, rules_by_report, current, holidays)
+    ]
     logger.info("定期取得の対象: %d 件", len(targets))
 
     saved: list[Path] = []
@@ -370,6 +397,34 @@ def _warn_shared_reports(entries: dict[str, ReportEntry]) -> None:
             "、".join(str(key) for key in keys),
             report_id,
         )
+
+
+def _is_due(
+    entry: ReportEntry,
+    rules_by_report: dict[str, list[ScheduleRule]],
+    current: dt.datetime,
+    holidays: set[dt.date],
+) -> bool:
+    """このレポートを今取得すべきか判定する。
+
+    **スケジュール行が無いレポートは毎回取得（後方互換）。**
+    行がある場合は **いずれかのルールが is_due() で True を返したら**取得する（OR）。
+    """
+    rules = rules_by_report.get(entry.key)
+    if not rules:
+        return True
+    return any(rule.is_due(current, holidays=holidays) for rule in rules)
+
+
+def _todays_holiday_set(current: dt.datetime) -> set[dt.date]:
+    """今日が祝日なら {今日}、そうでなければ空集合を返す。
+
+    ``is_due()`` の祝日スキップ判定は「対象日が holidays に含まれるか」だけ見る
+    ので、期間を取って集合化する必要は無く、当日1日分だけ用意すれば十分
+    （1日分の判定にしか使わないため。``ScheduleRule.is_due`` の引数を
+    整えた実装詳細）。
+    """
+    return {current.date()} if default_calendar().is_holiday(current.date()) else set()
 
 
 def _failure_row(exc: BaseException, seconds: float) -> HistoryRow:

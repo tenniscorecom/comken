@@ -186,23 +186,9 @@ class MasterRow:
         if source is None:
             raise MasterSheetNotDefinedError(cls.__name__)
 
-        # **読み取り専用で開く。** 書き込みモードだと存在しないパスを渡された
-        # ときに空のブックを新規作成し、その後のテーブル解決が「対象テーブルを
-        # 一意に決められません」で落ちる。管理表は共有サーバー (UNC) に
-        # 置く運用が前提で、現実の失敗は「サーバーが落ちた」「パスが変わった」
-        # 「権限が無い」のいずれか。**業務担当者が画面で見ても原因が分かるよう、
-        # ファイル不在は `ExcelFileNotFoundError` がそのまま上がる経路にする**。
-        with Excel(source, read_only=True) as excel:
-            raw_rows = excel.data_sheet(cls.SHEET_NAME).table().read()
-        if any(
-            isinstance(value, str) and value.startswith("=")
-            for raw_row in raw_rows
-            for value in raw_row.values()
-        ):
-            raise ExcelApplicationNotAvailableError(
-                source,
-                RuntimeError("管理表に未計算の数式があります"),
-            )
+        # 共有関数 ``read_raw_rows`` に生 dict 化を任せ、ここでは型変換・検証に
+        # 集中する（同じロジックを ``load_schedule`` 側でも使う）
+        raw_rows = read_raw_rows(source, cls.SHEET_NAME)
 
         rows: list[Self] = []
         seen: dict[str, set] = {}
@@ -469,6 +455,40 @@ _EMPTY = _Empty()
 def _is_blank(raw: dict) -> bool:
     """すべての列が空の行か。"""
     return all(value in (None, "") for value in raw.values())
+
+
+def read_raw_rows(source: Path, sheet_name: str) -> CoreTable:
+    """指定シートを「Excel の生 dict のリスト」として読む（実体は `Table`、dict の
+    イテレータとして使える）。
+
+    ``MasterRow`` に紐付かない共通の下読みとして使う。``MasterRow.load()`` も
+    ``schedule.load_schedule()`` も、Excel の開き方・未計算の数式判定をここで揃えて
+    二重実装を避ける。
+
+    **読み取り専用で開く。** 書き込みモードだと存在しないパスを渡されたときに
+    空のブックを新規作成し、その後のテーブル解決が「対象テーブルを一意に決められません」
+    で落ちる。管理表は共有サーバー (UNC) に置く運用が前提で、現実の失敗は
+    「サーバーが落ちた」「パスが変わった」「権限が無い」のいずれか。
+    **業務担当者が画面で見ても原因が分かるよう、ファイル不在は
+    ``ExcelFileNotFoundError`` がそのまま上がる経路にする。**
+
+    Raises:
+        ExcelFileNotFoundError: ``source`` が存在しない場合。
+        SheetNotFoundError: ``sheet_name`` がブックに無い場合。
+        ExcelApplicationNotAvailableError: 未計算の数式セルが含まれていた場合。
+    """
+    with Excel(source, read_only=True) as excel:
+        raw_rows = excel.data_sheet(sheet_name).table().read()
+    if any(
+        isinstance(value, str) and value.startswith("=")
+        for raw_row in raw_rows
+        for value in raw_row.values()
+    ):
+        raise ExcelApplicationNotAvailableError(
+            source,
+            RuntimeError("管理表に未計算の数式があります"),
+        )
+    return raw_rows
 
 
 def _require_headers(cls: type[MasterRow], raw: dict, source: Path) -> None:
