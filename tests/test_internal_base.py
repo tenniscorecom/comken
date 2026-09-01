@@ -11,11 +11,7 @@ from unittest import mock
 
 import pytest
 
-from comken.internal.base import (
-    InternalLibraryBase,
-    find_internal_library,
-    is_internal_library_available,
-)
+from comken.internal.base import InternalLibraryBase
 from comken.internal.exceptions import (
     InternalLibraryError,
     InternalLibraryNotFoundError,
@@ -121,38 +117,6 @@ class TestInternalLibraryBase:
         # ブロックを抜けたら参照は消える（内部状態）
 
 
-class TestIsInternalLibraryAvailable:
-    """`is_internal_library_available` のテスト。"""
-
-    def test_returns_true_when_module_found(self) -> None:
-        with mock.patch("comken.internal.base.importlib.util.find_spec", return_value=mock.Mock()):
-            assert is_internal_library_available("example_libs.v0000.rpa") is True
-
-    def test_returns_false_when_module_missing(self) -> None:
-        with mock.patch("comken.internal.base.importlib.util.find_spec", return_value=None):
-            assert is_internal_library_available("example_libs.v0000.rpa") is False
-
-
-class TestFindInternalLibrary:
-    """`find_internal_library` のテスト。"""
-
-    def test_returns_module_when_import_succeeds(self) -> None:
-        sentinel = mock.Mock()
-        with mock.patch("comken.internal.base.importlib.import_module", return_value=sentinel):
-            assert find_internal_library("example_libs.v0000.rpa") is sentinel
-
-    def test_returns_none_when_target_missing(self) -> None:
-        """対象モジュール自体が無いときは None。"""
-        with mock.patch(
-            "comken.internal.base.importlib.import_module",
-            side_effect=ModuleNotFoundError(
-                "No module named 'example_libs.v0000.missing'",
-                name="example_libs.v0000.missing",
-            ),
-        ):
-            assert find_internal_library("example_libs.v0000.missing") is None
-
-
 def test_internal_library_not_found_error_inherits_from_base() -> None:
     """`InternalLibraryNotFoundError` は `InternalLibraryError` の派生。"""
     assert issubclass(InternalLibraryNotFoundError, InternalLibraryError)
@@ -187,11 +151,6 @@ def test_find_spec_returns_false_when_parent_package_missing() -> None:
     assert target.find_spec() is False
 
 
-def test_is_internal_library_available_false_when_parent_missing() -> None:
-    """``is_internal_library_available`` も親が無いと False。"""
-    assert is_internal_library_available("nonexistent_parent.v0000.rpa") is False
-
-
 def test_load_propagates_dependency_import_error() -> None:
     """モジュール本体は見つかるが内部依存が無ければ元の ImportError を伝搬する。
 
@@ -215,22 +174,6 @@ def test_load_propagates_dependency_import_error() -> None:
     assert caught.value.name == "example_libs.v0000.subdep"
 
 
-def test_find_internal_library_propagates_dependency_import_error() -> None:
-    """``find_internal_library`` も依存不足なら None ではなく元の ImportError を返す。"""
-    with (
-        mock.patch(
-            "comken.internal.base.importlib.import_module",
-            side_effect=ModuleNotFoundError(
-                "No module named 'example_libs.v0000.subdep'",
-                name="example_libs.v0000.subdep",
-            ),
-        ),
-        pytest.raises(ModuleNotFoundError) as caught,
-    ):
-        find_internal_library("example_libs.v0000.rpa")
-    assert caught.value.name == "example_libs.v0000.subdep"
-
-
 def test_load_returns_internal_library_not_found_for_missing_target() -> None:
     """対象モジュール自体が無いときは ``InternalLibraryNotFoundError`` に変換する。"""
     target = InternalLibraryBase("example_libs.v0000.missing")
@@ -246,18 +189,6 @@ def test_load_returns_internal_library_not_found_for_missing_target() -> None:
     ):
         target.load()
     assert caught.value.library_name == "example_libs.v0000.missing"
-
-
-def test_find_internal_library_returns_none_for_missing_target() -> None:
-    """対象モジュール自体が無いときは ``None`` を返す。"""
-    with mock.patch(
-        "comken.internal.base.importlib.import_module",
-        side_effect=ModuleNotFoundError(
-            "No module named 'example_libs.v0000.missing'",
-            name="example_libs.v0000.missing",
-        ),
-    ):
-        assert find_internal_library("example_libs.v0000.missing") is None
 
 
 def test_load_returns_not_found_when_parent_package_is_missing() -> None:

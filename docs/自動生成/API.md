@@ -6443,33 +6443,6 @@ class InternalLibraryVersionMismatchError(InternalLibraryError):
 def __init__(self, library_name: str, required_version: str) -> None:
 ```
 
-### `is_internal_library_available`
-
-```text
-def is_internal_library_available(library_name: str) -> bool:
-```
-
-#### 説明
-
-社内ライブラリが import 可能なら True。
-
-親パッケージが見つからない場合 (``example_libs.v0000`` 自体が無いなど) も
-False を返す。 ``find_spec`` が内部依存の不在を区別できないため、
-この関数では「対象モジュール自体」の存在のみを判定する。
-
-### `find_internal_library`
-
-```text
-def find_internal_library(library_name: str) -> ModuleType | None:
-```
-
-#### 説明
-
-社内ライブラリを import して返す。無ければ None。
-
-``load()`` と同じく、対象モジュール自身（またはその親）が存在しない場合のみ
-None を返す。 モジュール内の依存不足は ImportError としてそのまま伝搬する。
-
 
 ## `from comken.services.salesforce_downloader import ...`
 
@@ -8051,6 +8024,462 @@ def remove(self, force: bool=False) -> None:
 
 Args:
     force: True にすると path 指定した固定フォルダも削除する。
+
+### `BackgroundTask`
+
+```text
+class BackgroundTask(Generic[T]):
+```
+
+#### 説明
+
+裏で動いている処理の取っ手。Browsers.run_task() が返す。
+
+Attributes:
+    label: 何の処理か。ログとエラーメッセージに出る。
+
+#### `__init__`
+
+```text
+def __init__(self, future: Future[T], label: str) -> None:
+```
+
+##### 説明
+
+直接呼ばず、Browsers.run_task() から作る。
+
+#### `wait`
+
+```text
+def wait(self, timeout: float | None=None) -> T:
+```
+
+##### 説明
+
+終わるのを待って、結果を返す。
+
+すでに終わっていれば、待たずにすぐ返る。
+中で例外が起きていた場合は、ここで送出される
+（裏で起きた失敗が黙って消えないよう、必ず受け取る側で表に出す）。
+
+Args:
+    timeout: 待つ秒数の上限。省略すると終わるまで待つ。
+
+Returns:
+    渡した処理の戻り値。
+
+Raises:
+    TimeoutError: timeout 秒以内に終わらなかった場合。処理自体は動き続ける。
+    Exception: 処理の中で起きた例外をそのまま送出する。
+
+#### `is_collected`
+
+```text
+@property
+def is_collected(self) -> bool:
+```
+
+##### 説明
+
+wait() で結果や例外を受け取り済みなら True。
+
+#### `is_done`
+
+```text
+@property
+def is_done(self) -> bool:
+```
+
+##### 説明
+
+終わっていれば True。まだ動いていれば False。
+
+待たずに様子だけ見たいときに使う。
+True になっていても、結果や例外を受け取るには wait() を呼ぶ。
+
+
+## `from comken.toolbox.browser.management import ...`
+
+### `Browsers`
+
+```text
+class Browsers:
+```
+
+#### 説明
+
+複数サイト分のブラウザをまとめて起動・終了する。**with 文の中でだけ使える。**
+
+どこで例外が出ても、起動済みのブラウザはすべて閉じる。
+1つのブラウザの終了に失敗しても、残りの終了は続行される。
+
+with を使わずに launch すると BrowsersNotStartedError になる（ブラウザは起動しない）。
+with を必須にしているのは、途中で例外が出たときにブラウザのプロセスが残り、
+次の実行でドライバーの更新まで邪魔するのを防ぐため。
+
+**run_task() で始めた処理が終わらないと、with も終わらない。** ブラウザを閉じる前に
+裏の処理の終了を待つため（操作の途中でブラウザが消えると原因が分かりにくいエラーになる）。
+終わらない可能性がある処理には、その中で待ち時間の上限を設けること。
+
+Attributes:
+    names: 起動済みのセッション名（起動した順）。
+
+#### `__init__`
+
+```text
+def __init__(self) -> None:
+```
+
+#### `launch`
+
+```text
+def launch(self, site: type[SiteBase], download_dir: str | Path | None=None) -> SiteBase:
+```
+
+##### 説明
+
+サイトクラスを渡してブラウザを1つ起動する（推奨経路）。
+
+サブクラスの NAME と OPTIONS を読んで、内部で `launch_session()` を
+呼び出す。呼び出し側に「名前」と「オプション」を別々に書かせないことで、
+取り違えが起きにくく、固有の値が1か所に集まる。
+
+Args:
+    site: 起動する SiteBase サブクラス。`NAME` が必須（空だと SiteConfigError）。
+    download_dir: ダウンロード先。省略時は OPTIONS.DOWNLOAD_DIR/<NAME>、
+                  それも未設定なら一時フォルダを作り、終了時に削除する。
+
+Returns:
+    起動済みの SiteBase インスタンス。`.session` で BrowserSession に繋がる。
+
+Raises:
+    SiteConfigError: サブクラスに NAME が設定されていない場合。
+    SessionNameConflictError: 同じ NAME ですでに起動している場合。
+    DriverStartError: ブラウザを起動できなかった場合。
+
+#### `launch_session`
+
+```text
+@measure
+def launch_session(self, name: str, options: type[BrowserOptions] | BrowserOptions | None=None, download_dir: str | Path | None=None) -> BrowserSession:
+```
+
+##### 説明
+
+名前とオプションを直接渡してブラウザを1つ起動する（低レベル経路）。
+
+`launch(SiteBase)` の中から呼ばれる雑務用。SiteBase サブクラスが用意できない
+場面（テスト・一時的な検証）で使う。通常は `launch(SiteBase)` を使う。
+
+ダウンロードフォルダとログイン状態はこの名前ごとに分かれる。
+同じサイトへ2つのアカウントでログインしたい場合も、
+「kintai_a」「kintai_b」と名前を分ければ混ざらない。
+
+Args:
+    name: セッション名。ログとエラーメッセージに出るので、
+          「kintai」「keiri」のようにサイトが分かる名前にする。
+    options: 起動オプション。BrowserOptions のサブクラスをそのまま渡せる
+             （セッションごとに別インスタンスを作るので、設定が混ざらない）。
+             省略時は BrowserOptions の初期値で起動する。
+    download_dir: ダウンロード先。省略時は options.DOWNLOAD_DIR/<name>、
+                  それも未設定なら一時フォルダを作り、終了時に削除する。
+
+Returns:
+    起動済みの BrowserSession。この with を抜けるまで使える。
+
+Raises:
+    SessionNameConflictError: 同じ名前ですでに起動している場合。
+    DriverStartError: ブラウザを起動できなかった場合。
+
+#### `run_task`
+
+```text
+def run_task(self, task: Callable[[], T], label: str='') -> BackgroundTask[T]:
+```
+
+##### 説明
+
+処理を裏で始めて、すぐ次の行へ進む。結果は wait() で受け取る。
+
+普通に書けば上から順に動く。時間のかかる処理を待っている間に
+別のことを進めたいときだけ、これで先に始めておく:
+
+    kintai = browsers.run_task(lambda: KintaiFlow(kintai).search())
+    KeiriFlow(keiri).login(user, password)   # 勤怠の読み込み中にこちらが進む
+    days = kintai.wait()                        # 戻って結果を受け取る
+
+**裏で動かす処理と、その後に自分で書く処理で、同じセッションを触らないこと。**
+同じセッションを同時に触ると ConcurrentSessionUseError で止まる
+（黙って別の画面を操作するより、早く気づけるほうが安全なため）。
+
+Args:
+    task: 引数を取らない呼び出し可能オブジェクト。lambda で包んで渡す。
+    label: 何の処理か。省略するとセッション名の代わりに連番が付く。
+           ログとエラーメッセージに出るので、付けておくと原因を追いやすい。
+
+Returns:
+    結果を受け取るための取っ手。wait() で結果、is_done で終了確認ができる。
+
+#### `parallel`
+
+```text
+def parallel(self, *tasks: Callable[[], T]) -> list[T]:
+```
+
+##### 説明
+
+複数の処理を同時に始めて、全部終わるまで待ち、渡した順に結果を返す。
+
+run_task() で始めて wait() で受け取るのを、まとめて書けるようにしたもの。
+「全部同時に始めて、全部の結果が欲しい」だけならこちらが短い:
+
+    # 逐次（上から順に動く）
+    a = KintaiFlow(kintai).fetch()
+    b = KeiriFlow(keiri).fetch()
+
+    # 同時（同じ呼び出しを lambda で包む）
+    a, b = browsers.parallel(
+        lambda: KintaiFlow(kintai).fetch(),
+        lambda: KeiriFlow(keiri).fetch(),
+    )
+
+受け取るタイミングを自分で決めたい場合は run_task() を使う。
+
+1つの処理では1つのセッションだけを触ること。同じセッションを2つの処理から
+触ると ConcurrentSessionUseError で止まる。
+
+Args:
+    *tasks: 引数を取らない呼び出し可能オブジェクト。
+
+Returns:
+    各処理の戻り値を、渡した順に並べたリスト。
+
+Raises:
+    Exception: 失敗が **1件**のときはその例外をそのまま送出する
+        （既存の呼び出し側を壊さないため）。
+    BaseExceptionGroup[Exception]: 失敗が **2件以上**のときは
+        ``ExceptionGroup`` でまとめて送出する。Python 3.11 以降の
+        ``except*`` で個別に取り出せる。すべての失敗は呼び出し前に
+        ``logger.error`` でログにも出している。
+
+#### `names`
+
+```text
+@property
+def names(self) -> list[str]:
+```
+
+##### 説明
+
+起動済みのセッション名（起動した順）。
+
+### `BrowserSession`
+
+```text
+class BrowserSession:
+```
+
+#### 説明
+
+1サイト分の Edge ブラウザ。with 文の中でだけ使える。
+
+with を必須にしているのは、処理の途中で例外が出たときに
+ブラウザのプロセスと一時フォルダを確実に片付けるため。
+with を使わずに操作すると SessionNotStartedError になる。
+
+ダウンロード先・ログイン状態・起動オプションはこのセッションが専有する。
+他のセッションと混ざらないので、サイトごとに違う設定を安心して使える。
+
+Attributes:
+    name: セッション名。ログとエラーメッセージに出るので、
+          「kintai」「keiri」のようにサイトが分かる名前にする。
+    download_dir: このセッション専用のダウンロードフォルダ。
+                  完了待ちは download_dir.wait() を使う。
+    wait_seconds: 要素待機のタイムアウト秒数。Page がこれを引き継ぐ。
+
+#### `__init__`
+
+```text
+def __init__(self, name: str, options: BrowserOptions, download_dir: DownloadDir, profile_dir: Path | None=None) -> None:
+```
+
+##### 説明
+
+直接呼ばず、Browsers.launch() から作る。
+
+Args:
+    name: セッション名。
+    options: 起動オプション。セッションごとに別インスタンスを渡すこと。
+    download_dir: このセッション専用のダウンロードフォルダ。
+    profile_dir: ログイン状態を残すフォルダ。None なら毎回まっさらな状態で起動する。
+
+#### `open`
+
+```text
+@measure
+def open(self, url: str) -> None:
+```
+
+##### 説明
+
+URL を開く。
+
+#### `refresh`
+
+```text
+def refresh(self) -> None:
+```
+
+##### 説明
+
+今のページを再読み込みする。
+
+#### `back`
+
+```text
+def back(self) -> None:
+```
+
+##### 説明
+
+ブラウザの「戻る」。
+
+#### `current_url`
+
+```text
+@property
+def current_url(self) -> str:
+```
+
+##### 説明
+
+今開いている URL。
+
+#### `title`
+
+```text
+@property
+def title(self) -> str:
+```
+
+##### 説明
+
+今開いているページのタイトル。
+
+#### `page_source`
+
+```text
+@property
+def page_source(self) -> str:
+```
+
+##### 説明
+
+今開いているページの HTML。
+
+#### `save_screenshot`
+
+```text
+@measure
+def save_screenshot(self, prefix: str='screenshot') -> Path:
+```
+
+##### 説明
+
+今の画面を logs/ に PNG で保存し、そのパスを返す。
+
+Args:
+    prefix: ファイル名の先頭。保存先は logs/{prefix}_{セッション名}_{日時}.png。
+
+Returns:
+    保存したファイルのパス。
+
+#### `popup_tab`
+
+```text
+@contextmanager
+def popup_tab(self, timeout: int | None=None) -> Iterator[BrowserSession]:
+```
+
+##### 説明
+
+別タブで開いた画面を操作し、抜けるときに閉じて元のタブへ戻る。
+
+リンクの target="_blank" や帳票 PDF のように、こちらの意図と関係なく
+タブが増える場面のためのもの。タブを開く操作を済ませてから with に入る:
+
+    page.click(PDF_LINK)              # ここで別タブが開く
+    with session.popup_tab():         # 開いたタブへ移る
+        session.save_screenshot("pdf")
+    # ← 別タブを閉じて、元のタブへ戻る（中で例外が出ても戻る）
+
+Args:
+    timeout: 新しいタブが開くのを待つ秒数。省略時は 10 秒。
+
+Yields:
+    自分自身。中では今までどおり session と Page をそのまま使える。
+
+Raises:
+    PopupTabNotOpenedError: 時間内に新しいタブが開かなかった場合。
+
+#### `load_many`
+
+```text
+def load_many(self, urls: Sequence[str], ready: Locator | None=None, max_open: int=_DEFAULT_MAX_OPEN_TABS, timeout: int | None=None) -> Iterator[str]:
+```
+
+##### 説明
+
+同じサイトの複数ページをまとめて開き、**読み込めたものから順に**返す。
+
+レポート一覧のように、同じサイトの大量の URL を見て回るときに使う。
+1件ずつ開いて待つと「読み込み時間 × 件数」かかるが、先に何枚か開いておくと
+待ち時間がブラウザ側で重なるため、全体が大幅に短くなる
+（1件2分・90件なら、逐次で3時間、10枚開けば20分台）。
+
+ログインは1回で済む。同じブラウザの中でタブを開くだけなので、
+Cookie も二要素認証の記憶も共有される。
+
+    for url in sf.load_many(report_urls, ready=ReportPage.TABLE, max_open=10):
+        rows = ReportPage(sf).rows()     # そのページのタブに切り替わっている
+        save(url, rows)
+    # ← 抜けると、開いたタブは全部閉じて元のタブへ戻る
+
+Args:
+    urls: 開く URL。渡した順に開くが、**返る順番は読み込みが終わった順**になる。
+    ready: 読み込み完了とみなす目印の要素。省略すると HTML の読み込み完了で判断する。
+           画面を描いてから中身を入れるサイト（Salesforce など）では、
+           表やヘッダーなど「出たら中身がある」要素を指定すること。
+    max_open: 同時に開いておくタブの数。増やすほど速くなるが、
+              メモリとサイト側の負荷も増える。
+    timeout: 1ページあたりの待ち時間の上限（秒）。省略時はセッションの設定。
+             超えたページは諦めて次へ進み、警告ログに残す。
+
+Yields:
+    読み込みが終わった URL。yield されている間、そのページのタブに切り替わっており、
+    Page のメソッドがそのまま使える。
+
+Raises:
+    SessionNotStartedError: with に入る前に呼んだ場合。
+    ConcurrentSessionUseError: 他のスレッドが同じセッションを操作している場合。
+
+#### `raw`
+
+```text
+@property
+def raw(self) -> webdriver.Edge:
+```
+
+##### 説明
+
+selenium の WebDriver そのもの。
+
+このクラスと Page に用意されていない機能を使うときの逃げ道。
+ここから switch_to でタブを移動すると、セッションが今どのタブにいるかを
+見失うことがあるので、タブ操作は popup_tab() を使うこと。
+
+ここから直接操作すると、同時操作の見張り（operating）を通らない。
+parallel の中で使う場合、他のスレッドと衝突しないことは呼び出し側の責任になる。
 
 ### `BackgroundTask`
 

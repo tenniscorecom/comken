@@ -74,32 +74,6 @@ class InternalLibraryBase:
         self._module = None
 
 
-# 後方互換性のために、「見つける／ラップ」も残す
-def is_internal_library_available(library_name: str) -> bool:
-    """社内ライブラリが import 可能なら True。
-
-    親パッケージが見つからない場合 (``example_libs.v0000`` 自体が無いなど) も
-    False を返す。 ``find_spec`` が内部依存の不在を区別できないため、
-    この関数では「対象モジュール自体」の存在のみを判定する。
-    """
-    return _is_available(library_name)
-
-
-def find_internal_library(library_name: str) -> ModuleType | None:
-    """社内ライブラリを import して返す。無ければ None。
-
-    ``load()`` と同じく、対象モジュール自身（またはその親）が存在しない場合のみ
-    None を返す。 モジュール内の依存不足は ImportError としてそのまま伝搬する。
-    """
-    try:
-        return importlib.import_module(library_name)
-    except ModuleNotFoundError as exc:
-        if _is_target_or_parent_missing(library_name, exc):
-            return None
-        # 内部依存の ImportError はそのまま呼び出し側へ伝える。
-        raise
-
-
 def _is_target_or_parent_missing(library_name: str, exc: BaseException) -> bool:
     """``library_name`` 自体またはその親パッケージが見つからないとき True。
 

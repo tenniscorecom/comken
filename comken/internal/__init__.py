@@ -4,11 +4,7 @@
 プロジェクトから呼ぶとき、バージョン違いを気にせず取り込める窓口を提供する。
 """
 
-from comken.internal.base import (
-    InternalLibraryBase,
-    find_internal_library,
-    is_internal_library_available,
-)
+from comken.internal.base import InternalLibraryBase
 from comken.internal.exceptions import (
     InternalLibraryError,
     InternalLibraryNotFoundError,
@@ -20,6 +16,4 @@ __all__ = [
     "InternalLibraryError",
     "InternalLibraryNotFoundError",
     "InternalLibraryVersionMismatchError",
-    "is_internal_library_available",
-    "find_internal_library",
 ]
