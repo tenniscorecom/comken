@@ -282,6 +282,14 @@ class MasterRow:
                 sheet.cell(row=row_number, column=col).fill = _EXAMPLE_FILL
 
         cls._write_guide(book)
+
+        # openpyxl が新規ブックに自動で作る空の「Sheet」が残っていれば削除する。
+        # create_template() のどのステップからも書き込まれない、pristine な残骸。
+        # 万一将来どこかで「Sheet」という名前のシートに実際にデータを書くようになった
+        # 場合に誤って消さないよう、A1 が空のときだけ消す
+        if "Sheet" in book.sheetnames and book["Sheet"]["A1"].value is None:
+            del book["Sheet"]
+
         book.save(path)
         book.close()
         return path

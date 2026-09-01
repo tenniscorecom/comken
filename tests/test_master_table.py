@@ -274,6 +274,12 @@ class TestTemplate:
             or ws["A2"].fill.fgColor.rgb == "00D9D9D9"
         )
 
+    def test_create_template_does_not_leave_default_sheet(self, tmp_path):
+        """openpyxl が自動で作る「Sheet」が雛形に残らないこと。"""
+        path = Item.create_template(tmp_path / "一覧.xlsx")
+        book = load_workbook(path)
+        assert "Sheet" not in book.sheetnames
+
 
 class TestColumnAdded:
     """あとから列を足しても、既存の表が読めなくならないこと。
