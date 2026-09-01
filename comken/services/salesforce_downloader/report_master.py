@@ -265,7 +265,7 @@ class MasterRow:
 
         # **全セルに雛形用のフォントを当てる。** 既存のフォント属性（太字など）は
         # そのまま使い回し、`name` だけ書き換える（後勝ちで上書きすると太字まで消える）
-        cls._apply_template_font(sheet, len(rows))
+        _apply_template_font(sheet, len(rows))
         # **`choices` がある列にドロップダウンを付ける。** データ行の先頭から
         # 十分な行数ぶんの範囲に適用し、あとから行を足しても効くようにする
         cls._apply_choice_validations(sheet, columns, len(rows))
@@ -288,18 +288,13 @@ class MasterRow:
 
     @classmethod
     def _apply_template_font(cls, sheet: Worksheet, example_count: int) -> None:
-        """雛形（表シート）の全セルに雛形用のフォント名を設定する。
+        """雛形（表シート）の全セルに雛形用のフォント名を設定する薄いラッパー。
 
-        既存の設定（太字など）は `Font` オブジェクトをそのまま使い回し、`name` だけを
-        書き換える。**他の属性（太字・サイズなど）に触らないため、雛形のもともとの
-        見出し書式（太字）を崩さない。**
+        実体はモジュールレベル関数 ``_apply_template_font``。``MasterRow`` に
+        紐付かない処理なので、``schedule.py`` の ``create_schedule_template``
+        からも同じ実装を呼び出せる形にしてある。
         """
-        last_row = max(_FIRST_DATA_ROW + example_count - 1, 1)
-        for row in sheet.iter_rows(
-            min_row=1, max_row=last_row, min_col=1, max_col=sheet.max_column
-        ):
-            for cell in row:
-                _set_template_font(cell)
+        _apply_template_font(sheet, example_count)
 
     @classmethod
     def _apply_choice_validations(
@@ -443,6 +438,25 @@ class MasterRow:
         # dataclass を付け忘れると fields() が空になり、原因の分からない失敗になる。
         # 継承した時点では判定できないので、ここでは何もせず load() 側で確かめる
         super().__init_subclass__(**kwargs)
+
+
+def _apply_template_font(sheet: Worksheet, example_count: int) -> None:
+    """雛形（表シート）の全セルに雛形用のフォント名を設定する。
+
+    既存の設定（太字など）は `Font` オブジェクトをそのまま使い回し、`name` だけを
+    書き換える。**他の属性（太字・サイズなど）に触らないため、雛形のもともとの
+    見出し書式（太字）を崩さない。**
+
+    ``MasterRow`` に紐付かない共通処理。``MasterRow.create_template`` の
+    クラスレベルからも、``schedule.create_schedule_template`` のように
+    ``MasterRow`` を経由しない雛形からも同じ実装を呼ぶ。
+    """
+    last_row = max(_FIRST_DATA_ROW + example_count - 1, 1)
+    for row in sheet.iter_rows(
+        min_row=1, max_row=last_row, min_col=1, max_col=sheet.max_column
+    ):
+        for cell in row:
+            _set_template_font(cell)
 
 
 class _Empty:

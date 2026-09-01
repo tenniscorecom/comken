@@ -487,6 +487,25 @@ for rule in rules:
     print(rule.schedule_key, rule.report_key, rule.frequency)
 ```
 
+雛形を新規作成・追記したい場合は `create_schedule_template()` を呼ぶ。
+**この関数はレポート管理表がすでに存在する前提**（`ReportEntry.create_template()`
+で先に `PY_管理表` シートを作ってから呼ぶ）で、既存のブックに
+`PY_スケジュール` シートを追加する。
+
+```python
+from comken.services.salesforce_downloader.schedule import create_schedule_template
+
+create_schedule_template(MASTER_PATH)  # 既存の管理表に「スケジュール」シートを追加
+```
+
+- 雛形には「毎週」「1時間ごと」の記入例 2 行を入れ、`取得頻度` / `曜日` / `月末指定` /
+  `有効` の各列に Excel のドロップダウン（入力規則）を付ける
+- `祝日対応` 列はドロップダウンを付けない（自由記述）
+- 「記入方法」シートが既にあるブックでは末尾に追記し、無ければスケジュール部分
+  だけの簡易版を作る
+- 「スケジュール」シートが既にあるブックに呼ぶと `SheetAlreadyExistsError`
+  （既存データを消す事故を防ぐため、上書きしない）
+
 なお、 `ScheduleRule.from_row()` を直接呼ぶ使い方も引き続き可能
 （テストや、別のデータソースから組み立てるときに使う）:
 
