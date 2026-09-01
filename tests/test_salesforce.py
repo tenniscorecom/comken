@@ -25,7 +25,7 @@ from comken.toolbox.credentials import save_credentials, store
 from comken.toolbox.csv import CSV
 from comken.toolbox.salesforce import (
     APIMetrics,
-    ClientCredentialsAuth,
+    ClientCredentialsOAuth,
     SalesforceBase,
 )
 from comken.toolbox.salesforce.report import report_id_from_url
@@ -113,19 +113,19 @@ def _salesforce(responses, token_responses=None):
         ) as post,
     ):
         client = _TestSalesforceBase(
-            auth=ClientCredentialsAuth("CID", "CSECRET", DOMAIN_URL), org_name="sandbox"
+            auth=ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL), org_name="sandbox"
         )
         yield client, session, post
 
 
-class TestClientCredentialsAuth:
+class TestClientCredentialsOAuth:
     def test_posts_client_credentials_to_my_domain(self):
         """My Domain のトークンエンドポイントへ client_credentials を POST する。"""
         with patch(
             "comken.toolbox.salesforce.oauth_credentials.requests.post",
             return_value=_token_response(),
         ) as post:
-            token, instance_url = ClientCredentialsAuth("CID", "CSECRET", DOMAIN_URL).fetch()
+            token, instance_url = ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL).fetch()
 
         assert (token, instance_url) == ("TOKEN", INSTANCE_URL)
         url, kwargs = post.call_args[0][0], post.call_args[1]
@@ -143,7 +143,7 @@ class TestClientCredentialsAuth:
             "comken.toolbox.salesforce.oauth_credentials.requests.post",
             return_value=_token_response(),
         ) as post:
-            ClientCredentialsAuth("CID", "CSECRET", f"{DOMAIN_URL}/").fetch()
+            ClientCredentialsOAuth("CID", "CSECRET", f"{DOMAIN_URL}/").fetch()
         assert post.call_args[0][0] == f"{DOMAIN_URL}/services/oauth2/token"
 
     def test_auth_failure_lists_what_to_check(self):
@@ -155,7 +155,7 @@ class TestClientCredentialsAuth:
             ),
             pytest.raises(SalesforceAuthError, match=r"(?s)Run As.*My Domain"),
         ):
-            ClientCredentialsAuth("CID", "CSECRET", DOMAIN_URL).fetch()
+            ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL).fetch()
 
     def test_network_failure_becomes_connection_error(self):
         """通信できない場合は SalesforceConnectionError になる。"""
@@ -166,7 +166,7 @@ class TestClientCredentialsAuth:
             ),
             pytest.raises(SalesforceConnectionError, match="接続できませんでした"),
         ):
-            ClientCredentialsAuth("CID", "CSECRET", DOMAIN_URL).fetch()
+            ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL).fetch()
 
 
 class TestSalesforceQuery:
@@ -618,7 +618,7 @@ class TestSites:
                 return_value=_token_response(),
             ),
         ):
-            site = Sandbox(auth=ClientCredentialsAuth("CID", "CSECRET", DOMAIN_URL))
+            site = Sandbox(auth=ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL))
         assert site.metrics.org_name == "Sandbox"
 
 

@@ -5994,6 +5994,57 @@ class ScheduleWeekdayInvalidError(DownloaderError):
 def __init__(self, value: object) -> None:
 ```
 
+### `ScheduleRowValueError`
+
+```text
+class ScheduleRowValueError(DownloaderError):
+```
+
+#### 説明
+
+スケジュール管理表の行の値が正しくない
+
+``ScheduleRule.from_row()`` が投げた ``DownloaderError`` を、**業務担当者が
+表の何行目を直せばいいか分かるよう行番号付きで**再送出するための例外。
+``load_schedule()`` が「行の境目」と「中の値エラー」を区別して表示するために
+使う。
+
+発生箇所: comken.services.salesforce_downloader.schedule の load_schedule()
+
+対処:
+    メッセージに出ている行と直したい値を、管理表で確認して直す
+
+#### `__init__`
+
+```text
+def __init__(self, row_number: int, reason: str) -> None:
+```
+
+### `ScheduleDuplicateKeyError`
+
+```text
+class ScheduleDuplicateKeyError(DownloaderError):
+```
+
+#### 説明
+
+スケジュール管理表の「スケジュールキー」が重複している
+
+1つの取得ルールを1行で表す管理表で同じキーが2行以上あると、
+ルールがどちらのものか区別できなくなる。
+
+発生箇所: comken.services.salesforce_downloader.schedule の load_schedule()
+
+対処:
+    スケジュール管理表を開いて、重複しているスケジュールキーの
+    どちらかを別の値に変える
+
+#### `__init__`
+
+```text
+def __init__(self, schedule_key: str, row_number: int, path: Path) -> None:
+```
+
 ### `TransferDestinationMultipleMatchError`
 
 ```text
@@ -9554,11 +9605,11 @@ Returns:
 Raises:
     SalesforceRequestError: 通信や認証に失敗した場合（`_client.request` 経由）。
 
-### `ClientCredentialsAuth`
+### `ClientCredentialsOAuth`
 
 定義を解決できませんでした。
 
-### `RefreshTokenAuth`
+### `RefreshTokenOAuth`
 
 定義を解決できませんでした。
 

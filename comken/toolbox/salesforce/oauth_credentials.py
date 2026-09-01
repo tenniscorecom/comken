@@ -73,7 +73,4 @@ class ClientCredentialsOAuth:
         return access_token, instance_url
 
 
-# 既存の呼び出し側との互換用 public 名（OAuth 公開名は廃止）
-ClientCredentialsAuth = ClientCredentialsOAuth
-
-__all__ = ["ClientCredentialsAuth"]
+__all__ = ["ClientCredentialsOAuth"]

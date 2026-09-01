@@ -13,7 +13,7 @@ Salesforce の公式発表・仕様と、それを受けた comken 側の判断�
 - **Client Credentials Flow は本番で使わない。** ECA 側でも無効にする。
   `client_secret` だけでアクセストークンを取れてしまい、漏えいすると実行ユーザーとして
   操作されるため（→ 次の節）。開発中に手元で動かすときだけ
-  `Sandbox(auth=ClientCredentialsAuth(...))` と**明示的に渡す**。
+  `Sandbox(auth=ClientCredentialsOAuth(...))` と**明示的に渡す**。
 - 実行専用ユーザーを割り当て、権限はそのユーザー側で最小限にする。
 - `client_id` / `client_secret` / `refresh_token` はコードや `config.ini` に書かず、
   Windows DPAPI で保管する。
@@ -126,9 +126,9 @@ comken は受け取った新しい token を DPAPI へ**自動で書き戻す**�
 動作確認の回転が速い。使うときは既定を上書きして明示的に渡す。
 
 ```python
-from comken.toolbox.salesforce import ClientCredentialsAuth
+from comken.toolbox.salesforce import ClientCredentialsOAuth
 
-with Sandbox(auth=ClientCredentialsAuth(cid, secret, domain)) as sf:
+with Sandbox(auth=ClientCredentialsOAuth(cid, secret, domain)) as sf:
     ...
 ```
 
@@ -348,10 +348,10 @@ Refresh Token Flow の **対になる形**で、初回認可が要らない代�
 `docs/開発/salesforce-authentication.md` の冒頭を参照):
 
 ```python
-from comken.toolbox.salesforce import ClientCredentialsAuth
+from comken.toolbox.salesforce import ClientCredentialsOAuth
 from comken.toolbox.salesforce.sites import Sandbox
 
-with Sandbox(auth=ClientCredentialsAuth(
+with Sandbox(auth=ClientCredentialsOAuth(
     client_id=...,
     client_secret=...,
     domain_url="login.salesforce.com",

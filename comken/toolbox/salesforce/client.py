@@ -131,7 +131,7 @@ class SalesforceBase:
             org_name: 計測ログに出す組織の呼び名。省略時はクラス名を使う。
             auth: 認証方式を差し替えるときに渡す。**クラスを渡せば**
                 DPAPI から組み立てる（値を手で並べなくてよい）。
-                    Sandbox(auth=ClientCredentialsAuth)   # 開発中だけ
+                    Sandbox(auth=ClientCredentialsOAuth)   # 開発中だけ
                 作成済みのインスタンスを渡すこともできる（テスト・JWT 等）。
                 その場合だけ prefix / domain_url は使われない。
 
@@ -148,7 +148,7 @@ class SalesforceBase:
         # 別途検出するため、ここでは NAME 衝突まで見ない
         type(self)._check_start()
         # 認証方式のクラスを渡されたら、組み立ては省略せず DPAPI から作る。
-        # 値を手で並べる書き方（ClientCredentialsAuth(cid, secret, url)）を
+        # 値を手で並べる書き方（ClientCredentialsOAuth(cid, secret, url)）を
         # 利用側に強いないため。既定（None）も同じ経路を通る。
         if auth is None:
             auth = RefreshTokenOAuth

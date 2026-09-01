@@ -21,7 +21,7 @@ from comken.exceptions import (
 )
 from comken.toolbox.browser import Browsers, SiteBase
 from comken.toolbox.browser.management.sessions import BrowserSession
-from comken.toolbox.salesforce import ClientCredentialsAuth
+from comken.toolbox.salesforce import ClientCredentialsOAuth
 from comken.toolbox.salesforce.client import SalesforceBase
 
 BROWSER_LOGGER = "comken.toolbox.browser.sitebase"
@@ -265,7 +265,7 @@ class TestSalesforceBaseOwner:
             patch("comken.toolbox.salesforce.oauth_credentials.requests.post") as post,
             pytest.raises(SiteOwnerRequiredError),
         ):
-            Org(auth=ClientCredentialsAuth("CID", "CSECRET", DOMAIN_URL))
+            Org(auth=ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL))
 
         post.assert_not_called()
 
@@ -280,7 +280,7 @@ class TestSalesforceBaseOwner:
         ComkenInternalOrg.__module__ = COMKEN_SALESFORCE_MODULE
 
         with _salesforce_http():
-            ComkenInternalOrg(auth=ClientCredentialsAuth("CID", "CSECRET", DOMAIN_URL))
+            ComkenInternalOrg(auth=ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL))
 
 
 class TestSalesforceStartedLog:
@@ -295,7 +295,7 @@ class TestSalesforceStartedLog:
             OWNER = "経理 / 田中"
 
         with caplog.at_level(logging.INFO, logger=SALESFORCE_LOGGER), _salesforce_http():
-            Org(auth=ClientCredentialsAuth("CID", "CSECRET", DOMAIN_URL))
+            Org(auth=ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL))
 
         messages = _info_messages(caplog)
         assert len(messages) == 1
@@ -321,6 +321,6 @@ class TestSalesforceStartedLog:
             _salesforce_http(),
             pytest.raises(RuntimeError),
         ):
-            Org(auth=ClientCredentialsAuth("CID", "CSECRET", DOMAIN_URL))
+            Org(auth=ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL))
 
         assert _info_messages(caplog) == []

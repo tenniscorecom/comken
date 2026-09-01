@@ -196,7 +196,4 @@ def _token_pair(body: dict) -> tuple[str, str]:
         raise SalesforceAuthError(200, "認証レスポンスの形式が不正です") from e
 
 
-# 既存の呼び出し側との互換用 public 名（OAuth 公開名は廃止）
-RefreshTokenAuth = RefreshTokenOAuth
-
-__all__ = ["RefreshTokenAuth"]
+__all__ = ["RefreshTokenOAuth"]

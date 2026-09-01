@@ -7,8 +7,8 @@ import pytest
 
 from comken.exceptions import SalesforceAuthError
 from comken.toolbox.salesforce import (
-    ClientCredentialsAuth,
-    RefreshTokenAuth,
+    ClientCredentialsOAuth,
+    RefreshTokenOAuth,
     SalesforceBase,
 )
 
@@ -32,9 +32,9 @@ def _response(body: dict, status_code: int = 200) -> MagicMock:
     return response
 
 
-class TestRefreshTokenAuth:
+class TestRefreshTokenOAuth:
     def test_authorization_url_contains_required_values_and_state(self):
-        url, state = RefreshTokenAuth.authorization_url(
+        url, state = RefreshTokenOAuth.authorization_url(
             "CID", "https://localhost/callback", DOMAIN_URL, state="STATE"
         )
         query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
@@ -53,7 +53,7 @@ class TestRefreshTokenAuth:
             {"access_token": "ACCESS", "instance_url": INSTANCE_URL, "refresh_token": "REFRESH"}
         )
         with patch(_REQUESTS_POST, return_value=response):
-            auth = RefreshTokenAuth.exchange_code(
+            auth = RefreshTokenOAuth.exchange_code(
                 "CID",
                 "SECRET",
                 "CODE",
@@ -61,7 +61,7 @@ class TestRefreshTokenAuth:
                 DOMAIN_URL,
                 on_refresh_token=saved_tokens.append,
             )
-        assert isinstance(auth, RefreshTokenAuth)
+        assert isinstance(auth, RefreshTokenOAuth)
         assert saved_tokens == ["REFRESH"]
 
     def test_refresh_omits_optional_secret_and_saves_rotated_token(self):
@@ -70,7 +70,7 @@ class TestRefreshTokenAuth:
             {"access_token": "ACCESS", "instance_url": INSTANCE_URL, "refresh_token": "ROTATED"}
         )
         with patch(_REQUESTS_POST, return_value=response) as post:
-            result = RefreshTokenAuth(
+            result = RefreshTokenOAuth(
                 "CID", "REFRESH", DOMAIN_URL, on_refresh_token=saved_tokens.append
             ).fetch()
         assert result == ("ACCESS", INSTANCE_URL)
@@ -80,7 +80,7 @@ class TestRefreshTokenAuth:
     def test_refresh_sends_secret_when_required(self):
         response = _response({"access_token": "ACCESS", "instance_url": INSTANCE_URL})
         with patch(_REQUESTS_POST, return_value=response) as post:
-            RefreshTokenAuth(
+            RefreshTokenOAuth(
                 "CID",
                 "REFRESH",
                 DOMAIN_URL,
@@ -94,7 +94,7 @@ class TestRefreshTokenAuth:
             patch(_REQUESTS_POST, return_value=response),
             pytest.raises(SalesforceAuthError) as raised,
         ):
-            RefreshTokenAuth("CID", "REFRESH", DOMAIN_URL).fetch()
+            RefreshTokenOAuth("CID", "REFRESH", DOMAIN_URL).fetch()
         assert "REFRESH" not in str(raised.value)
 
     def test_exchange_code_with_prefix_saves_to_dpapi_without_explicit_callback(self):
@@ -106,7 +106,7 @@ class TestRefreshTokenAuth:
             patch(_REQUESTS_POST, return_value=response),
             patch("comken.toolbox.credentials.save_credential") as save_credential,
         ):
-            RefreshTokenAuth.exchange_code(
+            RefreshTokenOAuth.exchange_code(
                 "CID",
                 "SECRET",
                 "CODE",
@@ -126,7 +126,7 @@ class TestRefreshTokenAuth:
             patch(_REQUESTS_POST, return_value=response),
             patch("comken.toolbox.credentials.save_credential") as save_credential,
         ):
-            RefreshTokenAuth.exchange_code(
+            RefreshTokenOAuth.exchange_code(
                 "CID",
                 "SECRET",
                 "CODE",
@@ -144,16 +144,16 @@ class TestRefreshTokenAuth:
             patch("comken.toolbox.credentials.Credentials", return_value=credentials),
             patch("comken.toolbox.credentials.save_credential") as save_credential,
         ):
-            auth = RefreshTokenAuth.from_credentials(DOMAIN_URL, "site_a")
+            auth = RefreshTokenOAuth.from_credentials(DOMAIN_URL, "site_a")
             auth._on_refresh_token("ROTATED")
         save_credential.assert_called_once_with("site_a_refresh_token", "ROTATED")
 
 
-class TestClientCredentialsAuth:
+class TestClientCredentialsOAuth:
     def test_from_credentials_reads_same_prefix(self):
         credentials = MagicMock(client_id="CID", client_secret="SECRET")
         with patch("comken.toolbox.credentials.Credentials", return_value=credentials) as load:
-            auth = ClientCredentialsAuth.from_credentials(DOMAIN_URL, "site_a")
+            auth = ClientCredentialsOAuth.from_credentials(DOMAIN_URL, "site_a")
         load.assert_called_once_with("site_a")
         assert auth._client_id == "CID"
         assert auth._client_secret == "SECRET"
@@ -181,12 +181,12 @@ class TestPluggableSalesforceAuth:
 class TestAuthClassIsBuiltFromCredentials:
     """auth に「クラス」を渡したら DPAPI から組み立てる。
 
-    利用側に ClientCredentialsAuth(cid, secret, url) と値を並べさせないため。
+    利用側に ClientCredentialsOAuth(cid, secret, url) と値を並べさせないため。
     既定（auth 省略）と同じ経路を通る。
     """
 
     def test_passing_a_class_reads_dpapi_with_the_class_prefix(self, monkeypatch):
-        """Sandbox(auth=ClientCredentialsAuth) が CREDENTIAL_PREFIX で DPAPI を引く。"""
+        """Sandbox(auth=ClientCredentialsOAuth) が CREDENTIAL_PREFIX で DPAPI を引く。"""
         called = {}
 
         class _FakeAuth:

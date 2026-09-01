@@ -45,7 +45,7 @@ Client Credentials Flow は `client_secret` だけでアクセストークンを
 | 使う場面 | 書き方 |
 |---|---|
 | 本番・通常 | `with Sandbox() as sf:` |
-| 開発中の動作確認 | `with Sandbox(auth=ClientCredentialsAuth) as sf:`（クラスを渡すだけ） |
+| 開発中の動作確認 | `with Sandbox(auth=ClientCredentialsOAuth) as sf:`（クラスを渡すだけ） |
 
 どちらも `fetch() -> (access_token, instance_url)` を実装しているので、
 API クライアント側は認証方式を知らずに済む。
@@ -84,10 +84,10 @@ with Sandbox(auth=auth) as sf:
 **本番では使わない**（→ [判断の根拠](開発/salesforce-authentication.md#2-なぜ-refresh-token-flow-を既定にするのか)）。
 
 ```python
-from comken.toolbox.salesforce import ClientCredentialsAuth
+from comken.toolbox.salesforce import ClientCredentialsOAuth
 from comken.toolbox.salesforce.sites import Sandbox
 
-with Sandbox(auth=ClientCredentialsAuth) as sf:      # クラスを渡すだけ
+with Sandbox(auth=ClientCredentialsOAuth) as sf:      # クラスを渡すだけ
     rows = sf.query("SELECT Id, Name FROM Account")
 ```
 
@@ -99,7 +99,7 @@ with Sandbox(auth=ClientCredentialsAuth) as sf:      # クラスを渡すだけ
 | 書き方 | 認証方式 | DPAPI から読む項目 |
 |---|---|---|
 | `Sandbox()` | Refresh Token（既定） | `sandbox_client_id` / `sandbox_client_secret` / `sandbox_refresh_token` |
-| `Sandbox(auth=ClientCredentialsAuth)` | Client Credentials（開発時） | `sandbox_client_id` / `sandbox_client_secret` |
+| `Sandbox(auth=ClientCredentialsOAuth)` | Client Credentials（開発時） | `sandbox_client_id` / `sandbox_client_secret` |
 | `Sandbox(prefix="sandbox_test")` | 既定のまま | `sandbox_test_*` |
 
 2方式は同じ `from_credentials()` / `fetch()` を持つので、

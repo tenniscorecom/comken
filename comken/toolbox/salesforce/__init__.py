@@ -20,17 +20,17 @@ Client Credentials Flow は `client_secret` だけでアクセストークンを
 漏えいすると実行ユーザーとして操作されるため、本番では使わない。
 **開発中に手元で動かしたいときだけ** `auth=` で明示的に渡す。
 
-    from comken.toolbox.salesforce import ClientCredentialsAuth
+    from comken.toolbox.salesforce import ClientCredentialsOAuth
 
-    with Sandbox(auth=ClientCredentialsAuth(cid, secret, domain)) as sf:  # 開発時だけ
+    with Sandbox(auth=ClientCredentialsOAuth(cid, secret, domain)) as sf:  # 開発時だけ
         ...
 
 設計の背景は docs/開発/salesforce-authentication.md を参照。
 
     SalesforceBase         1組織ぶんの API クライアントの土台（組織クラスで継承する）
     ReportAPI              レポート API。SalesforceBase.report が持っている
-    RefreshTokenAuth       Authorization Code + Refresh Token Flow（既定）
-    ClientCredentialsAuth  Client Credentials Flow（開発時に auth= で渡す）
+    RefreshTokenOAuth      Authorization Code + Refresh Token Flow（既定）
+    ClientCredentialsOAuth Client Credentials Flow（開発時に auth= で渡す）
     APIMetrics             API 呼び出しの計測。SalesforceBase.metrics が持っている
     APIUsage               組織の 24 時間 API 消費量
     ComponentStat          呼び出し元ごとの集計
@@ -62,8 +62,6 @@ except ImportError:
 # import 可能にするため
 _LAZY_TARGETS: dict[str, str] = {
     "SalesforceBase": "comken.toolbox.salesforce.client",
-    "ClientCredentialsAuth": "comken.toolbox.salesforce.oauth_credentials",
-    "RefreshTokenAuth": "comken.toolbox.salesforce.oauth_refresh",
     "ClientCredentialsOAuth": "comken.toolbox.salesforce.oauth_credentials",
     "RefreshTokenOAuth": "comken.toolbox.salesforce.oauth_refresh",
     "SalesforceCredentialRotator": "comken.toolbox.salesforce.rotation",
@@ -95,8 +93,8 @@ def __dir__() -> list[str]:
 __all__ = [
     "SalesforceBase",
     "ReportAPI",
-    "ClientCredentialsAuth",
-    "RefreshTokenAuth",
+    "ClientCredentialsOAuth",
+    "RefreshTokenOAuth",
     "APIMetrics",
     "APIUsage",
     "ComponentStat",
