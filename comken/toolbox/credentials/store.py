@@ -317,7 +317,6 @@ def _save_all(data: dict[str, str], path: Path) -> None:
 # インスタンスは GC で自然に消え、 レジストリも膨らまない。
 # ``Credentials`` は ``__getattr__`` を定義しているが ``__weakref__`` はクラスメンバ
 # として普通に解決されるため weakref はそのまま使える（ ``__slots__`` は不要）。
-# テスト時は ``_reset_instance_registry()`` で破棄する。
 _instances_by_path: dict[str, weakref.WeakSet["Credentials"]] = {}
 
 
@@ -346,14 +345,3 @@ def _invalidate_instances_for(path: Path) -> None:
     for instance in list(_instances_by_path.get(key, ())):
         if instance.__dict__.get("_cache") is not None:
             object.__setattr__(instance, "_cache", None)
-
-
-def _reset_instance_registry() -> None:
-    """**インスタンスレジストリを空にする**（テスト用）。
-
-    テストでは複数の ``tmp_path`` を使い回すので、 前のテストで登録された
-    インスタンスが残っていると、 保存系のテストで「別パスの Credentials が
-    巻き添えで破棄される」事故が起きうる。 各テストの前後で破棄する想定。
-    利用者向けの公開 API ではない。
-    """
-    _instances_by_path.clear()
