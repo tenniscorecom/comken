@@ -78,6 +78,14 @@ max-complexity = 10
 # 前提を押し付けることになるため、ここでは TID（相対 import 禁止）のみ外す。
 # comken 本体側の規約は引き続き適用する。
 "examples/**/*.py" = ["TID"]
+# 集約 __init__.py（1つのサブパッケージの公開名を1行1名で束ねる）。
+# ruff の isort は「as を使わない同一モジュールからの複数 import」を1行へ結合
+# しようとし、それを避けようとすると `import X as X`（自己エイリアス）が要る。
+# だが `as X` は初心者に意味が伝わりにくいうえ、公開名はここの __all__ が
+# 既に宣言している（pyright の explicit re-export も __all__ だけで満たす）ので、
+# I001（import の並び・結合）だけ無効化して素の import のまま1行1名を保つ。
+"comken/__init__.py" = ["I001"]
+"comken/core/__init__.py" = ["I001"]
 
 [tool.pytest.ini_options]
 # tools/ のスクリプト（export_for_chat など）をテストから import できるようにする。
