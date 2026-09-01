@@ -1,11 +1,11 @@
 """comken/core/logger/local.py — 単体実行用の root logger 構築。
 
 RPA 基盤外で単体実行するとき、各モジュールの logger が同じ出力先を使えるよう
-root logger を設定する。
+root logger を設定する。ファイル名は environment.py の ``_build_log_filename()`` で
+生成し、マイクロ秒＋PIDを含めた一意名で 1 プロセス 1 ファイルを保証する。
 """
 
 import logging
-import os
 from pathlib import Path
 
 from comken.core.clock import today
@@ -16,6 +16,7 @@ from comken.core.logger.environment import (
     ENVIRONMENT_HANDLER_NAME,
     LOCAL_HANDLER_NAME,
     LOG_FORMAT,
+    _build_log_filename,
     _compute_root_level,
     _guard_root_handlers,
     _warn_external_handlers_allowed,
@@ -38,6 +39,10 @@ def setup_local_logging(
     console を使い回して local ファイルだけを追加し、単独なら console と local
     ファイルの 2 種を追加する。
 
+    ファイル名は ``{path}/{today().isoformat()}/{ファイル名}`` となり、
+    ``_build_log_filename()`` がマイクロ秒と PID を含めて生成するため
+    同時実行でも別ファイルとして見分けられる。
+
     ``setup_logging()`` と ``setup_local_logging()`` が両方走った状態や、関係のない
     handler が混ざっている場合は ``LoggingAlreadyConfiguredError`` を送出して
     二重出力を防ぐ。comken 以外（他ライブラリ由来）の handler が混ざっている場合は
@@ -50,18 +55,16 @@ def setup_local_logging(
     external_allowed = _guard_root_handlers(existing, side="local", allow_existing=allow_existing)
 
     project_path = project_dir()
-    log_path = Path(path) if path is not None else project_path / "logs"
-    if not log_path.is_absolute():
-        log_path = project_path / log_path
-    log_path.mkdir(parents=True, exist_ok=True)
-    log_path /= f"local-{today().isoformat()}.log"
+    log_dir = Path(path) if path is not None else project_path / "logs"
+    if not log_dir.is_absolute():
+        log_dir = project_path / log_dir
+    log_dir = log_dir / today().isoformat()
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / _build_log_filename()
 
-    # environment と同じ本文形式にし、同時実行時も PID でログを見分けられるようにする。
-    formatter = logging.Formatter(
-        LOG_FORMAT,
-        datefmt=DATE_FORMAT,
-        defaults={"pid": os.getpid()},
-    )
+    # environment と同じ本文形式。プロセスの見分けはファイル名にマイクロ秒と
+    # PID が入るため、本文に PID を含める必要はない。
+    formatter = logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT)
     local_file_handler = logging.FileHandler(log_path, encoding="utf-8")
     local_file_handler.set_name(LOCAL_HANDLER_NAME)
     local_file_handler.setLevel(file_level)

@@ -1,9 +1,10 @@
 """comken/core/logger/environment.py — 社内環境向けの root logger 構築。
 
 アプリ全体のログを集めるため root logger を設定する。二重 handler は同じメッセージを
-重複出力するため、設定済みなら上書きせず例外にする。保存先は端末名（小文字化して照合）を
-``LOG_FOLDER_NAMES`` から引き、日付ごとのファイルとコンソールへ同じ形式で出力する。
-``LOG_FOLDER_NAMES`` に登録がない端末は ``LOG_ROOT/_etc_`` へまとめる。
+重複出力するため、設定済みなら上書きせず例外にする。保存先は実行端末のホスト名
+（小文字化）をそのままフォルダ名として ``LOG_ROOT/{hostname}/python/{日付}/`` の
+下に作り、ファイル名はマイクロ秒と PID を含む一意名にして 1 プロセス 1 ファイル
+にする。``LOG_FOLDER_NAMES`` のような端末別の登録辞書は持たない。
 """
 
 import logging
@@ -11,7 +12,7 @@ import os
 import socket
 from pathlib import Path
 
-from comken.core.clock import today
+from comken.core.clock import now, today
 from comken.core.logger.site import LoggerSite
 from comken.exceptions import (
     LoggingAlreadyConfiguredError,
@@ -19,12 +20,15 @@ from comken.exceptions import (
     LogRootNotConfiguredError,
 )
 
-LOG_FORMAT = "%(asctime)s %(levelname)s [pid=%(pid)s] %(name)s: %(message)s"
+LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 CONSOLE_HANDLER_NAME = "comken.console"
 ENVIRONMENT_HANDLER_NAME = "comken.environment"
 LOCAL_HANDLER_NAME = "comken.local"
-ETC_FOLDER_NAME = "_etc_"
+# ログファイルのタイムスタンプ書式。秒までの粒度だと同秒複数起動で衝突するため
+# マイクロ秒まで含めて 1 プロセス 1 ファイルにする。
+LOG_FILENAME_TIMESTAMP_FORMAT = "%Y%m%d_%H%M%S_%f"
+ENVIRONMENT_SUBFOLDER_NAME = "python"
 # comken が root に付けた handler だけレベル集計の対象にする。
 # 外部の NOTSET ハンドラーが混ざると root が NOTSET に巻き戻され、
 # isEnabledFor() が DEBUG まで通す穴になるため (回帰テスト #10)。
@@ -36,8 +40,9 @@ COMKEN_HANDLER_NAMES = frozenset(
 def setup_logging(site: type[LoggerSite], *, allow_existing: bool = False) -> None:
     """site の指定に従い root logger を設定する。
 
-    PID は同じ端末で同時に動くプロセスを見分ける値であり、保存先を選ぶ端末名とは
-    用途が異なる。Formatter の固定値として渡し、ログ呼び出し側へ負担を増やさない。
+    保存先は ``{LOG_ROOT}/{hostname(小文字)}/python/{today().isoformat()}/{ファイル名}``。
+    ファイル名はマイクロ秒と PID を含むため、1 プロセス 1 ファイルとして見分けられ、
+    ログ本文に PID を含める必要がなくなった（``setup_local_logging()`` も同様）。
 
     ``setup_local_logging()`` が先に走っている場合（root に console と local
     ファイルだけがある場合）は console を再利用し、environment ファイルだけを
@@ -60,27 +65,14 @@ def setup_logging(site: type[LoggerSite], *, allow_existing: bool = False) -> No
     # 「設定忘れか、運用で消すのか」が判断できなくなるため。
     if not site.LOG_ROOT:
         raise LogRootNotConfiguredError(site)
-    # 登録は大文字／小文字どちらでもよく、運用取得側も大小揺れるので
-    # キー側も問い合わせ側も小文字化した上で照合する。
+    # 端末名（小文字）をそのままフォルダ名にする。「登録辞書を端末ごとに書き換える」
+    # 二重管理を避ける設計。hostname は Windows の大小揺らぎに備えて小文字化する。
     hostname = socket.gethostname().lower()
-    folder_name = next(
-        (value for key, value in site.LOG_FOLDER_NAMES.items() if key.lower() == hostname),
-        None,
-    )
-    # 未登録、または値にパス区切りが含まれている場合は _etc_ 扱い。
-    # 後者は Path の `/` 演算子が絶対パス値を見ると LOG_ROOT を捨てて
-    # 別の場所へ書き込む罠なので、未登録としてガードする。
-    if not folder_name or "/" in folder_name or "\\" in folder_name:
-        folder_name = ETC_FOLDER_NAME
-    log_dir = Path(site.LOG_ROOT) / folder_name
+    log_dir = Path(site.LOG_ROOT) / hostname / ENVIRONMENT_SUBFOLDER_NAME / today().isoformat()
     log_dir.mkdir(parents=True, exist_ok=True)
-    log_path = log_dir / f"{site.NAME}-{today().isoformat()}.log"
+    log_path = log_dir / _build_log_filename()
 
-    formatter = logging.Formatter(
-        LOG_FORMAT,
-        datefmt=DATE_FORMAT,
-        defaults={"pid": os.getpid()},
-    )
+    formatter = logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT)
 
     if LOCAL_HANDLER_NAME in {h.name for h in existing}:
         # setup_local_logging() が既に console を備えている。console は使い回して
@@ -220,3 +212,16 @@ def _warn_external_handlers_allowed(func_name: str, handlers: list[logging.Handl
         func_name,
         "; ".join(external_descriptions) if external_descriptions else "(なし)",
     )
+
+
+def _build_log_filename() -> str:
+    """マイクロ秒と PID を含む一意なログファイル名を返す。
+
+    秒精度のタイムスタンプだと同時刻に別プロセスが起動した場合に同名衝突する。
+    マイクロ秒まで含めて衝突確率を下げ、PID と組み合わせることで
+    1 プロセス 1 ファイルを保証する。日時は ``comken.core.clock.now()`` を
+    経由して取得し、テストで固定値に差し替えられるようにする
+    （ ``datetime.datetime.now()`` を直接呼ばない）。
+    """
+    timestamp = now().strftime(LOG_FILENAME_TIMESTAMP_FORMAT)
+    return f"{timestamp}_{os.getpid()}.log"
