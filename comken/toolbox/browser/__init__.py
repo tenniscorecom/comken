@@ -39,31 +39,3 @@ __all__ = [
     "DownloadDir",
     "BackgroundTask",
 ]
-
-# 2026-08-03 の作り直しで無くなった名前と、その置き換え先。
-# 素の ImportError は「cannot import name 'EdgeDriver'」としか出ず、
-# 何に書き換えればよいか分からないため、案内を添えて送出する
-_REMOVED_NAMES = {
-    "EdgeDriver": (
-        "Browsers に変わりました。1サイトでも複数サイトでも同じ書き方になります。\n"
-        "  with Browsers() as browsers:\n"
-        "      kintai = browsers.launch(Kintai)\n"
-        "      kintai.session.open(...)"
-    ),
-    "BasePage": (
-        "Page に変わりました。セレクターは Locator にまとめ、\n"
-        "click_id / input_css のような種別付きメソッドは\n"
-        "click(LOC) / input(LOC, text) に一本化されています。"
-    ),
-}
-
-
-def __getattr__(name: str) -> object:
-    """無くなった名前が使われたときに、書き換え先を伝える。"""
-    if name in _REMOVED_NAMES:
-        raise AttributeError(
-            f"comken.toolbox.browser.{name} は廃止されました。\n"
-            f"{_REMOVED_NAMES[name]}\n"
-            "書き換え方は docs/browser.md を参照してください。"
-        )
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
