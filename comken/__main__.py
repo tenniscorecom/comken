@@ -13,9 +13,9 @@
 ``sf`` / ``cred`` / ``sfdl`` は ``salesforce`` / ``credentials`` /
 ``salesforce-downloader`` の別名（``argparse`` の ``add_parser(..., aliases=[...])``）。
 
-サブコマンドの実体は元の ``__main__.py`` に置いたまま呼び出すため、たとえば
-``python -m comken.toolbox.salesforce check`` のような旧呼び出しも当面は
-動き続ける（配置後は集約する）。
+CLI の入口はこの ``python -m comken`` 1か所に集約済み。旧来の
+``python -m comken.toolbox.salesforce ...`` のようなサブモジュール直接呼び出しは
+もう動かない（サブモジュール側に ``__main__.py`` は無い）。
 """
 
 import argparse
