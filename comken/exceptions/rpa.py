@@ -1,6 +1,6 @@
-"""comken/internal/exceptions.py — 社内ライブラリ呼び出しの共通例外。"""
+"""comken/exceptions/rpa.py — 社内 RPA 基盤呼び出しの共通例外。"""
 
-from comken.exceptions import ComkenError
+from comken.exceptions.base import ComkenError
 
 
 class InternalLibraryError(ComkenError):

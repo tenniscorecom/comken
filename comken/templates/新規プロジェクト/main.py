@@ -59,7 +59,7 @@ if __name__ == "__main__":
 # dry-run / debug を一時的に有効化したい場合は、`main()` を `with dry_run():` /
 # `with debug():` で囲む形にする（プロセス全体への setter は用意していない）。
 #
-#     from comken.internal.rpa import backoffice   # イントラネットのツールなら intranet に変える
+#     from comken.toolbox.rpa import backoffice   # イントラネットのツールなら intranet に変える
 #
 #     PROJECT_NAME = "（プロジェクト名）"   # 基盤へ渡す名前。ログの識別に使われる
 #

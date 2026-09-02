@@ -434,7 +434,8 @@ client_id / client_secret を読む（[credentials](credentials.md#credentials)�
 
 **`Sandbox` と URL は仮の値。** このリポジトリは公開しているため、
 実際の組織名や値は書かず、配置時に `DOMAIN_URL`・`CREDENTIAL_PREFIX` を
-書き換える（`comken/internal/salesforce_api.py` の `SALESFORCE_LIBRARY_NAME` と同じ扱い）。
+書き換える（Salesforce は comken 自前の `comken/toolbox/salesforce/` を使うため、
+社内ライブラリの名前は出てこない）。
 
 書き込み系（`insert` / `update` / `upsert` / `delete`）は `dry_run` を尊重する。
 使い方の一覧は [README](../README.md#モジュール一覧)、

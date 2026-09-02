@@ -1,4 +1,4 @@
-"""comken.internal.exceptions の動作を確認する。
+"""comken.exceptions.rpa の動作を確認する。
 
 `InternalLibraryError` は社内ライブラリ呼び出しに失敗したときの基底例外。
 `InternalLibraryNotFoundError` / `InternalLibraryVersionMismatchError` が
@@ -11,7 +11,6 @@ from __future__ import annotations
 import pytest
 
 import comken.exceptions
-import comken.internal.exceptions as internal_exceptions
 from comken.exceptions import (
     ComkenError,
     InternalLibraryError,
@@ -98,16 +97,6 @@ class TestInternalLibraryVersionMismatchError:
         with pytest.raises(InternalLibraryVersionMismatchError) as caught:
             raise InternalLibraryVersionMismatchError("lib", "1.2.3")
         assert caught.value.required_version == "1.2.3"
-
-
-def test_internal_exceptions_module_defines_expected_classes() -> None:
-    """`comken.internal.exceptions` に期待するクラスが揃っている。"""
-    for name in (
-        "InternalLibraryError",
-        "InternalLibraryNotFoundError",
-        "InternalLibraryVersionMismatchError",
-    ):
-        assert hasattr(internal_exceptions, name), f"{name} が定義されていない"
 
 
 def test_comken_exceptions_reexports_internal_library_classes() -> None:

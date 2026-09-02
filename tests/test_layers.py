@@ -9,7 +9,6 @@ LAYERS = {
     "runtime": 0,
     "core": 1,
     "toolbox": 2,
-    "internal": 3,
     "services": 4,
 }
 
@@ -17,7 +16,6 @@ ALLOWED_SAME_LAYER = {
     ("toolbox.excel", "toolbox.windows"),  # 既存数式・マクロ時の COM フォールバック
     ("toolbox.salesforce", "toolbox.credentials"),  # Salesforce の認証情報を安全に保存する
     ("toolbox.salesforce", "toolbox.csv"),  # レポート・SOQL の結果をそのまま CSV へ保存する
-    ("exceptions", "internal"),  # comken.exceptions が comken.internal の例外を re-export する
 }
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]

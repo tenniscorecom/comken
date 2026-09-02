@@ -6305,62 +6305,6 @@ def __init__(self, title: str) -> None:
 ```
 
 
-## `from comken.internal import ...`
-
-### `InternalLibraryError`
-
-```text
-class InternalLibraryError(ComkenError):
-```
-
-#### 説明
-
-社内ライブラリの呼び出しに失敗したときの基底例外
-
-対処:
-    画面に表示された具体的なエラー名（NotFound / VersionMismatch）を上の表から探す
-
-### `InternalLibraryNotFoundError`
-
-```text
-class InternalLibraryNotFoundError(InternalLibraryError):
-```
-
-#### 説明
-
-指定した社内ライブラリが見つからない
-
-対処:
-    社内 LAN 環境から、共有サーバ上の PYTHONPATH が通っているか確認し、
-    指定したライブラリ名のフォルダが存在するか確かめる
-
-#### `__init__`
-
-```text
-def __init__(self, library_name: str) -> None:
-```
-
-### `InternalLibraryVersionMismatchError`
-
-```text
-class InternalLibraryVersionMismatchError(InternalLibraryError):
-```
-
-#### 説明
-
-指定したバージョンの社内ライブラリが見つからない
-
-対処:
-    共有サーバ上の対象ライブラリのバージョンを確認し、
-    呼び出し側の指定と一致しているか確かめる
-
-#### `__init__`
-
-```text
-def __init__(self, library_name: str, required_version: str) -> None:
-```
-
-
 ## `from comken.services.salesforce_downloader import ...`
 
 ### `download_scheduled`
