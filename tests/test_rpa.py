@@ -1,6 +1,6 @@
-"""comken.internal.rpa の動作を確認する。
+"""comken.toolbox.rpa の動作を確認する。
 
-`comken.internal.rpa` は社内 RPA 基盤 (``example_libs.rpa``) を静的 import で
+`comken.toolbox.rpa` は社内 RPA 基盤 (``example_libs.rpa``) を静的 import で
 呼び出す薄いラッパー。 実機では社内 LAN にだけ存在するため、テストでは
 ``sys.modules`` にダミーモジュールを注入して差し替える。
 """
@@ -12,9 +12,9 @@ from unittest import mock
 
 import pytest
 
-from comken.internal import rpa as rpa_module
-from comken.internal.exceptions import InternalLibraryNotFoundError
-from comken.internal.rpa import RPA_LIBRARY_NAME, backoffice, intranet
+from comken.exceptions.rpa import InternalLibraryNotFoundError
+from comken.toolbox import rpa as rpa_module
+from comken.toolbox.rpa import RPA_LIBRARY_NAME, backoffice, intranet
 
 
 @pytest.fixture
@@ -104,3 +104,49 @@ def test_rpa_project_name_is_passed_through(fake_example_libs_rpa: mock.Mock) ->
     backoffice(lambda: None, "my-project")
     args, _ = fake_example_libs_rpa.backoffice.rpta.call_args
     assert args[1] == "my-project"
+
+
+# ── _raise_if_target_missing の単体テスト ─────────────────────────────
+
+
+def _raise(library_name: str, exc: ModuleNotFoundError) -> None:
+    """テスト用に `_raise_if_target_missing` を取り出す。"""
+    rpa_module._raise_if_target_missing(library_name, exc)
+
+
+def test_raises_not_found_when_target_module_missing() -> None:
+    """対象モジュール自体が見つからないとき ``InternalLibraryNotFoundError`` を送出する。"""
+    exc = ModuleNotFoundError(
+        "No module named 'example_libs.missing'",
+        name="example_libs.missing",
+    )
+    with pytest.raises(InternalLibraryNotFoundError) as caught:
+        _raise("example_libs.missing", exc)
+    assert caught.value.library_name == "example_libs.missing"
+
+
+def test_raises_not_found_when_parent_package_missing() -> None:
+    """親パッケージが見つからない場合も ``InternalLibraryNotFoundError`` を送出する。
+
+    ``library_name.startswith(missing_name + '.')`` で親部分一致を見る。
+    """
+    exc = ModuleNotFoundError(
+        "No module named 'example_libs'",
+        name="example_libs",
+    )
+    with pytest.raises(InternalLibraryNotFoundError) as caught:
+        _raise("example_libs.rpa", exc)
+    assert caught.value.library_name == "example_libs.rpa"
+
+
+def test_propagates_original_when_unrelated_dependency_missing() -> None:
+    """対象でも親でもない依存が無い場合は何もしない。
+
+    呼び出し元が ``raise`` で元の ``ModuleNotFoundError`` を伝搬する契約のため、
+    ``_raise_if_target_missing`` 自身は例外を上げない。
+    """
+    exc = ModuleNotFoundError(
+        "No module named 'example_libs.subdep'",
+        name="example_libs.subdep",
+    )
+    assert _raise("example_libs.rpa", exc) is None

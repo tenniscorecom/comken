@@ -274,6 +274,11 @@ from comken.exceptions.outlook import (
     OutlookError,
     OutlookFolderNotFoundError,
 )
+from comken.exceptions.rpa import (
+    InternalLibraryError,
+    InternalLibraryNotFoundError,
+    InternalLibraryVersionMismatchError,
+)
 from comken.exceptions.salesforce import (
     SalesforceAuthError,
     SalesforceConnectionError,
@@ -306,11 +311,6 @@ from comken.exceptions.table import (
     TransferDestinationMultipleMatchError,
 )
 from comken.exceptions.windows import WindowNotFoundError
-from comken.internal.exceptions import (
-    InternalLibraryError,
-    InternalLibraryNotFoundError,
-    InternalLibraryVersionMismatchError,
-)
 
 __all__ = [
     "ComkenError",

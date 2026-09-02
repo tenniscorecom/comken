@@ -122,7 +122,7 @@ def test_bundle_text_includes_all_comken_py_files() -> None:
 
 def test_verify_internal_library_placeholder_passes() -> None:
     """社内ライブラリ仮名が保たれている間は検証が通る。"""
-    # 現在の ``comken/internal/names.py`` の値は仮名のままなので例外は出ない
+    # 現在の ``comken/toolbox/rpa.py`` の値は仮名のままなので例外は出ない
     export_for_chat._verify_internal_library_placeholder()
 
 
