@@ -23,6 +23,8 @@ def test_concurrent_appends_keep_one_header_and_complete_rows(tmp_path) -> None:
     history_path = tmp_path / "履歴.csv"
     entry = ReportEntry(
         key="1001",
+        group_name="営業事務グループ",
+        assignee="山田",
         summary="顧客一覧",
         url="https://example.com/Report/00O5g00000ABCDE/view",
         output_format="CSV",
@@ -253,6 +255,8 @@ def _entry(folder: Path) -> ReportEntry:
     """各テストで同じ管理表1行を使う。"""
     return ReportEntry(
         key="1001",
+        group_name="営業事務グループ",
+        assignee="山田",
         summary="顧客一覧",
         url="https://example.com/Report/00O5g00000ABCDE/view",
         output_format="CSV",

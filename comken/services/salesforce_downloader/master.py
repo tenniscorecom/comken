@@ -47,6 +47,8 @@ _EXAMPLE_NOTE = "記入例です。使う前にこの行を消してください
 EXAMPLES = [
     {
         "key": "1001",
+        "group_name": "営業事務グループ",
+        "assignee": "山田",
         "summary": "顧客一覧",
         "url": f"{_DOMAIN}/00O5g00000ABCDE/view",
         "output_format": OUTPUT_FORMAT_CSV,
@@ -57,6 +59,8 @@ EXAMPLES = [
     },
     {
         "key": "1002",
+        "group_name": "経理グループ",
+        "assignee": "佐藤",
         "summary": "売上実績",
         "url": f"{_DOMAIN}/00O5g00000FGHIJ/view",
         "output_format": OUTPUT_FORMAT_EXCEL,
@@ -88,6 +92,18 @@ class ReportEntry(MasterRow):
         help="社内で決める管理番号。Salesforce のレポート ID ではありません。"
         "参照先のレポートを差し替えても、この番号は変えません。"
         "前ゼロ（0001 など）や記号入りの値も使えます",
+    )
+    # **記録専用列。** comken の判定・パス決定・スケジュール判定には一切関与しない
+    # （誰がどの部署で担当しているかを残しておくだけが役目）。`choices` を付けない
+    # のは、グループ名・担当者は部署の事情で増減するため
+    group_name: str = column(
+        "グループ名",
+        help="このレポートを管理している社内の部署・グループ名。"
+        "記録用（comken の動作には使わない）",
+    )
+    assignee: str = column(
+        "担当者",
+        help="このレポートの担当者名。記録用（comken の動作には使わない）",
     )
     summary: str = column(
         "概要", help="人が読んで何のレポートか分かる説明。保存するファイル名にも使われます"

@@ -27,6 +27,8 @@ def _make_master_only(path: Path) -> Path:
     """``PY_管理表`` だけを持つ既存の管理表ブックを作る。"""
     master_headers = [
         "ID",
+        "グループ名",
+        "担当者",
         "概要",
         "Salesforce URL",
         "出力形式",
@@ -37,12 +39,25 @@ def _make_master_only(path: Path) -> Path:
     master_row = dict(
         zip(
             master_headers,
-            ["1001", "顧客一覧", "https://example.com/a/view", "CSV", str(path.parent), "○", ""],
+            [
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                "https://example.com/a/view",
+                "CSV",
+                str(path.parent),
+                "○",
+                "",
+            ],
             strict=True,
         )
     )
     with Excel(path) as book:
-        book.create_data_sheet("管理表").create_table("管理表", Table(master_headers, [master_row]))
+        book.create_data_sheet("管理表").create_table("管理表", Table(master_headers, [
+            master_row,
+        ]))
+
     return path
 
 

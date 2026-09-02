@@ -35,7 +35,17 @@ URL_A = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/0
 URL_B = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000FGHIJ/view"
 ROWS = [{"名前": "山田", "金額": "100"}, {"名前": "鈴木", "金額": "200"}]
 
-HEADERS = ["ID", "概要", "Salesforce URL", "出力形式", "保存先", "有効", "備考"]
+HEADERS = [
+    "ID",
+    "グループ名",
+    "担当者",
+    "概要",
+    "Salesforce URL",
+    "出力形式",
+    "保存先",
+    "有効",
+    "備考",
+]
 
 
 @pytest.fixture(autouse=True)
@@ -75,9 +85,42 @@ def paths(tmp_path, monkeypatch):
     master = make_master(
         tmp_path / "レポート管理表.xlsx",
         [
-            ["1001", "顧客一覧", URL_A, "CSV", str(folder), "○", ""],
-            ["1002", "売上実績", URL_B, "Excel", str(folder), "○", ""],
-            ["1003", "停止中", URL_B, "CSV", str(folder), "×", ""],
+            [
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                URL_A,
+                "CSV",
+                str(folder),
+                "○",
+                "",
+            ],
+
+            [
+                "1002",
+                "経理グループ",
+                "佐藤",
+                "売上実績",
+                URL_B,
+                "Excel",
+                str(folder),
+                "○",
+                "",
+            ],
+
+            [
+                "1003",
+                "営業事務グループ",
+                "山田",
+                "停止中",
+                URL_B,
+                "CSV",
+                str(folder),
+                "×",
+                "",
+            ],
+
         ],
     )
     history_path = tmp_path / "ダウンロード履歴.csv"
@@ -115,7 +158,18 @@ class TestFilePathOf:
         folder.mkdir()
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", "顧客一覧", URL_A, "CSV", str(folder), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                URL_A,
+                "CSV",
+                str(folder),
+                "○",
+                "",
+            ]],
+
         )
         entry = load_master(master)["1001"]
         name = file_path_of(entry).name
@@ -129,7 +183,18 @@ class TestFilePathOf:
         folder.mkdir()
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", "顧客一覧", URL_A, "Excel", str(folder), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                URL_A,
+                "Excel",
+                str(folder),
+                "○",
+                "",
+            ]],
+
         )
         entry = load_master(master)["1001"]
         name = file_path_of(entry).name
@@ -142,7 +207,18 @@ class TestFilePathOf:
         folder.mkdir()
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", "禁則: A/B?C*D", URL_A, "CSV", str(folder), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "禁則: A/B?C*D",
+                URL_A,
+                "CSV",
+                str(folder),
+                "○",
+                "",
+            ]],
+
         )
         entry = load_master(master)["1001"]
         name = file_path_of(entry).name
@@ -157,7 +233,18 @@ class TestFilePathOf:
         long_summary = "あ" * 50
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", long_summary, URL_A, "CSV", str(folder), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                long_summary,
+                URL_A,
+                "CSV",
+                str(folder),
+                "○",
+                "",
+            ]],
+
         )
         entry = load_master(master)["1001"]
         name = file_path_of(entry).name

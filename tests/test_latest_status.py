@@ -21,7 +21,17 @@ from comken.toolbox.excel import Excel
 URL_A = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE/view"
 URL_B = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000FGHIJ/view"
 
-HEADERS = ["ID", "概要", "Salesforce URL", "出力形式", "保存先", "有効", "備考"]
+HEADERS = [
+    "ID",
+    "グループ名",
+    "担当者",
+    "概要",
+    "Salesforce URL",
+    "出力形式",
+    "保存先",
+    "有効",
+    "備考",
+]
 
 
 def make_master(path: Path, rows: list[list]) -> Path:
@@ -35,6 +45,8 @@ def make_master(path: Path, rows: list[list]) -> Path:
 def _entry(folder: Path, *, key: str, summary: str, url: str) -> ReportEntry:
     return ReportEntry(
         key=key,
+        group_name="営業事務グループ",
+        assignee="山田",
         summary=summary,
         url=url,
         output_format="CSV",
@@ -75,8 +87,30 @@ class TestWriteLatestStatus:
         master = make_master(
             tmp_path / "レポート管理表.xlsx",
             [
-                ["1001", "顧客一覧", URL_A, "CSV", str(folder), "○", ""],
-                ["1002", "売上実績", URL_B, "CSV", str(folder), "○", ""],
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "顧客一覧",
+                    URL_A,
+                    "CSV",
+                    str(folder),
+                    "○",
+                    "",
+                ],
+
+                [
+                    "1002",
+                    "経理グループ",
+                    "佐藤",
+                    "売上実績",
+                    URL_B,
+                    "CSV",
+                    str(folder),
+                    "○",
+                    "",
+                ],
+
             ],
         )
         history_path = tmp_path / "ダウンロード履歴.csv"
@@ -159,8 +193,30 @@ class TestWriteLatestStatus:
         master = make_master(
             tmp_path / "レポート管理表.xlsx",
             [
-                ["1001", "顧客一覧", URL_A, "CSV", str(folder), "○", ""],
-                ["1002", "売上実績", URL_B, "CSV", str(folder), "○", ""],
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "顧客一覧",
+                    URL_A,
+                    "CSV",
+                    str(folder),
+                    "○",
+                    "",
+                ],
+
+                [
+                    "1002",
+                    "経理グループ",
+                    "佐藤",
+                    "売上実績",
+                    URL_B,
+                    "CSV",
+                    str(folder),
+                    "○",
+                    "",
+                ],
+
             ],
         )
         history_path = tmp_path / "ダウンロード履歴.csv"
@@ -193,8 +249,30 @@ class TestWriteLatestStatus:
         master = make_master(
             tmp_path / "レポート管理表.xlsx",
             [
-                ["1001", "顧客一覧", URL_A, "CSV", str(folder), "○", ""],
-                ["1002", "売上実績", URL_B, "CSV", str(folder), "○", ""],
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "顧客一覧",
+                    URL_A,
+                    "CSV",
+                    str(folder),
+                    "○",
+                    "",
+                ],
+
+                [
+                    "1002",
+                    "経理グループ",
+                    "佐藤",
+                    "売上実績",
+                    URL_B,
+                    "CSV",
+                    str(folder),
+                    "○",
+                    "",
+                ],
+
             ],
         )
         history_path = tmp_path / "ダウンロード履歴.csv"
@@ -245,7 +323,18 @@ class TestWriteLatestStatus:
         folder.mkdir()
         master = make_master(
             tmp_path / "レポート管理表.xlsx",
-            [["1001", "顧客一覧", URL_A, "CSV", str(folder), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                URL_A,
+                "CSV",
+                str(folder),
+                "○",
+                "",
+            ]],
+
         )
         history_path = tmp_path / "ダウンロード履歴.csv"
         record(

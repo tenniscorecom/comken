@@ -103,6 +103,8 @@ python -m comken sf check
 | 列 | 例 |
 |---|---|
 | ID | `1001` |
+| グループ名 | `営業事務グループ` |
+| 担当者 | `山田` |
 | 概要 | `顧客一覧` |
 | Salesforce URL | `https://.../Report/00O.../view` |
 | 出力形式 | `CSV` / `Excel` |
@@ -203,14 +205,16 @@ python -m comken sfdl check レポート管理表.xlsx
 `comken.services.salesforce_downloader/master.py` にあり、読み込み・検証・雛形生成の
 仕組みは [管理表（master_table）](master-table.md) が持つ。
 
-| ID | 概要 | Salesforce URL | 出力形式 | 保存先 | 有効 | 0件あり | 備考 |
-|---|---|---|---|---|---|---|---|
-| 1001 | 顧客一覧 | https://.../Report/00O5g00000ABCDE/view | CSV | `\\server\A\input` | ○ | × | |
-| 1002 | 売上実績 | https://.../Report/00O5g00000FGHIJ/view | Excel | `\\server\B\input` | ○ | ○ | |
+| ID | グループ名 | 担当者 | 概要 | Salesforce URL | 出力形式 | 保存先 | 有効 | 0件あり | 備考 |
+|---|---|---|---|---|---|---|---|---|---|
+| 1001 | 営業事務グループ | 山田 | 顧客一覧 | https://.../Report/00O5g00000ABCDE/view | CSV | `\\server\A\input` | ○ | × | |
+| 1002 | 経理グループ | 佐藤 | 売上実績 | https://.../Report/00O5g00000FGHIJ/view | Excel | `\\server\B\input` | ○ | ○ | |
 
 | 列 | 何を書くか |
 |---|---|
 | **ID** | 社内で決める管理番号（`1001`, `CUST-01` など）。**Salesforce のレポート ID ではない**。前ゼロ（`0001`）や記号入りも使える |
+| **グループ名** | このレポートを管理している社内の部署・グループ名。**記録用で、comken の判定・パス決定・スケジュール判定には関与しない** |
+| **担当者** | このレポートの担当者名。**記録用で、comken の判定には関与しない** |
 | **概要** | 人が読んで分かる説明。保存するファイル名にも使う |
 | **Salesforce URL** | レポートを開いたときのアドレスを**そのまま貼る** |
 | **出力形式** | `CSV` か `Excel`。**雛形ではドロップダウンから選べる**。**既定値は持たせない**（書き忘れが既定値に流れると下流 RPA が期待する形式と食い違う事故になるため） |

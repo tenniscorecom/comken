@@ -42,10 +42,31 @@ URL_A = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/0
 URL_B = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000FGHIJ/view"
 ROWS = [{"名前": "山田", "金額": "100"}, {"名前": "鈴木", "金額": "200"}]
 
-HEADERS = ["ID", "概要", "Salesforce URL", "出力形式", "保存先", "有効", "備考"]
+HEADERS = [
+    "ID",
+    "グループ名",
+    "担当者",
+    "概要",
+    "Salesforce URL",
+    "出力形式",
+    "保存先",
+    "有効",
+    "備考",
+]
 # `0件あり` 列を足した見出し。列が無い管理表でも既定 `×` で読めることを確かめる
-# ため、`paths` fixture は 7 列のままで固定する
-HEADERS_WITH_ALLOW_EMPTY = [*HEADERS[:6], "0件あり", "備考"]
+# ため、`paths` fixture は 9 列のままで固定する
+HEADERS_WITH_ALLOW_EMPTY = [
+    "ID",
+    "グループ名",
+    "担当者",
+    "概要",
+    "Salesforce URL",
+    "出力形式",
+    "保存先",
+    "有効",
+    "0件あり",
+    "備考",
+]
 
 
 def make_master(path: Path, rows: list[list]) -> Path:
@@ -88,9 +109,42 @@ def paths(tmp_path, monkeypatch):
     master = make_master(
         tmp_path / "レポート管理表.xlsx",
         [
-            ["1001", "顧客一覧", URL_A, "CSV", str(folder), "○", ""],
-            ["1002", "売上実績", URL_B, "Excel", str(folder), "×", ""],
-            ["1003", "停止中", URL_B, "CSV", str(folder), "×", ""],
+            [
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                URL_A,
+                "CSV",
+                str(folder),
+                "○",
+                "",
+            ],
+
+            [
+                "1002",
+                "経理グループ",
+                "佐藤",
+                "売上実績",
+                URL_B,
+                "Excel",
+                str(folder),
+                "×",
+                "",
+            ],
+
+            [
+                "1003",
+                "営業事務グループ",
+                "山田",
+                "停止中",
+                URL_B,
+                "CSV",
+                str(folder),
+                "×",
+                "",
+            ],
+
         ],
     )
     history_path = tmp_path / "ダウンロード履歴.csv"
@@ -138,7 +192,18 @@ class TestLoadMaster:
     def test_blank_rows_are_skipped(self, tmp_path):
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", "顧客一覧", URL_A, "CSV", str(tmp_path), "○", ""], [None] * 7],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                URL_A,
+                "CSV",
+                str(tmp_path),
+                "○",
+                "",
+            ], [None] * 9],
+
         )
         assert list(load_master(master)) == ["1001"]
 
@@ -146,8 +211,30 @@ class TestLoadMaster:
         master = make_master(
             tmp_path / "管理表.xlsx",
             [
-                ["1001", "顧客一覧", URL_A, "CSV", str(tmp_path), "○", ""],
-                ["1001", "別の名前", URL_B, "Excel", str(tmp_path), "○", ""],
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "顧客一覧",
+                    URL_A,
+                    "CSV",
+                    str(tmp_path),
+                    "○",
+                    "",
+                ],
+
+                [
+                    "1001",
+                    "別の部署",
+                    "別の担当",
+                    "別の名前",
+                    URL_B,
+                    "Excel",
+                    str(tmp_path),
+                    "○",
+                    "",
+                ],
+
             ],
         )
         with pytest.raises(MasterDuplicateValueError):
@@ -156,7 +243,7 @@ class TestLoadMaster:
     def test_url_without_report_id_raises_with_row_number(self, tmp_path):
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", "顧客一覧", "https://example.com/", "CSV", str(tmp_path), "○", ""]],
+            [["1001", "営業事務グループ", "山田", "顧客一覧", "https://example.com/", "CSV", str(tmp_path), "○", ""]],  # noqa: E501
         )
         with pytest.raises(InvalidReportURLError) as e:
             load_master(master)
@@ -166,7 +253,18 @@ class TestLoadMaster:
         """`出力形式`に想定外の値を入れるとエラー。"""
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", "顧客一覧", URL_A, "PDF", str(tmp_path), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                URL_A,
+                "PDF",
+                str(tmp_path),
+                "○",
+                "",
+            ]],
+
         )
         with pytest.raises(MasterRowValueError) as e:
             load_master(master)
@@ -176,7 +274,18 @@ class TestLoadMaster:
         """`出力形式`は既定値なし。空欄のまま読み込むとエラー。"""
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", "顧客一覧", URL_A, "", str(tmp_path), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                URL_A,
+                "",
+                str(tmp_path),
+                "○",
+                "",
+            ]],
+
         )
         with pytest.raises(MasterRowValueError) as e:
             load_master(master)
@@ -186,7 +295,18 @@ class TestLoadMaster:
         """str 型の `key` なので、文字列の ID もそのまま使える。"""
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["A001", "顧客一覧", URL_A, "CSV", str(tmp_path), "○", ""]],
+            [[
+                "A001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                URL_A,
+                "CSV",
+                str(tmp_path),
+                "○",
+                "",
+            ]],
+
         )
         assert list(load_master(master)) == ["A001"]
 
@@ -203,7 +323,18 @@ class TestSharedReportIds:
     def test_unique_reports_are_not_listed(self, tmp_path):
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", "顧客一覧", URL_A, "CSV", str(tmp_path), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                URL_A,
+                "CSV",
+                str(tmp_path),
+                "○",
+                "",
+            ]],
+
         )
         assert shared_report_ids(load_master(master)) == {}
 
@@ -243,7 +374,18 @@ class TestDownloadScheduledRecord:
         folder = tmp_path / "Excel保存先"
         folder.mkdir()
         master = tmp_path / "Excel管理表.xlsx"
-        rows = [["1002", "売上実績", URL_B, "Excel", str(folder), "○", ""]]
+        rows = [[
+            "1002",
+            "経理グループ",
+            "佐藤",
+            "売上実績",
+            URL_B,
+            "Excel",
+            str(folder),
+            "○",
+            "",
+        ]]
+
         with ExcelForMaster(master) as book:
             book.create_data_sheet("管理表").create_table(
                 "管理表", Table(HEADERS, [dict(zip(HEADERS, row, strict=True)) for row in rows])
@@ -322,6 +464,7 @@ class TestDownloadScheduledRecord:
         # になると、上限に達して例外を上げる
         for sequence in range(5):
             candidate = base if sequence == 0 else paths["folder"] / f"1001_顧客一覧_{sequence}.csv"
+
             candidate.write_text("埋まり", encoding="utf-8")
 
         with (
@@ -372,7 +515,18 @@ class TestDownloadScheduledRecord:
         missing = tmp_path / "無いフォルダ"
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", "顧客一覧", URL_A, "CSV", str(missing), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                URL_A,
+                "CSV",
+                str(missing),
+                "○",
+                "",
+            ]],
+
         )
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
         monkeypatch.setattr(service_module, "HISTORY_PATH", tmp_path / "履歴.csv")
@@ -447,7 +601,18 @@ class TestHistory:
         missing = tmp_path / "無いフォルダ"
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", "顧客一覧", URL_A, "CSV", str(missing), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                URL_A,
+                "CSV",
+                str(missing),
+                "○",
+                "",
+            ]],
+
         )
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -482,7 +647,18 @@ class TestHistory:
         folder.mkdir()
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", "顧客一覧", URL_A, "CSV", str(folder), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                URL_A,
+                "CSV",
+                str(folder),
+                "○",
+                "",
+            ]],
+
         )
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -536,7 +712,18 @@ class TestHistory:
         folder.mkdir()
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", "顧客一覧", URL_A, "CSV", str(folder), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                URL_A,
+                "CSV",
+                str(folder),
+                "○",
+                "",
+            ]],
+
         )
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -584,7 +771,18 @@ class TestHistory:
         missing = tmp_path / "無いフォルダ"
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", "顧客一覧", URL_A, "CSV", str(missing), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                URL_A,
+                "CSV",
+                str(missing),
+                "○",
+                "",
+            ]],
+
         )
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -609,7 +807,18 @@ class TestHistory:
         folder.mkdir()
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", "顧客一覧", URL_A, "CSV", str(folder), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                URL_A,
+                "CSV",
+                str(folder),
+                "○",
+                "",
+            ]],
+
         )
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -658,7 +867,18 @@ class TestHistory:
         folder.mkdir()
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", "顧客一覧", URL_A, "CSV", str(folder), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                URL_A,
+                "CSV",
+                str(folder),
+                "○",
+                "",
+            ]],
+
         )
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -687,7 +907,18 @@ class TestHistory:
         folder.mkdir()
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", "顧客一覧", URL_A, "CSV", str(folder), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                URL_A,
+                "CSV",
+                str(folder),
+                "○",
+                "",
+            ]],
+
         )
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -729,8 +960,30 @@ class TestDownloadScheduled:
         master = make_master(
             tmp_path / "管理表.xlsx",
             [
-                ["1001", "落ちる方", URL_A, "CSV", str(tmp_path / "無い"), "○", ""],
-                ["1002", "通る方", URL_B, "CSV", str(folder), "○", ""],
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "落ちる方",
+                    URL_A,
+                    "CSV",
+                    str(tmp_path / "無い"),
+                    "○",
+                    "",
+                ],
+
+                [
+                    "1002",
+                    "経理グループ",
+                    "佐藤",
+                    "通る方",
+                    URL_B,
+                    "CSV",
+                    str(folder),
+                    "○",
+                    "",
+                ],
+
             ],
         )
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -755,8 +1008,30 @@ class TestDownloadScheduled:
         master = make_master(
             tmp_path / "管理表.xlsx",
             [
-                ["1001", "書込失敗", URL_A, "CSV", str(folder), "○", ""],
-                ["1002", "取得成功", URL_B, "CSV", str(folder), "○", ""],
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "書込失敗",
+                    URL_A,
+                    "CSV",
+                    str(folder),
+                    "○",
+                    "",
+                ],
+
+                [
+                    "1002",
+                    "経理グループ",
+                    "佐藤",
+                    "取得成功",
+                    URL_B,
+                    "CSV",
+                    str(folder),
+                    "○",
+                    "",
+                ],
+
             ],
         )
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -809,8 +1084,30 @@ class TestDownloadScheduled:
         master = make_master(
             tmp_path / "管理表.xlsx",
             [
-                ["1001", "想定外", URL_A, "CSV", str(folder), "○", ""],
-                ["1002", "通る方", URL_B, "CSV", str(folder), "○", ""],
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "想定外",
+                    URL_A,
+                    "CSV",
+                    str(folder),
+                    "○",
+                    "",
+                ],
+
+                [
+                    "1002",
+                    "経理グループ",
+                    "佐藤",
+                    "通る方",
+                    URL_B,
+                    "CSV",
+                    str(folder),
+                    "○",
+                    "",
+                ],
+
             ],
         )
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -883,7 +1180,18 @@ class TestDownloadScheduled:
         folder.mkdir()
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", "顧客一覧", URL_A, "CSV", str(folder), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                URL_A,
+                "CSV",
+                str(folder),
+                "○",
+                "",
+            ]],
+
         )
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
         monkeypatch.setattr(service_module, "HISTORY_PATH", tmp_path / "履歴.csv")
@@ -907,7 +1215,18 @@ class TestDownloadScheduled:
         # 直接 Excel を組み立てる）
         master = make_master_with_schedule(
             tmp_path / "管理表.xlsx",
-            [["1001", "曜日外し", URL_A, "CSV", str(folder), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "曜日外し",
+                URL_A,
+                "CSV",
+                str(folder),
+                "○",
+                "",
+            ]],
+
             schedule_rows=[
                 ["S001", "1001", "毎週", "09:00", "月", "取得しない", "○"],
             ],
@@ -933,7 +1252,18 @@ class TestDownloadScheduled:
         fixed_now = dt.datetime(2026, 1, 7, 12, 0)  # noqa: DTZ001 — テスト用に意図的に固定した tz-naive な datetime
         master = make_master_with_schedule(
             tmp_path / "管理表.xlsx",
-            [["1001", "曜日一致", URL_A, "CSV", str(folder), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "曜日一致",
+                URL_A,
+                "CSV",
+                str(folder),
+                "○",
+                "",
+            ]],
+
             schedule_rows=[
                 ["S001", "1001", "毎週", "09:00", "水", "取得しない", "○"],
             ],
@@ -957,7 +1287,18 @@ class TestDownloadScheduled:
         fixed_now = dt.datetime(2026, 1, 7, 12, 0)  # noqa: DTZ001 — テスト用に意図的に固定した tz-naive な datetime
         master = make_master_with_schedule(
             tmp_path / "管理表.xlsx",
-            [["1001", "OR判定", URL_A, "CSV", str(folder), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "OR判定",
+                URL_A,
+                "CSV",
+                str(folder),
+                "○",
+                "",
+            ]],
+
             schedule_rows=[
                 ["S001", "1001", "毎週", "09:00", "月", "取得しない", "○"],
                 ["S002", "1001", "毎週", "09:00", "水", "取得しない", "○"],
@@ -990,7 +1331,18 @@ class TestScheduleDedup:
         fixed_now = dt.datetime(2026, 1, 7, 12, 0)  # noqa: DTZ001 — テスト用に意図的に固定した tz-naive な datetime
         master = make_master_with_schedule(
             tmp_path / "管理表.xlsx",
-            [["1001", "曜日一致", URL_A, "CSV", str(folder), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "曜日一致",
+                URL_A,
+                "CSV",
+                str(folder),
+                "○",
+                "",
+            ]],
+
             schedule_rows=[
                 ["S001", "1001", "毎週", "09:00", "水", "取得しない", "○"],
             ],
@@ -1030,7 +1382,18 @@ class TestScheduleDedup:
         fixed_now = dt.datetime(2026, 1, 7, 12, 0)  # noqa: DTZ001 — テスト用に意図的に固定した tz-naive な datetime
         master = make_master_with_schedule(
             tmp_path / "管理表.xlsx",
-            [["1001", "曜日一致", URL_A, "CSV", str(folder), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "曜日一致",
+                URL_A,
+                "CSV",
+                str(folder),
+                "○",
+                "",
+            ]],
+
             schedule_rows=[
                 ["S001", "1001", "毎週", "09:00", "水", "取得しない", "○"],
             ],
@@ -1082,7 +1445,18 @@ class TestScheduleDedup:
         fixed_now = dt.datetime(2026, 1, 7, 12, 0)  # noqa: DTZ001 — テスト用に意図的に固定した tz-naive な datetime
         master = make_master_with_schedule(
             tmp_path / "管理表.xlsx",
-            [["1001", "曜日一致", URL_A, "CSV", str(folder), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "曜日一致",
+                URL_A,
+                "CSV",
+                str(folder),
+                "○",
+                "",
+            ]],
+
             schedule_rows=[
                 ["S001", "1001", "毎週", "09:00", "水", "取得しない", "○"],
             ],
@@ -1125,7 +1499,18 @@ class TestScheduleDedup:
         fixed_now = dt.datetime(2026, 1, 7, 12, 0)  # noqa: DTZ001 — テスト用に意図的に固定した tz-naive な datetime
         master = make_master_with_schedule(
             tmp_path / "管理表.xlsx",
-            [["1001", "複数スケジュール", URL_A, "CSV", str(folder), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "複数スケジュール",
+                URL_A,
+                "CSV",
+                str(folder),
+                "○",
+                "",
+            ]],
+
             schedule_rows=[
                 # 月曜 09:00 と水曜 09:00 の 2 行で `1001` を取得する設定
                 ["S_MON", "1001", "毎週", "09:00", "月", "取得しない", "○"],
@@ -1192,6 +1577,8 @@ def make_master_with_schedule(
     """
     master_headers = [
         "ID",
+        "グループ名",
+        "担当者",
         "概要",
         "Salesforce URL",
         "出力形式",
@@ -1275,7 +1662,19 @@ class TestAllowEmpty:
         folder.mkdir()
         master = make_master_with_allow_empty(
             tmp_path / "管理表.xlsx",
-            [["1001", "顧客一覧", URL_A, "CSV", str(folder), "○", "×", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                URL_A,
+                "CSV",
+                str(folder),
+                "○",
+                "×",
+                "",
+            ]],
+
         )
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -1310,7 +1709,19 @@ class TestAllowEmpty:
         folder.mkdir()
         master = make_master_with_allow_empty(
             tmp_path / "管理表.xlsx",
-            [["1001", "顧客一覧", URL_A, "CSV", str(folder), "○", "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                URL_A,
+                "CSV",
+                str(folder),
+                "○",
+                "○",
+                "",
+            ]],
+
         )
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -1345,7 +1756,19 @@ class TestAllowEmpty:
         folder.mkdir()
         master = make_master_with_allow_empty(
             tmp_path / "管理表.xlsx",
-            [["1001", "顧客一覧", URL_A, "CSV", str(folder), "○", "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                URL_A,
+                "CSV",
+                str(folder),
+                "○",
+                "○",
+                "",
+            ]],
+
         )
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(_paths_module, "MASTER_PATH", master)
@@ -1373,7 +1796,18 @@ class TestAllowEmpty:
         # 7 列のまま = `0件あり` 列が無い管理表
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", "顧客一覧", URL_A, "CSV", str(folder), "○", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                URL_A,
+                "CSV",
+                str(folder),
+                "○",
+                "",
+            ]],
+
         )
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(service_module, "MASTER_PATH", master)
@@ -1398,7 +1832,19 @@ class TestAllowEmpty:
         """5. `0件あり` に `○` `×` 以外を書くとエラーになる（choices で弾く）。"""
         master = make_master_with_allow_empty(
             tmp_path / "管理表.xlsx",
-            [["1001", "顧客一覧", URL_A, "CSV", str(tmp_path), "○", "△", ""]],
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "顧客一覧",
+                URL_A,
+                "CSV",
+                str(tmp_path),
+                "○",
+                "△",
+                "",
+            ]],
+
         )
         with pytest.raises(MasterRowValueError) as e:
             load_master(master)
@@ -1415,8 +1861,32 @@ class TestAllowEmpty:
         master = make_master_with_allow_empty(
             tmp_path / "管理表.xlsx",
             [
-                ["1001", "空でもOK", URL_A, "CSV", str(folder), "○", "○", ""],
-                ["1002", "普通のレポート", URL_B, "CSV", str(folder), "○", "×", ""],
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "空でもOK",
+                    URL_A,
+                    "CSV",
+                    str(folder),
+                    "○",
+                    "○",
+                    "",
+                ],
+
+                [
+                    "1002",
+                    "経理グループ",
+                    "佐藤",
+                    "普通のレポート",
+                    URL_B,
+                    "CSV",
+                    str(folder),
+                    "○",
+                    "×",
+                    "",
+                ],
+
             ],
         )
         history_path = tmp_path / "履歴.csv"
@@ -1489,7 +1959,7 @@ class TestCommandLine:
     def test_check_returns_failure_for_a_broken_master(self, tmp_path, capsys):
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", "顧客一覧", "https://example.com/", "CSV", str(tmp_path), "○", ""]],
+            [["1001", "営業事務グループ", "山田", "顧客一覧", "https://example.com/", "CSV", str(tmp_path), "○", ""]],  # noqa: E501
         )
         assert cli(["check", str(master)]) == 1
         assert "エラー:" in capsys.readouterr().err
