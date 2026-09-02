@@ -14,6 +14,7 @@ from comken.core.table import Table
 from comken.exceptions import ExcelFileNotFoundError, SheetAlreadyExistsError
 from comken.services.salesforce_downloader.schedule import (
     FREQUENCY_HOURLY,
+    FREQUENCY_MONTHLY,
     FREQUENCY_WEEKLY,
     SCHEDULE_HEADERS_FULL,
     SCHEDULE_SHEET_NAME,
@@ -77,8 +78,10 @@ class TestAddScheduleSheet:
         weekly = next(rule for rule in rules if rule.frequency == FREQUENCY_WEEKLY)
         assert weekly.weekday == 0  # 月曜
         assert weekly.run_time is not None and weekly.run_time.hour == 9
-        # 「1時間ごと」のほうは間隔・開始・終了時刻が埋まる
-        assert any(rule.interval_minutes == 60 for rule in rules)
+        # 「1時間ごと」のほうは間隔（60分）と開始時刻（取得時刻列=09:00）が埋まる
+        hourly = next(rule for rule in rules if rule.frequency == FREQUENCY_HOURLY)
+        assert hourly.interval_minutes == 60
+        assert hourly.run_time is not None and hourly.run_time.hour == 9
 
     def test_schedule_sheet_has_full_headers(self, tmp_path):
         """雛形は ``SCHEDULE_HEADERS_FULL`` の全列を持つ（不足列を足させる運用を避ける）。"""
@@ -122,7 +125,8 @@ class TestAddScheduleSheet:
     def test_choice_columns_have_dropdown(self, tmp_path):
         """``choices`` 列には Excel のドロップダウン（入力規則）が付くこと。
 
-        検証対象: 取得頻度・曜日・月末指定・有効（4列）。
+        検証対象: 取得頻度・曜日・有効（3列）。``月末指定`` 列が無くなったので
+        ドロップダウン対象も 4 列 → 3 列に減る。
         対象外: 祝日対応（自由記述のためドロップダウンを敢えて付けない）。
         """
         path = _make_master_only(tmp_path / "管理表.xlsx")
@@ -131,16 +135,56 @@ class TestAddScheduleSheet:
         book = load_workbook(path)
         sheet = book[f"PY_{SCHEDULE_SHEET_NAME}"]
         validations = list(sheet.data_validations.dataValidation)
-        # 4列分のドロップダウンが付く（末尾の 1003 は ``_DATA_VALIDATION_ROWS`` ぶん
+        # 3列分のドロップダウンが付く（末尾の 1003 は ``_DATA_VALIDATION_ROWS`` ぶん
         # の余裕）。 ``1行目の見出し``は含めずデータ行から開始する
         formulas = {str(v.sqref): v.formula1 for v in validations}
         assert formulas["C2:C1003"] == '"1時間ごと,毎日,毎週,毎月"'
         assert formulas["D2:D1003"] == '"月,火,水,木,金,土,日"'
-        assert formulas["J2:J1003"] == '"○,×"'
-        assert formulas["L2:L1003"] == '"○,×"'
-        # 祝日対応（K 列）には付かないことを確認
+        assert formulas["I2:I1003"] == '"○,×"'
+        # 祝日対応（H 列）には付かないことを確認
         for v in validations:
-            assert not str(v.sqref).startswith("K")
+            assert not str(v.sqref).startswith("H")
+
+    def test_weekday_and_date_columns_have_conditional_formatting(self, tmp_path):
+        """「曜日」「日付」列に、取得頻度に応じたグレーアウトの条件付き書式が付くこと。
+
+        「曜日」列（D 列）は「毎週」でないとき、「日付」列（G 列）は「毎月」でない
+        ときにグレーアウトするルールが、それぞれ 1 つずつ存在する。
+        動的な入力禁止ではなく見た目だけのヒントなので、データ検証や
+        ``protection`` には触らない（``Cell.is_locked`` も変えない）。
+        """
+        path = _make_master_only(tmp_path / "管理表.xlsx")
+        create_schedule_template(path)
+
+        book = load_workbook(path)
+        sheet = book[f"PY_{SCHEDULE_SHEET_NAME}"]
+        # ``ConditionalFormattingList`` は ``__iter__`` で ``ConditionalFormatting``
+        # を1個ずつ yield し、それぞれ ``.rules`` で ``Rule`` リストが取れる
+        cf_by_range: dict[str, list] = {}
+        for cf in sheet.conditional_formatting:
+            cf_by_range[str(cf.sqref)] = list(cf.rules)
+
+        weekday_range = "D2:D1003"
+        date_range = "G2:G1003"
+        assert weekday_range in cf_by_range, (
+            f"「曜日」列に条件付き書式がありません（登録済: {sorted(cf_by_range)}）"
+        )
+        assert date_range in cf_by_range, (
+            f"「日付」列に条件付き書式がありません（登録済: {sorted(cf_by_range)}）"
+        )
+
+        weekday_rules = cf_by_range[weekday_range]
+        date_rules = cf_by_range[date_range]
+        # 「毎週」「毎月」以外ではグレー塗りにしたいので、塗り色が設定された
+        # ``FormulaRule`` が1つ以上存在することを確認する
+        assert any(_is_gray_fill_formula(rule, FREQUENCY_WEEKLY) for rule in weekday_rules), (
+            f"「曜日」列に『{FREQUENCY_WEEKLY}』不一致条件のグレー塗りルールが"
+            f"見つかりません（ルール: {weekday_rules}）"
+        )
+        assert any(_is_gray_fill_formula(rule, FREQUENCY_MONTHLY) for rule in date_rules), (
+            f"「日付」列に『{FREQUENCY_MONTHLY}』不一致条件のグレー塗りルールが"
+            f"見つかりません（ルール: {date_rules}）"
+        )
 
     def test_missing_master_file_raises(self, tmp_path):
         """存在しないファイルを指定すると ``ExcelFileNotFoundError``（書き込みモードで
@@ -221,3 +265,24 @@ class TestGuideSheet:
         # スケジュールセクションの内容も追記されている
         assert "スケジュール" in text
         assert "スケジュールキー" in text
+
+
+def _is_gray_fill_formula(rule: object, target_frequency: str) -> bool:
+    """``rule`` が「``target_frequency`` でないときグレー塗り」ルールか判定する。
+
+    openpyxl の ``FormulaRule`` は ``formula`` に数式文字列の ``tuple`` を持ち、
+    塗り色は ``rule.dxf``（``DifferentialStyle``）の中の ``fill`` に格納される
+    （``Rule`` 自体は ``fill`` 属性を持たない）。ここでは数式が ``<>"<頻度>"``
+    形式（``<>`` 演算子でターゲット頻度を不一致比較）を含み、かつ
+    ``DifferentialStyle`` に塗り色が設定されていることを確認する。具体的な
+    色コードまでは見ない（``BFBFBF`` を将来変えてもテストが壊れないように
+    するため）。
+    """
+    formula = getattr(rule, "formula", None)
+    if not formula:
+        return False
+    needle = f'<>"{target_frequency}"'
+    if not any(needle in str(text) for text in formula):
+        return False
+    dxf = getattr(rule, "dxf", None)
+    return getattr(dxf, "fill", None) is not None

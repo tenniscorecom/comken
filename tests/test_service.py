@@ -1194,6 +1194,58 @@ class TestDownloadScheduled:
             saved = download_scheduled()
         assert [path.name.split("_")[0] for path in saved] == ["1001"]
 
+    def test_multiple_due_rules_pick_the_latest_run_time(self, tmp_path, monkeypatch):
+        """同じレポートに複数の「due」行がある場合、一番遅い時刻の行を採用する。
+
+        例: 「毎週・水曜・09:00」と「毎週・水曜・13:00」が並んでいて、13:00 に
+        ``download_scheduled()`` を呼ぶと、9:00 の行も 13:00 の行も曜日・時刻条件が
+        合うが、**履歴に記録される ``schedule_key`` は 13:00 側だけ**になる。
+        同じレポートを 9:00 と 13:00 で 2 回取る意味がないため（運用:
+        9:00 で失敗したときに 13:00 に拾う、等）。
+        """
+        folder = tmp_path / "保存先"
+        folder.mkdir()
+        # 水曜 13:00 固定 → どちらの行も is_due=True だが、遅い時刻の S002 を採用
+        fixed_now = dt.datetime(2026, 1, 7, 13, 0)  # noqa: DTZ001 — テスト用に意図的に固定した tz-naive な datetime
+        master = make_master_with_schedule(
+            tmp_path / "管理表.xlsx",
+            [[
+                "1001",
+                "営業事務グループ",
+                "山田",
+                "遅い時刻優先",
+                URL_A,
+                str(folder),
+                "○",
+                "",
+            ]],
+
+            schedule_rows=[
+                ["S001", "1001", "毎週", "09:00", "水", "取得しない", "○"],
+                ["S002", "1001", "毎週", "13:00", "水", "取得しない", "○"],
+            ],
+        )
+        monkeypatch.setattr(service_module, "MASTER_PATH", master)
+        monkeypatch.setattr(service_module, "HISTORY_PATH", tmp_path / "履歴.csv")
+        monkeypatch.setattr(service_module, "clock_now", lambda: fixed_now)
+        _patch_default_calendar(monkeypatch, holidays=set())
+
+        site = fake_salesforce()
+        with patch(
+            "comken.services.salesforce_downloader.service.site_for", return_value=site
+        ):
+            saved = download_scheduled()
+        # 1 回だけ取得される
+        assert site.return_value.__enter__.return_value.report.get.call_count == 1
+        assert [path.name.split("_")[0] for path in saved] == ["1001"]
+        # 履歴の「スケジュールキー」列が S002 だけであること（S001 は記録されない）
+        with CSV(tmp_path / "履歴.csv") as csv_file:
+            rows = csv_file.read()
+        assert len(rows) == 1
+        assert rows[0]["管理番号"] == "1001"
+        assert rows[0]["スケジュールキー"] == "S002"
+        assert rows[0]["成否"] == "成功"
+
 
 # ── スケジュール単位の重複実行防止（今回の機能の核心）───────────────────
 class TestScheduleDedup:

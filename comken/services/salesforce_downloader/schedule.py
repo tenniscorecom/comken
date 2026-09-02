@@ -1,17 +1,26 @@
 """comken/services/salesforce_downloader/schedule.py — 取得時刻を判定する。"""
 
 import datetime as dt
+import logging
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Self, cast
 
 from openpyxl import load_workbook
-from openpyxl.styles import Font
+from openpyxl.formatting.rule import FormulaRule
+from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.worksheet import Worksheet
 
+from comken.core.holidays import (
+    BusinessDayNotFoundError,
+    HolidayCalendar,
+    default_calendar,
+    nth_business_day_of_month,
+)
 from comken.core.table.model import Table as CoreTable
 from comken.exceptions import (
     DownloaderError,
@@ -45,6 +54,12 @@ FREQUENCY_MONTHLY = "毎月"
 HOLIDAY_SKIP = "取得しない"
 WEEKDAY_NAMES = ("月", "火", "水", "木", "金", "土", "日")
 
+logger = logging.getLogger(__name__)
+
+# 「第N営業日」表記の正規表現。N は 1 以上の整数。「曜日付き」（例: 「第2営業日（月曜）」）
+# のような表記は受け付けず、もっとも素直な形の入力を要求する
+_NTH_BUSINESS_DAY_PATTERN = re.compile(r"^第(\d+)営業日$")
+
 # レポート管理表と同じブック内のスケジュール管理シート名。**管理表本体と
 # 一緒に置かれる**ため、このシートが無い管理表でもエラーにせず空とみなす
 # （後方互換。詳細は load_schedule() を参照）
@@ -53,20 +68,16 @@ SCHEDULE_SHEET_NAME = "スケジュール"
 # 「スケジュール」シートの列（見出し）のフルセット。``ScheduleRule.from_row`` が
 # 受け付ける列を全て並べたもの。``load_schedule`` のテスト
 # (``tests/test_schedule_load.py`` の ``SCHEDULE_HEADERS``) はサブセットだが、
-# 雛形としては不足列（``取得開始時刻`` / ``取得終了時刻`` / ``取得間隔（分）`` /
-# ``日付`` / ``月末指定``）も最初から出して、利用者が「列を足す」工程を踏まずに
-# 済む形にする。
+# 雛形としては不足列（``取得間隔（分）`` / ``日付``）も最初から出して、利用者が
+# 「列を足す」工程を踏まずに済む形にする。
 SCHEDULE_HEADERS_FULL: tuple[str, ...] = (
     "スケジュールキー",
     "レポートキー",
     "取得頻度",
     "曜日",
     "取得時刻",
-    "取得開始時刻",
-    "取得終了時刻",
     "取得間隔（分）",
     "日付",
-    "月末指定",
     "祝日対応",
     "有効",
 )
@@ -83,8 +94,7 @@ SCHEDULE_COLUMN_SPECS: tuple[ColumnSpec, ...] = (
     ),
     ColumnSpec(
         header="レポートキー",
-        help="「管理表」シートの「ID」列の値。定期実行したいレポートの管理番号を"
-        "書いてください",
+        help="「管理表」シートの「ID」列の値。定期実行したいレポートの管理番号を書いてください",
     ),
     ColumnSpec(
         header="取得頻度",
@@ -99,44 +109,30 @@ SCHEDULE_COLUMN_SPECS: tuple[ColumnSpec, ...] = (
     ),
     ColumnSpec(
         header="取得時刻",
-        help="「毎日」「毎週」「毎月」のときの実行時刻。"
-        "HH:MM 形式（例: 09:00）で書いてください",
-    ),
-    ColumnSpec(
-        header="取得開始時刻",
-        help="「1時間ごと」のときの開始時刻。HH:MM 形式で書いてください",
-    ),
-    ColumnSpec(
-        header="取得終了時刻",
-        help="「1時間ごと」のときの終了時刻。HH:MM 形式で書いてください"
-        "（開始より後の時刻を書いてください）",
+        help="「毎日」「毎週」「毎月」「1時間ごと」共通の実行開始時刻。"
+        "HH:MM 形式（例: 09:00）で書いてください"
+        "（「1時間ごと」のときはここが開始時刻になります）。"
+        "「毎日」「毎週」「毎月」で、時刻を問わず1日のうちいつでも取得してよい"
+        "場合（例: 前日以前の確定済みデータのように、いつ取っても中身が変わらない"
+        "レポート）は空欄のままにできます（「1時間ごと」では必須です）",
     ),
     ColumnSpec(
         header="取得間隔（分）",
-        help="「1時間ごと」のとき、何分おきに取得するか。"
-        "60（1時間）などを数字だけで書いてください",
+        help="「1時間ごと」のとき、何分おきに取得するか。60（1時間）などを数字だけで書いてください",
     ),
     ColumnSpec(
         header="日付",
         help="「毎月」のとき、月の何日に取得するか。"
-        "1〜31 の数字で書いてください",
-    ),
-    ColumnSpec(
-        header="月末指定",
-        choices=("○", "×"),
-        help="「毎月」かつ「日付」列を月末にしたいときに「○」、"
-        "それ以外は「×」と書いてください",
+        "1〜31の数字、月末なら「月末」、第N営業日なら「第2営業日」のように書いてください",
     ),
     ColumnSpec(
         header="祝日対応",
-        help="「取得しない」と書くと祝日はスキップします。"
-        "それ以外（空欄含む）は祝日でも取得します",
+        help="「取得しない」と書くと祝日はスキップします。それ以外（空欄含む）は祝日でも取得します",
     ),
     ColumnSpec(
         header="有効",
         choices=("○", "×"),
-        help="「○」か「×」と書いてください"
-        "（「×」にすると、その行は取得対象から外れます）",
+        help="「○」か「×」と書いてください（「×」にすると、その行は取得対象から外れます）",
     ),
 )
 
@@ -149,11 +145,8 @@ _SCHEDULE_EXAMPLES: tuple[dict[str, object], ...] = (
         "取得頻度": FREQUENCY_WEEKLY,
         "曜日": "月",
         "取得時刻": "09:00",
-        "取得開始時刻": "",
-        "取得終了時刻": "",
         "取得間隔（分）": "",
         "日付": "",
-        "月末指定": "×",
         "祝日対応": HOLIDAY_SKIP,
         "有効": "○",
     },
@@ -162,12 +155,9 @@ _SCHEDULE_EXAMPLES: tuple[dict[str, object], ...] = (
         "レポートキー": "1002",
         "取得頻度": FREQUENCY_HOURLY,
         "曜日": "",
-        "取得時刻": "",
-        "取得開始時刻": "09:00",
-        "取得終了時刻": "17:00",
+        "取得時刻": "09:00",
         "取得間隔（分）": 60,
         "日付": "",
-        "月末指定": "×",
         "祝日対応": "",
         "有効": "○",
     },
@@ -180,6 +170,11 @@ _SCHEDULE_GUIDE_NOTE = "スケジュールの記入例の行は、実際に使�
 
 # 雛形に付ける「ドロップダウン範囲の行数」。``report_master`` と同じ値を使う。
 _DATA_VALIDATION_ROWS = 1000
+
+# 条件付き書式で「今回は使わない列」をグレーアウトする際の塗り色。
+# ``_EXAMPLE_FILL``（記入例の薄灰色）とは別に、もう少し濃いグレーにして
+# 「入力例」と「使わない列」を視覚的に区別できるようにする
+_UNUSED_COLUMN_FILL = PatternFill(start_color="BFBFBF", end_color="BFBFBF", fill_type="solid")
 
 # 雛形用のフォント名（``report_master`` と同じ「Noto Sans JP」）。PC に
 # 入っていないときは Excel が代替フォントを選ぶが、雛形としては問題なく使える。
@@ -203,29 +198,28 @@ class ScheduleRule:
     report_key: str
     frequency: str
     run_time: dt.time | None = None
-    start_time: dt.time | None = None
-    end_time: dt.time | None = None
     interval_minutes: int | None = None
     weekday: int | None = None
     day_of_month: int | None = None
     month_end: bool = False
+    nth_business_day: int | None = None
     holiday_policy: str = HOLIDAY_SKIP
     enabled: bool = True
 
     @classmethod
     def from_row(cls, row: Mapping[str, object]) -> Self:
         """日本語カラム名の辞書からスケジュールを作る。"""
+        day_of_month, month_end, nth_business_day = _parse_day_of_month(row.get("日付"))
         return cls(
             schedule_key=_required_text(row, "スケジュールキー"),
             report_key=_required_text(row, "レポートキー"),
             frequency=_required_text(row, "取得頻度"),
             run_time=_to_time(row.get("取得時刻")),
-            start_time=_to_time(row.get("取得開始時刻")),
-            end_time=_to_time(row.get("取得終了時刻")),
             interval_minutes=_parse_int(row.get("取得間隔（分）")),
             weekday=_parse_weekday(row.get("曜日")),
-            day_of_month=_parse_int(row.get("日付")),
-            month_end=_to_bool(row.get("月末指定")),
+            day_of_month=day_of_month,
+            month_end=month_end,
+            nth_business_day=nth_business_day,
             holiday_policy=_text_or_default(row, "祝日対応", HOLIDAY_SKIP),
             enabled=_to_bool(row.get("有効")),
         )
@@ -235,31 +229,71 @@ class ScheduleRule:
         now: dt.datetime,
         *,
         holidays: set[dt.date] | frozenset[dt.date] = frozenset(),
+        calendar: HolidayCalendar | None = None,
     ) -> bool:
-        """指定時刻にこのスケジュールを実行すべきか判定する。"""
-        if not self.enabled or not self._date_matches(now.date(), holidays):
+        """指定時刻にこのスケジュールを実行すべきか判定する。
+
+        ``calendar`` は「日付」列に「第N営業日」を指定した行の判定にのみ使う
+        （``comken.core.holidays.nth_business_day_of_month`` に渡す）。省略時は
+        ``default_calendar()`` にフォールバックする。``holidays`` 引数（祝日の
+        ``set[date]``）は独立に残しており、「第N営業日」以外での祝日判定に使う。
+
+        ``FREQUENCY_DAILY`` / ``FREQUENCY_WEEKLY`` / ``FREQUENCY_MONTHLY`` で
+        ``run_time is None`` のときは「時刻条件なし」を意味し、日付条件が合えば常に
+        ``True`` を返す（例: 前日以前の確定済みデータのように、いつ取っても同じ内容の
+        レポート用）。``FREQUENCY_HOURLY`` は対象外で、``run_time`` が無いと
+        ``ScheduleIntervalMissingError`` を投げる。
+        """
+        if not self.enabled or not self._date_matches(now.date(), holidays, calendar):
             return False
         if self.frequency == FREQUENCY_HOURLY:
             return self._is_hourly_due(now)
         if self.frequency in {FREQUENCY_DAILY, FREQUENCY_WEEKLY, FREQUENCY_MONTHLY}:
-            return self.run_time is not None and now.time() >= self.run_time
+            return self.run_time is None or now.time() >= self.run_time
         raise UnsupportedScheduleFrequencyError(self.frequency)
 
-    def _date_matches(self, date: dt.date, holidays: set[dt.date] | frozenset[dt.date]) -> bool:
+    def _date_matches(
+        self,
+        date: dt.date,
+        holidays: set[dt.date] | frozenset[dt.date],
+        calendar: HolidayCalendar | None = None,
+    ) -> bool:
         if self.holiday_policy == HOLIDAY_SKIP and date in holidays:
             return False
         if self.weekday is not None and date.weekday() != self.weekday:
             return False
         if self.day_of_month is not None and date.day != self.day_of_month:
             return False
+        if self.nth_business_day is not None:
+            cal = calendar if calendar is not None else default_calendar()
+            try:
+                target = nth_business_day_of_month(
+                    date.replace(day=1), self.nth_business_day, calendar=cal
+                )
+            except BusinessDayNotFoundError:
+                # 「第N営業日」がその月の営業日数を超える設定ミスのケース。
+                # ここで呼び出し元（``download_scheduled``）全体を止めると、
+                # 同じ管理表内の他レポートの取得まで巻き添えになるため、
+                # この日は対象外として扱いログだけ残す
+                logger.warning(
+                    "スケジュール %s の「第%d営業日」指定が %s年%s月の営業日数を"
+                    "超えています。この日は対象外として扱います。",
+                    self.schedule_key,
+                    self.nth_business_day,
+                    date.year,
+                    date.month,
+                )
+                return False
+            if date != target:
+                return False
         return not self.month_end or (date + dt.timedelta(days=1)).month != date.month
 
     def _is_hourly_due(self, now: dt.datetime) -> bool:
-        if self.start_time is None or self.end_time is None or not self.interval_minutes:
+        if self.run_time is None or not self.interval_minutes:
             raise ScheduleIntervalMissingError()
-        if now.time() < self.start_time or now.time() > self.end_time:
+        if now.time() < self.run_time:
             return False
-        start_minutes = self.start_time.hour * 60 + self.start_time.minute
+        start_minutes = self.run_time.hour * 60 + self.run_time.minute
         now_minutes = now.hour * 60 + now.minute
         return (now_minutes - start_minutes) % self.interval_minutes == 0
 
@@ -280,6 +314,29 @@ def _parse_int(value: object) -> int | None:
     if value in (None, ""):
         return None
     return int(str(value).strip())
+
+
+def _parse_day_of_month(value: object) -> tuple[int | None, bool, int | None]:
+    """「日付」列を ``(day_of_month, month_end, nth_business_day)`` に分解する。
+
+    空欄は「指定なし」、数字 1〜31 は ``day_of_month``、文字列「月末」は
+    ``month_end=True``、``"第N営業日"``（N は 1 以上の整数）は
+    ``nth_business_day=N`` として扱う。``_parse_int`` と同じ緩さで解釈し、
+    想定外の値（例: ``"来月"``）は ``int()`` 由来の ``ValueError`` をそのまま
+    投げる（専用のエラー型は用意しない）。
+
+    Returns:
+        3 要素のタプル。常にどれか 1 つだけが立ち、残りは「指定なし」になる。
+    """
+    if value in (None, ""):
+        return None, False, None
+    text = str(value).strip()
+    if text == "月末":
+        return None, True, None
+    match = _NTH_BUSINESS_DAY_PATTERN.match(text)
+    if match:
+        return None, False, int(match.group(1))
+    return _parse_int(text), False, None
 
 
 def _parse_weekday(value: object) -> int | None:
@@ -419,6 +476,7 @@ def create_schedule_template(
 
     _apply_template_font(schedule_sheet, len(rows))
     _apply_schedule_choice_validations(schedule_sheet, len(rows))
+    _apply_schedule_conditional_formatting(schedule_sheet, len(rows))
     _auto_width(schedule_sheet)
     schedule_sheet.freeze_panes = "A2"
 
@@ -482,6 +540,77 @@ def _apply_schedule_choice_validations(sheet: Worksheet, example_count: int) -> 
         sheet.add_data_validation(validation)
 
 
+def _apply_schedule_conditional_formatting(sheet: Worksheet, example_count: int) -> None:
+    """「曜日」「日付」列を、該当しない ``取得頻度`` のときグレーアウトする。
+
+    「曜日」列は ``取得頻度`` が「毎週」でないとき、「日付」列は「毎月」でない
+    ときグレーアウトする。**入力自体は禁止しない**（Excel の条件付き書式は
+    見た目だけで、セル保護やデータ検証とは独立）。VBA を使わない方針を維持する
+    ため、動的な入力制限は行わない。
+
+    列位置は ``SCHEDULE_COLUMN_SPECS`` から「曜日」「日付」を探して動的に
+    求める。``SCHEDULE_HEADERS_FULL`` の並びと ``SCHEDULE_COLUMN_SPECS`` の
+    並びは1対1で対応しているという既存前提に乗っているので、ハードコードの
+    列文字を使わない実装にしている（列の並びが変わっても ``SCHEDULE_HEADERS_FULL``
+    と ``SCHEDULE_COLUMN_SPECS`` を更新するだけで追随できる）。
+
+    ``FormulaRule`` の数式は範囲の左上セル基準の相対参照として書く。``$C{行}``
+    のように列を絶対参照・行を相対参照にすることで、範囲内の各行がそれぞれ
+    同じ行の C 列（取得頻度）を見るようになる（Excel の条件付き書式の標準的な
+    書き方）。
+    """
+    last_row = _FIRST_DATA_ROW + example_count - 1 + _DATA_VALIDATION_ROWS
+    weekday_letter = _resolve_schedule_column("曜日")
+    date_letter = _resolve_schedule_column("日付")
+    frequency_letter = _resolve_schedule_column("取得頻度")
+
+    weekday_range = f"{weekday_letter}{_FIRST_DATA_ROW}:{weekday_letter}{last_row}"
+    date_range = f"{date_letter}{_FIRST_DATA_ROW}:{date_letter}{last_row}"
+    sheet.conditional_formatting.add(
+        weekday_range,
+        FormulaRule(
+            formula=[
+                f'${frequency_letter}{_FIRST_DATA_ROW}<>"{FREQUENCY_WEEKLY}"',
+            ],
+            fill=_UNUSED_COLUMN_FILL,
+            stopIfTrue=False,
+        ),
+    )
+    sheet.conditional_formatting.add(
+        date_range,
+        FormulaRule(
+            formula=[
+                f'${frequency_letter}{_FIRST_DATA_ROW}<>"{FREQUENCY_MONTHLY}"',
+            ],
+            fill=_UNUSED_COLUMN_FILL,
+            stopIfTrue=False,
+        ),
+    )
+
+
+def _resolve_schedule_column(header: str) -> str:
+    """``SCHEDULE_COLUMN_SPECS`` から ``header`` を持つ列の列文字を返す。
+
+    ``SCHEDULE_HEADERS_FULL`` の並びと ``SCHEDULE_COLUMN_SPECS`` の並びは1対1で
+    対応するという既存前提に基づき、``SCHEDULE_HEADERS_FULL`` 側でも同じ
+    インデックスを返す。``SCHEDULE_HEADERS_FULL.index(header) + 1`` を直接
+    書いても同じだが、両者の順序が食い違っているときに気づけるよう一元化する。
+    """
+    for offset, spec in enumerate(SCHEDULE_COLUMN_SPECS, start=1):
+        if spec.header == header:
+            spec_index = offset
+            break
+    else:
+        raise ValueError(f"{header} は SCHEDULE_COLUMN_SPECS に存在しません")
+    headers_index = SCHEDULE_HEADERS_FULL.index(header) + 1
+    if spec_index != headers_index:
+        raise ValueError(
+            f"{header} の位置が SCHEDULE_COLUMN_SPECS と SCHEDULE_HEADERS_FULL で"
+            f"一致しません（{spec_index} vs {headers_index}）"
+        )
+    return get_column_letter(spec_index)
+
+
 def _append_schedule_guide(book: object) -> None:
     """``"記入方法"`` シートに、スケジュール列の説明を追記する。
 
@@ -542,13 +671,15 @@ def _guide_note_text(spec: ColumnSpec) -> str:
     if spec.choices:
         return f"「{'」か「'.join(spec.choices)}」と書いてください"
     if spec.header == "取得時刻":
-        return "HH:MM 形式で書いてください（例: 09:00）"
-    if spec.header in {"取得開始時刻", "取得終了時刻"}:
-        return "HH:MM 形式で書いてください"
+        return (
+            "HH:MM 形式で書いてください（例: 09:00）。"
+            "「毎日」「毎週」「毎月」で時刻を問わず1日のうちいつでも取得してよい"
+            "場合は空欄にできます（「1時間ごと」では必須）"
+        )
     if spec.header == "取得間隔（分）":
         return "数字だけで書いてください（例: 60）"
     if spec.header == "日付":
-        return "1〜31 の数字で書いてください"
+        return "1〜31の数字、月末なら「月末」、第N営業日なら「第2営業日」のように書いてください"
     return "空欄にできます"
 
 

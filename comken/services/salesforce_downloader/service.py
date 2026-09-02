@@ -407,7 +407,9 @@ def _matched_schedule_key(
       取れていなければ」取得（後方互換）
     - スケジュール行がある場合、いずれかの行が ``is_due()`` True で、かつ
       ``schedule_succeeded_today()`` が False（=今日まだ成功していない）なら取得。
-      複数の行が True を返す場合は最初の一致行のキーを採用
+      複数の行が True を返す場合は取得時刻が一番遅い行のキーを採用（それより早い
+      時刻の行は無視する）。``run_time is None`` の行は最も早い扱いとし、具体的な
+      時刻を持つ行がある限りそちらを優先する
     - いずれの行も ``is_due()`` False なら False, ""
     - いずれかの行が ``is_due()`` True でも、今日すでに成功済みなら False, ""
     """
@@ -416,12 +418,18 @@ def _matched_schedule_key(
         # スケジュール行が無いレポート: ``downloaded_today()`` で 1 日 1 回までに
         # 制限する（後方互換）。戻り値のキーは空文字
         return not history.downloaded_today(HISTORY_PATH, entry.key), ""
-    for rule in rules:
-        if rule.is_due(current, holidays=holidays) and not history.schedule_succeeded_today(
-            HISTORY_PATH, rule.schedule_key
-        ):
-            return True, rule.schedule_key
-    return False, ""
+    due_rules = [
+        rule
+        for rule in rules
+        if rule.is_due(current, holidays=holidays)
+        and not history.schedule_succeeded_today(HISTORY_PATH, rule.schedule_key)
+    ]
+    if not due_rules:
+        return False, ""
+    # ``run_time is None`` の行は具体的な時刻より優先度が低い（時刻条件なしの行で
+    # 取得すると、後の時刻の行を再評価する余地がなくなるため）。
+    latest = max(due_rules, key=lambda rule: rule.run_time or dt.time.min)
+    return True, latest.schedule_key
 
 
 def _todays_holiday_set(current: dt.datetime) -> set[dt.date]:
