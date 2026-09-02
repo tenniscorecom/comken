@@ -11,7 +11,7 @@ from openpyxl import load_workbook
 
 class TestBasicExamples:
     def test_csv_read(self, tmp_path, monkeypatch):
-        from examples.basics import csv_read
+        from examples import csv_read
 
         csv_path = tmp_path / "受注明細.csv"
         monkeypatch.setattr(csv_read, "CSV_PATH", csv_path)
@@ -21,7 +21,7 @@ class TestBasicExamples:
         assert "株式会社アルファ" in csv_path.read_text(encoding="utf-8")
 
     def test_csv_write(self, tmp_path, monkeypatch):
-        from examples.basics import csv_write
+        from examples import csv_write
 
         output_path = tmp_path / "作業記録.csv"
         monkeypatch.setattr(csv_write, "OUTPUT_PATH", output_path)
@@ -31,7 +31,7 @@ class TestBasicExamples:
         assert len(output_path.read_text(encoding="utf-8-sig").splitlines()) == 5
 
     def test_excel_read(self, tmp_path, monkeypatch):
-        from examples.basics import excel_read
+        from examples import excel_read
 
         excel_path = tmp_path / "在庫一覧.xlsx"
         monkeypatch.setattr(excel_read, "EXCEL_PATH", excel_path)
@@ -40,7 +40,7 @@ class TestBasicExamples:
         assert load_workbook(excel_path, read_only=True)["PY_在庫"].max_row == 3
 
     def test_excel_write(self, tmp_path, monkeypatch):
-        from examples.basics import excel_write
+        from examples import excel_write
 
         output_path = tmp_path / "売上帳票.xlsx"
         monkeypatch.setattr(excel_write, "OUTPUT_PATH", output_path)
@@ -51,7 +51,7 @@ class TestBasicExamples:
         assert worksheet["D4"].value == 4300
 
     def test_column_mapping(self, tmp_path, monkeypatch):
-        from examples.basics import column_mapping
+        from examples import column_mapping
 
         monkeypatch.setattr(column_mapping, "OUTPUT_FOLDER", tmp_path)
         monkeypatch.setattr(column_mapping, "CONFIG_PATH", tmp_path / "config.ini")
@@ -64,7 +64,7 @@ class TestBasicExamples:
         assert worksheet["C2"].value == 12000
 
     def test_state(self, tmp_path, monkeypatch):
-        from examples.basics import state
+        from examples import state
 
         state_path = tmp_path / "state.ini"
         monkeypatch.setattr(state, "STATE_PATH", state_path)
@@ -74,13 +74,13 @@ class TestBasicExamples:
         assert "1002" in state_path.read_text(encoding="utf-8")
 
     def test_logger(self, tmp_path, monkeypatch):
-        from examples.basics import logger
+        from examples import logger
 
         monkeypatch.setattr(logger, "LOG_FOLDER", tmp_path / "logs")
         logger.main()
 
     def test_runtime(self, tmp_path, monkeypatch):
-        from examples.basics import runtime
+        from examples import runtime
 
         monkeypatch.setattr(runtime, "OUTPUT_FOLDER", tmp_path)
         monkeypatch.setattr(runtime, "SOURCE_PATH", tmp_path / "source.txt")
@@ -92,7 +92,7 @@ class TestBasicExamples:
         assert runtime.ACTUAL_PATH.exists()
 
     def test_files(self, tmp_path, monkeypatch):
-        from examples.basics import files
+        from examples import files
 
         monkeypatch.setattr(files, "OUTPUT_FOLDER", tmp_path)
         monkeypatch.setattr(files, "ARCHIVE_PATH", tmp_path / "日次資料.zip")
@@ -102,12 +102,12 @@ class TestBasicExamples:
         assert len(list((tmp_path / "展開").glob("*.csv"))) == 2
 
     def test_utils(self):
-        from examples.basics import utils
+        from examples import utils
 
         utils.main()
 
     def test_constants(self, tmp_path, monkeypatch):
-        from examples.basics import constants
+        from examples import constants
 
         monkeypatch.setattr(constants, "OUTPUT_FOLDER", tmp_path)
         monkeypatch.setattr(constants, "CSV_PATH", tmp_path / "名簿.csv")
@@ -116,7 +116,7 @@ class TestBasicExamples:
         assert constants.CSV_PATH.exists()
 
     def test_exceptions(self, tmp_path, monkeypatch):
-        from examples.basics import exceptions
+        from examples import exceptions
 
         monkeypatch.setattr(exceptions, "CSV_PATH", tmp_path / "例外確認.csv")
         exceptions.main()
@@ -125,7 +125,7 @@ class TestBasicExamples:
 class TestCsvToExcelReport:
     def test_creates_report(self, tmp_path, monkeypatch):
         """CSV を読んで Excel レポートを作る例が xlsx を出力する。"""
-        from examples.csv_to_excel_report import run
+        from examples.advanced.csv_to_excel_report import run
 
         monkeypatch.setattr(run, "OUTPUT_FOLDER", tmp_path)
         run.main()
@@ -142,7 +142,7 @@ class TestExcelKeyTransfer:
     @pytest.fixture
     def transferred(self, tmp_path, monkeypatch):
         """サンプルを実行し、転記後のシートを {注文番号: 行} で返す。"""
-        from examples.excel_key_transfer import run
+        from examples.advanced.excel_key_transfer import run
 
         monkeypatch.setattr(run, "OUTPUT_FOLDER", tmp_path)
         monkeypatch.setattr(run, "MASTER_CSV", tmp_path / "master.csv")
@@ -172,7 +172,7 @@ class TestExcelKeyTransfer:
 class TestCsvDiffReport:
     def test_detects_added_removed_changed(self, tmp_path, monkeypatch):
         """差分レポートの例が追加・削除・変更を検出して xlsx を出す。"""
-        from examples.csv_diff_report import run
+        from examples.advanced.csv_diff_report import run
 
         monkeypatch.setattr(run, "OUTPUT_FOLDER", tmp_path)
         monkeypatch.setattr(run, "YESTERDAY_CSV", tmp_path / "yesterday.csv")
@@ -192,7 +192,7 @@ class TestCsvDiffReport:
 class TestCsvDateMove:
     def test_moves_only_file_with_matching_date(self, tmp_path):
         """指定列とファイル名の日付が一致する CSV だけを移動する。"""
-        from examples.csv_date_move.run import move_matching_files
+        from examples.advanced.csv_date_move.run import move_matching_files
 
         input_folder = tmp_path / "input"
         output_folder = tmp_path / "output"
@@ -218,7 +218,7 @@ class TestTableTransferDesign:
         read にしか無い行は新規追加、write にしか無い行は「転記元に無し」と
         印が付けられる。
         """
-        from examples.table_transfer_design import run
+        from examples.advanced.table_transfer_design import run
 
         monkeypatch.setattr(run, "OUTPUT_FOLDER", tmp_path)
         monkeypatch.setattr(run, "SOURCE_CSV", tmp_path / "受注.csv")

@@ -3,7 +3,7 @@
 事前準備:
     Classic Outlook にサインインしておく。
 実行:
-    python -m examples.outlook_inbox.run
+    python -m examples.advanced.outlook_inbox.run
 """
 
 import logging

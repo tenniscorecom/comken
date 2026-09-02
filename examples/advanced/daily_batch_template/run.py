@@ -10,7 +10,7 @@
     フォルダパス等を環境に合わせて書き換える。
 
 実行方法:
-    リポジトリのルートで python -m examples.daily_batch_template.run
+    リポジトリのルートで python -m examples.advanced.daily_batch_template.run
     （実プロジェクトに移すときは main.py にリネームし、
      templates/新規プロジェクト/実行.bat を組み合わせる）
 """

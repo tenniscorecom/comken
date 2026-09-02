@@ -4,7 +4,7 @@
 ヘッダー名で安全に値を読む方法、セル位置で読む方法、検索・抽出・索引・グループ化を示す。
 
 実行方法:
-    リポジトリのルートで python -m examples.basics.csv_read
+    リポジトリのルートで python -m examples.csv_read
 """
 
 import logging

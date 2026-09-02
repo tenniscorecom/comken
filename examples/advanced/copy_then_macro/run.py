@@ -19,7 +19,7 @@ r"""サンプル: bat でやっていた「コピー → マクロ → 配る」
     マクロ入りブック（.xlsm）は BOOK_NAME の場所に置いておく。
 
 実行方法:
-    リポジトリのルートで python -m examples.copy_then_macro.run
+    リポジトリのルートで python -m examples.advanced.copy_then_macro.run
 """
 
 import logging

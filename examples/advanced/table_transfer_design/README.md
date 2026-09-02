@@ -3,7 +3,7 @@
 保存先を持たない `Table` と、入力を変更せず新しい `Table` を返す `Transfer` の例です。
 
 ```text
-python -m examples.table_transfer_design.run
+python -m examples.advanced.table_transfer_design.run
 ```
 
 `mapping` は「転記元の列名 → 転記先の列名」の dict。

@@ -4,7 +4,7 @@
 表の書き込み、書式、列幅、ヘッダー固定、構造化テーブル化までを示す。
 
 実行方法:
-    リポジトリのルートで python -m examples.basics.excel_write
+    リポジトリのルートで python -m examples.excel_write
 """
 
 import logging

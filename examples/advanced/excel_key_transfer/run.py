@@ -8,7 +8,7 @@
     注文明細（注文番号 → 明細が複数） 1対多   group_by()  → SUMIF に相当
 
 実行方法:
-    リポジトリのルートで python -m examples.excel_key_transfer.run
+    リポジトリのルートで python -m examples.advanced.excel_key_transfer.run
 
 実行の流れ（外部システム・ネット接続は不要）:
     1. サンプルデータを output/ に生成する（注文マスタ.csv・注文明細.csv・請求一覧.xlsx）

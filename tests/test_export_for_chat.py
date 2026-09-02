@@ -81,27 +81,29 @@ def test_concatenate_files_wraps_each_file_with_header() -> None:
     assert text.count("# ===== FILE:") == len(files)
 
 
-def test_bundle_text_has_four_chapters_in_order() -> None:
-    """バンドル資料が 4 章をこの順で持っている。"""
+def test_bundle_text_has_six_chapters_in_order() -> None:
+    """バンドル資料が 6 章をこの順で持っている。"""
     text = export_for_chat._bundle_text()
 
-    # ヘッダ → 章 1 → 章 2 → 章 3 → 章 4 の順に出現する
+    # ヘッダ → 章 1 → 章 2 → 章 3 → 章 4 → 章 5 → 章 6 の順に出現する
     header_idx = text.find("# comken_bundle.md")
-    api_idx = text.find("# 1. 公開 API 索引")
-    examples_idx = text.find("# 2. 動く実例")
-    impl_idx = text.find("# 3. 実装全文")
-    errors_idx = text.find("# 4. エラー対応表")
+    conventions_idx = text.find("# 1. コーディング規約")
+    api_idx = text.find("# 2. 公開 API 索引")
+    examples_idx = text.find("# 3. 動く実例")
+    impl_idx = text.find("# 4. 実装全文")
+    errors_idx = text.find("# 5. エラー対応表")
+    spec_idx = text.find("# 6. 設計判断")
 
     assert header_idx >= 0
-    assert header_idx < api_idx < examples_idx < impl_idx < errors_idx
+    assert header_idx < conventions_idx < api_idx < examples_idx < impl_idx < errors_idx < spec_idx
 
 
 def test_bundle_text_includes_examples_files() -> None:
     """``examples/`` の代表ファイルがバンドルに含まれている。"""
     text = export_for_chat._bundle_text()
 
-    # 代表として ``examples/table_transfer_design/README.md`` が含まれる
-    assert "examples/table_transfer_design/README.md" in text
+    # 代表として ``examples/advanced/table_transfer_design/README.md`` が含まれる
+    assert "examples/advanced/table_transfer_design/README.md" in text
 
 
 def test_bundle_text_includes_all_comken_py_files() -> None:

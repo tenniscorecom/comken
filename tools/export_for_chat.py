@@ -548,16 +548,23 @@ def _verify_internal_library_placeholder() -> None:
 def _bundle_text() -> str:
     """社外 AI へ貼るための 1 ファイル資料を組み立てる。
 
-    並び順は **ヘッダ → 公開 API 索引 → 動く実例 (examples/) → 実装全文
-    (comken/) → エラー対応表**。先頭に実装全文を置くと ``_`` 始まりの内部
-    関数を公開 API と区別せずに使ったサンプルが出やすくなるため、索引で
-    存在する名前を固定してから実例で正しい書き方を見せ、最後に全文で細部を
-    裏取る構成にする。
+    並び順は **ヘッダ → コーディング規約 → 公開 API 索引 → 動く実例
+    (examples/) → 実装全文 (comken/) → エラー対応表 → 設計判断**。
+    規約を 1 章目に置くのは、社外 AI に規約（命名・型ヒント・定数・例外・
+    ロギング）を最初に読ませて、生成コードの表記ブレや規約違反を防ぐため。
+    その後は索引で公開 API を固定してから実例で正しい書き方を見せ、最後に
+    全文とエラー表・仕様書で細部を裏取る構成にする。
 
     社内ライブラリ仮名が保たれているかは ``_verify_internal_library_placeholder``
     で先に検証する（生成途中で発見しても中途半端なファイルが残るのを避ける）。
     """
     _verify_internal_library_placeholder()
+
+    conventions_path = ROOT / "docs" / "開発" / "CONVENTIONS.md"
+    spec_path = ROOT / "docs" / "開発" / "仕様書.md"
+    conventions_text = conventions_path.read_text(encoding="utf-8").rstrip()
+    spec_text = spec_path.read_text(encoding="utf-8").rstrip()
+    spec_line_count = len(spec_text.splitlines())
 
     api_text = _api_text()
     errors_text = _errors_generated_text()
@@ -582,21 +589,34 @@ def _bundle_text() -> str:
 
     parts: list[str] = []
     parts.append(
-        _bundle_header(api_text, package_files, examples_files, impl_line_count, impl_byte_count)
+        _bundle_header(
+            api_text,
+            package_files,
+            examples_files,
+            impl_line_count,
+            impl_byte_count,
+            spec_line_count,
+        )
     )
     parts.append("\n---\n\n")
-    parts.append("# 1. 公開 API 索引\n")
+    parts.append("# 1. コーディング規約（docs/開発/CONVENTIONS.md）\n")
+    parts.append(conventions_text)
+    parts.append("\n---\n\n")
+    parts.append("# 2. 公開 API 索引\n")
     parts.append(api_text.rstrip())
     parts.append("\n---\n\n")
     if examples_chunks:
-        parts.append("# 2. 動く実例（examples/）\n")
+        parts.append("# 3. 動く実例（examples/）\n")
         parts.extend(examples_chunks)
         parts.append("\n---\n\n")
-    parts.append("# 3. 実装全文（comken/）\n")
+    parts.append("# 4. 実装全文（comken/）\n")
     parts.append(impl_text)
     parts.append("\n---\n\n")
-    parts.append("# 4. エラー対応表（docs/ERRORS.md）\n")
+    parts.append("# 5. エラー対応表（docs/ERRORS.md）\n")
     parts.append(errors_text.rstrip())
+    parts.append("\n---\n\n")
+    parts.append("# 6. 設計判断（docs/開発/仕様書.md）\n")
+    parts.append(spec_text)
     parts.append("\n")
     return "".join(parts)
 
@@ -607,6 +627,7 @@ def _bundle_header(
     examples_files: list[Path],
     impl_line_count: int,
     impl_byte_count: int,
+    spec_line_count: int,
 ) -> str:
     """``comken_bundle.md`` の冒頭に置く「このファイルの読み方」を組み立てる。"""
     public_api_names = sum(
@@ -618,21 +639,29 @@ def _bundle_header(
         "## このファイルの読み方",
         "",
         "- comken は業務自動化の共通ライブラリです。",
-        "- このファイル 1 つだけで資料が完結します（API 索引 → 実例 → 実装全文 → エラー対応表）。",
-        "- 公開 API は **第 1 章** の索引に載っているものだけを使ってください。 ``_`` 始まりは"
-        " 内部実装なので使わないこと。",
-        "- 第 2 章は **動く実例** です。サンプルコードを書くときはここを参照してください。",
-        "- 第 3 章は実装全文です。索引に無い名前を勝手に使う前にここで実在を確かめてください。",
-        "- 第 4 章はエラー対応表です。利用者が読む画面の説明と、その例外が送出される条件を"
+        "- このファイル 1 つだけで資料が完結します（コーディング規約 → API 索引 → 実例"
+        " → 実装全文 → エラー対応表 → 設計判断）。",
+        "- **第 1 章のコーディング規約を必ず先に読んでください。** 命名・型ヒント・"
+        "定数・例外・ロギングの書き方はここで固定されています。ここを読まずに書いた"
+        "コードは規約違反で修正対象になります。",
+        "- 公開 API は **第 2 章** の索引に載っているものだけを使ってください。"
+        "``_`` 始まりは内部実装なので使わないこと。",
+        "- 第 3 章は **動く実例** です。サンプルコードを書くときはここを参照してください。",
+        "- 第 4 章は実装全文です。索引に無い名前を勝手に使う前にここで実在を確かめてください。",
+        "- 第 5 章はエラー対応表です。利用者が読む画面の説明と、その例外が送出される条件を"
         " ここで確認できます。",
+        "- 第 6 章は設計判断（仕様書）です。「なぜその設計にしたか」を知りたいときはここを"
+        " 参照してください。",
         "",
         "## 中身のサマリ",
         "",
+        "- コーディング規約（CONVENTIONS.md）: あり",
         f"- 公開 API 索引の名前数: {public_api_names}",
         f"- 動く実例（examples/）のファイル数: {len(examples_files)}",
         f"- 実装全文（comken/）の .py ファイル数: {len(package_files)}",
         f"- 実装全文（comken/）の総行数: {impl_line_count:,}",
         f"- 実装全文（comken/）の総バイト数: {impl_byte_count:,}",
+        f"- 設計判断（仕様書.md）の行数: {spec_line_count:,}",
         "",
         "再生成: `python tools/export_for_chat.py`",
         "",

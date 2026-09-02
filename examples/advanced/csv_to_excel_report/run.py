@@ -6,7 +6,7 @@ CSV の読み込み・絞り込み・集計（CSV + Table）と、
 Excel レポートの作成・見た目調整（Excel + Sheet）を通しで行う。
 
 実行方法:
-    リポジトリのルートで python -m examples.csv_to_excel_report.run
+    リポジトリのルートで python -m examples.advanced.csv_to_excel_report.run
 
 - 入力: このフォルダの data/売上明細.csv（同梱。外部システム・ネット接続は不要）
 - 出力: このフォルダの output/売上レポート_YYYYMMDD.xlsx

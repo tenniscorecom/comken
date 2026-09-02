@@ -2,7 +2,7 @@
 サンプル: CSV でファイルを新規作成し、行を追記する
 
 実行方法:
-    リポジトリのルートで python -m examples.basics.csv_write
+    リポジトリのルートで python -m examples.csv_write
 """
 
 import logging

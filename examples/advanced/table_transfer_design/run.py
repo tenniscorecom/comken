@@ -1,6 +1,6 @@
 """サンプル: Transfer の API（matched_rows / unmatched / apply_mapping / result）の使い方。
 
-`Table / Transfer の設計サンプル` として、基本サンプル（`basics/column_mapping.py`）
+`Table / Transfer の設計サンプル` として、基本サンプル（`examples/column_mapping.py`）
 との違いを示す。 このサンプルでは次の 4 つを取り上げる:
 
 - ``matched_rows()`` の ``for`` ループ内で ``continue`` して、特定条件の行を

@@ -5,7 +5,7 @@
     config.ini.example を config.ini にコピーし、フォルダ・日付列名・書式等を書き換える。
 
 実行方法:
-    リポジトリのルートで python -m examples.csv_date_move.run
+    リポジトリのルートで python -m examples.advanced.csv_date_move.run
 """
 
 import datetime

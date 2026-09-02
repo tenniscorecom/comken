@@ -5,7 +5,7 @@
 diff_rows で追加・削除・変更を検出し、区分ごとに色分けした Excel レポートにまとめる。
 
 実行方法:
-    リポジトリのルートで python -m examples.csv_diff_report.run
+    リポジトリのルートで python -m examples.advanced.csv_diff_report.run
 
 実行の流れ（外部システム・ネット接続は不要）:
     1. サンプルデータを output/ に生成する（名簿_昨日.csv と 名簿_今日.csv）

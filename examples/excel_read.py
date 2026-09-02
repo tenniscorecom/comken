@@ -4,7 +4,7 @@
 辞書・タプル・ジェネレーターで表を読む方法を、生成した Excel で示す。
 
 実行方法:
-    リポジトリのルートで python -m examples.basics.excel_read
+    リポジトリのルートで python -m examples.excel_read
 """
 
 import logging

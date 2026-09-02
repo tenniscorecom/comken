@@ -1,6 +1,6 @@
 # Excel キー突合転記
 
-`python -m examples.excel_key_transfer.run` で、CSV をキー検索して Excel へ転記する例を実行する。
+`python -m examples.advanced.excel_key_transfer.run` で、CSV をキー検索して Excel へ転記する例を実行する。
 CSV と Excel をそれぞれ `Table` として読み、
 `Transfer(read, write, mapping, read_key=..., write_key=...)` を作り、
 `matched_rows()` / `transfer_rows()` でループしながら書き換える。
