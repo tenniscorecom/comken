@@ -1,6 +1,5 @@
 """新しい環境別・ローカルログ設定のテスト。"""
 
-import datetime
 import importlib
 import logging
 import os
@@ -16,8 +15,8 @@ from comken.core.logger import Backoffice, Intranet, setup_local_logging, setup_
 from comken.core.logger.environment import (
     CONSOLE_HANDLER_NAME,
     ENVIRONMENT_HANDLER_NAME,
+    ETC_FOLDER_NAME,
     LOCAL_HANDLER_NAME,
-    _build_log_filename,
     _format_external_handlers,
 )
 from comken.core.logger.environment import (
@@ -32,19 +31,6 @@ from comken.exceptions import (
 )
 
 local_module = importlib.import_module("comken.core.logger.local")
-
-# テスト全体で固定する now()/today()。ファイル名にはマイクロ秒と
-# 日付フォルダ名（today().isoformat()）の両方が入るため、両方を
-# 同じ値に揃えておかないとテストの assertion が通らない。
-# ``strftime()`` はタイムゾーンに依存しないので、tzinfo を ``UTC`` に
-# 固定して ``DTZ001`` を満たす（テスト用途の固定値で、実環境の
-# タイムゾーンでも strftime の結果は変わらない）。
-_FIXED_NOW = datetime.datetime(
-    2026, 8, 21, 10, 30, 45, 123456, tzinfo=datetime.UTC
-)
-_FIXED_TODAY = date(2026, 8, 21)
-# 固定値を 1 か所にまとめて typo を防ぐ。
-_FIXED_LOG_FILENAME = f"{_FIXED_NOW.strftime('%Y%m%d_%H%M%S_%f')}_{os.getpid()}.log"
 
 
 class _LogCapture(logging.Handler):
@@ -75,30 +61,19 @@ def isolated_logging():
         root_logger.setLevel(original_level)
 
 
-def _prepare_site(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """LOG_ROOT を一時ディレクトリに向け、now()/today() を固定する。
-
-    フォルダ名は実行端末のホスト名（小文字） から自動で決まるため、
-    テスト側で用意する必要はない。各テストで必要なら
-    ``tmp_path / socket.gethostname().lower() / "python" / "2026-08-21"``
-    のように組み立てる。ファイル名は ``_FIXED_LOG_FILENAME`` になる。
-    """
+def _prepare_site(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    folder_name: str = "test-folder",
+) -> Path:
+    """LOG_ROOT と LOG_FOLDER_NAMES を一時ディレクトリへ向ける。"""
     logging.getLogger().handlers.clear()
+    hostname = socket.gethostname().lower()
     for site in (Backoffice, Intranet):
         monkeypatch.setattr(site, "LOG_ROOT", str(tmp_path))
-    monkeypatch.setattr(
-        "comken.core.logger.environment.today",
-        lambda: _FIXED_TODAY,
-    )
-    monkeypatch.setattr(
-        "comken.core.logger.environment.now",
-        lambda: _FIXED_NOW,
-    )
-
-
-def _environment_log_dir(tmp_path: Path) -> Path:
-    """hostname/python/{today()} の構造で出来上がるログディレクトリの絶対パス。"""
-    return tmp_path / socket.gethostname().lower() / "python" / _FIXED_TODAY.isoformat()
+        monkeypatch.setattr(site, "LOG_FOLDER_NAMES", {hostname: folder_name})
+    monkeypatch.setattr("comken.core.logger.environment.today", lambda: date(2026, 8, 21))
+    return tmp_path / folder_name
 
 
 class TestSetup:
@@ -106,18 +81,19 @@ class TestSetup:
         assert logger.setup_logging is environment_setup_logging
 
     def test_backoffice_adds_root_handlers(self, isolated_logging, tmp_path, monkeypatch):
-        _prepare_site(monkeypatch, tmp_path)
+        log_dir = _prepare_site(monkeypatch, tmp_path)
         setup_logging(Backoffice)
         assert len(isolated_logging.handlers) == 2
         assert {handler.name for handler in isolated_logging.handlers} == {
             CONSOLE_HANDLER_NAME,
             ENVIRONMENT_HANDLER_NAME,
         }
-        # ファイル名が動的なので、フォルダを作ってファイルが 1 件だけ存在することを確認する。
-        log_dir = _environment_log_dir(tmp_path)
-        assert log_dir.is_dir()
-        files = list(log_dir.glob("*.log"))
-        assert len(files) == 1
+        assert (log_dir / "backoffice-2026-08-21.log").exists()
+
+    def test_intranet_uses_its_name(self, isolated_logging, tmp_path, monkeypatch):
+        log_dir = _prepare_site(monkeypatch, tmp_path)
+        setup_logging(Intranet)
+        assert (log_dir / "intranet-2026-08-21.log").exists()
 
     def test_second_call_raises(self, isolated_logging, tmp_path, monkeypatch):
         _prepare_site(monkeypatch, tmp_path)
@@ -135,7 +111,7 @@ class TestSetup:
         isolated_logging.handlers.clear()
 
         class OwnerMissing(LoggerSite):
-            pass
+            NAME = "missing"
 
         with pytest.raises(SiteOwnerRequiredError):
             setup_logging(OwnerMissing)
@@ -146,6 +122,11 @@ class TestSetup:
         """LOG_ROOT が空のときは、ファイルを作る前に例外で止まる。"""
         logging.getLogger().handlers.clear()
         monkeypatch.setattr(Backoffice, "LOG_ROOT", "")
+        monkeypatch.setattr(
+            Backoffice,
+            "LOG_FOLDER_NAMES",
+            {socket.gethostname().lower(): "test-folder"},
+        )
 
         with pytest.raises(LogRootNotConfiguredError):
             setup_logging(Backoffice)
@@ -154,21 +135,73 @@ class TestSetup:
         assert list(tmp_path.iterdir()) == []
 
     def test_output_includes_process_id(self, isolated_logging, tmp_path, monkeypatch):
-        """ログ本文ではなくファイル名に PID が入ることで同時実行プロセスを見分けられる。"""
         _prepare_site(monkeypatch, tmp_path)
         setup_logging(Backoffice)
+        logging.getLogger("sample").info("done")
         file_handler = next(
             handler
             for handler in isolated_logging.handlers
             if isinstance(handler, logging.FileHandler)
         )
         file_handler.flush()
-        log_path = Path(file_handler.baseFilename)
-        assert log_path.name == _FIXED_LOG_FILENAME
-        # ファイル名に PID が入っており、ログ本文には PID が含まれない（新設計）。
-        assert f"_{os.getpid()}.log" in log_path.name
-        text = log_path.read_text(encoding="utf-8")
-        assert f"[pid={os.getpid()}]" not in text
+        text = Path(file_handler.baseFilename).read_text(encoding="utf-8")
+        assert f"[pid={os.getpid()}]" in text
+
+    def test_hostname_lookup_is_case_insensitive(self, isolated_logging, tmp_path, monkeypatch):
+        """LOG_FOLDER_NAMES のキーと取得側ホスト名の大小が違っても照合される。"""
+        logging.getLogger().handlers.clear()
+        mixed_case = "MixedCase-Host-01"
+        # 取得側は mixed case（大小が混在）として固定する。
+        monkeypatch.setattr(
+            "comken.core.logger.environment.socket.gethostname",
+            lambda: mixed_case,
+        )
+        # 登録側はわざと違うケース（upper）で書く。
+        monkeypatch.setattr(Backoffice, "LOG_ROOT", str(tmp_path))
+        monkeypatch.setattr(
+            Backoffice,
+            "LOG_FOLDER_NAMES",
+            {mixed_case.upper(): "test-folder"},
+        )
+        monkeypatch.setattr("comken.core.logger.environment.today", lambda: date(2026, 8, 21))
+
+        setup_logging(Backoffice)
+
+        assert (tmp_path / "test-folder" / "backoffice-2026-08-21.log").exists()
+
+    def test_unregistered_host_falls_back_to_etc(self, isolated_logging, tmp_path, monkeypatch):
+        """LOG_FOLDER_NAMES に存在しない端末では LOG_ROOT/_etc_ へ書かれる。"""
+        _prepare_site(monkeypatch, tmp_path, folder_name="real-folder")
+        # 登録側のキーを実際のホスト名（小文字）と別の文字列へ差し替え。
+        monkeypatch.setattr(Backoffice, "LOG_FOLDER_NAMES", {"no-such-host": "real-folder"})
+
+        setup_logging(Backoffice)
+
+        assert (tmp_path / ETC_FOLDER_NAME / "backoffice-2026-08-21.log").exists()
+        # 登録したフォルダには書かれない。
+        assert not (tmp_path / "real-folder").exists()
+
+    def test_value_with_path_separator_falls_back_to_etc(
+        self, isolated_logging, tmp_path, monkeypatch
+    ):
+        """LOG_FOLDER_NAMES の値にパス区切りが含まれている場合は未登録として扱う。
+
+        ``Path(LOG_ROOT) / value`` の ``/`` 演算子は、value が絶対パスのときに
+        ``LOG_ROOT`` を捨てて value 側へ書き込む罠がある。未登録扱いにすることで、
+        LOG_ROOT 配下にだけ書かれることを保証する。
+        """
+        _prepare_site(monkeypatch, tmp_path, folder_name="normal-folder")
+        hostname = socket.gethostname().lower()
+        # 絶対パスが書かれていたケース（Windows 形式）。
+        monkeypatch.setattr(
+            Backoffice,
+            "LOG_FOLDER_NAMES",
+            {hostname: r"C:\wrong\place"},
+        )
+        setup_logging(Backoffice)
+        # 通常フォルダと C:\wrong\place は作らず、_etc_ に書かれる。
+        assert not (tmp_path / "normal-folder").exists()
+        assert (tmp_path / ETC_FOLDER_NAME / "backoffice-2026-08-21.log").exists()
 
     def test_writes_japanese_as_utf8(self, isolated_logging, tmp_path, monkeypatch):
         _prepare_site(monkeypatch, tmp_path)
@@ -188,31 +221,14 @@ class TestLocal:
         assert logger.setup_local_logging is local_module.setup_local_logging
 
     def _prepare(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-        """setup_local_logging() 用: project_dir() 起点 + now()/today() を固定する。
-
-        now()/today() は ``_build_log_filename()`` と local.py の保存先組み立てが
-        それぞれ参照するため、environment 側（``now``）と local 側（``today``）の両方を
-        固定する必要がある（同じ関数を再 import した別名になっている）。
-        """
         logging.getLogger().handlers.clear()
         monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
-        monkeypatch.setattr(local_module, "today", lambda: _FIXED_TODAY)
-        monkeypatch.setattr(
-            "comken.core.logger.environment.today",
-            lambda: _FIXED_TODAY,
-        )
-        monkeypatch.setattr(
-            "comken.core.logger.environment.now",
-            lambda: _FIXED_NOW,
-        )
+        monkeypatch.setattr(local_module, "today", lambda: date(2026, 8, 21))
 
     def test_default_path(self, isolated_logging, tmp_path, monkeypatch):
         self._prepare(monkeypatch, tmp_path)
         setup_local_logging()
-        log_dir = tmp_path / "logs" / _FIXED_TODAY.isoformat()
-        assert log_dir.is_dir()
-        files = list(log_dir.glob("*.log"))
-        assert len(files) == 1
+        assert (tmp_path / "logs" / "local-2026-08-21.log").exists()
         assert {handler.name for handler in isolated_logging.handlers} == {
             CONSOLE_HANDLER_NAME,
             LOCAL_HANDLER_NAME,
@@ -257,19 +273,15 @@ class TestLocal:
         self._prepare(monkeypatch, tmp_path)
         custom_path = tmp_path / "custom" / "logs"
         setup_local_logging(path=custom_path)
-        log_dir = custom_path / _FIXED_TODAY.isoformat()
-        assert log_dir.is_dir()
-        assert len(list(log_dir.glob("*.log"))) == 1
+        assert (custom_path / "local-2026-08-21.log").exists()
 
     def test_relative_path_uses_project_dir(self, isolated_logging, tmp_path, monkeypatch):
         self._prepare(monkeypatch, tmp_path)
         setup_local_logging(path="custom-logs")
-        log_dir = tmp_path / "custom-logs" / _FIXED_TODAY.isoformat()
-        assert log_dir.is_dir()
-        assert len(list(log_dir.glob("*.log"))) == 1
+        assert (tmp_path / "custom-logs" / "local-2026-08-21.log").exists()
 
     def test_after_setup_reuses_console(self, isolated_logging, tmp_path, monkeypatch):
-        _prepare_site(monkeypatch, tmp_path)
+        log_dir = _prepare_site(monkeypatch, tmp_path)
         setup_logging(Backoffice)
         console_handler = next(
             handler
@@ -279,15 +291,7 @@ class TestLocal:
         )
 
         monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
-        monkeypatch.setattr(local_module, "today", lambda: _FIXED_TODAY)
-        monkeypatch.setattr(
-            "comken.core.logger.environment.today",
-            lambda: _FIXED_TODAY,
-        )
-        monkeypatch.setattr(
-            "comken.core.logger.environment.now",
-            lambda: _FIXED_NOW,
-        )
+        monkeypatch.setattr(local_module, "today", lambda: date(2026, 8, 21))
         setup_local_logging(console_level=logging.DEBUG, file_level=logging.WARNING)
 
         assert len(isolated_logging.handlers) == 3
@@ -299,24 +303,13 @@ class TestLocal:
         }
         assert console_handler.level == logging.DEBUG
         assert isolated_logging.level == logging.DEBUG
-        # setup_logging() 側のログファイルが hostname/python/{date} 配下に作られている。
-        env_log_dir = _environment_log_dir(tmp_path)
-        assert env_log_dir.is_dir()
-        assert len(list(env_log_dir.glob("*.log"))) == 1
+        assert (log_dir / "backoffice-2026-08-21.log").exists()
 
     def test_local_then_setup_reuses_console(self, isolated_logging, tmp_path, monkeypatch):
         """setup_local_logging() → setup_logging() の順でも動き、console は二重にならない。"""
         _prepare_site(monkeypatch, tmp_path)
         monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
-        monkeypatch.setattr(local_module, "today", lambda: _FIXED_TODAY)
-        monkeypatch.setattr(
-            "comken.core.logger.environment.today",
-            lambda: _FIXED_TODAY,
-        )
-        monkeypatch.setattr(
-            "comken.core.logger.environment.now",
-            lambda: _FIXED_NOW,
-        )
+        monkeypatch.setattr(local_module, "today", lambda: date(2026, 8, 21))
 
         setup_local_logging(console_level=logging.DEBUG, file_level=logging.WARNING)
         setup_logging(Backoffice)
@@ -344,15 +337,7 @@ class TestLocal:
         _prepare_site(monkeypatch, tmp_path)
         setup_logging(Backoffice)
         monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
-        monkeypatch.setattr(local_module, "today", lambda: _FIXED_TODAY)
-        monkeypatch.setattr(
-            "comken.core.logger.environment.today",
-            lambda: _FIXED_TODAY,
-        )
-        monkeypatch.setattr(
-            "comken.core.logger.environment.now",
-            lambda: _FIXED_NOW,
-        )
+        monkeypatch.setattr(local_module, "today", lambda: date(2026, 8, 21))
         setup_local_logging()
 
         with pytest.raises(LoggingAlreadyConfiguredError):
@@ -364,15 +349,7 @@ class TestLocal:
         _prepare_site(monkeypatch, tmp_path)
         setup_logging(Backoffice)
         monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
-        monkeypatch.setattr(local_module, "today", lambda: _FIXED_TODAY)
-        monkeypatch.setattr(
-            "comken.core.logger.environment.today",
-            lambda: _FIXED_TODAY,
-        )
-        monkeypatch.setattr(
-            "comken.core.logger.environment.now",
-            lambda: _FIXED_NOW,
-        )
+        monkeypatch.setattr(local_module, "today", lambda: date(2026, 8, 21))
         setup_local_logging()
 
         with pytest.raises(LoggingAlreadyConfiguredError):
@@ -425,7 +402,6 @@ class TestLocal:
                 h.close()
 
     def test_output_includes_process_id(self, isolated_logging, tmp_path, monkeypatch):
-        """ログ本文ではなくファイル名に PID が入ることで同時実行プロセスを見分けられる。"""
         self._prepare(monkeypatch, tmp_path)
         setup_local_logging()
         module_logger = logging.getLogger("sample.module")
@@ -436,12 +412,8 @@ class TestLocal:
             if isinstance(handler, logging.FileHandler)
         )
         file_handler.flush()
-        log_path = Path(file_handler.baseFilename)
-        assert log_path.name == _FIXED_LOG_FILENAME
-        assert f"_{os.getpid()}.log" in log_path.name
-        text = log_path.read_text(encoding="utf-8")
-        # 本文に PID を含まない（新設計）。
-        assert f"[pid={os.getpid()}]" not in text
+        text = Path(file_handler.baseFilename).read_text(encoding="utf-8")
+        assert f"[pid={os.getpid()}]" in text
         assert "sample.module: done" in text
 
     def test_root_level_is_min_of_own_handlers_alone(self, isolated_logging, tmp_path, monkeypatch):
@@ -470,15 +442,7 @@ class TestLocal:
         console / environment / local の min。"""
         _prepare_site(monkeypatch, tmp_path)
         monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
-        monkeypatch.setattr(local_module, "today", lambda: _FIXED_TODAY)
-        monkeypatch.setattr(
-            "comken.core.logger.environment.today",
-            lambda: _FIXED_TODAY,
-        )
-        monkeypatch.setattr(
-            "comken.core.logger.environment.now",
-            lambda: _FIXED_NOW,
-        )
+        monkeypatch.setattr(local_module, "today", lambda: date(2026, 8, 21))
 
         setup_local_logging(console_level=logging.DEBUG, file_level=logging.WARNING)
         setup_logging(Backoffice)
@@ -516,15 +480,7 @@ class TestLocal:
         monkeypatch.setattr(isolated_logging, "addHandler", patched_add_handler)
 
         monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
-        monkeypatch.setattr(local_module, "today", lambda: _FIXED_TODAY)
-        monkeypatch.setattr(
-            "comken.core.logger.environment.today",
-            lambda: _FIXED_TODAY,
-        )
-        monkeypatch.setattr(
-            "comken.core.logger.environment.now",
-            lambda: _FIXED_NOW,
-        )
+        monkeypatch.setattr(local_module, "today", lambda: date(2026, 8, 21))
         setup_local_logging()
 
         # 外部ハンドラーが root に付いていることを確認（テスト自体が穴を再現できているか）。
@@ -542,80 +498,6 @@ class TestOwner:
 
     def test_intranet_owner_is_comken(self):
         assert Intranet.OWNER == "comken"
-
-
-class TestSiteClassShape:
-    """LoggerSite / Backoffice / Intranet のクラス形状に関するテスト。
-
-    旧 ``NAME`` / ``LOG_FOLDER_NAMES`` を削除したため、誤って復活しないことを
-    保証する。新設計ではフォルダ名は実行端末のホスト名から作るため、
-    クラス側に登録情報を持たない。
-    """
-
-    @pytest.mark.parametrize("site_cls", [LoggerSite, Backoffice, Intranet])
-    def test_has_no_name_attribute(self, site_cls: type[LoggerSite]) -> None:
-        assert not hasattr(site_cls, "NAME")
-
-    @pytest.mark.parametrize("site_cls", [LoggerSite, Backoffice, Intranet])
-    def test_has_no_log_folder_names_attribute(self, site_cls: type[LoggerSite]) -> None:
-        assert not hasattr(site_cls, "LOG_FOLDER_NAMES")
-
-    def test_backoffice_and_intranet_differ_only_in_log_root(self, monkeypatch) -> None:
-        """Backoffice と Intranet の差分は ``LOG_ROOT`` などの設定値だけである。
-
-        旧設計では ``NAME`` / ``LOG_FOLDER_NAMES`` もあったため、独自属性が
-        ``{NAME, LOG_ROOT, LOG_FOLDER_NAMES, OWNER}`` だったが、新設計では
-        ``{LOG_ROOT, OWNER}`` だけであることを見る。``vars()`` には
-        ``__doc__`` などの Python 特殊属性も含まれるので、``__`` で始まらない
-        ものだけを独自属性とみなす。
-        """
-
-        def own_attrs(cls: type) -> set[str]:
-            # `__` で始まる特殊属性を除いたうえで、メソッド（関数 /
-            # classmethod / staticmethod）も除外し、クラス変数だけを残す。
-            # `classmethod` の descriptor は ``callable()`` が ``False`` を
-            # 返すので、``callable()`` だけだと除外しきれない。
-            return {
-                name
-                for name, value in vars(cls).items()
-                if not name.startswith("__")
-                and not isinstance(value, (classmethod, staticmethod))
-                and not (callable(value) and not isinstance(value, type))
-            }
-
-        # Backoffice と Intranet の「独自設定」は LOG_ROOT と OWNER だけである
-        # （旧設計の NAME / LOG_FOLDER_NAMES は廃止済み）。
-        assert own_attrs(Backoffice) <= {"LOG_ROOT", "OWNER"}
-        assert own_attrs(Intranet) <= {"LOG_ROOT", "OWNER"}
-        # 両者の独自属性集合は同じ（差分は LOG_ROOT の値のみで、形ではない）。
-        assert own_attrs(Backoffice) == own_attrs(Intranet)
-        # LoggerSite 基底でも同様に LOG_ROOT と OWNER だけが宣言されている。
-        assert own_attrs(LoggerSite) <= {"LOG_ROOT", "OWNER"}
-
-
-class TestLogFilenameBuilder:
-    """``_build_log_filename()`` の単体テスト。"""
-
-    def test_filename_contains_microseconds_and_pid(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """now() を固定したとき、``YYYYMMDD_HHMMSS_ffffff_<PID>.log`` 形式になる。"""
-        monkeypatch.setattr(
-            "comken.core.logger.environment.now",
-            lambda: _FIXED_NOW,
-        )
-        assert _build_log_filename() == _FIXED_LOG_FILENAME
-
-    def test_filename_differs_when_now_differs(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """now() がマイクロ秒違うだけでも別のファイル名になる（衝突回避）。"""
-        first = datetime.datetime(2026, 8, 21, 10, 30, 45, 123456, tzinfo=datetime.UTC)
-        second = datetime.datetime(2026, 8, 21, 10, 30, 45, 654321, tzinfo=datetime.UTC)
-        monkeypatch.setattr("comken.core.logger.environment.now", lambda: first)
-        name1 = _build_log_filename()
-        monkeypatch.setattr("comken.core.logger.environment.now", lambda: second)
-        name2 = _build_log_filename()
-        assert name1 != name2
-        # 同じ PID であっても、マイクロ秒が違えば衝突しない。
-        assert name1.endswith(f"_{os.getpid()}.log")
-        assert name2.endswith(f"_{os.getpid()}.log")
 
 
 class TestLoggingConflict:
@@ -939,12 +821,4 @@ class TestLoggingConflict:
         """setup_local_logging() 用のテスト準備（TestLocal._prepare を流用）。"""
         logging.getLogger().handlers.clear()
         monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
-        monkeypatch.setattr(local_module, "today", lambda: _FIXED_TODAY)
-        monkeypatch.setattr(
-            "comken.core.logger.environment.today",
-            lambda: _FIXED_TODAY,
-        )
-        monkeypatch.setattr(
-            "comken.core.logger.environment.now",
-            lambda: _FIXED_NOW,
-        )
+        monkeypatch.setattr(local_module, "today", lambda: date(2026, 8, 21))

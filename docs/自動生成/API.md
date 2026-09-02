@@ -3026,9 +3026,8 @@ def setup_logging(site: type[LoggerSite], *, allow_existing: bool=False) -> None
 
 site の指定に従い root logger を設定する。
 
-保存先は ``{LOG_ROOT}/{hostname(小文字)}/python/{today().isoformat()}/{ファイル名}``。
-ファイル名はマイクロ秒と PID を含むため、1 プロセス 1 ファイルとして見分けられ、
-ログ本文に PID を含める必要がなくなった（``setup_local_logging()`` も同様）。
+PID は同じ端末で同時に動くプロセスを見分ける値であり、保存先を選ぶ端末名とは
+用途が異なる。Formatter の固定値として渡し、ログ呼び出し側へ負担を増やさない。
 
 ``setup_local_logging()`` が先に走っている場合（root に console と local
 ファイルだけがある場合）は console を再利用し、environment ファイルだけを
@@ -3058,10 +3057,6 @@ def setup_local_logging(*, console_level: int=logging.INFO, file_level: int=logg
 ``setup_logging()`` と組み合わせず単独でも呼べる。``setup_logging()`` 直後なら
 console を使い回して local ファイルだけを追加し、単独なら console と local
 ファイルの 2 種を追加する。
-
-ファイル名は ``{path}/{today().isoformat()}/{ファイル名}`` となり、
-``_build_log_filename()`` がマイクロ秒と PID を含めて生成するため
-同時実行でも別ファイルとして見分けられる。
 
 ``setup_logging()`` と ``setup_local_logging()`` が両方走った状態や、関係のない
 handler が混ざっている場合は ``LoggingAlreadyConfiguredError`` を送出して
@@ -6280,8 +6275,7 @@ LoggerSite の LOG_ROOT が設定されていない
 
 対処:
     サブクラスに ``LOG_ROOT = "\\server\share\logs"`` を1行追加する
-    （絶対パスまたは UNC 文字列）。
-    実行端末のホスト名を小文字化したフォルダが LOG_ROOT の下に自動で作られます。
+    （絶対パスまたは UNC 文字列。LOG_FOLDER_NAMES のフォルダ名はこの下に作られる）。
 
 #### `__init__`
 

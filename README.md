@@ -528,10 +528,8 @@ POSITION = 42
 ## Logger
 
 社内環境では `setup_logging()` に環境クラスを渡し、root logger を設定する。
-保存先は `LOG_ROOT` をルートに、実行端末のホスト名（小文字）をフォルダ名として
-`{LOG_ROOT}/{hostname}/python/{日付}/{ファイル名}` の下に作られる。ファイル名は
-マイクロ秒と PID を含む一意名で、1 プロセス 1 ファイルとして見分けられる。
-二重呼び出し時の挙動など、詳細は [**仕様書 4.11 節**](docs/開発/仕様書.md#4-主要な設計判断) を参照。
+二重呼び出し時の挙動や `LOG_ROOT` / `LOG_FOLDER_NAMES` の二段構成など、詳細は
+[**仕様書 4.11 節**](docs/開発/仕様書.md#4-主要な設計判断)を参照。
 
 ```python
 from comken.core.logger import Backoffice, setup_logging
@@ -546,7 +544,7 @@ RPA 基盤を通さず単体実行するときは、`setup_local_logging()` で 
 # main.py
 from comken import comken_logger
 
-comken_logger.setup_local_logging()  # コンソールと logs/{日付}/{ファイル名}（UTF-8）へ出力
+comken_logger.setup_local_logging()  # コンソールと logs/local-YYYY-MM-DD.log（UTF-8）へ出力
 logger = logging.getLogger(__name__)
 logger.info("処理開始")
 ```

@@ -62,8 +62,7 @@ class LogRootNotConfiguredError(ComkenError):
 
     対処:
         サブクラスに ``LOG_ROOT = "\\\\server\\share\\logs"`` を1行追加する
-        （絶対パスまたは UNC 文字列）。
-        実行端末のホスト名を小文字化したフォルダが LOG_ROOT の下に自動で作られます。
+        （絶対パスまたは UNC 文字列。LOG_FOLDER_NAMES のフォルダ名はこの下に作られる）。
     """
 
     def __init__(self, site_cls: type) -> None:
@@ -72,5 +71,5 @@ class LogRootNotConfiguredError(ComkenError):
             f"  class {site_cls.__name__}(LoggerSite):\n"
             '      LOG_ROOT = "\\\\server\\share\\logs"   # ← この1行を追加してください\n'
             "LOG_ROOT はログを保存するルートの絶対パスまたは UNC 文字列です。\n"
-            "実行端末のホスト名を小文字化したフォルダが LOG_ROOT の下に自動で作られます。"
+            "LOG_FOLDER_NAMES に書いたフォルダ名はこの LOG_ROOT の下に作られます。"
         )
