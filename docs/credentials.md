@@ -60,7 +60,7 @@ python -m comken cred delete site_a_client_id  1件削除する
 ```
 
 `{"site_a": {"client_id": ...}}` は `site_a_client_id` というキー名に展開されて
-`%USERPROFILE%\.rpa\credentials.enc` に保存される。JSON に無いキーはそのまま残るので、
+`%USERPROFILE%\.rpa\system-id.enc` に保存される。JSON に無いキーはそのまま残るので、
 組織ごとに JSON を分けて何回かに分けて取り込める。
 
 取り込んだら**平文の JSON は消す**。`--delete-source` を付けると成功時に自動で消えるが、

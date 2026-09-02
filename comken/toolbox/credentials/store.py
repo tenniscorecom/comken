@@ -10,7 +10,7 @@ client_id と client_secret だけ・トークンだけ、といった構成に�
 仕組み:
     - 暗号化には Windows 標準の DPAPI を使う。暗号鍵を自分で管理する必要がなく、
       Windows がログオン中のアカウントに紐付けて暗号化・復号する
-    - 保存先は %USERPROFILE%\\.rpa\\credentials.enc（ユーザーごとに別ファイル）
+    - 保存先は %USERPROFILE%\\.rpa\\system-id.enc（ユーザーごとに別ファイル）
     - 同じ「ユーザー × PC」でないと復号できないため、ファイルを
       他人にコピーされても中身は読まれない
 
@@ -48,9 +48,8 @@ from comken.exceptions import (
 )
 
 # パッケージ名と関係なく、固定の保存先フォルダ名を使う。
-# 旧パッケージ名（comken）で保存していたデータを引き継ぐため、
-# パッケージリネームを契機に保存先を変えない。
-CREDENTIALS_PATH = Path.home() / ".rpa" / "credentials.enc"
+# ファイル名は社内の命名規則により system-id.enc に統一する（2026-09-02）。
+CREDENTIALS_PATH = Path.home() / ".rpa" / "system-id.enc"
 
 # キー名に使える文字（半角英数字とアンダースコアのみ）
 # 漢字・スペース・記号はコードや config.ini に書きにくいため弾く

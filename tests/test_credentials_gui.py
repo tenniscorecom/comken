@@ -60,7 +60,7 @@ class TestWindow:
 
         root.withdraw()  # 画面には出さない
         try:
-            app = CredentialsApp(root, path=tmp_path / "credentials.enc")
+            app = CredentialsApp(root, path=tmp_path / "system-id.enc")
             app._refresh()  # 一覧の更新が例外なく動くこと
             assert app.listbox.size() == 0  # 空の保存先なので1件もない
         finally:

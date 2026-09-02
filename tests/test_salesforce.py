@@ -661,7 +661,7 @@ class TestCredentialsInitialization:
     """DPAPI に入れた資格情報から組み立てる経路（既定は Refresh Token Flow）。"""
 
     def _store(self, tmp_path):
-        path = tmp_path / "credentials.enc"
+        path = tmp_path / "system-id.enc"
         save_credentials(
             {
                 "sandbox_client_id": "CID",
@@ -727,7 +727,7 @@ class TestCredentialsInitialization:
             PrefixUnsetSalesforce()
 
     def test_missing_credential_raises(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(store, "CREDENTIALS_PATH", tmp_path / "credentials.enc")
+        monkeypatch.setattr(store, "CREDENTIALS_PATH", tmp_path / "system-id.enc")
         with pytest.raises(CredentialNotFoundError):
             Sandbox()
 
