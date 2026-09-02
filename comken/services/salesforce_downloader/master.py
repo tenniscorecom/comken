@@ -4,9 +4,9 @@ r"""comken/services/salesforce_downloader/master.py — レポート管理表の
 仕組みは `comken.services.salesforce_downloader.report_master` にあり、ここは
 **どんな列があるか**を宣言する。
 
-    | ID   | 概要     | Salesforce URL              | 出力形式 | 保存先              | 有効 |
-    |------|----------|-----------------------------|----------|---------------------|------|
-    | 1001 | 顧客一覧 | https://.../Report/00O.../  | CSV      | \\server\A\input    | 有効 |
+    | ID   | 概要     | Salesforce URL              | 保存先              | 有効 |
+    |------|----------|-----------------------------|---------------------|------|
+    | 1001 | 顧客一覧 | https://.../Report/00O.../  | \\server\A\input    | 有効 |
 
 **Salesforce のレポート ID は入力させない。** URL を貼れば `report_id_from_url()` が
 取り出す。ID を人が抜き出す工程を挟むと、そこで写し間違いが起きるうえ、
@@ -34,11 +34,6 @@ from comken.exceptions import InvalidReportURLError, SalesforceReportIDNotFoundE
 from comken.services.salesforce_downloader.report_master import MasterRow, column
 from comken.toolbox.salesforce.report import report_id_from_url
 
-# 「出力形式」に書ける値
-OUTPUT_FORMAT_CSV = "CSV"
-OUTPUT_FORMAT_EXCEL = "Excel"
-
-
 # 記入例（雛形に入れる）。2行目は別のレポートにする——同じ URL を並べると、
 # check が「同じレポートを指している」と報告してしまう
 _DOMAIN = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report"
@@ -51,7 +46,6 @@ EXAMPLES = [
         "assignee": "山田",
         "summary": "顧客一覧",
         "url": f"{_DOMAIN}/00O5g00000ABCDE/view",
-        "output_format": OUTPUT_FORMAT_CSV,
         "folder": r"\\server\案件集計\input",
         "enabled": True,
         "allow_empty": False,  # 普段はデータがあるが、念のため「×」（既定）
@@ -63,7 +57,6 @@ EXAMPLES = [
         "assignee": "佐藤",
         "summary": "売上実績",
         "url": f"{_DOMAIN}/00O5g00000FGHIJ/view",
-        "output_format": OUTPUT_FORMAT_EXCEL,
         "folder": r"\\server\売上帳票\input",
         "enabled": True,
         "allow_empty": True,  # 「該当データ無し」が普通に起きるレポートの例
@@ -112,15 +105,6 @@ class ReportEntry(MasterRow):
         "Salesforce URL",
         help="Salesforce でレポートを開いたときのアドレスを、そのまま貼り付けてください。"
         "レポート ID を抜き出す必要はありません",
-    )
-    # **既定値を持たせない。** 空欄を「CSV」にすると、書き忘れが既定値に流れて
-    # 下流のRPAが期待する形式と食い違う事故になるため。`choices` で `CSV` /
-    # `Excel` のどちらかを必ず選ばせる
-    output_format: str = column(
-        "出力形式",
-        choices=(OUTPUT_FORMAT_CSV, OUTPUT_FORMAT_EXCEL),
-        help=f"「{OUTPUT_FORMAT_CSV}」は CSV 形式で保存します。"
-        f"「{OUTPUT_FORMAT_EXCEL}」は Excel 形式で保存します",
     )
     folder: Path = column(
         "保存先",

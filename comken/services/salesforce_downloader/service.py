@@ -73,7 +73,6 @@ from comken.services.salesforce_downloader._paths import (
 from comken.services.salesforce_downloader.history import HistoryRow
 from comken.services.salesforce_downloader.latest_status import write_latest_status
 from comken.services.salesforce_downloader.master import (
-    OUTPUT_FORMAT_EXCEL,
     ReportEntry,
     load_master,
     shared_report_ids,
@@ -81,7 +80,6 @@ from comken.services.salesforce_downloader.master import (
 from comken.services.salesforce_downloader.provider import _daily_cache_path_of, file_path_of
 from comken.services.salesforce_downloader.schedule import ScheduleRule, load_schedule
 from comken.toolbox.csv import CSV
-from comken.toolbox.excel import Excel
 from comken.toolbox.salesforce.sites import site_for
 
 logger = logging.getLogger(__name__)
@@ -322,18 +320,14 @@ def _save(entry: ReportEntry, table: Table) -> Path:
 
     0 行・`allow_empty` × → `EmptyReportError`（=失敗）／○ → 空 CSV を置く。
     ``report.get()`` が返す ``Table.columns`` を使うため、0 行でも Salesforce の
-    メタデータから得た見出しを保存する。出力形式は ``entry.output_format`` で
-    ``_write_csv`` / ``_write_excel`` を呼び分ける。
+    メタデータから得た見出しを保存する。
     """
     path = _reserve_path(entry)
     try:
         # 問い合わせは成功したが明細が無い。**0件あり × なら失敗扱い、○ なら正常終了**
         if not table and not entry.allow_empty:
             raise EmptyReportError(entry.key, entry.summary, entry.url)
-        if entry.output_format == OUTPUT_FORMAT_EXCEL:
-            _write_excel(path, table)
-        else:
-            _write_csv(path, table)
+        _write_csv(path, table)
     except Exception:
         path.unlink(missing_ok=True)
         raise
@@ -378,34 +372,6 @@ def _write_csv(path: Path, table: Table) -> None:
     """
     with atomic_write(path) as tmp, CSV(tmp) as csv_file:
         csv_file.replace(table)
-
-
-def _write_excel(path: Path, table: Table) -> None:
-    """一時ファイルへ書いてから置き換える。`comken.toolbox.excel.Excel` を使う。
-
-    CSV と同じく一時ファイル経由で置き換える。複数のプロジェクトが同時に呼ぶので、
-    直接書くと読んでいる最中のファイルが半端な状態になりうる。
-    ``atomic_write`` はバイナリでもそのまま使える（``os.replace`` で同一
-    ボリューム上に置いた一時ファイルを入れ替えるだけ）。
-    `Excel(path)` は `path` が無いとき `__enter__` で新規 `Workbook()` を作るので、
-    既存キャッシュを上書きしたいときも同じ書き味で使える。
-
-    本番では ``salesforce.report.get()`` が ``Table`` を返すが、テストでは
-    モックが ``list[dict]`` を返すことがあるため、``create_table`` の前に
-    ``Table`` へ詰め直す（``comken.toolbox.excel.table.ExcelTable.replace``
-    と同じ寛容な変換パターン）。
-    """
-    table_arg = (
-        table
-        if isinstance(table, Table)
-        else Table(list(table[0]) if table else [], table)
-    )
-    with (
-        atomic_write(path) as tmp,
-        Excel(tmp) as excel,
-    ):
-        sheet = excel.create_data_sheet("Report")
-        sheet.create_table("Report", table_arg)
 
 
 def _warn_shared_reports(entries: dict[str, ReportEntry]) -> None:

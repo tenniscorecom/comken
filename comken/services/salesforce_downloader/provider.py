@@ -36,7 +36,6 @@ from comken.exceptions import (
 )
 from comken.services.salesforce_downloader._paths import MASTER_PATH
 from comken.services.salesforce_downloader.master import (
-    OUTPUT_FORMAT_EXCEL,
     ReportEntry,
     load_master,
 )
@@ -125,9 +124,9 @@ def file_path_of(entry: ReportEntry) -> Path:
     ファイル名は「管理番号_概要_日付_時刻_マイクロ秒」。**管理番号を先頭に置く**のは、概要や
     参照先の Salesforce レポートが変わっても、番号は変わらないため。概要を入れるのは、
     保存先を人が直接見たときに何のファイルか分かるようにするため。拡張子は
-    ``output_format`` に応じて ``.csv`` か ``.xlsx`` になる。
+    常に ``.csv``。
     """
-    name = f"{entry.key}_{_safe_summary(entry.summary)}{_suffix_of(entry)}"
+    name = f"{entry.key}_{_safe_summary(entry.summary)}.csv"
     return entry.folder / DateNameBuilder(name).suffix("%Y%m%d_%H%M%S_%f")
 
 
@@ -135,24 +134,10 @@ def _daily_cache_path_of(entry: ReportEntry) -> Path:
     """定期取得の当日最新キャッシュに使う固定パスを返す。
 
     時刻を含めないことで、同日に何度取得しても読む側が同じパスを直接確認できる。
-    拡張子は ``output_format`` に応じて ``.csv`` か ``.xlsx`` になる。
+    拡張子は常に ``.csv``。
     """
-    name = f"{entry.key}_{_safe_summary(entry.summary)}{_suffix_of(entry)}"
+    name = f"{entry.key}_{_safe_summary(entry.summary)}.csv"
     return entry.folder / DateNameBuilder(name).suffix("%Y%m%d")
-
-
-def _suffix_of(entry: ReportEntry) -> str:
-    """``output_format`` に対応する拡張子を返す。
-
-    ``output_format`` 列は ``ReportEntry`` の ``choices`` で ``"CSV"`` / ``"Excel"`` の
-    みが許可されるため、ここで想定外の値にはならない（万一壊れていたら
-    ``KeyError`` で読み込み全体が止まる）。
-    """
-    if entry.output_format == OUTPUT_FORMAT_EXCEL:
-        return ".xlsx"
-    # 既定値は持たせない設計だが、シグネチャ上 ``str`` を受け取るので
-    # ``CSV`` 以外が来たときは CSV 扱いに倒す（落とすより安全側で進める）
-    return ".csv"
 
 
 def _find(report_key: str, master_path: Path) -> ReportEntry:

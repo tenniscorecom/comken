@@ -48,7 +48,6 @@ HEADERS = [
     "担当者",
     "概要",
     "Salesforce URL",
-    "出力形式",
     "保存先",
     "有効",
     "備考",
@@ -61,7 +60,6 @@ HEADERS_WITH_ALLOW_EMPTY = [
     "担当者",
     "概要",
     "Salesforce URL",
-    "出力形式",
     "保存先",
     "有効",
     "0件あり",
@@ -100,8 +98,8 @@ def paths(tmp_path, monkeypatch):
     差し替える。`service.py` と `provider.py` は import 時に独自のローカル束縛を
     作るので、両方の属性も同期する。
 
-    `1001`（=CSV・有効）が `download_scheduled()` の唯一の有効件。
-    `1002`（=Excel・有効）は Excel 出力テストが直接管理表を作る側で検証するため、
+    `1001`（=有効）が `download_scheduled()` の唯一の有効件。
+    `1002`（=有効）は Excel 出力テストが直接管理表を作る側で検証するため、
     ここでは**無効**にして対象外にしている。`1003` も無効。
     """
     folder = tmp_path / "保存先"
@@ -115,7 +113,6 @@ def paths(tmp_path, monkeypatch):
                 "山田",
                 "顧客一覧",
                 URL_A,
-                "CSV",
                 str(folder),
                 "○",
                 "",
@@ -127,7 +124,6 @@ def paths(tmp_path, monkeypatch):
                 "佐藤",
                 "売上実績",
                 URL_B,
-                "Excel",
                 str(folder),
                 "×",
                 "",
@@ -139,7 +135,6 @@ def paths(tmp_path, monkeypatch):
                 "山田",
                 "停止中",
                 URL_B,
-                "CSV",
                 str(folder),
                 "×",
                 "",
@@ -198,11 +193,10 @@ class TestLoadMaster:
                 "山田",
                 "顧客一覧",
                 URL_A,
-                "CSV",
                 str(tmp_path),
                 "○",
                 "",
-            ], [None] * 9],
+            ], [None] * 8],
 
         )
         assert list(load_master(master)) == ["1001"]
@@ -217,7 +211,6 @@ class TestLoadMaster:
                     "山田",
                     "顧客一覧",
                     URL_A,
-                    "CSV",
                     str(tmp_path),
                     "○",
                     "",
@@ -229,7 +222,6 @@ class TestLoadMaster:
                     "別の担当",
                     "別の名前",
                     URL_B,
-                    "Excel",
                     str(tmp_path),
                     "○",
                     "",
@@ -243,53 +235,11 @@ class TestLoadMaster:
     def test_url_without_report_id_raises_with_row_number(self, tmp_path):
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", "営業事務グループ", "山田", "顧客一覧", "https://example.com/", "CSV", str(tmp_path), "○", ""]],  # noqa: E501
+            [["1001", "営業事務グループ", "山田", "顧客一覧", "https://example.com/", str(tmp_path), "○", ""]],  # noqa: E501
         )
         with pytest.raises(InvalidReportURLError) as e:
             load_master(master)
         assert "1001" in str(e.value)  # 行番号ではなく管理番号で示す（空行があるとズレるため）
-
-    def test_unknown_output_format_raises(self, tmp_path):
-        """`出力形式`に想定外の値を入れるとエラー。"""
-        master = make_master(
-            tmp_path / "管理表.xlsx",
-            [[
-                "1001",
-                "営業事務グループ",
-                "山田",
-                "顧客一覧",
-                URL_A,
-                "PDF",
-                str(tmp_path),
-                "○",
-                "",
-            ]],
-
-        )
-        with pytest.raises(MasterRowValueError) as e:
-            load_master(master)
-        assert "出力形式" in str(e.value)
-
-    def test_blank_output_format_raises(self, tmp_path):
-        """`出力形式`は既定値なし。空欄のまま読み込むとエラー。"""
-        master = make_master(
-            tmp_path / "管理表.xlsx",
-            [[
-                "1001",
-                "営業事務グループ",
-                "山田",
-                "顧客一覧",
-                URL_A,
-                "",
-                str(tmp_path),
-                "○",
-                "",
-            ]],
-
-        )
-        with pytest.raises(MasterRowValueError) as e:
-            load_master(master)
-        assert "出力形式" in str(e.value)
 
     def test_non_numeric_key_is_allowed(self, tmp_path):
         """str 型の `key` なので、文字列の ID もそのまま使える。"""
@@ -301,7 +251,6 @@ class TestLoadMaster:
                 "山田",
                 "顧客一覧",
                 URL_A,
-                "CSV",
                 str(tmp_path),
                 "○",
                 "",
@@ -329,7 +278,6 @@ class TestSharedReportIds:
                 "山田",
                 "顧客一覧",
                 URL_A,
-                "CSV",
                 str(tmp_path),
                 "○",
                 "",
@@ -342,12 +290,11 @@ class TestSharedReportIds:
 class TestDownloadScheduledRecord:
     """`download_scheduled()` で 1 件のレポートを取得すると、ファイルと履歴が残る。"""
 
-    def test_saves_file_with_csv_extension_for_csv_output_format(self, paths, monkeypatch):
-        """`出力形式=CSV` のレポートは `.csv` で保存される。
+    def test_saves_file_with_csv_extension(self, paths, monkeypatch):
+        """レポートは `.csv` で保存される。
 
         `download_scheduled()` は管理表の全有効件を処理するので、`paths` fixture の
-        中では `1001`（=CSV）と `1002`（=Excel）が同時に取れる。CSV 側だけ
-        検証するため、`.csv` のファイルが含まれていることを確認する。
+        中では `1001` だけが有効。`.csv` のファイルが1件できることを確認する。
         """
         with patch(
             "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
@@ -359,56 +306,6 @@ class TestDownloadScheduledRecord:
         # CSV として読み戻せる
         with CSV(csv_paths[0], read_only=True) as csv_file:
             assert csv_file.read().read_rows() == ROWS
-
-    def test_saves_file_with_xlsx_extension_for_excel_output_format(
-        self, paths, monkeypatch, tmp_path
-    ):
-        """`出力形式=Excel` のレポートは `.xlsx` で保存される。
-
-        `paths` fixture では `1002` を無効にしてある（`download_scheduled()` の
-        対象を `1001` のみに絞るため）。Excel 出力の検証は、専用の管理表を
-        作って別途検証する。
-        """
-        from comken.toolbox.excel import Excel as ExcelForMaster
-
-        folder = tmp_path / "Excel保存先"
-        folder.mkdir()
-        master = tmp_path / "Excel管理表.xlsx"
-        rows = [[
-            "1002",
-            "経理グループ",
-            "佐藤",
-            "売上実績",
-            URL_B,
-            "Excel",
-            str(folder),
-            "○",
-            "",
-        ]]
-
-        with ExcelForMaster(master) as book:
-            book.create_data_sheet("管理表").create_table(
-                "管理表", Table(HEADERS, [dict(zip(HEADERS, row, strict=True)) for row in rows])
-            )
-        monkeypatch.setattr(service_module, "MASTER_PATH", master)
-        monkeypatch.setattr(service_module, "HISTORY_PATH", tmp_path / "履歴.csv")
-
-        with patch(
-            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
-        ):
-            saved = download_scheduled()
-        assert len(saved) == 1
-        assert saved[0].suffix == ".xlsx"
-        assert saved[0].is_file()
-        # Excel として読み戻せる
-        from openpyxl import load_workbook
-
-        book = load_workbook(saved[0])
-        sheet = book["PY_Report"]
-        rows = list(sheet.iter_rows(values_only=True))
-        # 1 行目は見出し、2 行目以降にデータ
-        assert rows[0] == ("名前", "金額")
-        assert rows[1] == ("山田", "100")
 
     def test_csv_path_is_accessible_after_construction(self, paths):
         with CSV(paths["history_path"]) as csv_file:
@@ -521,7 +418,6 @@ class TestDownloadScheduledRecord:
                 "山田",
                 "顧客一覧",
                 URL_A,
-                "CSV",
                 str(missing),
                 "○",
                 "",
@@ -607,7 +503,6 @@ class TestHistory:
                 "山田",
                 "顧客一覧",
                 URL_A,
-                "CSV",
                 str(missing),
                 "○",
                 "",
@@ -653,7 +548,6 @@ class TestHistory:
                 "山田",
                 "顧客一覧",
                 URL_A,
-                "CSV",
                 str(folder),
                 "○",
                 "",
@@ -718,7 +612,6 @@ class TestHistory:
                 "山田",
                 "顧客一覧",
                 URL_A,
-                "CSV",
                 str(folder),
                 "○",
                 "",
@@ -777,7 +670,6 @@ class TestHistory:
                 "山田",
                 "顧客一覧",
                 URL_A,
-                "CSV",
                 str(missing),
                 "○",
                 "",
@@ -813,7 +705,6 @@ class TestHistory:
                 "山田",
                 "顧客一覧",
                 URL_A,
-                "CSV",
                 str(folder),
                 "○",
                 "",
@@ -873,7 +764,6 @@ class TestHistory:
                 "山田",
                 "顧客一覧",
                 URL_A,
-                "CSV",
                 str(folder),
                 "○",
                 "",
@@ -913,7 +803,6 @@ class TestHistory:
                 "山田",
                 "顧客一覧",
                 URL_A,
-                "CSV",
                 str(folder),
                 "○",
                 "",
@@ -966,7 +855,6 @@ class TestDownloadScheduled:
                     "山田",
                     "落ちる方",
                     URL_A,
-                    "CSV",
                     str(tmp_path / "無い"),
                     "○",
                     "",
@@ -978,7 +866,6 @@ class TestDownloadScheduled:
                     "佐藤",
                     "通る方",
                     URL_B,
-                    "CSV",
                     str(folder),
                     "○",
                     "",
@@ -1014,7 +901,6 @@ class TestDownloadScheduled:
                     "山田",
                     "書込失敗",
                     URL_A,
-                    "CSV",
                     str(folder),
                     "○",
                     "",
@@ -1026,7 +912,6 @@ class TestDownloadScheduled:
                     "佐藤",
                     "取得成功",
                     URL_B,
-                    "CSV",
                     str(folder),
                     "○",
                     "",
@@ -1090,7 +975,6 @@ class TestDownloadScheduled:
                     "山田",
                     "想定外",
                     URL_A,
-                    "CSV",
                     str(folder),
                     "○",
                     "",
@@ -1102,7 +986,6 @@ class TestDownloadScheduled:
                     "佐藤",
                     "通る方",
                     URL_B,
-                    "CSV",
                     str(folder),
                     "○",
                     "",
@@ -1186,7 +1069,6 @@ class TestDownloadScheduled:
                 "山田",
                 "顧客一覧",
                 URL_A,
-                "CSV",
                 str(folder),
                 "○",
                 "",
@@ -1221,7 +1103,6 @@ class TestDownloadScheduled:
                 "山田",
                 "曜日外し",
                 URL_A,
-                "CSV",
                 str(folder),
                 "○",
                 "",
@@ -1258,7 +1139,6 @@ class TestDownloadScheduled:
                 "山田",
                 "曜日一致",
                 URL_A,
-                "CSV",
                 str(folder),
                 "○",
                 "",
@@ -1293,7 +1173,6 @@ class TestDownloadScheduled:
                 "山田",
                 "OR判定",
                 URL_A,
-                "CSV",
                 str(folder),
                 "○",
                 "",
@@ -1337,7 +1216,6 @@ class TestScheduleDedup:
                 "山田",
                 "曜日一致",
                 URL_A,
-                "CSV",
                 str(folder),
                 "○",
                 "",
@@ -1388,7 +1266,6 @@ class TestScheduleDedup:
                 "山田",
                 "曜日一致",
                 URL_A,
-                "CSV",
                 str(folder),
                 "○",
                 "",
@@ -1451,7 +1328,6 @@ class TestScheduleDedup:
                 "山田",
                 "曜日一致",
                 URL_A,
-                "CSV",
                 str(folder),
                 "○",
                 "",
@@ -1505,7 +1381,6 @@ class TestScheduleDedup:
                 "山田",
                 "複数スケジュール",
                 URL_A,
-                "CSV",
                 str(folder),
                 "○",
                 "",
@@ -1581,7 +1456,6 @@ def make_master_with_schedule(
         "担当者",
         "概要",
         "Salesforce URL",
-        "出力形式",
         "保存先",
         "有効",
         "備考",
@@ -1668,7 +1542,6 @@ class TestAllowEmpty:
                 "山田",
                 "顧客一覧",
                 URL_A,
-                "CSV",
                 str(folder),
                 "○",
                 "×",
@@ -1715,7 +1588,6 @@ class TestAllowEmpty:
                 "山田",
                 "顧客一覧",
                 URL_A,
-                "CSV",
                 str(folder),
                 "○",
                 "○",
@@ -1762,7 +1634,6 @@ class TestAllowEmpty:
                 "山田",
                 "顧客一覧",
                 URL_A,
-                "CSV",
                 str(folder),
                 "○",
                 "○",
@@ -1802,7 +1673,6 @@ class TestAllowEmpty:
                 "山田",
                 "顧客一覧",
                 URL_A,
-                "CSV",
                 str(folder),
                 "○",
                 "",
@@ -1838,7 +1708,6 @@ class TestAllowEmpty:
                 "山田",
                 "顧客一覧",
                 URL_A,
-                "CSV",
                 str(tmp_path),
                 "○",
                 "△",
@@ -1867,7 +1736,6 @@ class TestAllowEmpty:
                     "山田",
                     "空でもOK",
                     URL_A,
-                    "CSV",
                     str(folder),
                     "○",
                     "○",
@@ -1880,7 +1748,6 @@ class TestAllowEmpty:
                     "佐藤",
                     "普通のレポート",
                     URL_B,
-                    "CSV",
                     str(folder),
                     "○",
                     "×",
@@ -1929,10 +1796,6 @@ class TestTemplate:
         path = ReportEntry.create_template(tmp_path / "レポート管理表.xlsx", EXAMPLES)
         entries = load_master(path)
         assert list(entries) == ["1001", "1002"]
-        # 「実行方式」列は廃止し、`出力形式` 列が新設計。雛形 1 行目は CSV 例、
-        # 2 行目は Excel 例として ``EXAMPLES`` に書き込まれている
-        assert entries["1001"].output_format == "CSV"
-        assert entries["1002"].output_format == "Excel"
 
     def test_examples_point_at_different_reports(self, tmp_path):
         """記入例が同じレポートを指していると、check が重複として報告してしまう。"""
@@ -1959,7 +1822,7 @@ class TestCommandLine:
     def test_check_returns_failure_for_a_broken_master(self, tmp_path, capsys):
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [["1001", "営業事務グループ", "山田", "顧客一覧", "https://example.com/", "CSV", str(tmp_path), "○", ""]],  # noqa: E501
+            [["1001", "営業事務グループ", "山田", "顧客一覧", "https://example.com/", str(tmp_path), "○", ""]],  # noqa: E501
         )
         assert cli(["check", str(master)]) == 1
         assert "エラー:" in capsys.readouterr().err

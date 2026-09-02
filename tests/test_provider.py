@@ -41,7 +41,6 @@ HEADERS = [
     "担当者",
     "概要",
     "Salesforce URL",
-    "出力形式",
     "保存先",
     "有効",
     "備考",
@@ -91,7 +90,6 @@ def paths(tmp_path, monkeypatch):
                 "山田",
                 "顧客一覧",
                 URL_A,
-                "CSV",
                 str(folder),
                 "○",
                 "",
@@ -103,7 +101,6 @@ def paths(tmp_path, monkeypatch):
                 "佐藤",
                 "売上実績",
                 URL_B,
-                "Excel",
                 str(folder),
                 "○",
                 "",
@@ -115,7 +112,6 @@ def paths(tmp_path, monkeypatch):
                 "山田",
                 "停止中",
                 URL_B,
-                "CSV",
                 str(folder),
                 "×",
                 "",
@@ -164,7 +160,6 @@ class TestFilePathOf:
                 "山田",
                 "顧客一覧",
                 URL_A,
-                "CSV",
                 str(folder),
                 "○",
                 "",
@@ -176,30 +171,6 @@ class TestFilePathOf:
         assert name.startswith("1001_顧客一覧_")
         assert name.endswith(".csv")
         assert len(name.removesuffix(".csv").rsplit("_", 3)[-1]) == 6
-
-    def test_excel_file_name_uses_xlsx_suffix(self, tmp_path):
-        """`出力形式=Excel` のレポートは拡張子 `.xlsx` で組み立てる。"""
-        folder = tmp_path / "保存先"
-        folder.mkdir()
-        master = make_master(
-            tmp_path / "管理表.xlsx",
-            [[
-                "1001",
-                "営業事務グループ",
-                "山田",
-                "顧客一覧",
-                URL_A,
-                "Excel",
-                str(folder),
-                "○",
-                "",
-            ]],
-
-        )
-        entry = load_master(master)["1001"]
-        name = file_path_of(entry).name
-        assert name.startswith("1001_顧客一覧_")
-        assert name.endswith(".xlsx")
 
     def test_forbidden_characters_in_summary_are_stripped(self, tmp_path):
         """ファイル名に使えない文字（\\/:*?\"<>|）は落とす。"""
@@ -213,7 +184,6 @@ class TestFilePathOf:
                 "山田",
                 "禁則: A/B?C*D",
                 URL_A,
-                "CSV",
                 str(folder),
                 "○",
                 "",
@@ -239,7 +209,6 @@ class TestFilePathOf:
                 "山田",
                 long_summary,
                 URL_A,
-                "CSV",
                 str(folder),
                 "○",
                 "",
@@ -299,8 +268,8 @@ class TestCachedReport:
         # 1 回目だけ取得 → 保管ファイル 1 件 + 日次キャッシュ 1 件 = 2 件
         assert len(list(paths["folder"].glob("1001_*.csv"))) == 2
 
-    def test_excel_format_report_raises_when_cache_is_missing(self, paths):
-        """`出力形式=Excel` のレポートも、キャッシュが無いなら `CachedReportNotFoundError`"""
+    def test_second_report_raises_when_cache_is_missing(self, paths):
+        """まだ取得していないレポートも、キャッシュが無いなら `CachedReportNotFoundError`"""
         with pytest.raises(CachedReportNotFoundError):
             cached_report("1002")
 
