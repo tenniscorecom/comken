@@ -2,8 +2,14 @@
 
 ``comken.toolbox.salesforce.SalesforceBase`` と同等の API を提供する薄いラッパ。
 認証（Auth Refresh Token / Rotation / Metrics）は toolbox/salesforce 側に残し、
-本クラスは社内ライブラリ ``example_libs.v0000.salesforce`` のメソッドを呼ぶ
+本クラスは社内ライブラリ ``example_libs.salesforce`` のメソッドを呼ぶ
 ラッパとして機能する。
+
+``example_libs.salesforce`` は ``__enter__`` 内で静的 import する。
+``ModuleNotFoundError`` は ``comken.internal.base.raise_if_target_missing`` で
+``InternalLibraryNotFoundError`` に変換する。 静的 import にしたのは
+pyright の型検査・IDE 補完を効かせるためで、ライブラリのバージョンに
+依存しなくなったので importlib ベースの動的 import は必要なくなった。
 最終的には社内ライブラリを comken に直接取り込むため、バージョンチェックは
 実装しない（社内ライブラリの存在自体が一時的）。
 """
@@ -15,18 +21,17 @@ from typing import Any
 from comken.core.table import Table
 from comken.core.timer import measure
 from comken.exceptions import TableNotOpenError
-from comken.internal.base import InternalLibraryBase
-from comken.internal.names import INTERNAL_LIBRARY_ROOT
+from comken.internal.base import raise_if_target_missing
 
-SALESFORCE_LIBRARY_NAME = f"{INTERNAL_LIBRARY_ROOT}.salesforce"
+SALESFORCE_LIBRARY_NAME = "example_libs.salesforce"
 
 
 class SalesforceAPI:
     """社内 Salesforce API 呼び出しの薄い玄関。
 
-    ``example_libs.v0000.salesforce`` を ``comken.internal.base.InternalLibraryBase``
-    経由でロードするコンテキストマネージャ。``__enter__`` でモジュールをロードし、
-    ``__exit__`` で開放する。
+    ``example_libs.salesforce`` を ``__enter__`` 内で静的 import し、
+    ``ModuleNotFoundError`` を ``comken.internal.base.raise_if_target_missing``
+    経由で ``InternalLibraryNotFoundError`` に変換する。
 
     使用例::
 
@@ -43,21 +48,26 @@ class SalesforceAPI:
     ``comken.internal.exceptions.InternalLibraryNotFoundError`` が送出される。
 
     Raises:
-        InternalLibraryNotFoundError: 社内ライブラリ ``example_libs.v0000.salesforce``
+        InternalLibraryNotFoundError: 社内ライブラリ ``example_libs.salesforce``
             が import できない場合。
     """
 
     CREDENTIAL_PREFIX = "SALESFORCE"
 
     def __init__(self) -> None:
-        self._library = InternalLibraryBase(SALESFORCE_LIBRARY_NAME)
-        # 社内ライブラリ ``example_libs.v0000.salesforce`` のメソッドは comken 側に
+        # 社内ライブラリ ``example_libs.salesforce`` のメソッドは comken 側に
         # 型情報がない。 規約上、 Protocol のような複雑な仕組みは導入せず、
         # 局所的に ``Any`` を使ってメソッド呼び出しを許可する。
         self._module: Any | None = None
 
     def __enter__(self) -> SalesforceAPI:
-        self._module = self._library.load()
+        try:
+            # 社内 LAN にだけ存在する（自宅PC・CI では未インストール）
+            from example_libs import salesforce  # type: ignore[reportMissingImports]
+        except ModuleNotFoundError as exc:
+            raise_if_target_missing(SALESFORCE_LIBRARY_NAME, exc)
+            raise
+        self._module = salesforce
         return self
 
     def __exit__(self, *args: object) -> None:
@@ -133,7 +143,7 @@ class SalesforceAPI:
     def report_run(self, report_id: str) -> Table:
         """レポートを実行し、結果を Table で返す。
 
-        社内ライブラリ ``example_libs.v0000.salesforce`` の ``report_run`` は
+        社内ライブラリ ``example_libs.salesforce`` の ``report_run`` は
         ``SalesforceBase.report.get()`` と同じ ``[{表示名: 値}, ...]`` 形式を返す
         ため、1 件目から列を推測する。0 件のときは列が空の ``Table`` を返す
         （``records[0]`` からの推測に依存しない）。 ``toolbox.salesforce`` 側の

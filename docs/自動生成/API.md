@@ -6313,65 +6313,6 @@ def __init__(self, title: str) -> None:
 
 ## `from comken.internal import ...`
 
-### `InternalLibraryBase`
-
-```text
-class InternalLibraryBase:
-```
-
-#### 説明
-
-社内ライブラリのモジュールを束ねるラッパークラス。
-
-利用例::
-
-    with InternalLibraryBase("example_libs.v0000.rpa") as rpa:
-        rpa.backoffice(main, "project")
-
-#### `__init__`
-
-```text
-def __init__(self, library_name: str) -> None:
-```
-
-#### `library_name`
-
-```text
-@property
-def library_name(self) -> str:
-```
-
-##### 説明
-
-社内ライブラリの正式名称(例: ``example_libs.v0000.rpa``)を返す。
-
-#### `find_spec`
-
-```text
-def find_spec(self) -> bool:
-```
-
-##### 説明
-
-社内ライブラリが import 可能なら True。
-
-親パッケージ (``example_libs.v0000`` など) が見つからない場合も False を返す。
-
-#### `load`
-
-```text
-def load(self) -> ModuleType:
-```
-
-##### 説明
-
-社内ライブラリを import して返す。
-
-「対象モジュール自身、またはその親パッケージが見つからない」ときだけ
-``InternalLibraryNotFoundError`` に変換する。 モジュール内に別の依存が
-あって ``ImportError`` / ``ModuleNotFoundError`` が出た場合はそのまま伝搬する
-（依存不足を対象ライブラリの不在と誤変換しないため）。
-
 ### `InternalLibraryError`
 
 ```text

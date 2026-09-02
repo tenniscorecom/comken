@@ -1,157 +1,106 @@
 """comken.internal.rpa の動作を確認する。
 
-`comken.internal.rpa` は社内 RPA 基盤 (`example_libs.v0000.rpa`) を
-`InternalLibraryBase` 経由で呼び出す薄いラッパー。実機では社内 LAN に
-だけ存在するため、テストでは `unittest.mock` で差し替える。
+`comken.internal.rpa` は社内 RPA 基盤 (``example_libs.rpa``) を静的 import で
+呼び出す薄いラッパー。 実機では社内 LAN にだけ存在するため、テストでは
+``sys.modules`` にダミーモジュールを注入して差し替える。
 """
 
 from __future__ import annotations
 
+import sys
 from unittest import mock
 
 import pytest
 
+from comken.internal import rpa as rpa_module
 from comken.internal.exceptions import InternalLibraryNotFoundError
 from comken.internal.rpa import RPA_LIBRARY_NAME, backoffice, intranet
 
 
+@pytest.fixture
+def fake_example_libs_rpa(monkeypatch: pytest.MonkeyPatch) -> mock.Mock:
+    """``example_libs`` と ``example_libs.rpa`` のダミーを ``sys.modules`` へ注入する。
+
+    静的 import (``from example_libs import rpa``) をモックするため、 ``comken``
+    の Python プロセス上のモジュール表に直接入れる。 ``monkeypatch`` が自動で
+    テスト後に元へ戻す。
+    """
+    fake_rpa = mock.Mock()
+    fake_example_libs = mock.Mock()
+    fake_example_libs.rpa = fake_rpa
+    monkeypatch.setitem(sys.modules, "example_libs", fake_example_libs)
+    monkeypatch.setitem(sys.modules, "example_libs.rpa", fake_rpa)
+    return fake_rpa
+
+
+def _remove_example_libs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``example_libs`` が無い状態を強制する。 ``sys.modules`` から取り除く。"""
+    for name in ("example_libs.rpa", "example_libs"):
+        monkeypatch.delitem(sys.modules, name, raising=False)
+
+
 def test_rpa_library_name_is_public() -> None:
-    """`RPA_LIBRARY_NAME` に社内ライブラリの名前が設定されている。"""
-    assert RPA_LIBRARY_NAME == "example_libs.v0000.rpa"
+    """`RPA_LIBRARY_NAME` に社内ライブラリの名前が設定されている（バージョン無し）。"""
+    assert RPA_LIBRARY_NAME == "example_libs.rpa"
 
 
 class TestBackoffice:
     """`backoffice` のテスト。"""
 
-    def test_calls_backoffice_target_on_rpa(self) -> None:
+    def test_calls_backoffice_target_on_rpa(self, fake_example_libs_rpa: mock.Mock) -> None:
         """`backoffice` は RPA モジュールの `backoffice.rpta` を呼ぶ。"""
-        rpa = mock.Mock()
-        rpa.backoffice.rpta = mock.Mock(return_value="ok")
+        fake_example_libs_rpa.backoffice.rpta.return_value = "ok"
         sentinel_main = mock.Mock()
-        with mock.patch("comken.internal.rpa.InternalLibraryBase") as base_cls:
-            base_cls.return_value.__enter__.return_value = rpa
-            result = backoffice(sentinel_main, "project")
-        rpa.backoffice.rpta.assert_called_once_with(sentinel_main, "project")
+        result = backoffice(sentinel_main, "project")
+        fake_example_libs_rpa.backoffice.rpta.assert_called_once_with(sentinel_main, "project")
         assert result == "ok"
 
-    def test_propagates_internal_library_not_found(self) -> None:
-        """RPA が見つからないときは `InternalLibraryNotFoundError` がそのまま上がる。"""
-        with mock.patch("comken.internal.rpa.InternalLibraryBase") as base_cls:
-            base_cls.return_value.__enter__.side_effect = InternalLibraryNotFoundError(
-                RPA_LIBRARY_NAME
-            )
-            with pytest.raises(InternalLibraryNotFoundError):
-                backoffice(lambda: None, "project")
-
-    def test_uses_context_manager(self) -> None:
-        """`backoffice` は `InternalLibraryBase` を `with` 文で使っている。"""
-        with mock.patch("comken.internal.rpa.InternalLibraryBase") as base_cls:
-            base_cls.return_value.__enter__.return_value = mock.Mock(
-                backoffice=mock.Mock(rpta=mock.Mock(return_value=None))
-            )
+    def test_raises_not_found_when_example_libs_missing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``example_libs`` が無いとき ``InternalLibraryNotFoundError`` が送出される。"""
+        _remove_example_libs(monkeypatch)
+        with pytest.raises(InternalLibraryNotFoundError):
             backoffice(lambda: None, "project")
-        # `with` を抜けたら __exit__ が呼ばれている
-        base_cls.return_value.__exit__.assert_called_once()
 
 
 class TestIntranet:
     """`intranet` のテスト。"""
 
-    def test_calls_intranet_target_on_rpa(self) -> None:
+    def test_calls_intranet_target_on_rpa(self, fake_example_libs_rpa: mock.Mock) -> None:
         """`intranet` は RPA モジュールの `intranet.rpta` を呼ぶ。"""
-        rpa = mock.Mock()
-        rpa.intranet.rpta = mock.Mock(return_value="ok")
+        fake_example_libs_rpa.intranet.rpta.return_value = "ok"
         sentinel_main = mock.Mock()
-        with mock.patch("comken.internal.rpa.InternalLibraryBase") as base_cls:
-            base_cls.return_value.__enter__.return_value = rpa
-            result = intranet(sentinel_main, "project")
-        rpa.intranet.rpta.assert_called_once_with(sentinel_main, "project")
+        result = intranet(sentinel_main, "project")
+        fake_example_libs_rpa.intranet.rpta.assert_called_once_with(sentinel_main, "project")
         assert result == "ok"
 
-    def test_propagates_internal_library_not_found(self) -> None:
-        """RPA が見つからないときは `InternalLibraryNotFoundError` がそのまま上がる。"""
-        with mock.patch("comken.internal.rpa.InternalLibraryBase") as base_cls:
-            base_cls.return_value.__enter__.side_effect = InternalLibraryNotFoundError(
-                RPA_LIBRARY_NAME
-            )
-            with pytest.raises(InternalLibraryNotFoundError):
-                intranet(lambda: None, "project")
-
-    def test_uses_context_manager(self) -> None:
-        """`intranet` は `InternalLibraryBase` を `with` 文で使っている。"""
-        with mock.patch("comken.internal.rpa.InternalLibraryBase") as base_cls:
-            base_cls.return_value.__enter__.return_value = mock.Mock(
-                intranet=mock.Mock(rpta=mock.Mock(return_value=None))
-            )
+    def test_raises_not_found_when_example_libs_missing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``example_libs`` が無いとき ``InternalLibraryNotFoundError`` が送出される。"""
+        _remove_example_libs(monkeypatch)
+        with pytest.raises(InternalLibraryNotFoundError):
             intranet(lambda: None, "project")
-        base_cls.return_value.__exit__.assert_called_once()
-
-
-def test_rpa_uses_default_library_name() -> None:
-    """`backoffice` / `intranet` が `RPA_LIBRARY_NAME` を引数に使う。"""
-    with mock.patch("comken.internal.rpa.InternalLibraryBase") as base_cls:
-        base_cls.return_value.__enter__.return_value = mock.Mock(
-            backoffice=mock.Mock(rpta=mock.Mock(return_value=None))
-        )
-        backoffice(lambda: None, "p")
-    base_cls.assert_called_once_with(RPA_LIBRARY_NAME)
-
-
-def test_rpa_does_not_import_real_library() -> None:
-    """テスト中に実物の `example_libs.v0000.rpa` を import しないこと。"""
-
-    import sys
-
-    # 既に import されていればそれを覚えておく
-    already = RPA_LIBRARY_NAME in sys.modules
-    assert already is False or already is True  # 既存状態への依存を明示
 
 
 def test_rpa_module_lists_public_names() -> None:
     """公開名 (`backoffice`, `intranet`, `RPA_LIBRARY_NAME`) だけが露出する。"""
-    import comken.internal.rpa as rpa_module
-
     public = set(dir(rpa_module))
     for name in ("backoffice", "intranet", "RPA_LIBRARY_NAME"):
         assert name in public
-    # 内部実装（`_call`）は公開名ではないので linter チェックに任せる
 
 
-def test_rpa_handles_exception_in_main() -> None:
+def test_rpa_handles_exception_in_main(fake_example_libs_rpa: mock.Mock) -> None:
     """`main` 内で例外が出ても RPA の例外に変換されない（呼び出し側で扱う）。"""
-    rpa = mock.Mock()
-    rpa.backoffice.rpta = mock.Mock(side_effect=RuntimeError("boom"))
-    with mock.patch("comken.internal.rpa.InternalLibraryBase") as base_cls:
-        base_cls.return_value.__enter__.return_value = rpa
-        with pytest.raises(RuntimeError, match="boom"):
-            backoffice(lambda: None, "project")
+    fake_example_libs_rpa.backoffice.rpta.side_effect = RuntimeError("boom")
+    with pytest.raises(RuntimeError, match="boom"):
+        backoffice(lambda: None, "project")
 
 
-def test_rpa_project_name_is_passed_through() -> None:
+def test_rpa_project_name_is_passed_through(fake_example_libs_rpa: mock.Mock) -> None:
     """`project_name` 引数がそのまま RPA 側に渡る。"""
-    rpa = mock.Mock()
-    rpa.backoffice.rpta = mock.Mock(return_value=None)
-    with mock.patch("comken.internal.rpa.InternalLibraryBase") as base_cls:
-        base_cls.return_value.__enter__.return_value = rpa
-        backoffice(lambda: None, "my-project")
-    args, _ = rpa.backoffice.rpta.call_args
+    fake_example_libs_rpa.backoffice.rpta.return_value = None
+    backoffice(lambda: None, "my-project")
+    args, _ = fake_example_libs_rpa.backoffice.rpta.call_args
     assert args[1] == "my-project"
-
-
-# ── 共通定数からの組み立て ────────────────────────────────────────────
-
-
-def test_rpa_library_name_is_built_from_internal_root() -> None:
-    """`RPA_LIBRARY_NAME` は `INTERNAL_LIBRARY_ROOT` から組み立てられている。
-
-    共通定数を書き換えれば両名が追随する契約を確認するため、 ``f-string`` で
-    連結した結果と完全一致することを確かめる。
-    """
-    from comken.internal.names import INTERNAL_LIBRARY_ROOT
-    from comken.internal.salesforce_api import SALESFORCE_LIBRARY_NAME
-
-    # 期待値を左辺に置く（SIM300 対策）。
-    assert f"{INTERNAL_LIBRARY_ROOT}.rpa" == RPA_LIBRARY_NAME
-    assert f"{INTERNAL_LIBRARY_ROOT}.salesforce" == SALESFORCE_LIBRARY_NAME
-    # 共通定数を差し替えると両名が同時に変わる（書き換え漏れの検知）
-    assert SALESFORCE_LIBRARY_NAME.startswith(INTERNAL_LIBRARY_ROOT + ".")

@@ -524,24 +524,34 @@ def _concatenate_files(files: list[Path], package_root: Path) -> tuple[str, int,
 def _verify_internal_library_placeholder() -> None:
     """社内ライブラリ仮名が保たれているか検証する。
 
-    ``comken/internal/names.py`` の ``INTERNAL_LIBRARY_ROOT`` が
-    ``"example_libs.v0000"`` のまま（仮名から実名へ書き戻されていないこと）
-    を確認する。実名に置き換わっていると、公開リポジトリ経由で社内ライブラリ
+    ``comken/internal/rpa.py`` の ``RPA_LIBRARY_NAME`` と
+    ``comken/internal/salesforce_api.py`` の ``SALESFORCE_LIBRARY_NAME`` が
+    ``example_libs.`` で始まる仮名のまま（実名へ書き戻されていないこと）を
+    確認する。実名に置き換わっていると、公開リポジトリ経由で社内ライブラリ
     名が社外へ漏れるため、生成を止める。
+
+    旧 ``comken/internal/names.py`` の共通ルート定数は廃止された
+    （バージョンを含まない仮名で確定したため）。代わりに各モジュールの
+    定数を直接見る。
 
     Raises:
         RuntimeError: 仮名が崩れていた場合。
     """
-    expected_placeholder = "example_libs.v0000"
-    names_module = import_module("comken.internal.names")
-    actual_root: str = names_module.INTERNAL_LIBRARY_ROOT
-    if actual_root != expected_placeholder:
+    expected_prefix = "example_libs."
+    rpa_module = import_module("comken.internal.rpa")
+    salesforce_module = import_module("comken.internal.salesforce_api")
+    names: list[tuple[str, str]] = [
+        ("RPA_LIBRARY_NAME", rpa_module.RPA_LIBRARY_NAME),
+        ("SALESFORCE_LIBRARY_NAME", salesforce_module.SALESFORCE_LIBRARY_NAME),
+    ]
+    bad = [(label, value) for label, value in names if not value.startswith(expected_prefix)]
+    if bad:
+        details = ", ".join(f"{label}={value!r}" for label, value in bad)
         raise RuntimeError(
             "社内ライブラリ仮名が壊れています。"
-            f"comken/internal/names.py の INTERNAL_LIBRARY_ROOT が {actual_root!r} になっています。"
-            f"期待値: {expected_placeholder!r}。"
+            f"{details} が {expected_prefix!r} で始まっていません。"
             "comken は公開リポジトリのため、社内ライブラリの実名が混入しないよう"
-            "仮名 ``example_libs.v0000`` を保ってください。"
+            f"仮名 {expected_prefix!r} を保ってください。"
         )
 
 
