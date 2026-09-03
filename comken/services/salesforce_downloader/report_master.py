@@ -299,7 +299,7 @@ class MasterRow:
         """雛形（表シート）の全セルに雛形用のフォント名を設定する薄いラッパー。
 
         実体はモジュールレベル関数 ``_apply_template_font``。``MasterRow`` に
-        紐付かない処理なので、``schedule.py`` の ``create_schedule_template``
+        紐付かない処理なので、``schedule_template.py`` の ``create_schedule_template``
         からも同じ実装を呼び出せる形にしてある。
         """
         _apply_template_font(sheet, example_count)
@@ -456,7 +456,7 @@ def _apply_template_font(sheet: Worksheet, example_count: int) -> None:
     見出し書式（太字）を崩さない。**
 
     ``MasterRow`` に紐付かない共通処理。``MasterRow.create_template`` の
-    クラスレベルからも、``schedule.create_schedule_template`` のように
+    クラスレベルからも、``schedule_template.create_schedule_template`` のように
     ``MasterRow`` を経由しない雛形からも同じ実装を呼ぶ。
     """
     last_row = max(_FIRST_DATA_ROW + example_count - 1, 1)

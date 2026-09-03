@@ -1,4 +1,4 @@
-"""``comken.services.salesforce_downloader.schedule.create_schedule_template`` を検証する。
+"""``comken.services.salesforce_downloader.schedule_template.create_schedule_template`` を検証する。
 
 雛形の役割は「管理表ブックに ``PY_スケジュール`` シートを追加する」こと。
 往復テスト（``load_schedule`` で読み戻せる）、エラーパス、シート属性
@@ -16,10 +16,12 @@ from comken.services.salesforce_downloader.schedule import (
     FREQUENCY_HOURLY,
     FREQUENCY_MONTHLY,
     FREQUENCY_WEEKLY,
-    SCHEDULE_HEADERS_FULL,
     SCHEDULE_SHEET_NAME,
-    create_schedule_template,
     load_schedule,
+)
+from comken.services.salesforce_downloader.schedule_template import (
+    SCHEDULE_HEADERS_FULL,
+    create_schedule_template,
 )
 from comken.toolbox.excel import Excel
 
