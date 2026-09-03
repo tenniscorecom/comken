@@ -6,9 +6,6 @@ comken 流で書き直した実装（純粋計算）。
 
 このモジュールは **外を一切触らない** — `requests` も標準ライブラリ以外も
 import しないため、オフラインの社内 BO 環境でもそのまま動く。
-``CabinetOfficeCSVSource`` と並列に置き、
-``HolidayCalendar.from_sources([Cabinet, Computed])`` のように
-和集合で運用する想定。
 
 カバーする規則:
 
@@ -50,9 +47,8 @@ class ComputedHolidaySource(HolidaySource):
     """計算で祝日の和集合を返すソース。
 
     ``HolidaySource`` Protocol を実装する。``load()`` で ``Iterable[Holiday]`` を返す。
-    ``CabinetOfficeCSVSource`` と並列に置いて、
-    ``from_sources([Cabinet, Computed])`` のように和集合で運用する
-    （``HolidayCalendar`` 側の先勝ち WARNING ログが衝突をハンドリングする）。
+    ``HolidayCalendar.from_sources`` で他の ``HolidaySource``（同梱内閣府 CSV /
+    ``CompanyHolidaySource`` など）と並列に置いて和集合で運用する。
 
     このソースは **純粋計算のみ** — 外部通信・ファイル読み込みは一切しない。
     社内 BO 環境（オフライン・pip 制限）でもそのまま動く。

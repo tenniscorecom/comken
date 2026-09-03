@@ -1,6 +1,6 @@
 """comken/exceptions/holiday.py — 祝日判定ライブラリに関する例外。
 
-内閣府の祝日 CSV の取得・読み取り・管理表のマージに関する失敗をまとめる。
+内閣府の祝日 CSV の読み取り・管理表のマージに関する失敗をまとめる。
 「今日が営業日か」を判定する側は基本的に例外を上げない設計で、
 ここに来るのは「祝日データの用意に失敗した」という業務運用の場面に限定する。
 """
@@ -16,29 +16,6 @@ class HolidayCalendarError(ComkenError):
     対処:
         画面に表示された具体的なエラー名を上の表から探す
     """
-
-
-class HolidayCalendarFetchError(HolidayCalendarError):
-    """内閣府の祝日 CSV を取得できない
-
-    オフライン環境・社内ネットワークの制約・内閣府サイトの保守などの理由で
-    ダウンロードが失敗する。**ただしキャッシュが残っている場合は警告ログのみで動く**
-    （cached フラグで運用側が検知できる）。
-
-    発生箇所: comken.toolbox.holidays.sources.cabinet_office の CabinetOfficeCSVSource
-
-    対処:
-        ネットワーク接続と社内プロキシの設定を確認する。
-        それでも直らない場合は、保存済みのキャッシュで当面動かすか、
-        管理表（Excel）に会社休日を登録して代用する
-    """
-
-    def __init__(self, url: str, reason: str) -> None:
-        super().__init__(
-            f"内閣府の祝日 CSV を取得できませんでした: {url}\n"
-            f"{reason}\n"
-            "ネットワーク接続と社内プロキシの設定を確認してください。"
-        )
 
 
 class HolidayCalendarSourceError(HolidayCalendarError):

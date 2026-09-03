@@ -3,18 +3,15 @@
 RPA 置き換えプロジェクトで「いま取るべきレポートか」を判定するために使う、
 内閣府の祝日 CSV を基にした祝日判定ライブラリ。
 
-実装本体は `comken.core.holidays/` 配下にある（外部ライブラリに依存しないため
-`core` 層へ移設済み）。`comken.toolbox.holidays` には `requests` に依存する
-内閣府 CSV ダウンローダ（`CabinetOfficeCSVSource`）だけを残してある。
+実装本体は `comken.core.holidays/` 配下にある（外部ライブラリに依存しない）。
+内閣府 CSV は **git 管理下の 1 ファイル**として `comken/core/holidays/data/syukujitsu.csv`
+に同梱されており、年 1 回の **手動更新**（後述）で配布する。
+自動ダウンロード機能は廃止した（YAGNI）。
 
 `HolidayCalendar` 1 個に「内閣府の祝日」と「会社の休業日」をマージして
 持ち、`is_business_day()` でその日が営業日かを判定する。
 
 ## 最短の使い方
-
-ネットワークから内閣府の `syukujitsu.csv` を取ってきたいとき（業務 PC で `requests` が
-使える環境）は次の通り。`CabinetOfficeCSVSource` だけ toolbox 側にある
-（`comken.core` は `requests` を import しないため）。
 
 ```python
 from datetime import date
@@ -24,11 +21,9 @@ from comken.core.holidays import (
     HolidayCalendar,
     is_business_day,
 )
-from comken.toolbox.holidays.sources.cabinet_office import CabinetOfficeCSVSource
 
 calendar = HolidayCalendar.from_sources(
     [
-        CabinetOfficeCSVSource(),  # 既定: 同梱 CSV をそのまま使う
         CompanyHolidaySource(),    # コード直書きの会社休日
     ]
 )
@@ -41,7 +36,6 @@ if is_business_day(date.today(), calendar=calendar):
 
 | ソース               | 概要                                                       | 必要なもの                |
 | -------------------- | ---------------------------------------------------------- | ------------------------- |
-| `CabinetOfficeCSVSource`   | 内閣府の `syukujitsu.csv` を URL から取得                  | `requests` （取得時のみ） |
 | `ComputedHolidaySource`    | 純粋計算で祝日を組み立てる（mokejp/holidays_jp MIT 由来）  | 標準ライブラリのみ        |
 | `CompanyHolidaySource`     | 会社の休業日をコードに直書きして返す                       | 標準ライブラリのみ        |
 
@@ -49,53 +43,26 @@ if is_business_day(date.today(), calendar=calendar):
 「国民の祝日・休日月日」「国民の祝日・休日名称」。1 行目はヘッダーなので
 読み込み時にスキップする。
 
-## 保存先（キャッシュ）
-
-**内閣府 CSV は `comken/core/holidays/data/syukujitsu.csv` に同梱** している。
-`CabinetOfficeCSVSource` は **この同梱 CSV を保存先としても使う**（git 管理下の
-1ファイルが正本）。`default_calendar()` も同じファイルを指す。**PC ごとの
-キャッシュは廃止** した（「どの PC のキャッシュがいつのものか」を追えなくなる
-問題を防ぐため）。
-
-`cache_path` 引数を渡せば **別の場所を指定できる**（既定以外を使うケース）。
-ただし通常は変更しない。
-
-```python
-from comken.toolbox.holidays.sources.cabinet_office import CabinetOfficeCSVSource
-
-source = CabinetOfficeCSVSource(
-    cache_path=Path("D:/work/cache/syukujitsu.csv"),  # 既定以外を使うときだけ
-)
-```
-
-`source.refresh()` を呼ぶと **同梱 CSV を上書き** する。共有サーバーの
-**読み取り専用チェックアウト** で動かすとここで `PermissionError` で失敗する
-（エラーメッセージに「どこに書こうとしたか」と「年1回の手動更新手順」が
-出る）。通常は次の **年1回の手動更新** に乗せて配布する。
-
-```text
-1. 開発機で内閣府から取得（CabinetOfficeCSVSource().refresh() でも可）
-2. git に差分が出るのでコミット → タグを打つ
-3. 共有サーバー側で checkout
-```
-
-内閣府のデータは年に数回しか変わらないので、TTL は設けていない。
-
-`HolidayCalendar.is_business_day` などはネットに繋がらずに動くので、
-オフライン PC で requests が無いときも import は成功する。
-
 ## 内閣府 CSV の同梱（既定カレンダー）
 
 既定カレンダー（→ [既定カレンダー](#既定カレンダーcalendar-を省略する書き方)）は、
 内閣府の `syukujitsu.csv` を `comken/core/holidays/data/` に**同梱**している。
 業務 PC がオフラインでも `default_calendar()` はそのまま動く。
 
-- **年 1 回手動で更新する**（リポジトリを更新してタグを打つ流れに乗る）
-- TTL による自動再取得はしない（年に数回の更新を毎日取りに行く設定は無駄だった）
+- **年 1 回手動で更新する**（開発機で内閣府から取得 → コミット → 共有サーバーへ checkout）。
+  自動ダウンロード機能は無い
 - 収録期限（= 同梱 CSV に書かれた最新日付）が近づくと `EXPIRING_WARNING_DAYS`（既定 30 日）
   未満で **WARNING ログが 1 度だけ**出る（更新タイミングの検知）
 - 期限を過ぎても止まらず `ComputedHolidaySource`（計算式）でカバーする。
   春分・秋分のみ内閣府発表日との ±1 日のずれが起きうる
+
+### 年 1 回の手動更新手順
+
+1. 開発機で内閣府の `syukujitsu.csv` をダウンロードする
+   （URL: <https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv>）
+2. `comken/core/holidays/data/syukujitsu.csv` をダウンロードしたファイルで上書きする
+3. git で差分をコミットし、タグを打つ
+4. 共有サーバー側で `git fetch --tags && git checkout <tag>` して配布する
 
 ## 会社休日
 
@@ -166,10 +133,9 @@ COMPANY_HOLIDAYS_EXTRA: Final[tuple[_dt.date, ...]] = ()
 | `add_business_days(d, n, *, calendar)` | `d` から `n` 営業日後の日付（`n` が負なら前）           |
 | `BUSINESS_DAY_SEARCH_LIMIT`       | 「次の営業日」探索の上限日数（既定 30）                     |
 | `BUNDLED_CSV_PATH`                | 内閣府 CSV を同梱しているパス（git 管理下の正本）           |
-| `CabinetOfficeCSVSource`          | 内閣府 CSV を URL から取得して `BUNDLED_CSV_PATH` へ書く `HolidaySource` |
 | `ComputedHolidaySource`           | 計算で祝日の和集合を返す `HolidaySource`（mokejp/holidays_jp MIT 由来） |
 | `CompanyHolidaySource`            | 会社独自の休業日（コード直書き）の `HolidaySource`         |
-| `HolidayCalendarError` 系         | 例外（`HolidayCalendarFetchError` / `HolidayCalendarSourceError` / `HolidayCalendarFormatError` / `BusinessDayNotFoundError`） |
+| `HolidayCalendarError` 系         | 例外（`HolidayCalendarSourceError` / `HolidayCalendarFormatError` / `BusinessDayNotFoundError`） |
 
 `HolidayCalendar.is_business_day` はキーワード専用 `skip_weekends=True` を持ち、
 `False` にすると土曜・日曜でも祝日でなければ「営業日」と判定する
@@ -261,8 +227,7 @@ nth_business_day_of_month(date.today(), 3)  # 今月の第 3 営業日
 2. 同梱の `comken/core/holidays/data/syukujitsu.csv`（内閣府の実値。計算式の上書き用）
 3. `CompanyHolidaySource`（会社の休業日。コード直書き）
 
-`CabinetOfficeCSVSource` は `requests` 依存・業務 PC の通信制限に阻まれる
-ため既定には含めない。**`comken.core` は `requests` を import しないので、
+**`comken.core` は `requests` を import しないので、
 オフライン環境・社内 BO 端末でも `from comken.core import is_business_day`
 がそのまま動く。**
 

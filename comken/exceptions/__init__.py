@@ -115,7 +115,6 @@ ComkenError
 │   └── StateValueTypeError
 ├── WindowNotFoundError
 ├── HolidayCalendarError
-│   ├── HolidayCalendarFetchError
 │   ├── HolidayCalendarSourceError
 │   │   └── HolidayCalendarFormatError
 │   └── BusinessDayNotFoundError
@@ -252,7 +251,6 @@ from comken.exceptions.file import (
 from comken.exceptions.holiday import (
     BusinessDayNotFoundError,
     HolidayCalendarError,
-    HolidayCalendarFetchError,
     HolidayCalendarFormatError,
     HolidayCalendarSourceError,
 )
@@ -415,7 +413,6 @@ __all__ = [
     "StateValueTypeError",
     "BusinessDayNotFoundError",
     "HolidayCalendarError",
-    "HolidayCalendarFetchError",
     "HolidayCalendarSourceError",
     "HolidayCalendarFormatError",
     "DownloaderError",

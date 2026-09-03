@@ -136,9 +136,8 @@ class ComputedHolidaySource(HolidaySource):
 計算で祝日の和集合を返すソース。
 
 ``HolidaySource`` Protocol を実装する。``load()`` で ``Iterable[Holiday]`` を返す。
-``CabinetOfficeCSVSource`` と並列に置いて、
-``from_sources([Cabinet, Computed])`` のように和集合で運用する
-（``HolidayCalendar`` 側の先勝ち WARNING ログが衝突をハンドリングする）。
+``HolidayCalendar.from_sources`` で他の ``HolidaySource``（同梱内閣府 CSV /
+``CompanyHolidaySource`` など）と並列に置いて和集合で運用する。
 
 このソースは **純粋計算のみ** — 外部通信・ファイル読み込みは一切しない。
 社内 BO 環境（オフライン・pip 制限）でもそのまま動く。
@@ -409,13 +408,7 @@ def from_sources(cls, sources: Iterable[HolidaySource]) -> Self:
 
 ##### 説明
 
-複数の ``HolidaySource`` を合体させる（内閣府 + Computed + 会社休日 など）。
-
-**カスケード動作**: 前の source が ``HolidayCalendarFetchError``
-（内閣府の取得失敗・``requests`` 不在など）を投げたら次の source へ
-フォールバックする。**内閣府が取れない環境で Computed に切り替えたい**
-ケース（オフライン BO 環境・期限切れ）を想定。
-全部失敗したら最後の ``HolidayCalendarFetchError`` をそのまま送出。
+複数の ``HolidaySource`` を合体させる（Computed + 内閣府CSV + 会社休日 など）。
 
 Args:
     sources: ``load()`` を持つ ``HolidaySource`` の iterable。
@@ -423,10 +416,6 @@ Args:
 
 Returns:
     全ソースを結合した ``HolidayCalendar``。
-
-Raises:
-    HolidayCalendarFetchError: 全 source が ``HolidayCalendarFetchError``
-        を投げた場合、最後のエラーをそのまま送出する。
 
 #### `is_holiday`
 
@@ -438,8 +427,6 @@ def is_holiday(self, target: _dt.date) -> bool:
 
 ``target`` が祝日（または休日）なら ``True``。
 
-ターゲットが今年/来年なら、内閣府 source への強制再取得を試みる
-（今年中に 1 回だけ。失敗時はサイレント）。
 計算式由来の暫定値（``approximate=True``）を返すときは WARNING ログ。
 
 #### `holidays_in`
@@ -530,9 +517,8 @@ class HolidaySource(Protocol):
 
 祝日を 1セット取り出せる仕組みの共通インタフェース。
 
-内閣府の ``CabinetOfficeCSVSource`` や ``ComputedHolidaySource`` / 会社の
-``CompanyHolidaySource`` の両方がこれを実装するため、利用側は入手経路を
-意識せずに ``from_sources`` に渡せる。
+``ComputedHolidaySource`` や会社の ``CompanyHolidaySource`` などがこれを
+実装するため、利用側は入手経路を意識せずに ``from_sources`` に渡せる。
 
 この Protocol はメソッドの型を ``Iterable[Holiday]`` に固定する。
 ``load()`` を呼んだその瞬間に取得が走る（キャッシュは実装側で持つ）のが
@@ -548,30 +534,6 @@ def load(self) -> Iterable[Holiday]:
 ##### 説明
 
 祝日セットを取り出して ``Iterable[Holiday]`` で返す。
-
-### `RefreshableHolidaySource`
-
-```text
-class RefreshableHolidaySource(Protocol):
-```
-
-#### 説明
-
-TTL を無視して強制再取得できる祝日 source（例: 内閣府の ``CabinetOfficeCSVSource``）。
-
-``HolidayCalendar`` がターゲットが今年/来年のときに内閣府への
-再取得を試みるためのフック。短いタイムアウト（既定 0.5 秒）で実装する。
-必須ではなく、管理表など再取得が要らない source は実装しなくてよい。
-
-#### `refresh`
-
-```text
-def refresh(self) -> Iterable[Holiday]:
-```
-
-##### 説明
-
-TTL を無視して強制再取得する。
 
 ### `RowChange`
 
@@ -1118,9 +1080,7 @@ def default_calendar() -> HolidayCalendar:
        （内閣府の実値。計算式の上書き用）
     3. ``CompanyHolidaySource``（会社独自の休業日。コード直書き）
 
-**ネットワークには一切出ない。** ``CabinetOfficeCSVSource`` は
-含めない（``comken.core`` は ``requests`` に依存できないし、業務 PC の
-通信制限下でも動く必要があるため）。
+**ネットワークには一切出ない。**
 
 ### `delete_file`
 
@@ -2397,9 +2357,8 @@ class ComputedHolidaySource(HolidaySource):
 計算で祝日の和集合を返すソース。
 
 ``HolidaySource`` Protocol を実装する。``load()`` で ``Iterable[Holiday]`` を返す。
-``CabinetOfficeCSVSource`` と並列に置いて、
-``from_sources([Cabinet, Computed])`` のように和集合で運用する
-（``HolidayCalendar`` 側の先勝ち WARNING ログが衝突をハンドリングする）。
+``HolidayCalendar.from_sources`` で他の ``HolidaySource``（同梱内閣府 CSV /
+``CompanyHolidaySource`` など）と並列に置いて和集合で運用する。
 
 このソースは **純粋計算のみ** — 外部通信・ファイル読み込みは一切しない。
 社内 BO 環境（オフライン・pip 制限）でもそのまま動く。
@@ -2510,13 +2469,7 @@ def from_sources(cls, sources: Iterable[HolidaySource]) -> Self:
 
 ##### 説明
 
-複数の ``HolidaySource`` を合体させる（内閣府 + Computed + 会社休日 など）。
-
-**カスケード動作**: 前の source が ``HolidayCalendarFetchError``
-（内閣府の取得失敗・``requests`` 不在など）を投げたら次の source へ
-フォールバックする。**内閣府が取れない環境で Computed に切り替えたい**
-ケース（オフライン BO 環境・期限切れ）を想定。
-全部失敗したら最後の ``HolidayCalendarFetchError`` をそのまま送出。
+複数の ``HolidaySource`` を合体させる（Computed + 内閣府CSV + 会社休日 など）。
 
 Args:
     sources: ``load()`` を持つ ``HolidaySource`` の iterable。
@@ -2524,10 +2477,6 @@ Args:
 
 Returns:
     全ソースを結合した ``HolidayCalendar``。
-
-Raises:
-    HolidayCalendarFetchError: 全 source が ``HolidayCalendarFetchError``
-        を投げた場合、最後のエラーをそのまま送出する。
 
 #### `is_holiday`
 
@@ -2539,8 +2488,6 @@ def is_holiday(self, target: _dt.date) -> bool:
 
 ``target`` が祝日（または休日）なら ``True``。
 
-ターゲットが今年/来年なら、内閣府 source への強制再取得を試みる
-（今年中に 1 回だけ。失敗時はサイレント）。
 計算式由来の暫定値（``approximate=True``）を返すときは WARNING ログ。
 
 #### `holidays_in`
@@ -2634,33 +2581,6 @@ class HolidayCalendarError(ComkenError):
 対処:
     画面に表示された具体的なエラー名を上の表から探す
 
-### `HolidayCalendarFetchError`
-
-```text
-class HolidayCalendarFetchError(HolidayCalendarError):
-```
-
-#### 説明
-
-内閣府の祝日 CSV を取得できない
-
-オフライン環境・社内ネットワークの制約・内閣府サイトの保守などの理由で
-ダウンロードが失敗する。**ただしキャッシュが残っている場合は警告ログのみで動く**
-（cached フラグで運用側が検知できる）。
-
-発生箇所: comken.toolbox.holidays.sources.cabinet_office の CabinetOfficeCSVSource
-
-対処:
-    ネットワーク接続と社内プロキシの設定を確認する。
-    それでも直らない場合は、保存済みのキャッシュで当面動かすか、
-    管理表（Excel）に会社休日を登録して代用する
-
-#### `__init__`
-
-```text
-def __init__(self, url: str, reason: str) -> None:
-```
-
 ### `HolidayCalendarFormatError`
 
 ```text
@@ -2716,9 +2636,8 @@ class HolidaySource(Protocol):
 
 祝日を 1セット取り出せる仕組みの共通インタフェース。
 
-内閣府の ``CabinetOfficeCSVSource`` や ``ComputedHolidaySource`` / 会社の
-``CompanyHolidaySource`` の両方がこれを実装するため、利用側は入手経路を
-意識せずに ``from_sources`` に渡せる。
+``ComputedHolidaySource`` や会社の ``CompanyHolidaySource`` などがこれを
+実装するため、利用側は入手経路を意識せずに ``from_sources`` に渡せる。
 
 この Protocol はメソッドの型を ``Iterable[Holiday]`` に固定する。
 ``load()`` を呼んだその瞬間に取得が走る（キャッシュは実装側で持つ）のが
@@ -2734,30 +2653,6 @@ def load(self) -> Iterable[Holiday]:
 ##### 説明
 
 祝日セットを取り出して ``Iterable[Holiday]`` で返す。
-
-### `RefreshableHolidaySource`
-
-```text
-class RefreshableHolidaySource(Protocol):
-```
-
-#### 説明
-
-TTL を無視して強制再取得できる祝日 source（例: 内閣府の ``CabinetOfficeCSVSource``）。
-
-``HolidayCalendar`` がターゲットが今年/来年のときに内閣府への
-再取得を試みるためのフック。短いタイムアウト（既定 0.5 秒）で実装する。
-必須ではなく、管理表など再取得が要らない source は実装しなくてよい。
-
-#### `refresh`
-
-```text
-def refresh(self) -> Iterable[Holiday]:
-```
-
-##### 説明
-
-TTL を無視して強制再取得する。
 
 ### `add_business_days`
 
@@ -2872,9 +2767,7 @@ def default_calendar() -> HolidayCalendar:
        （内閣府の実値。計算式の上書き用）
     3. ``CompanyHolidaySource``（会社独自の休業日。コード直書き）
 
-**ネットワークには一切出ない。** ``CabinetOfficeCSVSource`` は
-含めない（``comken.core`` は ``requests`` に依存できないし、業務 PC の
-通信制限下でも動く必要があるため）。
+**ネットワークには一切出ない。**
 
 ### `first_business_day_of_month`
 
@@ -5521,33 +5414,6 @@ class HolidayCalendarError(ComkenError):
 対処:
     画面に表示された具体的なエラー名を上の表から探す
 
-### `HolidayCalendarFetchError`
-
-```text
-class HolidayCalendarFetchError(HolidayCalendarError):
-```
-
-#### 説明
-
-内閣府の祝日 CSV を取得できない
-
-オフライン環境・社内ネットワークの制約・内閣府サイトの保守などの理由で
-ダウンロードが失敗する。**ただしキャッシュが残っている場合は警告ログのみで動く**
-（cached フラグで運用側が検知できる）。
-
-発生箇所: comken.toolbox.holidays.sources.cabinet_office の CabinetOfficeCSVSource
-
-対処:
-    ネットワーク接続と社内プロキシの設定を確認する。
-    それでも直らない場合は、保存済みのキャッシュで当面動かすか、
-    管理表（Excel）に会社休日を登録して代用する
-
-#### `__init__`
-
-```text
-def __init__(self, url: str, reason: str) -> None:
-```
-
 ### `HolidayCalendarSourceError`
 
 ```text
@@ -6412,12 +6278,23 @@ def from_row(cls, row: Mapping[str, object]) -> Self:
 #### `is_due`
 
 ```text
-def is_due(self, now: dt.datetime, *, holidays: set[dt.date] | frozenset[dt.date]=frozenset()) -> bool:
+def is_due(self, now: dt.datetime, *, holidays: set[dt.date] | frozenset[dt.date]=frozenset(), calendar: HolidayCalendar | None=None) -> bool:
 ```
 
 ##### 説明
 
 指定時刻にこのスケジュールを実行すべきか判定する。
+
+``calendar`` は「日付」列に「第N営業日」を指定した行の判定にのみ使う
+（``comken.core.holidays.nth_business_day_of_month`` に渡す）。省略時は
+``default_calendar()`` にフォールバックする。``holidays`` 引数（祝日の
+``set[date]``）は独立に残しており、「第N営業日」以外での祝日判定に使う。
+
+``FREQUENCY_DAILY`` / ``FREQUENCY_WEEKLY`` / ``FREQUENCY_MONTHLY`` で
+``run_time is None`` のときは「時刻条件なし」を意味し、日付条件が合えば常に
+``True`` を返す（例: 前日以前の確定済みデータのように、いつ取っても同じ内容の
+レポート用）。``FREQUENCY_HOURLY`` は対象外で、``run_time`` が無いと
+``ScheduleIntervalMissingError`` を投げる。
 
 
 ## `from comken.toolbox import ...`
@@ -9577,88 +9454,6 @@ def count(self) -> int:
 ##### 説明
 
 データ行数を返す。
-
-
-## `from comken.toolbox.holidays import ...`
-
-### `CabinetOfficeCSVSource`
-
-```text
-class CabinetOfficeCSVSource(HolidaySource, RefreshableHolidaySource):
-```
-
-#### 説明
-
-内閣府の ``syukujitsu.csv`` をダウンロードして ``Holiday`` の iterable を返す。
-
-初回 ``load()`` 時にキャッシュ（= 同梱 CSV）が無ければダウンロードし、
-あればキャッシュを返す。``refresh()`` を呼ぶと TTL に関係なく強制再取得する。
-
-**既定の保存先はライブラリ同梱の CSV**（``BUNDLED_CSV_PATH``）。
-共有サーバーの **読み取り専用チェックアウト** で ``load()`` /
-``refresh()`` を呼ぶと ``PermissionError`` で落ちる。
-そのときは **開発機で取得 → コミット → 共有サーバーへ checkout** で
-配布する（年 1 回の手動更新）。
-
-Args:
-    url: 内閣府の CSV の URL。既定は ``syukujitsu.csv`` の配布 URL。
-    cache_path: ダウンロードした CSV の保存先。既定は ``BUNDLED_CSV_PATH``
-        （= ``comken/core/holidays/data/syukujitsu.csv``）。PC ごとの
-        キャッシュは廃止したので、通常は変更しない。
-    encoding: CSV の文字コード。CP932（Shift_JIS）のままで良い。
-    fetch_timeout_seconds: requests.get() のタイムアウト秒数。
-    refresh_timeout_seconds: refresh() で使う短いタイムアウト秒数（業務フロー停止を防ぐ）。
-
-#### `__init__`
-
-```text
-def __init__(self, url: str=DEFAULT_URL, cache_path: Path | str | None=None, *, encoding: str='cp932', fetch_timeout_seconds: float=30.0, refresh_timeout_seconds: float=0.5) -> None:
-```
-
-#### `load`
-
-```text
-@measure
-def load(self) -> list[Holiday]:
-```
-
-##### 説明
-
-キャッシュがあればそれを、無ければダウンロードして ``Holiday`` を返す。
-
-Returns:
-    内閣府の祝日を日付順に並べた ``Holiday`` のリスト。
-
-Raises:
-    HolidayCalendarFetchError: ダウンロードもキャッシュも読めない場合。
-        共有サーバーの読み取り専用チェックアウトで ``cache_path``
-        （既定は同梱 CSV）への書き込みに失敗したときもここに来る。
-
-#### `refresh`
-
-```text
-@measure
-def refresh(self) -> list[Holiday]:
-```
-
-##### 説明
-
-TTL を無視して内閣府から強制再取得する（業務フローを止めない短時間タイムアウト）。
-
-``HolidayCalendar.is_business_day(target)`` などでターゲットが
-今年/来年で内閣府 CSV に該当データが無い場合に呼ばれる。
-**タイムアウトは ``refresh_timeout_seconds``（既定 0.5 秒）** にして、
-ネットワークが遅い環境でも業務を止めない。
-
-取得できなくても例外は投げず、**キャッシュがあれば警告ログを出して
-キャッシュで代用**する（``load()`` と同じ挙動）。キャッシュも無い
-ときだけ ``HolidayCalendarFetchError`` を送出する。
-
-Returns:
-    内閣府の祝日を日付順に並べた ``Holiday`` のリスト。
-
-Raises:
-    HolidayCalendarFetchError: ダウンロードに失敗し、キャッシュも無い場合。
 
 
 ## `from comken.toolbox.outlook import ...`

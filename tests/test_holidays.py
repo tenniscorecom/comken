@@ -2,7 +2,6 @@
 
 内閣府の祝日 CSV（CP932 エンコード）と会社の休業日ソース、
 ソース Protocol の各経路を横断的に検証する。
-``comken.toolbox.holidays`` 側（``CabinetOfficeCSVSource``）の検証も同じファイルで行う。
 """
 
 from __future__ import annotations
@@ -35,11 +34,9 @@ from comken.core.holidays.sources.computed import ComputedHolidaySource
 from comken.exceptions import (
     BusinessDayNotFoundError,
     HolidayCalendarError,
-    HolidayCalendarFetchError,
     HolidayCalendarFormatError,
     HolidayCalendarSourceError,
 )
-from comken.toolbox.holidays import CabinetOfficeCSVSource
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "holidays" / "syukujitsu_sample.csv"
 
@@ -430,108 +427,6 @@ class TestModuleLevelFunction:
             is_business_day(_dt.date(2024, 1, 2), cal)  # type: ignore[misc]
 
 
-# ── CabinetOfficeCSVSource ────────────────────────────────────────────────
-
-
-class _StubResponse:
-    """requests のレスポンスを模倣する最小スタブ。"""
-
-    def __init__(self, content: bytes, status_code: int = 200) -> None:
-        self.content = content
-        self.status_code = status_code
-
-    def raise_for_status(self) -> None:
-        if self.status_code >= 400:
-            raise RuntimeError(f"status {self.status_code}")
-
-
-class TestCabinetOfficeCsvSource:
-    """``CabinetOfficeCSVSource`` のキャッシュ・フェッチ失敗フォールバック。"""
-
-    def test_uses_cache_when_present(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """キャッシュ済みならそのまま使う（ダウンロードを呼ばない）。"""
-        cache = tmp_path / "cache.csv"
-        cache.write_bytes(
-            "国民の祝日・休日月日,国民の祝日・休日名称\n2024-01-01,元日\n".encode("cp932")
-        )
-
-        called = {"count": 0}
-
-        def _fake_get(*args, **kwargs):
-            called["count"] += 1
-            return _StubResponse(b"unused")
-
-        monkeypatch.setattr("requests.get", _fake_get)
-        # requests が無い環境でも動かすため、sys.modules にダミーを入れる
-        import sys
-        import types
-
-        if "requests" not in sys.modules:
-            requests_module = types.ModuleType("requests")
-            requests_module.get = _fake_get  # type: ignore[attr-defined]
-            sys.modules["requests"] = requests_module
-
-        source = CabinetOfficeCSVSource(cache_path=cache)
-        holidays = list(source.load())
-        assert called["count"] == 0, "キャッシュがあればリクエストを呼ばない"
-        assert holidays[0].name == "元日"
-
-    def test_downloads_when_cache_absent(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """キャッシュが無ければダウンロードしてキャッシュを更新する。"""
-        cache = tmp_path / "cache.csv"
-        body = "国民の祝日・休日月日,国民の祝日・休日名称\n2024-02-11,建国記念の日\n".encode(
-            "cp932"
-        )
-        called = {"count": 0}
-
-        def _fake_get(*args, **kwargs):
-            called["count"] += 1
-            return _StubResponse(body)
-
-        import sys
-        import types
-
-        if "requests" not in sys.modules:
-            requests_module = types.ModuleType("requests")
-            requests_module.get = _fake_get  # type: ignore[attr-defined]
-            sys.modules["requests"] = requests_module
-        monkeypatch.setattr("requests.get", _fake_get)
-
-        source = CabinetOfficeCSVSource(cache_path=cache)
-        holidays = list(source.load())
-        assert called["count"] == 1, "キャッシュが無ければリクエストを呼ぶ"
-        assert holidays[0].name == "建国記念の日"
-        # キャッシュも更新されている
-        assert cache.read_bytes() == body
-
-    def test_raises_fetch_error_when_no_cache_and_network_fails(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """キャッシュも無い + 取得失敗 → ``HolidayCalendarFetchError``。"""
-        import sys
-        import types
-
-        def _failing_get(*args, **kwargs):
-            import requests  # type: ignore[import-not-found]
-
-            raise requests.RequestException("no network")  # type: ignore[attr-defined]
-
-        requests_module = types.ModuleType("requests")
-        requests_module.get = _failing_get  # type: ignore[attr-defined]
-        requests_module.RequestException = type(  # type: ignore[attr-defined]
-            "RequestException", (Exception,), {}
-        )
-        sys.modules["requests"] = requests_module
-        monkeypatch.setattr("requests.get", _failing_get)
-
-        cache = tmp_path / "no_cache.csv"
-        source = CabinetOfficeCSVSource(cache_path=cache)
-        with pytest.raises(HolidayCalendarFetchError):
-            list(source.load())
-
-
 # ── 例外の型階層 ─────────────────────────────────────────────────────────
 
 
@@ -541,7 +436,6 @@ class TestExceptionHierarchy:
     @pytest.mark.parametrize(
         ("exception", "expected_name"),
         [
-            (HolidayCalendarFetchError("u", "r"), "HolidayCalendarFetchError"),
             (HolidayCalendarSourceError("s", "r"), "HolidayCalendarSourceError"),
             (HolidayCalendarFormatError("p", "d"), "HolidayCalendarFormatError"),
         ],
@@ -551,44 +445,6 @@ class TestExceptionHierarchy:
         assert isinstance(exception, HolidayCalendarError)
         assert isinstance(exception, Exception)
         assert type(exception).__name__ == expected_name
-
-
-# ── 遅延 import 確認 ──────────────────────────────────────────────────────
-
-
-class TestNoImplicitRequests:
-    """モジュール import 時に ``requests`` が読まれないことを確認する。"""
-
-    def test_importing_holidays_does_not_load_requests(self) -> None:
-        """``comken.toolbox.holidays`` を import しても ``requests`` は入らない。
-
-        オフライン環境（社内 BO 端末）で requests が無い PC でも
-        ``HolidayCalendar.is_business_day`` などが動くことを保証する。
-        """
-        import sys
-
-        # 他のテストが ``sys.modules["requests"]`` にダミーを入れているので、
-        # このテストではまっさらな状態から import し直す
-        for name in (
-            "requests",
-            "comken.toolbox.holidays",
-            "comken.core.holidays",
-            "comken.core.holidays.calendar",
-            "comken.core.holidays.csv_source",
-            "comken.core.holidays.sources",
-            "comken.core.holidays.sources.computed",
-            "comken.core.holidays.sources.company",
-            "comken.toolbox.holidays.sources",
-            "comken.toolbox.holidays.sources.cabinet_office",
-        ):
-            sys.modules.pop(name, None)
-
-        import comken.toolbox.holidays  # noqa: F401
-
-        assert "requests" not in sys.modules, (
-            "requests が import 時に読込まれています。"
-            "CabinetOfficeCSVSource._download 内で遅延 import してください。"
-        )
 
 
 # ── ComputedHolidaySource ───────────────────────────────────────────────
@@ -839,172 +695,6 @@ class TestApproximateHoliday:
             assert h.approximate is False, f"{h} に approximate が付いています"
 
 
-class TestCabinetOfficeRefresh:
-    """``CabinetOfficeCSVSource.refresh()`` の挙動。"""
-
-    def test_refresh_default_timeout_is_half_second(self) -> None:
-        """``refresh()`` は既定で 0.5 秒タイムアウト（業務フローを止めないため）。"""
-        assert CabinetOfficeCSVSource()._refresh_timeout == 0.5
-
-    def test_refresh_returns_holidays_on_success(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        """``refresh()`` は内閣府取得に成功すると ``Holiday`` のリストを返しキャッシュへ書く。"""
-        source = CabinetOfficeCSVSource(cache_path=tmp_path / "syukujitsu.csv")
-        # fixture のバイト列を返す
-        fresh_bytes = FIXTURE_PATH.read_bytes()
-        monkeypatch.setattr(source, "_download", lambda timeout=None: fresh_bytes)
-
-        holidays = source.refresh()
-
-        assert any(h.name == "元日" for h in holidays)
-        # キャッシュに書かれている
-        assert (tmp_path / "syukujitsu.csv").exists()
-
-    def test_refresh_falls_back_to_cache_on_fetch_error(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        """内閣府取得失敗時にキャッシュがあれば警告ログを出してキャッシュで代用。"""
-        from comken.exceptions import HolidayCalendarFetchError
-
-        cache_path = tmp_path / "syukujitsu.csv"
-        cache_path.write_bytes(FIXTURE_PATH.read_bytes())
-        source = CabinetOfficeCSVSource(cache_path=cache_path)
-
-        def fail(timeout: float | None = None) -> bytes:
-            raise HolidayCalendarFetchError("https://example/", "timeout")
-
-        monkeypatch.setattr(source, "_download", fail)
-
-        holidays = source.refresh()
-
-        assert any(h.name == "元日" for h in holidays)
-
-
-class TestHolidayCalendarCascade:
-    """``HolidayCalendar.from_sources()`` のカスケード動作。"""
-
-    def test_cabinet_office_failure_falls_back_to_computed(self) -> None:
-        """内閣府失敗 → Computed にフォールバック（カスケード）。
-
-        オフライン BO 環境で内閣府が取得できなくても、Computed が
-        固定パターンの祝日を返すため業務が止まらない。
-        """
-        from comken.exceptions import HolidayCalendarFetchError
-
-        class FailingCabinet:
-            def load(self):
-                raise HolidayCalendarFetchError("https://example/", "network")
-
-        calendar = HolidayCalendar.from_sources(
-            [
-                FailingCabinet(),
-                ComputedHolidaySource(from_year=2026, to_year=2026),
-            ]
-        )
-
-        # Computed の固定パターンの祝日が反映されている
-        assert any(h.name == "憲法記念日" for h in calendar.all_holidays())
-
-    def test_all_sources_failure_raises_last_error(self) -> None:
-        """全 source が失敗したら最後の ``HolidayCalendarFetchError`` を送出。"""
-        from comken.exceptions import HolidayCalendarFetchError
-
-        class Failing:
-            def load(self):
-                raise HolidayCalendarFetchError("https://example/", "fail")
-
-        with pytest.raises(HolidayCalendarFetchError):
-            HolidayCalendar.from_sources([Failing(), Failing()])
-
-
-class TestHolidayCalendarRefresh:
-    """``HolidayCalendar.is_holiday()`` の内閣府強制再取得と approximate 警告。"""
-
-    def test_is_holiday_calls_refresh_for_current_year(self) -> None:
-        """ターゲットが今年のとき内閣府 refresh を試みる。"""
-        called = {"count": 0}
-
-        class FakeCabinet:
-            def refresh(self):
-                called["count"] += 1
-                return []
-
-            def load(self):
-                return []
-
-        calendar = HolidayCalendar.from_sources(
-            [
-                FakeCabinet(),
-                ComputedHolidaySource(from_year=2026, to_year=2026),
-            ]
-        )
-        this_year = _dt.date.today().year  # noqa: DTZ011
-        calendar.is_holiday(_dt.date(this_year, 1, 1))
-        assert called["count"] >= 1
-
-    def test_is_holiday_does_not_refresh_for_old_year(self) -> None:
-        """去年以前は refresh を試まない（内閣府 CSV には無いはずなので）。"""
-        called = {"count": 0}
-
-        class FakeCabinet:
-            def refresh(self):
-                called["count"] += 1
-                return []
-
-            def load(self):
-                return []
-
-        calendar = HolidayCalendar.from_sources(
-            [
-                FakeCabinet(),
-                ComputedHolidaySource(from_year=2026, to_year=2026),
-            ]
-        )
-        calendar.is_holiday(_dt.date(2020, 1, 1))  # 2020 年（過去）
-        assert called["count"] == 0
-
-    def test_is_holiday_warns_on_approximate(self, caplog: pytest.LogCaptureFixture) -> None:
-        """``approximate=True`` の Holiday を返すときに WARNING ログが出る。
-
-        春分の日・秋分の日は内閣府発表と ±1 日前後する可能性があるので、
-        ユーザーに気づかせる。
-        """
-        calendar = HolidayCalendar.from_sources(
-            [
-                ComputedHolidaySource(from_year=2026, to_year=2026),
-            ]
-        )
-        # 春分の日 (approximate=True)
-        with caplog.at_level(logging.WARNING, logger="comken.core.holidays.calendar"):
-            calendar.is_holiday(_dt.date(2026, 3, 20))
-        assert any("計算式による暫定値" in r.getMessage() for r in caplog.records)
-
-    def test_refresh_only_once_per_year(self) -> None:
-        """同じ年には 1 回しか refresh を試まない（重複防止）。"""
-        called = {"count": 0}
-
-        class FakeCabinet:
-            def refresh(self):
-                called["count"] += 1
-                return []
-
-            def load(self):
-                return []
-
-        calendar = HolidayCalendar.from_sources(
-            [
-                FakeCabinet(),
-                ComputedHolidaySource(from_year=2026, to_year=2026),
-            ]
-        )
-        this_year = _dt.date.today().year  # noqa: DTZ011
-        calendar.is_holiday(_dt.date(this_year, 1, 1))
-        calendar.is_holiday(_dt.date(this_year, 6, 15))
-        calendar.is_holiday(_dt.date(this_year, 12, 31))
-        assert called["count"] == 1
-
-
 # ── 既定カレンダー ─────────────────────────────────────────────────────
 
 
@@ -1026,8 +716,7 @@ class TestDefaultCalendar:
     def test_default_calendar_does_not_use_requests(self) -> None:
         """既定カレンダーがネットワークに出ないこと（``requests`` を import しない）。
 
-        ``CabinetOfficeCSVSource`` は ``requests`` 依存なので、これが既定
-        カレンダーに含まれていないことの間接チェック。
+        既定カレンダーの生成過程で ``requests`` を import する経路が無いことを確認する。
         """
         import sys
 
@@ -1035,7 +724,7 @@ class TestDefaultCalendar:
         default_calendar()
         assert "requests" not in sys.modules, (
             "既定カレンダーの生成で requests が import されました。"
-            "CabinetOfficeCSVSource を含めてはいけません。"
+            "requests に依存する経路を含めてはいけません。"
         )
 
     def test_default_calendar_includes_company_holidays(self) -> None:

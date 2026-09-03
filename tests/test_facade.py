@@ -61,7 +61,6 @@ def test_core_exposes_parts() -> None:
         "Holiday",
         "HolidayCalendar",
         "HolidaySource",
-        "RefreshableHolidaySource",
         "RowChange",
         "State",
         "Timer",

@@ -5,9 +5,8 @@ r"""comken/core/holidays/__init__.py — 祝日判定ライブラリ。
 
     from comken.core.holidays import HolidayCalendar, is_business_day
 
-    # 内閣府 CSV は ``CabinetOfficeCSVSource``（toolbox 側）で取得して
-    # ``BUNDLED_CSV_PATH`` へ書く。利用プロジェクトでは ``HolidayCalendar``
-    # に会社の休業日を足すだけで動かせる形が基本。
+    # 利用プロジェクトでは ``HolidayCalendar`` に会社の休業日を足すだけで
+    # 動かせる形が基本。
     calendar = HolidayCalendar.from_sources([
         CompanyHolidaySource(),
     ])
@@ -15,14 +14,9 @@ r"""comken/core/holidays/__init__.py — 祝日判定ライブラリ。
     if is_business_day(date.today(), calendar=calendar):
         ...  # レポートを取りに行く
 
-遅延 import 禁止の方針どおり、requests はモジュール import 時には読み込まない。
-ネット系の処理は ``sources.cabinet_office.CabinetOfficeCSVSource`` の中だけに閉じ、
-``HolidayCalendar.is_business_day`` 単体ではネットに繋がらずに動く。
-
 内閣府 CSV は ``BUNDLED_CSV_PATH``（= ``comken/core/holidays/data/syukujitsu.csv``）
 に **git 管理下で同梱** している。**PC ごとのキャッシュは持たない**。
 更新は年 1 回の手動作業（**開発機で内閣府から取得 → コミット → 共有サーバーへ checkout**）。
-``default_calendar()`` と ``CabinetOfficeCSVSource()`` は同じこの 1 ファイルを指す。
 
 営業日の判定関数（``is_business_day`` / ``business_day_after`` /
 ``business_day_on_or_after`` / ``first_business_day_of_month`` など）は
@@ -46,12 +40,10 @@ nth_business_day_of_month    ``target`` の月の第 n 営業日（n は 1 始�
 add_business_days            ``target`` から n 営業日後（n が負なら前）
 default_calendar             既定カレンダーを取得（プロセス内で 1回だけ遅延生成）
 set_default_calendar         既定カレンダーを差し替える（``None`` でリセット）
-CabinetOfficeCSVSource    内閣府 CSV を取得して ``BUNDLED_CSV_PATH`` へ書く ``HolidaySource``
 ComputedHolidaySource     計算式で祝日を組み立てる ``HolidaySource``
 CompanyHolidaySource      会社独自の休業日（コード直書き）の ``HolidaySource``
 HolidayCalendarError  祝日関連の基底例外
 BusinessDayNotFoundError   月内に該当営業日が無い／探索上限到達
-HolidayCalendarFetchError      内閣府 CSV の取得失敗
 HolidayCalendarSourceError     管理表・CSV 形式の問題
 HolidayCalendarFormatError     内閣府 CSV として解釈できない形式
 """
@@ -63,7 +55,6 @@ from comken.core.holidays.calendar import (
     Holiday,
     HolidayCalendar,
     HolidaySource,
-    RefreshableHolidaySource,
     add_business_days,
     business_day_after,
     business_day_before,
@@ -82,7 +73,6 @@ from comken.core.holidays.sources.computed import ComputedHolidaySource
 from comken.exceptions import (
     BusinessDayNotFoundError,
     HolidayCalendarError,
-    HolidayCalendarFetchError,
     HolidayCalendarFormatError,
     HolidayCalendarSourceError,
 )
@@ -97,11 +87,9 @@ __all__ = [
     "Holiday",
     "HolidayCalendar",
     "HolidayCalendarError",
-    "HolidayCalendarFetchError",
     "HolidayCalendarFormatError",
     "HolidayCalendarSourceError",
     "HolidaySource",
-    "RefreshableHolidaySource",
     "add_business_days",
     "business_day_after",
     "business_day_before",

@@ -93,7 +93,7 @@ PEP 8 は CapWords の中で略語を使う場合、**略語の文字をすべ�
 
 | 種別 | 例 | 備考 |
 |---|---|---|
-| 一般的な略語（クラス名） | `CSVError`, `APIMetrics`, `ExcelCOMHandler`, `InvalidReportURLError`, `CabinetOfficeCSVSource` | すべて大文字 |
+| 一般的な略語（クラス名） | `CSVError`, `APIMetrics`, `ExcelCOMHandler`, `InvalidReportURLError`, `HolidayCalendarError` | すべて大文字 |
 | 複合語の略語（例外名） | `SalesforceExternalIDMissingError`, `SalesforceReportIDNotFoundError` | `ID` も2文字だが大文字 |
 | 固有名詞・ブランド名 | `OAuth`, `DPAPI`, `HTTP` | 固有名詞としての表記をそのまま使う（例: `ClientCredentialsOAuth`） |
 

@@ -138,7 +138,6 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `StateValueTypeError` | state に保存できない型の値が渡された | 真偽値・整数・小数・文字列・文字列のリストのいずれかに変更する |
 | `BusinessDayNotFoundError` | 営業日が見つからなかった | n をその月の営業日数以下に直す、対象月の祝日に過不足がないか確認する、社内管理表（会社休日）が広範囲に登録されていないか確認する |
 | `HolidayCalendarError` | 祝日カレンダーに関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
-| `HolidayCalendarFetchError` | 内閣府の祝日 CSV を取得できない | ネットワーク接続と社内プロキシの設定を確認する。それでも直らない場合は、保存済みのキャッシュで当面動かすか、管理表（Excel）に会社休日を登録して代用する |
 | `HolidayCalendarSourceError` | 祝日データの読み取りに失敗した | 内閣府の CSV の場合: 内閣府の仕様変更。管理者へ連絡する |
 | `HolidayCalendarFormatError` | 内閣府 CSV 以外のファイルや壊れたファイルを内閣府 CSV として読み込もうとした | 内閣府の syukujitsu.csv を直接取得し直す。文字コードは CP932 (Shift_JIS) |
 | `HistoryWriteError` | 必須のダウンロード履歴を記録できなかった | 履歴CSVの保存先、共有サーバー接続、書込み権限を確認する |

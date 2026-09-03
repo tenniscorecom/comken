@@ -5,7 +5,6 @@
 ``is_holiday`` / ``is_business_day`` / ``business_day_after`` / ``expires_after`` を提供する。
 
 ネット系依存（requests）はこのモジュールには入らない。
-内閣府からの取得は ``sources/cabinet_office.py`` 側に閉じ込めている。
 """
 
 import datetime as _dt
@@ -16,7 +15,7 @@ from pathlib import Path
 from typing import Final, Protocol, Self, runtime_checkable
 
 from comken.core.clock import month_end, month_start
-from comken.exceptions import BusinessDayNotFoundError, HolidayCalendarFetchError
+from comken.exceptions import BusinessDayNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +50,8 @@ class Holiday:
 class HolidaySource(Protocol):
     """祝日を 1セット取り出せる仕組みの共通インタフェース。
 
-    内閣府の ``CabinetOfficeCSVSource`` や ``ComputedHolidaySource`` / 会社の
-    ``CompanyHolidaySource`` の両方がこれを実装するため、利用側は入手経路を
-    意識せずに ``from_sources`` に渡せる。
+    ``ComputedHolidaySource`` や会社の ``CompanyHolidaySource`` などがこれを
+    実装するため、利用側は入手経路を意識せずに ``from_sources`` に渡せる。
 
     この Protocol はメソッドの型を ``Iterable[Holiday]`` に固定する。
     ``load()`` を呼んだその瞬間に取得が走る（キャッシュは実装側で持つ）のが
@@ -63,20 +61,6 @@ class HolidaySource(Protocol):
 
     def load(self) -> Iterable[Holiday]:
         """祝日セットを取り出して ``Iterable[Holiday]`` で返す。"""
-        ...
-
-
-@runtime_checkable
-class RefreshableHolidaySource(Protocol):
-    """TTL を無視して強制再取得できる祝日 source（例: 内閣府の ``CabinetOfficeCSVSource``）。
-
-    ``HolidayCalendar`` がターゲットが今年/来年のときに内閣府への
-    再取得を試みるためのフック。短いタイムアウト（既定 0.5 秒）で実装する。
-    必須ではなく、管理表など再取得が要らない source は実装しなくてよい。
-    """
-
-    def refresh(self) -> Iterable[Holiday]:
-        """TTL を無視して強制再取得する。"""
         ...
 
 
@@ -105,11 +89,6 @@ class HolidayCalendar:
                 self._holidays[holiday.date] = holiday
         # 期限切れ警告を「同じ日に 1度だけ」出すためのキャッシュキー
         self._expiry_warned_on: _dt.date | None = None
-        # 同じ年には 1 回だけ内閣府 refresh を試みるためのキャッシュキー
-        self._refreshed_keys: set[int] = set()
-        # ``refresh()`` メソッドを持つ source のリスト（``from_sources`` で設定）。
-        # 単発利用（``HolidayCalendar([holidays])``）では空のまま。
-        self._refreshable_sources: list[RefreshableHolidaySource] = []
 
     # ── ファクトリ ───────────────────────────────────────────────────────────
 
@@ -137,13 +116,7 @@ class HolidayCalendar:
 
     @classmethod
     def from_sources(cls, sources: Iterable[HolidaySource]) -> Self:
-        """複数の ``HolidaySource`` を合体させる（内閣府 + Computed + 会社休日 など）。
-
-        **カスケード動作**: 前の source が ``HolidayCalendarFetchError``
-        （内閣府の取得失敗・``requests`` 不在など）を投げたら次の source へ
-        フォールバックする。**内閣府が取れない環境で Computed に切り替えたい**
-        ケース（オフライン BO 環境・期限切れ）を想定。
-        全部失敗したら最後の ``HolidayCalendarFetchError`` をそのまま送出。
+        """複数の ``HolidaySource`` を合体させる（Computed + 内閣府CSV + 会社休日 など）。
 
         Args:
             sources: ``load()`` を持つ ``HolidaySource`` の iterable。
@@ -151,45 +124,19 @@ class HolidayCalendar:
 
         Returns:
             全ソースを結合した ``HolidayCalendar``。
-
-        Raises:
-            HolidayCalendarFetchError: 全 source が ``HolidayCalendarFetchError``
-                を投げた場合、最後のエラーをそのまま送出する。
         """
         merged: list[Holiday] = []
-        last_error: HolidayCalendarFetchError | None = None
-        sources_list = list(sources)
-        for source in sources_list:
-            try:
-                merged.extend(source.load())
-            except HolidayCalendarFetchError as error:
-                logger.warning(
-                    "HolidaySource %s の取得に失敗しました。次のソースへフォールバックします: %s",
-                    type(source).__name__,
-                    error,
-                )
-                last_error = error
-                continue
-        if not merged and last_error is not None:
-            raise last_error
-        # ``refresh()`` メソッドを持つ source を保持。``is_business_day`` が
-        # 呼ばれたときに内閣府への強制再取得を指示するため。
-        instance = cls(merged)
-        instance._refreshable_sources = [
-            s for s in sources_list if isinstance(s, RefreshableHolidaySource)
-        ]
-        return instance
+        for source in sources:
+            merged.extend(source.load())
+        return cls(merged)
 
     # ── 判定 ─────────────────────────────────────────────────────────────────
 
     def is_holiday(self, target: _dt.date) -> bool:
         """``target`` が祝日（または休日）なら ``True``。
 
-        ターゲットが今年/来年なら、内閣府 source への強制再取得を試みる
-        （今年中に 1 回だけ。失敗時はサイレント）。
         計算式由来の暫定値（``approximate=True``）を返すときは WARNING ログ。
         """
-        self._maybe_refresh_for(target)
         holiday = self._holidays.get(target)
         if holiday is None:
             return False
@@ -276,47 +223,6 @@ class HolidayCalendar:
                 last,
             )
             self._expiry_warned_on = today
-
-    def _maybe_refresh_for(self, target: _dt.date) -> None:
-        """ターゲットが今年/来年なら、今年中に 1 回だけ内閣府に refresh を試みる。
-
-        **既定カレンダー（``default_calendar()``）では ``_refreshable_sources`` が
-        常に空のため、このメソッドは何もしない。** 自動再取得が働くのは、利用者が
-        明示的に ``HolidayCalendar.from_sources([..., CabinetOfficeCSVSource(), ...])``
-        のようにネットワーク対応の ``RefreshableHolidaySource`` を組み込んだときだけ。
-
-        キャッシュに ``target`` が無い or ``approximate=True`` (Computed の
-        近似式由来) のときに、内閣府に強制再取得を試みる。**今年中に 1 回だけ**
-        試す（複数回呼ばれるのを防ぐ）。失敗時はサイレント（既存のキャッシュ
-        または Computed の近似式で判定する）。
-        """
-        if not self._refreshable_sources:
-            return
-        today_year = _dt.date.today().year  # noqa: DTZ011
-        if target.year not in (today_year, today_year + 1):
-            return
-        if today_year in self._refreshed_keys:
-            return  # 同じ年には 1 回だけ
-        self._refreshed_keys.add(today_year)
-        for source in self._refreshable_sources:
-            try:
-                fresh = source.refresh()
-            except HolidayCalendarFetchError as error:
-                logger.warning(
-                    "HolidaySource %s への強制再取得に失敗しました: %s",
-                    type(source).__name__,
-                    error,
-                )
-                continue
-            # 内閣府由来の値（``approximate=False``）は Computed の近似式を
-            # 上書きする。逆は上書きしない（内閣府が取れない以上、Computed
-            # の近似式しかなく、ユーザーに誤情報を与えないため）。
-            for holiday in fresh:
-                existing = self._holidays.get(holiday.date)
-                if existing is not None and not existing.approximate:
-                    continue  # 既に内閣府由来 → 上書きしない
-                self._holidays[holiday.date] = holiday
-            return  # 1 個目の source が成功したら終了
 
 
 def is_business_day(
@@ -580,9 +486,8 @@ def add_business_days(
 # せずに ``is_business_day(target)`` と書ける」ための遅延生成キャッシュ。
 # ネットワークには出ない（``ComputedHolidaySource`` + 同梱 CSV + 会社休日 だけ）。
 
-# 内閣府の祝日 CSV を git 管理下に同梱したパス。``default_calendar()`` と
-# ``CabinetOfficeCSVSource`` の既定値が同じファイルを指すように、ここを
-# 単一の正本とする（PC ごとのキャッシュは廃止）。
+# 内閣府の祝日 CSV を git 管理下に同梱したパス。``default_calendar()`` が
+# 読む正本はここ。PC ごとのキャッシュは持たない。
 # 更新は年 1 回の手動作業（開発機で内閣府から取得 → コミット → 共有サーバーへ配置）。
 BUNDLED_CSV_PATH: Final[Path] = Path(__file__).parent / "data" / "syukujitsu.csv"
 _default_calendar: HolidayCalendar | None = None
@@ -597,9 +502,7 @@ def default_calendar() -> HolidayCalendar:
            （内閣府の実値。計算式の上書き用）
         3. ``CompanyHolidaySource``（会社独自の休業日。コード直書き）
 
-    **ネットワークには一切出ない。** ``CabinetOfficeCSVSource`` は
-    含めない（``comken.core`` は ``requests`` に依存できないし、業務 PC の
-    通信制限下でも動く必要があるため）。
+    **ネットワークには一切出ない。**
     """
     global _default_calendar
     if _default_calendar is None:
@@ -632,12 +535,7 @@ def set_default_calendar(calendar: HolidayCalendar | None) -> None:
 
 
 class _BundledCabinetCSVSource:
-    """同梱の ``syukujitsu.csv`` を読むための ``HolidaySource`` 実装。
-
-    ``CabinetOfficeCSVSource`` は ``requests`` 依存・ネットワーク取得が前提
-    なので既定カレンダーには使えない（``comken.core`` は ``requests`` を
-    import できない）。代わりに同梱 CSV を直接読む最小実装を用意する。
-    """
+    """同梱の ``syukujitsu.csv`` を読むための最小実装。"""
 
     def __init__(self, path: Path) -> None:
         self._path = path
@@ -683,7 +581,6 @@ __all__ = [
     "Holiday",
     "HolidayCalendar",
     "HolidaySource",
-    "RefreshableHolidaySource",
     "add_business_days",
     "business_day_after",
     "business_day_before",

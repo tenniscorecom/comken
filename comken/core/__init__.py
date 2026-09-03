@@ -39,7 +39,6 @@ from comken.core.holidays.calendar import EXPIRING_WARNING_DAYS
 from comken.core.holidays.calendar import Holiday
 from comken.core.holidays.calendar import HolidayCalendar
 from comken.core.holidays.calendar import HolidaySource
-from comken.core.holidays.calendar import RefreshableHolidaySource
 from comken.core.holidays.calendar import add_business_days
 from comken.core.holidays.calendar import business_day_after
 from comken.core.holidays.calendar import business_day_before
@@ -79,7 +78,6 @@ __all__ = [
     "Holiday",
     "HolidayCalendar",
     "HolidaySource",
-    "RefreshableHolidaySource",
     "RowChange",
     "State",
     "Timer",
