@@ -525,7 +525,7 @@ def _verify_internal_library_placeholder() -> None:
     """社内ライブラリ仮名が保たれているか検証する。
 
     ``comken/toolbox/rpa.py`` の ``RPA_LIBRARY_NAME`` が
-    ``example_libs.`` で始まる仮名のまま（実名へ書き戻されていないこと）を
+    ``kensetsu_libs.`` で始まる仮名のまま（実名へ書き戻されていないこと）を
     確認する。実名に置き換わっていると、公開リポジトリ経由で社内ライブラリ
     名が社外へ漏れるため、生成を止める。
 
@@ -539,7 +539,7 @@ def _verify_internal_library_placeholder() -> None:
     Raises:
         RuntimeError: 仮名が崩れていた場合。
     """
-    expected_prefix = "example_libs."
+    expected_prefix = "kensetsu_libs."
     rpa_module = import_module("comken.toolbox.rpa")
     names: list[tuple[str, str]] = [
         ("RPA_LIBRARY_NAME", rpa_module.RPA_LIBRARY_NAME),

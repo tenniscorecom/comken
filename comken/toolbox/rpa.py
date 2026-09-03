@@ -1,6 +1,6 @@
 """comken/toolbox/rpa.py — 社内 RPA 基盤呼び出しの薄いラッパー。
 
-``example_libs.rpa`` を静的 import で読み込み、対象が見つからない場合は
+``kensetsu_libs.rpa`` を静的 import で読み込み、対象が見つからない場合は
 ``InternalLibraryNotFoundError`` に変換する。呼び出し自体は
 ``comken.core.runner.run`` に任せる。
 """
@@ -14,7 +14,7 @@ from comken.core.runner import run
 from comken.core.timer import measure
 from comken.exceptions.rpa import InternalLibraryNotFoundError
 
-RPA_LIBRARY_NAME = "example_libs.rpa"
+RPA_LIBRARY_NAME = "kensetsu_libs.rpa"
 
 
 def _raise_if_target_missing(library_name: str, exc: ModuleNotFoundError) -> None:
@@ -53,7 +53,7 @@ def backoffice(main: Callable[[], Any], project_name: str) -> Any:
     """バックオフィスの RPA として main を実行する。"""
     try:
         # 社内 LAN にだけ存在する（自宅PC・CI では未インストール）
-        from example_libs import rpa  # type: ignore[reportMissingImports]
+        from kensetsu_libs import rpa  # type: ignore[reportMissingImports]
     except ModuleNotFoundError as exc:
         _raise_if_target_missing(RPA_LIBRARY_NAME, exc)
         raise
@@ -65,7 +65,7 @@ def intranet(main: Callable[[], Any], project_name: str) -> Any:
     """イントラネットの RPA として main を実行する。"""
     try:
         # 社内 LAN にだけ存在する（自宅PC・CI では未インストール）
-        from example_libs import rpa  # type: ignore[reportMissingImports]
+        from kensetsu_libs import rpa  # type: ignore[reportMissingImports]
     except ModuleNotFoundError as exc:
         _raise_if_target_missing(RPA_LIBRARY_NAME, exc)
         raise

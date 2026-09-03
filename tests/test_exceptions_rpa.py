@@ -55,13 +55,13 @@ class TestInternalLibraryNotFoundError:
 
     def test_library_name_is_attached(self) -> None:
         """`library_name` 属性に渡した名前が入る。"""
-        err = InternalLibraryNotFoundError("example_libs.rpa")
-        assert err.library_name == "example_libs.rpa"
+        err = InternalLibraryNotFoundError("kensetsu_libs.rpa")
+        assert err.library_name == "kensetsu_libs.rpa"
 
     def test_message_includes_library_name(self) -> None:
         """エラーメッセージにライブラリ名が入る（画面で原因が分かる）。"""
-        err = InternalLibraryNotFoundError("example_libs.rpa")
-        assert "example_libs.rpa" in str(err)
+        err = InternalLibraryNotFoundError("kensetsu_libs.rpa")
+        assert "kensetsu_libs.rpa" in str(err)
 
     def test_can_be_raised_and_caught(self) -> None:
         """送出・捕捉が普通にできる。"""
@@ -81,15 +81,15 @@ class TestInternalLibraryVersionMismatchError:
 
     def test_library_and_required_version_are_attached(self) -> None:
         """`library_name` / `required_version` が属性として残る。"""
-        err = InternalLibraryVersionMismatchError("example_libs.rpa", "0000")
-        assert err.library_name == "example_libs.rpa"
+        err = InternalLibraryVersionMismatchError("kensetsu_libs.rpa", "0000")
+        assert err.library_name == "kensetsu_libs.rpa"
         assert err.required_version == "0000"
 
     def test_message_includes_both(self) -> None:
         """メッセージにライブラリ名と要求バージョン両方が出る。"""
-        err = InternalLibraryVersionMismatchError("example_libs.rpa", "0000")
+        err = InternalLibraryVersionMismatchError("kensetsu_libs.rpa", "0000")
         text = str(err)
-        assert "example_libs.rpa" in text
+        assert "kensetsu_libs.rpa" in text
         assert "0000" in text
 
     def test_can_be_raised_and_caught(self) -> None:

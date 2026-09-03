@@ -1,6 +1,6 @@
 """comken.toolbox.rpa の動作を確認する。
 
-`comken.toolbox.rpa` は社内 RPA 基盤 (``example_libs.rpa``) を静的 import で
+`comken.toolbox.rpa` は社内 RPA 基盤 (``kensetsu_libs.rpa``) を静的 import で
 呼び出す薄いラッパー。 実機では社内 LAN にだけ存在するため、テストでは
 ``sys.modules`` にダミーモジュールを注入して差し替える。
 """
@@ -18,48 +18,48 @@ from comken.toolbox.rpa import RPA_LIBRARY_NAME, backoffice, intranet
 
 
 @pytest.fixture
-def fake_example_libs_rpa(monkeypatch: pytest.MonkeyPatch) -> mock.Mock:
-    """``example_libs`` と ``example_libs.rpa`` のダミーを ``sys.modules`` へ注入する。
+def fake_kensetsu_libs_rpa(monkeypatch: pytest.MonkeyPatch) -> mock.Mock:
+    """``kensetsu_libs`` と ``kensetsu_libs.rpa`` のダミーを ``sys.modules`` へ注入する。
 
-    静的 import (``from example_libs import rpa``) をモックするため、 ``comken``
+    静的 import (``from kensetsu_libs import rpa``) をモックするため、 ``comken``
     の Python プロセス上のモジュール表に直接入れる。 ``monkeypatch`` が自動で
     テスト後に元へ戻す。
     """
     fake_rpa = mock.Mock()
-    fake_example_libs = mock.Mock()
-    fake_example_libs.rpa = fake_rpa
-    monkeypatch.setitem(sys.modules, "example_libs", fake_example_libs)
-    monkeypatch.setitem(sys.modules, "example_libs.rpa", fake_rpa)
+    fake_kensetsu_libs = mock.Mock()
+    fake_kensetsu_libs.rpa = fake_rpa
+    monkeypatch.setitem(sys.modules, "kensetsu_libs", fake_kensetsu_libs)
+    monkeypatch.setitem(sys.modules, "kensetsu_libs.rpa", fake_rpa)
     return fake_rpa
 
 
-def _remove_example_libs(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``example_libs`` が無い状態を強制する。 ``sys.modules`` から取り除く。"""
-    for name in ("example_libs.rpa", "example_libs"):
+def _remove_kensetsu_libs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``kensetsu_libs`` が無い状態を強制する。 ``sys.modules`` から取り除く。"""
+    for name in ("kensetsu_libs.rpa", "kensetsu_libs"):
         monkeypatch.delitem(sys.modules, name, raising=False)
 
 
 def test_rpa_library_name_is_public() -> None:
     """`RPA_LIBRARY_NAME` に社内ライブラリの名前が設定されている（バージョン無し）。"""
-    assert RPA_LIBRARY_NAME == "example_libs.rpa"
+    assert RPA_LIBRARY_NAME == "kensetsu_libs.rpa"
 
 
 class TestBackoffice:
     """`backoffice` のテスト。"""
 
-    def test_calls_backoffice_target_on_rpa(self, fake_example_libs_rpa: mock.Mock) -> None:
+    def test_calls_backoffice_target_on_rpa(self, fake_kensetsu_libs_rpa: mock.Mock) -> None:
         """`backoffice` は RPA モジュールの `backoffice.rpa_run` を呼ぶ。"""
-        fake_example_libs_rpa.backoffice.rpa_run.return_value = "ok"
+        fake_kensetsu_libs_rpa.backoffice.rpa_run.return_value = "ok"
         sentinel_main = mock.Mock()
         result = backoffice(sentinel_main, "project")
-        fake_example_libs_rpa.backoffice.rpa_run.assert_called_once_with(sentinel_main, "project")
+        fake_kensetsu_libs_rpa.backoffice.rpa_run.assert_called_once_with(sentinel_main, "project")
         assert result == "ok"
 
-    def test_raises_not_found_when_example_libs_missing(
+    def test_raises_not_found_when_kensetsu_libs_missing(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """``example_libs`` が無いとき ``InternalLibraryNotFoundError`` が送出される。"""
-        _remove_example_libs(monkeypatch)
+        """``kensetsu_libs`` が無いとき ``InternalLibraryNotFoundError`` が送出される。"""
+        _remove_kensetsu_libs(monkeypatch)
         with pytest.raises(InternalLibraryNotFoundError):
             backoffice(lambda: None, "project")
 
@@ -67,19 +67,19 @@ class TestBackoffice:
 class TestIntranet:
     """`intranet` のテスト。"""
 
-    def test_calls_intranet_target_on_rpa(self, fake_example_libs_rpa: mock.Mock) -> None:
+    def test_calls_intranet_target_on_rpa(self, fake_kensetsu_libs_rpa: mock.Mock) -> None:
         """`intranet` は RPA モジュールの `intranet.rpa_run` を呼ぶ。"""
-        fake_example_libs_rpa.intranet.rpa_run.return_value = "ok"
+        fake_kensetsu_libs_rpa.intranet.rpa_run.return_value = "ok"
         sentinel_main = mock.Mock()
         result = intranet(sentinel_main, "project")
-        fake_example_libs_rpa.intranet.rpa_run.assert_called_once_with(sentinel_main, "project")
+        fake_kensetsu_libs_rpa.intranet.rpa_run.assert_called_once_with(sentinel_main, "project")
         assert result == "ok"
 
-    def test_raises_not_found_when_example_libs_missing(
+    def test_raises_not_found_when_kensetsu_libs_missing(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """``example_libs`` が無いとき ``InternalLibraryNotFoundError`` が送出される。"""
-        _remove_example_libs(monkeypatch)
+        """``kensetsu_libs`` が無いとき ``InternalLibraryNotFoundError`` が送出される。"""
+        _remove_kensetsu_libs(monkeypatch)
         with pytest.raises(InternalLibraryNotFoundError):
             intranet(lambda: None, "project")
 
@@ -91,18 +91,18 @@ def test_rpa_module_lists_public_names() -> None:
         assert name in public
 
 
-def test_rpa_handles_exception_in_main(fake_example_libs_rpa: mock.Mock) -> None:
+def test_rpa_handles_exception_in_main(fake_kensetsu_libs_rpa: mock.Mock) -> None:
     """`main` 内で例外が出ても RPA の例外に変換されない（呼び出し側で扱う）。"""
-    fake_example_libs_rpa.backoffice.rpa_run.side_effect = RuntimeError("boom")
+    fake_kensetsu_libs_rpa.backoffice.rpa_run.side_effect = RuntimeError("boom")
     with pytest.raises(RuntimeError, match="boom"):
         backoffice(lambda: None, "project")
 
 
-def test_rpa_project_name_is_passed_through(fake_example_libs_rpa: mock.Mock) -> None:
+def test_rpa_project_name_is_passed_through(fake_kensetsu_libs_rpa: mock.Mock) -> None:
     """`project_name` 引数がそのまま RPA 側に渡る。"""
-    fake_example_libs_rpa.backoffice.rpa_run.return_value = None
+    fake_kensetsu_libs_rpa.backoffice.rpa_run.return_value = None
     backoffice(lambda: None, "my-project")
-    args, _ = fake_example_libs_rpa.backoffice.rpa_run.call_args
+    args, _ = fake_kensetsu_libs_rpa.backoffice.rpa_run.call_args
     assert args[1] == "my-project"
 
 
@@ -117,12 +117,12 @@ def _raise(library_name: str, exc: ModuleNotFoundError) -> None:
 def test_raises_not_found_when_target_module_missing() -> None:
     """対象モジュール自体が見つからないとき ``InternalLibraryNotFoundError`` を送出する。"""
     exc = ModuleNotFoundError(
-        "No module named 'example_libs.missing'",
-        name="example_libs.missing",
+        "No module named 'kensetsu_libs.missing'",
+        name="kensetsu_libs.missing",
     )
     with pytest.raises(InternalLibraryNotFoundError) as caught:
-        _raise("example_libs.missing", exc)
-    assert caught.value.library_name == "example_libs.missing"
+        _raise("kensetsu_libs.missing", exc)
+    assert caught.value.library_name == "kensetsu_libs.missing"
 
 
 def test_raises_not_found_when_parent_package_missing() -> None:
@@ -131,12 +131,12 @@ def test_raises_not_found_when_parent_package_missing() -> None:
     ``library_name.startswith(missing_name + '.')`` で親部分一致を見る。
     """
     exc = ModuleNotFoundError(
-        "No module named 'example_libs'",
-        name="example_libs",
+        "No module named 'kensetsu_libs'",
+        name="kensetsu_libs",
     )
     with pytest.raises(InternalLibraryNotFoundError) as caught:
-        _raise("example_libs.rpa", exc)
-    assert caught.value.library_name == "example_libs.rpa"
+        _raise("kensetsu_libs.rpa", exc)
+    assert caught.value.library_name == "kensetsu_libs.rpa"
 
 
 def test_propagates_original_when_unrelated_dependency_missing() -> None:
@@ -146,7 +146,7 @@ def test_propagates_original_when_unrelated_dependency_missing() -> None:
     ``_raise_if_target_missing`` 自身は例外を上げない。
     """
     exc = ModuleNotFoundError(
-        "No module named 'example_libs.subdep'",
-        name="example_libs.subdep",
+        "No module named 'kensetsu_libs.subdep'",
+        name="kensetsu_libs.subdep",
     )
-    assert _raise("example_libs.rpa", exc) is None
+    assert _raise("kensetsu_libs.rpa", exc) is None
