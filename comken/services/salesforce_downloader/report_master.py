@@ -460,9 +460,7 @@ def _apply_template_font(sheet: Worksheet, example_count: int) -> None:
     ``MasterRow`` を経由しない雛形からも同じ実装を呼ぶ。
     """
     last_row = max(_FIRST_DATA_ROW + example_count - 1, 1)
-    for row in sheet.iter_rows(
-        min_row=1, max_row=last_row, min_col=1, max_col=sheet.max_column
-    ):
+    for row in sheet.iter_rows(min_row=1, max_row=last_row, min_col=1, max_col=sheet.max_column):
         for cell in row:
             _set_template_font(cell)
 

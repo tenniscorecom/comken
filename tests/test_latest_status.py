@@ -1,4 +1,4 @@
-﻿"""最新ステータス Excel の生成を検証する。
+"""最新ステータス Excel の生成を検証する。
 
 管理表（Excel）と履歴（CSV）は tmp_path に本物を作り、`write_latest_status()` の
 引数へ直接渡す（`_paths` の共有定数を monkeypatch すると `service.py` 側のローカル
@@ -95,7 +95,6 @@ class TestWriteLatestStatus:
                     "○",
                     "",
                 ],
-
                 [
                     "1002",
                     "経理グループ",
@@ -106,7 +105,6 @@ class TestWriteLatestStatus:
                     "○",
                     "",
                 ],
-
             ],
         )
         history_path = tmp_path / "ダウンロード履歴.csv"
@@ -119,7 +117,6 @@ class TestWriteLatestStatus:
             history_path,
             entry=entry1,
             project="P",
-
             row=HistoryRow(
                 succeeded=False,
                 fetched_from_salesforce=False,
@@ -134,7 +131,6 @@ class TestWriteLatestStatus:
             history_path,
             entry=entry1,
             project="P",
-
             row=HistoryRow(
                 succeeded=True,
                 fetched_from_salesforce=True,
@@ -147,7 +143,6 @@ class TestWriteLatestStatus:
             history_path,
             entry=entry2,
             project="P",
-
             row=HistoryRow(
                 succeeded=True,
                 fetched_from_salesforce=True,
@@ -160,7 +155,6 @@ class TestWriteLatestStatus:
             history_path,
             entry=entry2,
             project="P",
-
             row=HistoryRow(
                 succeeded=False,
                 fetched_from_salesforce=True,
@@ -199,7 +193,6 @@ class TestWriteLatestStatus:
                     "○",
                     "",
                 ],
-
                 [
                     "1002",
                     "経理グループ",
@@ -210,7 +203,6 @@ class TestWriteLatestStatus:
                     "○",
                     "",
                 ],
-
             ],
         )
         history_path = tmp_path / "ダウンロード履歴.csv"
@@ -219,7 +211,6 @@ class TestWriteLatestStatus:
             history_path,
             entry=_entry(folder, key="1001", summary="顧客一覧", url=URL_A),
             project="P",
-
             row=HistoryRow(
                 succeeded=True,
                 fetched_from_salesforce=True,
@@ -253,7 +244,6 @@ class TestWriteLatestStatus:
                     "○",
                     "",
                 ],
-
                 [
                     "1002",
                     "経理グループ",
@@ -264,7 +254,6 @@ class TestWriteLatestStatus:
                     "○",
                     "",
                 ],
-
             ],
         )
         history_path = tmp_path / "ダウンロード履歴.csv"
@@ -272,7 +261,6 @@ class TestWriteLatestStatus:
             history_path,
             entry=_entry(folder, key="1001", summary="顧客一覧", url=URL_A),
             project="P",
-
             row=HistoryRow(
                 succeeded=True,
                 fetched_from_salesforce=True,
@@ -284,7 +272,6 @@ class TestWriteLatestStatus:
             history_path,
             entry=_entry(folder, key="1002", summary="売上実績", url=URL_B),
             project="P",
-
             row=HistoryRow(
                 succeeded=False,
                 fetched_from_salesforce=True,
@@ -315,24 +302,24 @@ class TestWriteLatestStatus:
         folder.mkdir()
         master = make_master(
             tmp_path / "レポート管理表.xlsx",
-            [[
-                "1001",
-                "営業事務グループ",
-                "山田",
-                "顧客一覧",
-                URL_A,
-                str(folder),
-                "○",
-                "",
-            ]],
-
+            [
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "顧客一覧",
+                    URL_A,
+                    str(folder),
+                    "○",
+                    "",
+                ]
+            ],
         )
         history_path = tmp_path / "ダウンロード履歴.csv"
         record(
             history_path,
             entry=_entry(folder, key="1001", summary="顧客一覧", url=URL_A),
             project="P",
-
             row=HistoryRow(
                 succeeded=True,
                 fetched_from_salesforce=True,
@@ -357,6 +344,3 @@ def _rgb(fill) -> str:
     """openpyxl の ``PatternFill`` から、比較しやすい RGB 文字列を返す。"""
     fg = fill.fgColor
     return str(fg.rgb) if fg is not None else ""
-
-
-

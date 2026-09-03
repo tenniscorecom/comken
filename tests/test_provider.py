@@ -94,7 +94,6 @@ def paths(tmp_path, monkeypatch):
                 "○",
                 "",
             ],
-
             [
                 "1002",
                 "経理グループ",
@@ -105,7 +104,6 @@ def paths(tmp_path, monkeypatch):
                 "○",
                 "",
             ],
-
             [
                 "1003",
                 "営業事務グループ",
@@ -116,7 +114,6 @@ def paths(tmp_path, monkeypatch):
                 "×",
                 "",
             ],
-
         ],
     )
     history_path = tmp_path / "ダウンロード履歴.csv"
@@ -154,17 +151,18 @@ class TestFilePathOf:
         folder.mkdir()
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [[
-                "1001",
-                "営業事務グループ",
-                "山田",
-                "顧客一覧",
-                URL_A,
-                str(folder),
-                "○",
-                "",
-            ]],
-
+            [
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "顧客一覧",
+                    URL_A,
+                    str(folder),
+                    "○",
+                    "",
+                ]
+            ],
         )
         entry = load_master(master)["1001"]
         name = file_path_of(entry).name
@@ -178,17 +176,18 @@ class TestFilePathOf:
         folder.mkdir()
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [[
-                "1001",
-                "営業事務グループ",
-                "山田",
-                "禁則: A/B?C*D",
-                URL_A,
-                str(folder),
-                "○",
-                "",
-            ]],
-
+            [
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "禁則: A/B?C*D",
+                    URL_A,
+                    str(folder),
+                    "○",
+                    "",
+                ]
+            ],
         )
         entry = load_master(master)["1001"]
         name = file_path_of(entry).name
@@ -203,17 +202,18 @@ class TestFilePathOf:
         long_summary = "あ" * 50
         master = make_master(
             tmp_path / "管理表.xlsx",
-            [[
-                "1001",
-                "営業事務グループ",
-                "山田",
-                long_summary,
-                URL_A,
-                str(folder),
-                "○",
-                "",
-            ]],
-
+            [
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    long_summary,
+                    URL_A,
+                    str(folder),
+                    "○",
+                    "",
+                ]
+            ],
         )
         entry = load_master(master)["1001"]
         name = file_path_of(entry).name

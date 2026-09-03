@@ -135,9 +135,7 @@ def download_scheduled(project: str = "定期実行") -> list[Path]:
     for entry in entries.values():
         if not entry.enabled:
             continue
-        is_due, schedule_key = _matched_schedule_key(
-            entry, rules_by_report, current, holidays
-        )
+        is_due, schedule_key = _matched_schedule_key(entry, rules_by_report, current, holidays)
         if is_due:
             # ``schedule_key`` は取得後に履歴へ記録し、``schedule_succeeded_today()``
             # が再判定に使う。スケジュール行が無いレポート（後方互換）は空文字
@@ -180,9 +178,7 @@ def download_scheduled(project: str = "定期実行") -> list[Path]:
             output_path=LATEST_STATUS_PATH,
         )
     except Exception as e:
-        logger.warning(
-            "最新ステータスの更新に失敗しました（定期取得は本体の結果で判定）: %s", e
-        )
+        logger.warning("最新ステータスの更新に失敗しました（定期取得は本体の結果で判定）: %s", e)
     if failed:
         # 続けたぶん、最後に必ず知らせる（終了コードで落ちたことが分かるように）。
         # 直近の失敗を ``__cause__`` に乗せて送出する（呼び出し側が
@@ -443,9 +439,7 @@ def _todays_holiday_set(current: dt.datetime) -> set[dt.date]:
     return {current.date()} if default_calendar().is_holiday(current.date()) else set()
 
 
-def _failure_row(
-    exc: BaseException, seconds: float, schedule_key: str = ""
-) -> HistoryRow:
+def _failure_row(exc: BaseException, seconds: float, schedule_key: str = "") -> HistoryRow:
     """失敗時の履歴1行を、**例外の型だけから**組み立てる。
 
     `fetched` / `saved` は `_download()` の何処で失敗したかを例外で判別する。

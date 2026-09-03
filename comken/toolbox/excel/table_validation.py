@@ -78,9 +78,7 @@ def validate_range_for_table(
         range_max_col,
         header_row,
     )
-    _check_no_blank_data_rows(
-        worksheet, header_row, range_max_row, range_min_col, range_max_col
-    )
+    _check_no_blank_data_rows(worksheet, header_row, range_max_row, range_min_col, range_max_col)
     _check_no_duplicate_headers(header_cells)
     return range_min_col, range_min_row, range_max_col, range_max_row, header_row, header_cells
 
@@ -142,9 +140,7 @@ def _resolve_header_row(
 def _check_header_not_empty(header_cells: list[Any]) -> None:
     """見出し行のセルが全て埋まっているか検証する。"""
     empty_columns = [
-        column
-        for column, value in enumerate(header_cells, start=1)
-        if value is None or value == ""
+        column for column, value in enumerate(header_cells, start=1) if value is None or value == ""
     ]
     if empty_columns:
         raise EmptyHeaderCellError(empty_columns)

@@ -231,17 +231,12 @@ def create_schedule_template(
     rows = list(examples) if examples is not None else list(_SCHEDULE_EXAMPLES)
 
     # 構造化テーブル（``Sheet.create_table`` の要件）に渡す Table を作る
-    table_rows = [
-        {header: row.get(header, "") for header in SCHEDULE_HEADERS_FULL}
-        for row in rows
-    ]
+    table_rows = [{header: row.get(header, "") for header in SCHEDULE_HEADERS_FULL} for row in rows]
     schedule_table = CoreTable(list(SCHEDULE_HEADERS_FULL), table_rows)
 
     # スケジュール用データシートを作成。既存なら ``SheetAlreadyExistsError``
     with Excel(source) as excel:
-        excel.create_data_sheet(SCHEDULE_SHEET_NAME).create_table(
-            "スケジュール", schedule_table
-        )
+        excel.create_data_sheet(SCHEDULE_SHEET_NAME).create_table("スケジュール", schedule_table)
 
     # フォント・ドロップダウン・列幅・記入例の背景色は ``openpyxl`` で直接当てる
     # （``Sheet.create_table`` は値・テーブル定義だけを書き、書式は触らないため）
@@ -473,9 +468,7 @@ def _write_schedule_section(guide: Worksheet, start_row: int) -> None:
     note_row = body_start + len(SCHEDULE_COLUMN_SPECS) + 1
     for column, value in enumerate(("注意", _SCHEDULE_GUIDE_NOTE, ""), start=1):
         cell = guide.cell(row=note_row, column=column, value=value)
-        cell.font = Font(
-            bold=(column == 1), name=_TEMPLATE_FONT_NAME
-        )
+        cell.font = Font(bold=(column == 1), name=_TEMPLATE_FONT_NAME)
 
 
 def _normalize_guide_fonts(guide: Worksheet, start_row: int) -> None:

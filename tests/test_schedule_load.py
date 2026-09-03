@@ -79,7 +79,16 @@ class TestLoadSchedule:
             [
                 # 管理表本体は load_schedule() の検証対象ではないので空でもよいが、
                 # 実際の運用を再現するため1行入れておく
-                ["1001", "営業事務グループ", "山田", "顧客一覧", "https://example.com/a/view", str(tmp_path), "○", ""],  # noqa: E501
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "顧客一覧",
+                    "https://example.com/a/view",
+                    str(tmp_path),
+                    "○",
+                    "",
+                ],
             ],
             schedule_rows=[
                 ["S001", "1001", "毎週", "09:00", "月", "取得しない", "○"],
@@ -95,7 +104,18 @@ class TestLoadSchedule:
     def test_blank_rows_are_skipped(self, tmp_path):
         master = make_master_with_schedule(
             tmp_path / "管理表.xlsx",
-            [["1001", "営業事務グループ", "山田", "顧客一覧", "https://example.com/a/view", str(tmp_path), "○", ""]],  # noqa: E501
+            [
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "顧客一覧",
+                    "https://example.com/a/view",
+                    str(tmp_path),
+                    "○",
+                    "",
+                ]
+            ],
             schedule_rows=[
                 ["S001", "1001", "毎週", "09:00", "月", "取得しない", "○"],
                 [None] * len(SCHEDULE_HEADERS),  # 空行は読み飛ばす
@@ -109,7 +129,18 @@ class TestLoadSchedule:
         """「スケジュール」シートが無い管理表はエラーにせず空リストを返す（後方互換）。"""
         master = make_master_with_schedule(
             tmp_path / "管理表.xlsx",
-            [["1001", "営業事務グループ", "山田", "顧客一覧", "https://example.com/a/view", str(tmp_path), "○", ""]],  # noqa: E501
+            [
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "顧客一覧",
+                    "https://example.com/a/view",
+                    str(tmp_path),
+                    "○",
+                    "",
+                ]
+            ],
             # スケジュールシート自体を作らない
             schedule_rows=None,
         )
@@ -118,7 +149,18 @@ class TestLoadSchedule:
     def test_duplicate_schedule_key_raises(self, tmp_path):
         master = make_master_with_schedule(
             tmp_path / "管理表.xlsx",
-            [["1001", "営業事務グループ", "山田", "顧客一覧", "https://example.com/a/view", str(tmp_path), "○", ""]],  # noqa: E501
+            [
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "顧客一覧",
+                    "https://example.com/a/view",
+                    str(tmp_path),
+                    "○",
+                    "",
+                ]
+            ],
             schedule_rows=[
                 ["S001", "1001", "毎週", "09:00", "月", "取得しない", "○"],
                 ["S001", "1002", "毎週", "10:00", "火", "取得しない", "○"],  # 重複
@@ -134,7 +176,18 @@ class TestLoadSchedule:
         """曜日が壊れていると、メッセージに行番号が入る（業務担当者が直せるように）。"""
         master = make_master_with_schedule(
             tmp_path / "管理表.xlsx",
-            [["1001", "営業事務グループ", "山田", "顧客一覧", "https://example.com/a/view", str(tmp_path), "○", ""]],  # noqa: E501
+            [
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "顧客一覧",
+                    "https://example.com/a/view",
+                    str(tmp_path),
+                    "○",
+                    "",
+                ]
+            ],
             schedule_rows=[
                 ["S001", "1001", "毎週", "09:00", "不明", "取得しない", "○"],
             ],
@@ -149,7 +202,18 @@ class TestLoadSchedule:
     def test_missing_required_value_raises_with_row_number(self, tmp_path):
         master = make_master_with_schedule(
             tmp_path / "管理表.xlsx",
-            [["1001", "営業事務グループ", "山田", "顧客一覧", "https://example.com/a/view", str(tmp_path), "○", ""]],  # noqa: E501
+            [
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "顧客一覧",
+                    "https://example.com/a/view",
+                    str(tmp_path),
+                    "○",
+                    "",
+                ]
+            ],
             schedule_rows=[
                 [
                     "",
@@ -160,7 +224,6 @@ class TestLoadSchedule:
                     "取得しない",
                     "○",
                 ],  # スケジュールキー空
-
             ],
         )
         with pytest.raises(ScheduleRowValueError) as e:

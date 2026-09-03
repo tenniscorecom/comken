@@ -55,9 +55,15 @@ def _make_master_only(path: Path) -> Path:
         )
     )
     with Excel(path) as book:
-        book.create_data_sheet("管理表").create_table("管理表", Table(master_headers, [
-            master_row,
-        ]))
+        book.create_data_sheet("管理表").create_table(
+            "管理表",
+            Table(
+                master_headers,
+                [
+                    master_row,
+                ],
+            ),
+        )
 
     return path
 
