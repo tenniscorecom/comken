@@ -3,7 +3,9 @@
 アプリ全体のログを集めるため root logger を設定する。二重 handler は同じメッセージを
 重複出力するため、設定済みなら上書きせず例外にする。保存先は端末名（小文字化して照合）を
 ``LOG_FOLDER_NAMES`` から引き、日付ごとのファイルとコンソールへ同じ形式で出力する。
-``LOG_FOLDER_NAMES`` に登録がない端末は ``LOG_ROOT/_etc_`` へまとめる。
+``LOG_FOLDER_NAMES`` に登録がない端末や、値が空文字／パス区切りを含んでいて使えない
+端末は ``LOG_ROOT/_etc/etc_{ホスト名}/`` へ分けて書く。未登録の端末が複数あっても
+ログが混ざらないように、ホスト名のサブフォルダで区別する。
 """
 
 import logging
@@ -24,7 +26,9 @@ DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 CONSOLE_HANDLER_NAME = "comken.console"
 ENVIRONMENT_HANDLER_NAME = "comken.environment"
 LOCAL_HANDLER_NAME = "comken.local"
-ETC_FOLDER_NAME = "_etc_"
+# 未登録・不正値の端末をまとめる1階層目の固定フォルダ名。
+# 2階層目に ``etc_{hostname}`` を置いて、混ざらないように区別する。
+ETC_FOLDER_NAME = "_etc"
 # comken が root に付けた handler だけレベル集計の対象にする。
 # 外部の NOTSET ハンドラーが混ざると root が NOTSET に巻き戻され、
 # isEnabledFor() が DEBUG まで通す穴になるため (回帰テスト #10)。
@@ -67,12 +71,15 @@ def setup_logging(site: type[LoggerSite], *, allow_existing: bool = False) -> No
         (value for key, value in site.LOG_FOLDER_NAMES.items() if key.lower() == hostname),
         None,
     )
-    # 未登録、または値にパス区切りが含まれている場合は _etc_ 扱い。
+    # 未登録、または値にパス区切りが含まれている場合は _etc 扱い。
     # 後者は Path の `/` 演算子が絶対パス値を見ると LOG_ROOT を捨てて
     # 別の場所へ書き込む罠なので、未登録としてガードする。
+    # 未登録のまま 1 つの固定フォルダにまとめてしまうと、複数台の未登録端末の
+    # ログが区別できなくなるため、ホスト名ごとのサブフォルダへ分けて書く。
     if not folder_name or "/" in folder_name or "\\" in folder_name:
-        folder_name = ETC_FOLDER_NAME
-    log_dir = Path(site.LOG_ROOT) / folder_name
+        log_dir = Path(site.LOG_ROOT) / ETC_FOLDER_NAME / f"etc_{hostname}"
+    else:
+        log_dir = Path(site.LOG_ROOT) / folder_name
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"{site.NAME}-{today().isoformat()}.log"
 
