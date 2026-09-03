@@ -57,7 +57,7 @@ def backoffice(main: Callable[[], Any], project_name: str) -> Any:
     except ModuleNotFoundError as exc:
         _raise_if_target_missing(RPA_LIBRARY_NAME, exc)
         raise
-    return run(f"backoffice で {project_name}", lambda: rpa.backoffice.rpta(main, project_name))
+    return run(f"backoffice で {project_name}", lambda: rpa.backoffice.rpa_run(main, project_name))
 
 
 @measure
@@ -69,7 +69,7 @@ def intranet(main: Callable[[], Any], project_name: str) -> Any:
     except ModuleNotFoundError as exc:
         _raise_if_target_missing(RPA_LIBRARY_NAME, exc)
         raise
-    return run(f"intranet で {project_name}", lambda: rpa.intranet.rpta(main, project_name))
+    return run(f"intranet で {project_name}", lambda: rpa.intranet.rpa_run(main, project_name))
 
 
 __all__ = ["backoffice", "intranet", "RPA_LIBRARY_NAME"]

@@ -48,11 +48,11 @@ class TestBackoffice:
     """`backoffice` のテスト。"""
 
     def test_calls_backoffice_target_on_rpa(self, fake_example_libs_rpa: mock.Mock) -> None:
-        """`backoffice` は RPA モジュールの `backoffice.rpta` を呼ぶ。"""
-        fake_example_libs_rpa.backoffice.rpta.return_value = "ok"
+        """`backoffice` は RPA モジュールの `backoffice.rpa_run` を呼ぶ。"""
+        fake_example_libs_rpa.backoffice.rpa_run.return_value = "ok"
         sentinel_main = mock.Mock()
         result = backoffice(sentinel_main, "project")
-        fake_example_libs_rpa.backoffice.rpta.assert_called_once_with(sentinel_main, "project")
+        fake_example_libs_rpa.backoffice.rpa_run.assert_called_once_with(sentinel_main, "project")
         assert result == "ok"
 
     def test_raises_not_found_when_example_libs_missing(
@@ -68,11 +68,11 @@ class TestIntranet:
     """`intranet` のテスト。"""
 
     def test_calls_intranet_target_on_rpa(self, fake_example_libs_rpa: mock.Mock) -> None:
-        """`intranet` は RPA モジュールの `intranet.rpta` を呼ぶ。"""
-        fake_example_libs_rpa.intranet.rpta.return_value = "ok"
+        """`intranet` は RPA モジュールの `intranet.rpa_run` を呼ぶ。"""
+        fake_example_libs_rpa.intranet.rpa_run.return_value = "ok"
         sentinel_main = mock.Mock()
         result = intranet(sentinel_main, "project")
-        fake_example_libs_rpa.intranet.rpta.assert_called_once_with(sentinel_main, "project")
+        fake_example_libs_rpa.intranet.rpa_run.assert_called_once_with(sentinel_main, "project")
         assert result == "ok"
 
     def test_raises_not_found_when_example_libs_missing(
@@ -93,16 +93,16 @@ def test_rpa_module_lists_public_names() -> None:
 
 def test_rpa_handles_exception_in_main(fake_example_libs_rpa: mock.Mock) -> None:
     """`main` 内で例外が出ても RPA の例外に変換されない（呼び出し側で扱う）。"""
-    fake_example_libs_rpa.backoffice.rpta.side_effect = RuntimeError("boom")
+    fake_example_libs_rpa.backoffice.rpa_run.side_effect = RuntimeError("boom")
     with pytest.raises(RuntimeError, match="boom"):
         backoffice(lambda: None, "project")
 
 
 def test_rpa_project_name_is_passed_through(fake_example_libs_rpa: mock.Mock) -> None:
     """`project_name` 引数がそのまま RPA 側に渡る。"""
-    fake_example_libs_rpa.backoffice.rpta.return_value = None
+    fake_example_libs_rpa.backoffice.rpa_run.return_value = None
     backoffice(lambda: None, "my-project")
-    args, _ = fake_example_libs_rpa.backoffice.rpta.call_args
+    args, _ = fake_example_libs_rpa.backoffice.rpa_run.call_args
     assert args[1] == "my-project"
 
 
