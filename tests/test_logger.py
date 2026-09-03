@@ -170,14 +170,16 @@ class TestSetup:
         assert (tmp_path / "test-folder" / "backoffice-2026-08-21.log").exists()
 
     def test_unregistered_host_falls_back_to_etc(self, isolated_logging, tmp_path, monkeypatch):
-        """LOG_FOLDER_NAMES に存在しない端末では LOG_ROOT/_etc_ へ書かれる。"""
+        """LOG_FOLDER_NAMES に存在しない端末では LOG_ROOT/_etc/etc_{ホスト名}/ へ書かれる。"""
         _prepare_site(monkeypatch, tmp_path, folder_name="real-folder")
         # 登録側のキーを実際のホスト名（小文字）と別の文字列へ差し替え。
         monkeypatch.setattr(Backoffice, "LOG_FOLDER_NAMES", {"no-such-host": "real-folder"})
+        hostname = socket.gethostname().lower()
 
         setup_logging(Backoffice)
 
-        assert (tmp_path / ETC_FOLDER_NAME / "backoffice-2026-08-21.log").exists()
+        etc_subdir = tmp_path / ETC_FOLDER_NAME / f"etc_{hostname}"
+        assert (etc_subdir / "backoffice-2026-08-21.log").exists()
         # 登録したフォルダには書かれない。
         assert not (tmp_path / "real-folder").exists()
 
@@ -199,9 +201,61 @@ class TestSetup:
             {hostname: r"C:\wrong\place"},
         )
         setup_logging(Backoffice)
-        # 通常フォルダと C:\wrong\place は作らず、_etc_ に書かれる。
+        # 通常フォルダと C:\wrong\place は作らず、_etc/etc_{hostname}/ に書かれる。
         assert not (tmp_path / "normal-folder").exists()
-        assert (tmp_path / ETC_FOLDER_NAME / "backoffice-2026-08-21.log").exists()
+        etc_subdir = tmp_path / ETC_FOLDER_NAME / f"etc_{hostname}"
+        assert (etc_subdir / "backoffice-2026-08-21.log").exists()
+
+    def test_unregistered_host_and_invalid_value_write_to_separate_hostname_folders(
+        self, isolated_logging, tmp_path, monkeypatch
+    ):
+        """未登録ホストと値が不正なホストが両方起きても、両方とも自分の
+        ホスト名のフォルダ（``etc_{ホスト名}/``）に書かれる。
+
+        旧実装は ``LOG_ROOT/_etc_`` 1 か所にまとめていたので、未登録と不正値の
+        両方が起きるとどの端末のログか区別できなかった。今回の 2 階層仕様では
+        ``_etc/etc_{ホスト名}/`` で分かれるため、どちらのケースも実ホスト名
+        ベースのサブフォルダに書かれることを確認する。
+
+        ``setup_logging()`` は 1 プロセスで 1 回しか安全に呼べない設計
+        （``LoggingAlreadyConfiguredError``）なので、同一プロセス内で複数ホスト
+        を再現する必要はない。「フォルダ名が固定の ``_etc_`` ではなく、毎回
+        実ホスト名（``etc_{hostname}``）になっている」ことを両ケースで
+        確認する形に留める。
+        """
+        hostname = socket.gethostname().lower()
+
+        # ケース1: 未登録ホスト（登録側のキーに実ホスト名が含まれない）。
+        _prepare_site(monkeypatch, tmp_path, folder_name="real-folder")
+        monkeypatch.setattr(Backoffice, "LOG_FOLDER_NAMES", {"no-such-host": "real-folder"})
+        setup_logging(Backoffice)
+        unregistered_path = (
+            tmp_path / ETC_FOLDER_NAME / f"etc_{hostname}" / "backoffice-2026-08-21.log"
+        )
+
+        # ケース2: 値がパス区切りを含むホスト（実ホスト名キーで絶対パス値が書かれている）。
+        # 1 回目の setup_logging() が root に handler を残しているので、
+        # 2 回目を呼べるようにクリアしてから再度 ``_prepare_site`` する。
+        for handler in logging.getLogger().handlers[:]:
+            logging.getLogger().removeHandler(handler)
+            handler.close()
+        _prepare_site(monkeypatch, tmp_path, folder_name="normal-folder")
+        monkeypatch.setattr(
+            Backoffice,
+            "LOG_FOLDER_NAMES",
+            {hostname: r"C:\wrong\place"},
+        )
+        setup_logging(Backoffice)
+        invalid_path = tmp_path / ETC_FOLDER_NAME / f"etc_{hostname}" / "backoffice-2026-08-21.log"
+
+        # 両方のケースで etc_{ホスト名}/ フォルダが使われ、ログファイルが
+        # それぞれ同じホスト名のサブフォルダ内に書かれている。
+        # 旧実装なら ``_etc_/backoffice-2026-08-21.log`` （固定）だった。
+        assert unregistered_path.exists()
+        assert invalid_path.exists()
+        # 両ケースとも、登録フォルダにも ``C:\wrong\place`` にも書かれない。
+        assert not (tmp_path / "real-folder").exists()
+        assert not (tmp_path / "normal-folder").exists()
 
     def test_writes_japanese_as_utf8(self, isolated_logging, tmp_path, monkeypatch):
         _prepare_site(monkeypatch, tmp_path)
