@@ -89,7 +89,9 @@ class Sheet:
             raise DataSheetAccessError(self._worksheet.title, "create_table")
         full_name = self._with_table_prefix(name)
         self._validate_table_name(name)
-        if any(full_name in worksheet.tables for worksheet in self._excel._workbook.worksheets):
+        workbook = self._excel._workbook
+        assert workbook is not None  # Sheet は _ensure_normal_workbook() の後にしか作られない
+        if any(full_name in worksheet.tables for worksheet in workbook.worksheets):
             raise TableAlreadyExistsError(full_name)
         if not isinstance(table, Table):
             raise InvalidTableInputError("create_table には Table を指定してください。")
