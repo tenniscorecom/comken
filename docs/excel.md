@@ -65,6 +65,23 @@ with Excel("一覧.xlsx", read_only=True) as excel:
 - 数式そのものを読みたいときは `Sheet.read_formula(cell)` を使う
   （`read_value` は計算結果を返すため、数式判定には使えない）
 
+## 列を1本だけ読む（`read_column`）
+
+`Sheet.read_column(col, *, header_row=1, force_com=False) -> Table` は、1列だけを
+見出し付きで読む。最終行はシートの使用範囲（`max_row`）から自動で求めるので、
+`read_range(f"{col}1:{col}{最終行}")` のように範囲文字列を自分で組み立てなくてよい。
+
+```python
+ids = sheet.read_column("G").column("お客様ID")
+```
+
+見出しが同じ列がシート内に複数本あるとき（例: 同時レッスンの「お客様ID」が列ごとに
+繰り返し出てくる）に使う。シート全体を `read_range` / `Excel.read()` すると同名見出しの
+重複で `TableError` になるが、`read_column` は1列だけを `Table` にするので重複しない。
+
+見出しがシートの1行目にない（タイトル行や結合セルの下にある）ときは `header_row` で
+指定する。`header_row=2` なら `G2:G{最終行}` を読み、G2 を見出し・G3 以降をデータとして扱う。
+
 ## 保存とCOM
 
 正常に `with` を抜けたときだけ自動保存します。例外終了、`read_only=True`、dry-run では保存しません。保存時は同じフォルダの一時ファイルへ書き、再度開けることとVBAが変化していないことを確認してから元ファイルを置き換えます。

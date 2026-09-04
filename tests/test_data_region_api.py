@@ -180,3 +180,39 @@ class TestExcelTable:
             sheet.freeze_panes("A2")
             assert sheet.read_range("A1:B2").read_rows() == [{"name": "sales", "value": 10}]
             assert sheet.get_used_range() == ("A1", "B2")
+
+    def test_read_column_reads_only_the_given_column(self, tmp_path) -> None:
+        path = tmp_path / "dashboard.xlsx"
+        with Excel(path) as excel:
+            sheet = excel.sheet("Dashboard")
+            sheet.write_range(
+                "A1:B3",
+                [["名前", "値"], ["a", 1], ["b", 2]],
+            )
+            assert sheet.read_column("B").column("値") == [1, 2]
+
+    def test_read_column_works_when_the_same_header_repeats_in_other_columns(
+        self, tmp_path
+    ) -> None:
+        """見出しが重複するシートでも、列を1本ずつ指定すれば読める。
+
+        シート全体を read_range/read() すると同名見出しの重複で TableError に
+        なるが、read_column は1列だけを見出し付き Table にするので通る。
+        """
+        path = tmp_path / "concurrent-lessons.xlsx"
+        with Excel(path) as excel:
+            sheet = excel.sheet("Dashboard")
+            sheet.write_range(
+                "A1:C3",
+                [
+                    ["お客様ID", "コーチ", "お客様ID"],
+                    [101, "山田", 201],
+                    [102, "田中", 202],
+                ],
+            )
+
+            first_slot = sheet.read_column("A").column("お客様ID")
+            second_slot = sheet.read_column("C").column("お客様ID")
+
+            assert first_slot == [101, 102]
+            assert second_slot == [201, 202]

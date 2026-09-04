@@ -263,6 +263,25 @@ class Sheet:
         data_rows = [dict(zip(headers, row, strict=True)) for row in rows[1:]]
         return Table(headers, data_rows)
 
+    def read_column(self, col: str, *, header_row: int = 1, force_com: bool = False) -> Table:
+        """指定した1列だけを見出し付きで ``Table`` として読む。
+
+        `read_range(f"{col}1:{col}{最終行}")` の「最終行を求めて範囲文字列を
+        組み立てる」定型作業をまとめただけの薄いラッパー。最終行はシートの
+        使用範囲（``max_row``）から求める。
+
+        見出しが同じ列が複数本あるシート（例: 同時レッスンの「お客様ID」が
+        列ごとに繰り返し出てくる）で、列を1本ずつ指定して読みたいときに使う。
+        シート全体を ``read_range``/``read()`` すると同名見出しの重複で
+        ``TableError`` になるが、1列ずつなら重複しないので通る。
+
+            ids = sheet.read_column("G").column("お客様ID")
+        """
+        self._ensure_display_sheet("read_column")
+        return self.read_range(
+            f"{col}{header_row}:{col}{self._worksheet.max_row}", force_com=force_com
+        )
+
     def get_used_range(self) -> tuple[str, str]:
         """使用範囲の左上と右下のセル参照を返す。"""
         self._ensure_display_sheet("get_used_range")
