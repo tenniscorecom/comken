@@ -10,6 +10,7 @@ import logging
 import os
 import threading
 import time
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -42,6 +43,7 @@ from comken.toolbox.browser import (
     SiteBase,
     SitePage,
 )
+from comken.toolbox.browser.management import sessions as sessions_module
 from comken.toolbox.browser.management.browsers import Browsers as InternalBrowsers
 from comken.toolbox.browser.management.sessions import BrowserSession as InternalBrowserSession
 from comken.toolbox.browser.management.startup import _build_driver, create_service
@@ -128,6 +130,55 @@ class TestSessionRequiresWith:
         session.__exit__(None, None, None)
 
         assert not temp_path.exists()
+
+
+class TestSaveScreenshot:
+    """save_screenshot の保存先・ファイル名を指定できることのテスト。"""
+
+    def test_defaults_to_logs_dir_with_prefix_name_timestamp(self, tmp_path, monkeypatch):
+        """省略時は従来どおり logs/{prefix}_{セッション名}_{日時}.png に保存する。"""
+        monkeypatch.setattr(sessions_module, "project_dir", lambda: tmp_path)
+        monkeypatch.setattr(
+            sessions_module, "now", lambda: datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
+        )
+        session = _make_session(tmp_path, name="kintai")
+
+        path = session.save_screenshot()
+
+        assert path == tmp_path / "logs" / "screenshot_kintai_20260102_030405.png"
+        assert path.parent.is_dir()
+        session._driver.save_screenshot.assert_called_once_with(str(path))
+
+    def test_directory_overrides_default_logs_dir(self, tmp_path):
+        """directory を指定すると logs/ の代わりにそこへ保存する。"""
+        session = _make_session(tmp_path)
+        target_dir = tmp_path / "shots"
+
+        path = session.save_screenshot(directory=target_dir)
+
+        assert path.parent == target_dir
+        assert path.is_relative_to(target_dir)
+        session._driver.save_screenshot.assert_called_once_with(str(path))
+
+    def test_filename_overrides_prefix_and_timestamp(self, tmp_path, monkeypatch):
+        """filename を指定すると prefix・セッション名・日時を使わずそのまま使う。"""
+        monkeypatch.setattr(sessions_module, "project_dir", lambda: tmp_path)
+        session = _make_session(tmp_path)
+
+        path = session.save_screenshot(filename="ログイン後.png")
+
+        assert path == tmp_path / "logs" / "ログイン後.png"
+        session._driver.save_screenshot.assert_called_once_with(str(path))
+
+    def test_directory_and_filename_together(self, tmp_path):
+        """directory と filename を両方指定した場合は両方を使う。"""
+        session = _make_session(tmp_path)
+        target_dir = tmp_path / "shots"
+
+        path = session.save_screenshot(directory=target_dir, filename="a.png")
+
+        assert path == target_dir / "a.png"
+        session._driver.save_screenshot.assert_called_once_with(str(path))
 
 
 class TestSessionStartFailure:

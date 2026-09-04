@@ -174,18 +174,30 @@ class BrowserSession:
             return self._require_driver().page_source
 
     @measure
-    def save_screenshot(self, prefix: str = "screenshot") -> Path:
-        """今の画面を logs/ に PNG で保存し、そのパスを返す。
+    def save_screenshot(
+        self,
+        prefix: str = "screenshot",
+        *,
+        directory: Path | str | None = None,
+        filename: str | None = None,
+    ) -> Path:
+        """今の画面を PNG で保存し、そのパスを返す。
 
         Args:
-            prefix: ファイル名の先頭。保存先は logs/{prefix}_{セッション名}_{日時}.png。
+            prefix: ファイル名の先頭。filename 指定時は無視される。
+            directory: 保存先ディレクトリ。省略時は logs/。
+            filename: 保存するファイル名。省略時は {prefix}_{セッション名}_{日時}.png。
 
         Returns:
             保存したファイルのパス。
         """
         with self._operating("save_screenshot"):
-            timestamp = now().strftime("%Y%m%d_%H%M%S")
-            path = project_dir() / "logs" / f"{prefix}_{self.name}_{timestamp}.png"
+            target_dir = Path(directory) if directory is not None else project_dir() / "logs"
+            if filename is not None:
+                path = target_dir / filename
+            else:
+                timestamp = now().strftime("%Y%m%d_%H%M%S")
+                path = target_dir / f"{prefix}_{self.name}_{timestamp}.png"
             path.parent.mkdir(parents=True, exist_ok=True)
             self._require_driver().save_screenshot(str(path))
             return path
