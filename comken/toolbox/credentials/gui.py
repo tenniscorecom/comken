@@ -16,7 +16,11 @@ from tkinter import filedialog, messagebox, ttk
 from typing import cast
 
 from comken.exceptions import CredentialError, CredentialNotFoundError
-from comken.toolbox.credentials.importer import credential_name, import_json
+from comken.toolbox.credentials.importer import (
+    credential_name,
+    import_json,
+    split_credential_name,
+)
 from comken.toolbox.credentials.store import (
     CREDENTIAL_NAME_PATTERN,
     CREDENTIALS_PATH,
@@ -57,6 +61,23 @@ def build_credential_name(system: str, field: str) -> tuple[str | None, str | No
     return credential_name(system, field), None
 
 
+def split_name_for_edit(name: str) -> tuple[str, str]:
+    """登録済みキー名を、登録し直すためのフォーム入力（システム名・項目名）へ戻す。
+
+    `split_credential_name()` は「項目名は2語」という importer 側の規約に合わせた
+    分割で、規約に合わないキー（`salesforce_password` のような1語の項目名）は
+    None を返す。ここでは**フォームに入れ直したときに同じキー名へ戻ること**だけを
+    保証すればよいので、規約に合わなければ最後の `_` で割る素朴な分割へ落ちる。
+    どちらの分割でも `credential_name(system, field) == name` は必ず成り立つ
+    （どちらも `name` を `_` で割っただけなので、組み立て直せば元に戻る）。
+    """
+    parts = split_credential_name(name)
+    if parts is not None:
+        return parts
+    system, _, field = name.rpartition("_")
+    return system, field
+
+
 class CredentialsApp:
     """認証情報の登録画面。
 
@@ -91,9 +112,13 @@ class CredentialsApp:
 
         self.listbox = tk.Listbox(left, exportselection=False)
         self.listbox.pack(fill=tk.BOTH, expand=True)
+        self.listbox.bind("<<ListboxSelect>>", self._on_select_existing)
 
+        ttk.Label(
+            left, text="クリックすると右のシステム名・項目名が自動入力されます（登録し直し用）"
+        ).pack(anchor=tk.W, pady=(4, 0))
         ttk.Label(left, text="値は表示されません（登録できたかの確認用）").pack(
-            anchor=tk.W, pady=(4, 0)
+            anchor=tk.W, pady=(2, 0)
         )
         ttk.Button(left, text="選択したキーを削除", command=self._on_delete).pack(
             anchor=tk.W, pady=(8, 0)
@@ -162,6 +187,23 @@ class CredentialsApp:
     # --------------------------------------------------------- イベント処理
     def _on_toggle_show(self) -> None:
         self.value_entry.config(show="" if self.show_var.get() else _MASK_CHARACTER)
+
+    def _on_select_existing(self, _event: tk.Event) -> None:
+        """左の一覧から選ぶと、右のシステム名・項目名を自動入力する（登録し直し用）。
+
+        値は保持していないので空のまま。カーソルは値欄へ移し、
+        あとは値を入力して「登録する」を押すだけで同じキーへ上書きできるようにする。
+        """
+        selection = self.listbox.curselection()
+        if not selection:
+            return
+        name = self.listbox.get(selection[0])
+        system, field = split_name_for_edit(name)
+        self.system_var.set(system)
+        self.field_var.set(field)
+        self.value_var.set("")
+        self.value_entry.focus_set()
+        self._status(f"選択中: {name} — 値を入力して「登録する」を押すと上書きされます")
 
     def _on_save(self) -> None:
         """フォームの1件を保存し、読み直して文字数を出す。"""

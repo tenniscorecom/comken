@@ -7,7 +7,8 @@
 
 import pytest
 
-from comken.toolbox.credentials.gui import build_credential_name
+from comken.toolbox.credentials.gui import build_credential_name, split_name_for_edit
+from comken.toolbox.credentials.importer import credential_name
 
 
 class TestBuildCredentialName:
@@ -45,6 +46,38 @@ class TestBuildCredentialName:
         assert "半角英数字" in error
 
 
+class TestSplitNameForEdit:
+    """登録済みキー名を、登録し直すためのフォーム入力へ戻す。
+
+    分割そのものが「元の入力どおり」である保証はない（項目名に何語入るかは
+    キー名だけからは分からない）。保証するのは、フォームへ入れ直して
+    そのまま保存すると同じキー名に戻ること（上書きが狙った相手に当たること）だけ。
+    """
+
+    @pytest.mark.parametrize(
+        ("system", "field"),
+        [
+            ("site_a", "client_secret"),  # importer 標準の2語項目名
+            ("salesforce", "password"),  # 1語項目名（split_credential_name は None を返す）
+            ("site_a", "token"),  # システム名にアンダースコアを含む1語項目名
+            ("kintai_admin", "refresh_token"),  # 両方にアンダースコアを含む
+        ],
+    )
+    def test_round_trips_back_to_the_same_name(self, system, field):
+        """どんな組み合わせでも、フォームへ戻して組み立て直すと元のキー名に一致する。"""
+        name = credential_name(system, field)
+
+        recovered_system, recovered_field = split_name_for_edit(name)
+
+        assert credential_name(recovered_system, recovered_field) == name
+
+    def test_falls_back_when_standard_split_returns_none(self):
+        """項目名が1語だと split_credential_name() は None を返すので、末尾の _ で割る。"""
+        recovered_system, recovered_field = split_name_for_edit("salesforce_password")
+
+        assert (recovered_system, recovered_field) == ("salesforce", "password")
+
+
 class TestWindow:
     """画面が組み立てられること（表示はしない）。"""
 
@@ -63,5 +96,37 @@ class TestWindow:
             app = CredentialsApp(root, path=tmp_path / "system-id.enc")
             app._refresh()  # 一覧の更新が例外なく動くこと
             assert app.listbox.size() == 0  # 空の保存先なので1件もない
+        finally:
+            root.destroy()
+
+    def test_selecting_an_existing_key_fills_the_form(self, tmp_path):
+        """左の一覧から選ぶと、システム名・項目名が自動入力され、値欄は空になる。
+
+        登録し直すときに system/field を手で打ち直させない、が狙い
+        （手で打つと typo で別キーとして新規登録されてしまう）。
+        """
+        import tkinter as tk
+
+        from comken.toolbox.credentials.gui import CredentialsApp
+        from comken.toolbox.credentials.store import save_credential
+
+        try:
+            root = tk.Tk()
+        except tk.TclError:
+            pytest.skip("画面のない環境では GUI を起動できない")
+
+        root.withdraw()
+        try:
+            path = tmp_path / "system-id.enc"
+            save_credential("salesforce_password", "old-value", path)
+            app = CredentialsApp(root, path=path)
+            app.value_var.set("残っていたら失敗")
+
+            app.listbox.selection_set(0)
+            app._on_select_existing(tk.Event())
+
+            assert app.system_var.get() == "salesforce"
+            assert app.field_var.get() == "password"
+            assert app.value_var.get() == ""  # 値は保持していないので空にする
         finally:
             root.destroy()
