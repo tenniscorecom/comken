@@ -4,6 +4,7 @@ import re
 import tempfile
 import zipfile
 from pathlib import Path
+from typing import Any
 
 import pytest
 from openpyxl import Workbook
@@ -18,6 +19,7 @@ def _book_with_cached_formulas(
     *,
     sheet_name: str,
     formulas_with_values: dict[str, tuple[str, str]],
+    plain_values: dict[str, Any] | None = None,
 ) -> None:
     """数式セルにキャッシュ値（計算結果）を埋めた xlsx を作る。
 
@@ -25,6 +27,9 @@ def _book_with_cached_formulas(
     ``xl/worksheets/sheet1.xml`` を直接編集して ``<c><f>...</f><v>...</v></c>``
     の ``<v>`` に計算結果を入れる。Excel が開いたときは「キャッシュ済み」と
     みなされ、``Excel._cached_range`` は再計算しないで値を返す。
+
+    ``plain_values`` は見出し行のような数式でない値を混ぜたいときに使う
+    （``<f>`` タグが無いので、数式セルと同じ正規表現では書き換えられない）。
     """
     workbook = Workbook()
     sheet = workbook.active
@@ -33,6 +38,8 @@ def _book_with_cached_formulas(
     sheet.title = sheet_name
     for coord, formula_value in formulas_with_values.items():
         sheet[coord] = formula_value[0]
+    for coord, value in (plain_values or {}).items():
+        sheet[coord] = value
     workbook.save(path)
     # zip 内のシート XML に <v> を埋め込んでから再圧縮する。
     with tempfile.TemporaryDirectory() as tmp_str:
@@ -98,6 +105,31 @@ def test_read_value_on_multiple_formula_cells_in_one_session(tmp_path: Path) -> 
     with Excel(path, read_only=True) as excel:
         sheet = excel.sheet("集計")
         assert [sheet.read_value(f"A{row}") for row in (2, 3, 4)] == [4, 6, 8]
+
+
+def test_read_range_on_multi_row_column_with_formulas(tmp_path: Path) -> None:
+    """数式セルを含む複数行の範囲を read_range()/read_column() で読める。
+
+    ``self._worksheet[cell_range]`` は範囲の形に関わらず常に素の tuple を
+    返すため、以前は「MultiCellRange なら .min_row を使う」という分岐が
+    常に外れて座標が全部 0 になり、数式セルを含む範囲では
+    ``worksheet.cell(row=0, column=0)`` → "Row or column values must be
+    at least 1" になっていた（列に限らずどの複数セル範囲でも起きる）。
+    """
+    path = tmp_path / "cached-range.xlsx"
+    _book_with_cached_formulas(
+        path,
+        sheet_name="同時レッスン",
+        formulas_with_values={
+            "G3": ("=A3*100", "300"),
+            "G4": ("=A4*100", "400"),
+            "G5": ("=A5*100", "500"),
+        },
+        plain_values={"G2": "お客様ID"},
+    )
+    with Excel(path, read_only=True) as excel:
+        sheet = excel.sheet("同時レッスン")
+        assert sheet.read_column("G", header_row=2).column("お客様ID") == [300, 400, 500]
 
 
 def test_read_formula_returns_formula_string(tmp_path: Path) -> None:

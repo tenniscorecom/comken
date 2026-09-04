@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from openpyxl.styles import Border, PatternFill, Side
 from openpyxl.utils import column_index_from_string, get_column_letter
-from openpyxl.utils.cell import coordinate_from_string
+from openpyxl.utils.cell import coordinate_from_string, range_boundaries
 from openpyxl.worksheet.table import Table as OpenPyXLTable
 from openpyxl.worksheet.table import TableStyleInfo
 from openpyxl.worksheet.worksheet import Worksheet
@@ -222,20 +222,27 @@ class Sheet:
         ``force_com=True`` でキャッシュを無視して Excel 実機で強制再計算させる。
         """
         self._ensure_display_sheet("read_range")
-        cells = self._worksheet[cell_range]
-        # MultiCellRange は iter_rows 形式で展開して扱う。
-        if hasattr(cells, "min_row"):
-            min_row, min_col = cells.min_row, cells.min_col
-            max_row, max_col = cells.max_row, cells.max_col
-            row_iter = self._worksheet.iter_rows(
+        # ``self._worksheet[cell_range]`` は範囲の形に関わらず常に素の tuple を
+        # 返し、``.min_row`` 等は持たない（``MultiCellRange`` にはならない）。
+        # 以前はこれを ``hasattr`` で判定していたため常に外れ、複数セルの範囲でも
+        # 座標が全部 0 になり、数式セルを含む範囲で `worksheet.cell(row=0,
+        # column=0)` → ``ValueError`` になっていた。``range_boundaries()`` で
+        # 範囲文字列から直接座標を求める（1セルの範囲でも同じ形で返る）。
+        # "A:A" のような行・列を指定しない範囲は境界が求まらず None になるため
+        # 弾く（read_range は "A1:B10" のような完全な範囲だけを想定している）。
+        min_col, min_row, max_col, max_row = range_boundaries(cell_range)
+        if min_col is None or min_row is None or max_col is None or max_row is None:
+            raise InvalidTableInputError(
+                f"read_range には完全なセル範囲を指定してください（例: 'A1:B10'）: {cell_range!r}"
+            )
+        cells = list(
+            self._worksheet.iter_rows(
                 min_row=min_row, max_row=max_row, min_col=min_col, max_col=max_col
             )
-        else:
-            row_iter = iter(cells)
-            min_row = min_col = max_row = max_col = 0
+        )
         has_formula = any(
             isinstance(cell.value, str) and cell.value.startswith("=")
-            for row in row_iter
+            for row in cells
             for cell in row
         )
         if has_formula or force_com:
