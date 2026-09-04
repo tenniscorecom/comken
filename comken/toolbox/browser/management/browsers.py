@@ -71,6 +71,11 @@ from comken.toolbox.browser.sitebase import SiteBase
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+# launch() の戻り値を渡したサブクラスの型に合わせるための束縛 TypeVar。
+# 素の T だと SiteBase 以外も受理してしまい、束縛しないと pyright が
+# launch(Kintai) の戻り値を SiteBase 止まりで推論し、Kintai 固有の
+# メソッド（go_login() など）が補完に出なくなる。
+S = TypeVar("S", bound=SiteBase)
 
 # 裏で動かす処理の同時実行数の上限。ブラウザ操作は待ち時間がほとんどで
 # CPU を使わないため、サイト数として現実的な範囲を確保しておけばよい
@@ -137,9 +142,9 @@ class Browsers:
 
     def launch(
         self,
-        site: type[SiteBase],
+        site: type[S],
         download_dir: str | Path | None = None,
-    ) -> SiteBase:
+    ) -> S:
         """サイトクラスを渡してブラウザを1つ起動する（推奨経路）。
 
         サブクラスの NAME と OPTIONS を読んで、内部で `launch_session()` を

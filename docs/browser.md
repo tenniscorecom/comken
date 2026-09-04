@@ -404,8 +404,46 @@ class HomePage(KintaiPage):
 
 ```python
 home = LoginPage(session).login(user_id, password)
-days = home.open_attendance().unfilled_days()
+days = home.go_attendance().unfilled_days()
 ```
+
+### ボタン遷移の書き方
+
+**社内システムの画面遷移は、ほとんどがボタン／リンクのクリックで、URL 直アクセスは少数派。**
+セッション付きの遷移用トークンが URL に乗っている、遷移が POST や JS で行われる、
+そもそもパスが公開されていない、といった理由で `go("/path")` が使えないことが多い。
+`go_〇〇()` の中身は**既定でクリック、URL がわかっていて安定しているときだけ `go()`** で組み立てる。
+
+型は「まず動かす」節の `go_login()`（URL 直アクセス）と同じ形だが、中身がクリックに変わるだけ:
+
+```python
+class HomePage(KintaiPage):
+    ATTENDANCE_MENU = Locator.css("a[href='/attendance']")
+
+    def go_attendance(self) -> "AttendancePage":
+        """メニューの「勤怠」を押して遷移する。"""
+        from .attendance_page import AttendancePage
+
+        self.click(self.ATTENDANCE_MENU)
+        return self.to(AttendancePage)
+```
+
+**書き方の骨格は3行で固定**: ①押す対象を `Locator` で用意（クラス先頭）→
+②`self.click(LOC)` で押す → ③遷移先の画面クラスを `self.to(NextPage)` で返す。
+ボタンがリンク（`<a>`）でもフォーム送信ボタンでも書き方は変わらない
+（`click()` は押すだけで、遷移方式の違いは意識しなくてよい）。
+
+**`go()` を使ってよいのは、URL 自体が入口として安定しているとき**（ログイン画面・
+ブックマーク可能なトップページなど）。それ以外（一覧の詳細行・確認ダイアログの
+「はい」・タブ切り替えなど）は基本クリックにする。判断に迷ったら**押して確かめられる
+ボタンがあるならクリックを選ぶ**——URL は実装都合で変わりやすいが、ボタンは
+画面がある限り押せる。
+
+遷移後の読み込みが重い画面では、`click()` の直後に `to()` を返すだけでよい。
+次の画面の最初の操作（`login()` の `input()` など）が対象要素を自動で待つため、
+`go_〇〇()` 側で明示的に `wait_visible()` を挟む必要は基本的にない。
+遷移そのものの完了を確認したいとき（次の画面を使わずに終わる場合など）だけ、
+`go_〇〇()` の中で目印の要素を `wait_visible()` してから返す。
 
 ### セレクターの選び方
 
@@ -416,7 +454,14 @@ days = home.open_attendance().unfilled_days()
 | 1 | `Locator.id("userId")` | いちばん壊れにくい |
 | 2 | `Locator.name("userId")` | 入力欄はこれが使えることが多い |
 | 3 | `Locator.css("table tr .name")` | id / name が無いとき |
-| 4 | `Locator.xpath("//button[text()='検索']")` | 最終手段。文字で探すときだけ |
+| 4 | `Locator.link_text("検索")` | `<a>` をリンクテキスト完全一致で探すとき |
+| 5 | `Locator.partial_link_text("検索")` | `<a>` をリンクテキスト部分一致で探すとき |
+| 6 | `Locator.xpath("//button[text()='検索']")` | 最終手段。`<a>` 以外を文字で探すときや、それでも無理なとき |
+
+`link_text` / `partial_link_text` は `<a>` の可視テキスト全体（子要素込み）を比較する。
+`xpath("//a[text()='...']")` は直下のテキストノードにしか一致しないため、
+`<a><span>検索</span></a>` のように文字が子要素に入っていると素通りする。
+リンクを文字で探すときは xpath より先にこちらを検討する。
 
 絶対 XPath（`/html/body/div[3]/...`）は使わない。画面に1つ要素が増えただけで壊れる。
 

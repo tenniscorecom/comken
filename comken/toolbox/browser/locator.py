@@ -18,10 +18,19 @@ class Locator(NamedTuple):
     """セレクター（探し方 + 値）。Locator.id(...) 等のファクトリで作る。
 
     セレクターの優先順位（CONVENTIONS.md と同じ）:
-        1. Locator.id      … id 属性
-        2. Locator.name    … name 属性
-        3. Locator.css     … CSS セレクター
-        4. Locator.xpath   … XPath（最終手段。絶対パスは使わない）
+        1. Locator.id                … id 属性
+        2. Locator.name              … name 属性
+        3. Locator.css               … CSS セレクター
+        4. Locator.link_text         … <a> のリンクテキスト完全一致
+        5. Locator.partial_link_text … <a> のリンクテキスト部分一致
+        6. Locator.xpath             … XPath（最終手段。絶対パスは使わない）
+
+    リンクをテキストで探すときは、xpath の `//a[text()='...']` より
+    link_text / partial_link_text を先に検討する。`text()` は直下の
+    テキストノードにしか一致しないため、`<a><span>検索</span></a>` のように
+    子要素へテキストが入っていると素通りしてしまう。link_text はリンクの
+    可視テキスト全体（子要素込み）を Selenium 側で正規化して比較するため、
+    この種の DOM 構造の揺れに強い。
     """
 
     by: str
@@ -41,6 +50,16 @@ class Locator(NamedTuple):
     def css(cls, value: str) -> Self:
         """CSS セレクターで探す（例: Locator.css("table tr .name")）。"""
         return cls(By.CSS_SELECTOR, value)
+
+    @classmethod
+    def link_text(cls, value: str) -> Self:
+        """<a> のリンクテキストで完全一致で探す（例: Locator.link_text("検索")）。"""
+        return cls(By.LINK_TEXT, value)
+
+    @classmethod
+    def partial_link_text(cls, value: str) -> Self:
+        """<a> のリンクテキストで部分一致で探す（例: Locator.partial_link_text("検索")）。"""
+        return cls(By.PARTIAL_LINK_TEXT, value)
 
     @classmethod
     def xpath(cls, value: str) -> Self:

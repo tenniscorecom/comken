@@ -772,6 +772,8 @@ class TestLocator:
         assert Locator.id("x") == (By.ID, "x")
         assert Locator.name("x") == (By.NAME, "x")
         assert Locator.css(".x") == (By.CSS_SELECTOR, ".x")
+        assert Locator.link_text("x") == (By.LINK_TEXT, "x")
+        assert Locator.partial_link_text("x") == (By.PARTIAL_LINK_TEXT, "x")
         assert Locator.xpath("//x") == (By.XPATH, "//x")
 
     def test_unpacks_into_selenium_call(self):
