@@ -872,22 +872,23 @@ class Excel:
         オープンして数式かどうかを判定するため、**数式が無いブックでは zip を
         1 度しか読まない**。判定後に改めて数式側も ``iter_rows`` で同じ行から
         流し、同じ位置のセルを突き合わせる。
+
+        ``_open_stream_workbook()`` が返す Workbook はここでは閉じない。
+        `self._stream_workbook` / `self._stream_workbook_data_only` に
+        キャッシュされ、同じ ``Excel`` セッション内の複数回の呼び出しで
+        使い回される前提のため（zip を毎回読み直さないための仕組み）。
+        ここで閉じると、次に呼ばれたときキャッシュが閉じた zip を指したまま
+        返り、"Attempt to use ZIP archive that was already closed" になる。
+        実際に閉じるのは ``Excel.close()``（``with`` を抜けるとき）。
         """
         cached_workbook = self._open_stream_workbook(data_only=True)
-        formula_workbook: Workbook | None = None
-        try:
-            cached_sheet = cached_workbook[sheet_name]
-            rows, any_none = self._collect_cached_rows(cached_sheet, min_row)
-            if not any_none:
-                return rows, False
-            formula_workbook = self._open_stream_workbook(data_only=False)
-            formula_sheet = formula_workbook[sheet_name]
-            new_rows, needs_com = self._mark_uncalculated_formulas(rows, formula_sheet, min_row)
-            return new_rows, needs_com
-        finally:
-            cached_workbook.close()
-            if formula_workbook is not None:
-                formula_workbook.close()
+        cached_sheet = cached_workbook[sheet_name]
+        rows, any_none = self._collect_cached_rows(cached_sheet, min_row)
+        if not any_none:
+            return rows, False
+        formula_workbook = self._open_stream_workbook(data_only=False)
+        formula_sheet = formula_workbook[sheet_name]
+        return self._mark_uncalculated_formulas(rows, formula_sheet, min_row)
 
     @staticmethod
     def _collect_cached_rows(
@@ -949,7 +950,12 @@ class Excel:
     def _cached_range(
         self, sheet_name: str, min_col: int, min_row: int, max_col: int, max_row: int
     ) -> tuple[list[tuple[Any, ...]], bool]:
-        """実テーブル範囲の保存済み計算値と、COM再計算の要否を返す。"""
+        """実テーブル範囲の保存済み計算値と、COM再計算の要否を返す。
+
+        ``_open_stream_workbook()`` が返す Workbook はここでは閉じない。
+        `_cached_rows_from_stream()` と同じ理由（キャッシュされた Workbook を
+        同一セッション内で使い回すため）で、閉じるのは ``Excel.close()`` に任せる。
+        """
         if self._is_dirty or not self._working_path.exists():
             self._ensure_normal_workbook()
             formula_sheet = self._workbook[sheet_name]
@@ -966,29 +972,24 @@ class Excel:
             return rows, needs_com
         cached_workbook = self._open_stream_workbook(data_only=True)
         formula_workbook: Workbook | None = None
-        try:
-            cached_sheet = cached_workbook[sheet_name]
-            rows = []
-            needs_com = False
-            for row_number in range(min_row, max_row + 1):
-                row_values = []
-                for column in range(min_col, max_col + 1):
-                    cached_value = cached_sheet.cell(row=row_number, column=column).value
-                    if cached_value is None:
-                        if formula_workbook is None:
-                            formula_workbook = self._open_stream_workbook(data_only=False)
-                        formula_value = (
-                            formula_workbook[sheet_name].cell(row=row_number, column=column).value
-                        )
-                        if isinstance(formula_value, str) and formula_value.startswith("="):
-                            needs_com = True
-                    row_values.append(cached_value)
-                rows.append(tuple(row_values))
-            return rows, needs_com
-        finally:
-            cached_workbook.close()
-            if formula_workbook is not None:
-                formula_workbook.close()
+        cached_sheet = cached_workbook[sheet_name]
+        rows = []
+        needs_com = False
+        for row_number in range(min_row, max_row + 1):
+            row_values = []
+            for column in range(min_col, max_col + 1):
+                cached_value = cached_sheet.cell(row=row_number, column=column).value
+                if cached_value is None:
+                    if formula_workbook is None:
+                        formula_workbook = self._open_stream_workbook(data_only=False)
+                    formula_value = (
+                        formula_workbook[sheet_name].cell(row=row_number, column=column).value
+                    )
+                    if isinstance(formula_value, str) and formula_value.startswith("="):
+                        needs_com = True
+                row_values.append(cached_value)
+            rows.append(tuple(row_values))
+        return rows, needs_com
 
     @staticmethod
     def _is_unc_path(path: str | Path) -> bool:

@@ -77,6 +77,29 @@ def test_read_value_returns_cached_formula_result(tmp_path: Path) -> None:
         assert sheet.read_value("A2") == 4
 
 
+def test_read_value_on_multiple_formula_cells_in_one_session(tmp_path: Path) -> None:
+    """数式セルを同じセッションで複数回 read_value() しても壊れない。
+
+    ``_cached_range()`` はキャッシュした stream Workbook を使い回す設計だが、
+    以前は呼ぶたびに ``finally`` で閉じてしまい、2回目の呼び出しで
+    "Attempt to use ZIP archive that was already closed" になっていた
+    （同じ列を上から読むループで、2セル目以降が必ず壊れる形）。
+    """
+    path = tmp_path / "cached-multi.xlsx"
+    _book_with_cached_formulas(
+        path,
+        sheet_name="集計",
+        formulas_with_values={
+            "A2": ("=A1*2", "4"),
+            "A3": ("=A1*3", "6"),
+            "A4": ("=A1*4", "8"),
+        },
+    )
+    with Excel(path, read_only=True) as excel:
+        sheet = excel.sheet("集計")
+        assert [sheet.read_value(f"A{row}") for row in (2, 3, 4)] == [4, 6, 8]
+
+
 def test_read_formula_returns_formula_string(tmp_path: Path) -> None:
     """read_formula() はセルの数式本体をそのまま返す。"""
     path = tmp_path / "formula.xlsx"
