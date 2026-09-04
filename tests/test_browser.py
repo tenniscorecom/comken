@@ -193,6 +193,28 @@ class TestSaveScreenshot:
         assert path == target_dir / "error_kintai_20260102_030405.png"
         session._driver.save_screenshot.assert_called_once_with(str(path))
 
+    def test_relative_directory_becomes_a_subfolder_of_logs(self, tmp_path, monkeypatch):
+        """directory に相対パスを渡すと、カレントディレクトリでなく logs/ のサブフォルダになる。"""
+        monkeypatch.setattr(sessions_module, "project_dir", lambda: tmp_path)
+        monkeypatch.chdir(tmp_path.parent)  # project_dir() とは別の場所をカレントにする
+        session = _make_session(tmp_path)
+
+        path = session.save_screenshot("a.png", directory="errors")
+
+        assert path == tmp_path / "logs" / "errors" / "a.png"
+        session._driver.save_screenshot.assert_called_once_with(str(path))
+
+    def test_absolute_directory_escapes_logs_entirely(self, tmp_path, monkeypatch):
+        """directory に絶対パスを渡すと logs/ 配下ではなくそこへ直接保存する。"""
+        monkeypatch.setattr(sessions_module, "project_dir", lambda: tmp_path / "project")
+        session = _make_session(tmp_path)
+        elsewhere = tmp_path / "elsewhere"
+
+        path = session.save_screenshot("a.png", directory=elsewhere)
+
+        assert path == elsewhere / "a.png"
+        session._driver.save_screenshot.assert_called_once_with(str(path))
+
 
 class TestSessionStartFailure:
     """起動に失敗したときに、プロセスもフォルダも残さないことのテスト。"""

@@ -702,7 +702,8 @@ session.title                        # ページタイトル
 session.refresh() / session.back()   # 再読み込み / 戻る
 session.save_screenshot()                       # logs/screenshot_セッション名_日時.png に保存
 session.save_screenshot("login.png")            # logs/login.png に保存（ファイル名を直接指定）
-session.save_screenshot(directory="errors")     # errors/screenshot_セッション名_日時.png に保存
+session.save_screenshot(directory="errors")     # logs/errors/screenshot_セッション名_日時.png（logs/ 配下のサブフォルダ）
+session.save_screenshot(directory=r"D:\shots")  # 絶対パスなら logs/ の外にも保存できる
 session.download_dir.wait()                     # ダウンロード完了まで待つ
 
 with session.popup_tab():            # 別タブへ移り、抜けるときに閉じて戻る

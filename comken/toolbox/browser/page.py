@@ -111,7 +111,9 @@ class Page:
 
         Args:
             filename: 保存するファイル名。省略時は {prefix}_{セッション名}_{日時}.png。
-            directory: 保存先ディレクトリ。省略時は logs/。
+            directory: 保存先ディレクトリ。相対パスなら logs/ 配下のサブフォルダとして扱う
+                （例: "errors" → logs/errors/）。絶対パスを渡せば logs/ の外にも保存できる。
+                省略時は logs/。
             prefix: filename を省略したときのファイル名の先頭。
         """
         return self.session.save_screenshot(filename, directory=directory, prefix=prefix)
