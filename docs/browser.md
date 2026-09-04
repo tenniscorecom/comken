@@ -587,7 +587,7 @@ with page.frame(page.CONTENT_FRAME):
 ```python
 page.click(page.REPORT_LINK)         # ここで別タブが開く
 with session.popup_tab():            # 開いたタブへ移る
-    session.save_screenshot("report")
+    session.save_screenshot("report.png")
 # ← 別タブを閉じて、元のタブへ戻る
 ```
 
@@ -700,11 +700,13 @@ session.open(url)                    # URL を開く
 session.current_url                  # 現在の URL
 session.title                        # ページタイトル
 session.refresh() / session.back()   # 再読み込み / 戻る
-session.save_screenshot("prefix")    # logs/prefix_セッション名_日時.png に保存
-session.download_dir.wait()          # ダウンロード完了まで待つ
+session.save_screenshot()                       # logs/screenshot_セッション名_日時.png に保存
+session.save_screenshot("login.png")            # logs/login.png に保存（ファイル名を直接指定）
+session.save_screenshot(directory="errors")     # errors/screenshot_セッション名_日時.png に保存
+session.download_dir.wait()                     # ダウンロード完了まで待つ
 
 with session.popup_tab():            # 別タブへ移り、抜けるときに閉じて戻る
-    session.save_screenshot("report")
+    session.save_screenshot("report.png")
 
 session.raw.set_window_size(1200, 800)   # ここにない機能は raw（生の WebDriver）から
 ```
@@ -833,7 +835,7 @@ class LoginPage(SitePage):
 | ドラッグ＆ドロップ | `drag_drop(source, target)` |
 | 確認ダイアログ | `alert_accept()` / `alert_dismiss()` / `alert_text()` |
 | iframe の中を操作 | `with page.frame(LOC):` |
-| スクリーンショット | `save_screenshot(prefix)` |
+| スクリーンショット | `save_screenshot(filename=None, *, directory=None, prefix="screenshot")` |
 | 一覧の各行を処理する | `elements(LOC)`（WebElement のリスト） |
 | 最終手段 | `element(LOC)`（生の WebElement） / `js(script, *args)` |
 

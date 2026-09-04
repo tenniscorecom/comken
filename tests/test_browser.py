@@ -149,8 +149,18 @@ class TestSaveScreenshot:
         assert path.parent.is_dir()
         session._driver.save_screenshot.assert_called_once_with(str(path))
 
+    def test_filename_is_used_as_is_without_prefix_or_timestamp(self, tmp_path, monkeypatch):
+        """filename を第一引数で渡すと prefix・日時を使わずそのまま logs/ 直下に置く。"""
+        monkeypatch.setattr(sessions_module, "project_dir", lambda: tmp_path)
+        session = _make_session(tmp_path)
+
+        path = session.save_screenshot("ログイン後.png")
+
+        assert path == tmp_path / "logs" / "ログイン後.png"
+        session._driver.save_screenshot.assert_called_once_with(str(path))
+
     def test_directory_overrides_default_logs_dir(self, tmp_path):
-        """directory を指定すると logs/ の代わりにそこへ保存する。"""
+        """directory を指定すると logs/ の代わりにそこへ保存する（自動命名は維持）。"""
         session = _make_session(tmp_path)
         target_dir = tmp_path / "shots"
 
@@ -160,24 +170,27 @@ class TestSaveScreenshot:
         assert path.is_relative_to(target_dir)
         session._driver.save_screenshot.assert_called_once_with(str(path))
 
-    def test_filename_overrides_prefix_and_timestamp(self, tmp_path, monkeypatch):
-        """filename を指定すると prefix・セッション名・日時を使わずそのまま使う。"""
-        monkeypatch.setattr(sessions_module, "project_dir", lambda: tmp_path)
-        session = _make_session(tmp_path)
-
-        path = session.save_screenshot(filename="ログイン後.png")
-
-        assert path == tmp_path / "logs" / "ログイン後.png"
-        session._driver.save_screenshot.assert_called_once_with(str(path))
-
     def test_directory_and_filename_together(self, tmp_path):
         """directory と filename を両方指定した場合は両方を使う。"""
         session = _make_session(tmp_path)
         target_dir = tmp_path / "shots"
 
-        path = session.save_screenshot(directory=target_dir, filename="a.png")
+        path = session.save_screenshot("a.png", directory=target_dir)
 
         assert path == target_dir / "a.png"
+        session._driver.save_screenshot.assert_called_once_with(str(path))
+
+    def test_prefix_still_works_as_keyword_when_filename_is_omitted(self, tmp_path, monkeypatch):
+        """directory + prefix を渡すと、カテゴリー分けと従来の自動命名を両立できる。"""
+        monkeypatch.setattr(
+            sessions_module, "now", lambda: datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
+        )
+        session = _make_session(tmp_path, name="kintai")
+        target_dir = tmp_path / "errors"
+
+        path = session.save_screenshot(directory=target_dir, prefix="error")
+
+        assert path == target_dir / "error_kintai_20260102_030405.png"
         session._driver.save_screenshot.assert_called_once_with(str(path))
 
 

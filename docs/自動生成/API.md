@@ -6750,7 +6750,7 @@ def __init__(self) -> None:
 #### `launch`
 
 ```text
-def launch(self, site: type[SiteBase], download_dir: str | Path | None=None) -> SiteBase:
+def launch(self, site: type[S], download_dir: str | Path | None=None) -> S:
 ```
 
 ##### 説明
@@ -6998,15 +6998,17 @@ def page_source(self) -> str:
 
 ```text
 @measure
-def save_screenshot(self, prefix: str='screenshot') -> Path:
+def save_screenshot(self, filename: str | None=None, *, directory: Path | str | None=None, prefix: str='screenshot') -> Path:
 ```
 
 ##### 説明
 
-今の画面を logs/ に PNG で保存し、そのパスを返す。
+今の画面を PNG で保存し、そのパスを返す。
 
 Args:
-    prefix: ファイル名の先頭。保存先は logs/{prefix}_{セッション名}_{日時}.png。
+    filename: 保存するファイル名。省略時は {prefix}_{セッション名}_{日時}.png。
+    directory: 保存先ディレクトリ。省略時は logs/。
+    prefix: filename を省略したときのファイル名の先頭。
 
 Returns:
     保存したファイルのパス。
@@ -7280,12 +7282,17 @@ URL を開き、自分自身を返す。
 #### `save_screenshot`
 
 ```text
-def save_screenshot(self, prefix: str='screenshot') -> Path:
+def save_screenshot(self, filename: str | None=None, *, directory: Path | str | None=None, prefix: str='screenshot') -> Path:
 ```
 
 ##### 説明
 
-今の画面を logs/ に PNG で保存し、そのパスを返す。
+今の画面を PNG で保存し、そのパスを返す。
+
+Args:
+    filename: 保存するファイル名。省略時は {prefix}_{セッション名}_{日時}.png。
+    directory: 保存先ディレクトリ。省略時は logs/。
+    prefix: filename を省略したときのファイル名の先頭。
 
 #### `click`
 
@@ -7605,10 +7612,19 @@ class Locator(NamedTuple):
 セレクター（探し方 + 値）。Locator.id(...) 等のファクトリで作る。
 
 セレクターの優先順位（CONVENTIONS.md と同じ）:
-    1. Locator.id      … id 属性
-    2. Locator.name    … name 属性
-    3. Locator.css     … CSS セレクター
-    4. Locator.xpath   … XPath（最終手段。絶対パスは使わない）
+    1. Locator.id                … id 属性
+    2. Locator.name              … name 属性
+    3. Locator.css               … CSS セレクター
+    4. Locator.link_text         … <a> のリンクテキスト完全一致
+    5. Locator.partial_link_text … <a> のリンクテキスト部分一致
+    6. Locator.xpath             … XPath（最終手段。絶対パスは使わない）
+
+リンクをテキストで探すときは、xpath の `//a[text()='...']` より
+link_text / partial_link_text を先に検討する。`text()` は直下の
+テキストノードにしか一致しないため、`<a><span>検索</span></a>` のように
+子要素へテキストが入っていると素通りしてしまう。link_text はリンクの
+可視テキスト全体（子要素込み）を Selenium 側で正規化して比較するため、
+この種の DOM 構造の揺れに強い。
 
 #### `id`
 
@@ -7642,6 +7658,28 @@ def css(cls, value: str) -> Self:
 ##### 説明
 
 CSS セレクターで探す（例: Locator.css("table tr .name")）。
+
+#### `link_text`
+
+```text
+@classmethod
+def link_text(cls, value: str) -> Self:
+```
+
+##### 説明
+
+<a> のリンクテキストで完全一致で探す（例: Locator.link_text("検索")）。
+
+#### `partial_link_text`
+
+```text
+@classmethod
+def partial_link_text(cls, value: str) -> Self:
+```
+
+##### 説明
+
+<a> のリンクテキストで部分一致で探す（例: Locator.partial_link_text("検索")）。
 
 #### `xpath`
 
@@ -7842,7 +7880,7 @@ def __init__(self) -> None:
 #### `launch`
 
 ```text
-def launch(self, site: type[SiteBase], download_dir: str | Path | None=None) -> SiteBase:
+def launch(self, site: type[S], download_dir: str | Path | None=None) -> S:
 ```
 
 ##### 説明
@@ -8090,15 +8128,17 @@ def page_source(self) -> str:
 
 ```text
 @measure
-def save_screenshot(self, prefix: str='screenshot') -> Path:
+def save_screenshot(self, filename: str | None=None, *, directory: Path | str | None=None, prefix: str='screenshot') -> Path:
 ```
 
 ##### 説明
 
-今の画面を logs/ に PNG で保存し、そのパスを返す。
+今の画面を PNG で保存し、そのパスを返す。
 
 Args:
-    prefix: ファイル名の先頭。保存先は logs/{prefix}_{セッション名}_{日時}.png。
+    filename: 保存するファイル名。省略時は {prefix}_{セッション名}_{日時}.png。
+    directory: 保存先ディレクトリ。省略時は logs/。
+    prefix: filename を省略したときのファイル名の先頭。
 
 Returns:
     保存したファイルのパス。
@@ -9173,6 +9213,27 @@ def read_range(self, cell_range: str, *, force_com: bool=False) -> Table:
 
 数式セルがある範囲では保存済み計算値、無ければ COM で再計算した値を返す。
 ``force_com=True`` でキャッシュを無視して Excel 実機で強制再計算させる。
+
+#### `read_column`
+
+```text
+def read_column(self, col: str, *, header_row: int=1, force_com: bool=False) -> Table:
+```
+
+##### 説明
+
+指定した1列だけを見出し付きで ``Table`` として読む。
+
+`read_range(f"{col}1:{col}{最終行}")` の「最終行を求めて範囲文字列を
+組み立てる」定型作業をまとめただけの薄いラッパー。最終行はシートの
+使用範囲（``max_row``）から求める。
+
+見出しが同じ列が複数本あるシート（例: 同時レッスンの「お客様ID」が
+列ごとに繰り返し出てくる）で、列を1本ずつ指定して読みたいときに使う。
+シート全体を ``read_range``/``read()`` すると同名見出しの重複で
+``TableError`` になるが、1列ずつなら重複しないので通る。
+
+    ids = sheet.read_column("G").column("お客様ID")
 
 #### `get_used_range`
 

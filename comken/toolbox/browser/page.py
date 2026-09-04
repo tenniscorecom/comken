@@ -102,19 +102,19 @@ class Page:
 
     def save_screenshot(
         self,
-        prefix: str = "screenshot",
+        filename: str | None = None,
         *,
         directory: Path | str | None = None,
-        filename: str | None = None,
+        prefix: str = "screenshot",
     ) -> Path:
         """今の画面を PNG で保存し、そのパスを返す。
 
         Args:
-            prefix: ファイル名の先頭。filename 指定時は無視される。
-            directory: 保存先ディレクトリ。省略時は logs/。
             filename: 保存するファイル名。省略時は {prefix}_{セッション名}_{日時}.png。
+            directory: 保存先ディレクトリ。省略時は logs/。
+            prefix: filename を省略したときのファイル名の先頭。
         """
-        return self.session.save_screenshot(prefix, directory=directory, filename=filename)
+        return self.session.save_screenshot(filename, directory=directory, prefix=prefix)
 
     # ------------------------------------------------------------ 操作
 
