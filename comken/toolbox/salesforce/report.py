@@ -136,6 +136,45 @@ def _parse_report_payload(
     )
 
 
+def _normalize_label(label: str) -> str:
+    """表示名の前後空白を落として小文字化する。
+
+    Salesforce の表示名は前後に空白が入ることがあり、また大小文字の
+    ゆらぎ（カスタム表示名）は実フィールド側と一致しないことがあるため、
+    突き合わせの前にもう一段正規化する。完全一致しなかったときの
+    フォールバック（部分一致など）は敢えて行わない。**不一致は「不一致」**
+    のまま残し、誤った候補を押し付けないことを優先するため。
+    """
+    return label.strip().lower()
+
+
+def _build_field_index(data: object) -> tuple[dict[str, list[dict]], None]:
+    """Object Describe の ``fields`` 配列を ``{正規化表示名: [field, ...]}`` に組み立てる。
+
+    同じ表示名を持つフィールドが複数ある場合は、最初に見つかった1件だけを
+    選ばず**リストのまま**残す。呼び出し側で件数を判定し、1 件なら採用、
+    2 件以上なら「複数候補あり」として注記する。
+
+    Object Describe が ``fields`` を返さなかった場合（壊れたレスポンス等）は
+    空の辞書を返し、全列が「対応フィールドなし」になる。例外にはしない
+    （``describe_fields()`` のポリシーと揃えるため）。
+    """
+    fields = data.get("fields", []) if isinstance(data, dict) else []
+    index: dict[str, list[dict]] = {}
+    for field in fields:
+        if not isinstance(field, dict):
+            continue
+        name = field.get("name")
+        label = field.get("label")
+        field_type = field.get("type")
+        if not isinstance(name, str) or not isinstance(label, str):
+            continue
+        index.setdefault(_normalize_label(label), []).append(
+            {"name": name, "type": field_type if isinstance(field_type, str) else ""}
+        )
+    return index, None
+
+
 class ReportAPI:
     """レポートを実行して明細行を取得する。
 
@@ -362,3 +401,140 @@ class ReportAPI:
         )
         logger.debug("Salesforce Report取得完了: Report ID=%s 件数=%d", report_id, len(table))
         return table
+
+    @measure
+    def describe_fields(self, report_id: str) -> Table:
+        """レポートの列と、Salesforce の実フィールド API 名の対応表を作る。
+
+        **完全な自動変換ではない点に注意。** Salesforce の Reports API は、
+        レポートの列と実フィールドの対応を保証する公式な手段を提供していない。
+        そのため本メソッドは、レポートの**表示名**と主オブジェクト（標準
+        レポートタイプなら ``Opportunity`` など）の**フィールドの表示名**を
+        突き合わせて、同じ表示名なら実フィールドの API 名・型を埋める実装に
+        とどめている。一致しない列は黙って外さず「対応フィールドなし」として
+        残し、同じ表示名のフィールドが複数ある列は誤った候補を押し付けない
+        ように「複数候補あり」と注記する。「9割自動で埋めて、残りをはっきり
+        見せる」道具として使う。
+
+        利用例（何十件ものレポートをまとめて CSV へ落とす）:
+
+            with Sandbox() as sf:
+                for report_id in report_ids:
+                    sf.report.describe_fields_csv(report_id, f"fields_{report_id}.csv")
+
+        Args:
+            report_id: レポート ID。
+
+        Returns:
+            ``Table``。列は次のとおり（すべて日本語）:
+
+            - ``列キー``: レポート側の列キー（``detailColumns`` の値そのもの）
+            - ``表示名``: レポート API が返した表示名
+            - ``対応フィールドAPI名``: 一致した実フィールドの API 名。分からなければ
+              ``"(不明)"`` を入れる（空文字だと「調べたが空」と「調べていない」が
+              区別できないため）
+            - ``型``: 実フィールドのデータ型
+            - ``備考``: 複数候補あり・オブジェクト特定失敗などの理由。1 件で
+              一致した行は空文字
+        """
+        metadata = self.describe(report_id)
+        columns = (
+            metadata.get("reportMetadata", {}).get("detailColumns", [])
+            if isinstance(metadata, dict)
+            else []
+        )
+        column_info = (
+            metadata.get("reportExtendedMetadata", {}).get("detailColumnInfo", {})
+            if isinstance(metadata, dict)
+            else {}
+        )
+        object_name = (
+            metadata.get("reportMetadata", {}).get("reportType", {}).get("type", "")
+            if isinstance(metadata, dict)
+            else ""
+        )
+
+        # Object Describe 自体は /analytics/ ではないため、self._request() を
+        # 通すと 401/403 が SalesforceReportAccessDeniedError に変換されてしまう。
+        # ここは別系統の権限（オブジェクトへの参照）なので、変換せず
+        # SalesforceRequestError のまま伝播させる。
+        field_index: dict[str, list[dict]] | None
+        object_error_reason: str | None
+        if not object_name:
+            field_index = None
+            object_error_reason = (
+                "レポートタイプから主オブジェクトを特定できないため自動判定できません。"
+                "手動で確認してください"
+            )
+        else:
+            path = self._client.data_path(f"/sobjects/{object_name}/describe")
+            try:
+                data, _ = self._client.request("GET", path, component=COMPONENT)
+            except SalesforceRequestError as exc:
+                # 401 / 403 は権限エラー。Reports API とは別の権限系統
+                # （オブジェクトへの参照）なので、SalesforceReportAccessDeniedError には
+                # 変換せず SalesforceRequestError のまま呼び出し側へ返す。
+                if exc.status_code in (401, 403):
+                    raise
+                # 404 等は「複合レポートタイプなどで主オブジェクト名が見つからない」等
+                # の想定ケース。例外にせず、全列を「(不明)」で返して道具として動く状態を保つ。
+                field_index = None
+                object_error_reason = (
+                    f"主オブジェクト {object_name} の Object Describe に失敗したため"
+                    f"自動判定できません（HTTP {exc.status_code}: {exc.detail}）。"
+                    "手動で確認してください"
+                )
+            else:
+                field_index, object_error_reason = _build_field_index(data)
+
+        rows: list[dict[str, str]] = []
+        for column_key in columns:
+            info = column_info.get(column_key, {}) if isinstance(column_info, dict) else {}
+            label = info.get("label", column_key) if isinstance(info, dict) else column_key
+            row = {
+                "列キー": column_key,
+                "表示名": label,
+                "対応フィールドAPI名": "(不明)",
+                "型": "",
+                "備考": "",
+            }
+            if field_index is None or object_error_reason is not None:
+                # オブジェクト特定失敗 / Object Describe 失敗の全列共通
+                row["備考"] = object_error_reason or ""
+            else:
+                matches = field_index.get(_normalize_label(label), [])
+                if len(matches) == 1:
+                    field = matches[0]
+                    row["対応フィールドAPI名"] = field["name"]
+                    row["型"] = field["type"]
+                elif len(matches) > 1:
+                    candidates = ", ".join(f"{field['name']}({field['type']})" for field in matches)
+                    row["備考"] = f"複数候補あり: {candidates}"
+                else:
+                    row["備考"] = "対応フィールドなし"
+            rows.append(row)
+        return Table(
+            ["列キー", "表示名", "対応フィールドAPI名", "型", "備考"],
+            rows,
+        )
+
+    @measure
+    def describe_fields_csv(self, report_id: str, path: str | Path) -> Path:
+        """``describe_fields()`` の結果を CSV へ保存する。
+
+        ``run_csv()`` が ``get()`` の結果を CSV へ保存する薄い層なのと
+        同じ形。``Table`` 自体はファイル I/O を持たない設計のため、
+        レポートの列-フィールド対応表を直接 CSV で欲しいときはこちらを使う。
+
+        Args:
+            report_id: レポート ID。
+            path: 保存先の CSV パス（拡張子は ``.csv``）。
+
+        Returns:
+            保存した CSV のパス。
+        """
+        table = self.describe_fields(report_id)
+        csv_path = Path(path)
+        with CSV(csv_path) as csv_file:
+            csv_file.replace(table)
+        return csv_path

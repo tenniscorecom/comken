@@ -273,6 +273,37 @@ with site() as sf:
 > レポート用名前で、SOQL のフィールドパスとは1対1ではない。
 > 人が対応表を当てて書き換える必要がある。
 
+#### 列-フィールド対応表（`describe_fields` / `describe_fields_csv`）
+
+「3. SOQL へ書き換え」の下書きを何十件もまとめてやりたいとき、
+**`describe_fields(report_id)`** で「レポートの列」と「実フィールド API 名」
+の対応表を `Table` で取れる。さらに **`describe_fields_csv(report_id, path)`** で
+そのまま CSV へ落とせる。
+
+**完全な自動変換ではなく、9 割自動で埋めて残りを可視化する道具**として
+設計している。Salesforce の Reports API は列と実フィールドの対応を保証しない
+ため、レポートの表示名と主オブジェクトのフィールド表示名を突き合わせて
+**一致したぶんだけ**実 API 名・型を埋める。一致しない列は黙って外さず、
+「対応フィールドなし」「複数候補あり」と備考に書く。多対1の結合や
+氏名のようなレポート専用列は実フィールドが無いため、無理に埋めようと
+しない方針（誤った候補を押し付けないことを優先するため）。
+
+```python
+with Sandbox() as sf:
+    for report_id in report_ids:
+        sf.report.describe_fields_csv(report_id, f"fields_{report_id}.csv")
+```
+
+返却される `Table` の列: **列キー / 表示名 / 対応フィールドAPI名 / 型 / 備考**。
+「対応フィールドAPI名」が引けなかった行は空ではなく **`"(不明)"`** を入れる
+（「調べたが空」と「調べていない」を区別できない問題を防ぐため）。
+主オブジェクトの Object Describe が 404 等のときは例外にせず、全列を
+`(不明)` ＋理由の備考で返す（複合レポートタイプで主オブジェクト名が
+実在の sObject と一致しないケースを、道具として壊さず扱うため）。
+Object Describe の 401 / 403 は Analytics API とは別の権限系統なので、
+`SalesforceReportAccessDeniedError` には変換せず `SalesforceRequestError`
+のまま送出する。
+
 ---
 
 ## 計測

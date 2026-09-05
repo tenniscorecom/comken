@@ -596,6 +596,175 @@ class TestReportApi:
         assert table.columns == ["名前", "金額"]
 
 
+def _describe_fields_body(object_name="Opportunity", field_describe=None):
+    """``describe()`` のレスポンスと Object Describe のレスポンスをまとめて返す。
+
+    テストでは ``describe()`` のあとに ``/sobjects/{object}/describe`` が
+    続けて呼ばれるため、両方をリストに並べて 1 つの ``responses`` にできる。
+    """
+    describe_body = {
+        "reportMetadata": {
+            "reportFormat": "TABULAR",
+            "detailColumns": ["NAME", "AMOUNT", "STAGE_NAME", "UNKNOWN_LABEL"],
+            "reportType": {"type": object_name},
+        },
+        "reportExtendedMetadata": {
+            "detailColumnInfo": {
+                "NAME": {"label": "商談名"},
+                "AMOUNT": {"label": "金額"},
+                "STAGE_NAME": {
+                    "label": "フェーズ"
+                },  # Object Describe 側に同名フィールドが2つある想定
+                "UNKNOWN_LABEL": {"label": "レポート独自列"},
+            }
+        },
+    }
+    return describe_body
+
+
+class TestDescribeFields:
+    """``describe_fields()`` は完全な自動変換を狙わず、表示名の突き合わせだけで
+    9 割を埋め、残りは「対応フィールドなし」「複数候補あり」と注記して残す。
+    """
+
+    REPORT_ID = "00O000000000001"
+
+    def test_fills_api_name_and_type_when_label_matches(self):
+        """表示名が一致する列は、実フィールドの API 名・型を埋める。"""
+        describe_body = _describe_fields_body()
+        object_body = {
+            "fields": [
+                {"name": "Name", "label": "商談名", "type": "Text"},
+                {"name": "Amount", "label": "金額", "type": "Currency"},
+            ]
+        }
+        with _salesforce(
+            [_response(json_body=describe_body), _response(json_body=object_body)]
+        ) as (client, _, _):
+            table = client.report.describe_fields(self.REPORT_ID)
+
+        rows = table.read_rows()
+        # 一致した行は API 名・型が入り、備考は空
+        assert rows[0] == {
+            "列キー": "NAME",
+            "表示名": "商談名",
+            "対応フィールドAPI名": "Name",
+            "型": "Text",
+            "備考": "",
+        }
+        assert rows[1]["対応フィールドAPI名"] == "Amount"
+        assert rows[1]["型"] == "Currency"
+
+    def test_marks_unmatched_label_as_unknown(self):
+        """一致しない表示名は API 名を ``"(不明)"`` にして対応フィールドなしと注記する。"""
+        describe_body = _describe_fields_body()
+        object_body = {"fields": [{"name": "Name", "label": "商談名", "type": "Text"}]}
+        with _salesforce(
+            [_response(json_body=describe_body), _response(json_body=object_body)]
+        ) as (client, _, _):
+            table = client.report.describe_fields(self.REPORT_ID)
+
+        rows = table.read_rows()
+        # AMOUNT は Object Describe に存在しない
+        amount_row = next(row for row in rows if row["列キー"] == "AMOUNT")
+        assert amount_row["対応フィールドAPI名"] == "(不明)"
+        assert amount_row["型"] == ""
+        assert amount_row["備考"] == "対応フィールドなし"
+
+    def test_marks_multiple_candidates_without_picking_one(self):
+        """同じ表示名のフィールドが複数ある列は、誤った候補を押し付けずに複数候補として残す。"""
+        describe_body = _describe_fields_body()
+        object_body = {
+            "fields": [
+                {"name": "Name", "label": "商談名", "type": "Text"},
+                # 「フェーズ」を持つフィールドが2つある状況を意図的に作る
+                {"name": "StageName", "label": "フェーズ", "type": "Picklist"},
+                {"name": "CustomStage__c", "label": "フェーズ", "type": "Text"},
+            ]
+        }
+        with _salesforce(
+            [_response(json_body=describe_body), _response(json_body=object_body)]
+        ) as (client, _, _):
+            table = client.report.describe_fields(self.REPORT_ID)
+
+        rows = table.read_rows()
+        stage_row = next(row for row in rows if row["列キー"] == "STAGE_NAME")
+        assert stage_row["対応フィールドAPI名"] == "(不明)"
+        assert stage_row["型"] == ""
+        # どちらを採るか決めかねるため、両方の候補を「API名(型)」で見せる
+        assert "StageName(Picklist)" in stage_row["備考"]
+        assert "CustomStage__c(Text)" in stage_row["備考"]
+        assert stage_row["備考"].startswith("複数候補あり: ")
+
+    def test_object_describe_failure_does_not_raise(self):
+        """Object Describe 自体が失敗しても、例外にせず全列を「(不明)」＋理由の備考で返す。"""
+        describe_body = _describe_fields_body()
+        # /sobjects/.../describe が 404 を返す
+        not_found = _response(404, text="NOT_FOUND")
+        with _salesforce([_response(json_body=describe_body), not_found]) as (client, _, _):
+            table = client.report.describe_fields(self.REPORT_ID)
+
+        rows = table.read_rows()
+        assert len(rows) == 4
+        for row in rows:
+            assert row["対応フィールドAPI名"] == "(不明)"
+        # 理由の備考は全行同じ文言
+        reasons = {row["備考"] for row in rows}
+        assert len(reasons) == 1
+        only_reason = reasons.pop()
+        assert "Opportunity の Object Describe に失敗" in only_reason
+        assert "HTTP 404" in only_reason
+
+    def test_object_describe_401_keeps_salesforce_request_error(self):
+        """Object Describe が 401 を返しても Analytics API とは別の権限系統なので、
+        ``SalesforceReportAccessDeniedError`` に変換せず ``SalesforceRequestError``
+        のまま送出される。
+        """
+        describe_body = _describe_fields_body()
+        # SalesforceRequestError は _client.request が再認証を挟むので、
+        # 401 が 2 回続くよう並べて再認証後の 401 を確認する
+        unauthorized = _response(401, text="INVALID_SESSION_ID")
+        with (
+            _salesforce([_response(json_body=describe_body), unauthorized, unauthorized]) as (
+                client,
+                _,
+                _,
+            ),
+            pytest.raises(SalesforceRequestError, match="HTTP 401"),
+        ):
+            client.report.describe_fields(self.REPORT_ID)
+
+    def test_object_describe_403_keeps_salesforce_request_error(self):
+        """403 でも同じ。Analytics API ではなくオブジェクト権限なのでレポート系に変換しない。"""
+        describe_body = _describe_fields_body()
+        # 403 は再認証しないので 1 個で SalesforceRequestError が出る
+        forbidden = _response(403, text="INSUFFICIENT_ACCESS_OR_READONLY")
+        with (
+            _salesforce([_response(json_body=describe_body), forbidden]) as (client, _, _),
+            pytest.raises(SalesforceRequestError, match="HTTP 403"),
+        ):
+            client.report.describe_fields(self.REPORT_ID)
+
+    def test_describe_fields_csv_saves_the_table(self, tmp_path):
+        """``describe_fields_csv()`` は ``describe_fields()`` と同じ結果を CSV へ保存する。"""
+        describe_body = _describe_fields_body()
+        object_body = {"fields": [{"name": "Name", "label": "商談名", "type": "Text"}]}
+        path = tmp_path / "fields.csv"
+        with _salesforce(
+            [_response(json_body=describe_body), _response(json_body=object_body)]
+        ) as (client, _, _):
+            returned_path = client.report.describe_fields_csv(self.REPORT_ID, path)
+
+        assert returned_path == path
+        with CSV(path, read_only=True) as csv_file:
+            table = csv_file.read()
+        assert table.columns == ["列キー", "表示名", "対応フィールドAPI名", "型", "備考"]
+        # 1 行だけ一致しているケース
+        rows = table.read_rows()
+        assert rows[0]["列キー"] == "NAME"
+        assert rows[0]["対応フィールドAPI名"] == "Name"
+
+
 class TestReportAccessDenied:
     """Reports API が 401 / 403 を返したときに限り、``SalesforceRequestError`` ではなく
     ``SalesforceReportAccessDeniedError`` に変換されることを検証する。

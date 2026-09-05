@@ -10593,6 +10593,70 @@ Raises:
         （HTTP 401 / 403）。HTTP 401 / 403 以外は ``SalesforceRequestError``
         のまま送出される（``_request`` 経由で 401 / 403 だけ変換するため）。
 
+#### `describe_fields`
+
+```text
+@measure
+def describe_fields(self, report_id: str) -> Table:
+```
+
+##### 説明
+
+レポートの列と、Salesforce の実フィールド API 名の対応表を作る。
+
+**完全な自動変換ではない点に注意。** Salesforce の Reports API は、
+レポートの列と実フィールドの対応を保証する公式な手段を提供していない。
+そのため本メソッドは、レポートの**表示名**と主オブジェクト（標準
+レポートタイプなら ``Opportunity`` など）の**フィールドの表示名**を
+突き合わせて、同じ表示名なら実フィールドの API 名・型を埋める実装に
+とどめている。一致しない列は黙って外さず「対応フィールドなし」として
+残し、同じ表示名のフィールドが複数ある列は誤った候補を押し付けない
+ように「複数候補あり」と注記する。「9割自動で埋めて、残りをはっきり
+見せる」道具として使う。
+
+利用例（何十件ものレポートをまとめて CSV へ落とす）:
+
+    with Sandbox() as sf:
+        for report_id in report_ids:
+            sf.report.describe_fields_csv(report_id, f"fields_{report_id}.csv")
+
+Args:
+    report_id: レポート ID。
+
+Returns:
+    ``Table``。列は次のとおり（すべて日本語）:
+
+    - ``列キー``: レポート側の列キー（``detailColumns`` の値そのもの）
+    - ``表示名``: レポート API が返した表示名
+    - ``対応フィールドAPI名``: 一致した実フィールドの API 名。分からなければ
+      ``"(不明)"`` を入れる（空文字だと「調べたが空」と「調べていない」が
+      区別できないため）
+    - ``型``: 実フィールドのデータ型
+    - ``備考``: 複数候補あり・オブジェクト特定失敗などの理由。1 件で
+      一致した行は空文字
+
+#### `describe_fields_csv`
+
+```text
+@measure
+def describe_fields_csv(self, report_id: str, path: str | Path) -> Path:
+```
+
+##### 説明
+
+``describe_fields()`` の結果を CSV へ保存する。
+
+``run_csv()`` が ``get()`` の結果を CSV へ保存する薄い層なのと
+同じ形。``Table`` 自体はファイル I/O を持たない設計のため、
+レポートの列-フィールド対応表を直接 CSV で欲しいときはこちらを使う。
+
+Args:
+    report_id: レポート ID。
+    path: 保存先の CSV パス（拡張子は ``.csv``）。
+
+Returns:
+    保存した CSV のパス。
+
 ### `ClientCredentialsOAuth`
 
 定義を解決できませんでした。
