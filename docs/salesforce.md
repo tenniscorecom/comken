@@ -238,6 +238,30 @@ with site() as sf:
 `reportFormat` を見て、明細以外は明示的にエラーにする。
 実際にどの形式かは触れば分かるので、事前に決め打ちしない。
 
+### 用語の整理:「Analytics API」と「Reports and Dashboards REST API」
+
+`sf.report.*()` が叩いているのは公式ドキュメント上の **Reports and Dashboards REST API**（`/services/data/vXX.X/analytics/reports/...`）で、Salesforce は同じものを「**Analytics API**」と呼ぶことがある。
+混同しやすいので、先に区別を固定する。
+
+- **ここで言う「Analytics API」 = Reports and Dashboards REST API**（comken が使うもの）。
+  上限 2000 行・同期 / 非同期などの話は全部これ。
+- **CRM Analytics**（旧 Einstein Analytics / Tableau CRM）は**別ライセンス製品**で、
+  comken はそちらを使っていない・使えない。検索するとこの製品が先に出てきて混乱する。
+
+`sf.report.run()` 系が「Analytics API の権限がない」「Analytics API へのアクセスが
+拒否された」といった文面のまま 401 / 403 で失敗する場合、それは comken が
+**間違ったエンドポイントを叩いた**のではなく、Reports and Dashboards REST API
+そのものへのアクセスを拒否されたという意味。
+このときは `SalesforceReportAccessDeniedError` が送出される（メッセージの文言では
+判定せず、HTTP ステータスコードだけで判定する）。
+
+> 対処は管理者に次の3点を確認してもらう:
+> 1. 実行ユーザー（Client Credentials では Run As ユーザー）の Profile /
+>    Permission Set に「API Enabled」権限があるか
+> 2. 対象のレポート・レポートフォルダへのアクセス権があるか
+> 3. 組織の Edition・ライセンスが Reports and Dashboards REST API に対応しているか
+>    （一部の制限ライセンスでは使えない）
+
 ### 定義だけ取る（describe）
 
 `describe(report_id)` でレポートを**実行せず**に定義を取れる。

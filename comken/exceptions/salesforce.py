@@ -65,6 +65,12 @@ class SalesforceRequestError(SalesforceError):
             f"{detail}\n"
             "オブジェクト名・項目名・レコード Id と、実行ユーザーの権限を確認してください。"
         )
+        # 呼び出し側がプログラムから HTTP コードとリクエスト情報で判定できるように
+        # 残しておく。メッセージ生成の振る舞いは変えず、追加の属性を備えるだけにする
+        self.method = method
+        self.path = path
+        self.status_code = status_code
+        self.detail = detail
 
 
 class SalesforceExternalIDMissingError(SalesforceError):
@@ -198,4 +204,36 @@ class SalesforceReportExecutionError(SalesforceError):
             f"Salesforce のレポート実行に失敗しました: {report_id}\n"
             f"{detail}\n"
             "Salesforce でレポートを直接実行し、条件・権限・参照項目を確認してください。"
+        )
+
+
+class SalesforceReportAccessDeniedError(SalesforceError):
+    """レポート API（Reports and Dashboards REST API）へのアクセスを拒否された
+
+    Salesforce はこの API を「Analytics API」と呼ぶことがあり、別ライセンス製品の
+    CRM Analytics（旧 Einstein Analytics / Tableau CRM）と紛らわしい。
+    このエラーは comken が誤ったエンドポイントを叩いたのではなく、
+    Reports and Dashboards REST API そのものへのアクセスが HTTP 401 / 403 で
+    拒否された場合に出る。メッセージの文言ではなくステータスコードで判定する。
+
+    発生箇所: comken.toolbox.salesforce.report.ReportAPI の全メソッド
+              （get / run_csv / run_async / describe）
+
+    対処:
+        Salesforce 管理者に、実行ユーザー（Client Credentials では Run As ユーザー）
+        について次を確認してもらう。
+          1. Profile / Permission Set に「API Enabled」権限があるか
+          2. 対象のレポート・レポートフォルダへのアクセス権があるか
+          3. 組織の Edition・ライセンスが Reports and Dashboards REST API
+             に対応しているか（一部の制限ライセンスでは使えない）
+    """
+
+    def __init__(self, report_id: str, status_code: int, detail: str) -> None:
+        super().__init__(
+            f"Salesforce のレポート API（Analytics API）へのアクセスが"
+            f"拒否されました（HTTP {status_code}）: {report_id}\n"
+            f"{detail}\n"
+            "Salesforce 管理者に、実行ユーザーの「API Enabled」権限・"
+            "レポートへのアクセス権・組織の Edition が Reports and Dashboards "
+            "REST API に対応しているかを確認してもらってください。"
         )

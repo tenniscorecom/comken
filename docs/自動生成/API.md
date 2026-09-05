@@ -4859,6 +4859,39 @@ Salesforce 側でレポート実行に失敗した
 def __init__(self, report_id: str, detail: str) -> None:
 ```
 
+### `SalesforceReportAccessDeniedError`
+
+```text
+class SalesforceReportAccessDeniedError(SalesforceError):
+```
+
+#### 説明
+
+レポート API（Reports and Dashboards REST API）へのアクセスを拒否された
+
+Salesforce はこの API を「Analytics API」と呼ぶことがあり、別ライセンス製品の
+CRM Analytics（旧 Einstein Analytics / Tableau CRM）と紛らわしい。
+このエラーは comken が誤ったエンドポイントを叩いたのではなく、
+Reports and Dashboards REST API そのものへのアクセスが HTTP 401 / 403 で
+拒否された場合に出る。メッセージの文言ではなくステータスコードで判定する。
+
+発生箇所: comken.toolbox.salesforce.report.ReportAPI の全メソッド
+          （get / run_csv / run_async / describe）
+
+対処:
+    Salesforce 管理者に、実行ユーザー（Client Credentials では Run As ユーザー）
+    について次を確認してもらう。
+      1. Profile / Permission Set に「API Enabled」権限があるか
+      2. 対象のレポート・レポートフォルダへのアクセス権があるか
+      3. 組織の Edition・ライセンスが Reports and Dashboards REST API
+         に対応しているか（一部の制限ライセンスでは使えない）
+
+#### `__init__`
+
+```text
+def __init__(self, report_id: str, status_code: int, detail: str) -> None:
+```
+
 ### `SalesforceSiteNotFoundError`
 
 ```text
@@ -10456,6 +10489,8 @@ Raises:
     SalesforceReportTruncatedError: 上限で切り捨てられた場合
         （allow_truncated=True のときは送出しない）。
     SalesforceReportFormatError: 明細（TABULAR）形式でない場合。
+    SalesforceReportAccessDeniedError: レポート API への権限が無い場合
+        （HTTP 401 / 403）。
 
 #### `run_csv`
 
@@ -10481,6 +10516,14 @@ Args:
 Returns:
     保存した CSV のパス。
 
+Raises:
+    SalesforceReportTruncatedError: 上限で切り捨てられた場合
+        （``get()`` から伝播）。
+    SalesforceReportFormatError: 明細（TABULAR）形式でない場合
+        （``get()`` から伝播）。
+    SalesforceReportAccessDeniedError: レポート API への権限が無い場合
+        （HTTP 401 / 403、``get()`` から伝播）。
+
 #### `run_async`
 
 ```text
@@ -10504,6 +10547,8 @@ Raises:
     SalesforceReportTruncatedError: 上限で切り捨てられた場合。
     SalesforceReportFormatError: 明細（TABULAR）形式でない場合。
     SalesforceReportExecutionError: Salesforce 側で実行が失敗した場合。
+    SalesforceReportAccessDeniedError: レポート API への権限が無い場合
+        （HTTP 401 / 403）。
     TimeoutError: 制限時間内に完了しなかった場合。
 
 #### `describe`
@@ -10544,7 +10589,9 @@ Returns:
     API が dict 以外を返した場合（パース失敗時など）は空 dict。
 
 Raises:
-    SalesforceRequestError: 通信や認証に失敗した場合（`_client.request` 経由）。
+    SalesforceReportAccessDeniedError: レポート API への権限が無い場合
+        （HTTP 401 / 403）。HTTP 401 / 403 以外は ``SalesforceRequestError``
+        のまま送出される（``_request`` 経由で 401 / 403 だけ変換するため）。
 
 ### `ClientCredentialsOAuth`
 

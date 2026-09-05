@@ -29,10 +29,12 @@ from typing import TYPE_CHECKING, Any
 from comken.core.table import Table
 from comken.core.timer import measure
 from comken.exceptions import (
+    SalesforceReportAccessDeniedError,
     SalesforceReportExecutionError,
     SalesforceReportFormatError,
     SalesforceReportIDNotFoundError,
     SalesforceReportTruncatedError,
+    SalesforceRequestError,
 )
 from comken.toolbox.csv import CSV
 
@@ -150,6 +152,29 @@ class ReportAPI:
         """
         self._client = client
 
+    def _request(
+        self,
+        report_id: str,
+        method: str,
+        path: str,
+        body: dict | None = None,
+    ) -> tuple[dict | list | str | None, dict]:
+        """``self._client.request()`` を呼び、401 / 403 だけレポート専用の
+        分かりやすいエラーに差し替える。それ以外のステータスは元の例外のまま。
+
+        Salesforce は Reports and Dashboards REST API を「Analytics API」と呼ぶことが
+        あり、CRM Analytics（旧 Einstein Analytics）と紛らわしい。メッセージの文言では
+        判定せず、HTTP ステータスコード（401 / 403）という確実な情報だけで判定する。
+        """
+        try:
+            return self._client.request(method, path, body=body, component=COMPONENT)
+        except SalesforceRequestError as exc:
+            if exc.status_code in (401, 403):
+                raise SalesforceReportAccessDeniedError(
+                    report_id, exc.status_code, exc.detail
+                ) from exc
+            raise
+
     @measure
     def get(
         self,
@@ -177,6 +202,8 @@ class ReportAPI:
             SalesforceReportTruncatedError: 上限で切り捨てられた場合
                 （allow_truncated=True のときは送出しない）。
             SalesforceReportFormatError: 明細（TABULAR）形式でない場合。
+            SalesforceReportAccessDeniedError: レポート API への権限が無い場合
+                （HTTP 401 / 403）。
         """
         return self._fetch_report_table(report_id, filters, allow_truncated)
 
@@ -202,6 +229,14 @@ class ReportAPI:
 
         Returns:
             保存した CSV のパス。
+
+        Raises:
+            SalesforceReportTruncatedError: 上限で切り捨てられた場合
+                （``get()`` から伝播）。
+            SalesforceReportFormatError: 明細（TABULAR）形式でない場合
+                （``get()`` から伝播）。
+            SalesforceReportAccessDeniedError: レポート API への権限が無い場合
+                （HTTP 401 / 403、``get()`` から伝播）。
         """
         table = self.get(report_id, filters, allow_truncated)
         csv_path = Path(path)
@@ -230,18 +265,18 @@ class ReportAPI:
             SalesforceReportTruncatedError: 上限で切り捨てられた場合。
             SalesforceReportFormatError: 明細（TABULAR）形式でない場合。
             SalesforceReportExecutionError: Salesforce 側で実行が失敗した場合。
+            SalesforceReportAccessDeniedError: レポート API への権限が無い場合
+                （HTTP 401 / 403）。
             TimeoutError: 制限時間内に完了しなかった場合。
         """
         instances_path = f"{self._base_path()}/{report_id}/instances"
         body = {"reportMetadata": {"reportFilters": filters}} if filters else {}
-        started, _ = self._client.request("POST", instances_path, body=body, component=COMPONENT)
+        started, _ = self._request(report_id, "POST", instances_path, body=body)
         instance_id = started["id"] if isinstance(started, dict) else ""
 
         deadline = time.monotonic() + ASYNC_TIMEOUT_SECONDS
         while time.monotonic() < deadline:
-            data, _ = self._client.request(
-                "GET", f"{instances_path}/{instance_id}", component=COMPONENT
-            )
+            data, _ = self._request(report_id, "GET", f"{instances_path}/{instance_id}")
             status = data.get("status") if isinstance(data, dict) else None
             if status == "Success":
                 return _parse_report_payload(
@@ -290,11 +325,13 @@ class ReportAPI:
             API が dict 以外を返した場合（パース失敗時など）は空 dict。
 
         Raises:
-            SalesforceRequestError: 通信や認証に失敗した場合（`_client.request` 経由）。
+            SalesforceReportAccessDeniedError: レポート API への権限が無い場合
+                （HTTP 401 / 403）。HTTP 401 / 403 以外は ``SalesforceRequestError``
+                のまま送出される（``_request`` 経由で 401 / 403 だけ変換するため）。
         """
         path = f"{self._base_path()}/{report_id}/describe"
         logger.debug("Salesforce Report describe開始: Report ID=%s", report_id)
-        data, _ = self._client.request("GET", path, component=COMPONENT)
+        data, _ = self._request(report_id, "GET", path)
         logger.debug("Salesforce Report describe完了: Report ID=%s", report_id)
         return data if isinstance(data, dict) else {}
 
@@ -311,14 +348,14 @@ class ReportAPI:
         path = f"{self._base_path()}/{report_id}"
         logger.debug("Salesforce Report取得開始: Report ID=%s", report_id)
         if filters:
-            data, _ = self._client.request(
+            data, _ = self._request(
+                report_id,
                 "POST",
                 path,
                 body={"reportMetadata": {"reportFilters": filters}},
-                component=COMPONENT,
             )
         else:
-            data, _ = self._client.request("GET", path, component=COMPONENT)
+            data, _ = self._request(report_id, "GET", path)
         logger.debug("Salesforce APIレスポンス受信: Report ID=%s", report_id)
         table = _parse_report_payload(
             data, report_id, allow_truncated, metrics=self._client.metrics

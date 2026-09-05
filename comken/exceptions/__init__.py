@@ -65,7 +65,8 @@ ComkenError
 │   ├── SalesforceReportFormatError
 │   ├── SalesforceReportIDNotFoundError
 │   ├── SalesforceSiteNotFoundError
-│   └── SalesforceReportExecutionError
+│   ├── SalesforceReportExecutionError
+│   └── SalesforceReportAccessDeniedError
 ├── BrowserError
 │   ├── DriverStartError
 │   ├── BrowsersNotStartedError
@@ -283,6 +284,7 @@ from comken.exceptions.salesforce import (
     SalesforceCredentialRotationError,
     SalesforceError,
     SalesforceExternalIDMissingError,
+    SalesforceReportAccessDeniedError,
     SalesforceReportExecutionError,
     SalesforceReportFormatError,
     SalesforceReportIDNotFoundError,
@@ -386,6 +388,7 @@ __all__ = [
     "SalesforceReportFormatError",
     "SalesforceReportIDNotFoundError",
     "SalesforceReportExecutionError",
+    "SalesforceReportAccessDeniedError",
     "SalesforceSiteNotFoundError",
     "BrowserError",
     "DriverStartError",

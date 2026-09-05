@@ -14,6 +14,7 @@ from comken.exceptions import (
     SalesforceAuthError,
     SalesforceConnectionError,
     SalesforceExternalIDMissingError,
+    SalesforceReportAccessDeniedError,
     SalesforceReportExecutionError,
     SalesforceReportFormatError,
     SalesforceReportIDNotFoundError,
@@ -593,6 +594,111 @@ class TestReportApi:
             table = client.report.get("00O000000000001")
 
         assert table.columns == ["名前", "金額"]
+
+
+class TestReportAccessDenied:
+    """Reports API が 401 / 403 を返したときに限り、``SalesforceRequestError`` ではなく
+    ``SalesforceReportAccessDeniedError`` に変換されることを検証する。
+
+    文字列一致ではなく HTTP ステータスコードだけで判定する設計なので、
+    500 / 400 など他のステータスは **変換されず** 元のまま送出される
+    （意図せず全エラーを飲み込んでしまう変更を見逃さないため）。
+    """
+
+    REPORT_ID = "00O000000000001"
+
+    def test_get_converts_403_to_access_denied_error(self):
+        """GET の 403 は Reports API 固有の権限エラーに変換する。
+
+        元の SalesforceRequestError の ``detail`` は新しい例外に引き継がれ、
+        メッセージには ``report_id`` が含まれるので画面から追いかけられる。
+        """
+        with (
+            _salesforce([_response(403, text="Analytics API 権限がありません")]) as (
+                client,
+                _,
+                _,
+            ),
+            pytest.raises(
+                SalesforceReportAccessDeniedError, match=r"(?s)HTTP 403.*00O000000000001"
+            ),
+        ):
+            client.report.get(self.REPORT_ID)
+
+    def test_get_converts_401_to_access_denied_error(self):
+        """401 でも再認証後の 2 回目 401 がレポート系に変換される。
+
+        ``_client.request`` は 401 を 1 回だけ再認証してやり直すので、
+        ここでも 2 回連続で 401 を返すよう並べて、**再認証を挟んだ後の**
+        401 が対象例外へ変換されることを確認する。
+        """
+        unauthorized = _response(401, text="INVALID_SESSION_ID")
+        unauthorized_after_reauth = _response(401, text="INVALID_SESSION_ID")
+        with (
+            _salesforce([unauthorized, unauthorized_after_reauth]) as (client, _, _),
+            pytest.raises(
+                SalesforceReportAccessDeniedError, match=r"(?s)HTTP 401.*00O000000000001"
+            ),
+        ):
+            client.report.get(self.REPORT_ID)
+
+    def test_get_does_not_convert_500(self):
+        """500 は権限の問題ではないのでレポート系に変換しない。
+
+        ``SalesforceRequestError`` のまま送出され、メッセージには HTTP コードと
+        元の detail が残るので、切り分けの起点が壊れない。
+        5xx はリトライされるので 3 回分の 500 を用意する。
+        """
+        responses = [_response(500, text="Server Error") for _ in range(3)]
+        with (
+            _salesforce(responses) as (client, _, _),
+            patch("comken.toolbox.salesforce.client.time.sleep"),
+            pytest.raises(SalesforceRequestError, match=r"(?s)HTTP 500.*Server Error"),
+        ):
+            client.report.get(self.REPORT_ID)
+
+    def test_get_does_not_convert_400(self):
+        """400 は権限の問題ではないのでレポート系に変換しない。"""
+        with (
+            _salesforce([_response(400, text="INVALID_FIELD")]) as (client, _, _),
+            pytest.raises(SalesforceRequestError, match="INVALID_FIELD"),
+        ):
+            client.report.get(self.REPORT_ID)
+
+    def test_describe_converts_403_to_access_denied_error(self):
+        """describe() も 403 で ``SalesforceReportAccessDeniedError`` に変換する。
+
+        ``describe()`` は今までは一律 ``SalesforceRequestError`` を流していたので、
+        レポート API 全体に対する権限エラーが分かりにくかった。401 / 403 は
+        describe でも同じ「Reports API へのアクセス拒否」として扱う。
+        """
+        with (
+            _salesforce([_response(403, text="Analytics API 権限がありません")]) as (
+                client,
+                _,
+                _,
+            ),
+            pytest.raises(
+                SalesforceReportAccessDeniedError, match=r"(?s)HTTP 403.*00O000000000001"
+            ),
+        ):
+            client.report.describe(self.REPORT_ID)
+
+    def test_run_async_post_converts_403_to_access_denied_error(self):
+        """run_async() の POST（実行開始）でも 403 は ``SalesforceReportAccessDeniedError``
+        に変換される。インスタンスを開始する前の失敗なので、ポーリングには進まない。
+        """
+        with (
+            _salesforce([_response(403, text="Analytics API 権限がありません")]) as (
+                client,
+                _,
+                _,
+            ),
+            pytest.raises(
+                SalesforceReportAccessDeniedError, match=r"(?s)HTTP 403.*00O000000000001"
+            ),
+        ):
+            client.report.run_async(self.REPORT_ID)
 
 
 class TestSites:
