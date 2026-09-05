@@ -102,6 +102,17 @@ class Backoffice(LoggerSite):
 
 comken 共通のクラス。OWNER は ``"comken"``。
 
+#### `check_owner`
+
+```text
+@classmethod
+def check_owner(cls) -> None:
+```
+
+##### 説明
+
+OWNER が未設定ならログ構築前に停止する。
+
 ### `Intranet`
 
 ```text
@@ -113,6 +124,17 @@ class Intranet(LoggerSite):
 イントラネット環境のログ設定。
 
 comken 共通のクラス。OWNER は ``"comken"``。
+
+#### `check_owner`
+
+```text
+@classmethod
+def check_owner(cls) -> None:
+```
+
+##### 説明
+
+OWNER が未設定ならログ構築前に停止する。
 
 ### `comken_logger`
 
@@ -2897,6 +2919,17 @@ class Backoffice(LoggerSite):
 
 comken 共通のクラス。OWNER は ``"comken"``。
 
+#### `check_owner`
+
+```text
+@classmethod
+def check_owner(cls) -> None:
+```
+
+##### 説明
+
+OWNER が未設定ならログ構築前に停止する。
+
 ### `Intranet`
 
 ```text
@@ -2908,6 +2941,17 @@ class Intranet(LoggerSite):
 イントラネット環境のログ設定。
 
 comken 共通のクラス。OWNER は ``"comken"``。
+
+#### `check_owner`
+
+```text
+@classmethod
+def check_owner(cls) -> None:
+```
+
+##### 説明
+
+OWNER が未設定ならログ構築前に停止する。
 
 ### `setup_logging`
 
@@ -7225,7 +7269,7 @@ Returns:
 ### `Page`
 
 ```text
-class Page:
+class Page(NavigationMixin, OperationsMixin, ReadingMixin, WaitingMixin, AlertsMixin, EscapeMixin):
 ```
 
 #### 説明
@@ -7237,6 +7281,33 @@ ElementNotFoundError になり、どのセレクターで失敗したかがメ�
 
 Attributes:
     session: この画面が乗っているブラウザ。遷移先の画面クラスを作るときに渡す。
+
+#### `open`
+
+```text
+def open(self, url: str) -> Self:
+```
+
+##### 説明
+
+URL を開き、自分自身を返す。
+
+#### `save_screenshot`
+
+```text
+def save_screenshot(self, filename: str | None=None, *, directory: Path | str | None=None, prefix: str='screenshot') -> Path:
+```
+
+##### 説明
+
+今の画面を PNG で保存し、そのパスを返す。
+
+Args:
+    filename: 保存するファイル名。省略時は {prefix}_{セッション名}_{日時}.png。
+    directory: 保存先ディレクトリ。相対パスなら logs/ 配下のサブフォルダとして扱う
+        （例: "errors" → logs/errors/）。絶対パスを渡せば logs/ の外にも保存できる。
+        省略時は logs/。
+    prefix: filename を省略したときのファイル名の先頭。
 
 #### `__init__`
 
@@ -7271,33 +7342,6 @@ def to(self, page_class: type[P]) -> P:
 1つ足すたびに「セッションとは何か」が顔を出す。画面の遷移を書きたい
 だけの人が、ブラウザの持ち方まで知らずに済むようにする。
 
-#### `open`
-
-```text
-def open(self, url: str) -> Self:
-```
-
-##### 説明
-
-URL を開き、自分自身を返す。
-
-#### `save_screenshot`
-
-```text
-def save_screenshot(self, filename: str | None=None, *, directory: Path | str | None=None, prefix: str='screenshot') -> Path:
-```
-
-##### 説明
-
-今の画面を PNG で保存し、そのパスを返す。
-
-Args:
-    filename: 保存するファイル名。省略時は {prefix}_{セッション名}_{日時}.png。
-    directory: 保存先ディレクトリ。相対パスなら logs/ 配下のサブフォルダとして扱う
-        （例: "errors" → logs/errors/）。絶対パスを渡せば logs/ の外にも保存できる。
-        省略時は logs/。
-    prefix: filename を省略したときのファイル名の先頭。
-
 #### `click`
 
 ```text
@@ -7322,40 +7366,6 @@ def input(self, locator: Locator, text: str) -> None:
 ##### 説明
 
 入力欄に文字を入れる。もとの値は消える。
-
-#### `read_text`
-
-```text
-def read_text(self, locator: Locator) -> str:
-```
-
-##### 説明
-
-要素の表示文字を返す。
-
-#### `read_texts`
-
-```text
-def read_texts(self, locator: Locator) -> list[str]:
-```
-
-##### 説明
-
-一致する全要素の表示文字をリストで返す（一覧表の全行を読むときなど）。
-
-#### `read_attribute`
-
-```text
-def read_attribute(self, locator: Locator, name: str) -> str | None:
-```
-
-##### 説明
-
-要素の属性値を返す（href やチェック状態など）。属性が無ければ None。
-
-Args:
-    locator: 対象のセレクター。
-    name: 属性名（例: "href", "value", "checked"）。
 
 #### `select_text`
 
@@ -7416,6 +7426,40 @@ def scroll_bottom(self) -> None:
 ##### 説明
 
 ページの一番下までスクロールする（続きを読み込ませるときなど）。
+
+#### `read_text`
+
+```text
+def read_text(self, locator: Locator) -> str:
+```
+
+##### 説明
+
+要素の表示文字を返す。
+
+#### `read_texts`
+
+```text
+def read_texts(self, locator: Locator) -> list[str]:
+```
+
+##### 説明
+
+一致する全要素の表示文字をリストで返す（一覧表の全行を読むときなど）。
+
+#### `read_attribute`
+
+```text
+def read_attribute(self, locator: Locator, name: str) -> str | None:
+```
+
+##### 説明
+
+要素の属性値を返す（href やチェック状態など）。属性が無ければ None。
+
+Args:
+    locator: 対象のセレクター。
+    name: 属性名（例: "href", "value", "checked"）。
 
 #### `has_element`
 
@@ -7493,7 +7537,7 @@ def read_alert_text(self) -> str:
 
 ```text
 @contextmanager
-def frame(self, locator: Locator) -> Iterator[Page]:
+def frame(self, locator: Locator) -> Iterator[Self]:
 ```
 
 ##### 説明
@@ -7506,7 +7550,7 @@ ElementNotFoundError が出て、HTML 上には要素があるのに掴めない
 
     with page.frame(page.CONTENT_FRAME):
         page.click(page.SAVE_BUTTON)
-    # ← 元の画面へ戻る（中で例外が出ても戻る）
+    # 元の画面へ戻る（中で例外が出ても戻る）
 
 Yields:
     自分自身。中では今までどおりメソッドを呼べる。
@@ -8309,6 +8353,392 @@ def is_done(self) -> bool:
 True になっていても、結果や例外を受け取るには wait() を呼ぶ。
 
 
+## `from comken.toolbox.browser.page import ...`
+
+### `Page`
+
+```text
+class Page(NavigationMixin, OperationsMixin, ReadingMixin, WaitingMixin, AlertsMixin, EscapeMixin):
+```
+
+#### 説明
+
+1画面ぶんの操作をまとめる基底クラス。画面ごとに継承して使う。
+
+要素は見つかるまで自動で待つ。時間内に見つからない場合は
+ElementNotFoundError になり、どのセレクターで失敗したかがメッセージに出る。
+
+Attributes:
+    session: この画面が乗っているブラウザ。遷移先の画面クラスを作るときに渡す。
+
+#### `open`
+
+```text
+def open(self, url: str) -> Self:
+```
+
+##### 説明
+
+URL を開き、自分自身を返す。
+
+#### `save_screenshot`
+
+```text
+def save_screenshot(self, filename: str | None=None, *, directory: Path | str | None=None, prefix: str='screenshot') -> Path:
+```
+
+##### 説明
+
+今の画面を PNG で保存し、そのパスを返す。
+
+Args:
+    filename: 保存するファイル名。省略時は {prefix}_{セッション名}_{日時}.png。
+    directory: 保存先ディレクトリ。相対パスなら logs/ 配下のサブフォルダとして扱う
+        （例: "errors" → logs/errors/）。絶対パスを渡せば logs/ の外にも保存できる。
+        省略時は logs/。
+    prefix: filename を省略したときのファイル名の先頭。
+
+#### `__init__`
+
+```text
+def __init__(self, session: BrowserSession, wait_seconds: int | None=None) -> None:
+```
+
+##### 説明
+
+Args:
+    session: Browsers.launch() で起動したセッション。
+    wait_seconds: 要素待機のタイムアウト秒数。
+                  省略時はセッションの設定（BrowserOptions.WAIT_SECONDS）を引き継ぐ。
+
+#### `to`
+
+```text
+def to(self, page_class: type[P]) -> P:
+```
+
+##### 説明
+
+遷移先の画面クラスを作る（同じブラウザを引き継ぐ）。
+
+画面が変わるメソッドの最後で使う。
+
+    def login(self, user_id: str, password: str) -> HomePage:
+        self.click(self.LOGIN_BUTTON)
+        return self.to(HomePage)
+
+`HomePage(self.session)` と書いても同じだが、そう書くと画面クラスを
+1つ足すたびに「セッションとは何か」が顔を出す。画面の遷移を書きたい
+だけの人が、ブラウザの持ち方まで知らずに済むようにする。
+
+#### `click`
+
+```text
+def click(self, locator: Locator, index: int=0) -> None:
+```
+
+##### 説明
+
+要素をクリックする。クリックできる状態になるまで待つ。
+
+Args:
+    locator: 対象のセレクター。
+    index: 同じセレクターに複数の要素が一致する場合、何番目か（0始まり）。
+           まずはセレクター側で1つに絞り込み、index は最後の手段にする。
+
+#### `input`
+
+```text
+def input(self, locator: Locator, text: str) -> None:
+```
+
+##### 説明
+
+入力欄に文字を入れる。もとの値は消える。
+
+#### `select_text`
+
+```text
+def select_text(self, locator: Locator, text: str) -> None:
+```
+
+##### 説明
+
+プルダウンを、表示されている文字で選ぶ。
+
+#### `select_value`
+
+```text
+def select_value(self, locator: Locator, option_value: str) -> None:
+```
+
+##### 説明
+
+プルダウンを、option の value 属性で選ぶ。
+
+#### `select_index`
+
+```text
+def select_index(self, locator: Locator, index: int) -> None:
+```
+
+##### 説明
+
+プルダウンを、上から何番目かで選ぶ（0始まり）。
+
+#### `drag_drop`
+
+```text
+def drag_drop(self, source: Locator, target: Locator) -> None:
+```
+
+##### 説明
+
+要素を別の要素までドラッグして落とす。
+
+#### `scroll_to`
+
+```text
+def scroll_to(self, locator: Locator) -> None:
+```
+
+##### 説明
+
+要素が画面に入るまでスクロールする。
+
+#### `scroll_bottom`
+
+```text
+def scroll_bottom(self) -> None:
+```
+
+##### 説明
+
+ページの一番下までスクロールする（続きを読み込ませるときなど）。
+
+#### `read_text`
+
+```text
+def read_text(self, locator: Locator) -> str:
+```
+
+##### 説明
+
+要素の表示文字を返す。
+
+#### `read_texts`
+
+```text
+def read_texts(self, locator: Locator) -> list[str]:
+```
+
+##### 説明
+
+一致する全要素の表示文字をリストで返す（一覧表の全行を読むときなど）。
+
+#### `read_attribute`
+
+```text
+def read_attribute(self, locator: Locator, name: str) -> str | None:
+```
+
+##### 説明
+
+要素の属性値を返す（href やチェック状態など）。属性が無ければ None。
+
+Args:
+    locator: 対象のセレクター。
+    name: 属性名（例: "href", "value", "checked"）。
+
+#### `has_element`
+
+```text
+def has_element(self, locator: Locator) -> bool:
+```
+
+##### 説明
+
+要素が HTML 上に在るかを返す（待たずにその場で確認する）。
+
+「在れば押す」のような分岐に使う。表示されているかどうかは見ない。
+
+#### `count_elements`
+
+```text
+def count_elements(self, locator: Locator) -> int:
+```
+
+##### 説明
+
+一致する要素の数を返す（待たずにその場で数える。無ければ 0）。
+
+#### `wait_visible`
+
+```text
+def wait_visible(self, locator: Locator) -> None:
+```
+
+##### 説明
+
+要素が表示されるまで待つ（画面が開くのを待つときなど）。
+
+#### `wait_invisible`
+
+```text
+def wait_invisible(self, locator: Locator) -> None:
+```
+
+##### 説明
+
+要素が消えるまで待つ（読み込み中の表示が消えるのを待つときなど）。
+
+#### `alert_accept`
+
+```text
+def alert_accept(self) -> None:
+```
+
+##### 説明
+
+ブラウザの確認ダイアログで OK を押す。出るまで待つ。
+
+#### `alert_dismiss`
+
+```text
+def alert_dismiss(self) -> None:
+```
+
+##### 説明
+
+ブラウザの確認ダイアログでキャンセルを押す。出るまで待つ。
+
+#### `read_alert_text`
+
+```text
+def read_alert_text(self) -> str:
+```
+
+##### 説明
+
+ブラウザの確認ダイアログの文言を返す。出るまで待つ。
+
+#### `frame`
+
+```text
+@contextmanager
+def frame(self, locator: Locator) -> Iterator[Self]:
+```
+
+##### 説明
+
+iframe の中を操作し、抜けるときに元の画面へ戻る。
+
+iframe の中の要素は、切り替えないと見つからない。
+ElementNotFoundError が出て、HTML 上には要素があるのに掴めないときは
+たいていこれが原因:
+
+    with page.frame(page.CONTENT_FRAME):
+        page.click(page.SAVE_BUTTON)
+    # 元の画面へ戻る（中で例外が出ても戻る）
+
+Yields:
+    自分自身。中では今までどおりメソッドを呼べる。
+
+#### `find_element`
+
+```text
+def find_element(self, locator: Locator) -> WebElement:
+```
+
+##### 説明
+
+selenium の WebElement をそのまま返す。
+
+このクラスに用意されていない操作をするときの逃げ道。
+よく使うものはこのクラスにメソッドとして足すこと。
+
+#### `find_elements`
+
+```text
+def find_elements(self, locator: Locator) -> list[WebElement]:
+```
+
+##### 説明
+
+一致する全要素を WebElement のリストで返す。1件見つかるまで待つ。
+
+一覧表の行を1行ずつ処理するときに使う。行の中をさらに探すときは、
+行の WebElement から find_element(*Locator) で絞り込む:
+
+    for row in page.find_elements(page.ROWS):
+        if "未提出" in row.text:
+            row.find_element(*page.EDIT_BUTTON).click()
+
+まず値を読むだけなら read_texts() のほうが簡単で、
+「何番目かをクリックする」だけなら click(locator, index=...) で足りる。
+
+Args:
+    locator: 対象のセレクター。
+
+Returns:
+    見つかった要素のリスト（画面に並んでいる順）。
+
+Raises:
+    ElementNotFoundError: 1件も見つからないまま待ち時間が過ぎた場合。
+                          0件がありうる場面では、表そのものが出るのを wait_visible() で
+                          待ってから count_elements() で件数を確認する。
+                          count_elements() は待たないので、
+                          読み込み前に呼ぶと「まだ出ていない」を「0件」と読み違える。
+
+#### `execute_script`
+
+```text
+def execute_script(self, script: str, *args: object) -> object:
+```
+
+##### 説明
+
+JavaScript を実行して戻り値を返す。
+
+Args:
+    script: 実行する JavaScript。
+    *args: スクリプト内で arguments[0], arguments[1] ... として参照できる値。
+
+### `SitePage`
+
+```text
+class SitePage(Page):
+```
+
+#### 説明
+
+1つのサイト共通の画面クラス。サイトごとにこれを継承する。
+
+BASE_URL とログインなど、そのサイトのどの画面でも使う処理をここに書く。
+画面ごとのクラスは、さらにこれを継承する:
+
+    Page          … ブラウザ操作（click / input / select ...）
+      └ SitePage  … サイト共通（BASE_URL / ログイン / 共通ヘッダー）
+          └ LoginPage / HomePage / ...   … 各画面
+
+BASE_URL は次の順で解決する:
+  1. 自身（または親クラス）に `BASE_URL` が定義されていればそれ
+  2. 無ければ、`browsers.launch(SiteBase)` で起動した `SiteBase` の `BASE_URL`
+
+#### `go`
+
+```text
+def go(self, path: str='') -> Self:
+```
+
+##### 説明
+
+BASE_URL からの相対パスへ移動し、自分自身を返す。
+
+Args:
+    path: BASE_URL からの相対パス（例: "/login"）。省略時は BASE_URL を開く。
+
+
 ## `from comken.toolbox.browser.sites import ...`
 
 ### `SITES`
@@ -8349,6 +8779,85 @@ NTT西のサイトクラス。
     with NTTNishi() as ntt:
         secure = ntt.go_login().login(USER, PW)
 
+#### `go_login`
+
+```text
+def go_login(self) -> LoginPage:
+```
+
+##### 説明
+
+ログイン画面を開く。
+
+#### `__init__`
+
+```text
+def __init__(self, session: BrowserSession | None=None) -> None:
+```
+
+#### `downloads`
+
+```text
+@property
+def downloads(self) -> DownloadDir:
+```
+
+##### 説明
+
+このサイトのダウンロード先。完了待ちに使う。
+
+    files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
+
+Raises:
+    SiteNotStartedError: まだ起動していない場合。
+
+#### `to`
+
+```text
+def to(self, page_class: type[P]) -> P:
+```
+
+##### 説明
+
+このサイトの画面へ移る。
+
+画面クラスは動かすのにブラウザ（`BrowserSession`）を要るが、
+**それを呼ぶ側に書かせない**ためのもの。
+
+    def go_login(self) -> LoginPage:
+        return self.to(LoginPage).go("/login")
+
+**行き先の型を切り替えるだけで、ブラウザは動かさない。** 実際に動かすのは
+`Page.go("/path")` かリンクのクリックで、それを `go_〇〇()` の中に隠す。
+こうしておくと、その画面から行ける先が `go_〇〇()` の一覧になる。
+
+`Page.to()` と同じ名前にそろえてある。サイトから最初の画面へ移るのも、
+画面から次の画面へ移るのも、利用側から見れば同じ「移る」なので、
+覚える言葉を増やさない。
+
+`LoginPage(self.session)` と書いても同じだが、そう書くと
+「セッションとは何か」を知らないとサイトクラスを書けなくなる。
+
+Args:
+    page_class: 作りたい画面クラス（`Page` のサブクラス）。
+
+Returns:
+    そのサイトのブラウザに紐づいた画面クラスのインスタンス。
+
+#### `close`
+
+```text
+def close(self) -> None:
+```
+
+##### 説明
+
+Browsers から渡されたセッションは触らず、自分で起動したブラウザだけ閉じる。
+
+`with Kintai() as kintai:` で起動したインスタンスを `close()` しても安全。
+ただし `Browsers.launch()` から持たせてもらったインスタンスでは何もしない
+（持ち主の Browsers が with を抜けるときに閉じるため、二重に閉じない）。
+
 ### `NTTHigashi`
 
 ```text
@@ -8362,6 +8871,85 @@ NTT東のサイトクラス。
 使い方:
     with NTTHigashi() as ntt:
         secure = ntt.go_login().login(USER, PW)
+
+#### `go_login`
+
+```text
+def go_login(self) -> LoginPage:
+```
+
+##### 説明
+
+ログイン画面を開く。
+
+#### `__init__`
+
+```text
+def __init__(self, session: BrowserSession | None=None) -> None:
+```
+
+#### `downloads`
+
+```text
+@property
+def downloads(self) -> DownloadDir:
+```
+
+##### 説明
+
+このサイトのダウンロード先。完了待ちに使う。
+
+    files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
+
+Raises:
+    SiteNotStartedError: まだ起動していない場合。
+
+#### `to`
+
+```text
+def to(self, page_class: type[P]) -> P:
+```
+
+##### 説明
+
+このサイトの画面へ移る。
+
+画面クラスは動かすのにブラウザ（`BrowserSession`）を要るが、
+**それを呼ぶ側に書かせない**ためのもの。
+
+    def go_login(self) -> LoginPage:
+        return self.to(LoginPage).go("/login")
+
+**行き先の型を切り替えるだけで、ブラウザは動かさない。** 実際に動かすのは
+`Page.go("/path")` かリンクのクリックで、それを `go_〇〇()` の中に隠す。
+こうしておくと、その画面から行ける先が `go_〇〇()` の一覧になる。
+
+`Page.to()` と同じ名前にそろえてある。サイトから最初の画面へ移るのも、
+画面から次の画面へ移るのも、利用側から見れば同じ「移る」なので、
+覚える言葉を増やさない。
+
+`LoginPage(self.session)` と書いても同じだが、そう書くと
+「セッションとは何か」を知らないとサイトクラスを書けなくなる。
+
+Args:
+    page_class: 作りたい画面クラス（`Page` のサブクラス）。
+
+Returns:
+    そのサイトのブラウザに紐づいた画面クラスのインスタンス。
+
+#### `close`
+
+```text
+def close(self) -> None:
+```
+
+##### 説明
+
+Browsers から渡されたセッションは触らず、自分で起動したブラウザだけ閉じる。
+
+`with Kintai() as kintai:` で起動したインスタンスを `close()` しても安全。
+ただし `Browsers.launch()` から持たせてもらったインスタンスでは何もしない
+（持ち主の Browsers が with を抜けるときに閉じるため、二重に閉じない）。
 
 
 ## `from comken.toolbox.browser.sites.ntt import ...`
@@ -8379,6 +8967,24 @@ NTT西・NTT東で共通のブラウザオプション。
 デフォルト（BrowserOptions）から変更したいものだけ上書きする。
 サイトごとに変えたい項目が出てきたら、そのサイトのファイルで
 ``NTTBrowserOptions`` を継承したサブクラスを作って ``OPTIONS`` を差し替える。
+
+#### `build`
+
+```text
+def build(self, profile_dir: Path | None=None) -> list[str]:
+```
+
+##### 説明
+
+有効なオプションを Edge の起動引数リストに変換する。
+
+Args:
+    profile_dir: ログイン状態を残すプロファイルフォルダ。
+                 指定するとシークレットモードは自動的に外れる
+                 （シークレットは Cookie を残さないため、永続化と両立しない）。
+
+Returns:
+    webdriver に渡す起動引数のリスト。
 
 ### `NTTSiteBase`
 
@@ -8416,6 +9022,85 @@ NTT西のサイトクラス。
     with NTTNishi() as ntt:
         secure = ntt.go_login().login(USER, PW)
 
+#### `go_login`
+
+```text
+def go_login(self) -> LoginPage:
+```
+
+##### 説明
+
+ログイン画面を開く。
+
+#### `__init__`
+
+```text
+def __init__(self, session: BrowserSession | None=None) -> None:
+```
+
+#### `downloads`
+
+```text
+@property
+def downloads(self) -> DownloadDir:
+```
+
+##### 説明
+
+このサイトのダウンロード先。完了待ちに使う。
+
+    files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
+
+Raises:
+    SiteNotStartedError: まだ起動していない場合。
+
+#### `to`
+
+```text
+def to(self, page_class: type[P]) -> P:
+```
+
+##### 説明
+
+このサイトの画面へ移る。
+
+画面クラスは動かすのにブラウザ（`BrowserSession`）を要るが、
+**それを呼ぶ側に書かせない**ためのもの。
+
+    def go_login(self) -> LoginPage:
+        return self.to(LoginPage).go("/login")
+
+**行き先の型を切り替えるだけで、ブラウザは動かさない。** 実際に動かすのは
+`Page.go("/path")` かリンクのクリックで、それを `go_〇〇()` の中に隠す。
+こうしておくと、その画面から行ける先が `go_〇〇()` の一覧になる。
+
+`Page.to()` と同じ名前にそろえてある。サイトから最初の画面へ移るのも、
+画面から次の画面へ移るのも、利用側から見れば同じ「移る」なので、
+覚える言葉を増やさない。
+
+`LoginPage(self.session)` と書いても同じだが、そう書くと
+「セッションとは何か」を知らないとサイトクラスを書けなくなる。
+
+Args:
+    page_class: 作りたい画面クラス（`Page` のサブクラス）。
+
+Returns:
+    そのサイトのブラウザに紐づいた画面クラスのインスタンス。
+
+#### `close`
+
+```text
+def close(self) -> None:
+```
+
+##### 説明
+
+Browsers から渡されたセッションは触らず、自分で起動したブラウザだけ閉じる。
+
+`with Kintai() as kintai:` で起動したインスタンスを `close()` しても安全。
+ただし `Browsers.launch()` から持たせてもらったインスタンスでは何もしない
+（持ち主の Browsers が with を抜けるときに閉じるため、二重に閉じない）。
+
 ### `NTTHigashi`
 
 ```text
@@ -8429,6 +9114,85 @@ NTT東のサイトクラス。
 使い方:
     with NTTHigashi() as ntt:
         secure = ntt.go_login().login(USER, PW)
+
+#### `go_login`
+
+```text
+def go_login(self) -> LoginPage:
+```
+
+##### 説明
+
+ログイン画面を開く。
+
+#### `__init__`
+
+```text
+def __init__(self, session: BrowserSession | None=None) -> None:
+```
+
+#### `downloads`
+
+```text
+@property
+def downloads(self) -> DownloadDir:
+```
+
+##### 説明
+
+このサイトのダウンロード先。完了待ちに使う。
+
+    files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
+
+Raises:
+    SiteNotStartedError: まだ起動していない場合。
+
+#### `to`
+
+```text
+def to(self, page_class: type[P]) -> P:
+```
+
+##### 説明
+
+このサイトの画面へ移る。
+
+画面クラスは動かすのにブラウザ（`BrowserSession`）を要るが、
+**それを呼ぶ側に書かせない**ためのもの。
+
+    def go_login(self) -> LoginPage:
+        return self.to(LoginPage).go("/login")
+
+**行き先の型を切り替えるだけで、ブラウザは動かさない。** 実際に動かすのは
+`Page.go("/path")` かリンクのクリックで、それを `go_〇〇()` の中に隠す。
+こうしておくと、その画面から行ける先が `go_〇〇()` の一覧になる。
+
+`Page.to()` と同じ名前にそろえてある。サイトから最初の画面へ移るのも、
+画面から次の画面へ移るのも、利用側から見れば同じ「移る」なので、
+覚える言葉を増やさない。
+
+`LoginPage(self.session)` と書いても同じだが、そう書くと
+「セッションとは何か」を知らないとサイトクラスを書けなくなる。
+
+Args:
+    page_class: 作りたい画面クラス（`Page` のサブクラス）。
+
+Returns:
+    そのサイトのブラウザに紐づいた画面クラスのインスタンス。
+
+#### `close`
+
+```text
+def close(self) -> None:
+```
+
+##### 説明
+
+Browsers から渡されたセッションは触らず、自分で起動したブラウザだけ閉じる。
+
+`with Kintai() as kintai:` で起動したインスタンスを `close()` しても安全。
+ただし `Browsers.launch()` から持たせてもらったインスタンスでは何もしない
+（持ち主の Browsers が with を抜けるときに閉じるため、二重に閉じない）。
 
 
 ## `from comken.toolbox.browser.sites.ouju_site import ...`
@@ -8445,6 +9209,24 @@ ouju_site 用のブラウザオプション。
 
 デフォルト（BrowserOptions）から変更したいものだけ上書きする。
 全オプションのデフォルト値は comken/toolbox/browser/options.py を参照。
+
+#### `build`
+
+```text
+def build(self, profile_dir: Path | None=None) -> list[str]:
+```
+
+##### 説明
+
+有効なオプションを Edge の起動引数リストに変換する。
+
+Args:
+    profile_dir: ログイン状態を残すプロファイルフォルダ。
+                 指定するとシークレットモードは自動的に外れる
+                 （シークレットは Cookie を残さないため、永続化と両立しない）。
+
+Returns:
+    webdriver に渡す起動引数のリスト。
 
 ### `OujuSite`
 
@@ -8484,6 +9266,24 @@ class SampleBrowserOptions(BrowserOptions):
 デフォルト（BrowserOptions）から変更したいものだけ上書きする。
 全オプションのデフォルト値は comken/toolbox/browser/options.py を参照。
 
+#### `build`
+
+```text
+def build(self, profile_dir: Path | None=None) -> list[str]:
+```
+
+##### 説明
+
+有効なオプションを Edge の起動引数リストに変換する。
+
+Args:
+    profile_dir: ログイン状態を残すプロファイルフォルダ。
+                 指定するとシークレットモードは自動的に外れる
+                 （シークレットは Cookie を残さないため、永続化と両立しない）。
+
+Returns:
+    webdriver に渡す起動引数のリスト。
+
 ### `SampleSite`
 
 ```text
@@ -8519,6 +9319,24 @@ table_site 用のブラウザオプション。
 
 デフォルト（BrowserOptions）から変更したいものだけ上書きする。
 全オプションのデフォルト値は comken/toolbox/browser/options.py を参照。
+
+#### `build`
+
+```text
+def build(self, profile_dir: Path | None=None) -> list[str]:
+```
+
+##### 説明
+
+有効なオプションを Edge の起動引数リストに変換する。
+
+Args:
+    profile_dir: ログイン状態を残すプロファイルフォルダ。
+                 指定するとシークレットモードは自動的に外れる
+                 （シークレットは Cookie を残さないため、永続化と両立しない）。
+
+Returns:
+    webdriver に渡す起動引数のリスト。
 
 ### `TableSite`
 
@@ -9897,6 +10715,246 @@ Sandbox 組織のクライアント。
     with Sandbox() as sf:
         rows = sf.report.get("00O...")
 
+#### `__init__`
+
+```text
+def __init__(self, *, prefix: str='', domain_url: str='', org_name: str='', auth: _OAuth | type[_OAuth] | None=None) -> None:
+```
+
+##### 説明
+
+DPAPI に保管した認証情報を読み、選択中の OAuth 方式で接続する。
+
+読み込む項目は client.py が import している OAuth 方式（既定は
+RefreshTokenOAuth）で決まる。Client Credentials 方式は
+client_id / client_secret、Refresh Token 方式は
+client_id / client_secret / refresh_token を使う。
+
+Args:
+    prefix: 認証情報のシステム名。省略時はクラスの CREDENTIAL_PREFIX。
+        本番とテストを切り替えるときだけ渡す。
+    domain_url: My Domain の URL。省略時はクラスの DOMAIN_URL。
+    org_name: 計測ログに出す組織の呼び名。省略時はクラス名を使う。
+    auth: 認証方式を差し替えるときに渡す。**クラスを渡せば**
+        DPAPI から組み立てる（値を手で並べなくてよい）。
+            Sandbox(auth=ClientCredentialsOAuth)   # 開発中だけ
+        作成済みのインスタンスを渡すこともできる（テスト・JWT 等）。
+        その場合だけ prefix / domain_url は使われない。
+
+Raises:
+    InvalidCredentialNameError: システム名が空、または使えない文字を含む場合。
+    CredentialNotFoundError: 選択方式に必要な認証情報が未登録の場合。
+    CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
+    SalesforceAuthError: 認証に失敗した場合。
+    SalesforceConnectionError: ネットワークの問題で接続できない場合。
+
+#### `close`
+
+```text
+def close(self) -> None:
+```
+
+##### 説明
+
+HTTP セッションを閉じる。with を使う場合は自動で呼ばれる。
+
+#### `query_rows`
+
+```text
+@measure
+def query_rows(self, soql: str) -> Iterator[dict]:
+```
+
+##### 説明
+
+SOQL クエリを実行し ``{項目: 値}`` の dict を 1 件ずつ返す（全件・ページ送り自動）。
+
+レポートは上限 2000 行だが、SOQL に上限はない。**ページ受信のたびに**
+``yield`` するため、全件を溜め込まずに 1 件目からすぐ処理を始められる。
+``query()`` はこのイテレータを ``Table`` に包む薄い層
+（順序を「イテレータ先・Table 後」に揃えるため）。
+
+列の情報は SOQL のレスポンスからは取れないため、戻り値からは直接
+列名が出ない。``query()`` は ``records[0]`` から列を推測するが、
+これは「1 件以上あるとき」の便宜であって、本物のスキーマではない。
+列名を厳密に扱いたいときは ``describe`` 系エンドポイントを使うこと。
+
+Args:
+    soql: 実行する SOQL クエリ文字列。
+
+Returns:
+    SOQL のレコードを ``{項目: 値}`` の dict で 1 件ずつ返すイテレータ。
+
+#### `query`
+
+```text
+@measure
+def query(self, soql: str) -> Table:
+```
+
+##### 説明
+
+SOQL クエリを実行して ``Table`` を返す（全件取得・ページ送り自動）。
+
+``query_rows()`` を呼んで ``Table`` に包むだけの薄い層。
+列は SOQL からはメタデータが取れないため、**1 件目から推測**する。
+0 件のときは列が空の ``Table`` を返す（``rows[0]`` からの推測に依存
+しないため）。なお ``Account.Name`` のようなドット区切りの親子リレーション
+項目は**そのまま列名にする**（平坦化しない）。``records[0]`` のキーが
+そのまま列になるため、リレーションを跨いだ項目の取り回しを呼び出し側で
+揃えておくこと。
+
+Args:
+    soql: 実行する SOQL クエリ文字列。
+
+Returns:
+    SOQL の結果を表す ``Table``。
+
+#### `query_csv`
+
+```text
+@measure
+def query_csv(self, soql: str, path: str | Path) -> Path:
+```
+
+##### 説明
+
+SOQL クエリを実行して、結果をそのまま CSV へ保存する。
+
+``query()`` が返す ``Table`` を ``CSV`` へ書き出すだけの薄い層。
+``Table`` 自体はファイル I/O を持たない設計（保存先の責任を分ける）ため、
+SOQL の結果を直接 CSV で欲しいだけのときはこちらを使う。
+
+Args:
+    soql: 実行する SOQL クエリ文字列。
+    path: 保存先の CSV パス（拡張子は ``.csv``）。
+
+Returns:
+    保存した CSV のパス。
+
+#### `get`
+
+```text
+@measure
+def get(self, object_name: str, record_id: str) -> dict:
+```
+
+##### 説明
+
+レコードを1件取得する。
+
+``sf.report.get(...)`` ではなく ``sf.get(...)``（CRUD）で使う。
+``report`` は ``ReportAPI`` インスタンスで名前空間が分かれているため、
+CRUD の動詞群 ``get`` / ``insert`` / ``update`` / ``upsert`` / ``delete``
+と揃える目的で ``get`` を採用する。
+
+Args:
+    object_name: オブジェクトの API 参照名（例: "Account"）。
+    record_id: レコードの Id。
+
+#### `insert`
+
+```text
+@measure
+def insert(self, object_name: str, data: dict) -> str:
+```
+
+##### 説明
+
+レコードを作成して Id を返す。
+
+Args:
+    object_name: オブジェクトの API 参照名。
+    data: 作成するレコードの項目と値。
+
+#### `update`
+
+```text
+@measure
+def update(self, object_name: str, record_id: str, data: dict) -> None:
+```
+
+##### 説明
+
+レコードを更新する。
+
+Args:
+    object_name: オブジェクトの API 参照名。
+    record_id: 更新するレコードの Id。
+    data: 更新する項目と値。
+
+#### `upsert`
+
+```text
+@measure
+def upsert(self, object_name: str, external_id_field: str, data: dict) -> None:
+```
+
+##### 説明
+
+外部 ID で upsert する（一致すれば更新、なければ作成）。
+
+Args:
+    object_name: オブジェクトの API 参照名。
+    external_id_field: 外部 ID 項目の API 参照名（例: "ExternalId__c"）。
+    data: 項目と値。external_id_field の値を含めること。
+
+Raises:
+    SalesforceExternalIDMissingError: data に external_id_field が無い場合。
+
+#### `delete`
+
+```text
+@measure
+def delete(self, object_name: str, record_id: str) -> None:
+```
+
+##### 説明
+
+レコードを削除する。
+
+Args:
+    object_name: オブジェクトの API 参照名。
+    record_id: 削除するレコードの Id。
+
+#### `request`
+
+```text
+def request(self, method: str, path: str, body: dict | None=None, component: str='other') -> tuple[dict | list | str | None, dict]:
+```
+
+##### 説明
+
+REST API を呼び、(レスポンス本文, レスポンスヘッダー) を返す。
+
+すべての API 呼び出しがここを通る。計測と、401 のときの再認証もここで行う。
+通常は query() / get() 等を使い、このメソッドは
+ライブラリに無い API を叩くときだけ使う。
+
+Args:
+    method: HTTP メソッド（GET / POST / PATCH / DELETE）。
+    path: "/services/data/..." から始まるパス。
+    body: JSON で送る辞書（省略可）。
+    component: 計測での呼び出し元の区別（"query" / "crud" / "report"）。
+
+Raises:
+    SalesforceRequestError: API がエラーを返した場合。
+    SalesforceConnectionError: ネットワークの問題で接続できない場合。
+
+#### `data_path`
+
+```text
+def data_path(self, path: str) -> str:
+```
+
+##### 説明
+
+REST API のバージョン付きパスを組み立てる。
+
+ライブラリに無い API を request() で叩くときに使う。
+
+    sf.request("GET", sf.data_path("/limits"))
+
 ### `Production`
 
 ```text
@@ -9911,6 +10969,246 @@ Production 組織のクライアント。
     with Production() as sf:
         rows = sf.report.get("00O...")
 
+#### `__init__`
+
+```text
+def __init__(self, *, prefix: str='', domain_url: str='', org_name: str='', auth: _OAuth | type[_OAuth] | None=None) -> None:
+```
+
+##### 説明
+
+DPAPI に保管した認証情報を読み、選択中の OAuth 方式で接続する。
+
+読み込む項目は client.py が import している OAuth 方式（既定は
+RefreshTokenOAuth）で決まる。Client Credentials 方式は
+client_id / client_secret、Refresh Token 方式は
+client_id / client_secret / refresh_token を使う。
+
+Args:
+    prefix: 認証情報のシステム名。省略時はクラスの CREDENTIAL_PREFIX。
+        本番とテストを切り替えるときだけ渡す。
+    domain_url: My Domain の URL。省略時はクラスの DOMAIN_URL。
+    org_name: 計測ログに出す組織の呼び名。省略時はクラス名を使う。
+    auth: 認証方式を差し替えるときに渡す。**クラスを渡せば**
+        DPAPI から組み立てる（値を手で並べなくてよい）。
+            Sandbox(auth=ClientCredentialsOAuth)   # 開発中だけ
+        作成済みのインスタンスを渡すこともできる（テスト・JWT 等）。
+        その場合だけ prefix / domain_url は使われない。
+
+Raises:
+    InvalidCredentialNameError: システム名が空、または使えない文字を含む場合。
+    CredentialNotFoundError: 選択方式に必要な認証情報が未登録の場合。
+    CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
+    SalesforceAuthError: 認証に失敗した場合。
+    SalesforceConnectionError: ネットワークの問題で接続できない場合。
+
+#### `close`
+
+```text
+def close(self) -> None:
+```
+
+##### 説明
+
+HTTP セッションを閉じる。with を使う場合は自動で呼ばれる。
+
+#### `query_rows`
+
+```text
+@measure
+def query_rows(self, soql: str) -> Iterator[dict]:
+```
+
+##### 説明
+
+SOQL クエリを実行し ``{項目: 値}`` の dict を 1 件ずつ返す（全件・ページ送り自動）。
+
+レポートは上限 2000 行だが、SOQL に上限はない。**ページ受信のたびに**
+``yield`` するため、全件を溜め込まずに 1 件目からすぐ処理を始められる。
+``query()`` はこのイテレータを ``Table`` に包む薄い層
+（順序を「イテレータ先・Table 後」に揃えるため）。
+
+列の情報は SOQL のレスポンスからは取れないため、戻り値からは直接
+列名が出ない。``query()`` は ``records[0]`` から列を推測するが、
+これは「1 件以上あるとき」の便宜であって、本物のスキーマではない。
+列名を厳密に扱いたいときは ``describe`` 系エンドポイントを使うこと。
+
+Args:
+    soql: 実行する SOQL クエリ文字列。
+
+Returns:
+    SOQL のレコードを ``{項目: 値}`` の dict で 1 件ずつ返すイテレータ。
+
+#### `query`
+
+```text
+@measure
+def query(self, soql: str) -> Table:
+```
+
+##### 説明
+
+SOQL クエリを実行して ``Table`` を返す（全件取得・ページ送り自動）。
+
+``query_rows()`` を呼んで ``Table`` に包むだけの薄い層。
+列は SOQL からはメタデータが取れないため、**1 件目から推測**する。
+0 件のときは列が空の ``Table`` を返す（``rows[0]`` からの推測に依存
+しないため）。なお ``Account.Name`` のようなドット区切りの親子リレーション
+項目は**そのまま列名にする**（平坦化しない）。``records[0]`` のキーが
+そのまま列になるため、リレーションを跨いだ項目の取り回しを呼び出し側で
+揃えておくこと。
+
+Args:
+    soql: 実行する SOQL クエリ文字列。
+
+Returns:
+    SOQL の結果を表す ``Table``。
+
+#### `query_csv`
+
+```text
+@measure
+def query_csv(self, soql: str, path: str | Path) -> Path:
+```
+
+##### 説明
+
+SOQL クエリを実行して、結果をそのまま CSV へ保存する。
+
+``query()`` が返す ``Table`` を ``CSV`` へ書き出すだけの薄い層。
+``Table`` 自体はファイル I/O を持たない設計（保存先の責任を分ける）ため、
+SOQL の結果を直接 CSV で欲しいだけのときはこちらを使う。
+
+Args:
+    soql: 実行する SOQL クエリ文字列。
+    path: 保存先の CSV パス（拡張子は ``.csv``）。
+
+Returns:
+    保存した CSV のパス。
+
+#### `get`
+
+```text
+@measure
+def get(self, object_name: str, record_id: str) -> dict:
+```
+
+##### 説明
+
+レコードを1件取得する。
+
+``sf.report.get(...)`` ではなく ``sf.get(...)``（CRUD）で使う。
+``report`` は ``ReportAPI`` インスタンスで名前空間が分かれているため、
+CRUD の動詞群 ``get`` / ``insert`` / ``update`` / ``upsert`` / ``delete``
+と揃える目的で ``get`` を採用する。
+
+Args:
+    object_name: オブジェクトの API 参照名（例: "Account"）。
+    record_id: レコードの Id。
+
+#### `insert`
+
+```text
+@measure
+def insert(self, object_name: str, data: dict) -> str:
+```
+
+##### 説明
+
+レコードを作成して Id を返す。
+
+Args:
+    object_name: オブジェクトの API 参照名。
+    data: 作成するレコードの項目と値。
+
+#### `update`
+
+```text
+@measure
+def update(self, object_name: str, record_id: str, data: dict) -> None:
+```
+
+##### 説明
+
+レコードを更新する。
+
+Args:
+    object_name: オブジェクトの API 参照名。
+    record_id: 更新するレコードの Id。
+    data: 更新する項目と値。
+
+#### `upsert`
+
+```text
+@measure
+def upsert(self, object_name: str, external_id_field: str, data: dict) -> None:
+```
+
+##### 説明
+
+外部 ID で upsert する（一致すれば更新、なければ作成）。
+
+Args:
+    object_name: オブジェクトの API 参照名。
+    external_id_field: 外部 ID 項目の API 参照名（例: "ExternalId__c"）。
+    data: 項目と値。external_id_field の値を含めること。
+
+Raises:
+    SalesforceExternalIDMissingError: data に external_id_field が無い場合。
+
+#### `delete`
+
+```text
+@measure
+def delete(self, object_name: str, record_id: str) -> None:
+```
+
+##### 説明
+
+レコードを削除する。
+
+Args:
+    object_name: オブジェクトの API 参照名。
+    record_id: 削除するレコードの Id。
+
+#### `request`
+
+```text
+def request(self, method: str, path: str, body: dict | None=None, component: str='other') -> tuple[dict | list | str | None, dict]:
+```
+
+##### 説明
+
+REST API を呼び、(レスポンス本文, レスポンスヘッダー) を返す。
+
+すべての API 呼び出しがここを通る。計測と、401 のときの再認証もここで行う。
+通常は query() / get() 等を使い、このメソッドは
+ライブラリに無い API を叩くときだけ使う。
+
+Args:
+    method: HTTP メソッド（GET / POST / PATCH / DELETE）。
+    path: "/services/data/..." から始まるパス。
+    body: JSON で送る辞書（省略可）。
+    component: 計測での呼び出し元の区別（"query" / "crud" / "report"）。
+
+Raises:
+    SalesforceRequestError: API がエラーを返した場合。
+    SalesforceConnectionError: ネットワークの問題で接続できない場合。
+
+#### `data_path`
+
+```text
+def data_path(self, path: str) -> str:
+```
+
+##### 説明
+
+REST API のバージョン付きパスを組み立てる。
+
+ライブラリに無い API を request() で叩くときに使う。
+
+    sf.request("GET", sf.data_path("/limits"))
+
 ### `Developer`
 
 ```text
@@ -9924,6 +11222,246 @@ Developer 組織のクライアント。
 使い方:
     with Developer() as sf:
         rows = sf.report.get("00O...")
+
+#### `__init__`
+
+```text
+def __init__(self, *, prefix: str='', domain_url: str='', org_name: str='', auth: _OAuth | type[_OAuth] | None=None) -> None:
+```
+
+##### 説明
+
+DPAPI に保管した認証情報を読み、選択中の OAuth 方式で接続する。
+
+読み込む項目は client.py が import している OAuth 方式（既定は
+RefreshTokenOAuth）で決まる。Client Credentials 方式は
+client_id / client_secret、Refresh Token 方式は
+client_id / client_secret / refresh_token を使う。
+
+Args:
+    prefix: 認証情報のシステム名。省略時はクラスの CREDENTIAL_PREFIX。
+        本番とテストを切り替えるときだけ渡す。
+    domain_url: My Domain の URL。省略時はクラスの DOMAIN_URL。
+    org_name: 計測ログに出す組織の呼び名。省略時はクラス名を使う。
+    auth: 認証方式を差し替えるときに渡す。**クラスを渡せば**
+        DPAPI から組み立てる（値を手で並べなくてよい）。
+            Sandbox(auth=ClientCredentialsOAuth)   # 開発中だけ
+        作成済みのインスタンスを渡すこともできる（テスト・JWT 等）。
+        その場合だけ prefix / domain_url は使われない。
+
+Raises:
+    InvalidCredentialNameError: システム名が空、または使えない文字を含む場合。
+    CredentialNotFoundError: 選択方式に必要な認証情報が未登録の場合。
+    CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
+    SalesforceAuthError: 認証に失敗した場合。
+    SalesforceConnectionError: ネットワークの問題で接続できない場合。
+
+#### `close`
+
+```text
+def close(self) -> None:
+```
+
+##### 説明
+
+HTTP セッションを閉じる。with を使う場合は自動で呼ばれる。
+
+#### `query_rows`
+
+```text
+@measure
+def query_rows(self, soql: str) -> Iterator[dict]:
+```
+
+##### 説明
+
+SOQL クエリを実行し ``{項目: 値}`` の dict を 1 件ずつ返す（全件・ページ送り自動）。
+
+レポートは上限 2000 行だが、SOQL に上限はない。**ページ受信のたびに**
+``yield`` するため、全件を溜め込まずに 1 件目からすぐ処理を始められる。
+``query()`` はこのイテレータを ``Table`` に包む薄い層
+（順序を「イテレータ先・Table 後」に揃えるため）。
+
+列の情報は SOQL のレスポンスからは取れないため、戻り値からは直接
+列名が出ない。``query()`` は ``records[0]`` から列を推測するが、
+これは「1 件以上あるとき」の便宜であって、本物のスキーマではない。
+列名を厳密に扱いたいときは ``describe`` 系エンドポイントを使うこと。
+
+Args:
+    soql: 実行する SOQL クエリ文字列。
+
+Returns:
+    SOQL のレコードを ``{項目: 値}`` の dict で 1 件ずつ返すイテレータ。
+
+#### `query`
+
+```text
+@measure
+def query(self, soql: str) -> Table:
+```
+
+##### 説明
+
+SOQL クエリを実行して ``Table`` を返す（全件取得・ページ送り自動）。
+
+``query_rows()`` を呼んで ``Table`` に包むだけの薄い層。
+列は SOQL からはメタデータが取れないため、**1 件目から推測**する。
+0 件のときは列が空の ``Table`` を返す（``rows[0]`` からの推測に依存
+しないため）。なお ``Account.Name`` のようなドット区切りの親子リレーション
+項目は**そのまま列名にする**（平坦化しない）。``records[0]`` のキーが
+そのまま列になるため、リレーションを跨いだ項目の取り回しを呼び出し側で
+揃えておくこと。
+
+Args:
+    soql: 実行する SOQL クエリ文字列。
+
+Returns:
+    SOQL の結果を表す ``Table``。
+
+#### `query_csv`
+
+```text
+@measure
+def query_csv(self, soql: str, path: str | Path) -> Path:
+```
+
+##### 説明
+
+SOQL クエリを実行して、結果をそのまま CSV へ保存する。
+
+``query()`` が返す ``Table`` を ``CSV`` へ書き出すだけの薄い層。
+``Table`` 自体はファイル I/O を持たない設計（保存先の責任を分ける）ため、
+SOQL の結果を直接 CSV で欲しいだけのときはこちらを使う。
+
+Args:
+    soql: 実行する SOQL クエリ文字列。
+    path: 保存先の CSV パス（拡張子は ``.csv``）。
+
+Returns:
+    保存した CSV のパス。
+
+#### `get`
+
+```text
+@measure
+def get(self, object_name: str, record_id: str) -> dict:
+```
+
+##### 説明
+
+レコードを1件取得する。
+
+``sf.report.get(...)`` ではなく ``sf.get(...)``（CRUD）で使う。
+``report`` は ``ReportAPI`` インスタンスで名前空間が分かれているため、
+CRUD の動詞群 ``get`` / ``insert`` / ``update`` / ``upsert`` / ``delete``
+と揃える目的で ``get`` を採用する。
+
+Args:
+    object_name: オブジェクトの API 参照名（例: "Account"）。
+    record_id: レコードの Id。
+
+#### `insert`
+
+```text
+@measure
+def insert(self, object_name: str, data: dict) -> str:
+```
+
+##### 説明
+
+レコードを作成して Id を返す。
+
+Args:
+    object_name: オブジェクトの API 参照名。
+    data: 作成するレコードの項目と値。
+
+#### `update`
+
+```text
+@measure
+def update(self, object_name: str, record_id: str, data: dict) -> None:
+```
+
+##### 説明
+
+レコードを更新する。
+
+Args:
+    object_name: オブジェクトの API 参照名。
+    record_id: 更新するレコードの Id。
+    data: 更新する項目と値。
+
+#### `upsert`
+
+```text
+@measure
+def upsert(self, object_name: str, external_id_field: str, data: dict) -> None:
+```
+
+##### 説明
+
+外部 ID で upsert する（一致すれば更新、なければ作成）。
+
+Args:
+    object_name: オブジェクトの API 参照名。
+    external_id_field: 外部 ID 項目の API 参照名（例: "ExternalId__c"）。
+    data: 項目と値。external_id_field の値を含めること。
+
+Raises:
+    SalesforceExternalIDMissingError: data に external_id_field が無い場合。
+
+#### `delete`
+
+```text
+@measure
+def delete(self, object_name: str, record_id: str) -> None:
+```
+
+##### 説明
+
+レコードを削除する。
+
+Args:
+    object_name: オブジェクトの API 参照名。
+    record_id: 削除するレコードの Id。
+
+#### `request`
+
+```text
+def request(self, method: str, path: str, body: dict | None=None, component: str='other') -> tuple[dict | list | str | None, dict]:
+```
+
+##### 説明
+
+REST API を呼び、(レスポンス本文, レスポンスヘッダー) を返す。
+
+すべての API 呼び出しがここを通る。計測と、401 のときの再認証もここで行う。
+通常は query() / get() 等を使い、このメソッドは
+ライブラリに無い API を叩くときだけ使う。
+
+Args:
+    method: HTTP メソッド（GET / POST / PATCH / DELETE）。
+    path: "/services/data/..." から始まるパス。
+    body: JSON で送る辞書（省略可）。
+    component: 計測での呼び出し元の区別（"query" / "crud" / "report"）。
+
+Raises:
+    SalesforceRequestError: API がエラーを返した場合。
+    SalesforceConnectionError: ネットワークの問題で接続できない場合。
+
+#### `data_path`
+
+```text
+def data_path(self, path: str) -> str:
+```
+
+##### 説明
+
+REST API のバージョン付きパスを組み立てる。
+
+ライブラリに無い API を request() で叩くときに使う。
+
+    sf.request("GET", sf.data_path("/limits"))
 
 ### `site_for`
 

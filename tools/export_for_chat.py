@@ -271,26 +271,62 @@ def _doc_lines(
     return [f"{'#' * heading_level} 説明", "", docstring, ""]
 
 
-def _class_lines(node: ast.ClassDef) -> list[str]:
+def _own_methods(node: ast.ClassDef) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
+    """クラス自身の本体にある公開メソッド（__init__ は含む）。"""
+    return [
+        child
+        for child in node.body
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and (not child.name.startswith("_") or child.name == "__init__")
+    ]
+
+
+def _collect_methods_from_bases(
+    node: ast.ClassDef, path: Path, seen: set[str]
+) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
+    """同一パッケージ内で解決できる基底クラスから、公開メソッドを再帰的に集める。
+
+    Mixin合成だけで出来ていて自身に公開メソッドを持たないクラス（例: Page）を
+    ドキュメント化するときに使う。外部ライブラリの基底クラス（NamedTuple など）は
+    _find_definition が解決できないので黙ってスキップする。
+    """
+    collected: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+    for base in node.bases:
+        if not isinstance(base, ast.Name):
+            continue
+        resolved = _find_definition(path, base.id)
+        if resolved is None:
+            continue
+        base_path, base_node = resolved
+        if not isinstance(base_node, ast.ClassDef):
+            continue
+        for method in _own_methods(base_node):
+            if method.name not in seen:
+                seen.add(method.name)
+                collected.append(method)
+        collected += _collect_methods_from_bases(base_node, base_path, seen)
+    return collected
+
+
+def _class_lines(node: ast.ClassDef, path: Path) -> list[str]:
     """公開クラスの宣言、docstring、公開メソッドを Markdown にする。"""
     bases = ", ".join(ast.unparse(base) for base in node.bases)
     declaration = f"class {node.name}({bases}):" if bases else f"class {node.name}:"
     lines = ["```text", declaration, "```", "", *_doc_lines(node, 4)]
-    for child in node.body:
-        if not isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
-        if child.name.startswith("_") and child.name != "__init__":
-            continue
+    methods = _own_methods(node)
+    if not methods:
+        methods = _collect_methods_from_bases(node, path, set())
+    for child in methods:
         lines += [f"#### `{child.name}`", "", "```text", _signature(child), "```", ""]
         lines += _doc_lines(child, 5)
     return lines
 
 
-def _definition_lines(name: str, node: ast.AST) -> list[str]:
+def _definition_lines(name: str, node: ast.AST, path: Path) -> list[str]:
     """公開名1つ分の Markdown を返す。"""
     lines = [f"### `{name}`", ""]
     if isinstance(node, ast.ClassDef):
-        return [*lines, *_class_lines(node)]
+        return [*lines, *_class_lines(node, path)]
     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
         return [*lines, "```text", _signature(node), "```", "", *_doc_lines(node, 4)]
     return [*lines, "公開定数。", ""]
@@ -323,8 +359,8 @@ def _api_text() -> str:
             if definition is None:
                 sections += [f"### `{name}`", "", "定義を解決できませんでした。", ""]
                 continue
-            _, node = definition
-            sections += _definition_lines(name, node)
+            path, node = definition
+            sections += _definition_lines(name, node, path)
     return "\n".join(sections).rstrip() + "\n"
 
 
