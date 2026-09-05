@@ -86,19 +86,22 @@ def _parse_report_payload(
     allow_truncated: bool,
     *,
     metrics: Any | None = None,
-) -> tuple[list[str], list[dict]]:
-    """レポート API のレスポンスを ``(表示名の列リスト, [{表示名: 値}, ...])`` に変換する。
+) -> Table:
+    """レポート API のレスポンスを ``Table``（表示名の列 + {表示名: 値} の行）に変換する。
 
     0 件のときでも ``detailColumns`` / ``detailColumnInfo`` から組み立てた
-    ``labels`` を返すため、``Table`` の列情報が落ちない。
+    列を ``Table`` に持たせるため、列情報が落ちない。
 
     ``metrics`` は切り捨てを計測するためのフック（``APIMetrics.record_truncated_report``
     互換のメソッド ``record_truncated_report(report_id)`` を持つオブジェクト）。
     通常は ``SalesforceBase.metrics`` を渡す。テストや単発呼び出しで None の
     ときは計測をスキップする。
+
+    Returns:
+        表示名の列と行 dict を持つ ``Table``。
     """
     if not isinstance(data, dict):
-        return [], []
+        return Table([], [])
 
     metadata = data.get("reportMetadata", {})
     report_format = metadata.get("reportFormat")
@@ -125,9 +128,10 @@ def _parse_report_payload(
     labels = [column_info.get(column, {}).get("label", column) for column in columns]
 
     rows = data.get("factMap", {}).get(DETAIL_ROWS_KEY, {}).get("rows", [])
-    return labels, [
-        {label: row["dataCells"][i]["label"] for i, label in enumerate(labels)} for row in rows
-    ]
+    return Table(
+        labels,
+        [{label: row["dataCells"][i]["label"] for i, label in enumerate(labels)} for row in rows],
+    )
 
 
 class ReportAPI:
@@ -174,8 +178,7 @@ class ReportAPI:
                 （allow_truncated=True のときは送出しない）。
             SalesforceReportFormatError: 明細（TABULAR）形式でない場合。
         """
-        labels, rows = self._fetch_labels_and_rows(report_id, filters, allow_truncated)
-        return Table(labels, rows)
+        return self._fetch_report_table(report_id, filters, allow_truncated)
 
     @measure
     def run_csv(
@@ -241,10 +244,9 @@ class ReportAPI:
             )
             status = data.get("status") if isinstance(data, dict) else None
             if status == "Success":
-                labels, rows = _parse_report_payload(
+                return _parse_report_payload(
                     data, report_id, allow_truncated, metrics=self._client.metrics
                 )
-                return Table(labels, rows)
             if status == "Error":
                 if not isinstance(data, dict):
                     raise SalesforceReportExecutionError(report_id, "詳細情報なし")
@@ -299,13 +301,13 @@ class ReportAPI:
     def _base_path(self) -> str:
         return self._client.data_path("/analytics/reports")
 
-    def _fetch_labels_and_rows(
+    def _fetch_report_table(
         self,
         report_id: str,
         filters: list[dict] | None,
         allow_truncated: bool,
-    ) -> tuple[list[str], list[dict]]:
-        """HTTP 取得とパースを行い ``(labels, rows)`` を返す。"""
+    ) -> Table:
+        """HTTP 取得とパースを行い ``Table`` を返す。"""
         path = f"{self._base_path()}/{report_id}"
         logger.debug("Salesforce Report取得開始: Report ID=%s", report_id)
         if filters:
@@ -318,8 +320,8 @@ class ReportAPI:
         else:
             data, _ = self._client.request("GET", path, component=COMPONENT)
         logger.debug("Salesforce APIレスポンス受信: Report ID=%s", report_id)
-        labels, rows = _parse_report_payload(
+        table = _parse_report_payload(
             data, report_id, allow_truncated, metrics=self._client.metrics
         )
-        logger.debug("Salesforce Report取得完了: Report ID=%s 件数=%d", report_id, len(rows))
-        return labels, rows
+        logger.debug("Salesforce Report取得完了: Report ID=%s 件数=%d", report_id, len(table))
+        return table
