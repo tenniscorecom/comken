@@ -647,7 +647,7 @@ with Browsers() as browsers:
 |---|---|
 | `launch(SiteBase, download_dir=None)` | SiteBase サブクラスを渡してブラウザを1つ起動し、SiteBase インスタンスを返す |
 | `launch_session(name, options=None, download_dir=None)` | 低レベル経路。`Browsers` を使わずに名前とオプションで直接起動する |
-| `start(処理, label="")` | 処理を裏で始めて、すぐ次の行へ進む。`BackgroundTask` を返す |
+| `run_task(処理, label="")` | 処理を裏で始めて、すぐ次の行へ進む。`BackgroundTask` を返す |
 | `parallel(*tasks)` | 複数の処理を同時に実行し、渡した順に結果を返す |
 | `names` | 起動済みのセッション名（起動した順） |
 | `browsers["kintai"]` | 名前でセッションを取り出す |
@@ -821,24 +821,18 @@ class LoginPage(SitePage):
         return self.to(DashboardPage)           # 遷移先の画面クラスを返す
 ```
 
-**操作メソッド一覧**（すべて `Locator` を受け取る）:
+**メソッドの探し方**: 正確な名前・シグネチャは
+[自動生成 API.md の `Page`](自動生成/API.md#page) を参照する
+（`python tools/export_for_chat.py --bundle` で生成されるため、実装と食い違わない）。
+ここでは用途別の見取り図だけ示す。
 
-| したいこと | メソッド |
+| したいこと | 系統 |
 |---|---|
-| クリック | `click(LOC, index=0)` |
-| 文字入力（既存の値は消える） | `input(LOC, text)` |
-| テキスト取得 | `text(LOC)` / `texts(LOC)` |
-| 属性取得（href, value 等） | `attribute(LOC, name)` |
-| プルダウン選択 | `select_text(LOC, 表示名)` / `select_value(LOC, v)` / `select_index(LOC, i)` |
-| 表示・非表示を待つ | `wait_visible(LOC)` / `wait_invisible(LOC)` |
-| 存在確認・件数（待たない） | `has(LOC)` / `count(LOC)` |
-| スクロール | `scroll_to(LOC)` / `scroll_bottom()` |
-| ドラッグ＆ドロップ | `drag_drop(source, target)` |
-| 確認ダイアログ | `alert_accept()` / `alert_dismiss()` / `alert_text()` |
-| iframe の中を操作 | `with page.frame(LOC):` |
-| スクリーンショット | `save_screenshot(filename=None, *, directory=None, prefix="screenshot")` |
-| 一覧の各行を処理する | `elements(LOC)`（WebElement のリスト） |
-| 最終手段 | `element(LOC)`（生の WebElement） / `js(script, *args)` |
+| クリック・入力・プルダウン選択・スクロール・ドラッグ＆ドロップ | 操作系（`click` / `input` / `select_*` / `scroll_*` / `drag_drop`） |
+| テキスト・属性を読む、存在確認・件数（待たない） | 読み取り系（`read_*` / `has_element` / `count_elements`） |
+| 表示・非表示を待つ | 待機系（`wait_visible` / `wait_invisible`） |
+| 確認ダイアログの操作 | `alert_*`（`alert_accept` / `alert_dismiss` / `read_alert_text`） |
+| iframe の中を操作、スクリーンショット、最終手段 | `frame()` / `save_screenshot()` / `find_element*` / `execute_script()` |
 
 要素は自動で待機する（既定10秒）。時間内に見つからない場合は `ElementNotFoundError` になり、
 **どのセレクターで失敗したか**がメッセージに出る。`time.sleep` で待たないこと。
