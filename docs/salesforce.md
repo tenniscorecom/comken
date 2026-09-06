@@ -306,6 +306,62 @@ Object Describe の 401 / 403 は Analytics API とは別の権限系統なの�
 
 ---
 
+## Bulk API 2.0 の Query ジョブ（重い SOQL の逃げ道）
+
+**この機能は本物の Salesforce 組織に対して未検証。** ジョブ作成・状態確認・
+結果取得のエンドポイントとレスポンス構造は Salesforce の公式リファレンスに
+基づいて実装しているが、実際のレスポンスで想定と違う点が見つかったら、
+`comken/toolbox/salesforce/bulk_query.py` を修正すること。
+
+`SalesforceBase.query()` は SOQL を同期で送り、`nextRecordsUrl` を辿って
+全件取得する。**行数の上限はない**が、同期 REST の1リクエストごとの処理の
+ため、重いクエリ（複雑な絞り込み・大きいテーブルのフルスキャンなど）は
+HTTP タイムアウトに当たりやすい。そのような場合に Bulk API 2.0 の Query
+ジョブを使う。Bulk API は「ジョブを作って完了を待つ非同期方式」のため、
+重いクエリでもタイムアウトしにくい。
+
+```python
+from comken.toolbox.salesforce.sites import Sandbox
+
+with Sandbox() as sf:
+    # timeout_seconds の既定は600秒。大量データの抽出を想定
+    table = sf.bulk_query.run("SELECT Id, Name FROM Account")
+
+    # CSV へ直接保存することもできる（ReportAPI.run_csv() と同じ形）
+    sf.bulk_query.run_csv(
+        "SELECT Id, Name FROM Account",
+        "accounts.csv",
+    )
+```
+
+### `query()` との使い分け
+
+**`bulk_query` は「行数の上限を超えるため」の道具ではない。** `query()` も
+行数の上限はないので、行数だけを理由に `bulk_query` へ切り替える必要はない。
+使い分けの基準は「1リクエストが HTTP タイムアウトに当たるほどクエリが重いか」
+であり、それに当たる（または当たりそうな）クエリだけ非同期の `bulk_query`
+に切り替える。
+
+### 書き込み系（Ingest）は対象外
+
+`bulk_query` は**読み取り専用**。大量データの一括挿入・更新・削除に
+Bulk API を使いたい場合も、これまで通り `DataLoaderCLI`
+（docs/dataloader.md）を使う。comken では Bulk API の書き込み系（Ingest）
+は作らない方針。
+
+### エラー
+
+- `SalesforceBulkQueryFailedError`: ジョブが `Failed` / `Aborted` で終わったとき
+- `SalesforceBulkQueryTimeoutError`: `timeout_seconds` 以内にジョブが完了しなかったとき（既定600秒）
+
+### 未検証の前提
+
+実装は comken のテストで HTTP をモックして確認しているが、レスポンスの
+前提（結果 CSV の2ページ目以降にも1行目のヘッダー行が含まれる、次ページが
+無いときは `Sforce-Locator: null` になる、など）は本物の組織では未検証。
+実際の挙動が違っていたら `comken/toolbox/salesforce/bulk_query.py` を
+修正すること。
+
 ## 計測
 
 `_request()` が唯一の通り道なので、そこ1点で全部拾える。

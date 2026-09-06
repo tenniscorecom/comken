@@ -4917,6 +4917,49 @@ URL のドメインで決めるので、未登録のドメインでは接続先�
 def __init__(self, url: str, known_domains: list[str]) -> None:
 ```
 
+### `SalesforceBulkQueryFailedError`
+
+```text
+class SalesforceBulkQueryFailedError(SalesforceError):
+```
+
+#### 説明
+
+Bulk API のクエリジョブが失敗して終わった（Failed / Aborted）
+
+発生箇所: comken.toolbox.salesforce.bulk_query.BulkQueryAPI.run()
+
+対処:
+    表示されたエラー内容を確認する。SOQL の構文・参照項目・
+    実行ユーザーの権限を見直す
+
+#### `__init__`
+
+```text
+def __init__(self, job_id: str, state: str, error_message: str) -> None:
+```
+
+### `SalesforceBulkQueryTimeoutError`
+
+```text
+class SalesforceBulkQueryTimeoutError(SalesforceError):
+```
+
+#### 説明
+
+Bulk API のクエリジョブが制限時間内に終わらなかった
+
+発生箇所: comken.toolbox.salesforce.bulk_query.BulkQueryAPI.run()
+
+対処:
+    timeout_seconds を長くするか、クエリの対象を絞って再実行する
+
+#### `__init__`
+
+```text
+def __init__(self, job_id: str, timeout_seconds: float) -> None:
+```
+
 ### `BrowserError`
 
 ```text
@@ -10912,6 +10955,96 @@ Args:
 Returns:
     保存した CSV のパス。
 
+### `BulkQueryAPI`
+
+```text
+class BulkQueryAPI:
+```
+
+#### 説明
+
+Bulk API 2.0 の Query ジョブで SOQL を非同期実行する。
+
+``SalesforceBase`` が ``bulk_query`` 属性として持っている。単体では作らない。
+
+    with Sandbox() as sf:
+        table = sf.bulk_query.run("SELECT Id, Name FROM Account")
+
+``SalesforceBase.query()``（同期 SOQL・ページング対応済み）でも全件は
+取得できるが、クエリが重く同期の実行時間制約に当たる場合はこちらを使う。
+Bulk API はジョブを作って完了を待つ非同期方式のため、重いクエリでも
+タイムアウトしにくい。
+
+**本物の Salesforce 組織に対して未検証。** ジョブ作成・状態確認・結果取得の
+エンドポイントとレスポンス構造は Salesforce の公式リファレンスに基づいて
+実装しているが、実際のレスポンスで想定と違う点が見つかったら、この
+モジュールを修正すること。
+
+#### `__init__`
+
+```text
+def __init__(self, client: SalesforceBase) -> None:
+```
+
+##### 説明
+
+Args:
+    client: この Bulk Query API を使う Salesforce クライアント。
+
+#### `run`
+
+```text
+@measure
+def run(self, soql: str, *, timeout_seconds: float=DEFAULT_TIMEOUT_SECONDS) -> Table:
+```
+
+##### 説明
+
+SOQL を Bulk API 2.0 の Query ジョブとして実行し、結果を ``Table`` で返す。
+
+ジョブを作成し、完了（またはタイムアウト・失敗）まで待ってから、
+結果 CSV を（ページングがあれば全ページ）取得して ``Table`` に変換する。
+
+Args:
+    soql: 実行する SOQL クエリ文字列。
+    timeout_seconds: ジョブ完了を待つ上限秒数。大量データの抽出を
+        想定し、既定値は600秒（10分）。
+
+Returns:
+    クエリ結果を表す ``Table``。0件のときは列・行とも空。
+
+Raises:
+    SalesforceBulkQueryFailedError: ジョブが失敗して終わった場合
+        （状態が Failed / Aborted）。
+    SalesforceBulkQueryTimeoutError: timeout_seconds 以内にジョブが
+        完了しなかった場合。
+
+#### `run_csv`
+
+```text
+@measure
+def run_csv(self, soql: str, path: str | Path, *, timeout_seconds: float=DEFAULT_TIMEOUT_SECONDS) -> Path:
+```
+
+##### 説明
+
+``run()`` の結果をそのまま CSV へ保存する。
+
+``run()`` が返す ``Table`` を ``CSV`` へ書き出すだけの薄い層
+（``ReportAPI.run_csv()`` と同じ形）。
+
+Args:
+    soql: 実行する SOQL クエリ文字列。
+    path: 保存先の CSV パス（拡張子は ``.csv``）。
+    timeout_seconds: ``run()`` と同じ。
+
+Returns:
+    保存した CSV のパス。
+
+Raises:
+    SalesforceBulkQueryFailedError: ``run()`` から伝播。
+    SalesforceBulkQueryTimeoutError: ``run()`` から伝播。
+
 ### `ClientCredentialsOAuth`
 
 定義を解決できませんでした。
@@ -11286,7 +11419,7 @@ Args:
 #### `request`
 
 ```text
-def request(self, method: str, path: str, body: dict | None=None, component: str='other') -> tuple[dict | list | str | None, dict]:
+def request(self, method: str, path: str, body: dict | None=None, component: str='other', headers: dict[str, str] | None=None) -> tuple[dict | list | str | None, dict]:
 ```
 
 ##### 説明
@@ -11302,10 +11435,34 @@ Args:
     path: "/services/data/..." から始まるパス。
     body: JSON で送る辞書（省略可）。
     component: 計測での呼び出し元の区別（"query" / "crud" / "report"）。
+    headers: この呼び出しだけ上書きする追加ヘッダー（省略可）。
+        セッションの既定ヘッダーと同名のキーはこの値が勝つ（``requests``
+        ライブラリの挙動）。``None`` のときは何も追加しない。
 
 Raises:
     SalesforceRequestError: API がエラーを返した場合。
     SalesforceConnectionError: ネットワークの問題で接続できない場合。
+
+#### `request_csv`
+
+```text
+def request_csv(self, method: str, path: str, component: str='other') -> tuple[str, dict]:
+```
+
+##### 説明
+
+CSV 形式のレスポンスを返す API を呼ぶ（Bulk API 2.0 の結果取得専用）。
+
+``request()`` と同じ 5xx/429 リトライ・401 再認証を共有するため、
+Accept ヘッダーだけ text/csv に差し替えて ``request()`` を呼ぶ薄いラッパー。
+
+Args:
+    method: HTTP メソッド。
+    path: "/services/data/..." から始まるパス。
+    component: 計測での呼び出し元の区別。
+
+Returns:
+    (CSV本文の文字列, レスポンスヘッダーの辞書)。本文が無ければ空文字。
 
 #### `data_path`
 
@@ -11540,7 +11697,7 @@ Args:
 #### `request`
 
 ```text
-def request(self, method: str, path: str, body: dict | None=None, component: str='other') -> tuple[dict | list | str | None, dict]:
+def request(self, method: str, path: str, body: dict | None=None, component: str='other', headers: dict[str, str] | None=None) -> tuple[dict | list | str | None, dict]:
 ```
 
 ##### 説明
@@ -11556,10 +11713,34 @@ Args:
     path: "/services/data/..." から始まるパス。
     body: JSON で送る辞書（省略可）。
     component: 計測での呼び出し元の区別（"query" / "crud" / "report"）。
+    headers: この呼び出しだけ上書きする追加ヘッダー（省略可）。
+        セッションの既定ヘッダーと同名のキーはこの値が勝つ（``requests``
+        ライブラリの挙動）。``None`` のときは何も追加しない。
 
 Raises:
     SalesforceRequestError: API がエラーを返した場合。
     SalesforceConnectionError: ネットワークの問題で接続できない場合。
+
+#### `request_csv`
+
+```text
+def request_csv(self, method: str, path: str, component: str='other') -> tuple[str, dict]:
+```
+
+##### 説明
+
+CSV 形式のレスポンスを返す API を呼ぶ（Bulk API 2.0 の結果取得専用）。
+
+``request()`` と同じ 5xx/429 リトライ・401 再認証を共有するため、
+Accept ヘッダーだけ text/csv に差し替えて ``request()`` を呼ぶ薄いラッパー。
+
+Args:
+    method: HTTP メソッド。
+    path: "/services/data/..." から始まるパス。
+    component: 計測での呼び出し元の区別。
+
+Returns:
+    (CSV本文の文字列, レスポンスヘッダーの辞書)。本文が無ければ空文字。
 
 #### `data_path`
 
@@ -11794,7 +11975,7 @@ Args:
 #### `request`
 
 ```text
-def request(self, method: str, path: str, body: dict | None=None, component: str='other') -> tuple[dict | list | str | None, dict]:
+def request(self, method: str, path: str, body: dict | None=None, component: str='other', headers: dict[str, str] | None=None) -> tuple[dict | list | str | None, dict]:
 ```
 
 ##### 説明
@@ -11810,10 +11991,34 @@ Args:
     path: "/services/data/..." から始まるパス。
     body: JSON で送る辞書（省略可）。
     component: 計測での呼び出し元の区別（"query" / "crud" / "report"）。
+    headers: この呼び出しだけ上書きする追加ヘッダー（省略可）。
+        セッションの既定ヘッダーと同名のキーはこの値が勝つ（``requests``
+        ライブラリの挙動）。``None`` のときは何も追加しない。
 
 Raises:
     SalesforceRequestError: API がエラーを返した場合。
     SalesforceConnectionError: ネットワークの問題で接続できない場合。
+
+#### `request_csv`
+
+```text
+def request_csv(self, method: str, path: str, component: str='other') -> tuple[str, dict]:
+```
+
+##### 説明
+
+CSV 形式のレスポンスを返す API を呼ぶ（Bulk API 2.0 の結果取得専用）。
+
+``request()`` と同じ 5xx/429 リトライ・401 再認証を共有するため、
+Accept ヘッダーだけ text/csv に差し替えて ``request()`` を呼ぶ薄いラッパー。
+
+Args:
+    method: HTTP メソッド。
+    path: "/services/data/..." から始まるパス。
+    component: 計測での呼び出し元の区別。
+
+Returns:
+    (CSV本文の文字列, レスポンスヘッダーの辞書)。本文が無ければ空文字。
 
 #### `data_path`
 

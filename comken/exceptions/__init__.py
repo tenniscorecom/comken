@@ -66,7 +66,9 @@ ComkenError
 │   ├── SalesforceReportIDNotFoundError
 │   ├── SalesforceSiteNotFoundError
 │   ├── SalesforceReportExecutionError
-│   └── SalesforceReportAccessDeniedError
+│   ├── SalesforceReportAccessDeniedError
+│   ├── SalesforceBulkQueryFailedError
+│   └── SalesforceBulkQueryTimeoutError
 ├── BrowserError
 │   ├── DriverStartError
 │   ├── BrowsersNotStartedError
@@ -292,6 +294,8 @@ from comken.exceptions.rpa import (
 )
 from comken.exceptions.salesforce import (
     SalesforceAuthError,
+    SalesforceBulkQueryFailedError,
+    SalesforceBulkQueryTimeoutError,
     SalesforceConnectionError,
     SalesforceCredentialRotationError,
     SalesforceError,
@@ -402,6 +406,8 @@ __all__ = [
     "SalesforceReportExecutionError",
     "SalesforceReportAccessDeniedError",
     "SalesforceSiteNotFoundError",
+    "SalesforceBulkQueryFailedError",
+    "SalesforceBulkQueryTimeoutError",
     "BrowserError",
     "DriverStartError",
     "BrowsersNotStartedError",

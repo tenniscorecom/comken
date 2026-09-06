@@ -28,6 +28,7 @@ Client Credentials Flow は `client_secret` だけでアクセストークンを
 設計の背景は docs/開発/salesforce-authentication.md を参照。
 
     SalesforceBase         1組織ぶんの API クライアントの土台（組織クラスで継承する）
+    BulkQueryAPI           Bulk API 2.0 のクエリジョブ。SalesforceBase.bulk_query が持っている
     ReportAPI              レポート API。SalesforceBase.report が持っている
     RefreshTokenOAuth      Authorization Code + Refresh Token Flow（既定）
     ClientCredentialsOAuth Client Credentials Flow（開発時に auth= で渡す）
@@ -39,6 +40,7 @@ Client Credentials Flow は `client_secret` だけでアクセストークンを
 
 from types import ModuleType
 
+from comken.toolbox.salesforce.bulk_query import BulkQueryAPI
 from comken.toolbox.salesforce.metrics import (
     APIMetrics,
     APIUsage,
@@ -93,6 +95,7 @@ def __dir__() -> list[str]:
 __all__ = [
     "SalesforceBase",
     "ReportAPI",
+    "BulkQueryAPI",
     "ClientCredentialsOAuth",
     "RefreshTokenOAuth",
     "APIMetrics",

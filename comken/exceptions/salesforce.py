@@ -237,3 +237,38 @@ class SalesforceReportAccessDeniedError(SalesforceError):
             "レポートへのアクセス権・組織の Edition が Reports and Dashboards "
             "REST API に対応しているかを確認してもらってください。"
         )
+
+
+class SalesforceBulkQueryFailedError(SalesforceError):
+    """Bulk API のクエリジョブが失敗して終わった（Failed / Aborted）
+
+    発生箇所: comken.toolbox.salesforce.bulk_query.BulkQueryAPI.run()
+
+    対処:
+        表示されたエラー内容を確認する。SOQL の構文・参照項目・
+        実行ユーザーの権限を見直す
+    """
+
+    def __init__(self, job_id: str, state: str, error_message: str) -> None:
+        super().__init__(
+            f"Salesforce の Bulk API クエリジョブが失敗しました（状態: {state}）: {job_id}\n"
+            f"{error_message}\n"
+            "SOQL の構文・参照項目・実行ユーザーの権限を確認してください。"
+        )
+
+
+class SalesforceBulkQueryTimeoutError(SalesforceError):
+    """Bulk API のクエリジョブが制限時間内に終わらなかった
+
+    発生箇所: comken.toolbox.salesforce.bulk_query.BulkQueryAPI.run()
+
+    対処:
+        timeout_seconds を長くするか、クエリの対象を絞って再実行する
+    """
+
+    def __init__(self, job_id: str, timeout_seconds: float) -> None:
+        super().__init__(
+            f"Salesforce の Bulk API クエリジョブが {timeout_seconds} 秒以内に"
+            f"終わりませんでした: {job_id}\n"
+            "timeout_seconds を長くするか、クエリの対象を絞って再実行してください。"
+        )

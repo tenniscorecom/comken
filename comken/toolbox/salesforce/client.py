@@ -91,6 +91,7 @@ class SalesforceBase:
 
     Attributes:
         report: レポート API（sf.report.get(...)）。
+        bulk_query: Bulk API 2.0 のクエリジョブ（sf.bulk_query.run(...)）。
         metrics: API 呼び出しの計測（sf.metrics.log_summary()）。
     """
 
@@ -160,6 +161,12 @@ class SalesforceBase:
         self.auth = auth
         self.metrics = APIMetrics(org_name or type(self).__name__)
         self.report = ReportAPI(self)
+        # BulkQueryAPI は request() を共有するので遅延 import で読み込み、
+        # requests 非依存の経路でも comken.toolbox.salesforce.client だけを
+        # import したくなったときに循環 import を避ける
+        from comken.toolbox.salesforce.bulk_query import BulkQueryAPI
+
+        self.bulk_query = BulkQueryAPI(self)
 
         self._session = requests.Session()
         self._access_token = ""
@@ -405,6 +412,7 @@ class SalesforceBase:
         path: str,
         body: dict | None = None,
         component: str = "other",
+        headers: dict[str, str] | None = None,
     ) -> tuple[dict | list | str | None, dict]:
         """REST API を呼び、(レスポンス本文, レスポンスヘッダー) を返す。
 
@@ -417,6 +425,9 @@ class SalesforceBase:
             path: "/services/data/..." から始まるパス。
             body: JSON で送る辞書（省略可）。
             component: 計測での呼び出し元の区別（"query" / "crud" / "report"）。
+            headers: この呼び出しだけ上書きする追加ヘッダー（省略可）。
+                セッションの既定ヘッダーと同名のキーはこの値が勝つ（``requests``
+                ライブラリの挙動）。``None`` のときは何も追加しない。
 
         Raises:
             SalesforceRequestError: API がエラーを返した場合。
@@ -427,7 +438,7 @@ class SalesforceBase:
         # その下のループは 5xx/429 の一時障害だけを拾うので、初回送信と
         # 合計で最大 MAX_ATTEMPTS 回になる（試行 1..MAX_ATTEMPTS-1 = 2 回まで再試行）。
         # pyright から見ても response は Optional にならない
-        response = self._send(method, self._request_url(path), body)
+        response = self._send(method, self._request_url(path), body, headers)
 
         for attempt in range(1, MAX_ATTEMPTS):
             reason = _retry_reason(response.status_code)
@@ -446,7 +457,7 @@ class SalesforceBase:
             self.metrics.record_retry(component, reason)
             time.sleep(RETRY_WAIT_SECONDS * attempt)
             # instance_url は再認証で変わりうるので、毎回組み立て直す
-            response = self._send(method, self._request_url(path), body)
+            response = self._send(method, self._request_url(path), body, headers)
 
         # 401 の再認証は試行回数を消費しない別ルート。一時障害のリトライ中に
         # 出ても、ループの外で1回だけ拾う（2回続けて 401 になるのは設定の問題
@@ -455,7 +466,7 @@ class SalesforceBase:
             logger.debug("401 を受け取ったのでトークンを取り直します: %s", path)
             self.metrics.record_retry(component, RetryReason.REAUTH)
             self._authenticate()
-            response = self._send(method, self._request_url(path), body)
+            response = self._send(method, self._request_url(path), body, headers)
 
         # response は初回送信で必ず束縛済み
         is_error = response.status_code >= HTTP_BAD_REQUEST
@@ -470,6 +481,25 @@ class SalesforceBase:
 
         return self._body_of(response), dict(response.headers)
 
+    def request_csv(self, method: str, path: str, component: str = "other") -> tuple[str, dict]:
+        """CSV 形式のレスポンスを返す API を呼ぶ（Bulk API 2.0 の結果取得専用）。
+
+        ``request()`` と同じ 5xx/429 リトライ・401 再認証を共有するため、
+        Accept ヘッダーだけ text/csv に差し替えて ``request()`` を呼ぶ薄いラッパー。
+
+        Args:
+            method: HTTP メソッド。
+            path: "/services/data/..." から始まるパス。
+            component: 計測での呼び出し元の区別。
+
+        Returns:
+            (CSV本文の文字列, レスポンスヘッダーの辞書)。本文が無ければ空文字。
+        """
+        body, headers = self.request(
+            method, path, component=component, headers={"Accept": "text/csv"}
+        )
+        return (body if isinstance(body, str) else ""), headers
+
     def _request_url(self, path: str) -> str:
         """相対パスと Salesforce が返す絶対 URL の両方を送信用 URL にする。
 
@@ -482,10 +512,14 @@ class SalesforceBase:
         relative = urllib.parse.urlunsplit(("", "", parsed.path, parsed.query, ""))
         return f"{self._instance_url}{relative}"
 
-    def _send(self, method: str, url: str, body: dict | None) -> requests.Response:
+    def _send(
+        self, method: str, url: str, body: dict | None, headers: dict[str, str] | None = None
+    ) -> requests.Response:
         """HTTP リクエストを1回送る。"""
         try:
-            return self._session.request(method, url, json=body, timeout=self.TIMEOUT_SECONDS)
+            return self._session.request(
+                method, url, json=body, headers=headers, timeout=self.TIMEOUT_SECONDS
+            )
         except requests.exceptions.RequestException as e:
             raise SalesforceConnectionError(url, e) from e
 

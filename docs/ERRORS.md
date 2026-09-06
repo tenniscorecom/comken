@@ -129,6 +129,8 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `SalesforceReportExecutionError` | Salesforce 側でレポート実行に失敗した | Salesforce で同じレポートを直接実行し、表示された内容を管理者へ連絡する |
 | `SalesforceReportAccessDeniedError` | レポート API（Reports and Dashboards REST API）へのアクセスを拒否された | Salesforce 管理者に、実行ユーザー（Client Credentials では Run As ユーザー）について次を確認してもらう。1. Profile / Permission Set に「API Enabled」権限があるか2. 対象のレポート・レポートフォルダへのアクセス権があるか3. 組織の Edition・ライセンスが Reports and Dashboards REST APIに対応しているか（一部の制限ライセンスでは使えない） |
 | `SalesforceSiteNotFoundError` | URL のドメインに対応する組織が登録されていない | URL のドメインを見直す。新しい組織なら管理者へ連絡する（組織クラスの追加が要る） |
+| `SalesforceBulkQueryFailedError` | Bulk API のクエリジョブが失敗して終わった（Failed / Aborted） | 表示されたエラー内容を確認する。SOQL の構文・参照項目・実行ユーザーの権限を見直す |
+| `SalesforceBulkQueryTimeoutError` | Bulk API のクエリジョブが制限時間内に終わらなかった | timeout_seconds を長くするか、クエリの対象を絞って再実行する |
 | `MasterTableError` | Excel の管理表に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `MasterSheetNotDefinedError` | 管理表の場所が決まっていない | `load(パス)` のようにファイルを渡すか、クラスに PATH を書く（コードの直し方の話なので、非エンジニアが見た場合は管理者へ連絡する） |
 | `MasterColumnNotFoundError` | 管理表に必要な列（見出し）が無い | 管理表の1行目（見出し）を元に戻す。消してしまった場合は、メッセージに出ている「今ある見出し」と見比べて足す |

@@ -12,6 +12,8 @@ from comken.exceptions import (
     CredentialNotFoundError,
     InvalidCredentialNameError,
     SalesforceAuthError,
+    SalesforceBulkQueryFailedError,
+    SalesforceBulkQueryTimeoutError,
     SalesforceConnectionError,
     SalesforceExternalIDMissingError,
     SalesforceReportAccessDeniedError,
@@ -1049,3 +1051,178 @@ class TestApiMetrics:
         with caplog.at_level("INFO"):
             metrics.log_summary()
         assert "10.0%" in caplog.text
+
+
+class TestBulkQuery:
+    """Bulk API 2.0 Query ジョブの配線を HTTP モックで確認する。
+
+    各テストで、ジョブ作成 -> 状態確認（1回以上） -> 結果取得（1ページ以上）の順
+    でモックレスポンスを並べる。
+    """
+
+    JOB_ID = "750xx0000000001AAA"
+    SOQL = "SELECT Id, Name FROM Account"
+
+    def _csv_response(self, text, locator="null"):
+        """CSV ボディを持つモックレスポンスを作る。
+
+        Sforce-Locator ヘッダーを locator 引数で指定できる。
+        """
+        return _response(
+            text=text,
+            headers={"Content-Type": "text/csv", "Sforce-Locator": locator},
+        )
+
+    def test_run_returns_table_for_single_page(self):
+        """1 ページの通常系で、正しい Table を返せる。"""
+        created = _response(json_body={"id": self.JOB_ID, "state": "UploadComplete"})
+        complete = _response(json_body={"id": self.JOB_ID, "state": "JobComplete"})
+        csv = self._csv_response("Id,Name\n001xx,A\n001yy,B\n")
+
+        with (
+            _salesforce([created, complete, csv]) as (client, _, _),
+            patch("comken.toolbox.salesforce.bulk_query.time.sleep"),
+        ):
+            table = client.bulk_query.run(self.SOQL)
+
+        assert table.columns == ["Id", "Name"]
+        assert table.read_rows() == [
+            {"Id": "001xx", "Name": "A"},
+            {"Id": "001yy", "Name": "B"},
+        ]
+
+    def test_run_polls_until_complete(self):
+        """状態確認の 1 回目が InProgress で、2 回目で JobComplete になるケースで成功する。"""
+        created = _response(json_body={"id": self.JOB_ID, "state": "UploadComplete"})
+        in_progress = _response(json_body={"id": self.JOB_ID, "state": "InProgress"})
+        complete = _response(json_body={"id": self.JOB_ID, "state": "JobComplete"})
+        csv = self._csv_response("Id\n1\n")
+
+        with (
+            _salesforce([created, in_progress, complete, csv]) as (client, _, _),
+            patch("comken.toolbox.salesforce.bulk_query.time.sleep"),
+        ):
+            table = client.bulk_query.run(self.SOQL)
+
+        assert table.read_rows() == [{"Id": "1"}]
+
+    def test_run_raises_failed_error_when_job_fails(self):
+        """状態確認が Failed のとき
+        SalesforceBulkQueryFailedError を送出し、
+        errorMessage をメッセージに含む。"""
+        created = _response(json_body={"id": self.JOB_ID, "state": "UploadComplete"})
+        failed = _response(
+            json_body={
+                "id": self.JOB_ID,
+                "state": "Failed",
+                "errorMessage": "SOQL 構文エラー",
+            }
+        )
+        with (
+            _salesforce([created, failed]) as (client, _, _),
+            patch("comken.toolbox.salesforce.bulk_query.time.sleep"),
+            pytest.raises(SalesforceBulkQueryFailedError, match="SOQL 構文エラー"),
+        ):
+            client.bulk_query.run(self.SOQL)
+
+    def test_run_raises_timeout_error_when_job_stays_in_progress(self):
+        """timeout_seconds を 0 にするとループに入らず SalesforceBulkQueryTimeoutError になる。"""
+        created = _response(json_body={"id": self.JOB_ID, "state": "UploadComplete"})
+        in_progress = _response(json_body={"id": self.JOB_ID, "state": "InProgress"})
+
+        with (
+            _salesforce([created, in_progress]) as (client, _, _),
+            patch("comken.toolbox.salesforce.bulk_query.time.sleep"),
+            pytest.raises(SalesforceBulkQueryTimeoutError, match=r"0 秒"),
+        ):
+            client.bulk_query.run(self.SOQL, timeout_seconds=0)
+
+    def test_run_concatenates_multiple_pages_without_duplicating_header(self):
+        """複数ページの結果をヘッダー行重複なく結合する。"""
+        created = _response(json_body={"id": self.JOB_ID, "state": "UploadComplete"})
+        complete = _response(json_body={"id": self.JOB_ID, "state": "JobComplete"})
+        page1 = self._csv_response("Id,Name\n001,A\n002,B\n", locator="ABC123")
+        page2 = self._csv_response("Id,Name\n003,C\n004,D\n", locator="null")
+
+        with (
+            _salesforce([created, complete, page1, page2]) as (client, _, _),
+            patch("comken.toolbox.salesforce.bulk_query.time.sleep"),
+        ):
+            table = client.bulk_query.run(self.SOQL)
+
+        assert table.read_rows() == [
+            {"Id": "001", "Name": "A"},
+            {"Id": "002", "Name": "B"},
+            {"Id": "003", "Name": "C"},
+            {"Id": "004", "Name": "D"},
+        ]
+
+    def test_run_returns_columns_only_for_zero_results(self):
+        """0 件の場合はヘッダー行だけの CSV が返るので、列はあるが行数 0 の Table になる。"""
+        created = _response(json_body={"id": self.JOB_ID, "state": "UploadComplete"})
+        complete = _response(json_body={"id": self.JOB_ID, "state": "JobComplete"})
+        csv = self._csv_response("Id,Name\n")
+
+        with (
+            _salesforce([created, complete, csv]) as (client, _, _),
+            patch("comken.toolbox.salesforce.bulk_query.time.sleep"),
+        ):
+            table = client.bulk_query.run(self.SOQL)
+
+        assert table.columns == ["Id", "Name"]
+        assert table.read_rows() == []
+
+    def test_run_csv_writes_csv_file(self, tmp_path):
+        """run_csv() は run() の結果をそのまま CSV へ書き出す。"""
+        created = _response(json_body={"id": self.JOB_ID, "state": "UploadComplete"})
+        complete = _response(json_body={"id": self.JOB_ID, "state": "JobComplete"})
+        csv = self._csv_response("Id,Name\n001,A\n")
+        path = tmp_path / "bulk.csv"
+
+        with (
+            _salesforce([created, complete, csv]) as (client, _, _),
+            patch("comken.toolbox.salesforce.bulk_query.time.sleep"),
+        ):
+            returned_path = client.bulk_query.run_csv(self.SOQL, path)
+
+        assert returned_path == path
+        with CSV(path, read_only=True) as csv_file:
+            assert csv_file.read() == [
+                {"Id": "001", "Name": "A"},
+            ]
+
+    def test_request_headers_argument_is_passed_to_session(self):
+        """headers 引数を渡したとき、
+        session.request の headers 引数にも渡される。
+
+        1 ページ の run() で session.request が 3 回呼ばれる。
+        リスト 2 回目 (result) だけ Accept: text/csv が付く。
+        """
+        created = _response(json_body={"id": self.JOB_ID, "state": "UploadComplete"})
+        complete = _response(json_body={"id": self.JOB_ID, "state": "JobComplete"})
+        csv = self._csv_response("Id\n1\n")
+
+        with (
+            _salesforce([created, complete, csv]) as (client, session, _),
+            patch("comken.toolbox.salesforce.bulk_query.time.sleep"),
+        ):
+            client.bulk_query.run(self.SOQL)
+
+        headers_list = [call[1].get("headers") for call in session.request.call_args_list]
+        # ジョブ作成 (POST) と状態確認 (GET) は headers なし
+        assert headers_list[0] is None, "ジョブ作成は headers を渡さない"
+        assert headers_list[1] is None, "状態確認も headers を渡さない"
+        # 結果取得 (GET) だけ CSV ヘッダーを付ける
+        assert headers_list[2] == {"Accept": "text/csv"}
+
+    def test_request_csv_returns_csv_body_and_headers(self):
+        """request_csv() は CSV 文字列とレスポンスヘッダーをそのまま返す。"""
+        csv = self._csv_response("Id,Name\n001,A\n", locator="XYZ999")
+
+        with _salesforce([csv]) as (client, _, _):
+            text, headers = client.request_csv(
+                "GET", f"{DATA_PREFIX}/jobs/query/{self.JOB_ID}/results"
+            )
+
+        assert text == "Id,Name\n001,A\n"
+        assert headers["Sforce-Locator"] == "XYZ999"
