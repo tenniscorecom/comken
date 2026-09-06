@@ -107,6 +107,13 @@ class TestDataLoaderCLI:
         """0 以外の終了コードだと ``DataLoaderExecutionError``。stdout / stderr が残る。"""
         launcher_source = (
             "import sys\n"
+            # 疑似 launcher 自身の stdout/stderr を明示的に UTF-8 にする。
+            # CI（GitHub Actions の Windows ランナー）は既定の文字コードが
+            # UTF-8 でないことがあり、指定しないと日本語の print() 自体が
+            # UnicodeEncodeError で落ち、意図した終了コード 7 に届く前に
+            # Python の既定終了コード 1 で終わってしまう
+            "sys.stdout.reconfigure(encoding='utf-8', errors='replace')\n"
+            "sys.stderr.reconfigure(encoding='utf-8', errors='replace')\n"
             "print('何かの標準出力', file=sys.stdout)\n"
             "print('何かの標準エラー', file=sys.stderr)\n"
             "sys.exit(7)\n"

@@ -153,6 +153,14 @@ class DataLoaderCLI:
                 cwd=None if cwd is None else str(cwd),
                 capture_output=True,
                 text=True,
+                # デコードに使う文字コードを明示する。text=True 単体だと
+                # OS のロケール既定（Windows では非 UTF-8 のことがある）で
+                # 出力を decode するため、Data Loader が想定外の文字コードで
+                # 出力すると decode 自体が例外になり、本来の失敗理由が
+                # UnicodeDecodeError に隠れてしまう。errors="replace" にして、
+                # 診断用の出力を取り込む処理自体が失敗しないようにする。
+                encoding="utf-8",
+                errors="replace",
                 timeout=self._timeout_seconds,
             )
         except subprocess.TimeoutExpired as e:
