@@ -203,6 +203,16 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 |---|---|---|
 | `WindowNotFoundError` | 指定したウィンドウが見つからない | 対象ウィンドウが開いているか、タイトル（完全一致）が想定どおりかを確認する |
 
+## Data Loader のエラー
+
+| エラー名 | 意味 | 自分でできる対処 |
+|---|---|---|
+| `DataLoaderError` | Data Loader の実行に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
+| `DataLoaderLauncherNotFoundError` | Data Loader の実行ファイルが見つからない | ``launcher_path`` が正しいか、Data Loader がインストールされているか確認する。バージョンによってバッチファイル名や実行可能jarの位置が違うので、実際にインストールされたフォルダをエクスプローラーで開いて確かめる |
+| `DataLoaderTimeoutError` | Data Loader の実行が制限時間内に終わらなかった | 処理対象の件数を減らすか、``timeout_seconds`` を長くする。プロセスがハングしている場合はタスクマネージャーから Data Loader のプロセスを終了させる |
+| `DataLoaderExecutionError` | Data Loader が 0 以外の終了コードで終わった | 表示された標準出力・標準エラー出力を確認する。``config.properties``・``process-conf.xml`` の設定を見直す。よくある原因はログイン情報の誤り、SOQL のフィールド名不一致、書き出し先パスへの権限不足 |
+| `DataLoaderResultFileMissingError` | 指定した成功 / エラー CSV のパスにファイルが無い | ``config.properties`` の出力先パスと、``success_csv`` / ``error_csv`` に渡したパスが一致しているか確認する。出力先が相対パスで書かれている場合は、Data Loader を実行したカレントディレクトリから見たパスになる点にも注意する |
+
 ## 分類（まとめて捕捉する用）
 
 次の名前は、似たエラーをプログラム側でまとめて扱うための分類です。

@@ -119,7 +119,7 @@ ComkenError
 │   ├── HolidayCalendarSourceError
 │   │   └── HolidayCalendarFormatError
 │   └── BusinessDayNotFoundError
-└── DownloaderError
+├── DownloaderError
 │   ├── HistoryWriteError
 │   ├── HistoryLockTimeoutError
 │   ├── HistoryHeaderMismatchError
@@ -137,6 +137,11 @@ ComkenError
 │   ├── ScheduleWeekdayInvalidError
 │   ├── ScheduleRowValueError
 │   └── ScheduleDuplicateKeyError
+└── DataLoaderError
+│   ├── DataLoaderLauncherNotFoundError
+│   ├── DataLoaderTimeoutError
+│   ├── DataLoaderExecutionError
+│   └── DataLoaderResultFileMissingError
 
 カテゴリ基底クラスはまとめて捕捉するために使い、直接送出しない。
 """
@@ -200,6 +205,13 @@ from comken.exceptions.csv import (
     CSVInvalidHeaderError,
     CSVRowLengthError,
     EncodingDetectionError,
+)
+from comken.exceptions.dataloader import (
+    DataLoaderError,
+    DataLoaderExecutionError,
+    DataLoaderLauncherNotFoundError,
+    DataLoaderResultFileMissingError,
+    DataLoaderTimeoutError,
 )
 from comken.exceptions.downloader import (
     CachedReportNotFoundError,
@@ -436,6 +448,11 @@ __all__ = [
     "ScheduleWeekdayInvalidError",
     "ScheduleRowValueError",
     "ScheduleDuplicateKeyError",
+    "DataLoaderError",
+    "DataLoaderLauncherNotFoundError",
+    "DataLoaderTimeoutError",
+    "DataLoaderExecutionError",
+    "DataLoaderResultFileMissingError",
     "TransferDestinationMultipleMatchError",
     "TableNotOpenError",
     "TransferDestinationMissingError",
