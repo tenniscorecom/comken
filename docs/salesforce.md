@@ -52,7 +52,7 @@ API クライアント側は認証方式を知らずに済む。
 
 ```python
 from comken.toolbox.credentials import save_credential
-from comken.toolbox.salesforce.oauth_refresh import RefreshTokenOAuth
+from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth
 from comken.toolbox.salesforce.sites import Sandbox
 
 PREFIX = "sandbox"  # DPAPI に保存したときのキー名の頭

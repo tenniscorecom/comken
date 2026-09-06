@@ -35,7 +35,7 @@ import argparse
 import sys
 
 from comken.exceptions import ComkenError
-from comken.toolbox.salesforce.rotation import (
+from comken.toolbox.salesforce.auth.rotation import (
     ROTATION_COMPONENT,
     SalesforceCredentialRotator,
     _staged_credentials_of,
@@ -157,7 +157,7 @@ def _run_rotate(args: argparse.Namespace) -> None:
 def _stage_only(args: argparse.Namespace) -> None:
     """新しい secret を発行するところまでで止める（切り替えない）。"""
     with _open(args) as sf:
-        from comken.toolbox.salesforce.rotation import _consumer_id_of
+        from comken.toolbox.salesforce.auth.rotation import _consumer_id_of
 
         credentials, _ = sf.request(
             "GET",

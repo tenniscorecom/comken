@@ -17,7 +17,7 @@ INSTANCE_URL = "https://instance.my.salesforce.com"
 
 # 認証は必ずここを通るので、差し替え先はこの1本だけ。毎回フルパスを書くと
 # 行が長くなるうえ、モジュールを移したときの直し漏れが起きやすい
-_REQUESTS_POST = "comken.toolbox.salesforce.oauth_refresh.requests.post"
+_REQUESTS_POST = "comken.toolbox.salesforce.auth.oauth_refresh.requests.post"
 
 
 class _TestSalesforce(SalesforceBase):

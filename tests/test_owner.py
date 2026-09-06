@@ -61,7 +61,7 @@ def _salesforce_http():
     with (
         patch("comken.toolbox.salesforce.client.requests.Session", return_value=session),
         patch(
-            "comken.toolbox.salesforce.oauth_credentials.requests.post",
+            "comken.toolbox.salesforce.auth.oauth_credentials.requests.post",
             return_value=_token_response(),
         ),
     ):
@@ -262,7 +262,7 @@ class TestSalesforceBaseOwner:
             CREDENTIAL_PREFIX = "test_org"
 
         with (
-            patch("comken.toolbox.salesforce.oauth_credentials.requests.post") as post,
+            patch("comken.toolbox.salesforce.auth.oauth_credentials.requests.post") as post,
             pytest.raises(SiteOwnerRequiredError),
         ):
             Org(auth=ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL))

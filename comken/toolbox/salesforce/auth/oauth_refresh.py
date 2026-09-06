@@ -1,4 +1,4 @@
-"""comken/toolbox/salesforce/oauth_refresh.py — Refresh Token Flow
+"""comken/toolbox/salesforce/auth/oauth_refresh.py — Refresh Token Flow
 
 初回に認可コードから ``refresh_token`` を取り、以降は ``refresh_token`` で
 アクセストークンを更新し続ける方式。Salesforce 側で refresh_token を

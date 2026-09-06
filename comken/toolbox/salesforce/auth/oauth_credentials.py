@@ -1,4 +1,4 @@
-"""comken/toolbox/salesforce/oauth_credentials.py — Client Credentials Flow
+"""comken/toolbox/salesforce/auth/oauth_credentials.py — Client Credentials Flow
 
 ``client_id`` と ``client_secret`` だけでアクセストークンを取りに行く方式。
 リフレッシュトークンを使わないため、運用負荷が低い（失効・再認可の手続きが要らない）。

@@ -281,7 +281,7 @@ python -m comken cred gui
 ブラウザで ECA に「comken がこの組織にアクセスしていい」と 1 回だけ承認する。
 
 ```powershell
-python -c "from comken.toolbox.credentials import Credentials; from comken.toolbox.salesforce.oauth_refresh import RefreshTokenOAuth; from comken.toolbox.salesforce.sites import Sandbox; prefix = Sandbox.CREDENTIAL_PREFIX; client_id = Credentials(prefix).client_id; url, _ = RefreshTokenOAuth.authorization_url(client_id, 'http://localhost:8080/callback', Sandbox.DOMAIN_URL); print(url)"
+python -c "from comken.toolbox.credentials import Credentials; from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth; from comken.toolbox.salesforce.sites import Sandbox; prefix = Sandbox.CREDENTIAL_PREFIX; client_id = Credentials(prefix).client_id; url, _ = RefreshTokenOAuth.authorization_url(client_id, 'http://localhost:8080/callback', Sandbox.DOMAIN_URL); print(url)"
 ```
 
 - 表示された URL をブラウザで開く
@@ -298,7 +298,7 @@ python -c "from comken.toolbox.credentials import Credentials; from comken.toolb
 （`<prefix>_refresh_token`）へ自動で DPAPI 保存される。書き戻し用の関数を毎回手書きする必要はない。
 
 ```powershell
-python -c "from comken.toolbox.credentials import Credentials; from comken.toolbox.salesforce.oauth_refresh import RefreshTokenOAuth; from comken.toolbox.salesforce.sites import Sandbox; prefix = Sandbox.CREDENTIAL_PREFIX; creds = Credentials(prefix); RefreshTokenOAuth.exchange_code(creds.client_id, creds.client_secret, input('code: '), 'http://localhost:8080/callback', Sandbox.DOMAIN_URL, prefix=prefix); print('refresh_token を DPAPI に保存しました')"
+python -c "from comken.toolbox.credentials import Credentials; from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth; from comken.toolbox.salesforce.sites import Sandbox; prefix = Sandbox.CREDENTIAL_PREFIX; creds = Credentials(prefix); RefreshTokenOAuth.exchange_code(creds.client_id, creds.client_secret, input('code: '), 'http://localhost:8080/callback', Sandbox.DOMAIN_URL, prefix=prefix); print('refresh_token を DPAPI に保存しました')"
 ```
 
 - `code:` プロンプトに 2 でメモした文字列を貼り付け

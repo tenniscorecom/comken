@@ -38,12 +38,12 @@ from comken.exceptions import (
 )
 from comken.runtime import dry_run_log, is_dry_run
 from comken.toolbox.csv import CSV
-from comken.toolbox.salesforce.metrics import APIMetrics, RetryReason
 
 # 既定は Refresh Token Flow。Client Credentials Flow は client_secret だけで
 # アクセストークンを取れてしまい、漏えいしたときに実行ユーザーとして操作されるため
 # 使わない（→ docs/開発/salesforce-authentication.md）。
-from comken.toolbox.salesforce.oauth_refresh import RefreshTokenOAuth
+from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth
+from comken.toolbox.salesforce.metrics import APIMetrics, RetryReason
 from comken.toolbox.salesforce.report import ReportAPI
 
 logger = logging.getLogger(__name__)

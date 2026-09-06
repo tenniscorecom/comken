@@ -64,9 +64,9 @@ except ImportError:
 # import 可能にするため
 _LAZY_TARGETS: dict[str, str] = {
     "SalesforceBase": "comken.toolbox.salesforce.client",
-    "ClientCredentialsOAuth": "comken.toolbox.salesforce.oauth_credentials",
-    "RefreshTokenOAuth": "comken.toolbox.salesforce.oauth_refresh",
-    "SalesforceCredentialRotator": "comken.toolbox.salesforce.rotation",
+    "ClientCredentialsOAuth": "comken.toolbox.salesforce.auth.oauth_credentials",
+    "RefreshTokenOAuth": "comken.toolbox.salesforce.auth.oauth_refresh",
+    "SalesforceCredentialRotator": "comken.toolbox.salesforce.auth.rotation",
 }
 
 

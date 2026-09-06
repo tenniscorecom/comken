@@ -112,7 +112,7 @@ def _salesforce(responses, token_responses=None):
     with (
         patch("comken.toolbox.salesforce.client.requests.Session", return_value=session),
         patch(
-            "comken.toolbox.salesforce.oauth_credentials.requests.post", side_effect=tokens
+            "comken.toolbox.salesforce.auth.oauth_credentials.requests.post", side_effect=tokens
         ) as post,
     ):
         client = _TestSalesforceBase(
@@ -125,7 +125,7 @@ class TestClientCredentialsOAuth:
     def test_posts_client_credentials_to_my_domain(self):
         """My Domain のトークンエンドポイントへ client_credentials を POST する。"""
         with patch(
-            "comken.toolbox.salesforce.oauth_credentials.requests.post",
+            "comken.toolbox.salesforce.auth.oauth_credentials.requests.post",
             return_value=_token_response(),
         ) as post:
             token, instance_url = ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL).fetch()
@@ -143,7 +143,7 @@ class TestClientCredentialsOAuth:
     def test_trailing_slash_in_domain_url_is_tolerated(self):
         """domain_url の末尾スラッシュがあっても URL が壊れない。"""
         with patch(
-            "comken.toolbox.salesforce.oauth_credentials.requests.post",
+            "comken.toolbox.salesforce.auth.oauth_credentials.requests.post",
             return_value=_token_response(),
         ) as post:
             ClientCredentialsOAuth("CID", "CSECRET", f"{DOMAIN_URL}/").fetch()
@@ -153,7 +153,7 @@ class TestClientCredentialsOAuth:
         """認証失敗のメッセージに Run As と My Domain の確認手順が入る。"""
         with (
             patch(
-                "comken.toolbox.salesforce.oauth_credentials.requests.post",
+                "comken.toolbox.salesforce.auth.oauth_credentials.requests.post",
                 return_value=_response(400, json_body={"error": "invalid_grant"}),
             ),
             pytest.raises(SalesforceAuthError, match=r"(?s)Run As.*My Domain"),
@@ -164,7 +164,7 @@ class TestClientCredentialsOAuth:
         """通信できない場合は SalesforceConnectionError になる。"""
         with (
             patch(
-                "comken.toolbox.salesforce.oauth_credentials.requests.post",
+                "comken.toolbox.salesforce.auth.oauth_credentials.requests.post",
                 side_effect=requests.exceptions.ConnectTimeout("timed out"),
             ),
             pytest.raises(SalesforceConnectionError, match="接続できませんでした"),
@@ -891,7 +891,7 @@ class TestSites:
         with (
             patch("comken.toolbox.salesforce.client.requests.Session", return_value=session),
             patch(
-                "comken.toolbox.salesforce.oauth_credentials.requests.post",
+                "comken.toolbox.salesforce.auth.oauth_credentials.requests.post",
                 return_value=_token_response(),
             ),
         ):
@@ -956,7 +956,7 @@ class TestCredentialsInitialization:
         with (
             patch("comken.toolbox.salesforce.client.requests.Session", return_value=session),
             patch(
-                "comken.toolbox.salesforce.oauth_refresh.requests.post",
+                "comken.toolbox.salesforce.auth.oauth_refresh.requests.post",
                 return_value=_token_response(),
             ) as post,
         ):
@@ -984,7 +984,7 @@ class TestCredentialsInitialization:
         with (
             patch("comken.toolbox.salesforce.client.requests.Session", return_value=session),
             patch(
-                "comken.toolbox.salesforce.oauth_refresh.requests.post",
+                "comken.toolbox.salesforce.auth.oauth_refresh.requests.post",
                 return_value=_token_response(),
             ) as post,
         ):
