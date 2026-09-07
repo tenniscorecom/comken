@@ -180,7 +180,7 @@ class ReportAPI:
 
     `SalesforceBase` が `report` 属性として持っている。単体では作らない。
 
-        with Sandbox() as sf:
+        with Solution() as sf:
             rows = sf.report.get("00O000000000001")
     """
 
@@ -418,7 +418,7 @@ class ReportAPI:
 
         利用例（何十件ものレポートをまとめて CSV へ落とす）:
 
-            with Sandbox() as sf:
+            with Solution() as sf:
                 for report_id in report_ids:
                     sf.report.describe_fields_csv(report_id, f"fields_{report_id}.csv")
 

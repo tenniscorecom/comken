@@ -4,15 +4,15 @@
 共通の操作（SOQL・CRUD・レポート・計測）は `SalesforceBase` が持っているので、
 ここに書くのは**その組織でしか通じないもの**だけにする。
 
-    from comken.toolbox.salesforce.sites import Sandbox
+    from comken.toolbox.salesforce.sites import Solution
 
-    with Sandbox() as sf:
+    with Solution() as sf:
         rows = sf.report.get("00O...")
 
 URL と認証情報のシステム名はクラス定数なので、呼び出し側は何も渡さなくてよい。
 本番とテストで登録を切り替えるときだけシステム名を渡す:
 
-    with Sandbox(prefix=config.SALESFORCE.CREDENTIAL_PREFIX) as sf:
+    with Solution(prefix=config.SALESFORCE.CREDENTIAL_PREFIX) as sf:
         ...
 
 client_id / client_secret は DPAPI から読む（`comken.toolbox.credentials`）ので、
@@ -22,7 +22,7 @@ client_id / client_secret は DPAPI から読む（`comken.toolbox.credentials`�
 
 > [!warning] 組織名と URL は仮の値
 > **このリポジトリは公開しているので、実際の組織名・URL を書かない。**
-> `Sandbox` の `DOMAIN_URL` はダミーで、共有サーバーへ配置するときに
+> `Solution` の `DOMAIN_URL` はダミーで、共有サーバーへ配置するときに
 > 実際の値へ書き換える（Salesforce は comken 自前の `comken/toolbox/salesforce/`
 > を使うため、社内ライブラリ名は出てこない）。
 > 書き換えるのは各ファイルの `DOMAIN_URL`・`CREDENTIAL_PREFIX`・`REPORT_*` と、
@@ -33,16 +33,15 @@ from urllib.parse import urlsplit
 
 from comken.exceptions import SalesforceSiteNotFoundError
 from comken.toolbox.salesforce.client import SalesforceBase
-from comken.toolbox.salesforce.sites.developer import Developer
-from comken.toolbox.salesforce.sites.production import Production
-from comken.toolbox.salesforce.sites.sandbox import Sandbox
+from comken.toolbox.salesforce.sites.solution import Solution
+from comken.toolbox.salesforce.sites.solution_sandbox import SolutionSandbox
 
 # 登録済みの組織。URL からどの組織へつなぐかを引くのに使う。
 # **組織を増やしたらここにも足す。** 足し忘れると、その組織の URL だけが
 # SalesforceSiteNotFoundError になる（黙って別組織へつなぐことはない）
-SITES: tuple[type[SalesforceBase], ...] = (Sandbox, Production, Developer)
+SITES: tuple[type[SalesforceBase], ...] = (Solution, SolutionSandbox)
 
-__all__ = ["SITES", "Sandbox", "Production", "Developer", "site_for"]
+__all__ = ["SITES", "Solution", "SolutionSandbox", "site_for"]
 
 
 def site_for(url: str) -> type[SalesforceBase]:
@@ -53,8 +52,8 @@ def site_for(url: str) -> type[SalesforceBase]:
     レポートも取れるようにする。組織を人が選ぶ列を作ると、URL と食い違ったときに
     別組織へ問い合わせて「レポートが見つからない」という分かりにくい失敗になる。
 
-        site_for("https://example--sandbox.sandbox.my.salesforce.com/lightning/...")
-        # → Sandbox
+        site_for("https://example.my.salesforce.com/lightning/...")
+        # → Solution
 
     Args:
         url: レポートを開いたときのアドレス。**ドメインを含む URL であること**

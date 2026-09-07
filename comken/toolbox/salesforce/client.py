@@ -5,12 +5,12 @@ r"""comken/toolbox/salesforce/client.py — Salesforce API クライアント
 サブクラスがクラス定数として持ち、呼び出し側は組織クラスを作るだけでつながる。
 
     # 組織クラス側（sites/）
-    class Sandbox(SalesforceBase):
-        DOMAIN_URL = "https://example--sandbox.sandbox.my.salesforce.com"
-        CREDENTIAL_PREFIX = "sandbox"
+    class Solution(SalesforceBase):
+        DOMAIN_URL = "https://example.my.salesforce.com"
+        CREDENTIAL_PREFIX = "solution"
 
     # 使う側
-    with Sandbox() as sf:
+    with Solution() as sf:
         rows = sf.query("SELECT Id, Name FROM Application__c")
 
 認証・レポート・計測は継承せず**持たせている**。認証は「トークンを取る部品」で
@@ -84,7 +84,7 @@ class SalesforceBase:
     認証情報は DPAPI から読むので、呼び出し側のコードに秘密の値が現れない。
 
     使い方:
-        with Sandbox() as sf:
+        with Solution() as sf:
             records = sf.query("SELECT Id, Name FROM Account")
             rows = sf.report.get("00O000000000001")
             sf.metrics.log_summary()
@@ -133,7 +133,7 @@ class SalesforceBase:
             org_name: 計測ログに出す組織の呼び名。省略時はクラス名を使う。
             auth: 認証方式を差し替えるときに渡す。**クラスを渡せば**
                 DPAPI から組み立てる（値を手で並べなくてよい）。
-                    Sandbox(auth=ClientCredentialsOAuth)   # 開発中だけ
+                    Solution(auth=ClientCredentialsOAuth)   # 開発中だけ
                 作成済みのインスタンスを渡すこともできる（テスト・JWT 等）。
                 その場合だけ prefix / domain_url は使われない。
 
@@ -210,7 +210,7 @@ class SalesforceBase:
             return
         logger.info("site=%s owner=%s defined=%s", cls.__name__, cls.OWNER, cls.__module__)
 
-    # 組織クラスのまま返す（with Sandbox() as sf: で組織固有メソッドの補完が効く）
+    # 組織クラスのまま返す（with Solution() as sf: で組織固有メソッドの補完が効く）
     def __enter__(self) -> Self:
         return self
 

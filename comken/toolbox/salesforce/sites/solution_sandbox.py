@@ -1,4 +1,4 @@
-"""comken/toolbox/salesforce/sites/production.py — Production 組織
+"""comken/toolbox/salesforce/sites/solution_sandbox.py — Solution Sandbox 組織
 
 ※ URL は**ダミー**。配置するときに実際の値へ書き換える（詳細は sites/__init__.py）。
 
@@ -9,11 +9,11 @@
 from comken.toolbox.salesforce.client import SalesforceBase
 
 
-class Production(SalesforceBase):
-    """Production 組織のクライアント。
+class SolutionSandbox(SalesforceBase):
+    """Solution Sandbox 組織のクライアント。
 
     使い方:
-        with Production() as sf:
+        with SolutionSandbox() as sf:
             rows = sf.report.get("00O...")
     """
 
@@ -21,14 +21,14 @@ class Production(SalesforceBase):
     # プロジェクト側で定義した組織クラスは「プロジェクト名 / 担当者」の形式で書く。
     OWNER = "comken"
 
-    # My Domain の URL。Production は「<組織>.my」の形になる。
+    # My Domain の URL。Sandbox は「<組織>--<サンドボックス名>.sandbox」の形になる。
     # 組織で固定なので config.ini には置かない（環境で変わる値だけを config.ini へ）
     # TODO: 配置するときに実際の URL へ置き換える
-    DOMAIN_URL = "https://example.my.salesforce.com"
+    DOMAIN_URL = "https://example--sandbox.sandbox.my.salesforce.com"
 
-    # 認証情報のキー名の頭。DPAPI には production_client_id / production_client_secret で入る。
-    # 別の登録に切り替えるときだけ Production(prefix=...) で渡す
-    CREDENTIAL_PREFIX = "production"
+    # 認証情報のキー名の頭。DPAPI には solution_sandbox_client_id など入る。
+    # 別の登録に切り替えるときだけ SolutionSandbox(prefix=...) で渡す
+    CREDENTIAL_PREFIX = "solution_sandbox"
 
     # 組織が対応している API バージョン。既定と違うときだけ上書きする
     # API_VERSION = "67.0"

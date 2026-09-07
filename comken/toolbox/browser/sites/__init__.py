@@ -12,7 +12,7 @@
 > [!warning] サイト名と URL は仮の値
 > **このリポジトリは公開しているので、実際の社内システム名・URL を書かない。**
 > 共有サーバーへ配置するときに、各ファイルの実クラス名・`NAME`・`BASE_URL` を
-> 実際の値へ書き換える（`comken/toolbox/salesforce/sites/` の `Sandbox` と同じ扱い）。
+> 実際の値へ書き換える（`comken/toolbox/salesforce/sites/` の `Solution` と同じ扱い）。
 > 書き換えた値は組織内の配布物に置き、**このリポジトリへ書き戻さないこと。**
 
 昇格の手順:

@@ -60,7 +60,7 @@ class BulkQueryAPI:
 
     ``SalesforceBase`` が ``bulk_query`` 属性として持っている。単体では作らない。
 
-        with Sandbox() as sf:
+        with Solution() as sf:
             table = sf.bulk_query.run("SELECT Id, Name FROM Account")
 
     ``SalesforceBase.query()``（同期 SOQL・ページング対応済み）でも全件は

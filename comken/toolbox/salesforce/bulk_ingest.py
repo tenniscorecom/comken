@@ -76,7 +76,7 @@ class BulkIngestAPI:
 
     ``SalesforceBase`` が ``bulk_ingest`` 属性として持っている。単体では作らない。
 
-        with Sandbox() as sf:
+        with Solution() as sf:
             result = sf.bulk_ingest.insert("Account", [{"Name": "テスト"}])
             if len(result.failed) > 0:
                 print(f"{len(result.failed)} 行が失敗しました")

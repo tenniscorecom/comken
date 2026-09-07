@@ -1,6 +1,5 @@
 r"""comken/toolbox/salesforce/cli.py — 接続と資格情報ローテーションの確認コマンド
 
-    python -m comken sf check
     python -m comken sf report --report-id 00O...
     python -m comken sf rotate --app-id 1CE... --stage-only
 
@@ -9,7 +8,8 @@ r"""comken/toolbox/salesforce/cli.py — 接続と資格情報ローテーショ
 もう動かない（入口は `python -m comken` に集約）。
 
 つなぎ先は組織クラス（`sites/`）の DOMAIN_URL と CREDENTIAL_PREFIX。
-別の組織・別の登録を試すときだけ `--domain` / `--prefix` で上書きする。
+`--domain` を指定したときは `site_for()` で URL から組織クラスを自動解決する。
+別の登録を試すときだけ `--prefix` で上書きする。
 
 client_id / client_secret は **DPAPI に登録したものを読む**。コマンドラインに秘密の値は渡さない。
 先に `python -m comken cred import 認証情報.json` で登録しておく。
@@ -21,7 +21,6 @@ External Client App の consumer secret を REST API から回せるか（＝ロ
 
 | コマンド | 何が起きるか |
 |---|---|
-| `check` | `/limits` の GET で接続確認（副作用なし） |
 | `report` | レポートを実行して行数と列名を表示する。読み取りだけ |
 | `rotate --stage-only` | **新しい secret が発行される**が、切り替えない |
 | `rotate` | DPAPI へ保存し Salesforce 側を切り替える。**旧 secret は猶予後に無効** |
@@ -40,7 +39,8 @@ from comken.toolbox.salesforce.auth.rotation import (
     SalesforceCredentialRotator,
     _staged_credentials_of,
 )
-from comken.toolbox.salesforce.sites import Sandbox
+from comken.toolbox.salesforce.client import SalesforceBase
+from comken.toolbox.salesforce.sites import SolutionSandbox, site_for
 
 # 値そのものは絶対に出さない。項目名と型だけを見せる。
 _SECRET_FIELDS = ("consumersecret", "consumerkey", "secret", "token", "password")
@@ -63,10 +63,6 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Salesforce への接続と、資格情報ローテーションの可否を確かめる",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
-
-    checker = subparsers.add_parser("check", help="接続できるか確かめる（副作用なし）")
-    _add_common_arguments(checker)
-    checker.set_defaults(run=_run_check)
 
     report = subparsers.add_parser("report", help="レポートを実行して行数と列名を見る")
     _add_common_arguments(report)
@@ -100,22 +96,18 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _open(args: argparse.Namespace) -> Sandbox:
-    """確認対象の組織へつなぐ。--domain / --prefix があればそちらを使う。"""
-    return Sandbox(domain_url=args.domain, prefix=args.prefix)
+def _open(args: argparse.Namespace) -> SalesforceBase:
+    """確認対象の組織へつなぐ。
 
-
-def _run_check(args: argparse.Namespace) -> None:
-    """``/limits`` を GET して接続を確認する（副作用なし）。
-
-    ``--app-id`` で ECA の consumerId まで踏み込む経路は v1.0.0 で削除した。
-    ECA の資格情報 API は ``client_id`` / ``client_secret`` / ``refresh_token``
-    を返さないため、SF 側の実際の値は画面で確認するしかなく、CLI で
-    ``consumerId`` だけ取れても用途が限られるため。
+    ``--domain`` を指定すると ``site_for()`` で登録済みの組織クラスを
+    自動解決する（組織ごとの挙動の違いを正しく反映するため）。
+    ``--domain`` を省略すると ``SolutionSandbox``（安全側）を既定にする。
+    ``--prefix`` はどちらの経路でも DPAPI のキー名だけを上書きする。
     """
-    with _open(args) as sf:
-        sf.request("GET", sf.data_path("/limits"), component=ROTATION_COMPONENT)
-        print(f"接続できました（API v{sf.API_VERSION}）")
+    if args.domain:
+        site_class = site_for(args.domain)
+        return site_class(domain_url=args.domain, prefix=args.prefix)
+    return SolutionSandbox(prefix=args.prefix)
 
 
 def _run_report(args: argparse.Namespace) -> None:
@@ -145,7 +137,7 @@ def _run_rotate(args: argparse.Namespace) -> None:
         rotator = SalesforceCredentialRotator(
             sf,
             app_id=args.app_id,
-            credential_prefix=args.prefix or Sandbox.CREDENTIAL_PREFIX,
+            credential_prefix=args.prefix or type(sf).CREDENTIAL_PREFIX,
             is_enabled=True,
             interval_days=0,  # 期限に関わらず、この場で実行する
         )

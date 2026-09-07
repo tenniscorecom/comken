@@ -33,10 +33,10 @@ Edge を自動で動かして、社内システムから情報を取ったり入
 | | Salesforce | ブラウザ |
 |---|---|---|
 | 土台（直接は使わない） | `SalesforceBase` | `SiteBase` |
-| 対象ごとのクラス | `Sandbox(SalesforceBase)` | `Kintai(SiteBase)` |
+| 対象ごとのクラス | `Solution(SalesforceBase)` | `Kintai(SiteBase)` |
 | 固有の値の置き場 | `DOMAIN_URL` / `CREDENTIAL_PREFIX` / `OWNER` | `NAME` / `BASE_URL` / `OPTIONS` / `OWNER` |
 | 機能は継承せず持たせる | `.auth` / `.report` / `.metrics` | `.to(画面クラス)` で画面を作る |
-| 単体で使う入口 | `with Sandbox() as sf:` | `with Kintai() as kintai:` |
+| 単体で使う入口 | `with Solution() as sf:` | `with Kintai() as kintai:` |
 | 複数まとめて扱う入口 | `sites/` の `site_for()` | `Browsers` |
 | 画面／機能の分割 | `.report` / `.metrics` | `Page` のサブクラス |
 
@@ -70,7 +70,7 @@ def main() -> None:
 `go_login()` でログイン画面へ、`login(...)` で次の画面へ。
 **変数名も画面の名前になる**ので、いまどこにいるかが読める。
 `LoginPage(session)` のように画面クラスへセッションを渡し直す必要はない。
-起動の形は Salesforce の `with Sandbox() as sf:` と同じ。
+起動の形は Salesforce の `with Solution() as sf:` と同じ。
 
 1行に繋げてもよい。一度きりの流れなら、こちらが短い。
 

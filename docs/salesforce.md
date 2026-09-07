@@ -5,13 +5,13 @@
 認証方式を社内へ説明するときは、公式資料と判断理由をまとめた
 [Salesforce authentication decisions](開発/salesforce-authentication.md) を参照する。
 
-背景: Salesforce Sandbox 1組織から、レポートとレコードを API で取得したい。
+背景: Salesforce Solution 組織 1つから、レポートとレコードを API で取得したい。
 本書には現行仕様と、保守に必要な設計理由だけを記載する。
 関連: [ライブラリ開発規約](開発/ライブラリ開発規約.md)
 
 > [!note] 組織名の書き方
 > このリポジトリは公開しているため、**実際の組織名・サイト名は書かない**。
-> 本書では `Sandbox` の仮名を使い、組織名・URL・レポート ID は配置時に書き換える
+> 本書では `Solution` の仮名を使い、組織名・URL・レポート ID は配置時に書き換える
 > （社内ライブラリの実名を書かないのと同じ扱い）。
 
 ---
@@ -25,7 +25,7 @@
 | どこ | 名前 | 例 |
 |---|---|---|
 | Salesforce の画面（ECA の設定） | **Consumer Key / Consumer Secret** | 画面からコピーする |
-| comken のコード・DPAPI のキー名 | **client_id / client_secret** | `sandbox_client_id` |
+| comken のコード・DPAPI のキー名 | **client_id / client_secret** | `solution_client_id` |
 | ローテーション API のレスポンス | **consumerKey / consumerSecret** | `rotation.py` が受け取る |
 
 comken の中は `client_id` / `client_secret` に統一している（OAuth の標準的な呼び名）。
@@ -44,8 +44,8 @@ Client Credentials Flow は `client_secret` だけでアクセストークンを
 
 | 使う場面 | 書き方 |
 |---|---|
-| 本番・通常 | `with Sandbox() as sf:` |
-| 開発中の動作確認 | `with Sandbox(auth=ClientCredentialsOAuth) as sf:`（クラスを渡すだけ） |
+| 本番・通常 | `with Solution() as sf:` |
+| 開発中の動作確認 | `with Solution(auth=ClientCredentialsOAuth) as sf:`（クラスを渡すだけ） |
 
 どちらも `fetch() -> (access_token, instance_url)` を実装しているので、
 API クライアント側は認証方式を知らずに済む。
@@ -53,9 +53,9 @@ API クライアント側は認証方式を知らずに済む。
 ```python
 from comken.toolbox.credentials import save_credential
 from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth
-from comken.toolbox.salesforce.sites import Sandbox
+from comken.toolbox.salesforce.sites import Solution
 
-PREFIX = "sandbox"  # DPAPI に保存したときのキー名の頭
+PREFIX = "solution"  # DPAPI に保存したときのキー名の頭
 
 def save_rotated_token(new_token: str) -> None:
     # ローテーションで返ってきた新しい refresh_token を DPAPI へ書き戻す
@@ -68,7 +68,7 @@ auth = RefreshTokenOAuth(
     client_secret="Require Secret for Refresh Token Flow が有効な場合のみ",
     on_refresh_token=save_rotated_token,
 )
-with Sandbox(auth=auth) as sf:
+with Solution(auth=auth) as sf:
     records = sf.query("SELECT Id FROM Account")
 ```
 
@@ -85,22 +85,22 @@ with Sandbox(auth=auth) as sf:
 
 ```python
 from comken.toolbox.salesforce import ClientCredentialsOAuth
-from comken.toolbox.salesforce.sites import Sandbox
+from comken.toolbox.salesforce.sites import Solution
 
-with Sandbox(auth=ClientCredentialsOAuth) as sf:      # クラスを渡すだけ
+with Solution(auth=ClientCredentialsOAuth) as sf:      # クラスを渡すだけ
     rows = sf.query("SELECT Id, Name FROM Account")
 ```
 
 **値は書かない。** クラスを渡すと、組織クラスの `DOMAIN_URL` と
-`CREDENTIAL_PREFIX` を使って DPAPI から読む（`sandbox_client_id` /
-`sandbox_client_secret`）。既定（`Sandbox()`）とまったく同じ経路で、
+`CREDENTIAL_PREFIX` を使って DPAPI から読む（`solution_client_id` /
+`solution_client_secret`）。既定（`Solution()`）とまったく同じ経路で、
 使う方式が違うだけ。
 
 | 書き方 | 認証方式 | DPAPI から読む項目 |
 |---|---|---|
-| `Sandbox()` | Refresh Token（既定） | `sandbox_client_id` / `sandbox_client_secret` / `sandbox_refresh_token` |
-| `Sandbox(auth=ClientCredentialsOAuth)` | Client Credentials（開発時） | `sandbox_client_id` / `sandbox_client_secret` |
-| `Sandbox(prefix="sandbox_test")` | 既定のまま | `sandbox_test_*` |
+| `Solution()` | Refresh Token（既定） | `solution_client_id` / `solution_client_secret` / `solution_refresh_token` |
+| `Solution(auth=ClientCredentialsOAuth)` | Client Credentials（開発時） | `solution_client_id` / `solution_client_secret` |
+| `Solution(prefix="solution_test")` | 既定のまま | `solution_test_*` |
 
 2方式は同じ `from_credentials()` / `fetch()` を持つので、
 共通の query・CRUD・report・metrics は認証方式に依存しない。
@@ -148,7 +148,7 @@ SalesforceBase                     HTTP の土台。_request() が唯一の通�
   .report   : ReportAPI            レポート API
   .query() / .get() / .insert() …  SOQL・CRUD
   │
-  └─ Sandbox(SalesforceBase)       URL・認証情報名・OWNER・組織固有の処理を持つ
+  └─ Solution(SalesforceBase)      URL・認証情報名・OWNER・組織固有の処理を持つ
 ```
 
 `OWNER` は「プロジェクト名 / 担当者」の形式で必ず書く（起動時に検査される）。
@@ -156,7 +156,7 @@ SalesforceBase                     HTTP の土台。_request() が唯一の通�
 [ライブラリ開発規約](開発/ライブラリ開発規約.md#サイト組織クラスを昇格させる基準) を参照。
 
 **なぜレポートを継承にしないか。** `ReportAPI` を `SalesforceBase` のサブクラスにすると、
-`Sandbox` は `ReportAPI` ではないためレポートを呼べず、多重継承に追い込まれる。
+`Solution` は `ReportAPI` ではないためレポートを呼べず、多重継承に追い込まれる。
 持たせる形なら `sf.report.get(...)` と `sf.query(...)` が同じインスタンスから出る。
 
 **なぜ認証を継承にしないか。** OAuth は「Salesforce の一種」ではなく「トークンを取る部品」。
@@ -172,15 +172,15 @@ SalesforceBase                     HTTP の土台。_request() が唯一の通�
 呼び出し側で組織と URL を取り違えず、組織の情報を1か所に集約できる。
 
 **なぜ入口を1つにしたか。** 認証情報は常に DPAPI から読むため、秘密を直接渡す入口と
-DPAPI から読む別コンストラクタを併存させる意味がない。通常は `Sandbox()` だけを使い、
+DPAPI から読む別コンストラクタを併存させる意味がない。通常は `Solution()` だけを使い、
 テストや JWT への差し替えに限って `auth=` を渡す。
 
 ### 使い方のイメージ
 
 ```python
-from comken.toolbox.salesforce.sites import Sandbox
+from comken.toolbox.salesforce.sites import Solution
 
-with Sandbox() as sf:
+with Solution() as sf:
     rows = sf.report.get("00O000000000001")
     ...
 ```
@@ -192,7 +192,7 @@ with Sandbox() as sf:
 from comken.toolbox.salesforce.report import report_id_from_url
 from comken.toolbox.salesforce.sites import site_for
 
-report_url = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O000000000001/view"
+report_url = "https://example.my.salesforce.com/lightning/r/Report/00O000000000001/view"
 site = site_for(report_url)
 report_id = report_id_from_url(report_url)
 
@@ -289,7 +289,7 @@ with site() as sf:
 しない方針（誤った候補を押し付けないことを優先するため）。
 
 ```python
-with Sandbox() as sf:
+with Solution() as sf:
     for report_id in report_ids:
         sf.report.describe_fields_csv(report_id, f"fields_{report_id}.csv")
 ```
@@ -321,9 +321,9 @@ HTTP タイムアウトに当たりやすい。そのような場合に Bulk API
 重いクエリでもタイムアウトしにくい。
 
 ```python
-from comken.toolbox.salesforce.sites import Sandbox
+from comken.toolbox.salesforce.sites import Solution
 
-with Sandbox() as sf:
+with Solution() as sf:
     # timeout_seconds の既定は600秒。大量データの抽出を想定
     table = sf.bulk_query.run("SELECT Id, Name FROM Account")
 
@@ -378,9 +378,9 @@ Bulk API 2.0 の Ingest ジョブを使う。Bulk Ingest は「ジョブを作�
 待つ非同期方式」のため、件数が増えてもタイムアウトしにくい。
 
 ```python
-from comken.toolbox.salesforce.sites import Sandbox
+from comken.toolbox.salesforce.sites import Solution
 
-with Sandbox() as sf:
+with Solution() as sf:
     # 1) 一括作成（insert）
     result = sf.bulk_ingest.insert(
         "Account",
@@ -470,13 +470,13 @@ HTTP 呼び出しが1回も発生せず、空の `BulkIngestResult` を返す。
 
 ```
 平文の JSON      →  取り込みコマンド  →  DPAPI 暗号化ファイル  →  コードから読む
-（一時的に置く）      （暗号化して取込）    （ユーザー×PC に紐付く）   Credentials("sandbox")
+（一時的に置く）      （暗号化して取込）    （ユーザー×PC に紐付く）   Credentials("solution")
                       平文は確認後に削除
 ```
 
 - 平文JSONをまとめて取り込む。配布時に手入力を挟まないため
-- JSON はシステム名ごとに項目をまとめる形式（`{"sandbox": {"client_id": ...}}`）にして、
-  `sandbox_client_id` というキー名に展開する。組織ごとに client_id / client_secret が
+- JSON はシステム名ごとに項目をまとめる形式（`{"solution": {"client_id": ...}}`）にして、
+  `solution_client_id` というキー名に展開する。組織ごとに client_id / client_secret が
   別なので、システム名で分けられる形が要る
 - 取り込みは**まとめて 1 回書く**。1 件ずつ保存すると件数ぶん復号と暗号化を繰り返し、
   途中で失敗すると一部だけ入った状態になる
@@ -513,22 +513,21 @@ HTTP 呼び出しが1回も発生せず、空の `BulkIngestResult` を返す。
 秘密の値はコマンドラインに渡さない。先に DPAPI へ登録し、そこから読ませる。
 
 ```bat
-:: 1. 登録（開いた画面で sandbox / client_id・client_secret を入れる。平文のファイルは作らない）
+:: 1. 登録（開いた画面で solution / client_id・client_secret を入れる。平文のファイルは作らない）
 python -m comken cred gui
 
 :: 2. つないでみる
-python -m comken sf check
 python -m comken sf report --report-id 00O...
 ```
 
-既定では `Sandbox.CREDENTIAL_PREFIX` の `sandbox_client_id` / `sandbox_client_secret` が
-自動で引かれる。別の登録を試すときだけ `--prefix` にシステム名を渡す。
+既定では `Solution.CREDENTIAL_PREFIX` の `solution_client_id` / `solution_client_secret` が
+自動で引かれる。`--domain` で URL を指定すれば `site_for()` が対応する組織クラスへ
+自動解決する。別の登録を試すときだけ `--prefix` にシステム名を渡す。
 **DPAPI は「登録した Windows ユーザー × その PC」
 でしか復号できない**ので、実際に動かす PC・アカウントで登録する。
 
 | コマンド | すること | Salesforce 側への影響 |
 |---|---|---|
-| `check` | 接続してみる（`/limits` の GET） | なし |
 | `report` | レポートを実行し、行数と列名を出す（`--rows N` で中身も） | なし（読むだけ） |
 | `rotate --stage-only` | 新しい secret を発行するところまで | **発行される**が切り替わらない |
 | `rotate` | DPAPI へ保存して切り替える | **旧 secret は猶予後に無効** |
@@ -548,9 +547,9 @@ v1.0.0 で `check --app-id` は削除済み（ECA の `consumerId` だけ取れ�
 （このフローはリフレッシュトークンを発行しないため、保管も更新も発生しない）。
 
 ```python
-from comken.toolbox.salesforce.sites import Sandbox
+from comken.toolbox.salesforce.sites import Solution
 
-with Sandbox() as sf:
+with Solution() as sf:
     accounts = sf.query("SELECT Id, Name FROM Account")    # 行数の上限なし・ページ送り自動
     new_id = sf.insert("Account", {"Name": "新規取引先"})
     sf.update("Account", record_id=new_id, data={"Name": "更新後"})
@@ -560,7 +559,7 @@ with Sandbox() as sf:
     sf.metrics.log_summary()                               # 使用量を最後にまとめて出す
 ```
 
-My Domain は `Sandbox.DOMAIN_URL` に置く。`login.salesforce.com` ではこのフローは動かない。
+My Domain は `Solution.DOMAIN_URL` に置く。`login.salesforce.com` ではこのフローは動かない。
 
 ### 事前に管理者へ依頼すること
 
@@ -591,16 +590,16 @@ rows = sf.query("SELECT Name, Amount FROM Opportunity WHERE CreatedDate > 2026-0
 ### 組織（サイト）ごとのクラス
 
 組織は My Domain の URL と固有処理をまとめるため、1組織につき1クラスにする。
-現在は Sandbox / Production / Developer 3組織の雛形が `comken/toolbox/salesforce/sites/` に入っている。
+現在は Solution / SolutionSandbox 2組織の雛形が `comken/toolbox/salesforce/sites/` に入っている。
 
 ```python
-from comken.toolbox.salesforce.sites import Sandbox
+from comken.toolbox.salesforce.sites import Solution
 
-with Sandbox() as sf:
+with Solution() as sf:
     rows = sf.report.get("00O...")
 
 # 別の DPAPI 登録へ切り替える場合だけ指定する
-with Sandbox(prefix="sandbox_test") as sf:
+with Solution(prefix="solution_test") as sf:
     rows = sf.report.get("00O...")
 ```
 
@@ -617,7 +616,7 @@ client_id / client_secret を読む（[credentials](credentials.md#credentials)�
 `SiteOwnerRequiredError` で止まる。
 計測の組織名は指定しなければクラス名になるので、ログで組織を見分けられる。
 
-**`Sandbox` と URL は仮の値。** このリポジトリは公開しているため、
+**`Solution` と URL は仮の値。** このリポジトリは公開しているため、
 実際の組織名や値は書かず、配置時に `DOMAIN_URL`・`CREDENTIAL_PREFIX` を
 書き換える（Salesforce は comken 自前の `comken/toolbox/salesforce/` を使うため、
 社内ライブラリの名前は出てこない）。

@@ -15,6 +15,11 @@ def _client(**kwargs) -> MagicMock:
     return client
 
 
+def _site_class(client) -> MagicMock:
+    """site_for() が返す「組織クラス」の代わり。呼ぶと client を返す。"""
+    return MagicMock(return_value=client)
+
+
 class TestPrintShape:
     def test_hides_secret_values(self, capsys):
         """応答に含まれる秘密の値を画面へ出さない。
@@ -28,7 +33,7 @@ class TestPrintShape:
             ({"consumerId": "CID"}, {}),
             ({"id": "STG1", "consumerKey": "KEY-VALUE", "consumerSecret": "SECRET-VALUE"}, {}),
         ]
-        with patch("comken.toolbox.salesforce.cli.Sandbox", return_value=client):
+        with patch("comken.toolbox.salesforce.cli.site_for", return_value=_site_class(client)):
             main(
                 [
                     "rotate",
@@ -53,7 +58,7 @@ class TestReport:
         """既定では行数と列名だけを出し、中身は出さない。"""
         client = _client()
         client.report.get.return_value = [{"案件名": "極秘案件", "金額": "1000"}]
-        with patch("comken.toolbox.salesforce.cli.Sandbox", return_value=client):
+        with patch("comken.toolbox.salesforce.cli.site_for", return_value=_site_class(client)):
             code = main(
                 [
                     "report",
@@ -76,7 +81,7 @@ class TestReport:
         """--rows を指定したときだけ中身を出す。"""
         client = _client()
         client.report.get.return_value = [{"案件名": "案件A"}]
-        with patch("comken.toolbox.salesforce.cli.Sandbox", return_value=client):
+        with patch("comken.toolbox.salesforce.cli.site_for", return_value=_site_class(client)):
             main(
                 [
                     "report",
@@ -102,7 +107,7 @@ class TestRotate:
             ({"consumerId": "CID"}, {}),
             ({"id": "STG1", "consumerKey": "K", "consumerSecret": "S"}, {}),
         ]
-        with patch("comken.toolbox.salesforce.cli.Sandbox", return_value=client):
+        with patch("comken.toolbox.salesforce.cli.site_for", return_value=_site_class(client)):
             main(
                 [
                     "rotate",
@@ -123,12 +128,12 @@ class TestRotate:
     def test_aborts_when_not_confirmed(self, capsys):
         """確認に y 以外を入れたら何もしない。"""
         with (
-            patch("comken.toolbox.salesforce.cli.Sandbox") as sandbox,
+            patch("comken.toolbox.salesforce.cli.site_for") as site_for_mock,
             patch("builtins.input", return_value="n"),
         ):
             main(["rotate", "--domain", "https://x", "--prefix", "site_a", "--app-id", "1CE"])
 
-        sandbox.assert_not_called()
+        site_for_mock.assert_not_called()
         assert "中止しました" in capsys.readouterr().out
 
 
@@ -136,30 +141,26 @@ class TestErrors:
     def test_returns_1_with_message(self, capsys):
         """接続に失敗したら、traceback ではなくメッセージを出して 1 を返す。"""
         with patch(
-            "comken.toolbox.salesforce.cli.Sandbox",
-            side_effect=SalesforceAuthError(401, "invalid_client"),
+            "comken.toolbox.salesforce.cli.site_for",
+            return_value=MagicMock(side_effect=SalesforceAuthError(401, "invalid_client")),
         ):
-            code = main(["check", "--domain", "https://x", "--prefix", "site_a"])
+            code = main(
+                ["report", "--domain", "https://x", "--prefix", "site_a", "--report-id", "00O"]
+            )
 
         assert code == 1
         assert "エラー:" in capsys.readouterr().err
 
 
-class TestCheck:
-    def test_only_limits_no_app_id_argument(self, capsys):
-        """``sf check`` は ``--app-id`` を受け取らず、/limits の GET だけ実行する。
-
-        v1.0.0 で ``--app-id`` 経路を削除したため、``--app-id`` を渡すと argparse が
-        「unrecognized arguments: --app-id」で exit code 2 を返す。
-        """
+class TestDefaultOrg:
+    def test_omits_domain_to_use_solution_sandbox(self):
+        """``--domain`` を省略したら安全側の ``SolutionSandbox`` が既定で選ばれる。"""
         client = _client()
-        client.request.return_value = ({}, {})
-        with patch("comken.toolbox.salesforce.cli.Sandbox", return_value=client):
-            code = main(["check", "--domain", "https://x", "--prefix", "site_a"])
+        client.report.get.return_value = []
+        with patch(
+            "comken.toolbox.salesforce.cli.SolutionSandbox", return_value=client
+        ) as solution_sandbox_mock:
+            code = main(["report", "--prefix", "site_a", "--report-id", "00O"])
 
+        solution_sandbox_mock.assert_called_once_with(prefix="site_a")
         assert code == 0
-        methods_paths = [(call.args[0], call.args[1]) for call in client.request.call_args_list]
-        assert methods_paths == [("GET", client.data_path("/limits"))]
-        out = capsys.readouterr().out
-        assert "接続できました" in out
-        assert "consumerId" not in out

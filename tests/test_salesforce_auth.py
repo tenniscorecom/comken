@@ -186,7 +186,7 @@ class TestAuthClassIsBuiltFromCredentials:
     """
 
     def test_passing_a_class_reads_dpapi_with_the_class_prefix(self, monkeypatch):
-        """Sandbox(auth=ClientCredentialsOAuth) が CREDENTIAL_PREFIX で DPAPI を引く。"""
+        """SolutionSandbox(auth=ClientCredentialsOAuth) が CREDENTIAL_PREFIX で DPAPI を引く。"""
         called = {}
 
         class _FakeAuth:

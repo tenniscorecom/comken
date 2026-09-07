@@ -34,7 +34,7 @@ from comken.toolbox.salesforce import (
     SalesforceBase,
 )
 from comken.toolbox.salesforce.report import report_id_from_url
-from comken.toolbox.salesforce.sites import SITES, Sandbox, site_for
+from comken.toolbox.salesforce.sites import SITES, SolutionSandbox, site_for
 
 DOMAIN_URL = "https://example.my.salesforce.com"
 INSTANCE_URL = "https://example.my.salesforce.com"
@@ -875,13 +875,13 @@ class TestReportAccessDenied:
 
 
 class TestSites:
-    def test_sandbox_is_a_salesforce_client(self):
+    def test_solution_sandbox_is_a_salesforce_client(self):
         """組織クラスは共通の query / report / metrics をそのまま使える。"""
-        assert issubclass(Sandbox, SalesforceBase)
+        assert issubclass(SolutionSandbox, SalesforceBase)
         auth = MagicMock()
         auth.fetch.return_value = ("TOKEN", INSTANCE_URL)
         with patch("comken.toolbox.salesforce.client.requests.Session"):
-            sandbox = Sandbox(auth=auth)
+            sandbox = SolutionSandbox(auth=auth)
         assert callable(sandbox.query)
         assert sandbox.report is not None
         assert sandbox.metrics is not None
@@ -897,29 +897,29 @@ class TestSites:
                 return_value=_token_response(),
             ),
         ):
-            site = Sandbox(auth=ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL))
-        assert site.metrics.org_name == "Sandbox"
+            site = SolutionSandbox(auth=ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL))
+        assert site.metrics.org_name == "SolutionSandbox"
 
 
 class TestSiteFor:
     """レポートの URL から、つなぐ組織を決める（管理表に複数組織が混ざるため）。"""
 
     def test_url_of_a_registered_org(self):
-        url = f"{Sandbox.DOMAIN_URL}/lightning/r/Report/00O5g00000ABCDE/view"
-        assert site_for(url) is Sandbox
+        url = f"{SolutionSandbox.DOMAIN_URL}/lightning/r/Report/00O5g00000ABCDE/view"
+        assert site_for(url) is SolutionSandbox
 
     def test_host_case_is_ignored(self):
-        assert site_for(Sandbox.DOMAIN_URL.upper()) is Sandbox
+        assert site_for(SolutionSandbox.DOMAIN_URL.upper()) is SolutionSandbox
 
     def test_surrounding_spaces_are_ignored(self):
         """表からコピーした値に空白が混ざっていても引ける。"""
-        assert site_for(f"  {Sandbox.DOMAIN_URL}/lightning  ") is Sandbox
+        assert site_for(f"  {SolutionSandbox.DOMAIN_URL}/lightning  ") is SolutionSandbox
 
     def test_unknown_domain_raises(self):
         """未登録のドメインでは、黙って別組織へつながず止まる。"""
         with pytest.raises(SalesforceSiteNotFoundError) as error:
             site_for("https://other.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE/view")
-        assert Sandbox.DOMAIN_URL in str(error.value)  # 登録済みの組織を案内する
+        assert SolutionSandbox.DOMAIN_URL in str(error.value)  # 登録済みの組織を案内する
 
     def test_report_id_alone_raises(self):
         """ID だけでは、どの組織のレポートか決められない。"""
@@ -943,9 +943,9 @@ class TestCredentialsInitialization:
         path = tmp_path / "system-id.enc"
         save_credentials(
             {
-                "sandbox_client_id": "CID",
-                "sandbox_client_secret": "CSECRET",
-                "sandbox_refresh_token": "RTOKEN",
+                "solution_sandbox_client_id": "CID",
+                "solution_sandbox_client_secret": "CSECRET",
+                "solution_sandbox_refresh_token": "RTOKEN",
             },
             path,
         )
@@ -962,10 +962,10 @@ class TestCredentialsInitialization:
                 return_value=_token_response(),
             ) as post,
         ):
-            sf = Sandbox()
+            sf = SolutionSandbox()
 
-        assert isinstance(sf, Sandbox), "サブクラスのまま作られる"
-        assert post.call_args.args[0] == f"{Sandbox.DOMAIN_URL}/services/oauth2/token"
+        assert isinstance(sf, SolutionSandbox), "サブクラスのまま作られる"
+        assert post.call_args.args[0] == f"{SolutionSandbox.DOMAIN_URL}/services/oauth2/token"
         assert post.call_args.kwargs["data"]["client_id"] == "CID"
         assert post.call_args.kwargs["data"]["client_secret"] == "CSECRET"
 
@@ -990,7 +990,7 @@ class TestCredentialsInitialization:
                 return_value=_token_response(),
             ) as post,
         ):
-            Sandbox(prefix="sandbox_test")
+            SolutionSandbox(prefix="sandbox_test")
 
         assert post.call_args.kwargs["data"]["client_id"] == "TEST-CID"
 
@@ -1008,7 +1008,7 @@ class TestCredentialsInitialization:
     def test_missing_credential_raises(self, tmp_path, monkeypatch):
         monkeypatch.setattr(store, "CREDENTIALS_PATH", tmp_path / "system-id.enc")
         with pytest.raises(CredentialNotFoundError):
-            Sandbox()
+            SolutionSandbox()
 
 
 class TestApiMetrics:

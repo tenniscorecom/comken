@@ -10662,7 +10662,7 @@ class ReportAPI:
 
 `SalesforceBase` が `report` 属性として持っている。単体では作らない。
 
-    with Sandbox() as sf:
+    with Solution() as sf:
         rows = sf.report.get("00O000000000001")
 
 #### `__init__`
@@ -10832,7 +10832,7 @@ def describe_fields(self, report_id: str) -> Table:
 
 利用例（何十件ものレポートをまとめて CSV へ落とす）:
 
-    with Sandbox() as sf:
+    with Solution() as sf:
         for report_id in report_ids:
             sf.report.describe_fields_csv(report_id, f"fields_{report_id}.csv")
 
@@ -10885,7 +10885,7 @@ Bulk API 2.0 の Query ジョブで SOQL を非同期実行する。
 
 ``SalesforceBase`` が ``bulk_query`` 属性として持っている。単体では作らない。
 
-    with Sandbox() as sf:
+    with Solution() as sf:
         table = sf.bulk_query.run("SELECT Id, Name FROM Account")
 
 ``SalesforceBase.query()``（同期 SOQL・ページング対応済み）でも全件は
@@ -10975,7 +10975,7 @@ Bulk API 2.0 の Ingest ジョブで大量レコードを一括変更する。
 
 ``SalesforceBase`` が ``bulk_ingest`` 属性として持っている。単体では作らない。
 
-    with Sandbox() as sf:
+    with Solution() as sf:
         result = sf.bulk_ingest.insert("Account", [{"Name": "テスト"}])
         if len(result.failed) > 0:
             print(f"{len(result.failed)} 行が失敗しました")
@@ -11289,18 +11289,18 @@ class RetryReason:
 
 公開定数。
 
-### `Sandbox`
+### `Solution`
 
 ```text
-class Sandbox(SalesforceBase):
+class Solution(SalesforceBase):
 ```
 
 #### 説明
 
-Sandbox 組織のクライアント。
+Solution 組織のクライアント。
 
 使い方:
-    with Sandbox() as sf:
+    with Solution() as sf:
         rows = sf.report.get("00O...")
 
 #### `__init__`
@@ -11325,7 +11325,7 @@ Args:
     org_name: 計測ログに出す組織の呼び名。省略時はクラス名を使う。
     auth: 認証方式を差し替えるときに渡す。**クラスを渡せば**
         DPAPI から組み立てる（値を手で並べなくてよい）。
-            Sandbox(auth=ClientCredentialsOAuth)   # 開発中だけ
+            Solution(auth=ClientCredentialsOAuth)   # 開発中だけ
         作成済みのインスタンスを渡すこともできる（テスト・JWT 等）。
         その場合だけ prefix / domain_url は使われない。
 
@@ -11592,18 +11592,18 @@ REST API のバージョン付きパスを組み立てる。
 
     sf.request("GET", sf.data_path("/limits"))
 
-### `Production`
+### `SolutionSandbox`
 
 ```text
-class Production(SalesforceBase):
+class SolutionSandbox(SalesforceBase):
 ```
 
 #### 説明
 
-Production 組織のクライアント。
+Solution Sandbox 組織のクライアント。
 
 使い方:
-    with Production() as sf:
+    with SolutionSandbox() as sf:
         rows = sf.report.get("00O...")
 
 #### `__init__`
@@ -11628,310 +11628,7 @@ Args:
     org_name: 計測ログに出す組織の呼び名。省略時はクラス名を使う。
     auth: 認証方式を差し替えるときに渡す。**クラスを渡せば**
         DPAPI から組み立てる（値を手で並べなくてよい）。
-            Sandbox(auth=ClientCredentialsOAuth)   # 開発中だけ
-        作成済みのインスタンスを渡すこともできる（テスト・JWT 等）。
-        その場合だけ prefix / domain_url は使われない。
-
-Raises:
-    InvalidCredentialNameError: システム名が空、または使えない文字を含む場合。
-    CredentialNotFoundError: 選択方式に必要な認証情報が未登録の場合。
-    CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
-    SalesforceAuthError: 認証に失敗した場合。
-    SalesforceConnectionError: ネットワークの問題で接続できない場合。
-
-#### `close`
-
-```text
-def close(self) -> None:
-```
-
-##### 説明
-
-HTTP セッションを閉じる。with を使う場合は自動で呼ばれる。
-
-#### `query_rows`
-
-```text
-@measure
-def query_rows(self, soql: str) -> Iterator[dict]:
-```
-
-##### 説明
-
-SOQL クエリを実行し ``{項目: 値}`` の dict を 1 件ずつ返す（全件・ページ送り自動）。
-
-レポートは上限 2000 行だが、SOQL に上限はない。**ページ受信のたびに**
-``yield`` するため、全件を溜め込まずに 1 件目からすぐ処理を始められる。
-``query()`` はこのイテレータを ``Table`` に包む薄い層
-（順序を「イテレータ先・Table 後」に揃えるため）。
-
-列の情報は SOQL のレスポンスからは取れないため、戻り値からは直接
-列名が出ない。``query()`` は ``records[0]`` から列を推測するが、
-これは「1 件以上あるとき」の便宜であって、本物のスキーマではない。
-列名を厳密に扱いたいときは ``describe`` 系エンドポイントを使うこと。
-
-Args:
-    soql: 実行する SOQL クエリ文字列。
-
-Returns:
-    SOQL のレコードを ``{項目: 値}`` の dict で 1 件ずつ返すイテレータ。
-
-#### `query`
-
-```text
-@measure
-def query(self, soql: str) -> Table:
-```
-
-##### 説明
-
-SOQL クエリを実行して ``Table`` を返す（全件取得・ページ送り自動）。
-
-``query_rows()`` を呼んで ``Table`` に包むだけの薄い層。
-列は SOQL からはメタデータが取れないため、**1 件目から推測**する。
-0 件のときは列が空の ``Table`` を返す（``rows[0]`` からの推測に依存
-しないため）。なお ``Account.Name`` のようなドット区切りの親子リレーション
-項目は**そのまま列名にする**（平坦化しない）。``records[0]`` のキーが
-そのまま列になるため、リレーションを跨いだ項目の取り回しを呼び出し側で
-揃えておくこと。
-
-Args:
-    soql: 実行する SOQL クエリ文字列。
-
-Returns:
-    SOQL の結果を表す ``Table``。
-
-#### `query_csv`
-
-```text
-@measure
-def query_csv(self, soql: str, path: str | Path) -> Path:
-```
-
-##### 説明
-
-SOQL クエリを実行して、結果をそのまま CSV へ保存する。
-
-``query()`` が返す ``Table`` を ``CSV`` へ書き出すだけの薄い層。
-``Table`` 自体はファイル I/O を持たない設計（保存先の責任を分ける）ため、
-SOQL の結果を直接 CSV で欲しいだけのときはこちらを使う。
-
-Args:
-    soql: 実行する SOQL クエリ文字列。
-    path: 保存先の CSV パス（拡張子は ``.csv``）。
-
-Returns:
-    保存した CSV のパス。
-
-#### `get`
-
-```text
-@measure
-def get(self, object_name: str, record_id: str) -> dict:
-```
-
-##### 説明
-
-レコードを1件取得する。
-
-``sf.report.get(...)`` ではなく ``sf.get(...)``（CRUD）で使う。
-``report`` は ``ReportAPI`` インスタンスで名前空間が分かれているため、
-CRUD の動詞群 ``get`` / ``insert`` / ``update`` / ``upsert`` / ``delete``
-と揃える目的で ``get`` を採用する。
-
-Args:
-    object_name: オブジェクトの API 参照名（例: "Account"）。
-    record_id: レコードの Id。
-
-#### `insert`
-
-```text
-@measure
-def insert(self, object_name: str, data: dict) -> str:
-```
-
-##### 説明
-
-レコードを作成して Id を返す。
-
-Args:
-    object_name: オブジェクトの API 参照名。
-    data: 作成するレコードの項目と値。
-
-#### `update`
-
-```text
-@measure
-def update(self, object_name: str, record_id: str, data: dict) -> None:
-```
-
-##### 説明
-
-レコードを更新する。
-
-Args:
-    object_name: オブジェクトの API 参照名。
-    record_id: 更新するレコードの Id。
-    data: 更新する項目と値。
-
-#### `upsert`
-
-```text
-@measure
-def upsert(self, object_name: str, external_id_field: str, data: dict) -> None:
-```
-
-##### 説明
-
-外部 ID で upsert する（一致すれば更新、なければ作成）。
-
-Args:
-    object_name: オブジェクトの API 参照名。
-    external_id_field: 外部 ID 項目の API 参照名（例: "ExternalId__c"）。
-    data: 項目と値。external_id_field の値を含めること。
-
-Raises:
-    SalesforceExternalIDMissingError: data に external_id_field が無い場合。
-
-#### `delete`
-
-```text
-@measure
-def delete(self, object_name: str, record_id: str) -> None:
-```
-
-##### 説明
-
-レコードを削除する。
-
-Args:
-    object_name: オブジェクトの API 参照名。
-    record_id: 削除するレコードの Id。
-
-#### `request`
-
-```text
-def request(self, method: str, path: str, body: dict | None=None, component: str='other', headers: dict[str, str] | None=None, data: str | None=None) -> tuple[dict | list | str | None, dict]:
-```
-
-##### 説明
-
-REST API を呼び、(レスポンス本文, レスポンスヘッダー) を返す。
-
-すべての API 呼び出しがここを通る。計測と、401 のときの再認証もここで行う。
-通常は query() / get() 等を使い、このメソッドは
-ライブラリに無い API を叩くときだけ使う。
-
-Args:
-    method: HTTP メソッド（GET / POST / PATCH / DELETE）。
-    path: "/services/data/..." から始まるパス。
-    body: JSON で送る辞書（省略可）。
-    component: 計測での呼び出し元の区別（"query" / "crud" / "report"）。
-    headers: この呼び出しだけ上書きする追加ヘッダー（省略可）。
-        セッションの既定ヘッダーと同名のキーはこの値が勝つ（``requests``
-        ライブラリの挙動）。``None`` のときは何も追加しない。
-    data: CSV 本体など、生テキストで送りたいときに指定する（省略可）。
-        ``body`` と同じ呼び出しでは使わない。
-
-Raises:
-    SalesforceRequestError: API がエラーを返した場合。
-    SalesforceConnectionError: ネットワークの問題で接続できない場合。
-
-#### `request_csv`
-
-```text
-def request_csv(self, method: str, path: str, component: str='other') -> tuple[str, dict]:
-```
-
-##### 説明
-
-CSV 形式のレスポンスを返す API を呼ぶ（Bulk API 2.0 の結果取得専用）。
-
-``request()`` と同じ 5xx/429 リトライ・401 再認証を共有するため、
-Accept ヘッダーだけ text/csv に差し替えて ``request()`` を呼ぶ薄いラッパー。
-
-Args:
-    method: HTTP メソッド。
-    path: "/services/data/..." から始まるパス。
-    component: 計測での呼び出し元の区別。
-
-Returns:
-    (CSV本文の文字列, レスポンスヘッダーの辞書)。本文が無ければ空文字。
-
-#### `request_upload_csv`
-
-```text
-def request_upload_csv(self, method: str, path: str, csv_text: str, component: str='other') -> tuple[dict | list | str | None, dict]:
-```
-
-##### 説明
-
-CSV 本体をアップロードする API を呼ぶ（Bulk API 2.0 の Ingest データ送信専用）。
-
-``request()`` と同じ 5xx/429 リトライ・401 再認証を共有するため、
-Content-Type ヘッダーだけ text/csv に差し替えて ``request()`` を呼ぶ薄いラッパー。
-JSON ではなく CSV の生テキストを本体として送る点が ``request()`` の ``body=`` と異なる。
-
-Args:
-    method: HTTP メソッド（Bulk Ingest のデータ送信は PUT）。
-    path: "/services/data/..." から始まるパス。
-    csv_text: アップロードする CSV 本文（1行目はヘッダー行）。
-    component: 計測での呼び出し元の区別。
-
-Returns:
-    (レスポンス本文, レスポンスヘッダーの辞書)。
-
-#### `data_path`
-
-```text
-def data_path(self, path: str) -> str:
-```
-
-##### 説明
-
-REST API のバージョン付きパスを組み立てる。
-
-ライブラリに無い API を request() で叩くときに使う。
-
-    sf.request("GET", sf.data_path("/limits"))
-
-### `Developer`
-
-```text
-class Developer(SalesforceBase):
-```
-
-#### 説明
-
-Developer 組織のクライアント。
-
-使い方:
-    with Developer() as sf:
-        rows = sf.report.get("00O...")
-
-#### `__init__`
-
-```text
-def __init__(self, *, prefix: str='', domain_url: str='', org_name: str='', auth: _OAuth | type[_OAuth] | None=None) -> None:
-```
-
-##### 説明
-
-DPAPI に保管した認証情報を読み、選択中の OAuth 方式で接続する。
-
-読み込む項目は client.py が import している OAuth 方式（既定は
-RefreshTokenOAuth）で決まる。Client Credentials 方式は
-client_id / client_secret、Refresh Token 方式は
-client_id / client_secret / refresh_token を使う。
-
-Args:
-    prefix: 認証情報のシステム名。省略時はクラスの CREDENTIAL_PREFIX。
-        本番とテストを切り替えるときだけ渡す。
-    domain_url: My Domain の URL。省略時はクラスの DOMAIN_URL。
-    org_name: 計測ログに出す組織の呼び名。省略時はクラス名を使う。
-    auth: 認証方式を差し替えるときに渡す。**クラスを渡せば**
-        DPAPI から組み立てる（値を手で並べなくてよい）。
-            Sandbox(auth=ClientCredentialsOAuth)   # 開発中だけ
+            Solution(auth=ClientCredentialsOAuth)   # 開発中だけ
         作成済みのインスタンスを渡すこともできる（テスト・JWT 等）。
         その場合だけ prefix / domain_url は使われない。
 
@@ -12213,8 +11910,8 @@ URL のドメイン（My Domain）で決まるので、表に行を足すだけ�
 レポートも取れるようにする。組織を人が選ぶ列を作ると、URL と食い違ったときに
 別組織へ問い合わせて「レポートが見つからない」という分かりにくい失敗になる。
 
-    site_for("https://example--sandbox.sandbox.my.salesforce.com/lightning/...")
-    # → Sandbox
+    site_for("https://example.my.salesforce.com/lightning/...")
+    # → Solution
 
 Args:
     url: レポートを開いたときのアドレス。**ドメインを含む URL であること**

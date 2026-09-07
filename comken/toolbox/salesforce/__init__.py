@@ -2,9 +2,9 @@
 
 1インスタンスが1組織を受け持つ。**入口は組織クラス**（`sites/`）:
 
-    from comken.toolbox.salesforce.sites import Sandbox
+    from comken.toolbox.salesforce.sites import Solution
 
-    with Sandbox() as sf:
+    with Solution() as sf:
         records = sf.query("SELECT Id, Name FROM Account")
         rows = sf.report.get("00O000000000001")
         sf.metrics.log_summary()
@@ -13,7 +13,7 @@ URL と認証情報のシステム名は組織クラスがクラス定数とし�
 呼び出し側は何も渡さなくてよい。組織を増やすときは `sites/` にクラスを足す。
 **認証の既定は Refresh Token Flow。** 組織クラスをそのまま使えばこれになる。
 
-    with Sandbox() as sf:                                    # 既定（本番もこれ）
+    with Solution() as sf:                                    # 既定（本番もこれ）
         ...
 
 Client Credentials Flow は `client_secret` だけでアクセストークンを取れてしまい、
@@ -22,7 +22,7 @@ Client Credentials Flow は `client_secret` だけでアクセストークンを
 
     from comken.toolbox.salesforce import ClientCredentialsOAuth
 
-    with Sandbox(auth=ClientCredentialsOAuth(cid, secret, domain)) as sf:  # 開発時だけ
+    with Solution(auth=ClientCredentialsOAuth(cid, secret, domain)) as sf:  # 開発時だけ
         ...
 
 設計の背景は docs/開発/salesforce-authentication.md を参照。

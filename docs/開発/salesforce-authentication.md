@@ -9,11 +9,11 @@ Salesforce の公式発表・仕様と、それを受けた comken 側の判断�
 
 - 新規の連携アプリには **External Client App（ECA）** を使う。
 - 無人バッチの認証は **Authorization Code + Refresh Token Flow**。**これが既定**で、
-  組織クラスをそのまま使えばこの方式になる（`with Sandbox() as sf:`）。
+  組織クラスをそのまま使えばこの方式になる（`with Solution() as sf:`）。
 - **Client Credentials Flow は本番で使わない。** ECA 側でも無効にする。
   `client_secret` だけでアクセストークンを取れてしまい、漏えいすると実行ユーザーとして
   操作されるため（→ 次の節）。開発中に手元で動かすときだけ
-  `Sandbox(auth=ClientCredentialsOAuth(...))` と**明示的に渡す**。
+  `Solution(auth=ClientCredentialsOAuth(...))` と**明示的に渡す**。
 - 実行専用ユーザーを割り当て、権限はそのユーザー側で最小限にする。
 - `client_id` / `client_secret` / `refresh_token` はコードや `config.ini` に書かず、
   Windows DPAPI で保管する。
@@ -75,7 +75,7 @@ ECA は、開発者が決めるOAuth設定と、各組織の管理者が決め�
 ### comken 側の判断
 
 今回の連携アプリは新規作成するため、旧方式を前提にせずECAを標準にします。組織ごとの管理者が
-実行ユーザーとポリシーを管理できる点も、3組織へ同じライブラリを配る構成と合っています。
+実行ユーザーとポリシーを管理できる点も、複数組織へ同じライブラリを配る構成と合っています。
 
 補助解説:
 
@@ -128,7 +128,7 @@ comken は受け取った新しい token を DPAPI へ**自動で書き戻す**�
 ```python
 from comken.toolbox.salesforce import ClientCredentialsOAuth
 
-with Sandbox(auth=ClientCredentialsOAuth(cid, secret, domain)) as sf:
+with Solution(auth=ClientCredentialsOAuth(cid, secret, domain)) as sf:
     ...
 ```
 
@@ -268,11 +268,11 @@ APIからstaged credentialsを作成できるため、新旧資格情報を切�
 python -m comken cred gui
 ```
 
-- **キー名**: `<prefix>_client_id` (例: `sandbox_client_id`)
+- **キー名**: `<prefix>_client_id` (例: `solution_client_id`)
 - **値**: ECA の「Consumer Key」 (Salesforce 画面でコピー)
 - 続けて **`<prefix>_client_secret`** を「Consumer Secret」で登録
-- **prefix** は組織クラス (例: `Sandbox`) の `CREDENTIAL_PREFIX` と揃える
-  - デフォルトは組織名そのまま (`sandbox` / `production` など)
+- **prefix** は組織クラス (例: `Solution`) の `CREDENTIAL_PREFIX` と揃える
+  - デフォルトは組織名そのまま (`solution` / `solution_sandbox` など)
 
 登録したかは `python -m comken cred list` で確認できる。
 
@@ -281,7 +281,7 @@ python -m comken cred gui
 ブラウザで ECA に「comken がこの組織にアクセスしていい」と 1 回だけ承認する。
 
 ```powershell
-python -c "from comken.toolbox.credentials import Credentials; from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth; from comken.toolbox.salesforce.sites import Sandbox; prefix = Sandbox.CREDENTIAL_PREFIX; client_id = Credentials(prefix).client_id; url, _ = RefreshTokenOAuth.authorization_url(client_id, 'http://localhost:8080/callback', Sandbox.DOMAIN_URL); print(url)"
+python -c "from comken.toolbox.credentials import Credentials; from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth; from comken.toolbox.salesforce.sites import Solution; prefix = Solution.CREDENTIAL_PREFIX; client_id = Credentials(prefix).client_id; url, _ = RefreshTokenOAuth.authorization_url(client_id, 'http://localhost:8080/callback', Solution.DOMAIN_URL); print(url)"
 ```
 
 - 表示された URL をブラウザで開く
@@ -298,7 +298,7 @@ python -c "from comken.toolbox.credentials import Credentials; from comken.toolb
 （`<prefix>_refresh_token`）へ自動で DPAPI 保存される。書き戻し用の関数を毎回手書きする必要はない。
 
 ```powershell
-python -c "from comken.toolbox.credentials import Credentials; from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth; from comken.toolbox.salesforce.sites import Sandbox; prefix = Sandbox.CREDENTIAL_PREFIX; creds = Credentials(prefix); RefreshTokenOAuth.exchange_code(creds.client_id, creds.client_secret, input('code: '), 'http://localhost:8080/callback', Sandbox.DOMAIN_URL, prefix=prefix); print('refresh_token を DPAPI に保存しました')"
+python -c "from comken.toolbox.credentials import Credentials; from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth; from comken.toolbox.salesforce.sites import Solution; prefix = Solution.CREDENTIAL_PREFIX; creds = Credentials(prefix); RefreshTokenOAuth.exchange_code(creds.client_id, creds.client_secret, input('code: '), 'http://localhost:8080/callback', Solution.DOMAIN_URL, prefix=prefix); print('refresh_token を DPAPI に保存しました')"
 ```
 
 - `code:` プロンプトに 2 でメモした文字列を貼り付け
@@ -307,7 +307,7 @@ python -c "from comken.toolbox.credentials import Credentials; from comken.toolb
 ## 4. 動作確認
 
 ```powershell
-python -m comken sf check
+python -m comken sf report --report-id 00O...
 ```
 
 - 0 エラーなら OK
@@ -316,13 +316,13 @@ python -m comken sf check
 
 ## 5. 無人実行への移行
 
-ここまでの設定が完了すれば、`Sandbox()` をそのまま使うスクリプトは
+ここまでの設定が完了すれば、`Solution()` をそのまま使うスクリプトは
 **誰もログインしていない状態でも** 動く:
 
 ```python
-from comken.toolbox.salesforce.sites import Sandbox
+from comken.toolbox.salesforce.sites import Solution
 
-with Sandbox() as sf:
+with Solution() as sf:
     rows = sf.query("SELECT Id, Name FROM Account LIMIT 10")
 ```
 
@@ -349,9 +349,9 @@ Refresh Token Flow の **対になる形**で、初回認可が要らない代�
 
 ```python
 from comken.toolbox.salesforce import ClientCredentialsOAuth
-from comken.toolbox.salesforce.sites import Sandbox
+from comken.toolbox.salesforce.sites import Solution
 
-with Sandbox(auth=ClientCredentialsOAuth(
+with Solution(auth=ClientCredentialsOAuth(
     client_id=...,
     client_secret=...,
     domain_url="login.salesforce.com",
@@ -371,5 +371,5 @@ with Sandbox(auth=ClientCredentialsOAuth(
 | `UNSUPPORTED_GRANT_TYPE` | ECA のフロー設定で Authorization Code + Refresh Token Flow を有効にしているか |
 | `INVALID_REFRESH_TOKEN` | refresh_token を revoke 済み。手順 2 からやり直す |
 | 401 が返る (refresh_token は新しい) | ECA で「Manage Refresh Tokens」を開き、過去トークンの状態を確認 |
-| 連携アプリが見つからない | ECA のパッケージ / 組織を確認。`Sandbox.DOMAIN_URL` と一致するか |
+| 連携アプリが見つからない | ECA のパッケージ / 組織を確認。`Solution.DOMAIN_URL` と一致するか |
 

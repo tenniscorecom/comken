@@ -1163,7 +1163,7 @@ class TestSiteStandsAlone:
     """SiteBase を単体で使える（Browsers を経由しない）ことを固める。
 
     1サイトだけ触るツールで `with Browsers() as browsers:` を挟ませたくない。
-    Salesforce の `with Sandbox() as sf:` と同じ形で始められるようにする。
+    Salesforce の `with Solution() as sf:` と同じ形で始められるようにする。
     """
 
     @staticmethod
