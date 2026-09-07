@@ -15,17 +15,14 @@
 最初の1本はこれだけで書ける（CSV を読んで Excel レポートを作る例）:
 
 ```python
-from comken.core.table import Table
 from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Excel
 
 with CSV(r"C:\作業\data.csv", read_only=True) as csv_file:
-    rows = csv_file.read()
+    table = csv_file.read()
 
 with Excel(r"C:\作業\report.xlsx") as excel:
-    excel.create_data_sheet("結果").create_table(
-        "結果", Table(list(rows[0]), rows) if rows else Table(["結果"], [])
-    )
+    excel.create_data_sheet("結果").create_table("結果", table)
 ```
 
 ## ドキュメントの地図
