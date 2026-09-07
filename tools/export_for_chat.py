@@ -38,6 +38,10 @@ API_OUTPUT_PATH = ROOT / "docs" / "自動生成" / "API.md"
 ERRORS_OUTPUT_PATH = ROOT / "docs" / "ERRORS.md"
 LEGACY_OUTPUT_DIR = ROOT / "貼り付け用"
 BUNDLE_OUTPUT_PATH = ROOT / "comken_bundle.md"
+
+# 1カテゴリー（BUNDLES の1項目）がこれを超えたときだけ、さらに複数ファイルへ割る。
+# 基本は「1カテゴリー = 1ファイル」を保ちたいので、普段は超えない大きめの値にする。
+DEFAULT_MAX_CHARS = 400_000
 ERRORS_GENERATED_MARKER = (
     "<!-- ここから下は python export_for_chat.py が自動生成する。手で編集しない -->"
 )
@@ -146,7 +150,7 @@ BUNDLES: dict[str, tuple[str, list[str]]] = {
     "1_コーディング規約": (
         "これは社内 Python ライブラリ comken を使うツールの**コーディング規約**です。"
         "以後このスレッドで書くコードは、この規約に従ってください。",
-        ["CONVENTIONS.md"],
+        ["docs/開発/CONVENTIONS.md"],
     ),
     "2_ライブラリの使い方": (
         "これは社内 Python ライブラリ comken の**API 一覧**です。"
@@ -159,9 +163,9 @@ BUNDLES: dict[str, tuple[str, list[str]]] = {
         "これは社内ツールに付ける**仕様書とエラー対応ガイドのひな形**です。"
         "新しいツールのドキュメントを書くときは、この構成と書き方に合わせてください。",
         [
-            "templates/新規プロジェクト/docs/仕様書.md",
-            "templates/新規プロジェクト/docs/使い方.md",
-            "ERRORS.md",
+            "comken/templates/新規プロジェクト/docs/仕様書.md",
+            "comken/templates/新規プロジェクト/docs/使い方.md",
+            "docs/ERRORS.md",
         ],
     ),
     "4_ライブラリ自体を直す人向け": (
@@ -699,7 +703,11 @@ def main() -> None:
     parser.add_argument(
         "--max-chars",
         type=int,
-        help="指定時だけ、貼り付け用資料をこの文字数の目安で分割して出力する",
+        default=DEFAULT_MAX_CHARS,
+        help=(
+            "貼り付け用資料をこの文字数の目安で分割して出力する"
+            f"（既定 {DEFAULT_MAX_CHARS:,} 文字。0以下を指定すると分割を止める）"
+        ),
     )
     args = parser.parse_args()
     API_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -707,8 +715,9 @@ def main() -> None:
     print(f"{API_OUTPUT_PATH.relative_to(ROOT)} を生成しました")  # noqa: T201
     _write_errors()
     print(f"{ERRORS_OUTPUT_PATH.relative_to(ROOT)} を生成しました")  # noqa: T201
-    if args.max_chars is not None:
+    if args.max_chars > 0:
         _write_legacy_bundles(args.max_chars)
+        print(f"{LEGACY_OUTPUT_DIR.relative_to(ROOT)}/ に分割資料を生成しました")  # noqa: T201
     _write_bundle()
 
 

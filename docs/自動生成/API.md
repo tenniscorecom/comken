@@ -282,6 +282,20 @@ def __init__(self, folder: str | Path, for_date: datetime.date | None=None) -> N
 #### `prefix`
 
 ```text
+@overload
+def prefix(self, name: str, required: Literal[True]=True) -> Path:
+```
+
+#### `prefix`
+
+```text
+@overload
+def prefix(self, name: str, required: Literal[False]) -> Path | None:
+```
+
+#### `prefix`
+
+```text
 @measure
 def prefix(self, name: str, required: bool=True) -> Path | None:
 ```
@@ -292,6 +306,10 @@ def prefix(self, name: str, required: bool=True) -> Path | None:
 
 ``name`` に ``{:%Y-%m-%d}`` のような日付書式があれば、その位置へ日付を
 入れる。書式がなければ末尾へ ``YYYYMMDD`` を付ける。日付は **拡張子の手前** に入る。
+
+``required=True``（既定）では見つからないと例外になるため、戻り値は
+``Path``（``None`` にならない）。``required=False`` のときだけ
+``Path | None`` になる（呼び出し側の型チェッカーにもそう伝わる）。
 
 #### `dated`
 
@@ -1922,6 +1940,20 @@ def __init__(self, folder: str | Path, for_date: datetime.date | None=None) -> N
 #### `prefix`
 
 ```text
+@overload
+def prefix(self, name: str, required: Literal[True]=True) -> Path:
+```
+
+#### `prefix`
+
+```text
+@overload
+def prefix(self, name: str, required: Literal[False]) -> Path | None:
+```
+
+#### `prefix`
+
+```text
 @measure
 def prefix(self, name: str, required: bool=True) -> Path | None:
 ```
@@ -1932,6 +1964,10 @@ def prefix(self, name: str, required: bool=True) -> Path | None:
 
 ``name`` に ``{:%Y-%m-%d}`` のような日付書式があれば、その位置へ日付を
 入れる。書式がなければ末尾へ ``YYYYMMDD`` を付ける。日付は **拡張子の手前** に入る。
+
+``required=True``（既定）では見つからないと例外になるため、戻り値は
+``Path``（``None`` にならない）。``required=False`` のときだけ
+``Path | None`` になる（呼び出し側の型チェッカーにもそう伝わる）。
 
 #### `dated`
 
