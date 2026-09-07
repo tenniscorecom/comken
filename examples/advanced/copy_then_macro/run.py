@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 def main() -> None:
     """当日のデータを作業フォルダへ集め、マクロを動かし、結果を配る。"""
-    logger = setup_local_logging()
+    setup_local_logging()
 
     # 1. 当日のデータを受け取る。ファイル名に日付が入っている前提で選ぶ。
     #    見つからなければここで例外になる（bat と違い、古いファイルで先へ進まない）

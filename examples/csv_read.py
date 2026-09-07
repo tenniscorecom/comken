@@ -47,5 +47,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    logger = setup_local_logging()
+    setup_local_logging()
     main()
