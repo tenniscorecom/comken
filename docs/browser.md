@@ -617,6 +617,46 @@ comken は自動更新を行わない。**バージョンが合わなくなっ�
 
 ---
 
+## `Page` に用意されていない操作をするとき
+
+`click()` / `input()` / `read_*()` / `wait_visible()` など、よくある操作は
+`Page` に揃っているが、特殊な画面では足りないことがある。**そのときも
+`selenium` を直接 import しない。** `Page`（`EscapeMixin`）が持つ逃げ道を使う:
+
+- `find_element(LOC)` / `find_elements(LOC)` — selenium の `WebElement` を
+  そのまま返す。`Page` にないメソッド（`WebElement` 独自の操作等）を
+  一時的に呼びたいときに使う
+- `execute_script(js, *args)` — JavaScript を実行する。ドラッグ&ドロップの
+  代替や、`Page` の操作では届かない DOM 操作に使う
+- `frame(LOC)` — iframe の中へ切り替える（`with` 文で使う。抜けると自動で
+  元の画面へ戻る）
+
+例（`Page` にない「要素を右クリックする」を、逃げ道で一時的に実現する）:
+
+```python
+from selenium.webdriver.common.action_chains import ActionChains
+
+class ReportPage(SitePage):
+    ROW_MENU_BUTTON = Locator.css(".row-menu")
+
+    def open_row_context_menu(self, row_index: int) -> None:
+        """行の右クリックメニューを開く（Page に無い操作なので逃げ道を使う）。"""
+        element = self.find_elements(self.ROW_MENU_BUTTON)[row_index]
+        ActionChains(self.session.raw).context_click(element).perform()
+```
+
+**その操作が他の画面・他のサイトでも使えそうなら、逃げ道のまま残さず
+`Page`（`comken.toolbox.browser.page.operations` 等）へメソッドとして
+足すことを検討する。** 1つのプロジェクトでしか使わないなら、そのプロジェクトの
+`Page` サブクラスにメソッドとして生やすだけでよい。サイトをまたいで
+何度も同じ逃げ道コードを書いているなら、それは「`Page` に足りない部品」の
+サインなので、`comken` 側（ライブラリ）を更新する（`escape.py` の
+`find_element()` の docstring にも同じ方針が書いてある: 「よく使うものは
+このクラスにメソッドとして足すこと」）。**逃げ道を使ったコードをコピペで
+増やさない**のが目的。
+
+---
+
 ## API・機能早見
 
 ここまでの説明で使ったクラスとメソッドを、実装時に引ける形でまとめる。
