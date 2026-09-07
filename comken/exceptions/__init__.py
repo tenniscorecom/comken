@@ -65,7 +65,9 @@ ComkenError
 │   ├── SalesforceReportExecutionError
 │   ├── SalesforceReportAccessDeniedError
 │   ├── SalesforceBulkQueryFailedError
-│   └── SalesforceBulkQueryTimeoutError
+│   ├── SalesforceBulkQueryTimeoutError
+│   ├── SalesforceBulkIngestFailedError
+│   └── SalesforceBulkIngestTimeoutError
 ├── BrowserError
 │   ├── DriverStartError
 │   ├── BrowsersNotStartedError
@@ -286,6 +288,8 @@ from comken.exceptions.outlook import (
 )
 from comken.exceptions.salesforce import (
     SalesforceAuthError,
+    SalesforceBulkIngestFailedError,
+    SalesforceBulkIngestTimeoutError,
     SalesforceBulkQueryFailedError,
     SalesforceBulkQueryTimeoutError,
     SalesforceConnectionError,
@@ -397,6 +401,8 @@ __all__ = [
     "SalesforceSiteNotFoundError",
     "SalesforceBulkQueryFailedError",
     "SalesforceBulkQueryTimeoutError",
+    "SalesforceBulkIngestFailedError",
+    "SalesforceBulkIngestTimeoutError",
     "BrowserError",
     "DriverStartError",
     "BrowsersNotStartedError",

@@ -29,6 +29,7 @@ Client Credentials Flow は `client_secret` だけでアクセストークンを
 
     SalesforceBase         1組織ぶんの API クライアントの土台（組織クラスで継承する）
     BulkQueryAPI           Bulk API 2.0 のクエリジョブ。SalesforceBase.bulk_query が持っている
+    BulkIngestAPI          Bulk API 2.0 の Ingest ジョブ。SalesforceBase.bulk_ingest が持っている
     ReportAPI              レポート API。SalesforceBase.report が持っている
     RefreshTokenOAuth      Authorization Code + Refresh Token Flow（既定）
     ClientCredentialsOAuth Client Credentials Flow（開発時に auth= で渡す）
@@ -40,6 +41,7 @@ Client Credentials Flow は `client_secret` だけでアクセストークンを
 
 from types import ModuleType
 
+from comken.toolbox.salesforce.bulk_ingest import BulkIngestAPI, BulkIngestResult
 from comken.toolbox.salesforce.bulk_query import BulkQueryAPI
 from comken.toolbox.salesforce.metrics import (
     APIMetrics,
@@ -96,6 +98,8 @@ __all__ = [
     "SalesforceBase",
     "ReportAPI",
     "BulkQueryAPI",
+    "BulkIngestAPI",
+    "BulkIngestResult",
     "ClientCredentialsOAuth",
     "RefreshTokenOAuth",
     "APIMetrics",

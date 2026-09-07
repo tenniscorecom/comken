@@ -342,12 +342,11 @@ with Sandbox() as sf:
 であり、それに当たる（または当たりそうな）クエリだけ非同期の `bulk_query`
 に切り替える。
 
-### 書き込み系（Ingest）は対象外
+### 書き込み系（Ingest）は別の節
 
-`bulk_query` は**読み取り専用**。大量データの一括挿入・更新・削除に
-Bulk API を使いたい場合も、これまで通り `DataLoaderCLI`
-（docs/dataloader.md）を使う。comken では Bulk API の書き込み系（Ingest）
-は作らない方針。
+`bulk_query` は**読み取り専用**。書き込み系（insert / update / upsert /
+delete）は次の「Bulk API 2.0 の Ingest ジョブ」節の `bulk_ingest` か、
+`DataLoaderCLI`（docs/dataloader.md）を使う。
 
 ### エラー
 
@@ -361,6 +360,81 @@ Bulk API を使いたい場合も、これまで通り `DataLoaderCLI`
 無いときは `Sforce-Locator: null` になる、など）は本物の組織では未検証。
 実際の挙動が違っていたら `comken/toolbox/salesforce/bulk_query.py` を
 修正すること。
+
+---
+
+## Bulk API 2.0 の Ingest ジョブ（一括変更）
+
+**この機能は本物の Salesforce 組織に対して未検証。** ジョブ作成・データ
+アップロード・状態確認・成功/失敗結果取得のエンドポイントとレスポンス構造は
+Salesforce の公式リファレンスに基づいて実装しているが、実際のレスポンスで
+想定と違う点が見つかったら、`comken/toolbox/salesforce/bulk_ingest.py` を
+修正すること。
+
+`SalesforceBase.insert()` / `update()` / `upsert()` / `delete()` は同期で
+1件ずつ REST API を送る。**件数が多くなると同期 REST のHTTPタイムアウトに
+当たりやすい**（重いバリデーション・トリガの連鎖など）。そのような場合に
+Bulk API 2.0 の Ingest ジョブを使う。Bulk Ingest は「ジョブを作って完了を
+待つ非同期方式」のため、件数が増えてもタイムアウトしにくい。
+
+```python
+from comken.toolbox.salesforce.sites import Sandbox
+
+with Sandbox() as sf:
+    # 1) 一括作成（insert）
+    result = sf.bulk_ingest.insert(
+        "Account",
+        [{"Name": "取引先A"}, {"Name": "取引先B"}],
+    )
+
+    # 2) 外部 ID で upsert（一致すれば更新、なければ作成）
+    result = sf.bulk_ingest.upsert(
+        "Account",
+        "ExternalId__c",
+        [{"ExternalId__c": "A1", "Name": "取引先A（更新）"}],
+    )
+
+    # 失敗行があったときだけ中身を見る。例外ではない（下記「設計判断」参照）
+    for failed_row in result.failed.read_rows():
+        print(failed_row["sf__Id"], failed_row["sf__Error"])
+```
+
+### `DataLoaderCLI` との使い分け
+
+`DataLoaderCLI`（docs/dataloader.md）は Salesforce が配布している
+デスクトップアプリ版 Data Loader を**サブプロセスで呼び出す**方式で、
+デスクトップアプリのインストールが前提になる。`BulkIngestAPI` は
+Salesforce の REST API を**直接叩く**ため、デスクトップアプリの
+インストールは不要。ブラウザでデータ変更できない環境
+（Data Import Wizard がない組織など）からの移行先として使える。
+
+### 設計判断: 失敗行は例外にしない
+
+`BulkIngestResult.failed` が空でないとき、ライブラリは例外を**送出し
+ない**。ジョブ自体は正常終了しつつ一部の行が失敗することは仕様上
+起こり得るので、`DataLoaderResult` / `bulk_query` と同じく**呼び出し側
+が `len(result.failed)` を見て判断する**形にしている。`SalesforceBulkIngestFailedError`
+が送出されるのはこれとは別の状況で、**ジョブ自体が `Failed` / `Aborted`
+で終わった場合**（CSV の形式不正・対象オブジェクトが存在しない等、
+個々の行ではなくジョブ全体を実行できなかった場合）に限る。
+
+### `dry_run()` に対応する
+
+`comken.runtime.dry_run()`（`with dry_run():`）の中で呼ぶと、実際の
+HTTP 呼び出しが1回も発生せず、空の `BulkIngestResult` を返す。
+
+### エラー
+
+- `SalesforceBulkIngestFailedError`: ジョブが `Failed` / `Aborted` で終わったとき（メッセージに `errorMessage` の内容を含める）
+- `SalesforceBulkIngestTimeoutError`: `timeout_seconds` 以内にジョブが完了しなかったとき（既定600秒）
+
+### 未検証の前提
+
+実装は comken のテストで HTTP をモックして確認しているが、レスポンスの
+前提（結果 CSV の2ページ目以降にも1行目のヘッダー行が含まれる、次ページが
+無いときは `Sforce-Locator: null` になる、`errorMessage` フィールドで
+失敗理由が返る、など）は本物の組織では未検証。実際の挙動が違っていたら
+`comken/toolbox/salesforce/bulk_ingest.py` を修正すること。
 
 ## 計測
 

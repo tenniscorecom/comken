@@ -4907,6 +4907,51 @@ Bulk API のクエリジョブが制限時間内に終わらなかった
 def __init__(self, job_id: str, timeout_seconds: float) -> None:
 ```
 
+### `SalesforceBulkIngestFailedError`
+
+```text
+class SalesforceBulkIngestFailedError(SalesforceError):
+```
+
+#### 説明
+
+Bulk API の Ingest ジョブが失敗して終わった（Failed / Aborted）
+
+発生箇所: comken.toolbox.salesforce.bulk_ingest.BulkIngestAPI の
+          insert() / update() / upsert() / delete()
+
+対処:
+    表示されたエラー内容を確認する。CSV の列名・データ型・
+    実行ユーザーの権限を見直す
+
+#### `__init__`
+
+```text
+def __init__(self, job_id: str, state: str, error_message: str) -> None:
+```
+
+### `SalesforceBulkIngestTimeoutError`
+
+```text
+class SalesforceBulkIngestTimeoutError(SalesforceError):
+```
+
+#### 説明
+
+Bulk API の Ingest ジョブが制限時間内に終わらなかった
+
+発生箇所: comken.toolbox.salesforce.bulk_ingest.BulkIngestAPI の
+          insert() / update() / upsert() / delete()
+
+対処:
+    timeout_seconds を長くするか、データを分割して再実行する
+
+#### `__init__`
+
+```text
+def __init__(self, job_id: str, timeout_seconds: float) -> None:
+```
+
 ### `BrowserError`
 
 ```text
@@ -10992,6 +11037,177 @@ Raises:
     SalesforceBulkQueryFailedError: ``run()`` から伝播。
     SalesforceBulkQueryTimeoutError: ``run()`` から伝播。
 
+### `BulkIngestAPI`
+
+```text
+class BulkIngestAPI:
+```
+
+#### 説明
+
+Bulk API 2.0 の Ingest ジョブで大量レコードを一括変更する。
+
+``SalesforceBase`` が ``bulk_ingest`` 属性として持っている。単体では作らない。
+
+    with Sandbox() as sf:
+        result = sf.bulk_ingest.insert("Account", [{"Name": "テスト"}])
+        if len(result.failed) > 0:
+            print(f"{len(result.failed)} 行が失敗しました")
+
+**書き込み経路が ``DataLoaderCLI`` と異なる点:**  ``DataLoaderCLI``
+（docs/dataloader.md）はデスクトップアプリ版 Data Loader を
+サブプロセスで呼び出す方式で、デスクトップアプリのインストールが
+必要になる。``BulkIngestAPI`` は Salesforce の REST API を直接
+叩くため、**デスクトップアプリのインストールは不要**。ブラウザで
+データ変更できない環境（Data Import Wizard がない組織など）からの
+移行先として使える。
+
+**本物の Salesforce 組織に対して未検証。** ジョブ作成・アップロード・
+状態確認・結果取得のエンドポイントとレスポンス構造は Salesforce の
+公式リファレンスに基づいて実装しているが、実際のレスポンスで想定と
+違う点が見つかったら、このモジュールを修正すること。
+
+#### `__init__`
+
+```text
+def __init__(self, client: SalesforceBase) -> None:
+```
+
+##### 説明
+
+Args:
+    client: この Bulk Ingest API を使う Salesforce クライアント。
+
+#### `insert`
+
+```text
+@measure
+def insert(self, object_name: str, rows: list[dict] | Table, *, timeout_seconds: float=DEFAULT_TIMEOUT_SECONDS) -> BulkIngestResult:
+```
+
+##### 説明
+
+指定オブジェクトに複数レコードを一括作成する。
+
+``rows`` の各 dict のキーが CSV の列名になる。Salesforce の
+項目 API 参照名（例: ``"Name"``, ``"Account__c"``）をそのまま使うこと。
+
+Args:
+    object_name: オブジェクトの API 参照名（例: ``"Account"``）。
+    rows: 作成するレコードの ``list[dict]`` または ``Table``。
+    timeout_seconds: ジョブ完了を待つ上限秒数。大量データの
+        投入を想定し、既定値は600秒（10分）。
+
+Returns:
+    実行結果を表す ``BulkIngestResult``。
+
+Raises:
+    SalesforceBulkIngestFailedError: ジョブが失敗して終わった場合
+        （状態が ``Failed`` / ``Aborted``）。
+    SalesforceBulkIngestTimeoutError: ``timeout_seconds`` 以内に
+        ジョブが完了しなかった場合。
+
+#### `update`
+
+```text
+@measure
+def update(self, object_name: str, rows: list[dict] | Table, *, timeout_seconds: float=DEFAULT_TIMEOUT_SECONDS) -> BulkIngestResult:
+```
+
+##### 説明
+
+既存レコードを一括更新する。
+
+``rows`` の各 dict には ``Id`` 列の値（Salesforce のレコード Id）を
+含めること。
+
+Args:
+    object_name: オブジェクトの API 参照名（例: ``"Account"``）。
+    rows: 更新するレコードの ``list[dict]`` または ``Table``。
+        ``Id`` 列必須。
+    timeout_seconds: ``insert()`` と同じ。
+
+Returns:
+    実行結果を表す ``BulkIngestResult``。
+
+Raises:
+    SalesforceBulkIngestFailedError: ``insert()`` から伝播。
+    SalesforceBulkIngestTimeoutError: ``insert()`` から伝播。
+
+#### `upsert`
+
+```text
+@measure
+def upsert(self, object_name: str, external_id_field: str, rows: list[dict] | Table, *, timeout_seconds: float=DEFAULT_TIMEOUT_SECONDS) -> BulkIngestResult:
+```
+
+##### 説明
+
+外部 ID で複数レコードを一括 upsert する（一致すれば更新、なければ作成）。
+
+``rows`` の各 dict には ``external_id_field`` 列の値を含めること。
+
+Args:
+    object_name: オブジェクトの API 参照名（例: ``"Account"``）。
+    external_id_field: 外部 ID 項目の API 参照名（例: ``"ExternalId__c"``）。
+    rows: upsert するレコードの ``list[dict]`` または ``Table``。
+        ``external_id_field`` 列必須。
+    timeout_seconds: ``insert()`` と同じ。
+
+Returns:
+    実行結果を表す ``BulkIngestResult``。
+
+Raises:
+    SalesforceBulkIngestFailedError: ``insert()`` から伝播。
+    SalesforceBulkIngestTimeoutError: ``insert()`` から伝播。
+
+#### `delete`
+
+```text
+@measure
+def delete(self, object_name: str, rows: list[dict] | Table, *, timeout_seconds: float=DEFAULT_TIMEOUT_SECONDS) -> BulkIngestResult:
+```
+
+##### 説明
+
+既存レコードを一括削除する。
+
+``rows`` の各 dict には ``Id`` 列の値（Salesforce のレコード Id）を
+含めること。``Id`` 以外の列は指定しても無視される。
+
+Args:
+    object_name: オブジェクトの API 参照名（例: ``"Account"``）。
+    rows: 削除するレコードの ``list[dict]`` または ``Table``。
+        ``Id`` 列必須。
+    timeout_seconds: ``insert()`` と同じ。
+
+Returns:
+    実行結果を表す ``BulkIngestResult``。
+
+Raises:
+    SalesforceBulkIngestFailedError: ``insert()`` から伝播。
+    SalesforceBulkIngestTimeoutError: ``insert()`` から伝播。
+
+### `BulkIngestResult`
+
+```text
+class BulkIngestResult:
+```
+
+#### 説明
+
+Bulk Ingest ジョブの実行結果。
+
+Attributes:
+    successful: 成功した行の ``Table``（例: sf__Id, sf__Created, 元の列 ...）。
+    failed: 失敗した行の ``Table``（例: sf__Id, sf__Error, 元の列 ...）。
+        **1件以上の失敗行が含まれていても例外ではない**（ジョブ自体は
+        正常終了しつつ一部の行が失敗することは仕様上起こり得るため、
+        ここでは例外にしない。呼び出し側で ``len(result.failed)`` を
+        見て判断する）。
+    job_id: ジョブID。
+    state: ジョブの最終状態（"JobComplete" など）。
+
 ### `ClientCredentialsOAuth`
 
 定義を解決できませんでした。
@@ -11366,7 +11582,7 @@ Args:
 #### `request`
 
 ```text
-def request(self, method: str, path: str, body: dict | None=None, component: str='other', headers: dict[str, str] | None=None) -> tuple[dict | list | str | None, dict]:
+def request(self, method: str, path: str, body: dict | None=None, component: str='other', headers: dict[str, str] | None=None, data: str | None=None) -> tuple[dict | list | str | None, dict]:
 ```
 
 ##### 説明
@@ -11385,6 +11601,8 @@ Args:
     headers: この呼び出しだけ上書きする追加ヘッダー（省略可）。
         セッションの既定ヘッダーと同名のキーはこの値が勝つ（``requests``
         ライブラリの挙動）。``None`` のときは何も追加しない。
+    data: CSV 本体など、生テキストで送りたいときに指定する（省略可）。
+        ``body`` と同じ呼び出しでは使わない。
 
 Raises:
     SalesforceRequestError: API がエラーを返した場合。
@@ -11410,6 +11628,29 @@ Args:
 
 Returns:
     (CSV本文の文字列, レスポンスヘッダーの辞書)。本文が無ければ空文字。
+
+#### `request_upload_csv`
+
+```text
+def request_upload_csv(self, method: str, path: str, csv_text: str, component: str='other') -> tuple[dict | list | str | None, dict]:
+```
+
+##### 説明
+
+CSV 本体をアップロードする API を呼ぶ（Bulk API 2.0 の Ingest データ送信専用）。
+
+``request()`` と同じ 5xx/429 リトライ・401 再認証を共有するため、
+Content-Type ヘッダーだけ text/csv に差し替えて ``request()`` を呼ぶ薄いラッパー。
+JSON ではなく CSV の生テキストを本体として送る点が ``request()`` の ``body=`` と異なる。
+
+Args:
+    method: HTTP メソッド（Bulk Ingest のデータ送信は PUT）。
+    path: "/services/data/..." から始まるパス。
+    csv_text: アップロードする CSV 本文（1行目はヘッダー行）。
+    component: 計測での呼び出し元の区別。
+
+Returns:
+    (レスポンス本文, レスポンスヘッダーの辞書)。
 
 #### `data_path`
 
@@ -11644,7 +11885,7 @@ Args:
 #### `request`
 
 ```text
-def request(self, method: str, path: str, body: dict | None=None, component: str='other', headers: dict[str, str] | None=None) -> tuple[dict | list | str | None, dict]:
+def request(self, method: str, path: str, body: dict | None=None, component: str='other', headers: dict[str, str] | None=None, data: str | None=None) -> tuple[dict | list | str | None, dict]:
 ```
 
 ##### 説明
@@ -11663,6 +11904,8 @@ Args:
     headers: この呼び出しだけ上書きする追加ヘッダー（省略可）。
         セッションの既定ヘッダーと同名のキーはこの値が勝つ（``requests``
         ライブラリの挙動）。``None`` のときは何も追加しない。
+    data: CSV 本体など、生テキストで送りたいときに指定する（省略可）。
+        ``body`` と同じ呼び出しでは使わない。
 
 Raises:
     SalesforceRequestError: API がエラーを返した場合。
@@ -11688,6 +11931,29 @@ Args:
 
 Returns:
     (CSV本文の文字列, レスポンスヘッダーの辞書)。本文が無ければ空文字。
+
+#### `request_upload_csv`
+
+```text
+def request_upload_csv(self, method: str, path: str, csv_text: str, component: str='other') -> tuple[dict | list | str | None, dict]:
+```
+
+##### 説明
+
+CSV 本体をアップロードする API を呼ぶ（Bulk API 2.0 の Ingest データ送信専用）。
+
+``request()`` と同じ 5xx/429 リトライ・401 再認証を共有するため、
+Content-Type ヘッダーだけ text/csv に差し替えて ``request()`` を呼ぶ薄いラッパー。
+JSON ではなく CSV の生テキストを本体として送る点が ``request()`` の ``body=`` と異なる。
+
+Args:
+    method: HTTP メソッド（Bulk Ingest のデータ送信は PUT）。
+    path: "/services/data/..." から始まるパス。
+    csv_text: アップロードする CSV 本文（1行目はヘッダー行）。
+    component: 計測での呼び出し元の区別。
+
+Returns:
+    (レスポンス本文, レスポンスヘッダーの辞書)。
 
 #### `data_path`
 
@@ -11922,7 +12188,7 @@ Args:
 #### `request`
 
 ```text
-def request(self, method: str, path: str, body: dict | None=None, component: str='other', headers: dict[str, str] | None=None) -> tuple[dict | list | str | None, dict]:
+def request(self, method: str, path: str, body: dict | None=None, component: str='other', headers: dict[str, str] | None=None, data: str | None=None) -> tuple[dict | list | str | None, dict]:
 ```
 
 ##### 説明
@@ -11941,6 +12207,8 @@ Args:
     headers: この呼び出しだけ上書きする追加ヘッダー（省略可）。
         セッションの既定ヘッダーと同名のキーはこの値が勝つ（``requests``
         ライブラリの挙動）。``None`` のときは何も追加しない。
+    data: CSV 本体など、生テキストで送りたいときに指定する（省略可）。
+        ``body`` と同じ呼び出しでは使わない。
 
 Raises:
     SalesforceRequestError: API がエラーを返した場合。
@@ -11966,6 +12234,29 @@ Args:
 
 Returns:
     (CSV本文の文字列, レスポンスヘッダーの辞書)。本文が無ければ空文字。
+
+#### `request_upload_csv`
+
+```text
+def request_upload_csv(self, method: str, path: str, csv_text: str, component: str='other') -> tuple[dict | list | str | None, dict]:
+```
+
+##### 説明
+
+CSV 本体をアップロードする API を呼ぶ（Bulk API 2.0 の Ingest データ送信専用）。
+
+``request()`` と同じ 5xx/429 リトライ・401 再認証を共有するため、
+Content-Type ヘッダーだけ text/csv に差し替えて ``request()`` を呼ぶ薄いラッパー。
+JSON ではなく CSV の生テキストを本体として送る点が ``request()`` の ``body=`` と異なる。
+
+Args:
+    method: HTTP メソッド（Bulk Ingest のデータ送信は PUT）。
+    path: "/services/data/..." から始まるパス。
+    csv_text: アップロードする CSV 本文（1行目はヘッダー行）。
+    component: 計測での呼び出し元の区別。
+
+Returns:
+    (レスポンス本文, レスポンスヘッダーの辞書)。
 
 #### `data_path`
 

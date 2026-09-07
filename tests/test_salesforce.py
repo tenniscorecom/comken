@@ -12,6 +12,8 @@ from comken.exceptions import (
     CredentialNotFoundError,
     InvalidCredentialNameError,
     SalesforceAuthError,
+    SalesforceBulkIngestFailedError,
+    SalesforceBulkIngestTimeoutError,
     SalesforceBulkQueryFailedError,
     SalesforceBulkQueryTimeoutError,
     SalesforceConnectionError,
@@ -1226,3 +1228,232 @@ class TestBulkQuery:
 
         assert text == "Id,Name\n001,A\n"
         assert headers["Sforce-Locator"] == "XYZ999"
+
+
+class TestBulkIngest:
+    """Bulk API 2.0 Ingest ジョブの配線を HTTP モックで確認する。
+
+    各テストで、ジョブ作成 -> アップロード -> ジョブを閉じる -> 状態確認
+    (1回以上) -> 成功結果取得(1ページ以上) -> 失敗結果取得(1ページ以上) の
+    順でモックレスポンスを並べる。
+    """
+
+    JOB_ID = "750xx0000000001AAA"
+    OBJECT_NAME = "Account"
+
+    def _csv_response(self, text, locator="null"):
+        """CSV ボディを持つモックレスポンスを作る。
+
+        Sforce-Locator ヘッダーを locator 引数で指定できる。
+        """
+        return _response(
+            text=text,
+            headers={"Content-Type": "text/csv", "Sforce-Locator": locator},
+        )
+
+    def _responses_for_happy_path(self, csv_text_success="sf__Id\n001\n", csv_text_fail=""):
+        """成功/失敗結果とも1ページで終わる最小モックレスポンスを返す。
+
+        ジョブ作成 -> アップロード -> ジョブを閉じる -> 状態確認(完了) ->
+        成功結果 -> 失敗結果 の6個。
+        """
+        return [
+            _response(json_body={"id": self.JOB_ID, "state": "UploadComplete"}),
+            _response(204),
+            _response(204),
+            _response(json_body={"id": self.JOB_ID, "state": "JobComplete"}),
+            self._csv_response(csv_text_success),
+            self._csv_response(csv_text_fail),
+        ]
+
+    def test_insert_creates_job_with_correct_body(self):
+        """insert はジョブ作成の POST body に ``operation: "insert"`` を含め、
+        ``externalIdFieldName`` は**含めない**。"""
+        with (
+            _salesforce(self._responses_for_happy_path()) as (client, session, _),
+            patch("comken.toolbox.salesforce.bulk_ingest.time.sleep"),
+        ):
+            result = client.bulk_ingest.insert(self.OBJECT_NAME, [{"Name": "A"}])
+
+        # ジョブ作成 (POST /jobs/ingest) の body を確認
+        create_call = session.request.call_args_list[0]
+        assert create_call[0][0] == "POST"
+        assert create_call[0][1] == f"{INSTANCE_URL}{DATA_PREFIX}/jobs/ingest"
+        assert create_call[1]["json"] == {
+            "object": self.OBJECT_NAME,
+            "operation": "insert",
+            "lineEnding": "LF",
+            "contentType": "CSV",
+        }
+        assert result.state == "JobComplete"
+        assert result.job_id == self.JOB_ID
+
+    def test_upsert_creates_job_with_external_id_field(self):
+        """upsert は ``externalIdFieldName`` を body に含めてジョブを作成する。"""
+        with (
+            _salesforce(self._responses_for_happy_path()) as (client, session, _),
+            patch("comken.toolbox.salesforce.bulk_ingest.time.sleep"),
+        ):
+            client.bulk_ingest.upsert(self.OBJECT_NAME, "ExternalId__c", [{"ExternalId__c": "A1"}])
+
+        assert session.request.call_args_list[0][1]["json"] == {
+            "object": self.OBJECT_NAME,
+            "operation": "upsert",
+            "lineEnding": "LF",
+            "contentType": "CSV",
+            "externalIdFieldName": "ExternalId__c",
+        }
+
+    def test_delete_creates_job_with_correct_operation(self):
+        """delete は ``operation: "delete"`` を body に含めてジョブを作成する。"""
+        with (
+            _salesforce(self._responses_for_happy_path()) as (client, session, _),
+            patch("comken.toolbox.salesforce.bulk_ingest.time.sleep"),
+        ):
+            client.bulk_ingest.delete(self.OBJECT_NAME, [{"Id": "001xx"}])
+
+        assert session.request.call_args_list[0][1]["json"]["operation"] == "delete"
+
+    def test_upload_uses_text_csv_header_and_raw_data(self):
+        """CSV アップロードの PUT は ``Content-Type: text/csv`` ヘッダーと
+        ``json=`` ではなく ``data=`` で CSV 本文を送る。
+
+        リクエストの順: ジョブ作成 (POST) -> アップロード (PUT) -> ジョブを閉じる (PATCH)
+        なので 2 番目の call_args_list が PUT アップロード。
+        """
+        responses = self._responses_for_happy_path()
+        with (
+            _salesforce(responses) as (client, session, _),
+            patch("comken.toolbox.salesforce.bulk_ingest.time.sleep"),
+        ):
+            client.bulk_ingest.insert(self.OBJECT_NAME, [{"Name": "A"}])
+
+        upload_call = session.request.call_args_list[1]
+        method, url = upload_call[0]
+        assert (method, url) == (
+            "PUT",
+            f"{INSTANCE_URL}{DATA_PREFIX}/jobs/ingest/{self.JOB_ID}/batches",
+        )
+        # アップロードだけ CSV 用の Content-Type を上書きする
+        assert upload_call[1]["headers"] == {"Content-Type": "text/csv"}
+        # JSON ではなく生テキストとして送る
+        assert "json" not in upload_call[1] or upload_call[1].get("json") is None
+        assert isinstance(upload_call[1]["data"], str)
+        # UTF-8 BOM は CSV 書き込み既定で付くので、それを除いて先頭行を確認
+        body = upload_call[1]["data"]
+        if body.startswith("﻿"):
+            body = body[1:]
+        first_line = body.splitlines()[0]
+        assert first_line == "Name", "CSV 本文はヘッダー行（Name）から始まる"
+
+    def test_failed_job_raises_with_error_message(self):
+        """状態確認が ``Failed``（errorMessage 付き）なら
+        ``SalesforceBulkIngestFailedError`` を送出し、メッセージに
+        ``errorMessage`` の内容を含める。"""
+        responses = [
+            _response(json_body={"id": self.JOB_ID, "state": "UploadComplete"}),
+            _response(204),  # アップロード成功
+            _response(204),  # ジョブを閉じる
+            _response(
+                json_body={
+                    "id": self.JOB_ID,
+                    "state": "Failed",
+                    "errorMessage": "項目 Name がありません",
+                }
+            ),
+        ]
+        with (
+            _salesforce(responses) as (client, _, _),
+            patch("comken.toolbox.salesforce.bulk_ingest.time.sleep"),
+            pytest.raises(SalesforceBulkIngestFailedError, match="項目 Name がありません"),
+        ):
+            client.bulk_ingest.insert(self.OBJECT_NAME, [{"Name": "A"}])
+
+    def test_timeout_raises_when_job_does_not_finish(self):
+        """``timeout_seconds=0`` なら ``SalesforceBulkIngestTimeoutError`` になる。"""
+        responses = [
+            _response(json_body={"id": self.JOB_ID, "state": "UploadComplete"}),
+            _response(204),  # アップロード成功
+            _response(204),  # ジョブを閉じる
+            _response(json_body={"id": self.JOB_ID, "state": "InProgress"}),
+        ]
+        with (
+            _salesforce(responses) as (client, _, _),
+            patch("comken.toolbox.salesforce.bulk_ingest.time.sleep"),
+            pytest.raises(SalesforceBulkIngestTimeoutError, match=r"0 秒"),
+        ):
+            client.bulk_ingest.insert(self.OBJECT_NAME, [{"Name": "A"}], timeout_seconds=0)
+
+    def test_failed_rows_do_not_raise(self):
+        """``failedResults`` に1件以上の行が含まれていても例外にせず、
+        ``BulkIngestResult.failed`` にそのまま入れる。"""
+        success_csv = "sf__Id,sf__Created\n001,2024-01-01\n"
+        failed_csv = "sf__Id,sf__Error\n002,項目 X が不正です\n"
+        with (
+            _salesforce(self._responses_for_happy_path(success_csv, failed_csv)) as (
+                client,
+                _,
+                _,
+            ),
+            patch("comken.toolbox.salesforce.bulk_ingest.time.sleep"),
+        ):
+            result = client.bulk_ingest.insert(self.OBJECT_NAME, [{"Name": "A"}])
+
+        assert result.successful.read_rows() == [{"sf__Id": "001", "sf__Created": "2024-01-01"}]
+        assert result.failed.read_rows() == [{"sf__Id": "002", "sf__Error": "項目 X が不正です"}]
+
+    def test_successful_results_concatenate_multiple_pages_without_duplicate_header(self):
+        """``successfulResults`` が2ページに分かれるケースで、2ページ目の
+        ヘッダー行を二重にせず連結する。"""
+        responses = [
+            _response(json_body={"id": self.JOB_ID, "state": "UploadComplete"}),
+            _response(204),  # アップロード成功
+            _response(204),  # ジョブを閉じる
+            _response(json_body={"id": self.JOB_ID, "state": "JobComplete"}),
+            self._csv_response("sf__Id\n001\n002\n", locator="ABC123"),
+            self._csv_response("sf__Id\n003\n004\n", locator="null"),
+            # 失敗結果は空1ページ
+            self._csv_response("", locator="null"),
+        ]
+        with (
+            _salesforce(responses) as (client, _, _),
+            patch("comken.toolbox.salesforce.bulk_ingest.time.sleep"),
+        ):
+            result = client.bulk_ingest.insert(self.OBJECT_NAME, [{"Name": "A"}])
+
+        assert result.successful.read_rows() == [
+            {"sf__Id": "001"},
+            {"sf__Id": "002"},
+            {"sf__Id": "003"},
+            {"sf__Id": "004"},
+        ]
+
+    def test_dry_run_does_not_send_http_and_returns_empty_result(self):
+        """``dry_run()`` の中で ``insert()`` を呼ぶと実際の HTTP 呼び出しが
+        1回も発生せず、空の ``BulkIngestResult`` を返す。"""
+        with _salesforce([]) as (client, session, _), dry_run():
+            result = client.bulk_ingest.insert(self.OBJECT_NAME, [{"Name": "A"}])
+
+        session.request.assert_not_called()
+        assert result.state == "DRY-RUN"
+        assert result.job_id == ""
+        assert result.successful.read_rows() == []
+        assert result.failed.read_rows() == []
+
+    def test_request_data_argument_passes_raw_text_without_json(self):
+        """``SalesforceBase.request()`` に ``data="..."`` を渡すと、
+        ``session.request`` の ``data=`` 引数にそのまま渡され、``json=``
+        には ``None`` が渡される（``data`` を渡さない既存の経路は壊さない）。"""
+        with _salesforce([_response(json_body={"records": [], "done": True})]) as (
+            client,
+            session,
+            _,
+        ):
+            client.request("GET", f"{DATA_PREFIX}/limits", data="raw csv body")
+
+        # 直近の呼び出し（query ではない data 引数付き呼び出し）を確認
+        last_call = session.request.call_args_list[-1]
+        assert last_call[1]["data"] == "raw csv body"
+        assert last_call[1]["json"] is None
+        # 既存の query() 経路は data を渡していないので影響しない（テスト冒頭の
+        # query() 呼び出しは data=None のまま動いている）
