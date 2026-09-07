@@ -657,10 +657,10 @@ CSVやExcelに直接依存しないため、加工処理をファイルI/Oから
 def __init__(self, columns: list[str] | tuple[str, ...], rows: list[dict[str, Any]], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
 ```
 
-#### `read_rows`
+#### `to_rows`
 
 ```text
-def read_rows(self) -> list[dict[str, Any]]:
+def to_rows(self) -> list[dict[str, Any]]:
 ```
 
 ##### 説明
@@ -860,8 +860,8 @@ def unmatched(self) -> UnmatchedRows:
 突合しなかった行を ``UnmatchedRows`` で返す。
 
 ``only_in_read`` は write に対応が無い read 行（追加候補）。
-``Table`` として返すので ``.read_rows()`` / ``.filter()`` などの Table 標準の
-インターフェースが使える。 戻り値は ``Table.read_rows()`` と同じく **read 行の
+``Table`` として返すので ``.to_rows()`` / ``.filter()`` などの Table 標準の
+インターフェースが使える。 戻り値は ``Table.to_rows()`` と同じく **read 行の
 コピー** で、書き換えても ``read`` にも ``result()`` にも影響しない。
 
 ``only_in_write`` は read に対応が無い write 行（破棄候補）。
@@ -917,7 +917,7 @@ def result(self) -> Table:
 ``result()`` は同じ作業 Table インスタンスを返し続けるので、
 ``result().append(...)`` のように破壊的に加工した場合や、 ``result()`` を
 呼んだ後に ``unmatched().only_in_write`` の ``write_row`` を書き換えた場合も、
-後続の ``result().read_rows()`` 呼び出しに反映される（``Table._iter_rows_for_update``
+後続の ``result().to_rows()`` 呼び出しに反映される（``Table._iter_rows_for_update``
 経由で実体 dict を共有しているため）。
 
 Example:
@@ -1190,7 +1190,7 @@ CSV と Excel をまたいだ比較にも使える（"1000" と 1000 は同一�
 既存の ``list[dict]`` をそのまま渡すときはリストを指定する。戻り値の
 ``added`` / ``removed`` は ``Table`` になり、``filter`` / ``select`` /
 ``count`` などの Table 標準の操作が直接使える。Table インスタンスから
-``list[dict]`` を取り出すには ``Table.read_rows()`` を使う。
+``list[dict]`` を取り出すには ``Table.to_rows()`` を使う。
 Args:
     before: 変更前のデータ（``Table`` または辞書のリスト）。
     after: 変更後のデータ（``Table`` または辞書のリスト）。
@@ -3024,10 +3024,10 @@ CSVやExcelに直接依存しないため、加工処理をファイルI/Oから
 def __init__(self, columns: list[str] | tuple[str, ...], rows: list[dict[str, Any]], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
 ```
 
-#### `read_rows`
+#### `to_rows`
 
 ```text
-def read_rows(self) -> list[dict[str, Any]]:
+def to_rows(self) -> list[dict[str, Any]]:
 ```
 
 ##### 説明
@@ -3227,8 +3227,8 @@ def unmatched(self) -> UnmatchedRows:
 突合しなかった行を ``UnmatchedRows`` で返す。
 
 ``only_in_read`` は write に対応が無い read 行（追加候補）。
-``Table`` として返すので ``.read_rows()`` / ``.filter()`` などの Table 標準の
-インターフェースが使える。 戻り値は ``Table.read_rows()`` と同じく **read 行の
+``Table`` として返すので ``.to_rows()`` / ``.filter()`` などの Table 標準の
+インターフェースが使える。 戻り値は ``Table.to_rows()`` と同じく **read 行の
 コピー** で、書き換えても ``read`` にも ``result()`` にも影響しない。
 
 ``only_in_write`` は read に対応が無い write 行（破棄候補）。
@@ -3284,7 +3284,7 @@ def result(self) -> Table:
 ``result()`` は同じ作業 Table インスタンスを返し続けるので、
 ``result().append(...)`` のように破壊的に加工した場合や、 ``result()`` を
 呼んだ後に ``unmatched().only_in_write`` の ``write_row`` を書き換えた場合も、
-後続の ``result().read_rows()`` 呼び出しに反映される（``Table._iter_rows_for_update``
+後続の ``result().to_rows()`` 呼び出しに反映される（``Table._iter_rows_for_update``
 経由で実体 dict を共有しているため）。
 
 Example:
@@ -6522,288 +6522,6 @@ def is_due(self, now: dt.datetime, *, holidays: set[dt.date] | frozenset[dt.date
 ``ScheduleIntervalMissingError`` を投げる。
 
 
-## `from comken.toolbox import ...`
-
-### `Table`
-
-```text
-class Table:
-```
-
-#### 説明
-
-列と辞書行をメモリで扱う表。
-
-CSVやExcelに直接依存しないため、加工処理をファイルI/Oから分離できます。
-``types`` は入力時に明示された列だけを変換し、暗黙の型推測は行いません。
-
-#### `__init__`
-
-```text
-def __init__(self, columns: list[str] | tuple[str, ...], rows: list[dict[str, Any]], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
-```
-
-#### `read_rows`
-
-```text
-def read_rows(self) -> list[dict[str, Any]]:
-```
-
-##### 説明
-
-現在の行をコピーして返す。元のTableは変更しない。
-
-#### `replace`
-
-```text
-def replace(self, rows: list[dict]) -> Self:
-```
-
-##### 説明
-
-表の全行を置き換え、同じTableを返す。
-
-#### `append`
-
-```text
-def append(self, rows: list[dict] | dict) -> Self:
-```
-
-##### 説明
-
-1行または複数行を末尾へ追加する。
-
-#### `select`
-
-```text
-def select(self, *columns: str) -> Table:
-```
-
-##### 説明
-
-指定した列だけを持つ新しいTableを返す。
-
-#### `filter`
-
-```text
-def filter(self, predicate: Callable[[dict], bool]) -> Table:
-```
-
-##### 説明
-
-条件に一致する行だけを持つ新しいTableを返す。
-
-#### `column`
-
-```text
-def column(self, name: str) -> list[Any]:
-```
-
-##### 説明
-
-指定列の値を順番どおりに返す。
-
-#### `index`
-
-```text
-def index(self, key: str) -> dict[Any, dict]:
-```
-
-##### 説明
-
-指定列をキーにした行の索引を返す。
-
-#### `group_by`
-
-```text
-def group_by(self, key: str) -> dict[Any, Table]:
-```
-
-##### 説明
-
-指定列の値ごとにTableを分けて返す。
-
-#### `concat`
-
-```text
-def concat(self, other: Table) -> Table:
-```
-
-##### 説明
-
-同じ列定義の表を縦に連結する。
-
-列の順番は異なっていても構わないが、列名の集合が異なる表は
-別のデータとして扱う。列不足を空欄で補うと、入力ミスに気づけず
-データ欠落につながるため、ここでは明示的にエラーにする。
-
-### `Transfer`
-
-```text
-class Transfer:
-```
-
-#### 説明
-
-Table 間のキー突合と転記を行う。
-
-基本的な用法は次のとおり。 ``mapping`` は「転記元の列名 → 転記先の列名」。
-3つの取り出し口を使い分けて、read / write を行単位で加工する:
-
-- ``matched_rows()``: 両方にキーが揃う行を ``(read_row, write_row)`` で返す
-  （**両方とも作業 Table の実体行**）
-- ``transfer_rows()``: read 全行を ``(read_row, write_row | None)`` で返す
-  （write に無い行は ``None``、``read_row`` は **コピー**）
-- ``unmatched()``: 突合しなかった行を ``UnmatchedRows`` で返す
-  - ``only_in_read`` は **コピー**（``Table``）。書き換えても ``read`` にも
-    ``result()`` にも影響しない
-  - ``only_in_write`` は **作業 Table の実体行**（``list[Row]``）。書き換えると
-    ``result()`` に反映される
-
-Example:
-    transfer = Transfer(read_table, write_table, mapping,
-                        read_key="顧客ID", write_key="顧客ID")
-    for read_row, write_row in transfer.matched_rows():
-        if 条件:
-            continue                       # この行は破棄
-        transfer.apply_mapping(read_row, write_row)   # mapping の値をコピー
-        # 必要なら write_row["備考"] = "..." のように追加加工
-    # write に無い read 行は result() に追加していく（新規行の追加）
-    for read_row in transfer.unmatched().only_in_read:
-        transfer.result().append({
-            "顧客ID": read_row["顧客ID"],
-            "顧客名": read_row["取引先"],
-            "請求額": read_row["金額"],
-            "備考": "新規追加",
-        })
-    # read に無い write 行は「転記元に無し」と書き換える（result() に出るので別途 filter する）
-    for write_row in transfer.unmatched().only_in_write:
-        write_row["備考"] = "転記元に無し"
-
-**条件は ``apply_mapping()`` より前に書くこと。** Python の ``for`` ループは
-``continue`` したかどうかを呼び出し側に伝えないため、ループ内で
-``apply_mapping()`` を呼ばずに ``continue`` した行は、作業 Table へ反映されない。
-条件判定を ``apply_mapping()`` の後ろに書くと、``continue`` しても mapping が
-適用済みとなり破棄できないので、判定は必ず ``apply_mapping()`` の前に置く。
-
-**空キー (``None`` / ``""``) は突合対象外**。 値が無いキーは read 側・write 側の
-どちらでも照合に使わず、``unmatched()`` 側へ流れる。 ``0`` や ``False`` は
-空ではない（数値・bool の 0 落ち判定を避けるため）。 複合キーは **1要素でも空**
-なら空とみなす。
-
-#### `__init__`
-
-```text
-def __init__(self, read: Table, write: Table, mapping: Mapping[str, str], *, read_key: str | Sequence[str] | None=None, write_key: str | Sequence[str] | None=None) -> None:
-```
-
-#### `transfer_rows`
-
-```text
-def transfer_rows(self) -> Iterator[tuple[Row, Row | None]]:
-```
-
-##### 説明
-
-転記元の全行を ``(read_row, write_row)`` で返す。
-
-転記先に存在しない行は ``(read_row, None)`` として返す。新規行の追加が
-必要かどうかは利用者が ``if write_row is None: ...`` で判定する。
-書き込みは ``apply_mapping(read_row, write_row)`` を中心に行い、
-必要な列だけを ``write_row[write_col] = read_row[read_col]`` の形で
-個別に上書きする。 結果は ``result()`` で取り出す。
-
-#### `matched_rows`
-
-```text
-def matched_rows(self) -> Iterator[tuple[Row, Row]]:
-```
-
-##### 説明
-
-両方に存在する行だけを ``(read_row, write_row)`` で返す。
-
-転記先に存在しない行（``destination`` が ``None``）は含まない。
-
-#### `unmatched`
-
-```text
-def unmatched(self) -> UnmatchedRows:
-```
-
-##### 説明
-
-突合しなかった行を ``UnmatchedRows`` で返す。
-
-``only_in_read`` は write に対応が無い read 行（追加候補）。
-``Table`` として返すので ``.read_rows()`` / ``.filter()`` などの Table 標準の
-インターフェースが使える。 戻り値は ``Table.read_rows()`` と同じく **read 行の
-コピー** で、書き換えても ``read`` にも ``result()`` にも影響しない。
-
-``only_in_write`` は read に対応が無い write 行（破棄候補）。
-戻り値は ``matched_rows()`` が返す ``write_row`` と同じく **作業 Table の
-実体行**。 ``write_row["備考"] = "破棄予定"`` のように書き換えると
-``result()`` の戻り値へ反映される。
-
-空キー (``None`` / ``""``) の行も両側に含む。 キーが空なので照合に使えず、
-必ず対応が無いため。
-
-``transfer_rows()`` / ``matched_rows()`` を呼ばずに呼んでも動く。
-
-#### `apply_mapping`
-
-```text
-def apply_mapping(self, read_row: Row, write_row: Row | None) -> None:
-```
-
-##### 説明
-
-コンストラクタで渡された ``mapping`` どおりに値を ``write_row`` へコピーする。
-
-mapping の read 列 / write 列は ``__init__`` で存在を検証済みなので、
-ここで再びキー存在を確かめない。 ``write_row`` が ``None`` の場合
-（``transfer_rows()`` の ``(read_row, None)`` をそのまま渡した場合など）は
-転記先の行が無いので ``TransferDestinationMissingError`` で停止する。
-
-入力 ``read`` / ``write`` には触れない。書き込みは Transfer 内部の
-作業 Table に紐づいた ``write_row`` に対して行う。
-
-Args:
-    read_row: 転記元の行。
-    write_row: 転記先の行。 ``matched_rows()`` の戻り値か、
-        ``transfer_rows()`` の戻り値で ``None`` でないもの。
-
-Raises:
-    TransferDestinationMissingError: ``write_row`` が ``None`` のとき。
-
-#### `result`
-
-```text
-def result(self) -> Table:
-```
-
-##### 説明
-
-変更後の Table を返す。
-
-``transfer_rows()`` / ``matched_rows()`` のイテレーション中に ``write_row``
-に対して行った変更が反映された作業用 Table を返す。 イテレータを 1 度も
-進めないうちに ``result()`` を呼ぶと ``write`` のコピー（変更なし）が返る。
-
-``result()`` は同じ作業 Table インスタンスを返し続けるので、
-``result().append(...)`` のように破壊的に加工した場合や、 ``result()`` を
-呼んだ後に ``unmatched().only_in_write`` の ``write_row`` を書き換えた場合も、
-後続の ``result().read_rows()`` 呼び出しに反映される（``Table._iter_rows_for_update``
-経由で実体 dict を共有しているため）。
-
-Example:
-    transfer = Transfer(source, destination, mapping,
-                        read_key="顧客ID", write_key="顧客ID")
-    for source_row, destination_row in transfer.matched_rows():
-        transfer.apply_mapping(source_row, destination_row)
-    final_table = transfer.result()  # 変更後の Table
-
-
 ## `from comken.toolbox.access import ...`
 
 ### `AccessDatabase`
@@ -6831,7 +6549,7 @@ Access データベースを COM で操作する。
 容量と帯域を消費する。
 
 数十万件を CSV に出す場合は、Python にデータを載せない ``export_csv()`` を使う。
-``read_rows()`` は逐次処理用であり、結果を ``list`` にすると全件分のメモリを消費する。
+``iter_rows()`` は逐次処理用であり、結果を ``list`` にすると全件分のメモリを消費する。
 
 #### `__init__`
 
@@ -6881,7 +6599,7 @@ def run_query(self, name: str) -> None:
 
 UPDATE・INSERT・DELETE・テーブル作成など、データを変更するクエリ向け。
 元データベースへ変更を反映する場合は、初期化時に ``local_copy=False`` を指定する。
-SELECT クエリの結果を読む場合は ``read_rows()``、CSVへ出す場合は ``export_csv()`` を使う。
+SELECT クエリの結果を読む場合は ``iter_rows()``、CSVへ出す場合は ``export_csv()`` を使う。
 
 #### `export_csv`
 
@@ -6896,10 +6614,10 @@ def export_csv(self, source: str, dst: str | Path, encoding: str=Encoding.CP932)
 
 数十万件でも Python のメモリにデータを載せない、大量件数向けの方法。
 
-#### `read_rows`
+#### `iter_rows`
 
 ```text
-def read_rows(self, source: str) -> Iterator[dict[str, object]]:
+def iter_rows(self, source: str) -> Iterator[dict[str, object]]:
 ```
 
 ##### 説明
@@ -6919,13 +6637,13 @@ def read_table(self, source: str) -> Table:
 
 テーブルまたはクエリをメモリ上の ``Table`` として返す。
 
-全行をメモリへ載せるため、大量データには ``read_rows()`` を使う。
+全行をメモリへ載せるため、大量データには ``iter_rows()`` を使う。
 ``_LARGE_TABLE_WARNING_THRESHOLD`` を超える行を読んだときは警告ログを出す。
 表として絞り込み・索引・転記を行う場合の明示的な入口。
 
-列名は ``read_rows()`` のイテレータから直接取れない（イテレータは
+列名は ``iter_rows()`` のイテレータから直接取れない（イテレータは
 行ごとにしか値を返さない）ため、レコードセットを別途開いて列名だけ
-先に取得する。0 件のときは ``read_rows()`` が空ジェネレータを返すので
+先に取得する。0 件のときは ``iter_rows()`` が空ジェネレータを返すので
 ``columns`` が空になるが、Access 側にもスキーマ API が無いため
 「0 件のとき列名が空」なのは仕様として許容する。
 
@@ -9668,14 +9386,14 @@ def read(self) -> Table:
 全行を読み、指定された列だけを変換したTableを返す。
 
 ファイルの内容を**全件メモリに展開**する。行数が大きいファイル
-（目安: 1 万行を超えるもの）は ``read_rows()`` を使い、1 行ずつ処理する
-ことでメモリ消費を抑える。``read_rows()`` は列名も返さないので、
+（目安: 1 万行を超えるもの）は ``iter_rows()`` を使い、1 行ずつ処理する
+ことでメモリ消費を抑える。``iter_rows()`` は列名も返さないので、
 列名は ``read()`` または ``columns`` 引数で先に取っておく。
 
-#### `read_rows`
+#### `iter_rows`
 
 ```text
-def read_rows(self) -> Iterator[dict[str, str]]:
+def iter_rows(self) -> Iterator[dict[str, str]]:
 ```
 
 ##### 説明
