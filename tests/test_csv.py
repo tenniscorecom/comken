@@ -37,24 +37,24 @@ class TestCSV:
         with CSV(path, types={"id": int}) as csv_file:
             assert csv_file.read() == [{"id": 1, "name": "山田"}]
 
-    def test_read_rows_streams_dicts_one_at_a_time(self, tmp_path) -> None:
-        """``read_rows()`` は 1 行ずつ dict で流す（全件メモリに載せない）。"""
+    def test_iter_rows_streams_dicts_one_at_a_time(self, tmp_path) -> None:
+        """``iter_rows()`` は 1 行ずつ dict で流す（全件メモリに載せない）。"""
         path = tmp_path / "data.csv"
         path.write_text("id,name\n1,山田\n2,鈴木\n3,佐藤\n", encoding="utf-8-sig")
         with CSV(path) as csv_file:
-            iterator = csv_file.read_rows()
+            iterator = csv_file.iter_rows()
             assert next(iterator) == {"id": "1", "name": "山田"}
             assert next(iterator) == {"id": "2", "name": "鈴木"}
             assert next(iterator) == {"id": "3", "name": "佐藤"}
             with pytest.raises(StopIteration):
                 next(iterator)
 
-    def test_read_rows_uses_columns_when_header_is_absent(self, tmp_path) -> None:
+    def test_iter_rows_uses_columns_when_header_is_absent(self, tmp_path) -> None:
         """``columns`` を指定したときはヘッダー行を読まずにデータだけ流す。"""
         path = tmp_path / "no-header.csv"
         path.write_text("A001,1000\nA002,2000\n", encoding="utf-8-sig")
         with CSV(path, columns=["id", "amount"]) as csv_file:
-            assert list(csv_file.read_rows()) == [
+            assert list(csv_file.iter_rows()) == [
                 {"id": "A001", "amount": "1000"},
                 {"id": "A002", "amount": "2000"},
             ]
@@ -70,7 +70,7 @@ class TestCSV:
         path.write_text("A001,1000\n", encoding="utf-8-sig")
         with CSV(path, columns=["注文番号", "金額"]) as csv_file:
             table = csv_file.read()
-        assert table.read_rows() == [{"注文番号": "A001", "金額": "1000"}]
+        assert table.to_rows() == [{"注文番号": "A001", "金額": "1000"}]
 
     def test_append_is_saved_only_on_normal_with_exit(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
@@ -166,7 +166,7 @@ class TestCSV:
         path.write_text("id,amount\n001,2\n", encoding="utf-8-sig")
         with CSV(path, types={"amount": int}) as csv_file:
             table = csv_file.read()
-        assert table.read_rows() == [{"id": "001", "amount": 2}]
+        assert table.to_rows() == [{"id": "001", "amount": 2}]
 
     def test_type_conversion_error_reports_row_and_column(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
@@ -241,4 +241,4 @@ class TestCSV:
         with pytest.raises(TableNotOpenError, match="CSV"):
             CSV(path).count()
         with pytest.raises(TableNotOpenError, match="CSV"):
-            CSV(path).read_rows()
+            CSV(path).iter_rows()

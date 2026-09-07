@@ -42,7 +42,7 @@ DEFAULT_BACKUP_DAYS = 7
 BACKUP_DATE_FORMAT = "%Y%m%d_%H%M%S"
 BACKUP_FOLDER_NAME = "backup"
 # read_table() は全件を list にして返すため、この件数を超えるとメモリに厳しい。
-# 大量データは read_rows() か export_csv() を使うよう、利用者へ知らせる境界。
+# 大量データは iter_rows() か export_csv() を使うよう、利用者へ知らせる境界。
 _LARGE_TABLE_WARNING_THRESHOLD = 50_000
 _ENCODING_CODE_PAGES = {
     Encoding.CP932: CP932_CODE_PAGE,
@@ -68,7 +68,7 @@ class AccessDatabase(FileBase):
     容量と帯域を消費する。
 
     数十万件を CSV に出す場合は、Python にデータを載せない ``export_csv()`` を使う。
-    ``read_rows()`` は逐次処理用であり、結果を ``list`` にすると全件分のメモリを消費する。
+    ``iter_rows()`` は逐次処理用であり、結果を ``list`` にすると全件分のメモリを消費する。
     """
 
     SUFFIXES = (".accdb", ".mdb")
@@ -172,7 +172,7 @@ class AccessDatabase(FileBase):
 
         UPDATE・INSERT・DELETE・テーブル作成など、データを変更するクエリ向け。
         元データベースへ変更を反映する場合は、初期化時に ``local_copy=False`` を指定する。
-        SELECT クエリの結果を読む場合は ``read_rows()``、CSVへ出す場合は ``export_csv()`` を使う。
+        SELECT クエリの結果を読む場合は ``iter_rows()``、CSVへ出す場合は ``export_csv()`` を使う。
         """
         self._ensure_query(name)
         if is_dry_run():
@@ -215,7 +215,7 @@ class AccessDatabase(FileBase):
             code_page,
         )
 
-    def read_rows(self, source: str) -> Iterator[dict[str, object]]:
+    def iter_rows(self, source: str) -> Iterator[dict[str, object]]:
         """テーブルまたはクエリを辞書で1行ずつ返すジェネレータ。
 
         COM 往復を減らすため小さなバッチで取得する。数十万件を ``list`` にすると
@@ -239,13 +239,13 @@ class AccessDatabase(FileBase):
     def read_table(self, source: str) -> Table:
         """テーブルまたはクエリをメモリ上の ``Table`` として返す。
 
-        全行をメモリへ載せるため、大量データには ``read_rows()`` を使う。
+        全行をメモリへ載せるため、大量データには ``iter_rows()`` を使う。
         ``_LARGE_TABLE_WARNING_THRESHOLD`` を超える行を読んだときは警告ログを出す。
         表として絞り込み・索引・転記を行う場合の明示的な入口。
 
-        列名は ``read_rows()`` のイテレータから直接取れない（イテレータは
+        列名は ``iter_rows()`` のイテレータから直接取れない（イテレータは
         行ごとにしか値を返さない）ため、レコードセットを別途開いて列名だけ
-        先に取得する。0 件のときは ``read_rows()`` が空ジェネレータを返すので
+        先に取得する。0 件のときは ``iter_rows()`` が空ジェネレータを返すので
         ``columns`` が空になるが、Access 側にもスキーマ API が無いため
         「0 件のとき列名が空」なのは仕様として許容する。
         """
@@ -258,11 +258,11 @@ class AccessDatabase(FileBase):
             ]
         finally:
             recordset.Close()
-        rows = list(self.read_rows(source))
+        rows = list(self.iter_rows(source))
         if len(rows) > _LARGE_TABLE_WARNING_THRESHOLD:
             logger.warning(
                 "AccessDatabase.read_table(%r) は %d 行を読み込みました。"
-                "大量データは read_rows() でストリーミング読み込みする方がメモリに優しいです。",
+                "大量データは iter_rows() でストリーミング読み込みする方がメモリに優しいです。",
                 source,
                 len(rows),
             )

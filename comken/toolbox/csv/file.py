@@ -88,8 +88,8 @@ class CSV:
         """全行を読み、指定された列だけを変換したTableを返す。
 
         ファイルの内容を**全件メモリに展開**する。行数が大きいファイル
-        （目安: 1 万行を超えるもの）は ``read_rows()`` を使い、1 行ずつ処理する
-        ことでメモリ消費を抑える。``read_rows()`` は列名も返さないので、
+        （目安: 1 万行を超えるもの）は ``iter_rows()`` を使い、1 行ずつ処理する
+        ことでメモリ消費を抑える。``iter_rows()`` は列名も返さないので、
         列名は ``read()`` または ``columns`` 引数で先に取っておく。
         """
         self._ensure_open()
@@ -116,7 +116,7 @@ class CSV:
             rows.append(dict(zip(columns, values, strict=True)))
         return Table(columns, rows, types=self._types)
 
-    def read_rows(self) -> Iterator[dict[str, str]]:
+    def iter_rows(self) -> Iterator[dict[str, str]]:
         """CSV を 1 行ずつ ``{列名: 値}`` の dict で返すイテレーター。
 
         ``read()`` と違ってファイル全体を内存に展開しないため、**行数が大きい
@@ -138,11 +138,11 @@ class CSV:
         return self._iter_rows()
 
     def _iter_rows(self) -> Iterator[dict[str, str]]:
-        """``read_rows()`` のジェネレータ本体（事前条件は ``_ensure_open`` が済んでいること）。"""
+        """``iter_rows()`` のジェネレータ本体（事前条件は ``_ensure_open`` が済んでいること）。"""
         if self._pending is not None:
             # ``read()`` と同じく保留中の Table を 1 行ずつ返す。読み取り経路で
             # ``replace`` された結果はここでストリーム消費できる。
-            yield from self._pending.read_rows()
+            yield from self._pending.to_rows()
             return
         if not self.path.exists():
             raise CSVFileNotFoundError(self.path)
@@ -221,7 +221,7 @@ class CSV:
         else:
             raise CSVFileNotFoundError(self.path)
         if isinstance(rows, Table):
-            additions = rows.read_rows()
+            additions = rows.to_rows()
         elif isinstance(rows, dict):
             additions = [rows]
         elif isinstance(rows, list):
@@ -263,7 +263,7 @@ class CSV:
                 return
             writer = csv.DictWriter(file, fieldnames=table.columns, extrasaction="raise")
             writer.writeheader()
-            writer.writerows(table.read_rows())
+            writer.writerows(table.to_rows())
 
     @property
     def _write_encoding(self) -> str:

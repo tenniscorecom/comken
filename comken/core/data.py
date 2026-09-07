@@ -122,7 +122,7 @@ def diff_rows(
     既存の ``list[dict]`` をそのまま渡すときはリストを指定する。戻り値の
     ``added`` / ``removed`` は ``Table`` になり、``filter`` / ``select`` /
     ``count`` などの Table 標準の操作が直接使える。Table インスタンスから
-    ``list[dict]`` を取り出すには ``Table.read_rows()`` を使う。
+    ``list[dict]`` を取り出すには ``Table.to_rows()`` を使う。
     Args:
         before: 変更前のデータ（``Table`` または辞書のリスト）。
         after: 変更後のデータ（``Table`` または辞書のリスト）。
@@ -166,7 +166,7 @@ def diff_rows(
 def _materialize(data: Table | list[dict]) -> tuple[list[dict], list[str]]:
     """``Table`` / ``list[dict]`` を (行リスト, 列名リスト) に揃える。"""
     if isinstance(data, Table):
-        return data.read_rows(), list(data.columns)
+        return data.to_rows(), list(data.columns)
     if data:
         return list(data), list(data[0].keys())
     return [], []

@@ -232,7 +232,7 @@ class TestCachedReport:
             download_scheduled("定期実行")
         table = cached_report("1001")
         assert cached_report_path("1001").is_file()
-        assert table.read_rows() == ROWS
+        assert table.to_rows() == ROWS
 
     def test_does_not_call_salesforce(self, paths):
         with patch(
@@ -264,7 +264,7 @@ class TestCachedReport:
         ):
             download_scheduled()
         # 2 回目はスキップ → キャッシュは 1 回目のデータのまま
-        assert cached_report("1001").read_rows() == ROWS
+        assert cached_report("1001").to_rows() == ROWS
         # 1 回目だけ取得 → 保管ファイル 1 件 + 日次キャッシュ 1 件 = 2 件
         assert len(list(paths["folder"].glob("1001_*.csv"))) == 2
 
@@ -289,7 +289,7 @@ class TestCachedReport:
         cache_path = Path(str(caught.value).splitlines()[-2])
         cache_path.write_text("名前,金額\n手動配置,999\n", encoding="utf-8")
 
-        assert cached_report("1001").read_rows() == [{"名前": "手動配置", "金額": "999"}]
+        assert cached_report("1001").to_rows() == [{"名前": "手動配置", "金額": "999"}]
 
     def test_missing_cache_raises_even_if_archive_exists(self, paths):
         with patch(

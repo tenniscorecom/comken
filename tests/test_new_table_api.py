@@ -22,7 +22,7 @@ def test_table_supports_memory_operations() -> None:
         types={"id": int},
     )
 
-    assert table.read_rows() == [{"id": 1, "name": "山田", "group": "A"}]
+    assert table.to_rows() == [{"id": 1, "name": "山田", "group": "A"}]
     assert table[0] == {"id": 1, "name": "山田", "group": "A"}
     table[0]["id"] = 2
     assert table[0]["id"] == 1
@@ -30,7 +30,7 @@ def test_table_supports_memory_operations() -> None:
         table[1]
     assert len(table) == 1
     assert table.column("name") == ["山田"]
-    assert table.select("id", "name").read_rows() == [{"id": 1, "name": "山田"}]
+    assert table.select("id", "name").to_rows() == [{"id": 1, "name": "山田"}]
     assert len(table.filter(lambda row: row["group"] == "A")) == 1
     assert table.index("id")[1]["name"] == "山田"
 
@@ -77,7 +77,7 @@ def test_table_public_rows_are_copies_and_duplicate_keys_raise() -> None:
     table = Table(["id"], [{"id": 1}, {"id": 1}])
     first = next(iter(table))
     first["id"] = 2
-    assert table.read_rows()[0]["id"] == 1
+    assert table.to_rows()[0]["id"] == 1
     with pytest.raises(TableDuplicateKeyError):
         table.index("id")
 
@@ -91,8 +91,8 @@ def test_table_filter_predicate_cannot_change_source() -> None:
 
     filtered = table.filter(change_row)
 
-    assert table.read_rows() == [{"id": 1, "name": "before"}]
-    assert filtered.read_rows() == [{"id": 1, "name": "before"}]
+    assert table.to_rows() == [{"id": 1, "name": "before"}]
+    assert filtered.to_rows() == [{"id": 1, "name": "before"}]
 
 
 def test_compare_tables_accepts_different_column_order() -> None:
@@ -110,7 +110,7 @@ def test_compare_tables_accepts_different_key_names() -> None:
 
     comparison = compare_tables(read, write, read_key="read_id", write_key="write_id")
 
-    assert comparison.same.read_rows() == [{"read_id": 1, "name": "A"}]
+    assert comparison.same.to_rows() == [{"read_id": 1, "name": "A"}]
 
 
 @pytest.mark.parametrize("duplicate_side", ["read", "write"])
@@ -141,11 +141,11 @@ def test_select_keeps_only_types_for_selected_columns() -> None:
 
     selected = table.select("id")
 
-    assert selected.read_rows() == [{"id": 1}]
+    assert selected.to_rows() == [{"id": 1}]
     # 選択した列の変換関数だけが残る（value の int は持ち越さない）
     assert selected.types == {"id": int}
     selected.append({"id": "2"})
-    assert selected.read_rows() == [{"id": 1}, {"id": 2}]
+    assert selected.to_rows() == [{"id": 1}, {"id": 2}]
 
 
 def test_table_equals_table_by_content() -> None:
@@ -180,7 +180,7 @@ def test_table_equals_ignores_types() -> None:
     without_types = Table(["id"], [{"id": 1}])
 
     # 実行時の値（types 適用後）で比較される = 等しい
-    assert with_types.read_rows() == without_types.read_rows()
+    assert with_types.to_rows() == without_types.to_rows()
     assert with_types == without_types
 
 

@@ -75,7 +75,7 @@ def total_by_key() -> dict[str, dict[str, int]]:
         groups = csv_file.read().group_by(KEY)
     # CSV の値は常に str。Excel 上で数値として集計できるよう int にしてから渡す
     return {
-        key: {TOTAL: sum(int(row[AMOUNT]) for row in table.read_rows())}
+        key: {TOTAL: sum(int(row[AMOUNT]) for row in table.to_rows())}
         for key, table in groups.items()
     }
 
@@ -92,13 +92,13 @@ def main() -> None:
         source = csv_file.read()
     source = Table(
         [KEY, "顧客名", TOTAL],
-        [{**row, **totals.get(row[KEY], {})} for row in source.read_rows()],
+        [{**row, **totals.get(row[KEY], {})} for row in source.to_rows()],
     )
     destination = Table(
         [KEY, "顧客名", TOTAL],
-        [{KEY: row[KEY], "顧客名": "", TOTAL: ""} for row in source.read_rows()],
+        [{KEY: row[KEY], "顧客名": "", TOTAL: ""} for row in source.to_rows()],
     )
-    before = destination.read_rows()
+    before = destination.to_rows()
     transfer = Transfer(
         source,
         destination,
@@ -118,7 +118,7 @@ def main() -> None:
         # apply_mapping がコンストラクタで渡した mapping を write_row へコピーする
         transfer.apply_mapping(read_row, write_row)
     working = transfer.result()
-    after = working.read_rows()
+    after = working.to_rows()
     with Excel(INVOICE_XLSX) as excel:
         sheet = excel.sheet(SHEET)
         values = [working.columns, *[list(row.values()) for row in after]]

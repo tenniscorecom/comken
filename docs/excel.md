@@ -31,7 +31,7 @@ with Excel("一覧.xlsx", read_only=True) as excel:
     candidates = config.SOURCE.SHEET_NAME
     sheet_name = excel.find_sheet(*candidates)  # 見つかった str だけ返す
     table = excel.read(sheet_name)  # Table が返る
-    for row in table.read_rows():
+    for row in table.to_rows():
         ...
 ```
 
@@ -100,7 +100,7 @@ ids = sheet.read_column("G").column("お客様ID")
 
 ```python
 with Excel("重い.xlsx", engine="com", local_copy=False) as excel:
-    for row in excel.read("Sheet1").read_rows():
+    for row in excel.read("Sheet1").to_rows():
         ...
 ```
 

@@ -51,7 +51,7 @@ result = cli.run(
 )
 
 print(f"成功: {len(result.success)} 件 / 失敗: {len(result.errors)} 件")
-for row in result.errors.read_rows():
+for row in result.errors.to_rows():
     print("失敗:", row)
 ```
 

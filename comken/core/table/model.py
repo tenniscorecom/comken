@@ -57,7 +57,7 @@ class Table:
                 raise TableTypeConversionError(row_number, column, row[column]) from exc
         return normalized
 
-    def read_rows(self) -> list[dict[str, Any]]:
+    def to_rows(self) -> list[dict[str, Any]]:
         """現在の行をコピーして返す。元のTableは変更しない。"""
         return [dict(row) for row in self._rows]
 
@@ -72,7 +72,7 @@ class Table:
 
     def __iter__(self) -> Iterator[dict[str, Any]]:
         """各行のコピーを返す。反復中の変更は元のTableへ反映しない。"""
-        return iter(self.read_rows())
+        return iter(self.to_rows())
 
     def __len__(self) -> int:
         return len(self._rows)
@@ -82,9 +82,9 @@ class Table:
             # ``columns`` の**順番**が違う ``Table`` は等しくない（``concat`` が
             # 列順を揃える設計と揃える）。 ``types`` は比較に含めない（変換関数は
             # 表の中身ではないため）。
-            return self.columns == other.columns and self.read_rows() == other.read_rows()
+            return self.columns == other.columns and self.to_rows() == other.to_rows()
         if isinstance(other, list):
-            return self.read_rows() == other
+            return self.to_rows() == other
         # それ以外の型とは比較しない（``list`` を「中身の ``dict``」と誤判定しない
         # よう ``__eq__`` で ``False`` を返さず ``NotImplemented`` を返す）
         return NotImplemented

@@ -315,7 +315,7 @@ class TestDownloadScheduledRecord:
         assert csv_paths[0].is_file()
         # CSV として読み戻せる
         with CSV(csv_paths[0], read_only=True) as csv_file:
-            assert csv_file.read().read_rows() == ROWS
+            assert csv_file.read().to_rows() == ROWS
 
     def test_csv_path_is_accessible_after_construction(self, paths):
         with CSV(paths["history_path"]) as csv_file:
@@ -1718,7 +1718,7 @@ class TestAllowEmpty:
 
         reader = cached_report("1001")
         assert cached_report_path("1001").is_file()
-        assert reader.read_rows() == []
+        assert reader.to_rows() == []
 
     def test_master_without_allow_empty_column_defaults_to_no(self, tmp_path, monkeypatch):
         """4. `0件あり` の列が無い管理表でも読める（既定 `×` として扱われる）。"""

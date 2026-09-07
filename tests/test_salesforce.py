@@ -647,7 +647,7 @@ class TestDescribeFields:
         ) as (client, _, _):
             table = client.report.describe_fields(self.REPORT_ID)
 
-        rows = table.read_rows()
+        rows = table.to_rows()
         # 一致した行は API 名・型が入り、備考は空
         assert rows[0] == {
             "列キー": "NAME",
@@ -668,7 +668,7 @@ class TestDescribeFields:
         ) as (client, _, _):
             table = client.report.describe_fields(self.REPORT_ID)
 
-        rows = table.read_rows()
+        rows = table.to_rows()
         # AMOUNT は Object Describe に存在しない
         amount_row = next(row for row in rows if row["列キー"] == "AMOUNT")
         assert amount_row["対応フィールドAPI名"] == "(不明)"
@@ -691,7 +691,7 @@ class TestDescribeFields:
         ) as (client, _, _):
             table = client.report.describe_fields(self.REPORT_ID)
 
-        rows = table.read_rows()
+        rows = table.to_rows()
         stage_row = next(row for row in rows if row["列キー"] == "STAGE_NAME")
         assert stage_row["対応フィールドAPI名"] == "(不明)"
         assert stage_row["型"] == ""
@@ -708,7 +708,7 @@ class TestDescribeFields:
         with _salesforce([_response(json_body=describe_body), not_found]) as (client, _, _):
             table = client.report.describe_fields(self.REPORT_ID)
 
-        rows = table.read_rows()
+        rows = table.to_rows()
         assert len(rows) == 4
         for row in rows:
             assert row["対応フィールドAPI名"] == "(不明)"
@@ -764,7 +764,7 @@ class TestDescribeFields:
             table = csv_file.read()
         assert table.columns == ["列キー", "表示名", "対応フィールドAPI名", "型", "備考"]
         # 1 行だけ一致しているケース
-        rows = table.read_rows()
+        rows = table.to_rows()
         assert rows[0]["列キー"] == "NAME"
         assert rows[0]["対応フィールドAPI名"] == "Name"
 
@@ -1088,7 +1088,7 @@ class TestBulkQuery:
             table = client.bulk_query.run(self.SOQL)
 
         assert table.columns == ["Id", "Name"]
-        assert table.read_rows() == [
+        assert table.to_rows() == [
             {"Id": "001xx", "Name": "A"},
             {"Id": "001yy", "Name": "B"},
         ]
@@ -1106,7 +1106,7 @@ class TestBulkQuery:
         ):
             table = client.bulk_query.run(self.SOQL)
 
-        assert table.read_rows() == [{"Id": "1"}]
+        assert table.to_rows() == [{"Id": "1"}]
 
     def test_run_raises_failed_error_when_job_fails(self):
         """状態確認が Failed のとき
@@ -1152,7 +1152,7 @@ class TestBulkQuery:
         ):
             table = client.bulk_query.run(self.SOQL)
 
-        assert table.read_rows() == [
+        assert table.to_rows() == [
             {"Id": "001", "Name": "A"},
             {"Id": "002", "Name": "B"},
             {"Id": "003", "Name": "C"},
@@ -1172,7 +1172,7 @@ class TestBulkQuery:
             table = client.bulk_query.run(self.SOQL)
 
         assert table.columns == ["Id", "Name"]
-        assert table.read_rows() == []
+        assert table.to_rows() == []
 
     def test_run_csv_writes_csv_file(self, tmp_path):
         """run_csv() は run() の結果をそのまま CSV へ書き出す。"""
@@ -1399,8 +1399,8 @@ class TestBulkIngest:
         ):
             result = client.bulk_ingest.insert(self.OBJECT_NAME, [{"Name": "A"}])
 
-        assert result.successful.read_rows() == [{"sf__Id": "001", "sf__Created": "2024-01-01"}]
-        assert result.failed.read_rows() == [{"sf__Id": "002", "sf__Error": "項目 X が不正です"}]
+        assert result.successful.to_rows() == [{"sf__Id": "001", "sf__Created": "2024-01-01"}]
+        assert result.failed.to_rows() == [{"sf__Id": "002", "sf__Error": "項目 X が不正です"}]
 
     def test_successful_results_concatenate_multiple_pages_without_duplicate_header(self):
         """``successfulResults`` が2ページに分かれるケースで、2ページ目の
@@ -1421,7 +1421,7 @@ class TestBulkIngest:
         ):
             result = client.bulk_ingest.insert(self.OBJECT_NAME, [{"Name": "A"}])
 
-        assert result.successful.read_rows() == [
+        assert result.successful.to_rows() == [
             {"sf__Id": "001"},
             {"sf__Id": "002"},
             {"sf__Id": "003"},
@@ -1437,8 +1437,8 @@ class TestBulkIngest:
         session.request.assert_not_called()
         assert result.state == "DRY-RUN"
         assert result.job_id == ""
-        assert result.successful.read_rows() == []
-        assert result.failed.read_rows() == []
+        assert result.successful.to_rows() == []
+        assert result.failed.to_rows() == []
 
     def test_request_data_argument_passes_raw_text_without_json(self):
         """``SalesforceBase.request()`` に ``data="..."`` を渡すと、

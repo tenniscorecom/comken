@@ -332,7 +332,7 @@ class TestAccessDatabase:
         recordset.Fields.Item.side_effect = [MagicMock(Name="ID"), MagicMock(Name="名前")]
         recordset.EOF = False
         recordset.GetRows.side_effect = [((1, 2), ("A", "B")), ()]
-        rows = database.read_rows("T_出力")
+        rows = database.iter_rows("T_出力")
         assert inspect.isgenerator(rows)
         assert list(rows) == [{"ID": 1, "名前": "A"}, {"ID": 2, "名前": "B"}]
         recordset.GetRows.assert_called_with(1000)
@@ -346,11 +346,11 @@ class TestAccessDatabase:
         recordset.Fields.Item.return_value = MagicMock(Name="ID")
         monkeypatch.setattr("comken.toolbox.access.handler._LARGE_TABLE_WARNING_THRESHOLD", 10)
 
-        def fake_read_rows(self, source):
+        def fake_iter_rows(self, source):
             for index in range(20):
                 yield {"ID": index}
 
-        monkeypatch.setattr(AccessDatabase, "read_rows", fake_read_rows)
+        monkeypatch.setattr(AccessDatabase, "iter_rows", fake_iter_rows)
 
         with caplog.at_level(logging.WARNING, logger="comken.toolbox.access.handler"):
             result = database.read_table("T_出力")
@@ -358,7 +358,7 @@ class TestAccessDatabase:
         assert len(result) == 20
         assert "AccessDatabase.read_table" in caplog.text
         assert "20 行" in caplog.text
-        assert "read_rows()" in caplog.text
+        assert "iter_rows()" in caplog.text
 
     def test_read_table_does_not_warn_below_threshold(self, tmp_path, monkeypatch, caplog):
         database, access = _database(tmp_path)
@@ -368,11 +368,11 @@ class TestAccessDatabase:
         recordset.Fields.Item.return_value = MagicMock(Name="ID")
         monkeypatch.setattr("comken.toolbox.access.handler._LARGE_TABLE_WARNING_THRESHOLD", 10)
 
-        def fake_read_rows(self, source):
+        def fake_iter_rows(self, source):
             for index in range(5):
                 yield {"ID": index}
 
-        monkeypatch.setattr(AccessDatabase, "read_rows", fake_read_rows)
+        monkeypatch.setattr(AccessDatabase, "iter_rows", fake_iter_rows)
 
         with caplog.at_level(logging.WARNING, logger="comken.toolbox.access.handler"):
             result = database.read_table("T_出力")

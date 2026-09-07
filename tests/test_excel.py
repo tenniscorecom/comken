@@ -343,7 +343,7 @@ class TestReadComputedRowsDropsBlankRows:
         with Excel(path, read_only=True) as excel:
             table = excel.read("データ")
 
-        assert table.read_rows() == [{"ID": "1", "名前": "A"}, {"ID": "2", "名前": "B"}]
+        assert table.to_rows() == [{"ID": "1", "名前": "A"}, {"ID": "2", "名前": "B"}]
 
     def test_empty_header_cell_error_still_fires(self, tmp_path) -> None:
         """見出し行の空セルは従来どおり ``EmptyHeaderCellError``。"""
@@ -376,7 +376,7 @@ class TestReadComputedRowsDropsBlankRows:
             table = excel.read("データ")
 
         assert rows == [("1", "A")]
-        assert table.read_rows() == [{"ID": "1", "名前": "A"}]
+        assert table.to_rows() == [{"ID": "1", "名前": "A"}]
 
 
 class TestFindSheet:

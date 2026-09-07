@@ -82,12 +82,12 @@ class TestDataLoaderCLI:
         assert isinstance(result, DataLoaderResult)
         assert result.returncode == 0
         assert result.success.columns == ["id", "name"]
-        assert result.success.read_rows() == [
+        assert result.success.to_rows() == [
             {"id": "1", "name": "山田"},
             {"id": "2", "name": "鈴木"},
         ]
         assert result.errors.columns == ["id", "reason"]
-        assert result.errors.read_rows() == [{"id": "3", "reason": "validation"}]
+        assert result.errors.to_rows() == [{"id": "3", "reason": "validation"}]
 
     def test_run_returns_empty_tables_when_csvs_are_none(self, tmp_path: Path) -> None:
         """``success_csv`` / ``error_csv`` を ``None`` にすると空 ``Table`` が返る。"""

@@ -395,7 +395,7 @@ with Solution() as sf:
     )
 
     # 失敗行があったときだけ中身を見る。例外ではない（下記「設計判断」参照）
-    for failed_row in result.failed.read_rows():
+    for failed_row in result.failed.to_rows():
         print(failed_row["sf__Id"], failed_row["sf__Error"])
 ```
 
