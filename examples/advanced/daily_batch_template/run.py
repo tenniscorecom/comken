@@ -18,7 +18,6 @@
 import logging
 
 from comken.core import DateFileFinder, DateNameBuilder
-from comken.core.table import Table
 from comken.exceptions import ComkenError
 from comken.run import backoffice  # イントラネットのツールなら intranet に変える
 from comken.toolbox.csv import CSV
@@ -42,8 +41,8 @@ def main() -> None:
         return
 
     with CSV(source) as csv_file:
-        rows = csv_file.read()
-    logger.info("読み込み: %s（%d 件）", source.name, len(rows))
+        table = csv_file.read()
+    logger.info("読み込み: %s（%d 件）", source.name, len(table))
 
     # ↓↓↓ ここに実際の加工処理を書く（絞り込み・突合・集計など） ↓↓↓
 
@@ -51,11 +50,9 @@ def main() -> None:
 
     output_path = config.FILES.OUTPUT_FOLDER / DateNameBuilder(f"{BATCH_NAME}.xlsx").prefix()
     with Excel(output_path) as excel:
-        excel.create_data_sheet("売上").create_table(
-            "売上", Table(list(rows[0]) if rows else [], rows)
-        )
+        excel.create_data_sheet("売上").create_table("売上", table)
     logger.info("出力: %s", output_path)
-    logger.info("%s 完了（%d 件）", BATCH_NAME, len(rows))
+    logger.info("%s 完了（%d 件）", BATCH_NAME, len(table))
 
 
 if __name__ == "__main__":
