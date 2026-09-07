@@ -92,6 +92,14 @@ def test_all_named_comken_classes_and_functions_have_docstrings() -> None:
                 continue
             if node.name.startswith("_"):
                 continue
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and any(
+                (isinstance(d, ast.Name) and d.id == "overload")
+                or (isinstance(d, ast.Attribute) and d.attr == "overload")
+                for d in node.decorator_list
+            ):
+                # @overload のスタブ宣言は型シグネチャだけの役割で、実装本体
+                # （docstring を持つ）が別に必ず存在するため対象外にする。
+                continue
             if ast.get_docstring(node) is None:
                 missing.append(f"{path.relative_to(_ROOT).as_posix()}:{node.lineno} {node.name}")
     assert not missing, f"docstringがないクラス・関数があります: {missing}"

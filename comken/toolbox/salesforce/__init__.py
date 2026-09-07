@@ -40,6 +40,7 @@ Client Credentials Flow は `client_secret` だけでアクセストークンを
 """
 
 from types import ModuleType
+from typing import TYPE_CHECKING
 
 from comken.toolbox.salesforce.bulk_ingest import BulkIngestAPI, BulkIngestResult
 from comken.toolbox.salesforce.bulk_query import BulkQueryAPI
@@ -70,6 +71,17 @@ _LAZY_TARGETS: dict[str, str] = {
     "RefreshTokenOAuth": "comken.toolbox.salesforce.auth.oauth_refresh",
     "SalesforceCredentialRotator": "comken.toolbox.salesforce.auth.rotation",
 }
+
+if TYPE_CHECKING:
+    # 型チェッカー（pyright 等）は __getattr__ の戻り値を追えず、遅延対象を
+    # 全て object 型と見なしてしまう（継承・属性アクセス・呼び出しが軒並み
+    # エラーになる）。TYPE_CHECKING はここでだけ True 扱いになり実行時には
+    # 一切評価されないため、requests 非依存という遅延importの目的を壊さずに
+    # 型だけ正しく解決できる。
+    from comken.toolbox.salesforce.auth.oauth_credentials import ClientCredentialsOAuth
+    from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth
+    from comken.toolbox.salesforce.auth.rotation import SalesforceCredentialRotator
+    from comken.toolbox.salesforce.client import SalesforceBase
 
 
 def __getattr__(name: str) -> object:

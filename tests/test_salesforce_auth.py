@@ -145,6 +145,7 @@ class TestRefreshTokenOAuth:
             patch("comken.toolbox.credentials.save_credential") as save_credential,
         ):
             auth = RefreshTokenOAuth.from_credentials(DOMAIN_URL, "site_a")
+            assert auth._on_refresh_token is not None
             auth._on_refresh_token("ROTATED")
         save_credential.assert_called_once_with("site_a_refresh_token", "ROTATED")
 

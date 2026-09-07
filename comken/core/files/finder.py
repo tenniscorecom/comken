@@ -7,6 +7,7 @@ import datetime
 import logging
 import re
 from pathlib import Path
+from typing import Literal, overload
 
 from comken.core.clock import today
 from comken.core.timer import measure
@@ -34,6 +35,10 @@ class DateFileFinder:
         self._folder = Path(folder)
         self._date = for_date or today()
 
+    @overload
+    def prefix(self, name: str, required: Literal[True] = True) -> Path: ...
+    @overload
+    def prefix(self, name: str, required: Literal[False]) -> Path | None: ...
     @measure
     def prefix(
         self,
@@ -44,6 +49,10 @@ class DateFileFinder:
 
         ``name`` に ``{:%Y-%m-%d}`` のような日付書式があれば、その位置へ日付を
         入れる。書式がなければ末尾へ ``YYYYMMDD`` を付ける。日付は **拡張子の手前** に入る。
+
+        ``required=True``（既定）では見つからないと例外になるため、戻り値は
+        ``Path``（``None`` にならない）。``required=False`` のときだけ
+        ``Path | None`` になる（呼び出し側の型チェッカーにもそう伝わる）。
         """
         stem, extension = _split_suffix(name)
         dated_name = (
