@@ -130,7 +130,9 @@ class TestClientCredentialsOAuth:
             "comken.toolbox.salesforce.auth.oauth_credentials.requests.post",
             return_value=_token_response(),
         ) as post:
-            token, instance_url = ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL).fetch()
+            token, instance_url = ClientCredentialsOAuth(
+                "CID", "CSECRET", DOMAIN_URL
+            ).request_token()
 
         assert (token, instance_url) == ("TOKEN", INSTANCE_URL)
         url, kwargs = post.call_args[0][0], post.call_args[1]
@@ -148,7 +150,7 @@ class TestClientCredentialsOAuth:
             "comken.toolbox.salesforce.auth.oauth_credentials.requests.post",
             return_value=_token_response(),
         ) as post:
-            ClientCredentialsOAuth("CID", "CSECRET", f"{DOMAIN_URL}/").fetch()
+            ClientCredentialsOAuth("CID", "CSECRET", f"{DOMAIN_URL}/").request_token()
         assert post.call_args[0][0] == f"{DOMAIN_URL}/services/oauth2/token"
 
     def test_auth_failure_lists_what_to_check(self):
@@ -160,7 +162,7 @@ class TestClientCredentialsOAuth:
             ),
             pytest.raises(SalesforceAuthError, match=r"(?s)Run As.*My Domain"),
         ):
-            ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL).fetch()
+            ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL).request_token()
 
     def test_network_failure_becomes_connection_error(self):
         """通信できない場合は SalesforceConnectionError になる。"""
@@ -171,7 +173,7 @@ class TestClientCredentialsOAuth:
             ),
             pytest.raises(SalesforceConnectionError, match="接続できませんでした"),
         ):
-            ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL).fetch()
+            ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL).request_token()
 
 
 class TestSalesforceQuery:
@@ -879,7 +881,7 @@ class TestSites:
         """組織クラスは共通の query / report / metrics をそのまま使える。"""
         assert issubclass(SolutionSandbox, SalesforceBase)
         auth = MagicMock()
-        auth.fetch.return_value = ("TOKEN", INSTANCE_URL)
+        auth.request_token.return_value = ("TOKEN", INSTANCE_URL)
         with patch("comken.toolbox.salesforce.client.requests.Session"):
             sandbox = SolutionSandbox(auth=auth)
         assert callable(sandbox.query)

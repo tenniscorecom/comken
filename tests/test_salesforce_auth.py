@@ -72,7 +72,7 @@ class TestRefreshTokenOAuth:
         with patch(_REQUESTS_POST, return_value=response) as post:
             result = RefreshTokenOAuth(
                 "CID", "REFRESH", DOMAIN_URL, on_refresh_token=saved_tokens.append
-            ).fetch()
+            ).request_token()
         assert result == ("ACCESS", INSTANCE_URL)
         assert "client_secret" not in post.call_args.kwargs["data"]
         assert saved_tokens == ["ROTATED"]
@@ -85,7 +85,7 @@ class TestRefreshTokenOAuth:
                 "REFRESH",
                 DOMAIN_URL,
                 client_secret="SECRET",
-            ).fetch()
+            ).request_token()
         assert post.call_args.kwargs["data"]["client_secret"] == "SECRET"
 
     def test_auth_error_redacts_refresh_token(self):
@@ -94,7 +94,7 @@ class TestRefreshTokenOAuth:
             patch(_REQUESTS_POST, return_value=response),
             pytest.raises(SalesforceAuthError) as raised,
         ):
-            RefreshTokenOAuth("CID", "REFRESH", DOMAIN_URL).fetch()
+            RefreshTokenOAuth("CID", "REFRESH", DOMAIN_URL).request_token()
         assert "REFRESH" not in str(raised.value)
 
     def test_exchange_code_with_prefix_saves_to_dpapi_without_explicit_callback(self):
@@ -162,7 +162,7 @@ class TestClientCredentialsOAuth:
 class TestPluggableSalesforceAuth:
     def test_client_uses_supplied_auth_for_initial_and_401_authentication(self):
         auth = MagicMock()
-        auth.fetch.side_effect = [("FIRST", INSTANCE_URL), ("SECOND", INSTANCE_URL)]
+        auth.request_token.side_effect = [("FIRST", INSTANCE_URL), ("SECOND", INSTANCE_URL)]
         session = MagicMock()
         session.headers = {}
         unauthorized = MagicMock(status_code=401, text="unauthorized", headers={})
@@ -175,7 +175,7 @@ class TestPluggableSalesforceAuth:
             _TestSalesforce(auth=auth) as client,
         ):
             assert client.query("SELECT Id FROM Account") == []
-        assert auth.fetch.call_count == 2
+        assert auth.request_token.call_count == 2
 
 
 class TestAuthClassIsBuiltFromCredentials:
@@ -196,7 +196,7 @@ class TestAuthClassIsBuiltFromCredentials:
                 called["prefix"] = prefix
                 return cls()
 
-            def fetch(self):
+            def request_token(self):
                 return "TOKEN", DOMAIN_URL
 
         with patch("comken.toolbox.salesforce.client.requests.Session"):
@@ -214,7 +214,7 @@ class TestAuthClassIsBuiltFromCredentials:
             def from_credentials(cls, domain_url, prefix):  # 呼ばれたら失敗
                 raise AssertionError("インスタンスを渡したら from_credentials は呼ばない")
 
-            def fetch(self):
+            def request_token(self):
                 return "TOKEN", DOMAIN_URL
 
         with patch("comken.toolbox.salesforce.client.requests.Session"):

@@ -47,7 +47,7 @@ Client Credentials Flow は `client_secret` だけでアクセストークンを
 | 本番・通常 | `with Solution() as sf:` |
 | 開発中の動作確認 | `with Solution(auth=ClientCredentialsOAuth) as sf:`（クラスを渡すだけ） |
 
-どちらも `fetch() -> (access_token, instance_url)` を実装しているので、
+どちらも `request_token() -> (access_token, instance_url)` を実装しているので、
 API クライアント側は認証方式を知らずに済む。
 
 ```python
@@ -102,7 +102,7 @@ with Solution(auth=ClientCredentialsOAuth) as sf:      # クラスを渡すだ�
 | `Solution(auth=ClientCredentialsOAuth)` | Client Credentials（開発時） | `solution_client_id` / `solution_client_secret` |
 | `Solution(prefix="solution_test")` | 既定のまま | `solution_test_*` |
 
-2方式は同じ `from_credentials()` / `fetch()` を持つので、
+2方式は同じ `from_credentials()` / `request_token()` を持つので、
 共通の query・CRUD・report・metrics は認証方式に依存しない。
 
 ### Client Credentials Flow を使うときの落とし穴

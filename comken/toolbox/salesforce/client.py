@@ -72,7 +72,7 @@ class _OAuth(Protocol):
         """認証情報からインスタンスを組み立てる（具象クラスごとに実装する）。"""
         ...
 
-    def fetch(self) -> tuple[str, str]:
+    def request_token(self) -> tuple[str, str]:
         """アクセストークンとinstance_urlを返す。"""
         ...
 
@@ -571,7 +571,7 @@ class SalesforceBase:
 
     def _authenticate(self) -> None:
         """トークンを取り直し、以降のリクエストに使うヘッダーを差し替える。"""
-        self._access_token, self._instance_url = self.auth.fetch()
+        self._access_token, self._instance_url = self.auth.request_token()
         self._session.headers.update(
             {
                 "Authorization": f"Bearer {self._access_token}",

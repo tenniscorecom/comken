@@ -43,7 +43,7 @@ class ClientCredentialsOAuth:
         return cls(credentials.client_id, credentials.client_secret, domain_url)
 
     @measure
-    def fetch(self) -> tuple[str, str]:
+    def request_token(self) -> tuple[str, str]:
         """アクセストークンと instance_url を取得する。"""
         url = f"{self._domain_url}{TOKEN_PATH}"
         try:

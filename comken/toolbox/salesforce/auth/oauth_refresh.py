@@ -75,7 +75,7 @@ class RefreshTokenOAuth:
         )
 
     @measure
-    def fetch(self) -> tuple[str, str]:
+    def request_token(self) -> tuple[str, str]:
         """refresh_token を使ってアクセストークンを取得する。"""
         data = {
             "grant_type": REFRESH_TOKEN_GRANT,
