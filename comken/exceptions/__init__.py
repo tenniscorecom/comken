@@ -2,9 +2,6 @@
 
 ComkenError
 ├── SiteOwnerRequiredError          SiteBase / SalesforceBase に OWNER が未設定
-├── InternalLibraryError
-│   ├── InternalLibraryNotFoundError         指定した社内ライブラリが見つからない
-│   └── InternalLibraryVersionMismatchError  指定したバージョンの社内ライブラリが見つからない
 ├── LoggingAlreadyConfiguredError   root logger が設定済み
 ├── LoggingConflictError            root logger に他ライブラリの handler が混ざっている
 ├── LogRootNotConfiguredError       LoggerSite の LOG_ROOT が未設定
@@ -287,11 +284,6 @@ from comken.exceptions.outlook import (
     OutlookError,
     OutlookFolderNotFoundError,
 )
-from comken.exceptions.rpa import (
-    InternalLibraryError,
-    InternalLibraryNotFoundError,
-    InternalLibraryVersionMismatchError,
-)
 from comken.exceptions.salesforce import (
     SalesforceAuthError,
     SalesforceBulkQueryFailedError,
@@ -331,9 +323,6 @@ from comken.exceptions.windows import WindowNotFoundError
 __all__ = [
     "ComkenError",
     "SiteOwnerRequiredError",
-    "InternalLibraryError",
-    "InternalLibraryNotFoundError",
-    "InternalLibraryVersionMismatchError",
     "AccessError",
     "AccessBackupError",
     "AccessFileNotFoundError",

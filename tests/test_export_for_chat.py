@@ -120,12 +120,6 @@ def test_bundle_text_includes_all_comken_py_files() -> None:
         assert relative in text
 
 
-def test_verify_internal_library_placeholder_passes() -> None:
-    """社内ライブラリ仮名が保たれている間は検証が通る。"""
-    # 現在の ``comken/toolbox/rpa.py`` の値は仮名のままなので例外は出ない
-    export_for_chat._verify_internal_library_placeholder()
-
-
 def test_bundle_output_path_constant_exists() -> None:
     """``BUNDLE_OUTPUT_PATH`` がリポジトリ直下の ``comken_bundle.md`` を指す。"""
     assert export_for_chat.BUNDLE_OUTPUT_PATH == export_for_chat.ROOT / "comken_bundle.md"

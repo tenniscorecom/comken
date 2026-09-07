@@ -86,7 +86,6 @@ ERROR_CATEGORIES = (
             exceptions.SalesforceError,
             exceptions.CredentialError,
             exceptions.HolidayCalendarError,
-            exceptions.InternalLibraryError,
         ),
     ),
     ErrorCategory("ブラウザ（Edge 自動操作）のエラー", (exceptions.BrowserError,)),
@@ -141,7 +140,6 @@ CLASSIFICATION_ERRORS = (
     exceptions.CredentialError,
     exceptions.BrowserError,
     exceptions.TableError,
-    exceptions.InternalLibraryError,
 )
 
 BUNDLES: dict[str, tuple[str, list[str]]] = {
@@ -558,40 +556,6 @@ def _concatenate_files(files: list[Path], package_root: Path) -> tuple[str, int,
     return text, line_count, total_bytes
 
 
-def _verify_internal_library_placeholder() -> None:
-    """社内ライブラリ仮名が保たれているか検証する。
-
-    ``comken/toolbox/rpa.py`` の ``RPA_LIBRARY_NAME`` が
-    ``kensetsu_libs.`` で始まる仮名のまま（実名へ書き戻されていないこと）を
-    確認する。実名に置き換わっていると、公開リポジトリ経由で社内ライブラリ
-    名が社外へ漏れるため、生成を止める。
-
-    Salesforce は comken 自前の ``comken/toolbox/salesforce/`` を使うため、
-    社内ライブラリ経由の ``SALESFORCE_LIBRARY_NAME`` の検証は不要になった。
-
-    旧 ``internal`` 層にあった共通ルート定数は廃止された（バージョンを含まない
-    仮名で確定したため）。さらに社内ライブラリ呼び出し層（``internal``）自体も
-    廃止され ``toolbox`` へ統合されたため、各モジュールの定数を直接見る。
-
-    Raises:
-        RuntimeError: 仮名が崩れていた場合。
-    """
-    expected_prefix = "kensetsu_libs."
-    rpa_module = import_module("comken.toolbox.rpa")
-    names: list[tuple[str, str]] = [
-        ("RPA_LIBRARY_NAME", rpa_module.RPA_LIBRARY_NAME),
-    ]
-    bad = [(label, value) for label, value in names if not value.startswith(expected_prefix)]
-    if bad:
-        details = ", ".join(f"{label}={value!r}" for label, value in bad)
-        raise RuntimeError(
-            "社内ライブラリ仮名が壊れています。"
-            f"{details} が {expected_prefix!r} で始まっていません。"
-            "comken は公開リポジトリのため、社内ライブラリの実名が混入しないよう"
-            f"仮名 {expected_prefix!r} を保ってください。"
-        )
-
-
 def _bundle_text() -> str:
     """社外 AI へ貼るための 1 ファイル資料を組み立てる。
 
@@ -601,12 +565,7 @@ def _bundle_text() -> str:
     ロギング）を最初に読ませて、生成コードの表記ブレや規約違反を防ぐため。
     その後は索引で公開 API を固定してから実例で正しい書き方を見せ、最後に
     全文とエラー表・仕様書で細部を裏取る構成にする。
-
-    社内ライブラリ仮名が保たれているかは ``_verify_internal_library_placeholder``
-    で先に検証する（生成途中で発見しても中途半端なファイルが残るのを避ける）。
     """
-    _verify_internal_library_placeholder()
-
     conventions_path = ROOT / "docs" / "開発" / "CONVENTIONS.md"
     spec_path = ROOT / "docs" / "開発" / "仕様書.md"
     conventions_text = conventions_path.read_text(encoding="utf-8").rstrip()

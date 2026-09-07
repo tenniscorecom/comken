@@ -3365,59 +3365,6 @@ class SiteOwnerRequiredError(ComkenError):
 def __init__(self, site_cls: type, base_cls_name: str) -> None:
 ```
 
-### `InternalLibraryError`
-
-```text
-class InternalLibraryError(ComkenError):
-```
-
-#### 説明
-
-社内ライブラリの呼び出しに失敗したときの基底例外
-
-対処:
-    画面に表示された具体的なエラー名（NotFound / VersionMismatch）を上の表から探す
-
-### `InternalLibraryNotFoundError`
-
-```text
-class InternalLibraryNotFoundError(InternalLibraryError):
-```
-
-#### 説明
-
-指定した社内ライブラリが見つからない
-
-対処:
-    社内 LAN 環境から、共有サーバ上の PYTHONPATH が通っているか確認し、
-    指定したライブラリ名のフォルダが存在するか確かめる
-
-#### `__init__`
-
-```text
-def __init__(self, library_name: str) -> None:
-```
-
-### `InternalLibraryVersionMismatchError`
-
-```text
-class InternalLibraryVersionMismatchError(InternalLibraryError):
-```
-
-#### 説明
-
-指定したバージョンの社内ライブラリが見つからない
-
-対処:
-    共有サーバ上の対象ライブラリのバージョンを確認し、
-    呼び出し側の指定と一致しているか確かめる
-
-#### `__init__`
-
-```text
-def __init__(self, library_name: str, required_version: str) -> None:
-```
-
 ### `AccessError`
 
 ```text
@@ -12516,3 +12463,48 @@ class FileFormat:
 #### 説明
 
 Workbook.SaveAs に渡す Excel の保存形式定数。
+
+
+## `from comken.run import ...`
+
+### `backoffice`
+
+```text
+def backoffice(main: Callable[[], Any], project_name: str) -> Any:
+```
+
+#### 説明
+
+バックオフィスの RPA として main を実行する。
+
+現在は最小実装（``main()`` を呼んで結果を返すだけ）。``project_name`` は
+呼び出し側との呼び出し規約（シグネチャ）を保つために受け取るが、現状では
+使っていない。
+
+Args:
+    main: 実行する関数。
+    project_name: プロジェクト名（現状は未使用）。
+
+Returns:
+    ``main()`` の戻り値。
+
+### `intranet`
+
+```text
+def intranet(main: Callable[[], Any], project_name: str) -> Any:
+```
+
+#### 説明
+
+イントラネットの RPA として main を実行する。
+
+現在は最小実装（``main()`` を呼んで結果を返すだけ）。``project_name`` は
+呼び出し側との呼び出し規約（シグネチャ）を保つために受け取るが、現状では
+使っていない。
+
+Args:
+    main: 実行する関数。
+    project_name: プロジェクト名（現状は未使用）。
+
+Returns:
+    ``main()`` の戻り値。

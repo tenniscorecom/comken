@@ -91,8 +91,6 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
 | `SiteOwnerRequiredError` | `SiteBase` / `SalesforceBase` のサブクラスに `OWNER` が設定されていない | サブクラスに `OWNER = "プロジェクト名 / 担当者"` を1行追加する。ライブラリ（`comken.toolbox.browser.sites/` または`comken.toolbox.salesforce.sites/`）に入れるべきサイトかは`docs/開発/ライブラリ開発規約.md` の「サイト／組織クラスを昇格させる基準」を参照して判断する。ライブラリに昇格したい場合はライブラリ管理者へ連絡する。 |
-| `InternalLibraryNotFoundError` | 指定した社内ライブラリが見つからない | 社内 LAN 環境から、共有サーバ上の PYTHONPATH が通っているか確認し、指定したライブラリ名のフォルダが存在するか確かめる |
-| `InternalLibraryVersionMismatchError` | 指定したバージョンの社内ライブラリが見つからない | 共有サーバ上の対象ライブラリのバージョンを確認し、呼び出し側の指定と一致しているか確かめる |
 | `EncodingDetectionError` | CSV の文字コードを判定できない | CSV の保存形式を確認し、管理者へ連絡する |
 | `CSVFileNotFoundError` | 読み込む CSV ファイルが存在しない | パスを確認する。新規出力は columns を指定して write / replace する |
 | `CSVHeaderMissingError` | CSV に見出し行がない | 見出し行を追加するか、ヘッダーなし CSV なら columns を指定する |
@@ -235,4 +233,3 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `CredentialError` | 認証情報の保存・取得に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `BrowserError` | ブラウザ操作に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `TableError` | 表データの読み書き・転記に関するエラー | 画面に表示された具体的なエラー内容を確認する |
-| `InternalLibraryError` | 社内ライブラリの呼び出しに失敗したときの基底例外 | 画面に表示された具体的なエラー名（NotFound / VersionMismatch）を上の表から探す |
