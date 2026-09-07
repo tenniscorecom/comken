@@ -146,9 +146,22 @@ HTTP の `get()`、キー・値ストアの `get()` / `set()` のように、そ
 | Table を list 化 | `to_rows()` |
 | 単一レコード取得 | `get() -> dict` |
 | SOQL | `query()` |
-| レポート実行 | `run()` |
-| 画面・セル・属性を読む | `read_*()` |
+| Excel・CSV・Windows のセル/属性を読む | `read_*()` |
 | 真偽判定 | `is_*()` / `has_*()` |
+
+**例外: ブラウザ自動化（Page Object Model）は `get_*` のままにする**
+（`get_heading()` / `get_error_message()` 等）。Selenium/Playwright を含む
+業界慣習が `get_text()` / `get_attribute()` のように `get_*` を標準にしており、
+上の「読み取り系は `read_*`」ルールをここへ機械的に当てはめると、ブラウザ
+自動化のコードを書く人の直感と衝突する（2026-08-30 決定。一度 `read_*` へ
+統一しようとして差し戻した経緯あり）。Excel/CSV/Salesforce のファイル・
+データ読み取りとブラウザ要素取得は性質が違うので、ドメインごとに慣習を
+優先してよい。
+
+**`Salesforce Report API` の `get()` も同様に例外。** `sf.report.get()` は
+複数行を返すが、`run()` ではなく `get()` のままにする（呼び出し形として
+`sf.report.get()` の方が自然という判断。`run_csv()` / `run_async()` は
+明示的にバリエーションを示す名前なのでこのままでよい）。
 
 ### 定数を大文字にする理由
 
