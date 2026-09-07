@@ -299,17 +299,18 @@ git checkout v0.11.3       :: 切り替えたいタグ（上で確認した最�
 popd
 ```
 
-**社内固有の値を書いた2ファイルは、切り替えで上書きされないようにしておく。**
+**社内固有の値を書いた3ファイルは、切り替えで上書きされないようにしておく。**
 配置したときに1回だけ設定する。
 
 ```bat
 git update-index --skip-worktree comken/toolbox/salesforce/sites/solution_sandbox.py
 git update-index --skip-worktree comken/toolbox/salesforce/sites/solution.py
+git update-index --skip-worktree comken/services/salesforce_downloader/_paths.py
 ```
 
 これで手元の書き換えが消えず、うっかり push することもない。comken 側でこれらの
 ファイルを変更したときは切り替えが止まるので、そのときだけ `--no-skip-worktree` で解除して
-手で合わせ、また設定し直す（→ [仕様書](docs/開発/仕様書.md#配置時に書き換える2ファイル)）。
+手で合わせ、また設定し直す（→ [仕様書](docs/開発/仕様書.md#配置時に書き換える3ファイル)）。
 
 **切り替えた瞬間に、次に import した全プロジェクトが新しい版になる。** 更新のたびの
 配布作業はない。問題が出たら前のタグへ戻せば、同じように全プロジェクトが戻る。
