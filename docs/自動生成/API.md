@@ -8926,30 +8926,10 @@ Args:
 
 公開定数。
 
-### `SampleSite`
+### `NTTWest`
 
 ```text
-class SampleSite(SiteBase):
-```
-
-#### 説明
-
-the-internet.herokuapp.com 用の SiteBase。
-
-#### `go_login`
-
-```text
-def go_login(self) -> LoginPage:
-```
-
-##### 説明
-
-ログイン画面を開く。
-
-### `NTTNishi`
-
-```text
-class NTTNishi(NTTSiteBase):
+class NTTWest(NTTSiteBase):
 ```
 
 #### 説明
@@ -8957,7 +8937,7 @@ class NTTNishi(NTTSiteBase):
 NTT西のサイトクラス。
 
 使い方:
-    with NTTNishi() as ntt:
+    with NTTWest() as ntt:
         secure = ntt.go_login().login(USER, PW)
 
 #### `go_login`
@@ -9039,10 +9019,10 @@ Browsers から渡されたセッションは触らず、自分で起動した�
 ただし `Browsers.launch()` から持たせてもらったインスタンスでは何もしない
 （持ち主の Browsers が with を抜けるときに閉じるため、二重に閉じない）。
 
-### `NTTHigashi`
+### `NTTEast`
 
 ```text
-class NTTHigashi(NTTSiteBase):
+class NTTEast(NTTSiteBase):
 ```
 
 #### 説明
@@ -9050,7 +9030,7 @@ class NTTHigashi(NTTSiteBase):
 NTT東のサイトクラス。
 
 使い方:
-    with NTTHigashi() as ntt:
+    with NTTEast() as ntt:
         secure = ntt.go_login().login(USER, PW)
 
 #### `go_login`
@@ -9131,6 +9111,62 @@ Browsers から渡されたセッションは触らず、自分で起動した�
 `with Kintai() as kintai:` で起動したインスタンスを `close()` しても安全。
 ただし `Browsers.launch()` から持たせてもらったインスタンスでは何もしない
 （持ち主の Browsers が with を抜けるときに閉じるため、二重に閉じない）。
+
+
+## `from comken.toolbox.browser.sites.ams_site import ...`
+
+### `AMSBrowserOptions`
+
+```text
+class AMSBrowserOptions(BrowserOptions):
+```
+
+#### 説明
+
+ams_site 用のブラウザオプション。
+
+デフォルト（BrowserOptions）から変更したいものだけ上書きする。
+全オプションのデフォルト値は comken/toolbox/browser/options.py を参照。
+
+#### `build`
+
+```text
+def build(self, profile_dir: Path | None=None) -> list[str]:
+```
+
+##### 説明
+
+有効なオプションを Edge の起動引数リストに変換する。
+
+Args:
+    profile_dir: ログイン状態を残すプロファイルフォルダ。
+                 指定するとシークレットモードは自動的に外れる
+                 （シークレットは Cookie を残さないため、永続化と両立しない）。
+
+Returns:
+    webdriver に渡す起動引数のリスト。
+
+### `AMSSite`
+
+```text
+class AMSSite(SiteBase):
+```
+
+#### 説明
+
+ams_site 雛形用の SiteBase。
+
+URL や要素セレクタは example の値のまま。利用プロジェクト側で継承して書き換える。
+
+#### `go_login`
+
+```text
+def go_login(self) -> LoginPage:
+```
+
+##### 説明
+
+ログイン画面を開く。
 
 
 ## `from comken.toolbox.browser.sites.ntt import ...`
@@ -9177,7 +9213,7 @@ class NTTSiteBase(SiteBase):
 
 NTT西・NTT東に共通のサイト操作（ログイン画面を開く、等）。
 
-NAME / BASE_URL はサブクラス（nishi.py / higashi.py）で必ず上書きする。
+NAME / BASE_URL はサブクラス（west.py / east.py）で必ず上書きする。
 
 #### `go_login`
 
@@ -9189,10 +9225,10 @@ def go_login(self) -> LoginPage:
 
 ログイン画面を開く。
 
-### `NTTNishi`
+### `NTTWest`
 
 ```text
-class NTTNishi(NTTSiteBase):
+class NTTWest(NTTSiteBase):
 ```
 
 #### 説明
@@ -9200,7 +9236,7 @@ class NTTNishi(NTTSiteBase):
 NTT西のサイトクラス。
 
 使い方:
-    with NTTNishi() as ntt:
+    with NTTWest() as ntt:
         secure = ntt.go_login().login(USER, PW)
 
 #### `go_login`
@@ -9282,10 +9318,10 @@ Browsers から渡されたセッションは触らず、自分で起動した�
 ただし `Browsers.launch()` から持たせてもらったインスタンスでは何もしない
 （持ち主の Browsers が with を抜けるときに閉じるため、二重に閉じない）。
 
-### `NTTHigashi`
+### `NTTEast`
 
 ```text
-class NTTHigashi(NTTSiteBase):
+class NTTEast(NTTSiteBase):
 ```
 
 #### 説明
@@ -9293,7 +9329,7 @@ class NTTHigashi(NTTSiteBase):
 NTT東のサイトクラス。
 
 使い方:
-    with NTTHigashi() as ntt:
+    with NTTEast() as ntt:
         secure = ntt.go_login().login(USER, PW)
 
 #### `go_login`
@@ -9418,116 +9454,6 @@ class OujuSite(SiteBase):
 #### 説明
 
 ouju_site 雛形用の SiteBase。
-
-URL や要素セレクタは example の値のまま。利用プロジェクト側で継承して書き換える。
-
-#### `go_login`
-
-```text
-def go_login(self) -> LoginPage:
-```
-
-##### 説明
-
-ログイン画面を開く。
-
-
-## `from comken.toolbox.browser.sites.sample import ...`
-
-### `SampleBrowserOptions`
-
-```text
-class SampleBrowserOptions(BrowserOptions):
-```
-
-#### 説明
-
-サンプルサイト用のブラウザオプション。
-
-デフォルト（BrowserOptions）から変更したいものだけ上書きする。
-全オプションのデフォルト値は comken/toolbox/browser/options.py を参照。
-
-#### `build`
-
-```text
-def build(self, profile_dir: Path | None=None) -> list[str]:
-```
-
-##### 説明
-
-有効なオプションを Edge の起動引数リストに変換する。
-
-Args:
-    profile_dir: ログイン状態を残すプロファイルフォルダ。
-                 指定するとシークレットモードは自動的に外れる
-                 （シークレットは Cookie を残さないため、永続化と両立しない）。
-
-Returns:
-    webdriver に渡す起動引数のリスト。
-
-### `SampleSite`
-
-```text
-class SampleSite(SiteBase):
-```
-
-#### 説明
-
-the-internet.herokuapp.com 用の SiteBase。
-
-#### `go_login`
-
-```text
-def go_login(self) -> LoginPage:
-```
-
-##### 説明
-
-ログイン画面を開く。
-
-
-## `from comken.toolbox.browser.sites.table_site import ...`
-
-### `TableBrowserOptions`
-
-```text
-class TableBrowserOptions(BrowserOptions):
-```
-
-#### 説明
-
-table_site 用のブラウザオプション。
-
-デフォルト（BrowserOptions）から変更したいものだけ上書きする。
-全オプションのデフォルト値は comken/toolbox/browser/options.py を参照。
-
-#### `build`
-
-```text
-def build(self, profile_dir: Path | None=None) -> list[str]:
-```
-
-##### 説明
-
-有効なオプションを Edge の起動引数リストに変換する。
-
-Args:
-    profile_dir: ログイン状態を残すプロファイルフォルダ。
-                 指定するとシークレットモードは自動的に外れる
-                 （シークレットは Cookie を残さないため、永続化と両立しない）。
-
-Returns:
-    webdriver に渡す起動引数のリスト。
-
-### `TableSite`
-
-```text
-class TableSite(SiteBase):
-```
-
-#### 説明
-
-table_site 雛形用の SiteBase。
 
 URL や要素セレクタは example の値のまま。利用プロジェクト側で継承して書き換える。
 

@@ -1,4 +1,4 @@
-"""comken/toolbox/browser/sites/ntt/nishi.py — NTT西 サイト
+"""comken/toolbox/browser/sites/ntt/west.py — NTT西（NTTWest） サイト
 
 ※ URL はダミー。配置するときに実際の値へ書き換える（詳細は sites/__init__.py）。
 
@@ -9,14 +9,14 @@
 from comken.toolbox.browser.sites.ntt.base import NTTSiteBase
 
 
-class NTTNishi(NTTSiteBase):
+class NTTWest(NTTSiteBase):
     """NTT西のサイトクラス。
 
     使い方:
-        with NTTNishi() as ntt:
+        with NTTWest() as ntt:
             secure = ntt.go_login().login(USER, PW)
     """
 
-    NAME = "ntt_nishi"
+    NAME = "ntt_west"
     # TODO: 配置するときに実際の URL へ書き換える
     BASE_URL = "https://ntt-nishi.example.co.jp"

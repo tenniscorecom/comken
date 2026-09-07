@@ -27,7 +27,7 @@ class NTTBrowserOptions(BrowserOptions):
 class NTTSiteBase(SiteBase):
     """NTT西・NTT東に共通のサイト操作（ログイン画面を開く、等）。
 
-    NAME / BASE_URL はサブクラス（nishi.py / higashi.py）で必ず上書きする。
+    NAME / BASE_URL はサブクラス（west.py / east.py）で必ず上書きする。
     """
 
     OPTIONS = NTTBrowserOptions

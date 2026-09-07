@@ -289,7 +289,7 @@ def test_template_has_no_src_sites_directory(generated: Path) -> None:
     ここに ``src/sites/`` が復活する回帰をここで防ぐ。
 
     ブラウザ操作の見本（書き方・最小形）はライブラリ側の
-    ``comken/toolbox/browser/sites/sample/`` に残っているので、雛形側で持つ
+    ``comken/toolbox/browser/sites/ouju_site/`` に残っているので、雛形側で持つ
     必要はない。
     """
     sites_dir = generated / "src" / "sites"

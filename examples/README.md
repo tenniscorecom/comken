@@ -68,6 +68,5 @@ VS Code のターミナルで **`python -m comken init プロジェクト名`** 
 「入力ファイルを探す → 加工する → Excel を出力する」という実務でいちばん多い構成に、
 エラー処理・ログ・config.ini の書き方が入っている。
 
-ブラウザ自動化のツールなら、`comken/toolbox/browser/sites/sample/pages/` にある
-`SampleSite` の Page Object Model 構成を合わせて使う。サンプルサイトの
-動かし方は `docs/browser.md` を参照。
+ブラウザ自動化のツールなら、`comken/toolbox/browser/sites/ouju_site/pages/` にある
+Page Object Model 構成を合わせて使う。書き方は `docs/browser.md` を参照。
