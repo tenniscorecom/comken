@@ -1,18 +1,19 @@
 """comken/toolbox/rpa.py — 社内 RPA 基盤呼び出しの薄いラッパー。
 
 ``kensetsu_libs.rpa`` を静的 import で読み込み、対象が見つからない場合は
-``InternalLibraryNotFoundError`` に変換する。呼び出し自体は
-``comken.core.runner.run`` に任せる。
+``InternalLibraryNotFoundError`` に変換する。 呼び出し前に開始ログを出す。
 """
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import Any
 
-from comken.core.runner import run
 from comken.core.timer import measure
 from comken.exceptions.rpa import InternalLibraryNotFoundError
+
+logger = logging.getLogger(__name__)
 
 RPA_LIBRARY_NAME = "kensetsu_libs.rpa"
 
@@ -57,7 +58,8 @@ def backoffice(main: Callable[[], Any], project_name: str) -> Any:
     except ModuleNotFoundError as exc:
         _raise_if_target_missing(RPA_LIBRARY_NAME, exc)
         raise
-    return run(f"backoffice で {project_name}", lambda: rpa.backoffice.rpa_run(main, project_name))
+    logger.info("%s を開始します", f"backoffice で {project_name}")
+    return rpa.backoffice.rpa_run(main, project_name)
 
 
 @measure
@@ -69,7 +71,8 @@ def intranet(main: Callable[[], Any], project_name: str) -> Any:
     except ModuleNotFoundError as exc:
         _raise_if_target_missing(RPA_LIBRARY_NAME, exc)
         raise
-    return run(f"intranet で {project_name}", lambda: rpa.intranet.rpa_run(main, project_name))
+    logger.info("%s を開始します", f"intranet で {project_name}")
+    return rpa.intranet.rpa_run(main, project_name)
 
 
 __all__ = ["backoffice", "intranet", "RPA_LIBRARY_NAME"]
