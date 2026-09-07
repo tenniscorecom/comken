@@ -1,7 +1,7 @@
 """comken/toolbox/rpa.py — 社内 RPA 基盤呼び出しの薄いラッパー。
 
 ``kensetsu_libs.rpa`` を静的 import で読み込み、対象が見つからない場合は
-``InternalLibraryNotFoundError`` に変換する。 呼び出し前に開始ログを出す。
+``InternalLibraryNotFoundError`` に変換する。呼び出し前に開始ログを出す。
 """
 
 from __future__ import annotations
