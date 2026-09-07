@@ -330,6 +330,9 @@ class ExcelTable:
             TableFormulaOverwriteError: ``allow_formula_overwrite`` が偽のまま
                 数式列を上書きしようとした場合。
         """
+        # このメソッドは `replace()` から呼ばれる前提で、`replace()` は冒頭の
+        # `if self._name is None` ブロックで必ず値を確定させてから呼ぶ。
+        assert self._name is not None
         if not any(passed_columns):
             raise InvalidTableOperationError("列のないTableはExcelテーブルにできません。")
 

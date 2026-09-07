@@ -237,6 +237,7 @@ class Excel:
                 "Sheet 系の API は openpyxl 経路（engine='openpyxl'）で開いてください。"
             )
         self._ensure_normal_workbook()
+        assert self._workbook is not None
         if name is None:
             display_sheets = [
                 sheet for sheet in self._workbook.sheetnames if not self._is_data_sheet_name(sheet)
@@ -279,6 +280,7 @@ class Excel:
                 "has_sheet() / list_sheets() を使ってください。"
             )
         self._ensure_normal_workbook()
+        assert self._workbook is not None
         last_error = SheetNotFoundError(
             "" if not candidates else candidates[-1], self._workbook.sheetnames
         )
@@ -313,6 +315,7 @@ class Excel:
                 "Sheet 系の API は openpyxl 経路で開いてください。"
             )
         self._ensure_writable("create_data_sheet")
+        assert self._workbook is not None
         full_name = self._with_python_prefix(name)
         if full_name in self._workbook.sheetnames:
             raise SheetAlreadyExistsError(full_name)
@@ -335,6 +338,7 @@ class Excel:
                 "Sheet 系の API は openpyxl 経路で開いてください。"
             )
         self._ensure_writable("create_sheet")
+        assert self._workbook is not None
         if self._is_data_sheet_name(name):
             raise SheetNameError(name)
         if name in self._workbook.sheetnames:
@@ -352,6 +356,7 @@ class Excel:
                 "list_sheets() を使ってください。"
             )
         self._ensure_normal_workbook()
+        assert self._workbook is not None
         return [name for name in self._workbook.sheetnames if self._is_data_sheet_name(name)]
 
     def _read_range_with_com(
@@ -585,6 +590,7 @@ class Excel:
                 "保存は excel.com_handler.save() を利用してください。"
             )
         self._ensure_normal_workbook()
+        assert self._workbook is not None
         if self._read_only or not self._is_dirty:
             return
         if is_dry_run():
@@ -751,6 +757,12 @@ class Excel:
             not self._working_path.exists() or self._working_path.stat().st_size == 0
         )
         if self._is_dirty or working_file_is_empty:
+            # このメソッドは3箇所（_read_range_with_com/run_macro/_read_computed_rows）
+            # から呼ばれ、いずれも self._workbook が None のまま到達しうる経路がある
+            # （_ensure_open() は状態フラグの検査のみで self._workbook を保証しない）。
+            # そのため assert はここ（実際に使う直前）に置き、使わない分岐では
+            # 評価しない。
+            assert self._workbook is not None
             self._workbook.save(self._working_path)
             self._working_copy_is_stale = False
 
@@ -838,6 +850,7 @@ class Excel:
         空行（全セルが ``None`` または空文字）はストリーム段階で落とす。
         """
         self._ensure_normal_workbook()
+        assert self._workbook is not None
         formula_sheet = self._workbook[sheet_name]
         rows: list[tuple[Any, ...]] = []
         needs_com = False
@@ -958,6 +971,7 @@ class Excel:
         """
         if self._is_dirty or not self._working_path.exists():
             self._ensure_normal_workbook()
+            assert self._workbook is not None
             formula_sheet = self._workbook[sheet_name]
             rows = [
                 tuple(
@@ -1008,6 +1022,8 @@ class Excel:
             return None
 
     def _is_pristine_workbook(self) -> bool:
+        # ``sheet()`` から ``_ensure_normal_workbook()`` 経由で呼ばれる前提。
+        assert self._workbook is not None
         worksheet = cast(Worksheet, self._workbook.active)
         return len(self._workbook.worksheets) == 1 and worksheet["A1"].value is None
 

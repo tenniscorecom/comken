@@ -35,6 +35,7 @@ r"""comken/toolbox/browser/sitebase.py — サイトを表す SiteBase 基底ク
 from __future__ import annotations
 
 import logging
+from types import TracebackType
 from typing import TYPE_CHECKING, ClassVar, Self, TypeVar
 
 from comken.exceptions import (
@@ -142,7 +143,12 @@ class SiteBase:
             return
         logger.info("site=%s owner=%s defined=%s", cls.NAME, cls.OWNER, cls.__module__)
 
-    def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         if self._browsers is not None:
             self._browsers.__exit__(exc_type, exc_val, exc_tb)
             self._browsers = None
