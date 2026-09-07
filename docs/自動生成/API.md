@@ -9780,11 +9780,11 @@ def last_row(self, sheet_name: str) -> int:
 openpyxl は ``Worksheet.max_row`` を使う。COM は ``ExcelCOMHandler.last_row``
 の ``UsedRange`` 計算を使う（数式が入ったセルも含む最終行）。
 
-#### `exists_sheet`
+#### `has_sheet`
 
 ```text
 @measure
-def exists_sheet(self, name: str) -> bool:
+def has_sheet(self, name: str) -> bool:
 ```
 
 ##### 説明
@@ -10026,10 +10026,10 @@ def read_column(self, col: str, *, header_row: int=1, force_com: bool=False) -> 
 
     ids = sheet.read_column("G").column("お客様ID")
 
-#### `get_used_range`
+#### `read_used_range`
 
 ```text
-def get_used_range(self) -> tuple[str, str]:
+def read_used_range(self) -> tuple[str, str]:
 ```
 
 ##### 説明
@@ -11914,11 +11914,11 @@ def activate(self) -> None:
 
 ウィンドウを前面に表示する。最小化されている場合は復元する。
 
-#### `get_title`
+#### `read_title`
 
 ```text
 @measure
-def get_title(self) -> str:
+def read_title(self) -> str:
 ```
 
 ##### 説明

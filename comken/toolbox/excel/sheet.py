@@ -291,9 +291,9 @@ class Sheet:
             f"{col}{header_row}:{col}{self._worksheet.max_row}", force_com=force_com
         )
 
-    def get_used_range(self) -> tuple[str, str]:
+    def read_used_range(self) -> tuple[str, str]:
         """使用範囲の左上と右下のセル参照を返す。"""
-        self._ensure_display_sheet("get_used_range")
+        self._ensure_display_sheet("read_used_range")
         return "A1", f"{get_column_letter(self._worksheet.max_column)}{self._worksheet.max_row}"
 
     def set_row_height(self, row: int, height: float) -> None:

@@ -59,7 +59,7 @@ WINDOW_TITLE = "メモ帳"
 
 w = WindowHandler(WINDOW_TITLE)
 w.activate() # ウィンドウを前面に表示
-w.get_title() # タイトルを取得
+w.read_title() # タイトルを取得
 ```
 
 ### RegistryHandler

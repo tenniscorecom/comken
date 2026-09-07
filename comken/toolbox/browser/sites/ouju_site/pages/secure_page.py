@@ -21,7 +21,7 @@ class SecurePage(AppPage):
     HEADING = Locator.css("h1")
     LOGOUT_BTN = Locator.css("button.logout")
 
-    def get_heading(self) -> str:
+    def read_heading(self) -> str:
         """画面の見出しテキストを返す。"""
         return self.read_text(self.HEADING)
 

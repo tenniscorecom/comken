@@ -428,7 +428,7 @@ class WindowHandler:
         win32gui.SetForegroundWindow(self._hwnd)
 
     @measure
-    def get_title(self) -> str:
+    def read_title(self) -> str:
         """ウィンドウのタイトルを返す。"""
         return win32gui.GetWindowText(self._hwnd)
 

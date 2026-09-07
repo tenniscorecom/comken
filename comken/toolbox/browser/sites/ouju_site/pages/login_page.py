@@ -32,7 +32,7 @@ class LoginPage(AppPage):
         画面遷移メソッドは遷移先のページクラスを返す。
         呼び出し側は返ってきたオブジェクトをそのまま使える:
             secure = login_page.login("user", "pass")
-            print(secure.get_heading())
+            print(secure.read_heading())
         """
         from comken.toolbox.browser.sites.ouju_site.pages.secure_page import SecurePage
 
@@ -41,6 +41,6 @@ class LoginPage(AppPage):
         self.click(self.LOGIN_BTN)
         return self.to(SecurePage)
 
-    def get_error_message(self) -> str:
+    def read_error_message(self) -> str:
         """ログイン失敗時のエラーメッセージを返す。"""
         return self.read_text(self.ERROR_MSG)

@@ -228,7 +228,7 @@ class Excel:
     def sheet(self, name: str | None = None) -> "Sheet":
         """名前でシートを取得する。未存在の新規ブックでは最初のシートを改名する。"""
         # engine='com' は Worksheet を返さない設計（``Sheet`` 系 API は openpyxl 前提）。
-        # 共通 API（``list_sheets`` / ``last_row`` / ``exists_sheet`` など）か
+        # 共通 API（``list_sheets`` / ``last_row`` / ``has_sheet`` など）か
         # ``excel.com_handler`` 経由で操作する。
         if self._engine == "com":
             self._ensure_open()
@@ -276,7 +276,7 @@ class Excel:
             self._ensure_open()
             raise InvalidTableOperationError(
                 "engine='com' では excel.find_sheet() は使えません。"
-                "exists_sheet() / list_sheets() を使ってください。"
+                "has_sheet() / list_sheets() を使ってください。"
             )
         self._ensure_normal_workbook()
         last_error = SheetNotFoundError(
@@ -434,7 +434,7 @@ class Excel:
         return int(worksheet.max_row)
 
     @measure
-    def exists_sheet(self, name: str) -> bool:
+    def has_sheet(self, name: str) -> bool:
         """指定した名前のシートが存在するか返す。"""
         if self._engine == "com":
             self._ensure_open()

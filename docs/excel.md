@@ -113,7 +113,7 @@ with Excel("重い.xlsx", engine="com", local_copy=False) as excel:
     一度だけ `UserWarning` を出す**。UNC パスでの事故を減らすため、`local_copy=True`
     か `False` を明示することが望ましい。
 - `engine="com"` で動く公開 API は薄い範囲のみ: `read()`、`list_sheets()`、
-  `count_sheets()`、`last_row(sheet_name)`、`exists_sheet(name)`、および
+  `count_sheets()`、`last_row(sheet_name)`、`has_sheet(name)`、および
   `excel.com_handler` プロパティ（`run_macro` / `save_as` などの COM 固有 API への
   エスケープハッチ）。
 - `engine="com"` で `sheet()` / `data_sheet()` / `create_sheet()` / `create_data_sheet()` /

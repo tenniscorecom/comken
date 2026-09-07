@@ -103,11 +103,11 @@ def test_com_engine_last_row_delegates_to_handler(tmp_path) -> None:
     fake_com.last_row.assert_called_once_with("Sheet1")
 
 
-def test_com_engine_exists_sheet_finds_matching_name(tmp_path) -> None:
-    """``exists_sheet(name)`` がシートの有無を返すこと。"""
+def test_com_engine_has_sheet_finds_matching_name(tmp_path) -> None:
+    """``has_sheet(name)`` がシートの有無を返すこと。"""
     excel, _ = _build_com_excel(tmp_path, names=["Sheet1", "Sheet2"])
-    assert excel.exists_sheet("Sheet1") is True
-    assert excel.exists_sheet("存在しない") is False
+    assert excel.has_sheet("Sheet1") is True
+    assert excel.has_sheet("存在しない") is False
 
 
 def test_com_engine_read_delegates_to_handler(tmp_path) -> None:

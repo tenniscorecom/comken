@@ -179,7 +179,7 @@ class TestExcelTable:
             sheet.set_background("A1", "FFFF00")
             sheet.freeze_panes("A2")
             assert sheet.read_range("A1:B2").to_rows() == [{"name": "sales", "value": 10}]
-            assert sheet.get_used_range() == ("A1", "B2")
+            assert sheet.read_used_range() == ("A1", "B2")
 
     def test_read_column_reads_only_the_given_column(self, tmp_path) -> None:
         path = tmp_path / "dashboard.xlsx"
