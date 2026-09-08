@@ -140,6 +140,17 @@ def local_copy(path: str | Path) -> Iterator[Path]:
         tmp_path.unlink(missing_ok=True)
 
 
+def _resolve_target(src: Path, dst: Path) -> Path:
+    """dst が既存フォルダなら src と同名を、それ以外は dst そのものを対象パスとする。"""
+    return dst / src.name if dst.is_dir() else dst
+
+
+def _is_same_existing_file(src: Path, target: Path) -> bool:
+    """target の親フォルダを作成した上で、src と target が同一ファイルかを返す。"""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    return target.exists() and src.samefile(target)
+
+
 @measure
 def move_file(src: str | Path, dst: str | Path) -> Path:
     """ファイルを移動する。
@@ -157,12 +168,11 @@ def move_file(src: str | Path, dst: str | Path) -> Path:
     """
     src = Path(src)
     dst = Path(dst)
-    target = dst / src.name if dst.is_dir() else dst
+    target = _resolve_target(src, dst)
     if is_dry_run():
         dry_run_log("ファイルを移動: %s → %s", src, target)
         return target
-    target.parent.mkdir(parents=True, exist_ok=True)
-    if target.exists() and src.samefile(target):
+    if _is_same_existing_file(src, target):
         return target
     try:
         src.replace(target)
@@ -201,12 +211,11 @@ def copy_file(src: str | Path, dst: str | Path) -> Path:
     """
     src = Path(src)
     dst = Path(dst)
-    target = dst / src.name if dst.is_dir() else dst
+    target = _resolve_target(src, dst)
     if is_dry_run():
         dry_run_log("ファイルをコピー: %s → %s", src, target)
         return target
-    target.parent.mkdir(parents=True, exist_ok=True)
-    if target.exists() and src.samefile(target):
+    if _is_same_existing_file(src, target):
         return target
     shutil.copy2(src, target)
     return target

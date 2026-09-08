@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import Literal, overload
 
 from comken.core.clock import today
+from comken.core.files.name import _split_suffix
 from comken.core.timer import measure
-from comken.exceptions import FileSuffixMissingError
 
 logger = logging.getLogger(__name__)
 
@@ -159,16 +159,3 @@ def dates_in_name(name: str) -> list[datetime.date]:
         except ValueError:
             continue  # 20261345 のように数字は揃っていても日付として成立しないもの
     return results
-
-
-def _split_suffix(name: str) -> tuple[str, str]:
-    """ファイル名（または ``prefix``）を ``stem`` と拡張子に分ける。拡張子無ければ例外。
-
-    Raises:
-        FileSuffixMissingError: 拡張子が無いとき。
-    """
-    parsed = Path(name)
-    extension = parsed.suffix
-    if not extension:
-        raise FileSuffixMissingError(name)
-    return parsed.stem, extension
