@@ -57,6 +57,16 @@ def fetch_paged_csv_as_table(
         tmp_filename: 一時ファイルの名前（呼び出し元ごとに変えて衝突を
             避ける、例: ``"bulk_query_result.csv"`` /
             ``"bulk_ingest_result.csv"``）。
+
+    ページ間はディスク上の一時ファイルへ逐次追記するため、**全ページを
+    同時にメモリへ持つことはない**。ただし戻り値は ``Table``（メモリ上の
+    全行）であり、最後に一時ファイル全体を1回で読み込む。``CSV.read()``
+    と同じ設計判断（``comken`` の ``Table`` はメモリ上の行だけを扱う
+    モデルで、行単位ストリームで返す API ではない）で、呼び出し側が
+    ``concat()`` / ``filter()`` など Table 操作へそのまま渡せることを
+    優先している。数百万行規模で行単位ストリームが要るなら、この関数は
+    使わずページ取得部分だけを流用して ``CSV.iter_rows()`` 相当の経路を
+    別途組む。
     """
     text, headers = client.request_csv("GET", path, component=component)
     lines = text.splitlines()

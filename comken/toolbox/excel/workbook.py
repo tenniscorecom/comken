@@ -585,7 +585,7 @@ class Excel:
             作成された ``ExcelTable``。
 
         Raises:
-            NotImplementedError: ``engine='com'`` で開いたインスタンスで呼ばれたとき。
+            InvalidTableOperationError: ``engine='com'`` で開いたインスタンスで呼ばれたとき。
             InvalidTableInputError: 範囲・結合・空データ行のいずれかが条件違反のとき。
             EmptyHeaderCellError: 見出し行に空セルがあるとき。
             DuplicateHeaderCellError: 見出し行に同じ名前が複数あるとき。
@@ -597,7 +597,8 @@ class Excel:
             # engine='com' では Worksheet を保持しないため、openpyxl の Table オブジェクトを
             # 作成するこの API は対応しない。COM 経路でテーブル化したい場合は openpyxl で
             # 開いたブックで実行してから COM で読む、という流れにする。
-            raise NotImplementedError(
+            # 他の engine 限定 API（sheet() など）と同じく InvalidTableOperationError で統一する。
+            raise InvalidTableOperationError(
                 "convert_range_to_table は openpyxl で開いたブックでのみ対応しています。"
                 "engine='openpyxl' で開いてください。"
             )

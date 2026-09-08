@@ -59,7 +59,7 @@ Python の作法（PEP 8）に従う。
 |---|---|---|
 | クラス名 | PascalCase | `Excel`, `LoginPage`, `CsvMerger` |
 | 定数・固定値 | UPPER_SNAKE_CASE | `COL_Q`, `SHEET_NAME`, `WAIT_SECONDS` |
-| 関数・メソッド | snake_case | `read_rows()`, `run_macro()` |
+| 関数・メソッド | snake_case | `iter_rows()`, `run_macro()` |
 | 変数 | snake_case | `csv_lookup`, `matched_rows` |
 | モジュール・ファイル名 | snake_case | `handler.py`, `driver_update.py` |
 | フォルダ名 | snake_case | `excel/`, `browser/` |
@@ -111,7 +111,7 @@ snake_case の世界（関数名・変数名・モジュール名・パッケー
 | 操作 | 動詞 | 例 |
 |---|---|---|
 | 処理・マクロ・クエリを実行する | `run_` | `run_macro()`, `run_query()`, `run_task()` |
-| データや値を読み取る | `read_` | `read_rows()`, `read_text()`, `read_messages()` |
+| データや値を読み取る | `read_` | `read_row_values()`, `read_text()`, `read_messages()` |
 | 1件を検索する | `find_` | `find_element()` |
 | 複数件を絞り込む | `filter_` | `filter_rows()` |
 | 存在・状態を判定する | `is_` / `has_` / `can_` | `is_empty()`, `has_element()` |
@@ -135,10 +135,10 @@ HTTP の `get()`、キー・値ストアの `get()` / `set()` のように、そ
 
 ### 読み取り系メソッドの動詞
 
-読み取り API は**戻り値の形で名前を分ける**。同じ名前 `read_rows()` で
-「一括の `list`」と「逐次のイテレーター」が混ざると、呼び出し側が
-「もう 1 度 for できるか」「list 化が必要か」を毎回判断することになり、
-誤用しやすい。**戻り値の型と名前を一致させる**のが原則。
+読み取り API は**戻り値の形で名前を分ける**。旧 API では同じ名前 `read_rows()`
+（`068479b` で廃止）に「一括の `list`」と「逐次のイテレーター」が混ざっており、
+呼び出し側が「もう 1 度 for できるか」「list 化が必要か」を毎回判断することに
+なり、誤用しやすかった。**戻り値の型と名前を一致させる**のが原則。
 
 | 動作 | 名前 |
 |---|---|
@@ -163,6 +163,14 @@ HTTP の `get()`、キー・値ストアの `get()` / `set()` のように、そ
 複数行を返すが、`run()` ではなく `get()` のままにする（呼び出し形として
 `sf.report.get()` の方が自然という判断。`run_csv()` / `run_async()` は
 明示的にバリエーションを示す名前なのでこのままでよい）。
+
+**`Salesforce Report API` の `describe()` 系も動詞表の例外。**
+`sf.report.describe()` / `describe_fields()` / `describe_fields_csv()` は
+レポートを実行せず定義（列・フィルタ・形式）だけを取得する。`query()` と
+同じ理由で例外にする: Salesforce REST API 自身が `sobjects/describe` の
+ように「describe」をメタデータ取得の動詞として定義しており、`read_` へ
+統一すると Salesforce のドキュメント・エラーメッセージとの対応が取りにくく
+なる（ドメインで確立した語を優先する）。
 
 ### 定数を大文字にする理由
 
@@ -438,7 +446,7 @@ def find_latest(folder: str | Path, pattern: str = "*.xlsx") -> Path | None:
 
 ```python
 # 悪い例（マジックナンバー）
-rows = f.read_rows("売上データ", min_row=2)
+rows = com.read_row_values("売上データ", min_row=2)
 if file_size > 10485760:
     ...
 ```
@@ -450,7 +458,7 @@ HEADER_ROW = 1
 LOCAL_COPY_THRESHOLD_MB = 10
 LOCAL_COPY_THRESHOLD_BYTES = LOCAL_COPY_THRESHOLD_MB * 1024 * 1024  # 計算式のまま書く
 
-rows = f.read_rows(SHEET_NAME, min_row=HEADER_ROW + 1)
+rows = com.read_row_values(SHEET_NAME, min_row=HEADER_ROW + 1)
 if file_size > LOCAL_COPY_THRESHOLD_BYTES:
     ...
 ```

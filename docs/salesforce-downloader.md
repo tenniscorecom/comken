@@ -582,7 +582,7 @@ for rule in rules:
 `PY_スケジュール` シートを追加する。
 
 ```python
-from comken.services.salesforce_downloader.schedule import create_schedule_template
+from comken.services.salesforce_downloader.schedule_template import create_schedule_template
 
 create_schedule_template(MASTER_PATH)  # 既存の管理表に「スケジュール」シートを追加
 ```

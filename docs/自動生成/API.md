@@ -2062,7 +2062,7 @@ Returns:
 
 ```text
 @measure
-def copy_to_local_if_large(path: str | Path, threshold_mb: float) -> tuple[Path, Path | None]:
+def copy_to_local_if_large(path: str | Path, threshold_mb: float | None) -> tuple[Path, Path | None]:
 ```
 
 #### 説明
@@ -2073,6 +2073,8 @@ NAS・ネットワークドライブ上のファイルを openpyxl や win32com 
 遅い・不安定になる事があり、社内ルールで許可されていればローカルへコピーして
 安定化させる。``threshold_mb=0`` を指定すればコピーせず元のまま返す
 （社内ルールでローカルコピーが禁止されている場合のオプトアウト）。
+``threshold_mb=None`` を指定するとサイズに関係なく常にコピーする
+（UNC パス上のファイルを明示的にローカル化したい場合のオプトイン）。
 
 返り値は ``(working_path, tmp_path_or_None)``。第2要素が ``None`` 以外の
 ときは呼び出し側がローカルコピーの所有者となり、不要になったら
@@ -2088,7 +2090,8 @@ NAS・ネットワークドライブ上のファイルを openpyxl や win32com 
 Args:
     path: 元のファイルパス。
     threshold_mb: この値（MB）を**超える**ファイルはコピーする。
-                  0 を指定するとコピーしない。
+                  0 を指定するとコピーしない。``None`` を指定すると
+                  サイズに関係なく常にコピーする。
 
 Returns:
     (working_path, tmp_path_or_None) のタプル。
@@ -9855,7 +9858,7 @@ Returns:
     作成された ``ExcelTable``。
 
 Raises:
-    NotImplementedError: ``engine='com'`` で開いたインスタンスで呼ばれたとき。
+    InvalidTableOperationError: ``engine='com'`` で開いたインスタンスで呼ばれたとき。
     InvalidTableInputError: 範囲・結合・空データ行のいずれかが条件違反のとき。
     EmptyHeaderCellError: 見出し行に空セルがあるとき。
     DuplicateHeaderCellError: 見出し行に同じ名前が複数あるとき。
@@ -11368,7 +11371,7 @@ openpyxl では対応できない以下の操作に使う:
 #### `__init__`
 
 ```text
-def __init__(self, path: str | Path, password: str='', headers: list[str] | None=None, local_copy_threshold_mb: float=10) -> None:
+def __init__(self, path: str | Path, password: str='', headers: list[str] | None=None, local_copy_threshold_mb: float | None=10) -> None:
 ```
 
 ##### 説明
@@ -11386,6 +11389,7 @@ Args:
         マクロ起動が UNC / 共有サーバー上のファイルを参照する場合、
         コピー元では見つからないことがある。そのときは
         ``local_copy_threshold_mb=0`` を指定して元の場所で開く。
+        ``None`` を指定するとサイズに関係なく常にローカルへコピーする。
 
 #### `read_cell`
 

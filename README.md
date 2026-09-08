@@ -47,11 +47,13 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 
 ## 使うときの約束
 
-- **`from comken import ...` で取れるのは、何をするプロジェクトでも使う5個だけ。**
+- **`from comken import ...` で取れるのは、何をするプロジェクトでも使う7個だけ。**
   `config` / `Config`（設定）、`comken_logger`（ログ）、実行モードの2関数
-  （`dry_run` / `debug`）
+  （`dry_run` / `debug`）、ログの起動元を表す `Backoffice` / `Intranet`
 - **部品は `from comken.core import ...` から取る。** ファイル検索・日時・文字列・差分・
-  計測など30個（`FileFinder` / `copy_file` / `project_dir` / `today` / `Timer` / `retry` など）
+  計測など（`FileFinder` / `copy_file` / `project_dir` / `today` / `Timer` / `retry` など。
+  正確な数は増減するため固定値を書かない — 知りたいときは
+  `python -c "import comken.core; print(len(comken.core.__all__))"`）
 - **表データは `CSV` / `Excel` と `Table` を使い、ファイル形式に依存しない処理にする**
   （どの機能群に依存しているかが import 行で分かる）
 - **書くときは `from comken import X` が第一選択。** そこに無いものだけ `from comken.core import Y`
@@ -119,8 +121,8 @@ write 側に空キーが複数あっても ``TransferDestinationMultipleMatchErr
 | [Data Loader（CLI 実行）](docs/dataloader.md) | Salesforce Data Loader の CLI 実行を手伝う（大量データの一括変更。正確な構文は環境ごとに確認が必要） |
 | [Salesforce認証の判断根拠](docs/開発/salesforce-authentication.md) | ECA・Refresh Token Flow を既定にした理由と公式資料 |
 | [credentials（DPAPI）](docs/credentials.md) | パスワード・client_secret の暗号化保存（Windows ユーザーに紐付く） |
-| [祝日判定](docs/holidays.md) | 内閣府の祝日 CSV（CP932）+ 社内管理表の会社休日をマージして営業日判定 |
-| [core（部品）](docs/core.md) | `from comken.core import ...` で取る30個。ファイル検索・操作・圧縮・ファイル名の組み立て／データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時 |
+| [祝日判定](docs/holidays.md) | 内閣府の祝日 CSV（CP932）+ コード直書きの会社休日をマージして営業日判定 |
+| [core（部品）](docs/core.md) | `from comken.core import ...` で取る部品群。ファイル検索・操作・圧縮・ファイル名の組み立て／データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時 |
 
 ## 定数クラス一覧
 
@@ -518,7 +520,7 @@ graph LR
         runtime["runtime\n実行モード"]
         deprecation["deprecation\n旧名の警告"]
     end
-    subgraph L1["comken.core — 外を触らない部品（30個）"]
+    subgraph L1["comken.core — 外を触らない部品"]
         config["config\n設定ファイル"]
         logger["logger\nログ設定"]
         state["state\n状態の永続化"]

@@ -153,7 +153,7 @@ with Excel("帳票.xlsx") as excel:
   行わない。事故を減らすため `header_row` は明示することを推奨。
 - 表示用シート・データシートどちらでも利用可能。`PY_T_` プレフィックスは補わない
   （指定された名前をそのまま使う）。
-- `engine="com"` で呼ぶと `NotImplementedError`（openpyxl 経路のみ対応）。
+- `engine="com"` で呼ぶと `InvalidTableOperationError`（openpyxl 経路のみ対応）。
 
 ## `with` 必須
 

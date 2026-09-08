@@ -218,7 +218,9 @@ class HolidayCalendar:
             last = self.last_known_date()
             logger.warning(
                 "祝日カレンダーの収録期限が近づいています: 残り %d 日（最終収録日: %s）。"
-                "内閣府の祝日 CSV を更新するか、管理表に直近の祝日を追加してください。",
+                "内閣府の syukujitsu.csv をダウンロードして"
+                "comken/core/holidays/data/syukujitsu.csv を上書きし、コミット・タグ打ちして"
+                "配布してください（docs/holidays.md の「年1回の手動更新手順」参照）。",
                 remaining,
                 last,
             )
