@@ -406,6 +406,21 @@ class TestCopyToLocalIfLarge:
         assert working == src
         assert tmp is None
 
+    def test_threshold_none_forces_copy_regardless_of_size(self, tmp_path):
+        """``threshold_mb=None`` はサイズに関係なく常にコピーする（0バイトでも）。
+
+        ``local_copy=True`` を「強制コピー」の意味で使う呼び出し側
+        （``Excel``/``ExcelCOMHandler``）が使う値。``threshold_mb=0`` は
+        「コピー無効」という別の意味を持つため、これと区別している。
+        """
+        src = tmp_path / "tiny.xlsx"
+        src.write_bytes(b"")  # 0バイト
+
+        working, tmp = copy_to_local_if_large(src, threshold_mb=None)
+
+        assert working != src
+        assert tmp == working
+
     def test_returns_path_objects(self, tmp_path):
         """返り値はどちらも Path オブジェクト（呼び出し側の簡潔さのため）。"""
         # 閾値未満

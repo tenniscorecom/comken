@@ -187,10 +187,13 @@ class Excel:
             threshold,
         )
 
-    def _resolve_com_local_copy_threshold(self) -> float:
+    def _resolve_com_local_copy_threshold(self) -> float | None:
         """``engine='com'`` 用の ``local_copy_threshold_mb`` を ``_local_copy`` から算出する。"""
         if self._local_copy is True:
-            return 0
+            # ``copy_to_local_if_large`` は ``threshold_mb=0`` を「コピー無効」
+            # と扱うため、常にコピーさせたいここでは使えない。``None`` は
+            # サイズに関係なく常にコピーする専用の値として区別している。
+            return None
         if self._local_copy is False:
             # ``copy_to_local_if_large`` は ``threshold_mb=0`` を「コピー無効」と
             # 扱うので、``float('inf')`` を渡しても同じ結果になる（stat() 比較が
@@ -1131,7 +1134,7 @@ class Excel:
         """
         cached_workbook = self._open_stream_workbook(data_only=True)
         cached_sheet = cached_workbook[sheet_name]
-        rows, any_none = self._collect_cached_rows(cached_sheet, min_row)
+        rows, row_indices, any_none = self._collect_cached_rows(cached_sheet, min_row)
         if not any_none:
             logger.debug(
                 "_cached_rows_from_stream: None セルが無いので数式判定をスキップ: sheet=%s rows=%d",
@@ -1146,12 +1149,12 @@ class Excel:
         )
         formula_workbook = self._open_stream_workbook(data_only=False)
         formula_sheet = formula_workbook[sheet_name]
-        return self._mark_uncalculated_formulas(rows, formula_sheet, min_row)
+        return self._mark_uncalculated_formulas(rows, row_indices, formula_sheet, min_row)
 
     @staticmethod
     def _collect_cached_rows(
         cached_sheet: Worksheet, min_row: int
-    ) -> tuple[list[tuple[Any, ...]], bool]:
+    ) -> tuple[list[tuple[Any, ...]], list[int], bool]:
         """``data_only=True`` の値を ``min_row`` から流し、空行は捨てる。
 
         「ストリーム段階」で落とす: ``iter_rows`` から yield された行を
@@ -1159,37 +1162,58 @@ class Excel:
         メモリに積まずにスキップする。 ``0`` / ``False`` は値として残す。
         Excel の ``dimension`` が膨らんだブックでも、不要な tuple や dict を
         残さずに線形時間で返せる。
+
+        あわせて、残した各行が ``iter_rows(min_row=min_row)`` の何番目
+        （0始まり）だったかを ``row_indices`` として返す。数式側ストリーム
+        （空行を捨てない）と突き合わせるとき、空行を挟んだ行がズレたまま
+        ``zip`` されるのを防ぐために使う（``_mark_uncalculated_formulas``）。
         """
         rows: list[tuple[Any, ...]] = []
+        row_indices: list[int] = []
         any_none = False
-        for cached_row in cached_sheet.iter_rows(min_row=min_row, values_only=True):
+        cached_stream = cached_sheet.iter_rows(min_row=min_row, values_only=True)
+        for index, cached_row in enumerate(cached_stream):
             row_tuple = tuple(cached_row)
             if Excel._row_is_blank(row_tuple):
                 # 空行はメモリに積まずにスキップ
                 continue
             rows.append(row_tuple)
+            row_indices.append(index)
             if not any_none:
                 for value in row_tuple:
                     if value is None:
                         any_none = True
                         break
-        return rows, any_none
+        return rows, row_indices, any_none
 
     @staticmethod
     def _mark_uncalculated_formulas(
         rows: list[tuple[Any, ...]],
+        row_indices: list[int],
         formula_sheet: Worksheet,
         min_row: int,
     ) -> tuple[list[tuple[Any, ...]], bool]:
-        """数式側ストリームを流し、``rows`` の None セルのうち数式を ``needs_com`` に積む。"""
+        """数式側ストリームを流し、``rows`` の None セルのうち数式を ``needs_com`` に積む。
+
+        ``rows`` は ``_collect_cached_rows`` が空行を捨てたあとの行なので、
+        素直に ``formula_sheet.iter_rows()`` と ``zip`` すると、空行を1つでも
+        挟んだ時点で以降のすべての行がズレて突き合わさる（別の行同士を
+        比較してしまう）。``row_indices`` に記録された絶対位置まで
+        formula 側ストリームを1本の forward イテレータで進めることで、
+        ストリームを読み直さず（線形時間のまま）位置を合わせる。
+        """
         new_rows: list[tuple[Any, ...]] = []
         needs_com = False
-        for cached_row, formula_row in zip(
-            rows, formula_sheet.iter_rows(min_row=min_row, values_only=True), strict=False
-        ):
-            formula_tuple = tuple(formula_row)
+        formula_stream = enumerate(formula_sheet.iter_rows(min_row=min_row, values_only=True))
+        next_index = -1
+        formula_row: tuple[Any, ...] = ()
+        for cached_row, target_index in zip(rows, row_indices, strict=True):
+            while next_index < target_index:
+                next_index, raw_formula_row = next(formula_stream)
+                formula_row = tuple(raw_formula_row)
             # cached 側と formula 側で行長が違う場合（末尾の空セル等）に
             # 備えて cached 側に合わせる。
+            formula_tuple = formula_row
             if len(formula_tuple) < len(cached_row):
                 formula_tuple = formula_tuple + (None,) * (len(cached_row) - len(formula_tuple))
             new_row: list[Any] = []

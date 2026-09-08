@@ -208,17 +208,18 @@ class Table:
         if set(self.columns) != set(other.columns):
             raise TableError("concatする表の列名が一致しません。")
         columns = self.columns
-        # ``other`` は自分と別の Table なので types が異なりうる。
-        # _from_normalized_rows() は変換済み前提で converter を実行しないため、
-        # ``other`` 側の値を self.types で変換し直さずに混ぜてしまうと、
-        # 同じ列に self.types 変換済みの値と未変換の値が混在しうる。
-        # concat() だけは通常の ``Table(...)`` を使い、self.types を全行へ
-        # 揃えて適用する（既存の挙動を維持する）。
-        result = Table(
-            columns,
-            [{column: row[column] for column in columns} for row in [*self._rows, *other._rows]],
-            types=self.types,
-        )
+        # ``other`` は自分と別の Table なので types が異なりうる（または無い）。
+        # other 側の値だけ self.types で変換し、self.types 変換済みの値と
+        # 未変換の値が同じ列に混在しないようにする。
+        # self 側の行は既に self.types で変換済みなので、ここでもう一度
+        # converter へ通さない（非冪等な converter（例: 文字列前提のパース
+        # 関数）を変換済みの値に再適用すると壊れる／例外になるため）。
+        self_rows = [{column: row[column] for column in columns} for row in self._rows]
+        other_rows = [
+            self._normalize({column: row[column] for column in columns}, row_number)
+            for row_number, row in enumerate(other._rows, 1)
+        ]
+        result = Table._from_normalized_rows(columns, [*self_rows, *other_rows], types=self.types)
         logger.debug(
             "Table concat: %d 行 + %d 行 = %d 行",
             len(self._rows),

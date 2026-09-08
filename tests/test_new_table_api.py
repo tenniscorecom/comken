@@ -59,6 +59,30 @@ def test_table_concat_applies_self_types_to_other_rows_too() -> None:
     assert all(isinstance(row["x"], int) for row in result.to_rows())
 
 
+def test_table_concat_does_not_reapply_types_to_self_rows() -> None:
+    """concat() は self 側の行(既に self.types で変換済み)へ converter を
+    再適用しない。
+
+    ``str_only_to_int`` は文字列しか受け付けない非冪等な converter。
+    修正前は self 側の変換済みの値（既に ``int``）へ concat() 内でもう一度
+    この converter を適用してしまい ``TypeError`` になっていた。
+    """
+
+    def str_only_to_int(value: object) -> int:
+        if not isinstance(value, str):
+            raise TypeError(f"文字列以外は受け付けません: {value!r}")
+        return int(value)
+
+    left = Table(["x"], [{"x": "5"}], types={"x": str_only_to_int})
+    # other 側は types を指定せず、生の文字列のまま保持する
+    # （concat() が other 側だけを self.types で変換する既存の設計を使う）。
+    right = Table(["x"], [{"x": "7"}])
+
+    result = left.concat(right)
+
+    assert result.to_rows() == [{"x": 5}, {"x": 7}]
+
+
 def test_csv_is_string_by_default_and_types_are_explicit(tmp_path) -> None:
     path = tmp_path / "data.csv"
     path.write_text("id,name\n1,山田\n", encoding="utf-8-sig")

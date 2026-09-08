@@ -425,3 +425,42 @@ class TestFormulaColumnPreservation:
             table.replace(Table(["ID", "名前"], [{"ID": "002", "名前": "新"}]))
             assert table._worksheet["A2"].value == "002"
             assert table._worksheet["B2"].value == "新"
+
+
+class _FakeSheet:
+    """``iter_rows(min_row=..., values_only=True)`` だけを持つ最小の偽シート。
+
+    ``Excel._collect_cached_rows`` / ``Excel._mark_uncalculated_formulas`` は
+    ``Worksheet`` のこのメソッドしか使わないため、実 xlsx を作らずに
+    行ズレのケースだけをピンポイントで再現できる。
+    """
+
+    def __init__(self, rows: list[tuple[Any, ...]]) -> None:
+        self._rows = rows
+
+    def iter_rows(self, min_row: int = 1, values_only: bool = True):
+        yield from self._rows
+
+
+class TestMarkUncalculatedFormulasRowAlignment:
+    """空行を挟んでも data_only 側と数式側の行位置がズレないことを確認する。"""
+
+    def test_blank_row_before_uncalculated_formula_is_still_detected(self) -> None:
+        # 行1: 通常データ。行2: 空行(_collect_cached_rows が捨てる)。
+        # 行3: A列が未計算の数式セル(data_only側はNone)。
+        cached_sheet = _FakeSheet([(1, "a"), (None, None), (None, "b")])
+        formula_sheet = _FakeSheet([(1, "a"), (None, None), ("=SUM(1,1)", "b")])
+
+        rows, row_indices, any_none = Excel._collect_cached_rows(cached_sheet, min_row=1)
+        assert rows == [(1, "a"), (None, "b")]
+        assert row_indices == [0, 2]  # 空行(index=1)がスキップされている
+        assert any_none is True
+
+        new_rows, needs_com = Excel._mark_uncalculated_formulas(
+            rows, row_indices, formula_sheet, min_row=1
+        )
+
+        # 修正前は zip がズレて formula_sheet の空行(index=1)と突き合わされ、
+        # 実際の数式セル("=SUM(1,1)", index=2)を見落として needs_com=False になっていた。
+        assert needs_com is True
+        assert new_rows == [(1, "a"), (None, "b")]

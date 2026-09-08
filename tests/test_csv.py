@@ -241,6 +241,39 @@ class TestCSV:
         with pytest.raises(CSVRowLengthError, match="2行目"), CSV(path) as csv_file:
             csv_file.read()
 
+    @pytest.mark.parametrize("text", ["id,name\n1\n", "id,name\n1,A,extra\n"])
+    def test_iter_rows_rejects_wrong_data_width(self, tmp_path, text) -> None:
+        """``iter_rows()`` も ``read()`` と同じく列数不一致を検出する。
+
+        ``csv.DictReader`` は列数が合わない行を検証せず、余分な値を ``None``
+        キー配下へ、不足した列を ``None`` 値で埋めて黙って返す。以前は
+        ``iter_rows()`` だけこの検証が抜けていた。
+        """
+        path = tmp_path / "data.csv"
+        path.write_text(text, encoding="utf-8-sig")
+        with pytest.raises(CSVRowLengthError, match="2行目"), CSV(path) as csv_file:
+            list(csv_file.iter_rows())
+
+    def test_iter_rows_with_explicit_encoding_rejects_wrong_data_width(self, tmp_path) -> None:
+        """明示 encoding のストリーミング経路（``DictReader`` 直結）でも検出する。"""
+        path = tmp_path / "data.csv"
+        path.write_text("id,name\n1,山田\n2\n", encoding="utf-8")
+        with (
+            pytest.raises(CSVRowLengthError, match="3行目"),
+            CSV(path, encoding="utf-8") as csv_file,
+        ):
+            list(csv_file.iter_rows())
+
+    def test_iter_rows_headerless_rejects_wrong_data_width(self, tmp_path) -> None:
+        """``columns`` 指定（ヘッダー行なし）でも1行目から検出する。"""
+        path = tmp_path / "data.csv"
+        path.write_text("A001,1000,山田\n", encoding="utf-8-sig")
+        with (
+            pytest.raises(CSVRowLengthError, match="1行目"),
+            CSV(path, columns=["id", "amount"]) as csv_file,
+        ):
+            list(csv_file.iter_rows())
+
     def test_missing_and_zero_byte_have_dedicated_errors(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
         with pytest.raises(CSVFileNotFoundError), CSV(path) as csv_file:

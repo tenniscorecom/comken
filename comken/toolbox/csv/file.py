@@ -183,6 +183,12 @@ class CSV:
         ``source`` は ``io.StringIO`` でも ``Path.open()`` したファイルでも
         ``DictReader`` にとっては同じ iterable なので、AUTO 経路と明示 encoding 経路の
         両方でこのヘルパーを共有する。
+
+        ``csv.DictReader`` は列数が合わない行を検証せず、余分な値は ``None``
+        キー配下へリストで積み、不足した列は ``None`` 値で埋めて黙って返す。
+        ``read()`` は同じ不正入力を ``CSVRowLengthError`` にするため、ここでも
+        ``DictReader`` の戻り値からその2パターンを検出して揃える
+        （1行ずつの ``O(1)`` チェックなので、ストリーミングの利点は損なわない）。
         """
         if self._columns is None:
             reader = csv.DictReader(source)
@@ -190,8 +196,17 @@ class CSV:
             # 列名があらかじめ決まっているときは DictReader の headers を上書きして
             # ``csv.DictReader`` にヘッダー行を読ませない。残るのはデータ行のみ。
             reader = csv.DictReader(source, fieldnames=self._columns)
-        for row in reader:
-            # DictReader は None を含むキー/値を返さないので ``dict(row)`` で十分
+        first_data_line = 1 if self._columns is not None else 2
+        for line_number, row in enumerate(reader, start=first_data_line):
+            expected = len(reader.fieldnames or ())
+            extra = row.pop(None, None)  # type: ignore[call-overload]
+            if extra is not None:
+                raise CSVRowLengthError(self.path, line_number, expected, expected + len(extra))
+            missing = sum(1 for value in row.values() if value is None)
+            if missing:
+                raise CSVRowLengthError(self.path, line_number, expected, expected - missing)
+            # DictReader は None を含むキー/値を返さない(上のチェックで排除済み)ので
+            # ``dict(row)`` で十分
             yield dict(row)
 
     def _validate_columns(self, columns: list[str]) -> None:
