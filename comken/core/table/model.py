@@ -6,6 +6,7 @@ Table はメモリ上の行だけを担当します。CSV や Excel の保存処
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from typing import Any, Self
 
@@ -16,6 +17,8 @@ from comken.exceptions.table import (
     TableRowColumnsError,
     TableTypeConversionError,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class Table:
@@ -39,6 +42,12 @@ class Table:
         self._rows: list[dict[str, Any]] = [
             self._normalize(row, row_number) for row_number, row in enumerate(rows, 1)
         ]
+        logger.debug(
+            "Table 構築: %d 列, %d 行, 型変換 %d 列",
+            len(self.columns),
+            len(self._rows),
+            len(self.types),
+        )
 
     def _normalize(self, row: Mapping[str, Any], row_number: int) -> dict[str, Any]:
         missing = [column for column in self.columns if column not in row]
@@ -92,6 +101,7 @@ class Table:
     def replace(self, rows: list[dict]) -> Self:
         """表の全行を置き換え、同じTableを返す。"""
         self._rows = [self._normalize(row, row_number) for row_number, row in enumerate(rows, 1)]
+        logger.debug("Table replace: %d 行", len(self._rows))
         return self
 
     def append(self, rows: list[dict] | dict) -> Self:
@@ -100,6 +110,7 @@ class Table:
         start = len(self._rows) + 1
         normalized = [self._normalize(row, start + index) for index, row in enumerate(values)]
         self._rows.extend(normalized)
+        logger.debug("Table append: +%d 行 (合計 %d 行)", len(normalized), len(self._rows))
         return self
 
     def select(self, *columns: str) -> Table:
@@ -110,17 +121,21 @@ class Table:
         selected_types = {
             column: converter for column, converter in self.types.items() if column in columns
         }
-        return Table(
+        result = Table(
             list(columns),
             [{column: row[column] for column in columns} for row in self._rows],
             types=selected_types,
         )
+        logger.debug("Table select: %d 列, %d 行", len(result.columns), len(result))
+        return result
 
     def filter(self, predicate: Callable[[dict], bool]) -> Table:
         """条件に一致する行だけを持つ新しいTableを返す。"""
         # predicate は利用者コードなので、誤って行を書き換えても元の Table へ影響させない。
         rows = [dict(row) for row in self._rows if predicate(dict(row))]
-        return Table(self.columns, rows, types=self.types)
+        result = Table(self.columns, rows, types=self.types)
+        logger.debug("Table filter: %d 行 (元 %d 行)", len(result), len(self._rows))
+        return result
 
     def column(self, name: str) -> list[Any]:
         """指定列の値を順番どおりに返す。"""
@@ -134,8 +149,10 @@ class Table:
         for row in self._rows:
             value = row[key]
             if value in result:
+                logger.debug("Table index: キー重複を検出: %s=%r", key, value)
                 raise TableDuplicateKeyError([key], value)
             result[value] = dict(row)
+        logger.debug("Table index: %s で索引化, %d 件", key, len(result))
         return result
 
     def group_by(self, key: str) -> dict[Any, Table]:
@@ -144,9 +161,11 @@ class Table:
         grouped: dict[Any, list[dict]] = {}
         for row in self._rows:
             grouped.setdefault(row[key], []).append(row)
-        return {
+        result = {
             value: Table(self.columns, rows, types=self.types) for value, rows in grouped.items()
         }
+        logger.debug("Table group_by: %s で %d グループ", key, len(result))
+        return result
 
     def concat(self, other: Table) -> Table:
         """同じ列定義の表を縦に連結する。
@@ -158,11 +177,18 @@ class Table:
         if set(self.columns) != set(other.columns):
             raise TableError("concatする表の列名が一致しません。")
         columns = self.columns
-        return Table(
+        result = Table(
             columns,
             [{column: row[column] for column in columns} for row in [*self._rows, *other._rows]],
             types=self.types,
         )
+        logger.debug(
+            "Table concat: %d 行 + %d 行 = %d 行",
+            len(self._rows),
+            len(other._rows),
+            len(result),
+        )
+        return result
 
     def _check_columns(self, columns: Iterable[str]) -> None:
         missing = [column for column in columns if column not in self.columns]

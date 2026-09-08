@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 from types import TracebackType
@@ -28,6 +29,8 @@ from comken.exceptions.table import (
     TableNotOpenError,
 )
 from comken.runtime import is_dry_run
+
+logger = logging.getLogger(__name__)
 
 Value: TypeAlias = str | int | float | bool
 
@@ -76,6 +79,7 @@ class CSV:
             and not (self._read_only or self._dry_run or is_dry_run())
             and self._pending is not None
         ):
+            logger.debug("CSV withブロック終了時に保留内容を書き出し: %s", self.path)
             self._write(self._pending)
         self._is_open = False
 
@@ -95,10 +99,14 @@ class CSV:
         self._ensure_open()
         if self._pending is not None:
             # replace/write の結果は保存前でも、同じ処理中の「現在の Table」として読める。
+            logger.debug("CSV read は保留中 Table を返します: %s", self.path)
             return self._pending
+        logger.debug("CSV 読み込み開始: %s", self.path)
         if not self.path.exists():
+            logger.debug("CSV ファイルが存在しません: %s", self.path)
             raise CSVFileNotFoundError(self.path)
         if self.path.stat().st_size == 0:
+            logger.debug("CSV は空ファイルです: %s", self.path)
             if self._columns is None:
                 raise CSVHeaderMissingError(self.path)
             return Table(self._columns, [], types=self._types)
@@ -114,6 +122,12 @@ class CSV:
             if len(values) != len(columns):
                 raise CSVRowLengthError(self.path, line_number, len(columns), len(values))
             rows.append(dict(zip(columns, values, strict=True)))
+        logger.debug(
+            "CSV 読み込み完了: %s, %d 行, %d 列",
+            self.path,
+            len(rows),
+            len(columns),
+        )
         return Table(columns, rows, types=self._types)
 
     def iter_rows(self) -> Iterator[dict[str, str]]:
@@ -142,8 +156,10 @@ class CSV:
         if self._pending is not None:
             # ``read()`` と同じく保留中の Table を 1 行ずつ返す。読み取り経路で
             # ``replace`` された結果はここでストリーム消費できる。
+            logger.debug("CSV iter_rows は保留中 Table を返します: %s", self.path)
             yield from self._pending.to_rows()
             return
+        logger.debug("CSV iter_rows 開始: %s", self.path)
         if not self.path.exists():
             raise CSVFileNotFoundError(self.path)
         if self.path.stat().st_size == 0:
@@ -176,12 +192,16 @@ class CSV:
     def _read_text(self) -> str:
         raw = self.path.read_bytes()
         if self._encoding != Encoding.AUTO:
+            logger.debug("CSV 読み込み: %s, encoding=%s", self.path, self._encoding)
             return raw.decode(self._encoding)
         for encoding in (Encoding.UTF8_SIG, Encoding.CP932):
             try:
-                return raw.decode(encoding)
+                decoded = raw.decode(encoding)
+                logger.debug("CSV 読み込み: %s, encoding=%s (auto)", self.path, encoding)
+                return decoded
             except UnicodeDecodeError:
                 continue
+        logger.debug("CSV 読み込み: 文字コードを判定できません: %s", self.path)
         raise EncodingDetectionError(self.path)
 
     def replace(self, rows: list[dict[str, Value]] | Table) -> None:
@@ -206,6 +226,12 @@ class CSV:
                 raise CSVColumnsRequiredError(self.path)
             table = Table(columns, [], types=self._types)
         self._pending = table
+        logger.debug(
+            "CSV replace を保留: %s, %d 行, %d 列",
+            self.path,
+            len(table),
+            len(table.columns),
+        )
         # replace は計画を作るだけにする。途中で例外が起きたときに、
         # それまでの一部だけがファイルへ残ると復旧しにくいためである。
 
@@ -232,6 +258,12 @@ class CSV:
             )
         current.append(additions)
         self._pending = current
+        logger.debug(
+            "CSV append を保留: %s, +%d 行 (合計 %d 行)",
+            self.path,
+            len(additions),
+            len(current),
+        )
 
     @measure
     def save(self) -> None:
@@ -254,6 +286,13 @@ class CSV:
             self._pending = None
 
     def _write(self, table: Table) -> None:
+        logger.debug(
+            "CSV 書き込み: %s, %d 行, %d 列, encoding=%s",
+            self.path,
+            len(table),
+            len(table.columns),
+            self._write_encoding,
+        )
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with (
             atomic_write(self.path) as temporary_path,

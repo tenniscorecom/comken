@@ -1,9 +1,12 @@
 """comken/core/data.py — データ変換・比較ユーティリティ"""
 
+import logging
 from dataclasses import dataclass
 
 from comken.core.table.model import Table
 from comken.exceptions import InvalidColumnError, KeyColumnNotFoundError
+
+logger = logging.getLogger(__name__)
 
 
 def is_true_word(text: str) -> bool:
@@ -134,6 +137,12 @@ def diff_rows(
     Raises:
         KeyColumnNotFoundError: key で指定した列が存在しない場合。
     """
+    logger.debug(
+        "diff_rows 開始: before=%d 行, after=%d 行, key=%s",
+        len(before),
+        len(after),
+        key,
+    )
     before_rows, before_columns = _materialize(before)
     after_rows, after_columns = _materialize(after)
 
@@ -156,6 +165,12 @@ def diff_rows(
                 RowChange(key=k, before=before_by_key[k], after=after_by_key[k], columns=columns)
             )
 
+    logger.debug(
+        "diff_rows 完了: added=%d 行, removed=%d 行, changed=%d 行",
+        len(added_rows),
+        len(removed_rows),
+        len(changed),
+    )
     return DiffResult(
         added=Table(after_columns, added_rows),
         removed=Table(before_columns, removed_rows),

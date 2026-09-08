@@ -7,6 +7,7 @@ mapping の列名はコンストラクタで検証するので、typo は早期�
 入力 ``read`` / ``write`` は直接変更せず、内部の作業 Table に書き込む。
 """
 
+import logging
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -19,6 +20,8 @@ from comken.exceptions.table import (
     TransferDestinationMultipleMatchError,
     TransferMappingError,
 )
+
+logger = logging.getLogger(__name__)
 
 Row = dict[str, Any]
 
@@ -116,6 +119,14 @@ class Transfer:
             raise TableColumnNotFoundError(missing_write)
         # 作業 Table は最初のイテレーションで生成する。入力には触らない。
         self._working_table: Table | None = None
+        logger.debug(
+            "Transfer 構築: read=%d 行, write=%d 行, mapping=%d 列, keys(read/write)=%d/%d",
+            len(self.read),
+            len(self.write),
+            len(self.mapping),
+            len(self.read_keys),
+            len(self.write_keys),
+        )
 
     def transfer_rows(self) -> Iterator[tuple[Row, Row | None]]:
         """転記元の全行を ``(read_row, write_row)`` で返す。
@@ -130,6 +141,11 @@ class Transfer:
         self.write._check_columns(self.write_keys)
         self._ensure_working_table()
         write_index = self._working_index()
+        logger.debug(
+            "Transfer transfer_rows 開始: read=%d 行, write index=%d 件",
+            len(self.read),
+            len(write_index),
+        )
         for read_row in self.read.to_rows():
             key = self._row_key(read_row, self.read_keys)
             write_row = write_index.get(key)
@@ -188,6 +204,12 @@ class Transfer:
                 write_only.append(write_row)
 
         only_in_read = Table(list(self.read.columns), read_only, types=self.read.types)
+        logger.debug(
+            "Transfer unmatched: only_in_read=%d 行, only_in_write=%d 行 (matched=%d 行)",
+            len(only_in_read),
+            len(write_only),
+            len(self.read) - len(only_in_read),
+        )
         return UnmatchedRows(only_in_read, write_only)
 
     def apply_mapping(self, read_row: Row, write_row: Row | None) -> None:
@@ -210,6 +232,7 @@ class Transfer:
             TransferDestinationMissingError: ``write_row`` が ``None`` のとき。
         """
         if write_row is None:
+            logger.debug("Transfer apply_mapping: 転記先が None のため中断")
             raise TransferDestinationMissingError(
                 "apply_mapping に None の転記先行を渡しました。"
                 "transfer_rows() が返した (read_row, None) は write 側に対応行が無い行です。"
@@ -249,6 +272,11 @@ class Transfer:
             self._working_table = Table(
                 self.write.columns, self.write.to_rows(), types=self.write.types
             )
+            logger.debug(
+                "Transfer 作業 Table を新規作成: %d 行, %d 列",
+                len(self._working_table),
+                len(self._working_table.columns),
+            )
         return self._working_table
 
     def _working_index(self) -> dict[tuple[Any, ...], Row]:
@@ -267,6 +295,7 @@ class Transfer:
                 # 空キーは照合に使わない。unmatched() 側へ流れる。
                 continue
             if key in index:
+                logger.debug("Transfer _working_index: キー重複を検出: %r", key)
                 raise TransferDestinationMultipleMatchError(",".join(self.write_keys), key)
             index[key] = write_row
         return index
