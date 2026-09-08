@@ -1,9 +1,9 @@
-"""comken/toolbox/browser/sites/ams_site/site.py — AMS 用の SiteBase クラス。
+"""comken/toolbox/browser/sites/ams/site.py — AMS 用の SiteBase クラス。
 
-このサイトのものは sites/ams_site/ の中で完結する（site.py・pages/）。
+このサイトのものは sites/ams/ の中で完結する（site.py・pages/）。
 サイトを増やすときは sites/<サイト名>/ をもう1つ作る。
 
-1サイトにつき ``AMSSite`` と ``AMSBrowserOptions`` を **同じ ``site.py`` に置く**
+1サイトにつき ``AMS`` と ``AMSBrowserOptions`` を **同じ ``site.py`` に置く**
 （``〇〇Site`` と ``〇〇SiteOptions`` は必ずセットで、フォルダが同じならファイルも
 分ける理由が無い）。ブラウザ設定は config.ini ではなくこのファイル（サイト側の
 Python）に書き、設定できる項目は ``print(AMSBrowserOptions())`` で一覧できる。
@@ -15,16 +15,16 @@ Python）に書き、設定できる項目は ``print(AMSBrowserOptions())`` で
 （書き方の正本は docs/browser.md）。
 
 > [!note] 雛形の値
-> URL・オプションの値は ``ouju_site`` と同じダミーのまま。利用プロジェクト側で
+> URL・オプションの値は ``ouju`` と同じダミーのまま。利用プロジェクト側で
 > 実際の値へ書き換える前提（実際のセレクタや画面遷移は利用者が後で埋める）。
 """
 
 from comken.toolbox.browser import BrowserOptions, SiteBase
-from comken.toolbox.browser.sites.ams_site.pages.login_page import LoginPage
+from comken.toolbox.browser.sites.ams.pages.login_page import LoginPage
 
 
 class AMSBrowserOptions(BrowserOptions):
-    """ams_site 用のブラウザオプション。
+    """ams 用のブラウザオプション。
 
     デフォルト（BrowserOptions）から変更したいものだけ上書きする。
     全オプションのデフォルト値は comken/toolbox/browser/options.py を参照。
@@ -40,13 +40,13 @@ class AMSBrowserOptions(BrowserOptions):
     WINDOW_SIZE = "1600,1024"
 
 
-class AMSSite(SiteBase):
-    """ams_site 雛形用の SiteBase。
+class AMS(SiteBase):
+    """ams 雛形用の SiteBase。
 
     URL や要素セレクタは example の値のまま。利用プロジェクト側で継承して書き換える。
     """
 
-    NAME = "ams_site"
+    NAME = "ams"
     BASE_URL = "https://example.com"
     OPTIONS = AMSBrowserOptions
     OWNER = "comken"

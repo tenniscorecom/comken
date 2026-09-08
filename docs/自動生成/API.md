@@ -8905,7 +8905,7 @@ Browsers から渡されたセッションは触らず、自分で起動した�
 （持ち主の Browsers が with を抜けるときに閉じるため、二重に閉じない）。
 
 
-## `from comken.toolbox.browser.sites.ams_site import ...`
+## `from comken.toolbox.browser.sites.ams import ...`
 
 ### `AMSBrowserOptions`
 
@@ -8915,7 +8915,7 @@ class AMSBrowserOptions(BrowserOptions):
 
 #### 説明
 
-ams_site 用のブラウザオプション。
+ams 用のブラウザオプション。
 
 デフォルト（BrowserOptions）から変更したいものだけ上書きする。
 全オプションのデフォルト値は comken/toolbox/browser/options.py を参照。
@@ -8938,15 +8938,15 @@ Args:
 Returns:
     webdriver に渡す起動引数のリスト。
 
-### `AMSSite`
+### `AMS`
 
 ```text
-class AMSSite(SiteBase):
+class AMS(SiteBase):
 ```
 
 #### 説明
 
-ams_site 雛形用の SiteBase。
+ams 雛形用の SiteBase。
 
 URL や要素セレクタは example の値のまま。利用プロジェクト側で継承して書き換える。
 
@@ -9204,7 +9204,7 @@ Browsers から渡されたセッションは触らず、自分で起動した�
 （持ち主の Browsers が with を抜けるときに閉じるため、二重に閉じない）。
 
 
-## `from comken.toolbox.browser.sites.ouju_site import ...`
+## `from comken.toolbox.browser.sites.ouju import ...`
 
 ### `OujuBrowserOptions`
 
@@ -9214,7 +9214,7 @@ class OujuBrowserOptions(BrowserOptions):
 
 #### 説明
 
-ouju_site 用のブラウザオプション。
+ouju 用のブラウザオプション。
 
 デフォルト（BrowserOptions）から変更したいものだけ上書きする。
 全オプションのデフォルト値は comken/toolbox/browser/options.py を参照。
@@ -9237,15 +9237,15 @@ Args:
 Returns:
     webdriver に渡す起動引数のリスト。
 
-### `OujuSite`
+### `Ouju`
 
 ```text
-class OujuSite(SiteBase):
+class Ouju(SiteBase):
 ```
 
 #### 説明
 
-ouju_site 雛形用の SiteBase。
+ouju 雛形用の SiteBase。
 
 URL や要素セレクタは example の値のまま。利用プロジェクト側で継承して書き換える。
 

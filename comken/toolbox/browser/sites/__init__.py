@@ -4,7 +4,7 @@
 社内システム**をここに置く。プロジェクト側で個別に使うサイトは置かない
 （プロジェクト側の `src/sites/` に置く。判断基準は
 `docs/開発/ライブラリ開発規約.md` の「サイト／組織クラスを昇格させる基準」を参照）。
-書き方の見本は `ouju_site/` を参照。
+書き方の見本は `ouju/` を参照。
 
     from comken.toolbox.browser.sites import SITES    # 公認サイトの一覧
     from comken.toolbox.browser.sites import Kintai  # 個別 import も可

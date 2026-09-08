@@ -253,7 +253,7 @@ src/
 
 `comken init` が作る雛形には `src/sites/` は**含まれていない**。ブラウザ操作を使う
 プロジェクトでは、この節の形に合わせて `src/sites/<サイト名>/` を自分で追加する
-（書き方の見本はライブラリ側の `comken/toolbox/browser/sites/ouju_site/` にある）。
+（書き方の見本はライブラリ側の `comken/toolbox/browser/sites/ouju/` にある）。
 サイトを増やすには、`src/sites/<サイト名>/` を隣にもう1つ作るだけ。
 
 **サイトクラスと画面共通クラスは別物。** サイトクラスは「どのサイトか」を表し、
@@ -890,13 +890,13 @@ class LoginPage(SitePage):
 
 ### サンプル実装
 
-`comken/toolbox/browser/sites/ouju_site/` にサイト実装の見本がある
+`comken/toolbox/browser/sites/ouju/` にサイト実装の見本がある
 （実行スクリプトの例は examples/README.md 参照）。
 
 **上の「1サイト＝1フォルダ」で書いてある**ので、形の見本としてそのまま真似できる。
 
 ```
-comken/toolbox/browser/sites/ouju_site/
+comken/toolbox/browser/sites/ouju/
 ├── site.py                 # サイトクラス＋このサイトの BrowserOptions
 └── pages/
     ├── app_page.py         # このサイトの画面に共通
@@ -915,4 +915,4 @@ comken/toolbox/browser/sites/ouju_site/
 
 - [公開 API](自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外
 - [エラー対応ガイド](ERRORS.md#ブラウザedge-自動操作のエラー) — エラー名から対処を引く
-- `comken/toolbox/browser/sites/ouju_site/` — サイト実装の見本
+- `comken/toolbox/browser/sites/ouju/` — サイト実装の見本
