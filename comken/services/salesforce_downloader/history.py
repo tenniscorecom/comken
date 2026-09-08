@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from comken.core.clock import now, today
+from comken.core.table.model import Table
 from comken.core.timer import measure
 from comken.exceptions import (
     HistoryHeaderMismatchError,
@@ -364,27 +365,35 @@ def truncated_today(
 
 
 @measure
-def read_all(path: str | Path) -> list[dict[str, str]]:
-    """履歴 CSV を全行読んで返す。フィルタはしない。
+def read_history(path: str | Path) -> Table:
+    """履歴 CSV を全行読んで Table で返す。フィルタはしない。
+
+    **パッケージ内部専用。** 利用プロジェクト側が「今日この管理番号は
+    成功したか」を知りたいだけなら、この全件読み込みではなく
+    ``downloaded_today()``（bool を返す）を使う方が単純で意図も伝わる。
+    この関数は `write_latest_status()` のように**履歴全体を横断的に見る**
+    必要がある内部処理のためのもの。
 
     **絞り込みは呼び出し側が行う。** 日付・トリガ・成否の組合せは使う側でしか
-    決まらないため、ここでは全件をそのまま ``dict`` のリストで返す。
+    決まらないため、ここでは全件をそのまま Table で返す（列は全て文字列の
+    まま、型変換はしない。必要な列だけ利用側で変換する）。
     読み取りにも追記と同じロックを使うので、別プロセスが書いている途中の行を
     読まない。
 
-    ファイルが無ければ空リストを返す。既存の見出しが現在の列定義と合わない場合は
-    ``HistoryHeaderMismatchError`` を投げる。
+    ファイルが無ければ空の Table（``COLUMNS`` の列だけを持つ）を返す。
+    既存の見出しが現在の列定義と合わない場合は ``HistoryHeaderMismatchError``
+    を投げる。
 
     Args:
         path: 履歴 CSV のパス。
 
     Returns:
-        履歴1行を ``dict`` にしたもの。順序は CSV に書かれたまま。
+        履歴の各行を持つ Table。列は ``COLUMNS`` の順番のまま。
     """
     history_path = Path(path)
     if not history_path.is_file():
         logger.debug("履歴ファイル無し: path=%s, 件数=0", history_path)
-        return []
+        return Table(list(COLUMNS), [])
     logger.debug("履歴全件読み込み開始: path=%s", history_path)
     with (
         HistoryFileLock(history_path),
@@ -394,7 +403,7 @@ def read_all(path: str | Path) -> list[dict[str, str]]:
         _require_expected_header(history_path, reader.fieldnames)
         rows = [dict(row) for row in reader]
     logger.debug("履歴全件読み込み完了: path=%s, 件数=%d", history_path, len(rows))
-    return rows
+    return Table(list(COLUMNS), rows)
 
 
 def _stage(value: bool | None) -> str:

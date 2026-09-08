@@ -163,7 +163,7 @@ def _latest_rows_by_key(history_path: Path) -> dict[str, dict[str, str]]:
     書いている）なので、文字列のまま大小比較できる。空文字は無視する。
     """
     latest: dict[str, dict[str, str]] = {}
-    for row in history.read_all(history_path):
+    for row in history.read_history(history_path):
         timestamp = row.get("実行日時", "")
         key = row.get("管理番号", "")
         if not timestamp or not key:

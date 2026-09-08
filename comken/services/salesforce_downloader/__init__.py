@@ -23,6 +23,7 @@ r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポー�
     ReportEntry          管理表の1行
     ReportEntry.create_template  管理表の雛形（Excel）を作る
     write_latest_status  全レポートの最新実行結果を 1 つの Excel へ上書き生成する
+    downloaded_today     指定した管理番号が今日すでに成功しているかを履歴から調べる
 
 **「今すぐ取りに行く」APIは無い。** 急ぎの取得は権限を持つ人が Salesforce から
 手動ダウンロードするか、`download_scheduled()` をスケジュール外で直接実行する
@@ -92,6 +93,7 @@ __all__ = [
     "load_master",
     "shared_report_ids",
     "write_latest_status",
+    "downloaded_today",
     "ReportEntry",
     "ScheduleRule",
 ]
@@ -104,6 +106,7 @@ _LAZY_TARGETS: dict[str, str] = {
     "cached_report_path": "comken.services.salesforce_downloader.provider",
     "file_path_of": "comken.services.salesforce_downloader.provider",
     "write_latest_status": "comken.services.salesforce_downloader.latest_status",
+    "downloaded_today": "comken.services.salesforce_downloader.history",
 }
 
 
