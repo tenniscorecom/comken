@@ -24,6 +24,8 @@ config.pyi
 
 # ChatGPT 貼り付け用の書き出し（export_for_chat.py がいつでも作り直せる）
 貼り付け用/
+# comken_bundle.md（ソースコード込みの全文）を文字数で輪切りにしたもの
+貼り付け用_全文/
 # ChatGPT貼り付け用に物理結合した1ファイル（export_for_chat.py --bundle が生成）
 comken_bundle.md
 
