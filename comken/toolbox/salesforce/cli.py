@@ -33,17 +33,22 @@ External Client App の consumer secret を REST API から回せるか（＝ロ
 import argparse
 import sys
 
-from comken.exceptions import ComkenError
+from comken.exceptions import ComkenError, SalesforceSiteSelectionError
+from comken.toolbox.credentials import Credentials
+from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth
 from comken.toolbox.salesforce.auth.rotation import (
     ROTATION_COMPONENT,
     SalesforceCredentialRotator,
     _staged_credentials_of,
 )
 from comken.toolbox.salesforce.client import SalesforceBase
-from comken.toolbox.salesforce.sites import SolutionSandbox, site_for
+from comken.toolbox.salesforce.sites import SITES, SolutionSandbox, site_for
 
 # 値そのものは絶対に出さない。項目名と型だけを見せる。
 _SECRET_FIELDS = ("consumersecret", "consumerkey", "secret", "token", "password")
+
+# ECA の Callback URL 設定と揃える必要がある（salesforce-authentication.md の手順と共通）
+_SETUP_CALLBACK_URL = "http://localhost:8080/callback"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -85,6 +90,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     rotate.add_argument("--yes", action="store_true", help="切り替えの確認を省く")
     rotate.set_defaults(run=_run_rotate)
+
+    setup = subparsers.add_parser(
+        "setup", help="組織を選んで Refresh Token Flow の初回認可を対話的に行う"
+    )
+    setup.set_defaults(run=_run_setup)
 
     return parser
 
@@ -172,6 +182,57 @@ def _stage_only(args: argparse.Namespace) -> None:
 def _confirm() -> bool:
     answer = input("旧 secret は猶予後に使えなくなります。続けますか？ [y/N]: ")
     return answer.strip().lower() == "y"
+
+
+def _select_site() -> type[SalesforceBase]:
+    """SITES から番号か名前（大文字小文字を区別しない）で組織クラスを選ばせる。"""
+    print("登録済みの組織:")
+    for index, site_class in enumerate(SITES, start=1):
+        print(f"  {index}. {site_class.__name__}")
+    answer = input("番号または組織名を入力してください: ").strip()
+
+    if answer.isdigit():
+        position = int(answer)
+        if 1 <= position <= len(SITES):
+            return SITES[position - 1]
+        raise SalesforceSiteSelectionError(answer, [s.__name__ for s in SITES])
+
+    matches = [
+        site_class for site_class in SITES if site_class.__name__.casefold() == answer.casefold()
+    ]
+    if len(matches) == 1:
+        return matches[0]
+    raise SalesforceSiteSelectionError(answer, [s.__name__ for s in SITES])
+
+
+def _run_setup(_args: argparse.Namespace) -> None:
+    """組織を選び、Refresh Token Flow の初回認可を対話的に行う。"""
+    site_class = _select_site()
+    prefix = site_class.CREDENTIAL_PREFIX
+    print(f"選択: {site_class.__name__}（prefix={prefix}）")
+
+    credentials = Credentials(prefix)
+    url, _ = RefreshTokenOAuth.authorization_url(
+        credentials.client_id, _SETUP_CALLBACK_URL, site_class.DOMAIN_URL
+    )
+    print()
+    print("次の URL をブラウザで開き、Salesforce にログインして許可してください:")
+    print(f"  {url}")
+    print()
+    print(f"許可すると {_SETUP_CALLBACK_URL}?code=... へリダイレクトされます。")
+    code = input("code= の後ろの文字列を貼り付けてください: ").strip()
+
+    RefreshTokenOAuth.exchange_code(
+        credentials.client_id,
+        credentials.client_secret,
+        code,
+        _SETUP_CALLBACK_URL,
+        site_class.DOMAIN_URL,
+        prefix=prefix,
+    )
+    print()
+    print(f"refresh_token を DPAPI に保存しました（{prefix}_refresh_token）。")
+    print("動作確認: python -m comken sf report --report-id 00O...")
 
 
 def _print_shape(body: object, indent: str = "  ") -> None:

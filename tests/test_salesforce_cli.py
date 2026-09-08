@@ -1,9 +1,13 @@
 """確認コマンド（python -m comken sf）のテスト。"""
 
+from typing import cast
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from comken.exceptions import SalesforceAuthError
 from comken.toolbox.salesforce.cli import main
+from comken.toolbox.salesforce.sites import SITES, Solution, SolutionSandbox
 
 
 def _client(**kwargs) -> MagicMock:
@@ -164,3 +168,101 @@ class TestDefaultOrg:
 
         solution_sandbox_mock.assert_called_once_with(prefix="site_a")
         assert code == 0
+
+
+class TestSetup:
+    """`sf setup` — 組織を選んで Refresh Token Flow の初回認可を行う。"""
+
+    def _credentials_mock(self):
+        """`Credentials(prefix)` の戻り値を差し替えるための MagicMock。"""
+        credentials = MagicMock()
+        credentials.client_id = "CID"
+        credentials.client_secret = "CSECRET"
+        return credentials
+
+    def test_selects_site_by_number(self, capsys):
+        """`2` を入れたら SITES の2番目（SolutionSandbox）が選ばれる。
+
+        認可 URL と exchange の domain_url が SolutionSandbox のものになることで確認する。
+        """
+        with (
+            patch(
+                "comken.toolbox.salesforce.cli.Credentials", return_value=self._credentials_mock()
+            ),
+            patch(
+                "comken.toolbox.salesforce.cli.RefreshTokenOAuth.authorization_url",
+                return_value=("https://example.test/authorize", "STATE"),
+            ),
+            patch("comken.toolbox.salesforce.cli.RefreshTokenOAuth.exchange_code") as exchange,
+            patch("builtins.input", side_effect=["2", "AUTH-CODE"]),
+        ):
+            code = main(["setup"])
+
+        assert code == 0
+        # SITES は Solution / SolutionSandbox の順なので、2番目 = SolutionSandbox
+        assert SolutionSandbox in SITES
+        assert SITES.index(SolutionSandbox) == 1
+        # exchange_code の domain_url が SolutionSandbox のドメインであることを確認
+        exchange_mock = cast(MagicMock, exchange)
+        exchange_call = exchange_mock.call_args
+        assert exchange_call.args[4] == SolutionSandbox.DOMAIN_URL
+
+    def test_selects_site_by_name_case_insensitive(self, capsys):
+        """`solution`（小文字）を入れたら Solution（小文字を許容）が選ばれる。"""
+        with (
+            patch(
+                "comken.toolbox.salesforce.cli.Credentials", return_value=self._credentials_mock()
+            ),
+            patch(
+                "comken.toolbox.salesforce.cli.RefreshTokenOAuth.authorization_url",
+                return_value=("https://example.test/authorize", "STATE"),
+            ),
+            patch("comken.toolbox.salesforce.cli.RefreshTokenOAuth.exchange_code") as exchange,
+            patch("builtins.input", side_effect=["solution", "AUTH-CODE"]),
+        ):
+            code = main(["setup"])
+
+        assert code == 0
+        exchange_mock = cast(MagicMock, exchange)
+        exchange_call = exchange_mock.call_args
+        assert exchange_call.args[4] == Solution.DOMAIN_URL
+        assert exchange_call.kwargs["prefix"] == Solution.CREDENTIAL_PREFIX
+
+    @pytest.mark.parametrize("bad_answer", ["99", "nonexistent", ""])
+    def test_invalid_answer_exits_with_error(self, capsys, bad_answer):
+        """範囲外の番号・存在しない名前を入れると、終了コード1でstderr にメッセージ。"""
+        with patch("builtins.input", return_value=bad_answer):
+            code = main(["setup"])
+
+        captured = capsys.readouterr()
+        assert code == 1
+        assert "エラー:" in captured.err
+        # 登録済みの組織名は候補として表示される
+        for site_class in SITES:
+            assert site_class.__name__ in captured.err
+
+    def test_full_flow_shows_url_and_saves_refresh_token(self, capsys):
+        """一連の流れ — URL 表示・code 受け渡し・完了メッセージを確認。"""
+        credentials = self._credentials_mock()
+        with (
+            patch("comken.toolbox.salesforce.cli.Credentials", return_value=credentials),
+            patch(
+                "comken.toolbox.salesforce.cli.RefreshTokenOAuth.authorization_url",
+                return_value=("https://example.test/authorize?client_id=CID", "STATE"),
+            ),
+            patch("comken.toolbox.salesforce.cli.RefreshTokenOAuth.exchange_code") as exchange,
+            patch("builtins.input", side_effect=["1", "AUTH-CODE-VALUE"]),
+        ):
+            code = main(["setup"])
+
+        assert code == 0
+        out = capsys.readouterr().out
+        # 認可 URL が標準出力に出ている
+        assert "https://example.test/authorize?client_id=CID" in out
+        exchange_mock = cast(MagicMock, exchange)
+        # exchange_code に入力した code がそのまま渡されている
+        assert exchange_mock.call_args.args[2] == "AUTH-CODE-VALUE"
+        # prefix は組織クラスの CREDENTIAL_PREFIX
+        assert exchange_mock.call_args.kwargs["prefix"] == SITES[0].CREDENTIAL_PREFIX
+        # 完了メッセージ
+        assert "refresh_token を DPAPI に保存しました" in out

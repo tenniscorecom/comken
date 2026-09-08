@@ -280,9 +280,28 @@ python -m comken cred gui
 
 ブラウザで ECA に「comken がこの組織にアクセスしていい」と 1 回だけ承認する。
 
+`comken.toolbox.salesforce.sites.SITES` に登録されている組織から、**番号または
+組織名（大文字小文字を区別しない）で**選んで `setup` を実行する。`--domain`
+や `--prefix` はこのコマンドでは使わない（組織はこのコマンド自身が選ばせるため）。
+
 ```powershell
-python -c "from comken.toolbox.credentials import Credentials; from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth; from comken.toolbox.salesforce.sites import Solution; prefix = Solution.CREDENTIAL_PREFIX; client_id = Credentials(prefix).client_id; url, _ = RefreshTokenOAuth.authorization_url(client_id, 'http://localhost:8080/callback', Solution.DOMAIN_URL); print(url)"
+python -m comken sf setup
 ```
+
+実行すると:
+
+1. 登録済みの組織が `1. ... 2. ...` の形で表示される。**番号か組織名を入力**する
+2. 選択した組織の prefix で DPAPI から client_id / client_secret を読む
+3. ECA の認可 URL を組み立てて画面に出す
+4. 次の `code:` プロンプトで `code=` 以降の文字列を受け付け、`refresh_token`
+   を DPAPI へ自動保存する
+
+このコマンドは 1 回実行するたびに「URL を表示 → code を受け取り → refresh_token
+を保存」までをまとめて行う。途中で止めたくなったら `Ctrl+C` で中断すれば
+refresh_token は保存されない（途中で失敗したら `<prefix>_refresh_token` は
+**未登録のまま**。手順 2 からやり直す）。
+
+ブラウザでの操作:
 
 - 表示された URL をブラウザで開く
 - Salesforce のログイン画面で ECA を許可する組織のユーザーでログイン
@@ -294,15 +313,19 @@ python -c "from comken.toolbox.credentials import Credentials; from comken.toolb
 
 ## 3. code を refresh_token に交換
 
-`prefix=` を渡すだけで、受け取った refresh_token は `from_credentials` と同じ書き戻し先
-（`<prefix>_refresh_token`）へ自動で DPAPI 保存される。書き戻し用の関数を毎回手書きする必要はない。
-
-```powershell
-python -c "from comken.toolbox.credentials import Credentials; from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth; from comken.toolbox.salesforce.sites import Solution; prefix = Solution.CREDENTIAL_PREFIX; creds = Credentials(prefix); RefreshTokenOAuth.exchange_code(creds.client_id, creds.client_secret, input('code: '), 'http://localhost:8080/callback', Solution.DOMAIN_URL, prefix=prefix); print('refresh_token を DPAPI に保存しました')"
-```
+2 の `setup` を実行すると、`code:` プロンプトが出る。あとは 2 でメモした
+文字列を貼り付けるだけ:
 
 - `code:` プロンプトに 2 でメモした文字列を貼り付け
-- 出力の `refresh_token を DPAPI に保存しました` が出れば、`<prefix>_refresh_token` への登録は完了（別途 `cred gui` で登録し直す必要はない）
+- 出力の `refresh_token を DPAPI に保存しました（<prefix>_refresh_token）` が
+  出れば、`<prefix>_refresh_token` への登録は完了（別途 `cred gui` で
+  登録し直す必要はない）
+
+内部では `RefreshTokenOAuth.exchange_code(..., prefix=<prefix>)` を呼び、
+受け取った refresh_token は `from_credentials` と同じ書き戻し先
+（`<prefix>_refresh_token`）へ自動で DPAPI 保存される。書き戻し用の関数を
+毎回手書きする必要はない。別の組織で `setup` を実行すれば、それぞれの
+`<prefix>_refresh_token` に別々に保存される。
 
 ## 4. 動作確認
 

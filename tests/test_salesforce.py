@@ -9,6 +9,7 @@ import requests
 
 from comken import dry_run
 from comken.exceptions import (
+    ComkenError,
     CredentialNotFoundError,
     InvalidCredentialNameError,
     SalesforceAuthError,
@@ -17,6 +18,7 @@ from comken.exceptions import (
     SalesforceBulkQueryFailedError,
     SalesforceBulkQueryTimeoutError,
     SalesforceConnectionError,
+    SalesforceError,
     SalesforceExternalIDMissingError,
     SalesforceReportAccessDeniedError,
     SalesforceReportExecutionError,
@@ -25,6 +27,7 @@ from comken.exceptions import (
     SalesforceReportTruncatedError,
     SalesforceRequestError,
     SalesforceSiteNotFoundError,
+    SalesforceSiteSelectionError,
 )
 from comken.toolbox.credentials import save_credentials, store
 from comken.toolbox.csv import CSV
@@ -936,6 +939,32 @@ class TestSiteFor:
         """SITES に登録されているものは、すべて SalesforceBase の組織クラス。"""
         assert SITES
         assert all(issubclass(site, SalesforceBase) for site in SITES)
+
+
+class TestSalesforceSiteSelectionError:
+    """対話的な組織選択で、番号にも組織名にも一致しなかった場合の例外。"""
+
+    def test_inherits_from_salesforce_error(self):
+        """SalesforceError 経由で ComkenError に連なり、main() が拾える。"""
+        assert issubclass(SalesforceSiteSelectionError, SalesforceError)
+        assert issubclass(SalesforceSiteSelectionError, ComkenError)
+
+    def test_message_includes_the_user_answer(self):
+        """入力値がそのままメッセージへ出て、ユーザーが何を間違えたか分かる。"""
+        error = SalesforceSiteSelectionError("99", ["Solution", "SolutionSandbox"])
+        assert "99" in str(error)
+
+    def test_message_lists_the_registered_sites(self):
+        """登録済みの組織名を列挙し、打ち間違いを直せるようにする。"""
+        error = SalesforceSiteSelectionError("99", ["Solution", "SolutionSandbox"])
+        message = str(error)
+        assert "Solution" in message
+        assert "SolutionSandbox" in message
+
+    def test_empty_list_does_not_crash(self):
+        """登録済み組織が0件のときでも、メッセージ生成で落ちない。"""
+        error = SalesforceSiteSelectionError("?", [])
+        assert "?" in str(error)
 
 
 class TestCredentialsInitialization:

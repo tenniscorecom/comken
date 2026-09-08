@@ -127,6 +127,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `SalesforceReportExecutionError` | Salesforce 側でレポート実行に失敗した | Salesforce で同じレポートを直接実行し、表示された内容を管理者へ連絡する |
 | `SalesforceReportAccessDeniedError` | レポート API（Reports and Dashboards REST API）へのアクセスを拒否された | Salesforce 管理者に、実行ユーザー（Client Credentials では Run As ユーザー）について次を確認してもらう。1. Profile / Permission Set に「API Enabled」権限があるか2. 対象のレポート・レポートフォルダへのアクセス権があるか3. 組織の Edition・ライセンスが Reports and Dashboards REST APIに対応しているか（一部の制限ライセンスでは使えない） |
 | `SalesforceSiteNotFoundError` | URL のドメインに対応する組織が登録されていない | URL のドメインを見直す。新しい組織なら管理者へ連絡する（組織クラスの追加が要る） |
+| `SalesforceSiteSelectionError` | 対話的な組織選択で、番号にも組織名にも一致しなかった | 表示された番号（1〜件数）か、組織名（大文字小文字は区別しない）を入力し直す |
 | `SalesforceBulkQueryFailedError` | Bulk API のクエリジョブが失敗して終わった（Failed / Aborted） | 表示されたエラー内容を確認する。SOQL の構文・参照項目・実行ユーザーの権限を見直す |
 | `SalesforceBulkQueryTimeoutError` | Bulk API のクエリジョブが制限時間内に終わらなかった | timeout_seconds を長くするか、クエリの対象を絞って再実行する |
 | `SalesforceBulkIngestFailedError` | Bulk API の Ingest ジョブが失敗して終わった（Failed / Aborted） | 表示されたエラー内容を確認する。CSV の列名・データ型・実行ユーザーの権限を見直す |

@@ -169,6 +169,24 @@ class SalesforceSiteNotFoundError(SalesforceError):
         )
 
 
+class SalesforceSiteSelectionError(SalesforceError):
+    """対話的な組織選択で、番号にも組織名にも一致しなかった
+
+    発生箇所: comken.toolbox.salesforce.cli._select_site()
+
+    対処:
+        表示された番号（1〜件数）か、組織名（大文字小文字は区別しない）を
+        入力し直す
+    """
+
+    def __init__(self, answer: str, site_names: list[str]) -> None:
+        listed = "\n".join(f"  {name}" for name in site_names) or "  （登録なし）"
+        super().__init__(
+            f"「{answer}」に一致する組織がありません。番号か、次のいずれかの"
+            f"組織名（大文字小文字は区別しない）を入力してください:\n{listed}"
+        )
+
+
 class SalesforceReportIDNotFoundError(SalesforceError):
     """レポートの URL からレポート ID を取り出せない
 

@@ -4900,6 +4900,28 @@ URL のドメインで決めるので、未登録のドメインでは接続先�
 def __init__(self, url: str, known_domains: list[str]) -> None:
 ```
 
+### `SalesforceSiteSelectionError`
+
+```text
+class SalesforceSiteSelectionError(SalesforceError):
+```
+
+#### 説明
+
+対話的な組織選択で、番号にも組織名にも一致しなかった
+
+発生箇所: comken.toolbox.salesforce.cli._select_site()
+
+対処:
+    表示された番号（1〜件数）か、組織名（大文字小文字は区別しない）を
+    入力し直す
+
+#### `__init__`
+
+```text
+def __init__(self, answer: str, site_names: list[str]) -> None:
+```
+
 ### `SalesforceBulkQueryFailedError`
 
 ```text

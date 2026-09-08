@@ -62,6 +62,7 @@ ComkenError
 │   ├── SalesforceReportFormatError
 │   ├── SalesforceReportIDNotFoundError
 │   ├── SalesforceSiteNotFoundError
+│   ├── SalesforceSiteSelectionError
 │   ├── SalesforceReportExecutionError
 │   ├── SalesforceReportAccessDeniedError
 │   ├── SalesforceBulkQueryFailedError
@@ -303,6 +304,7 @@ from comken.exceptions.salesforce import (
     SalesforceReportTruncatedError,
     SalesforceRequestError,
     SalesforceSiteNotFoundError,
+    SalesforceSiteSelectionError,
 )
 from comken.exceptions.state import (
     StateError,
@@ -399,6 +401,7 @@ __all__ = [
     "SalesforceReportExecutionError",
     "SalesforceReportAccessDeniedError",
     "SalesforceSiteNotFoundError",
+    "SalesforceSiteSelectionError",
     "SalesforceBulkQueryFailedError",
     "SalesforceBulkQueryTimeoutError",
     "SalesforceBulkIngestFailedError",
