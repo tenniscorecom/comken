@@ -39,9 +39,7 @@ from comken.exceptions import (
 from comken.runtime import dry_run_log, is_dry_run
 from comken.toolbox.csv import CSV
 
-# 既定は Refresh Token Flow。Client Credentials Flow は client_secret だけで
-# アクセストークンを取れてしまい、漏えいしたときに実行ユーザーとして操作されるため
-# 使わない（→ docs/開発/salesforce-authentication.md）。
+# 既定は Refresh Token Flow（→ docs/開発/salesforce-authentication.md）。
 from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth
 from comken.toolbox.salesforce.metrics import APIMetrics, RetryReason
 from comken.toolbox.salesforce.report import ReportAPI
@@ -139,8 +137,7 @@ class SalesforceBase:
         """DPAPI に保管した認証情報を読み、選択中の OAuth 方式で接続する。
 
         読み込む項目は client.py が import している OAuth 方式（既定は
-        RefreshTokenOAuth）で決まる。Client Credentials 方式は
-        client_id / client_secret、Refresh Token 方式は
+        RefreshTokenOAuth）で決まる。Refresh Token 方式は
         client_id / client_secret / refresh_token を使う。
 
         Args:
@@ -150,7 +147,6 @@ class SalesforceBase:
             org_name: 計測ログに出す組織の呼び名。省略時はクラス名を使う。
             auth: 認証方式を差し替えるときに渡す。**クラスを渡せば**
                 DPAPI から組み立てる（値を手で並べなくてよい）。
-                    Solution(auth=ClientCredentialsOAuth)   # 開発中だけ
                 作成済みのインスタンスを渡すこともできる（テスト・JWT 等）。
                 その場合だけ prefix / domain_url は使われない。
 
@@ -167,8 +163,7 @@ class SalesforceBase:
         # 別途検出するため、ここでは NAME 衝突まで見ない
         type(self)._check_start()
         # 認証方式のクラスを渡されたら、組み立ては省略せず DPAPI から作る。
-        # 値を手で並べる書き方（ClientCredentialsOAuth(cid, secret, url)）を
-        # 利用側に強いないため。既定（None）も同じ経路を通る。
+        # 値を手で並べる書き方を利用側に強いないため。既定（None）も同じ経路を通る。
         if auth is None:
             auth = RefreshTokenOAuth
         if isinstance(auth, type):

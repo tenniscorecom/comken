@@ -7,7 +7,6 @@ import pytest
 
 from comken.exceptions import SalesforceAuthError
 from comken.toolbox.salesforce import (
-    ClientCredentialsOAuth,
     RefreshTokenOAuth,
     SalesforceBase,
 )
@@ -150,16 +149,6 @@ class TestRefreshTokenOAuth:
         save_credential.assert_called_once_with("site_a_refresh_token", "ROTATED")
 
 
-class TestClientCredentialsOAuth:
-    def test_from_credentials_reads_same_prefix(self):
-        credentials = MagicMock(client_id="CID", client_secret="SECRET")
-        with patch("comken.toolbox.credentials.Credentials", return_value=credentials) as load:
-            auth = ClientCredentialsOAuth.from_credentials(DOMAIN_URL, "site_a")
-        load.assert_called_once_with("site_a")
-        assert auth._client_id == "CID"
-        assert auth._client_secret == "SECRET"
-
-
 class TestPluggableSalesforceAuth:
     def test_client_uses_supplied_auth_for_initial_and_401_authentication(self):
         auth = MagicMock()
@@ -182,12 +171,12 @@ class TestPluggableSalesforceAuth:
 class TestAuthClassIsBuiltFromCredentials:
     """auth に「クラス」を渡したら DPAPI から組み立てる。
 
-    利用側に ClientCredentialsOAuth(cid, secret, url) と値を並べさせないため。
+    利用側に OAuth 認証部品を ``(cid, secret, url)`` と値で並べさせないため。
     既定（auth 省略）と同じ経路を通る。
     """
 
     def test_passing_a_class_reads_dpapi_with_the_class_prefix(self, monkeypatch):
-        """SolutionSandbox(auth=ClientCredentialsOAuth) が CREDENTIAL_PREFIX で DPAPI を引く。"""
+        """``auth=<auth class>`` が ``CREDENTIAL_PREFIX`` で DPAPI を引く。"""
         called = {}
 
         class _FakeAuth:

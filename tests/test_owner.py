@@ -21,7 +21,6 @@ from comken.exceptions import (
 )
 from comken.toolbox.browser import Browsers, SiteBase
 from comken.toolbox.browser.management.sessions import BrowserSession
-from comken.toolbox.salesforce import ClientCredentialsOAuth
 from comken.toolbox.salesforce.client import SalesforceBase
 
 BROWSER_LOGGER = "comken.toolbox.browser.sitebase"
@@ -53,6 +52,16 @@ def _token_response():
     return response
 
 
+def _fake_auth():
+    """``request_token() -> (token, url)`` を返す認証部品のモック。
+
+    OWNER 検査や起動ログなど、認証方式そのものを見ない経路で使う。
+    """
+    auth = MagicMock()
+    auth.request_token.return_value = ("TOKEN", DOMAIN_URL)
+    return auth
+
+
 @contextlib.contextmanager
 def _salesforce_http():
     """Salesforce の認証と HTTP セッションをモックする。"""
@@ -61,7 +70,7 @@ def _salesforce_http():
     with (
         patch("comken.toolbox.salesforce.client.requests.Session", return_value=session),
         patch(
-            "comken.toolbox.salesforce.auth.oauth_credentials.requests.post",
+            "comken.toolbox.salesforce.auth.oauth_refresh.requests.post",
             return_value=_token_response(),
         ),
     ):
@@ -262,10 +271,10 @@ class TestSalesforceBaseOwner:
             CREDENTIAL_PREFIX = "test_org"
 
         with (
-            patch("comken.toolbox.salesforce.auth.oauth_credentials.requests.post") as post,
+            patch("comken.toolbox.salesforce.auth.oauth_refresh.requests.post") as post,
             pytest.raises(SiteOwnerRequiredError),
         ):
-            Org(auth=ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL))
+            Org(auth=_fake_auth())
 
         post.assert_not_called()
 
@@ -280,7 +289,7 @@ class TestSalesforceBaseOwner:
         ComkenInternalOrg.__module__ = COMKEN_SALESFORCE_MODULE
 
         with _salesforce_http():
-            ComkenInternalOrg(auth=ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL))
+            ComkenInternalOrg(auth=_fake_auth())
 
 
 class TestSalesforceStartedLog:
@@ -295,7 +304,7 @@ class TestSalesforceStartedLog:
             OWNER = "経理 / 田中"
 
         with caplog.at_level(logging.INFO, logger=SALESFORCE_LOGGER), _salesforce_http():
-            Org(auth=ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL))
+            Org(auth=_fake_auth())
 
         messages = _info_messages(caplog)
         assert len(messages) == 1
@@ -321,6 +330,6 @@ class TestSalesforceStartedLog:
             _salesforce_http(),
             pytest.raises(RuntimeError),
         ):
-            Org(auth=ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL))
+            Org(auth=_fake_auth())
 
         assert _info_messages(caplog) == []

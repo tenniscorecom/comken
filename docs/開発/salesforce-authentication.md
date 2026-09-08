@@ -12,8 +12,7 @@ Salesforce の公式発表・仕様と、それを受けた comken 側の判断�
   組織クラスをそのまま使えばこの方式になる（`with Solution() as sf:`）。
 - **Client Credentials Flow は本番で使わない。** ECA 側でも無効にする。
   `client_secret` だけでアクセストークンを取れてしまい、漏えいすると実行ユーザーとして
-  操作されるため（→ 次の節）。開発中に手元で動かすときだけ
-  `Solution(auth=ClientCredentialsOAuth(...))` と**明示的に渡す**。
+  操作されるため（→ 次の節）。
 - 実行専用ユーザーを割り当て、権限はそのユーザー側で最小限にする。
 - `client_id` / `client_secret` / `refresh_token` はコードや `config.ini` に書かず、
   Windows DPAPI で保管する。
@@ -22,10 +21,15 @@ Salesforce の公式発表・仕様と、それを受けた comken 側の判断�
 
 ## 最重要: secretが漏えいしたときの違い
 
-comken は両方を実装しているが、**既定は Refresh Token Flow**
+comken は両方を実装していたが、**既定は Refresh Token Flow**
 （`client.py` が `oauth_refresh` を import している）。
-Client Credentials Flow は、開発中に `auth=` で明示的に渡したときだけ使われる。
 下の表がその理由で、**この差だけで既定を決めている**。
+
+> [!note] 補足（2026-09-08）
+> Client Credentials Flow は社内運用上もう使えないため、comken からも
+> コード（`oauth_credentials.py` / `ClientCredentialsOAuth`）を削除した。
+> 残している判断記録（漏えい時の挙動・既定採用の経緯）は、
+> 「過去の判断を消さない」というリポジトリの慣習に基づきそのまま残している。
 
 | 有効な認証フロー | `client_id + client_secret`だけが漏えい | 結果 |
 |---|---|---|
@@ -137,12 +141,12 @@ comken は受け取った新しい token を DPAPI へ**自動で書き戻す**�
 **開発中に手元で動かすときだけ**使う。初回の対話的な認可を挟まずに済むため、
 動作確認の回転が速い。使うときは既定を上書きして明示的に渡す。
 
-```python
-from comken.toolbox.salesforce import ClientCredentialsOAuth
-
-with Solution(auth=ClientCredentialsOAuth(cid, secret, domain)) as sf:
-    ...
-```
+> [!note] 補足（2026-09-08）
+> Client Credentials Flow は社内の運用上もう使えないため、comken からも
+> コード（`oauth_credentials.py` / `ClientCredentialsOAuth`）を削除した。
+> この節の「開発中に手元で動かすときだけ使う」という前提と、上記の
+> 「本番では使わない。ECA 側でも無効にする」という判断は**今も有効**で、
+> 歴史的記録として残している。
 
 **本番では使わない。ECA 側でも無効にする。** 有効なまま残すと、
 Refresh Token Flow を併用していても、漏えいした2値で入れる入口が残る。
@@ -417,19 +421,13 @@ Refresh Token Rotation を有効にしている場合、**`comken` が新しい 
 
 Refresh Token Flow の **対になる形**で、初回認可が要らない代わりに
 `client_secret` 単独で操作できる (本番で使わない理由は
-`docs/開発/salesforce-authentication.md` の冒頭を参照):
+`docs/開発/salesforce-authentication.md` の冒頭を参照)。
 
-```python
-from comken.toolbox.salesforce import ClientCredentialsOAuth
-from comken.toolbox.salesforce.sites import Solution
-
-with Solution(auth=ClientCredentialsOAuth(
-    client_id=...,
-    client_secret=...,
-    domain_url="login.salesforce.com",
-)) as sf:
-    ...
-```
+> [!note] 補足（2026-09-08）
+> Client Credentials Flow は社内の運用上もう使えないため、comken からも
+> コード（`oauth_credentials.py` / `ClientCredentialsOAuth`）を削除した。
+> この節の「開発中に手元で動かすときだけ使う」「本番では使わない」という
+> 前提は今も有効で、節は歴史的記録として残している。
 
 **本番では使わない。** 動作確認の回転を速くしたい開発中だけ。
 

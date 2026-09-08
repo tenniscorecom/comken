@@ -5,7 +5,6 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
-import requests
 
 from comken import dry_run
 from comken.core.table import Table
@@ -13,12 +12,10 @@ from comken.exceptions import (
     ComkenError,
     CredentialNotFoundError,
     InvalidCredentialNameError,
-    SalesforceAuthError,
     SalesforceBulkIngestFailedError,
     SalesforceBulkIngestTimeoutError,
     SalesforceBulkQueryFailedError,
     SalesforceBulkQueryTimeoutError,
-    SalesforceConnectionError,
     SalesforceError,
     SalesforceExternalIDMissingError,
     SalesforceReportAccessDeniedError,
@@ -34,7 +31,7 @@ from comken.toolbox.credentials import save_credentials, store
 from comken.toolbox.csv import CSV
 from comken.toolbox.salesforce import (
     APIMetrics,
-    ClientCredentialsOAuth,
+    RefreshTokenOAuth,
     SalesforceBase,
 )
 from comken.toolbox.salesforce.bulk_ingest import BulkIngestAPI
@@ -119,66 +116,13 @@ def _salesforce(responses, token_responses=None):
     with (
         patch("comken.toolbox.salesforce.client.requests.Session", return_value=session),
         patch(
-            "comken.toolbox.salesforce.auth.oauth_credentials.requests.post", side_effect=tokens
+            "comken.toolbox.salesforce.auth.oauth_refresh.requests.post", side_effect=tokens
         ) as post,
     ):
         client = _TestSalesforceBase(
-            auth=ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL), org_name="sandbox"
+            auth=RefreshTokenOAuth("CID", "RT", DOMAIN_URL), org_name="sandbox"
         )
         yield client, session, post
-
-
-class TestClientCredentialsOAuth:
-    def test_posts_client_credentials_to_my_domain(self):
-        """My Domain のトークンエンドポイントへ client_credentials を POST する。"""
-        with patch(
-            "comken.toolbox.salesforce.auth.oauth_credentials.requests.post",
-            return_value=_token_response(),
-        ) as post:
-            token, instance_url = ClientCredentialsOAuth(
-                "CID", "CSECRET", DOMAIN_URL
-            ).request_token()
-
-        assert (token, instance_url) == ("TOKEN", INSTANCE_URL)
-        url, kwargs = post.call_args[0][0], post.call_args[1]
-        assert url == f"{DOMAIN_URL}/services/oauth2/token"
-        assert kwargs["data"] == {
-            "grant_type": "client_credentials",
-            "client_id": "CID",
-            "client_secret": "CSECRET",
-        }
-        assert kwargs["timeout"] > 0, "タイムアウトを必ず指定する"
-
-    def test_trailing_slash_in_domain_url_is_tolerated(self):
-        """domain_url の末尾スラッシュがあっても URL が壊れない。"""
-        with patch(
-            "comken.toolbox.salesforce.auth.oauth_credentials.requests.post",
-            return_value=_token_response(),
-        ) as post:
-            ClientCredentialsOAuth("CID", "CSECRET", f"{DOMAIN_URL}/").request_token()
-        assert post.call_args[0][0] == f"{DOMAIN_URL}/services/oauth2/token"
-
-    def test_auth_failure_lists_what_to_check(self):
-        """認証失敗のメッセージに Run As と My Domain の確認手順が入る。"""
-        with (
-            patch(
-                "comken.toolbox.salesforce.auth.oauth_credentials.requests.post",
-                return_value=_response(400, json_body={"error": "invalid_grant"}),
-            ),
-            pytest.raises(SalesforceAuthError, match=r"(?s)Run As.*My Domain"),
-        ):
-            ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL).request_token()
-
-    def test_network_failure_becomes_connection_error(self):
-        """通信できない場合は SalesforceConnectionError になる。"""
-        with (
-            patch(
-                "comken.toolbox.salesforce.auth.oauth_credentials.requests.post",
-                side_effect=requests.exceptions.ConnectTimeout("timed out"),
-            ),
-            pytest.raises(SalesforceConnectionError, match="接続できませんでした"),
-        ):
-            ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL).request_token()
 
 
 class TestSalesforceQuery:
@@ -900,11 +844,11 @@ class TestSites:
         with (
             patch("comken.toolbox.salesforce.client.requests.Session", return_value=session),
             patch(
-                "comken.toolbox.salesforce.auth.oauth_credentials.requests.post",
+                "comken.toolbox.salesforce.auth.oauth_refresh.requests.post",
                 return_value=_token_response(),
             ),
         ):
-            site = SolutionSandbox(auth=ClientCredentialsOAuth("CID", "CSECRET", DOMAIN_URL))
+            site = SolutionSandbox(auth=RefreshTokenOAuth("CID", "RT", DOMAIN_URL))
         assert site.metrics.org_name == "SolutionSandbox"
 
 

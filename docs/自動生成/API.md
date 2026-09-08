@@ -10459,10 +10459,6 @@ Attributes:
     stdout: Data Loader の標準出力（プロセス終了時点）。
     stderr: Data Loader の標準エラー出力（プロセス終了時点）。
 
-### `ClientCredentialsOAuth`
-
-定義を解決できませんでした。
-
 ### `RefreshTokenOAuth`
 
 定義を解決できませんでした。
@@ -10630,8 +10626,7 @@ def __init__(self, *, prefix: str='', domain_url: str='', org_name: str='', auth
 DPAPI に保管した認証情報を読み、選択中の OAuth 方式で接続する。
 
 読み込む項目は client.py が import している OAuth 方式（既定は
-RefreshTokenOAuth）で決まる。Client Credentials 方式は
-client_id / client_secret、Refresh Token 方式は
+RefreshTokenOAuth）で決まる。Refresh Token 方式は
 client_id / client_secret / refresh_token を使う。
 
 Args:
@@ -10641,7 +10636,6 @@ Args:
     org_name: 計測ログに出す組織の呼び名。省略時はクラス名を使う。
     auth: 認証方式を差し替えるときに渡す。**クラスを渡せば**
         DPAPI から組み立てる（値を手で並べなくてよい）。
-            Solution(auth=ClientCredentialsOAuth)   # 開発中だけ
         作成済みのインスタンスを渡すこともできる（テスト・JWT 等）。
         その場合だけ prefix / domain_url は使われない。
 
@@ -10947,8 +10941,7 @@ def __init__(self, *, prefix: str='', domain_url: str='', org_name: str='', auth
 DPAPI に保管した認証情報を読み、選択中の OAuth 方式で接続する。
 
 読み込む項目は client.py が import している OAuth 方式（既定は
-RefreshTokenOAuth）で決まる。Client Credentials 方式は
-client_id / client_secret、Refresh Token 方式は
+RefreshTokenOAuth）で決まる。Refresh Token 方式は
 client_id / client_secret / refresh_token を使う。
 
 Args:
@@ -10958,7 +10951,6 @@ Args:
     org_name: 計測ログに出す組織の呼び名。省略時はクラス名を使う。
     auth: 認証方式を差し替えるときに渡す。**クラスを渡せば**
         DPAPI から組み立てる（値を手で並べなくてよい）。
-            Solution(auth=ClientCredentialsOAuth)   # 開発中だけ
         作成済みのインスタンスを渡すこともできる（テスト・JWT 等）。
         その場合だけ prefix / domain_url は使われない。
 

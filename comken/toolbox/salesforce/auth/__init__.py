@@ -3,7 +3,6 @@
 以下をまとめている:
 
     oauth_refresh.py       RefreshTokenOAuth（Authorization Code + Refresh Token Flow、既定）
-    oauth_credentials.py   ClientCredentialsOAuth（Client Credentials Flow、開発時専用）
     rotation.py            SalesforceCredentialRotator（ECA 認証情報の定期ローテーション）
 
 公開 API としての入口は変わらず `comken.toolbox.salesforce`

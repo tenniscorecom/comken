@@ -16,22 +16,12 @@ URL と認証情報のシステム名は組織クラスがクラス定数とし�
     with Solution() as sf:                                    # 既定（本番もこれ）
         ...
 
-Client Credentials Flow は `client_secret` だけでアクセストークンを取れてしまい、
-漏えいすると実行ユーザーとして操作されるため、本番では使わない。
-**開発中に手元で動かしたいときだけ** `auth=` で明示的に渡す。
-
-    from comken.toolbox.salesforce import ClientCredentialsOAuth
-
-    with Solution(auth=ClientCredentialsOAuth(cid, secret, domain)) as sf:  # 開発時だけ
-        ...
-
 設計の背景は docs/開発/salesforce-authentication.md を参照。
 
     SalesforceBase         1組織ぶんの API クライアントの土台（組織クラスで継承する）
     DataLoaderCLI          Salesforce Data Loader の CLI 呼び出し（サブプロセス実行）
     DataLoaderResult       DataLoaderCLI.run() の戻り値
     RefreshTokenOAuth      Authorization Code + Refresh Token Flow（既定）
-    ClientCredentialsOAuth Client Credentials Flow（開発時に auth= で渡す）
     APIMetrics             API 呼び出しの計測。SalesforceBase.metrics が持っている
     APIUsage               組織の 24 時間 API 消費量
 """
@@ -45,7 +35,7 @@ from comken.toolbox.salesforce.metrics import APIMetrics, APIUsage
 
 # requests の存在チェックだけ先に行う。依存が無い環境でもこのパッケージを
 # import だけはできるようにしておき、実際に API を叩く経路
-# （`oauth_credentials` / `oauth_refresh` / `client` / `rotation` 等）で
+# （`oauth_refresh` / `client` / `rotation` 等）で
 # `import requests` が走った時点で ImportError が出る。
 _requests: ModuleType | None
 try:
@@ -58,7 +48,6 @@ except ImportError:
 # import 可能にするため
 _LAZY_TARGETS: dict[str, str] = {
     "SalesforceBase": "comken.toolbox.salesforce.client",
-    "ClientCredentialsOAuth": "comken.toolbox.salesforce.auth.oauth_credentials",
     "RefreshTokenOAuth": "comken.toolbox.salesforce.auth.oauth_refresh",
     "SalesforceCredentialRotator": "comken.toolbox.salesforce.auth.rotation",
 }
@@ -69,7 +58,6 @@ if TYPE_CHECKING:
     # エラーになる）。TYPE_CHECKING はここでだけ True 扱いになり実行時には
     # 一切評価されないため、requests 非依存という遅延importの目的を壊さずに
     # 型だけ正しく解決できる。
-    from comken.toolbox.salesforce.auth.oauth_credentials import ClientCredentialsOAuth
     from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth
     from comken.toolbox.salesforce.auth.rotation import SalesforceCredentialRotator
     from comken.toolbox.salesforce.client import SalesforceBase
@@ -102,7 +90,6 @@ __all__ = [
     "BulkIngestResult",
     "DataLoaderCLI",
     "DataLoaderResult",
-    "ClientCredentialsOAuth",
     "RefreshTokenOAuth",
     "APIMetrics",
     "APIUsage",

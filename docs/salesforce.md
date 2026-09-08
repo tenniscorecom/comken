@@ -40,15 +40,14 @@ Salesforce 側の名前が出てくるのは**画面からコピーするとき�
 
 Client Credentials Flow は `client_secret` だけでアクセストークンを取れてしまうため、
 **本番では使わない**（判断の根拠は [Salesforce 認証の判断根拠](開発/salesforce-authentication.md)）。
-開発中に手元で動かすときだけ `auth=` で明示的に渡す。
 
-| 使う場面 | 書き方 |
-|---|---|
-| 本番・通常 | `with Solution() as sf:` |
-| 開発中の動作確認 | `with Solution(auth=ClientCredentialsOAuth) as sf:`（クラスを渡すだけ） |
+> [!note] 補足（2026-09-08）
+> Client Credentials Flow は社内の運用上もう使えないため、comken からも
+> コード（`oauth_credentials.py` / `ClientCredentialsOAuth`）を削除した。
+> 開発中だけ Client Credentials Flow を使う節は、歴史的記録として残している。
 
-どちらも `request_token() -> (access_token, instance_url)` を実装しているので、
-API クライアント側は認証方式を知らずに済む。
+`request_token() -> (access_token, instance_url)` を実装する認証方式は
+将来差し替えられるよう、`auth` 引数で渡せる形にしてある（既定は Refresh Token）。
 
 ```python
 from comken.toolbox.credentials import save_credential
@@ -83,27 +82,13 @@ with Solution(auth=auth) as sf:
 初回の対話的な認可を挟まずに動かせるので、動作確認の回転が速い。
 **本番では使わない**（→ [判断の根拠](開発/salesforce-authentication.md#2-なぜ-refresh-token-flow-を既定にするのか)）。
 
-```python
-from comken.toolbox.salesforce import ClientCredentialsOAuth
-from comken.toolbox.salesforce.sites import Solution
+> [!note] 補足（2026-09-08）
+> Client Credentials Flow は社内の運用上もう使えないため、comken からも
+> コード（`oauth_credentials.py` / `ClientCredentialsOAuth`）を削除した。
+> この節は歴史的記録として残している。
 
-with Solution(auth=ClientCredentialsOAuth) as sf:      # クラスを渡すだけ
-    rows = sf.query("SELECT Id, Name FROM Account")
-```
-
-**値は書かない。** クラスを渡すと、組織クラスの `DOMAIN_URL` と
-`CREDENTIAL_PREFIX` を使って DPAPI から読む（`solution_client_id` /
-`solution_client_secret`）。既定（`Solution()`）とまったく同じ経路で、
-使う方式が違うだけ。
-
-| 書き方 | 認証方式 | DPAPI から読む項目 |
-|---|---|---|
-| `Solution()` | Refresh Token（既定） | `solution_client_id` / `solution_client_secret` / `solution_refresh_token` |
-| `Solution(auth=ClientCredentialsOAuth)` | Client Credentials（開発時） | `solution_client_id` / `solution_client_secret` |
-| `Solution(prefix="solution_test")` | 既定のまま | `solution_test_*` |
-
-2方式は同じ `from_credentials()` / `request_token()` を持つので、
-共通の query・CRUD・report・metrics は認証方式に依存しない。
+認証を `auth=` で差し替える仕組みは将来別の方式（JWT など）を生やす余地として
+残してあり、`Solution()` の既定経路（Refresh Token）と独立に扱える。
 
 ### Client Credentials Flow を使うときの落とし穴
 
@@ -173,8 +158,6 @@ classDiagram
         +from_credentials()
         +request_token()
     }
-    class ClientCredentialsOAuth {
-    }
     class RefreshTokenOAuth {
     }
     class ReportAPI {
@@ -189,7 +172,6 @@ classDiagram
     SalesforceBase *-- _OAuth
     SalesforceBase *-- APIMetrics
     SalesforceBase *-- ReportAPI
-    _OAuth <|.. ClientCredentialsOAuth : implements
     _OAuth <|.. RefreshTokenOAuth : implements
 ```
 
@@ -298,8 +280,7 @@ with site() as sf:
 判定せず、HTTP ステータスコードだけで判定する）。
 
 > 対処は管理者に次の3点を確認してもらう:
-> 1. 実行ユーザー（Client Credentials では Run As ユーザー）の Profile /
->    Permission Set に「API Enabled」権限があるか
+> 1. 実行ユーザーの Profile / Permission Set に「API Enabled」権限があるか
 > 2. 対象のレポート・レポートフォルダへのアクセス権があるか
 > 3. 組織の Edition・ライセンスが Reports and Dashboards REST API に対応しているか
 >    （一部の制限ライセンスでは使えない）
