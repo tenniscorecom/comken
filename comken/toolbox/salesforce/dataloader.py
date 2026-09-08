@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,6 +15,8 @@ from comken.exceptions import (
     DataLoaderTimeoutError,
 )
 from comken.toolbox.csv import CSV
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT_SECONDS = 3600
 
@@ -144,9 +147,16 @@ class DataLoaderCLI:
                 ``error_csv`` に指定したパスにファイルが無い。
         """
         if not self._launcher_path.exists():
+            logger.debug("launcher が見つかりません: %s", self._launcher_path)
             raise DataLoaderLauncherNotFoundError(self._launcher_path)
 
         command = [str(self._launcher_path), *args]
+        logger.debug(
+            "Data Loader を実行します: command=%s cwd=%s timeout_seconds=%s",
+            command,
+            cwd,
+            self._timeout_seconds,
+        )
         try:
             completed = subprocess.run(
                 command,
@@ -164,10 +174,21 @@ class DataLoaderCLI:
                 timeout=self._timeout_seconds,
             )
         except subprocess.TimeoutExpired as e:
+            logger.debug(
+                "Data Loader がタイムアウトしました: launcher=%s timeout_seconds=%s",
+                self._launcher_path,
+                self._timeout_seconds,
+            )
             raise DataLoaderTimeoutError(self._launcher_path, self._timeout_seconds) from e
 
         stdout = completed.stdout or ""
         stderr = completed.stderr or ""
+        logger.debug(
+            "Data Loader が終了しました: returncode=%d stdout=%r stderr=%r",
+            completed.returncode,
+            stdout,
+            stderr,
+        )
         if completed.returncode != 0:
             raise DataLoaderExecutionError(
                 self._launcher_path, completed.returncode, stdout, stderr
@@ -175,6 +196,11 @@ class DataLoaderCLI:
 
         success_table = self._read_result_csv(success_csv)
         error_table = self._read_result_csv(error_csv)
+        logger.debug(
+            "Data Loader の結果を読み込みました: success=%d件 errors=%d件",
+            len(success_table),
+            len(error_table),
+        )
         return DataLoaderResult(
             success=success_table,
             errors=error_table,
@@ -191,9 +217,12 @@ class DataLoaderCLI:
         0 バイトファイル・ヘッダーのみのケースは ``CSV`` クラスの既存動作に任せる。
         """
         if path is None:
+            logger.debug("結果CSVの指定なし（空のTableを返す）")
             return Table([], [])
         result_path = Path(path)
+        logger.debug("結果CSVを読み込みます: %s", result_path)
         if not result_path.exists():
+            logger.debug("結果CSVが見つかりません: %s", result_path)
             raise DataLoaderResultFileMissingError(result_path)
         with CSV(result_path, read_only=True) as csv_file:
             return csv_file.read()
