@@ -286,6 +286,59 @@ INPUT_受注_HEADER_ROW = 1
 **引っかかったら、まず「この関数はいくつのことをやっているか」を数える。**
 たいてい2つ以上あり、分ければ複雑さも一緒に下がる。
 
+### 分岐の書き方（if / elif / match）
+
+| 場面 | 使うもの |
+|---|---|
+| 前提条件・エラー条件を先に弾く | ガード節（`if 異常: raise` / `return` で早期に抜ける） |
+| 決まった値の集合から1つを選ぶ（すべて対等な選択肢） | `elif` の連鎖 |
+| 型・構造で分岐する（`isinstance` の連鎖になりがちなもの） | `match` / `case` |
+
+```python
+# 良い（ガード節で異常系を先に片付け、本筋の処理をネストさせない）
+def process(row: dict) -> str:
+    if not row:
+        raise ValueError("空の行は処理できません")
+    if "id" not in row:
+        raise KeyError("id 列がありません")
+    return row["id"]
+
+# 悪い（正常系がネストの奥に埋もれる）
+def process(row: dict) -> str:
+    if row:
+        if "id" in row:
+            return row["id"]
+        else:
+            raise KeyError("id 列がありません")
+    else:
+        raise ValueError("空の行は処理できません")
+```
+
+```python
+# 良い（対等な値の分岐は elif）
+if status == "Success":
+    ...
+elif status == "Failed":
+    ...
+elif status == "Aborted":
+    ...
+
+# 良い（型で分岐するなら match。isinstance の連鎖より読みやすい）
+match value:
+    case str():
+        ...
+    case int() | float():
+        ...
+    case dict():
+        ...
+```
+
+**分岐が増えて `C90` に引っかかったら、`elif` / `match` を無理に削らず、
+分岐そのものを関数へ切り出す**（前節「関数の複雑さ」参照）。
+`if`-`elif` を単純な `if` の羅列（早期 `return` の乱発）に置き換えるだけの
+書き換えはしない。「対等な選択肢を1つ選ぶ」という意味が `if` の羅列だと
+読み取りにくくなるため。
+
 ```python
 # 良い（機能を提供するパッケージが分かる）
 from パッケージ.excel import Excel
@@ -621,6 +674,13 @@ Excel ファイルが開きっぱなしになると、次に開こうとした�
 
 固有の失敗にはカスタム例外を使い、**基底例外を1つ決めて、その下に階層化する**。
 呼び出し側が基底1つで「自分たちのコード由来の失敗」をまとめて捕捉できるようにするため。
+
+**この階層化ルールは comken 本体（ライブラリ）を対象とする。comken を使う
+プロジェクト側は、独自のカスタム例外クラスを新しく定義しない。** プロジェクト
+固有の失敗は、comken が提供する例外（`ComkenError` 系）か、Python の標準例外
+（`ValueError` / `RuntimeError` 等）をそのまま使う。プロジェクトごとに例外
+階層を作ると、覚えるべき型がプロジェクトの数だけ増え、他のプロジェクトへ
+使い回せない。カスタム例外の設計・階層化は comken 本体の役割に限定する。
 
 | ルール | 理由 |
 |---|---|
