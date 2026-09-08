@@ -13,6 +13,7 @@ from comken.services.salesforce_downloader.history import (
     record,
     schedule_succeeded_today,
     successful_files_today,
+    truncated_today,
 )
 from comken.services.salesforce_downloader.master import ReportEntry
 from comken.toolbox.csv import CSV
@@ -237,6 +238,111 @@ def test_schedule_succeeded_today_rejects_empty_key(tmp_path) -> None:
         ),
     )
     assert schedule_succeeded_today(history_path, "") is False
+
+
+def test_truncated_today_returns_true_when_today_failed_with_truncated_error(tmp_path) -> None:
+    """今日 ``SalesforceReportTruncatedError`` で失敗した履歴があれば True。"""
+    history_path = tmp_path / "履歴.csv"
+    entry = _entry(tmp_path)
+    record(
+        history_path,
+        entry=entry,
+        project="P",
+        row=HistoryRow(
+            succeeded=False,
+            fetched_from_salesforce=True,
+            saved_to_file=None,
+            cause="Salesforce",
+            error_code="SalesforceReportTruncatedError",
+            error="2000 行で打ち止め",
+        ),
+    )
+    assert truncated_today(history_path, entry.key) is True
+
+
+def test_truncated_today_returns_false_when_history_missing(tmp_path) -> None:
+    """履歴ファイルが無い場合は例外を出さず False。"""
+    assert truncated_today(tmp_path / "無い.csv", "1001") is False
+
+
+def test_truncated_today_returns_false_for_other_error_codes(tmp_path) -> None:
+    """今日の失敗でも、エラーコードが ``SalesforceReportTruncatedError``
+    以外（例: 通信エラー、``OSError``）なら False。2000件超以外の失敗は
+    毎回リトライしてよい、という既存挙動を壊さない。"""
+    history_path = tmp_path / "履歴.csv"
+    entry = _entry(tmp_path)
+    record(
+        history_path,
+        entry=entry,
+        project="P",
+        row=HistoryRow(
+            succeeded=False,
+            fetched_from_salesforce=True,
+            saved_to_file=False,
+            cause="ファイル",
+            error_code="OSError",
+            error="共有サーバー断",
+        ),
+    )
+    assert truncated_today(history_path, entry.key) is False
+
+
+def test_truncated_today_ignores_other_report_keys(tmp_path) -> None:
+    """別の管理番号の 2000件超 失敗履歴は True にしない。"""
+    history_path = tmp_path / "履歴.csv"
+    entry = _entry(tmp_path)
+    record(
+        history_path,
+        entry=entry,
+        project="P",
+        row=HistoryRow(
+            succeeded=False,
+            fetched_from_salesforce=True,
+            saved_to_file=None,
+            cause="Salesforce",
+            error_code="SalesforceReportTruncatedError",
+            error="2000 行で打ち止め",
+        ),
+    )
+    assert truncated_today(history_path, "別の管理番号") is False
+
+
+def test_truncated_today_ignores_other_dates(tmp_path) -> None:
+    """昨日の ``SalesforceReportTruncatedError`` 失敗は True にしない
+    （翌日に改めて1回だけ試すため、日付をまたいだらリセットする）。"""
+    history_path = tmp_path / "履歴.csv"
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    history_path.write_text(
+        (
+            "実行日時,管理番号,スケジュールキー,概要,レポートID,URL,プロジェクト,"
+            "成否,Salesforce取得結果,保存結果,保存先,ファイル名,取得件数,処理秒数,"
+            "原因区分,エラーコード,エラー内容\n"
+            "2024-01-01 09:00:00,1001,,,,,,失敗,成功,,,"
+            ",,1.00,Salesforce,SalesforceReportTruncatedError,2000 行で打ち止め"
+        ),
+        encoding="utf-8-sig",
+    )
+    assert truncated_today(history_path, "1001") is False
+
+
+def test_truncated_today_ignores_successful_rows_with_same_code(tmp_path) -> None:
+    """同じエラーコードの文字列が成否=成功の行に書かれていても False
+    （あり得ない組合せだが、列値の照合順の防御として明示的に区別する）。"""
+    history_path = tmp_path / "履歴.csv"
+    entry = _entry(tmp_path)
+    record(
+        history_path,
+        entry=entry,
+        project="P",
+        row=HistoryRow(
+            succeeded=True,
+            fetched_from_salesforce=True,
+            saved_to_file=True,
+            file_name="a.csv",
+            error_code="SalesforceReportTruncatedError",
+        ),
+    )
+    assert truncated_today(history_path, entry.key) is False
 
 
 def _append_from_process(arguments: tuple[str, str, int]) -> None:

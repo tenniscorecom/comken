@@ -1848,6 +1848,152 @@ class TestAllowEmpty:
             assert by_key["1002"]["取得件数"] == "2"
 
 
+# ── 2000件超で失敗したレポートの当日スキップ ─────────────────────────
+class TestTruncatedSkip:
+    """``SalesforceReportTruncatedError`` で失敗したレポートは、
+    当日中の再実行では `download_scheduled()` の対象から外れる
+    （=Salesforce へ問い合わせない）。"""
+
+    @staticmethod
+    def _seed_failure_row(
+        history_path: Path,
+        *,
+        when: dt.datetime,
+        error_code: str,
+        cause: str = "Salesforce",
+        fetch_result: str = "失敗",
+        save_result: str = "",
+    ) -> None:
+        """``when`` の日時の失敗履歴を1行書く。エラーコードだけ差し替えられる。
+
+        テストでは Salesforce へ実際に 2000件超のレスポンスを返させる必要がない
+        （=本物の大きな CSV を作ると遅い）ので、履歴だけ直接書く。
+        列の並びは ``history.COLUMNS`` と一致させる
+        （`comken.services.salesforce_downloader.history.COLUMNS`）。
+        """
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        history_path.write_text(
+            (
+                "実行日時,管理番号,スケジュールキー,概要,レポートID,URL,プロジェクト,"
+                "成否,Salesforce取得結果,保存結果,保存先,ファイル名,取得件数,処理秒数,"
+                "原因区分,エラーコード,エラー内容\n"
+                f"{when:%Y-%m-%d %H:%M:%S},1001,,,00O5g00000ABCDE,{URL_A},定期実行,"
+                f"失敗,{fetch_result},{save_result},{history_path.parent},,,1.00,"
+                f"{cause},{error_code},2000 行で打ち止め"
+            ),
+            encoding="utf-8-sig",
+        )
+
+    @classmethod
+    def _seed_truncated_failure(cls, history_path: Path, *, when: dt.datetime) -> None:
+        """``SalesforceReportTruncatedError`` の失敗履歴を1行書く。"""
+        cls._seed_failure_row(
+            history_path,
+            when=when,
+            error_code="SalesforceReportTruncatedError",
+        )
+
+    def test_today_truncated_skips_salesforce_call(self, paths, monkeypatch):
+        """今日すでに ``SalesforceReportTruncatedError`` で失敗したレポートは、
+        同じ日の ``download_scheduled()`` の対象から外れる。"""
+        now = dt.datetime(2026, 1, 7, 12, 0)  # noqa: DTZ001 — テスト用に意図的に固定した tz-naive な datetime
+        monkeypatch.setattr(service_module, "clock_now", lambda: now)
+        # 同じ「今日」の失敗履歴を直接書く
+        self._seed_truncated_failure(paths["history_path"], when=now)
+
+        site = fake_salesforce()
+        with patch("comken.services.salesforce_downloader.service.site_for", return_value=site):
+            saved = download_scheduled()
+        # Salesforce へ問い合わせない（=2回目以降の定期実行で同じ失敗を繰り返さない）
+        assert site.return_value.__enter__.return_value.report.get.call_count == 0
+        # 保存ファイルも増えない
+        assert saved == []
+
+    def test_yesterday_truncated_does_not_skip_today(self, paths, monkeypatch):
+        """昨日 ``SalesforceReportTruncatedError`` で失敗した記録があっても、
+        日付が変われば今日の対象に戻る（翌日 1 回だけ改めて試す）。"""
+        now = dt.datetime(2026, 1, 7, 12, 0)  # noqa: DTZ001 — テスト用に意図的に固定した tz-naive な datetime
+        yesterday = now - dt.timedelta(days=1)
+        monkeypatch.setattr(service_module, "clock_now", lambda: now)
+        # 「昨日」の失敗履歴
+        self._seed_truncated_failure(paths["history_path"], when=yesterday)
+
+        site = fake_salesforce()
+        with patch("comken.services.salesforce_downloader.service.site_for", return_value=site):
+            saved = download_scheduled()
+        # 今日は対象になる = Salesforce へ問い合わせる
+        assert site.return_value.__enter__.return_value.report.get.call_count == 1
+        assert [path.name.split("_")[0] for path in saved] == ["1001"]
+
+    def test_today_other_error_does_not_skip(self, paths, monkeypatch):
+        """今日 ``SalesforceReportTruncatedError`` **以外**の理由（例: 通信エラー、
+        ``OSError``）で失敗した記録は、スキップ対象にしない。2000件超以外の失敗は
+        毎回リトライしてよい、という既存挙動を壊さない。"""
+        now = dt.datetime(2026, 1, 7, 12, 0)  # noqa: DTZ001 — テスト用に意図的に固定した tz-naive な datetime
+        monkeypatch.setattr(service_module, "clock_now", lambda: now)
+        # 履歴に「今日の失敗（ただし OSError）」を直接書く
+        self._seed_failure_row(
+            paths["history_path"],
+            when=now,
+            error_code="OSError",
+            cause="ファイル",
+            fetch_result="成功",
+            save_result="失敗",
+        )
+
+        site = fake_salesforce()
+        with patch("comken.services.salesforce_downloader.service.site_for", return_value=site):
+            saved = download_scheduled()
+        # 2000件超以外なので普通に取得される
+        assert site.return_value.__enter__.return_value.report.get.call_count == 1
+        assert [path.name.split("_")[0] for path in saved] == ["1001"]
+
+    def test_truncated_skip_works_with_schedule_key(self, tmp_path, monkeypatch):
+        """スケジュール行に紐付くレポートでも、当日 truncated 済みなら
+        2回目の ``download_scheduled()`` で再取得されない。"""
+        folder = tmp_path / "保存先"
+        folder.mkdir()
+        fixed_now = dt.datetime(2026, 1, 7, 12, 0)  # noqa: DTZ001 — テスト用に意図的に固定した tz-naive な datetime
+        master = make_master_with_schedule(
+            tmp_path / "管理表.xlsx",
+            [
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "2000件超の履歴",
+                    URL_A,
+                    str(folder),
+                    "○",
+                    "",
+                ]
+            ],
+            schedule_rows=[
+                ["S001", "1001", "毎週", "09:00", "水", "取得しない", "○"],
+            ],
+        )
+        history_path = tmp_path / "履歴.csv"
+        monkeypatch.setattr(service_module, "MASTER_PATH", master)
+        monkeypatch.setattr(service_module, "HISTORY_PATH", history_path)
+        monkeypatch.setattr(service_module, "LATEST_STATUS_PATH", tmp_path / "最新ステータス.xlsx")
+        monkeypatch.setattr(service_module, "clock_now", lambda: fixed_now)
+        _patch_default_calendar(monkeypatch, holidays=set())
+
+        # 当日 truncated 済み = スケジュール一致だが 2000件超で失敗
+        self._seed_truncated_failure(history_path, when=fixed_now)
+
+        site = fake_salesforce()
+        with patch("comken.services.salesforce_downloader.service.site_for", return_value=site):
+            download_scheduled()
+        # 当日 truncated 済みなのですでにスキップされ、Salesforce へ問い合わせない
+        assert site.return_value.__enter__.return_value.report.get.call_count == 0
+        # 履歴は事前投入した 1 行のまま
+        with CSV(history_path) as csv_file:
+            rows = csv_file.read()
+        assert len(rows) == 1
+        assert rows[0]["エラーコード"] == "SalesforceReportTruncatedError"
+
+
 class TestTemplate:
     """管理表の雛形は、そのまま読み込める状態で作られる。"""
 

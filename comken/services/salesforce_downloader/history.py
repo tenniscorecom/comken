@@ -60,6 +60,12 @@ FAILURE = "失敗"
 # 互換のため名前は残してある（外部ツールが定数名参照に備えて）
 TRIGGER_SCHEDULED = "定期"
 
+# 2000件超で失敗したときの例外クラス名。`_failure_row()` が
+# `error_code=type(exc).__name__` で例外クラス名を履歴に書くため、
+# 比較対象も同じ文字列にする。``history.py`` は Salesforce の例外クラスを
+# import しない（依存を増やさない）ので、import せず文字列リテラルで扱う
+TRUNCATED_ERROR_NAME = "SalesforceReportTruncatedError"
+
 _TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
@@ -279,6 +285,78 @@ def schedule_succeeded_today(
                 return True
     logger.debug(
         "スケジュールキー当日成功の検出なし: path=%s, schedule_key=%s → False",
+        history_path,
+        key_text,
+    )
+    return False
+
+
+@measure
+def truncated_today(
+    path: str | Path,
+    report_key: str,
+    date: datetime.date | None = None,
+) -> bool:
+    """その日すでに2000件超（SalesforceReportTruncatedError）で失敗したかを返す。
+
+    定期実行のたびに同じレポートが失敗し続けるのを防ぐため、``download_scheduled()``
+    が対象選定の前に呼ぶ。1日1回失敗すれば、その日の残りの定期実行では
+    スキップする（翌日になれば改めて1回だけ試す）。
+
+    2000件超で失敗したまま放置すると毎日同じ失敗ログが積み上がるので、
+    1日1回だけ試す方針にしてある。**永久に試さなくすると、レポートの
+    規模が縮小した・SOQL へ切り替えたなどで状況が直ったあとに気づかず
+    放置される**ため、翌日には改めて1回だけ試す形にした。
+    ``downloaded_today()`` と同じ「履歴を正とする」判定で、ファイルの有無
+    には依存しない。
+
+    Args:
+        path: 履歴 CSV のパス。
+        report_key: 管理番号。
+        date: 調べる日付。省略すると今日。
+
+    Returns:
+        ``SalesforceReportTruncatedError`` で失敗した履歴がその日に1件でも
+        あれば True。履歴が無い／失敗の記録が無い／別のエラーコードの失敗は
+        全て False。
+    """
+    history_path = Path(path)
+    target = (date or today()).strftime("%Y-%m-%d")
+    key_text = str(report_key)
+    if not history_path.is_file():
+        logger.debug(
+            "2000件超失敗履歴の検索: path=%s → 履歴無しのため False",
+            history_path,
+        )
+        return False
+    logger.debug(
+        "2000件超失敗履歴の検索開始: path=%s, 管理番号=%s, 日付=%s",
+        history_path,
+        key_text,
+        target,
+    )
+    with (
+        HistoryFileLock(history_path),
+        history_path.open("r", encoding="utf-8-sig", newline="") as f,
+    ):
+        reader = csv.DictReader(f)
+        _require_expected_header(history_path, reader.fieldnames)
+        for row in reader:
+            if (
+                row.get("実行日時", "").startswith(target)
+                and row.get("管理番号", "") == key_text
+                and row.get("成否", "") == FAILURE
+                and row.get("エラーコード", "") == TRUNCATED_ERROR_NAME
+            ):
+                logger.debug(
+                    "2000件超失敗履歴を検出: path=%s, 管理番号=%s "
+                    "→ 当日中のため、この定期実行ではスキップ",
+                    history_path,
+                    key_text,
+                )
+                return True
+    logger.debug(
+        "2000件超失敗履歴の検出なし: path=%s, 管理番号=%s → False",
         history_path,
         key_text,
     )

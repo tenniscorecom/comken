@@ -131,15 +131,7 @@ def download_scheduled(project: str = "定期実行") -> list[Path]:
     # 祝日は「今日が祝日か」だけ分かればよいので、1日分の set を作る
     holidays = _todays_holiday_set(current)
 
-    targets: list[tuple[ReportEntry, str]] = []
-    for entry in entries.values():
-        if not entry.enabled:
-            continue
-        is_due, schedule_key = _matched_schedule_key(entry, rules_by_report, current, holidays)
-        if is_due:
-            # ``schedule_key`` は取得後に履歴へ記録し、``schedule_succeeded_today()``
-            # が再判定に使う。スケジュール行が無いレポート（後方互換）は空文字
-            targets.append((entry, schedule_key))
+    targets = _select_targets(entries, rules_by_report, current, holidays)
     logger.info("定期取得の対象: %d 件", len(targets))
 
     saved: list[Path] = []
@@ -426,6 +418,42 @@ def _matched_schedule_key(
     # 取得すると、後の時刻の行を再評価する余地がなくなるため）。
     latest = max(due_rules, key=lambda rule: rule.run_time or dt.time.min)
     return True, latest.schedule_key
+
+
+def _select_targets(
+    entries: dict[str, ReportEntry],
+    rules_by_report: dict[str, list[ScheduleRule]],
+    current: dt.datetime,
+    holidays: set[dt.date],
+) -> list[tuple[ReportEntry, str]]:
+    """定期取得の対象を「有効」かつ「取得すべき」かつ「当日未失敗」のレポートに絞る。
+
+    ``download_scheduled()`` から対象選定ロジックだけを抜き出したヘルパー。
+    関数本体が複雑にならないように分離している（``download_scheduled`` 自体は
+    既に10近くの分岐があり、複雑度の上限に近い）。
+
+    2000件超で失敗したレポートは、当日中の再実行では再取得しない。
+    ``is_due`` が True になったときだけ履歴を確認し、無駄な履歴読み込みを避ける。
+    翌日になれば履歴の日付フィルタが外れて再試行される（``truncated_today()`` 側の
+    責任）。
+    """
+    targets: list[tuple[ReportEntry, str]] = []
+    for entry in entries.values():
+        if not entry.enabled:
+            continue
+        is_due, schedule_key = _matched_schedule_key(entry, rules_by_report, current, holidays)
+        if not is_due:
+            continue
+        if history.truncated_today(HISTORY_PATH, entry.key, current.date()):
+            logger.info(
+                "本日は2000件超で失敗済みのため、この定期実行ではスキップします: %s",
+                entry.key,
+            )
+            continue
+        # ``schedule_key`` は取得後に履歴へ記録し、``schedule_succeeded_today()``
+        # が再判定に使う。スケジュール行が無いレポート（後方互換）は空文字
+        targets.append((entry, schedule_key))
+    return targets
 
 
 def _todays_holiday_set(current: dt.datetime) -> set[dt.date]:
