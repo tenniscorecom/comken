@@ -9,6 +9,7 @@
 # 定義中の RefreshTokenOAuth を戻り値の型注釈に使うため、注釈の評価を遅延する。
 from __future__ import annotations
 
+import logging
 import secrets
 import urllib.parse
 from collections.abc import Callable
@@ -18,6 +19,8 @@ import requests
 
 from comken.core.timer import measure
 from comken.exceptions import SalesforceAuthError, SalesforceConnectionError
+
+logger = logging.getLogger(__name__)
 
 AUTHORIZATION_PATH = "/services/oauth2/authorize"
 AUTHORIZATION_CODE_GRANT = "authorization_code"
@@ -37,7 +40,10 @@ def _default_on_refresh_token(prefix: str) -> Callable[[str], None]:
     def _save(refresh_token: str) -> None:
         from comken.toolbox.credentials import save_credential
 
-        save_credential(f"{prefix}_refresh_token", refresh_token)
+        name = f"{prefix}_refresh_token"
+        logger.debug("新しい refresh_token を DPAPI へ保存します: name=%s", name)
+        save_credential(name, refresh_token)
+        logger.debug("refresh_token を DPAPI へ保存しました: name=%s", name)
 
     return _save
 
@@ -65,7 +71,11 @@ class RefreshTokenOAuth:
         """DPAPIに保存したOAuth資格情報から認証を作る。"""
         from comken.toolbox.credentials import Credentials
 
+        logger.debug(
+            "DPAPI から OAuth 資格情報を読みます: prefix=%s domain_url=%s", prefix, domain_url
+        )
         credentials = Credentials(prefix)
+        # 値そのものはログに出さない（client_id / client_secret / refresh_token は秘密）
         return cls(
             credentials.client_id,
             credentials.refresh_token,
@@ -84,13 +94,21 @@ class RefreshTokenOAuth:
         }
         if self._client_secret is not None:
             data["client_secret"] = self._client_secret
+        logger.debug(
+            "refresh_token でアクセストークンを取得します: domain_url=%s client_secret=%s",
+            self._domain_url,
+            "あり" if self._client_secret else "なし",
+        )
         body = _post_token(self._domain_url, data, secrets_to_redact=tuple(data.values()))
         rotated_token = body.get("refresh_token")
         if isinstance(rotated_token, str) and rotated_token != self._refresh_token:
+            logger.debug("Salesforce 側で refresh_token がローテーションされたので差し替えます")
             if self._on_refresh_token is not None:
                 self._on_refresh_token(rotated_token)
             self._refresh_token = rotated_token
-        return _token_pair(body)
+        access_token, instance_url = _token_pair(body)
+        logger.debug("アクセストークンを取得しました: instance_url=%s", instance_url)
+        return access_token, instance_url
 
     @staticmethod
     def authorization_url(
@@ -103,6 +121,14 @@ class RefreshTokenOAuth:
     ) -> tuple[str, str]:
         """利用者がブラウザで開く認可 URL と CSRF 検証用 state を返す。"""
         actual_state = state or secrets.token_urlsafe(32)
+        # state は CSRF 検証用の使い捨て値だが、認可の秘密の一部なのでログには出さない
+        logger.debug(
+            "認可 URL を組み立てます: domain_url=%s redirect_uri=%s scope=%s state=%s",
+            domain_url,
+            redirect_uri,
+            scope,
+            "指定あり" if state else "自動生成",
+        )
         query = urllib.parse.urlencode(
             {
                 "response_type": RESPONSE_TYPE,
@@ -137,6 +163,13 @@ class RefreshTokenOAuth:
         resolved_callback = on_refresh_token or (
             _default_on_refresh_token(prefix) if prefix else None
         )
+        logger.debug(
+            "認可コードを交換します: domain_url=%s redirect_uri=%s prefix=%s 保存先=%s",
+            domain_url,
+            redirect_uri,
+            prefix or "（なし）",
+            "指定のコールバック" if on_refresh_token else ("DPAPI" if prefix else "保存しない"),
+        )
         token_request = {
             "grant_type": AUTHORIZATION_CODE_GRANT,
             "client_id": client_id,
@@ -152,6 +185,7 @@ class RefreshTokenOAuth:
         refresh_token = body.get("refresh_token")
         if not isinstance(refresh_token, str) or not refresh_token:
             raise SalesforceAuthError(200, "認証レスポンスに refresh_token がありません")
+        logger.debug("認可コードの交換に成功し refresh_token を受け取りました")
         if resolved_callback is not None:
             resolved_callback(refresh_token)
         return cls(
@@ -170,10 +204,17 @@ def _post_token(
     secrets_to_redact: tuple[str, ...],
 ) -> dict:
     url = f"{domain_url}{TOKEN_PATH}"
+    # リクエストの中身（client_secret・code・refresh_token）は秘密なので、
+    # ログに残すのは宛先 URL と grant_type、結果のステータスコードだけにする。
+    logger.debug(
+        "トークンエンドポイントへ POST します: url=%s grant_type=%s", url, data["grant_type"]
+    )
     try:
         response = requests.post(url, data=data, timeout=TIMEOUT_SECONDS)
     except requests.exceptions.RequestException as e:
+        logger.debug("トークンエンドポイントへ接続できませんでした: url=%s", url)
         raise SalesforceConnectionError(url, e) from e
+    logger.debug("トークンエンドポイントの応答: status=%d", response.status_code)
     if response.status_code >= 400:
         detail = response.text
         for secret in secrets_to_redact:

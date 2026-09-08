@@ -39,13 +39,22 @@ class ClientCredentialsOAuth:
         """DPAPIに保存したclient_idとclient_secretから認証を作る。"""
         from comken.toolbox.credentials import Credentials
 
+        logger.debug(
+            "DPAPI から client_id / client_secret を読みます: prefix=%s domain_url=%s",
+            prefix,
+            domain_url,
+        )
         credentials = Credentials(prefix)
+        # 値そのものはログに出さない（client_id / client_secret は秘密）
         return cls(credentials.client_id, credentials.client_secret, domain_url)
 
     @measure
     def request_token(self) -> tuple[str, str]:
         """アクセストークンと instance_url を取得する。"""
         url = f"{self._domain_url}{TOKEN_PATH}"
+        # リクエストの中身（client_secret）は秘密なので、ログに残すのは
+        # 宛先 URL と grant_type、結果のステータスコードだけにする。
+        logger.debug("トークンエンドポイントへ POST します: url=%s grant_type=%s", url, GRANT_TYPE)
         try:
             response = requests.post(
                 url,
@@ -57,7 +66,9 @@ class ClientCredentialsOAuth:
                 timeout=TIMEOUT_SECONDS,
             )
         except requests.exceptions.RequestException as e:
+            logger.debug("トークンエンドポイントへ接続できませんでした: url=%s", url)
             raise SalesforceConnectionError(url, e) from e
+        logger.debug("トークンエンドポイントの応答: status=%d", response.status_code)
         if response.status_code >= 400:
             detail = response.text
             if self._client_secret:
@@ -69,7 +80,7 @@ class ClientCredentialsOAuth:
             instance_url = body["instance_url"]
         except (ValueError, KeyError, TypeError) as e:
             raise SalesforceAuthError(response.status_code, "認証レスポンスの形式が不正です") from e
-        logger.debug("アクセストークンを取得しました: %s", instance_url)
+        logger.debug("アクセストークンを取得しました: instance_url=%s", instance_url)
         return access_token, instance_url
 
 

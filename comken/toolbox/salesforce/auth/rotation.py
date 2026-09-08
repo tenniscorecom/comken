@@ -10,6 +10,7 @@ REST レスポンスの正確なスキーマは公式リファレンスで確認
 """
 
 import datetime
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,6 +22,8 @@ from comken.exceptions import (
 )
 from comken.toolbox.credentials import load_credential, save_credentials
 from comken.toolbox.salesforce.client import SalesforceBase
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_ROTATION_INTERVAL_DAYS = 60
 ROTATION_COMPONENT = "credential_rotation"
@@ -53,19 +56,46 @@ class SalesforceCredentialRotator:
     def rotate_if_due(self, today: datetime.date | None = None) -> bool:
         """有効かつ指定日数を過ぎていれば実行し、実行したかを返す。"""
         if not self._is_enabled:
+            logger.debug(
+                "ローテーションは無効なのでスキップします: prefix=%s", self._credential_prefix
+            )
             return False
         rotation_date = today or local_today()
         if not self._is_due(rotation_date):
+            logger.debug(
+                "ローテーション期限内なのでスキップします: prefix=%s 判定日=%s 間隔=%d日",
+                self._credential_prefix,
+                rotation_date,
+                self._interval_days,
+            )
             return False
+        logger.debug(
+            "ローテーション期限切れなので実行します: prefix=%s app_id=%s 判定日=%s",
+            self._credential_prefix,
+            self._app_id,
+            rotation_date,
+        )
         self._rotate(rotation_date)
+        logger.info(
+            "Salesforce の資格情報をローテーションしました: prefix=%s 実行日=%s",
+            self._credential_prefix,
+            rotation_date,
+        )
         return True
 
     def _is_due(self, today: datetime.date) -> bool:
+        name = self._credential_name("last_rotation_date")
+        logger.debug(
+            "最終ローテーション日を DPAPI から読みます: name=%s path=%s",
+            name,
+            self._credential_path,
+        )
         try:
-            raw_date = load_credential(
-                self._credential_name("last_rotation_date"), self._credential_path
-            )
+            raw_date = load_credential(name, self._credential_path)
         except CredentialNotFoundError:
+            logger.debug(
+                "最終ローテーション日が未保存なので初回として実行対象にします: name=%s", name
+            )
             return True
         try:
             last_rotation_date = datetime.date.fromisoformat(raw_date)
@@ -73,9 +103,17 @@ class SalesforceCredentialRotator:
             raise SalesforceCredentialRotationError(
                 f"最終ローテーション日が YYYY-MM-DD 形式ではありません: {raw_date}"
             ) from error
-        return (today - last_rotation_date).days >= self._interval_days
+        elapsed_days = (today - last_rotation_date).days
+        logger.debug(
+            "最終ローテーションからの経過日数: %d日（間隔=%d日 最終=%s）",
+            elapsed_days,
+            self._interval_days,
+            last_rotation_date,
+        )
+        return elapsed_days >= self._interval_days
 
     def _rotate(self, rotation_date: datetime.date) -> None:
+        logger.debug("既存の資格情報を取得します: app_id=%s", self._app_id)
         credentials_response, _ = self._client.request(
             "GET",
             self._client.data_path(f"/apps/oauth/credentials/{self._app_id}"),
@@ -83,13 +121,21 @@ class SalesforceCredentialRotator:
         )
         consumer_id = _consumer_id_of(credentials_response)
         base_path = self._client.data_path(f"/apps/oauth/credentials/{self._app_id}/{consumer_id}")
+        logger.debug("staged な新資格情報を作成します: consumer_id=%s", consumer_id)
         response, _ = self._client.request(
             "POST", f"{base_path}/staged", component=ROTATION_COMPONENT
         )
         staged = _staged_credentials_of(response)
+        logger.debug("staged な新資格情報を受け取りました: staged_id=%s", staged.staged_id)
 
         # 保存前に rotate すると、新 secret を失ったまま旧 secret の猶予だけが進む。
         # 3値を一括保存できた場合に限って Salesforce 側を切り替える。
+        logger.debug(
+            "新しい資格情報3件（client_id / client_secret / last_rotation_date）を"
+            "DPAPI へ保存します: prefix=%s path=%s",
+            self._credential_prefix,
+            self._credential_path,
+        )
         try:
             save_credentials(
                 {
@@ -104,12 +150,17 @@ class SalesforceCredentialRotator:
                 f"新しい認証情報を DPAPI へ保存できませんでした: {error}"
             ) from error
 
+        logger.debug(
+            "DPAPI への保存が完了したので Salesforce 側を切り替えます: staged_id=%s",
+            staged.staged_id,
+        )
         self._client.request(
             "PATCH",
             f"{base_path}/staged/{staged.staged_id}",
             body={"command": "rotate"},
             component=ROTATION_COMPONENT,
         )
+        logger.debug("Salesforce 側の切り替えが完了しました: staged_id=%s", staged.staged_id)
 
     def _credential_name(self, suffix: str) -> str:
         return f"{self._credential_prefix}_{suffix}"
