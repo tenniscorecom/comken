@@ -8,6 +8,7 @@ import pytest
 import requests
 
 from comken import dry_run
+from comken.core.table import Table
 from comken.exceptions import (
     ComkenError,
     CredentialNotFoundError,
@@ -36,6 +37,7 @@ from comken.toolbox.salesforce import (
     ClientCredentialsOAuth,
     SalesforceBase,
 )
+from comken.toolbox.salesforce.bulk_ingest import BulkIngestAPI
 from comken.toolbox.salesforce.report import report_id_from_url
 from comken.toolbox.salesforce.sites import SITES, Solution, SolutionSandbox, site_for
 
@@ -1590,3 +1592,56 @@ class TestBulkIngest:
         assert last_call[1]["json"] is None
         # 既存の query() 経路は data を渡していないので影響しない（テスト冒頭の
         # query() 呼び出しは data=None のまま動いている）
+
+    def test_table_to_csv_text_round_trips_without_bom(self):
+        """``_table_to_csv_text()`` は BOM を含まない素の CSV テキストを返し、
+        日本語・カンマ・改行を含む値も CSV のクォート規則で往復できる。
+
+        一時ファイル往復をやめて ``io.StringIO`` + ``csv.DictWriter`` で
+        メモリ上に組み立てる実装に直したため、UTF-8 の BOM が先頭に混入
+        しないことが要点。
+        """
+        table = Table(
+            ["Name", "Note"],
+            [
+                {"Name": "テスト株式会社", "Note": "カンマ, と\n改行を含む"},
+                {"Name": 'A"B', "Note": ""},
+            ],
+        )
+
+        text = BulkIngestAPI._table_to_csv_text(table)
+
+        # BOM が混入していないこと
+        bom = chr(0xFEFF)
+        assert not text.startswith(bom)
+        assert bom not in text
+        # ヘッダー行はそのまま出力される（先頭はカラム名そのもの）
+        first_line = text.splitlines()[0]
+        assert first_line.startswith("Name")
+        # csv.DictReader で読み戻すと元の Table と一致する
+        import csv as _csv
+        import io as _io
+
+        reader = _csv.DictReader(_io.StringIO(text))
+        assert reader.fieldnames == ["Name", "Note"]
+        assert list(reader) == table.to_rows()
+
+    def test_table_to_csv_text_returns_empty_for_empty_columns(self):
+        """列が無い Table は空文字列を返す（``.replace(table)`` が空でも例外にしない）。"""
+        text = BulkIngestAPI._table_to_csv_text(Table([], []))
+        assert text == ""
+
+    def test_table_to_csv_text_uses_lf_only(self):
+        """``_table_to_csv_text()`` の改行は ``\\n`` のみ（``\\r\\n`` を含まない）。
+
+        ``_create_job()`` は Salesforce へ ``lineEnding: "LF"`` と申告している
+        （bulk_ingest.py の ``_create_job()`` 参照）。``csv`` モジュールの既定の
+        改行（``\\r\\n``）のままアップロードすると、申告した改行規則と実データが
+        食い違う。
+        """
+        table = Table(["Name"], [{"Name": "A"}, {"Name": "B"}])
+
+        text = BulkIngestAPI._table_to_csv_text(table)
+
+        assert "\r" not in text
+        assert text == "Name\nA\nB\n"

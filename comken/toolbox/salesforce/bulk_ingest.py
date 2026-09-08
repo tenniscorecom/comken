@@ -12,12 +12,11 @@ Salesforce の公式リファレンスに基づいて実装しているが、実
 
 from __future__ import annotations
 
+import csv
+import io
 import logging
-import tempfile
 import time
-import urllib.parse
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from comken.core.table import Table
@@ -27,7 +26,7 @@ from comken.exceptions import (
     SalesforceBulkIngestTimeoutError,
 )
 from comken.runtime import dry_run_log, is_dry_run
-from comken.toolbox.csv import CSV
+from comken.toolbox.salesforce._bulk_paging import fetch_paged_csv_as_table
 
 if TYPE_CHECKING:  # 実行時は import しない（client と相互参照になるため）
     from comken.toolbox.salesforce.client import SalesforceBase
@@ -44,10 +43,6 @@ DEFAULT_TIMEOUT_SECONDS = 600
 JOB_COMPLETE_STATE = "JobComplete"
 # 本物の組織で未検証の前提: 失敗時にありえる state を列挙しておく
 JOB_FAILED_STATES = ("Failed", "Aborted")
-# 結果取得の ``Sforce-Locator`` ヘッダーが無い・次ページ無しのマーカー。
-# 公式リファレンスでは「次ページが無いときは null 文字列」と書かれており、
-# 実際の振る舞いは本物の組織で未検証。
-NO_MORE_PAGES_LOCATOR = "null"
 
 
 @dataclass(frozen=True)
@@ -331,54 +326,37 @@ class BulkIngestAPI:
         """成功/失敗の結果 CSV を（ページングがあれば全ページ）取得して ``Table`` にする。
 
         ``result_kind`` は ``"successfulResults"`` または ``"failedResults"``。
-        大量データを想定した Bulk API で、全ページ分のテキストを 1 つの
-        巨大な文字列として連結してからファイルに書くと、その連結文字列自体が
-        メモリを圧迫する。代わりに、ページを受信するたびに一時ファイルへ
-        追記する形にすることで、メモリに保持するのは常に 1 ページ分の
-        テキストだけにする。
-
-        1 ページ目は ``Sforce-Locator`` ヘッダーが ``"null"`` か空なら
-        最終ページ。値があれば ``?locator=<値>`` を付けて同じ結果取得 URL を
-        呼ぶ。2 ページ目以降にも**ヘッダー行が含まれる**前提で、1 行目を
-        捨てて連結する（本物の組織で未検証の前提）。
+        ページング・一時ファイルへの逐次書き込み・``Table`` への変換の
+        共通処理は ``_bulk_paging.fetch_paged_csv_as_table()`` に集約した。
         """
         path = self._client.data_path(f"{JOBS_PATH}/{job_id}/{result_kind}")
-        text, headers = self._client.request_csv("GET", path, component=COMPONENT)
-        lines = text.splitlines()
-        locator = headers.get("Sforce-Locator", "")
-        if not lines and (not locator or locator == NO_MORE_PAGES_LOCATOR):
-            # 1 ページ目が完全に空で、次ページも無い → 真の 0 件
-            return Table([], [])
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp_path = Path(tmp_dir) / "bulk_ingest_result.csv"
-            # 1 ページ目（ヘッダー込み）を書き出す。``splitlines`` で末尾改行を
-            # 落としているので、追記時に ``\n`` を足してもページ間に空行が
-            # 挟まらない（``csv.DictReader`` の行解釈がずれないように）。
-            tmp_path.write_text("\n".join(lines), encoding="utf-8")
-            while locator and locator != NO_MORE_PAGES_LOCATOR:
-                next_path = f"{path}?locator={urllib.parse.quote(locator, safe='')}"
-                next_text, next_headers = self._client.request_csv(
-                    "GET", next_path, component=COMPONENT
-                )
-                next_lines = next_text.splitlines()
-                # 2 ページ目以降のヘッダー行を除いて追記（未検証の前提）
-                with tmp_path.open("a", encoding="utf-8", newline="") as f:
-                    if next_lines[1:]:
-                        f.write("\n")
-                        f.write("\n".join(next_lines[1:]))
-                locator = next_headers.get("Sforce-Locator", "")
-            with CSV(tmp_path, read_only=True) as csv_file:
-                return csv_file.read()
+        return fetch_paged_csv_as_table(self._client, path, COMPONENT, "bulk_ingest_result.csv")
 
     @staticmethod
     def _table_to_csv_text(table: Table) -> str:
         """``Table`` を CSV テキスト（文字列）に変換する。
 
-        ``CSV`` クラスはファイル書き込みしかしないため、いったん一時ファイル
-        に書き出してから読み戻して文字列にする（``_fetch_result()`` と対称）。
+        BOM 無しの素の CSV テキストを ``io.StringIO`` + ``csv.DictWriter``
+        でメモリ上に直接組み立てる（一時ファイルへの往復はしない）。
+        組み立て方は ``comken.toolbox.csv.CSV._write()`` と同じ
+        （``csv.DictWriter(..., extrasaction="raise")`` → ``writeheader()``
+        → ``writerows(table.to_rows())``）。アップロード時は別途エンコード
+        されるため、ここでは Python の ``str`` を返せばよい。
+
+        ``lineterminator="\\n"`` を明示する。``csv`` モジュールの既定は
+        ``\\r\\n`` だが、``_create_job()`` は Salesforce へ
+        ``lineEnding: "LF"`` と申告している。ここで ``\\r\\n`` を送ると
+        申告と実データが食い違い、Salesforce 側の行末解釈がずれる恐れがある
+        （旧実装は一時ファイル経由で ``Path.read_text()`` の改行正規化に
+        より結果的に ``\\n`` になっていた。ここで明示することで、
+        一時ファイルを介さなくても同じ ``\\n`` を保証する）。
         """
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp_path = Path(tmp_dir) / "bulk_ingest_input.csv"
-            with CSV(tmp_path) as csv_file:
-                csv_file.replace(table)
-            return tmp_path.read_text(encoding="utf-8")
+        buffer = io.StringIO(newline="")
+        if not table.columns:
+            return ""
+        writer = csv.DictWriter(
+            buffer, fieldnames=table.columns, extrasaction="raise", lineterminator="\n"
+        )
+        writer.writeheader()
+        writer.writerows(table.to_rows())
+        return buffer.getvalue()

@@ -20,9 +20,7 @@ Bulk API はジョブを作って完了を待つ非同期方式のため、重�
 from __future__ import annotations
 
 import logging
-import tempfile
 import time
-import urllib.parse
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -33,6 +31,7 @@ from comken.exceptions import (
     SalesforceBulkQueryTimeoutError,
 )
 from comken.toolbox.csv import CSV
+from comken.toolbox.salesforce._bulk_paging import fetch_paged_csv_as_table
 
 if TYPE_CHECKING:  # 実行時は import しない（client と相互参照になるため）
     from comken.toolbox.salesforce.client import SalesforceBase
@@ -49,10 +48,6 @@ DEFAULT_TIMEOUT_SECONDS = 600
 JOB_COMPLETE_STATE = "JobComplete"
 # 本物の組織で未検証の前提: 失敗時にありえる state を列挙しておく
 JOB_FAILED_STATES = ("Failed", "Aborted")
-# 結果取得の ``Sforce-Locator`` ヘッダーが無い・次ページ無しのマーカー。
-# 公式リファレンスでは「次ページが無いときは null 文字列」と書かれており、
-# 実際の振る舞いは本物の組織で未検証。
-NO_MORE_PAGES_LOCATOR = "null"
 
 
 class BulkQueryAPI:
@@ -173,41 +168,8 @@ class BulkQueryAPI:
     def _fetch_all_results(self, job_id: str) -> Table:
         """結果 CSV を（ページングがあれば全ページ）取得し、``Table`` に変換する。
 
-        大量データを想定した Bulk API で、全ページ分のテキストを1つの
-        巨大な文字列として連結してからファイルに書くと、その連結文字列自体が
-        メモリを圧迫する。代わりに、ページを受信するたびに一時ファイルへ
-        追記する形にすることで、メモリに保持するのは常に1ページ分の
-        テキストだけにする。
-
-        1ページ目は ``Sforce-Locator`` ヘッダーが ``"null"`` か空なら
-        最終ページ。値があれば ``?locator=<値>`` を付けて同じ結果取得 URL を
-        呼ぶ。2ページ目以降にも**ヘッダー行が含まれる**前提で、1行目を捨てて
-        連結する（本物の組織で未検証の前提）。
+        ページング・一時ファイルへの逐次書き込み・``Table`` への変換の
+        共通処理は ``_bulk_paging.fetch_paged_csv_as_table()`` に集約した。
         """
         path = self._client.data_path(f"{JOBS_PATH}/{job_id}/results")
-        text, headers = self._client.request_csv("GET", path, component=COMPONENT)
-        lines = text.splitlines()
-        locator = headers.get("Sforce-Locator", "")
-        if not lines and (not locator or locator == NO_MORE_PAGES_LOCATOR):
-            # 1ページ目が完全に空で、次ページも無い → 真の0件
-            return Table([], [])
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp_path = Path(tmp_dir) / "bulk_query_result.csv"
-            # 1ページ目（ヘッダー込み）を書き出す。``splitlines`` で末尾改行を
-            # 落としているので、追記時に ``\n`` を足してもページ間に空行が
-            # 挟まらない（``csv.DictReader`` の行解釈がずれないように）。
-            tmp_path.write_text("\n".join(lines), encoding="utf-8")
-            while locator and locator != NO_MORE_PAGES_LOCATOR:
-                next_path = f"{path}?locator={urllib.parse.quote(locator, safe='')}"
-                next_text, next_headers = self._client.request_csv(
-                    "GET", next_path, component=COMPONENT
-                )
-                next_lines = next_text.splitlines()
-                # 2ページ目以降のヘッダー行を除いて追記（未検証の前提）
-                with tmp_path.open("a", encoding="utf-8", newline="") as f:
-                    if next_lines[1:]:
-                        f.write("\n")
-                        f.write("\n".join(next_lines[1:]))
-                locator = next_headers.get("Sforce-Locator", "")
-            with CSV(tmp_path, read_only=True) as csv_file:
-                return csv_file.read()
+        return fetch_paged_csv_as_table(self._client, path, COMPONENT, "bulk_query_result.csv")
