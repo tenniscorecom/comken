@@ -6557,6 +6557,10 @@ Returns:
 
 定義を解決できませんでした。
 
+### `downloaded_today`
+
+定義を解決できませんでした。
+
 ### `ReportEntry`
 
 ```text

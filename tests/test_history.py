@@ -118,7 +118,7 @@ def test_read_history_returns_every_row_in_order(tmp_path) -> None:
         row=HistoryRow(True, True, True, file_name="b.csv"),
     )
 
-    rows = read_history(history_path)
+    rows = read_history(history_path).to_rows()
     assert [row["プロジェクト"] for row in rows] == ["P1", "P2"]
     assert rows[0]["ファイル名"] == "a.csv"
     assert rows[1]["ファイル名"] == "b.csv"
