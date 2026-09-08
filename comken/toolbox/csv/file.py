@@ -166,17 +166,32 @@ class CSV:
             if self._columns is None:
                 raise CSVHeaderMissingError(self.path)
             return
-        text = self._read_text()
-        if self._columns is None:
-            reader = csv.DictReader(io.StringIO(text))
-            for row in reader:
-                # DictReader は None を含むキー/値を返さないので ``dict(row)`` で十分
-                yield dict(row)
+        if self._encoding == Encoding.AUTO:
+            # 自動判定はファイル全体を読んでから順に文字コードを試す必要があるため、
+            # 従来どおり全文字列を読み ``io.StringIO`` に乗せて ``DictReader`` に渡す。
+            yield from self._iter_rows_from_source(io.StringIO(self._read_text()))
             return
-        # 列名があらかじめ決まっているときは DictReader の headers を上書きして
-        # ``csv.DictReader`` にヘッダー行を読ませない。残るのはデータ行のみ。
-        reader = csv.DictReader(io.StringIO(text), fieldnames=self._columns)
+        # encoding が明示されているときはファイルをストリームとして開き、
+        # 全体を読み込まずに 1 行ずつ ``DictReader`` に流す。``yield`` を含む
+        # 関数内の ``with`` は、ジェネレータの ``close()``/GC 時に自動で閉じる。
+        with self.path.open("r", encoding=self._encoding, newline="") as stream:
+            yield from self._iter_rows_from_source(stream)
+
+    def _iter_rows_from_source(self, source: io.TextIOBase) -> Iterator[dict[str, str]]:
+        """``DictReader`` の ``source`` を受けて、見出し列の扱いだけを共通化する内部ヘルパー。
+
+        ``source`` は ``io.StringIO`` でも ``Path.open()`` したファイルでも
+        ``DictReader`` にとっては同じ iterable なので、AUTO 経路と明示 encoding 経路の
+        両方でこのヘルパーを共有する。
+        """
+        if self._columns is None:
+            reader = csv.DictReader(source)
+        else:
+            # 列名があらかじめ決まっているときは DictReader の headers を上書きして
+            # ``csv.DictReader`` にヘッダー行を読ませない。残るのはデータ行のみ。
+            reader = csv.DictReader(source, fieldnames=self._columns)
         for row in reader:
+            # DictReader は None を含むキー/値を返さないので ``dict(row)`` で十分
             yield dict(row)
 
     def _validate_columns(self, columns: list[str]) -> None:

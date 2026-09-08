@@ -59,6 +59,43 @@ class TestCSV:
                 {"id": "A002", "amount": "2000"},
             ]
 
+    def test_iter_rows_with_explicit_encoding_streams_file_directly(self, tmp_path) -> None:
+        """明示 encoding 指定時は ``_read_text`` を経由せずファイルから直接ストリーミングする。"""
+        path = tmp_path / "data.csv"
+        path.write_text("id,name\n1,山田\n2,鈴木\n", encoding="utf-8")
+        with (
+            CSV(path, encoding="utf-8") as csv_file,
+            patch.object(
+                CSV,
+                "_read_text",
+                side_effect=AssertionError("明示 encoding 指定時は _read_text を呼ばないはず"),
+            ),
+        ):
+            # 明示 encoding のときは文字コード判定のためにファイル全体を読む必要がないため、
+            # ``_read_text`` を呼ばずに ``Path.open`` から直接 ``DictReader`` に流す。
+            # 呼ばれたら失敗する ``AssertionError`` で検証する。
+            assert list(csv_file.iter_rows()) == [
+                {"id": "1", "name": "山田"},
+                {"id": "2", "name": "鈴木"},
+            ]
+
+    def test_iter_rows_with_explicit_encoding_uses_columns(self, tmp_path) -> None:
+        """明示 encoding 指定でも ``columns`` 指定はストリーミング経路で動く。"""
+        path = tmp_path / "no-header.csv"
+        path.write_text("A001,1000\nA002,2000\n", encoding="cp932")
+        with (
+            CSV(path, encoding="cp932", columns=["id", "amount"]) as csv_file,
+            patch.object(
+                CSV,
+                "_read_text",
+                side_effect=AssertionError("明示 encoding 指定時は _read_text を呼ばないはず"),
+            ),
+        ):
+            assert list(csv_file.iter_rows()) == [
+                {"id": "A001", "amount": "1000"},
+                {"id": "A002", "amount": "2000"},
+            ]
+
     def test_auto_reads_cp932(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
         path.write_text("名前\n山田\n", encoding="cp932")
