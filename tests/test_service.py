@@ -1893,21 +1893,26 @@ class TestTruncatedSkip:
             error_code="SalesforceReportTruncatedError",
         )
 
-    def test_today_truncated_skips_salesforce_call(self, paths, monkeypatch):
+    def test_today_truncated_skips_salesforce_call_but_still_reports_failure(
+        self, paths, monkeypatch
+    ):
         """今日すでに ``SalesforceReportTruncatedError`` で失敗したレポートは、
-        同じ日の ``download_scheduled()`` の対象から外れる。"""
+        同じ日の ``download_scheduled()`` で Salesforce へは問い合わせないが、
+        **「今回も未取得だった」という事実は失敗として報告する**
+        （終了コード0の見かけ上の成功にはしない）。"""
         now = dt.datetime(2026, 1, 7, 12, 0)  # noqa: DTZ001 — テスト用に意図的に固定した tz-naive な datetime
         monkeypatch.setattr(service_module, "clock_now", lambda: now)
         # 同じ「今日」の失敗履歴を直接書く
         self._seed_truncated_failure(paths["history_path"], when=now)
 
         site = fake_salesforce()
-        with patch("comken.services.salesforce_downloader.service.site_for", return_value=site):
-            saved = download_scheduled()
+        with (
+            patch("comken.services.salesforce_downloader.service.site_for", return_value=site),
+            pytest.raises(ScheduledDownloadFailedError, match="1001"),
+        ):
+            download_scheduled()
         # Salesforce へ問い合わせない（=2回目以降の定期実行で同じ失敗を繰り返さない）
         assert site.return_value.__enter__.return_value.report.get.call_count == 0
-        # 保存ファイルも増えない
-        assert saved == []
 
     def test_yesterday_truncated_does_not_skip_today(self, paths, monkeypatch):
         """昨日 ``SalesforceReportTruncatedError`` で失敗した記録があっても、
@@ -1983,7 +1988,11 @@ class TestTruncatedSkip:
         self._seed_truncated_failure(history_path, when=fixed_now)
 
         site = fake_salesforce()
-        with patch("comken.services.salesforce_downloader.service.site_for", return_value=site):
+        # スキップしても「今回も未取得だった」ことは失敗として報告される
+        with (
+            patch("comken.services.salesforce_downloader.service.site_for", return_value=site),
+            pytest.raises(ScheduledDownloadFailedError),
+        ):
             download_scheduled()
         # 当日 truncated 済みなのですでにスキップされ、Salesforce へ問い合わせない
         assert site.return_value.__enter__.return_value.report.get.call_count == 0

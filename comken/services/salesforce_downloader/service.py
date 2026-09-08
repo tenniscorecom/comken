@@ -131,11 +131,15 @@ def download_scheduled(project: str = "定期実行") -> list[Path]:
     # 祝日は「今日が祝日か」だけ分かればよいので、1日分の set を作る
     holidays = _todays_holiday_set(current)
 
-    targets = _select_targets(entries, rules_by_report, current, holidays)
+    targets, already_failed = _select_targets(entries, rules_by_report, current, holidays)
     logger.info("定期取得の対象: %d 件", len(targets))
 
     saved: list[Path] = []
-    failed: list[str] = []
+    # 本日すでに2000件超で失敗済みのレポートは Salesforce へ再問い合わせしないが、
+    # 「今回も未取得だった」という事実は失敗として残す。ここで空のまま黙って
+    # 進むと、2回目以降の定期実行が常に成功扱い（終了コード0）になり、
+    # 「失敗をRPA基盤が終了コードで判断できるようにする」という契約に反する。
+    failed: list[str] = list(already_failed)
     # 失敗時に ``ScheduledDownloadFailedError`` から ``__cause__`` で辿れるよう、
     # 直近の捕捉した例外を覚えておく（同じ失敗が複数件あっても、最後の1件だけを
     # 連鎖させる）。``None`` のままだと「原因例外が無い」ことを示す
@@ -425,19 +429,31 @@ def _select_targets(
     rules_by_report: dict[str, list[ScheduleRule]],
     current: dt.datetime,
     holidays: set[dt.date],
-) -> list[tuple[ReportEntry, str]]:
+) -> tuple[list[tuple[ReportEntry, str]], list[str]]:
     """定期取得の対象を「有効」かつ「取得すべき」かつ「当日未失敗」のレポートに絞る。
 
     ``download_scheduled()`` から対象選定ロジックだけを抜き出したヘルパー。
     関数本体が複雑にならないように分離している（``download_scheduled`` 自体は
     既に10近くの分岐があり、複雑度の上限に近い）。
 
-    2000件超で失敗したレポートは、当日中の再実行では再取得しない。
-    ``is_due`` が True になったときだけ履歴を確認し、無駄な履歴読み込みを避ける。
-    翌日になれば履歴の日付フィルタが外れて再試行される（``truncated_today()`` 側の
-    責任）。
+    2000件超で失敗したレポートは、当日中の再実行では Salesforce へ再問い合わせ
+    しない。``is_due`` が True になったときだけ履歴を確認し、無駄な履歴読み込みを
+    避ける。翌日になれば履歴の日付フィルタが外れて再試行される
+    （``truncated_today()`` 側の責任）。
+
+    **ただし、再問い合わせしないことと「成功扱いにする」ことは別。** 戻り値の
+    2つ目（``already_failed``）に、この定期実行でスキップした管理番号を積んで
+    返す。``download_scheduled()`` はこれを ``failed`` の初期値に使い、
+    「今回も未取得だった」という事実を終了コードへ反映させる（そうしないと
+    2回目以降の定期実行が常に成功扱いになり、RPA基盤が失敗に気づけない）。
+
+    Returns:
+        ``(targets, already_failed)``。``targets`` は実際に取得を試みる
+        ``(ReportEntry, schedule_key)`` のリスト。``already_failed`` は
+        本日すでに2000件超で失敗済みのためスキップした管理番号のリスト。
     """
     targets: list[tuple[ReportEntry, str]] = []
+    already_failed: list[str] = []
     for entry in entries.values():
         if not entry.enabled:
             continue
@@ -446,14 +462,16 @@ def _select_targets(
             continue
         if history.truncated_today(HISTORY_PATH, entry.key, current.date()):
             logger.info(
-                "本日は2000件超で失敗済みのため、この定期実行ではスキップします: %s",
+                "本日は2000件超で失敗済みのため、この定期実行ではスキップします"
+                "（失敗としては記録します）: %s",
                 entry.key,
             )
+            already_failed.append(entry.key)
             continue
         # ``schedule_key`` は取得後に履歴へ記録し、``schedule_succeeded_today()``
         # が再判定に使う。スケジュール行が無いレポート（後方互換）は空文字
         targets.append((entry, schedule_key))
-    return targets
+    return targets, already_failed
 
 
 def _todays_holiday_set(current: dt.datetime) -> set[dt.date]:
