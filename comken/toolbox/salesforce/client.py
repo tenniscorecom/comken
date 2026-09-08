@@ -441,6 +441,9 @@ class SalesforceBase:
         通常は query() / get() 等を使い、このメソッドは
         ライブラリに無い API を叩くときだけ使う。
 
+        中身は薄い調整役で、実処理は ``_send_with_backoff``（5xx/429 リトライ）と
+        ``_reauthenticate_if_unauthorized``（401 再認証）に任せている。
+
         Args:
             method: HTTP メソッド（GET / POST / PATCH / DELETE）。
             path: "/services/data/..." から始まるパス。
@@ -457,41 +460,16 @@ class SalesforceBase:
             SalesforceConnectionError: ネットワークの問題で接続できない場合。
         """
         start = time.perf_counter()
-        # 初回送信をループの前で行い、response を必ず束縛する。
-        # その下のループは 5xx/429 の一時障害だけを拾うので、初回送信と
-        # 合計で最大 MAX_ATTEMPTS 回になる（試行 1..MAX_ATTEMPTS-1 = 2 回まで再試行）。
-        # pyright から見ても response は Optional にならない
+        # 初回送信をバックオフの外で行い、response を必ず束縛する。下のループは
+        # 5xx/429 の一時障害だけを拾うので、初回送信と合計で最大 MAX_ATTEMPTS 回
+        # になる（試行 1..MAX_ATTEMPTS-1 = 2 回まで再試行）。pyright から見ても
+        # response は Optional にならない
         response = self._send(method, self._request_url(path), body, headers, data)
+        response = self._send_with_backoff(method, path, body, headers, data, component, response)
+        response = self._reauthenticate_if_unauthorized(
+            response, method, path, body, headers, data, component
+        )
 
-        for attempt in range(1, MAX_ATTEMPTS):
-            reason = _retry_reason(response.status_code)
-            if not reason:
-                # 成功、または 4xx のようにリトライしても直らない永続的な失敗
-                break
-            # 5xx と 429 は Salesforce 側の一時的な事情なので、待って試し直す
-            logger.debug(
-                "%s のため %d 秒待って再試行します（%d/%d）: %s",
-                reason,
-                RETRY_WAIT_SECONDS * attempt,
-                attempt,
-                MAX_ATTEMPTS,
-                path,
-            )
-            self.metrics.record_retry(component, reason)
-            time.sleep(RETRY_WAIT_SECONDS * attempt)
-            # instance_url は再認証で変わりうるので、毎回組み立て直す
-            response = self._send(method, self._request_url(path), body, headers, data)
-
-        # 401 の再認証は試行回数を消費しない別ルート。一時障害のリトライ中に
-        # 出ても、ループの外で1回だけ拾う（2回続けて 401 になるのは設定の問題
-        # なので、リトライで隠さず下の SalesforceRequestError に落とす）
-        if response.status_code == HTTP_UNAUTHORIZED:
-            logger.debug("401 を受け取ったのでトークンを取り直します: %s", path)
-            self.metrics.record_retry(component, RetryReason.REAUTH)
-            self._authenticate()
-            response = self._send(method, self._request_url(path), body, headers, data)
-
-        # response は初回送信で必ず束縛済み
         is_error = response.status_code >= HTTP_BAD_REQUEST
         self.metrics.record_call(component, time.perf_counter() - start, is_error=is_error)
 
@@ -503,6 +481,67 @@ class SalesforceBase:
             raise SalesforceRequestError(method, path, response.status_code, response.text)
 
         return self._body_of(response), dict(response.headers)
+
+    def _send_with_backoff(
+        self,
+        method: str,
+        path: str,
+        body: dict | None,
+        headers: dict[str, str] | None,
+        data: str | None,
+        component: str,
+        response: requests.Response,
+    ) -> requests.Response:
+        """5xx / 429 だけを拾って待ち時間付きで再送信し、最終レスポンスを返す。
+
+        呼び出し側で初回送信を行い、その ``response`` を渡すとリトライ判定から
+        続ける。リトライ対象外のステータスならそのまま返す。5xx と 429 は
+        Salesforce 側の一時的な事情なので、待って試し直す。
+
+        ``path`` は再認証で ``instance_url`` が変わる可能性があるため、デバッグ
+        ログ用に渡し、URL が必要になるたびに ``_request_url(path)`` で組み立て直す。
+        """
+        for attempt in range(1, MAX_ATTEMPTS):
+            reason = _retry_reason(response.status_code)
+            if not reason:
+                # 成功、または 4xx のようにリトライしても直らない永続的な失敗
+                return response
+            logger.debug(
+                "%s のため %d 秒待って再試行します（%d/%d）: %s",
+                reason,
+                RETRY_WAIT_SECONDS * attempt,
+                attempt,
+                MAX_ATTEMPTS,
+                path,
+            )
+            self.metrics.record_retry(component, reason)
+            time.sleep(RETRY_WAIT_SECONDS * attempt)
+            response = self._send(method, self._request_url(path), body, headers, data)
+        return response
+
+    def _reauthenticate_if_unauthorized(
+        self,
+        response: requests.Response,
+        method: str,
+        path: str,
+        body: dict | None,
+        headers: dict[str, str] | None,
+        data: str | None,
+        component: str,
+    ) -> requests.Response:
+        """401 ならトークンを取り直して 1 回だけ再送信し、最終レスポンスを返す。
+
+        401 の再認証はバックオフのリトライ回数を消費しない別ルート。一時障害の
+        リトライ中に 401 が出ても、ここはループの外で 1 回だけ拾う。2 回続けて
+        401 になるのは設定の問題なので、再認証後も 401 のままなら次の
+        ``SalesforceRequestError`` にそのまま落とす。
+        """
+        if response.status_code == HTTP_UNAUTHORIZED:
+            logger.debug("401 を受け取ったのでトークンを取り直します: %s", path)
+            self.metrics.record_retry(component, RetryReason.REAUTH)
+            self._authenticate()
+            response = self._send(method, self._request_url(path), body, headers, data)
+        return response
 
     def request_csv(self, method: str, path: str, component: str = "other") -> tuple[str, dict]:
         """CSV 形式のレスポンスを返す API を呼ぶ（Bulk API 2.0 の結果取得専用）。
