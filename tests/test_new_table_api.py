@@ -44,6 +44,21 @@ def test_table_concat_and_group_by() -> None:
     assert len(left.group_by("id")[1]) == 1
 
 
+def test_table_concat_applies_self_types_to_other_rows_too() -> None:
+    """concat() は self.types を結果の全行（other 側も含む）へ揃えて適用する。
+
+    other が自分と別の types（または types なし）で作られていても、
+    concat した結果の同じ列に変換済みの値と未変換の値が混在してはいけない。
+    """
+    left = Table(["x"], [{"x": "5"}], types={"x": int})
+    right = Table(["x"], [{"x": "7"}], types={"x": str})
+
+    result = left.concat(right)
+
+    assert result.to_rows() == [{"x": 5}, {"x": 7}]
+    assert all(isinstance(row["x"], int) for row in result.to_rows())
+
+
 def test_csv_is_string_by_default_and_types_are_explicit(tmp_path) -> None:
     path = tmp_path / "data.csv"
     path.write_text("id,name\n1,山田\n", encoding="utf-8-sig")

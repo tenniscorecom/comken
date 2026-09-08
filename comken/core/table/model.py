@@ -205,7 +205,13 @@ class Table:
         if set(self.columns) != set(other.columns):
             raise TableError("concatする表の列名が一致しません。")
         columns = self.columns
-        result = Table._from_normalized_rows(
+        # ``other`` は自分と別の Table なので types が異なりうる。
+        # _from_normalized_rows() は変換済み前提で converter を実行しないため、
+        # ``other`` 側の値を self.types で変換し直さずに混ぜてしまうと、
+        # 同じ列に self.types 変換済みの値と未変換の値が混在しうる。
+        # concat() だけは通常の ``Table(...)`` を使い、self.types を全行へ
+        # 揃えて適用する（既存の挙動を維持する）。
+        result = Table(
             columns,
             [{column: row[column] for column in columns} for row in [*self._rows, *other._rows]],
             types=self.types,
