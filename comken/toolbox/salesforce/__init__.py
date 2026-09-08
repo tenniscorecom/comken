@@ -28,32 +28,20 @@ Client Credentials Flow は `client_secret` だけでアクセストークンを
 設計の背景は docs/開発/salesforce-authentication.md を参照。
 
     SalesforceBase         1組織ぶんの API クライアントの土台（組織クラスで継承する）
-    BulkQueryAPI           Bulk API 2.0 のクエリジョブ。SalesforceBase.bulk_query が持っている
-    BulkIngestAPI          Bulk API 2.0 の Ingest ジョブ。SalesforceBase.bulk_ingest が持っている
-    ReportAPI              レポート API。SalesforceBase.report が持っている
     DataLoaderCLI          Salesforce Data Loader の CLI 呼び出し（サブプロセス実行）
     DataLoaderResult       DataLoaderCLI.run() の戻り値
     RefreshTokenOAuth      Authorization Code + Refresh Token Flow（既定）
     ClientCredentialsOAuth Client Credentials Flow（開発時に auth= で渡す）
     APIMetrics             API 呼び出しの計測。SalesforceBase.metrics が持っている
     APIUsage               組織の 24 時間 API 消費量
-    ComponentStat          呼び出し元ごとの集計
-    RetryReason            リトライ理由の定数
 """
 
 from types import ModuleType
 from typing import TYPE_CHECKING
 
-from comken.toolbox.salesforce.bulk_ingest import BulkIngestAPI, BulkIngestResult
-from comken.toolbox.salesforce.bulk_query import BulkQueryAPI
+from comken.toolbox.salesforce.bulk_ingest import BulkIngestResult
 from comken.toolbox.salesforce.dataloader import DataLoaderCLI, DataLoaderResult
-from comken.toolbox.salesforce.metrics import (
-    APIMetrics,
-    APIUsage,
-    ComponentStat,
-    RetryReason,
-)
-from comken.toolbox.salesforce.report import ReportAPI
+from comken.toolbox.salesforce.metrics import APIMetrics, APIUsage
 
 # requests の存在チェックだけ先に行う。依存が無い環境でもこのパッケージを
 # import だけはできるようにしておき、実際に API を叩く経路
@@ -111,9 +99,6 @@ def __dir__() -> list[str]:
 
 __all__ = [
     "SalesforceBase",
-    "ReportAPI",
-    "BulkQueryAPI",
-    "BulkIngestAPI",
     "BulkIngestResult",
     "DataLoaderCLI",
     "DataLoaderResult",
@@ -121,7 +106,5 @@ __all__ = [
     "RefreshTokenOAuth",
     "APIMetrics",
     "APIUsage",
-    "ComponentStat",
-    "RetryReason",
     "SalesforceCredentialRotator",
 ]
