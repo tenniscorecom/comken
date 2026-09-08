@@ -260,6 +260,31 @@ APIからstaged credentialsを作成できるため、新旧資格情報を切�
   - Callback URL に `http://localhost:8080/callback` を設定 (後述の `http_server` 方式)
 - comken を実行する Windows ユーザーと、ECA を作成した管理者が別の場合は事前に連携
 
+## 手順全体の流れ
+
+本セクション 1〜6 を 4 つの登場人物で通した全体像。
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Eng as エンジニア
+    participant CLI as comken CLI
+    participant Browser as ブラウザ
+    participant SF as Salesforce
+
+    Eng->>CLI: cred gui で client_id / client_secret を登録
+    Eng->>CLI: sf setup を実行
+    CLI-->>Eng: 認可 URL を表示
+    Eng->>Browser: URL を開いてログイン・Allow
+    Browser->>SF: 認可
+    SF-->>Browser: code 付きで callback へリダイレクト
+    Browser-->>Eng: callback URL の code をメモ
+    Eng->>CLI: code を貼り付け
+    CLI->>SF: code を refresh_token に交換
+    CLI->>CLI: refresh_token を DPAPI へ保存
+    Eng->>CLI: sf report で動作確認
+```
+
 ## 1. ECA の client_id / client_secret を DPAPI に登録
 
 まず `client_id` と `client_secret` を comken の資格情報ストアに入れる。

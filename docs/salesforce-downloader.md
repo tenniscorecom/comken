@@ -12,6 +12,18 @@
   各プロジェクト（cached_report / download_scheduled）
 ```
 
+以下は上の構成に「最新ステータス.xlsx」を加えて Mermaid の `graph TD` で描き直したもの。
+
+```mermaid
+graph TD
+    A["レポート管理表.xlsx<br/>（人が編集）"] --> B["salesforce_downloader"]
+    B <--> C["Salesforce"]
+    B --> D["ダウンロード履歴.csv<br/>（追記）"]
+    B --> E["最新ステータス.xlsx<br/>（上書き）"]
+    D --> F["各プロジェクト<br/>cached_report"]
+    E --> F
+```
+
 ---
 
 ## 使う側
@@ -69,6 +81,18 @@ print(cached_report_path(CUSTOMER_LIST))   # 本日の固定キャッシュの�
 ## はじめて使うとき（通しの手順）
 
 **配置した直後に1回だけやる作業。** 順番に意味があるので、上から進める。
+
+下の手順は上から流す一本道。各ステップの見出しをそのままノード名にしている。
+
+```mermaid
+graph TD
+    A[認証情報を登録する] --> B[管理表の置き場所を決める]
+    B --> C[管理表を用意する]
+    C --> D[Excelで記入する]
+    D --> E[書き方を確かめる]
+    E --> F[1件だけ取ってみる]
+    F --> G[定期実行に組み込む]
+```
 
 ### 1. 認証情報を登録する
 
@@ -352,6 +376,21 @@ def _classify_cause(error, fetched_from_salesforce, saved_to_file):
     if fetched_from_salesforce is False:                # 取得段階で落ちた
         return "Salesforce"
     return "設定"                                       # 取得段階に入る前
+```
+
+以下は上の判定順（上から評価）を Mermaid の `flowchart TD` にしたもの。
+
+```mermaid
+flowchart TD
+    Start[例外発生] --> A{ComkenError か<br/>OSError か?}
+    A -->|No| R1[プログラム]
+    A -->|Yes| B{saved_to_file is<br/>False?}
+    B -->|Yes| R2[ファイル]
+    B -->|No| C{fetched=True かつ<br/>saved=None?}
+    C -->|Yes| R3[データなし]
+    C -->|No| D{fetched_from_salesforce<br/>is False?}
+    D -->|Yes| R4[Salesforce]
+    D -->|No| R5[設定]
 ```
 
 `データなし` が 0 件を一意に指す理由: 取得成功（`True`）を確定してから保存の `try` に入る

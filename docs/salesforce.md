@@ -151,6 +151,48 @@ SalesforceBase                     HTTP の土台。_request() が唯一の通�
   └─ Solution(SalesforceBase)      URL・認証情報名・OWNER・組織固有の処理を持つ
 ```
 
+以下は上の構造を Mermaid の classDiagram にしたもの。継承は `<|--`、合成（has-a）は `*--` で表す。
+
+```mermaid
+classDiagram
+    class SalesforceBase {
+        -_oauth : _OAuth
+        -_metrics : APIMetrics
+        +report : ReportAPI
+        +query()
+        +get()
+        +insert()
+    }
+    class Solution {
+        +DOMAIN_URL
+        +CREDENTIAL_PREFIX
+        +OWNER
+    }
+    class _OAuth {
+        <<interface>>
+        +from_credentials()
+        +request_token()
+    }
+    class ClientCredentialsOAuth {
+    }
+    class RefreshTokenOAuth {
+    }
+    class ReportAPI {
+        +get(report_id)
+        +run_async(report_id)
+        +describe(report_id)
+    }
+    class APIMetrics {
+        +log_summary()
+    }
+    SalesforceBase <|-- Solution
+    SalesforceBase *-- _OAuth
+    SalesforceBase *-- APIMetrics
+    SalesforceBase *-- ReportAPI
+    _OAuth <|.. ClientCredentialsOAuth : implements
+    _OAuth <|.. RefreshTokenOAuth : implements
+```
+
 `OWNER` は「プロジェクト名 / 担当者」の形式で必ず書く（起動時に検査される）。
 ライブラリへ昇格したクラスは `OWNER = "comken"` にする。昇格の基準は
 [ライブラリ開発規約](開発/ライブラリ開発規約.md#サイト組織クラスを昇格させる基準) を参照。
@@ -472,6 +514,16 @@ HTTP 呼び出しが1回も発生せず、空の `BulkIngestResult` を返す。
 平文の JSON      →  取り込みコマンド  →  DPAPI 暗号化ファイル  →  コードから読む
 （一時的に置く）      （暗号化して取込）    （ユーザー×PC に紐付く）   Credentials("solution")
                       平文は確認後に削除
+```
+
+以下は上の流れを Mermaid の `graph LR` にしたもの。
+
+```mermaid
+graph LR
+    A["平文の JSON<br/>（一時的に置く）"] --> B["取り込みコマンド<br/>（暗号化して取込）"]
+    B --> C["DPAPI 暗号化ファイル<br/>（ユーザー×PC に紐付く）"]
+    C --> D["コードから読む<br/>Credentials(&quot;solution&quot;)"]
+    B -. "平文は確認後に削除" .-> A
 ```
 
 - 平文JSONをまとめて取り込む。配布時に手入力を挟まないため
