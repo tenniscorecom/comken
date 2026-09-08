@@ -97,7 +97,7 @@ def copy_to_local_if_large(path: str | Path, threshold_mb: float) -> tuple[Path,
         return src, None
     # クラス側に open できる名前（パス）が必要なので NamedTemporaryFile で
     # 名前だけ確保してすぐ閉じ、呼び出し側がパスから開ける状態にする。
-    tmp = tempfile.NamedTemporaryFile(suffix=src.suffix, delete=False)  # noqa: SIM115
+    tmp = tempfile.NamedTemporaryFile(suffix=src.suffix, delete=False)  # noqa: SIM115 — withで包むと閉じた瞬間に削除されるため使わない
     tmp_path = Path(tmp.name)
     tmp.close()
     try:
@@ -130,7 +130,7 @@ def local_copy(path: str | Path) -> Iterator[Path]:
     """
     src = Path(path)
     # NOTE: 呼び出し側がパスから開くため、名前を確保して即座に閉じる。
-    tmp = tempfile.NamedTemporaryFile(suffix=src.suffix, delete=False)  # noqa: SIM115
+    tmp = tempfile.NamedTemporaryFile(suffix=src.suffix, delete=False)  # noqa: SIM115 — withで包むと閉じた瞬間に削除されるため使わない
     tmp_path = Path(tmp.name)
     tmp.close()
     try:
@@ -179,7 +179,7 @@ def move_file(src: str | Path, dst: str | Path) -> Path:
     except OSError:
         # os.replace は同一ドライブ内で使うため、移動先と同じフォルダに一時ファイルを作る。
         # NOTE: shutil.copy2 で書くため、一時ファイル名を確保して即座に閉じる。
-        tmp = tempfile.NamedTemporaryFile(  # noqa: SIM115
+        tmp = tempfile.NamedTemporaryFile(  # noqa: SIM115 — withで包むと閉じた瞬間に削除されるため使わない
             dir=target.parent, prefix=f".{target.name}.", suffix=".tmp", delete=False
         )
         tmp_path = Path(tmp.name)

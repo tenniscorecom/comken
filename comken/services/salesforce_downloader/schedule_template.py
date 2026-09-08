@@ -35,6 +35,7 @@ from openpyxl import load_workbook
 from openpyxl.formatting.rule import FormulaRule
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
+from openpyxl.workbook.workbook import Workbook
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.worksheet import Worksheet
 
@@ -405,7 +406,7 @@ def _resolve_schedule_column(header: str) -> str:
     return get_column_letter(spec_index)
 
 
-def _append_schedule_guide(book: object) -> None:
+def _append_schedule_guide(book: Workbook) -> None:
     """``"記入方法"`` シートに、スケジュール列の説明を追記する。
 
     既存シートがある場合は末尾（既存「注意」の下）から書き足し、無ければ
@@ -413,14 +414,14 @@ def _append_schedule_guide(book: object) -> None:
     シートの最終使用行を読み取ってから ``_GUIDE_APPEND_BLANK_ROWS`` 行空きを
     挟んでからセクションを始める。
     """
-    if _GUIDE_SHEET_NAME in book.sheetnames:  # type: ignore[attr-defined]
-        guide, start_row = _resume_existing_guide(book[_GUIDE_SHEET_NAME])  # type: ignore[attr-defined]
+    if _GUIDE_SHEET_NAME in book.sheetnames:
+        guide, start_row = _resume_existing_guide(book[_GUIDE_SHEET_NAME])
         logger.debug(
             "スケジュール雛形: ガイドシート既存（追記開始行=%d）",
             start_row,
         )
     else:
-        guide = book.create_sheet(_GUIDE_SHEET_NAME)  # type: ignore[attr-defined]
+        guide = book.create_sheet(_GUIDE_SHEET_NAME)
         start_row = _init_new_guide(guide)
         logger.debug("スケジュール雛形: ガイドシートを新規作成")
 

@@ -1095,11 +1095,7 @@ class Excel:
             for value in row_tuple:
                 # OpenPyXL で何かを書いた後は既存キャッシュが残っていても現在の値に
                 # 対応する保証がないので、Excel で再計算する。
-                if (
-                    isinstance(value, str)
-                    and value.startswith("=")
-                    and (value is None or self._is_dirty)
-                ):
+                if isinstance(value, str) and value.startswith("=") and self._is_dirty:
                     needs_com = True
         logger.debug(
             "_cached_rows_from_memory: sheet=%s min_row=%d rows=%d needs_com=%s",
