@@ -1,6 +1,7 @@
 """comken/toolbox/excel/workbook.py — Excel ブックとデータ領域を操作する。"""
 
 import hashlib
+import logging
 import os
 import shutil
 import tempfile
@@ -48,6 +49,8 @@ Engine = Literal["openpyxl", "com"]
 Value: TypeAlias = str | int | float | bool | datetime
 _EXCEL_SUFFIXES = {".xlsx", ".xlsm", ".xltx", ".xltm"}
 
+logger = logging.getLogger(__name__)
+
 
 def _force_local_copy(path: Path) -> tuple[Path, Path]:
     """UNCパス上のブックを作業コピーへ複製し、``(working_path, tmp_path)`` を返す。
@@ -60,6 +63,7 @@ def _force_local_copy(path: Path) -> tuple[Path, Path]:
     os.close(fd)
     tmp_path = Path(name)
     shutil.copy2(path, tmp_path)
+    logger.debug("作業コピーを作成しました: src=%s tmp=%s", path, tmp_path)
     return tmp_path, tmp_path
 
 
@@ -122,6 +126,15 @@ class Excel:
                 self._local_copy_required = self._is_unc_path(source)
         else:
             self._local_copy_required = local_copy
+        logger.debug(
+            "Excel を初期化しました: path=%s engine=%s read_only=%s local_copy=%s "
+            "local_copy_required=%s",
+            self.path,
+            self._engine,
+            self._read_only,
+            self._local_copy,
+            self._local_copy_required,
+        )
         self._local_copy_path: Path | None = None
         self._working_path: Path = self.path
         self._working_copy_is_stale = False
@@ -144,7 +157,9 @@ class Excel:
     def __enter__(self) -> Self:
         # 既に開いている状態で再度入ってきた場合は、二重にブックを開かない。
         if self._is_open and not self._is_closed:
+            logger.debug("Excel は既に開いています: %s", self.path)
             return self
+        logger.debug("Excel を開きます: path=%s engine=%s", self.path, self._engine)
         if self._engine == "com":
             self._enter_com_engine()
             return self
@@ -160,11 +175,17 @@ class Excel:
 
         if not self._working_path.exists():
             # COM は既存ファイルを開くための経路なので、新規ファイル作成は openpyxl に任せる
+            logger.debug("COM 用ブックが存在しません: %s", self.path)
             raise ExcelFileNotFoundError(self.path)
         threshold = self._resolve_com_local_copy_threshold()
         self._com_handler = ExcelCOMHandler(self._working_path, local_copy_threshold_mb=threshold)
         self._is_open = True
         self._is_closed = False
+        logger.debug(
+            "COM ブックを開きました: working_path=%s threshold_mb=%s",
+            self._working_path,
+            threshold,
+        )
 
     def _resolve_com_local_copy_threshold(self) -> float:
         """``engine='com'`` 用の ``local_copy_threshold_mb`` を ``_local_copy`` から算出する。"""
@@ -183,6 +204,9 @@ class Excel:
                 stacklevel=2,
             )
             self._local_copy_warned = True
+            logger.debug(
+                "engine='com' で local_copy 未指定の警告を1度だけ出しました: %s", self.path
+            )
         return 10  # ExcelCOMHandler の既定
 
     def _enter_openpyxl_engine(self) -> None:
@@ -193,6 +217,11 @@ class Excel:
             # 仕様書 4.5 では「大きなブック」と書かれているが、UNC ではサイズに関わら
             # ず全件コピーする（社内で扱うブックは小さく個別閾値を設ける実務的意義が薄い）。
             self._working_path, self._local_copy_path = _force_local_copy(self.path)
+            logger.debug(
+                "openpyxl ブックの作業コピーを使用します: src=%s working=%s",
+                self.path,
+                self._working_path,
+            )
         else:
             self._working_path = self.path
         if not self._read_only:
@@ -204,14 +233,26 @@ class Excel:
                     read_only=False,
                     keep_vba=self.path.suffix.casefold() in {".xlsm", ".xltm"},
                 )
+                logger.debug(
+                    "openpyxl でブックを読み込みました: working_path=%s read_only=False",
+                    self._working_path,
+                )
             else:
                 self._workbook = Workbook()
+                logger.debug(
+                    "openpyxl で新規ブックを作成しました: working_path=%s", self._working_path
+                )
         else:
             # 読み取り専用では Workbook を遅延オープンする。``Sheet.table()`` や
             # ``excel.sheet(...)._worksheet[...]`` のように通常Worksheetを要求する
             # 経路は、その時点で ``_ensure_normal_workbook()`` が開く。
             if not self._working_path.exists():
+                logger.debug("読み取り専用ブックが存在しません: %s", self.path)
                 raise ExcelFileNotFoundError(self.path)
+            logger.debug(
+                "openpyxl 読み取り専用ブックは遅延オープンします: working_path=%s",
+                self._working_path,
+            )
         self._is_open = True
         self._is_closed = False
 
@@ -223,6 +264,12 @@ class Excel:
     ) -> None:
         # 例外時に保存すると、途中までの変更で元ファイルを壊す可能性がある。
         # read_only と dry-run の扱いは close() 側へ集約している。
+        logger.debug(
+            "Excel を閉じます: path=%s exc_type=%s save=%s",
+            self.path,
+            exc_type.__name__ if exc_type is not None else None,
+            exc_type is None,
+        )
         self.close(save=exc_type is None)
 
     def sheet(self, name: str | None = None) -> "Sheet":
@@ -245,10 +292,16 @@ class Excel:
             if len(display_sheets) != 1:
                 raise SheetNotFoundError("省略", display_sheets)
             name = display_sheets[0]
+            logger.debug("省略名の表示シートを 1 件に特定しました: %s", name)
         if name not in self._workbook.sheetnames:
             if not self.path.exists() and self._is_pristine_workbook():
                 cast(Worksheet, self._workbook.active).title = name
                 self._is_dirty = True
+                logger.debug(
+                    "新規ブックのアクティブシートを改名しました: name=%s path=%s",
+                    name,
+                    self.path,
+                )
             else:
                 raise SheetNotFoundError(name, self._workbook.sheetnames)
         return Sheet(self, self._workbook[name])
@@ -286,7 +339,9 @@ class Excel:
         )
         for name in candidates:
             if name in self._workbook.sheetnames:
+                logger.debug("find_sheet がヒットしました: name=%s", name)
                 return name
+            logger.debug("find_sheet の候補にヒットしませんでした: name=%s", name)
             last_error = SheetNotFoundError(name, self._workbook.sheetnames)
         raise last_error
 
@@ -321,6 +376,7 @@ class Excel:
             raise SheetAlreadyExistsError(full_name)
         worksheet = self._workbook.create_sheet(full_name)
         self._mark_dirty()
+        logger.debug("データシートを作成しました: name=%s", full_name)
         return Sheet(self, worksheet)
 
     def create_sheet(self, name: str) -> "Sheet":
@@ -345,6 +401,7 @@ class Excel:
             raise SheetAlreadyExistsError(name)
         worksheet = self._workbook.create_sheet(name)
         self._mark_dirty()
+        logger.debug("表示用シートを作成しました: name=%s", name)
         return Sheet(self, worksheet)
 
     def list_data_sheets(self) -> list[str]:
@@ -357,12 +414,23 @@ class Excel:
             )
         self._ensure_normal_workbook()
         assert self._workbook is not None
-        return [name for name in self._workbook.sheetnames if self._is_data_sheet_name(name)]
+        names = [name for name in self._workbook.sheetnames if self._is_data_sheet_name(name)]
+        logger.debug("データシート一覧を取得しました: count=%d", len(names))
+        return names
 
     def _read_range_with_com(
         self, sheet_name: str, min_col: int, min_row: int, max_col: int, max_row: int
     ) -> list[tuple[Any, ...]]:
         """実テーブル範囲だけをCOMの計算値で読む。"""
+        logger.debug(
+            "_read_range_with_com を呼び出します: sheet=%s "
+            "min_col=%d min_row=%d max_col=%d max_row=%d",
+            sheet_name,
+            min_col,
+            min_row,
+            max_col,
+            max_row,
+        )
         if self._is_dirty:
             self._prepare_com_working_copy()
         self._sync_working_file()
@@ -399,11 +467,15 @@ class Excel:
             self._ensure_open()
             com_handler = self._com_handler
             assert com_handler is not None  # _ensure_open で開いた後は必ず設定済み
-            return [sheet.Name for sheet in com_handler._wb.Sheets]
+            sheets = [sheet.Name for sheet in com_handler._wb.Sheets]
+            logger.debug("シート一覧を取得しました (COM): count=%d", len(sheets))
+            return sheets
         self._ensure_normal_workbook()
         workbook = self._workbook
         assert workbook is not None  # _ensure_normal_workbook の後は必ず Workbook が開く
-        return list(workbook.sheetnames)
+        sheets = list(workbook.sheetnames)
+        logger.debug("シート一覧を取得しました (openpyxl): count=%d", len(sheets))
+        return sheets
 
     @measure
     def count_sheets(self) -> int:
@@ -412,11 +484,15 @@ class Excel:
             self._ensure_open()
             com_handler = self._com_handler
             assert com_handler is not None  # _ensure_open で開いた後は必ず設定済み
-            return int(com_handler._wb.Sheets.Count)
+            count = int(com_handler._wb.Sheets.Count)
+            logger.debug("シート数を取得しました (COM): count=%d", count)
+            return count
         self._ensure_normal_workbook()
         workbook = self._workbook
         assert workbook is not None  # _ensure_normal_workbook の後は必ず Workbook が開く
-        return len(workbook.sheetnames)
+        count = len(workbook.sheetnames)
+        logger.debug("シート数を取得しました (openpyxl): count=%d", count)
+        return count
 
     @measure
     def last_row(self, sheet_name: str) -> int:
@@ -429,14 +505,18 @@ class Excel:
             self._ensure_open()
             com_handler = self._com_handler
             assert com_handler is not None  # _ensure_open で開いた後は必ず設定済み
-            return com_handler.last_row(sheet_name)
+            last = com_handler.last_row(sheet_name)
+            logger.debug("最終行を取得しました (COM): sheet=%s last_row=%d", sheet_name, last)
+            return last
         self._ensure_normal_workbook()
         workbook = self._workbook
         assert workbook is not None  # _ensure_normal_workbook の後は必ず Workbook が開く
         if sheet_name not in workbook.sheetnames:
             raise SheetNotFoundError(sheet_name, workbook.sheetnames)
         worksheet = workbook[sheet_name]
-        return int(worksheet.max_row)
+        last = int(worksheet.max_row)
+        logger.debug("最終行を取得しました (openpyxl): sheet=%s last_row=%d", sheet_name, last)
+        return last
 
     @measure
     def has_sheet(self, name: str) -> bool:
@@ -445,11 +525,15 @@ class Excel:
             self._ensure_open()
             com_handler = self._com_handler
             assert com_handler is not None  # _ensure_open で開いた後は必ず設定済み
-            return any(sheet.Name == name for sheet in com_handler._wb.Sheets)
+            result = any(sheet.Name == name for sheet in com_handler._wb.Sheets)
+            logger.debug("シート存在を確認しました (COM): name=%s exists=%s", name, result)
+            return result
         self._ensure_normal_workbook()
         workbook = self._workbook
         assert workbook is not None  # _ensure_normal_workbook の後は必ず Workbook が開く
-        return name in workbook.sheetnames
+        result = name in workbook.sheetnames
+        logger.debug("シート存在を確認しました (openpyxl): name=%s exists=%s", name, result)
+        return result
 
     def convert_range_to_table(
         self,
@@ -504,6 +588,13 @@ class Excel:
         if sheet_name not in workbook.sheetnames:
             raise SheetNotFoundError(sheet_name, workbook.sheetnames)
         worksheet = workbook[sheet_name]
+        logger.debug(
+            "convert_range_to_table を開始: sheet=%s range=%s table_name=%s header_row=%s",
+            sheet_name,
+            range,
+            table_name,
+            header_row,
+        )
         _min_col, _min_row, range_max_col, range_max_row, header_row, _header_cells = (
             validate_range_for_table(worksheet, range, header_row)
         )
@@ -529,12 +620,24 @@ class Excel:
         )
         worksheet.add_table(excel_table)
         self._mark_dirty()
+        logger.debug(
+            "convert_range_to_table が完了しました: table_name=%s ref=%s header_row=%d",
+            table_name,
+            ref,
+            header_row,
+        )
         return ExcelTable(self, worksheet, table_name)
 
     def close(self, *, save: bool = True) -> None:
         """ブックを閉じる。通常はwithの正常終了時に変更を自動保存する。"""
         if self._is_closed or not self._is_open:
             return
+        logger.debug(
+            "Excel をクローズします: path=%s save=%s is_dirty=%s",
+            self.path,
+            save,
+            self._is_dirty,
+        )
         try:
             if save and self._is_dirty:
                 self.save()
@@ -592,10 +695,18 @@ class Excel:
         self._ensure_normal_workbook()
         assert self._workbook is not None
         if self._read_only or not self._is_dirty:
+            logger.debug(
+                "save をスキップしました: path=%s read_only=%s is_dirty=%s",
+                self.path,
+                self._read_only,
+                self._is_dirty,
+            )
             return
         if is_dry_run():
+            logger.debug("dry-run のため save をスキップします: %s", self.path)
             dry_run_log("Excel を保存: %s", self.path)
             return
+        logger.debug("Excel を保存します: path=%s", self.path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         original_vba = self._vba_digest(self.path)
         with atomic_write(self.path) as temporary_path:
@@ -610,16 +721,30 @@ class Excel:
             except (KeyboardInterrupt, SystemExit):
                 raise
             except Exception as error:
+                logger.debug(
+                    "保存後の検証に失敗しました: path=%s temporary=%s",
+                    self.path,
+                    temporary_path,
+                )
                 raise ExcelSaveValidationError(self.path, error) from error
             finally:
                 if verification is not None:
                     verification.close()
             if original_vba is not None and self._vba_digest(temporary_path) != original_vba:
+                logger.debug(
+                    "保存後に VBA バイナリが変化しました: path=%s",
+                    self.path,
+                )
                 raise ExcelMacroPreservationError(self.path)
         self._is_dirty = False
         # 明示 save() 後も with 内でCOM操作を続けられる。次のCOM利用時に
         # 保存後の原本からローカル作業コピーを同期し、古い値を開かない。
         self._working_copy_is_stale = self._working_path != self.path
+        logger.debug(
+            "Excel の保存が完了しました: path=%s working_copy_is_stale=%s",
+            self.path,
+            self._working_copy_is_stale,
+        )
 
     @measure
     def run_macro(self, macro_name: str) -> None:
@@ -638,8 +763,14 @@ class Excel:
             )
         self._ensure_writable("run_macro")
         if is_dry_run():
+            logger.debug(
+                "dry-run のためマクロ実行をスキップします: macro=%s path=%s",
+                macro_name,
+                self.path,
+            )
             dry_run_log("Excel マクロを実行: %s (%s)", macro_name, self.path)
             return
+        logger.debug("Excel マクロを実行します: macro=%s path=%s", macro_name, self.path)
         self._prepare_com_working_copy()
         self._sync_working_file()
         from comken.toolbox.windows.handler import ExcelCOMHandler
@@ -649,6 +780,7 @@ class Excel:
             excel_com.save()
         self._reload_workbook()
         self._is_dirty = True
+        logger.debug("Excel マクロの実行が完了しました: macro=%s", macro_name)
 
     @measure
     def _read_computed_rows(self, sheet_name: str, min_row: int = 2) -> list[tuple[Any, ...]]:
@@ -661,9 +793,21 @@ class Excel:
         self._ensure_open()
         rows, needs_com = self._cached_rows(sheet_name, min_row)
         if not needs_com:
+            logger.debug(
+                "_read_computed_rows: キャッシュ済み値で返します: sheet=%s min_row=%d rows=%d",
+                sheet_name,
+                min_row,
+                len(rows),
+            )
             return rows
         # 書込み後の計算読取りでも、後続処理が例外なら元ファイルを変えない。
         # COMへ同期する先を一時コピーへ切り替えてから保存する。
+        logger.debug(
+            "_read_computed_rows: COM へ昇格して再計算します: sheet=%s min_row=%d rows=%d",
+            sheet_name,
+            min_row,
+            len(rows),
+        )
         if self._is_dirty:
             self._prepare_com_working_copy()
         self._sync_working_file()
@@ -691,7 +835,7 @@ class Excel:
 
         Args:
             sheet_name: シート名。
-            header_row: 見出し行の番号（1 始まり）。既定は 1。
+            header_row: 見出し行の番号（1 始まり)。既定は 1。
             force_com: ``True`` でキャッシュを無視して Excel 実機で強制再計算。
 
         Returns:
@@ -702,15 +846,33 @@ class Excel:
             # engine='com' は「COM 専用で読む」前提なので ``force_com`` は実質無効。
             # 受け取って無視しても害はないため、エラーにはせず握りつぶす。
             assert self._com_handler is not None  # _ensure_open の後に必ず設定済み
-            return self._com_handler.read(sheet_name, header_row=header_row)
+            table = self._com_handler.read(sheet_name, header_row=header_row)
+            logger.debug(
+                "read を実行しました (COM): sheet=%s header_row=%d rows=%d",
+                sheet_name,
+                header_row,
+                len(table),
+            )
+            return table
         rows = self._read_computed_rows(sheet_name, header_row)
         if not rows:
+            logger.debug(
+                "read: シートにデータ行がありませんでした: sheet=%s header_row=%d",
+                sheet_name,
+                header_row,
+            )
             return Table([], [])
         headers = list(rows[0])
         empty_columns = [index for index, header in enumerate(headers, start=1) if header is None]
         if empty_columns:
             raise EmptyHeaderCellError(empty_columns)
         data_rows = [dict(zip(headers, row, strict=False)) for row in rows[1:]]
+        logger.debug(
+            "read を実行しました (openpyxl): sheet=%s header_row=%d data_rows=%d",
+            sheet_name,
+            header_row,
+            len(data_rows),
+        )
         return Table(headers, data_rows)
 
     def _ensure_open(self) -> None:
@@ -734,10 +896,22 @@ class Excel:
                 read_only=False,
                 keep_vba=self.path.suffix.casefold() in {".xlsm", ".xltm"},
             )
+            logger.debug(
+                "_ensure_normal_workbook: 遅延オープンしました: working_path=%s",
+                self._working_path,
+            )
         else:
             if self._read_only:
+                logger.debug(
+                    "_ensure_normal_workbook: 読み取り専用ブックが存在しません: %s",
+                    self.path,
+                )
                 raise ExcelFileNotFoundError(self.path)
             self._workbook = Workbook()
+            logger.debug(
+                "_ensure_normal_workbook: 新規 Workbook を用意しました: working_path=%s",
+                self._working_path,
+            )
 
     def _mark_dirty(self) -> None:
         self._ensure_writable("書き込み")
@@ -753,10 +927,22 @@ class Excel:
         if self._working_copy_is_stale and self.path.exists():
             shutil.copy2(self.path, self._working_path)
             self._working_copy_is_stale = False
+            logger.debug(
+                "_sync_working_file: 元ファイルから作業ファイルを再同期しました: src=%s dst=%s",
+                self.path,
+                self._working_path,
+            )
         working_file_is_empty = (
             not self._working_path.exists() or self._working_path.stat().st_size == 0
         )
         if self._is_dirty or working_file_is_empty:
+            logger.debug(
+                "_sync_working_file: 作業ファイルを Workbook から書き出します: "
+                "path=%s is_dirty=%s empty=%s",
+                self._working_path,
+                self._is_dirty,
+                working_file_is_empty,
+            )
             # このメソッドは3箇所（_read_range_with_com/run_macro/_read_computed_rows）
             # から呼ばれ、いずれも self._workbook が None のまま到達しうる経路がある
             # （_ensure_open() は状態フラグの検査のみで self._workbook を保証しない）。
@@ -783,12 +969,22 @@ class Excel:
             if self._local_copy_path is None:
                 self._working_path, self._local_copy_path = _force_local_copy(self.path)
             self._working_copy_is_stale = False
+            logger.debug(
+                "_prepare_com_working_copy: 元ファイルから作業コピーを用意しました: "
+                "src=%s working=%s",
+                self.path,
+                self._working_path,
+            )
             return
         fd, name = tempfile.mkstemp(suffix=self.path.suffix or ".xlsx")
         os.close(fd)
         self._working_path = Path(name)
         self._local_copy_path = self._working_path
         self._working_copy_is_stale = False
+        logger.debug(
+            "_prepare_com_working_copy: 新規ブック用の作業コピーを作成しました: working=%s",
+            self._working_path,
+        )
 
     def _reload_workbook(self) -> None:
         """通常 Workbook と stream Workbook を再読込する（COM でのマクロ実行後など）。"""
@@ -803,6 +999,9 @@ class Excel:
             self._working_path,
             keep_vba=self.path.suffix.casefold() in {".xlsm", ".xltm"},
         )
+        logger.debug(
+            "_reload_workbook: ブックを再読込しました: working_path=%s", self._working_path
+        )
 
     def _open_stream_workbook(self, *, data_only: bool) -> Workbook:
         """openpyxl の read_only ストリーム Workbook を遅延オープンして返す。
@@ -813,6 +1012,7 @@ class Excel:
         """
         cache = self._stream_workbook_data_only if data_only else self._stream_workbook
         if cache is not None:
+            logger.debug("_open_stream_workbook: キャッシュを返します: data_only=%s", data_only)
             return cache
         workbook = load_workbook(
             self._working_path,
@@ -824,6 +1024,11 @@ class Excel:
             self._stream_workbook_data_only = workbook
         else:
             self._stream_workbook = workbook
+        logger.debug(
+            "_open_stream_workbook: 新しいストリーム Workbook を開きました: data_only=%s path=%s",
+            data_only,
+            self._working_path,
+        )
         return workbook
 
     def _cached_rows(self, sheet_name: str, min_row: int) -> tuple[list[tuple[Any, ...]], bool]:
@@ -837,7 +1042,17 @@ class Excel:
         持っていないため）。
         """
         if self._is_dirty or not self._working_path.exists():
+            logger.debug(
+                "_cached_rows: メモリから読みます: sheet=%s min_row=%d",
+                sheet_name,
+                min_row,
+            )
             return self._cached_rows_from_memory(sheet_name, min_row)
+        logger.debug(
+            "_cached_rows: ストリームから読みます: sheet=%s min_row=%d",
+            sheet_name,
+            min_row,
+        )
         return self._cached_rows_from_stream(sheet_name, min_row)
 
     def _cached_rows_from_memory(
@@ -869,6 +1084,13 @@ class Excel:
                     and (value is None or self._is_dirty)
                 ):
                     needs_com = True
+        logger.debug(
+            "_cached_rows_from_memory: sheet=%s min_row=%d rows=%d needs_com=%s",
+            sheet_name,
+            min_row,
+            len(rows),
+            needs_com,
+        )
         return rows, needs_com
 
     def _cached_rows_from_stream(
@@ -898,7 +1120,17 @@ class Excel:
         cached_sheet = cached_workbook[sheet_name]
         rows, any_none = self._collect_cached_rows(cached_sheet, min_row)
         if not any_none:
+            logger.debug(
+                "_cached_rows_from_stream: None セルが無いので数式判定をスキップ: sheet=%s rows=%d",
+                sheet_name,
+                len(rows),
+            )
             return rows, False
+        logger.debug(
+            "_cached_rows_from_stream: None セルがあるため数式判定を行います: sheet=%s rows=%d",
+            sheet_name,
+            len(rows),
+        )
         formula_workbook = self._open_stream_workbook(data_only=False)
         formula_sheet = formula_workbook[sheet_name]
         return self._mark_uncalculated_formulas(rows, formula_sheet, min_row)
@@ -983,6 +1215,12 @@ class Excel:
             needs_com = any(
                 isinstance(value, str) and value.startswith("=") for row in rows for value in row
             )
+            logger.debug(
+                "_cached_range: メモリから読みました: sheet=%s rows=%d needs_com=%s",
+                sheet_name,
+                len(rows),
+                needs_com,
+            )
             return rows, needs_com
         cached_workbook = self._open_stream_workbook(data_only=True)
         formula_workbook: Workbook | None = None
@@ -1003,6 +1241,12 @@ class Excel:
                         needs_com = True
                 row_values.append(cached_value)
             rows.append(tuple(row_values))
+        logger.debug(
+            "_cached_range: ストリームから読みました: sheet=%s rows=%d needs_com=%s",
+            sheet_name,
+            len(rows),
+            needs_com,
+        )
         return rows, needs_com
 
     @staticmethod

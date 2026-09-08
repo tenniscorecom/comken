@@ -1,5 +1,6 @@
 """comken/toolbox/excel/table.py — Excel データシートを操作する。"""
 
+import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, TypeAlias
 
@@ -22,6 +23,8 @@ if TYPE_CHECKING:
     from comken.toolbox.excel.workbook import Excel
 
 Value: TypeAlias = str | int | float | bool | datetime
+
+logger = logging.getLogger(__name__)
 
 
 class ExcelTable:
@@ -52,6 +55,13 @@ class ExcelTable:
             self._name = table_names[0]
         excel_table = self._worksheet.tables[self._name]
         min_col, min_row, max_col, max_row = _table_boundaries(excel_table.ref)
+        logger.debug(
+            "ExcelTable.read: sheet=%s table=%s ref=%s force_com=%s",
+            self._worksheet.title,
+            self._name,
+            excel_table.ref,
+            force_com,
+        )
         formula_cells = [
             cell
             for row in self._worksheet.iter_rows(
@@ -111,6 +121,13 @@ class ExcelTable:
             for row in rows[1:]
             if any(value is not None for value in row)
         ]
+        logger.debug(
+            "ExcelTable.read: 読み込み完了: sheet=%s table=%s columns=%d rows=%d",
+            self._worksheet.title,
+            self._name,
+            len(headers),
+            len(result),
+        )
         return Table([str(header) for header in headers], result, types=self._excel._types)
 
     def replace(
@@ -157,6 +174,15 @@ class ExcelTable:
         table = rows if isinstance(rows, Table) else Table(list(rows[0]) if rows else [], rows)
         rows_list = table.to_rows()
         passed_columns = [str(c) for c in table.columns]
+
+        logger.debug(
+            "ExcelTable.replace: sheet=%s table=%s columns=%d rows=%d allow_formula_overwrite=%s",
+            self._worksheet.title,
+            self._name,
+            len(passed_columns),
+            len(rows_list),
+            allow_formula_overwrite,
+        )
 
         self._validate_replace_columns(
             passed_columns=passed_columns,
@@ -205,6 +231,12 @@ class ExcelTable:
         last_cell = self._worksheet.cell(new_max_row, max_col).coordinate
         excel_table.ref = f"{self._worksheet.cell(min_row, min_col).coordinate}:{last_cell}"
         self._excel._mark_dirty()
+        logger.debug(
+            "ExcelTable.replace: 書き込み完了: sheet=%s table=%s new_ref=%s",
+            self._worksheet.title,
+            self._name,
+            excel_table.ref,
+        )
 
     def append(
         self,
@@ -253,6 +285,16 @@ class ExcelTable:
                 "ExcelTable の追記には Table、1行、または行リストを指定してください。"
             )
 
+        logger.debug(
+            "ExcelTable.append: sheet=%s table=%s additions=%d columns=%d "
+            "allow_formula_overwrite=%s",
+            self._worksheet.title,
+            self._name,
+            len(additions),
+            len(additions_columns),
+            allow_formula_overwrite,
+        )
+
         formula_in_additions = [c for c in additions_columns if c in formula_columns]
 
         # 数式列を追加しようとしていたらエラー
@@ -290,6 +332,11 @@ class ExcelTable:
         non_formula_columns = [c for c in existing_headers if c not in formula_columns]
         if not non_formula_columns:
             # すべての既存列が数式列。書き込める列が無いので何もしない。
+            logger.debug(
+                "ExcelTable.append: 全列が数式列のため追記できる列がありません: sheet=%s table=%s",
+                self._worksheet.title,
+                self._name,
+            )
             return
         filtered_current_rows = [
             {header: row[header] for header in non_formula_columns} for row in current_rows
@@ -303,7 +350,14 @@ class ExcelTable:
 
     def count(self) -> int:
         """データ行数を返す。"""
-        return len(self.read())
+        count = len(self.read())
+        logger.debug(
+            "ExcelTable.count: sheet=%s table=%s rows=%d",
+            self._worksheet.title,
+            self._name,
+            count,
+        )
+        return count
 
     def _validate_replace_columns(
         self,

@@ -1,5 +1,6 @@
 """comken/toolbox/excel/sheet.py — Excel シートを操作する。"""
 
+import logging
 import re
 from copy import copy
 from typing import TYPE_CHECKING, Any, Literal
@@ -49,6 +50,8 @@ _CELL_REFERENCE_PATTERN = re.compile(r"^[A-Z]+[0-9]+$|^R[0-9]+C[0-9]+$", re.IGNO
 # Excel がテーブル名に許さない特殊文字。バッククォート・鉤括弧・パス区切りなどを含む。
 _FORBIDDEN_TABLE_CHARACTERS = frozenset("[]/\\:*?\"<>|'`#%@$&+={}~")
 
+logger = logging.getLogger(__name__)
+
 
 class Sheet:
     """Excel シートのデータ領域または表示領域を操作する。"""
@@ -77,6 +80,11 @@ class Sheet:
             raise InvalidTableOperationError(
                 "1シートに複数テーブルがあります。table(name)で指定してください。"
             )
+        logger.debug(
+            "Sheet.table を取得しました: sheet=%s name=%s",
+            self._worksheet.title,
+            name,
+        )
         return ExcelTable(self._excel, self._worksheet, name)
 
     def create_table(self, name: str, table: Table, start_cell: str = "A1") -> ExcelTable:
@@ -102,6 +110,14 @@ class Sheet:
             start_column_number = column_index_from_string(start_column)
         except (TypeError, ValueError):
             raise InvalidTableInputError(f"start_cell が不正です: {start_cell!r}") from None
+        logger.debug(
+            "create_table を開始: sheet=%s name=%s start_cell=%s columns=%d rows=%d",
+            self._worksheet.title,
+            full_name,
+            start_cell,
+            len(table.columns),
+            len(table),
+        )
         for column, header in enumerate(table.columns, start_column_number):
             self._worksheet.cell(start_row, column, header)
         for row_number, row in enumerate(table.to_rows(), start_row + 1):
@@ -125,6 +141,12 @@ class Sheet:
         )
         self._worksheet.add_table(excel_table)
         self._excel._mark_dirty()
+        logger.debug(
+            "create_table が完了: sheet=%s name=%s ref=%s",
+            self._worksheet.title,
+            full_name,
+            ref,
+        )
         return ExcelTable(self._excel, self._worksheet, full_name)
 
     @staticmethod
@@ -162,6 +184,7 @@ class Sheet:
         self._ensure_display_sheet("write_value")
         self._worksheet[cell] = value
         self._excel._mark_dirty()
+        logger.debug("write_value: sheet=%s cell=%s", self._worksheet.title, cell)
 
     def read_value(self, cell: str, *, force_com: bool = False) -> Any:
         """セルの値を読む。数式は計算結果を返す。
@@ -175,11 +198,21 @@ class Sheet:
         raw = self._worksheet[cell].value
         is_formula = isinstance(raw, str) and raw.startswith("=")
         if not is_formula and not force_com:
+            logger.debug(
+                "read_value: キャッシュ済み値を返します: sheet=%s cell=%s",
+                self._worksheet.title,
+                cell,
+            )
             return "" if raw is None else raw
         column, row = coordinate_from_string(cell)
         column_index = column_index_from_string(column)
         self._excel._ensure_open()
         if force_com:
+            logger.debug(
+                "read_value: force_com=True で COM へ昇格します: sheet=%s cell=%s",
+                self._worksheet.title,
+                cell,
+            )
             rows = self._excel._read_range_with_com(
                 self._worksheet.title, column_index, row, column_index, row
             )
@@ -188,7 +221,17 @@ class Sheet:
             self._worksheet.title, column_index, row, column_index, row
         )
         if not needs_com and cached_rows:
+            logger.debug(
+                "read_value: 計算済みキャッシュから返します: sheet=%s cell=%s",
+                self._worksheet.title,
+                cell,
+            )
             return cached_rows[0][0]
+        logger.debug(
+            "read_value: 未計算のため COM へ昇格します: sheet=%s cell=%s",
+            self._worksheet.title,
+            cell,
+        )
         rows = self._excel._read_range_with_com(
             self._worksheet.title, column_index, row, column_index, row
         )
@@ -216,6 +259,12 @@ class Sheet:
             for cell, value in zip(cell_row, value_row, strict=True):
                 cell.value = value
         self._excel._mark_dirty()
+        logger.debug(
+            "write_range: sheet=%s range=%s rows=%d",
+            self._worksheet.title,
+            cell_range,
+            len(values),
+        )
 
     def read_range(self, cell_range: str, *, force_com: bool = False) -> Table:
         """指定範囲の先頭行を見出しとして ``Table`` で読む。
@@ -247,6 +296,13 @@ class Sheet:
             for row in cells
             for cell in row
         )
+        logger.debug(
+            "read_range: sheet=%s range=%s has_formula=%s force_com=%s",
+            self._worksheet.title,
+            cell_range,
+            has_formula,
+            force_com,
+        )
         if has_formula or force_com:
             if force_com:
                 rows = self._excel._read_range_with_com(
@@ -270,6 +326,13 @@ class Sheet:
             return Table([], [])
         headers = [str(value) for value in rows[0]]
         data_rows = [dict(zip(headers, row, strict=True)) for row in rows[1:]]
+        logger.debug(
+            "read_range: sheet=%s range=%s headers=%d data_rows=%d",
+            self._worksheet.title,
+            cell_range,
+            len(headers),
+            len(data_rows),
+        )
         return Table(headers, data_rows)
 
     def read_column(self, col: str, *, header_row: int = 1, force_com: bool = False) -> Table:
@@ -294,19 +357,29 @@ class Sheet:
     def read_used_range(self) -> tuple[str, str]:
         """使用範囲の左上と右下のセル参照を返す。"""
         self._ensure_display_sheet("read_used_range")
-        return "A1", f"{get_column_letter(self._worksheet.max_column)}{self._worksheet.max_row}"
+        top_left = "A1"
+        bottom_right = f"{get_column_letter(self._worksheet.max_column)}{self._worksheet.max_row}"
+        logger.debug(
+            "read_used_range: sheet=%s range=%s:%s",
+            self._worksheet.title,
+            top_left,
+            bottom_right,
+        )
+        return top_left, bottom_right
 
     def set_row_height(self, row: int, height: float) -> None:
         """行の高さを設定する。"""
         self._ensure_display_sheet("set_row_height")
         self._worksheet.row_dimensions[row].height = height
         self._excel._mark_dirty()
+        logger.debug("set_row_height: sheet=%s row=%d", self._worksheet.title, row)
 
     def set_column_width(self, col: str, width: float) -> None:
         """列の幅を設定する。"""
         self._ensure_display_sheet("set_column_width")
         self._worksheet.column_dimensions[col].width = width
         self._excel._mark_dirty()
+        logger.debug("set_column_width: sheet=%s col=%s", self._worksheet.title, col)
 
     def hide_row(self, row: int) -> None:
         """指定した行を非表示にする。
@@ -333,24 +406,28 @@ class Sheet:
         self._ensure_display_sheet("insert_row")
         self._worksheet.insert_rows(row)
         self._excel._mark_dirty()
+        logger.debug("insert_row: sheet=%s row=%d", self._worksheet.title, row)
 
     def delete_row(self, row: int) -> None:
         """指定位置の表示用の行を削除する。"""
         self._ensure_display_sheet("delete_row")
         self._worksheet.delete_rows(row)
         self._excel._mark_dirty()
+        logger.debug("delete_row: sheet=%s row=%d", self._worksheet.title, row)
 
     def insert_column(self, col: str) -> None:
         """指定位置に表示用の列を挿入する。"""
         self._ensure_display_sheet("insert_column")
         self._worksheet.insert_cols(column_index_from_string(col))
         self._excel._mark_dirty()
+        logger.debug("insert_column: sheet=%s col=%s", self._worksheet.title, col)
 
     def delete_column(self, col: str) -> None:
         """指定位置の表示用の列を削除する。"""
         self._ensure_display_sheet("delete_column")
         self._worksheet.delete_cols(column_index_from_string(col))
         self._excel._mark_dirty()
+        logger.debug("delete_column: sheet=%s col=%s", self._worksheet.title, col)
 
     def format(
         self,
@@ -402,12 +479,24 @@ class Sheet:
         if number_format is not None:
             target.number_format = str(number_format)
         self._excel._mark_dirty()
+        logger.debug(
+            "format: sheet=%s cell=%s bold=%s italic=%s size=%s name=%s color=%s number_format=%s",
+            self._worksheet.title,
+            cell,
+            bold,
+            italic,
+            size,
+            name,
+            color,
+            number_format,
+        )
 
     def set_background(self, cell: str, color: str) -> None:
         """セルの背景色を設定する。"""
         self._ensure_display_sheet("set_background")
         self._worksheet[cell].fill = PatternFill("solid", fgColor=color.removeprefix("#"))
         self._excel._mark_dirty()
+        logger.debug("set_background: sheet=%s cell=%s", self._worksheet.title, cell)
 
     def set_border(
         self,
@@ -434,24 +523,28 @@ class Sheet:
         side = Side(style=style, color=color.removeprefix("#"))
         self._worksheet[cell].border = Border(left=side, right=side, top=side, bottom=side)
         self._excel._mark_dirty()
+        logger.debug("set_border: sheet=%s cell=%s style=%s", self._worksheet.title, cell, style)
 
     def merge_cells(self, cell_range: str) -> None:
         """指定範囲のセルを結合する。"""
         self._ensure_display_sheet("merge_cells")
         self._worksheet.merge_cells(cell_range)
         self._excel._mark_dirty()
+        logger.debug("merge_cells: sheet=%s range=%s", self._worksheet.title, cell_range)
 
     def unmerge_cells(self, cell_range: str) -> None:
         """指定範囲のセル結合を解除する。"""
         self._ensure_display_sheet("unmerge_cells")
         self._worksheet.unmerge_cells(cell_range)
         self._excel._mark_dirty()
+        logger.debug("unmerge_cells: sheet=%s range=%s", self._worksheet.title, cell_range)
 
     def freeze_panes(self, cell: str) -> None:
         """指定セルより上・左の領域を固定表示する。"""
         self._ensure_display_sheet("freeze_panes")
         self._worksheet.freeze_panes = cell
         self._excel._mark_dirty()
+        logger.debug("freeze_panes: sheet=%s cell=%s", self._worksheet.title, cell)
 
     def _ensure_display_sheet(self, operation: str) -> None:
         self._excel._ensure_open()

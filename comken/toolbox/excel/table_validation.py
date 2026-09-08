@@ -26,6 +26,7 @@ comken.toolbox.excel.table_validation import validate_range_for_table``
 """
 
 import builtins
+import logging
 from typing import Any
 
 from openpyxl.utils.cell import range_boundaries
@@ -36,6 +37,8 @@ from comken.exceptions import (
     EmptyHeaderCellError,
     InvalidTableInputError,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def validate_range_for_table(
@@ -48,6 +51,12 @@ def validate_range_for_table(
     戻り値は ``(min_col, min_row, max_col, max_row, header_row, header_cells)``。
     各判定に違反したら対応する既存例外で止める。
     """
+    logger.debug(
+        "validate_range_for_table を開始: sheet=%s range=%s explicit_header_row=%s",
+        worksheet.title,
+        range_spec,
+        explicit_header_row,
+    )
     boundaries = range_boundaries(range_spec)
     # ``range_boundaries`` は型ヒント上 ``int | None`` を返すが、利用者が ``range_spec``
     # を ``range_boundaries`` を通せる形で渡しているため通常 ``None`` にはならない。
@@ -62,6 +71,11 @@ def validate_range_for_table(
     )
     header_row = _resolve_header_row(
         worksheet, explicit_header_row, range_min_row, range_min_col, range_max_col
+    )
+    logger.debug(
+        "validate_range_for_table: header_row= 決定: sheet=%s header_row=%d",
+        worksheet.title,
+        header_row,
     )
     # 引数 ``range`` が組み込み ``range`` を覆い隠すため ``builtins.range`` を直接呼ぶ
     header_cells = [
@@ -80,6 +94,12 @@ def validate_range_for_table(
     )
     _check_no_blank_data_rows(worksheet, header_row, range_max_row, range_min_col, range_max_col)
     _check_no_duplicate_headers(header_cells)
+    logger.debug(
+        "validate_range_for_table: 検証OK: sheet=%s header_row=%d columns=%d",
+        worksheet.title,
+        header_row,
+        len(header_cells),
+    )
     return range_min_col, range_min_row, range_max_col, range_max_row, header_row, header_cells
 
 
@@ -95,6 +115,11 @@ def _check_range_inside_dimensions(
     dim = worksheet.dimensions
     # ``dimensions`` が空（新規シート等）のときは ``range`` をそのまま許容する。
     if not dim or dim == "A1:A1":
+        logger.debug(
+            "_check_range_inside_dimensions: dimensions が空のためスキップ: sheet=%s dim=%r",
+            worksheet.title,
+            dim,
+        )
         return
     # ``range_boundaries`` は型ヒント上 ``int | None`` を返すが、既存の
     # ``_table_boundaries`` と同じく「dimensions から取った値は通常 None にならない」
@@ -110,6 +135,12 @@ def _check_range_inside_dimensions(
         or range_max_col > dim_max_col
         or range_max_row > dim_max_row
     ):
+        logger.debug(
+            "_check_range_inside_dimensions: 範囲外を検出: sheet=%s range=%s dim=%s",
+            worksheet.title,
+            range_spec,
+            dim,
+        )
         raise InvalidTableInputError(
             f"指定した範囲 {range_spec} がシート「{worksheet.title}」の使用範囲 "
             f"({dim}) を超えています。"
@@ -133,6 +164,11 @@ def _resolve_header_row(
             and merged_range.min_col >= range_min_col
             and merged_range.max_col <= range_max_col
         ):
+            logger.debug(
+                "_resolve_header_row: A2 ルールで見出し行を次行へ: sheet=%s min_row=%d",
+                worksheet.title,
+                range_min_row,
+            )
             return range_min_row + 1
     return range_min_row
 
@@ -143,6 +179,10 @@ def _check_header_not_empty(header_cells: list[Any]) -> None:
         column for column, value in enumerate(header_cells, start=1) if value is None or value == ""
     ]
     if empty_columns:
+        logger.debug(
+            "_check_header_not_empty: 空見出しを検出: empty_columns=%s",
+            empty_columns,
+        )
         raise EmptyHeaderCellError(empty_columns)
 
 
@@ -174,6 +214,11 @@ def _check_no_merged_cells_in_range(
             continue
         merged_in_range.append(str(merged_range))
     if merged_in_range:
+        logger.debug(
+            "_check_no_merged_cells_in_range: 結合セルを検出: sheet=%s merged=%s",
+            worksheet.title,
+            merged_in_range,
+        )
         raise InvalidTableInputError(
             f"指定した範囲 {range_spec} に結合セルがあります: "
             f"{', '.join(merged_in_range)}。"
@@ -199,6 +244,10 @@ def _check_no_blank_data_rows(
         if all(value is None or value == "" for value in row_values):
             blank_data_rows.append(row_index)
     if blank_data_rows:
+        logger.debug(
+            "_check_no_blank_data_rows: 空データ行を検出: blank_rows=%s",
+            blank_data_rows,
+        )
         raise InvalidTableInputError(
             f"指定した範囲のデータ行に空行があります: 行 {blank_data_rows}。"
             "データは連続している必要があります。"
@@ -216,4 +265,8 @@ def _check_no_duplicate_headers(header_cells: list[Any]) -> None:
         else:
             seen.add(header)
     if duplicates:
+        logger.debug(
+            "_check_no_duplicate_headers: 重複見出しを検出: duplicates=%s",
+            duplicates,
+        )
         raise DuplicateHeaderCellError(duplicates)
