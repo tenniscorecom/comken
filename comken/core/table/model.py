@@ -158,8 +158,11 @@ class Table:
 
     def filter(self, predicate: Callable[[dict], bool]) -> Table:
         """条件に一致する行だけを持つ新しいTableを返す。"""
-        # predicate は利用者コードなので、誤って行を書き換えても元の Table へ影響させない。
-        rows = [dict(row) for row in self._rows if predicate(dict(row))]
+        # predicate は利用者コードなので、渡すのはコピー（誤って行を書き換えても
+        # 元の Table へ影響させない）。採用した行そのもの（コピーではない）を
+        # rows へ集め、コピーは _from_normalized_rows() 側の1回だけにする
+        # （以前は predicate 用・採用時・fast path 内の3重コピーになっていた）。
+        rows = [row for row in self._rows if predicate(dict(row))]
         result = Table._from_normalized_rows(self.columns, rows, types=self.types)
         logger.debug("Table filter: %d 行 (元 %d 行)", len(result), len(self._rows))
         return result
