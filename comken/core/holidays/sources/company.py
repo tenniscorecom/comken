@@ -11,9 +11,12 @@
 """
 
 import datetime as _dt
+import logging
 from typing import Final
 
 from comken.core.holidays.calendar import Holiday, HolidaySource
+
+logger = logging.getLogger(__name__)
 
 # 毎年繰り返す会社の休業日。**年は書かない**（毎年その月日が休みになる）。
 # 休みを増やすときは (月, 日) を書き足すだけでよい。年またぎの年末年始も
@@ -65,6 +68,11 @@ class CompanyHolidaySource(HolidaySource):
             raise ValueError(
                 f"from_year ({self._from_year}) が to_year ({self._to_year}) より大きいです。"
             )
+        logger.debug(
+            "CompanyHolidaySource 構築: from_year=%d, to_year=%d",
+            self._from_year,
+            self._to_year,
+        )
 
     def load(self) -> list[Holiday]:
         """会社休日を ``Holiday`` のリストで返す。
@@ -72,6 +80,17 @@ class CompanyHolidaySource(HolidaySource):
         日付順に並べた状態で返す。国民の祝日と重なっても気にせずそのまま出す
         （``HolidayCalendar`` 側で先勝ち採用される）。
         """
+        # 会社休日は CSV ではなくコードに直書きされた ``COMPANY_HOLIDAYS`` /
+        # ``COMPANY_HOLIDAYS_EXTRA`` から組み立てる（外部 I/O なし）。
+        # CSV ソースの ``load_cabinet_office_csv`` と違って読み取りパスは無いが、
+        # 対象範囲・生成件数を debug ログへ出しておく。
+        logger.debug(
+            "CompanyHolidaySource.load 開始: from_year=%d, to_year=%d, 固定=%d 区分, 臨時=%d 件",
+            self._from_year,
+            self._to_year,
+            len(COMPANY_HOLIDAYS),
+            len(COMPANY_HOLIDAYS_EXTRA),
+        )
         holidays: list[Holiday] = [
             Holiday(date=extra_date, name=EXTRA_HOLIDAY_NAME)
             for extra_date in COMPANY_HOLIDAYS_EXTRA
@@ -81,7 +100,9 @@ class CompanyHolidaySource(HolidaySource):
             for name, month_days in COMPANY_HOLIDAYS.items():
                 for month, day in month_days:
                     holidays.append(Holiday(date=_dt.date(year, month, day), name=name))
-        return sorted(holidays, key=lambda h: h.date)
+        result = sorted(holidays, key=lambda h: h.date)
+        logger.debug("CompanyHolidaySource.load 完了: %d 件", len(result))
+        return result
 
 
 __all__ = [

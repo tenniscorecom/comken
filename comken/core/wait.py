@@ -45,7 +45,9 @@ def wait_seconds(n: float) -> None:
     Args:
         n: 待機秒数。小数も指定できる（例: 0.5）。
     """
+    logger.debug("wait_seconds 開始: %.3f 秒", n)
     time.sleep(n)
+    logger.debug("wait_seconds 完了: %.3f 秒", n)
 
 
 def wait_until(condition: Callable[[], bool], timeout: float = 60, interval: float = 1.0) -> bool:
@@ -62,11 +64,16 @@ def wait_until(condition: Callable[[], bool], timeout: float = 60, interval: flo
     """
     # 条件確認 → 期限判定 → sleep の順にすることで、
     # 最後の sleep 中に条件が成立した場合も取りこぼさない
+    logger.debug("wait_until 開始: timeout=%.3f 秒, interval=%.3f 秒", timeout, interval)
     deadline = time.monotonic() + timeout
     while True:
         if condition():
+            logger.debug(
+                "wait_until 条件成立: %.3f 秒経過", time.monotonic() - (deadline - timeout)
+            )
             return True
         if time.monotonic() >= deadline:
+            logger.debug("wait_until タイムアウト: %.3f 秒", timeout)
             return False
         time.sleep(interval)
 
@@ -128,15 +135,25 @@ def wait_for_file(
     _ensure_watchable_folder(folder_path)
     # 期限は最初に1度だけ計算する (``time.sleep`` 中もカウントが進むように
     # するため、``monotonic`` を使って壁時計の変更に影響されないようにしている)
+    logger.debug(
+        "wait_for_file 開始: folder=%s, pattern=%s, timeout=%.3f 秒, poll_interval=%.3f 秒",
+        folder_path,
+        name_pattern,
+        timeout,
+        poll_interval,
+    )
     deadline = time.monotonic() + timeout
     while True:
         matched = [p for p in folder_path.glob(name_pattern) if p.is_file()]
         if matched:
-            return max(matched, key=lambda p: p.stat().st_mtime)
+            found = max(matched, key=lambda p: p.stat().st_mtime)
+            logger.debug("wait_for_file 発見: %s", found)
+            return found
         if time.monotonic() >= deadline:
             # 待っている間にフォルダごと消えた（共有サーバーが切れた等）場合は、
             # 「ファイルが来ない」ではなくそちらを知らせる
             _ensure_watchable_folder(folder_path)
+            logger.debug("wait_for_file タイムアウト: %s\\%s", folder_path, name_pattern)
             raise FileNotFoundError(
                 f"ファイルが見つかりません: {folder_path}\\{name_pattern} ({timeout}秒待ちました)"
             )
@@ -183,8 +200,18 @@ def wait_until_stable(
         TimeoutError: ``timeout`` までに書き込みが終わらなかった場合。
     """
     file_path = Path(path)
+    logger.debug(
+        "wait_until_stable 開始: path=%s, stable_for=%.3f 秒, "
+        "timeout=%.3f 秒, poll_interval=%.3f 秒",
+        file_path,
+        stable_for,
+        timeout,
+        poll_interval,
+    )
     deadline = time.monotonic() + timeout
-    return _wait_until_stable(file_path, stable_for, poll_interval, deadline)
+    result = _wait_until_stable(file_path, stable_for, poll_interval, deadline)
+    logger.debug("wait_until_stable 完了: %s", result)
+    return result
 
 
 def _ensure_watchable_folder(folder_path: Path) -> None:
@@ -197,10 +224,12 @@ def _ensure_watchable_folder(folder_path: Path) -> None:
     if folder_path.is_dir():
         return
     if folder_path.exists():
+        logger.debug("wait_for_file 監視先がフォルダではありません: %s", folder_path)
         raise NotADirectoryError(
             f"フォルダではありません: {folder_path}\n"
             "監視するフォルダを指定してください（ファイルは指定できません）。"
         )
+    logger.debug("wait_for_file 監視フォルダが存在しません: %s", folder_path)
     raise FileNotFoundError(
         f"監視するフォルダがありません: {folder_path}\n"
         "共有サーバーにつながっているか、パスが正しいかを確認してください。"
@@ -219,6 +248,7 @@ def _wait_until_stable(
     探す時間と共通、後者は自前）ので、期限だけを引数で受け取る形にしている。
     """
     if stable_for <= 0:
+        logger.debug("wait_until_stable: stable_for<=0 のため即座に返ります: %s", file_path)
         return file_path
 
     # (サイズ, 更新時刻) が変わらないまま stable_for 秒たったら書き終わりとみなす。
@@ -229,6 +259,7 @@ def _wait_until_stable(
         try:
             stat = file_path.stat()
         except FileNotFoundError as e:
+            logger.debug("wait_until_stable 監視中にファイルが消えました: %s", file_path)
             raise FileNotFoundError(
                 f"待っている間にファイルが消えました: {file_path}\n"
                 "別の処理が移動または削除していないか確認してください。"
@@ -240,9 +271,21 @@ def _wait_until_stable(
             last_seen = current
             unchanged_since = now
         elif now - unchanged_since >= stable_for:
+            logger.debug(
+                "wait_until_stable 安定化検出: size=%d, %.3f 秒変化なし: %s",
+                stat.st_size,
+                stable_for,
+                file_path,
+            )
             return file_path
 
         if now >= deadline:
+            logger.debug(
+                "wait_until_stable タイムアウト: size=%d, stable_for=%.3f 秒: %s",
+                stat.st_size,
+                stable_for,
+                file_path,
+            )
             raise TimeoutError(
                 f"書き込みが終わりません: {file_path}"
                 f" (サイズ {stat.st_size} バイトのまま {stable_for} 秒を待てませんでした)\n"

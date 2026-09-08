@@ -32,11 +32,14 @@ def zip_folder(folder: str | Path, dst: str | Path | None = None) -> Path:
     """
     folder = Path(folder)
     if not folder.is_dir():
+        logger.debug("zip_folder 失敗: フォルダが存在しません: %s", folder)
         raise FileNotFoundError(f"フォルダが見つかりません: {folder}")
     dst = Path(dst) if dst else folder.parent / f"{folder.name}.zip"
     # 出力先の親フォルダはここで用意する。atomic_write は勝手に作らない
     dst.parent.mkdir(parents=True, exist_ok=True)
+    logger.debug("zip_folder 開始: src=%s, dst=%s", folder, dst)
 
+    added = 0
     with (
         atomic_write(dst) as tmp,
         zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zf,
@@ -48,6 +51,8 @@ def zip_folder(folder: str | Path, dst: str | Path | None = None) -> Path:
                 and path.resolve() != tmp.resolve()
             ):
                 zf.write(path, path.relative_to(folder))
+                added += 1
+    logger.debug("zip_folder 完了: %d ファイル追加, dst=%s", added, dst)
     return dst
 
 
@@ -68,11 +73,13 @@ def zip_files(files: Sequence[str | Path], dst: str | Path) -> Path:
     paths = [Path(file) for file in files]
     for path in paths:
         if not path.is_file():
+            logger.debug("zip_files 失敗: ファイルが存在しません: %s", path)
             raise FileNotFoundError(f"ファイルが見つかりません: {path}")
 
     names = [path.name.casefold() for path in paths]
     duplicated = sorted({path.name for path in paths if names.count(path.name.casefold()) > 1})
     if duplicated:
+        logger.debug("zip_files 失敗: 同名ファイルが複数: %s", duplicated)
         raise ValueError(
             f"zip の中で同じ名前になるファイルが複数あります: {', '.join(duplicated)}\n"
             "そのまま圧縮すると片方が消えるため、ファイル名を変えるか、"
@@ -82,6 +89,7 @@ def zip_files(files: Sequence[str | Path], dst: str | Path) -> Path:
     dst = Path(dst)
     # 出力先の親フォルダはここで用意する。atomic_write は勝手に作らない
     dst.parent.mkdir(parents=True, exist_ok=True)
+    logger.debug("zip_files 開始: %d ファイル, dst=%s", len(paths), dst)
 
     with (
         atomic_write(dst) as tmp,
@@ -89,6 +97,7 @@ def zip_files(files: Sequence[str | Path], dst: str | Path) -> Path:
     ):
         for path in paths:
             zf.write(path, path.name)
+    logger.debug("zip_files 完了: %d ファイル追加, dst=%s", len(paths), dst)
     return dst
 
 
@@ -110,8 +119,11 @@ def unzip(src: str | Path, dst: str | Path | None = None) -> Path:
     src = Path(src)
     dst = Path(dst) if dst else src.with_suffix("")
     dst.mkdir(parents=True, exist_ok=True)
+    logger.debug("unzip 開始: src=%s, dst=%s", src, dst)
 
     # UTF-8 フラグのないエントリ（Windows 製 zip）にだけ cp932 を適用する。
     with zipfile.ZipFile(src, metadata_encoding="cp932") as zf:
         zf.extractall(dst)
+        entry_count = len(zf.namelist())
+    logger.debug("unzip 完了: %d エントリ展開, dst=%s", entry_count, dst)
     return dst

@@ -1,11 +1,14 @@
 """comken/core/table/comparison.py — 2つのTableをキーで比較する。"""
 
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
 from comken.core.table.model import Table
 from comken.exceptions.table import TableDuplicateKeyError, TransferMappingError
+
+logger = logging.getLogger(__name__)
 
 Row = dict[str, Any]
 
@@ -30,6 +33,15 @@ def compare_tables(
     """2つのTableをキーで比較し、4種類のTableに分けて返す。"""
     read_keys = [read_key] if isinstance(read_key, str) else list(read_key)
     write_keys = [write_key] if isinstance(write_key, str) else list(write_key)
+    logger.debug(
+        "compare_tables 開始: read=%d 行/%d 列, write=%d 行/%d 列, read_keys=%s, write_keys=%s",
+        len(read),
+        len(read.columns),
+        len(write),
+        len(write.columns),
+        read_keys,
+        write_keys,
+    )
     if len(read_keys) != len(write_keys):
         raise TransferMappingError
     read._check_columns(read_keys)
@@ -64,6 +76,13 @@ def compare_tables(
     for key, write_row in write_index.items():
         if key not in read_index:
             write_only.append(write_row)
+    logger.debug(
+        "compare_tables 完了: same=%d 行, only_in_read=%d 行, only_in_write=%d 行, changed=%d 行",
+        len(same),
+        len(read_only),
+        len(write_only),
+        len(changed),
+    )
     return TableComparison(
         Table(read.columns, read_only, types=read.types),
         Table(write.columns, write_only, types=write.types),

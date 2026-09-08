@@ -17,12 +17,15 @@ Config の属性（config.SECTION.KEY）は config.ini から実行時に動的�
 """
 
 import configparser
+import logging
 from pathlib import Path
 
 from comken.core.config import _is_mapping_section, _parse_value
 from comken.core.files.atomic import atomic_write
 from comken.core.files.ops import cleanup_stale_tmp
 from comken.exceptions import ConfigFileNotFoundError
+
+logger = logging.getLogger(__name__)
 
 _STUB_HEADER = '''"""config.ini から自動生成されたエディタ補完用スタブ。手で編集しない。
 
@@ -58,12 +61,20 @@ def generate_stub(
     cfg = configparser.ConfigParser(interpolation=None)
     loaded = cfg.read(ini_path, encoding="utf-8-sig")
     if not loaded:
-        raise ConfigFileNotFoundError(Path(ini_path).resolve())
+        resolved = Path(ini_path).resolve()
+        logger.debug("generate_stub 失敗: config.ini が見つかりません: %s", resolved)
+        raise ConfigFileNotFoundError(resolved)
 
     # 実行時の Config と同じセクション名（前後空白落とし済み）で補完スタブを出す。
     from comken.core.config import _build_section_map
 
     section_map = _build_section_map(cfg)
+    logger.debug(
+        "generate_stub: ini=%s, sections=%d, output_path=%s",
+        Path(ini_path).resolve(),
+        len(section_map),
+        output_path,
+    )
 
     if output_path is not None:
         # 出力先を明示した場合は class スタブ（src/config.pyi 形式）を書く
@@ -73,6 +84,7 @@ def generate_stub(
             _build_stub_content(cfg, section_map, Path(ini_path).resolve().parent),
             encoding="utf-8",
         )
+        logger.debug("generate_stub: class スタブ書き込み完了: %s", output_path)
         return output_path
 
     stub_path = _resolve_stub_path(ini_path)
@@ -83,12 +95,15 @@ def generate_stub(
             _build_stub_content(cfg, section_map, Path(ini_path).resolve().parent),
             encoding="utf-8",
         )
+        logger.debug("generate_stub: class スタブ書き込み完了: %s", stub_path)
         return stub_path
 
     # src/config.py が無い → typings スタブ一式
     project_dir = Path(ini_path).resolve().parent
     _write_typings_stubs(project_dir, cfg, section_map)
-    return project_dir / "typings" / "comken" / "core" / "config.pyi"
+    result = project_dir / "typings" / "comken" / "core" / "config.pyi"
+    logger.debug("generate_stub: typings スタブ書き込み完了: %s", result)
+    return result
 
 
 def update_stub(
@@ -113,11 +128,21 @@ def update_stub(
         section_map = _build_section_map(cfg)
     stub_path = _resolve_stub_path(ini_path)
     if stub_path is not None:
+        logger.debug(
+            "update_stub: class スタブへ書き込み: %s (sections=%d)",
+            stub_path,
+            len(section_map),
+        )
         _write_stub_atomic(
             stub_path,
             _build_stub_content(cfg, section_map, Path(ini_path).resolve().parent),
         )
         return
+    logger.debug(
+        "update_stub: typings スタブへ書き込み: ini=%s (sections=%d)",
+        Path(ini_path).resolve(),
+        len(section_map),
+    )
     _write_typings_stubs(Path(ini_path).resolve().parent, cfg, section_map)
 
 
@@ -161,14 +186,18 @@ def _write_stub_atomic(stub_path: Path, content: str) -> None:
     """
     try:
         if stub_path.exists() and stub_path.read_text(encoding="utf-8") == content:
+            logger.debug("_write_stub_atomic: 内容が同じためスキップ: %s", stub_path)
             return
         stub_path.parent.mkdir(parents=True, exist_ok=True)
         cleanup_stale_tmp(stub_path)  # 前回クラッシュ時の残骸を掃除
         # ``atomic_write`` は親フォルダを作らないので、上の mkdir で存在を保証する
         with atomic_write(stub_path) as tmp:
             tmp.write_text(content, encoding="utf-8")
-    except OSError:
-        pass  # 読み取り専用フォルダ等。補完が更新されないだけで実行には影響しない
+        logger.debug("_write_stub_atomic: 書き込み完了: %s (%d バイト)", stub_path, len(content))
+    except OSError as e:
+        # 読み取り専用フォルダ等。補完が更新されないだけで実行には影響しない
+        logger.debug("_write_stub_atomic: OSError のためスキップ: %s (%s)", stub_path, e)
+        pass
 
 
 # ── 内部ヘルパー ──────────────────────────────────────────────────────────────

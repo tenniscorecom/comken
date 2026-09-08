@@ -13,11 +13,14 @@ comken ではラップしない方針（薄いラッパーを増やさない）�
 「黙って ``.xlsx`` を付ける」挙動は廃止した（付け忘れの方が付け間違いより高くつくため）。
 """
 
+import logging
 from datetime import date, datetime
 from pathlib import Path
 
 from comken.core.clock import now
 from comken.exceptions import FileSuffixMissingError
+
+logger = logging.getLogger(__name__)
 
 
 class DateNameBuilder:
@@ -53,6 +56,13 @@ class DateNameBuilder:
         """
         self._stem, self._extension = _split_suffix(name)
         self._date = _resolve_date(for_date)
+        logger.debug(
+            "DateNameBuilder 構築: name=%s, stem=%s, extension=%s, date=%s",
+            name,
+            self._stem,
+            self._extension,
+            self._date,
+        )
 
     def prefix(self, prefix: str = "{:%Y%m%d}_") -> str:
         """``prefix + 日付 + ベース名 + 拡張子`` を返す（例: ``"20260825_売上.xlsx"``）。
@@ -64,7 +74,9 @@ class DateNameBuilder:
         dated_prefix = (
             prefix.format(self._date) if "{:" in prefix else f"{prefix}{self._date:%Y%m%d}_"
         )
-        return f"{dated_prefix}{self._stem}{self._extension}"
+        result = f"{dated_prefix}{self._stem}{self._extension}"
+        logger.debug("DateNameBuilder.prefix: prefix=%r, result=%s", prefix, result)
+        return result
 
     def suffix(self, date_format: str = "%Y%m%d") -> str:
         """今日の日付を後ろに付けたファイル名を返す（例: ``"売上_20260825.xlsx"``）。
@@ -73,7 +85,9 @@ class DateNameBuilder:
         紛らわしいため、内部状態は ``_extension``（= 拡張子）と ``_stem``（= 拡張子を除いた
         ベース名）で持つ。``self._extension`` は常にドット付きで ``".xlsx"`` / ``".csv"`` 等。
         """
-        return f"{self._stem}_{self._date.strftime(date_format)}{self._extension}"
+        result = f"{self._stem}_{self._date.strftime(date_format)}{self._extension}"
+        logger.debug("DateNameBuilder.suffix: date_format=%s, result=%s", date_format, result)
+        return result
 
 
 def _resolve_date(value: date | datetime | None) -> date | datetime:
@@ -103,5 +117,6 @@ def _split_suffix(name: str) -> tuple[str, str]:
     parsed = Path(name)
     extension = parsed.suffix
     if not extension:
+        logger.debug("_split_suffix 失敗: 拡張子なし: %s", name)
         raise FileSuffixMissingError(name)
     return parsed.stem, extension
