@@ -94,6 +94,10 @@ class SalesforceBase:
         bulk_query: Bulk API 2.0 のクエリジョブ（sf.bulk_query.run(...)）。
         bulk_ingest: Bulk API 2.0 の Ingest ジョブ（sf.bulk_ingest.insert(...)）。
         metrics: API 呼び出しの計測（sf.metrics.log_summary()）。
+        DOMAIN_URL: 組織の My Domain の URL。組織クラスで指定する。
+        CREDENTIAL_PREFIX: 認証情報のキー名の頭。組織クラスで指定する。
+        DISPLAY_NAME: 人が読むための組織名。空なら display_name() がクラス名を返す。
+        CALLBACK_URL: 初回認可（Refresh Token Flow）で使うローカル Callback URL。
     """
 
     # API バージョン。組織が対応していない場合はサブクラスで上書きする
@@ -106,10 +110,23 @@ class SalesforceBase:
     # 認証情報のキー名の頭。組織クラスで指定する
     CREDENTIAL_PREFIX = ""
 
+    # 表示用の分かりやすい名前（任意）。空なら display_name() がクラス名を返す
+    DISPLAY_NAME = ""
+
+    # 初回認可（Refresh Token Flow）で使うローカル Callback URL。
+    # 通常は組織ごとに変える必要はないが、ECA 側の設定と食い違う組織が
+    # あれば、そのクラスで上書きする
+    CALLBACK_URL = "http://localhost:8080/callback"
+
     # 「どのプロジェクト／誰が継承して作ったか」を示す識別子。同じ社内組織の
     # クラスが複数プロジェクトで重複していないかを、ライブラリ管理者が
     # 把握するために使う。comken 配下に置くクラスは OWNER = "comken" にする。
     OWNER = ""
+
+    @classmethod
+    def display_name(cls) -> str:
+        """人が読むための組織名。``DISPLAY_NAME`` が空ならクラス名を使う。"""
+        return cls.DISPLAY_NAME or cls.__name__
 
     def __init__(
         self,

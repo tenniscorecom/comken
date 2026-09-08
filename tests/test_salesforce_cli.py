@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from comken.exceptions import SalesforceAuthError
+from comken.exceptions import CredentialNotFoundError, SalesforceAuthError
 from comken.toolbox.salesforce.cli import main
 from comken.toolbox.salesforce.sites import SITES, Solution, SolutionSandbox
 
@@ -102,6 +102,26 @@ class TestReport:
 
         assert "案件A" in capsys.readouterr().out
 
+    def test_site_flag_picks_registered_org_without_domain(self):
+        """``--site`` を指定すると ``site_for()`` を経由せず組織クラスを直接使う。"""
+        client = _client()
+        client.report.get.return_value = []
+        # --site で渡した組織クラス（SolutionSandbox）が直接呼ばれる。
+        # SITES はインポート時に固定されるため、``_resolve_site`` をモックして
+        # 呼び出された側だけ差し替える
+        with (
+            patch(
+                "comken.toolbox.salesforce.cli._resolve_site",
+                return_value=MagicMock(return_value=client),
+            ) as resolve,
+            patch("comken.toolbox.salesforce.cli.site_for") as site_for_mock,
+        ):
+            code = main(["report", "--site", "2", "--report-id", "00O"])
+
+        resolve.assert_called_once_with("2")
+        site_for_mock.assert_not_called()
+        assert code == 0
+
 
 class TestRotate:
     def test_stops_before_switching_with_stage_only(self, capsys):
@@ -139,6 +159,37 @@ class TestRotate:
 
         site_for_mock.assert_not_called()
         assert "中止しました" in capsys.readouterr().out
+
+    def test_site_flag_picks_registered_org_without_domain(self):
+        """``--site`` を指定すると ``site_for()`` を経由せず組織クラスを直接使う。"""
+        client = _client()
+        client.request.side_effect = [
+            ({"consumerId": "CID"}, {}),
+            ({"id": "STG1", "consumerKey": "K", "consumerSecret": "S"}, {}),
+        ]
+        # SITES はインポート時に固定されるため、``_resolve_site`` をモックして
+        # 呼び出された側だけ差し替える
+        with (
+            patch(
+                "comken.toolbox.salesforce.cli._resolve_site",
+                return_value=MagicMock(return_value=client),
+            ) as resolve,
+            patch("comken.toolbox.salesforce.cli.site_for") as site_for_mock,
+        ):
+            code = main(
+                [
+                    "rotate",
+                    "--site",
+                    "2",
+                    "--app-id",
+                    "1CE",
+                    "--stage-only",
+                ]
+            )
+
+        resolve.assert_called_once_with("2")
+        site_for_mock.assert_not_called()
+        assert code == 0
 
 
 class TestErrors:
@@ -194,7 +245,8 @@ class TestSetup:
                 return_value=("https://example.test/authorize", "STATE"),
             ),
             patch("comken.toolbox.salesforce.cli.RefreshTokenOAuth.exchange_code") as exchange,
-            patch("builtins.input", side_effect=["2", "AUTH-CODE"]),
+            # 番号選択 → 確認プロンプト (`y`) → code の 3 ステップ
+            patch("builtins.input", side_effect=["2", "y", "AUTH-CODE"]),
         ):
             code = main(["setup"])
 
@@ -218,7 +270,7 @@ class TestSetup:
                 return_value=("https://example.test/authorize", "STATE"),
             ),
             patch("comken.toolbox.salesforce.cli.RefreshTokenOAuth.exchange_code") as exchange,
-            patch("builtins.input", side_effect=["solution", "AUTH-CODE"]),
+            patch("builtins.input", side_effect=["solution", "y", "AUTH-CODE"]),
         ):
             code = main(["setup"])
 
@@ -251,7 +303,7 @@ class TestSetup:
                 return_value=("https://example.test/authorize?client_id=CID", "STATE"),
             ),
             patch("comken.toolbox.salesforce.cli.RefreshTokenOAuth.exchange_code") as exchange,
-            patch("builtins.input", side_effect=["1", "AUTH-CODE-VALUE"]),
+            patch("builtins.input", side_effect=["1", "y", "AUTH-CODE-VALUE"]),
         ):
             code = main(["setup"])
 
@@ -266,3 +318,118 @@ class TestSetup:
         assert exchange_mock.call_args.kwargs["prefix"] == SITES[0].CREDENTIAL_PREFIX
         # 完了メッセージ
         assert "refresh_token を DPAPI に保存しました" in out
+        # --site に渡す番号を案内する行も出る
+        assert "--site 1 --report-id" in out
+
+    def test_site_flag_skips_interactive_selection_by_number(self, capsys):
+        """``--site 2`` を指定すると対話選択をスキップして SolutionSandbox が選ばれる。
+
+        input は確認プロンプトと code 入力の 2 回だけになる。
+        """
+        with (
+            patch(
+                "comken.toolbox.salesforce.cli.Credentials", return_value=self._credentials_mock()
+            ),
+            patch(
+                "comken.toolbox.salesforce.cli.RefreshTokenOAuth.authorization_url",
+                return_value=("https://example.test/authorize", "STATE"),
+            ),
+            patch("comken.toolbox.salesforce.cli.RefreshTokenOAuth.exchange_code") as exchange,
+            patch("builtins.input", side_effect=["y", "AUTH-CODE"]),
+        ):
+            code = main(["setup", "--site", "2"])
+
+        assert code == 0
+        exchange_mock = cast(MagicMock, exchange)
+        # SolutionSandbox が選ばれたことを domain_url / prefix で確認
+        assert exchange_mock.call_args.args[4] == SolutionSandbox.DOMAIN_URL
+        assert exchange_mock.call_args.kwargs["prefix"] == SolutionSandbox.CREDENTIAL_PREFIX
+        # 選択プロンプトは出ていない
+        out = capsys.readouterr().out
+        assert "番号または組織名を入力してください" not in out
+
+    def test_site_flag_accepts_lowercase_name(self, capsys):
+        """``--site solution``（小文字）でも Solution クラスが引ける。"""
+        with (
+            patch(
+                "comken.toolbox.salesforce.cli.Credentials", return_value=self._credentials_mock()
+            ),
+            patch(
+                "comken.toolbox.salesforce.cli.RefreshTokenOAuth.authorization_url",
+                return_value=("https://example.test/authorize", "STATE"),
+            ),
+            patch("comken.toolbox.salesforce.cli.RefreshTokenOAuth.exchange_code") as exchange,
+            patch("builtins.input", side_effect=["y", "AUTH-CODE"]),
+        ):
+            code = main(["setup", "--site", "solution"])
+
+        assert code == 0
+        exchange_mock = cast(MagicMock, exchange)
+        assert exchange_mock.call_args.args[4] == Solution.DOMAIN_URL
+
+    def test_aborts_when_confirmation_is_rejected(self, capsys):
+        """確認プロンプトで ``n`` と答えると認可フローを始めずに終わる。"""
+        with (
+            patch(
+                "comken.toolbox.salesforce.cli.Credentials", return_value=self._credentials_mock()
+            ),
+            patch(
+                "comken.toolbox.salesforce.cli.RefreshTokenOAuth.authorization_url"
+            ) as authorization_url,
+            patch("comken.toolbox.salesforce.cli.RefreshTokenOAuth.exchange_code") as exchange,
+            patch("builtins.input", side_effect=["1", "n"]),
+        ):
+            code = main(["setup"])
+
+        assert code == 0
+        out = capsys.readouterr().out
+        assert "中止しました" in out
+        authorization_url.assert_not_called()
+        exchange.assert_not_called()
+
+    def test_warns_about_missing_credentials_and_guides_to_cred_gui(self, capsys):
+        """``Credentials`` が ``CredentialNotFoundError`` を出すとき、
+        ``cred gui`` への案内を出し、main() の戻り値は 1 で stderr にもメッセージが出る。
+        """
+        with (
+            patch(
+                "comken.toolbox.salesforce.cli.Credentials",
+                side_effect=CredentialNotFoundError(Solution.CREDENTIAL_PREFIX + "_client_id", []),
+            ),
+            patch(
+                "comken.toolbox.salesforce.cli.RefreshTokenOAuth.authorization_url"
+            ) as authorization_url,
+            patch("builtins.input", side_effect=["1", "y"]),
+        ):
+            code = main(["setup"])
+
+        captured = capsys.readouterr()
+        authorization_url.assert_not_called()
+        assert code == 1
+        assert "未登録" in captured.out
+        assert "python -m comken cred gui" in captured.out
+        assert "エラー:" in captured.err
+
+
+class TestSites:
+    """`python -m comken sf sites` で登録済み組織を一覧表示する。"""
+
+    def test_lists_each_site_with_name_and_settings(self, capsys):
+        """`sf sites` を実行すると ``SITES`` の各組織の
+        クラス名・表示名・DOMAIN_URL・CREDENTIAL_PREFIX が標準出力に出る。
+        """
+        code = main(["sites"])
+
+        out = capsys.readouterr().out
+        assert code == 0
+        # 番号付きのサマリ
+        assert "登録済みの組織:" in out
+        for index, site_class in enumerate(SITES, start=1):
+            assert f"{index}. {site_class.__name__}" in out
+        # 詳細（DOMAIN_URL / CREDENTIAL_PREFIX）
+        for site_class in SITES:
+            assert site_class.__name__ in out
+            assert site_class.DOMAIN_URL in out
+            assert site_class.CREDENTIAL_PREFIX in out
+            # display_name() の値も出る
+            assert site_class.display_name() in out

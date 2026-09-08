@@ -288,6 +288,12 @@ python -m comken cred gui
 python -m comken sf setup
 ```
 
+対話選択をスキップしたいときは `--site <番号|組織名>` を渡す:
+
+```powershell
+python -m comken sf setup --site 1
+```
+
 実行すると:
 
 1. 登録済みの組織が `1. ... 2. ...` の形で表示される。**番号か組織名を入力**する
@@ -331,6 +337,12 @@ refresh_token は保存されない（途中で失敗したら `<prefix>_refresh
 
 ```powershell
 python -m comken sf report --report-id 00O...
+```
+
+`--site` で組織を直接指定してもよい:
+
+```powershell
+python -m comken sf report --site 2 --report-id 00O...
 ```
 
 - 0 エラーなら OK

@@ -1,6 +1,8 @@
 r"""comken/toolbox/salesforce/cli.py — 接続と資格情報ローテーションの確認コマンド
 
-    python -m comken sf report --report-id 00O...
+    python -m comken sf sites
+    python -m comken sf report --site 1 --report-id 00O...
+    python -m comken sf setup --site 1
     python -m comken sf rotate --app-id 1CE... --stage-only
 
 **このモジュールは `comken/__main__.py` から呼ばれる。** `main(argv)` を直接
@@ -8,11 +10,12 @@ r"""comken/toolbox/salesforce/cli.py — 接続と資格情報ローテーショ
 もう動かない（入口は `python -m comken` に集約）。
 
 つなぎ先は組織クラス（`sites/`）の DOMAIN_URL と CREDENTIAL_PREFIX。
-`--domain` を指定したときは `site_for()` で URL から組織クラスを自動解決する。
-別の登録を試すときだけ `--prefix` で上書きする。
+`--site` で番号か組織名を指定すれば `site_for()` と同じ結果になる
+（URL を丸ごと書かなくて済む）。`--domain` を指定したときは `site_for()` で
+URL から組織クラスを自動解決する。別の登録を試すときだけ `--prefix` で上書きする。
 
 client_id / client_secret は **DPAPI に登録したものを読む**。コマンドラインに秘密の値は渡さない。
-先に `python -m comken cred import 認証情報.json` で登録しておく。
+先に `python -m comken cred gui`（または `cred import 認証情報.json`）で登録しておく。
 
 External Client App の consumer secret を REST API から回せるか（＝ローテーションを
 自分たちで回せるか）は組織の設定に依存し、レスポンスの項目名も公開資料で確認できていない。
@@ -21,7 +24,9 @@ External Client App の consumer secret を REST API から回せるか（＝ロ
 
 | コマンド | 何が起きるか |
 |---|---|
-| `report` | レポートを実行して行数と列名を表示する。読み取りだけ |
+| `sites` | 登録済みの組織を番号・表示名・DOMAIN_URL・CREDENTIAL_PREFIX 一覧表示 |
+| `report --site <番号\|組織名>` | レポートを実行して行数と列名を表示する。読み取りだけ |
+| `setup --site <番号\|組織名>` | 組織を選んで Refresh Token Flow の初回認可を対話的に行う |
 | `rotate --stage-only` | **新しい secret が発行される**が、切り替えない |
 | `rotate` | DPAPI へ保存し Salesforce 側を切り替える。**旧 secret は猶予後に無効** |
 """
@@ -33,7 +38,11 @@ External Client App の consumer secret を REST API から回せるか（＝ロ
 import argparse
 import sys
 
-from comken.exceptions import ComkenError, SalesforceSiteSelectionError
+from comken.exceptions import (
+    ComkenError,
+    CredentialNotFoundError,
+    SalesforceSiteSelectionError,
+)
 from comken.toolbox.credentials import Credentials
 from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth
 from comken.toolbox.salesforce.auth.rotation import (
@@ -46,9 +55,6 @@ from comken.toolbox.salesforce.sites import SITES, SolutionSandbox, site_for
 
 # 値そのものは絶対に出さない。項目名と型だけを見せる。
 _SECRET_FIELDS = ("consumersecret", "consumerkey", "secret", "token", "password")
-
-# ECA の Callback URL 設定と揃える必要がある（salesforce-authentication.md の手順と共通）
-_SETUP_CALLBACK_URL = "http://localhost:8080/callback"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -68,6 +74,9 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Salesforce への接続と、資格情報ローテーションの可否を確かめる",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    sites = subparsers.add_parser("sites", help="登録済みの組織を一覧表示する")
+    sites.set_defaults(run=_run_sites)
 
     report = subparsers.add_parser("report", help="レポートを実行して行数と列名を見る")
     _add_common_arguments(report)
@@ -94,12 +103,16 @@ def _build_parser() -> argparse.ArgumentParser:
     setup = subparsers.add_parser(
         "setup", help="組織を選んで Refresh Token Flow の初回認可を対話的に行う"
     )
+    setup.add_argument("--site", default="", help="番号か組織名を指定して対話選択を省略する")
     setup.set_defaults(run=_run_setup)
 
     return parser
 
 
 def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--site", default="", help="番号か組織名で組織を指定する（--domain より簡単）"
+    )
     parser.add_argument("--domain", default="", help="My Domain の URL（既定は組織クラスの値）")
     parser.add_argument(
         "--prefix", default="", help="DPAPI に登録したシステム名（既定は組織クラスの値）"
@@ -109,11 +122,13 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
 def _open(args: argparse.Namespace) -> SalesforceBase:
     """確認対象の組織へつなぐ。
 
-    ``--domain`` を指定すると ``site_for()`` で登録済みの組織クラスを
-    自動解決する（組織ごとの挙動の違いを正しく反映するため）。
-    ``--domain`` を省略すると ``SolutionSandbox``（安全側）を既定にする。
-    ``--prefix`` はどちらの経路でも DPAPI のキー名だけを上書きする。
+    優先順位: ``--site``（番号/組織名） > ``--domain``（URLからsite_for()で自動解決）
+    > 省略時は ``SolutionSandbox``（安全側）。``--prefix`` はどの経路でも
+    DPAPI のキー名だけを上書きする。
     """
+    if args.site:
+        site_class = _resolve_site(args.site)
+        return site_class(prefix=args.prefix)
     if args.domain:
         site_class = site_for(args.domain)
         return site_class(domain_url=args.domain, prefix=args.prefix)
@@ -139,7 +154,7 @@ def _run_rotate(args: argparse.Namespace) -> None:
         _stage_only(args)
         return
 
-    if not args.yes and not _confirm():
+    if not args.yes and not _confirm("旧 secret は猶予後に使えなくなります。続けますか？"):
         print("中止しました。")
         return
 
@@ -179,18 +194,14 @@ def _stage_only(args: argparse.Namespace) -> None:
     print("まだ切り替えていません。切り替えるには --stage-only を外して実行してください。")
 
 
-def _confirm() -> bool:
-    answer = input("旧 secret は猶予後に使えなくなります。続けますか？ [y/N]: ")
+def _confirm(message: str) -> bool:
+    """確認プロンプトを出し、``y`` であれば True を返す。``[y/N]:`` は関数側で付ける。"""
+    answer = input(f"{message} [y/N]: ")
     return answer.strip().lower() == "y"
 
 
-def _select_site() -> type[SalesforceBase]:
-    """SITES から番号か名前（大文字小文字を区別しない）で組織クラスを選ばせる。"""
-    print("登録済みの組織:")
-    for index, site_class in enumerate(SITES, start=1):
-        print(f"  {index}. {site_class.__name__}")
-    answer = input("番号または組織名を入力してください: ").strip()
-
+def _resolve_site(answer: str) -> type[SalesforceBase]:
+    """番号または組織名（大文字小文字を区別しない）から組織クラスを引く。"""
     if answer.isdigit():
         position = int(answer)
         if 1 <= position <= len(SITES):
@@ -205,34 +216,77 @@ def _select_site() -> type[SalesforceBase]:
     raise SalesforceSiteSelectionError(answer, [s.__name__ for s in SITES])
 
 
-def _run_setup(_args: argparse.Namespace) -> None:
-    """組織を選び、Refresh Token Flow の初回認可を対話的に行う。"""
-    site_class = _select_site()
-    prefix = site_class.CREDENTIAL_PREFIX
-    print(f"選択: {site_class.__name__}（prefix={prefix}）")
+def _select_site() -> type[SalesforceBase]:
+    """SITES を番号付きで表示し、入力させてから ``_resolve_site()`` で解決する。"""
+    _print_sites()
+    answer = input("番号または組織名を入力してください: ").strip()
+    return _resolve_site(answer)
 
-    credentials = Credentials(prefix)
+
+def _print_sites() -> None:
+    """SITES を番号・表示名つきで一覧表示する（sites サブコマンドと setup の両方で使う）。"""
+    print("登録済みの組織:")
+    for index, site_class in enumerate(SITES, start=1):
+        print(f"  {index}. {site_class.__name__}（{site_class.display_name()}）")
+
+
+def _run_sites(_args: argparse.Namespace) -> None:
+    """登録済みの組織を、名前・DOMAIN_URL・CREDENTIAL_PREFIX つきで一覧表示する。"""
+    _print_sites()
+    print()
+    for site_class in SITES:
+        print(f"{site_class.__name__}（{site_class.display_name()}）")
+        print(f"  DOMAIN_URL: {site_class.DOMAIN_URL}")
+        print(f"  CREDENTIAL_PREFIX: {site_class.CREDENTIAL_PREFIX}")
+
+
+def _run_setup(args: argparse.Namespace) -> None:
+    """組織を選び、Refresh Token Flow の初回認可を対話的に行う。"""
+    site_class = _resolve_site(args.site) if args.site else _select_site()
+    prefix = site_class.CREDENTIAL_PREFIX
+
+    print()
+    print(f"接続先: {site_class.__name__}（{site_class.display_name()}）")
+    print(f"  DOMAIN_URL: {site_class.DOMAIN_URL}")
+    print(f"  CREDENTIAL_PREFIX: {prefix}")
+    print(f"  CALLBACK_URL: {site_class.CALLBACK_URL}")
+    if not _confirm("この接続先で初回認証を開始しますか？"):
+        print("中止しました。")
+        return
+
+    try:
+        credentials = Credentials(prefix)
+        client_id = credentials.client_id
+        client_secret = credentials.client_secret
+    except CredentialNotFoundError:
+        print()
+        print(f"{prefix}_client_id / {prefix}_client_secret が未登録です。")
+        print("先に次のコマンドで client_id / client_secret を登録してください:")
+        print("  python -m comken cred gui")
+        raise
+
     url, _ = RefreshTokenOAuth.authorization_url(
-        credentials.client_id, _SETUP_CALLBACK_URL, site_class.DOMAIN_URL
+        client_id, site_class.CALLBACK_URL, site_class.DOMAIN_URL
     )
     print()
     print("次の URL をブラウザで開き、Salesforce にログインして許可してください:")
     print(f"  {url}")
     print()
-    print(f"許可すると {_SETUP_CALLBACK_URL}?code=... へリダイレクトされます。")
+    print(f"許可すると {site_class.CALLBACK_URL}?code=... へリダイレクトされます。")
     code = input("code= の後ろの文字列を貼り付けてください: ").strip()
 
     RefreshTokenOAuth.exchange_code(
-        credentials.client_id,
-        credentials.client_secret,
+        client_id,
+        client_secret,
         code,
-        _SETUP_CALLBACK_URL,
+        site_class.CALLBACK_URL,
         site_class.DOMAIN_URL,
         prefix=prefix,
     )
     print()
     print(f"refresh_token を DPAPI に保存しました（{prefix}_refresh_token）。")
-    print("動作確認: python -m comken sf report --report-id 00O...")
+    site_number = SITES.index(site_class) + 1
+    print(f"動作確認: python -m comken sf report --site {site_number} --report-id 00O...")
 
 
 def _print_shape(body: object, indent: str = "  ") -> None:

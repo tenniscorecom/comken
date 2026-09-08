@@ -11076,6 +11076,17 @@ Solution 組織のクライアント。
     with Solution() as sf:
         rows = sf.report.get("00O...")
 
+#### `display_name`
+
+```text
+@classmethod
+def display_name(cls) -> str:
+```
+
+##### 説明
+
+人が読むための組織名。``DISPLAY_NAME`` が空ならクラス名を使う。
+
 #### `__init__`
 
 ```text
@@ -11378,6 +11389,17 @@ Solution Sandbox 組織のクライアント。
 使い方:
     with SolutionSandbox() as sf:
         rows = sf.report.get("00O...")
+
+#### `display_name`
+
+```text
+@classmethod
+def display_name(cls) -> str:
+```
+
+##### 説明
+
+人が読むための組織名。``DISPLAY_NAME`` が空ならクラス名を使う。
 
 #### `__init__`
 

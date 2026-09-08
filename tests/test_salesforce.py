@@ -37,7 +37,7 @@ from comken.toolbox.salesforce import (
     SalesforceBase,
 )
 from comken.toolbox.salesforce.report import report_id_from_url
-from comken.toolbox.salesforce.sites import SITES, SolutionSandbox, site_for
+from comken.toolbox.salesforce.sites import SITES, Solution, SolutionSandbox, site_for
 
 DOMAIN_URL = "https://example.my.salesforce.com"
 INSTANCE_URL = "https://example.my.salesforce.com"
@@ -939,6 +939,48 @@ class TestSiteFor:
         """SITES に登録されているものは、すべて SalesforceBase の組織クラス。"""
         assert SITES
         assert all(issubclass(site, SalesforceBase) for site in SITES)
+
+
+class TestDisplayName:
+    """``SalesforceBase.display_name()`` は人が読む組織名を返す。"""
+
+    def test_returns_class_name_when_display_name_is_empty(self):
+        """``DISPLAY_NAME`` を設定していないクラスではクラス名を返す。"""
+
+        class _AnonymousSite(SalesforceBase):
+            OWNER = "test_salesforce / テスト"
+
+        assert _AnonymousSite.display_name() == "_AnonymousSite"
+
+    def test_returns_display_name_when_set(self):
+        """``DISPLAY_NAME`` を設定したクラスではその値をそのまま返す。"""
+
+        class _LabeledSite(SalesforceBase):
+            DISPLAY_NAME = "テスト組織"
+            OWNER = "test_salesforce / テスト"
+
+        assert _LabeledSite.display_name() == "テスト組織"
+
+    def test_solution_uses_production_display_name(self):
+        """``Solution`` は本番組織の表示名を返す。"""
+        assert Solution.display_name() == "本番組織"
+
+    def test_solution_sandbox_uses_sandbox_display_name(self):
+        """``SolutionSandbox`` はサンドボックス組織の表示名を返す。"""
+        assert SolutionSandbox.display_name() == "サンドボックス組織"
+
+
+class TestCallbackUrl:
+    """``SalesforceBase.CALLBACK_URL`` は Refresh Token Flow の受け口既定値を持つ。"""
+
+    def test_default_callback_url_is_localhost(self):
+        """既定では ``http://localhost:8080/callback`` を返す（上書きしなければ）。"""
+        assert SalesforceBase.CALLBACK_URL == "http://localhost:8080/callback"
+
+    def test_registered_sites_inherit_default_callback_url(self):
+        """``SITES`` の組織クラスは既定の Callback URL をそのまま使う。"""
+        for site in SITES:
+            assert site.CALLBACK_URL == "http://localhost:8080/callback"
 
 
 class TestSalesforceSiteSelectionError:

@@ -30,5 +30,8 @@ class Solution(SalesforceBase):
     # 別の登録に切り替えるときだけ Solution(prefix=...) で渡す
     CREDENTIAL_PREFIX = "solution"
 
+    # 表示用の日本語名。sf sites / sf setup で一覧・確認に使う
+    DISPLAY_NAME = "本番組織"
+
     # 組織が対応している API バージョン。既定と違うときだけ上書きする
     # API_VERSION = "67.0"
