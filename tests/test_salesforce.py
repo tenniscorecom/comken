@@ -1232,6 +1232,37 @@ class TestBulkQuery:
             {"Id": "004", "Name": "D"},
         ]
 
+    def test_run_concatenates_three_pages_without_extra_blank_lines(self):
+        """3 ページ以上にまたがる結果で、ページ境界に余計な空行が
+        入らないことを確認する（書き込まれたファイルの中身が
+        ``"\\n".join(lines)`` と一致することを担保する）。
+
+        各ページ末尾の改行を維持したまま追記していくとページ境界に
+        空行ができ、 ``csv.DictReader`` が空行を読んで
+        ``CSVRowLengthError`` を送出する。``splitlines()`` で末尾改行を
+        落としてから連結する実装が正しければエラーにならない。
+        """
+        created = _response(json_body={"id": self.JOB_ID, "state": "UploadComplete"})
+        complete = _response(json_body={"id": self.JOB_ID, "state": "JobComplete"})
+        page1 = self._csv_response("Id,Name\n001,A\n002,B\n", locator="ABC111")
+        page2 = self._csv_response("Id,Name\n003,C\n004,D\n", locator="ABC222")
+        page3 = self._csv_response("Id,Name\n005,E\n", locator="null")
+
+        with (
+            _salesforce([created, complete, page1, page2, page3]) as (client, _, _),
+            patch("comken.toolbox.salesforce.bulk_query.time.sleep"),
+        ):
+            table = client.bulk_query.run(self.SOQL)
+
+        assert table.columns == ["Id", "Name"]
+        assert table.to_rows() == [
+            {"Id": "001", "Name": "A"},
+            {"Id": "002", "Name": "B"},
+            {"Id": "003", "Name": "C"},
+            {"Id": "004", "Name": "D"},
+            {"Id": "005", "Name": "E"},
+        ]
+
     def test_run_returns_columns_only_for_zero_results(self):
         """0 件の場合はヘッダー行だけの CSV が返るので、列はあるが行数 0 の Table になる。"""
         created = _response(json_body={"id": self.JOB_ID, "state": "UploadComplete"})
@@ -1499,6 +1530,35 @@ class TestBulkIngest:
             {"sf__Id": "002"},
             {"sf__Id": "003"},
             {"sf__Id": "004"},
+        ]
+
+    def test_successful_results_concatenate_three_pages_without_extra_blank_lines(self):
+        """``successfulResults`` が3ページに分かれるケースで、ページ境界に
+        余計な空行が入らないことを確認する。"""
+        responses = [
+            _response(json_body={"id": self.JOB_ID, "state": "UploadComplete"}),
+            _response(204),  # アップロード成功
+            _response(204),  # ジョブを閉じる
+            _response(json_body={"id": self.JOB_ID, "state": "JobComplete"}),
+            self._csv_response("sf__Id\n001\n002\n", locator="ABC111"),
+            self._csv_response("sf__Id\n003\n004\n", locator="ABC222"),
+            self._csv_response("sf__Id\n005\n", locator="null"),
+            # 失敗結果は空1ページ
+            self._csv_response("", locator="null"),
+        ]
+        with (
+            _salesforce(responses) as (client, _, _),
+            patch("comken.toolbox.salesforce.bulk_ingest.time.sleep"),
+        ):
+            result = client.bulk_ingest.insert(self.OBJECT_NAME, [{"Name": "A"}])
+
+        assert result.successful.columns == ["sf__Id"]
+        assert result.successful.to_rows() == [
+            {"sf__Id": "001"},
+            {"sf__Id": "002"},
+            {"sf__Id": "003"},
+            {"sf__Id": "004"},
+            {"sf__Id": "005"},
         ]
 
     def test_dry_run_does_not_send_http_and_returns_empty_result(self):
