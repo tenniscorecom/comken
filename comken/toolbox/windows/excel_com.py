@@ -1,13 +1,12 @@
-"""comken/toolbox/windows/handler.py — Windows API ユーティリティ（pywin32）
+"""comken/toolbox/windows/excel_com.py — pywin32 経由の Excel COM 操作
 
-pywin32 を使った Windows 固有操作を提供する。
+openpyxl では対応できない以下の操作に使う:
 
-- ExcelCOMHandler: 数式の計算結果を読む、VBA マクロを実行する、パスワード付き保存など
-- WindowHandler: ウィンドウの検索・前面表示
-- RegistryHandler: レジストリ値の読み取り
+- 数式の計算結果を読む（CalculateFull で再計算してから取得）
+- VBA マクロを実行する
+- パスワード付きで保存する
 
 通常の Excel 読み書きは excel の Excel（openpyxl）を使うこと。
-ExcelCOMHandler は数式やマクロが必要な場面に限定して使う。
 """
 
 # 定義中のハンドラー自身を戻り値の型注釈に使うため、注釈の評価を遅延する。
@@ -18,10 +17,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, Self
 
-import win32api
 import win32com.client
-import win32con
-import win32gui
 
 from comken.constants import FileFormat
 from comken.core.data import column_number
@@ -36,7 +32,6 @@ from comken.exceptions import (
     ExcelHeadersTooFewError,
     FileFormatMismatchError,
     MacroError,
-    WindowNotFoundError,
 )
 from comken.exceptions.warning import _warn_coerce
 from comken.runtime import dry_run_log, is_dry_run
@@ -400,78 +395,6 @@ class ExcelCOMHandler(FileBase):
             logger.debug("一時ファイルを削除できませんでした: %s", tmp, exc_info=True)
         else:
             self._tmp = None
-
-
-class WindowHandler:
-    """ウィンドウの検索・操作クラス。
-
-    タイトルでウィンドウを検索し、前面に表示する。
-
-    """
-
-    def __init__(self, title: str) -> None:
-        """
-        Args:
-            title: 検索するウィンドウのタイトル（完全一致）。
-
-        Raises:
-            WindowNotFoundError: ウィンドウが見つからない場合。
-        """
-        self._hwnd = win32gui.FindWindow(None, title)
-        if self._hwnd == 0:
-            raise WindowNotFoundError(title)
-
-    @measure
-    def activate(self) -> None:
-        """ウィンドウを前面に表示する。最小化されている場合は復元する。"""
-        win32gui.ShowWindow(self._hwnd, win32con.SW_RESTORE)
-        win32gui.SetForegroundWindow(self._hwnd)
-
-    @measure
-    def read_title(self) -> str:
-        """ウィンドウのタイトルを返す。"""
-        return win32gui.GetWindowText(self._hwnd)
-
-
-class RegistryHandler:
-    """レジストリ値の読み取りクラス。with 文で確実にキーを閉じる。"""
-
-    def __init__(self, hive: int, key_path: str) -> None:
-        """
-        Args:
-            hive: レジストリのルートキー（例: win32con.HKEY_CURRENT_USER）。
-            key_path: キーのパス（例: r"Software\\MyApp"）。
-        """
-        self._key = win32api.RegOpenKey(hive, key_path)
-
-    def __enter__(self) -> Self:
-        return self
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_value: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        self.close()
-
-    @measure
-    def read(self, value_name: str) -> str:
-        """レジストリ値を読み取る。
-
-        Args:
-            value_name: 読み取る値の名前。
-
-        Returns:
-            レジストリ値の文字列。
-        """
-        value, _ = win32api.RegQueryValueEx(self._key, value_name)
-        return value
-
-    @measure
-    def close(self) -> None:
-        """レジストリキーを閉じる。with 文を使う場合は自動で呼ばれる。"""
-        win32api.RegCloseKey(self._key)
 
 
 def _block_values(ws: Any, first_row: int, last_row: int, last_col: int) -> list[tuple]:

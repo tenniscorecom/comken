@@ -9804,7 +9804,7 @@ engine='com' で開いたブックは、内部で保持している ``ExcelCOMHa
 
 Args:
     sheet_name: シート名。
-    header_row: 見出し行の番号（1 始まり）。既定は 1。
+    header_row: 見出し行の番号（1 始まり)。既定は 1。
     force_com: ``True`` でキャッシュを無視して Excel 実機で強制再計算。
 
 Returns:

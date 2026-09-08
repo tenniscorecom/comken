@@ -227,7 +227,7 @@ class TestConvertRangeToTableComEngine:
         fake_com.__exit__.return_value = False
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(
-                "comken.toolbox.windows.handler.ExcelCOMHandler",
+                "comken.toolbox.windows.excel_com.ExcelCOMHandler",
                 MagicMock(return_value=fake_com),
             )
             with (

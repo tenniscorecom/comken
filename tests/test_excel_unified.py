@@ -153,7 +153,7 @@ class TestExcelComPromotion:
         com.__enter__.return_value.read_row_values.return_value = [(10, 20)]
 
         with (
-            patch("comken.toolbox.windows.handler.ExcelCOMHandler", return_value=com) as handler,
+            patch("comken.toolbox.windows.excel_com.ExcelCOMHandler", return_value=com) as handler,
             Excel(path) as excel,
         ):
             rows = excel._read_computed_rows("Sheet")
@@ -170,7 +170,7 @@ class TestExcelComPromotion:
         workbook.save(path)
 
         with (
-            patch("comken.toolbox.windows.handler.ExcelCOMHandler") as handler,
+            patch("comken.toolbox.windows.excel_com.ExcelCOMHandler") as handler,
             Excel(path) as excel,
         ):
             assert excel._read_computed_rows("Sheet") == [(10,)]
@@ -182,7 +182,7 @@ class TestExcelComPromotion:
         _book(path)
 
         with (
-            patch("comken.toolbox.windows.handler.ExcelCOMHandler") as handler,
+            patch("comken.toolbox.windows.excel_com.ExcelCOMHandler") as handler,
             Excel(path) as excel,
             patch.object(excel, "_cached_rows", return_value=([(20,)], False)),
         ):
@@ -196,7 +196,7 @@ class TestExcelComPromotion:
         com = MagicMock()
 
         with (
-            patch("comken.toolbox.windows.handler.ExcelCOMHandler", return_value=com) as handler,
+            patch("comken.toolbox.windows.excel_com.ExcelCOMHandler", return_value=com) as handler,
             patch.object(Excel, "_reload_workbook"),
             Excel(path) as excel,
         ):
@@ -237,7 +237,7 @@ class TestExcelComPromotion:
                 return None
 
         with (
-            patch("comken.toolbox.windows.handler.ExcelCOMHandler", FakeExcelComHandler),
+            patch("comken.toolbox.windows.excel_com.ExcelCOMHandler", FakeExcelComHandler),
             Excel(path) as excel,
         ):
             excel.run_macro("Module1.Update")
@@ -252,7 +252,7 @@ class TestExcelComPromotion:
         com.__enter__.return_value.run_macro.side_effect = RuntimeError("macro failed")
 
         with (
-            patch("comken.toolbox.windows.handler.ExcelCOMHandler", return_value=com),
+            patch("comken.toolbox.windows.excel_com.ExcelCOMHandler", return_value=com),
             pytest.raises(RuntimeError, match="macro failed"),
             Excel(path) as excel,
         ):
@@ -267,7 +267,7 @@ class TestExcelComPromotion:
         com = MagicMock()
 
         with (
-            patch("comken.toolbox.windows.handler.ExcelCOMHandler", return_value=com),
+            patch("comken.toolbox.windows.excel_com.ExcelCOMHandler", return_value=com),
             patch.object(Excel, "_reload_workbook"),
             pytest.raises(RuntimeError, match="later failure"),
             Excel(path) as excel,
@@ -282,7 +282,7 @@ class TestExcelComPromotion:
         com = MagicMock()
 
         with (
-            patch("comken.toolbox.windows.handler.ExcelCOMHandler", return_value=com) as handler,
+            patch("comken.toolbox.windows.excel_com.ExcelCOMHandler", return_value=com) as handler,
             patch.object(Excel, "_reload_workbook"),
             Excel(path) as excel,
         ):

@@ -42,7 +42,7 @@ from comken.toolbox.excel.table import ExcelTable
 from comken.toolbox.excel.table_validation import validate_range_for_table
 
 if TYPE_CHECKING:
-    from comken.toolbox.windows.handler import ExcelCOMHandler
+    from comken.toolbox.windows.excel_com import ExcelCOMHandler
 
 Engine = Literal["openpyxl", "com"]
 
@@ -171,7 +171,7 @@ class Excel:
         # pywin32 が無い環境では ExcelCOMHandler を import できない。関数内 import に
         # することで openpyxl 経路だけを使う利用側-PC では import 失敗を避ける
         # （既存 ``_read_range_with_com`` と同じ設計）。
-        from comken.toolbox.windows.handler import ExcelCOMHandler
+        from comken.toolbox.windows.excel_com import ExcelCOMHandler
 
         if not self._working_path.exists():
             # COM は既存ファイルを開くための経路なので、新規ファイル作成は openpyxl に任せる
@@ -451,7 +451,7 @@ class Excel:
         if self._is_dirty:
             self._prepare_com_working_copy()
         self._sync_working_file()
-        from comken.toolbox.windows.handler import ExcelCOMHandler
+        from comken.toolbox.windows.excel_com import ExcelCOMHandler
 
         with ExcelCOMHandler(self._working_path, local_copy_threshold_mb=0) as excel_com:
             return excel_com.read_block(sheet_name, min_col, min_row, max_col, max_row)
@@ -790,7 +790,7 @@ class Excel:
         logger.debug("Excel マクロを実行します: macro=%s path=%s", macro_name, self.path)
         self._prepare_com_working_copy()
         self._sync_working_file()
-        from comken.toolbox.windows.handler import ExcelCOMHandler
+        from comken.toolbox.windows.excel_com import ExcelCOMHandler
 
         with ExcelCOMHandler(self._working_path, local_copy_threshold_mb=0) as excel_com:
             excel_com.run_macro(macro_name)
@@ -828,7 +828,7 @@ class Excel:
         if self._is_dirty:
             self._prepare_com_working_copy()
         self._sync_working_file()
-        from comken.toolbox.windows.handler import ExcelCOMHandler
+        from comken.toolbox.windows.excel_com import ExcelCOMHandler
 
         with ExcelCOMHandler(self._working_path, local_copy_threshold_mb=0) as excel_com:
             return excel_com.read_row_values(sheet_name, min_row)

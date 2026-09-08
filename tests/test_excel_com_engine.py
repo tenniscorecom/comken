@@ -134,7 +134,7 @@ def test_com_engine_local_copy_none_warns_once(tmp_path) -> None:
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(
-            "comken.toolbox.windows.handler.ExcelCOMHandler",
+            "comken.toolbox.windows.excel_com.ExcelCOMHandler",
             MagicMock(return_value=fake_com),
         )
         with (
@@ -160,7 +160,7 @@ def test_com_engine_local_copy_explicit_does_not_warn(tmp_path) -> None:
         warnings.simplefilter("always")
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(
-                "comken.toolbox.windows.handler.ExcelCOMHandler",
+                "comken.toolbox.windows.excel_com.ExcelCOMHandler",
                 MagicMock(return_value=fake_com),
             )
             with Excel(path, engine="com", local_copy=False):

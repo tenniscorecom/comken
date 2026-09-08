@@ -13,7 +13,7 @@ COM 操作やパスワード保存が必要な場合に限定する。
 ### ExcelCOMHandler
 
 ```python
-from comken.toolbox.windows.handler import ExcelCOMHandler
+from comken.toolbox.windows.excel_com import ExcelCOMHandler
 
 SHEET = "Sheet1"
 DATA_ROW = 2
@@ -53,7 +53,7 @@ Excel COM は、パスワード保存やマクロなど COM が必要な操作�
 ### WindowHandler
 
 ```python
-from comken.toolbox.windows.handler import WindowHandler
+from comken.toolbox.windows.window import WindowHandler
 
 WINDOW_TITLE = "メモ帳"
 
@@ -66,7 +66,7 @@ w.read_title() # タイトルを取得
 
 ```python
 import win32con
-from comken.toolbox.windows.handler import RegistryHandler
+from comken.toolbox.windows.registry import RegistryHandler
 
 SETTING_KEY = "SettingName"
 
