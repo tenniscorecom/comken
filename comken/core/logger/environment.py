@@ -36,11 +36,6 @@ COMKEN_HANDLER_NAMES = frozenset(
     {CONSOLE_HANDLER_NAME, ENVIRONMENT_HANDLER_NAME, LOCAL_HANDLER_NAME}
 )
 
-# ログ設定を行うモジュール自身。``setup_logging()`` 内の分岐は、comken の
-# handler を root に追加し終えた**後**に debug ログへ出す。先に出すと
-# 新規追加した environment ファイルへ記録されない。
-logger = logging.getLogger(__name__)
-
 
 def setup_logging(site: type[LoggerSite], *, allow_existing: bool = False) -> None:
     """site の指定に従い root logger を設定する。
@@ -98,10 +93,8 @@ def setup_logging(site: type[LoggerSite], *, allow_existing: bool = False) -> No
         # setup_local_logging() が既に console を備えている。console は使い回して
         # environment ファイルだけを追加する（重複出力を避ける）。console のレベルは
         # setup_local_logging() が決めた値をそのまま使う。
-        console_reused = True
         console_handler = next(h for h in existing if h.name == CONSOLE_HANDLER_NAME)
     else:
-        console_reused = False
         console_handler = logging.StreamHandler()
         console_handler.set_name(CONSOLE_HANDLER_NAME)
         console_handler.setLevel(logging.INFO)
@@ -114,33 +107,6 @@ def setup_logging(site: type[LoggerSite], *, allow_existing: bool = False) -> No
     root_logger.addHandler(environment_file_handler)
 
     root_logger.setLevel(_compute_root_level(root_logger.handlers))
-
-    # 設定の分岐を debug ログへ出す。comken の handler 追加後なので
-    # 新しく追加した environment ファイル側にも記録される。
-    etc_reason: str
-    if not folder_name:
-        etc_reason = "LOG_FOLDER_NAMES に未登録"
-    elif "/" in folder_name or "\\" in folder_name:
-        etc_reason = "フォルダ名にパス区切りが含まれる"
-    else:
-        etc_reason = ""
-    logger.debug(
-        "setup_logging: site=%s, hostname=%s, folder=%s, log_path=%s, "
-        "console_reused=%s, handlers=%s, root_level=%s",
-        site.__name__,
-        hostname,
-        str(log_dir),
-        str(log_path),
-        console_reused,
-        sorted(h.name for h in root_logger.handlers if h.name),
-        logging.getLevelName(root_logger.level),
-    )
-    if etc_reason:
-        logger.debug(
-            "setup_logging: 未登録端末として _etc 配下へ振り分け (%s): %s",
-            etc_reason,
-            str(log_dir),
-        )
 
     # 警告は comken の handler を root に追加し終えてから出す。先に出すと
     # 警告が comken のログファイルに残らず、何と共存したか追跡できなくなる。

@@ -21,11 +21,6 @@ from comken.core.logger.environment import (
     _warn_external_handlers_allowed,
 )
 
-# ログ設定を行うモジュール自身。``setup_local_logging()`` 内の分岐は、
-# comken の handler を root に追加し終えた**後**に debug ログへ出す。先に出すと
-# 新規追加した local ファイルへ記録されない。
-logger = logging.getLogger(__name__)
-
 
 def setup_local_logging(
     *,
@@ -60,7 +55,6 @@ def setup_local_logging(
         log_path = project_path / log_path
     log_path.mkdir(parents=True, exist_ok=True)
     log_path /= f"local-{today().isoformat()}.log"
-    log_path_resolved = log_path  # debug ログ用に確定形を保持
 
     # environment と同じ本文形式にし、同時実行時も PID でログを見分けられるようにする。
     formatter = logging.Formatter(
@@ -75,11 +69,9 @@ def setup_local_logging(
 
     if ENVIRONMENT_HANDLER_NAME in {h.name for h in existing}:
         # setup_logging() が作った console を使い回し、同じログが画面へ2回出るのを防ぐ。
-        console_reused = True
         console_handler = next(h for h in existing if h.name == CONSOLE_HANDLER_NAME)
     else:
         # setup_local_logging() 単独で呼ばれた場合だけ、画面表示用の console も用意する。
-        console_reused = False
         console_handler = logging.StreamHandler()
         console_handler.set_name(CONSOLE_HANDLER_NAME)
         console_handler.setLevel(console_level)
@@ -92,19 +84,6 @@ def setup_local_logging(
     # min が 0 を返し、root まで NOTSET に巻き戻されて isEnabledFor() が
     # DEBUG まで通す穴になるため。
     root_logger.setLevel(_compute_root_level(root_logger.handlers))
-
-    # 設定の分岐を debug ログへ出す。comken の handler 追加後なので
-    # 新しく追加した local ファイル側にも記録される。
-    logger.debug(
-        "setup_local_logging: log_path=%s, console_reused=%s, console_level=%s, "
-        "file_level=%s, handlers=%s, root_level=%s",
-        str(log_path_resolved),
-        console_reused,
-        logging.getLevelName(console_level),
-        logging.getLevelName(file_level),
-        sorted(h.name for h in root_logger.handlers if h.name),
-        logging.getLevelName(root_logger.level),
-    )
 
     # 警告は comken の handler を root に追加し終えてから出す。先に出すと
     # 警告が comken のログファイルに残らず、何と共存したか追跡できなくなる。
