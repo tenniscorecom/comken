@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Protocol, Self, runtime_checkable
 
-from comken.core.clock import month_end, month_start
+from comken.core.clock import month_end, month_start, today
 from comken.exceptions import BusinessDayNotFoundError
 
 logger = logging.getLogger(__name__)
@@ -223,6 +223,19 @@ class HolidayCalendar:
                 last,
             )
             self._expiry_warned_on = today
+
+
+def warn_if_calendar_expiring_soon() -> None:
+    """既定の祝日カレンダーの収録期限が近ければ、起動時に警告する。
+
+    祝日判定 (``is_business_day`` 等) を実際に使うかどうかに関わらず、
+    RPA スクリプトの起動直後に呼ぶことを想定している
+    (``comken.run.backoffice`` / ``intranet`` から呼ばれる)。
+    同じ日に複数回呼んでも警告は 1日 1回だけ (``_maybe_warn_expiring``
+    の既存の重複防止をそのまま使う)。
+    """
+    cal = default_calendar()
+    cal._maybe_warn_expiring(today())
 
 
 def is_business_day(
@@ -592,4 +605,5 @@ __all__ = [
     "last_business_day_of_month",
     "nth_business_day_of_month",
     "set_default_calendar",
+    "warn_if_calendar_expiring_soon",
 ]

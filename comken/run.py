@@ -21,6 +21,8 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from comken.core.holidays.calendar import warn_if_calendar_expiring_soon
+
 logger = logging.getLogger(__name__)
 
 
@@ -38,6 +40,7 @@ def backoffice(main: Callable[[], Any], project_name: str) -> Any:
     Returns:
         ``main()`` の戻り値。
     """
+    warn_if_calendar_expiring_soon()
     target_name = getattr(main, "__name__", type(main).__name__)
     logger.debug(
         "バックオフィス RPA として main を実行します: target=%s project_name=%s",
@@ -74,6 +77,7 @@ def intranet(main: Callable[[], Any], project_name: str) -> Any:
     Returns:
         ``main()`` の戻り値。
     """
+    warn_if_calendar_expiring_soon()
     target_name = getattr(main, "__name__", type(main).__name__)
     logger.debug(
         "イントラネット RPA として main を実行します: target=%s project_name=%s",

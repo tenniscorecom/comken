@@ -66,6 +66,7 @@ from comken.core.holidays.calendar import (
     last_business_day_of_month,
     nth_business_day_of_month,
     set_default_calendar,
+    warn_if_calendar_expiring_soon,
 )
 from comken.core.holidays.csv_source import load_cabinet_office_csv
 from comken.core.holidays.sources.company import CompanyHolidaySource
@@ -102,4 +103,5 @@ __all__ = [
     "load_cabinet_office_csv",
     "nth_business_day_of_month",
     "set_default_calendar",
+    "warn_if_calendar_expiring_soon",
 ]

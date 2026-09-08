@@ -45,9 +45,12 @@ def _is_skippable(path: Path) -> bool:
     - `__main__.py` は CLI 入口で層の外から呼ぶので対象外
     - `cli.py` は `__main__.py` と同じく CLI 入口。`__main__.py` から委譲
       されるだけで、ライブラリとして import される層ではないため対象外
+    - `run.py` は RPA スクリプトが直接呼び出す入口で、`backoffice` /
+      `intranet` を提供する。CLI 入口と同じく「層ルールの外側」から
+      利用される単一ファイルのため対象外
     - `templates/` は配布される雛形ファイル群で comken パッケージの一部ではない
     """
-    if path.name in ("__main__.py", "cli.py"):
+    if path.name in ("__main__.py", "cli.py", "run.py"):
         return True
     return "templates" in path.parts
 

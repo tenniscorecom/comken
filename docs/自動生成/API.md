@@ -2940,6 +2940,22 @@ def set_default_calendar(calendar: HolidayCalendar | None) -> None:
 呼んでおけば、利用者は ``is_business_day(target)`` のような
 モジュール関数を直接呼べる。
 
+### `warn_if_calendar_expiring_soon`
+
+```text
+def warn_if_calendar_expiring_soon() -> None:
+```
+
+#### 説明
+
+既定の祝日カレンダーの収録期限が近ければ、起動時に警告する。
+
+祝日判定 (``is_business_day`` 等) を実際に使うかどうかに関わらず、
+RPA スクリプトの起動直後に呼ぶことを想定している
+(``comken.run.backoffice`` / ``intranet`` から呼ばれる)。
+同じ日に複数回呼んでも警告は 1日 1回だけ (``_maybe_warn_expiring``
+の既存の重複防止をそのまま使う)。
+
 
 ## `from comken.core.logger import ...`
 
