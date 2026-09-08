@@ -11,7 +11,7 @@ python -c "import comken" >nul 2>&1 && goto :run
 set "PYTHONPATH=%PYTHON_LIBRARY%;%PYTHONPATH%"
 if not exist "%PYTHON_LIBRARY%\comken\__init__.py" (
   echo [エラー] 共通ライブラリ comken 未到達: %PYTHON_LIBRARY%
-  echo 共有サーバー / PYTHON_LIBRARY / setup_comken.bat を確認してください
+  echo 共有サーバー / PYTHON_LIBRARY を確認してください（社内 PC は PYTHONPATH 配布済み）
   popd & exit /b 1
 )
 :run

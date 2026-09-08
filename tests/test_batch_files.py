@@ -124,10 +124,8 @@ def test_batch_file_checks_comken_before_running(path: Path):
 
 
 # comken の場所を「bat 自身のフォルダ以外」から知る手段。**bat ごとに違う。**
-# setup は PYTHONPATH を「これから通す」側なので、そこから探してはいけない。
 # プロジェクト側へ配る bat（実行・認証情報の登録）は、もともと先頭の固定値を書き換えて使う。
 _SECOND_SOURCE = {
-    "setup_comken.bat": ('set "PYTHON_LIBRARY=', "bat に書いておく固定値"),
     "実行.bat": ('set "PYTHON_LIBRARY=', "bat に書いておく固定値"),
     "認証情報の登録.bat": ('set "PYTHON_LIBRARY=', "bat に書いておく固定値"),
 }
@@ -152,56 +150,11 @@ def test_batch_file_does_not_rely_on_dp0_alone(path: Path):
     assert phrase in text, f"{path.name} は comken の場所を「{meaning}」から探していない"
 
 
-def test_setup_comken_does_not_use_setx_for_long_vars():
-    """**setup_comken.bat は setx で PATH / PYTHONPATH を書かない。**
-
-    setx は 1024 文字を超える値を切り捨てる（この PC のユーザー PATH は実測 2102 文字）。
-    そのため PATH と PYTHONPATH は Set-ItemProperty で書き、setx は通知目的だけに使う。
-    `setx` の直後に `PATH` や `PYTHONPATH` が続く形になっていれば、setx で書いている。
-    """
-    text = _read(_ROOT / "setup_comken.bat")
-    # rem コメント内を除外するため、行頭にある `setx` コマンドだけ拾う
-    for m in re.finditer(r"(?m)^\s*setx\s+(.+)$", text):
-        target = m.group(1).split()[0]  # setx の次に書いた変数名（先頭のトークン）
-        assert target.upper() not in {"PATH", "PYTHONPATH"}, (
-            f"setup_comken.bat が setx で {target} を書いている。"
-            "1024 文字制限で切り捨てられるので、setx には短い変数だけを渡してください。"
-        )
-
-
-def test_setup_comken_preserves_raw_value():
-    """**setup_comken.bat は値を展開せずに読む。**
-
-    `DoNotExpandEnvironmentNames` を渡して読まないと、`GetEnvironmentVariable` や
-    `GetValue` が `%USERPROFILE%` などを絶対パスへ展開し、書き戻しで元表記を失う。
-    この PC の多くのユーザー PATH は `REG_EXPAND_SZ` で `%USERPROFILE%...` を持つので、
-    展開せずに読むことが必須。
-    """
-    text = _read(_ROOT / "setup_comken.bat")
-    assert "DoNotExpandEnvironmentNames" in text, (
-        "setup_comken.bat が DoNotExpandEnvironmentNames を使っていない。"
-        "値を展開せずに読む実装にしてください。"
-    )
-
-
-def test_setup_comken_preserves_value_kind():
-    """**setup_comken.bat は値の型（REG_SZ / REG_EXPAND_SZ）を保つ。**
-
-    `GetValueKind` で現在の型を調べ、同じ型で書き戻す。型が REG_SZ に変わると、
-    値に残った `%変数%` が展開されなくなる。
-    """
-    text = _read(_ROOT / "setup_comken.bat")
-    assert "GetValueKind" in text, (
-        "setup_comken.bat が GetValueKind を使っていない。"
-        "元の型を保って書き戻す実装にしてください。"
-    )
-
-
 # ── 雛形の bat に pause を入れない ─────────────────────────────────────────────
 # RPA から呼ぶと失敗時に pause で止まり、無人実行がハングする。
 # 「RPA 基盤が python を直接呼ぶ運用」と「RPA が実行.bat を絶対パスで呼ぶ運用」の
 # 両方を許容するため、pause は使わない。認証情報の登録.bat も RPA から呼ばれる
-# 可能性があるので同様に検査する（setup_comken.bat は PC 設定用なので対象外）。
+# 可能性があるので同様に検査する。
 _PAUSE_FORBIDDEN_BATS = (
     "実行.bat",
     "認証情報の登録.bat",
@@ -230,16 +183,3 @@ def test_template_bat_has_no_pause(name: str) -> None:
                 f"{path.name}:{line_no} に pause があります。"
                 "RPA から呼ぶと失敗時に無人実行が止まるので、削除してください。"
             )
-
-
-def test_setup_comken_does_not_search_pythonpath():
-    """**setup_comken.bat は PYTHONPATH から comken を探さない。**
-
-    この bat は PYTHONPATH を「これから通す」ためのもの。
-    通っていないから実行するのに、そこから探すのは筋が通らない。
-    """
-    text = _read(_ROOT / "setup_comken.bat")
-    assert r'%PYTHONPATH:;=" "%' not in text, (
-        "setup_comken.bat が PYTHONPATH を探索している。"
-        "通すための bat が、通っている前提で探してはいけない。"
-    )
