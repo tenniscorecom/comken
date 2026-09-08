@@ -11,6 +11,7 @@
 
 import csv
 import datetime
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +24,8 @@ from comken.exceptions import (
 )
 from comken.services.salesforce_downloader.history_file_lock import HistoryFileLock
 from comken.services.salesforce_downloader.master import ReportEntry
+
+logger = logging.getLogger(__name__)
 
 # 履歴CSVの列。順序は出力ファイルそのものなので、追加・並び替えは全プロジェクトの
 # 既存履歴を読む処理へ影響する（互換性ポリシーに従う）
@@ -101,6 +104,13 @@ def record(
         row: 履歴1行の本体（成否・各段階の結果・件数・エラー）。
     """
     path = Path(path)
+    logger.debug(
+        "履歴追記開始: path=%s, 管理番号=%s, schedule_key=%s, project=%s",
+        path,
+        entry.key,
+        row.schedule_key,
+        project,
+    )
     values = [
         now().strftime(_TIMESTAMP_FORMAT),
         entry.key,
@@ -127,6 +137,7 @@ def record(
         raise
     except OSError as exc:
         raise HistoryWriteError(path, str(exc)) from exc
+    logger.debug("履歴追記完了: path=%s", path)
 
 
 @measure
@@ -171,10 +182,17 @@ def successful_files_today(
     """
     _ = trigger  # 旧コードでは履歴の「実行方式」列を見ていたが、列を廃止したので未使用
     history_path = Path(path)
-    if not history_path.is_file():
-        return []
     target = (date or today()).strftime("%Y-%m-%d")
     key_text = str(report_key)
+    if not history_path.is_file():
+        logger.debug("履歴ファイル無し: path=%s, 件数=0", history_path)
+        return []
+    logger.debug(
+        "本日成功履歴の検索開始: path=%s, 管理番号=%s, 日付=%s",
+        history_path,
+        key_text,
+        target,
+    )
     matches: list[Path] = []
     with (
         HistoryFileLock(history_path),
@@ -191,6 +209,7 @@ def successful_files_today(
                 and row.get("ファイル名", "")
             ):
                 matches.append(Path(row.get("保存先", "")) / row["ファイル名"])
+    logger.debug("本日成功履歴の検索完了: path=%s, 該当件数=%d", history_path, len(matches))
     return list(reversed(matches))
 
 
@@ -222,14 +241,22 @@ def schedule_succeeded_today(
         当日に ``schedule_key`` で成功した履歴があれば True。
     """
     history_path = Path(path)
-    if not history_path.is_file():
-        return False
     target = (date or today()).strftime("%Y-%m-%d")
     key_text = str(schedule_key)
+    if not history_path.is_file():
+        logger.debug("履歴ファイル無し: path=%s, schedule_key=%s → False", history_path, key_text)
+        return False
     if not key_text:
         # スケジュール行に紐付かないキーを渡された場合は、誤って他行と一致
         # させないため常に False。呼び出し側で弾くのが本来の形
+        logger.debug("schedule_key が空文字: path=%s → 防御的に False", history_path)
         return False
+    logger.debug(
+        "スケジュールキー重複チェック開始: path=%s, schedule_key=%s, 日付=%s",
+        history_path,
+        key_text,
+        target,
+    )
     with (
         HistoryFileLock(history_path),
         history_path.open("r", encoding="utf-8-sig", newline="") as f,
@@ -243,7 +270,18 @@ def schedule_succeeded_today(
                 and row.get("成否", "") == SUCCESS
                 and row.get("保存結果", "") == SUCCESS
             ):
+                logger.debug(
+                    "スケジュールキー当日成功済みを検出: path=%s, schedule_key=%s "
+                    "→ 今日は既に成功済みのためスキップ",
+                    history_path,
+                    key_text,
+                )
                 return True
+    logger.debug(
+        "スケジュールキー当日成功の検出なし: path=%s, schedule_key=%s → False",
+        history_path,
+        key_text,
+    )
     return False
 
 
@@ -267,14 +305,18 @@ def read_all(path: str | Path) -> list[dict[str, str]]:
     """
     history_path = Path(path)
     if not history_path.is_file():
+        logger.debug("履歴ファイル無し: path=%s, 件数=0", history_path)
         return []
+    logger.debug("履歴全件読み込み開始: path=%s", history_path)
     with (
         HistoryFileLock(history_path),
         history_path.open("r", encoding="utf-8-sig", newline="") as f,
     ):
         reader = csv.DictReader(f)
         _require_expected_header(history_path, reader.fieldnames)
-        return [dict(row) for row in reader]
+        rows = [dict(row) for row in reader]
+    logger.debug("履歴全件読み込み完了: path=%s, 件数=%d", history_path, len(rows))
+    return rows
 
 
 def _stage(value: bool | None) -> str:

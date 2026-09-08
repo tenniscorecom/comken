@@ -10,6 +10,7 @@ docstring を参照（書く主体が違うものは分けないと、人が開�
 プログラムが保存できず履歴が飛ぶ）。
 """
 
+import logging
 from pathlib import Path
 
 from openpyxl import load_workbook
@@ -22,6 +23,8 @@ from comken.services.salesforce_downloader import _paths as _paths_module
 from comken.services.salesforce_downloader import history
 from comken.services.salesforce_downloader.master import load_master
 from comken.toolbox.excel import Excel
+
+logger = logging.getLogger(__name__)
 
 # 出力シートの列。順序はこの順でしか読まれない（手で編集しないファイルだが、
 # 将来の読み返しを考え `COLUMNS` と同じく先頭で固定する）
@@ -73,11 +76,23 @@ def write_latest_status(
     master_path = Path(master_path) if master_path is not None else _paths_module.MASTER_PATH
     history_path = Path(history_path) if history_path is not None else _paths_module.HISTORY_PATH
     output_path = Path(output_path) if output_path is not None else _paths_module.LATEST_STATUS_PATH
+    logger.debug(
+        "最新ステータス書込開始: master=%s, history=%s, output=%s",
+        master_path,
+        history_path,
+        output_path,
+    )
     entries = load_master(master_path)
     latest_by_key = _latest_rows_by_key(history_path)
+    logger.debug(
+        "最新ステータス集計: 管理表=%d 件, 履歴の最新=%d 件",
+        len(entries),
+        len(latest_by_key),
+    )
 
     body: list[dict[str, str]] = []
     failure_row_numbers: list[int] = []  # Excel の行番号（見出しが 1 行目）
+    not_run_count = 0
     for key, entry in entries.items():
         latest = latest_by_key.get(key)
         if latest is None:
@@ -91,6 +106,7 @@ def write_latest_status(
                     "エラー内容": "",
                 }
             )
+            not_run_count += 1
             continue
         succeeded = latest["成否"] != history.FAILURE
         body.append(
@@ -113,6 +129,14 @@ def write_latest_status(
         sheet = book.create_data_sheet("最新ステータス")
         sheet.create_table("最新ステータス", table)
 
+    logger.debug(
+        "最新ステータス書込完了: path=%s, 件数=%d, 未実行=%d, 失敗（塗りつぶし対象）=%d",
+        output_path,
+        len(body),
+        not_run_count,
+        len(failure_row_numbers),
+    )
+
     if failure_row_numbers:
         # `create_data_sheet` は名前に `PY_` を補う（`Excel`/`Sheet` の共通規約）。
         # report_master.py の雛形生成と同じく、保存済みファイルを開き直して
@@ -125,6 +149,11 @@ def write_latest_status(
                 worksheet.cell(row=row_number, column=column).fill = fill
         workbook.save(output_path)
         workbook.close()
+        logger.debug(
+            "失敗行を PINK で塗りつぶし: path=%s, 行数=%d",
+            output_path,
+            len(failure_row_numbers),
+        )
 
 
 def _latest_rows_by_key(history_path: Path) -> dict[str, dict[str, str]]:

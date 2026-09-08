@@ -27,6 +27,7 @@ create_schedule_template`` で雛形生成だけを呼ぶ形になる（判定�
 ``schedule.py`` のまま）。
 """
 
+import logging
 from pathlib import Path
 from typing import cast
 
@@ -55,6 +56,8 @@ from comken.services.salesforce_downloader.schedule import (
     SCHEDULE_SHEET_NAME,
 )
 from comken.toolbox.excel import Excel
+
+logger = logging.getLogger(__name__)
 
 # 雛形に付ける「ドロップダウン範囲の行数」。``report_master`` と同じ値を使う。
 _DATA_VALIDATION_ROWS = 1000
@@ -238,6 +241,12 @@ def create_schedule_template(
     with Excel(source) as excel:
         excel.create_data_sheet(SCHEDULE_SHEET_NAME).create_table("スケジュール", schedule_table)
 
+    logger.debug(
+        "スケジュール雛形データシート作成: path=%s, 例=%d 行",
+        source,
+        len(rows),
+    )
+
     # フォント・ドロップダウン・列幅・記入例の背景色は ``openpyxl`` で直接当てる
     # （``Sheet.create_table`` は値・テーブル定義だけを書き、書式は触らないため）
     book = load_workbook(source)
@@ -260,6 +269,7 @@ def create_schedule_template(
 
     book.save(source)
     book.close()
+    logger.debug("スケジュール雛形書込完了: path=%s", source)
     return source
 
 
@@ -283,6 +293,7 @@ def _apply_schedule_choice_validations(sheet: Worksheet, example_count: int) -> 
     """
     required_headers = {"取得頻度"}
     last_row = _FIRST_DATA_ROW + example_count - 1 + _DATA_VALIDATION_ROWS
+    choice_column_count = 0
     for offset, spec in enumerate(SCHEDULE_COLUMN_SPECS, start=1):
         if not spec.choices:
             continue  # ``choices`` を宣言していない列には付けない
@@ -307,6 +318,12 @@ def _apply_schedule_choice_validations(sheet: Worksheet, example_count: int) -> 
         )
         validation.add(f"{letter}{_FIRST_DATA_ROW}:{letter}{last_row}")
         sheet.add_data_validation(validation)
+        choice_column_count += 1
+    logger.debug(
+        "スケジュール雛形: ドロップダウン列=%d / 全列=%d",
+        choice_column_count,
+        len(SCHEDULE_COLUMN_SPECS),
+    )
 
 
 def _apply_schedule_conditional_formatting(sheet: Worksheet, example_count: int) -> None:
@@ -355,6 +372,14 @@ def _apply_schedule_conditional_formatting(sheet: Worksheet, example_count: int)
             stopIfTrue=False,
         ),
     )
+    logger.debug(
+        "スケジュール雛形: 条件付き書式 (曜日列=%s は「%s」以外グレー,"
+        " 日付列=%s は「%s」以外グレー)",
+        weekday_letter,
+        FREQUENCY_WEEKLY,
+        date_letter,
+        FREQUENCY_MONTHLY,
+    )
 
 
 def _resolve_schedule_column(header: str) -> str:
@@ -390,9 +415,14 @@ def _append_schedule_guide(book: object) -> None:
     """
     if _GUIDE_SHEET_NAME in book.sheetnames:  # type: ignore[attr-defined]
         guide, start_row = _resume_existing_guide(book[_GUIDE_SHEET_NAME])  # type: ignore[attr-defined]
+        logger.debug(
+            "スケジュール雛形: ガイドシート既存（追記開始行=%d）",
+            start_row,
+        )
     else:
         guide = book.create_sheet(_GUIDE_SHEET_NAME)  # type: ignore[attr-defined]
         start_row = _init_new_guide(guide)
+        logger.debug("スケジュール雛形: ガイドシートを新規作成")
 
     _write_schedule_section(guide, start_row)
     _normalize_guide_fonts(guide, start_row)

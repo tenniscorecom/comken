@@ -26,6 +26,7 @@ r"""comken/services/salesforce_downloader/master.py — レポート管理表の
 - 取得・保存・履歴 → service.py / history.py
 """
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -33,6 +34,8 @@ from comken.core.timer import measure
 from comken.exceptions import InvalidReportURLError, SalesforceReportIDNotFoundError
 from comken.services.salesforce_downloader.report_master import MasterRow, column
 from comken.toolbox.salesforce.report import report_id_from_url
+
+logger = logging.getLogger(__name__)
 
 # 記入例（雛形に入れる）。2行目は別のレポートにする——同じ URL を並べると、
 # check が「同じレポートを指している」と報告してしまう
@@ -172,10 +175,12 @@ def load_master(path: str | Path | None = None) -> dict[str, ReportEntry]:
     Returns:
         {管理番号: ReportEntry}。管理表に並んでいる順を保つ。
     """
+    logger.debug("レポート管理表読込開始: path=%s", path)
     entries = {}
     for entry in ReportEntry.load(path):
         entry.report_id  # noqa: B018 — URL が壊れていれば、ここで読み込みごと止める
         entries[entry.key] = entry
+    logger.debug("レポート管理表読込完了: path=%s, 件数=%d", path, len(entries))
     return entries
 
 
@@ -192,4 +197,6 @@ def shared_report_ids(entries: dict[str, ReportEntry]) -> dict[str, list[str]]:
     by_report_id: dict[str, list[str]] = {}
     for entry in entries.values():
         by_report_id.setdefault(entry.report_id, []).append(entry.key)
-    return {report_id: keys for report_id, keys in by_report_id.items() if len(keys) > 1}
+    duplicates = {report_id: keys for report_id, keys in by_report_id.items() if len(keys) > 1}
+    logger.debug("重複レポートIDの検出: 対象=%d, 重複=%d", len(by_report_id), len(duplicates))
+    return duplicates
