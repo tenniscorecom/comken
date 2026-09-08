@@ -211,6 +211,18 @@ class Excel:
 
     def _enter_openpyxl_engine(self) -> None:
         """``engine='openpyxl'`` でブックを開く（``__enter__`` の一部）。"""
+        self._resolve_openpyxl_working_path()
+        self._open_openpyxl_workbook()
+        self._is_open = True
+        self._is_closed = False
+
+    def _resolve_openpyxl_working_path(self) -> None:
+        """``engine='openpyxl'`` 用の作業パスを決定し ``self._working_path`` を設定する。
+
+        ``self._local_copy_required`` が真でファイルが存在するなら
+        ``_force_local_copy()`` でローカル作業コピーを使い、そうでなければ
+        ``self.path`` をそのまま使う。
+        """
         if self._local_copy_required and self.path.exists():
             # NAS・ネットワークドライブ上のブックを直接扱うと OpenPyXL/Excel の I/O が
             # 不安定になることがある。作業中だけローカルを使い、保存時に元のパスへ戻す。
@@ -224,6 +236,13 @@ class Excel:
             )
         else:
             self._working_path = self.path
+
+    def _open_openpyxl_workbook(self) -> None:
+        """``self._read_only`` に応じて openpyxl のブックを開く（``self._workbook`` を設定）。
+
+        書き込み用は ``__enter__`` で必ず開く。読み取り専用は遅延オープンのままにし、
+        ``_working_path`` が存在しなければ ``ExcelFileNotFoundError`` を送出する。
+        """
         if not self._read_only:
             # 書き込み用ブックは __enter__ で必ず開く。``_read_computed_rows`` のように
             # メモリ上のセル値を参照する経路があるため。
@@ -253,8 +272,6 @@ class Excel:
                 "openpyxl 読み取り専用ブックは遅延オープンします: working_path=%s",
                 self._working_path,
             )
-        self._is_open = True
-        self._is_closed = False
 
     def __exit__(
         self,
