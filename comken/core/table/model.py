@@ -66,6 +66,32 @@ class Table:
                 raise TableTypeConversionError(row_number, column, row[column]) from exc
         return normalized
 
+    @classmethod
+    def _from_normalized_rows(
+        cls,
+        columns: list[str] | tuple[str, ...],
+        rows: list[dict[str, Any]],
+        types: Mapping[str, Callable[[Any], Any]] | None = None,
+    ) -> Table:
+        """既に types 変換済みの行から Table を作る（変換関数を再実行しない内部専用）。
+
+        select() / filter() / group_by() / concat() のように、値が既に元の
+        Table で変換済みであることを呼び出し側が保証できるときだけ使う。
+        通常の ``Table(...)`` と違い ``_normalize()`` を通さないため、列の
+        過不足チェックも行わない（呼び出し側の責任で ``columns`` と ``rows`` の
+        列が一致していること）。
+
+        渡された行は ``dict(row)`` でコピーしてから保持する（Table 間で行
+        オブジェクトの参照を共有しない、という既存の不変条件を保つため）。
+        """
+        instance = cls.__new__(cls)
+        instance.columns = list(columns)
+        if len(instance.columns) != len(set(instance.columns)):
+            raise TableError("列名は重複させられません。")
+        instance.types = dict(types or {})
+        instance._rows = [dict(row) for row in rows]
+        return instance
+
     def to_rows(self) -> list[dict[str, Any]]:
         """現在の行をコピーして返す。元のTableは変更しない。"""
         return [dict(row) for row in self._rows]
@@ -81,7 +107,8 @@ class Table:
 
     def __iter__(self) -> Iterator[dict[str, Any]]:
         """各行のコピーを返す。反復中の変更は元のTableへ反映しない。"""
-        return iter(self.to_rows())
+        for row in self._rows:
+            yield dict(row)
 
     def __len__(self) -> int:
         return len(self._rows)
@@ -121,7 +148,7 @@ class Table:
         selected_types = {
             column: converter for column, converter in self.types.items() if column in columns
         }
-        result = Table(
+        result = Table._from_normalized_rows(
             list(columns),
             [{column: row[column] for column in columns} for row in self._rows],
             types=selected_types,
@@ -133,7 +160,7 @@ class Table:
         """条件に一致する行だけを持つ新しいTableを返す。"""
         # predicate は利用者コードなので、誤って行を書き換えても元の Table へ影響させない。
         rows = [dict(row) for row in self._rows if predicate(dict(row))]
-        result = Table(self.columns, rows, types=self.types)
+        result = Table._from_normalized_rows(self.columns, rows, types=self.types)
         logger.debug("Table filter: %d 行 (元 %d 行)", len(result), len(self._rows))
         return result
 
@@ -162,7 +189,8 @@ class Table:
         for row in self._rows:
             grouped.setdefault(row[key], []).append(row)
         result = {
-            value: Table(self.columns, rows, types=self.types) for value, rows in grouped.items()
+            value: Table._from_normalized_rows(self.columns, rows, types=self.types)
+            for value, rows in grouped.items()
         }
         logger.debug("Table group_by: %s で %d グループ", key, len(result))
         return result
@@ -177,7 +205,7 @@ class Table:
         if set(self.columns) != set(other.columns):
             raise TableError("concatする表の列名が一致しません。")
         columns = self.columns
-        result = Table(
+        result = Table._from_normalized_rows(
             columns,
             [{column: row[column] for column in columns} for row in [*self._rows, *other._rows]],
             types=self.types,
