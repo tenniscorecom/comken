@@ -237,6 +237,32 @@ class ScheduledDownloadFailedError(DownloaderError):
         )
 
 
+class SoqlDownloadFailedError(DownloaderError):
+    """SOQL レポートの取得で1件以上が失敗した
+
+    取得できたものは保存済み。**1件失敗しても残りは続けたうえで、最後にまとめて知らせる。**
+    `download_scheduled()` と同じ「ログだけだと気づけない」問題なので、最後に例外で
+    上げる。``ScheduledDownloadFailedError`` は履歴 CSV の存在を前提にしたメッセージ
+    になるため、履歴機能を持たない SOQL レポート経路ではこの例外を使う。
+
+    発生箇所: comken.services.salesforce_downloader.soql_reports の download_soql_reports()
+
+    対処:
+        表示された管理番号について、SOQL クエリ・組織の認証情報・保存先フォルダの
+        権限・ネットワークの状態を確認する。急いで必要なものは
+        ``download_soql_reports()`` を直接実行してもよい
+    """
+
+    def __init__(self, failed_keys: list[str]) -> None:
+        self.failed_keys = failed_keys
+        keys = "、".join(str(key) for key in failed_keys)
+        super().__init__(
+            f"SOQL レポートの取得で {len(failed_keys)} 件が失敗しました: {keys}\n"
+            "失敗した管理番号について、SOQL クエリ・組織の認証情報・保存先フォルダの"
+            "権限・ネットワークの状態を確認してください。"
+        )
+
+
 class UnsupportedScheduleFrequencyError(DownloaderError):
     """管理表の「取得頻度」に、想定外の値が書かれている
 

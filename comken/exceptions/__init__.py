@@ -133,6 +133,7 @@ ComkenError
 │   ├── ReportFolderNotFoundError
 │   ├── ReportReservePathLimitError
 │   ├── ScheduledDownloadFailedError
+│   ├── SoqlDownloadFailedError
 │   ├── UnsupportedScheduleFrequencyError
 │   ├── ScheduleIntervalMissingError
 │   ├── ScheduleRequiredValueMissingError
@@ -233,6 +234,7 @@ from comken.exceptions.downloader import (
     ScheduleRequiredValueMissingError,
     ScheduleRowValueError,
     ScheduleWeekdayInvalidError,
+    SoqlDownloadFailedError,
     UnsupportedScheduleFrequencyError,
 )
 from comken.exceptions.excel import (
@@ -446,6 +448,7 @@ __all__ = [
     "ReportFolderNotFoundError",
     "ReportReservePathLimitError",
     "ScheduledDownloadFailedError",
+    "SoqlDownloadFailedError",
     "UnsupportedScheduleFrequencyError",
     "ScheduleIntervalMissingError",
     "ScheduleRequiredValueMissingError",

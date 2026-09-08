@@ -5922,6 +5922,34 @@ class ScheduledDownloadFailedError(DownloaderError):
 def __init__(self, failed_keys: list[str], history_path: Path) -> None:
 ```
 
+### `SoqlDownloadFailedError`
+
+```text
+class SoqlDownloadFailedError(DownloaderError):
+```
+
+#### 説明
+
+SOQL レポートの取得で1件以上が失敗した
+
+取得できたものは保存済み。**1件失敗しても残りは続けたうえで、最後にまとめて知らせる。**
+`download_scheduled()` と同じ「ログだけだと気づけない」問題なので、最後に例外で
+上げる。``ScheduledDownloadFailedError`` は履歴 CSV の存在を前提にしたメッセージ
+になるため、履歴機能を持たない SOQL レポート経路ではこの例外を使う。
+
+発生箇所: comken.services.salesforce_downloader.soql_reports の download_soql_reports()
+
+対処:
+    表示された管理番号について、SOQL クエリ・組織の認証情報・保存先フォルダの
+    権限・ネットワークの状態を確認する。急いで必要なものは
+    ``download_soql_reports()`` を直接実行してもよい
+
+#### `__init__`
+
+```text
+def __init__(self, failed_keys: list[str]) -> None:
+```
+
 ### `UnsupportedScheduleFrequencyError`
 
 ```text
@@ -6594,6 +6622,80 @@ def is_due(self, now: dt.datetime, *, holidays: set[dt.date] | frozenset[dt.date
 ``True`` を返す（例: 前日以前の確定済みデータのように、いつ取っても同じ内容の
 レポート用）。``FREQUENCY_HOURLY`` は対象外で、``run_time`` が無いと
 ``ScheduleIntervalMissingError`` を投げる。
+
+
+## `from comken.services.salesforce_downloader.soql_reports import ...`
+
+### `SoqlReport`
+
+```text
+class SoqlReport:
+```
+
+#### 説明
+
+Report API（2000行上限）で取れない大きなレポートを SOQL で取る基底クラス。
+
+サブクラスは ``KEY`` / ``SUMMARY`` / ``URL`` / ``FOLDER`` を上書きし、
+``soql()`` を実装する。1レポート=1ファイルで ``__init__.py`` の
+``SOQL_REPORTS`` タプルへ明示的に登録する（**自動登録の仕組みは持たない**）。
+
+Excel の「スケジュール」シートとは独立している。いつ呼ぶかは呼び出し側
+（プロジェクトの定期実行）が決める前提なので、この基底クラスには
+スケジュール判定を持たせない。
+
+Attributes:
+    KEY: 管理番号。``download_scheduled()`` の ``ReportEntry.key`` と
+        同じ意味で、社内で決める論理的な番号（前ゼロ・記号入りも可）。
+        Salesforce のレポート ID ではない。
+    SUMMARY: 人が読んで何のレポートか分かる説明。保存するファイル名にも使われる。
+    URL: レポートを開いた組織の My Domain の URL。``site_for()`` で
+        組織を解決するために使う（``ReportEntry.url`` と同じ運用）。
+    FOLDER: 保存先フォルダの絶対パス／UNC 文字列。**フォルダが無いと
+        エラーにする**（``_reserve_path()`` と同じ判断。書き間違いに
+        気づけるよう、勝手には作らない）。
+    ALLOW_EMPTY: ``True`` なら 0 件のときも空 CSV を保存して成功扱い、
+        ``False`` なら 0 件を ``EmptyReportError`` として失敗扱いする
+        （``ReportEntry.allow_empty`` と同じ運用）。
+
+#### `soql`
+
+```text
+def soql(self) -> str:
+```
+
+##### 説明
+
+実行する SOQL クエリ文字列を返す。サブクラスで実装する。
+
+### `SOQL_REPORTS`
+
+公開定数。
+
+### `download_soql_reports`
+
+```text
+def download_soql_reports(reports: Sequence[type[SoqlReport]] | None=None) -> list[Path]:
+```
+
+#### 説明
+
+登録された SOQL レポートを全て取得し、保存先のパスを返す。
+
+``reports`` を省略すると ``SOQL_REPORTS`` を使う（テストでは差し替え可能）。
+**1件失敗しても残りは続ける**（``download_scheduled()`` と同じ方針）。
+
+想定した失敗（``ComkenError`` / ``OSError``）はログに残して次のレポートへ進む。
+想定外（``TypeError`` などのプログラムバグ）はそのまま伝播させ、気づける
+ようにする。1件でも失敗したら最後に ``SoqlDownloadFailedError`` を
+``__cause__`` 付きで送出する。
+
+Args:
+    reports: 取得対象の ``SoqlReport`` サブクラスのシーケンス。
+        ``None`` のときは ``SOQL_REPORTS`` を使う。
+
+Returns:
+    保存したファイルのパス一覧（**成功したぶんだけ**）。
 
 
 ## `from comken.toolbox.access import ...`
