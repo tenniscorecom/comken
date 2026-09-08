@@ -17,8 +17,11 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def backoffice(main: Callable[[], Any], project_name: str) -> Any:
@@ -35,8 +38,26 @@ def backoffice(main: Callable[[], Any], project_name: str) -> Any:
     Returns:
         ``main()`` の戻り値。
     """
-    del project_name  # 現状未使用。シグネチャ互換のためだけに受け取る
-    return main()
+    target_name = getattr(main, "__name__", type(main).__name__)
+    logger.debug(
+        "バックオフィス RPA として main を実行します: target=%s project_name=%s",
+        target_name,
+        project_name,
+    )
+    try:
+        result = main()
+    except Exception:
+        logger.debug(
+            "バックオフィス RPA の main 実行が失敗しました: target=%s",
+            target_name,
+            exc_info=True,
+        )
+        raise
+    logger.debug(
+        "バックオフィス RPA の main 実行が完了しました: target=%s",
+        target_name,
+    )
+    return result
 
 
 def intranet(main: Callable[[], Any], project_name: str) -> Any:
@@ -53,8 +74,26 @@ def intranet(main: Callable[[], Any], project_name: str) -> Any:
     Returns:
         ``main()`` の戻り値。
     """
-    del project_name  # 現状未使用。シグネチャ互換のためだけに受け取る
-    return main()
+    target_name = getattr(main, "__name__", type(main).__name__)
+    logger.debug(
+        "イントラネット RPA として main を実行します: target=%s project_name=%s",
+        target_name,
+        project_name,
+    )
+    try:
+        result = main()
+    except Exception:
+        logger.debug(
+            "イントラネット RPA の main 実行が失敗しました: target=%s",
+            target_name,
+            exc_info=True,
+        )
+        raise
+    logger.debug(
+        "イントラネット RPA の main 実行が完了しました: target=%s",
+        target_name,
+    )
+    return result
 
 
 __all__ = ["backoffice", "intranet"]

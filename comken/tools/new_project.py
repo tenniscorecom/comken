@@ -16,8 +16,11 @@
 """
 
 import argparse
+import logging
 import shutil
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # このファイルは comken/tools/ にあるので、comken パッケージのルートは1つ上。
 # テンプレートは同じ comken/ の下にある（comken/templates/新規プロジェクト）。
@@ -66,20 +69,33 @@ PYTHON_LIBRARY_FILES = (
 def create(project_name: str, into: Path, python_library: Path = IMPORT_ROOT) -> Path:
     """ひな形をコピーして、新しいプロジェクトのフォルダを作る。"""
     if not TEMPLATE_DIR.is_dir():
+        logger.debug("ひな形が見つかりません: %s", TEMPLATE_DIR)
         raise FileNotFoundError(f"ひな形が見つかりません: {TEMPLATE_DIR}")
 
     target = into / project_name
     # 既存フォルダを上書きすると、書きかけの中身が消える。必ず止める。
     if target.exists():
+        logger.debug(
+            "同名のフォルダが既に存在するため中止します: target=%s",
+            target,
+        )
         raise FileExistsError(
             f"すでに同じ名前のフォルダがあります: {target}\n"
             "別の名前にするか、既存のフォルダを移動してから実行してください。"
         )
 
+    logger.debug(
+        "プロジェクト雛形の生成を開始します: template=%s target=%s python_library=%s",
+        TEMPLATE_DIR,
+        target,
+        python_library,
+    )
     shutil.copytree(TEMPLATE_DIR, target, ignore=IGNORED)
+    logger.debug("雛形をコピーしました: %s -> %s", TEMPLATE_DIR, target)
     _strip_template_notes(target / "README.md", project_name)
     _fill_project_name(target, project_name)
     _fill_python_library(target, python_library)
+    logger.debug("プロジェクト雛形の生成が完了しました: %s", target)
 
     # NOTE: config.ini はここでは作らない。初回実行時に comken が
     #       config.ini.example から作って確認を促す（作り忘れの受け皿はそちらに一本化）。
@@ -141,10 +157,14 @@ def _fill_project_name(target: Path, project_name: str) -> None:
     for name in NAMED_FILES:
         path = target / name
         if not path.is_file():
+            logger.debug("プロジェクト名差し込みの対象外: %s", path)
             continue
         text = path.read_text(encoding="utf-8-sig")
         if PLACEHOLDER_NAME in text:
             path.write_text(text.replace(PLACEHOLDER_NAME, project_name), encoding="utf-8")
+            logger.debug("プロジェクト名を差し込みました: %s", path)
+        else:
+            logger.debug("プレースホルダが見つからず差し込みをスキップ: %s", path)
 
 
 def _fill_python_library(target: Path, python_library: Path) -> None:
@@ -160,6 +180,7 @@ def _fill_python_library(target: Path, python_library: Path) -> None:
     for name in PYTHON_LIBRARY_FILES:
         path = target / name
         if not path.is_file():
+            logger.debug("comken の場所差し込みの対象外: %s", path)
             continue
         encoding = _encoding_of(path)
         text = path.read_text(encoding=encoding)
@@ -167,6 +188,7 @@ def _fill_python_library(target: Path, python_library: Path) -> None:
         text = text.replace(slash_placeholder, slash_root)
         text = text.replace(PLACEHOLDER_PYTHON_LIBRARY, str(python_library))
         path.write_text(text, encoding=encoding)
+        logger.debug("comken の場所を差し込みました: %s", path)
 
 
 def _strip_template_notes(readme: Path, project_name: str) -> None:
@@ -176,6 +198,9 @@ def _strip_template_notes(readme: Path, project_name: str) -> None:
     if separator:
         # 節の直前の区切り線（---）も一緒に落とす
         head = head.rstrip().removesuffix("---").rstrip() + "\n"
+        logger.debug("README からひな形向けの節を落としました: %s", readme)
+    else:
+        logger.debug("README にひな形向けの節が見つかりません: %s", readme)
     readme.write_text(head.replace(PLACEHOLDER_NAME, project_name), encoding="utf-8")
 
 

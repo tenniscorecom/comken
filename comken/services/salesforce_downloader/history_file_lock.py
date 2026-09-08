@@ -1,5 +1,6 @@
 """comken/services/salesforce_downloader/history_file_lock.py — 履歴CSVの排他制御。"""
 
+import logging
 import msvcrt
 import time
 from pathlib import Path
@@ -7,6 +8,8 @@ from types import TracebackType
 from typing import BinaryIO, Self
 
 from comken.exceptions import HistoryLockTimeoutError
+
+logger = logging.getLogger(__name__)
 
 LOCK_TIMEOUT_SECONDS = 10.0
 LOCK_RETRY_SECONDS = 0.05
@@ -24,6 +27,11 @@ class HistoryFileLock:
         self._path = Path(f"{Path(history_path)}.lock")
         self._timeout = timeout
         self._file: BinaryIO | None = None
+        logger.debug(
+            "HistoryFileLock を作成しました: path=%s timeout=%s",
+            self._path,
+            self._timeout,
+        )
 
     def __enter__(self) -> Self:
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -32,15 +40,22 @@ class HistoryFileLock:
             lock_file.write(b"0")
             lock_file.flush()
         deadline = time.monotonic() + self._timeout
+        logger.debug("履歴CSVのロック取得を開始します: path=%s", self._path)
         while True:
             try:
                 lock_file.seek(0)
                 msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
                 self._file = lock_file
+                logger.debug("履歴CSVのロック取得が完了しました: path=%s", self._path)
                 return self
             except OSError as exc:
                 if time.monotonic() >= deadline:
                     lock_file.close()
+                    logger.debug(
+                        "履歴CSVのロック取得がタイムアウトしました: path=%s timeout=%s",
+                        self._path,
+                        self._timeout,
+                    )
                     raise HistoryLockTimeoutError(self._path, self._timeout) from exc
                 time.sleep(LOCK_RETRY_SECONDS)
 
@@ -55,6 +70,7 @@ class HistoryFileLock:
         try:
             self._file.seek(0)
             msvcrt.locking(self._file.fileno(), msvcrt.LK_UNLCK, 1)
+            logger.debug("履歴CSVのロックを解放しました: path=%s", self._path)
         finally:
             self._file.close()
             self._file = None
