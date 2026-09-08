@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Self
 
 from comken.toolbox.browser.page.base import _PageBase
+
+logger = logging.getLogger(__name__)
 
 
 class NavigationMixin(_PageBase):
@@ -13,7 +16,9 @@ class NavigationMixin(_PageBase):
 
     def open(self, url: str) -> Self:
         """URL を開き、自分自身を返す。"""
+        logger.debug("URL を開きます: url=%s session=%s", url, self.session.name)
         self.session.open(url)
+        logger.debug("URL を開きました: url=%s session=%s", url, self.session.name)
         return self
 
     def save_screenshot(
@@ -32,4 +37,13 @@ class NavigationMixin(_PageBase):
                 省略時は logs/。
             prefix: filename を省略したときのファイル名の先頭。
         """
-        return self.session.save_screenshot(filename, directory=directory, prefix=prefix)
+        logger.debug(
+            "スクリーンショットを保存します: filename=%s directory=%s prefix=%s session=%s",
+            filename,
+            directory,
+            prefix,
+            self.session.name,
+        )
+        path = self.session.save_screenshot(filename, directory=directory, prefix=prefix)
+        logger.debug("スクリーンショットを保存しました: path=%s", path)
+        return path

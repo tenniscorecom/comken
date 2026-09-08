@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from typing import cast
 
 from selenium.webdriver.common.alert import Alert
 from selenium.webdriver.support import expected_conditions as EC
 
 from comken.toolbox.browser.page.base import _PageBase
+
+logger = logging.getLogger(__name__)
 
 
 class AlertsMixin(_PageBase):
@@ -18,13 +21,18 @@ class AlertsMixin(_PageBase):
         with self.session._operating("alert_accept"):
             # EC.alert_is_present() の戻り Alert を pyright が bool と推論するため、Alert に直す
             cast(Alert, self._until(EC.alert_is_present(), "alert", "現れ")).accept()
+            logger.debug("警告ダイアログを OK で閉じました: session=%s", self.session.name)
 
     def alert_dismiss(self) -> None:
         """ブラウザの確認ダイアログでキャンセルを押す。出るまで待つ。"""
         with self.session._operating("alert_dismiss"):
             cast(Alert, self._until(EC.alert_is_present(), "alert", "現れ")).dismiss()
+            logger.debug("警告ダイアログをキャンセルで閉じました: session=%s", self.session.name)
 
     def read_alert_text(self) -> str:
         """ブラウザの確認ダイアログの文言を返す。出るまで待つ。"""
         with self.session._operating("read_alert_text"):
-            return cast(Alert, self._until(EC.alert_is_present(), "alert", "現れ")).text
+            text = cast(Alert, self._until(EC.alert_is_present(), "alert", "現れ")).text
+            # アラート本文は業務メッセージになり得るので、値そのものは出さない
+            logger.debug("警告ダイアログの文言を読みました: length=%d", len(text))
+            return text

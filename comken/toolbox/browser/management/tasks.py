@@ -55,9 +55,20 @@ class BackgroundTask(Generic[T]):
             TimeoutError: timeout 秒以内に終わらなかった場合。処理自体は動き続ける。
             Exception: 処理の中で起きた例外をそのまま送出する。
         """
+        logger.debug(
+            "BackgroundTask の結果を待ちます: label=%s timeout=%s 状態=%s",
+            self.label,
+            "なし" if timeout is None else f"{timeout}秒",
+            "完了" if self.is_done else "実行中",
+        )
         try:
             result = self._future.result(timeout=timeout)
         except FutureTimeoutError as exc:
+            logger.debug(
+                "BackgroundTask が時間内に終わりませんでした: label=%s timeout=%s秒",
+                self.label,
+                timeout,
+            )
             # まだ動いている。受け取ったことにはしない
             raise TimeoutError(
                 f"「{self.label}」が {timeout} 秒以内に終わりませんでした。\n"
@@ -66,9 +77,11 @@ class BackgroundTask(Generic[T]):
             ) from exc
         except Exception:
             self._is_collected = True
+            logger.debug("BackgroundTask が例外で終了しました: label=%s", self.label)
             raise
 
         self._is_collected = True
+        logger.debug("BackgroundTask が完了しました: label=%s", self.label)
         return result
 
     @property

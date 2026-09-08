@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Self
 
 from comken.toolbox.browser.page.model import Page
+
+logger = logging.getLogger(__name__)
 
 
 class SitePage(Page):
@@ -30,7 +33,15 @@ class SitePage(Page):
         Args:
             path: BASE_URL からの相対パス（例: "/login"）。省略時は BASE_URL を開く。
         """
-        self.session.open(self._base_url + path)
+        full_url = self._base_url + path
+        logger.debug(
+            "BASE_URL からの相対パスへ移動します: path=%s base_url=%s full=%s session=%s",
+            path,
+            self._base_url,
+            full_url,
+            self.session.name,
+        )
+        self.session.open(full_url)
         return self
 
     @property

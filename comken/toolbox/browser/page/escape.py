@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Self
@@ -11,6 +12,8 @@ from selenium.webdriver.support import expected_conditions as EC
 
 from comken.toolbox.browser.locator import Locator
 from comken.toolbox.browser.page.base import _PageBase
+
+logger = logging.getLogger(__name__)
 
 
 class EscapeMixin(_PageBase):
@@ -31,12 +34,14 @@ class EscapeMixin(_PageBase):
         Yields:
             自分自身。中では今までどおりメソッドを呼べる。
         """
+        logger.debug("iframe へ切り替えます: locator=%s", locator)
         with self.session._operating(f"frame({locator})"):
             self._until(EC.frame_to_be_available_and_switch_to_it(locator), locator, "切り替えられ")
             try:
                 yield self
             finally:
                 self.session.raw.switch_to.default_content()
+                logger.debug("iframe から戻りました: locator=%s", locator)
 
     def find_element(self, locator: Locator) -> WebElement:
         """selenium の WebElement をそのまま返す。
@@ -45,7 +50,9 @@ class EscapeMixin(_PageBase):
         よく使うものはこのクラスにメソッドとして足すこと。
         """
         with self.session._operating(f"find_element({locator})"):
-            return self._until(EC.presence_of_element_located(locator), locator, "見つかり")
+            element = self._until(EC.presence_of_element_located(locator), locator, "見つかり")
+            logger.debug("find_element で取得しました: locator=%s", locator)
+            return element
 
     def find_elements(self, locator: Locator) -> list[WebElement]:
         """一致する全要素を WebElement のリストで返す。1件見つかるまで待つ。
@@ -74,7 +81,11 @@ class EscapeMixin(_PageBase):
                                   読み込み前に呼ぶと「まだ出ていない」を「0件」と読み違える。
         """
         with self.session._operating(f"find_elements({locator})"):
-            return self._until(EC.presence_of_all_elements_located(locator), locator, "見つかり")
+            elements = self._until(
+                EC.presence_of_all_elements_located(locator), locator, "見つかり"
+            )
+            logger.debug("find_elements で取得しました: locator=%s 件数=%d", locator, len(elements))
+            return elements
 
     def execute_script(self, script: str, *args: object) -> object:
         """JavaScript を実行して戻り値を返す。
@@ -83,5 +94,17 @@ class EscapeMixin(_PageBase):
             script: 実行する JavaScript。
             *args: スクリプト内で arguments[0], arguments[1] ... として参照できる値。
         """
+        # script の中身は秘匿情報が埋め込まれている可能性もあるのでログには出さない
+        logger.debug(
+            "JavaScript を実行します: length=%d 引数=%d個",
+            len(script),
+            len(args),
+        )
         with self.session._operating("execute_script"):
-            return self.session.raw.execute_script(script, *args)
+            result = self.session.raw.execute_script(script, *args)
+            logger.debug(
+                "JavaScript の実行が完了しました: length=%d 戻り値=%s",
+                len(script),
+                type(result).__name__,
+            )
+            return result

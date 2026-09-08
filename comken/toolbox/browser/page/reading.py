@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.support import expected_conditions as EC
 
 from comken.toolbox.browser.locator import Locator
 from comken.toolbox.browser.page.base import _PageBase
+
+logger = logging.getLogger(__name__)
 
 
 class ReadingMixin(_PageBase):
@@ -15,7 +19,10 @@ class ReadingMixin(_PageBase):
     def read_text(self, locator: Locator) -> str:
         """要素の表示文字を返す。"""
         with self.session._operating(f"read_text({locator})"):
-            return self._until(EC.visibility_of_element_located(locator), locator, "表示され").text
+            text = self._until(EC.visibility_of_element_located(locator), locator, "表示され").text
+            # 表示文字は業務データになり得るので値そのものは出さない
+            logger.debug("テキストを読みました: locator=%s length=%d", locator, len(text))
+            return text
 
     def read_texts(self, locator: Locator) -> list[str]:
         """一致する全要素の表示文字をリストで返す（一覧表の全行を読むときなど）。"""
@@ -23,7 +30,15 @@ class ReadingMixin(_PageBase):
             elements = self._until(
                 EC.presence_of_all_elements_located(locator), locator, "見つかり"
             )
-            return [element.text for element in elements]
+            texts = [element.text for element in elements]
+            # 全要素の長さの合計だけ出し、値そのものは出さない
+            logger.debug(
+                "テキスト一覧を読みました: locator=%s 件数=%d 合計文字数=%d",
+                locator,
+                len(texts),
+                sum(len(t) for t in texts),
+            )
+            return texts
 
     def read_attribute(self, locator: Locator, name: str) -> str | None:
         """要素の属性値を返す（href やチェック状態など）。属性が無ければ None。
@@ -34,7 +49,15 @@ class ReadingMixin(_PageBase):
         """
         with self.session._operating(f"read_attribute({locator}, {name})"):
             element = self._until(EC.presence_of_element_located(locator), locator, "見つかり")
-            return element.get_attribute(name)
+            value = element.get_attribute(name)
+            # 値そのものは出さない（href や value 属性は業務データの可能性）
+            logger.debug(
+                "属性を読みました: locator=%s name=%s 取得=%s",
+                locator,
+                name,
+                "あり" if value is not None else "なし",
+            )
+            return value
 
     def has_element(self, locator: Locator) -> bool:
         """要素が HTML 上に在るかを返す（待たずにその場で確認する）。
@@ -44,11 +67,15 @@ class ReadingMixin(_PageBase):
         with self.session._operating(f"has_element({locator})"):
             try:
                 self.session.raw.find_element(*locator)
+                logger.debug("要素の存在を検出しました: locator=%s 結果=あり", locator)
                 return True
             except NoSuchElementException:
+                logger.debug("要素の存在を検出しました: locator=%s 結果=なし", locator)
                 return False
 
     def count_elements(self, locator: Locator) -> int:
         """一致する要素の数を返す（待たずにその場で数える。無ければ 0）。"""
         with self.session._operating(f"count_elements({locator})"):
-            return len(self.session.raw.find_elements(*locator))
+            count = len(self.session.raw.find_elements(*locator))
+            logger.debug("要素を数えました: locator=%s 件数=%d", locator, count)
+            return count

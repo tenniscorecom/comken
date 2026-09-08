@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import logging
+
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
 
 from comken.toolbox.browser.locator import Locator
 from comken.toolbox.browser.page.base import _PageBase
+
+logger = logging.getLogger(__name__)
 
 
 class OperationsMixin(_PageBase):
@@ -25,11 +29,18 @@ class OperationsMixin(_PageBase):
             if index == 0:
                 condition = EC.element_to_be_clickable(locator)
                 self._until(condition, locator, "クリックでき").click()
+                logger.debug("クリックしました: locator=%s index=0", locator)
                 return
             elements = self._until(
                 EC.presence_of_all_elements_located(locator), locator, "見つかり"
             )
             elements[index].click()
+            logger.debug(
+                "クリックしました: locator=%s index=%d 候補=%d件",
+                locator,
+                index,
+                len(elements),
+            )
 
     def input(self, locator: Locator, text: str) -> None:
         """入力欄に文字を入れる。もとの値は消える。"""
@@ -37,21 +48,29 @@ class OperationsMixin(_PageBase):
             element = self._visible(locator)
             element.clear()
             element.send_keys(text)
+            # 入力値はログに出さない（業務データのため）。桁数だけ残して操作が
+            # 走ったことを確認できるようにする
+            logger.debug("入力しました: locator=%s length=%d", locator, len(text))
 
     def select_text(self, locator: Locator, text: str) -> None:
         """プルダウンを、表示されている文字で選ぶ。"""
         with self.session._operating(f"select_text({locator})"):
             Select(self._visible(locator)).select_by_visible_text(text)
+            # 選択基準の文字列は UI ラベルだが、業務データの一部になり得るので出さない
+            logger.debug("表示テキストで select しました: locator=%s", locator)
 
     def select_value(self, locator: Locator, option_value: str) -> None:
         """プルダウンを、option の value 属性で選ぶ。"""
         with self.session._operating(f"select_value({locator})"):
             Select(self._visible(locator)).select_by_value(option_value)
+            # value は業務上の識別子になり得るので出さない
+            logger.debug("value 属性で select しました: locator=%s", locator)
 
     def select_index(self, locator: Locator, index: int) -> None:
         """プルダウンを、上から何番目かで選ぶ（0始まり）。"""
         with self.session._operating(f"select_index({locator})"):
             Select(self._visible(locator)).select_by_index(index)
+            logger.debug("インデックスで select しました: locator=%s index=%d", locator, index)
 
     def drag_drop(self, source: Locator, target: Locator) -> None:
         """要素を別の要素までドラッグして落とす。"""
@@ -59,14 +78,17 @@ class OperationsMixin(_PageBase):
             ActionChains(self.session.raw).drag_and_drop(
                 self._visible(source), self._visible(target)
             ).perform()
+            logger.debug("ドラッグ&ドロップしました: source=%s target=%s", source, target)
 
     def scroll_to(self, locator: Locator) -> None:
         """要素が画面に入るまでスクロールする。"""
         with self.session._operating(f"scroll_to({locator})"):
             element = self._until(EC.presence_of_element_located(locator), locator, "見つかり")
             self.session.raw.execute_script("arguments[0].scrollIntoView(true);", element)
+            logger.debug("要素までスクロールしました: locator=%s", locator)
 
     def scroll_bottom(self) -> None:
         """ページの一番下までスクロールする（続きを読み込ませるときなど）。"""
         with self.session._operating("scroll_bottom"):
             self.session.raw.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            logger.debug("ページ末尾までスクロールしました: session=%s", self.session.name)

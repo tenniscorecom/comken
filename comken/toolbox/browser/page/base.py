@@ -8,6 +8,7 @@ ElementNotFoundError に包み直す _until() をここに置く。
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import Any, TypeVar
 
@@ -19,6 +20,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from comken.exceptions import ElementNotFoundError
 from comken.toolbox.browser.locator import Locator
 from comken.toolbox.browser.management import BrowserSession
+
+logger = logging.getLogger(__name__)
 
 # to() が「渡したクラスをそのまま返す」ことを型で示す
 P = TypeVar("P", bound="_PageBase")
@@ -41,6 +44,12 @@ class _PageBase:
         self.session = session
         self._wait_seconds = wait_seconds if wait_seconds is not None else session.wait_seconds
         self._wait = WebDriverWait(session.raw, self._wait_seconds)
+        logger.debug(
+            "Page を初期化しました: page=%s session=%s wait_seconds=%d",
+            type(self).__name__,
+            session.name,
+            self._wait_seconds,
+        )
 
     def to(self, page_class: type[P]) -> P:
         """遷移先の画面クラスを作る（同じブラウザを引き継ぐ）。
@@ -55,6 +64,11 @@ class _PageBase:
         1つ足すたびに「セッションとは何か」が顔を出す。画面の遷移を書きたい
         だけの人が、ブラウザの持ち方まで知らずに済むようにする。
         """
+        logger.debug(
+            "画面クラスを遷移します: from=%s to=%s",
+            type(self).__name__,
+            page_class.__name__,
+        )
         return page_class(self.session)
 
     def _until(self, condition: Callable[[Any], Any], locator: object, description: str) -> Any:
@@ -66,6 +80,14 @@ class _PageBase:
         try:
             return self._wait.until(condition)
         except TimeoutException as exc:
+            # タイムアウト時はどの待機が失敗したかを残す。値そのものは出さない
+            logger.debug(
+                "要素待機のタイムアウト: description=%s locator=%s timeout=%d秒 session=%s",
+                description,
+                locator,
+                self._wait_seconds,
+                self.session.name,
+            )
             raise ElementNotFoundError(locator, self._wait_seconds, description) from exc
 
     def _visible(self, locator: Locator) -> WebElement:
