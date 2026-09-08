@@ -39,7 +39,7 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 | エラーが出た | [エラー対応ガイド](docs/ERRORS.md)（エラー表は **自動生成**） |
 | 動くコードを見る | [examples](examples/README.md) |
 | なぜこの設計なのか知る | [仕様書](docs/開発/仕様書.md) |
-| コードを書く規約 | [共通コーディング規約](docs/開発/CONVENTIONS.md) |
+| コードを書く規約 | [コーディング規約（利用者向け）](docs/開発/コーディング規約_利用者向け.md)（詳細版は[CONVENTIONS.md](docs/開発/CONVENTIONS.md)） |
 | comken 本体を直す | [ライブラリ開発規約](docs/開発/ライブラリ開発規約.md) |
 | 開発してリリースする | [仕様書「開発とリリース」](docs/開発/仕様書.md#開発とリリース)（タグを打つ → 共有サーバーで checkout） |
 | comken を使うツールを作る | `comken init プロジェクト名` で雛形を作る（作られた `README.md` が中を案内する） |
