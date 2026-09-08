@@ -23,11 +23,14 @@ JSON の形式（システム名ごとに項目をまとめる）:
 """
 
 import json
+import logging
 from pathlib import Path
 
 from comken.core.timer import measure
 from comken.exceptions import CredentialImportError
 from comken.toolbox.credentials.store import save_credentials
+
+logger = logging.getLogger(__name__)
 
 _NAME_SEPARATOR = "_"
 _FIELD_PART_COUNT = 2
@@ -71,9 +74,17 @@ def import_json(json_path: str | Path, path: Path | None = None) -> list[str]:
         CredentialDecryptionError: 既存ファイルを復号できない場合。
     """
     json_path = Path(json_path)
+    logger.debug("import_json 開始: json_path=%s, 暗号化先=%s", json_path, path or "既定")
     items = _flatten(json_path)
     save_credentials(items, path)
-    return sorted(items)
+    names = sorted(items)
+    logger.debug(
+        "import_json 完了: json_path=%s, 取り込み件数=%d, keys=%s",
+        json_path,
+        len(names),
+        names,
+    )
+    return names
 
 
 def _flatten(json_path: Path) -> dict[str, str]:
@@ -87,18 +98,23 @@ def _read_json_object(json_path: Path) -> dict[str, object]:
     try:
         raw = json_path.read_text(encoding="utf-8")
     except OSError as e:
+        logger.debug("_read_json_object: ファイル読み込み失敗: json_path=%s", json_path)
         raise CredentialImportError(json_path, f"ファイルを読めませんでした（{e}）。") from e
     try:
         parsed = json.loads(raw, object_pairs_hook=_reject_duplicate_keys)
     except json.JSONDecodeError as e:
+        logger.debug("_read_json_object: JSON 解析失敗: json_path=%s, line=%d", json_path, e.lineno)
         raise CredentialImportError(
             json_path, f"JSON として読めませんでした（{e.lineno} 行目付近: {e.msg}）。"
         ) from e
     except _DuplicateKeyError as e:
+        logger.debug("_read_json_object: 重複キー検出: json_path=%s, key=%s", json_path, e.key)
         raise CredentialImportError(json_path, f"「{e.key}」が2回書かれています。") from e
 
     if not isinstance(parsed, dict):
+        logger.debug("_read_json_object: 最上位がオブジェクトでない: json_path=%s", json_path)
         raise CredentialImportError(json_path, "いちばん外側が { } になっていません。")
+    logger.debug("_read_json_object 成功: json_path=%s, キー数=%d", json_path, len(parsed))
     return parsed
 
 
@@ -129,7 +145,9 @@ def _flatten_fields(json_path: Path, parsed: dict[str, object]) -> dict[str, str
             items[name] = value
 
     if not items:
+        logger.debug("_flatten_fields: 項目が1つもない: json_path=%s", json_path)
         raise CredentialImportError(json_path, "取り込む項目が1つもありません。")
+    logger.debug("_flatten_fields: json_path=%s, 展開後キー数=%d", json_path, len(items))
     return items
 
 

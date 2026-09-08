@@ -10,6 +10,7 @@ tkinter（Python 標準ライブラリ）製。ターミナルを使わない人
 漏れる経路が増える。登録できたかどうかは、キー名の一覧と文字数で確かめられる。
 """
 
+import logging
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -32,6 +33,8 @@ from comken.toolbox.credentials.store import (
 
 # 入力中の値を隠す文字。伏せ字にしておき、確認したいときだけ表示に切り替える
 _MASK_CHARACTER = "●"
+
+logger = logging.getLogger(__name__)
 
 
 def build_credential_name(system: str, field: str) -> tuple[str | None, str | None]:
@@ -100,6 +103,7 @@ class CredentialsApp:
 
         self._build_widgets()
         self._refresh()
+        logger.debug("CredentialsApp を起動: path=%s", self._path or CREDENTIALS_PATH)
 
     # --------------------------------------------------------- 画面の組み立て
     def _build_widgets(self) -> None:
@@ -178,8 +182,10 @@ class CredentialsApp:
     def _refresh(self) -> None:
         """登録済みキー名の一覧を最新にする。"""
         self.listbox.delete(0, tk.END)
-        for name in list_names(self._path):
+        names = list_names(self._path)
+        for name in names:
             self.listbox.insert(tk.END, name)
+        logger.debug("_refresh: path=%s, 一覧件数=%d", self._path or CREDENTIALS_PATH, len(names))
 
     def _status(self, message: str) -> None:
         self.status_var.set(message)
@@ -204,6 +210,7 @@ class CredentialsApp:
         self.value_var.set("")
         self.value_entry.focus_set()
         self._status(f"選択中: {name} — 値を入力して「登録する」を押すと上書きされます")
+        logger.debug("_on_select_existing: name=%s", name)
 
     def _on_save(self) -> None:
         """フォームの1件を保存し、読み直して文字数を出す。"""
@@ -220,6 +227,7 @@ class CredentialsApp:
         if name in list_names(self._path) and not messagebox.askyesno(
             "上書きの確認", f"{name} は登録済みです。上書きしますか？", parent=self.root
         ):
+            logger.debug("_on_save: 上書きをキャンセル: name=%s", name)
             return
 
         try:
@@ -228,12 +236,18 @@ class CredentialsApp:
             # 読み直せることまで確かめる。桁数を出せば、貼り間違いはここで気づける
             length = len(load_credential(cast(str, name), self._path))
         except CredentialError as e:
+            logger.debug(
+                "_on_save: 保存失敗: name=%s, path=%s",
+                name,
+                self._path or CREDENTIALS_PATH,
+            )
             messagebox.showerror("登録できませんでした", str(e), parent=self.root)
             return
 
         self.value_var.set("")
         self._refresh()
         self._status(f"登録しました: {name}（{length} 文字）")
+        logger.debug("_on_save 完了: name=%s, 長さ=%d 文字", name, length)
 
     def _on_delete(self) -> None:
         selection = self.listbox.curselection()
@@ -247,17 +261,21 @@ class CredentialsApp:
         if not messagebox.askyesno(
             "削除の確認", f"{name} を削除します。よろしいですか？", parent=self.root
         ):
+            logger.debug("_on_delete: 削除をキャンセル: name=%s", name)
             return
 
         try:
             delete_credential(name, self._path)
         except CredentialNotFoundError:
+            logger.debug("_on_delete: 対象は既に消えていた: name=%s", name)
             pass  # 一覧を開いたあとに消えていた場合。_refresh で表示が揃う
         except CredentialError as e:
+            logger.debug("_on_delete: 削除失敗: name=%s", name)
             messagebox.showerror("削除できませんでした", str(e), parent=self.root)
             return
         self._refresh()
         self._status(f"削除しました: {name}")
+        logger.debug("_on_delete 完了: name=%s", name)
 
     def _on_import_json(self) -> None:
         """平文 JSON を選んでまとめて取り込む（コマンドの import と同じ）。"""
@@ -270,15 +288,18 @@ class CredentialsApp:
             return
 
         json_path = Path(selected)
+        logger.debug("_on_import_json 開始: json_path=%s", json_path)
         try:
             names = import_json(json_path, self._path)
         except CredentialError as e:
+            logger.debug("_on_import_json 失敗: json_path=%s", json_path)
             messagebox.showerror("取り込めませんでした", str(e), parent=self.root)
             return
 
         self._refresh()
         self._status(f"{len(names)} 件を取り込みました。")
         self._offer_source_deletion(json_path, names)
+        logger.debug("_on_import_json 完了: json_path=%s, 件数=%d", json_path, len(names))
 
     def _offer_source_deletion(self, json_path: Path, names: list[str]) -> None:
         """読み直せたときだけ、平文 JSON の削除を勧める。
@@ -291,6 +312,10 @@ class CredentialsApp:
             for name in names:
                 load_credential(name, self._path)
         except CredentialError:
+            logger.debug(
+                "_offer_source_deletion: 値の復号に失敗したため平文を残す: json_path=%s",
+                json_path,
+            )
             messagebox.showwarning(
                 "平文の JSON は残します",
                 "取り込んだ値を読み直せませんでした。\n"
@@ -305,11 +330,20 @@ class CredentialsApp:
             parent=self.root,
         ):
             self._status(f"平文の JSON が残っています: {json_path}")
+            logger.debug(
+                "_offer_source_deletion: 平文 JSON の削除をユーザーが辞退: json_path=%s",
+                json_path,
+            )
             return
 
         try:
             json_path.unlink()
         except OSError as e:
+            logger.debug(
+                "_offer_source_deletion: 平文 JSON の削除失敗: json_path=%s, err=%s",
+                json_path,
+                e,
+            )
             # 取り込みは成功しているので失敗扱いにはせず、消し忘れだけ伝える
             messagebox.showwarning(
                 "削除できませんでした",
@@ -318,6 +352,7 @@ class CredentialsApp:
             )
             return
         self._status(f"平文の JSON を削除しました: {json_path}")
+        logger.debug("_offer_source_deletion: 平文 JSON を削除: json_path=%s", json_path)
 
 
 def main() -> None:

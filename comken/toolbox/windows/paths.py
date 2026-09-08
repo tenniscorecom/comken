@@ -7,9 +7,12 @@
     Paths.downloads()
 """
 
+import logging
 import os
 import tempfile
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # レジストリ「User Shell Folders」の Downloads の値名（固定 GUID）
 _DOWNLOADS_GUID = "{374DE290-123F-4565-9164-39C4925E467B}"
@@ -82,9 +85,19 @@ def _get_shell_folder(value_name: str, default: Path) -> Path:
       上限を気にする必要は無い。
     """
     if value_name in _shell_folder_cache:
+        logger.debug(
+            "_get_shell_folder: キャッシュを使用: value_name=%s, path=%s",
+            value_name,
+            _shell_folder_cache[value_name],
+        )
         return _shell_folder_cache[value_name]
     path = _read_shell_folder(value_name, default)
     _shell_folder_cache[value_name] = path
+    logger.debug(
+        "_get_shell_folder: キャッシュに登録: value_name=%s, path=%s",
+        value_name,
+        path,
+    )
     return path
 
 
@@ -101,8 +114,19 @@ def _read_shell_folder(value_name: str, default: Path) -> Path:
         key_path = r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path) as key:
             raw, _ = winreg.QueryValueEx(key, value_name)
-        return Path(os.path.expandvars(raw))
+        resolved = Path(os.path.expandvars(raw))
+        logger.debug(
+            "_read_shell_folder: レジストリから解決: value_name=%s, path=%s",
+            value_name,
+            resolved,
+        )
+        return resolved
     except (OSError, ImportError):
+        logger.debug(
+            "_read_shell_folder: レジストリ解決失敗で既定値を使用: value_name=%s, path=%s",
+            value_name,
+            default,
+        )
         return default
 
 
@@ -112,4 +136,7 @@ def _reset_cached_shell_folders() -> None:
     テストで別のレジストリ値を偽装したいケースに備えて用意している。 普通の
     利用では呼ぶ必要は無い（フォルダの場所は実行中に変わらない）。
     """
+    logger.debug(
+        "_reset_cached_shell_folders: キャッシュを破棄（サイズ=%d）", len(_shell_folder_cache)
+    )
     _shell_folder_cache.clear()

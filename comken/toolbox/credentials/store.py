@@ -30,6 +30,7 @@ client_id と client_secret だけ・トークンだけ、といった構成に�
 """
 
 import json
+import logging
 import re
 import weakref
 from pathlib import Path
@@ -46,6 +47,8 @@ from comken.exceptions import (
     CredentialStoreCorruptedError,
     InvalidCredentialNameError,
 )
+
+logger = logging.getLogger(__name__)
 
 # パッケージ名と関係なく、固定の保存先フォルダ名を使う。
 # ファイル名は社内の命名規則により system-id.enc に統一する（2026-09-02）。
@@ -95,6 +98,7 @@ class Credentials:
         # 初回の属性アクセスで復号結果を丸ごと持っておく。 詳しくは __getattr__ の
         # コメント参照（秘密情報の保持期間・save/delete 後の扱いもそこに書いた）。
         self._cache: dict[str, str] | None = None
+        logger.debug("Credentials を生成: prefix=%s, path=%s", prefix, path or CREDENTIALS_PATH)
 
     def __getattr__(self, item: str) -> str:
         # _ 始まりは Python 内部の属性探索（copy 等）なので通常の AttributeError にする
@@ -106,7 +110,9 @@ class Credentials:
             # 元の ``load_credential()`` と同じ例外型・同じメッセージにする。
             # 「登録済みのキー名」を添える仕様は ``load_credential`` 側にあるので
             # ここでも再現する（``CredentialNotFoundError(name, sorted(data))``）
+            logger.debug("Credentials の属性取得に失敗（未登録）: key=%s", key)
             raise CredentialNotFoundError(key, sorted(data))
+        logger.debug("Credentials の属性を取得: key=%s", key)
         return data[key]
 
     def _decrypted(self) -> dict[str, str]:
@@ -145,10 +151,14 @@ class Credentials:
         """
         cached = self.__dict__.get("_cache")
         if cached is not None:
+            logger.debug("復号キャッシュを使用: prefix=%s, 件数=%d", self._prefix, len(cached))
             return cached
-        data = _load_all(self._path or CREDENTIALS_PATH)
+        target_path = self._path or CREDENTIALS_PATH
+        logger.debug("復号キャッシュ未確立のため復号を実行: path=%s", target_path)
+        data = _load_all(target_path)
         object.__setattr__(self, "_cache", data)
         _register_instance(self)
+        logger.debug("復号キャッシュを保持: prefix=%s, 件数=%d", self._prefix, len(data))
         return data
 
 
@@ -194,9 +204,11 @@ def save_credentials(items: dict[str, str], path: Path | None = None) -> None:
                 f"認証情報の値は文字列で渡してください: {name} は {type(value).__name__}"
             )
     path = path or CREDENTIALS_PATH
+    logger.debug("save_credentials 開始: path=%s, 件数=%d", path, len(items))
     data = _load_all(path)
     data.update(items)
     _save_all(data, path)
+    logger.debug("save_credentials 完了: path=%s, 登録後総件数=%d", path, len(data))
     # 保存後は同じパスを参照する ``Credentials`` インスタンスの復号キャッシュが
     # 古くなるので、 次回の属性アクセスで再復号されるよう ``_cache`` を捨てる
     # （詳細は ``Credentials._decrypted`` のコメント）
@@ -218,7 +230,9 @@ def load_credential(name: str, path: Path | None = None) -> str:
     path = path or CREDENTIALS_PATH
     data = _load_all(path)
     if name not in data:
+        logger.debug("load_credential: キー未登録: name=%s, path=%s", name, path)
         raise CredentialNotFoundError(name, sorted(data))
+    logger.debug("load_credential 成功: name=%s, path=%s", name, path)
     return data[name]
 
 
@@ -233,9 +247,11 @@ def delete_credential(name: str, path: Path | None = None) -> None:
     path = path or CREDENTIALS_PATH
     data = _load_all(path)
     if name not in data:
+        logger.debug("delete_credential: キー未登録: name=%s, path=%s", name, path)
         raise CredentialNotFoundError(name, sorted(data))
     del data[name]
     _save_all(data, path)
+    logger.debug("delete_credential 完了: name=%s, path=%s, 残件数=%d", name, path, len(data))
     # 削除後はキャッシュが古くなるので破棄。 詳細は ``Credentials._decrypted``
     _invalidate_instances_for(path)
 
@@ -248,7 +264,9 @@ def list_names(path: Path | None = None) -> list[str]:
         CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
     """
     path = path or CREDENTIALS_PATH
-    return sorted(_load_all(path))
+    names = sorted(_load_all(path))
+    logger.debug("list_names: path=%s, 件数=%d", path, len(names))
+    return names
 
 
 def _load_all(path: Path) -> dict[str, str]:
@@ -258,6 +276,7 @@ def _load_all(path: Path) -> dict[str, str]:
     別の例外に分ける（前者は実行アカウントの問題、後者は取り込み直し）。
     """
     if not path.exists():
+        logger.debug("_load_all: ファイル未作成: path=%s", path)
         return {}
     encrypted = path.read_bytes()
     try:
@@ -265,15 +284,18 @@ def _load_all(path: Path) -> dict[str, str]:
     except pywintypes.error as e:
         # 原因（別ユーザー・別 PC・暗号文の破損）を DPAPI は区別して返さないので、
         # 確認する順番を示した1つの例外にまとめる
+        logger.debug("_load_all: DPAPI 復号に失敗: path=%s", path)
         raise CredentialDecryptionError(path, e) from e
 
     try:
         data = json.loads(decrypted.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as e:
+        logger.debug("_load_all: JSON 解析に失敗: path=%s", path)
         raise CredentialStoreCorruptedError(path, str(e)) from e
     if not isinstance(data, dict) or not all(
         isinstance(key, str) and isinstance(value, str) for key, value in data.items()
     ):
+        logger.debug("_load_all: 復号済み JSON の形が不正: path=%s", path)
         raise CredentialStoreCorruptedError(path, "キーと値がすべて文字列の形になっていません。")
     return data
 
@@ -297,6 +319,7 @@ def _save_all(data: dict[str, str], path: Path) -> None:
     # 暗号化済み bytes をそのまま書く（アトミックに丸ごと置き換わる）。
     with atomic_write(path) as tmp_path:
         tmp_path.write_bytes(encrypted)
+    logger.debug("_save_all: 暗号化して書き出し: path=%s, 件数=%d", path, len(data))
 
 
 # ── ``Credentials`` のインスタンス単位キャッシュ用レジストリ ───────────────
@@ -328,6 +351,9 @@ def _register_instance(instance: "Credentials") -> None:
     key = str(instance._path or CREDENTIALS_PATH)
     bucket = _instances_by_path.setdefault(key, weakref.WeakSet())
     bucket.add(instance)
+    logger.debug(
+        "_register_instance: path=%s 配下にインスタンスを登録（サイズ=%d）", key, len(bucket)
+    )
 
 
 def _invalidate_instances_for(path: Path) -> None:
@@ -341,6 +367,9 @@ def _invalidate_instances_for(path: Path) -> None:
     ので、 スナップショット（ ``list(...)`` ）を取ってから走査する。
     """
     key = str(path)
+    invalidated = 0
     for instance in list(_instances_by_path.get(key, ())):
         if instance.__dict__.get("_cache") is not None:
             object.__setattr__(instance, "_cache", None)
+            invalidated += 1
+    logger.debug("_invalidate_instances_for: path=%s のキャッシュを %d 件破棄", key, invalidated)
