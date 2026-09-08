@@ -510,7 +510,7 @@ def _write_legacy_bundles(max_chars: int) -> None:
         chunks = _split(_legacy_bundle_text(title, purpose, sources), max_chars)
         for number, chunk in enumerate(chunks, start=1):
             suffix = "" if len(chunks) == 1 else f"_{number}of{len(chunks)}"
-            path = LEGACY_OUTPUT_DIR / f"{title}{suffix}.txt"
+            path = LEGACY_OUTPUT_DIR / f"{title}{suffix}.md"
             header = "" if number == 1 else f"（{title} の続き {number}/{len(chunks)}）\n\n"
             path.write_text(header + chunk, encoding="utf-8")
             print(f"{path.name}  {len(chunk):,} 文字")  # noqa: T201
@@ -714,7 +714,7 @@ def _write_bundle_chunks(text: str, max_chars: int) -> None:
     BUNDLE_CHUNK_DIR.mkdir()
     chunks = _split(text, max_chars)
     for number, chunk in enumerate(chunks, start=1):
-        path = BUNDLE_CHUNK_DIR / f"comken_bundle_{number}of{len(chunks)}.txt"
+        path = BUNDLE_CHUNK_DIR / f"comken_bundle_{number}of{len(chunks)}.md"
         header = "" if number == 1 else f"（comken_bundle.md の続き {number}/{len(chunks)}）\n\n"
         path.write_text(header + chunk, encoding="utf-8")
         print(f"{path.relative_to(ROOT)}  {len(chunk):,} 文字")  # noqa: T201
