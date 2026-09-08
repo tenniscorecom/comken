@@ -38,7 +38,6 @@ API_OUTPUT_PATH = ROOT / "docs" / "自動生成" / "API.md"
 ERRORS_OUTPUT_PATH = ROOT / "docs" / "ERRORS.md"
 LEGACY_OUTPUT_DIR = ROOT / "貼り付け用"
 BUNDLE_OUTPUT_PATH = ROOT / "comken_bundle.md"
-BUNDLE_CHUNK_DIR = ROOT / "貼り付け用_全文"
 
 # 1カテゴリー（BUNDLES の1項目）がこれを超えたときだけ、さらに複数ファイルへ割る。
 # 基本は「1カテゴリー = 1ファイル」を保ちたいので、普段は超えない大きめの値にする。
@@ -689,35 +688,14 @@ def _extract_public_names(api_text: str) -> set[str]:
     return names
 
 
-def _write_bundle() -> str:
-    """``comken_bundle.md`` を 1 ファイル書き出し、本文を返す（分割版の生成にも使う）。"""
+def _write_bundle() -> None:
+    """``comken_bundle.md`` を 1 ファイル書き出す。"""
     text = _bundle_text()
     BUNDLE_OUTPUT_PATH.write_text(text, encoding="utf-8")
     print(  # noqa: T201
         f"{BUNDLE_OUTPUT_PATH.relative_to(ROOT)} を生成しました"
         f"（{len(text):,} 文字 / {BUNDLE_OUTPUT_PATH.stat().st_size:,} バイト）"
     )
-    return text
-
-
-def _write_bundle_chunks(text: str, max_chars: int) -> None:
-    """``comken_bundle.md`` の中身（ソースコード含む全章）を、ブラウザに貼りやすい
-    大きさへ分割する。
-
-    ``貼り付け用/``（``BUNDLES`` によるカテゴリー別・要約中心の分割）とは別物。
-    こちらは comken_bundle.md を単純に文字数で輪切りにするだけなので、
-    実装全文（comken/ 配下のソースコード）も含めて全内容が保たれる
-    （AI がソースコードを見られず推測で答えてしまうのを防ぐ）。
-    """
-    if BUNDLE_CHUNK_DIR.exists():
-        shutil.rmtree(BUNDLE_CHUNK_DIR)
-    BUNDLE_CHUNK_DIR.mkdir()
-    chunks = _split(text, max_chars)
-    for number, chunk in enumerate(chunks, start=1):
-        path = BUNDLE_CHUNK_DIR / f"comken_bundle_{number}of{len(chunks)}.md"
-        header = "" if number == 1 else f"（comken_bundle.md の続き {number}/{len(chunks)}）\n\n"
-        path.write_text(header + chunk, encoding="utf-8")
-        print(f"{path.relative_to(ROOT)}  {len(chunk):,} 文字")  # noqa: T201
 
 
 def main() -> None:
@@ -740,10 +718,7 @@ def main() -> None:
     if args.max_chars > 0:
         _write_legacy_bundles(args.max_chars)
         print(f"{LEGACY_OUTPUT_DIR.relative_to(ROOT)}/ に分割資料を生成しました")  # noqa: T201
-    bundle_text = _write_bundle()
-    if args.max_chars > 0:
-        _write_bundle_chunks(bundle_text, args.max_chars)
-        print(f"{BUNDLE_CHUNK_DIR.relative_to(ROOT)}/ に全文の分割資料を生成しました")  # noqa: T201
+    _write_bundle()
 
 
 if __name__ == "__main__":
