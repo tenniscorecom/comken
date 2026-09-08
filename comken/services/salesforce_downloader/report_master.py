@@ -57,6 +57,7 @@ Excel の見出しで、スペースを含む見出し（`Salesforce URL`）も�
 
 import dataclasses
 import datetime as dt
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar, Self
@@ -80,6 +81,8 @@ from comken.exceptions import (
     MasterSheetNotDefinedError,
 )
 from comken.toolbox.excel import Excel
+
+logger = logging.getLogger(__name__)
 
 # フィールドの metadata に入れるときのキー
 _SPEC_KEY = "comken_master_column"
@@ -186,6 +189,10 @@ class MasterRow:
         if source is None:
             raise MasterSheetNotDefinedError(cls.__name__)
 
+        logger.debug(
+            "管理表読込開始: class=%s, path=%s, sheet=%s", cls.__name__, source, cls.SHEET_NAME
+        )
+
         # 共有関数 ``read_raw_rows`` に生 dict 化を任せ、ここでは型変換・検証に
         # 集中する（同じロジックを ``load_schedule`` 側でも使う）
         raw_rows = read_raw_rows(source, cls.SHEET_NAME)
@@ -198,6 +205,7 @@ class MasterRow:
             row_number = offset + _FIRST_DATA_ROW
             _require_headers(cls, raw, source)
             rows.append(cls._build(raw, row_number, seen, source))
+        logger.debug("管理表読込完了: class=%s, path=%s, 件数=%d", cls.__name__, source, len(rows))
         return rows
 
     @classmethod
@@ -253,12 +261,21 @@ class MasterRow:
             }
             for example in (examples or [])
         ]
+        logger.debug(
+            "雛形生成開始: class=%s, path=%s, sheet=%s, 記入例=%d 行, 列=%d",
+            cls.__name__,
+            path,
+            cls.SHEET_NAME,
+            len(rows),
+            len(headers),
+        )
 
         # 空の雛形でも Excel テーブルを成立させるため、API が要求する見出しだけを
         # 持つ Table を作る。実データが無い場合の仮行は create_table が保持しない。
         template_table = CoreTable(headers, rows)
         with Excel(path) as excel:
             excel.create_data_sheet(cls.SHEET_NAME).create_table(cls.__name__, template_table)
+        logger.debug("雛形: データシート作成: path=%s, sheet=%s", path, cls.SHEET_NAME)
 
         book = load_workbook(path)
         sheet = book[f"PY_{cls.SHEET_NAME}"]
@@ -266,6 +283,9 @@ class MasterRow:
         # **全セルに雛形用のフォントを当てる。** 既存のフォント属性（太字など）は
         # そのまま使い回し、`name` だけ書き換える（後勝ちで上書きすると太字まで消える）
         _apply_template_font(sheet, len(rows))
+        logger.debug(
+            "雛形: テンプレートフォント適用: sheet=%s, 対象=%d 行", cls.SHEET_NAME, len(rows)
+        )
         # **`choices` がある列にドロップダウンを付ける。** データ行の先頭から
         # 十分な行数ぶんの範囲に適用し、あとから行を足しても効くようにする
         cls._apply_choice_validations(sheet, columns, len(rows))
@@ -289,9 +309,11 @@ class MasterRow:
         # 場合に誤って消さないよう、A1 が空のときだけ消す
         if "Sheet" in book.sheetnames and book["Sheet"]["A1"].value is None:
             del book["Sheet"]
+            logger.debug("雛形: openpyxl 作成の空シート 'Sheet' を削除: path=%s", path)
 
         book.save(path)
         book.close()
+        logger.debug("雛形書込完了: path=%s", path)
         return path
 
     @classmethod
@@ -316,6 +338,7 @@ class MasterRow:
         宣言を1か所に保つ。
         """
         last_row = _FIRST_DATA_ROW + example_count - 1 + _DATA_VALIDATION_ROWS
+        choice_column_count = 0
         for offset, (name, spec, _) in enumerate(columns, start=1):
             if not spec.choices:
                 continue  # `choices` を宣言していない列には付けない
@@ -340,6 +363,13 @@ class MasterRow:
             )
             validation.add(f"{letter}{_FIRST_DATA_ROW}:{letter}{last_row}")
             ws.add_data_validation(validation)
+            choice_column_count += 1
+        logger.debug(
+            "雛形: ドロップダウン列=%d / 全列=%d, 適用範囲=%d 行目まで",
+            choice_column_count,
+            len(columns),
+            last_row,
+        )
 
     @classmethod
     def _write_guide(cls, book: Workbook) -> None:
@@ -354,6 +384,7 @@ class MasterRow:
         よう、**太字設定 → フォント適用** の順で行う。
         """
         sheet = book.create_sheet("記入方法")
+        logger.debug("雛形: ガイドシート作成: class=%s", cls.__name__)
         # 冒頭の説明文。設定が無ければ何も書かない（空の欄を増やさない）
         if cls.GUIDE_INTRO:
             sheet.cell(row=1, column=1, value=cls.GUIDE_INTRO)
@@ -504,10 +535,14 @@ def read_raw_rows(source: Path, sheet_name: str) -> CoreTable:
         for raw_row in raw_rows
         for value in raw_row.values()
     ):
+        logger.debug("管理表に未計算の数式を検出: path=%s, sheet=%s", source, sheet_name)
         raise ExcelApplicationNotAvailableError(
             source,
             RuntimeError("管理表に未計算の数式があります"),
         )
+    logger.debug(
+        "管理表の生行読込完了: path=%s, sheet=%s, 生行数=%d", source, sheet_name, len(raw_rows)
+    )
     return raw_rows
 
 
