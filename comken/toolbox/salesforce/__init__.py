@@ -31,6 +31,8 @@ Client Credentials Flow は `client_secret` だけでアクセストークンを
     BulkQueryAPI           Bulk API 2.0 のクエリジョブ。SalesforceBase.bulk_query が持っている
     BulkIngestAPI          Bulk API 2.0 の Ingest ジョブ。SalesforceBase.bulk_ingest が持っている
     ReportAPI              レポート API。SalesforceBase.report が持っている
+    DataLoaderCLI          Salesforce Data Loader の CLI 呼び出し（サブプロセス実行）
+    DataLoaderResult       DataLoaderCLI.run() の戻り値
     RefreshTokenOAuth      Authorization Code + Refresh Token Flow（既定）
     ClientCredentialsOAuth Client Credentials Flow（開発時に auth= で渡す）
     APIMetrics             API 呼び出しの計測。SalesforceBase.metrics が持っている
@@ -44,6 +46,7 @@ from typing import TYPE_CHECKING
 
 from comken.toolbox.salesforce.bulk_ingest import BulkIngestAPI, BulkIngestResult
 from comken.toolbox.salesforce.bulk_query import BulkQueryAPI
+from comken.toolbox.salesforce.dataloader import DataLoaderCLI, DataLoaderResult
 from comken.toolbox.salesforce.metrics import (
     APIMetrics,
     APIUsage,
@@ -112,6 +115,8 @@ __all__ = [
     "BulkQueryAPI",
     "BulkIngestAPI",
     "BulkIngestResult",
+    "DataLoaderCLI",
+    "DataLoaderResult",
     "ClientCredentialsOAuth",
     "RefreshTokenOAuth",
     "APIMetrics",

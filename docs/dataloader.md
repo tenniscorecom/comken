@@ -12,7 +12,7 @@ Salesforce Data Loader は、Salesforce が配布している大量データ一�
 実行ファイルが配置され、CLI モードで動かすと `config.properties` と
 `process-conf.xml` を読み込んで一括挿入・更新・削除を行う。
 
-comken の `comken.toolbox.dataloader.DataLoaderCLI` は、その **CLI 呼び出しを
+comken の `comken.toolbox.salesforce.dataloader.DataLoaderCLI` は、その **CLI 呼び出しを
 Python から扱いやすくする薄ラッパー**。`subprocess.run` の呼び出し・タイムアウト
 管理・終了コード確認・成功／エラー CSV の `Table` 読み込みまでを担当する。
 
@@ -33,7 +33,7 @@ comken はその「呼び出し部分」の差し込み口を提供するだけ�
 ## 使い方
 
 ```python
-from comken.toolbox.dataloader import DataLoaderCLI
+from comken.toolbox.salesforce.dataloader import DataLoaderCLI
 
 # launcher_path は自分の Data Loader のバージョンに合わせて指定する。
 # 下記は一例。

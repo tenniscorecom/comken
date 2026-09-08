@@ -21,7 +21,7 @@ from comken.exceptions import (
     DataLoaderResultFileMissingError,
     DataLoaderTimeoutError,
 )
-from comken.toolbox.dataloader import DataLoaderCLI, DataLoaderResult
+from comken.toolbox.salesforce.dataloader import DataLoaderCLI, DataLoaderResult
 
 
 def _write_python_launcher(tmp_path: Path, source: str) -> Path:

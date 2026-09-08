@@ -1,4 +1,4 @@
-"""comken/toolbox/dataloader/handler.py — Salesforce Data Loader の CLI 呼び出し。"""
+"""comken/toolbox/salesforce/dataloader.py — Salesforce Data Loader の CLI 呼び出し。"""
 
 from __future__ import annotations
 

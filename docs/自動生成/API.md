@@ -9517,148 +9517,6 @@ def count(self) -> int:
 データ行数を返す。
 
 
-## `from comken.toolbox.dataloader import ...`
-
-### `DataLoaderCLI`
-
-```text
-class DataLoaderCLI:
-```
-
-#### 説明
-
-Salesforce Data Loader をコマンドラインから実行する。
-
-Salesforce Data Loader は、Salesforce が配布する大量データの一括変更用の
-デスクトップアプリ。インストールすると ``dataloader.bat``（Windows の場合）
-のような実行ファイルが配置され、CLI モードで動かすと ``config.properties`` と
-``process-conf.xml`` を読み込んで一括挿入・更新・削除を行う。
-
-**このクラスは、その CLI 呼び出しを Python から扱いやすくする薄ラッパー。**
-``subprocess.run`` の呼び出し・タイムアウト管理・終了コード確認・成功／
-エラー CSV の ``Table`` 読み込みまでを担当する。
-
-**Data Loader 自身のインストールと ``config.properties`` /
-``process-conf.xml`` の作成は利用者の作業。** comken 側で用意しない。
-
-**最重要の設計方針:** Data Loader の CLI 呼び出し構文（launcher に渡す
-引数の形）は **バージョンによって変わりうる**。comken 側では構文を
-決め打ちせず、利用者が ``launcher_path`` と ``args`` を渡す形にする。
-実際に動くコマンドは、使っている Data Loader のバージョンに合わせて
-ターミナルで一度確認してから ``args`` に渡す。
-
-#### `__init__`
-
-```text
-def __init__(self, launcher_path: str | Path, timeout_seconds: float=DEFAULT_TIMEOUT_SECONDS) -> None:
-```
-
-##### 説明
-
-``launcher_path`` とタイムアウト秒数を保持する。
-
-ここではファイルの存在を確認しない。コンストラクタと ``run()`` の間で
-ファイルが移動・復旧する余地を残すため（既存の ``Excel`` など、
-「コンストラクタでは開かない、``__enter__``/操作時に確認する」設計に
-ならう）。実際の存在確認は ``run()`` の冒頭で行う。
-
-Args:
-    launcher_path: Data Loader の実行ファイル（例:
-        ``C:\Program Files\salesforce.com\Data Loader\dataloader.bat``）。
-    timeout_seconds: サブプロセスのタイムアウト秒数。大量データを扱うため
-        既定値は 3600秒（1時間）。短くするほどタイムアウト判定が早くなる。
-
-#### `launcher_path`
-
-```text
-@property
-def launcher_path(self) -> Path:
-```
-
-##### 説明
-
-コンストラクタに渡した実行ファイルのパス。
-
-#### `timeout_seconds`
-
-```text
-@property
-def timeout_seconds(self) -> float:
-```
-
-##### 説明
-
-サブプロセスのタイムアウト秒数。
-
-#### `run`
-
-```text
-def run(self, args: list[str], *, success_csv: str | Path | None=None, error_csv: str | Path | None=None, cwd: str | Path | None=None) -> DataLoaderResult:
-```
-
-##### 説明
-
-Data Loader を subprocess で実行し、結果を ``DataLoaderResult`` で返す。
-
-Data Loader の CLI 呼び出し（launcher_path に渡す args の形）は
-バージョンによって異なることがある。**このメソッドは正確な構文を
-決め打ちしない。** 実際に動くコマンドを、事前にターミナルで
-一度確認してから args に渡すこと。
-
-使用例（構文は一例。実際の値は自分の Data Loader のバージョンで確認する）:
-
-    cli = DataLoaderCLI(r"C:\Program Files\salesforce.com\Data Loader\dataloader.bat")
-    result = cli.run(
-        ["run", str(config_dir)],
-        success_csv=config_dir / "success.csv",
-        error_csv=config_dir / "error.csv",
-    )
-    if len(result.errors) > 0:
-        print(f"{len(result.errors)} 件が失敗しました")
-
-Args:
-    args: launcher に渡す引数のリスト。先頭に launcher 自身は含めない
-        （このクラスが ``[str(launcher_path), *args]`` の形で組み立てる）。
-    success_csv: Data Loader が書き出した成功 CSV のパス。``None`` を
-        渡すと読み込み対象外（空の ``Table`` が返る）。
-    error_csv: Data Loader が書き出したエラー CSV のパス。``None`` を
-        渡すと読み込み対象外（空の ``Table`` が返る）。
-    cwd: サブプロセスのカレントディレクトリ。``None`` のときは
-        ``subprocess.run`` の既定動作に従う。
-
-Returns:
-    DataLoaderResult: 成功／エラー CSV を ``Table`` 化した結果。
-
-Raises:
-    DataLoaderLauncherNotFoundError: ``launcher_path`` が存在しない。
-    DataLoaderTimeoutError: ``timeout_seconds`` 内にプロセスが終わらなかった。
-    DataLoaderExecutionError: Data Loader が 0 以外の終了コードで終了した
-        （stdout / stderr がメッセージに含まれる）。
-    DataLoaderResultFileMissingError: 正常終了したのに ``success_csv`` または
-        ``error_csv`` に指定したパスにファイルが無い。
-
-### `DataLoaderResult`
-
-```text
-class DataLoaderResult:
-```
-
-#### 説明
-
-Data Loader 実行結果。
-
-Attributes:
-    success: Data Loader が書き出した成功 CSV を読み込んだ ``Table``。
-        ``success_csv`` を ``None`` に指定した場合は空の ``Table``。
-    errors: Data Loader が書き出したエラー CSV を読み込んだ ``Table``。
-        ``error_csv`` を ``None`` に指定した場合は空の ``Table``。
-        **1件以上のエラー行が入っていても例外ではない**（呼び出し側が
-        中身を見て個別に判断する。プロセス自体は正常終了している）。
-    returncode: サブプロセスの終了コード。正常終了は 0。
-    stdout: Data Loader の標準出力（プロセス終了時点）。
-    stderr: Data Loader の標準エラー出力（プロセス終了時点）。
-
-
 ## `from comken.toolbox.excel import ...`
 
 ### `Excel`
@@ -10909,6 +10767,145 @@ Attributes:
         見て判断する）。
     job_id: ジョブID。
     state: ジョブの最終状態（"JobComplete" など）。
+
+### `DataLoaderCLI`
+
+```text
+class DataLoaderCLI:
+```
+
+#### 説明
+
+Salesforce Data Loader をコマンドラインから実行する。
+
+Salesforce Data Loader は、Salesforce が配布する大量データの一括変更用の
+デスクトップアプリ。インストールすると ``dataloader.bat``（Windows の場合）
+のような実行ファイルが配置され、CLI モードで動かすと ``config.properties`` と
+``process-conf.xml`` を読み込んで一括挿入・更新・削除を行う。
+
+**このクラスは、その CLI 呼び出しを Python から扱いやすくする薄ラッパー。**
+``subprocess.run`` の呼び出し・タイムアウト管理・終了コード確認・成功／
+エラー CSV の ``Table`` 読み込みまでを担当する。
+
+**Data Loader 自身のインストールと ``config.properties`` /
+``process-conf.xml`` の作成は利用者の作業。** comken 側で用意しない。
+
+**最重要の設計方針:** Data Loader の CLI 呼び出し構文（launcher に渡す
+引数の形）は **バージョンによって変わりうる**。comken 側では構文を
+決め打ちせず、利用者が ``launcher_path`` と ``args`` を渡す形にする。
+実際に動くコマンドは、使っている Data Loader のバージョンに合わせて
+ターミナルで一度確認してから ``args`` に渡す。
+
+#### `__init__`
+
+```text
+def __init__(self, launcher_path: str | Path, timeout_seconds: float=DEFAULT_TIMEOUT_SECONDS) -> None:
+```
+
+##### 説明
+
+``launcher_path`` とタイムアウト秒数を保持する。
+
+ここではファイルの存在を確認しない。コンストラクタと ``run()`` の間で
+ファイルが移動・復旧する余地を残すため（既存の ``Excel`` など、
+「コンストラクタでは開かない、``__enter__``/操作時に確認する」設計に
+ならう）。実際の存在確認は ``run()`` の冒頭で行う。
+
+Args:
+    launcher_path: Data Loader の実行ファイル（例:
+        ``C:\Program Files\salesforce.com\Data Loader\dataloader.bat``）。
+    timeout_seconds: サブプロセスのタイムアウト秒数。大量データを扱うため
+        既定値は 3600秒（1時間）。短くするほどタイムアウト判定が早くなる。
+
+#### `launcher_path`
+
+```text
+@property
+def launcher_path(self) -> Path:
+```
+
+##### 説明
+
+コンストラクタに渡した実行ファイルのパス。
+
+#### `timeout_seconds`
+
+```text
+@property
+def timeout_seconds(self) -> float:
+```
+
+##### 説明
+
+サブプロセスのタイムアウト秒数。
+
+#### `run`
+
+```text
+def run(self, args: list[str], *, success_csv: str | Path | None=None, error_csv: str | Path | None=None, cwd: str | Path | None=None) -> DataLoaderResult:
+```
+
+##### 説明
+
+Data Loader を subprocess で実行し、結果を ``DataLoaderResult`` で返す。
+
+Data Loader の CLI 呼び出し（launcher_path に渡す args の形）は
+バージョンによって異なることがある。**このメソッドは正確な構文を
+決め打ちしない。** 実際に動くコマンドを、事前にターミナルで
+一度確認してから args に渡すこと。
+
+使用例（構文は一例。実際の値は自分の Data Loader のバージョンで確認する）:
+
+    cli = DataLoaderCLI(r"C:\Program Files\salesforce.com\Data Loader\dataloader.bat")
+    result = cli.run(
+        ["run", str(config_dir)],
+        success_csv=config_dir / "success.csv",
+        error_csv=config_dir / "error.csv",
+    )
+    if len(result.errors) > 0:
+        print(f"{len(result.errors)} 件が失敗しました")
+
+Args:
+    args: launcher に渡す引数のリスト。先頭に launcher 自身は含めない
+        （このクラスが ``[str(launcher_path), *args]`` の形で組み立てる）。
+    success_csv: Data Loader が書き出した成功 CSV のパス。``None`` を
+        渡すと読み込み対象外（空の ``Table`` が返る）。
+    error_csv: Data Loader が書き出したエラー CSV のパス。``None`` を
+        渡すと読み込み対象外（空の ``Table`` が返る）。
+    cwd: サブプロセスのカレントディレクトリ。``None`` のときは
+        ``subprocess.run`` の既定動作に従う。
+
+Returns:
+    DataLoaderResult: 成功／エラー CSV を ``Table`` 化した結果。
+
+Raises:
+    DataLoaderLauncherNotFoundError: ``launcher_path`` が存在しない。
+    DataLoaderTimeoutError: ``timeout_seconds`` 内にプロセスが終わらなかった。
+    DataLoaderExecutionError: Data Loader が 0 以外の終了コードで終了した
+        （stdout / stderr がメッセージに含まれる）。
+    DataLoaderResultFileMissingError: 正常終了したのに ``success_csv`` または
+        ``error_csv`` に指定したパスにファイルが無い。
+
+### `DataLoaderResult`
+
+```text
+class DataLoaderResult:
+```
+
+#### 説明
+
+Data Loader 実行結果。
+
+Attributes:
+    success: Data Loader が書き出した成功 CSV を読み込んだ ``Table``。
+        ``success_csv`` を ``None`` に指定した場合は空の ``Table``。
+    errors: Data Loader が書き出したエラー CSV を読み込んだ ``Table``。
+        ``error_csv`` を ``None`` に指定した場合は空の ``Table``。
+        **1件以上のエラー行が入っていても例外ではない**（呼び出し側が
+        中身を見て個別に判断する。プロセス自体は正常終了している）。
+    returncode: サブプロセスの終了コード。正常終了は 0。
+    stdout: Data Loader の標準出力（プロセス終了時点）。
+    stderr: Data Loader の標準エラー出力（プロセス終了時点）。
 
 ### `ClientCredentialsOAuth`
 

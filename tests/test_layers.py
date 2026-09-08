@@ -15,8 +15,7 @@ LAYERS = {
 ALLOWED_SAME_LAYER = {
     ("toolbox.excel", "toolbox.windows"),  # 既存数式・マクロ時の COM フォールバック
     ("toolbox.salesforce", "toolbox.credentials"),  # Salesforce の認証情報を安全に保存する
-    ("toolbox.salesforce", "toolbox.csv"),  # レポート・SOQL の結果をそのまま CSV へ保存する
-    ("toolbox.dataloader", "toolbox.csv"),  # Data Loader の結果を Table に読み込む
+    ("toolbox.salesforce", "toolbox.csv"),  # レポート・SOQL・Data Loader の結果を CSV/Table にする
 }
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
