@@ -133,7 +133,7 @@ class SalesforceCredentialRotator:
         # 保存前に rotate すると、新 secret を失ったまま旧 secret の猶予だけが進む。
         # 3値を一括保存できた場合に限って Salesforce 側を切り替える。
         logger.debug(
-            "新しい資格情報3件（client_id / client_secret / last_rotation_date）を"
+            "新しい資格情報3件（api_client_id / api_client_secret / last_rotation_date）を"
             "DPAPI へ保存します: prefix=%s path=%s",
             self._credential_prefix,
             self._credential_path,
@@ -142,8 +142,8 @@ class SalesforceCredentialRotator:
             save_credentials(
                 {
                     self._credential_prefix: {
-                        "client_id": staged.consumer_key,
-                        "client_secret": staged.consumer_secret,
+                        "api_client_id": staged.consumer_key,
+                        "api_client_secret": staged.consumer_secret,
                         "last_rotation_date": rotation_date.isoformat(),
                     }
                 },

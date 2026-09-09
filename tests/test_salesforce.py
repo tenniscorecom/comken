@@ -963,9 +963,9 @@ class TestCredentialsInitialization:
         save_credentials(
             {
                 "solution_sandbox": {
-                    "client_id": "CID",
-                    "client_secret": "CSECRET",
-                    "refresh_token": "RTOKEN",
+                    "api_client_id": "CID",
+                    "api_client_secret": "CSECRET",
+                    "api_refresh_token": "RTOKEN",
                 }
             },
             path,
@@ -996,9 +996,9 @@ class TestCredentialsInitialization:
         save_credentials(
             {
                 "sandbox_test": {
-                    "client_id": "TEST-CID",
-                    "client_secret": "TEST-SECRET",
-                    "refresh_token": "TEST-RTOKEN",
+                    "api_client_id": "TEST-CID",
+                    "api_client_secret": "TEST-SECRET",
+                    "api_refresh_token": "TEST-RTOKEN",
                 }
             },
             path,

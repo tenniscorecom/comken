@@ -256,11 +256,11 @@ def _run_setup(args: argparse.Namespace) -> None:
 
     try:
         credentials = Credentials(prefix)
-        client_id = credentials.client_id
-        client_secret = credentials.client_secret
+        client_id = credentials.api_client_id
+        client_secret = credentials.api_client_secret
     except CredentialNotFoundError:
         print()
-        print(f"{prefix}_client_id / {prefix}_client_secret が未登録です。")
+        print(f"{prefix}.api_client_id / {prefix}.api_client_secret が未登録です。")
         print("先に次のコマンドで client_id / client_secret を登録してください:")
         print("  python -m comken cred gui")
         raise
@@ -284,7 +284,7 @@ def _run_setup(args: argparse.Namespace) -> None:
         prefix=prefix,
     )
     print()
-    print(f"refresh_token を DPAPI に保存しました（{prefix}_refresh_token）。")
+    print(f"refresh_token を DPAPI に保存しました（{prefix}.api_refresh_token）。")
     site_number = SITES.index(site_class) + 1
     print(f"動作確認: python -m comken sf report --site {site_number} --report-id 00O...")
 

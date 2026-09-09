@@ -13,16 +13,17 @@ docs/salesforce-downloader.md「SOQLレポート（2000件超のレポートを�
 1. ``LargeSalesReport.URL`` のドメインが ``comken/toolbox/salesforce/sites/`` の
    ``SITES`` に登録済みであること（未登録だと ``site_for()`` が
    ``SalesforceSiteNotFoundError`` を投げる）
-2. その組織の ``client_id`` / ``client_secret`` / ``refresh_token`` が、実行する
-   ユーザー・PCで DPAPI に登録済みであること。**登録は「サイト名: {項目名: 値}」の
-   入れ子 JSON を一時的に用意し、取り込みコマンドで流し込む**（平文はその場で
-   消える。docs/credentials.md「登録」参照）:
+2. その組織の ``api_client_id`` / ``api_client_secret`` / ``api_refresh_token`` が、
+   実行するユーザー・PCで DPAPI に登録済みであること（項目名の ``api_`` は
+   Salesforce 専用の認証情報だと分かるようにする接頭辞）。**登録は
+   「サイト名: {項目名: 値}」の入れ子 JSON を一時的に用意し、取り込みコマンドで
+   流し込む**（平文はその場で消える。docs/credentials.md「登録」参照）:
 
        {
          "solution": {
-           "client_id": "...",
-           "client_secret": "...",
-           "refresh_token": "..."
+           "api_client_id": "...",
+           "api_client_secret": "...",
+           "api_refresh_token": "..."
          }
        }
 

@@ -309,11 +309,12 @@ sequenceDiagram
 python -m comken cred gui
 ```
 
-- **キー名**: `<prefix>_client_id` (例: `solution_client_id`)
+- **サイト名**: 組織クラス (例: `Solution`) の `CREDENTIAL_PREFIX`
+  （デフォルトは組織名そのまま。`solution` / `solution_sandbox` など）
+- **項目名**: `api_client_id`
 - **値**: ECA の「Consumer Key」 (Salesforce 画面でコピー)
-- 続けて **`<prefix>_client_secret`** を「Consumer Secret」で登録
-- **prefix** は組織クラス (例: `Solution`) の `CREDENTIAL_PREFIX` と揃える
-  - デフォルトは組織名そのまま (`solution` / `solution_sandbox` など)
+- 続けて **項目名 `api_client_secret`** を「Consumer Secret」で登録
+  （`Credentials(prefix).api_client_id` / `.api_client_secret` で読める）
 
 登録したかは `python -m comken cred list` で確認できる。
 

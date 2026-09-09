@@ -227,8 +227,8 @@ class TestSetup:
     def _credentials_mock(self):
         """`Credentials(prefix)` の戻り値を差し替えるための MagicMock。"""
         credentials = MagicMock()
-        credentials.client_id = "CID"
-        credentials.client_secret = "CSECRET"
+        credentials.api_client_id = "CID"
+        credentials.api_client_secret = "CSECRET"
         return credentials
 
     def test_selects_site_by_number(self, capsys):
@@ -394,7 +394,9 @@ class TestSetup:
         with (
             patch(
                 "comken.toolbox.salesforce.cli.Credentials",
-                side_effect=CredentialNotFoundError(f"{Solution.CREDENTIAL_PREFIX}.client_id", []),
+                side_effect=CredentialNotFoundError(
+                    f"{Solution.CREDENTIAL_PREFIX}.api_client_id", []
+                ),
             ),
             patch(
                 "comken.toolbox.salesforce.cli.RefreshTokenOAuth.authorization_url"

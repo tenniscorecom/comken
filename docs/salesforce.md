@@ -25,12 +25,16 @@
 | どこ | 名前 | 例 |
 |---|---|---|
 | Salesforce の画面（ECA の設定） | **Consumer Key / Consumer Secret** | 画面からコピーする |
-| comken のコード・DPAPI のキー名 | **client_id / client_secret** | `solution_client_id` |
+| comken のコード変数名 | **client_id / client_secret** | `RefreshTokenOAuth` の引数名 |
+| DPAPI のキー名 | **api_client_id / api_client_secret** | `Credentials("solution").api_client_id` |
 | ローテーション API のレスポンス | **consumerKey / consumerSecret** | `rotation.py` が受け取る |
 
-comken の中は `client_id` / `client_secret` に統一している（OAuth の標準的な呼び名）。
-Salesforce 側の名前が出てくるのは**画面からコピーするときと、ローテーション API の
-レスポンスを読むときだけ**で、`rotation.py` が境界で `client_id` へ変換している。
+comken のコード（変数名・引数名）は `client_id` / `client_secret` に統一している
+（OAuth の標準的な呼び名）。**DPAPI の保存キーだけ `api_` を付けている**
+（Salesforce 専用の認証情報だと分かるようにするため。他のサイトの認証情報と
+名前が混ざらない）。Salesforce 側の名前が出てくるのは**画面からコピーするときと、
+ローテーション API のレスポンスを読むときだけ**で、`rotation.py` が境界で
+`client_id` へ変換している。
 
 認証方式（Client Credentials / Refresh Token）による名前の違いは**ない**。
 
@@ -54,11 +58,11 @@ from comken.toolbox.credentials import save_credential
 from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth
 from comken.toolbox.salesforce.sites import Solution
 
-PREFIX = "solution"  # DPAPI に保存したときのキー名の頭
+PREFIX = "solution"  # DPAPI に保存したときのサイト名
 
 def save_rotated_token(new_token: str) -> None:
     # ローテーションで返ってきた新しい refresh_token を DPAPI へ書き戻す
-    save_credential(f"{PREFIX}_refresh_token", new_token)
+    save_credential(PREFIX, "api_refresh_token", new_token)
 
 auth = RefreshTokenOAuth(
     client_id="Consumer Key の値",   # 画面の Consumer Key をここへ
@@ -508,9 +512,10 @@ graph LR
 ```
 
 - 平文JSONをまとめて取り込む。配布時に手入力を挟まないため
-- JSON はシステム名ごとに項目をまとめる形式（`{"solution": {"client_id": ...}}`）にして、
-  `solution_client_id` というキー名に展開する。組織ごとに client_id / client_secret が
-  別なので、システム名で分けられる形が要る
+- JSON はシステム名ごとに項目をまとめる形式（`{"solution": {"api_client_id": ...}}`）に
+  して、同じ入れ子構造のまま保存する。組織ごとに client_id / client_secret が別なので、
+  システム名で分けられる形が要る。項目名に `api_` を付けているのは、Salesforce の
+  認証情報だけに使う名前だと分かるようにするため（他のサイトの認証情報と混ざらない）
 - 取り込みは**まとめて 1 回書く**。1 件ずつ保存すると件数ぶん復号と暗号化を繰り返し、
   途中で失敗すると一部だけ入った状態になる
 - **平文 JSON は既定では消さない。** `--delete-source` を付けたときだけ消す。
@@ -519,9 +524,9 @@ graph LR
 - DPAPI は**同じ Windows ユーザー × 同じ PC** でしか復号できない。
   登録した本人と実行アカウントが違うとハマる（一番多い事故）。
   原因を区別できないので、確認する順番を書いた `CredentialDecryptionError` にまとめた
-- 組織クラスの初期化を唯一の入口にした。`CREDENTIAL_PREFIX` から client_id / client_secret
-  を読むので、**呼び出し側のコードに秘密の値が現れない**。別の登録へ切り替える場合だけ
-  `prefix=` を渡す
+- 組織クラスの初期化を唯一の入口にした。`CREDENTIAL_PREFIX` から api_client_id /
+  api_client_secret を読むので、**呼び出し側のコードに秘密の値が現れない**。
+  別の登録へ切り替える場合だけ `prefix=` を渡す
 
 ### 何を守っていて、何を守っていないか
 
@@ -546,14 +551,14 @@ graph LR
 秘密の値はコマンドラインに渡さない。先に DPAPI へ登録し、そこから読ませる。
 
 ```bat
-:: 1. 登録（開いた画面で solution / client_id・client_secret を入れる。平文のファイルは作らない）
+:: 1. 登録（開いた画面で solution / api_client_id・api_client_secret を入れる。平文のファイルは作らない）
 python -m comken cred gui
 
 :: 2. つないでみる
 python -m comken sf report --report-id 00O...
 ```
 
-既定では `Solution.CREDENTIAL_PREFIX` の `solution_client_id` / `solution_client_secret` が
+既定では `Solution.CREDENTIAL_PREFIX` の `api_client_id` / `api_client_secret` が
 自動で引かれる。`--domain` で URL を指定すれば `site_for()` が対応する組織クラスへ
 自動解決する。別の登録を試すときだけ `--prefix` にシステム名を渡す。
 **DPAPI は「登録した Windows ユーザー × その PC」
@@ -636,8 +641,8 @@ with Solution(prefix="solution_test") as sf:
     rows = sf.report.get("00O...")
 ```
 
-組織クラスは `CREDENTIAL_PREFIX` を頭に付けたキー名で、DPAPI に保管した
-client_id / client_secret を読む（[credentials](credentials.md#credentials)）。
+組織クラスは `CREDENTIAL_PREFIX` をサイト名として、DPAPI に保管した
+api_client_id / api_client_secret を読む（[credentials](credentials.md#credentials)）。
 コードにも config.ini にも秘密の値が現れない。
 
 各クラスには `CREDENTIAL_PREFIX`（認証情報のキー名の頭）・`DOMAIN_URL`（My Domain）・

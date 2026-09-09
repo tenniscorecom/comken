@@ -5,8 +5,11 @@
 ローテーションして返してきた場合は、新トークンを ``_default_on_refresh_token``
 （``from_credentials`` / ``exchange_code(prefix=...)`` が組み立てる）で DPAPI に保存する。
 
-DPAPI の保管形式は ``{prefix: {"refresh_token": ...}}`` の入れ子構造なので、
-書き戻しは ``save_credential(prefix, "refresh_token", token)`` の2引数で行う。
+DPAPI の保管形式は ``{prefix: {"api_refresh_token": ...}}`` の入れ子構造なので、
+書き戻しは ``save_credential(prefix, "api_refresh_token", token)`` の2引数で行う。
+項目名に ``api_`` を付けているのは、Salesforce 以外の認証情報（ブラウザの
+ログインパスワード等）と区別するため（この項目名は Salesforce の認証情報
+専用で、他のサイトの `Credentials` が同じ項目名を使う必要はない）。
 """
 
 # 定義中の RefreshTokenOAuth を戻り値の型注釈に使うため、注釈の評価を遅延する。
@@ -34,7 +37,7 @@ TIMEOUT_SECONDS = 60
 
 
 def _default_on_refresh_token(prefix: str) -> Callable[[str], None]:
-    """新しい refresh_token を DPAPI（ ``{prefix: {"refresh_token": ...}}`` ）へ書き戻す。
+    """新しい refresh_token を DPAPI（ ``{prefix: {"api_refresh_token": ...}}`` ）へ書き戻す。
 
     ``from_credentials`` と ``exchange_code(prefix=...)`` の両方が使う、
     書き戻し先の唯一の定義。
@@ -44,7 +47,7 @@ def _default_on_refresh_token(prefix: str) -> Callable[[str], None]:
         from comken.toolbox.credentials import save_credential
 
         logger.debug("新しい refresh_token を DPAPI へ保存します: prefix=%s", prefix)
-        save_credential(prefix, "refresh_token", refresh_token)
+        save_credential(prefix, "api_refresh_token", refresh_token)
         logger.debug("refresh_token を DPAPI へ保存しました: prefix=%s", prefix)
 
     return _save
@@ -79,10 +82,10 @@ class RefreshTokenOAuth:
         credentials = Credentials(prefix)
         # 値そのものはログに出さない（client_id / client_secret / refresh_token は秘密）
         return cls(
-            credentials.client_id,
-            credentials.refresh_token,
+            credentials.api_client_id,
+            credentials.api_refresh_token,
             domain_url,
-            client_secret=credentials.client_secret,
+            client_secret=credentials.api_client_secret,
             on_refresh_token=_default_on_refresh_token(prefix),
         )
 
@@ -158,7 +161,7 @@ class RefreshTokenOAuth:
 
         初回に受け取った refresh_token を DPAPI へ書き戻す処理は、
         呼び出し側で毎回書かなくてよいよう ``prefix`` を渡すだけで済む
-        （``from_credentials`` と同じ書き戻し先: ``{prefix: {"refresh_token": ...}}``）。
+        （``from_credentials`` と同じ書き戻し先: ``{prefix: {"api_refresh_token": ...}}``）。
         独自の保存先を使うときだけ ``on_refresh_token`` を明示的に渡す
         （その場合は ``prefix`` より優先する）。
         """
