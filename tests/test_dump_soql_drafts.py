@@ -292,27 +292,17 @@ class TestSoqlDraftBuilding:
 
 
 class TestUnsupportedReportFormat:
-    def test_summary_format_is_excluded_with_note(self, tmp_path):
+    def test_format_without_report_type_stays_blocked(self, tmp_path):
+        """reportFormatに関わらず、主オブジェクトが特定できなければBLOCKED。"""
         master = _master_with_one_report(tmp_path)
         output = tmp_path / "out.csv"
         describe_response = {"reportMetadata": {"reportFormat": "SUMMARY"}}
         site = fake_site(describe_response)
         with patch("tools.dump_soql_drafts.site_for", return_value=site):
             dump_soql_drafts(master, output)
-        rows = _read_rows(output)
-        assert rows[0]["SOQLドラフト"] == ""
-        assert "SUMMARY" in rows[0]["備考"] or "対象外" in rows[0]["備考"]
-
-    def test_matrix_format_is_excluded_with_note(self, tmp_path):
-        master = _master_with_one_report(tmp_path)
-        output = tmp_path / "out.csv"
-        describe_response = {"reportMetadata": {"reportFormat": "MATRIX"}}
-        site = fake_site(describe_response)
-        with patch("tools.dump_soql_drafts.site_for", return_value=site):
-            dump_soql_drafts(master, output)
-        rows = _read_rows(output)
-        assert rows[0]["SOQLドラフト"] == ""
-        assert "対象外" in rows[0]["備考"]
+        row = _read_rows(output)[0]
+        assert row["SOQLドラフト"] == ""
+        assert row["状態"] == "BLOCKED"
 
     def test_summary_format_exposes_raw_aggregation_data(self, tmp_path):
         """SUMMARY形式でSOQLは作れなくても、aggregates/groupingsDownの生データは見える。"""
@@ -717,6 +707,132 @@ class TestStandardDateFilter:
         assert "THIS_MONTH" in rows[0]["備考"]
 
 
+class TestSummaryMatrixGroupBy:
+    """SUMMARY/MATRIX形式の groupingsDown/groupingsAcross/aggregates からの
+    SELECT/GROUP BY 組み立て。"""
+
+    def _fields_table(self):
+        return Table(
+            FIELDS_COLUMNS,
+            [
+                {
+                    "列キー": "STAGE_NAME",
+                    "表示名": "フェーズ名",
+                    "対応フィールドAPI名": "StageName",
+                    "型": "picklist",
+                    "備考": "",
+                },
+                {
+                    "列キー": "AMOUNT",
+                    "表示名": "金額",
+                    "対応フィールドAPI名": "Amount",
+                    "型": "currency",
+                    "備考": "",
+                },
+            ],
+        )
+
+    def test_summary_format_builds_select_and_group_by(self, tmp_path):
+        """SUMMARY: groupingsDownとaggregatesからSELECT/GROUP BYを組み立て、状態はREVIEW止まり。"""
+        master = _master_with_one_report(tmp_path)
+        output = tmp_path / "out.csv"
+        describe_response = {
+            "reportMetadata": {
+                "reportFormat": "SUMMARY",
+                "reportType": {"type": "Opportunity"},
+                "groupingsDown": [{"name": "STAGE_NAME"}],
+                "aggregates": ["s!AMOUNT"],
+                "reportFilters": [],
+            }
+        }
+        site = fake_site(describe_response, self._fields_table())
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
+            dump_soql_drafts(master, output)
+        row = _read_rows(output)[0]
+        assert row["SOQLドラフト"] == (
+            "SELECT StageName, SUM(Amount) FROM Opportunity GROUP BY StageName"
+        )
+        # 集計関数プレフィックスの対応は未検証のため、READYにはしない
+        assert row["状態"] == "REVIEW"
+        assert "未検証" in row["備考"]
+
+    def test_matrix_format_includes_groupings_across_in_group_by(self, tmp_path):
+        """MATRIX: groupingsDown/groupingsAcrossの両方がGROUP BYへ入る。"""
+        master = _master_with_one_report(tmp_path)
+        output = tmp_path / "out.csv"
+        describe_response = {
+            "reportMetadata": {
+                "reportFormat": "MATRIX",
+                "reportType": {"type": "Opportunity"},
+                "groupingsDown": [{"name": "STAGE_NAME"}],
+                "groupingsAcross": [{"name": "AMOUNT"}],
+                "reportFilters": [],
+            }
+        }
+        site = fake_site(describe_response, self._fields_table())
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
+            dump_soql_drafts(master, output)
+        soql = _read_rows(output)[0]["SOQLドラフト"]
+        assert "GROUP BY StageName, Amount" in soql
+
+    def test_row_count_aggregate_becomes_count_id(self, tmp_path):
+        """ "RowCount"はCOUNT(Id)として扱う。"""
+        master = _master_with_one_report(tmp_path)
+        output = tmp_path / "out.csv"
+        describe_response = {
+            "reportMetadata": {
+                "reportFormat": "SUMMARY",
+                "reportType": {"type": "Opportunity"},
+                "groupingsDown": [{"name": "STAGE_NAME"}],
+                "aggregates": ["RowCount"],
+                "reportFilters": [],
+            }
+        }
+        site = fake_site(describe_response, self._fields_table())
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
+            dump_soql_drafts(master, output)
+        assert "COUNT(Id)" in _read_rows(output)[0]["SOQLドラフト"]
+
+    def test_unresolvable_grouping_and_aggregate_leaves_blocked(self, tmp_path):
+        """グルーピング列も集計列も1件も解決できなければBLOCKED。"""
+        master = _master_with_one_report(tmp_path)
+        output = tmp_path / "out.csv"
+        describe_response = {
+            "reportMetadata": {
+                "reportFormat": "SUMMARY",
+                "reportType": {"type": "Opportunity"},
+                "groupingsDown": [{"name": "MYSTERY"}],
+                "reportFilters": [],
+            }
+        }
+        site = fake_site(describe_response, self._fields_table())
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
+            dump_soql_drafts(master, output)
+        row = _read_rows(output)[0]
+        assert row["SOQLドラフト"] == ""
+        assert row["状態"] == "BLOCKED"
+
+    def test_unparseable_aggregate_key_is_excluded_and_noted(self, tmp_path):
+        """ "!"区切りが無い集計キーはSELECTから除外し、個別対応の注記を残す。"""
+        master = _master_with_one_report(tmp_path)
+        output = tmp_path / "out.csv"
+        describe_response = {
+            "reportMetadata": {
+                "reportFormat": "SUMMARY",
+                "reportType": {"type": "Opportunity"},
+                "groupingsDown": [{"name": "STAGE_NAME"}],
+                "aggregates": ["unknown_format"],
+                "reportFilters": [],
+            }
+        }
+        site = fake_site(describe_response, self._fields_table())
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
+            dump_soql_drafts(master, output)
+        row = _read_rows(output)[0]
+        assert row["SOQLドラフト"] == "SELECT StageName FROM Opportunity GROUP BY StageName"
+        assert "unknown_format" in row["備考"]
+
+
 class TestCrossFilters:
     def test_cross_filters_are_noted_but_not_converted(self, tmp_path):
         master = _master_with_one_report(tmp_path)
@@ -811,6 +927,116 @@ class TestCrossFilters:
             dump_soql_drafts(master, output)
         rows = _read_rows(output)
         assert rows[0]["フィルタ詳細(生データ)"] == "crossFilters: {'relatedEntity': 'Contact'}"
+
+    def test_with_operator_is_converted_to_in_subquery(self, tmp_path):
+        """primaryTableColumnを解釈できたcrossFiltersはIN半結合へ変換され、状態はREVIEW。"""
+        master = _master_with_one_report(tmp_path)
+        output = tmp_path / "out.csv"
+        describe_response = {
+            "reportMetadata": {
+                "reportFormat": "TABULAR",
+                "reportType": {"type": "Account"},
+                "detailColumns": ["ACC_NAME"],
+                "reportFilters": [],
+                "crossFilters": [
+                    {"primaryTableColumn": "$Account.Opportunities", "operator": "with"}
+                ],
+            }
+        }
+        fields_table = Table(
+            FIELDS_COLUMNS,
+            [
+                {
+                    "列キー": "ACC_NAME",
+                    "表示名": "取引先名",
+                    "対応フィールドAPI名": "Name",
+                    "型": "string",
+                    "備考": "",
+                },
+            ],
+        )
+        site = fake_site(describe_response, fields_table)
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
+            dump_soql_drafts(master, output)
+        row = _read_rows(output)[0]
+        assert row["SOQLドラフト"] == (
+            "SELECT Name FROM Account WHERE Id IN (SELECT AccountId FROM Opportunity)"
+        )
+        assert row["状態"] == "REVIEW"
+        assert "ヒューリスティック" in row["備考"]
+
+    def test_without_operator_is_converted_to_not_in_subquery(self, tmp_path):
+        """operator="without"はNOT IN半結合へ変換される。"""
+        master = _master_with_one_report(tmp_path)
+        output = tmp_path / "out.csv"
+        describe_response = {
+            "reportMetadata": {
+                "reportFormat": "TABULAR",
+                "reportType": {"type": "Account"},
+                "detailColumns": ["ACC_NAME"],
+                "reportFilters": [],
+                "crossFilters": [
+                    {"primaryTableColumn": "$Account.Contacts", "operator": "without"}
+                ],
+            }
+        }
+        fields_table = Table(
+            FIELDS_COLUMNS,
+            [
+                {
+                    "列キー": "ACC_NAME",
+                    "表示名": "取引先名",
+                    "対応フィールドAPI名": "Name",
+                    "型": "string",
+                    "備考": "",
+                },
+            ],
+        )
+        site = fake_site(describe_response, fields_table)
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
+            dump_soql_drafts(master, output)
+        soql = _read_rows(output)[0]["SOQLドラフト"]
+        assert "NOT IN (SELECT AccountId FROM Contact)" in soql
+
+    def test_criteria_is_embedded_as_comment_for_manual_conversion(self, tmp_path):
+        """criteria(子オブジェクト側の条件)は自動変換せず生データをコメントとして残す。"""
+        master = _master_with_one_report(tmp_path)
+        output = tmp_path / "out.csv"
+        describe_response = {
+            "reportMetadata": {
+                "reportFormat": "TABULAR",
+                "reportType": {"type": "Account"},
+                "detailColumns": ["ACC_NAME"],
+                "reportFilters": [],
+                "crossFilters": [
+                    {
+                        "primaryTableColumn": "$Account.Opportunities",
+                        "operator": "with",
+                        "criteria": [
+                            {"column": "AMOUNT", "operator": "greaterThan", "value": "1000"}
+                        ],
+                    }
+                ],
+            }
+        }
+        fields_table = Table(
+            FIELDS_COLUMNS,
+            [
+                {
+                    "列キー": "ACC_NAME",
+                    "表示名": "取引先名",
+                    "対応フィールドAPI名": "Name",
+                    "型": "string",
+                    "備考": "",
+                },
+            ],
+        )
+        site = fake_site(describe_response, fields_table)
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
+            dump_soql_drafts(master, output)
+        soql = _read_rows(output)[0]["SOQLドラフト"]
+        assert "criteria(要手動変換)" in soql
+        assert "AMOUNT" in soql
 
 
 class TestBooleanFilter:

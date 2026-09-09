@@ -775,12 +775,13 @@ Salesforceの設定画面（オブジェクトマネージャ）で手動確認�
 `includes` / `excludes` / `within` はSOQL側の書き方がReport側と1対1にならないため、
 機械的に変換せず個別に読んで組み立てる。
 
-**手順3・4をまとめて、管理表の全件について`SELECT`/`WHERE`のドラフトを1本のCSVへ出す
-`tools/dump_soql_drafts.py`がある**（開発・移行支援ツールで、恒久的な公開APIではない）。
-上の演算子対応表に加えて、`reportFilters`とは別枠の`standardDateFilter`（期間
-フィルタ）のうち明示的な開始日・終了日（`durationValue: "CUSTOM"`）だけを`WHERE`句へ
-変換する。相対期間（`THIS_MONTH`等）・`includes`/`excludes`/`within`・`crossFilters`は
-機械変換せず、誤った完成SOQLとして扱わないよう `BLOCKED` にする:
+**手順3・4をまとめて、管理表の全件について`SELECT`/`WHERE`/`GROUP BY`のドラフトを
+1本のCSVへ出す`tools/dump_soql_drafts.py`がある**（開発・移行支援ツールで、恒久的な
+公開APIではない）。上の演算子対応表に加えて、`reportFilters`とは別枠の
+`standardDateFilter`（期間フィルタ）のうち明示的な開始日・終了日
+（`durationValue: "CUSTOM"`）だけを`WHERE`句へ変換する。相対期間（`THIS_MONTH`等）・
+`includes`/`excludes`/`within`は機械変換せず、誤った完成SOQLとして扱わないよう
+`BLOCKED` にする:
 
 ```bash
 python tools/dump_soql_drafts.py
@@ -818,18 +819,27 @@ SELECTに無くフィルタだけに現れる列キーもカタログへ残る�
 `reportType.type` を実オブジェクトとして Object Describe できない複合・カスタム
 レポートタイプは、誤った `FROM` 句を出さないよう `BLOCKED` にする。
 最後の「フィルタ詳細(生データ)」は `reportFilters` を加工せずそのまま
-`列=演算子:値` の一覧にしたもので、ドラフトの検証や、`TABULAR`以外で
-SOQLドラフトを作れなかったレポートの絞り込み条件を確認するのに使う。
-`crossFilters` があるときは同じ列へ `crossFilters: {...}` として生の辞書を
-そのまま追記する（正確なキー構成が本物の組織で未検証のため、SOQLの
-`WHERE ... IN (SELECT ...)` への変換は機械化せず、この生データを見て人が組み立てる）。
+`列=演算子:値` の一覧にしたもので、ドラフトの検証に使う。
 
-**`SUMMARY` / `MATRIX` 形式は `SELECT`/`WHERE` を組み立てず `BLOCKED` にするが、
-`aggregates` / `groupingsDown` / `groupingsAcross` の生データは
-「集計・グルーピング詳細(生データ)」列で確認できる。** `aggregates` の集計関数
-エンコーディング（合計・平均等をキーのどの部分で表しているか）が本物の組織で
-未検証のため、`GROUP BY` や `SUM()` 等への機械変換はしない。この生データを見ながら
-`SELECT`/`GROUP BY` 句を人が組み立てる。
+**`crossFilters` は `WHERE Id IN/NOT IN (SELECT ... FROM ...)` の半結合へ自動変換を
+試みる。** `primaryTableColumn`（`"$親.関係名"` の形と仮定）から子オブジェクト名を
+推測し、親への参照フィールド名は `<親オブジェクト>Id` という標準的な命名を仮定する
+（**この2つの推測はヒューリスティックで、本物の Salesforce 組織で未検証**。カスタム
+オブジェクト・カスタムlookup項目では外れることが多い）。子オブジェクト側の絞り込み
+条件（`criteria`）はこのレポートの列マッピングでは解決できないため自動変換せず、
+生データを `/* criteria(要手動変換): ... */` というSQLコメントとしてそのまま
+埋め込む。この変換を使った行は**状態が`READY`にはならず、必ず`REVIEW`止まりになる**
+（「フィルタ詳細(生データ)」列にも`crossFilters: {...}`として生の辞書を残すので、
+推測が外れていた場合はそちらで元データを確認する）。
+
+**`SUMMARY` / `MATRIX` 形式は `groupingsDown`/`groupingsAcross`（グルーピング列）と
+`aggregates`（集計列）から `SELECT`/`GROUP BY` の自動変換を試みる。** `aggregates`
+のキー（`"s!Amount"` 等）の集計関数プレフィックス対応（合計=`s`、平均=`a`、最大=`mx`、
+最小=`mi`、`"RowCount"`は`COUNT(Id)`）は Salesforce 公式ドキュメントに基づく一般知識で、
+**本物の組織で未検証**。このため変換に成功しても状態は`READY`にはならず、必ず
+`REVIEW`止まりになる。グルーピング列・集計列が1件も解決できない場合は`BLOCKED`のまま
+（`SELECT`/`WHERE`を組み立てない）。集計・グルーピングの生データは常に
+「集計・グルーピング詳細(生データ)」列でも確認できる。
 **あくまで下書き**であり、`READY` 以外はそのまま`SoqlReport.soql()`に貼らない。
 「備考」欄の指摘を解消し、必要ならカタログを確認済みにしてから手順5へ進む。
 `状態`が`ERROR`または`INVALID`の行が1件でもある実行は終了コード1、

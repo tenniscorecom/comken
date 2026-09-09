@@ -9,14 +9,16 @@
 ``reportFilters`` はこちらでも取得済みなので、生データも「フィルタ詳細(生データ)」
 列としてまとめて1回の実行で出す。
 
-Report Describe と Object Describe の結果から ``SELECT`` / ``WHERE`` 句のドラフトを
-機械的に組み立て、1レポート1行の CSV へ出す。確認した列マッピングは別のカタログへ
-蓄積し、同じ組織・レポートタイプの新規レポートでも再利用する。**完成品ではない。**
-演算子の変換は
-``docs/salesforce-downloader.md`` の「SOQLレポート」節にある対応表と同じ内容だが、
-本物の Salesforce 組織に対して未検証。1対1変換できないもの（``includes`` /
-``excludes`` / ``within`` / ``crossFilters`` / 相対期間の ``standardDateFilter`` など）は
-SOQL欄を空にして ``BLOCKED`` とする。人が確認してから
+Report Describe と Object Describe の結果から ``SELECT`` / ``WHERE`` / ``GROUP BY`` 句の
+ドラフトを機械的に組み立て、1レポート1行の CSV へ出す。確認した列マッピングは別の
+カタログへ蓄積し、同じ組織・レポートタイプの新規レポートでも再利用する。
+**完成品ではない。** 演算子の変換は ``docs/salesforce-downloader.md`` の「SOQLレポート」
+節にある対応表と同じ内容だが、本物の Salesforce 組織に対して未検証。``crossFilters``
+（半結合への変換）・``SUMMARY``/``MATRIX``（``GROUP BY``・集計関数への変換）は
+ヒューリスティックな推測変換のため、成功しても状態は必ず ``REVIEW`` 止まりにし
+``READY`` にはしない。``includes`` / ``excludes`` / ``within`` / 相対期間の
+``standardDateFilter`` は1対1変換できないため、対象の条件を ``WHERE`` から除外して
+「備考」へ回す。人が確認してから
 ``comken/services/salesforce_downloader/soql_reports/`` 配下の ``SoqlReport``
 サブクラスへ書き写す前提の道具（docs 手順3〜5に相当する下準備）。
 
@@ -113,6 +115,18 @@ _COMPARISON_OPERATORS = {
 }
 # LIKE 系（値は常に文字列として '...' で囲む）
 _LIKE_OPERATORS = {"contains", "startsWith"}
+
+# aggregates のキー（例: "s!Amount"）の関数プレフィックス → SOQL 集計関数。
+# 対応関係（合計=s、平均=a、最大=mx、最小=mi）は Salesforce 公式ドキュメントに
+# 基づく一般知識で、本物の組織で未検証。このマッピングを使った変換結果は
+# 常に REVIEW 扱いにする（_build_select_and_group_by() が notes へ必ず1件足すため
+# READY 判定条件「notes が空」を満たさなくなる）。
+_AGGREGATE_FUNCTIONS = {
+    "s": "SUM",
+    "a": "AVG",
+    "mx": "MAX",
+    "mi": "MIN",
+}
 
 _UNRESOLVED_FIELD = "(不明)"
 _NUMERIC_RE = re.compile(r"-?\d+(\.\d+)?")
@@ -397,6 +411,85 @@ def _build_select_clause(
     return ", ".join(resolved)
 
 
+def _parse_aggregate_key(aggregate_key: str) -> tuple[str, str] | None:
+    """``"s!Amount"`` のような集計キーを ``(SOQL集計関数, 列キー)`` に分解する。
+
+    ``"RowCount"`` は行数（``COUNT()``）として扱う。プレフィックスが
+    ``_AGGREGATE_FUNCTIONS`` に無い、または ``"!"`` 区切りが無い場合は
+    ``None`` を返す（呼び出し側で個別対応へ回す）。
+    """
+    if aggregate_key == "RowCount":
+        return "COUNT", ""
+    if "!" not in aggregate_key:
+        return None
+    prefix, field_key = aggregate_key.split("!", 1)
+    func = _AGGREGATE_FUNCTIONS.get(prefix)
+    if func is None or not field_key:
+        return None
+    return func, field_key
+
+
+def _build_grouping_columns(
+    groupings: list[object],
+    field_map: dict[str, tuple[str, str]],
+    notes: list[str],
+) -> list[str]:
+    """``groupingsDown`` / ``groupingsAcross``（``SUMMARY``/``MATRIX``）を解決済み列名にする。"""
+    resolved: list[str] = []
+    unresolved: list[str] = []
+    for grouping in groupings:
+        if not isinstance(grouping, dict):
+            notes.append("groupingsに想定外の形式の要素があるため無視")
+            continue
+        column_key = grouping.get("name")
+        if not isinstance(column_key, str):
+            continue
+        field = field_map.get(column_key, (_UNRESOLVED_FIELD, ""))[0]
+        if field == _UNRESOLVED_FIELD:
+            unresolved.append(column_key)
+            continue
+        if field not in resolved:
+            resolved.append(field)
+    if unresolved:
+        notes.append(f"不明なグルーピング列(除外): {', '.join(unresolved)}")
+    return resolved
+
+
+def _build_aggregate_expressions(
+    aggregates: list[object],
+    field_map: dict[str, tuple[str, str]],
+    notes: list[str],
+) -> list[str]:
+    """``aggregates`` を集計関数の SOQL 式（``SUM(Amount)`` 等）にする。
+
+    プレフィックスの対応（合計=s、平均=a、最大=mx、最小=mi）は本物の組織で
+    未検証。解決できたものも含め、この関数を使った SOQL は呼び出し側で
+    常に REVIEW 扱いにする。
+    """
+    expressions: list[str] = []
+    unresolved: list[str] = []
+    for aggregate_key in aggregates:
+        if not isinstance(aggregate_key, str):
+            notes.append("aggregatesに想定外の形式の要素があるため無視")
+            continue
+        parsed = _parse_aggregate_key(aggregate_key)
+        if parsed is None:
+            unresolved.append(aggregate_key)
+            continue
+        func, field_key = parsed
+        if func == "COUNT" and not field_key:
+            expressions.append("COUNT(Id)")
+            continue
+        field = field_map.get(field_key, (_UNRESOLVED_FIELD, ""))[0]
+        if field == _UNRESOLVED_FIELD:
+            unresolved.append(aggregate_key)
+            continue
+        expressions.append(f"{func}({field})")
+    if unresolved:
+        notes.append(f"個別対応が必要な集計キーあり(SELECTから除外): {', '.join(unresolved)}")
+    return expressions
+
+
 def _expand_boolean_filter(expression: str, conditions: dict[int, str]) -> str | None:
     """番号式を検証し、各番号を括弧付き条件へ置換する。"""
     tokens = _BOOLEAN_TOKEN_RE.findall(expression)
@@ -490,23 +583,106 @@ def _build_date_filter_condition(
     return f"{column} >= {start_date} AND {column} <= {end_date}", True
 
 
+def _guess_child_object_name(relationship_name: str) -> str:
+    """リレーション名から子オブジェクトの API 名を推測する（ヒューリスティック、未検証）。
+
+    カスタムオブジェクトのリレーション名は ``"Xxx__r"`` の形になる規則を使い
+    ``"__c"`` へ置き換える。標準オブジェクトは複数形のことが多いため、
+    簡易な英語の複数形→単数形変換を試みる（例外は多く、この関数の結果が
+    実際のオブジェクト名と一致する保証はない）。
+    """
+    if relationship_name.endswith("__r"):
+        return relationship_name[: -len("__r")] + "__c"
+    if relationship_name.endswith("ies"):
+        return relationship_name[: -len("ies")] + "y"
+    if relationship_name.endswith(("ses", "xes", "ches", "shes")):
+        return relationship_name[:-2]
+    if relationship_name.endswith("s"):
+        return relationship_name[:-1]
+    return relationship_name
+
+
+def _build_cross_filter_condition(cross_filter: dict, notes: list[str]) -> str | None:
+    """1つの ``crossFilter`` を SOQL の半結合（``IN``/``NOT IN`` サブクエリ）へ変換する。
+
+    ``crossFilters`` の正確な JSON 構造・子オブジェクトの解決方法は本物の
+    Salesforce 組織で未検証。``primaryTableColumn``（``"$親.関係名"`` の形と
+    仮定）から子オブジェクト名を ``_guess_child_object_name()`` で推測し、
+    親への参照フィールド名は ``"<親オブジェクト>Id"`` という標準的な命名を
+    仮定する（カスタムの lookup 項目では実際の API 名と異なることが多い）。
+
+    ``criteria``（子オブジェクト側の絞り込み条件）は、このレポート自身の
+    ``field_map``（主オブジェクト用）では列名を解決できないため機械変換せず、
+    生データのままコメントとして埋め込む。人が実際のフィールド名へ書き換える
+    前提。この関数を使った SOQL は呼び出し側で常に REVIEW 扱いにする。
+    """
+    primary_column = cross_filter.get("primaryTableColumn")
+    if not isinstance(primary_column, str) or "." not in primary_column:
+        notes.append("crossFiltersのprimaryTableColumnを解釈できません(個別対応)")
+        return None
+    parent_part, relationship_name = primary_column.split(".", 1)
+    parent_object = parent_part.lstrip("$")
+    if not parent_object or not relationship_name:
+        notes.append("crossFiltersのprimaryTableColumnを解釈できません(個別対応)")
+        return None
+    child_object = _guess_child_object_name(relationship_name)
+    parent_field_guess = f"{parent_object}Id"
+
+    operator = cross_filter.get("operator")
+    soql_operator = "NOT IN" if operator == "without" else "IN"
+
+    subquery = f"SELECT {parent_field_guess} FROM {child_object}"
+    criteria = cross_filter.get("criteria")
+    if criteria:
+        subquery += f" /* criteria(要手動変換): {criteria!r} */"
+    notes.append(
+        f"crossFilters({operator!r})を推測変換しました({child_object}/{parent_field_guess}は"
+        "ヒューリスティックで未検証。criteriaは手動でWHERE条件へ書き換えること)"
+    )
+    return f"Id {soql_operator} ({subquery})"
+
+
+def _build_cross_filter_conditions(
+    cross_filters: object, notes: list[str]
+) -> tuple[list[str], bool]:
+    """``crossFilters`` 全件を SOQL 条件式のリストへ変換する。
+
+    戻り値は ``(条件式のリスト, 全件変換できたか)``。1件でも
+    ``primaryTableColumn`` を解釈できないものがあれば ``False`` を返す
+    （呼び出し側で REVIEW/BLOCKED を判断する材料にする）。
+    """
+    if not cross_filters:
+        return [], True
+    if not isinstance(cross_filters, list):
+        notes.append("crossFiltersが想定外の形式です")
+        return [], False
+    conditions: list[str] = []
+    all_converted = True
+    for cross_filter in cross_filters:
+        if not isinstance(cross_filter, dict):
+            notes.append("crossFiltersに想定外の形式の要素があるため無視")
+            all_converted = False
+            continue
+        condition = _build_cross_filter_condition(cross_filter, notes)
+        if condition is None:
+            all_converted = False
+            continue
+        conditions.append(condition)
+    return conditions, all_converted
+
+
 def _validate_report_metadata(metadata: object) -> tuple[dict, str] | tuple[None, str]:
     """``describe()`` の戻り値を検証し、``(report_metadata, "")`` か ``(None, エラー文)`` を返す。
 
-    ``TABULAR`` 以外（``SUMMARY`` / ``MATRIX``）や主オブジェクトが特定できない
-    ケースも、ここで「対象外」としてエラー文に含める（呼び出し側で早期リターンする）。
+    ``reportFormat`` は ``TABULAR`` / ``SUMMARY`` / ``MATRIX`` のいずれも受け付ける
+    （``SELECT`` 句の組み立て方は ``_compose_soql_draft()`` が形式ごとに分ける）。
+    主オブジェクトが特定できないケースだけ「対象外」としてここで早期リターンする。
     """
     if not isinstance(metadata, dict):
         return None, "describe()の戻り値が不正な形式です"
     report_metadata = metadata.get("reportMetadata", {})
     if not isinstance(report_metadata, dict):
         return None, "reportMetadataが不正な形式です"
-    report_format = report_metadata.get("reportFormat", "")
-    if report_format != "TABULAR":
-        return None, (
-            f"reportFormat={report_format!r}のため対象外(SUMMARY/MATRIXは個別対応。"
-            "集計・グルーピングの生データは「集計・グルーピング詳細(生データ)」列を参照)"
-        )
     report_type = report_metadata.get("reportType")
     if not isinstance(report_type, dict):
         return None, "reportTypeが不正な形式です"
@@ -516,19 +692,58 @@ def _validate_report_metadata(metadata: object) -> tuple[dict, str] | tuple[None
     return report_metadata, ""
 
 
+def _build_select_and_group_by(
+    report_metadata: dict, field_map: dict[str, tuple[str, str]], notes: list[str]
+) -> tuple[str, str, bool]:
+    """``SELECT`` 句と（該当すれば）``GROUP BY`` 句を組み立てる。
+
+    戻り値は ``(SELECT句, GROUP BY句, is_complete)``。``TABULAR`` は
+    ``detailColumns`` から、``SUMMARY``/``MATRIX`` は ``groupingsDown`` /
+    ``groupingsAcross`` + ``aggregates`` から組み立てる。後者は集計関数
+    プレフィックスの対応が未検証のため、成功しても必ず ``notes`` へ1件足し、
+    呼び出し側で ``READY`` にはならないようにする（常に ``REVIEW`` 止まり）。
+    """
+    report_format = report_metadata.get("reportFormat", "")
+    if report_format == "TABULAR":
+        detail_columns = report_metadata.get("detailColumns", [])
+        if not isinstance(detail_columns, list):
+            notes.append("detailColumnsが想定外の形式です")
+            return "Id", "", False
+        return _build_select_clause(detail_columns, field_map, notes), "", True
+
+    groupings_down = report_metadata.get("groupingsDown", [])
+    groupings_across = report_metadata.get("groupingsAcross", [])
+    groupings = (groupings_down if isinstance(groupings_down, list) else []) + (
+        groupings_across if isinstance(groupings_across, list) else []
+    )
+    grouping_columns = _build_grouping_columns(groupings, field_map, notes)
+    aggregates = report_metadata.get("aggregates", [])
+    aggregate_expressions = _build_aggregate_expressions(
+        aggregates if isinstance(aggregates, list) else [], field_map, notes
+    )
+    select_parts = grouping_columns + aggregate_expressions
+    if not select_parts:
+        notes.append("SELECT対象(グルーピング列・集計列)を1件も解決できませんでした")
+        return "Id", "", False
+    notes.append(
+        f"reportFormat={report_format!r}の自動変換は未検証です"
+        "(集計関数プレフィックス・グルーピングの対応関係を必ず確認すること)"
+    )
+    group_by_clause = ", ".join(grouping_columns) if grouping_columns else ""
+    return ", ".join(select_parts), group_by_clause, True
+
+
 def _compose_soql_draft(
     report_metadata: dict, object_name: str, field_map: dict[str, tuple[str, str]]
 ) -> tuple[str, list[str], bool]:
-    """検証済みの ``reportMetadata`` から SOQL ドラフトを組み立てる。戻り値は ``(SOQL, notes)``。"""
-    notes: list[str] = []
-    is_complete = True
+    """検証済みの ``reportMetadata`` から SOQL ドラフトを組み立てる。
 
-    detail_columns = report_metadata.get("detailColumns", [])
-    if not isinstance(detail_columns, list):
-        notes.append("detailColumnsが想定外の形式です")
-        detail_columns = []
-        is_complete = False
-    select_clause = _build_select_clause(detail_columns, field_map, notes)
+    戻り値は ``(SOQL, notes, is_complete)``。
+    """
+    notes: list[str] = []
+    select_clause, group_by_clause, is_complete = _build_select_and_group_by(
+        report_metadata, field_map, notes
+    )
 
     report_filters = report_metadata.get("reportFilters", [])
     if not isinstance(report_filters, list):
@@ -546,22 +761,18 @@ def _compose_soql_draft(
     date_condition, is_date_complete = _build_date_filter_condition(standard_date_filter, notes)
     if date_condition:
         where_conditions.append(date_condition)
-    is_complete = is_complete and is_where_complete and is_date_complete
 
     cross_filters = report_metadata.get("crossFilters")
-    if cross_filters:
-        if isinstance(cross_filters, list):
-            notes.append(
-                "crossFiltersあり(子オブジェクト条件、個別対応が必要。"
-                "生データは「フィルタ詳細(生データ)」列を参照)"
-            )
-        else:
-            notes.append("crossFiltersが想定外の形式です")
-        is_complete = False
+    cross_conditions, is_cross_complete = _build_cross_filter_conditions(cross_filters, notes)
+    where_conditions.extend(cross_conditions)
+
+    is_complete = is_complete and is_where_complete and is_date_complete and is_cross_complete
 
     soql = f"SELECT {select_clause} FROM {object_name}"
     if where_conditions:
         soql += " WHERE " + " AND ".join(where_conditions)
+    if group_by_clause:
+        soql += " GROUP BY " + group_by_clause
     return soql, notes, is_complete
 
 
