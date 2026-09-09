@@ -3,9 +3,13 @@
 client_id / client_secret・パスワード・トークンなど、config.ini に平文で書けない値を
 Windows ログオンユーザーに紐付けて暗号化し、ユーザープロファイル内に保存する。
 
-キー名1つに値1つを持つ単純な形式にしてある。
-「ユーザー名とパスワードが必ずセット」という決め打ちをしないため、
-client_id と client_secret だけ・トークンだけ、といった構成にも合わせられる。
+**保存形式は ``{サイト名: {項目名: 値}}`` の入れ子 JSON。**
+フラットな ``"{site}_{field}"`` 文字列キーで保管していた時期があったが、
+``last_rotation_date`` のように**項目名が3単語以上になる**とサイト名との
+境界が文字列処理だけでは一意に決まらなかったため、（サイト名, 項目名）の
+組のまま保管する形に変えた。復元時の曖昧さが構造的に消えるので、
+「``solution_last_rotation_date`` を「``solution`` / ``last_rotation_date``」
+として扱う」といった誤動作が起きなくなる。
 
 仕組み:
     - 暗号化には Windows 標準の DPAPI を使う。暗号鍵を自分で管理する必要がなく、
@@ -21,12 +25,12 @@ client_id と client_secret だけ・トークンだけ、といった構成に�
     from comken.toolbox.credentials import Credentials
 
     cred = Credentials("site_a")
-    cred.client_id      # → site_a_client_id の値
-    cred.client_secret  # → site_a_client_secret の値
+    cred.client_id      # → load_credential("site_a", "client_id") と同じ
+    cred.client_secret  # → load_credential("site_a", "client_secret") と同じ
 
     # 1件だけ取り出す場合
     from comken.toolbox.credentials import load_credential
-    password = load_credential("oju_sys_password")
+    password = load_credential("oju_sys", "password")
 """
 
 import json
@@ -54,25 +58,31 @@ logger = logging.getLogger(__name__)
 # ファイル名は社内の命名規則により system-id.enc に統一する（2026-09-02）。
 CREDENTIALS_PATH = Path.home() / ".rpa" / "system-id.enc"
 
-# キー名に使える文字（半角英数字とアンダースコアのみ）
+# サイト名・項目名に使える文字（半角英数字とアンダースコアのみ）
 # 漢字・スペース・記号はコードや config.ini に書きにくいため弾く
 CREDENTIAL_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")
+
+# CredentialNotFoundError の表示用に、サイト名と項目名を組み合わせる区切り。
+# ファイル名や JSON キーに使うわけではないので、人が見て区切りが分かれば何でもよい。
+# ``.`` を選んだのは「キー名全体」ではなく「サイト.項目」のスコープ感が伝わるため。
+_DISPLAY_NAME_SEPARATOR = "."
 
 # 復号失敗時に DPAPI が返す説明文字列（デバッグ用。動作には影響しない）
 _FILE_DESCRIPTION = "comken credentials"
 
 
 class Credentials:
-    """システム名配下の認証情報に、属性アクセスでまとめてアクセスする。
+    """サイト名配下の認証情報に、属性アクセスでまとめてアクセスする。
 
-    キー名「システム名_項目名」のシステム名部分だけを指定し、項目名は属性で取り出す。
-    システム名を config.ini から渡せば、本番用・テスト用アカウントの切り替えが
-    config.ini の1行だけで済む（コード側にキー名の直書きが残らない）。
+    入れ子の ``{サイト名: {項目名: 値}}`` から、指定されたサイト名の部分 dict を
+    取り出し、項目名を属性アクセスで解決する。サイト名を config.ini から渡せば、
+    本番用・テスト用アカウントの切り替えが config.ini の1行だけで済む
+    （コード側に長いキー名の直書きが残らない）。
 
     使い方:
         cred = Credentials("site_a")
-        cred.client_id      # → load_credential("site_a_client_id") と同じ
-        cred.client_secret  # → load_credential("site_a_client_secret") と同じ
+        cred.client_id      # → load_credential("site_a", "client_id") と同じ
+        cred.client_secret  # → load_credential("site_a", "client_secret") と同じ
 
         # config.ini で本番・テストを切り替える場合
         # [CREDENTIALS]
@@ -80,42 +90,58 @@ class Credentials:
         cred = Credentials(config.CREDENTIALS.SITE_A)
 
     Raises:
-        InvalidCredentialNameError: システム名に使えない文字が含まれている場合。
+        InvalidCredentialNameError: サイト名に使えない文字が含まれている場合。
         CredentialNotFoundError: 属性に対応するキーが未登録の場合。
         CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
     """
 
-    def __init__(self, prefix: str, path: Path | None = None) -> None:
+    def __init__(self, site: str, path: Path | None = None) -> None:
         """
         Args:
-            prefix: キー名のシステム名部分（例: "site_a", "site_a_test"）。
+            site: 認証情報のサイト名（例: "site_a", "site_a_test"）。
             path: 保存先ファイル。省略時は CREDENTIALS_PATH（通常は省略する）。
         """
-        if not CREDENTIAL_NAME_PATTERN.fullmatch(prefix):
-            raise InvalidCredentialNameError("システム名", prefix)
-        self._prefix = prefix
+        if not CREDENTIAL_NAME_PATTERN.fullmatch(site):
+            raise InvalidCredentialNameError("サイト名", site)
+        self._site = site
         self._path = path
         # 初回の属性アクセスで復号結果を丸ごと持っておく。 詳しくは __getattr__ の
         # コメント参照（秘密情報の保持期間・save/delete 後の扱いもそこに書いた）。
-        self._cache: dict[str, str] | None = None
-        logger.debug("Credentials を生成: prefix=%s, path=%s", prefix, path or CREDENTIALS_PATH)
+        self._cache: dict[str, dict[str, str]] | None = None
+        logger.debug("Credentials を生成: site=%s, path=%s", site, path or CREDENTIALS_PATH)
 
     def __getattr__(self, item: str) -> str:
         # _ 始まりは Python 内部の属性探索（copy 等）なので通常の AttributeError にする
         if item.startswith("_"):
             raise AttributeError(item)
-        data = self._decrypted()
-        key = f"{self._prefix}_{item}"
-        if key not in data:
+        site_dict = self._site_dict()
+        if item not in site_dict:
             # 元の ``load_credential()`` と同じ例外型・同じメッセージにする。
             # 「登録済みのキー名」を添える仕様は ``load_credential`` 側にあるので
-            # ここでも再現する（``CredentialNotFoundError(name, sorted(data))``）
-            logger.debug("Credentials の属性取得に失敗（未登録）: key=%s", key)
-            raise CredentialNotFoundError(key, sorted(data))
-        logger.debug("Credentials の属性を取得: key=%s", key)
-        return data[key]
+            # ここでも再現する（``CredentialNotFoundError(name, registered)``）。
+            # 名前は ``{サイト名}.{項目名}`` の形で表示する（フラットキーの再合成は
+            # やめ、 入れ子の構造をそのまま見せる）。
+            name = f"{self._site}{_DISPLAY_NAME_SEPARATOR}{item}"
+            registered = sorted(
+                f"{site}{_DISPLAY_NAME_SEPARATOR}{field}"
+                for site, fields in self._decrypted().items()
+                for field in fields
+            )
+            logger.debug(
+                "Credentials の属性取得に失敗（未登録）: site=%s, field=%s",
+                self._site,
+                item,
+            )
+            raise CredentialNotFoundError(name, registered)
+        logger.debug("Credentials の属性を取得: site=%s, field=%s", self._site, item)
+        return site_dict[item]
 
-    def _decrypted(self) -> dict[str, str]:
+    def _site_dict(self) -> dict[str, str]:
+        """このサイト名の項目 dict を返す。初回アクセスでファイル全体を復号して保持する。"""
+        decrypted = self._decrypted()
+        return decrypted.get(self._site, {})
+
+    def _decrypted(self) -> dict[str, dict[str, str]]:
         """**復号結果を 1 度だけ呼んで保持する**内部キャッシュ。
 
         設計判断（コメントに書いた判断のサマリ）:
@@ -151,64 +177,75 @@ class Credentials:
         """
         cached = self.__dict__.get("_cache")
         if cached is not None:
-            logger.debug("復号キャッシュを使用: prefix=%s, 件数=%d", self._prefix, len(cached))
+            logger.debug("復号キャッシュを使用: site=%s, 件数=%d", self._site, len(cached))
             return cached
         target_path = self._path or CREDENTIALS_PATH
         logger.debug("復号キャッシュ未確立のため復号を実行: path=%s", target_path)
         data = _load_all(target_path)
         object.__setattr__(self, "_cache", data)
         _register_instance(self)
-        logger.debug("復号キャッシュを保持: prefix=%s, 件数=%d", self._prefix, len(data))
+        logger.debug("復号キャッシュを保持: site=%s, 件数=%d", self._site, len(data))
         return data
 
 
 @measure
-def save_credential(name: str, value: str, path: Path | None = None) -> None:
-    """認証情報を1件、暗号化して保存する。同じキー名は上書きされる。
+def save_credential(site: str, field: str, value: str, path: Path | None = None) -> None:
+    """認証情報を1件、暗号化して保存する。同じ（サイト, 項目）は上書きされる。
 
     Args:
-        name: キー名（例: "site_a_client_secret"）。取得時のキーになる。
-            半角英数字とアンダースコアのみ使用できる。
+        site: サイト名（例: "site_a"）。半角英数字とアンダースコアのみ。
+        field: 項目名（例: "client_secret"）。半角英数字とアンダースコアのみ。
         value: 保存する値（client_secret・パスワード・トークンなど）。
         path: 保存先ファイル。省略時は CREDENTIALS_PATH（通常は省略する）。
 
     Raises:
-        InvalidCredentialNameError: キー名に使えない文字が含まれている場合。
+        InvalidCredentialNameError: サイト名・項目名に使えない文字が含まれている場合。
         CredentialDecryptionError: 既存ファイルを復号できない場合。
     """
-    save_credentials({name: value}, path)
+    save_credentials({site: {field: value}}, path)
 
 
 @measure
-def save_credentials(items: dict[str, str], path: Path | None = None) -> None:
-    """認証情報をまとめて暗号化して保存する。同じキー名は上書きされる。
+def save_credentials(items: dict[str, dict[str, str]], path: Path | None = None) -> None:
+    """認証情報をまとめて暗号化して保存する。同じ（サイト, 項目）は上書きされる。
 
     1件ずつ save_credential() を呼ぶと、件数ぶん復号と暗号化を繰り返し、
     途中で失敗すると一部だけ入った状態になる。まとめて渡せば書き込みは1回で、
     「全部入るか、1つも入らないか」のどちらかになる。
 
     Args:
-        items: キー名と値の対応（例: {"site_a_client_id": "..."}）。
+        items: ``{サイト名: {項目名: 値}}`` の入れ子 dict（例:
+            ``{"site_a": {"client_id": "..."}}``）。
         path: 保存先ファイル。省略時は CREDENTIALS_PATH（通常は省略する）。
 
     Raises:
-        InvalidCredentialNameError: キー名に使えない文字が含まれている場合。
+        InvalidCredentialNameError: サイト名・項目名に使えない文字が含まれている場合。
         CredentialDecryptionError: 既存ファイルを復号できない場合。
-        TypeError: 値が文字列でない場合（呼び出し側のバグ）。
+        TypeError: 値が文字列でない・入れ子の構造が壊れている場合（呼び出し側のバグ）。
     """
-    for name, value in items.items():
-        if not CREDENTIAL_NAME_PATTERN.fullmatch(name):
-            raise InvalidCredentialNameError("キー名", name)
-        if not isinstance(value, str):
+    for site, fields in items.items():
+        if not CREDENTIAL_NAME_PATTERN.fullmatch(site):
+            raise InvalidCredentialNameError("サイト名", site)
+        if not isinstance(fields, dict):
             raise TypeError(
-                f"認証情報の値は文字列で渡してください: {name} は {type(value).__name__}"
+                f"認証情報の値はサイトごとの dict で渡してください: "
+                f"{site} は {type(fields).__name__}"
             )
+        for field, value in fields.items():
+            if not CREDENTIAL_NAME_PATTERN.fullmatch(field):
+                raise InvalidCredentialNameError("項目名", field)
+            if not isinstance(value, str):
+                raise TypeError(
+                    f"認証情報の値は文字列で渡してください: "
+                    f"{site}/{field} は {type(value).__name__}"
+                )
     path = path or CREDENTIALS_PATH
-    logger.debug("save_credentials 開始: path=%s, 件数=%d", path, len(items))
+    logger.debug("save_credentials 開始: path=%s, サイト数=%d", path, len(items))
     data = _load_all(path)
-    data.update(items)
+    for site, fields in items.items():
+        data.setdefault(site, {}).update(fields)
     _save_all(data, path)
-    logger.debug("save_credentials 完了: path=%s, 登録後総件数=%d", path, len(data))
+    logger.debug("save_credentials 完了: path=%s, 登録後総サイト数=%d", path, len(data))
     # 保存後は同じパスを参照する ``Credentials`` インスタンスの復号キャッシュが
     # 古くなるので、 次回の属性アクセスで再復号されるよう ``_cache`` を捨てる
     # （詳細は ``Credentials._decrypted`` のコメント）
@@ -216,61 +253,95 @@ def save_credentials(items: dict[str, str], path: Path | None = None) -> None:
 
 
 @measure
-def load_credential(name: str, path: Path | None = None) -> str:
+def load_credential(site: str, field: str, path: Path | None = None) -> str:
     """保存済みの認証情報を復号して返す。
 
     Args:
-        name: 登録時に指定したキー名。
+        site: 登録時に指定したサイト名。
+        field: 登録時に指定した項目名。
         path: 保存先ファイル。省略時は CREDENTIALS_PATH（通常は省略する）。
 
     Raises:
-        CredentialNotFoundError: キー名が未登録の場合。
+        InvalidCredentialNameError: サイト名・項目名に使えない文字が含まれている場合。
+        CredentialNotFoundError: 指定した（サイト, 項目）が未登録の場合。
         CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
     """
+    if not CREDENTIAL_NAME_PATTERN.fullmatch(site):
+        raise InvalidCredentialNameError("サイト名", site)
+    if not CREDENTIAL_NAME_PATTERN.fullmatch(field):
+        raise InvalidCredentialNameError("項目名", field)
     path = path or CREDENTIALS_PATH
     data = _load_all(path)
-    if name not in data:
-        logger.debug("load_credential: キー未登録: name=%s, path=%s", name, path)
-        raise CredentialNotFoundError(name, sorted(data))
-    logger.debug("load_credential 成功: name=%s, path=%s", name, path)
-    return data[name]
+    site_dict = data.get(site)
+    name = f"{site}{_DISPLAY_NAME_SEPARATOR}{field}"
+    if not site_dict or field not in site_dict:
+        registered = sorted(
+            f"{s}{_DISPLAY_NAME_SEPARATOR}{f}" for s, fields in data.items() for f in fields
+        )
+        logger.debug("load_credential: 未登録: site=%s, field=%s, path=%s", site, field, path)
+        raise CredentialNotFoundError(name, registered)
+    logger.debug("load_credential 成功: site=%s, field=%s, path=%s", site, field, path)
+    return site_dict[field]
 
 
 @measure
-def delete_credential(name: str, path: Path | None = None) -> None:
+def delete_credential(site: str, field: str, path: Path | None = None) -> None:
     """登録済みの認証情報を1件削除する。
 
     Raises:
-        CredentialNotFoundError: キー名が未登録の場合。
+        InvalidCredentialNameError: サイト名・項目名に使えない文字が含まれている場合。
+        CredentialNotFoundError: 指定した（サイト, 項目）が未登録の場合。
         CredentialDecryptionError: 既存ファイルを復号できない場合。
     """
+    if not CREDENTIAL_NAME_PATTERN.fullmatch(site):
+        raise InvalidCredentialNameError("サイト名", site)
+    if not CREDENTIAL_NAME_PATTERN.fullmatch(field):
+        raise InvalidCredentialNameError("項目名", field)
     path = path or CREDENTIALS_PATH
     data = _load_all(path)
-    if name not in data:
-        logger.debug("delete_credential: キー未登録: name=%s, path=%s", name, path)
-        raise CredentialNotFoundError(name, sorted(data))
-    del data[name]
+    site_dict = data.get(site)
+    name = f"{site}{_DISPLAY_NAME_SEPARATOR}{field}"
+    if not site_dict or field not in site_dict:
+        registered = sorted(
+            f"{s}{_DISPLAY_NAME_SEPARATOR}{f}" for s, fields in data.items() for f in fields
+        )
+        logger.debug("delete_credential: 未登録: site=%s, field=%s, path=%s", site, field, path)
+        raise CredentialNotFoundError(name, registered)
+    del site_dict[field]
+    # サイトを空にしたら dict 自体も取り除く（``data[site] = {}`` の状態を残さない）
+    if not site_dict:
+        del data[site]
     _save_all(data, path)
-    logger.debug("delete_credential 完了: name=%s, path=%s, 残件数=%d", name, path, len(data))
+    logger.debug(
+        "delete_credential 完了: site=%s, field=%s, path=%s, 残サイト数=%d",
+        site,
+        field,
+        path,
+        len(data),
+    )
     # 削除後はキャッシュが古くなるので破棄。 詳細は ``Credentials._decrypted``
     _invalidate_instances_for(path)
 
 
 @measure
-def list_names(path: Path | None = None) -> list[str]:
-    """登録済みのキー名一覧を返す（値そのものは返さない）。
+def list_names(path: Path | None = None) -> list[tuple[str, str]]:
+    """登録済みの ``(サイト名, 項目名)`` のタプル一覧を返す（値そのものは返さない）。
+
+    並び順は **サイト名 → 項目名** でソートする。同じサイト名の項目が固まって
+    表示されるので、 ``cli list`` のようなグルーピング表示がタプル1要素目だけで済む。
 
     Raises:
         CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
     """
     path = path or CREDENTIALS_PATH
-    names = sorted(_load_all(path))
-    logger.debug("list_names: path=%s, 件数=%d", path, len(names))
-    return names
+    data = _load_all(path)
+    pairs = sorted((site, field) for site, fields in data.items() for field in fields)
+    logger.debug("list_names: path=%s, 件数=%d", path, len(pairs))
+    return pairs
 
 
-def _load_all(path: Path) -> dict[str, str]:
-    """暗号化ファイルを復号して全キーの辞書を返す。未作成なら空辞書。
+def _load_all(path: Path) -> dict[str, dict[str, str]]:
+    """暗号化ファイルを復号して ``{サイト名: {項目名: 値}}`` の dict を返す。未作成なら空 dict。
 
     「復号できない」と「復号はできたが中身が壊れている」は対処が違うので、
     別の例外に分ける（前者は実行アカウントの問題、後者は取り込み直し）。
@@ -292,16 +363,24 @@ def _load_all(path: Path) -> dict[str, str]:
     except (UnicodeDecodeError, json.JSONDecodeError) as e:
         logger.debug("_load_all: JSON 解析に失敗: path=%s", path)
         raise CredentialStoreCorruptedError(path, str(e)) from e
-    if not isinstance(data, dict) or not all(
-        isinstance(key, str) and isinstance(value, str) for key, value in data.items()
+    if (
+        not isinstance(data, dict)
+        or not all(isinstance(key, str) for key in data)
+        or not all(
+            isinstance(value, dict)
+            and all(
+                isinstance(field, str) and isinstance(item, str) for field, item in value.items()
+            )
+            for value in data.values()
+        )
     ):
         logger.debug("_load_all: 復号済み JSON の形が不正: path=%s", path)
         raise CredentialStoreCorruptedError(path, "キーと値がすべて文字列の形になっていません。")
     return data
 
 
-def _save_all(data: dict[str, str], path: Path) -> None:
-    """全キーの辞書を暗号化してファイルに書き込む。
+def _save_all(data: dict[str, dict[str, str]], path: Path) -> None:
+    """入れ子 dict を暗号化してファイルに書き込む。
 
     一時ファイル経由でアトミックに置き換える（``atomic_write`` に統一）。
     書き込み中にクラッシュしても、暗号化ファイルが半端に壊れて全キーが読めなくなる

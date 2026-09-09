@@ -2,8 +2,8 @@
 
     python -m comken cred gui                       登録画面を開く
     python -m comken cred import 認証情報.json      平文 JSON を取り込む
-    python -m comken cred list                      登録済みの認証情報を接頭辞別に表示する
-    python -m comken cred delete site_a_client_id   1件削除する
+    python -m comken cred list                      登録済みの認証情報をサイト名別に表示する
+    python -m comken cred delete site_a client_id   1件削除する
 
 **このモジュールは `comken/__main__.py` から呼ばれる。** `main(argv)` を直接
 呼ぶすと（テスト等）動くが、`python -m comken.toolbox.credentials` は
@@ -29,7 +29,7 @@ import sys
 from pathlib import Path
 
 from comken.exceptions import CredentialError
-from comken.toolbox.credentials.importer import import_json, split_credential_name
+from comken.toolbox.credentials.importer import import_json
 from comken.toolbox.credentials.store import CREDENTIALS_PATH, delete_credential, list_names
 
 
@@ -63,17 +63,18 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     importer.set_defaults(run=_run_import)
 
-    lister = subparsers.add_parser("list", help="登録済みの認証情報を接頭辞別に表示する")
+    lister = subparsers.add_parser("list", help="登録済みの認証情報をサイト名別に表示する")
     lister.set_defaults(run=_run_list)
 
     deleter = subparsers.add_parser("delete", help="登録済みの認証情報を1件削除する")
-    deleter.add_argument("name", help="削除するキー名（例: site_a_client_id）")
+    deleter.add_argument("site", help="削除する認証情報のサイト名（例: site_a）")
+    deleter.add_argument("field", help="削除する認証情報の項目名（例: client_id）")
     deleter.set_defaults(run=_run_delete)
 
     return parser
 
 
-def _run_gui(args: argparse.Namespace) -> None:
+def _run_gui(_args: argparse.Namespace) -> None:
     """登録画面を開く。
 
     tkinter の import を関数の中に置くのは、画面を使わないコマンド
@@ -85,10 +86,10 @@ def _run_gui(args: argparse.Namespace) -> None:
 
 
 def _run_import(args: argparse.Namespace) -> None:
-    names = import_json(args.json_path)
-    print(f"{len(names)} 件を取り込みました: {CREDENTIALS_PATH}")
-    for name in names:
-        print(f"  {name}")
+    pairs = import_json(args.json_path)
+    print(f"{len(pairs)} 件を取り込みました: {CREDENTIALS_PATH}")
+    for site, field in pairs:
+        print(f"  {site}.{field}")
     if args.delete_source:
         try:
             args.json_path.unlink()
@@ -102,31 +103,25 @@ def _run_import(args: argparse.Namespace) -> None:
         print(f"平文の JSON が残っています。中身を確認したら削除してください: {args.json_path}")
 
 
-def _run_list(args: argparse.Namespace) -> None:
-    names = list_names()
-    if not names:
+def _run_list(_args: argparse.Namespace) -> None:
+    pairs = list_names()
+    if not pairs:
         print("登録済みの認証情報はありません。")
         return
-    grouped: dict[str, list[str]] = {}
-    ungrouped: list[str] = []
-    for name in names:
-        parts = split_credential_name(name)
-        if parts is None:
-            ungrouped.append(name)
-            continue
-        prefix, field = parts
-        grouped.setdefault(prefix, []).append(field)
-
+    # タプルの1要素目がサイト名。 list_names() が（サイト名→項目名）で
+    # ソートして返しているので、 同じサイト名の項目が連続するように見える。
+    # ラベル崩れ防止のため、 表示は ``サイト名.項目名`` に統一する。
     print(f"登録済みの認証情報（{CREDENTIALS_PATH}）:")
-    for prefix, fields in grouped.items():
-        print(f"  {prefix}    {' / '.join(fields)}")
-    for name in ungrouped:
-        print(f"  {name}")
+    grouped: dict[str, list[str]] = {}
+    for site, field in pairs:
+        grouped.setdefault(site, []).append(field)
+    for site, fields in grouped.items():
+        print(f"  {site}    {' / '.join(fields)}")
 
 
 def _run_delete(args: argparse.Namespace) -> None:
-    delete_credential(args.name)
-    print(f"削除しました: {args.name}")
+    delete_credential(args.site, args.field)
+    print(f"削除しました: {args.site}.{args.field}")
 
 
 # このモジュールは `python -m comken.toolbox.credentials` からは実行しない

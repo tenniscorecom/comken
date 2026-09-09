@@ -9383,16 +9383,17 @@ class Credentials:
 
 #### 説明
 
-システム名配下の認証情報に、属性アクセスでまとめてアクセスする。
+サイト名配下の認証情報に、属性アクセスでまとめてアクセスする。
 
-キー名「システム名_項目名」のシステム名部分だけを指定し、項目名は属性で取り出す。
-システム名を config.ini から渡せば、本番用・テスト用アカウントの切り替えが
-config.ini の1行だけで済む（コード側にキー名の直書きが残らない）。
+入れ子の ``{サイト名: {項目名: 値}}`` から、指定されたサイト名の部分 dict を
+取り出し、項目名を属性アクセスで解決する。サイト名を config.ini から渡せば、
+本番用・テスト用アカウントの切り替えが config.ini の1行だけで済む
+（コード側に長いキー名の直書きが残らない）。
 
 使い方:
     cred = Credentials("site_a")
-    cred.client_id      # → load_credential("site_a_client_id") と同じ
-    cred.client_secret  # → load_credential("site_a_client_secret") と同じ
+    cred.client_id      # → load_credential("site_a", "client_id") と同じ
+    cred.client_secret  # → load_credential("site_a", "client_secret") と同じ
 
     # config.ini で本番・テストを切り替える場合
     # [CREDENTIALS]
@@ -9400,27 +9401,27 @@ config.ini の1行だけで済む（コード側にキー名の直書きが残�
     cred = Credentials(config.CREDENTIALS.SITE_A)
 
 Raises:
-    InvalidCredentialNameError: システム名に使えない文字が含まれている場合。
+    InvalidCredentialNameError: サイト名に使えない文字が含まれている場合。
     CredentialNotFoundError: 属性に対応するキーが未登録の場合。
     CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
 
 #### `__init__`
 
 ```text
-def __init__(self, prefix: str, path: Path | None=None) -> None:
+def __init__(self, site: str, path: Path | None=None) -> None:
 ```
 
 ##### 説明
 
 Args:
-    prefix: キー名のシステム名部分（例: "site_a", "site_a_test"）。
+    site: 認証情報のサイト名（例: "site_a", "site_a_test"）。
     path: 保存先ファイル。省略時は CREDENTIALS_PATH（通常は省略する）。
 
 ### `load_credential`
 
 ```text
 @measure
-def load_credential(name: str, path: Path | None=None) -> str:
+def load_credential(site: str, field: str, path: Path | None=None) -> str:
 ```
 
 #### 説明
@@ -9428,63 +9429,66 @@ def load_credential(name: str, path: Path | None=None) -> str:
 保存済みの認証情報を復号して返す。
 
 Args:
-    name: 登録時に指定したキー名。
+    site: 登録時に指定したサイト名。
+    field: 登録時に指定した項目名。
     path: 保存先ファイル。省略時は CREDENTIALS_PATH（通常は省略する）。
 
 Raises:
-    CredentialNotFoundError: キー名が未登録の場合。
+    InvalidCredentialNameError: サイト名・項目名に使えない文字が含まれている場合。
+    CredentialNotFoundError: 指定した（サイト, 項目）が未登録の場合。
     CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
 
 ### `save_credential`
 
 ```text
 @measure
-def save_credential(name: str, value: str, path: Path | None=None) -> None:
+def save_credential(site: str, field: str, value: str, path: Path | None=None) -> None:
 ```
 
 #### 説明
 
-認証情報を1件、暗号化して保存する。同じキー名は上書きされる。
+認証情報を1件、暗号化して保存する。同じ（サイト, 項目）は上書きされる。
 
 Args:
-    name: キー名（例: "site_a_client_secret"）。取得時のキーになる。
-        半角英数字とアンダースコアのみ使用できる。
+    site: サイト名（例: "site_a"）。半角英数字とアンダースコアのみ。
+    field: 項目名（例: "client_secret"）。半角英数字とアンダースコアのみ。
     value: 保存する値（client_secret・パスワード・トークンなど）。
     path: 保存先ファイル。省略時は CREDENTIALS_PATH（通常は省略する）。
 
 Raises:
-    InvalidCredentialNameError: キー名に使えない文字が含まれている場合。
+    InvalidCredentialNameError: サイト名・項目名に使えない文字が含まれている場合。
     CredentialDecryptionError: 既存ファイルを復号できない場合。
 
 ### `save_credentials`
 
 ```text
 @measure
-def save_credentials(items: dict[str, str], path: Path | None=None) -> None:
+def save_credentials(items: dict[str, dict[str, str]], path: Path | None=None) -> None:
 ```
 
 #### 説明
 
-認証情報をまとめて暗号化して保存する。同じキー名は上書きされる。
+認証情報をまとめて暗号化して保存する。同じ（サイト, 項目）は上書きされる。
 
 1件ずつ save_credential() を呼ぶと、件数ぶん復号と暗号化を繰り返し、
 途中で失敗すると一部だけ入った状態になる。まとめて渡せば書き込みは1回で、
 「全部入るか、1つも入らないか」のどちらかになる。
 
 Args:
-    items: キー名と値の対応（例: {"site_a_client_id": "..."}）。
+    items: ``{サイト名: {項目名: 値}}`` の入れ子 dict（例:
+        ``{"site_a": {"client_id": "..."}}``）。
     path: 保存先ファイル。省略時は CREDENTIALS_PATH（通常は省略する）。
 
 Raises:
-    InvalidCredentialNameError: キー名に使えない文字が含まれている場合。
+    InvalidCredentialNameError: サイト名・項目名に使えない文字が含まれている場合。
     CredentialDecryptionError: 既存ファイルを復号できない場合。
-    TypeError: 値が文字列でない場合（呼び出し側のバグ）。
+    TypeError: 値が文字列でない・入れ子の構造が壊れている場合（呼び出し側のバグ）。
 
 ### `delete_credential`
 
 ```text
 @measure
-def delete_credential(name: str, path: Path | None=None) -> None:
+def delete_credential(site: str, field: str, path: Path | None=None) -> None:
 ```
 
 #### 説明
@@ -9492,19 +9496,23 @@ def delete_credential(name: str, path: Path | None=None) -> None:
 登録済みの認証情報を1件削除する。
 
 Raises:
-    CredentialNotFoundError: キー名が未登録の場合。
+    InvalidCredentialNameError: サイト名・項目名に使えない文字が含まれている場合。
+    CredentialNotFoundError: 指定した（サイト, 項目）が未登録の場合。
     CredentialDecryptionError: 既存ファイルを復号できない場合。
 
 ### `list_names`
 
 ```text
 @measure
-def list_names(path: Path | None=None) -> list[str]:
+def list_names(path: Path | None=None) -> list[tuple[str, str]]:
 ```
 
 #### 説明
 
-登録済みのキー名一覧を返す（値そのものは返さない）。
+登録済みの ``(サイト名, 項目名)`` のタプル一覧を返す（値そのものは返さない）。
+
+並び順は **サイト名 → 項目名** でソートする。同じサイト名の項目が固まって
+表示されるので、 ``cli list`` のようなグルーピング表示がタプル1要素目だけで済む。
 
 Raises:
     CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
@@ -9513,7 +9521,7 @@ Raises:
 
 ```text
 @measure
-def import_json(json_path: str | Path, path: Path | None=None) -> list[str]:
+def import_json(json_path: str | Path, path: Path | None=None) -> list[tuple[str, str]]:
 ```
 
 #### 説明
@@ -9528,11 +9536,14 @@ Args:
     path: 保存先ファイル。省略時は CREDENTIALS_PATH（通常は省略する）。
 
 Returns:
-    取り込んだキー名のリスト（値は含まない）。
+    取り込んだ ``(サイト名, 項目名)`` のタプルのリスト（値は含まない）。
+    ``list_names()`` と同じ並び順（サイト名→項目名でソート）。
 
 Raises:
-    CredentialImportError: JSON が見つからない・壊れている・形式が違う場合。
-    InvalidCredentialNameError: 展開したキー名に使えない文字が含まれている場合。
+    CredentialImportError: JSON が見つからない・壊れている・形式が違う場合
+        （サイト名・項目名に使えない文字が含まれている場合を含む。
+        ``_read_nested()`` が ``save_credentials()`` を呼ぶ前に検証するため、
+        ``InvalidCredentialNameError`` はここでは送出されない）。
     CredentialDecryptionError: 既存ファイルを復号できない場合。
 
 

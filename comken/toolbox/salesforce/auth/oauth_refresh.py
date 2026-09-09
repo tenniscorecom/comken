@@ -4,6 +4,9 @@
 アクセストークンを更新し続ける方式。Salesforce 側で refresh_token を
 ローテーションして返してきた場合は、新トークンを ``_default_on_refresh_token``
 （``from_credentials`` / ``exchange_code(prefix=...)`` が組み立てる）で DPAPI に保存する。
+
+DPAPI の保管形式は ``{prefix: {"refresh_token": ...}}`` の入れ子構造なので、
+書き戻しは ``save_credential(prefix, "refresh_token", token)`` の2引数で行う。
 """
 
 # 定義中の RefreshTokenOAuth を戻り値の型注釈に使うため、注釈の評価を遅延する。
@@ -31,7 +34,7 @@ TIMEOUT_SECONDS = 60
 
 
 def _default_on_refresh_token(prefix: str) -> Callable[[str], None]:
-    """新しい refresh_token を DPAPI（``<prefix>_refresh_token``）へ書き戻すコールバックを作る。
+    """新しい refresh_token を DPAPI（ ``{prefix: {"refresh_token": ...}}`` ）へ書き戻す。
 
     ``from_credentials`` と ``exchange_code(prefix=...)`` の両方が使う、
     書き戻し先の唯一の定義。
@@ -40,10 +43,9 @@ def _default_on_refresh_token(prefix: str) -> Callable[[str], None]:
     def _save(refresh_token: str) -> None:
         from comken.toolbox.credentials import save_credential
 
-        name = f"{prefix}_refresh_token"
-        logger.debug("新しい refresh_token を DPAPI へ保存します: name=%s", name)
-        save_credential(name, refresh_token)
-        logger.debug("refresh_token を DPAPI へ保存しました: name=%s", name)
+        logger.debug("新しい refresh_token を DPAPI へ保存します: prefix=%s", prefix)
+        save_credential(prefix, "refresh_token", refresh_token)
+        logger.debug("refresh_token を DPAPI へ保存しました: prefix=%s", prefix)
 
     return _save
 
@@ -156,7 +158,7 @@ class RefreshTokenOAuth:
 
         初回に受け取った refresh_token を DPAPI へ書き戻す処理は、
         呼び出し側で毎回書かなくてよいよう ``prefix`` を渡すだけで済む
-        （``from_credentials`` と同じ書き戻し先: ``<prefix>_refresh_token``）。
+        （``from_credentials`` と同じ書き戻し先: ``{prefix: {"refresh_token": ...}}``）。
         独自の保存先を使うときだけ ``on_refresh_token`` を明示的に渡す
         （その場合は ``prefix`` より優先する）。
         """

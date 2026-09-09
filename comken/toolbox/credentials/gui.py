@@ -14,14 +14,9 @@ import logging
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
-from typing import cast
 
 from comken.exceptions import CredentialError, CredentialNotFoundError
-from comken.toolbox.credentials.importer import (
-    credential_name,
-    import_json,
-    split_credential_name,
-)
+from comken.toolbox.credentials.importer import import_json
 from comken.toolbox.credentials.store import (
     CREDENTIAL_NAME_PATTERN,
     CREDENTIALS_PATH,
@@ -36,55 +31,53 @@ _MASK_CHARACTER = "●"
 
 logger = logging.getLogger(__name__)
 
+# 一覧・選択でサイト名と項目名をまとめて見せる区切り。ストア側で例外メッセージに
+# 使うのと同じ ``.`` に揃えると、 ログや画面と CLI の表示が同じ形で揃う。
+_DISPLAY_NAME_SEPARATOR = "."
 
-def build_credential_name(system: str, field: str) -> tuple[str | None, str | None]:
-    """フォームの入力を検証して、保存に使うキー名を組み立てる。
+
+def build_credential_name(system: str, field: str) -> tuple[tuple[str, str] | None, str | None]:
+    """フォームの入力を検証して、``(サイト名, 項目名)`` を返す。
 
     例外ではなくメッセージを返す。画面にそのまま出す文章なので、
     「何がどう間違っているか」を書ける場所を1か所にまとめたい。
 
     Args:
-        system: システム名の入力欄の値（例: "site_a"）。
+        system: サイト名の入力欄の値（例: "site_a"）。
         field: 項目名の入力欄の値（例: "client_secret"）。
 
     Returns:
-        (キー名, None): 入力が正しい場合。
+        ((サイト名, 項目名), None): 入力が正しい場合。
         (None, エラーメッセージ): 入力に問題がある場合。
     """
     system = system.strip()  # コピペで前後に空白が入ることが多い
     field = field.strip()
     if not system:
-        return None, "システム名を入力してください（例: site_a）。"
+        return None, "サイト名を入力してください（例: site_a）。"
     if not CREDENTIAL_NAME_PATTERN.fullmatch(system):
-        return None, "システム名に使えるのは半角英数字とアンダースコアだけです（例: site_a）。"
+        return None, "サイト名に使えるのは半角英数字とアンダースコアだけです（例: site_a）。"
     if not field:
         return None, "項目名を入力してください（例: client_id / client_secret / password）。"
     if not CREDENTIAL_NAME_PATTERN.fullmatch(field):
         return None, "項目名に使えるのは半角英数字とアンダースコアだけです（例: client_id）。"
-    return credential_name(system, field), None
+    return (system, field), None
 
 
-def split_name_for_edit(name: str) -> tuple[str, str]:
-    """登録済みキー名を、登録し直すためのフォーム入力（システム名・項目名）へ戻す。
+def split_name_for_edit(pair: tuple[str, str]) -> tuple[str, str]:
+    """``(サイト名, 項目名)`` をそのままフォームの入力欄2つへ返す。
 
-    `split_credential_name()` は「項目名は2語」という importer 側の規約に合わせた
-    分割で、規約に合わないキー（`salesforce_password` のような1語の項目名）は
-    None を返す。ここでは**フォームに入れ直したときに同じキー名へ戻ること**だけを
-    保証すればよいので、規約に合わなければ最後の `_` で割る素朴な分割へ落ちる。
-    どちらの分割でも `credential_name(system, field) == name` は必ず成り立つ
-    （どちらも `name` を `_` で割っただけなので、組み立て直せば元に戻る）。
+    入れ子構造では **登録時の ``(サイト名, 項目名)`` がそのままDBに保管される**
+    ので、再分割の曖昧さは構造的に発生しない。分割ロジックを置く必要は無くなったが、
+    テスト用に同じシグネチャで ``pair -> (system, field)`` を返す関数を残している
+    （将来 ``(サイト名, 項目名)`` 以外の表現を扱いたくなった場合の差し替え点）。
     """
-    parts = split_credential_name(name)
-    if parts is not None:
-        return parts
-    system, _, field = name.rpartition("_")
-    return system, field
+    return pair[0], pair[1]
 
 
 class CredentialsApp:
     """認証情報の登録画面。
 
-    左: 登録済みキー名の一覧（値は表示しない）と、選んだキーの削除
+    左: 登録済みの認証情報の一覧（値は表示しない）と、選んだキーの削除
     右: 手入力での登録フォームと、平文 JSON の取り込み
     下: 保存先のパスと、直前の操作の結果
     """
@@ -111,7 +104,7 @@ class CredentialsApp:
         main.pack(fill=tk.BOTH, expand=True)
 
         # ── 左: 登録済み一覧 ──
-        left = ttk.LabelFrame(main, text="登録済みのキー名", padding=8)
+        left = ttk.LabelFrame(main, text="登録済みの認証情報", padding=8)
         left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.listbox = tk.Listbox(left, exportselection=False)
@@ -119,12 +112,12 @@ class CredentialsApp:
         self.listbox.bind("<<ListboxSelect>>", self._on_select_existing)
 
         ttk.Label(
-            left, text="クリックすると右のシステム名・項目名が自動入力されます（登録し直し用）"
+            left, text="クリックすると右のサイト名・項目名が自動入力されます（登録し直し用）"
         ).pack(anchor=tk.W, pady=(4, 0))
         ttk.Label(left, text="値は表示されません（登録できたかの確認用）").pack(
             anchor=tk.W, pady=(2, 0)
         )
-        ttk.Button(left, text="選択したキーを削除", command=self._on_delete).pack(
+        ttk.Button(left, text="選択した項目を削除", command=self._on_delete).pack(
             anchor=tk.W, pady=(8, 0)
         )
 
@@ -132,10 +125,10 @@ class CredentialsApp:
         right = ttk.Frame(main, padding=(12, 0, 0, 0))
         right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        form = ttk.LabelFrame(right, text="登録（同じキー名なら上書き）", padding=8)
+        form = ttk.LabelFrame(right, text="登録（同じ（サイト名, 項目名）なら上書き）", padding=8)
         form.pack(fill=tk.X)
 
-        ttk.Label(form, text="システム名（例: site_a）").pack(anchor=tk.W)
+        ttk.Label(form, text="サイト名（例: site_a）").pack(anchor=tk.W)
         self.system_var = tk.StringVar()
         ttk.Entry(form, textvariable=self.system_var).pack(fill=tk.X, pady=(0, 6))
 
@@ -180,12 +173,17 @@ class CredentialsApp:
 
     # ------------------------------------------------------------- 表示の更新
     def _refresh(self) -> None:
-        """登録済みキー名の一覧を最新にする。"""
+        """登録済み認証情報の一覧を最新にする。"""
         self.listbox.delete(0, tk.END)
-        names = list_names(self._path)
-        for name in names:
-            self.listbox.insert(tk.END, name)
-        logger.debug("_refresh: path=%s, 一覧件数=%d", self._path or CREDENTIALS_PATH, len(names))
+        pairs = list_names(self._path)
+        for pair in pairs:
+            display = f"{pair[0]}{_DISPLAY_NAME_SEPARATOR}{pair[1]}"
+            self.listbox.insert(tk.END, display)
+        logger.debug(
+            "_refresh: path=%s, 一覧件数=%d",
+            self._path or CREDENTIALS_PATH,
+            len(pairs),
+        )
 
     def _status(self, message: str) -> None:
         self.status_var.set(message)
@@ -195,26 +193,27 @@ class CredentialsApp:
         self.value_entry.config(show="" if self.show_var.get() else _MASK_CHARACTER)
 
     def _on_select_existing(self, _event: tk.Event) -> None:
-        """左の一覧から選ぶと、右のシステム名・項目名を自動入力する（登録し直し用）。
+        """左の一覧から選ぶと、右のサイト名・項目名を自動入力する（登録し直し用）。
 
         値は保持していないので空のまま。カーソルは値欄へ移し、
-        あとは値を入力して「登録する」を押すだけで同じキーへ上書きできるようにする。
+        あとは値を入力して「登録する」を押すだけで同じ（サイト, 項目）へ上書きできる。
         """
         selection = self.listbox.curselection()
         if not selection:
             return
-        name = self.listbox.get(selection[0])
-        system, field = split_name_for_edit(name)
-        self.system_var.set(system)
+        display = self.listbox.get(selection[0])
+        # ``site.field`` 形式で表示しているので、 必ず最初の ``.`` だけ区切りとして扱う
+        site, _, field = display.partition(_DISPLAY_NAME_SEPARATOR)
+        self.system_var.set(site)
         self.field_var.set(field)
         self.value_var.set("")
         self.value_entry.focus_set()
-        self._status(f"選択中: {name} — 値を入力して「登録する」を押すと上書きされます")
-        logger.debug("_on_select_existing: name=%s", name)
+        self._status(f"選択中: {display} — 値を入力して「登録する」を押すと上書きされます")
+        logger.debug("_on_select_existing: display=%s", display)
 
     def _on_save(self) -> None:
         """フォームの1件を保存し、読み直して文字数を出す。"""
-        name, error = build_credential_name(self.system_var.get(), self.field_var.get())
+        pair, error = build_credential_name(self.system_var.get(), self.field_var.get())
         if error:
             messagebox.showwarning("入力を確認してください", error, parent=self.root)
             return
@@ -224,21 +223,27 @@ class CredentialsApp:
             messagebox.showwarning("入力を確認してください", "値が空です。", parent=self.root)
             return
 
-        if name in list_names(self._path) and not messagebox.askyesno(
-            "上書きの確認", f"{name} は登録済みです。上書きしますか？", parent=self.root
+        # build_credential_name() は error が None のとき pair は必ず (str, str) を返す契約。
+        # pyright は条件分岐をまたいだ型の絞り込みまでは追わないので、 assert で固定する。
+        assert pair is not None
+        site, field = pair
+        if (site, field) in list_names(self._path) and not messagebox.askyesno(
+            "上書きの確認",
+            f"{site}{_DISPLAY_NAME_SEPARATOR}{field} は登録済みです。上書きしますか？",
+            parent=self.root,
         ):
-            logger.debug("_on_save: 上書きをキャンセル: name=%s", name)
+            logger.debug("_on_save: 上書きをキャンセル: site=%s, field=%s", site, field)
             return
 
         try:
-            # build_credential_name() は error が None のとき name を str で返す契約
-            save_credential(cast(str, name), value, self._path)
+            save_credential(site, field, value, self._path)
             # 読み直せることまで確かめる。桁数を出せば、貼り間違いはここで気づける
-            length = len(load_credential(cast(str, name), self._path))
+            length = len(load_credential(site, field, self._path))
         except CredentialError as e:
             logger.debug(
-                "_on_save: 保存失敗: name=%s, path=%s",
-                name,
+                "_on_save: 保存失敗: site=%s, field=%s, path=%s",
+                site,
+                field,
                 self._path or CREDENTIALS_PATH,
             )
             messagebox.showerror("登録できませんでした", str(e), parent=self.root)
@@ -246,36 +251,39 @@ class CredentialsApp:
 
         self.value_var.set("")
         self._refresh()
-        self._status(f"登録しました: {name}（{length} 文字）")
-        logger.debug("_on_save 完了: name=%s, 長さ=%d 文字", name, length)
+        self._status(f"登録しました: {site}{_DISPLAY_NAME_SEPARATOR}{field}（{length} 文字）")
+        logger.debug("_on_save 完了: site=%s, field=%s, 長さ=%d 文字", site, field, length)
 
     def _on_delete(self) -> None:
         selection = self.listbox.curselection()
         if not selection:
             messagebox.showinfo(
-                "削除", "左の一覧から削除するキーを選んでください。", parent=self.root
+                "削除", "左の一覧から削除する項目を選んでください。", parent=self.root
             )
             return
-        name = self.listbox.get(selection[0])
+        display = self.listbox.get(selection[0])
+        site, _, field = display.partition(_DISPLAY_NAME_SEPARATOR)
 
         if not messagebox.askyesno(
-            "削除の確認", f"{name} を削除します。よろしいですか？", parent=self.root
+            "削除の確認",
+            f"{site}{_DISPLAY_NAME_SEPARATOR}{field} を削除します。よろしいですか？",
+            parent=self.root,
         ):
-            logger.debug("_on_delete: 削除をキャンセル: name=%s", name)
+            logger.debug("_on_delete: 削除をキャンセル: display=%s", display)
             return
 
         try:
-            delete_credential(name, self._path)
+            delete_credential(site, field, self._path)
         except CredentialNotFoundError:
-            logger.debug("_on_delete: 対象は既に消えていた: name=%s", name)
+            logger.debug("_on_delete: 対象は既に消えていた: display=%s", display)
             pass  # 一覧を開いたあとに消えていた場合。_refresh で表示が揃う
         except CredentialError as e:
-            logger.debug("_on_delete: 削除失敗: name=%s", name)
+            logger.debug("_on_delete: 削除失敗: display=%s", display)
             messagebox.showerror("削除できませんでした", str(e), parent=self.root)
             return
         self._refresh()
-        self._status(f"削除しました: {name}")
-        logger.debug("_on_delete 完了: name=%s", name)
+        self._status(f"削除しました: {site}{_DISPLAY_NAME_SEPARATOR}{field}")
+        logger.debug("_on_delete 完了: display=%s", display)
 
     def _on_import_json(self) -> None:
         """平文 JSON を選んでまとめて取り込む（コマンドの import と同じ）。"""
@@ -290,18 +298,18 @@ class CredentialsApp:
         json_path = Path(selected)
         logger.debug("_on_import_json 開始: json_path=%s", json_path)
         try:
-            names = import_json(json_path, self._path)
+            pairs = import_json(json_path, self._path)
         except CredentialError as e:
             logger.debug("_on_import_json 失敗: json_path=%s", json_path)
             messagebox.showerror("取り込めませんでした", str(e), parent=self.root)
             return
 
         self._refresh()
-        self._status(f"{len(names)} 件を取り込みました。")
-        self._offer_source_deletion(json_path, names)
-        logger.debug("_on_import_json 完了: json_path=%s, 件数=%d", json_path, len(names))
+        self._status(f"{len(pairs)} 件を取り込みました。")
+        self._offer_source_deletion(json_path, pairs)
+        logger.debug("_on_import_json 完了: json_path=%s, 件数=%d", json_path, len(pairs))
 
-    def _offer_source_deletion(self, json_path: Path, names: list[str]) -> None:
+    def _offer_source_deletion(self, json_path: Path, pairs: list[tuple[str, str]]) -> None:
         """読み直せたときだけ、平文 JSON の削除を勧める。
 
         読み直せていれば、この実行アカウントで復号できることが確かめられている。
@@ -309,8 +317,8 @@ class CredentialsApp:
         （DPAPI は「登録したユーザー × PC」でしか復号できない）。
         """
         try:
-            for name in names:
-                load_credential(name, self._path)
+            for site, field in pairs:
+                load_credential(site, field, self._path)
         except CredentialError:
             logger.debug(
                 "_offer_source_deletion: 値の復号に失敗したため平文を残す: json_path=%s",
@@ -326,7 +334,7 @@ class CredentialsApp:
 
         if not messagebox.askyesno(
             "平文の JSON を削除しますか？",
-            f"{len(names)} 件すべてを読み直せました。平文の JSON は不要です。\n\n{json_path}",
+            f"{len(pairs)} 件すべてを読み直せました。平文の JSON は不要です。\n\n{json_path}",
             parent=self.root,
         ):
             self._status(f"平文の JSON が残っています: {json_path}")

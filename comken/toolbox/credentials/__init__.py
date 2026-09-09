@@ -11,19 +11,19 @@ Windows ログオンユーザーに紐付けて暗号化して保管する。
     from comken.toolbox.credentials import Credentials
 
     cred = Credentials("site_a")
-    cred.client_id      # → site_a_client_id の値
-    cred.client_secret  # → site_a_client_secret の値
+    cred.client_id      # → site_a 配下の client_id の値
+    cred.client_secret  # → site_a 配下の client_secret の値
 
 暗号化・復号は **同じ Windows ユーザー × 同じ PC** でしか成立しない。
 タスクスケジューラの実行ユーザーが登録時と違うと復号できないので、
 運用アカウントで取り込むこと（最も多い事故）。
 
-    Credentials        システム名配下の値に属性でアクセスする
-    load_credential    キー名を指定して1件取り出す
-    save_credential    キー名を指定して1件保存する
+    Credentials        サイト名配下の値に属性でアクセスする
+    load_credential    (サイト名, 項目名) を指定して1件取り出す
+    save_credential    (サイト名, 項目名) を指定して1件保存する
     save_credentials   まとめて保存する（書き込みは1回）
     delete_credential  1件削除する
-    list_names         登録済みのキー名一覧（値は返さない）
+    list_names         登録済みの (サイト名, 項目名) の一覧（値は返さない）
     import_json        平文 JSON を読み込んで取り込む
     CREDENTIALS_PATH   保存先のパス
 """

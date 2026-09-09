@@ -113,7 +113,7 @@ class TestRefreshTokenOAuth:
                 DOMAIN_URL,
                 prefix="site_a",
             )
-        save_credential.assert_called_once_with("site_a_refresh_token", "REFRESH")
+        save_credential.assert_called_once_with("site_a", "refresh_token", "REFRESH")
 
     def test_exchange_code_explicit_callback_overrides_prefix(self):
         """on_refresh_token を明示的に渡したときは prefix の既定より優先されることを確認する。"""
@@ -146,7 +146,7 @@ class TestRefreshTokenOAuth:
             auth = RefreshTokenOAuth.from_credentials(DOMAIN_URL, "site_a")
             assert auth._on_refresh_token is not None
             auth._on_refresh_token("ROTATED")
-        save_credential.assert_called_once_with("site_a_refresh_token", "ROTATED")
+        save_credential.assert_called_once_with("site_a", "refresh_token", "ROTATED")
 
 
 class TestPluggableSalesforceAuth:

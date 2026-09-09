@@ -962,9 +962,11 @@ class TestCredentialsInitialization:
         path = tmp_path / "system-id.enc"
         save_credentials(
             {
-                "solution_sandbox_client_id": "CID",
-                "solution_sandbox_client_secret": "CSECRET",
-                "solution_sandbox_refresh_token": "RTOKEN",
+                "solution_sandbox": {
+                    "client_id": "CID",
+                    "client_secret": "CSECRET",
+                    "refresh_token": "RTOKEN",
+                }
             },
             path,
         )
@@ -993,9 +995,11 @@ class TestCredentialsInitialization:
         path = self._store(tmp_path)
         save_credentials(
             {
-                "sandbox_test_client_id": "TEST-CID",
-                "sandbox_test_client_secret": "TEST-SECRET",
-                "sandbox_test_refresh_token": "TEST-RTOKEN",
+                "sandbox_test": {
+                    "client_id": "TEST-CID",
+                    "client_secret": "TEST-SECRET",
+                    "refresh_token": "TEST-RTOKEN",
+                }
             },
             path,
         )

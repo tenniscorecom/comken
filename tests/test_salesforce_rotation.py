@@ -69,9 +69,11 @@ class TestSalesforceCredentialRotator:
         ]
         save.assert_called_once_with(
             {
-                "site_a_client_id": "new-key",
-                "site_a_client_secret": "new-secret",
-                "site_a_last_rotation_date": "2026-08-13",
+                "site_a": {
+                    "client_id": "new-key",
+                    "client_secret": "new-secret",
+                    "last_rotation_date": "2026-08-13",
+                }
             },
             None,
         )

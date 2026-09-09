@@ -7,7 +7,7 @@ README の「credentials」から移した、モジュールを使うときの�
 ## credentials
 
 client_secret・パスワード・トークンは config.ini に平文で書けない。
-Windows 標準の **DPAPI** で暗号化して保管し、コードからはキー名で引く。
+Windows 標準の **DPAPI** で暗号化して保管し、コードからは（サイト名, 項目名）で引く。
 暗号鍵の管理は不要で、Windows がログオン中のアカウントに紐付けて暗号化・復号する。
 
 ### 登録（初回だけ）
@@ -29,10 +29,10 @@ Windows 標準の **DPAPI** で暗号化して保管し、コードからはキ�
 python -m comken cred gui
 ```
 
-システム名・項目名・値を入れて「登録する」を押す。**入力した文字は伏せ字で、平文の
+サイト名・項目名・値を入れて「登録する」を押す。**入力した文字は伏せ字で、平文の
 ファイルも作らない。** 登録すると読み直して文字数を出すので、貼り間違いはそこで気づける。
-登録済みのキー名の一覧と削除も同じ画面にある（**値を読み出す機能は無い**——画面に出せば
-覗き見やスクリーンショットで漏れる経路が増えるため）。
+登録済みの認証情報（サイト名.項目名の一覧）の表示と削除も同じ画面にある
+（**値を読み出す機能は無い**——画面に出せば覗き見やスクリーンショットで漏れる経路が増えるため）。
 
 `templates/認証情報の登録.bat` をプロジェクトのフォルダへコピーしておけば、
 **ダブルクリックで開く**。ターミナルを使わない人にはこれを渡す。
@@ -54,14 +54,15 @@ python -m comken cred gui
 ```
 
 ```
-python -m comken cred import 認証情報.json    取り込む
-python -m comken cred list                     登録済みの認証情報を接頭辞別に表示する
-python -m comken cred delete site_a_client_id  1件削除する
+python -m comken cred import 認証情報.json     取り込む
+python -m comken cred list                      登録済みの認証情報をサイト名別に表示する
+python -m comken cred delete site_a client_id   1件削除する
 ```
 
-`{"site_a": {"client_id": ...}}` は `site_a_client_id` というキー名に展開されて
-`%USERPROFILE%\.rpa\system-id.enc` に保存される。JSON に無いキーはそのまま残るので、
-組織ごとに JSON を分けて何回かに分けて取り込める。
+`{"site_a": {"client_id": ...}}` は同じ入れ子構造のまま
+`%USERPROFILE%\.rpa\system-id.enc` へ保存される（展開・組み立て直しはしない）。
+JSON に無い（サイト名, 項目名）はそのまま残るので、組織ごとに JSON を分けて
+何回かに分けて取り込める。
 
 取り込んだら**平文の JSON は消す**。`--delete-source` を付けると成功時に自動で消えるが、
 既定では消さない。実行アカウントで読めることを `list` で確かめてから消すのが安全なため。
@@ -69,15 +70,20 @@ python -m comken cred delete site_a_client_id  1件削除する
 ### 使う側
 
 ```python
-from comken.toolbox.credentials import Credentials
+from comken.toolbox.credentials import Credentials, load_credential
 
 cred = Credentials("site_a")
-cred.client_id      # → site_a_client_id の値
-cred.client_secret  # → site_a_client_secret の値
+cred.client_id      # → site_a 配下の client_id の値
+cred.client_secret  # → site_a 配下の client_secret の値
+
+# 1件だけ直接取り出す場合は（サイト名, 項目名）の2引数で
+password = load_credential("oju_sys", "password")
 ```
 
-システム名を config.ini から渡せば、本番とテストの切り替えが config.ini の1行で済む
-（コード側にキー名の直書きが残らない）。
+認証情報は `{サイト名: {項目名: 値}}` の入れ子構造で保管している。
+`Credentials("site_a")` のようにサイト名を指定すれば、そのサイト配下の項目に
+属性アクセスできる。サイト名を config.ini から渡せば、本番とテストの切り替えが
+config.ini の1行で済む（コード側に長いキー名の直書きが残らない）。
 
 ```python
 # [CREDENTIALS]

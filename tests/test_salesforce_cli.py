@@ -394,7 +394,7 @@ class TestSetup:
         with (
             patch(
                 "comken.toolbox.salesforce.cli.Credentials",
-                side_effect=CredentialNotFoundError(Solution.CREDENTIAL_PREFIX + "_client_id", []),
+                side_effect=CredentialNotFoundError(f"{Solution.CREDENTIAL_PREFIX}.client_id", []),
             ),
             patch(
                 "comken.toolbox.salesforce.cli.RefreshTokenOAuth.authorization_url"

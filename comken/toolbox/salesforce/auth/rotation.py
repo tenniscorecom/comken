@@ -84,17 +84,19 @@ class SalesforceCredentialRotator:
         return True
 
     def _is_due(self, today: datetime.date) -> bool:
-        name = self._credential_name("last_rotation_date")
         logger.debug(
-            "最終ローテーション日を DPAPI から読みます: name=%s path=%s",
-            name,
+            "最終ローテーション日を DPAPI から読みます: prefix=%s path=%s",
+            self._credential_prefix,
             self._credential_path,
         )
         try:
-            raw_date = load_credential(name, self._credential_path)
+            raw_date = load_credential(
+                self._credential_prefix, "last_rotation_date", self._credential_path
+            )
         except CredentialNotFoundError:
             logger.debug(
-                "最終ローテーション日が未保存なので初回として実行対象にします: name=%s", name
+                "最終ローテーション日が未保存なので初回として実行対象にします: prefix=%s",
+                self._credential_prefix,
             )
             return True
         try:
@@ -139,9 +141,11 @@ class SalesforceCredentialRotator:
         try:
             save_credentials(
                 {
-                    self._credential_name("client_id"): staged.consumer_key,
-                    self._credential_name("client_secret"): staged.consumer_secret,
-                    self._credential_name("last_rotation_date"): rotation_date.isoformat(),
+                    self._credential_prefix: {
+                        "client_id": staged.consumer_key,
+                        "client_secret": staged.consumer_secret,
+                        "last_rotation_date": rotation_date.isoformat(),
+                    }
                 },
                 self._credential_path,
             )
@@ -161,9 +165,6 @@ class SalesforceCredentialRotator:
             component=ROTATION_COMPONENT,
         )
         logger.debug("Salesforce 側の切り替えが完了しました: staged_id=%s", staged.staged_id)
-
-    def _credential_name(self, suffix: str) -> str:
-        return f"{self._credential_prefix}_{suffix}"
 
 
 @dataclass(frozen=True)
