@@ -608,6 +608,46 @@ class TestDescribeFields:
         owner_row = next(row for row in table if row["列キー"] == "OWNER")
         assert owner_row["対応フィールドAPI名"] == "OwnerId"
 
+    def test_metadata_path_includes_grouping_and_aggregate_columns(self):
+        """SUMMARY/MATRIX用のgroupingsDown/groupingsAcross/aggregatesの列も対応表へ残す。"""
+        describe_body = _describe_fields_body()
+        describe_body["reportMetadata"]["groupingsDown"] = [
+            {"name": "STAGE_NAME", "sortOrder": "Asc"}
+        ]
+        describe_body["reportMetadata"]["groupingsAcross"] = [{"name": "CLOSE_DATE"}]
+        describe_body["reportMetadata"]["aggregates"] = ["s!AMOUNT"]
+        describe_body["reportExtendedMetadata"]["groupingColumnInfo"] = {
+            "STAGE_NAME": {"label": "フェーズ名"},
+            "CLOSE_DATE": {"label": "完了予定日"},
+        }
+        describe_body["reportExtendedMetadata"]["aggregateColumnInfo"] = {
+            "AMOUNT": {"label": "金額"},
+        }
+        object_body = {
+            "fields": [
+                {"name": "StageName", "label": "フェーズ名", "type": "picklist"},
+                {"name": "CloseDate", "label": "完了予定日", "type": "date"},
+                {"name": "Amount", "label": "金額", "type": "currency"},
+            ]
+        }
+        with _salesforce([_response(json_body=object_body)]) as (client, _, _):
+            table = client.report._describe_fields_from_metadata(describe_body)
+
+        by_key = {row["列キー"]: row for row in table}
+        assert by_key["STAGE_NAME"]["対応フィールドAPI名"] == "StageName"
+        assert by_key["CLOSE_DATE"]["対応フィールドAPI名"] == "CloseDate"
+        assert by_key["AMOUNT"]["対応フィールドAPI名"] == "Amount"
+
+    def test_aggregate_key_without_exclamation_is_ignored(self):
+        """ "!"区切りが無い集計キー（想定外の形式）は列として扱わずスキップする。"""
+        describe_body = _describe_fields_body()
+        describe_body["reportMetadata"]["aggregates"] = ["RowCount"]
+        object_body = {"fields": [{"name": "Name", "label": "商談名", "type": "Text"}]}
+        with _salesforce([_response(json_body=object_body)]) as (client, _, _):
+            table = client.report._describe_fields_from_metadata(describe_body)
+
+        assert "RowCount" not in [row["列キー"] for row in table]
+
     def test_fills_api_name_and_type_when_label_matches(self):
         """表示名が一致する列は、実フィールドの API 名・型を埋める。"""
         describe_body = _describe_fields_body()

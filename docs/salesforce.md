@@ -322,8 +322,11 @@ with Solution() as sf:
 ```
 
 返却される `Table` の列: **列キー / 表示名 / 対応フィールドAPI名 / 型 / 備考**。
-`detailColumns` にある表示列だけでなく、`reportFilters` だけに現れる列も含む。
-同じ接続中に同一オブジェクトを複数レポートで使う場合、Object Describe は
+`detailColumns` にある表示列だけでなく、`reportFilters` だけに現れる列、
+`SUMMARY`/`MATRIX` 形式の `groupingsDown`/`groupingsAcross`（グルーピング列）、
+`aggregates`（集計対象列）も含む。グルーピング列・集計列の表示名は
+`groupingColumnInfo`/`aggregateColumnInfo`（`detailColumnInfo` とは別枠）から
+引く。同じ接続中に同一オブジェクトを複数レポートで使う場合、Object Describe は
 オブジェクト単位でキャッシュして再利用する。
 「対応フィールドAPI名」が引けなかった行は空ではなく **`"(不明)"`** を入れる
 （「調べたが空」と「調べていない」を区別できない問題を防ぐため）。

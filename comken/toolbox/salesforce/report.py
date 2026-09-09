@@ -175,6 +175,81 @@ def _build_field_index(data: object) -> tuple[dict[str, list[dict]], None]:
     return index, None
 
 
+def _filter_only_columns(report_filters: object) -> list[str]:
+    """``reportFilters`` にだけ現れる列キーを返す（SELECT には出ない列）。"""
+    if not isinstance(report_filters, list):
+        return []
+    return [
+        column_key
+        for report_filter in report_filters
+        if isinstance(report_filter, dict)
+        and isinstance(column_key := report_filter.get("column"), str)
+    ]
+
+
+def _grouping_columns(report_metadata: dict) -> list[str]:
+    """``groupingsDown`` / ``groupingsAcross``（``SUMMARY``/``MATRIX``）の列キーを返す。"""
+    columns = []
+    for grouping_key in ("groupingsDown", "groupingsAcross"):
+        for grouping in report_metadata.get(grouping_key, []) or []:
+            if isinstance(grouping, dict) and isinstance(grouping.get("name"), str):
+                columns.append(grouping["name"])
+    return columns
+
+
+def _aggregate_field_columns(aggregates: object) -> list[str]:
+    """``aggregates`` の集計対象列キーを返す。
+
+    集計キーは ``"s!Amount"`` のように「関数!列キー」の形（本物の組織で
+    未検証）。``"!"`` が無いものは列キーとして扱えないため無視する。
+    """
+    if not isinstance(aggregates, list):
+        return []
+    return [
+        aggregate_key.split("!", 1)[-1]
+        for aggregate_key in aggregates
+        if isinstance(aggregate_key, str) and "!" in aggregate_key
+    ]
+
+
+def _collect_describable_columns(report_metadata: dict) -> list[str]:
+    """``describe_fields()`` が解決を試みる列キーの一覧を組み立てる（重複除去済み）。
+
+    ``detailColumns``（SELECT に出す列）に加え、SELECT には出ないが
+    ``reportFilters`` だけで使う列、``SUMMARY`` / ``MATRIX`` の
+    ``groupingsDown`` / ``groupingsAcross`` のグルーピング列、``aggregates``
+    の集計対象列も含める。
+    """
+    columns = list(report_metadata.get("detailColumns", []))
+    for column_key in (
+        _filter_only_columns(report_metadata.get("reportFilters"))
+        + _grouping_columns(report_metadata)
+        + _aggregate_field_columns(report_metadata.get("aggregates"))
+    ):
+        if column_key not in columns:
+            columns.append(column_key)
+    return columns
+
+
+def _collect_column_info(metadata: dict) -> dict:
+    """``describe_fields()`` の表示名引き当てに使う列情報を組み立てる。
+
+    グルーピング列・集計列の表示名は ``detailColumnInfo`` ではなく
+    ``groupingColumnInfo`` / ``aggregateColumnInfo`` 側に入っている
+    （本物の組織で未検証）ため、同じ列キー空間としてマージする
+    （キーの重複は無い前提）。
+    """
+    extended_metadata: dict = (
+        metadata.get("reportExtendedMetadata", {}) if isinstance(metadata, dict) else {}
+    )
+    column_info: dict = dict(extended_metadata.get("detailColumnInfo", {}) or {})
+    for info_key in ("groupingColumnInfo", "aggregateColumnInfo"):
+        info = extended_metadata.get(info_key)
+        if isinstance(info, dict):
+            column_info.update(info)
+    return column_info
+
+
 class ReportAPI:
     """レポートを実行して明細行を取得する。
 
@@ -455,8 +530,11 @@ class ReportAPI:
         Returns:
             ``Table``。列は次のとおり（すべて日本語）:
 
-            - ``列キー``: レポート側の列キー（``detailColumns`` と、SELECTには無く
-              ``reportFilters`` だけに現れる列の ``column``）
+            - ``列キー``: レポート側の列キー。``detailColumns`` に加え、SELECTには
+              無く ``reportFilters`` だけに現れる列の ``column``、``SUMMARY`` /
+              ``MATRIX`` 形式の ``groupingsDown`` / ``groupingsAcross`` の
+              ``name``、``aggregates`` の集計対象列（``"s!Amount"`` の ``Amount``
+              部分）も含む
             - ``表示名``: レポート API が返した表示名
             - ``対応フィールドAPI名``: 一致した実フィールドの API 名。分からなければ
               ``"(不明)"`` を入れる（空文字だと「調べたが空」と「調べていない」が
@@ -475,29 +553,10 @@ class ReportAPI:
 
     def _describe_fields_with_object_status(self, metadata: dict) -> tuple[Table, str | None]:
         """列対応表と、主オブジェクトを検証できなかった理由を返す。"""
-        columns = list(
-            metadata.get("reportMetadata", {}).get("detailColumns", [])
-            if isinstance(metadata, dict)
-            else []
-        )
-        report_filters = metadata.get("reportMetadata", {}).get("reportFilters", [])
-        if isinstance(report_filters, list):
-            for report_filter in report_filters:
-                if not isinstance(report_filter, dict):
-                    continue
-                column_key = report_filter.get("column")
-                if isinstance(column_key, str) and column_key not in columns:
-                    columns.append(column_key)
-        column_info = (
-            metadata.get("reportExtendedMetadata", {}).get("detailColumnInfo", {})
-            if isinstance(metadata, dict)
-            else {}
-        )
-        object_name = (
-            metadata.get("reportMetadata", {}).get("reportType", {}).get("type", "")
-            if isinstance(metadata, dict)
-            else ""
-        )
+        report_metadata = metadata.get("reportMetadata", {}) if isinstance(metadata, dict) else {}
+        columns = _collect_describable_columns(report_metadata)
+        column_info = _collect_column_info(metadata)
+        object_name = report_metadata.get("reportType", {}).get("type", "")
 
         # Object Describe 自体は /analytics/ ではないため、self._request() を
         # 通すと 401/403 が SalesforceReportAccessDeniedError に変換されてしまう。
