@@ -22,6 +22,7 @@ import logging
 from unittest.mock import MagicMock, patch
 
 from comken.core import Table
+from comken.core.logger import setup_local_logging
 from comken.services.salesforce_downloader.soql_reports.runner import download_soql_reports
 from comken.toolbox.csv import CSV
 
@@ -85,5 +86,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    # ログ設定は comken 側の標準ヘルパーを使う（examples/logger.py と同じ形）。
+    # 生の logging.basicConfig() は使わない — ファイル出力・二重設定防止など、
+    # setup_local_logging() が持つ既定の仕組みを外してしまうため。
+    setup_local_logging(path=OUTPUT_DIR.parent / "logs")
     main()
