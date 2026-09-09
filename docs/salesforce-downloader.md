@@ -745,6 +745,21 @@ python tools/dump_report_filters.py --output filters.csv
 `includes` / `excludes` / `within` はSOQL側の書き方がReport側と1対1にならないため、
 機械的に変換せず個別に読んで組み立てる。
 
+**手順3・4をまとめて、管理表の全件について`SELECT`/`WHERE`のドラフトを1本のCSVへ出す
+`tools/dump_soql_drafts.py`もある**（同じく開発用の使い捨てツール、恒久的な公開APIでは
+ない）。上の演算子対応表に加えて、`reportFilters`とは別枠の`standardDateFilter`（期間
+フィルタ）のうち明示的な開始日・終了日（`durationValue: "CUSTOM"`）だけを`WHERE`句へ
+変換する。相対期間（`THIS_MONTH`等）・`includes`/`excludes`/`within`・`crossFilters`は
+機械変換せず「備考」列へ回すので、そこだけ人が確認して書き足す:
+
+```bash
+python tools/dump_soql_drafts.py --output soql_drafts.csv
+```
+
+出力される列は「管理番号 / 概要 / レポートID / URL / SOQLドラフト / 備考」。
+**あくまで下書き**であり、そのまま`SoqlReport.soql()`に貼るのではなく、「備考」欄の
+指摘（不明列・個別対応が必要な演算子など）を解消してから手順5へ進む。
+
 #### 5. `SoqlReport` サブクラスとして実装する
 
 `comken/services/salesforce_downloader/soql_reports/` 配下に**1レポート=1ファイル**で書く。
