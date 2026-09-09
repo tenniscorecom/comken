@@ -507,6 +507,43 @@ def run() -> None:
 `download_scheduled()` の戻り値は `list[Path]`（保存できたファイルのパス）。中身を読みたい
 プロジェクトは `cached_report()` を1件ずつ使う。
 
+### タスクから実行時フィルタを渡す
+
+タスク固有の条件でレポートを実行するときは `filters_by_report` を使う。キーは
+Salesforce のレポートIDではなく、管理表の管理番号。指定しなかったレポートは
+保存済み条件のまま実行される。実行時フィルタは元のSalesforceレポート定義を変更しない。
+
+```python
+from comken.services.salesforce_downloader import download_scheduled
+
+PROJECT_NAME = "Salesforceレポートダウンローダー"
+SALES_RESULT = "1003"
+
+FILTERS_BY_REPORT = {
+    SALES_RESULT: [
+        {
+            "column": "CREATED_DATE",
+            "operator": "greaterThan",
+            "value": "2026-09-01",
+        }
+    ]
+}
+
+download_scheduled(
+    PROJECT_NAME,
+    filters_by_report=FILTERS_BY_REPORT,
+)
+```
+
+フィルタ1件の形式は `sf.report.get(..., filters=...)` と同じ
+`column` / `operator` / `value`。管理表に無い管理番号を書いた場合は、条件を黙って
+無視せず `ReportNotRegisteredError` で止める。
+
+この辞書は、全レポートをSOQLへ移行するときの `WHERE` 句の材料でもある。そのため
+実行時条件を `if` 文や文字列結合へ散らさず、管理番号ごとの辞書にまとめる。
+ただし `tools/dump_soql_drafts.py` が自動取得できるのは Salesforce に保存された
+レポート定義だけであり、この実行時フィルタは別途SOQLへ合成する必要がある。
+
 **1件失敗しても残りは続ける——ただし想定した失敗に限る。** 5本のうち1本が落ちたときに
 全部やり直すと、手で用意する手間が5本ぶんになる。`ComkenError`（メッセージ本文に対処が
 載っている想定内の失敗）と `OSError`（共有サーバー断・権限など運用上の失敗）は
@@ -739,24 +776,52 @@ Salesforceの設定画面（オブジェクトマネージャ）で手動確認�
 機械的に変換せず個別に読んで組み立てる。
 
 **手順3・4をまとめて、管理表の全件について`SELECT`/`WHERE`のドラフトを1本のCSVへ出す
-`tools/dump_soql_drafts.py`がある**（開発用の使い捨てツール、恒久的な公開APIではない）。
+`tools/dump_soql_drafts.py`がある**（開発・移行支援ツールで、恒久的な公開APIではない）。
 上の演算子対応表に加えて、`reportFilters`とは別枠の`standardDateFilter`（期間
 フィルタ）のうち明示的な開始日・終了日（`durationValue: "CUSTOM"`）だけを`WHERE`句へ
 変換する。相対期間（`THIS_MONTH`等）・`includes`/`excludes`/`within`・`crossFilters`は
-機械変換せず「備考」列へ回すので、そこだけ人が確認して書き足す:
+機械変換せず、誤った完成SOQLとして扱わないよう `BLOCKED` にする:
 
 ```bash
 python tools/dump_soql_drafts.py
 ```
 
 出力先は CLI 引数ではなく、ファイル冒頭の `OUTPUT_PATH` を直接書き換える
-（既定 `soql_drafts_dump.csv`）。出力される列は
-「管理番号 / 概要 / レポートID / URL / SOQLドラフト / 備考 / フィルタ詳細(生データ)」。
+（既定 `soql_drafts_dump.csv`）。同じフォルダへ列対応の再利用用
+`soql_field_mapping_catalog.csv` も作る。出力される列は
+「管理番号 / 概要 / レポートID / URL / 状態 / SOQLドラフト / 備考 /
+フィルタ詳細(生データ)」。状態は次の意味を持つ。
+
+| 状態 | 意味 |
+|---|---|
+| `READY` | 自動変換でき、備考もない |
+| `REVIEW` | SOQLは作れたが、不明なSELECT列など人の確認が必要 |
+| `BLOCKED` | 未解決のフィルタ・演算子・論理式等があり、SOQL欄を空にした |
+| `ERROR` | Report Describeや接続に失敗した |
+
+`reportBooleanFilter` の番号式は `AND` / `OR` / 括弧 / `NOT` を保って展開する。
+番号が未解決条件を参照する場合や式が不正な場合は `BLOCKED` になる。値は列の型を使い、
+文字列・ID・参照は引用し、数値・Boolean・date/datetimeはSOQLの型に合わせる。
+
+マッピングカタログは「サイトクラス / レポートタイプ / 列キー」で候補を蓄積する。
+Salesforceの設定画面で確認した行は、`フィールドAPI名` と `型` を直して
+`確認状態` を `確認済み` にする。次回から自動候補より優先して使われる。
+SELECTに無くフィルタだけに現れる列キーもカタログへ残る。
+同じキーで自動候補が食い違った場合は、後勝ちにせず `要確認` として止める。
+確認済みの行は次回実行でも自動候補で上書きしない。カタログには組織固有の項目情報が
+入るため、既定ファイル名は `.gitignore` の対象にしている。
+
+`状態=READY` が保証するのは、**Salesforceに保存されたレポート定義を変換できたことまで**。
+呼び出し側が `download_scheduled(filters_by_report=...)` で追加する実行時フィルタは
+`describe()` から取得できないため、最終的なSOQLではその辞書も `WHERE` 句へ反映する。
+`reportType.type` を実オブジェクトとして Object Describe できない複合・カスタム
+レポートタイプは、誤った `FROM` 句を出さないよう `BLOCKED` にする。
 最後の「フィルタ詳細(生データ)」は `reportFilters` を加工せずそのまま
 `列=演算子:値` の一覧にしたもので、ドラフトの検証や、`TABULAR`以外で
 SOQLドラフトを作れなかったレポートの絞り込み条件を確認するのに使う。
-**あくまで下書き**であり、そのまま`SoqlReport.soql()`に貼るのではなく、「備考」欄の
-指摘（不明列・個別対応が必要な演算子など）を解消してから手順5へ進む。
+**あくまで下書き**であり、`READY` 以外はそのまま`SoqlReport.soql()`に貼らない。
+「備考」欄の指摘を解消し、必要ならカタログを確認済みにしてから手順5へ進む。
+取得失敗を1件でも含む実行は終了コード1、それ以外（`BLOCKED`を含む）は終了コード0になる。
 
 #### 5. `SoqlReport` サブクラスとして実装する
 

@@ -190,6 +190,7 @@ class ReportAPI:
             client: このレポート API を使う Salesforce クライアント。
         """
         self._client = client
+        self._object_field_results: dict[str, tuple[dict[str, list[dict]] | None, str | None]] = {}
 
     def _request(
         self,
@@ -377,6 +378,32 @@ class ReportAPI:
     def _base_path(self) -> str:
         return self._client.data_path("/analytics/reports")
 
+    def _object_field_index(
+        self, object_name: str
+    ) -> tuple[dict[str, list[dict]] | None, str | None]:
+        """Object Describe をオブジェクト名単位で取得・キャッシュする。"""
+        cached_result = self._object_field_results.get(object_name)
+        if cached_result is not None:
+            return cached_result
+        path = self._client.data_path(f"/sobjects/{object_name}/describe")
+        try:
+            data, _ = self._client.request("GET", path, component=COMPONENT)
+        except SalesforceRequestError as exc:
+            if exc.status_code in (401, 403):
+                raise
+            reason = (
+                f"主オブジェクト {object_name} の Object Describe に失敗したため"
+                f"自動判定できません（HTTP {exc.status_code}: {exc.detail}）。"
+                "手動で確認してください"
+            )
+            result: tuple[dict[str, list[dict]] | None, str | None] = (None, reason)
+            self._object_field_results[object_name] = result
+            return result
+        field_index, _ = _build_field_index(data)
+        result = (field_index, None)
+        self._object_field_results[object_name] = result
+        return result
+
     def _fetch_report_table(
         self,
         report_id: str,
@@ -428,7 +455,8 @@ class ReportAPI:
         Returns:
             ``Table``。列は次のとおり（すべて日本語）:
 
-            - ``列キー``: レポート側の列キー（``detailColumns`` の値そのもの）
+            - ``列キー``: レポート側の列キー（``detailColumns`` と、SELECTには無く
+              ``reportFilters`` だけに現れる列の ``column``）
             - ``表示名``: レポート API が返した表示名
             - ``対応フィールドAPI名``: 一致した実フィールドの API 名。分からなければ
               ``"(不明)"`` を入れる（空文字だと「調べたが空」と「調べていない」が
@@ -438,11 +466,28 @@ class ReportAPI:
               一致した行は空文字
         """
         metadata = self.describe(report_id)
-        columns = (
+        return self._describe_fields_from_metadata(metadata)
+
+    def _describe_fields_from_metadata(self, metadata: dict) -> Table:
+        """取得済み Report Describe から列対応表を作る。"""
+        table, _ = self._describe_fields_with_object_status(metadata)
+        return table
+
+    def _describe_fields_with_object_status(self, metadata: dict) -> tuple[Table, str | None]:
+        """列対応表と、主オブジェクトを検証できなかった理由を返す。"""
+        columns = list(
             metadata.get("reportMetadata", {}).get("detailColumns", [])
             if isinstance(metadata, dict)
             else []
         )
+        report_filters = metadata.get("reportMetadata", {}).get("reportFilters", [])
+        if isinstance(report_filters, list):
+            for report_filter in report_filters:
+                if not isinstance(report_filter, dict):
+                    continue
+                column_key = report_filter.get("column")
+                if isinstance(column_key, str) and column_key not in columns:
+                    columns.append(column_key)
         column_info = (
             metadata.get("reportExtendedMetadata", {}).get("detailColumnInfo", {})
             if isinstance(metadata, dict)
@@ -467,25 +512,7 @@ class ReportAPI:
                 "手動で確認してください"
             )
         else:
-            path = self._client.data_path(f"/sobjects/{object_name}/describe")
-            try:
-                data, _ = self._client.request("GET", path, component=COMPONENT)
-            except SalesforceRequestError as exc:
-                # 401 / 403 は権限エラー。Reports API とは別の権限系統
-                # （オブジェクトへの参照）なので、SalesforceReportAccessDeniedError には
-                # 変換せず SalesforceRequestError のまま呼び出し側へ返す。
-                if exc.status_code in (401, 403):
-                    raise
-                # 404 等は「複合レポートタイプなどで主オブジェクト名が見つからない」等
-                # の想定ケース。例外にせず、全列を「(不明)」で返して道具として動く状態を保つ。
-                field_index = None
-                object_error_reason = (
-                    f"主オブジェクト {object_name} の Object Describe に失敗したため"
-                    f"自動判定できません（HTTP {exc.status_code}: {exc.detail}）。"
-                    "手動で確認してください"
-                )
-            else:
-                field_index, object_error_reason = _build_field_index(data)
+            field_index, object_error_reason = self._object_field_index(object_name)
 
         rows: list[dict[str, str]] = []
         for column_key in columns:
@@ -513,9 +540,12 @@ class ReportAPI:
                 else:
                     row["備考"] = "対応フィールドなし"
             rows.append(row)
-        return Table(
-            ["列キー", "表示名", "対応フィールドAPI名", "型", "備考"],
-            rows,
+        return (
+            Table(
+                ["列キー", "表示名", "対応フィールドAPI名", "型", "備考"],
+                rows,
+            ),
+            object_error_reason,
         )
 
     @measure

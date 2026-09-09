@@ -61,6 +61,7 @@ from comken.exceptions import (
     HistoryLockTimeoutError,
     HistoryWriteError,
     ReportFolderNotFoundError,
+    ReportNotRegisteredError,
     ReportReservePathLimitError,
     ScheduledDownloadFailedError,
 )
@@ -100,22 +101,39 @@ RESERVE_PATH_LIMIT = 1000
 
 
 @measure
-def download_scheduled(project: str = "定期実行") -> list[Path]:
+def download_scheduled(
+    project: str = "定期実行",
+    *,
+    filters_by_report: dict[str, list[dict]] | None = None,
+) -> list[Path]:
     """管理表で有効なレポートをまとめて取得する。
 
     定期実行のプロジェクトから呼ぶ。**1件失敗しても残りは続ける**。戻り値は `list[Path]`
     のままで `CSV` を返さない（定期取得の呼び出し側は中身を読まないため）。
 
+    ``filters_by_report`` は、管理番号ごとに Salesforce Report API の実行時フィルタを
+    指定する。指定のない管理番号は、Salesforce に保存されているレポート条件のまま実行する。
+    URL やレポート ID ではなく管理番号をキーにするため、管理表で参照先を差し替えても
+    呼び出し側のコードは変えなくてよい。
+
     **「スケジュール」シート**にこのレポートの行が無いときは、
     「有効」だけで毎回対象にする（後方互換）。
     この機能追加を境に既存のレポートが突然取得されなくなる事故を防ぐため。
 
+    Args:
+        project: 履歴の「プロジェクト」列へ残す呼び出し元の名前。
+        filters_by_report: ``{管理番号: [Report APIフィルタ, ...]}``。各フィルタは
+            ``{"column": ..., "operator": ..., "value": ...}`` の形で指定する。
+
     Raises:
+        ReportNotRegisteredError: ``filters_by_report`` に管理表未登録の管理番号がある場合。
         ScheduledDownloadFailedError: 1件でも取得できなかった場合。**取得できたものは
             保存したうえで**送出する。ログだけに出して正常終了すると、スケジューラや
             RPA 基盤から見て成功と区別が付かない。
     """
     entries = load_master(MASTER_PATH)
+    filters_by_report = filters_by_report or {}
+    _validate_filters_by_report(filters_by_report, entries)
     _warn_shared_reports(entries)
 
     # スケジュール管理表を読んで、レポートキーで引けるように索引化。**有効行だけ**を
@@ -146,7 +164,15 @@ def download_scheduled(project: str = "定期実行") -> list[Path]:
     last_exception: BaseException | None = None
     for entry, schedule_key in targets:
         try:
-            saved.append(_download(entry, project, HISTORY_PATH, schedule_key))
+            saved.append(
+                _download(
+                    entry,
+                    project,
+                    HISTORY_PATH,
+                    schedule_key,
+                    filters=filters_by_report.get(entry.key),
+                )
+            )
         except (ComkenError, OSError) as e:
             # **想定した失敗は続ける。想定していない失敗は止める。**
             # - `ComkenError` は `docs/ERRORS.md` に対処法が載っている想定内の失敗なので続行する
@@ -258,12 +284,14 @@ def _download(
     project: str,
     history_path: Path,
     schedule_key: str = "",
+    *,
+    filters: list[dict] | None = None,
 ) -> Path:
     """1件を取得して保存し、成否を履歴に残す。"""
     attempt = _Attempt(entry, project, history_path, schedule_key)
     try:
         _require_folder(entry)
-        table = _fetch(entry)
+        table = _fetch(entry, filters)
         path = _save(entry, table)
         _update_daily_cache(entry, path)
     except Exception as exc:
@@ -295,7 +323,7 @@ def _require_folder(entry: ReportEntry) -> None:
         raise ReportFolderNotFoundError(entry.key, entry.folder)
 
 
-def _fetch(entry: ReportEntry) -> Table:
+def _fetch(entry: ReportEntry, filters: list[dict] | None = None) -> Table:
     """Salesforce へ問い合わせて明細表を返す。
 
     つなぐ組織は URL のドメインで決まる（`site_for()`）。管理表に組織を選ぶ列は
@@ -304,7 +332,18 @@ def _fetch(entry: ReportEntry) -> Table:
     """
     site = site_for(entry.url)
     with site() as salesforce:
-        return salesforce.report.get(entry.report_id)
+        if filters is None:
+            return salesforce.report.get(entry.report_id)
+        return salesforce.report.get(entry.report_id, filters=filters)
+
+
+def _validate_filters_by_report(
+    filters_by_report: dict[str, list[dict]], entries: dict[str, ReportEntry]
+) -> None:
+    """実行時フィルタの管理番号がすべて管理表に存在することを確認する。"""
+    for report_key in filters_by_report:
+        if report_key not in entries:
+            raise ReportNotRegisteredError(report_key, list(entries), MASTER_PATH)
 
 
 def _save(entry: ReportEntry, table: Table) -> Path:

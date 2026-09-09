@@ -584,6 +584,30 @@ class TestDescribeFields:
 
     REPORT_ID = "00O000000000001"
 
+    def test_reuses_object_describe_for_same_object(self):
+        """同じReportAPI内では同一オブジェクトのDescribeを1回だけ取得する。"""
+        describe_body = _describe_fields_body()
+        object_body = {"fields": [{"name": "Name", "label": "商談名", "type": "Text"}]}
+        with _salesforce([_response(json_body=object_body)]) as (client, session, _):
+            client.report._describe_fields_from_metadata(describe_body)
+            client.report._describe_fields_from_metadata(describe_body)
+
+        assert session.request.call_count == 1
+
+    def test_metadata_path_also_includes_filter_only_columns(self):
+        """SELECTに無くフィルタだけにある列も対応表へ残す。"""
+        describe_body = _describe_fields_body()
+        describe_body["reportMetadata"]["reportFilters"] = [
+            {"column": "OWNER", "operator": "equals", "value": "005xxx"}
+        ]
+        describe_body["reportExtendedMetadata"]["detailColumnInfo"]["OWNER"] = {"label": "所有者ID"}
+        object_body = {"fields": [{"name": "OwnerId", "label": "所有者ID", "type": "reference"}]}
+        with _salesforce([_response(json_body=object_body)]) as (client, _, _):
+            table = client.report._describe_fields_from_metadata(describe_body)
+
+        owner_row = next(row for row in table if row["列キー"] == "OWNER")
+        assert owner_row["対応フィールドAPI名"] == "OwnerId"
+
     def test_fills_api_name_and_type_when_label_matches(self):
         """表示名が一致する列は、実フィールドの API 名・型を埋める。"""
         describe_body = _describe_fields_body()

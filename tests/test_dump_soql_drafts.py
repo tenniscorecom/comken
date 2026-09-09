@@ -10,7 +10,14 @@ from unittest.mock import MagicMock, patch
 
 from comken.core.table import Table
 from comken.toolbox.excel import Excel
-from tools.dump_soql_drafts import CSV_HEADERS, FAILED_PREFIX, dump_soql_drafts
+from tools.dump_soql_drafts import (
+    CSV_HEADERS,
+    FAILED_PREFIX,
+    _expand_boolean_filter,
+    _filter_to_condition,
+    _merge_catalog_rows,
+    dump_soql_drafts,
+)
 
 URL_A = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE/view"
 URL_B = "https://example.my.salesforce.com/lightning/r/Report/00O5g00000FGHIJ/view"
@@ -48,7 +55,10 @@ def fake_site(
         report.describe.side_effect = describe_response
     else:
         report.describe.return_value = describe_response
-    report.describe_fields.return_value = fields_table or Table(FIELDS_COLUMNS, [])
+    table = fields_table or Table(FIELDS_COLUMNS, [])
+    report._describe_fields_from_metadata.return_value = table
+    report._describe_fields_with_object_status.return_value = (table, None)
+    report.describe_fields.return_value = table
     site_class.return_value = client
     site_class.__name__ = "FakeSite"
     site_class.DISPLAY_NAME = "テスト組織"
@@ -122,6 +132,102 @@ class TestSoqlDraftBuilding:
             == "SELECT Name, Amount FROM Opportunity WHERE StageName = 'Closed Won'"
         )
         assert rows[0]["備考"] == ""
+        report_api = site.return_value.__enter__.return_value.report
+        assert report_api.describe.call_count == 1
+
+    def test_confirmed_catalog_mapping_is_prioritized(self, tmp_path):
+        master = _master_with_one_report(tmp_path)
+        output = tmp_path / "out.csv"
+        catalog = tmp_path / "catalog.csv"
+        with catalog.open("w", encoding="utf-8-sig", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow(
+                [
+                    "サイトクラス",
+                    "レポートタイプ",
+                    "列キー",
+                    "表示名",
+                    "フィールドAPI名",
+                    "型",
+                    "確認状態",
+                    "備考",
+                ]
+            )
+            writer.writerow(
+                [
+                    "FakeSite",
+                    "Opportunity",
+                    "CUSTOM",
+                    "独自列",
+                    "Custom__c",
+                    "string",
+                    "確認済み",
+                    "",
+                ]
+            )
+        describe_response = {
+            "reportMetadata": {
+                "reportFormat": "TABULAR",
+                "reportType": {"type": "Opportunity"},
+                "detailColumns": ["CUSTOM"],
+                "reportFilters": [],
+            }
+        }
+        fields_table = Table(
+            FIELDS_COLUMNS,
+            [
+                {
+                    "列キー": "CUSTOM",
+                    "表示名": "独自列",
+                    "対応フィールドAPI名": "(不明)",
+                    "型": "",
+                    "備考": "対応フィールドなし",
+                }
+            ],
+        )
+        site = fake_site(describe_response, fields_table)
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
+            dump_soql_drafts(master, output, catalog)
+
+        assert _read_rows(output)[0]["SOQLドラフト"] == "SELECT Custom__c FROM Opportunity"
+
+    def test_unverified_from_object_is_blocked_even_with_resolved_columns(self, tmp_path):
+        master = _master_with_one_report(tmp_path)
+        output = tmp_path / "out.csv"
+        describe_response = {
+            "reportMetadata": {
+                "reportFormat": "TABULAR",
+                "reportType": {"type": "CustomReportType"},
+                "detailColumns": ["NAME"],
+                "reportFilters": [],
+            }
+        }
+        fields_table = Table(
+            FIELDS_COLUMNS,
+            [
+                {
+                    "列キー": "NAME",
+                    "表示名": "名前",
+                    "対応フィールドAPI名": "Name",
+                    "型": "string",
+                    "備考": "",
+                }
+            ],
+        )
+        site = fake_site(describe_response, fields_table)
+        report = site.return_value.__enter__.return_value.report
+        report._describe_fields_with_object_status.return_value = (
+            fields_table,
+            "主オブジェクトを検証できません",
+        )
+
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
+            dump_soql_drafts(master, output)
+
+        row = _read_rows(output)[0]
+        assert row["状態"] == "BLOCKED"
+        assert row["SOQLドラフト"] == ""
+        assert "主オブジェクト" in row["備考"]
 
     def test_numeric_value_is_not_quoted(self, tmp_path):
         """数値らしい値は SOQL 上でクォートしない。"""
@@ -369,6 +475,7 @@ class TestUnresolvedFields:
             dump_soql_drafts(master, output)
         rows = _read_rows(output)
         assert rows[0]["SOQLドラフト"] == "SELECT Name FROM Opportunity"
+        assert rows[0]["状態"] == "REVIEW"
         assert "MYSTERY_COLUMN" in rows[0]["備考"]
 
     def test_all_columns_unresolved_falls_back_to_id(self, tmp_path):
@@ -430,7 +537,8 @@ class TestUnresolvedFields:
         with patch("tools.dump_soql_drafts.site_for", return_value=site):
             dump_soql_drafts(master, output)
         rows = _read_rows(output)
-        assert rows[0]["SOQLドラフト"] == "SELECT Name FROM Opportunity"
+        assert rows[0]["SOQLドラフト"] == ""
+        assert rows[0]["状態"] == "BLOCKED"
         assert "MYSTERY_COLUMN" in rows[0]["備考"]
 
 
@@ -471,7 +579,8 @@ class TestManualOperators:
         with patch("tools.dump_soql_drafts.site_for", return_value=site):
             dump_soql_drafts(master, output)
         rows = _read_rows(output)
-        assert rows[0]["SOQLドラフト"] == "SELECT Name FROM Opportunity"
+        assert rows[0]["SOQLドラフト"] == ""
+        assert rows[0]["状態"] == "BLOCKED"
         assert "includes" in rows[0]["備考"]
 
 
@@ -545,7 +654,8 @@ class TestStandardDateFilter:
         with patch("tools.dump_soql_drafts.site_for", return_value=site):
             dump_soql_drafts(master, output)
         rows = _read_rows(output)
-        assert rows[0]["SOQLドラフト"] == "SELECT Name FROM Opportunity"
+        assert rows[0]["SOQLドラフト"] == ""
+        assert rows[0]["状態"] == "BLOCKED"
         assert "THIS_MONTH" in rows[0]["備考"]
 
 
@@ -578,8 +688,79 @@ class TestCrossFilters:
         with patch("tools.dump_soql_drafts.site_for", return_value=site):
             dump_soql_drafts(master, output)
         rows = _read_rows(output)
-        assert rows[0]["SOQLドラフト"] == "SELECT Name FROM Opportunity"
+        assert rows[0]["SOQLドラフト"] == ""
+        assert rows[0]["状態"] == "BLOCKED"
         assert "crossFilters" in rows[0]["備考"]
+
+
+class TestBooleanFilter:
+    def test_expands_and_or_parentheses_and_not(self):
+        conditions = {1: "A = 1", 2: "B = 2", 3: "C = 3"}
+
+        expanded = _expand_boolean_filter("1 AND (2 OR NOT 3)", conditions)
+
+        assert expanded == "(A = 1) AND ((B = 2) OR NOT ((C = 3)))"
+
+    def test_returns_none_when_expression_references_unresolved_condition(self):
+        assert _expand_boolean_filter("1 OR 2", {1: "A = 1"}) is None
+
+    def test_returns_none_for_invalid_syntax(self):
+        assert _expand_boolean_filter("1 AND OR 2", {1: "A = 1", 2: "B = 2"}) is None
+
+
+class TestCatalogMerge:
+    def test_confirmed_mapping_is_not_overwritten(self):
+        confirmed = {
+            "サイトクラス": "Site",
+            "レポートタイプ": "Opportunity",
+            "列キー": "CUSTOM",
+            "表示名": "独自列",
+            "フィールドAPI名": "Confirmed__c",
+            "型": "string",
+            "確認状態": "確認済み",
+            "備考": "手動確認",
+        }
+        observed = {**confirmed, "フィールドAPI名": "Other__c", "確認状態": "未確認"}
+
+        assert _merge_catalog_rows([confirmed], [observed]) == [confirmed]
+
+    def test_conflicting_automatic_candidates_require_review(self):
+        first = {
+            "サイトクラス": "Site",
+            "レポートタイプ": "Opportunity",
+            "列キー": "CUSTOM",
+            "表示名": "独自列",
+            "フィールドAPI名": "First__c",
+            "型": "string",
+            "確認状態": "未確認",
+            "備考": "",
+        }
+        second = {**first, "フィールドAPI名": "Second__c"}
+
+        merged = _merge_catalog_rows([first], [second])
+
+        assert merged[0]["確認状態"] == "要確認"
+        assert merged[0]["フィールドAPI名"] == "(不明)"
+        assert "First__c" in merged[0]["備考"]
+        assert "Second__c" in merged[0]["備考"]
+
+
+class TestTypedLiteral:
+    def test_numeric_looking_id_is_quoted(self):
+        assert _filter_to_condition("ExternalId__c", "id", "equals", "00123") == (
+            "ExternalId__c = '00123'"
+        )
+
+    def test_boolean_and_date_are_not_quoted(self):
+        assert _filter_to_condition("Active__c", "boolean", "equals", "TRUE") == (
+            "Active__c = true"
+        )
+        assert _filter_to_condition("CloseDate", "date", "equals", "2026-09-09") == (
+            "CloseDate = 2026-09-09"
+        )
+
+    def test_invalid_typed_value_is_unresolved(self):
+        assert _filter_to_condition("Amount", "currency", "equals", "one") is None
 
 
 class TestFailureHandling:

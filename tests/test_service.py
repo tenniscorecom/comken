@@ -21,6 +21,7 @@ from comken.exceptions import (
     InvalidReportURLError,
     MasterDuplicateValueError,
     MasterRowValueError,
+    ReportNotRegisteredError,
     ScheduledDownloadFailedError,
 )
 from comken.services.salesforce_downloader import (
@@ -299,6 +300,38 @@ class TestSharedReportIds:
 
 class TestDownloadScheduledRecord:
     """`download_scheduled()` で 1 件のレポートを取得すると、ファイルと履歴が残る。"""
+
+    def test_passes_filters_for_matching_report(self, paths):
+        """管理番号に指定した実行時フィルタだけを Report API へ渡す。"""
+        filters = [
+            {
+                "column": "CREATED_DATE",
+                "operator": "greaterThan",
+                "value": "2026-09-01",
+            }
+        ]
+        site = fake_salesforce()
+        with patch("comken.services.salesforce_downloader.service.site_for", return_value=site):
+            download_scheduled(filters_by_report={"1001": filters})
+
+        report_get = site.return_value.__enter__.return_value.report.get
+        report_get.assert_called_once_with("00O5g00000ABCDE", filters=filters)
+
+    def test_does_not_pass_filters_when_report_has_no_filters(self, paths):
+        """実行時フィルタを省略したレポートは保存済み条件のまま実行する。"""
+        site = fake_salesforce()
+        with patch("comken.services.salesforce_downloader.service.site_for", return_value=site):
+            download_scheduled()
+
+        report_get = site.return_value.__enter__.return_value.report.get
+        report_get.assert_called_once_with("00O5g00000ABCDE")
+
+    def test_rejects_filters_for_unregistered_report(self, paths):
+        """管理番号の誤記で条件が黙って無視されない。"""
+        filters = [{"column": "CREATED_DATE", "operator": "equals", "value": "2026-09-09"}]
+
+        with pytest.raises(ReportNotRegisteredError):
+            download_scheduled(filters_by_report={"9999": filters})
 
     def test_saves_file_with_csv_extension(self, paths, monkeypatch):
         """レポートは `.csv` で保存される。

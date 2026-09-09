@@ -10,6 +10,13 @@ r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポー�
     SALES_RESULT = "1003"
 
     download_scheduled()            # 定期取得をまとめて実行（1回呼ぶと全件取る）
+    download_scheduled(              # タスク固有の実行時フィルタがある場合
+        filters_by_report={
+            SALES_RESULT: [
+                {"column": "CREATED_DATE", "operator": "greaterThan", "value": "2026-09-01"}
+            ]
+        }
+    )
     by_code = cached_report(SALES_RESULT).index("顧客コード")
 
 **プロジェクトのコードに Salesforce の URL もレポート ID も書かない。** 書くのは

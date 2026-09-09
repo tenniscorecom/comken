@@ -31,6 +31,10 @@ comken_bundle.md
 config.ini
 state.ini
 
+# Salesforceレポート移行ツールの実データ（組織固有情報を含む）
+soql_drafts_dump.csv
+soql_field_mapping_catalog.csv
+
 # AIツール向けのローカル作業指示（ライブラリ本体には含めない）
 AGENTS.md
 CLAUDE.md
