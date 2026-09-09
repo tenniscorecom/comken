@@ -9,6 +9,7 @@ import ast
 import logging
 import sys
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -1701,7 +1702,7 @@ class TestConfigSubclassing:
         namespace: dict[str, object] = {}
         exec(snippet, namespace)
 
-        captured: str | None = namespace["captured"]  # type: ignore[assignment]
+        captured = cast("str | None", namespace["captured"])
         assert captured is not None, "継承が例外を送出せずにクラス定義が完了した"
         assert "AppConfig" in captured
         assert "from comken import config" in captured

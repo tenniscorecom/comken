@@ -53,7 +53,10 @@ from comken.toolbox.salesforce.sites import site_for  # noqa: E402
 logger = logging.getLogger(__name__)
 
 # 出力 CSV の見出し。すべて日本語で、利用者が Excel で開いてそのまま読める形にする
-CSV_HEADERS = (
+# ``tuple[str, ...]`` と明示することで、``csv.DictWriter`` の型解決が
+# ``Literal[...]`` の Mapping を要求してしまい ``list[dict[str, str]]`` と
+# 噛み合わなくなるのを避ける（型無しの列挙にすると自動でリテラル化される）。
+CSV_HEADERS: tuple[str, ...] = (
     "管理番号",
     "概要",
     "レポートID",
@@ -63,7 +66,7 @@ CSV_HEADERS = (
     "備考",
     "フィルタ詳細(生データ)",
 )
-CATALOG_HEADERS = (
+CATALOG_HEADERS: tuple[str, ...] = (
     "サイトクラス",
     "レポートタイプ",
     "列キー",
@@ -640,7 +643,7 @@ def _write_catalog(
     with path.open("w", encoding=Encoding.UTF8_SIG, newline="") as file:
         writer = csv.DictWriter(file, fieldnames=CATALOG_HEADERS)
         writer.writeheader()
-        writer.writerows(rows)  # type: ignore[arg-type]
+        writer.writerows(rows)
 
 
 def _write_csv(output_path: Path, rows: list[_DraftRow]) -> None:
@@ -652,7 +655,7 @@ def _write_csv(output_path: Path, rows: list[_DraftRow]) -> None:
     with output_path.open("w", encoding=Encoding.UTF8_SIG, newline="") as file:
         writer = csv.DictWriter(file, fieldnames=CSV_HEADERS)
         writer.writeheader()
-        writer.writerows(rows)  # type: ignore[arg-type]
+        writer.writerows(rows)
 
 
 def dump_soql_drafts(

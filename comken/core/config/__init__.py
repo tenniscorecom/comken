@@ -85,6 +85,22 @@ _is_version_logged = False
 MAPPING_SECTION_SUFFIX = "MAPPING"
 
 
+class _CaseSensitiveConfigParser(configparser.ConfigParser):
+    """キー名を小文字に潰さない ``ConfigParser``。
+
+    ``configparser`` は既定でオプション名を小文字化するため、書かれたとおりの
+    綴りを保つには ``optionxform`` を差し替える必要がある。インスタンス属性へ
+    ``str`` を代入する慣用句（``cfg.optionxform = str``）は型スタブ上の
+    method slot と噛み合わず pyright が誤検知するため、代わりにサブクラスで
+    メソッドとして正しくオーバーライドする（``_validate_upper_case`` が
+    「大文字で書かれていたか」を判定するのに使う）。
+    """
+
+    def optionxform(self, optionstr: str) -> str:
+        """オプション名を変換せずそのまま返す（既定の小文字化を無効化する）。"""
+        return optionstr
+
+
 class Config:
     """config.ini を読み込み、config.SECTION.KEY の形式でアクセスできるクラス。
 
@@ -173,13 +189,7 @@ class Config:
         # 社内 RPA 基盤は C:\ など別の場所をカレントにして
         # `python <絶対パス>\main.py` と呼ぶ。カレント基準だと C:\config.ini を探してしまう
         path = resolved_path
-        cfg = configparser.ConfigParser(interpolation=None)
-        # configparser は既定でキー名を小文字に潰すため、書かれたとおりの綴りを保つ。
-        # これがないと「大文字で書かれていたか」を判定できない（_validate_upper_case）。
-        # `str` 型を callable として代入しているが、configparser の型スタブが
-        # method slot を許容せず pyright が「No overloaded function matches」と
-        # 誤検知するため残す。実行時は `str("FOO") == "FOO"` で identity として動く。
-        cfg.optionxform = str  # type: ignore[method-assign]
+        cfg = _CaseSensitiveConfigParser(interpolation=None)
         # utf-8-sig: メモ帳等で保存すると BOM 付き UTF-8 になるため（BOM なしも読める）
         loaded = cfg.read(path, encoding="utf-8-sig")
         if not loaded:

@@ -8,7 +8,7 @@ import logging
 from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 from types import TracebackType
-from typing import Any, Self, TypeAlias
+from typing import Any, Self, TypeAlias, cast
 
 from comken.constants import Encoding
 from comken.core.files import atomic_write
@@ -199,7 +199,10 @@ class CSV:
         first_data_line = 1 if self._columns is not None else 2
         for line_number, row in enumerate(reader, start=first_data_line):
             expected = len(reader.fieldnames or ())
-            extra = row.pop(None, None)  # type: ignore[call-overload]
+            # 型スタブ上は dict[str, str] だが、列数が多い行では csv.DictReader が
+            # 実際には None キー（restkey）へ余分な値のリストを積む。cast() で
+            # その実際のありうる形を明示し、ignore で握りつぶさない。
+            extra = cast("dict[str | None, Any]", row).pop(None, None)
             if extra is not None:
                 raise CSVRowLengthError(self.path, line_number, expected, expected + len(extra))
             missing = sum(1 for value in row.values() if value is None)

@@ -25,6 +25,21 @@ StateValue = bool | int | float | str | list[str]
 __all__ = ["State"]
 
 
+class _CaseSensitiveConfigParser(configparser.ConfigParser):
+    """キー名を小文字に潰さない ``ConfigParser``。
+
+    ``configparser`` は既定でオプション名を小文字化するため、書かれたとおりの
+    綴りを保つには ``optionxform`` を差し替える必要がある。インスタンス属性へ
+    ``str`` を代入する慣用句（``parser.optionxform = str``）は型スタブ上の
+    method slot と噛み合わず pyright が誤検知するため、代わりにサブクラスで
+    メソッドとして正しくオーバーライドする。
+    """
+
+    def optionxform(self, optionstr: str) -> str:
+        """オプション名を変換せずそのまま返す（既定の小文字化を無効化する）。"""
+        return optionstr
+
+
 class State:
     """プログラムが次回実行へ持ち越す値を state.ini に保存する。
 
@@ -110,13 +125,7 @@ class State:
 
 
 def _new_parser() -> configparser.ConfigParser:
-    parser = configparser.ConfigParser(interpolation=None)
-    # configparser の型スタブは method slot への callable 代入を許容せず、
-    # pyright が「No overloaded function matches」と誤検知する。実行時は
-    # `str("FOO") == "FOO"` で identity として動く（社内 BO 環境では
-    # configparser への type stub 提供が無く、自前で書き換えられない）
-    parser.optionxform = str  # type: ignore[method-assign]
-    return parser
+    return _CaseSensitiveConfigParser(interpolation=None)
 
 
 def _is_state_value(value: object) -> bool:
