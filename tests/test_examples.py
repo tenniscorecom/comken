@@ -211,6 +211,26 @@ class TestCsvDateMove:
         assert not (output_folder / mismatching.name).exists()
 
 
+class TestSoqlReportMigration:
+    def test_downloads_and_saves_via_soql(self, tmp_path, monkeypatch):
+        """SOQLレポート移行の例が、疑似APIを通して実際にCSVを保存する。
+
+        ``site_for()`` を差し替えているのは ``run.py`` 自体（サンプルの外部
+        接続無し設計の一部）。ここでは保存先だけ ``tmp_path`` へ差し替える。
+        """
+        from examples.advanced.soql_report_migration import large_sales_report, run
+
+        monkeypatch.setattr(large_sales_report.LargeSalesReport, "FOLDER", str(tmp_path))
+        run.main()
+
+        outputs = list(tmp_path.glob("*.csv"))
+        assert len(outputs) == 1
+        assert outputs[0].name.startswith("9001_")
+        rows = outputs[0].read_text(encoding="utf-8-sig").splitlines()
+        assert len(rows) == 3  # 見出し + データ2件
+        assert "0061" in rows[1]
+
+
 class TestTableTransferDesign:
     def test_writes_invoice_with_skip_and_unmatched(self, tmp_path, monkeypatch):
         """Transfer.matched_rows / unmatched / apply_mapping を使ったサンプルが

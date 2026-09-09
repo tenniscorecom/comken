@@ -652,6 +652,11 @@ Report API（`sf.report.get()` / `download_scheduled()`）は同期・非同期�
 自動変換はしない。** レポートの列名とSOQLのフィールドAPI名は1対1に対応しないため、
 最終的な `WHERE`句・`SELECT`句は人が読んで組み立てる。以下は最短で下準備を終える手順。
 
+**手順1〜7を通しで実際に動くコードで確認したい場合は
+[examples/advanced/soql_report_migration](../examples/advanced/soql_report_migration/run.py) を参照。**
+実際のSalesforce組織には接続せず、`python -m examples.advanced.soql_report_migration.run`
+だけでそのまま実行できる（疑似APIに差し替えている。詳細はそのファイルの冒頭コメント参照）。
+
 ### 手順
 
 #### 1. URLからレポートIDを取り出す
