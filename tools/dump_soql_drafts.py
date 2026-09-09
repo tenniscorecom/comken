@@ -65,6 +65,7 @@ CSV_HEADERS: tuple[str, ...] = (
     "SOQLドラフト",
     "備考",
     "フィルタ詳細(生データ)",
+    "集計・グルーピング詳細(生データ)",
 )
 CATALOG_HEADERS: tuple[str, ...] = (
     "サイトクラス",
@@ -147,6 +148,7 @@ _DraftRow = TypedDict(
         "SOQLドラフト": str,
         "備考": str,
         "フィルタ詳細(生データ)": str,
+        "集計・グルーピング詳細(生データ)": str,
     },
 )
 
@@ -158,6 +160,7 @@ class _DraftResult:
     soql: str
     note: str
     raw_filters: str
+    raw_aggregation: str
     status: str
     catalog_rows: list[dict[str, str]]
 
@@ -272,6 +275,28 @@ def _format_raw_cross_filters(cross_filters: list[object]) -> str:
     for cross_filter in cross_filters:
         parts.append(str(cross_filter) if isinstance(cross_filter, dict) else "(不正な要素)")
     return "; ".join(parts)
+
+
+def _format_raw_aggregation(report_metadata: dict) -> str:
+    """``aggregates`` / ``groupingsDown`` / ``groupingsAcross`` を人が読める形にする。
+
+    ``SUMMARY`` / ``MATRIX`` 形式のレポートが持つ集計・グルーピング定義。
+    ``aggregates`` の集計関数エンコーディング（合計・平均等をキーのどの部分で
+    表しているか）が本物の Salesforce 組織で未検証のため、``GROUP BY`` や
+    集計関数（``SUM()`` 等）への機械変換はしない。生データをそのままダンプし、
+    ``SELECT`` 句・``GROUP BY`` 句は人が組み立てる（``crossFilters`` と同じ方針）。
+    """
+    parts: list[str] = []
+    aggregates = report_metadata.get("aggregates")
+    if aggregates:
+        parts.append(f"aggregates: {aggregates}")
+    groupings_down = report_metadata.get("groupingsDown")
+    if groupings_down:
+        parts.append(f"groupingsDown: {groupings_down}")
+    groupings_across = report_metadata.get("groupingsAcross")
+    if groupings_across:
+        parts.append(f"groupingsAcross: {groupings_across}")
+    return " | ".join(parts)
 
 
 def _format_raw_filters(report_filters: list[object]) -> str:
@@ -478,7 +503,10 @@ def _validate_report_metadata(metadata: object) -> tuple[dict, str] | tuple[None
         return None, "reportMetadataが不正な形式です"
     report_format = report_metadata.get("reportFormat", "")
     if report_format != "TABULAR":
-        return None, f"reportFormat={report_format!r}のため対象外(SUMMARY/MATRIXは個別対応)"
+        return None, (
+            f"reportFormat={report_format!r}のため対象外(SUMMARY/MATRIXは個別対応。"
+            "集計・グルーピングの生データは「集計・グルーピング詳細(生データ)」列を参照)"
+        )
     report_type = report_metadata.get("reportType")
     if not isinstance(report_type, dict):
         return None, "reportTypeが不正な形式です"
@@ -571,14 +599,10 @@ def _describe_and_build_draft(
     """
     metadata = salesforce_client.report.describe(entry.report_id)
     raw_report_metadata = metadata.get("reportMetadata", {}) if isinstance(metadata, dict) else {}
-    raw_filter_values = (
-        raw_report_metadata.get("reportFilters", [])
-        if isinstance(raw_report_metadata, dict)
-        else []
-    )
-    raw_cross_filter_values = (
-        raw_report_metadata.get("crossFilters", []) if isinstance(raw_report_metadata, dict) else []
-    )
+    if not isinstance(raw_report_metadata, dict):
+        raw_report_metadata = {}
+    raw_filter_values = raw_report_metadata.get("reportFilters", [])
+    raw_cross_filter_values = raw_report_metadata.get("crossFilters", [])
     raw_filters = _format_raw_filters(
         raw_filter_values if isinstance(raw_filter_values, list) else []
     )
@@ -591,10 +615,11 @@ def _describe_and_build_draft(
             if raw_filters
             else f"crossFilters: {raw_cross_filters}"
         )
+    raw_aggregation = _format_raw_aggregation(raw_report_metadata)
 
     report_metadata, error = _validate_report_metadata(metadata)
     if report_metadata is None:
-        return _DraftResult("", error, raw_filters, "BLOCKED", [])
+        return _DraftResult("", error, raw_filters, raw_aggregation, "BLOCKED", [])
 
     object_name = report_metadata["reportType"]["type"]
     fields_table, object_error_reason = (
@@ -634,7 +659,7 @@ def _describe_and_build_draft(
         if validation_error is not None:
             status = "INVALID"
             notes.append(validation_error)
-    return _DraftResult(soql, " / ".join(notes), raw_filters, status, catalog_rows)
+    return _DraftResult(soql, " / ".join(notes), raw_filters, raw_aggregation, status, catalog_rows)
 
 
 def _read_catalog(
@@ -795,6 +820,7 @@ def dump_soql_drafts(
                                 "SOQLドラフト": "",
                                 "備考": f"{FAILED_PREFIX}{exc}",
                                 "フィルタ詳細(生データ)": "",
+                                "集計・グルーピング詳細(生データ)": "",
                             }
                         )
                         site_written_keys.add(entry.key)
@@ -809,6 +835,7 @@ def dump_soql_drafts(
                             "SOQLドラフト": result.soql,
                             "備考": result.note,
                             "フィルタ詳細(生データ)": result.raw_filters,
+                            "集計・グルーピング詳細(生データ)": result.raw_aggregation,
                         }
                     )
                     site_written_keys.add(entry.key)
@@ -832,6 +859,7 @@ def dump_soql_drafts(
                         "SOQLドラフト": "",
                         "備考": f"{FAILED_PREFIX}{exc}",
                         "フィルタ詳細(生データ)": "",
+                        "集計・グルーピング詳細(生データ)": "",
                     }
                 )
 

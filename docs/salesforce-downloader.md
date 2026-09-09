@@ -790,7 +790,7 @@ python tools/dump_soql_drafts.py
 （既定 `soql_drafts_dump.csv`）。同じフォルダへ列対応の再利用用
 `soql_field_mapping_catalog.csv` も作る。出力される列は
 「管理番号 / 概要 / レポートID / URL / 状態 / SOQLドラフト / 備考 /
-フィルタ詳細(生データ)」。状態は次の意味を持つ。
+フィルタ詳細(生データ) / 集計・グルーピング詳細(生データ)」。状態は次の意味を持つ。
 
 | 状態 | 意味 |
 |---|---|
@@ -823,6 +823,13 @@ SOQLドラフトを作れなかったレポートの絞り込み条件を確認�
 `crossFilters` があるときは同じ列へ `crossFilters: {...}` として生の辞書を
 そのまま追記する（正確なキー構成が本物の組織で未検証のため、SOQLの
 `WHERE ... IN (SELECT ...)` への変換は機械化せず、この生データを見て人が組み立てる）。
+
+**`SUMMARY` / `MATRIX` 形式は `SELECT`/`WHERE` を組み立てず `BLOCKED` にするが、
+`aggregates` / `groupingsDown` / `groupingsAcross` の生データは
+「集計・グルーピング詳細(生データ)」列で確認できる。** `aggregates` の集計関数
+エンコーディング（合計・平均等をキーのどの部分で表しているか）が本物の組織で
+未検証のため、`GROUP BY` や `SUM()` 等への機械変換はしない。この生データを見ながら
+`SELECT`/`GROUP BY` 句を人が組み立てる。
 **あくまで下書き**であり、`READY` 以外はそのまま`SoqlReport.soql()`に貼らない。
 「備考」欄の指摘を解消し、必要ならカタログを確認済みにしてから手順5へ進む。
 `状態`が`ERROR`または`INVALID`の行が1件でもある実行は終了コード1、

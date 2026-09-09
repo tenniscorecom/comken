@@ -314,6 +314,64 @@ class TestUnsupportedReportFormat:
         assert rows[0]["SOQLドラフト"] == ""
         assert "対象外" in rows[0]["備考"]
 
+    def test_summary_format_exposes_raw_aggregation_data(self, tmp_path):
+        """SUMMARY形式でSOQLは作れなくても、aggregates/groupingsDownの生データは見える。"""
+        master = _master_with_one_report(tmp_path)
+        output = tmp_path / "out.csv"
+        describe_response = {
+            "reportMetadata": {
+                "reportFormat": "SUMMARY",
+                "aggregates": ["s!AMOUNT"],
+                "groupingsDown": [{"name": "STAGE_NAME", "sortOrder": "Asc"}],
+            }
+        }
+        site = fake_site(describe_response)
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
+            dump_soql_drafts(master, output)
+        row = _read_rows(output)[0]
+        assert row["SOQLドラフト"] == ""
+        detail = row["集計・グルーピング詳細(生データ)"]
+        assert "aggregates:" in detail
+        assert "s!AMOUNT" in detail
+        assert "groupingsDown:" in detail
+        assert "STAGE_NAME" in detail
+
+    def test_matrix_format_exposes_groupings_across(self, tmp_path):
+        """MATRIX形式はgroupingsAcross（列側のグルーピング）も生データに含む。"""
+        master = _master_with_one_report(tmp_path)
+        output = tmp_path / "out.csv"
+        describe_response = {
+            "reportMetadata": {
+                "reportFormat": "MATRIX",
+                "groupingsDown": [{"name": "STAGE_NAME"}],
+                "groupingsAcross": [{"name": "CLOSE_DATE"}],
+            }
+        }
+        site = fake_site(describe_response)
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
+            dump_soql_drafts(master, output)
+        detail = _read_rows(output)[0]["集計・グルーピング詳細(生データ)"]
+        assert "groupingsDown:" in detail
+        assert "groupingsAcross:" in detail
+        assert "CLOSE_DATE" in detail
+
+    def test_tabular_without_aggregation_leaves_column_empty(self, tmp_path):
+        """TABULARで集計・グルーピングが無ければ、その列は空のまま。"""
+        master = _master_with_one_report(tmp_path)
+        output = tmp_path / "out.csv"
+        describe_response = {
+            "reportMetadata": {
+                "reportFormat": "TABULAR",
+                "reportType": {"type": "Opportunity"},
+                "detailColumns": [],
+                "reportFilters": [],
+            }
+        }
+        site = fake_site(describe_response)
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
+            dump_soql_drafts(master, output)
+        assert _read_rows(output)[0]["集計・グルーピング詳細(生データ)"] == ""
+
 
 class TestRawFilterDetails:
     """「フィルタ詳細(生データ)」列(旧 dump_report_filters.py 相当)のテスト。"""
