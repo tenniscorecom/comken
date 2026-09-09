@@ -84,11 +84,11 @@ class TestCsvOutput:
                 "reportMetadata": {
                     "reportFilters": [
                         {
-                            "field": "CLOSE_DATE",
+                            "column": "CLOSE_DATE",
                             "operator": "greaterOrEqual",
                             "value": "2024-01-01",
                         },
-                        {"field": "STAGE", "operator": "equals", "value": "Closed Won"},
+                        {"column": "STAGE", "operator": "equals", "value": "Closed Won"},
                     ]
                 }
             }
@@ -166,7 +166,7 @@ class TestCsvOutput:
                 "reportMetadata": {
                     "reportFilters": [
                         {
-                            "field": "STAGE",
+                            "column": "STAGE",
                             "operator": "in",
                             "value": ["Prospecting", "Qualification"],
                         }
@@ -247,7 +247,7 @@ class TestFailureHandling:
             return {
                 "reportMetadata": {
                     "reportFilters": [
-                        {"field": "AMOUNT", "operator": "greaterThan", "value": "1000"}
+                        {"column": "AMOUNT", "operator": "greaterThan", "value": "1000"}
                     ]
                 }
             }
@@ -263,7 +263,7 @@ class TestFailureHandling:
             {
                 "reportMetadata": {
                     "reportFilters": [
-                        {"field": "AMOUNT", "operator": "greaterThan", "value": "1000"}
+                        {"column": "AMOUNT", "operator": "greaterThan", "value": "1000"}
                     ]
                 }
             }
@@ -327,7 +327,7 @@ class TestSiteConnectionReuse:
         site = fake_site(
             {
                 "reportMetadata": {
-                    "reportFilters": [{"field": "NAME", "operator": "contains", "value": "山田"}]
+                    "reportFilters": [{"column": "NAME", "operator": "contains", "value": "山田"}]
                 }
             }
         )
@@ -368,12 +368,12 @@ class TestSiteConnectionReuse:
         )
         output = tmp_path / "out.csv"
         site_a = fake_site(
-            {"reportMetadata": {"reportFilters": [{"field": "A", "operator": "eq", "value": "1"}]}}
+            {"reportMetadata": {"reportFilters": [{"column": "A", "operator": "eq", "value": "1"}]}}
         )
         site_a.__name__ = "FakeSiteA"
         site_a.DISPLAY_NAME = "テスト組織A"
         site_b = fake_site(
-            {"reportMetadata": {"reportFilters": [{"field": "B", "operator": "eq", "value": "2"}]}}
+            {"reportMetadata": {"reportFilters": [{"column": "B", "operator": "eq", "value": "2"}]}}
         )
         site_b.__name__ = "FakeSiteB"
         site_b.DISPLAY_NAME = "テスト組織B"

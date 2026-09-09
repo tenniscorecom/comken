@@ -641,6 +641,160 @@ if rule.is_due(datetime.now(), holidays=set()):
 
 ---
 
+## SOQLレポート（2000件超のレポートを移行する）
+
+Report API（`sf.report.get()` / `download_scheduled()`）は同期・非同期どちらも
+**2000行が上限**（[docs/salesforce.md「レポート — 2000行の壁」](salesforce.md#レポート-2000行の壁)参照）。
+3段構えの3段目「SOQLへ書き換え」に該当するレポートは、`comken/services/salesforce_downloader/soql_reports/`
+の基盤を使って個別に実装する。
+
+**このパッケージは「レポートのURLからSOQLで取れる状態にする」までの下準備ツール一式であって、
+自動変換はしない。** レポートの列名とSOQLのフィールドAPI名は1対1に対応しないため、
+最終的な `WHERE`句・`SELECT`句は人が読んで組み立てる。以下は最短で下準備を終える手順。
+
+### 手順
+
+#### 1. URLからレポートIDを取り出す
+
+管理表に貼ってあるレポートURLをそのまま渡せる（IDだけ抜き出す工程は不要）。
+
+```python
+from comken.toolbox.salesforce.report import report_id_from_url
+
+report_id = report_id_from_url(
+    "https://example.my.salesforce.com/lightning/r/Report/00O5g00000ABCDEfgh/view"
+)
+# "00O5g00000ABCDEfgh"
+```
+
+#### 2. `describe()` でレポート定義（形式・フィルタ）を確認する
+
+**レポートを実行しない**ため、2000行の上限も実行枠も消費しない。何度でも叩ける。
+
+```python
+with Solution() as sf:
+    metadata = sf.report.describe(report_id)
+
+metadata["reportMetadata"]["reportFormat"]        # "TABULAR" / "SUMMARY" / "MATRIX"
+metadata["reportMetadata"]["reportFilters"]        # 絞り込み条件（次のステップで使う）
+metadata["reportMetadata"]["reportType"]["type"]   # 主オブジェクト（例: "Opportunity"）
+```
+
+**`TABULAR`（明細）以外は個別対応が必要。** `SUMMARY`/`MATRIX` はグルーピング・集計を
+持つため、SOQLでは`GROUP BY`・集計関数（`COUNT()`/`SUM()`等）で作り直す必要があり、
+この手順の「列を1対1で移す」だけでは済まない。
+
+#### 3. `describe_fields()` で列→フィールドAPI名の対応表を作る
+
+**9割自動で埋めて、残りを可視化する道具。** 何十件もまとめて下書きしたいときは
+`describe_fields_csv()` でCSVへ落とす（詳細は
+[docs/salesforce.md「列-フィールド対応表」](salesforce.md#列-フィールド対応表describe_fields-describe_fields_csv)）。
+
+```python
+with Solution() as sf:
+    fields_table = sf.report.describe_fields(report_id)
+    # または: sf.report.describe_fields_csv(report_id, "fields.csv")
+```
+
+戻る `Table` の列: `列キー` / `表示名` / `対応フィールドAPI名` / `型` / `備考`。
+`対応フィールドAPI名` が `(不明)` または `備考` に「複数候補あり」と出た列は、
+Salesforceの設定画面（オブジェクトマネージャ）で手動確認する。
+
+#### 4. `reportFilters` をSOQLの `WHERE` 句に変換する
+
+`reportFilters` の各要素は `{"column": ..., "operator": ..., "value": ...}` の形
+（**`"field"` ではない**。過去にこのキー名を取り違えていたことがあるので注意）。
+
+`tools/dump_report_filters.py` で管理表の全件を一括CSV化できる
+（[こちらも開発用の使い捨てツール](../tools/dump_report_filters.py)。恒久的な公開APIではない）:
+
+```bash
+python tools/dump_report_filters.py --output filters.csv
+```
+
+演算子の対応関係は次のとおり（**一般的な知識に基づくもので、本物のSalesforce組織に対して
+未検証。実際の `describe()` の返り値と突き合わせて確認すること**）:
+
+| Reportの`operator` | 意味 | SOQLでの書き方 |
+|---|---|---|
+| `equals` | 等しい | `= 値` |
+| `notEqual` | 等しくない | `!= 値` |
+| `lessThan` | より小さい | `< 値` |
+| `greaterThan` | より大きい | `> 値` |
+| `lessOrEqual` | 以下 | `<= 値` |
+| `greaterOrEqual` | 以上 | `>= 値` |
+| `contains` | 含む | `LIKE '%値%'` |
+| `notContain` | 含まない | `NOT (項目 LIKE '%値%')` |
+| `startsWith` | で始まる | `LIKE '値%'` |
+| `includes` | 複数選択リストのいずれかを含む | `INCLUDES(値1, 値2, ...)`（個別対応） |
+| `excludes` | 複数選択リストのいずれも含まない | `EXCLUDES(値1, 値2, ...)`（個別対応） |
+| `within` | 地理位置の範囲内 | `DISTANCE()`関数等で個別対応（1対1変換不可） |
+
+`includes` / `excludes` / `within` はSOQL側の書き方がReport側と1対1にならないため、
+機械的に変換せず個別に読んで組み立てる。
+
+#### 5. `SoqlReport` サブクラスとして実装する
+
+`comken/services/salesforce_downloader/soql_reports/` 配下に**1レポート=1ファイル**で書く。
+
+```python
+# comken/services/salesforce_downloader/soql_reports/large_sales_report.py
+from comken.services.salesforce_downloader.soql_reports.base import SoqlReport
+
+
+class LargeSalesReport(SoqlReport):
+    KEY = "9001"                                   # 社内で決める管理番号
+    SUMMARY = "売上明細（SOQL、2000件超）"
+    URL = "https://example.my.salesforce.com"       # site_for() が組織を解決する
+    FOLDER = r"\\server\share\reports\売上明細"      # 存在しないとエラー（勝手に作らない）
+    ALLOW_EMPTY = False                              # 0件を失敗として扱うか
+
+    def soql(self) -> str:
+        return (
+            "SELECT Id, Name, Amount, CloseDate, StageName "
+            "FROM Opportunity "
+            "WHERE CloseDate >= 2024-01-01 AND StageName != 'Closed Won'"
+        )
+```
+
+Excelの「スケジュール」シートとは独立している。**いつ呼ぶかは呼び出し側
+（プロジェクトの定期実行）が決める**（この基底クラス自体はスケジュール判定を持たない）。
+
+#### 6. `SOQL_REPORTS` へ登録する
+
+**自動登録の仕組みは持たない。** `_registry.py` のタプルへ1行足す。
+
+```python
+# comken/services/salesforce_downloader/soql_reports/_registry.py
+from comken.services.salesforce_downloader.soql_reports.large_sales_report import (
+    LargeSalesReport,
+)
+
+SOQL_REPORTS: tuple[type[SoqlReport], ...] = (LargeSalesReport,)
+```
+
+#### 7. 動作確認する
+
+```python
+from comken.services.salesforce_downloader.soql_reports import download_soql_reports
+
+saved = download_soql_reports()   # SOQL_REPORTS を全部取得・保存
+```
+
+`download_scheduled()` と同じく**1件失敗しても残りは続け**、1件でも失敗したら最後に
+`SoqlDownloadFailedError` を送出する。**履歴（history.csv）への記録は対象外**（利用場面が
+見えてから別途検討する）。保存されるファイル名は
+`管理番号_概要_日付_時刻_マイクロ秒.csv`（`download_scheduled()` と同じ組み立て方）。
+
+### この手順が対象にしないもの
+
+- `SUMMARY` / `MATRIX` 形式のレポート（グルーピング・集計はSOQLの`GROUP BY`で作り直す）
+- 複合レポートタイプ（主オブジェクトが1つに定まらず `describe_fields()` の自動判定が効かない）
+- スケジュール判定（呼び出し側のプロジェクトが決める）
+- 履歴記録（現状は対象外）
+
+---
+
 ## エラー
 
 | エラー | いつ | 対処 |
@@ -704,6 +858,7 @@ comken 側のドキュメントを参照。
 | 管理表・履歴・最新ステータスの置き場所を変える | `_paths.py` の `MASTER_PATH` / `HISTORY_PATH` / `LATEST_STATUS_PATH` |
 | Salesforce の認証・API の叩き方を変える | `comken/toolbox/salesforce/`（Downloader ではない） |
 | 接続先の組織を足す | `comken/toolbox/salesforce/sites/` |
+| 2000件超のレポートをSOQLで取る | `soql_reports/`（1レポート=1ファイル＋`_registry.py`へ登録） |
 
 右列に「**全プロジェクトに効く**」と書いているのは、軽く触ってよい場所と、触ると全
 プロジェクトへ影響する場所を**見た目で区別するため**。各ファイル docstring の

@@ -102,7 +102,11 @@ def _filters_to_rows(
             # 1 行だけ出す
             field = operator = value = ""
         else:
-            field = _stringify_filter_field(report_filter.get("field"))
+            # Salesforce Reports and Dashboards REST API の reportFilters は
+            # 列を "column" キーで持つ（公式ドキュメントの例:
+            # {"column": "OPEN", "operator": "equals", "value": "True"}）。
+            # "field" ではない点に注意（過去に取り違えていた実績あり）。
+            field = _stringify_filter_field(report_filter.get("column"))
             operator = _stringify_filter_field(report_filter.get("operator"))
             value = _stringify_filter_field(report_filter.get("value"))
         rows.append(
