@@ -103,16 +103,20 @@ class CredentialsApp:
         main = ttk.Frame(self.root, padding=12)
         main.pack(fill=tk.BOTH, expand=True)
 
-        # ── 左: 登録済み一覧 ──
+        # ── 左: 登録済み一覧（サイトごとにまとめ、開閉できるツリー表示） ──
         left = ttk.LabelFrame(main, text="登録済みの認証情報", padding=8)
         left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        self.listbox = tk.Listbox(left, exportselection=False)
-        self.listbox.pack(fill=tk.BOTH, expand=True)
-        self.listbox.bind("<<ListboxSelect>>", self._on_select_existing)
+        self.tree = ttk.Treeview(left, show="tree", selectmode="browse")
+        self.tree.pack(fill=tk.BOTH, expand=True)
+        self.tree.bind("<<TreeviewSelect>>", self._on_select_existing)
 
         ttk.Label(
-            left, text="クリックすると右のサイト名・項目名が自動入力されます（登録し直し用）"
+            left,
+            text="項目をクリックすると右のサイト名・項目名が自動入力されます（登録し直し用）。"
+            "サイト名の▶で開閉できます。",
+            wraplength=280,
+            justify=tk.LEFT,
         ).pack(anchor=tk.W, pady=(4, 0))
         ttk.Label(left, text="値は表示されません（登録できたかの確認用）").pack(
             anchor=tk.W, pady=(2, 0)
@@ -173,12 +177,25 @@ class CredentialsApp:
 
     # ------------------------------------------------------------- 表示の更新
     def _refresh(self) -> None:
-        """登録済み認証情報の一覧を最新にする。"""
-        self.listbox.delete(0, tk.END)
+        """登録済み認証情報の一覧を最新にする（サイトごとにまとめ、既定は折りたたんで表示）。
+
+        件数が増えても目的の項目をすぐ見つけられるよう、フラットな一覧ではなく
+        サイト名を親、項目名を子にしたツリーにする。子の iid は
+        ``site.field``（``_DISPLAY_NAME_SEPARATOR`` 区切り）にして、
+        選択時に site/field へ分解し直さず ``tree.parent()`` と表示テキストから
+        直接取り出せるようにする。
+        """
+        self.tree.delete(*self.tree.get_children())
         pairs = list_names(self._path)
-        for pair in pairs:
-            display = f"{pair[0]}{_DISPLAY_NAME_SEPARATOR}{pair[1]}"
-            self.listbox.insert(tk.END, display)
+        grouped: dict[str, list[str]] = {}
+        for site, field in pairs:
+            grouped.setdefault(site, []).append(field)
+        for site, fields in grouped.items():
+            self.tree.insert("", tk.END, iid=site, text=f"{site}（{len(fields)}件）", open=False)
+            for field in fields:
+                self.tree.insert(
+                    site, tk.END, iid=f"{site}{_DISPLAY_NAME_SEPARATOR}{field}", text=field
+                )
         logger.debug(
             "_refresh: path=%s, 一覧件数=%d",
             self._path or CREDENTIALS_PATH,
@@ -197,17 +214,29 @@ class CredentialsApp:
 
         値は保持していないので空のまま。カーソルは値欄へ移し、
         あとは値を入力して「登録する」を押すだけで同じ（サイト, 項目）へ上書きできる。
+
+        サイト行（親）を選んだだけでは項目が定まらないため、サイト名だけ入れて
+        項目名は空のまま返す（ツリーの開閉だけしたい操作と地続きなので、
+        それ自体はエラーにしない）。
         """
-        selection = self.listbox.curselection()
+        selection = self.tree.selection()
         if not selection:
             return
-        display = self.listbox.get(selection[0])
-        # ``site.field`` 形式で表示しているので、 必ず最初の ``.`` だけ区切りとして扱う
-        site, _, field = display.partition(_DISPLAY_NAME_SEPARATOR)
+        selected_id = selection[0]
+        site = self.tree.parent(selected_id)
+        if not site:
+            # 選んだのはサイト行（親）そのもの
+            self.system_var.set(selected_id)
+            self.field_var.set("")
+            self._status(f"選択中: {selected_id} — 項目名を入力してください")
+            logger.debug("_on_select_existing: site=%s", selected_id)
+            return
+        field = self.tree.item(selected_id, "text")
         self.system_var.set(site)
         self.field_var.set(field)
         self.value_var.set("")
         self.value_entry.focus_set()
+        display = f"{site}{_DISPLAY_NAME_SEPARATOR}{field}"
         self._status(f"選択中: {display} — 値を入力して「登録する」を押すと上書きされます")
         logger.debug("_on_select_existing: display=%s", display)
 
@@ -255,14 +284,25 @@ class CredentialsApp:
         logger.debug("_on_save 完了: site=%s, field=%s, 長さ=%d 文字", site, field, length)
 
     def _on_delete(self) -> None:
-        selection = self.listbox.curselection()
+        selection = self.tree.selection()
         if not selection:
             messagebox.showinfo(
                 "削除", "左の一覧から削除する項目を選んでください。", parent=self.root
             )
             return
-        display = self.listbox.get(selection[0])
-        site, _, field = display.partition(_DISPLAY_NAME_SEPARATOR)
+        selected_id = selection[0]
+        site = self.tree.parent(selected_id)
+        if not site:
+            # サイト行（親）そのものは削除できない。 1件ずつ delete_credential() を
+            # 呼ぶ設計のため、 「サイトごと一括削除」に対応する操作が無い
+            messagebox.showinfo(
+                "削除",
+                "サイト名ではなく、削除したい項目（子）を選んでください。",
+                parent=self.root,
+            )
+            return
+        field = self.tree.item(selected_id, "text")
+        display = f"{site}{_DISPLAY_NAME_SEPARATOR}{field}"
 
         if not messagebox.askyesno(
             "削除の確認",

@@ -93,7 +93,7 @@ class TestWindow:
         try:
             app = CredentialsApp(root, path=tmp_path / "system-id.enc")
             app._refresh()  # 一覧の更新が例外なく動くこと
-            assert app.listbox.size() == 0  # 空の保存先なので1件もない
+            assert app.tree.get_children() == ()  # 空の保存先なので1件もない
         finally:
             root.destroy()
 
@@ -120,11 +120,72 @@ class TestWindow:
             app = CredentialsApp(root, path=path)
             app.value_var.set("残っていたら失敗")
 
-            app.listbox.selection_set(0)
+            app.tree.selection_set("salesforce.password")
             app._on_select_existing(tk.Event())
 
             assert app.system_var.get() == "salesforce"
             assert app.field_var.get() == "password"
             assert app.value_var.get() == ""  # 値は保持していないので空にする
+        finally:
+            root.destroy()
+
+    def test_grouping_multiple_fields_under_one_site(self, tmp_path):
+        """同じサイトの複数項目は、1つの親ノードの下にまとまる。"""
+        import tkinter as tk
+
+        from comken.toolbox.credentials.gui import CredentialsApp
+        from comken.toolbox.credentials.store import save_credentials
+
+        try:
+            root = tk.Tk()
+        except tk.TclError:
+            pytest.skip("画面のない環境では GUI を起動できない")
+
+        root.withdraw()
+        try:
+            path = tmp_path / "system-id.enc"
+            save_credentials(
+                {
+                    "salesforce": {"client_id": "a", "client_secret": "b"},
+                    "kintai": {"password": "c"},
+                },
+                path,
+            )
+            app = CredentialsApp(root, path=path)
+
+            # list_names() は (サイト名, 項目名) でソートして返すため、
+            # サイト名のアルファベット順（kintai → salesforce）で並ぶ
+            assert app.tree.get_children() == ("kintai", "salesforce")
+            assert app.tree.get_children("salesforce") == (
+                "salesforce.client_id",
+                "salesforce.client_secret",
+            )
+            assert app.tree.item("salesforce", "text") == "salesforce（2件）"
+        finally:
+            root.destroy()
+
+    def test_selecting_a_site_node_fills_only_the_site_name(self, tmp_path):
+        """サイト行（親）を選んだだけでは項目名は定まらないので、空のままにする。"""
+        import tkinter as tk
+
+        from comken.toolbox.credentials.gui import CredentialsApp
+        from comken.toolbox.credentials.store import save_credential
+
+        try:
+            root = tk.Tk()
+        except tk.TclError:
+            pytest.skip("画面のない環境では GUI を起動できない")
+
+        root.withdraw()
+        try:
+            path = tmp_path / "system-id.enc"
+            save_credential("salesforce", "password", "old-value", path)
+            app = CredentialsApp(root, path=path)
+
+            app.tree.selection_set("salesforce")
+            app._on_select_existing(tk.Event())
+
+            assert app.system_var.get() == "salesforce"
+            assert app.field_var.get() == ""
         finally:
             root.destroy()
