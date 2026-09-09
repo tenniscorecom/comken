@@ -717,13 +717,6 @@ Salesforceの設定画面（オブジェクトマネージャ）で手動確認�
 `reportFilters` の各要素は `{"column": ..., "operator": ..., "value": ...}` の形
 （**`"field"` ではない**。過去にこのキー名を取り違えていたことがあるので注意）。
 
-`tools/dump_report_filters.py` で管理表の全件を一括CSV化できる
-（[こちらも開発用の使い捨てツール](../tools/dump_report_filters.py)。恒久的な公開APIではない）:
-
-```bash
-python tools/dump_report_filters.py --output filters.csv
-```
-
 演算子の対応関係は次のとおり（**一般的な知識に基づくもので、本物のSalesforce組織に対して
 未検証。実際の `describe()` の返り値と突き合わせて確認すること**）:
 
@@ -746,8 +739,8 @@ python tools/dump_report_filters.py --output filters.csv
 機械的に変換せず個別に読んで組み立てる。
 
 **手順3・4をまとめて、管理表の全件について`SELECT`/`WHERE`のドラフトを1本のCSVへ出す
-`tools/dump_soql_drafts.py`もある**（同じく開発用の使い捨てツール、恒久的な公開APIでは
-ない）。上の演算子対応表に加えて、`reportFilters`とは別枠の`standardDateFilter`（期間
+`tools/dump_soql_drafts.py`がある**（開発用の使い捨てツール、恒久的な公開APIではない）。
+上の演算子対応表に加えて、`reportFilters`とは別枠の`standardDateFilter`（期間
 フィルタ）のうち明示的な開始日・終了日（`durationValue: "CUSTOM"`）だけを`WHERE`句へ
 変換する。相対期間（`THIS_MONTH`等）・`includes`/`excludes`/`within`・`crossFilters`は
 機械変換せず「備考」列へ回すので、そこだけ人が確認して書き足す:
@@ -758,7 +751,10 @@ python tools/dump_soql_drafts.py
 
 出力先は CLI 引数ではなく、ファイル冒頭の `OUTPUT_PATH` を直接書き換える
 （既定 `soql_drafts_dump.csv`）。出力される列は
-「管理番号 / 概要 / レポートID / URL / SOQLドラフト / 備考」。
+「管理番号 / 概要 / レポートID / URL / SOQLドラフト / 備考 / フィルタ詳細(生データ)」。
+最後の「フィルタ詳細(生データ)」は `reportFilters` を加工せずそのまま
+`列=演算子:値` の一覧にしたもので、ドラフトの検証や、`TABULAR`以外で
+SOQLドラフトを作れなかったレポートの絞り込み条件を確認するのに使う。
 **あくまで下書き**であり、そのまま`SoqlReport.soql()`に貼るのではなく、「備考」欄の
 指摘（不明列・個別対応が必要な演算子など）を解消してから手順5へ進む。
 

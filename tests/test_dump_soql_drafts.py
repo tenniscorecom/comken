@@ -1,8 +1,7 @@
 """``tools/dump_soql_drafts.py`` のテスト。
 
 Salesforce には繋がず、管理表は ``tmp_path`` 配下に作って実物を読み込ませ、
-``site_for()``（``tools.dump_report_filters`` 経由で参照される）は
-``unittest.mock.patch`` で差し替える。
+``site_for()`` は ``unittest.mock.patch`` で差し替える。
 """
 
 import csv
@@ -111,7 +110,7 @@ class TestSoqlDraftBuilding:
             ],
         )
         site = fake_site(describe_response, fields_table)
-        with patch("tools.dump_report_filters.site_for", return_value=site):
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
             written = dump_soql_drafts(master, output)
         assert written == 1
         rows = _read_rows(output)
@@ -151,7 +150,7 @@ class TestSoqlDraftBuilding:
             ],
         )
         site = fake_site(describe_response, fields_table)
-        with patch("tools.dump_report_filters.site_for", return_value=site):
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
             dump_soql_drafts(master, output)
         rows = _read_rows(output)
         assert rows[0]["SOQLドラフト"] == "SELECT Amount FROM Opportunity WHERE Amount > 1000"
@@ -180,7 +179,7 @@ class TestSoqlDraftBuilding:
             ],
         )
         site = fake_site(describe_response, fields_table)
-        with patch("tools.dump_report_filters.site_for", return_value=site):
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
             dump_soql_drafts(master, output)
         rows = _read_rows(output)
         assert rows[0]["SOQLドラフト"] == "SELECT Name FROM Opportunity"
@@ -192,7 +191,7 @@ class TestUnsupportedReportFormat:
         output = tmp_path / "out.csv"
         describe_response = {"reportMetadata": {"reportFormat": "SUMMARY"}}
         site = fake_site(describe_response)
-        with patch("tools.dump_report_filters.site_for", return_value=site):
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
             dump_soql_drafts(master, output)
         rows = _read_rows(output)
         assert rows[0]["SOQLドラフト"] == ""
@@ -203,11 +202,135 @@ class TestUnsupportedReportFormat:
         output = tmp_path / "out.csv"
         describe_response = {"reportMetadata": {"reportFormat": "MATRIX"}}
         site = fake_site(describe_response)
-        with patch("tools.dump_report_filters.site_for", return_value=site):
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
             dump_soql_drafts(master, output)
         rows = _read_rows(output)
         assert rows[0]["SOQLドラフト"] == ""
         assert "対象外" in rows[0]["備考"]
+
+
+class TestRawFilterDetails:
+    """「フィルタ詳細(生データ)」列(旧 dump_report_filters.py 相当)のテスト。"""
+
+    def test_raw_filters_are_listed_regardless_of_soql_conversion(self, tmp_path):
+        """ドラフトSOQLでは除外された演算子(includes)も、生データ列には残ること。"""
+        master = _master_with_one_report(tmp_path)
+        output = tmp_path / "out.csv"
+        describe_response = {
+            "reportMetadata": {
+                "reportFormat": "TABULAR",
+                "reportType": {"type": "Opportunity"},
+                "detailColumns": ["OPP_NAME"],
+                "reportFilters": [
+                    {"column": "STAGE", "operator": "equals", "value": "Closed Won"},
+                    {"column": "TYPE", "operator": "includes", "value": ["A", "B"]},
+                ],
+            }
+        }
+        fields_table = Table(
+            FIELDS_COLUMNS,
+            [
+                {
+                    "列キー": "OPP_NAME",
+                    "表示名": "案件名",
+                    "対応フィールドAPI名": "Name",
+                    "型": "string",
+                    "備考": "",
+                },
+                {
+                    "列キー": "STAGE",
+                    "表示名": "ステージ",
+                    "対応フィールドAPI名": "StageName",
+                    "型": "picklist",
+                    "備考": "",
+                },
+            ],
+        )
+        site = fake_site(describe_response, fields_table)
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
+            dump_soql_drafts(master, output)
+        rows = _read_rows(output)
+        raw = rows[0]["フィルタ詳細(生データ)"]
+        assert "STAGE=equals:Closed Won" in raw
+        assert "TYPE=includes:['A', 'B']" in raw
+
+    def test_raw_filters_are_present_even_for_unsupported_format(self, tmp_path):
+        """SUMMARY/MATRIXでSOQLドラフトが作れなくても、生データ列は出ること。"""
+        master = _master_with_one_report(tmp_path)
+        output = tmp_path / "out.csv"
+        describe_response = {
+            "reportMetadata": {
+                "reportFormat": "SUMMARY",
+                "reportFilters": [
+                    {"column": "STAGE", "operator": "equals", "value": "Closed Won"},
+                ],
+            }
+        }
+        site = fake_site(describe_response)
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
+            dump_soql_drafts(master, output)
+        rows = _read_rows(output)
+        assert rows[0]["SOQLドラフト"] == ""
+        assert "STAGE=equals:Closed Won" in rows[0]["フィルタ詳細(生データ)"]
+
+    def test_no_filters_produces_empty_raw_details(self, tmp_path):
+        master = _master_with_one_report(tmp_path)
+        output = tmp_path / "out.csv"
+        describe_response = {
+            "reportMetadata": {
+                "reportFormat": "TABULAR",
+                "reportType": {"type": "Opportunity"},
+                "detailColumns": ["OPP_NAME"],
+                "reportFilters": [],
+            }
+        }
+        fields_table = Table(
+            FIELDS_COLUMNS,
+            [
+                {
+                    "列キー": "OPP_NAME",
+                    "表示名": "案件名",
+                    "対応フィールドAPI名": "Name",
+                    "型": "string",
+                    "備考": "",
+                },
+            ],
+        )
+        site = fake_site(describe_response, fields_table)
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
+            dump_soql_drafts(master, output)
+        rows = _read_rows(output)
+        assert rows[0]["フィルタ詳細(生データ)"] == ""
+
+    def test_unexpected_report_filters_shape_does_not_break(self, tmp_path):
+        """``reportFilters`` が dict 以外の要素を含んでいてもスキップせず処理を続ける。"""
+        master = _master_with_one_report(tmp_path)
+        output = tmp_path / "out.csv"
+        describe_response = {
+            "reportMetadata": {
+                "reportFormat": "TABULAR",
+                "reportType": {"type": "Opportunity"},
+                "detailColumns": ["OPP_NAME"],
+                "reportFilters": ["unexpected"],
+            }
+        }
+        fields_table = Table(
+            FIELDS_COLUMNS,
+            [
+                {
+                    "列キー": "OPP_NAME",
+                    "表示名": "案件名",
+                    "対応フィールドAPI名": "Name",
+                    "型": "string",
+                    "備考": "",
+                },
+            ],
+        )
+        site = fake_site(describe_response, fields_table)
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
+            dump_soql_drafts(master, output)
+        rows = _read_rows(output)
+        assert rows[0]["フィルタ詳細(生データ)"] == "(不正な要素)"
 
 
 class TestUnresolvedFields:
@@ -242,7 +365,7 @@ class TestUnresolvedFields:
             ],
         )
         site = fake_site(describe_response, fields_table)
-        with patch("tools.dump_report_filters.site_for", return_value=site):
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
             dump_soql_drafts(master, output)
         rows = _read_rows(output)
         assert rows[0]["SOQLドラフト"] == "SELECT Name FROM Opportunity"
@@ -272,7 +395,7 @@ class TestUnresolvedFields:
             ],
         )
         site = fake_site(describe_response, fields_table)
-        with patch("tools.dump_report_filters.site_for", return_value=site):
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
             dump_soql_drafts(master, output)
         rows = _read_rows(output)
         assert rows[0]["SOQLドラフト"] == "SELECT Id FROM Opportunity"
@@ -304,7 +427,7 @@ class TestUnresolvedFields:
             ],
         )
         site = fake_site(describe_response, fields_table)
-        with patch("tools.dump_report_filters.site_for", return_value=site):
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
             dump_soql_drafts(master, output)
         rows = _read_rows(output)
         assert rows[0]["SOQLドラフト"] == "SELECT Name FROM Opportunity"
@@ -345,7 +468,7 @@ class TestManualOperators:
             ],
         )
         site = fake_site(describe_response, fields_table)
-        with patch("tools.dump_report_filters.site_for", return_value=site):
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
             dump_soql_drafts(master, output)
         rows = _read_rows(output)
         assert rows[0]["SOQLドラフト"] == "SELECT Name FROM Opportunity"
@@ -383,7 +506,7 @@ class TestStandardDateFilter:
             ],
         )
         site = fake_site(describe_response, fields_table)
-        with patch("tools.dump_report_filters.site_for", return_value=site):
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
             dump_soql_drafts(master, output)
         rows = _read_rows(output)
         assert rows[0]["SOQLドラフト"] == (
@@ -419,7 +542,7 @@ class TestStandardDateFilter:
             ],
         )
         site = fake_site(describe_response, fields_table)
-        with patch("tools.dump_report_filters.site_for", return_value=site):
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
             dump_soql_drafts(master, output)
         rows = _read_rows(output)
         assert rows[0]["SOQLドラフト"] == "SELECT Name FROM Opportunity"
@@ -452,7 +575,7 @@ class TestCrossFilters:
             ],
         )
         site = fake_site(describe_response, fields_table)
-        with patch("tools.dump_report_filters.site_for", return_value=site):
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
             dump_soql_drafts(master, output)
         rows = _read_rows(output)
         assert rows[0]["SOQLドラフト"] == "SELECT Name FROM Opportunity"
@@ -520,7 +643,7 @@ class TestFailureHandling:
         def fake_site_for(url: str) -> MagicMock:
             return site_for_results[url]
 
-        with patch("tools.dump_report_filters.site_for", side_effect=fake_site_for):
+        with patch("tools.dump_soql_drafts.site_for", side_effect=fake_site_for):
             written = dump_soql_drafts(master, output)
         assert written == 2
         by_key = {row["管理番号"]: row for row in _read_rows(output)}

@@ -1,7 +1,13 @@
 """管理表に登録された全レポートについて、SOQLへの書き換え下書きを CSV にダンプする。
 
-**このファイルは開発用**（``tools/dump_report_filters.py`` と同じ位置づけ）。
-``comken`` パッケージの ``__all__`` には載せず、恒久的な公開 API にもしない。
+**このファイルは開発用。** ``comken`` パッケージの ``__all__`` には載せず、
+恒久的な公開 API にもしない。
+
+**旧 ``tools/dump_report_filters.py`` を統合した版。** 元は「1フィルタ=1行」で
+``reportFilters`` の生データだけを出す別ツールだったが、どちらも ``describe()`` を
+呼ぶため2つ実行すると2重に叩くことになる。SOQLドラフトの組み立てに必要な
+``reportFilters`` はこちらでも取得済みなので、生データも「フィルタ詳細(生データ)」
+列としてまとめて1回の実行で出す。
 
 ``describe()`` / ``describe_fields()`` の結果から ``SELECT`` / ``WHERE`` 句のドラフトを
 機械的に組み立て、1レポート1行の CSV へ出す。**完成品ではない。** 演算子の変換は
@@ -10,7 +16,7 @@
 ``excludes`` / ``within`` / ``crossFilters`` / 相対期間の ``standardDateFilter`` など）は
 機械変換せず「備考」列へ回す。人が確認してから
 ``comken/services/salesforce_downloader/soql_reports/`` 配下の ``SoqlReport``
-サブクラスへ書き写す前提の道具（docs 手順4〜5に相当する下準備）。
+サブクラスへ書き写す前提の道具（docs 手順3〜5に相当する下準備）。
 
 使い方:
     python tools/dump_soql_drafts.py
@@ -18,9 +24,9 @@
 
 出力先は CLI 引数ではなく、このファイル冒頭の ``OUTPUT_PATH`` を直接書き換える。
 
-**300 件近いレポートを処理するため、組織ごとに接続を使い回す。** 組織のグルーピング・
-接続の使い回しは ``tools/dump_report_filters.py`` の実装をそのまま使う（同じロジックを
-二重管理しない）。
+**300 件近いレポートを処理するため、組織ごとに接続を使い回す。** 1 件ごとに
+``with site() as sf:`` を呼ぶと、認証・接続のたびに数秒を失うため、組織で
+グルーピングして 1 組織 1 接続にまとめる。
 """
 
 import argparse
@@ -32,19 +38,27 @@ from pathlib import Path
 from typing import Any, TypedDict
 
 # スクリプトとして実行すると sys.path の先頭は tools/ になるため、
-# comken / tools を import する前にリポジトリルートを探索対象へ加える。
+# comken を import する前にリポジトリルートを探索対象へ加える。
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from comken.constants import Encoding  # noqa: E402
 from comken.core.table import Table  # noqa: E402
 from comken.services.salesforce_downloader.master import ReportEntry, load_master  # noqa: E402
-from tools.dump_report_filters import _group_entries_by_site  # noqa: E402
+from comken.toolbox.salesforce.sites import site_for  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
 # 出力 CSV の見出し。すべて日本語で、利用者が Excel で開いてそのまま読める形にする
-CSV_HEADERS = ("管理番号", "概要", "レポートID", "URL", "SOQLドラフト", "備考")
+CSV_HEADERS = (
+    "管理番号",
+    "概要",
+    "レポートID",
+    "URL",
+    "SOQLドラフト",
+    "備考",
+    "フィルタ詳細(生データ)",
+)
 
 # 出力先 CSV パス。CLI 引数にはせず、直接ここを書き換えて使う
 # （使い捨てツールなので、毎回オプションを付けるより1箇所直す方が早い）。
@@ -75,15 +89,65 @@ _UNRESOLVED_FIELD = "(不明)"
 _NUMERIC_RE = re.compile(r"-?\d+(\.\d+)?")
 
 
-class _DraftRow(TypedDict):
-    """CSV 1 行分。"""
+# キーに "(" "）" を含めるため、class 構文ではなく関数形式の TypedDict を使う
+# （class 構文はキーが Python の識別子である必要があるため）。
+_DraftRow = TypedDict(
+    "_DraftRow",
+    {
+        "管理番号": str,
+        "概要": str,
+        "レポートID": str,
+        "URL": str,
+        "SOQLドラフト": str,
+        "備考": str,
+        "フィルタ詳細(生データ)": str,
+    },
+)
 
-    管理番号: str
-    概要: str
-    レポートID: str
-    URL: str
-    SOQLドラフト: str
-    備考: str
+
+def _group_entries_by_site(
+    entries: dict[str, ReportEntry],
+) -> list[tuple[type, list[ReportEntry]]]:
+    """``site_for(url)`` で組織を解決し、同じ組織のレポートをまとめる。
+
+    戻り値は「(組織クラス, その組織のレポート一覧)」のタプルのリスト。
+    組織の登録順を保つため ``defaultdict(list)`` ではなく ``dict`` を使い、
+    出現順を保持する。各値のリストも ``entries`` の挿入順を維持する。
+    """
+    grouped: dict[type, list[ReportEntry]] = {}
+    for entry in entries.values():
+        site_class = site_for(entry.url)
+        grouped.setdefault(site_class, []).append(entry)
+    return list(grouped.items())
+
+
+def _stringify_filter_field(value: object) -> str:
+    """``reportFilters`` の1フィールドを CSV セル用に文字列化する。
+
+    ``value`` にリスト・辞書が入ることがある（例: ``in`` 演算子）。``None`` は
+    空文字（「値が無い」と「未取得」を同じ空文字で表現する）。
+    """
+    return "" if value is None else str(value)
+
+
+def _format_raw_filters(report_filters: list[object]) -> str:
+    """``reportFilters`` を「列=演算子:値」の一覧文字列にする（旧ツールの生データ出力相当）。
+
+    SOQL ドラフトが「不明な列は除外」「個別対応が必要な演算子は除外」と加工済みなのに対し、
+    こちらは加工前の全件をそのまま残す（ドラフトの検証・手動での組み立てに使う）。
+    """
+    if not report_filters:
+        return ""
+    parts: list[str] = []
+    for report_filter in report_filters:
+        if not isinstance(report_filter, dict):
+            parts.append("(不正な要素)")
+            continue
+        column = _stringify_filter_field(report_filter.get("column"))
+        operator = _stringify_filter_field(report_filter.get("operator"))
+        value = _stringify_filter_field(report_filter.get("value"))
+        parts.append(f"{column}={operator}:{value}")
+    return "; ".join(parts)
 
 
 def _quote_value(value: str) -> str:
@@ -267,19 +331,29 @@ def _compose_soql_draft(
     return soql, notes
 
 
-def _describe_and_build_draft(salesforce_client: Any, entry: ReportEntry) -> tuple[str, str]:
-    """1レポート分の SOQL ドラフトを組み立てる。戻り値は ``(SOQLドラフト, 備考)``。"""
+def _describe_and_build_draft(salesforce_client: Any, entry: ReportEntry) -> tuple[str, str, str]:
+    """1レポート分の SOQL ドラフトを組み立てる。戻り値は ``(SOQLドラフト, 備考, フィルタ詳細)``。
+
+    「フィルタ詳細(生データ)」は ``reportFormat`` が ``TABULAR`` 以外で SOQL
+    ドラフトを組み立てられない場合でも、``describe()`` 自体が成功していれば
+    取り出す（生データの監査は SOQL 化の対象かどうかに関係なく使えるため）。
+    """
     metadata = salesforce_client.report.describe(entry.report_id)
+    raw_report_filters = metadata.get("reportMetadata", {}) if isinstance(metadata, dict) else {}
+    raw_filters = _format_raw_filters(
+        raw_report_filters.get("reportFilters", []) if isinstance(raw_report_filters, dict) else []
+    )
+
     report_metadata, error = _validate_report_metadata(metadata)
     if report_metadata is None:
-        return "", error
+        return "", error, raw_filters
 
     object_name = report_metadata["reportType"]["type"]
     fields_table = salesforce_client.report.describe_fields(entry.report_id)
     field_map = _field_map(fields_table)
 
     soql, notes = _compose_soql_draft(report_metadata, object_name, field_map)
-    return soql, " / ".join(notes)
+    return soql, " / ".join(notes), raw_filters
 
 
 def _write_csv(output_path: Path, rows: list[_DraftRow]) -> None:
@@ -332,30 +406,34 @@ def dump_soql_drafts(
                     if processed % PROGRESS_LOG_INTERVAL == 0 or processed == total:
                         logger.info("処理中: %d/%d 件目 (%s)", processed, total, entry.key)
                     try:
-                        soql, note = _describe_and_build_draft(salesforce_client, entry)
+                        soql, note, raw_filters = _describe_and_build_draft(
+                            salesforce_client, entry
+                        )
                     except Exception as exc:
                         # 1 件の失敗（権限・削除済み・通信断・想定外バグ）で全体を止めない
                         logger.error("SOQLドラフト作成に失敗しました: %s（%s）", entry.key, exc)
                         rows.append(
-                            _DraftRow(
-                                管理番号=entry.key,
-                                概要=entry.summary,
-                                レポートID=entry.report_id,
-                                URL=entry.url,
-                                SOQLドラフト="",
-                                備考=f"{FAILED_PREFIX}{exc}",
-                            )
+                            {
+                                "管理番号": entry.key,
+                                "概要": entry.summary,
+                                "レポートID": entry.report_id,
+                                "URL": entry.url,
+                                "SOQLドラフト": "",
+                                "備考": f"{FAILED_PREFIX}{exc}",
+                                "フィルタ詳細(生データ)": "",
+                            }
                         )
                         continue
                     rows.append(
-                        _DraftRow(
-                            管理番号=entry.key,
-                            概要=entry.summary,
-                            レポートID=entry.report_id,
-                            URL=entry.url,
-                            SOQLドラフト=soql,
-                            備考=note,
-                        )
+                        {
+                            "管理番号": entry.key,
+                            "概要": entry.summary,
+                            "レポートID": entry.report_id,
+                            "URL": entry.url,
+                            "SOQLドラフト": soql,
+                            "備考": note,
+                            "フィルタ詳細(生データ)": raw_filters,
+                        }
                     )
         except Exception as exc:
             # 1 組織丸ごと失敗した場合、その組織の登録件すべてを「取得失敗」行として残す
@@ -366,14 +444,15 @@ def dump_soql_drafts(
             )
             for entry in site_entries:
                 rows.append(
-                    _DraftRow(
-                        管理番号=entry.key,
-                        概要=entry.summary,
-                        レポートID=entry.report_id,
-                        URL=entry.url,
-                        SOQLドラフト="",
-                        備考=f"{FAILED_PREFIX}{exc}",
-                    )
+                    {
+                        "管理番号": entry.key,
+                        "概要": entry.summary,
+                        "レポートID": entry.report_id,
+                        "URL": entry.url,
+                        "SOQLドラフト": "",
+                        "備考": f"{FAILED_PREFIX}{exc}",
+                        "フィルタ詳細(生データ)": "",
+                    }
                 )
 
     _write_csv(output_path, rows)
