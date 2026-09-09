@@ -22,16 +22,15 @@ SOQL欄を空にして ``BLOCKED`` とする。人が確認してから
 
 使い方:
     python tools/dump_soql_drafts.py
-    python tools/dump_soql_drafts.py --master reports.xlsx
 
-出力先は CLI 引数ではなく、このファイル冒頭の ``OUTPUT_PATH`` を直接書き換える。
+管理表・出力先とも CLI 引数ではなく、このファイル冒頭の ``MASTER_PATH`` /
+``OUTPUT_PATH`` を直接書き換える。
 
 **300 件近いレポートを処理するため、組織ごとに接続を使い回す。** 1 件ごとに
 ``with site() as sf:`` を呼ぶと、認証・接続のたびに数秒を失うため、組織で
 グルーピングして 1 組織 1 接続にまとめる。
 """
 
-import argparse
 import csv
 import logging
 import re
@@ -76,6 +75,10 @@ CATALOG_HEADERS: tuple[str, ...] = (
     "確認状態",
     "備考",
 )
+
+# 管理表（Excel）のパス。CLI 引数にはせず、直接ここを書き換えて使う。
+# ``None`` のときは ``load_master()`` の既定（``_paths.MASTER_PATH``）を使う。
+MASTER_PATH: Path | None = None
 
 # 出力先 CSV パス。CLI 引数にはせず、直接ここを書き換えて使う。
 # 列マッピングの確認結果は同じフォルダのカタログへ蓄積し、次回以降も再利用する。
@@ -774,25 +777,11 @@ def dump_soql_drafts(
     return len(rows)
 
 
-def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--master",
-        type=Path,
-        default=None,
-        help=(
-            "管理表（Excel）のパス。省略時は ``load_master()`` の既定"
-            "（``comken.services.salesforce_downloader._paths.MASTER_PATH``）"
-        ),
-    )
-    return parser.parse_args(argv)
-
-
-def main(argv: list[str] | None = None) -> int:
-    # 出力先は CLI 引数にせず OUTPUT_PATH を直接書き換える運用にしている
-    # （社内移行作業では、毎回オプションを付けるより1箇所直す方が早い）。
-    args = _parse_args(argv)
-    dump_soql_drafts(args.master, OUTPUT_PATH)
+def main() -> int:
+    # 管理表・出力先とも CLI 引数にせず、MASTER_PATH / OUTPUT_PATH を直接
+    # 書き換える運用にしている（社内移行作業では、毎回オプションを付けるより
+    # 1箇所直す方が早い）。
+    dump_soql_drafts(MASTER_PATH, OUTPUT_PATH)
     with OUTPUT_PATH.open(encoding=Encoding.UTF8_SIG, newline="") as file:
         statuses = [row["状態"] for row in csv.DictReader(file)]
     return 1 if "ERROR" in statuses else 0
