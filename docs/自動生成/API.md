@@ -9546,6 +9546,27 @@ Raises:
         ``InvalidCredentialNameError`` はここでは送出されない）。
     CredentialDecryptionError: 既存ファイルを復号できない場合。
 
+### `prompt_new_password`
+
+```text
+def prompt_new_password(label: str='新しいパスワード') -> str:
+```
+
+#### 説明
+
+新しいパスワードをCLIから2回入力させ、一致するまで再入力を求める。
+
+入力文字は画面に表示しない（getpass）。1回目と2回目が食い違う間、
+または未入力のままの間は確定させず、何度でも聞き直す。タイプミスした
+まま確定して、サイト側とDPAPI側の値がずれる事故を防ぐため。
+
+Args:
+    label: プロンプトに表示する項目名。複数サイトを扱うスクリプトで
+           「どの値を聞かれているか」を区別したいときに使う。
+
+Returns:
+    2回とも一致した入力値。
+
 
 ## `from comken.toolbox.csv import ...`
 

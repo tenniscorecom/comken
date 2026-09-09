@@ -25,10 +25,12 @@ Windows ログオンユーザーに紐付けて暗号化して保管する。
     delete_credential  1件削除する
     list_names         登録済みの (サイト名, 項目名) の一覧（値は返さない）
     import_json        平文 JSON を読み込んで取り込む
+    prompt_new_password  新しいパスワードをCLIから2回入力させ、一致を確かめる
     CREDENTIALS_PATH   保存先のパス
 """
 
 from comken.toolbox.credentials.importer import import_json
+from comken.toolbox.credentials.prompt import prompt_new_password
 from comken.toolbox.credentials.store import (
     CREDENTIALS_PATH,
     Credentials,
@@ -48,4 +50,5 @@ __all__ = [
     "delete_credential",
     "list_names",
     "import_json",
+    "prompt_new_password",
 ]

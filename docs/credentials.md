@@ -91,6 +91,28 @@ config.ini の1行で済む（コード側に長いキー名の直書きが残�
 cred = Credentials(config.CREDENTIALS.SITE_A)
 ```
 
+### パスワードの変更
+
+ブラウザ自動化中にサイト側から強制的にパスワード変更を求められたとき、新しい
+パスワードを **CLI で受け付け → サイト側へ反映 → DPAPI 認証情報ストアへも反映**、
+の3つを一緒に行う。片方だけ更新すると次回以降ログインできなくなるため、
+同じ値を両方に使う。
+
+```python
+from comken.toolbox.credentials import prompt_new_password, save_credential
+
+new_password = prompt_new_password()                       # 画面には表示せず2回入力させ、一致を確かめる
+change_password_page.submit_new_password(new_password)     # サイト側へ反映
+save_credential("ams", "password", new_password)           # DPAPI側へ反映
+```
+
+`prompt_new_password()` は `getpass` で入力を伏せ字にし、1回目と2回目が食い違う間・
+未入力の間は確定させず何度でも聞き直す。「サイト側と DPAPI 側のパスワードがずれる」
+事故はここで防ぐ。
+
+強制的に変更画面へ飛ばされたことの検知方法（URL の変化で判定するのが基本）は
+[ブラウザ操作のパスワード期限切れ](browser.md#パスワード期限切れの変更画面へ飛ばされたとき)を参照。
+
 ### 登録したユーザー・PC でしか復号できない
 
 DPAPI は **Windows アカウント × PC** に紐付く。ファイルを他人にコピーされても中身は

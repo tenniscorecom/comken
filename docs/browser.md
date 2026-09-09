@@ -543,6 +543,40 @@ def ensure_login(self, user_id: str, password: str) -> "HomePage":
 
 ---
 
+## パスワード期限切れの変更画面へ飛ばされたとき
+
+社内システムの多くは、パスワードの有効期限が切れるとログイン直後に強制的に
+変更画面へ飛ばす。**画面遷移メソッドは遷移先の型を返す**という通常のルールの
+まま、行き先が2通りある場合は戻り値の型を `SecurePage | ChangePasswordPage`
+のように増やし、呼び出し側で `isinstance` 分岐する。
+
+```python
+result = login_page.login(username, password)
+if isinstance(result, ChangePasswordPage):
+    from comken.toolbox.credentials import prompt_new_password, save_credential
+
+    new_password = prompt_new_password()
+    secure = result.submit_new_password(new_password)   # サイト側へ反映
+    save_credential("ams", "password", new_password)    # DPAPI側へ反映
+else:
+    secure = result
+```
+
+### 検知方法
+
+強制遷移の起き方はサイトによって2パターンある。実際に F12 で確かめて選ぶ。
+
+| パターン | 見分け方 |
+|---|---|
+| **URL が変わる**（例: `/login` → `/change-password`） | `session.current_url` に変更画面の PATH が含まれるかを見る（多くのサイトはこちら） |
+| **URL は変わらず、画面内に変更フォームだけが現れる**（SPA 等） | 変更画面固有の要素（新パスワード欄など）の有無を `has_element()` で見る |
+
+雛形（`comken/toolbox/browser/sites/ams/`）は前者を既定にしている。
+`login_page.py` の `login()` と `change_password_page.py` が見本。
+DPAPI への反映まで含めた使い方は [認証情報のパスワードの変更](credentials.md#パスワードの変更) を参照。
+
+---
+
 ## ファイルをダウンロードする
 
 ダウンロードフォルダはセッションごとに分かれている。完了待ちは `download_dir.wait()`。
