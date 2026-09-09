@@ -318,6 +318,34 @@ python -m comken cred gui
 
 登録したかは `python -m comken cred list` で確認できる。
 
+> [!note] 補足（2026-09-10）
+> 項目名は `52adbdb`（DPAPI項目名に`api_`接頭辞を付ける）より前は
+> `client_id` / `client_secret` / `refresh_token`（接頭辞なし）だった。
+> その時期に登録した環境では `sf setup` が
+> `認証情報が登録されていません: {prefix}.api_client_id` で失敗し、
+> 「登録済みのキー名」に `{prefix}.client_id` が並ぶ形でつまずく。
+>
+> 値を画面に出さずに、その場で新しい項目名へ移行できる（同じ PC・同じ
+> Windows アカウントで実行する）。
+
+```python
+from comken.toolbox.credentials import list_names, load_credential, save_credential, delete_credential
+
+RENAMES = {
+    "client_id": "api_client_id",
+    "client_secret": "api_client_secret",
+    "refresh_token": "api_refresh_token",
+}
+for site, field in list_names():
+    if field in RENAMES:
+        save_credential(site, RENAMES[field], load_credential(site, field))
+        delete_credential(site, field)
+        print(f"{site}.{field} -> {site}.{RENAMES[field]}")
+```
+
+実行後は `python -m comken cred list` で `api_client_id` / `api_client_secret`
+に変わったことを確認してから、もう一度 `sf setup` を試す。
+
 ## 2. 初回認可 (authorization_url)
 
 ブラウザで ECA に「comken がこの組織にアクセスしていい」と 1 回だけ承認する。
