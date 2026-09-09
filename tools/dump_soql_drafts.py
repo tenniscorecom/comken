@@ -247,6 +247,24 @@ def _stringify_filter_field(value: object) -> str:
     return "" if value is None else str(value)
 
 
+def _format_raw_cross_filters(cross_filters: list[object]) -> str:
+    """``crossFilters`` を人が読める形の文字列にする（生データ、機械変換はしない）。
+
+    ``crossFilters``（子オブジェクトの有無で絞る "With"/"Without" 条件）は
+    ``reportFilters`` のような固定フォーマット（``{"column", "operator", "value"}``）
+    ではなく、正確なキー構成が本物の Salesforce 組織で未検証。誤った憶測で
+    ``WHERE ... IN (SELECT ...)`` 相当のSOQLを機械生成すると、一見もっともらしい
+    間違ったクエリになりかねないため、辞書の中身をそのままダンプするだけに留め、
+    最終的な半結合（IN / NOT IN サブクエリ）への組み立ては人が行う。
+    """
+    if not cross_filters:
+        return ""
+    parts: list[str] = []
+    for cross_filter in cross_filters:
+        parts.append(str(cross_filter) if isinstance(cross_filter, dict) else "(不正な要素)")
+    return "; ".join(parts)
+
+
 def _format_raw_filters(report_filters: list[object]) -> str:
     """``reportFilters`` を「列=演算子:値」の一覧文字列にする（旧ツールの生データ出力相当）。
 
@@ -496,7 +514,10 @@ def _compose_soql_draft(
     cross_filters = report_metadata.get("crossFilters")
     if cross_filters:
         if isinstance(cross_filters, list):
-            notes.append("crossFiltersあり(子オブジェクト条件、個別対応が必要)")
+            notes.append(
+                "crossFiltersあり(子オブジェクト条件、個別対応が必要。"
+                "生データは「フィルタ詳細(生データ)」列を参照)"
+            )
         else:
             notes.append("crossFiltersが想定外の形式です")
         is_complete = False
@@ -520,13 +541,27 @@ def _describe_and_build_draft(
     取り出す（生データの監査は SOQL 化の対象かどうかに関係なく使えるため）。
     """
     metadata = salesforce_client.report.describe(entry.report_id)
-    raw_report_filters = metadata.get("reportMetadata", {}) if isinstance(metadata, dict) else {}
+    raw_report_metadata = metadata.get("reportMetadata", {}) if isinstance(metadata, dict) else {}
     raw_filter_values = (
-        raw_report_filters.get("reportFilters", []) if isinstance(raw_report_filters, dict) else []
+        raw_report_metadata.get("reportFilters", [])
+        if isinstance(raw_report_metadata, dict)
+        else []
+    )
+    raw_cross_filter_values = (
+        raw_report_metadata.get("crossFilters", []) if isinstance(raw_report_metadata, dict) else []
     )
     raw_filters = _format_raw_filters(
         raw_filter_values if isinstance(raw_filter_values, list) else []
     )
+    raw_cross_filters = _format_raw_cross_filters(
+        raw_cross_filter_values if isinstance(raw_cross_filter_values, list) else []
+    )
+    if raw_cross_filters:
+        raw_filters = (
+            f"{raw_filters} | crossFilters: {raw_cross_filters}"
+            if raw_filters
+            else f"crossFilters: {raw_cross_filters}"
+        )
 
     report_metadata, error = _validate_report_metadata(metadata)
     if report_metadata is None:

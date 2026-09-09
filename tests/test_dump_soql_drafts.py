@@ -692,6 +692,68 @@ class TestCrossFilters:
         assert rows[0]["状態"] == "BLOCKED"
         assert "crossFilters" in rows[0]["備考"]
 
+    def test_cross_filters_raw_data_appears_in_filter_detail_column(self, tmp_path):
+        """crossFiltersの生データは「フィルタ詳細(生データ)」列で確認できる。"""
+        master = _master_with_one_report(tmp_path)
+        output = tmp_path / "out.csv"
+        describe_response = {
+            "reportMetadata": {
+                "reportFormat": "TABULAR",
+                "reportType": {"type": "Opportunity"},
+                "detailColumns": ["OPP_NAME"],
+                "reportFilters": [
+                    {"column": "STAGE", "operator": "equals", "value": "Closed Won"},
+                ],
+                "crossFilters": [{"relatedEntity": "OpportunityLineItem", "operator": "with"}],
+            }
+        }
+        fields_table = Table(
+            FIELDS_COLUMNS,
+            [
+                {
+                    "列キー": "OPP_NAME",
+                    "表示名": "案件名",
+                    "対応フィールドAPI名": "Name",
+                    "型": "string",
+                    "備考": "",
+                },
+                {
+                    "列キー": "STAGE",
+                    "表示名": "ステージ",
+                    "対応フィールドAPI名": "StageName",
+                    "型": "picklist",
+                    "備考": "",
+                },
+            ],
+        )
+        site = fake_site(describe_response, fields_table)
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
+            dump_soql_drafts(master, output)
+        rows = _read_rows(output)
+        detail = rows[0]["フィルタ詳細(生データ)"]
+        # reportFilters の生データと crossFilters の生データが両方残る
+        assert "STAGE=equals:Closed Won" in detail
+        assert "crossFilters:" in detail
+        assert "OpportunityLineItem" in detail
+        assert "with" in detail
+
+    def test_cross_filters_raw_data_alone_when_no_report_filters(self, tmp_path):
+        """reportFiltersが無くcrossFiltersだけのときも生データが残る。"""
+        master = _master_with_one_report(tmp_path)
+        output = tmp_path / "out.csv"
+        describe_response = {
+            "reportMetadata": {
+                "reportFormat": "TABULAR",
+                "reportFilters": [],
+                "crossFilters": [{"relatedEntity": "Contact"}],
+            }
+        }
+        site = fake_site(describe_response)
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
+            dump_soql_drafts(master, output)
+        rows = _read_rows(output)
+        assert rows[0]["フィルタ詳細(生データ)"] == "crossFilters: {'relatedEntity': 'Contact'}"
+
 
 class TestBooleanFilter:
     def test_expands_and_or_parentheses_and_not(self):
