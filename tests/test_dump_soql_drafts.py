@@ -825,6 +825,109 @@ class TestTypedLiteral:
         assert _filter_to_condition("Amount", "currency", "equals", "one") is None
 
 
+class TestSoqlValidation:
+    """``VALIDATE_SOQL`` を有効化したときの実行時検証。"""
+
+    def _ready_describe_response(self):
+        return {
+            "reportMetadata": {
+                "reportFormat": "TABULAR",
+                "reportType": {"type": "Opportunity"},
+                "detailColumns": ["OPP_NAME"],
+                "reportFilters": [],
+            }
+        }
+
+    def _ready_fields_table(self):
+        return Table(
+            FIELDS_COLUMNS,
+            [
+                {
+                    "列キー": "OPP_NAME",
+                    "表示名": "案件名",
+                    "対応フィールドAPI名": "Name",
+                    "型": "string",
+                    "備考": "",
+                },
+            ],
+        )
+
+    def test_disabled_by_default_does_not_call_query_rows(self, tmp_path):
+        """既定(VALIDATE_SOQL=False)では query_rows() を一切呼ばない(API呼び出しを増やさない)。"""
+        master = _master_with_one_report(tmp_path)
+        output = tmp_path / "out.csv"
+        site = fake_site(self._ready_describe_response(), self._ready_fields_table())
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
+            dump_soql_drafts(master, output)
+        salesforce_client = site.return_value.__enter__.return_value
+        salesforce_client.query_rows.assert_not_called()
+        assert _read_rows(output)[0]["状態"] == "READY"
+
+    def test_enabled_marks_invalid_on_query_failure(self, tmp_path, monkeypatch):
+        """有効化時、query_rows()がSalesforceRequestErrorを出したらINVALIDに落とす。"""
+        import tools.dump_soql_drafts as module
+        from comken.exceptions import SalesforceRequestError
+
+        monkeypatch.setattr(module, "VALIDATE_SOQL", True)
+        master = _master_with_one_report(tmp_path)
+        output = tmp_path / "out.csv"
+        site = fake_site(self._ready_describe_response(), self._ready_fields_table())
+        salesforce_client = site.return_value.__enter__.return_value
+        salesforce_client.query_rows.side_effect = SalesforceRequestError(
+            "GET", "/query", 400, "MALFORMED_QUERY: 項目名が不正です"
+        )
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
+            dump_soql_drafts(master, output)
+        row = _read_rows(output)[0]
+        assert row["状態"] == "INVALID"
+        assert "SOQL検証失敗" in row["備考"]
+        assert "MALFORMED_QUERY" in row["備考"]
+
+    def test_enabled_keeps_ready_on_query_success(self, tmp_path, monkeypatch):
+        """有効化時、query_rows()が成功すればREADYのまま。"""
+        import tools.dump_soql_drafts as module
+
+        monkeypatch.setattr(module, "VALIDATE_SOQL", True)
+        master = _master_with_one_report(tmp_path)
+        output = tmp_path / "out.csv"
+        site = fake_site(self._ready_describe_response(), self._ready_fields_table())
+        salesforce_client = site.return_value.__enter__.return_value
+        salesforce_client.query_rows.return_value = iter([])
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
+            dump_soql_drafts(master, output)
+        assert _read_rows(output)[0]["状態"] == "READY"
+
+    def test_enabled_appends_limit_to_soql_without_one(self, tmp_path, monkeypatch):
+        """既にLIMIT句が無いドラフトへはLIMIT 1を付けて検証する。"""
+        import tools.dump_soql_drafts as module
+
+        monkeypatch.setattr(module, "VALIDATE_SOQL", True)
+        master = _master_with_one_report(tmp_path)
+        output = tmp_path / "out.csv"
+        site = fake_site(self._ready_describe_response(), self._ready_fields_table())
+        salesforce_client = site.return_value.__enter__.return_value
+        salesforce_client.query_rows.return_value = iter([])
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
+            dump_soql_drafts(master, output)
+        called_soql = salesforce_client.query_rows.call_args[0][0]
+        assert called_soql == "SELECT Name FROM Opportunity LIMIT 1"
+
+    def test_enabled_skips_non_ready_drafts(self, tmp_path, monkeypatch):
+        """BLOCKEDなど非READYのドラフトは検証しない(不完全なSOQLを実行しない)。"""
+        import tools.dump_soql_drafts as module
+
+        monkeypatch.setattr(module, "VALIDATE_SOQL", True)
+        master = _master_with_one_report(tmp_path)
+        output = tmp_path / "out.csv"
+        describe_response = {"reportMetadata": {"reportFormat": "SUMMARY"}}
+        site = fake_site(describe_response)
+        with patch("tools.dump_soql_drafts.site_for", return_value=site):
+            dump_soql_drafts(master, output)
+        salesforce_client = site.return_value.__enter__.return_value
+        salesforce_client.query_rows.assert_not_called()
+        assert _read_rows(output)[0]["状態"] == "BLOCKED"
+
+
 class TestFailureHandling:
     def test_describe_failure_does_not_stop_others(self, tmp_path):
         master = make_master(

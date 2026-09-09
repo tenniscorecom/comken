@@ -46,6 +46,7 @@ sys.path.insert(0, str(ROOT))
 
 from comken.constants import Encoding  # noqa: E402
 from comken.core.table import Table  # noqa: E402
+from comken.exceptions import SalesforceRequestError  # noqa: E402
 from comken.services.salesforce_downloader.master import ReportEntry, load_master  # noqa: E402
 from comken.toolbox.salesforce.sites import site_for  # noqa: E402
 
@@ -83,6 +84,13 @@ MASTER_PATH: Path | None = None
 # 出力先 CSV パス。CLI 引数にはせず、直接ここを書き換えて使う。
 # 列マッピングの確認結果は同じフォルダのカタログへ蓄積し、次回以降も再利用する。
 OUTPUT_PATH = Path("soql_drafts_dump.csv")
+
+# True にすると、状態が READY になったドラフトを実際に Salesforce へ
+# ``LIMIT 1`` 付きで投げて構文・項目名を検証する（1件ごとに追加の API 呼び出しが
+# 増えるため既定は False。300件近い一括実行では API 使用量に注意）。
+# 検証に失敗した場合は状態を INVALID に落とし、エラー内容を「備考」へ残す。
+VALIDATE_SOQL = False
+
 # describe() が失敗したとき、「備考」列にこのプレフィックスを付けて失敗事実を残す
 FAILED_PREFIX = "取得失敗: "
 
@@ -110,6 +118,7 @@ _NUMERIC_RE = re.compile(r"-?\d+(\.\d+)?")
 _DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 _DATETIME_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})")
 _BOOLEAN_TOKEN_RE = re.compile(r"\d+|AND|OR|NOT|\(|\)", re.IGNORECASE)
+_LIMIT_CLAUSE_RE = re.compile(r"\bLIMIT\s+\d+\b", re.IGNORECASE)
 _NUMBER_TYPES = {"currency", "double", "int", "long", "percent"}
 _STRING_TYPES = {
     "string",
@@ -528,6 +537,26 @@ def _compose_soql_draft(
     return soql, notes, is_complete
 
 
+def _validate_soql(salesforce_client: Any, soql: str) -> str | None:
+    """``READY`` になった SOQL ドラフトを実際に Salesforce へ投げて検証する。
+
+    ``LIMIT`` 句が無ければ ``LIMIT 1`` を付けて実行し、実データの取得量を
+    最小限に抑える（このツールの目的はSOQLの構文・項目名の妥当性確認であって、
+    データの取得ではないため）。想定される失敗（構文誤り・項目名誤り・権限不足等）
+    は ``SalesforceRequestError`` としてまとめて捕捉し、エラー内容を文字列で返す。
+    それ以外の想定外の例外は呼び出し側の「1件の失敗」処理へそのまま伝播させる。
+
+    Returns:
+        検証に成功すれば ``None``、失敗すればエラー内容の文字列。
+    """
+    validation_soql = soql if _LIMIT_CLAUSE_RE.search(soql) else f"{soql} LIMIT 1"
+    try:
+        next(salesforce_client.query_rows(validation_soql), None)
+    except SalesforceRequestError as exc:
+        return f"SOQL検証失敗(HTTP {exc.status_code}): {exc.detail}"
+    return None
+
+
 def _describe_and_build_draft(
     salesforce_client: Any,
     entry: ReportEntry,
@@ -600,6 +629,11 @@ def _describe_and_build_draft(
     if not is_complete:
         status = "BLOCKED"
         soql = ""
+    if VALIDATE_SOQL and status == "READY":
+        validation_error = _validate_soql(salesforce_client, soql)
+        if validation_error is not None:
+            status = "INVALID"
+            notes.append(validation_error)
     return _DraftResult(soql, " / ".join(notes), raw_filters, status, catalog_rows)
 
 
@@ -819,7 +853,9 @@ def main() -> int:
     dump_soql_drafts(MASTER_PATH, OUTPUT_PATH)
     with OUTPUT_PATH.open(encoding=Encoding.UTF8_SIG, newline="") as file:
         statuses = [row["状態"] for row in csv.DictReader(file)]
-    return 1 if "ERROR" in statuses else 0
+    # ERROR(取得失敗)・INVALID(READYのはずが実行検証で失敗)はどちらも
+    # 実際に何かが壊れている状態なので、非0で終了させて気づけるようにする。
+    return 1 if {"ERROR", "INVALID"} & set(statuses) else 0
 
 
 if __name__ == "__main__":

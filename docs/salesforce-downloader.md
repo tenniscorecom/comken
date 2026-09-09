@@ -794,10 +794,11 @@ python tools/dump_soql_drafts.py
 
 | 状態 | 意味 |
 |---|---|
-| `READY` | 自動変換でき、備考もない |
+| `READY` | 自動変換でき、備考もない（`VALIDATE_SOQL=True`のときは実行検証にも成功） |
 | `REVIEW` | SOQLは作れたが、不明なSELECT列など人の確認が必要 |
 | `BLOCKED` | 未解決のフィルタ・演算子・論理式等があり、SOQL欄を空にした |
 | `ERROR` | Report Describeや接続に失敗した |
+| `INVALID` | `VALIDATE_SOQL=True`のとき、`READY`のはずのSOQLを実際にSalesforceへ投げたら拒否された |
 
 `reportBooleanFilter` の番号式は `AND` / `OR` / 括弧 / `NOT` を保って展開する。
 番号が未解決条件を参照する場合や式が不正な場合は `BLOCKED` になる。値は列の型を使い、
@@ -824,7 +825,15 @@ SOQLドラフトを作れなかったレポートの絞り込み条件を確認�
 `WHERE ... IN (SELECT ...)` への変換は機械化せず、この生データを見て人が組み立てる）。
 **あくまで下書き**であり、`READY` 以外はそのまま`SoqlReport.soql()`に貼らない。
 「備考」欄の指摘を解消し、必要ならカタログを確認済みにしてから手順5へ進む。
-取得失敗を1件でも含む実行は終了コード1、それ以外（`BLOCKED`を含む）は終了コード0になる。
+`状態`が`ERROR`または`INVALID`の行が1件でもある実行は終了コード1、
+それ以外（`BLOCKED`を含む）は終了コード0になる。
+
+**`VALIDATE_SOQL`（既定`False`）を`True`にすると、`READY`になったドラフトを
+実際にSalesforceへ`LIMIT 1`付きで投げて構文・項目名を検証する。**
+`describe()`はレポートを実行しないため気付けない、実フィールドAPI名の
+誤り等をここで検出できる。1件ごとに追加のAPI呼び出しが増えるため、
+300件近い一括実行では既定の`False`のまま様子を見て、絞り込んだ上で有効化する
+運用を想定している。
 
 #### 5. `SoqlReport` サブクラスとして実装する
 
