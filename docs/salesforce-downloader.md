@@ -753,10 +753,12 @@ python tools/dump_report_filters.py --output filters.csv
 機械変換せず「備考」列へ回すので、そこだけ人が確認して書き足す:
 
 ```bash
-python tools/dump_soql_drafts.py --output soql_drafts.csv
+python tools/dump_soql_drafts.py
 ```
 
-出力される列は「管理番号 / 概要 / レポートID / URL / SOQLドラフト / 備考」。
+出力先は CLI 引数ではなく、ファイル冒頭の `OUTPUT_PATH` を直接書き換える
+（既定 `soql_drafts_dump.csv`）。出力される列は
+「管理番号 / 概要 / レポートID / URL / SOQLドラフト / 備考」。
 **あくまで下書き**であり、そのまま`SoqlReport.soql()`に貼るのではなく、「備考」欄の
 指摘（不明列・個別対応が必要な演算子など）を解消してから手順5へ進む。
 

@@ -14,7 +14,9 @@
 
 使い方:
     python tools/dump_soql_drafts.py
-    python tools/dump_soql_drafts.py --master reports.xlsx --output soql_drafts.csv
+    python tools/dump_soql_drafts.py --master reports.xlsx
+
+出力先は CLI 引数ではなく、このファイル冒頭の ``OUTPUT_PATH`` を直接書き換える。
 
 **300 件近いレポートを処理するため、組織ごとに接続を使い回す。** 組織のグルーピング・
 接続の使い回しは ``tools/dump_report_filters.py`` の実装をそのまま使う（同じロジックを
@@ -44,7 +46,9 @@ logger = logging.getLogger(__name__)
 # 出力 CSV の見出し。すべて日本語で、利用者が Excel で開いてそのまま読める形にする
 CSV_HEADERS = ("管理番号", "概要", "レポートID", "URL", "SOQLドラフト", "備考")
 
-DEFAULT_OUTPUT_PATH = Path("soql_drafts_dump.csv")
+# 出力先 CSV パス。CLI 引数にはせず、直接ここを書き換えて使う
+# （使い捨てツールなので、毎回オプションを付けるより1箇所直す方が早い）。
+OUTPUT_PATH = Path("soql_drafts_dump.csv")
 # describe() が失敗したとき、「備考」列にこのプレフィックスを付けて失敗事実を残す
 FAILED_PREFIX = "取得失敗: "
 
@@ -393,18 +397,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "（``comken.services.salesforce_downloader._paths.MASTER_PATH``）"
         ),
     )
-    parser.add_argument(
-        "--output",
-        type=Path,
-        default=DEFAULT_OUTPUT_PATH,
-        help=f"出力先 CSV パス（既定 {DEFAULT_OUTPUT_PATH}）",
-    )
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
+    # 出力先は CLI 引数にせず OUTPUT_PATH を直接書き換える運用にしている
+    # （使い捨てツールなので、毎回オプションを付けるより1箇所直す方が早い）。
     args = _parse_args(argv)
-    dump_soql_drafts(args.master, args.output)
+    dump_soql_drafts(args.master, OUTPUT_PATH)
     return 0
 
 

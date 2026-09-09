@@ -530,10 +530,11 @@ class TestFailureHandling:
 
 
 class TestMasterLoading:
-    def test_default_output_path_is_used_when_not_specified(self):
-        from tools.dump_soql_drafts import DEFAULT_OUTPUT_PATH
+    def test_output_path_constant_is_the_expected_default(self):
+        """出力先はCLI引数ではなく OUTPUT_PATH を直接書き換える運用。"""
+        from tools.dump_soql_drafts import OUTPUT_PATH
 
-        assert Path("soql_drafts_dump.csv") == DEFAULT_OUTPUT_PATH
+        assert Path("soql_drafts_dump.csv") == OUTPUT_PATH
 
     def test_empty_master_produces_header_only_csv(self, tmp_path):
         master = make_master(tmp_path / "管理表.xlsx", [])
