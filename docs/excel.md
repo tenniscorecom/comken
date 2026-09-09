@@ -109,7 +109,7 @@ with Excel("重い.xlsx", engine="com", local_copy=False) as excel:
 - `engine="com"` のとき `Excel` は内部で `ExcelCOMHandler` を保持する。`__enter__` /
   `__exit__` で自動的に開き、COM プロセスは `with` 終了時に必ず閉じる。
 - `local_copy` の対応:
-  - `True` → `ExcelCOMHandler(local_copy_threshold_mb=0)` で常時ローカルコピー
+  - `True` → `ExcelCOMHandler(local_copy_threshold_mb=-1)` でサイズに関係なく常にローカルコピー
   - `False` → `ExcelCOMHandler(local_copy_threshold_mb=inf)` でコピーしない
   - `None`（未指定）→ `ExcelCOMHandler` 既定（10 MB 超でコピー）だが、**`__enter__` で
     一度だけ `UserWarning` を出す**。UNC パスでの事故を減らすため、`local_copy=True`

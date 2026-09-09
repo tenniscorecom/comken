@@ -66,7 +66,7 @@ class ExcelCOMHandler(FileBase):
         path: str | Path,
         password: str = "",
         headers: list[str] | None = None,
-        local_copy_threshold_mb: float | None = 10,
+        local_copy_threshold_mb: float = 10,
     ) -> None:
         """
         Args:
@@ -82,7 +82,6 @@ class ExcelCOMHandler(FileBase):
                 マクロ起動が UNC / 共有サーバー上のファイルを参照する場合、
                 コピー元では見つからないことがある。そのときは
                 ``local_copy_threshold_mb=0`` を指定して元の場所で開く。
-                ``None`` を指定するとサイズに関係なく常にローカルへコピーする。
         """
         super().__init__(path)
         self._original_path = self._path

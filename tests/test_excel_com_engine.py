@@ -168,13 +168,14 @@ def test_com_engine_local_copy_explicit_does_not_warn(tmp_path) -> None:
     assert not [w for w in caught if "local_copy を明示" in str(w.message)]
 
 
-def test_com_engine_local_copy_true_forces_unconditional_copy(tmp_path) -> None:
+def test_com_engine_local_copy_true_passes_negative_threshold(tmp_path) -> None:
     """``local_copy=True`` は「サイズに関係なく常にコピー」を意味するので
-    ``ExcelCOMHandler`` へ ``local_copy_threshold_mb=None`` を渡す。
+    ``ExcelCOMHandler`` へ ``local_copy_threshold_mb=-1`` を渡す。
 
-    ``copy_to_local_if_large`` は ``threshold_mb=0`` を「コピー無効」と扱う
-    ため、以前は ``local_copy=True`` でも ``0`` を渡してしまい、
-    実際には一度もローカルコピーされない逆の挙動になっていた。
+    公開APIの ``local_copy_threshold_mb: float`` を崩さず、Sheets や
+    config.ini から「数値だけ」を読み書きする契約に揃えている。
+    ``copy_to_local_if_large`` は ``threshold_mb <= 0`` のとき必ず元パスを
+    返すため、負値なら必ずコピー側に分岐する。
     """
     path = tmp_path / "book.xlsx"
     path.write_bytes(b"")
@@ -188,7 +189,7 @@ def test_com_engine_local_copy_true_forces_unconditional_copy(tmp_path) -> None:
         with Excel(path, engine="com", local_copy=True):
             pass
 
-    assert handler_cls.call_args.kwargs["local_copy_threshold_mb"] is None
+    assert handler_cls.call_args.kwargs["local_copy_threshold_mb"] == -1
 
 
 def test_openpyxl_engine_com_handler_raises(tmp_path) -> None:

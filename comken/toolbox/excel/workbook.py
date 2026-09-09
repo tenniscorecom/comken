@@ -187,13 +187,13 @@ class Excel:
             threshold,
         )
 
-    def _resolve_com_local_copy_threshold(self) -> float | None:
+    def _resolve_com_local_copy_threshold(self) -> float:
         """``engine='com'`` 用の ``local_copy_threshold_mb`` を ``_local_copy`` から算出する。"""
         if self._local_copy is True:
-            # ``copy_to_local_if_large`` は ``threshold_mb=0`` を「コピー無効」
-            # と扱うため、常にコピーさせたいここでは使えない。``None`` は
-            # サイズに関係なく常にコピーする専用の値として区別している。
-            return None
+            # 強制コピー: ``copy_to_local_if_large`` は ``threshold_mb=0`` を「コピー無効」
+            # と扱うため、別の特別値(負値)で「しきい値判定を必ずスキップする」を表す。
+            # 公開APIは ``float`` のまま、Sheets 属性表現と整合させる。
+            return -1
         if self._local_copy is False:
             # ``copy_to_local_if_large`` は ``threshold_mb=0`` を「コピー無効」と
             # 扱うので、``float('inf')`` を渡しても同じ結果になる（stat() 比較が

@@ -61,17 +61,13 @@ def project_dir() -> Path:
 
 
 @measure
-def copy_to_local_if_large(
-    path: str | Path, threshold_mb: float | None
-) -> tuple[Path, Path | None]:
+def copy_to_local_if_large(path: str | Path, threshold_mb: float) -> tuple[Path, Path | None]:
     """ファイルサイズが閾値を超えていればローカルへコピーして、そのパスを返す。
 
     NAS・ネットワークドライブ上のファイルを openpyxl や win32com が開くときに
     遅い・不安定になる事があり、社内ルールで許可されていればローカルへコピーして
     安定化させる。``threshold_mb=0`` を指定すればコピーせず元のまま返す
     （社内ルールでローカルコピーが禁止されている場合のオプトアウト）。
-    ``threshold_mb=None`` を指定するとサイズに関係なく常にコピーする
-    （UNC パス上のファイルを明示的にローカル化したい場合のオプトイン）。
 
     返り値は ``(working_path, tmp_path_or_None)``。第2要素が ``None`` 以外の
     ときは呼び出し側がローカルコピーの所有者となり、不要になったら
@@ -87,8 +83,10 @@ def copy_to_local_if_large(
     Args:
         path: 元のファイルパス。
         threshold_mb: この値（MB）を**超える**ファイルはコピーする。
-                      0 を指定するとコピーしない。``None`` を指定すると
-                      サイズに関係なく常にコピーする。
+                      0 を指定するとコピーしない。
+                      ``local_copy=True`` の強制コピー経路は内部で ``-1`` を渡す
+                      （``stat().st_size <= 負の MB`` は常に False になり、
+                      必ずコピー側に分岐する）。
 
     Returns:
         (working_path, tmp_path_or_None) のタプル。
@@ -96,11 +94,10 @@ def copy_to_local_if_large(
         コピーしなかったときは ``(元のパス, None)``。
     """
     src = Path(path)
-    if threshold_mb is not None:
-        if not threshold_mb:
-            return src, None
-        if src.stat().st_size <= threshold_mb * 1024 * 1024:
-            return src, None
+    if not threshold_mb:
+        return src, None
+    if src.stat().st_size <= threshold_mb * 1024 * 1024:
+        return src, None
     # クラス側に open できる名前（パス）が必要なので NamedTemporaryFile で
     # 名前だけ確保してすぐ閉じ、呼び出し側がパスから開ける状態にする。
     tmp = tempfile.NamedTemporaryFile(suffix=src.suffix, delete=False)  # noqa: SIM115 — withで包むと閉じた瞬間に削除されるため使わない
