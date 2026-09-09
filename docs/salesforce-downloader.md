@@ -653,9 +653,16 @@ Report API（`sf.report.get()` / `download_scheduled()`）は同期・非同期�
 最終的な `WHERE`句・`SELECT`句は人が読んで組み立てる。以下は最短で下準備を終える手順。
 
 **手順1〜7を通しで実際に動くコードで確認したい場合は
-[examples/advanced/soql_report_migration](../examples/advanced/soql_report_migration/run.py) を参照。**
-実際のSalesforce組織には接続せず、`python -m examples.advanced.soql_report_migration.run`
-だけでそのまま実行できる（疑似APIに差し替えている。詳細はそのファイルの冒頭コメント参照）。
+[examples/advanced/soql_report_migration](../examples/advanced/soql_report_migration/) を参照。**
+このフォルダには2つの実行方法がある:
+
+- **`run.py`**（動作確認用）: 実際のSalesforce組織には接続せず、
+  `python -m examples.advanced.soql_report_migration.run` だけでそのまま実行できる
+  （疑似APIに差し替えている。詳細はそのファイルの冒頭コメント参照）
+- **`production_main.py`**（本番用テンプレート）: モックを一切使わない、実際に
+  Salesforceへ接続する本番コードそのもの。事前準備（組織の登録・DPAPIへの認証情報
+  登録・保存先フォルダ）が済んでいなければ意図的に失敗する（そのファイルの冒頭
+  コメントに手順あり）。実プロジェクトへ移すときは `main.py` にリネームしてコピーする
 
 ### 手順
 

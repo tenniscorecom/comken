@@ -40,7 +40,7 @@ comken の使い方を「動くコード」で覚えるためのサンプル。
 | 5 | daily_batch_template | 日次バッチの流れ（入力を探す → 加工 → Excel 出力） | comken.run / FileFinder / Excel | config.ini + 社内ライブラリ |
 | 6 | outlook_inbox | 受信メール → CSV → 結果メールの下書き | Outlook / MailMessage / CSV | Classic Outlook |
 | 7 | copy_then_macro | 当日ファイルをコピー → Excel マクロ → 配布 | FileFinder / Excel.run_macro / copy_file | Microsoft Excel + パス設定 |
-| 8 | soql_report_migration | 2000件超のレポートをSOQLで取り直す | SoqlReport / download_soql_reports / site_for | なし（疑似APIで動く。詳細は [docs/salesforce-downloader.md](../docs/salesforce-downloader.md#soqlレポート2000件超のレポートを移行する)） |
+| 8 | soql_report_migration | 2000件超のレポートをSOQLで取り直す | SoqlReport / download_soql_reports / site_for | `run.py`はなし（疑似APIで動く）。`production_main.py`は本番用テンプレート（組織登録+DPAPI認証情報が必要）。詳細は [docs/salesforce-downloader.md](../docs/salesforce-downloader.md#soqlレポート2000件超のレポートを移行する) |
 
 ### 実行方法
 
