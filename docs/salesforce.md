@@ -568,10 +568,14 @@ graph LR
 :: 1. 登録（開いた画面で solution / api_client_id・api_client_secret を入れる。平文のファイルは作らない）
 python -m comken cred gui
 
-:: 2. つないでみる
+:: 2. 初回認可（ブラウザが自動で開く。承認するだけでrefresh_tokenまで自動保存される）
+python -m comken sf setup
+
+:: 3. つないでみる
 python -m comken sf report --report-id 00O...
 ```
 
+`sf setup` は初回だけ必要な対話的な手順（[初回認可の手順](開発/salesforce-authentication.md#2-初回認可-authorization_url)）。
 既定では `Solution.CREDENTIAL_PREFIX` の `api_client_id` / `api_client_secret` が
 自動で引かれる。`--domain` で URL を指定すれば `site_for()` が対応する組織クラスへ
 自動解決する。別の登録を試すときだけ `--prefix` にシステム名を渡す。
@@ -594,9 +598,10 @@ v1.0.0 で `check --app-id` は削除済み（ECA の `consumerId` だけ取れ�
 
 前半の設計判断を、利用側から引ける形にまとめる。背景と制約の説明は前半を正とする。
 
-1インスタンスが1組織を受け持つ。認証は OAuth 2.0 クライアントクレデンシャルフローで、
-**ユーザー名・パスワード・セキュリティトークン・リフレッシュトークンを使わない**
-（このフローはリフレッシュトークンを発行しないため、保管も更新も発生しない）。
+1インスタンスが1組織を受け持つ。認証は既定で **Authorization Code + Refresh Token Flow**
+（ユーザー名・パスワード・セキュリティトークンは使わない）。`refresh_token` は DPAPI に
+保管され、`sf setup` の初回認可のあとは自動で更新・保存される
+（ローテーションされたときの書き戻しも含む。[判断の根拠](開発/salesforce-authentication.md#2-なぜ-refresh-token-flow-を既定にするのか)）。
 
 ```python
 from comken.toolbox.salesforce.sites import Solution
@@ -615,12 +620,14 @@ My Domain は `Solution.DOMAIN_URL` に置く。`login.salesforce.com` ではこ
 
 ### 事前に管理者へ依頼すること
 
-1. RPA 専用のインテグレーションユーザーを作る（「API の有効化」権限）
-2. 接続アプリを作り、OAuth 有効化・スコープ `api`・
-   **「クライアントクレデンシャルフローを有効化」**にチェック
-3. 接続アプリのポリシーで**実行ユーザー（Run As）**に 1 のユーザーを指定
-   （未指定だと `invalid_grant` になる）
-4. Consumer Key / Consumer Secret を受け取る
+1. RPA 専用の実行ユーザーを作る（「API の有効化」権限）
+2. External Client App（ECA）を作り、「OAuth 設定」で
+   **Authorization Code + Refresh Token Flow を有効化**・スコープ `api refresh_token`
+3. 「Client Credentials Flow」は **無効化**（共存させると secret 単独漏えいの入口が残る）
+4. 「Refresh Token Rotation」を有効化（推奨）
+5. Callback URL に `http://localhost:8080/callback`（`sf setup` が自動で
+   受け取れる。詳細は [初回認可の手順](開発/salesforce-authentication.md#0-前提)）
+6. Consumer Key / Consumer Secret を受け取る
 
 ### レポートの 2000 行制限
 

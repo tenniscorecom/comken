@@ -4881,8 +4881,8 @@ Reports and Dashboards REST API そのものへのアクセスが HTTP 401 / 403
           （get / run_csv / run_async / describe）
 
 対処:
-    Salesforce 管理者に、実行ユーザー（Client Credentials では Run As ユーザー）
-    について次を確認してもらう。
+    Salesforce 管理者に、refresh_token を発行したユーザーについて
+    次を確認してもらう。
       1. Profile / Permission Set に「API Enabled」権限があるか
       2. 対象のレポート・レポートフォルダへのアクセス権があるか
       3. 組織の Edition・ライセンスが Reports and Dashboards REST API

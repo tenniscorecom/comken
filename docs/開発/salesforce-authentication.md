@@ -297,16 +297,19 @@ sequenceDiagram
 
     Eng->>CLI: cred gui で client_id / client_secret を登録
     Eng->>CLI: sf setup を実行
-    CLI-->>Eng: 認可 URL を表示
-    Eng->>Browser: URL を開いてログイン・Allow
+    CLI->>CLI: 認可URLを組み立て、ローカルサーバー(localhost)で待ち受け開始
+    CLI->>Browser: ブラウザを自動で開く
+    Eng->>Browser: ログイン・Allow
     Browser->>SF: 認可
     SF-->>Browser: code 付きで callback へリダイレクト
-    Browser-->>Eng: callback URL の code をメモ
-    Eng->>CLI: code を貼り付け
-    CLI->>SF: code を refresh_token に交換
+    Browser->>CLI: リダイレクトがローカルサーバーへ自動で届く
+    CLI->>SF: code + code_verifier(PKCE) を refresh_token に交換
     CLI->>CLI: refresh_token を DPAPI へ保存
     Eng->>CLI: sf report で動作確認
 ```
+
+自動受信に失敗した場合（ポート使用中等）・Callback URL が localhost でない場合だけ、
+リダイレクトされた URL 全体を手動で貼り付けるフローにフォールバックする（手順 2 参照）。
 
 ## 1. ECA の client_id / client_secret を DPAPI に登録
 
@@ -392,7 +395,7 @@ python -m comken sf setup --site 1
 このコマンドは 1 回実行するたびに「URL を表示 → ブラウザを開く → 自動で
 受け取り → refresh_token を保存」までをまとめて行う。途中で止めたくなったら
 `Ctrl+C` で中断すれば refresh_token は保存されない（途中で失敗したら
-`<prefix>_refresh_token` は**未登録のまま**。手順 2 からやり直す）。
+`<prefix>.api_refresh_token` は**未登録のまま**。手順 2 からやり直す）。
 
 > [!note] 自動受け取りが失敗したとき
 > ポートが他のプロセスに使われている等で自動受け取りに失敗した場合は、
@@ -410,14 +413,14 @@ python -m comken sf setup --site 1
 - 自動で開いたブラウザで、ECA を許可する組織のユーザーでログイン
 - 「Allow」（許可）をクリック
 - あとは自動。出力に
-  `refresh_token を DPAPI に保存しました（<prefix>_refresh_token）` が出れば
+  `refresh_token を DPAPI に保存しました（<prefix>.api_refresh_token）` が出れば
   完了（別途 `cred gui` で登録し直す必要はない）
 
 内部では `RefreshTokenOAuth.exchange_code(..., prefix=<prefix>)` を呼び、
 受け取った refresh_token は `from_credentials` と同じ書き戻し先
-（`<prefix>_refresh_token`）へ自動で DPAPI 保存される。書き戻し用の関数を
+（`<prefix>.api_refresh_token`）へ自動で DPAPI 保存される。書き戻し用の関数を
 毎回手書きする必要はない。別の組織で `setup` を実行すれば、それぞれの
-`<prefix>_refresh_token` に別々に保存される。
+`<prefix>.api_refresh_token` に別々に保存される。
 
 ## 4. 動作確認
 
@@ -432,7 +435,7 @@ python -m comken sf report --site 2 --report-id 00O...
 ```
 
 - 0 エラーなら OK
-- 401 が返ったら、`<prefix>_refresh_token` が **古い/期限切れ**の可能性。
+- 401 が返ったら、`<prefix>.api_refresh_token` が **古い/期限切れ**の可能性。
   手順 2 からやり直す (手順 3 が DPAPI への保存まで自動で行うので、やり直すのはここまで)
 
 ## 5. 無人実行への移行
@@ -485,8 +488,8 @@ Refresh Token Flow の **対になる形**で、初回認可が要らない代�
 
 | 症状 | 確認 |
 |---|---|
-| `INVALID_CLIENT_ID` | `python -m comken cred list` で `<prefix>_client_id` を確認。ECA の Consumer Key と一致するか |
-| `INVALID_CLIENT_SECRET` | 同様に `<prefix>_client_secret` を確認 |
+| `INVALID_CLIENT_ID` | `python -m comken cred list` で `<prefix>.api_client_id` を確認。ECA の Consumer Key と一致するか |
+| `INVALID_CLIENT_SECRET` | 同様に `<prefix>.api_client_secret` を確認 |
 | `INVALID_AUTH_CODE` | authorization_url で取得した `code` を 10 分以上放置した。手順 2 からやり直す |
 | `invalid_grant` / `invalid_request`（PKCE 関連） | `authorization_url()` が返した `AuthorizationRequest` の `code_verifier` を `exchange_code()` に渡さず、別の実行の値を使い回した。1回の `sf setup` 実行内で完結させ、手順 2 からやり直す |
 | `UNSUPPORTED_GRANT_TYPE` | ECA のフロー設定で Authorization Code + Refresh Token Flow を有効にしているか |
