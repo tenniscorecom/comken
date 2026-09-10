@@ -253,12 +253,17 @@ APIからstaged credentialsを作成できるため、新旧資格情報を切�
 
 ## 6. 管理者へ依頼する内容
 
+ECAの作成・設定はIT側の作業。comken側が行うのは、これを依頼することと
+（[初回認可の手順](#0-前提)に沿って）認可を通すことだけ。
+
 1. 組織ごとにECAを作成する。
-2. OAuthスコープは必要最小限にする。
-3. Client Credentials Flowを有効化する。
-4. API専用の実行ユーザーを指定する。
-5. 実行ユーザーへ必要なオブジェクト・項目・レポートだけを許可する。
-6. secretの共有方法とローテーション担当を決める。
+2. OAuthスコープは必要最小限にする（`api refresh_token`）。
+3. **Authorization Code + Refresh Token Flow を有効化**し、Client Credentials
+   Flow は無効化する（詳細な設定項目は [0. 前提](#0-前提) を渡す）。
+4. Callback URL に `http://localhost:8080/callback` を設定する。
+5. RPA専用の実行ユーザーを指定し、必要なオブジェクト・項目・レポートだけを許可する。
+6. Consumer Key / Consumer Secret の共有方法と、secretのローテーション担当を決める
+   （`sf rotate` で回せる。[5. secretの保管とローテーション](#5-secretの保管とローテーション)参照）。
 
 ## 関連文書
 
