@@ -2,22 +2,17 @@
 
 ブラウザ自動化でサイト側からパスワード変更を強制されたとき、CLIで新しい
 パスワードを2回入力させて一致を確かめる。ここで得た値は呼び出し側が
-サイトへ送信し、save_credential() でDPAPI認証情報ストアへも反映する
+サイトへ送信し、Credentials.save() でDPAPI認証情報ストアへも反映する
 （サイト側とDPAPI側のパスワードがずれないよう、同じ値を両方に使う）。
 
-    from comken.toolbox.credentials import prompt_new_password, save_credential
+    from comken.toolbox.credentials import prompt_new_password
 
     new_password = prompt_new_password()
     change_password_page.submit_new_password(new_password)   # サイト側へ反映
-    # site / field をリテラルで書くと、ログイン時に読む側との typo に気づけず、
-    # 別項目として保存されて次回ログインが失敗し続ける。session.name と、
-    # 画面クラス側で定義した項目名の定数（例: ChangePasswordPage.CREDENTIAL_FIELD）
-    # を参照して揃える。
-    save_credential(
-        change_password_page.session.name,
-        ChangePasswordPage.CREDENTIAL_FIELD,
-        new_password,
-    )  # DPAPI側へ反映
+    # cred は読み（cred.password）と同じインスタンス。site をここで
+    # 書き直さないことで、typo で別サイトへ保存される事故を防ぐ
+    # （画面クラス側で定義した項目名の定数と合わせて使う）。
+    cred.save(ChangePasswordPage.CREDENTIAL_FIELD, new_password)  # DPAPI側へ反映
 """
 
 # 対話的にパスワードを受け付けるモジュールのため、再入力を促すメッセージの

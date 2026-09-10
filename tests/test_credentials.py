@@ -224,6 +224,38 @@ class TestCredentialsAttributes:
         assert len(bucket) == 0
 
 
+class TestCredentialsSave:
+    """Credentials.save() — 生成時に渡した site へそのまま書く入口。
+
+    save_credential(site, field, value) を毎回呼ぶと、 site を読む側
+    （Credentials(site)）と書く側で別々に書くことになり、 typo で site が
+    ずれても気づけない。 同じインスタンスの save() を使えば、 read/write が
+    必ず同じ site を指す。
+    """
+
+    def test_save_writes_under_the_same_site_as_constructed(self, store):
+        cred = Credentials("site_a", store)
+        cred.save("password", "new-value")
+        assert load_credential("site_a", "password", store) == "new-value"
+
+    def test_save_is_visible_through_the_same_instance_afterwards(self, store):
+        """save() 直後に同じインスタンスで読むと、 キャッシュではなく新しい値が返る。"""
+        save_credential("site_a", "password", "old-value", store)
+        cred = Credentials("site_a", store)
+        assert cred.password == "old-value"  # 先にキャッシュを作らせる
+
+        cred.save("password", "new-value")
+
+        assert cred.password == "new-value"
+
+    def test_save_does_not_affect_other_sites(self, store):
+        cred_a = Credentials("site_a", store)
+        cred_a.save("password", "A")
+        assert load_credential("site_a", "password", store) == "A"
+        with pytest.raises(CredentialNotFoundError):
+            load_credential("site_b", "password", store)
+
+
 class TestDeleteAndList:
     def test_delete_removes_only_that_pair(self, store):
         save_credentials(

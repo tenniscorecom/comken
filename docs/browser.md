@@ -551,18 +551,17 @@ def ensure_login(self, user_id: str, password: str) -> "HomePage":
 のように増やし、呼び出し側で `isinstance` 分岐する。
 
 ```python
-result = login_page.login(username, password)
+# cred は読み（cred.password）にも書き（cred.save）にも同じ site を使う。
+# site 名を外と中で別々に書かない（typo で別サイトとして保存され、
+# 次回ログインが古いパスワードのまま失敗し続ける事故を防ぐ）
+cred = Credentials(config.CREDENTIALS.AMS)
+result = login_page.login(cred.username, cred.password)
 if isinstance(result, ChangePasswordPage):
-    from comken.toolbox.credentials import prompt_new_password, save_credential
+    from comken.toolbox.credentials import prompt_new_password
 
     new_password = prompt_new_password()
     secure = result.submit_new_password(new_password)   # サイト側へ反映
-    # site は login_page.session.name、field は ChangePasswordPage.CREDENTIAL_FIELD を使う。
-    # リテラルで書き直すと、読む側・書く側で typo が起きても気づけず、
-    # 別項目として保存されて次回ログインが古いパスワードのまま失敗し続ける。
-    save_credential(
-        login_page.session.name, ChangePasswordPage.CREDENTIAL_FIELD, new_password
-    )  # DPAPI側へ反映
+    cred.save(ChangePasswordPage.CREDENTIAL_FIELD, new_password)  # DPAPI側へ反映
 else:
     secure = result
 ```

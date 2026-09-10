@@ -91,6 +91,14 @@ config.ini の1行で済む（コード側に長いキー名の直書きが残�
 cred = Credentials(config.CREDENTIALS.SITE_A)
 ```
 
+登録済みの値を更新したいときは `cred.save(項目名, 新しい値)`。**`Credentials()` を
+作るときに渡した site をそのまま使う**ので、更新のたびに site 名を書き直さなくてよい
+（次項の理由も参照）。
+
+```python
+cred.save("client_secret", new_secret)
+```
+
 ### パスワードの変更
 
 ブラウザ自動化中にサイト側から強制的にパスワード変更を求められたとき、新しい
@@ -99,23 +107,22 @@ cred = Credentials(config.CREDENTIALS.SITE_A)
 同じ値を両方に使う。
 
 ```python
-from comken.toolbox.credentials import prompt_new_password, save_credential
+from comken.toolbox.credentials import Credentials, prompt_new_password
 
-new_password = prompt_new_password()                       # 画面には表示せず2回入力させ、一致を確かめる
-change_password_page.submit_new_password(new_password)     # サイト側へ反映
-save_credential(
-    change_password_page.session.name,     # "ams" のようなリテラルは書かない
-    ChangePasswordPage.CREDENTIAL_FIELD,   # "password" も同様
-    new_password,
-)  # DPAPI側へ反映
+cred = Credentials(config.CREDENTIALS.AMS)
+result = login_page.login(cred.username, cred.password)   # 読みは cred から
+if isinstance(result, ChangePasswordPage):
+    new_password = prompt_new_password()                    # 画面には表示せず2回入力させ、一致を確かめる
+    result.submit_new_password(new_password)                # サイト側へ反映
+    cred.save(ChangePasswordPage.CREDENTIAL_FIELD, new_password)  # 書きも同じ cred へ
 ```
 
 `prompt_new_password()` は `getpass` で入力を伏せ字にし、1回目と2回目が食い違う間・
-未入力の間は確定させず何度でも聞き直す。site / field をリテラルで書くと、
-ログイン時に読む側（`Credentials(site).password` 等）と書き戻す側で typo が
-あっても気づけず、別項目として保存されて次回ログインが古いパスワードのまま
-失敗し続ける。`session.name` と `ChangePasswordPage.CREDENTIAL_FIELD`
-（両方とも定義は1か所）を参照することで、この事故を防ぐ。
+未入力の間は確定させず何度でも聞き直す。site を `save_credential(site, ...)` の
+ようにその場でリテラルや別の識別子（ブラウザセッション名など）から書くと、
+読む側の `cred` が指す site とずれても気づけず、別項目として保存されて次回
+ログインが古いパスワードのまま失敗し続ける。**読み書きを同じ `cred` インスタンス
+に通す**ことで、この事故はそもそも起こり得ない設計にする。
 
 強制的に変更画面へ飛ばされたことの検知方法（URL の変化で判定するのが基本）は
 [ブラウザ操作のパスワード期限切れ](browser.md#パスワード期限切れの変更画面へ飛ばされたとき)を参照。
