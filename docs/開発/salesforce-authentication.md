@@ -443,7 +443,8 @@ with Solution() as sf:
 3. **手順 2 からやり直す**
 
 Refresh Token Rotation を有効にしている場合、**`comken` が新しい `refresh_token` を
-受け取ったタイミングで DPAPI に自動で書き戻す** (`oauth_refresh.py` の `_default_on_refresh_token()`)。
+受け取ったタイミングで DPAPI に自動で書き戻す** (`oauth_refresh.py` の
+`_on_refresh_token_via_credentials()` / `_on_refresh_token_via_prefix()`)。
 運用としてやることは増えない。
 
 ## 7. Client Credentials Flow を使う場合 (開発中だけ)

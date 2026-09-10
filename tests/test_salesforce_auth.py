@@ -137,18 +137,16 @@ class TestRefreshTokenOAuth:
         assert saved_tokens == ["REFRESH"]
         save_credential.assert_not_called()
 
-    def test_from_credentials_saves_rotated_token_to_same_prefix(self):
+    def test_from_credentials_saves_rotated_token_to_the_same_instance(self):
+        """読み込みに使った Credentials へ書き戻す（prefix を渡し直さない）。"""
         credentials = MagicMock(
             api_client_id="CID", api_client_secret="SECRET", api_refresh_token="REFRESH"
         )
-        with (
-            patch("comken.toolbox.credentials.Credentials", return_value=credentials),
-            patch("comken.toolbox.credentials.save_credential") as save_credential,
-        ):
+        with patch("comken.toolbox.credentials.Credentials", return_value=credentials):
             auth = RefreshTokenOAuth.from_credentials(DOMAIN_URL, "site_a")
             assert auth._on_refresh_token is not None
             auth._on_refresh_token("ROTATED")
-        save_credential.assert_called_once_with("site_a", "api_refresh_token", "ROTATED")
+        credentials.save.assert_called_once_with("api_refresh_token", "ROTATED")
 
 
 class TestPluggableSalesforceAuth:

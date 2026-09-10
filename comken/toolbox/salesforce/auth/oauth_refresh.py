@@ -2,14 +2,21 @@
 
 初回に認可コードから ``refresh_token`` を取り、以降は ``refresh_token`` で
 アクセストークンを更新し続ける方式。Salesforce 側で refresh_token を
-ローテーションして返してきた場合は、新トークンを ``_default_on_refresh_token``
-（``from_credentials`` / ``exchange_code(prefix=...)`` が組み立てる）で DPAPI に保存する。
+ローテーションして返してきた場合は、新トークンを DPAPI に保存する
+（``from_credentials`` は ``_on_refresh_token_via_credentials``、
+``exchange_code(prefix=...)`` は ``_on_refresh_token_via_prefix`` が組み立てる）。
 
-DPAPI の保管形式は ``{prefix: {"api_refresh_token": ...}}`` の入れ子構造なので、
-書き戻しは ``save_credential(prefix, "api_refresh_token", token)`` の2引数で行う。
+DPAPI の保管形式は ``{prefix: {"api_refresh_token": ...}}`` の入れ子構造。
 項目名に ``api_`` を付けているのは、Salesforce 以外の認証情報（ブラウザの
 ログインパスワード等）と区別するため（この項目名は Salesforce の認証情報
 専用で、他のサイトの `Credentials` が同じ項目名を使う必要はない）。
+
+``from_credentials`` は client_id 等を読むのに ``Credentials(prefix)`` を
+既に作っているため、書き戻しも**同じインスタンス**の ``Credentials.save()``
+を使う（読み書きで prefix を渡す場所が分かれると、将来どちらかだけ prefix の
+扱いを変えたときに気づけずずれる事故につながる）。一方 ``exchange_code`` は
+初回登録で読み込みが無い（まだ何も登録されていない）ため、書き込み専用に
+その場で ``Credentials(prefix)`` を作る。
 """
 
 # 定義中の RefreshTokenOAuth を戻り値の型注釈に使うため、注釈の評価を遅延する。
@@ -19,12 +26,15 @@ import logging
 import secrets
 import urllib.parse
 from collections.abc import Callable
-from typing import Self
+from typing import TYPE_CHECKING, Self
 
 import requests
 
 from comken.core.timer import measure
 from comken.exceptions import SalesforceAuthError, SalesforceConnectionError
+
+if TYPE_CHECKING:
+    from comken.toolbox.credentials import Credentials
 
 logger = logging.getLogger(__name__)
 
@@ -36,11 +46,28 @@ TOKEN_PATH = "/services/oauth2/token"
 TIMEOUT_SECONDS = 60
 
 
-def _default_on_refresh_token(prefix: str) -> Callable[[str], None]:
+def _on_refresh_token_via_credentials(credentials: Credentials) -> Callable[[str], None]:
+    """新しい refresh_token を、読み込みに使った Credentials と同じ site へ書き戻す。
+
+    ``from_credentials`` が使う。 prefix 文字列を経由して別途
+    ``Credentials(prefix)`` を作り直すのではなく、 読み込みに使った同じ
+    インスタンスの ``save()`` を使うことで、 読み書きが必ず同じ site を指す
+    ようにする。
+    """
+
+    def _save(refresh_token: str) -> None:
+        logger.debug("新しい refresh_token を DPAPI へ保存します")
+        credentials.save("api_refresh_token", refresh_token)
+        logger.debug("refresh_token を DPAPI へ保存しました")
+
+    return _save
+
+
+def _on_refresh_token_via_prefix(prefix: str) -> Callable[[str], None]:
     """新しい refresh_token を DPAPI（ ``{prefix: {"api_refresh_token": ...}}`` ）へ書き戻す。
 
-    ``from_credentials`` と ``exchange_code(prefix=...)`` の両方が使う、
-    書き戻し先の唯一の定義。
+    ``exchange_code(prefix=...)`` が使う。初回登録の時点では読み込みに使った
+    Credentials が無いため、書き込み専用にその場でインスタンスを作る。
     """
 
     def _save(refresh_token: str) -> None:
@@ -86,7 +113,7 @@ class RefreshTokenOAuth:
             credentials.api_refresh_token,
             domain_url,
             client_secret=credentials.api_client_secret,
-            on_refresh_token=_default_on_refresh_token(prefix),
+            on_refresh_token=_on_refresh_token_via_credentials(credentials),
         )
 
     @measure
@@ -166,7 +193,7 @@ class RefreshTokenOAuth:
         （その場合は ``prefix`` より優先する）。
         """
         resolved_callback = on_refresh_token or (
-            _default_on_refresh_token(prefix) if prefix else None
+            _on_refresh_token_via_prefix(prefix) if prefix else None
         )
         logger.debug(
             "認可コードを交換します: domain_url=%s redirect_uri=%s prefix=%s 保存先=%s",
