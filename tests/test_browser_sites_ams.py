@@ -80,6 +80,37 @@ class TestLoginFailure:
         assert isinstance(result, SecurePage)
 
 
+class TestLoginButtonSkip:
+    """ログインボタンが既に消えている場合（非同期で先にログインが進んだ場合）の扱い。"""
+
+    def test_skips_click_when_login_button_not_found(self, tmp_path):
+        """ボタンが見つからなければクリックを省略し、そのまま画面判定へ進む。"""
+        page = _make_login_page(tmp_path, current_url_after_login=f"{AMS.BASE_URL}/home")
+        page.click = MagicMock()
+
+        result = page.login("user01", "password")
+
+        page.click.assert_not_called()
+        assert isinstance(result, SecurePage)
+
+    def test_clicks_login_button_when_present(self, tmp_path):
+        """ボタンが見つかれば、従来どおりクリックしてから画面判定へ進む。"""
+        page = _make_login_page(tmp_path, current_url_after_login=f"{AMS.BASE_URL}/home")
+        page.click = MagicMock()
+
+        def find_element_side_effect(by, value):
+            if (by, value) == tuple(page.LOGIN_BTN):
+                return MagicMock()
+            raise NoSuchElementException()
+
+        page.session._driver.find_element.side_effect = find_element_side_effect
+
+        result = page.login("user01", "password")
+
+        page.click.assert_called_once_with(page.LOGIN_BTN)
+        assert isinstance(result, SecurePage)
+
+
 class TestChangePasswordPageSubmission:
     """submit_new_password() — サイト側の拒否を PasswordRejectedError として伝える。"""
 

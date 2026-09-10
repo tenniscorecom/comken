@@ -6,6 +6,7 @@ URL や要素セレクタは example の値のまま。利用プロジェクト�
 # TYPE_CHECKING 内の SecurePage を型注釈で使うため、注釈の評価を遅延する。
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from comken.exceptions import LoginFailedError
@@ -16,6 +17,8 @@ if TYPE_CHECKING:
     # IDE の補完・型チェック用。ランタイムでは import されない
     from comken.toolbox.browser.sites.ams.pages.change_password_page import ChangePasswordPage
     from comken.toolbox.browser.sites.ams.pages.secure_page import SecurePage
+
+logger = logging.getLogger(__name__)
 
 
 class LoginPage(AppPage):
@@ -63,6 +66,12 @@ class LoginPage(AppPage):
         単純にユーザー名・パスワードが間違っている場合（期限切れとは別の失敗）は
         ログイン画面にエラー表示が残るため、``LoginFailedError``（サイト側の
         エラー文言つき）を送出する。呼び出し側で個別に判定を書く必要はない。
+
+        サイトによっては、パスワード欄への入力完了などをきっかけに非同期で
+        ログインが進み、ログインボタンが押せる状態のまま消えている（既に
+        ログイン済み）ことがある。押せないボタンを待って ElementNotFoundError
+        になるのを避けるため、クリック前に ``has_element()`` でボタンの有無を
+        確かめ、無ければクリックせずそのまま画面判定へ進む。
         """
         from comken.toolbox.browser.sites.ams.pages.change_password_page import (
             ChangePasswordPage,
@@ -71,8 +80,15 @@ class LoginPage(AppPage):
 
         self.input(self.USERNAME, username)
         self.input(self.PASSWORD, password)
-        self.click(self.LOGIN_BTN)
-        if ChangePasswordPage.PATH in self.session.current_url:
+        if self.has_element(self.LOGIN_BTN):
+            self.click(self.LOGIN_BTN)
+        else:
+            logger.debug("ログインボタンが見当たらないためクリックを省略しました")
+
+        current_url = self.session.current_url
+        logger.debug("ログイン後の画面を判定します: current_url=%s", current_url)
+
+        if ChangePasswordPage.PATH in current_url:
             return self.to(ChangePasswordPage)
         if self.has_element(self.ERROR_MSG):
             raise LoginFailedError(self.get_error_message())
