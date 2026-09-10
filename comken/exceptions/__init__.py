@@ -51,7 +51,8 @@ ComkenError
 │   ├── CredentialNotFoundError
 │   ├── CredentialDecryptionError
 │   ├── CredentialStoreCorruptedError
-│   └── CredentialImportError
+│   ├── CredentialImportError
+│   └── PasswordRejectedError
 ├── SalesforceError
 │   ├── SalesforceAuthError
 │   ├── SalesforceConnectionError
@@ -199,6 +200,7 @@ from comken.exceptions.credential import (
     CredentialNotFoundError,
     CredentialStoreCorruptedError,
     InvalidCredentialNameError,
+    PasswordRejectedError,
 )
 from comken.exceptions.csv import (
     CSVColumnsRequiredError,
@@ -391,6 +393,7 @@ __all__ = [
     "CredentialDecryptionError",
     "CredentialStoreCorruptedError",
     "CredentialImportError",
+    "PasswordRejectedError",
     "SalesforceError",
     "SalesforceAuthError",
     "SalesforceConnectionError",

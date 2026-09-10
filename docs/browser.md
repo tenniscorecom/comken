@@ -551,20 +551,27 @@ def ensure_login(self, user_id: str, password: str) -> "HomePage":
 のように増やし、呼び出し側で `isinstance` 分岐する。
 
 ```python
-# cred は読み（cred.password）にも書き（prompt_new_password 内の cred.save()）
+# cred は読み（cred.password）にも書き（change_password 内の cred.save()）
 # にも同じ site を使う。site 名を外と中で別々に書かない（typo で別サイトと
 # して保存され、次回ログインが古いパスワードのまま失敗し続ける事故を防ぐ）
 cred = Credentials(config.CREDENTIALS.AMS)
 result = login_page.login(cred.username, cred.password)
 if isinstance(result, ChangePasswordPage):
-    from comken.toolbox.credentials import prompt_new_password
+    from comken.toolbox.credentials import change_password
 
-    # CLIで2回入力させ、一致したらその場でDPAPIへ保存まで終わる
-    new_password = prompt_new_password(cred)
-    secure = result.submit_new_password(new_password)   # サイト側へ反映
+    # CLIで2回入力→サイトへ送信→DPAPI保存まで1行で完結する。サイト側が
+    # 拒否した場合（PasswordRejectedError）は自動で聞き直す
+    secure = change_password(cred, result.submit_new_password)
 else:
     secure = result
 ```
+
+サイト側が新しいパスワードを拒否する（記号が足りない・文字数が足りない等）
+ことがある。その再試行ループを利用プロジェクト側に書かせないため、
+`submit_new_password()`（ここでは `ChangePasswordPage` のメソッド）は
+拒否を検知したら `PasswordRejectedError` を送出する実装にしておく。
+`change_password()` がそれを受け取って自動でCLIへ聞き直す
+（既定3回まで。再試行させたくなければ `max_attempts=1` を渡す）。
 
 ### 検知方法
 

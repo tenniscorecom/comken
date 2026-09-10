@@ -112,21 +112,28 @@ cred.save()
 同じ値を両方に使う。
 
 ```python
-from comken.toolbox.credentials import Credentials, prompt_new_password
+from comken.toolbox.credentials import Credentials, change_password
 
 cred = Credentials(config.CREDENTIALS.AMS)
 result = login_page.login(cred.username, cred.password)   # 読みは cred から
 if isinstance(result, ChangePasswordPage):
-    # CLIで2回入力させ、一致したらその場でDPAPIへの保存まで終わる
-    new_password = prompt_new_password(cred)
-    result.submit_new_password(new_password)                # サイト側へ反映
+    # CLIで2回入力→サイトへ送信→DPAPI保存まで1行で完結する
+    secure = change_password(cred, result.submit_new_password)
 ```
 
-`prompt_new_password(cred)` は `msvcrt` で入力を伏せ字にし、1回目と2回目が
-食い違う間・未入力の間は確定させず何度でも聞き直す。確定したら渡した `cred`
-（＝ログイン時に読んだのと同じインスタンス）へ代入して `save()` まで内部で行う
-ので、呼び出し側で site 名や項目名を書き直す必要がない（typo で別サイト・
-別項目として保存されて次回ログインが失敗し続ける事故を防ぐ）。
+`change_password(cred, submit)` は `msvcrt` で入力を伏せ字にし、1回目と2回目が
+食い違う間・未入力の間は確定させず何度でも聞き直す。確定した値を `submit`
+（ここでは `result.submit_new_password`）でサイトへ送信し、**成功して初めて**
+渡した `cred`（＝ログイン時に読んだのと同じインスタンス）へ代入して `save()`
+まで行う（サイトが拒否した値を DPAPI に残さないため）。site 名や項目名を
+呼び出し側で書き直す必要もない（typo で別サイト・別項目として保存されて
+次回ログインが失敗し続ける事故を防ぐ）。
+
+サイト側が新しいパスワードを拒否する（記号が足りない・文字数が足りない等）
+ことがある。`submit` が `PasswordRejectedError` を送出する実装にしておけば、
+`change_password()` が自動でCLIへ聞き直す（既定3回まで。再試行させたくなければ
+`max_attempts=1`）。単に受け付けて保存するだけでよく、サイトへの送信も
+拒否時の再試行も不要なら `prompt_new_password(cred)` を直接使う。
 
 無人実行（RPAのスケジュール実行等）で誤って走らせても入力待ちのままハングし
 続けないよう、既定 300 秒（`timeout_seconds` で変更可）で `TimeoutError` になる。

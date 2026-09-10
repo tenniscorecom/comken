@@ -10,6 +10,17 @@
     new_password = prompt_new_password(cred)                 # CLI受付→DPAPI保存までここで完結
     change_password_page.submit_new_password(new_password)   # サイト側へは別途反映
 
+サイト側が新しいパスワードを拒否しうる（記号が足りない等）場合は、
+呼び出し側で再試行ループを書かせずに済む ``change_password()`` を使う。
+サイト固有の画面クラスが ``PasswordRejectedError`` を送出するようにしておけば、
+拒否のたびに自動でCLIへ戻って聞き直す（再試行させたくなければ
+``max_attempts=1`` を指定する）。
+
+    from comken.toolbox.credentials import Credentials, change_password
+
+    cred = Credentials(config.CREDENTIALS.AMS)
+    secure = change_password(cred, change_password_page.submit_new_password)
+
 無人実行（RPAのスケジュール実行等）では対話入力できないため、
 timeout_seconds を過ぎても入力が確定しなければ TimeoutError で失敗する
 （入力待ちのままハングし続けない）。
@@ -23,12 +34,18 @@ timeout_seconds を過ぎても入力が確定しなければ TimeoutError で�
 import logging
 import msvcrt
 import time
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from typing import TYPE_CHECKING, TypeVar
+
+from comken.exceptions import PasswordRejectedError
 
 if TYPE_CHECKING:
     from comken.toolbox.credentials.store import Credentials
 
 logger = logging.getLogger(__name__)
+
+# submit() の戻り値（change_password() が呼び出し側へそのまま返す型）
+_T = TypeVar("_T")
 
 # Credentials に保存する項目名の既定値。パスワード以外を受け付けたいときだけ
 # 呼び出し側で field を指定する。
@@ -36,6 +53,8 @@ DEFAULT_PASSWORD_FIELD = "password"
 # 入力待ちの上限秒数の既定値。無人実行でハングし続けないための上限で、
 # 人が使う分には十分長い値にしてある。
 DEFAULT_TIMEOUT_SECONDS = 300.0
+# change_password() がサイト側の拒否に対して自動で聞き直す既定の最大回数。
+DEFAULT_MAX_ATTEMPTS = 3
 
 _ENTER_CHARS = ("\r", "\n")
 _BACKSPACE = "\x08"
@@ -80,6 +99,72 @@ def prompt_new_password(
     cred.save()
     logger.debug("新しい値を Credentials へ保存しました: field=%s", field)
     return new_value
+
+
+def change_password(
+    cred: "Credentials",
+    submit: Callable[[str], _T],
+    field: str = DEFAULT_PASSWORD_FIELD,
+    *,
+    label: str = "新しいパスワード",
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    max_attempts: int = DEFAULT_MAX_ATTEMPTS,
+) -> _T:
+    """新しいパスワードをCLIから受け付け、``submit()`` でサイトへ送信する。
+
+    サイト側が拒否した場合（記号が足りない・文字数が足りない等）は、
+    自動でCLIへ戻って聞き直す。呼び出し側のプロジェクトで再試行ループを
+    書く必要はない。
+
+    ``submit`` はサイト固有の画面クラスのメソッド（例:
+    ``change_password_page.submit_new_password``）を渡す。サイト側が
+    拒否したことを検知したら ``PasswordRejectedError`` を送出する実装に
+    しておくこと（検知の方法はサイトごとに違うため、ここでは決められない
+    ――画面クラス側の責務にする）。
+
+    再試行させたくない場合は ``max_attempts=1`` を指定する（1回失敗したら
+    ``PasswordRejectedError`` をそのまま呼び出し側へ返す）。
+
+    DPAPI への保存（``cred.save()``）は ``submit()`` が成功した後にだけ行う。
+    サイト側に拒否された値を DPAPI へ残さないため（読む側とサイト側の
+    パスワードがずれる事故を防ぐ）。
+
+    Args:
+        cred: 保存先。``Credentials(config.CREDENTIALS.<サイト>)`` で作ったもの。
+        submit: 新しいパスワードを受け取ってサイトへ送信する関数。サイトが
+            拒否した場合は ``PasswordRejectedError`` を送出すること。
+        field: 保存する項目名。既定は ``"password"``。
+        label: プロンプトに表示する項目名。
+        timeout_seconds: 1回あたりの入力待ちの上限秒数（聞き直すたびにリセットされる）。
+        max_attempts: 最大試行回数。既定3回。1にすると再試行しない。
+
+    Returns:
+        ``submit()`` の戻り値（通常はサイト側の遷移先の画面インスタンス）。
+
+    Raises:
+        ValueError: ``max_attempts`` が1未満の場合。
+        TimeoutError: 入力待ちがタイムアウトした場合。
+        PasswordRejectedError: ``max_attempts`` 回すべてサイト側に拒否された場合。
+    """
+    if max_attempts < 1:
+        raise ValueError(f"max_attempts は1以上にしてください: {max_attempts}")
+    attempt = 1
+    while True:
+        new_value = _prompt_confirmed(label, timeout_seconds)
+        try:
+            result = submit(new_value)
+        except PasswordRejectedError as e:
+            logger.debug("サイト側がパスワードを拒否しました: attempt=%d/%d", attempt, max_attempts)
+            if attempt >= max_attempts:
+                raise
+            print(e)
+            print(f"もう一度入力してください（{attempt}/{max_attempts}回目が拒否されました）。")
+            attempt += 1
+            continue
+        setattr(cred, field, new_value)
+        cred.save()
+        logger.debug("新しい値をサイト・Credentials の両方へ反映しました: field=%s", field)
+        return result
 
 
 def _prompt_confirmed(label: str, timeout_seconds: float) -> str:

@@ -6,12 +6,12 @@
 連携まで含めて確かめる。
 """
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from comken.exceptions import CredentialNotFoundError
-from comken.toolbox.credentials.prompt import prompt_new_password
+from comken.exceptions import CredentialNotFoundError, PasswordRejectedError
+from comken.toolbox.credentials.prompt import change_password, prompt_new_password
 from comken.toolbox.credentials.store import Credentials, load_credential
 
 _READ_MASKED = "comken.toolbox.credentials.prompt._read_masked"
@@ -76,3 +76,70 @@ class TestPromptNewPassword:
             prompt_new_password(cred)
         with pytest.raises(CredentialNotFoundError):
             load_credential("ams", "password", store)
+
+
+class TestChangePassword:
+    """change_password() — 拒否されたら自動で聞き直し、成功したときだけ保存する。"""
+
+    def test_saves_and_returns_submit_result_on_first_success(self, store):
+        cred = Credentials("ams", store)
+        submit = MagicMock(return_value="SECURE_PAGE")
+        with patch(_READ_MASKED, side_effect=["new-pass", "new-pass"]):
+            result = change_password(cred, submit)
+        assert result == "SECURE_PAGE"
+        submit.assert_called_once_with("new-pass")
+        assert load_credential("ams", "password", store) == "new-pass"
+
+    def test_retries_and_saves_the_accepted_value_not_the_rejected_one(self, store, capsys):
+        cred = Credentials("ams", store)
+        submit = MagicMock(side_effect=[PasswordRejectedError("記号が必要です"), "SECURE_PAGE"])
+        with patch(
+            _READ_MASKED,
+            side_effect=["rejected", "rejected", "accepted", "accepted"],
+        ):
+            result = change_password(cred, submit)
+        assert result == "SECURE_PAGE"
+        assert submit.call_args_list[0].args == ("rejected",)
+        assert submit.call_args_list[1].args == ("accepted",)
+        # 拒否された値ではなく、受理された値だけが保存される
+        assert load_credential("ams", "password", store) == "accepted"
+        out = capsys.readouterr().out
+        assert "記号が必要です" in out
+        assert "1/3回目が拒否されました" in out
+
+    def test_raises_and_saves_nothing_after_max_attempts(self, store):
+        cred = Credentials("ams", store)
+        submit = MagicMock(side_effect=PasswordRejectedError("文字数が足りません"))
+        with (
+            patch(
+                _READ_MASKED,
+                side_effect=["a", "a", "b", "b", "c", "c"],
+            ),
+            pytest.raises(PasswordRejectedError),
+        ):
+            change_password(cred, submit, max_attempts=3)
+        assert submit.call_count == 3
+        with pytest.raises(CredentialNotFoundError):
+            load_credential("ams", "password", store)
+
+    def test_max_attempts_one_does_not_retry(self, store):
+        cred = Credentials("ams", store)
+        submit = MagicMock(side_effect=PasswordRejectedError("拒否"))
+        with (
+            patch(_READ_MASKED, side_effect=["a", "a"]),
+            pytest.raises(PasswordRejectedError),
+        ):
+            change_password(cred, submit, max_attempts=1)
+        submit.assert_called_once()
+
+    def test_max_attempts_below_one_raises_value_error(self, store):
+        cred = Credentials("ams", store)
+        with pytest.raises(ValueError, match="max_attempts"):
+            change_password(cred, MagicMock(), max_attempts=0)
+
+    def test_saves_under_the_given_field(self, store):
+        cred = Credentials("ams", store)
+        submit = MagicMock(return_value="SECURE_PAGE")
+        with patch(_READ_MASKED, side_effect=["new-pass", "new-pass"]):
+            change_password(cred, submit, "pin")
+        assert load_credential("ams", "pin", store) == "new-pass"

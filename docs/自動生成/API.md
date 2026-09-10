@@ -4654,6 +4654,34 @@ class CredentialImportError(CredentialError):
 def __init__(self, path: Path, detail: str) -> None:
 ```
 
+### `PasswordRejectedError`
+
+```text
+class PasswordRejectedError(CredentialError):
+```
+
+#### 説明
+
+サイト側が新しいパスワードを拒否した（記号が足りない・文字数が足りない等）
+
+サイト固有の画面クラス（例: ``ChangePasswordPage.submit_new_password()``）が、
+パスワード送信後にサイト側のエラー表示を検知した場合に送出する。
+``comken.toolbox.credentials.change_password()`` はこの例外を受け取ると、
+理由を表示して新しいパスワードを CLI で受け付け直す
+（``max_attempts`` に達するまで自動で再試行する）。
+
+発生箇所: 利用プロジェクト側のパスワード変更画面クラス（サイト固有の実装）
+
+対処:
+    表示されたエラー内容（サイト側の拒否理由）を確認し、要件を満たす
+    パスワードを入力し直す
+
+#### `__init__`
+
+```text
+def __init__(self, reason: str) -> None:
+```
+
 ### `SalesforceError`
 
 ```text
@@ -9605,6 +9633,50 @@ Returns:
 
 Raises:
     TimeoutError: timeout_seconds 以内に入力が確定しなかった場合。
+
+### `change_password`
+
+```text
+def change_password(cred: 'Credentials', submit: Callable[[str], _T], field: str=DEFAULT_PASSWORD_FIELD, *, label: str='新しいパスワード', timeout_seconds: float=DEFAULT_TIMEOUT_SECONDS, max_attempts: int=DEFAULT_MAX_ATTEMPTS) -> _T:
+```
+
+#### 説明
+
+新しいパスワードをCLIから受け付け、``submit()`` でサイトへ送信する。
+
+サイト側が拒否した場合（記号が足りない・文字数が足りない等）は、
+自動でCLIへ戻って聞き直す。呼び出し側のプロジェクトで再試行ループを
+書く必要はない。
+
+``submit`` はサイト固有の画面クラスのメソッド（例:
+``change_password_page.submit_new_password``）を渡す。サイト側が
+拒否したことを検知したら ``PasswordRejectedError`` を送出する実装に
+しておくこと（検知の方法はサイトごとに違うため、ここでは決められない
+――画面クラス側の責務にする）。
+
+再試行させたくない場合は ``max_attempts=1`` を指定する（1回失敗したら
+``PasswordRejectedError`` をそのまま呼び出し側へ返す）。
+
+DPAPI への保存（``cred.save()``）は ``submit()`` が成功した後にだけ行う。
+サイト側に拒否された値を DPAPI へ残さないため（読む側とサイト側の
+パスワードがずれる事故を防ぐ）。
+
+Args:
+    cred: 保存先。``Credentials(config.CREDENTIALS.<サイト>)`` で作ったもの。
+    submit: 新しいパスワードを受け取ってサイトへ送信する関数。サイトが
+        拒否した場合は ``PasswordRejectedError`` を送出すること。
+    field: 保存する項目名。既定は ``"password"``。
+    label: プロンプトに表示する項目名。
+    timeout_seconds: 1回あたりの入力待ちの上限秒数（聞き直すたびにリセットされる）。
+    max_attempts: 最大試行回数。既定3回。1にすると再試行しない。
+
+Returns:
+    ``submit()`` の戻り値（通常はサイト側の遷移先の画面インスタンス）。
+
+Raises:
+    ValueError: ``max_attempts`` が1未満の場合。
+    TimeoutError: 入力待ちがタイムアウトした場合。
+    PasswordRejectedError: ``max_attempts`` 回すべてサイト側に拒否された場合。
 
 
 ## `from comken.toolbox.csv import ...`

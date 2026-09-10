@@ -118,3 +118,23 @@ class CredentialImportError(CredentialError):
             '  "site_b": {"client_id": "...", "client_secret": "..."}\n'
             "}"
         )
+
+
+class PasswordRejectedError(CredentialError):
+    """サイト側が新しいパスワードを拒否した（記号が足りない・文字数が足りない等）
+
+    サイト固有の画面クラス（例: ``ChangePasswordPage.submit_new_password()``）が、
+    パスワード送信後にサイト側のエラー表示を検知した場合に送出する。
+    ``comken.toolbox.credentials.change_password()`` はこの例外を受け取ると、
+    理由を表示して新しいパスワードを CLI で受け付け直す
+    （``max_attempts`` に達するまで自動で再試行する）。
+
+    発生箇所: 利用プロジェクト側のパスワード変更画面クラス（サイト固有の実装）
+
+    対処:
+        表示されたエラー内容（サイト側の拒否理由）を確認し、要件を満たす
+        パスワードを入力し直す
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"サイト側が新しいパスワードを拒否しました: {reason}")

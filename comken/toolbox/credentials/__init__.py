@@ -27,11 +27,13 @@ Windows ログオンユーザーに紐付けて暗号化して保管する。
     list_names         登録済みの (サイト名, 項目名) の一覧（値は返さない）
     import_json        平文 JSON を読み込んで取り込む
     prompt_new_password  新しいパスワードをCLIから2回入力させ、Credentials へ保存する
+    change_password    prompt_new_password に加え、サイト側への送信・拒否時の
+                       自動再試行までを行う（PasswordRejectedError を使う）
     CREDENTIALS_PATH   保存先のパス
 """
 
 from comken.toolbox.credentials.importer import import_json
-from comken.toolbox.credentials.prompt import prompt_new_password
+from comken.toolbox.credentials.prompt import change_password, prompt_new_password
 from comken.toolbox.credentials.store import (
     CREDENTIALS_PATH,
     Credentials,
@@ -52,4 +54,5 @@ __all__ = [
     "list_names",
     "import_json",
     "prompt_new_password",
+    "change_password",
 ]
