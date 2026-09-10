@@ -632,11 +632,13 @@ except LoginFailedError as e:
 `ElementNotFoundError` になってしまうため、`login()` 側は
 `self.click_if_present(self.LOGIN_BTN)` を使う（要素があればクリックし、
 無ければ何もしないでそのまま画面判定（期限切れ／エラー表示／通常ログイン）
-へ進む）。
+へ進む）。要素が無いのは想定外の分岐なので、`click_if_present()` 自身が
+info ログを残す。呼び出し側で同じ事実を重ねてログする必要はない。
 
-雛形の `login()` は判定の直前に `current_url` を info ログへ残す。想定外の
-画面へ飛んだ場合の切り分けに、実際に飛んだ先の URL を見比べられるように
-している（既定のログレベルは INFO なので、debug ログだと通常実行では残らない）。
+パスワード期限切れで `ChangePasswordPage` へ遷移する分岐は運用上ふつうに
+起こりうるため、雛形の `login()` はそこだけ `current_url` を添えて info ログへ
+残す。通常のログイン成功時（`SecurePage` を返すだけの経路）では何もログしない
+— 毎回出るログは「分岐の理由だけを info にする」という方針とずれるため。
 
 ### 自分のサイトで同じパターンを使うとき
 

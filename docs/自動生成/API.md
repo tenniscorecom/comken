@@ -7511,6 +7511,9 @@ def click_if_present(self, locator: Locator) -> bool:
 ElementNotFoundError になってしまうため、先に要素の有無を（待たずに）
 確かめてから click() する形をここへまとめている。
 
+要素が無いのは想定外の分岐なので info で残す（既定のログレベルは
+INFO。呼び出し側で同じ事実を重ねてログしなくてよい）。
+
 #### `input`
 
 ```text
@@ -8654,6 +8657,9 @@ def click_if_present(self, locator: Locator) -> bool:
 ことがある画面で使う。素直に click() すると要素待機のタイムアウトで
 ElementNotFoundError になってしまうため、先に要素の有無を（待たずに）
 確かめてから click() する形をここへまとめている。
+
+要素が無いのは想定外の分岐なので info で残す（既定のログレベルは
+INFO。呼び出し側で同じ事実を重ねてログしなくてよい）。
 
 #### `input`
 

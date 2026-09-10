@@ -49,8 +49,8 @@ class LoginPage(AppPage):
         サイトによっては、パスワード欄への入力完了などをきっかけに非同期で
         ログインが進み、ログインボタンが押せる状態のまま消えている（既に
         ログイン済み）ことがある。押せないボタンを待って ElementNotFoundError
-        になるのを避けるため、クリック前にボタンの有無を確かめ、無ければ
-        クリックせずそのまま画面判定へ進む。
+        になるのを避けるため、``click_if_present()`` でボタンの有無を確かめて
+        から押す（無ければクリックせずそのまま画面判定へ進む）。
         """
         from comken.toolbox.browser.sites.ouju.pages.secure_page import SecurePage
 
@@ -58,21 +58,9 @@ class LoginPage(AppPage):
 
         self.input(self.USERNAME, username)
         self.input(self.PASSWORD, password)
-        if not self.click_if_present(self.LOGIN_BTN):
-            # 既定のログレベルは INFO（DEBUG は既定で出ない）。想定外の
-            # 分岐なので、後から実行ログを見て気付けるよう info で残す
-            logger.info("ログインボタンが見当たらないためクリックを省略しました")
+        # 要素が無ければ click_if_present() 自身が info ログを残す
+        self.click_if_present(self.LOGIN_BTN)
 
         self.wait_for_result(url_before_login, self.ERROR_MSG)
-
-        current_url = self.session.current_url
-        # 想定外の画面へ飛んだ場合に切り分けられるよう info で残す
-        # （既定のログレベルは INFO。DEBUG だと通常実行では残らない）
-        logger.info("ログイン後の画面を判定します: current_url=%s", current_url)
-
         self.raise_if_shown(self.ERROR_MSG, LoginFailedError)
         return self.to(SecurePage)
-
-    def get_error_message(self) -> str:
-        """ログイン失敗時のエラーメッセージを返す。"""
-        return self.read_text(self.ERROR_MSG)

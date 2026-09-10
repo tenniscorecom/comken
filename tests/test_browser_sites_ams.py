@@ -8,7 +8,6 @@ from unittest.mock import MagicMock
 
 import pytest
 from selenium.common.exceptions import NoSuchElementException
-from selenium.webdriver.support.ui import WebDriverWait
 
 from comken.exceptions import LoginFailedError, PasswordRejectedError
 from comken.toolbox.browser import BrowserOptions, DownloadDir
@@ -80,35 +79,10 @@ class TestLoginFailure:
 
         assert isinstance(result, SecurePage)
 
-    def test_catches_error_message_that_appears_after_a_short_async_delay(self, tmp_path):
-        """エラー表示が非同期で少し遅れて出るサイトでも、クリック直後の一度きりの
-        確認では見逃さず、URLが変わるかエラーが出るまで待ってから正しく検知する
-        （レースコンディションの回帰確認。このテストだけ _wait を完全モックにせず、
-        短いポーリング間隔の実物に差し替えて実際の待機ロジックを検証する）。
-        """
-        page = _make_login_page(tmp_path, current_url_after_login=f"{AMS.BASE_URL}/login")
-        page._wait = WebDriverWait(page.session.raw, timeout=1, poll_frequency=0.05)
 
-        # ERROR_MSG だけ最初の数回は見つからない（＝非同期で少し遅れて出る）
-        # ことにする。USERNAME/PASSWORD/LOGIN_BTN は通常どおり即座に見つかる
-        error_lookup_count = 0
-
-        def find_element_side_effect(by, value):
-            nonlocal error_lookup_count
-            element = MagicMock()
-            element.is_displayed.return_value = True
-            if (by, value) != tuple(LoginPage.ERROR_MSG):
-                return element
-            error_lookup_count += 1
-            if error_lookup_count < 3:
-                raise NoSuchElementException()
-            element.text = "非同期で少し遅れて出たエラー"
-            return element
-
-        page.session._driver.find_element.side_effect = find_element_side_effect
-
-        with pytest.raises(LoginFailedError, match="非同期で少し遅れて出たエラー"):
-            page.login("user01", "wrong-password")
+# 非同期で少し遅れて出るエラー表示のレースコンディション回帰テストは
+# tests/test_browser.py の TestPage.test_wait_for_result_* に集約してある
+# （wait_for_result() 自体の待機ロジックなので、サイトごとに複製しない）。
 
 
 class TestLoginButtonSkip:
@@ -176,34 +150,6 @@ class TestChangePasswordPageSubmission:
         with pytest.raises(PasswordRejectedError, match="記号"):
             page.submit_new_password("weak")
 
-    def test_catches_rejection_message_that_appears_after_a_short_async_delay(self, tmp_path):
-        """拒否表示が非同期で少し遅れて出るサイトでも、送信直後の一度きりの
-        確認では見逃さず、URLが変わるか拒否表示が出るまで待ってから正しく
-        検知する（レースコンディションの回帰確認。このテストだけ _wait を
-        完全モックにせず、短いポーリング間隔の実物に差し替えて実際の
-        待機ロジックを検証する）。
-        """
-        page = self._make_change_password_page(tmp_path)
-        page.session._driver.current_url = f"{AMS.BASE_URL}{ChangePasswordPage.PATH}"
-        page._wait = WebDriverWait(page.session.raw, timeout=1, poll_frequency=0.05)
-
-        # ERROR_MESSAGE だけ最初の数回は見つからない（＝非同期で少し遅れて出る）
-        # ことにする。NEW_PASSWORD/CONFIRM_PASSWORD/SUBMIT_BTN は通常どおり即座に見つかる
-        error_lookup_count = 0
-
-        def find_element_side_effect(by, value):
-            nonlocal error_lookup_count
-            element = MagicMock()
-            element.is_displayed.return_value = True
-            if (by, value) != tuple(ChangePasswordPage.ERROR_MESSAGE):
-                return element
-            error_lookup_count += 1
-            if error_lookup_count < 3:
-                raise NoSuchElementException()
-            element.text = "非同期で少し遅れて出た拒否メッセージ"
-            return element
-
-        page.session._driver.find_element.side_effect = find_element_side_effect
-
-        with pytest.raises(PasswordRejectedError, match="非同期で少し遅れて出た拒否メッセージ"):
-            page.submit_new_password("New-Pass1!")
+    # 非同期で少し遅れて出る拒否表示のレースコンディション回帰テストは
+    # tests/test_browser.py の TestPage.test_wait_for_result_* に集約してある
+    # （wait_for_result() 自体の待機ロジックなので、サイトごとに複製しない）。

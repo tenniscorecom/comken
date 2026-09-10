@@ -16,6 +16,7 @@ from unittest.mock import MagicMock
 import pytest
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
 
 from comken.exceptions import (
     BrowsersClosedError,
@@ -1008,6 +1009,38 @@ class TestPage:
             page.wait_for_result("https://example.com/login", Locator.css(".error"))
 
         assert ".error" in str(exc_info.value)
+
+    def test_wait_for_result_catches_error_that_appears_after_a_short_async_delay(self, tmp_path):
+        """エラー表示が非同期で少し遅れて出ても、一度きりの確認では見逃さず、
+        URLが変わるかエラーが出るまで待ってから正しく検知する（レースコンディションの
+        回帰確認。このテストだけ _wait を完全モックにせず、短いポーリング間隔の実物に
+        差し替えて実際の待機ロジックを検証する。wait_for_result() 自体の挙動なので、
+        呼び出し側のサイトごとに複製しない — ここ1箇所で確認する）。
+        """
+        page = self._page(tmp_path)
+        page._wait = WebDriverWait(page.session.raw, timeout=1, poll_frequency=0.05)
+        page.session._driver.current_url = "https://example.com/login"
+        error_locator = Locator.css(".error")
+
+        # error_locator だけ最初の数回は見つからない（＝非同期で少し遅れて出る）
+        # ことにする
+        lookup_count = 0
+
+        def find_element_side_effect(by, value):
+            nonlocal lookup_count
+            if (by, value) != tuple(error_locator):
+                return MagicMock()
+            lookup_count += 1
+            if lookup_count < 3:
+                raise NoSuchElementException()
+            return MagicMock()
+
+        page.session._driver.find_element.side_effect = find_element_side_effect
+
+        # 例外なく確定すれば検知できている
+        page.wait_for_result("https://example.com/login", error_locator)
+
+        assert lookup_count >= 3  # 最初の数回は見つからなかった（＝遅延を実際に待った）
 
 
 class TestSitePage:
