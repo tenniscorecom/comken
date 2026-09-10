@@ -9,6 +9,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from selenium.webdriver.support import expected_conditions as EC
+
 from comken.exceptions import LoginFailedError
 from comken.toolbox.browser import Locator
 from comken.toolbox.browser.sites.ams.pages.app_page import AppPage
@@ -66,6 +68,10 @@ class LoginPage(AppPage):
         単純にユーザー名・パスワードが間違っている場合（期限切れとは別の失敗）は
         ログイン画面にエラー表示が残るため、``LoginFailedError``（サイト側の
         エラー文言つき）を送出する。呼び出し側で個別に判定を書く必要はない。
+        エラー表示は非同期（Ajax 等）で少し遅れて出て、その後は数秒で自動的に
+        消えるサイトもあるため、クリック直後に一度だけ確認するのではなく、
+        「URL が変わる」か「エラー表示が出る」のどちらかが起きるまで待ってから
+        判定する（早い方が起きた時点で確定するので、成功時に無駄な待ちは発生しない）。
 
         サイトによっては、パスワード欄への入力完了などをきっかけに非同期で
         ログインが進み、ログインボタンが押せる状態のまま消えている（既に
@@ -78,12 +84,26 @@ class LoginPage(AppPage):
         )
         from comken.toolbox.browser.sites.ams.pages.secure_page import SecurePage
 
+        url_before_login = self.session.current_url
+
         self.input(self.USERNAME, username)
         self.input(self.PASSWORD, password)
         if self.has_element(self.LOGIN_BTN):
             self.click(self.LOGIN_BTN)
         else:
             logger.debug("ログインボタンが見当たらないためクリックを省略しました")
+
+        # URL が変わる（成功・期限切れ変更画面への遷移）か、エラー表示が出るか、
+        # どちらか早い方が起きるまで待つ。非同期でエラー表示が遅れて出るサイトでも、
+        # クリック直後の一度きりの確認で見逃すことがない
+        self._until(
+            EC.any_of(
+                EC.url_changes(url_before_login),
+                EC.presence_of_element_located(self.ERROR_MSG),
+            ),
+            "current_url の変化 または ERROR_MSG の表示",
+            "ログイン結果が確定し",
+        )
 
         current_url = self.session.current_url
         logger.debug("ログイン後の画面を判定します: current_url=%s", current_url)
