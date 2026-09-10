@@ -22,10 +22,13 @@ DPAPI の保管形式は ``{prefix: {"api_refresh_token": ...}}`` の入れ子�
 # 定義中の RefreshTokenOAuth を戻り値の型注釈に使うため、注釈の評価を遅延する。
 from __future__ import annotations
 
+import base64
+import hashlib
 import logging
 import secrets
 import urllib.parse
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Self
 
 import requests
@@ -44,6 +47,12 @@ REFRESH_TOKEN_GRANT = "refresh_token"
 RESPONSE_TYPE = "code"
 TOKEN_PATH = "/services/oauth2/token"
 TIMEOUT_SECONDS = 60
+# PKCE（RFC 7636）。Salesforce は Authorization Code Flow で必須にしている。
+# 付けても害はない（未対応の設定でも無視されるだけ）ため、常に付与する。
+CODE_CHALLENGE_METHOD = "S256"
+# base64url化すると約64文字になり、RFC 7636 が定める code_verifier の
+# 長さ（43〜128文字）に余裕を持って収まる。
+CODE_VERIFIER_BYTES = 48
 
 
 def _on_refresh_token_via_credentials(credentials: Credentials) -> Callable[[str], None]:
@@ -79,6 +88,19 @@ def _on_refresh_token_via_prefix(prefix: str) -> Callable[[str], None]:
         logger.debug("refresh_token を DPAPI へ保存しました: prefix=%s", prefix)
 
     return _save
+
+
+@dataclass(frozen=True)
+class AuthorizationRequest:
+    """``authorization_url()`` が返す、認可URLと一緒に持ち回る使い捨ての値。
+
+    ``state`` は CSRF 検証用、``code_verifier`` は PKCE（RFC 7636）用。
+    どちらも ``exchange_code()`` を呼ぶまで呼び出し側が保持しておく。
+    """
+
+    url: str
+    state: str
+    code_verifier: str
 
 
 class RefreshTokenOAuth:
@@ -151,10 +173,17 @@ class RefreshTokenOAuth:
         *,
         scope: str = "api refresh_token",
         state: str | None = None,
-    ) -> tuple[str, str]:
-        """利用者がブラウザで開く認可 URL と CSRF 検証用 state を返す。"""
+    ) -> AuthorizationRequest:
+        """利用者がブラウザで開く認可 URL・CSRF検証用state・PKCE用code_verifierを返す。
+
+        Salesforce は Authorization Code Flow で PKCE を必須にしているため、
+        code_challenge を常に付与する。``code_verifier`` は ``exchange_code()``
+        を呼ぶまで、呼び出し側（``AuthorizationRequest``）が持っておく。
+        """
         actual_state = state or secrets.token_urlsafe(32)
-        # state は CSRF 検証用の使い捨て値だが、認可の秘密の一部なのでログには出さない
+        code_verifier = secrets.token_urlsafe(CODE_VERIFIER_BYTES)
+        code_challenge = _code_challenge_of(code_verifier)
+        # state・code_verifier は認可の秘密の一部なのでログには出さない
         logger.debug(
             "認可 URL を組み立てます: domain_url=%s redirect_uri=%s scope=%s state=%s",
             domain_url,
@@ -169,9 +198,12 @@ class RefreshTokenOAuth:
                 "redirect_uri": redirect_uri,
                 "scope": scope,
                 "state": actual_state,
+                "code_challenge": code_challenge,
+                "code_challenge_method": CODE_CHALLENGE_METHOD,
             }
         )
-        return f"{domain_url.rstrip('/')}{AUTHORIZATION_PATH}?{query}", actual_state
+        url = f"{domain_url.rstrip('/')}{AUTHORIZATION_PATH}?{query}"
+        return AuthorizationRequest(url, actual_state, code_verifier)
 
     @classmethod
     def exchange_code(
@@ -181,11 +213,16 @@ class RefreshTokenOAuth:
         code: str,
         redirect_uri: str,
         domain_url: str,
+        code_verifier: str,
         *,
         prefix: str = "",
         on_refresh_token: Callable[[str], None] | None = None,
     ) -> Self:
         """認可コードを交換し、取得した refresh_token を持つ認証部品を返す。
+
+        ``code_verifier`` は ``authorization_url()`` が返した
+        ``AuthorizationRequest.code_verifier`` をそのまま渡す（PKCE、RFC 7636。
+        Salesforce が必須にしている）。
 
         初回に受け取った refresh_token を DPAPI へ書き戻す処理は、
         呼び出し側で毎回書かなくてよいよう ``prefix`` を渡すだけで済む
@@ -209,11 +246,12 @@ class RefreshTokenOAuth:
             "client_secret": client_secret,
             "code": code,
             "redirect_uri": redirect_uri,
+            "code_verifier": code_verifier,
         }
         body = _post_token(
             domain_url.rstrip("/"),
             token_request,
-            secrets_to_redact=(client_secret, code),
+            secrets_to_redact=(client_secret, code, code_verifier),
         )
         refresh_token = body.get("refresh_token")
         if not isinstance(refresh_token, str) or not refresh_token:
@@ -270,4 +308,10 @@ def _token_pair(body: dict) -> tuple[str, str]:
         raise SalesforceAuthError(200, "認証レスポンスの形式が不正です") from e
 
 
-__all__ = ["RefreshTokenOAuth"]
+def _code_challenge_of(code_verifier: str) -> str:
+    """RFC 7636: ``BASE64URL-ENCODE(SHA256(ASCII(code_verifier)))``（パディング無し）。"""
+    digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+
+
+__all__ = ["AuthorizationRequest", "RefreshTokenOAuth"]

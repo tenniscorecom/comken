@@ -10,6 +10,7 @@ from comken.toolbox.salesforce import (
     RefreshTokenOAuth,
     SalesforceBase,
 )
+from comken.toolbox.salesforce.auth.oauth_refresh import _code_challenge_of
 
 DOMAIN_URL = "https://example.my.salesforce.com"
 INSTANCE_URL = "https://instance.my.salesforce.com"
@@ -33,18 +34,32 @@ def _response(body: dict, status_code: int = 200) -> MagicMock:
 
 class TestRefreshTokenOAuth:
     def test_authorization_url_contains_required_values_and_state(self):
-        url, state = RefreshTokenOAuth.authorization_url(
+        auth_request = RefreshTokenOAuth.authorization_url(
             "CID", "https://localhost/callback", DOMAIN_URL, state="STATE"
         )
-        query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
-        assert state == "STATE"
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(auth_request.url).query)
+        assert auth_request.state == "STATE"
         assert query == {
             "response_type": ["code"],
             "client_id": ["CID"],
             "redirect_uri": ["https://localhost/callback"],
             "scope": ["api refresh_token"],
             "state": ["STATE"],
+            "code_challenge": [query["code_challenge"][0]],
+            "code_challenge_method": ["S256"],
         }
+
+    def test_authorization_url_includes_pkce_code_challenge(self):
+        """Salesforce が Authorization Code Flow で必須にしている PKCE。"""
+        auth_request = RefreshTokenOAuth.authorization_url(
+            "CID", "https://localhost/callback", DOMAIN_URL
+        )
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(auth_request.url).query)
+        # code_verifier は43〜128文字（RFC 7636）で、毎回ランダムに生成される
+        assert 43 <= len(auth_request.code_verifier) <= 128
+        assert query["code_challenge_method"] == ["S256"]
+        assert query["code_challenge"][0] == _code_challenge_of(auth_request.code_verifier)
+        assert query["code_challenge"][0] != auth_request.code_verifier
 
     def test_exchange_code_returns_auth_and_reports_initial_refresh_token(self):
         saved_tokens: list[str] = []
@@ -58,10 +73,26 @@ class TestRefreshTokenOAuth:
                 "CODE",
                 "https://localhost/callback",
                 DOMAIN_URL,
+                "VERIFIER",
                 on_refresh_token=saved_tokens.append,
             )
         assert isinstance(auth, RefreshTokenOAuth)
         assert saved_tokens == ["REFRESH"]
+
+    def test_exchange_code_sends_pkce_code_verifier(self):
+        response = _response(
+            {"access_token": "ACCESS", "instance_url": INSTANCE_URL, "refresh_token": "REFRESH"}
+        )
+        with patch(_REQUESTS_POST, return_value=response) as post:
+            RefreshTokenOAuth.exchange_code(
+                "CID",
+                "SECRET",
+                "CODE",
+                "https://localhost/callback",
+                DOMAIN_URL,
+                "VERIFIER",
+            )
+        assert post.call_args.kwargs["data"]["code_verifier"] == "VERIFIER"
 
     def test_refresh_omits_optional_secret_and_saves_rotated_token(self):
         saved_tokens: list[str] = []
@@ -111,6 +142,7 @@ class TestRefreshTokenOAuth:
                 "CODE",
                 "https://localhost/callback",
                 DOMAIN_URL,
+                "VERIFIER",
                 prefix="site_a",
             )
         save_credential.assert_called_once_with("site_a", "api_refresh_token", "REFRESH")
@@ -131,6 +163,7 @@ class TestRefreshTokenOAuth:
                 "CODE",
                 "https://localhost/callback",
                 DOMAIN_URL,
+                "VERIFIER",
                 prefix="site_a",
                 on_refresh_token=saved_tokens.append,
             )

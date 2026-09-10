@@ -350,6 +350,13 @@ for site, field in list_names():
 
 ブラウザで ECA に「comken がこの組織にアクセスしていい」と 1 回だけ承認する。
 
+> [!note] PKCE（2026-09-10）
+> Salesforce は Authorization Code Flow で PKCE（RFC 7636）を必須にしている。
+> `authorization_url()` は毎回ランダムな `code_verifier` を生成して
+> `code_challenge` を認可 URL に含め、`exchange_code()` へそのまま渡す
+> （`AuthorizationRequest.code_verifier`）。呼び出し側で意識する必要はない
+> （`sf setup` を含め、この文書の手順はそのまま通る）。
+
 `comken.toolbox.salesforce.sites.SITES` に登録されている組織から、**番号または
 組織名（大文字小文字を区別しない）で**選んで `setup` を実行する。`--domain`
 や `--prefix` はこのコマンドでは使わない（組織はこのコマンド自身が選ばせるため）。
@@ -468,6 +475,7 @@ Refresh Token Flow の **対になる形**で、初回認可が要らない代�
 | `INVALID_CLIENT_ID` | `python -m comken cred list` で `<prefix>_client_id` を確認。ECA の Consumer Key と一致するか |
 | `INVALID_CLIENT_SECRET` | 同様に `<prefix>_client_secret` を確認 |
 | `INVALID_AUTH_CODE` | authorization_url で取得した `code` を 10 分以上放置した。手順 2 からやり直す |
+| `invalid_grant` / `invalid_request`（PKCE 関連） | `authorization_url()` が返した `AuthorizationRequest` の `code_verifier` を `exchange_code()` に渡さず、別の実行の値を使い回した。1回の `sf setup` 実行内で完結させ、手順 2 からやり直す |
 | `UNSUPPORTED_GRANT_TYPE` | ECA のフロー設定で Authorization Code + Refresh Token Flow を有効にしているか |
 | `INVALID_REFRESH_TOKEN` | refresh_token を revoke 済み。手順 2 からやり直す |
 | 401 が返る (refresh_token は新しい) | ECA で「Manage Refresh Tokens」を開き、過去トークンの状態を確認 |

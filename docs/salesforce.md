@@ -76,7 +76,8 @@ with Solution(auth=auth) as sf:
 ```
 
 初回だけ `RefreshTokenOAuth.authorization_url()` の URL をブラウザで開き、戻された `state` を
-照合してから `exchange_code()` へ code を渡す。ライブラリはローカル HTTP サーバーや
+照合してから `exchange_code()` へ code と `AuthorizationRequest.code_verifier`（PKCE、
+Salesforce が必須にしている）を渡す。ライブラリはローカル HTTP サーバーや
 ブラウザを勝手に起動しない。レスポンスに新しい refresh token が含まれた場合は
 `on_refresh_token` が呼ばれるので、その場で DPAPI へ保存する。コールバックを省略すると
 プロセス内だけ更新され、次回起動時に古い token を使う点に注意する。

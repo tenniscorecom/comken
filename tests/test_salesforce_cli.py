@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from comken.exceptions import CredentialNotFoundError, SalesforceAuthError
+from comken.toolbox.salesforce.auth.oauth_refresh import AuthorizationRequest
 from comken.toolbox.salesforce.cli import main
 from comken.toolbox.salesforce.sites import SITES, Solution, SolutionSandbox
 
@@ -242,7 +243,9 @@ class TestSetup:
             ),
             patch(
                 "comken.toolbox.salesforce.cli.RefreshTokenOAuth.authorization_url",
-                return_value=("https://example.test/authorize", "STATE"),
+                return_value=AuthorizationRequest(
+                    "https://example.test/authorize", "STATE", "VERIFIER"
+                ),
             ),
             patch("comken.toolbox.salesforce.cli.RefreshTokenOAuth.exchange_code") as exchange,
             # 番号選択 → 確認プロンプト (`y`) → code の 3 ステップ
@@ -267,7 +270,9 @@ class TestSetup:
             ),
             patch(
                 "comken.toolbox.salesforce.cli.RefreshTokenOAuth.authorization_url",
-                return_value=("https://example.test/authorize", "STATE"),
+                return_value=AuthorizationRequest(
+                    "https://example.test/authorize", "STATE", "VERIFIER"
+                ),
             ),
             patch("comken.toolbox.salesforce.cli.RefreshTokenOAuth.exchange_code") as exchange,
             patch("builtins.input", side_effect=["solution", "y", "AUTH-CODE"]),
@@ -300,7 +305,9 @@ class TestSetup:
             patch("comken.toolbox.salesforce.cli.Credentials", return_value=credentials),
             patch(
                 "comken.toolbox.salesforce.cli.RefreshTokenOAuth.authorization_url",
-                return_value=("https://example.test/authorize?client_id=CID", "STATE"),
+                return_value=AuthorizationRequest(
+                    "https://example.test/authorize?client_id=CID", "STATE", "VERIFIER"
+                ),
             ),
             patch("comken.toolbox.salesforce.cli.RefreshTokenOAuth.exchange_code") as exchange,
             patch("builtins.input", side_effect=["1", "y", "AUTH-CODE-VALUE"]),
@@ -332,7 +339,9 @@ class TestSetup:
             ),
             patch(
                 "comken.toolbox.salesforce.cli.RefreshTokenOAuth.authorization_url",
-                return_value=("https://example.test/authorize", "STATE"),
+                return_value=AuthorizationRequest(
+                    "https://example.test/authorize", "STATE", "VERIFIER"
+                ),
             ),
             patch("comken.toolbox.salesforce.cli.RefreshTokenOAuth.exchange_code") as exchange,
             patch("builtins.input", side_effect=["y", "AUTH-CODE"]),
@@ -356,7 +365,9 @@ class TestSetup:
             ),
             patch(
                 "comken.toolbox.salesforce.cli.RefreshTokenOAuth.authorization_url",
-                return_value=("https://example.test/authorize", "STATE"),
+                return_value=AuthorizationRequest(
+                    "https://example.test/authorize", "STATE", "VERIFIER"
+                ),
             ),
             patch("comken.toolbox.salesforce.cli.RefreshTokenOAuth.exchange_code") as exchange,
             patch("builtins.input", side_effect=["y", "AUTH-CODE"]),

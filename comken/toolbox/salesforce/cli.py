@@ -265,12 +265,12 @@ def _run_setup(args: argparse.Namespace) -> None:
         print("  python -m comken cred gui")
         raise
 
-    url, _ = RefreshTokenOAuth.authorization_url(
+    auth_request = RefreshTokenOAuth.authorization_url(
         client_id, site_class.CALLBACK_URL, site_class.DOMAIN_URL
     )
     print()
     print("次の URL をブラウザで開き、Salesforce にログインして許可してください:")
-    print(f"  {url}")
+    print(f"  {auth_request.url}")
     print()
     print(f"許可すると {site_class.CALLBACK_URL}?code=... へリダイレクトされます。")
     code = input("code= の後ろの文字列を貼り付けてください: ").strip()
@@ -281,6 +281,7 @@ def _run_setup(args: argparse.Namespace) -> None:
         code,
         site_class.CALLBACK_URL,
         site_class.DOMAIN_URL,
+        auth_request.code_verifier,
         prefix=prefix,
     )
     print()
