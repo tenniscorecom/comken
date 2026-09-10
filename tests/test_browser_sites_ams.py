@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 from selenium.common.exceptions import NoSuchElementException
 
-from comken.exceptions import PasswordRejectedError
+from comken.exceptions import LoginFailedError, PasswordRejectedError
 from comken.toolbox.browser import BrowserOptions, DownloadDir
 from comken.toolbox.browser.management.sessions import BrowserSession
 from comken.toolbox.browser.sites.ams.pages.change_password_page import ChangePasswordPage
@@ -28,6 +28,9 @@ def _make_login_page(tmp_path, current_url_after_login: str) -> LoginPage:
     )
     session._driver = MagicMock()
     session._driver.current_url = current_url_after_login
+    # has_element() の既定は「要素なし」。ログインエラー表示ありのテストだけ
+    # 個別に find_element.side_effect を外して上書きする
+    session._driver.find_element.side_effect = NoSuchElementException()
     session._site = AMS()
     page = LoginPage(session)
     page._wait = MagicMock()  # click/input の要素待機を素通りさせる
@@ -53,6 +56,28 @@ class TestLoginPasswordExpiry:
         result = page.login("user01", "password")
 
         assert isinstance(result, ChangePasswordPage)
+
+
+class TestLoginFailure:
+    """login() — 単純な認証情報間違い（期限切れとは別）を LoginFailedError として伝える。"""
+
+    def test_raises_login_failed_when_error_shown(self, tmp_path):
+        """URL は変わらずエラー表示が出ていれば LoginFailedError（サイト側の文言つき）。"""
+        page = _make_login_page(tmp_path, current_url_after_login=f"{AMS.BASE_URL}/login")
+        page.session._driver.find_element.side_effect = None
+        page.session._driver.find_element.return_value = MagicMock()  # エラー要素あり
+        page._wait.until.return_value.text = "ユーザー名またはパスワードが違います"
+
+        with pytest.raises(LoginFailedError, match="ユーザー名またはパスワードが違います"):
+            page.login("user01", "wrong-password")
+
+    def test_returns_secure_page_when_no_error_shown(self, tmp_path):
+        """エラー表示が無ければ従来どおり SecurePage（回帰確認、has_element の既定値）。"""
+        page = _make_login_page(tmp_path, current_url_after_login=f"{AMS.BASE_URL}/home")
+
+        result = page.login("user01", "password")
+
+        assert isinstance(result, SecurePage)
 
 
 class TestChangePasswordPageSubmission:

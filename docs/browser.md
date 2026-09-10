@@ -586,6 +586,26 @@ else:
 `login_page.py` の `login()` と `change_password_page.py` が見本。
 DPAPI への反映まで含めた使い方は [認証情報のパスワードの変更](credentials.md#パスワードの変更) を参照。
 
+### 単純にパスワードが間違っているとき
+
+期限切れとは別に、ユーザー名・パスワードが単純に間違っていて認証自体に
+失敗する場合がある。この場合サイトはログイン画面のまま留まり、画面内に
+エラー表示が出るだけなので、`isinstance` では判定できない。呼び出し側に
+「エラー表示を見て判定する」処理を書かせないため、`login()` 側でエラー表示を
+検知して `LoginFailedError`（サイト側のエラー文言つき）を送出する実装にしておく。
+
+```python
+try:
+    result = login_page.login(cred.username, cred.password)
+except LoginFailedError as e:
+    # DPAPI に保存した認証情報が古くなっている可能性が高い。
+    # python -m comken cred gui で登録し直してから再実行する
+    print(e)
+    raise
+```
+
+雛形（`ams/pages/login_page.py`）は `.login-error` 要素の有無で検知している。
+
 ---
 
 ## ファイルをダウンロードする

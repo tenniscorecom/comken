@@ -84,7 +84,8 @@ ComkenError
 │   ├── SiteNotStartedError
 │   ├── ElementNotFoundError
 │   ├── PopupTabNotOpenedError
-│   └── DownloadTimeoutError
+│   ├── DownloadTimeoutError
+│   └── LoginFailedError
 ├── InvalidColumnError
 ├── TableError
 │   ├── InvalidTableInputError
@@ -167,6 +168,7 @@ from comken.exceptions.browser import (
     DownloadTimeoutError,
     DriverStartError,
     ElementNotFoundError,
+    LoginFailedError,
     PopupTabNotOpenedError,
     SessionClosedError,
     SessionNameConflictError,
@@ -426,6 +428,7 @@ __all__ = [
     "ElementNotFoundError",
     "PopupTabNotOpenedError",
     "DownloadTimeoutError",
+    "LoginFailedError",
     "MasterTableError",
     "MasterSheetNotDefinedError",
     "MasterColumnNotFoundError",

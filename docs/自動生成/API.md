@@ -5404,6 +5404,35 @@ class DownloadTimeoutError(BrowserError):
 def __init__(self, directory: object, seconds: int) -> None:
 ```
 
+### `LoginFailedError`
+
+```text
+class LoginFailedError(BrowserError):
+```
+
+#### 説明
+
+ログインに失敗した（ユーザー名・パスワードが違う等）
+
+サイト固有の画面クラス（例: ``LoginPage.login()``）が、送信後もログイン
+画面のエラー表示を検知した場合に送出する。パスワード期限切れによる
+強制的な変更画面への遷移とは別の、単純な「認証情報が間違っている」
+失敗を表す。
+
+発生箇所: 利用プロジェクト側のログイン画面クラス（サイト固有の実装）
+
+対処:
+    表示されたエラー内容（サイト側のエラーメッセージ）を確認する。
+    DPAPI に保存した認証情報が古くなっていないか
+    `python -m comken cred list` で確認し、必要なら
+    `python -m comken cred gui` で登録し直す
+
+#### `__init__`
+
+```text
+def __init__(self, reason: str) -> None:
+```
+
 ### `MasterTableError`
 
 ```text

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from comken.exceptions import LoginFailedError
 from comken.toolbox.browser import Locator
 from comken.toolbox.browser.sites.ams.pages.app_page import AppPage
 
@@ -58,6 +59,10 @@ class LoginPage(AppPage):
              まま応答が差し替わる場合）。この場合は URL では判定できないので、
              ``self.has_element(ChangePasswordPage.NEW_PASSWORD)``
              のように変更画面固有の要素の有無で判定する形に書き換える。
+
+        単純にユーザー名・パスワードが間違っている場合（期限切れとは別の失敗）は
+        ログイン画面にエラー表示が残るため、``LoginFailedError``（サイト側の
+        エラー文言つき）を送出する。呼び出し側で個別に判定を書く必要はない。
         """
         from comken.toolbox.browser.sites.ams.pages.change_password_page import (
             ChangePasswordPage,
@@ -69,6 +74,8 @@ class LoginPage(AppPage):
         self.click(self.LOGIN_BTN)
         if ChangePasswordPage.PATH in self.session.current_url:
             return self.to(ChangePasswordPage)
+        if self.has_element(self.ERROR_MSG):
+            raise LoginFailedError(self.get_error_message())
         return self.to(SecurePage)
 
     def get_error_message(self) -> str:
