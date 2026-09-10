@@ -260,7 +260,7 @@ ECAの作成・設定はIT側の作業。comken側が行うのは、これを依
 2. OAuthスコープは必要最小限にする（`api refresh_token`）。
 3. **Authorization Code + Refresh Token Flow を有効化**し、Client Credentials
    Flow は無効化する（詳細な設定項目は [0. 前提](#0-前提) を渡す）。
-4. Callback URL に `http://localhost:8080/callback` を設定する。
+4. Callback URL に `http://127.0.0.1:8080/callback` を設定する。
 5. RPA専用の実行ユーザーを指定し、必要なオブジェクト・項目・レポートだけを許可する。
 6. Consumer Key / Consumer Secret の共有方法と、secretのローテーション担当を決める
    （`sf rotate` で回せる。[5. secretの保管とローテーション](#5-secretの保管とローテーション)参照）。
@@ -285,7 +285,10 @@ ECAの作成・設定はIT側の作業。comken側が行うのは、これを依
   - 「Client Credentials Flow」は **無効化** (既定) — 共存させると secret 単独漏えいの入口が残る
   - 「Refresh Token Rotation」を有効化 (推奨)
   - 「Require Secret for Refresh Token Flow」を **無効化** (comken の既定)
-  - Callback URL に `http://localhost:8080/callback` を設定 (後述の `http_server` 方式)
+  - Callback URL に `http://127.0.0.1:8080/callback` を設定 (後述の `http_server` 方式。
+    `localhost` ではなく `127.0.0.1` にするのは、待ち受けサーバーが IPv4 でしか
+    listen しないため、環境によって `localhost` が IPv6 に解決されると繋がらない
+    ことがあるのを避けるため)
 - comken を実行する Windows ユーザーと、ECA を作成した管理者が別の場合は事前に連携
 
 ## 手順全体の流れ

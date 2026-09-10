@@ -311,7 +311,7 @@ def _obtain_authorization_code(auth_request: AuthorizationRequest, redirect_uri:
         print("ブラウザを自動で開きます。承認すると自動で受け取ります...")
         webbrowser.open(auth_request.url)
         try:
-            callback = wait_for_callback(redirect_uri)
+            callback = wait_for_callback(redirect_uri, auth_request.state)
         except (OSError, TimeoutError, SalesforceAuthError) as e:
             print(f"自動受け取りに失敗しました（{e}）。手動で貼り付けてください。")
         else:

@@ -625,7 +625,7 @@ My Domain は `Solution.DOMAIN_URL` に置く。`login.salesforce.com` ではこ
    **Authorization Code + Refresh Token Flow を有効化**・スコープ `api refresh_token`
 3. 「Client Credentials Flow」は **無効化**（共存させると secret 単独漏えいの入口が残る）
 4. 「Refresh Token Rotation」を有効化（推奨）
-5. Callback URL に `http://localhost:8080/callback`（`sf setup` が自動で
+5. Callback URL に `http://127.0.0.1:8080/callback`（`sf setup` が自動で
    受け取れる。詳細は [初回認可の手順](開発/salesforce-authentication.md#0-前提)）
 6. Consumer Key / Consumer Secret を受け取る
 

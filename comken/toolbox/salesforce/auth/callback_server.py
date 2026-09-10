@@ -2,9 +2,12 @@
 
 Salesforceの認可コード（``code=...``）は、利用者がブラウザで承認したあと
 ブラウザが ``redirect_uri`` へリダイレクトすることで渡される。``redirect_uri``
-が localhost の場合だけ、そのポートで1回だけ待ち受けて ``code`` / ``state``
-を自動で取り出せる（URLからの手動コピペを無くす。長い認可コードは ``=``
+が localhost の場合だけ、そのポートで待ち受けて ``code`` / ``state`` を
+自動で取り出せる（URLからの手動コピペを無くす。長い認可コードは ``=``
 を含むことが多く、途中で切れて貼り付けるミスが起きやすいため）。
+favicon.ico の取得など無関係なリクエストは無視して待ち続け、本物の
+リダイレクト（パス一致・expected_state 一致）を受け取るか、
+合計の timeout_seconds を使い切ったら止まる。
 
 localhost 以外（社内で公開した callback URL 等）はこのマシンでは受け取れない
 ため、``is_localhost_callback()`` で判定し、呼び出し側で手動のcode入力に
@@ -13,6 +16,7 @@ localhost 以外（社内で公開した callback URL 等）はこのマシン�
 
 import http.server
 import logging
+import time
 import urllib.parse
 from dataclasses import dataclass
 from typing import cast
@@ -58,19 +62,27 @@ def parse_redirect_url(url: str) -> CallbackResult:
 
 
 def wait_for_callback(
-    redirect_uri: str, timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
+    redirect_uri: str,
+    expected_state: str,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> CallbackResult:
-    """redirect_uri のポートで1回だけ待ち受け、リダイレクトの code / state を受け取って返す。
+    """redirect_uri のポートで待ち受け、リダイレクトの code / state を受け取って返す。
 
-    1件受け取ったら（またはタイムアウトしたら）即座に止まる。listenし続けない。
+    ブラウザは favicon.ico の取得など、callback とは無関係な GET をこのポートへ
+    送ってくることがある。無関係なパス・expected_state と一致しない code は
+    そのリクエストだけを無視して**待ち受けを継続する**（1件目で即座に確定させると、
+    無関係なリクエストに横取りされて本来のリダイレクトを取りこぼす）。
+    timeout_seconds の合計時間を使い切っても届かなければ諦める。
 
     Args:
         redirect_uri: ECA に登録した callback URL（``is_localhost_callback()``
             が True であること）。
-        timeout_seconds: リダイレクトを待つ上限秒数。
+        expected_state: ``authorization_url()`` が返した state。これと一致する
+            リクエストだけを本物の応答として扱う（CSRF対策・横取り対策）。
+        timeout_seconds: リダイレクトを待つ合計の上限秒数。
 
     Returns:
-        受け取った code / state。
+        受け取った code / state（state は expected_state と一致済み）。
 
     Raises:
         OSError: ポートを既に他プロセスが使っている等、待ち受けを開始できない場合。
@@ -79,11 +91,17 @@ def wait_for_callback(
     """
     split = urllib.parse.urlsplit(redirect_uri)
     path = split.path or "/"
-    server = _CallbackServer((split.hostname or "localhost", split.port or 80), path)
+    address = (split.hostname or "localhost", split.port or 80)
+    server = _CallbackServer(address, path, expected_state)
+    deadline = time.monotonic() + timeout_seconds
     try:
         logger.debug("OAuthリダイレクトの待ち受けを開始します: path=%s", path)
-        server.timeout = timeout_seconds
-        server.handle_request()
+        while server.oauth_outcome is None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            server.timeout = remaining
+            server.handle_request()
     finally:
         server.server_close()
 
@@ -103,30 +121,42 @@ def wait_for_callback(
 
 
 class _CallbackServer(http.server.HTTPServer):
-    """認可コードを1件受け取るためだけの、使い捨てのローカルサーバー。"""
+    """認可コードを受け取るためだけの、使い捨てのローカルサーバー。"""
 
-    def __init__(self, address: tuple[str, int], path: str) -> None:
+    def __init__(self, address: tuple[str, int], path: str, expected_state: str) -> None:
         super().__init__(address, _CallbackHandler)
         self.oauth_path = path
-        # (結果, エラーメッセージ) のタプル。 リクエストを受けるまで None のまま
+        self.oauth_expected_state = expected_state
+        # (結果, エラーメッセージ) のタプル。 まだ確定していない間は None のまま
         # （タイムアウトしたかどうかを None かどうかで区別する）。
         self.oauth_outcome: tuple[dict[str, str], str | None] | None = None
 
 
 class _CallbackHandler(http.server.BaseHTTPRequestHandler):
-    """OAuthリダイレクトの1件だけを受け取り、結果を server 側へ書き込む。"""
+    """OAuthリダイレクトを受け取り、確定したら結果を server 側へ書き込む。
+
+    パスが違う・state が expected_state と一致しない（favicon.ico の取得や、
+    無関係な別プロセスからのリクエスト等）場合は 404 だけ返し、
+    server.oauth_outcome は書き込まない（wait_for_callback() 側が待ち受けを続ける）。
+    """
 
     def do_GET(self) -> None:
-        """GETリクエストを1件処理し、code/state（またはエラー）を server 側へ書き込む。"""
+        """GETリクエストを1件処理する。本物の応答だと確定できたときだけ結果を書き込む。"""
         # http.server の基底クラスでは self.server は BaseServer 型だが、
         # 実際に渡ってくるのは wait_for_callback() が組み立てた _CallbackServer。
         server = cast("_CallbackServer", self.server)
         request_path, _, query = self.path.partition("?")
-        if request_path != server.oauth_path:
+        result, error = _parse_query(query)
+        is_own_path = request_path == server.oauth_path
+        # エラー応答（Salesforceが承認を拒否した等）はSalesforce側にstateを
+        # 付け返す保証が無いため、path一致だけで確定させる。成功応答（code有り）は
+        # 横取り・混線を防ぐためstateの一致も必須にする。
+        state_matches = result.get("state") == server.oauth_expected_state
+        is_match = is_own_path and (error is not None or state_matches)
+        if not is_match:
             self.send_response(404)
             self.end_headers()
             return
-        result, error = _parse_query(query)
         server.oauth_outcome = (result, error)
         body = (
             f"認可に失敗しました: {error}"

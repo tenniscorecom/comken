@@ -984,13 +984,13 @@ class TestCallbackUrl:
     """``SalesforceBase.CALLBACK_URL`` は Refresh Token Flow の受け口既定値を持つ。"""
 
     def test_default_callback_url_is_localhost(self):
-        """既定では ``http://localhost:8080/callback`` を返す（上書きしなければ）。"""
-        assert SalesforceBase.CALLBACK_URL == "http://localhost:8080/callback"
+        """既定では ``http://127.0.0.1:8080/callback`` を返す（上書きしなければ）。"""
+        assert SalesforceBase.CALLBACK_URL == "http://127.0.0.1:8080/callback"
 
     def test_registered_sites_inherit_default_callback_url(self):
         """``SITES`` の組織クラスは既定の Callback URL をそのまま使う。"""
         for site in SITES:
-            assert site.CALLBACK_URL == "http://localhost:8080/callback"
+            assert site.CALLBACK_URL == "http://127.0.0.1:8080/callback"
 
 
 class TestSalesforceSiteSelectionError:

@@ -112,9 +112,12 @@ class SalesforceBase:
     DISPLAY_NAME = ""
 
     # 初回認可（Refresh Token Flow）で使うローカル Callback URL。
+    # "localhost" ではなく "127.0.0.1" を使う。待ち受けサーバー（callback_server.py）は
+    # IPv4 でしか listen しないため、"localhost" が IPv6（::1）に解決される環境だと
+    # ブラウザからの接続が失敗しうる。127.0.0.1 なら DNS 解決自体が発生せず曖昧さがない。
     # 通常は組織ごとに変える必要はないが、ECA 側の設定と食い違う組織が
     # あれば、そのクラスで上書きする
-    CALLBACK_URL = "http://localhost:8080/callback"
+    CALLBACK_URL = "http://127.0.0.1:8080/callback"
 
     # 「どのプロジェクト／誰が継承して作ったか」を示す識別子。同じ社内組織の
     # クラスが複数プロジェクトで重複していないかを、ライブラリ管理者が
