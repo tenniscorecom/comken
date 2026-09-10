@@ -87,15 +87,17 @@ refresh token が含まれた場合は `on_refresh_token` が呼ばれるので�
 localhost なら、ブラウザを自動で開いてリダイレクトも自動受信し、`code`/`code_verifier`
 を組み立てて `exchange_code()` まで呼ぶ（[初回認可の手順](開発/salesforce-authentication.md#2-初回認可-authorization_url)）。
 
-### 開発中だけ Client Credentials Flow を使う
+### Client Credentials Flow（歴史的記録・現在は使わない）
 
-初回の対話的な認可を挟まずに動かせるので、動作確認の回転が速い。
-**本番では使わない**（→ [判断の根拠](開発/salesforce-authentication.md#2-なぜ-refresh-token-flow-を既定にするのか)）。
+初回の対話的な認可を挟まずに動かせるため、当初は開発中だけ使う想定だった
+（→ [判断の根拠](開発/salesforce-authentication.md#2-なぜ-refresh-token-flow-を既定にするのか)）。
 
-> [!note] 補足（2026-09-08）
+> [!note] 補足（2026-09-08 / 2026-09-10）
 > Client Credentials Flow は社内の運用上もう使えないため、comken からも
 > コード（`oauth_credentials.py` / `ClientCredentialsOAuth`）を削除した。
-> この節は歴史的記録として残している。
+> さらに `sf setup` の初回認可自体が自動化された（OAuthリダイレクトの
+> 自動受信・PKCE対応）ため、**開発中も含めて使わない。** この節は歴史的
+> 記録として残している。
 
 認証を `auth=` で差し替える仕組みは将来別の方式（JWT など）を生やす余地として
 残してあり、`Solution()` の既定経路（Refresh Token）と独立に扱える。
