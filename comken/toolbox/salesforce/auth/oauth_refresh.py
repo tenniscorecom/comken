@@ -57,7 +57,8 @@ def _on_refresh_token_via_credentials(credentials: Credentials) -> Callable[[str
 
     def _save(refresh_token: str) -> None:
         logger.debug("新しい refresh_token を DPAPI へ保存します")
-        credentials.save("api_refresh_token", refresh_token)
+        credentials.api_refresh_token = refresh_token
+        credentials.save()
         logger.debug("refresh_token を DPAPI へ保存しました")
 
     return _save

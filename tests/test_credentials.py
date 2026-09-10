@@ -225,7 +225,7 @@ class TestCredentialsAttributes:
 
 
 class TestCredentialsSave:
-    """Credentials.save() — 生成時に渡した site へそのまま書く入口。
+    """cred.field = 値 → cred.save() — 生成時に渡した site へそのまま書く入口。
 
     save_credential(site, field, value) を毎回呼ぶと、 site を読む側
     （Credentials(site)）と書く側で別々に書くことになり、 typo で site が
@@ -235,25 +235,56 @@ class TestCredentialsSave:
 
     def test_save_writes_under_the_same_site_as_constructed(self, store):
         cred = Credentials("site_a", store)
-        cred.save("password", "new-value")
+        cred.password = "new-value"
+        cred.save()
         assert load_credential("site_a", "password", store) == "new-value"
 
-    def test_save_is_visible_through_the_same_instance_afterwards(self, store):
-        """save() 直後に同じインスタンスで読むと、 キャッシュではなく新しい値が返る。"""
+    def test_assignment_alone_does_not_touch_disk(self, store):
+        """代入だけではディスクに書かない（ふつうの属性代入と同じ）。"""
+        cred = Credentials("site_a", store)
+        cred.password = "new-value"
+        with pytest.raises(CredentialNotFoundError):
+            load_credential("site_a", "password", store)
+
+    def test_assignment_is_visible_through_the_same_instance_before_save(self, store):
+        """save() を呼ぶ前でも、 同じインスタンスでは直近の代入を読める。"""
         save_credential("site_a", "password", "old-value", store)
         cred = Credentials("site_a", store)
         assert cred.password == "old-value"  # 先にキャッシュを作らせる
 
-        cred.save("password", "new-value")
+        cred.password = "new-value"
 
         assert cred.password == "new-value"
 
+    def test_save_persists_other_cached_fields_too(self, store):
+        """1項目だけ代入して save() しても、 同じインスタンスが持つ他の項目は保たれる。"""
+        save_credentials({"site_a": {"client_id": "A", "password": "old"}}, store)
+        cred = Credentials("site_a", store)
+        assert cred.client_id == "A"  # 先にキャッシュを作らせる
+
+        cred.password = "new-value"
+        cred.save()
+
+        assert load_credential("site_a", "client_id", store) == "A"
+        assert load_credential("site_a", "password", store) == "new-value"
+
     def test_save_does_not_affect_other_sites(self, store):
         cred_a = Credentials("site_a", store)
-        cred_a.save("password", "A")
+        cred_a.password = "A"
+        cred_a.save()
         assert load_credential("site_a", "password", store) == "A"
         with pytest.raises(CredentialNotFoundError):
             load_credential("site_b", "password", store)
+
+    def test_assigning_non_string_raises_type_error(self, store):
+        cred = Credentials("site_a", store)
+        with pytest.raises(TypeError):
+            cred.password = 12345  # type: ignore[assignment]
+
+    def test_assigning_invalid_field_name_raises(self, store):
+        cred = Credentials("site_a", store)
+        with pytest.raises(InvalidCredentialNameError):
+            cred.クライアントID = "A"
 
 
 class TestDeleteAndList:

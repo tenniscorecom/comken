@@ -146,7 +146,8 @@ class TestRefreshTokenOAuth:
             auth = RefreshTokenOAuth.from_credentials(DOMAIN_URL, "site_a")
             assert auth._on_refresh_token is not None
             auth._on_refresh_token("ROTATED")
-        credentials.save.assert_called_once_with("api_refresh_token", "ROTATED")
+        assert credentials.api_refresh_token == "ROTATED"
+        credentials.save.assert_called_once_with()
 
 
 class TestPluggableSalesforceAuth:

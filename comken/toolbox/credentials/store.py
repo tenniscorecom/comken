@@ -136,8 +136,36 @@ class Credentials:
         logger.debug("Credentials の属性を取得: site=%s, field=%s", self._site, item)
         return site_dict[item]
 
-    def save(self, field: str, value: str) -> None:
-        """このインスタンスと同じ site（コンストラクタに渡したもの）へ1件保存する。
+    def __setattr__(self, name: str, value: object) -> None:
+        """``cred.password = "new-value"`` のように代入すると、保存前の値を仮に持つ。
+
+        代入だけではディスクに書かない（ふつうの属性代入と同じ）。実際に DPAPI へ
+        反映されるのは ``save()`` を呼んだときだけ（代入が暗黙にファイルI/Oを
+        起こすと、意図しない代入まで保存されてしまうため）。
+        """
+        if name.startswith("_"):
+            # _site / _path / _cache の初期化・内部キャッシュ更新はここを通る
+            object.__setattr__(self, name, value)
+            return
+        if not CREDENTIAL_NAME_PATTERN.fullmatch(name):
+            raise InvalidCredentialNameError("項目名", name)
+        if not isinstance(value, str):
+            raise TypeError(
+                f"認証情報の値は文字列で渡してください: "
+                f"{self._site}.{name} は {type(value).__name__}"
+            )
+        # _decrypted() が返す dict はキャッシュそのもの（コピーではない）ので、
+        # ここで書き換えれば save() を呼ぶ前でも同じインスタンスの属性アクセスで読める。
+        self._decrypted().setdefault(self._site, {})[name] = value
+        logger.debug("Credentials へ代入（未保存）: site=%s, field=%s", self._site, name)
+
+    def save(self) -> None:
+        """代入で変えた値をまとめて、このインスタンスと同じ site（コンストラクタに
+        渡したもの）へ保存する。
+
+            cred = Credentials(config.CREDENTIALS.AMS)
+            cred.password = new_password
+            cred.save()
 
         site 名をもう一度書かせないための入口。 read（属性アクセス）と write を
         別々に site を書いて揃える設計だと、 typo や参照元の食い違い（config.ini
@@ -145,20 +173,15 @@ class Credentials:
         気づけず、 別サイトとして保存されてしまう。 同じ Credentials インスタンスの
         read/write が必ず同じ site を指すよう、 こちらを使う。
 
-            cred = Credentials(config.CREDENTIALS.AMS)
-            new_password = prompt_new_password()
-            change_password_page.submit_new_password(new_password)
-            cred.save("password", new_password)   # cred と同じ site へ書く
-
         site 名をまだ Credentials として持っていない・呼び出しのたびに別の site へ
-        書きたい場合（Salesforce の refresh_token 書き戻し等）は
+        書きたい場合（Salesforce の初回登録等、読み込みが無いところへの書き込み）は
         ``save_credential()`` を直接使う。
 
         保存後は、 同じ path を使う他の Credentials インスタンスの復号キャッシュも
-        含めて自動で破棄される（``save_credential()`` 自体が行うため、 ここでは
+        含めて自動で破棄される（``save_credentials()`` 自体が行うため、 ここでは
         何もしない）。 次の属性アクセスで再復号される。
         """
-        save_credential(self._site, field, value, self._path)
+        save_credentials({self._site: self._site_dict()}, self._path)
 
     def _site_dict(self) -> dict[str, str]:
         """このサイト名の項目 dict を返す。初回アクセスでファイル全体を復号して保持する。"""

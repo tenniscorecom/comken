@@ -91,18 +91,20 @@ config.ini の1行で済む（コード側に長いキー名の直書きが残�
 cred = Credentials(config.CREDENTIALS.SITE_A)
 ```
 
-登録済みの値を更新したいときは `cred.save(項目名, 新しい値)`。**`Credentials()` を
-作るときに渡した site をそのまま使う**ので、更新のたびに site 名を書き直さなくてよい
+登録済みの値を更新したいときは、属性へ代入してから `cred.save()`。**代入だけでは
+ディスクに書かない**（ふつうの属性代入と同じ）。`Credentials()` を作るときに
+渡した site をそのまま使うので、更新のたびに site 名を書き直さなくてよい
 （次項の理由も参照）。
 
 ```python
-cred.save("client_secret", new_secret)
+cred.client_secret = new_secret
+cred.save()
 ```
 
 ### パスワードの変更
 
 ブラウザ自動化中にサイト側から強制的にパスワード変更を求められたとき、新しい
-パスワードを **CLI で受け付け → サイト側へ反映 → DPAPI 認証情報ストアへも反映**、
+パスワードを **CLI で受け付け → DPAPI 認証情報ストアへ反映 → サイト側へも反映**、
 の3つを一緒に行う。片方だけ更新すると次回以降ログインできなくなるため、
 同じ値を両方に使う。
 
@@ -112,17 +114,19 @@ from comken.toolbox.credentials import Credentials, prompt_new_password
 cred = Credentials(config.CREDENTIALS.AMS)
 result = login_page.login(cred.username, cred.password)   # 読みは cred から
 if isinstance(result, ChangePasswordPage):
-    new_password = prompt_new_password()                    # 画面には表示せず2回入力させ、一致を確かめる
+    # CLIで2回入力させ、一致したらその場でDPAPIへの保存まで終わる
+    new_password = prompt_new_password(cred)
     result.submit_new_password(new_password)                # サイト側へ反映
-    cred.save(ChangePasswordPage.CREDENTIAL_FIELD, new_password)  # 書きも同じ cred へ
 ```
 
-`prompt_new_password()` は `getpass` で入力を伏せ字にし、1回目と2回目が食い違う間・
-未入力の間は確定させず何度でも聞き直す。site を `save_credential(site, ...)` の
-ようにその場でリテラルや別の識別子（ブラウザセッション名など）から書くと、
-読む側の `cred` が指す site とずれても気づけず、別項目として保存されて次回
-ログインが古いパスワードのまま失敗し続ける。**読み書きを同じ `cred` インスタンス
-に通す**ことで、この事故はそもそも起こり得ない設計にする。
+`prompt_new_password(cred)` は `msvcrt` で入力を伏せ字にし、1回目と2回目が
+食い違う間・未入力の間は確定させず何度でも聞き直す。確定したら渡した `cred`
+（＝ログイン時に読んだのと同じインスタンス）へ代入して `save()` まで内部で行う
+ので、呼び出し側で site 名や項目名を書き直す必要がない（typo で別サイト・
+別項目として保存されて次回ログインが失敗し続ける事故を防ぐ）。
+
+無人実行（RPAのスケジュール実行等）で誤って走らせても入力待ちのままハングし
+続けないよう、既定 300 秒（`timeout_seconds` で変更可）で `TimeoutError` になる。
 
 強制的に変更画面へ飛ばされたことの検知方法（URL の変化で判定するのが基本）は
 [ブラウザ操作のパスワード期限切れ](browser.md#パスワード期限切れの変更画面へ飛ばされたとき)を参照。

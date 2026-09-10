@@ -18,14 +18,15 @@ Windows ログオンユーザーに紐付けて暗号化して保管する。
 タスクスケジューラの実行ユーザーが登録時と違うと復号できないので、
 運用アカウントで取り込むこと（最も多い事故）。
 
-    Credentials        サイト名配下の値に属性でアクセスする
+    Credentials        サイト名配下の値に属性でアクセスする（cred.field = 値 と
+                       cred.save() で更新もできる）
     load_credential    (サイト名, 項目名) を指定して1件取り出す
     save_credential    (サイト名, 項目名) を指定して1件保存する
     save_credentials   まとめて保存する（書き込みは1回）
     delete_credential  1件削除する
     list_names         登録済みの (サイト名, 項目名) の一覧（値は返さない）
     import_json        平文 JSON を読み込んで取り込む
-    prompt_new_password  新しいパスワードをCLIから2回入力させ、一致を確かめる
+    prompt_new_password  新しいパスワードをCLIから2回入力させ、Credentials へ保存する
     CREDENTIALS_PATH   保存先のパス
 """
 

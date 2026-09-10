@@ -9420,12 +9420,17 @@ Args:
 #### `save`
 
 ```text
-def save(self, field: str, value: str) -> None:
+def save(self) -> None:
 ```
 
 ##### 説明
 
-このインスタンスと同じ site（コンストラクタに渡したもの）へ1件保存する。
+代入で変えた値をまとめて、このインスタンスと同じ site（コンストラクタに
+渡したもの）へ保存する。
+
+    cred = Credentials(config.CREDENTIALS.AMS)
+    cred.password = new_password
+    cred.save()
 
 site 名をもう一度書かせないための入口。 read（属性アクセス）と write を
 別々に site を書いて揃える設計だと、 typo や参照元の食い違い（config.ini
@@ -9433,17 +9438,12 @@ site 名をもう一度書かせないための入口。 read（属性アクセ�
 気づけず、 別サイトとして保存されてしまう。 同じ Credentials インスタンスの
 read/write が必ず同じ site を指すよう、 こちらを使う。
 
-    cred = Credentials(config.CREDENTIALS.AMS)
-    new_password = prompt_new_password()
-    change_password_page.submit_new_password(new_password)
-    cred.save("password", new_password)   # cred と同じ site へ書く
-
 site 名をまだ Credentials として持っていない・呼び出しのたびに別の site へ
-書きたい場合（Salesforce の refresh_token 書き戻し等）は
+書きたい場合（Salesforce の初回登録等、読み込みが無いところへの書き込み）は
 ``save_credential()`` を直接使う。
 
 保存後は、 同じ path を使う他の Credentials インスタンスの復号キャッシュも
-含めて自動で破棄される（``save_credential()`` 自体が行うため、 ここでは
+含めて自動で破棄される（``save_credentials()`` 自体が行うため、 ここでは
 何もしない）。 次の属性アクセスで再復号される。
 
 ### `load_credential`
@@ -9578,23 +9578,33 @@ Raises:
 ### `prompt_new_password`
 
 ```text
-def prompt_new_password(label: str='新しいパスワード') -> str:
+def prompt_new_password(cred: 'Credentials', field: str=DEFAULT_PASSWORD_FIELD, *, label: str='新しいパスワード', timeout_seconds: float=DEFAULT_TIMEOUT_SECONDS) -> str:
 ```
 
 #### 説明
 
-新しいパスワードをCLIから2回入力させ、一致するまで再入力を求める。
+新しいパスワードをCLIから2回入力させ、一致したら cred へ保存して返す。
 
-入力文字は画面に表示しない（getpass）。1回目と2回目が食い違う間、
-または未入力のままの間は確定させず、何度でも聞き直す。タイプミスした
-まま確定して、サイト側とDPAPI側の値がずれる事故を防ぐため。
+入力文字は画面に表示しない。1回目と2回目が食い違う間、または未入力の間は
+確定させず何度でも聞き直す。timeout_seconds 以内に入力が確定しなければ
+TimeoutError にする（無人実行でハングし続けるのを防ぐ）。
+
+確定した値は ``cred.<field> = 値`` の形で代入し、その場で ``cred.save()``
+まで行う。ログイン時に読む側（``cred.password`` 等）と同じインスタンスを
+渡すことで、site 名を書き直す必要がない（typo で別サイトへ保存される
+事故を防ぐ）。
 
 Args:
-    label: プロンプトに表示する項目名。複数サイトを扱うスクリプトで
-           「どの値を聞かれているか」を区別したいときに使う。
+    cred: 保存先。``Credentials(config.CREDENTIALS.<サイト>)`` で作ったもの。
+    field: 保存する項目名。既定は ``"password"``。
+    label: プロンプトに表示する項目名（表示用で、保存先の項目名とは独立）。
+    timeout_seconds: 入力待ちの上限秒数。既定 300 秒（5分）。
 
 Returns:
-    2回とも一致した入力値。
+    2回とも一致した入力値（保存済み）。
+
+Raises:
+    TimeoutError: timeout_seconds 以内に入力が確定しなかった場合。
 
 
 ## `from comken.toolbox.csv import ...`

@@ -33,17 +33,18 @@ class LoginPage(AppPage):
         パスワードの有効期限切れの場合はサイト側が強制的に変更画面へ飛ばすため、
         代わりに ChangePasswordPage を返す。呼び出し側は型で分岐する:
 
-            # cred は読み（cred.password）にも書き（cred.save）にも同じ site を使う。
-            # site 名を login() の外と中で別々に書かない（typo で別サイトとして
-            # 保存され、次回ログインが古いパスワードのまま失敗し続ける事故を防ぐ）
+            # cred は読み（cred.password）にも書き（prompt_new_password 内の
+            # cred.save()）にも同じ site を使う。site 名を login() の外と中で
+            # 別々に書かない（typo で別サイトとして保存され、次回ログインが
+            # 古いパスワードのまま失敗し続ける事故を防ぐ）
             cred = Credentials(config.CREDENTIALS.AMS)
             result = login_page.login(cred.username, cred.password)
             if isinstance(result, ChangePasswordPage):
                 from comken.toolbox.credentials import prompt_new_password
 
-                new_password = prompt_new_password()
+                # CLIで2回入力させ、一致したらその場でDPAPIへ保存まで終わる
+                new_password = prompt_new_password(cred)
                 secure = result.submit_new_password(new_password)   # サイト側へ反映
-                cred.save(ChangePasswordPage.CREDENTIAL_FIELD, new_password)  # DPAPI側へ反映
             else:
                 secure = result
             print(secure.get_heading())
