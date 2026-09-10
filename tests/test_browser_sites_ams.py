@@ -49,3 +49,22 @@ class TestLoginPasswordExpiry:
         result = page.login("user01", "password")
 
         assert isinstance(result, ChangePasswordPage)
+
+
+class TestCredentialFieldConstant:
+    """save_credential() へ渡す site/field をリテラルで書き直させないための配線。"""
+
+    def test_credential_field_is_a_constant_not_a_literal(self, tmp_path):
+        """呼び出し側は ChangePasswordPage.CREDENTIAL_FIELD と session.name を
+        参照する設計（docs/credentials.md・docs/browser.md の例と同じ）。
+        リテラルで typo しても気づけない事故を防ぐため、値そのものではなく
+        「参照できること」を確認する。
+        """
+        redirected_url = f"{AMS.BASE_URL}{ChangePasswordPage.PATH}"
+        page = _make_login_page(tmp_path, current_url_after_login=redirected_url)
+
+        result = page.login("user01", "password")
+
+        assert isinstance(result, ChangePasswordPage)
+        assert result.session.name == page.session.name
+        assert ChangePasswordPage.CREDENTIAL_FIELD == "password"

@@ -103,12 +103,19 @@ from comken.toolbox.credentials import prompt_new_password, save_credential
 
 new_password = prompt_new_password()                       # 画面には表示せず2回入力させ、一致を確かめる
 change_password_page.submit_new_password(new_password)     # サイト側へ反映
-save_credential("ams", "password", new_password)           # DPAPI側へ反映
+save_credential(
+    change_password_page.session.name,     # "ams" のようなリテラルは書かない
+    ChangePasswordPage.CREDENTIAL_FIELD,   # "password" も同様
+    new_password,
+)  # DPAPI側へ反映
 ```
 
 `prompt_new_password()` は `getpass` で入力を伏せ字にし、1回目と2回目が食い違う間・
-未入力の間は確定させず何度でも聞き直す。「サイト側と DPAPI 側のパスワードがずれる」
-事故はここで防ぐ。
+未入力の間は確定させず何度でも聞き直す。site / field をリテラルで書くと、
+ログイン時に読む側（`Credentials(site).password` 等）と書き戻す側で typo が
+あっても気づけず、別項目として保存されて次回ログインが古いパスワードのまま
+失敗し続ける。`session.name` と `ChangePasswordPage.CREDENTIAL_FIELD`
+（両方とも定義は1か所）を参照することで、この事故を防ぐ。
 
 強制的に変更画面へ飛ばされたことの検知方法（URL の変化で判定するのが基本）は
 [ブラウザ操作のパスワード期限切れ](browser.md#パスワード期限切れの変更画面へ飛ばされたとき)を参照。

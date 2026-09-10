@@ -9,7 +9,15 @@
 
     new_password = prompt_new_password()
     change_password_page.submit_new_password(new_password)   # サイト側へ反映
-    save_credential("ams", "password", new_password)          # DPAPI側へ反映
+    # site / field をリテラルで書くと、ログイン時に読む側との typo に気づけず、
+    # 別項目として保存されて次回ログインが失敗し続ける。session.name と、
+    # 画面クラス側で定義した項目名の定数（例: ChangePasswordPage.CREDENTIAL_FIELD）
+    # を参照して揃える。
+    save_credential(
+        change_password_page.session.name,
+        ChangePasswordPage.CREDENTIAL_FIELD,
+        new_password,
+    )  # DPAPI側へ反映
 """
 
 # 対話的にパスワードを受け付けるモジュールのため、再入力を促すメッセージの

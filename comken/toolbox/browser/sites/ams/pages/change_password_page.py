@@ -21,6 +21,11 @@ class ChangePasswordPage(AppPage):
 
     # LoginPage.login() が current_url にこの文字列が含まれるかで遷移を検知する。
     PATH = "/change-password"
+    # DPAPI認証情報ストアの項目名。ログイン時に読む側（Credentials(site).password）と
+    # 変更後に書き戻す側（save_credential(site, ...)）が別々に文字列を書くと、
+    # 片方だけtypoしたときに気づけないまま別項目として保存され、次回ログインが
+    # 古いパスワードのまま失敗し続ける。両側でこの定数を参照して揃える。
+    CREDENTIAL_FIELD = "password"
     NEW_PASSWORD = Locator.id("newPassword")
     CONFIRM_PASSWORD = Locator.id("confirmPassword")
     SUBMIT_BTN = Locator.css("button[type=submit]")

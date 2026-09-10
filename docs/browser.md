@@ -557,7 +557,12 @@ if isinstance(result, ChangePasswordPage):
 
     new_password = prompt_new_password()
     secure = result.submit_new_password(new_password)   # サイト側へ反映
-    save_credential("ams", "password", new_password)    # DPAPI側へ反映
+    # site は login_page.session.name、field は ChangePasswordPage.CREDENTIAL_FIELD を使う。
+    # リテラルで書き直すと、読む側・書く側で typo が起きても気づけず、
+    # 別項目として保存されて次回ログインが古いパスワードのまま失敗し続ける。
+    save_credential(
+        login_page.session.name, ChangePasswordPage.CREDENTIAL_FIELD, new_password
+    )  # DPAPI側へ反映
 else:
     secure = result
 ```
