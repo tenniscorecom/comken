@@ -543,107 +543,22 @@ def ensure_login(self, user_id: str, password: str) -> "HomePage":
 
 ---
 
-## パスワード期限切れの変更画面へ飛ばされたとき
+## ログイン失敗まわり（期限切れ・認証エラー・非同期の揺れ）
 
-社内システムの多くは、パスワードの有効期限が切れるとログイン直後に強制的に
-変更画面へ飛ばす。**画面遷移メソッドは遷移先の型を返す**という通常のルールの
-まま、行き先が2通りある場合は戻り値の型を `SecurePage | ChangePasswordPage`
-のように増やし、呼び出し側で `isinstance` 分岐する。
+パスワード期限切れの変更画面（`ChangePasswordPage`）・単純な認証情報間違い
+（`LoginFailedError`）・非同期でボタンや表示が遅れて出るサイトへの対処は、
+雛形（`comken/toolbox/browser/sites/ams/pages/login_page.py`・
+`change_password_page.py`、`ouju/pages/login_page.py`）に実装済み。
 
-```python
-# cred は読み（cred.password）にも書き（change_password 内の cred.save()）
-# にも同じ site を使う。site 名を外と中で別々に書かない（typo で別サイトと
-# して保存され、次回ログインが古いパスワードのまま失敗し続ける事故を防ぐ）
-cred = Credentials(config.CREDENTIALS.AMS)
-result = login_page.login(cred.username, cred.password)
-if isinstance(result, ChangePasswordPage):
-    from comken.toolbox.credentials import change_password
-
-    # CLIで2回入力→サイトへ送信→DPAPI保存まで1行で完結する。サイト側が
-    # 拒否した場合（PasswordRejectedError）は自動で聞き直す
-    secure = change_password(cred, result.submit_new_password)
-else:
-    secure = result
-```
-
-サイト側が新しいパスワードを拒否する（記号が足りない・文字数が足りない等）
-ことがある。その再試行ループを利用プロジェクト側に書かせないため、
-`submit_new_password()`（ここでは `ChangePasswordPage` のメソッド）は
-拒否を検知したら `PasswordRejectedError` を送出する実装にしておく
-（内部は `raise_if_shown(self.ERROR_MESSAGE, PasswordRejectedError)`。
-下の「単純にパスワードが間違っているとき」と同じ共通処理を使っている）。
-`change_password()` がそれを受け取って自動でCLIへ聞き直す
-（既定3回まで。再試行させたくなければ `max_attempts=1` を渡す）。
-拒否の表示も Ajax 等で少し遅れて出ることがあるため、送信後は
-`wait_for_result()` で「URL が変わる」か「拒否の表示が出る」のどちらかが
-起きるまで待ってから判定している。
-
-### 検知方法
-
-強制遷移の起き方はサイトによって2パターンある。実際に F12 で確かめて選ぶ。
-
-| パターン | 見分け方 |
-|---|---|
-| **URL が変わる**（例: `/login` → `/change-password`） | `session.current_url` に変更画面の PATH が含まれるかを見る（多くのサイトはこちら） |
-| **URL は変わらず、画面内に変更フォームだけが現れる**（SPA 等） | 変更画面固有の要素（新パスワード欄など）の有無を `has_element()` で見る |
-
-雛形（`comken/toolbox/browser/sites/ams/`）は前者を既定にしている。
-`login_page.py` の `login()` と `change_password_page.py` が見本。
+**実装の詳細・呼び出し側の書き方は、ここでは重複させずコードの docstring
+（`LoginPage.login()` / `ChangePasswordPage.submit_new_password()`）を
+正とする** — `docs/` は共有サーバーへ配布されず docstring だけが実際に
+利用プロジェクト側へ届くため、二重管理を避けてそちらに寄せている。
+[自動生成 API.md](自動生成/API.md) にも同じ docstring が載る。
 DPAPI への反映まで含めた使い方は [認証情報のパスワードの変更](credentials.md#パスワードの変更) を参照。
 
-### 単純にパスワードが間違っているとき
-
-期限切れとは別に、ユーザー名・パスワードが単純に間違っていて認証自体に
-失敗する場合がある。この場合サイトはログイン画面のまま留まり、画面内に
-エラー表示が出るだけなので、`isinstance` では判定できない。呼び出し側に
-「エラー表示を見て判定する」処理を書かせないため、`login()` 側でエラー表示を
-検知して `LoginFailedError`（サイト側のエラー文言つき）を送出する実装にしておく。
-
-```python
-try:
-    result = login_page.login(cred.username, cred.password)
-except LoginFailedError as e:
-    # DPAPI に保存した認証情報が古くなっている可能性が高い。
-    # python -m comken cred gui で登録し直してから再実行する
-    print(e)
-    raise
-```
-
-雛形（`ams/pages/login_page.py`・`ouju/pages/login_page.py`）は
-`.login-error` 要素の有無で検知している。パスワード関連のエラー判定は
-どのサイトでも同じ形（「エラー要素があれば、その文言で例外を送出する」）に
-なりがちなので、`self.raise_if_shown(self.ERROR_MSG, LoginFailedError)`
-という共通メソッドにまとめてある（`ChangePasswordPage.submit_new_password()`
-の `PasswordRejectedError` 送出も同じメソッドを使っている）。
-
-エラー表示は Ajax 等で少し遅れて出て、その後は数秒で自動的に消えるサイトも
-ある。クリック直後に一度きり確認するだけだと、表示が遅れた分をすり抜けて
-しまい、実際は失敗しているのに `SecurePage` を返してしまう恐れがある。
-そのため雛形の `login()` は、クリック後に「URL が変わる」か「エラー表示が
-出る」のどちらかが起きるまで `self.wait_for_result(url_before, self.ERROR_MSG)`
-で待ってから判定している。早い方が起きた時点で確定するので、ログイン成功時に
-無駄な待ちが発生することはない。
-
-### ログインボタンが既に無いとき
-
-サイトによっては、パスワード欄への入力完了などをきっかけに非同期でログインが
-進み、`click()` しようとした時点でログインボタンが既に消えている（押せない）
-ことがある。素直に `click()` すると要素待機のタイムアウトで
-`ElementNotFoundError` になってしまうため、`login()` 側は
-`self.click_if_present(self.LOGIN_BTN)` を使う（要素があればクリックし、
-無ければ何もしないでそのまま画面判定（期限切れ／エラー表示／通常ログイン）
-へ進む）。要素が無いのは想定外の分岐なので、`click_if_present()` 自身が
-info ログを残す。呼び出し側で同じ事実を重ねてログする必要はない。
-
-パスワード期限切れで `ChangePasswordPage` へ遷移する分岐は運用上ふつうに
-起こりうるため、雛形の `login()` はそこだけ `current_url` を添えて info ログへ
-残す。通常のログイン成功時（`SecurePage` を返すだけの経路）では何もログしない
-— 毎回出るログは「分岐の理由だけを info にする」という方針とずれるため。
-
-### 自分のサイトで同じパターンを使うとき
-
 `click_if_present()` / `raise_if_shown()` / `wait_for_result()` は
-`comken.toolbox.browser.Page`（`SitePage` も継承先）が持つ汎用メソッドなので、
+`comken.toolbox.browser.Page`（`SitePage` も継承先）が持つ汎用メソッドで、
 `ams`・`ouju` に限らずどのサイトの画面クラスでも使える。ログイン以外の
 フォーム送信（例: 検索条件の送信でエラーが出る画面）でも同じ形になりやすい。
 
