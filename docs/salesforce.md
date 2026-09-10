@@ -77,10 +77,15 @@ with Solution(auth=auth) as sf:
 
 初回だけ `RefreshTokenOAuth.authorization_url()` の URL をブラウザで開き、戻された `state` を
 照合してから `exchange_code()` へ code と `AuthorizationRequest.code_verifier`（PKCE、
-Salesforce が必須にしている）を渡す。ライブラリはローカル HTTP サーバーや
-ブラウザを勝手に起動しない。レスポンスに新しい refresh token が含まれた場合は
-`on_refresh_token` が呼ばれるので、その場で DPAPI へ保存する。コールバックを省略すると
-プロセス内だけ更新され、次回起動時に古い token を使う点に注意する。
+Salesforce が必須にしている）を渡す。このAPI自体はローカル HTTP サーバーや
+ブラウザを勝手に起動しない（`code` は呼び出し側が用意する）。レスポンスに新しい
+refresh token が含まれた場合は `on_refresh_token` が呼ばれるので、その場で DPAPI へ
+保存する。コールバックを省略するとプロセス内だけ更新され、次回起動時に古い token を
+使う点に注意する。
+
+**`python -m comken sf setup`（CLI）はここまで自動化している。** `CALLBACK_URL` が
+localhost なら、ブラウザを自動で開いてリダイレクトも自動受信し、`code`/`code_verifier`
+を組み立てて `exchange_code()` まで呼ぶ（[初回認可の手順](開発/salesforce-authentication.md#2-初回認可-authorization_url)）。
 
 ### 開発中だけ Client Credentials Flow を使う
 

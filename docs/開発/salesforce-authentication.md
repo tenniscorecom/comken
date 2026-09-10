@@ -375,34 +375,36 @@ python -m comken sf setup --site 1
 
 1. 登録済みの組織が `1. ... 2. ...` の形で表示される。**番号か組織名を入力**する
 2. 選択した組織の prefix で DPAPI から client_id / client_secret を読む
-3. ECA の認可 URL を組み立てて画面に出す
-4. 次の `code:` プロンプトで `code=` 以降の文字列を受け付け、`refresh_token`
-   を DPAPI へ自動保存する
+3. ECA の認可 URL を組み立てて画面に出し、ブラウザを自動で開く
+4. `CALLBACK_URL` が `localhost`（既定）なら、承認後のリダイレクトを
+   **自動で受け取り**、そのまま `refresh_token` を DPAPI へ保存する
 
-このコマンドは 1 回実行するたびに「URL を表示 → code を受け取り → refresh_token
-を保存」までをまとめて行う。途中で止めたくなったら `Ctrl+C` で中断すれば
-refresh_token は保存されない（途中で失敗したら `<prefix>_refresh_token` は
-**未登録のまま**。手順 2 からやり直す）。
+コピペの手間は無い。ブラウザで Salesforce にログインし「Allow」（許可）を
+押すだけで、あとは comken が自動で受け取って完了する。
 
-ブラウザでの操作:
+このコマンドは 1 回実行するたびに「URL を表示 → ブラウザを開く → 自動で
+受け取り → refresh_token を保存」までをまとめて行う。途中で止めたくなったら
+`Ctrl+C` で中断すれば refresh_token は保存されない（途中で失敗したら
+`<prefix>_refresh_token` は**未登録のまま**。手順 2 からやり直す）。
 
-- 表示された URL をブラウザで開く
-- Salesforce のログイン画面で ECA を許可する組織のユーザーでログイン
-- 「Allow」 (許可) をクリック
-- ブラウザを `http://localhost:8080/callback?code=...` にリダイレクト
-- **その callback URL の `code=` 以降の文字列**をメモ
+> [!note] 自動受け取りが失敗したとき
+> ポートが他のプロセスに使われている等で自動受け取りに失敗した場合は、
+> 「自動受け取りに失敗しました」と表示され、手動貼り付けに切り替わる。
+> このとき貼り付けるのは **リダイレクトされた URL 全体**（アドレスバーを
+> 選択してコピペしたもの）でよい（`code=` の後ろだけを切り出す必要はない。
+> 認可コードは `=` を含むことが多く、切り出しは貼り間違いの元だったため
+> 廃止した）。`CALLBACK_URL` が `localhost` でない組織（社内で公開した
+> callback URL を使う場合）も、最初から同じ手動貼り付けになる。
 
-この `code` は 10 分で失効する。すぐ次の手順で使う。
+## 3. refresh_token への交換（自動）
 
-## 3. code を refresh_token に交換
+手順 2 の `setup` の中で自動的に行われる。ブラウザでの操作:
 
-2 の `setup` を実行すると、`code:` プロンプトが出る。あとは 2 でメモした
-文字列を貼り付けるだけ:
-
-- `code:` プロンプトに 2 でメモした文字列を貼り付け
-- 出力の `refresh_token を DPAPI に保存しました（<prefix>_refresh_token）` が
-  出れば、`<prefix>_refresh_token` への登録は完了（別途 `cred gui` で
-  登録し直す必要はない）
+- 自動で開いたブラウザで、ECA を許可する組織のユーザーでログイン
+- 「Allow」（許可）をクリック
+- あとは自動。出力に
+  `refresh_token を DPAPI に保存しました（<prefix>_refresh_token）` が出れば
+  完了（別途 `cred gui` で登録し直す必要はない）
 
 内部では `RefreshTokenOAuth.exchange_code(..., prefix=<prefix>)` を呼び、
 受け取った refresh_token は `from_credentials` と同じ書き戻し先

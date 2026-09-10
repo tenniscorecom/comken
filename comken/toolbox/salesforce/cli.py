@@ -37,14 +37,22 @@ External Client App の consumer secret を REST API から回せるか（＝ロ
 
 import argparse
 import sys
+import webbrowser
 
 from comken.exceptions import (
     ComkenError,
     CredentialNotFoundError,
+    SalesforceAuthError,
     SalesforceSiteSelectionError,
 )
 from comken.toolbox.credentials import Credentials
-from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth
+from comken.toolbox.salesforce.auth.callback_server import (
+    CallbackResult,
+    is_localhost_callback,
+    parse_redirect_url,
+    wait_for_callback,
+)
+from comken.toolbox.salesforce.auth.oauth_refresh import AuthorizationRequest, RefreshTokenOAuth
 from comken.toolbox.salesforce.auth.rotation import (
     ROTATION_COMPONENT,
     SalesforceCredentialRotator,
@@ -268,12 +276,7 @@ def _run_setup(args: argparse.Namespace) -> None:
     auth_request = RefreshTokenOAuth.authorization_url(
         client_id, site_class.CALLBACK_URL, site_class.DOMAIN_URL
     )
-    print()
-    print("次の URL をブラウザで開き、Salesforce にログインして許可してください:")
-    print(f"  {auth_request.url}")
-    print()
-    print(f"許可すると {site_class.CALLBACK_URL}?code=... へリダイレクトされます。")
-    code = input("code= の後ろの文字列を貼り付けてください: ").strip()
+    code = _obtain_authorization_code(auth_request, site_class.CALLBACK_URL)
 
     RefreshTokenOAuth.exchange_code(
         client_id,
@@ -288,6 +291,51 @@ def _run_setup(args: argparse.Namespace) -> None:
     print(f"refresh_token を DPAPI に保存しました（{prefix}.api_refresh_token）。")
     site_number = SITES.index(site_class) + 1
     print(f"動作確認: python -m comken sf report --site {site_number} --report-id 00O...")
+
+
+def _obtain_authorization_code(auth_request: AuthorizationRequest, redirect_uri: str) -> str:
+    """認可コードを受け取る。
+
+    redirect_uri が localhost ならブラウザを自動で開き、リダイレクトも自動で
+    受け取る。自動受け取りに失敗した場合・localhost でない場合は、
+    リダイレクトされた URL 全体を貼り付けさせて解析する（``code=`` の
+    後ろだけを切り出させると、認可コードに含まれることが多い ``=`` 等の
+    記号で貼り間違いが起きやすいため、URL 全体をそのまま受け取る）。
+    """
+    print()
+    print("次の URL をブラウザで開き、Salesforce にログインして許可してください:")
+    print(f"  {auth_request.url}")
+
+    if is_localhost_callback(redirect_uri):
+        print()
+        print("ブラウザを自動で開きます。承認すると自動で受け取ります...")
+        webbrowser.open(auth_request.url)
+        try:
+            callback = wait_for_callback(redirect_uri)
+        except (OSError, TimeoutError, SalesforceAuthError) as e:
+            print(f"自動受け取りに失敗しました（{e}）。手動で貼り付けてください。")
+        else:
+            print("認可コードを自動で受け取りました。")
+            return _code_of(callback, auth_request)
+
+    print()
+    print(f"許可すると {redirect_uri}?code=... へリダイレクトされます。")
+    print("そのリダイレクト先の URL を、アドレスバーからそのまま貼り付けてください。")
+    while True:
+        redirected_url = input("URL: ").strip()
+        try:
+            callback = parse_redirect_url(redirected_url)
+        except SalesforceAuthError as e:
+            print(f"URL を読み取れませんでした（{e}）。もう一度貼り付けてください。")
+            continue
+        return _code_of(callback, auth_request)
+
+
+def _code_of(callback: CallbackResult, auth_request: AuthorizationRequest) -> str:
+    """CSRF検証（stateの一致）をしてから code を返す。"""
+    if callback.state != auth_request.state:
+        raise SalesforceAuthError(200, "state が一致しません（CSRF検証に失敗しました）")
+    return callback.code
 
 
 def _print_shape(body: object, indent: str = "  ") -> None:
