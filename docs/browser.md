@@ -212,15 +212,14 @@ unfilled, pending = browsers.parallel(
 ### 守ること
 
 **裏で動かしている処理と、自分で書いている処理で、同じブラウザを触らないこと。**
-同じブラウザを同時に触ると `ConcurrentSessionUseError` で止まる。
-待たされるのではなく即エラーにしているのは、黙って壊れる（別の画面を操作していた）より、
-早く気づけるほうが安全なため。
 
 ```python
 kintai_task = browsers.run_task(lambda: kintai.go_login().login(USER, PW).unfilled_days())
 keiri.go_login().login(USER, PW).pending_rows()   # ⭕ 別のブラウザなので問題ない
 kintai.go_login().login(USER, PW)                  # ❌ 裏で使っている勤怠を触っている
 ```
+
+なぜ即エラーにしているかは `Browsers.run_task()` の docstring（自動生成/API.md）を参照。
 
 `wait()` を呼び忘れたまま `with` を抜けても、ブラウザを閉じる前に処理の終了は待つ。
 その処理が失敗していた場合はログに残る（黙って消えることはない）。
@@ -553,8 +552,9 @@ def ensure_login(self, user_id: str, password: str) -> "HomePage":
 **実装の詳細・呼び出し側の書き方は、ここでは重複させずコードの docstring
 （`LoginPage.login()` / `ChangePasswordPage.submit_new_password()`）を
 正とする** — `docs/` は共有サーバーへ配布されず docstring だけが実際に
-利用プロジェクト側へ届くため、二重管理を避けてそちらに寄せている。
-[自動生成 API.md](自動生成/API.md) にも同じ docstring が載る。
+利用プロジェクト側へ届くため、二重管理を避けてそちらに寄せている
+（この2つはサイト雛形のページクラスのため自動生成/API.md には載らない。
+ソースを直接開くか IDE の定義ジャンプで読む）。
 DPAPI への反映まで含めた使い方は [認証情報のパスワードの変更](credentials.md#パスワードの変更) を参照。
 
 `click_if_present()` / `raise_if_shown()` / `wait_for_result()` は

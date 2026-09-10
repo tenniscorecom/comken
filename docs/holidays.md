@@ -39,9 +39,8 @@ if is_business_day(date.today(), calendar=calendar):
 | `ComputedHolidaySource`    | 純粋計算で祝日を組み立てる（mokejp/holidays_jp MIT 由来）  | 標準ライブラリのみ        |
 | `CompanyHolidaySource`     | 会社の休業日をコードに直書きして返す                       | 標準ライブラリのみ        |
 
-内閣府 CSV は **CP932（Shift_JIS）** で配布され、列は
-「国民の祝日・休日月日」「国民の祝日・休日名称」。1 行目はヘッダーなので
-読み込み時にスキップする。
+内閣府 CSV のエンコーディング・列構成・ヘッダー行の扱いは
+`load_cabinet_office_csv()` のdocstring（自動生成/API.md）を参照。
 
 ## 内閣府 CSV の同梱（既定カレンダー）
 
@@ -192,14 +191,10 @@ business_day_after(date(2026, 8, 20), calendar=cal)
 「`d` を含むかどうか」だけが違うので、「`d` が営業日のときにスキップして
 ほしくない」ケースは `on_or_*` を選ぶ。
 
-`nth_business_day_of_month` は月の初日から数えて `n` 番目の営業日。
-その月の営業日数を超える `n` を渡すと `BusinessDayNotFoundError`。
-その月に営業日が 1 日も無い月でも `BusinessDayNotFoundError`。
-
-`business_day_after` 系の探索は最大 `BUSINESS_DAY_SEARCH_LIMIT` 日
-（既定 30 日）で打ち切り、見つからなければ `BusinessDayNotFoundError` を送る。
-祝日データが壊れていたり、`CompanyHolidaySource` に休日を広範囲に登録してしまった
-ときの無限ループを防ぐため。
+`nth_business_day_of_month` は、`n` が月の営業日数を超える場合と、その月に
+営業日が 1 日も無い場合のどちらも `BusinessDayNotFoundError`。探索の打ち切り
+条件（`BUSINESS_DAY_SEARCH_LIMIT`）を含む詳しい挙動は `business_day_after()` /
+`nth_business_day_of_month()` のdocstring（自動生成/API.md）を参照。
 
 ## 既定カレンダー（`calendar` を省略する書き方）
 
@@ -221,18 +216,16 @@ if is_business_day(date.today()):           # 既定カレンダーで判定
 nth_business_day_of_month(date.today(), 3)  # 今月の第 3 営業日
 ```
 
-既定カレンダーは次の 3 つから組み立てる。**ネットワークには一切出ない。**
-
-1. `ComputedHolidaySource`（純粋計算。土台）
-2. 同梱の `comken/core/holidays/data/syukujitsu.csv`（内閣府の実値。計算式の上書き用）
-3. `CompanyHolidaySource`（会社の休業日。コード直書き）
+既定カレンダーの構成（3 つの `HolidaySource` の組み合わせ）は `default_calendar()`
+のdocstring（自動生成/API.md）を参照。**ネットワークには一切出ない。**
 
 **`comken.core` は `requests` を import しないので、
 オフライン環境・社内 BO 端末でも `from comken.core import is_business_day`
 がそのまま動く。**
 
 会社独自の年末年始などを追加したいプロジェクトは、起動時に
-`set_default_calendar()` を一度呼んで差し替える。
+`set_default_calendar()` を一度呼んで差し替える（挙動の詳細はdocstring・
+自動生成/API.md を参照）。
 
 ```python
 from comken.core.holidays import (
@@ -251,9 +244,6 @@ set_default_calendar(my_calendar)
 
 # 以降は calendar= なしで使える
 ```
-
-`set_default_calendar(None)` でリセットすると、次回の呼び出しで
-既定の遅延生成に戻る。
 
 ## 注意事項
 

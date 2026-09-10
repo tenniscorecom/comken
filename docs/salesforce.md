@@ -75,13 +75,13 @@ with Solution(auth=auth) as sf:
     records = sf.query("SELECT Id FROM Account")
 ```
 
-初回だけ `RefreshTokenOAuth.authorization_url()` の URL をブラウザで開き、戻された `state` を
-照合してから `exchange_code()` へ code と `AuthorizationRequest.code_verifier`（PKCE、
-Salesforce が必須にしている）を渡す。このAPI自体はローカル HTTP サーバーや
-ブラウザを勝手に起動しない（`code` は呼び出し側が用意する）。レスポンスに新しい
-refresh token が含まれた場合は `on_refresh_token` が呼ばれるので、その場で DPAPI へ
-保存する。コールバックを省略するとプロセス内だけ更新され、次回起動時に古い token を
-使う点に注意する。
+初回認可の PKCE ハンドシェイク（`authorization_url()` → `state` 照合 →
+`exchange_code()` へ `code` / `code_verifier` を渡す）と、refresh_token が
+ローテーションされたときの `on_refresh_token` 呼び出しの挙動は
+`RefreshTokenOAuth.authorization_url()` / `exchange_code()` / `request_token()`
+のdocstringを参照。このAPI自体はローカル HTTP サーバーや
+ブラウザを勝手に起動しない（`code` は呼び出し側が用意する）。コールバックを
+省略するとプロセス内だけ更新され、次回起動時に古い token を使う点に注意する。
 
 **`python -m comken sf setup`（CLI）はここまでを対話的にまとめて行う。** 認可URLを
 表示し、承認後にリダイレクトされたURL全体を貼り付けると、`code`/`code_verifier`
@@ -120,10 +120,10 @@ refresh token が含まれた場合は `on_refresh_token` が呼ばれるので�
 つまり**コード側で残り秒数を計算する意味がない**。次の方針にする。
 
 1. 起動時に1回トークンを取る
-2. `401`（`INVALID_SESSION_ID`）が返ったら、**その場で1回だけ取り直して同じリクエストを再送**
+2. `401`（`INVALID_SESSION_ID`）が返ったら取り直して同じリクエストを再送する
 3. `expires_in` は見ない・保存しない
 
-再送は1回だけに限る（2回連続で 401 なら設定不備なので、リトライで隠さず落とす）。
+再送の回数・失敗時の扱いは `SalesforceBase._reauthenticate_if_unauthorized()` のdocstringを参照。
 
 ### 将来 JWT に移る場合
 
@@ -284,44 +284,24 @@ with site() as sf:
 - **CRM Analytics**（旧 Einstein Analytics / Tableau CRM）は**別ライセンス製品**で、
   comken はそちらを使っていない・使えない。検索するとこの製品が先に出てきて混乱する。
 
-`sf.report.run()` 系が「Analytics API の権限がない」「Analytics API へのアクセスが
-拒否された」といった文面のまま 401 / 403 で失敗する場合、それは comken が
-**間違ったエンドポイントを叩いた**のではなく、Reports and Dashboards REST API
-そのものへのアクセスを拒否されたという意味。
-このときは `SalesforceReportAccessDeniedError` が送出される（メッセージの文言では
-判定せず、HTTP ステータスコードだけで判定する）。
-
-> 対処は管理者に次の3点を確認してもらう:
-> 1. 実行ユーザーの Profile / Permission Set に「API Enabled」権限があるか
-> 2. 対象のレポート・レポートフォルダへのアクセス権があるか
-> 3. 組織の Edition・ライセンスが Reports and Dashboards REST API に対応しているか
->    （一部の制限ライセンスでは使えない）
+`sf.report.run()` 系が 401 / 403 で失敗したときの意味（comken が間違ったエンドポイントを
+叩いたのではないこと）と管理者への確認事項は `SalesforceReportAccessDeniedError` の
+docstring（自動生成/API.md）を参照。
 
 ### 定義だけ取る（describe）
 
-`describe(report_id)` でレポートを**実行せず**に定義を取れる。
-`get()` / `run_async()` と違い、2000 行の上限も実行枠も消費しない。
-上の 3 段構えで「3. SOQL へ書き換え」を検討するとき、移行先 SOQL の
-下書き材料として使う。
-
-> **列名の対応は自動ではない。** レポートの列名は `ACCOUNT.NAME` のような
-> レポート用名前で、SOQL のフィールドパスとは1対1ではない。
-> 人が対応表を当てて書き換える必要がある。
+`describe(report_id)` の挙動（実行せずに定義だけ取れる・2000 行の上限や実行枠を
+消費しない・SOQL 移行の下書き材料にする用途・列名が SOQL のフィールドパスと
+1対1ではない点）は `ReportAPI.describe()` のdocstringを参照。
 
 #### 列-フィールド対応表（`describe_fields` / `describe_fields_csv`）
 
 「3. SOQL へ書き換え」の下書きを何十件もまとめてやりたいとき、
 **`describe_fields(report_id)`** で「レポートの列」と「実フィールド API 名」
 の対応表を `Table` で取れる。さらに **`describe_fields_csv(report_id, path)`** で
-そのまま CSV へ落とせる。
-
-**完全な自動変換ではなく、9 割自動で埋めて残りを可視化する道具**として
-設計している。Salesforce の Reports API は列と実フィールドの対応を保証しない
-ため、レポートの表示名と主オブジェクトのフィールド表示名を突き合わせて
-**一致したぶんだけ**実 API 名・型を埋める。一致しない列は黙って外さず、
-「対応フィールドなし」「複数候補あり」と備考に書く。多対1の結合や
-氏名のようなレポート専用列は実フィールドが無いため、無理に埋めようと
-しない方針（誤った候補を押し付けないことを優先するため）。
+そのまま CSV へ落とせる。設計方針（9 割自動で埋めて残りを可視化する道具である
+こと）・対象列の範囲・戻り値の列構成は `ReportAPI.describe_fields()` のdocstring
+を参照。
 
 ```python
 with Solution() as sf:
@@ -329,18 +309,12 @@ with Solution() as sf:
         sf.report.describe_fields_csv(report_id, f"fields_{report_id}.csv")
 ```
 
-返却される `Table` の列: **列キー / 表示名 / 対応フィールドAPI名 / 型 / 備考**。
-`detailColumns` にある表示列だけでなく、`reportFilters` だけに現れる列、
-`SUMMARY`/`MATRIX` 形式の `groupingsDown`/`groupingsAcross`（グルーピング列）、
-`aggregates`（集計対象列）も含む。グルーピング列・集計列の表示名は
+実装の補足（docstring に無い分）: グルーピング列・集計列の表示名は
 `groupingColumnInfo`/`aggregateColumnInfo`（`detailColumnInfo` とは別枠）から
 引く。同じ接続中に同一オブジェクトを複数レポートで使う場合、Object Describe は
-オブジェクト単位でキャッシュして再利用する。
-「対応フィールドAPI名」が引けなかった行は空ではなく **`"(不明)"`** を入れる
-（「調べたが空」と「調べていない」を区別できない問題を防ぐため）。
-主オブジェクトの Object Describe が 404 等のときは例外にせず、全列を
-`(不明)` ＋理由の備考で返す（複合レポートタイプで主オブジェクト名が
-実在の sObject と一致しないケースを、道具として壊さず扱うため）。
+オブジェクト単位でキャッシュして再利用する。主オブジェクトの Object Describe が
+404 等のときは例外にせず、全列を `(不明)` ＋理由の備考で返す（複合レポートタイプで
+主オブジェクト名が実在の sObject と一致しないケースを、道具として壊さず扱うため）。
 Object Describe の 401 / 403 は Analytics API とは別の権限系統なので、
 `SalesforceReportAccessDeniedError` には変換せず `SalesforceRequestError`
 のまま送出する。
@@ -349,17 +323,8 @@ Object Describe の 401 / 403 は Analytics API とは別の権限系統なの�
 
 ## Bulk API 2.0 の Query ジョブ（重い SOQL の逃げ道）
 
-**この機能は本物の Salesforce 組織に対して未検証。** ジョブ作成・状態確認・
-結果取得のエンドポイントとレスポンス構造は Salesforce の公式リファレンスに
-基づいて実装しているが、実際のレスポンスで想定と違う点が見つかったら、
-`comken/toolbox/salesforce/bulk_query.py` を修正すること。
-
-`SalesforceBase.query()` は SOQL を同期で送り、`nextRecordsUrl` を辿って
-全件取得する。**行数の上限はない**が、同期 REST の1リクエストごとの処理の
-ため、重いクエリ（複雑な絞り込み・大きいテーブルのフルスキャンなど）は
-HTTP タイムアウトに当たりやすい。そのような場合に Bulk API 2.0 の Query
-ジョブを使う。Bulk API は「ジョブを作って完了を待つ非同期方式」のため、
-重いクエリでもタイムアウトしにくい。
+未検証である旨と、`SalesforceBase.query()`（同期 SOQL）との対比・使う場面は
+`BulkQueryAPI` クラスのdocstringを参照。
 
 ```python
 from comken.toolbox.salesforce.sites import Solution
@@ -396,21 +361,18 @@ delete）は次の「Bulk API 2.0 の Ingest ジョブ」節の `bulk_ingest` �
 
 ### 未検証の前提
 
-実装は comken のテストで HTTP をモックして確認しているが、レスポンスの
-前提（結果 CSV の2ページ目以降にも1行目のヘッダー行が含まれる、次ページが
-無いときは `Sforce-Locator: null` になる、など）は本物の組織では未検証。
-実際の挙動が違っていたら `comken/toolbox/salesforce/bulk_query.py` を
-修正すること。
+実装は comken のテストで HTTP をモックして確認しているが、ページングの前提
+（2ページ目以降のヘッダー行の扱い・`Sforce-Locator: null` の意味）は本物の
+組織では未検証。詳しくは `fetch_paged_csv_as_table()`
+（`comken/toolbox/salesforce/_bulk_paging.py`）のdocstringを参照。
+実際の挙動が違っていたら同ファイルを修正すること。
 
 ---
 
 ## Bulk API 2.0 の Ingest ジョブ（一括変更）
 
-**この機能は本物の Salesforce 組織に対して未検証。** ジョブ作成・データ
-アップロード・状態確認・成功/失敗結果取得のエンドポイントとレスポンス構造は
-Salesforce の公式リファレンスに基づいて実装しているが、実際のレスポンスで
-想定と違う点が見つかったら、`comken/toolbox/salesforce/bulk_ingest.py` を
-修正すること。
+未検証である旨は `BulkIngestAPI` クラスのdocstringを参照
+（実際のレスポンスで想定と違う点が見つかったら `comken/toolbox/salesforce/bulk_ingest.py` を修正すること）。
 
 `SalesforceBase.insert()` / `update()` / `upsert()` / `delete()` は同期で
 1件ずつ REST API を送る。**件数が多くなると同期 REST のHTTPタイムアウトに
@@ -442,22 +404,17 @@ with Solution() as sf:
 
 ### `DataLoaderCLI` との使い分け
 
-`DataLoaderCLI`（docs/dataloader.md）は Salesforce が配布している
-デスクトップアプリ版 Data Loader を**サブプロセスで呼び出す**方式で、
-デスクトップアプリのインストールが前提になる。`BulkIngestAPI` は
-Salesforce の REST API を**直接叩く**ため、デスクトップアプリの
-インストールは不要。ブラウザでデータ変更できない環境
-（Data Import Wizard がない組織など）からの移行先として使える。
+`DataLoaderCLI`（docs/dataloader.md）と `BulkIngestAPI`
+（デスクトップアプリのインストール要否・サブプロセス経由か REST 直叩きか）の
+違いは `BulkIngestAPI` クラスのdocstringを参照。
 
 ### 設計判断: 失敗行は例外にしない
 
-`BulkIngestResult.failed` が空でないとき、ライブラリは例外を**送出し
-ない**。ジョブ自体は正常終了しつつ一部の行が失敗することは仕様上
-起こり得るので、`DataLoaderResult` / `bulk_query` と同じく**呼び出し側
-が `len(result.failed)` を見て判断する**形にしている。`SalesforceBulkIngestFailedError`
-が送出されるのはこれとは別の状況で、**ジョブ自体が `Failed` / `Aborted`
+`BulkIngestResult.failed` が空でないときに例外を送出しない理由は
+`BulkIngestResult` のdocstring（自動生成/API.md）を参照。これとは別に、
+`SalesforceBulkIngestFailedError` は**ジョブ自体が `Failed` / `Aborted`
 で終わった場合**（CSV の形式不正・対象オブジェクトが存在しない等、
-個々の行ではなくジョブ全体を実行できなかった場合）に限る。
+個々の行ではなくジョブ全体を実行できなかった場合）に限って送出される。
 
 ### `dry_run()` に対応する
 
@@ -471,10 +428,9 @@ HTTP 呼び出しが1回も発生せず、空の `BulkIngestResult` を返す。
 
 ### 未検証の前提
 
-実装は comken のテストで HTTP をモックして確認しているが、レスポンスの
-前提（結果 CSV の2ページ目以降にも1行目のヘッダー行が含まれる、次ページが
-無いときは `Sforce-Locator: null` になる、`errorMessage` フィールドで
-失敗理由が返る、など）は本物の組織では未検証。実際の挙動が違っていたら
+ページングの前提は「Bulk API 2.0 の Query ジョブ」節の「未検証の前提」と同じ
+（`fetch_paged_csv_as_table()` を共有している）。加えて `errorMessage`
+フィールドで失敗理由が返る点も本物の組織では未検証。実際の挙動が違っていたら
 `comken/toolbox/salesforce/bulk_ingest.py` を修正すること。
 
 ## 計測
@@ -490,10 +446,10 @@ HTTP 呼び出しが1回も発生せず、空の `BulkIngestResult` を返す。
 | **レポートの切り捨て発生** | **SOQL 化すべきレポートの洗い出し** |
 
 > [!note] リトライは実際に行う
-> 「リトライ回数」を数えるからには、数えるだけで終わらせない。
-> **401 は取り直して1回だけ**やり直し（2回目の 401 は設定不備なので隠さずエラーにする）、
-> **5xx と 429 は待ち時間を伸ばしながら最大3回**やり直す。4xx はやり直しても
-> 直らないので即エラー。数えているのに一度もやり直していない、という嘘の計測を作らない。
+> 「リトライ回数」を数えるからには、数えるだけで終わらせない。実際の再試行ロジック
+> （401 / 5xx / 429 / 4xx それぞれの扱い）は `SalesforceBase._send_with_backoff()` /
+> `_reauthenticate_if_unauthorized()` のdocstringを参照。数えているのに一度も
+> やり直していない、という嘘の計測を作らない。
 
 もう1つ、自前カウントより信頼できる情報源がある。レスポンスヘッダーの
 `Sforce-Limit-Info: api-usage=1234/15000` で、**組織の 24 時間 API 消費量が実測で取れる**。

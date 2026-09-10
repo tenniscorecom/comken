@@ -51,12 +51,13 @@ print(cached_report_path(CUSTOMER_LIST))   # 本日の固定キャッシュの�
 `replace()` / `append()` など、`Table` の API がそのまま使える。CSV / Excel の
 読み込みは中で吸収するので、利用側は中身の形式を意識しなくてよい。
 ファイルパスだけ欲しいときは `cached_report_path()` を別関数として用意している
-（戻り値は `Path`）。`Table` を経由しないので、パスを他ツールへ渡す用途で
-読み込みは走らない。
+（戻り値は `Path`）。
 
-`download_scheduled()` は `list[Path]` のままで **`Table` を返さない**。定期取得の
-呼び出し側は中身を読まず「取らせる」のが目的なので、reader を並べても使い道がないため
-（役割の違いが戻り値の型に出ている）。
+`download_scheduled()` がなぜ `Table` ではなく `list[Path]` を返すかは、
+その docstring（自動生成/API.md には未収録。`service.py` のソースを直接参照）
+に理由がある。`cached_report()` が自動的に取りに行かない理由はそちらにも
+無く——**ここで自動的に取りに行くと、定期取得が動いていないことに誰も
+気づかなくなる**ため。
 
 ### 2つの関数の使い分け
 
@@ -65,12 +66,9 @@ print(cached_report_path(CUSTOMER_LIST))   # 本日の固定キャッシュの�
 | `download_scheduled()` | **今この瞬間に、有効な全レポートをまとめて取りに行く** | **行く**（定期取得の入口） |
 | `cached_report(ID)` | **本日の定期取得キャッシュを受け取る** | **行かない**（無ければ例外） |
 
-`cached_report()` は取りに行く関数ではない。本日の固定キャッシュが無ければ
-`CachedReportNotFoundError` で止まる。**ここで自動的に取りに行くと、定期取得が
-動いていないことに誰も気づかなくなる**ため。急いでその場の最新値が必要なときは
-`download_scheduled()` をスケジュール外で直接実行する。Downloader 自身には
-「今すぐ取りに行く」だけの関数を残さない（定期取得が動いていないことに誰も
-気づかなくなるため）。
+急いでその場の最新値が必要なときは `download_scheduled()` をスケジュール外で
+直接実行する。Downloader 自身には「今すぐ取りに行く」だけの関数を残さない
+（定期取得が動いていないことに誰も気づかなくなるため）。
 
 定期キャッシュを1日に複数回更新したいときは、呼び出す側のスケジューラから
 `download_scheduled()` を必要な時刻に実行する。Downloader 自身には複雑な
@@ -216,11 +214,9 @@ python -m comken sfdl check レポート管理表.xlsx
   00O5g00000FGHIJ: 1002（売上実績）、1005（売上実績・別集計）
 ```
 
-書き方の誤り（管理番号の重複、URL からレポート ID を取り出せない等）は取得のときにも
-止まるが、**編集した直後にその場で分かる**ほうが直すのが早い。
-
-> どちらも**保守用のコマンド**で、業務の定期実行ではない。毎日の取得は個別プロジェクトから
-> `download_scheduled()` を呼ぶ（ライブラリには実行される単位を置かない）。
+`check` が保守用コマンドである理由（業務の定期実行ではない、書き方の誤りは取得時にも
+止まるが編集直後に気づけた方が早い等）は `cli.py` のモジュール docstring を参照
+（モジュール docstring のため自動生成/API.md には載らない。ソースを直接開く）。
 
 ### 列
 
@@ -277,10 +273,12 @@ shared_report_ids(load_master(MASTER_PATH))
 <保存先>\1002_売上実績_20260814_091530_123456.csv
 ```
 
-**管理番号が先頭**なのは、概要や参照先の Salesforce レポートが変わっても番号は変わらないため。
-概要を入れるのは、保存先を人が直接見たときに何のファイルか分かるようにするため。
-時刻はマイクロ秒まで付け、同じ日に複数回取得しても前のファイルを残す。万一名前が
-衝突した場合も連番を付け、既存ファイルを上書きしない。
+ファイル名の組み立て方（管理番号を先頭に置く理由・概要を入れる理由）は
+`provider.file_path_of()` の docstring を参照（自動生成/API.md には未収録。
+ソースを直接開く）。時刻はマイクロ秒まで付け、同じ日に複数回取得しても
+前のファイルを残す。万一名前が衝突した場合も連番を付け、既存ファイルを
+上書きしない（`service._reserve_path()` の docstring参照。こちらも同様に
+未収録）。
 
 **拡張子は常に `.csv`**。本日の固定キャッシュ（`cached_report()` /
 `cached_report_path()` が指すファイル）も同じ `.csv` で読み書きされる。
@@ -326,9 +324,8 @@ shared_report_ids(load_master(MASTER_PATH))
 
 ## 履歴（CSV）
 
-**管理表とは別のファイルにする。** 管理表は人が Excel で編集し、履歴はプログラムが
-書き足す。同じファイルにすると、人が開いている間はプログラムが保存できず、履歴が飛ぶか
-管理表が壊れる。**書く主体が違うものは分ける。**
+**管理表とは別のファイルにする理由**（書く主体が人とプログラムで違うものは分ける）は
+`history.py` のモジュール docstring を参照（自動生成/API.md には未収録。ソースを直接開く）。
 
 記録する列（順序はこの通り）:
 
@@ -341,10 +338,10 @@ Salesforce取得結果, 保存結果, 保存先, ファイル名, 取得件数, 
 `download_scheduled()` 1 本になったので、トリガ列（以前の「実行方式」）は廃止した。
 
 **`スケジュールキー`** はその取得を起動したスケジュール行のキー（管理表「スケジュール」
-シートの `スケジュールキー` 列と同じ値）。**同じスケジュール行の重複実行を防ぐ**
-ための根拠データで、`schedule_succeeded_today()` がこの列を引いている。スケジュール
-行に紐付かないレポートの取得（後方互換）は空文字。失敗履歴は dedup の判定に使わ
-れない（保存失敗で残っていないなら再試行できるべきため）。
+シートの `スケジュールキー` 列と同じ値）。判定の詳細（重複実行を防ぐ根拠データである
+こと、失敗履歴は dedup 判定に使わないこと）は `history.schedule_succeeded_today()`
+の docstring を参照（自動生成/API.md には未収録）。スケジュール行に紐付かないレポートの
+取得（後方互換）は空文字。
 
 `Salesforce取得結果` と `保存結果` は **3状態** を取る（`成功` / `失敗` / 空）。
 空はその段階まで到達しなかったことを表す。`エラーコード` には例外クラス名が入り、
@@ -362,36 +359,9 @@ Salesforce取得結果, 保存結果, 保存先, ファイル名, 取得件数, 
 | `ファイル` | 保存・共有サーバー・権限まわりの失敗 | **共有サーバーとアクセス権を確認** |
 | `プログラム` | comken 側の想定外（バグ） | **作った人へ連絡** |
 
-5区分の判定は次の5行（上から順に評価）で、`download_scheduled()` が握りつぶす
-例外の範囲と**まったく同じ**条件になるよう対応させている:
-
-```python
-def _classify_cause(error, fetched_from_salesforce, saved_to_file):
-    if not isinstance(error, (ComkenError, OSError)):  # 想定外
-        return "プログラム"
-    if saved_to_file is False:                          # 保存段階で落ちた
-        return "ファイル"
-    if fetched_from_salesforce is True and saved_to_file is None:
-        return "データなし"                              # 0 件を一意に指す
-    if fetched_from_salesforce is False:                # 取得段階で落ちた
-        return "Salesforce"
-    return "設定"                                       # 取得段階に入る前
-```
-
-以下は上の判定順（上から評価）を Mermaid の `flowchart TD` にしたもの。
-
-```mermaid
-flowchart TD
-    Start[例外発生] --> A{ComkenError か<br/>OSError か?}
-    A -->|No| R1[プログラム]
-    A -->|Yes| B{saved_to_file is<br/>False?}
-    B -->|Yes| R2[ファイル]
-    B -->|No| C{fetched=True かつ<br/>saved=None?}
-    C -->|Yes| R3[データなし]
-    C -->|No| D{fetched_from_salesforce<br/>is False?}
-    D -->|Yes| R4[Salesforce]
-    D -->|No| R5[設定]
-```
+5区分の判定順（狭い条件から順に評価）と、`download_scheduled()` が握りつぶす例外の
+範囲との対応は `service._failure_row()` の docstring を参照
+（内部関数のため自動生成/API.md には載らない。ソースを直接開く）。
 
 `データなし` が 0 件を一意に指す理由: 取得成功（`True`）を確定してから保存の `try` に入る
 までの間に発生しうる例外は `EmptyReportError` だけ。`EmptyReportError` は保存の `try` を
@@ -439,10 +409,9 @@ flowchart TD
 ## 最新ステータス（Excel）
 
 `download_scheduled()` のたびに、管理表の全エントリについて履歴 CSV から最新
-（実行日時が最大）の行を引いて 1 ファイルへ**上書き**生成する。
-人が読む用の帳票で、**プログラムだけが上書きする**（人は編集しない）ので、
-管理表（Excel）・履歴（CSV）とは別のファイルに置く。分ける理由は履歴と同じ
-（書く主体が違うと、人が開いている間にプログラムが保存できず履歴が飛ぶ）。
+（実行日時が最大）の行を引いて 1 ファイルへ**上書き**生成する。人が読む用の帳票で、
+**プログラムだけが上書きする**（人は編集しない）。詳細は `latest_status.py` の
+モジュール docstring を参照（自動生成/API.md には未収録。ソースを直接開く）。
 
 **履歴と役割が違う。** 履歴は「全実行の記録」で 1 レポートの最新だけ見たい
 業務側からは探しにくい。最新ステータスは「管理表 × 履歴の最新行」を 1 シート
@@ -462,11 +431,9 @@ flowchart TD
 | 管理番号 | 概要 | 最新実行日時 | 成否 | 原因区分 | エラー内容 |
 |---|---|---|---|---|---|
 
-- **履歴が無い管理番号は「未実行」と表示する。** 対象から落とすと一覧にあるのに
-  結果が載っていないという見落としが起きるため
-- **失敗した行は `Color.PINK` でセルを塗りつぶす。** 帳票を開いた瞬間に
-  「どの管理番号が落ちているか」が視覚で分かる（`report_master.py` の記入例と
-  同じ `PatternFill` を使う）
+- 履歴が無い管理番号の扱い・`Color.PINK` での塗りつぶしの詳細は
+  `write_latest_status()` の docstring を参照（自動生成/API.md には未収録）。
+  帳票を開いた瞬間に「どの管理番号が落ちているか」が視覚で分かる
 - ファイルへ書き込む経路で例外が出ても、`download_scheduled()` の成否判定には
   影響させない（`ScheduledDownloadFailedError` は本体結果で決まる）。
   帳票の書き損ねはログに warning を出すだけ
@@ -576,11 +543,8 @@ download_scheduled(
 「1時間ごと」で間隔内に確実に1回は終わらせたい、という終了時刻の概念は無い（「開始を
 過ぎたら、その日のうちに取れればよい」という運用要件）。
 
-**「取得時刻」列は空欄にできる。** 「毎日」「毎週」「毎月」で取得時刻を空欄にすると、
-「時刻を問わず、その日（該当曜日・該当日）ならいつでも due」という意味になる。
-Salesforceレポートのフィルタが「前日以前の確定済みデータ」を対象にしていて、
-日付さえ変わればいつ取っても中身が変わらないレポート向け（`S006` がこの例。
-「1時間ごと」では取得時刻は必須のまま）。
+**「取得時刻」列は空欄にできる**（`S006` がこの例）。空欄の意味と、「1時間ごと」では
+必須のままである理由は `ScheduleRule.is_due()` の docstring（自動生成/API.md）を参照。
 
 「日付」列は「毎月」のときだけ使い、次のいずれかを書く:
 
@@ -597,10 +561,11 @@ Salesforceレポートのフィルタが「前日以前の確定済みデータ�
 1日に2回取る意味がないため）。運用上は「9時に失敗したら13時にリトライする」
 という意図で複数行を並べることを想定している。
 
-雛形（`create_schedule_template()`）で生成した「スケジュール」シートには、
-Excelの条件付き書式で「曜日」列は取得頻度が「毎週」でないとき、「日付」列は
-「毎月」でないときにグレーアウトする（見た目のヒントのみで、入力自体を
-禁止するものではない）。
+雛形（`create_schedule_template()`）で生成した「スケジュール」シートには、条件付き
+書式で「曜日」「日付」列をグレーアウトする仕掛けがある。詳細は
+`_apply_schedule_conditional_formatting()` の docstring を参照
+（内部関数のため自動生成/API.md には載らない。見た目のヒントのみで、
+入力自体を禁止するものではない）。
 
 Excel の生 dict から直接 `ScheduleRule` を組み立てることもできるが、運用では
 `load_schedule()` 経由で読むのが基本:
@@ -624,15 +589,9 @@ from comken.services.salesforce_downloader.schedule_template import create_sched
 create_schedule_template(MASTER_PATH)  # 既存の管理表に「スケジュール」シートを追加
 ```
 
-- 雛形には「毎週」「1時間ごと」の記入例 2 行を入れ、`取得頻度` / `曜日` /
-  `有効` の各列に Excel のドロップダウン（入力規則）を付ける
-- `曜日` 列・`日付` 列には、`取得頻度` に応じたグレーアウトの条件付き書式も付ける
-  （前述の通り見た目のヒントのみ）
-- `祝日対応` 列はドロップダウンを付けない（自由記述）
-- 「記入方法」シートが既にあるブックでは末尾に追記し、無ければスケジュール部分
-  だけの簡易版を作る
-- 「スケジュール」シートが既にあるブックに呼ぶと `SheetAlreadyExistsError`
-  （既存データを消す事故を防ぐため、上書きしない）
+雛形に何が入るか（記入例・ドロップダウン・条件付き書式・「記入方法」シートへの追記・
+`SheetAlreadyExistsError` になる条件）は `create_schedule_template()` の docstring
+を参照（自動生成/API.md には未収録）。
 
 なお、 `ScheduleRule.from_row()` を直接呼ぶ使い方も引き続き可能
 （テストや、別のデータソースから組み立てるときに使う）:
@@ -653,10 +612,9 @@ if rule.is_due(datetime.now(), holidays=set()):
 ```
 
 **このシートが管理表に無い管理表でも `load_schedule()` は空リストを返す
-（後方互換）。** 機能を足していない既存のレポートは、`有効` のままで
-毎回取得される（後方互換フォールバック）。「スケジュール」シート
-に何も書いていないレポートは曜日・時刻を絞らず毎回走る、と覚えておけば
-「このレポートは曜日を絞っていないのに、なぜ毎回取れるのか」を見て分かる。
+（後方互換）。** 「スケジュール」シートに何も書いていないレポートが曜日・時刻を
+絞らず毎回走る理由は `load_schedule()` と `download_scheduled()` の docstring
+を参照（どちらも自動生成/API.md には未収録。ソースを直接開く）。
 
 ### 利用プロジェクト側の設計判断
 
@@ -876,8 +834,8 @@ class LargeSalesReport(SoqlReport):
         )
 ```
 
-Excelの「スケジュール」シートとは独立している。**いつ呼ぶかは呼び出し側
-（プロジェクトの定期実行）が決める**（この基底クラス自体はスケジュール判定を持たない）。
+Excel の「スケジュール」シートとは独立しており、いつ呼ぶかは呼び出し側が決める。
+詳細は `SoqlReport` の docstring（自動生成/API.md）を参照。
 
 #### 6. `SOQL_REPORTS` へ登録する
 
@@ -900,10 +858,10 @@ from comken.services.salesforce_downloader.soql_reports import download_soql_rep
 saved = download_soql_reports()   # SOQL_REPORTS を全部取得・保存
 ```
 
-`download_scheduled()` と同じく**1件失敗しても残りは続け**、1件でも失敗したら最後に
-`SoqlDownloadFailedError` を送出する。**履歴（history.csv）への記録は対象外**（利用場面が
-見えてから別途検討する）。保存されるファイル名は
-`管理番号_概要_日付_時刻_マイクロ秒.csv`（`download_scheduled()` と同じ組み立て方）。
+挙動（履歴（history.csv）への記録が対象外である理由）は `runner.py` の
+モジュール docstring を参照（自動生成/API.md には未収録）。1件失敗しても
+残りは続けること・保存ファイル名の組み立て方（`download_scheduled()` と同じ）は
+`download_soql_reports()` の docstring（自動生成/API.md）を参照。
 
 ### この手順が対象にしないもの
 
@@ -916,22 +874,16 @@ saved = download_soql_reports()   # SOQL_REPORTS を全部取得・保存
 
 ## エラー
 
-| エラー | いつ | 対処 |
-|---|---|---|
-| `ReportNotRegisteredError` | 管理番号が管理表に無い | 管理表に登録する |
-| `ReportDisabledError` | 管理表で「無効」になっている | 使うなら「有効」に戻す |
-| `MasterDuplicateValueError` | 管理表の unique 列に同じ値が2つある | どちらかの値を変える |
-| `MasterRowValueError` | 管理表の値が型・選択肢に合わない、または空欄にできない | メッセージの行と列を直す |
-| `CachedReportNotFoundError` | 本日の固定キャッシュが無い | 表示された正確なパスへ CSV を置き、同じ処理を再実行する |
-| `EmptyReportError` | 明細が 0 行（管理表の `0件あり` が `×`） | その日 0 件が普通なら管理表を `○` に。指している Salesforce レポートが違う可能性がある |
-| `ReportFolderNotFoundError` | 保存先のフォルダが無い | 管理表の「保存先」を確認する |
-| `ScheduledDownloadFailedError` | 定期取得で1件以上が失敗した | 履歴の「エラーコード」「エラー内容」で理由を確認する |
-| `ScheduleDuplicateKeyError` | スケジュール管理表の「スケジュールキー」が重複している | スケジュール管理表を開いて、重複している行のどちらかを別の値に変える |
-| `ScheduleRowValueError` | スケジュール管理表の行の値が正しくない | メッセージに出ている行と直したい値を管理表で確認する |
+エラー名と対処法は [docs/ERRORS.md](ERRORS.md)（comken 全体の例外クラスの docstring
+から自動生成、docstring が正）にまとまっている。Downloader 由来のものは
+`ReportNotRegisteredError` / `ReportDisabledError` / `MasterDuplicateValueError` /
+`MasterRowValueError` / `CachedReportNotFoundError` / `EmptyReportError` /
+`ReportFolderNotFoundError` / `ScheduledDownloadFailedError` /
+`ScheduleDuplicateKeyError` / `ScheduleRowValueError`（いずれも
+`comken/exceptions/downloader.py`）。
 
-`ScheduledDownloadFailedError` は**取得できたものを保存したうえで**送出する。
-1件失敗しても残りは続けるが、ログだけ出して正常終了すると**スケジューラから見て成功と
-区別が付かない**ので、最後に必ず知らせる。直したあと再実行すれば、残りだけが落ちる。
+`ScheduledDownloadFailedError` は**取得できたものを保存したうえで**送出する
+（理由は docstring 参照）。直したあと再実行すれば、残りだけが落ちる。
 
 ---
 

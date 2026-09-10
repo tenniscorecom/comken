@@ -65,45 +65,19 @@ assert result.success == result.errors == type(result.success)([], [])
 
 ## 設計判断・注意点
 
-### CLI の構文は comken が決め打ちしない
+**CLI 構文を comken が決め打ちしない理由・`launcher_path` の存在確認を
+`run()` まで遅らせる理由・既定タイムアウトが長い理由・
+`DataLoaderResult.errors` が空でなくても例外にならない理由は、ここでは
+重複させずコードの docstring（`DataLoaderCLI` / `DataLoaderCLI.run()` /
+`DataLoaderResult`）を正とする** — `docs/` は共有サーバーへ配布されず
+docstring だけが実際に利用プロジェクト側へ届くため、二重管理を避けて
+そちらに寄せている。[自動生成 API.md](自動生成/API.md) にも同じ docstring が載る。
 
-Data Loader の CLI 呼び出し構文は **バージョンによって変わりうる**。
-comken 側で一つの形に決め打ちすると、Data Loader をバージョンアップした瞬間に
-全利用箇所が壊れる。確実に作れる部分（subprocess 実行・タイムアウト・終了
-コード確認・結果 CSV の読み込み）は comken がしっかり作り込み、環境依存で
-断定できない部分（実行ファイルのパス・コマンド引数）は **呼び出し側が渡す**
-設計にしている。
+### 結果 CSV が無いときの対処
 
-### `DataLoaderResult.errors` が空でなくても例外にならない
-
-Data Loader は「プロセスとしては正常終了しつつ、対象レコードの一部分だけ
-失敗する」という結果を普通に返す（例: バリデーション違反の行が混ざっていた）。
-これは「処理が成功した」とも「失敗した」とも一概に言えない。
-
-comken は **プロセスの異常（終了コード非ゼロ）と、レコード単位の失敗を
-区別する**。前者は `DataLoaderExecutionError` などの例外で呼び出し側に
-伝えるが、後者は `DataLoaderResult.errors` に `Table` として詰めて返すだけで、
-例外にはしない。「成功 0 件・失敗 100 件」と「成功 100 件・失敗 0 件」が
-同じ呼び出し方で受け取れるので、利用者側の集計ロジックが分岐を増やさずに済む。
-
-### `launcher_path` の存在確認は `run()` で行う
-
-コンストラクタではファイルの存在を確認しない。コンストラクタと `run()`
-呼び出しの間に Data Loader がインストールされる／ファイルが復旧する余地を
-残すため（既存の `Excel` クラスなど、「コンストラクタでは開かない、
-`__enter__` / 操作時に確認する」設計に倣う趣旨）。
-
-### 大量データを扱うので既定のタイムアウトは長め
-
-`timeout_seconds` の既定値は 3600 秒（1 時間）。数万件以上のバッチでは
-数十分かかることも珍しくないため。タイムアウトが足りない場合は
-`timeout_seconds` を明示的に引き上げるか、処理対象の件数を減らす。
-
-### 結果 CSV が無いときは例外
-
-正常終了したのに `success_csv` / `error_csv` に指定したパスにファイルが
-無いと `DataLoaderResultFileMissingError` が出る。`config.properties`
-側の出力先設定と、ここで渡したパスが食い違っている可能性が高い。
+`DataLoaderResultFileMissingError` が出たら、`config.properties` 側の
+出力先設定と、`run()` に渡した `success_csv` / `error_csv` のパスが
+食い違っている可能性が高い。
 
 ## 関連
 

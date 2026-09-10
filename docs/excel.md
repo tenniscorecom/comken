@@ -19,11 +19,9 @@ with Excel("顧客.xlsx", read_only=True) as excel:
 
 ## シート名を候補から選ぶ
 
-「古い形式と新しい形式でシート名が違う」「テンプレ更新でリネームされた」のように、
-業務ファイルでよくある候補違いを `Excel.find_sheet(*candidates)` で吸収する。
-候補を順に試し、最初に見つかった **シート名（str）** を返す。全部無いときは
-最後の試行で `SheetNotFoundError`（実在シート一覧入り）をそのまま投げる。
-**`Sheet` インスタンスが要るときは戻った名前を `excel.sheet(name)` に渡す。**
+業務ファイルでよくある「バージョン違いでシート名が違う」候補違いを
+`Excel.find_sheet(*candidates)` で吸収する。挙動・戻り値・例外の詳細は
+`Excel.find_sheet()` のdocstring（自動生成/API.md）を参照。
 
 ```python
 with Excel("一覧.xlsx", read_only=True) as excel:
@@ -35,8 +33,6 @@ with Excel("一覧.xlsx", read_only=True) as excel:
         ...
 ```
 
-`excel.sheet(name)` を経由しない理由は、 `sheet()` が未存在の新規ブックで
-**自動でリネーム**するため。候補違いのときに知らぬ間にブックが変わるのを防ぐ。
 データシート（`PY_` プレフィックス付き）を候補に入れても所属判定はそのままなので、
 業務ロジック上は **表示用シート名だけを候補にする** こと。
 
@@ -70,16 +66,12 @@ with Excel("一覧.xlsx", read_only=True) as excel:
 ## 列を1本だけ読む（`read_column`）
 
 `Sheet.read_column(col, *, header_row=1, force_com=False) -> Table` は、1列だけを
-見出し付きで読む。最終行はシートの使用範囲（`max_row`）から自動で求めるので、
-`read_range(f"{col}1:{col}{最終行}")` のように範囲文字列を自分で組み立てなくてよい。
+見出し付きで読む。用途（同名見出しが複数本あるシートで1列ずつ読みたいとき）と
+挙動の詳細は `Sheet.read_column()` のdocstring（自動生成/API.md）を参照。
 
 ```python
 ids = sheet.read_column("G").column("お客様ID")
 ```
-
-見出しが同じ列がシート内に複数本あるとき（例: 同時レッスンの「お客様ID」が列ごとに
-繰り返し出てくる）に使う。シート全体を `read_range` / `Excel.read()` すると同名見出しの
-重複で `TableError` になるが、`read_column` は1列だけを `Table` にするので重複しない。
 
 見出しがシートの1行目にない（タイトル行や結合セルの下にある）ときは `header_row` で
 指定する。`header_row=2` なら `G2:G{最終行}` を読み、G2 を見出し・G3 以降をデータとして扱う。
@@ -90,15 +82,15 @@ ids = sheet.read_column("G").column("お客様ID")
 
 `ExcelTable.read()` はExcelテーブルの `ref` 内だけを読み、常に `Table` を返します。保存済みの数式キャッシュがない場合だけ内部でCOMへ切り替えます。キャッシュの有無にかかわらず再計算した値が必要なら `read(force_com=True)` を使います。シート全体を `Table` としてCOMで読む公開APIはありません。
 
-`Excel(path)` はUNCパス（`\\server\share\...`）なら作業中だけ自動的にローカルコピーを使います。`local_copy=True` で強制、`local_copy=False` で無効にできます。ローカルコピーの変更は明示的な `save()` または正常終了時だけ元パスへ保存され、処理後に削除されます。
+`Excel(path)` はUNCパス（`\\server\share\...`）なら書き込み時だけ自動的にローカルコピーを使います（`local_copy=True` で強制、`local_copy=False` で無効化）。詳しい条件は `Excel.__init__()` のdocstring（自動生成/API.md）を参照。
 
 既存ブックは表示用シートとデータシートを分け、Pythonから扱う表には `PY_` シートと `PY_T_` テーブルのプレフィックスを付けます。既存のセル範囲を自動でテーブル化することはありません。
 
 ## エンジン切り替え（`engine` 引数）
 
-約31シート＋ピボット十数個のようなブックを openpyxl で開くとピボットキャッシュ XML
-のパースが遅く、同じファイルを Excel COM（pywin32）経由で開くと速い。そのための
-切り替えが `Excel(..., engine="com")`。既定の `engine="openpyxl"` は既存と同じ動作。
+openpyxl で開くと遅い重いブック（ピボット多数など）を Excel COM（pywin32）経由で
+開くための切り替えが `Excel(..., engine="com")`。既定の `engine="openpyxl"` は
+既存と同じ動作。使いどころの詳細は `Excel.__init__()` のdocstring（自動生成/API.md）を参照。
 
 ```python
 with Excel("重い.xlsx", engine="com", local_copy=False) as excel:
@@ -148,9 +140,8 @@ with Excel("帳票.xlsx") as excel:
   - 見出し行に重複がある → `DuplicateHeaderCellError`
   - `table_name` が Excel の命名規則違反 → `InvalidTableNameError`
   - 同名のテーブルが既に存在 → `TableAlreadyExistsError`
-- `header_row` 未指定時の自動推定は **A2 ルールだけ**: `range` の先頭行に結合セルが
-  あれば次行を見出し行とみなす。それ以外の推定（フォントサイズ差・空白判定など）は
-  行わない。事故を減らすため `header_row` は明示することを推奨。
+- `header_row` 未指定時の自動推定ルール（A2 ルール）の詳細は
+  `Excel.convert_range_to_table()` のdocstring（自動生成/API.md）を参照。
 - 表示用シート・データシートどちらでも利用可能。`PY_T_` プレフィックスは補わない
   （指定された名前をそのまま使う）。
 - `engine="com"` で呼ぶと `InvalidTableOperationError`（openpyxl 経路のみ対応）。

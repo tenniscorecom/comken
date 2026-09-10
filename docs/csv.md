@@ -19,15 +19,14 @@ CSVを連結する場合は、列名の集合が完全に同じ `Table` 同士�
 
 ## ストリーム読み取り（大量データ）
 
-`read()` はファイル全件をメモリに展開するため、行数が大きい CSV（目安: 1 万行超）では `iter_rows()` を使う。1 行ずつ dict で返るので、全件を `list(...)` にまとめなければメモリ消費は 1 行分だけで抑えられる。列名は戻り値の dict からは取れないので、`csv.read().columns` か `columns=[...]` 引数で先に取っておく。
+`read()` と `iter_rows()` のメモリ特性・列名の取得方法・呼び出し条件（`with` 内限定）は
+`CSV.read()` / `CSV.iter_rows()` のdocstring（自動生成/API.md）を参照。
 
 ```python
 with CSV("big.csv") as csv_file:
     for row in csv_file.iter_rows():
         process(row)  # 1 行ずつ処理
 ```
-
-`iter_rows()` も `with` の中でのみ呼べる（`read()` と同じ `_ensure_open` を通る）。
 
 ヘッダーのない CSV は、`headers` ではなくほかの Table API と同じ `columns` で
 列名を指定します。

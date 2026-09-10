@@ -123,10 +123,9 @@ ok = wait_until(lambda: 条件, timeout=120, interval=2)
 
 ### セル値→日付（parse_cell_date）
 
-Excel の日付列は **セル値の型がバラバラ**で来る（`datetime.datetime` /
-`datetime.date` / 文字列）。 それぞれを `datetime.date` に揃え、読めなかった値は
-`None` を返す（例外にはしない）。 「読めない行は件数だけ `WARNING` に出して集計から
-外す」業務運用に向いている。
+Excel の日付列は型がバラバラで来る（`datetime.datetime` / `datetime.date` / 文字列）のを
+`datetime.date` に揃えて返す関数。読めない値の扱い・受け付ける書式・内閣府祝日 CSV の
+パーサとは別口にしている理由は `parse_cell_date()` のdocstring（自動生成/API.md）を参照。
 
 ```python
 from comken.core import parse_cell_date
@@ -139,10 +138,7 @@ parse_cell_date("日付ではない")                            # → None
 parse_cell_date(None)                                     # → None
 ```
 
-受け付ける書式は `clock.py` の `_DATE_TEXT_FORMATS` に固定。 新しい書式を足すときは
-**ここにタプル要素を追加する**。 内閣府祝日 CSV の `_parse_date` は配布フォーマットの
-制約で 2 形式に固定した別口なので、 緩めた場合に「内閣府以外のファイルを取り違えても
-気付かない」事故を防ぐために揃えていない。
+新しい書式を足すときは `clock.py` の `_DATE_TEXT_FORMATS` にタプル要素を追加する。
 
 ### テキスト正規化（normalize / strip_spaces / remove_spaces)
 
@@ -226,10 +222,9 @@ DEBUG Excel.save: 開始
 DEBUG Excel.save: 完了 1.234秒
 ```
 
-主目的は「どの処理で止まったか」を特定すること。終了時にしかログを出さないと、
-止まった処理の痕跡は永久に残らない。**関数名だけ**を出し、引数・戻り値は出さない
-（DPAPI のトークン・client_secret などの秘密の値がログへ載る危険があるため）。
-「どのファイルで止まったか」を知りたいときは呼び出し側がログへ出す。
+「開始」を必ず先に出す理由・引数や戻り値をログに出さない理由は `measure()` の
+docstring（自動生成/API.md）を参照。「どのファイルで止まったか」を知りたいときは
+呼び出し側がログへ出す。
 
 ### ファイル出現待ち（wait_for_file）
 
@@ -256,16 +251,13 @@ path = wait_for_file(
 | 監視するフォルダが無い | `FileNotFoundError`（「監視するフォルダがありません」） | **待たずに即座** |
 | `folder` にファイルを渡した | `NotADirectoryError` | 待たずに即座 |
 
-フォルダの不在を即座に失敗させるのは、`Path.glob()` が存在しないフォルダでも
-例外を出さず空を返すため。区別しないと「共有サーバーが切れている」「パスの打ち間違い」も
-「ファイルがまだ来ていない」と同じ形で 60 秒後に失敗し、原因が分からなくなる。
-待っている間にフォルダごと消えた場合も、`timeout` 到達時にそちらを知らせる。
+フォルダの不在を待たずに即座に失敗させる理由は `wait_for_file()` の
+docstring（自動生成/API.md）を参照。
 
 ### 書き込み完了待ち（wait_until_stable / stable_for）
 
-**ファイルが「存在する」ことと「書き終わっている」ことは別。** 作成直後の
-ファイルは書き込み途中でも `is_file()` が True になるので、そのまま読むと
-途中までの内容を掴むことがある。他システムが共有サーバーへ置きにくる
+ファイルが「存在する」ことと「書き終わっている」ことは別（作成直後のファイルは
+書き込み途中でも `is_file()` が True になる）。他システムが共有サーバーへ置きにくる
 ファイルを読むときは、書き込み完了まで待つ。
 
 ```python
@@ -288,14 +280,9 @@ path = wait_until_stable(r"\\server\share\in\data.csv", stable_for=2.0)
 | ファイルが無い / 待っている間に消えた | `FileNotFoundError` |
 | ファイルは有るが `timeout` までに書き終わらない | `TimeoutError` |
 
-**サイズと更新時刻でしか判断できないので確実ではない。** 書き込み側が
-`stable_for` より長く止まると、途中でも「書き終わった」と判定する。
-不安定な共有フォルダでは `stable_for` を長めに取る。
-
-**書き込み側を自分で書けるなら、この関数より「別名で書いてから rename する」
-ほうが確実**（`core/files` の atomic 系がその形）。rename は一瞬で終わるので、
-読む側が途中の状態を見ることがない。`wait_until_stable` は**書き込み側に
-手を出せないとき**の手段。
+判定の確実性の限界（サイズ・更新時刻でしか判断できない）と、書き込み側を自分で
+書けるなら「別名で書いてから rename する」方が確実という代替案は、
+`wait_until_stable()` の docstring（自動生成/API.md）を参照。
 
 `DateFileFinder.prefix()` は1 回探すだけなので「無ければ待つ」はこちらを使う。
 
