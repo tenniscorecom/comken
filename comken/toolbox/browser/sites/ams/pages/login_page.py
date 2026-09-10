@@ -91,7 +91,9 @@ class LoginPage(AppPage):
         if self.has_element(self.LOGIN_BTN):
             self.click(self.LOGIN_BTN)
         else:
-            logger.debug("ログインボタンが見当たらないためクリックを省略しました")
+            # 既定のログレベルは INFO（DEBUG は既定で出ない）。想定外の
+            # 分岐なので、後から実行ログを見て気付けるよう info で残す
+            logger.info("ログインボタンが見当たらないためクリックを省略しました")
 
         # URL が変わる（成功・期限切れ変更画面への遷移）か、エラー表示が出るか、
         # どちらか早い方が起きるまで待つ。非同期でエラー表示が遅れて出るサイトでも、
@@ -106,7 +108,9 @@ class LoginPage(AppPage):
         )
 
         current_url = self.session.current_url
-        logger.debug("ログイン後の画面を判定します: current_url=%s", current_url)
+        # 想定外の画面へ飛んだ場合に切り分けられるよう info で残す
+        # （既定のログレベルは INFO。DEBUG だと通常実行では残らない）
+        logger.info("ログイン後の画面を判定します: current_url=%s", current_url)
 
         if ChangePasswordPage.PATH in current_url:
             return self.to(ChangePasswordPage)
