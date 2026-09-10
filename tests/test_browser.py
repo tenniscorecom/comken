@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.common.by import By
 
 from comken.exceptions import (
@@ -956,6 +956,58 @@ class TestPage:
             raise RuntimeError("中での失敗")
 
         page.session._driver.switch_to.default_content.assert_called_once_with()
+
+    def test_click_if_present_clicks_when_element_exists(self, tmp_path):
+        """要素があればクリックし、True を返す。"""
+        page = self._page(tmp_path)
+
+        result = page.click_if_present(Locator.id("login-btn"))
+
+        assert result is True
+        page._wait.until.return_value.click.assert_called_once_with()
+
+    def test_click_if_present_skips_when_element_missing(self, tmp_path):
+        """要素が無ければクリックせず、False を返す。"""
+        page = self._page(tmp_path)
+        page.session._driver.find_element.side_effect = NoSuchElementException()
+
+        result = page.click_if_present(Locator.id("login-btn"))
+
+        assert result is False
+        page._wait.until.assert_not_called()
+
+    def test_raise_if_shown_raises_with_displayed_text(self, tmp_path):
+        """要素があれば、表示文字を渡して作った例外を送出する。"""
+        page = self._page(tmp_path)
+        page._wait.until.return_value.text = "エラーが発生しました"
+
+        with pytest.raises(ValueError, match="エラーが発生しました"):
+            page.raise_if_shown(Locator.css(".error"), ValueError)
+
+    def test_raise_if_shown_does_nothing_when_not_shown(self, tmp_path):
+        """要素が無ければ何もしない。"""
+        page = self._page(tmp_path)
+        page.session._driver.find_element.side_effect = NoSuchElementException()
+
+        page.raise_if_shown(Locator.css(".error"), ValueError)  # 例外が出なければ OK
+
+    def test_wait_for_result_waits_on_url_change_or_error(self, tmp_path):
+        """URL の変化かエラー表示のどちらかを待つ条件を組み立てて待機する。"""
+        page = self._page(tmp_path)
+
+        page.wait_for_result("https://example.com/login", Locator.css(".error"))
+
+        page._wait.until.assert_called_once()
+
+    def test_wait_for_result_timeout_becomes_element_not_found(self, tmp_path):
+        """時間切れは、どのセレクターで失敗したかが分かる例外に変わる。"""
+        page = self._page(tmp_path)
+        page._wait.until.side_effect = TimeoutException()
+
+        with pytest.raises(ElementNotFoundError) as exc_info:
+            page.wait_for_result("https://example.com/login", Locator.css(".error"))
+
+        assert ".error" in str(exc_info.value)
 
 
 class TestSitePage:

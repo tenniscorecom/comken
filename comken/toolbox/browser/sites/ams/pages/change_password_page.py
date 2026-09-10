@@ -7,6 +7,7 @@ URL や要素セレクタは example の値のまま。利用プロジェクト�
 # TYPE_CHECKING 内の SecurePage を型注釈で使うため、注釈の評価を遅延する。
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from comken.exceptions import PasswordRejectedError
@@ -15,6 +16,8 @@ from comken.toolbox.browser.sites.ams.pages.app_page import AppPage
 
 if TYPE_CHECKING:
     from comken.toolbox.browser.sites.ams.pages.secure_page import SecurePage
+
+logger = logging.getLogger(__name__)
 
 
 class ChangePasswordPage(AppPage):
@@ -42,12 +45,24 @@ class ChangePasswordPage(AppPage):
         ``PasswordRejectedError`` を送出する。``change_password()`` はこれを
         受け取って自動で聞き直す（利用プロジェクト側で再試行ループを
         書かなくてよい）。
+        拒否の表示は非同期（Ajax 等）で少し遅れて出るサイトもあるため、送信
+        直後に一度だけ確認するのではなく、「URL が変わる」か「拒否の表示が
+        出る」のどちらかが起きるまで待ってから判定する。
         """
         from comken.toolbox.browser.sites.ams.pages.secure_page import SecurePage
+
+        url_before_submit = self.session.current_url
 
         self.input(self.NEW_PASSWORD, new_password)
         self.input(self.CONFIRM_PASSWORD, new_password)
         self.click(self.SUBMIT_BTN)
-        if self.has_element(self.ERROR_MESSAGE):
-            raise PasswordRejectedError(self.read_text(self.ERROR_MESSAGE))
+
+        self.wait_for_result(url_before_submit, self.ERROR_MESSAGE)
+
+        current_url = self.session.current_url
+        # 想定外の画面へ飛んだ場合に切り分けられるよう info で残す
+        # （既定のログレベルは INFO。DEBUG だと通常実行では残らない）
+        logger.info("パスワード変更の送信結果を判定します: current_url=%s", current_url)
+
+        self.raise_if_shown(self.ERROR_MESSAGE, PasswordRejectedError)
         return self.to(SecurePage)

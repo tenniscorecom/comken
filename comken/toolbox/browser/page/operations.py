@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
@@ -41,6 +42,23 @@ class OperationsMixin(_PageBase):
                 index,
                 len(elements),
             )
+
+    def click_if_present(self, locator: Locator) -> bool:
+        """要素があればクリックし、無ければ何もしない。クリックしたかどうかを返す。
+
+        非同期でログインが先に進む等、押すはずのボタンが既に画面から消えている
+        ことがある画面で使う。素直に click() すると要素待機のタイムアウトで
+        ElementNotFoundError になってしまうため、先に要素の有無を（待たずに）
+        確かめてから click() する形をここへまとめている。
+        """
+        with self.session._operating(f"click_if_present({locator})"):
+            try:
+                self.session.raw.find_element(*locator)
+            except NoSuchElementException:
+                logger.debug("要素が無いためクリックを省略しました: locator=%s", locator)
+                return False
+        self.click(locator)
+        return True
 
     def input(self, locator: Locator, text: str) -> None:
         """入力欄に文字を入れる。もとの値は消える。"""

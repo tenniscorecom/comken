@@ -175,3 +175,35 @@ class TestChangePasswordPageSubmission:
 
         with pytest.raises(PasswordRejectedError, match="記号"):
             page.submit_new_password("weak")
+
+    def test_catches_rejection_message_that_appears_after_a_short_async_delay(self, tmp_path):
+        """拒否表示が非同期で少し遅れて出るサイトでも、送信直後の一度きりの
+        確認では見逃さず、URLが変わるか拒否表示が出るまで待ってから正しく
+        検知する（レースコンディションの回帰確認。このテストだけ _wait を
+        完全モックにせず、短いポーリング間隔の実物に差し替えて実際の
+        待機ロジックを検証する）。
+        """
+        page = self._make_change_password_page(tmp_path)
+        page.session._driver.current_url = f"{AMS.BASE_URL}{ChangePasswordPage.PATH}"
+        page._wait = WebDriverWait(page.session.raw, timeout=1, poll_frequency=0.05)
+
+        # ERROR_MESSAGE だけ最初の数回は見つからない（＝非同期で少し遅れて出る）
+        # ことにする。NEW_PASSWORD/CONFIRM_PASSWORD/SUBMIT_BTN は通常どおり即座に見つかる
+        error_lookup_count = 0
+
+        def find_element_side_effect(by, value):
+            nonlocal error_lookup_count
+            element = MagicMock()
+            element.is_displayed.return_value = True
+            if (by, value) != tuple(ChangePasswordPage.ERROR_MESSAGE):
+                return element
+            error_lookup_count += 1
+            if error_lookup_count < 3:
+                raise NoSuchElementException()
+            element.text = "非同期で少し遅れて出た拒否メッセージ"
+            return element
+
+        page.session._driver.find_element.side_effect = find_element_side_effect
+
+        with pytest.raises(PasswordRejectedError, match="非同期で少し遅れて出た拒否メッセージ"):
+            page.submit_new_password("New-Pass1!")

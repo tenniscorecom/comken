@@ -7496,6 +7496,21 @@ Args:
     index: 同じセレクターに複数の要素が一致する場合、何番目か（0始まり）。
            まずはセレクター側で1つに絞り込み、index は最後の手段にする。
 
+#### `click_if_present`
+
+```text
+def click_if_present(self, locator: Locator) -> bool:
+```
+
+##### 説明
+
+要素があればクリックし、無ければ何もしない。クリックしたかどうかを返す。
+
+非同期でログインが先に進む等、押すはずのボタンが既に画面から消えている
+ことがある画面で使う。素直に click() すると要素待機のタイムアウトで
+ElementNotFoundError になってしまうため、先に要素の有無を（待たずに）
+確かめてから click() する形をここへまとめている。
+
 #### `input`
 
 ```text
@@ -7612,6 +7627,25 @@ def has_element(self, locator: Locator) -> bool:
 
 「在れば押す」のような分岐に使う。表示されているかどうかは見ない。
 
+#### `raise_if_shown`
+
+```text
+def raise_if_shown(self, locator: Locator, make_error: Callable[[str], Exception]) -> None:
+```
+
+##### 説明
+
+locator の要素が画面に出ていれば、表示文字を渡して作った例外を送出する。
+
+ログイン失敗・パスワード変更の拒否など、「エラー表示の有無で成否を
+判定する」画面で共通して使う。表示されていなければ何もしない。
+
+    self.raise_if_shown(self.ERROR_MSG, LoginFailedError)
+
+make_error には、表示文字（str）を1つだけ受け取る例外クラス・関数を渡す
+（``LoginFailedError`` / ``PasswordRejectedError`` はどちらも
+``__init__(self, reason: str)`` なので、クラスをそのまま渡せる）。
+
 #### `count_elements`
 
 ```text
@@ -7641,6 +7675,27 @@ def wait_invisible(self, locator: Locator) -> None:
 ##### 説明
 
 要素が消えるまで待つ（読み込み中の表示が消えるのを待つときなど）。
+
+#### `wait_for_result`
+
+```text
+def wait_for_result(self, url_before: str, error_locator: Locator) -> None:
+```
+
+##### 説明
+
+フォーム送信の結果が出るまで待つ:「URL が変わる」か「error_locator の
+要素が出る」のどちらか早い方が起きた時点で確定する。
+
+結果が Ajax 等で少し遅れて出る画面で、送信直後に一度だけ確認すると
+表示の遅れをすり抜けてしまう（実際は失敗しているのに成功と判定して
+しまう）のを防ぐために使う。早い方が起きた時点で確定するので、
+成功時に無駄な待ちは発生しない。
+
+    url_before = self.session.current_url
+    self.click(self.LOGIN_BTN)
+    self.wait_for_result(url_before, self.ERROR_MSG)
+    self.raise_if_shown(self.ERROR_MSG, LoginFailedError)
 
 #### `alert_accept`
 
@@ -8585,6 +8640,21 @@ Args:
     index: 同じセレクターに複数の要素が一致する場合、何番目か（0始まり）。
            まずはセレクター側で1つに絞り込み、index は最後の手段にする。
 
+#### `click_if_present`
+
+```text
+def click_if_present(self, locator: Locator) -> bool:
+```
+
+##### 説明
+
+要素があればクリックし、無ければ何もしない。クリックしたかどうかを返す。
+
+非同期でログインが先に進む等、押すはずのボタンが既に画面から消えている
+ことがある画面で使う。素直に click() すると要素待機のタイムアウトで
+ElementNotFoundError になってしまうため、先に要素の有無を（待たずに）
+確かめてから click() する形をここへまとめている。
+
 #### `input`
 
 ```text
@@ -8701,6 +8771,25 @@ def has_element(self, locator: Locator) -> bool:
 
 「在れば押す」のような分岐に使う。表示されているかどうかは見ない。
 
+#### `raise_if_shown`
+
+```text
+def raise_if_shown(self, locator: Locator, make_error: Callable[[str], Exception]) -> None:
+```
+
+##### 説明
+
+locator の要素が画面に出ていれば、表示文字を渡して作った例外を送出する。
+
+ログイン失敗・パスワード変更の拒否など、「エラー表示の有無で成否を
+判定する」画面で共通して使う。表示されていなければ何もしない。
+
+    self.raise_if_shown(self.ERROR_MSG, LoginFailedError)
+
+make_error には、表示文字（str）を1つだけ受け取る例外クラス・関数を渡す
+（``LoginFailedError`` / ``PasswordRejectedError`` はどちらも
+``__init__(self, reason: str)`` なので、クラスをそのまま渡せる）。
+
 #### `count_elements`
 
 ```text
@@ -8730,6 +8819,27 @@ def wait_invisible(self, locator: Locator) -> None:
 ##### 説明
 
 要素が消えるまで待つ（読み込み中の表示が消えるのを待つときなど）。
+
+#### `wait_for_result`
+
+```text
+def wait_for_result(self, url_before: str, error_locator: Locator) -> None:
+```
+
+##### 説明
+
+フォーム送信の結果が出るまで待つ:「URL が変わる」か「error_locator の
+要素が出る」のどちらか早い方が起きた時点で確定する。
+
+結果が Ajax 等で少し遅れて出る画面で、送信直後に一度だけ確認すると
+表示の遅れをすり抜けてしまう（実際は失敗しているのに成功と判定して
+しまう）のを防ぐために使う。早い方が起きた時点で確定するので、
+成功時に無駄な待ちは発生しない。
+
+    url_before = self.session.current_url
+    self.click(self.LOGIN_BTN)
+    self.wait_for_result(url_before, self.ERROR_MSG)
+    self.raise_if_shown(self.ERROR_MSG, LoginFailedError)
 
 #### `alert_accept`
 

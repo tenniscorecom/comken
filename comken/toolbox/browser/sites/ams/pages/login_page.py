@@ -9,8 +9,6 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from selenium.webdriver.support import expected_conditions as EC
-
 from comken.exceptions import LoginFailedError
 from comken.toolbox.browser import Locator
 from comken.toolbox.browser.sites.ams.pages.app_page import AppPage
@@ -88,9 +86,7 @@ class LoginPage(AppPage):
 
         self.input(self.USERNAME, username)
         self.input(self.PASSWORD, password)
-        if self.has_element(self.LOGIN_BTN):
-            self.click(self.LOGIN_BTN)
-        else:
+        if not self.click_if_present(self.LOGIN_BTN):
             # 既定のログレベルは INFO（DEBUG は既定で出ない）。想定外の
             # 分岐なので、後から実行ログを見て気付けるよう info で残す
             logger.info("ログインボタンが見当たらないためクリックを省略しました")
@@ -98,14 +94,7 @@ class LoginPage(AppPage):
         # URL が変わる（成功・期限切れ変更画面への遷移）か、エラー表示が出るか、
         # どちらか早い方が起きるまで待つ。非同期でエラー表示が遅れて出るサイトでも、
         # クリック直後の一度きりの確認で見逃すことがない
-        self._until(
-            EC.any_of(
-                EC.url_changes(url_before_login),
-                EC.presence_of_element_located(self.ERROR_MSG),
-            ),
-            "current_url の変化 または ERROR_MSG の表示",
-            "ログイン結果が確定し",
-        )
+        self.wait_for_result(url_before_login, self.ERROR_MSG)
 
         current_url = self.session.current_url
         # 想定外の画面へ飛んだ場合に切り分けられるよう info で残す
@@ -114,8 +103,7 @@ class LoginPage(AppPage):
 
         if ChangePasswordPage.PATH in current_url:
             return self.to(ChangePasswordPage)
-        if self.has_element(self.ERROR_MSG):
-            raise LoginFailedError(self.get_error_message())
+        self.raise_if_shown(self.ERROR_MSG, LoginFailedError)
         return self.to(SecurePage)
 
     def get_error_message(self) -> str:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.support import expected_conditions as EC
@@ -72,6 +73,22 @@ class ReadingMixin(_PageBase):
             except NoSuchElementException:
                 logger.debug("要素の存在を検出しました: locator=%s 結果=なし", locator)
                 return False
+
+    def raise_if_shown(self, locator: Locator, make_error: Callable[[str], Exception]) -> None:
+        """locator の要素が画面に出ていれば、表示文字を渡して作った例外を送出する。
+
+        ログイン失敗・パスワード変更の拒否など、「エラー表示の有無で成否を
+        判定する」画面で共通して使う。表示されていなければ何もしない。
+
+            self.raise_if_shown(self.ERROR_MSG, LoginFailedError)
+
+        make_error には、表示文字（str）を1つだけ受け取る例外クラス・関数を渡す
+        （``LoginFailedError`` / ``PasswordRejectedError`` はどちらも
+        ``__init__(self, reason: str)`` なので、クラスをそのまま渡せる）。
+        """
+        with self.session._operating(f"raise_if_shown({locator})"):
+            if self.has_element(locator):
+                raise make_error(self.read_text(locator))
 
     def count_elements(self, locator: Locator) -> int:
         """一致する要素の数を返す（待たずにその場で数える。無ければ 0）。"""

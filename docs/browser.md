@@ -569,9 +569,14 @@ else:
 サイト側が新しいパスワードを拒否する（記号が足りない・文字数が足りない等）
 ことがある。その再試行ループを利用プロジェクト側に書かせないため、
 `submit_new_password()`（ここでは `ChangePasswordPage` のメソッド）は
-拒否を検知したら `PasswordRejectedError` を送出する実装にしておく。
+拒否を検知したら `PasswordRejectedError` を送出する実装にしておく
+（内部は `raise_if_shown(self.ERROR_MESSAGE, PasswordRejectedError)`。
+下の「単純にパスワードが間違っているとき」と同じ共通処理を使っている）。
 `change_password()` がそれを受け取って自動でCLIへ聞き直す
 （既定3回まで。再試行させたくなければ `max_attempts=1` を渡す）。
+拒否の表示も Ajax 等で少し遅れて出ることがあるため、送信後は
+`wait_for_result()` で「URL が変わる」か「拒否の表示が出る」のどちらかが
+起きるまで待ってから判定している。
 
 ### 検知方法
 
@@ -604,28 +609,41 @@ except LoginFailedError as e:
     raise
 ```
 
-雛形（`ams/pages/login_page.py`）は `.login-error` 要素の有無で検知している。
+雛形（`ams/pages/login_page.py`・`ouju/pages/login_page.py`）は
+`.login-error` 要素の有無で検知している。パスワード関連のエラー判定は
+どのサイトでも同じ形（「エラー要素があれば、その文言で例外を送出する」）に
+なりがちなので、`self.raise_if_shown(self.ERROR_MSG, LoginFailedError)`
+という共通メソッドにまとめてある（`ChangePasswordPage.submit_new_password()`
+の `PasswordRejectedError` 送出も同じメソッドを使っている）。
 
 エラー表示は Ajax 等で少し遅れて出て、その後は数秒で自動的に消えるサイトも
-ある。クリック直後に一度きり `has_element()` するだけだと、表示が遅れた分を
-すり抜けてしまい、実際は失敗しているのに `SecurePage` を返してしまう恐れが
-ある。そのため雛形の `login()` は、クリック後に「URL が変わる」か
-「エラー表示が出る」のどちらかが起きるまで（`EC.any_of` で）待ってから
-判定している。早い方が起きた時点で確定するので、ログイン成功時に無駄な
-待ちが発生することはない。
+ある。クリック直後に一度きり確認するだけだと、表示が遅れた分をすり抜けて
+しまい、実際は失敗しているのに `SecurePage` を返してしまう恐れがある。
+そのため雛形の `login()` は、クリック後に「URL が変わる」か「エラー表示が
+出る」のどちらかが起きるまで `self.wait_for_result(url_before, self.ERROR_MSG)`
+で待ってから判定している。早い方が起きた時点で確定するので、ログイン成功時に
+無駄な待ちが発生することはない。
 
 ### ログインボタンが既に無いとき
 
 サイトによっては、パスワード欄への入力完了などをきっかけに非同期でログインが
 進み、`click()` しようとした時点でログインボタンが既に消えている（押せない）
 ことがある。素直に `click()` すると要素待機のタイムアウトで
-`ElementNotFoundError` になってしまうため、`login()` 側でクリック前に
-`has_element()` でボタンの有無を確かめ、無ければクリックを省略してそのまま
-画面判定（期限切れ／エラー表示／通常ログイン）へ進む実装にしておく。
+`ElementNotFoundError` になってしまうため、`login()` 側は
+`self.click_if_present(self.LOGIN_BTN)` を使う（要素があればクリックし、
+無ければ何もしないでそのまま画面判定（期限切れ／エラー表示／通常ログイン）
+へ進む）。
 
 雛形の `login()` は判定の直前に `current_url` を info ログへ残す。想定外の
 画面へ飛んだ場合の切り分けに、実際に飛んだ先の URL を見比べられるように
 している（既定のログレベルは INFO なので、debug ログだと通常実行では残らない）。
+
+### 自分のサイトで同じパターンを使うとき
+
+`click_if_present()` / `raise_if_shown()` / `wait_for_result()` は
+`comken.toolbox.browser.Page`（`SitePage` も継承先）が持つ汎用メソッドなので、
+`ams`・`ouju` に限らずどのサイトの画面クラスでも使える。ログイン以外の
+フォーム送信（例: 検索条件の送信でエラーが出る画面）でも同じ形になりやすい。
 
 ---
 
@@ -955,8 +973,11 @@ class LoginPage(SitePage):
 | したいこと | 系統 |
 |---|---|
 | クリック・入力・プルダウン選択・スクロール・ドラッグ＆ドロップ | 操作系（`click` / `input` / `select_*` / `scroll_*` / `drag_drop`） |
+| ボタンがあればクリック、無ければ何もしない | `click_if_present`（ボタンが既に消えていることがある画面向け） |
 | テキスト・属性を読む、存在確認・件数（待たない） | 読み取り系（`read_*` / `has_element` / `count_elements`） |
+| エラー要素の有無で成否を判定し、あれば例外を送出する | `raise_if_shown`（ログイン失敗・パスワード拒否など） |
 | 表示・非表示を待つ | 待機系（`wait_visible` / `wait_invisible`） |
+| フォーム送信後、URL が変わるかエラーが出るまで待つ | `wait_for_result`（結果が非同期で少し遅れて出る画面向け） |
 | 確認ダイアログの操作 | `alert_*`（`alert_accept` / `alert_dismiss` / `read_alert_text`） |
 | iframe の中を操作、スクリーンショット、最終手段 | `frame()` / `save_screenshot()` / `find_element*` / `execute_script()` |
 
