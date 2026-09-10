@@ -37,7 +37,6 @@ External Client App の consumer secret を REST API から回せるか（＝ロ
 
 import argparse
 import sys
-import webbrowser
 
 from comken.exceptions import (
     ComkenError,
@@ -46,12 +45,7 @@ from comken.exceptions import (
     SalesforceSiteSelectionError,
 )
 from comken.toolbox.credentials import Credentials
-from comken.toolbox.salesforce.auth.callback_server import (
-    CallbackResult,
-    is_localhost_callback,
-    parse_redirect_url,
-    wait_for_callback,
-)
+from comken.toolbox.salesforce.auth.oauth_redirect import CallbackResult, parse_redirect_url
 from comken.toolbox.salesforce.auth.oauth_refresh import AuthorizationRequest, RefreshTokenOAuth
 from comken.toolbox.salesforce.auth.rotation import (
     ROTATION_COMPONENT,
@@ -296,8 +290,6 @@ def _run_setup(args: argparse.Namespace) -> None:
 def _obtain_authorization_code(auth_request: AuthorizationRequest, redirect_uri: str) -> str:
     """認可コードを受け取る。
 
-    redirect_uri が localhost ならブラウザを自動で開き、リダイレクトも自動で
-    受け取る。自動受け取りに失敗した場合・localhost でない場合は、
     リダイレクトされた URL 全体を貼り付けさせて解析する（``code=`` の
     後ろだけを切り出させると、認可コードに含まれることが多い ``=`` 等の
     記号で貼り間違いが起きやすいため、URL 全体をそのまま受け取る）。
@@ -305,19 +297,6 @@ def _obtain_authorization_code(auth_request: AuthorizationRequest, redirect_uri:
     print()
     print("次の URL をブラウザで開き、Salesforce にログインして許可してください:")
     print(f"  {auth_request.url}")
-
-    if is_localhost_callback(redirect_uri):
-        print()
-        print("ブラウザを自動で開きます。承認すると自動で受け取ります...")
-        webbrowser.open(auth_request.url)
-        try:
-            callback = wait_for_callback(redirect_uri, auth_request.state)
-        except (OSError, TimeoutError, SalesforceAuthError) as e:
-            print(f"自動受け取りに失敗しました（{e}）。手動で貼り付けてください。")
-        else:
-            print("認可コードを自動で受け取りました。")
-            return _code_of(callback, auth_request)
-
     print()
     print(f"許可すると {redirect_uri}?code=... へリダイレクトされます。")
     print("そのリダイレクト先の URL を、アドレスバーからそのまま貼り付けてください。")

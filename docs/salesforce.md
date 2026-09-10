@@ -83,8 +83,8 @@ refresh token が含まれた場合は `on_refresh_token` が呼ばれるので�
 保存する。コールバックを省略するとプロセス内だけ更新され、次回起動時に古い token を
 使う点に注意する。
 
-**`python -m comken sf setup`（CLI）はここまで自動化している。** `CALLBACK_URL` が
-localhost なら、ブラウザを自動で開いてリダイレクトも自動受信し、`code`/`code_verifier`
+**`python -m comken sf setup`（CLI）はここまでを対話的にまとめて行う。** 認可URLを
+表示し、承認後にリダイレクトされたURL全体を貼り付けると、`code`/`code_verifier`
 を組み立てて `exchange_code()` まで呼ぶ（[初回認可の手順](開発/salesforce-authentication.md#2-初回認可-authorization_url)）。
 
 ### Client Credentials Flow（歴史的記録・現在は使わない）
@@ -95,9 +95,9 @@ localhost なら、ブラウザを自動で開いてリダイレクトも自動�
 > [!note] 補足（2026-09-08 / 2026-09-10）
 > Client Credentials Flow は社内の運用上もう使えないため、comken からも
 > コード（`oauth_credentials.py` / `ClientCredentialsOAuth`）を削除した。
-> さらに `sf setup` の初回認可自体が自動化された（OAuthリダイレクトの
-> 自動受信・PKCE対応）ため、**開発中も含めて使わない。** この節は歴史的
-> 記録として残している。
+> Refresh Token Flow の初回認可は組織ごとに1回だけの手作業で済み、それ以降は
+> 自動更新されるため、**開発中も含めて使わない。** この節は歴史的記録として
+> 残している。
 
 認証を `auth=` で差し替える仕組みは将来別の方式（JWT など）を生やす余地として
 残してあり、`Solution()` の既定経路（Refresh Token）と独立に扱える。
@@ -568,7 +568,7 @@ graph LR
 :: 1. 登録（開いた画面で solution / api_client_id・api_client_secret を入れる。平文のファイルは作らない）
 python -m comken cred gui
 
-:: 2. 初回認可（ブラウザが自動で開く。承認するだけでrefresh_tokenまで自動保存される）
+:: 2. 初回認可（表示されたURLをブラウザで開いて承認し、リダイレクト先のURLを貼り付ける）
 python -m comken sf setup
 
 :: 3. つないでみる
@@ -625,8 +625,8 @@ My Domain は `Solution.DOMAIN_URL` に置く。`login.salesforce.com` ではこ
    **Authorization Code + Refresh Token Flow を有効化**・スコープ `api refresh_token`
 3. 「Client Credentials Flow」は **無効化**（共存させると secret 単独漏えいの入口が残る）
 4. 「Refresh Token Rotation」を有効化（推奨）
-5. Callback URL に `http://127.0.0.1:8080/callback`（`sf setup` が自動で
-   受け取れる。詳細は [初回認可の手順](開発/salesforce-authentication.md#0-前提)）
+5. Callback URL に `http://localhost:8080/callback`（詳細は
+   [初回認可の手順](開発/salesforce-authentication.md#0-前提)）
 6. Consumer Key / Consumer Secret を受け取る
 
 ### レポートの 2000 行制限

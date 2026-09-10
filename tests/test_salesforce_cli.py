@@ -6,7 +6,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from comken.exceptions import CredentialNotFoundError, SalesforceAuthError
-from comken.toolbox.salesforce.auth.callback_server import CallbackResult
 from comken.toolbox.salesforce.auth.oauth_refresh import AuthorizationRequest
 from comken.toolbox.salesforce.cli import main
 from comken.toolbox.salesforce.sites import SITES, Solution, SolutionSandbox
@@ -233,27 +232,11 @@ class TestSetup:
         credentials.api_client_secret = "CSECRET"
         return credentials
 
-    def _auto_capture(self, code: str = "AUTH-CODE", state: str = "STATE"):
-        """ブラウザ自動起動＋リダイレクト自動受け取りをモックする（callback_urlはlocalhost既定）。
-
-        `webbrowser.open` を差し替えて実際にブラウザを起動させず、
-        `wait_for_callback` を差し替えて実際にソケットを待ち受けさせない
-        （待ち受けさせると、リダイレクトが来ないテストではハングする）。
-        """
-        return (
-            patch("comken.toolbox.salesforce.cli.webbrowser.open"),
-            patch(
-                "comken.toolbox.salesforce.cli.wait_for_callback",
-                return_value=CallbackResult(code=code, state=state),
-            ),
-        )
-
     def test_selects_site_by_number(self, capsys):
         """`2` を入れたら SITES の2番目（SolutionSandbox）が選ばれる。
 
         認可 URL と exchange の domain_url が SolutionSandbox のものになることで確認する。
         """
-        webbrowser_open, wait_for_callback = self._auto_capture()
         with (
             patch(
                 "comken.toolbox.salesforce.cli.Credentials", return_value=self._credentials_mock()
@@ -265,10 +248,11 @@ class TestSetup:
                 ),
             ),
             patch("comken.toolbox.salesforce.cli.RefreshTokenOAuth.exchange_code") as exchange,
-            webbrowser_open,
-            wait_for_callback,
-            # 番号選択 → 確認プロンプト (`y`) の 2 ステップ（codeは自動受け取り）
-            patch("builtins.input", side_effect=["2", "y"]),
+            # 番号選択 → 確認プロンプト (`y`) → リダイレクトURLの貼り付け
+            patch(
+                "builtins.input",
+                side_effect=["2", "y", "http://localhost:8080/callback?code=AUTH-CODE&state=STATE"],
+            ),
         ):
             code = main(["setup"])
 
@@ -283,7 +267,6 @@ class TestSetup:
 
     def test_selects_site_by_name_case_insensitive(self, capsys):
         """`solution`（小文字）を入れたら Solution（小文字を許容）が選ばれる。"""
-        webbrowser_open, wait_for_callback = self._auto_capture()
         with (
             patch(
                 "comken.toolbox.salesforce.cli.Credentials", return_value=self._credentials_mock()
@@ -295,9 +278,14 @@ class TestSetup:
                 ),
             ),
             patch("comken.toolbox.salesforce.cli.RefreshTokenOAuth.exchange_code") as exchange,
-            webbrowser_open,
-            wait_for_callback,
-            patch("builtins.input", side_effect=["solution", "y"]),
+            patch(
+                "builtins.input",
+                side_effect=[
+                    "solution",
+                    "y",
+                    "http://localhost:8080/callback?code=AUTH-CODE&state=STATE",
+                ],
+            ),
         ):
             code = main(["setup"])
 
@@ -323,7 +311,6 @@ class TestSetup:
     def test_full_flow_shows_url_and_saves_refresh_token(self, capsys):
         """一連の流れ — URL 表示・code 受け渡し・完了メッセージを確認。"""
         credentials = self._credentials_mock()
-        webbrowser_open, wait_for_callback = self._auto_capture(code="AUTH-CODE-VALUE")
         with (
             patch("comken.toolbox.salesforce.cli.Credentials", return_value=credentials),
             patch(
@@ -333,9 +320,14 @@ class TestSetup:
                 ),
             ),
             patch("comken.toolbox.salesforce.cli.RefreshTokenOAuth.exchange_code") as exchange,
-            webbrowser_open,
-            wait_for_callback,
-            patch("builtins.input", side_effect=["1", "y"]),
+            patch(
+                "builtins.input",
+                side_effect=[
+                    "1",
+                    "y",
+                    "http://localhost:8080/callback?code=AUTH-CODE-VALUE&state=STATE",
+                ],
+            ),
         ):
             code = main(["setup"])
 
@@ -343,10 +335,8 @@ class TestSetup:
         out = capsys.readouterr().out
         # 認可 URL が標準出力に出ている
         assert "https://example.test/authorize?client_id=CID" in out
-        # 自動で受け取ったことが分かるメッセージが出ている
-        assert "自動で受け取りました" in out
         exchange_mock = cast(MagicMock, exchange)
-        # exchange_code に自動受け取りした code がそのまま渡されている
+        # exchange_code に貼り付けた code がそのまま渡されている
         assert exchange_mock.call_args.args[2] == "AUTH-CODE-VALUE"
         # prefix は組織クラスの CREDENTIAL_PREFIX
         assert exchange_mock.call_args.kwargs["prefix"] == SITES[0].CREDENTIAL_PREFIX
@@ -358,9 +348,8 @@ class TestSetup:
     def test_site_flag_skips_interactive_selection_by_number(self, capsys):
         """``--site 2`` を指定すると対話選択をスキップして SolutionSandbox が選ばれる。
 
-        input は確認プロンプトの1回だけになる（codeは自動受け取り）。
+        input は確認プロンプト・URL貼り付けの2回だけになる。
         """
-        webbrowser_open, wait_for_callback = self._auto_capture()
         with (
             patch(
                 "comken.toolbox.salesforce.cli.Credentials", return_value=self._credentials_mock()
@@ -372,9 +361,10 @@ class TestSetup:
                 ),
             ),
             patch("comken.toolbox.salesforce.cli.RefreshTokenOAuth.exchange_code") as exchange,
-            webbrowser_open,
-            wait_for_callback,
-            patch("builtins.input", side_effect=["y"]),
+            patch(
+                "builtins.input",
+                side_effect=["y", "http://localhost:8080/callback?code=AUTH-CODE&state=STATE"],
+            ),
         ):
             code = main(["setup", "--site", "2"])
 
@@ -389,7 +379,6 @@ class TestSetup:
 
     def test_site_flag_accepts_lowercase_name(self, capsys):
         """``--site solution``（小文字）でも Solution クラスが引ける。"""
-        webbrowser_open, wait_for_callback = self._auto_capture()
         with (
             patch(
                 "comken.toolbox.salesforce.cli.Credentials", return_value=self._credentials_mock()
@@ -401,9 +390,10 @@ class TestSetup:
                 ),
             ),
             patch("comken.toolbox.salesforce.cli.RefreshTokenOAuth.exchange_code") as exchange,
-            webbrowser_open,
-            wait_for_callback,
-            patch("builtins.input", side_effect=["y"]),
+            patch(
+                "builtins.input",
+                side_effect=["y", "http://localhost:8080/callback?code=AUTH-CODE&state=STATE"],
+            ),
         ):
             code = main(["setup", "--site", "solution"])
 
@@ -412,8 +402,7 @@ class TestSetup:
         assert exchange_mock.call_args.args[4] == Solution.DOMAIN_URL
 
     def test_state_mismatch_raises(self, capsys):
-        """自動受け取りした state が authorization_url のものと違えば、CSRF検証として弾く。"""
-        webbrowser_open, wait_for_callback = self._auto_capture(state="WRONG-STATE")
+        """貼り付けたURLのstateが authorization_url のものと違えば、CSRF検証として弾く。"""
         with (
             patch(
                 "comken.toolbox.salesforce.cli.Credentials", return_value=self._credentials_mock()
@@ -425,51 +414,20 @@ class TestSetup:
                 ),
             ),
             patch("comken.toolbox.salesforce.cli.RefreshTokenOAuth.exchange_code") as exchange,
-            webbrowser_open,
-            wait_for_callback,
-            patch("builtins.input", side_effect=["1", "y"]),
+            patch(
+                "builtins.input",
+                side_effect=[
+                    "1",
+                    "y",
+                    "http://localhost:8080/callback?code=AUTH-CODE&state=WRONG-STATE",
+                ],
+            ),
         ):
             code = main(["setup"])
 
         assert code == 1
         assert "state が一致しません" in capsys.readouterr().err
         cast(MagicMock, exchange).assert_not_called()
-
-    def test_falls_back_to_manual_url_when_auto_capture_fails(self, capsys):
-        """自動受け取りに失敗したら、リダイレクトURL全体の貼り付けに切り替わる。"""
-        with (
-            patch(
-                "comken.toolbox.salesforce.cli.Credentials", return_value=self._credentials_mock()
-            ),
-            patch(
-                "comken.toolbox.salesforce.cli.RefreshTokenOAuth.authorization_url",
-                return_value=AuthorizationRequest(
-                    "https://example.test/authorize", "STATE", "VERIFIER"
-                ),
-            ),
-            patch("comken.toolbox.salesforce.cli.RefreshTokenOAuth.exchange_code") as exchange,
-            patch("comken.toolbox.salesforce.cli.webbrowser.open"),
-            patch(
-                "comken.toolbox.salesforce.cli.wait_for_callback",
-                side_effect=TimeoutError("no callback in test"),
-            ),
-            patch(
-                "builtins.input",
-                # 番号選択 → 確認プロンプト(y) → リダイレクトURL全体の貼り付け
-                side_effect=[
-                    "1",
-                    "y",
-                    "http://localhost:8080/callback?code=PASTED-CODE&state=STATE",
-                ],
-            ),
-        ):
-            code = main(["setup"])
-
-        assert code == 0
-        out = capsys.readouterr().out
-        assert "自動受け取りに失敗しました" in out
-        exchange_mock = cast(MagicMock, exchange)
-        assert exchange_mock.call_args.args[2] == "PASTED-CODE"
 
     def test_manual_paste_retries_on_unparsable_url(self, capsys):
         """貼り付けたURLにcodeが含まれなければ、もう一度貼り付けさせる。"""
@@ -484,11 +442,6 @@ class TestSetup:
                 ),
             ),
             patch("comken.toolbox.salesforce.cli.RefreshTokenOAuth.exchange_code") as exchange,
-            patch("comken.toolbox.salesforce.cli.webbrowser.open"),
-            patch(
-                "comken.toolbox.salesforce.cli.wait_for_callback",
-                side_effect=TimeoutError("no callback in test"),
-            ),
             patch(
                 "builtins.input",
                 side_effect=[

@@ -150,8 +150,9 @@ comken は受け取った新しい token を DPAPI へ**自動で書き戻す**�
 
 > [!note] 補足（2026-09-10）
 > 「開発中に手元で動かすときだけ使う」という前提は撤回。**開発中も使わない**
-> （sf setup の初回認可が `sf setup` を実行するだけで自動化された（OAuthリダイレクト
-> の自動受信・PKCE対応）ため、Client Credentials Flow で省ける手間自体が無くなった）。
+> （Refresh Token Flow の初回認可は組織ごとに1回だけの手作業で済み、
+> それ以降は自動更新される。Client Credentials Flow が省く手間はこの
+> 「1回だけの手作業」だけなので、わざわざ別方式を使う理由にならない）。
 > この節はコードが既に削除済みであることも含め、判断の経緯を残すための
 > 歴史的記録に留める。
 
@@ -260,7 +261,7 @@ ECAの作成・設定はIT側の作業。comken側が行うのは、これを依
 2. OAuthスコープは必要最小限にする（`api refresh_token`）。
 3. **Authorization Code + Refresh Token Flow を有効化**し、Client Credentials
    Flow は無効化する（詳細な設定項目は [0. 前提](#0-前提) を渡す）。
-4. Callback URL に `http://127.0.0.1:8080/callback` を設定する。
+4. Callback URL に `http://localhost:8080/callback` を設定する。
 5. RPA専用の実行ユーザーを指定し、必要なオブジェクト・項目・レポートだけを許可する。
 6. Consumer Key / Consumer Secret の共有方法と、secretのローテーション担当を決める
    （`sf rotate` で回せる。[5. secretの保管とローテーション](#5-secretの保管とローテーション)参照）。
@@ -285,10 +286,7 @@ ECAの作成・設定はIT側の作業。comken側が行うのは、これを依
   - 「Client Credentials Flow」は **無効化** (既定) — 共存させると secret 単独漏えいの入口が残る
   - 「Refresh Token Rotation」を有効化 (推奨)
   - 「Require Secret for Refresh Token Flow」を **無効化** (comken の既定)
-  - Callback URL に `http://127.0.0.1:8080/callback` を設定 (後述の `http_server` 方式。
-    `localhost` ではなく `127.0.0.1` にするのは、待ち受けサーバーが IPv4 でしか
-    listen しないため、環境によって `localhost` が IPv6 に解決されると繋がらない
-    ことがあるのを避けるため)
+  - Callback URL に `http://localhost:8080/callback` を設定
 - comken を実行する Windows ユーザーと、ECA を作成した管理者が別の場合は事前に連携
 
 ## 手順全体の流れ
@@ -305,19 +303,16 @@ sequenceDiagram
 
     Eng->>CLI: cred gui で client_id / client_secret を登録
     Eng->>CLI: sf setup を実行
-    CLI->>CLI: 認可URLを組み立て、ローカルサーバー(localhost)で待ち受け開始
-    CLI->>Browser: ブラウザを自動で開く
-    Eng->>Browser: ログイン・Allow
+    CLI-->>Eng: 認可 URL を表示
+    Eng->>Browser: URL を開いてログイン・Allow
     Browser->>SF: 認可
     SF-->>Browser: code 付きで callback へリダイレクト
-    Browser->>CLI: リダイレクトがローカルサーバーへ自動で届く
+    Browser-->>Eng: リダイレクトされた URL 全体をコピー
+    Eng->>CLI: URL を貼り付け
     CLI->>SF: code + code_verifier(PKCE) を refresh_token に交換
     CLI->>CLI: refresh_token を DPAPI へ保存
     Eng->>CLI: sf report で動作確認
 ```
-
-自動受信に失敗した場合（ポート使用中等）・Callback URL が localhost でない場合だけ、
-リダイレクトされた URL 全体を手動で貼り付けるフローにフォールバックする（手順 2 参照）。
 
 ## 1. ECA の client_id / client_secret を DPAPI に登録
 
@@ -393,36 +388,32 @@ python -m comken sf setup --site 1
 
 1. 登録済みの組織が `1. ... 2. ...` の形で表示される。**番号か組織名を入力**する
 2. 選択した組織の prefix で DPAPI から client_id / client_secret を読む
-3. ECA の認可 URL を組み立てて画面に出し、ブラウザを自動で開く
-4. `CALLBACK_URL` が `localhost`（既定）なら、承認後のリダイレクトを
-   **自動で受け取り**、そのまま `refresh_token` を DPAPI へ保存する
+3. ECA の認可 URL を組み立てて画面に出す
+4. 次のプロンプトで、承認後にリダイレクトされた **URL 全体** を貼り付けると、
+   `refresh_token` を DPAPI へ自動保存する
 
-コピペの手間は無い。ブラウザで Salesforce にログインし「Allow」（許可）を
-押すだけで、あとは comken が自動で受け取って完了する。
+貼り付けるのは **リダイレクトされた URL 全体**（アドレスバーを選択して
+コピペしたもの）でよい（`code=` の後ろだけを切り出す必要はない。認可コードは
+`=` を含むことが多く、切り出しは貼り間違いの元になるため）。
 
-このコマンドは 1 回実行するたびに「URL を表示 → ブラウザを開く → 自動で
-受け取り → refresh_token を保存」までをまとめて行う。途中で止めたくなったら
-`Ctrl+C` で中断すれば refresh_token は保存されない（途中で失敗したら
-`<prefix>.api_refresh_token` は**未登録のまま**。手順 2 からやり直す）。
+このコマンドは 1 回実行するたびに「URL を表示 → URL を貼り付け → refresh_token
+を保存」までをまとめて行う。途中で止めたくなったら `Ctrl+C` で中断すれば
+refresh_token は保存されない（途中で失敗したら `<prefix>.api_refresh_token` は
+**未登録のまま**。手順 2 からやり直す）。
 
-> [!note] 自動受け取りが失敗したとき
-> ポートが他のプロセスに使われている等で自動受け取りに失敗した場合は、
-> 「自動受け取りに失敗しました」と表示され、手動貼り付けに切り替わる。
-> このとき貼り付けるのは **リダイレクトされた URL 全体**（アドレスバーを
-> 選択してコピペしたもの）でよい（`code=` の後ろだけを切り出す必要はない。
-> 認可コードは `=` を含むことが多く、切り出しは貼り間違いの元だったため
-> 廃止した）。`CALLBACK_URL` が `localhost` でない組織（社内で公開した
-> callback URL を使う場合）も、最初から同じ手動貼り付けになる。
-
-## 3. refresh_token への交換（自動）
+## 3. refresh_token への交換
 
 手順 2 の `setup` の中で自動的に行われる。ブラウザでの操作:
 
-- 自動で開いたブラウザで、ECA を許可する組織のユーザーでログイン
-- 「Allow」（許可）をクリック
-- あとは自動。出力に
-  `refresh_token を DPAPI に保存しました（<prefix>.api_refresh_token）` が出れば
-  完了（別途 `cred gui` で登録し直す必要はない）
+1. 表示された URL をブラウザで開く
+2. ECA を許可する組織のユーザーでログイン
+3. 「Allow」（許可）をクリック
+4. ブラウザが `http://localhost:8080/callback?code=...` へリダイレクトされる
+5. **そのリダイレクト先の URL をアドレスバーごとコピー**し、`setup` のプロンプトへ貼り付け
+
+`code` は 10 分で失効する。貼り付けたら出力に
+`refresh_token を DPAPI に保存しました（<prefix>.api_refresh_token）` が出れば
+完了（別途 `cred gui` で登録し直す必要はない）。
 
 内部では `RefreshTokenOAuth.exchange_code(..., prefix=<prefix>)` を呼び、
 受け取った refresh_token は `from_credentials` と同じ書き戻し先
@@ -486,9 +477,10 @@ Refresh Token Flow の **対になる形**で、初回認可が要らない代�
 > 「本番では使わない」という判断は今も有効で、節は歴史的記録として残している。
 
 > [!note] 補足（2026-09-10）
-> 「開発中だけ使う」という前提も撤回。**開発中も使わない。** `sf setup` の
-> 初回認可が自動化された（OAuthリダイレクトの自動受信・PKCE対応）ため、
-> このフローで省けていた手間自体が無くなった。
+> 「開発中だけ使う」という前提も撤回。**開発中も使わない。** Refresh Token Flow
+> の初回認可は組織ごとに1回だけの手作業（URLを開いて承認し、リダイレクト先の
+> URLを貼り付けるだけ）で済み、それ以降は自動更新される。この方式が省く手間は
+> その「1回だけの手作業」だけなので、わざわざ別方式を使う理由にならない。
 
 **本番でも開発中でも使わない。**
 
