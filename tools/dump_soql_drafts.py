@@ -585,23 +585,44 @@ def _build_date_filter_condition(
     return f"{column} >= {start_date} AND {column} <= {end_date}", True
 
 
+# "-ses" で終わる複数形は語源が2通りあり、末尾何文字を外すべきか
+# 一般規則だけでは決まらない（例: "Classes"は"Class"+"es"で2文字、
+# "Cases"は"Case"+"s"で1文字だが、末尾だけ見るとどちらも"-ses"で
+# 区別がつかない）。Salesforce の標準オブジェクトで頻出するものだけ、
+# 一般規則の前に個別の対応を置く。
+_IRREGULAR_PLURAL_OBJECT_NAMES = {
+    "Cases": "Case",
+}
+
+
+def _singularize(name: str) -> str:
+    """簡易な英語の複数形→単数形変換を試みる（ヒューリスティック、未検証。例外は多い）。"""
+    if name in _IRREGULAR_PLURAL_OBJECT_NAMES:
+        return _IRREGULAR_PLURAL_OBJECT_NAMES[name]
+    if name.endswith("ies"):
+        return name[: -len("ies")] + "y"
+    if name.endswith(("ses", "xes", "ches", "shes")):
+        return name[:-2]
+    if name.endswith("s"):
+        return name[:-1]
+    return name
+
+
 def _guess_child_object_name(relationship_name: str) -> str:
     """リレーション名から子オブジェクトの API 名を推測する（ヒューリスティック、未検証）。
 
     カスタムオブジェクトのリレーション名は ``"Xxx__r"`` の形になる規則を使い
-    ``"__c"`` へ置き換える。標準オブジェクトは複数形のことが多いため、
-    簡易な英語の複数形→単数形変換を試みる（例外は多く、この関数の結果が
-    実際のオブジェクト名と一致する保証はない）。
+    ``"__c"`` へ置き換える。**カスタムオブジェクトの子リレーション名も標準
+    オブジェクトと同じく複数形になることが多い**（例: オブジェクトAPI名
+    ``Invoice__c`` の子リレーション名は ``Invoices__r``）ため、``__r`` を
+    外した部分にも同じ単数形変換を適用してから ``__c`` を付ける。標準
+    オブジェクトは複数形のことが多いため、こちらにも同じ変換を試みる
+    （例外は多く、この関数の結果が実際のオブジェクト名と一致する保証はない）。
     """
     if relationship_name.endswith("__r"):
-        return relationship_name[: -len("__r")] + "__c"
-    if relationship_name.endswith("ies"):
-        return relationship_name[: -len("ies")] + "y"
-    if relationship_name.endswith(("ses", "xes", "ches", "shes")):
-        return relationship_name[:-2]
-    if relationship_name.endswith("s"):
-        return relationship_name[:-1]
-    return relationship_name
+        base = relationship_name[: -len("__r")]
+        return _singularize(base) + "__c"
+    return _singularize(relationship_name)
 
 
 def _build_cross_filter_condition(cross_filter: dict, notes: list[str]) -> str | None:

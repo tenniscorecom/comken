@@ -15,6 +15,7 @@ from tools.dump_soql_drafts import (
     FAILED_PREFIX,
     _expand_boolean_filter,
     _filter_to_condition,
+    _guess_child_object_name,
     _merge_catalog_rows,
     dump_soql_drafts,
 )
@@ -830,6 +831,33 @@ class TestSummaryMatrixGroupBy:
         row = _read_rows(output)[0]
         assert row["SOQLドラフト"] == "SELECT StageName FROM Opportunity GROUP BY StageName"
         assert "unknown_format" in row["備考"]
+
+
+class TestGuessChildObjectName:
+    """``_guess_child_object_name()`` の単数形変換（ヒューリスティック）。"""
+
+    def test_standard_object_plural_relationship(self):
+        """標準オブジェクトの複数形リレーション名は単数形の API 名になる。"""
+        assert _guess_child_object_name("Opportunities") == "Opportunity"
+        assert _guess_child_object_name("Contacts") == "Contact"
+
+    def test_standard_object_case_is_a_common_irregular_plural(self):
+        """ "Cases"は"Class"型（-ses→2文字除去）ではなく"Case"+"s"型（1文字除去）。"""
+        assert _guess_child_object_name("Cases") == "Case"
+
+    def test_custom_object_relationship_is_singularized_before_appending_suffix(self):
+        """__r を __c に置き換えるだけでなく、複数形も外してから付け直す。
+
+        （回帰確認: 以前は "Invoices__r" のような複数形のカスタム
+        リレーション名を "Invoices__c" にしてしまい、実際のオブジェクト
+        API名 "Invoice__c" と一致しなかった）
+        """
+        assert _guess_child_object_name("Invoices__r") == "Invoice__c"
+        assert _guess_child_object_name("Cases__r") == "Case__c"
+
+    def test_custom_object_relationship_already_singular(self):
+        """既に単数形のカスタムリレーション名はそのまま __c を付ける。"""
+        assert _guess_child_object_name("Invoice__r") == "Invoice__c"
 
 
 class TestCrossFilters:
