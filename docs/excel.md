@@ -20,8 +20,7 @@ with Excel("顧客.xlsx", read_only=True) as excel:
 ## シート名を候補から選ぶ
 
 業務ファイルでよくある「バージョン違いでシート名が違う」候補違いを
-`Excel.find_sheet(*candidates)` で吸収する。挙動・戻り値・例外の詳細は
-`Excel.find_sheet()` のdocstring（自動生成/API.md）を参照。
+`Excel.find_sheet(*candidates)` で吸収する。
 
 ```python
 with Excel("一覧.xlsx", read_only=True) as excel:
@@ -66,8 +65,7 @@ with Excel("一覧.xlsx", read_only=True) as excel:
 ## 列を1本だけ読む（`read_column`）
 
 `Sheet.read_column(col, *, header_row=1, force_com=False) -> Table` は、1列だけを
-見出し付きで読む。用途（同名見出しが複数本あるシートで1列ずつ読みたいとき）と
-挙動の詳細は `Sheet.read_column()` のdocstring（自動生成/API.md）を参照。
+見出し付きで読む。同名見出しが複数本あるシートで1列ずつ読みたいときに使う。
 
 ```python
 ids = sheet.read_column("G").column("お客様ID")
@@ -82,7 +80,7 @@ ids = sheet.read_column("G").column("お客様ID")
 
 `ExcelTable.read()` はExcelテーブルの `ref` 内だけを読み、常に `Table` を返します。保存済みの数式キャッシュがない場合だけ内部でCOMへ切り替えます。キャッシュの有無にかかわらず再計算した値が必要なら `read(force_com=True)` を使います。シート全体を `Table` としてCOMで読む公開APIはありません。
 
-`Excel(path)` はUNCパス（`\\server\share\...`）なら書き込み時だけ自動的にローカルコピーを使います（`local_copy=True` で強制、`local_copy=False` で無効化）。詳しい条件は `Excel.__init__()` のdocstring（自動生成/API.md）を参照。
+`Excel(path)` はUNCパス（`\\server\share\...`）なら書き込み時だけ自動的にローカルコピーを使います（`local_copy=True` で強制、`local_copy=False` で無効化）。
 
 既存ブックは表示用シートとデータシートを分け、Pythonから扱う表には `PY_` シートと `PY_T_` テーブルのプレフィックスを付けます。既存のセル範囲を自動でテーブル化することはありません。
 
@@ -90,7 +88,7 @@ ids = sheet.read_column("G").column("お客様ID")
 
 openpyxl で開くと遅い重いブック（ピボット多数など）を Excel COM（pywin32）経由で
 開くための切り替えが `Excel(..., engine="com")`。既定の `engine="openpyxl"` は
-既存と同じ動作。使いどころの詳細は `Excel.__init__()` のdocstring（自動生成/API.md）を参照。
+既存と同じ動作。
 
 ```python
 with Excel("重い.xlsx", engine="com", local_copy=False) as excel:
@@ -140,8 +138,6 @@ with Excel("帳票.xlsx") as excel:
   - 見出し行に重複がある → `DuplicateHeaderCellError`
   - `table_name` が Excel の命名規則違反 → `InvalidTableNameError`
   - 同名のテーブルが既に存在 → `TableAlreadyExistsError`
-- `header_row` 未指定時の自動推定ルール（A2 ルール）の詳細は
-  `Excel.convert_range_to_table()` のdocstring（自動生成/API.md）を参照。
 - 表示用シート・データシートどちらでも利用可能。`PY_T_` プレフィックスは補わない
   （指定された名前をそのまま使う）。
 - `engine="com"` で呼ぶと `InvalidTableOperationError`（openpyxl 経路のみ対応）。

@@ -219,8 +219,6 @@ keiri.go_login().login(USER, PW).pending_rows()   # ⭕ 別のブラウザなの
 kintai.go_login().login(USER, PW)                  # ❌ 裏で使っている勤怠を触っている
 ```
 
-なぜ即エラーにしているかは `Browsers.run_task()` の docstring（自動生成/API.md）を参照。
-
 `wait()` を呼び忘れたまま `with` を抜けても、ブラウザを閉じる前に処理の終了は待つ。
 その処理が失敗していた場合はログに残る（黙って消えることはない）。
 
@@ -548,14 +546,9 @@ def ensure_login(self, user_id: str, password: str) -> "HomePage":
 （`LoginFailedError`）・非同期でボタンや表示が遅れて出るサイトへの対処は、
 雛形（`comken/toolbox/browser/sites/ams/pages/login_page.py`・
 `change_password_page.py`、`ouju/pages/login_page.py`）に実装済み。
-
-**実装の詳細・呼び出し側の書き方は、ここでは重複させずコードの docstring
-（`LoginPage.login()` / `ChangePasswordPage.submit_new_password()`）を
-正とする** — `docs/` は共有サーバーへ配布されず docstring だけが実際に
-利用プロジェクト側へ届くため、二重管理を避けてそちらに寄せている
-（この2つはサイト雛形のページクラスのため自動生成/API.md には載らない。
-ソースを直接開くか IDE の定義ジャンプで読む）。
-DPAPI への反映まで含めた使い方は [認証情報のパスワードの変更](credentials.md#パスワードの変更) を参照。
+実装の詳細は `LoginPage.login()` / `ChangePasswordPage.submit_new_password()`
+を直接読む。DPAPI への反映まで含めた使い方は
+[認証情報のパスワードの変更](credentials.md#パスワードの変更) を参照。
 
 `click_if_present()` / `raise_if_shown()` / `wait_for_result()` は
 `comken.toolbox.browser.Page`（`SitePage` も継承先）が持つ汎用メソッドで、

@@ -124,8 +124,7 @@ ok = wait_until(lambda: 条件, timeout=120, interval=2)
 ### セル値→日付（parse_cell_date）
 
 Excel の日付列は型がバラバラで来る（`datetime.datetime` / `datetime.date` / 文字列）のを
-`datetime.date` に揃えて返す関数。読めない値の扱い・受け付ける書式・内閣府祝日 CSV の
-パーサとは別口にしている理由は `parse_cell_date()` のdocstring（自動生成/API.md）を参照。
+`datetime.date` に揃えて返す関数。
 
 ```python
 from comken.core import parse_cell_date
@@ -222,9 +221,7 @@ DEBUG Excel.save: 開始
 DEBUG Excel.save: 完了 1.234秒
 ```
 
-「開始」を必ず先に出す理由・引数や戻り値をログに出さない理由は `measure()` の
-docstring（自動生成/API.md）を参照。「どのファイルで止まったか」を知りたいときは
-呼び出し側がログへ出す。
+「どのファイルで止まったか」を知りたいときは呼び出し側がログへ出す。
 
 ### ファイル出現待ち（wait_for_file）
 
@@ -251,9 +248,6 @@ path = wait_for_file(
 | 監視するフォルダが無い | `FileNotFoundError`（「監視するフォルダがありません」） | **待たずに即座** |
 | `folder` にファイルを渡した | `NotADirectoryError` | 待たずに即座 |
 
-フォルダの不在を待たずに即座に失敗させる理由は `wait_for_file()` の
-docstring（自動生成/API.md）を参照。
-
 ### 書き込み完了待ち（wait_until_stable / stable_for）
 
 ファイルが「存在する」ことと「書き終わっている」ことは別（作成直後のファイルは
@@ -279,10 +273,6 @@ path = wait_until_stable(r"\\server\share\in\data.csv", stable_for=2.0)
 |---|---|
 | ファイルが無い / 待っている間に消えた | `FileNotFoundError` |
 | ファイルは有るが `timeout` までに書き終わらない | `TimeoutError` |
-
-判定の確実性の限界（サイズ・更新時刻でしか判断できない）と、書き込み側を自分で
-書けるなら「別名で書いてから rename する」方が確実という代替案は、
-`wait_until_stable()` の docstring（自動生成/API.md）を参照。
 
 `DateFileFinder.prefix()` は1 回探すだけなので「無ければ待つ」はこちらを使う。
 

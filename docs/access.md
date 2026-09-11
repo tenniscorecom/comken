@@ -26,10 +26,6 @@ with AccessDatabase(r"C:\作業\顧客.accdb") as db:
         ...
 ```
 
-`local_copy=False`（元 DB を直接開く場合）のバックアップ挙動——自動作成のタイミング・
-保持期間・`backup_dir` を指定するときの注意点・復旧の手順——は `AccessDatabase`
-クラスのdocstring（自動生成/API.md）を参照。
-
 `table_names()` で利用可能なテーブルと保存済みクエリを確認できる。外部に影響する
 マクロ・VBA・CSV 出力は `dry_run()` 中には実行されない。
 

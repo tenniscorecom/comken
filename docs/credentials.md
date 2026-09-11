@@ -36,12 +36,6 @@ python -m comken cred gui
 登録済みの認証情報の一覧と削除も同じ画面にある（サイト名を親、項目名を子にした
 ツリー表示）。平文 JSON を選んでまとめて取り込むボタンも同じ画面にある。
 
-**画面の設計（一覧の並べ方・値を読み出す機能が無い理由・平文 JSON 削除前に
-読み直しで確認する理由）は、ここでは重複させずコードの docstring
-（`comken/toolbox/credentials/gui.py` のモジュール docstring・`CredentialsApp`
-配下の各メソッド）を正とする。** `CredentialsApp` は GUI 内部の実装クラスで
-自動生成/API.md には載らないため、ソースを直接開くか IDE の定義ジャンプで読む。
-
 `templates/認証情報の登録.bat` をプロジェクトのフォルダへコピーしておけば、
 **ダブルクリックで開く**。ターミナルを使わない人にはこれを渡す。
 
@@ -64,13 +58,9 @@ python -m comken cred delete site_a client_id   1件削除する
 ```
 
 `{"site_a": {"client_id": ...}}` は同じ入れ子構造のまま
-`%USERPROFILE%\.rpa\system-id.enc` へ保存される。保存時の挙動（展開・組み立て
-直しをしない理由、JSON に無い既存キーの扱い）は `comken/toolbox/credentials/importer.py`
-のモジュール docstring を正とする（ここでは重複させない）。
+`%USERPROFILE%\.rpa\system-id.enc` へ保存される。
 
-取り込んだら**平文の JSON は消す**。`--delete-source` の挙動と、既定では
-自動削除しない理由は `comken/toolbox/credentials/cli.py` のモジュール
-docstring を参照（モジュール docstring のため自動生成/API.md には載らない）。
+取り込んだら**平文の JSON は消す**。
 
 ### 使う側
 
@@ -93,13 +83,7 @@ password = load_credential("oju_sys", "password")
 cred = Credentials(config.CREDENTIALS.SITE_A)
 ```
 
-登録済みの値を更新したいときは、属性へ代入してから `cred.save()`。属性アクセス・
-代入の仕組み（サイト名からの入れ子構造の解決、代入だけではディスクに書かない
-理由、site 名を書き直さなくてよい理由）は、ここでは重複させずコードの
-docstring（`Credentials` クラス・`Credentials.__setattr__()` ・
-`Credentials.save()`）を正とする。`save()` は [自動生成 API.md](自動生成/API.md)
-にも同じ docstring が載るが、`__setattr__()` は特殊メソッドのため載らない
-（ソースを直接開くか IDE の定義ジャンプで読む）。
+登録済みの値を更新したいときは、属性へ代入してから `cred.save()`。
 
 ```python
 cred.client_secret = new_secret
@@ -125,11 +109,7 @@ if isinstance(result, ChangePasswordPage):
 
 入力の伏せ字表示・確定タイミング・拒否時の自動再試行（既定3回、
 `max_attempts=1` で無効化）・無人実行での `TimeoutError`（既定 300 秒、
-`timeout_seconds` で変更可）といった挙動は、ここでは重複させずコードの
-docstring（`comken/toolbox/credentials/prompt.py` のモジュール docstring・
-`change_password()` ・`prompt_new_password()`）を正とする。後者2つは
-[自動生成 API.md](自動生成/API.md) にも同じ docstring が載る
-（モジュール docstring 自体は載らない）。
+`timeout_seconds` で変更可）といった挙動がある。
 
 単に受け付けて保存するだけでよく、サイトへの送信も拒否時の再試行も不要なら
 `prompt_new_password(cred)` を直接使う。

@@ -77,8 +77,6 @@ with RegistryHandler(win32con.HKEY_CURRENT_USER, r"Software\MyApp") as r:
 ### よく使うフォルダ（Paths）
 
 `Path(__file__).parent / ".." / "Downloads"` のような組み立てをしなくてよい。
-OneDrive の「既知のフォルダーの移動」への追従の仕組みは `Paths` クラスのdocstring
-（自動生成/API.md）を参照。
 
 ```python
 from comken.toolbox.windows import Paths
@@ -89,9 +87,6 @@ Paths.temp_dir()    # → C:\Users\xxx\AppData\Local\Temp
 ```
 
 ### Excel 孤立プロセスの後始末（is_excel_running / kill_excel）
-
-COM 経由の Excel 自動化での孤立プロセスの問題は `is_excel_running()` / `kill_excel()`
-のdocstring（自動生成/API.md）を参照。
 
 ```python
 from comken.toolbox.windows import is_excel_running, kill_excel

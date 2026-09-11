@@ -19,9 +19,6 @@ CSVを連結する場合は、列名の集合が完全に同じ `Table` 同士�
 
 ## ストリーム読み取り（大量データ）
 
-`read()` と `iter_rows()` のメモリ特性・列名の取得方法・呼び出し条件（`with` 内限定）は
-`CSV.read()` / `CSV.iter_rows()` のdocstring（自動生成/API.md）を参照。
-
 ```python
 with CSV("big.csv") as csv_file:
     for row in csv_file.iter_rows():
