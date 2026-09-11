@@ -282,13 +282,50 @@ def _format_raw_cross_filters(cross_filters: list[object]) -> str:
     ``WHERE ... IN (SELECT ...)`` 相当のSOQLを機械生成すると、一見もっともらしい
     間違ったクエリになりかねないため、辞書の中身をそのままダンプするだけに留め、
     最終的な半結合（IN / NOT IN サブクエリ）への組み立ては人が行う。
+
+    生の Python 辞書を ``str()`` で埋め込むと ``{'primaryTableColumn': ...}``
+    のような読みにくい形になるため、キー構成を決め打ちせず全キーを
+    ``key=value`` の形へ揃えて出す（``criteria`` だけは中身が
+    ``reportFilters`` と同じ形なので ``_format_raw_filters()`` で整形する）。
     """
     if not cross_filters:
         return ""
     parts: list[str] = []
     for cross_filter in cross_filters:
-        parts.append(str(cross_filter) if isinstance(cross_filter, dict) else "(不正な要素)")
+        parts.append(
+            _format_raw_dict(cross_filter) if isinstance(cross_filter, dict) else "(不正な要素)"
+        )
     return "; ".join(parts)
+
+
+def _format_raw_dict(data: dict) -> str:
+    """辞書を ``key=value, key2=value2`` の一覧にする（``str(dict)`` の
+    ``{'key': 'value'}`` という読みにくい表記の代わり）。``criteria`` キーは
+    中身が ``reportFilters`` と同じ形（``{"column", "operator", "value"}`` の
+    リスト）なので ``_format_raw_filters()`` で整形する。
+    """
+    pieces: list[str] = []
+    for key, value in data.items():
+        if key == "criteria" and isinstance(value, list):
+            pieces.append(f"{key}=[{_format_raw_filters(value)}]")
+        else:
+            pieces.append(f"{key}={_stringify_filter_field(value)}")
+    return ", ".join(pieces)
+
+
+def _format_raw_groupings(groupings: object) -> str:
+    """``groupingsDown`` / ``groupingsAcross`` を「列名(並び順)」の一覧にする。"""
+    if not isinstance(groupings, list):
+        return str(groupings)
+    parts: list[str] = []
+    for grouping in groupings:
+        if not isinstance(grouping, dict):
+            parts.append(str(grouping))
+            continue
+        name = _stringify_filter_field(grouping.get("name"))
+        sort_order = grouping.get("sortOrder")
+        parts.append(f"{name}({sort_order})" if sort_order else name)
+    return ", ".join(parts)
 
 
 def _format_raw_aggregation(report_metadata: dict) -> str:
@@ -299,17 +336,25 @@ def _format_raw_aggregation(report_metadata: dict) -> str:
     表しているか）が本物の Salesforce 組織で未検証のため、``GROUP BY`` や
     集計関数（``SUM()`` 等）への機械変換はしない。生データをそのままダンプし、
     ``SELECT`` 句・``GROUP BY`` 句は人が組み立てる（``crossFilters`` と同じ方針）。
+
+    ``groupingsDown``/``groupingsAcross`` は辞書のリストを ``str()`` でそのまま
+    出すと読みにくいため、``_format_raw_groupings()`` で列名だけの一覧に整える。
     """
     parts: list[str] = []
     aggregates = report_metadata.get("aggregates")
     if aggregates:
-        parts.append(f"aggregates: {aggregates}")
+        aggregates_text = (
+            ", ".join(str(item) for item in aggregates)
+            if isinstance(aggregates, list)
+            else str(aggregates)
+        )
+        parts.append(f"aggregates: {aggregates_text}")
     groupings_down = report_metadata.get("groupingsDown")
     if groupings_down:
-        parts.append(f"groupingsDown: {groupings_down}")
+        parts.append(f"groupingsDown: {_format_raw_groupings(groupings_down)}")
     groupings_across = report_metadata.get("groupingsAcross")
     if groupings_across:
-        parts.append(f"groupingsAcross: {groupings_across}")
+        parts.append(f"groupingsAcross: {_format_raw_groupings(groupings_across)}")
     return " | ".join(parts)
 
 
@@ -657,7 +702,8 @@ def _build_cross_filter_condition(cross_filter: dict, notes: list[str]) -> str |
     subquery = f"SELECT {parent_field_guess} FROM {child_object}"
     criteria = cross_filter.get("criteria")
     if criteria:
-        subquery += f" /* criteria(要手動変換): {criteria!r} */"
+        criteria_text = _format_raw_filters(criteria) if isinstance(criteria, list) else criteria
+        subquery += f" /* criteria(要手動変換): {criteria_text} */"
     notes.append(
         f"crossFilters({operator!r})を推測変換しました({child_object}/{parent_field_guess}は"
         "ヒューリスティックで未検証。criteriaは手動でWHERE条件へ書き換えること)"

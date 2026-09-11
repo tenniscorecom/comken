@@ -325,6 +325,10 @@ class TestUnsupportedReportFormat:
         assert "s!AMOUNT" in detail
         assert "groupingsDown:" in detail
         assert "STAGE_NAME" in detail
+        # 辞書のリストをそのまま str() でダンプした読みにくい形
+        # （例: "[{'name': 'STAGE_NAME', ...}]"）になっていないことを確認する
+        assert "{'name'" not in detail
+        assert detail == "aggregates: s!AMOUNT | groupingsDown: STAGE_NAME(Asc)"
 
     def test_matrix_format_exposes_groupings_across(self, tmp_path):
         """MATRIX形式はgroupingsAcross（列側のグルーピング）も生データに含む。"""
@@ -953,7 +957,7 @@ class TestCrossFilters:
         with patch("tools.dump_soql_drafts.site_for", return_value=site):
             dump_soql_drafts(master, output)
         rows = _read_rows(output)
-        assert rows[0]["フィルタ詳細(生データ)"] == "crossFilters: {'relatedEntity': 'Contact'}"
+        assert rows[0]["フィルタ詳細(生データ)"] == "crossFilters: relatedEntity=Contact"
 
     def test_with_operator_is_converted_to_in_subquery(self, tmp_path):
         """primaryTableColumnを解釈できたcrossFiltersはIN半結合へ変換され、状態はREVIEW。"""
@@ -1063,7 +1067,10 @@ class TestCrossFilters:
             dump_soql_drafts(master, output)
         soql = _read_rows(output)[0]["SOQLドラフト"]
         assert "criteria(要手動変換)" in soql
-        assert "AMOUNT" in soql
+        assert "AMOUNT=greaterThan:1000" in soql
+        # 辞書のリストをそのまま repr() でダンプした読みにくい形
+        # （例: "[{'column': 'AMOUNT', ...}]"）になっていないことを確認する
+        assert "{'column'" not in soql
 
 
 class TestBooleanFilter:

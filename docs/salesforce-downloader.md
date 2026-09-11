@@ -787,8 +787,8 @@ SELECTに無くフィルタだけに現れる列キーもカタログへ残る�
 条件（`criteria`）はこのレポートの列マッピングでは解決できないため自動変換せず、
 生データを `/* criteria(要手動変換): ... */` というSQLコメントとしてそのまま
 埋め込む。この変換を使った行は**状態が`READY`にはならず、必ず`REVIEW`止まりになる**
-（「フィルタ詳細(生データ)」列にも`crossFilters: {...}`として生の辞書を残すので、
-推測が外れていた場合はそちらで元データを確認する）。
+（「フィルタ詳細(生データ)」列にも`crossFilters: primaryTableColumn=..., operator=...`
+として元データを`key=value`形式で残すので、推測が外れていた場合はそちらで確認する）。
 
 **`SUMMARY` / `MATRIX` 形式は `groupingsDown`/`groupingsAcross`（グルーピング列）と
 `aggregates`（集計列）から `SELECT`/`GROUP BY` の自動変換を試みる。** `aggregates`
