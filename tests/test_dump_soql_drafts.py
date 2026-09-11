@@ -56,8 +56,7 @@ def fake_site(
     else:
         report.describe.return_value = describe_response
     table = fields_table or Table(FIELDS_COLUMNS, [])
-    report._describe_fields_from_metadata.return_value = table
-    report._describe_fields_with_object_status.return_value = (table, None)
+    report.describe_fields_with_object_status.return_value = (table, None)
     report.describe_fields.return_value = table
     site_class.return_value = client
     site_class.__name__ = "FakeSite"
@@ -216,7 +215,7 @@ class TestSoqlDraftBuilding:
         )
         site = fake_site(describe_response, fields_table)
         report = site.return_value.__enter__.return_value.report
-        report._describe_fields_with_object_status.return_value = (
+        report.describe_fields_with_object_status.return_value = (
             fields_table,
             "主オブジェクトを検証できません",
         )

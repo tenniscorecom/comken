@@ -544,15 +544,24 @@ class ReportAPI:
               一致した行は空文字
         """
         metadata = self.describe(report_id)
-        return self._describe_fields_from_metadata(metadata)
-
-    def _describe_fields_from_metadata(self, metadata: dict) -> Table:
-        """取得済み Report Describe から列対応表を作る。"""
-        table, _ = self._describe_fields_with_object_status(metadata)
+        table, _ = self.describe_fields_with_object_status(metadata)
         return table
 
-    def _describe_fields_with_object_status(self, metadata: dict) -> tuple[Table, str | None]:
-        """列対応表と、主オブジェクトを検証できなかった理由を返す。"""
+    def describe_fields_with_object_status(self, metadata: dict) -> tuple[Table, str | None]:
+        """取得済み Report Describe から列対応表を作る（describe_fields() の下請け）。
+
+        `describe_fields(report_id)` は内部で `describe()` を呼ぶが、何十件もの
+        レポートをまとめて処理する場面（reportFilters 等の生データも同じ
+        `describe()` 結果から読みたいことが多い）では `describe()` を二重に
+        呼ばずに済むよう、取得済みの `metadata` を受け取るこちらを公開している。
+
+        Args:
+            metadata: `describe(report_id)` の戻り値。
+
+        Returns:
+            `(列対応表, 主オブジェクトを検証できなかった理由)`。理由が
+            `None` ならオブジェクト特定・Object Describe のどちらも成功している。
+        """
         report_metadata = metadata.get("reportMetadata", {}) if isinstance(metadata, dict) else {}
         columns = _collect_describable_columns(report_metadata)
         column_info = _collect_column_info(metadata)

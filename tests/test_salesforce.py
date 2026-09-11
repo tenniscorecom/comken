@@ -589,8 +589,8 @@ class TestDescribeFields:
         describe_body = _describe_fields_body()
         object_body = {"fields": [{"name": "Name", "label": "商談名", "type": "Text"}]}
         with _salesforce([_response(json_body=object_body)]) as (client, session, _):
-            client.report._describe_fields_from_metadata(describe_body)
-            client.report._describe_fields_from_metadata(describe_body)
+            client.report.describe_fields_with_object_status(describe_body)
+            client.report.describe_fields_with_object_status(describe_body)
 
         assert session.request.call_count == 1
 
@@ -603,7 +603,7 @@ class TestDescribeFields:
         describe_body["reportExtendedMetadata"]["detailColumnInfo"]["OWNER"] = {"label": "所有者ID"}
         object_body = {"fields": [{"name": "OwnerId", "label": "所有者ID", "type": "reference"}]}
         with _salesforce([_response(json_body=object_body)]) as (client, _, _):
-            table = client.report._describe_fields_from_metadata(describe_body)
+            table, _ = client.report.describe_fields_with_object_status(describe_body)
 
         owner_row = next(row for row in table if row["列キー"] == "OWNER")
         assert owner_row["対応フィールドAPI名"] == "OwnerId"
@@ -631,7 +631,7 @@ class TestDescribeFields:
             ]
         }
         with _salesforce([_response(json_body=object_body)]) as (client, _, _):
-            table = client.report._describe_fields_from_metadata(describe_body)
+            table, _ = client.report.describe_fields_with_object_status(describe_body)
 
         by_key = {row["列キー"]: row for row in table}
         assert by_key["STAGE_NAME"]["対応フィールドAPI名"] == "StageName"
@@ -644,7 +644,7 @@ class TestDescribeFields:
         describe_body["reportMetadata"]["aggregates"] = ["RowCount"]
         object_body = {"fields": [{"name": "Name", "label": "商談名", "type": "Text"}]}
         with _salesforce([_response(json_body=object_body)]) as (client, _, _):
-            table = client.report._describe_fields_from_metadata(describe_body)
+            table, _ = client.report.describe_fields_with_object_status(describe_body)
 
         assert "RowCount" not in [row["列キー"] for row in table]
 

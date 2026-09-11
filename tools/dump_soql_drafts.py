@@ -439,7 +439,7 @@ def _build_grouping_columns(
     unresolved: list[str] = []
     for grouping in groupings:
         if not isinstance(grouping, dict):
-            notes.append("groupingsに想定外の形式の要素があるため無視")
+            notes.append(f"groupingsに想定外の形式の要素があるため無視: {grouping!r}")
             continue
         column_key = grouping.get("name")
         if not isinstance(column_key, str):
@@ -470,7 +470,7 @@ def _build_aggregate_expressions(
     unresolved: list[str] = []
     for aggregate_key in aggregates:
         if not isinstance(aggregate_key, str):
-            notes.append("aggregatesに想定外の形式の要素があるため無視")
+            notes.append(f"aggregatesに想定外の形式の要素があるため無視: {aggregate_key!r}")
             continue
         parsed = _parse_aggregate_key(aggregate_key)
         if parsed is None:
@@ -510,7 +510,7 @@ def _build_where_clause(
     manual_operators: list[str] = []
     for number, report_filter in enumerate(report_filters, start=1):
         if not isinstance(report_filter, dict):
-            notes.append("reportFiltersに想定外の形式の要素があるため無視")
+            notes.append(f"reportFiltersに想定外の形式の要素があるため無視: {report_filter!r}")
             has_unresolved = True
             continue
         column_key = str(report_filter.get("column", ""))
@@ -540,7 +540,7 @@ def _build_where_clause(
             return "", False
         return expanded, True
     if report_boolean_filter not in (None, ""):
-        notes.append("reportBooleanFilterが想定外の形式です")
+        notes.append(f"reportBooleanFilterが想定外の形式です: {report_boolean_filter!r}")
         return "", False
     return " AND ".join(conditions.values()), True
 
@@ -558,7 +558,9 @@ def _build_date_filter_condition(
     if not standard_date_filter:
         return "", True
     if not isinstance(standard_date_filter, dict):
-        notes.append("期間フィルタ(standardDateFilter)が想定外の形式です")
+        notes.append(
+            f"期間フィルタ(standardDateFilter)が想定外の形式です: {standard_date_filter!r}"
+        )
         return "", False
     column = standard_date_filter.get("column")
     duration_value = standard_date_filter.get("durationValue")
@@ -654,13 +656,13 @@ def _build_cross_filter_conditions(
     if not cross_filters:
         return [], True
     if not isinstance(cross_filters, list):
-        notes.append("crossFiltersが想定外の形式です")
+        notes.append(f"crossFiltersが想定外の形式です: {cross_filters!r}")
         return [], False
     conditions: list[str] = []
     all_converted = True
     for cross_filter in cross_filters:
         if not isinstance(cross_filter, dict):
-            notes.append("crossFiltersに想定外の形式の要素があるため無視")
+            notes.append(f"crossFiltersに想定外の形式の要素があるため無視: {cross_filter!r}")
             all_converted = False
             continue
         condition = _build_cross_filter_condition(cross_filter, notes)
@@ -679,16 +681,16 @@ def _validate_report_metadata(metadata: object) -> tuple[dict, str] | tuple[None
     主オブジェクトが特定できないケースだけ「対象外」としてここで早期リターンする。
     """
     if not isinstance(metadata, dict):
-        return None, "describe()の戻り値が不正な形式です"
+        return None, f"describe()の戻り値が不正な形式です: {type(metadata).__name__}"
     report_metadata = metadata.get("reportMetadata", {})
     if not isinstance(report_metadata, dict):
-        return None, "reportMetadataが不正な形式です"
+        return None, f"reportMetadataが不正な形式です: {report_metadata!r}"
     report_type = report_metadata.get("reportType")
     if not isinstance(report_type, dict):
-        return None, "reportTypeが不正な形式です"
+        return None, f"reportTypeが不正な形式です: {report_type!r}"
     object_name = report_type.get("type")
     if not isinstance(object_name, str) or not object_name:
-        return None, "reportType.typeから主オブジェクトを特定できません"
+        return None, f"reportType.typeから主オブジェクトを特定できません: {object_name!r}"
     return report_metadata, ""
 
 
@@ -707,7 +709,7 @@ def _build_select_and_group_by(
     if report_format == "TABULAR":
         detail_columns = report_metadata.get("detailColumns", [])
         if not isinstance(detail_columns, list):
-            notes.append("detailColumnsが想定外の形式です")
+            notes.append(f"detailColumnsが想定外の形式です: {detail_columns!r}")
             return "Id", "", False
         return _build_select_clause(detail_columns, field_map, notes), "", True
 
@@ -747,7 +749,7 @@ def _compose_soql_draft(
 
     report_filters = report_metadata.get("reportFilters", [])
     if not isinstance(report_filters, list):
-        notes.append("reportFiltersが想定外の形式です")
+        notes.append(f"reportFiltersが想定外の形式です: {report_filters!r}")
         report_filters = []
         is_complete = False
     where_conditions = []
@@ -833,8 +835,8 @@ def _describe_and_build_draft(
         return _DraftResult("", error, raw_filters, raw_aggregation, "BLOCKED", [])
 
     object_name = report_metadata["reportType"]["type"]
-    fields_table, object_error_reason = (
-        salesforce_client.report._describe_fields_with_object_status(metadata)
+    fields_table, object_error_reason = salesforce_client.report.describe_fields_with_object_status(
+        metadata
     )
     catalog_rows: list[dict[str, str]] = []
     report_type = object_name
