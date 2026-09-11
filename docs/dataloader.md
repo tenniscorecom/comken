@@ -63,17 +63,7 @@ result = cli.run(["run", str(config_dir)])  # success / error CSV は読まな�
 assert result.success == result.errors == type(result.success)([], [])
 ```
 
-## 設計判断・注意点
-
-**CLI 構文を comken が決め打ちしない理由・`launcher_path` の存在確認を
-`run()` まで遅らせる理由・既定タイムアウトが長い理由・
-`DataLoaderResult.errors` が空でなくても例外にならない理由は、ここでは
-重複させずコードの docstring（`DataLoaderCLI` / `DataLoaderCLI.run()` /
-`DataLoaderResult`）を正とする** — `docs/` は共有サーバーへ配布されず
-docstring だけが実際に利用プロジェクト側へ届くため、二重管理を避けて
-そちらに寄せている。[自動生成 API.md](自動生成/API.md) にも同じ docstring が載る。
-
-### 結果 CSV が無いときの対処
+## 結果 CSV が無いときの対処
 
 `DataLoaderResultFileMissingError` が出たら、`config.properties` 側の
 出力先設定と、`run()` に渡した `success_csv` / `error_csv` のパスが

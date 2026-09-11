@@ -75,13 +75,11 @@ with Solution(auth=auth) as sf:
     records = sf.query("SELECT Id FROM Account")
 ```
 
-初回認可の PKCE ハンドシェイク（`authorization_url()` → `state` 照合 →
-`exchange_code()` へ `code` / `code_verifier` を渡す）と、refresh_token が
-ローテーションされたときの `on_refresh_token` 呼び出しの挙動は
-`RefreshTokenOAuth.authorization_url()` / `exchange_code()` / `request_token()`
-のdocstringを参照。このAPI自体はローカル HTTP サーバーや
-ブラウザを勝手に起動しない（`code` は呼び出し側が用意する）。コールバックを
-省略するとプロセス内だけ更新され、次回起動時に古い token を使う点に注意する。
+初回認可は PKCE ハンドシェイク（`authorization_url()` → `state` 照合 →
+`exchange_code()` へ `code` / `code_verifier` を渡す）で行う。このAPI自体は
+ローカル HTTP サーバーやブラウザを勝手に起動しない（`code` は呼び出し側が
+用意する）。コールバックを省略するとプロセス内だけ更新され、次回起動時に
+古い token を使う点に注意する。
 
 **`python -m comken sf setup`（CLI）はここまでを対話的にまとめて行う。** 認可URLを
 表示し、承認後にリダイレクトされたURL全体を貼り付けると、`code`/`code_verifier`
@@ -122,8 +120,6 @@ with Solution(auth=auth) as sf:
 1. 起動時に1回トークンを取る
 2. `401`（`INVALID_SESSION_ID`）が返ったら取り直して同じリクエストを再送する
 3. `expires_in` は見ない・保存しない
-
-再送の回数・失敗時の扱いは `SalesforceBase._reauthenticate_if_unauthorized()` のdocstringを参照。
 
 ### 将来 JWT に移る場合
 
@@ -285,23 +281,20 @@ with site() as sf:
   comken はそちらを使っていない・使えない。検索するとこの製品が先に出てきて混乱する。
 
 `sf.report.run()` 系が 401 / 403 で失敗したときの意味（comken が間違ったエンドポイントを
-叩いたのではないこと）と管理者への確認事項は `SalesforceReportAccessDeniedError` の
-docstring（自動生成/API.md）を参照。
+叩いたのではないこと）と管理者への確認事項は `SalesforceReportAccessDeniedError` にある。
 
 ### 定義だけ取る（describe）
 
-`describe(report_id)` の挙動（実行せずに定義だけ取れる・2000 行の上限や実行枠を
-消費しない・SOQL 移行の下書き材料にする用途・列名が SOQL のフィールドパスと
-1対1ではない点）は `ReportAPI.describe()` のdocstringを参照。
+`describe(report_id)` は実行せずに定義だけを取れる（2000 行の上限や実行枠を消費
+しない）。SOQL 移行の下書き材料にする用途で、列名は SOQL のフィールドパスと
+1対1ではない点に注意する。
 
 #### 列-フィールド対応表（`describe_fields` / `describe_fields_csv`）
 
 「3. SOQL へ書き換え」の下書きを何十件もまとめてやりたいとき、
 **`describe_fields(report_id)`** で「レポートの列」と「実フィールド API 名」
 の対応表を `Table` で取れる。さらに **`describe_fields_csv(report_id, path)`** で
-そのまま CSV へ落とせる。設計方針（9 割自動で埋めて残りを可視化する道具である
-こと）・対象列の範囲・戻り値の列構成は `ReportAPI.describe_fields()` のdocstring
-を参照。
+そのまま CSV へ落とせる（9 割自動で埋めて残りを可視化する道具）。
 
 ```python
 with Solution() as sf:
@@ -322,9 +315,6 @@ Object Describe の 401 / 403 は Analytics API とは別の権限系統なの�
 ---
 
 ## Bulk API 2.0 の Query ジョブ（重い SOQL の逃げ道）
-
-未検証である旨と、`SalesforceBase.query()`（同期 SOQL）との対比・使う場面は
-`BulkQueryAPI` クラスのdocstringを参照。
 
 ```python
 from comken.toolbox.salesforce.sites import Solution
@@ -363,16 +353,15 @@ delete）は次の「Bulk API 2.0 の Ingest ジョブ」節の `bulk_ingest` �
 
 実装は comken のテストで HTTP をモックして確認しているが、ページングの前提
 （2ページ目以降のヘッダー行の扱い・`Sforce-Locator: null` の意味）は本物の
-組織では未検証。詳しくは `fetch_paged_csv_as_table()`
-（`comken/toolbox/salesforce/_bulk_paging.py`）のdocstringを参照。
-実際の挙動が違っていたら同ファイルを修正すること。
+組織では未検証。実際の挙動が違っていたら `fetch_paged_csv_as_table()`
+（`comken/toolbox/salesforce/_bulk_paging.py`）を修正すること。
 
 ---
 
 ## Bulk API 2.0 の Ingest ジョブ（一括変更）
 
-未検証である旨は `BulkIngestAPI` クラスのdocstringを参照
-（実際のレスポンスで想定と違う点が見つかったら `comken/toolbox/salesforce/bulk_ingest.py` を修正すること）。
+実際のレスポンスで想定と違う点が見つかったら
+`comken/toolbox/salesforce/bulk_ingest.py`（`BulkIngestAPI`）を修正すること。
 
 `SalesforceBase.insert()` / `update()` / `upsert()` / `delete()` は同期で
 1件ずつ REST API を送る。**件数が多くなると同期 REST のHTTPタイムアウトに
@@ -404,14 +393,13 @@ with Solution() as sf:
 
 ### `DataLoaderCLI` との使い分け
 
-`DataLoaderCLI`（docs/dataloader.md）と `BulkIngestAPI`
-（デスクトップアプリのインストール要否・サブプロセス経由か REST 直叩きか）の
-違いは `BulkIngestAPI` クラスのdocstringを参照。
+`DataLoaderCLI`（docs/dataloader.md）は Data Loader デスクトップアプリの
+インストールが要り、サブプロセス経由で動く。`BulkIngestAPI` はインストール
+不要で、REST を直接叩く。
 
 ### 設計判断: 失敗行は例外にしない
 
-`BulkIngestResult.failed` が空でないときに例外を送出しない理由は
-`BulkIngestResult` のdocstring（自動生成/API.md）を参照。これとは別に、
+`BulkIngestResult.failed` が空でないときに例外は送出しない。これとは別に、
 `SalesforceBulkIngestFailedError` は**ジョブ自体が `Failed` / `Aborted`
 で終わった場合**（CSV の形式不正・対象オブジェクトが存在しない等、
 個々の行ではなくジョブ全体を実行できなかった場合）に限って送出される。
@@ -448,7 +436,7 @@ HTTP 呼び出しが1回も発生せず、空の `BulkIngestResult` を返す。
 > [!note] リトライは実際に行う
 > 「リトライ回数」を数えるからには、数えるだけで終わらせない。実際の再試行ロジック
 > （401 / 5xx / 429 / 4xx それぞれの扱い）は `SalesforceBase._send_with_backoff()` /
-> `_reauthenticate_if_unauthorized()` のdocstringを参照。数えているのに一度も
+> `_reauthenticate_if_unauthorized()` にある。数えているのに一度も
 > やり直していない、という嘘の計測を作らない。
 
 もう1つ、自前カウントより信頼できる情報源がある。レスポンスヘッダーの
