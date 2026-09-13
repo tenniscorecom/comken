@@ -74,6 +74,7 @@ class BrowserOptions:
         "USER_AGENT": "--user-agent={}",
         "WINDOW_SIZE": "--window-size={}",
         "WINDOW_POSITION": "--window-position={}",
+        "UNSAFELY_TREAT_INSECURE_ORIGIN_AS_SECURE": "--unsafely-treat-insecure-origin-as-secure={}",
     }
 
     # ── デフォルト有効 ──
@@ -107,6 +108,11 @@ class BrowserOptions:
     USER_AGENT: str | None = None
     WINDOW_SIZE: str | None = None
     WINDOW_POSITION: str | None = None
+    # HTTPS 非対応で IP アドレス直打ちの社内システム向け。指定したオリジン
+    # （例: "http://192.0.2.10"）については「安全でない接続」警告
+    # （パスワード欄などに出る Not Secure 表示）を出さなくなる。
+    # TLS 証明書の検証自体には関与しない（それは IGNORE_CERTIFICATE_ERRORS の役割）
+    UNSAFELY_TREAT_INSECURE_ORIGIN_AS_SECURE: str | None = None
 
     def __repr__(self) -> str:
         """print() でデフォルト値一覧を表示する。サブクラスではデフォルトからの差分も表示。"""

@@ -830,6 +830,20 @@ class TestOptionsBuild:
 
         assert not any(a.startswith("--user-agent=") for a in args)
 
+    def test_unsafely_treat_insecure_origin_as_secure_when_set(self):
+        """HTTPオリジンを指定すると、対応する起動引数が出る。既定はNoneなので出ない。"""
+
+        class HttpOnlyOptions(BrowserOptions):
+            UNSAFELY_TREAT_INSECURE_ORIGIN_AS_SECURE = "http://203.0.113.10"
+
+        assert "--unsafely-treat-insecure-origin-as-secure=http://203.0.113.10" in (
+            HttpOnlyOptions().build()
+        )
+        assert not any(
+            a.startswith("--unsafely-treat-insecure-origin-as-secure=")
+            for a in BrowserOptions().build()
+        )
+
 
 class TestRemovedNames:
     """作り直しで無くなった名前を使ったときの案内のテスト。"""

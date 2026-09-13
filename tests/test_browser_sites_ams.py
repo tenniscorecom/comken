@@ -13,6 +13,8 @@ from comken.exceptions import LoginFailedError, PasswordRejectedError
 from comken.toolbox.browser import BrowserOptions, DownloadDir
 from comken.toolbox.browser.management.sessions import BrowserSession
 from comken.toolbox.browser.sites.ams.pages.change_password_page import ChangePasswordPage
+from comken.toolbox.browser.sites.ams.pages.customer_list_page import CustomerListPage
+from comken.toolbox.browser.sites.ams.pages.device_screen_page import DeviceScreenPage
 from comken.toolbox.browser.sites.ams.pages.login_page import LoginPage
 from comken.toolbox.browser.sites.ams.pages.secure_page import SecurePage
 from comken.toolbox.browser.sites.ams.site import AMS
@@ -153,3 +155,44 @@ class TestChangePasswordPageSubmission:
     # 非同期で少し遅れて出る拒否表示のレースコンディション回帰テストは
     # tests/test_browser.py の TestPage.test_wait_for_result_* に集約してある
     # （wait_for_result() 自体の待機ロジックなので、サイトごとに複製しない）。
+
+
+def _make_customer_list_page(tmp_path) -> CustomerListPage:
+    session = BrowserSession(
+        name="test",
+        options=BrowserOptions(),
+        download_dir=DownloadDir(path=tmp_path / "dl"),
+        profile_dir=None,
+    )
+    session._driver = MagicMock()
+    session._site = AMS()
+    page = CustomerListPage(session)
+    page._wait = MagicMock()  # click/input/wait_visible の要素待機を素通りさせる
+    return page
+
+
+class TestCustomerListPageOpenDeviceScreen:
+    """open_device_screen() — 装置リンクの有無で戻り値が変わる分岐。"""
+
+    def test_returns_device_screen_when_link_present(self, tmp_path):
+        """装置リンクがあればクリックして DeviceScreenPage を返す。"""
+        page = _make_customer_list_page(tmp_path)
+        page.session._driver.find_element.side_effect = None
+        page.session._driver.find_element.return_value = MagicMock()  # 装置リンクあり
+        page.click = MagicMock()
+
+        result = page.open_device_screen()
+
+        page.click.assert_called_once_with(page.DEVICE_LINK)
+        assert isinstance(result, DeviceScreenPage)
+
+    def test_returns_none_when_link_missing(self, tmp_path):
+        """装置がそのお客様に紐づいていなければ None を返す（クリックもしない）。"""
+        page = _make_customer_list_page(tmp_path)
+        page.session._driver.find_element.side_effect = NoSuchElementException()
+        page.click = MagicMock()
+
+        result = page.open_device_screen()
+
+        page.click.assert_not_called()
+        assert result is None
