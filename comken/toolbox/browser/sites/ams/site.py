@@ -41,6 +41,9 @@ class AMSBrowserOptions(BrowserOptions):
     START_MAXIMIZED = False
     WINDOW_SIZE = "1600,1024"
 
+    # 装置画面を開く際、既定の10秒だとタイムアウトすることがあったため延長
+    WAIT_SECONDS = 30
+
 
 class AMS(SiteBase):
     """ams 雛形用の SiteBase。
