@@ -6558,6 +6558,79 @@ def __init__(self, title: str) -> None:
 ```
 
 
+## `from comken.services.csv_column_reducer import ...`
+
+### `reduce_columns`
+
+```text
+def reduce_columns(table: Table, columns: Sequence[str], *, aliases: Mapping[str, str] | None=None) -> Table:
+```
+
+#### 説明
+
+columns（欲しい列名）だけを残した Table を返す。
+
+aliases に ``{欲しい列名: 実際に table にある列名}`` を渡すと、列名が
+変わっていてもそちらから値を拾う。結果の列名は常に columns 側（欲しい
+名前）に揃う。aliases に無い列は、table 側にも同じ名前でそのまま
+存在する前提で選ぶ。
+
+    # 「顧客番号」が新ロールでは「顧客ID」にリネームされている場合
+    reduce_columns(table, ["顧客番号", "氏名"], aliases={"顧客番号": "顧客ID"})
+
+欲しい列が table に無い場合は ``Table.select()`` と同じ
+``TableColumnNotFoundError`` になる（サイレントに欠落させない）。
+
+### `reduce_ouju_csv`
+
+```text
+def reduce_ouju_csv(table: Table, *, columns: list[str] | None=None) -> Table:
+```
+
+#### 説明
+
+応需CSVの Table を、既定では旧ロール列だけに絞って返す。
+
+columns を渡すと、既定の OLD_ROLE_COLUMNS の代わりにそちらを使う
+（新ロールへ完全移行した後や、他システム向けに必要な列だけ残したいときに使う）。
+リネーム対応表は常に OLD_ROLE_ALIASES を使う
+（columns を差し替えても、リネームの吸収自体は変わらないため）。
+
+### `reduce_ouju_csv_file`
+
+```text
+def reduce_ouju_csv_file(path: str | Path, *, columns: list[str] | None=None, backup_suffix: str='_bak') -> Path:
+```
+
+#### 説明
+
+CSVファイルを読み、旧ロール列だけに絞って同じパス・同じファイル名で書き戻す。
+
+加工前のファイルは拡張子の前に ``backup_suffix`` を挟んだ名前
+（例: ``応需.csv`` → ``応需.bak.csv``）へリネームしてから書き直す
+（処理前の状態を残す。``.csv`` のまま残すのは、CSV クラスが ``.csv``
+以外の拡張子を受け付けないため。自動削除はしない — 消すかどうかは
+呼び出し側が決める）。同名のバックアップが既にあれば上書きする
+（move_file の挙動どおり）。
+
+Args:
+    path: 応需からダウンロードしたCSVのパス。
+    columns: 残す列名を上書きしたいときに指定する。省略時は
+        ouju_role.OLD_ROLE_COLUMNS（旧ロール相当）を使う。
+    backup_suffix: バックアップファイル名に付ける接尾辞。
+
+Returns:
+    リネーム後のバックアップファイルのパス。
+
+### `OLD_ROLE_COLUMNS`
+
+公開定数。
+
+### `OLD_ROLE_ALIASES`
+
+公開定数。
+
+
 ## `from comken.services.salesforce_downloader import ...`
 
 ### `download_scheduled`
@@ -9241,6 +9314,16 @@ def go_login(self) -> LoginPage:
 ##### 説明
 
 ログイン画面を開く。
+
+#### `go_customer_list`
+
+```text
+def go_customer_list(self) -> CustomerListPage:
+```
+
+##### 説明
+
+お客様一覧画面を開く（ログイン後、URL 直飛びで行ける）。
 
 
 ## `from comken.toolbox.browser.sites.ntt import ...`
