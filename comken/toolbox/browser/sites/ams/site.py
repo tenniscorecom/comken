@@ -24,10 +24,6 @@ from comken.toolbox.browser import BrowserOptions, SiteBase
 from comken.toolbox.browser.sites.ams.pages.customer_list_page import CustomerListPage
 from comken.toolbox.browser.sites.ams.pages.login_page import LoginPage
 
-# BASE_URL は AMSBrowserOptions 側でも使う（IP を安全なオリジンとして扱う設定に
-# 同じ値を渡す必要があるため）。2箇所に書いて食い違う事故を避けるため定数化する
-_BASE_URL = "http://203.0.113.10"
-
 
 class AMSBrowserOptions(BrowserOptions):
     """ams 用のブラウザオプション。
@@ -45,10 +41,6 @@ class AMSBrowserOptions(BrowserOptions):
     START_MAXIMIZED = False
     WINDOW_SIZE = "1600,1024"
 
-    # このサイトは HTTPS 非対応で IP アドレス直打ちのため、ブラウザが出す
-    # 「安全でない接続」警告（ログイン画面のパスワード欄などに出る）を抑止する
-    UNSAFELY_TREAT_INSECURE_ORIGIN_AS_SECURE = _BASE_URL
-
 
 class AMS(SiteBase):
     """ams 雛形用の SiteBase。
@@ -57,7 +49,7 @@ class AMS(SiteBase):
     """
 
     NAME = "ams"
-    BASE_URL = _BASE_URL
+    BASE_URL = "http://203.0.113.10"
     OPTIONS = AMSBrowserOptions
     OWNER = "comken"
 
