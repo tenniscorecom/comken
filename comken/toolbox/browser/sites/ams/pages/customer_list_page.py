@@ -28,22 +28,30 @@ class CustomerListPage(AppPage):
         self.click(self.SEARCH_BTN)
         self.wait_visible(self.RESULT_AREA)
 
-    def open_device_screen(self) -> DeviceScreenPage | None:
-        """検索結果の装置リンクを開く。
+    def has_device(self) -> bool:
+        """直前の search() の結果に、装置へのリンクがあるかを返す。
 
-        そのお客様に装置が紐づいていなければ ``None`` を返す
-        （呼び出し側で次のお客様IDへ進む）。
+        search() の後、ここが False の間はブラウザは実際にはまだこの
+        CustomerListPage のままなので、open_device_screen() は呼ばない
+        （呼ぶと装置画面へ遷移したことになってしまい、実態と食い違う）。
+        """
+        return self.has_element(self.DEVICE_LINK)
+
+    def open_device_screen(self) -> DeviceScreenPage:
+        """装置リンクを開き、DeviceScreenPage を返す。
+
+        呼ぶ前に has_device() で有無を確かめておくこと
+        （装置が無いのに呼ぶと、通常の click() と同じ待機タイムアウトになる）。
 
             for customer_id in customer_ids:
                 # 一覧画面はURL直飛びで開き直せるので、検索のたびに取り直す
                 customer_list = ams.go_customer_list()
                 customer_list.search(customer_id)
-                device_screen = customer_list.open_device_screen()
-                if device_screen is None:
+                if not customer_list.has_device():
                     logger.warning("装置が見つかりません: customer_id=%s", customer_id)
                     continue
+                device_screen = customer_list.open_device_screen()
                 device_screen.save_screenshot(f"device_{customer_id}.png")
         """
-        if not self.click_if_present(self.DEVICE_LINK):
-            return None
+        self.click(self.DEVICE_LINK)
         return self.to(DeviceScreenPage)

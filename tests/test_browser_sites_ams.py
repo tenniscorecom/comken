@@ -171,28 +171,34 @@ def _make_customer_list_page(tmp_path) -> CustomerListPage:
     return page
 
 
-class TestCustomerListPageOpenDeviceScreen:
-    """open_device_screen() — 装置リンクの有無で戻り値が変わる分岐。"""
+class TestCustomerListPageHasDevice:
+    """has_device() — 装置リンクの有無をブラウザの状態を変えずに確かめる。"""
 
-    def test_returns_device_screen_when_link_present(self, tmp_path):
-        """装置リンクがあればクリックして DeviceScreenPage を返す。"""
+    def test_true_when_link_present(self, tmp_path):
+        """装置リンクがあれば True。"""
         page = _make_customer_list_page(tmp_path)
         page.session._driver.find_element.side_effect = None
         page.session._driver.find_element.return_value = MagicMock()  # 装置リンクあり
+
+        assert page.has_device() is True
+
+    def test_false_when_link_missing(self, tmp_path):
+        """装置がそのお客様に紐づいていなければ False。"""
+        page = _make_customer_list_page(tmp_path)
+        page.session._driver.find_element.side_effect = NoSuchElementException()
+
+        assert page.has_device() is False
+
+
+class TestCustomerListPageOpenDeviceScreen:
+    """open_device_screen() — 常に装置リンクをクリックして DeviceScreenPage を返す。"""
+
+    def test_returns_device_screen(self, tmp_path):
+        """装置リンクをクリックして DeviceScreenPage を返す。"""
+        page = _make_customer_list_page(tmp_path)
         page.click = MagicMock()
 
         result = page.open_device_screen()
 
         page.click.assert_called_once_with(page.DEVICE_LINK)
         assert isinstance(result, DeviceScreenPage)
-
-    def test_returns_none_when_link_missing(self, tmp_path):
-        """装置がそのお客様に紐づいていなければ None を返す（クリックもしない）。"""
-        page = _make_customer_list_page(tmp_path)
-        page.session._driver.find_element.side_effect = NoSuchElementException()
-        page.click = MagicMock()
-
-        result = page.open_device_screen()
-
-        page.click.assert_not_called()
-        assert result is None
