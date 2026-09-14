@@ -28,30 +28,23 @@ class CustomerListPage(AppPage):
         self.click(self.SEARCH_BTN)
         self.wait_visible(self.RESULT_AREA)
 
-    def has_device(self) -> bool:
-        """直前の search() の結果に、装置へのリンクがあるかを返す。
+    def open_device_screen(self) -> DeviceScreenPage | CustomerListPage:
+        """検索結果の装置リンクを開く。
 
-        search() の後、ここが False の間はブラウザは実際にはまだこの
-        CustomerListPage のままなので、open_device_screen() は呼ばない
-        （呼ぶと装置画面へ遷移したことになってしまい、実態と食い違う）。
-        """
-        return self.has_element(self.DEVICE_LINK)
-
-    def open_device_screen(self) -> DeviceScreenPage:
-        """装置リンクを開き、DeviceScreenPage を返す。
-
-        呼ぶ前に has_device() で有無を確かめておくこと
-        （装置が無いのに呼ぶと、通常の click() と同じ待機タイムアウトになる）。
+        そのお客様に装置が紐づいていなければ画面は遷移しないため、自分自身
+        （CustomerListPage）を返す。呼び出し側は型で分岐する
+        （LoginPage.login() が期限切れのとき ChangePasswordPage を返すのと同じ形）:
 
             for customer_id in customer_ids:
                 # 一覧画面はURL直飛びで開き直せるので、検索のたびに取り直す
                 customer_list = ams.go_customer_list()
                 customer_list.search(customer_id)
-                if not customer_list.has_device():
+                result = customer_list.open_device_screen()
+                if isinstance(result, CustomerListPage):
                     logger.warning("装置が見つかりません: customer_id=%s", customer_id)
                     continue
-                device_screen = customer_list.open_device_screen()
-                device_screen.save_screenshot(f"device_{customer_id}.png")
+                result.save_screenshot(f"device_{customer_id}.png")
         """
-        self.click(self.DEVICE_LINK)
+        if not self.click_if_present(self.DEVICE_LINK):
+            return self
         return self.to(DeviceScreenPage)
