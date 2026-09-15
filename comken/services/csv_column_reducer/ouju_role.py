@@ -16,10 +16,32 @@ from comken.services.csv_column_reducer.reducer import reduce_columns
 # TODO: 実際の旧ロールの列名に書き換える
 OLD_ROLE_COLUMNS: list[str] = []
 
-# 新ロールでリネームされた列だけ {旧ロールでの列名: 新ロールでの実際の列名}。
-# リネームされていない列はここに書かなくてよい（table 側にも同名で存在する前提で選ばれる）
-# TODO: 実際にリネームされた列を追記する
+# 新ロールでリネームされた列のうち、先頭の＊有無では説明できないものだけ
+# {旧ロールでの列名: 新ロールでの実際の列名}。
+# 先頭の＊有無だけが違う列（新ロールの必須マーク等）は _resolve_asterisk_aliases()
+# が自動で吸収するため、ここに書かなくてよい
+# TODO: 実際にリネームされた列（＊以外の理由によるもの）があれば追記する
 OLD_ROLE_ALIASES: dict[str, str] = {}
+
+
+def _resolve_asterisk_aliases(
+    table_columns: list[str], wanted_columns: list[str]
+) -> dict[str, str]:
+    """欲しい列名のうち、先頭の＊の有無だけが違う実列名を自動で対応付ける。
+
+    新ロールでは必須項目に＊が付く等、列によって＊が増えたり消えたりする
+    （一律の付け外しではない）ため、先頭の＊を無視して同じ列とみなす。
+    完全一致する列はここでは対応表に入れない（select() がそのまま解決できるため）。
+    """
+    by_stripped = {name.removeprefix("＊"): name for name in table_columns}
+    aliases = {}
+    for wanted in wanted_columns:
+        if wanted in table_columns:
+            continue
+        actual = by_stripped.get(wanted.removeprefix("＊"))
+        if actual is not None:
+            aliases[wanted] = actual
+    return aliases
 
 
 def reduce_ouju_csv(table: Table, *, columns: list[str] | None = None) -> Table:
@@ -27,8 +49,11 @@ def reduce_ouju_csv(table: Table, *, columns: list[str] | None = None) -> Table:
 
     columns を渡すと、既定の OLD_ROLE_COLUMNS の代わりにそちらを使う
     （新ロールへ完全移行した後や、他システム向けに必要な列だけ残したいときに使う）。
-    リネーム対応表は常に OLD_ROLE_ALIASES を使う
-    （columns を差し替えても、リネームの吸収自体は変わらないため）。
+
+    先頭の＊有無だけが違う列は自動で吸収し、結果の列名は常に旧ロール側
+    （columns / OLD_ROLE_COLUMNS で指定した名前）に揃える。それ以外の
+    リネームは OLD_ROLE_ALIASES を使う（自動判定より OLD_ROLE_ALIASES を優先する）。
     """
     wanted = columns if columns is not None else OLD_ROLE_COLUMNS
-    return reduce_columns(table, wanted, aliases=OLD_ROLE_ALIASES)
+    aliases = {**_resolve_asterisk_aliases(table.columns, wanted), **OLD_ROLE_ALIASES}
+    return reduce_columns(table, wanted, aliases=aliases)
