@@ -16,7 +16,6 @@ Python）に書き、設定できる項目は ``print(OujuBrowserOptions())`` �
 """
 
 from comken.toolbox.browser import BrowserOptions, SiteBase
-from comken.toolbox.browser.sites.ouju.pages.csv_report_page import CsvReportPage
 from comken.toolbox.browser.sites.ouju.pages.login_page import LoginPage
 
 
@@ -51,7 +50,3 @@ class Ouju(SiteBase):
     def go_login(self) -> LoginPage:
         """ログイン画面を開く。"""
         return self.to(LoginPage).go("/login")
-
-    def go_csv_report(self) -> CsvReportPage:
-        """CSV帳票のダウンロード画面を開く（ログイン後、URL 直飛びで行ける）。"""
-        return self.to(CsvReportPage).go("/report")

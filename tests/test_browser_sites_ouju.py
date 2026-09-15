@@ -12,7 +12,6 @@ from selenium.common.exceptions import NoSuchElementException
 from comken.exceptions import LoginFailedError
 from comken.toolbox.browser import BrowserOptions, DownloadDir
 from comken.toolbox.browser.management.sessions import BrowserSession
-from comken.toolbox.browser.sites.ouju.pages.csv_report_page import CsvReportPage
 from comken.toolbox.browser.sites.ouju.pages.login_page import LoginPage
 from comken.toolbox.browser.sites.ouju.pages.secure_page import SecurePage
 from comken.toolbox.browser.sites.ouju.site import Ouju
@@ -93,32 +92,3 @@ class TestLoginButtonSkip:
 
         page.click.assert_called_once_with(page.LOGIN_BTN)
         assert isinstance(result, SecurePage)
-
-
-class TestCsvReportPageDownloadCsv:
-    """download_csv() — クリックしてダウンロード完了を待ち、そのパスを返す配線の確認。
-
-    列削減の組み合わせは comken.services.csv_column_reducer 側の責務
-    （toolbox は services に依存できないため）。そちらは
-    tests/test_csv_column_reducer.py で確認する。
-    """
-
-    def test_returns_the_downloaded_path(self, tmp_path):
-        dl_dir = tmp_path / "dl"
-        session = BrowserSession(
-            name="test",
-            options=BrowserOptions(),
-            download_dir=DownloadDir(path=dl_dir),
-            profile_dir=None,
-        )
-        session._driver = MagicMock()
-        session._site = Ouju()
-        page = CsvReportPage(session)
-        page.click = MagicMock()
-        downloaded_path = dl_dir / "応需.csv"
-        downloaded_path.write_text("a,b\n1,2\n", encoding="utf-8-sig")
-
-        result = page.download_csv()
-
-        page.click.assert_called_once_with(page.DOWNLOAD_BTN)
-        assert result == downloaded_path

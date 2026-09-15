@@ -6608,12 +6608,17 @@ def reduce_ouju_csv_file(path: str | Path, *, columns: list[str] | None=None, ba
 
 CSVファイルを読み、旧ロール列だけに絞って同じパス・同じファイル名で書き戻す。
 
-加工前のファイルは拡張子の前に ``backup_suffix`` を挟んだ名前
-（例: ``応需.csv`` → ``応需.bak.csv``）へリネームしてから書き直す
-（処理前の状態を残す。``.csv`` のまま残すのは、CSV クラスが ``.csv``
-以外の拡張子を受け付けないため。自動削除はしない — 消すかどうかは
-呼び出し側が決める）。同名のバックアップが既にあれば上書きする
-（move_file の挙動どおり）。
+**列削減が先、バックアップは削減に成功した後にだけ作る。** OLD_ROLE_COLUMNS
+の設定ミス等で削減が失敗しても、この順序なら元ファイルには一切手を付けて
+いないため、設定を直してそのまま同じファイルへ再実行できる（先にファイルを
+退避してから削減する順序だと、失敗するたびに直前の正常なバックアップが
+次のリトライで上書きされ、失敗を繰り返すと元データを失いかねない）。
+
+バックアップは拡張子の前に ``backup_suffix`` を挟んだ名前
+（例: ``応需.csv`` → ``応需_bak.csv``）で、削減成功後の元ファイルの複製。
+``.csv`` のまま残すのは、CSV クラスが ``.csv`` 以外の拡張子を受け付けない
+ため。既に同名のバックアップがあれば上書きする（直前の成功時点の複製なので、
+古い方を残す意味は無い）。自動削除はしない — 消すかどうかは呼び出し側が決める。
 
 Args:
     path: 応需からダウンロードしたCSVのパス。
@@ -6622,27 +6627,7 @@ Args:
     backup_suffix: バックアップファイル名に付ける接尾辞。
 
 Returns:
-    リネーム後のバックアップファイルのパス。
-
-### `download_and_reduce_ouju_csv`
-
-```text
-def download_and_reduce_ouju_csv(ouju: Ouju, *, columns: list[str] | None=None) -> Path:
-```
-
-#### 説明
-
-ログイン済みの Ouju で CSV帳票をダウンロードし、列を削減して返す。
-
-新ロールでは列数が255を超えてAccessへ取り込めないため、既定では
-旧ロール相当の列だけに絞る。columns を渡すと絞る列を上書きできる。
-
-    with Ouju() as ouju:
-        ouju.go_login().login(username, password)
-        path = download_and_reduce_ouju_csv(ouju)
-
-Returns:
-    列を削減した後のCSVのパス（ダウンロードされた場所・ファイル名のまま）。
+    バックアップファイルのパス。
 
 ### `OLD_ROLE_COLUMNS`
 
@@ -9779,16 +9764,6 @@ def go_login(self) -> LoginPage:
 ##### 説明
 
 ログイン画面を開く。
-
-#### `go_csv_report`
-
-```text
-def go_csv_report(self) -> CsvReportPage:
-```
-
-##### 説明
-
-CSV帳票のダウンロード画面を開く（ログイン後、URL 直飛びで行ける）。
 
 
 ## `from comken.toolbox.credentials import ...`

@@ -1,12 +1,10 @@
 """comken/services/csv_column_reducer の列削減（reduce_columns / reduce_ouju_csv_file）のテスト。"""
 
-from unittest.mock import MagicMock
-
 import pytest
 
 from comken.core import Table
-from comken.exceptions import TableColumnNotFoundError
-from comken.services.csv_column_reducer import download_and_reduce_ouju_csv, reduce_columns
+from comken.exceptions import TableColumnNotFoundError, TableError
+from comken.services.csv_column_reducer import reduce_columns
 from comken.services.csv_column_reducer.file_ops import reduce_ouju_csv_file
 from comken.services.csv_column_reducer.ouju_role import reduce_ouju_csv
 from comken.toolbox.csv import CSV
@@ -109,7 +107,9 @@ class TestReduceOujuCsv:
 
 
 class TestReduceOujuCsvFile:
-    """reduce_ouju_csv_file() — 元ファイルをバックアップへ退避し、同名で書き戻す。"""
+    """reduce_ouju_csv_file() — 削減成功後にだけ元ファイルをバックアップへ複製し、
+    同名で書き戻す。
+    """
 
     def test_backs_up_original_and_writes_reduced_csv_with_same_name(self, tmp_path, monkeypatch):
         import comken.services.csv_column_reducer.ouju_role as ouju_role_module
@@ -139,40 +139,62 @@ class TestReduceOujuCsvFile:
         with CSV(path, read_only=True) as reduced_csv:
             assert reduced_csv.read() == [{"b": "2"}]
 
+    def test_original_file_is_untouched_when_reduction_fails(self, tmp_path, monkeypatch):
+        """欲しい列が無くて削減に失敗しても、元ファイル・バックアップともに触らない。
 
-class TestDownloadAndReduceOujuCsv:
-    """download_and_reduce_ouju_csv() — ダウンロードして列削減を呼ぶ配線の確認。
+        （リトライのたびに直前の正常なバックアップを潰してしまう事故を防ぐため。
+        失敗時は元ファイルがそのまま残るので、設定を直して同じファイルへ再実行できる）。
+        """
+        import comken.services.csv_column_reducer.ouju_role as ouju_role_module
 
-    toolbox は services に依存できない設計ルールのため、ダウンロード自体
-    （go_csv_report().download_csv()）はここでは実行せず、Ouju をモックして
-    「呼ばれたか・結果をreduce_ouju_csv_file()へ正しく渡したか」だけ確かめる。
-    """
+        monkeypatch.setattr(ouju_role_module, "OLD_ROLE_COLUMNS", ["存在しない列"])
+        path = tmp_path / "応需.csv"
+        original_content = "a,b\n1,2\n"
+        path.write_text(original_content, encoding="utf-8-sig")
 
-    def test_downloads_then_reduces_with_default_columns(self, monkeypatch, tmp_path):
-        downloaded_path = tmp_path / "応需.csv"
-        ouju = MagicMock()
-        ouju.go_csv_report.return_value.download_csv.return_value = downloaded_path
-        reduce_mock = MagicMock()
-        monkeypatch.setattr(
-            "comken.services.csv_column_reducer.ouju_download.reduce_ouju_csv_file",
-            reduce_mock,
-        )
+        with pytest.raises(TableColumnNotFoundError):
+            reduce_ouju_csv_file(path)
 
-        result = download_and_reduce_ouju_csv(ouju)
+        assert path.read_text(encoding="utf-8-sig") == original_content
+        assert not (tmp_path / "応需_bak.csv").exists()
 
-        reduce_mock.assert_called_once_with(downloaded_path, columns=None)
-        assert result == downloaded_path
+    def test_retry_after_fixing_config_succeeds_without_losing_previous_backup(
+        self, tmp_path, monkeypatch
+    ):
+        """1回目が失敗しても、設定を直せば同じファイルへ再実行できる。
 
-    def test_passes_columns_override_through(self, monkeypatch, tmp_path):
-        downloaded_path = tmp_path / "応需.csv"
-        ouju = MagicMock()
-        ouju.go_csv_report.return_value.download_csv.return_value = downloaded_path
-        reduce_mock = MagicMock()
-        monkeypatch.setattr(
-            "comken.services.csv_column_reducer.ouju_download.reduce_ouju_csv_file",
-            reduce_mock,
-        )
+        （先にリネームしてから削減する順序だと、1回目の失敗時点で元ファイルが
+        既に無くなっているため、この再実行自体ができなかった）。
+        """
+        import comken.services.csv_column_reducer.ouju_role as ouju_role_module
 
-        download_and_reduce_ouju_csv(ouju, columns=["a"])
+        monkeypatch.setattr(ouju_role_module, "OLD_ROLE_COLUMNS", ["存在しない列"])
+        path = tmp_path / "応需.csv"
+        path.write_text("a,b\n1,2\n", encoding="utf-8-sig")
+        with pytest.raises(TableColumnNotFoundError):
+            reduce_ouju_csv_file(path)
 
-        reduce_mock.assert_called_once_with(downloaded_path, columns=["a"])
+        monkeypatch.setattr(ouju_role_module, "OLD_ROLE_COLUMNS", ["a"])
+        backup_path = reduce_ouju_csv_file(path)
+
+        assert backup_path.exists()
+        with CSV(path, read_only=True) as reduced_csv:
+            assert reduced_csv.read() == [{"a": "1"}]
+
+    def test_duplicate_old_role_columns_raise_before_touching_files(self, tmp_path, monkeypatch):
+        """OLD_ROLE_COLUMNSに重複があれば、Tableの検証でそのまま例外になる。
+
+        （専用の重複チェックを別途書かなくても、Tableのコンストラクタが
+        列名の重複を拒否するため、ここでも自然にカバーされる）。
+        """
+        import comken.services.csv_column_reducer.ouju_role as ouju_role_module
+
+        monkeypatch.setattr(ouju_role_module, "OLD_ROLE_COLUMNS", ["a", "a"])
+        path = tmp_path / "応需.csv"
+        original_content = "a,b\n1,2\n"
+        path.write_text(original_content, encoding="utf-8-sig")
+
+        with pytest.raises(TableError):
+            reduce_ouju_csv_file(path)
+
+        assert path.read_text(encoding="utf-8-sig") == original_content
