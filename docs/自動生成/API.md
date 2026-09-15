@@ -6622,6 +6622,26 @@ Args:
 Returns:
     リネーム後のバックアップファイルのパス。
 
+### `download_and_reduce_ouju_csv`
+
+```text
+def download_and_reduce_ouju_csv(ouju: Ouju, *, columns: list[str] | None=None) -> Path:
+```
+
+#### 説明
+
+ログイン済みの Ouju で CSV帳票をダウンロードし、列を削減して返す。
+
+新ロールでは列数が255を超えてAccessへ取り込めないため、既定では
+旧ロール相当の列だけに絞る。columns を渡すと絞る列を上書きできる。
+
+    with Ouju() as ouju:
+        ouju.go_login().login(username, password)
+        path = download_and_reduce_ouju_csv(ouju)
+
+Returns:
+    列を削減した後のCSVのパス（ダウンロードされた場所・ファイル名のまま）。
+
 ### `OLD_ROLE_COLUMNS`
 
 公開定数。
@@ -9757,6 +9777,16 @@ def go_login(self) -> LoginPage:
 ##### 説明
 
 ログイン画面を開く。
+
+#### `go_csv_report`
+
+```text
+def go_csv_report(self) -> CsvReportPage:
+```
+
+##### 説明
+
+CSV帳票のダウンロード画面を開く（ログイン後、URL 直飛びで行ける）。
 
 
 ## `from comken.toolbox.credentials import ...`

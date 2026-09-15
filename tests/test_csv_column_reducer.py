@@ -1,10 +1,12 @@
 """comken/services/csv_column_reducer の列削減（reduce_columns / reduce_ouju_csv_file）のテスト。"""
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from comken.core import Table
 from comken.exceptions import TableColumnNotFoundError
-from comken.services.csv_column_reducer import reduce_columns
+from comken.services.csv_column_reducer import download_and_reduce_ouju_csv, reduce_columns
 from comken.services.csv_column_reducer.file_ops import reduce_ouju_csv_file
 from comken.services.csv_column_reducer.ouju_role import reduce_ouju_csv
 from comken.toolbox.csv import CSV
@@ -103,3 +105,41 @@ class TestReduceOujuCsvFile:
 
         with CSV(path, read_only=True) as reduced_csv:
             assert reduced_csv.read() == [{"b": "2"}]
+
+
+class TestDownloadAndReduceOujuCsv:
+    """download_and_reduce_ouju_csv() — ダウンロードして列削減を呼ぶ配線の確認。
+
+    toolbox は services に依存できない設計ルールのため、ダウンロード自体
+    （go_csv_report().download_csv()）はここでは実行せず、Ouju をモックして
+    「呼ばれたか・結果をreduce_ouju_csv_file()へ正しく渡したか」だけ確かめる。
+    """
+
+    def test_downloads_then_reduces_with_default_columns(self, monkeypatch, tmp_path):
+        downloaded_path = tmp_path / "応需.csv"
+        ouju = MagicMock()
+        ouju.go_csv_report.return_value.download_csv.return_value = downloaded_path
+        reduce_mock = MagicMock()
+        monkeypatch.setattr(
+            "comken.services.csv_column_reducer.ouju_download.reduce_ouju_csv_file",
+            reduce_mock,
+        )
+
+        result = download_and_reduce_ouju_csv(ouju)
+
+        reduce_mock.assert_called_once_with(downloaded_path, columns=None)
+        assert result == downloaded_path
+
+    def test_passes_columns_override_through(self, monkeypatch, tmp_path):
+        downloaded_path = tmp_path / "応需.csv"
+        ouju = MagicMock()
+        ouju.go_csv_report.return_value.download_csv.return_value = downloaded_path
+        reduce_mock = MagicMock()
+        monkeypatch.setattr(
+            "comken.services.csv_column_reducer.ouju_download.reduce_ouju_csv_file",
+            reduce_mock,
+        )
+
+        download_and_reduce_ouju_csv(ouju, columns=["a"])
+
+        reduce_mock.assert_called_once_with(downloaded_path, columns=["a"])
