@@ -73,33 +73,33 @@ class TestReduceOujuCsv:
         assert result.columns == ["a"]
 
     def test_absorbs_asterisk_that_was_added_in_new_role(self, monkeypatch):
-        """新ロールで先頭に＊が付いた列も、旧ロール名で自動的に拾う。"""
+        """新ロールで先頭に*が付いた列も、旧ロール名で自動的に拾う。"""
         import comken.services.csv_column_reducer.ouju_role as ouju_role_module
 
         monkeypatch.setattr(ouju_role_module, "OLD_ROLE_COLUMNS", ["氏名"])
-        table = Table(["＊氏名"], [{"＊氏名": "山田"}])
+        table = Table(["*氏名"], [{"*氏名": "山田"}])
 
         result = reduce_ouju_csv(table)
 
         assert result.to_rows() == [{"氏名": "山田"}]
 
     def test_absorbs_asterisk_that_was_removed_in_new_role(self, monkeypatch):
-        """旧ロールで＊付きだった列が新ロールで＊なしになっても拾う。"""
+        """旧ロールで*付きだった列が新ロールで*なしになっても拾う。"""
         import comken.services.csv_column_reducer.ouju_role as ouju_role_module
 
-        monkeypatch.setattr(ouju_role_module, "OLD_ROLE_COLUMNS", ["＊住所"])
+        monkeypatch.setattr(ouju_role_module, "OLD_ROLE_COLUMNS", ["*住所"])
         table = Table(["住所"], [{"住所": "名古屋"}])
 
         result = reduce_ouju_csv(table)
 
-        assert result.to_rows() == [{"＊住所": "名古屋"}]
+        assert result.to_rows() == [{"*住所": "名古屋"}]
 
     def test_exact_match_is_preferred_over_asterisk_normalization(self, monkeypatch):
-        """完全一致する列があれば、＊正規化ではなくそちらをそのまま使う。"""
+        """完全一致する列があれば、*正規化ではなくそちらをそのまま使う。"""
         import comken.services.csv_column_reducer.ouju_role as ouju_role_module
 
         monkeypatch.setattr(ouju_role_module, "OLD_ROLE_COLUMNS", ["氏名"])
-        table = Table(["氏名", "＊氏名"], [{"氏名": "本物", "＊氏名": "別列"}])
+        table = Table(["氏名", "*氏名"], [{"氏名": "本物", "*氏名": "別列"}])
 
         result = reduce_ouju_csv(table)
 
