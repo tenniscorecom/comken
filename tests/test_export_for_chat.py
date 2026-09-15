@@ -81,48 +81,47 @@ def test_concatenate_files_wraps_each_file_with_header() -> None:
     assert text.count("# ===== FILE:") == len(files)
 
 
-def test_bundle_text_has_six_chapters_in_order() -> None:
-    """バンドル資料が 6 章をこの順で持っている。"""
-    text = export_for_chat._bundle_text()
+def test_bundle_sections_are_in_order_with_implementation_split_by_package() -> None:
+    """バンドル資料が章（カテゴリ）ごとに分かれ、実装全文はパッケージ単位でさらに分かれている。"""
+    titles = [title for title, _ in export_for_chat._bundle_sections()]
 
-    # ヘッダ → 章 1 → 章 2 → 章 3 → 章 4 → 章 5 → 章 6 の順に出現する
-    header_idx = text.find("# comken_bundle.md")
-    conventions_idx = text.find("# 1. コーディング規約")
-    api_idx = text.find("# 2. 公開 API 索引")
-    examples_idx = text.find("# 3. 動く実例")
-    impl_idx = text.find("# 4. 実装全文")
-    errors_idx = text.find("# 5. エラー対応表")
-    spec_idx = text.find("# 6. 設計判断")
-
-    assert header_idx >= 0
-    assert header_idx < conventions_idx < api_idx < examples_idx < impl_idx < errors_idx < spec_idx
-
-
-def test_bundle_text_includes_examples_files() -> None:
-    """``examples/`` の代表ファイルがバンドルに含まれている。"""
-    text = export_for_chat._bundle_text()
-
-    # 代表として ``examples/advanced/table_transfer_design/README.md`` が含まれる
-    assert "examples/advanced/table_transfer_design/README.md" in text
+    # 0 読み方 → 1 規約 → 2 API索引 → 3 実例 → 4 実装_* (複数) → 5 エラー表 → 6 設計判断 の順
+    assert titles[0] == "0_読み方"
+    assert titles[1] == "1_コーディング規約"
+    assert titles[2] == "2_公開API索引"
+    assert titles[3] == "3_動く実例"
+    impl_titles = [title for title in titles if title.startswith("4_実装_")]
+    assert impl_titles  # comken/ のパッケージ数だけ分かれている
+    assert "4_実装_core" in impl_titles
+    assert "4_実装_toolbox" in impl_titles
+    assert titles[-2] == "5_エラー対応表"
+    assert titles[-1] == "6_設計判断"
 
 
-def test_bundle_text_includes_all_comken_py_files() -> None:
-    """``comken/`` の .py がすべて含まれている（ファイル数で検証）。"""
-    text = export_for_chat._bundle_text()
+def test_bundle_sections_include_examples_files() -> None:
+    """``examples/`` の代表ファイルが「3_動く実例」章に含まれている。"""
+    sections = dict(export_for_chat._bundle_sections())
 
-    # ``comken/`` 配下の .py がすべてヘッダ付きで入る
+    assert "examples/advanced/table_transfer_design/README.md" in sections["3_動く実例"]
+
+
+def test_bundle_sections_include_all_comken_py_files() -> None:
+    """``comken/`` の .py がすべて、いずれかの「4_実装_*」章に含まれている。"""
+    sections = export_for_chat._bundle_sections()
+    implementation_text = "".join(text for title, text in sections if title.startswith("4_実装_"))
+
     expected_files = export_for_chat._collect_python_files(export_for_chat.PACKAGE_ROOT)
-    assert text.count("# ===== FILE:") >= len(expected_files)
+    assert implementation_text.count("# ===== FILE:") == len(expected_files)
 
     # 各ファイルへの相対パスがそのまま入っている
     for path in expected_files[:5]:  # 全件チェックは冗長なので先頭5件で十分
         relative = path.relative_to(export_for_chat.PACKAGE_ROOT.parent).as_posix()
-        assert relative in text
+        assert relative in implementation_text
 
 
-def test_bundle_output_path_constant_exists() -> None:
-    """``BUNDLE_OUTPUT_PATH`` がリポジトリ直下の ``comken_bundle.md`` を指す。"""
-    assert export_for_chat.BUNDLE_OUTPUT_PATH == export_for_chat.ROOT / "comken_bundle.md"
+def test_bundle_output_dir_constant_exists() -> None:
+    """``BUNDLE_OUTPUT_DIR`` がリポジトリ直下の ``comken_bundle/`` を指す。"""
+    assert export_for_chat.BUNDLE_OUTPUT_DIR == export_for_chat.ROOT / "comken_bundle"
 
 
 def test_excluded_dir_names_includes_build_and_dist() -> None:

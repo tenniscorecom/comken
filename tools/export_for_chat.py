@@ -8,9 +8,10 @@
 ``docs/自動生成/API.md`` へ書き出す。添付できない環境では ``--max-chars`` を指定すると、
 従来どおり資料を文字数の目安で分割して ``貼り付け用/`` へ出力する。
 
-**同時に、社内の外部 AI へ貼るための 1 ファイル資料（``comken_bundle.md``）も
-既定で生成する。** インデックス → 実例 → 実装全文 → エラー対応表の順で並び、
-内部実装を区別せずに使ったサンプルが出にくくなっている。
+**同時に、社内の外部 AI へ貼るための資料（``comken_bundle/``）も既定で生成する。**
+章ごと（規約 → API 索引 → 実例 → 実装全文 → エラー対応表 → 設計判断）にファイルを分け、
+実装全文はさらに ``comken/`` 直下のパッケージ単位（core・toolbox・services 等）で
+分ける。1ファイルにまとめると数百万文字になり、チャットへ貼るには長すぎるため。
 
 使い方:
     python tools/export_for_chat.py
@@ -37,7 +38,7 @@ PACKAGE_ROOT = ROOT / "comken"
 API_OUTPUT_PATH = ROOT / "docs" / "自動生成" / "API.md"
 ERRORS_OUTPUT_PATH = ROOT / "docs" / "ERRORS.md"
 LEGACY_OUTPUT_DIR = ROOT / "貼り付け用"
-BUNDLE_OUTPUT_PATH = ROOT / "comken_bundle.md"
+BUNDLE_OUTPUT_DIR = ROOT / "comken_bundle"
 
 # 1カテゴリー（BUNDLES の1項目）がこれを超えたときだけ、さらに複数ファイルへ割る。
 # 基本は「1カテゴリー = 1ファイル」を保ちたいので、普段は超えない大きめの値にする。
@@ -560,15 +561,33 @@ def _concatenate_files(files: list[Path], package_root: Path) -> tuple[str, int,
     return text, line_count, total_bytes
 
 
-def _bundle_text() -> str:
-    """社外 AI へ貼るための 1 ファイル資料を組み立てる。
+def _implementation_groups(package_files: list[Path]) -> list[tuple[str, list[Path]]]:
+    """実装ファイルを ``comken/`` 直下のパッケージ単位（core・toolbox・services 等）でまとめる。
+
+    直下に置かれた単体ファイル（``constants.py`` 等）は ``root`` としてまとめる。
+    サブパッケージが1つでも巨大（toolbox 等）な場合は、書き出し側の ``_split()`` で
+    さらに文字数ベースに割る。
+    """
+    groups: dict[str, list[Path]] = {}
+    for path in package_files:
+        relative = path.relative_to(PACKAGE_ROOT)
+        key = relative.parts[0] if len(relative.parts) > 1 else "root"
+        groups.setdefault(key, []).append(path)
+    return sorted(groups.items())
+
+
+def _bundle_sections() -> list[tuple[str, str]]:
+    """社外 AI へ貼るための資料を、章（カテゴリ）ごとの (タイトル, 本文) の並びで組み立てる。
 
     並び順は **ヘッダ → コーディング規約 → 公開 API 索引 → 動く実例
-    (examples/) → 実装全文 (comken/) → エラー対応表 → 設計判断**。
-    規約を 1 章目に置くのは、社外 AI に規約（命名・型ヒント・定数・例外・
-    ロギング）を最初に読ませて、生成コードの表記ブレや規約違反を防ぐため。
+    (examples/) → 実装全文 (comken/、パッケージ単位でさらに分割) → エラー対応表
+    → 設計判断**。規約を先頭に置くのは、社外 AI に規約（命名・型ヒント・定数・
+    例外・ロギング）を最初に読ませて、生成コードの表記ブレや規約違反を防ぐため。
     その後は索引で公開 API を固定してから実例で正しい書き方を見せ、最後に
     全文とエラー表・仕様書で細部を裏取る構成にする。
+
+    章ごとに別ファイルへ書き出す前提のため、1ファイルへ結合したときに使う
+    区切り線（``---``）はここでは入れない。
     """
     conventions_path = ROOT / "docs" / "開発" / "CONVENTIONS.md"
     spec_path = ROOT / "docs" / "開発" / "仕様書.md"
@@ -579,7 +598,7 @@ def _bundle_text() -> str:
     api_text = _api_text()
     errors_text = _errors_generated_text()
     package_files = _collect_python_files(PACKAGE_ROOT)
-    impl_text, impl_line_count, impl_byte_count = _concatenate_files(package_files, PACKAGE_ROOT)
+    implementation_groups = _implementation_groups(package_files)
 
     # 動く実例: examples/ 配下をすべて .py / README.md の順で並べる。
     examples_root = ROOT / "examples"
@@ -597,71 +616,60 @@ def _bundle_text() -> str:
                 examples_chunks[-1] += "\n"
             examples_files.append(path)
 
-    parts: list[str] = []
-    parts.append(
-        _bundle_header(
-            api_text,
-            package_files,
-            examples_files,
-            impl_line_count,
-            impl_byte_count,
-            spec_line_count,
-        )
-    )
-    parts.append("\n---\n\n")
-    parts.append("# 1. コーディング規約（docs/開発/CONVENTIONS.md）\n")
-    parts.append(conventions_text)
-    parts.append("\n---\n\n")
-    parts.append("# 2. 公開 API 索引\n")
-    parts.append(api_text.rstrip())
-    parts.append("\n---\n\n")
+    sections: list[tuple[str, str]] = [
+        (
+            "0_読み方",
+            _bundle_readme(
+                api_text, package_files, implementation_groups, examples_files, spec_line_count
+            ),
+        ),
+        ("1_コーディング規約", conventions_text),
+        ("2_公開API索引", api_text.rstrip()),
+    ]
     if examples_chunks:
-        parts.append("# 3. 動く実例（examples/）\n")
-        parts.extend(examples_chunks)
-        parts.append("\n---\n\n")
-    parts.append("# 4. 実装全文（comken/）\n")
-    parts.append(impl_text)
-    parts.append("\n---\n\n")
-    parts.append("# 5. エラー対応表（docs/ERRORS.md）\n")
-    parts.append(errors_text.rstrip())
-    parts.append("\n---\n\n")
-    parts.append("# 6. 設計判断（docs/開発/仕様書.md）\n")
-    parts.append(spec_text)
-    parts.append("\n")
-    return "".join(parts)
+        sections.append(("3_動く実例", "".join(examples_chunks).rstrip()))
+    for group_name, group_files in implementation_groups:
+        text, _, _ = _concatenate_files(group_files, PACKAGE_ROOT)
+        sections.append((f"4_実装_{group_name}", text.rstrip()))
+    sections.append(("5_エラー対応表", errors_text.rstrip()))
+    sections.append(("6_設計判断", spec_text))
+    return sections
 
 
-def _bundle_header(
+def _bundle_readme(
     api_text: str,
     package_files: list[Path],
+    implementation_groups: list[tuple[str, list[Path]]],
     examples_files: list[Path],
-    impl_line_count: int,
-    impl_byte_count: int,
     spec_line_count: int,
 ) -> str:
-    """``comken_bundle.md`` の冒頭に置く「このファイルの読み方」を組み立てる。"""
+    """``comken_bundle/`` の入口に置く「このフォルダの読み方」を組み立てる。"""
     public_api_names = sum(
         api_text.count(f"### `{name}`") for name in _extract_public_names(api_text)
     )
+    group_lines = [
+        f"  - 4_実装_{name}.md（{len(files)} ファイル）" for name, files in implementation_groups
+    ]
     lines = [
-        "# comken_bundle.md — 社内 AI へ渡す comken 資料",
+        "# comken_bundle/ — 社内 AI へ渡す comken 資料",
         "",
-        "## このファイルの読み方",
+        "## このフォルダの読み方",
         "",
         "- comken は業務自動化の共通ライブラリです。",
-        "- このファイル 1 つだけで資料が完結します（コーディング規約 → API 索引 → 実例"
-        " → 実装全文 → エラー対応表 → 設計判断）。",
-        "- **第 1 章のコーディング規約を必ず先に読んでください。** 命名・型ヒント・"
+        "- 章（コーディング規約 → API 索引 → 実例 → 実装全文 → エラー対応表 →"
+        " 設計判断）ごとにファイルを分けています。1ファイルが数百万文字になって"
+        " チャットへ貼れなくなるのを避けるため、実装全文はさらに comken/ 直下の"
+        " パッケージ単位（core・toolbox・services 等）で分割しています。",
+        "- **1_コーディング規約 を必ず先に読んでください。** 命名・型ヒント・"
         "定数・例外・ロギングの書き方はここで固定されています。ここを読まずに書いた"
         "コードは規約違反で修正対象になります。",
-        "- 公開 API は **第 2 章** の索引に載っているものだけを使ってください。"
+        "- 公開 API は **2_公開API索引** に載っているものだけを使ってください。"
         "``_`` 始まりは内部実装なので使わないこと。",
-        "- 第 3 章は **動く実例** です。サンプルコードを書くときはここを参照してください。",
-        "- 第 4 章は実装全文です。索引に無い名前を勝手に使う前にここで実在を確かめてください。",
-        "- 第 5 章はエラー対応表です。利用者が読む画面の説明と、その例外が送出される条件を"
-        " ここで確認できます。",
-        "- 第 6 章は設計判断（仕様書）です。「なぜその設計にしたか」を知りたいときはここを"
-        " 参照してください。",
+        "- 3_動く実例 は実際に動くサンプルコードです。書くときはここを参照してください。",
+        "- 4_実装_* は実装全文です。索引に無い名前を勝手に使う前にここで実在を確かめてください。"
+        " 必要なパッケージのファイルだけ渡せば十分なことが多いです。",
+        "- 5_エラー対応表 は、利用者が読む画面の説明とその例外が送出される条件です。",
+        "- 6_設計判断 は「なぜその設計にしたか」（仕様書）です。",
         "",
         "## 中身のサマリ",
         "",
@@ -669,8 +677,8 @@ def _bundle_header(
         f"- 公開 API 索引の名前数: {public_api_names}",
         f"- 動く実例（examples/）のファイル数: {len(examples_files)}",
         f"- 実装全文（comken/）の .py ファイル数: {len(package_files)}",
-        f"- 実装全文（comken/）の総行数: {impl_line_count:,}",
-        f"- 実装全文（comken/）の総バイト数: {impl_byte_count:,}",
+        "- 実装全文の内訳:",
+        *group_lines,
         f"- 設計判断（仕様書.md）の行数: {spec_line_count:,}",
         "",
         "再生成: `python tools/export_for_chat.py`",
@@ -688,14 +696,23 @@ def _extract_public_names(api_text: str) -> set[str]:
     return names
 
 
-def _write_bundle() -> None:
-    """``comken_bundle.md`` を 1 ファイル書き出す。"""
-    text = _bundle_text()
-    BUNDLE_OUTPUT_PATH.write_text(text, encoding="utf-8")
-    print(  # noqa: T201
-        f"{BUNDLE_OUTPUT_PATH.relative_to(ROOT)} を生成しました"
-        f"（{len(text):,} 文字 / {BUNDLE_OUTPUT_PATH.stat().st_size:,} バイト）"
-    )
+def _write_bundle(max_chars: int) -> None:
+    """``comken_bundle/`` へ、章（カテゴリ）ごとにファイルを書き出す。
+
+    1章が ``max_chars`` を超えるときだけ、``_split()`` でさらに複数ファイルへ割る
+    （``_write_legacy_bundles()`` と同じ考え方）。
+    """
+    if BUNDLE_OUTPUT_DIR.exists():
+        shutil.rmtree(BUNDLE_OUTPUT_DIR)
+    BUNDLE_OUTPUT_DIR.mkdir()
+    for title, text in _bundle_sections():
+        chunks = _split(text, max_chars)
+        for number, chunk in enumerate(chunks, start=1):
+            suffix = "" if len(chunks) == 1 else f"_{number}of{len(chunks)}"
+            path = BUNDLE_OUTPUT_DIR / f"{title}{suffix}.md"
+            header = "" if number == 1 else f"（{title} の続き {number}/{len(chunks)}）\n\n"
+            path.write_text(header + chunk, encoding="utf-8")
+            print(f"{path.name}  {len(chunk):,} 文字")  # noqa: T201
 
 
 def main() -> None:
@@ -710,6 +727,7 @@ def main() -> None:
         ),
     )
     args = parser.parse_args()
+    bundle_max_chars = args.max_chars if args.max_chars > 0 else sys.maxsize
     API_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     API_OUTPUT_PATH.write_text(_api_text(), encoding="utf-8")
     print(f"{API_OUTPUT_PATH.relative_to(ROOT)} を生成しました")  # noqa: T201
@@ -718,7 +736,8 @@ def main() -> None:
     if args.max_chars > 0:
         _write_legacy_bundles(args.max_chars)
         print(f"{LEGACY_OUTPUT_DIR.relative_to(ROOT)}/ に分割資料を生成しました")  # noqa: T201
-    _write_bundle()
+    _write_bundle(bundle_max_chars)
+    print(f"{BUNDLE_OUTPUT_DIR.relative_to(ROOT)}/ に章ごとの資料を生成しました")  # noqa: T201
 
 
 if __name__ == "__main__":

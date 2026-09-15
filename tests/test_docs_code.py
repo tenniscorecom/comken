@@ -17,7 +17,7 @@ _ROOT = Path(__file__).resolve().parent.parent
 # pytest --basetemp で指定した作業ディレクトリ（.pytest-tmp/）はテスト用の一時領域で、
 # リポジトリのドキュメントとしては存在しないので走査対象外にする。
 # test_batch_files.py と同じ除外セットを使う。
-# ``comken_bundle.md`` も対象外: export_for_chat.py が既定で生成する物理結合ファイルで、
+# ``comken_bundle/`` も対象外: export_for_chat.py が既定で生成する結合資料フォルダで、
 # 削除済み名（pdf 等）や相対リンク（../../README.md）を含むため、 ここで検査すると
 # 「中身に含まれる名前すべて」を検査対象にできない（バンドル用の検証は
 # tests/test_export_for_chat.py が別途担う）。
@@ -26,12 +26,11 @@ _DOCS = [
     for path in _ROOT.rglob("*.md")
     if ".git" not in path.parts
     and ".pytest-tmp" not in path.parts
-    # 貼り付け用/ は export_for_chat.py が他の文書を丸ごと結合した生成物。
-    # 他ファイルからの相対リンクをそのまま含むため検証対象外にする
-    # （comken_bundle.md と同じ理由）。
+    # 貼り付け用/・comken_bundle/ は export_for_chat.py が他の文書を丸ごと結合した
+    # 生成物。他ファイルからの相対リンクをそのまま含むため検証対象外にする。
     and "貼り付け用" not in path.parts
+    and "comken_bundle" not in path.parts
     and path.name != "CODEX_TASK.md"
-    and path.name != "comken_bundle.md"
 ]
 
 _CODE_BLOCK = re.compile(r"```python(\s+skip)?\n(.*?)```", re.DOTALL)
