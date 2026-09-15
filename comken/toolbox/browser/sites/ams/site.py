@@ -20,9 +20,17 @@ Python）に書き、設定できる項目は ``print(AMSBrowserOptions())`` で
 > example の値のまま。利用プロジェクト側で実際の値へ書き換える前提。
 """
 
+# 遷移先の import を型注釈だけ TYPE_CHECKING、実行時はメソッド内に分けているのは、
+# 画面クラス同士の循環importを避けるため（循環の有無に関わらず一律この形にする）
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from comken.toolbox.browser import BrowserOptions, SiteBase
-from comken.toolbox.browser.sites.ams.pages.customer_list_page import CustomerListPage
-from comken.toolbox.browser.sites.ams.pages.login_page import LoginPage
+
+if TYPE_CHECKING:
+    from comken.toolbox.browser.sites.ams.pages.customer_list_page import CustomerListPage
+    from comken.toolbox.browser.sites.ams.pages.login_page import LoginPage
 
 
 class AMSBrowserOptions(BrowserOptions):
@@ -58,8 +66,12 @@ class AMS(SiteBase):
 
     def go_login(self) -> LoginPage:
         """ログイン画面を開く。"""
+        from comken.toolbox.browser.sites.ams.pages.login_page import LoginPage
+
         return self.to(LoginPage).go("/login")
 
     def go_customer_list(self) -> CustomerListPage:
         """お客様一覧画面を開く（ログイン後、URL 直飛びで行ける）。"""
+        from comken.toolbox.browser.sites.ams.pages.customer_list_page import CustomerListPage
+
         return self.to(CustomerListPage).go("/customers")

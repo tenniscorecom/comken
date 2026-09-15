@@ -5,9 +5,15 @@ URL や要素セレクタは example の値のまま。利用プロジェクト�
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from comken.toolbox.browser import Locator
 from comken.toolbox.browser.sites.ams.pages.app_page import AppPage
-from comken.toolbox.browser.sites.ams.pages.device_screen_page import DeviceScreenPage
+
+if TYPE_CHECKING:
+    # 遷移先の import は実行時にはメソッドの中で行う（画面クラス同士の循環importを
+    # 避けるため、循環の有無に関わらず一律この形にする）。ここは型注釈専用
+    from comken.toolbox.browser.sites.ams.pages.device_screen_page import DeviceScreenPage
 
 
 class CustomerListPage(AppPage):
@@ -45,6 +51,8 @@ class CustomerListPage(AppPage):
                     continue
                 result.save_screenshot(f"device_{customer_id}.png")
         """
+        from comken.toolbox.browser.sites.ams.pages.device_screen_page import DeviceScreenPage
+
         if not self.click_if_present(self.DEVICE_LINK):
             return self
         return self.to(DeviceScreenPage)

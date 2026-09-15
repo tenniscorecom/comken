@@ -373,9 +373,10 @@ class LoginPage(KintaiPage):
         return self.to(HomePage)
 ```
 
-遷移先の import をメソッドの中に置いているのは、画面クラス同士が互いを参照して
-循環インポートになるため（型注釈でも名前を使うなら `from __future__ import annotations` と
-`TYPE_CHECKING` を合わせる）。
+遷移先の import は常にメソッドの中に置き、モジュール先頭では `TYPE_CHECKING` の中だけで
+import する（`from __future__ import annotations` と組み合わせる）。**今その画面同士が
+循環しているかどうかは毎回判断しない** — 一律この形にしておけば、後から別の画面が
+追加でお互いを参照するようになっても壊れない。
 
 **画面が変わるメソッドは、遷移先の画面クラスを返す。** 呼ぶ側が画面の流れを
 コードのまま追えるようになる。
