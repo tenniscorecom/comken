@@ -1079,6 +1079,42 @@ class TestPage:
 
         assert lookup_count >= 3  # 空文字の間は確定せず、実際に文字が入るまで待った
 
+    def test_wait_until_any_waits_for_first_true_condition(self, tmp_path):
+        """複数の条件のうち、どれか一つが真になるまで待つ。"""
+        page = self._page(tmp_path)
+
+        page.wait_until_any(page.url_changed("https://example.com/login"))
+
+        page._wait.until.assert_called_once()
+
+    def test_wait_until_any_timeout_becomes_element_not_found(self, tmp_path):
+        """時間切れは ElementNotFoundError になる。"""
+        page = self._page(tmp_path)
+        page._wait.until.side_effect = TimeoutException()
+
+        with pytest.raises(ElementNotFoundError):
+            page.wait_until_any(page.url_changed("https://example.com/login"))
+
+    def test_wait_for_url_change_waits_until_url_differs_from_entry(self, tmp_path):
+        """with に入った時点のURLを基準に、抜けた後に実際に変わるまで待つ。"""
+        page = self._page(tmp_path)
+        page._wait = WebDriverWait(page.session.raw, timeout=1, poll_frequency=0.05)
+        page.session._driver.current_url = "https://example.com/login"
+
+        with page.wait_for_url_change():
+            page.session._driver.current_url = "https://example.com/home"
+
+        # ここまで例外なく進めば、with を抜けた後のURLで確定できている
+
+    def test_wait_for_url_change_times_out_when_url_stays_the_same(self, tmp_path):
+        """with を抜けてもURLが変わらなければタイムアウトになる。"""
+        page = self._page(tmp_path)
+        page._wait = WebDriverWait(page.session.raw, timeout=0.2, poll_frequency=0.05)
+        page.session._driver.current_url = "https://example.com/login"
+
+        with pytest.raises(ElementNotFoundError), page.wait_for_url_change():
+            pass  # URLを変えない
+
 
 class TestSitePage:
     """サイト共通の画面クラスのテスト。"""

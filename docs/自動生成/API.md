@@ -7754,6 +7754,68 @@ def wait_invisible(self, locator: Locator) -> None:
 
 要素が消えるまで待つ（読み込み中の表示が消えるのを待つときなど）。
 
+#### `url_changed`
+
+```text
+def url_changed(self, url_before: str) -> Condition:
+```
+
+##### 説明
+
+URL が url_before から変わったことを表す条件（wait_until_any へ渡す）。
+
+#### `wait_for_url_change`
+
+```text
+@contextmanager
+def wait_for_url_change(self) -> Iterator[None]:
+```
+
+##### 説明
+
+with に入った時点の URL から、抜けるまでに変わるのを待つ。
+
+「操作前の URL を変数に取っておいて、操作後に渡す」手間を無くしたもの。
+変わらなければ通常どおり ElementNotFoundError になる。
+
+    with self.wait_for_url_change():
+        self.click(self.NEXT_BTN)
+
+#### `text_shown`
+
+```text
+def text_shown(self, locator: Locator) -> Condition:
+```
+
+##### 説明
+
+locator の要素の表示文字が空でないことを表す条件（wait_until_any へ渡す）。
+
+要素の「存在」ではなく「表示文字が空でないか」で判定する
+（``raise_if_shown()`` と判定基準を合わせている）。コンテナが先に
+空のままDOMへ出て、文字は後から入る画面でも誤判定しない。
+
+見つからない間の ``NoSuchElementException`` は WebDriverWait が既定で
+無視して待ち続けるため、ここで拾う必要はない。
+
+#### `wait_until_any`
+
+```text
+def wait_until_any(self, *conditions: Condition) -> None:
+```
+
+##### 説明
+
+conditions のうち、どれか一つが最初に真になるまで待つ。
+
+url_changed() / text_shown() など、このクラスが用意する条件と組み合わせる
+（Selenium の expected_conditions を呼び出し側で直接 import しなくてよいように
+するため）。
+
+    url_before = self.session.current_url
+    self.click(self.SEARCH_BTN)
+    self.wait_until_any(self.url_changed(url_before), self.text_shown(self.NO_RESULT_MSG))
+
 #### `wait_for_result`
 
 ```text
@@ -7763,17 +7825,17 @@ def wait_for_result(self, url_before: str, error_locator: Locator) -> None:
 ##### 説明
 
 フォーム送信の結果が出るまで待つ:「URL が変わる」か「error_locator の
-要素が出る」のどちらか早い方が起きた時点で確定する。
+表示文字が出る」のどちらか早い方が起きた時点で確定する。
 
 結果が Ajax 等で少し遅れて出る画面で、送信直後に一度だけ確認すると
 表示の遅れをすり抜けてしまう（実際は失敗しているのに成功と判定して
 しまう）のを防ぐために使う。早い方が起きた時点で確定するので、
 成功時に無駄な待ちは発生しない。
 
-error_locator は「要素が在るか」ではなく「表示文字が空でないか」で
-判定する（``raise_if_shown()`` と判定基準を合わせている）。エラー用の
-コンテナが最初から空のままDOMに在る画面でも、文字が入る前の一瞬を
-「結果が確定した」と誤判定しない。
+「URL変化・エラー表示」のよくある2択専用の短縮形（wait_until_any() と
+同じ条件を使うが、時間切れ時のエラーに error_locator が残るよう
+wait_until_any() 経由にはしていない）。それ以外の組み合わせで
+待ちたいときは wait_until_any() を直接使う。
 
     url_before = self.session.current_url
     self.click(self.LOGIN_BTN)
@@ -8908,6 +8970,68 @@ def wait_invisible(self, locator: Locator) -> None:
 
 要素が消えるまで待つ（読み込み中の表示が消えるのを待つときなど）。
 
+#### `url_changed`
+
+```text
+def url_changed(self, url_before: str) -> Condition:
+```
+
+##### 説明
+
+URL が url_before から変わったことを表す条件（wait_until_any へ渡す）。
+
+#### `wait_for_url_change`
+
+```text
+@contextmanager
+def wait_for_url_change(self) -> Iterator[None]:
+```
+
+##### 説明
+
+with に入った時点の URL から、抜けるまでに変わるのを待つ。
+
+「操作前の URL を変数に取っておいて、操作後に渡す」手間を無くしたもの。
+変わらなければ通常どおり ElementNotFoundError になる。
+
+    with self.wait_for_url_change():
+        self.click(self.NEXT_BTN)
+
+#### `text_shown`
+
+```text
+def text_shown(self, locator: Locator) -> Condition:
+```
+
+##### 説明
+
+locator の要素の表示文字が空でないことを表す条件（wait_until_any へ渡す）。
+
+要素の「存在」ではなく「表示文字が空でないか」で判定する
+（``raise_if_shown()`` と判定基準を合わせている）。コンテナが先に
+空のままDOMへ出て、文字は後から入る画面でも誤判定しない。
+
+見つからない間の ``NoSuchElementException`` は WebDriverWait が既定で
+無視して待ち続けるため、ここで拾う必要はない。
+
+#### `wait_until_any`
+
+```text
+def wait_until_any(self, *conditions: Condition) -> None:
+```
+
+##### 説明
+
+conditions のうち、どれか一つが最初に真になるまで待つ。
+
+url_changed() / text_shown() など、このクラスが用意する条件と組み合わせる
+（Selenium の expected_conditions を呼び出し側で直接 import しなくてよいように
+するため）。
+
+    url_before = self.session.current_url
+    self.click(self.SEARCH_BTN)
+    self.wait_until_any(self.url_changed(url_before), self.text_shown(self.NO_RESULT_MSG))
+
 #### `wait_for_result`
 
 ```text
@@ -8917,17 +9041,17 @@ def wait_for_result(self, url_before: str, error_locator: Locator) -> None:
 ##### 説明
 
 フォーム送信の結果が出るまで待つ:「URL が変わる」か「error_locator の
-要素が出る」のどちらか早い方が起きた時点で確定する。
+表示文字が出る」のどちらか早い方が起きた時点で確定する。
 
 結果が Ajax 等で少し遅れて出る画面で、送信直後に一度だけ確認すると
 表示の遅れをすり抜けてしまう（実際は失敗しているのに成功と判定して
 しまう）のを防ぐために使う。早い方が起きた時点で確定するので、
 成功時に無駄な待ちは発生しない。
 
-error_locator は「要素が在るか」ではなく「表示文字が空でないか」で
-判定する（``raise_if_shown()`` と判定基準を合わせている）。エラー用の
-コンテナが最初から空のままDOMに在る画面でも、文字が入る前の一瞬を
-「結果が確定した」と誤判定しない。
+「URL変化・エラー表示」のよくある2択専用の短縮形（wait_until_any() と
+同じ条件を使うが、時間切れ時のエラーに error_locator が残るよう
+wait_until_any() 経由にはしていない）。それ以外の組み合わせで
+待ちたいときは wait_until_any() を直接使う。
 
     url_before = self.session.current_url
     self.click(self.LOGIN_BTN)
