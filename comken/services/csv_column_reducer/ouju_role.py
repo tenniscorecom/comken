@@ -3,6 +3,10 @@
 応需システムを「新ロール」で使うと、ダウンロードされるCSVの列数が255を超えて
 Access へ取り込めなくなる。既定では旧ロール相当の列だけを残して回避する。
 
+列選択そのもの（列名ゆれの吸収を含む）は Table.select(aliases=...) が
+汎用で持っている（comken/core/table/model.py）。ここは応需固有の値
+（列リスト・リネーム対応表）だけを持つ。
+
 列名・リネーム対応表は環境依存の実データなので、ここはダミーのまま
 （利用プロジェクト側で実際の値へ書き換える前提）。
 """
@@ -10,7 +14,6 @@ Access へ取り込めなくなる。既定では旧ロール相当の列だけ�
 from __future__ import annotations
 
 from comken.core.table.model import Table
-from comken.services.csv_column_reducer.reducer import reduce_columns
 
 # 旧ロールで残す列名（この並び順で出力される）。
 # TODO: 実際の旧ロールの列名に書き換える
@@ -56,4 +59,4 @@ def reduce_ouju_csv(table: Table, *, columns: list[str] | None = None) -> Table:
     """
     wanted = columns if columns is not None else OLD_ROLE_COLUMNS
     aliases = {**_resolve_asterisk_aliases(table.columns, wanted), **OLD_ROLE_ALIASES}
-    return reduce_columns(table, wanted, aliases=aliases)
+    return table.select(*wanted, aliases=aliases)

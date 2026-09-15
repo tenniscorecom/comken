@@ -140,17 +140,31 @@ class Table:
         logger.debug("Table append: +%d 行 (合計 %d 行)", len(normalized), len(self._rows))
         return self
 
-    def select(self, *columns: str) -> Table:
-        """指定した列だけを持つ新しいTableを返す。"""
-        self._check_columns(columns)
-        # 選択されなかった列の変換関数まで持ち回らないよう、columns に含まれる
-        # 列だけに絞った types を渡す
+    def select(self, *columns: str, aliases: Mapping[str, str] | None = None) -> Table:
+        """指定した列だけを持つ新しいTableを返す。
+
+        aliases に ``{欲しい列名: 実際にこのTableにある列名}`` を渡すと、
+        列名が変わっていてもそちらから値を拾う（例えば CSV の見出しが
+        リネームされていても、旧名で選び直せる）。結果の列名は常に
+        columns 側（欲しい名前）に揃う。aliases に無い列は、そのままの
+        名前で存在する前提で選ぶ。
+        """
+        aliases = aliases or {}
+        actual_names = [aliases.get(column, column) for column in columns]
+        self._check_columns(actual_names)
+        # 選択されなかった列の変換関数まで持ち回らないよう、実際に選んだ
+        # 列だけに絞った types を、結果の列名（columns 側）へ付け替えて渡す
         selected_types = {
-            column: converter for column, converter in self.types.items() if column in columns
+            column: self.types[actual]
+            for column, actual in zip(columns, actual_names, strict=True)
+            if actual in self.types
         }
         result = Table._from_normalized_rows(
             list(columns),
-            [{column: row[column] for column in columns} for row in self._rows],
+            [
+                {column: row[actual] for column, actual in zip(columns, actual_names, strict=True)}
+                for row in self._rows
+            ],
             types=selected_types,
         )
         logger.debug("Table select: %d 列, %d 行", len(result.columns), len(result))

@@ -24,8 +24,8 @@ from comken.toolbox.csv import CSV
 
 
 class TestCSV:
-    def test_public_api_contains_only_csv(self) -> None:
-        assert csv_package.__all__ == ["CSV"]
+    def test_public_api_contains_only_csv_and_transform_csv_file(self) -> None:
+        assert csv_package.__all__ == ["CSV", "transform_csv_file"]
         for removed in ("Csv" + "Reader", "Csv" + "Writer", "Csv" + "Base", "index" + "_files"):
             assert not hasattr(csv_package, removed)
 

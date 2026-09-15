@@ -7,6 +7,7 @@ import pytest
 
 from comken.core.table import Table, compare_tables
 from comken.exceptions.table import (
+    TableColumnNotFoundError,
     TableDuplicateKeyError,
     TableError,
     TransferMappingError,
@@ -185,6 +186,43 @@ def test_select_keeps_only_types_for_selected_columns() -> None:
     assert selected.types == {"id": int}
     selected.append({"id": "2"})
     assert selected.to_rows() == [{"id": 1}, {"id": 2}]
+
+
+def test_select_aliases_absorbs_renamed_columns() -> None:
+    """``select(aliases=...)`` は列名が変わっていても対応表から拾い、欲しい名前に揃える。"""
+    table = Table(["顧客ID", "氏名"], [{"顧客ID": "001", "氏名": "山田"}])
+
+    result = table.select("顧客番号", "氏名", aliases={"顧客番号": "顧客ID"})
+
+    assert result.columns == ["顧客番号", "氏名"]
+    assert result.to_rows() == [{"顧客番号": "001", "氏名": "山田"}]
+
+
+def test_select_aliases_type_converter_follows_the_renamed_column() -> None:
+    """types で指定した変換は、aliasesによるリネーム後の列名にもついてくる。"""
+    table = Table(["顧客ID"], [{"顧客ID": "1"}], types={"顧客ID": int})
+
+    result = table.select("顧客番号", aliases={"顧客番号": "顧客ID"})
+
+    assert result.to_rows() == [{"顧客番号": 1}]
+
+
+def test_select_raises_when_aliased_column_is_missing() -> None:
+    """aliasesで解決した実列名が無ければ、通常の select() と同じ例外になる。"""
+    table = Table(["a"], [{"a": "1"}])
+
+    with pytest.raises(TableColumnNotFoundError):
+        table.select("b")
+
+
+def test_table_rejects_duplicate_column_names() -> None:
+    """列名が重複した Table は作れない（select() の結果も含む）。"""
+    with pytest.raises(TableError):
+        Table(["a", "a"], [])
+
+    table = Table(["a", "b"], [{"a": "1", "b": "2"}])
+    with pytest.raises(TableError):
+        table.select("a", "a")
 
 
 def test_table_equals_table_by_content() -> None:

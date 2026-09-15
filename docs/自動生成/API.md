@@ -708,12 +708,18 @@ def append(self, rows: list[dict] | dict) -> Self:
 #### `select`
 
 ```text
-def select(self, *columns: str) -> Table:
+def select(self, *columns: str, aliases: Mapping[str, str] | None=None) -> Table:
 ```
 
 ##### 説明
 
 指定した列だけを持つ新しいTableを返す。
+
+aliases に ``{欲しい列名: 実際にこのTableにある列名}`` を渡すと、
+列名が変わっていてもそちらから値を拾う（例えば CSV の見出しが
+リネームされていても、旧名で選び直せる）。結果の列名は常に
+columns 側（欲しい名前）に揃う。aliases に無い列は、そのままの
+名前で存在する前提で選ぶ。
 
 #### `filter`
 
@@ -3112,12 +3118,18 @@ def append(self, rows: list[dict] | dict) -> Self:
 #### `select`
 
 ```text
-def select(self, *columns: str) -> Table:
+def select(self, *columns: str, aliases: Mapping[str, str] | None=None) -> Table:
 ```
 
 ##### 説明
 
 指定した列だけを持つ新しいTableを返す。
+
+aliases に ``{欲しい列名: 実際にこのTableにある列名}`` を渡すと、
+列名が変わっていてもそちらから値を拾う（例えば CSV の見出しが
+リネームされていても、旧名で選び直せる）。結果の列名は常に
+columns 側（欲しい名前）に揃う。aliases に無い列は、そのままの
+名前で存在する前提で選ぶ。
 
 #### `filter`
 
@@ -6560,27 +6572,6 @@ def __init__(self, title: str) -> None:
 
 ## `from comken.services.csv_column_reducer import ...`
 
-### `reduce_columns`
-
-```text
-def reduce_columns(table: Table, columns: Sequence[str], *, aliases: Mapping[str, str] | None=None) -> Table:
-```
-
-#### 説明
-
-columns（欲しい列名）だけを残した Table を返す。
-
-aliases に ``{欲しい列名: 実際に table にある列名}`` を渡すと、列名が
-変わっていてもそちらから値を拾う。結果の列名は常に columns 側（欲しい
-名前）に揃う。aliases に無い列は、table 側にも同じ名前でそのまま
-存在する前提で選ぶ。
-
-    # 「顧客番号」が新ロールでは「顧客ID」にリネームされている場合
-    reduce_columns(table, ["顧客番号", "氏名"], aliases={"顧客番号": "顧客ID"})
-
-欲しい列が table に無い場合は ``Table.select()`` と同じ
-``TableColumnNotFoundError`` になる（サイレントに欠落させない）。
-
 ### `reduce_ouju_csv`
 
 ```text
@@ -6608,17 +6599,8 @@ def reduce_ouju_csv_file(path: str | Path, *, columns: list[str] | None=None, ba
 
 CSVファイルを読み、旧ロール列だけに絞って同じパス・同じファイル名で書き戻す。
 
-**列削減が先、バックアップは削減に成功した後にだけ作る。** OLD_ROLE_COLUMNS
-の設定ミス等で削減が失敗しても、この順序なら元ファイルには一切手を付けて
-いないため、設定を直してそのまま同じファイルへ再実行できる（先にファイルを
-退避してから削減する順序だと、失敗するたびに直前の正常なバックアップが
-次のリトライで上書きされ、失敗を繰り返すと元データを失いかねない）。
-
-バックアップは拡張子の前に ``backup_suffix`` を挟んだ名前
-（例: ``応需.csv`` → ``応需_bak.csv``）で、削減成功後の元ファイルの複製。
-``.csv`` のまま残すのは、CSV クラスが ``.csv`` 以外の拡張子を受け付けない
-ため。既に同名のバックアップがあれば上書きする（直前の成功時点の複製なので、
-古い方を残す意味は無い）。自動削除はしない — 消すかどうかは呼び出し側が決める。
+処理の骨格（列削減が先、バックアップは成功後にだけ作る等）は
+comken.toolbox.csv.transform_csv_file() の docstring を参照。
 
 Args:
     path: 応需からダウンロードしたCSVのパス。
@@ -10152,6 +10134,37 @@ def count(self) -> int:
 ##### 説明
 
 データ行数を返す。
+
+### `transform_csv_file`
+
+```text
+def transform_csv_file(path: str | Path, transform: Callable[[Table], Table], *, backup_suffix: str='_bak') -> Path:
+```
+
+#### 説明
+
+CSVファイルを読み、transform(table) の結果を同じパス・同じファイル名で書き戻す。
+
+**transform が先、バックアップは成功した後にだけ作る。** transform が失敗
+しても（列名の設定ミス等）この順序なら元ファイルには一切手を付けていない
+ため、設定を直してそのまま同じファイルへ再実行できる（先にファイルを
+退避してから加工する順序だと、失敗するたびに直前の正常なバックアップが
+次のリトライで上書きされ、失敗を繰り返すと元データを失いかねない）。
+
+バックアップは拡張子の前に ``backup_suffix`` を挟んだ名前
+（例: ``応需.csv`` → ``応需_bak.csv``）で、transform 成功後の元ファイルの
+複製。``.csv`` のまま残すのは、CSV クラスが ``.csv`` 以外の拡張子を
+受け付けないため。既に同名のバックアップがあれば上書きする（直前の
+成功時点の複製なので、古い方を残す意味は無い）。自動削除はしない
+— 消すかどうかは呼び出し側が決める。
+
+Args:
+    path: 加工したいCSVのパス。
+    transform: 読み込んだ Table を受け取り、書き戻したい Table を返す関数。
+    backup_suffix: バックアップファイル名に付ける接尾辞。
+
+Returns:
+    バックアップファイルのパス。
 
 
 ## `from comken.toolbox.excel import ...`
