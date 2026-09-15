@@ -26,9 +26,6 @@ _DOCS = [
     for path in _ROOT.rglob("*.md")
     if ".git" not in path.parts
     and ".pytest-tmp" not in path.parts
-    # 貼り付け用/・comken_bundle/ は export_for_chat.py が他の文書を丸ごと結合した
-    # 生成物。他ファイルからの相対リンクをそのまま含むため検証対象外にする。
-    and "貼り付け用" not in path.parts
     and "comken_bundle" not in path.parts
     and path.name != "CODEX_TASK.md"
 ]

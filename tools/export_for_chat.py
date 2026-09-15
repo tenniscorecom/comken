@@ -1,17 +1,18 @@
-"""comken の公開 API ドキュメント、エラー対応ガイド、貼り付け用資料を生成する。
+"""comken の公開 API ドキュメント、エラー対応ガイド、チャット貼り付け用資料を生成する。
 
 **このファイルは開発用**（リポジトリ直下の ``tools/`` にあり、配布されない）。
 ``comken/tools/`` に同梱されて ``python -m comken init`` から呼ばれる
 ``new_project.py`` とは役割が違うので、混同しないこと。
 
 各パッケージの ``__all__`` をたどり、型ヒント付き署名と docstring 全文を
-``docs/自動生成/API.md`` へ書き出す。添付できない環境では ``--max-chars`` を指定すると、
-従来どおり資料を文字数の目安で分割して ``貼り付け用/`` へ出力する。
+``docs/自動生成/API.md`` へ書き出す。
 
 **同時に、社内の外部 AI へ貼るための資料（``comken_bundle/``）も既定で生成する。**
-章ごと（規約 → API 索引 → 実例 → 実装全文 → エラー対応表 → 設計判断）にファイルを分け、
-実装全文はさらに ``comken/`` 直下のパッケージ単位（core・toolbox・services 等）で
-分ける。1ファイルにまとめると数百万文字になり、チャットへ貼るには長すぎるため。
+章ごと（規約 → API 索引 → 実例 → 実装全文 → エラー対応表 → 設計判断 → 新規プロジェクトの
+テンプレ → ライブラリ開発規約）にファイルを分け、実装全文はさらに ``comken/`` 直下の
+パッケージ単位（core・toolbox・services 等）で分ける。1ファイルにまとめると数百万文字に
+なり、チャットへ貼るには長すぎるため。1章が ``--max-chars``（既定40万字）を超える
+場合のみ、さらに複数ファイルへ割る。
 
 使い方:
     python tools/export_for_chat.py
@@ -37,11 +38,10 @@ exceptions = import_module("comken.exceptions")
 PACKAGE_ROOT = ROOT / "comken"
 API_OUTPUT_PATH = ROOT / "docs" / "自動生成" / "API.md"
 ERRORS_OUTPUT_PATH = ROOT / "docs" / "ERRORS.md"
-LEGACY_OUTPUT_DIR = ROOT / "貼り付け用"
 BUNDLE_OUTPUT_DIR = ROOT / "comken_bundle"
 
-# 1カテゴリー（BUNDLES の1項目）がこれを超えたときだけ、さらに複数ファイルへ割る。
-# 基本は「1カテゴリー = 1ファイル」を保ちたいので、普段は超えない大きめの値にする。
+# 1章（_bundle_sections() の1項目）がこれを超えたときだけ、さらに複数ファイルへ割る。
+# 基本は「1章 = 1ファイル」を保ちたいので、普段は超えない大きめの値にする。
 DEFAULT_MAX_CHARS = 400_000
 ERRORS_GENERATED_MARKER = (
     "<!-- ここから下は python export_for_chat.py が自動生成する。手で編集しない -->"
@@ -146,35 +146,6 @@ CLASSIFICATION_ERRORS = (
     exceptions.BrowserError,
     exceptions.TableError,
 )
-
-BUNDLES: dict[str, tuple[str, list[str]]] = {
-    "1_コーディング規約": (
-        "これは社内 Python ライブラリ comken を使うツールの**コーディング規約**です。"
-        "以後このスレッドで書くコードは、この規約に従ってください。",
-        ["docs/開発/CONVENTIONS.md"],
-    ),
-    "2_ライブラリの使い方": (
-        "これは社内 Python ライブラリ comken の**API 一覧**です。"
-        "comken を使うコードを書くときは、ここに載っている関数・引数だけを使ってください。"
-        "載っていない機能は「comken には無い」と判断し、勝手に作らず標準ライブラリで書くか、"
-        "その旨を伝えてください。",
-        ["README.md", "@API"],
-    ),
-    "3_ドキュメントの書き方": (
-        "これは社内ツールに付ける**仕様書とエラー対応ガイドのひな形**です。"
-        "新しいツールのドキュメントを書くときは、この構成と書き方に合わせてください。",
-        [
-            "comken/templates/新規プロジェクト/docs/仕様書.md",
-            "comken/templates/新規プロジェクト/docs/使い方.md",
-            "docs/ERRORS.md",
-        ],
-    ),
-    "4_ライブラリ自体を直す人向け": (
-        "これは社内ライブラリ comken **本体**を修正するときの規約です。"
-        "comken を使うだけなら不要です。",
-        ["docs/開発/ライブラリ開発規約.md"],
-    ),
-}
 
 
 def _parse(path: Path) -> ast.Module:
@@ -470,18 +441,6 @@ def _write_errors() -> None:
     ERRORS_OUTPUT_PATH.write_text(_merged_errors_text(current), encoding="utf-8")
 
 
-def _legacy_bundle_text(title: str, purpose: str, sources: list[str]) -> str:
-    """貼り付け用資料1種類（``--max-chars`` 向け）のテキストを組み立てる。"""
-    parts = [f"# {title}", "", purpose, ""]
-    for source in sources:
-        if source == "@API":
-            parts += ["", "=" * 60, "", _api_text()]
-            continue
-        parts += ["", "=" * 60, f"（資料: {source}）", "=" * 60, ""]
-        parts.append((ROOT / source).read_text(encoding="utf-8-sig").rstrip())
-    return "\n".join(parts) + "\n"
-
-
 def _split(text: str, max_chars: int) -> list[str]:
     """行の途中で切らず、指定文字数を目安に分割する。"""
     chunks: list[str] = []
@@ -497,23 +456,6 @@ def _split(text: str, max_chars: int) -> list[str]:
     if current:
         chunks.append("".join(current))
     return chunks
-
-
-def _write_legacy_bundles(max_chars: int) -> None:
-    """従来の貼り付け用分割テキストを生成する。"""
-    if max_chars <= 0:
-        raise ValueError("--max-chars には1以上の整数を指定してください")
-    if LEGACY_OUTPUT_DIR.exists():
-        shutil.rmtree(LEGACY_OUTPUT_DIR)
-    LEGACY_OUTPUT_DIR.mkdir()
-    for title, (purpose, sources) in BUNDLES.items():
-        chunks = _split(_legacy_bundle_text(title, purpose, sources), max_chars)
-        for number, chunk in enumerate(chunks, start=1):
-            suffix = "" if len(chunks) == 1 else f"_{number}of{len(chunks)}"
-            path = LEGACY_OUTPUT_DIR / f"{title}{suffix}.md"
-            header = "" if number == 1 else f"（{title} の続き {number}/{len(chunks)}）\n\n"
-            path.write_text(header + chunk, encoding="utf-8")
-            print(f"{path.name}  {len(chunk):,} 文字")  # noqa: T201
 
 
 def _collect_python_files(package_root: Path) -> list[Path]:
@@ -581,10 +523,12 @@ def _bundle_sections() -> list[tuple[str, str]]:
 
     並び順は **ヘッダ → コーディング規約 → 公開 API 索引 → 動く実例
     (examples/) → 実装全文 (comken/、パッケージ単位でさらに分割) → エラー対応表
-    → 設計判断**。規約を先頭に置くのは、社外 AI に規約（命名・型ヒント・定数・
-    例外・ロギング）を最初に読ませて、生成コードの表記ブレや規約違反を防ぐため。
-    その後は索引で公開 API を固定してから実例で正しい書き方を見せ、最後に
-    全文とエラー表・仕様書で細部を裏取る構成にする。
+    → 設計判断 → 新規プロジェクトのテンプレ → ライブラリ開発規約**。規約を先頭に
+    置くのは、社外 AI に規約（命名・型ヒント・定数・例外・ロギング）を最初に
+    読ませて、生成コードの表記ブレや規約違反を防ぐため。その後は索引で公開 API を
+    固定してから実例で正しい書き方を見せ、最後に全文とエラー表・仕様書で細部を
+    裏取る構成にする。末尾の2章（新規プロジェクトのテンプレ・ライブラリ開発規約）は
+    使う人を選ぶ資料（新しいツールを作る人・comken 本体を直す人）なので最後に置く。
 
     章ごとに別ファイルへ書き出す前提のため、1ファイルへ結合したときに使う
     区切り線（``---``）はここでは入れない。
@@ -633,6 +577,19 @@ def _bundle_sections() -> list[tuple[str, str]]:
         sections.append((f"4_実装_{group_name}", text.rstrip()))
     sections.append(("5_エラー対応表", errors_text.rstrip()))
     sections.append(("6_設計判断", spec_text))
+
+    new_project_docs_dir = PACKAGE_ROOT / "templates" / "新規プロジェクト" / "docs"
+    new_project_text = "\n\n---\n\n".join(
+        f"# ===== FILE: {path.relative_to(ROOT).as_posix()} =====\n\n"
+        + path.read_text(encoding="utf-8").rstrip()
+        for path in (new_project_docs_dir / "仕様書.md", new_project_docs_dir / "使い方.md")
+    )
+    sections.append(("7_新規プロジェクトのテンプレ", new_project_text))
+
+    library_conventions_path = ROOT / "docs" / "開発" / "ライブラリ開発規約.md"
+    sections.append(
+        ("8_ライブラリ開発規約", library_conventions_path.read_text(encoding="utf-8").rstrip())
+    )
     return sections
 
 
@@ -657,9 +614,10 @@ def _bundle_readme(
         "",
         "- comken は業務自動化の共通ライブラリです。",
         "- 章（コーディング規約 → API 索引 → 実例 → 実装全文 → エラー対応表 →"
-        " 設計判断）ごとにファイルを分けています。1ファイルが数百万文字になって"
-        " チャットへ貼れなくなるのを避けるため、実装全文はさらに comken/ 直下の"
-        " パッケージ単位（core・toolbox・services 等）で分割しています。",
+        " 設計判断 → 新規プロジェクトのテンプレ → ライブラリ開発規約）ごとにファイルを"
+        " 分けています。1ファイルが数百万文字になってチャットへ貼れなくなるのを避けるため、"
+        " 実装全文はさらに comken/ 直下のパッケージ単位（core・toolbox・services 等）で"
+        " 分割しています。",
         "- **1_コーディング規約 を必ず先に読んでください。** 命名・型ヒント・"
         "定数・例外・ロギングの書き方はここで固定されています。ここを読まずに書いた"
         "コードは規約違反で修正対象になります。",
@@ -670,6 +628,10 @@ def _bundle_readme(
         " 必要なパッケージのファイルだけ渡せば十分なことが多いです。",
         "- 5_エラー対応表 は、利用者が読む画面の説明とその例外が送出される条件です。",
         "- 6_設計判断 は「なぜその設計にしたか」（仕様書）です。",
+        "- 7_新規プロジェクトのテンプレ は、comken を使う新しいツールのドキュメントを"
+        "書くときのひな形（仕様書・使い方）です。comken を使うだけなら不要です。",
+        "- 8_ライブラリ開発規約 は comken **本体**を修正するときの規約です。"
+        "comken を使うだけなら不要です。",
         "",
         "## 中身のサマリ",
         "",
@@ -699,8 +661,7 @@ def _extract_public_names(api_text: str) -> set[str]:
 def _write_bundle(max_chars: int) -> None:
     """``comken_bundle/`` へ、章（カテゴリ）ごとにファイルを書き出す。
 
-    1章が ``max_chars`` を超えるときだけ、``_split()`` でさらに複数ファイルへ割る
-    （``_write_legacy_bundles()`` と同じ考え方）。
+    1章が ``max_chars`` を超えるときだけ、``_split()`` でさらに複数ファイルへ割る。
     """
     if BUNDLE_OUTPUT_DIR.exists():
         shutil.rmtree(BUNDLE_OUTPUT_DIR)
@@ -722,7 +683,7 @@ def main() -> None:
         type=int,
         default=DEFAULT_MAX_CHARS,
         help=(
-            "貼り付け用資料をこの文字数の目安で分割して出力する"
+            "comken_bundle/ の1章がこの文字数を超えたときの分割の目安"
             f"（既定 {DEFAULT_MAX_CHARS:,} 文字。0以下を指定すると分割を止める）"
         ),
     )
@@ -733,9 +694,6 @@ def main() -> None:
     print(f"{API_OUTPUT_PATH.relative_to(ROOT)} を生成しました")  # noqa: T201
     _write_errors()
     print(f"{ERRORS_OUTPUT_PATH.relative_to(ROOT)} を生成しました")  # noqa: T201
-    if args.max_chars > 0:
-        _write_legacy_bundles(args.max_chars)
-        print(f"{LEGACY_OUTPUT_DIR.relative_to(ROOT)}/ に分割資料を生成しました")  # noqa: T201
     _write_bundle(bundle_max_chars)
     print(f"{BUNDLE_OUTPUT_DIR.relative_to(ROOT)}/ に章ごとの資料を生成しました")  # noqa: T201
 

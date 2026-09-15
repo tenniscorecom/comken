@@ -94,8 +94,22 @@ def test_bundle_sections_are_in_order_with_implementation_split_by_package() -> 
     assert impl_titles  # comken/ のパッケージ数だけ分かれている
     assert "4_実装_core" in impl_titles
     assert "4_実装_toolbox" in impl_titles
-    assert titles[-2] == "5_エラー対応表"
-    assert titles[-1] == "6_設計判断"
+    assert "5_エラー対応表" in titles
+    assert "6_設計判断" in titles
+    assert titles[-2] == "7_新規プロジェクトのテンプレ"
+    assert titles[-1] == "8_ライブラリ開発規約"
+
+
+def test_bundle_sections_have_no_duplicate_titles_or_content() -> None:
+    """章ごとに1ファイルへ分けた後も、同じ内容が2箇所に重複して入らない。
+
+    以前は貼り付け用/（旧方式）と comken_bundle/（新方式）が併存し、
+    コーディング規約などが両方に丸ごと重複していた。廃止した今、
+    タイトルの重複が無いことだけを確かめれば十分（内容はソースが1箇所しか無い）。
+    """
+    titles = [title for title, _ in export_for_chat._bundle_sections()]
+
+    assert len(titles) == len(set(titles))
 
 
 def test_bundle_sections_include_examples_files() -> None:
