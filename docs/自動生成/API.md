@@ -7832,9 +7832,7 @@ def wait_for_result(self, url_before: str, error_locator: Locator) -> None:
 しまう）のを防ぐために使う。早い方が起きた時点で確定するので、
 成功時に無駄な待ちは発生しない。
 
-「URL変化・エラー表示」のよくある2択専用の短縮形（wait_until_any() と
-同じ条件を使うが、時間切れ時のエラーに error_locator が残るよう
-wait_until_any() 経由にはしていない）。それ以外の組み合わせで
+「URL変化・エラー表示」のよくある2択専用の短縮形。それ以外の組み合わせで
 待ちたいときは wait_until_any() を直接使う。
 
     url_before = self.session.current_url
@@ -9048,9 +9046,7 @@ def wait_for_result(self, url_before: str, error_locator: Locator) -> None:
 しまう）のを防ぐために使う。早い方が起きた時点で確定するので、
 成功時に無駄な待ちは発生しない。
 
-「URL変化・エラー表示」のよくある2択専用の短縮形（wait_until_any() と
-同じ条件を使うが、時間切れ時のエラーに error_locator が残るよう
-wait_until_any() 経由にはしていない）。それ以外の組み合わせで
+「URL変化・エラー表示」のよくある2択専用の短縮形。それ以外の組み合わせで
 待ちたいときは wait_until_any() を直接使う。
 
     url_before = self.session.current_url

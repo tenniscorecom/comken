@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, TypeAlias
 
 from selenium.webdriver.support import expected_conditions as EC
 
+from comken.exceptions import ElementNotFoundError
 from comken.toolbox.browser.locator import Locator
 from comken.toolbox.browser.page.base import _PageBase
 
@@ -54,8 +55,12 @@ class WaitingMixin(_PageBase):
         """
         url_before = self.session.current_url
         yield
-        with self.session._operating(f"wait_for_url_change(url_before={url_before!r})"):
-            self._until(self.url_changed(url_before), url_before, "URLが変わり")
+        try:
+            self.wait_until_any(self.url_changed(url_before))
+        except ElementNotFoundError as error:
+            # wait_until_any() のメッセージは条件オブジェクトの羅列で読みにくいため、
+            # url_before に詰め替える（_until() が TimeoutException を包み直すのと同じ形）
+            raise ElementNotFoundError(url_before, self._wait_seconds, "URLが変わり") from error
 
     def text_shown(self, locator: Locator) -> Condition:
         """locator の要素の表示文字が空でないことを表す条件（wait_until_any へ渡す）。
@@ -93,9 +98,7 @@ class WaitingMixin(_PageBase):
         しまう）のを防ぐために使う。早い方が起きた時点で確定するので、
         成功時に無駄な待ちは発生しない。
 
-        「URL変化・エラー表示」のよくある2択専用の短縮形（wait_until_any() と
-        同じ条件を使うが、時間切れ時のエラーに error_locator が残るよう
-        wait_until_any() 経由にはしていない）。それ以外の組み合わせで
+        「URL変化・エラー表示」のよくある2択専用の短縮形。それ以外の組み合わせで
         待ちたいときは wait_until_any() を直接使う。
 
             url_before = self.session.current_url
@@ -103,12 +106,12 @@ class WaitingMixin(_PageBase):
             self.wait_for_result(url_before, self.ERROR_MSG)
             self.raise_if_shown(self.ERROR_MSG, LoginFailedError)
         """
-        with self.session._operating(f"wait_for_result(url_before={url_before!r})"):
-            self._until(
-                EC.any_of(self.url_changed(url_before), self.text_shown(error_locator)),
-                error_locator,
-                "結果が確定し",
-            )
+        try:
+            self.wait_until_any(self.url_changed(url_before), self.text_shown(error_locator))
+        except ElementNotFoundError as error:
+            # wait_until_any() のメッセージは条件オブジェクトの羅列で読みにくいため、
+            # error_locator に詰め替える（_until() が TimeoutException を包み直すのと同じ形）
+            raise ElementNotFoundError(error_locator, self._wait_seconds, "結果が確定し") from error
         logger.debug(
             "結果が確定しました: url_before=%s error_locator=%s", url_before, error_locator
         )
