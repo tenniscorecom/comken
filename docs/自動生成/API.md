@@ -6589,28 +6589,6 @@ columns を渡すと、既定の OLD_ROLE_COLUMNS の代わりにそちらを使
 （columns / OLD_ROLE_COLUMNS で指定した名前）に揃える。それ以外の
 リネームは OLD_ROLE_ALIASES を使う（自動判定より OLD_ROLE_ALIASES を優先する）。
 
-### `reduce_ouju_csv_file`
-
-```text
-def reduce_ouju_csv_file(path: str | Path, *, columns: list[str] | None=None, backup_suffix: str='_bak') -> Path:
-```
-
-#### 説明
-
-CSVファイルを読み、旧ロール列だけに絞って同じパス・同じファイル名で書き戻す。
-
-処理の骨格（列削減が先、バックアップは成功後にだけ作る等）は
-comken.toolbox.csv.transform_csv_file() の docstring を参照。
-
-Args:
-    path: 応需からダウンロードしたCSVのパス。
-    columns: 残す列名を上書きしたいときに指定する。省略時は
-        ouju_role.OLD_ROLE_COLUMNS（旧ロール相当）を使う。
-    backup_suffix: バックアップファイル名に付ける接尾辞。
-
-Returns:
-    バックアップファイルのパス。
-
 ### `OLD_ROLE_COLUMNS`
 
 公開定数。

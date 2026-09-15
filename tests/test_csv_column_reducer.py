@@ -7,9 +7,8 @@ tests/test_new_table_api.py で確認する。ファイル読み書き・バッ�
 """
 
 from comken.core import Table
-from comken.services.csv_column_reducer.file_ops import reduce_ouju_csv_file
-from comken.services.csv_column_reducer.ouju_role import reduce_ouju_csv
-from comken.toolbox.csv import CSV
+from comken.services.csv_column_reducer import reduce_ouju_csv
+from comken.toolbox.csv import transform_csv_file
 
 
 class TestReduceOujuCsv:
@@ -71,45 +70,14 @@ class TestReduceOujuCsv:
         assert result.to_rows() == [{"氏名": "本物"}]
 
 
-class TestReduceOujuCsvFile:
-    """reduce_ouju_csv_file() — transform_csv_file()へreduce_ouju_csv()を渡す配線の確認。
+def test_transform_csv_file_composes_with_reduce_ouju_csv(tmp_path, monkeypatch):
+    """__init__.py のdocstringに載せた使い方どおり、そのまま組み合わせて動く。"""
+    import comken.services.csv_column_reducer.ouju_role as ouju_role_module
 
-    バックアップ順序・失敗時の扱い自体は tests/test_csv_transform_file.py が
-    transform_csv_file() 側で確認済みなので、ここでは重複させない。
-    """
+    monkeypatch.setattr(ouju_role_module, "OLD_ROLE_COLUMNS", ["a"])
+    path = tmp_path / "応需.csv"
+    path.write_text("a,b\n1,2\n", encoding="utf-8-sig")
 
-    def test_backs_up_original_and_writes_reduced_csv_with_same_name(self, tmp_path, monkeypatch):
-        import comken.services.csv_column_reducer.ouju_role as ouju_role_module
+    transform_csv_file(path, reduce_ouju_csv)
 
-        monkeypatch.setattr(ouju_role_module, "OLD_ROLE_COLUMNS", ["a"])
-        path = tmp_path / "応需.csv"
-        path.write_text("a,b\n1,2\n", encoding="utf-8-sig")
-
-        backup_path = reduce_ouju_csv_file(path)
-
-        assert backup_path == tmp_path / "応需_bak.csv"
-        with CSV(path, read_only=True) as reduced_csv:
-            assert reduced_csv.read() == [{"a": "1"}]
-
-    def test_columns_argument_overrides_old_role_columns(self, tmp_path, monkeypatch):
-        import comken.services.csv_column_reducer.ouju_role as ouju_role_module
-
-        monkeypatch.setattr(ouju_role_module, "OLD_ROLE_COLUMNS", ["a"])
-        path = tmp_path / "応需.csv"
-        path.write_text("a,b\n1,2\n", encoding="utf-8-sig")
-
-        reduce_ouju_csv_file(path, columns=["b"])
-
-        with CSV(path, read_only=True) as reduced_csv:
-            assert reduced_csv.read() == [{"b": "2"}]
-
-    def test_backup_suffix_argument_is_passed_through(self, tmp_path, monkeypatch):
-        import comken.services.csv_column_reducer.ouju_role as ouju_role_module
-
-        monkeypatch.setattr(ouju_role_module, "OLD_ROLE_COLUMNS", ["a"])
-        path = tmp_path / "応需.csv"
-        path.write_text("a,b\n1,2\n", encoding="utf-8-sig")
-
-        backup_path = reduce_ouju_csv_file(path, backup_suffix="_old")
-
-        assert backup_path == tmp_path / "応需_old.csv"
+    assert path.read_text(encoding="utf-8-sig") == "a\n1\n"
