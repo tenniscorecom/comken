@@ -6570,34 +6570,6 @@ def __init__(self, title: str) -> None:
 ```
 
 
-## `from comken.services.csv_column_reducer import ...`
-
-### `reduce_ouju_csv`
-
-```text
-def reduce_ouju_csv(table: Table, *, columns: list[str] | None=None) -> Table:
-```
-
-#### 説明
-
-応需CSVの Table を、既定では旧ロール列だけに絞って返す。
-
-columns を渡すと、既定の OLD_ROLE_COLUMNS の代わりにそちらを使う
-（新ロールへ完全移行した後や、他システム向けに必要な列だけ残したいときに使う）。
-
-先頭の*有無だけが違う列は自動で吸収し、結果の列名は常に旧ロール側
-（columns / OLD_ROLE_COLUMNS で指定した名前）に揃える。それ以外の
-リネームは OLD_ROLE_ALIASES を使う（自動判定より OLD_ROLE_ALIASES を優先する）。
-
-### `OLD_ROLE_COLUMNS`
-
-公開定数。
-
-### `OLD_ROLE_ALIASES`
-
-公開定数。
-
-
 ## `from comken.services.salesforce_downloader import ...`
 
 ### `download_scheduled`
