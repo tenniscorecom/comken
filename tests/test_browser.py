@@ -992,6 +992,13 @@ class TestPage:
 
         page.raise_if_shown(Locator.css(".error"), ValueError)  # 例外が出なければ OK
 
+    def test_raise_if_shown_does_nothing_when_text_is_empty(self, tmp_path):
+        """要素はあっても表示文字が空なら、まだ出ていない扱いで何もしない。"""
+        page = self._page(tmp_path)
+        page._wait.until.return_value.text = ""
+
+        page.raise_if_shown(Locator.css(".error"), ValueError)  # 例外が出なければ OK
+
     def test_wait_for_result_waits_on_url_change_or_error(self, tmp_path):
         """URL の変化かエラー表示のどちらかを待つ条件を組み立てて待機する。"""
         page = self._page(tmp_path)

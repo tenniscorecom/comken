@@ -79,6 +79,8 @@ class ReadingMixin(_PageBase):
 
         ログイン失敗・パスワード変更の拒否など、「エラー表示の有無で成否を
         判定する」画面で共通して使う。表示されていなければ何もしない。
+        要素はあっても表示文字が空（コンテナだけ先に描画され、文字は後から
+        入る等）の場合も、まだ「出ていない」扱いにして何もしない。
 
             self.raise_if_shown(self.ERROR_MSG, LoginFailedError)
 
@@ -87,8 +89,11 @@ class ReadingMixin(_PageBase):
         ``__init__(self, reason: str)`` なので、クラスをそのまま渡せる）。
         """
         with self.session._operating(f"raise_if_shown({locator})"):
-            if self.has_element(locator):
-                raise make_error(self.read_text(locator))
+            if not self.has_element(locator):
+                return
+            text = self.read_text(locator)
+            if text:
+                raise make_error(text)
 
     def count_elements(self, locator: Locator) -> int:
         """一致する要素の数を返す（待たずにその場で数える。無ければ 0）。"""
