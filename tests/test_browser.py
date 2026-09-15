@@ -1049,6 +1049,36 @@ class TestPage:
 
         assert lookup_count >= 3  # 最初の数回は見つからなかった（＝遅延を実際に待った）
 
+    def test_wait_for_result_ignores_error_element_with_empty_text(self, tmp_path):
+        """エラー要素が最初から空文字でDOMに在っても、実際に文字が入るまでは
+        確定しない（raise_if_shown() の「文字が空ならまだ出ていない」判定と
+        合わせた回帰確認。要素の有無だけで判定すると、空のコンテナが最初から
+        DOMに在る画面で即座に誤確定してしまう）。
+        """
+        page = self._page(tmp_path)
+        page._wait = WebDriverWait(page.session.raw, timeout=1, poll_frequency=0.05)
+        page.session._driver.current_url = "https://example.com/login"
+        error_locator = Locator.css(".error")
+
+        lookup_count = 0
+        error_element = MagicMock()
+        error_element.text = ""
+
+        def find_element_side_effect(by, value):
+            nonlocal lookup_count
+            if (by, value) != tuple(error_locator):
+                return MagicMock()
+            lookup_count += 1
+            if lookup_count >= 3:
+                error_element.text = "エラーが発生しました"
+            return error_element
+
+        page.session._driver.find_element.side_effect = find_element_side_effect
+
+        page.wait_for_result("https://example.com/login", error_locator)
+
+        assert lookup_count >= 3  # 空文字の間は確定せず、実際に文字が入るまで待った
+
 
 class TestSitePage:
     """サイト共通の画面クラスのテスト。"""

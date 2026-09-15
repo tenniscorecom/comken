@@ -7770,6 +7770,11 @@ def wait_for_result(self, url_before: str, error_locator: Locator) -> None:
 しまう）のを防ぐために使う。早い方が起きた時点で確定するので、
 成功時に無駄な待ちは発生しない。
 
+error_locator は「要素が在るか」ではなく「表示文字が空でないか」で
+判定する（``raise_if_shown()`` と判定基準を合わせている）。エラー用の
+コンテナが最初から空のままDOMに在る画面でも、文字が入る前の一瞬を
+「結果が確定した」と誤判定しない。
+
     url_before = self.session.current_url
     self.click(self.LOGIN_BTN)
     self.wait_for_result(url_before, self.ERROR_MSG)
@@ -8918,6 +8923,11 @@ def wait_for_result(self, url_before: str, error_locator: Locator) -> None:
 表示の遅れをすり抜けてしまう（実際は失敗しているのに成功と判定して
 しまう）のを防ぐために使う。早い方が起きた時点で確定するので、
 成功時に無駄な待ちは発生しない。
+
+error_locator は「要素が在るか」ではなく「表示文字が空でないか」で
+判定する（``raise_if_shown()`` と判定基準を合わせている）。エラー用の
+コンテナが最初から空のままDOMに在る画面でも、文字が入る前の一瞬を
+「結果が確定した」と誤判定しない。
 
     url_before = self.session.current_url
     self.click(self.LOGIN_BTN)

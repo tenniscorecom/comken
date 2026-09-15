@@ -3,13 +3,33 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from selenium.webdriver.support import expected_conditions as EC
 
 from comken.toolbox.browser.locator import Locator
 from comken.toolbox.browser.page.base import _PageBase
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from selenium.webdriver.remote.webdriver import WebDriver
+
 logger = logging.getLogger(__name__)
+
+
+def _error_text_shown(locator: Locator) -> Callable[[WebDriver], bool]:
+    """locator の要素の表示文字が空でないことを条件にする。
+
+    ``EC.presence_of_element_located`` は要素の存在だけを見るため、エラー用の
+    コンテナが先にDOMへ空のまま出て、文字は後から入る画面だと、文字が入る前の
+    一瞬を「結果が確定した」と誤判定してしまう。``raise_if_shown()`` が
+    「文字が空ならまだ出ていない」扱いにしているのと判定基準を合わせる。
+
+    見つからない間の ``NoSuchElementException`` は WebDriverWait が既定で
+    無視して待ち続けるため、ここで拾う必要はない。
+    """
+    return lambda driver: bool(driver.find_element(*locator).text)
 
 
 class WaitingMixin(_PageBase):
@@ -38,6 +58,11 @@ class WaitingMixin(_PageBase):
         しまう）のを防ぐために使う。早い方が起きた時点で確定するので、
         成功時に無駄な待ちは発生しない。
 
+        error_locator は「要素が在るか」ではなく「表示文字が空でないか」で
+        判定する（``raise_if_shown()`` と判定基準を合わせている）。エラー用の
+        コンテナが最初から空のままDOMに在る画面でも、文字が入る前の一瞬を
+        「結果が確定した」と誤判定しない。
+
             url_before = self.session.current_url
             self.click(self.LOGIN_BTN)
             self.wait_for_result(url_before, self.ERROR_MSG)
@@ -47,7 +72,7 @@ class WaitingMixin(_PageBase):
             self._until(
                 EC.any_of(
                     EC.url_changes(url_before),
-                    EC.presence_of_element_located(error_locator),
+                    _error_text_shown(error_locator),
                 ),
                 error_locator,
                 "結果が確定し",
