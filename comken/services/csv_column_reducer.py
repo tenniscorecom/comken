@@ -4,36 +4,34 @@
 Access へ取り込めなくなる。既定では旧ロール相当の列だけを残して回避する。
 
 列名ゆれの吸収を含む列選択そのものは Table.select(aliases=...)
-（comken.core.table.model.Table）、ファイル単位の読み書き・バックアップの骨格は
-comken.toolbox.csv.transform_csv_file() がそれぞれ汎用で持っている。
-このファイルは応需固有の値（列リスト・リネーム対応表）だけを持ち、
-ファイルをまとめて処理したいときは両者を組み合わせて使う。
+（comken.core.table.model.Table）が汎用で持っている。ファイルの読み書き・
+バックアップは、応需固有のこの使い方に限って ここで直接扱う
+（サービス固有の使い方なので、toolbox 側を汎用化する必要はないと判断した）。
 
-    from comken.services.csv_column_reducer import reduce_ouju_csv
-    from comken.toolbox.csv import transform_csv_file
+    from comken.services.csv_column_reducer import reduce_ouju_csv_file
 
-    transform_csv_file("応需.csv", reduce_ouju_csv)  # 旧ロール列だけに絞って同じ名前で書き戻す
-
-    # 残す列を上書きしたいときは lambda で columns を渡す
-    transform_csv_file("応需.csv", lambda table: reduce_ouju_csv(table, columns=["氏名"]))
+    reduce_ouju_csv_file("応需.csv")  # 旧ロール列だけに絞って同じ名前で書き戻す
 
 列名・リネーム対応表は環境依存の実データなので、ここはダミーのまま
 （利用プロジェクト側で実際の値へ書き換える前提）。
 
 **このファイルが持つもの:**
 - 応需CSV向けの既定の列リスト・リネーム対応表（雛形。実データは利用側で埋める）
-- Table 単位の削減（reduce_ouju_csv）
+- Table 単位の削減（reduce_ouju_csv）・ファイル単位の削減（reduce_ouju_csv_file）
 
 **ここに書かないもの:**
 - 列選択そのもの（列名ゆれの吸収を含む） → comken.core.table.model.Table.select()
-- ファイルの読み書き・バックアップの骨格 → comken.toolbox.csv.transform_csv_file()
 - Access への取り込み自体 → 利用プロジェクト
 - 応需からのCSVダウンロード自体 → 利用プロジェクト
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from comken.core.files import copy_file
 from comken.core.table.model import Table
+from comken.toolbox.csv import CSV
 
 # 旧ロールで残す列名（この並び順で出力される）。
 # TODO: 実際の旧ロールの列名に書き換える
@@ -60,6 +58,49 @@ def reduce_ouju_csv(table: Table, *, columns: list[str] | None = None) -> Table:
     wanted = columns if columns is not None else OLD_ROLE_COLUMNS
     aliases = {**_resolve_asterisk_aliases(table.columns, wanted), **OLD_ROLE_ALIASES}
     return table.select(*wanted, aliases=aliases)
+
+
+def reduce_ouju_csv_file(
+    path: str | Path,
+    *,
+    columns: list[str] | None = None,
+    backup_suffix: str = "_bak",
+) -> Path:
+    """CSVファイルを読み、旧ロール列だけに絞って同じパス・同じファイル名で書き戻す。
+
+    **削減が先、バックアップは成功した後にだけ作る。** OLD_ROLE_COLUMNS の
+    設定ミス等で削減が失敗しても、この順序なら元ファイルには一切手を付けて
+    いないため、設定を直してそのまま同じファイルへ再実行できる（先にファイルを
+    退避してから削減する順序だと、失敗するたびに直前の正常なバックアップが
+    次のリトライで上書きされ、失敗を繰り返すと元データを失いかねない）。
+
+    バックアップは拡張子の前に ``backup_suffix`` を挟んだ名前
+    （例: ``応需.csv`` → ``応需_bak.csv``）で、削減成功後の元ファイルの複製。
+    ``.csv`` のまま残すのは、CSV クラスが ``.csv`` 以外の拡張子を受け付けない
+    ため。既に同名のバックアップがあれば上書きする（直前の成功時点の複製なので、
+    古い方を残す意味は無い）。自動削除はしない — 消すかどうかは呼び出し側が決める。
+
+    Args:
+        path: 応需からダウンロードしたCSVのパス。
+        columns: 残す列名を上書きしたいときに指定する。省略時は
+            OLD_ROLE_COLUMNS（旧ロール相当）を使う。
+        backup_suffix: バックアップファイル名に付ける接尾辞。
+
+    Returns:
+        バックアップファイルのパス。
+    """
+    path = Path(path)
+    with CSV(path, read_only=True) as source:
+        table = source.read()
+    # ここで失敗すれば元ファイルは無傷のまま送出される（下のバックアップ・書き戻しに進まない）
+    reduced = reduce_ouju_csv(table, columns=columns)
+
+    backup_path = path.with_name(f"{path.stem}{backup_suffix}{path.suffix}")
+    copy_file(path, backup_path)
+
+    with CSV(path) as dest:
+        dest.replace(reduced)
+    return backup_path
 
 
 def _resolve_asterisk_aliases(

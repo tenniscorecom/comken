@@ -1,14 +1,16 @@
 """comken/services/csv_column_reducer（応需CSVの新ロール→旧ロール列削減）のテスト。
 
 列選択そのもの（aliasesによる列名ゆれの吸収）は Table.select() 側の契約なので
-tests/test_new_table_api.py で確認する。ファイル読み書き・バックアップの
-骨格は transform_csv_file() 側の契約なので tests/test_csv_transform_file.py
-で確認する。ここでは応需固有の部分（*吸収・OLD_ROLE_COLUMNSとの配線）だけを見る。
+tests/test_new_table_api.py で確認する。ここでは応需固有の部分
+（*吸収・OLD_ROLE_COLUMNSとの配線・ファイル入出力）を見る。
 """
 
+import pytest
+
 from comken.core import Table
-from comken.services.csv_column_reducer import reduce_ouju_csv
-from comken.toolbox.csv import transform_csv_file
+from comken.exceptions import TableColumnNotFoundError
+from comken.services.csv_column_reducer import reduce_ouju_csv, reduce_ouju_csv_file
+from comken.toolbox.csv import CSV
 
 
 class TestReduceOujuCsv:
@@ -70,14 +72,88 @@ class TestReduceOujuCsv:
         assert result.to_rows() == [{"氏名": "本物"}]
 
 
-def test_transform_csv_file_composes_with_reduce_ouju_csv(tmp_path, monkeypatch):
-    """csv_column_reducer.py のdocstringに載せた使い方どおり、そのまま組み合わせて動く。"""
-    import comken.services.csv_column_reducer as csv_column_reducer_module
+class TestReduceOujuCsvFile:
+    """reduce_ouju_csv_file() — 削減成功後にだけ元ファイルをバックアップへ複製し、
+    同名で書き戻す。
+    """
 
-    monkeypatch.setattr(csv_column_reducer_module, "OLD_ROLE_COLUMNS", ["a"])
-    path = tmp_path / "応需.csv"
-    path.write_text("a,b\n1,2\n", encoding="utf-8-sig")
+    def test_backs_up_original_and_writes_reduced_csv_with_same_name(self, tmp_path, monkeypatch):
+        import comken.services.csv_column_reducer as csv_column_reducer_module
 
-    transform_csv_file(path, reduce_ouju_csv)
+        monkeypatch.setattr(csv_column_reducer_module, "OLD_ROLE_COLUMNS", ["a"])
+        path = tmp_path / "応需.csv"
+        path.write_text("a,b\n1,2\n", encoding="utf-8-sig")
 
-    assert path.read_text(encoding="utf-8-sig") == "a\n1\n"
+        backup_path = reduce_ouju_csv_file(path)
+
+        assert backup_path == tmp_path / "応需_bak.csv"
+        assert backup_path.exists()
+        with CSV(backup_path, read_only=True) as backup_csv:
+            assert backup_csv.read().columns == ["a", "b"]
+        with CSV(path, read_only=True) as reduced_csv:
+            assert reduced_csv.read() == [{"a": "1"}]
+
+    def test_columns_argument_overrides_old_role_columns(self, tmp_path, monkeypatch):
+        import comken.services.csv_column_reducer as csv_column_reducer_module
+
+        monkeypatch.setattr(csv_column_reducer_module, "OLD_ROLE_COLUMNS", ["a"])
+        path = tmp_path / "応需.csv"
+        path.write_text("a,b\n1,2\n", encoding="utf-8-sig")
+
+        reduce_ouju_csv_file(path, columns=["b"])
+
+        with CSV(path, read_only=True) as reduced_csv:
+            assert reduced_csv.read() == [{"b": "2"}]
+
+    def test_backup_suffix_argument_is_passed_through(self, tmp_path, monkeypatch):
+        import comken.services.csv_column_reducer as csv_column_reducer_module
+
+        monkeypatch.setattr(csv_column_reducer_module, "OLD_ROLE_COLUMNS", ["a"])
+        path = tmp_path / "応需.csv"
+        path.write_text("a,b\n1,2\n", encoding="utf-8-sig")
+
+        backup_path = reduce_ouju_csv_file(path, backup_suffix="_old")
+
+        assert backup_path == tmp_path / "応需_old.csv"
+
+    def test_original_file_is_untouched_when_reduction_fails(self, tmp_path, monkeypatch):
+        """欲しい列が無くて削減に失敗しても、元ファイル・バックアップともに触らない。
+
+        （リトライのたびに直前の正常なバックアップを潰してしまう事故を防ぐため。
+        失敗時は元ファイルがそのまま残るので、設定を直して同じファイルへ再実行できる）。
+        """
+        import comken.services.csv_column_reducer as csv_column_reducer_module
+
+        monkeypatch.setattr(csv_column_reducer_module, "OLD_ROLE_COLUMNS", ["存在しない列"])
+        path = tmp_path / "応需.csv"
+        original_content = "a,b\n1,2\n"
+        path.write_text(original_content, encoding="utf-8-sig")
+
+        with pytest.raises(TableColumnNotFoundError):
+            reduce_ouju_csv_file(path)
+
+        assert path.read_text(encoding="utf-8-sig") == original_content
+        assert not (tmp_path / "応需_bak.csv").exists()
+
+    def test_retry_after_fixing_config_succeeds_without_losing_previous_backup(
+        self, tmp_path, monkeypatch
+    ):
+        """1回目が失敗しても、設定を直せば同じファイルへ再実行できる。
+
+        （先にリネームしてから削減する順序だと、1回目の失敗時点で元ファイルが
+        既に無くなっているため、この再実行自体ができなかった）。
+        """
+        import comken.services.csv_column_reducer as csv_column_reducer_module
+
+        monkeypatch.setattr(csv_column_reducer_module, "OLD_ROLE_COLUMNS", ["存在しない列"])
+        path = tmp_path / "応需.csv"
+        path.write_text("a,b\n1,2\n", encoding="utf-8-sig")
+        with pytest.raises(TableColumnNotFoundError):
+            reduce_ouju_csv_file(path)
+
+        monkeypatch.setattr(csv_column_reducer_module, "OLD_ROLE_COLUMNS", ["a"])
+        backup_path = reduce_ouju_csv_file(path)
+
+        assert backup_path.exists()
+        with CSV(path, read_only=True) as reduced_csv:
+            assert reduced_csv.read() == [{"a": "1"}]
