@@ -264,15 +264,36 @@ with site() as sf:
 公式が「filters で絞れ」と書いているとおり、2段目は正攻法。
 3段目を先回りで全部やる必要はない。**計測（後述）が移行対象を教えてくれる**。
 
-### 4段目（最終手段）: ブラウザ経由でエクスポート
+### 4段目（最終手段）: 画面のエクスポート機能を直接叩く
 
 マトリックス／統合レポートなど、SOQL に書き換えられない形式のレポートで
-1区間でも 2000 行を超える場合だけ、`comken.toolbox.browser.sites.salesforce.Salesforce`
-を使う。画面のエクスポート機能をブラウザ操作で叩くため、API のこの上限自体が
-かからない。レポートURLを渡すと、読み込みが重いレポートでも複数タブで並列に
-待ちつつ、CSVを1件ずつ確実にダウンロードする（詳しくは `docs/browser.md` の
-「複数ページをまとめて開く」）。3段目より重い手段なので、3段目で足りるかを
-先に確かめること。
+1区間でも 2000 行を超える場合だけ、画面のエクスポート機能（`?export=1&xf=csv`）を
+frontdoor.jsp 経由で直接叩く。API のこの上限自体がかからない。3段目より重い手段
+なので、3段目で足りるかを先に確かめること。
+
+やり方は2通りあり、**まず `ReportExporter`（requestsだけ）を試す**:
+
+| | `comken.toolbox.salesforce.ReportExporter` | `comken.toolbox.browser.sites.salesforce.Salesforce` |
+|---|---|---|
+| 仕組み | `requests` + `ThreadPoolExecutor` | 実ブラウザ（Selenium）+ `load_many()` |
+| 速さ・軽さ | 速い。ブラウザを起動しない | 遅い・重い。ブラウザプロセスが要る |
+| 通らない可能性 | 組織のセッションセキュリティポリシーが frontdoor.jsp 由来のセッションを「標準」扱いにし、エクスポートに「高保証」を要求している場合は `SalesforceReportExportError` | ほぼ通る（実ブラウザなので高保証相当のセッションになりやすい） |
+| インタフェース | `export_reports(urls, directory)` → `(report_id, パス)` を順に返す | `download_reports(urls, ready=...)` → 同じ形で返す |
+
+`ReportExporter` が `SalesforceReportExportError` で弾かれたときだけ、
+`comken.toolbox.browser.sites.salesforce.Salesforce`（詳しくは `docs/browser.md` の
+「複数ページをまとめて開く」）に切り替える。戻り値の形を揃えてあるので、
+呼び出し側の書き換えは最小で済む。
+
+```python
+from comken.toolbox.salesforce.sites import Solution
+from comken.toolbox.salesforce.report_export import ReportExporter
+
+with Solution() as sf:
+    exporter = ReportExporter(sf)
+    for report_id, path in exporter.export_reports(report_urls, "出力先"):
+        ...
+```
 
 ### レポート形式
 

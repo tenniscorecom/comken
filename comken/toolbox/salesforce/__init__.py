@@ -26,6 +26,7 @@ URL と認証情報のシステム名は組織クラスがクラス定数とし�
     APIUsage                     組織の 24 時間 API 消費量
     BulkIngestResult             Bulk Ingest ジョブの実行結果（成功／失敗行を Table で持つ）
     SalesforceCredentialRotator  ECA の資格情報を期限到来時だけローテーションする（既定で無効）
+    ReportExporter               画面のエクスポート機能でレポート取得（APIの2000行上限を回避）
 """
 
 from types import ModuleType
@@ -52,6 +53,7 @@ _LAZY_TARGETS: dict[str, str] = {
     "SalesforceBase": "comken.toolbox.salesforce.client",
     "RefreshTokenOAuth": "comken.toolbox.salesforce.auth.oauth_refresh",
     "SalesforceCredentialRotator": "comken.toolbox.salesforce.auth.rotation",
+    "ReportExporter": "comken.toolbox.salesforce.report_export",
 }
 
 if TYPE_CHECKING:
@@ -63,6 +65,7 @@ if TYPE_CHECKING:
     from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth
     from comken.toolbox.salesforce.auth.rotation import SalesforceCredentialRotator
     from comken.toolbox.salesforce.client import SalesforceBase
+    from comken.toolbox.salesforce.report_export import ReportExporter
 
 
 def __getattr__(name: str) -> object:
@@ -96,4 +99,5 @@ __all__ = [
     "APIMetrics",
     "APIUsage",
     "SalesforceCredentialRotator",
+    "ReportExporter",
 ]

@@ -133,6 +133,12 @@ class TestSalesforceQuery:
             client.close()
         session.close.assert_called_once()
 
+    def test_exposes_access_token_and_instance_url(self):
+        """REST API以外の経路（frontdoor.jsp等）へ引き継げるよう、読み取り専用で公開する。"""
+        with _salesforce([]) as (client, _, _):
+            assert client.access_token == "TOKEN"
+            assert client.instance_url == INSTANCE_URL
+
     def test_follows_next_records_url_and_strips_attributes(self):
         """done が偽なら次ページを辿り、attributes を落として返す。"""
         page1 = _response(

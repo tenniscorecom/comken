@@ -259,6 +259,36 @@ class SalesforceReportAccessDeniedError(SalesforceError):
         )
 
 
+class SalesforceReportExportError(SalesforceError):
+    """画面のエクスポート機能（frontdoor.jsp経由）でレポートをCSV/XLS取得できなかった
+
+    HTTPステータス自体は200で返るが、本文がCSV/XLSではなくHTMLのログイン画面や
+    エラーページになっている場合に出る。frontdoor.jsp由来のセッションは
+    「標準」のセキュリティレベルとして扱われることがあり、組織のセッションポリシーで
+    このレベルのセッションからのエクスポートが拒否されている可能性がある。
+
+    発生箇所: comken.toolbox.salesforce.report_export.ReportExporter.export()
+
+    対処:
+        1. 実ブラウザ経由（comken.toolbox.browser.sites.salesforce.Salesforce）で
+           同じレポートを開いて試す。通れば、この経路がセッションセキュリティレベルで
+           弾かれていることが確定する
+        2. Salesforce 管理者に、対象ユーザーのセッションセキュリティレベルの設定
+           （高保証を要求するポリシーが有効か）を確認してもらう
+        3. レポートそのものへのアクセス権・組織の Edition を確認してもらう
+    """
+
+    def __init__(self, report_id: str, status_code: int, content_type: str) -> None:
+        super().__init__(
+            f"レポートのエクスポートに失敗しました: {report_id}"
+            f"（HTTP {status_code}、Content-Type={content_type!r}）\n"
+            "CSV/XLSではなくHTML（ログイン画面やエラーページ）が返っています。\n"
+            "実ブラウザ経由（comken.toolbox.browser.sites.salesforce.Salesforce）で"
+            "同じレポートを開いて通るか確認するか、Salesforce管理者にセッション"
+            "セキュリティレベルの設定を確認してもらってください。"
+        )
+
+
 class SalesforceBulkQueryFailedError(SalesforceError):
     """Bulk API のクエリジョブが失敗して終わった（Failed / Aborted）
 

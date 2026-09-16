@@ -640,6 +640,21 @@ class SalesforceBase:
         """
         return f"/services/data/v{self.API_VERSION}{path}"
 
+    @property
+    def access_token(self) -> str:
+        """今使っているOAuthアクセストークン。
+
+        REST API（Bearer認証）以外の経路へ引き継ぐときに使う
+        （例: comken.toolbox.salesforce.report_export の frontdoor.jsp 経由エクスポート、
+        comken.toolbox.browser.sites.salesforce の実ブラウザ経由ダウンロード）。
+        """
+        return self._access_token
+
+    @property
+    def instance_url(self) -> str:
+        """今つながっている組織のインスタンスURL。"""
+        return self._instance_url
+
 
 # ── 内部ヘルパー ──────────────────────────────────────────────────────────────
 

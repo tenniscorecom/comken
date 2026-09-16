@@ -4992,6 +4992,37 @@ Reports and Dashboards REST API そのものへのアクセスが HTTP 401 / 403
 def __init__(self, report_id: str, status_code: int, detail: str) -> None:
 ```
 
+### `SalesforceReportExportError`
+
+```text
+class SalesforceReportExportError(SalesforceError):
+```
+
+#### 説明
+
+画面のエクスポート機能（frontdoor.jsp経由）でレポートをCSV/XLS取得できなかった
+
+HTTPステータス自体は200で返るが、本文がCSV/XLSではなくHTMLのログイン画面や
+エラーページになっている場合に出る。frontdoor.jsp由来のセッションは
+「標準」のセキュリティレベルとして扱われることがあり、組織のセッションポリシーで
+このレベルのセッションからのエクスポートが拒否されている可能性がある。
+
+発生箇所: comken.toolbox.salesforce.report_export.ReportExporter.export()
+
+対処:
+    1. 実ブラウザ経由（comken.toolbox.browser.sites.salesforce.Salesforce）で
+       同じレポートを開いて試す。通れば、この経路がセッションセキュリティレベルで
+       弾かれていることが確定する
+    2. Salesforce 管理者に、対象ユーザーのセッションセキュリティレベルの設定
+       （高保証を要求するポリシーが有効か）を確認してもらう
+    3. レポートそのものへのアクセス権・組織の Edition を確認してもらう
+
+#### `__init__`
+
+```text
+def __init__(self, report_id: str, status_code: int, content_type: str) -> None:
+```
+
 ### `SalesforceSiteNotFoundError`
 
 ```text
@@ -11404,6 +11435,10 @@ class APIUsage:
 
 定義を解決できませんでした。
 
+### `ReportExporter`
+
+定義を解決できませんでした。
+
 
 ## `from comken.toolbox.salesforce.sites import ...`
 
@@ -11726,6 +11761,32 @@ REST API のバージョン付きパスを組み立てる。
 
     sf.request("GET", sf.data_path("/limits"))
 
+#### `access_token`
+
+```text
+@property
+def access_token(self) -> str:
+```
+
+##### 説明
+
+今使っているOAuthアクセストークン。
+
+REST API（Bearer認証）以外の経路へ引き継ぐときに使う
+（例: comken.toolbox.salesforce.report_export の frontdoor.jsp 経由エクスポート、
+comken.toolbox.browser.sites.salesforce の実ブラウザ経由ダウンロード）。
+
+#### `instance_url`
+
+```text
+@property
+def instance_url(self) -> str:
+```
+
+##### 説明
+
+今つながっている組織のインスタンスURL。
+
 ### `SolutionSandbox`
 
 ```text
@@ -12040,6 +12101,32 @@ REST API のバージョン付きパスを組み立てる。
 ライブラリに無い API を request() で叩くときに使う。
 
     sf.request("GET", sf.data_path("/limits"))
+
+#### `access_token`
+
+```text
+@property
+def access_token(self) -> str:
+```
+
+##### 説明
+
+今使っているOAuthアクセストークン。
+
+REST API（Bearer認証）以外の経路へ引き継ぐときに使う
+（例: comken.toolbox.salesforce.report_export の frontdoor.jsp 経由エクスポート、
+comken.toolbox.browser.sites.salesforce の実ブラウザ経由ダウンロード）。
+
+#### `instance_url`
+
+```text
+@property
+def instance_url(self) -> str:
+```
+
+##### 説明
+
+今つながっている組織のインスタンスURL。
 
 ### `site_for`
 
