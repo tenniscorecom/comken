@@ -4928,6 +4928,9 @@ class SalesforceReportIDNotFoundError(SalesforceError):
 発生箇所: comken.toolbox.salesforce.report.report_id_from_url()
          （呼び出し元の例: comken-salesforce-downloader の master.py。
          2026-08-30 に comken から分離した別リポジトリ）
+         comken.toolbox.browser.sites.salesforce.site._report_id_from_url()
+         （ブラウザ経由でのレポートCSVダウンロード。toolbox.browser を
+         toolbox.salesforce に依存させないため、同じ正規表現をあえて別実装している）
 
 対処:
     Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す
@@ -8135,6 +8138,26 @@ Returns:
 Raises:
     DownloadTimeoutError: timeout 秒以内にダウンロードが完了しなかった場合。
 
+#### `mark_known`
+
+```text
+def mark_known(self, *paths: Path) -> None:
+```
+
+##### 説明
+
+指定したファイルを「既知」として扱う。以後の wait() では新規扱いしない。
+
+wait() は「作成時点で既にあったファイル」しか除外しないため、同じ
+DownloadDir で wait() を複数回呼ぶ運用（レポートを1件ずつ落として
+リネーム、を繰り返すなど）だと、リネーム後のファイルが次の wait() で
+「新しいダウンロード」として誤検出される。wait() が返したファイルを
+呼び出し側でリネーム・移動したときは、リネーム後のパスをここに
+渡しておく。
+
+Args:
+    *paths: 既知として扱うファイルのパス。存在しないパスは無視する。
+
 #### `remove`
 
 ```text
@@ -9388,6 +9411,84 @@ Browsers から渡されたセッションは触らず、自分で起動した�
 ただし `Browsers.launch()` から持たせてもらったインスタンスでは何もしない
 （持ち主の Browsers が with を抜けるときに閉じるため、二重に閉じない）。
 
+### `Salesforce`
+
+```text
+class Salesforce(SiteBase):
+```
+
+#### 説明
+
+Salesforceのレポートをブラウザ経由でCSVダウンロードするための雛形。
+
+URL や認証は example の値のまま。利用プロジェクト側で継承して書き換える
+（BASE_URL を実際の組織の My Domain URL へ）。
+
+ID/パスワードでのログイン画面は使わない。comken.toolbox.salesforce で取得した
+OAuthアクセストークンを ``login_with_token()`` に渡すだけで、
+frontdoor.jsp 経由でブラウザのログイン状態を確立する（MFAの二度手間が無い）。
+
+#### `login_with_token`
+
+```text
+def login_with_token(self, access_token: str, instance_url: str | None=None) -> None:
+```
+
+##### 説明
+
+OAuthアクセストークンでブラウザのログイン状態を確立する（frontdoor.jsp）。
+
+Args:
+    access_token: comken.toolbox.salesforce 側で取得したOAuthアクセストークン
+        （Salesforceのセッションidを兼ねる）。
+    instance_url: 組織のインスタンスURL。省略時は BASE_URL を使う。
+
+#### `download_reports`
+
+```text
+def download_reports(self, report_urls: Sequence[str], *, ready: Locator | None=None, max_open: int=_DEFAULT_MAX_OPEN_TABS, page_timeout: int | None=None, download_timeout: int=_DEFAULT_DOWNLOAD_TIMEOUT_SECONDS, export_format: str='csv') -> Iterator[tuple[str, Path]]:
+```
+
+##### 説明
+
+レポートURLを渡すと、順に (report_id, ダウンロードしたファイルのパス) を返す。
+
+レポートの読み込みが重いことを前提に、``load_many()`` で複数タブを同時に
+開いておき、読み込みが終わったものから順にエクスポートしてダウンロードする。
+
+**読み込み待ちは並列、ダウンロードのトリガーは1件ずつ。** Salesforceの
+エクスポートはファイル名がレポート名で決まりIDでは決まらないため、複数の
+ダウンロードを同時に走らせると「どのファイルがどのレポートか」を取り違える。
+読み込みの終わったタブから順にこのメソッドが1件ずつ処理するので、
+ダウンロードが同時に複数走ることはない。
+
+    with Salesforce() as sf:
+        sf.login_with_token(access_token, instance_url)
+        for report_id, path in sf.download_reports(report_urls, ready=MY_READY_LOCATOR):
+            move_to_project_folder(report_id, path)
+
+Args:
+    report_urls: レポート画面のURL（またはレポートID）のリスト。
+    ready: レポートの読み込み完了とみなす目印の要素。**省略せず渡すことを
+        強く推奨する。** LightningはページのHTMLを描いてから中身を
+        後入れするため、省略時（HTMLの読み込み完了で判断）だと表が
+        まだ空でも「読み込み完了」とみなしてしまう。組織・Salesforceの
+        バージョンでDOMが変わるため、comken側では固定値を持たない。
+    max_open: 同時に開いておくタブの数。既定10。
+    page_timeout: レポート1件あたりの読み込み待ちの上限秒数。省略時はセッションの設定
+        （SalesforceBrowserOptions.WAIT_SECONDS）。
+    download_timeout: ダウンロード完了待ちの上限秒数。既定300秒。
+    export_format: "csv" または "xls"。
+
+Yields:
+    (report_id, ダウンロードしたファイルのパス) のタプル。ファイルは
+    download_dir 直下に "{report_id}.{export_format}" として保存される
+    （Salesforceがレポート名で付けた元のファイル名から、この場でリネームする）。
+
+Raises:
+    SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
+    DownloadTimeoutError: download_timeout 秒以内にダウンロードが完了しなかった場合。
+
 
 ## `from comken.toolbox.browser.sites.ams import ...`
 
@@ -9752,6 +9853,118 @@ def go_login(self) -> LoginPage:
 ##### 説明
 
 ログイン画面を開く。
+
+
+## `from comken.toolbox.browser.sites.salesforce import ...`
+
+### `Salesforce`
+
+```text
+class Salesforce(SiteBase):
+```
+
+#### 説明
+
+Salesforceのレポートをブラウザ経由でCSVダウンロードするための雛形。
+
+URL や認証は example の値のまま。利用プロジェクト側で継承して書き換える
+（BASE_URL を実際の組織の My Domain URL へ）。
+
+ID/パスワードでのログイン画面は使わない。comken.toolbox.salesforce で取得した
+OAuthアクセストークンを ``login_with_token()`` に渡すだけで、
+frontdoor.jsp 経由でブラウザのログイン状態を確立する（MFAの二度手間が無い）。
+
+#### `login_with_token`
+
+```text
+def login_with_token(self, access_token: str, instance_url: str | None=None) -> None:
+```
+
+##### 説明
+
+OAuthアクセストークンでブラウザのログイン状態を確立する（frontdoor.jsp）。
+
+Args:
+    access_token: comken.toolbox.salesforce 側で取得したOAuthアクセストークン
+        （Salesforceのセッションidを兼ねる）。
+    instance_url: 組織のインスタンスURL。省略時は BASE_URL を使う。
+
+#### `download_reports`
+
+```text
+def download_reports(self, report_urls: Sequence[str], *, ready: Locator | None=None, max_open: int=_DEFAULT_MAX_OPEN_TABS, page_timeout: int | None=None, download_timeout: int=_DEFAULT_DOWNLOAD_TIMEOUT_SECONDS, export_format: str='csv') -> Iterator[tuple[str, Path]]:
+```
+
+##### 説明
+
+レポートURLを渡すと、順に (report_id, ダウンロードしたファイルのパス) を返す。
+
+レポートの読み込みが重いことを前提に、``load_many()`` で複数タブを同時に
+開いておき、読み込みが終わったものから順にエクスポートしてダウンロードする。
+
+**読み込み待ちは並列、ダウンロードのトリガーは1件ずつ。** Salesforceの
+エクスポートはファイル名がレポート名で決まりIDでは決まらないため、複数の
+ダウンロードを同時に走らせると「どのファイルがどのレポートか」を取り違える。
+読み込みの終わったタブから順にこのメソッドが1件ずつ処理するので、
+ダウンロードが同時に複数走ることはない。
+
+    with Salesforce() as sf:
+        sf.login_with_token(access_token, instance_url)
+        for report_id, path in sf.download_reports(report_urls, ready=MY_READY_LOCATOR):
+            move_to_project_folder(report_id, path)
+
+Args:
+    report_urls: レポート画面のURL（またはレポートID）のリスト。
+    ready: レポートの読み込み完了とみなす目印の要素。**省略せず渡すことを
+        強く推奨する。** LightningはページのHTMLを描いてから中身を
+        後入れするため、省略時（HTMLの読み込み完了で判断）だと表が
+        まだ空でも「読み込み完了」とみなしてしまう。組織・Salesforceの
+        バージョンでDOMが変わるため、comken側では固定値を持たない。
+    max_open: 同時に開いておくタブの数。既定10。
+    page_timeout: レポート1件あたりの読み込み待ちの上限秒数。省略時はセッションの設定
+        （SalesforceBrowserOptions.WAIT_SECONDS）。
+    download_timeout: ダウンロード完了待ちの上限秒数。既定300秒。
+    export_format: "csv" または "xls"。
+
+Yields:
+    (report_id, ダウンロードしたファイルのパス) のタプル。ファイルは
+    download_dir 直下に "{report_id}.{export_format}" として保存される
+    （Salesforceがレポート名で付けた元のファイル名から、この場でリネームする）。
+
+Raises:
+    SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
+    DownloadTimeoutError: download_timeout 秒以内にダウンロードが完了しなかった場合。
+
+### `SalesforceBrowserOptions`
+
+```text
+class SalesforceBrowserOptions(BrowserOptions):
+```
+
+#### 説明
+
+salesforce 用のブラウザオプション。
+
+デフォルト（BrowserOptions）から変更したいものだけ上書きする。
+レポートの読み込みが重いことがあるため、待機秒数を既定より長めにする。
+
+#### `build`
+
+```text
+def build(self, profile_dir: Path | None=None) -> list[str]:
+```
+
+##### 説明
+
+有効なオプションを Edge の起動引数リストに変換する。
+
+Args:
+    profile_dir: ログイン状態を残すプロファイルフォルダ。
+                 指定するとシークレットモードは自動的に外れる
+                 （シークレットは Cookie を残さないため、永続化と両立しない）。
+
+Returns:
+    webdriver に渡す起動引数のリスト。
 
 
 ## `from comken.toolbox.credentials import ...`

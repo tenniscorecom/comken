@@ -113,6 +113,23 @@ class DownloadDir:
 
         raise DownloadTimeoutError(self.path, timeout)
 
+    def mark_known(self, *paths: Path) -> None:
+        """指定したファイルを「既知」として扱う。以後の wait() では新規扱いしない。
+
+        wait() は「作成時点で既にあったファイル」しか除外しないため、同じ
+        DownloadDir で wait() を複数回呼ぶ運用（レポートを1件ずつ落として
+        リネーム、を繰り返すなど）だと、リネーム後のファイルが次の wait() で
+        「新しいダウンロード」として誤検出される。wait() が返したファイルを
+        呼び出し側でリネーム・移動したときは、リネーム後のパスをここに
+        渡しておく。
+
+        Args:
+            *paths: 既知として扱うファイルのパス。存在しないパスは無視する。
+        """
+        for path in paths:
+            if path.exists():
+                self._initial_files[path] = path.stat().st_mtime_ns
+
     def remove(self, force: bool = False) -> None:
         """フォルダごと削除する。ファイルを残したい場合は呼ばなくてよい。
 

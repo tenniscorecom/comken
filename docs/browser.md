@@ -576,6 +576,44 @@ with Browsers() as browsers:
 `DOWNLOAD_DIR` を指定していない場合は一時フォルダが使われ、**`with` を抜けると消える**。
 残したいファイルは `with` の中で移動しておくこと。
 
+同じ `download_dir` で `wait()` を複数回呼ぶ（1件ずつ落として次へ進む運用）場合は、
+呼び出し側でリネーム・移動した後のパスを `download_dir.mark_known(path)` で伝えること。
+`wait()` は「作成時点で既にあったファイル」しか除外しないため、伝え忘れると
+リネーム後のファイルを次の `wait()` が「新しいダウンロード」と誤検出する
+（実例は `comken/toolbox/browser/sites/salesforce/site.py` の `download_reports()`）。
+
+---
+
+## 複数ページをまとめて開く（`load_many`）
+
+レポート一覧のように、同じサイトの大量の URL を見て回るときに使う。1件ずつ開いて
+待つと「読み込み時間 × 件数」かかるが、`load_many()` で先に何枚か開いておくと
+待ち時間がブラウザ側で重なるため、全体が大幅に短くなる。
+
+```python
+with Browsers() as browsers:
+    site = browsers.launch(Site)
+
+    for url in site.session.load_many(report_urls, ready=ReportPage.TABLE, max_open=10):
+        rows = ReportPage(site.session).rows()     # そのページのタブに切り替わっている
+        save(url, rows)
+    # ← 抜けると、開いたタブは全部閉じて元のタブへ戻る
+```
+
+- `ready` は**必ず渡す**。省略するとHTMLの読み込み完了だけで「読み込めた」と判断するため、
+  画面を描いてから中身を後入れするサイト（Salesforceなど）では表がまだ空でも
+  次へ進んでしまう
+- `max_open` は同時に開いておくタブの数。増やすほど速くなるが、メモリとサイト側の
+  負荷も増える
+- ログインは1回で済む。同じブラウザの中でタブを開くだけなので、Cookie も
+  二要素認証の記憶も共有される
+
+**実例:** `comken/toolbox/browser/sites/salesforce/` は、Salesforceレポートの
+CSVエクスポートをこの仕組みで並列化している（レポートAPIの2000行上限を超える
+ものをブラウザ経由で取る手段。詳しくは `docs/salesforce.md`）。読み込みの重い
+レポート表示は `load_many()` で並列に待ち、ダウンロードのトリガーだけは
+1件ずつ処理することで、ファイル名の取り違えを防いでいる。
+
 ---
 
 ## よくあるつまずき
