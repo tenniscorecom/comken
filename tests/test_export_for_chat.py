@@ -30,10 +30,22 @@ def test_find_definition_follows_nested_reexport() -> None:
 def test_split_preserves_text() -> None:
     text = "1行目\n2行目\n3行目\n"
 
-    chunks = export_for_chat._split(text, max_chars=5)
+    chunks = export_for_chat._split(text, max_bytes=5)
 
     assert "".join(chunks) == text
     assert len(chunks) == 3
+
+
+def test_split_uses_utf8_byte_length_not_character_count() -> None:
+    """日本語1文字は3バイトになるため、文字数ではなくバイト数で判定する。"""
+    # "あ"（3バイト）を3個。1行あたり9バイトなので、max_bytes=10だと2行ごとには
+    # 収まらない（9+9=18>10）が、文字数（3）で判定していれば2行分（6）は収まってしまう
+    text = "あああ\n" * 4
+
+    chunks = export_for_chat._split(text, max_bytes=10)
+
+    assert "".join(chunks) == text
+    assert len(chunks) == 4  # 1行（9バイト）ごとに分かれる
 
 
 def test_script_can_import_comken_when_run_directly() -> None:

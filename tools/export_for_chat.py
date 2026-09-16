@@ -8,15 +8,14 @@
 ``docs/自動生成/API.md`` へ書き出す。
 
 **同時に、社内の外部 AI へ貼るための資料（``comken_bundle/``）も既定で生成する。**
-章ごと（規約 → API 索引 → 実例 → 実装全文 → エラー対応表 → 設計判断 → 新規プロジェクトの
-テンプレ → ライブラリ開発規約）にファイルを分け、実装全文はさらに ``comken/`` 直下の
-パッケージ単位（core・toolbox・services 等）で分ける。1ファイルにまとめると数百万文字に
-なり、チャットへ貼るには長すぎるため。1章が ``--max-chars``（既定40万字）を超える
-場合のみ、さらに複数ファイルへ割る。
+章ごと（規約・API索引・実例 → 実装全文 → エラー対応表・設計判断 → 新規プロジェクト向け）に
+ファイルを分ける。1ファイルにまとめると数百万文字になり、チャットへ貼るには長すぎるため。
+1章が ``--max-bytes``（既定10万バイト。アップロード先の制限は文字数でなくファイル
+サイズなので、バイト数で判定する）を超える場合のみ、さらに複数ファイルへ割る。
 
 使い方:
     python tools/export_for_chat.py
-    python tools/export_for_chat.py --max-chars 20000
+    python tools/export_for_chat.py --max-bytes 50000
 """
 
 import argparse
@@ -40,9 +39,10 @@ API_OUTPUT_PATH = ROOT / "docs" / "自動生成" / "API.md"
 ERRORS_OUTPUT_PATH = ROOT / "docs" / "ERRORS.md"
 BUNDLE_OUTPUT_DIR = ROOT / "comken_bundle"
 
-# 1章（_bundle_sections() の1項目）がこれを超えたときだけ、さらに複数ファイルへ割る。
-# 基本は「1章 = 1ファイル」を保ちたいので、普段は超えない大きめの値にする。
-DEFAULT_MAX_CHARS = 400_000
+# 1章（_bundle_sections() の1項目）がこれ（UTF-8バイト数）を超えたときだけ、
+# さらに複数ファイルへ割る。約53万バイトのファイルがアップロード先（社内の外部AI
+# チャット）で弾かれ、約12万バイトは通った実績を踏まえて10万バイトにしている。
+DEFAULT_MAX_BYTES = 100_000
 ERRORS_GENERATED_MARKER = (
     "<!-- ここから下は python export_for_chat.py が自動生成する。手で編集しない -->"
 )
@@ -441,18 +441,25 @@ def _write_errors() -> None:
     ERRORS_OUTPUT_PATH.write_text(_merged_errors_text(current), encoding="utf-8")
 
 
-def _split(text: str, max_chars: int) -> list[str]:
-    """行の途中で切らず、指定文字数を目安に分割する。"""
+def _split(text: str, max_bytes: int) -> list[str]:
+    """行の途中で切らず、指定バイト数（UTF-8）を目安に分割する。
+
+    アップロード先の制限は文字数ではなくファイルサイズ（バイト数）であることが
+    多いため、バイト数で判定する。日本語は1文字3バイトになるため、文字数だけで
+    判定すると日本語比率が高い文書（エラー対応表・設計判断等）だけファイルサイズが
+    大きくなり、同じ文字数上限でも危険域に入ってしまう。
+    """
     chunks: list[str] = []
     current: list[str] = []
     size = 0
     for line in text.splitlines(keepends=True):
-        if current and size + len(line) > max_chars:
+        line_size = len(line.encode("utf-8"))
+        if current and size + line_size > max_bytes:
             chunks.append("".join(current))
             current = []
             size = 0
         current.append(line)
-        size += len(line)
+        size += line_size
     if current:
         chunks.append("".join(current))
     return chunks
@@ -646,43 +653,45 @@ def _extract_public_names(api_text: str) -> set[str]:
     return names
 
 
-def _write_bundle(max_chars: int) -> None:
+def _write_bundle(max_bytes: int) -> None:
     """``comken_bundle/`` へ、章（カテゴリ）ごとにファイルを書き出す。
 
-    1章が ``max_chars`` を超えるときだけ、``_split()`` でさらに複数ファイルへ割る。
+    1章が ``max_bytes``（UTF-8）を超えるときだけ、``_split()`` でさらに
+    複数ファイルへ割る。
     """
     if BUNDLE_OUTPUT_DIR.exists():
         shutil.rmtree(BUNDLE_OUTPUT_DIR)
     BUNDLE_OUTPUT_DIR.mkdir()
     for title, text in _bundle_sections():
-        chunks = _split(text, max_chars)
+        chunks = _split(text, max_bytes)
         for number, chunk in enumerate(chunks, start=1):
             suffix = "" if len(chunks) == 1 else f"_{number}of{len(chunks)}"
             path = BUNDLE_OUTPUT_DIR / f"{title}{suffix}.md"
             header = "" if number == 1 else f"（{title} の続き {number}/{len(chunks)}）\n\n"
-            path.write_text(header + chunk, encoding="utf-8")
-            print(f"{path.name}  {len(chunk):,} 文字")  # noqa: T201
+            content = header + chunk
+            path.write_text(content, encoding="utf-8")
+            print(f"{path.name}  {len(content.encode('utf-8')):,} バイト")  # noqa: T201
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--max-chars",
+        "--max-bytes",
         type=int,
-        default=DEFAULT_MAX_CHARS,
+        default=DEFAULT_MAX_BYTES,
         help=(
-            "comken_bundle/ の1章がこの文字数を超えたときの分割の目安"
-            f"（既定 {DEFAULT_MAX_CHARS:,} 文字。0以下を指定すると分割を止める）"
+            "comken_bundle/ の1章がこのバイト数（UTF-8）を超えたときの分割の目安"
+            f"（既定 {DEFAULT_MAX_BYTES:,} バイト。0以下を指定すると分割を止める）"
         ),
     )
     args = parser.parse_args()
-    bundle_max_chars = args.max_chars if args.max_chars > 0 else sys.maxsize
+    bundle_max_bytes = args.max_bytes if args.max_bytes > 0 else sys.maxsize
     API_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     API_OUTPUT_PATH.write_text(_api_text(), encoding="utf-8")
     print(f"{API_OUTPUT_PATH.relative_to(ROOT)} を生成しました")  # noqa: T201
     _write_errors()
     print(f"{ERRORS_OUTPUT_PATH.relative_to(ROOT)} を生成しました")  # noqa: T201
-    _write_bundle(bundle_max_chars)
+    _write_bundle(bundle_max_bytes)
     print(f"{BUNDLE_OUTPUT_DIR.relative_to(ROOT)}/ に章ごとの資料を生成しました")  # noqa: T201
 
 
