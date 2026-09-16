@@ -81,23 +81,17 @@ def test_concatenate_files_wraps_each_file_with_header() -> None:
     assert text.count("# ===== FILE:") == len(files)
 
 
-def test_bundle_sections_are_in_order_with_implementation_split_by_package() -> None:
-    """バンドル資料が章（カテゴリ）ごとに分かれ、実装全文はパッケージ単位でさらに分かれている。"""
+def test_bundle_sections_are_five_large_chapters_in_order() -> None:
+    """バンドル資料は少数の大きな章にまとまっている（細分化しない）。"""
     titles = [title for title, _ in export_for_chat._bundle_sections()]
 
-    # 0 読み方 → 1 規約 → 2 API索引 → 3 実例 → 4 実装_* (複数) → 5 エラー表 → 6 設計判断 の順
-    assert titles[0] == "0_読み方"
-    assert titles[1] == "1_コーディング規約"
-    assert titles[2] == "2_公開API索引"
-    assert titles[3] == "3_動く実例"
-    impl_titles = [title for title in titles if title.startswith("4_実装_")]
-    assert impl_titles  # comken/ のパッケージ数だけ分かれている
-    assert "4_実装_core" in impl_titles
-    assert "4_実装_toolbox" in impl_titles
-    assert "5_エラー対応表" in titles
-    assert "6_設計判断" in titles
-    assert titles[-2] == "7_新規プロジェクトのテンプレ"
-    assert titles[-1] == "8_ライブラリ開発規約"
+    assert titles == [
+        "0_読み方",
+        "1_規約_API索引_実例",
+        "2_実装全文",
+        "3_エラー対応表_設計判断",
+        "4_新規プロジェクト向け",
+    ]
 
 
 def test_bundle_sections_have_no_duplicate_titles_or_content() -> None:
@@ -113,16 +107,16 @@ def test_bundle_sections_have_no_duplicate_titles_or_content() -> None:
 
 
 def test_bundle_sections_include_examples_files() -> None:
-    """``examples/`` の代表ファイルが「3_動く実例」章に含まれている。"""
+    """``examples/`` の代表ファイルが「1_規約_API索引_実例」章に含まれている。"""
     sections = dict(export_for_chat._bundle_sections())
 
-    assert "examples/advanced/table_transfer_design/README.md" in sections["3_動く実例"]
+    assert "examples/advanced/table_transfer_design/README.md" in sections["1_規約_API索引_実例"]
 
 
 def test_bundle_sections_include_all_comken_py_files() -> None:
-    """``comken/`` の .py がすべて、いずれかの「4_実装_*」章に含まれている。"""
-    sections = export_for_chat._bundle_sections()
-    implementation_text = "".join(text for title, text in sections if title.startswith("4_実装_"))
+    """``comken/`` の .py がすべて「2_実装全文」章に含まれている。"""
+    sections = dict(export_for_chat._bundle_sections())
+    implementation_text = sections["2_実装全文"]
 
     expected_files = export_for_chat._collect_python_files(export_for_chat.PACKAGE_ROOT)
     assert implementation_text.count("# ===== FILE:") == len(expected_files)

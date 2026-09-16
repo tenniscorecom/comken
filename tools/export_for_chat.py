@@ -503,32 +503,19 @@ def _concatenate_files(files: list[Path], package_root: Path) -> tuple[str, int,
     return text, line_count, total_bytes
 
 
-def _implementation_groups(package_files: list[Path]) -> list[tuple[str, list[Path]]]:
-    """実装ファイルを ``comken/`` 直下のパッケージ単位（core・toolbox・services 等）でまとめる。
-
-    直下に置かれた単体ファイル（``constants.py`` 等）は ``root`` としてまとめる。
-    サブパッケージが1つでも巨大（toolbox 等）な場合は、書き出し側の ``_split()`` で
-    さらに文字数ベースに割る。
-    """
-    groups: dict[str, list[Path]] = {}
-    for path in package_files:
-        relative = path.relative_to(PACKAGE_ROOT)
-        key = relative.parts[0] if len(relative.parts) > 1 else "root"
-        groups.setdefault(key, []).append(path)
-    return sorted(groups.items())
-
-
 def _bundle_sections() -> list[tuple[str, str]]:
     """社外 AI へ貼るための資料を、章（カテゴリ）ごとの (タイトル, 本文) の並びで組み立てる。
 
-    並び順は **ヘッダ → コーディング規約 → 公開 API 索引 → 動く実例
-    (examples/) → 実装全文 (comken/、パッケージ単位でさらに分割) → エラー対応表
-    → 設計判断 → 新規プロジェクトのテンプレ → ライブラリ開発規約**。規約を先頭に
-    置くのは、社外 AI に規約（命名・型ヒント・定数・例外・ロギング）を最初に
-    読ませて、生成コードの表記ブレや規約違反を防ぐため。その後は索引で公開 API を
-    固定してから実例で正しい書き方を見せ、最後に全文とエラー表・仕様書で細部を
-    裏取る構成にする。末尾の2章（新規プロジェクトのテンプレ・ライブラリ開発規約）は
-    使う人を選ぶ資料（新しいツールを作る人・comken 本体を直す人）なので最後に置く。
+    章は少数の大きなまとまりにしている（細かく分けすぎると、逆にどれを渡せば
+    いいか分かりにくくなるため）。1章が ``--max-chars``（既定40万字）を超える
+    ときだけ、書き出し側の ``_split()`` で機械的に複数ファイルへ割る
+    （章の中身で分け方を変えたりはしない）。
+
+    並び順は **ヘッダ → 規約・API索引・実例 → 実装全文 → エラー対応表・設計判断
+    → 新規プロジェクト向け**。規約を先頭に置くのは、社外 AI に規約（命名・
+    型ヒント・定数・例外・ロギング）を最初に読ませて、生成コードの表記ブレや
+    規約違反を防ぐため。最後の「新規プロジェクト向け」は使う人を選ぶ資料
+    （新しいツールを作る人・comken 本体を直す人）なので最後に置く。
 
     章ごとに別ファイルへ書き出す前提のため、1ファイルへ結合したときに使う
     区切り線（``---``）はここでは入れない。
@@ -537,12 +524,11 @@ def _bundle_sections() -> list[tuple[str, str]]:
     spec_path = ROOT / "docs" / "開発" / "仕様書.md"
     conventions_text = conventions_path.read_text(encoding="utf-8").rstrip()
     spec_text = spec_path.read_text(encoding="utf-8").rstrip()
-    spec_line_count = len(spec_text.splitlines())
 
     api_text = _api_text()
     errors_text = _errors_generated_text()
     package_files = _collect_python_files(PACKAGE_ROOT)
-    implementation_groups = _implementation_groups(package_files)
+    impl_text, impl_line_count, impl_byte_count = _concatenate_files(package_files, PACKAGE_ROOT)
 
     # 動く実例: examples/ 配下をすべて .py / README.md の順で並べる。
     examples_root = ROOT / "examples"
@@ -560,77 +546,80 @@ def _bundle_sections() -> list[tuple[str, str]]:
                 examples_chunks[-1] += "\n"
             examples_files.append(path)
 
-    sections: list[tuple[str, str]] = [
-        (
-            "0_読み方",
-            _bundle_readme(
-                api_text, package_files, implementation_groups, examples_files, spec_line_count
-            ),
-        ),
-        ("1_コーディング規約", conventions_text),
-        ("2_公開API索引", api_text.rstrip()),
-    ]
-    if examples_chunks:
-        sections.append(("3_動く実例", "".join(examples_chunks).rstrip()))
-    for group_name, group_files in implementation_groups:
-        text, _, _ = _concatenate_files(group_files, PACKAGE_ROOT)
-        sections.append((f"4_実装_{group_name}", text.rstrip()))
-    sections.append(("5_エラー対応表", errors_text.rstrip()))
-    sections.append(("6_設計判断", spec_text))
-
     new_project_docs_dir = PACKAGE_ROOT / "templates" / "新規プロジェクト" / "docs"
     new_project_text = "\n\n---\n\n".join(
         f"# ===== FILE: {path.relative_to(ROOT).as_posix()} =====\n\n"
         + path.read_text(encoding="utf-8").rstrip()
         for path in (new_project_docs_dir / "仕様書.md", new_project_docs_dir / "使い方.md")
     )
-    sections.append(("7_新規プロジェクトのテンプレ", new_project_text))
-
     library_conventions_path = ROOT / "docs" / "開発" / "ライブラリ開発規約.md"
-    sections.append(
-        ("8_ライブラリ開発規約", library_conventions_path.read_text(encoding="utf-8").rstrip())
-    )
-    return sections
+    library_conventions_text = library_conventions_path.read_text(encoding="utf-8").rstrip()
+
+    reference_parts = [
+        "# 1. コーディング規約（docs/開発/CONVENTIONS.md）\n" + conventions_text,
+        "# 2. 公開 API 索引\n" + api_text.rstrip(),
+    ]
+    if examples_chunks:
+        reference_parts.append("# 3. 動く実例（examples/）\n" + "".join(examples_chunks).rstrip())
+
+    return [
+        (
+            "0_読み方",
+            _bundle_readme(
+                api_text, package_files, examples_files, impl_line_count, impl_byte_count
+            ),
+        ),
+        ("1_規約_API索引_実例", "\n\n---\n\n".join(reference_parts)),
+        ("2_実装全文", impl_text.rstrip()),
+        (
+            "3_エラー対応表_設計判断",
+            "# エラー対応表（docs/ERRORS.md）\n"
+            + errors_text.rstrip()
+            + "\n\n---\n\n# 設計判断（docs/開発/仕様書.md）\n"
+            + spec_text,
+        ),
+        (
+            "4_新規プロジェクト向け",
+            "# 新規プロジェクトのテンプレ\n"
+            + new_project_text
+            + "\n\n---\n\n# ライブラリ開発規約（docs/開発/ライブラリ開発規約.md）\n"
+            + library_conventions_text,
+        ),
+    ]
 
 
 def _bundle_readme(
     api_text: str,
     package_files: list[Path],
-    implementation_groups: list[tuple[str, list[Path]]],
     examples_files: list[Path],
-    spec_line_count: int,
+    impl_line_count: int,
+    impl_byte_count: int,
 ) -> str:
     """``comken_bundle/`` の入口に置く「このフォルダの読み方」を組み立てる。"""
     public_api_names = sum(
         api_text.count(f"### `{name}`") for name in _extract_public_names(api_text)
     )
-    group_lines = [
-        f"  - 4_実装_{name}.md（{len(files)} ファイル）" for name, files in implementation_groups
-    ]
     lines = [
         "# comken_bundle/ — 社内 AI へ渡す comken 資料",
         "",
         "## このフォルダの読み方",
         "",
         "- comken は業務自動化の共通ライブラリです。",
-        "- 章（コーディング規約 → API 索引 → 実例 → 実装全文 → エラー対応表 →"
-        " 設計判断 → 新規プロジェクトのテンプレ → ライブラリ開発規約）ごとにファイルを"
-        " 分けています。1ファイルが数百万文字になってチャットへ貼れなくなるのを避けるため、"
-        " 実装全文はさらに comken/ 直下のパッケージ単位（core・toolbox・services 等）で"
-        " 分割しています。",
-        "- **1_コーディング規約 を必ず先に読んでください。** 命名・型ヒント・"
-        "定数・例外・ロギングの書き方はここで固定されています。ここを読まずに書いた"
-        "コードは規約違反で修正対象になります。",
-        "- 公開 API は **2_公開API索引** に載っているものだけを使ってください。"
-        "``_`` 始まりは内部実装なので使わないこと。",
-        "- 3_動く実例 は実際に動くサンプルコードです。書くときはここを参照してください。",
-        "- 4_実装_* は実装全文です。索引に無い名前を勝手に使う前にここで実在を確かめてください。"
-        " 必要なパッケージのファイルだけ渡せば十分なことが多いです。",
-        "- 5_エラー対応表 は、利用者が読む画面の説明とその例外が送出される条件です。",
-        "- 6_設計判断 は「なぜその設計にしたか」（仕様書）です。",
-        "- 7_新規プロジェクトのテンプレ は、comken を使う新しいツールのドキュメントを"
-        "書くときのひな形（仕様書・使い方）です。comken を使うだけなら不要です。",
-        "- 8_ライブラリ開発規約 は comken **本体**を修正するときの規約です。"
+        "- 章（規約・API索引・実例 → 実装全文 → エラー対応表・設計判断 →"
+        " 新規プロジェクト向け）ごとにファイルを分けています。1章が数百万文字に"
+        " なる場合は --max-chars（既定40万字）ごとに機械的に複数ファイルへ割ります"
+        "（``_1of2`` のような接尾辞が付きます）。",
+        "- **1_規約_API索引_実例 を必ず先に読んでください。** 命名・型ヒント・"
+        "定数・例外・ロギングの書き方（コーディング規約）はここで固定されています。"
+        "ここを読まずに書いたコードは規約違反で修正対象になります。公開APIも"
+        "ここに載っているものだけを使ってください（``_`` 始まりは内部実装）。"
+        "動く実例もここに含まれます。",
+        "- 2_実装全文 は comken/ の全ソースです。索引に無い名前を勝手に使う前に"
+        "ここで実在を確かめてください。",
+        "- 3_エラー対応表_設計判断 は、利用者が読む画面の説明とその例外が送出される"
+        "条件（エラー対応表）、「なぜその設計にしたか」（設計判断）です。",
+        "- 4_新規プロジェクト向け は、comken を使う新しいツールのドキュメントを"
+        "書くときのひな形と、comken **本体**を修正するときの規約です。"
         "comken を使うだけなら不要です。",
         "",
         "## 中身のサマリ",
@@ -639,9 +628,8 @@ def _bundle_readme(
         f"- 公開 API 索引の名前数: {public_api_names}",
         f"- 動く実例（examples/）のファイル数: {len(examples_files)}",
         f"- 実装全文（comken/）の .py ファイル数: {len(package_files)}",
-        "- 実装全文の内訳:",
-        *group_lines,
-        f"- 設計判断（仕様書.md）の行数: {spec_line_count:,}",
+        f"- 実装全文（comken/）の総行数: {impl_line_count:,}",
+        f"- 実装全文（comken/）の総バイト数: {impl_byte_count:,}",
         "",
         "再生成: `python tools/export_for_chat.py`",
         "",
