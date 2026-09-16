@@ -18,12 +18,14 @@ URL と認証情報のシステム名は組織クラスがクラス定数とし�
 
 設計の背景は docs/開発/salesforce-authentication.md を参照。
 
-    SalesforceBase         1組織ぶんの API クライアントの土台（組織クラスで継承する）
-    DataLoaderCLI          Salesforce Data Loader の CLI 呼び出し（サブプロセス実行）
-    DataLoaderResult       DataLoaderCLI.run() の戻り値
-    RefreshTokenOAuth      Authorization Code + Refresh Token Flow（既定）
-    APIMetrics             API 呼び出しの計測。SalesforceBase.metrics が持っている
-    APIUsage               組織の 24 時間 API 消費量
+    SalesforceBase              1組織ぶんの API クライアントの土台（組織クラスで継承する）
+    DataLoaderCLI                Salesforce Data Loader の CLI 呼び出し（サブプロセス実行）
+    DataLoaderResult             DataLoaderCLI.run() の戻り値
+    RefreshTokenOAuth            Authorization Code + Refresh Token Flow（既定）
+    APIMetrics                   API 呼び出しの計測。SalesforceBase.metrics が持っている
+    APIUsage                     組織の 24 時間 API 消費量
+    BulkIngestResult             Bulk Ingest ジョブの実行結果（成功／失敗行を Table で持つ）
+    SalesforceCredentialRotator  ECA の資格情報を期限到来時だけローテーションする（既定で無効）
 """
 
 from types import ModuleType

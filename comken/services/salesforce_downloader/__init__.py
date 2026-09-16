@@ -22,15 +22,17 @@ r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポー�
 **プロジェクトのコードに Salesforce の URL もレポート ID も書かない。** 書くのは
 管理番号だけで、参照先の差し替えは管理表を直せば済む（コードは変えない）。
 
-    download_scheduled   管理表で有効な全レポートをまとめて取得する
-    cached_report        本日の定期取得キャッシュを CSV で返す（取りに行かない）
-    file_path_of         そのレポートが保存されるパス
-    load_master          管理表を読む
-    shared_report_ids    同じ Salesforce レポートを指している管理番号を返す
-    ReportEntry          管理表の1行
+    download_scheduled    管理表で有効な全レポートをまとめて取得する
+    cached_report         本日の定期取得キャッシュを CSV で返す（取りに行かない）
+    cached_report_path    本日の定期取得キャッシュが置かれるパスを返す（中身は読まない）
+    file_path_of          そのレポートが保存されるパス
+    load_master           管理表を読む
+    shared_report_ids     同じ Salesforce レポートを指している管理番号を返す
+    ReportEntry           管理表の1行
     ReportEntry.create_template  管理表の雛形（Excel）を作る
-    write_latest_status  全レポートの最新実行結果を 1 つの Excel へ上書き生成する
-    downloaded_today     指定した管理番号が今日すでに成功しているかを履歴から調べる
+    ScheduleRule          取得スケジュール管理表の1行
+    write_latest_status   全レポートの最新実行結果を 1 つの Excel へ上書き生成する
+    downloaded_today      指定した管理番号が今日すでに成功しているかを履歴から調べる
 
 **「今すぐ取りに行く」APIは無い。** 急ぎの取得は権限を持つ人が Salesforce から
 手動ダウンロードするか、`download_scheduled()` をスケジュール外で直接実行する
