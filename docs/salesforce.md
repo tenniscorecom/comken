@@ -268,30 +268,39 @@ with site() as sf:
 
 マトリックス／統合レポートなど、SOQL に書き換えられない形式のレポートで
 1区間でも 2000 行を超える場合だけ、画面のエクスポート機能（`?export=1&xf=csv`）を
-frontdoor.jsp 経由で直接叩く。API のこの上限自体がかからない。3段目より重い手段
-なので、3段目で足りるかを先に確かめること。
+使う。API のこの上限自体がかからない。3段目より重い手段なので、3段目で
+足りるかを先に確かめること。使うのは
+`comken.toolbox.browser.sites.salesforce.Salesforce`。
 
-やり方は2通りあり、**まず `ReportExporter`（requestsだけ）を試す**:
-
-| | `comken.toolbox.salesforce.ReportExporter` | `comken.toolbox.browser.sites.salesforce.Salesforce` |
-|---|---|---|
-| 仕組み | `requests` + `ThreadPoolExecutor` | 実ブラウザ（Selenium）+ `load_many()` |
-| 速さ・軽さ | 速い。ブラウザを起動しない | 遅い・重い。ブラウザプロセスが要る |
-| 通らない可能性 | 組織のセッションセキュリティポリシーが frontdoor.jsp 由来のセッションを「標準」扱いにし、エクスポートに「高保証」を要求している場合は `SalesforceReportExportError` | ほぼ通る（実ブラウザなので高保証相当のセッションになりやすい） |
-| インタフェース | `export_reports(urls, directory)` → `(report_id, パス)` を順に返す | `download_reports(urls, ready=...)` → 同じ形で返す |
-
-`ReportExporter` が `SalesforceReportExportError` で弾かれたときだけ、
-`comken.toolbox.browser.sites.salesforce.Salesforce`（詳しくは `docs/browser.md` の
-「複数ページをまとめて開く」）に切り替える。戻り値の形を揃えてあるので、
-呼び出し側の書き換えは最小で済む。
+> [!warning] requests だけの認証は組織によって通らないことを確認済み
+> `requests` で frontdoor.jsp にアクセストークンを渡すだけでセッションを
+> 確立しようとすると、ログイン画面へリダイレクトされて通らない組織がある
+> （2026-09-17 実機確認。考えられる原因はセッションセキュリティレベル・
+> 接続アプリのOAuthスコープ・ログインIP制限の不一致など）。REST API自体は
+> 同じアクセストークンで正常に通るため、トークンは有効。**「requests単体での
+> セッション確立」だけが弾かれる。**
+>
+> そのため `Salesforce` は**認証の確立だけ実ブラウザ（Selenium）で行う**。
+> `login_with_token()` が実ブラウザで frontdoor.jsp を叩いてログインし、
+> 以降のダウンロードは2通りから選べる:
+>
+> | | `download_reports()` | `export_reports()` |
+> |---|---|---|
+> | ダウンロードの実体 | ブラウザのタブ（`load_many()`） | `login_with_token()`確立後のセッションCookieを requests へ引き継ぎ、`ThreadPoolExecutor` で並列 |
+> | 速さ | タブの切り替えが挟まる分遅い | 速い（HTTPリクエストを直接並列に投げるだけ） |
+> | 確実さ | 実ブラウザでの操作そのものなので確実 | セッションが切れていると `SalesforceReportExportError` |
+>
+> **まず `export_reports()` を試し、`SalesforceReportExportError` が出たら
+> `download_reports()` へ切り替える。** 戻り値の形（`(report_id, パス)`）を
+> 揃えてあるので、切り替えの書き換えは最小で済む（詳しくは `docs/browser.md`
+> の「複数ページをまとめて開く」）。
 
 ```python
-from comken.toolbox.salesforce.sites import Solution
-from comken.toolbox.salesforce.report_export import ReportExporter
+from comken.toolbox.browser.sites.salesforce import Salesforce
 
-with Solution() as sf:
-    exporter = ReportExporter(sf)
-    for report_id, path in exporter.export_reports(report_urls, "出力先"):
+with Salesforce() as sf:
+    sf.login_with_token(access_token, instance_url)
+    for report_id, path in sf.export_reports(report_urls, "出力先"):
         ...
 ```
 

@@ -4,17 +4,19 @@
 （tests/test_browser_sites_ntt.py と同じ方針）。
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from comken.exceptions import SiteNotStartedError
+from comken.exceptions import SalesforceReportExportError, SiteNotStartedError
 from comken.toolbox.browser import BrowserOptions, DownloadDir
 from comken.toolbox.browser.management.sessions import BrowserSession
 from comken.toolbox.browser.sites import SITES
 from comken.toolbox.browser.sites.salesforce.site import (
     Salesforce,
     _build_export_url,
+    _cookies_to_requests_session,
+    _domain_of,
     _rename_to_report_id,
 )
 
@@ -158,3 +160,117 @@ class TestDownloadReports:
         session.load_many.assert_called_once_with(
             [REPORT_URL_1, REPORT_URL_2], ready=None, max_open=10, timeout=None
         )
+
+
+class TestDomainOf:
+    """_domain_of() — URLから scheme + netloc だけを取り出す。"""
+
+    def test_extracts_scheme_and_netloc(self):
+        assert _domain_of(REPORT_URL_1) == "https://example.my.salesforce.com"
+
+
+class TestCookiesToRequestsSession:
+    """_cookies_to_requests_session() — Seleniumのcookieをrequests.Sessionへ移す。"""
+
+    def test_copies_all_cookies(self):
+        driver_cookies = [
+            {"name": "sid", "value": "ABC123", "domain": ".salesforce.com"},
+            {"name": "other", "value": "XYZ", "domain": ".salesforce.com"},
+        ]
+
+        http_session = _cookies_to_requests_session(driver_cookies)
+
+        cookie_dict = http_session.cookies.get_dict()
+        assert cookie_dict == {"sid": "ABC123", "other": "XYZ"}
+
+    def test_handles_empty_cookie_list(self):
+        http_session = _cookies_to_requests_session([])
+
+        assert http_session.cookies.get_dict() == {}
+
+
+def _csv_response(body: bytes = b"col1,col2\n1,2\n"):
+    response = MagicMock()
+    response.status_code = 200
+    response.headers = {
+        "Content-Type": "text/csv",
+        "Content-Disposition": "attachment; filename=report.csv",
+    }
+    response.content = body
+    return response
+
+
+def _html_response(status: int = 200):
+    response = MagicMock()
+    response.status_code = status
+    response.headers = {"Content-Type": "text/html; charset=UTF-8"}
+    response.content = b"<html>login</html>"
+    return response
+
+
+class TestExportReports:
+    """export_reports() — セッションCookieをrequestsへ引き継ぎ並列ダウンロードする。"""
+
+    def test_downloads_all_reports_and_yields_report_id_and_path(self, tmp_path):
+        session = _make_session(tmp_path)
+        session._driver.current_url = REPORT_URL_1
+        session._driver.get_cookies.return_value = [
+            {"name": "sid", "value": "TOKEN", "domain": ".salesforce.com"}
+        ]
+        sf = Salesforce(session)
+
+        http_session = MagicMock()
+        http_session.get.side_effect = [
+            _csv_response(b"report1"),
+            _csv_response(b"report2"),
+        ]
+        with patch(
+            "comken.toolbox.browser.sites.salesforce.site.requests.Session",
+            return_value=http_session,
+        ):
+            results = dict(sf.export_reports([REPORT_URL_1, REPORT_URL_2], tmp_path))
+
+        assert set(results) == {"00O5g00000ABCDE1AS", "00O5g00000ABCDE2AS"}
+        for report_id, path in results.items():
+            assert path == tmp_path / f"{report_id}.csv"
+            assert path.exists()
+
+    def test_creates_target_directory(self, tmp_path):
+        session = _make_session(tmp_path)
+        session._driver.current_url = REPORT_URL_1
+        session._driver.get_cookies.return_value = []
+        sf = Salesforce(session)
+
+        http_session = MagicMock()
+        http_session.get.return_value = _csv_response()
+        target = tmp_path / "nested" / "dir"
+        with patch(
+            "comken.toolbox.browser.sites.salesforce.site.requests.Session",
+            return_value=http_session,
+        ):
+            list(sf.export_reports([REPORT_URL_1], target))
+
+        assert target.is_dir()
+
+    def test_raises_when_response_is_html(self, tmp_path):
+        session = _make_session(tmp_path)
+        session._driver.current_url = REPORT_URL_1
+        session._driver.get_cookies.return_value = []
+        sf = Salesforce(session)
+
+        http_session = MagicMock()
+        http_session.get.return_value = _html_response()
+        with (
+            patch(
+                "comken.toolbox.browser.sites.salesforce.site.requests.Session",
+                return_value=http_session,
+            ),
+            pytest.raises(SalesforceReportExportError),
+        ):
+            list(sf.export_reports([REPORT_URL_1], tmp_path))
+
+    def test_raises_when_not_started(self):
+        sf = Salesforce()
+
+        with pytest.raises(SiteNotStartedError):
+            list(sf.export_reports([REPORT_URL_1], "出力先"))

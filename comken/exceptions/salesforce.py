@@ -196,8 +196,8 @@ class SalesforceReportIDNotFoundError(SalesforceError):
     発生箇所: comken.toolbox.salesforce.report.report_id_from_url()
              （呼び出し元の例: comken-salesforce-downloader の master.py。
              2026-08-30 に comken から分離した別リポジトリ。
-             comken.toolbox.browser.sites.salesforce.site.download_reports() も
-             同じ report_id_from_url() を呼ぶ）
+             comken.toolbox.browser.sites.salesforce.site.download_reports() /
+             export_reports() も同じ report_id_from_url() を呼ぶ）
 
     対処:
         Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す
@@ -260,21 +260,20 @@ class SalesforceReportAccessDeniedError(SalesforceError):
 
 
 class SalesforceReportExportError(SalesforceError):
-    """画面のエクスポート機能（frontdoor.jsp経由）でレポートをCSV/XLS取得できなかった
+    """画面のエクスポート機能でレポートをCSV/XLS取得できなかった
 
     HTTPステータス自体は200で返るが、本文がCSV/XLSではなくHTMLのログイン画面や
-    エラーページになっている場合に出る。frontdoor.jsp由来のセッションは
-    「標準」のセキュリティレベルとして扱われることがあり、組織のセッションポリシーで
-    このレベルのセッションからのエクスポートが拒否されている可能性がある。
+    エラーページになっている場合に出る。
 
-    発生箇所: comken.toolbox.salesforce.report_export.ReportExporter.export()
+    発生箇所: comken.toolbox.browser.sites.salesforce.Salesforce.export_reports()
+             （login_with_token() で確立したブラウザのセッションCookieを
+             requestsへ引き継いで並列ダウンロードする経路。login_with_token()を
+             先に呼んでいない、あるいはセッションの有効期限が切れていると起きる）
 
     対処:
-        1. 実ブラウザ経由（comken.toolbox.browser.sites.salesforce.Salesforce）で
-           同じレポートを開いて試す。通れば、この経路がセッションセキュリティレベルで
-           弾かれていることが確定する
-        2. Salesforce 管理者に、対象ユーザーのセッションセキュリティレベルの設定
-           （高保証を要求するポリシーが有効か）を確認してもらう
+        1. login_with_token() を呼んでからこのメソッドを呼んでいるか確認する
+        2. 時間が経ってセッションが切れていないか（長時間のバッチの後半で
+           発生する場合はこれが疑わしい）
         3. レポートそのものへのアクセス権・組織の Edition を確認してもらう
     """
 
@@ -283,9 +282,8 @@ class SalesforceReportExportError(SalesforceError):
             f"レポートのエクスポートに失敗しました: {report_id}"
             f"（HTTP {status_code}、Content-Type={content_type!r}）\n"
             "CSV/XLSではなくHTML（ログイン画面やエラーページ）が返っています。\n"
-            "実ブラウザ経由（comken.toolbox.browser.sites.salesforce.Salesforce）で"
-            "同じレポートを開いて通るか確認するか、Salesforce管理者にセッション"
-            "セキュリティレベルの設定を確認してもらってください。"
+            "login_with_token() を先に呼んでいるか、セッションが切れていないかを"
+            "確認してください。"
         )
 
 

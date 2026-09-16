@@ -610,14 +610,16 @@ with Browsers() as browsers:
 
 **実例:** `comken/toolbox/browser/sites/salesforce/` は、Salesforceレポートの
 CSVエクスポートをこの仕組みで並列化している（レポートAPIの2000行上限を超える
-ものをブラウザ経由で取る手段。詳しくは `docs/salesforce.md`）。読み込みの重い
-レポート表示は `load_many()` で並列に待ち、ダウンロードのトリガーだけは
-1件ずつ処理することで、ファイル名の取り違えを防いでいる。
+ものを取る最終手段。詳しくは `docs/salesforce.md`）。`download_reports()` は
+読み込みの重いレポート表示を `load_many()` で並列に待ち、ダウンロードの
+トリガーだけは1件ずつ処理することで、ファイル名の取り違えを防いでいる。
 
-**このブラウザ経由は最終手段。** まずは軽くて速い
-`comken.toolbox.salesforce.ReportExporter`（requestsだけ、ブラウザ不要）を試し、
-組織のセッションセキュリティポリシーで弾かれたときだけこちらに切り替える
-（判断の基準は `docs/salesforce.md` の「4段目」）。
+同じモジュールの `export_reports()` はさらに速い。認証の確立だけ実ブラウザ
+（`login_with_token()`）で行い、実際のN件のダウンロードは requests +
+`ThreadPoolExecutor` で並列に投げる（requestsだけでの認証確立は組織によって
+弾かれることを確認済みなので、認証だけは実ブラウザに任せている）。
+まずこちらを試し、`SalesforceReportExportError` が出たら `download_reports()`
+へ切り替える。
 
 ---
 

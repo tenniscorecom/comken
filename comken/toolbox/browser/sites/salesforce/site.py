@@ -4,6 +4,17 @@ r"""comken/toolbox/browser/sites/salesforce/site.py — Salesforceレポート�
 （toolbox.browser → toolbox.salesforce は tests/test_layers.py の ALLOWED_SAME_LAYER で
 許可済み）。
 
+ダウンロード方法は2通り:
+
+- ``download_reports()`` — タブ（load_many）だけで完結する。組織のセッション
+  ポリシーに関わらず確実に通る
+- ``export_reports()`` — ``login_with_token()`` で確立したブラウザのセッション
+  Cookieを requests へ引き継ぎ、実際のN件のダウンロードは requests +
+  ThreadPoolExecutor で並列に行う。**速いのでこちらを先に試す。**
+  requests だけで frontdoor.jsp ログインを試みるとログイン画面へ
+  リダイレクトされて通らない組織があることを確認済み（セッションセキュリティ
+  レベル等）のため、認証だけは実ブラウザで確立している
+
 > [!warning] URL は仮の値
 > **このリポジトリは公開しているので、実際の組織の URL を書かない。**
 > `BASE_URL` はダミーで、共有サーバーへ配置するときに実際の値へ書き換える
@@ -14,11 +25,14 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterator, Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
-from comken.exceptions import SiteNotStartedError
+import requests
+
+from comken.exceptions import SalesforceReportExportError, SiteNotStartedError
 from comken.toolbox.browser import BrowserOptions, SiteBase
 from comken.toolbox.browser.locator import Locator
 from comken.toolbox.salesforce.report import report_id_from_url
@@ -33,6 +47,9 @@ _DEFAULT_MAX_OPEN_TABS = 10
 
 # レポート1件あたりのダウンロード完了待ちの既定秒数。集計系レポートは重いことがある
 _DEFAULT_DOWNLOAD_TIMEOUT_SECONDS = 300
+
+# export_reports() で同時に投げるHTTPリクエストの既定数
+_DEFAULT_MAX_WORKERS = 10
 
 
 class SalesforceBrowserOptions(BrowserOptions):
@@ -138,11 +155,79 @@ class Salesforce(SiteBase):
             logger.info("レポートをダウンロードしました: report_id=%s path=%s", report_id, renamed)
             yield report_id, renamed
 
+    def export_reports(
+        self,
+        report_urls: Sequence[str],
+        directory: str | Path,
+        *,
+        export_format: str = "csv",
+        max_workers: int = _DEFAULT_MAX_WORKERS,
+    ) -> Iterator[tuple[str, Path]]:
+        """``login_with_token()`` 済みのセッションCookieを requests へ引き継ぎ、
+        並列にダウンロードして (report_id, 保存先パス) を返す。
+
+        ``download_reports()`` はタブの読み込み・切り替えが挟まるため、実際の
+        ダウンロードは1件ずつしか進まない。このメソッドはブラウザを認証の確立
+        （``login_with_token()``）だけに使い、N件のダウンロード自体は
+        requests + ThreadPoolExecutor で並列に行うため、はるかに速い。
+
+        **requests だけで frontdoor.jsp ログインを試みるとログイン画面へ
+        リダイレクトされ、通らない組織があることを確認済み**（セッション
+        セキュリティレベル等）。実ブラウザで確立したセッションCookieを使うことで、
+        この制約を避けている。
+
+            with Salesforce() as sf:
+                sf.login_with_token(access_token, instance_url)
+                for report_id, path in sf.export_reports(report_urls, "出力先"):
+                    ...
+
+        Args:
+            report_urls: レポート画面のURL（またはレポートID）のリスト。
+            directory: 保存先ディレクトリ。無ければ作成する。
+            export_format: "csv" または "xls"。
+            max_workers: 同時に投げるリクエストの数。既定10。
+
+        Yields:
+            (report_id, ダウンロードしたファイルのパス) のタプル。ファイルは
+            ``directory`` 直下に ``{report_id}.{export_format}`` として保存される。
+            **完了した順**に返るため、``report_urls`` の順序とは限らない。
+
+        Raises:
+            SiteNotStartedError: 未起動、または ``login_with_token()`` を呼ぶ前の場合。
+            SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
+            SalesforceReportExportError: いずれかのレポートでエクスポートが失敗した場合
+                （``login_with_token()`` 未実行・セッション切れ等）。
+        """
+        session = self._require_session()
+        domain = _domain_of(session.current_url)
+        http_session = _cookies_to_requests_session(session.raw.get_cookies())
+
+        target_dir = Path(directory)
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(_export_via_http, http_session, domain, url, export_format): url
+                for url in report_urls
+            }
+            for future in as_completed(futures):
+                report_id, content = future.result()
+                path = target_dir / f"{report_id}.{export_format}"
+                path.write_bytes(content)
+                logger.info("レポートをダウンロードしました: report_id=%s path=%s", report_id, path)
+                yield report_id, path
+
     def _require_session(self) -> BrowserSession:
         """起動済みの BrowserSession を返す。未起動なら理由を示して落とす。"""
         if self.session is None:
             raise SiteNotStartedError(self.__class__)
         return self.session
+
+
+def _domain_of(url: str) -> str:
+    """URL から scheme + netloc だけを取り出す（例: https://example.my.salesforce.com）。"""
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.netloc}"
 
 
 def _build_export_url(current_url: str, report_id: str, export_format: str) -> str:
@@ -152,8 +237,37 @@ def _build_export_url(current_url: str, report_id: str, export_format: str) -> s
     ブラウザが直接CSVをダウンロードする（クラシックUI時代からある仕組みで、
     Lightningのドメインからでもそのまま使える）。
     """
-    parts = urlsplit(current_url)
-    return f"{parts.scheme}://{parts.netloc}/{report_id}?isdtp=p1&export=1&enc=UTF-8&xf={export_format}"
+    return f"{_domain_of(current_url)}/{report_id}?isdtp=p1&export=1&enc=UTF-8&xf={export_format}"
+
+
+def _cookies_to_requests_session(driver_cookies: list[dict]) -> requests.Session:
+    """Seleniumの driver.get_cookies() を requests.Session の Cookie へ移す。
+
+    login_with_token() で実ブラウザが確立したセッションを、requests 側でも
+    そのまま使えるようにする。
+    """
+    http_session = requests.Session()
+    for cookie in driver_cookies:
+        http_session.cookies.set(cookie["name"], cookie["value"], domain=cookie.get("domain", ""))
+    return http_session
+
+
+def _export_via_http(
+    http_session: requests.Session, domain: str, report_url: str, export_format: str
+) -> tuple[str, bytes]:
+    """1件のレポートをHTTPで直接エクスポートする（export_reports() の並列実行単位）。"""
+    report_id = report_id_from_url(report_url)
+    response = http_session.get(
+        f"{domain}/{report_id}",
+        params={"isdtp": "p1", "export": "1", "enc": "UTF-8", "xf": export_format},
+        timeout=_DEFAULT_DOWNLOAD_TIMEOUT_SECONDS,
+    )
+    content_type = response.headers.get("Content-Type", "")
+    disposition = response.headers.get("Content-Disposition", "")
+    looks_like_export = "attachment" in disposition.lower() or export_format in content_type.lower()
+    if response.status_code != requests.codes.ok or not looks_like_export:
+        raise SalesforceReportExportError(report_id, response.status_code, content_type)
+    return report_id, response.content
 
 
 def _rename_to_report_id(

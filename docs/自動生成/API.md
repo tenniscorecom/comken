@@ -4928,8 +4928,8 @@ class SalesforceReportIDNotFoundError(SalesforceError):
 発生箇所: comken.toolbox.salesforce.report.report_id_from_url()
          （呼び出し元の例: comken-salesforce-downloader の master.py。
          2026-08-30 に comken から分離した別リポジトリ。
-         comken.toolbox.browser.sites.salesforce.site.download_reports() も
-         同じ report_id_from_url() を呼ぶ）
+         comken.toolbox.browser.sites.salesforce.site.download_reports() /
+         export_reports() も同じ report_id_from_url() を呼ぶ）
 
 対処:
     Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す
@@ -5000,21 +5000,20 @@ class SalesforceReportExportError(SalesforceError):
 
 #### 説明
 
-画面のエクスポート機能（frontdoor.jsp経由）でレポートをCSV/XLS取得できなかった
+画面のエクスポート機能でレポートをCSV/XLS取得できなかった
 
 HTTPステータス自体は200で返るが、本文がCSV/XLSではなくHTMLのログイン画面や
-エラーページになっている場合に出る。frontdoor.jsp由来のセッションは
-「標準」のセキュリティレベルとして扱われることがあり、組織のセッションポリシーで
-このレベルのセッションからのエクスポートが拒否されている可能性がある。
+エラーページになっている場合に出る。
 
-発生箇所: comken.toolbox.salesforce.report_export.ReportExporter.export()
+発生箇所: comken.toolbox.browser.sites.salesforce.Salesforce.export_reports()
+         （login_with_token() で確立したブラウザのセッションCookieを
+         requestsへ引き継いで並列ダウンロードする経路。login_with_token()を
+         先に呼んでいない、あるいはセッションの有効期限が切れていると起きる）
 
 対処:
-    1. 実ブラウザ経由（comken.toolbox.browser.sites.salesforce.Salesforce）で
-       同じレポートを開いて試す。通れば、この経路がセッションセキュリティレベルで
-       弾かれていることが確定する
-    2. Salesforce 管理者に、対象ユーザーのセッションセキュリティレベルの設定
-       （高保証を要求するポリシーが有効か）を確認してもらう
+    1. login_with_token() を呼んでからこのメソッドを呼んでいるか確認する
+    2. 時間が経ってセッションが切れていないか（長時間のバッチの後半で
+       発生する場合はこれが疑わしい）
     3. レポートそのものへのアクセス権・組織の Edition を確認してもらう
 
 #### `__init__`
@@ -9519,6 +9518,49 @@ Raises:
     SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
     DownloadTimeoutError: download_timeout 秒以内にダウンロードが完了しなかった場合。
 
+#### `export_reports`
+
+```text
+def export_reports(self, report_urls: Sequence[str], directory: str | Path, *, export_format: str='csv', max_workers: int=_DEFAULT_MAX_WORKERS) -> Iterator[tuple[str, Path]]:
+```
+
+##### 説明
+
+``login_with_token()`` 済みのセッションCookieを requests へ引き継ぎ、
+並列にダウンロードして (report_id, 保存先パス) を返す。
+
+``download_reports()`` はタブの読み込み・切り替えが挟まるため、実際の
+ダウンロードは1件ずつしか進まない。このメソッドはブラウザを認証の確立
+（``login_with_token()``）だけに使い、N件のダウンロード自体は
+requests + ThreadPoolExecutor で並列に行うため、はるかに速い。
+
+**requests だけで frontdoor.jsp ログインを試みるとログイン画面へ
+リダイレクトされ、通らない組織があることを確認済み**（セッション
+セキュリティレベル等）。実ブラウザで確立したセッションCookieを使うことで、
+この制約を避けている。
+
+    with Salesforce() as sf:
+        sf.login_with_token(access_token, instance_url)
+        for report_id, path in sf.export_reports(report_urls, "出力先"):
+            ...
+
+Args:
+    report_urls: レポート画面のURL（またはレポートID）のリスト。
+    directory: 保存先ディレクトリ。無ければ作成する。
+    export_format: "csv" または "xls"。
+    max_workers: 同時に投げるリクエストの数。既定10。
+
+Yields:
+    (report_id, ダウンロードしたファイルのパス) のタプル。ファイルは
+    ``directory`` 直下に ``{report_id}.{export_format}`` として保存される。
+    **完了した順**に返るため、``report_urls`` の順序とは限らない。
+
+Raises:
+    SiteNotStartedError: 未起動、または ``login_with_token()`` を呼ぶ前の場合。
+    SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
+    SalesforceReportExportError: いずれかのレポートでエクスポートが失敗した場合
+        （``login_with_token()`` 未実行・セッション切れ等）。
+
 
 ## `from comken.toolbox.browser.sites.ams import ...`
 
@@ -9964,6 +10006,49 @@ Yields:
 Raises:
     SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
     DownloadTimeoutError: download_timeout 秒以内にダウンロードが完了しなかった場合。
+
+#### `export_reports`
+
+```text
+def export_reports(self, report_urls: Sequence[str], directory: str | Path, *, export_format: str='csv', max_workers: int=_DEFAULT_MAX_WORKERS) -> Iterator[tuple[str, Path]]:
+```
+
+##### 説明
+
+``login_with_token()`` 済みのセッションCookieを requests へ引き継ぎ、
+並列にダウンロードして (report_id, 保存先パス) を返す。
+
+``download_reports()`` はタブの読み込み・切り替えが挟まるため、実際の
+ダウンロードは1件ずつしか進まない。このメソッドはブラウザを認証の確立
+（``login_with_token()``）だけに使い、N件のダウンロード自体は
+requests + ThreadPoolExecutor で並列に行うため、はるかに速い。
+
+**requests だけで frontdoor.jsp ログインを試みるとログイン画面へ
+リダイレクトされ、通らない組織があることを確認済み**（セッション
+セキュリティレベル等）。実ブラウザで確立したセッションCookieを使うことで、
+この制約を避けている。
+
+    with Salesforce() as sf:
+        sf.login_with_token(access_token, instance_url)
+        for report_id, path in sf.export_reports(report_urls, "出力先"):
+            ...
+
+Args:
+    report_urls: レポート画面のURL（またはレポートID）のリスト。
+    directory: 保存先ディレクトリ。無ければ作成する。
+    export_format: "csv" または "xls"。
+    max_workers: 同時に投げるリクエストの数。既定10。
+
+Yields:
+    (report_id, ダウンロードしたファイルのパス) のタプル。ファイルは
+    ``directory`` 直下に ``{report_id}.{export_format}`` として保存される。
+    **完了した順**に返るため、``report_urls`` の順序とは限らない。
+
+Raises:
+    SiteNotStartedError: 未起動、または ``login_with_token()`` を呼ぶ前の場合。
+    SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
+    SalesforceReportExportError: いずれかのレポートでエクスポートが失敗した場合
+        （``login_with_token()`` 未実行・セッション切れ等）。
 
 ### `SalesforceBrowserOptions`
 
@@ -11435,10 +11520,6 @@ class APIUsage:
 
 定義を解決できませんでした。
 
-### `ReportExporter`
-
-定義を解決できませんでした。
-
 
 ## `from comken.toolbox.salesforce.sites import ...`
 
@@ -11773,8 +11854,8 @@ def access_token(self) -> str:
 今使っているOAuthアクセストークン。
 
 REST API（Bearer認証）以外の経路へ引き継ぐときに使う
-（例: comken.toolbox.salesforce.report_export の frontdoor.jsp 経由エクスポート、
-comken.toolbox.browser.sites.salesforce の実ブラウザ経由ダウンロード）。
+（例: comken.toolbox.browser.sites.salesforce.Salesforce.login_with_token()
+での実ブラウザ経由ダウンロード）。
 
 #### `instance_url`
 
@@ -12114,8 +12195,8 @@ def access_token(self) -> str:
 今使っているOAuthアクセストークン。
 
 REST API（Bearer認証）以外の経路へ引き継ぐときに使う
-（例: comken.toolbox.salesforce.report_export の frontdoor.jsp 経由エクスポート、
-comken.toolbox.browser.sites.salesforce の実ブラウザ経由ダウンロード）。
+（例: comken.toolbox.browser.sites.salesforce.Salesforce.login_with_token()
+での実ブラウザ経由ダウンロード）。
 
 #### `instance_url`
 
