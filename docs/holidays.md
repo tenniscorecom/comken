@@ -118,6 +118,7 @@ COMPANY_HOLIDAYS_EXTRA: Final[tuple[_dt.date, ...]] = ()
 | `HolidayCalendar`                 | 祝日を保持し、営業日判定を行う本体                          |
 | `HolidayCalendar.from_csv(path)`  | 内閣府 CSV を直接読む最短ルート                             |
 | `HolidayCalendar.from_sources(...)` | 複数の `HolidaySource` をマージするルート                  |
+| `HolidayCalendar.export_csv(path)` | 保持している祝日を CSV へ書き出す（Excel・VBA など Python 以外のツール向け） |
 | `is_business_day(d, *, calendar)` | カレンダー指定で営業日かを返すモジュールレベル関数        |
 | `business_day_after(d, *, calendar)` | `d` より後で最初の営業日（`d` 自身を含まない）            |
 | `business_day_before(d, *, calendar)` | `d` より前で最初の営業日（`d` 自身を含まない）           |

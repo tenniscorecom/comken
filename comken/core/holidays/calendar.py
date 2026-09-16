@@ -209,6 +209,37 @@ class HolidayCalendar:
         """保持している祝日を日付順に並べたリストを返す。"""
         return sorted(self._holidays.values(), key=lambda h: h.date)
 
+    def export_csv(self, path: str | Path, *, encoding: str = "utf-8-sig") -> Path:
+        """保持している祝日を CSV へ書き出す。
+
+        Python を使わない Excel・VBA からも同じ祝日データを参照したいときに使う。
+        列は ``date``（``YYYY-MM-DD``）・``name``・``approximate``（``True``/``False``）
+        の3列。``comken.toolbox.csv`` は使わず標準ライブラリの ``csv`` だけで書く
+        （``comken.core`` は外を触らない部品の置き場で、``toolbox`` を import しない
+        という層のルールに従うため）。
+
+        Args:
+            path: 書き出す CSV のパス。
+            encoding: 既定は ``utf-8-sig``（BOM付き）。Excel は BOM 無しの UTF-8 だと
+                文字化けするため。
+
+        Returns:
+            書き出した CSV のパス。
+        """
+        import csv as _csv
+
+        file_path = Path(path)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        with file_path.open("w", encoding=encoding, newline="") as file:
+            writer = _csv.writer(file)
+            writer.writerow(["date", "name", "approximate"])
+            for holiday in self.all_holidays():
+                writer.writerow([holiday.date.isoformat(), holiday.name, holiday.approximate])
+        logger.debug(
+            "祝日カレンダーをCSVへ書き出しました: %s (%d件)", file_path, len(self._holidays)
+        )
+        return file_path
+
     def _maybe_warn_expiring(self, today: _dt.date) -> None:
         """期限切れが近いとき、**同じ日付で 1度だけ** WARNING ログを出す。"""
         if self._expiry_warned_on == today:

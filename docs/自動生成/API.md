@@ -547,6 +547,30 @@ def all_holidays(self) -> list[Holiday]:
 
 保持している祝日を日付順に並べたリストを返す。
 
+#### `export_csv`
+
+```text
+def export_csv(self, path: str | Path, *, encoding: str='utf-8-sig') -> Path:
+```
+
+##### 説明
+
+保持している祝日を CSV へ書き出す。
+
+Python を使わない Excel・VBA からも同じ祝日データを参照したいときに使う。
+列は ``date``（``YYYY-MM-DD``）・``name``・``approximate``（``True``/``False``）
+の3列。``comken.toolbox.csv`` は使わず標準ライブラリの ``csv`` だけで書く
+（``comken.core`` は外を触らない部品の置き場で、``toolbox`` を import しない
+という層のルールに従うため）。
+
+Args:
+    path: 書き出す CSV のパス。
+    encoding: 既定は ``utf-8-sig``（BOM付き）。Excel は BOM 無しの UTF-8 だと
+        文字化けするため。
+
+Returns:
+    書き出した CSV のパス。
+
 ### `HolidaySource`
 
 ```text
@@ -2634,6 +2658,30 @@ def all_holidays(self) -> list[Holiday]:
 ##### 説明
 
 保持している祝日を日付順に並べたリストを返す。
+
+#### `export_csv`
+
+```text
+def export_csv(self, path: str | Path, *, encoding: str='utf-8-sig') -> Path:
+```
+
+##### 説明
+
+保持している祝日を CSV へ書き出す。
+
+Python を使わない Excel・VBA からも同じ祝日データを参照したいときに使う。
+列は ``date``（``YYYY-MM-DD``）・``name``・``approximate``（``True``/``False``）
+の3列。``comken.toolbox.csv`` は使わず標準ライブラリの ``csv`` だけで書く
+（``comken.core`` は外を触らない部品の置き場で、``toolbox`` を import しない
+という層のルールに従うため）。
+
+Args:
+    path: 書き出す CSV のパス。
+    encoding: 既定は ``utf-8-sig``（BOM付き）。Excel は BOM 無しの UTF-8 だと
+        文字化けするため。
+
+Returns:
+    書き出した CSV のパス。
 
 ### `HolidayCalendarError`
 

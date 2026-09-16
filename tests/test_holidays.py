@@ -193,6 +193,55 @@ class TestHolidayCalendarBasic:
         assert tuple(cal.holiday_names(_dt.date(2024, 1, 2))) == ()
 
 
+class TestExportCsv:
+    """``export_csv`` — Excel / VBA など Python を使わないツール向けの書き出し。"""
+
+    def test_writes_header_and_rows_sorted_by_date(self, tmp_path: Path) -> None:
+        cal = _fixture_calendar()
+        out = tmp_path / "holidays.csv"
+
+        result = cal.export_csv(out)
+
+        assert result == out
+        text = out.read_text(encoding="utf-8-sig")
+        lines = text.splitlines()
+        assert lines[0] == "date,name,approximate"
+        assert lines[1] == "2024-01-01,元日,False"
+        # all_holidays() と同じ日付順で並ぶ
+        dates_in_file = [line.split(",")[0] for line in lines[1:]]
+        assert dates_in_file == sorted(dates_in_file)
+
+    def test_creates_parent_directories(self, tmp_path: Path) -> None:
+        cal = _fixture_calendar()
+        out = tmp_path / "nested" / "dir" / "holidays.csv"
+
+        cal.export_csv(out)
+
+        assert out.exists()
+
+    def test_default_encoding_is_utf8_with_bom(self, tmp_path: Path) -> None:
+        """既定は utf-8-sig（BOM付き）。Excelで文字化けしないため。"""
+        cal = _fixture_calendar()
+        out = tmp_path / "holidays.csv"
+
+        cal.export_csv(out)
+
+        raw = out.read_bytes()
+        assert raw.startswith(b"\xef\xbb\xbf")
+
+    def test_approximate_flag_is_written(self, tmp_path: Path) -> None:
+        """approximate=True の祝日も文字列として書き出される。"""
+        cal = HolidayCalendar(
+            [Holiday(date=_dt.date(2024, 2, 11), name="建国記念の日", approximate=True)]
+        )
+        out = tmp_path / "holidays.csv"
+
+        cal.export_csv(out)
+
+        text = out.read_text(encoding="utf-8-sig")
+        assert "2024-02-11,建国記念の日,True" in text
+
+
 class TestIsBusinessDay:
     """``is_business_day`` の挙動（週末スキップ・週末スキップなし）。"""
 
