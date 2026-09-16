@@ -51,7 +51,7 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 |---|---|
 | はじめて使う | この README の「[はじめて使う人へ](#はじめて使う人へ)」 |
 | 何が用意されているか探す | このREADMEの「[モジュール一覧](#モジュール一覧)」 |
-| モジュールの使い方を知る | [CSV](docs/csv.md)・[Excel](docs/excel.md)・[Access](docs/access.md)・[Outlook](docs/outlook.md)・[Windows](docs/windows.md)・[ブラウザ](docs/browser.md)・[Salesforce](docs/salesforce.md)・[Data Loader（CLI 実行）](docs/dataloader.md)・[core の部品](docs/core.md)・[認証情報](docs/credentials.md)・[祝日判定](docs/holidays.md) |
+| モジュールの使い方を知る | [CSV](docs/csv.md)・[Excel](docs/excel.md)・[Access](docs/access.md)・[Outlook](docs/outlook.md)・[Windows](docs/windows.md)・[ブラウザ](docs/browser.md)・[Salesforce](docs/salesforce.md)・[Data Loader（CLI 実行）](docs/dataloader.md)・[core の部品](docs/core.md)・[認証情報](docs/credentials.md)・[祝日判定](docs/holidays.md)・[Salesforceレポートダウンローダー](docs/salesforce-downloader.md)・[Excel表を型付き設定として読む](docs/master-table.md) |
 | **初めて外部システムにつなぐ** | ID とパスワードの[登録](docs/credentials.md#登録初回だけ) → [Salesforce につないで確かめる](docs/salesforce.md#つないで確かめるコマンド) |
 | 引数・戻り値・例外を正確に知る | [公開 API](docs/自動生成/API.md)（**自動生成**） |
 | エラーが出た | [エラー対応ガイド](docs/ERRORS.md)（エラー表は **自動生成**） |
@@ -60,7 +60,7 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 | コードを書く規約 | [コーディング規約（利用者向け）](docs/開発/コーディング規約_利用者向け.md)（詳細版は[CONVENTIONS.md](docs/開発/CONVENTIONS.md)） |
 | comken 本体を直す | [ライブラリ開発規約](docs/開発/ライブラリ開発規約.md) |
 | 開発してリリースする | [仕様書「開発とリリース」](docs/開発/仕様書.md#開発とリリース)（タグを打つ → 共有サーバーで checkout） |
-| comken を使うツールを作る | `comken init プロジェクト名` で雛形を作る（作られた `README.md` が中を案内する） |
+| comken を使うツールを作る | `python -m comken init プロジェクト名` で雛形を作る（作られた `README.md` が中を案内する） |
 | コードを読む・レビューする | [コードリーディングガイド](docs/開発/コードリーディングガイド.md) |
 
 ## 使うときの約束
@@ -147,6 +147,8 @@ write 側に空キーが複数あっても ``TransferDestinationMultipleMatchErr
 | [credentials（DPAPI）](docs/credentials.md) | パスワード・client_secret の暗号化保存（Windows ユーザーに紐付く） |
 | [祝日判定](docs/holidays.md) | 内閣府の祝日 CSV（CP932）+ コード直書きの会社休日をマージして営業日判定 |
 | [core（部品）](docs/core.md) | `from comken.core import ...` で取る部品群。ファイル検索・操作・圧縮・ファイル名の組み立て／データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時 |
+| [Salesforceレポートダウンローダー（services）](docs/salesforce-downloader.md) | 複数プロジェクトのSalesforceレポート定期取得を1か所に集約するサービス（管理表・履歴・最新実行結果） |
+| [Excel表を型付き設定として読む（master_table）](docs/master-table.md) | 「どのレポートを取るか」のような行が増えていく設定を、Excelの表から型付きの行として読み込む仕組み |
 
 ## 定数クラス一覧
 
@@ -191,14 +193,14 @@ comken は共有サーバー上の1か所を**直接参照する**（ローカ�
 2026-09-08 に廃止した）。
 
 **確認方法**: `python -c "import comken; print(comken.__version__)"` が通るか
-確かめる。通れば何もしなくてよい（次の「`comken init` で何が作られるか」まで
+確かめる。通れば何もしなくてよい（次の「`python -m comken init` で何が作られるか」まで
 読み飛ばしてよい）。
 
 **通らないとき**: これは自分で直すセットアップの問題ではなく、PC の
 イメージ配布側の問題。情シス・PC 管理担当へお問い合わせください。
 `setup_comken.bat` のような自己解決の手段は無くなった。
 
-### `comken init` で何が作られるか
+### `python -m comken init` で何が作られるか
 
 **打った場所に、プロジェクト名のフォルダが1つ**できる。中身は
 `comken/templates/新規プロジェクト/` 一式（パッケージに同梱されている）で、

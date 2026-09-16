@@ -248,7 +248,7 @@ src/
 サイト名を2箇所に書く形にすると、増やすときも消すときも2箇所を触ることになる。
 **サイトを1つ消すなら、フォルダを1つ消せば終わり**にしておく。
 
-`comken init` が作る雛形には `src/sites/` は**含まれていない**。ブラウザ操作を使う
+`python -m comken init` が作る雛形には `src/sites/` は**含まれていない**。ブラウザ操作を使う
 プロジェクトでは、この節の形に合わせて `src/sites/<サイト名>/` を自分で追加する
 （書き方の見本はライブラリ側の `comken/toolbox/browser/sites/ouju/` にある）。
 サイトを増やすには、`src/sites/<サイト名>/` を隣にもう1つ作るだけ。
@@ -878,7 +878,7 @@ class LoginPage(SitePage):
 
 **メソッドの探し方**: 正確な名前・シグネチャは
 [自動生成 API.md の `Page`](自動生成/API.md#page) を参照する
-（`python tools/export_for_chat.py --bundle` で生成されるため、実装と食い違わない）。
+（`python tools/export_for_chat.py` で生成されるため、実装と食い違わない）。
 ここでは用途別の見取り図だけ示す。
 
 | したいこと | 系統 |
@@ -886,9 +886,11 @@ class LoginPage(SitePage):
 | クリック・入力・プルダウン選択・スクロール・ドラッグ＆ドロップ | 操作系（`click` / `input` / `select_*` / `scroll_*` / `drag_drop`） |
 | ボタンがあればクリック、無ければ何もしない | `click_if_present`（ボタンが既に消えていることがある画面向け） |
 | テキスト・属性を読む、存在確認・件数（待たない） | 読み取り系（`read_*` / `has_element` / `count_elements`） |
-| エラー要素の有無で成否を判定し、あれば例外を送出する | `raise_if_shown`（ログイン失敗・パスワード拒否など） |
+| 要素があり、かつ表示文字も空でなければ例外を送出する | `raise_if_shown`（ログイン失敗・パスワード拒否など） |
 | 表示・非表示を待つ | 待機系（`wait_visible` / `wait_invisible`） |
-| フォーム送信後、URL が変わるかエラーが出るまで待つ | `wait_for_result`（結果が非同期で少し遅れて出る画面向け） |
+| フォーム送信後、URL が変わるかエラーが出るまで待つ | `wait_for_result`（結果が非同期で少し遅れて出る画面向け。よくある2択専用の短縮形） |
+| 条件を自分で組み合わせて、どれか一つが最初に真になるまで待つ | `wait_until_any`（`url_changed` / `text_shown` 等の条件と組み合わせる） |
+| with に入った時点の URL を基準に、抜けた後に変わるのを待つ | `wait_for_url_change()`（操作前の URL を変数に取らなくてよい） |
 | 確認ダイアログの操作 | `alert_*`（`alert_accept` / `alert_dismiss` / `read_alert_text`） |
 | iframe の中を操作、スクリーンショット、最終手段 | `frame()` / `save_screenshot()` / `find_element*` / `execute_script()` |
 
