@@ -1290,6 +1290,51 @@ class TestBrowsersLaunchSite:
                 browsers.launch(Kintai)
 
 
+class TestResolveProfileDir:
+    """PROFILE_ROOT の解決（_resolve_profile_dir）— 相対パスでも絶対パスへ直す。
+
+    相対パスのまま --user-data-dir に渡すと、msedge.exe 側の作業ディレクトリ
+    次第でプロファイル初期化に失敗し、紛らわしいバージョン不一致メッセージで
+    DriverStartError になる回帰の再発防止。
+    """
+
+    def test_resolves_relative_profile_root_to_absolute(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
+        monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
+        monkeypatch.chdir(tmp_path)
+
+        class RelativeProfileOptions(BrowserOptions):
+            PROFILE_ROOT = "./test"
+
+        with Browsers() as browsers:
+            session = browsers.launch_session("kintai", RelativeProfileOptions)
+
+        assert session._profile_dir is not None
+        assert session._profile_dir.is_absolute()
+        assert session._profile_dir == (tmp_path / "test" / "kintai").resolve()
+
+    def test_leaves_absolute_profile_root_unchanged(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
+        monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
+
+        class AbsoluteProfileOptions(BrowserOptions):
+            PROFILE_ROOT = str(tmp_path / "profiles")
+
+        with Browsers() as browsers:
+            session = browsers.launch_session("kintai", AbsoluteProfileOptions)
+
+        assert session._profile_dir == tmp_path / "profiles" / "kintai"
+
+    def test_none_when_profile_root_unset(self, monkeypatch):
+        monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
+        monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
+
+        with Browsers() as browsers:
+            session = browsers.launch_session("kintai", BrowserOptions)
+
+        assert session._profile_dir is None
+
+
 class TestBrowsersLaunchSession:
     """`Browsers.launch_session(name, options)`（低レベル経路）のテスト。"""
 

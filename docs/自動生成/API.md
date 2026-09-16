@@ -5184,7 +5184,14 @@ class DriverStartError(BrowserError):
 
 対処:
     エラーの本文にある確認事項をそのまま試す。
-    Windows Update で Edge が更新された直後に起きやすい
+    Windows Update で Edge が更新された直後に起きやすい。
+
+    メッセージが「バージョンが合わない」でも、``PROFILE_ROOT`` に
+    **相対パス**を設定している場合は疑わしい。``--user-data-dir`` に
+    相対パスが渡ると、msedge.exe 側の作業ディレクトリ次第でプロファイル
+    初期化に失敗し、実際の原因と無関係に同じメッセージで落ちることがある
+    （``Browsers._resolve_profile_dir()`` は絶対パスへ解決して渡すが、
+    念のため確認する）
 
 #### `__init__`
 
@@ -9475,7 +9482,7 @@ Args:
 #### `download_reports`
 
 ```text
-def download_reports(self, report_urls: Sequence[str], *, ready: Locator | None=None, max_open: int=_DEFAULT_MAX_OPEN_TABS, page_timeout: int | None=None, download_timeout: int=_DEFAULT_DOWNLOAD_TIMEOUT_SECONDS, export_format: str='csv') -> Iterator[tuple[str, Path]]:
+def download_reports(self, report_urls: Sequence[str], *, ready: Locator | None=None, max_open: int=_DEFAULT_MAX_OPEN_TABS, page_timeout: int | None=None, download_timeout: int=_DEFAULT_DOWNLOAD_TIMEOUT_SECONDS, export_format: str='csv', encoding: str='Shift_JIS') -> Iterator[tuple[str, Path]]:
 ```
 
 ##### 説明
@@ -9508,6 +9515,9 @@ Args:
         （SalesforceBrowserOptions.WAIT_SECONDS）。
     download_timeout: ダウンロード完了待ちの上限秒数。既定300秒。
     export_format: "csv" または "xls"。
+    encoding: エクスポートする文字コード。既定は ``Shift_JIS``（CP932相当）。
+        Excel・社内システムでの扱いやすさを優先している。UTF-8で欲しい
+        場合は ``"UTF-8"`` を渡す。
 
 Yields:
     (report_id, ダウンロードしたファイルのパス) のタプル。ファイルは
@@ -9521,7 +9531,7 @@ Raises:
 #### `export_reports`
 
 ```text
-def export_reports(self, report_urls: Sequence[str], directory: str | Path, *, export_format: str='csv', max_workers: int=_DEFAULT_MAX_WORKERS) -> Iterator[tuple[str, Path]]:
+def export_reports(self, report_urls: Sequence[str], directory: str | Path, *, export_format: str='csv', encoding: str='Shift_JIS', max_workers: int=_DEFAULT_MAX_WORKERS) -> Iterator[tuple[str, Path]]:
 ```
 
 ##### 説明
@@ -9548,6 +9558,9 @@ Args:
     report_urls: レポート画面のURL（またはレポートID）のリスト。
     directory: 保存先ディレクトリ。無ければ作成する。
     export_format: "csv" または "xls"。
+    encoding: エクスポートする文字コード。既定は ``Shift_JIS``（CP932相当）。
+        Excel・社内システムでの扱いやすさを優先している。UTF-8で欲しい
+        場合は ``"UTF-8"`` を渡す。
     max_workers: 同時に投げるリクエストの数。既定10。
 
 Yields:
@@ -9964,7 +9977,7 @@ Args:
 #### `download_reports`
 
 ```text
-def download_reports(self, report_urls: Sequence[str], *, ready: Locator | None=None, max_open: int=_DEFAULT_MAX_OPEN_TABS, page_timeout: int | None=None, download_timeout: int=_DEFAULT_DOWNLOAD_TIMEOUT_SECONDS, export_format: str='csv') -> Iterator[tuple[str, Path]]:
+def download_reports(self, report_urls: Sequence[str], *, ready: Locator | None=None, max_open: int=_DEFAULT_MAX_OPEN_TABS, page_timeout: int | None=None, download_timeout: int=_DEFAULT_DOWNLOAD_TIMEOUT_SECONDS, export_format: str='csv', encoding: str='Shift_JIS') -> Iterator[tuple[str, Path]]:
 ```
 
 ##### 説明
@@ -9997,6 +10010,9 @@ Args:
         （SalesforceBrowserOptions.WAIT_SECONDS）。
     download_timeout: ダウンロード完了待ちの上限秒数。既定300秒。
     export_format: "csv" または "xls"。
+    encoding: エクスポートする文字コード。既定は ``Shift_JIS``（CP932相当）。
+        Excel・社内システムでの扱いやすさを優先している。UTF-8で欲しい
+        場合は ``"UTF-8"`` を渡す。
 
 Yields:
     (report_id, ダウンロードしたファイルのパス) のタプル。ファイルは
@@ -10010,7 +10026,7 @@ Raises:
 #### `export_reports`
 
 ```text
-def export_reports(self, report_urls: Sequence[str], directory: str | Path, *, export_format: str='csv', max_workers: int=_DEFAULT_MAX_WORKERS) -> Iterator[tuple[str, Path]]:
+def export_reports(self, report_urls: Sequence[str], directory: str | Path, *, export_format: str='csv', encoding: str='Shift_JIS', max_workers: int=_DEFAULT_MAX_WORKERS) -> Iterator[tuple[str, Path]]:
 ```
 
 ##### 説明
@@ -10037,6 +10053,9 @@ Args:
     report_urls: レポート画面のURL（またはレポートID）のリスト。
     directory: 保存先ディレクトリ。無ければ作成する。
     export_format: "csv" または "xls"。
+    encoding: エクスポートする文字コード。既定は ``Shift_JIS``（CP932相当）。
+        Excel・社内システムでの扱いやすさを優先している。UTF-8で欲しい
+        場合は ``"UTF-8"`` を渡す。
     max_workers: 同時に投げるリクエストの数。既定10。
 
 Yields:

@@ -173,7 +173,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
-| `DriverStartError` | ブラウザを起動できない | エラーの本文にある確認事項をそのまま試す。Windows Update で Edge が更新された直後に起きやすい |
+| `DriverStartError` | ブラウザを起動できない | エラーの本文にある確認事項をそのまま試す。Windows Update で Edge が更新された直後に起きやすい。メッセージが「バージョンが合わない」でも、``PROFILE_ROOT`` に**相対パス**を設定している場合は疑わしい。``--user-data-dir`` に相対パスが渡ると、msedge.exe 側の作業ディレクトリ次第でプロファイル初期化に失敗し、実際の原因と無関係に同じメッセージで落ちることがある（``Browsers._resolve_profile_dir()`` は絶対パスへ解決して渡すが、念のため確認する） |
 | `BrowsersNotStartedError` | `with` を使わずに `Browsers` を使った | `with Browsers() as browsers:` の中で使う（ブラウザは起動していないので実害はない） |
 | `BrowsersClosedError` | `with` を抜けた後の `Browsers` を使った | 続けたい処理を `with` の中に入れる。外へ持ち出すのは取り出した値だけにする |
 | `SessionNotStartedError` | `with` を使わずにブラウザを操作した | `with Browsers() as browsers:` の中で使う |

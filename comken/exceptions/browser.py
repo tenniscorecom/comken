@@ -46,7 +46,14 @@ class DriverStartError(BrowserError):
 
     対処:
         エラーの本文にある確認事項をそのまま試す。
-        Windows Update で Edge が更新された直後に起きやすい
+        Windows Update で Edge が更新された直後に起きやすい。
+
+        メッセージが「バージョンが合わない」でも、``PROFILE_ROOT`` に
+        **相対パス**を設定している場合は疑わしい。``--user-data-dir`` に
+        相対パスが渡ると、msedge.exe 側の作業ディレクトリ次第でプロファイル
+        初期化に失敗し、実際の原因と無関係に同じメッセージで落ちることがある
+        （``Browsers._resolve_profile_dir()`` は絶対パスへ解決して渡すが、
+        念のため確認する）
     """
 
     def __init__(self, driver_path: str, detail: Exception) -> None:
@@ -56,7 +63,9 @@ class DriverStartError(BrowserError):
             "次を確認してください:\n"
             "  1. そのパスに msedgedriver.exe があるか\n"
             "  2. msedgedriver.exe のバージョンが、今インストールされている Edge と一致しているか\n"
-            "     （Edge のバージョンは edge://version で確認できます）"
+            "     （Edge のバージョンは edge://version で確認できます）\n"
+            "  3. PROFILE_ROOT に相対パスを設定していないか\n"
+            "     （メッセージがバージョン不一致でも、実際はこちらが原因のことがある）"
         )
 
 

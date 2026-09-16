@@ -98,6 +98,7 @@ class Salesforce(SiteBase):
         page_timeout: int | None = None,
         download_timeout: int = _DEFAULT_DOWNLOAD_TIMEOUT_SECONDS,
         export_format: str = "csv",
+        encoding: str = "Shift_JIS",
     ) -> Iterator[tuple[str, Path]]:
         """レポートURLを渡すと、順に (report_id, ダウンロードしたファイルのパス) を返す。
 
@@ -127,6 +128,9 @@ class Salesforce(SiteBase):
                 （SalesforceBrowserOptions.WAIT_SECONDS）。
             download_timeout: ダウンロード完了待ちの上限秒数。既定300秒。
             export_format: "csv" または "xls"。
+            encoding: エクスポートする文字コード。既定は ``Shift_JIS``（CP932相当）。
+                Excel・社内システムでの扱いやすさを優先している。UTF-8で欲しい
+                場合は ``"UTF-8"`` を渡す。
 
         Yields:
             (report_id, ダウンロードしたファイルのパス) のタプル。ファイルは
@@ -142,7 +146,7 @@ class Salesforce(SiteBase):
             list(report_urls), ready=ready, max_open=max_open, timeout=page_timeout
         ):
             report_id = report_id_from_url(url)
-            export_url = _build_export_url(session.current_url, report_id, export_format)
+            export_url = _build_export_url(session.current_url, report_id, export_format, encoding)
             session.open(export_url)
             downloaded = self.downloads.wait(timeout=download_timeout)
             renamed = _rename_to_report_id(
@@ -161,6 +165,7 @@ class Salesforce(SiteBase):
         directory: str | Path,
         *,
         export_format: str = "csv",
+        encoding: str = "Shift_JIS",
         max_workers: int = _DEFAULT_MAX_WORKERS,
     ) -> Iterator[tuple[str, Path]]:
         """``login_with_token()`` 済みのセッションCookieを requests へ引き継ぎ、
@@ -185,6 +190,9 @@ class Salesforce(SiteBase):
             report_urls: レポート画面のURL（またはレポートID）のリスト。
             directory: 保存先ディレクトリ。無ければ作成する。
             export_format: "csv" または "xls"。
+            encoding: エクスポートする文字コード。既定は ``Shift_JIS``（CP932相当）。
+                Excel・社内システムでの扱いやすさを優先している。UTF-8で欲しい
+                場合は ``"UTF-8"`` を渡す。
             max_workers: 同時に投げるリクエストの数。既定10。
 
         Yields:
@@ -207,7 +215,9 @@ class Salesforce(SiteBase):
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
-                executor.submit(_export_via_http, http_session, domain, url, export_format): url
+                executor.submit(
+                    _export_via_http, http_session, domain, url, export_format, encoding
+                ): url
                 for url in report_urls
             }
             for future in as_completed(futures):
@@ -230,14 +240,15 @@ def _domain_of(url: str) -> str:
     return f"{parts.scheme}://{parts.netloc}"
 
 
-def _build_export_url(current_url: str, report_id: str, export_format: str) -> str:
+def _build_export_url(current_url: str, report_id: str, export_format: str, encoding: str) -> str:
     """今のタブのドメインを使って、レポートのエクスポートURLを組み立てる。
 
-    ``?export=1&enc=UTF-8&xf=csv`` を付けたURLへ遷移すると、画面を描かずに
+    ``?export=1&enc=Shift_JIS&xf=csv`` を付けたURLへ遷移すると、画面を描かずに
     ブラウザが直接CSVをダウンロードする（クラシックUI時代からある仕組みで、
     Lightningのドメインからでもそのまま使える）。
     """
-    return f"{_domain_of(current_url)}/{report_id}?isdtp=p1&export=1&enc=UTF-8&xf={export_format}"
+    domain = _domain_of(current_url)
+    return f"{domain}/{report_id}?isdtp=p1&export=1&enc={encoding}&xf={export_format}"
 
 
 def _cookies_to_requests_session(driver_cookies: list[dict]) -> requests.Session:
@@ -253,13 +264,17 @@ def _cookies_to_requests_session(driver_cookies: list[dict]) -> requests.Session
 
 
 def _export_via_http(
-    http_session: requests.Session, domain: str, report_url: str, export_format: str
+    http_session: requests.Session,
+    domain: str,
+    report_url: str,
+    export_format: str,
+    encoding: str,
 ) -> tuple[str, bytes]:
     """1件のレポートをHTTPで直接エクスポートする（export_reports() の並列実行単位）。"""
     report_id = report_id_from_url(report_url)
     response = http_session.get(
         f"{domain}/{report_id}",
-        params={"isdtp": "p1", "export": "1", "enc": "UTF-8", "xf": export_format},
+        params={"isdtp": "p1", "export": "1", "enc": encoding, "xf": export_format},
         timeout=_DEFAULT_DOWNLOAD_TIMEOUT_SECONDS,
     )
     content_type = response.headers.get("Content-Type", "")

@@ -442,11 +442,17 @@ def _resolve_profile_dir(name: str, options: BrowserOptions) -> Path | None:
 
     同じフォルダを2つの Edge が同時に開くと起動に失敗するため、
     必ず名前ごとのサブフォルダに分ける。
+
+    **必ず絶対パスにする。** ``--user-data-dir`` に相対パスを渡すと、
+    msedge.exe 側の作業ディレクトリが Python の実行時カレントディレクトリと
+    一致しない場合にプロファイルの初期化に失敗し、Selenium 側には
+    「Edge のバージョンが合わない」という紛らわしいメッセージで
+    DriverStartError になる（実際はバージョンではなくパスの問題）。
     """
     if not options.PROFILE_ROOT:
         return None
 
-    profile_dir = Path(options.PROFILE_ROOT) / name
+    profile_dir = (Path(options.PROFILE_ROOT) / name).resolve()
     profile_dir.mkdir(parents=True, exist_ok=True)
     logger.info("ログイン状態を引き継ぎます: %s", profile_dir)
     return profile_dir

@@ -55,15 +55,20 @@ class TestBuildExportUrl:
     """_build_export_url() — 今のタブのドメインからエクスポートURLを組み立てる。"""
 
     def test_builds_csv_export_url_from_current_domain(self):
-        url = _build_export_url(REPORT_URL_1, "00O5g00000ABCDE1AS", "csv")
+        url = _build_export_url(REPORT_URL_1, "00O5g00000ABCDE1AS", "csv", "Shift_JIS")
 
         assert url == (
             "https://example.my.salesforce.com/00O5g00000ABCDE1AS"
-            "?isdtp=p1&export=1&enc=UTF-8&xf=csv"
+            "?isdtp=p1&export=1&enc=Shift_JIS&xf=csv"
         )
 
+    def test_uses_given_encoding(self):
+        url = _build_export_url(REPORT_URL_1, "00O5g00000ABCDE1AS", "csv", "UTF-8")
+
+        assert "enc=UTF-8" in url
+
     def test_uses_given_export_format(self):
-        url = _build_export_url(REPORT_URL_1, "00O5g00000ABCDE1AS", "xls")
+        url = _build_export_url(REPORT_URL_1, "00O5g00000ABCDE1AS", "xls", "Shift_JIS")
 
         assert url.endswith("xf=xls")
 
