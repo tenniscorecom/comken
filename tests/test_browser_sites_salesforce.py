@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from comken.exceptions import SalesforceReportIDNotFoundError, SiteNotStartedError
+from comken.exceptions import SiteNotStartedError
 from comken.toolbox.browser import BrowserOptions, DownloadDir
 from comken.toolbox.browser.management.sessions import BrowserSession
 from comken.toolbox.browser.sites import SITES
@@ -16,7 +16,6 @@ from comken.toolbox.browser.sites.salesforce.site import (
     Salesforce,
     _build_export_url,
     _rename_to_report_id,
-    _report_id_from_url,
 )
 
 REPORT_URL_1 = "https://example.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE1AS/view"
@@ -46,18 +45,8 @@ class TestPublicApi:
         assert Salesforce not in SITES
 
 
-class TestReportIdFromUrl:
-    """_report_id_from_url() — レポートURLからIDを取り出す。"""
-
-    def test_extracts_id_from_lightning_url(self):
-        assert _report_id_from_url(REPORT_URL_1) == "00O5g00000ABCDE1AS"
-
-    def test_accepts_bare_report_id(self):
-        assert _report_id_from_url("00O5g00000ABCDE1AS") == "00O5g00000ABCDE1AS"
-
-    def test_raises_when_id_not_found(self):
-        with pytest.raises(SalesforceReportIDNotFoundError):
-            _report_id_from_url("https://example.my.salesforce.com/not-a-report")
+# report_id_from_url() 自体のテストは tests/test_salesforce.py に集約してある
+# （comken.toolbox.salesforce.report をそのまま使っているだけなので、ここでは複製しない）。
 
 
 class TestBuildExportUrl:

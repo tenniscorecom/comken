@@ -16,6 +16,7 @@ ALLOWED_SAME_LAYER = {
     ("toolbox.excel", "toolbox.windows"),  # 既存数式・マクロ時の COM フォールバック
     ("toolbox.salesforce", "toolbox.credentials"),  # Salesforce の認証情報を安全に保存する
     ("toolbox.salesforce", "toolbox.csv"),  # レポート・SOQL・Data Loader の結果を CSV/Table にする
+    ("toolbox.browser", "toolbox.salesforce"),  # レポートAPIの2000行上限をブラウザ経由で回避する
 }
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]

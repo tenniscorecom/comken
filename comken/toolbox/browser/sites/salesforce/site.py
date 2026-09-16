@@ -1,9 +1,8 @@
 r"""comken/toolbox/browser/sites/salesforce/site.py — Salesforceレポートのブラウザダウンロード。
 
-レポートIDはこのファイル内で正規表現から取り出す（comken.toolbox.salesforce.report と
-同じパターンだが、あえて重複させている。toolbox.browser を toolbox.salesforce に
-依存させると tests/test_layers.py の ALLOWED_SAME_LAYER に新しい組み合わせを
-増やすことになり、ブラウザ側の独立性が崩れるため）。
+レポートIDの抽出は comken.toolbox.salesforce.report.report_id_from_url() をそのまま使う
+（toolbox.browser → toolbox.salesforce は tests/test_layers.py の ALLOWED_SAME_LAYER で
+許可済み）。
 
 > [!warning] URL は仮の値
 > **このリポジトリは公開しているので、実際の組織の URL を書かない。**
@@ -14,41 +13,26 @@ r"""comken/toolbox/browser/sites/salesforce/site.py — Salesforceレポート�
 from __future__ import annotations
 
 import logging
-import re
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
-from comken.exceptions import SalesforceReportIDNotFoundError, SiteNotStartedError
+from comken.exceptions import SiteNotStartedError
 from comken.toolbox.browser import BrowserOptions, SiteBase
 from comken.toolbox.browser.locator import Locator
+from comken.toolbox.salesforce.report import report_id_from_url
 
 if TYPE_CHECKING:
     from comken.toolbox.browser.management import BrowserSession
 
 logger = logging.getLogger(__name__)
 
-# レポートIDは 00O + 英数字12桁（画面）か15桁（API）
-_REPORT_ID_PATTERN = re.compile(r"\b(00O[A-Za-z0-9]{12}(?:[A-Za-z0-9]{3})?)\b")
-
 # load_many() で同時に開いておくタブの既定数
 _DEFAULT_MAX_OPEN_TABS = 10
 
 # レポート1件あたりのダウンロード完了待ちの既定秒数。集計系レポートは重いことがある
 _DEFAULT_DOWNLOAD_TIMEOUT_SECONDS = 300
-
-
-def _report_id_from_url(text: str) -> str:
-    """レポートの URL からレポート ID を取り出す。ID をそのまま渡してもよい。
-
-    Raises:
-        SalesforceReportIDNotFoundError: レポート ID が見つからない場合。
-    """
-    matched = _REPORT_ID_PATTERN.search(text.strip())
-    if matched is None:
-        raise SalesforceReportIDNotFoundError(text)
-    return matched.group(1)
 
 
 class SalesforceBrowserOptions(BrowserOptions):
@@ -140,7 +124,7 @@ class Salesforce(SiteBase):
         for url in session.load_many(
             list(report_urls), ready=ready, max_open=max_open, timeout=page_timeout
         ):
-            report_id = _report_id_from_url(url)
+            report_id = report_id_from_url(url)
             export_url = _build_export_url(session.current_url, report_id, export_format)
             session.open(export_url)
             downloaded = self.downloads.wait(timeout=download_timeout)
