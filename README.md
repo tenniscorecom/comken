@@ -2,6 +2,24 @@
 
 業務自動化で使う Python 共通ライブラリ。
 
+## 全体像（4層構成）
+
+置き場所は「何を操作するかに関係なく使う」ものから「業務寄り」のものへ4層。
+**下の層は上の層を import できない**（矢印は下から上へだけ）。
+
+```mermaid
+graph LR
+    L0["comken 直下\n設定・ログ・実行モード・例外・定数"]
+    L1["comken.core\n外を触らない部品"]
+    L2["comken.toolbox\nExcel・CSV・ブラウザ等、外を操作する道具"]
+    L3["comken.services\n複数のtoolboxを組み合わせた業務機能"]
+    L1 --> L0
+    L2 --> L1
+    L3 --> L2
+```
+
+迷ったら「自分が使いたい層より下に置く」。詳しい中身は下の「[パッケージ構成](#パッケージ構成)」。
+
 ## はじめて使う人へ
 
 この README を最初から最後まで読む必要はない。次の順で進めるのが早い:
@@ -72,8 +90,14 @@ comken は置き場所を4つに分けている。**どこに置くかは「そ�
 | `comken` 直下 | **何を操作するかに関係なく使う** | 設定・ログ・実行モード・例外・定数 |
 | `comken.core` | **外にあるものを触らない部品** | ファイル検索・操作・圧縮・命名／日時・文字列・差分・待機・リトライ・計測・状態 |
 | `comken.toolbox` | **「〜を操作する／〜と通信する」で説明できる** | Excel・CSV・Access・Outlook・Windows・ブラウザ・Salesforce・認証情報 |
+| `comken.services` | **複数の toolbox を組み合わせた、業務寄りのまとまった機能** | Salesforceレポートの集約取得・応需CSVの新ロール列削減 |
 
 import の書き方は上の「[使うときの約束](#使うときの約束)」を参照。
+
+**下の層は上の層を import できない**（`comken` 直下 → `core` → `toolbox` → `services`
+の順で、矢印は下から上へだけ）。逆（`services` が `toolbox` を使う等）は問題ない。
+この向きは `tests/test_layers.py` で機械的に検査していて、逆向きの import は
+テストが落ちる。迷ったら「自分が使いたい層より下に置く」。
 
 **実行される単位（定期実行のバッチなど）は comken に置かない。** それは個別プロジェクトの
 仕事で、comken に置くのは呼ばれる側だけにする。
@@ -540,8 +564,13 @@ graph LR
         salesforce["salesforce\nSalesforce API"]
         credentials["credentials\n認証情報（DPAPI）"]
     end
+    subgraph L3["comken.services — toolboxを組み合わせた業務機能"]
+        sfdl["salesforce_downloader\nSFレポート集約取得"]
+        csvreducer["csv_column_reducer\n応需CSV新ロール列削減"]
+    end
     L1 --> L0
     L2 --> L1
+    L3 --> L2
     salesforce --> sites["salesforce.sites\n組織ごとのクラス"]
     salesforce --> credentials
     browser --> browsersites
