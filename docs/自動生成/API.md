@@ -550,7 +550,7 @@ def all_holidays(self) -> list[Holiday]:
 #### `export_csv`
 
 ```text
-def export_csv(self, path: str | Path, *, encoding: str='utf-8-sig') -> Path:
+def export_csv(self, path: str | Path | None=None, *, encoding: str='utf-8-sig') -> Path:
 ```
 
 ##### 説明
@@ -564,7 +564,9 @@ Python を使わない Excel・VBA からも同じ祝日データを参照した
 という層のルールに従うため）。
 
 Args:
-    path: 書き出す CSV のパス。
+    path: 書き出す CSV のパス。省略時は内閣府 CSV と同じ ``data/`` フォルダの
+        ``holidays.csv``（``EXPORTED_CSV_PATH``）に書き出す。Excel・VBA 側から
+        見に行く場所を固定できる。
     encoding: 既定は ``utf-8-sig``（BOM付き）。Excel は BOM 無しの UTF-8 だと
         文字化けするため。
 
@@ -2483,6 +2485,10 @@ Returns:
 
 公開定数。
 
+### `EXPORTED_CSV_PATH`
+
+公開定数。
+
 ### `Holiday`
 
 ```text
@@ -2662,7 +2668,7 @@ def all_holidays(self) -> list[Holiday]:
 #### `export_csv`
 
 ```text
-def export_csv(self, path: str | Path, *, encoding: str='utf-8-sig') -> Path:
+def export_csv(self, path: str | Path | None=None, *, encoding: str='utf-8-sig') -> Path:
 ```
 
 ##### 説明
@@ -2676,7 +2682,9 @@ Python を使わない Excel・VBA からも同じ祝日データを参照した
 という層のルールに従うため）。
 
 Args:
-    path: 書き出す CSV のパス。
+    path: 書き出す CSV のパス。省略時は内閣府 CSV と同じ ``data/`` フォルダの
+        ``holidays.csv``（``EXPORTED_CSV_PATH``）に書き出す。Excel・VBA 側から
+        見に行く場所を固定できる。
     encoding: 既定は ``utf-8-sig``（BOM付き）。Excel は BOM 無しの UTF-8 だと
         文字化けするため。
 

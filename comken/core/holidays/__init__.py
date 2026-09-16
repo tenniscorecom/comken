@@ -26,6 +26,7 @@ r"""comken/core/holidays/__init__.py — 祝日判定ライブラリ。
 ``set_default_calendar()`` で差し替える。
 
 BUNDLED_CSV_PATH             内閣府 CSV を同梱しているパス（正本）。git 管理下。
+EXPORTED_CSV_PATH            HolidayCalendar.export_csv() の既定の書き出し先。生成物のため非追跡。
 HolidayCalendar       祝日セットを保持し判定を行う本体
 HolidaySource         祝日セットを返す仕組みの Protocol
 Holiday               1件の祝日（日付 + 名称）
@@ -52,6 +53,7 @@ from comken.core.holidays.calendar import (
     BUNDLED_CSV_PATH,
     BUSINESS_DAY_SEARCH_LIMIT,
     EXPIRING_WARNING_DAYS,
+    EXPORTED_CSV_PATH,
     Holiday,
     HolidayCalendar,
     HolidaySource,
@@ -85,6 +87,7 @@ __all__ = [
     "CompanyHolidaySource",
     "ComputedHolidaySource",
     "EXPIRING_WARNING_DAYS",
+    "EXPORTED_CSV_PATH",
     "Holiday",
     "HolidayCalendar",
     "HolidayCalendarError",

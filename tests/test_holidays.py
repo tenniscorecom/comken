@@ -241,6 +241,21 @@ class TestExportCsv:
         text = out.read_text(encoding="utf-8-sig")
         assert "2024-02-11,建国記念の日,True" in text
 
+    def test_default_path_is_exported_csv_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """path省略時は EXPORTED_CSV_PATH（内閣府CSVと同じ data/ フォルダ）に書く。"""
+        from comken.core.holidays import calendar as calendar_module
+
+        fake_path = tmp_path / "holidays.csv"
+        monkeypatch.setattr(calendar_module, "EXPORTED_CSV_PATH", fake_path)
+        cal = _fixture_calendar()
+
+        result = cal.export_csv()
+
+        assert result == fake_path
+        assert fake_path.exists()
+
 
 class TestIsBusinessDay:
     """``is_business_day`` の挙動（週末スキップ・週末スキップなし）。"""

@@ -209,7 +209,7 @@ class HolidayCalendar:
         """保持している祝日を日付順に並べたリストを返す。"""
         return sorted(self._holidays.values(), key=lambda h: h.date)
 
-    def export_csv(self, path: str | Path, *, encoding: str = "utf-8-sig") -> Path:
+    def export_csv(self, path: str | Path | None = None, *, encoding: str = "utf-8-sig") -> Path:
         """保持している祝日を CSV へ書き出す。
 
         Python を使わない Excel・VBA からも同じ祝日データを参照したいときに使う。
@@ -219,7 +219,9 @@ class HolidayCalendar:
         という層のルールに従うため）。
 
         Args:
-            path: 書き出す CSV のパス。
+            path: 書き出す CSV のパス。省略時は内閣府 CSV と同じ ``data/`` フォルダの
+                ``holidays.csv``（``EXPORTED_CSV_PATH``）に書き出す。Excel・VBA 側から
+                見に行く場所を固定できる。
             encoding: 既定は ``utf-8-sig``（BOM付き）。Excel は BOM 無しの UTF-8 だと
                 文字化けするため。
 
@@ -228,7 +230,7 @@ class HolidayCalendar:
         """
         import csv as _csv
 
-        file_path = Path(path)
+        file_path = Path(path) if path is not None else EXPORTED_CSV_PATH
         file_path.parent.mkdir(parents=True, exist_ok=True)
         with file_path.open("w", encoding=encoding, newline="") as file:
             writer = _csv.writer(file)
@@ -536,6 +538,11 @@ def add_business_days(
 # 読む正本はここ。PC ごとのキャッシュは持たない。
 # 更新は年 1 回の手動作業（開発機で内閣府から取得 → コミット → 共有サーバーへ配置）。
 BUNDLED_CSV_PATH: Final[Path] = Path(__file__).parent / "data" / "syukujitsu.csv"
+
+# HolidayCalendar.export_csv() の既定の書き出し先。内閣府 CSV と同じ data/ フォルダに
+# 置くことで、Excel・VBA 側は常にこのパスを見に行けばよい（git 管理はしない生成物）。
+EXPORTED_CSV_PATH: Final[Path] = BUNDLED_CSV_PATH.parent / "holidays.csv"
+
 _default_calendar: HolidayCalendar | None = None
 
 
