@@ -33,15 +33,16 @@ r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポー�
     ScheduleRule          取得スケジュール管理表の1行
     write_latest_status   全レポートの最新実行結果を 1 つの Excel へ上書き生成する
     downloaded_today      指定した管理番号が今日すでに成功しているかを履歴から調べる
-    browser_site_for      レポートAPIの2000行上限を超える場合の最終手段（ブラウザ経由）。
-                          URLから組織のブラウザサイトクラスを返す
-    build_destination     ブラウザ版exportの保存先を base/担当者/概要/レポート名.拡張子
-                          の形で組み立てる（グループごとにbaseが変わる運用向け）
 
 **「今すぐ取りに行く」APIは無い。** 急ぎの取得は権限を持つ人が Salesforce から
 手動ダウンロードするか、`download_scheduled()` をスケジュール外で直接実行する
 （呼び出し側でスケジューラを増やす）。Downloader 側に「今すぐ取りに行く」専用の
 関数を残すと、定期取得が動いていないことに誰も気づかなくなるため。
+
+**レポートAPIの2000行上限を超える場合（マトリックス／統合など）の最終手段は
+`comken.toolbox.salesforce.browser`。** ブラウザ経由でレポートをエクスポートする
+（詳しくは docs/salesforce.md）。このパッケージ固有の機能ではなく、Salesforceに
+アクセスする他のサービスからも使える共有の仕組みとして toolbox 側に置いてある。
 
 管理表の検査はコマンドからも呼べる（保守用。業務の定期実行ではない）:
 
@@ -80,7 +81,7 @@ comken 本体側の共有例外（`ComkenError` / `SalesforceReportIDNotFoundErr
 
 ---
 
-**`__init__.py` 経由の import で `requests` / `selenium` を読み込ませない設計。**
+**`__init__.py` 経由の import で `requests` を読み込ませない設計。**
 
 `service.py` を import すると `requests` が必要になる。BO 環境のように
 `requests` が入っていないところで `cached_report` /
@@ -88,12 +89,9 @@ comken 本体側の共有例外（`ComkenError` / `SalesforceReportIDNotFoundErr
 だけ動かせるよう、`__getattr__` (PEP 562) で遅延 import する。
 
 `download_scheduled` を import したときだけ `service.py` が読み込まれ、
-`requests` がロードされる。`browser_site_for` を import したときだけ
-`browser_sites.py`（`comken.toolbox.browser` 経由）が読み込まれ、
-`selenium` もロードされる。
+`requests` がロードされる。
 """
 
-from comken.services.salesforce_downloader.browser_paths import build_destination
 from comken.services.salesforce_downloader.master import (
     ReportEntry,
     load_master,
@@ -112,8 +110,6 @@ __all__ = [
     "downloaded_today",
     "ReportEntry",
     "ScheduleRule",
-    "browser_site_for",
-    "build_destination",
 ]
 
 # 遅延 import する対象。値はその属性が定義されているサブモジュールの絶対パス。
@@ -125,7 +121,6 @@ _LAZY_TARGETS: dict[str, str] = {
     "file_path_of": "comken.services.salesforce_downloader.provider",
     "write_latest_status": "comken.services.salesforce_downloader.latest_status",
     "downloaded_today": "comken.services.salesforce_downloader.history",
-    "browser_site_for": "comken.services.salesforce_downloader.browser_sites",
 }
 
 

@@ -153,7 +153,7 @@ class SalesforceSiteNotFoundError(SalesforceError):
     URL のドメインで決めるので、未登録のドメインでは接続先を選べない。
 
     発生箇所: comken.toolbox.salesforce.sites.site_for()
-             comken.services.salesforce_downloader.browser_sites.browser_site_for()
+             comken.toolbox.salesforce.browser.sites.site_for()
              （ブラウザ経由でのレポートダウンロードの組織振り分け）
 
     対処:
@@ -198,7 +198,7 @@ class SalesforceReportIDNotFoundError(SalesforceError):
     発生箇所: comken.toolbox.salesforce.report.report_id_from_url()
              （呼び出し元の例: comken-salesforce-downloader の master.py。
              2026-08-30 に comken から分離した別リポジトリ。
-             comken.toolbox.browser.sites.salesforce.site.export_reports() も
+             comken.toolbox.salesforce.browser.site.export_reports() も
              同じ report_id_from_url() を呼ぶ）
 
     対処:
@@ -267,7 +267,7 @@ class SalesforceReportExportError(SalesforceError):
     HTTPステータス自体は200で返るが、本文がCSV/XLSではなくHTMLのログイン画面や
     エラーページになっている場合に出る。
 
-    発生箇所: comken.toolbox.browser.sites.salesforce.Salesforce.export_reports()
+    発生箇所: comken.toolbox.salesforce.browser.site.Salesforce.export_reports()
              （go_login() + wait_for_manual_login() で確立したブラウザのセッション
              Cookieをrequestsへ引き継いで並列ダウンロードする経路。ログインを
              済ませていない、あるいはセッションの有効期限が切れていると起きる）

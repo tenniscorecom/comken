@@ -1,4 +1,4 @@
-"""comken/toolbox/browser/sites/salesforce/pages/login_page.py — Salesforceのログイン画面。
+"""comken/toolbox/salesforce/browser/pages/login_page.py — Salesforceのログイン画面。
 
 id="username" / id="password" / id="Login" はSalesforceのログイン画面
 （Lightning・Classicどちらのドメインでも同じ）で長年変わっていない標準的なIDで、

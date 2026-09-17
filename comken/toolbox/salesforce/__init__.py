@@ -26,6 +26,21 @@ URL と認証情報のシステム名は組織クラスがクラス定数とし�
     APIUsage                     組織の 24 時間 API 消費量
     BulkIngestResult             Bulk Ingest ジョブの実行結果（成功／失敗行を Table で持つ）
     SalesforceCredentialRotator  ECA の資格情報を期限到来時だけローテーションする（既定で無効）
+
+レポートAPIの2000行上限を超える場合（マトリックス／統合などSOQLに書き換えられない
+形式）の最終手段は `comken.toolbox.salesforce.browser`。画面のエクスポート機能を
+ブラウザ経由で叩く。組織ごとの設定（URL・認証情報名）はAPI側の組織クラス
+（`sites/` の `Solution` 等）が持つ値をそのまま使うため、ここに同居させている
+（詳しくは docs/salesforce.md）。
+
+    from comken.toolbox.salesforce.browser.sites import site_for
+
+    site_class = site_for(report_url)
+    with site_class() as sf:
+        sf.login_with_credentials(site_class.CREDENTIAL_PREFIX)
+        sf.wait_for_manual_login()
+        for report_id, path in sf.export_reports(reports):
+            ...
 """
 
 from types import ModuleType

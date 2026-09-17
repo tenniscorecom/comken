@@ -270,7 +270,8 @@ with site() as sf:
 1区間でも 2000 行を超える場合だけ、画面のエクスポート機能（`?export=1&xf=csv`）を
 使う。API のこの上限自体がかからない。3段目より重い手段なので、3段目で
 足りるかを先に確かめること。使うのは
-`comken.toolbox.browser.sites.salesforce.Salesforce`。
+`comken.toolbox.salesforce.browser.site.Salesforce`（組織ごとの入口は
+`comken.toolbox.salesforce.browser.sites`）。
 
 > [!warning] requests だけでのセッション確立は組織によって通らないことを確認済み
 > `requests` で frontdoor.jsp にアクセストークンを渡すだけでセッションを
@@ -294,11 +295,12 @@ with site() as sf:
 > 渡せばよい）を渡せる。
 
 ```python
-from comken.toolbox.browser.sites.salesforce import Salesforce
+from comken.toolbox.salesforce.browser.sites import site_for
 
-with Salesforce() as sf:
-    sf.login_with_credentials("salesforce_temp")  # DPAPIに登録済みのID/パスワード
-    sf.wait_for_manual_login()                     # MFA等が出た場合だけ対応する
+site_class = site_for(report_url)
+with site_class() as sf:
+    sf.login_with_credentials(site_class.CREDENTIAL_PREFIX)  # DPAPIに登録済みのID/パスワード
+    sf.wait_for_manual_login()                                # MFA等が出た場合だけ対応する
 
     # ファイル名・置き場所は呼び出し側が {URL: 保存先パス} で指定する
     reports = {report_url: f"出力先/{report_name}.csv" for report_url, report_name in ...}
@@ -306,15 +308,16 @@ with Salesforce() as sf:
         ...
 ```
 
-**複数組織（本番・サンドボックス等）を扱う場合**は、`comken.toolbox.browser.sites.salesforce.Salesforce`
-（雛形。BASE_URLがダミー）を組織ごとに継承する。`comken.services.salesforce_downloader.browser_sites`
-に実例がある: `SolutionBrowser` / `SolutionSandboxBrowser` はAPI側の組織クラス
+**組織ごとのクラス（本番・サンドボックス等）** は `comken.toolbox.salesforce.browser.sites`
+にある: `Solution` / `SolutionSandbox` は API側の組織クラス
 （`comken.toolbox.salesforce.sites.Solution` / `SolutionSandbox`）が持つ `DOMAIN_URL` を
-そのまま使い、URLを二重に管理しない。`browser_site_for(url)` は `site_for()` のブラウザ版で、
+そのまま使い、URLを二重に管理しない。`site_for(url)` は API版の同名関数のブラウザ版で、
 レポートURLのドメインから組織のブラウザサイトクラスを返す。
 
-`toolbox.browser` と `toolbox.salesforce` は互いに依存しない設計（`tests/test_layers.py`）
-なので、組織ごとの組み合わせは両方に依存できる `services` 層（`salesforce_downloader`）に置く。
+API版の組織クラス（`toolbox.salesforce.sites`）とブラウザ版（`toolbox.salesforce.browser.sites`）を
+同じ `toolbox.salesforce` パッケージに同居させているのは、組織ごとの設定を1箇所にまとめるため。
+このため `toolbox.salesforce` は Selenium を使う `toolbox.browser` に依存する
+（逆方向は無い。`tests/test_layers.py` の `ALLOWED_SAME_LAYER` を参照）。
 
 **ログイン状態を次回起動でも使い回すには `OPTIONS.PROFILE_ROOT` を設定すること**
 （未設定だと起動のたびにまっさらなプロファイルになり、毎回ログインし直しになる）。
