@@ -46,6 +46,7 @@ r"""comken/services/salesforce_downloader/service.py — 取得の本体。
 import datetime as dt
 import logging
 import shutil
+import tempfile
 import time
 from pathlib import Path
 
@@ -98,6 +99,16 @@ CAUSE_PROGRAM = "プログラム"
 # 共有サーバーの同期・権限異常などで ``FileExistsError`` が返り続けると無限
 # ループになるため、必ず上限を切る。
 RESERVE_PATH_LIMIT = 1000
+
+# **SOQL化が完了するまでの暫定措置。** ここに管理番号を入れると、_fetch() が
+# レポートAPIではなくブラウザ経由（comken.toolbox.salesforce.browser）で取得する。
+# マトリックス／統合レポートなど、SOQLに書き換えられない・書き換えが追いついて
+# いないレポート向け。SOQL化が終わったら、ここから管理番号を消すだけでAPI経由に
+# 戻せる（_save() 以降は共通のため、他に変更は不要）。
+# 既定は空（全件API経由）。ブラウザ経由は要求ごとにログインの手間があるうえ、
+# 定期実行では PROFILE_ROOT に永続化した既存のログイン状態が前提になる
+# （事前に人が一度だけ手動ログインしておく。詳しくは _fetch_via_browser() を参照）。
+BROWSER_FETCH_REPORT_KEYS: frozenset[str] = frozenset()
 
 
 @measure
@@ -329,12 +340,49 @@ def _fetch(entry: ReportEntry, filters: list[dict] | None = None) -> Table:
     つなぐ組織は URL のドメインで決まる（`site_for()`）。管理表に組織を選ぶ列は
     作らない——人が選ぶ形にすると、URL と食い違ったときに別の組織へ問い合わせて
     「レポートが見つからない」という分かりにくい失敗になる。
+
+    `entry.key` が `BROWSER_FETCH_REPORT_KEYS` にあれば、ブラウザ経由
+    （`_fetch_via_browser()`）に切り替える（SOQL化までの暫定措置）。この場合
+    `filters` は使えない（画面のエクスポートには実行時フィルタの仕組みが無い）。
     """
+    if entry.key in BROWSER_FETCH_REPORT_KEYS:
+        if filters is not None:
+            raise ValueError(
+                f"ブラウザ経由のレポートには実行時フィルタを指定できません: {entry.key}"
+            )
+        return _fetch_via_browser(entry)
     site = site_for(entry.url)
     with site() as salesforce:
         if filters is None:
             return salesforce.report.get(entry.report_id)
         return salesforce.report.get(entry.report_id, filters=filters)
+
+
+def _fetch_via_browser(entry: ReportEntry) -> Table:
+    """ブラウザ経由で entry を取得し、`_fetch()` と同じ Table を返す（SOQL化までの暫定）。
+
+    定期実行（無人）から呼ばれる前提のため、ここではログインを行わない。
+    `OPTIONS.PROFILE_ROOT` に永続化された既存のログイン状態をそのまま使う
+    （事前に人が一度だけ ``go_login()`` + ``wait_for_manual_login()`` または
+    ``login_with_credentials()`` で手動ログインしておく）。ログイン状態が
+    切れている場合はエクスポートがHTMLを返し、`SalesforceReportExportError`
+    （`ComkenError` のサブクラス）になる。`download_scheduled()` は
+    既存の `ComkenError` 処理でそのまま次のレポートへ続行する。
+
+    `selenium` 依存を、実際にブラウザ経由のレポートを使うときだけ読み込むよう、
+    ここで初めて import する（`BROWSER_FETCH_REPORT_KEYS` が空の運用では
+    `service.py` を import しても `selenium` は要らない）。
+    """
+    from comken.toolbox.salesforce.browser.sites import site_for as browser_site_for
+
+    site_class = browser_site_for(entry.url)
+    with site_class() as sf:
+        sf.go_login()
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir) / f"{entry.key}.csv"
+            dict(sf.export_reports({entry.url: tmp_path}))
+            with CSV(tmp_path, read_only=True) as source:
+                return source.read()
 
 
 def _validate_filters_by_report(
