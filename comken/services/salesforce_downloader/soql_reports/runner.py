@@ -49,7 +49,7 @@ from comken.toolbox.salesforce.sites import site_for
 logger = logging.getLogger(__name__)
 
 # ``_reserve_path`` が連番を足して空きファイル名を探索する回数の上限。
-# ``comken.services.salesforce_downloader.service.RESERVE_PATH_LIMIT`` と同じ
+# Salesforceレポートダウンローダー の ``service.RESERVE_PATH_LIMIT`` と同じ
 # 理由: 共有サーバーの同期・権限異常で ``FileExistsError`` が返り続けると
 # 無限ループになるため、必ず上限を切る
 RESERVE_PATH_LIMIT = 1000

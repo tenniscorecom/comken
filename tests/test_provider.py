@@ -1,16 +1,17 @@
-"""Salesforce レポートの集約取得（読み取る側）を、Salesforce をモックして検証する。
+"""Salesforce レポートの集約取得（読み取る側）を検証する。
 
-`cached_report()` / `file_path_of()` は設計上ネットワークを使わない。
-`download_scheduled()` で置かれたファイルを、`cached_report()` が
-受け取れるかを確かめる。`service.py` を経由した書き置き（`download_scheduled`）
-が必要なので、`download_scheduled` も import している（テスト専用）。
+`cached_report()` / `file_path_of()` は設計上ネットワークを使わない。取得を
+実行する側（`download_scheduled()`）は 2026-09 に comken の外（Salesforceレポート
+ダウンローダー）へ切り出したため、ここでは「取得を実行する側が置くファイル」を
+`_simulate_download()` で直接シミュレートし、`cached_report()` がそれを正しく
+受け取れるかを確かめる（実際の取得実行側のテストは、そちらのリポジトリの
+`tests/` にある）。
 
 `MASTER_PATH` / `HISTORY_PATH` は `monkeypatch.setattr` で tmp_path のパスへ
 差し替える。
 """
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -23,12 +24,13 @@ from comken.exceptions import (
 from comken.services.salesforce_downloader import (
     cached_report,
     cached_report_path,
-    download_scheduled,
     file_path_of,
     load_master,
 )
 from comken.services.salesforce_downloader import provider as provider_module
-from comken.services.salesforce_downloader import service as service_module
+from comken.services.salesforce_downloader.master import ReportEntry
+from comken.services.salesforce_downloader.provider import daily_cache_path_of
+from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Excel
 
 URL_A = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE/view"
@@ -53,7 +55,7 @@ def _reset_master_cache():
 
     `_find()` は ``Path.resolve()`` 後の絶対パスをキーに管理表をキャッシュする
     ため、 ``tmp_path`` が違うテスト同士はキーが違っていて**普通はリークしない**。
-    ただしモンキーパッチで `_paths.MASTER_PATH` を差し替えた直後に古いキャッシュ
+    ただしモンキーパッチで `paths.MASTER_PATH` を差し替えた直後に古いキャッシュ
     を引きずらないよう、念のため明示的に破棄する。
     """
     provider_module._reset_cached_master()
@@ -75,9 +77,8 @@ def make_master(path: Path, rows: list[list]) -> Path:
 def paths(tmp_path, monkeypatch):
     """管理表・履歴・保存先をまとめて用意し、共有定数へ注入する。
 
-    `_paths.MASTER_PATH` / `_paths.HISTORY_PATH` を tmp_path 配下の値へ
-    差し替える。`service.py` / `provider.py` は import 時に独自のローカル束縛を
-    作るので、両方の属性も同期する。
+    `paths.MASTER_PATH` / `paths.HISTORY_PATH` を tmp_path 配下の値へ差し替える。
+    `provider.py` は import 時に独自のローカル束縛を作るので、その属性も同期する。
     """
     folder = tmp_path / "保存先"
     folder.mkdir()
@@ -117,10 +118,8 @@ def paths(tmp_path, monkeypatch):
         ],
     )
     history_path = tmp_path / "ダウンロード履歴.csv"
-    monkeypatch.setattr("comken.services.salesforce_downloader._paths.MASTER_PATH", master)
-    monkeypatch.setattr("comken.services.salesforce_downloader._paths.HISTORY_PATH", history_path)
-    monkeypatch.setattr(service_module, "MASTER_PATH", master)
-    monkeypatch.setattr(service_module, "HISTORY_PATH", history_path)
+    monkeypatch.setattr("comken.services.salesforce_downloader.paths.MASTER_PATH", master)
+    monkeypatch.setattr("comken.services.salesforce_downloader.paths.HISTORY_PATH", history_path)
     # `provider` もローカル束縛しているので同期する
     monkeypatch.setattr(provider_module, "MASTER_PATH", master)
     return {
@@ -130,17 +129,20 @@ def paths(tmp_path, monkeypatch):
     }
 
 
-def _all_master_rows(paths: dict) -> None:
-    """``download_scheduled()`` を全件回すテスト用ヘルパー。"""
-    pass  # 注: この fixture は test_service.py とは独立したものとして 1002 を有効のまま使う
+def _simulate_download(entry: ReportEntry, rows: list[dict] | None = None) -> Path:
+    """取得を実行する側（Salesforceレポートダウンローダー）が置くファイルをシミュレートする。
 
-
-def fake_salesforce(rows: list[dict] | None = None) -> MagicMock:
-    """report.get() が rows を返す Salesforce クライアント。"""
-    client = MagicMock()
-    client.__enter__.return_value.report.get.return_value = ROWS if rows is None else rows
-    site = MagicMock(return_value=client)
-    return site
+    実物の `download_scheduled()` はもう comken に無いので、ここでは
+    「保管ファイル（`file_path_of`）を書き、当日キャッシュ（`daily_cache_path_of`）を
+    その内容で更新する」という、書き込み側との契約だけを直接再現する。
+    """
+    values = ROWS if rows is None else rows
+    columns = list(values[0].keys()) if values else ["名前", "金額"]
+    archive_path = file_path_of(entry)
+    with CSV(archive_path) as csv_file:
+        csv_file.replace(Table(columns, values))
+    daily_cache_path_of(entry).write_bytes(archive_path.read_bytes())
+    return archive_path
 
 
 class TestFilePathOf:
@@ -226,47 +228,27 @@ class TestCachedReport:
     """cached_report() は固定パスだけを確認し、Salesforceへ取りに行かない。"""
 
     def test_returns_the_file_downloaded_by_the_scheduled_run(self, paths):
-        with patch(
-            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
-        ):
-            download_scheduled("定期実行")
+        entry = load_master(paths["master_path"])["1001"]
+        _simulate_download(entry)
         table = cached_report("1001")
         assert cached_report_path("1001").is_file()
         assert table.to_rows() == ROWS
 
-    def test_does_not_call_salesforce(self, paths):
-        with patch(
-            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
-        ):
-            download_scheduled("定期実行")
-        site = fake_salesforce()
-        with patch("comken.services.salesforce_downloader.service.site_for", return_value=site):
-            cached_report("1001")
-        site.assert_not_called()
+    def test_archive_files_accumulate_while_cache_reflects_latest(self, paths):
+        """保管ファイル（`file_path_of`）は書くたびに増えるが、当日キャッシュは最新のみ持つ。
 
-    def test_same_day_run_replaces_cache_and_keeps_archives(self, paths):
-        """`paths` fixture の管理表には「スケジュール」シートが無い。
-
-        スケジュール行が無いレポートは ``downloaded_today()`` ベースで
-        1 日 1 回までに制限されるため、**2 回目はスキップ**され、キャッシュは
-        1 回目の取得結果のまま変わらない。代わりに「時刻付き保管ファイルが
-        増え続ける」運用ではないので、保管は 1 回分で止まる。
+        いつ・何回書くか（1日1回までに制限する等）はスケジュール判定の話で、
+        取得を実行する側（Salesforceレポートダウンローダー）の責務。ここでは
+        「書き込みが2回あったら」読み取り側がどう見えるかだけを確かめる。
         """
+        entry = load_master(paths["master_path"])["1001"]
         updated_rows = [{"名前": "最新", "金額": "300"}]
-        with patch(
-            "comken.services.salesforce_downloader.service.site_for",
-            return_value=fake_salesforce(),
-        ):
-            download_scheduled()
-        with patch(
-            "comken.services.salesforce_downloader.service.site_for",
-            return_value=fake_salesforce(updated_rows),
-        ):
-            download_scheduled()
-        # 2 回目はスキップ → キャッシュは 1 回目のデータのまま
-        assert cached_report("1001").to_rows() == ROWS
-        # 1 回目だけ取得 → 保管ファイル 1 件 + 日次キャッシュ 1 件 = 2 件
-        assert len(list(paths["folder"].glob("1001_*.csv"))) == 2
+        _simulate_download(entry)
+        _simulate_download(entry, updated_rows)
+        # 当日キャッシュは最新の書き込みを反映する
+        assert cached_report("1001").to_rows() == updated_rows
+        # 保管ファイルは書くたびに増える（2件）+ 当日キャッシュ1件 = 3件
+        assert len(list(paths["folder"].glob("1001_*.csv"))) == 3
 
     def test_second_report_raises_when_cache_is_missing(self, paths):
         """まだ取得していないレポートも、キャッシュが無いなら `CachedReportNotFoundError`"""
@@ -292,12 +274,10 @@ class TestCachedReport:
         assert cached_report("1001").to_rows() == [{"名前": "手動配置", "金額": "999"}]
 
     def test_missing_cache_raises_even_if_archive_exists(self, paths):
-        with patch(
-            "comken.services.salesforce_downloader.service.site_for", return_value=fake_salesforce()
-        ):
-            download_scheduled("定期実行")
+        entry = load_master(paths["master_path"])["1001"]
+        _simulate_download(entry)
         # 時刻付き保管ファイルは残し、時刻を含まない当日キャッシュだけを消す。
-        cache_path = provider_module._daily_cache_path_of(load_master(paths["master_path"])["1001"])
+        cache_path = provider_module.daily_cache_path_of(entry)
         cache_path.unlink()
         with pytest.raises(CachedReportNotFoundError):
             cached_report("1001")

@@ -1,12 +1,17 @@
-"""comken/services/salesforce_downloader/history.py — ダウンロード履歴の記録。
+"""comken/services/salesforce_downloader/history.py — ダウンロード履歴の読み取りと形式。
+
+**書き込みは 2026-09 に comken の外（Salesforceレポートダウンローダー）へ
+切り出した。** ここに残っているのは「履歴CSVの列・1行の形（`COLUMNS` /
+`HistoryRow`）」と「その形式で書かれた履歴を読む関数」だけ。書き込み側
+（`record()` 相当）は外部プロジェクト側にあり、ここで定義する `COLUMNS` /
+`HistoryRow` / `HistoryFileLock`（`history_file_lock.py`）を同じ契約として
+import して使う。読み書きどちらの側も**同じ形式定義を参照する**ことで、
+列やロックの取り方が2箇所で食い違う事故を防ぐ（詳しくは `__init__.py` の
+履歴メモを参照）。
 
 **管理表とは別のファイルにする。** 書く主体が違う（管理表は人、履歴はプログラム）ので
 分けないと、人が開いている間にプログラムが保存できず履歴が飛ぶ。**CSV に追記する。**
 複数のプロジェクトが同時に走るので、Excel を開いて保存し直す方式だと壊れる。
-
-成功／失敗の判断と各段階の結果（Salesforce への問い合わせ、保存）は呼ぶ側
-（`service.py`）が決めて、ここは受け取った値を1行に書くだけ。集計は利用側で
-この CSV を `CSV.read()` で読む。
 """
 
 import csv
@@ -16,15 +21,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from comken.core.clock import now, today
+from comken.core.clock import today
 from comken.core.table.model import Table
 from comken.core.timer import measure
-from comken.exceptions import (
-    HistoryHeaderMismatchError,
-    HistoryWriteError,
-)
+from comken.exceptions import HistoryHeaderMismatchError
 from comken.services.salesforce_downloader.history_file_lock import HistoryFileLock
-from comken.services.salesforce_downloader.master import ReportEntry
 
 logger = logging.getLogger(__name__)
 
@@ -61,23 +62,22 @@ FAILURE = "失敗"
 # 互換のため名前は残してある（外部ツールが定数名参照に備えて）
 TRIGGER_SCHEDULED = "定期"
 
-# 2000件超で失敗したときの例外クラス名。`_failure_row()` が
-# `error_code=type(exc).__name__` で例外クラス名を履歴に書くため、
-# 比較対象も同じ文字列にする。``history.py`` は Salesforce の例外クラスを
-# import しない（依存を増やさない）ので、import せず文字列リテラルで扱う
+# 2000件超で失敗したときの例外クラス名。書き込み側が `error_code=type(exc).__name__`
+# で例外クラス名を履歴に書くため、比較対象も同じ文字列にする。``history.py`` は
+# Salesforce の例外クラスを import しない（依存を増やさない）ので、import せず
+# 文字列リテラルで扱う
 TRUNCATED_ERROR_NAME = "SalesforceReportTruncatedError"
-
-_TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
 @dataclass(frozen=True)
 class HistoryRow:
     """履歴1行の「呼び出し側が組み立てる部分」。履歴の列と1対1。
 
-    `entry` の5列（管理番号・概要・レポートID・URL・保存先）は `record()` 側で
-    取り出す。`fetched_from_salesforce` / `saved_to_file` は `True` / `False` /
-    `None` の3状態で、未到達は `None`。`schedule_key` はスケジュール行に紐付く
-    取得で値が入り、スケジュール行が無いレポートの取得（後方互換）は空文字。
+    `entry` の5列（管理番号・概要・レポートID・URL・保存先）は書き込み側
+    （Salesforceレポートダウンローダー）で取り出す。`fetched_from_salesforce` /
+    `saved_to_file` は `True` / `False` / `None` の3状態で、未到達は `None`。
+    `schedule_key` はスケジュール行に紐付く取得で値が入り、スケジュール行が
+    無いレポートの取得（後方互換）は空文字。
     """
 
     succeeded: bool
@@ -90,61 +90,6 @@ class HistoryRow:
     error_code: str = ""
     error: str = ""
     schedule_key: str = ""
-
-
-@measure
-def record(
-    path: str | Path,
-    *,
-    entry: ReportEntry,
-    project: str,
-    row: HistoryRow,
-) -> None:
-    """履歴を1行追記する。ファイルが無ければ見出し行から作る。
-
-    履歴は取得結果の根拠になる必須データなので、記録できなければ処理を失敗させる。
-
-    Args:
-        path: 履歴 CSV のパス。
-        entry: 管理表1行。管理番号・概要・レポートID・URL・保存先はこの中身を履歴に出す。
-        project: 呼び出したプロジェクト名。
-        row: 履歴1行の本体（成否・各段階の結果・件数・エラー）。
-    """
-    path = Path(path)
-    logger.debug(
-        "履歴追記開始: path=%s, 管理番号=%s, schedule_key=%s, project=%s",
-        path,
-        entry.key,
-        row.schedule_key,
-        project,
-    )
-    values = [
-        now().strftime(_TIMESTAMP_FORMAT),
-        entry.key,
-        row.schedule_key,
-        entry.summary,
-        entry.report_id,
-        entry.url,
-        project,
-        SUCCESS if row.succeeded else FAILURE,
-        _stage(row.fetched_from_salesforce),
-        _stage(row.saved_to_file),
-        str(entry.folder),
-        row.file_name,
-        "" if row.row_count is None else row.row_count,
-        f"{row.seconds:.2f}",
-        row.cause,
-        row.error_code,
-        row.error.replace("\n", " "),  # 1行1レコードを保つ
-    ]
-    try:
-        with HistoryFileLock(path):
-            _append(path, values)
-    except HistoryWriteError:
-        raise
-    except OSError as exc:
-        raise HistoryWriteError(path, str(exc)) from exc
-    logger.debug("履歴追記完了: path=%s", path)
 
 
 @measure
@@ -234,8 +179,9 @@ def schedule_succeeded_today(
     ``実行日時`` が当日で始まり、``成否 == 成功``、``保存結果 == 成功``、
     かつ ``スケジュールキー == schedule_key`` の行があれば True。
 
-    空文字の ``schedule_key`` では呼ばない前提。呼び出し側 (``service._matched_schedule_key``)
-    で空文字のときはこの関数を呼ばないため。空文字で呼ばれた場合は履歴上どの
+    空文字の ``schedule_key`` では呼ばない前提。呼び出し側（Salesforceレポート
+    ダウンローダーの ``_matched_schedule_key()``）で空文字のときはこの関数を
+    呼ばないため。空文字で呼ばれた場合は履歴上どの
     スケジュールキーとも一致しないため必ず False を返す（誤って空文字を渡しても
     誤判定しない防御的挙動）。
 
@@ -404,36 +350,6 @@ def read_history(path: str | Path) -> Table:
         rows = [dict(row) for row in reader]
     logger.debug("履歴全件読み込み完了: path=%s, 件数=%d", history_path, len(rows))
     return Table(list(COLUMNS), rows)
-
-
-def _stage(value: bool | None) -> str:
-    """3状態（成功／失敗／未到達）を履歴の文字列に変換する。"""
-    if value is None:
-        return ""
-    return SUCCESS if value else FAILURE
-
-
-def _append(path: Path, values: list) -> None:
-    """1行を追記する。見出し行はファイルを作るときだけ書く。
-
-    Excel が読めるよう UTF-8 BOM 付きにする。newline="" は csv モジュールの作法
-    （Windows で空行が入るのを防ぐ）。
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    is_new = not path.exists() or path.stat().st_size == 0
-    if not is_new:
-        _validate_existing_header(path)
-    with path.open("a", encoding="utf-8-sig", newline="") as f:
-        writer = csv.writer(f)
-        if is_new:
-            writer.writerow(COLUMNS)
-        writer.writerow(values)
-
-
-def _validate_existing_header(path: Path) -> None:
-    """追記前に見出しを確認し、違う列へ値をずらして書く事故を防ぐ。"""
-    with path.open("r", encoding="utf-8-sig", newline="") as f:
-        _require_expected_header(path, next(csv.reader(f), None))
 
 
 def _require_expected_header(path: Path, actual: Sequence[str] | None) -> None:

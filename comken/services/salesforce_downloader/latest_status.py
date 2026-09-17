@@ -19,8 +19,8 @@ from openpyxl.styles import PatternFill
 from comken.constants import Color
 from comken.core.table.model import Table
 from comken.core.timer import measure
-from comken.services.salesforce_downloader import _paths as _paths_module
 from comken.services.salesforce_downloader import history
+from comken.services.salesforce_downloader import paths as _paths_module
 from comken.services.salesforce_downloader.master import load_master
 from comken.toolbox.excel import Excel
 
@@ -59,9 +59,9 @@ def write_latest_status(
     private 属性を外から触らせる作りになっていないため、スタイル適用は
     ``Excel`` のコンテキストを閉じたあとに行う。
 
-    ``None`` を渡すと `_paths.MASTER_PATH` / `_paths.HISTORY_PATH` /
-    `_paths.LATEST_STATUS_PATH` の現在値を使う。**関数定義時のデフォルト値で
-    はなく呼び出し時の値を読む**ので、テストが ``_paths`` を monkeypatch
+    ``None`` を渡すと `paths.MASTER_PATH` / `paths.HISTORY_PATH` /
+    `paths.LATEST_STATUS_PATH` の現在値を使う。**関数定義時のデフォルト値で
+    はなく呼び出し時の値を読む**ので、テストが ``paths`` を monkeypatch
     して既定の保存先を確認できる。
 
     Args:

@@ -1,8 +1,13 @@
-"""comken/services/salesforce_downloader/_paths.py — 管理表・履歴の置き場所。
+"""comken/services/salesforce_downloader/paths.py — 管理表・履歴の置き場所。
 
-`service.py`（取りに行く側）と `provider.py`（読み取る側）の両方が読む定数を、
-依存関係を持ち込まない形で共有する。
+`provider.py`（読み取る側）や、外部プロジェクト（Salesforceレポートダウンローダー）の
+取得実行側の両方が読む定数を、依存関係を持ち込まない形で共有する。
 `comken.toolbox.salesforce` を経由しないため、`requests` なしで import できる。
+
+**アンダースコア無しの名前にしてある。** 取得実行部分（旧 `service.py`）は
+2026-09 に comken の外（Salesforceレポートダウンローダー）へ切り出したため、
+この定数はもう同一パッケージ内だけでなく、外部プロジェクトからも直接
+import される（詳しくは `__init__.py` の履歴メモを参照）。
 
 配置するときに実際の場所へ書き換える（公開リポジトリなので仮名にしてある）。
 """

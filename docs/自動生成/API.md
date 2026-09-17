@@ -5928,7 +5928,8 @@ class ReportNotRegisteredError(DownloaderError):
 管理番号はコードに定数で書く（CUSTOMER_LIST = "1001"）。管理表から行を消したり、
 番号を打ち間違えたりすると、どのレポートを指しているか決められない。
 
-発生箇所: comken.services.salesforce_downloader の download_scheduled() / cached_report()
+発生箇所: Salesforceレポートダウンローダー の download_scheduled() /
+comken.services.salesforce_downloader の cached_report()
 
 対処:
     管理表を開いて、その管理番号の行があるか確認する。
@@ -5953,7 +5954,7 @@ class ReportDisabledError(DownloaderError):
 使うのをやめたレポートは、行を消さずに「無効」にして履歴との対応を残す。
 無効のものを黙って取りに行くと、やめたはずの取得が続いてしまう。
 
-発生箇所: comken.services.salesforce_downloader の download_scheduled() / cached_report()
+発生箇所: comken.services.salesforce_downloader の cached_report() / cached_report_path()
 
 対処:
     また使うなら管理表の「有効」を「有効」に戻す。
@@ -6001,7 +6002,7 @@ class EmptyReportError(DownloaderError):
 空のファイルを置くと、使う側は「データが無い日」と「取得が失敗した日」を
 区別できなくなる。0 行のときはファイルを作らず、失敗として扱う。
 
-発生箇所: comken.services.salesforce_downloader の download_scheduled()
+発生箇所: Salesforceレポートダウンローダー の download_scheduled()
 
 対処:
     Salesforce の画面で同じレポートを開き、本当に 0 件か確認する。
@@ -6026,7 +6027,7 @@ class ReportFolderNotFoundError(DownloaderError):
 無いフォルダを作らないのは、書き間違いのことが多いため。
 勝手に作ると、誰も読まない場所へ置き続けることになる。
 
-発生箇所: comken.services.salesforce_downloader の download_scheduled()
+発生箇所: Salesforceレポートダウンローダー の download_scheduled()
 
 対処:
     管理表の「保存先」を確認する。共有フォルダなら、
@@ -6052,7 +6053,7 @@ class ReportReservePathLimitError(DownloaderError):
 ファイル名を探す。 上限（ ``RESERVE_PATH_LIMIT`` ）まで試しても確保できない
 のは権限・同期の異常など、運用側に原因があることが多い。
 
-発生箇所: comken.services.salesforce_downloader.service の _reserve_path()
+発生箇所: Salesforceレポートダウンローダー の _reserve_path()
 
 対処:
     保存先フォルダが想定どおりか確認する。 共有フォルダなら、 古い取得
@@ -6079,7 +6080,7 @@ class ScheduledDownloadFailedError(DownloaderError):
 ログだけに出して正常終了すると、スケジューラや RPA 基盤から見て成功と区別が付かず、
 落ちていることに誰も気づかない。
 
-発生箇所: comken.services.salesforce_downloader の download_scheduled()
+発生箇所: Salesforceレポートダウンローダー の download_scheduled()
 
 対処:
     履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。
@@ -6669,10 +6670,6 @@ def __init__(self, title: str) -> None:
 
 
 ## `from comken.services.salesforce_downloader import ...`
-
-### `download_scheduled`
-
-定義を解決できませんでした。
 
 ### `cached_report`
 

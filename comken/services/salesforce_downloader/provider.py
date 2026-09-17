@@ -34,11 +34,11 @@ from comken.exceptions import (
     ReportDisabledError,
     ReportNotRegisteredError,
 )
-from comken.services.salesforce_downloader._paths import MASTER_PATH
 from comken.services.salesforce_downloader.master import (
     ReportEntry,
     load_master,
 )
+from comken.services.salesforce_downloader.paths import MASTER_PATH
 from comken.toolbox.csv import CSV
 
 logger = logging.getLogger(__name__)
@@ -90,7 +90,7 @@ def cached_report(report_key: str, project: str = "") -> Table:
         CachedReportNotFoundError: 本日のキャッシュが無い場合。
     """
     entry = _find(report_key, MASTER_PATH)
-    path = _daily_cache_path_of(entry)
+    path = daily_cache_path_of(entry)
     if not path.is_file():
         raise CachedReportNotFoundError(entry.key, entry.summary, path)
     logger.info("本日の定期取得キャッシュを使います: %s", path)
@@ -115,7 +115,7 @@ def cached_report_path(report_key: str) -> Path:
         ReportDisabledError: 管理表で無効になっている場合。
     """
     entry = _find(report_key, MASTER_PATH)
-    return _daily_cache_path_of(entry)
+    return daily_cache_path_of(entry)
 
 
 def file_path_of(entry: ReportEntry) -> Path:
@@ -130,7 +130,7 @@ def file_path_of(entry: ReportEntry) -> Path:
     return entry.folder / DateNameBuilder(name).suffix("%Y%m%d_%H%M%S_%f")
 
 
-def _daily_cache_path_of(entry: ReportEntry) -> Path:
+def daily_cache_path_of(entry: ReportEntry) -> Path:
     """定期取得の当日最新キャッシュに使う固定パスを返す。
 
     時刻を含めないことで、同日に何度取得しても読む側が同じパスを直接確認できる。

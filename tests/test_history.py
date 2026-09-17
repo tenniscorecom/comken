@@ -1,97 +1,75 @@
-"""ダウンロード履歴の別実行単位からの同時追記を検証する。"""
+"""ダウンロード履歴の読み取り関数を検証する。
 
-from concurrent.futures import ThreadPoolExecutor
-from multiprocessing import get_context
+履歴の書き込み（旧 `record()`、同時追記の排他制御を含む）は 2026-09 に comken の外
+（Salesforceレポートダウンローダー）へ切り出した。書き込み側のテスト（同時追記・
+書き込み時のヘッダー検証）はそちらの `tests/` にある。ここでは読み取り関数
+（`successful_files_today` / `schedule_succeeded_today` / `truncated_today` /
+`read_history`）だけを検証し、テストデータは `_write_row()` で直接 CSV へ書く
+（`record()` が内部でやっていたことの最小限の再現）。
+"""
+
+import csv
 from pathlib import Path
 
 import pytest
 
+from comken.core.clock import now
 from comken.exceptions import HistoryHeaderMismatchError
 from comken.services.salesforce_downloader.history import (
     COLUMNS,
+    FAILURE,
+    SUCCESS,
     HistoryRow,
     read_history,
-    record,
     schedule_succeeded_today,
     successful_files_today,
     truncated_today,
 )
 from comken.services.salesforce_downloader.master import ReportEntry
-from comken.toolbox.csv import CSV
 
 
-def test_concurrent_appends_keep_one_header_and_complete_rows(tmp_path) -> None:
-    """同時に見出し作成と追記が走っても、欠損・混在した行を作らない。"""
-    history_path = tmp_path / "履歴.csv"
-    entry = ReportEntry(
-        key="1001",
-        group_name="営業事務グループ",
-        assignee="山田",
-        summary="顧客一覧",
-        url="https://example.com/Report/00O5g00000ABCDE/view",
-        folder=tmp_path,
-        enabled=True,
-        allow_empty=False,
-        note="",
-    )
+def _write_row(path: Path, *, entry: ReportEntry, project: str, row: HistoryRow) -> None:
+    """テスト用: 旧 `record()` 相当の1行をCSVへ直接書く（書き込み側は別リポジトリへ移動）。"""
 
-    def append(index: int) -> None:
-        record(
-            history_path,
-            entry=entry,
-            project=str(index),
-            row=HistoryRow(
-                succeeded=True,
-                fetched_from_salesforce=True,
-                saved_to_file=True,
-                file_name=f"{index}.csv",
-                row_count=index,
-            ),
-        )
+    def _stage(value: bool | None) -> str:
+        if value is None:
+            return ""
+        return SUCCESS if value else FAILURE
 
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        list(executor.map(append, range(40)))
-
-    with CSV(history_path) as csv_file:
-        rows = csv_file.read()
-    assert len(rows) == 40
-    assert {row["プロジェクト"] for row in rows} == {str(index) for index in range(40)}
-
-
-def test_process_appends_keep_one_header_and_complete_rows(tmp_path) -> None:
-    """別プロセスから同時追記しても、見出しと各行を壊さない。"""
-    history_path = tmp_path / "履歴.csv"
-    arguments = [(str(history_path), str(tmp_path), index) for index in range(12)]
-    with get_context("spawn").Pool(processes=4) as pool:
-        pool.map(_append_from_process, arguments)
-
-    with CSV(history_path) as csv_file:
-        rows = csv_file.read()
-    assert len(rows) == 12
-    assert {row["プロジェクト"] for row in rows} == {str(index) for index in range(12)}
-
-
-def test_rejects_history_with_different_header(tmp_path) -> None:
-    """既存履歴の列が違う場合、値をずらして追記せず明示的に止める。"""
-    history_path = tmp_path / "履歴.csv"
-    history_path.write_text("管理番号,成否\n1000,成功\n", encoding="utf-8-sig")
-
-    with pytest.raises(HistoryHeaderMismatchError):
-        record(
-            history_path,
-            entry=_entry(tmp_path),
-            project="追記",
-            row=HistoryRow(True, True, True, file_name="new.csv"),
-        )
-
-    assert history_path.read_text(encoding="utf-8-sig").splitlines()[0] == "管理番号,成否"
+    values = [
+        now().strftime("%Y-%m-%d %H:%M:%S"),
+        entry.key,
+        row.schedule_key,
+        entry.summary,
+        entry.report_id,
+        entry.url,
+        project,
+        SUCCESS if row.succeeded else FAILURE,
+        _stage(row.fetched_from_salesforce),
+        _stage(row.saved_to_file),
+        str(entry.folder),
+        row.file_name,
+        "" if row.row_count is None else row.row_count,
+        f"{row.seconds:.2f}",
+        row.cause,
+        row.error_code,
+        row.error.replace("\n", " "),
+    ]
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    is_new = not path.exists() or path.stat().st_size == 0
+    with path.open("a", encoding="utf-8-sig", newline="") as f:
+        writer = csv.writer(f)
+        if is_new:
+            writer.writerow(COLUMNS)
+        writer.writerow(values)
 
 
 def test_successful_file_requires_both_overall_and_save_success(tmp_path) -> None:
     """成否だけが成功でも、保存成功が無い履歴を取得済みにしない。"""
     history_path = tmp_path / "履歴.csv"
     entry = _entry(tmp_path)
-    record(
+    _write_row(
         history_path,
         entry=entry,
         project="異常な履歴",
@@ -105,13 +83,13 @@ def test_read_history_returns_every_row_in_order(tmp_path) -> None:
     """絞り込みはせず、書かれた順のまま全行を Table で返す。"""
     history_path = tmp_path / "履歴.csv"
     entry = _entry(tmp_path)
-    record(
+    _write_row(
         history_path,
         entry=entry,
         project="P1",
         row=HistoryRow(True, True, True, file_name="a.csv"),
     )
-    record(
+    _write_row(
         history_path,
         entry=entry,
         project="P2",
@@ -144,7 +122,7 @@ def test_schedule_succeeded_today_returns_true_after_same_key_success(tmp_path) 
     """同じスケジュールキーで当日成功した履歴があれば True を返す。"""
     history_path = tmp_path / "履歴.csv"
     entry = _entry(tmp_path)
-    record(
+    _write_row(
         history_path,
         entry=entry,
         project="P",
@@ -168,7 +146,7 @@ def test_schedule_succeeded_today_ignores_other_keys(tmp_path) -> None:
     """別スケジュールキーの成功履歴は True にしない。"""
     history_path = tmp_path / "履歴.csv"
     entry = _entry(tmp_path)
-    record(
+    _write_row(
         history_path,
         entry=entry,
         project="P",
@@ -186,8 +164,6 @@ def test_schedule_succeeded_today_ignores_other_keys(tmp_path) -> None:
 def test_schedule_succeeded_today_ignores_other_dates(tmp_path) -> None:
     """昨日の成功履歴は True にしない。"""
     history_path = tmp_path / "履歴.csv"
-    # まず当日分の空ファイルを作る（`record()` は内部で `now()` を使うため、
-    # 直接 CSV を書いて古い日付の成功履歴を入れる）
     history_path.parent.mkdir(parents=True, exist_ok=True)
     history_path.write_text(
         (
@@ -205,7 +181,7 @@ def test_schedule_succeeded_today_requires_save_success(tmp_path) -> None:
     """成否=成功でも保存結果=失敗なら True にしない（保存できていないので再試行可）。"""
     history_path = tmp_path / "履歴.csv"
     entry = _entry(tmp_path)
-    record(
+    _write_row(
         history_path,
         entry=entry,
         project="P",
@@ -228,7 +204,7 @@ def test_schedule_succeeded_today_rejects_empty_key(tmp_path) -> None:
     """
     history_path = tmp_path / "履歴.csv"
     entry = _entry(tmp_path)
-    record(
+    _write_row(
         history_path,
         entry=entry,
         project="P",
@@ -247,7 +223,7 @@ def test_truncated_today_returns_true_when_today_failed_with_truncated_error(tmp
     """今日 ``SalesforceReportTruncatedError`` で失敗した履歴があれば True。"""
     history_path = tmp_path / "履歴.csv"
     entry = _entry(tmp_path)
-    record(
+    _write_row(
         history_path,
         entry=entry,
         project="P",
@@ -274,7 +250,7 @@ def test_truncated_today_returns_false_for_other_error_codes(tmp_path) -> None:
     毎回リトライしてよい、という既存挙動を壊さない。"""
     history_path = tmp_path / "履歴.csv"
     entry = _entry(tmp_path)
-    record(
+    _write_row(
         history_path,
         entry=entry,
         project="P",
@@ -294,7 +270,7 @@ def test_truncated_today_ignores_other_report_keys(tmp_path) -> None:
     """別の管理番号の 2000件超 失敗履歴は True にしない。"""
     history_path = tmp_path / "履歴.csv"
     entry = _entry(tmp_path)
-    record(
+    _write_row(
         history_path,
         entry=entry,
         project="P",
@@ -333,7 +309,7 @@ def test_truncated_today_ignores_successful_rows_with_same_code(tmp_path) -> Non
     （あり得ない組合せだが、列値の照合順の防御として明示的に区別する）。"""
     history_path = tmp_path / "履歴.csv"
     entry = _entry(tmp_path)
-    record(
+    _write_row(
         history_path,
         entry=entry,
         project="P",
@@ -346,17 +322,6 @@ def test_truncated_today_ignores_successful_rows_with_same_code(tmp_path) -> Non
         ),
     )
     assert truncated_today(history_path, entry.key) is False
-
-
-def _append_from_process(arguments: tuple[str, str, int]) -> None:
-    """spawnした子プロセスから履歴を1行追記する。"""
-    history_path, folder, index = arguments
-    record(
-        history_path,
-        entry=_entry(Path(folder)),
-        project=str(index),
-        row=HistoryRow(True, True, True, file_name=f"{index}.csv", row_count=index),
-    )
 
 
 def _entry(folder: Path) -> ReportEntry:

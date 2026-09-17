@@ -1,5 +1,14 @@
 ﻿# Salesforce レポートの集約取得（salesforce_downloader）
 
+> [!important] 2026-09: 取得を実行する側は comken の外へ切り出した
+> `download_scheduled()`（Salesforce へ実際に取りに行き、履歴へ書く処理）は
+> `Salesforceレポートダウンローダー` リポジトリ（`src/salesforce_downloader/`）に
+> ある。**このページで書いているのは、comken 側に残っている「管理表・履歴の
+> 形式（共有契約）」と「取っておいたものを読む側」（`cached_report()` 等）まで。**
+> `download_scheduled()` の実装・定期実行の組み込み方・実行時フィルタや
+> ブラウザ経由取得の指定方法は、そちらのリポジトリの README を参照。
+> 経緯は `comken/services/salesforce_downloader/__init__.py` の履歴メモを参照。
+
 各プロジェクトが個別に Salesforce からレポートを落としていると、**どのプロジェクトが
 どのレポートを、どれくらいの頻度で取っているのか**が分からなくなる。取得をここへ集約し、
 何を取っているかは**管理表（Excel）**に、いつ何を取ったかは**履歴（CSV）**に集める。
@@ -7,16 +16,16 @@
 ```
 レポート管理表.xlsx（人が編集）        ダウンロード履歴.csv（プログラムが追記）
         ↓                                      ↑
-  comken.services.salesforce_downloader  ──→ Salesforce
+  Salesforceレポートダウンローダー       ──→ Salesforce
         ↓
-  各プロジェクト（cached_report / download_scheduled）
+  各プロジェクト（comken.services.salesforce_downloader の cached_report）
 ```
 
 以下は上の構成に「最新ステータス.xlsx」を加えて Mermaid の `graph TD` で描き直したもの。
 
 ```mermaid
 graph TD
-    A["レポート管理表.xlsx<br/>（人が編集）"] --> B["salesforce_downloader"]
+    A["レポート管理表.xlsx<br/>（人が編集）"] --> B["Salesforceレポートダウンローダー"]
     B <--> C["Salesforce"]
     B --> D["ダウンロード履歴.csv<br/>（追記）"]
     B --> E["最新ステータス.xlsx<br/>（上書き）"]
@@ -37,8 +46,8 @@ from comken.services.salesforce_downloader import (
 CUSTOMER_LIST = "1001"    # 管理表の「ID」。意味の分かる名前を付ける
 SALES_RESULT = "1003"
 
-# 定期取得は download_scheduled() をスケジュール駆動で呼ぶ。
-# 中身を読みたいプロジェクトは本日キャッシュを cached_report() で受け取る。
+# 定期取得（download_scheduled()）は Salesforceレポートダウンローダー側がスケジュール
+# 駆動で呼ぶ。中身を読みたいプロジェクトは本日キャッシュを cached_report() で受け取る。
 by_code = cached_report(SALES_RESULT).index("顧客コード")
 # 中身が要らずファイルパスだけ欲しいときは cached_report_path()
 print(cached_report_path(CUSTOMER_LIST))   # 本日の固定キャッシュのパス
@@ -59,18 +68,19 @@ print(cached_report_path(CUSTOMER_LIST))   # 本日の固定キャッシュの�
 
 ### 2つの関数の使い分け
 
-| | 意味 | Salesforce へ問い合わせるか |
-|---|---|---|
-| `download_scheduled()` | **今この瞬間に、有効な全レポートをまとめて取りに行く** | **行く**（定期取得の入口） |
-| `cached_report(ID)` | **本日の定期取得キャッシュを受け取る** | **行かない**（無ければ例外） |
+| | 意味 | Salesforce へ問い合わせるか | どこにあるか |
+|---|---|---|---|
+| `download_scheduled()` | **今この瞬間に、有効な全レポートをまとめて取りに行く** | **行く**（定期取得の入口） | Salesforceレポートダウンローダー |
+| `cached_report(ID)` | **本日の定期取得キャッシュを受け取る** | **行かない**（無ければ例外） | comken |
 
 急いでその場の最新値が必要なときは `download_scheduled()` をスケジュール外で
-直接実行する。Downloader 自身には「今すぐ取りに行く」だけの関数を残さない
-（定期取得が動いていないことに誰も気づかなくなるため）。
+直接実行する（Salesforceレポートダウンローダー側）。「今すぐ取りに行く」だけの
+専用関数はどちらのリポジトリにも置かない（定期取得が動いていないことに誰も
+気づかなくなるため）。
 
 定期キャッシュを1日に複数回更新したいときは、呼び出す側のスケジューラから
-`download_scheduled()` を必要な時刻に実行する。Downloader 自身には複雑な
-スケジュール（土日祝を除く等）を持たせない——呼び出す側と二重に持つと必ずズレるため。
+`download_scheduled()` を必要な時刻に実行する。複雑なスケジュール（土日祝を除く等）を
+呼び出す側と二重に持たせない——予定は呼び出す側にすでにあるため。
 
 ---
 
@@ -106,7 +116,7 @@ python -m comken sf check
 
 ### 2. 管理表の置き場所を決める
 
-**先に決める。** 場所は `comken.services.salesforce_downloader/_paths.py` の
+**先に決める。** 場所は `comken.services.salesforce_downloader/paths.py` の
 `MASTER_PATH` に書いてあり、**配置のときに書き換えるファイルのひとつ**
 （→ [配置するときの設定](#配置するときの設定)）。
 
@@ -149,26 +159,12 @@ python -m comken sfdl check "\\実際のサーバー\share\tools\salesforce\レ�
 
 **Salesforce へはつながない。** 記入内容の検査だけなので、何度でも安全に流せる。
 
-### 6. 1件だけ取ってみる
+### 6. 1件だけ取ってみる／7. 定期実行に組み込む
 
-いきなり定期実行に入れず、**1件で通しを確かめる**。管理表に書いた管理番号を渡す。
-`download_scheduled()` をそのまま 1 回流すと、管理表の全件を 1 度だけ取って
-くれる（定期実行と「1 件確認」を兼ねる）。
-
-```python
-from comken.services.salesforce_downloader import download_scheduled
-
-saved = download_scheduled("動作確認")
-print(saved)  # 保存されたファイルのパスのリスト
-```
-
-ここまで通れば、**保存先にファイルができ、履歴（CSV）に1行増えている**。
-
-### 7. 定期実行に組み込む
-
-`download_scheduled()` を、タスクスケジューラや RPA 基盤から定期的に呼ぶ。
-**時刻を決めるのは呼び出す側**で、管理表には時刻を持たせない
-（→ [定期取得](#定期取得)）。
+ここから先（`download_scheduled()` を使った動作確認・定期実行への組み込み）は
+`Salesforceレポートダウンローダー` リポジトリの README を参照。いきなり定期実行に
+入れず、まず1件で通しを確かめてから、タスクスケジューラや RPA 基盤へ組み込む
+という流れは変わらない。
 
 ---
 
@@ -429,80 +425,17 @@ dedup 判定に使わない。スケジュール行に紐付かないレポー�
 ```python
 from comken.services.salesforce_downloader.latest_status import write_latest_status
 
-write_latest_status()  # 既定のパス（_paths.LATEST_STATUS_PATH）へ書き出す
+write_latest_status()  # 既定のパス（paths.LATEST_STATUS_PATH）へ書き出す
 ```
 
 ---
 
 ## 定期取得
 
-**定期実行そのものは comken に置かない。** 実行される単位は個別プロジェクトの仕事で、
-comken に置くのは呼ばれる側だけにする。
-
-定期実行のプロジェクト側で、これを呼ぶだけでよい。
-
-```python
-import logging
-
-from comken.services.salesforce_downloader import download_scheduled
-
-PROJECT_NAME = "Salesforceレポートダウンローダー"   # 履歴の「プロジェクト」列に残る名前
-
-logger = logging.getLogger(__name__)
-
-
-def run() -> None:
-    saved = download_scheduled(PROJECT_NAME)
-    logger.info("%d 件を取得しました。", len(saved))
-```
-
-`download_scheduled()` の戻り値は `list[Path]`（保存できたファイルのパス）。中身を読みたい
-プロジェクトは `cached_report()` を1件ずつ使う。
-
-### タスクから実行時フィルタを渡す
-
-タスク固有の条件でレポートを実行するときは `filters_by_report` を使う。キーは
-Salesforce のレポートIDではなく、管理表の管理番号。指定しなかったレポートは
-保存済み条件のまま実行される。実行時フィルタは元のSalesforceレポート定義を変更しない。
-
-```python
-from comken.services.salesforce_downloader import download_scheduled
-
-PROJECT_NAME = "Salesforceレポートダウンローダー"
-SALES_RESULT = "1003"
-
-FILTERS_BY_REPORT = {
-    SALES_RESULT: [
-        {
-            "column": "CREATED_DATE",
-            "operator": "greaterThan",
-            "value": "2026-09-01",
-        }
-    ]
-}
-
-download_scheduled(
-    PROJECT_NAME,
-    filters_by_report=FILTERS_BY_REPORT,
-)
-```
-
-フィルタ1件の形式は `sf.report.get(..., filters=...)` と同じ
-`column` / `operator` / `value`。管理表に無い管理番号を書いた場合は、条件を黙って
-無視せず `ReportNotRegisteredError` で止める。
-
-この辞書は、全レポートをSOQLへ移行するときの `WHERE` 句の材料でもある。そのため
-実行時条件を `if` 文や文字列結合へ散らさず、管理番号ごとの辞書にまとめる。
-ただし `tools/dump_soql_drafts.py` が自動取得できるのは Salesforce に保存された
-レポート定義だけであり、この実行時フィルタは別途SOQLへ合成する必要がある。
-
-**1件失敗しても残りは続ける——ただし想定した失敗に限る。** 5本のうち1本が落ちたときに
-全部やり直すと、手で用意する手間が5本ぶんになる。`ComkenError`（メッセージ本文に対処が
-載っている想定内の失敗）と `OSError`（共有サーバー断・権限など運用上の失敗）は
-1件ずつ拾って残りを続ける。それ以外の例外（`TypeError` など）は**想定していない
-（comken 側のバグ）**ので、その場で落として気づかせる。`ScheduledDownloadFailedError`
-（＝「1件取れませんでした」）の顔で出てくると、非エンジニアが「もう一度実行してみる」を
-繰り返すだけになるため。失敗は履歴（`原因区分` 列）とログに残る。
+**定期実行の実装（`download_scheduled()` の呼び出し・実行時フィルタ・ブラウザ経由
+取得の指定・失敗時の扱い）は `Salesforceレポートダウンローダー` リポジトリにある。**
+comken 側に置くのは、そのプロジェクトが従う**管理表・履歴の形式**（このページの他の
+節）と、以下の「スケジュール管理表」（`schedule.py` / `schedule_template.py`）まで。
 
 ### スケジュール管理表（曜日・時刻の振り分け）
 
@@ -593,23 +526,8 @@ if rule.is_due(datetime.now(), holidays=set()):
 （後方互換）。** 「スケジュール」シートに何も書いていないレポートは曜日・時刻を
 絞らず毎回走る。
 
-### 利用プロジェクト側の設計判断
-
-定期実行のバッチは利用プロジェクト側に置く。設計上の判断は次のとおり。
-
-- **定期取得のバッチは利用プロジェクト側に置く。** comken は「実行される単位」を
-  持たない
-- **何を落とすかはコードに書かない。** レポート管理表で `有効` のものが対象で、
-  増減は管理表を直すだけで済む
-- **「今すぐ取りに行く」専用の API は comken に置かない。** 急ぐ取得は
-  権限を持つ人が手動で Salesforce からダウンロードするか、呼び出し側で
-  `download_scheduled()` をスケジュール外で実行する
-- **「土日祝を除く」のようなスケジュールをこのバッチに持たせない。** それは
-  呼び出す側の予定に既にあるため
-- **失敗があれば例外で止める。** `ScheduledDownloadFailedError` が送出される。
-  ログだけ出して正常終了すると、スケジューラから見て成功と区別が付かない
-- **履歴の「プロジェクト」列に残る名前を定数（`PROJECT_NAME`）で持つ。** 誰が
-  取ったかを後から追えるようにする
+取得実行側（`download_scheduled()` の呼び出し方・失敗時の扱い・`PROJECT_NAME` の
+持ち方）の設計判断は `Salesforceレポートダウンローダー` リポジトリの README を参照。
 
 ---
 
@@ -861,8 +779,9 @@ saved = download_soql_reports()   # SOQL_REPORTS を全部取得・保存
 
 ## 配置するときの設定
 
-管理表と履歴の場所は `comken.services.salesforce_downloader/_paths.py` に書いてある。
-配置するときに実際の場所へ書き換える。
+管理表と履歴の場所は `comken.services.salesforce_downloader/paths.py` に書いてある。
+配置するときに実際の場所へ書き換える。取得実行側（Salesforceレポートダウンローダー）も
+この定数を import して使うため、書き換えるのはここ1か所だけでよい。
 
 ```python
 SALESFORCE_DOWNLOADER_FOLDER = Path(r"\\実際のサーバー\share\tools\salesforce")
@@ -880,7 +799,7 @@ LATEST_STATUS_PATH = SALESFORCE_DOWNLOADER_FOLDER / LATEST_STATUS_FILENAME
 comken 側のドキュメントを参照。
 
 **利用側の API から `master_path=` / `history_path=` / `output_path=` を渡せない。**
-この3つの定数は `_paths.py` で一元管理する。プロジェクト側に同名のパス定数を作ると、
+この3つの定数は `paths.py` で一元管理する。プロジェクト側に同名のパス定数を作ると、
 管理表を直したのに出力先が変わらず、しかもエラーにもならない事故が起きる
 （境界を破った典型例）。
 
@@ -893,12 +812,13 @@ comken 側のドキュメントを参照。
 | レポートを1本足す／やめる | 管理表（Excel）だけ。コードは触らない |
 | 参照先の Salesforce レポートを差し替える | 管理表の「Salesforce URL」 |
 | 保存先を変える | 管理表の「保存先」 |
-| 取る時刻・曜日を変える、月末だけにする | 呼び出す側のスケジューラ |
+| 取る時刻・曜日を変える、月末だけにする | 管理表の「スケジュール」シート（`schedule.py` が判定。呼び出し方自体は Salesforceレポートダウンローダー） |
 | 取ったCSVを加工する・DBへ入れる・通知する | 利用プロジェクト |
-| ファイル名の付け方を変える | `provider.py` の `file_path_of()` ← **全プロジェクトに効く** |
-| 履歴に列を足す | `history.py` ← **全プロジェクトに効く** |
+| Salesforce への問い合わせ・保存・履歴書き込みの実行を変える | Salesforceレポートダウンローダー（`service.py`） |
+| ファイル名の付け方を変える | `provider.py` の `file_path_of()` / `daily_cache_path_of()` ← **全プロジェクトに効く** |
+| 履歴の列・読み取り方を変える | `history.py` ← **全プロジェクトに効く**（書き込み側は Salesforceレポートダウンローダー） |
 | 管理表に列を足す | `master.py` の `ReportEntry` |
-| 管理表・履歴・最新ステータスの置き場所を変える | `_paths.py` の `MASTER_PATH` / `HISTORY_PATH` / `LATEST_STATUS_PATH` |
+| 管理表・履歴・最新ステータスの置き場所を変える | `paths.py` の `MASTER_PATH` / `HISTORY_PATH` / `LATEST_STATUS_PATH` |
 | Salesforce の認証・API の叩き方を変える | `comken/toolbox/salesforce/`（Downloader ではない） |
 | 接続先の組織を足す | `comken/toolbox/salesforce/sites/` |
 | 2000件超のレポートをSOQLで取る | `soql_reports/`（1レポート=1ファイル＋`_registry.py`へ登録） |
@@ -911,7 +831,7 @@ comken 側のドキュメントを参照。
 ### 境界を破った事故の例
 
 - **保存先をプロジェクト側の定数にも書いてしまった。** 管理表を直したのに出力先が変わらず、
-  エラーにもならない（履歴には書いたとおりに動いた記録が残る）— `service.py` の
+  エラーにもならない（履歴には書いたとおりに動いた記録が残る）— `paths.py` の
   `MASTER_PATH` / `HISTORY_PATH` と、管理表の「保存先」の2箇所を見比べる必要がある
   ことに気づくまで、誰も原因にたどり着けない
 - **「このプロジェクトのときは別フォルダへ保存」を Downloader に持ち込んだ。** 全プロジェクトの

@@ -1,19 +1,25 @@
 """最新ステータス Excel の生成を検証する。
 
 管理表（Excel）と履歴（CSV）は tmp_path に本物を作り、`write_latest_status()` の
-引数へ直接渡す（`_paths` の共有定数を monkeypatch すると `service.py` 側のローカル
-束縛と食い違う経路が残るため、明示引数で閉じたテストにする）。
+引数へ直接渡す（`paths` の共有定数を monkeypatch すると `latest_status.py` 側の
+ローカル束縛と食い違う経路が残るため、明示引数で閉じたテストにする）。
+
+履歴の書き込み（旧 `history.record()`）は 2026-09 に comken の外
+（Salesforceレポートダウンローダー）へ切り出したため、ここでは集計対象の履歴行を
+`_record()` で直接 CSV へ書く（`record()` が内部でやっていたことの最小限の再現）。
 """
 
+import csv
 import time
 from pathlib import Path
 
 from openpyxl import load_workbook
 
-import comken.services.salesforce_downloader._paths as _paths_module
+import comken.services.salesforce_downloader.paths as _paths_module
 from comken.constants import Color
+from comken.core.clock import now
 from comken.core.table.model import Table
-from comken.services.salesforce_downloader.history import HistoryRow, record
+from comken.services.salesforce_downloader.history import COLUMNS, FAILURE, SUCCESS, HistoryRow
 from comken.services.salesforce_downloader.latest_status import write_latest_status
 from comken.services.salesforce_downloader.master import ReportEntry
 from comken.toolbox.excel import Excel
@@ -39,6 +45,46 @@ def make_master(path: Path, rows: list[list]) -> Path:
     with Excel(path) as book:
         book.create_data_sheet("管理表").create_table("管理表", Table(HEADERS, table_rows))
     return path
+
+
+def _record(path: Path, *, entry: ReportEntry, project: str, row: HistoryRow) -> None:
+    """テスト用: 旧 `history.record()` 相当の1行をCSVへ直接書く。
+
+    書き込み側は Salesforceレポートダウンローダーへ移動したため、集計（read側）の
+    テストではここで最小限の行を組み立てる。
+    """
+
+    def _stage(value: bool | None) -> str:
+        if value is None:
+            return ""
+        return SUCCESS if value else FAILURE
+
+    values = [
+        now().strftime("%Y-%m-%d %H:%M:%S"),
+        entry.key,
+        row.schedule_key,
+        entry.summary,
+        entry.report_id,
+        entry.url,
+        project,
+        SUCCESS if row.succeeded else FAILURE,
+        _stage(row.fetched_from_salesforce),
+        _stage(row.saved_to_file),
+        str(entry.folder),
+        row.file_name,
+        "" if row.row_count is None else row.row_count,
+        f"{row.seconds:.2f}",
+        row.cause,
+        row.error_code,
+        row.error.replace("\n", " "),
+    ]
+    path = Path(path)
+    is_new = not path.exists() or path.stat().st_size == 0
+    with path.open("a", encoding="utf-8-sig", newline="") as f:
+        writer = csv.writer(f)
+        if is_new:
+            writer.writerow(COLUMNS)
+        writer.writerow(values)
 
 
 def _entry(folder: Path, *, key: str, summary: str, url: str) -> ReportEntry:
@@ -113,7 +159,7 @@ class TestWriteLatestStatus:
         entry2 = _entry(folder, key="1002", summary="売上実績", url=URL_B)
         # 1001: 古い失敗 → 新しい成功。``now()`` の精度が秒なので 1 秒待って
         # 確実に新しい行として認識させる（文字列比較なので同秒だと古い行が残る）
-        record(
+        _record(
             history_path,
             entry=entry1,
             project="P",
@@ -127,7 +173,7 @@ class TestWriteLatestStatus:
             ),
         )
         time.sleep(1)
-        record(
+        _record(
             history_path,
             entry=entry1,
             project="P",
@@ -139,7 +185,7 @@ class TestWriteLatestStatus:
             ),
         )
         # 1002: 古い成功 → 新しい失敗
-        record(
+        _record(
             history_path,
             entry=entry2,
             project="P",
@@ -151,7 +197,7 @@ class TestWriteLatestStatus:
             ),
         )
         time.sleep(1)
-        record(
+        _record(
             history_path,
             entry=entry2,
             project="P",
@@ -207,7 +253,7 @@ class TestWriteLatestStatus:
         )
         history_path = tmp_path / "ダウンロード履歴.csv"
         # 1001 だけ履歴がある
-        record(
+        _record(
             history_path,
             entry=_entry(folder, key="1001", summary="顧客一覧", url=URL_A),
             project="P",
@@ -257,7 +303,7 @@ class TestWriteLatestStatus:
             ],
         )
         history_path = tmp_path / "ダウンロード履歴.csv"
-        record(
+        _record(
             history_path,
             entry=_entry(folder, key="1001", summary="顧客一覧", url=URL_A),
             project="P",
@@ -268,7 +314,7 @@ class TestWriteLatestStatus:
                 file_name="1001.csv",
             ),
         )
-        record(
+        _record(
             history_path,
             entry=_entry(folder, key="1002", summary="売上実績", url=URL_B),
             project="P",
@@ -297,7 +343,7 @@ class TestWriteLatestStatus:
             assert _rgb(sheet.cell(row=3, column=column).fill) == f"00{Color.PINK}"
 
     def test_default_paths_follow_paths_module(self, tmp_path, monkeypatch):
-        """引数を省略すると ``_paths.LATEST_STATUS_PATH`` へ書き出す。"""
+        """引数を省略すると ``paths.LATEST_STATUS_PATH`` へ書き出す。"""
         folder = tmp_path / "保存先"
         folder.mkdir()
         master = make_master(
@@ -316,7 +362,7 @@ class TestWriteLatestStatus:
             ],
         )
         history_path = tmp_path / "ダウンロード履歴.csv"
-        record(
+        _record(
             history_path,
             entry=_entry(folder, key="1001", summary="顧客一覧", url=URL_A),
             project="P",

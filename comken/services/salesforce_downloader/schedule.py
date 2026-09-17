@@ -237,7 +237,7 @@ def load_schedule(path: str | Path | None = None) -> list[ScheduleRule]:
         ExcelFileNotFoundError: ``path`` が存在しない場合。
     """
     if path is None:
-        from comken.services.salesforce_downloader._paths import MASTER_PATH
+        from comken.services.salesforce_downloader.paths import MASTER_PATH
 
         path = MASTER_PATH
     source = Path(path)
