@@ -34,9 +34,10 @@ comken を使う側のプロジェクトの構成は `templates/新規プロジ�
 12. ロギング
 13. Excel（openpyxl）
 14. Windows 操作（pywin32）
-15. コメント
-16. 日時の扱い
-17. テスト
+15. ブラウザ自動化（Selenium）
+16. コメント
+17. 日時の扱い
+18. テスト
 
 ---
 
@@ -381,8 +382,7 @@ from パッケージ.utils.files import *
 | 3 | `logger`・型変数（`TypeVar` / `ParamSpec`） |
 | 4 | 定数・定数クラス |
 | 5 | 主役の公開クラス（モジュール名が指すもの） |
-| 6 | その他の公開クラス・公開関数 |
-| 7 | 内部ヘルパー（`_` プレフィックス）— **必ず最後** |
+| 6 | その他の公開クラス・公開関数、およびそれぞれが使う内部ヘルパー（`_` プレフィックス） |
 
 ```python
 """example/handler.py — ○○ユーティリティ"""            # 1. docstring
@@ -395,10 +395,38 @@ DEFAULT_TIMEOUT = 30                    # 4. 定数
 class CSV:                        # 5. 主役の公開クラス
     ...
 
-def merge_csv(paths: list) -> Path:     # 6. 公開関数
+def merge_csv(paths: list) -> Path:     # 6. 公開関数（メイン）
+    encoding = _detect_encoding(paths[0])
     ...
 
-def _detect_encoding(path: Path) -> str:  # 7. 内部ヘルパー
+def _detect_encoding(path: Path) -> str:  # merge_csv() だけが使うヘルパーなので直後に置く
+    ...
+```
+
+**内部ヘルパーは「使う公開関数のすぐ下」に置く。ファイル末尾へまとめて追いやらない。**
+読む側は公開関数を読んだ直後にその実装の続きを読みたいのであって、
+ファイルの最後までスクロールしてヘルパーを探したいわけではない。
+公開関数が複数あるモジュールでは、**各公開関数 → その関数が使うヘルパー**の
+組を、公開関数の重要度順（メインで使う関数を上、そこから呼ばれるものを直後）に
+並べる。
+
+**複数の公開関数から共通して呼ばれるヘルパーは、最初に使われる箇所より前に
+出して独立させる。** 特定の1関数専用のヘルパーと同列に埋もれさせない。
+
+```python
+def _shared_helper():  # 複数の公開関数が使うので、呼び出し側より上に出す
+    ...
+
+def download_scheduled():         # 公開関数A（メイン）
+    _shared_helper()
+    ...
+
+def _download():                  # download_scheduled() だけが使うヘルパー
+    _shared_helper()
+    ...
+
+def cached_report():              # 公開関数B
+    _shared_helper()
     ...
 ```
 
@@ -749,6 +777,29 @@ logger.error("エラーが発生しました", exc_info=True)  # exc_info=True �
 | 本番環境での抑制 | できない | できる |
 | スタックトレースの出力 | 手動で書く | `exc_info=True` で自動 |
 
+### メッセージは `%s` プレースホルダで渡す（f-string にしない）
+
+```python
+# 悪い（呼び出し元のログレベルに関わらず、毎回文字列を組み立ててしまう）
+logger.debug(f"詳細: {expensive_repr(value)}")
+
+# 良い（ログレベルで出力しないと決まっていれば、フォーマット自体が走らない）
+logger.debug("詳細: %s", expensive_repr(value))
+```
+
+`logging` は「そのレベルを実際に出力する」と決まってから初めて `%s` を埋める
+（遅延評価）。f-string や `str.format()` は呼び出した時点で必ず文字列を組み立てて
+しまうため、`logger.debug(...)` が実際には捨てられる本番環境でも計算コストを払う。
+
+### ログレベルの選び方
+
+| レベル | 使いどころ |
+|---|---|
+| `DEBUG` | 開発中の詳細な経過（変数の中身、分岐の通過箇所）。本番では出力しない前提 |
+| `INFO` | 正常系の節目（処理の開始・完了、何件処理したか）。運用担当者が後から追う想定 |
+| `WARNING` | 処理は継続するが、気づいてほしい異常（想定外だが致命的ではない値、フォールバック動作） |
+| `ERROR` | 処理が失敗して中断・スキップした。例外をそのまま送出する箇所では省略してよい（呼び出し元がログに残せる） |
+
 ---
 
 ## Excel（openpyxl）
@@ -804,6 +855,56 @@ try:
 except pywintypes.error as e:
     logger.error("Win32 API エラー: code=%d, msg=%s", e.winerror, e.strerror)
     raise
+```
+
+---
+
+## ブラウザ自動化（Selenium）
+
+### スクリーンショットは自動キャプチャに任せる
+
+`BrowserSession` の `with` ブロック内で例外が発生すると、その時点の画面が
+`logs/error_セッション名_YYYYMMDD_HHMMSS.png` に**自動保存**される
+（詳しくは [docs/browser.md](../browser.md) の「BrowserSession」参照）。
+
+```python
+# 悪い（自動キャプチャと二重になる。失敗時のスクリーンショットは
+# with を抜けるときに comken 側がすでに撮っている）
+try:
+    session.open(url)
+    session.click(locator)
+except Exception:
+    session.save_screenshot("error.png")
+    raise
+
+# 良い（何もしない。失敗時の画面は自動で logs/error_*.png に残る）
+session.open(url)
+session.click(locator)
+```
+
+`save_screenshot()` を明示的に呼ぶのは、**例外にならない「見た目のズレ」を残したいとき**
+（想定した要素が表示されているかの目視確認、途中経過の記録など）に限る。
+失敗時の状況確認だけが目的なら、まず自動キャプチャで足りるか確認してから足す。
+
+```python
+# 良い（例外にならないので自動キャプチャの対象外。明示的に撮る必要がある）
+session.open(url)
+if not session.find_element(confirmation_banner):
+    logger.warning("確認バナーが出ていません")
+    session.save_screenshot(directory="errors")
+```
+
+### 保存先はデフォルト（`logs/`）に任せる
+
+保存先を毎回組み立てない。ファイル名だけ・サブディレクトリだけを指定し、
+`logs/` からの相対パスにする（絶対パスは `logs/` の外に置きたい特別な理由があるときだけ）。
+
+```python
+# 悪い（logs/ の場所を決め打ちしている。環境が変わると壊れる）
+session.save_screenshot(Path("logs") / "errors" / f"{name}.png")
+
+# 良い（directory 引数に任せる）
+session.save_screenshot(f"{name}.png", directory="errors")
 ```
 
 ---
