@@ -48,6 +48,14 @@ for item in Item.load():        # 読む（型変換・検証込み）
 | `item.source`（`Path` 型） | 「コピー元」列 |
 | `item.note` | 「備考」列（既定値ありの列は **見出しごと無くても読める**） |
 
+**`SHEET_NAME` に書く名前には `PY_` を付けない。** 上の例なら `SHEET_NAME = "一覧"`
+だが、実際に Excel 上へ作られる／読みに行くシート名は `comken.toolbox.excel.Excel`
+の規約で `PY_一覧` になる（`create_data_sheet()` / `data_sheet()` が自動で補う）。
+テーブル名も同様に `PY_T_` が前置される。**Python 側のコードや `SHEET_NAME` の
+宣言、このドキュメントの記述はすべて生の名前（プレフィックス無し）で書けばよく、
+プレフィックスの付け外しはライブラリ側が両方向で自動的に行う**（詳細は
+[Excel（excel）](excel.md) を参照）。
+
 ---
 
 ## `column()` に書けること
