@@ -9441,9 +9441,13 @@ Salesforceのレポートをブラウザ経由でCSVダウンロードするた�
 URL は example の値のまま。利用プロジェクト側で継承して書き換える
 （BASE_URL を実際の組織の My Domain URL へ）。
 
-ログインは ``go_login()`` + ``wait_for_manual_login()`` で人が手動で行う
-（接続アプリの登録・OAuth初回認可を挟まないため、一時的に使いたいだけの
-ときに手早い。MFAもそのままブラウザで入力できる）。
+ログイン方法は2通り:
+
+- ``go_login()`` + ``wait_for_manual_login()`` — 人がブラウザでID/パスワード/
+  MFAを手動入力する
+- ``login_with_credentials(prefix)`` — DPAPIに保存したID/パスワードを自動
+  入力する（MFA等の追加確認が出た場合は、続けて ``wait_for_manual_login()``
+  を呼んで人が対応する）
 
 **ログインを使い回すには OPTIONS.PROFILE_ROOT を設定すること。**
 未設定だと起動のたびにまっさらなプロファイルになり、毎回ログインし直しになる
@@ -9456,7 +9460,7 @@ URL は example の値のまま。利用プロジェクト側で継承して書�
         OPTIONS = MySalesforceOptions
 
     with MySalesforce() as sf:
-        sf.go_login()
+        sf.login_with_credentials("salesforce_temp")
         sf.wait_for_manual_login()      # 初回だけ。2回目以降はプロファイルに残る
         for report_id, path in sf.export_reports(report_urls, "出力先"):
             ...
@@ -9464,14 +9468,39 @@ URL は example の値のまま。利用プロジェクト側で継承して書�
 #### `go_login`
 
 ```text
-def go_login(self) -> None:
+def go_login(self) -> LoginPage:
 ```
 
 ##### 説明
 
-ログイン画面を開く。ID/パスワード/MFAは人がブラウザで手動入力する想定。
+ログイン画面を開く。
 
-ログイン後は ``wait_for_manual_login()`` を呼ぶこと。
+ID/パスワードを自分で入力するなら ``LoginPage.login()``、人が手動で
+入力するならこの後 ``wait_for_manual_login()`` を呼ぶ。
+
+#### `login_with_credentials`
+
+```text
+def login_with_credentials(self, prefix: str) -> None:
+```
+
+##### 説明
+
+DPAPIに保存したID/パスワードでログインを試みる。
+
+MFA（認証コード・端末認証など）が要求される組織では、これだけでは
+ログインが完了しない。続けて ``wait_for_manual_login()`` を呼び、
+人がブラウザで残りの確認を終えるのを待つこと。
+
+Args:
+    prefix: DPAPIに登録した認証情報のシステム名
+        （``comken.toolbox.credentials.Credentials`` のサイト名）。
+        ``username`` / ``password`` の2項目を登録しておく
+        （例: ``python -m comken cred gui``）。
+
+Raises:
+    CredentialNotFoundError: prefix配下に username/password が未登録の場合。
+    CredentialDecryptionError: 別のユーザー・PCで登録されていて復号できない場合。
 
 #### `wait_for_manual_login`
 
@@ -9484,13 +9513,14 @@ def wait_for_manual_login(self) -> None:
 ブラウザでの手動ログインが終わるまで待つ（ターミナルでEnter待ち）。
 
 ``BrowserOptions.HEADLESS`` は既定で ``False`` のため、通常はブラウザの
-画面が見える状態で起動している。そこへ人がID/パスワード/MFAを入力し、
-ログインが終わったらこちらのターミナルで Enter を押す。
+画面が見える状態で起動している。そこへ人がID/パスワード/MFAを入力し
+（``login_with_credentials()`` 済みならMFAだけ）、ログインが終わったら
+こちらのターミナルで Enter を押す。
 
 #### `export_reports`
 
 ```text
-def export_reports(self, report_urls: Sequence[str], directory: str | Path, *, export_format: str='csv', encoding: str='Shift_JIS', max_workers: int=_DEFAULT_MAX_WORKERS, keep_alive_url: str | None=None, keep_alive_interval: float=_DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS) -> Iterator[tuple[str, Path]]:
+def export_reports(self, report_urls: Sequence[str], directory: str | Path, *, export_format: str='csv', encoding: str='Shift_JIS', max_workers: int=_DEFAULT_MAX_WORKERS, keep_alive_report_id: str | None=None, keep_alive_interval: float=_DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS) -> Iterator[tuple[str, Path]]:
 ```
 
 ##### 説明
@@ -9502,7 +9532,7 @@ def export_reports(self, report_urls: Sequence[str], directory: str | Path, *, e
 requests + ThreadPoolExecutor で並列に行う。
 
     with Salesforce() as sf:
-        sf.go_login()
+        sf.login_with_credentials("salesforce_temp")
         sf.wait_for_manual_login()
         for report_id, path in sf.export_reports(report_urls, "出力先"):
             ...
@@ -9515,14 +9545,15 @@ Args:
         Excel・社内システムでの扱いやすさを優先している。UTF-8で欲しい
         場合は ``"UTF-8"`` を渡す。
     max_workers: 同時に投げるリクエストの数。既定10。
-    keep_alive_url: ダウンロード中、この間隔でブラウザに開かせ続ける
-        軽いページのURL（例: 0件のレポート）。省略時は何もしない。
-        件数が多くダウンロードに時間がかかる場合、ブラウザ自体は
-        ログイン後なにも操作していないため、途中でSalesforce側の
+    keep_alive_report_id: ダウンロード中、この間隔でブラウザに開かせ続ける
+        軽いレポートのID（例: 0件のレポート）。ドメインは今のセッションの
+        ものをそのまま使うため、URLではなくIDだけ渡せばよい。省略時は
+        何もしない。件数が多くダウンロードに時間がかかる場合、ブラウザ
+        自体はログイン後なにも操作していないため、途中でSalesforce側の
         セッションが切れて ``SalesforceReportExportError`` になることが
         ある。その暫定対処として指定する（恒久対処ではない。根本的には
         Salesforce管理者にセッションタイムアウトの設定を確認してもらうのが筋）。
-    keep_alive_interval: ``keep_alive_url`` を開く間隔（秒）。既定300秒（5分）。
+    keep_alive_interval: ``keep_alive_report_id`` を開く間隔（秒）。既定300秒（5分）。
 
 Yields:
     (report_id, ダウンロードしたファイルのパス) のタプル。ファイルは
@@ -9916,9 +9947,13 @@ Salesforceのレポートをブラウザ経由でCSVダウンロードするた�
 URL は example の値のまま。利用プロジェクト側で継承して書き換える
 （BASE_URL を実際の組織の My Domain URL へ）。
 
-ログインは ``go_login()`` + ``wait_for_manual_login()`` で人が手動で行う
-（接続アプリの登録・OAuth初回認可を挟まないため、一時的に使いたいだけの
-ときに手早い。MFAもそのままブラウザで入力できる）。
+ログイン方法は2通り:
+
+- ``go_login()`` + ``wait_for_manual_login()`` — 人がブラウザでID/パスワード/
+  MFAを手動入力する
+- ``login_with_credentials(prefix)`` — DPAPIに保存したID/パスワードを自動
+  入力する（MFA等の追加確認が出た場合は、続けて ``wait_for_manual_login()``
+  を呼んで人が対応する）
 
 **ログインを使い回すには OPTIONS.PROFILE_ROOT を設定すること。**
 未設定だと起動のたびにまっさらなプロファイルになり、毎回ログインし直しになる
@@ -9931,7 +9966,7 @@ URL は example の値のまま。利用プロジェクト側で継承して書�
         OPTIONS = MySalesforceOptions
 
     with MySalesforce() as sf:
-        sf.go_login()
+        sf.login_with_credentials("salesforce_temp")
         sf.wait_for_manual_login()      # 初回だけ。2回目以降はプロファイルに残る
         for report_id, path in sf.export_reports(report_urls, "出力先"):
             ...
@@ -9939,14 +9974,39 @@ URL は example の値のまま。利用プロジェクト側で継承して書�
 #### `go_login`
 
 ```text
-def go_login(self) -> None:
+def go_login(self) -> LoginPage:
 ```
 
 ##### 説明
 
-ログイン画面を開く。ID/パスワード/MFAは人がブラウザで手動入力する想定。
+ログイン画面を開く。
 
-ログイン後は ``wait_for_manual_login()`` を呼ぶこと。
+ID/パスワードを自分で入力するなら ``LoginPage.login()``、人が手動で
+入力するならこの後 ``wait_for_manual_login()`` を呼ぶ。
+
+#### `login_with_credentials`
+
+```text
+def login_with_credentials(self, prefix: str) -> None:
+```
+
+##### 説明
+
+DPAPIに保存したID/パスワードでログインを試みる。
+
+MFA（認証コード・端末認証など）が要求される組織では、これだけでは
+ログインが完了しない。続けて ``wait_for_manual_login()`` を呼び、
+人がブラウザで残りの確認を終えるのを待つこと。
+
+Args:
+    prefix: DPAPIに登録した認証情報のシステム名
+        （``comken.toolbox.credentials.Credentials`` のサイト名）。
+        ``username`` / ``password`` の2項目を登録しておく
+        （例: ``python -m comken cred gui``）。
+
+Raises:
+    CredentialNotFoundError: prefix配下に username/password が未登録の場合。
+    CredentialDecryptionError: 別のユーザー・PCで登録されていて復号できない場合。
 
 #### `wait_for_manual_login`
 
@@ -9959,13 +10019,14 @@ def wait_for_manual_login(self) -> None:
 ブラウザでの手動ログインが終わるまで待つ（ターミナルでEnter待ち）。
 
 ``BrowserOptions.HEADLESS`` は既定で ``False`` のため、通常はブラウザの
-画面が見える状態で起動している。そこへ人がID/パスワード/MFAを入力し、
-ログインが終わったらこちらのターミナルで Enter を押す。
+画面が見える状態で起動している。そこへ人がID/パスワード/MFAを入力し
+（``login_with_credentials()`` 済みならMFAだけ）、ログインが終わったら
+こちらのターミナルで Enter を押す。
 
 #### `export_reports`
 
 ```text
-def export_reports(self, report_urls: Sequence[str], directory: str | Path, *, export_format: str='csv', encoding: str='Shift_JIS', max_workers: int=_DEFAULT_MAX_WORKERS, keep_alive_url: str | None=None, keep_alive_interval: float=_DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS) -> Iterator[tuple[str, Path]]:
+def export_reports(self, report_urls: Sequence[str], directory: str | Path, *, export_format: str='csv', encoding: str='Shift_JIS', max_workers: int=_DEFAULT_MAX_WORKERS, keep_alive_report_id: str | None=None, keep_alive_interval: float=_DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS) -> Iterator[tuple[str, Path]]:
 ```
 
 ##### 説明
@@ -9977,7 +10038,7 @@ def export_reports(self, report_urls: Sequence[str], directory: str | Path, *, e
 requests + ThreadPoolExecutor で並列に行う。
 
     with Salesforce() as sf:
-        sf.go_login()
+        sf.login_with_credentials("salesforce_temp")
         sf.wait_for_manual_login()
         for report_id, path in sf.export_reports(report_urls, "出力先"):
             ...
@@ -9990,14 +10051,15 @@ Args:
         Excel・社内システムでの扱いやすさを優先している。UTF-8で欲しい
         場合は ``"UTF-8"`` を渡す。
     max_workers: 同時に投げるリクエストの数。既定10。
-    keep_alive_url: ダウンロード中、この間隔でブラウザに開かせ続ける
-        軽いページのURL（例: 0件のレポート）。省略時は何もしない。
-        件数が多くダウンロードに時間がかかる場合、ブラウザ自体は
-        ログイン後なにも操作していないため、途中でSalesforce側の
+    keep_alive_report_id: ダウンロード中、この間隔でブラウザに開かせ続ける
+        軽いレポートのID（例: 0件のレポート）。ドメインは今のセッションの
+        ものをそのまま使うため、URLではなくIDだけ渡せばよい。省略時は
+        何もしない。件数が多くダウンロードに時間がかかる場合、ブラウザ
+        自体はログイン後なにも操作していないため、途中でSalesforce側の
         セッションが切れて ``SalesforceReportExportError`` になることが
         ある。その暫定対処として指定する（恒久対処ではない。根本的には
         Salesforce管理者にセッションタイムアウトの設定を確認してもらうのが筋）。
-    keep_alive_interval: ``keep_alive_url`` を開く間隔（秒）。既定300秒（5分）。
+    keep_alive_interval: ``keep_alive_report_id`` を開く間隔（秒）。既定300秒（5分）。
 
 Yields:
     (report_id, ダウンロードしたファイルのパス) のタプル。ファイルは

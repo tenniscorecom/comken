@@ -279,24 +279,26 @@ with site() as sf:
 > 接続アプリのOAuthスコープ・ログインIP制限の不一致など）。そのため
 > `Salesforce` は**ログインの確立を実ブラウザ（Selenium）で行う**。
 >
-> `go_login()` + `wait_for_manual_login()` で人が手動でログイン（MFAも含めて
-> ブラウザでそのまま入力する）し、確立したセッションCookieを
-> `export_reports()` が requests へ引き継いで、実際のN件のダウンロードは
-> `ThreadPoolExecutor` で並列に投げる。ブラウザの起動は最初のログイン確立の
-> ときだけで済む。接続アプリの登録・OAuth初回認可を挟まないため、
-> 一時的に使いたいだけのときに手早い。
+> `go_login()` + `wait_for_manual_login()`（人が手動でログイン）、または
+> `login_with_credentials(prefix)`（DPAPIに保存したID/パスワードを自動入力し、
+> MFA等が出た場合だけ `wait_for_manual_login()` で人が続きを対応する）で
+> ログインし、確立したセッションCookieを `export_reports()` が requests へ
+> 引き継いで、実際のN件のダウンロードは `ThreadPoolExecutor` で並列に投げる。
+> ブラウザの起動は最初のログイン確立のときだけで済む。接続アプリの登録・
+> OAuth初回認可を挟まないため、一時的に使いたいだけのときに手早い。
 >
 > ダウンロードに時間がかかる場合、ブラウザ自体はログイン後なにも操作しない
 > ため、途中でSalesforce側のセッションが切れて `SalesforceReportExportError`
-> になることがある。その暫定対処として `keep_alive_url`（軽いレポートなどを
-> 一定間隔で開き直す）を渡せる。
+> になることがある。その暫定対処として `keep_alive_report_id`（軽いレポートの
+> IDを一定間隔で開き直す。ドメインは今のセッションのものを使うのでIDだけ
+> 渡せばよい）を渡せる。
 
 ```python
 from comken.toolbox.browser.sites.salesforce import Salesforce
 
 with Salesforce() as sf:
-    sf.go_login()
-    sf.wait_for_manual_login()
+    sf.login_with_credentials("salesforce_temp")  # DPAPIに登録済みのID/パスワード
+    sf.wait_for_manual_login()                     # MFA等が出た場合だけ対応する
     for report_id, path in sf.export_reports(report_urls, "出力先"):
         ...
 ```

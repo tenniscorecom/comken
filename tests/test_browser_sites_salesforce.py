@@ -14,6 +14,7 @@ from comken.exceptions import SalesforceReportExportError, SiteNotStartedError
 from comken.toolbox.browser import BrowserOptions, DownloadDir
 from comken.toolbox.browser.management.sessions import BrowserSession
 from comken.toolbox.browser.sites import SITES
+from comken.toolbox.browser.sites.salesforce.pages.login_page import LoginPage
 from comken.toolbox.browser.sites.salesforce.site import (
     Salesforce,
     _cookies_to_requests_session,
@@ -80,6 +81,42 @@ class TestWaitForManualLogin:
         Salesforce().wait_for_manual_login()
 
         assert len(calls) == 1
+
+
+class TestLoginPageLogin:
+    """LoginPage.login() — ID/パスワードを入力してログインボタンを押す。"""
+
+    def test_fills_username_and_password_and_clicks_login(self, tmp_path):
+        session = _make_session(tmp_path)
+        page = LoginPage(session)
+        page._wait = MagicMock()
+        element = MagicMock()
+        page._wait.until.return_value = element
+
+        page.login("user@example.com", "secret")
+
+        element.send_keys.assert_any_call("user@example.com")
+        element.send_keys.assert_any_call("secret")
+        element.click.assert_called_once()
+
+
+class TestLoginWithCredentials:
+    """login_with_credentials() — DPAPIのID/パスワードでログインフォームへ入力する。"""
+
+    def test_uses_credentials_to_login(self, tmp_path):
+        session = _make_session(tmp_path)
+        sf = Salesforce(session)
+        cred = MagicMock(username="user@example.com", password="secret")
+        login_page = MagicMock()
+        with (
+            patch("comken.toolbox.credentials.Credentials", return_value=cred) as cred_class,
+            patch.object(Salesforce, "go_login", return_value=login_page) as go_login,
+        ):
+            sf.login_with_credentials("salesforce_temp")
+
+        cred_class.assert_called_once_with("salesforce_temp")
+        go_login.assert_called_once()
+        login_page.login.assert_called_once_with("user@example.com", "secret")
 
 
 class TestDomainOf:
@@ -236,7 +273,7 @@ class TestStartKeepAlive:
 
 
 class TestExportReportsKeepAlive:
-    """export_reports() の keep_alive_url — ダウンロード終了後は必ず止まる。"""
+    """export_reports() の keep_alive_report_id — ダウンロード終了後は必ず止まる。"""
 
     def test_keep_alive_thread_stops_after_completion(self, tmp_path):
         session = _make_session(tmp_path)
@@ -254,10 +291,37 @@ class TestExportReportsKeepAlive:
                 sf.export_reports(
                     [REPORT_URL_1],
                     tmp_path,
-                    keep_alive_url=REPORT_URL_1,
+                    keep_alive_report_id="00O5g00000ABCDE9AS",
                     keep_alive_interval=0.02,
                 )
             )
 
         active_threads = [t for t in threading.enumerate() if t.name == "salesforce-keep-alive"]
         assert active_threads == []
+
+    def test_keep_alive_url_is_built_from_current_domain(self, tmp_path):
+        session = _make_session(tmp_path)
+        session._driver.current_url = REPORT_URL_1
+        session._driver.get_cookies.return_value = []
+        sf = Salesforce(session)
+
+        def _slow_get(*args, **kwargs):
+            time.sleep(0.1)
+            return _csv_response()
+
+        http_session = MagicMock()
+        http_session.get.side_effect = _slow_get
+        with patch(
+            "comken.toolbox.browser.sites.salesforce.site.requests.Session",
+            return_value=http_session,
+        ):
+            list(
+                sf.export_reports(
+                    [REPORT_URL_1],
+                    tmp_path,
+                    keep_alive_report_id="00O5g00000ABCDE9AS",
+                    keep_alive_interval=0.02,
+                )
+            )
+
+        session._driver.get.assert_any_call("https://example.my.salesforce.com/00O5g00000ABCDE9AS")
