@@ -196,8 +196,8 @@ class SalesforceReportIDNotFoundError(SalesforceError):
     発生箇所: comken.toolbox.salesforce.report.report_id_from_url()
              （呼び出し元の例: comken-salesforce-downloader の master.py。
              2026-08-30 に comken から分離した別リポジトリ。
-             comken.toolbox.browser.sites.salesforce.site.download_reports() /
-             export_reports() も同じ report_id_from_url() を呼ぶ）
+             comken.toolbox.browser.sites.salesforce.site.export_reports() も
+             同じ report_id_from_url() を呼ぶ）
 
     対処:
         Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す

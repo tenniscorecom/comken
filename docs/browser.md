@@ -576,11 +576,11 @@ with Browsers() as browsers:
 `DOWNLOAD_DIR` を指定していない場合は一時フォルダが使われ、**`with` を抜けると消える**。
 残したいファイルは `with` の中で移動しておくこと。
 
-同じ `download_dir` で `wait()` を複数回呼ぶ（1件ずつ落として次へ進む運用）場合は、
-呼び出し側でリネーム・移動した後のパスを `download_dir.mark_known(path)` で伝えること。
-`wait()` は「作成時点で既にあったファイル」しか除外しないため、伝え忘れると
-リネーム後のファイルを次の `wait()` が「新しいダウンロード」と誤検出する
-（実例は `comken/toolbox/browser/sites/salesforce/site.py` の `download_reports()`）。
+**同じ `download_dir` で `wait()` を複数回呼ばない。** `wait()` は「作成時点で
+既にあったファイル」しか除外しないため、2回目以降の呼び出しは1回目に見つけた
+ファイルを再び返してしまう。1件ずつ落として次へ進みたい場合は、レポートURLを
+直接HTTPで叩くなど、ブラウザのダウンロードフォルダを経由しない方法を検討する
+（`comken/toolbox/browser/sites/salesforce/site.py` の `export_reports()` が実例）。
 
 ---
 
@@ -607,19 +607,6 @@ with Browsers() as browsers:
   負荷も増える
 - ログインは1回で済む。同じブラウザの中でタブを開くだけなので、Cookie も
   二要素認証の記憶も共有される
-
-**実例:** `comken/toolbox/browser/sites/salesforce/` は、Salesforceレポートの
-CSVエクスポートをこの仕組みで並列化している（レポートAPIの2000行上限を超える
-ものを取る最終手段。詳しくは `docs/salesforce.md`）。`download_reports()` は
-読み込みの重いレポート表示を `load_many()` で並列に待ち、ダウンロードの
-トリガーだけは1件ずつ処理することで、ファイル名の取り違えを防いでいる。
-
-同じモジュールの `export_reports()` はさらに速い。認証の確立だけ実ブラウザ
-（`login_with_token()`）で行い、実際のN件のダウンロードは requests +
-`ThreadPoolExecutor` で並列に投げる（requestsだけでの認証確立は組織によって
-弾かれることを確認済みなので、認証だけは実ブラウザに任せている）。
-まずこちらを試し、`SalesforceReportExportError` が出たら `download_reports()`
-へ切り替える。
 
 ---
 
@@ -666,9 +653,14 @@ comken は自動更新を行わない。**バージョンが合わなくなっ�
 `PROFILE_ROOT` に相対パス（`./profiles` のような）を設定していると、
 `--user-data-dir` に渡る値が相対パスのままになり、msedge.exe 側の作業
 ディレクトリ次第でプロファイル初期化に失敗し、実際とは無関係な
-バージョン不一致メッセージで落ちることがある。`Browsers._resolve_profile_dir()`
-は絶対パスへ解決してから渡すようにしてあるが、`PROFILE_ROOT` 自体は
-絶対パスで書くのが安全（`comken/core/files` の `project_dir()` などを使う）。
+バージョン不一致メッセージで落ちることがある。
+
+`DRIVER_PATH`・`DOWNLOAD_DIR` も同じ理由で相対パスだと不安定になりうる
+（ブラウザプロセス・ドライバープロセス側の作業ディレクトリは、Pythonの
+実行時カレントディレクトリと必ずしも一致しない）。`_resolve_profile_dir()` /
+`start_driver()` / `DownloadDir.__init__()` はいずれも絶対パスへ解決してから
+渡すようにしてあるが、設定値そのものも絶対パスで書くのが安全
+（`comken/core/files` の `project_dir()` などを使う）。
 
 ---
 

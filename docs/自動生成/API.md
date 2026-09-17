@@ -4928,8 +4928,8 @@ class SalesforceReportIDNotFoundError(SalesforceError):
 発生箇所: comken.toolbox.salesforce.report.report_id_from_url()
          （呼び出し元の例: comken-salesforce-downloader の master.py。
          2026-08-30 に comken から分離した別リポジトリ。
-         comken.toolbox.browser.sites.salesforce.site.download_reports() /
-         export_reports() も同じ report_id_from_url() を呼ぶ）
+         comken.toolbox.browser.sites.salesforce.site.export_reports() も
+         同じ report_id_from_url() を呼ぶ）
 
 対処:
     Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す
@@ -8174,26 +8174,6 @@ Returns:
 Raises:
     DownloadTimeoutError: timeout 秒以内にダウンロードが完了しなかった場合。
 
-#### `mark_known`
-
-```text
-def mark_known(self, *paths: Path) -> None:
-```
-
-##### 説明
-
-指定したファイルを「既知」として扱う。以後の wait() では新規扱いしない。
-
-wait() は「作成時点で既にあったファイル」しか除外しないため、同じ
-DownloadDir で wait() を複数回呼ぶ運用（レポートを1件ずつ落として
-リネーム、を繰り返すなど）だと、リネーム後のファイルが次の wait() で
-「新しいダウンロード」として誤検出される。wait() が返したファイルを
-呼び出し側でリネーム・移動したときは、リネーム後のパスをここに
-渡しておく。
-
-Args:
-    *paths: 既知として扱うファイルのパス。存在しないパスは無視する。
-
 #### `remove`
 
 ```text
@@ -9464,6 +9444,9 @@ ID/パスワードでのログイン画面は使わない。comken.toolbox.sales
 OAuthアクセストークンを ``login_with_token()`` に渡すだけで、
 frontdoor.jsp 経由でブラウザのログイン状態を確立する（MFAの二度手間が無い）。
 
+起動オプションは既定（BrowserOptions）のままでよいため OPTIONS は書かない
+（画面を待つ操作が無く、Lightning特有のタイムアウト延長も不要なため）。
+
 #### `login_with_token`
 
 ```text
@@ -9479,59 +9462,10 @@ Args:
         （Salesforceのセッションidを兼ねる）。
     instance_url: 組織のインスタンスURL。省略時は BASE_URL を使う。
 
-#### `download_reports`
-
-```text
-def download_reports(self, report_urls: Sequence[str], *, ready: Locator | None=None, max_open: int=_DEFAULT_MAX_OPEN_TABS, page_timeout: int | None=None, download_timeout: int=_DEFAULT_DOWNLOAD_TIMEOUT_SECONDS, export_format: str='csv', encoding: str='Shift_JIS') -> Iterator[tuple[str, Path]]:
-```
-
-##### 説明
-
-レポートURLを渡すと、順に (report_id, ダウンロードしたファイルのパス) を返す。
-
-レポートの読み込みが重いことを前提に、``load_many()`` で複数タブを同時に
-開いておき、読み込みが終わったものから順にエクスポートしてダウンロードする。
-
-**読み込み待ちは並列、ダウンロードのトリガーは1件ずつ。** Salesforceの
-エクスポートはファイル名がレポート名で決まりIDでは決まらないため、複数の
-ダウンロードを同時に走らせると「どのファイルがどのレポートか」を取り違える。
-読み込みの終わったタブから順にこのメソッドが1件ずつ処理するので、
-ダウンロードが同時に複数走ることはない。
-
-    with Salesforce() as sf:
-        sf.login_with_token(access_token, instance_url)
-        for report_id, path in sf.download_reports(report_urls, ready=MY_READY_LOCATOR):
-            move_to_project_folder(report_id, path)
-
-Args:
-    report_urls: レポート画面のURL（またはレポートID）のリスト。
-    ready: レポートの読み込み完了とみなす目印の要素。**省略せず渡すことを
-        強く推奨する。** LightningはページのHTMLを描いてから中身を
-        後入れするため、省略時（HTMLの読み込み完了で判断）だと表が
-        まだ空でも「読み込み完了」とみなしてしまう。組織・Salesforceの
-        バージョンでDOMが変わるため、comken側では固定値を持たない。
-    max_open: 同時に開いておくタブの数。既定10。
-    page_timeout: レポート1件あたりの読み込み待ちの上限秒数。省略時はセッションの設定
-        （SalesforceBrowserOptions.WAIT_SECONDS）。
-    download_timeout: ダウンロード完了待ちの上限秒数。既定300秒。
-    export_format: "csv" または "xls"。
-    encoding: エクスポートする文字コード。既定は ``Shift_JIS``（CP932相当）。
-        Excel・社内システムでの扱いやすさを優先している。UTF-8で欲しい
-        場合は ``"UTF-8"`` を渡す。
-
-Yields:
-    (report_id, ダウンロードしたファイルのパス) のタプル。ファイルは
-    download_dir 直下に "{report_id}.{export_format}" として保存される
-    （Salesforceがレポート名で付けた元のファイル名から、この場でリネームする）。
-
-Raises:
-    SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
-    DownloadTimeoutError: download_timeout 秒以内にダウンロードが完了しなかった場合。
-
 #### `export_reports`
 
 ```text
-def export_reports(self, report_urls: Sequence[str], directory: str | Path, *, export_format: str='csv', encoding: str='Shift_JIS', max_workers: int=_DEFAULT_MAX_WORKERS) -> Iterator[tuple[str, Path]]:
+def export_reports(self, report_urls: Sequence[str], directory: str | Path, *, export_format: str='csv', encoding: str='Shift_JIS', max_workers: int=_DEFAULT_MAX_WORKERS, keep_alive_url: str | None=None, keep_alive_interval: float=_DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS) -> Iterator[tuple[str, Path]]:
 ```
 
 ##### 説明
@@ -9539,15 +9473,8 @@ def export_reports(self, report_urls: Sequence[str], directory: str | Path, *, e
 ``login_with_token()`` 済みのセッションCookieを requests へ引き継ぎ、
 並列にダウンロードして (report_id, 保存先パス) を返す。
 
-``download_reports()`` はタブの読み込み・切り替えが挟まるため、実際の
-ダウンロードは1件ずつしか進まない。このメソッドはブラウザを認証の確立
-（``login_with_token()``）だけに使い、N件のダウンロード自体は
-requests + ThreadPoolExecutor で並列に行うため、はるかに速い。
-
-**requests だけで frontdoor.jsp ログインを試みるとログイン画面へ
-リダイレクトされ、通らない組織があることを確認済み**（セッション
-セキュリティレベル等）。実ブラウザで確立したセッションCookieを使うことで、
-この制約を避けている。
+ブラウザは認証の確立（``login_with_token()``）だけに使い、N件の
+ダウンロード自体は requests + ThreadPoolExecutor で並列に行う。
 
     with Salesforce() as sf:
         sf.login_with_token(access_token, instance_url)
@@ -9562,6 +9489,15 @@ Args:
         Excel・社内システムでの扱いやすさを優先している。UTF-8で欲しい
         場合は ``"UTF-8"`` を渡す。
     max_workers: 同時に投げるリクエストの数。既定10。
+    keep_alive_url: ダウンロード中、この間隔でブラウザに開かせ続ける
+        軽いページのURL（例: 0件のレポート）。省略時は何もしない。
+        件数が多くダウンロードに時間がかかる場合、ブラウザ自体は
+        ``login_with_token()`` 以降なにも操作していないため、途中で
+        Salesforce側のセッションが切れて ``SalesforceReportExportError``
+        になることがある。その暫定対処として指定する
+        （恒久対処ではない。根本的にはSalesforce管理者にセッション
+        タイムアウトの設定を確認してもらうのが筋）。
+    keep_alive_interval: ``keep_alive_url`` を開く間隔（秒）。既定300秒（5分）。
 
 Yields:
     (report_id, ダウンロードしたファイルのパス) のタプル。ファイルは
@@ -9959,6 +9895,9 @@ ID/パスワードでのログイン画面は使わない。comken.toolbox.sales
 OAuthアクセストークンを ``login_with_token()`` に渡すだけで、
 frontdoor.jsp 経由でブラウザのログイン状態を確立する（MFAの二度手間が無い）。
 
+起動オプションは既定（BrowserOptions）のままでよいため OPTIONS は書かない
+（画面を待つ操作が無く、Lightning特有のタイムアウト延長も不要なため）。
+
 #### `login_with_token`
 
 ```text
@@ -9974,59 +9913,10 @@ Args:
         （Salesforceのセッションidを兼ねる）。
     instance_url: 組織のインスタンスURL。省略時は BASE_URL を使う。
 
-#### `download_reports`
-
-```text
-def download_reports(self, report_urls: Sequence[str], *, ready: Locator | None=None, max_open: int=_DEFAULT_MAX_OPEN_TABS, page_timeout: int | None=None, download_timeout: int=_DEFAULT_DOWNLOAD_TIMEOUT_SECONDS, export_format: str='csv', encoding: str='Shift_JIS') -> Iterator[tuple[str, Path]]:
-```
-
-##### 説明
-
-レポートURLを渡すと、順に (report_id, ダウンロードしたファイルのパス) を返す。
-
-レポートの読み込みが重いことを前提に、``load_many()`` で複数タブを同時に
-開いておき、読み込みが終わったものから順にエクスポートしてダウンロードする。
-
-**読み込み待ちは並列、ダウンロードのトリガーは1件ずつ。** Salesforceの
-エクスポートはファイル名がレポート名で決まりIDでは決まらないため、複数の
-ダウンロードを同時に走らせると「どのファイルがどのレポートか」を取り違える。
-読み込みの終わったタブから順にこのメソッドが1件ずつ処理するので、
-ダウンロードが同時に複数走ることはない。
-
-    with Salesforce() as sf:
-        sf.login_with_token(access_token, instance_url)
-        for report_id, path in sf.download_reports(report_urls, ready=MY_READY_LOCATOR):
-            move_to_project_folder(report_id, path)
-
-Args:
-    report_urls: レポート画面のURL（またはレポートID）のリスト。
-    ready: レポートの読み込み完了とみなす目印の要素。**省略せず渡すことを
-        強く推奨する。** LightningはページのHTMLを描いてから中身を
-        後入れするため、省略時（HTMLの読み込み完了で判断）だと表が
-        まだ空でも「読み込み完了」とみなしてしまう。組織・Salesforceの
-        バージョンでDOMが変わるため、comken側では固定値を持たない。
-    max_open: 同時に開いておくタブの数。既定10。
-    page_timeout: レポート1件あたりの読み込み待ちの上限秒数。省略時はセッションの設定
-        （SalesforceBrowserOptions.WAIT_SECONDS）。
-    download_timeout: ダウンロード完了待ちの上限秒数。既定300秒。
-    export_format: "csv" または "xls"。
-    encoding: エクスポートする文字コード。既定は ``Shift_JIS``（CP932相当）。
-        Excel・社内システムでの扱いやすさを優先している。UTF-8で欲しい
-        場合は ``"UTF-8"`` を渡す。
-
-Yields:
-    (report_id, ダウンロードしたファイルのパス) のタプル。ファイルは
-    download_dir 直下に "{report_id}.{export_format}" として保存される
-    （Salesforceがレポート名で付けた元のファイル名から、この場でリネームする）。
-
-Raises:
-    SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
-    DownloadTimeoutError: download_timeout 秒以内にダウンロードが完了しなかった場合。
-
 #### `export_reports`
 
 ```text
-def export_reports(self, report_urls: Sequence[str], directory: str | Path, *, export_format: str='csv', encoding: str='Shift_JIS', max_workers: int=_DEFAULT_MAX_WORKERS) -> Iterator[tuple[str, Path]]:
+def export_reports(self, report_urls: Sequence[str], directory: str | Path, *, export_format: str='csv', encoding: str='Shift_JIS', max_workers: int=_DEFAULT_MAX_WORKERS, keep_alive_url: str | None=None, keep_alive_interval: float=_DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS) -> Iterator[tuple[str, Path]]:
 ```
 
 ##### 説明
@@ -10034,15 +9924,8 @@ def export_reports(self, report_urls: Sequence[str], directory: str | Path, *, e
 ``login_with_token()`` 済みのセッションCookieを requests へ引き継ぎ、
 並列にダウンロードして (report_id, 保存先パス) を返す。
 
-``download_reports()`` はタブの読み込み・切り替えが挟まるため、実際の
-ダウンロードは1件ずつしか進まない。このメソッドはブラウザを認証の確立
-（``login_with_token()``）だけに使い、N件のダウンロード自体は
-requests + ThreadPoolExecutor で並列に行うため、はるかに速い。
-
-**requests だけで frontdoor.jsp ログインを試みるとログイン画面へ
-リダイレクトされ、通らない組織があることを確認済み**（セッション
-セキュリティレベル等）。実ブラウザで確立したセッションCookieを使うことで、
-この制約を避けている。
+ブラウザは認証の確立（``login_with_token()``）だけに使い、N件の
+ダウンロード自体は requests + ThreadPoolExecutor で並列に行う。
 
     with Salesforce() as sf:
         sf.login_with_token(access_token, instance_url)
@@ -10057,6 +9940,15 @@ Args:
         Excel・社内システムでの扱いやすさを優先している。UTF-8で欲しい
         場合は ``"UTF-8"`` を渡す。
     max_workers: 同時に投げるリクエストの数。既定10。
+    keep_alive_url: ダウンロード中、この間隔でブラウザに開かせ続ける
+        軽いページのURL（例: 0件のレポート）。省略時は何もしない。
+        件数が多くダウンロードに時間がかかる場合、ブラウザ自体は
+        ``login_with_token()`` 以降なにも操作していないため、途中で
+        Salesforce側のセッションが切れて ``SalesforceReportExportError``
+        になることがある。その暫定対処として指定する
+        （恒久対処ではない。根本的にはSalesforce管理者にセッション
+        タイムアウトの設定を確認してもらうのが筋）。
+    keep_alive_interval: ``keep_alive_url`` を開く間隔（秒）。既定300秒（5分）。
 
 Yields:
     (report_id, ダウンロードしたファイルのパス) のタプル。ファイルは
@@ -10068,37 +9960,6 @@ Raises:
     SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
     SalesforceReportExportError: いずれかのレポートでエクスポートが失敗した場合
         （``login_with_token()`` 未実行・セッション切れ等）。
-
-### `SalesforceBrowserOptions`
-
-```text
-class SalesforceBrowserOptions(BrowserOptions):
-```
-
-#### 説明
-
-salesforce 用のブラウザオプション。
-
-デフォルト（BrowserOptions）から変更したいものだけ上書きする。
-レポートの読み込みが重いことがあるため、待機秒数を既定より長めにする。
-
-#### `build`
-
-```text
-def build(self, profile_dir: Path | None=None) -> list[str]:
-```
-
-##### 説明
-
-有効なオプションを Edge の起動引数リストに変換する。
-
-Args:
-    profile_dir: ログイン状態を残すプロファイルフォルダ。
-                 指定するとシークレットモードは自動的に外れる
-                 （シークレットは Cookie を残さないため、永続化と両立しない）。
-
-Returns:
-    webdriver に渡す起動引数のリスト。
 
 
 ## `from comken.toolbox.credentials import ...`

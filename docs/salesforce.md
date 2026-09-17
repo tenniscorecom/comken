@@ -282,18 +282,14 @@ with site() as sf:
 >
 > そのため `Salesforce` は**認証の確立だけ実ブラウザ（Selenium）で行う**。
 > `login_with_token()` が実ブラウザで frontdoor.jsp を叩いてログインし、
-> 以降のダウンロードは2通りから選べる:
+> 確立したセッションCookieを `export_reports()` が requests へ引き継いで、
+> 実際のN件のダウンロードは `ThreadPoolExecutor` で並列に投げる。
+> ブラウザの起動は認証確立の1回だけで済む。
 >
-> | | `download_reports()` | `export_reports()` |
-> |---|---|---|
-> | ダウンロードの実体 | ブラウザのタブ（`load_many()`） | `login_with_token()`確立後のセッションCookieを requests へ引き継ぎ、`ThreadPoolExecutor` で並列 |
-> | 速さ | タブの切り替えが挟まる分遅い | 速い（HTTPリクエストを直接並列に投げるだけ） |
-> | 確実さ | 実ブラウザでの操作そのものなので確実 | セッションが切れていると `SalesforceReportExportError` |
->
-> **まず `export_reports()` を試し、`SalesforceReportExportError` が出たら
-> `download_reports()` へ切り替える。** 戻り値の形（`(report_id, パス)`）を
-> 揃えてあるので、切り替えの書き換えは最小で済む（詳しくは `docs/browser.md`
-> の「複数ページをまとめて開く」）。
+> ダウンロードに時間がかかる場合、ブラウザ自体は `login_with_token()` 以降
+> なにも操作しないため、途中でSalesforce側のセッションが切れて
+> `SalesforceReportExportError` になることがある。その暫定対処として
+> `keep_alive_url`（軽いレポートなどを一定間隔で開き直す）を渡せる。
 
 ```python
 from comken.toolbox.browser.sites.salesforce import Salesforce

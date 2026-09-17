@@ -559,8 +559,8 @@ class TestDownloadDir:
         finally:
             dl.remove()
 
-    def test_wait_called_twice_without_mark_known_returns_same_file_again(self):
-        """mark_known()を呼ばないと、2回目のwait()が1回目のファイルを再検出する(既知の制約)。"""
+    def test_wait_called_twice_returns_same_file_again(self):
+        """wait()は作成時点のファイルしか除外しないため、2回目も同じファイルを再検出する(既知の制約)。"""
         dl = DownloadDir()
         try:
             target = dl.path / "report.xlsx"
@@ -574,30 +574,6 @@ class TestDownloadDir:
         finally:
             dl.remove()
 
-    def test_mark_known_excludes_file_from_next_wait(self):
-        """mark_known() したファイルは、次の wait() で新規ダウンロード扱いされない。"""
-        dl = DownloadDir()
-        try:
-            first_file = dl.path / "report1.xlsx"
-            first_file.touch()
-            dl.wait(timeout=3)
-            dl.mark_known(first_file)
-
-            second_file = dl.path / "report2.xlsx"
-            second_file.touch()
-
-            assert dl.wait(timeout=3) == [second_file]
-        finally:
-            dl.remove()
-
-    def test_mark_known_ignores_nonexistent_path(self, tmp_path):
-        """存在しないパスを渡しても無視される（例外にならない）。"""
-        dl = DownloadDir()
-        try:
-            dl.mark_known(tmp_path / "no_such_file.xlsx")
-        finally:
-            dl.remove()
-
     def test_wait_times_out_when_in_progress(self):
         """.crdownload が残っている間は完了とみなさず、タイムアウトする。"""
         dl = DownloadDir()
@@ -608,6 +584,15 @@ class TestDownloadDir:
                 dl.wait(timeout=1)
         finally:
             dl.remove()
+
+    def test_resolves_relative_path_to_absolute(self, tmp_path, monkeypatch):
+        """相対パスで指定しても、絶対パスへ解決される(ブラウザ側の作業ディレクトリずれ対策)。"""
+        monkeypatch.chdir(tmp_path)
+
+        dl = DownloadDir(path="downloads")
+
+        assert dl.path.is_absolute()
+        assert dl.path == (tmp_path / "downloads").resolve()
 
     def test_wait_ignores_old_temp_file(self, tmp_path):
         """作成前からある一時ファイルは新しいダウンロードを妨げない。"""

@@ -4,6 +4,8 @@
 （tests/test_browser_sites_ntt.py と同じ方針）。
 """
 
+import threading
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -14,10 +16,9 @@ from comken.toolbox.browser.management.sessions import BrowserSession
 from comken.toolbox.browser.sites import SITES
 from comken.toolbox.browser.sites.salesforce.site import (
     Salesforce,
-    _build_export_url,
     _cookies_to_requests_session,
     _domain_of,
-    _rename_to_report_id,
+    _start_keep_alive,
 )
 
 REPORT_URL_1 = "https://example.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE1AS/view"
@@ -51,52 +52,6 @@ class TestPublicApi:
 # （comken.toolbox.salesforce.report をそのまま使っているだけなので、ここでは複製しない）。
 
 
-class TestBuildExportUrl:
-    """_build_export_url() — 今のタブのドメインからエクスポートURLを組み立てる。"""
-
-    def test_builds_csv_export_url_from_current_domain(self):
-        url = _build_export_url(REPORT_URL_1, "00O5g00000ABCDE1AS", "csv", "Shift_JIS")
-
-        assert url == (
-            "https://example.my.salesforce.com/00O5g00000ABCDE1AS"
-            "?isdtp=p1&export=1&enc=Shift_JIS&xf=csv"
-        )
-
-    def test_uses_given_encoding(self):
-        url = _build_export_url(REPORT_URL_1, "00O5g00000ABCDE1AS", "csv", "UTF-8")
-
-        assert "enc=UTF-8" in url
-
-    def test_uses_given_export_format(self):
-        url = _build_export_url(REPORT_URL_1, "00O5g00000ABCDE1AS", "xls", "Shift_JIS")
-
-        assert url.endswith("xf=xls")
-
-
-class TestRenameToReportId:
-    """_rename_to_report_id() — ダウンロードした最新ファイルをreport_idベースの名前へ変える。"""
-
-    def test_renames_latest_file(self, tmp_path):
-        original = tmp_path / "月次レポート.csv"
-        original.touch()
-
-        renamed = _rename_to_report_id([original], tmp_path, "00O5g00000ABCDE1AS", "csv")
-
-        assert renamed == tmp_path / "00O5g00000ABCDE1AS.csv"
-        assert renamed.exists()
-        assert not original.exists()
-
-    def test_overwrites_existing_target(self, tmp_path):
-        target = tmp_path / "00O5g00000ABCDE1AS.csv"
-        target.write_text("old")
-        original = tmp_path / "月次レポート.csv"
-        original.write_text("new")
-
-        renamed = _rename_to_report_id([original], tmp_path, "00O5g00000ABCDE1AS", "csv")
-
-        assert renamed.read_text() == "new"
-
-
 class TestLoginWithToken:
     """login_with_token() — frontdoor.jsp でブラウザのログイン状態を確立する。"""
 
@@ -125,46 +80,6 @@ class TestLoginWithToken:
 
         with pytest.raises(SiteNotStartedError):
             sf.login_with_token("MY_TOKEN")
-
-
-class TestDownloadReports:
-    """download_reports() — 読み込みが終わったレポートから順にダウンロードしてリネームする。"""
-
-    def test_downloads_and_renames_each_report_without_mixing_files(self, tmp_path):
-        """2件目のダウンロード判定に、1件目のリネーム後ファイルが紛れ込まないことを確認する。
-
-        DownloadDir.wait() を複数回呼ぶと、mark_known() を呼ばない限り前回リネームした
-        ファイルを再検出してしまう回帰（tests/test_utils.py で個別に確認済み）を、
-        Salesforce.download_reports() 側で正しく防げているかを確かめる。
-        """
-        session = _make_session(tmp_path)
-        session.load_many = MagicMock(return_value=iter([REPORT_URL_1, REPORT_URL_2]))
-        session._driver.current_url = REPORT_URL_1
-        sf = Salesforce(session)
-
-        # 1件目はここで既にダウンロード済みという想定(session.open は素通しのモック)
-        (session.download_dir.path / "レポートA.csv").touch()
-
-        results = sf.download_reports([REPORT_URL_1, REPORT_URL_2], ready=None, download_timeout=1)
-
-        first_id, first_path = next(results)
-        assert first_id == "00O5g00000ABCDE1AS"
-        assert first_path == session.download_dir.path / "00O5g00000ABCDE1AS.csv"
-
-        # 2件目のタブに切り替わった想定で current_url を変え、ファイルもここで初めて作る
-        session._driver.current_url = REPORT_URL_2
-        (session.download_dir.path / "レポートB.csv").touch()
-
-        second_id, second_path = next(results)
-        assert second_id == "00O5g00000ABCDE2AS"
-        assert second_path == session.download_dir.path / "00O5g00000ABCDE2AS.csv"
-
-        with pytest.raises(StopIteration):
-            next(results)
-
-        session.load_many.assert_called_once_with(
-            [REPORT_URL_1, REPORT_URL_2], ready=None, max_open=10, timeout=None
-        )
 
 
 class TestDomainOf:
@@ -279,3 +194,70 @@ class TestExportReports:
 
         with pytest.raises(SiteNotStartedError):
             list(sf.export_reports([REPORT_URL_1], "出力先"))
+
+
+class TestStartKeepAlive:
+    """_start_keep_alive() — export_reports() 中、ブラウザにURLを開かせ続ける暫定対処。"""
+
+    def test_returns_none_thread_when_url_is_none(self, tmp_path):
+        session = _make_session(tmp_path)
+
+        thread, stop = _start_keep_alive(session, None, 300)
+
+        assert thread is None
+        assert not stop.is_set()
+
+    def test_opens_url_repeatedly_until_stopped(self, tmp_path):
+        session = _make_session(tmp_path)
+
+        thread, stop = _start_keep_alive(session, REPORT_URL_1, 0.02)
+        try:
+            time.sleep(0.1)
+        finally:
+            stop.set()
+            thread.join(timeout=1)
+
+        assert not thread.is_alive()
+        assert session._driver.get.call_count >= 2
+
+    def test_survives_open_failure_and_keeps_running(self, tmp_path):
+        session = _make_session(tmp_path)
+        session._driver.get.side_effect = RuntimeError("開けませんでした")
+
+        thread, stop = _start_keep_alive(session, REPORT_URL_1, 0.02)
+        try:
+            time.sleep(0.1)
+        finally:
+            stop.set()
+            thread.join(timeout=1)
+
+        assert not thread.is_alive()
+        assert session._driver.get.call_count >= 2
+
+
+class TestExportReportsKeepAlive:
+    """export_reports() の keep_alive_url — ダウンロード終了後は必ず止まる。"""
+
+    def test_keep_alive_thread_stops_after_completion(self, tmp_path):
+        session = _make_session(tmp_path)
+        session._driver.current_url = REPORT_URL_1
+        session._driver.get_cookies.return_value = []
+        sf = Salesforce(session)
+
+        http_session = MagicMock()
+        http_session.get.return_value = _csv_response()
+        with patch(
+            "comken.toolbox.browser.sites.salesforce.site.requests.Session",
+            return_value=http_session,
+        ):
+            list(
+                sf.export_reports(
+                    [REPORT_URL_1],
+                    tmp_path,
+                    keep_alive_url=REPORT_URL_1,
+                    keep_alive_interval=0.02,
+                )
+            )
+
+        active_threads = [t for t in threading.enumerate() if t.name == "salesforce-keep-alive"]
+        assert active_threads == []

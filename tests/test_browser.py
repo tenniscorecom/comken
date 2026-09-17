@@ -11,6 +11,7 @@ import os
 import threading
 import time
 from datetime import UTC, datetime
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -268,6 +269,36 @@ class TestSessionStartFailure:
             session.__enter__()
 
         assert edge.call_count == 1
+
+
+class TestDriverPathResolution:
+    """DRIVER_PATH が相対パスでも、Service には絶対パスで渡ることの確認。
+
+    相対パスのまま Service(executable_path=...) へ渡すと、実行時の
+    カレントディレクトリ次第で見つからなくなる（PROFILE_ROOT と同じ理由の
+    回帰防止）。
+    """
+
+    def test_resolves_relative_driver_path_to_absolute(self, tmp_path, monkeypatch):
+        service_class = MagicMock(return_value=MagicMock())
+        edge = MagicMock(return_value=MagicMock())
+        monkeypatch.setattr("comken.toolbox.browser.management.startup.Service", service_class)
+        monkeypatch.setattr("comken.toolbox.browser.management.startup.webdriver.Edge", edge)
+        monkeypatch.chdir(tmp_path)
+
+        class RelativeDriverOptions(BrowserOptions):
+            DRIVER_PATH = "./msedgedriver.exe"
+
+        session = BrowserSession(
+            name="test",
+            options=RelativeDriverOptions(),
+            download_dir=DownloadDir(path=tmp_path / "dl"),
+        )
+        session.__enter__()
+
+        called_path = service_class.call_args.kwargs["executable_path"]
+        assert Path(called_path).is_absolute()
+        assert Path(called_path) == (tmp_path / "msedgedriver.exe").resolve()
 
 
 class TestExternalLogSuppression:

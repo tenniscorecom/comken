@@ -1,19 +1,18 @@
-r"""comken/toolbox/browser/sites/salesforce/site.py — Salesforceレポートのブラウザダウンロード。
+r"""comken/toolbox/browser/sites/salesforce/site.py — Salesforceレポートのブラウザ経由ダウンロード。
+
+Reports and Dashboards REST APIの2000行上限を超えるレポート（マトリックス／統合など
+SOQLに書き換えられない形式）向けの最終手段。画面のエクスポート機能
+（``?export=1&xf=csv``）を直接叩く。
+
+requestsだけで frontdoor.jsp ログインを試みるとログイン画面へリダイレクトされ、
+通らない組織があることを確認済み（セッションセキュリティレベル等）。そのため
+認証の確立だけ実ブラウザ（Selenium）で行い、``login_with_token()`` が確立した
+セッションCookieを requests へ引き継いで、実際のN件のダウンロードは
+requests + ThreadPoolExecutor で並列に行う。
 
 レポートIDの抽出は comken.toolbox.salesforce.report.report_id_from_url() をそのまま使う
 （toolbox.browser → toolbox.salesforce は tests/test_layers.py の ALLOWED_SAME_LAYER で
 許可済み）。
-
-ダウンロード方法は2通り:
-
-- ``download_reports()`` — タブ（load_many）だけで完結する。組織のセッション
-  ポリシーに関わらず確実に通る
-- ``export_reports()`` — ``login_with_token()`` で確立したブラウザのセッション
-  Cookieを requests へ引き継ぎ、実際のN件のダウンロードは requests +
-  ThreadPoolExecutor で並列に行う。**速いのでこちらを先に試す。**
-  requests だけで frontdoor.jsp ログインを試みるとログイン画面へ
-  リダイレクトされて通らない組織があることを確認済み（セッションセキュリティ
-  レベル等）のため、認証だけは実ブラウザで確立している
 
 > [!warning] URL は仮の値
 > **このリポジトリは公開しているので、実際の組織の URL を書かない。**
@@ -24,6 +23,7 @@ r"""comken/toolbox/browser/sites/salesforce/site.py — Salesforceレポート�
 from __future__ import annotations
 
 import logging
+import threading
 from collections.abc import Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -33,8 +33,7 @@ from urllib.parse import urlsplit
 import requests
 
 from comken.exceptions import SalesforceReportExportError, SiteNotStartedError
-from comken.toolbox.browser import BrowserOptions, SiteBase
-from comken.toolbox.browser.locator import Locator
+from comken.toolbox.browser import SiteBase
 from comken.toolbox.salesforce.report import report_id_from_url
 
 if TYPE_CHECKING:
@@ -42,24 +41,14 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# load_many() で同時に開いておくタブの既定数
-_DEFAULT_MAX_OPEN_TABS = 10
-
-# レポート1件あたりのダウンロード完了待ちの既定秒数。集計系レポートは重いことがある
-_DEFAULT_DOWNLOAD_TIMEOUT_SECONDS = 300
-
 # export_reports() で同時に投げるHTTPリクエストの既定数
 _DEFAULT_MAX_WORKERS = 10
 
+# 1リクエストあたりのタイムアウト秒数。集計系レポートは重いことがある
+_DEFAULT_REQUEST_TIMEOUT_SECONDS = 300
 
-class SalesforceBrowserOptions(BrowserOptions):
-    """salesforce 用のブラウザオプション。
-
-    デフォルト（BrowserOptions）から変更したいものだけ上書きする。
-    レポートの読み込みが重いことがあるため、待機秒数を既定より長めにする。
-    """
-
-    WAIT_SECONDS = 180
+# keep_alive_url を開く既定の間隔（秒）
+_DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS = 300
 
 
 class Salesforce(SiteBase):
@@ -71,11 +60,13 @@ class Salesforce(SiteBase):
     ID/パスワードでのログイン画面は使わない。comken.toolbox.salesforce で取得した
     OAuthアクセストークンを ``login_with_token()`` に渡すだけで、
     frontdoor.jsp 経由でブラウザのログイン状態を確立する（MFAの二度手間が無い）。
+
+    起動オプションは既定（BrowserOptions）のままでよいため OPTIONS は書かない
+    （画面を待つ操作が無く、Lightning特有のタイムアウト延長も不要なため）。
     """
 
     NAME = "salesforce"
     BASE_URL = "https://example.my.salesforce.com"
-    OPTIONS = SalesforceBrowserOptions
     OWNER = "comken"
 
     def login_with_token(self, access_token: str, instance_url: str | None = None) -> None:
@@ -89,76 +80,6 @@ class Salesforce(SiteBase):
         domain = (instance_url or self.BASE_URL).rstrip("/")
         self._require_session().open(f"{domain}/secur/frontdoor.jsp?sid={access_token}")
 
-    def download_reports(
-        self,
-        report_urls: Sequence[str],
-        *,
-        ready: Locator | None = None,
-        max_open: int = _DEFAULT_MAX_OPEN_TABS,
-        page_timeout: int | None = None,
-        download_timeout: int = _DEFAULT_DOWNLOAD_TIMEOUT_SECONDS,
-        export_format: str = "csv",
-        encoding: str = "Shift_JIS",
-    ) -> Iterator[tuple[str, Path]]:
-        """レポートURLを渡すと、順に (report_id, ダウンロードしたファイルのパス) を返す。
-
-        レポートの読み込みが重いことを前提に、``load_many()`` で複数タブを同時に
-        開いておき、読み込みが終わったものから順にエクスポートしてダウンロードする。
-
-        **読み込み待ちは並列、ダウンロードのトリガーは1件ずつ。** Salesforceの
-        エクスポートはファイル名がレポート名で決まりIDでは決まらないため、複数の
-        ダウンロードを同時に走らせると「どのファイルがどのレポートか」を取り違える。
-        読み込みの終わったタブから順にこのメソッドが1件ずつ処理するので、
-        ダウンロードが同時に複数走ることはない。
-
-            with Salesforce() as sf:
-                sf.login_with_token(access_token, instance_url)
-                for report_id, path in sf.download_reports(report_urls, ready=MY_READY_LOCATOR):
-                    move_to_project_folder(report_id, path)
-
-        Args:
-            report_urls: レポート画面のURL（またはレポートID）のリスト。
-            ready: レポートの読み込み完了とみなす目印の要素。**省略せず渡すことを
-                強く推奨する。** LightningはページのHTMLを描いてから中身を
-                後入れするため、省略時（HTMLの読み込み完了で判断）だと表が
-                まだ空でも「読み込み完了」とみなしてしまう。組織・Salesforceの
-                バージョンでDOMが変わるため、comken側では固定値を持たない。
-            max_open: 同時に開いておくタブの数。既定10。
-            page_timeout: レポート1件あたりの読み込み待ちの上限秒数。省略時はセッションの設定
-                （SalesforceBrowserOptions.WAIT_SECONDS）。
-            download_timeout: ダウンロード完了待ちの上限秒数。既定300秒。
-            export_format: "csv" または "xls"。
-            encoding: エクスポートする文字コード。既定は ``Shift_JIS``（CP932相当）。
-                Excel・社内システムでの扱いやすさを優先している。UTF-8で欲しい
-                場合は ``"UTF-8"`` を渡す。
-
-        Yields:
-            (report_id, ダウンロードしたファイルのパス) のタプル。ファイルは
-            download_dir 直下に "{report_id}.{export_format}" として保存される
-            （Salesforceがレポート名で付けた元のファイル名から、この場でリネームする）。
-
-        Raises:
-            SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
-            DownloadTimeoutError: download_timeout 秒以内にダウンロードが完了しなかった場合。
-        """
-        session = self._require_session()
-        for url in session.load_many(
-            list(report_urls), ready=ready, max_open=max_open, timeout=page_timeout
-        ):
-            report_id = report_id_from_url(url)
-            export_url = _build_export_url(session.current_url, report_id, export_format, encoding)
-            session.open(export_url)
-            downloaded = self.downloads.wait(timeout=download_timeout)
-            renamed = _rename_to_report_id(
-                downloaded, self.downloads.path, report_id, export_format
-            )
-            # wait() は作成時点のファイルしか除外しないため、リネーム後のパスを
-            # 「既知」として伝えておかないと、次の1件の wait() がこれを
-            # 誤って新しいダウンロードとして検出する
-            self.downloads.mark_known(*downloaded, renamed)
-            logger.info("レポートをダウンロードしました: report_id=%s path=%s", report_id, renamed)
-            yield report_id, renamed
-
     def export_reports(
         self,
         report_urls: Sequence[str],
@@ -167,19 +88,14 @@ class Salesforce(SiteBase):
         export_format: str = "csv",
         encoding: str = "Shift_JIS",
         max_workers: int = _DEFAULT_MAX_WORKERS,
+        keep_alive_url: str | None = None,
+        keep_alive_interval: float = _DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS,
     ) -> Iterator[tuple[str, Path]]:
         """``login_with_token()`` 済みのセッションCookieを requests へ引き継ぎ、
         並列にダウンロードして (report_id, 保存先パス) を返す。
 
-        ``download_reports()`` はタブの読み込み・切り替えが挟まるため、実際の
-        ダウンロードは1件ずつしか進まない。このメソッドはブラウザを認証の確立
-        （``login_with_token()``）だけに使い、N件のダウンロード自体は
-        requests + ThreadPoolExecutor で並列に行うため、はるかに速い。
-
-        **requests だけで frontdoor.jsp ログインを試みるとログイン画面へ
-        リダイレクトされ、通らない組織があることを確認済み**（セッション
-        セキュリティレベル等）。実ブラウザで確立したセッションCookieを使うことで、
-        この制約を避けている。
+        ブラウザは認証の確立（``login_with_token()``）だけに使い、N件の
+        ダウンロード自体は requests + ThreadPoolExecutor で並列に行う。
 
             with Salesforce() as sf:
                 sf.login_with_token(access_token, instance_url)
@@ -194,6 +110,15 @@ class Salesforce(SiteBase):
                 Excel・社内システムでの扱いやすさを優先している。UTF-8で欲しい
                 場合は ``"UTF-8"`` を渡す。
             max_workers: 同時に投げるリクエストの数。既定10。
+            keep_alive_url: ダウンロード中、この間隔でブラウザに開かせ続ける
+                軽いページのURL（例: 0件のレポート）。省略時は何もしない。
+                件数が多くダウンロードに時間がかかる場合、ブラウザ自体は
+                ``login_with_token()`` 以降なにも操作していないため、途中で
+                Salesforce側のセッションが切れて ``SalesforceReportExportError``
+                になることがある。その暫定対処として指定する
+                （恒久対処ではない。根本的にはSalesforce管理者にセッション
+                タイムアウトの設定を確認してもらうのが筋）。
+            keep_alive_interval: ``keep_alive_url`` を開く間隔（秒）。既定300秒（5分）。
 
         Yields:
             (report_id, ダウンロードしたファイルのパス) のタプル。ファイルは
@@ -213,19 +138,29 @@ class Salesforce(SiteBase):
         target_dir = Path(directory)
         target_dir.mkdir(parents=True, exist_ok=True)
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {
-                executor.submit(
-                    _export_via_http, http_session, domain, url, export_format, encoding
-                ): url
-                for url in report_urls
-            }
-            for future in as_completed(futures):
-                report_id, content = future.result()
-                path = target_dir / f"{report_id}.{export_format}"
-                path.write_bytes(content)
-                logger.info("レポートをダウンロードしました: report_id=%s path=%s", report_id, path)
-                yield report_id, path
+        keep_alive_thread, stop_keep_alive = _start_keep_alive(
+            session, keep_alive_url, keep_alive_interval
+        )
+        try:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    executor.submit(
+                        _export_via_http, http_session, domain, url, export_format, encoding
+                    ): url
+                    for url in report_urls
+                }
+                for future in as_completed(futures):
+                    report_id, content = future.result()
+                    path = target_dir / f"{report_id}.{export_format}"
+                    path.write_bytes(content)
+                    logger.info(
+                        "レポートをダウンロードしました: report_id=%s path=%s", report_id, path
+                    )
+                    yield report_id, path
+        finally:
+            stop_keep_alive.set()
+            if keep_alive_thread is not None:
+                keep_alive_thread.join()
 
     def _require_session(self) -> BrowserSession:
         """起動済みの BrowserSession を返す。未起動なら理由を示して落とす。"""
@@ -234,21 +169,41 @@ class Salesforce(SiteBase):
         return self.session
 
 
+def _start_keep_alive(
+    session: BrowserSession, url: str | None, interval: float
+) -> tuple[threading.Thread | None, threading.Event]:
+    """指定したURLを一定間隔で開き続けるスレッドを始める（export_reports()のセッション維持用）。
+
+    長時間の並列ダウンロード中、ブラウザ自体は何も操作しないため
+    Salesforce側のセッションが途中で切れることがある暫定対処。
+    url が None なら何もしない（スレッドは作らない）。
+
+    呼び出し側は必ず ``finally`` で戻り値の Event を ``set()`` してから
+    スレッドを ``join()`` して止めること。
+    """
+    stop = threading.Event()
+    if url is None:
+        return None, stop
+
+    def _loop() -> None:
+        while not stop.wait(interval):
+            try:
+                session.open(url)
+                logger.debug("セッション維持のため開き直しました: %s", url)
+            except Exception:
+                logger.warning(
+                    "セッション維持のためのアクセスに失敗しました: %s", url, exc_info=True
+                )
+
+    thread = threading.Thread(target=_loop, name="salesforce-keep-alive", daemon=True)
+    thread.start()
+    return thread, stop
+
+
 def _domain_of(url: str) -> str:
     """URL から scheme + netloc だけを取り出す（例: https://example.my.salesforce.com）。"""
     parts = urlsplit(url)
     return f"{parts.scheme}://{parts.netloc}"
-
-
-def _build_export_url(current_url: str, report_id: str, export_format: str, encoding: str) -> str:
-    """今のタブのドメインを使って、レポートのエクスポートURLを組み立てる。
-
-    ``?export=1&enc=Shift_JIS&xf=csv`` を付けたURLへ遷移すると、画面を描かずに
-    ブラウザが直接CSVをダウンロードする（クラシックUI時代からある仕組みで、
-    Lightningのドメインからでもそのまま使える）。
-    """
-    domain = _domain_of(current_url)
-    return f"{domain}/{report_id}?isdtp=p1&export=1&enc={encoding}&xf={export_format}"
 
 
 def _cookies_to_requests_session(driver_cookies: list[dict]) -> requests.Session:
@@ -275,7 +230,7 @@ def _export_via_http(
     response = http_session.get(
         f"{domain}/{report_id}",
         params={"isdtp": "p1", "export": "1", "enc": encoding, "xf": export_format},
-        timeout=_DEFAULT_DOWNLOAD_TIMEOUT_SECONDS,
+        timeout=_DEFAULT_REQUEST_TIMEOUT_SECONDS,
     )
     content_type = response.headers.get("Content-Type", "")
     disposition = response.headers.get("Content-Disposition", "")
@@ -283,19 +238,3 @@ def _export_via_http(
     if response.status_code != requests.codes.ok or not looks_like_export:
         raise SalesforceReportExportError(report_id, response.status_code, content_type)
     return report_id, response.content
-
-
-def _rename_to_report_id(
-    downloaded: list[Path], directory: Path, report_id: str, export_format: str
-) -> Path:
-    """download_dir.wait() が返した最新のファイルを report_id ベースの名前へ変える。
-
-    Salesforceが付けるファイル名はレポート名でありIDではないため、呼び出し側が
-    「どのレポートのファイルか」を確実に分かるようにリネームする。
-    """
-    latest = downloaded[-1]
-    target = directory / f"{report_id}.{export_format}"
-    if target.exists():
-        target.unlink()
-    latest.rename(target)
-    return target
