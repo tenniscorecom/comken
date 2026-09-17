@@ -58,6 +58,7 @@ Excel の見出しで、スペースを含む見出し（`Salesforce URL`）も�
 import dataclasses
 import datetime as dt
 import logging
+import typing
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar, Self
@@ -574,21 +575,38 @@ def _convert(value: Any, value_type: Any, spec: ColumnSpec, row: int, cls: type)
             row, spec.header, value, f"「{'」か「'.join(spec.choices)}」と書いてください。"
         )
 
-    if value_type is bool or value_type == "bool":
+    candidate_types = _candidate_types(value_type)
+
+    if bool in candidate_types or value_type is bool or value_type == "bool":
         return _to_bool(value)
-    if value_type is int or value_type == "int":
+    if int in candidate_types or value_type is int or value_type == "int":
         return _to_int(value, text, spec, row)
-    if value_type is Path or value_type == "Path":
+    if Path in candidate_types or value_type is Path or value_type == "Path":
         return Path(text)
-    if value_type is dt.time or value_type == "dt.time":
+    if dt.time in candidate_types or value_type is dt.time or value_type == "dt.time":
         return _to_time(value)
-    if value_type is str or value_type == "str":
+    if str in candidate_types or value_type is str or value_type == "str":
         # **Excel は数値セルを float で返すことがある。** そのまま `str()` すると
         # `1001` が `"1001.0"` になるため、整数値は整数文字列として返す
         if isinstance(value, float) and value.is_integer():
             return str(int(value))
         return text
     return text
+
+
+def _candidate_types(value_type: Any) -> tuple[type, ...]:
+    """Union 型ヒント（`dt.time | None` など）を展開して、要素の型を返す。
+
+    文字列として渡された型ヒント（`from __future__ import annotations` 時）は
+    Union 判定できないので空タプルにフォールバックし、呼び出し元の旧来の
+    ``is bool`` 比較パスで判定させる。
+    """
+    if isinstance(value_type, str):
+        return ()
+    origin = typing.get_origin(value_type)
+    if origin is typing.Union:
+        return typing.get_args(value_type)
+    return (value_type,)
 
 
 def _to_bool(value: Any) -> bool:

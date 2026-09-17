@@ -23,7 +23,6 @@ r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポー�
     ReportEntry           管理表の1行
     ReportEntry.create_template  管理表の雛形（Excel）を作る
     ScheduleRule          取得スケジュール管理表の1行
-    write_latest_status   全レポートの最新実行結果を 1 つの Excel へ上書き生成する
     downloaded_today      指定した管理番号が今日すでに成功しているかを履歴から調べる
 
 **「今すぐ取りに行く」関数はここには無い。** 取得の実行（`download_scheduled()`）は
@@ -90,9 +89,11 @@ comken 本体側の共有例外（`ComkenError` / `SalesforceReportIDNotFoundErr
 **`__init__.py` 経由の import で `openpyxl` 以外の重い依存を読み込ませない設計。**
 取得実行部分（`requests` / `selenium` が要る）が外へ出たため、このパッケージ自体は
 もう `requests` を必要としない。`__getattr__` (PEP 562) による遅延 import は、
-`master.py`（Excel）だけで完結する軽い用途と `latest_status.py`（openpyxl の
-スタイル操作まで使う）用途を分けておく目的で残してある。
+Excel だけで完結する軽い用途と SOQL・履歴読み取りなど別の依存を切り分ける
+目的で残してある。
 """
+
+from typing import TYPE_CHECKING
 
 from comken.services.salesforce_downloader.sheets.master import (
     ReportEntry,
@@ -101,13 +102,20 @@ from comken.services.salesforce_downloader.sheets.master import (
 )
 from comken.services.salesforce_downloader.sheets.schedule import ScheduleRule
 
+if TYPE_CHECKING:
+    from comken.services.salesforce_downloader.provider import (
+        cached_report,
+        cached_report_path,
+        file_path_of,
+    )
+    from comken.services.salesforce_downloader.sheets.history import downloaded_today
+
 __all__ = [
     "cached_report",
     "cached_report_path",
     "file_path_of",
     "load_master",
     "shared_report_ids",
-    "write_latest_status",
     "downloaded_today",
     "ReportEntry",
     "ScheduleRule",
@@ -118,7 +126,6 @@ _LAZY_TARGETS: dict[str, str] = {
     "cached_report": "comken.services.salesforce_downloader.provider",
     "cached_report_path": "comken.services.salesforce_downloader.provider",
     "file_path_of": "comken.services.salesforce_downloader.provider",
-    "write_latest_status": "comken.services.salesforce_downloader.sheets.latest_status",
     "downloaded_today": "comken.services.salesforce_downloader.sheets.history",
 }
 

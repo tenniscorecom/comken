@@ -131,6 +131,7 @@ ComkenError
 │   ├── CachedReportNotFoundError
 │   ├── ReportNotRegisteredError
 │   ├── SoqlReportNotRegisteredError
+│   ├── GroupNotRegisteredError
 │   ├── ReportDisabledError
 │   ├── InvalidReportURLError
 │   ├── EmptyReportError
@@ -140,10 +141,7 @@ ComkenError
 │   ├── SoqlDownloadFailedError
 │   ├── UnsupportedScheduleFrequencyError
 │   ├── ScheduleIntervalMissingError
-│   ├── ScheduleRequiredValueMissingError
-│   ├── ScheduleWeekdayInvalidError
-│   ├── ScheduleRowValueError
-│   └── ScheduleDuplicateKeyError
+│   └── ScheduleWeekdayInvalidError
 └── DataLoaderError
 │   ├── DataLoaderLauncherNotFoundError
 │   ├── DataLoaderTimeoutError
@@ -226,6 +224,7 @@ from comken.exceptions.downloader import (
     CachedReportNotFoundError,
     DownloaderError,
     EmptyReportError,
+    GroupNotRegisteredError,
     HistoryHeaderMismatchError,
     HistoryLockTimeoutError,
     HistoryWriteError,
@@ -235,10 +234,7 @@ from comken.exceptions.downloader import (
     ReportNotRegisteredError,
     ReportReservePathLimitError,
     ScheduledDownloadFailedError,
-    ScheduleDuplicateKeyError,
     ScheduleIntervalMissingError,
-    ScheduleRequiredValueMissingError,
-    ScheduleRowValueError,
     ScheduleWeekdayInvalidError,
     SoqlDownloadFailedError,
     SoqlReportNotRegisteredError,
@@ -454,6 +450,7 @@ __all__ = [
     "CachedReportNotFoundError",
     "ReportNotRegisteredError",
     "SoqlReportNotRegisteredError",
+    "GroupNotRegisteredError",
     "ReportDisabledError",
     "InvalidReportURLError",
     "EmptyReportError",
@@ -463,10 +460,7 @@ __all__ = [
     "SoqlDownloadFailedError",
     "UnsupportedScheduleFrequencyError",
     "ScheduleIntervalMissingError",
-    "ScheduleRequiredValueMissingError",
     "ScheduleWeekdayInvalidError",
-    "ScheduleRowValueError",
-    "ScheduleDuplicateKeyError",
     "DataLoaderError",
     "DataLoaderLauncherNotFoundError",
     "DataLoaderTimeoutError",

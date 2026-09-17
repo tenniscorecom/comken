@@ -3098,7 +3098,7 @@ comken 以外の handler が root に混ざっている場合は ``LoggingConfli
 ### `setup_local_logging`
 
 ```text
-def setup_local_logging(*, console_level: int=logging.INFO, file_level: int=logging.INFO, path: str | Path | None=None, allow_existing: bool=False) -> None:
+def setup_local_logging(*, console_level: int | None=None, file_level: int | None=None, path: str | Path | None=None, allow_existing: bool=False) -> None:
 ```
 
 #### 説明
@@ -3118,6 +3118,12 @@ handler が混ざっている場合は ``LoggingAlreadyConfiguredError`` を送�
 ``LoggingConflictError`` を送出し、既存 handler の出力先やレベルを勝手に
 変えてしまうことを防ぐ。``allow_existing=True`` を指定すると、その判定を
 **警告ログだけ**に留めて処理を続行する。
+
+``console_level`` / ``file_level`` を省略すると、呼び出し時点の
+``with debug():`` の状態で決まる（有効なら ``DEBUG``、無効なら ``INFO``）。
+**`setup_local_logging()` を `with debug():` の中で呼べば、それだけで
+画面・ファイルとも DEBUG まで出る。** 明示的に渡した場合はそちらを優先する
+（`with debug():` の外でも常時 DEBUG にしたい、といった用途向け）。
 
 
 ## `from comken.core.table import ...`
@@ -5968,6 +5974,33 @@ class SoqlReportNotRegisteredError(DownloaderError):
 def __init__(self, report_key: str, registered: list[str]) -> None:
 ```
 
+### `GroupNotRegisteredError`
+
+```text
+class GroupNotRegisteredError(DownloaderError):
+```
+
+#### 説明
+
+管理表の「グループ」列に設定シートに登録されていない値が書かれている
+
+出力先フォルダは「グループ→ベースパス」の対応を、設定シート（レポート管理表
+と同じブック内の「設定」シート）で管理する。管理表にないグループ名が書かれて
+いると、出力先を決められない。
+
+発生箇所: comken.services.salesforce_downloader.provider の report_folder()
+
+対処:
+    管理表の「グループ」列に書かれた値が、設定シート（`group_settings.py` の
+    `GroupSetting`）の「グループ」列に存在するか確認する。新しく部署・グループを
+    追加するときは、設定シート側にも同じ名前で行を足す
+
+#### `__init__`
+
+```text
+def __init__(self, group: str, registered: list[str], master_path: Path) -> None:
+```
+
 ### `ReportDisabledError`
 
 ```text
@@ -6049,16 +6082,19 @@ class ReportFolderNotFoundError(DownloaderError):
 
 #### 説明
 
-管理表に書かれた保存先のフォルダが無い
+保存先として組み立てたフォルダが無い
 
+保存先フォルダは、管理表の「グループ」「担当者」「概要」と設定シートの
+「ベースURL」から Python 側で組み立てる（`provider.report_folder()`）。
+組み立てたフォルダそのものが存在しない場合にこの例外になる。
 無いフォルダを作らないのは、書き間違いのことが多いため。
 勝手に作ると、誰も読まない場所へ置き続けることになる。
 
 発生箇所: Salesforceレポートダウンローダー の download_scheduled()
 
 対処:
-    管理表の「保存先」を確認する。共有フォルダなら、
-    つながっているか・権限があるかも確認する
+    設定シートの「ベースURL」と、管理表の「グループ」「担当者」「概要」を
+    確認する。共有フォルダなら、つながっているか・権限があるかも確認する
 
 #### `__init__`
 
@@ -6181,46 +6217,21 @@ class ScheduleIntervalMissingError(DownloaderError):
 
 #### 説明
 
-「1時間ごと」の行で、開始・終了・間隔のどれかが抜けている
+「1時間ごと」の行で、開始時刻が抜けている
 
-1時間おきの判定は「開始時刻から終了時刻までのあいだ、指定分間隔で動く」
-という形なので、3つの情報がそろうまで動かない。
+1時間おきの判定は「開始時刻から 60 分刻みで動く」という形なので、
+開始時刻が無いと動かない。
 
-発生箇所: comken.services.salesforce_downloader.sheets.schedule の is_due()
+発生箇所: comken.services.salesforce_downloader.sheets.schedule の ScheduleRule.is_due()
 
 対処:
-    管理表の「取得開始時刻」「取得終了時刻」「取得間隔（分）」の3列を
-    すべて埋める
+    管理表の「スケジュール」シートで、frequency が「1時間ごと」の行の
+    「取得時刻」列を埋める
 
 #### `__init__`
 
 ```text
 def __init__(self) -> None:
-```
-
-### `ScheduleRequiredValueMissingError`
-
-```text
-class ScheduleRequiredValueMissingError(DownloaderError):
-```
-
-#### 説明
-
-管理表の必須列が空になっている
-
-スケジュールキー・レポートキー・取得頻度のいずれかが空だと、
-どのレポートをいつ取るか決められない。
-
-発生箇所: comken.services.salesforce_downloader.sheets.schedule の ScheduleRule.from_row()
-
-対処:
-    管理表の該当行で、表示された列名（スケジュールキー / レポートキー /
-    取得頻度）の値を埋める
-
-#### `__init__`
-
-```text
-def __init__(self, column: str) -> None:
 ```
 
 ### `ScheduleWeekdayInvalidError`
@@ -6236,7 +6247,7 @@ class ScheduleWeekdayInvalidError(DownloaderError):
 許容されるのは月〜日の漢字1文字（「月」「火」「水」「木」「金」「土」「日」）
 または「〜曜日」の接尾辞付き表記。
 
-発生箇所: comken.services.salesforce_downloader.sheets.schedule の ScheduleRule.from_row()
+発生箇所: comken.services.salesforce_downloader.sheets.schedule の ScheduleRule.weekday
 
 対処:
     管理表の「曜日」列の値を月〜日のいずれかに修正する（「曜日」を付ける
@@ -6246,57 +6257,6 @@ class ScheduleWeekdayInvalidError(DownloaderError):
 
 ```text
 def __init__(self, value: object) -> None:
-```
-
-### `ScheduleRowValueError`
-
-```text
-class ScheduleRowValueError(DownloaderError):
-```
-
-#### 説明
-
-スケジュール管理表の行の値が正しくない
-
-``ScheduleRule.from_row()`` が投げた ``DownloaderError`` を、**業務担当者が
-表の何行目を直せばいいか分かるよう行番号付きで**再送出するための例外。
-``load_schedule()`` が「行の境目」と「中の値エラー」を区別して表示するために
-使う。
-
-発生箇所: comken.services.salesforce_downloader.sheets.schedule の load_schedule()
-
-対処:
-    メッセージに出ている行と直したい値を、管理表で確認して直す
-
-#### `__init__`
-
-```text
-def __init__(self, row_number: int, reason: str) -> None:
-```
-
-### `ScheduleDuplicateKeyError`
-
-```text
-class ScheduleDuplicateKeyError(DownloaderError):
-```
-
-#### 説明
-
-スケジュール管理表の「スケジュールキー」が重複している
-
-1つの取得ルールを1行で表す管理表で同じキーが2行以上あると、
-ルールがどちらのものか区別できなくなる。
-
-発生箇所: comken.services.salesforce_downloader.sheets.schedule の load_schedule()
-
-対処:
-    スケジュール管理表を開いて、重複しているスケジュールキーの
-    どちらかを別の値に変える
-
-#### `__init__`
-
-```text
-def __init__(self, schedule_key: str, row_number: int, path: Path) -> None:
 ```
 
 ### `DataLoaderError`
@@ -6744,10 +6704,6 @@ def shared_report_ids(entries: dict[str, ReportEntry]) -> dict[str, list[str]]:
 Returns:
     {Salesforce のレポート ID: [管理番号, ...]}。2つ以上のものだけ。
 
-### `write_latest_status`
-
-定義を解決できませんでした。
-
 ### `downloaded_today`
 
 定義を解決できませんでした。
@@ -6782,16 +6738,18 @@ Raises:
 ### `ScheduleRule`
 
 ```text
-class ScheduleRule:
+class ScheduleRule(MasterRow):
 ```
 
 #### 説明
 
 「スケジュール」シートの1行。1行 = 1つの取得ルール。
 
-列名（Excel 上の見出し）はフィールド名と異なるものがあるため、
-`from_row()` が日本語の列名から読み替える。以下は実体（フィールド）ごとの
-対応列名と意味。
+列定義は `column()` に集約されている。``曜日`` / ``日付`` 列は自由記述
+（空欄を許す）なので ``choices`` を付けず、``weekday`` /
+``day_of_month`` / ``month_end`` / ``nth_business_day`` の 4 つの
+`@property` でパース結果だけを公開する（``ReportEntry.report_id`` が
+URL から計算派生するのと同じ考え方）。
 
 Attributes:
     schedule_key: 列「スケジュールキー」。このルールを一意に識別するキー。
@@ -6803,26 +6761,61 @@ Attributes:
         `FREQUENCY_WEEKLY` / `FREQUENCY_MONTHLY` のいずれか。
     run_time: 列「取得時刻」。毎日・毎週・毎月・1時間ごとに共通の実行時刻
         （1時間ごとのときは開始時刻を兼ねる）。空欄可。
-    interval_minutes: 列「取得間隔（分）」。`frequency` が1時間ごとのときだけ使う。
-    weekday: 列「曜日」。`frequency` が毎週のときだけ使う（0=月〜6=日）。
-    day_of_month: 列「日付」の一部。`frequency` が毎月かつ日付の数値指定
-        （1〜31）のときに入る。
-    month_end: 列「日付」の一部。`frequency` が毎月かつ「月末」指定のとき `True`。
-    nth_business_day: 列「日付」の一部。`frequency` が毎月かつ「第N営業日」
-        指定のときに入る。
+    raw_weekday: 列「曜日」。`frequency` が毎週のときだけ使う
+        （下の `weekday` property で 0=月〜6=日 に変換）。
+    raw_day_of_month: 列「日付」。`frequency` が毎月のときだけ使う
+        （1〜31 の数字 / `月末` / `第N営業日` のいずれかを下の
+        `day_of_month` / `month_end` / `nth_business_day` property で
+        分解する）。
     holiday_policy: 列「祝日対応」。`HOLIDAY_SKIP`（既定）なら祝日はスキップする。
-    enabled: 列「有効」。`○`/`×`。無効な行は判定対象から外れる。
+    enabled: 列「有効」。`○`/`×`。既定値なし（書き忘れはエラー）。
 
-#### `from_row`
+#### `weekday`
 
 ```text
-@classmethod
-def from_row(cls, row: Mapping[str, object]) -> Self:
+@property
+def weekday(self) -> int | None:
 ```
 
 ##### 説明
 
-日本語カラム名の辞書からスケジュールを作る。
+「曜日」列の値を 0=月〜6=日 の整数に変換する。空欄は None。
+
+Raises:
+    ScheduleWeekdayInvalidError: 想定外の文字列が書かれている場合。
+
+#### `day_of_month`
+
+```text
+@property
+def day_of_month(self) -> int | None:
+```
+
+##### 説明
+
+「日付」列が 1〜31 の数字で書かれたとき、その値。
+
+#### `month_end`
+
+```text
+@property
+def month_end(self) -> bool:
+```
+
+##### 説明
+
+「日付」列が「月末」のとき True。
+
+#### `nth_business_day`
+
+```text
+@property
+def nth_business_day(self) -> int | None:
+```
+
+##### 説明
+
+「日付」列が「第N営業日」のとき、N。
 
 #### `is_due`
 

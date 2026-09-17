@@ -1,8 +1,8 @@
 """``comken.services.salesforce_downloader.sheets.schedule.load_schedule`` を検証する。
 
-`ScheduleRule.from_row()` のパース挙動は ``tests/test_schedule.py`` で担保する
-（既存テストを壊さない）。ここでは**「Excel から読んで ScheduleRule のリストにする」**
-経路と、エラー時の挙動を確かめる。
+`ScheduleRule` の ``raw_*`` パースとプロパティ挙動は ``tests/test_schedule.py``
+で担保する（既存テストを壊さない）。ここでは**「Excel から読んで ScheduleRule
+のリストにする」**経路と、エラー時の挙動を確かめる。
 """
 
 from pathlib import Path
@@ -12,24 +12,24 @@ import pytest
 from comken.core.table import Table
 from comken.exceptions import (
     ExcelFileNotFoundError,
-    ScheduleDuplicateKeyError,
-    ScheduleRequiredValueMissingError,
-    ScheduleRowValueError,
-    ScheduleWeekdayInvalidError,
+    MasterDuplicateValueError,
+    MasterRowValueError,
 )
 from comken.services.salesforce_downloader.sheets.schedule import (
     SCHEDULE_SHEET_NAME,
-    ScheduleRule,
     load_schedule,
 )
 from comken.toolbox.excel import Excel
 
+# 新スキーマ: 「取得間隔（分）」列は廃止、「日付」列を `曜日` と `祝日対応` の間に
+# 追加。順序はこのとおり（Excel の列順は自由だが、テストではこの順で作る）
 SCHEDULE_HEADERS = [
     "スケジュールキー",
     "レポートキー",
     "取得頻度",
     "取得時刻",
     "曜日",
+    "日付",
     "祝日対応",
     "有効",
 ]
@@ -47,11 +47,10 @@ def make_master_with_schedule(
     """
     master_headers = [
         "ID",
-        "グループ名",
+        "グループ",
         "担当者",
         "概要",
         "Salesforce URL",
-        "保存先",
         "有効",
         "備考",
     ]
@@ -85,14 +84,15 @@ class TestLoadSchedule:
                     "山田",
                     "顧客一覧",
                     "https://example.com/a/view",
-                    str(tmp_path),
                     "○",
                     "",
                 ],
             ],
             schedule_rows=[
-                ["S001", "1001", "毎週", "09:00", "月", "取得しない", "○"],
-                ["S002", "1002", "毎日", "10:30", "", "取得しない", "○"],
+                # スケジュールキー / レポートキー / 取得頻度 / 取得時刻 / 曜日 /
+                # 日付 / 祝日対応 / 有効 の8列で書く
+                ["S001", "1001", "毎週", "09:00", "月", "", "取得しない", "○"],
+                ["S002", "1002", "毎日", "10:30", "", "", "取得しない", "○"],
             ],
         )
         rules = load_schedule(master)
@@ -111,15 +111,14 @@ class TestLoadSchedule:
                     "山田",
                     "顧客一覧",
                     "https://example.com/a/view",
-                    str(tmp_path),
                     "○",
                     "",
                 ]
             ],
             schedule_rows=[
-                ["S001", "1001", "毎週", "09:00", "月", "取得しない", "○"],
+                ["S001", "1001", "毎週", "09:00", "月", "", "取得しない", "○"],
                 [None] * len(SCHEDULE_HEADERS),  # 空行は読み飛ばす
-                ["S002", "1002", "毎日", "10:30", "", "取得しない", "○"],
+                ["S002", "1002", "毎日", "10:30", "", "", "取得しない", "○"],
             ],
         )
         rules = load_schedule(master)
@@ -136,7 +135,6 @@ class TestLoadSchedule:
                     "山田",
                     "顧客一覧",
                     "https://example.com/a/view",
-                    str(tmp_path),
                     "○",
                     "",
                 ]
@@ -156,50 +154,23 @@ class TestLoadSchedule:
                     "山田",
                     "顧客一覧",
                     "https://example.com/a/view",
-                    str(tmp_path),
                     "○",
                     "",
                 ]
             ],
             schedule_rows=[
-                ["S001", "1001", "毎週", "09:00", "月", "取得しない", "○"],
-                ["S001", "1002", "毎週", "10:00", "火", "取得しない", "○"],  # 重複
+                ["S001", "1001", "毎週", "09:00", "月", "", "取得しない", "○"],
+                ["S001", "1002", "毎週", "10:00", "火", "", "取得しない", "○"],  # 重複
             ],
         )
-        with pytest.raises(ScheduleDuplicateKeyError) as e:
+        with pytest.raises(MasterDuplicateValueError) as e:
             load_schedule(master)
-        # 業務担当者に「どちらの値か」「何行目か」が届く
+        # 業務担当者に「どの値が」「どの見出しで」重複したかが届く
+        assert "スケジュールキー" in str(e.value)
         assert "S001" in str(e.value)
-        assert "3 行目" in str(e.value)  # 重複の2行目は offset=1 で row_number=3
-
-    def test_invalid_weekday_raises_with_row_number(self, tmp_path):
-        """曜日が壊れていると、メッセージに行番号が入る（業務担当者が直せるように）。"""
-        master = make_master_with_schedule(
-            tmp_path / "管理表.xlsx",
-            [
-                [
-                    "1001",
-                    "営業事務グループ",
-                    "山田",
-                    "顧客一覧",
-                    "https://example.com/a/view",
-                    str(tmp_path),
-                    "○",
-                    "",
-                ]
-            ],
-            schedule_rows=[
-                ["S001", "1001", "毎週", "09:00", "不明", "取得しない", "○"],
-            ],
-        )
-        with pytest.raises(ScheduleRowValueError) as e:
-            load_schedule(master)
-        # 見出しの次の行（offset=0, row_number=2）が指摘される
-        assert "2 行目" in str(e.value)
-        # 元の例外（曜日エラー）が連鎖している
-        assert isinstance(e.value.__cause__, ScheduleWeekdayInvalidError)
 
     def test_missing_required_value_raises_with_row_number(self, tmp_path):
+        """必須列（スケジュールキー）が空のとき、行番号付き ``MasterRowValueError`` で抜ける。"""
         master = make_master_with_schedule(
             tmp_path / "管理表.xlsx",
             [
@@ -209,7 +180,6 @@ class TestLoadSchedule:
                     "山田",
                     "顧客一覧",
                     "https://example.com/a/view",
-                    str(tmp_path),
                     "○",
                     "",
                 ]
@@ -221,15 +191,86 @@ class TestLoadSchedule:
                     "毎週",
                     "09:00",
                     "月",
+                    "",
                     "取得しない",
                     "○",
                 ],  # スケジュールキー空
             ],
         )
-        with pytest.raises(ScheduleRowValueError) as e:
+        with pytest.raises(MasterRowValueError) as e:
             load_schedule(master)
+        # 見出しの次の行（offset=0, row_number=2）が指摘される
         assert "2 行目" in str(e.value)
-        assert isinstance(e.value.__cause__, ScheduleRequiredValueMissingError)
+        assert "スケジュールキー" in str(e.value)
+
+    def test_invalid_frequency_raises(self, tmp_path):
+        """choices に無い取得頻度は ``MasterRowValueError``（=許可された選択肢が並ぶ）。"""
+        master = make_master_with_schedule(
+            tmp_path / "管理表.xlsx",
+            [
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "顧客一覧",
+                    "https://example.com/a/view",
+                    "○",
+                    "",
+                ]
+            ],
+            schedule_rows=[
+                ["S001", "1001", "ときどき", "09:00", "", "", "取得しない", "○"],
+            ],
+        )
+        with pytest.raises(MasterRowValueError) as e:
+            load_schedule(master)
+        assert "取得頻度" in str(e.value)
+
+    def test_blank_enabled_raises(self, tmp_path):
+        """「有効」列は既定値なし（書き忘れはエラー）に統一したため、空欄で止まる。"""
+        master = make_master_with_schedule(
+            tmp_path / "管理表.xlsx",
+            [
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "顧客一覧",
+                    "https://example.com/a/view",
+                    "○",
+                    "",
+                ]
+            ],
+            schedule_rows=[
+                ["S001", "1001", "毎週", "09:00", "月", "", "取得しない", ""],
+            ],
+        )
+        with pytest.raises(MasterRowValueError) as e:
+            load_schedule(master)
+        assert "有効" in str(e.value)
+
+    def test_day_of_month_is_parsed(self, tmp_path):
+        """「日付」列の数字が ``day_of_month`` プロパティで取り出せる。"""
+        master = make_master_with_schedule(
+            tmp_path / "管理表.xlsx",
+            [
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "顧客一覧",
+                    "https://example.com/a/view",
+                    "○",
+                    "",
+                ]
+            ],
+            schedule_rows=[
+                ["S001", "1001", "毎月", "06:00", "", "15", "取得しない", "○"],
+            ],
+        )
+        rules = load_schedule(master)
+        assert rules[0].day_of_month == 15
+        assert rules[0].month_end is False
 
     def test_missing_master_file_raises(self, tmp_path):
         """シート無しと「ファイル自体が無い」は別のエラー（後者はそのまま上位へ）。"""
@@ -237,19 +278,3 @@ class TestLoadSchedule:
         assert not missing.exists()
         with pytest.raises(ExcelFileNotFoundError):
             load_schedule(missing)
-
-
-# 後方互換のサニティチェック: 既存 `ScheduleRule.from_row()` の呼び出し形式が
-# 今まで通り動くことを確認する（タスク #2 の「``tests/test_schedule.py`` の
-# 既存呼び出し ``ScheduleRule.from_row(row)`` が今まで通り動くこと」を保証）。
-def test_existing_from_row_signature_still_works():
-    rule = ScheduleRule.from_row(
-        {
-            "スケジュールキー": "S1",
-            "レポートキー": "1001",
-            "取得頻度": "毎日",
-            "取得時刻": "09:00",
-            "有効": "○",
-        }
-    )
-    assert rule.schedule_key == "S1"

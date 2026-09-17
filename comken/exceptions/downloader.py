@@ -84,6 +84,30 @@ class ReportNotRegisteredError(DownloaderError):
         )
 
 
+class GroupNotRegisteredError(DownloaderError):
+    """管理表の「グループ」列に設定シートに登録されていない値が書かれている
+
+    出力先フォルダは「グループ→ベースパス」の対応を、設定シート（レポート管理表
+    と同じブック内の「設定」シート）で管理する。管理表にないグループ名が書かれて
+    いると、出力先を決められない。
+
+    発生箇所: comken.services.salesforce_downloader.provider の report_folder()
+
+    対処:
+        管理表の「グループ」列に書かれた値が、設定シート（`group_settings.py` の
+        `GroupSetting`）の「グループ」列に存在するか確認する。新しく部署・グループを
+        追加するときは、設定シート側にも同じ名前で行を足す
+    """
+
+    def __init__(self, group: str, registered: list[str], master_path: Path) -> None:
+        known = "、".join(registered) or "（登録なし）"
+        super().__init__(
+            f"管理表の「グループ」列に設定されていないグループ名です: {group}\n"
+            f"設定シートに登録済みのグループ: {known}\n"
+            f"管理表: {master_path}"
+        )
+
+
 class SoqlReportNotRegisteredError(DownloaderError):
     """管理表の「SOQL」列が「○」なのに、同じ管理番号の SoqlReport が登録されていない
 
@@ -193,23 +217,27 @@ class EmptyReportError(DownloaderError):
 
 
 class ReportFolderNotFoundError(DownloaderError):
-    """管理表に書かれた保存先のフォルダが無い
+    """保存先として組み立てたフォルダが無い
 
+    保存先フォルダは、管理表の「グループ」「担当者」「概要」と設定シートの
+    「ベースURL」から Python 側で組み立てる（`provider.report_folder()`）。
+    組み立てたフォルダそのものが存在しない場合にこの例外になる。
     無いフォルダを作らないのは、書き間違いのことが多いため。
     勝手に作ると、誰も読まない場所へ置き続けることになる。
 
     発生箇所: Salesforceレポートダウンローダー の download_scheduled()
 
     対処:
-        管理表の「保存先」を確認する。共有フォルダなら、
-        つながっているか・権限があるかも確認する
+        設定シートの「ベースURL」と、管理表の「グループ」「担当者」「概要」を
+        確認する。共有フォルダなら、つながっているか・権限があるかも確認する
     """
 
     def __init__(self, report_key: str, folder: Path) -> None:
         super().__init__(
             f"保存先のフォルダがありません: {report_key}\n"
             f"{folder}\n"
-            "管理表の「保存先」を確認してください。\n"
+            "設定シートの「ベースURL」と、管理表の「グループ」「担当者」「概要」を"
+            "確認してください。\n"
             "共有フォルダの場合は、つながっているか（権限があるか）も確認してください。"
         )
 
@@ -309,44 +337,23 @@ class UnsupportedScheduleFrequencyError(DownloaderError):
 
 
 class ScheduleIntervalMissingError(DownloaderError):
-    """「1時間ごと」の行で、開始・終了・間隔のどれかが抜けている
+    """「1時間ごと」の行で、開始時刻が抜けている
 
-    1時間おきの判定は「開始時刻から終了時刻までのあいだ、指定分間隔で動く」
-    という形なので、3つの情報がそろうまで動かない。
+    1時間おきの判定は「開始時刻から 60 分刻みで動く」という形なので、
+    開始時刻が無いと動かない。
 
-    発生箇所: comken.services.salesforce_downloader.sheets.schedule の is_due()
+    発生箇所: comken.services.salesforce_downloader.sheets.schedule の ScheduleRule.is_due()
 
     対処:
-        管理表の「取得開始時刻」「取得終了時刻」「取得間隔（分）」の3列を
-        すべて埋める
+        管理表の「スケジュール」シートで、frequency が「1時間ごと」の行の
+        「取得時刻」列を埋める
     """
 
     def __init__(self) -> None:
         super().__init__(
-            "1時間ごとには開始・終了時刻と間隔が必要です\n"
-            "管理表の「取得開始時刻」「取得終了時刻」「取得間隔（分）」の"
-            "3列をすべて埋めてください。"
-        )
-
-
-class ScheduleRequiredValueMissingError(DownloaderError):
-    """管理表の必須列が空になっている
-
-    スケジュールキー・レポートキー・取得頻度のいずれかが空だと、
-    どのレポートをいつ取るか決められない。
-
-    発生箇所: comken.services.salesforce_downloader.sheets.schedule の ScheduleRule.from_row()
-
-    対処:
-        管理表の該当行で、表示された列名（スケジュールキー / レポートキー /
-        取得頻度）の値を埋める
-    """
-
-    def __init__(self, column: str) -> None:
-        super().__init__(
-            f"管理表の必須列が空です: {column}\n"
-            "管理表の「スケジュールキー」「レポートキー」「取得頻度」は"
-            "必ず値を入力してください。"
+            "1時間ごとには開始時刻が必要です\n"
+            "管理表の「スケジュール」シートで、frequency が「1時間ごと」の行の"
+            "「取得時刻」列を埋めてください。"
         )
 
 
@@ -356,7 +363,7 @@ class ScheduleWeekdayInvalidError(DownloaderError):
     許容されるのは月〜日の漢字1文字（「月」「火」「水」「木」「金」「土」「日」）
     または「〜曜日」の接尾辞付き表記。
 
-    発生箇所: comken.services.salesforce_downloader.sheets.schedule の ScheduleRule.from_row()
+    発生箇所: comken.services.salesforce_downloader.sheets.schedule の ScheduleRule.weekday
 
     対処:
         管理表の「曜日」列の値を月〜日のいずれかに修正する（「曜日」を付ける
@@ -368,45 +375,4 @@ class ScheduleWeekdayInvalidError(DownloaderError):
             f"曜日が正しくありません: {value}\n"
             "管理表の「曜日」列の値を 月 / 火 / 水 / 木 / 金 / 土 / 日 の"
             "いずれかに修正してください（「曜日」を付ける形式でも可）。"
-        )
-
-
-class ScheduleRowValueError(DownloaderError):
-    """スケジュール管理表の行の値が正しくない
-
-    ``ScheduleRule.from_row()`` が投げた ``DownloaderError`` を、**業務担当者が
-    表の何行目を直せばいいか分かるよう行番号付きで**再送出するための例外。
-    ``load_schedule()`` が「行の境目」と「中の値エラー」を区別して表示するために
-    使う。
-
-    発生箇所: comken.services.salesforce_downloader.sheets.schedule の load_schedule()
-
-    対処:
-        メッセージに出ている行と直したい値を、管理表で確認して直す
-    """
-
-    def __init__(self, row_number: int, reason: str) -> None:
-        super().__init__(
-            f"スケジュール管理表の {row_number} 行目の値が正しくありません。\n{reason}"
-        )
-
-
-class ScheduleDuplicateKeyError(DownloaderError):
-    """スケジュール管理表の「スケジュールキー」が重複している
-
-    1つの取得ルールを1行で表す管理表で同じキーが2行以上あると、
-    ルールがどちらのものか区別できなくなる。
-
-    発生箇所: comken.services.salesforce_downloader.sheets.schedule の load_schedule()
-
-    対処:
-        スケジュール管理表を開いて、重複しているスケジュールキーの
-        どちらかを別の値に変える
-    """
-
-    def __init__(self, schedule_key: str, row_number: int, path: Path) -> None:
-        super().__init__(
-            f"スケジュール管理表の「スケジュールキー」が重複しています: {schedule_key!r}\n"
-            f"{path}（{row_number} 行目）\n"
-            "スケジュール管理表を開いて、重複している行のどちらかを別の値に変えてください。"
         )

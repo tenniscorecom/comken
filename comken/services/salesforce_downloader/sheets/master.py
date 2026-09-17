@@ -2,16 +2,17 @@ r"""comken/services/salesforce_downloader/sheets/master.py — レポート管�
 
 **`sheets/` には、ワークブック・CSVの「1枚（1ファイル）」ごとに、そこにある列と
 意味を宣言するモジュールを集めている**（`schedule.py` = スケジュールシート、
-`history.py` = 履歴CSV、`latest_status.py` = 最新ステータス）。Excel の読み書き
-そのものの仕組みは含めない（`report_master.py` など、`sheets/` の外に置く）。
+`group_settings.py` = 設定シート、`history.py` = 履歴CSV）。
+Excel の読み書きそのものの仕組みは含めない（`report_master.py` など、
+`sheets/` の外に置く）。
 
 **このファイルにあるのは「社内の取り決め」だけ。** Excel を読む・検証する・雛形を作る
 仕組みは `comken.services.salesforce_downloader.report_master` にあり、ここは
 **どんな列があるか**を宣言する。
 
-    | ID   | 概要     | Salesforce URL              | 保存先              | 有効 |
-    |------|----------|-----------------------------|---------------------|------|
-    | 1001 | 顧客一覧 | https://.../Report/00O.../  | \\server\A\input    | 有効 |
+    | ID   | 概要     | Salesforce URL              | グループ | 担当者 | 有効 |
+    |------|----------|-----------------------------|----------|--------|------|
+    | 1001 | 顧客一覧 | https://.../Report/00O.../  | 営業本部  | 山田   | 有効 |
 
 **Salesforce のレポート ID は入力させない。** URL を貼れば `report_id_from_url()` が
 取り出す。ID を人が抜き出す工程を挟むと、そこで写し間違いが起きるうえ、
@@ -20,6 +21,11 @@ r"""comken/services/salesforce_downloader/sheets/master.py — レポート管�
 **ID（管理番号）は Salesforce のレポート ID ではない。** 社内で決める論理的な番号で、
 同じ意味のデータを指す限り変えない。参照先の Salesforce レポートを差し替えても、
 利用側の Python コード（`CUSTOMER_LIST = "1001"`）は変えずに済む。
+
+**出力先フォルダは Excel のセル（保存先列）には書かない。** `グループ` 列 +
+`担当者` 列 + `概要` 列 + `設定` シート（`group_settings.py`）の組み合わせで
+Python 側で組み立てる（`provider.report_folder()`）。Excel の数式で組み立てる
+案は openpyxl が数式セルを信頼できないため採用しなかった。
 
 このファイルが持つもの:
 - 管理表にどんな列があるか
@@ -30,6 +36,7 @@ r"""comken/services/salesforce_downloader/sheets/master.py — レポート管�
 - Excel をどう読むか・どう検証するか → report_master.py
 - 取得の実行・保存 → Salesforceレポートダウンローダー の service.py
 - 履歴の読み取り・形式 → history.py
+- 出力先フォルダの組み立て → provider.py / group_settings.py
 """
 
 import logging
@@ -51,7 +58,8 @@ EXAMPLES = [
         "key": "1001",
         "summary": "顧客一覧",
         "url": f"{_DOMAIN}/00O5g00000ABCDE/view",
-        "folder": r"\\server\案件集計\input",
+        "group": "営業本部",
+        "assignee": "山田太郎",
         "enabled": True,
         "allow_empty": False,  # 普段はデータがあるが、念のため「×」（既定）
         "exceeds_row_limit": False,  # 2000行に収まる通常のレポート（既定）
@@ -61,7 +69,8 @@ EXAMPLES = [
         "key": "1002",
         "summary": "売上実績",
         "url": f"{_DOMAIN}/00O5g00000FGHIJ/view",
-        "folder": r"\\server\売上帳票\input",
+        "group": "営業本部",
+        "assignee": "佐藤花子",
         "enabled": True,
         "allow_empty": True,  # 「該当データ無し」が普通に起きるレポートの例
         "exceeds_row_limit": False,
@@ -92,17 +101,27 @@ class ReportEntry(MasterRow):
         "前ゼロ（0001 など）や記号入りの値も使えます",
     )
     summary: str = column(
-        "概要", help="人が読んで何のレポートか分かる説明。保存するファイル名にも使われます"
+        "概要",
+        help="人が読んで何のレポートか分かる説明。保存するファイル名にも使われ、"
+        "出力パスの第3階層にも使われます",
     )
     url: str = column(
         "Salesforce URL",
         help="Salesforce でレポートを開いたときのアドレスを、そのまま貼り付けてください。"
         "レポート ID を抜き出す必要はありません",
     )
-    folder: Path = column(
-        "保存先",
-        help="落としたファイルを置くフォルダ。フォルダが無いとエラーになります"
-        "（打ち間違いに気づけるよう、勝手には作りません）",
+    # **出力先の組み立て:** 「ベースパス（設定シート） / 担当者 / 概要 / ファイル名」
+    # の3階層になる。第1階層は `group_settings.load_group_settings()` で引いた
+    # ベースパス、`assignee` が第2階層、`summary` が第3階層（Python 側で組み立てる
+    # ので、フォルダ列を人が打つ必要は無い）
+    group: str = column(
+        "グループ",
+        help="出力先を決めるグループ名。sheets/group_settings.py の設定シートに"
+        "登録したグループ名と一致させてください",
+    )
+    assignee: str = column(
+        "担当者",
+        help="出力パスの第2階層に使う担当者名",
     )
     # **既定値を持たせない。** 空欄を「有効」にすると、書き忘れがそのまま有効になり、
     # 「まだ有効にしたくない」のか「書き方が分からず空にした」のか区別できなくなる。

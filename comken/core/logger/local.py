@@ -20,12 +20,13 @@ from comken.core.logger.environment import (
     _guard_root_handlers,
     _warn_external_handlers_allowed,
 )
+from comken.runtime import is_debug
 
 
 def setup_local_logging(
     *,
-    console_level: int = logging.INFO,
-    file_level: int = logging.INFO,
+    console_level: int | None = None,
+    file_level: int | None = None,
     path: str | Path | None = None,
     allow_existing: bool = False,
 ) -> None:
@@ -44,7 +45,18 @@ def setup_local_logging(
     ``LoggingConflictError`` を送出し、既存 handler の出力先やレベルを勝手に
     変えてしまうことを防ぐ。``allow_existing=True`` を指定すると、その判定を
     **警告ログだけ**に留めて処理を続行する。
+
+    ``console_level`` / ``file_level`` を省略すると、呼び出し時点の
+    ``with debug():`` の状態で決まる（有効なら ``DEBUG``、無効なら ``INFO``）。
+    **`setup_local_logging()` を `with debug():` の中で呼べば、それだけで
+    画面・ファイルとも DEBUG まで出る。** 明示的に渡した場合はそちらを優先する
+    （`with debug():` の外でも常時 DEBUG にしたい、といった用途向け）。
     """
+    if console_level is None:
+        console_level = logging.DEBUG if is_debug() else logging.INFO
+    if file_level is None:
+        file_level = logging.DEBUG if is_debug() else logging.INFO
+
     root_logger = logging.getLogger()
     existing = root_logger.handlers[:]
     external_allowed = _guard_root_handlers(existing, side="local", allow_existing=allow_existing)

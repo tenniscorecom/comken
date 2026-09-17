@@ -8,10 +8,8 @@
 import datetime as dt
 import logging
 import re
-from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import MISSING, dataclass
 from pathlib import Path
-from typing import Self
 
 from comken.core.holidays import (
     BusinessDayNotFoundError,
@@ -20,23 +18,13 @@ from comken.core.holidays import (
     nth_business_day_of_month,
 )
 from comken.exceptions import (
-    DownloaderError,
     ExcelFileNotFoundError,
-    ScheduleDuplicateKeyError,
     ScheduleIntervalMissingError,
-    ScheduleRequiredValueMissingError,
-    ScheduleRowValueError,
     ScheduleWeekdayInvalidError,
     SheetNotFoundError,
     UnsupportedScheduleFrequencyError,
 )
-from comken.services.salesforce_downloader.report_master import (
-    _FIRST_DATA_ROW,
-    _is_blank,
-    _to_bool,
-    _to_time,
-    read_raw_rows,
-)
+from comken.services.salesforce_downloader.report_master import MasterRow, column
 
 FREQUENCY_HOURLY = "1時間ごと"
 FREQUENCY_DAILY = "毎日"
@@ -57,13 +45,15 @@ _NTH_BUSINESS_DAY_PATTERN = re.compile(r"^第(\d+)営業日$")
 SCHEDULE_SHEET_NAME = "スケジュール"
 
 
-@dataclass(frozen=True)
-class ScheduleRule:
+@dataclass(frozen=True, kw_only=True)
+class ScheduleRule(MasterRow):
     """「スケジュール」シートの1行。1行 = 1つの取得ルール。
 
-    列名（Excel 上の見出し）はフィールド名と異なるものがあるため、
-    `from_row()` が日本語の列名から読み替える。以下は実体（フィールド）ごとの
-    対応列名と意味。
+    列定義は `column()` に集約されている。``曜日`` / ``日付`` 列は自由記述
+    （空欄を許す）なので ``choices`` を付けず、``weekday`` /
+    ``day_of_month`` / ``month_end`` / ``nth_business_day`` の 4 つの
+    `@property` でパース結果だけを公開する（``ReportEntry.report_id`` が
+    URL から計算派生するのと同じ考え方）。
 
     Attributes:
         schedule_key: 列「スケジュールキー」。このルールを一意に識別するキー。
@@ -75,46 +65,114 @@ class ScheduleRule:
             `FREQUENCY_WEEKLY` / `FREQUENCY_MONTHLY` のいずれか。
         run_time: 列「取得時刻」。毎日・毎週・毎月・1時間ごとに共通の実行時刻
             （1時間ごとのときは開始時刻を兼ねる）。空欄可。
-        interval_minutes: 列「取得間隔（分）」。`frequency` が1時間ごとのときだけ使う。
-        weekday: 列「曜日」。`frequency` が毎週のときだけ使う（0=月〜6=日）。
-        day_of_month: 列「日付」の一部。`frequency` が毎月かつ日付の数値指定
-            （1〜31）のときに入る。
-        month_end: 列「日付」の一部。`frequency` が毎月かつ「月末」指定のとき `True`。
-        nth_business_day: 列「日付」の一部。`frequency` が毎月かつ「第N営業日」
-            指定のときに入る。
+        raw_weekday: 列「曜日」。`frequency` が毎週のときだけ使う
+            （下の `weekday` property で 0=月〜6=日 に変換）。
+        raw_day_of_month: 列「日付」。`frequency` が毎月のときだけ使う
+            （1〜31 の数字 / `月末` / `第N営業日` のいずれかを下の
+            `day_of_month` / `month_end` / `nth_business_day` property で
+            分解する）。
         holiday_policy: 列「祝日対応」。`HOLIDAY_SKIP`（既定）なら祝日はスキップする。
-        enabled: 列「有効」。`○`/`×`。無効な行は判定対象から外れる。
+        enabled: 列「有効」。`○`/`×`。既定値なし（書き忘れはエラー）。
     """
 
-    schedule_key: str
-    report_key: str
-    frequency: str
-    run_time: dt.time | None = None
-    interval_minutes: int | None = None
-    weekday: int | None = None
-    day_of_month: int | None = None
-    month_end: bool = False
-    nth_business_day: int | None = None
-    holiday_policy: str = HOLIDAY_SKIP
-    enabled: bool = True
+    SHEET_NAME = SCHEDULE_SHEET_NAME
 
-    @classmethod
-    def from_row(cls, row: Mapping[str, object]) -> Self:
-        """日本語カラム名の辞書からスケジュールを作る。"""
-        day_of_month, month_end, nth_business_day = _parse_day_of_month(row.get("日付"))
-        return cls(
-            schedule_key=_required_text(row, "スケジュールキー"),
-            report_key=_required_text(row, "レポートキー"),
-            frequency=_required_text(row, "取得頻度"),
-            run_time=_to_time(row.get("取得時刻")),
-            interval_minutes=_parse_int(row.get("取得間隔（分）")),
-            weekday=_parse_weekday(row.get("曜日")),
-            day_of_month=day_of_month,
-            month_end=month_end,
-            nth_business_day=nth_business_day,
-            holiday_policy=_text_or_default(row, "祝日対応", HOLIDAY_SKIP),
-            enabled=_to_bool(row.get("有効")),
-        )
+    schedule_key: str = column(
+        "スケジュールキー",
+        unique=True,
+        help="このルールを一意に識別するキー。履歴の「スケジュールキー」列に記録され、"
+        "同じスケジュール行を同日に何度も実行しない dedup 判定に使います",
+    )
+    report_key: str = column(
+        "レポートキー",
+        help="対象のレポートの管理番号（レポート管理表シートの ID と対応させる）",
+    )
+    frequency: str = column(
+        "取得頻度",
+        choices=(FREQUENCY_HOURLY, FREQUENCY_DAILY, FREQUENCY_WEEKLY, FREQUENCY_MONTHLY),
+        help="1時間ごと / 毎日 / 毎週 / 毎月 のいずれか",
+    )
+    run_time: dt.time | None = column(
+        "取得時刻",
+        default=None,
+        help="毎日・毎週・毎月・1時間ごとに共通の実行開始時刻。"
+        "1時間ごとのときは開始時刻を兼ねる。空欄可",
+    )
+    # `choices` ではなく `default=""` の自由記述にしているのは空欄を許すため。
+    # パース結果は下の `weekday` property で取り出す
+    raw_weekday: str = column(
+        "曜日",
+        default="",
+        help=(
+            "frequency が「毎週」のときだけ書く。"
+            "月〜日の漢字1文字（「月 / 火 / 水 / 木 / 金 / 土 / 日」のいずれか、"
+            "または「曜日」を付ける形式（例: 「月曜日」））。空欄可"
+        ),
+    )
+    raw_day_of_month: str = column(
+        "日付",
+        default="",
+        help="frequency が「毎月」のときだけ書く。"
+        "1〜31 の数字 / 「月末」 / 「第N営業日」（N は 1 以上の整数）のいずれか。"
+        "空欄可",
+    )
+    holiday_policy: str = column(
+        "祝日対応",
+        default=HOLIDAY_SKIP,
+        help="「取得しない」以外も自由に書ける（運用メモとしての利用を想定）",
+    )
+    # 既定値を持たせない（書き忘れを「有効」と区別するため）。`master.py` の
+    # 「有効」列と同じ考え方
+    enabled: bool = column(
+        "有効",
+        choices=("○", "×"),
+        help="「○」か「×」と書いてください",
+    )
+
+    @property
+    def weekday(self) -> int | None:
+        """「曜日」列の値を 0=月〜6=日 の整数に変換する。空欄は None。
+
+        Raises:
+            ScheduleWeekdayInvalidError: 想定外の文字列が書かれている場合。
+        """
+        if not self.raw_weekday:
+            return None
+        text = self.raw_weekday.strip().removesuffix("曜日")
+        if text not in WEEKDAY_NAMES:
+            raise ScheduleWeekdayInvalidError(self.raw_weekday)
+        return WEEKDAY_NAMES.index(text)
+
+    @property
+    def day_of_month(self) -> int | None:
+        """「日付」列が 1〜31 の数字で書かれたとき、その値。"""
+        _, value, _ = self._parsed_day_of_month
+        return value
+
+    @property
+    def month_end(self) -> bool:
+        """「日付」列が「月末」のとき True。"""
+        value, _, _ = self._parsed_day_of_month
+        return value
+
+    @property
+    def nth_business_day(self) -> int | None:
+        """「日付」列が「第N営業日」のとき、N。"""
+        _, _, value = self._parsed_day_of_month
+        return value
+
+    @property
+    def _parsed_day_of_month(self) -> tuple[bool, int | None, int | None]:
+        """「日付」列を ``(month_end, day_of_month, nth_business_day)`` に分解する。
+
+        `ReportEntry.report_id` と同じく、Excel の生セル値を 1 回パースして
+        3 つの派生プロパティへ分配する。空欄は「指定なし」、数字 1〜31 は
+        `day_of_month`、文字列「月末」は `month_end=True`、`"第N営業日"` は
+        `nth_business_day=N` として扱う。想定外の値（例: `"来月"`）は
+        ``int()`` 由来の ``ValueError`` がそのまま飛ぶ（専用のエラー型は
+        用意しない）。
+        """
+        return _parse_day_of_month(self.raw_day_of_month)
 
     def is_due(
         self,
@@ -181,35 +239,23 @@ class ScheduleRule:
         return not self.month_end or (date + dt.timedelta(days=1)).month != date.month
 
     def _is_hourly_due(self, now: dt.datetime) -> bool:
-        if self.run_time is None or not self.interval_minutes:
+        """``run_time`` から 60 分刻みで一致するかを返す。
+
+        ``interval_minutes`` 列は廃止し、判定は 60 分固定。``run_time`` が無い
+        行は ``ScheduleIntervalMissingError``（「1時間ごとには開始時刻が必要」）
+        を投げる。
+        """
+        if self.run_time is None:
             raise ScheduleIntervalMissingError()
         if now.time() < self.run_time:
             return False
         start_minutes = self.run_time.hour * 60 + self.run_time.minute
         now_minutes = now.hour * 60 + now.minute
-        return (now_minutes - start_minutes) % self.interval_minutes == 0
+        return (now_minutes - start_minutes) % 60 == 0
 
 
-def _required_text(row: Mapping[str, object], column: str) -> str:
-    value = str(row.get(column, "")).strip()
-    if not value:
-        raise ScheduleRequiredValueMissingError(column)
-    return value
-
-
-def _text_or_default(row: Mapping[str, object], column: str, default: str) -> str:
-    value = str(row.get(column, "")).strip()
-    return value or default
-
-
-def _parse_int(value: object) -> int | None:
-    if value in (None, ""):
-        return None
-    return int(str(value).strip())
-
-
-def _parse_day_of_month(value: object) -> tuple[int | None, bool, int | None]:
-    """「日付」列を ``(day_of_month, month_end, nth_business_day)`` に分解する。
+def _parse_day_of_month(value: object) -> tuple[bool, int | None, int | None]:
+    """「日付」列を ``(month_end, day_of_month, nth_business_day)`` に分解する。
 
     空欄は「指定なし」、数字 1〜31 は ``day_of_month``、文字列「月末」は
     ``month_end=True``、``"第N営業日"``（N は 1 以上の整数）は
@@ -221,23 +267,16 @@ def _parse_day_of_month(value: object) -> tuple[int | None, bool, int | None]:
         3 要素のタプル。常にどれか 1 つだけが立ち、残りは「指定なし」になる。
     """
     if value in (None, ""):
-        return None, False, None
+        return False, None, None
     text = str(value).strip()
     if text == "月末":
-        return None, True, None
+        return True, None, None
     match = _NTH_BUSINESS_DAY_PATTERN.match(text)
     if match:
-        return None, False, int(match.group(1))
-    return _parse_int(text), False, None
-
-
-def _parse_weekday(value: object) -> int | None:
-    if value in (None, ""):
-        return None
-    text = str(value).strip().removesuffix("曜日")
-    if text not in WEEKDAY_NAMES:
-        raise ScheduleWeekdayInvalidError(value)
-    return WEEKDAY_NAMES.index(text)
+        return False, None, int(match.group(1))
+    if not text.isdigit():
+        raise ValueError(f"「日付」列の値を解釈できません: {value!r}")
+    return False, int(text), None
 
 
 def load_schedule(path: str | Path | None = None) -> list[ScheduleRule]:
@@ -247,11 +286,11 @@ def load_schedule(path: str | Path | None = None) -> list[ScheduleRule]:
     使っていない既存の管理表（「スケジュール」シートをまだ追加していないもの）が、
     このシートの有無で読み込みごと壊れないようにするため（後方互換）。
 
-    空行は読み飛ばす（``ReportEntry`` と同じ扱い）。**スケジュールキーが
-    重複している行はエラー**にする（``ReportEntry.key`` が ``unique=True``
-    であるのと同じ考え方）。**行の中で値が壊れていた場合**は、``ScheduleRule.from_row``
-    が投げた例外を ``ScheduleRowValueError`` で受け直して**行番号付き**で
-    再送出する（業務担当者がどの行を直せばいいか分かるようにするため）。
+    ``ScheduleRule.load()`` が `unique=True` の列で重複を検出すると
+    ``MasterDuplicateValueError`` を上げ、必須列が空だと
+    ``MasterRowValueError`` を上げる。これらは `comken/exceptions/master_table.py`
+    の例外で、メッセージに**行番号・列名・値**が入る（業務担当者が表の
+    どこを直せばいいか分かる形式）。
 
     存在しない ``レポートキー`` を指している行はここではエラーにしない。
     レポート管理表との突き合わせは呼び出し側 ``download_scheduled()`` の責務。
@@ -263,8 +302,9 @@ def load_schedule(path: str | Path | None = None) -> list[ScheduleRule]:
         宣言順に並んだ ``ScheduleRule`` のリスト。
 
     Raises:
-        ScheduleDuplicateKeyError: スケジュールキーが重複している行がある。
-        ScheduleRowValueError: 値の整合性エラー（行番号付き）。
+        MasterColumnNotFoundError: 宣言した見出しが表に無い場合。
+        MasterRowValueError: 値が型・選択肢に合わない、または空にできない列が空の場合。
+        MasterDuplicateValueError: スケジュールキーが重複している行がある場合。
         ExcelFileNotFoundError: ``path`` が存在しない場合。
     """
     if path is None:
@@ -272,43 +312,14 @@ def load_schedule(path: str | Path | None = None) -> list[ScheduleRule]:
 
         path = MASTER_PATH
     source = Path(path)
-
     # **シートが無い場合は空リストを返す。** この機能をまだ使っていない管理表を
     # 読み込み時に壊さないため。``ExcelFileNotFoundError`` などの「ファイル自体に
     # 関するエラー」はそのまま上位へ伝える
     try:
-        raw_rows = read_raw_rows(source, SCHEDULE_SHEET_NAME)
+        return ScheduleRule.load(source)
     except SheetNotFoundError:
         return []
 
-    rules: list[ScheduleRule] = []
-    seen_keys: set[str] = set()
-    for offset, raw in enumerate(raw_rows):
-        if _is_blank(raw):
-            continue  # 表の下に残った空行は読み飛ばす
-        row_number = offset + _FIRST_DATA_ROW
-        try:
-            rule = ScheduleRule.from_row(raw)
-        except DownloaderError as e:
-            # ``ScheduleDuplicateKeyError`` も ``DownloaderError`` のサブクラスだが
-            # この時点ではまだ送出される経路が無い（``from_row`` は送らない）ので
-            # そのまま行番号を足して再送出する
-            raise ScheduleRowValueError(row_number, str(e)) from e
-        if rule.schedule_key in seen_keys:
-            raise ScheduleDuplicateKeyError(rule.schedule_key, row_number, source)
-        seen_keys.add(rule.schedule_key)
-        rules.append(rule)
-    return rules
-
-
-# 「スケジュール」シートの列のうち、ドロップダウン（入力規則）を付ける対象。
-# 値は選択肢のタプル。「祝日対応」は自由記述のため含めない（意図的。
-# 「取得しない」以外は「祝日でも取得する」という自由な表現を許すため）
-_SCHEDULE_DROPDOWN_CHOICES: dict[str, tuple[str, ...]] = {
-    "取得頻度": (FREQUENCY_HOURLY, FREQUENCY_DAILY, FREQUENCY_WEEKLY, FREQUENCY_MONTHLY),
-    "曜日": WEEKDAY_NAMES,
-    "有効": ("○", "×"),
-}
 
 # ドロップダウンを適用する行数（見出しの次の行から）。あとから行を足しても
 # 効くよう、十分な行数を確保する（雛形生成があった頃の既定値を踏襲）
@@ -320,12 +331,11 @@ def apply_schedule_dropdowns(path: str | Path) -> None:
 
     **シート自体は作らない。** 「スケジュール」シートは手で作る運用のため、
     ここでは既にあるシートに対して入力規則だけを追加・上書きする。見出し行
-    （1行目）を読んで列位置を探すので、列の並び順は問わない
-    （`SCHEDULE_HEADERS_FULL` のような固定順を前提にしない）。
+    （1行目）を読んで列位置を探すので、列の並び順は問わない。
 
-    ドロップダウンを付けるのは `取得頻度` / `曜日` / `有効` の3列
-    （`_SCHEDULE_DROPDOWN_CHOICES` 参照）。`祝日対応` は自由記述のため対象外。
-    見出しに無い列・`_SCHEDULE_DROPDOWN_CHOICES` に無い列は無視する。
+    ドロップダウンを付ける対象は `ScheduleRule._columns()` から動的に拾う
+    （``choices`` が宣言された列）。`祝日対応` は自由記述のため対象外
+    （意図的。「取得しない」以外は「祝日でも取得する」という自由な表現を許す）。
 
     Args:
         path: 「スケジュール」シートを持つ Excel ファイル（既存）。
@@ -348,17 +358,32 @@ def apply_schedule_dropdowns(path: str | Path) -> None:
 
     last_row = 1 + _DROPDOWN_ROW_COUNT
     applied = 0
+    # 列宣言 (`_columns()`) から {見出し: choices} を組み立て、見出し名でシートに
+    # 存在する列だけにドロップダウンを当てる。`_SCHEDULE_DROPDOWN_CHOICES` のような
+    # 別辞書を二重管理しないので、`column()` の宣言を足せば自動でドロップダウンが
+    # 付く（master.py の `ReportEntry.create_template()` と同じ「宣言1か所」原則）
+    choices_by_header: dict[str, tuple[str, ...]] = {
+        spec.header: spec.choices
+        for _, spec, _ in ScheduleRule._columns()
+        if spec.choices
+    }
+    # 既定値のない列は `allow_blank=False` にする（ドロップダウンからの空欄提出を
+    # 許さない）。既定値の有無は dataclass の `default` 属性から取る
+    allow_blank_by_header: dict[str, bool] = {
+        spec.header: _is_optional(name)
+        for name, spec, _ in ScheduleRule._columns()
+    }
     header_row = next(sheet.iter_rows(min_row=1, max_row=1))
     for column_index, cell in enumerate(header_row, start=1):
         header = str(cell.value) if cell.value is not None else ""
-        choices = _SCHEDULE_DROPDOWN_CHOICES.get(header)
+        choices = choices_by_header.get(header)
         if choices is None:
             continue
         letter = get_column_letter(column_index)
         validation = DataValidation(
             type="list",
             formula1=f'"{",".join(choices)}"',
-            allow_blank=header != "取得頻度",
+            allow_blank=allow_blank_by_header.get(header, False),
             showDropDown=False,
             showErrorMessage=True,
             errorTitle="書き方が違います",
@@ -373,6 +398,14 @@ def apply_schedule_dropdowns(path: str | Path) -> None:
     logger.debug(
         "スケジュールシートへドロップダウンを適用しました: path=%s, 列数=%d", source, applied
     )
+
+
+def _is_optional(name: str) -> bool:
+    """`ScheduleRule` のフィールドが既定値を持つか（空欄を許すか）。"""
+    for field_name, item in ScheduleRule.__dataclass_fields__.items():
+        if field_name == name:
+            return item.default is not MISSING
+    return False
 
 
 __all__ = [

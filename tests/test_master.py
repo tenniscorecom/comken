@@ -15,11 +15,10 @@ URL = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O
 
 HEADERS = [
     "ID",
-    "グループ名",
+    "グループ",
     "担当者",
     "概要",
     "Salesforce URL",
-    "保存先",
     "有効",
     "0件あり",
     "2000件超",
@@ -30,11 +29,10 @@ HEADERS = [
 # 「2000件超」「SOQL」列を追加する前の古い管理表（後方互換の確認用）
 LEGACY_HEADERS = [
     "ID",
-    "グループ名",
+    "グループ",
     "担当者",
     "概要",
     "Salesforce URL",
-    "保存先",
     "有効",
     "0件あり",
     "備考",
@@ -49,14 +47,13 @@ def make_master(path: Path, headers: list[str], rows: list[list]) -> Path:
     return path
 
 
-def _row(folder: Path, *, exceeds: str, soql: str) -> list:
+def _row(*, exceeds: str, soql: str) -> list:
     return [
         "1001",
-        "営業事務グループ",
-        "山田",
+        "営業本部",
+        "山田太郎",
         "顧客一覧",
         URL,
-        str(folder),
         "○",
         "×",
         exceeds,
@@ -69,17 +66,13 @@ class TestExceedsRowLimitAndUseSoql:
     """「2000件超」「SOQL」列の読み取り。"""
 
     def test_reads_maru_as_true(self, tmp_path):
-        master = make_master(
-            tmp_path / "管理表.xlsx", HEADERS, [_row(tmp_path, exceeds="○", soql="○")]
-        )
+        master = make_master(tmp_path / "管理表.xlsx", HEADERS, [_row(exceeds="○", soql="○")])
         entry = load_master(master)["1001"]
         assert entry.exceeds_row_limit is True
         assert entry.use_soql is True
 
     def test_reads_batsu_as_false(self, tmp_path):
-        master = make_master(
-            tmp_path / "管理表.xlsx", HEADERS, [_row(tmp_path, exceeds="×", soql="×")]
-        )
+        master = make_master(tmp_path / "管理表.xlsx", HEADERS, [_row(exceeds="×", soql="×")])
         entry = load_master(master)["1001"]
         assert entry.exceeds_row_limit is False
         assert entry.use_soql is False
@@ -89,11 +82,10 @@ class TestExceedsRowLimitAndUseSoql:
         rows = [
             [
                 "1001",
-                "営業事務グループ",
-                "山田",
+                "営業本部",
+                "山田太郎",
                 "顧客一覧",
                 URL,
-                str(tmp_path),
                 "○",
                 "×",
                 "",
@@ -108,12 +100,13 @@ class TestExceedsRowLimitAndUseSoql:
 class TestDirectConstruction:
     """ReportEntry を直接組み立てるとき（テストの他の場所で使う形）も既定値が効く。"""
 
-    def test_defaults_when_omitted(self, tmp_path):
+    def test_defaults_when_omitted(self):
         entry = ReportEntry(
             key="1001",
             summary="顧客一覧",
             url=URL,
-            folder=tmp_path,
+            group="営業本部",
+            assignee="山田太郎",
             enabled=True,
             allow_empty=False,
         )

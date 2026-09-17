@@ -47,7 +47,8 @@ def _write_row(path: Path, *, entry: ReportEntry, project: str, row: HistoryRow)
         SUCCESS if row.succeeded else FAILURE,
         _stage(row.fetched_from_salesforce),
         _stage(row.saved_to_file),
-        str(entry.folder),
+        # 保存先の組み立て（group_settings 経由）は他の場所で扱うので、ここでは概要だけ書く
+        entry.summary,
         row.file_name,
         "" if row.row_count is None else row.row_count,
         f"{row.seconds:.2f}",
@@ -324,13 +325,15 @@ def test_truncated_today_ignores_successful_rows_with_same_code(tmp_path) -> Non
     assert truncated_today(history_path, entry.key) is False
 
 
-def _entry(folder: Path) -> ReportEntry:
+def _entry(tmp_path: Path) -> ReportEntry:
     """各テストで同じ管理表1行を使う。"""
+    _ = tmp_path  # フォルダは組み立てないので受け取るだけ
     return ReportEntry(
         key="1001",
         summary="顧客一覧",
         url="https://example.com/Report/00O5g00000ABCDE/view",
-        folder=folder,
+        group="営業本部",
+        assignee="山田太郎",
         enabled=True,
         allow_empty=False,
     )

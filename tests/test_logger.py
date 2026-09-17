@@ -323,6 +323,50 @@ class TestLocal:
         assert stream_handler.level == logging.INFO
         assert file_handler.level == logging.DEBUG
 
+    def test_levels_default_to_debug_inside_debug_block(
+        self, isolated_logging, tmp_path, monkeypatch
+    ):
+        """``with debug():`` の中で呼ぶと、両レベルとも既定で DEBUG になる。"""
+        from comken.runtime import debug
+
+        self._prepare(monkeypatch, tmp_path)
+        with debug():
+            setup_local_logging()
+        stream_handler = next(
+            handler
+            for handler in isolated_logging.handlers
+            if isinstance(handler, logging.StreamHandler)
+            and not isinstance(handler, logging.FileHandler)
+        )
+        file_handler = next(
+            handler
+            for handler in isolated_logging.handlers
+            if isinstance(handler, logging.FileHandler)
+        )
+        assert stream_handler.level == logging.DEBUG
+        assert file_handler.level == logging.DEBUG
+
+    def test_explicit_level_overrides_debug_block(self, isolated_logging, tmp_path, monkeypatch):
+        """明示的に渡した ``console_level`` / ``file_level`` は ``debug()`` より優先する。"""
+        from comken.runtime import debug
+
+        self._prepare(monkeypatch, tmp_path)
+        with debug():
+            setup_local_logging(console_level=logging.WARNING, file_level=logging.ERROR)
+        stream_handler = next(
+            handler
+            for handler in isolated_logging.handlers
+            if isinstance(handler, logging.StreamHandler)
+            and not isinstance(handler, logging.FileHandler)
+        )
+        file_handler = next(
+            handler
+            for handler in isolated_logging.handlers
+            if isinstance(handler, logging.FileHandler)
+        )
+        assert stream_handler.level == logging.WARNING
+        assert file_handler.level == logging.ERROR
+
     def test_custom_path(self, isolated_logging, tmp_path, monkeypatch):
         self._prepare(monkeypatch, tmp_path)
         custom_path = tmp_path / "custom" / "logs"

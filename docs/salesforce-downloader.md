@@ -21,16 +21,14 @@
   各プロジェクト（comken.services.salesforce_downloader の cached_report）
 ```
 
-以下は上の構成に「最新ステータス.xlsx」を加えて Mermaid の `graph TD` で描き直したもの。
+以下は上の構成を Mermaid の `graph TD` で描き直したもの。
 
 ```mermaid
 graph TD
     A["レポート管理表.xlsx<br/>（人が編集）"] --> B["Salesforceレポートダウンローダー"]
     B <--> C["Salesforce"]
     B --> D["ダウンロード履歴.csv<br/>（追記）"]
-    B --> E["最新ステータス.xlsx<br/>（上書き）"]
     D --> F["各プロジェクト<br/>cached_report"]
-    E --> F
 ```
 
 ---
@@ -135,13 +133,19 @@ python -m comken sf check
 | ID | `1001` |
 | 概要 | `顧客一覧` |
 | Salesforce URL | `https://.../Report/00O.../view` |
-| 保存先 | `\\server\A\input` |
+| グループ | `営業本部` |
+| 担当者 | `山田太郎` |
 | 有効 | `○` |
 | 0件あり | `×` |
 | 2000件超 | `×` |
 | SOQL | `×` |
 
-グループ名・担当者・備考のような**記録用の列は自由に追加してよい**。
+**保存先（フォルダ）は管理表に書かない。** 出力先は **「設定」シート**（管理表と同じ
+ブック内の別シート）に「グループ→ベースパス」の対応を書き、`グループ` 列 +
+`担当者` 列 + `概要` 列を Python 側で連結して組み立てる（`provider.report_folder()`）。
+Excel の数式で組み立てる案は openpyxl が数式セルを信頼できないため採用しなかった。
+
+備考のような**記録用の列は自由に追加してよい**。
 comken はこの表を「宣言した列」だけで読むため、余分な列があっても無視される
 （→ [列](#列)）。
 
@@ -151,8 +155,8 @@ comken はこの表を「宣言した列」だけで読むため、余分な列�
 
 - **`Salesforce URL` は、レポートを開いたときのアドレスをそのまま貼る**（ID を抜き出さない）
 - **`ID` は社内で決める管理番号**。Salesforce のレポート ID ではない
-- **`保存先` のフォルダは先に作っておく。** 無いとエラーになる
-  （打ち間違いに気づけるよう、**勝手には作らない**）
+- **「グループ」「担当者」「ベースパス」の各フォルダは先に作っておく。** 無いと
+  エラーになる（打ち間違いに気づけるよう、**勝手には作らない**）
 
 ### 5. 書き方を確かめる
 
@@ -220,23 +224,27 @@ python -m comken sfdl check レポート管理表.xlsx
 `comken.services.salesforce_downloader/sheets/master.py` にあり、読み込み・検証・雛形生成の
 仕組みは [管理表（master_table）](master-table.md) が持つ。
 
-| ID | 概要 | Salesforce URL | 保存先 | 有効 | 0件あり | 2000件超 | SOQL |
-|---|---|---|---|---|---|---|---|
-| 1001 | 顧客一覧 | https://.../Report/00O5g00000ABCDE/view | `\\server\A\input` | ○ | × | × | × |
-| 1002 | 売上実績 | https://.../Report/00O5g00000FGHIJ/view | `\\server\B\input` | ○ | ○ | × | × |
+| ID | 概要 | Salesforce URL | グループ | 担当者 | 有効 | 0件あり | 2000件超 | SOQL |
+|---|---|---|---|---|---|---|---|---|
+| 1001 | 顧客一覧 | https://.../Report/00O5g00000ABCDE/view | 営業本部 | 山田太郎 | ○ | × | × | × |
+| 1002 | 売上実績 | https://.../Report/00O5g00000FGHIJ/view | 営業本部 | 佐藤花子 | ○ | ○ | × | × |
 
 | 列 | 何を書くか |
 |---|---|
 | **ID** | 社内で決める管理番号（`1001`, `CUST-01` など）。**Salesforce のレポート ID ではない**。前ゼロ（`0001`）や記号入りも使える |
-| **概要** | 人が読んで分かる説明。保存するファイル名にも使う |
+| **概要** | 人が読んで分かる説明。保存するファイル名と、出力パスの第3階層に使う |
 | **Salesforce URL** | レポートを開いたときのアドレスを**そのまま貼る** |
-| **保存先** | 落としたファイルを置くフォルダ |
+| **グループ** | 出力先の起点となるグループ名。「設定」シート（[設定シート](#設定シート) 参照）に登録したグループ名と一致させる |
+| **担当者** | 出力パスの第2階層に使う名前 |
 | **有効** | `○` か `×`。**雛形ではドロップダウンから選べる**。行は消さない（履歴との対応が残る） |
 | **0件あり** | その日のデータが 0 件になることがあるレポートなら `○`。`×` のときに 0 件だとエラーになります（[「0 件の扱い」](#0-件の扱い) 参照） |
 | **2000件超** | Report API の2000行上限を超えることが分かっているなら `○`。取得実行側がブラウザ経由（画面のエクスポート機能）に切り替える。「SOQL」列が `○` のときはこの列より優先される |
 | **SOQL** | SOQL化済みで、同じ管理番号の `SoqlReport` が登録されているなら `○`。取得実行側はSOQL経由に切り替える（「2000件超」列より優先）。`○` なのに登録が無いと `SoqlReportNotRegisteredError` で止まる |
 
-**グループ名・担当者・備考のような記録専用の列は、この宣言に含めていない。**
+**設定シートにないグループ名を書くと `GroupNotRegisteredError` で止まる**。新しい
+グループ（部署）を足したいときは、設定シート側にも同じグループ名で行を追加する。
+
+**備考のような記録専用の列は、この宣言に含めていない。**
 comken は「宣言した列」だけを読み、それ以外の列は無視する。人が付け足したい
 記録用の列を、雛形にもとから入れておきたい場合だけ `column()` に足す（→
 [管理表（master_table）](master-table.md)）。
@@ -266,12 +274,43 @@ shared_report_ids(load_master(MASTER_PATH))
 
 ---
 
+## 設定シート
+
+**「設定」シートは、レポート管理表と同じブック内の別シート**として配置する
+（スケジュールシートと同じ運用）。1行に「グループ名」と「ベースパス」を
+書く。管理表の「グループ」列に書かれた名前と一致する行を `provider.report_folder()`
+が引き、ベースパスの下の第2階層に「担当者」、第3階層に「概要」を連結して
+**Python 側で組み立てる**（`provider.py` / `sheets/group_settings.py`）。
+
+Excel の数式 (VLOOKUP 等) で組み立てる案も検討したが、openpyxl で数式セルを
+読み取ると Excel で開き直して保存しないとキャッシュが更新されず信頼できない、
+非エンジニア運用のうえで数式を壊すリスクもあるため、Python 側で組み立てることに
+した。
+
+| グループ | ベースURL |
+|---|---|
+| 営業本部 | `\\server\share\営業本部` |
+| 経理グループ | `\\server\share\経理` |
+
+| 列 | 何を書くか |
+|---|---|
+| **グループ** | 社内のグループ名・部署名。管理表の「グループ」列と一致させる。同じ名前は1行しか登録できない（重複は `MasterDuplicateValueError`） |
+| **ベースURL** | そのグループの出力先の起点パス。出力ファイルは「ベースパス / 担当者 / 概要 /」の下に置かれる |
+
+設定シートは雛形自動生成の対象外（手で追加する運用）。列の宣言は
+`comken.services.salesforce_downloader/sheets/group_settings.py` にある。
+
+---
+
 ## 保存されるファイル
 
 ```
-<保存先>\1001_顧客一覧_20260814_091530_123456.csv
-<保存先>\1002_売上実績_20260814_091530_123456.csv
+<ベースパス>\<担当者>\<概要>\1001_顧客一覧_20260814_091530_123456.csv
+<ベースパス>\<担当者>\<概要>\1002_売上実績_20260814_091530_123456.csv
 ```
+
+ベースパスは「設定」シートの「ベースURL」列、`担当者`/`概要` は管理表の
+各列から取られ、Python 側で連結される。
 
 ファイル名は管理番号を先頭に置く。時刻はマイクロ秒まで付け、同じ日に
 複数回取得しても前のファイルを残す。万一名前が衝突した場合も連番を付け、
@@ -396,47 +435,6 @@ dedup 判定に使わない。スケジュール行に紐付かないレポー�
 
 ---
 
-## 最新ステータス（Excel）
-
-`download_scheduled()` のたびに、管理表の全エントリについて履歴 CSV から最新
-（実行日時が最大）の行を引いて 1 ファイルへ**上書き**生成する。人が読む用の帳票で、
-**プログラムだけが上書きする**（人は編集しない）。
-
-**履歴と役割が違う。** 履歴は「全実行の記録」で 1 レポートの最新だけ見たい
-業務側からは探しにくい。最新ステータスは「管理表 × 履歴の最新行」を 1 シート
-にまとめるので、**「今どのレポートが落ちているか」を一覧で把握できる**。
-履歴 CSV には時系列で残るので、後の調査は履歴で行う。
-
-```
-レポート管理表.xlsx（人が編集）        ダウンロード履歴.csv（プログラムが追記）
-        ↓                                      ↓
-        └──────────── write_latest_status() ────┘
-                            ↓
-              最新ステータス.xlsx（上書き生成）
-```
-
-書き出される列:
-
-| 管理番号 | 概要 | 最新実行日時 | 成否 | 原因区分 | エラー内容 |
-|---|---|---|---|---|---|
-
-- 履歴が無い管理番号は「未実行」と表示し、失敗した行は `Color.PINK` で塗りつぶす。
-  帳票を開いた瞬間に「どの管理番号が落ちているか」が視覚で分かる
-- ファイルへ書き込む経路で例外が出ても、`download_scheduled()` の成否判定には
-  影響させない（`ScheduledDownloadFailedError` は本体結果で決まる）。
-  帳票の書き損ねはログに warning を出すだけ
-
-直接呼ぶ必要はない。`download_scheduled()` の最後に自動で上書きされる。
-別のタイミングでも起こしたいときは、直接呼んでもよい。
-
-```python
-from comken.services.salesforce_downloader.sheets.latest_status import write_latest_status
-
-write_latest_status()  # 既定のパス（paths.LATEST_STATUS_PATH）へ書き出す
-```
-
----
-
 ## 定期取得
 
 **定期実行の実装（`download_scheduled()` の呼び出し・実行時フィルタ・ブラウザ経由
@@ -455,19 +453,18 @@ comken 側に置くのは、そのプロジェクトが従う**管理表・履�
 スケジュールは「1行につき1つの取得ルール」として管理する。同じレポートを月・水・金に
 取得する場合は、「スケジュール」シートに3行登録する。
 
-| スケジュールキー | レポートキー | 取得頻度 | 曜日 | 取得時刻 | 取得間隔（分） | 日付 | 祝日対応 | 有効 |
-|---|---|---|---|---|---|---|---|---|
-| S001 | R001 | 毎週 | 月 | 09:00 |  |  | 取得しない | ○ |
-| S002 | R001 | 毎週 | 水 | 09:00 |  |  | 取得しない | ○ |
-| S003 | R001 | 毎週 | 金 | 09:00 |  |  | 取得しない | ○ |
-| S004 | R001 | 1時間ごと |  | 09:00 | 60 |  |  | ○ |
-| S005 | R002 | 毎月 |  | 06:00 |  | 月末 | 取得しない | ○ |
-| S006 | R003 | 毎月 |  |  |  | 第2営業日 | 取得しない | ○ |
+| スケジュールキー | レポートキー | 取得頻度 | 取得時刻 | 曜日 | 日付 | 祝日対応 | 有効 |
+|---|---|---|---|---|---|---|---|
+| S001 | R001 | 毎週 | 09:00 | 月 |  | 取得しない | ○ |
+| S002 | R001 | 毎週 | 09:00 | 水 |  | 取得しない | ○ |
+| S003 | R001 | 毎週 | 09:00 | 金 |  | 取得しない | ○ |
+| S004 | R001 | 1時間ごと | 09:00 |  |  |  | ○ |
+| S005 | R002 | 毎月 | 06:00 |  | 月末 | 取得しない | ○ |
+| S006 | R003 | 毎月 |  |  | 第2営業日 | 取得しない | ○ |
 
 「取得時刻」列は「毎日」「毎週」「毎月」「1時間ごと」すべてに共通の実行開始時刻で、
-「1時間ごと」のときはこの列が開始時刻を兼ねる（「取得開始時刻」列は存在しない）。
-「1時間ごと」で間隔内に確実に1回は終わらせたい、という終了時刻の概念は無い（「開始を
-過ぎたら、その日のうちに取れればよい」という運用要件）。
+「1時間ごと」のときはこの列が開始時刻を兼ねる。「1時間ごと」は **開始時刻から
+60 分刻みで動く**（間隔の指定は無く、固定 60 分）。
 
 **「取得時刻」列は空欄にできる**（`S006` がこの例）。
 
@@ -486,8 +483,7 @@ comken 側に置くのは、そのプロジェクトが従う**管理表・履�
 1日に2回取る意味がないため）。運用上は「9時に失敗したら13時にリトライする」
 という意図で複数行を並べることを想定している。
 
-Excel の生 dict から直接 `ScheduleRule` を組み立てることもできるが、運用では
-`load_schedule()` 経由で読むのが基本:
+運用では `load_schedule()` 経由で読むのが基本:
 
 ```python
 from comken.services.salesforce_downloader.sheets.schedule import load_schedule
@@ -497,34 +493,43 @@ for rule in rules:
     print(rule.schedule_key, rule.report_key, rule.frequency)
 ```
 
-**「スケジュール」シートは雛形生成を持たない。** 上の列定義表のとおり手で作る
-（`レポート管理表` と同じブックへ、シート名「スケジュール」で追加する）。手で作った
-シートへドロップダウン（入力規則）だけ後から付けたい場合は
-`apply_schedule_dropdowns()` を使う（`取得頻度` / `曜日` / `有効` の3列が対象。
-列の位置ではなく見出し名で探すので、列の並び順は問わない）:
-
-```python
-from comken.services.salesforce_downloader.sheets.schedule import apply_schedule_dropdowns
-
-apply_schedule_dropdowns("レポート管理表.xlsx")
-```
-
-なお、 `ScheduleRule.from_row()` を直接呼ぶ使い方も引き続き可能
-（テストや、別のデータソースから組み立てるときに使う）:
+`ScheduleRule` は `@dataclass(frozen=True, kw_only=True)` + `MasterRow` の
+構造体で、列名は `comken/services/salesforce_downloader/sheets/schedule.py` の
+`column()` 宣言が正。`曜日` / `日付` は自由記述なので `weekday` /
+`day_of_month` / `month_end` / `nth_business_day` の 4 つの `@property`
+でパース済み値を取り出す（`ReportEntry.report_id` が URL から計算派生するのと
+同じ考え方）。実行可否の判定:
 
 ```python
 from datetime import datetime
 
 from comken.services.salesforce_downloader.sheets.schedule import ScheduleRule
 
-rule = ScheduleRule.from_row(
-    {
-        "スケジュールキー": "S001", "レポートキー": "R001", "取得頻度": "毎週",
-        "曜日": "月", "取得時刻": "09:00", "祝日対応": "取得しない", "有効": "○",
-    }
+rule = ScheduleRule(
+    schedule_key="S001",
+    report_key="R001",
+    frequency="毎週",
+    run_time=datetime.strptime("09:00", "%H:%M").time(),
+    raw_weekday="月",
+    raw_day_of_month="",
+    holiday_policy="取得しない",
+    enabled=True,
 )
 if rule.is_due(datetime.now(), holidays=set()):
     print("このレポートを取得する")
+```
+
+**「スケジュール」シートは雛形生成を持たない。** 上の列定義表のとおり手で作る
+（`レポート管理表` と同じブックへ、シート名「スケジュール」で追加する）。手で作った
+シートへドロップダウン（入力規則）だけ後から付けたい場合は
+`apply_schedule_dropdowns()` を使う。ドロップダウンは `column()` 宣言で
+`choices` を付けた列に自動で付く（現状 `取得頻度` のみ。`祝日対応` は自由記述の
+ため対象外。列の位置ではなく見出し名で探すので、列の並び順は問わない）:
+
+```python
+from comken.services.salesforce_downloader.sheets.schedule import apply_schedule_dropdowns
+
+apply_schedule_dropdowns("レポート管理表.xlsx")
 ```
 
 **このシートが管理表に無い管理表でも `load_schedule()` は空リストを返す
@@ -785,10 +790,10 @@ saved = download_soql_reports()   # SOQL_REPORTS を全部取得・保存
 
 エラー名と対処法は [docs/ERRORS.md](ERRORS.md)（comken 全体の例外クラスの docstring
 から自動生成、docstring が正）にまとまっている。Downloader 由来のものは
-`ReportNotRegisteredError` / `SoqlReportNotRegisteredError` / `ReportDisabledError` /
-`MasterDuplicateValueError` / `MasterRowValueError` / `CachedReportNotFoundError` /
-`EmptyReportError` / `ReportFolderNotFoundError` / `ScheduledDownloadFailedError` /
-`ScheduleDuplicateKeyError` / `ScheduleRowValueError`（いずれも
+`ReportNotRegisteredError` / `SoqlReportNotRegisteredError` /
+`GroupNotRegisteredError` / `ReportDisabledError` / `MasterDuplicateValueError` /
+`MasterRowValueError` / `CachedReportNotFoundError` / `EmptyReportError` /
+`ReportFolderNotFoundError` / `ScheduledDownloadFailedError`（いずれも
 `comken/exceptions/downloader.py`）。
 
 `ScheduledDownloadFailedError` は**取得できたものを保存したうえで**送出する
@@ -807,18 +812,16 @@ SALESFORCE_DOWNLOADER_FOLDER = Path(r"\\実際のサーバー\share\tools\salesf
 
 MASTER_FILENAME = "レポート管理表.xlsx"
 HISTORY_FILENAME = "ダウンロード履歴.csv"
-LATEST_STATUS_FILENAME = "最新ステータス.xlsx"
 
 MASTER_PATH = SALESFORCE_DOWNLOADER_FOLDER / MASTER_FILENAME
 HISTORY_PATH = SALESFORCE_DOWNLOADER_FOLDER / HISTORY_FILENAME
-LATEST_STATUS_PATH = SALESFORCE_DOWNLOADER_FOLDER / LATEST_STATUS_FILENAME
 ```
 
 **設定ファイルへ集約せず、使う場所に書く。** 理由と、共有サーバーで書き換えを守る方法は
 comken 側のドキュメントを参照。
 
-**利用側の API から `master_path=` / `history_path=` / `output_path=` を渡せない。**
-この3つの定数は `paths.py` で一元管理する。プロジェクト側に同名のパス定数を作ると、
+**利用側の API から `master_path=` / `history_path=` を渡せない。**
+この 2 つの定数は `paths.py` で一元管理する。プロジェクト側に同名のパス定数を作ると、
 管理表を直したのに出力先が変わらず、しかもエラーにもならない事故が起きる
 （境界を破った典型例）。
 
@@ -830,14 +833,17 @@ comken 側のドキュメントを参照。
 |---|---|
 | レポートを1本足す／やめる | 管理表（Excel）だけ。コードは触らない |
 | 参照先の Salesforce レポートを差し替える | 管理表の「Salesforce URL」 |
-| 保存先を変える | 管理表の「保存先」 |
+| 出力先のベースパスを変える | 管理表と同じブック内の「設定」シート（`group_settings.py`） |
+| 出力先の担当者を変える | 管理表の「担当者」列 |
 | 取る時刻・曜日を変える、月末だけにする | 管理表の「スケジュール」シート（`schedule.py` が判定。呼び出し方自体は Salesforceレポートダウンローダー） |
 | 取ったCSVを加工する・DBへ入れる・通知する | 利用プロジェクト |
 | Salesforce への問い合わせ・保存・履歴書き込みの実行を変える | Salesforceレポートダウンローダー（`service.py`） |
 | ファイル名の付け方を変える | `provider.py` の `file_path_of()` / `daily_cache_path_of()` ← **全プロジェクトに効く** |
 | 履歴の列・読み取り方を変える | `history.py` ← **全プロジェクトに効く**（書き込み側は Salesforceレポートダウンローダー） |
 | 管理表に列を足す | `master.py` の `ReportEntry` |
-| 管理表・履歴・最新ステータスの置き場所を変える | `paths.py` の `MASTER_PATH` / `HISTORY_PATH` / `LATEST_STATUS_PATH` |
+| 設定シートに列を足す | `group_settings.py` の `GroupSetting` |
+| スケジュールシートに列を足す | `schedule.py` の `ScheduleRule` |
+| 管理表・履歴の置き場所を変える | `paths.py` の `MASTER_PATH` / `HISTORY_PATH` |
 | Salesforce の認証・API の叩き方を変える | `comken/toolbox/salesforce/`（Downloader ではない） |
 | 接続先の組織を足す | `comken/toolbox/salesforce/sites/` |
 | 2000件超のレポートをSOQLで取る | `soql_reports/`（1レポート=1ファイル＋`_registry.py`へ登録）＋管理表の「SOQL」列を`○` |
@@ -852,7 +858,8 @@ comken 側のドキュメントを参照。
 
 - **保存先をプロジェクト側の定数にも書いてしまった。** 管理表を直したのに出力先が変わらず、
   エラーにもならない（履歴には書いたとおりに動いた記録が残る）— `paths.py` の
-  `MASTER_PATH` / `HISTORY_PATH` と、管理表の「保存先」の2箇所を見比べる必要がある
+  `MASTER_PATH` / `HISTORY_PATH` と、「設定」シートの「ベースURL」+ 管理表の
+  「グループ」/「担当者」/「概要」の3箇所を見比べる必要がある
   ことに気づくまで、誰も原因にたどり着けない
 - **「このプロジェクトのときは別フォルダへ保存」を Downloader に持ち込んだ。** 全プロジェクトの
   分岐判定が1か所に集中し、Downloader 自体がプロジェクトを識別することになる —
