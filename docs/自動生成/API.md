@@ -5037,6 +5037,8 @@ URL のドメインに対応する組織が登録されていない
 URL のドメインで決めるので、未登録のドメインでは接続先を選べない。
 
 発生箇所: comken.toolbox.salesforce.sites.site_for()
+         comken.services.salesforce_downloader.browser_sites.browser_site_for()
+         （ブラウザ経由でのレポートダウンロードの組織振り分け）
 
 対処:
     URL のドメインを見直す。新しい組織なら管理者へ連絡する
@@ -6794,6 +6796,10 @@ def is_due(self, now: dt.datetime, *, holidays: set[dt.date] | frozenset[dt.date
 ``True`` を返す（例: 前日以前の確定済みデータのように、いつ取っても同じ内容の
 レポート用）。``FREQUENCY_HOURLY`` は対象外で、``run_time`` が無いと
 ``ScheduleIntervalMissingError`` を投げる。
+
+### `browser_site_for`
+
+定義を解決できませんでした。
 
 
 ## `from comken.services.salesforce_downloader.soql_reports import ...`

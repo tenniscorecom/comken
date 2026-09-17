@@ -76,6 +76,16 @@ def test_write_latest_status_does_not_load_service(monkeypatch: pytest.MonkeyPat
     assert "comken.services.salesforce_downloader.service" not in sys.modules
 
 
+def test_cached_report_does_not_load_browser_sites(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`cached_report` を import しても `browser_sites`（selenium依存）は読み込まれない。"""
+    for mod_name in list(sys.modules):
+        if mod_name == "comken.services.salesforce_downloader.browser_sites":
+            monkeypatch.delitem(sys.modules, mod_name, raising=False)
+    from comken.services.salesforce_downloader import cached_report  # noqa: F401
+
+    assert "comken.services.salesforce_downloader.browser_sites" not in sys.modules
+
+
 # ─────────────────────────────────────────────────────────────────────
 # service を import して良い関数 (service 側)
 # ─────────────────────────────────────────────────────────────────────
@@ -90,3 +100,14 @@ def test_download_scheduled_does_not_crash(monkeypatch: pytest.MonkeyPatch) -> N
     from comken.services.salesforce_downloader import download_scheduled
 
     assert download_scheduled is not None
+
+
+def test_browser_site_for_does_not_crash(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`browser_site_for` を import しても AttributeError 等で落ちない。
+
+    browser_sites.py を読むので selenium が sys.modules に入る前提だが、
+    ここでは「import 経路が壊れていない」ことだけを確認する。
+    """
+    from comken.services.salesforce_downloader import browser_site_for
+
+    assert browser_site_for is not None

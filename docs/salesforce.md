@@ -306,6 +306,16 @@ with Salesforce() as sf:
         ...
 ```
 
+**複数組織（本番・サンドボックス等）を扱う場合**は、`comken.toolbox.browser.sites.salesforce.Salesforce`
+（雛形。BASE_URLがダミー）を組織ごとに継承する。`comken.services.salesforce_downloader.browser_sites`
+に実例がある: `SolutionBrowser` / `SolutionSandboxBrowser` はAPI側の組織クラス
+（`comken.toolbox.salesforce.sites.Solution` / `SolutionSandbox`）が持つ `DOMAIN_URL` を
+そのまま使い、URLを二重に管理しない。`browser_site_for(url)` は `site_for()` のブラウザ版で、
+レポートURLのドメインから組織のブラウザサイトクラスを返す。
+
+`toolbox.browser` と `toolbox.salesforce` は互いに依存しない設計（`tests/test_layers.py`）
+なので、組織ごとの組み合わせは両方に依存できる `services` 層（`salesforce_downloader`）に置く。
+
 **ログイン状態を次回起動でも使い回すには `OPTIONS.PROFILE_ROOT` を設定すること**
 （未設定だと起動のたびにまっさらなプロファイルになり、毎回ログインし直しになる）。
 詳しくは `Salesforce` クラスの docstring と `docs/browser.md` の

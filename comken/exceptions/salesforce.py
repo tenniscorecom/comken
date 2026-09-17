@@ -153,6 +153,8 @@ class SalesforceSiteNotFoundError(SalesforceError):
     URL のドメインで決めるので、未登録のドメインでは接続先を選べない。
 
     発生箇所: comken.toolbox.salesforce.sites.site_for()
+             comken.services.salesforce_downloader.browser_sites.browser_site_for()
+             （ブラウザ経由でのレポートダウンロードの組織振り分け）
 
     対処:
         URL のドメインを見直す。新しい組織なら管理者へ連絡する
