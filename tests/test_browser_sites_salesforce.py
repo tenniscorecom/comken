@@ -82,6 +82,36 @@ class TestLoginWithToken:
             sf.login_with_token("MY_TOKEN")
 
 
+class TestGoLogin:
+    """go_login() — 人が手動でログインする画面を開く。"""
+
+    def test_opens_base_url(self, tmp_path):
+        session = _make_session(tmp_path)
+        sf = Salesforce(session)
+
+        sf.go_login()
+
+        session._driver.get.assert_called_once_with(Salesforce.BASE_URL)
+
+    def test_raises_when_not_started(self):
+        sf = Salesforce()
+
+        with pytest.raises(SiteNotStartedError):
+            sf.go_login()
+
+
+class TestWaitForManualLogin:
+    """wait_for_manual_login() — 人がブラウザでログインを終えるのをEnter待ちする。"""
+
+    def test_waits_for_enter_key(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr("builtins.input", lambda prompt="": calls.append(prompt))
+
+        Salesforce().wait_for_manual_login()
+
+        assert len(calls) == 1
+
+
 class TestDomainOf:
     """_domain_of() — URLから scheme + netloc だけを取り出す。"""
 

@@ -57,12 +57,30 @@ class Salesforce(SiteBase):
     URL や認証は example の値のまま。利用プロジェクト側で継承して書き換える
     （BASE_URL を実際の組織の My Domain URL へ）。
 
-    ID/パスワードでのログイン画面は使わない。comken.toolbox.salesforce で取得した
-    OAuthアクセストークンを ``login_with_token()`` に渡すだけで、
-    frontdoor.jsp 経由でブラウザのログイン状態を確立する（MFAの二度手間が無い）。
+    ログイン方法は2通り:
 
-    起動オプションは既定（BrowserOptions）のままでよいため OPTIONS は書かない
-    （画面を待つ操作が無く、Lightning特有のタイムアウト延長も不要なため）。
+    - ``login_with_token()`` — comken.toolbox.salesforce で取得したOAuthアクセス
+      トークンを渡すだけで、frontdoor.jsp 経由でログイン状態を確立する
+      （MFAの手間が無い代わりに、Salesforce側の接続アプリ登録・初回認可が要る）
+    - ``go_login()`` + ``wait_for_manual_login()`` — 接続アプリの登録を挟まず、
+      人がブラウザでID/パスワード/MFAを手動入力する。一時的に使いたいだけの
+      ときに手早い
+
+    **手動ログインを使い回すには OPTIONS.PROFILE_ROOT を設定すること。**
+    未設定だと起動のたびにまっさらなプロファイルになり、毎回ログインし直しになる
+    （`docs/browser.md` の「ログイン状態を残す」を参照）:
+
+        class MySalesforceOptions(BrowserOptions):
+            PROFILE_ROOT = r"C:\\作業\\salesforce_profile"
+
+        class MySalesforce(Salesforce):
+            OPTIONS = MySalesforceOptions
+
+        with MySalesforce() as sf:
+            sf.go_login()
+            sf.wait_for_manual_login()      # 初回だけ。2回目以降はプロファイルに残る
+            for report_id, path in sf.export_reports(report_urls, "出力先"):
+                ...
     """
 
     NAME = "salesforce"
@@ -79,6 +97,24 @@ class Salesforce(SiteBase):
         """
         domain = (instance_url or self.BASE_URL).rstrip("/")
         self._require_session().open(f"{domain}/secur/frontdoor.jsp?sid={access_token}")
+
+    def go_login(self) -> None:
+        """ログイン画面を開く。ID/パスワード/MFAは人がブラウザで手動入力する想定。
+
+        ``login_with_token()`` と違い、Salesforce側の接続アプリ登録・OAuth初回認可
+        を挟まない。一時的に使いたいだけのときに使う。ログイン後は
+        ``wait_for_manual_login()`` を呼ぶこと。
+        """
+        self._require_session().open(self.BASE_URL)
+
+    def wait_for_manual_login(self) -> None:
+        """ブラウザでの手動ログインが終わるまで待つ（ターミナルでEnter待ち）。
+
+        ``BrowserOptions.HEADLESS`` は既定で ``False`` のため、通常はブラウザの
+        画面が見える状態で起動している。そこへ人がID/パスワード/MFAを入力し、
+        ログインが終わったらこちらのターミナルで Enter を押す。
+        """
+        input("ブラウザでログイン（必要ならMFAも）を完了したら、ここで Enter を押してください...")
 
     def export_reports(
         self,
