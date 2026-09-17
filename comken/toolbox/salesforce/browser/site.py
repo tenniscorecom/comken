@@ -67,7 +67,8 @@ class Salesforce(SiteBase):
       MFAを手動入力する
     - ``login_with_credentials(prefix)`` — DPAPIに保存したID/パスワードを自動
       入力する（MFA等の追加確認が出た場合は、続けて ``wait_for_manual_login()``
-      を呼んで人が対応する）
+      を呼んで人が対応する）。``prefix`` は省略でき、その場合はクラスの
+      ``CREDENTIAL_PREFIX`` を使う
 
     **ログインを使い回すには OPTIONS.PROFILE_ROOT を設定すること。**
     未設定だと起動のたびにまっさらなプロファイルになり、毎回ログインし直しになる
@@ -78,9 +79,10 @@ class Salesforce(SiteBase):
 
         class MySalesforce(Salesforce):
             OPTIONS = MySalesforceOptions
+            CREDENTIAL_PREFIX = "salesforce_temp"
 
         with MySalesforce() as sf:
-            sf.login_with_credentials("salesforce_temp")
+            sf.login_with_credentials()     # prefix省略 → CREDENTIAL_PREFIXを使う
             sf.wait_for_manual_login()      # 初回だけ。2回目以降はプロファイルに残る
             for report_id, path in sf.export_reports(report_urls, "出力先"):
                 ...
@@ -89,6 +91,10 @@ class Salesforce(SiteBase):
     NAME = "salesforce"
     BASE_URL = "https://example.my.salesforce.com"
     OWNER = "comken"
+
+    # 認証情報のキー名の頭。組織クラスで指定する
+    # （``comken.toolbox.salesforce.client.SalesforceBase.CREDENTIAL_PREFIX`` と同じ役割）
+    CREDENTIAL_PREFIX = ""
 
     def go_login(self) -> LoginPage:
         """ログイン画面を開く。
@@ -99,7 +105,7 @@ class Salesforce(SiteBase):
         logger.info("Salesforceのログイン画面を開きます: url=%s", self.BASE_URL)
         return self.to(LoginPage).go()
 
-    def login_with_credentials(self, prefix: str) -> None:
+    def login_with_credentials(self, prefix: str = "") -> None:
         """DPAPIに保存したID/パスワードでログインを試みる。
 
         MFA（認証コード・端末認証など）が要求される組織では、これだけでは
@@ -110,7 +116,8 @@ class Salesforce(SiteBase):
             prefix: DPAPIに登録した認証情報のシステム名
                 （``comken.toolbox.credentials.Credentials`` のサイト名）。
                 ``username`` / ``password`` の2項目を登録しておく
-                （例: ``python -m comken cred gui``）。
+                （例: ``python -m comken cred gui``）。**省略時はクラスの
+                ``CREDENTIAL_PREFIX``** を使う（本番とテストを切り替えるときだけ渡す）。
 
         Raises:
             CredentialNotFoundError: prefix配下に username/password が未登録の場合。
@@ -118,6 +125,7 @@ class Salesforce(SiteBase):
         """
         from comken.toolbox.credentials import Credentials
 
+        prefix = prefix or self.CREDENTIAL_PREFIX
         logger.info("DPAPIの認証情報でログインを試みます: prefix=%s", prefix)
         cred = Credentials(prefix)
         login_page = self.go_login()

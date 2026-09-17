@@ -281,8 +281,9 @@ with site() as sf:
 > `Salesforce` は**ログインの確立を実ブラウザ（Selenium）で行う**。
 >
 > `go_login()` + `wait_for_manual_login()`（人が手動でログイン）、または
-> `login_with_credentials(prefix)`（DPAPIに保存したID/パスワードを自動入力し、
-> MFA等が出た場合だけ `wait_for_manual_login()` で人が続きを対応する）で
+> `login_with_credentials()`（DPAPIに保存したID/パスワードを自動入力し、
+> MFA等が出た場合だけ `wait_for_manual_login()` で人が続きを対応する。
+> `prefix` 省略時は組織クラスの `CREDENTIAL_PREFIX` を使う）で
 > ログインし、確立したセッションCookieを `export_reports()` が requests へ
 > 引き継いで、実際のN件のダウンロードは `ThreadPoolExecutor` で並列に投げる。
 > ブラウザの起動は最初のログイン確立のときだけで済む。接続アプリの登録・
@@ -299,7 +300,7 @@ from comken.toolbox.salesforce.browser.sites import site_for
 
 site_class = site_for(report_url)
 with site_class() as sf:
-    sf.login_with_credentials(site_class.CREDENTIAL_PREFIX)  # DPAPIに登録済みのID/パスワード
+    sf.login_with_credentials()  # prefix省略 → CREDENTIAL_PREFIXを使う（DPAPIに登録済みのID/パスワード）
     sf.wait_for_manual_login()                                # MFA等が出た場合だけ対応する
 
     # ファイル名・置き場所は呼び出し側が {URL: 保存先パス} で指定する

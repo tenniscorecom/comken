@@ -14,7 +14,7 @@ class Solution(Salesforce):
 
     使い方:
         with Solution() as sf:
-            sf.login_with_credentials(Solution.CREDENTIAL_PREFIX)
+            sf.login_with_credentials()  # prefix省略 → CREDENTIAL_PREFIXを使う
             sf.wait_for_manual_login()
             for report_id, path in sf.export_reports(reports):
                 ...

@@ -116,6 +116,42 @@ class TestLoginWithCredentials:
         go_login.assert_called_once()
         login_page.login.assert_called_once_with("user@example.com", "secret")
 
+    def test_falls_back_to_class_credential_prefix_when_omitted(self, tmp_path):
+        """prefix省略時は、クラスの CREDENTIAL_PREFIX を使う。"""
+
+        class _MyOrg(Salesforce):
+            CREDENTIAL_PREFIX = "salesforce_solution"
+
+        session = _make_session(tmp_path)
+        session._site = _MyOrg()
+        sf = _MyOrg(session)
+        cred = MagicMock(username="user@example.com", password="secret")
+        with (
+            patch("comken.toolbox.credentials.Credentials", return_value=cred) as cred_class,
+            patch.object(Salesforce, "go_login", return_value=MagicMock()),
+        ):
+            sf.login_with_credentials()
+
+        cred_class.assert_called_once_with("salesforce_solution")
+
+    def test_explicit_prefix_overrides_class_credential_prefix(self, tmp_path):
+        """明示的に渡した prefix は、クラスの CREDENTIAL_PREFIX より優先される。"""
+
+        class _MyOrg(Salesforce):
+            CREDENTIAL_PREFIX = "salesforce_solution"
+
+        session = _make_session(tmp_path)
+        session._site = _MyOrg()
+        sf = _MyOrg(session)
+        cred = MagicMock(username="user@example.com", password="secret")
+        with (
+            patch("comken.toolbox.credentials.Credentials", return_value=cred) as cred_class,
+            patch.object(Salesforce, "go_login", return_value=MagicMock()),
+        ):
+            sf.login_with_credentials("salesforce_temp")
+
+        cred_class.assert_called_once_with("salesforce_temp")
+
 
 class TestDomainOf:
     """_domain_of() — URLから scheme + netloc だけを取り出す。"""
