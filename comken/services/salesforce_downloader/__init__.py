@@ -94,12 +94,12 @@ comken 本体側の共有例外（`ComkenError` / `SalesforceReportIDNotFoundErr
 スタイル操作まで使う）用途を分けておく目的で残してある。
 """
 
-from comken.services.salesforce_downloader.master import (
+from comken.services.salesforce_downloader.sheets.master import (
     ReportEntry,
     load_master,
     shared_report_ids,
 )
-from comken.services.salesforce_downloader.schedule import ScheduleRule
+from comken.services.salesforce_downloader.sheets.schedule import ScheduleRule
 
 __all__ = [
     "cached_report",
@@ -118,8 +118,8 @@ _LAZY_TARGETS: dict[str, str] = {
     "cached_report": "comken.services.salesforce_downloader.provider",
     "cached_report_path": "comken.services.salesforce_downloader.provider",
     "file_path_of": "comken.services.salesforce_downloader.provider",
-    "write_latest_status": "comken.services.salesforce_downloader.latest_status",
-    "downloaded_today": "comken.services.salesforce_downloader.history",
+    "write_latest_status": "comken.services.salesforce_downloader.sheets.latest_status",
+    "downloaded_today": "comken.services.salesforce_downloader.sheets.history",
 }
 
 

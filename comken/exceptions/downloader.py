@@ -293,7 +293,7 @@ class UnsupportedScheduleFrequencyError(DownloaderError):
     許容される値は ``1時間ごと`` / ``毎日`` / ``毎週`` / ``毎月`` の4種類。
     それ以外（手書きのタイポ・想定外の列挙値）が入っていると判定できない。
 
-    発生箇所: comken.services.salesforce_downloader.schedule の is_due()
+    発生箇所: comken.services.salesforce_downloader.sheets.schedule の is_due()
 
     対処:
         管理表の「取得頻度」列の値を ``1時間ごと`` / ``毎日`` / ``毎週`` /
@@ -314,7 +314,7 @@ class ScheduleIntervalMissingError(DownloaderError):
     1時間おきの判定は「開始時刻から終了時刻までのあいだ、指定分間隔で動く」
     という形なので、3つの情報がそろうまで動かない。
 
-    発生箇所: comken.services.salesforce_downloader.schedule の is_due()
+    発生箇所: comken.services.salesforce_downloader.sheets.schedule の is_due()
 
     対処:
         管理表の「取得開始時刻」「取得終了時刻」「取得間隔（分）」の3列を
@@ -335,7 +335,7 @@ class ScheduleRequiredValueMissingError(DownloaderError):
     スケジュールキー・レポートキー・取得頻度のいずれかが空だと、
     どのレポートをいつ取るか決められない。
 
-    発生箇所: comken.services.salesforce_downloader.schedule の ScheduleRule.from_row()
+    発生箇所: comken.services.salesforce_downloader.sheets.schedule の ScheduleRule.from_row()
 
     対処:
         管理表の該当行で、表示された列名（スケジュールキー / レポートキー /
@@ -356,7 +356,7 @@ class ScheduleWeekdayInvalidError(DownloaderError):
     許容されるのは月〜日の漢字1文字（「月」「火」「水」「木」「金」「土」「日」）
     または「〜曜日」の接尾辞付き表記。
 
-    発生箇所: comken.services.salesforce_downloader.schedule の ScheduleRule.from_row()
+    発生箇所: comken.services.salesforce_downloader.sheets.schedule の ScheduleRule.from_row()
 
     対処:
         管理表の「曜日」列の値を月〜日のいずれかに修正する（「曜日」を付ける
@@ -379,7 +379,7 @@ class ScheduleRowValueError(DownloaderError):
     ``load_schedule()`` が「行の境目」と「中の値エラー」を区別して表示するために
     使う。
 
-    発生箇所: comken.services.salesforce_downloader.schedule の load_schedule()
+    発生箇所: comken.services.salesforce_downloader.sheets.schedule の load_schedule()
 
     対処:
         メッセージに出ている行と直したい値を、管理表で確認して直す
@@ -397,7 +397,7 @@ class ScheduleDuplicateKeyError(DownloaderError):
     1つの取得ルールを1行で表す管理表で同じキーが2行以上あると、
     ルールがどちらのものか区別できなくなる。
 
-    発生箇所: comken.services.salesforce_downloader.schedule の load_schedule()
+    発生箇所: comken.services.salesforce_downloader.sheets.schedule の load_schedule()
 
     対処:
         スケジュール管理表を開いて、重複しているスケジュールキーの

@@ -15,7 +15,7 @@ from comken.exceptions import (
     ScheduleRequiredValueMissingError,
     ScheduleWeekdayInvalidError,
 )
-from comken.services.salesforce_downloader.schedule import FREQUENCY_HOURLY, ScheduleRule
+from comken.services.salesforce_downloader.sheets.schedule import FREQUENCY_HOURLY, ScheduleRule
 
 
 def base_row(**overrides: object) -> dict[str, object]:

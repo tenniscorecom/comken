@@ -6161,7 +6161,7 @@ class UnsupportedScheduleFrequencyError(DownloaderError):
 許容される値は ``1時間ごと`` / ``毎日`` / ``毎週`` / ``毎月`` の4種類。
 それ以外（手書きのタイポ・想定外の列挙値）が入っていると判定できない。
 
-発生箇所: comken.services.salesforce_downloader.schedule の is_due()
+発生箇所: comken.services.salesforce_downloader.sheets.schedule の is_due()
 
 対処:
     管理表の「取得頻度」列の値を ``1時間ごと`` / ``毎日`` / ``毎週`` /
@@ -6186,7 +6186,7 @@ class ScheduleIntervalMissingError(DownloaderError):
 1時間おきの判定は「開始時刻から終了時刻までのあいだ、指定分間隔で動く」
 という形なので、3つの情報がそろうまで動かない。
 
-発生箇所: comken.services.salesforce_downloader.schedule の is_due()
+発生箇所: comken.services.salesforce_downloader.sheets.schedule の is_due()
 
 対処:
     管理表の「取得開始時刻」「取得終了時刻」「取得間隔（分）」の3列を
@@ -6211,7 +6211,7 @@ class ScheduleRequiredValueMissingError(DownloaderError):
 スケジュールキー・レポートキー・取得頻度のいずれかが空だと、
 どのレポートをいつ取るか決められない。
 
-発生箇所: comken.services.salesforce_downloader.schedule の ScheduleRule.from_row()
+発生箇所: comken.services.salesforce_downloader.sheets.schedule の ScheduleRule.from_row()
 
 対処:
     管理表の該当行で、表示された列名（スケジュールキー / レポートキー /
@@ -6236,7 +6236,7 @@ class ScheduleWeekdayInvalidError(DownloaderError):
 許容されるのは月〜日の漢字1文字（「月」「火」「水」「木」「金」「土」「日」）
 または「〜曜日」の接尾辞付き表記。
 
-発生箇所: comken.services.salesforce_downloader.schedule の ScheduleRule.from_row()
+発生箇所: comken.services.salesforce_downloader.sheets.schedule の ScheduleRule.from_row()
 
 対処:
     管理表の「曜日」列の値を月〜日のいずれかに修正する（「曜日」を付ける
@@ -6263,7 +6263,7 @@ class ScheduleRowValueError(DownloaderError):
 ``load_schedule()`` が「行の境目」と「中の値エラー」を区別して表示するために
 使う。
 
-発生箇所: comken.services.salesforce_downloader.schedule の load_schedule()
+発生箇所: comken.services.salesforce_downloader.sheets.schedule の load_schedule()
 
 対処:
     メッセージに出ている行と直したい値を、管理表で確認して直す
@@ -6287,7 +6287,7 @@ class ScheduleDuplicateKeyError(DownloaderError):
 1つの取得ルールを1行で表す管理表で同じキーが2行以上あると、
 ルールがどちらのものか区別できなくなる。
 
-発生箇所: comken.services.salesforce_downloader.schedule の load_schedule()
+発生箇所: comken.services.salesforce_downloader.sheets.schedule の load_schedule()
 
 対処:
     スケジュール管理表を開いて、重複しているスケジュールキーの
@@ -6787,7 +6787,31 @@ class ScheduleRule:
 
 #### 説明
 
-取得スケジュール管理表の1行。
+「スケジュール」シートの1行。1行 = 1つの取得ルール。
+
+列名（Excel 上の見出し）はフィールド名と異なるものがあるため、
+`from_row()` が日本語の列名から読み替える。以下は実体（フィールド）ごとの
+対応列名と意味。
+
+Attributes:
+    schedule_key: 列「スケジュールキー」。このルールを一意に識別するキー。
+        履歴の「スケジュールキー」列に記録され、同じ行を同日に何度も
+        実行しないための dedup 判定にも使う。
+    report_key: 列「レポートキー」。対象のレポートの管理番号
+        （レポート管理表シートの ID と対応する）。
+    frequency: 列「取得頻度」。`FREQUENCY_HOURLY` / `FREQUENCY_DAILY` /
+        `FREQUENCY_WEEKLY` / `FREQUENCY_MONTHLY` のいずれか。
+    run_time: 列「取得時刻」。毎日・毎週・毎月・1時間ごとに共通の実行時刻
+        （1時間ごとのときは開始時刻を兼ねる）。空欄可。
+    interval_minutes: 列「取得間隔（分）」。`frequency` が1時間ごとのときだけ使う。
+    weekday: 列「曜日」。`frequency` が毎週のときだけ使う（0=月〜6=日）。
+    day_of_month: 列「日付」の一部。`frequency` が毎月かつ日付の数値指定
+        （1〜31）のときに入る。
+    month_end: 列「日付」の一部。`frequency` が毎月かつ「月末」指定のとき `True`。
+    nth_business_day: 列「日付」の一部。`frequency` が毎月かつ「第N営業日」
+        指定のときに入る。
+    holiday_policy: 列「祝日対応」。`HOLIDAY_SKIP`（既定）なら祝日はスキップする。
+    enabled: 列「有効」。`○`/`×`。無効な行は判定対象から外れる。
 
 #### `from_row`
 

@@ -133,8 +133,6 @@ python -m comken sf check
 | 列 | 例 |
 |---|---|
 | ID | `1001` |
-| グループ名 | `営業事務グループ` |
-| 担当者 | `山田` |
 | 概要 | `顧客一覧` |
 | Salesforce URL | `https://.../Report/00O.../view` |
 | 保存先 | `\\server\A\input` |
@@ -142,7 +140,10 @@ python -m comken sf check
 | 0件あり | `×` |
 | 2000件超 | `×` |
 | SOQL | `×` |
-| 備考 | （任意） |
+
+グループ名・担当者・備考のような**記録用の列は自由に追加してよい**。
+comken はこの表を「宣言した列」だけで読むため、余分な列があっても無視される
+（→ [列](#列)）。
 
 ### 4. Excel で記入する
 
@@ -182,8 +183,8 @@ python -m comken sfdl check "\\実際のサーバー\share\tools\salesforce\レ�
 直接呼ぶ。
 
 ```python
-from comken.services.salesforce_downloader.master import ReportEntry
-from comken.services.salesforce_downloader.master import EXAMPLES
+from comken.services.salesforce_downloader.sheets.master import ReportEntry
+from comken.services.salesforce_downloader.sheets.master import EXAMPLES
 
 ReportEntry.create_template("レポート管理表.xlsx", EXAMPLES)
 ```
@@ -216,19 +217,17 @@ python -m comken sfdl check レポート管理表.xlsx
 ### 列
 
 シート名は `管理表`。1行目が見出し。列の宣言は
-`comken.services.salesforce_downloader/master.py` にあり、読み込み・検証・雛形生成の
+`comken.services.salesforce_downloader/sheets/master.py` にあり、読み込み・検証・雛形生成の
 仕組みは [管理表（master_table）](master-table.md) が持つ。
 
-| ID | グループ名 | 担当者 | 概要 | Salesforce URL | 保存先 | 有効 | 0件あり | 2000件超 | SOQL | 備考 |
-|---|---|---|---|---|---|---|---|---|---|---|
-| 1001 | 営業事務グループ | 山田 | 顧客一覧 | https://.../Report/00O5g00000ABCDE/view | `\\server\A\input` | ○ | × | × | × | |
-| 1002 | 経理グループ | 佐藤 | 売上実績 | https://.../Report/00O5g00000FGHIJ/view | `\\server\B\input` | ○ | ○ | × | × | |
+| ID | 概要 | Salesforce URL | 保存先 | 有効 | 0件あり | 2000件超 | SOQL |
+|---|---|---|---|---|---|---|---|
+| 1001 | 顧客一覧 | https://.../Report/00O5g00000ABCDE/view | `\\server\A\input` | ○ | × | × | × |
+| 1002 | 売上実績 | https://.../Report/00O5g00000FGHIJ/view | `\\server\B\input` | ○ | ○ | × | × |
 
 | 列 | 何を書くか |
 |---|---|
 | **ID** | 社内で決める管理番号（`1001`, `CUST-01` など）。**Salesforce のレポート ID ではない**。前ゼロ（`0001`）や記号入りも使える |
-| **グループ名** | このレポートを管理している社内の部署・グループ名。**記録用で、comken の判定・パス決定・スケジュール判定には関与しない** |
-| **担当者** | このレポートの担当者名。**記録用で、comken の判定には関与しない** |
 | **概要** | 人が読んで分かる説明。保存するファイル名にも使う |
 | **Salesforce URL** | レポートを開いたときのアドレスを**そのまま貼る** |
 | **保存先** | 落としたファイルを置くフォルダ |
@@ -236,7 +235,11 @@ python -m comken sfdl check レポート管理表.xlsx
 | **0件あり** | その日のデータが 0 件になることがあるレポートなら `○`。`×` のときに 0 件だとエラーになります（[「0 件の扱い」](#0-件の扱い) 参照） |
 | **2000件超** | Report API の2000行上限を超えることが分かっているなら `○`。取得実行側がブラウザ経由（画面のエクスポート機能）に切り替える。「SOQL」列が `○` のときはこの列より優先される |
 | **SOQL** | SOQL化済みで、同じ管理番号の `SoqlReport` が登録されているなら `○`。取得実行側はSOQL経由に切り替える（「2000件超」列より優先）。`○` なのに登録が無いと `SoqlReportNotRegisteredError` で止まる |
-| **備考** | 編集者の覚え書き（任意） |
+
+**グループ名・担当者・備考のような記録専用の列は、この宣言に含めていない。**
+comken は「宣言した列」だけを読み、それ以外の列は無視する。人が付け足したい
+記録用の列を、雛形にもとから入れておきたい場合だけ `column()` に足す（→
+[管理表（master_table）](master-table.md)）。
 
 ### Salesforce のレポート ID は入力させない
 
@@ -427,7 +430,7 @@ dedup 判定に使わない。スケジュール行に紐付かないレポー�
 別のタイミングでも起こしたいときは、直接呼んでもよい。
 
 ```python
-from comken.services.salesforce_downloader.latest_status import write_latest_status
+from comken.services.salesforce_downloader.sheets.latest_status import write_latest_status
 
 write_latest_status()  # 既定のパス（paths.LATEST_STATUS_PATH）へ書き出す
 ```
@@ -439,8 +442,8 @@ write_latest_status()  # 既定のパス（paths.LATEST_STATUS_PATH）へ書き�
 **定期実行の実装（`download_scheduled()` の呼び出し・実行時フィルタ・ブラウザ経由
 取得の指定・失敗時の扱い）は `Salesforceレポートダウンローダー` リポジトリにある。**
 comken 側に置くのは、そのプロジェクトが従う**管理表・履歴の形式**（このページの他の
-節）と、以下の「スケジュール管理表」（`schedule.py`）まで。「スケジュール」シート自体は
-**雛形生成を持たず、手で作る**運用にしている（列の意味は下表を参照）。
+節）と、以下の「スケジュール管理表」（`sheets/schedule.py`）まで。「スケジュール」シート
+自体は**雛形生成を持たず、手で作る**運用にしている（列の意味は下表を参照）。
 
 ### スケジュール管理表（曜日・時刻の振り分け）
 
@@ -487,7 +490,7 @@ Excel の生 dict から直接 `ScheduleRule` を組み立てることもでき�
 `load_schedule()` 経由で読むのが基本:
 
 ```python
-from comken.services.salesforce_downloader.schedule import load_schedule
+from comken.services.salesforce_downloader.sheets.schedule import load_schedule
 
 rules = load_schedule()  # 引数なしなら MASTER_PATH を自動で読む
 for rule in rules:
@@ -495,7 +498,16 @@ for rule in rules:
 ```
 
 **「スケジュール」シートは雛形生成を持たない。** 上の列定義表のとおり手で作る
-（`レポート管理表` と同じブックへ、シート名「スケジュール」で追加する）。
+（`レポート管理表` と同じブックへ、シート名「スケジュール」で追加する）。手で作った
+シートへドロップダウン（入力規則）だけ後から付けたい場合は
+`apply_schedule_dropdowns()` を使う（`取得頻度` / `曜日` / `有効` の3列が対象。
+列の位置ではなく見出し名で探すので、列の並び順は問わない）:
+
+```python
+from comken.services.salesforce_downloader.sheets.schedule import apply_schedule_dropdowns
+
+apply_schedule_dropdowns("レポート管理表.xlsx")
+```
 
 なお、 `ScheduleRule.from_row()` を直接呼ぶ使い方も引き続き可能
 （テストや、別のデータソースから組み立てるときに使う）:
@@ -503,7 +515,7 @@ for rule in rules:
 ```python
 from datetime import datetime
 
-from comken.services.salesforce_downloader.schedule import ScheduleRule
+from comken.services.salesforce_downloader.sheets.schedule import ScheduleRule
 
 rule = ScheduleRule.from_row(
     {

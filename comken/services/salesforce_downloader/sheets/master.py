@@ -1,4 +1,9 @@
-r"""comken/services/salesforce_downloader/master.py — レポート管理表の列を決める。
+r"""comken/services/salesforce_downloader/sheets/master.py — レポート管理表の列を決める。
+
+**`sheets/` には、ワークブック・CSVの「1枚（1ファイル）」ごとに、そこにある列と
+意味を宣言するモジュールを集めている**（`schedule.py` = スケジュールシート、
+`history.py` = 履歴CSV、`latest_status.py` = 最新ステータス）。Excel の読み書き
+そのものの仕組みは含めない（`report_master.py` など、`sheets/` の外に置く）。
 
 **このファイルにあるのは「社内の取り決め」だけ。** Excel を読む・検証する・雛形を作る
 仕組みは `comken.services.salesforce_downloader.report_master` にあり、ここは
@@ -41,13 +46,9 @@ logger = logging.getLogger(__name__)
 # 記入例（雛形に入れる）。2行目は別のレポートにする——同じ URL を並べると、
 # check が「同じレポートを指している」と報告してしまう
 _DOMAIN = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report"
-# 雛形に入れる「消してよい行」だと示すための備考。記入例2行の「備考」セルに書く
-_EXAMPLE_NOTE = "記入例です。使う前にこの行を消してください"
 EXAMPLES = [
     {
         "key": "1001",
-        "group_name": "営業事務グループ",
-        "assignee": "山田",
         "summary": "顧客一覧",
         "url": f"{_DOMAIN}/00O5g00000ABCDE/view",
         "folder": r"\\server\案件集計\input",
@@ -55,12 +56,9 @@ EXAMPLES = [
         "allow_empty": False,  # 普段はデータがあるが、念のため「×」（既定）
         "exceeds_row_limit": False,  # 2000行に収まる通常のレポート（既定）
         "use_soql": False,  # Report API のまま（既定）
-        "note": _EXAMPLE_NOTE,
     },
     {
         "key": "1002",
-        "group_name": "経理グループ",
-        "assignee": "佐藤",
         "summary": "売上実績",
         "url": f"{_DOMAIN}/00O5g00000FGHIJ/view",
         "folder": r"\\server\売上帳票\input",
@@ -68,7 +66,6 @@ EXAMPLES = [
         "allow_empty": True,  # 「該当データ無し」が普通に起きるレポートの例
         "exceeds_row_limit": False,
         "use_soql": False,
-        "note": _EXAMPLE_NOTE,
     },
 ]
 
@@ -93,18 +90,6 @@ class ReportEntry(MasterRow):
         help="社内で決める管理番号。Salesforce のレポート ID ではありません。"
         "参照先のレポートを差し替えても、この番号は変えません。"
         "前ゼロ（0001 など）や記号入りの値も使えます",
-    )
-    # **記録専用列。** comken の判定・パス決定・スケジュール判定には一切関与しない
-    # （誰がどの部署で担当しているかを残しておくだけが役目）。`choices` を付けない
-    # のは、グループ名・担当者は部署の事情で増減するため
-    group_name: str = column(
-        "グループ名",
-        help="このレポートを管理している社内の部署・グループ名。"
-        "記録用（comken の動作には使わない）",
-    )
-    assignee: str = column(
-        "担当者",
-        help="このレポートの担当者名。記録用（comken の動作には使わない）",
     )
     summary: str = column(
         "概要", help="人が読んで何のレポートか分かる説明。保存するファイル名にも使われます"
@@ -169,13 +154,6 @@ class ReportEntry(MasterRow):
         help="SOQL化済みで、同じ管理番号のSOQL定義が"
         "comken.services.salesforce_downloader.soql_reports に登録されているなら「○」。"
         "取得実行側はSOQL経由に切り替えます（「2000件超」列より優先）",
-    )
-    # いちばん右に置く（読み取りに使う列の後ろ）。業務側の覚え書き用。
-    # 既定値 `""`（書かなくてよい列）。
-    note: str = column(
-        "備考",
-        default="",
-        help="編集者の覚え書き。空のままで構いません",
     )
 
     @property

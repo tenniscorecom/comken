@@ -1,4 +1,8 @@
-"""comken/services/salesforce_downloader/history.py — ダウンロード履歴の読み取りと形式。
+"""comken/services/salesforce_downloader/sheets/history.py — 履歴CSVの列と、その読み取り。
+
+**`sheets/` には、ワークブック・CSVの「1枚（1ファイル）」ごとに、そこにある列と
+意味を宣言するモジュールを集めている**（`master.py` = レポート管理表シート、
+`schedule.py` = スケジュールシート、`latest_status.py` = 最新ステータス）。
 
 **書き込みは 2026-09 に comken の外（Salesforceレポートダウンローダー）へ
 切り出した。** ここに残っているのは「履歴CSVの列・1行の形（`COLUMNS` /

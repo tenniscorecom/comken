@@ -1,4 +1,4 @@
-"""comken/services/salesforce_downloader/latest_status.py — 全レポートの最新実行結果（Excel）。
+"""comken/services/salesforce_downloader/sheets/latest_status.py — 最新実行結果（Excel）。
 
 `download_scheduled()` のあとに、管理表の全レポートについて履歴 CSV から
 最新（実行日時が最大）の行を引いて、1 ファイルへ上書き生成する。
@@ -19,9 +19,9 @@ from openpyxl.styles import PatternFill
 from comken.constants import Color
 from comken.core.table.model import Table
 from comken.core.timer import measure
-from comken.services.salesforce_downloader import history
 from comken.services.salesforce_downloader import paths as _paths_module
-from comken.services.salesforce_downloader.master import load_master
+from comken.services.salesforce_downloader.sheets import history
+from comken.services.salesforce_downloader.sheets.master import load_master
 from comken.toolbox.excel import Excel
 
 logger = logging.getLogger(__name__)

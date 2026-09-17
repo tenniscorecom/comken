@@ -19,9 +19,14 @@ import comken.services.salesforce_downloader.paths as _paths_module
 from comken.constants import Color
 from comken.core.clock import now
 from comken.core.table.model import Table
-from comken.services.salesforce_downloader.history import COLUMNS, FAILURE, SUCCESS, HistoryRow
-from comken.services.salesforce_downloader.latest_status import write_latest_status
-from comken.services.salesforce_downloader.master import ReportEntry
+from comken.services.salesforce_downloader.sheets.history import (
+    COLUMNS,
+    FAILURE,
+    SUCCESS,
+    HistoryRow,
+)
+from comken.services.salesforce_downloader.sheets.latest_status import write_latest_status
+from comken.services.salesforce_downloader.sheets.master import ReportEntry
 from comken.toolbox.excel import Excel
 
 URL_A = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE/view"
@@ -90,14 +95,11 @@ def _record(path: Path, *, entry: ReportEntry, project: str, row: HistoryRow) ->
 def _entry(folder: Path, *, key: str, summary: str, url: str) -> ReportEntry:
     return ReportEntry(
         key=key,
-        group_name="営業事務グループ",
-        assignee="山田",
         summary=summary,
         url=url,
         folder=folder,
         enabled=True,
         allow_empty=False,
-        note="",
     )
 
 

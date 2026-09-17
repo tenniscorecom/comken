@@ -1,4 +1,4 @@
-"""comken.services.salesforce_downloader.master の ReportEntry 固有の列を検証する。
+"""comken.services.salesforce_downloader.sheets.master の ReportEntry 固有の列を検証する。
 
 汎用の MasterRow / column() 機構は tests/test_master_table.py 側でカバーする。
 ここでは ReportEntry に追加した列（`exceeds_row_limit` / `use_soql`）の読み取りと、
@@ -8,7 +8,7 @@
 from pathlib import Path
 
 from comken.core.table import Table
-from comken.services.salesforce_downloader.master import ReportEntry, load_master
+from comken.services.salesforce_downloader.sheets.master import ReportEntry, load_master
 from comken.toolbox.excel import Excel
 
 URL = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE/view"
@@ -111,14 +111,11 @@ class TestDirectConstruction:
     def test_defaults_when_omitted(self, tmp_path):
         entry = ReportEntry(
             key="1001",
-            group_name="営業事務グループ",
-            assignee="山田",
             summary="顧客一覧",
             url=URL,
             folder=tmp_path,
             enabled=True,
             allow_empty=False,
-            note="",
         )
         assert entry.exceeds_row_limit is False
         assert entry.use_soql is False

@@ -28,8 +28,8 @@ from comken.services.salesforce_downloader import (
     load_master,
 )
 from comken.services.salesforce_downloader import provider as provider_module
-from comken.services.salesforce_downloader.master import ReportEntry
 from comken.services.salesforce_downloader.provider import daily_cache_path_of
+from comken.services.salesforce_downloader.sheets.master import ReportEntry
 from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Excel
 

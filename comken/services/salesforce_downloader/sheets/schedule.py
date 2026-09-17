@@ -1,4 +1,9 @@
-"""comken/services/salesforce_downloader/schedule.py — 取得時刻を判定する。"""
+"""comken/services/salesforce_downloader/sheets/schedule.py — スケジュール列と取得時刻の判定。
+
+`sheets/` の他のファイルと同じく、**このファイルは「スケジュール」シートに何が
+あるか（`ScheduleRule`）と、その値を使った判定ロジックを持つ**。Excel を読む・
+雛形を作る仕組みは `report_master.py`（`sheets/` の外）にある。
+"""
 
 import datetime as dt
 import logging
@@ -16,6 +21,7 @@ from comken.core.holidays import (
 )
 from comken.exceptions import (
     DownloaderError,
+    ExcelFileNotFoundError,
     ScheduleDuplicateKeyError,
     ScheduleIntervalMissingError,
     ScheduleRequiredValueMissingError,
@@ -53,7 +59,32 @@ SCHEDULE_SHEET_NAME = "スケジュール"
 
 @dataclass(frozen=True)
 class ScheduleRule:
-    """取得スケジュール管理表の1行。"""
+    """「スケジュール」シートの1行。1行 = 1つの取得ルール。
+
+    列名（Excel 上の見出し）はフィールド名と異なるものがあるため、
+    `from_row()` が日本語の列名から読み替える。以下は実体（フィールド）ごとの
+    対応列名と意味。
+
+    Attributes:
+        schedule_key: 列「スケジュールキー」。このルールを一意に識別するキー。
+            履歴の「スケジュールキー」列に記録され、同じ行を同日に何度も
+            実行しないための dedup 判定にも使う。
+        report_key: 列「レポートキー」。対象のレポートの管理番号
+            （レポート管理表シートの ID と対応する）。
+        frequency: 列「取得頻度」。`FREQUENCY_HOURLY` / `FREQUENCY_DAILY` /
+            `FREQUENCY_WEEKLY` / `FREQUENCY_MONTHLY` のいずれか。
+        run_time: 列「取得時刻」。毎日・毎週・毎月・1時間ごとに共通の実行時刻
+            （1時間ごとのときは開始時刻を兼ねる）。空欄可。
+        interval_minutes: 列「取得間隔（分）」。`frequency` が1時間ごとのときだけ使う。
+        weekday: 列「曜日」。`frequency` が毎週のときだけ使う（0=月〜6=日）。
+        day_of_month: 列「日付」の一部。`frequency` が毎月かつ日付の数値指定
+            （1〜31）のときに入る。
+        month_end: 列「日付」の一部。`frequency` が毎月かつ「月末」指定のとき `True`。
+        nth_business_day: 列「日付」の一部。`frequency` が毎月かつ「第N営業日」
+            指定のときに入る。
+        holiday_policy: 列「祝日対応」。`HOLIDAY_SKIP`（既定）なら祝日はスキップする。
+        enabled: 列「有効」。`○`/`×`。無効な行は判定対象から外れる。
+    """
 
     schedule_key: str
     report_key: str
@@ -270,8 +301,83 @@ def load_schedule(path: str | Path | None = None) -> list[ScheduleRule]:
     return rules
 
 
+# 「スケジュール」シートの列のうち、ドロップダウン（入力規則）を付ける対象。
+# 値は選択肢のタプル。「祝日対応」は自由記述のため含めない（意図的。
+# 「取得しない」以外は「祝日でも取得する」という自由な表現を許すため）
+_SCHEDULE_DROPDOWN_CHOICES: dict[str, tuple[str, ...]] = {
+    "取得頻度": (FREQUENCY_HOURLY, FREQUENCY_DAILY, FREQUENCY_WEEKLY, FREQUENCY_MONTHLY),
+    "曜日": WEEKDAY_NAMES,
+    "有効": ("○", "×"),
+}
+
+# ドロップダウンを適用する行数（見出しの次の行から）。あとから行を足しても
+# 効くよう、十分な行数を確保する（雛形生成があった頃の既定値を踏襲）
+_DROPDOWN_ROW_COUNT = 1000
+
+
+def apply_schedule_dropdowns(path: str | Path) -> None:
+    """既存の「スケジュール」シートの列に、Excel のドロップダウン（入力規則）を付ける。
+
+    **シート自体は作らない。** 「スケジュール」シートは手で作る運用のため、
+    ここでは既にあるシートに対して入力規則だけを追加・上書きする。見出し行
+    （1行目）を読んで列位置を探すので、列の並び順は問わない
+    （`SCHEDULE_HEADERS_FULL` のような固定順を前提にしない）。
+
+    ドロップダウンを付けるのは `取得頻度` / `曜日` / `有効` の3列
+    （`_SCHEDULE_DROPDOWN_CHOICES` 参照）。`祝日対応` は自由記述のため対象外。
+    見出しに無い列・`_SCHEDULE_DROPDOWN_CHOICES` に無い列は無視する。
+
+    Args:
+        path: 「スケジュール」シートを持つ Excel ファイル（既存）。
+
+    Raises:
+        ExcelFileNotFoundError: ``path`` が存在しない場合。
+        SheetNotFoundError: 「スケジュール」シートが無い場合。
+    """
+    from openpyxl import load_workbook
+    from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.datavalidation import DataValidation
+
+    source = Path(path)
+    if not source.exists():
+        raise ExcelFileNotFoundError(source)
+    book = load_workbook(source)
+    if SCHEDULE_SHEET_NAME not in book.sheetnames:
+        raise SheetNotFoundError(SCHEDULE_SHEET_NAME, book.sheetnames)
+    sheet = book[SCHEDULE_SHEET_NAME]
+
+    last_row = 1 + _DROPDOWN_ROW_COUNT
+    applied = 0
+    header_row = next(sheet.iter_rows(min_row=1, max_row=1))
+    for column_index, cell in enumerate(header_row, start=1):
+        header = str(cell.value) if cell.value is not None else ""
+        choices = _SCHEDULE_DROPDOWN_CHOICES.get(header)
+        if choices is None:
+            continue
+        letter = get_column_letter(column_index)
+        validation = DataValidation(
+            type="list",
+            formula1=f'"{",".join(choices)}"',
+            allow_blank=header != "取得頻度",
+            showDropDown=False,
+            showErrorMessage=True,
+            errorTitle="書き方が違います",
+            error=f"『{'』か『'.join(choices)}』のいずれかを入力してください。",
+        )
+        validation.add(f"{letter}2:{letter}{last_row}")
+        sheet.add_data_validation(validation)
+        applied += 1
+
+    book.save(source)
+    book.close()
+    logger.debug(
+        "スケジュールシートへドロップダウンを適用しました: path=%s, 列数=%d", source, applied
+    )
+
+
 __all__ = [
     "ScheduleRule",
     "SCHEDULE_SHEET_NAME",
     "load_schedule",
+    "apply_schedule_dropdowns",
 ]

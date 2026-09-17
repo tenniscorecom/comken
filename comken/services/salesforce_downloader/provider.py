@@ -34,11 +34,11 @@ from comken.exceptions import (
     ReportDisabledError,
     ReportNotRegisteredError,
 )
-from comken.services.salesforce_downloader.master import (
+from comken.services.salesforce_downloader.paths import MASTER_PATH
+from comken.services.salesforce_downloader.sheets.master import (
     ReportEntry,
     load_master,
 )
-from comken.services.salesforce_downloader.paths import MASTER_PATH
 from comken.toolbox.csv import CSV
 
 logger = logging.getLogger(__name__)

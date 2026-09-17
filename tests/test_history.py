@@ -15,7 +15,7 @@ import pytest
 
 from comken.core.clock import now
 from comken.exceptions import HistoryHeaderMismatchError
-from comken.services.salesforce_downloader.history import (
+from comken.services.salesforce_downloader.sheets.history import (
     COLUMNS,
     FAILURE,
     SUCCESS,
@@ -25,7 +25,7 @@ from comken.services.salesforce_downloader.history import (
     successful_files_today,
     truncated_today,
 )
-from comken.services.salesforce_downloader.master import ReportEntry
+from comken.services.salesforce_downloader.sheets.master import ReportEntry
 
 
 def _write_row(path: Path, *, entry: ReportEntry, project: str, row: HistoryRow) -> None:
@@ -328,12 +328,9 @@ def _entry(folder: Path) -> ReportEntry:
     """各テストで同じ管理表1行を使う。"""
     return ReportEntry(
         key="1001",
-        group_name="営業事務グループ",
-        assignee="山田",
         summary="顧客一覧",
         url="https://example.com/Report/00O5g00000ABCDE/view",
         folder=folder,
         enabled=True,
         allow_empty=False,
-        note="",
     )

@@ -1,4 +1,4 @@
-"""``comken.services.salesforce_downloader.schedule.load_schedule`` を検証する。
+"""``comken.services.salesforce_downloader.sheets.schedule.load_schedule`` を検証する。
 
 `ScheduleRule.from_row()` のパース挙動は ``tests/test_schedule.py`` で担保する
 （既存テストを壊さない）。ここでは**「Excel から読んで ScheduleRule のリストにする」**
@@ -17,7 +17,7 @@ from comken.exceptions import (
     ScheduleRowValueError,
     ScheduleWeekdayInvalidError,
 )
-from comken.services.salesforce_downloader.schedule import (
+from comken.services.salesforce_downloader.sheets.schedule import (
     SCHEDULE_SHEET_NAME,
     ScheduleRule,
     load_schedule,
