@@ -35,6 +35,8 @@ r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポー�
     downloaded_today      指定した管理番号が今日すでに成功しているかを履歴から調べる
     browser_site_for      レポートAPIの2000行上限を超える場合の最終手段（ブラウザ経由）。
                           URLから組織のブラウザサイトクラスを返す
+    build_destination     ブラウザ版exportの保存先を base/担当者/概要/レポート名.拡張子
+                          の形で組み立てる（グループごとにbaseが変わる運用向け）
 
 **「今すぐ取りに行く」APIは無い。** 急ぎの取得は権限を持つ人が Salesforce から
 手動ダウンロードするか、`download_scheduled()` をスケジュール外で直接実行する
@@ -91,6 +93,7 @@ comken 本体側の共有例外（`ComkenError` / `SalesforceReportIDNotFoundErr
 `selenium` もロードされる。
 """
 
+from comken.services.salesforce_downloader.browser_paths import build_destination
 from comken.services.salesforce_downloader.master import (
     ReportEntry,
     load_master,
@@ -110,6 +113,7 @@ __all__ = [
     "ReportEntry",
     "ScheduleRule",
     "browser_site_for",
+    "build_destination",
 ]
 
 # 遅延 import する対象。値はその属性が定義されているサブモジュールの絶対パス。

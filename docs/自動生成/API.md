@@ -6801,6 +6801,33 @@ def is_due(self, now: dt.datetime, *, holidays: set[dt.date] | frozenset[dt.date
 
 定義を解決できませんでした。
 
+### `build_destination`
+
+```text
+def build_destination(base_by_group: Mapping[str, str | Path], group_name: str, assignee: str, summary: str, report_name: str, *, export_format: str='csv') -> Path:
+```
+
+#### 説明
+
+保存先を ``base/担当者/概要/レポート名.拡張子`` の形で組み立てる。
+
+ベースパスはグループごとに変わる運用のため、呼び出し側が
+``{グループ名: ベースパス}`` の対応表を渡す。
+
+Args:
+    base_by_group: ``{グループ名: 保存先のベースパス}`` の対応表。
+    group_name: 保存先のベースを決めるグループ名。
+    assignee: 担当者名。フォルダ名になる。
+    summary: レポートの概要。フォルダ名になる。
+    report_name: レポート名。ファイル名になる（拡張子は付けない）。
+    export_format: ファイルの拡張子。既定は "csv"。
+
+Returns:
+    組み立てた保存先パス（``pathlib.Path``）。
+
+Raises:
+    ValueError: ``group_name`` が ``base_by_group`` に登録されていない場合。
+
 
 ## `from comken.services.salesforce_downloader.soql_reports import ...`
 
