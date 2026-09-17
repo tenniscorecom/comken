@@ -5006,12 +5006,13 @@ HTTPステータス自体は200で返るが、本文がCSV/XLSではなくHTML�
 エラーページになっている場合に出る。
 
 発生箇所: comken.toolbox.browser.sites.salesforce.Salesforce.export_reports()
-         （login_with_token() で確立したブラウザのセッションCookieを
-         requestsへ引き継いで並列ダウンロードする経路。login_with_token()を
-         先に呼んでいない、あるいはセッションの有効期限が切れていると起きる）
+         （go_login() + wait_for_manual_login() で確立したブラウザのセッション
+         Cookieをrequestsへ引き継いで並列ダウンロードする経路。ログインを
+         済ませていない、あるいはセッションの有効期限が切れていると起きる）
 
 対処:
-    1. login_with_token() を呼んでからこのメソッドを呼んでいるか確認する
+    1. go_login() + wait_for_manual_login() でログインを済ませてから
+       export_reports() を呼んでいるか確認する
     2. 時間が経ってセッションが切れていないか（長時間のバッチの後半で
        発生する場合はこれが疑わしい）
     3. レポートそのものへのアクセス権・組織の Edition を確認してもらう
@@ -9437,19 +9438,14 @@ class Salesforce(SiteBase):
 
 Salesforceのレポートをブラウザ経由でCSVダウンロードするための雛形。
 
-URL や認証は example の値のまま。利用プロジェクト側で継承して書き換える
+URL は example の値のまま。利用プロジェクト側で継承して書き換える
 （BASE_URL を実際の組織の My Domain URL へ）。
 
-ログイン方法は2通り:
+ログインは ``go_login()`` + ``wait_for_manual_login()`` で人が手動で行う
+（接続アプリの登録・OAuth初回認可を挟まないため、一時的に使いたいだけの
+ときに手早い。MFAもそのままブラウザで入力できる）。
 
-- ``login_with_token()`` — comken.toolbox.salesforce で取得したOAuthアクセス
-  トークンを渡すだけで、frontdoor.jsp 経由でログイン状態を確立する
-  （MFAの手間が無い代わりに、Salesforce側の接続アプリ登録・初回認可が要る）
-- ``go_login()`` + ``wait_for_manual_login()`` — 接続アプリの登録を挟まず、
-  人がブラウザでID/パスワード/MFAを手動入力する。一時的に使いたいだけの
-  ときに手早い
-
-**手動ログインを使い回すには OPTIONS.PROFILE_ROOT を設定すること。**
+**ログインを使い回すには OPTIONS.PROFILE_ROOT を設定すること。**
 未設定だと起動のたびにまっさらなプロファイルになり、毎回ログインし直しになる
 （`docs/browser.md` の「ログイン状態を残す」を参照）:
 
@@ -9465,21 +9461,6 @@ URL や認証は example の値のまま。利用プロジェクト側で継承�
         for report_id, path in sf.export_reports(report_urls, "出力先"):
             ...
 
-#### `login_with_token`
-
-```text
-def login_with_token(self, access_token: str, instance_url: str | None=None) -> None:
-```
-
-##### 説明
-
-OAuthアクセストークンでブラウザのログイン状態を確立する（frontdoor.jsp）。
-
-Args:
-    access_token: comken.toolbox.salesforce 側で取得したOAuthアクセストークン
-        （Salesforceのセッションidを兼ねる）。
-    instance_url: 組織のインスタンスURL。省略時は BASE_URL を使う。
-
 #### `go_login`
 
 ```text
@@ -9490,9 +9471,7 @@ def go_login(self) -> None:
 
 ログイン画面を開く。ID/パスワード/MFAは人がブラウザで手動入力する想定。
 
-``login_with_token()`` と違い、Salesforce側の接続アプリ登録・OAuth初回認可
-を挟まない。一時的に使いたいだけのときに使う。ログイン後は
-``wait_for_manual_login()`` を呼ぶこと。
+ログイン後は ``wait_for_manual_login()`` を呼ぶこと。
 
 #### `wait_for_manual_login`
 
@@ -9516,14 +9495,15 @@ def export_reports(self, report_urls: Sequence[str], directory: str | Path, *, e
 
 ##### 説明
 
-``login_with_token()`` 済みのセッションCookieを requests へ引き継ぎ、
+ログイン済みのブラウザのセッションCookieを requests へ引き継ぎ、
 並列にダウンロードして (report_id, 保存先パス) を返す。
 
-ブラウザは認証の確立（``login_with_token()``）だけに使い、N件の
-ダウンロード自体は requests + ThreadPoolExecutor で並列に行う。
+ブラウザはログインの確立だけに使い、N件のダウンロード自体は
+requests + ThreadPoolExecutor で並列に行う。
 
     with Salesforce() as sf:
-        sf.login_with_token(access_token, instance_url)
+        sf.go_login()
+        sf.wait_for_manual_login()
         for report_id, path in sf.export_reports(report_urls, "出力先"):
             ...
 
@@ -9538,11 +9518,10 @@ Args:
     keep_alive_url: ダウンロード中、この間隔でブラウザに開かせ続ける
         軽いページのURL（例: 0件のレポート）。省略時は何もしない。
         件数が多くダウンロードに時間がかかる場合、ブラウザ自体は
-        ``login_with_token()`` 以降なにも操作していないため、途中で
-        Salesforce側のセッションが切れて ``SalesforceReportExportError``
-        になることがある。その暫定対処として指定する
-        （恒久対処ではない。根本的にはSalesforce管理者にセッション
-        タイムアウトの設定を確認してもらうのが筋）。
+        ログイン後なにも操作していないため、途中でSalesforce側の
+        セッションが切れて ``SalesforceReportExportError`` になることが
+        ある。その暫定対処として指定する（恒久対処ではない。根本的には
+        Salesforce管理者にセッションタイムアウトの設定を確認してもらうのが筋）。
     keep_alive_interval: ``keep_alive_url`` を開く間隔（秒）。既定300秒（5分）。
 
 Yields:
@@ -9551,10 +9530,10 @@ Yields:
     **完了した順**に返るため、``report_urls`` の順序とは限らない。
 
 Raises:
-    SiteNotStartedError: 未起動、または ``login_with_token()`` を呼ぶ前の場合。
+    SiteNotStartedError: 未起動の場合。
     SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
     SalesforceReportExportError: いずれかのレポートでエクスポートが失敗した場合
-        （``login_with_token()`` 未実行・セッション切れ等）。
+        （ログイン未実行・セッション切れ等）。
 
 
 ## `from comken.toolbox.browser.sites.ams import ...`
@@ -9934,19 +9913,14 @@ class Salesforce(SiteBase):
 
 Salesforceのレポートをブラウザ経由でCSVダウンロードするための雛形。
 
-URL や認証は example の値のまま。利用プロジェクト側で継承して書き換える
+URL は example の値のまま。利用プロジェクト側で継承して書き換える
 （BASE_URL を実際の組織の My Domain URL へ）。
 
-ログイン方法は2通り:
+ログインは ``go_login()`` + ``wait_for_manual_login()`` で人が手動で行う
+（接続アプリの登録・OAuth初回認可を挟まないため、一時的に使いたいだけの
+ときに手早い。MFAもそのままブラウザで入力できる）。
 
-- ``login_with_token()`` — comken.toolbox.salesforce で取得したOAuthアクセス
-  トークンを渡すだけで、frontdoor.jsp 経由でログイン状態を確立する
-  （MFAの手間が無い代わりに、Salesforce側の接続アプリ登録・初回認可が要る）
-- ``go_login()`` + ``wait_for_manual_login()`` — 接続アプリの登録を挟まず、
-  人がブラウザでID/パスワード/MFAを手動入力する。一時的に使いたいだけの
-  ときに手早い
-
-**手動ログインを使い回すには OPTIONS.PROFILE_ROOT を設定すること。**
+**ログインを使い回すには OPTIONS.PROFILE_ROOT を設定すること。**
 未設定だと起動のたびにまっさらなプロファイルになり、毎回ログインし直しになる
 （`docs/browser.md` の「ログイン状態を残す」を参照）:
 
@@ -9962,21 +9936,6 @@ URL や認証は example の値のまま。利用プロジェクト側で継承�
         for report_id, path in sf.export_reports(report_urls, "出力先"):
             ...
 
-#### `login_with_token`
-
-```text
-def login_with_token(self, access_token: str, instance_url: str | None=None) -> None:
-```
-
-##### 説明
-
-OAuthアクセストークンでブラウザのログイン状態を確立する（frontdoor.jsp）。
-
-Args:
-    access_token: comken.toolbox.salesforce 側で取得したOAuthアクセストークン
-        （Salesforceのセッションidを兼ねる）。
-    instance_url: 組織のインスタンスURL。省略時は BASE_URL を使う。
-
 #### `go_login`
 
 ```text
@@ -9987,9 +9946,7 @@ def go_login(self) -> None:
 
 ログイン画面を開く。ID/パスワード/MFAは人がブラウザで手動入力する想定。
 
-``login_with_token()`` と違い、Salesforce側の接続アプリ登録・OAuth初回認可
-を挟まない。一時的に使いたいだけのときに使う。ログイン後は
-``wait_for_manual_login()`` を呼ぶこと。
+ログイン後は ``wait_for_manual_login()`` を呼ぶこと。
 
 #### `wait_for_manual_login`
 
@@ -10013,14 +9970,15 @@ def export_reports(self, report_urls: Sequence[str], directory: str | Path, *, e
 
 ##### 説明
 
-``login_with_token()`` 済みのセッションCookieを requests へ引き継ぎ、
+ログイン済みのブラウザのセッションCookieを requests へ引き継ぎ、
 並列にダウンロードして (report_id, 保存先パス) を返す。
 
-ブラウザは認証の確立（``login_with_token()``）だけに使い、N件の
-ダウンロード自体は requests + ThreadPoolExecutor で並列に行う。
+ブラウザはログインの確立だけに使い、N件のダウンロード自体は
+requests + ThreadPoolExecutor で並列に行う。
 
     with Salesforce() as sf:
-        sf.login_with_token(access_token, instance_url)
+        sf.go_login()
+        sf.wait_for_manual_login()
         for report_id, path in sf.export_reports(report_urls, "出力先"):
             ...
 
@@ -10035,11 +9993,10 @@ Args:
     keep_alive_url: ダウンロード中、この間隔でブラウザに開かせ続ける
         軽いページのURL（例: 0件のレポート）。省略時は何もしない。
         件数が多くダウンロードに時間がかかる場合、ブラウザ自体は
-        ``login_with_token()`` 以降なにも操作していないため、途中で
-        Salesforce側のセッションが切れて ``SalesforceReportExportError``
-        になることがある。その暫定対処として指定する
-        （恒久対処ではない。根本的にはSalesforce管理者にセッション
-        タイムアウトの設定を確認してもらうのが筋）。
+        ログイン後なにも操作していないため、途中でSalesforce側の
+        セッションが切れて ``SalesforceReportExportError`` になることが
+        ある。その暫定対処として指定する（恒久対処ではない。根本的には
+        Salesforce管理者にセッションタイムアウトの設定を確認してもらうのが筋）。
     keep_alive_interval: ``keep_alive_url`` を開く間隔（秒）。既定300秒（5分）。
 
 Yields:
@@ -10048,10 +10005,10 @@ Yields:
     **完了した順**に返るため、``report_urls`` の順序とは限らない。
 
 Raises:
-    SiteNotStartedError: 未起動、または ``login_with_token()`` を呼ぶ前の場合。
+    SiteNotStartedError: 未起動の場合。
     SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
     SalesforceReportExportError: いずれかのレポートでエクスポートが失敗した場合
-        （``login_with_token()`` 未実行・セッション切れ等）。
+        （ログイン未実行・セッション切れ等）。
 
 
 ## `from comken.toolbox.credentials import ...`
@@ -11814,32 +11771,6 @@ REST API のバージョン付きパスを組み立てる。
 
     sf.request("GET", sf.data_path("/limits"))
 
-#### `access_token`
-
-```text
-@property
-def access_token(self) -> str:
-```
-
-##### 説明
-
-今使っているOAuthアクセストークン。
-
-REST API（Bearer認証）以外の経路へ引き継ぐときに使う
-（例: comken.toolbox.browser.sites.salesforce.Salesforce.login_with_token()
-での実ブラウザ経由ダウンロード）。
-
-#### `instance_url`
-
-```text
-@property
-def instance_url(self) -> str:
-```
-
-##### 説明
-
-今つながっている組織のインスタンスURL。
-
 ### `SolutionSandbox`
 
 ```text
@@ -12154,32 +12085,6 @@ REST API のバージョン付きパスを組み立てる。
 ライブラリに無い API を request() で叩くときに使う。
 
     sf.request("GET", sf.data_path("/limits"))
-
-#### `access_token`
-
-```text
-@property
-def access_token(self) -> str:
-```
-
-##### 説明
-
-今使っているOAuthアクセストークン。
-
-REST API（Bearer認証）以外の経路へ引き継ぐときに使う
-（例: comken.toolbox.browser.sites.salesforce.Salesforce.login_with_token()
-での実ブラウザ経由ダウンロード）。
-
-#### `instance_url`
-
-```text
-@property
-def instance_url(self) -> str:
-```
-
-##### 説明
-
-今つながっている組織のインスタンスURL。
 
 ### `site_for`
 

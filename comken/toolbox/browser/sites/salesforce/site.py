@@ -4,11 +4,9 @@ Reports and Dashboards REST APIの2000行上限を超えるレポート（マト
 SOQLに書き換えられない形式）向けの最終手段。画面のエクスポート機能
 （``?export=1&xf=csv``）を直接叩く。
 
-requestsだけで frontdoor.jsp ログインを試みるとログイン画面へリダイレクトされ、
-通らない組織があることを確認済み（セッションセキュリティレベル等）。そのため
-認証の確立だけ実ブラウザ（Selenium）で行い、``login_with_token()`` が確立した
-セッションCookieを requests へ引き継いで、実際のN件のダウンロードは
-requests + ThreadPoolExecutor で並列に行う。
+ログインは人が手動で行う（``go_login()`` + ``wait_for_manual_login()``）。
+接続アプリの登録・OAuth初回認可を挟まないため、一時的に使いたいだけのときに手早い。
+ログインさえ済めば、実際のN件のダウンロードは requests + ThreadPoolExecutor で並列に行う。
 
 レポートIDの抽出は comken.toolbox.salesforce.report.report_id_from_url() をそのまま使う
 （toolbox.browser → toolbox.salesforce は tests/test_layers.py の ALLOWED_SAME_LAYER で
@@ -54,19 +52,14 @@ _DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS = 300
 class Salesforce(SiteBase):
     """Salesforceのレポートをブラウザ経由でCSVダウンロードするための雛形。
 
-    URL や認証は example の値のまま。利用プロジェクト側で継承して書き換える
+    URL は example の値のまま。利用プロジェクト側で継承して書き換える
     （BASE_URL を実際の組織の My Domain URL へ）。
 
-    ログイン方法は2通り:
+    ログインは ``go_login()`` + ``wait_for_manual_login()`` で人が手動で行う
+    （接続アプリの登録・OAuth初回認可を挟まないため、一時的に使いたいだけの
+    ときに手早い。MFAもそのままブラウザで入力できる）。
 
-    - ``login_with_token()`` — comken.toolbox.salesforce で取得したOAuthアクセス
-      トークンを渡すだけで、frontdoor.jsp 経由でログイン状態を確立する
-      （MFAの手間が無い代わりに、Salesforce側の接続アプリ登録・初回認可が要る）
-    - ``go_login()`` + ``wait_for_manual_login()`` — 接続アプリの登録を挟まず、
-      人がブラウザでID/パスワード/MFAを手動入力する。一時的に使いたいだけの
-      ときに手早い
-
-    **手動ログインを使い回すには OPTIONS.PROFILE_ROOT を設定すること。**
+    **ログインを使い回すには OPTIONS.PROFILE_ROOT を設定すること。**
     未設定だと起動のたびにまっさらなプロファイルになり、毎回ログインし直しになる
     （`docs/browser.md` の「ログイン状態を残す」を参照）:
 
@@ -87,23 +80,10 @@ class Salesforce(SiteBase):
     BASE_URL = "https://example.my.salesforce.com"
     OWNER = "comken"
 
-    def login_with_token(self, access_token: str, instance_url: str | None = None) -> None:
-        """OAuthアクセストークンでブラウザのログイン状態を確立する（frontdoor.jsp）。
-
-        Args:
-            access_token: comken.toolbox.salesforce 側で取得したOAuthアクセストークン
-                （Salesforceのセッションidを兼ねる）。
-            instance_url: 組織のインスタンスURL。省略時は BASE_URL を使う。
-        """
-        domain = (instance_url or self.BASE_URL).rstrip("/")
-        self._require_session().open(f"{domain}/secur/frontdoor.jsp?sid={access_token}")
-
     def go_login(self) -> None:
         """ログイン画面を開く。ID/パスワード/MFAは人がブラウザで手動入力する想定。
 
-        ``login_with_token()`` と違い、Salesforce側の接続アプリ登録・OAuth初回認可
-        を挟まない。一時的に使いたいだけのときに使う。ログイン後は
-        ``wait_for_manual_login()`` を呼ぶこと。
+        ログイン後は ``wait_for_manual_login()`` を呼ぶこと。
         """
         self._require_session().open(self.BASE_URL)
 
@@ -127,14 +107,15 @@ class Salesforce(SiteBase):
         keep_alive_url: str | None = None,
         keep_alive_interval: float = _DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS,
     ) -> Iterator[tuple[str, Path]]:
-        """``login_with_token()`` 済みのセッションCookieを requests へ引き継ぎ、
+        """ログイン済みのブラウザのセッションCookieを requests へ引き継ぎ、
         並列にダウンロードして (report_id, 保存先パス) を返す。
 
-        ブラウザは認証の確立（``login_with_token()``）だけに使い、N件の
-        ダウンロード自体は requests + ThreadPoolExecutor で並列に行う。
+        ブラウザはログインの確立だけに使い、N件のダウンロード自体は
+        requests + ThreadPoolExecutor で並列に行う。
 
             with Salesforce() as sf:
-                sf.login_with_token(access_token, instance_url)
+                sf.go_login()
+                sf.wait_for_manual_login()
                 for report_id, path in sf.export_reports(report_urls, "出力先"):
                     ...
 
@@ -149,11 +130,10 @@ class Salesforce(SiteBase):
             keep_alive_url: ダウンロード中、この間隔でブラウザに開かせ続ける
                 軽いページのURL（例: 0件のレポート）。省略時は何もしない。
                 件数が多くダウンロードに時間がかかる場合、ブラウザ自体は
-                ``login_with_token()`` 以降なにも操作していないため、途中で
-                Salesforce側のセッションが切れて ``SalesforceReportExportError``
-                になることがある。その暫定対処として指定する
-                （恒久対処ではない。根本的にはSalesforce管理者にセッション
-                タイムアウトの設定を確認してもらうのが筋）。
+                ログイン後なにも操作していないため、途中でSalesforce側の
+                セッションが切れて ``SalesforceReportExportError`` になることが
+                ある。その暫定対処として指定する（恒久対処ではない。根本的には
+                Salesforce管理者にセッションタイムアウトの設定を確認してもらうのが筋）。
             keep_alive_interval: ``keep_alive_url`` を開く間隔（秒）。既定300秒（5分）。
 
         Yields:
@@ -162,10 +142,10 @@ class Salesforce(SiteBase):
             **完了した順**に返るため、``report_urls`` の順序とは限らない。
 
         Raises:
-            SiteNotStartedError: 未起動、または ``login_with_token()`` を呼ぶ前の場合。
+            SiteNotStartedError: 未起動の場合。
             SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
             SalesforceReportExportError: いずれかのレポートでエクスポートが失敗した場合
-                （``login_with_token()`` 未実行・セッション切れ等）。
+                （ログイン未実行・セッション切れ等）。
         """
         session = self._require_session()
         domain = _domain_of(session.current_url)
@@ -245,8 +225,7 @@ def _domain_of(url: str) -> str:
 def _cookies_to_requests_session(driver_cookies: list[dict]) -> requests.Session:
     """Seleniumの driver.get_cookies() を requests.Session の Cookie へ移す。
 
-    login_with_token() で実ブラウザが確立したセッションを、requests 側でも
-    そのまま使えるようにする。
+    ブラウザで確立したログインセッションを、requests 側でもそのまま使えるようにする。
     """
     http_session = requests.Session()
     for cookie in driver_cookies:

@@ -266,12 +266,13 @@ class SalesforceReportExportError(SalesforceError):
     エラーページになっている場合に出る。
 
     発生箇所: comken.toolbox.browser.sites.salesforce.Salesforce.export_reports()
-             （login_with_token() で確立したブラウザのセッションCookieを
-             requestsへ引き継いで並列ダウンロードする経路。login_with_token()を
-             先に呼んでいない、あるいはセッションの有効期限が切れていると起きる）
+             （go_login() + wait_for_manual_login() で確立したブラウザのセッション
+             Cookieをrequestsへ引き継いで並列ダウンロードする経路。ログインを
+             済ませていない、あるいはセッションの有効期限が切れていると起きる）
 
     対処:
-        1. login_with_token() を呼んでからこのメソッドを呼んでいるか確認する
+        1. go_login() + wait_for_manual_login() でログインを済ませてから
+           export_reports() を呼んでいるか確認する
         2. 時間が経ってセッションが切れていないか（長時間のバッチの後半で
            発生する場合はこれが疑わしい）
         3. レポートそのものへのアクセス権・組織の Edition を確認してもらう
@@ -282,8 +283,8 @@ class SalesforceReportExportError(SalesforceError):
             f"レポートのエクスポートに失敗しました: {report_id}"
             f"（HTTP {status_code}、Content-Type={content_type!r}）\n"
             "CSV/XLSではなくHTML（ログイン画面やエラーページ）が返っています。\n"
-            "login_with_token() を先に呼んでいるか、セッションが切れていないかを"
-            "確認してください。"
+            "go_login() + wait_for_manual_login() でログインを済ませているか、"
+            "セッションが切れていないかを確認してください。"
         )
 
 

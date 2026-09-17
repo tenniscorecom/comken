@@ -52,36 +52,6 @@ class TestPublicApi:
 # （comken.toolbox.salesforce.report をそのまま使っているだけなので、ここでは複製しない）。
 
 
-class TestLoginWithToken:
-    """login_with_token() — frontdoor.jsp でブラウザのログイン状態を確立する。"""
-
-    def test_opens_frontdoor_jsp_with_token(self, tmp_path):
-        session = _make_session(tmp_path)
-        sf = Salesforce(session)
-
-        sf.login_with_token("MY_TOKEN", instance_url="https://org.my.salesforce.com")
-
-        session._driver.get.assert_called_once_with(
-            "https://org.my.salesforce.com/secur/frontdoor.jsp?sid=MY_TOKEN"
-        )
-
-    def test_falls_back_to_base_url_when_instance_url_omitted(self, tmp_path):
-        session = _make_session(tmp_path)
-        sf = Salesforce(session)
-
-        sf.login_with_token("MY_TOKEN")
-
-        session._driver.get.assert_called_once_with(
-            f"{Salesforce.BASE_URL}/secur/frontdoor.jsp?sid=MY_TOKEN"
-        )
-
-    def test_raises_when_not_started(self):
-        sf = Salesforce()
-
-        with pytest.raises(SiteNotStartedError):
-            sf.login_with_token("MY_TOKEN")
-
-
 class TestGoLogin:
     """go_login() — 人が手動でログインする画面を開く。"""
 

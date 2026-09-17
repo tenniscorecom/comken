@@ -272,40 +272,39 @@ with site() as sf:
 足りるかを先に確かめること。使うのは
 `comken.toolbox.browser.sites.salesforce.Salesforce`。
 
-> [!warning] requests だけの認証は組織によって通らないことを確認済み
+> [!warning] requests だけでのセッション確立は組織によって通らないことを確認済み
 > `requests` で frontdoor.jsp にアクセストークンを渡すだけでセッションを
 > 確立しようとすると、ログイン画面へリダイレクトされて通らない組織がある
 > （2026-09-17 実機確認。考えられる原因はセッションセキュリティレベル・
-> 接続アプリのOAuthスコープ・ログインIP制限の不一致など）。REST API自体は
-> 同じアクセストークンで正常に通るため、トークンは有効。**「requests単体での
-> セッション確立」だけが弾かれる。**
+> 接続アプリのOAuthスコープ・ログインIP制限の不一致など）。そのため
+> `Salesforce` は**ログインの確立を実ブラウザ（Selenium）で行う**。
 >
-> そのため `Salesforce` は**認証の確立だけ実ブラウザ（Selenium）で行う**。
-> `login_with_token()` が実ブラウザで frontdoor.jsp を叩いてログインし、
-> 確立したセッションCookieを `export_reports()` が requests へ引き継いで、
-> 実際のN件のダウンロードは `ThreadPoolExecutor` で並列に投げる。
-> ブラウザの起動は認証確立の1回だけで済む。
+> `go_login()` + `wait_for_manual_login()` で人が手動でログイン（MFAも含めて
+> ブラウザでそのまま入力する）し、確立したセッションCookieを
+> `export_reports()` が requests へ引き継いで、実際のN件のダウンロードは
+> `ThreadPoolExecutor` で並列に投げる。ブラウザの起動は最初のログイン確立の
+> ときだけで済む。接続アプリの登録・OAuth初回認可を挟まないため、
+> 一時的に使いたいだけのときに手早い。
 >
-> ダウンロードに時間がかかる場合、ブラウザ自体は `login_with_token()` 以降
-> なにも操作しないため、途中でSalesforce側のセッションが切れて
-> `SalesforceReportExportError` になることがある。その暫定対処として
-> `keep_alive_url`（軽いレポートなどを一定間隔で開き直す）を渡せる。
+> ダウンロードに時間がかかる場合、ブラウザ自体はログイン後なにも操作しない
+> ため、途中でSalesforce側のセッションが切れて `SalesforceReportExportError`
+> になることがある。その暫定対処として `keep_alive_url`（軽いレポートなどを
+> 一定間隔で開き直す）を渡せる。
 
 ```python
 from comken.toolbox.browser.sites.salesforce import Salesforce
 
 with Salesforce() as sf:
-    sf.login_with_token(access_token, instance_url)
+    sf.go_login()
+    sf.wait_for_manual_login()
     for report_id, path in sf.export_reports(report_urls, "出力先"):
         ...
 ```
 
-**接続アプリの登録を挟まず一時的に使いたいだけなら、`go_login()` +
-`wait_for_manual_login()` で人が手動ログインする経路もある**（MFAもそのまま
-ブラウザで入力できる）。ログイン状態を次回起動でも使い回すには
-`OPTIONS.PROFILE_ROOT` を設定すること（未設定だと起動のたびにまっさらな
-プロファイルになり、毎回ログインし直しになる）。詳しくは `Salesforce` クラスの
-docstring と `docs/browser.md` の「ログイン状態を残す」を参照。
+**ログイン状態を次回起動でも使い回すには `OPTIONS.PROFILE_ROOT` を設定すること**
+（未設定だと起動のたびにまっさらなプロファイルになり、毎回ログインし直しになる）。
+詳しくは `Salesforce` クラスの docstring と `docs/browser.md` の
+「ログイン状態を残す」を参照。
 
 ### レポート形式
 
