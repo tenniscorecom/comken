@@ -44,6 +44,13 @@ r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポー�
 （詳しくは docs/salesforce.md）。このパッケージ固有の機能ではなく、Salesforceに
 アクセスする他のサービスからも使える共有の仕組みとして toolbox 側に置いてある。
 
+`download_scheduled()` からは `browser_fetch_reports` で使う（**SOQL化が完了する
+までの暫定措置**）。どの管理番号をブラウザ経由にするかは呼び出し側（プロジェクト）が
+呼び出しごとに指定する。事前に人が一度だけ手動ログインしておく必要がある
+（詳しくは `service._fetch_via_browser()` を参照）:
+
+    download_scheduled(browser_fetch_reports=frozenset({SALES_RESULT}))
+
 管理表の検査はコマンドからも呼べる（保守用。業務の定期実行ではない）:
 
     python -m comken sfdl check

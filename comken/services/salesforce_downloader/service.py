@@ -108,6 +108,11 @@ RESERVE_PATH_LIMIT = 1000
 # 既定は空（全件API経由）。ブラウザ経由は要求ごとにログインの手間があるうえ、
 # 定期実行では PROFILE_ROOT に永続化した既存のログイン状態が前提になる
 # （事前に人が一度だけ手動ログインしておく。詳しくは _fetch_via_browser() を参照）。
+#
+# **どの管理番号が対象かは、ここではなく呼び出し側（プロジェクト）で決める。**
+# `download_scheduled(browser_fetch_reports={...})` で呼び出しごとに指定するのが
+# 通常の使い方（管理番号は各プロジェクトの事情で決まり、comken はそれを知る立場に
+# ない）。ここの値は `browser_fetch_reports` を省略したときだけ使われる既定値。
 BROWSER_FETCH_REPORT_KEYS: frozenset[str] = frozenset()
 
 
@@ -116,6 +121,7 @@ def download_scheduled(
     project: str = "定期実行",
     *,
     filters_by_report: dict[str, list[dict]] | None = None,
+    browser_fetch_reports: frozenset[str] | None = None,
 ) -> list[Path]:
     """管理表で有効なレポートをまとめて取得する。
 
@@ -127,6 +133,13 @@ def download_scheduled(
     URL やレポート ID ではなく管理番号をキーにするため、管理表で参照先を差し替えても
     呼び出し側のコードは変えなくてよい。
 
+    ``browser_fetch_reports`` は、SOQL化までの暫定でブラウザ経由取得に切り替える管理番号を
+    指定する（マトリックス／統合レポートなど、1区間でも 2000 行を超える・SOQL に書き換えられない
+    レポート向け）。**どの管理番号が対象かは呼び出し側（プロジェクト）が知っている事情なので、
+    comken 側に固定で書かない。** 省略時は comken 側の既定（`service.BROWSER_FETCH_REPORT_KEYS`、
+    既定は空）を使う。ブラウザ経由のレポートは事前に人が一度だけ手動ログインしておく必要がある
+    （詳しくは `_fetch_via_browser()` を参照）。
+
     **「スケジュール」シート**にこのレポートの行が無いときは、
     「有効」だけで毎回対象にする（後方互換）。
     この機能追加を境に既存のレポートが突然取得されなくなる事故を防ぐため。
@@ -135,9 +148,12 @@ def download_scheduled(
         project: 履歴の「プロジェクト」列へ残す呼び出し元の名前。
         filters_by_report: ``{管理番号: [Report APIフィルタ, ...]}``。各フィルタは
             ``{"column": ..., "operator": ..., "value": ...}`` の形で指定する。
+        browser_fetch_reports: ブラウザ経由取得に切り替える管理番号の集合。省略時は
+            comken 側の既定（`BROWSER_FETCH_REPORT_KEYS`）を使う。
 
     Raises:
-        ReportNotRegisteredError: ``filters_by_report`` に管理表未登録の管理番号がある場合。
+        ReportNotRegisteredError: ``filters_by_report`` / ``browser_fetch_reports`` に
+            管理表未登録の管理番号がある場合。
         ScheduledDownloadFailedError: 1件でも取得できなかった場合。**取得できたものは
             保存したうえで**送出する。ログだけに出して正常終了すると、スケジューラや
             RPA 基盤から見て成功と区別が付かない。
@@ -145,6 +161,8 @@ def download_scheduled(
     entries = load_master(MASTER_PATH)
     filters_by_report = filters_by_report or {}
     _validate_filters_by_report(filters_by_report, entries)
+    if browser_fetch_reports is not None:
+        _validate_browser_fetch_reports(browser_fetch_reports, entries)
     _warn_shared_reports(entries)
 
     # スケジュール管理表を読んで、レポートキーで引けるように索引化。**有効行だけ**を
@@ -182,6 +200,7 @@ def download_scheduled(
                     HISTORY_PATH,
                     schedule_key,
                     filters=filters_by_report.get(entry.key),
+                    browser_fetch_reports=browser_fetch_reports,
                 )
             )
         except (ComkenError, OSError) as e:
@@ -297,12 +316,13 @@ def _download(
     schedule_key: str = "",
     *,
     filters: list[dict] | None = None,
+    browser_fetch_reports: frozenset[str] | None = None,
 ) -> Path:
     """1件を取得して保存し、成否を履歴に残す。"""
     attempt = _Attempt(entry, project, history_path, schedule_key)
     try:
         _require_folder(entry)
-        table = _fetch(entry, filters)
+        table = _fetch(entry, filters, browser_fetch_reports=browser_fetch_reports)
         path = _save(entry, table)
         _update_daily_cache(entry, path)
     except Exception as exc:
@@ -334,18 +354,27 @@ def _require_folder(entry: ReportEntry) -> None:
         raise ReportFolderNotFoundError(entry.key, entry.folder)
 
 
-def _fetch(entry: ReportEntry, filters: list[dict] | None = None) -> Table:
+def _fetch(
+    entry: ReportEntry,
+    filters: list[dict] | None = None,
+    *,
+    browser_fetch_reports: frozenset[str] | None = None,
+) -> Table:
     """Salesforce へ問い合わせて明細表を返す。
 
     つなぐ組織は URL のドメインで決まる（`site_for()`）。管理表に組織を選ぶ列は
     作らない——人が選ぶ形にすると、URL と食い違ったときに別の組織へ問い合わせて
     「レポートが見つからない」という分かりにくい失敗になる。
 
-    `entry.key` が `BROWSER_FETCH_REPORT_KEYS` にあれば、ブラウザ経由
-    （`_fetch_via_browser()`）に切り替える（SOQL化までの暫定措置）。この場合
-    `filters` は使えない（画面のエクスポートには実行時フィルタの仕組みが無い）。
+    `entry.key` が `browser_fetch_reports`（省略時はモジュール既定の
+    `BROWSER_FETCH_REPORT_KEYS`）にあれば、ブラウザ経由（`_fetch_via_browser()`）に
+    切り替える（SOQL化までの暫定措置）。この場合 `filters` は使えない
+    （画面のエクスポートには実行時フィルタの仕組みが無い）。
     """
-    if entry.key in BROWSER_FETCH_REPORT_KEYS:
+    active_browser_fetch_reports = (
+        browser_fetch_reports if browser_fetch_reports is not None else BROWSER_FETCH_REPORT_KEYS
+    )
+    if entry.key in active_browser_fetch_reports:
         if filters is not None:
             raise ValueError(
                 f"ブラウザ経由のレポートには実行時フィルタを指定できません: {entry.key}"
@@ -390,6 +419,15 @@ def _validate_filters_by_report(
 ) -> None:
     """実行時フィルタの管理番号がすべて管理表に存在することを確認する。"""
     for report_key in filters_by_report:
+        if report_key not in entries:
+            raise ReportNotRegisteredError(report_key, list(entries), MASTER_PATH)
+
+
+def _validate_browser_fetch_reports(
+    browser_fetch_reports: frozenset[str], entries: dict[str, ReportEntry]
+) -> None:
+    """ブラウザ経由取得を指定した管理番号がすべて管理表に存在することを確認する。"""
+    for report_key in browser_fetch_reports:
         if report_key not in entries:
             raise ReportNotRegisteredError(report_key, list(entries), MASTER_PATH)
 

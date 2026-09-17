@@ -169,6 +169,23 @@ def fake_salesforce(rows: list[dict] | None = None) -> MagicMock:
     return site
 
 
+def fake_browser_site(rows: list[dict] | None = None) -> MagicMock:
+    """export_reports() が CSV を書き出すブラウザ版サイトクラス（`browser_fetch_reports` 用）。"""
+    values = ROWS if rows is None else rows
+    lines = "\n".join(f"{r['名前']},{r['金額']}" for r in values)
+    csv_bytes = f"名前,金額\n{lines}\n".encode()
+
+    def _export_reports(reports, **kwargs):
+        for _url, destination in reports.items():
+            Path(destination).write_bytes(csv_bytes)
+            yield "dummy", Path(destination)
+
+    instance = MagicMock()
+    instance.export_reports.side_effect = _export_reports
+    instance.__enter__.return_value = instance
+    return MagicMock(return_value=instance)
+
+
 class TestLoadMaster:
     """管理表の読み取りと検証。"""
 
@@ -332,6 +349,27 @@ class TestDownloadScheduledRecord:
 
         with pytest.raises(ReportNotRegisteredError):
             download_scheduled(filters_by_report={"9999": filters})
+
+    def test_uses_browser_fetch_for_specified_report(self, paths):
+        """browser_fetch_reports に挙げた管理番号は、Report API ではなくブラウザ経由になる。
+
+        どのレポートをブラウザ経由にするかは呼び出し側（プロジェクト）が
+        呼び出しごとに指定する（comken 側に固定で書かない設計）。
+        """
+        browser_site = fake_browser_site()
+        with (
+            patch("comken.services.salesforce_downloader.service.site_for") as api_site_for,
+            patch("comken.toolbox.salesforce.browser.sites.site_for", return_value=browser_site),
+        ):
+            download_scheduled(browser_fetch_reports=frozenset({"1001"}))
+
+        api_site_for.assert_not_called()
+        browser_site.return_value.go_login.assert_called_once()
+
+    def test_rejects_browser_fetch_for_unregistered_report(self, paths):
+        """管理番号の誤記で対象が黙って無視されない。"""
+        with pytest.raises(ReportNotRegisteredError):
+            download_scheduled(browser_fetch_reports=frozenset({"9999"}))
 
     def test_saves_file_with_csv_extension(self, paths, monkeypatch):
         """レポートは `.csv` で保存される。
