@@ -84,6 +84,29 @@ class ReportNotRegisteredError(DownloaderError):
         )
 
 
+class SoqlReportNotRegisteredError(DownloaderError):
+    """管理表の「SOQL」列が「○」なのに、同じ管理番号の SoqlReport が登録されていない
+
+    管理表と ``SOQL_REPORTS`` は別々に編集できるため、「SOQL」列だけ「○」にして
+    ``SoqlReport`` の追加・登録（``soql_reports/_registry.py``）を忘れると、
+    どの SOQL クエリを使えばいいか決められない。
+
+    発生箇所: comken.services.salesforce_downloader.soql_reports の soql_report_for()
+
+    対処:
+        管理番号に対応する ``SoqlReport`` サブクラスを追加し、``KEY`` を管理表と
+        同じ値にして ``soql_reports/_registry.py`` の ``SOQL_REPORTS`` へ登録する。
+        まだ SOQL 化していないなら、管理表の「SOQL」列を「×」に戻す
+    """
+
+    def __init__(self, report_key: str, registered: list[str]) -> None:
+        known = "、".join(str(key) for key in registered) or "（登録なし）"
+        super().__init__(
+            f"管理番号 {report_key} はSOQL列が「○」ですが、SoqlReportが登録されていません。\n"
+            f"登録済みのSOQL管理番号: {known}"
+        )
+
+
 class InvalidReportURLError(DownloaderError):
     """管理表の URL から Salesforce のレポート ID を取り出せない
 

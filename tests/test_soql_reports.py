@@ -15,8 +15,9 @@ from comken.core.table import Table
 from comken.exceptions import (
     SalesforceSiteNotFoundError,
     SoqlDownloadFailedError,
+    SoqlReportNotRegisteredError,
 )
-from comken.services.salesforce_downloader.soql_reports import _registry
+from comken.services.salesforce_downloader.soql_reports import _registry, soql_report_for
 from comken.services.salesforce_downloader.soql_reports import runner as runner_module
 from comken.services.salesforce_downloader.soql_reports.base import SoqlReport
 from comken.services.salesforce_downloader.soql_reports.runner import download_soql_reports
@@ -303,3 +304,39 @@ class TestSoqlReportsRegistry:
         # 型注釈は実行時に強制されないが、tuple として受け入れることを確認
         items: tuple[type[SoqlReport], ...] = (_DummyReport, _AllowEmptyReport)
         assert all(issubclass(item, SoqlReport) for item in items)
+
+
+class TestSoqlReportFor:
+    """``soql_report_for()`` — 管理番号から ``SoqlReport`` サブクラスを引く。"""
+
+    def test_returns_matching_report_class(self):
+        original = _registry.SOQL_REPORTS
+        _registry.SOQL_REPORTS = (_DummyReport, _AllowEmptyReport)
+        try:
+            assert soql_report_for("9001") is _DummyReport
+            assert soql_report_for("9002") is _AllowEmptyReport
+        finally:
+            _registry.SOQL_REPORTS = original
+
+    def test_raises_when_key_not_registered(self):
+        original = _registry.SOQL_REPORTS
+        _registry.SOQL_REPORTS = (_DummyReport,)
+        try:
+            with pytest.raises(SoqlReportNotRegisteredError) as caught:
+                soql_report_for("9999")
+        finally:
+            _registry.SOQL_REPORTS = original
+        assert "9999" in str(caught.value)
+        assert "9001" in str(caught.value)
+
+    def test_picks_up_registry_changes(self):
+        """import 時点のスナップショットではなく、``_registry`` を都度読む。"""
+        original = _registry.SOQL_REPORTS
+        _registry.SOQL_REPORTS = ()
+        try:
+            with pytest.raises(SoqlReportNotRegisteredError):
+                soql_report_for("9001")
+            _registry.SOQL_REPORTS = (_DummyReport,)
+            assert soql_report_for("9001") is _DummyReport
+        finally:
+            _registry.SOQL_REPORTS = original

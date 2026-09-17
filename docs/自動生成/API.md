@@ -5941,6 +5941,33 @@ comken.services.salesforce_downloader の cached_report()
 def __init__(self, report_key: str, registered: list[str], master_path: Path) -> None:
 ```
 
+### `SoqlReportNotRegisteredError`
+
+```text
+class SoqlReportNotRegisteredError(DownloaderError):
+```
+
+#### 説明
+
+管理表の「SOQL」列が「○」なのに、同じ管理番号の SoqlReport が登録されていない
+
+管理表と ``SOQL_REPORTS`` は別々に編集できるため、「SOQL」列だけ「○」にして
+``SoqlReport`` の追加・登録（``soql_reports/_registry.py``）を忘れると、
+どの SOQL クエリを使えばいいか決められない。
+
+発生箇所: comken.services.salesforce_downloader.soql_reports の soql_report_for()
+
+対処:
+    管理番号に対応する ``SoqlReport`` サブクラスを追加し、``KEY`` を管理表と
+    同じ値にして ``soql_reports/_registry.py`` の ``SOQL_REPORTS`` へ登録する。
+    まだ SOQL 化していないなら、管理表の「SOQL」列を「×」に戻す
+
+#### `__init__`
+
+```text
+def __init__(self, report_key: str, registered: list[str]) -> None:
+```
+
 ### `ReportDisabledError`
 
 ```text
@@ -6867,6 +6894,28 @@ Args:
 
 Returns:
     保存したファイルのパス一覧（**成功したぶんだけ**）。
+
+### `soql_report_for`
+
+```text
+def soql_report_for(key: str) -> type[SoqlReport]:
+```
+
+#### 説明
+
+管理番号（``ReportEntry.key`` と同じ値）から ``SoqlReport`` サブクラスを引く。
+
+管理表の「SOQL」列が「○」の行を取得実行側が処理するときに使う想定。
+
+Args:
+    key: 管理番号。``SoqlReport.KEY`` と一致するものを探す。
+
+Returns:
+    該当する ``SoqlReport`` サブクラス。
+
+Raises:
+    SoqlReportNotRegisteredError: ``SOQL_REPORTS`` に該当する ``KEY`` が無い場合
+        （管理表の「SOQL」列を「○」にしたのに登録を忘れている設定ミス）。
 
 
 ## `from comken.toolbox.access import ...`

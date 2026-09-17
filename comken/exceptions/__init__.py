@@ -130,6 +130,7 @@ ComkenError
 │   ├── HistoryHeaderMismatchError
 │   ├── CachedReportNotFoundError
 │   ├── ReportNotRegisteredError
+│   ├── SoqlReportNotRegisteredError
 │   ├── ReportDisabledError
 │   ├── InvalidReportURLError
 │   ├── EmptyReportError
@@ -240,6 +241,7 @@ from comken.exceptions.downloader import (
     ScheduleRowValueError,
     ScheduleWeekdayInvalidError,
     SoqlDownloadFailedError,
+    SoqlReportNotRegisteredError,
     UnsupportedScheduleFrequencyError,
 )
 from comken.exceptions.excel import (
@@ -451,6 +453,7 @@ __all__ = [
     "HistoryHeaderMismatchError",
     "CachedReportNotFoundError",
     "ReportNotRegisteredError",
+    "SoqlReportNotRegisteredError",
     "ReportDisabledError",
     "InvalidReportURLError",
     "EmptyReportError",

@@ -140,6 +140,8 @@ python -m comken sf check
 | 保存先 | `\\server\A\input` |
 | 有効 | `○` |
 | 0件あり | `×` |
+| 2000件超 | `×` |
+| SOQL | `×` |
 | 備考 | （任意） |
 
 ### 4. Excel で記入する
@@ -217,10 +219,10 @@ python -m comken sfdl check レポート管理表.xlsx
 `comken.services.salesforce_downloader/master.py` にあり、読み込み・検証・雛形生成の
 仕組みは [管理表（master_table）](master-table.md) が持つ。
 
-| ID | グループ名 | 担当者 | 概要 | Salesforce URL | 保存先 | 有効 | 0件あり | 備考 |
-|---|---|---|---|---|---|---|---|---|
-| 1001 | 営業事務グループ | 山田 | 顧客一覧 | https://.../Report/00O5g00000ABCDE/view | `\\server\A\input` | ○ | × | |
-| 1002 | 経理グループ | 佐藤 | 売上実績 | https://.../Report/00O5g00000FGHIJ/view | `\\server\B\input` | ○ | ○ | |
+| ID | グループ名 | 担当者 | 概要 | Salesforce URL | 保存先 | 有効 | 0件あり | 2000件超 | SOQL | 備考 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1001 | 営業事務グループ | 山田 | 顧客一覧 | https://.../Report/00O5g00000ABCDE/view | `\\server\A\input` | ○ | × | × | × | |
+| 1002 | 経理グループ | 佐藤 | 売上実績 | https://.../Report/00O5g00000FGHIJ/view | `\\server\B\input` | ○ | ○ | × | × | |
 
 | 列 | 何を書くか |
 |---|---|
@@ -232,6 +234,8 @@ python -m comken sfdl check レポート管理表.xlsx
 | **保存先** | 落としたファイルを置くフォルダ |
 | **有効** | `○` か `×`。**雛形ではドロップダウンから選べる**。行は消さない（履歴との対応が残る） |
 | **0件あり** | その日のデータが 0 件になることがあるレポートなら `○`。`×` のときに 0 件だとエラーになります（[「0 件の扱い」](#0-件の扱い) 参照） |
+| **2000件超** | Report API の2000行上限を超えることが分かっているなら `○`。取得実行側がブラウザ経由（画面のエクスポート機能）に切り替える。「SOQL」列が `○` のときはこの列より優先される |
+| **SOQL** | SOQL化済みで、同じ管理番号の `SoqlReport` が登録されているなら `○`。取得実行側はSOQL経由に切り替える（「2000件超」列より優先）。`○` なのに登録が無いと `SoqlReportNotRegisteredError` で止まる |
 | **備考** | 編集者の覚え書き（任意） |
 
 ### Salesforce のレポート ID は入力させない
@@ -435,7 +439,8 @@ write_latest_status()  # 既定のパス（paths.LATEST_STATUS_PATH）へ書き�
 **定期実行の実装（`download_scheduled()` の呼び出し・実行時フィルタ・ブラウザ経由
 取得の指定・失敗時の扱い）は `Salesforceレポートダウンローダー` リポジトリにある。**
 comken 側に置くのは、そのプロジェクトが従う**管理表・履歴の形式**（このページの他の
-節）と、以下の「スケジュール管理表」（`schedule.py` / `schedule_template.py`）まで。
+節）と、以下の「スケジュール管理表」（`schedule.py`）まで。「スケジュール」シート自体は
+**雛形生成を持たず、手で作る**運用にしている（列の意味は下表を参照）。
 
 ### スケジュール管理表（曜日・時刻の振り分け）
 
@@ -478,10 +483,6 @@ comken 側に置くのは、そのプロジェクトが従う**管理表・履�
 1日に2回取る意味がないため）。運用上は「9時に失敗したら13時にリトライする」
 という意図で複数行を並べることを想定している。
 
-雛形（`create_schedule_template()`）で生成した「スケジュール」シートには、条件付き
-書式で「曜日」「日付」列をグレーアウトする仕掛けがある（見た目のヒントのみで、
-入力自体を禁止するものではない）。
-
 Excel の生 dict から直接 `ScheduleRule` を組み立てることもできるが、運用では
 `load_schedule()` 経由で読むのが基本:
 
@@ -493,16 +494,8 @@ for rule in rules:
     print(rule.schedule_key, rule.report_key, rule.frequency)
 ```
 
-雛形を新規作成・追記したい場合は `create_schedule_template()` を呼ぶ。
-**この関数はレポート管理表がすでに存在する前提**（`ReportEntry.create_template()`
-で先に `PY_管理表` シートを作ってから呼ぶ）で、既存のブックに
-`PY_スケジュール` シートを追加する。
-
-```python
-from comken.services.salesforce_downloader.schedule_template import create_schedule_template
-
-create_schedule_template(MASTER_PATH)  # 既存の管理表に「スケジュール」シートを追加
-```
+**「スケジュール」シートは雛形生成を持たない。** 上の列定義表のとおり手で作る
+（`レポート管理表` と同じブックへ、シート名「スケジュール」で追加する）。
 
 なお、 `ScheduleRule.from_row()` を直接呼ぶ使い方も引き続き可能
 （テストや、別のデータソースから組み立てるときに使う）:
@@ -753,12 +746,26 @@ saved = download_soql_reports()   # SOQL_REPORTS を全部取得・保存
 履歴（history.csv）への記録は対象外。1件失敗しても残りは続け、保存ファイル名の
 組み立て方は `download_scheduled()` と同じ。
 
+**この `download_soql_reports()` は、管理表に行を作らず SOQL レポートだけを
+まとめて取りたいときの経路。** 管理表に既にあるレポートを SOQL 化した場合は、
+こちらを呼ぶのではなく、管理表の「SOQL」列を `○` にする（`ReportEntry.key` と
+同じ `KEY` の `SoqlReport` が必要）。この経路なら `download_scheduled()` が
+`_fetch()` 経由で自動的に SOQL を使い、履歴（history.csv）にも記録される。
+2つの経路の違いは次のとおり:
+
+| | `download_soql_reports()` | 管理表「SOQL」列 |
+|---|---|---|
+| 管理表への登録 | 不要 | 必要（行がある前提） |
+| スケジュール判定 | 呼び出し側が個別に用意 | 「スケジュール」シートが使える |
+| 履歴（history.csv） | 記録しない | 記録する |
+| 呼び方 | `download_soql_reports()` を直接呼ぶ | `download_scheduled()` から自動 |
+
 ### この手順が対象にしないもの
 
 - `SUMMARY` / `MATRIX` 形式のレポート（グルーピング・集計はSOQLの`GROUP BY`で作り直す）
 - 複合レポートタイプ（主オブジェクトが1つに定まらず `describe_fields()` の自動判定が効かない）
-- スケジュール判定（呼び出し側のプロジェクトが決める）
-- 履歴記録（現状は対象外）
+- スケジュール判定・履歴記録（`download_soql_reports()` を直接呼ぶ経路の場合。
+  管理表の「SOQL」列を使う経路ならどちらも自動で付いてくる）
 
 ---
 
@@ -766,9 +773,9 @@ saved = download_soql_reports()   # SOQL_REPORTS を全部取得・保存
 
 エラー名と対処法は [docs/ERRORS.md](ERRORS.md)（comken 全体の例外クラスの docstring
 から自動生成、docstring が正）にまとまっている。Downloader 由来のものは
-`ReportNotRegisteredError` / `ReportDisabledError` / `MasterDuplicateValueError` /
-`MasterRowValueError` / `CachedReportNotFoundError` / `EmptyReportError` /
-`ReportFolderNotFoundError` / `ScheduledDownloadFailedError` /
+`ReportNotRegisteredError` / `SoqlReportNotRegisteredError` / `ReportDisabledError` /
+`MasterDuplicateValueError` / `MasterRowValueError` / `CachedReportNotFoundError` /
+`EmptyReportError` / `ReportFolderNotFoundError` / `ScheduledDownloadFailedError` /
 `ScheduleDuplicateKeyError` / `ScheduleRowValueError`（いずれも
 `comken/exceptions/downloader.py`）。
 
@@ -821,7 +828,8 @@ comken 側のドキュメントを参照。
 | 管理表・履歴・最新ステータスの置き場所を変える | `paths.py` の `MASTER_PATH` / `HISTORY_PATH` / `LATEST_STATUS_PATH` |
 | Salesforce の認証・API の叩き方を変える | `comken/toolbox/salesforce/`（Downloader ではない） |
 | 接続先の組織を足す | `comken/toolbox/salesforce/sites/` |
-| 2000件超のレポートをSOQLで取る | `soql_reports/`（1レポート=1ファイル＋`_registry.py`へ登録） |
+| 2000件超のレポートをSOQLで取る | `soql_reports/`（1レポート=1ファイル＋`_registry.py`へ登録）＋管理表の「SOQL」列を`○` |
+| API／ブラウザ／SOQLのどれで取るか変える | 管理表の「2000件超」「SOQL」列（コードは触らない） |
 
 右列に「**全プロジェクトに効く**」と書いているのは、軽く触ってよい場所と、触ると全
 プロジェクトへ影響する場所を**見た目で区別するため**。各ファイル docstring の

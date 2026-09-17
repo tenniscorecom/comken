@@ -23,7 +23,8 @@ r"""comken/services/salesforce_downloader/master.py — レポート管理表の
 
 ここに書かないもの:
 - Excel をどう読むか・どう検証するか → report_master.py
-- 取得・保存・履歴 → service.py / history.py
+- 取得の実行・保存 → Salesforceレポートダウンローダー の service.py
+- 履歴の読み取り・形式 → history.py
 """
 
 import logging
@@ -52,6 +53,8 @@ EXAMPLES = [
         "folder": r"\\server\案件集計\input",
         "enabled": True,
         "allow_empty": False,  # 普段はデータがあるが、念のため「×」（既定）
+        "exceeds_row_limit": False,  # 2000行に収まる通常のレポート（既定）
+        "use_soql": False,  # Report API のまま（既定）
         "note": _EXAMPLE_NOTE,
     },
     {
@@ -63,6 +66,8 @@ EXAMPLES = [
         "folder": r"\\server\売上帳票\input",
         "enabled": True,
         "allow_empty": True,  # 「該当データ無し」が普通に起きるレポートの例
+        "exceeds_row_limit": False,
+        "use_soql": False,
         "note": _EXAMPLE_NOTE,
     },
 ]
@@ -140,6 +145,30 @@ class ReportEntry(MasterRow):
         help="その日のデータが 0 件になることがあるレポートなら「○」。"
         "「×」のときに 0 件だとエラーになります"
         "（指しているレポートが違う可能性に気づけるようにするため）",
+    )
+    # **既定値 `×`。** 書き忘れても通常の Report API 経由のまま動く
+    # （安全側＝挙動が変わらない側に倒す）。「○」にすると取得実行側が
+    # ブラウザ経由（画面のエクスポート機能）に切り替える。SOQL 列が「○」の
+    # 行では、この列の値に関わらず SOQL 経由が優先される（下記参照）
+    exceeds_row_limit: bool = column(
+        "2000件超",
+        choices=("○", "×"),
+        default=False,
+        help="Report API の2000行上限を超えることが分かっているレポートなら「○」。"
+        "取得実行側がブラウザ経由（画面のエクスポート機能）に切り替えます。"
+        "「SOQL」列が「○」のときはこの列より優先されます",
+    )
+    # **既定値 `×`。** 書き忘れても通常の Report API 経由のまま動く。
+    # 「○」にする場合は、同じ管理番号（`key`）の `SoqlReport.KEY` を
+    # `comken.services.salesforce_downloader.soql_reports` へ登録しておくこと
+    # （無いと設定ミスとして例外で止まる）
+    use_soql: bool = column(
+        "SOQL",
+        choices=("○", "×"),
+        default=False,
+        help="SOQL化済みで、同じ管理番号のSOQL定義が"
+        "comken.services.salesforce_downloader.soql_reports に登録されているなら「○」。"
+        "取得実行側はSOQL経由に切り替えます（「2000件超」列より優先）",
     )
     # いちばん右に置く（読み取りに使う列の後ろ）。業務側の覚え書き用。
     # 既定値 `""`（書かなくてよい列）。
