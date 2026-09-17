@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -134,8 +134,7 @@ class Salesforce(SiteBase):
 
     def export_reports(
         self,
-        report_urls: Sequence[str],
-        directory: str | Path,
+        reports: Mapping[str, str | Path],
         *,
         export_format: str = "csv",
         encoding: str = "Shift_JIS",
@@ -146,19 +145,27 @@ class Salesforce(SiteBase):
         """ログイン済みのブラウザのセッションCookieを requests へ引き継ぎ、
         並列にダウンロードして (report_id, 保存先パス) を返す。
 
+        ファイル名・置き場所は呼び出し側が ``reports`` で完全に指定する
+        （comken側では report_id ベースの名前を強制しない）。
+
         ブラウザはログインの確立だけに使い、N件のダウンロード自体は
         requests + ThreadPoolExecutor で並列に行う。
 
             with Salesforce() as sf:
                 sf.login_with_credentials("salesforce_temp")
                 sf.wait_for_manual_login()
-                for report_id, path in sf.export_reports(report_urls, "出力先"):
+                reports = {
+                    report_url: f"出力先/{report_name}.csv"
+                    for report_url, report_name in ...
+                }
+                for report_id, path in sf.export_reports(reports):
                     ...
 
         Args:
-            report_urls: レポート画面のURL（またはレポートID）のリスト。
-            directory: 保存先ディレクトリ。無ければ作成する。
-            export_format: "csv" または "xls"。
+            reports: ``{レポート画面のURL（またはレポートID）: 保存先ファイルパス}``
+                の対応表。保存先の親フォルダが無ければ作成する。
+            export_format: "csv" または "xls"。保存先のファイル名の拡張子とは
+                無関係（Salesforceに実際に何形式で吐かせるかだけを決める）。
             encoding: エクスポートする文字コード。既定は ``Shift_JIS``（CP932相当）。
                 Excel・社内システムでの扱いやすさを優先している。UTF-8で欲しい
                 場合は ``"UTF-8"`` を渡す。
@@ -174,9 +181,8 @@ class Salesforce(SiteBase):
             keep_alive_interval: ``keep_alive_report_id`` を開く間隔（秒）。既定300秒（5分）。
 
         Yields:
-            (report_id, ダウンロードしたファイルのパス) のタプル。ファイルは
-            ``directory`` 直下に ``{report_id}.{export_format}`` として保存される。
-            **完了した順**に返るため、``report_urls`` の順序とは限らない。
+            (report_id, 保存したファイルのパス) のタプル。
+            **完了した順**に返るため、``reports`` の順序とは限らない。
 
         Raises:
             SiteNotStartedError: 未起動の場合。
@@ -189,18 +195,13 @@ class Salesforce(SiteBase):
         driver_cookies = session.raw.get_cookies()
         http_session = _cookies_to_requests_session(driver_cookies)
         logger.info(
-            "export_reports() 開始: 件数=%d domain=%s directory=%s max_workers=%d "
-            "encoding=%s cookie数=%d",
-            len(report_urls),
+            "export_reports() 開始: 件数=%d domain=%s max_workers=%d encoding=%s cookie数=%d",
+            len(reports),
             domain,
-            directory,
             max_workers,
             encoding,
             len(driver_cookies),
         )
-
-        target_dir = Path(directory)
-        target_dir.mkdir(parents=True, exist_ok=True)
 
         keep_alive_url = (
             f"{domain}/{keep_alive_report_id}" if keep_alive_report_id is not None else None
@@ -214,27 +215,28 @@ class Salesforce(SiteBase):
                 futures = {
                     executor.submit(
                         _export_via_http, http_session, domain, url, export_format, encoding
-                    ): url
-                    for url in report_urls
+                    ): Path(destination)
+                    for url, destination in reports.items()
                 }
                 for future in as_completed(futures):
+                    destination = futures[future]
                     report_id, content = future.result()
-                    path = target_dir / f"{report_id}.{export_format}"
-                    path.write_bytes(content)
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    destination.write_bytes(content)
                     done += 1
                     logger.info(
                         "レポートをダウンロードしました(%d/%d): report_id=%s path=%s",
                         done,
-                        len(report_urls),
+                        len(reports),
                         report_id,
-                        path,
+                        destination,
                     )
-                    yield report_id, path
+                    yield report_id, destination
         finally:
             stop_keep_alive.set()
             if keep_alive_thread is not None:
                 keep_alive_thread.join()
-            logger.info("export_reports() 終了: 完了=%d/%d", done, len(report_urls))
+            logger.info("export_reports() 終了: 完了=%d/%d", done, len(reports))
 
     def _require_session(self) -> BrowserSession:
         """起動済みの BrowserSession を返す。未起動なら理由を示して落とす。"""

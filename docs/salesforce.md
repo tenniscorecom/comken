@@ -299,7 +299,10 @@ from comken.toolbox.browser.sites.salesforce import Salesforce
 with Salesforce() as sf:
     sf.login_with_credentials("salesforce_temp")  # DPAPIに登録済みのID/パスワード
     sf.wait_for_manual_login()                     # MFA等が出た場合だけ対応する
-    for report_id, path in sf.export_reports(report_urls, "出力先"):
+
+    # ファイル名・置き場所は呼び出し側が {URL: 保存先パス} で指定する
+    reports = {report_url: f"出力先/{report_name}.csv" for report_url, report_name in ...}
+    for report_id, path in sf.export_reports(reports):
         ...
 ```
 

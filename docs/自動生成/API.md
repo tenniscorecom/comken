@@ -9520,7 +9520,7 @@ def wait_for_manual_login(self) -> None:
 #### `export_reports`
 
 ```text
-def export_reports(self, report_urls: Sequence[str], directory: str | Path, *, export_format: str='csv', encoding: str='Shift_JIS', max_workers: int=_DEFAULT_MAX_WORKERS, keep_alive_report_id: str | None=None, keep_alive_interval: float=_DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS) -> Iterator[tuple[str, Path]]:
+def export_reports(self, reports: Mapping[str, str | Path], *, export_format: str='csv', encoding: str='Shift_JIS', max_workers: int=_DEFAULT_MAX_WORKERS, keep_alive_report_id: str | None=None, keep_alive_interval: float=_DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS) -> Iterator[tuple[str, Path]]:
 ```
 
 ##### 説明
@@ -9528,19 +9528,27 @@ def export_reports(self, report_urls: Sequence[str], directory: str | Path, *, e
 ログイン済みのブラウザのセッションCookieを requests へ引き継ぎ、
 並列にダウンロードして (report_id, 保存先パス) を返す。
 
+ファイル名・置き場所は呼び出し側が ``reports`` で完全に指定する
+（comken側では report_id ベースの名前を強制しない）。
+
 ブラウザはログインの確立だけに使い、N件のダウンロード自体は
 requests + ThreadPoolExecutor で並列に行う。
 
     with Salesforce() as sf:
         sf.login_with_credentials("salesforce_temp")
         sf.wait_for_manual_login()
-        for report_id, path in sf.export_reports(report_urls, "出力先"):
+        reports = {
+            report_url: f"出力先/{report_name}.csv"
+            for report_url, report_name in ...
+        }
+        for report_id, path in sf.export_reports(reports):
             ...
 
 Args:
-    report_urls: レポート画面のURL（またはレポートID）のリスト。
-    directory: 保存先ディレクトリ。無ければ作成する。
-    export_format: "csv" または "xls"。
+    reports: ``{レポート画面のURL（またはレポートID）: 保存先ファイルパス}``
+        の対応表。保存先の親フォルダが無ければ作成する。
+    export_format: "csv" または "xls"。保存先のファイル名の拡張子とは
+        無関係（Salesforceに実際に何形式で吐かせるかだけを決める）。
     encoding: エクスポートする文字コード。既定は ``Shift_JIS``（CP932相当）。
         Excel・社内システムでの扱いやすさを優先している。UTF-8で欲しい
         場合は ``"UTF-8"`` を渡す。
@@ -9556,9 +9564,8 @@ Args:
     keep_alive_interval: ``keep_alive_report_id`` を開く間隔（秒）。既定300秒（5分）。
 
 Yields:
-    (report_id, ダウンロードしたファイルのパス) のタプル。ファイルは
-    ``directory`` 直下に ``{report_id}.{export_format}`` として保存される。
-    **完了した順**に返るため、``report_urls`` の順序とは限らない。
+    (report_id, 保存したファイルのパス) のタプル。
+    **完了した順**に返るため、``reports`` の順序とは限らない。
 
 Raises:
     SiteNotStartedError: 未起動の場合。
@@ -10026,7 +10033,7 @@ def wait_for_manual_login(self) -> None:
 #### `export_reports`
 
 ```text
-def export_reports(self, report_urls: Sequence[str], directory: str | Path, *, export_format: str='csv', encoding: str='Shift_JIS', max_workers: int=_DEFAULT_MAX_WORKERS, keep_alive_report_id: str | None=None, keep_alive_interval: float=_DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS) -> Iterator[tuple[str, Path]]:
+def export_reports(self, reports: Mapping[str, str | Path], *, export_format: str='csv', encoding: str='Shift_JIS', max_workers: int=_DEFAULT_MAX_WORKERS, keep_alive_report_id: str | None=None, keep_alive_interval: float=_DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS) -> Iterator[tuple[str, Path]]:
 ```
 
 ##### 説明
@@ -10034,19 +10041,27 @@ def export_reports(self, report_urls: Sequence[str], directory: str | Path, *, e
 ログイン済みのブラウザのセッションCookieを requests へ引き継ぎ、
 並列にダウンロードして (report_id, 保存先パス) を返す。
 
+ファイル名・置き場所は呼び出し側が ``reports`` で完全に指定する
+（comken側では report_id ベースの名前を強制しない）。
+
 ブラウザはログインの確立だけに使い、N件のダウンロード自体は
 requests + ThreadPoolExecutor で並列に行う。
 
     with Salesforce() as sf:
         sf.login_with_credentials("salesforce_temp")
         sf.wait_for_manual_login()
-        for report_id, path in sf.export_reports(report_urls, "出力先"):
+        reports = {
+            report_url: f"出力先/{report_name}.csv"
+            for report_url, report_name in ...
+        }
+        for report_id, path in sf.export_reports(reports):
             ...
 
 Args:
-    report_urls: レポート画面のURL（またはレポートID）のリスト。
-    directory: 保存先ディレクトリ。無ければ作成する。
-    export_format: "csv" または "xls"。
+    reports: ``{レポート画面のURL（またはレポートID）: 保存先ファイルパス}``
+        の対応表。保存先の親フォルダが無ければ作成する。
+    export_format: "csv" または "xls"。保存先のファイル名の拡張子とは
+        無関係（Salesforceに実際に何形式で吐かせるかだけを決める）。
     encoding: エクスポートする文字コード。既定は ``Shift_JIS``（CP932相当）。
         Excel・社内システムでの扱いやすさを優先している。UTF-8で欲しい
         場合は ``"UTF-8"`` を渡す。
@@ -10062,9 +10077,8 @@ Args:
     keep_alive_interval: ``keep_alive_report_id`` を開く間隔（秒）。既定300秒（5分）。
 
 Yields:
-    (report_id, ダウンロードしたファイルのパス) のタプル。ファイルは
-    ``directory`` 直下に ``{report_id}.{export_format}`` として保存される。
-    **完了した順**に返るため、``report_urls`` の順序とは限らない。
+    (report_id, 保存したファイルのパス) のタプル。
+    **完了した順**に返るため、``reports`` の順序とは限らない。
 
 Raises:
     SiteNotStartedError: 未起動の場合。

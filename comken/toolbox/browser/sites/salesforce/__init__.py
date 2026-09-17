@@ -9,7 +9,8 @@ comken.toolbox.salesforce の Reports and Dashboards REST API は2000行が上�
     with Salesforce() as sf:
         sf.go_login()
         sf.wait_for_manual_login()
-        for report_id, path in sf.export_reports(report_urls, "出力先"):
+        reports = {report_url: f"出力先/{report_id}.csv" for report_url, report_id in ...}
+        for report_id, path in sf.export_reports(reports):
             print(report_id, path)
 """
 

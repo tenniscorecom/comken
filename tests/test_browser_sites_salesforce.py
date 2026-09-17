@@ -168,7 +168,7 @@ def _html_response(status: int = 200):
 class TestExportReports:
     """export_reports() — セッションCookieをrequestsへ引き継ぎ並列ダウンロードする。"""
 
-    def test_downloads_all_reports_and_yields_report_id_and_path(self, tmp_path):
+    def test_downloads_reports_to_the_given_destinations(self, tmp_path):
         session = _make_session(tmp_path)
         session._driver.current_url = REPORT_URL_1
         session._driver.get_cookies.return_value = [
@@ -181,18 +181,23 @@ class TestExportReports:
             _csv_response(b"report1"),
             _csv_response(b"report2"),
         ]
+        destination_1 = tmp_path / "月次レポート.csv"
+        destination_2 = tmp_path / "サブフォルダ" / "四半期レポート.csv"
         with patch(
             "comken.toolbox.browser.sites.salesforce.site.requests.Session",
             return_value=http_session,
         ):
-            results = dict(sf.export_reports([REPORT_URL_1, REPORT_URL_2], tmp_path))
+            results = dict(
+                sf.export_reports({REPORT_URL_1: destination_1, REPORT_URL_2: destination_2})
+            )
 
         assert set(results) == {"00O5g00000ABCDE1AS", "00O5g00000ABCDE2AS"}
-        for report_id, path in results.items():
-            assert path == tmp_path / f"{report_id}.csv"
-            assert path.exists()
+        assert results["00O5g00000ABCDE1AS"] == destination_1
+        assert results["00O5g00000ABCDE2AS"] == destination_2
+        assert destination_1.exists()
+        assert destination_2.exists()
 
-    def test_creates_target_directory(self, tmp_path):
+    def test_creates_parent_directory_of_destination(self, tmp_path):
         session = _make_session(tmp_path)
         session._driver.current_url = REPORT_URL_1
         session._driver.get_cookies.return_value = []
@@ -200,14 +205,14 @@ class TestExportReports:
 
         http_session = MagicMock()
         http_session.get.return_value = _csv_response()
-        target = tmp_path / "nested" / "dir"
+        destination = tmp_path / "nested" / "dir" / "report.csv"
         with patch(
             "comken.toolbox.browser.sites.salesforce.site.requests.Session",
             return_value=http_session,
         ):
-            list(sf.export_reports([REPORT_URL_1], target))
+            list(sf.export_reports({REPORT_URL_1: destination}))
 
-        assert target.is_dir()
+        assert destination.exists()
 
     def test_raises_when_response_is_html(self, tmp_path):
         session = _make_session(tmp_path)
@@ -224,13 +229,13 @@ class TestExportReports:
             ),
             pytest.raises(SalesforceReportExportError),
         ):
-            list(sf.export_reports([REPORT_URL_1], tmp_path))
+            list(sf.export_reports({REPORT_URL_1: tmp_path / "report.csv"}))
 
     def test_raises_when_not_started(self):
         sf = Salesforce()
 
         with pytest.raises(SiteNotStartedError):
-            list(sf.export_reports([REPORT_URL_1], "出力先"))
+            list(sf.export_reports({REPORT_URL_1: "出力先/report.csv"}))
 
 
 class TestStartKeepAlive:
@@ -289,8 +294,7 @@ class TestExportReportsKeepAlive:
         ):
             list(
                 sf.export_reports(
-                    [REPORT_URL_1],
-                    tmp_path,
+                    {REPORT_URL_1: tmp_path / "report.csv"},
                     keep_alive_report_id="00O5g00000ABCDE9AS",
                     keep_alive_interval=0.02,
                 )
@@ -317,8 +321,7 @@ class TestExportReportsKeepAlive:
         ):
             list(
                 sf.export_reports(
-                    [REPORT_URL_1],
-                    tmp_path,
+                    {REPORT_URL_1: tmp_path / "report.csv"},
                     keep_alive_report_id="00O5g00000ABCDE9AS",
                     keep_alive_interval=0.02,
                 )

@@ -39,9 +39,17 @@ def start_driver(
     # 相対パスのまま Service へ渡すと、実行時のカレントディレクトリ次第で
     # 見つからなくなる（PROFILE_ROOT と同じ理由。docs/browser.md 参照）
     driver_path = Path(options_config.DRIVER_PATH).resolve()
+    logger.debug(
+        "Edgeを起動します: driver_path=%s profile_dir=%s download_dir=%s headless=%s",
+        driver_path,
+        profile_dir,
+        download_dir.path,
+        options_config.HEADLESS,
+    )
     try:
         return _build_driver(driver_path, options_config, profile_dir, download_dir)
     except Exception as error:
+        logger.warning("Edgeの起動に失敗しました: driver_path=%s", driver_path, exc_info=True)
         # 一時フォルダを残さない。download_dir は with 想定だが、__enter__ 失敗時は
         # ここで __exit__ を呼んで後始末する必要がある
         download_dir.__exit__(None, None, None)
@@ -56,8 +64,10 @@ def _build_driver(
 ) -> webdriver.Edge:
     """起動オプションを組み立て、初期化済みのEdgeを返す。"""
     edge_options = Options()
-    for argument in options_config.build(profile_dir):
+    arguments = options_config.build(profile_dir)
+    for argument in arguments:
         edge_options.add_argument(argument)
+    logger.debug("Edge起動引数: %s", arguments)
 
     if options_config.SUPPRESS_EXTERNAL_LOGS:
         edge_options.add_experimental_option("excludeSwitches", ["enable-logging"])

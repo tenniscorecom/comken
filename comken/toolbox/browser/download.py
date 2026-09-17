@@ -66,6 +66,12 @@ class DownloadDir:
             self._is_temp = True
         # 既存フォルダを指定した場合、前回のファイルを wait() の完了対象にしないための記録
         self._initial_files = {p: p.stat().st_mtime_ns for p in self.path.iterdir() if p.is_file()}
+        logger.debug(
+            "DownloadDirを用意しました: path=%s 一時フォルダ=%s 既存ファイル=%d件",
+            self.path,
+            self._is_temp,
+            len(self._initial_files),
+        )
 
     def __fspath__(self) -> str:
         # os.PathLike 対応。パスを受け取る関数へそのまま渡せるようにする
@@ -102,6 +108,7 @@ class DownloadDir:
         Raises:
             DownloadTimeoutError: timeout 秒以内にダウンロードが完了しなかった場合。
         """
+        logger.debug("ダウンロード完了待ちを開始します: path=%s timeout=%d秒", self.path, timeout)
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             current = {p: p.stat().st_mtime_ns for p in self.path.iterdir() if p.is_file()}
@@ -111,9 +118,18 @@ class DownloadDir:
             in_progress = [p for p in changed if p.suffix in _IN_PROGRESS_SUFFIXES]
             files = [p for p in changed if p.suffix not in _IN_PROGRESS_SUFFIXES]
             if files and not in_progress:
-                return sorted(files, key=lambda p: p.stat().st_mtime)
+                result = sorted(files, key=lambda p: p.stat().st_mtime)
+                logger.debug(
+                    "ダウンロード完了を確認しました: %d件 %s",
+                    len(result),
+                    [p.name for p in result],
+                )
+                return result
             time.sleep(_POLL_INTERVAL_SECONDS)
 
+        logger.warning(
+            "ダウンロード完了を確認できませんでした: path=%s timeout=%d秒", self.path, timeout
+        )
         raise DownloadTimeoutError(self.path, timeout)
 
     def remove(self, force: bool = False) -> None:
