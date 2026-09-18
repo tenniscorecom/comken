@@ -31,7 +31,7 @@ def _rule(**overrides: Any) -> ScheduleRule:
         "schedule_key": "S1",
         "report_key": "1001",
         "frequency": "毎日",
-        "run_time": dt.time(9, 0),
+        "start_time": dt.time(9, 0),
         "raw_weekday": "",
         "raw_day_of_month": "",
         "holiday_policy": "取得しない",
@@ -122,7 +122,7 @@ class TestNthBusinessDayIsDue:
         return _rule(
             frequency="毎月",
             raw_weekday="",
-            run_time=None,
+            start_time=None,
             raw_day_of_month=date_marker,
         )
 
@@ -176,7 +176,7 @@ class TestIsHourlyDue:
     """``_is_hourly_due`` の60分固定の挙動。"""
 
     def _hourly_rule(self, **overrides: object) -> ScheduleRule:
-        return _rule(frequency=FREQUENCY_HOURLY, run_time=dt.time(9, 0), **overrides)
+        return _rule(frequency=FREQUENCY_HOURLY, start_time=dt.time(9, 0), **overrides)
 
     def test_is_due_at_start_time(self):
         """開始時刻ちょうどは ``is_due()`` で True。"""
@@ -203,33 +203,33 @@ class TestIsHourlyDue:
         now = dt.datetime(2026, 1, 1, 8, 30)  # noqa: DTZ001
         assert rule.is_due(now) is False
 
-    def test_missing_run_time_raises(self):
-        """``run_time`` が無い「1時間ごと」行は ``ScheduleIntervalMissingError``。"""
-        rule = _rule(frequency=FREQUENCY_HOURLY, run_time=None)
+    def test_missing_start_time_raises(self):
+        """``start_time`` が無い「1時間ごと」行は ``ScheduleIntervalMissingError``。"""
+        rule = _rule(frequency=FREQUENCY_HOURLY, start_time=None)
         now = dt.datetime(2026, 1, 1, 9, 0)  # noqa: DTZ001
         with pytest.raises(ScheduleIntervalMissingError):
             rule.is_due(now)
 
 
 class TestIsDueTimeOptional:
-    """「毎日」「毎週」「毎月」で ``取得時刻`` を空欄にすると、時刻条件なしで due 判定する。"""
+    """「毎日」「毎週」「毎月」で ``取得開始時刻`` を空欄にすると、時刻条件なしで due 判定する。"""
 
     @pytest.mark.parametrize("frequency", ["毎日", "毎週", "毎月"])
-    def test_blank_run_time_means_due_at_any_time(self, frequency):
-        """``run_time is None`` は「時刻条件なし」と解釈する。
+    def test_blank_start_time_means_due_at_any_time(self, frequency):
+        """``start_time is None`` は「時刻条件なし」と解釈する。
 
         同じレポートを1日のうちいつ取っても中身が変わらない（例: 前日以前の確定済み
         データ）の用途を想定。「1時間ごと」では空欄を許さないので、この挙動は適用しない。
         """
-        rule = _rule(frequency=frequency, run_time=None)
+        rule = _rule(frequency=frequency, start_time=None)
         # 0:00 と 23:59 の両方で True を返す（=任意の時刻で due）
         assert rule.is_due(dt.datetime(2026, 1, 1, 0, 0)) is True  # noqa: DTZ001
         assert rule.is_due(dt.datetime(2026, 1, 1, 23, 59)) is True  # noqa: DTZ001
 
-    def test_blank_run_time_still_respects_date_match(self):
-        """``run_time`` が空欄でも、曜日や月の日など日付条件は引き続き適用される。"""
+    def test_blank_start_time_still_respects_date_match(self):
+        """``start_time`` が空欄でも、曜日や月の日など日付条件は引き続き適用される。"""
         # 「毎週・水曜」の行で、月曜に問い合わせると日付不一致で False
-        rule = _rule(frequency="毎週", raw_weekday="水", run_time=None)
+        rule = _rule(frequency="毎週", raw_weekday="水", start_time=None)
         # 2026/1/5 は月曜
         monday = dt.datetime(2026, 1, 5, 12, 0)  # noqa: DTZ001
         assert rule.is_due(monday) is False

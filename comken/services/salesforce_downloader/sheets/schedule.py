@@ -30,6 +30,7 @@ FREQUENCY_DAILY = "毎日"
 FREQUENCY_WEEKLY = "毎週"
 FREQUENCY_MONTHLY = "毎月"
 HOLIDAY_SKIP = "取得しない"
+HOLIDAY_FETCH = "取得する"
 WEEKDAY_NAMES = ("月", "火", "水", "木", "金", "土", "日")
 
 logger = logging.getLogger(__name__)
@@ -62,15 +63,18 @@ class ScheduleRule(MasterRow):
             （レポート管理表シートの ID と対応する）。
         frequency: 列「取得頻度」。`FREQUENCY_HOURLY` / `FREQUENCY_DAILY` /
             `FREQUENCY_WEEKLY` / `FREQUENCY_MONTHLY` のいずれか。
-        run_time: 列「取得時刻」。毎日・毎週・毎月・1時間ごとに共通の実行時刻
-            （1時間ごとのときは開始時刻を兼ねる）。空欄可。
+        start_time: 列「取得開始時刻」。毎日・毎週・毎月・1時間ごとに共通の実行
+            開始時刻（この時刻を過ぎたら取得してよい）。空欄可。
+        desired_time: 列「取得時刻」。このレポートが何時までに欲しいかの目安
+            （記録用）。判定には使わない。
         raw_weekday: 列「曜日」。`frequency` が毎週のときだけ使う
             （下の `weekday` property で 0=月〜6=日 に変換）。
         raw_day_of_month: 列「日付」。`frequency` が毎月のときだけ使う
             （1〜31 の数字 / `月末` / `第N営業日` のいずれかを下の
             `day_of_month` / `month_end` / `nth_business_day` property で
             分解する）。
-        holiday_policy: 列「祝日対応」。`HOLIDAY_SKIP`（既定）なら祝日はスキップする。
+        holiday_policy: 列「祝日対応」。`HOLIDAY_SKIP`（既定）なら祝日はスキップ、
+            `HOLIDAY_FETCH` なら祝日でも取得する。
         enabled: 列「有効」。`○`/`×`。既定値なし（書き忘れはエラー）。
     """
 
@@ -91,11 +95,18 @@ class ScheduleRule(MasterRow):
         choices=(FREQUENCY_HOURLY, FREQUENCY_DAILY, FREQUENCY_WEEKLY, FREQUENCY_MONTHLY),
         help="1時間ごと / 毎日 / 毎週 / 毎月 のいずれか",
     )
-    run_time: dt.time | None = column(
+    start_time: dt.time | None = column(
+        "取得開始時刻",
+        default=None,
+        help="この時刻を過ぎたら取得してよい開始時刻。"
+        "「毎日」「毎週」「毎月」「1時間ごと」のすべてに共通。"
+        "1時間ごとのときは開始時刻から60分刻みで動きます。空欄可",
+    )
+    desired_time: dt.time | None = column(
         "取得時刻",
         default=None,
-        help="毎日・毎週・毎月・1時間ごとに共通の実行開始時刻。"
-        "1時間ごとのときは開始時刻を兼ねる。空欄可",
+        help="このレポートが何時までに欲しいかの目安（記録用）。"
+        "取得の判定には使いません（判定に使うのは「取得開始時刻」）。空欄可",
     )
     # `choices` ではなく `default=""` の自由記述にしているのは空欄を許すため。
     # パース結果は下の `weekday` property で取り出す
@@ -118,7 +129,9 @@ class ScheduleRule(MasterRow):
     holiday_policy: str = column(
         "祝日対応",
         default=HOLIDAY_SKIP,
-        help="「取得しない」以外も自由に書ける（運用メモとしての利用を想定）",
+        choices=(HOLIDAY_SKIP, HOLIDAY_FETCH),
+        help="祝日の扱いを「取得しない」（既定、スキップ）か「取得する」の"
+        "2 値から選びます",
     )
     # 既定値を持たせない（書き忘れを「有効」と区別するため）。`master.py` の
     # 「有効」列と同じ考え方
@@ -188,9 +201,9 @@ class ScheduleRule(MasterRow):
         ``set[date]``）は独立に残しており、「第N営業日」以外での祝日判定に使う。
 
         ``FREQUENCY_DAILY`` / ``FREQUENCY_WEEKLY`` / ``FREQUENCY_MONTHLY`` で
-        ``run_time is None`` のときは「時刻条件なし」を意味し、日付条件が合えば常に
+        ``start_time is None`` のときは「時刻条件なし」を意味し、日付条件が合えば常に
         ``True`` を返す（例: 前日以前の確定済みデータのように、いつ取っても同じ内容の
-        レポート用）。``FREQUENCY_HOURLY`` は対象外で、``run_time`` が無いと
+        レポート用）。``FREQUENCY_HOURLY`` は対象外で、``start_time`` が無いと
         ``ScheduleIntervalMissingError`` を投げる。
         """
         if not self.enabled or not self._date_matches(now.date(), holidays, calendar):
@@ -198,7 +211,7 @@ class ScheduleRule(MasterRow):
         if self.frequency == FREQUENCY_HOURLY:
             return self._is_hourly_due(now)
         if self.frequency in {FREQUENCY_DAILY, FREQUENCY_WEEKLY, FREQUENCY_MONTHLY}:
-            return self.run_time is None or now.time() >= self.run_time
+            return self.start_time is None or now.time() >= self.start_time
         raise UnsupportedScheduleFrequencyError(self.frequency)
 
     def _date_matches(
@@ -238,17 +251,17 @@ class ScheduleRule(MasterRow):
         return not self.month_end or (date + dt.timedelta(days=1)).month != date.month
 
     def _is_hourly_due(self, now: dt.datetime) -> bool:
-        """``run_time`` から 60 分刻みで一致するかを返す。
+        """``start_time`` から 60 分刻みで一致するかを返す。
 
-        ``interval_minutes`` 列は廃止し、判定は 60 分固定。``run_time`` が無い
+        ``interval_minutes`` 列は廃止し、判定は 60 分固定。``start_time`` が無い
         行は ``ScheduleIntervalMissingError``（「1時間ごとには開始時刻が必要」）
         を投げる。
         """
-        if self.run_time is None:
+        if self.start_time is None:
             raise ScheduleIntervalMissingError()
-        if now.time() < self.run_time:
+        if now.time() < self.start_time:
             return False
-        start_minutes = self.run_time.hour * 60 + self.run_time.minute
+        start_minutes = self.start_time.hour * 60 + self.start_time.minute
         now_minutes = now.hour * 60 + now.minute
         return (now_minutes - start_minutes) % 60 == 0
 

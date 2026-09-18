@@ -10,9 +10,9 @@ Excel の読み書きそのものの仕組みは含めない（`report_master.py
 仕組みは `comken.services.salesforce_downloader.report_master` にあり、ここは
 **どんな列があるか**を宣言する。
 
-    | ID   | 概要     | Salesforce URL              | グループ | 担当者 | 有効 |
-    |------|----------|-----------------------------|----------|--------|------|
-    | 1001 | 顧客一覧 | https://.../Report/00O.../  | 営業本部  | 山田   | 有効 |
+    | ID   | グループ | 担当者 | 概要     | Salesforce URL              | 有効 |
+    |------|----------|--------|----------|-----------------------------|------|
+    | 1001 | 営業本部  | 山田   | 顧客一覧 | https://.../Report/00O.../  | 有効 |
 
 **Salesforce のレポート ID は入力させない。** URL を貼れば `report_id_from_url()` が
 取り出す。ID を人が抜き出す工程を挟むと、そこで写し間違いが起きるうえ、
@@ -59,10 +59,10 @@ _DOMAIN = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report
 EXAMPLES = [
     {
         "key": "1001",
-        "summary": "顧客一覧",
-        "url": f"{_DOMAIN}/00O5g00000ABCDE/view",
         "group": "営業本部",
         "assignee": "山田太郎",
+        "summary": "顧客一覧",
+        "url": f"{_DOMAIN}/00O5g00000ABCDE/view",
         "enabled": True,
         "allow_empty": False,  # 普段はデータがあるが、念のため「×」（既定）
         "exceeds_row_limit": False,  # 2000行に収まる通常のレポート（既定）
@@ -70,10 +70,10 @@ EXAMPLES = [
     },
     {
         "key": "1002",
-        "summary": "売上実績",
-        "url": f"{_DOMAIN}/00O5g00000FGHIJ/view",
         "group": "営業本部",
         "assignee": "佐藤花子",
+        "summary": "売上実績",
+        "url": f"{_DOMAIN}/00O5g00000FGHIJ/view",
         "enabled": True,
         "allow_empty": True,  # 「該当データ無し」が普通に起きるレポートの例
         "exceeds_row_limit": False,
@@ -95,15 +95,6 @@ class ReportEntry(MasterRow):
         "参照先のレポートを差し替えても、この番号は変えません。"
         "前ゼロ（0001 など）や記号入りの値も使えます",
     )
-    summary: str = column(
-        "概要",
-        help="人が読んで何のレポートか分かる説明。記録用。出力パスには使いません",
-    )
-    url: str = column(
-        "Salesforce URL",
-        help="Salesforce でレポートを開いたときのアドレスを、そのまま貼り付けてください。"
-        "レポート ID を抜き出す必要はありません",
-    )
     # **出力先の組み立て:** 「ベースパス（設定シート）」のみ。第1階層は
     # `group_settings.load_group_settings()` で引いたベースパス（Python 側で
     # 組み立てるので、フォルダ列を人が打つ必要は無い）。`assignee` / `summary`
@@ -116,6 +107,15 @@ class ReportEntry(MasterRow):
     assignee: str = column(
         "担当者",
         help="記録用の担当者名。出力パスには使いません",
+    )
+    summary: str = column(
+        "概要",
+        help="人が読んで何のレポートか分かる説明。記録用。出力パスには使いません",
+    )
+    url: str = column(
+        "Salesforce URL",
+        help="Salesforce でレポートを開いたときのアドレスを、そのまま貼り付けてください。"
+        "レポート ID を抜き出す必要はありません",
     )
     # **既定値を持たせない。** 空欄を「有効」にすると、書き忘れがそのまま有効になり、
     # 「まだ有効にしたくない」のか「書き方が分からず空にした」のか区別できなくなる。

@@ -27,6 +27,7 @@ SCHEDULE_HEADERS = [
     "スケジュールキー",
     "レポートキー",
     "取得頻度",
+    "取得開始時刻",
     "取得時刻",
     "曜日",
     "日付",
@@ -89,17 +90,17 @@ class TestLoadSchedule:
                 ],
             ],
             schedule_rows=[
-                # スケジュールキー / レポートキー / 取得頻度 / 取得時刻 / 曜日 /
-                # 日付 / 祝日対応 / 有効 の8列で書く
-                ["S001", "1001", "毎週", "09:00", "月", "", "取得しない", "○"],
-                ["S002", "1002", "毎日", "10:30", "", "", "取得しない", "○"],
+                # スケジュールキー / レポートキー / 取得頻度 / 取得開始時刻 /
+                # 取得時刻 / 曜日 / 日付 / 祝日対応 / 有効 の9列で書く
+                ["S001", "1001", "毎週", "09:00", "", "月", "", "取得しない", "○"],
+                ["S002", "1002", "毎日", "10:30", "", "", "", "取得しない", "○"],
             ],
         )
         rules = load_schedule(master)
         assert [rule.schedule_key for rule in rules] == ["S001", "S002"]
         assert rules[0].weekday == 0  # 月曜
-        assert rules[1].run_time is not None
-        assert rules[1].run_time.hour == 10
+        assert rules[1].start_time is not None
+        assert rules[1].start_time.hour == 10
 
     def test_blank_rows_are_skipped(self, tmp_path):
         master = make_master_with_schedule(
@@ -116,9 +117,9 @@ class TestLoadSchedule:
                 ]
             ],
             schedule_rows=[
-                ["S001", "1001", "毎週", "09:00", "月", "", "取得しない", "○"],
+                ["S001", "1001", "毎週", "09:00", "", "月", "", "取得しない", "○"],
                 [None] * len(SCHEDULE_HEADERS),  # 空行は読み飛ばす
-                ["S002", "1002", "毎日", "10:30", "", "", "取得しない", "○"],
+                ["S002", "1002", "毎日", "10:30", "", "", "", "取得しない", "○"],
             ],
         )
         rules = load_schedule(master)
@@ -159,8 +160,8 @@ class TestLoadSchedule:
                 ]
             ],
             schedule_rows=[
-                ["S001", "1001", "毎週", "09:00", "月", "", "取得しない", "○"],
-                ["S001", "1002", "毎週", "10:00", "火", "", "取得しない", "○"],  # 重複
+                ["S001", "1001", "毎週", "09:00", "", "月", "", "取得しない", "○"],
+                ["S001", "1002", "毎週", "10:00", "", "火", "", "取得しない", "○"],  # 重複
             ],
         )
         with pytest.raises(MasterDuplicateValueError) as e:
@@ -190,6 +191,7 @@ class TestLoadSchedule:
                     "1001",
                     "毎週",
                     "09:00",
+                    "",
                     "月",
                     "",
                     "取得しない",
@@ -219,7 +221,7 @@ class TestLoadSchedule:
                 ]
             ],
             schedule_rows=[
-                ["S001", "1001", "ときどき", "09:00", "", "", "取得しない", "○"],
+                ["S001", "1001", "ときどき", "09:00", "", "", "", "取得しない", "○"],
             ],
         )
         with pytest.raises(MasterRowValueError) as e:
@@ -242,7 +244,7 @@ class TestLoadSchedule:
                 ]
             ],
             schedule_rows=[
-                ["S001", "1001", "毎週", "09:00", "月", "", "取得しない", ""],
+                ["S001", "1001", "毎週", "09:00", "", "月", "", "取得しない", ""],
             ],
         )
         with pytest.raises(MasterRowValueError) as e:
@@ -265,7 +267,7 @@ class TestLoadSchedule:
                 ]
             ],
             schedule_rows=[
-                ["S001", "1001", "毎月", "06:00", "", "15", "取得しない", "○"],
+                ["S001", "1001", "毎月", "06:00", "", "", "15", "取得しない", "○"],
             ],
         )
         rules = load_schedule(master)
