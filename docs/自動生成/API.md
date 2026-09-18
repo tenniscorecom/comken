@@ -6666,7 +6666,7 @@ def __init__(self, title: str) -> None:
 
 定義を解決できませんでした。
 
-### `file_path_of`
+### `output_path`
 
 定義を解決できませんでした。
 

@@ -12,12 +12,19 @@
 戻り値は `Table`。行の検索・抽出・索引化は Table の API でできる。
 パスだけ欲しい場合は `cached_report_path()` を使う。
 
+**2026-09 に出力パスの組み立てを 1 本化した。** フォルダは設定シートのベースパスのみ、
+ファイル名は ``{管理番号}_{スケジュール時刻:%Y%m%d_%H%M}.csv``。 ``assignee`` /
+``summary`` は管理表に残してあるが、出力パスには使わない。 ``cached_report()`` /
+``cached_report_path()`` は固定パスを直接読む方式から、フォルダ内検索で当日分の
+最新ファイルを返す方式に変更した。
+
 このファイルが持つもの:
 - 定期取得済みのファイルを返す
-- 保存先パスの組み立て（`file_path_of` / `daily_cache_path_of` / `report_folder`）
+- 保存先パスの組み立て（`output_path` / `report_folder`）
+- フォルダ内で当日分の最新ファイルを検索する `_latest_today_path`
 
 ここに書かないもの:
-- Salesforce への問い合わせ → service.py
+- Salesforce への問い合わせ → service.py（Salesforceレポートダウンローダー側）
 - 履歴への記録 → history.py
 - 管理表の読み込み（列定義・雛形・検査）→ master.py
 - 設定シート（グループ→ベースパス）の列定義 → sheets/group_settings.py
@@ -29,7 +36,6 @@ from collections import OrderedDict
 from pathlib import Path
 
 from comken.core.clock import now as clock_now
-from comken.core.files import DateNameBuilder
 from comken.core.table.model import Table
 from comken.core.timer import measure
 from comken.exceptions import (
@@ -86,16 +92,14 @@ _master_cache: OrderedDict[str, dict[str, ReportEntry]] = OrderedDict()
 _GROUP_SETTINGS_CACHE_MAXSIZE = 16
 _group_settings_cache: OrderedDict[str, dict[str, Path]] = OrderedDict()
 
-# ── service.py から移動してきた定数 ──
-# ファイル名に使えない文字。概要をファイル名に混ぜるので、ここで落とす
-_FORBIDDEN_IN_NAME = '\\/:*?"<>|'
-# 概要が長いとパスが伸びすぎるので、ファイル名に使うのはこの長さまで
-_SUMMARY_LIMIT = 30
-
 
 @measure
 def cached_report(report_key: str, project: str = "") -> Table:
     """本日の定期取得キャッシュを `Table` で返す。**取りに行かない。**
+
+    フォルダ (``report_folder()`` が返すベースパス) 配下から「``{管理番号}_{今日の日付}_*.csv``」
+    のファイルを検索し、ファイル名の並び順で一番新しいもの（``%Y%m%d_%H%M`` の
+    ゼロパディング文字列なので辞書順＝時刻順）の中身を ``Table`` で返す。
 
     Args:
         report_key: 管理表の管理番号（例: "1001"）。
@@ -111,9 +115,13 @@ def cached_report(report_key: str, project: str = "") -> Table:
         GroupNotRegisteredError: 設定シートにないグループ名が管理表に書かれている場合。
     """
     entry = _find(report_key, MASTER_PATH)
-    path = daily_cache_path_of(entry)
-    if not path.is_file():
-        raise CachedReportNotFoundError(entry.key, entry.summary, path)
+    path = _latest_today_path(entry)
+    if path is None:
+        raise CachedReportNotFoundError(
+            entry.key,
+            entry.summary,
+            report_folder(entry, _load_group_settings_cached(MASTER_PATH)),
+        )
     logger.info("本日の定期取得キャッシュを使います: %s", path)
     with CSV(path, read_only=True, columns=[] if path.stat().st_size == 0 else None) as csv_file:
         return csv_file.read()
@@ -123,7 +131,9 @@ def cached_report(report_key: str, project: str = "") -> Table:
 def cached_report_path(report_key: str) -> Path:
     """本日の定期取得キャッシュが置かれるパスを返す。中身は読まない。
 
-    ファイル自体を別のツールに渡したいときに使う。**取りに行かない。**
+    ファイル自体を別のツールに渡したいときに使う。**取りに行かない。** フォルダ
+    配下から当日分の最新ファイルを検索する ``cached_report()`` と同じ規則で
+    パスを返す（1日に複数回取得があったら、一番新しい時刻のファイル）。
 
     Args:
         report_key: 管理表の管理番号（例: "1001"）。
@@ -137,59 +147,32 @@ def cached_report_path(report_key: str) -> Path:
         GroupNotRegisteredError: 設定シートにないグループ名が管理表に書かれている場合。
     """
     entry = _find(report_key, MASTER_PATH)
-    return daily_cache_path_of(entry)
+    path = _latest_today_path(entry)
+    if path is None:
+        raise CachedReportNotFoundError(
+            entry.key,
+            entry.summary,
+            report_folder(entry, _load_group_settings_cached(MASTER_PATH)),
+        )
+    return path
 
 
-def file_path_of(entry: ReportEntry) -> Path:
-    """そのレポートを保存するパス。
-
-    ファイル名は「管理番号_概要_日付_時刻_マイクロ秒」。**管理番号を先頭に置く**のは、概要や
-    参照先の Salesforce レポートが変わっても、番号は変わらないため。概要を入れるのは、
-    保存先を人が直接見たときに何のファイルか分かるようにするため。拡張子は
-    常に ``.csv``。
-
-    フォルダ部分は ``report_folder()`` で組み立てる（管理表の `group` / `assignee`
-    と、設定シートのベースパスから Python 側で組み立てる）。
-    """
-    name = f"{entry.key}_{_safe_summary(entry.summary)}.csv"
-    folder = report_folder(entry, _load_group_settings_cached(MASTER_PATH))
-    return folder / DateNameBuilder(name).suffix("%Y%m%d_%H%M%S_%f")
-
-
-def daily_cache_path_of(entry: ReportEntry) -> Path:
-    """定期取得の当日最新キャッシュに使う固定パスを返す。
-
-    時刻を含めないことで、同日に何度取得しても読む側が同じパスを直接確認できる。
-    拡張子は常に ``.csv``。
-
-    フォルダ部分は ``report_folder()`` で組み立てる（管理表の `group` / `assignee`
-    と、設定シートのベースパスから Python 側で組み立てる）。
-    """
-    name = f"{entry.key}_{_safe_summary(entry.summary)}.csv"
-    folder = report_folder(entry, _load_group_settings_cached(MASTER_PATH))
-    return folder / DateNameBuilder(name).suffix("%Y%m%d")
-
-
-def rpa_output_path(
+def output_path(
     entry: ReportEntry,
     schedule_run_time: dt.time | None = None,
     *,
     now: dt.datetime | None = None,
 ) -> Path:
-    """既存の社内RPA（9291）向けの固定名/準固定名の保存先パスを返す。
+    """レポートの保存先パス（唯一の出力先）を返す。
 
-    既存の ``file_path_of()`` / ``daily_cache_path_of()`` と同じく、フォルダ部分は
-    ``report_folder()`` で組み立てる（設定シートのベースパス配下）。ファイル名だけ
-    ``entry.report_name`` と ``entry.save_mode`` で決める:
+    フォルダは ``report_folder()``（設定シートのベースパスをそのまま返す）。
+    ファイル名は ``{管理番号}_{時刻:%Y%m%d_%H%M}.csv``。時刻は ``schedule_run_time``
+    （今回の取得の根拠になったスケジュール行の「取得時刻」）を優先し、 ``None``
+    （スケジュール行が無いレポート、後方互換）のときは ``now``（省略時は現在時刻）
+    をそのまま使う。
 
-    - 「上書き」: ``entry.report_name`` をそのまま使う（拡張子が無ければ ``.csv`` を補う）。
-      毎回同じパスになり、呼び出し側が上書き保存する想定
-    - 「新規」: ``entry.report_name`` の拡張子を除いた stem に、
-      ``{schedule_run_time:%Y%m%d_%H%M}`` を付けた名前にする。``schedule_run_time``
-      が ``None`` のときは ``now``（省略時は現在時刻）をそのまま使う
-
-    ``save_mode`` は `ReportEntry` の `choices` で「上書き」「新規」しか通らないため、
-    それ以外の値はこの関数に来ない。
+    常に新規ファイルとして扱う（同じパスへの上書きは想定しない。衝突回避は呼び出し側
+    ``Salesforceレポートダウンローダー`` の ``_reserve_unique_path`` の責務）。
 
     Args:
         entry: レポート管理表の1行。
@@ -201,37 +184,40 @@ def rpa_output_path(
     Raises:
         GroupNotRegisteredError: 設定シートにないグループ名の場合（``report_folder()`` 経由）。
     """
-    base_name = _normalized_report_name(entry.report_name)
     folder = report_folder(entry, _load_group_settings_cached(MASTER_PATH))
-    if entry.save_mode == "上書き":
-        return folder / base_name
-    # 「新規」: stem に ``%Y%m%d_%H%M`` を足す。 ``schedule_run_time`` が ``None``
-    # のときは ``now``（省略時は現在時刻）をそのまま使う
     current = now if now is not None else clock_now()
     if schedule_run_time is not None:
         base_dt = dt.datetime.combine(current.date(), schedule_run_time)
     else:
         base_dt = current
-    stem, _, ext = base_name.rpartition(".")
-    return folder / f"{stem}_{base_dt.strftime('%Y%m%d_%H%M')}.{ext}"
+    return folder / f"{entry.key}_{base_dt.strftime('%Y%m%d_%H%M')}.csv"
 
 
-def _normalized_report_name(name: str) -> str:
-    """9291 向けのファイル名について、拡張子が無ければ ``.csv`` を補う。
+def _latest_today_path(entry: ReportEntry) -> Path | None:
+    """フォルダ内で本日分のファイルを探し、ファイル名の並び順で最新を返す。無ければ ``None``。
 
-    小文字の ``.csv`` のみ受け付ける（仕様上、``.CSV`` など大文字小文字混在は
-    想定していない）。呼び出し側の `ReportEntry.save_mode` が choices で固定値の
-    ため、ここで変な値が来ないことを前提にシンプルにしている。
+    ファイル名は ``{管理番号}_{YYYYMMDD}_{HHMM}.csv`` の形。 ``YYYYMMDD_HHMM`` は
+    ゼロパディングされた数値文字列なので、文字列ソート順がそのまま時刻の昇順と
+    一致する。 ``ScheduleRule.run_time`` は ``%H:%M`` の2桁ゼロパディング形式で
+    保存されているため問題ない。
+
+    検索範囲は ``report_folder()`` が返すベースパスの直下。サブフォルダは
+    見ない（フォルダ階層は「ベースパスのみ」に1本化したため、配下に別フォルダは
+    存在しない設計）。
     """
-    return name if name.lower().endswith(".csv") else f"{name}.csv"
+    folder = report_folder(entry, _load_group_settings_cached(MASTER_PATH))
+    today = clock_now().strftime("%Y%m%d")
+    candidates = sorted(folder.glob(f"{entry.key}_{today}_*.csv"))
+    return candidates[-1] if candidates else None
 
 
 def report_folder(entry: ReportEntry, group_settings: dict[str, Path]) -> Path:
     """管理表の1行と設定シートから、保存先フォルダを組み立てる。
 
-    組み立てルールは **「ベースパス（設定シート）/ 担当者（管理表）/ 概要（管理表）」**
-    の3階層。Excel の数式で組み立てる案は openpyxl が数式セルを信頼できない
-    ため採用せず、Python 側で連結する。
+    組み立てルールは **「設定シートのベースパス」** のみ。 管理表の `assignee`
+    / `summary` は**出力パスには使わない**（管理表には残してあっても、フォルダ
+    階層には影響しない）。 Excel の数式で組み立てる案は openpyxl が数式セルを
+    信頼できないため採用せず、Python 側で連結する。
 
     Args:
         entry: レポート管理表の1行。
@@ -247,7 +233,7 @@ def report_folder(entry: ReportEntry, group_settings: dict[str, Path]) -> Path:
     base_path = group_settings.get(entry.group)
     if base_path is None:
         raise GroupNotRegisteredError(entry.group, sorted(group_settings), MASTER_PATH)
-    return base_path / entry.assignee / entry.summary
+    return base_path
 
 
 def _find(report_key: str, master_path: Path) -> ReportEntry:
@@ -323,9 +309,3 @@ def _reset_cached_master() -> None:
     """
     _master_cache.clear()
     _group_settings_cache.clear()
-
-
-def _safe_summary(summary: str) -> str:
-    """概要をファイル名に使える形にする。"""
-    cleaned = "".join(char for char in summary if char not in _FORBIDDEN_IN_NAME).strip()
-    return cleaned[:_SUMMARY_LIMIT] or "レポート"

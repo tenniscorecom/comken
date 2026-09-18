@@ -23,9 +23,12 @@ Excel の読み書きそのものの仕組みは含めない（`report_master.py
 利用側の Python コード（`CUSTOMER_LIST = "1001"`）は変えずに済む。
 
 **出力先フォルダは Excel のセル（保存先列）には書かない。** `グループ` 列 +
-`担当者` 列 + `概要` 列 + `設定` シート（`group_settings.py`）の組み合わせで
-Python 側で組み立てる（`provider.report_folder()`）。Excel の数式で組み立てる
-案は openpyxl が数式セルを信頼できないため採用しなかった。
+`設定` シート（`group_settings.py`）の組み合わせで Python 側で組み立てる
+（`provider.report_folder()`）。Excel の数式で組み立てる案は openpyxl が数式
+セルを信頼できないため採用しなかった。
+
+**2026-09 から `担当者` / `概要` は出力パスに使わなくなった。** 管理表には
+残してある（記録用のため）が、フォルダ階層の組み立てには影響しない。
 
 このファイルが持つもの:
 - 管理表にどんな列があるか
@@ -64,8 +67,6 @@ EXAMPLES = [
         "allow_empty": False,  # 普段はデータがあるが、念のため「×」（既定）
         "exceeds_row_limit": False,  # 2000行に収まる通常のレポート（既定）
         "use_soql": False,  # Report API のまま（既定）
-        "report_name": "顧客一覧.csv",  # 9291 が読みに来る固定名（例）
-        "save_mode": "上書き",
     },
     {
         "key": "1002",
@@ -77,8 +78,6 @@ EXAMPLES = [
         "allow_empty": True,  # 「該当データ無し」が普通に起きるレポートの例
         "exceeds_row_limit": False,
         "use_soql": False,
-        "report_name": "売上実績.csv",
-        "save_mode": "新規",  # 取得ごとに時刻付きで残す例
     },
 ]
 
@@ -98,18 +97,17 @@ class ReportEntry(MasterRow):
     )
     summary: str = column(
         "概要",
-        help="人が読んで何のレポートか分かる説明。保存するファイル名にも使われ、"
-        "出力パスの第3階層にも使われます",
+        help="人が読んで何のレポートか分かる説明。記録用。出力パスには使いません",
     )
     url: str = column(
         "Salesforce URL",
         help="Salesforce でレポートを開いたときのアドレスを、そのまま貼り付けてください。"
         "レポート ID を抜き出す必要はありません",
     )
-    # **出力先の組み立て:** 「ベースパス（設定シート） / 担当者 / 概要 / ファイル名」
-    # の3階層になる。第1階層は `group_settings.load_group_settings()` で引いた
-    # ベースパス、`assignee` が第2階層、`summary` が第3階層（Python 側で組み立てる
-    # ので、フォルダ列を人が打つ必要は無い）
+    # **出力先の組み立て:** 「ベースパス（設定シート）」のみ。第1階層は
+    # `group_settings.load_group_settings()` で引いたベースパス（Python 側で
+    # 組み立てるので、フォルダ列を人が打つ必要は無い）。`assignee` / `summary`
+    # は記録用に残してあるが、出力パスには影響しない
     group: str = column(
         "グループ",
         help="出力先を決めるグループ名。sheets/group_settings.py の設定シートに"
@@ -117,26 +115,7 @@ class ReportEntry(MasterRow):
     )
     assignee: str = column(
         "担当者",
-        help="出力パスの第2階層に使う担当者名",
-    )
-    # 既存の社内RPA（9291）向けの固定名/準固定名の出力。フォルダは ``report_folder``
-    # と共通（=「ベースパス/担当者/概要」の3階層）で、ファイル名だけ ``report_name`` +
-    # ``save_mode`` で組み立てる。
-    #
-    # **既定値は両方とも付けない（必須列）。** 書き忘れたレポートで 9291 向け出力が
-    # 黙って止まると、業務側だけが「データが来ない」と困る。設定の有無を明示するため、
-    # `master.py` の `enabled` 列と同じく、必須扱いにしておく
-    report_name: str = column(
-        "出力ファイル名",
-        help="既存の社内RPA（9291）が読みに行く固定ファイル名。"
-        "拡張子込みで書いてください（例: 「月次受注.csv」）。"
-        "拡張子を省略した場合は自動的に .csv を補います。空欄にはできません",
-    )
-    save_mode: str = column(
-        "保存方式",
-        choices=("上書き", "新規"),
-        help="「上書き」は「出力ファイル名」の固定名で毎回上書きします（9291互換）。"
-        "「新規」は取得のたびに別名（スケジュール時刻を付けた名前）で残します",
+        help="記録用の担当者名。出力パスには使いません",
     )
     # **既定値を持たせない。** 空欄を「有効」にすると、書き忘れがそのまま有効になり、
     # 「まだ有効にしたくない」のか「書き方が分からず空にした」のか区別できなくなる。

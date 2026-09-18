@@ -17,7 +17,7 @@ r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポー�
 
     cached_report         本日の定期取得キャッシュを CSV で返す（取りに行かない）
     cached_report_path    本日の定期取得キャッシュが置かれるパスを返す（中身は読まない）
-    file_path_of          そのレポートが保存されるパス
+    output_path           そのレポートの唯一の保存先パスを返す
     load_master           管理表を読む
     shared_report_ids     同じ Salesforce レポートを指している管理番号を返す
     ReportEntry           管理表の1行
@@ -52,6 +52,11 @@ Salesforce から手動ダウンロードするか、そちらのプロジェク
   `provider.daily_cache_path_of` など、ここで定義する形式を import して使う
   （これらのモジュール・シンボルにアンダースコアを付けていないのは、この
   外部からの import を想定しているため）。
+- 2026-09: 出力パスの組み立てを3系統（``file_path_of`` / ``daily_cache_path_of`` /
+  ``rpa_output_path``）から1本化した。フォルダは設定シートのベースパスのみ、
+  ファイル名は ``{管理番号}_{スケジュール時刻}.csv`` に統一。``cached_report()`` /
+  ``cached_report_path()`` は固定パスを直接読む方式から、フォルダ内検索で当日分の
+  最新ファイルを返す方式に変更。
 - 2026-08-30 に comken から分離し、外部の別リポジトリ
   （`comken-salesforce-downloader` → 最終的に `Salesforceレポートダウンローダー`）として
   運用していた
@@ -105,14 +110,14 @@ if TYPE_CHECKING:
     from comken.services.salesforce_downloader.provider import (
         cached_report,
         cached_report_path,
-        file_path_of,
+        output_path,
     )
     from comken.services.salesforce_downloader.sheets.history import downloaded_today
 
 __all__ = [
     "cached_report",
     "cached_report_path",
-    "file_path_of",
+    "output_path",
     "load_master",
     "shared_report_ids",
     "downloaded_today",
@@ -124,7 +129,7 @@ __all__ = [
 _LAZY_TARGETS: dict[str, str] = {
     "cached_report": "comken.services.salesforce_downloader.provider",
     "cached_report_path": "comken.services.salesforce_downloader.provider",
-    "file_path_of": "comken.services.salesforce_downloader.provider",
+    "output_path": "comken.services.salesforce_downloader.provider",
     "downloaded_today": "comken.services.salesforce_downloader.sheets.history",
 }
 

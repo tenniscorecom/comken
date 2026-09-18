@@ -336,6 +336,4 @@ def _entry(tmp_path: Path) -> ReportEntry:
         assignee="山田太郎",
         enabled=True,
         allow_empty=False,
-        report_name="顧客一覧.csv",
-        save_mode="上書き",
     )
