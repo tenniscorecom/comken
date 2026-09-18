@@ -23,10 +23,12 @@
 - 設定シート（グループ→ベースパス）の列定義 → sheets/group_settings.py
 """
 
+import datetime as dt
 import logging
 from collections import OrderedDict
 from pathlib import Path
 
+from comken.core.clock import now as clock_now
 from comken.core.files import DateNameBuilder
 from comken.core.table.model import Table
 from comken.core.timer import measure
@@ -166,6 +168,62 @@ def daily_cache_path_of(entry: ReportEntry) -> Path:
     name = f"{entry.key}_{_safe_summary(entry.summary)}.csv"
     folder = report_folder(entry, _load_group_settings_cached(MASTER_PATH))
     return folder / DateNameBuilder(name).suffix("%Y%m%d")
+
+
+def rpa_output_path(
+    entry: ReportEntry,
+    schedule_run_time: dt.time | None = None,
+    *,
+    now: dt.datetime | None = None,
+) -> Path:
+    """既存の社内RPA（9291）向けの固定名/準固定名の保存先パスを返す。
+
+    既存の ``file_path_of()`` / ``daily_cache_path_of()`` と同じく、フォルダ部分は
+    ``report_folder()`` で組み立てる（設定シートのベースパス配下）。ファイル名だけ
+    ``entry.report_name`` と ``entry.save_mode`` で決める:
+
+    - 「上書き」: ``entry.report_name`` をそのまま使う（拡張子が無ければ ``.csv`` を補う）。
+      毎回同じパスになり、呼び出し側が上書き保存する想定
+    - 「新規」: ``entry.report_name`` の拡張子を除いた stem に、
+      ``{schedule_run_time:%Y%m%d_%H%M}`` を付けた名前にする。``schedule_run_time``
+      が ``None`` のときは ``now``（省略時は現在時刻）をそのまま使う
+
+    ``save_mode`` は `ReportEntry` の `choices` で「上書き」「新規」しか通らないため、
+    それ以外の値はこの関数に来ない。
+
+    Args:
+        entry: レポート管理表の1行。
+        schedule_run_time: 今回の取得の根拠になったスケジュール行の「取得時刻」
+            （``ScheduleRule.run_time``）。無ければ ``now`` にフォールバックする。
+        now: ``schedule_run_time`` が無いときに使う時刻。省略時は現在時刻
+            （``comken.core.clock.now()`` を使う）。
+
+    Raises:
+        GroupNotRegisteredError: 設定シートにないグループ名の場合（``report_folder()`` 経由）。
+    """
+    base_name = _normalized_report_name(entry.report_name)
+    folder = report_folder(entry, _load_group_settings_cached(MASTER_PATH))
+    if entry.save_mode == "上書き":
+        return folder / base_name
+    # 「新規」: stem に ``%Y%m%d_%H%M`` を足す。 ``schedule_run_time`` が ``None``
+    # のときは ``now``（省略時は現在時刻）をそのまま使う
+    current = now if now is not None else clock_now()
+    if schedule_run_time is not None:
+        base_dt = dt.datetime.combine(current.date(), schedule_run_time)
+    else:
+        base_dt = current
+    stem, _, ext = base_name.rpartition(".")
+    return folder / f"{stem}_{base_dt.strftime('%Y%m%d_%H%M')}.{ext}"
+
+
+def _normalized_report_name(name: str) -> str:
+    """9291 向けのファイル名について、拡張子が無ければ ``.csv`` を補う。
+
+    小文字の ``.csv`` のみ受け付ける（仕様上、``.CSV`` など大文字小文字混在は
+    想定していない）。呼び出し側の `ReportEntry.save_mode` が choices で固定値の
+    ため、ここで変な値が来ないことを前提にシンプルにしている。
+    """
+    return name if name.lower().endswith(".csv") else f"{name}.csv"
 
 
 def report_folder(entry: ReportEntry, group_settings: dict[str, Path]) -> Path:

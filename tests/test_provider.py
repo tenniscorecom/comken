@@ -11,6 +11,7 @@
 差し替える。
 """
 
+import datetime as dt
 from pathlib import Path
 
 import pytest
@@ -46,6 +47,21 @@ HEADERS = [
     "概要",
     "Salesforce URL",
     "有効",
+    "出力ファイル名",
+    "保存方式",
+    "備考",
+]
+
+# 9291 向けの固定名出力を有効にした管理表の見出し。`make_master_with_rpa()` で使う
+HEADERS_RPA = [
+    "ID",
+    "グループ",
+    "担当者",
+    "概要",
+    "Salesforce URL",
+    "有効",
+    "出力ファイル名",
+    "保存方式",
     "備考",
 ]
 
@@ -73,6 +89,23 @@ def make_master(path: Path, rows: list[list], settings_rows: list[list] | None =
     table_rows = [dict(zip(HEADERS, row, strict=True)) for row in rows]
     with Excel(path) as book:
         book.create_data_sheet("管理表").create_table("管理表", Table(HEADERS, table_rows))
+        if settings_rows is not None:
+            settings_table_rows = [
+                dict(zip(GROUP_SETTINGS_HEADERS, row, strict=True)) for row in settings_rows
+            ]
+            book.create_data_sheet("設定").create_table(
+                "設定", Table(GROUP_SETTINGS_HEADERS, settings_table_rows)
+            )
+    return path
+
+
+def make_master_with_rpa(
+    path: Path, rows: list[list], settings_rows: list[list] | None = None
+) -> Path:
+    """「出力ファイル名」「保存方式」列を含む 9291 向け管理表を作る。"""
+    table_rows = [dict(zip(HEADERS_RPA, row, strict=True)) for row in rows]
+    with Excel(path) as book:
+        book.create_data_sheet("管理表").create_table("管理表", Table(HEADERS_RPA, table_rows))
         if settings_rows is not None:
             settings_table_rows = [
                 dict(zip(GROUP_SETTINGS_HEADERS, row, strict=True)) for row in settings_rows
@@ -111,6 +144,8 @@ def paths(tmp_path, monkeypatch):
                 "顧客一覧",
                 URL_A,
                 "○",
+                "顧客一覧.csv",
+                "上書き",
                 "",
             ],
             [
@@ -120,6 +155,8 @@ def paths(tmp_path, monkeypatch):
                 "売上実績",
                 URL_B,
                 "○",
+                "売上実績.csv",
+                "上書き",
                 "",
             ],
             [
@@ -129,6 +166,8 @@ def paths(tmp_path, monkeypatch):
                 "停止中",
                 URL_B,
                 "×",
+                "停止中.csv",
+                "上書き",
                 "",
             ],
         ],
@@ -181,6 +220,8 @@ class TestFilePathOf:
                     "顧客一覧",
                     URL_A,
                     "○",
+                    "顧客一覧.csv",
+                    "上書き",
                     "",
                 ]
             ],
@@ -211,6 +252,8 @@ class TestFilePathOf:
                     "禁則: A/B?C*D",
                     URL_A,
                     "○",
+                    "禁則.csv",
+                    "上書き",
                     "",
                 ]
             ],
@@ -240,6 +283,8 @@ class TestFilePathOf:
                     long_summary,
                     URL_A,
                     "○",
+                    "顧客一覧.csv",
+                    "上書き",
                     "",
                 ]
             ],
@@ -362,6 +407,8 @@ class TestGroupSettingsLoading:
                     "顧客一覧",
                     URL_A,
                     "○",
+                    "顧客一覧.csv",
+                    "上書き",
                     "",
                 ]
             ],
@@ -377,3 +424,152 @@ class TestGroupSettingsLoading:
             provider_module.file_path_of(entry)
         assert "未知グループ" in str(caught.value)
         assert "営業本部" in str(caught.value)
+
+
+class TestRpaOutputPath:
+    """``rpa_output_path()`` は 9291 向けの固定名/準固定名パスを組み立てる。"""
+
+    def _make_master(
+        self,
+        tmp_path: Path,
+        *,
+        base_path: Path,
+        report_name: str,
+        save_mode: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> Path:
+        """9291 列を含む管理表を作って ``MASTER_PATH`` へ差し替える。"""
+        (base_path / "山田" / "顧客一覧").mkdir(parents=True, exist_ok=True)
+        master = make_master_with_rpa(
+            tmp_path / "管理表.xlsx",
+            [
+                [
+                    "1001",
+                    "営業本部",
+                    "山田",
+                    "顧客一覧",
+                    URL_A,
+                    "○",
+                    report_name,
+                    save_mode,
+                    "",
+                ]
+            ],
+            settings_rows=[["営業本部", str(base_path)]],
+        )
+        monkeypatch.setattr(provider_module, "MASTER_PATH", master)
+        return master
+
+    def test_overwrite_mode_returns_fixed_name_in_report_folder(self, tmp_path, monkeypatch):
+        """「上書き」モードでは ``entry.report_name`` をそのまま保存先にする（拡張子補完あり）。"""
+        base_path = tmp_path / "ベース"
+        base_path.mkdir()
+        self._make_master(
+            tmp_path,
+            base_path=base_path,
+            report_name="月次受注",
+            save_mode="上書き",
+            monkeypatch=monkeypatch,
+        )
+        entry = load_master(provider_module.MASTER_PATH)["1001"]
+        path = provider_module.rpa_output_path(entry)
+        assert path == base_path / "山田" / "顧客一覧" / "月次受注.csv"
+
+    def test_overwrite_mode_preserves_existing_extension(self, tmp_path, monkeypatch):
+        """「上書き」モードで既に ``.csv`` が付いていれば補完しない。"""
+        base_path = tmp_path / "ベース"
+        base_path.mkdir()
+        self._make_master(
+            tmp_path,
+            base_path=base_path,
+            report_name="月次受注.csv",
+            save_mode="上書き",
+            monkeypatch=monkeypatch,
+        )
+        entry = load_master(provider_module.MASTER_PATH)["1001"]
+        path = provider_module.rpa_output_path(entry)
+        assert path.name == "月次受注.csv"
+
+    def test_new_mode_appends_schedule_run_time(self, tmp_path, monkeypatch):
+        """「新規」モード + ``schedule_run_time`` 指定 → stem に ``%Y%m%d_%H%M`` を付ける。"""
+        base_path = tmp_path / "ベース"
+        base_path.mkdir()
+        self._make_master(
+            tmp_path,
+            base_path=base_path,
+            report_name="月次受注.csv",
+            save_mode="新規",
+            monkeypatch=monkeypatch,
+        )
+        entry = load_master(provider_module.MASTER_PATH)["1001"]
+        run_time = dt.time(9, 0)
+        # 日付は ``now`` 引数（ここでは ``clock_now`` の戻り値）から採るため、明示する
+        fixed_now = dt.datetime(2026, 9, 18, 9, 5)  # noqa: DTZ001 — テスト用に意図的に固定した tz-naive な datetime
+        path = provider_module.rpa_output_path(entry, run_time, now=fixed_now)
+        assert path == base_path / "山田" / "顧客一覧" / "月次受注_20260918_0900.csv"
+
+    def test_new_mode_falls_back_to_now_when_no_schedule_run_time(
+        self, tmp_path, monkeypatch
+    ):
+        """スケジュール行が無いレポート（後方互換）で ``schedule_run_time=None`` のときは
+        ``now`` 引数の値（省略時は現在時刻）で補完する。"""
+        base_path = tmp_path / "ベース"
+        base_path.mkdir()
+        self._make_master(
+            tmp_path,
+            base_path=base_path,
+            report_name="月次受注.csv",
+            save_mode="新規",
+            monkeypatch=monkeypatch,
+        )
+        entry = load_master(provider_module.MASTER_PATH)["1001"]
+        fixed_now = dt.datetime(2026, 1, 7, 13, 30)  # noqa: DTZ001 — テスト用に意図的に固定した tz-naive な datetime
+        path = provider_module.rpa_output_path(entry, None, now=fixed_now)
+        assert path == base_path / "山田" / "顧客一覧" / "月次受注_20260107_1330.csv"
+
+    def test_new_mode_uses_clock_now_when_now_argument_omitted(
+        self, tmp_path, monkeypatch
+    ):
+        """``now`` 引数も省略した場合は ``clock_now()`` の現在時刻で補完する。"""
+        base_path = tmp_path / "ベース"
+        base_path.mkdir()
+        self._make_master(
+            tmp_path,
+            base_path=base_path,
+            report_name="月次受注.csv",
+            save_mode="新規",
+            monkeypatch=monkeypatch,
+        )
+        entry = load_master(provider_module.MASTER_PATH)["1001"]
+        fixed_now = dt.datetime(2026, 5, 4, 7, 0)  # noqa: DTZ001 — テスト用に意図的に固定した tz-naive な datetime
+        monkeypatch.setattr(provider_module, "clock_now", lambda: fixed_now)
+        path = provider_module.rpa_output_path(entry)
+        assert path == base_path / "山田" / "顧客一覧" / "月次受注_20260504_0700.csv"
+
+    def test_unknown_group_raises_group_not_registered(self, tmp_path, monkeypatch):
+        """``report_folder()`` 経由の ``GroupNotRegisteredError`` がそのまま上がる。"""
+        base_path = tmp_path / "ベース"
+        base_path.mkdir()
+        (base_path / "山田" / "顧客一覧").mkdir(parents=True, exist_ok=True)
+        master = make_master_with_rpa(
+            tmp_path / "管理表.xlsx",
+            [
+                [
+                    "1001",
+                    "未知グループ",
+                    "山田",
+                    "顧客一覧",
+                    URL_A,
+                    "○",
+                    "顧客一覧.csv",
+                    "上書き",
+                    "",
+                ]
+            ],
+            settings_rows=[["営業本部", str(base_path)]],
+        )
+        monkeypatch.setattr(provider_module, "MASTER_PATH", master)
+        entry = load_master(master)["1001"]
+        with pytest.raises(GroupNotRegisteredError) as caught:
+            provider_module.rpa_output_path(entry)
+        assert "未知グループ" in str(caught.value)
