@@ -35,6 +35,42 @@ logger = logging.getLogger(__name__)
 Value: TypeAlias = str | int | float | bool
 
 
+def read_text(path: str | Path, *, encoding: str = Encoding.AUTO) -> str:
+    """CSV ファイルをバイト列として読み、文字コードを判定して文字列を返す。
+
+    文字コードは次の順で試す:
+
+    1. ``encoding`` が ``Encoding.AUTO`` 以外なら、それをそのまま使う
+       （`csv.reader` 側にも渡す想定なので、Python の codec 名を入れる）
+    2. ``Encoding.AUTO`` のときは ``UTF8_SIG`` → ``CP932`` の順で
+       ``UnicodeDecodeError`` をベースに判定する
+
+    ``AUTO`` でどちらも読めなければ ``EncodingDetectionError`` を投げる。
+    ファイルの存在チェック・空ファイル分岐・BOM 除去などは呼び出し側に
+    任せる（``CSV.read()`` では BOM 除去も含めて ``csv.reader`` が処理する）。
+
+    ``comken.toolbox.csv.CSV`` の読み込み経路と、``comken.services
+    .salesforce_downloader.sheets.history`` の履歴 CSV 読み込み経路、
+    それから Salesforceレポートダウンローダーの ``_validate_existing_header``
+    で同じ判定を共有する（プログラムが書く分は UTF-8 BOM 付きだが、
+    人が Excel で開いて保存し直すと CP932 へ化けるため）。
+    """
+    path = Path(path)
+    raw = path.read_bytes()
+    if encoding != Encoding.AUTO:
+        logger.debug("CSV 読み込み: %s, encoding=%s", path, encoding)
+        return raw.decode(encoding)
+    for candidate in (Encoding.UTF8_SIG, Encoding.CP932):
+        try:
+            decoded = raw.decode(candidate)
+            logger.debug("CSV 読み込み: %s, encoding=%s (auto)", path, candidate)
+            return decoded
+        except UnicodeDecodeError:
+            continue
+    logger.debug("CSV 読み込み: 文字コードを判定できません: %s", path)
+    raise EncodingDetectionError(path)
+
+
 class CSV:
     """CSV ファイルを1つのデータ領域として読み書きする。
 
@@ -223,19 +259,8 @@ class CSV:
             raise CSVInvalidHeaderError(self.path, f"重複する見出しがあります: {duplicates}")
 
     def _read_text(self) -> str:
-        raw = self.path.read_bytes()
-        if self._encoding != Encoding.AUTO:
-            logger.debug("CSV 読み込み: %s, encoding=%s", self.path, self._encoding)
-            return raw.decode(self._encoding)
-        for encoding in (Encoding.UTF8_SIG, Encoding.CP932):
-            try:
-                decoded = raw.decode(encoding)
-                logger.debug("CSV 読み込み: %s, encoding=%s (auto)", self.path, encoding)
-                return decoded
-            except UnicodeDecodeError:
-                continue
-        logger.debug("CSV 読み込み: 文字コードを判定できません: %s", self.path)
-        raise EncodingDetectionError(self.path)
+        # 汎用ヘルパーに判定を委譲する（履歴CSVなどからも同じロジックを使う）
+        return read_text(self.path, encoding=self._encoding)
 
     def replace(self, rows: list[dict[str, Value]] | Table) -> None:
         """ファイルのデータ領域を全置換する。"""

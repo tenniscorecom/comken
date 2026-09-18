@@ -16,7 +16,8 @@ class CSVError(ComkenError):
 class EncodingDetectionError(CSVError):
     """CSV の文字コードを判定できない
 
-    発生箇所: CSV.read()
+    発生箇所: 文字コード自動判定時（``comken.toolbox.csv.read_text()`` /
+    ``comken.toolbox.csv.CSV.read()``）
 
     対処:
         CSV の保存形式を確認し、管理者へ連絡する
@@ -25,7 +26,7 @@ class EncodingDetectionError(CSVError):
     def __init__(self, path: Path | str) -> None:
         super().__init__(
             "文字コードを判定できませんでした（UTF-8 / CP932 のどちらでも読めません）: "
-            f"{path}\nCSV(path, encoding='文字コード名') で明示してください。"
+            f"{path}\nencoding 引数で明示してください。"
         )
 
 

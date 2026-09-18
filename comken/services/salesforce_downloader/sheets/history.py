@@ -20,16 +20,19 @@ import して使う。読み書きどちらの側も**同じ形式定義を参�
 
 import csv
 import datetime
+import io
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from comken.constants import Encoding
 from comken.core.clock import today
 from comken.core.table.model import Table
 from comken.core.timer import measure
 from comken.exceptions import HistoryHeaderMismatchError
 from comken.services.salesforce_downloader.history_file_lock import HistoryFileLock
+from comken.toolbox.csv import read_text
 
 logger = logging.getLogger(__name__)
 
@@ -150,11 +153,9 @@ def successful_files_today(
         target,
     )
     matches: list[Path] = []
-    with (
-        HistoryFileLock(history_path),
-        history_path.open("r", encoding="utf-8-sig", newline="") as f,
-    ):
-        reader = csv.DictReader(f)
+    with HistoryFileLock(history_path):
+        text = read_text(history_path, encoding=Encoding.AUTO)
+        reader = csv.DictReader(io.StringIO(text))
         _require_expected_header(history_path, reader.fieldnames)
         for row in reader:
             if (
@@ -214,11 +215,9 @@ def schedule_succeeded_today(
         key_text,
         target,
     )
-    with (
-        HistoryFileLock(history_path),
-        history_path.open("r", encoding="utf-8-sig", newline="") as f,
-    ):
-        reader = csv.DictReader(f)
+    with HistoryFileLock(history_path):
+        text = read_text(history_path, encoding=Encoding.AUTO)
+        reader = csv.DictReader(io.StringIO(text))
         _require_expected_header(history_path, reader.fieldnames)
         for row in reader:
             if (
@@ -286,11 +285,9 @@ def truncated_today(
         key_text,
         target,
     )
-    with (
-        HistoryFileLock(history_path),
-        history_path.open("r", encoding="utf-8-sig", newline="") as f,
-    ):
-        reader = csv.DictReader(f)
+    with HistoryFileLock(history_path):
+        text = read_text(history_path, encoding=Encoding.AUTO)
+        reader = csv.DictReader(io.StringIO(text))
         _require_expected_header(history_path, reader.fieldnames)
         for row in reader:
             if (
@@ -345,11 +342,9 @@ def read_history(path: str | Path) -> Table:
         logger.debug("履歴ファイル無し: path=%s, 件数=0", history_path)
         return Table(list(COLUMNS), [])
     logger.debug("履歴全件読み込み開始: path=%s", history_path)
-    with (
-        HistoryFileLock(history_path),
-        history_path.open("r", encoding="utf-8-sig", newline="") as f,
-    ):
-        reader = csv.DictReader(f)
+    with HistoryFileLock(history_path):
+        text = read_text(history_path, encoding=Encoding.AUTO)
+        reader = csv.DictReader(io.StringIO(text))
         _require_expected_header(history_path, reader.fieldnames)
         rows = [dict(row) for row in reader]
     logger.debug("履歴全件読み込み完了: path=%s, 件数=%d", history_path, len(rows))

@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from comken.core.clock import now
-from comken.exceptions import HistoryHeaderMismatchError
+from comken.exceptions import EncodingDetectionError, HistoryHeaderMismatchError
 from comken.services.salesforce_downloader.sheets.history import (
     COLUMNS,
     FAILURE,
@@ -337,3 +337,125 @@ def _entry(tmp_path: Path) -> ReportEntry:
         enabled=True,
         allow_empty=False,
     )
+
+
+def _write_row_cp932(path: Path, *, entry: ReportEntry, project: str, row: HistoryRow) -> None:
+    """テスト用: ``CP932`` で1行書く（Excel で開いて保存し直した履歴を再現）。
+
+    人が Excel で開いて上書き保存すると CP932 化するため、``read_text()`` 側が
+    それを吸収できることを確認する。日本語列名が CP932 のバイト列にしか
+    乗らないため、UTF-8 試行が失敗して CP932 経路を通る。
+    """
+
+    def _stage(value: bool | None) -> str:
+        if value is None:
+            return ""
+        return SUCCESS if value else FAILURE
+
+    values = [
+        now().strftime("%Y-%m-%d %H:%M:%S"),
+        entry.key,
+        row.schedule_key,
+        entry.summary,
+        entry.report_id,
+        entry.url,
+        project,
+        SUCCESS if row.succeeded else FAILURE,
+        _stage(row.fetched_from_salesforce),
+        _stage(row.saved_to_file),
+        # 保存先の組み立て（group_settings 経由）は他の場所で扱うので、ここでは概要だけ書く
+        entry.summary,
+        row.file_name,
+        "" if row.row_count is None else row.row_count,
+        f"{row.seconds:.2f}",
+        row.cause,
+        row.error_code,
+        row.error.replace("\n", " "),
+    ]
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    is_new = not path.exists() or path.stat().st_size == 0
+    with path.open("a", encoding="cp932", newline="") as f:
+        writer = csv.writer(f)
+        if is_new:
+            writer.writerow(COLUMNS)
+        writer.writerow(values)
+
+
+# ── 文字コード自動判定（人が Excel で開いて保存し直した履歴の吸収） ──
+class TestEncodingAutoDetection:
+    """``read_text()`` が UTF-8 (BOM 付き) と CP932 の自動判定で両方読めること。"""
+
+    def test_read_history_handles_cp932_encoded_file(self, tmp_path) -> None:
+        """CP932 で保存された履歴も読み取れる（Excel 経由で再保存した履歴）。"""
+        history_path = tmp_path / "履歴.csv"
+        entry = _entry(tmp_path)
+        _write_row_cp932(
+            history_path,
+            entry=entry,
+            project="案件集計",
+            row=HistoryRow(True, True, True, file_name="a.csv"),
+        )
+        # 列名・値ともに日本語が含まれるため UTF-8 経由は失敗し、CP932 で復号される
+        rows = read_history(history_path).to_rows()
+        assert len(rows) == 1
+        assert rows[0]["管理番号"] == "1001"
+        assert rows[0]["プロジェクト"] == "案件集計"
+        assert rows[0]["ファイル名"] == "a.csv"
+
+    def test_successful_files_today_handles_cp932_encoded_file(self, tmp_path) -> None:
+        """CP932 の履歴から当日の成功ファイル名を取れる。"""
+        history_path = tmp_path / "履歴.csv"
+        entry = _entry(tmp_path)
+        _write_row_cp932(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="a.csv"),
+        )
+        matches = successful_files_today(history_path, entry.key)
+        # 保存先は ``_write_row_cp932`` 内で ``entry.summary`` を入れる（テスト簡略化のため）
+        assert matches == [Path(entry.summary) / "a.csv"]
+
+    def test_schedule_succeeded_today_handles_cp932_encoded_file(self, tmp_path) -> None:
+        """CP932 の履歴から当日同キーの成功を判定できる。"""
+        history_path = tmp_path / "履歴.csv"
+        entry = _entry(tmp_path)
+        _write_row_cp932(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="a.csv", schedule_key="S001"),
+        )
+        assert schedule_succeeded_today(history_path, "S001") is True
+
+    def test_truncated_today_handles_cp932_encoded_file(self, tmp_path) -> None:
+        """CP932 の履歴から ``SalesforceReportTruncatedError`` の当日失敗を拾える。"""
+        history_path = tmp_path / "履歴.csv"
+        entry = _entry(tmp_path)
+        _write_row_cp932(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(
+                succeeded=False,
+                fetched_from_salesforce=True,
+                saved_to_file=None,
+                cause="Salesforce",
+                error_code="SalesforceReportTruncatedError",
+                error="2000 行で打ち止め",
+            ),
+        )
+        assert truncated_today(history_path, entry.key) is True
+
+    def test_read_history_rejects_undecodable_file(self, tmp_path) -> None:
+        """UTF-8 / CP932 のどちらでも読めないバイト列は明示的にエラーにする。
+
+        エンコーディングを握りつぶすと「読めたように見えて壊れた値」の事故に
+        つながるため、``EncodingDetectionError`` で停止する。
+        """
+        history_path = tmp_path / "履歴.csv"
+        history_path.write_bytes(b"\x80\x81\x82\x83")  # UTF-8 / CP932 どちらでも読めないバイト列
+
+        with pytest.raises(EncodingDetectionError):
+            read_history(history_path)
