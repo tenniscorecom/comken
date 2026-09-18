@@ -63,6 +63,7 @@ Excel の見出しで、スペースを含む見出し（`Salesforce URL`）も�
 import dataclasses
 import datetime as dt
 import logging
+import re
 import typing
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -92,6 +93,12 @@ _TRUE_WORDS = ("有効", "○", "o", "yes", "1", "on", "はい")
 
 # 見出し行を除いた1行目が Excel の何行目か（見出しが1行目のため）
 _FIRST_DATA_ROW = 2
+
+# Excel が「文字列」として保存した時刻を、ゼロパディングなしでも受け付けるための
+# フォールバック。``dt.time.fromisoformat()`` は ``"9:00"`` のような表記を
+# 拒否するため、ここでは 1〜2 桁の時・分・（省略可の）秒を許容する。
+# 範囲チェック（時 0〜23 / 分・秒 0〜59）は ``dt.time`` コンストラクタに任せる。
+_TIME_PATTERN = re.compile(r"^(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?$")
 
 
 @dataclass(frozen=True)
@@ -428,6 +435,12 @@ def _to_time(value: Any) -> dt.time | None:
     Excel の時刻セルは ``datetime`` で返ることがあるため、``datetime`` /
     ``time`` / ISO 形式の文字列のいずれも受け付ける。schedule.py の
     「取得時刻」系の列で使う。
+
+    文字列は ``dt.time.fromisoformat()`` をまず試し、ゼロパディングなしの
+    表記（例: ``"9:00"`` / ``"9:5"`` / ``"9:00:00"``）は正規表現で緩めて
+    受け付ける。``dt.time`` コンストラクタが時 0〜23 / 分・秒 0〜59 の範囲を
+    自動で検証するため、範囲外（例: ``"25:00"``）は従来どおり ``ValueError``
+    を送出する。
     """
     if value in (None, ""):
         return None
@@ -435,7 +448,20 @@ def _to_time(value: Any) -> dt.time | None:
         return value.time().replace(second=0, microsecond=0)
     if isinstance(value, dt.time):
         return value.replace(second=0, microsecond=0)
-    return dt.time.fromisoformat(str(value).strip())
+
+    text = str(value).strip()
+    try:
+        return dt.time.fromisoformat(text)
+    except ValueError:
+        # ISO 形式以外（ゼロパディングなしの表記など）は下の緩めたパースに任せる
+        pass
+
+    match = _TIME_PATTERN.match(text)
+    if match is None:
+        # どちらにも合わない入力は「時刻として解釈不能」として従来どおり送出
+        raise ValueError(f"invalid time value: {text!r}") from None
+    hour, minute, second = match.groups()
+    return dt.time(int(hour), int(minute), int(second) if second else 0)
 
 
 def _to_int(value: Any, text: str, spec: ColumnSpec, row: int) -> int:

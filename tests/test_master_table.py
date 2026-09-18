@@ -4,6 +4,7 @@ Salesforce に依存しない汎用部分だけを見る（Salesforce 固有の�
 test_service.py 側）。
 """
 
+import datetime as dt
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -325,3 +326,77 @@ class TestFormula:
             assert "Excel" in str(e)  # Excel が無い PC。原因が分かる形で止まる
         else:
             assert "CONCATENATE" not in str(items[0].source)  # 計算結果が入っている
+
+
+class TestToTime:
+    """``_to_time`` のパース挙動。``schedule.py`` の「取得開始時刻」「取得時刻」
+    列は Excel から文字列として読まれることがあるため、ゼロパディングなしの
+    表記でも受け付ける。Excel セル経由の ``dt.time`` / ``dt.datetime`` は
+    従来どおり扱える。
+    """
+
+    def test_parses_strict_iso_time(self):
+        """``dt.time.fromisoformat`` が受け付ける表記はそのまま通す（高速パス）。"""
+        from comken.services.salesforce_downloader.report_master import _to_time
+
+        assert _to_time("09:00:00") == dt.time(9, 0, 0)
+        assert _to_time("09:00") == dt.time(9, 0)
+        assert _to_time("23:59:59") == dt.time(23, 59, 59)
+
+    @pytest.mark.parametrize(
+        "text, expected",
+        [
+            ("9:00", dt.time(9, 0)),  # 時 1 桁・秒なし
+            ("9:00:00", dt.time(9, 0, 0)),  # 時 1 桁・秒あり
+            ("9:5", dt.time(9, 5)),  # 分 1 桁
+            ("9:5:30", dt.time(9, 5, 30)),  # 分 1 桁・秒あり
+            ("0:0", dt.time(0, 0)),  # 境界: 0:0
+            ("23:59", dt.time(23, 59)),  # 境界: 23:59
+            ("  9:00  ", dt.time(9, 0)),  # 前後の空白は許容（``strip`` 済み）
+        ],
+    )
+    def test_accepts_zero_padded_variants(self, text, expected):
+        """ゼロパディングなしの ``H:M`` / ``H:M:S`` も ``dt.time`` に変換できる。
+
+        Excel 側で「文字列」として保存された時刻（例: スケジュール管理表の
+        「取得開始時刻」列に ``9:00`` と手入力されたケース）でも落ちない。
+        """
+        from comken.services.salesforce_downloader.report_master import _to_time
+
+        assert _to_time(text) == expected
+
+    def test_passes_through_dt_time(self):
+        """``dt.time`` インスタンスはそのまま返す（秒・マイクロ秒は 0 に丸める）。"""
+        from comken.services.salesforce_downloader.report_master import _to_time
+
+        # 既存の挙動: 分は保持し、秒・マイクロ秒を 0 に丸める
+        assert _to_time(dt.time(9, 0, 30)) == dt.time(9, 0, 0)
+
+    def test_passes_through_dt_datetime(self):
+        """``dt.datetime`` インスタンスは ``time`` 部分だけ取り出す。"""
+        from comken.services.salesforce_downloader.report_master import _to_time
+
+        value = dt.datetime(2026, 1, 1, 9, 30, 45)  # noqa: DTZ001
+        # 既存の挙動: 時・分は保持し、秒・マイクロ秒を 0 に丸める
+        assert _to_time(value) == dt.time(9, 30, 0)
+
+    def test_blank_returns_none(self):
+        """空欄（``None`` / ``""``）は ``None`` を返す。"""
+        from comken.services.salesforce_downloader.report_master import _to_time
+
+        assert _to_time(None) is None
+        assert _to_time("") is None
+
+    @pytest.mark.parametrize("text", ["25:00", "9:60", "9時", "来月", "abc", "9", "9:00:"])
+    def test_invalid_value_raises_value_error(self, text):
+        """時刻として解釈不能な値は ``ValueError`` をそのまま送出する。
+
+        範囲外（``"25:00"`` / ``"9:60"``）と非時刻表記（``"9時"`` / ``"来月"`` /
+        ``"abc"`` / ``"9"`` / ``"9:00:"``）の両方を弾く。``fromisoformat`` の
+        高速パスと正規表現フォールバックのどちらにも掛からないため、明示的な
+        エラーメッセージ付きで ``ValueError`` が上がる。
+        """
+        from comken.services.salesforce_downloader.report_master import _to_time
+
+        with pytest.raises(ValueError):
+            _to_time(text)

@@ -29,6 +29,7 @@ from comken.services.salesforce_downloader.report_master import MasterRow, colum
 FREQUENCY_DAILY = "毎日"
 FREQUENCY_WEEKLY = "毎週"
 FREQUENCY_MONTHLY = "毎月"
+FREQUENCY_BUSINESS_DAY = "毎営業日"
 HOLIDAY_SKIP = "取得しない"
 HOLIDAY_FETCH = "取得する"
 HOLIDAY_BEFORE = "1営業日前"
@@ -64,8 +65,8 @@ class ScheduleRule(MasterRow):
         report_key: 列「レポートキー」。対象のレポートの管理番号
             （レポート管理表シートの ID と対応する）。
         frequency: 列「取得頻度」。`FREQUENCY_DAILY` / `FREQUENCY_WEEKLY` /
-            `FREQUENCY_MONTHLY` のいずれか。
-        start_time: 列「取得開始時刻」。毎日・毎週・毎月の実行開始時刻
+            `FREQUENCY_MONTHLY` / `FREQUENCY_BUSINESS_DAY` のいずれか。
+        start_time: 列「取得開始時刻」。毎日・毎週・毎月・毎営業日の実行開始時刻
             （この時刻を過ぎたら取得してよい）。空欄可。
         desired_time: 列「取得時刻」。このレポートが何時までに欲しいかの目安
             （記録用）。判定には使わない。
@@ -96,14 +97,15 @@ class ScheduleRule(MasterRow):
     )
     frequency: str = column(
         "取得頻度",
-        choices=(FREQUENCY_DAILY, FREQUENCY_WEEKLY, FREQUENCY_MONTHLY),
-        help="毎日 / 毎週 / 毎月 のいずれか",
+        choices=(FREQUENCY_DAILY, FREQUENCY_WEEKLY, FREQUENCY_MONTHLY, FREQUENCY_BUSINESS_DAY),
+        help="毎日 / 毎週 / 毎月 / 毎営業日 のいずれか。"
+        "「毎営業日」は土日を除く平日のみ実行します",
     )
     start_time: dt.time | None = column(
         "取得開始時刻",
         default=None,
         help="この時刻を過ぎたら取得してよい開始時刻。"
-        "「毎日」「毎週」「毎月」のすべてに共通。空欄可",
+        "「毎日」「毎週」「毎月」「毎営業日」のすべてに共通。空欄可",
     )
     desired_time: dt.time | None = column(
         "取得時刻",
@@ -203,14 +205,23 @@ class ScheduleRule(MasterRow):
         ``set[date]``）は独立に残しており、「第N営業日」以外での祝日判定に使う
         （呼び出し元 ``download_scheduled`` との後方互換のため）。
 
-        ``FREQUENCY_DAILY`` / ``FREQUENCY_WEEKLY`` / ``FREQUENCY_MONTHLY`` で
-        ``start_time is None`` のときは「時刻条件なし」を意味し、日付条件が合えば常に
-        ``True`` を返す（例: 前日以前の確定済みデータのように、いつ取っても同じ内容の
-        レポート用）。
+        ``FREQUENCY_DAILY`` / ``FREQUENCY_WEEKLY`` / ``FREQUENCY_MONTHLY`` /
+        ``FREQUENCY_BUSINESS_DAY`` で ``start_time is None`` のときは「時刻条件なし」
+        を意味し、日付条件が合えば常に ``True`` を返す（例: 前日以前の確定済みデータの
+        ように、いつ取っても同じ内容のレポート用）。
+
+        「毎営業日」は曜日フィルタ（土日を除く）のみで、祝日の除外は
+        ``holiday_policy`` の組み合わせで実現する（例: 「毎営業日」+「取得しない」で
+        土日祝日を除く真の営業日だけになる）。
         """
         if not self.enabled or not self._date_matches(now.date(), holidays, calendar):
             return False
-        if self.frequency in {FREQUENCY_DAILY, FREQUENCY_WEEKLY, FREQUENCY_MONTHLY}:
+        if self.frequency in {
+            FREQUENCY_DAILY,
+            FREQUENCY_WEEKLY,
+            FREQUENCY_MONTHLY,
+            FREQUENCY_BUSINESS_DAY,
+        }:
             return self.start_time is None or now.time() >= self.start_time
         raise UnsupportedScheduleFrequencyError(self.frequency)
 
@@ -230,6 +241,10 @@ class ScheduleRule(MasterRow):
         （呼び出し元 ``download_scheduled`` 全体を止めるのを避けるため）。
         """
         if self.weekday is not None and date.weekday() != self.weekday:
+            return False
+        if self.frequency == FREQUENCY_BUSINESS_DAY and date.weekday() >= 5:
+            # 土曜(5)・日曜(6) は対象外。祝日の除外は `holiday_policy` 側で
+            # 別途行うため、ここでは曜日フィルタのみ
             return False
         if self.day_of_month is not None and date.day != self.day_of_month:
             return False

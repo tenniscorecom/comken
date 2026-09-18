@@ -14,6 +14,8 @@ import pytest
 from comken.core.holidays import HolidayCalendar, nth_business_day_of_month
 from comken.exceptions import ScheduleWeekdayInvalidError
 from comken.services.salesforce_downloader.sheets.schedule import (
+    FREQUENCY_BUSINESS_DAY,
+    FREQUENCY_DAILY,
     HOLIDAY_AFTER,
     HOLIDAY_BEFORE,
     HOLIDAY_FETCH,
@@ -200,6 +202,104 @@ class TestIsDueTimeOptional:
         # 2026/1/7 は水曜
         wednesday = dt.datetime(2026, 1, 7, 12, 0)  # noqa: DTZ001
         assert rule.is_due(wednesday) is True
+
+
+class TestBusinessDayFrequency:
+    """「毎営業日」(`FREQUENCY_BUSINESS_DAY`) の挙動を ``is_due()`` で確かめる。
+
+    「毎営業日」は曜日フィルタ（土日を除く）のみで、祝日の除外は
+    ``holiday_policy`` の組み合わせで実現する（``HOLIDAY_SKIP`` を既定で
+    組み合わせれば、土日祝日を除く真の営業日だけになる）。
+    """
+
+    @pytest.mark.parametrize(
+        "date, expected",
+        [
+            # 2026/1/5(月) → True, 1/6(火) → True, ..., 1/9(金) → True
+            (dt.date(2026, 1, 5), True),  # 月
+            (dt.date(2026, 1, 6), True),  # 火
+            (dt.date(2026, 1, 7), True),  # 水
+            (dt.date(2026, 1, 8), True),  # 木
+            (dt.date(2026, 1, 9), True),  # 金
+            # 2026/1/10(土) → False, 1/11(日) → False
+            (dt.date(2026, 1, 10), False),  # 土
+            (dt.date(2026, 1, 11), False),  # 日
+        ],
+    )
+    def test_skips_weekends_and_runs_on_weekdays(self, date, expected):
+        """「毎営業日」行は土曜・日曜で False、平日で True。"""
+        rule = _rule(
+            frequency=FREQUENCY_BUSINESS_DAY,
+            raw_weekday="",
+            raw_day_of_month="",
+            start_time=None,  # 時刻条件を邪魔しないため None
+        )
+        when = dt.datetime.combine(date, dt.time(12, 0))
+        assert rule.is_due(when) is expected
+
+    def test_respects_start_time_on_business_day(self):
+        """「毎営業日」行は ``start_time`` も従来どおり適用する（既存挙動と共通）。"""
+        rule = _rule(
+            frequency=FREQUENCY_BUSINESS_DAY,
+            raw_weekday="",
+            raw_day_of_month="",
+            start_time=dt.time(9, 0),
+        )
+        # 2026/1/5(月) 8:00 → start_time 前なので False
+        early = dt.datetime(2026, 1, 5, 8, 0)  # noqa: DTZ001
+        assert rule.is_due(early) is False
+        # 2026/1/5(月) 9:00 → True
+        on_time = dt.datetime(2026, 1, 5, 9, 0)  # noqa: DTZ001
+        assert rule.is_due(on_time) is True
+        # 2026/1/10(土) 9:00 → 曜日フィルタで False（土曜）
+        saturday = dt.datetime(2026, 1, 10, 9, 0)  # noqa: DTZ001
+        assert rule.is_due(saturday) is False
+
+    def test_holiday_skip_combined_with_business_day_excludes_holidays(self):
+        """「毎営業日」+「取得しない」で土日祝日を除く真の営業日だけになる。
+
+        2026/1/5(月) が祝日 ``holidays`` 引数に含まれていれば、曜日フィルタは
+        パスしても ``HOLIDAY_SKIP`` で False に落ちる。
+        """
+        rule = _rule(
+            frequency=FREQUENCY_BUSINESS_DAY,
+            raw_weekday="",
+            raw_day_of_month="",
+            start_time=None,
+            holiday_policy=HOLIDAY_SKIP,
+        )
+        # 祝日の月曜 → 曜日フィルタは通るが HOLIDAY_SKIP で False
+        holiday_monday = dt.datetime(2026, 1, 5, 12, 0)  # noqa: DTZ001
+        assert rule.is_due(holiday_monday, holidays={dt.date(2026, 1, 5)}) is False
+        # 同じ月曜を holidays=空で問い合わせれば True
+        assert rule.is_due(holiday_monday, holidays=set()) is True
+
+
+class TestDailyFrequencyRegression:
+    """「毎日」(`FREQUENCY_DAILY`) が土日でも True のまま（既存挙動）を回帰確認する。
+
+    「毎営業日」を新設した影響が「毎日」に漏れていないことを保証するための、
+    1 回限りのスモークテスト。
+    """
+
+    @pytest.mark.parametrize(
+        "date",
+        [
+            dt.date(2026, 1, 10),  # 土
+            dt.date(2026, 1, 11),  # 日
+            dt.date(2026, 1, 12),  # 月
+        ],
+    )
+    def test_daily_returns_true_on_weekends(self, date):
+        """「毎日」は土日でも平日でも True。"""
+        rule = _rule(
+            frequency=FREQUENCY_DAILY,
+            raw_weekday="",
+            raw_day_of_month="",
+            start_time=None,
+        )
+        when = dt.datetime.combine(date, dt.time(12, 0))
+        assert rule.is_due(when) is True
 
 
 class TestHolidayPolicySkipFetch:
