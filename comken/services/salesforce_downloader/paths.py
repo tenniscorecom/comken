@@ -16,8 +16,9 @@ from pathlib import Path
 
 # レポート管理表（Excel）。非エンジニアが編集する。編集後は次のコマンドで検査できる:
 #     python -m comken sfdl check
-# 雛形が必要な場合は `ReportEntry.create_template()` を Python から直接呼ぶ
-# （雛形自動生成の CLI は非エンジニア運用の方針により廃止済み）。
+# 雛形が必要な場合は利用側プロジェクトから
+# `Salesforceレポートダウンローダー` 側の `template_writer.create_combined_workbook()`
+# などを Python から直接呼ぶ（雛形自動生成の CLI は非エンジニア運用の方針により廃止済み）。
 # **config ファイルへは外出ししない。** 利用側がパスを渡せるようにすると、
 # プロジェクト側に定数を持たせて管理表と食い違う事故が起きる（場所を変えるなら
 # ここ1か所を変える）。設定ファイルに集約する案は試して戻した

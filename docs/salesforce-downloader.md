@@ -122,7 +122,8 @@ python -m comken sf check
 
 **管理表（Excel）は非エンジニアが手動で用意・編集する。** ライブラリ側は雛形を
 自動生成する `init` コマンドを提供していない。雛形が必要な場合は、
-`ReportEntry.create_template()` を Python から直接呼んで作成できる
+`Salesforceレポートダウンローダー` リポジトリ側（`src/salesforce_downloader/template_writer.py`）
+の関数（`create_combined_workbook()` など）を Python から直接呼んで作成する
 （サンプルは [管理表（master_table）](master-table.md) を参照）。
 
 管理表の1行目（見出し）は次のとおり。各列の意味は「記入方法」シートを用意するなら
@@ -181,25 +182,26 @@ python -m comken sfdl check "\\実際のサーバー\share\tools\salesforce\レ�
 
 ### 雛形を作る（任意）
 
-**管理表（Excel）は非エンジニアが手動で用意・編集する。** ライブラリ側は雛形を
-自動生成する CLI コマンドを提供していないが、ライブラリ機能として
-`ReportEntry.create_template()` を持つ。雛形が必要な場合は Python から
-直接呼ぶ。
+**管理表（Excel）は非エンジニアが手動で用意・編集する。** 雛形の生成は
+`Salesforceレポートダウンローダー` リポジトリ側
+（`src/salesforce_downloader/template_writer.py`）の関数で行う
+（ライブラリ comken 本体には雛形生成の API は置いていない）。**「管理表」
+「スケジュール」「設定」の3シートを1つのブックにまとめて生成**したい場合は
+`create_combined_workbook(path)` を、1シートだけ生成したい場合は
+`create_template(path, ReportEntry)` などを Python から直接呼ぶ
+（詳しくは Salesforceレポートダウンローダー側の README / ソースを参照）。
 
 ```python
-from comken.services.salesforce_downloader.sheets.master import ReportEntry
-from comken.services.salesforce_downloader.sheets.master import EXAMPLES
+from src.salesforce_downloader.template_writer import create_combined_workbook
 
-ReportEntry.create_template("レポート管理表.xlsx", EXAMPLES)
+create_combined_workbook("レポート管理表.xlsx")
 ```
 
 記入例2行と、各列の書き方をまとめた**「記入方法」シート**が入った状態で作られる。
-「記入方法」シートの先頭には、編集者へ向けた次の案内が置かれている。
-
-> この表に行を足すだけで、新しいレポートを取得できます。プログラム（コード）を
-> 直す必要はありません。
-
-**すでにあるファイルは上書きしない**（記入済みの管理表を消さないため）。
+雛形から Excel テーブル（=行を足すのが楽になる構造）が作られ、`choices` を宣言した
+列には自動でドロップダウン（入力規則）が付く。雛形全体のフォントは Noto Sans JP
+（Windows 標準ではないため未導入 PC では Excel が代替フォントで代替表示する。
+動作には影響しない）。
 
 ### 編集したあとに確かめる
 
@@ -530,13 +532,15 @@ if rule.is_due(datetime.now(), holidays=set()):
 
 **「スケジュール」シートは雛形生成を持たない。** 上の列定義表のとおり手で作る
 （`レポート管理表` と同じブックへ、シート名「スケジュール」で追加する）。手で作った
-シートへドロップダウン（入力規則）だけ後から付けたい場合は
-`apply_schedule_dropdowns()` を使う。ドロップダウンは `column()` 宣言で
-`choices` を付けた列に自動で付く（現状 `取得頻度` のみ。`祝日対応` は自由記述の
-ため対象外。列の位置ではなく見出し名で探すので、列の並び順は問わない）:
+シートへドロップダウン（入力規則）だけ後から付けたい場合は、
+`Salesforceレポートダウンローダー` リポジトリ側
+（`src/salesforce_downloader/template_writer.py`）の `apply_schedule_dropdowns()`
+を使う。ドロップダウンは `column()` 宣言で `choices` を付けた列に自動で付く
+（現状 `取得頻度` のみ。`祝日対応` は自由記述のため対象外。列の位置ではなく
+見出し名で探すので、列の並び順は問わない）:
 
 ```python
-from comken.services.salesforce_downloader.sheets.schedule import apply_schedule_dropdowns
+from src.salesforce_downloader.template_writer import apply_schedule_dropdowns
 
 apply_schedule_dropdowns("レポート管理表.xlsx")
 ```

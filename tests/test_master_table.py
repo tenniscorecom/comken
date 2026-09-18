@@ -150,137 +150,6 @@ class TestValidation:
         assert "「○」か「×」" in str(e.value)
 
 
-class TestTemplate:
-    """雛形は、そのまま読み込める状態で作られる。"""
-
-    def test_generated_template_can_be_loaded(self, tmp_path):
-        """**雛形と読み込みで列がズレない**（同じ宣言から作るため）。"""
-        example = {
-            "key": "1001",
-            "name": "受注一覧",
-            "source": Path(r"\\server\受注\data.csv"),
-            "mode": "毎日",
-            "enabled": True,
-        }
-        path = Item.create_template(tmp_path / "一覧.xlsx", [example])
-        items = Item.load(path)
-        assert len(items) == 1
-        assert items[0].key == "1001"
-        assert items[0].enabled is True  # True は「○」として書かれ、読み戻せる
-
-    def test_bool_choices_round_trip(self, tmp_path):
-        """bool 列の独自表記は、雛形へ書いて読み戻しても値が変わらない。"""
-
-        @dataclass(frozen=True, kw_only=True)
-        class WithBoolChoices(MasterRow):
-            SHEET_NAME = "一覧"
-
-            key: str = column("ID")
-            is_allowed: bool = column("許可", choices=("○", "×"))
-
-        examples = [
-            {"key": "1", "is_allowed": True},
-            {"key": "2", "is_allowed": False},
-        ]
-        path = WithBoolChoices.create_template(tmp_path / "一覧.xlsx", examples)
-
-        sheet = load_workbook(path)["PY_一覧"]
-        assert [sheet["B2"].value, sheet["B3"].value] == ["○", "×"]
-        assert [row.is_allowed for row in WithBoolChoices.load(path)] == [True, False]
-
-    def test_headers_are_written_in_declaration_order(self, tmp_path):
-        path = Item.create_template(tmp_path / "一覧.xlsx")
-        sheet = load_workbook(path)["PY_一覧"]
-        assert [cell.value for cell in sheet[1]] == HEADERS
-
-    def test_guide_sheet_lists_every_column(self, tmp_path):
-        """非エンジニアが1枚で分かるよう、列ごとの説明を書く。"""
-        path = Item.create_template(tmp_path / "一覧.xlsx")
-        guide = load_workbook(path)["記入方法"]
-        text = "\n".join(str(cell.value) for row in guide.iter_rows() for cell in row)
-        for header in HEADERS:
-            assert header in text
-        assert "管理番号" in text  # help がそのまま出る
-        assert "「毎日」か「手動」" in text  # 選択肢は書き方として出す
-
-    def test_multiline_guide_intro_uses_one_cell_row(self, tmp_path):
-        @dataclass(frozen=True, kw_only=True)
-        class WithMultilineGuide(MasterRow):
-            SHEET_NAME = "一覧"
-            GUIDE_INTRO = "1行目\n2行目"
-
-            key: str = column("ID")
-
-        path = WithMultilineGuide.create_template(tmp_path / "一覧.xlsx")
-        guide = load_workbook(path)["記入方法"]
-
-        assert guide["A1"].value == "1行目\n2行目"
-        assert [cell.value for cell in guide[3]] == ["列", "何を書くか", "書けない場合"]
-        assert guide.freeze_panes == "A4"
-
-    def test_table_is_created(self, tmp_path):
-        """Excel のテーブルにしておくと、行を足すのが楽になる。"""
-        path = Item.create_template(tmp_path / "一覧.xlsx", [{"key": "1", "name": "a"}])
-        assert "PY_T_Item" in load_workbook(path)["PY_一覧"].tables
-
-    def test_choice_columns_get_dropdown_in_template(self, tmp_path):
-        """`choices` のある列には Excel のドロップダウン（入力規則）が付く。"""
-        path = Item.create_template(tmp_path / "一覧.xlsx", [{"key": "1", "name": "a"}])
-        ws = load_workbook(path)["PY_一覧"]
-        validations = list(ws.data_validations.dataValidation)
-        # 「方式」「有効」の 2 列にドロップダウンが付く。「名前」「コピー元」「ID」「備考」
-        # には付かない
-        ranges = sorted(str(v.sqref) for v in validations)
-        assert ranges == ["D2:D1002", "E2:E1002"]
-        formulas = {str(v.sqref): v.formula1 for v in validations}
-        assert formulas["D2:D1002"] == '"毎日,手動"'
-        assert formulas["E2:E1002"] == '"○,×"'
-
-    def test_non_choice_columns_have_no_dropdown(self, tmp_path):
-        """`choices` を宣言していない列にはドロップダウンが付かない。"""
-        path = Item.create_template(tmp_path / "一覧.xlsx", [{"key": "1", "name": "a"}])
-        ws = load_workbook(path)["PY_一覧"]
-        # 「名前」列（B2:B1002）に validation が無いこと
-        for v in ws.data_validations.dataValidation:
-            assert str(v.sqref) != "B2:B1002"
-
-    def test_template_font_is_noto_sans_jp(self, tmp_path):
-        """雛形（表シート・記入方法シートとも）のフォントが Noto Sans JP。"""
-        from openpyxl import load_workbook
-
-        path = Item.create_template(tmp_path / "一覧.xlsx", [{"key": "1", "name": "a"}])
-        wb = load_workbook(path)
-        cell = wb["PY_一覧"]["A1"]
-        assert cell.font.name == "Noto Sans JP"
-        # ガイドシートの全セルのフォント名も Noto Sans JP
-        guide = wb["記入方法"]
-        for row in guide.iter_rows(min_row=1, max_row=10):
-            for cell in row:
-                assert cell.font.name == "Noto Sans JP"
-
-    def test_example_rows_are_marked_with_note_and_fill(self, tmp_path):
-        """記入例には「備考」に案内文が書いてあり、薄い背景色が付く。"""
-        from openpyxl import load_workbook
-
-        path = Item.create_template(
-            tmp_path / "一覧.xlsx", [{"key": "1", "name": "a", "note": "記入例です"}]
-        )
-        ws = load_workbook(path)["PY_一覧"]
-        # 記入例の備考列に案内文が書かれている
-        assert ws["F2"].value == "記入例です"
-        # 記入例全体に薄い背景色
-        assert (
-            ws["A2"].fill.fgColor.value.endswith("D9D9D9")
-            or ws["A2"].fill.fgColor.rgb == "00D9D9D9"
-        )
-
-    def test_create_template_does_not_leave_default_sheet(self, tmp_path):
-        """openpyxl が自動で作る「Sheet」が雛形に残らないこと。"""
-        path = Item.create_template(tmp_path / "一覧.xlsx")
-        book = load_workbook(path)
-        assert "Sheet" not in book.sheetnames
-
-
 class TestColumnAdded:
     """あとから列を足しても、既存の表が読めなくならないこと。
 
@@ -330,6 +199,48 @@ class TestColumnAdded:
         rows = [[*ROW_A, "なにか"]]
         items = Item.load(make_sheet(tmp_path / "一覧.xlsx", rows, headers))
         assert items[0].key == "1001"
+
+
+class TestColumnSpecs:
+    """``column_specs()`` の公開 API。利用側（雛形生成・ドロップダウン適用など）が
+    列定義を読むための入り口。``_columns()`` と並び順・内容を保ったまま既定値も返す。"""
+
+    def test_returns_one_entry_per_declared_column(self):
+        specs = Item.column_specs()
+        assert [name for name, _, _, _ in specs] == [
+            "key",
+            "name",
+            "source",
+            "mode",
+            "enabled",
+            "note",
+        ]
+
+    def test_spec_carries_header_and_choices(self):
+        specs = Item.column_specs()
+        modes = next(item for item in specs if item[0] == "mode")
+        _, mode_spec, _, _ = modes
+        assert mode_spec.header == "方式"
+        assert mode_spec.choices == ("毎日", "手動")
+        assert mode_spec.help == "毎日は自動で取ります"
+
+    def test_default_is_dataclasses_missing_when_not_declared(self):
+        import dataclasses
+
+        specs = Item.column_specs()
+        name_default = next(item[3] for item in specs if item[0] == "name")
+        assert name_default is dataclasses.MISSING  # 既定値なし＝必須
+
+    def test_default_is_returned_when_declared(self):
+        specs = Item.column_specs()
+        note_default = next(item[3] for item in specs if item[0] == "note")
+        assert note_default == ""  # 既定値あり＝空欄でもOK
+
+    def test_value_type_is_the_annotated_type(self):
+        specs = Item.column_specs()
+        key_value_type = next(item[2] for item in specs if item[0] == "key")
+        # 注釈が str なら str クラスが返る（前方参照のとき文字列になる仕様は同じ）
+        assert key_value_type is str
 
 
 class TestHeaderAccess:

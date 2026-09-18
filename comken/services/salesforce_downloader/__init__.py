@@ -21,7 +21,6 @@ r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポー�
     load_master           管理表を読む
     shared_report_ids     同じ Salesforce レポートを指している管理番号を返す
     ReportEntry           管理表の1行
-    ReportEntry.create_template  管理表の雛形（Excel）を作る
     ScheduleRule          取得スケジュール管理表の1行
     downloaded_today      指定した管理番号が今日すでに成功しているかを履歴から調べる
 

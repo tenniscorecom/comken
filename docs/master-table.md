@@ -33,11 +33,15 @@ class Item(MasterRow):
 ```
 
 ```python
-Item.create_template(path)      # 記入例と「記入方法」シート付きの雛形を作る
-
 for item in Item.load():        # 読む（型変換・検証込み）
     print(item.name, item.source)
 ```
+
+**雛形（Excel）の書き出しは利用側プロジェクトの責務**で、このモジュール（comken）には
+雛形生成の API は無い。Salesforce なら `Salesforceレポートダウンローダー` 側の
+`template_writer.create_combined_workbook()` などが雛形を作る。comken 側は
+読み込み・検証に集中する。利用側が列定義を読むときは `Item.column_specs()` を使う
+（`(Python の名前, 列の決まり, 型注釈, 既定値)` を宣言順で返す公開 API）。
 
 **Python の名前は英語、Excel の見出しは日本語**にできます。`column()` の第1引数が
 見出しで、`Salesforce URL` のように**スペースを含む見出し**（識別子にできない名前）も扱えます。
@@ -146,42 +150,6 @@ True として読みます。bool 列に2つの `choices` を指定すると、�
 管理表 3 行目の「方式」が正しくありません: '毎週'
 「毎日」か「手動」と書いてください。
 ```
-
----
-
-## 雛形（`create_template`）
-
-- 記入例を入れられる（**空の表を渡されるより、1行埋まっているほうが何をどう書くか伝わる**）
-- 記入例の行に「備考」欄の案内文 + 薄い背景色を付けて「**消してよい行**」と分かるようにする
-- **`choices` を宣言した列には自動で Excel の入力規則（ドロップダウン）が付く**。
-  `help` から組み立てた入力時メッセージと、`choices` からのエラーメッセージも出る
-- **「記入方法」シート**が付く。列ごとに `help` と「空欄にできるか／書ける値」が並ぶ
-- Excel のテーブルにする・列幅を整える・見出しを固定する
-- **雛形全体のフォントは Noto Sans JP**（Windows 標準ではないため、未導入 PC では Excel が
-  代替フォントで代替表示する。動作には影響しない）
-
-```python skip
-Item.create_template(path, examples=[{"key": "1001", "name": "受注一覧", ...}])
-```
-
-### 「記入方法」シートの冒頭に案内を出す
-
-編集者が `docs/` を読まない前提で、**このシートの上部**にだけ出す一言を置けます。
-`GUIDE_INTRO` をクラス変数で宣言してください（複数行も可）。
-
-```python
-@dataclass(frozen=True, kw_only=True)
-class ReportEntry(MasterRow):
-    SHEET_NAME = "管理表"
-    GUIDE_INTRO = (
-        "この表に行を足すだけで、新しいレポートを取得できます。"
-        "プログラム（コード）を直す必要はありません。"
-    )
-```
-
-ツール側の汎用文言（`docs/` への誘導）はここに書きません。Salesforce なら
-Salesforce の、Access なら Access の案内にすべきで、ツールが事情を知ると
-境界が壊れます。
 
 ---
 

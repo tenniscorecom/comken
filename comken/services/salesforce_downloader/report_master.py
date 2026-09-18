@@ -24,9 +24,14 @@ config.ini より表のほうが扱いやすい（並べ替え・フィルタ・
         folder: Path = column("保存先", help="落としたファイルを置くフォルダ")
         enabled: bool = column("有効", default=True, help="使わなくなったら「無効」")
 
-    Report.create_template(path)   # 記入例と「記入方法」シート付きの雛形を作る
     for report in Report.load():   # 読む（型変換・検証込み）
         print(report.summary, report.folder)
+
+**雛形（Excel）の書き出しは、このリポジトリ（comken）の責務ではない。** 雛形生成・
+ドロップダウン適用・「記入方法」シートの組み立ては、Salesforceレポートダウンローダー側
+（`src/salesforce_downloader/template_writer.py`）などの**利用側プロジェクトで行う**。
+このモジュールは読み込み・検証に集中する。`column_specs()` を使うと、利用側が
+列定義（`column()` で宣言した内容）を読み取れる。
 
 **Python の名前は英語、Excel の見出しは日本語**にできる。`column()` の第1引数が
 Excel の見出しで、スペースを含む見出し（`Salesforce URL`）も扱える。
@@ -63,14 +68,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar, Self
 
-from openpyxl import load_workbook
-from openpyxl.styles import Font, PatternFill
-from openpyxl.utils import get_column_letter
-from openpyxl.workbook.workbook import Workbook
-from openpyxl.worksheet.datavalidation import DataValidation
-from openpyxl.worksheet.worksheet import Worksheet
-
-from comken.constants import Color
 from comken.core.data import is_true_word
 from comken.core.table.model import Table as CoreTable
 from comken.core.timer import measure
@@ -95,21 +92,6 @@ _TRUE_WORDS = ("有効", "○", "o", "yes", "1", "on", "はい")
 
 # 見出し行を除いた1行目が Excel の何行目か（見出しが1行目のため）
 _FIRST_DATA_ROW = 2
-
-# 雛形の全セルに付けるフォント名。Windows 標準ではないため、入っていない PC では
-# Excel が代替フォントを使う（コメント作成時点 2026-08）。これは予想される動作で、
-# 意図した見た目にならずとも雛形自体は問題なく使える
-_TEMPLATE_FONT_NAME = "Noto Sans JP"
-
-# ドロップダウンを適用するデータ行数。**行を足したときにも効くよう**、雛形時点での
-# 想定行数より十分大きく取っておく（テンプレから1000行以上増える運用は基本無い）
-_DATA_VALIDATION_ROWS = 1000
-
-# 記入例の行に付ける背景色。本物のデータと見分けが付くよう、薄い灰色系で
-# `Color.LIGHT_GRAY` を使う（強く出すと「エラー行」に見えるため）
-_EXAMPLE_FILL_COLOR = Color.LIGHT_GRAY
-# openpyxl の PatternFill を作って使い回す（毎回作り直すのを避ける）
-_EXAMPLE_FILL = PatternFill(fill_type="solid", fgColor=_EXAMPLE_FILL_COLOR)
 
 
 @dataclass(frozen=True)
@@ -159,14 +141,10 @@ class MasterRow:
     クラス変数:
         SHEET_NAME: 読み書きするシート名。
         PATH: 既定のファイル。指定すると `load()` を引数なしで呼べる。
-        GUIDE_INTRO: 「記入方法」シートの冒頭に出す説明文。設定した管理表だけを
-            向いた案内（Salesforce なら Salesforce の）をここに置くと、非エンジニアが
-            表を開いた瞬間にこの表で何ができるかが分かる。空のままでも雛形は作れる。
     """
 
     SHEET_NAME: ClassVar[str] = "管理表"
     PATH: ClassVar[Path | None] = None
-    GUIDE_INTRO: ClassVar[str] = ""
 
     # ── 読む ────────────────────────────────────────────────────────────────
     @classmethod
@@ -232,185 +210,6 @@ class MasterRow:
             values[name] = value
         return cls(**values)
 
-    # ── 雛形を作る ───────────────────────────────────────────────────────────
-    @classmethod
-    @measure
-    def create_template(cls, path: str | Path, examples: list[dict] | None = None) -> Path:
-        """記入例と「記入方法」シートが入った雛形を作る。
-
-        **空の表を渡されるより、1行埋まっているほうが何をどう書くか伝わる**ので、
-        記入例を入れておく（使う前に消す案内も「記入方法」に書く）。
-
-        **`choices` を宣言した列には、自動でドロップダウン（Excel の入力規則）が付く。**
-        ドロップダウン・案内文・エラーメッセージは `column()` の `choices` と `help` から
-        組み立てるため、宣言を1か所に保ったまま入力補助が出る。
-
-        **雛形全体のフォントは Noto Sans JP。** 既存のフォント属性（太字など）は、
-        フォント名だけ書き換える方式で残す。
-
-        Args:
-            path: 作成先（.xlsx）。
-            examples: 記入例。{Python の名前: 値} の形で渡す。
-        """
-        path = Path(path)
-        columns = cls._columns()
-        headers = [spec.header for _, spec, _ in columns]
-        rows = [
-            {
-                spec.header: _to_cell(example.get(name, ""), spec, value_type)
-                for name, spec, value_type in columns
-            }
-            for example in (examples or [])
-        ]
-        logger.debug(
-            "雛形生成開始: class=%s, path=%s, sheet=%s, 記入例=%d 行, 列=%d",
-            cls.__name__,
-            path,
-            cls.SHEET_NAME,
-            len(rows),
-            len(headers),
-        )
-
-        # 空の雛形でも Excel テーブルを成立させるため、API が要求する見出しだけを
-        # 持つ Table を作る。実データが無い場合の仮行は create_table が保持しない。
-        template_table = CoreTable(headers, rows)
-        with Excel(path) as excel:
-            excel.create_data_sheet(cls.SHEET_NAME).create_table(cls.__name__, template_table)
-        logger.debug("雛形: データシート作成: path=%s, sheet=%s", path, cls.SHEET_NAME)
-
-        book = load_workbook(path)
-        sheet = book[f"PY_{cls.SHEET_NAME}"]
-
-        # **全セルに雛形用のフォントを当てる。** 既存のフォント属性（太字など）は
-        # そのまま使い回し、`name` だけ書き換える（後勝ちで上書きすると太字まで消える）
-        _apply_template_font(sheet, len(rows))
-        logger.debug(
-            "雛形: テンプレートフォント適用: sheet=%s, 対象=%d 行", cls.SHEET_NAME, len(rows)
-        )
-        # **`choices` がある列にドロップダウンを付ける。** データ行の先頭から
-        # 十分な行数ぶんの範囲に適用し、あとから行を足しても効くようにする
-        cls._apply_choice_validations(sheet, columns, len(rows))
-
-        _auto_width(sheet)
-        sheet.freeze_panes = "A2"
-
-        # 記入例の行に薄い背景色を付ける。**本物のデータと見分けが付く**ように
-        # するための目印で、エラー行に見える色は避ける（強すぎる色は業務側が
-        # 「何か起きたのか」と不安になるため）
-        for offset in range(len(rows)):
-            row_number = _FIRST_DATA_ROW + offset
-            for col in range(1, len(headers) + 1):
-                sheet.cell(row=row_number, column=col).fill = _EXAMPLE_FILL
-
-        cls._write_guide(book)
-
-        # openpyxl が新規ブックに自動で作る空の「Sheet」が残っていれば削除する。
-        # create_template() のどのステップからも書き込まれない、pristine な残骸。
-        # 万一将来どこかで「Sheet」という名前のシートに実際にデータを書くようになった
-        # 場合に誤って消さないよう、A1 が空のときだけ消す
-        if "Sheet" in book.sheetnames and book["Sheet"]["A1"].value is None:
-            del book["Sheet"]
-            logger.debug("雛形: openpyxl 作成の空シート 'Sheet' を削除: path=%s", path)
-
-        book.save(path)
-        book.close()
-        logger.debug("雛形書込完了: path=%s", path)
-        return path
-
-    @classmethod
-    def _apply_choice_validations(
-        cls, ws: Worksheet, columns: list[tuple[str, ColumnSpec, type]], example_count: int
-    ) -> None:
-        """`choices` を宣言した列に Excel の入力規則（ドロップダウン）を付ける。
-
-        列ごとに `DataValidation` を作り、**データ行2行目から十分な下まで**の範囲に
-        適用する（あとから行を足したときにもドロップダウンが効くよう、十分な行数を取る）。
-        入力時メッセージとエラーメッセージは `column()` の `help` と `choices` から組み立て、
-        宣言を1か所に保つ。
-        """
-        last_row = _FIRST_DATA_ROW + example_count - 1 + _DATA_VALIDATION_ROWS
-        choice_column_count = 0
-        for offset, (name, spec, _) in enumerate(columns, start=1):
-            if not spec.choices:
-                continue  # `choices` を宣言していない列には付けない
-            letter = _column_letter(offset)
-            choices_text = "、".join(f"「{choice}」" for choice in spec.choices)
-            prompt = f"{spec.help}\n書き方: {choices_text}".strip()
-            error = f"『{'』か『'.join(spec.choices)}』のいずれかを入力してください。"
-            # showDropDown=False は「ボタンを表示する」指定（Excel の API は逆）。
-            # 非エンジニアが見て選択できる必要があるため True（=ボタンを表示しない）
-            # にはしない
-            validation = DataValidation(
-                type="list",
-                formula1=f'"{",".join(spec.choices)}"',
-                allow_blank=_default_of(cls, name) is not dataclasses.MISSING,
-                showDropDown=False,
-                showErrorMessage=True,
-                errorTitle="書き方が違います",
-                error=error,
-                showInputMessage=True,
-                promptTitle=spec.header,
-                prompt=prompt,
-            )
-            validation.add(f"{letter}{_FIRST_DATA_ROW}:{letter}{last_row}")
-            ws.add_data_validation(validation)
-            choice_column_count += 1
-        logger.debug(
-            "雛形: ドロップダウン列=%d / 全列=%d, 適用範囲=%d 行目まで",
-            choice_column_count,
-            len(columns),
-            last_row,
-        )
-
-    @classmethod
-    def _write_guide(cls, book: Workbook) -> None:
-        """「記入方法」シートを書く。非エンジニアが1枚で分かるようにする。
-
-        `GUIDE_INTRO` が設定されていれば冒頭（見出しより上）に書き出す。
-        `docs/` を読まない編集者への唯一の案内になるため、各管理表に特化した
-        説明を置く。改行は同じセル内に表示される。
-
-        書き終わったら雛形用フォントをセルに適用する（表シート側で `_apply_template_font`
-        したのと同じフォント名に揃える）。`set_bold` で付けた太字も保持される
-        よう、**太字設定 → フォント適用** の順で行う。
-        """
-        sheet = book.create_sheet("記入方法")
-        logger.debug("雛形: ガイドシート作成: class=%s", cls.__name__)
-        # 冒頭の説明文。設定が無ければ何も書かない（空の欄を増やさない）
-        if cls.GUIDE_INTRO:
-            sheet.cell(row=1, column=1, value=cls.GUIDE_INTRO)
-            # 改行を含む説明文も1セルなので、空ける行数は変えない
-            header_row = 3
-        else:
-            header_row = 1
-        for column, value in enumerate(("列", "何を書くか", "書けない場合"), start=1):
-            sheet.cell(row=header_row, column=column, value=value)
-        for offset, (name, spec, value_type) in enumerate(cls._columns(), start=1):
-            row_number = header_row + offset
-            required = _default_of(cls, name) is dataclasses.MISSING
-            note = "空欄にできません" if required else "空欄にできます"
-            if spec.choices:
-                note = f"「{'」か「'.join(spec.choices)}」と書いてください"
-            elif value_type is bool:
-                note = "「○」か「×」と書いてください"
-            for column, value in enumerate((spec.header, spec.help, note), start=1):
-                sheet.cell(row=row_number, column=column, value=value)
-
-        last = header_row + len(cls._columns()) + 2
-        sheet.cell(row=last, column=1, value="注意")
-        sheet.cell(row=last, column=2, value="1行目の見出しは変えないでください（列名で読みます）")
-        sheet.cell(row=last + 1, column=2, value="記入例の行は、実際に使うときに消してください")
-        for column in range(1, 4):
-            sheet.cell(row=header_row, column=column).font = Font(bold=True)
-        _auto_width(sheet, max_width=80)
-        sheet.freeze_panes = f"A{header_row + 1}"
-
-        # 太字属性を**保ったまま**フォント名を差し替える。先に `set_bold` してから
-        # `_set_template_font` を呼ぶことで、既存の `bold=True` を引き継げる
-        for row in sheet.iter_rows():
-            for cell in row:
-                _set_template_font(cell)
-
     # ── 列の情報 ─────────────────────────────────────────────────────────────
     @classmethod
     def header(cls, name: str) -> str:
@@ -433,6 +232,22 @@ class MasterRow:
     def headers(cls) -> list[str]:
         """Excel の見出しを宣言順で返す。"""
         return [spec.header for _, spec, _ in cls._columns()]
+
+    @classmethod
+    def column_specs(cls) -> list[tuple[str, ColumnSpec, Any, Any]]:
+        """(Python の名前, 列の決まり, 型注釈, 既定値) を宣言順で返す。
+
+        雛形生成・入力規則（ドロップダウン）適用など、列定義を必要とする
+        利用側コードのための公開API。**既定値が `dataclasses.MISSING` のとき、
+        その列は必須（空欄不可）**を示す。
+
+        `_columns()` と同じ並び順を保つので、雛形や読み込み側の実装と
+        食い違いが起きない。
+        """
+        return [
+            (name, spec, value_type, _default_of(cls, name))
+            for name, spec, value_type in cls._columns()
+        ]
 
     @classmethod
     def _columns(cls) -> list[tuple[str, ColumnSpec, Any]]:
@@ -468,21 +283,6 @@ class MasterRow:
         # dataclass を付け忘れると fields() が空になり、原因の分からない失敗になる。
         # 継承した時点では判定できないので、ここでは何もせず load() 側で確かめる
         super().__init_subclass__(**kwargs)
-
-
-def _apply_template_font(sheet: Worksheet, example_count: int) -> None:
-    """雛形（表シート）の全セルに雛形用のフォント名を設定する。
-
-    既存の設定（太字など）は `Font` オブジェクトをそのまま使い回し、`name` だけを
-    書き換える。**他の属性（太字・サイズなど）に触らないため、雛形のもともとの
-    見出し書式（太字）を崩さない。**
-
-    ``MasterRow`` に紐付かない共通処理。``MasterRow.create_template`` から呼ぶ。
-    """
-    last_row = max(_FIRST_DATA_ROW + example_count - 1, 1)
-    for row in sheet.iter_rows(min_row=1, max_row=last_row, min_col=1, max_col=sheet.max_column):
-        for cell in row:
-            _set_template_font(cell)
 
 
 class _Empty:
@@ -648,53 +448,3 @@ def _to_int(value: Any, text: str, spec: ColumnSpec, row: int) -> int:
     if not text.isdigit():
         raise MasterRowValueError(row, spec.header, value, "数字だけで書いてください（例: 1001）。")
     return int(text)
-
-
-def _to_cell(value: Any, spec: ColumnSpec, value_type: Any) -> Any:
-    """記入例をセルに書ける形にする。"""
-    if isinstance(value, bool):
-        if (value_type is bool or value_type == "bool") and spec.choices:
-            return spec.choices[0] if value else spec.choices[1]
-        # choices を宣言していない真偽列の既定表記。**案内文（「○」か「×」）と
-        # そろえる。** ここだけ「有効/無効」を書くと、記入方法シートの案内と
-        # 雛形の中身が食い違い、どちらに従えばよいか分からなくなる。
-        # 読む側は `_TRUE_WORDS` が「有効」も受け付けるので、既存の管理表は壊れない
-        return "○" if value else "×"
-    if isinstance(value, Path):
-        return str(value)
-    return value
-
-
-def _column_letter(index: int) -> str:
-    """1 -> A, 27 -> AA。"""
-    letters = ""
-    while index > 0:
-        index, remainder = divmod(index - 1, 26)
-        letters = chr(ord("A") + remainder) + letters
-    return letters
-
-
-def _set_template_font(cell: Any) -> None:
-    """セルに雛形用のフォント名（Noto Sans JP）を当てる。
-
-    既存のフォント属性（太字・サイズ・色）はそのまま残し、`name` だけを書き換える。
-    **`Font(...)` で全項目を指定すると太字などが消える**ため、openpyxl の現プロパティを
-    引き継ぐ形で作る。
-    """
-    existing = cell.font
-    cell.font = Font(
-        name=_TEMPLATE_FONT_NAME,
-        size=existing.size,
-        bold=existing.bold,
-        italic=existing.italic,
-        color=existing.color,
-    )
-
-
-def _auto_width(sheet: Worksheet, *, max_width: int | None = None) -> None:
-    """セル内容に合わせて列幅を設定する。"""
-    for column_index, cells in enumerate(sheet.iter_cols(), start=1):
-        width = max((len(str(cell.value or "")) for cell in cells), default=0) + 2
-        if max_width is not None:
-            width = min(width, max_width)
-        sheet.column_dimensions[get_column_letter(column_index)].width = width

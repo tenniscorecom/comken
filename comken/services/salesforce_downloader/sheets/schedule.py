@@ -8,7 +8,7 @@
 import datetime as dt
 import logging
 import re
-from dataclasses import MISSING, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 
 from comken.core.holidays import (
@@ -18,7 +18,6 @@ from comken.core.holidays import (
     nth_business_day_of_month,
 )
 from comken.exceptions import (
-    ExcelFileNotFoundError,
     ScheduleIntervalMissingError,
     ScheduleWeekdayInvalidError,
     SheetNotFoundError,
@@ -321,96 +320,8 @@ def load_schedule(path: str | Path | None = None) -> list[ScheduleRule]:
         return []
 
 
-# ドロップダウンを適用する行数（見出しの次の行から）。あとから行を足しても
-# 効くよう、十分な行数を確保する（雛形生成があった頃の既定値を踏襲）
-_DROPDOWN_ROW_COUNT = 1000
-
-
-def apply_schedule_dropdowns(path: str | Path) -> None:
-    """既存の「スケジュール」シートの列に、Excel のドロップダウン（入力規則）を付ける。
-
-    **シート自体は作らない。** 「スケジュール」シートは手で作る運用のため、
-    ここでは既にあるシートに対して入力規則だけを追加・上書きする。見出し行
-    （1行目）を読んで列位置を探すので、列の並び順は問わない。
-
-    ドロップダウンを付ける対象は `ScheduleRule._columns()` から動的に拾う
-    （``choices`` が宣言された列）。`祝日対応` は自由記述のため対象外
-    （意図的。「取得しない」以外は「祝日でも取得する」という自由な表現を許す）。
-
-    Args:
-        path: 「スケジュール」シートを持つ Excel ファイル（既存）。
-
-    Raises:
-        ExcelFileNotFoundError: ``path`` が存在しない場合。
-        SheetNotFoundError: 「スケジュール」シートが無い場合。
-    """
-    from openpyxl import load_workbook
-    from openpyxl.utils import get_column_letter
-    from openpyxl.worksheet.datavalidation import DataValidation
-
-    source = Path(path)
-    if not source.exists():
-        raise ExcelFileNotFoundError(source)
-    book = load_workbook(source)
-    if SCHEDULE_SHEET_NAME not in book.sheetnames:
-        raise SheetNotFoundError(SCHEDULE_SHEET_NAME, book.sheetnames)
-    sheet = book[SCHEDULE_SHEET_NAME]
-
-    last_row = 1 + _DROPDOWN_ROW_COUNT
-    applied = 0
-    # 列宣言 (`_columns()`) から {見出し: choices} を組み立て、見出し名でシートに
-    # 存在する列だけにドロップダウンを当てる。`_SCHEDULE_DROPDOWN_CHOICES` のような
-    # 別辞書を二重管理しないので、`column()` の宣言を足せば自動でドロップダウンが
-    # 付く（master.py の `ReportEntry.create_template()` と同じ「宣言1か所」原則）
-    choices_by_header: dict[str, tuple[str, ...]] = {
-        spec.header: spec.choices
-        for _, spec, _ in ScheduleRule._columns()
-        if spec.choices
-    }
-    # 既定値のない列は `allow_blank=False` にする（ドロップダウンからの空欄提出を
-    # 許さない）。既定値の有無は dataclass の `default` 属性から取る
-    allow_blank_by_header: dict[str, bool] = {
-        spec.header: _is_optional(name)
-        for name, spec, _ in ScheduleRule._columns()
-    }
-    header_row = next(sheet.iter_rows(min_row=1, max_row=1))
-    for column_index, cell in enumerate(header_row, start=1):
-        header = str(cell.value) if cell.value is not None else ""
-        choices = choices_by_header.get(header)
-        if choices is None:
-            continue
-        letter = get_column_letter(column_index)
-        validation = DataValidation(
-            type="list",
-            formula1=f'"{",".join(choices)}"',
-            allow_blank=allow_blank_by_header.get(header, False),
-            showDropDown=False,
-            showErrorMessage=True,
-            errorTitle="書き方が違います",
-            error=f"『{'』か『'.join(choices)}』のいずれかを入力してください。",
-        )
-        validation.add(f"{letter}2:{letter}{last_row}")
-        sheet.add_data_validation(validation)
-        applied += 1
-
-    book.save(source)
-    book.close()
-    logger.debug(
-        "スケジュールシートへドロップダウンを適用しました: path=%s, 列数=%d", source, applied
-    )
-
-
-def _is_optional(name: str) -> bool:
-    """`ScheduleRule` のフィールドが既定値を持つか（空欄を許すか）。"""
-    for field_name, item in ScheduleRule.__dataclass_fields__.items():
-        if field_name == name:
-            return item.default is not MISSING
-    return False
-
-
 __all__ = [
     "ScheduleRule",
     "SCHEDULE_SHEET_NAME",
     "load_schedule",
-    "apply_schedule_dropdowns",
 ]
