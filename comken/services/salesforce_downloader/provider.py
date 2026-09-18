@@ -167,9 +167,9 @@ def output_path(
 
     フォルダは ``report_folder()``（設定シートのベースパスをそのまま返す）。
     ファイル名は ``{管理番号}_{時刻:%Y%m%d_%H%M}.csv``。時刻は ``schedule_run_time``
-    （今回の取得の根拠になったスケジュール行の「取得時刻」）を優先し、 ``None``
-    （スケジュール行が無いレポート、後方互換）のときは ``now``（省略時は現在時刻）
-    をそのまま使う。
+    （今回の取得の根拠になったスケジュール行の「取得時刻」、``ScheduleRule.desired_time``
+    の値。記録用の希望時刻）を優先し、 ``None`` （スケジュール行が無いレポート、
+    後方互換）のときは ``now``（省略時は現在時刻）をそのまま使う。
 
     常に新規ファイルとして扱う（同じパスへの上書きは想定しない。衝突回避は呼び出し側
     ``Salesforceレポートダウンローダー`` の ``_reserve_unique_path`` の責務）。
@@ -177,7 +177,8 @@ def output_path(
     Args:
         entry: レポート管理表の1行。
         schedule_run_time: 今回の取得の根拠になったスケジュール行の「取得時刻」
-            （``ScheduleRule.run_time``）。無ければ ``now`` にフォールバックする。
+            （``ScheduleRule.desired_time``）。判定には使われない記録用の希望時刻で、
+            ファイル名に ``%H%M`` として埋め込む。無ければ ``now`` にフォールバックする。
         now: ``schedule_run_time`` が無いときに使う時刻。省略時は現在時刻
             （``comken.core.clock.now()`` を使う）。
 
@@ -198,7 +199,7 @@ def _latest_today_path(entry: ReportEntry) -> Path | None:
 
     ファイル名は ``{管理番号}_{YYYYMMDD}_{HHMM}.csv`` の形。 ``YYYYMMDD_HHMM`` は
     ゼロパディングされた数値文字列なので、文字列ソート順がそのまま時刻の昇順と
-    一致する。 ``ScheduleRule.run_time`` は ``%H:%M`` の2桁ゼロパディング形式で
+    一致する。 ``ScheduleRule.desired_time`` は ``%H:%M`` の2桁ゼロパディング形式で
     保存されているため問題ない。
 
     検索範囲は ``report_folder()`` が返すベースパスの直下。サブフォルダは

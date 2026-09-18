@@ -12,9 +12,12 @@ from typing import Any, cast
 import pytest
 
 from comken.core.holidays import HolidayCalendar, nth_business_day_of_month
-from comken.exceptions import ScheduleIntervalMissingError, ScheduleWeekdayInvalidError
+from comken.exceptions import ScheduleWeekdayInvalidError
 from comken.services.salesforce_downloader.sheets.schedule import (
-    FREQUENCY_HOURLY,
+    HOLIDAY_AFTER,
+    HOLIDAY_BEFORE,
+    HOLIDAY_FETCH,
+    HOLIDAY_SKIP,
     ScheduleRule,
 )
 
@@ -172,45 +175,6 @@ class TestNthBusinessDayIsDue:
         assert rule.is_due(on_target) is True
 
 
-class TestIsHourlyDue:
-    """``_is_hourly_due`` の60分固定の挙動。"""
-
-    def _hourly_rule(self, **overrides: object) -> ScheduleRule:
-        return _rule(frequency=FREQUENCY_HOURLY, start_time=dt.time(9, 0), **overrides)
-
-    def test_is_due_at_start_time(self):
-        """開始時刻ちょうどは ``is_due()`` で True。"""
-        rule = self._hourly_rule()
-        now = dt.datetime(2026, 1, 1, 9, 0)  # noqa: DTZ001
-        assert rule.is_due(now) is True
-
-    def test_is_due_at_each_60_minute_multiple(self):
-        """開始時刻から 60 分刻みの時刻に ``True``。"""
-        rule = self._hourly_rule()
-        for hour in [9, 10, 11, 12, 23]:
-            now = dt.datetime(2026, 1, 1, hour, 0)  # noqa: DTZ001
-            assert rule.is_due(now) is True, f"{hour}:00 should be due"
-
-    def test_is_not_due_at_non_multiple(self):
-        """60分の倍数でない時刻は ``False``（間隔列は廃止したので 30 分刻みは対象外）。"""
-        rule = self._hourly_rule()
-        now = dt.datetime(2026, 1, 1, 9, 30)  # noqa: DTZ001
-        assert rule.is_due(now) is False
-
-    def test_is_not_due_before_start_time(self):
-        """開始時刻より前は ``False``。"""
-        rule = self._hourly_rule()
-        now = dt.datetime(2026, 1, 1, 8, 30)  # noqa: DTZ001
-        assert rule.is_due(now) is False
-
-    def test_missing_start_time_raises(self):
-        """``start_time`` が無い「1時間ごと」行は ``ScheduleIntervalMissingError``。"""
-        rule = _rule(frequency=FREQUENCY_HOURLY, start_time=None)
-        now = dt.datetime(2026, 1, 1, 9, 0)  # noqa: DTZ001
-        with pytest.raises(ScheduleIntervalMissingError):
-            rule.is_due(now)
-
-
 class TestIsDueTimeOptional:
     """「毎日」「毎週」「毎月」で ``取得開始時刻`` を空欄にすると、時刻条件なしで due 判定する。"""
 
@@ -236,6 +200,250 @@ class TestIsDueTimeOptional:
         # 2026/1/7 は水曜
         wednesday = dt.datetime(2026, 1, 7, 12, 0)  # noqa: DTZ001
         assert rule.is_due(wednesday) is True
+
+
+class TestHolidayPolicySkipFetch:
+    """``HOLIDAY_SKIP`` / ``HOLIDAY_FETCH`` の既存挙動が変わっていないこと（回帰確認）。
+
+    「1営業日前」「1営業日後」は ``TestHolidayPolicyShifted`` で別クラスにまとめる。
+    祝日判定に使う ``holidays`` 引数（=呼び出し元 ``download_scheduled`` が当日分
+    だけ渡す ``set[date]``）もそのまま動くことを確認する。
+    """
+
+    def test_skip_does_not_match_on_holiday(self):
+        """「取得しない」行で、対象日が祝日（holidays 引数に含まれる）なら ``False``。"""
+        rule = _rule(frequency="毎週", raw_weekday="月", holiday_policy=HOLIDAY_SKIP)
+        # 2026/1/5 は月曜
+        when = dt.datetime(2026, 1, 5, 12, 0)  # noqa: DTZ001
+        # holidays 引数に対象日が入っていない → 取得
+        assert rule.is_due(when, holidays=set()) is True
+        # holidays 引数に対象日が入っている → スキップ
+        assert rule.is_due(when, holidays={dt.date(2026, 1, 5)}) is False
+
+    def test_fetch_matches_even_on_holiday(self):
+        """「取得する」行は祝日でもそのまま取得する。"""
+        rule = _rule(frequency="毎週", raw_weekday="月", holiday_policy=HOLIDAY_FETCH)
+        when = dt.datetime(2026, 1, 5, 12, 0)  # noqa: DTZ001
+        # holidays 引数の中身に関わらず True（曜日が月曜なら必ず True）
+        assert rule.is_due(when, holidays=set()) is True
+        assert rule.is_due(when, holidays={dt.date(2026, 1, 5)}) is True
+
+    def test_skip_does_not_match_on_non_weekday_even_when_not_holiday(self):
+        """曜日条件を満たさない日は祝日でなくても False（既存挙動）。"""
+        rule = _rule(frequency="毎週", raw_weekday="月", holiday_policy=HOLIDAY_SKIP)
+        # 2026/1/7 は水曜
+        when = dt.datetime(2026, 1, 7, 12, 0)  # noqa: DTZ001
+        assert rule.is_due(when, holidays=set()) is False
+
+
+class TestHolidayPolicyShifted:
+    """「1営業日前」「1営業日後」の探索ロジック。
+
+    単発の祝日、複数連続の祝日、対象日が土日と重なるケース、
+    既存挙動（HOLIDAY_SKIP/FETCH）が破壊されていないことを確かめる。
+    祝日判定は ``calendar`` 経由（``is_holiday``）なので、``holidays`` 引数には
+    頼らない。テストでは ``_make_fake_calendar`` のフェイクを使い、対象日が
+    祝日のケースも非祝日のケースも自由に作れる。
+    """
+
+    def _weekly_rule(self, weekday_name: str, holiday_policy: str) -> ScheduleRule:
+        return _rule(
+            frequency="毎週",
+            raw_weekday=weekday_name,
+            holiday_policy=holiday_policy,
+            start_time=None,  # 時刻判定を邪魔しないため None
+        )
+
+    def test_shifted_before_single_monday_holiday(self):
+        """「1営業日前」: 月曜が祝日 → 前の金曜が True、月曜自身は False。
+
+        2026/1/2（金）→ 2026/1/5（月=祝日）→ 2026/1/6（火 = 月曜の翌営業日）
+        ``date=2026/1/2`` で問い合わせると、``date+1`` から次の営業日に達するまで
+        の間に祝日である月曜（2026/1/5）が含まれるので True。
+        """
+        calendar = _make_fake_calendar({dt.date(2026, 1, 5)})  # 1/5(月)だけ祝日
+        rule = self._weekly_rule("月", HOLIDAY_BEFORE)
+
+        # 前営業日（金曜）→ True
+        assert (
+            rule.is_due(dt.datetime(2026, 1, 2, 12, 0), calendar=calendar) is True  # noqa: DTZ001
+        )
+        # 祝日である月曜 → 対象日自体は False
+        assert (
+            rule.is_due(dt.datetime(2026, 1, 5, 12, 0), calendar=calendar) is False  # noqa: DTZ001
+        )
+        # 翌営業日（火曜）→ False（月曜の翌営業日であり、1営業日前側の終端を超える）
+        assert (
+            rule.is_due(dt.datetime(2026, 1, 6, 12, 0), calendar=calendar) is False  # noqa: DTZ001
+        )
+
+    def test_shifted_after_single_monday_holiday(self):
+        """「1営業日後」: 月曜が祝日 → 翌火曜が True、月曜自身は False。
+
+        ``date=2026/1/6`` で問い合わせると、``date-1`` から前の営業日に達するまで
+        の間に祝日である月曜（2026/1/5）が含まれるので True。
+        """
+        calendar = _make_fake_calendar({dt.date(2026, 1, 5)})  # 1/5(月)だけ祝日
+        rule = self._weekly_rule("月", HOLIDAY_AFTER)
+
+        # 翌営業日（火曜）→ True
+        assert (
+            rule.is_due(dt.datetime(2026, 1, 6, 12, 0), calendar=calendar) is True  # noqa: DTZ001
+        )
+        # 祝日である月曜 → 対象日自体は False
+        assert (
+            rule.is_due(dt.datetime(2026, 1, 5, 12, 0), calendar=calendar) is False  # noqa: DTZ001
+        )
+        # 前営業日（金曜）→ False（翌営業日側の終端を超える）
+        assert (
+            rule.is_due(dt.datetime(2026, 1, 2, 12, 0), calendar=calendar) is False  # noqa: DTZ001
+        )
+
+    def test_shifted_before_consecutive_monday_tuesday_holidays(self):
+        """「1営業日前」: 月・火が祝日 → 前の金曜が True、火曜は False。
+
+        2 連続祝日のときは「金曜（→月曜=祝日の 1 営業日前）」だけが True になり、
+        途中の火曜（祝日）が True になってはならない。
+        """
+        calendar = _make_fake_calendar(
+            {dt.date(2026, 1, 5), dt.date(2026, 1, 6)}  # 月・火が祝日
+        )
+        rule = self._weekly_rule("月", HOLIDAY_BEFORE)
+
+        # 前金曜 → True（月曜が祝日で、1営業日前が金曜）
+        assert (
+            rule.is_due(dt.datetime(2026, 1, 2, 12, 0), calendar=calendar) is True  # noqa: DTZ001
+        )
+        # 月曜（祝日）→ False
+        assert (
+            rule.is_due(dt.datetime(2026, 1, 5, 12, 0), calendar=calendar) is False  # noqa: DTZ001
+        )
+        # 火曜（祝日だが、weekday=月 条件を満たさない）→ False（条件不一致）
+        assert (
+            rule.is_due(dt.datetime(2026, 1, 6, 12, 0), calendar=calendar) is False  # noqa: DTZ001
+        )
+        # 水曜（翌営業日、探索終端を超える）→ False
+        assert (
+            rule.is_due(dt.datetime(2026, 1, 7, 12, 0), calendar=calendar) is False  # noqa: DTZ001
+        )
+
+    def test_shifted_after_only_one_of_consecutive_holidays_triggers(self):
+        """「1営業日後」: 月・火が祝日で対象日が月曜 → 水曜が True、火曜が False。
+
+        連続祝日のときも「翌営業日（水曜）」だけが True になる。途中の火曜は
+        祝日だが、「対象日条件（weekday=月）」を満たさないので探索中に True 判定
+        が挟まらない。
+        """
+        calendar = _make_fake_calendar(
+            {dt.date(2026, 1, 5), dt.date(2026, 1, 6)}  # 月・火が祝日
+        )
+        rule = self._weekly_rule("月", HOLIDAY_AFTER)
+
+        # 水曜 → True（月曜の翌営業日 = 1営業日後）
+        assert (
+            rule.is_due(dt.datetime(2026, 1, 7, 12, 0), calendar=calendar) is True  # noqa: DTZ001
+        )
+        # 月曜（祝日）→ False
+        assert (
+            rule.is_due(dt.datetime(2026, 1, 5, 12, 0), calendar=calendar) is False  # noqa: DTZ001
+        )
+        # 火曜（祝日、ただし weekday=月 条件を満たさない）→ False
+        assert (
+            rule.is_due(dt.datetime(2026, 1, 6, 12, 0), calendar=calendar) is False  # noqa: DTZ001
+        )
+
+    def test_shifted_before_target_date_itself_is_never_true(self):
+        """「1営業日前」: 対象日が祝日でも非祝日でも、対象日自体は常に False。
+
+        既存テスト（``TestHolidayPolicySkipFetch``）と組み合わせた回帰確認。
+        """
+        calendar = _make_fake_calendar({dt.date(2026, 1, 5)})  # 1/5(月)だけ祝日
+        rule = self._weekly_rule("月", HOLIDAY_BEFORE)
+
+        # 祝日月曜 → 対象日自体は False
+        assert (
+            rule.is_due(dt.datetime(2026, 1, 5, 12, 0), calendar=calendar) is False  # noqa: DTZ001
+        )
+        # 翌週の月曜（非祝日）→ 対象日自体は False（前営業日側でも翌営業日側でもない）
+        assert (
+            rule.is_due(dt.datetime(2026, 1, 12, 12, 0), calendar=calendar) is False  # noqa: DTZ001
+        )
+
+    def test_shifted_non_business_day_target_is_false(self):
+        """「1営業日前/後」: ``date`` 自身が非営業日（土日）なら False。
+
+        ずらし先になり得ないため、土日に問い合わせたら False。
+        """
+        calendar = _make_fake_calendar({dt.date(2026, 1, 5)})  # 1/5(月)だけ祝日
+        rule = self._weekly_rule("月", HOLIDAY_BEFORE)
+
+        # 2026/1/3 は土曜。ずらし先になり得ない
+        assert (
+            rule.is_due(dt.datetime(2026, 1, 3, 12, 0), calendar=calendar) is False  # noqa: DTZ001
+        )
+        # 2026/1/4 は日曜
+        assert (
+            rule.is_due(dt.datetime(2026, 1, 4, 12, 0), calendar=calendar) is False  # noqa: DTZ001
+        )
+
+    def test_shifted_before_does_not_trigger_when_no_holiday_target_between(self):
+        """「1営業日前」: 間に祝日対象日がなければ False（翌営業日に直接ぶつかる）。"""
+        calendar = _make_fake_calendar(set())  # 祝日は無い
+        rule = self._weekly_rule("月", HOLIDAY_BEFORE)
+
+        # 月曜は祝日ではないが、対象日（翌営業日）との間に祝日対象日が無い
+        # 2026/1/5(月) → 2026/1/6(火、=翌営業日) でぶつかる → False
+        # ただし月曜自体は「対象日条件を満たす」+「祝日ではない」となるため
+        # ``_raw_date_matches`` が True になり HOLIDAY_BEFORE のときは対象日 False → ルートの
+        # 「ずらし先探索」には来ない。翌営業日 2026/1/6 を問い合わせた場合のみが
+        # 「HOLIDAY_BEFORE 探索」の対象となり、その間には祝日が無いので False
+        assert (
+            rule.is_due(dt.datetime(2026, 1, 6, 12, 0), calendar=calendar) is False  # noqa: DTZ001
+        )
+
+    def test_shifted_before_with_three_consecutive_holidays(self):
+        """「1営業日前」: 月・火・水と3日連続の祝日 → 探索区間に複数の祝日があっても True。
+
+        対象日（月曜）の翌日から次の営業日に達するまでの非営業日区間に「祝日かつ
+        対象日条件を満たす日」が1つでも含まれていれば True。複数含まれていても
+        結果は同じ（最初に発見した時点で True を返す）。
+        """
+        calendar = _make_fake_calendar(
+            {
+                dt.date(2026, 1, 5),  # 月
+                dt.date(2026, 1, 6),  # 火
+                dt.date(2026, 1, 7),  # 水
+            }
+        )
+        rule = self._weekly_rule("月", HOLIDAY_BEFORE)
+
+        # 前金曜 → True
+        assert (
+            rule.is_due(dt.datetime(2026, 1, 2, 12, 0), calendar=calendar) is True  # noqa: DTZ001
+        )
+        # 月曜 → False（対象日自体）
+        assert (
+            rule.is_due(dt.datetime(2026, 1, 5, 12, 0), calendar=calendar) is False  # noqa: DTZ001
+        )
+        # 木曜（翌営業日、探索区間の終端）→ False
+        assert (
+            rule.is_due(dt.datetime(2026, 1, 8, 12, 0), calendar=calendar) is False  # noqa: DTZ001
+        )
+
+    def test_shifted_uses_calendar_not_holidays_argument(self):
+        """「1営業日前/後」の探索は ``holidays`` 引数ではなく ``calendar`` を使う。
+
+        ``holidays=set()``（空）を明示的に渡しても、未来/過去の祝日を
+        ``calendar.is_holiday()`` 経由で正しく拾うこと。これが「両方を
+        辻褄が合う形で使う」要件の核。
+        """
+        calendar = _make_fake_calendar({dt.date(2026, 1, 5)})  # 1/5(月)だけ祝日
+        rule = self._weekly_rule("月", HOLIDAY_BEFORE)
+
+        # holidays は空だが、calendar 経由で 1/5 が祝日と判定されて True
+        assert (
+            rule.is_due(dt.datetime(2026, 1, 2, 12, 0), holidays=set(), calendar=calendar) is True  # noqa: DTZ001
+        )
 
 
 def _make_fake_calendar(holidays_set: set[dt.date]) -> HolidayCalendar:

@@ -6194,44 +6194,19 @@ class UnsupportedScheduleFrequencyError(DownloaderError):
 
 管理表の「取得頻度」に、想定外の値が書かれている
 
-許容される値は ``1時間ごと`` / ``毎日`` / ``毎週`` / ``毎月`` の4種類。
+許容される値は ``毎日`` / ``毎週`` / ``毎月`` の3種類。
 それ以外（手書きのタイポ・想定外の列挙値）が入っていると判定できない。
 
 発生箇所: comken.services.salesforce_downloader.sheets.schedule の is_due()
 
 対処:
-    管理表の「取得頻度」列の値を ``1時間ごと`` / ``毎日`` / ``毎週`` /
-    ``毎月`` のいずれかに修正する
+    管理表の「取得頻度」列の値を ``毎日`` / ``毎週`` / ``毎月`` の
+    いずれかに修正する
 
 #### `__init__`
 
 ```text
 def __init__(self, frequency: str) -> None:
-```
-
-### `ScheduleIntervalMissingError`
-
-```text
-class ScheduleIntervalMissingError(DownloaderError):
-```
-
-#### 説明
-
-「1時間ごと」の行で、開始時刻が抜けている
-
-1時間おきの判定は「開始時刻から 60 分刻みで動く」という形なので、
-開始時刻が無いと動かない。
-
-発生箇所: comken.services.salesforce_downloader.sheets.schedule の ScheduleRule.is_due()
-
-対処:
-    管理表の「スケジュール」シートで、frequency が「1時間ごと」の行の
-    「取得時刻」列を埋める
-
-#### `__init__`
-
-```text
-def __init__(self) -> None:
 ```
 
 ### `ScheduleWeekdayInvalidError`
@@ -6757,17 +6732,22 @@ Attributes:
         実行しないための dedup 判定にも使う。
     report_key: 列「レポートキー」。対象のレポートの管理番号
         （レポート管理表シートの ID と対応する）。
-    frequency: 列「取得頻度」。`FREQUENCY_HOURLY` / `FREQUENCY_DAILY` /
-        `FREQUENCY_WEEKLY` / `FREQUENCY_MONTHLY` のいずれか。
-    run_time: 列「取得時刻」。毎日・毎週・毎月・1時間ごとに共通の実行時刻
-        （1時間ごとのときは開始時刻を兼ねる）。空欄可。
+    frequency: 列「取得頻度」。`FREQUENCY_DAILY` / `FREQUENCY_WEEKLY` /
+        `FREQUENCY_MONTHLY` のいずれか。
+    start_time: 列「取得開始時刻」。毎日・毎週・毎月の実行開始時刻
+        （この時刻を過ぎたら取得してよい）。空欄可。
+    desired_time: 列「取得時刻」。このレポートが何時までに欲しいかの目安
+        （記録用）。判定には使わない。
     raw_weekday: 列「曜日」。`frequency` が毎週のときだけ使う
         （下の `weekday` property で 0=月〜6=日 に変換）。
     raw_day_of_month: 列「日付」。`frequency` が毎月のときだけ使う
         （1〜31 の数字 / `月末` / `第N営業日` のいずれかを下の
         `day_of_month` / `month_end` / `nth_business_day` property で
         分解する）。
-    holiday_policy: 列「祝日対応」。`HOLIDAY_SKIP`（既定）なら祝日はスキップする。
+    holiday_policy: 列「祝日対応」。`HOLIDAY_SKIP`（既定、祝日はスキップ）/
+        `HOLIDAY_FETCH`（曜日/日付/月末/第N営業日が祝日でも取得）/
+        `HOLIDAY_BEFORE`（対象日が祝日なら前営業日へ前倒し）/
+        `HOLIDAY_AFTER`（対象日が祝日なら翌営業日へ繰り越し）の 4 値から選ぶ。
     enabled: 列「有効」。`○`/`×`。既定値なし（書き忘れはエラー）。
 
 #### `weekday`
@@ -6827,16 +6807,16 @@ def is_due(self, now: dt.datetime, *, holidays: set[dt.date] | frozenset[dt.date
 
 指定時刻にこのスケジュールを実行すべきか判定する。
 
-``calendar`` は「日付」列に「第N営業日」を指定した行の判定にのみ使う
-（``comken.core.holidays.nth_business_day_of_month`` に渡す）。省略時は
+``calendar`` は「日付」列に「第N営業日」を指定した行の判定と、「1営業日前/
+1営業日後」で祝日に当たった対象日の前後の営業日探索に使う。省略時は
 ``default_calendar()`` にフォールバックする。``holidays`` 引数（祝日の
-``set[date]``）は独立に残しており、「第N営業日」以外での祝日判定に使う。
+``set[date]``）は独立に残しており、「第N営業日」以外での祝日判定に使う
+（呼び出し元 ``download_scheduled`` との後方互換のため）。
 
 ``FREQUENCY_DAILY`` / ``FREQUENCY_WEEKLY`` / ``FREQUENCY_MONTHLY`` で
-``run_time is None`` のときは「時刻条件なし」を意味し、日付条件が合えば常に
+``start_time is None`` のときは「時刻条件なし」を意味し、日付条件が合えば常に
 ``True`` を返す（例: 前日以前の確定済みデータのように、いつ取っても同じ内容の
-レポート用）。``FREQUENCY_HOURLY`` は対象外で、``run_time`` が無いと
-``ScheduleIntervalMissingError`` を投げる。
+レポート用）。
 
 
 ## `from comken.services.salesforce_downloader.soql_reports import ...`

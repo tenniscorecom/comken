@@ -140,8 +140,7 @@ ComkenError
 │   ├── ScheduledDownloadFailedError
 │   ├── SoqlDownloadFailedError
 │   ├── UnsupportedScheduleFrequencyError
-│   ├── ScheduleIntervalMissingError
-│   └── ScheduleWeekdayInvalidError
+│   ├── ScheduleWeekdayInvalidError
 └── DataLoaderError
 │   ├── DataLoaderLauncherNotFoundError
 │   ├── DataLoaderTimeoutError
@@ -234,7 +233,6 @@ from comken.exceptions.downloader import (
     ReportNotRegisteredError,
     ReportReservePathLimitError,
     ScheduledDownloadFailedError,
-    ScheduleIntervalMissingError,
     ScheduleWeekdayInvalidError,
     SoqlDownloadFailedError,
     SoqlReportNotRegisteredError,
@@ -459,7 +457,6 @@ __all__ = [
     "ScheduledDownloadFailedError",
     "SoqlDownloadFailedError",
     "UnsupportedScheduleFrequencyError",
-    "ScheduleIntervalMissingError",
     "ScheduleWeekdayInvalidError",
     "DataLoaderError",
     "DataLoaderLauncherNotFoundError",

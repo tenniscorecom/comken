@@ -160,8 +160,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `ReportReservePathLimitError` | 保存ファイル名の連番が上限に達した | 保存先フォルダが想定どおりか確認する。 共有フォルダなら、 古い取得ファイルを退避するか、 別の保存先に変える。 連発する場合は権限・排他制御の設定も見直す |
 | `ScheduledDownloadFailedError` | 定期取得で1件以上が失敗した | 履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。急いで必要なものは download_scheduled() をスケジュール外で実行する。権限を持つ人が Salesforce から手動でダウンロードしてもよい |
 | `SoqlDownloadFailedError` | SOQL レポートの取得で1件以上が失敗した | 表示された管理番号について、SOQL クエリ・組織の認証情報・保存先フォルダの権限・ネットワークの状態を確認する。急いで必要なものは``download_soql_reports()`` を直接実行してもよい |
-| `UnsupportedScheduleFrequencyError` | 管理表の「取得頻度」に、想定外の値が書かれている | 管理表の「取得頻度」列の値を ``1時間ごと`` / ``毎日`` / ``毎週`` /``毎月`` のいずれかに修正する |
-| `ScheduleIntervalMissingError` | 「1時間ごと」の行で、開始時刻が抜けている | 管理表の「スケジュール」シートで、frequency が「1時間ごと」の行の「取得時刻」列を埋める |
+| `UnsupportedScheduleFrequencyError` | 管理表の「取得頻度」に、想定外の値が書かれている | 管理表の「取得頻度」列の値を ``毎日`` / ``毎週`` / ``毎月`` のいずれかに修正する |
 | `ScheduleWeekdayInvalidError` | 管理表の「曜日」列に想定外の値が入っている | 管理表の「曜日」列の値を月〜日のいずれかに修正する（「曜日」を付ける形式でも可） |
 | `LoggingAlreadyConfiguredError` | root logger がすでに設定されている | setup_logging() または setup_local_logging() はアプリの入口で1回だけ呼ぶ。実行基盤がログを設定する場合は呼ばない。 |
 | `LoggingConflictError` | root logger に comken 以外の handler が設定されている | 上の handler 一覧をそのままライブラリの管理者へ連絡してください（連絡先は環境ごとに異なるので、ここには書かない）。やむを得ず共存させたい場合は、呼び出し時に ``allow_existing=True``を指定すれば処理は続きますが、comken のハンドラーが追加されることで既存ライブラリのログが**二重**に出たり、出力先が想定と変わる可能性があります。 |

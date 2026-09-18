@@ -318,42 +318,21 @@ class SoqlDownloadFailedError(DownloaderError):
 class UnsupportedScheduleFrequencyError(DownloaderError):
     """管理表の「取得頻度」に、想定外の値が書かれている
 
-    許容される値は ``1時間ごと`` / ``毎日`` / ``毎週`` / ``毎月`` の4種類。
+    許容される値は ``毎日`` / ``毎週`` / ``毎月`` の3種類。
     それ以外（手書きのタイポ・想定外の列挙値）が入っていると判定できない。
 
     発生箇所: comken.services.salesforce_downloader.sheets.schedule の is_due()
 
     対処:
-        管理表の「取得頻度」列の値を ``1時間ごと`` / ``毎日`` / ``毎週`` /
-        ``毎月`` のいずれかに修正する
+        管理表の「取得頻度」列の値を ``毎日`` / ``毎週`` / ``毎月`` の
+        いずれかに修正する
     """
 
     def __init__(self, frequency: str) -> None:
         super().__init__(
             f"対応していない取得頻度です: {frequency}\n"
-            "管理表の「取得頻度」列の値を 1時間ごと / 毎日 / 毎週 / 毎月 の"
+            "管理表の「取得頻度」列の値を 毎日 / 毎週 / 毎月 の"
             "いずれかに修正してください。"
-        )
-
-
-class ScheduleIntervalMissingError(DownloaderError):
-    """「1時間ごと」の行で、開始時刻が抜けている
-
-    1時間おきの判定は「開始時刻から 60 分刻みで動く」という形なので、
-    開始時刻が無いと動かない。
-
-    発生箇所: comken.services.salesforce_downloader.sheets.schedule の ScheduleRule.is_due()
-
-    対処:
-        管理表の「スケジュール」シートで、frequency が「1時間ごと」の行の
-        「取得時刻」列を埋める
-    """
-
-    def __init__(self) -> None:
-        super().__init__(
-            "1時間ごとには開始時刻が必要です\n"
-            "管理表の「スケジュール」シートで、frequency が「1時間ごと」の行の"
-            "「取得時刻」列を埋めてください。"
         )
 
 

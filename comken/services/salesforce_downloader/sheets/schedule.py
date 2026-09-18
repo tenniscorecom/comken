@@ -12,25 +12,27 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from comken.core.holidays import (
+    BUSINESS_DAY_SEARCH_LIMIT,
     BusinessDayNotFoundError,
     HolidayCalendar,
     default_calendar,
+    is_business_day,
     nth_business_day_of_month,
 )
 from comken.exceptions import (
-    ScheduleIntervalMissingError,
     ScheduleWeekdayInvalidError,
     SheetNotFoundError,
     UnsupportedScheduleFrequencyError,
 )
 from comken.services.salesforce_downloader.report_master import MasterRow, column
 
-FREQUENCY_HOURLY = "1時間ごと"
 FREQUENCY_DAILY = "毎日"
 FREQUENCY_WEEKLY = "毎週"
 FREQUENCY_MONTHLY = "毎月"
 HOLIDAY_SKIP = "取得しない"
 HOLIDAY_FETCH = "取得する"
+HOLIDAY_BEFORE = "1営業日前"
+HOLIDAY_AFTER = "1営業日後"
 WEEKDAY_NAMES = ("月", "火", "水", "木", "金", "土", "日")
 
 logger = logging.getLogger(__name__)
@@ -61,10 +63,10 @@ class ScheduleRule(MasterRow):
             実行しないための dedup 判定にも使う。
         report_key: 列「レポートキー」。対象のレポートの管理番号
             （レポート管理表シートの ID と対応する）。
-        frequency: 列「取得頻度」。`FREQUENCY_HOURLY` / `FREQUENCY_DAILY` /
-            `FREQUENCY_WEEKLY` / `FREQUENCY_MONTHLY` のいずれか。
-        start_time: 列「取得開始時刻」。毎日・毎週・毎月・1時間ごとに共通の実行
-            開始時刻（この時刻を過ぎたら取得してよい）。空欄可。
+        frequency: 列「取得頻度」。`FREQUENCY_DAILY` / `FREQUENCY_WEEKLY` /
+            `FREQUENCY_MONTHLY` のいずれか。
+        start_time: 列「取得開始時刻」。毎日・毎週・毎月の実行開始時刻
+            （この時刻を過ぎたら取得してよい）。空欄可。
         desired_time: 列「取得時刻」。このレポートが何時までに欲しいかの目安
             （記録用）。判定には使わない。
         raw_weekday: 列「曜日」。`frequency` が毎週のときだけ使う
@@ -73,8 +75,10 @@ class ScheduleRule(MasterRow):
             （1〜31 の数字 / `月末` / `第N営業日` のいずれかを下の
             `day_of_month` / `month_end` / `nth_business_day` property で
             分解する）。
-        holiday_policy: 列「祝日対応」。`HOLIDAY_SKIP`（既定）なら祝日はスキップ、
-            `HOLIDAY_FETCH` なら祝日でも取得する。
+        holiday_policy: 列「祝日対応」。`HOLIDAY_SKIP`（既定、祝日はスキップ）/
+            `HOLIDAY_FETCH`（曜日/日付/月末/第N営業日が祝日でも取得）/
+            `HOLIDAY_BEFORE`（対象日が祝日なら前営業日へ前倒し）/
+            `HOLIDAY_AFTER`（対象日が祝日なら翌営業日へ繰り越し）の 4 値から選ぶ。
         enabled: 列「有効」。`○`/`×`。既定値なし（書き忘れはエラー）。
     """
 
@@ -92,15 +96,14 @@ class ScheduleRule(MasterRow):
     )
     frequency: str = column(
         "取得頻度",
-        choices=(FREQUENCY_HOURLY, FREQUENCY_DAILY, FREQUENCY_WEEKLY, FREQUENCY_MONTHLY),
-        help="1時間ごと / 毎日 / 毎週 / 毎月 のいずれか",
+        choices=(FREQUENCY_DAILY, FREQUENCY_WEEKLY, FREQUENCY_MONTHLY),
+        help="毎日 / 毎週 / 毎月 のいずれか",
     )
     start_time: dt.time | None = column(
         "取得開始時刻",
         default=None,
         help="この時刻を過ぎたら取得してよい開始時刻。"
-        "「毎日」「毎週」「毎月」「1時間ごと」のすべてに共通。"
-        "1時間ごとのときは開始時刻から60分刻みで動きます。空欄可",
+        "「毎日」「毎週」「毎月」のすべてに共通。空欄可",
     )
     desired_time: dt.time | None = column(
         "取得時刻",
@@ -108,16 +111,14 @@ class ScheduleRule(MasterRow):
         help="このレポートが何時までに欲しいかの目安（記録用）。"
         "取得の判定には使いません（判定に使うのは「取得開始時刻」）。空欄可",
     )
-    # `choices` ではなく `default=""` の自由記述にしているのは空欄を許すため。
-    # パース結果は下の `weekday` property で取り出す
+    # `choices` を宣言しているが、`weekday` property は「月曜日」のような接尾辞付き
+    # 表記もパースできる（手入力・既存データとの後方互換のため）。ドロップダウン
+    # は `column_specs()` 経由で `apply_schedule_dropdowns()` から自動付与される
     raw_weekday: str = column(
         "曜日",
         default="",
-        help=(
-            "frequency が「毎週」のときだけ書く。"
-            "月〜日の漢字1文字（「月 / 火 / 水 / 木 / 金 / 土 / 日」のいずれか、"
-            "または「曜日」を付ける形式（例: 「月曜日」））。空欄可"
-        ),
+        choices=WEEKDAY_NAMES,
+        help="frequency が「毎週」のときだけ選ぶ。月〜日のいずれか。空欄可",
     )
     raw_day_of_month: str = column(
         "日付",
@@ -129,9 +130,10 @@ class ScheduleRule(MasterRow):
     holiday_policy: str = column(
         "祝日対応",
         default=HOLIDAY_SKIP,
-        choices=(HOLIDAY_SKIP, HOLIDAY_FETCH),
-        help="祝日の扱いを「取得しない」（既定、スキップ）か「取得する」の"
-        "2 値から選びます",
+        choices=(HOLIDAY_SKIP, HOLIDAY_FETCH, HOLIDAY_BEFORE, HOLIDAY_AFTER),
+        help="祝日の扱いを「取得しない」「取得する」「1営業日前」「1営業日後」の"
+        "4 値から選びます。「1営業日前」「1営業日後」は、対象日が祝日のときに"
+        "代わりに取得する日（前営業日/翌営業日）を表します",
     )
     # 既定値を持たせない（書き忘れを「有効」と区別するため）。`master.py` の
     # 「有効」列と同じ考え方
@@ -195,33 +197,38 @@ class ScheduleRule(MasterRow):
     ) -> bool:
         """指定時刻にこのスケジュールを実行すべきか判定する。
 
-        ``calendar`` は「日付」列に「第N営業日」を指定した行の判定にのみ使う
-        （``comken.core.holidays.nth_business_day_of_month`` に渡す）。省略時は
+        ``calendar`` は「日付」列に「第N営業日」を指定した行の判定と、「1営業日前/
+        1営業日後」で祝日に当たった対象日の前後の営業日探索に使う。省略時は
         ``default_calendar()`` にフォールバックする。``holidays`` 引数（祝日の
-        ``set[date]``）は独立に残しており、「第N営業日」以外での祝日判定に使う。
+        ``set[date]``）は独立に残しており、「第N営業日」以外での祝日判定に使う
+        （呼び出し元 ``download_scheduled`` との後方互換のため）。
 
         ``FREQUENCY_DAILY`` / ``FREQUENCY_WEEKLY`` / ``FREQUENCY_MONTHLY`` で
         ``start_time is None`` のときは「時刻条件なし」を意味し、日付条件が合えば常に
         ``True`` を返す（例: 前日以前の確定済みデータのように、いつ取っても同じ内容の
-        レポート用）。``FREQUENCY_HOURLY`` は対象外で、``start_time`` が無いと
-        ``ScheduleIntervalMissingError`` を投げる。
+        レポート用）。
         """
         if not self.enabled or not self._date_matches(now.date(), holidays, calendar):
             return False
-        if self.frequency == FREQUENCY_HOURLY:
-            return self._is_hourly_due(now)
         if self.frequency in {FREQUENCY_DAILY, FREQUENCY_WEEKLY, FREQUENCY_MONTHLY}:
             return self.start_time is None or now.time() >= self.start_time
         raise UnsupportedScheduleFrequencyError(self.frequency)
 
-    def _date_matches(
+    def _raw_date_matches(
         self,
         date: dt.date,
-        holidays: set[dt.date] | frozenset[dt.date],
-        calendar: HolidayCalendar | None = None,
+        calendar: HolidayCalendar | None,
     ) -> bool:
-        if self.holiday_policy == HOLIDAY_SKIP and date in holidays:
-            return False
+        """祝日を考慮せず、``曜日`` / ``日付`` / ``月末`` / ``第N営業日`` の
+        条件だけで ``date`` が生の対象日として一致するかを返す。
+
+        「1営業日前」「1営業日後」の判定で「対象日条件を満たす祝日」を探すときの
+        ヘルパーとして ``_date_matches()`` の内外から呼ばれる。既存の判定
+        ロジックは変えず、そのまま ``_date_matches()`` から移しただけ。
+        ``BusinessDayNotFoundError`` が起きた「月の営業日数を超える」設定ミスは
+        ``_date_matches()`` と同じ方針で、この日は対象外として ``False`` を返す
+        （呼び出し元 ``download_scheduled`` 全体を止めるのを避けるため）。
+        """
         if self.weekday is not None and date.weekday() != self.weekday:
             return False
         if self.day_of_month is not None and date.day != self.day_of_month:
@@ -233,10 +240,6 @@ class ScheduleRule(MasterRow):
                     date.replace(day=1), self.nth_business_day, calendar=cal
                 )
             except BusinessDayNotFoundError:
-                # 「第N営業日」がその月の営業日数を超える設定ミスのケース。
-                # ここで呼び出し元（``download_scheduled``）全体を止めると、
-                # 同じ管理表内の他レポートの取得まで巻き添えになるため、
-                # この日は対象外として扱いログだけ残す
                 logger.warning(
                     "スケジュール %s の「第%d営業日」指定が %s年%s月の営業日数を"
                     "超えています。この日は対象外として扱います。",
@@ -250,20 +253,75 @@ class ScheduleRule(MasterRow):
                 return False
         return not self.month_end or (date + dt.timedelta(days=1)).month != date.month
 
-    def _is_hourly_due(self, now: dt.datetime) -> bool:
-        """``start_time`` から 60 分刻みで一致するかを返す。
+    def _date_matches(
+        self,
+        date: dt.date,
+        holidays: set[dt.date] | frozenset[dt.date],
+        calendar: HolidayCalendar | None = None,
+    ) -> bool:
+        """``date`` がこのスケジュールの「取得日」に当たるかを返す。
 
-        ``interval_minutes`` 列は廃止し、判定は 60 分固定。``start_time`` が無い
-        行は ``ScheduleIntervalMissingError``（「1時間ごとには開始時刻が必要」）
-        を投げる。
+        判定は 2 段で行う:
+
+        1. ``_raw_date_matches()`` で「曜日/日付/月末/第N営業日」の条件だけで
+           一致するかを見る。一致する場合、``holiday_policy`` に応じて:
+           - ``HOLIDAY_SKIP``（既定）:  ``date`` が ``holidays`` に含まれていれば
+             ``False``。**後方互換のため祝日判定は ``holidays`` 引数を使う**
+             （``download_scheduled`` が当日1日分のセットを作って渡す運用）
+           - ``HOLIDAY_FETCH``: ``True``
+           - ``HOLIDAY_BEFORE`` / ``HOLIDAY_AFTER``: ``False``（対象日自体では取得
+             せず、前後営業日への前倒し/繰り越し先に判定を委ねる）
+
+        2. 生の対象日条件を満たさない場合、``HOLIDAY_BEFORE`` / ``HOLIDAY_AFTER``
+           のときだけ「直近の祝日である対象日」からちょうど 1 営業日ぶん前/後の
+           営業日かを ``_search_shifted_target()`` で確認する。``date`` 自身が
+           非営業日なら即 ``False``（ずらし先になり得ないため）。
         """
-        if self.start_time is None:
-            raise ScheduleIntervalMissingError()
-        if now.time() < self.start_time:
+        if self._raw_date_matches(date, calendar):
+            if self.holiday_policy == HOLIDAY_SKIP and date in holidays:
+                return False
+            # 対象日自体は BEFORE/AFTER のときは False（前後の営業日へ判定を委ねる）。
+            # SKIP/FETCH はここに来る時点で holidays 引数の判定は済んでいるため True
+            return self.holiday_policy not in (HOLIDAY_BEFORE, HOLIDAY_AFTER)
+        if self.holiday_policy not in (HOLIDAY_BEFORE, HOLIDAY_AFTER):
             return False
-        start_minutes = self.start_time.hour * 60 + self.start_time.minute
-        now_minutes = now.hour * 60 + now.minute
-        return (now_minutes - start_minutes) % 60 == 0
+        cal = calendar if calendar is not None else default_calendar()
+        if not is_business_day(date, calendar=cal):
+            return False
+        direction = "before" if self.holiday_policy == HOLIDAY_BEFORE else "after"
+        return self._search_shifted_target(date, direction, cal)
+
+    def _search_shifted_target(
+        self,
+        date: dt.date,
+        direction: str,
+        calendar: HolidayCalendar,
+    ) -> bool:
+        """``date`` が祝日に当たった対象日のちょうど 1 営業日ぶん前/後かを判定する。
+
+        ``direction="before"`` のときは「``date`` の翌日から次の営業日に達するまで」
+        の非営業日区間（``date`` 自身を含まない）を、``direction="after"`` のときは
+        「``date`` の前日から前の営業日に達するまで」の非営業日区間を順に走査し、
+        **その区間に祝日である対象日が 1 つでも含まれていれば ``True``**。
+
+        探索は ``BUSINESS_DAY_SEARCH_LIMIT`` （``comken.core.holidays`` の営業日
+        探索と同じ上限=30 日）で打ち切る。``date`` 自身が非営業日の場合は呼び出し元
+        （``_date_matches``）で先に弾く。
+
+        祝日判定は ``calendar`` 経由（``calendar.is_holiday()``）で行う。「未来日/
+        過去日」も含めて対象日条件を満たす祝日を判定する必要があるため、
+        ``_date_matches()`` の ``holidays`` 引数（当日1日分）とは別系統を使う。
+        """
+        step = 1 if direction == "before" else -1
+        cursor = date + dt.timedelta(days=step)
+        for _ in range(BUSINESS_DAY_SEARCH_LIMIT):
+            if is_business_day(cursor, calendar=calendar):
+                # 次の営業日に到達 → 区間内に祝日である対象日は無かった
+                return False
+            if self._raw_date_matches(cursor, calendar) and calendar.is_holiday(cursor):
+                return True
+            cursor += dt.timedelta(days=step)
+        return False
 
 
 def _parse_day_of_month(value: object) -> tuple[bool, int | None, int | None]:
