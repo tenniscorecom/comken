@@ -9,6 +9,7 @@
 """
 
 import csv
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,10 @@ from comken.services.salesforce_downloader.sheets.history import (
     truncated_today,
 )
 from comken.services.salesforce_downloader.sheets.master import ReportEntry
+
+# マイグレーションテスト用の固定 URL。``test_service.py`` と同じ値を使う（管理表の URL
+# からレポート ID を取り出すテストは ``report_id`` 列が実 URL を要求するため）
+URL_A = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE/view"
 
 
 def _write_row(path: Path, *, entry: ReportEntry, project: str, row: HistoryRow) -> None:
@@ -111,9 +116,16 @@ def test_read_history_returns_empty_table_when_history_missing(tmp_path) -> None
 
 
 def test_read_history_rejects_header_mismatch(tmp_path) -> None:
-    """既存の見出しが違う場合、列ずれを読まず明示的に止める。"""
+    """見出しが壊れている（空の見出しがある／列名が重複している）場合は
+    ``HistoryHeaderMismatchError`` で止める。
+
+    列数が違う／列名が一部欠落している／順序が違う程度の変更は
+    ``migrate_row()`` で吸収するため、ここでは**致命的に壊れたケース**
+    （=どの列値をどの列に読んだか曖昧になるケース）だけを弾く。
+    """
     history_path = tmp_path / "履歴.csv"
-    history_path.write_text("管理番号,成否\n1000,成功\n", encoding="utf-8-sig")
+    # 2列目に空文字の見出し = ``DictReader`` が列値の対応を取れない壊れ方
+    history_path.write_text("管理番号,,成否\n1000,x,成功\n", encoding="utf-8-sig")
 
     with pytest.raises(HistoryHeaderMismatchError):
         read_history(history_path)
@@ -459,3 +471,241 @@ class TestEncodingAutoDetection:
 
         with pytest.raises(EncodingDetectionError):
             read_history(history_path)
+
+
+# ── 列構成マイグレーション（COLUMNS 追加・削除・並び替え） ─────────────────────
+def _write_csv_raw(path: Path, header: Sequence[str], rows: Sequence[Sequence[str]]) -> None:
+    """テスト用: 任意の列構成で履歴CSVを書く（COLUMNS 以外も書ける）。
+
+    ``_write_row()`` は ``COLUMNS`` 固定のヘルパーなので、COLUMNS と違う列構成を
+    試したいテストでは直接このヘルパーで書く。出力は ``_append()`` と同じく
+    UTF-8 BOM 付きにする（``read_text()`` の UTF-8 経路で読める）。
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(header)
+        for row in rows:
+            writer.writerow(row)
+
+
+def _today_row_values(
+    *, schedule_key: str = "", error_code: str = "", result: str = SUCCESS
+) -> list[str]:
+    """COLUMNS 順の今日日付1行を組み立てる（テストで使う基本データ）。"""
+    today_str = now().strftime("%Y-%m-%d %H:%M:%S")
+    return [
+        today_str,  # 実行日時
+        "1001",  # 管理番号
+        schedule_key,  # スケジュールキー
+        "顧客一覧",  # 概要
+        "00O5g00000ABCDE",  # レポートID
+        URL_A,  # URL
+        "定期実行",  # プロジェクト
+        result,  # 成否
+        SUCCESS,  # Salesforce取得結果
+        SUCCESS,  # 保存結果
+        "顧客一覧",  # 保存先（テスト簡略化のため概要で代用）
+        "a.csv",  # ファイル名
+        "1",  # 取得件数
+        "0.10",  # 処理秒数
+        "",  # 原因区分
+        error_code,  # エラーコード
+        "",  # エラー内容
+    ]
+
+
+class TestHeaderMigration:
+    """``COLUMNS`` の列追加・削除・並び替えがあっても、読み込み側が動くこと。
+
+    管理表マイグレーション（``create_template()``）と同じ「増えた列は空文字、
+    減った列は捨て、並び順は新しい定義順」のルールを履歴CSV側にも適用する。
+    """
+
+    def test_extra_column_at_end_is_absorbed(self, tmp_path) -> None:
+        """COLUMNS に無い列が末尾にあるCSVでも、既存データは保持して読み込める。
+
+        増えた列（COLUMNS に無い列）は ``migrate_row()`` が捨てて、新しい
+        ``COLUMNS`` 順の Table を返す。値が捨てられた事自体はログや例外で
+        騒がず、黙って吸収する。
+        """
+        history_path = tmp_path / "履歴.csv"
+        # 末尾に「新しい列」を足した17列の見出し
+        extra_header = [*COLUMNS, "新列"]
+        _write_csv_raw(
+            history_path,
+            header=[*extra_header],
+            rows=[[*_today_row_values(), "追加された値"]],
+        )
+
+        rows = read_history(history_path).to_rows()
+        assert len(rows) == 1
+        # 返り値の Table は ``COLUMNS`` の列だけを持つ（追加された列は捨てた）
+        assert list(rows[0].keys()) == list(COLUMNS)
+        # 既存列の値は保持される
+        assert rows[0]["管理番号"] == "1001"
+        assert rows[0]["ファイル名"] == "a.csv"
+
+    def test_missing_last_column_is_filled_with_empty(self, tmp_path) -> None:
+        """COLUMNS の末尾列が無い古いCSVでも、最後の列を空文字として読み込める。"""
+        history_path = tmp_path / "履歴.csv"
+        # 「エラー内容」を抜いた15列の見出し（古いバージョン想定）
+        old_header = list(COLUMNS[:-1])
+        _write_csv_raw(
+            history_path,
+            header=old_header,
+            rows=[_today_row_values()[: len(old_header)]],
+        )
+
+        rows = read_history(history_path).to_rows()
+        assert len(rows) == 1
+        # 抜けた列は空文字で埋められる
+        assert rows[0]["エラー内容"] == ""
+        assert rows[0]["管理番号"] == "1001"
+
+    def test_reordered_columns_are_normalized_to_current_order(self, tmp_path) -> None:
+        """COLUMNS の順序が違う古いCSVでも、各値は現在の ``COLUMNS`` 順で読める。"""
+        history_path = tmp_path / "履歴.csv"
+        # 「管理番号」「実行日時」「プロジェクト」「成否」を先頭に並べ替えた
+        # 古い構成。値の並びもそれに揃える
+        reordered_header = [
+            "管理番号",
+            "実行日時",
+            "プロジェクト",
+            "成否",
+            *[
+                column
+                for column in COLUMNS
+                if column not in {"管理番号", "実行日時", "プロジェクト", "成否"}
+            ],
+        ]
+        # 値はヘッダーと同じ並びで書く。5 列目以降は元の COLUMNS 順のうち
+        # 先頭4列を除いた残り
+        reordered_values = [
+            "1001",  # 管理番号
+            now().strftime("%Y-%m-%d %H:%M:%S"),  # 実行日時
+            "定期実行",  # プロジェクト
+            SUCCESS,  # 成否
+            "",  # スケジュールキー
+            "顧客一覧",  # 概要
+            "00O5g00000ABCDE",  # レポートID
+            URL_A,  # URL
+            SUCCESS,  # Salesforce取得結果
+            SUCCESS,  # 保存結果
+            "顧客一覧",  # 保存先
+            "a.csv",  # ファイル名
+            "1",  # 取得件数
+            "0.10",  # 処理秒数
+            "",  # 原因区分
+            "",  # エラーコード
+            "",  # エラー内容
+        ]
+        _write_csv_raw(history_path, header=reordered_header, rows=[reordered_values])
+
+        rows = read_history(history_path).to_rows()
+        assert len(rows) == 1
+        # ``migrate_row()`` が ``COLUMNS`` 順へ並べ直すため、列名で値を取れる
+        assert rows[0]["管理番号"] == "1001"
+        assert rows[0]["実行日時"].startswith(now().strftime("%Y-%m-%d"))
+        assert rows[0]["成否"] == SUCCESS
+        assert rows[0]["ファイル名"] == "a.csv"
+
+    def test_extra_column_does_not_break_successful_files_today(self, tmp_path) -> None:
+        """列追加があっても ``successful_files_today()`` が当日成功を拾える。"""
+        history_path = tmp_path / "履歴.csv"
+        extra_header = [*COLUMNS, "新列"]
+        _write_csv_raw(
+            history_path,
+            header=extra_header,
+            rows=[[*_today_row_values(), "追加された値"]],
+        )
+
+        matches = successful_files_today(history_path, "1001")
+        assert matches == [Path("顧客一覧") / "a.csv"]
+
+    def test_missing_column_does_not_break_schedule_succeeded_today(self, tmp_path) -> None:
+        """列欠落があっても ``schedule_succeeded_today()`` が例外を出さない。
+
+        「スケジュールキー」列が無い古いCSVでも、読み込み側で ``migrate_row()``
+        が吸収して ``COLUMNS`` 順の行へ揃え直すため、判定ロジックは通常通り動く。
+        古い構成ではスケジュールキーが無いので ``schedule_key == ""`` となり、
+        渡した ``S001`` とは一致しない（防御的に False を返す）。
+        """
+        history_path = tmp_path / "履歴.csv"
+        # 「スケジュールキー」と「エラー内容」を両方抜いた古い構成
+        old_header = [c for c in COLUMNS if c not in {"スケジュールキー", "エラー内容"}]
+        old_values_full = _today_row_values(schedule_key="S001")
+        # 抜けた列ぶんを除いた値で書く（古い見出し 15 列に合わせる）
+        old_values = [
+            value
+            for header, value in zip(COLUMNS, old_values_full, strict=True)
+            if header in set(old_header)
+        ]
+        _write_csv_raw(history_path, header=old_header, rows=[old_values])
+
+        # 旧バージョンのヘッダーでも例外を出さず、防御的に False を返す
+        assert schedule_succeeded_today(history_path, "S001") is False
+
+    def test_reordered_columns_do_not_break_truncated_today(self, tmp_path) -> None:
+        """列並び替えがあっても ``truncated_today()`` が truncated エラーを拾える。"""
+        history_path = tmp_path / "履歴.csv"
+        # 失敗行（``SalesforceReportTruncatedError``）を「管理番号/実行日時/成否/
+        # エラーコード」が先頭に並ぶ古い順で書く
+        reordered_header = [
+            "管理番号",
+            "実行日時",
+            "成否",
+            "エラーコード",
+            *[
+                column
+                for column in COLUMNS
+                if column not in {"管理番号", "実行日時", "成否", "エラーコード"}
+            ],
+        ]
+        truncated_values = [
+            "1001",
+            now().strftime("%Y-%m-%d %H:%M:%S"),
+            FAILURE,
+            "SalesforceReportTruncatedError",
+            "",  # スケジュールキー
+            "顧客一覧",  # 概要
+            "00O5g00000ABCDE",  # レポートID
+            URL_A,  # URL
+            "定期実行",  # プロジェクト
+            SUCCESS,  # Salesforce取得結果
+            "",  # 保存結果
+            "",  # 保存先
+            "",  # ファイル名
+            "",  # 取得件数
+            "1.00",  # 処理秒数
+            "Salesforce",  # 原因区分
+            "",  # エラー内容
+        ]
+        _write_csv_raw(history_path, header=reordered_header, rows=[truncated_values])
+
+        assert truncated_today(history_path, "1001") is True
+
+    def test_renamed_known_column_is_treated_as_new_column(self, tmp_path) -> None:
+        """既存列を**リネーム**した古いCSVでは、旧名の値は捨てられ、新名は空文字。
+
+        ファイル全体マイグレーション（``history_writer._migrate_if_needed()``）
+        側で吸収される挙動なので、読み込み側のテストとしては「例外を出さず、
+        新 ``COLUMNS`` 順で読める（リネーム前の列は空文字）」ことを確認する。
+        """
+        history_path = tmp_path / "履歴.csv"
+        # 「ファイル名」を「FILE_NAME」にリネームした古いバージョン
+        renamed_header = ["FILE_NAME" if c == "ファイル名" else c for c in COLUMNS]
+        old_values = _today_row_values()
+        renamed_values = [
+            "a.csv" if header == "ファイル名" else value
+            for header, value in zip(COLUMNS, old_values, strict=True)
+        ]
+        _write_csv_raw(history_path, header=renamed_header, rows=[renamed_values])
+
+        rows = read_history(history_path).to_rows()
+        assert len(rows) == 1
+        # リネーム後の列名は ``COLUMNS`` に無いため捨てる
+        assert rows[0]["ファイル名"] == ""
+        # 他の列は保持
+        assert rows[0]["管理番号"] == "1001"

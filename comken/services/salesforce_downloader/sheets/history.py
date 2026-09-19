@@ -157,7 +157,8 @@ def successful_files_today(
         text = read_text(history_path, encoding=Encoding.AUTO)
         reader = csv.DictReader(io.StringIO(text))
         _require_expected_header(history_path, reader.fieldnames)
-        for row in reader:
+        for raw_row in reader:
+            row = migrate_row(raw_row)
             if (
                 row.get("実行日時", "").startswith(target)
                 and row.get("管理番号", "") == key_text
@@ -219,7 +220,8 @@ def schedule_succeeded_today(
         text = read_text(history_path, encoding=Encoding.AUTO)
         reader = csv.DictReader(io.StringIO(text))
         _require_expected_header(history_path, reader.fieldnames)
-        for row in reader:
+        for raw_row in reader:
+            row = migrate_row(raw_row)
             if (
                 row.get("実行日時", "").startswith(target)
                 and row.get("スケジュールキー", "") == key_text
@@ -289,7 +291,8 @@ def truncated_today(
         text = read_text(history_path, encoding=Encoding.AUTO)
         reader = csv.DictReader(io.StringIO(text))
         _require_expected_header(history_path, reader.fieldnames)
-        for row in reader:
+        for raw_row in reader:
+            row = migrate_row(raw_row)
             if (
                 row.get("実行日時", "").startswith(target)
                 and row.get("管理番号", "") == key_text
@@ -328,8 +331,8 @@ def read_history(path: str | Path) -> Table:
     読まない。
 
     ファイルが無ければ空の Table（``COLUMNS`` の列だけを持つ）を返す。
-    既存の見出しが現在の列定義と合わない場合は ``HistoryHeaderMismatchError``
-    を投げる。
+    見出しが古い構成でも ``migrate_row()`` で新構成に揃え直して返す
+    （致命的に壊れた見出しは ``HistoryHeaderMismatchError`` で止める）。
 
     Args:
         path: 履歴 CSV のパス。
@@ -346,13 +349,52 @@ def read_history(path: str | Path) -> Table:
         text = read_text(history_path, encoding=Encoding.AUTO)
         reader = csv.DictReader(io.StringIO(text))
         _require_expected_header(history_path, reader.fieldnames)
-        rows = [dict(row) for row in reader]
+        rows = [migrate_row(row) for row in reader]
     logger.debug("履歴全件読み込み完了: path=%s, 件数=%d", history_path, len(rows))
     return Table(list(COLUMNS), rows)
 
 
+def migrate_row(row: dict[str, str]) -> dict[str, str]:
+    """行データを現在の ``COLUMNS`` 構成に揃え直す。
+
+    列が増減・並び替わっていても、既存の値は保持しつつ ``COLUMNS`` の順に
+    並べ直す。**増えた列は空文字**、**``COLUMNS`` に無い列は捨てる**。
+    ``_require_expected_header()`` を通した後の生 ``row`` を受け取り、
+    読み取りロジックが ``COLUMNS`` の列名を仮定して ``row.get(...)`` できるように
+    形を整える役割。
+
+    公開関数。Salesforceレポートダウンローダー側の書き込み側マイグレーション
+    （``history_writer._migrate_if_needed()``）からも同じ実装を使うため、
+    comken 側に置いて呼び出し側で import する。
+    """
+    return {column: row.get(column, "") for column in COLUMNS}
+
+
 def _require_expected_header(path: Path, actual: Sequence[str] | None) -> None:
-    """履歴の見出しが現在の列定義と完全一致しなければ止める。"""
+    """履歴の見出しが**致命的に壊れていないか**を確認する。
+
+    列の不足・余剰・並び替えなど通常のマイグレーション対象は ``migrate_row()``
+    が吸収するため、ここでは止めない（``logger.debug`` で差分だけ残す）。
+    一方、**見出しが全く読めない／空文字の見出しがある／列名が重複している**
+    のは CSV として整合性が壊れており ``csv.DictReader`` がどの列値をどの
+    キーに入れたか曖昧になるため、``HistoryHeaderMismatchError`` で止める。
+
+    Args:
+        path: 履歴 CSV のパス（エラーメッセージ用）。
+        actual: ``csv.DictReader`` の ``fieldnames``（= 1 行目の列名群）。
+    """
     actual_columns = tuple(actual or ())
-    if actual_columns != COLUMNS:
+    if not actual_columns:
         raise HistoryHeaderMismatchError(path, actual_columns, COLUMNS)
+    if any(column == "" for column in actual_columns):
+        raise HistoryHeaderMismatchError(path, actual_columns, COLUMNS)
+    if len(set(actual_columns)) != len(actual_columns):
+        raise HistoryHeaderMismatchError(path, actual_columns, COLUMNS)
+    if actual_columns != COLUMNS:
+        logger.debug(
+            "履歴の見出しが現在の COLUMNS と異なります: path=%s, actual=%s, expected=%s "
+            "（migrate_row() で吸収）",
+            path,
+            actual_columns,
+            COLUMNS,
+        )
