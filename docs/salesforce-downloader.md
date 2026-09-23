@@ -2,7 +2,7 @@
 
 > [!important] 2026-09: 取得を実行する側は comken の外へ切り出した
 > `download_scheduled()`（Salesforce へ実際に取りに行き、履歴へ書く処理）は
-> `Salesforceレポートダウンローダー` リポジトリ（`src/salesforce_downloader/`）に
+> `Salesforceレポートダウンローダー` リポジトリ（`src/`）に
 > ある。**このページで書いているのは、comken 側に残っている「管理表・履歴の
 > 形式（共有契約）」と「取っておいたものを読む側」（`cached_report()` 等）まで。**
 > `download_scheduled()` の実装・定期実行の組み込み方・実行時フィルタや
@@ -122,7 +122,7 @@ python -m comken sf check
 
 **管理表（Excel）は非エンジニアが手動で用意・編集する。** ライブラリ側は雛形を
 自動生成する `init` コマンドを提供していない。雛形が必要な場合は、
-`Salesforceレポートダウンローダー` リポジトリ側（`src/salesforce_downloader/template_writer.py`）
+`Salesforceレポートダウンローダー` リポジトリ側（`src/template_writer.py`）
 の関数（`create_combined_workbook()` など）を Python から直接呼んで作成する
 （サンプルは [管理表（master_table）](master-table.md) を参照）。
 
@@ -187,7 +187,7 @@ python -m comken sfdl check "\\実際のサーバー\share\tools\salesforce\レ�
 
 **管理表（Excel）は非エンジニアが手動で用意・編集する。** 雛形の生成は
 `Salesforceレポートダウンローダー` リポジトリ側
-（`src/salesforce_downloader/template_writer.py`）の関数で行う
+（`src/template_writer.py`）の関数で行う
 （ライブラリ comken 本体には雛形生成の API は置いていない）。**「管理表」
 「スケジュール」「設定」の3シートを1つのブックにまとめて生成**したい場合は
 `create_combined_workbook(path)` を、1シートだけ生成したい場合は
@@ -195,7 +195,7 @@ python -m comken sfdl check "\\実際のサーバー\share\tools\salesforce\レ�
 （詳しくは Salesforceレポートダウンローダー側の README / ソースを参照）。
 
 ```python
-from src.salesforce_downloader.template_writer import create_combined_workbook
+from src.template_writer import create_combined_workbook
 
 create_combined_workbook("レポート管理表.xlsx")
 ```
@@ -583,7 +583,7 @@ if rule.is_due(datetime.now(), holidays=set()):
 （`レポート管理表` と同じブックへ、シート名「スケジュール」で追加する）。手で作った
 シートへドロップダウン（入力規則）だけ後から付けたい場合は、
 `Salesforceレポートダウンローダー` リポジトリ側
-（`src/salesforce_downloader/template_writer.py`）の `apply_schedule_dropdowns()`
+（`src/template_writer.py`）の `apply_schedule_dropdowns()`
 を使う。ドロップダウンは `column()` 宣言で `choices` を付けた列に自動で付く
 （`取得頻度` / `曜日` / `祝日対応` / `有効` の 4 列。`曜日` 列も `choices` で
 月〜日の 7 値ドロップダウンが自動付与される。`日付` / `取得開始時刻` /
@@ -591,7 +591,7 @@ if rule.is_due(datetime.now(), holidays=set()):
 並び順は問わない）:
 
 ```python
-from src.salesforce_downloader.template_writer import apply_schedule_dropdowns
+from src.template_writer import apply_schedule_dropdowns
 
 apply_schedule_dropdowns("レポート管理表.xlsx")
 ```

@@ -29,7 +29,7 @@ config.ini より表のほうが扱いやすい（並べ替え・フィルタ・
 
 **雛形（Excel）の書き出しは、このリポジトリ（comken）の責務ではない。** 雛形生成・
 ドロップダウン適用・「記入方法」シートの組み立ては、Salesforceレポートダウンローダー側
-（`src/salesforce_downloader/template_writer.py`）などの**利用側プロジェクトで行う**。
+（`src/template_writer.py`）などの**利用側プロジェクトで行う**。
 このモジュールは読み込み・検証に集中する。`column_specs()` を使うと、利用側が
 列定義（`column()` で宣言した内容）を読み取れる。
 
