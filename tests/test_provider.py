@@ -267,9 +267,7 @@ class TestLatestTodayPath:
         # 当日（2026-09-18）のファイルを _simulate_download で置く
         fixed_now = dt.datetime(2026, 9, 18, 9, 5)  # noqa: DTZ001 — テスト用に意図的に固定した tz-naive な datetime
         monkeypatch.setattr(provider_module, "clock_now", lambda: fixed_now)
-        today_file = _simulate_download(
-            entry, schedule_run_time=dt.time(9, 0), fixed_now=fixed_now
-        )
+        today_file = _simulate_download(entry, schedule_run_time=dt.time(9, 0), fixed_now=fixed_now)
         latest = provider_module._latest_today_path(entry)
         assert latest == today_file
 
@@ -281,10 +279,56 @@ class TestLatestTodayPath:
         # 別レポートのファイルを直接置く
         other_file = paths["base_path"] / "1002_20260918_0900.csv"
         other_file.write_text("別レポート", encoding="utf-8")
-        target = _simulate_download(
-            entry, schedule_run_time=dt.time(9, 0), fixed_now=fixed_now
-        )
+        target = _simulate_download(entry, schedule_run_time=dt.time(9, 0), fixed_now=fixed_now)
         assert provider_module._latest_today_path(entry) == target
+
+    def test_returns_larger_sequence_number(self, paths, monkeypatch):
+        """``_9`` と ``_10`` の連番があるとき、``_10``（数値として大きい方）を返す。
+
+        ``sorted()`` の文字列ソート順だと ``_10`` が ``_9`` より前に並ぶため、
+        文字列ソート方式だと ``_9`` を「最新」と誤選択する事故が起きる。
+        ``_latest_today_path`` は ``(HHMM, 連番)`` の数値タプルで比較する。
+        """
+        entry = load_master(paths["master_path"])["1001"]
+        fixed_now = dt.datetime(2026, 9, 18, 9, 0)  # noqa: DTZ001 — テスト用に意図的に固定した tz-naive な datetime
+        monkeypatch.setattr(provider_module, "clock_now", lambda: fixed_now)
+        # 同時刻（HHMM=0900）に連番 9 と 10 が両方ある状況を再現する。
+        # ``_simulate_download`` は ``_reserve_unique_path`` 相当の衝突回避をしないので、
+        # ファイル名で直接作って ``_latest_today_path`` の挙動だけを確かめる
+        ninth = paths["base_path"] / "1001_20260918_0900_9.csv"
+        ninth.write_text("9", encoding="utf-8")
+        tenth = paths["base_path"] / "1001_20260918_0900_10.csv"
+        tenth.write_text("10", encoding="utf-8")
+
+        assert provider_module._latest_today_path(entry) == tenth
+
+    def test_returns_latest_hhmm_when_sequences_match(self, paths, monkeypatch):
+        """連番が同じ（あるいは無い）場合、``HHMM`` が新しい方を返す。"""
+        entry = load_master(paths["master_path"])["1001"]
+        fixed_now = dt.datetime(2026, 9, 18, 13, 0)  # noqa: DTZ001 — テスト用に意図的に固定した tz-naive な datetime
+        monkeypatch.setattr(provider_module, "clock_now", lambda: fixed_now)
+        # 9時台と 13時台のファイルを直接置く
+        early = paths["base_path"] / "1001_20260918_0900.csv"
+        early.write_text("朝", encoding="utf-8")
+        late = paths["base_path"] / "1001_20260918_1300.csv"
+        late.write_text("昼", encoding="utf-8")
+
+        assert provider_module._latest_today_path(entry) == late
+
+    def test_ignores_files_that_do_not_match_pattern(self, paths, monkeypatch):
+        """想定外の命名（手で置いたファイル等）は候補から除外する。"""
+        entry = load_master(paths["master_path"])["1001"]
+        fixed_now = dt.datetime(2026, 9, 18, 9, 0)  # noqa: DTZ001 — テスト用に意図的に固定した tz-naive な datetime
+        monkeypatch.setattr(provider_module, "clock_now", lambda: fixed_now)
+        # 想定外の命名（HHMM が無い・拡張子が違う・管理番号が違う）
+        (paths["base_path"] / "1001_20260918_manual.csv").write_text("x", encoding="utf-8")
+        (paths["base_path"] / "1001_20260918_0900.txt").write_text("x", encoding="utf-8")
+        (paths["base_path"] / "9999_20260918_0900.csv").write_text("x", encoding="utf-8")
+        # パターンマッチする唯一のファイル
+        valid = paths["base_path"] / "1001_20260918_0900.csv"
+        valid.write_text("ok", encoding="utf-8")
+
+        assert provider_module._latest_today_path(entry) == valid
 
 
 class TestCachedReport:

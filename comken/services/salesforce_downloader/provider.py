@@ -32,6 +32,7 @@
 
 import datetime as dt
 import logging
+import re
 from collections import OrderedDict
 from pathlib import Path
 
@@ -195,12 +196,21 @@ def output_path(
 
 
 def _latest_today_path(entry: ReportEntry) -> Path | None:
-    """フォルダ内で本日分のファイルを探し、ファイル名の並び順で最新を返す。無ければ ``None``。
+    """フォルダ内で本日分のファイルを探し、ファイル名から導いた ``(HHMM, 連番)``
+    の数値タプルが最大のものを返す。無ければ ``None``。
 
-    ファイル名は ``{管理番号}_{YYYYMMDD}_{HHMM}.csv`` の形。 ``YYYYMMDD_HHMM`` は
-    ゼロパディングされた数値文字列なので、文字列ソート順がそのまま時刻の昇順と
-    一致する。 ``ScheduleRule.desired_time`` は ``%H:%M`` の2桁ゼロパディング形式で
-    保存されているため問題ない。
+    ファイル名は ``{管理番号}_{YYYYMMDD}_{HHMM}.csv`` の基本形に加え、同名が
+    既に存在したときは ``_reserve_unique_path`` が ``_{連番}`` を付けた
+    ``{管理番号}_{YYYYMMDD}_{HHMM}_{連番}.csv`` を作る。
+
+    **``sorted()`` の文字列ソート順は数値順と一致しない。** 例えば ``_9.csv``
+    より ``_10.csv`` が辞書順では先に並ぶため、文字列ソートで「最新」を取ると
+    ``_9`` が選ばれる事故になる。``HHMM`` と連番（無ければ 0）を**整数**として
+    取り出して ``(HHMM, 連番)`` のタプルで比較する。
+
+    パターンマッチしないファイル名（手作業で置いたもの等）は候補から除外する。
+    管理番号に正規表現のメタ文字（``.`` 等）が含まれても壊れないよう、
+    ``re.escape`` で固定する。
 
     検索範囲は ``report_folder()`` が返すベースパスの直下。サブフォルダは
     見ない（フォルダ階層は「ベースパスのみ」に1本化したため、配下に別フォルダは
@@ -208,8 +218,22 @@ def _latest_today_path(entry: ReportEntry) -> Path | None:
     """
     folder = report_folder(entry, _load_group_settings_cached(MASTER_PATH))
     today = clock_now().strftime("%Y%m%d")
-    candidates = sorted(folder.glob(f"{entry.key}_{today}_*.csv"))
-    return candidates[-1] if candidates else None
+    # glob はそのまま（管理番号と日付の接頭辞で候補を大幅に絞るため残す）。
+    # 候補の ``.csv`` ファイル名から ``(HHMM, 連番)`` を整数で取り出し、
+    # 数値として最大のものを最新とする
+    pattern = re.compile(rf"^{re.escape(entry.key)}_{today}_(\d{{4}})(?:_(\d+))?\.csv$")
+    candidates: list[tuple[tuple[int, int], Path]] = []
+    for path in folder.glob(f"{entry.key}_{today}_*.csv"):
+        match = pattern.match(path.name)
+        if match is None:
+            continue
+        hhmm = int(match.group(1))
+        seq = int(match.group(2)) if match.group(2) else 0
+        candidates.append(((hhmm, seq), path))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: item[0])
+    return candidates[-1][1]
 
 
 def report_folder(entry: ReportEntry, group_settings: dict[str, Path]) -> Path:

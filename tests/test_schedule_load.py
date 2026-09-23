@@ -280,3 +280,244 @@ class TestLoadSchedule:
         assert not missing.exists()
         with pytest.raises(ExcelFileNotFoundError):
             load_schedule(missing)
+
+
+class TestScheduleValidation:
+    """``ScheduleRule.validate()`` は「取得頻度」と「曜日」「日付」の組み合わせと、
+    「日付」列の解釈不能値を読み込み時に ``MasterRowValueError`` で止める。"""
+
+    @staticmethod
+    def _row(**overrides: str) -> list[str]:
+        base: list[str] = [
+            "S001",
+            "1001",
+            "毎週",
+            "09:00",
+            "",
+            "月",
+            "",
+            "取得しない",
+            "○",
+        ]
+        columns = [
+            "スケジュールキー",
+            "レポートキー",
+            "取得頻度",
+            "取得開始時刻",
+            "取得時刻",
+            "曜日",
+            "日付",
+            "祝日対応",
+            "有効",
+        ]
+        for key, value in overrides.items():
+            base[columns.index(key)] = value
+        return base
+
+    def test_weekly_without_weekday_raises_with_row_and_column(self, tmp_path):
+        """「毎週」なのに「曜日」が空 → 行番号・列名付きでエラー。"""
+        master = make_master_with_schedule(
+            tmp_path / "管理表.xlsx",
+            [
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "顧客一覧",
+                    "https://example.com/a/view",
+                    "○",
+                    "",
+                ]
+            ],
+            schedule_rows=[
+                self._row(曜日=""),  # 「毎週」なのに曜日が空
+            ],
+        )
+        with pytest.raises(MasterRowValueError) as caught:
+            load_schedule(master)
+        message = str(caught.value)
+        assert "2 行目" in message
+        assert "「曜日」" in message  # 列名が「曜日」になっている（業務担当者向け）
+        assert "正しくありません" in message  # 「◯行目の「◯」が正しくありません」形式
+        assert "(未指定)" not in message  # 列名が取れていない旧バグの形ではない
+        # 列名位置にタプルの repr（`('`, `, '` など）が混入していないこと
+        after_row = message.split("行目", 1)[1]
+        column_label = after_row.split("」", 1)[0]
+        assert "(" not in column_label
+
+    def test_monthly_without_day_of_month_raises_with_row_and_column(self, tmp_path):
+        """「毎月」なのに「日付」が空 → 行番号・列名付きでエラー。"""
+        master = make_master_with_schedule(
+            tmp_path / "管理表.xlsx",
+            [
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "顧客一覧",
+                    "https://example.com/a/view",
+                    "○",
+                    "",
+                ]
+            ],
+            schedule_rows=[
+                # 「毎月」だが「曜日」と「日付」の両方が空。「曜日」の方が
+                # 先に検証で止まらないよう、ここでは「曜日」も明示的に空にする
+                self._row(取得頻度="毎月", 曜日="", 日付=""),
+            ],
+        )
+        with pytest.raises(MasterRowValueError) as caught:
+            load_schedule(master)
+        message = str(caught.value)
+        assert "2 行目" in message
+        assert "「日付」" in message  # 列名が「日付」になっている
+        assert "正しくありません" in message
+        assert "(未指定)" not in message
+        assert "(" not in message.split("行目", 1)[1].split("」", 1)[0]
+
+    def test_non_weekly_with_weekday_raises(self, tmp_path):
+        """「毎週」以外で「曜日」が埋まっている → 「毎週」のときだけ、と案内して止める。"""
+        master = make_master_with_schedule(
+            tmp_path / "管理表.xlsx",
+            [
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "顧客一覧",
+                    "https://example.com/a/view",
+                    "○",
+                    "",
+                ]
+            ],
+            schedule_rows=[
+                self._row(取得頻度="毎日", 曜日="月"),  # 「毎日」だが曜日が書かれている
+            ],
+        )
+        with pytest.raises(MasterRowValueError) as caught:
+            load_schedule(master)
+        message = str(caught.value)
+        assert "2 行目" in message
+        assert "「曜日」" in message
+        assert "毎週" in message
+        assert "(未指定)" not in message
+        assert "(" not in message.split("行目", 1)[1].split("」", 1)[0]
+
+    def test_non_monthly_with_day_of_month_raises(self, tmp_path):
+        """「毎月」以外で「日付」が埋まっている → 「毎月」のときだけ、と案内して止める。"""
+        master = make_master_with_schedule(
+            tmp_path / "管理表.xlsx",
+            [
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "顧客一覧",
+                    "https://example.com/a/view",
+                    "○",
+                    "",
+                ]
+            ],
+            schedule_rows=[
+                self._row(取得頻度="毎週", 日付="15"),
+            ],
+        )
+        with pytest.raises(MasterRowValueError) as caught:
+            load_schedule(master)
+        message = str(caught.value)
+        assert "2 行目" in message
+        assert "「日付」" in message
+        assert "毎月" in message
+        assert "(未指定)" not in message
+        assert "(" not in message.split("行目", 1)[1].split("」", 1)[0]
+
+    def test_invalid_day_of_month_value_raises_with_row_and_column(self, tmp_path):
+        """「日付」列の解釈不能値（例: 「来月」）も読み込み時にエラー。"""
+        master = make_master_with_schedule(
+            tmp_path / "管理表.xlsx",
+            [
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "顧客一覧",
+                    "https://example.com/a/view",
+                    "○",
+                    "",
+                ]
+            ],
+            schedule_rows=[
+                self._row(取得頻度="毎月", 日付="来月"),
+            ],
+        )
+        with pytest.raises(MasterRowValueError) as caught:
+            load_schedule(master)
+        message = str(caught.value)
+        assert "2 行目" in message
+        assert "「日付」" in message
+        assert "来月" in message
+        assert "(未指定)" not in message
+        assert "(" not in message.split("行目", 1)[1].split("」", 1)[0]
+
+    def test_invalid_time_value_raises_with_row_and_column(self, tmp_path):
+        """時刻の不正値（範囲外）も読み込み時に ``MasterRowValueError`` で行番号・列名付き。"""
+        master = make_master_with_schedule(
+            tmp_path / "管理表.xlsx",
+            [
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "顧客一覧",
+                    "https://example.com/a/view",
+                    "○",
+                    "",
+                ]
+            ],
+            schedule_rows=[
+                self._row(取得開始時刻="25:00"),
+            ],
+        )
+        with pytest.raises(MasterRowValueError) as caught:
+            load_schedule(master)
+        message = str(caught.value)
+        assert "2 行目" in message
+        assert "取得開始時刻" in message
+        assert "(未指定)" not in message
+
+    def test_reports_all_invalid_rows_before_stopping(self, tmp_path):
+        """1行目で止まらず、以降の行も順次チェックされる（例: 2行目で別の違反）。"""
+        master = make_master_with_schedule(
+            tmp_path / "管理表.xlsx",
+            [
+                [
+                    "1001",
+                    "営業事務グループ",
+                    "山田",
+                    "顧客一覧",
+                    "https://example.com/a/view",
+                    "○",
+                    "",
+                ]
+            ],
+            schedule_rows=[
+                # 行2: 「毎週」だが曜日空（最初の違反）
+                self._row(スケジュールキー="S001", 曜日=""),
+                # 行3: 「日付」が解釈不能（「来月」）
+                self._row(
+                    スケジュールキー="S002",
+                    レポートキー="1001",
+                    取得頻度="毎月",
+                    日付="来月",
+                ),
+            ],
+        )
+        # 1行目で ``MasterRowValueError`` が出れば、2行目の検査には進まない。
+        # 「1件目で止める」のが読み込み時の自然な挙動（業務担当者は直して再実行する）
+        with pytest.raises(MasterRowValueError) as caught:
+            load_schedule(master)
+        message = str(caught.value)
+        assert "2 行目" in message
+        assert "曜日" in message
+        assert "(未指定)" not in message
+        assert "(" not in message.split("行目", 1)[1].split("」", 1)[0]

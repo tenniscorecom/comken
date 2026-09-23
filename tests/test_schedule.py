@@ -57,10 +57,6 @@ class TestWeekdayProperty:
         rule = _rule()
         assert rule.weekday is None
 
-    def test_accepts_with_weekday_suffix(self):
-        rule = _rule(raw_weekday="月曜日")
-        assert rule.weekday == 0
-
     def test_invalid_raises(self):
         rule = _rule(raw_weekday="不明")
         with pytest.raises(ScheduleWeekdayInvalidError):

@@ -5,6 +5,7 @@ test_service.py 側）。
 """
 
 import datetime as dt
+import typing
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -400,3 +401,103 @@ class TestToTime:
 
         with pytest.raises(ValueError):
             _to_time(text)
+
+
+class TestCandidateTypes:
+    """``_candidate_types`` は Union 型ヒントを (要素の型, ...) に展開する。
+
+    Python 3.10+ の ``X | None`` 構文は ``types.UnionType`` で表されるため、
+    3.11〜3.13 で ``dt.time | None`` を渡されたときも ``(dt.time, NoneType)`` を
+    返す必要がある。``typing.Union`` だけだと 3.11〜3.13 で時刻に変換されず
+    文字列のまま返る回帰が起きる。
+    """
+
+    def test_expands_typing_union(self):
+        """``typing.Union[dt.time, None]`` は ``(dt.time, NoneType)`` に展開される。"""
+        from comken.services.salesforce_downloader.report_master import _candidate_types
+
+        result = _candidate_types(dt.time | None)
+        assert dt.time in result
+        assert type(None) in result
+
+    def test_expands_pipe_union(self):
+        """``dt.time | None`` は 3.11〜3.13 で ``types.UnionType`` として現れる。
+
+        3.14 では ``typing.Union`` 側に正規化されるため、3.14 ではこの分岐は
+        通らないが、3.11〜3.13 の回帰を防ぐために同じパスを通すことを確認する。
+        """
+        import types as _types
+
+        from comken.services.salesforce_downloader.report_master import _candidate_types
+
+        union_type = dt.time | None
+        # 3.11〜3.13 では ``types.UnionType``、3.14 では ``typing.Union``。
+        # どちらでも同じ結果が返れば OK
+        assert typing.get_origin(union_type) in (_types.UnionType, typing.Union)
+        result = _candidate_types(union_type)
+        assert dt.time in result
+        assert type(None) in result
+
+    def test_returns_single_type_for_plain_annotation(self):
+        """Union でない型はそのまま 1要素タプルで返す。"""
+        from comken.services.salesforce_downloader.report_master import _candidate_types
+
+        assert _candidate_types(dt.time) == (dt.time,)
+        assert _candidate_types(str) == (str,)
+
+    def test_string_annotation_returns_empty_tuple(self):
+        """``from __future__ import annotations`` 時の文字列は判定不能なので空タプル。"""
+        from comken.services.salesforce_downloader.report_master import _candidate_types
+
+        assert _candidate_types("dt.time | None") == ()
+
+
+class TestConvertTimeValueError:
+    """``_convert()`` は時刻変換の ``ValueError`` を行番号・列名付きの
+    ``MasterRowValueError`` に変換する。"""
+
+    def test_invalid_time_value_raises_master_row_value_error(self, tmp_path):
+        """``"25:00"`` のような範囲外は、業務担当者に届く形（行番号・列名）で上がる。"""
+        from comken.services.salesforce_downloader.report_master import (
+            ColumnSpec,
+            _convert,
+        )
+
+        @dataclass(frozen=True, kw_only=True)
+        class WithTime(MasterRow):
+            """時刻列を持つ検証用。"""
+
+            SHEET_NAME = "一覧"
+
+            key: str = column("ID", unique=True, help="管理番号")
+            at: dt.time = column("時刻", help="実行時刻")
+
+        spec = ColumnSpec(header="時刻")
+        with pytest.raises(MasterRowValueError) as caught:
+            _convert("25:00", dt.time, spec, 7, WithTime)
+        # 行番号・列名・正しい書き方のヒントが業務担当者に届く
+        assert "7 行目" in str(caught.value)
+        assert "時刻" in str(caught.value)
+        assert "9:00" in str(caught.value)
+
+    def test_invalid_time_in_union_returns_master_row_value_error(self, tmp_path):
+        """``dt.time | None`` 型ヒントでも、不正値は ``MasterRowValueError`` に変換される。"""
+        from comken.services.salesforce_downloader.report_master import (
+            ColumnSpec,
+            _convert,
+        )
+
+        @dataclass(frozen=True, kw_only=True)
+        class WithOptionalTime(MasterRow):
+            """``dt.time | None`` を持つ検証用。"""
+
+            SHEET_NAME = "一覧"
+
+            key: str = column("ID", unique=True, help="管理番号")
+            at: dt.time | None = column("時刻", default=None, help="空欄可")
+
+        spec = ColumnSpec(header="時刻")
+        with pytest.raises(MasterRowValueError) as caught:
+            _convert("abc", dt.time | None, spec, 3, WithOptionalTime)
+        assert "3 行目" in str(caught.value)
+        assert "時刻" in str(caught.value)

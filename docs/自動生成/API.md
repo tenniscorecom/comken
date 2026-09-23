@@ -4069,7 +4069,8 @@ class EncodingDetectionError(CSVError):
 
 CSV の文字コードを判定できない
 
-発生箇所: CSV.read()
+発生箇所: 文字コード自動判定時（``comken.toolbox.csv.read_text()`` /
+``comken.toolbox.csv.CSV.read()``）
 
 対処:
     CSV の保存形式を確認し、管理者へ連絡する
@@ -6733,8 +6734,8 @@ Attributes:
     report_key: 列「レポートキー」。対象のレポートの管理番号
         （レポート管理表シートの ID と対応する）。
     frequency: 列「取得頻度」。`FREQUENCY_DAILY` / `FREQUENCY_WEEKLY` /
-        `FREQUENCY_MONTHLY` のいずれか。
-    start_time: 列「取得開始時刻」。毎日・毎週・毎月の実行開始時刻
+        `FREQUENCY_MONTHLY` / `FREQUENCY_BUSINESS_DAY` のいずれか。
+    start_time: 列「取得開始時刻」。毎日・毎週・毎月・毎営業日の実行開始時刻
         （この時刻を過ぎたら取得してよい）。空欄可。
     desired_time: 列「取得時刻」。このレポートが何時までに欲しいかの目安
         （記録用）。判定には使わない。
@@ -6760,6 +6761,12 @@ def weekday(self) -> int | None:
 ##### 説明
 
 「曜日」列の値を 0=月〜6=日 の整数に変換する。空欄は None。
+
+読み込み時は ``choices=WEEKDAY_NAMES`` で月〜日に絞り込まれているため、
+想定外の表記（例: 「月曜日」）はここに来る前に ``MasterRowValueError``
+として弾かれる。``ScheduleWeekdayInvalidError`` は既定の挙動を逸脱した
+場合に備えた受け皿で、テストや Python から直接 ``ScheduleRule`` を
+組み立てたときにだけ使われる。
 
 Raises:
     ScheduleWeekdayInvalidError: 想定外の文字列が書かれている場合。
@@ -6797,6 +6804,31 @@ def nth_business_day(self) -> int | None:
 
 「日付」列が「第N営業日」のとき、N。
 
+#### `validate`
+
+```text
+def validate(self) -> tuple[str, str] | None:
+```
+
+##### 説明
+
+行ごとの追加検証。頻度と「曜日」「日付」の組み合わせをここで検査する。
+
+列単体では ``choices`` で「曜日=月〜日」「日付=空欄OK」までしか表せず、
+「毎週なのに曜日が空」「毎週以外で曜日が書かれている」「毎月なのに日付が空」
+のような行をまたぐ組み合わせは、``choices`` だけでは弾けない。読み込み時に
+一括して ``MasterRowValueError``（行番号・列名付き）に変換するので、
+業務担当者は「どの行の、どの列をどう直せばいいか」がメッセージで分かる。
+
+``_parsed_day_of_month`` は ``int()`` 由来などの ``ValueError`` をそのまま
+投げるので、ここで「日付」列の解釈不能値を検出して ``(Excel の見出し,
+メッセージ)`` を返す。
+
+Returns:
+    問題がなければ ``None``。問題があれば ``(Excel の見出し, 直し方の
+    メッセージ)``。``_build()`` 側が行番号を付けて ``MasterRowValueError``
+    に変換する。
+
 #### `is_due`
 
 ```text
@@ -6813,10 +6845,14 @@ def is_due(self, now: dt.datetime, *, holidays: set[dt.date] | frozenset[dt.date
 ``set[date]``）は独立に残しており、「第N営業日」以外での祝日判定に使う
 （呼び出し元 ``download_scheduled`` との後方互換のため）。
 
-``FREQUENCY_DAILY`` / ``FREQUENCY_WEEKLY`` / ``FREQUENCY_MONTHLY`` で
-``start_time is None`` のときは「時刻条件なし」を意味し、日付条件が合えば常に
-``True`` を返す（例: 前日以前の確定済みデータのように、いつ取っても同じ内容の
-レポート用）。
+``FREQUENCY_DAILY`` / ``FREQUENCY_WEEKLY`` / ``FREQUENCY_MONTHLY`` /
+``FREQUENCY_BUSINESS_DAY`` で ``start_time is None`` のときは「時刻条件なし」
+を意味し、日付条件が合えば常に ``True`` を返す（例: 前日以前の確定済みデータの
+ように、いつ取っても同じ内容のレポート用）。
+
+「毎営業日」は曜日フィルタ（土日を除く）のみで、祝日の除外は
+``holiday_policy`` の組み合わせで実現する（例: 「毎営業日」+「取得しない」で
+土日祝日を除く真の営業日だけになる）。
 
 
 ## `from comken.services.salesforce_downloader.soql_reports import ...`
@@ -10225,6 +10261,33 @@ def count(self) -> int:
 ##### 説明
 
 データ行数を返す。
+
+### `read_text`
+
+```text
+def read_text(path: str | Path, *, encoding: str=Encoding.AUTO) -> str:
+```
+
+#### 説明
+
+CSV ファイルをバイト列として読み、文字コードを判定して文字列を返す。
+
+文字コードは次の順で試す:
+
+1. ``encoding`` が ``Encoding.AUTO`` 以外なら、それをそのまま使う
+   （`csv.reader` 側にも渡す想定なので、Python の codec 名を入れる）
+2. ``Encoding.AUTO`` のときは ``UTF8_SIG`` → ``CP932`` の順で
+   ``UnicodeDecodeError`` をベースに判定する
+
+``AUTO`` でどちらも読めなければ ``EncodingDetectionError`` を投げる。
+ファイルの存在チェック・空ファイル分岐・BOM 除去などは呼び出し側に
+任せる（``CSV.read()`` では BOM 除去も含めて ``csv.reader`` が処理する）。
+
+``comken.toolbox.csv.CSV`` の読み込み経路と、``comken.services
+.salesforce_downloader.sheets.history`` の履歴 CSV 読み込み経路、
+それから Salesforceレポートダウンローダーの ``_validate_existing_header``
+で同じ判定を共有する（プログラムが書く分は UTF-8 BOM 付きだが、
+人が Excel で開いて保存し直すと CP932 へ化けるため）。
 
 
 ## `from comken.toolbox.excel import ...`

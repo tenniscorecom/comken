@@ -98,8 +98,7 @@ class ScheduleRule(MasterRow):
     frequency: str = column(
         "取得頻度",
         choices=(FREQUENCY_DAILY, FREQUENCY_WEEKLY, FREQUENCY_MONTHLY, FREQUENCY_BUSINESS_DAY),
-        help="毎日 / 毎週 / 毎月 / 毎営業日 のいずれか。"
-        "「毎営業日」は土日を除く平日のみ実行します",
+        help="毎日 / 毎週 / 毎月 / 毎営業日 のいずれか。「毎営業日」は土日を除く平日のみ実行します",
     )
     start_time: dt.time | None = column(
         "取得開始時刻",
@@ -113,9 +112,10 @@ class ScheduleRule(MasterRow):
         help="このレポートが何時までに欲しいかの目安（記録用）。"
         "取得の判定には使いません（判定に使うのは「取得開始時刻」）。空欄可",
     )
-    # `choices` を宣言しているが、`weekday` property は「月曜日」のような接尾辞付き
-    # 表記もパースできる（手入力・既存データとの後方互換のため）。ドロップダウン
-    # は `column_specs()` 経由で `apply_schedule_dropdowns()` から自動付与される
+    # `choices` を宣言しているので、読み込み時は「月〜日」のいずれかに絞り込まれる
+    # （ドロップダウンは `column_specs()` 経由で `apply_schedule_dropdowns()` から
+    # 自動付与される）。手入力でも「月曜日」のような接尾辞付き表記は ``weekday``
+    # property のパースで対応していたが、``choices`` 検査で弾かれるため無効になった
     raw_weekday: str = column(
         "曜日",
         default="",
@@ -149,12 +149,18 @@ class ScheduleRule(MasterRow):
     def weekday(self) -> int | None:
         """「曜日」列の値を 0=月〜6=日 の整数に変換する。空欄は None。
 
+        読み込み時は ``choices=WEEKDAY_NAMES`` で月〜日に絞り込まれているため、
+        想定外の表記（例: 「月曜日」）はここに来る前に ``MasterRowValueError``
+        として弾かれる。``ScheduleWeekdayInvalidError`` は既定の挙動を逸脱した
+        場合に備えた受け皿で、テストや Python から直接 ``ScheduleRule`` を
+        組み立てたときにだけ使われる。
+
         Raises:
             ScheduleWeekdayInvalidError: 想定外の文字列が書かれている場合。
         """
         if not self.raw_weekday:
             return None
-        text = self.raw_weekday.strip().removesuffix("曜日")
+        text = self.raw_weekday.strip()
         if text not in WEEKDAY_NAMES:
             raise ScheduleWeekdayInvalidError(self.raw_weekday)
         return WEEKDAY_NAMES.index(text)
@@ -176,6 +182,70 @@ class ScheduleRule(MasterRow):
         """「日付」列が「第N営業日」のとき、N。"""
         _, _, value = self._parsed_day_of_month
         return value
+
+    def validate(self) -> tuple[str, str] | None:
+        """行ごとの追加検証。頻度と「曜日」「日付」の組み合わせをここで検査する。
+
+        列単体では ``choices`` で「曜日=月〜日」「日付=空欄OK」までしか表せず、
+        「毎週なのに曜日が空」「毎週以外で曜日が書かれている」「毎月なのに日付が空」
+        のような行をまたぐ組み合わせは、``choices`` だけでは弾けない。読み込み時に
+        一括して ``MasterRowValueError``（行番号・列名付き）に変換するので、
+        業務担当者は「どの行の、どの列をどう直せばいいか」がメッセージで分かる。
+
+        ``_parsed_day_of_month`` は ``int()`` 由来などの ``ValueError`` をそのまま
+        投げるので、ここで「日付」列の解釈不能値を検出して ``(Excel の見出し,
+        メッセージ)`` を返す。
+
+        Returns:
+            問題がなければ ``None``。問題があれば ``(Excel の見出し, 直し方の
+            メッセージ)``。``_build()`` 側が行番号を付けて ``MasterRowValueError``
+            に変換する。
+        """
+        weekday_header = self.header("raw_weekday")
+        day_header = self.header("raw_day_of_month")
+
+        # 「日付」列の解釈チェック。想定外の値（例: 「来月」）はここで捕まえる
+        if self.raw_day_of_month:
+            try:
+                _parse_day_of_month(self.raw_day_of_month)
+            except ValueError:
+                return (
+                    day_header,
+                    "「日付」は 1〜31 の数字、「月末」、または"
+                    f"「第N営業日（N は 1 以上の整数）」のいずれかで書いてください"
+                    f"（入力: {self.raw_day_of_month!r}）",
+                )
+
+        # 「取得頻度」と「曜日」「日付」の組み合わせ
+        if self.frequency == FREQUENCY_WEEKLY:
+            if not self.raw_weekday:
+                return (
+                    weekday_header,
+                    "「取得頻度」が「毎週」のときは「曜日」を指定してください。"
+                    "空欄だと毎回実行されるため、毎日取りに行く事故になります。",
+                )
+        elif self.raw_weekday:
+            # 毎週以外で曜日が書かれている → 黙って曜日フィルタが効いていた事故を防ぐ
+            return (
+                weekday_header,
+                f"「取得頻度」が「{self.frequency}」のときは「曜日」を指定できません。"
+                "「曜日」は「毎週」のときだけ使います。空欄にしてください。",
+            )
+
+        if self.frequency == FREQUENCY_MONTHLY:
+            if not self.raw_day_of_month:
+                return (
+                    day_header,
+                    "「取得頻度」が「毎月」のときは「日付」を指定してください。"
+                    "空欄だと毎回実行されるため、毎日取りに行く事故になります。",
+                )
+        elif self.raw_day_of_month:
+            return (
+                day_header,
+                f"「取得頻度」が「{self.frequency}」のときは「日付」を指定できません。"
+                "「日付」は「毎月」のときだけ使います。空欄にしてください。",
+            )
+        return None
 
     @property
     def _parsed_day_of_month(self) -> tuple[bool, int | None, int | None]:

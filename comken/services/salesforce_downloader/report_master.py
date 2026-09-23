@@ -64,6 +64,7 @@ import dataclasses
 import datetime as dt
 import logging
 import re
+import types
 import typing
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -215,7 +216,34 @@ class MasterRow:
                     raise MasterDuplicateValueError(spec.header, value, source)
                 seen[name].add(value)
             values[name] = value
-        return cls(**values)
+        instance = cls(**values)
+        # 行ごとの追加検証（例: 「頻度」と「曜日」「日付」の組み合わせ）。
+        # ``validate()`` が ``(Excel の見出し, メッセージ)`` を返した場合のみ、
+        # ここで ``MasterRowValueError`` に行番号・列名を必ず付けて再送出する。
+        bad = instance.validate()
+        if bad is not None:
+            column_header, message = bad
+            raise MasterRowValueError(
+                row_number,
+                column_header,
+                raw.get(column_header),
+                message,
+            )
+        return instance
+
+    def validate(self) -> tuple[str, str] | None:
+        """行ごとの追加検証のフック。継承先で必要に応じて上書きする。
+
+        不正値を発見したら ``(Excel の見出し, 直し方のメッセージ)`` を返す。
+        ``_build()`` が行番号を付けて ``MasterRowValueError`` に変換して
+        業務担当者に届く。例外で値を返す方式（``ValueError`` の ``args`` に
+        タプルを詰める）は読みづらく受け渡しのミスも起きやすいため、
+        戻り値で渡す。
+
+        何も問題がなければ ``None`` を返す。何も上書きしない既定の挙動は「常に OK」
+        （``ReportEntry`` / ``GroupSetting`` など、追加検証が要らない行クラスへ
+        の影響を残さない）。
+        """
 
     # ── 列の情報 ─────────────────────────────────────────────────────────────
     @classmethod
@@ -391,7 +419,19 @@ def _convert(value: Any, value_type: Any, spec: ColumnSpec, row: int, cls: type)
     if Path in candidate_types or value_type is Path or value_type == "Path":
         return Path(text)
     if dt.time in candidate_types or value_type is dt.time or value_type == "dt.time":
-        return _to_time(value)
+        try:
+            return _to_time(value)
+        except ValueError:
+            # **素の ValueError をそのまま上げると「どの行の、どの列で起きたか」が
+            # 業務担当者に届かない。** ``_to_time`` の例外は ``int`` の範囲外や
+            # フォーマット不一致など「ユーザー入力の問題」だけなので、ここで
+            # 行番号・列名を必ず付ける
+            raise MasterRowValueError(
+                row,
+                spec.header,
+                value,
+                "時刻は「9:00」「09:00:00」のように書いてください。",
+            ) from None
     if str in candidate_types or value_type is str or value_type == "str":
         # **Excel は数値セルを float で返すことがある。** そのまま `str()` すると
         # `1001` が `"1001.0"` になるため、整数値は整数文字列として返す
@@ -404,6 +444,13 @@ def _convert(value: Any, value_type: Any, spec: ColumnSpec, row: int, cls: type)
 def _candidate_types(value_type: Any) -> tuple[type, ...]:
     """Union 型ヒント（`dt.time | None` など）を展開して、要素の型を返す。
 
+    Python 3.10+ の ``X | None`` 構文は ``types.UnionType`` で表される。
+    ``typing.Union`` だけ見ていると 3.11〜3.13 で ``ScheduleRule.start_time`` /
+    ``desired_time`` の ``dt.time | None`` 列が時刻に変換されず文字列のまま返る
+    ため、両方とも同じ ``typing.get_args()`` 経路で展開する。
+    3.14 では ``typing.Union`` 側に正規化されるので、3.11〜3.13 の回帰防止として
+    両方を見る（3.14 では ``types.UnionType`` 側の判定は通らないので素通りする）。
+
     文字列として渡された型ヒント（`from __future__ import annotations` 時）は
     Union 判定できないので空タプルにフォールバックし、呼び出し元の旧来の
     ``is bool`` 比較パスで判定させる。
@@ -411,7 +458,7 @@ def _candidate_types(value_type: Any) -> tuple[type, ...]:
     if isinstance(value_type, str):
         return ()
     origin = typing.get_origin(value_type)
-    if origin is typing.Union:
+    if origin is typing.Union or origin is types.UnionType:
         return typing.get_args(value_type)
     return (value_type,)
 
