@@ -82,7 +82,9 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `EncodingDetectionError` | CSV の文字コードを判定できない | CSV の保存形式を確認し、管理者へ連絡する |
 | `CSVHeaderError` | CSV の見出し行に関するエラー | - 見出し行を追加するか、ヘッダーなし CSV なら ``columns`` を指定する- 1行目にある空欄・重複した見出しを直す- 新規 CSV に書き出すときは ``CSV(columns=[...])`` で列を指定する |
 | `CSVRowLengthError` | CSV のデータ行の列数が見出し数と一致しない | 表示された行の区切り文字と値の数を確認する |
+| `ExcelColumnNotFoundError` | Excel の列見出しが見つからない | Excel の1行目を確認する |
 | `KeyColumnNotFoundError` | 比較に使うキー列が見つからない | Excel・CSV の列名を確認する |
+| `TransferSourceColumnNotFoundError` | 列名転記で、lookup の転記元列が見つからない | 転記元データと config.ini のマッピング左側を確認する |
 | `InvalidColumnError` | 列の指定が正しくない（打ち間違いなど） | 列は番号（1, 2, …）か列記号（"A", "AA"）で指定する |
 | `ConfigCreatedFromExampleError` | config.ini が無かったので example から作った | 作られた config.ini の値を書き換えて、もう一度実行する |
 | `ConfigLowerCaseNameError` | config.ini のセクション名・キー名に小文字がある | 表示された名前を大文字に書き換える（`[files]` → `[FILES]`） |
@@ -134,8 +136,10 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `GroupNotRegisteredError` | 管理表の「グループ」列に設定シートに登録されていない値が書かれている | 管理表の「グループ」列に書かれた値が、設定シート（`group_settings.py` の`GroupSetting`）の「グループ」列に存在するか確認する。新しく部署・グループを追加するときは、設定シート側にも同じ名前で行を足す |
 | `ReportDisabledError` | 管理表で「無効」になっているレポートを取ろうとした | また使うなら管理表の「有効」を「有効」に戻す。使わないなら、呼び出し側のコードから消す |
 | `EmptyReportError` | レポートは実行できたが明細が 0 行だった | Salesforce の画面で同じレポートを開き、本当に 0 件か確認する。0 件が正常に起こるレポートなら、管理表の「0件あり」を「○」にする。 |
+| `ReportFolderNotFoundError` | 保存先として組み立てたフォルダが無い | 設定シートの「ベースURL」（フォルダのパス）と、管理表の「グループ」を確認する。共有フォルダなら、つながっているか・権限があるかも確認する |
 | `ReportReservePathLimitError` | 保存ファイル名の連番が上限に達した | 保存先フォルダが想定どおりか確認する。 共有フォルダなら、 古い取得ファイルを退避するか、 別の保存先に変える。 連発する場合は権限・排他制御の設定も見直す |
 | `ScheduleSettingError` | 管理表のスケジュール列（取得頻度・曜日）に想定外の値が書かれている | 管理表の「取得頻度」列を ``毎日`` / ``毎週`` / ``毎月`` / ``毎営業日`` のいずれかに、「曜日」列を月〜日のいずれかに修正する（「曜日」接尾辞付きも可） |
+| `ScheduledDownloadFailedError` | 定期取得で1件以上が失敗した | 履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。急いで必要なものは download_scheduled() をスケジュール外で実行する。権限を持つ人が Salesforce から手動でダウンロードしてもよい |
 | `SoqlDownloadFailedError` | SOQL レポートの取得で1件以上が失敗した | 表示された管理番号について、SOQL クエリ・組織の認証情報・保存先フォルダの権限・ネットワークの状態を確認する。急いで必要なものは``download_soql_reports()`` を直接実行してもよい |
 | `LoggingAlreadyConfiguredError` | root logger がすでに設定されている | setup_logging() または setup_local_logging() はアプリの入口で1回だけ呼ぶ。実行基盤がログを設定する場合は呼ばない。 |
 | `LoggingConflictError` | root logger に comken 以外の handler が設定されている | 上の handler 一覧をそのままライブラリの管理者へ連絡してください（連絡先は環境ごとに異なるので、ここには書かない）。やむを得ず共存させたい場合は、呼び出し時に ``allow_existing=True``を指定すれば処理は続きますが、comken のハンドラーが追加されることで既存ライブラリのログが**二重**に出たり、出力先が想定と変わる可能性があります。 |

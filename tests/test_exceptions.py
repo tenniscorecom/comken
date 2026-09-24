@@ -14,6 +14,7 @@ from comken.exceptions import (
     ConfigSectionNotFoundError,
     CSVError,
     EncodingDetectionError,
+    ExcelColumnNotFoundError,
     ExcelError,
     ExcelHeaderError,
     ExcelUsageError,
@@ -80,6 +81,7 @@ def test_all_declared_names_are_resolvable() -> None:
         ),
         (EncodingDetectionError("data.csv"), CSVError, "data.csv"),
         (ComkenFileNotFoundError("CSV ファイル", "data.csv"), ComkenError, "data.csv"),
+        (ExcelColumnNotFoundError(["金額"]), ColumnNotFoundError, "金額"),
         (KeyColumnNotFoundError("ID", ["名前"]), ColumnNotFoundError, "ID"),
         (
             ComkenFileNotFoundError(

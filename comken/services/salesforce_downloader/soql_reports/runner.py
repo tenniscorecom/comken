@@ -36,8 +36,8 @@ from comken.core.files import DateNameBuilder, atomic_write
 from comken.core.table.model import Table
 from comken.exceptions import (
     ComkenError,
-    ComkenFileNotFoundError,
     EmptyReportError,
+    ReportFolderNotFoundError,
     ReportReservePathLimitError,
     SoqlDownloadFailedError,
 )
@@ -121,7 +121,7 @@ def _download(report_cls: type[SoqlReport]) -> Path:
 
 
 def _require_folder(report_cls: type[SoqlReport]) -> None:
-    """保存先フォルダが無ければ ``ComkenFileNotFoundError``。**勝手に作らない。**
+    """保存先フォルダが無ければ ``ReportFolderNotFoundError``。**勝手に作らない。**
 
     作らずに失敗させるのは ``service._require_folder()`` と同じ理由:
     無いのは書き間違いのことが多く、勝手に作ると誰も読まない場所へ
@@ -129,13 +129,7 @@ def _require_folder(report_cls: type[SoqlReport]) -> None:
     """
     folder = Path(report_cls.FOLDER)
     if not folder.is_dir():
-        raise ComkenFileNotFoundError(
-            f"保存先のフォルダ（管理番号 {report_cls.KEY}）",
-            folder,
-            "設定シートの「ベースURL」（フォルダのパス）と、管理表の「グループ」を"
-            "確認してください。\n"
-            "共有フォルダの場合は、つながっているか（権限があるか）も確認してください。",
-        )
+        raise ReportFolderNotFoundError(report_cls.KEY, folder)
 
 
 def _fetch(report_cls: type[SoqlReport]) -> Table:

@@ -181,6 +181,31 @@ class EmptyReportError(DownloaderError):
         )
 
 
+class ReportFolderNotFoundError(DownloaderError):
+    """保存先として組み立てたフォルダが無い
+
+    保存先フォルダは、管理表の「グループ」で引いた設定シートの「ベースURL」（フォルダのパス）
+    そのものである（`provider.report_folder()`）。そのフォルダが存在しない場合にこの例外になる。
+    無いフォルダを作らないのは、書き間違いのことが多いため。
+    勝手に作ると、誰も読まない場所へ置き続けることになる。
+
+    発生箇所: Salesforceレポートダウンローダー の download_scheduled()
+
+    対処:
+        設定シートの「ベースURL」（フォルダのパス）と、管理表の「グループ」を
+        確認する。共有フォルダなら、つながっているか・権限があるかも確認する
+    """
+
+    def __init__(self, report_key: str, folder: Path) -> None:
+        super().__init__(
+            f"保存先のフォルダがありません: {report_key}\n"
+            f"{folder}\n"
+            "設定シートの「ベースURL」（フォルダのパス）と、管理表の「グループ」を"
+            "確認してください。\n"
+            "共有フォルダの場合は、つながっているか（権限があるか）も確認してください。"
+        )
+
+
 class ReportReservePathLimitError(DownloaderError):
     """保存ファイル名の連番が上限に達した
 
@@ -202,6 +227,29 @@ class ReportReservePathLimitError(DownloaderError):
             f"{base_path}\n"
             f"{limit} 回試しても空きのファイル名が見つかりませんでした。\n"
             "保存先フォルダの権限・排他制御と、 古い取得ファイルの数を確認してください。"
+        )
+
+
+class ScheduledDownloadFailedError(DownloaderError):
+    """定期取得で1件以上が失敗した
+
+    取得できたものは保存済み。**1件失敗しても残りは続けたうえで、最後にまとめて知らせる。**
+    ログだけに出して正常終了すると、スケジューラや RPA 基盤から見て成功と区別が付かず、
+    落ちていることに誰も気づかない。
+
+    発生箇所: Salesforceレポートダウンローダー の download_scheduled()
+
+    対処:
+        履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。
+        急いで必要なものは download_scheduled() をスケジュール外で実行する。
+        権限を持つ人が Salesforce から手動でダウンロードしてもよい
+    """
+
+    def __init__(self, failed_keys: list[str], history_path: Path) -> None:
+        keys = "、".join(str(key) for key in failed_keys)
+        super().__init__(
+            f"定期取得で {len(failed_keys)} 件が失敗しました: {keys}\n"
+            f"失敗した理由は履歴を確認してください: {history_path}"
         )
 
 

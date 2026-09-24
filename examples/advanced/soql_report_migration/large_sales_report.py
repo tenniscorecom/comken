@@ -15,7 +15,7 @@ from pathlib import Path
 from comken.services.salesforce_downloader.soql_reports.base import SoqlReport
 
 # サンプル用に、このフォルダ内で完結させる（本番では会社の共有フォルダのパスにする）。
-# ``download_soql_reports()`` は保存先フォルダが無いと ``ComkenFileNotFoundError`` に
+# ``download_soql_reports()`` は保存先フォルダが無いと ``ReportFolderNotFoundError`` に
 # なる（``service._require_folder()`` と同じ設計で、書き間違いに気づけるよう勝手には
 # 作らない）。このサンプルでは実行前に ``run.py`` 側で ``mkdir`` している。
 OUTPUT_DIR = Path(__file__).resolve().parent / "output"

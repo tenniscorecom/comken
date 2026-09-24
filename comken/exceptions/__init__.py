@@ -80,7 +80,9 @@ ComkenError
 │   ├── TransferDestinationMissingError
 │   └── TransferDestinationMultipleMatchError
 ├── ColumnNotFoundError
-│   └── KeyColumnNotFoundError
+│   ├── ExcelColumnNotFoundError
+│   ├── KeyColumnNotFoundError
+│   └── TransferSourceColumnNotFoundError
 ├── ConfigError
 │   ├── ConfigCreatedFromExampleError
 │   ├── ConfigLowerCaseNameError
@@ -112,6 +114,8 @@ ComkenError
 │   ├── EmptyReportError
 │   ├── ReportReservePathLimitError
 │   ├── ScheduleSettingError
+│   ├── ReportFolderNotFoundError
+│   ├── ScheduledDownloadFailedError
 │   └── SoqlDownloadFailedError
 └── DataLoaderError
 │   ├── DataLoaderTimeoutError
@@ -152,8 +156,10 @@ from comken.exceptions.calendar import (
 )
 from comken.exceptions.column import (
     ColumnNotFoundError,
+    ExcelColumnNotFoundError,
     InvalidColumnError,
     KeyColumnNotFoundError,
+    TransferSourceColumnNotFoundError,
 )
 from comken.exceptions.config import (
     ConfigCreatedFromExampleError,
@@ -192,8 +198,10 @@ from comken.exceptions.downloader import (
     HistoryLockTimeoutError,
     HistoryWriteError,
     ReportDisabledError,
+    ReportFolderNotFoundError,
     ReportNotRegisteredError,
     ReportReservePathLimitError,
+    ScheduledDownloadFailedError,
     ScheduleSettingError,
     SoqlDownloadFailedError,
     SoqlReportNotRegisteredError,
@@ -296,7 +304,9 @@ __all__ = [
     "CSVHeaderError",
     "CSVRowLengthError",
     "ColumnNotFoundError",
+    "ExcelColumnNotFoundError",
     "KeyColumnNotFoundError",
+    "TransferSourceColumnNotFoundError",
     "InvalidColumnError",
     "ConfigError",
     "ConfigCreatedFromExampleError",
@@ -369,8 +379,10 @@ __all__ = [
     "GroupNotRegisteredError",
     "ReportDisabledError",
     "EmptyReportError",
+    "ReportFolderNotFoundError",
     "ReportReservePathLimitError",
     "ScheduleSettingError",
+    "ScheduledDownloadFailedError",
     "SoqlDownloadFailedError",
     "DataLoaderError",
     "DataLoaderTimeoutError",
@@ -405,7 +417,6 @@ _RENAMED_EXCEPTIONS: dict[str, str] = {
     "DataLoaderLauncherNotFoundError": "ComkenFileNotFoundError",
     "DataLoaderResultFileMissingError": "ComkenFileNotFoundError",
     "OutlookAttachmentNotFoundError": "ComkenFileNotFoundError",
-    "ReportFolderNotFoundError": "ComkenFileNotFoundError",
     "EmptyHeaderCellError": "ExcelHeaderError",
     "DuplicateHeaderCellError": "ExcelHeaderError",
     "EmptyExcelTableError": "ExcelHeaderError",
@@ -416,8 +427,6 @@ _RENAMED_EXCEPTIONS: dict[str, str] = {
     "ExcelMacroPreservationError": "ExcelSaveError",
     "ExcelHeadersTooFewError": "ExcelUsageError",
     "FileFormatMismatchError": "ExcelUsageError",
-    "ExcelColumnNotFoundError": "ColumnNotFoundError",
-    "TransferSourceColumnNotFoundError": "ColumnNotFoundError",
     "CSVHeaderMissingError": "CSVHeaderError",
     "CSVInvalidHeaderError": "CSVHeaderError",
     "CSVColumnsRequiredError": "CSVHeaderError",
@@ -428,7 +437,6 @@ _RENAMED_EXCEPTIONS: dict[str, str] = {
     "InvalidReportURLError": "SalesforceReportIDNotFoundError",
     "UnsupportedScheduleFrequencyError": "ScheduleSettingError",
     "ScheduleWeekdayInvalidError": "ScheduleSettingError",
-    "ScheduledDownloadFailedError": "DownloaderError",
     "BrowsersNotStartedError": "BrowserNotStartedError",
     "SessionNotStartedError": "BrowserNotStartedError",
     "SiteNotStartedError": "BrowserNotStartedError",

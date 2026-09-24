@@ -511,13 +511,16 @@ API が安定していない前提なので、利用プロジェクト側は「�
 
 ### 例外クラスの統合（2026-09-25）
 
-**対処が同じ例外だけを 1 クラスにまとめた**（138 → 116 クラス）。細かく分けた元の目的は、
+**対処が同じ例外だけを 1 クラスにまとめた**（138 → 120 クラス）。細かく分けた元の目的は、
 非エンジニアが「何が悪いか」を分かるようにすることで、それは**メッセージ**が担っている。
 一方 `docs/ERRORS.md` はエラー名（クラス名）から対処を引く表なので、
 分類ごとに全部まとめると検索キーを失う。そのため、対処が違うものは残した。
 
-- ファイルが無い 8 クラスは `ComkenFileNotFoundError` 1 つにした。標準の `FileNotFoundError` も継承する（`ConfigKeyNotFoundError` が `AttributeError` を継承するのと同じ形）
+- ファイルが無い 7 クラスは `ComkenFileNotFoundError` 1 つにした。標準の `FileNotFoundError` も継承する（`ConfigKeyNotFoundError` が `AttributeError` を継承するのと同じ形）
 - 型で `except` されている例外や、利用側が個別に捕捉している例外は残した
+- **comken 内で送出されない例外は「未使用」ではない。** 利用者プロジェクトが送出する想定のもの（`ExcelColumnNotFoundError`・`TransferSourceColumnNotFoundError`・`ScheduledDownloadFailedError`・`LoginFailedError` など）がある。
+  また `ReportFolderNotFoundError` は、ダウンローダーが型で原因区分を決め、クラス名を履歴の「エラーコード」に書いていた。
+  この4つは一度統合してから、利用側プロジェクトを grep して気づき、元に戻した
 - 旧名は削除せず、警告つき別名で残した。会社側プロジェクトは私の環境から grep できず、
   `except 旧名` を無警告で壊すと現場のコードが静かに止まるため
 - 代償: `ComkenFileNotFoundError` は `ExcelError` などの配下ではないので、`except ExcelError` では
