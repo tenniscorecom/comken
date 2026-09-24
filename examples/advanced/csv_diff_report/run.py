@@ -19,6 +19,7 @@ from pathlib import Path
 from comken.constants import Color
 from comken.core import DateNameBuilder, diff_rows
 from comken.toolbox.csv import CSV
+from comken.toolbox.csv.file import Value
 from comken.toolbox.excel import Excel
 
 HERE = Path(__file__).parent
@@ -43,12 +44,12 @@ FILL_COLORS = {
 }
 
 # サンプル用のデータ（今日は 002 の部署が変わり、003 が消え、004 が増えている）
-YESTERDAY_ROWS = [
+YESTERDAY_ROWS: list[dict[str, Value]] = [
     {"社員番号": "001", "氏名": "山田 太郎", "部署": "営業部"},
     {"社員番号": "002", "氏名": "佐藤 花子", "部署": "総務部"},
     {"社員番号": "003", "氏名": "田中 一郎", "部署": "開発部"},
 ]
-TODAY_ROWS = [
+TODAY_ROWS: list[dict[str, Value]] = [
     {"社員番号": "001", "氏名": "山田 太郎", "部署": "営業部"},
     {"社員番号": "002", "氏名": "佐藤 花子", "部署": "経理部"},
     {"社員番号": "004", "氏名": "鈴木 次郎", "部署": "営業部"},

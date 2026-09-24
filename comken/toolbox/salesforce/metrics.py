@@ -17,6 +17,7 @@ from pathlib import Path
 
 from comken.core.clock import now
 from comken.toolbox.csv import CSV
+from comken.toolbox.csv.file import Value
 
 logger = logging.getLogger(__name__)
 
@@ -172,7 +173,7 @@ class APIMetrics:
         columns: list[str] = list(CSV_HEADERS)
 
         # 列名は CSV_HEADERS と同じ順で対応させる（見出しを二重に書かない）
-        rows = [
+        rows: list[dict[str, Value]] = [
             dict(
                 zip(
                     CSV_HEADERS,

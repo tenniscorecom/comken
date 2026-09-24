@@ -147,7 +147,7 @@ def _run_report(args: argparse.Namespace) -> None:
     print("列:")
     for column in rows[0]:
         print(f"  {column}")
-    for row in rows[: args.rows]:
+    for row in rows.to_rows()[: args.rows]:
         print(f"  {row}")
 
 

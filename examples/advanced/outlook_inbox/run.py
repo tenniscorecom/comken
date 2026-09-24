@@ -10,6 +10,7 @@ import logging
 from pathlib import Path
 
 from comken.toolbox.csv import CSV
+from comken.toolbox.csv.file import Value
 from comken.toolbox.outlook import Outlook
 
 logger = logging.getLogger(__name__)
@@ -23,7 +24,7 @@ DRAFT_TO = "taro@example.co.jp"
 def main() -> None:
     """対象メールを CSV に記録し、処理結果を下書きに保存する。"""
     with Outlook() as mail:
-        rows = [
+        rows: list[dict[str, Value]] = [
             {
                 "受信日時": message.received_at.isoformat(),
                 "差出人": message.sender,

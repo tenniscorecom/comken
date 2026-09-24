@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import io
 import logging
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Self, TypeAlias, cast
@@ -262,7 +262,7 @@ class CSV:
         # 汎用ヘルパーに判定を委譲する（履歴CSVなどからも同じロジックを使う）
         return read_text(self.path, encoding=self._encoding)
 
-    def replace(self, rows: Sequence[Mapping[str, Value]] | Table) -> None:
+    def replace(self, rows: list[dict[str, Value]] | Table) -> None:
         """ファイルのデータ領域を全置換する。"""
         self._ensure_open()
         if self._read_only:
@@ -293,17 +293,11 @@ class CSV:
         # replace は計画を作るだけにする。途中で例外が起きたときに、
         # それまでの一部だけがファイルへ残ると復旧しにくいためである。
 
-    def append(self, rows: Sequence[Mapping[str, Value]] | Mapping[str, Value] | Table) -> None:
+    def append(self, rows: list[dict[str, Value]] | dict[str, Value] | Table) -> None:
         """行を保留中のTableへ追加する。確定はsaveまたはwith正常終了で行う。"""
         self._ensure_open()
         if self._read_only:
             raise InvalidTableOperationError("read_only=True のCSVには書き込めません。")
-        # 実行時は list / dict / Table に限定して文字列など想定外の入力を弾く
-        # （元の挙動を保つ）。
-        if not isinstance(rows, (list, dict, Table)):
-            raise InvalidTableInputError(
-                "CSV の追記には Table、1行、または行リストを指定してください。"
-            )
         if self._pending is not None or self.path.exists():
             current = self.read()
         elif self._columns is not None:
@@ -314,8 +308,12 @@ class CSV:
             additions = rows.to_rows()
         elif isinstance(rows, dict):
             additions = [rows]
+        elif isinstance(rows, list):
+            additions = rows
         else:
-            additions = list(rows)
+            raise InvalidTableInputError(
+                "CSV の追記には Table、1行、または行リストを指定してください。"
+            )
         current.append(additions)
         self._pending = current
         logger.debug(

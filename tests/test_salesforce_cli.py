@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from comken.core.table import Table
 from comken.exceptions import CredentialNotFoundError, SalesforceAuthError
 from comken.toolbox.salesforce.auth.oauth_refresh import AuthorizationRequest
 from comken.toolbox.salesforce.cli import main
@@ -62,7 +63,9 @@ class TestReport:
     def test_shows_row_count_and_columns_without_values(self, capsys):
         """既定では行数と列名だけを出し、中身は出さない。"""
         client = _client()
-        client.report.get.return_value = [{"案件名": "極秘案件", "金額": "1000"}]
+        client.report.get.return_value = Table(
+            ["案件名", "金額"], [{"案件名": "極秘案件", "金額": "1000"}]
+        )
         with patch("comken.toolbox.salesforce.cli.site_for", return_value=_site_class(client)):
             code = main(
                 [
@@ -85,7 +88,7 @@ class TestReport:
     def test_shows_values_when_rows_requested(self, capsys):
         """--rows を指定したときだけ中身を出す。"""
         client = _client()
-        client.report.get.return_value = [{"案件名": "案件A"}]
+        client.report.get.return_value = Table(["案件名"], [{"案件名": "案件A"}])
         with patch("comken.toolbox.salesforce.cli.site_for", return_value=_site_class(client)):
             main(
                 [
@@ -106,7 +109,7 @@ class TestReport:
     def test_site_flag_picks_registered_org_without_domain(self):
         """``--site`` を指定すると ``site_for()`` を経由せず組織クラスを直接使う。"""
         client = _client()
-        client.report.get.return_value = []
+        client.report.get.return_value = Table(["案件名"], [])
         # --site で渡した組織クラス（SolutionSandbox）が直接呼ばれる。
         # SITES はインポート時に固定されるため、``_resolve_site`` をモックして
         # 呼び出された側だけ差し替える
@@ -212,7 +215,7 @@ class TestDefaultOrg:
     def test_omits_domain_to_use_solution_sandbox(self):
         """``--domain`` を省略したら安全側の ``SolutionSandbox`` が既定で選ばれる。"""
         client = _client()
-        client.report.get.return_value = []
+        client.report.get.return_value = Table(["案件名"], [])
         with patch(
             "comken.toolbox.salesforce.cli.SolutionSandbox", return_value=client
         ) as solution_sandbox_mock:
