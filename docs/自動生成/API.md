@@ -1605,10 +1605,9 @@ def set_default_calendar(calendar: HolidayCalendar | None) -> None:
 
 既定カレンダーを差し替える（``None`` を渡すと既定の遅延生成に戻る）。
 
-会社独自の年末年始などを追加したいプロジェクトは、起動時に
-``set_default_calendar(HolidayCalendar.from_sources([...]))`` を一度
-呼んでおけば、利用者は ``is_business_day(target)`` のような
-モジュール関数を直接呼べる。
+通常は使わない（既定カレンダーが ``ComputedHolidaySource`` + 同梱 CSV +
+``CompanyHolidaySource`` を既に含むため）。テストや、既定カレンダー全体を
+別の実装へ置き換えたい特殊用途向け。``None`` を渡すと既定の遅延生成に戻る。
 
 ### `strip_spaces`
 
@@ -2416,8 +2415,9 @@ class CompanyHolidaySource(HolidaySource):
 このソースは **外部 I/O を一切しない** 純粋な Python 計算。
 社内 BO 環境（オフライン・pip 制限）でもそのまま動く。
 
-既定の対象範囲は「実行時の今日 - ``DEFAULT_YEARS_BACK`` 年 〜 実行時の
-今年 + ``DEFAULT_YEARS_AHEAD`` 年」。
+対象範囲は常に「実行時の今日 - ``DEFAULT_YEARS_BACK`` 年 〜 実行時の
+今年 + ``DEFAULT_YEARS_AHEAD`` 年」の**既定値**で固定。
+コンストラクタ引数は持たない（利用者が範囲を変える用途を想定していないため）。
 
 .. note::
     **既定では来年分までしか生成しない。** 内閣府の祝日 CSV
@@ -2426,19 +2426,12 @@ class CompanyHolidaySource(HolidaySource):
     **既定の範囲外の日付には会社休日（年末年始休暇）が付かない** ので、
     来年より先の日付では「国民の祝日は付くが年末年始休暇は付かない」
     という状態になる（国民の祝日は別ソース ``ComputedHolidaySource`` が
-    2099 年まで計算する）。先の日付まで含めて営業日計算をしたいときは
-    ``to_year`` を明示する。
-
-Args:
-    from_year: 対象範囲の開始年。省略時は「実行時の今日の年 - ``DEFAULT_YEARS_BACK``」。
-    to_year: 対象範囲の終了年。省略時は「実行時の今日の年 +
-        ``DEFAULT_YEARS_AHEAD`` 年」（既定の ``DEFAULT_YEARS_AHEAD = 1``
-        で来年分まで）。
+    2099 年まで計算する）。
 
 #### `__init__`
 
 ```text
-def __init__(self, *, from_year: int | None=None, to_year: int | None=None) -> None:
+def __init__(self) -> None:
 ```
 
 #### `load`
@@ -3015,10 +3008,9 @@ def set_default_calendar(calendar: HolidayCalendar | None) -> None:
 
 既定カレンダーを差し替える（``None`` を渡すと既定の遅延生成に戻る）。
 
-会社独自の年末年始などを追加したいプロジェクトは、起動時に
-``set_default_calendar(HolidayCalendar.from_sources([...]))`` を一度
-呼んでおけば、利用者は ``is_business_day(target)`` のような
-モジュール関数を直接呼べる。
+通常は使わない（既定カレンダーが ``ComputedHolidaySource`` + 同梱 CSV +
+``CompanyHolidaySource`` を既に含むため）。テストや、既定カレンダー全体を
+別の実装へ置き換えたい特殊用途向け。``None`` を渡すと既定の遅延生成に戻る。
 
 ### `warn_if_calendar_expiring_soon`
 

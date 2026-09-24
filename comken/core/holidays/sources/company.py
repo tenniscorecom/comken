@@ -41,10 +41,7 @@ EXTRA_HOLIDAY_NAME: Final[str] = "会社休業日"
 # 過去側は ``DEFAULT_YEARS_BACK`` 年ぶん（業務で参照する日付は今日の過去
 # 数十年以内に収まるため）。先は ``DEFAULT_YEARS_AHEAD = 1`` で**来年まで**に
 # 留める — 内閣府の祝日 CSV（``data/syukujitsu.csv``）が来年分までしか公表
-# されないので、年末年始休暇も来年分までしか生成しない。来年より先で営業日
-# 計算をしたいときは ``to_year`` を明示してこのソースの対象範囲を広げること
-# （国民の祝日側は ``ComputedHolidaySource`` が 2099 年まで計算するので、
-# 同じ範囲に広げれば先の日付でも国民の祝日＋年末年始休暇が揃う）。
+# されないので、年末年始休暇も来年分までしか生成しない。
 DEFAULT_YEARS_BACK: Final[int] = 40
 DEFAULT_YEARS_AHEAD: Final[int] = 1
 
@@ -63,8 +60,9 @@ class CompanyHolidaySource(HolidaySource):
     このソースは **外部 I/O を一切しない** 純粋な Python 計算。
     社内 BO 環境（オフライン・pip 制限）でもそのまま動く。
 
-    既定の対象範囲は「実行時の今日 - ``DEFAULT_YEARS_BACK`` 年 〜 実行時の
-    今年 + ``DEFAULT_YEARS_AHEAD`` 年」。
+    対象範囲は常に「実行時の今日 - ``DEFAULT_YEARS_BACK`` 年 〜 実行時の
+    今年 + ``DEFAULT_YEARS_AHEAD`` 年」の**既定値**で固定。
+    コンストラクタ引数は持たない（利用者が範囲を変える用途を想定していないため）。
 
     .. note::
         **既定では来年分までしか生成しない。** 内閣府の祝日 CSV
@@ -73,35 +71,19 @@ class CompanyHolidaySource(HolidaySource):
         **既定の範囲外の日付には会社休日（年末年始休暇）が付かない** ので、
         来年より先の日付では「国民の祝日は付くが年末年始休暇は付かない」
         という状態になる（国民の祝日は別ソース ``ComputedHolidaySource`` が
-        2099 年まで計算する）。先の日付まで含めて営業日計算をしたいときは
-        ``to_year`` を明示する。
-
-    Args:
-        from_year: 対象範囲の開始年。省略時は「実行時の今日の年 - ``DEFAULT_YEARS_BACK``」。
-        to_year: 対象範囲の終了年。省略時は「実行時の今日の年 +
-            ``DEFAULT_YEARS_AHEAD`` 年」（既定の ``DEFAULT_YEARS_AHEAD = 1``
-            で来年分まで）。
+        2099 年まで計算する）。
     """
 
-    def __init__(
-        self,
-        *,
-        from_year: int | None = None,
-        to_year: int | None = None,
-    ) -> None:
+    def __init__(self) -> None:
         # 「今日」は comken.core.clock.today() から取る。datetime.date.today() を
         # 直接呼ばないのは、テストで日付を固定できるようにするため。
         current_year = clock.today().year
-        self._from_year = from_year if from_year is not None else current_year - DEFAULT_YEARS_BACK
-        self._to_year = to_year if to_year is not None else current_year + DEFAULT_YEARS_AHEAD
-        if self._from_year > self._to_year:
-            raise ValueError(
-                f"from_year ({self._from_year}) が to_year ({self._to_year}) より大きいです。"
-            )
+        self._first_year = current_year - DEFAULT_YEARS_BACK
+        self._last_year = current_year + DEFAULT_YEARS_AHEAD
         logger.debug(
-            "CompanyHolidaySource 構築: from_year=%d, to_year=%d",
-            self._from_year,
-            self._to_year,
+            "CompanyHolidaySource 構築: first_year=%d, last_year=%d",
+            self._first_year,
+            self._last_year,
         )
 
     def load(self) -> list[Holiday]:
@@ -115,18 +97,18 @@ class CompanyHolidaySource(HolidaySource):
         # CSV ソースの ``load_cabinet_office_csv`` と違って読み取りパスは無いが、
         # 対象範囲・生成件数を debug ログへ出しておく。
         logger.debug(
-            "CompanyHolidaySource.load 開始: from_year=%d, to_year=%d, 固定=%d 区分, 臨時=%d 件",
-            self._from_year,
-            self._to_year,
+            "CompanyHolidaySource.load 開始: first_year=%d, last_year=%d, 固定=%d 区分, 臨時=%d 件",
+            self._first_year,
+            self._last_year,
             len(COMPANY_HOLIDAYS),
             len(COMPANY_HOLIDAYS_EXTRA),
         )
         holidays: list[Holiday] = [
             Holiday(date=extra_date, name=EXTRA_HOLIDAY_NAME)
             for extra_date in COMPANY_HOLIDAYS_EXTRA
-            if self._from_year <= extra_date.year <= self._to_year
+            if self._first_year <= extra_date.year <= self._last_year
         ]
-        for year in range(self._from_year, self._to_year + 1):
+        for year in range(self._first_year, self._last_year + 1):
             for name, month_days in COMPANY_HOLIDAYS.items():
                 for month, day in month_days:
                     holidays.append(Holiday(date=_dt.date(year, month, day), name=name))

@@ -16,21 +16,16 @@ RPA 置き換えプロジェクトで「いま取るべきレポートか」を�
 ```python
 from datetime import date
 
-from comken.core.holidays import (
-    CompanyHolidaySource,
-    HolidayCalendar,
-    is_business_day,
-)
+from comken.core.holidays import is_business_day
 
-calendar = HolidayCalendar.from_sources(
-    [
-        CompanyHolidaySource(),    # コード直書きの会社休日
-    ]
-)
-
-if is_business_day(date.today(), calendar=calendar):
+if is_business_day(date.today()):     # 既定カレンダーで判定
     ...  # レポートを取りに行く
 ```
+
+`is_business_day` / `business_day_after` / `last_business_day_of_month` などの
+モジュール関数は `calendar=` を省略でき、既定カレンダー
+（`ComputedHolidaySource` + 同梱 `syukujitsu.csv` + `CompanyHolidaySource`）
+がそのまま使われる。利用者が `HolidayCalendar` を組み立てる必要はない。
 
 ## 取得元
 
@@ -218,27 +213,6 @@ nth_business_day_of_month(date.today(), 3)  # 今月の第 3 営業日
 **`comken.core` は `requests` を import しないので、
 オフライン環境・社内 BO 端末でも `from comken.core import is_business_day`
 がそのまま動く。**
-
-会社独自の年末年始などを追加したいプロジェクトは、起動時に
-`set_default_calendar()` を一度呼んで差し替える。
-
-```python
-from comken.core.holidays import (
-    HolidayCalendar,
-    ComputedHolidaySource,
-    CompanyHolidaySource,
-    set_default_calendar,
-)
-
-# 起動時に 1 回だけ呼ぶ
-my_calendar = HolidayCalendar.from_sources([
-    ComputedHolidaySource(),
-    CompanyHolidaySource(),
-])
-set_default_calendar(my_calendar)
-
-# 以降は calendar= なしで使える
-```
 
 ## 注意事項
 

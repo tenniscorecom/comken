@@ -681,13 +681,24 @@ class TestComputedSourceConstraints:
 class TestCompanyHolidaySource:
     """``CompanyHolidaySource`` の挙動（会社休日をコード直書きで返す）。"""
 
-    def test_year_end_and_new_year_holiday_default_present(self) -> None:
+    def test_year_end_and_new_year_holiday_default_present(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """既定で 12/29 - 1/3 が「年末年始休暇」として休業扱いになる。
 
         12/29, 12/30, 12/31, 1/1, 1/2, 1/3 の 6 日間が ``Holiday`` に
         入ることを確認する。年跨ぎ（12→1）が正しく展開されるかも兼ねる。
+
+        引数なしの ``CompanyHolidaySource()`` は既定範囲（実行時の今日を
+        基準に ``DEFAULT_YEARS_BACK`` / ``DEFAULT_YEARS_AHEAD``）を返すため、
+        「今日」を 2026-09-24 に固定して 2026 年末〜2027 年初が範囲内に入る
+        状態で検証する。
         """
-        source = CompanyHolidaySource(from_year=2026, to_year=2027)
+        from comken.core import clock as clock_module
+
+        monkeypatch.setattr(clock_module, "today", lambda: _dt.date(2026, 9, 24))
+
+        source = CompanyHolidaySource()
         holidays = source.load()
         assert Holiday(date=_dt.date(2026, 12, 29), name="年末年始休暇") in holidays
         assert Holiday(date=_dt.date(2026, 12, 30), name="年末年始休暇") in holidays
@@ -698,25 +709,22 @@ class TestCompanyHolidaySource:
 
     def test_extra_holidays_named_company_holiday(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """``COMPANY_HOLIDAYS_EXTRA`` の名称は「会社休業日」。"""
+        from comken.core import clock as clock_module
         from comken.core.holidays.sources import company as company_module
 
+        monkeypatch.setattr(clock_module, "today", lambda: _dt.date(2026, 9, 24))
         monkeypatch.setattr(
             company_module,
             "COMPANY_HOLIDAYS_EXTRA",
             (_dt.date(2026, 11, 4),),
         )
-        source = company_module.CompanyHolidaySource(from_year=2026, to_year=2026)
+        source = company_module.CompanyHolidaySource()
         holidays = source.load()
         # ``company_module.Holiday`` を使う: ``comken.core.holidays.Holiday`` と
         # クラス ID が一致しない環境でも比較できるよう、
         # 同じ module から取得した dataclass を使う
         target = company_module.Holiday(date=_dt.date(2026, 11, 4), name="会社休業日")
         assert target in holidays
-
-    def test_rejects_inverted_range(self) -> None:
-        """``from_year > to_year`` は ``ValueError``。"""
-        with pytest.raises(ValueError):
-            CompanyHolidaySource(from_year=2030, to_year=2020)
 
     def test_is_business_day_false_on_year_end(self) -> None:
         """``CompanyHolidaySource`` 単独でも 12/29 - 1/3 を休業扱いする。"""
@@ -776,59 +784,6 @@ class TestCompanyHolidaySourceDefaultRange:
         assert _dt.date(1989, 12, 31) not in dates
         assert _dt.date(2032, 1, 1) not in dates
 
-    def test_explicit_range_overrides_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """``from_year`` / ``to_year`` を明示したときは既定より優先される。"""
-        from comken.core import clock as clock_module
-        from comken.core.holidays.sources import company as company_module
-
-        monkeypatch.setattr(clock_module, "today", lambda: _dt.date(2026, 9, 24))
-
-        source = company_module.CompanyHolidaySource(from_year=2000, to_year=2001)
-        dates = {h.date for h in source.load()}
-
-        # 2000-2001 の年末年始が含まれる
-        assert _dt.date(2000, 12, 29) in dates
-        assert _dt.date(2001, 1, 3) in dates
-        # 既定範囲 (1986/2027) は含まれない
-        assert _dt.date(1986, 1, 1) not in dates
-        assert _dt.date(2027, 12, 31) not in dates
-
-    def test_only_from_year_uses_default_to_year(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """``from_year`` だけを指定したら ``to_year`` は既定（今年+1=来年）を使う。"""
-        from comken.core import clock as clock_module
-        from comken.core.holidays.sources import company as company_module
-
-        monkeypatch.setattr(clock_module, "today", lambda: _dt.date(2026, 9, 24))
-
-        source = company_module.CompanyHolidaySource(from_year=2000)
-        dates = {h.date for h in source.load()}
-
-        # from_year=2000 を明示しているので 2000 以降が入る
-        assert _dt.date(2000, 1, 1) in dates
-        # to_year は既定 (2026+1=2027、来年) で 2027 まで入る
-        assert _dt.date(2027, 12, 31) in dates
-        # 2028 は既定範囲外
-        assert _dt.date(2028, 1, 1) not in dates
-        # 2000 より前は範囲外
-        assert _dt.date(1999, 12, 31) not in dates
-
-    def test_only_to_year_uses_default_from_year(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """``to_year`` だけを指定したら ``from_year`` は既定（今年-40）を使う。"""
-        from comken.core import clock as clock_module
-        from comken.core.holidays.sources import company as company_module
-
-        monkeypatch.setattr(clock_module, "today", lambda: _dt.date(2026, 9, 24))
-
-        source = company_module.CompanyHolidaySource(to_year=2001)
-        dates = {h.date for h in source.load()}
-
-        # to_year=2001 を明示しているので 2001 まで入る
-        assert _dt.date(2001, 1, 3) in dates
-        # from_year は既定 (2026-40=1986) で 1986 から始まる
-        assert _dt.date(1986, 1, 1) in dates
-        # 2002 以降は範囲外
-        assert _dt.date(2002, 1, 1) not in dates
-
 
 class TestApproximateHoliday:
     """``Holiday.approximate`` 属性の挙動。
@@ -854,9 +809,13 @@ class TestApproximateHoliday:
             else:
                 assert h.approximate is False, f"{h} に approximate が付いています"
 
-    def test_company_holidays_are_not_approximate(self) -> None:
+    def test_company_holidays_are_not_approximate(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """``CompanyHolidaySource`` は ``approximate=False`` を維持する。"""
-        holidays = CompanyHolidaySource(from_year=2026, to_year=2026).load()
+        from comken.core import clock as clock_module
+
+        # 既定範囲（実行時の今日-40 〜 今日+1）に 2026 が入るように固定する
+        monkeypatch.setattr(clock_module, "today", lambda: _dt.date(2026, 9, 24))
+        holidays = CompanyHolidaySource().load()
         for h in holidays:
             assert h.approximate is False, f"{h} に approximate が付いています"
 

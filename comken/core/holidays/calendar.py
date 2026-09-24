@@ -578,10 +578,9 @@ def default_calendar() -> HolidayCalendar:
 def set_default_calendar(calendar: HolidayCalendar | None) -> None:
     """既定カレンダーを差し替える（``None`` を渡すと既定の遅延生成に戻る）。
 
-    会社独自の年末年始などを追加したいプロジェクトは、起動時に
-    ``set_default_calendar(HolidayCalendar.from_sources([...]))`` を一度
-    呼んでおけば、利用者は ``is_business_day(target)`` のような
-    モジュール関数を直接呼べる。
+    通常は使わない（既定カレンダーが ``ComputedHolidaySource`` + 同梱 CSV +
+    ``CompanyHolidaySource`` を既に含むため）。テストや、既定カレンダー全体を
+    別の実装へ置き換えたい特殊用途向け。``None`` を渡すと既定の遅延生成に戻る。
     """
     global _default_calendar
     _default_calendar = calendar
