@@ -134,7 +134,7 @@ End Function
 ' 使い方: If cal.Exists(Format(d, "yyyy-mm-dd")) Then ... （祝日・会社休日）
 ```
 
-ファイルは git 管理下の正本で、共有サーバー上にある `company_calendar.csv` を、Python と同じパスのまま参照する。`tools\build_release.py` の出力はタグ時点のファイルだけを含むので、Python と VBA は常に同じカレンダーを読む。
+ファイルは git 管理下の正本で、共有サーバーのチェックアウト（リリースタグ）にある `company_calendar.csv` を、Python と同じパスのまま参照する。タグを切り替えるまで内容は変わらないので、Python と VBA は常に同じカレンダーを読む。
 **収録範囲外の日付は「祝日ではない」扱いになる**（下の「範囲外の扱い」を参照）。
 
 ## 年 1 回の更新手順
@@ -147,11 +147,8 @@ End Function
 3. `python tools\build_calendar.py` を実行して
    `comken/core/calendar/data/company_calendar.csv` を再生成する
 4. `syukujitsu.csv` と `company_calendar.csv` をまとめてコミットし、push する
-5. リリースタグを打つ（`comken/__init__.py` の `__version__` とタグ番号を必ず一致させる。
-   `docs/開発/仕様書.md` の「開発とリリース」を参照）
-6. `python tools\build_release.py --tag <タグ>` を実行し、表示された robocopy
-   コマンドを **BO 用と intranet 用の両方の共有サーバー** で実行して配布する
-   （`docs/開発/仕様書.md` の「開発と本番の分離」を参照）
+5. リリースタグを打つ（共有サーバーのチェックアウトは**リリース済みのタグだけ**に保つ運用のため。`docs/開発/仕様書.md` の「開発と本番の分離」を参照）
+6. 共有サーバー側で、そのタグをチェックアウトして配布する（**ブランチをチェックアウトしない**）
 
 ## 会社休日変更手順
 

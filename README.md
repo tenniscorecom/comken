@@ -59,7 +59,7 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 | なぜこの設計なのか知る | [仕様書](docs/開発/仕様書.md) |
 | コードを書く規約 | [コーディング規約（利用者向け）](docs/開発/コーディング規約_利用者向け.md)（詳細版は[CONVENTIONS.md](docs/開発/CONVENTIONS.md)） |
 | comken 本体を直す | [ライブラリ開発規約](docs/開発/ライブラリ開発規約.md) |
-| 開発してリリースする | [仕様書「開発とリリース」](docs/開発/仕様書.md#開発とリリース)（タグを打つ → `tools\build_release.py` → 共有サーバーへ robocopy） |
+| 開発してリリースする | [仕様書「開発とリリース」](docs/開発/仕様書.md#開発とリリース)（タグを打つ → 共有サーバーで checkout） |
 | comken を使うツールを作る | `python -m comken init プロジェクト名` で雛形を作る（作られた `README.md` が中を案内する） |
 | コードを読む・レビューする | [コードリーディングガイド](docs/開発/コードリーディングガイド.md) |
 
@@ -137,7 +137,7 @@ write 側に空キーが複数あっても ``TransferDestinationMultipleMatchErr
 | [CSV](docs/csv.md) | CSV の読み込み・検索・抽出 |
 | [Excel（openpyxl）](docs/excel.md) | Excel の読み書き（既存数式の計算結果・マクロは必要時に win32com を使用） |
 | [Access](docs/access.md) | Access のマクロ・VBA 実行、テーブル／クエリの CSV 出力 |
-| [Outlook](docs/outlook.md) | Classic Outlook の受信メール読み取り・下書き作成（**BO 環境では利用不可**） |
+| [Outlook](docs/outlook.md) | Classic Outlook の受信メール読み取り・下書き作成 |
 | [Windows（pywin32）](docs/windows.md) | Excel COM 操作・ウィンドウ操作・レジストリ読み取り |
 | [Browser（Edge）](docs/browser.md) | Edge ブラウザ操作 |
 | [Browser 公認サイト](docs/browser.md) | ライブラリ公認の `SiteBase` サブクラスを集めた置き場（`comken.toolbox.browser.sites`）。プロジェクト横断で再利用するサイトだけ昇格する |
@@ -266,30 +266,31 @@ PCの環境変数を変更したくない場合は、各プロジェクトのル
 
 ### 共有サーバーの comken を更新する
 
-開発 PC で `tools\build_release.py` を実行してリリース用フォルダと zip を作り、
-表示された robocopy コマンドを **BO 用と intranet 用の両方の共有サーバー**で実行する
-（→ [開発とリリース](docs/開発/仕様書.md#開発とリリース)）。
+共有サーバーのチェックアウトを、**リリース済みのタグへ切り替える**（→ [開発とリリース](docs/開発/仕様書.md#開発とリリース)）。
 
 ```bat
-python tools\build_release.py --tag v1.0.0
+pushd \\server\share\tools\comken
+git fetch --tags
+git tag -l                 :: 出ているタグを確認する
+git checkout v0.11.3       :: 切り替えたいタグ（上で確認した最新版）
+popd
 ```
 
-タグ時点のファイルだけが `git archive` で取り出され、`dist/comken-v1.0.0/` と
-`dist/comken-v1.0.0.zip` ができる。RELEASE.txt にタグ・コミット・`__version__`
-が記録されるので、配った先で「どの版か」が分かる。
-**社内固有の値を書いた3ファイル**（`comken/toolbox/salesforce/sites/solution.py`・
-`solution_sandbox.py`・`comken/services/salesforce_downloader/paths.py`）は、
-robocopy の `/XF` で送り元（配布用フォルダ）側のフルパス指定によりコピー対象外にされる。
-各サーバー側の値（組織・フォルダ）が上書きされず、BO と intranet で値が違う場合も壊れない。
+**社内固有の値を書いた3ファイルは、切り替えで上書きされないようにしておく。**
+配置したときに1回だけ設定する。
 
-**配布ツールは git のある開発 PC で動く**（git が無い環境では使えない）。BO/intranet の
-共有サーバーには git バイナリが入っていないため、共有サーバー側で `git checkout` を
-する手順は使えない。配布用フォルダには `tools/` も含まれるが、共有サーバーでは git が無いので
-`build_release.py` は動かせない（**共有サーバーには git がない前提で運用する**）。
+```bat
+git update-index --skip-worktree comken/toolbox/salesforce/sites/solution_sandbox.py
+git update-index --skip-worktree comken/toolbox/salesforce/sites/solution.py
+git update-index --skip-worktree comken/services/salesforce_downloader/paths.py
+```
 
-問題が出たら、旧リリースのフォルダ/zip を同じ手順でコピーし直す。`dist/` は git 管理外
-（`.gitignore` で除外）なので、**配布した zip は手元に残しておく**。
-残していない場合は `python tools\build_release.py --tag <旧タグ>` で再生成できる。
+これで手元の書き換えが消えず、うっかり push することもない。comken 側でこれらの
+ファイルを変更したときは切り替えが止まるので、そのときだけ `--no-skip-worktree` で解除して
+手で合わせ、また設定し直す（→ [仕様書](docs/開発/仕様書.md#配置時に書き換える3ファイル)）。
+
+**切り替えた瞬間に、次に import した全プロジェクトが新しい版になる。** 更新のたびの
+配布作業はない。問題が出たら前のタグへ戻せば、同じように全プロジェクトが戻る。
 
 - **バイトコードキャッシュは自動でローカルに逃がす**: 共有サーバーが読み取り専用でも
   遅くならないよう、comken は import 時に `.pyc` の出力先を `%LOCALAPPDATA%\comken-pycache`
