@@ -9494,6 +9494,21 @@ CSV ファイルを1つのデータ領域として読み書きする。
 Table と同じ「行の集合」として Transfer へ渡せる境界を提供する。
 ヘッダーのないファイルは ``columns`` で列名を指定する。
 
+文字コード:
+
+- 読み込み時（``encoding=`` を ``Encoding.AUTO`` にした既定）は
+  ``UTF-8 BOM 付き → BOM なし UTF-8 → CP932`` の順で自動判定する。
+  詳細は ``read_text`` を参照。
+- 書き込み時は ``encoding=`` を明示すればその codec をそのまま使う。
+  明示しない ``Encoding.AUTO`` のときは、**既存ファイルの文字コードを保つ**
+  （BOM 付き UTF-8 は BOM 付きのまま、BOM なし UTF-8 は BOM なしのまま、
+  CP932 は CP932 のまま）。新規ファイルや中身が空のファイル、
+  ASCII だけで判定できないファイルは ``UTF-8 BOM 付き`` を既定にする。
+- 保った文字コードでは表せない文字を書き込もうとすると、
+  ``?`` に置換せず ``InvalidTableInputError`` で停止する。
+  このとき一時ファイルは ``atomic_write`` が片付けるため、
+  元のファイルは無傷で残る。
+
 #### `__init__`
 
 ```text
@@ -9598,18 +9613,21 @@ CSV ファイルをバイト列として読み、文字コードを判定して�
 
 1. ``encoding`` が ``Encoding.AUTO`` 以外なら、それをそのまま使う
    （`csv.reader` 側にも渡す想定なので、Python の codec 名を入れる）
-2. ``Encoding.AUTO`` のときは ``UTF8_SIG`` → ``CP932`` の順で
-   ``UnicodeDecodeError`` をベースに判定する
+2. ``Encoding.AUTO`` のときは ``_detect_csv_encoding`` で判定する:
+   - ``utf-8-sig`` / ``utf-8`` の判定 → ``utf-8-sig`` codec で復号する
+     （``utf-8-sig`` は BOM の有無を codec が吸収する）
+   - ``cp932`` の判定 → ``cp932`` codec で復号する
+   - 判定不能（空 / 全部 ASCII / どちらも読めない）→
+     従来どおり ``UTF8_SIG`` → ``CP932`` の順で
+     ``UnicodeDecodeError`` をベースに再試行する
 
 ``AUTO`` でどちらも読めなければ ``EncodingDetectionError`` を投げる。
 ファイルの存在チェック・空ファイル分岐・BOM 除去などは呼び出し側に
 任せる（``CSV.read()`` では BOM 除去も含めて ``csv.reader`` が処理する）。
 
-``comken.toolbox.csv.CSV`` の読み込み経路と、``comken.services
-.salesforce_downloader.sheets.history`` の履歴 CSV 読み込み経路、
-それから Salesforceレポートダウンローダーの ``_validate_existing_header``
-で同じ判定を共有する（プログラムが書く分は UTF-8 BOM 付きだが、
-人が Excel で開いて保存し直すと CP932 へ化けるため）。
+``CSV`` の読み込みと書き込み（``_write_encoding``）で同じ判定（``_detect_csv_encoding``）を
+共有する（プログラムが書く分は UTF-8 BOM 付きだが、人が Excel で開いて保存し直すと
+CP932 へ化けることがあるため、書き込みでも既存ファイルの文字コードを保つ）。
 
 
 ## `from comken.toolbox.excel import ...`

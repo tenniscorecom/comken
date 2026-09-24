@@ -17,6 +17,21 @@ with CSV("顧客.csv") as csv:
 
 CSVを連結する場合は、列名の集合が完全に同じ `Table` 同士だけを `table.concat(other)` で連結します。列の順番は異なっていても構いません。
 
+## 文字コード
+
+- **読み込み**: `encoding=` を `Encoding.AUTO`（既定）にしておくと、
+  UTF-8 BOM 付き → BOM なし UTF-8 → CP932 の順で自動判定する。
+  `encoding=` を明示すればその codec で読む。
+- **書き込み**: `encoding=` を明示すればその codec をそのまま使う。
+  `Encoding.AUTO` のときは**既存ファイルの文字コードを保つ**
+  （人が Excel で開いて CP932 へ化けたファイルに `append` / `replace`
+  しても、CP932 のまま書き戻される）。新規ファイルや中身が無い
+  ファイル、ASCII だけで判定できないファイルは UTF-8 BOM 付きを
+  既定にする。
+- 保った文字コードで表せない文字を書き込もうとすると、`?` に
+  黙って置換せず `InvalidTableInputError` で停止する。一時ファイルは
+  `atomic_write` が片付けるので、**元のファイルは無傷で残る**。
+
 ## ストリーム読み取り（大量データ）
 
 ```python

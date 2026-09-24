@@ -47,6 +47,45 @@ def _columns_required_message(path: Path) -> str:
     return f"空の新規 CSV の列を決定できません: {path}\nCSV(columns=[...]) を指定してください。"
 
 
+def _detect_csv_encoding(raw: bytes) -> str | None:
+    """CSV バイト列の文字コードを推定する（読み込みと書き込みで共有）。
+
+    戻り値:
+
+    - ``utf-8-sig``: 先頭が UTF-8 BOM
+    - ``utf-8``: BOM が無く、非 ASCII を含み UTF-8 として読める
+    - ``cp932``: 上記以外で CP932 として読める
+    - ``None``: 空 / 全部 ASCII（BOM なし）/ どちらも読めない
+
+    読み込み時は ``utf-8-sig`` codec を使い（``utf-8`` 判定の場合も
+    BOM の有無を codec が吸収する）、書き込み時は BOM の有無を保ったまま
+    codec を選ぶ。``None`` の場合は読み込み・書き込みとも既定の
+    ``utf-8-sig`` にフォールバックする。
+
+    ``read_text()``（読み込み）と ``CSV`` の書き込み（``_write_encoding``）で同じ判定を
+    共有する（プログラムが書く分は UTF-8 BOM 付きだが、人が Excel で開いて保存し直すと
+    CP932 へ化けることがあるため、読みと書きで規則が食い違わないようにする）。
+    """
+    if not raw:
+        return None
+    if raw.startswith(b"\xef\xbb\xbf"):
+        return "utf-8-sig"
+    # ASCII だけなら UTF-8 / CP932 どちらも復号でき、区別できない。
+    # 呼び出し側で新規ファイルと同じ既定（``utf-8-sig``）を選んでもらう。
+    if not any(byte > 0x7F for byte in raw):
+        return None
+    try:
+        raw.decode("utf-8")
+        return "utf-8"
+    except UnicodeDecodeError:
+        pass
+    try:
+        raw.decode("cp932")
+        return "cp932"
+    except UnicodeDecodeError:
+        return None
+
+
 def read_text(path: str | Path, *, encoding: str = Encoding.AUTO) -> str:
     """CSV ファイルをバイト列として読み、文字コードを判定して文字列を返す。
 
@@ -54,25 +93,39 @@ def read_text(path: str | Path, *, encoding: str = Encoding.AUTO) -> str:
 
     1. ``encoding`` が ``Encoding.AUTO`` 以外なら、それをそのまま使う
        （`csv.reader` 側にも渡す想定なので、Python の codec 名を入れる）
-    2. ``Encoding.AUTO`` のときは ``UTF8_SIG`` → ``CP932`` の順で
-       ``UnicodeDecodeError`` をベースに判定する
+    2. ``Encoding.AUTO`` のときは ``_detect_csv_encoding`` で判定する:
+       - ``utf-8-sig`` / ``utf-8`` の判定 → ``utf-8-sig`` codec で復号する
+         （``utf-8-sig`` は BOM の有無を codec が吸収する）
+       - ``cp932`` の判定 → ``cp932`` codec で復号する
+       - 判定不能（空 / 全部 ASCII / どちらも読めない）→
+         従来どおり ``UTF8_SIG`` → ``CP932`` の順で
+         ``UnicodeDecodeError`` をベースに再試行する
 
     ``AUTO`` でどちらも読めなければ ``EncodingDetectionError`` を投げる。
     ファイルの存在チェック・空ファイル分岐・BOM 除去などは呼び出し側に
     任せる（``CSV.read()`` では BOM 除去も含めて ``csv.reader`` が処理する）。
 
-    ``comken.toolbox.csv.CSV`` の読み込み経路と、``comken.services
-    .salesforce_downloader.sheets.history`` の履歴 CSV 読み込み経路、
-    それから Salesforceレポートダウンローダーの ``_validate_existing_header``
-    で同じ判定を共有する（プログラムが書く分は UTF-8 BOM 付きだが、
-    人が Excel で開いて保存し直すと CP932 へ化けるため）。
+    ``CSV`` の読み込みと書き込み（``_write_encoding``）で同じ判定（``_detect_csv_encoding``）を
+    共有する（プログラムが書く分は UTF-8 BOM 付きだが、人が Excel で開いて保存し直すと
+    CP932 へ化けることがあるため、書き込みでも既存ファイルの文字コードを保つ）。
     """
     path = Path(path)
     raw = path.read_bytes()
     if encoding != Encoding.AUTO:
         logger.debug("CSV 読み込み: %s, encoding=%s", path, encoding)
         return raw.decode(encoding)
-    for candidate in (Encoding.UTF8_SIG, Encoding.CP932):
+    detected = _detect_csv_encoding(raw)
+    if detected is None:
+        # 判定不能（空 / 全部 ASCII）: 従来の UTF8_SIG → CP932 の順で再試行する。
+        # ASCII ファイルでは UTF8_SIG が必ず成功する。
+        candidates: tuple[str, ...] = (Encoding.UTF8_SIG, Encoding.CP932)
+    elif detected == "utf-8":
+        # BOM なし UTF-8。``utf-8-sig`` codec なら BOM が無くても復号できる。
+        candidates = (Encoding.UTF8_SIG,)
+    else:
+        # ``utf-8-sig`` (BOM あり) / ``cp932`` の判定結果そのまま。
+        candidates = (detected,)
+    for candidate in candidates:
         try:
             decoded = raw.decode(candidate)
             logger.debug("CSV 読み込み: %s, encoding=%s (auto)", path, candidate)
@@ -88,6 +141,21 @@ class CSV:
 
     Table と同じ「行の集合」として Transfer へ渡せる境界を提供する。
     ヘッダーのないファイルは ``columns`` で列名を指定する。
+
+    文字コード:
+
+    - 読み込み時（``encoding=`` を ``Encoding.AUTO`` にした既定）は
+      ``UTF-8 BOM 付き → BOM なし UTF-8 → CP932`` の順で自動判定する。
+      詳細は ``read_text`` を参照。
+    - 書き込み時は ``encoding=`` を明示すればその codec をそのまま使う。
+      明示しない ``Encoding.AUTO`` のときは、**既存ファイルの文字コードを保つ**
+      （BOM 付き UTF-8 は BOM 付きのまま、BOM なし UTF-8 は BOM なしのまま、
+      CP932 は CP932 のまま）。新規ファイルや中身が空のファイル、
+      ASCII だけで判定できないファイルは ``UTF-8 BOM 付き`` を既定にする。
+    - 保った文字コードでは表せない文字を書き込もうとすると、
+      ``?`` に置換せず ``InvalidTableInputError`` で停止する。
+      このとき一時ファイルは ``atomic_write`` が片付けるため、
+      元のファイルは無傷で残る。
     """
 
     def __init__(
@@ -360,27 +428,65 @@ class CSV:
             self._pending = None
 
     def _write(self, table: Table) -> None:
+        encoding = self._write_encoding
         logger.debug(
             "CSV 書き込み: %s, %d 行, %d 列, encoding=%s",
             self.path,
             len(table),
             len(table.columns),
-            self._write_encoding,
+            encoding,
         )
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with (
-            atomic_write(self.path) as temporary_path,
-            temporary_path.open("w", encoding=self._write_encoding, newline="") as file,
-        ):
-            if not table.columns:
-                return
-            writer = csv.DictWriter(file, fieldnames=table.columns, extrasaction="raise")
-            writer.writeheader()
-            writer.writerows(table.to_rows())
+        try:
+            with (
+                atomic_write(self.path) as temporary_path,
+                temporary_path.open("w", encoding=encoding, newline="") as file,
+            ):
+                if not table.columns:
+                    return
+                writer = csv.DictWriter(file, fieldnames=table.columns, extrasaction="raise")
+                writer.writeheader()
+                writer.writerows(table.to_rows())
+        except UnicodeEncodeError as exc:
+            # 保った文字コード（``encoding``）で表せない文字が含まれている。
+            # ``atomic_write`` が一時ファイルを片付けるので、元のファイルは
+            # 置き換えられずに無傷で残る。``?`` への暗黙の置換はしない。
+            offending = ""
+            if exc.object is not None and exc.start is not None and exc.end is not None:
+                offending = repr(exc.object[exc.start : exc.end])
+            raise InvalidTableInputError(
+                f"CSV を {encoding} で書き込めません（保った文字コードで表せない文字があります）: "
+                f"{self.path}\n"
+                f"表せない文字: {offending}\n"
+                "対処: ファイルを UTF-8 (BOM 付き) で保存し直すか、"
+                "表せない文字を含む行を修正してください。"
+            ) from exc
 
     @property
     def _write_encoding(self) -> str:
-        return Encoding.UTF8_SIG if self._encoding == Encoding.AUTO else self._encoding
+        """書き込む codec を返す。
+
+        - ``encoding=`` を明示したときはその値をそのまま使う（読み込みと同じ指定）。
+        - ``Encoding.AUTO`` のとき、書き込み先が既存ファイルなら
+          ``_detect_csv_encoding`` で文字コードを判定して保ったまま書き込む
+          （UTF-8 BOM 付き → BOM 付き UTF-8、BOM なし UTF-8 → BOM なし UTF-8、
+          CP932 → CP932）。新規ファイルや中身が無いファイル、
+          ASCII だけで判定できないファイルは ``UTF-8 BOM 付き`` を既定にする。
+
+        ``encoding`` を明示した ``CSV`` でも、保った codec と同じ理由で表せない
+        文字を書き込もうとすると ``_write`` が ``InvalidTableInputError``
+        を投げる（黙って ``?`` に置換しない）。
+        """
+        if self._encoding != Encoding.AUTO:
+            return self._encoding
+        if not self.path.exists() or self.path.stat().st_size == 0:
+            # 既存ファイルが無い、または中身が無い。判定しようがないので
+            # 新規ファイルと同じ既定（``utf-8-sig``）にする。
+            return Encoding.UTF8_SIG
+        detected = _detect_csv_encoding(self.path.read_bytes())
+        # 判定不能（全部 ASCII / どちらも読めない）は既定の ``utf-8-sig`` に
+        # フォールバックする。
+        return detected if detected is not None else Encoding.UTF8_SIG
 
     def count(self) -> int:
         """データ行数を返す。"""

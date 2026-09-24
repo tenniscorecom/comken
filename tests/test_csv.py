@@ -11,6 +11,7 @@ from comken.exceptions import (
     CSVHeaderError,
     CSVRowLengthError,
     EncodingDetectionError,
+    InvalidTableInputError,
     InvalidTableOperationError,
     TableNotOpenError,
     TableRowColumnsError,
@@ -310,3 +311,109 @@ class TestCSV:
             CSV(path).count()
         with pytest.raises(TableNotOpenError, match="CSV"):
             CSV(path).iter_rows()
+
+    def test_append_preserves_cp932_encoding(self, tmp_path) -> None:
+        """CP932 の既存ファイルに追記しても CP932 のまま（BOM を付けない）。"""
+        path = tmp_path / "history.csv"
+        path.write_text("日付,備考\n2024-01-01,初期データ\n", encoding="cp932")
+        with CSV(path) as csv_file:
+            csv_file.append({"日付": "2024-01-02", "備考": "追記"})
+        raw = path.read_bytes()
+        assert not raw.startswith(b"\xef\xbb\xbf")
+        # 全体を CP932 として復号でき、追記した行が含まれること。
+        decoded = raw.decode("cp932")
+        assert "初期データ" in decoded
+        assert "追記" in decoded
+
+    def test_append_preserves_utf8_bom(self, tmp_path) -> None:
+        """UTF-8 BOM 付きの既存ファイルは BOM 付きのままで書き戻される。"""
+        path = tmp_path / "data.csv"
+        path.write_text("id,name\n1,山田\n", encoding="utf-8-sig")
+        with CSV(path) as csv_file:
+            csv_file.append({"id": "2", "name": "鈴木"})
+        raw = path.read_bytes()
+        assert raw.startswith(b"\xef\xbb\xbf")
+        assert raw.decode("utf-8-sig").splitlines()[0] == "id,name"
+        assert "鈴木" in raw.decode("utf-8-sig")
+
+    def test_append_preserves_utf8_without_bom(self, tmp_path) -> None:
+        """BOM なし UTF-8 の既存ファイルは BOM を付けずに書き戻される。"""
+        path = tmp_path / "data.csv"
+        path.write_text("id,name\n1,山田\n", encoding="utf-8")
+        with CSV(path) as csv_file:
+            csv_file.append({"id": "2", "name": "鈴木"})
+        raw = path.read_bytes()
+        assert not raw.startswith(b"\xef\xbb\xbf")
+        assert "鈴木" in raw.decode("utf-8")
+
+    def test_replace_preserves_cp932_encoding(self, tmp_path) -> None:
+        """``replace()`` も CP932 を保つ。"""
+        path = tmp_path / "history.csv"
+        path.write_text("日付,備考\n2024-01-01,初期データ\n", encoding="cp932")
+        with CSV(path) as csv_file:
+            csv_file.replace([{"日付": "2024-02-01", "備考": "置き換え"}])
+        raw = path.read_bytes()
+        assert not raw.startswith(b"\xef\xbb\xbf")
+        decoded = raw.decode("cp932")
+        assert "初期データ" not in decoded
+        assert "置き換え" in decoded
+
+    def test_new_file_written_with_utf8_bom(self, tmp_path) -> None:
+        """新規ファイルは既定通り UTF-8 BOM 付きで書き出される。"""
+        path = tmp_path / "new.csv"
+        with CSV(path) as csv_file:
+            csv_file.replace([{"id": "1", "name": "山田"}])
+        raw = path.read_bytes()
+        assert raw.startswith(b"\xef\xbb\xbf")
+        assert path.read_text(encoding="utf-8-sig").splitlines()[0] == "id,name"
+
+    def test_ascii_only_existing_file_falls_back_to_utf8_sig(self, tmp_path) -> None:
+        """ASCII だけの既存ファイルに日本語を足すと、判定不能として ``utf-8-sig`` で書く。"""
+        path = tmp_path / "ascii.csv"
+        # ``id,value`` の ASCII だけの既存ファイル。判定不能なので既定の utf-8-sig に
+        # フォールバックすることを確かめるため、日本語のセルを足して BOM が付くか確認する。
+        path.write_text("id,value\n1,A\n", encoding="utf-8")
+        with CSV(path) as csv_file:
+            csv_file.append({"id": "2", "value": "B"})
+            csv_file.append({"id": "3", "value": "山田"})
+        raw = path.read_bytes()
+        # ASCII だけだと判定不能なので、新規ファイルと同じ utf-8-sig (BOM 付き) で書く。
+        assert raw.startswith(b"\xef\xbb\xbf")
+        assert "山田" in raw.decode("utf-8-sig")
+
+    def test_cp932_file_unrepresentable_char_raises_and_preserves_file(self, tmp_path) -> None:
+        """CP932 既存ファイルに表せない文字（絵文字）を書くと例外、ファイルは無傷。"""
+        path = tmp_path / "history.csv"
+        original_bytes = "日付,備考\n2024-01-01,初期データ\n".encode("cp932")
+        path.write_bytes(original_bytes)
+        before = path.read_bytes()
+        with (
+            pytest.raises(InvalidTableInputError, match="cp932"),
+            CSV(path) as csv_file,
+        ):
+            csv_file.append({"日付": "2024-01-02", "備考": "絵文字😀"})
+        # 例外後はファイルが完全に元通り（``atomic_write`` が temp を片付けた）。
+        assert path.read_bytes() == before
+
+    def test_explicit_encoding_overrides_preservation(self, tmp_path) -> None:
+        """``encoding=`` 明示時はその指定が最優先（既存ファイルの文字コードと無関係）。
+
+        CP932（既定の ``AUTO`` 判定なら保持される）ASCII だけの既存ファイルに
+        対して ``encoding="utf-8-sig`` を明示すると、保持せず BOM 付きで書く。
+        """
+        path = tmp_path / "data.csv"
+        path.write_text("id\n1\n", encoding="cp932")
+        with CSV(path, encoding="utf-8-sig") as csv_file:
+            csv_file.append({"id": "2"})
+        raw = path.read_bytes()
+        # 明示 ``encoding="utf-8-sig"`` は既定判定を上書きして BOM を付ける。
+        assert raw.startswith(b"\xef\xbb\xbf")
+
+    def test_explicit_encoding_on_new_file(self, tmp_path) -> None:
+        """新規ファイルでも ``encoding=`` 明示はそのまま使われる。"""
+        path = tmp_path / "new.csv"
+        with CSV(path, encoding="cp932") as csv_file:
+            csv_file.replace([{"id": "1", "name": "山田"}])
+        raw = path.read_bytes()
+        assert not raw.startswith(b"\xef\xbb\xbf")
+        assert "山田" in raw.decode("cp932")
