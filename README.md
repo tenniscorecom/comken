@@ -266,7 +266,7 @@ PCの環境変数を変更したくない場合は、各プロジェクトのル
 
 ### 共有サーバーの comken を更新する
 
-開発 PC で `tools\build_release.py` を実行してリリース用フォルダを作り、
+開発 PC で `tools\build_release.py` を実行してリリース用フォルダと zip を作り、
 表示された robocopy コマンドを **BO 用と intranet 用の両方の共有サーバー**で実行する
 （→ [開発とリリース](docs/開発/仕様書.md#開発とリリース)）。
 
@@ -274,9 +274,10 @@ PCの環境変数を変更したくない場合は、各プロジェクトのル
 python tools\build_release.py --tag v1.0.0
 ```
 
-タグ時点のファイルだけが `git archive` で取り出され、`dist/comken-v1.0.0/` が
-できる。RELEASE.txt にタグ・コミット・`__version__` が記録されるので、配った先で
-「どの版か」が分かる。**社内固有の値を書いた3ファイル**（`comken/toolbox/salesforce/sites/solution.py`・
+タグ時点のファイルだけが `git archive` で取り出され、`dist/comken-v1.0.0/` と
+`dist/comken-v1.0.0.zip` ができる。RELEASE.txt にタグ・コミット・`__version__`
+が記録されるので、配った先で「どの版か」が分かる。
+**社内固有の値を書いた3ファイル**（`comken/toolbox/salesforce/sites/solution.py`・
 `solution_sandbox.py`・`comken/services/salesforce_downloader/paths.py`）は、
 robocopy の `/XF` で送り元（配布用フォルダ）側のフルパス指定によりコピー対象外にされる。
 各サーバー側の値（組織・フォルダ）が上書きされず、BO と intranet で値が違う場合も壊れない。
@@ -286,9 +287,9 @@ robocopy の `/XF` で送り元（配布用フォルダ）側のフルパス指�
 する手順は使えない。配布用フォルダには `tools/` も含まれるが、共有サーバーでは git が無いので
 `build_release.py` は動かせない（**共有サーバーには git がない前提で運用する**）。
 
-問題が出たら、旧リリースのフォルダを同じ手順でコピーし直す。`dist/` は git 管理外
-（`.gitignore` で除外）なので、**配った `dist\comken-<旧タグ>\` フォルダを保管しておく**。
-無ければ `python tools\build_release.py --tag <旧タグ>` で作り直せる（`dist/` は git 管理外）。
+問題が出たら、旧リリースのフォルダ/zip を同じ手順でコピーし直す。`dist/` は git 管理外
+（`.gitignore` で除外）なので、**配布した zip は手元に残しておく**。
+残していない場合は `python tools\build_release.py --tag <旧タグ>` で再生成できる。
 
 - **バイトコードキャッシュは自動でローカルに逃がす**: 共有サーバーが読み取り専用でも
   遅くならないよう、comken は import 時に `.pyc` の出力先を `%LOCALAPPDATA%\comken-pycache`

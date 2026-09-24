@@ -1,4 +1,4 @@
-"""tools/build_release.py — リリース用のフォルダを生成するツール。
+"""tools/build_release.py — リリース用のフォルダと zip を生成するツール。
 
 git のタグで指定した時点のファイルだけを ``git archive`` で取り出し、共有サーバーの
 **フォルダコピー（robocopy）** で配布できる形に整えて ``RELEASE.txt`` を添える。
@@ -24,7 +24,7 @@ git のタグで指定した時点のファイルだけを ``git archive`` で�
 （``.gitignore`` で除外済み）。
 
 ``git archive`` は **git が追跡しているファイルだけ** を出力するため、
-未コミット・未追跡のファイルはリリース用フォルダにも入らない。
+未コミット・未追跡のファイルはリリース用フォルダにも zip にも入らない。
 """
 
 from __future__ import annotations
@@ -37,6 +37,7 @@ import re
 import subprocess
 import sys
 import tarfile
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -78,6 +79,7 @@ class ReleaseArtifacts:
     """``build_release()`` の戻り値。生成物と robocopy コマンドを束ねる。"""
 
     folder: Path  # ``dist/comken-<tag>/``
+    zip_path: Path  # ``dist/comken-<tag>.zip``
     robocopy_command: str  # 標準出力に表示する配布コマンド
     commit: str  # タグが指すコミットハッシュ
 
@@ -89,7 +91,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """CLI 引数を解釈する。テストからも ``parse_args([...])`` で呼べる。"""
     parser = argparse.ArgumentParser(
         description=(
-            "タグ時点のファイルだけをリリース用フォルダに出力し、"
+            "タグ時点のファイルだけをリリース用フォルダと zip に出力し、"
             "robocopy の配布コマンドを表示する。"
         ),
     )
@@ -104,7 +106,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--dest",
         type=Path,
         default=Path("dist"),
-        help="出力先ディレクトリ（既定: dist）。配下に comken-<tag>/ を作る",
+        help="出力先ディレクトリ（既定: dist）。配下に comken-<tag>/ と zip を作る",
     )
     parser.add_argument(
         "--server-path",
@@ -117,7 +119,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="既存の出力先（comken-<tag>/）があれば消して作り直す",
+        help="既存の出力先（comken-<tag>/ と zip）があれば消して作り直す",
     )
     parser.add_argument(
         "--repo-root",
@@ -169,7 +171,7 @@ def build_release(
     force: bool,
     repo_root: Path,
 ) -> ReleaseArtifacts:
-    """タグ時点のファイルから ``dist/comken-<tag>/`` を作るメイン処理。
+    """タグ時点のファイルから ``dist/comken-<tag>/`` と zip を作るメイン処理。
 
     処理:
 
@@ -177,19 +179,20 @@ def build_release(
        バイト列を取得する（``git archive`` は git 管理下のファイルだけ出力する）
     2. ``tarfile`` で読み、``dist/comken-<tag>/`` 配下に展開する
     3. ``RELEASE.txt`` にタグ・コミット・作成日時・``__version__`` を書く
-    4. robocopy コマンド（``/MIR`` + ``/XF`` で3ファイル除外）を組み立てて返す
+    4. 同じ内容で ``dist/comken-<tag>.zip`` を作る
+    5. robocopy コマンド（``/MIR`` + ``/XF`` で3ファイル除外）を組み立てて返す
 
     Args:
         tag: リリースタグ（例: ``v1.0.0``）。タグの存在と、
             タグ時点の ``__version__`` がタグ番号と一致することは呼び出し前に検証する
-        dest: 出力先ディレクトリ（配下に ``comken-<tag>/`` を作る）
+        dest: 出力先ディレクトリ（配下に ``comken-<tag>/`` と zip を作る）
         server_path: 配布先パス（robocopy の宛先に使う）
         force: ``True`` なら既存出力を削除して作り直す。``False`` なら既存がある
             時点で ``ReleaseBuildError``
         repo_root: ``git`` を実行するときの作業ディレクトリ
 
     Returns:
-        生成物への参照（フォルダ・robocopy コマンド・コミットハッシュ）。
+        生成物への参照（フォルダ・zip・robocopy コマンド・コミットハッシュ）。
 
     Raises:
         ReleaseBuildError: タグが存在しない、``__version__`` がタグ番号と食い違う、
@@ -212,7 +215,8 @@ def build_release(
 
     dest = dest.resolve()
     folder = dest / f"comken-{tag}"
-    _check_destinations(folder, force=force, dest=dest)
+    zip_path = dest / f"comken-{tag}.zip"
+    _check_destinations(folder, zip_path, force=force, dest=dest)
 
     folder.parent.mkdir(parents=True, exist_ok=True)
 
@@ -230,11 +234,15 @@ def build_release(
         version=tag_version,
     )
 
-    # 4. robocopy コマンドを組み立てる
+    # 4. zip を作る
+    _build_zip(folder, zip_path)
+
+    # 5. robocopy コマンドを組み立てる
     robocopy_command = _build_robocopy_command(folder, server_path)
 
     return ReleaseArtifacts(
         folder=folder,
+        zip_path=zip_path,
         robocopy_command=robocopy_command,
         commit=tag_commit,
     )
@@ -333,6 +341,7 @@ def _run_git_bytes(*args: str, repo_root: Path) -> bytes:
 
 def _check_destinations(
     folder: Path,
+    zip_path: Path,
     *,
     force: bool,
     dest: Path,
@@ -341,18 +350,22 @@ def _check_destinations(
 
     ``dest`` の外は触らない（共有サーバー上の同名のフォルダを誤って消さないため）。
     """
-    if not folder.exists():
+    if not folder.exists() and not zip_path.exists():
         return
     if not force:
         raise ReleaseBuildError(
-            f"{folder} が既に存在します。"
+            f"{folder} または {zip_path} が既に存在します。"
             " 上書きせずに失敗しました。再生成する場合は --force を"
             " 付けてください（このオプションは dest/ の下だけ消します）。"
         )
     # force: dest の下だけ削除。万一 dest と同じパスが万一渡されても
     # 誤って環境を壊さないよう、dest 自身は消さない
-    if folder.exists() and folder.is_relative_to(dest):
-        _rmtree(folder)
+    for target in (folder, zip_path):
+        if target.exists() and target.is_relative_to(dest):
+            if target.is_dir():
+                _rmtree(target)
+            else:
+                target.unlink()
 
 
 def _rmtree(path: Path) -> None:
@@ -401,6 +414,15 @@ def _write_release_txt(
     (target / "RELEASE.txt").write_text(body, encoding="utf-8")
 
 
+def _build_zip(folder: Path, zip_path: Path) -> None:
+    """``folder`` の中身（``RELEASE.txt`` 含む）を zip に詰める。"""
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for path in sorted(folder.rglob("*")):
+            if path.is_file():
+                arcname = path.relative_to(folder).as_posix()
+                zf.write(path, arcname=arcname)
+
+
 def _build_robocopy_command(source: Path, server_path: str) -> str:
     """robocopy の配布コマンドを組み立てる。
 
@@ -436,7 +458,7 @@ def _build_robocopy_command(source: Path, server_path: str) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI 入口。タグ指定 → フォルダ生成 → robocopy コマンド表示。
+    """CLI 入口。タグ指定 → フォルダ/zip 生成 → robocopy コマンド表示。
 
     配布コマンドと注意事項は ``logger.warning`` で出す（CLI では
     ``logging.basicConfig`` を INFO で初期化するのでコンソールに出る）。
@@ -458,6 +480,7 @@ def main(argv: list[str] | None = None) -> int:
     logger.warning("リリース用フォルダを作成しました")
     logger.warning("=" * 70)
     logger.warning("  フォルダ    : %s", artifacts.folder)
+    logger.warning("  zip         : %s", artifacts.zip_path)
     logger.warning("  タグ        : %s", tag)
     logger.warning("  コミット    : %s", artifacts.commit)
     logger.warning("")
@@ -469,7 +492,7 @@ def main(argv: list[str] | None = None) -> int:
     logger.warning("  - /MIR は宛先にしか無いファイルを削除する")
     logger.warning("    （除外指定した3ファイルは削除されない）")
     logger.warning("  - 除外した3ファイルは各サーバー側の値のまま残る")
-    logger.warning("  - ロールバックは旧タグのフォルダを同じ手順でコピーする")
+    logger.warning("  - ロールバックは旧タグのフォルダ/zip を同じ手順でコピーする")
     logger.warning("=" * 70)
     return 0
 

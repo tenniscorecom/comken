@@ -1,7 +1,7 @@
 """tools/build_release.py のテスト。
 
 小さな一時 git リポジトリで ``git archive`` の代わりをし、フォルダ生成 /
-``RELEASE.txt`` 書き込み / タグと ``__version__`` の整合性検査 /
+zip 化 / ``RELEASE.txt`` 書き込み / タグと ``__version__`` の整合性検査 /
 robocopy コマンド組み立てを検証する。
 
 git が無い環境ではテスト全体を ``pytest.skip`` する（このツールは git が
@@ -14,6 +14,7 @@ import logging
 import os
 import shutil
 import subprocess
+import zipfile
 from pathlib import Path
 
 import build_release
@@ -83,12 +84,12 @@ def sample_repo(tmp_path: Path) -> Path:
 class TestBuildReleaseSuccess:
     """タグと ``__version__`` が一致しているときの正常な生成。"""
 
-    def test_creates_folder(
+    def test_creates_folder_and_zip(
         self,
         sample_repo: Path,
         tmp_path: Path,
     ) -> None:
-        """フォルダと ``RELEASE.txt`` が作られ、``__version__`` が一致する。"""
+        """フォルダ・zip・``RELEASE.txt`` が作られ、``__version__`` が一致する。"""
         dest = tmp_path / "out"
         artifacts = build_release.build_release(
             tag="v1.2.3",
@@ -100,6 +101,8 @@ class TestBuildReleaseSuccess:
 
         assert artifacts.folder == dest / "comken-v1.2.3"
         assert artifacts.folder.is_dir()
+        assert artifacts.zip_path == dest / "comken-v1.2.3.zip"
+        assert artifacts.zip_path.is_file()
 
         # フォルダの中身
         init_text = (artifacts.folder / "comken" / "__init__.py").read_text(encoding="utf-8")
@@ -114,10 +117,37 @@ class TestBuildReleaseSuccess:
         assert artifacts.commit in release_text
 
 
+class TestZipMatchesFolder:
+    """zip の中身とフォルダの中身が一致する（同じ展開結果になる）。"""
+
+    def test_zip_entries_match_folder_files(
+        self,
+        sample_repo: Path,
+        tmp_path: Path,
+    ) -> None:
+        artifacts = build_release.build_release(
+            tag="v1.2.3",
+            dest=tmp_path / "out",
+            server_path=r"\\server\share\tools\comken",
+            force=False,
+            repo_root=sample_repo,
+        )
+
+        folder_files = sorted(
+            p.relative_to(artifacts.folder).as_posix()
+            for p in artifacts.folder.rglob("*")
+            if p.is_file()
+        )
+        with zipfile.ZipFile(artifacts.zip_path) as zf:
+            zip_names = sorted(zf.namelist())
+
+        assert folder_files == zip_names
+
+
 class TestUntrackedExcluded:
     """``git archive`` は未コミット・未追跡のファイルを含まないため、
 
-    リリース用フォルダにも入らない。
+    リリース用フォルダにも zip にも入らない。
     """
 
     def test_untracked_files_are_not_included(
@@ -146,6 +176,10 @@ class TestUntrackedExcluded:
         init_in_artifact = (artifacts.folder / "comken" / "__init__.py").read_text(encoding="utf-8")
         assert init_in_artifact == '__version__ = "1.2.3"\n'
 
+        with zipfile.ZipFile(artifacts.zip_path) as zf:
+            names = zf.namelist()
+        assert not any(name.endswith("secret.txt") for name in names)
+
 
 # ── エラー系 ───────────────────────────────────────────────────────────────
 
@@ -172,8 +206,9 @@ class TestVersionMismatch:
                 force=False,
                 repo_root=sample_repo,
             )
-        # 検査で止まるので、フォルダの中身は作られていない
+        # 検査で止まるので、フォルダ・zip の中身は作られていない
         assert not (dest / "comken-v9.9.9").exists()
+        assert not (dest / "comken-v9.9.9.zip").exists()
 
 
 class TestTagNotFound:
@@ -244,6 +279,7 @@ class TestExistingDestination:
             repo_root=sample_repo,
         )
         assert artifacts.folder.is_dir()
+        assert artifacts.zip_path.is_file()
 
     def test_force_does_not_delete_outside_dest(
         self,
