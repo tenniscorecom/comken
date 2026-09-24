@@ -5,7 +5,7 @@
 （``from comken.core import DateFileFinder``）。
 
 書くときは ``from comken import X`` が第一選択。そこに無いものだけ
-``from comken.core import Y`` で取る（仕様書 4.32）。
+``from comken.core import Y`` で取る（docs/ARCHITECTURE.md §3）。
 
 toolbox / services はこの2階層に上げない。``from comken.toolbox.excel import Excel``
 のように深いパスのままで十分で、そこには「どの機能群に依存しているか」が読める意味があるため。

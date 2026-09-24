@@ -135,7 +135,7 @@ class TestOutlook:
 class TestReceivedAttachmentsAndLinksAreNotReachable:
     """受信メールの添付とリンクへ、プログラムから到達できないことを固定する。
 
-    社内ルールで受信メールの添付とリンクを開くことは禁止されている（仕様書 4.17）。
+    社内ルールで受信メールの添付とリンクを開くことは禁止されている（docs/ARCHITECTURE.md §7）。
     プログラムから開けてしまうと、人が守っているルールを自動処理が迂回することになり、
     しかも自動なので誰も気づかない。
 
@@ -164,7 +164,7 @@ class TestReceivedAttachmentsAndLinksAreNotReachable:
         """Outlook に受信添付・リンクを開くメソッドを足していない。"""
         for name in self.FORBIDDEN:
             assert not hasattr(Outlook, name), (
-                f"Outlook.{name}() は実装しない（仕様書 4.17）。"
+                f"Outlook.{name}() は実装しない（docs/ARCHITECTURE.md §7）。"
                 "添付の中身が要るなら、共有サーバー経由での受け渡しを送信元へ依頼する"
             )
 
@@ -174,7 +174,7 @@ class TestReceivedAttachmentsAndLinksAreNotReachable:
 
         assert "has_attachments" in fields
         assert not [f for f in fields if f != "has_attachments" and "attach" in f], (
-            "MailMessage に添付そのものを持たせない（仕様書 4.17）。"
+            "MailMessage に添付そのものを持たせない（docs/ARCHITECTURE.md §7）。"
             f"現在のフィールド: {sorted(fields)}"
         )
 
@@ -182,5 +182,5 @@ class TestReceivedAttachmentsAndLinksAreNotReachable:
         """MailMessage 側にも添付を取り出すメソッドを足していない。"""
         for name in self.FORBIDDEN:
             assert not hasattr(MailMessage, name), (
-                f"MailMessage.{name}() は実装しない（仕様書 4.17）"
+                f"MailMessage.{name}() は実装しない（docs/ARCHITECTURE.md §7）"
             )

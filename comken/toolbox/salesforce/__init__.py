@@ -16,7 +16,7 @@ URL と認証情報のシステム名は組織クラスがクラス定数とし�
     with Solution() as sf:                                    # 既定（本番もこれ）
         ...
 
-設計の背景は docs/開発/salesforce-authentication.md を参照。
+設計の背景は docs/HISTORY.md「認証方式」を参照。
 
     SalesforceBase              1組織ぶんの API クライアントの土台（組織クラスで継承する）
     DataLoaderCLI                Salesforce Data Loader の CLI 呼び出し（サブプロセス実行）

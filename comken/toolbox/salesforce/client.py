@@ -39,7 +39,7 @@ from comken.exceptions import (
 from comken.runtime import dry_run_log, is_dry_run
 from comken.toolbox.csv import CSV
 
-# 既定は Refresh Token Flow（→ docs/開発/salesforce-authentication.md）。
+# 既定は Refresh Token Flow（→ docs/HISTORY.md）。
 from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth
 from comken.toolbox.salesforce.metrics import APIMetrics, RetryReason
 from comken.toolbox.salesforce.report import ReportAPI

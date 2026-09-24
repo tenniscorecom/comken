@@ -114,7 +114,7 @@ class TestSiteBaseOwner:
         assert "OWNER =" in message
         # 基底クラス名は呼び出し側が渡す（__base__ に頼ると多重継承でずれる）
         assert "class Kintai(SiteBase):" in message
-        assert "ライブラリ開発規約.md" in message
+        assert "CONVENTIONS.md" in message
         assert "ライブラリ管理者へ連絡" in message
 
     def test_comken_module_is_exempt(self, monkeypatch):

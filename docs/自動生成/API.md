@@ -2768,7 +2768,7 @@ class SiteOwnerRequiredError(ComkenError):
     サブクラスに `OWNER = "プロジェクト名 / 担当者"` を1行追加する。
     ライブラリ（`comken.toolbox.browser.sites/` または
     `comken.toolbox.salesforce.sites/`）に入れるべきサイトかは
-    `docs/開発/ライブラリ開発規約.md` の「サイト／組織クラスを昇格させる基準」を
+    `CONVENTIONS.md` の「サイト／組織クラスを昇格させる基準」を
     参照して判断する。ライブラリに昇格したい場合はライブラリ管理者へ連絡する。
 
 #### `__init__`
@@ -4708,7 +4708,7 @@ class SiteAlreadyInLibraryError(BrowserError):
 対処:
     ライブラリから `from comken.toolbox.browser.sites import <クラス名>` で取り出して使う。
     プロジェクト側の定義は消す。ライブラリへ昇格する基準は
-    `docs/開発/ライブラリ開発規約.md` を参照。
+    `CONVENTIONS.md` の「サイト／組織クラスを昇格させる基準」を参照。
 
 #### `__init__`
 

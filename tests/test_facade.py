@@ -1,6 +1,6 @@
 """comken の公開 API 検証。
 
-公開は2階層（仕様書 4.32）。``from comken import ...`` には
+公開は2階層（docs/ARCHITECTURE.md §3）。``from comken import ...`` には
 「何をするプロジェクトかに関係なく使う」土台だけを置き、部品は
 ``from comken.core import ...`` から取る。両方の ``__all__`` が意図どおりで、
 互いに重複していないことをここで保証する。
@@ -124,7 +124,7 @@ def test_facade_and_core_do_not_overlap() -> None:
     """同じ名前が2つの入口から取れると、どちらで書くか迷う。
 
     書くときの優先順位は「comken 直下が第一選択、無いものだけ comken.core」
-    （仕様書 4.32）。重複するとこの順序が意味を失う。
+    （docs/ARCHITECTURE.md §3）。重複するとこの順序が意味を失う。
     """
     overlap = set(comken.__all__) & set(comken.core.__all__)
     assert not overlap, f"直下と core で名前が重複している: {sorted(overlap)}"

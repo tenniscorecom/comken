@@ -2,12 +2,11 @@
 
 [README（ドキュメントの入口）へ戻る](../README.md)
 
-認証方式を社内へ説明するときは、公式資料と判断理由をまとめた
-[Salesforce authentication decisions](開発/salesforce-authentication.md) を参照する。
+認証方式を社内へ説明するときは、判断理由をまとめた [設計判断の履歴「認証方式」](HISTORY.md#認証方式-external-client-app-authorization-code-refresh-token-flow) を参照する。
 
 背景: Salesforce Solution 組織 1つから、レポートとレコードを API で取得したい。
 本書には現行仕様と、保守に必要な設計理由だけを記載する。
-関連: [ライブラリ開発規約](開発/ライブラリ開発規約.md)
+関連: [コーディング規約](../CONVENTIONS.md)
 
 > [!note] 組織名の書き方
 > このリポジトリは公開しているため、**実際の組織名・サイト名は書かない**。
@@ -43,7 +42,7 @@ comken のコード（変数名・引数名）は `client_id` / `client_secret` 
 組織クラスをそのまま使えばこの方式になる。
 
 Client Credentials Flow は `client_secret` だけでアクセストークンを取れてしまうため、
-**本番では使わない**（判断の根拠は [Salesforce 認証の判断根拠](開発/salesforce-authentication.md)）。
+**本番では使わない**（判断の根拠は [設計判断の履歴](HISTORY.md#認証方式-external-client-app-authorization-code-refresh-token-flow)）。
 
 > [!note] 補足（2026-09-08）
 > Client Credentials Flow は社内の運用上もう使えないため、comken からも
@@ -83,12 +82,12 @@ with Solution(auth=auth) as sf:
 
 **`python -m comken sf setup`（CLI）はここまでを対話的にまとめて行う。** 認可URLを
 表示し、承認後にリダイレクトされたURL全体を貼り付けると、`code`/`code_verifier`
-を組み立てて `exchange_code()` まで呼ぶ（[初回認可の手順](開発/salesforce-authentication.md#2-初回認可-authorization_url)）。
+を組み立てて `exchange_code()` まで呼ぶ（[つないで確かめる](#つないで確かめるコマンド)）。
 
 ### Client Credentials Flow（歴史的記録・現在は使わない）
 
 初回の対話的な認可を挟まずに動かせるため、当初は開発中だけ使う想定だった
-（→ [判断の根拠](開発/salesforce-authentication.md#2-なぜ-refresh-token-flow-を既定にするのか)）。
+（→ [判断の根拠](HISTORY.md#認証方式-external-client-app-authorization-code-refresh-token-flow)）。
 
 > [!note] 補足（2026-09-08 / 2026-09-10）
 > Client Credentials Flow は社内の運用上もう使えないため、comken からも
@@ -185,7 +184,7 @@ classDiagram
 
 `OWNER` は「プロジェクト名 / 担当者」の形式で必ず書く（起動時に検査される）。
 ライブラリへ昇格したクラスは `OWNER = "comken"` にする。昇格の基準は
-[ライブラリ開発規約](開発/ライブラリ開発規約.md#サイト組織クラスを昇格させる基準) を参照。
+[コーディング規約「サイト／組織クラスを昇格させる基準」](../CONVENTIONS.md#21-サイト組織クラスを昇格させる基準) を参照。
 
 **なぜレポートを継承にしないか。** `ReportAPI` を `SalesforceBase` のサブクラスにすると、
 `Solution` は `ReportAPI` ではないためレポートを呼べず、多重継承に追い込まれる。
@@ -584,7 +583,7 @@ python -m comken sf setup
 python -m comken sf report --report-id 00O...
 ```
 
-`sf setup` は初回だけ必要な対話的な手順（[初回認可の手順](開発/salesforce-authentication.md#2-初回認可-authorization_url)）。
+`sf setup` は初回だけ必要な対話的な手順（[つないで確かめる](#つないで確かめるコマンド)）。
 既定では `Solution.CREDENTIAL_PREFIX` の `api_client_id` / `api_client_secret` が
 自動で引かれる。`--domain` で URL を指定すれば `site_for()` が対応する組織クラスへ
 自動解決する。別の登録を試すときだけ `--prefix` にシステム名を渡す。
@@ -603,6 +602,29 @@ python -m comken sf report --report-id 00O...
 点に注意。値そのものは画面に出さず、項目名と桁数だけを表示する。
 v1.0.0 で `check --app-id` は削除済み（ECA の `consumerId` だけ取れても用途が限られるため）。
 
+## 失効時の対応
+
+`refresh_token` を失効させたいとき:
+
+1. ECA 画面で「Revoke」操作をする（または ECA を作り直す）
+2. `python -m comken sf setup` の初回認可からやり直す
+
+Refresh Token Rotation を有効にしている場合、comken は新しい `refresh_token` を受け取った時点で
+DPAPI へ自動で書き戻す。運用としてやることは増えない。
+
+## トラブルシュート（認証まわり）
+
+| 症状 | 確認 |
+|---|---|
+| `INVALID_CLIENT_ID` | `python -m comken cred list` で `<prefix>.api_client_id` を確認。ECA の Consumer Key と一致するか |
+| `INVALID_CLIENT_SECRET` | 同様に `<prefix>.api_client_secret` を確認 |
+| `INVALID_AUTH_CODE` | `authorization_url()` で取得した `code` を 10 分以上放置した。初回認可からやり直す |
+| `invalid_grant` / `invalid_request`（PKCE 関連） | `authorization_url()` が返した `AuthorizationRequest` の `code_verifier` を `exchange_code()` に渡さず、別の実行の値を使い回した。1回の `sf setup` 実行内で完結させ、初回認可からやり直す |
+| `UNSUPPORTED_GRANT_TYPE` | ECA のフロー設定で Authorization Code + Refresh Token Flow を有効にしているか |
+| `INVALID_REFRESH_TOKEN` | `refresh_token` を revoke 済み。初回認可からやり直す |
+| 401 が返る（`refresh_token` は新しい） | ECA で「Manage Refresh Tokens」を開き、過去トークンの状態を確認 |
+| 連携アプリが見つからない | ECA のパッケージ / 組織を確認。`Solution.DOMAIN_URL` と一致するか |
+
 ## 実装を使うときの早見
 
 前半の設計判断を、利用側から引ける形にまとめる。背景と制約の説明は前半を正とする。
@@ -610,7 +632,7 @@ v1.0.0 で `check --app-id` は削除済み（ECA の `consumerId` だけ取れ�
 1インスタンスが1組織を受け持つ。認証は既定で **Authorization Code + Refresh Token Flow**
 （ユーザー名・パスワード・セキュリティトークンは使わない）。`refresh_token` は DPAPI に
 保管され、`sf setup` の初回認可のあとは自動で更新・保存される
-（ローテーションされたときの書き戻しも含む。[判断の根拠](開発/salesforce-authentication.md#2-なぜ-refresh-token-flow-を既定にするのか)）。
+（ローテーションされたときの書き戻しも含む。[判断の根拠](HISTORY.md#認証方式-external-client-app-authorization-code-refresh-token-flow)）。
 
 ```python
 from comken.toolbox.salesforce.sites import Solution
@@ -635,7 +657,7 @@ My Domain は `Solution.DOMAIN_URL` に置く。`login.salesforce.com` ではこ
 3. 「Client Credentials Flow」は **無効化**（共存させると secret 単独漏えいの入口が残る）
 4. 「Refresh Token Rotation」を有効化（推奨）
 5. Callback URL に `http://localhost:8080/callback`（詳細は
-   [初回認可の手順](開発/salesforce-authentication.md#0-前提)）
+   [つないで確かめる](#つないで確かめるコマンド)）
 6. Consumer Key / Consumer Secret を受け取る
 
 ### レポートの 2000 行制限
@@ -691,7 +713,7 @@ api_client_id / api_client_secret を読む（[credentials](credentials.md#crede
 
 書き込み系（`insert` / `update` / `upsert` / `delete`）は `dry_run` を尊重する。
 使い方の一覧は [README](../README.md#モジュール一覧)、
-認証の判断根拠は [salesforce-authentication.md](開発/salesforce-authentication.md) を参照。
+認証の判断根拠は [設計判断の履歴](HISTORY.md#認証方式-external-client-app-authorization-code-refresh-token-flow) を参照。
 
 ---
 

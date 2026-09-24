@@ -229,7 +229,7 @@ class Excel:
         if self._local_copy_required and self.path.exists():
             # NAS・ネットワークドライブ上のブックを直接扱うと OpenPyXL/Excel の I/O が
             # 不安定になることがある。作業中だけローカルを使い、保存時に元のパスへ戻す。
-            # 仕様書 4.5 では「大きなブック」と書かれているが、UNC ではサイズに関わら
+            # docs/ARCHITECTURE.md §6 では「大きなブック」と書かれているが、UNC ではサイズに関わら
             # ず全件コピーする（社内で扱うブックは小さく個別閾値を設ける実務的意義が薄い）。
             self._working_path, self._local_copy_path = _force_local_copy(self.path)
             logger.debug(
@@ -980,7 +980,7 @@ class Excel:
         if self.path.exists():
             # 書き込み経路では UNC かどうかに関係なく作業コピーを用意する（既に使って
             # いるケースに加え、読み取り専用 Excel でマクロを呼ぶ非常経路もここに来る）。
-            # 仕様書 4.5 と同じくサイズ無制限でコピーする。
+            # docs/ARCHITECTURE.md §6 と同じくサイズ無制限でコピーする。
             self._working_path, self._local_copy_path = copy_to_local_if_large(
                 self.path, threshold_mb=0
             )

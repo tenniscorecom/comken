@@ -147,7 +147,7 @@ End Function
 3. `python tools\build_calendar.py` を実行して
    `comken/core/calendar/data/company_calendar.csv` を再生成する
 4. `syukujitsu.csv` と `company_calendar.csv` をまとめてコミットし、push する
-5. リリースタグを打つ（共有サーバーのチェックアウトは**リリース済みのタグだけ**に保つ運用のため。`docs/開発/仕様書.md` の「開発と本番の分離」を参照）
+5. リリースタグを打つ（共有サーバーのチェックアウトは**リリース済みのタグだけ**に保つ運用のため。`docs/ARCHITECTURE.md` の「パッケージ構成と配置・運用」を参照）
 6. 共有サーバー側で、そのタグをチェックアウトして配布する（**ブランチをチェックアウトしない**）
 
 ## 会社休日変更手順
@@ -283,6 +283,6 @@ business_day_after(date(2026, 8, 20))
 ## 関連
 
 - 内閣府: <https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv>
-- comken 仕様書: `docs/開発/仕様書.md`
+- comken 設計書: `docs/ARCHITECTURE.md`
 - comken 例外階層: `comken/exceptions/__init__.py`
 - 生成ツール: `tools/build_calendar.py`

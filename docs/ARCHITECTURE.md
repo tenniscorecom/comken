@@ -4,7 +4,7 @@
 > 経緯・却下した代替案・理由は [`HISTORY.md`](HISTORY.md) を参照する。
 > API の使い方（引数・戻り値・例外）は docstring が一次情報で、
 > [`自動生成/API.md`](自動生成/API.md) はそこから自動生成される。
-> コーディング規約は `CONVENTIONS.md`（`docs/開発/CONVENTIONS.md`）を参照。
+> コーディング規約は [`CONVENTIONS.md`](../CONVENTIONS.md) を参照。
 
 ## 1. 基本方針
 
@@ -186,7 +186,7 @@ Excel / Excel 内の表データ連携は `Transfer(read, write, mapping)` に�
 
 ## 8. ブラウザ内部設計
 
-保守するときの参照地図。詳細は [`開発/browser-internals.md`](開発/browser-internals.md) を正本とする。本節は要約。
+ブラウザ機能を保守するときの参照地図。
 
 ### 公開 API
 
@@ -325,11 +325,8 @@ BO と intranet でバージョンを分けることはしない（版を分け�
 
 ## 12. 関連ドキュメント
 
-- [`HISTORY.md`](HISTORY.md): comken の設計判断の **経緯・却下した代替案・理由** だけを集めた文書。**現状の説明はここに書かない**
-- `CONVENTIONS.md`（`docs/開発/CONVENTIONS.md`）: comken と利用プロジェクトの **コーディング規約**（命名・型ヒント・例外・ロギング・Page Object Model など）
-- [`開発/仕様書.md`](開発/仕様書.md): 設計方針・ユースケース・設計判断の一次情報
-- [`開発/ライブラリ開発規約.md`](開発/ライブラリ開発規約.md): ライブラリ本体を編集するときの追加ルール（OWNER 必須、破壊的変更の扱い、サイト／組織クラスの昇格基準）
-- [`開発/browser-internals.md`](開発/browser-internals.md): ブラウザ内部の保守地図
+- [`HISTORY.md`](HISTORY.md): 設計判断の **経緯・却下した代替案・理由** だけを集めた文書。現状の説明はここに書かない
+- [`CONVENTIONS.md`](../CONVENTIONS.md): **コーディング規約**（1〜14 章は利用者向け、15 章以降は comken 本体の編集者向け）
 - [`自動生成/API.md`](自動生成/API.md): 公開 API の署名・docstring（**生成物**、手で編集しない）
 - [`ERRORS.md`](ERRORS.md): 例外クラスと非エンジニア向けの対処（**生成物**、手で編集しない）
 - [`README.md`](../README.md): 入口とモジュール一覧

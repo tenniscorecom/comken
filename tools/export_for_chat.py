@@ -522,15 +522,14 @@ def _bundle_sections() -> list[tuple[str, str]]:
     → 新規プロジェクト向け**。規約を先頭に置くのは、社外 AI に規約（命名・
     型ヒント・定数・例外・ロギング）を最初に読ませて、生成コードの表記ブレや
     規約違反を防ぐため。最後の「新規プロジェクト向け」は使う人を選ぶ資料
-    （新しいツールを作る人・comken 本体を直す人）なので最後に置く。
+    （新しいツールを作る人）なので最後に置く。
 
     章ごとに別ファイルへ書き出す前提のため、1ファイルへ結合したときに使う
     区切り線（``---``）はここでは入れない。
     """
-    conventions_path = ROOT / "docs" / "開発" / "CONVENTIONS.md"
-    spec_path = ROOT / "docs" / "開発" / "仕様書.md"
-    conventions_text = conventions_path.read_text(encoding="utf-8").rstrip()
-    spec_text = spec_path.read_text(encoding="utf-8").rstrip()
+    conventions_text = (ROOT / "CONVENTIONS.md").read_text(encoding="utf-8").rstrip()
+    architecture_text = (ROOT / "docs" / "ARCHITECTURE.md").read_text(encoding="utf-8").rstrip()
+    history_text = (ROOT / "docs" / "HISTORY.md").read_text(encoding="utf-8").rstrip()
 
     api_text = _api_text()
     errors_text = _errors_generated_text()
@@ -559,11 +558,9 @@ def _bundle_sections() -> list[tuple[str, str]]:
         + path.read_text(encoding="utf-8").rstrip()
         for path in (new_project_docs_dir / "仕様書.md", new_project_docs_dir / "使い方.md")
     )
-    library_conventions_path = ROOT / "docs" / "開発" / "ライブラリ開発規約.md"
-    library_conventions_text = library_conventions_path.read_text(encoding="utf-8").rstrip()
 
     reference_parts = [
-        "# 1. コーディング規約（docs/開発/CONVENTIONS.md）\n" + conventions_text,
+        "# 1. コーディング規約（CONVENTIONS.md）\n" + conventions_text,
         "# 2. 公開 API 索引\n" + api_text.rstrip(),
     ]
     if examples_chunks:
@@ -582,15 +579,14 @@ def _bundle_sections() -> list[tuple[str, str]]:
             "3_エラー対応表_設計判断",
             "# エラー対応表（docs/ERRORS.md）\n"
             + errors_text.rstrip()
-            + "\n\n---\n\n# 設計判断（docs/開発/仕様書.md）\n"
-            + spec_text,
+            + "\n\n---\n\n# 設計書（docs/ARCHITECTURE.md）\n"
+            + architecture_text
+            + "\n\n---\n\n# 設計判断の履歴（docs/HISTORY.md）\n"
+            + history_text,
         ),
         (
             "4_新規プロジェクト向け",
-            "# 新規プロジェクトのテンプレ\n"
-            + new_project_text
-            + "\n\n---\n\n# ライブラリ開発規約（docs/開発/ライブラリ開発規約.md）\n"
-            + library_conventions_text,
+            "# 新規プロジェクトのテンプレ\n" + new_project_text,
         ),
     ]
 
@@ -624,10 +620,9 @@ def _bundle_readme(
         "- 2_実装全文 は comken/ の全ソースです。索引に無い名前を勝手に使う前に"
         "ここで実在を確かめてください。",
         "- 3_エラー対応表_設計判断 は、利用者が読む画面の説明とその例外が送出される"
-        "条件（エラー対応表）、「なぜその設計にしたか」（設計判断）です。",
+        "条件（エラー対応表）、「なぜその設計にしたか」（設計書と設計判断の履歴）です。",
         "- 4_新規プロジェクト向け は、comken を使う新しいツールのドキュメントを"
-        "書くときのひな形と、comken **本体**を修正するときの規約です。"
-        "comken を使うだけなら不要です。",
+        "書くときのひな形です。comken を使うだけなら不要です。",
         "",
         "## 中身のサマリ",
         "",
