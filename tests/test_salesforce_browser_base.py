@@ -14,7 +14,7 @@ from comken.exceptions import BrowserNotStartedError, SalesforceReportExportErro
 from comken.toolbox.browser import BrowserOptions, DownloadDir
 from comken.toolbox.browser.management.sessions import BrowserSession
 from comken.toolbox.browser.sites.salesforce.base import (
-    SalesforceSiteBase,
+    SalesforceReportBrowser,
     _cookies_to_requests_session,
     _domain_of,
     _start_keep_alive,
@@ -34,7 +34,7 @@ def _make_session(tmp_path, name: str = "test") -> BrowserSession:
         profile_dir=None,
     )
     session._driver = MagicMock()
-    session._site = SalesforceSiteBase()
+    session._site = SalesforceReportBrowser()
     return session
 
 
@@ -42,9 +42,9 @@ class TestPublicApi:
     """URLがダミーのままの雛形。組織別クラスは comken.toolbox.browser.sites.salesforce にある。"""
 
     def test_class_attributes(self):
-        assert SalesforceSiteBase.NAME
-        assert SalesforceSiteBase.BASE_URL
-        assert SalesforceSiteBase.OWNER == "comken"
+        assert SalesforceReportBrowser.NAME
+        assert SalesforceReportBrowser.BASE_URL
+        assert SalesforceReportBrowser.OWNER == "comken"
 
 
 # report_id_from_url() 自体のテストは tests/test_salesforce.py に集約してある
@@ -56,14 +56,14 @@ class TestGoLogin:
 
     def test_opens_base_url(self, tmp_path):
         session = _make_session(tmp_path)
-        sf = SalesforceSiteBase(session)
+        sf = SalesforceReportBrowser(session)
 
         sf.go_login()
 
-        session._driver.get.assert_called_once_with(SalesforceSiteBase.BASE_URL)
+        session._driver.get.assert_called_once_with(SalesforceReportBrowser.BASE_URL)
 
     def test_raises_when_not_started(self):
-        sf = SalesforceSiteBase()
+        sf = SalesforceReportBrowser()
 
         with pytest.raises(BrowserNotStartedError):
             sf.go_login()
@@ -76,7 +76,7 @@ class TestWaitForManualLogin:
         calls = []
         monkeypatch.setattr("builtins.input", lambda prompt="": calls.append(prompt))
 
-        SalesforceSiteBase().wait_for_manual_login()
+        SalesforceReportBrowser().wait_for_manual_login()
 
         assert len(calls) == 1
 
@@ -103,12 +103,12 @@ class TestLoginWithCredentials:
 
     def test_uses_credentials_to_login(self, tmp_path):
         session = _make_session(tmp_path)
-        sf = SalesforceSiteBase(session)
+        sf = SalesforceReportBrowser(session)
         cred = MagicMock(username="user@example.com", password="secret")
         login_page = MagicMock()
         with (
             patch("comken.toolbox.credentials.Credentials", return_value=cred) as cred_class,
-            patch.object(SalesforceSiteBase, "go_login", return_value=login_page) as go_login,
+            patch.object(SalesforceReportBrowser, "go_login", return_value=login_page) as go_login,
         ):
             sf.login_with_credentials("salesforce_temp")
 
@@ -119,7 +119,7 @@ class TestLoginWithCredentials:
     def test_falls_back_to_class_credential_prefix_when_omitted(self, tmp_path):
         """prefix省略時は、クラスの CREDENTIAL_PREFIX を使う。"""
 
-        class _MyOrg(SalesforceSiteBase):
+        class _MyOrg(SalesforceReportBrowser):
             CREDENTIAL_PREFIX = "salesforce_solution"
 
         session = _make_session(tmp_path)
@@ -128,7 +128,7 @@ class TestLoginWithCredentials:
         cred = MagicMock(username="user@example.com", password="secret")
         with (
             patch("comken.toolbox.credentials.Credentials", return_value=cred) as cred_class,
-            patch.object(SalesforceSiteBase, "go_login", return_value=MagicMock()),
+            patch.object(SalesforceReportBrowser, "go_login", return_value=MagicMock()),
         ):
             sf.login_with_credentials()
 
@@ -137,7 +137,7 @@ class TestLoginWithCredentials:
     def test_explicit_prefix_overrides_class_credential_prefix(self, tmp_path):
         """明示的に渡した prefix は、クラスの CREDENTIAL_PREFIX より優先される。"""
 
-        class _MyOrg(SalesforceSiteBase):
+        class _MyOrg(SalesforceReportBrowser):
             CREDENTIAL_PREFIX = "salesforce_solution"
 
         session = _make_session(tmp_path)
@@ -146,7 +146,7 @@ class TestLoginWithCredentials:
         cred = MagicMock(username="user@example.com", password="secret")
         with (
             patch("comken.toolbox.credentials.Credentials", return_value=cred) as cred_class,
-            patch.object(SalesforceSiteBase, "go_login", return_value=MagicMock()),
+            patch.object(SalesforceReportBrowser, "go_login", return_value=MagicMock()),
         ):
             sf.login_with_credentials("salesforce_temp")
 
@@ -208,7 +208,7 @@ class TestExportReports:
         session._driver.get_cookies.return_value = [
             {"name": "sid", "value": "TOKEN", "domain": ".salesforce.com"}
         ]
-        sf = SalesforceSiteBase(session)
+        sf = SalesforceReportBrowser(session)
 
         http_session = MagicMock()
         http_session.get.side_effect = [
@@ -235,7 +235,7 @@ class TestExportReports:
         session = _make_session(tmp_path)
         session._driver.current_url = REPORT_URL_1
         session._driver.get_cookies.return_value = []
-        sf = SalesforceSiteBase(session)
+        sf = SalesforceReportBrowser(session)
 
         http_session = MagicMock()
         http_session.get.return_value = _csv_response()
@@ -252,7 +252,7 @@ class TestExportReports:
         session = _make_session(tmp_path)
         session._driver.current_url = REPORT_URL_1
         session._driver.get_cookies.return_value = []
-        sf = SalesforceSiteBase(session)
+        sf = SalesforceReportBrowser(session)
 
         http_session = MagicMock()
         http_session.get.return_value = _html_response()
@@ -266,7 +266,7 @@ class TestExportReports:
             list(sf.export_reports({REPORT_URL_1: tmp_path / "report.csv"}))
 
     def test_raises_when_not_started(self):
-        sf = SalesforceSiteBase()
+        sf = SalesforceReportBrowser()
 
         with pytest.raises(BrowserNotStartedError):
             list(sf.export_reports({REPORT_URL_1: "出力先/report.csv"}))
@@ -318,7 +318,7 @@ class TestExportReportsKeepAlive:
         session = _make_session(tmp_path)
         session._driver.current_url = REPORT_URL_1
         session._driver.get_cookies.return_value = []
-        sf = SalesforceSiteBase(session)
+        sf = SalesforceReportBrowser(session)
 
         http_session = MagicMock()
         http_session.get.return_value = _csv_response()
@@ -341,7 +341,7 @@ class TestExportReportsKeepAlive:
         session = _make_session(tmp_path)
         session._driver.current_url = REPORT_URL_1
         session._driver.get_cookies.return_value = []
-        sf = SalesforceSiteBase(session)
+        sf = SalesforceReportBrowser(session)
 
         def _slow_get(*args, **kwargs):
             time.sleep(0.1)

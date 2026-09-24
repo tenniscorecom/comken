@@ -198,7 +198,8 @@ class SalesforceReportIDNotFoundError(SalesforceError):
     発生箇所: comken.toolbox.salesforce.report.report_id_from_url()
              （呼び出し元の例: comken-salesforce-downloader の master.py。
              2026-08-30 に comken から分離した別リポジトリ。
-             comken.toolbox.browser.sites.salesforce.base.SalesforceSiteBase.export_reports() も
+             comken.toolbox.browser.sites.salesforce.base
+             .SalesforceReportBrowser.export_reports() も
              同じ report_id_from_url() を呼ぶ）
 
     対処:
@@ -267,7 +268,7 @@ class SalesforceReportExportError(SalesforceError):
     HTTPステータス自体は200で返るが、本文がCSV/XLSではなくHTMLのログイン画面や
     エラーページになっている場合に出る。
 
-    発生箇所: comken.toolbox.browser.sites.salesforce.base.SalesforceSiteBase.export_reports()
+    発生箇所: comken.toolbox.browser.sites.salesforce.base.SalesforceReportBrowser.export_reports()
              （go_login() + wait_for_manual_login() で確立したブラウザのセッション
              Cookieをrequestsへ引き継いで並列ダウンロードする経路。ログインを
              済ませていない、あるいはセッションの有効期限が切れていると起きる）

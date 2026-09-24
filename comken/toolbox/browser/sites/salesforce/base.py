@@ -1,4 +1,5 @@
-r"""comken/toolbox/browser/sites/salesforce/base.py — SalesforceSiteBase（ブラウザ経由の雛形）。
+r"""comken/toolbox/browser/sites/salesforce/base.py — SalesforceReportBrowser
+（ブラウザ経由の雛形）。
 
 Reports and Dashboards REST APIの2000行上限を超えるレポート（マトリックス／統合など
 SOQLに書き換えられない形式）向けの最終手段。画面のエクスポート機能
@@ -7,7 +8,7 @@ SOQLに書き換えられない形式）向けの最終手段。画面のエク�
 ログインは ``go_login()`` + ``wait_for_manual_login()``（人が手動で入力）、または
 ``login_with_credentials()``（DPAPIに保存したID/パスワードを自動入力、MFA等は
 引き続き人が対応）のどちらか。接続アプリの登録・OAuth初回認可を挟まないため、
-一時的に使いたいだけのときに手早い。ログインさえ済めば、実際のN件のダウンロードは
+一時的に使いたいだけの時に手早い。ログインさえ済めば、実際のN件のダウンロードは
 requests + ThreadPoolExecutor で並列に行う。
 
 組織ごとのクラスは同フォルダの ``solution.py`` / ``solution_sandbox.py`` にあり、
@@ -52,7 +53,7 @@ _DEFAULT_REQUEST_TIMEOUT_SECONDS = 300
 _DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS = 300
 
 
-class SalesforceSiteBase(SiteBase):
+class SalesforceReportBrowser(SiteBase):
     """Salesforceのレポートをブラウザ経由でCSVダウンロードするための雛形。
 
     URL は example の値のまま。利用プロジェクト側で継承して書き換える
@@ -74,7 +75,7 @@ class SalesforceSiteBase(SiteBase):
         class MySalesforceOptions(BrowserOptions):
             PROFILE_ROOT = r"C:\\作業\\salesforce_profile"
 
-        class MySalesforce(SalesforceSiteBase):
+        class MySalesforce(SalesforceReportBrowser):
             OPTIONS = MySalesforceOptions
             CREDENTIAL_PREFIX = "salesforce_temp"
 

@@ -9,9 +9,9 @@ import pytest
 from comken.exceptions import SalesforceSiteNotFoundError
 from comken.toolbox.browser.sites.salesforce import (
     SITES,
-    SalesforceSiteBase,
-    SolutionSandboxSite,
-    SolutionSite,
+    SalesforceReportBrowser,
+    Solution,
+    SolutionSandbox,
     site_for,
 )
 from comken.toolbox.salesforce.sites import Solution as SolutionApi
@@ -22,13 +22,13 @@ class TestOrgClasses:
     """組織ごとのブラウザサイトクラス — URLはAPI側のDOMAIN_URLをそのまま使う。"""
 
     def test_solution_uses_api_side_domain(self):
-        assert SolutionSite.BASE_URL == SolutionApi.DOMAIN_URL
+        assert Solution.BASE_URL == SolutionApi.DOMAIN_URL
 
     def test_solution_sandbox_uses_api_side_domain(self):
-        assert SolutionSandboxSite.BASE_URL == SolutionSandboxApi.DOMAIN_URL
+        assert SolutionSandbox.BASE_URL == SolutionSandboxApi.DOMAIN_URL
 
     def test_solution_uses_api_side_credential_prefix(self):
-        assert SolutionSite.CREDENTIAL_PREFIX == SolutionApi.CREDENTIAL_PREFIX
+        assert Solution.CREDENTIAL_PREFIX == SolutionApi.CREDENTIAL_PREFIX
 
     def test_org_classes_have_distinct_names(self):
         """PROFILE_ROOT/<NAME>/ でログイン状態が分かれるため、NAME は必ず別にする。"""
@@ -37,27 +37,27 @@ class TestOrgClasses:
 
     def test_org_classes_are_salesforce_browser_sites(self):
         for site in SITES:
-            assert issubclass(site, SalesforceSiteBase)
+            assert issubclass(site, SalesforceReportBrowser)
 
 
 class TestSiteFor:
     """レポートの URL から、ブラウザ経由でつなぐ組織を決める。"""
 
     def test_url_of_a_registered_org(self):
-        url = f"{SolutionSandboxSite.BASE_URL}/lightning/r/Report/00O5g00000ABCDE/view"
-        assert site_for(url) is SolutionSandboxSite
+        url = f"{SolutionSandbox.BASE_URL}/lightning/r/Report/00O5g00000ABCDE/view"
+        assert site_for(url) is SolutionSandbox
 
     def test_host_case_is_ignored(self):
-        assert site_for(SolutionSandboxSite.BASE_URL.upper()) is SolutionSandboxSite
+        assert site_for(SolutionSandbox.BASE_URL.upper()) is SolutionSandbox
 
     def test_surrounding_spaces_are_ignored(self):
-        url = f"  {SolutionSandboxSite.BASE_URL}/lightning  "
-        assert site_for(url) is SolutionSandboxSite
+        url = f"  {SolutionSandbox.BASE_URL}/lightning  "
+        assert site_for(url) is SolutionSandbox
 
     def test_unknown_domain_raises(self):
         with pytest.raises(SalesforceSiteNotFoundError) as error:
             site_for("https://other.my.salesforce.com/lightning/r/Report/00O/view")
-        assert SolutionSandboxSite.BASE_URL in str(error.value)
+        assert SolutionSandbox.BASE_URL in str(error.value)
 
     def test_report_id_alone_raises(self):
         with pytest.raises(SalesforceSiteNotFoundError):

@@ -28,13 +28,15 @@
 
 from comken.toolbox.browser.sitebase import SiteBase
 from comken.toolbox.browser.sites.ntt import NTTEast, NTTWest
-from comken.toolbox.browser.sites.salesforce import SolutionSandboxSite, SolutionSite
 
 # ライブラリ公認サイトの一覧。最初に空で置いておき、昇格するサイトが出てきたら
 # ここで追加していく。**プロジェクト側で同じ NAME のクラスを作ると、
 # 起動時に `SiteAlreadyInLibraryError` で止まる。**
-# SolutionSite・SolutionSandboxSite・NTTWest・NTTEast は URL がダミーのままなので
-# SITES には含めない（配置時に実際の値へ書き換えたら登録する）。
+# NTTWest・NTTEast は URL がダミーのままなので SITES には含めない
+# （配置時に実際の値へ書き換えたら登録する）。Salesforce のクラスは
+# API 側（`comken.toolbox.salesforce.sites`）と同名でパッケージで区別するため、
+# ここでは再エクスポートせず、各利用側で
+# `comken.toolbox.browser.sites.salesforce` から直接 import する。
 SITES: tuple[type[SiteBase], ...] = ()
 
-__all__ = ["SITES", "NTTWest", "NTTEast", "SolutionSite", "SolutionSandboxSite"]
+__all__ = ["SITES", "NTTWest", "NTTEast"]
