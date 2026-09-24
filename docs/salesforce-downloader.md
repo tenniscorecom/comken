@@ -306,8 +306,8 @@ shared_report_ids(load_master(MASTER_PATH))
 **「設定」シートは、レポート管理表と同じブック内の別シート**として配置する
 （スケジュールシートと同じ運用）。1行に「グループ名」と「ベースパス」を
 書く。管理表の「グループ」列に書かれた名前と一致する行を `provider.report_folder()`
-が引き、ベースパスの下の第2階層に「担当者」、第3階層に「概要」を連結して
-**Python 側で組み立てる**（`provider.py` / `sheets/group_settings.py`）。
+が引き、**設定シートのベースパスをそのまま保存先フォルダとして返す**
+（`provider.py` / `sheets/group_settings.py`）。
 
 Excel の数式 (VLOOKUP 等) で組み立てる案も検討したが、openpyxl で数式セルを
 読み取ると Excel で開き直して保存しないとキャッシュが更新されず信頼できない、
@@ -322,7 +322,7 @@ Excel の数式 (VLOOKUP 等) で組み立てる案も検討したが、openpyxl
 | 列 | 何を書くか |
 |---|---|
 | **グループ** | 社内のグループ名・部署名。管理表の「グループ」列と一致させる。同じ名前は1行しか登録できない（重複は `MasterDuplicateValueError`） |
-| **ベースURL** | そのグループの出力先の起点パス。出力ファイルは「ベースパス / 担当者 / 概要 /」の下に置かれる |
+| **ベースURL** | そのグループの出力先の起点パス。出力ファイルはこのベースパスの直下に置かれる（`report_folder()` の戻り値をそのまま保存先フォルダとして使う） |
 
 設定シートは雛形自動生成の対象外（手で追加する運用）。列の宣言は
 `comken.services.salesforce_downloader/sheets/group_settings.py` にある。

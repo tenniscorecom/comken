@@ -331,6 +331,8 @@ class _Calendar:
         self._holidays = holidays
         # 期限切れ警告を「同じ日に 1度だけ」出すためのキャッシュキー
         self._expiry_warned_on: _dt.date | None = None
+        # 収録範囲外の日付を問い合わせたときの警告を「プロセスで 1度だけ」出すためのフラグ
+        self._out_of_range_warned: bool = False
 
     @classmethod
     def load_default(cls) -> _Calendar:
@@ -425,20 +427,39 @@ class _Calendar:
             return -1
         return (last - today).days
 
-    def expires_after(self, target: _dt.date) -> bool:
-        """``target`` が収録済み最終日以降なら ``True``。"""
+    def _maybe_warn_expiring(self, today: _dt.date) -> None:
+        """期限切れが近いとき、または収録範囲外の日付を問い合わせたとき、
+        **それぞれ 1度だけ** WARNING ログを出す。
+
+        - 範囲外警告はプロセスで 1度だけ（``_out_of_range_warned``）
+        - 期限切れ警告は「同じ日付で 1度だけ」（``_expiry_warned_on``）
+        - 収録データが空のときは両方とも出さない（既存挙動を維持）
+        - 範囲外警告と期限切れ警告が両方該当するときは、範囲外側を先に出す
+          （問い合わせた日付が既に最終日を過ぎている時点で期限も過ぎているため、
+          先に問題の本質を読ませる）
+        """
         last = self.last_known_date()
         if last is None:
-            return True
-        return target >= last
-
-    def _maybe_warn_expiring(self, today: _dt.date) -> None:
-        """期限切れが近いとき、**同じ日付で 1度だけ** WARNING ログを出す。"""
+            return
+        if not self._out_of_range_warned and today > last:
+            logger.warning(
+                "会社用カレンダーの収録範囲外の日付が問い合わせられました: %s"
+                "（最終収録日: %s）。"
+                "この日以降は国民の祝日・会社休日が付きません。"
+                "内閣府の syukujitsu.csv を更新して"
+                "tools/calendar_data/syukujitsu.csv を上書きし、"
+                "python tools\\build_calendar.py を実行して"
+                "comken/core/calendar/data/company_calendar.csv を"
+                "再生成してください（docs/calendar.md の「年1回の更新手順」参照）。",
+                today,
+                last,
+            )
+            self._out_of_range_warned = True
+            return
         if self._expiry_warned_on == today:
             return
         remaining = self.days_until_expiry(today)
         if 0 <= remaining < EXPIRING_WARNING_DAYS:
-            last = self.last_known_date()
             logger.warning(
                 "会社用カレンダーの収録期限が近づいています: 残り %d 日"
                 "（最終収録日: %s）。"

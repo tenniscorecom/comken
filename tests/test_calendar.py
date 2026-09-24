@@ -215,7 +215,6 @@ class TestExpiry:
         """祝日が 1件も無いときは「最初から期限切れ」扱い。"""
         empty = _Calendar({})
         assert empty.last_known_date() is None
-        assert empty.expires_after(_dt.date(2024, 1, 1)) is True
         assert empty.days_until_expiry(_dt.date(2024, 1, 1)) == -1
 
 
@@ -261,6 +260,39 @@ class TestExpiringWarning:
                 is_business_day(_dt.date(2024, 4, 21))
             warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
             assert len(warnings) == 2
+        finally:
+            _set_calendar_for_test(None)
+
+    def test_warning_logged_once_when_querying_after_last_known_date(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """収録最終日より後の日付を問い合わせると、範囲外 WARNING が 1度だけ出る。"""
+        _set_calendar_for_test(_holiday_calendar({_dt.date(2024, 5, 5): "こどもの日"}))
+        try:
+            after = _dt.date(2025, 1, 1)  # 最終収録日 5/5 より後
+            with caplog.at_level(logging.WARNING, logger="comken.core.calendar._calendar"):
+                is_business_day(after)
+                is_business_day(after)  # 同じ日の 2回目以降は増えない
+                is_business_day(after + _dt.timedelta(days=10))  # 範囲外でも別の日でも増えない
+            warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+            assert len(warnings) == 1
+            assert "収録範囲外" in warnings[0].getMessage()
+            assert str(after) in warnings[0].getMessage()
+        finally:
+            _set_calendar_for_test(None)
+
+    def test_no_out_of_range_warning_when_target_is_on_or_before_last_known_date(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """最終日以前の日付では範囲外警告は出ない（期限切れ警告だけ）。"""
+        # 最終収録日を十分に先に置き、範囲外にも期限切れ警告にも該当させない
+        _set_calendar_for_test(_holiday_calendar({_dt.date(2025, 12, 31): "年末"}))
+        try:
+            with caplog.at_level(logging.WARNING, logger="comken.core.calendar._calendar"):
+                is_business_day(_dt.date(2024, 1, 1))
+                is_business_day(_dt.date(2025, 6, 1))
+            warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+            assert not [w for w in warnings if "収録範囲外" in w.getMessage()]
         finally:
             _set_calendar_for_test(None)
 
