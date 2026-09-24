@@ -216,7 +216,7 @@ logger.warning("ファイルが見つかりません: %s", path)
 logger.error("エラーが発生しました", exc_info=True)  # exc_info=True でスタックトレースも出力
 ```
 
-実行するときのログ設定の呼び出し方は [README「Logger」](README.md#logger)を参照してください。
+実行するときのログ設定の呼び出し方は [core「Logger」](docs/core.md#logger)を参照してください。
 
 ### ブラウザのページオブジェクトに書くとき
 
@@ -228,7 +228,7 @@ logger.error("エラーが発生しました", exc_info=True)  # exc_info=True �
 自分でログを足すのは、汎用ログだけでは残らない**分岐の理由**があるときだけにしてください。
 
 その際は `logger.info` を使ってください。**既定のログレベルは INFO で、DEBUG は
-出ません**（[README「Logger」](README.md#logger) の `setup_logging()` /
+出ません**（[core「Logger」](docs/core.md#logger) の `setup_logging()` /
 `setup_local_logging()` とも、既定のコンソール・ファイル出力は INFO 以上）。
 comken 側の操作ログが `logger.debug` なのは、1操作ごとに出ると量が多すぎるため
 既定で抑制しているからで、ページオブジェクト側で足す「分岐の理由」は逆に、

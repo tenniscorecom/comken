@@ -2,23 +2,9 @@
 
 業務自動化で使う Python 共通ライブラリ。
 
-## 全体像（4層構成）
+動作環境: Windows / Python 3.13 以上（実行環境は 3.14）。詳細は [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) の「9. 動作環境」。
 
-置き場所は「何を操作するかに関係なく使う」ものから「業務寄り」のものへ4層。
-**下の層は上の層を import できない**（矢印は下から上へだけ）。
-
-```mermaid
-graph LR
-    L0["comken 直下\n設定・ログ・実行モード・例外・定数"]
-    L1["comken.core\n外を触らない部品"]
-    L2["comken.toolbox\nExcel・CSV・ブラウザ等、外を操作する道具"]
-    L3["comken.services\n複数のtoolboxを組み合わせた業務機能"]
-    L1 --> L0
-    L2 --> L1
-    L3 --> L2
-```
-
-迷ったら「自分が使いたい層より下に置く」。詳しい中身は下の「[パッケージ構成](#パッケージ構成)」。
+設計は [設計書](docs/ARCHITECTURE.md) を参照。
 
 ## はじめて使う人へ
 
@@ -56,12 +42,12 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 | 引数・戻り値・例外を正確に知る | [公開 API](docs/自動生成/API.md)（**自動生成**） |
 | エラーが出た | [エラー対応ガイド](docs/ERRORS.md)（エラー表は **自動生成**） |
 | 動くコードを見る | [examples](examples/README.md) |
-| なぜこの設計なのか知る | [仕様書](docs/開発/仕様書.md) |
-| コードを書く規約 | [コーディング規約（利用者向け）](docs/開発/コーディング規約_利用者向け.md)（詳細版は[CONVENTIONS.md](docs/開発/CONVENTIONS.md)） |
-| comken 本体を直す | [ライブラリ開発規約](docs/開発/ライブラリ開発規約.md) |
-| 開発してリリースする | [仕様書「開発とリリース」](docs/開発/仕様書.md#開発とリリース)（タグを打つ → 共有サーバーで checkout） |
+| なぜこの設計なのか知る | [設計判断の歴史](docs/HISTORY.md) |
+| コードを書く規約 / comken 本体を直す | [CONVENTIONS.md](CONVENTIONS.md)（利用者向け＝1〜14 章、本体編集者向け＝15 章以降） |
+
+| 開発してリリースする | [ARCHITECTURE.md「開発とリリース」](docs/ARCHITECTURE.md#11-開発とリリース)（タグを打つ → 共有サーバーで checkout） |
 | comken を使うツールを作る | `python -m comken init プロジェクト名` で雛形を作る（作られた `README.md` が中を案内する） |
-| コードを読む・レビューする | [コードリーディングガイド](docs/開発/コードリーディングガイド.md) |
+| コードを読む・レビューする | [コードを読む順番](CONVENTIONS.md#24-コードを読む順番) |
 
 ## 使うときの約束
 
@@ -77,54 +63,11 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 - **書くときは `from comken import X` が第一選択。** そこに無いものだけ `from comken.core import Y`
 - **ファイル・ブラウザ・COM は `with` で開く。** 途中で失敗しても閉じられる
 - **エラーは細かい方から受ける。** 個別（`SheetNotFoundError`）→ 分野（`ExcelError`）→
-  全体（`ComkenError`）の3段。階層は[仕様書「例外体系」](docs/開発/仕様書.md#5-例外体系)
+  全体（`ComkenError`）の3段。階層は[例外体系](docs/ARCHITECTURE.md#5-例外体系)
 - **機密は config.ini に書かない。** [認証情報](docs/credentials.md)（DPAPI）に入れ、
   config.ini にはキー名だけ書く
 
-## パッケージの構成
-
-comken は置き場所を4つに分けている。**どこに置くかは「そのモジュールをどう説明できるか」で決まる。**
-
-| 場所 | 基準 | 中身 |
-|---|---|---|
-| `comken` 直下 | **何を操作するかに関係なく使う** | 設定・ログ・実行モード・例外・定数 |
-| `comken.core` | **外にあるものを触らない部品** | ファイル検索・操作・圧縮・命名／日時・文字列・差分・待機・リトライ・計測・状態 |
-| `comken.toolbox` | **「〜を操作する／〜と通信する」で説明できる** | Excel・CSV・Access・Outlook・Windows・ブラウザ・Salesforce・認証情報 |
-| `comken.services` | **複数の toolbox を組み合わせた、業務寄りのまとまった機能** | Salesforceレポートの集約取得・応需CSVの新ロール列削減 |
-
-import の書き方は上の「[使うときの約束](#使うときの約束)」を参照。
-
-**下の層は上の層を import できない**（`comken` 直下 → `core` → `toolbox` → `services`
-の順で、矢印は下から上へだけ）。逆（`services` が `toolbox` を使う等）は問題ない。
-この向きは `tests/test_layers.py` で機械的に検査していて、逆向きの import は
-テストが落ちる。迷ったら「自分が使いたい層より下に置く」。
-
-**実行される単位（定期実行のバッチなど）は comken に置かない。** それは個別プロジェクトの
-仕事で、comken に置くのは呼ばれる側だけにする。
-
 ## モジュール一覧
-
-表データは ``Table`` に統一する。CSV は ``CSV.read()``、Excel は
-``Excel.data_sheet().table().read()`` で ``Table`` を取得し、転記は
-``Transfer(read, write, mapping=...)`` を作って次の 3 つの取り出し口で加工する:
-
-- ``matched_rows()``: 両側にキーが揃う行を ``(read_row, write_row)`` で返す
-- ``transfer_rows()``: read 全行を ``(read_row, write_row | None)`` で返す
-  （write に無い行は ``None``）
-- ``unmatched()``: 突合しなかった行を ``UnmatchedRows`` で返す
-  - ``only_in_read``: write に無い read 行を返す（追加候補、**コピー**）
-  - ``only_in_write``: read に無い write 行を返す（破棄候補、**作業 Table の実体行**）
-
-加工は ``transfer.apply_mapping(read_row, write_row)`` 1 行で済み、
-``unmatched().only_in_read`` の行は ``transfer.result().append()`` で
-新規行として追加できる。保存は CSV / Excel の ``with`` を正常終了した時に行う。
-列対応ではなくExcelシートのセル内容と基本レイアウトを複製するときは
-``Sheet.copy_to()`` を使う（画像・グラフ・印刷設定等は対象外）。
-
-**空キー (``None`` / ``""``) は突合対象外**。``0`` / ``False`` は空ではない。
-空キーは read / write のどちらでも ``unmatched()`` 側へ流れるため、
-write 側に空キーが複数あっても ``TransferDestinationMultipleMatchError``
-にはならない。
 
 | モジュール | 概要 |
 |---|---|
@@ -143,7 +86,6 @@ write 側に空キーが複数あっても ``TransferDestinationMultipleMatchErr
 | [Browser 公認サイト](docs/browser.md) | ライブラリ公認の `SiteBase` サブクラスを集めた置き場（`comken.toolbox.browser.sites`）。プロジェクト横断で再利用するサイトだけ昇格する |
 | [Salesforce（requests）](docs/salesforce.md) | Salesforce の SOQL・レコード操作・レポート取得・API 使用量の計測 |
 | [Data Loader（CLI 実行）](docs/dataloader.md) | Salesforce Data Loader の CLI 実行を手伝う（大量データの一括変更。正確な構文は環境ごとに確認が必要） |
-| [Salesforce認証の判断根拠](docs/開発/salesforce-authentication.md) | ECA・Refresh Token Flow を既定にした理由と公式資料 |
 | [credentials（DPAPI）](docs/credentials.md) | パスワード・client_secret の暗号化保存（Windows ユーザーに紐付く） |
 | [カレンダー判定](docs/calendar.md) | 内閣府の祝日 CSV と会社休日ルールを合成した「会社用カレンダー CSV」を Python・VBA 共通で読み取って営業日判定 |
 | [core（部品）](docs/core.md) | `from comken.core import ...` で取る部品群。ファイル検索・操作・圧縮・ファイル名の組み立て／データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時 |
@@ -266,7 +208,7 @@ PCの環境変数を変更したくない場合は、各プロジェクトのル
 
 ### 共有サーバーの comken を更新する
 
-共有サーバーのチェックアウトを、**リリース済みのタグへ切り替える**（→ [開発とリリース](docs/開発/仕様書.md#開発とリリース)）。
+共有サーバーのチェックアウトを、**リリース済みのタグへ切り替える**（→ [開発とリリース](docs/ARCHITECTURE.md#11-開発とリリース)）。
 
 ```bat
 pushd \\server\share\tools\comken
@@ -287,7 +229,7 @@ git update-index --skip-worktree comken/services/salesforce_downloader/paths.py
 
 これで手元の書き換えが消えず、うっかり push することもない。comken 側でこれらの
 ファイルを変更したときは切り替えが止まるので、そのときだけ `--no-skip-worktree` で解除して
-手で合わせ、また設定し直す（→ [仕様書](docs/開発/仕様書.md#配置時に書き換える3ファイル)）。
+手で合わせ、また設定し直す（→ [ARCHITECTURE.md](docs/ARCHITECTURE.md#配置時に書き換える3ファイル)）。
 
 **切り替えた瞬間に、次に import した全プロジェクトが新しい版になる。** 更新のたびの
 配布作業はない。問題が出たら前のタグへ戻せば、同じように全プロジェクトが戻る。
@@ -296,7 +238,7 @@ git update-index --skip-worktree comken/services/salesforce_downloader/paths.py
   遅くならないよう、comken は import 時に `.pyc` の出力先を `%LOCALAPPDATA%\comken-pycache`
   に向ける（`sys.pycache_prefix`）。環境変数 `PYTHONPYCACHEPREFIX` を設定済みの場合はそちらを尊重する。
 - **代償**: import のたびにネットワークを読むので起動が遅く、共有サーバーが落ちると動かない。
-  詳しい仕組み・運用（更新/ロールバック/開発との分離）は 仕様書.md の「参照・運用」を参照。
+  詳しい仕組み・運用（更新/ロールバック/開発との分離）は [ARCHITECTURE.md「10. パッケージ構成と配置・運用」](docs/ARCHITECTURE.md#10-パッケージ構成と配置運用)を参照。
 
 ### comken の場所を変えたとき
 
@@ -312,276 +254,3 @@ comken を別の共有フォルダへ移したときは、各プロジェクト�
 書き換えるだけで済んでいたが、2026-09-08 に恒久登録スクリプトを廃止した
 ため、各プロジェクトの bat を直接書き換える方式に戻った）。
 
-## 実行モード（バージョン / デバッグ / dry-run）
-
-実行モードの切り替えは **`with dry_run():` / `with debug():` の context manager**。
-**設計上の理由**（`config.ini` を読まない理由・旧 `[RUN]` セクションの廃止経緯など）は
-[**仕様書 4.1 節**](docs/開発/仕様書.md#4-主要な設計判断)を参照。
-
-```python
-import comken
-
-comken.__version__        # → "1.0.0"
-
-# デバッグモード: `with debug():` ブロック内でのみ @measure が DEBUG ログを出す。
-with comken.debug():
-    run()
-
-# dry-run モード: 外部に影響する操作を実行せず、内容だけ [DRY-RUN] 付きで INFO ログに出す。
-# 読み取り（CSV・Excel の読み込み）は通常どおり実行される
-with comken.dry_run():
-    run()
-```
-
-自作関数の出入りを同じ仕組みで記録できる（デバッグモード中だけログが出る）:
-
-```python
-from comken.core import measure
-
-@measure
-def build_report():
-    ...
-```
-
-`@measure` は**関数名（qualname）だけ**をログに出す。引数・戻り値は出さない
-（DPAPI のトークン・client_secret・パスワードを扱うため、汎用デコレータが
-自動で引数を出す形になっていると、いつか秘密の値がログへ載る危険があるため）。
-「どのファイルで止まったか」を知りたいときは、呼び出し側が処理対象をログに出す。
-
-雛形プロジェクトでは `with comken.debug():` を `main()` を囲む形で
-`main.py` に書き、止めたい処理単位で on/off する（`config.ini` の旧 `[RUN]` セクションは
-廃止済みのため、書いても効きません。詳細は[**仕様書 4.1 節**](docs/開発/仕様書.md#4-主要な設計判断)）。
-
----
-
----
-
-## Config
-
-`config.ini` を `config.SECTION.KEY` の形式で読み込む。
-
-**基本の使い方**（`src/config.py` は不要。エディタ補完も効く）:
-
-```python
-from comken import config
-
-# 初回アクセス時にカレントディレクトリの config.ini を1度だけ読む（遅延読み込み）
-folder = config.REPORT.OUTPUT_FOLDER
-path = config.FILES.INPUT_FOLDER / "支店A.csv"
-
-# config.ini が別の場所にあるときは Config(path) を直接呼んで使う
-from comken.core.config import Config
-
-local_config = Config(r"C:\作業\config.ini")
-folder = local_config.REPORT.OUTPUT_FOLDER
-```
-
-> **補完（Pylance）:** config を初めて読むと、config.ini から補完用スタブ
-> `typings/comken/core/`（config.pyi）と `typings/comken/__init__.pyi` が自動生成される。
-> VS Code + Pylance で `config.SECTION.KEY` が型付き補完される（typings/ は .gitignore 推奨）。
-> スタブの手動生成 CLI（`python -m comken config`）は v1.0.0 で削除済み。Config() を一度呼ぶだけで自動更新される。
-
-明示的にインスタンスを持ちたい場合（テストや複数 ini の読み分けに）:
-
-```python
-from comken import Config
-
-config = Config()                      # カレントディレクトリの config.ini
-config = Config("path/to/config.ini")  # パスを指定する場合
-```
-
-```ini
-; config.ini（プロジェクト固有の非機密設定を書く）。
-; 命名・配置の規約（セクション名・キー名は大文字、パスは config.ini からの相対パスが既定）は
-; [**CONVENTIONS.md**](docs/開発/CONVENTIONS.md) を参照。
-
-[REPORT]
-OUTPUT_FOLDER = ./output
-TEMPLATE_PATH = \\nas-server\templates\template.xlsx
-```
-
-```python
-config.REPORT.OUTPUT_FOLDER # → Path
-config.REPORT.TEMPLATE_PATH # → Path
-```
-
-**列名の対応表:** セクション名を `MAPPING` で終わらせ、`転記元の列名 = 転記先の列名`
-の向きで書く。列名は大文字に直されず、値も常に文字列として返る。
-
-```ini
-[受注_MAPPING]
-受注No = 受注番号
-商品cd = 商品コード
-年度 = 2026
-```
-
-```python
-mapping = config.受注_MAPPING
-# → {"受注No": "受注番号", "商品cd": "商品コード", "年度": "2026"}
-```
-
-半角の `:` と `=` は INI の区切り記号になるため、列名には使えない（全角の `：` `＝` は使用可）。
-
-**値の型変換ルール:**
-
-| config.ini の値 | 返る型 |
-|---|---|
-| `true` / `false`（大文字小文字問わず） | bool に自動変換 |
-| `yes` / `no` / `on` / `off` | **変換しない**（str のまま） |
-| `[a, b, c]` | list[str] に自動変換 |
-| 整数（`10` など） | int に自動変換 |
-| 小数（`1.5` など） | float に自動変換 |
-| 絶対パス（`C:\...` / `\\...` / `/...`） | Path に自動変換 |
-| その他の文字列 | str のまま |
-
-`true` / `false` 以外の `yes` / `on` / `1` / `0` を bool に変換しないのは、
-`1` が「数値の1」なのか「ON の意味」なのか曖昧になる事故を避けるため。
-数値を文字列として使いたい場合（シート名 `"2024"` など）はコード側で `str()` に変換する。
-
-**リスト値は `[...]` で囲んで書く**（カンマ区切り。改行区切りも可）:
-
-```ini
-[REPORT]
-TARGET_SHEETS = [支店A, 支店B, 集計]
-ONE_SHEET = [支店A]
-```
-
-```python
-config.REPORT.TARGET_SHEETS   # → ["支店A", "支店B", "集計"]
-config.REPORT.ONE_SHEET       # → ["支店A"]（1要素でもリスト）
-```
-
-`[...]` で囲むのは「1要素のリスト」と「ただの文字列」を区別するため
-（カンマの有無だけで判定すると、リストを1件に減らした途端に文字列になり、
-for ループが文字単位になる事故が起きる）。
-
-**エディタの補完候補（型スタブの自動生成）:**
-
-属性は実行時に動的に作られるため、そのままではエディタが `config.REPORT.` の先を補完できない。
-そのため config を初めて読むと、config.ini から補完用スタブ `typings/comken/`
-（config.pyi + `__init__.pyi`）が自動生成される。VS Code + Pylance がこれを読み、
-セクション・キーが型付きで補完される（config.ini を変更すると次の実行で更新される）。
-
-まだ一度も実行していない状態で先にスタブだけ作りたい場合は `from comken import config`
-を1度実行すれば自動生成される（`Config()` 初期化時に `typings/comken/` が更新される）。
-
-生成された `typings/` は手で編集せず、`.gitignore` に含める（自動生成物）。
-
-なお**ブラウザの設定は config.ini には書かない**。`BrowserOptions` のインスタンス
-（`src/browser_options.py`）で行う（Browser を参照）。
-
----
-
-## State
-
-人が書く固定の設定は `config.ini`、プログラムが次回へ持ち越す状態は `state.ini` と
-使い分ける。人が調整した設定をプログラムが上書きする事故を防ぐため、両者は混ぜない。
-
-```python
-from comken.core import State
-
-state = State()                         # 実行フォルダ直下の state.ini
-last_file = state.get("LAST_FILE")     # 無ければ None
-position = state.get("POSITION", 0)    # 既定値も指定できる
-state.set("LAST_FILE", "data.csv")    # その場で保存
-```
-
-`state.ini` が無い初回実行は空の状態で続行する。値は文字列・数値・bool・文字列リストの
-型を保って読み戻せる。壊れたファイルは続きの位置を失わないよう、初回扱いにせずエラーで止まる
-（dry-run 中の `set()` の扱いなど、詳細は[**仕様書 4.24 節**](docs/開発/仕様書.md#4-主要な設計判断)）。
-
-実際に保存される内容:
-
-```ini
-[STATE]
-LAST_FILE = "data.csv"
-POSITION = 42
-```
-
----
-
-## Logger
-
-社内環境では `setup_logging()` に環境クラスを渡し、root logger を設定する。
-二重呼び出し時の挙動や `LOG_ROOT` / `LOG_FOLDER_NAMES` の二段構成など、詳細は
-[**仕様書 4.11 節**](docs/開発/仕様書.md#4-主要な設計判断)を参照。
-
-```python
-from comken.core.logger import Backoffice, setup_logging
-
-setup_logging(Backoffice)
-```
-
-RPA 基盤を通さず単体実行するときは、`setup_local_logging()` で root logger を設定する。
-`setup_local_logging()` は `None` を返さないので、logger は `getLogger(__name__)` で取る。
-
-```python
-# main.py
-from comken import comken_logger
-
-comken_logger.setup_local_logging()  # コンソールと logs/local-YYYY-MM-DD.log（UTF-8）へ出力
-logger = logging.getLogger(__name__)
-logger.info("処理開始")
-```
-
-```python
-# src/ 以下のモジュール
-import logging
-
-logger = logging.getLogger(__name__)
-logger.info("CSV読み込み完了: %d件", len(rows))
-```
-
----
-
----
-
-## パッケージ構成
-
-```mermaid
-graph LR
-    subgraph L0["comken 直下 — 全層が使う共通語彙"]
-        exceptions["exceptions\n例外体系"]
-        constants["constants\n公開定数"]
-        runtime["runtime\n実行モード"]
-        deprecation["deprecation\n旧名の警告"]
-    end
-    subgraph L1["comken.core — 外を触らない部品"]
-        config["config\n設定ファイル"]
-        logger["logger\nログ設定"]
-        state["state\n状態の永続化"]
-        clock["clock\n日時"]
-        text["text\n正規化"]
-        data["data\n差分・型変換"]
-        corefiles["files\n検索・操作・圧縮・命名"]
-    end
-    subgraph L2["comken.toolbox — 外を触る道具"]
-        excel["excel\nExcel"]
-        csv["csv\nCSV"]
-        access["access\nAccess"]
-        outlook["outlook\nOutlook"]
-        windows["windows\nCOM / Window / Paths"]
-        browser["browser\nブラウザ"]
-        browsersites["browser.sites\nライブラリ公認サイト"]
-        salesforce["salesforce\nSalesforce API"]
-        credentials["credentials\n認証情報（DPAPI）"]
-    end
-    subgraph L3["comken.services — toolboxを組み合わせた業務機能"]
-        sfdl["salesforce_downloader\nSFレポート集約取得"]
-        csvreducer["csv_column_reducer\n応需CSV新ロール列削減"]
-    end
-    L1 --> L0
-    L2 --> L1
-    L3 --> L2
-    salesforce --> sites["salesforce.sites\n組織ごとのクラス"]
-    salesforce --> credentials
-    browser --> browsersites
-```
-
----
-
-## 主なユースケース
-
-動く例は [`examples/README.md`](examples/README.md) の一覧を参照（インストール直後にそのまま動かせる）。
-
----

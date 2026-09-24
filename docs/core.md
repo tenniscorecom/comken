@@ -328,7 +328,253 @@ rows = table.to_rows()
 `Transfer.unmatched()` の `only_in_read` は `Table`（コピー）、
 `only_in_write` は **作業 Table の実体行**（`list[Row]`）。`only_in_write` の
 行を書き換えると `transfer.result()` に出るので、追加候補を `append()` する前に
-加工できる（[README「モジュール一覧」](../README.md#モジュール一覧) 参照）。
+加工できる（[Transfer（転記）](#transfer転記) 参照）。
+
+### Transfer（転記）
+
+表データは ``Table`` に統一する。CSV は ``CSV.read()``、Excel は
+``Excel.data_sheet().table().read()`` で ``Table`` を取得し、転記は
+``Transfer(read, write, mapping=...)`` を作って次の 3 つの取り出し口で加工する:
+
+- ``matched_rows()``: 両側にキーが揃う行を ``(read_row, write_row)`` で返す
+- ``transfer_rows()``: read 全行を ``(read_row, write_row | None)`` で返す
+  （write に無い行は ``None``）
+- ``unmatched()``: 突合しなかった行を ``UnmatchedRows`` で返す
+  - ``only_in_read``: write に無い read 行を返す（追加候補、**コピー**）
+  - ``only_in_write``: read に無い write 行を返す（破棄候補、**作業 Table の実体行**）
+
+加工は ``transfer.apply_mapping(read_row, write_row)`` 1 行で済み、
+``unmatched().only_in_read`` の行は ``transfer.result().append()`` で
+新規行として追加できる。保存は CSV / Excel の ``with`` を正常終了した時に行う。
+列対応ではなくExcelシートのセル内容と基本レイアウトを複製するときは
+``Sheet.copy_to()`` を使う（画像・グラフ・印刷設定等は対象外）。
+
+**空キー (``None`` / ``""``) は突合対象外**。``0`` / ``False`` は空ではない。
+空キーは read / write のどちらでも ``unmatched()`` 側へ流れるため、
+write 側に空キーが複数あっても ``TransferDestinationMultipleMatchError``
+にはならない。
+
+---
+
+## 設定・状態・ログ・実行モード
+
+### 実行モード（バージョン / デバッグ / dry-run）
+
+実行モードの切り替えは **`with dry_run():` / `with debug():` の context manager**。
+**設計上の理由**（`config.ini` を読まない理由・旧 `[RUN]` セクションの廃止経緯など）は
+[**設計書「4. 設定と実行モード」**](ARCHITECTURE.md#4-設定と実行モード)と [**HISTORY.md**](HISTORY.md#1-設定と非機密情報の扱い)を参照。
+
+```python
+import comken
+
+comken.__version__        # → "1.0.0"
+
+# デバッグモード: `with debug():` ブロック内でのみ @measure が DEBUG ログを出す。
+with comken.debug():
+    run()
+
+# dry-run モード: 外部に影響する操作を実行せず、内容だけ [DRY-RUN] 付きで INFO ログに出す。
+# 読み取り（CSV・Excel の読み込み）は通常どおり実行される
+with comken.dry_run():
+    run()
+```
+
+自作関数の出入りを同じ仕組みで記録できる（デバッグモード中だけログが出る）:
+
+```python
+from comken.core import measure
+
+@measure
+def build_report():
+    ...
+```
+
+`@measure` は**関数名（qualname）だけ**をログに出す。引数・戻り値は出さない
+（DPAPI のトークン・client_secret・パスワードを扱うため、汎用デコレータが
+自動で引数を出す形になっていると、いつか秘密の値がログへ載る危険があるため）。
+「どのファイルで止まったか」を知りたいときは、呼び出し側が処理対象をログに出す。
+
+雛形プロジェクトでは `with comken.debug():` を `main()` を囲む形で
+`main.py` に書き、止めたい処理単位で on/off する（`config.ini` の旧 `[RUN]` セクションは
+廃止済みのため、書いても効きません。詳細は[**HISTORY.md**](HISTORY.md#1-設定と非機密情報の扱い)）。
+
+---
+
+### Config
+
+`config.ini` を `config.SECTION.KEY` の形式で読み込む。
+
+**基本の使い方**（`src/config.py` は不要。エディタ補完も効く）:
+
+```python
+from comken import config
+
+# 初回アクセス時にカレントディレクトリの config.ini を1度だけ読む（遅延読み込み）
+folder = config.REPORT.OUTPUT_FOLDER
+path = config.FILES.INPUT_FOLDER / "支店A.csv"
+
+# config.ini が別の場所にあるときは Config(path) を直接呼んで使う
+from comken.core.config import Config
+
+local_config = Config(r"C:\作業\config.ini")
+folder = local_config.REPORT.OUTPUT_FOLDER
+```
+
+> **補完（Pylance）:** config を初めて読むと、config.ini から補完用スタブ
+> `typings/comken/core/`（config.pyi）と `typings/comken/__init__.pyi` が自動生成される。
+> VS Code + Pylance で `config.SECTION.KEY` が型付き補完される（typings/ は .gitignore 推奨）。
+> スタブの手動生成 CLI（`python -m comken config`）は v1.0.0 で削除済み。Config() を一度呼ぶだけで自動更新される。
+
+明示的にインスタンスを持ちたい場合（テストや複数 ini の読み分けに）:
+
+```python
+from comken import Config
+
+config = Config()                      # カレントディレクトリの config.ini
+config = Config("path/to/config.ini")  # パスを指定する場合
+```
+
+```ini
+; config.ini（プロジェクト固有の非機密設定を書く）。
+; 命名・配置の規約（セクション名・キー名は大文字、パスは config.ini からの相対パスが既定）は
+; [**CONVENTIONS.md**](../CONVENTIONS.md#11-configini-の書き方) を参照。
+
+[REPORT]
+OUTPUT_FOLDER = ./output
+TEMPLATE_PATH = \\nas-server\templates\template.xlsx
+```
+
+```python
+config.REPORT.OUTPUT_FOLDER # → Path
+config.REPORT.TEMPLATE_PATH # → Path
+```
+
+**列名の対応表:** セクション名を `MAPPING` で終わらせ、`転記元の列名 = 転記先の列名`
+の向きで書く。列名は大文字に直されず、値も常に文字列として返る。
+
+```ini
+[受注_MAPPING]
+受注No = 受注番号
+商品cd = 商品コード
+年度 = 2026
+```
+
+```python
+mapping = config.受注_MAPPING
+# → {"受注No": "受注番号", "商品cd": "商品コード", "年度": "2026"}
+```
+
+半角の `:` と `=` は INI の区切り記号になるため、列名には使えない（全角の `：` `＝` は使用可）。
+
+**値の型変換ルール:**
+
+| config.ini の値 | 返る型 |
+|---|---|
+| `true` / `false`（大文字小文字問わず） | bool に自動変換 |
+| `yes` / `no` / `on` / `off` | **変換しない**（str のまま） |
+| `[a, b, c]` | list[str] に自動変換 |
+| 整数（`10` など） | int に自動変換 |
+| 小数（`1.5` など） | float に自動変換 |
+| 絶対パス（`C:\...` / `\\...` / `/...`） | Path に自動変換 |
+| その他の文字列 | str のまま |
+
+`true` / `false` 以外の `yes` / `on` / `1` / `0` を bool に変換しないのは、
+`1` が「数値の1」なのか「ON の意味」なのか曖昧になる事故を避けるため。
+数値を文字列として使いたい場合（シート名 `"2024"` など）はコード側で `str()` に変換する。
+
+**リスト値は `[...]` で囲んで書く**（カンマ区切り。改行区切りも可）:
+
+```ini
+[REPORT]
+TARGET_SHEETS = [支店A, 支店B, 集計]
+ONE_SHEET = [支店A]
+```
+
+```python
+config.REPORT.TARGET_SHEETS   # → ["支店A", "支店B", "集計"]
+config.REPORT.ONE_SHEET       # → ["支店A"]（1要素でもリスト）
+```
+
+`[...]` で囲むのは「1要素のリスト」と「ただの文字列」を区別するため
+（カンマの有無だけで判定すると、リストを1件に減らした途端に文字列になり、
+for ループが文字単位になる事故が起きる）。
+
+**エディタの補完候補（型スタブの自動生成）:**
+
+属性は実行時に動的に作られるため、そのままではエディタが `config.REPORT.` の先を補完できない。
+そのため config を初めて読むと、config.ini から補完用スタブ `typings/comken/`
+（config.pyi + `__init__.pyi`）が自動生成される。VS Code + Pylance がこれを読み、
+セクション・キーが型付きで補完される（config.ini を変更すると次の実行で更新される）。
+
+まだ一度も実行していない状態で先にスタブだけ作りたい場合は `from comken import config`
+を1度実行すれば自動生成される（`Config()` 初期化時に `typings/comken/` が更新される）。
+
+生成された `typings/` は手で編集せず、`.gitignore` に含める（自動生成物）。
+
+なお**ブラウザの設定は config.ini には書かない**。`BrowserOptions` のインスタンス
+（`src/browser_options.py`）で行う（Browser を参照）。
+
+---
+
+### State
+
+人が書く固定の設定は `config.ini`、プログラムが次回へ持ち越す状態は `state.ini` と
+使い分ける。人が調整した設定をプログラムが上書きする事故を防ぐため、両者は混ぜない。
+
+```python
+from comken.core import State
+
+state = State()                         # 実行フォルダ直下の state.ini
+last_file = state.get("LAST_FILE")     # 無ければ None
+position = state.get("POSITION", 0)    # 既定値も指定できる
+state.set("LAST_FILE", "data.csv")    # その場で保存
+```
+
+`state.ini` が無い初回実行は空の状態で続行する。値は文字列・数値・bool・文字列リストの
+型を保って読み戻せる。壊れたファイルは続きの位置を失わないよう、初回扱いにせずエラーで止まる
+（dry-run 中の `set()` の扱いなど、詳細は[**設計書「4. 設定と実行モード」**](ARCHITECTURE.md#4-設定と実行モード)）。
+
+実際に保存される内容:
+
+```ini
+[STATE]
+LAST_FILE = "data.csv"
+POSITION = 42
+```
+
+---
+
+### Logger
+
+社内環境では `setup_logging()` に環境クラスを渡し、root logger を設定する。
+二重呼び出し時の挙動や `LOG_ROOT` / `LOG_FOLDER_NAMES` の二段構成など、詳細は
+[**HISTORY.md**](HISTORY.md#9-ロギング)を参照。
+
+```python
+from comken.core.logger import Backoffice, setup_logging
+
+setup_logging(Backoffice)
+```
+
+RPA 基盤を通さず単体実行するときは、`setup_local_logging()` で root logger を設定する。
+`setup_local_logging()` は `None` を返さないので、logger は `getLogger(__name__)` で取る。
+
+```python
+# main.py
+from comken import comken_logger
+
+comken_logger.setup_local_logging()  # コンソールと logs/local-YYYY-MM-DD.log（UTF-8）へ出力
+logger = logging.getLogger(__name__)
+logger.info("処理開始")
+```
+
+```python
+# src/ 以下のモジュール
+import logging
+
+logger = logging.getLogger(__name__)
+logger.info("CSV読み込み完了: %d件", len(rows))
+```
 
 ---
 
