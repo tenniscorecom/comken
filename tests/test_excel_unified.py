@@ -6,7 +6,7 @@ import pytest
 from openpyxl import Workbook, load_workbook
 
 from comken import dry_run
-from comken.exceptions import ExcelMacroPreservationError, ExcelSaveValidationError
+from comken.exceptions import ExcelSaveError
 from comken.toolbox.excel import Excel
 
 
@@ -92,7 +92,7 @@ class TestExcelAutomaticSave:
                 patch.object(
                     excel._workbook, "save", side_effect=lambda target: target.write_bytes(b"bad")
                 ),
-                pytest.raises(ExcelSaveValidationError),
+                pytest.raises(ExcelSaveError),
             ):
                 excel.save()
             excel.close(save=False)
@@ -134,7 +134,7 @@ class TestExcelAutomaticSave:
 
             with (
                 patch.object(excel, "_vba_digest", side_effect=[b"before", b"after"]),
-                pytest.raises(ExcelMacroPreservationError),
+                pytest.raises(ExcelSaveError),
             ):
                 excel.save()
             excel.close(save=False)

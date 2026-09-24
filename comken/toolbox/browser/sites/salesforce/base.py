@@ -32,7 +32,7 @@ from urllib.parse import urlsplit
 
 import requests
 
-from comken.exceptions import SalesforceReportExportError, SiteNotStartedError
+from comken.exceptions import BrowserNotStartedError, SalesforceReportExportError
 from comken.toolbox.browser import SiteBase
 from comken.toolbox.browser.sites.salesforce.pages.login_page import LoginPage
 from comken.toolbox.salesforce.report import report_id_from_url
@@ -193,7 +193,7 @@ class SalesforceSiteBase(SiteBase):
             **完了した順**に返るため、``reports`` の順序とは限らない。
 
         Raises:
-            SiteNotStartedError: 未起動の場合。
+            BrowserNotStartedError: 未起動の場合。
             SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
             SalesforceReportExportError: いずれかのレポートでエクスポートが失敗した場合
                 （ログイン未実行・セッション切れ等）。
@@ -249,7 +249,10 @@ class SalesforceSiteBase(SiteBase):
     def _require_session(self) -> BrowserSession:
         """起動済みの BrowserSession を返す。未起動なら理由を示して落とす。"""
         if self.session is None:
-            raise SiteNotStartedError(self.__class__)
+            raise BrowserNotStartedError(
+                f"{self.__class__.__name__} はまだ起動していません。"
+                f"`with {self.__class__.__name__}() as site:` の中で使ってください。"
+            )
         return self.session
 
 

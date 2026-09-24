@@ -17,7 +17,7 @@ from comken.core.calendar import (
     nth_business_day_of_month,
 )
 from comken.core.calendar._calendar import _Calendar, _set_calendar_for_test
-from comken.exceptions import ScheduleWeekdayInvalidError
+from comken.exceptions import ScheduleSettingError
 from comken.services.salesforce_downloader.sheets.schedule import (
     FREQUENCY_BUSINESS_DAY,
     FREQUENCY_DAILY,
@@ -93,7 +93,7 @@ class TestWeekdayProperty:
 
     def test_invalid_raises(self):
         rule = _rule(raw_weekday="不明")
-        with pytest.raises(ScheduleWeekdayInvalidError):
+        with pytest.raises(ScheduleSettingError):
             _ = rule.weekday
 
 

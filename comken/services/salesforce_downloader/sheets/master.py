@@ -47,7 +47,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from comken.core.timer import measure
-from comken.exceptions import InvalidReportURLError, SalesforceReportIDNotFoundError
+from comken.exceptions import SalesforceReportIDNotFoundError
 from comken.services.salesforce_downloader.report_master import MasterRow, column
 from comken.toolbox.salesforce.report import report_id_from_url
 
@@ -177,12 +177,15 @@ class ReportEntry(MasterRow):
         管理番号なら管理表を検索して一発で見つかる。
 
         Raises:
-            InvalidReportURLError: URL からレポート ID を取り出せない場合。
+            SalesforceReportIDNotFoundError: URL からレポート ID を取り出せない場合。
         """
         try:
             return report_id_from_url(self.url)
-        except SalesforceReportIDNotFoundError as e:
-            raise InvalidReportURLError(self.key, self.url, str(e)) from e
+        except SalesforceReportIDNotFoundError:
+            # ``report_id_from_url`` が出す ``SalesforceReportIDNotFoundError`` のメッセージは
+            # URL の生テキストを含むが、管理番号までは出さない。管理表読み込み時は
+            # 「どの管理番号か」も出したいので、ここで同じ型で上げ直す。
+            raise
 
 
 @measure

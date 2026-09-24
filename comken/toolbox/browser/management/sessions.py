@@ -34,7 +34,7 @@ from selenium import webdriver
 from comken.core.clock import now
 from comken.core.files.ops import project_dir
 from comken.core.timer import measure
-from comken.exceptions import ConcurrentSessionUseError, SessionClosedError, SessionNotStartedError
+from comken.exceptions import BrowserClosedError, BrowserNotStartedError, ConcurrentSessionUseError
 from comken.toolbox.browser.download import DownloadDir
 
 if TYPE_CHECKING:
@@ -61,7 +61,7 @@ class BrowserSession:
 
     with を必須にしているのは、処理の途中で例外が出たときに
     ブラウザのプロセスと一時フォルダを確実に片付けるため。
-    with を使わずに操作すると SessionNotStartedError になる。
+    with を使わずに操作すると BrowserNotStartedError になる。
 
     ダウンロード先・ログイン状態・起動オプションはこのセッションが専有する。
     他のセッションと混ざらないので、サイトごとに違う設定を安心して使える。
@@ -272,7 +272,7 @@ class BrowserSession:
             Page のメソッドがそのまま使える。
 
         Raises:
-            SessionNotStartedError: with に入る前に呼んだ場合。
+            BrowserNotStartedError: with に入る前に呼んだ場合。
             ConcurrentSessionUseError: 他のスレッドが同じセッションを操作している場合。
         """
         seconds = timeout if timeout is not None else self.wait_seconds
@@ -306,14 +306,25 @@ class BrowserSession:
             operation: 何をしようとしているか（エラーメッセージに出る）。
 
         Raises:
-            SessionNotStartedError: with に入る前に操作した場合。
-            SessionClosedError: with を抜けた後に操作した場合。
+            BrowserNotStartedError: with に入る前に操作した場合。
+            BrowserClosedError: with を抜けた後に操作した場合。
             ConcurrentSessionUseError: 他のスレッドが同時に操作している場合。
         """
         if self._is_closed:
-            raise SessionClosedError(self.name, operation)
+            raise BrowserClosedError(
+                f"閉じ終わったセッション「{self.name}」を操作しました: {operation}\n"
+                "with を抜けた後のセッションは使えません。\n"
+                "with の外へ持ち出すのはセッションではなく、取り出した値にしてください。"
+            )
         if self._driver is None:
-            raise SessionNotStartedError(operation)
+            raise BrowserNotStartedError(
+                f"with に入る前のセッションを操作しました: {operation}\n"
+                "BrowserSession は with 文の中でだけ使えます。\n"
+                "  with Browsers() as browsers:\n"
+                "      kintai = browsers.launch(Kintai)\n"
+                "      kintai.session.open(...)\n"
+                "サイトを増やすときは launch を1行足してください。"
+            )
 
         # blocking=False にして「待つ」のではなく「弾く」。待ってしまうと
         # 設計ミスが性能劣化として現れるだけで、原因に気づけないため
@@ -330,9 +341,20 @@ class BrowserSession:
     def _require_driver(self) -> webdriver.Edge:
         """起動済みの WebDriver を返す。使える状態でなければ理由を示して落とす。"""
         if self._is_closed:
-            raise SessionClosedError(self.name, "driver")
+            raise BrowserClosedError(
+                f"閉じ終わったセッション「{self.name}」を操作しました: driver\n"
+                "with を抜けた後のセッションは使えません。\n"
+                "with の外へ持ち出すのはセッションではなく、取り出した値にしてください。"
+            )
         if self._driver is None:
-            raise SessionNotStartedError("driver")
+            raise BrowserNotStartedError(
+                "with に入る前のセッションを操作しました: driver\n"
+                "BrowserSession は with 文の中でだけ使えます。\n"
+                "  with Browsers() as browsers:\n"
+                "      kintai = browsers.launch(Kintai)\n"
+                "      kintai.session.open(...)\n"
+                "サイトを増やすときは launch を1行足してください。"
+            )
         return self._driver
 
     def _save_error_screenshot(self) -> None:

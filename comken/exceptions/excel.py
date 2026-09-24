@@ -14,20 +14,6 @@ class ExcelError(ComkenError):
     """
 
 
-class DataSheetAccessError(ExcelError):
-    """データシートと表示用シートの責務に反する操作をした。
-
-    対処:
-        data_ で始まるシートは table()、それ以外はセル・範囲 API で操作する
-    """
-
-    def __init__(self, sheet_name: str, operation: str) -> None:
-        super().__init__(
-            f"シート「{sheet_name}」では {operation} を使用できません。\n"
-            "データシートは table()、表示用シートはセル・範囲 API で操作してください。"
-        )
-
-
 class SheetNotFoundError(ExcelError):
     """指定した名前のシートがない
 
@@ -39,67 +25,6 @@ class SheetNotFoundError(ExcelError):
 
     def __init__(self, name: str, sheets: list[str]) -> None:
         super().__init__(f"シートが見つかりません: {name}  存在するシート: {sheets}")
-
-
-class SheetAlreadyExistsError(ExcelError):
-    """同じ名前のシートが既にある
-
-    対処:
-        別のシート名を指定するか、既存のシート名を変更する
-    """
-
-    def __init__(self, name: str) -> None:
-        super().__init__(
-            f"シート「{name}」は既に存在します。\n"
-            "別のシート名を指定するか、既存のシートをリネームしてください。"
-        )
-
-
-class SheetNameError(ExcelError):
-    """表示用シートに使えない名前を ``create_sheet`` に渡した
-
-    ``PY_`` で始まる名前はデータシート用なので ``create_data_sheet`` で作る。
-
-    発生箇所: ``Excel.create_sheet()``
-
-    対処:
-        予約接頭辞 ``PY_`` を除いた名前を ``create_sheet`` に渡すか、
-        データシートとして作る場合は ``create_data_sheet`` を使う
-    """
-
-    def __init__(self, name: str) -> None:
-        super().__init__(
-            f"シート「{name}」は表示用シートとして作成できません。\n"
-            "「PY_」で始まる名前はデータシート用なので create_data_sheet() を使ってください。"
-        )
-
-
-class InvalidTableNameError(ExcelError):
-    """Excel で使えないテーブル名を指定した
-
-    対処:
-        空白・数字始まり・セル参照のような名前を避ける
-    """
-
-    def __init__(self, name: str) -> None:
-        super().__init__(
-            f"テーブル名「{name}」は Excel で使用できません。\n"
-            "空白を含めず、数字以外から始まり、セル参照（A1、R1C1 など）と"
-            "紛らわしくない名前を指定してください。"
-        )
-
-
-class TableAlreadyExistsError(ExcelError):
-    """同じ名前のテーブルが既にある
-
-    対処:
-        別のテーブル名を指定する
-    """
-
-    def __init__(self, name: str) -> None:
-        super().__init__(
-            f"テーブル「{name}」は既に存在します。\n別のテーブル名を指定してください。"
-        )
 
 
 class TableNotFoundError(ExcelError):
@@ -181,111 +106,66 @@ class MacroError(ExcelError):
         )
 
 
-class EmptyHeaderCellError(ExcelError):
-    """Excel の見出しに空欄がある
+class ExcelHeaderError(ExcelError):
+    """Excel の見出し行・テーブル定義に関するエラー
 
-    発生箇所: Excel.read() / ExcelTable.read() / ExcelCOMHandler.read()
-
-    対処:
-        Excel の1行目の空欄を埋める
-    """
-
-    def __init__(self, columns: list[int]) -> None:
-        super().__init__(
-            f"ヘッダー行に空のセルがあります。列番号: {columns}\n"
-            "Excelの1行目（ヘッダー行）を確認してください。"
-        )
-
-
-class DuplicateHeaderCellError(ExcelError):
-    """Excel の見出し名が重複している
-
-    発生箇所: Sheet.create_table()
+    見出しの空欄・重複、テーブル定義範囲から1行も読み取れない失敗を
+    まとめて扱う。``replace()`` / ``append()`` は既定で数式セルを値で潰さない
+    ので、空に見えるセルもここで発見できる。
 
     対処:
-        Excel の見出し名を重複しない名前に変更する
+        - Excel の1行目（見出し行）の空欄・重複を直す
+        - テーブル定義範囲が狭すぎないか、データシートと表示用シートの取り違えがないか確認する
     """
 
-    def __init__(self, headers: Sequence[object]) -> None:
-        super().__init__(
-            f"ヘッダー行に同じ見出しがあります: {headers}\n"
-            "Excelの見出し名を重複しない名前に変更してください。"
-        )
+    def __init__(self, message: str, **attributes: object) -> None:
+        super().__init__(message)
+        for key, value in attributes.items():
+            self.__dict__[key] = value
 
 
-class EmptyExcelTableError(ExcelError):
-    """Excel テーブル定義はあるが、定義範囲を1行も読み取れない。
+class ExcelNameError(ExcelError):
+    """Excel のシート名・テーブル名に関するエラー
 
     対処:
-        Excel のテーブル定義範囲を確認する
+        - 既に存在する名前は避ける（シート／テーブル）
+        - ``PY_`` 接頭辞は ``create_data_sheet`` 用なので ``create_sheet`` には付けない
+        - 空白・数字始まり・セル参照のような名前はテーブル名に使わない
     """
 
-    def __init__(self, sheet_name: str, reason: str) -> None:
-        self.sheet_name = sheet_name
-        self.reason = reason
-        super().__init__(f"Excel テーブル「{sheet_name}」が空です: {reason}")
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
 
 
-class ExcelHeadersTooFewError(ExcelError):
-    """指定した見出し数が列数より少ない
+class ExcelSaveError(ExcelError):
+    """保存時に Excel ファイルを安全に置き換えられなかった
 
-    発生箇所: ExcelCOMHandler.read()
+    元ファイルは保持される。VBA を保ったまま保存できなかった、
+    保存したはずのファイルが Excel で開けないなどで発覚する。
 
     対処:
-        管理者へ連絡する
+        元ファイルは変更されていない。空き容量・Excel のバージョン整合性・
+        VBA の保存形式（``.xlsm`` になっているか）を確認して再実行する
     """
 
-    def __init__(self, expected: int, actual: int) -> None:
-        super().__init__(
-            f"headers の列数（{expected}列）がシートの列数（{actual}列）より少ないため、"
-            "はみ出した列のデータが失われます。\n"
-            "headers にすべての列名を指定してください。"
-        )
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
 
 
-class FileFormatMismatchError(ExcelError):
-    """保存拡張子と形式が合わない
+class ExcelUsageError(ExcelError):
+    """Excel の使い方に反する操作をした
 
-    発生箇所: ExcelCOMHandler.save_as()
+    データシートと表示用シートの責務違反、``read_only=True`` への書き込み、
+    見出し数不足、保存拡張子の不一致などをまとめて扱う。
 
     対処:
-        管理者へ連絡する
+        エラーに表示された操作名・見出し数・拡張子を確認する。
+        - ``read_only=True`` への書き込みは read_only=False で開き直す
+        - データシート／表示用シートの API は ``Excel`` クラスのドキュメントを参照する
     """
 
-    def __init__(self, suffix: str) -> None:
-        super().__init__(
-            f"保存先の拡張子（{suffix}）が元ファイルの形式と一致しません。\n"
-            "形式を変換して保存する場合は file_format 引数で FileFormat 定数を"
-            "指定してください。（例: file_format=FileFormat.CSV）"
-        )
-
-
-class ExcelSaveValidationError(ExcelError):
-    """保存予定のExcelファイルを再度開けず、安全に置き換えられない。
-
-    対処:
-        元ファイルは保持される。空き容量とExcel形式を確認して再実行する
-    """
-
-    def __init__(self, path: Path | str, detail: object) -> None:
-        super().__init__(
-            f"保存予定のExcelファイルを検証できませんでした: {path}\n"
-            f"元ファイルは変更していません。（詳細: {detail}）"
-        )
-
-
-class ExcelMacroPreservationError(ExcelError):
-    """保存予定のブックからVBAプロジェクトが欠落または変化した。
-
-    対処:
-        元ファイルは保持される。管理者に連絡し、Excel実機で保存方法を確認する
-    """
-
-    def __init__(self, path: Path | str) -> None:
-        super().__init__(
-            f"VBAを保持できないためExcelを保存しませんでした: {path}\n"
-            "元ファイルは変更していません。管理者に連絡してください。"
-        )
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
 
 
 class ExcelApplicationNotAvailableError(ExcelError):
@@ -299,7 +179,7 @@ class ExcelApplicationNotAvailableError(ExcelError):
 
     **読み書きだけなら Excel は要らない**（openpyxl で動く）。
 
-    発生箇所: comken.toolbox.windows の ExcelCOMHandler
+    発生箇所: comken.toolbox.windows の ExcelError
 
     対処:
         この PC に Excel が入っているか確認する。入れられない PC で動かすなら、
@@ -314,21 +194,3 @@ class ExcelApplicationNotAvailableError(ExcelError):
             "数式の計算結果を読むときだけ Excel が必要です。"
             "数式をやめて値で書いてもらえば、Excel なしで動きます。"
         )
-
-
-class ExcelReadOnlyOperationError(ExcelError):
-    """read_only=True の Excel に書き込もうとした。
-
-    Excel(path, read_only=True) は読み取り専用なので、保存やシート作成を
-    行う create_sheet / create_data_sheet / run_macro 系の API は使えない。
-
-    発生箇所: Excel.create_data_sheet() / Excel.create_sheet() /
-             Excel.run_macro()
-
-    対処:
-        read_only=False で開き直すか、書き込みが要らない操作かを
-        見直す（読み取りだけなら Excel(path, read_only=True) で十分）
-    """
-
-    def __init__(self, operation: str) -> None:
-        super().__init__(f"read_only=True のExcelでは{operation}できません。")

@@ -20,18 +20,15 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 
 from comken.exceptions import (
-    BrowsersClosedError,
-    BrowsersNotStartedError,
+    BrowserClosedError,
+    BrowserNotStartedError,
     ConcurrentSessionUseError,
     DriverStartError,
     ElementNotFoundError,
     PopupTabNotOpenedError,
-    SessionClosedError,
     SessionNameConflictError,
     SessionNotFoundError,
-    SessionNotStartedError,
     SiteConfigError,
-    SiteNotStartedError,
 )
 from comken.toolbox import browser
 from comken.toolbox.browser import (
@@ -79,22 +76,22 @@ class TestSessionRequiresWith:
     """with を使わない・使い終わったセッションを弾くことのテスト。"""
 
     def test_rejects_operation_before_with(self, tmp_path):
-        """with に入る前に操作すると SessionNotStartedError になる。"""
+        """with に入る前に操作すると BrowserNotStartedError になる。"""
         session = BrowserSession(
             name="test",
             options=BrowserOptions(),
             download_dir=DownloadDir(path=tmp_path / "dl"),
         )
 
-        with pytest.raises(SessionNotStartedError):
+        with pytest.raises(BrowserNotStartedError):
             session.open("https://example.com")
 
     def test_rejects_operation_after_close(self, tmp_path):
-        """with を抜けた後に操作すると SessionClosedError になる。"""
+        """with を抜けた後に操作すると BrowserClosedError になる。"""
         session = _make_session(tmp_path)
         session.__exit__(None, None, None)
 
-        with pytest.raises(SessionClosedError):
+        with pytest.raises(BrowserClosedError):
             session.open("https://example.com")
 
     def test_quit_failure_still_cleans_download_dir(self, tmp_path):
@@ -470,7 +467,7 @@ class TestBrowsersRequiresWith:
 
         browsers = Browsers()
 
-        with pytest.raises(BrowsersNotStartedError):
+        with pytest.raises(BrowserNotStartedError):
             browsers.launch_session("kintai")
 
         edge.assert_not_called()  # 弾かれた時点で何も起きていない
@@ -479,32 +476,32 @@ class TestBrowsersRequiresWith:
         """with に入れずに start しても動かない。"""
         browsers = Browsers()
 
-        with pytest.raises(BrowsersNotStartedError):
+        with pytest.raises(BrowserNotStartedError):
             browsers.run_task(lambda: "動いてしまった")
 
     def test_rejects_getitem_without_with(self):
         """with に入れずにセッションを取り出すこともできない。"""
         browsers = Browsers()
 
-        with pytest.raises(BrowsersNotStartedError):
+        with pytest.raises(BrowserNotStartedError):
             browsers["kintai"]
 
     def test_rejects_launch_after_with(self, monkeypatch):
-        """with を抜けた後に使うと BrowsersClosedError になる。"""
+        """with を抜けた後に使うと BrowserClosedError になる。"""
         monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
         monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
 
         with Browsers() as browsers:
             browsers.launch_session("kintai")
 
-        with pytest.raises(BrowsersClosedError):
+        with pytest.raises(BrowserClosedError):
             browsers.launch_session("keiri")
 
     def test_error_message_shows_correct_form(self):
         """エラーメッセージに、正しい書き方が載っている。"""
         browsers = Browsers()
 
-        with pytest.raises(BrowsersNotStartedError) as exc_info:
+        with pytest.raises(BrowserNotStartedError) as exc_info:
             browsers.launch_session("kintai")
 
         assert "with Browsers() as browsers:" in str(exc_info.value)
@@ -689,7 +686,7 @@ class TestBrowsersStart:
         """動き出すのが遅れたタスクからでも、ブラウザを取り出せる。
 
         閉じたことにするタイミングが早すぎると、まだ閉じていないのに
-        BrowsersClosedError になる。
+        BrowserClosedError になる。
         """
         monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
         monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
@@ -729,7 +726,7 @@ class TestBrowsersStart:
         """with に入れずに parallel を呼ぶと、引数が空でも弾かれる。"""
         browsers = Browsers()
 
-        with pytest.raises(BrowsersNotStartedError):
+        with pytest.raises(BrowserNotStartedError):
             browsers.parallel()
 
     def test_reports_uncollected_error(self, caplog):
@@ -1302,7 +1299,7 @@ class TestBrowsersLaunchSite:
 
         browsers = Browsers()
 
-        with pytest.raises(BrowsersNotStartedError):
+        with pytest.raises(BrowserNotStartedError):
             browsers.launch(Kintai)
 
         edge.assert_not_called()  # 弾かれた時点で何も起きていない
@@ -1389,7 +1386,7 @@ class TestBrowsersLaunchSession:
 
         browsers = Browsers()
 
-        with pytest.raises(BrowsersNotStartedError):
+        with pytest.raises(BrowserNotStartedError):
             browsers.launch_session("kintai")
 
         edge.assert_not_called()
@@ -1520,7 +1517,7 @@ class TestSessionIsNotExposedToCallers:
             NAME = "kintai"
             OWNER = "test_browser / テスト"
 
-        with pytest.raises(SiteNotStartedError):
+        with pytest.raises(BrowserNotStartedError):
             Kintai().to(Page)
 
     def test_downloads_before_start_is_rejected(self):
@@ -1530,5 +1527,5 @@ class TestSessionIsNotExposedToCallers:
             NAME = "kintai"
             OWNER = "test_browser / テスト"
 
-        with pytest.raises(SiteNotStartedError):
+        with pytest.raises(BrowserNotStartedError):
             _ = Kintai().downloads

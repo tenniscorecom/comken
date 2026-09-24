@@ -2879,25 +2879,6 @@ Excel に関するエラー
 対処:
     画面に表示された具体的なエラー名を上の表から探す
 
-### `DataSheetAccessError`
-
-```text
-class DataSheetAccessError(ExcelError):
-```
-
-#### 説明
-
-データシートと表示用シートの責務に反する操作をした。
-
-対処:
-    data_ で始まるシートは table()、それ以外はセル・範囲 API で操作する
-
-#### `__init__`
-
-```text
-def __init__(self, sheet_name: str, operation: str) -> None:
-```
-
 ### `ExcelApplicationNotAvailableError`
 
 ```text
@@ -2916,7 +2897,7 @@ Excel が入っていない PC で、Excel 本体が要る操作をしようと�
 
 **読み書きだけなら Excel は要らない**（openpyxl で動く）。
 
-発生箇所: comken.toolbox.windows の ExcelCOMHandler
+発生箇所: comken.toolbox.windows の ExcelError
 
 対処:
     この PC に Excel が入っているか確認する。入れられない PC で動かすなら、
@@ -2926,6 +2907,98 @@ Excel が入っていない PC で、Excel 本体が要る操作をしようと�
 
 ```text
 def __init__(self, path: Path, error: Exception) -> None:
+```
+
+### `ExcelUsageError`
+
+```text
+class ExcelUsageError(ExcelError):
+```
+
+#### 説明
+
+Excel の使い方に反する操作をした
+
+データシートと表示用シートの責務違反、``read_only=True`` への書き込み、
+見出し数不足、保存拡張子の不一致などをまとめて扱う。
+
+対処:
+    エラーに表示された操作名・見出し数・拡張子を確認する。
+    - ``read_only=True`` への書き込みは read_only=False で開き直す
+    - データシート／表示用シートの API は ``Excel`` クラスのドキュメントを参照する
+
+#### `__init__`
+
+```text
+def __init__(self, message: str) -> None:
+```
+
+### `ExcelHeaderError`
+
+```text
+class ExcelHeaderError(ExcelError):
+```
+
+#### 説明
+
+Excel の見出し行・テーブル定義に関するエラー
+
+見出しの空欄・重複、テーブル定義範囲から1行も読み取れない失敗を
+まとめて扱う。``replace()`` / ``append()`` は既定で数式セルを値で潰さない
+ので、空に見えるセルもここで発見できる。
+
+対処:
+    - Excel の1行目（見出し行）の空欄・重複を直す
+    - テーブル定義範囲が狭すぎないか、データシートと表示用シートの取り違えがないか確認する
+
+#### `__init__`
+
+```text
+def __init__(self, message: str, **attributes: object) -> None:
+```
+
+### `ExcelNameError`
+
+```text
+class ExcelNameError(ExcelError):
+```
+
+#### 説明
+
+Excel のシート名・テーブル名に関するエラー
+
+対処:
+    - 既に存在する名前は避ける（シート／テーブル）
+    - ``PY_`` 接頭辞は ``create_data_sheet`` 用なので ``create_sheet`` には付けない
+    - 空白・数字始まり・セル参照のような名前はテーブル名に使わない
+
+#### `__init__`
+
+```text
+def __init__(self, message: str) -> None:
+```
+
+### `ExcelSaveError`
+
+```text
+class ExcelSaveError(ExcelError):
+```
+
+#### 説明
+
+保存時に Excel ファイルを安全に置き換えられなかった
+
+元ファイルは保持される。VBA を保ったまま保存できなかった、
+保存したはずのファイルが Excel で開けないなどで発覚する。
+
+対処:
+    元ファイルは変更されていない。空き容量・Excel のバージョン整合性・
+    VBA の保存形式（``.xlsm`` になっているか）を確認して再実行する
+
+#### `__init__`
+
+```text
+def __init__(self, message: str) -> None:
 ```
 
 ### `SheetNotFoundError`
@@ -2949,85 +3022,23 @@ class SheetNotFoundError(ExcelError):
 def __init__(self, name: str, sheets: list[str]) -> None:
 ```
 
-### `SheetAlreadyExistsError`
+### `TableNotFoundError`
 
 ```text
-class SheetAlreadyExistsError(ExcelError):
+class TableNotFoundError(ExcelError):
 ```
 
 #### 説明
 
-同じ名前のシートが既にある
+指定したテーブルがシートにない
 
 対処:
-    別のシート名を指定するか、既存のシート名を変更する
+    エラーに表示された既存テーブル名を確認する
 
 #### `__init__`
 
 ```text
-def __init__(self, name: str) -> None:
-```
-
-### `SheetNameError`
-
-```text
-class SheetNameError(ExcelError):
-```
-
-#### 説明
-
-表示用シートに使えない名前を ``create_sheet`` に渡した
-
-``PY_`` で始まる名前はデータシート用なので ``create_data_sheet`` で作る。
-
-発生箇所: ``Excel.create_sheet()``
-
-対処:
-    予約接頭辞 ``PY_`` を除いた名前を ``create_sheet`` に渡すか、
-    データシートとして作る場合は ``create_data_sheet`` を使う
-
-#### `__init__`
-
-```text
-def __init__(self, name: str) -> None:
-```
-
-### `InvalidTableNameError`
-
-```text
-class InvalidTableNameError(ExcelError):
-```
-
-#### 説明
-
-Excel で使えないテーブル名を指定した
-
-対処:
-    空白・数字始まり・セル参照のような名前を避ける
-
-#### `__init__`
-
-```text
-def __init__(self, name: str) -> None:
-```
-
-### `TableAlreadyExistsError`
-
-```text
-class TableAlreadyExistsError(ExcelError):
-```
-
-#### 説明
-
-同じ名前のテーブルが既にある
-
-対処:
-    別のテーブル名を指定する
-
-#### `__init__`
-
-```text
-def __init__(self, name: str) -> None:
+def __init__(self, name: str, tables: list[str]) -> None:
 ```
 
 ### `TableFormulaOverwriteError`
@@ -3082,25 +3093,6 @@ class TableColumnMismatchError(ExcelError):
 def __init__(self, table_name: str, missing: Sequence[str]) -> None:
 ```
 
-### `TableNotFoundError`
-
-```text
-class TableNotFoundError(ExcelError):
-```
-
-#### 説明
-
-指定したテーブルがシートにない
-
-対処:
-    エラーに表示された既存テーブル名を確認する
-
-#### `__init__`
-
-```text
-def __init__(self, name: str, tables: list[str]) -> None:
-```
-
 ### `MacroError`
 
 ```text
@@ -3120,173 +3112,6 @@ Excel のマクロが失敗した
 
 ```text
 def __init__(self, name: str, detail: Exception) -> None:
-```
-
-### `EmptyHeaderCellError`
-
-```text
-class EmptyHeaderCellError(ExcelError):
-```
-
-#### 説明
-
-Excel の見出しに空欄がある
-
-発生箇所: Excel.read() / ExcelTable.read() / ExcelCOMHandler.read()
-
-対処:
-    Excel の1行目の空欄を埋める
-
-#### `__init__`
-
-```text
-def __init__(self, columns: list[int]) -> None:
-```
-
-### `DuplicateHeaderCellError`
-
-```text
-class DuplicateHeaderCellError(ExcelError):
-```
-
-#### 説明
-
-Excel の見出し名が重複している
-
-発生箇所: Sheet.create_table()
-
-対処:
-    Excel の見出し名を重複しない名前に変更する
-
-#### `__init__`
-
-```text
-def __init__(self, headers: Sequence[object]) -> None:
-```
-
-### `EmptyExcelTableError`
-
-```text
-class EmptyExcelTableError(ExcelError):
-```
-
-#### 説明
-
-Excel テーブル定義はあるが、定義範囲を1行も読み取れない。
-
-対処:
-    Excel のテーブル定義範囲を確認する
-
-#### `__init__`
-
-```text
-def __init__(self, sheet_name: str, reason: str) -> None:
-```
-
-### `ExcelHeadersTooFewError`
-
-```text
-class ExcelHeadersTooFewError(ExcelError):
-```
-
-#### 説明
-
-指定した見出し数が列数より少ない
-
-発生箇所: ExcelCOMHandler.read()
-
-対処:
-    管理者へ連絡する
-
-#### `__init__`
-
-```text
-def __init__(self, expected: int, actual: int) -> None:
-```
-
-### `ExcelMacroPreservationError`
-
-```text
-class ExcelMacroPreservationError(ExcelError):
-```
-
-#### 説明
-
-保存予定のブックからVBAプロジェクトが欠落または変化した。
-
-対処:
-    元ファイルは保持される。管理者に連絡し、Excel実機で保存方法を確認する
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path | str) -> None:
-```
-
-### `ExcelReadOnlyOperationError`
-
-```text
-class ExcelReadOnlyOperationError(ExcelError):
-```
-
-#### 説明
-
-read_only=True の Excel に書き込もうとした。
-
-Excel(path, read_only=True) は読み取り専用なので、保存やシート作成を
-行う create_sheet / create_data_sheet / run_macro 系の API は使えない。
-
-発生箇所: Excel.create_data_sheet() / Excel.create_sheet() /
-         Excel.run_macro()
-
-対処:
-    read_only=False で開き直すか、書き込みが要らない操作かを
-    見直す（読み取りだけなら Excel(path, read_only=True) で十分）
-
-#### `__init__`
-
-```text
-def __init__(self, operation: str) -> None:
-```
-
-### `ExcelSaveValidationError`
-
-```text
-class ExcelSaveValidationError(ExcelError):
-```
-
-#### 説明
-
-保存予定のExcelファイルを再度開けず、安全に置き換えられない。
-
-対処:
-    元ファイルは保持される。空き容量とExcel形式を確認して再実行する
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path | str, detail: object) -> None:
-```
-
-### `FileFormatMismatchError`
-
-```text
-class FileFormatMismatchError(ExcelError):
-```
-
-#### 説明
-
-保存拡張子と形式が合わない
-
-発生箇所: ExcelCOMHandler.save_as()
-
-対処:
-    管理者へ連絡する
-
-#### `__init__`
-
-```text
-def __init__(self, suffix: str) -> None:
 ```
 
 ### `CSVError`
@@ -3324,42 +3149,28 @@ CSV の文字コードを判定できない
 def __init__(self, path: Path | str) -> None:
 ```
 
-### `CSVHeaderMissingError`
+### `CSVHeaderError`
 
 ```text
-class CSVHeaderMissingError(CSVError):
+class CSVHeaderError(CSVError):
 ```
 
 #### 説明
 
-CSV に見出し行がない
+CSV の見出し行に関するエラー
+
+見出し行がない、見出しに空欄・重複がある、新規 CSV に列を
+指定できない、といった失敗をまとめて扱う。
 
 対処:
-    見出し行を追加するか、ヘッダーなし CSV なら columns を指定する
+    - 見出し行を追加するか、ヘッダーなし CSV なら ``columns`` を指定する
+    - 1行目にある空欄・重複した見出しを直す
+    - 新規 CSV に書き出すときは ``CSV(columns=[...])`` で列を指定する
 
 #### `__init__`
 
 ```text
-def __init__(self, path: Path | str) -> None:
-```
-
-### `CSVInvalidHeaderError`
-
-```text
-class CSVInvalidHeaderError(CSVError):
-```
-
-#### 説明
-
-CSV の見出しに空欄または重複がある
-
-対処:
-    CSV の1行目にある空欄または重複した見出しを直す
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path | str, reason: str) -> None:
+def __init__(self, message: str) -> None:
 ```
 
 ### `CSVRowLengthError`
@@ -3381,25 +3192,6 @@ CSV のデータ行の列数が見出し数と一致しない
 def __init__(self, path: Path | str, line_number: int, expected: int, actual: int) -> None:
 ```
 
-### `CSVColumnsRequiredError`
-
-```text
-class CSVColumnsRequiredError(CSVError):
-```
-
-#### 説明
-
-空の新規 CSV に出力する列を決定できない
-
-対処:
-    CSV(columns=[...]) または Table(columns, []) で列を指定する
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path | str) -> None:
-```
-
 ### `ColumnNotFoundError`
 
 ```text
@@ -3412,40 +3204,6 @@ Excel・CSV・データ比較で列が見つからないエラー
 
 対処:
     画面に表示された具体的なエラー名を上の表から探す
-
-### `ExcelColumnNotFoundError`
-
-```text
-class ExcelColumnNotFoundError(ColumnNotFoundError):
-```
-
-#### 説明
-
-Excel の列見出しが見つからない
-
-非エンジニアが列名を変更したときに分かりやすいメッセージを出すために使う。
-
-発生箇所: 利用側プロジェクトの列検証処理（comken 本体のソースからは
-          送出されない。利用者プロジェクトから送出する想定）
-
-使い方:
-    from comken.exceptions import ExcelColumnNotFoundError
-
-    REQUIRED_COLUMNS = ["日付", "担当者", "金額"]
-
-    def validate_columns(rows: list[dict[str, str]], required: list[str]) -> None:
-        missing = [column for column in required if column not in rows[0]]
-        if missing:
-            raise ExcelColumnNotFoundError(missing)
-
-対処:
-    Excel の1行目を確認する
-
-#### `__init__`
-
-```text
-def __init__(self, columns: list[str]) -> None:
-```
 
 ### `KeyColumnNotFoundError`
 
@@ -3466,31 +3224,6 @@ class KeyColumnNotFoundError(ColumnNotFoundError):
 
 ```text
 def __init__(self, key: str, existing: list[str]) -> None:
-```
-
-### `TransferSourceColumnNotFoundError`
-
-```text
-class TransferSourceColumnNotFoundError(ColumnNotFoundError):
-```
-
-#### 説明
-
-列名転記で、lookup の転記元列が見つからない
-
-comken 本体のソースからは送出されない。利用者プロジェクトから送出する想定。
-例外を定義して import するだけで使え、comken 内の利用は前提としない。
-``ExcelColumnNotFoundError`` と同じ位置づけ。
-
-発生箇所: 利用側プロジェクトの転記元列検証処理
-
-対処:
-    転記元データと config.ini のマッピング左側を確認する
-
-#### `__init__`
-
-```text
-def __init__(self, columns: list[str], existing: list[str]) -> None:
 ```
 
 ### `InvalidColumnError`
@@ -4191,7 +3924,7 @@ Reports and Dashboards REST API そのものへのアクセスが HTTP 401 / 403
 対処:
     Salesforce 管理者に、refresh_token を発行したユーザーについて
     次を確認してもらう。
-      1. Profile / Permission Set に「API Enabled」権限があるか
+      1. Profile / Permission Set に「API Enabled」」権限があるか
       2. 対象のレポート・レポートフォルダへのアクセス権があるか
       3. 組織の Edition・ライセンスが Reports and Dashboards REST API
          に対応しているか（一部の制限ライセンスでは使えない）
@@ -4282,92 +4015,60 @@ class SalesforceSiteSelectionError(SalesforceError):
 def __init__(self, answer: str, site_names: list[str]) -> None:
 ```
 
-### `SalesforceBulkQueryFailedError`
+### `SalesforceBulkFailedError`
 
 ```text
-class SalesforceBulkQueryFailedError(SalesforceError):
+class SalesforceBulkFailedError(SalesforceError):
 ```
 
 #### 説明
 
-Bulk API のクエリジョブが失敗して終わった（Failed / Aborted）
+Bulk API のジョブが失敗して終わった（Failed / Aborted）
+
+クエリ（``bulk_query``）と Ingest（``bulk_ingest``）の両方で共通する
+ジョブ失敗を扱う。SOQL 構文・項目参照・CSV 列名・データ型など、
+原因は経路ごとに違うのでメッセージで個別に示す。
 
 発生箇所: comken.toolbox.salesforce.bulk_query.BulkQueryAPI.run()
+         comken.toolbox.salesforce.bulk_ingest.BulkIngestAPI の
+         insert() / update() / upsert() / delete()
 
 対処:
-    表示されたエラー内容を確認する。SOQL の構文・参照項目・
-    実行ユーザーの権限を見直す
+    表示されたエラー内容を確認する。クエリ経路は SOQL 構文・参照項目・
+    実行ユーザーの権限、Ingest 経路は CSV の列名・データ型・実行ユーザーの
+権限を見直す
 
 #### `__init__`
 
 ```text
-def __init__(self, job_id: str, state: str, error_message: str) -> None:
+def __init__(self, message: str) -> None:
 ```
 
-### `SalesforceBulkQueryTimeoutError`
+### `SalesforceBulkTimeoutError`
 
 ```text
-class SalesforceBulkQueryTimeoutError(SalesforceError):
+class SalesforceBulkTimeoutError(SalesforceError):
 ```
 
 #### 説明
 
-Bulk API のクエリジョブが制限時間内に終わらなかった
+Bulk API のジョブが制限時間内に終わらなかった
+
+クエリ（``bulk_query``）と Ingest（``bulk_ingest``）の両方で共通する
+タイムアウトを扱う。
 
 発生箇所: comken.toolbox.salesforce.bulk_query.BulkQueryAPI.run()
+         comken.toolbox.salesforce.bulk_ingest.BulkIngestAPI の
+         insert() / update() / upsert() / delete()
 
 対処:
-    timeout_seconds を長くするか、クエリの対象を絞って再実行する
+    ``timeout_seconds`` を長くするか、対象を絞って再実行する。
+    Ingest 経路はデータを分割して再実行してもよい
 
 #### `__init__`
 
 ```text
-def __init__(self, job_id: str, timeout_seconds: float) -> None:
-```
-
-### `SalesforceBulkIngestFailedError`
-
-```text
-class SalesforceBulkIngestFailedError(SalesforceError):
-```
-
-#### 説明
-
-Bulk API の Ingest ジョブが失敗して終わった（Failed / Aborted）
-
-発生箇所: comken.toolbox.salesforce.bulk_ingest.BulkIngestAPI の
-          insert() / update() / upsert() / delete()
-
-対処:
-    表示されたエラー内容を確認する。CSV の列名・データ型・
-    実行ユーザーの権限を見直す
-
-#### `__init__`
-
-```text
-def __init__(self, job_id: str, state: str, error_message: str) -> None:
-```
-
-### `SalesforceBulkIngestTimeoutError`
-
-```text
-class SalesforceBulkIngestTimeoutError(SalesforceError):
-```
-
-#### 説明
-
-Bulk API の Ingest ジョブが制限時間内に終わらなかった
-
-発生箇所: comken.toolbox.salesforce.bulk_ingest.BulkIngestAPI の
-          insert() / update() / upsert() / delete()
-
-対処:
-    timeout_seconds を長くするか、データを分割して再実行する
-
-#### `__init__`
-
-```text
-def __init__(self, job_id: str, timeout_seconds: float) -> None:
+def __init__(self, message: str) -> None:
 ```
 
 ### `BrowserError`
@@ -4412,18 +4113,23 @@ class DriverStartError(BrowserError):
 def __init__(self, driver_path: str, detail: Exception) -> None:
 ```
 
-### `BrowsersNotStartedError`
+### `BrowserNotStartedError`
 
 ```text
-class BrowsersNotStartedError(BrowserError):
+class BrowserNotStartedError(BrowserError):
 ```
 
 #### 説明
 
-`with` を使わずに `Browsers` を使った
+`with` を使わずにブラウザを操作した
 
-with を使わないと、処理の途中で例外が出たときにブラウザのプロセスが残り続ける。
-残ったブラウザはドライバーの更新も邪魔するため、必ず with の中で使う。
+``Browsers`` 本体の ``launch`` / ``launch_session`` / ``run_task`` / ``__getitem__`` 、
+``BrowserSession`` の ``open`` / ``driver`` など、 ``Browsers / BrowserSession`` を
+``with`` に入れずに呼ぶとここで止める。with を使わないと、処理の途中で例外が
+出たときにブラウザのプロセスが残り続けるため。
+
+``SiteBase.to()`` / ``SiteBase.downloads`` のように、サイト単位で ``with`` に入る
+経路も同じく ``with`` の外で使うとここで止まる。
 
     # 誤り
     browsers = Browsers()
@@ -4439,21 +4145,23 @@ with を使わないと、処理の途中で例外が出たときにブラウザ
 #### `__init__`
 
 ```text
-def __init__(self, operation: str) -> None:
+def __init__(self, message: str) -> None:
 ```
 
-### `BrowsersClosedError`
+### `BrowserClosedError`
 
 ```text
-class BrowsersClosedError(BrowserError):
+class BrowserClosedError(BrowserError):
 ```
 
 #### 説明
 
-`with` を抜けた後の `Browsers` を使った
+`with` を抜けた後のブラウザを操作した
 
-with の外へ browsers を持ち出すと起きる。with を抜けた時点で
+with の外へブラウザを持ち出すと起きる。with を抜けた時点で
 ブラウザはすべて閉じているため、そこから起動や操作はできない。
+取得したデータを with の外で使いたい場合は、セッションではなく
+取り出した値（文字列やファイルパス）を返すようにする。
 
 対処:
     続けたい処理を `with` の中に入れる。外へ持ち出すのは取り出した値だけにする
@@ -4461,60 +4169,7 @@ with の外へ browsers を持ち出すと起きる。with を抜けた時点で
 #### `__init__`
 
 ```text
-def __init__(self, operation: str) -> None:
-```
-
-### `SessionNotStartedError`
-
-```text
-class SessionNotStartedError(BrowserError):
-```
-
-#### 説明
-
-`with` を使わずにブラウザを操作した
-
-BrowserSession は with 文の中でだけ使える。with を使わないと、
-処理の途中で例外が出たときにブラウザのプロセスが残り続けるため。
-
-    # 誤り
-    session = BrowserSession(...)
-    session.open("https://example.com")     # ← ここで送出される
-
-    # 正しい
-    with Browsers() as browsers:
-        kintai = browsers.launch(Kintai)
-        kintai.session.open("https://example.com")
-
-対処:
-    `with Browsers() as browsers:` の中で使う
-
-#### `__init__`
-
-```text
-def __init__(self, operation: str) -> None:
-```
-
-### `SessionClosedError`
-
-```text
-class SessionClosedError(BrowserError):
-```
-
-#### 説明
-
-`with` を抜けた後のブラウザを操作した
-
-with の外へセッションを持ち出すと起きる。取得したデータを with の外で使いたい場合は、
-セッションではなく取り出した値（文字列やファイルパス）を返すようにする。
-
-対処:
-    `with` の外へ持ち出すのは、ブラウザではなく取り出した値にする
-
-#### `__init__`
-
-```text
-def __init__(self, name: str, operation: str) -> None:
+def __init__(self, message: str) -> None:
 ```
 
 ### `ConcurrentSessionUseError`
@@ -4634,30 +4289,6 @@ class SiteAlreadyInLibraryError(BrowserError):
 
 ```text
 def __init__(self, site_cls: type, library_cls: type) -> None:
-```
-
-### `SiteNotStartedError`
-
-```text
-class SiteNotStartedError(BrowserError):
-```
-
-#### 説明
-
-まだ起動していないサイトの画面を作ろうとした
-
-`with` に入る前、または閉じた後に `to()` を呼ぶとここで止まる。
-ブラウザが無い状態で画面クラスを作ると、最初の操作まで失敗が遅れる。
-
-発生箇所: SiteBase.to() / SiteBase.downloads
-
-対処:
-    `with Kintai() as kintai:` の中で使う
-
-#### `__init__`
-
-```text
-def __init__(self, site: type) -> None:
 ```
 
 ### `ElementNotFoundError`
@@ -5070,7 +4701,7 @@ class CachedReportNotFoundError(DownloaderError):
 
 **勝手に Salesforce へ取りに行かない。** cached_report() は
 「取っておいたものを受け取る」関数で、取りに行く関数ではない。
-ここで自動的に取りに行くと、定期取得が動いていないことに誰も気づかなくなる。
+ここで自動的に取りに行くと、定期取得が動いていないことに誰も気づかない。
 
 発生箇所: comken.services.salesforce_downloader の cached_report()
 
@@ -5189,29 +4820,6 @@ class ReportDisabledError(DownloaderError):
 def __init__(self, report_key: str, summary: str, master_path: Path) -> None:
 ```
 
-### `InvalidReportURLError`
-
-```text
-class InvalidReportURLError(DownloaderError):
-```
-
-#### 説明
-
-管理表の URL から Salesforce のレポート ID を取り出せない
-
-貼られたものが Salesforce のレポート URL でないと、どのレポートか決められない。
-
-発生箇所: comken.services.salesforce_downloader の管理表読み込み
-
-対処:
-    Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す
-
-#### `__init__`
-
-```text
-def __init__(self, report_key: str, url: str, reason: str) -> None:
-```
-
 ### `EmptyReportError`
 
 ```text
@@ -5264,31 +4872,33 @@ class ReportReservePathLimitError(DownloaderError):
 def __init__(self, report_key: str, base_path: Path, limit: int) -> None:
 ```
 
-### `ScheduledDownloadFailedError`
+### `ScheduleSettingError`
 
 ```text
-class ScheduledDownloadFailedError(DownloaderError):
+class ScheduleSettingError(DownloaderError):
 ```
 
 #### 説明
 
-定期取得で1件以上が失敗した
+管理表のスケジュール列（取得頻度・曜日）に想定外の値が書かれている
 
-取得できたものは保存済み。**1件失敗しても残りは続けたうえで、最後にまとめて知らせる。**
-ログだけに出して正常終了すると、スケジューラや RPA 基盤から見て成功と区別が付かず、
-落ちていることに誰も気づかない。
+- 「取得頻度」は ``毎日`` / ``毎週`` / ``毎月`` / ``毎営業日`` の4種類
+- 「曜日」は ``月`` 〜 ``日`` の漢字1文字（「曜日」接尾辞付きも可）
 
-発生箇所: Salesforceレポートダウンローダー の download_scheduled()
+これら以外（手書きのタイポ・想定外の列挙値）が入っていると、取得の判定が
+できない。
+
+発生箇所: comken.services.salesforce_downloader.sheets.schedule の is_due() /
+ScheduleRule.weekday
 
 対処:
-    履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。
-    急いで必要なものは download_scheduled() をスケジュール外で実行する。
-    権限を持つ人が Salesforce から手動でダウンロードしてもよい
+    管理表の「取得頻度」列を ``毎日`` / ``毎週`` / ``毎月`` / ``毎営業日`` の
+    いずれかに、「曜日」列を月〜日のいずれかに修正する（「曜日」接尾辞付きも可）
 
 #### `__init__`
 
 ```text
-def __init__(self, failed_keys: list[str], history_path: Path) -> None:
+def __init__(self, message: str) -> None:
 ```
 
 ### `SoqlDownloadFailedError`
@@ -5303,8 +4913,8 @@ SOQL レポートの取得で1件以上が失敗した
 
 取得できたものは保存済み。**1件失敗しても残りは続けたうえで、最後にまとめて知らせる。**
 `download_scheduled()` と同じ「ログだけだと気づけない」問題なので、最後に例外で
-上げる。``ScheduledDownloadFailedError`` は履歴 CSV の存在を前提にしたメッセージ
-になるため、履歴機能を持たない SOQL レポート経路ではこの例外を使う。
+上げる。定期取得は履歴 CSV の存在を前提にしたメッセージになるため、
+履歴機能を持たない SOQL レポート経路ではこの例外を使う。
 
 発生箇所: comken.services.salesforce_downloader.soql_reports の download_soql_reports()
 
@@ -5317,56 +4927,6 @@ SOQL レポートの取得で1件以上が失敗した
 
 ```text
 def __init__(self, failed_keys: list[str]) -> None:
-```
-
-### `UnsupportedScheduleFrequencyError`
-
-```text
-class UnsupportedScheduleFrequencyError(DownloaderError):
-```
-
-#### 説明
-
-管理表の「取得頻度」に、想定外の値が書かれている
-
-許容される値は ``毎日`` / ``毎週`` / ``毎月`` の3種類。
-それ以外（手書きのタイポ・想定外の列挙値）が入っていると判定できない。
-
-発生箇所: comken.services.salesforce_downloader.sheets.schedule の is_due()
-
-対処:
-    管理表の「取得頻度」列の値を ``毎日`` / ``毎週`` / ``毎月`` の
-    いずれかに修正する
-
-#### `__init__`
-
-```text
-def __init__(self, frequency: str) -> None:
-```
-
-### `ScheduleWeekdayInvalidError`
-
-```text
-class ScheduleWeekdayInvalidError(DownloaderError):
-```
-
-#### 説明
-
-管理表の「曜日」列に想定外の値が入っている
-
-許容されるのは月〜日の漢字1文字（「月」「火」「水」「木」「金」「土」「日」）
-または「〜曜日」の接尾辞付き表記。
-
-発生箇所: comken.services.salesforce_downloader.sheets.schedule の ScheduleRule.weekday
-
-対処:
-    管理表の「曜日」列の値を月〜日のいずれかに修正する（「曜日」を付ける
-    形式でも可）
-
-#### `__init__`
-
-```text
-def __init__(self, value: object) -> None:
 ```
 
 ### `DataLoaderError`
@@ -5793,7 +5353,7 @@ URL から取り出した Salesforce のレポート ID。
 管理番号なら管理表を検索して一発で見つかる。
 
 Raises:
-    InvalidReportURLError: URL からレポート ID を取り出せない場合。
+    SalesforceReportIDNotFoundError: URL からレポート ID を取り出せない場合。
 
 ### `ScheduleRule`
 
@@ -5848,12 +5408,12 @@ def weekday(self) -> int | None:
 
 読み込み時は ``choices=WEEKDAY_NAMES`` で月〜日に絞り込まれているため、
 想定外の表記（例: 「月曜日」）はここに来る前に ``MasterRowValueError``
-として弾かれる。``ScheduleWeekdayInvalidError`` は既定の挙動を逸脱した
+として弾かれる。``ScheduleSettingError`` は既定の挙動を逸脱した
 場合に備えた受け皿で、テストや Python から直接 ``ScheduleRule`` を
 組み立てたときにだけ使われる。
 
 Raises:
-    ScheduleWeekdayInvalidError: 想定外の文字列が書かれている場合。
+    ScheduleSettingError: 想定外の文字列が書かれている場合。
 
 #### `day_of_month`
 
@@ -6185,7 +5745,7 @@ class Browsers:
 どこで例外が出ても、起動済みのブラウザはすべて閉じる。
 1つのブラウザの終了に失敗しても、残りの終了は続行される。
 
-with を使わずに launch すると BrowsersNotStartedError になる（ブラウザは起動しない）。
+with を使わずに launch すると BrowserNotStartedError になる（ブラウザは起動しない）。
 with を必須にしているのは、途中で例外が出たときにブラウザのプロセスが残り、
 次の実行でドライバーの更新まで邪魔するのを防ぐため。
 
@@ -6357,7 +5917,7 @@ class BrowserSession:
 
 with を必須にしているのは、処理の途中で例外が出たときに
 ブラウザのプロセスと一時フォルダを確実に片付けるため。
-with を使わずに操作すると SessionNotStartedError になる。
+with を使わずに操作すると BrowserNotStartedError になる。
 
 ダウンロード先・ログイン状態・起動オプションはこのセッションが専有する。
 他のセッションと混ざらないので、サイトごとに違う設定を安心して使える。
@@ -6536,7 +6096,7 @@ Yields:
     Page のメソッドがそのまま使える。
 
 Raises:
-    SessionNotStartedError: with に入る前に呼んだ場合。
+    BrowserNotStartedError: with に入る前に呼んだ場合。
     ConcurrentSessionUseError: 他のスレッドが同じセッションを操作している場合。
 
 #### `raw`
@@ -6598,7 +6158,7 @@ def downloads(self) -> DownloadDir:
     files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
 
 Raises:
-    SiteNotStartedError: まだ起動していない場合。
+    BrowserNotStartedError: まだ起動していない場合。
 
 #### `to`
 
@@ -7444,7 +7004,7 @@ class Browsers:
 どこで例外が出ても、起動済みのブラウザはすべて閉じる。
 1つのブラウザの終了に失敗しても、残りの終了は続行される。
 
-with を使わずに launch すると BrowsersNotStartedError になる（ブラウザは起動しない）。
+with を使わずに launch すると BrowserNotStartedError になる（ブラウザは起動しない）。
 with を必須にしているのは、途中で例外が出たときにブラウザのプロセスが残り、
 次の実行でドライバーの更新まで邪魔するのを防ぐため。
 
@@ -7616,7 +7176,7 @@ class BrowserSession:
 
 with を必須にしているのは、処理の途中で例外が出たときに
 ブラウザのプロセスと一時フォルダを確実に片付けるため。
-with を使わずに操作すると SessionNotStartedError になる。
+with を使わずに操作すると BrowserNotStartedError になる。
 
 ダウンロード先・ログイン状態・起動オプションはこのセッションが専有する。
 他のセッションと混ざらないので、サイトごとに違う設定を安心して使える。
@@ -7795,7 +7355,7 @@ Yields:
     Page のメソッドがそのまま使える。
 
 Raises:
-    SessionNotStartedError: with に入る前に呼んだ場合。
+    BrowserNotStartedError: with に入る前に呼んだ場合。
     ConcurrentSessionUseError: 他のスレッドが同じセッションを操作している場合。
 
 #### `raw`
@@ -8450,7 +8010,7 @@ def downloads(self) -> DownloadDir:
     files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
 
 Raises:
-    SiteNotStartedError: まだ起動していない場合。
+    BrowserNotStartedError: まだ起動していない場合。
 
 #### `to`
 
@@ -8543,7 +8103,7 @@ def downloads(self) -> DownloadDir:
     files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
 
 Raises:
-    SiteNotStartedError: まだ起動していない場合。
+    BrowserNotStartedError: まだ起動していない場合。
 
 #### `to`
 
@@ -8713,7 +8273,7 @@ Yields:
     **完了した順**に返るため、``reports`` の順序とは限らない。
 
 Raises:
-    SiteNotStartedError: 未起動の場合。
+    BrowserNotStartedError: 未起動の場合。
     SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
     SalesforceReportExportError: いずれかのレポートでエクスポートが失敗した場合
         （ログイン未実行・セッション切れ等）。
@@ -8738,7 +8298,7 @@ def downloads(self) -> DownloadDir:
     files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
 
 Raises:
-    SiteNotStartedError: まだ起動していない場合。
+    BrowserNotStartedError: まだ起動していない場合。
 
 #### `to`
 
@@ -8908,7 +8468,7 @@ Yields:
     **完了した順**に返るため、``reports`` の順序とは限らない。
 
 Raises:
-    SiteNotStartedError: 未起動の場合。
+    BrowserNotStartedError: 未起動の場合。
     SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
     SalesforceReportExportError: いずれかのレポートでエクスポートが失敗した場合
         （ログイン未実行・セッション切れ等）。
@@ -8933,7 +8493,7 @@ def downloads(self) -> DownloadDir:
     files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
 
 Raises:
-    SiteNotStartedError: まだ起動していない場合。
+    BrowserNotStartedError: まだ起動していない場合。
 
 #### `to`
 
@@ -9149,7 +8709,7 @@ def downloads(self) -> DownloadDir:
     files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
 
 Raises:
-    SiteNotStartedError: まだ起動していない場合。
+    BrowserNotStartedError: まだ起動していない場合。
 
 #### `to`
 
@@ -9242,7 +8802,7 @@ def downloads(self) -> DownloadDir:
     files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
 
 Raises:
-    SiteNotStartedError: まだ起動していない場合。
+    BrowserNotStartedError: まだ起動していない場合。
 
 #### `to`
 
@@ -9493,7 +9053,7 @@ Yields:
     **完了した順**に返るため、``reports`` の順序とは限らない。
 
 Raises:
-    SiteNotStartedError: 未起動の場合。
+    BrowserNotStartedError: 未起動の場合。
     SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
     SalesforceReportExportError: いずれかのレポートでエクスポートが失敗した場合
         （ログイン未実行・セッション切れ等）。
@@ -9619,7 +9179,7 @@ Yields:
     **完了した順**に返るため、``reports`` の順序とは限らない。
 
 Raises:
-    SiteNotStartedError: 未起動の場合。
+    BrowserNotStartedError: 未起動の場合。
     SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
     SalesforceReportExportError: いずれかのレポートでエクスポートが失敗した場合
         （ログイン未実行・セッション切れ等）。
@@ -9644,7 +9204,7 @@ def downloads(self) -> DownloadDir:
     files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
 
 Raises:
-    SiteNotStartedError: まだ起動していない場合。
+    BrowserNotStartedError: まだ起動していない場合。
 
 #### `to`
 
@@ -9814,7 +9374,7 @@ Yields:
     **完了した順**に返るため、``reports`` の順序とは限らない。
 
 Raises:
-    SiteNotStartedError: 未起動の場合。
+    BrowserNotStartedError: 未起動の場合。
     SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
     SalesforceReportExportError: いずれかのレポートでエクスポートが失敗した場合
         （ログイン未実行・セッション切れ等）。
@@ -9839,7 +9399,7 @@ def downloads(self) -> DownloadDir:
     files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
 
 Raises:
-    SiteNotStartedError: まだ起動していない場合。
+    BrowserNotStartedError: まだ起動していない場合。
 
 #### `to`
 
@@ -10553,10 +10113,8 @@ Returns:
 Raises:
     InvalidTableOperationError: ``engine='com'`` で開いたインスタンスで呼ばれたとき。
     InvalidTableInputError: 範囲・結合・空データ行のいずれかが条件違反のとき。
-    EmptyHeaderCellError: 見出し行に空セルがあるとき。
-    DuplicateHeaderCellError: 見出し行に同じ名前が複数あるとき。
-    InvalidTableNameError: ``table_name`` が Excel の命名規則に合わないとき。
-    TableAlreadyExistsError: 指定したテーブル名が既に存在するとき。
+    ExcelHeaderError: 見出し行に空セルがある／同じ名前が複数あるとき。
+    ExcelNameError: ``table_name`` が命名規則に合わない／既存テーブル名と衝突するとき。
 
 #### `close`
 
@@ -12249,7 +11807,7 @@ close() は保存せずに閉じる（SaveChanges=False）ため、
 write_cell での変更を残す場合は必ず呼ぶこと。
 
 Raises:
-    FileFormatMismatchError: 保存先の拡張子がワークブックの形式と食い違う場合。
+    ExcelUsageError: 保存先の拡張子がワークブックの形式と食い違う場合。
 
 #### `save_as`
 

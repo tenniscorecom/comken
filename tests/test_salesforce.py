@@ -12,10 +12,8 @@ from comken.exceptions import (
     ComkenError,
     CredentialNotFoundError,
     InvalidCredentialNameError,
-    SalesforceBulkIngestFailedError,
-    SalesforceBulkIngestTimeoutError,
-    SalesforceBulkQueryFailedError,
-    SalesforceBulkQueryTimeoutError,
+    SalesforceBulkFailedError,
+    SalesforceBulkTimeoutError,
     SalesforceError,
     SalesforceExternalIDMissingError,
     SalesforceReportAccessDeniedError,
@@ -1197,7 +1195,7 @@ class TestBulkQuery:
 
     def test_run_raises_failed_error_when_job_fails(self):
         """状態確認が Failed のとき
-        SalesforceBulkQueryFailedError を送出し、
+        SalesforceBulkFailedError を送出し、
         errorMessage をメッセージに含む。"""
         created = _response(json_body={"id": self.JOB_ID, "state": "UploadComplete"})
         failed = _response(
@@ -1210,19 +1208,19 @@ class TestBulkQuery:
         with (
             _salesforce([created, failed]) as (client, _, _),
             patch("comken.toolbox.salesforce.bulk_query.time.sleep"),
-            pytest.raises(SalesforceBulkQueryFailedError, match="SOQL 構文エラー"),
+            pytest.raises(SalesforceBulkFailedError, match="SOQL 構文エラー"),
         ):
             client.bulk_query.run(self.SOQL)
 
     def test_run_raises_timeout_error_when_job_stays_in_progress(self):
-        """timeout_seconds を 0 にするとループに入らず SalesforceBulkQueryTimeoutError になる。"""
+        """timeout_seconds を 0 にするとループに入らず SalesforceBulkTimeoutError になる。"""
         created = _response(json_body={"id": self.JOB_ID, "state": "UploadComplete"})
         in_progress = _response(json_body={"id": self.JOB_ID, "state": "InProgress"})
 
         with (
             _salesforce([created, in_progress]) as (client, _, _),
             patch("comken.toolbox.salesforce.bulk_query.time.sleep"),
-            pytest.raises(SalesforceBulkQueryTimeoutError, match=r"0 秒"),
+            pytest.raises(SalesforceBulkTimeoutError, match=r"0 秒"),
         ):
             client.bulk_query.run(self.SOQL, timeout_seconds=0)
 
@@ -1466,7 +1464,7 @@ class TestBulkIngest:
 
     def test_failed_job_raises_with_error_message(self):
         """状態確認が ``Failed``（errorMessage 付き）なら
-        ``SalesforceBulkIngestFailedError`` を送出し、メッセージに
+        ``SalesforceBulkFailedError`` を送出し、メッセージに
         ``errorMessage`` の内容を含める。"""
         responses = [
             _response(json_body={"id": self.JOB_ID, "state": "UploadComplete"}),
@@ -1483,12 +1481,12 @@ class TestBulkIngest:
         with (
             _salesforce(responses) as (client, _, _),
             patch("comken.toolbox.salesforce.bulk_ingest.time.sleep"),
-            pytest.raises(SalesforceBulkIngestFailedError, match="項目 Name がありません"),
+            pytest.raises(SalesforceBulkFailedError, match="項目 Name がありません"),
         ):
             client.bulk_ingest.insert(self.OBJECT_NAME, [{"Name": "A"}])
 
     def test_timeout_raises_when_job_does_not_finish(self):
-        """``timeout_seconds=0`` なら ``SalesforceBulkIngestTimeoutError`` になる。"""
+        """``timeout_seconds=0`` なら ``SalesforceBulkTimeoutError`` になる。"""
         responses = [
             _response(json_body={"id": self.JOB_ID, "state": "UploadComplete"}),
             _response(204),  # アップロード成功
@@ -1498,7 +1496,7 @@ class TestBulkIngest:
         with (
             _salesforce(responses) as (client, _, _),
             patch("comken.toolbox.salesforce.bulk_ingest.time.sleep"),
-            pytest.raises(SalesforceBulkIngestTimeoutError, match=r"0 秒"),
+            pytest.raises(SalesforceBulkTimeoutError, match=r"0 秒"),
         ):
             client.bulk_ingest.insert(self.OBJECT_NAME, [{"Name": "A"}], timeout_seconds=0)
 

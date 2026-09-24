@@ -2,23 +2,20 @@
 
 BrowserError
 ├── 起動・終了に関するもの
-│   ├── DriverStartError            ドライバーの起動に失敗した
-│   ├── BrowsersNotStartedError     Browsers を with に入れずに使った
-│   ├── BrowsersClosedError         with を抜けた後の Browsers を使った
-│   ├── SessionNotStartedError      with に入らずに操作した
-│   └── SessionClosedError          with を抜けた後に操作した
+│   ├── DriverStartError                ドライバーの起動に失敗した
+│   ├── BrowserNotStartedError           with に入らずにブラウザを操作した
+│   └── BrowserClosedError               with を抜けた後にブラウザを操作した
 ├── 並列実行に関するもの
-│   └── ConcurrentSessionUseError   1つのセッションを複数スレッドから同時に操作した
+│   └── ConcurrentSessionUseError        1つのセッションを複数スレッドから同時に操作した
 ├── 複数サイト管理に関するもの
-│   ├── SessionNameConflictError    同じ名前で2回起動した
-│   ├── SessionNotFoundError        起動していない名前を取り出そうとした
-│   ├── SiteConfigError             サブクラスの NAME が空
-│   ├── SiteAlreadyInLibraryError   ライブラリにあるサイトをプロジェクト側で再定義した
-│   └── SiteNotStartedError         起動していないサイトで to() / downloads を呼んだ
+│   ├── SessionNameConflictError         同じ名前で2回起動した
+│   ├── SessionNotFoundError             起動していない名前を取り出そうとした
+│   ├── SiteConfigError                  サブクラスの NAME が空
+│   └── SiteAlreadyInLibraryError        ライブラリにあるサイトをプロジェクト側で再定義した
 └── 画面操作に関するもの
-    ├── ElementNotFoundError        要素が時間内に見つからなかった
-    ├── PopupTabNotOpenedError      新しいタブが時間内に開かなかった
-    └── DownloadTimeoutError        ダウンロードが時間内に完了しなかった
+    ├── ElementNotFoundError             要素が時間内に見つからなかった
+    ├── PopupTabNotOpenedError           新しいタブが時間内に開かなかった
+    └── DownloadTimeoutError             ダウンロードが時間内に完了しなかった
 
 例外メッセージには「何が起きたか」だけでなく「次に何を確認すればよいか」まで書く。
 ブラウザ操作の失敗は画面側の変更が原因であることが多く、
@@ -69,11 +66,16 @@ class DriverStartError(BrowserError):
         )
 
 
-class BrowsersNotStartedError(BrowserError):
-    """`with` を使わずに `Browsers` を使った
+class BrowserNotStartedError(BrowserError):
+    """`with` を使わずにブラウザを操作した
 
-    with を使わないと、処理の途中で例外が出たときにブラウザのプロセスが残り続ける。
-    残ったブラウザはドライバーの更新も邪魔するため、必ず with の中で使う。
+    ``Browsers`` 本体の ``launch`` / ``launch_session`` / ``run_task`` / ``__getitem__`` 、
+    ``BrowserSession`` の ``open`` / ``driver`` など、 ``Browsers / BrowserSession`` を
+    ``with`` に入れずに呼ぶとここで止める。with を使わないと、処理の途中で例外が
+    出たときにブラウザのプロセスが残り続けるため。
+
+    ``SiteBase.to()`` / ``SiteBase.downloads`` のように、サイト単位で ``with`` に入る
+    経路も同じく ``with`` の外で使うとここで止まる。
 
         # 誤り
         browsers = Browsers()
@@ -87,82 +89,24 @@ class BrowsersNotStartedError(BrowserError):
         `with Browsers() as browsers:` の中で使う（ブラウザは起動していないので実害はない）
     """
 
-    def __init__(self, operation: str) -> None:
-        super().__init__(
-            f"with に入れずに Browsers を使いました: {operation}\n"
-            "Browsers は with 文の中でだけ使えます。\n"
-            "  with Browsers() as browsers:\n"
-            "      kintai = browsers.launch(Kintai)\n"
-            "      ...\n"
-            "こうしておくと、途中でエラーが出てもブラウザは必ず閉じられます。"
-        )
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
 
 
-class BrowsersClosedError(BrowserError):
-    """`with` を抜けた後の `Browsers` を使った
+class BrowserClosedError(BrowserError):
+    """`with` を抜けた後のブラウザを操作した
 
-    with の外へ browsers を持ち出すと起きる。with を抜けた時点で
+    with の外へブラウザを持ち出すと起きる。with を抜けた時点で
     ブラウザはすべて閉じているため、そこから起動や操作はできない。
+    取得したデータを with の外で使いたい場合は、セッションではなく
+    取り出した値（文字列やファイルパス）を返すようにする。
 
     対処:
         続けたい処理を `with` の中に入れる。外へ持ち出すのは取り出した値だけにする
     """
 
-    def __init__(self, operation: str) -> None:
-        super().__init__(
-            f"with を抜けた後の Browsers を使いました: {operation}\n"
-            "ブラウザはすでに全部閉じています。\n"
-            "続けて操作したい処理は with の中に入れてください。\n"
-            "with の外へ持ち出すのはブラウザではなく、取り出した値にします。"
-        )
-
-
-class SessionNotStartedError(BrowserError):
-    """`with` を使わずにブラウザを操作した
-
-    BrowserSession は with 文の中でだけ使える。with を使わないと、
-    処理の途中で例外が出たときにブラウザのプロセスが残り続けるため。
-
-        # 誤り
-        session = BrowserSession(...)
-        session.open("https://example.com")     # ← ここで送出される
-
-        # 正しい
-        with Browsers() as browsers:
-            kintai = browsers.launch(Kintai)
-            kintai.session.open("https://example.com")
-
-    対処:
-        `with Browsers() as browsers:` の中で使う
-    """
-
-    def __init__(self, operation: str) -> None:
-        super().__init__(
-            f"with に入る前のセッションを操作しました: {operation}\n"
-            "BrowserSession は with 文の中でだけ使えます。\n"
-            "  with Browsers() as browsers:\n"
-            "      kintai = browsers.launch(Kintai)\n"
-            "      kintai.session.open(...)\n"
-            "サイトを増やすときは launch を1行足してください。"
-        )
-
-
-class SessionClosedError(BrowserError):
-    """`with` を抜けた後のブラウザを操作した
-
-    with の外へセッションを持ち出すと起きる。取得したデータを with の外で使いたい場合は、
-    セッションではなく取り出した値（文字列やファイルパス）を返すようにする。
-
-    対処:
-        `with` の外へ持ち出すのは、ブラウザではなく取り出した値にする
-    """
-
-    def __init__(self, name: str, operation: str) -> None:
-        super().__init__(
-            f"閉じ終わったセッション「{name}」を操作しました: {operation}\n"
-            "with を抜けた後のセッションは使えません。\n"
-            "with の外へ持ち出すのはセッションではなく、取り出した値にしてください。"
-        )
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
 
 
 # ------------------------------------------------------------ 並列実行
@@ -208,25 +152,6 @@ class SessionNameConflictError(BrowserError):
             "1つの Browsers の中で同じ名前は使えません。\n"
             "同じサイトに2つのアカウントでログインする場合は、"
             "「kintai_a」「kintai_b」のように名前を分けてください。"
-        )
-
-
-class SiteNotStartedError(BrowserError):
-    """まだ起動していないサイトの画面を作ろうとした
-
-    `with` に入る前、または閉じた後に `to()` を呼ぶとここで止まる。
-    ブラウザが無い状態で画面クラスを作ると、最初の操作まで失敗が遅れる。
-
-    発生箇所: SiteBase.to() / SiteBase.downloads
-
-    対処:
-        `with Kintai() as kintai:` の中で使う
-    """
-
-    def __init__(self, site: type) -> None:
-        super().__init__(
-            f"{site.__name__} はまだ起動していません。"
-            f"`with {site.__name__}() as site:` の中で使ってください。"
         )
 
 

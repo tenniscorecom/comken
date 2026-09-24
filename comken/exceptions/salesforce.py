@@ -244,7 +244,7 @@ class SalesforceReportAccessDeniedError(SalesforceError):
     対処:
         Salesforce 管理者に、refresh_token を発行したユーザーについて
         次を確認してもらう。
-          1. Profile / Permission Set に「API Enabled」権限があるか
+          1. Profile / Permission Set に「API Enabled」」権限があるか
           2. 対象のレポート・レポートフォルダへのアクセス権があるか
           3. 組織の Edition・ライセンスが Reports and Dashboards REST API
              に対応しているか（一部の制限ライセンスでは使えない）
@@ -290,73 +290,41 @@ class SalesforceReportExportError(SalesforceError):
         )
 
 
-class SalesforceBulkQueryFailedError(SalesforceError):
-    """Bulk API のクエリジョブが失敗して終わった（Failed / Aborted）
+class SalesforceBulkFailedError(SalesforceError):
+    """Bulk API のジョブが失敗して終わった（Failed / Aborted）
+
+    クエリ（``bulk_query``）と Ingest（``bulk_ingest``）の両方で共通する
+    ジョブ失敗を扱う。SOQL 構文・項目参照・CSV 列名・データ型など、
+    原因は経路ごとに違うのでメッセージで個別に示す。
 
     発生箇所: comken.toolbox.salesforce.bulk_query.BulkQueryAPI.run()
+             comken.toolbox.salesforce.bulk_ingest.BulkIngestAPI の
+             insert() / update() / upsert() / delete()
 
     対処:
-        表示されたエラー内容を確認する。SOQL の構文・参照項目・
-        実行ユーザーの権限を見直す
+        表示されたエラー内容を確認する。クエリ経路は SOQL 構文・参照項目・
+        実行ユーザーの権限、Ingest 経路は CSV の列名・データ型・実行ユーザーの
+    権限を見直す
     """
 
-    def __init__(self, job_id: str, state: str, error_message: str) -> None:
-        super().__init__(
-            f"Salesforce の Bulk API クエリジョブが失敗しました（状態: {state}）: {job_id}\n"
-            f"{error_message}\n"
-            "SOQL の構文・参照項目・実行ユーザーの権限を確認してください。"
-        )
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
 
 
-class SalesforceBulkQueryTimeoutError(SalesforceError):
-    """Bulk API のクエリジョブが制限時間内に終わらなかった
+class SalesforceBulkTimeoutError(SalesforceError):
+    """Bulk API のジョブが制限時間内に終わらなかった
+
+    クエリ（``bulk_query``）と Ingest（``bulk_ingest``）の両方で共通する
+    タイムアウトを扱う。
 
     発生箇所: comken.toolbox.salesforce.bulk_query.BulkQueryAPI.run()
+             comken.toolbox.salesforce.bulk_ingest.BulkIngestAPI の
+             insert() / update() / upsert() / delete()
 
     対処:
-        timeout_seconds を長くするか、クエリの対象を絞って再実行する
+        ``timeout_seconds`` を長くするか、対象を絞って再実行する。
+        Ingest 経路はデータを分割して再実行してもよい
     """
 
-    def __init__(self, job_id: str, timeout_seconds: float) -> None:
-        super().__init__(
-            f"Salesforce の Bulk API クエリジョブが {timeout_seconds} 秒以内に"
-            f"終わりませんでした: {job_id}\n"
-            "timeout_seconds を長くするか、クエリの対象を絞って再実行してください。"
-        )
-
-
-class SalesforceBulkIngestFailedError(SalesforceError):
-    """Bulk API の Ingest ジョブが失敗して終わった（Failed / Aborted）
-
-    発生箇所: comken.toolbox.salesforce.bulk_ingest.BulkIngestAPI の
-              insert() / update() / upsert() / delete()
-
-    対処:
-        表示されたエラー内容を確認する。CSV の列名・データ型・
-        実行ユーザーの権限を見直す
-    """
-
-    def __init__(self, job_id: str, state: str, error_message: str) -> None:
-        super().__init__(
-            f"Salesforce の Bulk API Ingest ジョブが失敗しました（状態: {state}）: {job_id}\n"
-            f"{error_message}\n"
-            "CSV の列名・データ型・実行ユーザーの権限を確認してください。"
-        )
-
-
-class SalesforceBulkIngestTimeoutError(SalesforceError):
-    """Bulk API の Ingest ジョブが制限時間内に終わらなかった
-
-    発生箇所: comken.toolbox.salesforce.bulk_ingest.BulkIngestAPI の
-              insert() / update() / upsert() / delete()
-
-    対処:
-        timeout_seconds を長くするか、データを分割して再実行する
-    """
-
-    def __init__(self, job_id: str, timeout_seconds: float) -> None:
-        super().__init__(
-            f"Salesforce の Bulk API Ingest ジョブが {timeout_seconds} 秒以内に"
-            f"終わりませんでした: {job_id}\n"
-            "timeout_seconds を長くするか、データを分割して再実行してください。"
-        )
+    def __init__(self, message: str) -> None:
+        super().__init__(message)

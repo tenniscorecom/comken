@@ -9,9 +9,9 @@ r"""comken/services/salesforce_downloader/soql_reports/runner.py — SOQLレポ�
     saved = download_soql_reports([Large, ...])  # テスト用に取り違え
 
 ``download_scheduled()`` と同じく **1件失敗しても残りは続ける**。
-戻り値は ``list[Path]``。``ScheduledDownloadFailedError`` 相当の役割を
-``SoqlDownloadFailedError`` が担う（履歴 CSV を前提にしたメッセージは
-合わないため SOQL 経路は専用例外にする）。
+戻り値は ``list[Path]``。定期取得（履歴 CSV 前提）の失敗用の例外は
+``SoqlDownloadFailedError`` が SOQL 経路向けに担う（履歴前提のメッセージは
+合わないため、SOQL 経路は専用例外にする）。
 
 履歴（history.csv）への記録は **今回対象外**。``ReportEntry`` 前提の
 ``history.record()`` を無理に流用せず、まずは「取得して保存する」ところまで

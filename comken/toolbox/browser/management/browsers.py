@@ -56,8 +56,8 @@ from typing import Self, TypeVar
 
 from comken.core.timer import measure
 from comken.exceptions import (
-    BrowsersClosedError,
-    BrowsersNotStartedError,
+    BrowserClosedError,
+    BrowserNotStartedError,
     SessionNameConflictError,
     SessionNotFoundError,
     SiteConfigError,
@@ -88,7 +88,7 @@ class Browsers:
     どこで例外が出ても、起動済みのブラウザはすべて閉じる。
     1つのブラウザの終了に失敗しても、残りの終了は続行される。
 
-    with を使わずに launch すると BrowsersNotStartedError になる（ブラウザは起動しない）。
+    with を使わずに launch すると BrowserNotStartedError になる（ブラウザは起動しない）。
     with を必須にしているのは、途中で例外が出たときにブラウザのプロセスが残り、
     次の実行でドライバーの更新まで邪魔するのを防ぐため。
 
@@ -359,13 +359,25 @@ class Browsers:
         起動してしまう前にここで止めるので、弾かれた時点では何も起きていない。
 
         Raises:
-            BrowsersNotStartedError: with に入れずに使った場合。
-            BrowsersClosedError: with を抜けた後に使った場合。
+            BrowserNotStartedError: with に入れずに使った場合。
+            BrowserClosedError: with を抜けた後に使った場合。
         """
         if self._is_closed:
-            raise BrowsersClosedError(operation)
+            raise BrowserClosedError(
+                f"with を抜けた後の Browsers を使いました: {operation}\n"
+                "ブラウザはすでに全部閉じています。\n"
+                "続けて操作したい処理は with の中に入れてください。\n"
+                "with の外へ持ち出すのはブラウザではなく、取り出した値にします。"
+            )
         if not self._is_started:
-            raise BrowsersNotStartedError(operation)
+            raise BrowserNotStartedError(
+                f"with に入れずに Browsers を使いました: {operation}\n"
+                "Browsers は with 文の中でだけ使えます。\n"
+                "  with Browsers() as browsers:\n"
+                "      kintai = browsers.launch(Kintai)\n"
+                "      ...\n"
+                "こうしておくと、途中でエラーが出てもブラウザは必ず閉じられます。"
+            )
 
     def _finish_background_tasks(self) -> None:
         """裏で動いている処理の終了を待ってから、実行の仕組みを片付ける。

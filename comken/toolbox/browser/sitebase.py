@@ -39,9 +39,9 @@ from types import TracebackType
 from typing import TYPE_CHECKING, ClassVar, Self, TypeVar
 
 from comken.exceptions import (
+    BrowserNotStartedError,
     SiteAlreadyInLibraryError,
     SiteConfigError,
-    SiteNotStartedError,
     SiteOwnerRequiredError,
 )
 from comken.toolbox.browser.download import DownloadDir
@@ -161,10 +161,13 @@ class SiteBase:
             files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
 
         Raises:
-            SiteNotStartedError: まだ起動していない場合。
+            BrowserNotStartedError: まだ起動していない場合。
         """
         if self.session is None:
-            raise SiteNotStartedError(self.__class__)
+            raise BrowserNotStartedError(
+                f"{self.__class__.__name__} はまだ起動していません。"
+                f"`with {self.__class__.__name__}() as site:` の中で使ってください。"
+            )
         return self.session.download_dir
 
     def to(self, page_class: type[P]) -> P:
@@ -194,7 +197,10 @@ class SiteBase:
             そのサイトのブラウザに紐づいた画面クラスのインスタンス。
         """
         if self.session is None:
-            raise SiteNotStartedError(self.__class__)
+            raise BrowserNotStartedError(
+                f"{self.__class__.__name__} はまだ起動していません。"
+                f"`with {self.__class__.__name__}() as site:` の中で使ってください。"
+            )
         return page_class(self.session)
 
     def close(self) -> None:

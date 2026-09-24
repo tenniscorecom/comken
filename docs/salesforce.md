@@ -410,8 +410,8 @@ delete）は次の「Bulk API 2.0 の Ingest ジョブ」節の `bulk_ingest` �
 
 ### エラー
 
-- `SalesforceBulkQueryFailedError`: ジョブが `Failed` / `Aborted` で終わったとき
-- `SalesforceBulkQueryTimeoutError`: `timeout_seconds` 以内にジョブが完了しなかったとき（既定600秒）
+- `SalesforceBulkFailedError`: ジョブが `Failed` / `Aborted` で終わったとき
+- `SalesforceBulkTimeoutError`: `timeout_seconds` 以内にジョブが完了しなかったとき（既定600秒）
 
 ### 未検証の前提
 
@@ -464,7 +464,7 @@ with Solution() as sf:
 ### 設計判断: 失敗行は例外にしない
 
 `BulkIngestResult.failed` が空でないときに例外は送出しない。これとは別に、
-`SalesforceBulkIngestFailedError` は**ジョブ自体が `Failed` / `Aborted`
+`SalesforceBulkFailedError` は**ジョブ自体が `Failed` / `Aborted`
 で終わった場合**（CSV の形式不正・対象オブジェクトが存在しない等、
 個々の行ではなくジョブ全体を実行できなかった場合）に限って送出される。
 
@@ -475,8 +475,8 @@ HTTP 呼び出しが1回も発生せず、空の `BulkIngestResult` を返す。
 
 ### エラー
 
-- `SalesforceBulkIngestFailedError`: ジョブが `Failed` / `Aborted` で終わったとき（メッセージに `errorMessage` の内容を含める）
-- `SalesforceBulkIngestTimeoutError`: `timeout_seconds` 以内にジョブが完了しなかったとき（既定600秒）
+- `SalesforceBulkFailedError`: ジョブが `Failed` / `Aborted` で終わったとき（メッセージに `errorMessage` の内容を含める）
+- `SalesforceBulkTimeoutError`: `timeout_seconds` 以内にジョブが完了しなかったとき（既定600秒）
 
 ### 未検証の前提
 

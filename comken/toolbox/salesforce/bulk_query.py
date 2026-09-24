@@ -27,8 +27,8 @@ from typing import TYPE_CHECKING
 from comken.core.table import Table
 from comken.core.timer import measure
 from comken.exceptions import (
-    SalesforceBulkQueryFailedError,
-    SalesforceBulkQueryTimeoutError,
+    SalesforceBulkFailedError,
+    SalesforceBulkTimeoutError,
 )
 from comken.toolbox.csv import CSV
 from comken.toolbox.salesforce._bulk_paging import fetch_paged_csv_as_table
@@ -92,9 +92,9 @@ class BulkQueryAPI:
             クエリ結果を表す ``Table``。0件のときは列・行とも空。
 
         Raises:
-            SalesforceBulkQueryFailedError: ジョブが失敗して終わった場合
+            SalesforceBulkFailedError: ジョブが失敗して終わった場合
                 （状態が Failed / Aborted）。
-            SalesforceBulkQueryTimeoutError: timeout_seconds 以内にジョブが
+            SalesforceBulkTimeoutError: timeout_seconds 以内にジョブが
                 完了しなかった場合。
         """
         job_id = self._create_job(soql)
@@ -119,8 +119,8 @@ class BulkQueryAPI:
             保存した CSV のパス。
 
         Raises:
-            SalesforceBulkQueryFailedError: ``run()`` から伝播。
-            SalesforceBulkQueryTimeoutError: ``run()`` から伝播。
+            SalesforceBulkFailedError: ``run()`` から伝播。
+            SalesforceBulkTimeoutError: ``run()`` から伝播。
         """
         table = self.run(soql, timeout_seconds=timeout_seconds)
         csv_path = Path(path)
@@ -144,8 +144,8 @@ class BulkQueryAPI:
 
         ``state`` が ``JobComplete`` になるまで ``POLL_INTERVAL_SECONDS`` 秒
         間隔で ``GET /jobs/query/{jobId}`` を投げる。``Failed`` / ``Aborted``
-        になったら ``SalesforceBulkQueryFailedError`` を、``timeout_seconds``
-        以内に ``JobComplete`` にならなければ ``SalesforceBulkQueryTimeoutError``
+        になったら ``SalesforceBulkFailedError`` を、``timeout_seconds``
+        以内に ``JobComplete`` にならなければ ``SalesforceBulkTimeoutError``
         を送出する。
         """
         path = self._client.data_path(f"{JOBS_PATH}/{job_id}")
@@ -161,9 +161,18 @@ class BulkQueryAPI:
                     if isinstance(data, dict)
                     else "詳細情報なし"
                 )
-                raise SalesforceBulkQueryFailedError(job_id, state, error_message)
+                raise SalesforceBulkFailedError(
+                    f"Salesforce の Bulk API クエリジョブが失敗しました"
+                    f"（状態: {state}）: {job_id}\n"
+                    f"{error_message}\n"
+                    "SOQL の構文・参照項目・実行ユーザーの権限を確認してください。"
+                )
             time.sleep(POLL_INTERVAL_SECONDS)
-        raise SalesforceBulkQueryTimeoutError(job_id, timeout_seconds)
+        raise SalesforceBulkTimeoutError(
+            f"Salesforce の Bulk API クエリジョブが {timeout_seconds} 秒以内に"
+            f"終わりませんでした: {job_id}\n"
+            "timeout_seconds を長くするか、クエリの対象を絞って再実行してください。"
+        )
 
     def _fetch_all_results(self, job_id: str) -> Table:
         """結果 CSV を（ページングがあれば全ページ）取得し、``Table`` に変換する。

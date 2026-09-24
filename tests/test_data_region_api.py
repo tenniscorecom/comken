@@ -7,7 +7,7 @@ import pytest
 
 from comken import dry_run
 from comken.core.table import Table
-from comken.exceptions import DataSheetAccessError, TableColumnMismatchError
+from comken.exceptions import ExcelUsageError, TableColumnMismatchError
 from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Excel
 
@@ -75,7 +75,7 @@ class TestExcelTable:
         with Excel(tmp_path / "data.xlsx") as excel:
             sheet = excel.create_data_sheet("Users")
 
-            with pytest.raises(DataSheetAccessError):
+            with pytest.raises(ExcelUsageError):
                 sheet.write_value("A1", "禁止")
 
     def test_empty_replace_with_omitted_non_formula_column_raises(self, tmp_path) -> None:
@@ -167,7 +167,7 @@ class TestExcelTable:
         with Excel(tmp_path / "dashboard.xlsx") as excel:
             sheet = excel.sheet("Dashboard")
 
-            with pytest.raises(DataSheetAccessError):
+            with pytest.raises(ExcelUsageError):
                 sheet.table()
 
     def test_display_sheet_cell_range_and_format(self, tmp_path) -> None:

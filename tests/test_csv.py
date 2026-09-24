@@ -8,9 +8,7 @@ from comken.constants import Encoding
 from comken.core import Table
 from comken.exceptions import (
     ComkenFileNotFoundError,
-    CSVColumnsRequiredError,
-    CSVHeaderMissingError,
-    CSVInvalidHeaderError,
+    CSVHeaderError,
     CSVRowLengthError,
     EncodingDetectionError,
     InvalidTableOperationError,
@@ -231,7 +229,7 @@ class TestCSV:
     def test_rejects_invalid_headers(self, tmp_path, text) -> None:
         path = tmp_path / "data.csv"
         path.write_text(text, encoding="utf-8-sig")
-        with pytest.raises(CSVInvalidHeaderError), CSV(path) as csv_file:
+        with pytest.raises(CSVHeaderError), CSV(path) as csv_file:
             csv_file.read()
 
     @pytest.mark.parametrize("text", ["id,name\n1\n", "id,name\n1,A,extra\n"])
@@ -279,7 +277,7 @@ class TestCSV:
         with pytest.raises(ComkenFileNotFoundError), CSV(path) as csv_file:
             csv_file.read()
         path.touch()
-        with pytest.raises(CSVHeaderMissingError), CSV(path) as csv_file:
+        with pytest.raises(CSVHeaderError), CSV(path) as csv_file:
             csv_file.read()
         with CSV(path, columns=["id"]) as csv_file:
             assert csv_file.read() == []
@@ -287,7 +285,7 @@ class TestCSV:
     def test_utf8_bom_only_has_missing_header_error(self, tmp_path) -> None:
         path = tmp_path / "bom_only.csv"
         path.write_bytes(b"\xef\xbb\xbf")
-        with pytest.raises(CSVHeaderMissingError), CSV(path) as csv_file:
+        with pytest.raises(CSVHeaderError), CSV(path) as csv_file:
             csv_file.read()
 
     def test_replace_empty_preserves_columns_or_requires_them(self, tmp_path) -> None:
@@ -296,7 +294,7 @@ class TestCSV:
         with CSV(existing) as csv_file:
             csv_file.replace([])
         assert existing.read_text(encoding="utf-8-sig") == "id\n"
-        with pytest.raises(CSVColumnsRequiredError), CSV(tmp_path / "new.csv") as csv_file:
+        with pytest.raises(CSVHeaderError), CSV(tmp_path / "new.csv") as csv_file:
             csv_file.replace([])
 
     def test_read_outside_with_block_raises_table_not_open_error(self, tmp_path) -> None:

@@ -14,11 +14,10 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from comken.core.table.model import Table
 from comken.exceptions import (
-    DataSheetAccessError,
+    ExcelNameError,
+    ExcelUsageError,
     InvalidTableInputError,
-    InvalidTableNameError,
     InvalidTableOperationError,
-    TableAlreadyExistsError,
     TableNotFoundError,
 )
 from comken.toolbox.excel.table import ExcelTable
@@ -53,6 +52,23 @@ _FORBIDDEN_TABLE_CHARACTERS = frozenset("[]/\\:*?\"<>|'`#%@$&+={}~")
 logger = logging.getLogger(__name__)
 
 
+def _data_sheet_access_error(sheet_name: str, operation: str) -> ExcelUsageError:
+    """データシートと表示用シートの責務違反のメッセージを組み立てる。"""
+    return ExcelUsageError(
+        f"シート「{sheet_name}」では {operation} を使用できません。\n"
+        "データシートは table()、表示用シートはセル・範囲 API で操作してください。"
+    )
+
+
+def _invalid_table_name_error(name: str) -> ExcelNameError:
+    """テーブル命名規則違反のメッセージを組み立てる。"""
+    return ExcelNameError(
+        f"テーブル名「{name}」は Excel で使用できません。\n"
+        "空白を含めず、数字以外から始まり、セル参照（A1、R1C1 など）と"
+        "紛らわしくない名前を指定してください。"
+    )
+
+
 class Sheet:
     """Excel シートのデータ領域または表示領域を操作する。"""
 
@@ -70,7 +86,7 @@ class Sheet:
     def table(self, name: str | None = None) -> ExcelTable:
         """データシート全体を扱うテーブルを返す。"""
         if not self.is_data_sheet:
-            raise DataSheetAccessError(self._worksheet.title, "table")
+            raise _data_sheet_access_error(self._worksheet.title, "table")
         table_names = list(self._worksheet.tables)
         if name is not None:
             name = self._with_table_prefix(name)
@@ -94,13 +110,15 @@ class Sheet:
         現在値で、Excel ファイルへの保存は Excel の save/with 契約で後から行います。
         """
         if not self.is_data_sheet:
-            raise DataSheetAccessError(self._worksheet.title, "create_table")
+            raise _data_sheet_access_error(self._worksheet.title, "create_table")
         full_name = self._with_table_prefix(name)
         self._validate_table_name(name)
         workbook = self._excel._workbook
         assert workbook is not None  # Sheet は _ensure_normal_workbook() の後にしか作られない
         if any(full_name in worksheet.tables for worksheet in workbook.worksheets):
-            raise TableAlreadyExistsError(full_name)
+            raise ExcelNameError(
+                f"テーブル「{full_name}」は既に存在します。\n別のテーブル名を指定してください。"
+            )
         if not isinstance(table, Table):
             raise InvalidTableInputError("create_table には Table を指定してください。")
         if not table.columns:
@@ -164,20 +182,20 @@ class Sheet:
         ここで先に弾く。
         """
         if not name:
-            raise InvalidTableNameError(name)
+            raise _invalid_table_name_error(name)
         # Excel はテーブル名に空白・制御文字を許さない
         if any(ch.isspace() for ch in name):
-            raise InvalidTableNameError(name)
+            raise _invalid_table_name_error(name)
         # 先頭が数字だとセル参照と紛らわしい
         if name[0].isdigit():
-            raise InvalidTableNameError(name)
+            raise _invalid_table_name_error(name)
         # Excel がセル参照と解釈し得る形（A1, R1C1 など）を拒否する
         if _CELL_REFERENCE_PATTERN.fullmatch(name):
-            raise InvalidTableNameError(name)
+            raise _invalid_table_name_error(name)
         # Excel が許さない特殊文字を拒否する
         for character in name:
             if character in _FORBIDDEN_TABLE_CHARACTERS:
-                raise InvalidTableNameError(name)
+                raise _invalid_table_name_error(name)
 
     def write_value(self, cell: str, value: Any) -> None:
         """セルへ値を書き込む。"""
@@ -549,7 +567,7 @@ class Sheet:
     def _ensure_display_sheet(self, operation: str) -> None:
         self._excel._ensure_open()
         if self.is_data_sheet:
-            raise DataSheetAccessError(self._worksheet.title, operation)
+            raise _data_sheet_access_error(self._worksheet.title, operation)
 
     def _set_row_hidden(self, row: int, is_hidden: bool) -> None:
         self._ensure_display_sheet("hide/show_row")

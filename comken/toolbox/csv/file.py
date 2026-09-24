@@ -15,9 +15,7 @@ from comken.core.files import atomic_write
 from comken.core.table.model import Table
 from comken.core.timer import measure
 from comken.exceptions.csv import (
-    CSVColumnsRequiredError,
-    CSVHeaderMissingError,
-    CSVInvalidHeaderError,
+    CSVHeaderError,
     CSVRowLengthError,
     EncodingDetectionError,
 )
@@ -32,6 +30,21 @@ from comken.runtime import is_dry_run
 logger = logging.getLogger(__name__)
 
 type Value = str | int | float | bool
+
+
+def _missing_header_message(path: Path) -> str:
+    """``CSVHeaderError`` の「見出し行が無い」文言。"""
+    return f"CSV に見出し行がありません: {path}\ncolumns を指定するか、見出し行を追加してください。"
+
+
+def _invalid_header_message(path: Path, reason: str) -> str:
+    """``CSVHeaderError`` の「見出しに空欄・重複がある」文言。"""
+    return f"CSV の見出しが不正です: {path}\n{reason}"
+
+
+def _columns_required_message(path: Path) -> str:
+    """``CSVHeaderError`` の「空 CSV に列を決定できない」文言。"""
+    return f"空の新規 CSV の列を決定できません: {path}\nCSV(columns=[...]) を指定してください。"
 
 
 def read_text(path: str | Path, *, encoding: str = Encoding.AUTO) -> str:
@@ -143,12 +156,12 @@ class CSV:
         if self.path.stat().st_size == 0:
             logger.debug("CSV は空ファイルです: %s", self.path)
             if self._columns is None:
-                raise CSVHeaderMissingError(self.path)
+                raise CSVHeaderError(_missing_header_message(self.path))
             return Table(self._columns, [], types=self._types)
         raw_rows = list(csv.reader(io.StringIO(self._read_text())))
         if not raw_rows and self._columns is None:
             # UTF-8 BOM は文字ではなく署名なので、BOM だけのファイルにも見出しはない。
-            raise CSVHeaderMissingError(self.path)
+            raise CSVHeaderError(_missing_header_message(self.path))
         columns = self._columns if self._columns is not None else raw_rows.pop(0)
         self._validate_columns(columns)
         first_data_line = 1 if self._columns is not None else 2
@@ -199,7 +212,7 @@ class CSV:
             raise ComkenFileNotFoundError("CSV ファイル", self.path)
         if self.path.stat().st_size == 0:
             if self._columns is None:
-                raise CSVHeaderMissingError(self.path)
+                raise CSVHeaderError(_missing_header_message(self.path))
             return
         if self._encoding == Encoding.AUTO:
             # 自動判定はファイル全体を読んでから順に文字コードを試す必要があるため、
@@ -249,13 +262,17 @@ class CSV:
 
     def _validate_columns(self, columns: list[str]) -> None:
         if not columns:
-            raise CSVHeaderMissingError(self.path)
+            raise CSVHeaderError(_missing_header_message(self.path))
         empty = [index for index, column in enumerate(columns, 1) if column == ""]
         if empty:
-            raise CSVInvalidHeaderError(self.path, f"空の見出しがあります（{empty}列目）。")
+            raise CSVHeaderError(
+                _invalid_header_message(self.path, f"空の見出しがあります（{empty}列目）。")
+            )
         duplicates = [column for column in dict.fromkeys(columns) if columns.count(column) > 1]
         if duplicates:
-            raise CSVInvalidHeaderError(self.path, f"重複する見出しがあります: {duplicates}")
+            raise CSVHeaderError(
+                _invalid_header_message(self.path, f"重複する見出しがあります: {duplicates}")
+            )
 
     def _read_text(self) -> str:
         # 汎用ヘルパーに判定を委譲する（履歴CSVなどからも同じロジックを使う）
@@ -280,7 +297,7 @@ class CSV:
             if columns is None and self.path.exists() and self.path.stat().st_size > 0:
                 columns = self.read().columns
             if columns is None:
-                raise CSVColumnsRequiredError(self.path)
+                raise CSVHeaderError(_columns_required_message(self.path))
             table = Table(columns, [], types=self._types)
         self._pending = table
         logger.debug(

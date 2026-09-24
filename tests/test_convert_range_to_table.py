@@ -9,11 +9,9 @@ from __future__ import annotations
 import pytest
 
 from comken.exceptions import (
-    DuplicateHeaderCellError,
-    EmptyHeaderCellError,
+    ExcelHeaderError,
+    ExcelNameError,
     InvalidTableInputError,
-    InvalidTableNameError,
-    TableAlreadyExistsError,
 )
 from comken.toolbox.excel import Excel
 from comken.toolbox.excel.workbook import ExcelTable
@@ -114,7 +112,7 @@ class TestConvertRangeToTableErrors:
     """異常系: 安全性判定に違反した場合、対応する既存例外が上がる。"""
 
     def test_empty_header_cell_raises(self, tmp_path) -> None:
-        """見出し行のセルが空なら ``EmptyHeaderCellError``。"""
+        """見出し行のセルが空なら ``ExcelHeaderError``。"""
         path = tmp_path / "book.xlsx"
         with Excel(path) as excel:
             sheet = excel.create_sheet("案件一覧")
@@ -122,7 +120,7 @@ class TestConvertRangeToTableErrors:
             sheet.write_value("A2", "1")
             sheet.write_value("B2", "A")
             sheet.write_value("C2", "OK")
-            with pytest.raises(EmptyHeaderCellError):
+            with pytest.raises(ExcelHeaderError):
                 excel.convert_range_to_table("案件一覧", range="A1:C2", table_name="案件")
 
     def test_merged_cell_inside_range_raises(self, tmp_path) -> None:
@@ -157,7 +155,7 @@ class TestConvertRangeToTableErrors:
             assert "3" in str(exc_info.value)
 
     def test_duplicate_headers_raise(self, tmp_path) -> None:
-        """見出しの重複は ``DuplicateHeaderCellError``。"""
+        """見出しの重複は ``ExcelHeaderError``。"""
         path = tmp_path / "book.xlsx"
         with Excel(path) as excel:
             sheet = excel.create_sheet("案件一覧")
@@ -165,7 +163,7 @@ class TestConvertRangeToTableErrors:
             sheet.write_value("A2", "1")
             sheet.write_value("B2", "A")
             sheet.write_value("C2", "OK")
-            with pytest.raises(DuplicateHeaderCellError):
+            with pytest.raises(ExcelHeaderError):
                 excel.convert_range_to_table("案件一覧", range="A1:C2", table_name="案件")
 
     @pytest.mark.parametrize(
@@ -179,16 +177,16 @@ class TestConvertRangeToTableErrors:
         ],
     )
     def test_invalid_table_names_raise(self, tmp_path, invalid_name: str) -> None:
-        """Excel のテーブル命名規則違反は ``InvalidTableNameError``。"""
+        """Excel のテーブル命名規則違反は ``ExcelNameError``。"""
         path = tmp_path / "book.xlsx"
         with Excel(path) as excel:
             sheet = excel.create_sheet("案件一覧")
             _write_simple_table(sheet)
-            with pytest.raises(InvalidTableNameError):
+            with pytest.raises(ExcelNameError):
                 excel.convert_range_to_table("案件一覧", range="A1:C4", table_name=invalid_name)
 
     def test_duplicate_table_name_raises(self, tmp_path) -> None:
-        """同じテーブル名が既に存在するときは ``TableAlreadyExistsError``。"""
+        """同じテーブル名が既に存在するときは ``ExcelNameError``。"""
         path = tmp_path / "book.xlsx"
         with Excel(path) as excel:
             sheet = excel.create_sheet("案件一覧")
@@ -198,7 +196,7 @@ class TestConvertRangeToTableErrors:
             sheet.write_value("E2", "1")
             sheet.write_value("F2", "A")
             sheet.write_value("G2", "OK")
-            with pytest.raises(TableAlreadyExistsError):
+            with pytest.raises(ExcelNameError):
                 excel.convert_range_to_table("案件一覧", range="E1:G2", table_name="案件")
 
     def test_range_outside_dimensions_raises(self, tmp_path) -> None:

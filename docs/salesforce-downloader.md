@@ -464,7 +464,7 @@ dedup 判定に使わない。スケジュール行に紐付かないレポー�
 同時実行しても行の途中を読まず、一定時間ロックを取れない場合や書込みに失敗した場合は
 専用例外（`HistoryLockTimeoutError` / `HistoryWriteError`）で処理を止める。既存履歴の
 見出しが現在の列定義と完全一致しない場合は、致命的に壊れた見出し（空の見出し・重複）が
-CSV 系の例外（`CSVInvalidHeaderError` / `CSVHeaderMissingError`）で止められる。
+CSV 系の例外（`CSVHeaderError`）で止められる。
 致命ではない列ずれ（列数が違う／列名が一部欠落／順序が違う）は `migrate_row()` で
 新構成に揃え直して読み込みを継続する。
 
@@ -896,11 +896,11 @@ saved = download_soql_reports()   # SOQL_REPORTS を全部取得・保存
 `ReportNotRegisteredError` / `SoqlReportNotRegisteredError` /
 `GroupNotRegisteredError` / `ReportDisabledError` / `MasterDuplicateValueError` /
 `MasterRowValueError` / `CachedReportNotFoundError` / `EmptyReportError` /
-`ComkenFileNotFoundError` / `ScheduledDownloadFailedError`（いずれも
-`comken/exceptions/downloader.py`）。
+`ComkenFileNotFoundError`（いずれも `comken/exceptions/downloader.py`）。
 
-`ScheduledDownloadFailedError` は**取得できたものを保存したうえで**送出する
-（理由は docstring 参照）。直したあと再実行すれば、残りだけが落ちる。
+定期取得で 1 件以上失敗した場合は **取得できたものを保存したうえで**例外で知らせる
+（理由は `SoqlDownloadFailedError` の docstring 参照）。直したあと再実行すれば、
+残りだけが落ちる。
 
 ---
 

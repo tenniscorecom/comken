@@ -6,9 +6,8 @@ import pytest
 
 from comken.core.table import Table
 from comken.exceptions import (
-    EmptyExcelTableError,
-    EmptyHeaderCellError,
     ExcelError,
+    ExcelHeaderError,
     InvalidTableOperationError,
     TableColumnMismatchError,
 )
@@ -28,7 +27,7 @@ def test_read_raises_when_range_read_returns_no_rows(tmp_path) -> None:
         # COM 読み込みを空結果にして rows が空になるシナリオを作る
         with (
             patch.object(excel, "_read_range_with_com", return_value=[]),
-            pytest.raises(EmptyExcelTableError) as exc_info,
+            pytest.raises(ExcelHeaderError) as exc_info,
         ):
             table.read(force_com=True)
 
@@ -44,7 +43,7 @@ def test_read_uses_header_error_when_header_row_is_empty(tmp_path) -> None:
 
         with (
             patch.object(excel, "_read_range_with_com", return_value=[(None,)]),
-            pytest.raises(EmptyHeaderCellError) as exc_info,
+            pytest.raises(ExcelHeaderError) as exc_info,
         ):
             table.read(force_com=True)
 
@@ -52,8 +51,8 @@ def test_read_uses_header_error_when_header_row_is_empty(tmp_path) -> None:
 
 
 def test_empty_excel_table_error_is_a_subclass_of_excel_error() -> None:
-    """EmptyExcelTableError が ExcelError の派生であることを確認する。"""
-    assert issubclass(EmptyExcelTableError, ExcelError)
+    """ExcelHeaderError が ExcelError の派生であることを確認する。"""
+    assert issubclass(ExcelHeaderError, ExcelError)
 
 
 def test_replace_on_empty_table_adds_first_data_row(tmp_path) -> None:

@@ -42,13 +42,13 @@ with Excel("一覧.xlsx", read_only=True) as excel:
 シート全体を Excel の構造化テーブル（`create_table()` で作る、リボンに出てくる正式なテーブルオブジェクト）として自動的に扱う機能はありません。1シートに複数の構造化テーブルがある場合は `table("名前")` で明示します。`Excel.read()` でシートの使用範囲全体を Python の `Table` として読む方法は「数式」節を参照してください（**Excel の構造化テーブルと comken の `Table` クラスは別物**です。`Excel.read()` は構造化テーブルの有無に関係なく、シートの使用範囲を comken の `Table` に変換します）。
 
 `create_table("名前", table)` に渡す名前は Excel がテーブル名に使えない形式
-（先頭が数字・セル参照と紛らわしい形・空白・特殊文字を含む）で `InvalidTableNameError` が
+（先頭が数字・セル参照と紛らわしい形・空白・特殊文字を含む）で `ExcelNameError` が
 出ます。エラーメッセージはそのまま非エンジニアへ届くため、**事前に `help` シートなどで
 命名ルールを書いておく**のが安全です。
 
 ## 表示用シート
 
-帳票のように書式や自由セル配置が必要なシートは `create_sheet("集計")` で作る。シート名はそのまま使われ、`PY_` 接頭辞は付きません。戻り値の `Sheet` ではセル・書式・ウィンドウ固定・列幅・行高などの表示用 API が使えます。`table()` のようなデータシート用 API は `DataSheetAccessError` になります。`create_sheet()` は複数回呼んで何枚でも追加でき、既存テストや管理表の動作は変わりません。
+帳票のように書式や自由セル配置が必要なシートは `create_sheet("集計")` で作る。シート名はそのまま使われ、`PY_` 接頭辞は付きません。戻り値の `Sheet` ではセル・書式・ウィンドウ固定・列幅・行高などの表示用 API が使えます。`table()` のようなデータシート用 API は `ExcelUsageError` になります。`create_sheet()` は複数回呼んで何枚でも追加でき、既存テストや管理表の動作は変わりません。
 
 ## 数式
 
@@ -130,14 +130,14 @@ with Excel("帳票.xlsx") as excel:
 ```
 
 - 安全性判定: 次のいずれかに該当すれば対応する例外で止める。
-  - 見出し行のセルが空 → `EmptyHeaderCellError`
+  - 見出し行のセルが空 → `ExcelHeaderError`
   - 範囲内に結合セルがある（A2 が発火した「見出し行より前の行」はタイトルとして許容）
     → `InvalidTableInputError`
   - 範囲がシートの使用範囲外 → `InvalidTableInputError`
   - データ行の途中に全セル空の行がある → `InvalidTableInputError`（行番号入り）
-  - 見出し行に重複がある → `DuplicateHeaderCellError`
-  - `table_name` が Excel の命名規則違反 → `InvalidTableNameError`
-  - 同名のテーブルが既に存在 → `TableAlreadyExistsError`
+  - 見出し行に重複がある → `ExcelHeaderError`
+  - `table_name` が Excel の命名規則違反 → `ExcelNameError`
+  - 同名のテーブルが既に存在 → `ExcelNameError`
 - 表示用シート・データシートどちらでも利用可能。`PY_T_` プレフィックスは補わない
   （指定された名前をそのまま使う）。
 - `engine="com"` で呼ぶと `InvalidTableOperationError`（openpyxl 経路のみ対応）。

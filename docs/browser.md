@@ -97,7 +97,7 @@ with Kintai() as kintai:
 
 ```python
 browsers = Browsers()
-browsers.launch(Kintai)   # ← BrowsersNotStartedError（ブラウザは起動しない）
+browsers.launch(Kintai)   # ← BrowserNotStartedError（ブラウザは起動しない）
 ```
 
 `with` を忘れるとエラーで落ちたときにブラウザのプロセスが残り続け、
@@ -794,7 +794,7 @@ unfilled, pending = browsers.parallel(
 
 ### BrowserSession（1サイト分のブラウザ）
 
-`with` の中でだけ使える。使わずに操作すると `SessionNotStartedError` になる
+`with` の中でだけ使える。使わずに操作すると `BrowserNotStartedError` になる
 （エラーで落ちたときにブラウザのプロセスが残り続けるのを防ぐため）。
 
 ```python

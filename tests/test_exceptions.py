@@ -13,12 +13,10 @@ from comken.exceptions import (
     ConfigMappingEmptyValueError,
     ConfigSectionNotFoundError,
     CSVError,
-    EmptyHeaderCellError,
     EncodingDetectionError,
-    ExcelColumnNotFoundError,
     ExcelError,
-    ExcelHeadersTooFewError,
-    FileFormatMismatchError,
+    ExcelHeaderError,
+    ExcelUsageError,
     KeyColumnNotFoundError,
     MacroError,
     SheetNotFoundError,
@@ -54,12 +52,34 @@ def test_all_declared_names_are_resolvable() -> None:
         ),
         (SheetNotFoundError("集計", ["Sheet1"]), ExcelError, "集計"),
         (MacroError("Module1.Run", Exception("失敗")), ExcelError, "Module1.Run"),
-        (EmptyHeaderCellError([2]), ExcelError, "列番号: [2]"),
-        (ExcelHeadersTooFewError(2, 3), ExcelError, "2列"),
-        (FileFormatMismatchError(".csv"), ExcelError, ".csv"),
+        (
+            ExcelHeaderError(
+                "ヘッダー行に空のセルがあります。列番号: [2]\n"
+                "Excelの1行目（ヘッダー行）を確認してください。"
+            ),
+            ExcelError,
+            "列番号: [2]",
+        ),
+        (
+            ExcelUsageError(
+                "headers の列数（2列）がシートの列数（3列）より少ないため、"
+                "はみ出した列のデータが失われます。\n"
+                "headers にすべての列名を指定してください。"
+            ),
+            ExcelError,
+            "2列",
+        ),
+        (
+            ExcelUsageError(
+                "保存先の拡張子（.csv）が元ファイルの形式と一致しません。\n"
+                "形式を変換して保存する場合は file_format 引数で FileFormat 定数を"
+                "指定してください。（例: file_format=FileFormat.CSV）"
+            ),
+            ExcelError,
+            ".csv",
+        ),
         (EncodingDetectionError("data.csv"), CSVError, "data.csv"),
         (ComkenFileNotFoundError("CSV ファイル", "data.csv"), ComkenError, "data.csv"),
-        (ExcelColumnNotFoundError(["金額"]), ColumnNotFoundError, "金額"),
         (KeyColumnNotFoundError("ID", ["名前"]), ColumnNotFoundError, "ID"),
         (
             ComkenFileNotFoundError(

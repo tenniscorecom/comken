@@ -45,25 +45,16 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
-| `DataSheetAccessError` | データシートと表示用シートの責務に反する操作をした。 | data_ で始まるシートは table()、それ以外はセル・範囲 API で操作する |
 | `ExcelApplicationNotAvailableError` | Excel を起動できない | この PC に Excel が入っているか確認する。入れられない PC で動かすなら、数式ではなく値で書いてもらう（管理表なら、数式の結果を貼り付けてもらう） |
+| `ExcelUsageError` | Excel の使い方に反する操作をした | エラーに表示された操作名・見出し数・拡張子を確認する。- ``read_only=True`` への書き込みは read_only=False で開き直す- データシート／表示用シートの API は ``Excel`` クラスのドキュメントを参照する |
+| `ExcelHeaderError` | Excel の見出し行・テーブル定義に関するエラー | - Excel の1行目（見出し行）の空欄・重複を直す- テーブル定義範囲が狭すぎないか、データシートと表示用シートの取り違えがないか確認する |
+| `ExcelNameError` | Excel のシート名・テーブル名に関するエラー | - 既に存在する名前は避ける（シート／テーブル）- ``PY_`` 接頭辞は ``create_data_sheet`` 用なので ``create_sheet`` には付けない- 空白・数字始まり・セル参照のような名前はテーブル名に使わない |
+| `ExcelSaveError` | 保存時に Excel ファイルを安全に置き換えられなかった | 元ファイルは変更されていない。空き容量・Excel のバージョン整合性・VBA の保存形式（``.xlsm`` になっているか）を確認して再実行する |
 | `SheetNotFoundError` | 指定した名前のシートがない | Excel を開いて、下のシート名（タブ）が変わっていないか確認する。変えた場合は元に戻す |
-| `SheetAlreadyExistsError` | 同じ名前のシートが既にある | 別のシート名を指定するか、既存のシート名を変更する |
-| `SheetNameError` | 表示用シートに使えない名前を ``create_sheet`` に渡した | 予約接頭辞 ``PY_`` を除いた名前を ``create_sheet`` に渡すか、データシートとして作る場合は ``create_data_sheet`` を使う |
-| `InvalidTableNameError` | Excel で使えないテーブル名を指定した | 空白・数字始まり・セル参照のような名前を避ける |
-| `TableAlreadyExistsError` | 同じ名前のテーブルが既にある | 別のテーブル名を指定する |
+| `TableNotFoundError` | 指定したテーブルがシートにない | エラーに表示された既存テーブル名を確認する |
 | `TableFormulaOverwriteError` | テーブル内の人が入れた数式を値で潰そうとした | 数式を保持したい場合は、``replace()`` のあとに該当セルへ元の数式を書き戻す。意図的に値で潰してよいときだけ ``allow_formula_overwrite=True`` を渡す |
 | `TableColumnMismatchError` | 渡された Table の列が既存テーブルの見出しと一致しない | 既存の見出しと一致するように渡す Table の列を修正する。数式で参照される列は渡さない（「金額」のように計算で決まる列をTable に含めない、または数式を保持する前提の列として残す） |
-| `TableNotFoundError` | 指定したテーブルがシートにない | エラーに表示された既存テーブル名を確認する |
 | `MacroError` | Excel のマクロが失敗した | Excel をすべて閉じて再実行する。続く場合は管理者へ |
-| `EmptyHeaderCellError` | Excel の見出しに空欄がある | Excel の1行目の空欄を埋める |
-| `DuplicateHeaderCellError` | Excel の見出し名が重複している | Excel の見出し名を重複しない名前に変更する |
-| `EmptyExcelTableError` | Excel テーブル定義はあるが、定義範囲を1行も読み取れない。 | Excel のテーブル定義範囲を確認する |
-| `ExcelHeadersTooFewError` | 指定した見出し数が列数より少ない | 管理者へ連絡する |
-| `ExcelMacroPreservationError` | 保存予定のブックからVBAプロジェクトが欠落または変化した。 | 元ファイルは保持される。管理者に連絡し、Excel実機で保存方法を確認する |
-| `ExcelReadOnlyOperationError` | read_only=True の Excel に書き込もうとした。 | read_only=False で開き直すか、書き込みが要らない操作かを見直す（読み取りだけなら Excel(path, read_only=True) で十分） |
-| `ExcelSaveValidationError` | 保存予定のExcelファイルを再度開けず、安全に置き換えられない。 | 元ファイルは保持される。空き容量とExcel形式を確認して再実行する |
-| `FileFormatMismatchError` | 保存拡張子と形式が合わない | 管理者へ連絡する |
 
 ## Access のエラー
 
@@ -89,13 +80,9 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 |---|---|---|
 | `SiteOwnerRequiredError` | `SiteBase` / `SalesforceBase` のサブクラスに `OWNER` が設定されていない | サブクラスに `OWNER = "プロジェクト名 / 担当者"` を1行追加する。ライブラリ（`comken.toolbox.browser.sites/` または`comken.toolbox.salesforce.sites/`）に入れるべきサイトかは`CONVENTIONS.md` の「サイト／組織クラスを昇格させる基準」を参照して判断する。ライブラリに昇格したい場合はライブラリ管理者へ連絡する。 |
 | `EncodingDetectionError` | CSV の文字コードを判定できない | CSV の保存形式を確認し、管理者へ連絡する |
-| `CSVHeaderMissingError` | CSV に見出し行がない | 見出し行を追加するか、ヘッダーなし CSV なら columns を指定する |
-| `CSVInvalidHeaderError` | CSV の見出しに空欄または重複がある | CSV の1行目にある空欄または重複した見出しを直す |
+| `CSVHeaderError` | CSV の見出し行に関するエラー | - 見出し行を追加するか、ヘッダーなし CSV なら ``columns`` を指定する- 1行目にある空欄・重複した見出しを直す- 新規 CSV に書き出すときは ``CSV(columns=[...])`` で列を指定する |
 | `CSVRowLengthError` | CSV のデータ行の列数が見出し数と一致しない | 表示された行の区切り文字と値の数を確認する |
-| `CSVColumnsRequiredError` | 空の新規 CSV に出力する列を決定できない | CSV(columns=[...]) または Table(columns, []) で列を指定する |
-| `ExcelColumnNotFoundError` | Excel の列見出しが見つからない | Excel の1行目を確認する |
 | `KeyColumnNotFoundError` | 比較に使うキー列が見つからない | Excel・CSV の列名を確認する |
-| `TransferSourceColumnNotFoundError` | 列名転記で、lookup の転記元列が見つからない | 転記元データと config.ini のマッピング左側を確認する |
 | `InvalidColumnError` | 列の指定が正しくない（打ち間違いなど） | 列は番号（1, 2, …）か列記号（"A", "AA"）で指定する |
 | `ConfigCreatedFromExampleError` | config.ini が無かったので example から作った | 作られた config.ini の値を書き換えて、もう一度実行する |
 | `ConfigLowerCaseNameError` | config.ini のセクション名・キー名に小文字がある | 表示された名前を大文字に書き換える（`[files]` → `[FILES]`） |
@@ -122,14 +109,12 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `SalesforceReportFormatError` | レポートの形式が対応していない | レポートを明細形式にするか、管理者へ連絡する |
 | `SalesforceReportIDNotFoundError` | レポートの URL からレポート ID を取り出せない | Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す |
 | `SalesforceReportExecutionError` | Salesforce 側でレポート実行に失敗した | Salesforce で同じレポートを直接実行し、表示された内容を管理者へ連絡する |
-| `SalesforceReportAccessDeniedError` | レポート API（Reports and Dashboards REST API）へのアクセスを拒否された | Salesforce 管理者に、refresh_token を発行したユーザーについて次を確認してもらう。1. Profile / Permission Set に「API Enabled」権限があるか2. 対象のレポート・レポートフォルダへのアクセス権があるか3. 組織の Edition・ライセンスが Reports and Dashboards REST APIに対応しているか（一部の制限ライセンスでは使えない） |
+| `SalesforceReportAccessDeniedError` | レポート API（Reports and Dashboards REST API）へのアクセスを拒否された | Salesforce 管理者に、refresh_token を発行したユーザーについて次を確認してもらう。1. Profile / Permission Set に「API Enabled」」権限があるか2. 対象のレポート・レポートフォルダへのアクセス権があるか3. 組織の Edition・ライセンスが Reports and Dashboards REST APIに対応しているか（一部の制限ライセンスでは使えない） |
 | `SalesforceReportExportError` | 画面のエクスポート機能でレポートをCSV/XLS取得できなかった | 1. go_login() + wait_for_manual_login() でログインを済ませてからexport_reports() を呼んでいるか確認する2. 時間が経ってセッションが切れていないか（長時間のバッチの後半で発生する場合はこれが疑わしい）3. レポートそのものへのアクセス権・組織の Edition を確認してもらう |
 | `SalesforceSiteNotFoundError` | URL のドメインに対応する組織が登録されていない | URL のドメインを見直す。新しい組織なら管理者へ連絡する（組織クラスの追加が要る） |
 | `SalesforceSiteSelectionError` | 対話的な組織選択で、番号にも組織名にも一致しなかった | 表示された番号（1〜件数）か、組織名（大文字小文字は区別しない）を入力し直す |
-| `SalesforceBulkQueryFailedError` | Bulk API のクエリジョブが失敗して終わった（Failed / Aborted） | 表示されたエラー内容を確認する。SOQL の構文・参照項目・実行ユーザーの権限を見直す |
-| `SalesforceBulkQueryTimeoutError` | Bulk API のクエリジョブが制限時間内に終わらなかった | timeout_seconds を長くするか、クエリの対象を絞って再実行する |
-| `SalesforceBulkIngestFailedError` | Bulk API の Ingest ジョブが失敗して終わった（Failed / Aborted） | 表示されたエラー内容を確認する。CSV の列名・データ型・実行ユーザーの権限を見直す |
-| `SalesforceBulkIngestTimeoutError` | Bulk API の Ingest ジョブが制限時間内に終わらなかった | timeout_seconds を長くするか、データを分割して再実行する |
+| `SalesforceBulkFailedError` | Bulk API のジョブが失敗して終わった（Failed / Aborted） | 表示されたエラー内容を確認する。クエリ経路は SOQL 構文・参照項目・実行ユーザーの権限、Ingest 経路は CSV の列名・データ型・実行ユーザーの権限を見直す |
+| `SalesforceBulkTimeoutError` | Bulk API のジョブが制限時間内に終わらなかった | ``timeout_seconds`` を長くするか、対象を絞って再実行する。Ingest 経路はデータを分割して再実行してもよい |
 | `MasterTableError` | Excel の管理表に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
 | `MasterSheetNotDefinedError` | 管理表の場所が決まっていない | `load(パス)` のようにファイルを渡すか、クラスに PATH を書く（コードの直し方の話なので、非エンジニアが見た場合は管理者へ連絡する） |
 | `MasterColumnNotFoundError` | 管理表に必要な列（見出し）が無い | 管理表の1行目（見出し）を元に戻す。消してしまった場合は、メッセージに出ている「今ある見出し」と見比べて足す |
@@ -148,13 +133,10 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `SoqlReportNotRegisteredError` | 管理表の「SOQL」列が「○」なのに、同じ管理番号の SoqlReport が登録されていない | 管理番号に対応する ``SoqlReport`` サブクラスを追加し、``KEY`` を管理表と同じ値にして ``soql_reports/_registry.py`` の ``SOQL_REPORTS`` へ登録する。まだ SOQL 化していないなら、管理表の「SOQL」列を「×」に戻す |
 | `GroupNotRegisteredError` | 管理表の「グループ」列に設定シートに登録されていない値が書かれている | 管理表の「グループ」列に書かれた値が、設定シート（`group_settings.py` の`GroupSetting`）の「グループ」列に存在するか確認する。新しく部署・グループを追加するときは、設定シート側にも同じ名前で行を足す |
 | `ReportDisabledError` | 管理表で「無効」になっているレポートを取ろうとした | また使うなら管理表の「有効」を「有効」に戻す。使わないなら、呼び出し側のコードから消す |
-| `InvalidReportURLError` | 管理表の URL から Salesforce のレポート ID を取り出せない | Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す |
 | `EmptyReportError` | レポートは実行できたが明細が 0 行だった | Salesforce の画面で同じレポートを開き、本当に 0 件か確認する。0 件が正常に起こるレポートなら、管理表の「0件あり」を「○」にする。 |
 | `ReportReservePathLimitError` | 保存ファイル名の連番が上限に達した | 保存先フォルダが想定どおりか確認する。 共有フォルダなら、 古い取得ファイルを退避するか、 別の保存先に変える。 連発する場合は権限・排他制御の設定も見直す |
-| `ScheduledDownloadFailedError` | 定期取得で1件以上が失敗した | 履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。急いで必要なものは download_scheduled() をスケジュール外で実行する。権限を持つ人が Salesforce から手動でダウンロードしてもよい |
+| `ScheduleSettingError` | 管理表のスケジュール列（取得頻度・曜日）に想定外の値が書かれている | 管理表の「取得頻度」列を ``毎日`` / ``毎週`` / ``毎月`` / ``毎営業日`` のいずれかに、「曜日」列を月〜日のいずれかに修正する（「曜日」接尾辞付きも可） |
 | `SoqlDownloadFailedError` | SOQL レポートの取得で1件以上が失敗した | 表示された管理番号について、SOQL クエリ・組織の認証情報・保存先フォルダの権限・ネットワークの状態を確認する。急いで必要なものは``download_soql_reports()`` を直接実行してもよい |
-| `UnsupportedScheduleFrequencyError` | 管理表の「取得頻度」に、想定外の値が書かれている | 管理表の「取得頻度」列の値を ``毎日`` / ``毎週`` / ``毎月`` のいずれかに修正する |
-| `ScheduleWeekdayInvalidError` | 管理表の「曜日」列に想定外の値が入っている | 管理表の「曜日」列の値を月〜日のいずれかに修正する（「曜日」を付ける形式でも可） |
 | `LoggingAlreadyConfiguredError` | root logger がすでに設定されている | setup_logging() または setup_local_logging() はアプリの入口で1回だけ呼ぶ。実行基盤がログを設定する場合は呼ばない。 |
 | `LoggingConflictError` | root logger に comken 以外の handler が設定されている | 上の handler 一覧をそのままライブラリの管理者へ連絡してください（連絡先は環境ごとに異なるので、ここには書かない）。やむを得ず共存させたい場合は、呼び出し時に ``allow_existing=True``を指定すれば処理は続きますが、comken のハンドラーが追加されることで既存ライブラリのログが**二重**に出たり、出力先が想定と変わる可能性があります。 |
 | `LogRootNotConfiguredError` | LoggerSite の LOG_ROOT が設定されていない | サブクラスに ``LOG_ROOT = "\\server\share\logs"`` を1行追加する（絶対パスまたは UNC 文字列。LOG_FOLDER_NAMES のフォルダ名はこの下に作られる）。 |
@@ -165,16 +147,13 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
 | `DriverStartError` | ブラウザを起動できない | エラーの本文にある確認事項をそのまま試す。Windows Update で Edge が更新された直後に起きやすい。メッセージが「バージョンが合わない」でも、``PROFILE_ROOT`` に**相対パス**を設定している場合は疑わしい。``--user-data-dir`` に相対パスが渡ると、msedge.exe 側の作業ディレクトリ次第でプロファイル初期化に失敗し、実際の原因と無関係に同じメッセージで落ちることがある（``Browsers._resolve_profile_dir()`` は絶対パスへ解決して渡すが、念のため確認する） |
-| `BrowsersNotStartedError` | `with` を使わずに `Browsers` を使った | `with Browsers() as browsers:` の中で使う（ブラウザは起動していないので実害はない） |
-| `BrowsersClosedError` | `with` を抜けた後の `Browsers` を使った | 続けたい処理を `with` の中に入れる。外へ持ち出すのは取り出した値だけにする |
-| `SessionNotStartedError` | `with` を使わずにブラウザを操作した | `with Browsers() as browsers:` の中で使う |
-| `SessionClosedError` | `with` を抜けた後のブラウザを操作した | `with` の外へ持ち出すのは、ブラウザではなく取り出した値にする |
+| `BrowserNotStartedError` | `with` を使わずにブラウザを操作した | `with Browsers() as browsers:` の中で使う（ブラウザは起動していないので実害はない） |
+| `BrowserClosedError` | `with` を抜けた後のブラウザを操作した | 続けたい処理を `with` の中に入れる。外へ持ち出すのは取り出した値だけにする |
 | `ConcurrentSessionUseError` | 1つのブラウザを複数の処理から同時に操作した | サイトごとに `launch` でブラウザを分ける |
 | `SessionNameConflictError` | 同じ名前で2回 `launch` した | 名前を変える（同一サイトの別アカウントなら `kintai_a` / `kintai_b` など） |
 | `SessionNotFoundError` | `launch` していない名前を取り出した | 先に `launch` する。エラーに起動済みの一覧が出ます |
 | `SiteConfigError` | `SiteBase` サブクラスの設定が不足している | サブクラスに NAME を定義する（BASE_URL / OPTIONS も同じ） |
 | `SiteAlreadyInLibraryError` | ライブラリ公認のサイトと同じ NAME のサイトをプロジェクト側で定義した | ライブラリから `from comken.toolbox.browser.sites import <クラス名>` で取り出して使う。プロジェクト側の定義は消す。ライブラリへ昇格する基準は`CONVENTIONS.md` の「サイト／組織クラスを昇格させる基準」を参照。 |
-| `SiteNotStartedError` | まだ起動していないサイトの画面を作ろうとした | `with Kintai() as kintai:` の中で使う |
 | `ElementNotFoundError` | 画面の部品が時間内に見つからない | もう一度実行する。サイトが重いだけのことが多い。毎回出るなら画面が変わった可能性があるので管理者へ（エラーに、どの部品を探していたかが出ます） |
 | `PopupTabNotOpenedError` | 別タブが開かない | もう一度実行する。続く場合は、その画面の「別ウィンドウで開く」ボタンが変わった可能性があるので管理者へ |
 | `DownloadTimeoutError` | ダウンロードが終わらない | ネットワークの状態を確認して再実行する。大きいファイルなら時間がかかっているだけのこともある |

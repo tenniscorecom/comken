@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from comken.exceptions import SalesforceReportExportError, SiteNotStartedError
+from comken.exceptions import BrowserNotStartedError, SalesforceReportExportError
 from comken.toolbox.browser import BrowserOptions, DownloadDir
 from comken.toolbox.browser.management.sessions import BrowserSession
 from comken.toolbox.browser.sites.salesforce.base import (
@@ -65,7 +65,7 @@ class TestGoLogin:
     def test_raises_when_not_started(self):
         sf = SalesforceSiteBase()
 
-        with pytest.raises(SiteNotStartedError):
+        with pytest.raises(BrowserNotStartedError):
             sf.go_login()
 
 
@@ -268,7 +268,7 @@ class TestExportReports:
     def test_raises_when_not_started(self):
         sf = SalesforceSiteBase()
 
-        with pytest.raises(SiteNotStartedError):
+        with pytest.raises(BrowserNotStartedError):
             list(sf.export_reports({REPORT_URL_1: "出力先/report.csv"}))
 
 

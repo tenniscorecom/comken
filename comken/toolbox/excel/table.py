@@ -10,9 +10,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from comken.core.table.model import Table
 from comken.exceptions import (
-    DuplicateHeaderCellError,
-    EmptyExcelTableError,
-    EmptyHeaderCellError,
+    ExcelHeaderError,
     InvalidTableInputError,
     InvalidTableOperationError,
     TableColumnMismatchError,
@@ -25,6 +23,27 @@ if TYPE_CHECKING:
 type Value = str | int | float | bool | datetime
 
 logger = logging.getLogger(__name__)
+
+
+def _empty_excel_table_message(sheet_name: str, reason: str) -> str:
+    """``ExcelHeaderError`` の「Excel テーブル定義はあるが1行も読めない」文言。"""
+    return f"Excel テーブル「{sheet_name}」が空です: {reason}"
+
+
+def _empty_header_message(columns: list[int]) -> str:
+    """``ExcelHeaderError`` の「見出し行の空セル」文言。"""
+    return (
+        f"ヘッダー行に空のセルがあります。列番号: {columns}\n"
+        "Excelの1行目（ヘッダー行）を確認してください。"
+    )
+
+
+def _duplicate_header_message(headers: object) -> str:
+    """``ExcelHeaderError`` の「見出しの重複」文言。"""
+    return (
+        f"ヘッダー行に同じ見出しがあります: {headers}\n"
+        "Excelの見出し名を重複しない名前に変更してください。"
+    )
 
 
 class ExcelTable:
@@ -92,21 +111,24 @@ class ExcelTable:
                 )
             ]
         if not rows:
-            raise EmptyExcelTableError(
-                self._worksheet.title,
-                "テーブル範囲を読み取れませんでした",
+            raise ExcelHeaderError(
+                _empty_excel_table_message(
+                    self._worksheet.title, "テーブル範囲を読み取れませんでした"
+                ),
+                sheet_name=self._worksheet.title,
+                reason="テーブル範囲を読み取れませんでした",
             )
         # ref が定義する列数をそのまま使う。末尾の空見出しを切り捨てると、
         # テーブル定義の壊れを見逃し、後ろの列データを失うため。
         headers = list(rows[0])
         empty_columns = [index for index, header in enumerate(headers, 1) if header is None]
         if empty_columns:
-            raise EmptyHeaderCellError(empty_columns)
+            raise ExcelHeaderError(_empty_header_message(empty_columns))
         duplicate_headers = [
             header for header in dict.fromkeys(headers) if headers.count(header) > 1
         ]
         if duplicate_headers:
-            raise DuplicateHeaderCellError(duplicate_headers)
+            raise ExcelHeaderError(_duplicate_header_message(duplicate_headers))
         result = [
             {
                 str(header): (

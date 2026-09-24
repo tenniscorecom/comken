@@ -18,31 +18,20 @@ ComkenError
 │   ├── ClassicOutlookNotAvailableError
 │   └── OutlookFolderNotFoundError
 ├── ExcelError
-│   ├── DataSheetAccessError
 │   ├── ExcelApplicationNotAvailableError
-│   ├── ExcelSaveValidationError
-│   ├── ExcelMacroPreservationError
-│   ├── ExcelReadOnlyOperationError
+│   ├── ExcelHeaderError
+│   ├── ExcelNameError
+│   ├── ExcelSaveError
+│   ├── ExcelUsageError
 │   ├── SheetNotFoundError
-│   ├── SheetAlreadyExistsError
-│   ├── SheetNameError
-│   ├── InvalidTableNameError
-│   ├── TableAlreadyExistsError
 │   ├── TableNotFoundError
 │   ├── TableFormulaOverwriteError
 │   ├── TableColumnMismatchError
-│   ├── MacroError
-│   ├── EmptyHeaderCellError
-│   ├── DuplicateHeaderCellError
-│   ├── EmptyExcelTableError
-│   ├── ExcelHeadersTooFewError
-│   └── FileFormatMismatchError
+│   └── MacroError
 ├── CSVError
 │   ├── EncodingDetectionError
-│   ├── CSVHeaderMissingError
-│   ├── CSVInvalidHeaderError
-│   ├── CSVRowLengthError
-│   └── CSVColumnsRequiredError
+│   ├── CSVHeaderError
+│   └── CSVRowLengthError
 ├── CredentialError
 │   ├── InvalidCredentialNameError
 │   ├── CredentialNotFoundError
@@ -64,22 +53,17 @@ ComkenError
 │   ├── SalesforceReportExecutionError
 │   ├── SalesforceReportAccessDeniedError
 │   ├── SalesforceReportExportError
-│   ├── SalesforceBulkQueryFailedError
-│   ├── SalesforceBulkQueryTimeoutError
-│   ├── SalesforceBulkIngestFailedError
-│   └── SalesforceBulkIngestTimeoutError
+│   ├── SalesforceBulkFailedError
+│   └── SalesforceBulkTimeoutError
 ├── BrowserError
 │   ├── DriverStartError
-│   ├── BrowsersNotStartedError
-│   ├── BrowsersClosedError
-│   ├── SessionNotStartedError
-│   ├── SessionClosedError
+│   ├── BrowserNotStartedError
+│   ├── BrowserClosedError
 │   ├── ConcurrentSessionUseError
 │   ├── SessionNameConflictError
 │   ├── SessionNotFoundError
 │   ├── SiteConfigError
 │   ├── SiteAlreadyInLibraryError
-│   ├── SiteNotStartedError
 │   ├── ElementNotFoundError
 │   ├── PopupTabNotOpenedError
 │   ├── DownloadTimeoutError
@@ -96,9 +80,7 @@ ComkenError
 │   ├── TransferDestinationMissingError
 │   └── TransferDestinationMultipleMatchError
 ├── ColumnNotFoundError
-│   ├── ExcelColumnNotFoundError
-│   ├── KeyColumnNotFoundError
-│   └── TransferSourceColumnNotFoundError
+│   └── KeyColumnNotFoundError
 ├── ConfigError
 │   ├── ConfigCreatedFromExampleError
 │   ├── ConfigLowerCaseNameError
@@ -127,13 +109,10 @@ ComkenError
 │   ├── SoqlReportNotRegisteredError
 │   ├── GroupNotRegisteredError
 │   ├── ReportDisabledError
-│   ├── InvalidReportURLError
 │   ├── EmptyReportError
 │   ├── ReportReservePathLimitError
-│   ├── ScheduledDownloadFailedError
-│   ├── SoqlDownloadFailedError
-│   ├── UnsupportedScheduleFrequencyError
-│   └── ScheduleWeekdayInvalidError
+│   ├── ScheduleSettingError
+│   └── SoqlDownloadFailedError
 └── DataLoaderError
 │   ├── DataLoaderTimeoutError
 │   └── DataLoaderExecutionError
@@ -152,22 +131,19 @@ from comken.exceptions.access import (
 )
 from comken.exceptions.base import ComkenError, SiteOwnerRequiredError
 from comken.exceptions.browser import (
+    BrowserClosedError,
     BrowserError,
-    BrowsersClosedError,
-    BrowsersNotStartedError,
+    BrowserNotStartedError,
     ConcurrentSessionUseError,
     DownloadTimeoutError,
     DriverStartError,
     ElementNotFoundError,
     LoginFailedError,
     PopupTabNotOpenedError,
-    SessionClosedError,
     SessionNameConflictError,
     SessionNotFoundError,
-    SessionNotStartedError,
     SiteAlreadyInLibraryError,
     SiteConfigError,
-    SiteNotStartedError,
 )
 from comken.exceptions.calendar import (
     BusinessDayNotFoundError,
@@ -176,10 +152,8 @@ from comken.exceptions.calendar import (
 )
 from comken.exceptions.column import (
     ColumnNotFoundError,
-    ExcelColumnNotFoundError,
     InvalidColumnError,
     KeyColumnNotFoundError,
-    TransferSourceColumnNotFoundError,
 )
 from comken.exceptions.config import (
     ConfigCreatedFromExampleError,
@@ -200,10 +174,8 @@ from comken.exceptions.credential import (
     PasswordRejectedError,
 )
 from comken.exceptions.csv import (
-    CSVColumnsRequiredError,
     CSVError,
-    CSVHeaderMissingError,
-    CSVInvalidHeaderError,
+    CSVHeaderError,
     CSVRowLengthError,
     EncodingDetectionError,
 )
@@ -219,34 +191,22 @@ from comken.exceptions.downloader import (
     GroupNotRegisteredError,
     HistoryLockTimeoutError,
     HistoryWriteError,
-    InvalidReportURLError,
     ReportDisabledError,
     ReportNotRegisteredError,
     ReportReservePathLimitError,
-    ScheduledDownloadFailedError,
-    ScheduleWeekdayInvalidError,
+    ScheduleSettingError,
     SoqlDownloadFailedError,
     SoqlReportNotRegisteredError,
-    UnsupportedScheduleFrequencyError,
 )
 from comken.exceptions.excel import (
-    DataSheetAccessError,
-    DuplicateHeaderCellError,
-    EmptyExcelTableError,
-    EmptyHeaderCellError,
     ExcelApplicationNotAvailableError,
     ExcelError,
-    ExcelHeadersTooFewError,
-    ExcelMacroPreservationError,
-    ExcelReadOnlyOperationError,
-    ExcelSaveValidationError,
-    FileFormatMismatchError,
-    InvalidTableNameError,
+    ExcelHeaderError,
+    ExcelNameError,
+    ExcelSaveError,
+    ExcelUsageError,
     MacroError,
-    SheetAlreadyExistsError,
-    SheetNameError,
     SheetNotFoundError,
-    TableAlreadyExistsError,
     TableColumnMismatchError,
     TableFormulaOverwriteError,
     TableNotFoundError,
@@ -276,10 +236,8 @@ from comken.exceptions.outlook import (
 )
 from comken.exceptions.salesforce import (
     SalesforceAuthError,
-    SalesforceBulkIngestFailedError,
-    SalesforceBulkIngestTimeoutError,
-    SalesforceBulkQueryFailedError,
-    SalesforceBulkQueryTimeoutError,
+    SalesforceBulkFailedError,
+    SalesforceBulkTimeoutError,
     SalesforceConnectionError,
     SalesforceCredentialRotationError,
     SalesforceError,
@@ -323,35 +281,22 @@ __all__ = [
     "AccessRoutineError",
     "AccessSourceNotFoundError",
     "ExcelError",
-    "DataSheetAccessError",
     "ExcelApplicationNotAvailableError",
+    "ExcelUsageError",
+    "ExcelHeaderError",
+    "ExcelNameError",
+    "ExcelSaveError",
     "SheetNotFoundError",
-    "SheetAlreadyExistsError",
-    "SheetNameError",
-    "InvalidTableNameError",
-    "TableAlreadyExistsError",
+    "TableNotFoundError",
     "TableFormulaOverwriteError",
     "TableColumnMismatchError",
-    "TableNotFoundError",
     "MacroError",
-    "EmptyHeaderCellError",
-    "DuplicateHeaderCellError",
-    "EmptyExcelTableError",
-    "ExcelHeadersTooFewError",
-    "ExcelMacroPreservationError",
-    "ExcelReadOnlyOperationError",
-    "ExcelSaveValidationError",
-    "FileFormatMismatchError",
     "CSVError",
     "EncodingDetectionError",
-    "CSVHeaderMissingError",
-    "CSVInvalidHeaderError",
+    "CSVHeaderError",
     "CSVRowLengthError",
-    "CSVColumnsRequiredError",
     "ColumnNotFoundError",
-    "ExcelColumnNotFoundError",
     "KeyColumnNotFoundError",
-    "TransferSourceColumnNotFoundError",
     "InvalidColumnError",
     "ConfigError",
     "ConfigCreatedFromExampleError",
@@ -388,22 +333,17 @@ __all__ = [
     "SalesforceReportExportError",
     "SalesforceSiteNotFoundError",
     "SalesforceSiteSelectionError",
-    "SalesforceBulkQueryFailedError",
-    "SalesforceBulkQueryTimeoutError",
-    "SalesforceBulkIngestFailedError",
-    "SalesforceBulkIngestTimeoutError",
+    "SalesforceBulkFailedError",
+    "SalesforceBulkTimeoutError",
     "BrowserError",
     "DriverStartError",
-    "BrowsersNotStartedError",
-    "BrowsersClosedError",
-    "SessionNotStartedError",
-    "SessionClosedError",
+    "BrowserNotStartedError",
+    "BrowserClosedError",
     "ConcurrentSessionUseError",
     "SessionNameConflictError",
     "SessionNotFoundError",
     "SiteConfigError",
     "SiteAlreadyInLibraryError",
-    "SiteNotStartedError",
     "ElementNotFoundError",
     "PopupTabNotOpenedError",
     "DownloadTimeoutError",
@@ -428,13 +368,10 @@ __all__ = [
     "SoqlReportNotRegisteredError",
     "GroupNotRegisteredError",
     "ReportDisabledError",
-    "InvalidReportURLError",
     "EmptyReportError",
     "ReportReservePathLimitError",
-    "ScheduledDownloadFailedError",
+    "ScheduleSettingError",
     "SoqlDownloadFailedError",
-    "UnsupportedScheduleFrequencyError",
-    "ScheduleWeekdayInvalidError",
     "DataLoaderError",
     "DataLoaderTimeoutError",
     "DataLoaderExecutionError",
@@ -456,7 +393,7 @@ __all__ = [
 
 
 # v1.0.0 以前の旧例外名は削除せず、 ``FutureWarning`` 付きの別名として残す。
-# 会社側プロジェクトは ``grep`` できないため、 ``from comken.exceptions
+# 会社側プロジェクトは ``grep `` できないため、 ``from comken.exceptions
 # import OldName`` を無警告で壊すと、現場のコードがサイレントに止まる。
 # 旧サブモジュール経由（``comken.exceptions.excel.ExcelFileNotFoundError`` など）は
 # 対象外。パッケージ入口からの import / 属性アクセスだけをこの仕組みで救う。
@@ -469,6 +406,34 @@ _RENAMED_EXCEPTIONS: dict[str, str] = {
     "DataLoaderResultFileMissingError": "ComkenFileNotFoundError",
     "OutlookAttachmentNotFoundError": "ComkenFileNotFoundError",
     "ReportFolderNotFoundError": "ComkenFileNotFoundError",
+    "EmptyHeaderCellError": "ExcelHeaderError",
+    "DuplicateHeaderCellError": "ExcelHeaderError",
+    "EmptyExcelTableError": "ExcelHeaderError",
+    "SheetAlreadyExistsError": "ExcelNameError",
+    "TableAlreadyExistsError": "ExcelNameError",
+    "InvalidTableNameError": "ExcelNameError",
+    "ExcelSaveValidationError": "ExcelSaveError",
+    "ExcelMacroPreservationError": "ExcelSaveError",
+    "ExcelHeadersTooFewError": "ExcelUsageError",
+    "FileFormatMismatchError": "ExcelUsageError",
+    "ExcelColumnNotFoundError": "ColumnNotFoundError",
+    "TransferSourceColumnNotFoundError": "ColumnNotFoundError",
+    "CSVHeaderMissingError": "CSVHeaderError",
+    "CSVInvalidHeaderError": "CSVHeaderError",
+    "CSVColumnsRequiredError": "CSVHeaderError",
+    "SalesforceBulkQueryFailedError": "SalesforceBulkFailedError",
+    "SalesforceBulkIngestFailedError": "SalesforceBulkFailedError",
+    "SalesforceBulkQueryTimeoutError": "SalesforceBulkTimeoutError",
+    "SalesforceBulkIngestTimeoutError": "SalesforceBulkTimeoutError",
+    "InvalidReportURLError": "SalesforceReportIDNotFoundError",
+    "UnsupportedScheduleFrequencyError": "ScheduleSettingError",
+    "ScheduleWeekdayInvalidError": "ScheduleSettingError",
+    "ScheduledDownloadFailedError": "DownloaderError",
+    "BrowsersNotStartedError": "BrowserNotStartedError",
+    "SessionNotStartedError": "BrowserNotStartedError",
+    "SiteNotStartedError": "BrowserNotStartedError",
+    "BrowsersClosedError": "BrowserClosedError",
+    "SessionClosedError": "BrowserClosedError",
 }
 
 

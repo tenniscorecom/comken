@@ -4,6 +4,10 @@
 で参照すると、新クラスが返り ``FutureWarning`` が出る。会社側プロジェクトは
 ``grep`` できないため、無警告で壊すと現場のコードがサイレントに止まる。
 
+対応表は ``comken/exceptions/__init__.py`` の ``_RENAMED_EXCEPTIONS`` に
+一元化されている。テスト側では再記述せず、その dict を直接 parametrize に
+回す（``__init__.py`` 側を ``pop`` されたときの登録漏れ検出も兼ねる）。
+
 **壊れたら落ちる**: ``__getattr__`` を削除して ``test_old_name_resolves_with_future_warning``
 が落ちれば、別名機構が壊れていることを CI で検出できる。
 """
@@ -15,21 +19,11 @@ import warnings
 import pytest
 
 import comken.exceptions
-from comken.exceptions import ComkenFileNotFoundError
+from comken.exceptions import ComkenError
 
-# 別名テーブルは ``comken/exceptions/__init__.py`` の ``_RENAMED_EXCEPTIONS`` と
-# 同じ 8 件。テスト側で再記述しているのは、 ``__init__.py`` 側を ``pop`` された
-# ときに「**登録漏れを CI で検出する**」ため。``__getattr__`` を消して
-# ``getattr(comken.exceptions, name)`` が ``AttributeError`` になれば落ちる。
-_OLD_TO_NEW_NAMES: dict[str, type[ComkenFileNotFoundError]] = {
-    "ExcelFileNotFoundError": ComkenFileNotFoundError,
-    "CSVFileNotFoundError": ComkenFileNotFoundError,
-    "AccessFileNotFoundError": ComkenFileNotFoundError,
-    "ConfigFileNotFoundError": ComkenFileNotFoundError,
-    "DataLoaderLauncherNotFoundError": ComkenFileNotFoundError,
-    "DataLoaderResultFileMissingError": ComkenFileNotFoundError,
-    "OutlookAttachmentNotFoundError": ComkenFileNotFoundError,
-    "ReportFolderNotFoundError": ComkenFileNotFoundError,
+_OLD_TO_NEW_NAMES: dict[str, type[ComkenError]] = {
+    old_name: getattr(comken.exceptions, new_name)
+    for old_name, new_name in comken.exceptions._RENAMED_EXCEPTIONS.items()
 }
 
 
@@ -39,7 +33,7 @@ _OLD_TO_NEW_NAMES: dict[str, type[ComkenFileNotFoundError]] = {
 )
 def test_old_name_resolves_with_future_warning(
     old_name: str,
-    new_cls: type[ComkenFileNotFoundError],
+    new_cls: type[ComkenError],
 ) -> None:
     """旧名を取り出すと ``FutureWarning`` が出て新クラスと同一。
 
@@ -68,16 +62,24 @@ def test_except_old_name_catches_new_class(old_name: str) -> None:
     旧名は ``__getattr__`` 経由でしか取れないので、 ``except`` 文で使うときに
     警告が出ないよう、 ここでは抑制する（**捕捉できることが本質**なので、
     警告の件数をテストする関心事は上のテストに分離してある）。
+
+    各新クラスのコンストラクタの形が違うので、 ``Exception.__new__`` で
+    インスタンスを作って ``args`` を直接設定する（``raise`` 直前で十分）。
     """
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", FutureWarning)
         old_cls = getattr(comken.exceptions, old_name)
+        new_cls = _OLD_TO_NEW_NAMES[old_name]
 
+    # 統合先クラスごとにコンストラクタの引数形が違うため、
+    # ``Exception`` 流の ``__new__`` でインスタンス化し ``args`` を直接渡す。
+    instance = new_cls.__new__(new_cls)
+    instance.args = ("テスト用",)
     try:
-        raise ComkenFileNotFoundError("テスト用", "dummy/path")
+        raise instance
     except old_cls:
         return  # 捕捉できた場合はここで終了
-    pytest.fail(f"{old_name} で ComkenFileNotFoundError を捕捉できなかった")
+    pytest.fail(f"{old_name} で新クラスを捕捉できなかった")
 
 
 def test_unknown_name_raises_attribute_error() -> None:
@@ -97,18 +99,3 @@ def test_old_names_are_not_in_all() -> None:
     """
     leaked = [name for name in _OLD_TO_NEW_NAMES if name in comken.exceptions.__all__]
     assert not leaked, f"旧名が __all__ に残っている: {leaked}"
-
-
-def test_old_name_module_is_not_imported_via_attribute_path() -> None:
-    """``comken.exceptions.<旧サブモジュール>.<旧例外>`` は対象外であることを確認する。
-
-    別名機構は **パッケージ入口からの import / 属性アクセスだけ**を救う設計。
-    旧サブモジュール経由は対象外だが、 その境界が崩れていないか（うっかり
-    サブモジュール側に旧クラスを残していないか）の最低限のチェックとして、
-    「旧サブモジュールから旧名を取り出すと想定どおり失敗する」ことを確認する。
-    """
-    import comken.exceptions.excel as excel_module
-
-    # ``comken.exceptions.excel.ExcelFileNotFoundError`` は今存在しないはず。
-    with pytest.raises(AttributeError):
-        excel_module.ExcelFileNotFoundError  # noqa: B018

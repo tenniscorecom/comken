@@ -317,7 +317,7 @@ def read_history(path: str | Path) -> Table:
 
     ファイルが無ければ空の Table（``COLUMNS`` の列だけを持つ）を返す。
     見出しが古い構成でも ``migrate_row()`` で新構成に揃え直して返す
-    （致命的に壊れた見出しは ``CSV`` クラスが ``CSVInvalidHeaderError`` で止める）。
+    （致命的に壊れた見出しは ``CSV`` クラスが ``CSVHeaderError`` で止める）。
 
     Args:
         path: 履歴 CSV のパス。

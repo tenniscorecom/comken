@@ -113,23 +113,6 @@ class SoqlReportNotRegisteredError(DownloaderError):
         )
 
 
-class InvalidReportURLError(DownloaderError):
-    """管理表の URL から Salesforce のレポート ID を取り出せない
-
-    貼られたものが Salesforce のレポート URL でないと、どのレポートか決められない。
-
-    発生箇所: comken.services.salesforce_downloader の管理表読み込み
-
-    対処:
-        Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す
-    """
-
-    def __init__(self, report_key: str, url: str, reason: str) -> None:
-        super().__init__(
-            f"管理番号 {report_key} の Salesforce URL が正しくありません: {url}\n{reason}"
-        )
-
-
 class ReportDisabledError(DownloaderError):
     """管理表で「無効」になっているレポートを取ろうとした
 
@@ -159,7 +142,7 @@ class CachedReportNotFoundError(DownloaderError):
 
     **勝手に Salesforce へ取りに行かない。** cached_report() は
     「取っておいたものを受け取る」関数で、取りに行く関数ではない。
-    ここで自動的に取りに行くと、定期取得が動いていないことに誰も気づかなくなる。
+    ここで自動的に取りに行くと、定期取得が動いていないことに誰も気づかない。
 
     発生箇所: comken.services.salesforce_downloader の cached_report()
 
@@ -222,36 +205,13 @@ class ReportReservePathLimitError(DownloaderError):
         )
 
 
-class ScheduledDownloadFailedError(DownloaderError):
-    """定期取得で1件以上が失敗した
-
-    取得できたものは保存済み。**1件失敗しても残りは続けたうえで、最後にまとめて知らせる。**
-    ログだけに出して正常終了すると、スケジューラや RPA 基盤から見て成功と区別が付かず、
-    落ちていることに誰も気づかない。
-
-    発生箇所: Salesforceレポートダウンローダー の download_scheduled()
-
-    対処:
-        履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。
-        急いで必要なものは download_scheduled() をスケジュール外で実行する。
-        権限を持つ人が Salesforce から手動でダウンロードしてもよい
-    """
-
-    def __init__(self, failed_keys: list[str], history_path: Path) -> None:
-        keys = "、".join(str(key) for key in failed_keys)
-        super().__init__(
-            f"定期取得で {len(failed_keys)} 件が失敗しました: {keys}\n"
-            f"失敗した理由は履歴を確認してください: {history_path}"
-        )
-
-
 class SoqlDownloadFailedError(DownloaderError):
     """SOQL レポートの取得で1件以上が失敗した
 
     取得できたものは保存済み。**1件失敗しても残りは続けたうえで、最後にまとめて知らせる。**
     `download_scheduled()` と同じ「ログだけだと気づけない」問題なので、最後に例外で
-    上げる。``ScheduledDownloadFailedError`` は履歴 CSV の存在を前提にしたメッセージ
-    になるため、履歴機能を持たない SOQL レポート経路ではこの例外を使う。
+    上げる。定期取得は履歴 CSV の存在を前提にしたメッセージになるため、
+    履歴機能を持たない SOQL レポート経路ではこの例外を使う。
 
     発生箇所: comken.services.salesforce_downloader.soql_reports の download_soql_reports()
 
@@ -271,43 +231,22 @@ class SoqlDownloadFailedError(DownloaderError):
         )
 
 
-class UnsupportedScheduleFrequencyError(DownloaderError):
-    """管理表の「取得頻度」に、想定外の値が書かれている
+class ScheduleSettingError(DownloaderError):
+    """管理表のスケジュール列（取得頻度・曜日）に想定外の値が書かれている
 
-    許容される値は ``毎日`` / ``毎週`` / ``毎月`` の3種類。
-    それ以外（手書きのタイポ・想定外の列挙値）が入っていると判定できない。
+    - 「取得頻度」は ``毎日`` / ``毎週`` / ``毎月`` / ``毎営業日`` の4種類
+    - 「曜日」は ``月`` 〜 ``日`` の漢字1文字（「曜日」接尾辞付きも可）
 
-    発生箇所: comken.services.salesforce_downloader.sheets.schedule の is_due()
+    これら以外（手書きのタイポ・想定外の列挙値）が入っていると、取得の判定が
+    できない。
 
-    対処:
-        管理表の「取得頻度」列の値を ``毎日`` / ``毎週`` / ``毎月`` の
-        いずれかに修正する
-    """
-
-    def __init__(self, frequency: str) -> None:
-        super().__init__(
-            f"対応していない取得頻度です: {frequency}\n"
-            "管理表の「取得頻度」列の値を 毎日 / 毎週 / 毎月 の"
-            "いずれかに修正してください。"
-        )
-
-
-class ScheduleWeekdayInvalidError(DownloaderError):
-    """管理表の「曜日」列に想定外の値が入っている
-
-    許容されるのは月〜日の漢字1文字（「月」「火」「水」「木」「金」「土」「日」）
-    または「〜曜日」の接尾辞付き表記。
-
-    発生箇所: comken.services.salesforce_downloader.sheets.schedule の ScheduleRule.weekday
+    発生箇所: comken.services.salesforce_downloader.sheets.schedule の is_due() /
+    ScheduleRule.weekday
 
     対処:
-        管理表の「曜日」列の値を月〜日のいずれかに修正する（「曜日」を付ける
-        形式でも可）
+        管理表の「取得頻度」列を ``毎日`` / ``毎週`` / ``毎月`` / ``毎営業日`` の
+        いずれかに、「曜日」列を月〜日のいずれかに修正する（「曜日」接尾辞付きも可）
     """
 
-    def __init__(self, value: object) -> None:
-        super().__init__(
-            f"曜日が正しくありません: {value}\n"
-            "管理表の「曜日」列の値を 月 / 火 / 水 / 木 / 金 / 土 / 日 の"
-            "いずれかに修正してください（「曜日」を付ける形式でも可）。"
-        )
+    def __init__(self, message: str) -> None:
+        super().__init__(message)

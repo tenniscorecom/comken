@@ -24,14 +24,13 @@
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
 | `SheetNotFoundError` | 指定した名前のシートがない | Excel を開いて、下のシート名（タブ）が変わっていないか確認する。変えた場合は元に戻す |
-| `SheetAlreadyExistsError` | 同じ名前のシートが既にある | 別のシート名を指定するか、既存のシート名を変更する |
-| `InvalidTableNameError` | Excel で使えないテーブル名を指定した | 空白・数字始まり・セル参照のような名前を避ける |
-| `TableAlreadyExistsError` | 同じ名前のテーブルが既にある | 別のテーブル名を指定する |
+| `ExcelNameError` | シート名・テーブル名が衝突・命名規則違反 | 別のシート名／テーブル名を指定するか、既存の名前を変更する。``PY_`` 接頭辞は ``create_data_sheet`` 用 |
 | `TableNotFoundError` | 指定したテーブルがシートにない | エラーに表示された既存テーブル名を確認する |
-| `ExcelColumnNotFoundError` | Excel の列見出しが見つからない | Excel の1行目を確認する |
+| `ColumnNotFoundError` | 列が見つからない | Excel の1行目を確認する |
 | `MacroError` | Excel のマクロが失敗した | Excel をすべて閉じて再実行する。続く場合は管理者へ |
-| `EmptyHeaderCellError` | Excel の見出しに空欄がある | Excel の1行目の空欄を埋める |
-| `ExcelHeadersTooFewError` | 指定した見出し数が列数より少ない | 管理者へ連絡する |
+| `ExcelHeaderError` | 見出し行に空欄・重複、または空テーブル | Excel の1行目（見出し行）の空欄・重複を直す |
+| `ExcelUsageError` | ``read_only=True`` への書き込み・データシート／表示用シートの API 違反・見出し数不足・保存拡張子の不一致 | エラーに表示された操作名・見出し数・拡張子を確認する |
+| `ExcelSaveError` | 保存時に Excel ファイルを安全に置き換えられない | 元ファイルは変更されていない。空き容量・Excel のバージョン整合性・VBA の保存形式を確認 |
 
 ## Access のエラー
 
@@ -41,7 +40,7 @@
 | `AccessLocalCopyError` | Access ファイルを一時フォルダへコピーできない | 使用状況・読み取り権限・空き容量を確認する |
 | `AccessRoutineError` | Access マクロまたは VBA の実行に失敗した | 表示された名前と Access 側の内容を確認する |
 | `AccessSourceNotFoundError` | テーブルまたはクエリが見つからない | エラーに表示された存在する名前を確認する |
-| `FileFormatMismatchError` | 保存拡張子と形式が合わない | 管理者へ連絡する |
+| `ExcelUsageError` | 保存拡張子と形式が合わない | 管理者へ連絡する |
 | `PermissionError` | ファイルが誰かに開かれている | 自分や他の人がそのファイルを開いていないか確認して閉じる |
 
 ---
@@ -51,14 +50,12 @@
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
 | `FileNotFoundError` | ファイルが見つからない | ファイルの置き場所と名前を確認する。「今日の日付のファイル」を探す処理なら、今日のファイルが作られているか確認する |
-| `ComkenFileNotFoundError` | ファイル・フォルダが見つからない（対象はメッセージに出る） | メッセージに表示された対象（Excel ファイル / CSV ファイル / Access ファイル / config.ini / Outlook 添付 / Data Loader 実行ファイル / 結果 CSV / 保存先フォルダ 等）とパスを見て、置き場所と名前を確認する |
+| `ComkenFileNotFoundError` | ファイル・フォルダが見つからない（対象はメッセージに出る） | メッセージに表示された対象（Excel ファイル / CSV ファイル / Access ファイル / config.ini / Outlook 添付 / Data Loader 実行ファイル / 結果 CSV / 保存先フォルダ 等）とパスを見てして、置き場所と名前を確認する |
 | `TimeoutError` | ダウンロードが終わらない | ネットワークの状態を確認して再実行する |
 | `UnsupportedFileSuffixError` | 対応外の拡張子が指定された | CSV / Excel の対応する拡張子のファイルを指定する |
 | `EncodingDetectionError` | CSV の文字コードを判定できない | CSV の保存形式を確認し、管理者へ連絡する |
-| `CSVHeaderMissingError` | CSV に見出し行がない | 見出し行を追加するか、ヘッダーなし CSV なら columns を指定する |
-| `CSVInvalidHeaderError` | CSV の見出しに空欄または重複がある | CSV の1行目にある空欄または重複した見出しを直す |
+| `CSVHeaderError` | CSV に見出し行がない・空欄・重複・新規 CSV に列を指定できない | 見出し行を追加するか、ヘッダーなし CSV なら ``columns`` を指定する。1行目にある空欄・重複を直す。新規 CSV には ``CSV(columns=[...])`` で列を指定する |
 | `CSVRowLengthError` | CSV のデータ行の列数が見出し数と一致しない | 表示された行の区切り文字と値の数を確認する |
-| `CSVColumnsRequiredError` | 空の新規 CSV に出力する列を決定できない | CSV(columns=[...]) または Table(columns, []) で列を指定する |
 | `KeyColumnNotFoundError` | 比較に使うキー列が見つからない | Excel・CSV の列名を確認する |
 | `InvalidColumnError` | 列の指定が正しくない（打ち間違いなど） | 列は番号（1, 2, …）か列記号（"A", "AA"）で指定する |
 | `ConfigCreatedFromExampleError` | config.ini が無かったので example から作った | 作られた config.ini の値を書き換えて、もう一度実行する |

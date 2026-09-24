@@ -22,8 +22,8 @@ from typing import TYPE_CHECKING
 from comken.core.table import Table
 from comken.core.timer import measure
 from comken.exceptions import (
-    SalesforceBulkIngestFailedError,
-    SalesforceBulkIngestTimeoutError,
+    SalesforceBulkFailedError,
+    SalesforceBulkTimeoutError,
 )
 from comken.runtime import dry_run_log, is_dry_run
 from comken.toolbox.salesforce._bulk_paging import fetch_paged_csv_as_table
@@ -120,9 +120,9 @@ class BulkIngestAPI:
             実行結果を表す ``BulkIngestResult``。
 
         Raises:
-            SalesforceBulkIngestFailedError: ジョブが失敗して終わった場合
+            SalesforceBulkFailedError: ジョブが失敗して終わった場合
                 （状態が ``Failed`` / ``Aborted``）。
-            SalesforceBulkIngestTimeoutError: ``timeout_seconds`` 以内に
+            SalesforceBulkTimeoutError: ``timeout_seconds`` 以内に
                 ジョブが完了しなかった場合。
         """
         return self._run(object_name, "insert", rows, None, timeout_seconds)
@@ -150,8 +150,8 @@ class BulkIngestAPI:
             実行結果を表す ``BulkIngestResult``。
 
         Raises:
-            SalesforceBulkIngestFailedError: ``insert()`` から伝播。
-            SalesforceBulkIngestTimeoutError: ``insert()`` から伝播。
+            SalesforceBulkFailedError: ``insert()`` から伝播。
+            SalesforceBulkTimeoutError: ``insert()`` から伝播。
         """
         return self._run(object_name, "update", rows, None, timeout_seconds)
 
@@ -179,8 +179,8 @@ class BulkIngestAPI:
             実行結果を表す ``BulkIngestResult``。
 
         Raises:
-            SalesforceBulkIngestFailedError: ``insert()`` から伝播。
-            SalesforceBulkIngestTimeoutError: ``insert()`` から伝播。
+            SalesforceBulkFailedError: ``insert()`` から伝播。
+            SalesforceBulkTimeoutError: ``insert()`` から伝播。
         """
         return self._run(object_name, "upsert", rows, external_id_field, timeout_seconds)
 
@@ -207,8 +207,8 @@ class BulkIngestAPI:
             実行結果を表す ``BulkIngestResult``。
 
         Raises:
-            SalesforceBulkIngestFailedError: ``insert()`` から伝播。
-            SalesforceBulkIngestTimeoutError: ``insert()`` から伝播。
+            SalesforceBulkFailedError: ``insert()`` から伝播。
+            SalesforceBulkTimeoutError: ``insert()`` から伝播。
         """
         return self._run(object_name, "delete", rows, None, timeout_seconds)
 
@@ -298,8 +298,8 @@ class BulkIngestAPI:
 
         ``state`` が ``JobComplete`` になるまで ``POLL_INTERVAL_SECONDS`` 秒
         間隔で ``GET /jobs/ingest/{jobId}`` を投げる。``Failed`` / ``Aborted``
-        になったら ``SalesforceBulkIngestFailedError`` を、``timeout_seconds``
-        以内に ``JobComplete`` にならなければ ``SalesforceBulkIngestTimeoutError``
+        になったら ``SalesforceBulkFailedError`` を、``timeout_seconds``
+        以内に ``JobComplete`` にならなければ ``SalesforceBulkTimeoutError``
         を送出する。
 
         Returns:
@@ -318,9 +318,18 @@ class BulkIngestAPI:
                     if isinstance(data, dict)
                     else "詳細情報なし"
                 )
-                raise SalesforceBulkIngestFailedError(job_id, state, error_message)
+                raise SalesforceBulkFailedError(
+                    f"Salesforce の Bulk API Ingest ジョブが失敗しました"
+                    f"（状態: {state}）: {job_id}\n"
+                    f"{error_message}\n"
+                    "CSV の列名・データ型・実行ユーザーの権限を確認してください。"
+                )
             time.sleep(POLL_INTERVAL_SECONDS)
-        raise SalesforceBulkIngestTimeoutError(job_id, timeout_seconds)
+        raise SalesforceBulkTimeoutError(
+            f"Salesforce の Bulk API Ingest ジョブが {timeout_seconds} 秒以内に"
+            f"終わりませんでした: {job_id}\n"
+            "timeout_seconds を長くするか、データを分割して再実行してください。"
+        )
 
     def _fetch_result(self, job_id: str, result_kind: str) -> Table:
         """成功/失敗の結果 CSV を（ページングがあれば全ページ）取得して ``Table`` にする。

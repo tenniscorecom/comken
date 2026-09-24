@@ -27,10 +27,9 @@ from comken.core.table.model import Table
 from comken.core.timer import measure
 from comken.exceptions import (
     ComkenFileNotFoundError,
-    EmptyHeaderCellError,
     ExcelApplicationNotAvailableError,
-    ExcelHeadersTooFewError,
-    FileFormatMismatchError,
+    ExcelHeaderError,
+    ExcelUsageError,
     MacroError,
 )
 from comken.exceptions.warning import _warn_coerce
@@ -219,7 +218,12 @@ class ExcelCOMHandler(FileBase):
         last_col = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
         if self._headers is not None:
             if last_col > len(self._headers):
-                raise ExcelHeadersTooFewError(len(self._headers), last_col)
+                raise ExcelUsageError(
+                    f"headers の列数（{len(self._headers)}列）がシートの列数"
+                    f"（{last_col}列）より少ないため、"
+                    "はみ出した列のデータが失われます。\n"
+                    "headers にすべての列名を指定してください。"
+                )
             data_rows = [
                 # headers が実データ列より多い場合は、従来どおり余った見出しを含めない。
                 dict(zip(self._headers, row, strict=False))
@@ -234,7 +238,10 @@ class ExcelCOMHandler(FileBase):
             return Table([], [])  # 空シート（Excel 側と挙動を揃える）
         none_cols = [i + 1 for i, h in enumerate(file_headers) if h is None]
         if none_cols:
-            raise EmptyHeaderCellError(none_cols)
+            raise ExcelHeaderError(
+                f"ヘッダー行に空のセルがあります。列番号: {none_cols}\n"
+                "Excelの1行目（ヘッダー行）を確認してください。"
+            )
         data_rows = [
             dict(zip(file_headers, row, strict=False))
             for row in _block_values(ws, header_row + 1, last_row, last_col)
@@ -297,7 +304,7 @@ class ExcelCOMHandler(FileBase):
         write_cell での変更を残す場合は必ず呼ぶこと。
 
         Raises:
-            FileFormatMismatchError: 保存先の拡張子がワークブックの形式と食い違う場合。
+            ExcelUsageError: 保存先の拡張子がワークブックの形式と食い違う場合。
         """
         original = Path(self._original_path)
         if is_dry_run():
@@ -313,7 +320,11 @@ class ExcelCOMHandler(FileBase):
         file_format = self._wb.FileFormat
         suffix_format = _SUFFIX_TO_FORMAT.get(original.suffix.lower())
         if suffix_format is not None and suffix_format != file_format:
-            raise FileFormatMismatchError(original.suffix)
+            raise ExcelUsageError(
+                f"保存先の拡張子（{original.suffix}）が元ファイルの形式と一致しません。\n"
+                "形式を変換して保存する場合は file_format 引数で FileFormat 定数を"
+                "指定してください。（例: file_format=FileFormat.CSV）"
+            )
         self._wb.SaveAs(str(original), FileFormat=file_format)
         # SaveAs 後は開いているブック自体が元ファイルへ切り替わる。
         # 次回の save() は同じファイルに対する Save() にする。
@@ -347,7 +358,11 @@ class ExcelCOMHandler(FileBase):
             # 変換の意図がある場合は file_format の明示を必須にする
             suffix_format = _SUFFIX_TO_FORMAT.get(save_path.suffix.lower())
             if suffix_format is not None and suffix_format != file_format:
-                raise FileFormatMismatchError(save_path.suffix)
+                raise ExcelUsageError(
+                    f"保存先の拡張子（{save_path.suffix}）が元ファイルの形式と一致しません。\n"
+                    "形式を変換して保存する場合は file_format 引数で FileFormat 定数を"
+                    "指定してください。（例: file_format=FileFormat.CSV）"
+                )
         if is_dry_run():
             # パスワードは秘匿値なのでログには出さない（save_path のみ）
             dry_run_log("Excel を別名保存: %s", save_path)

@@ -30,29 +30,20 @@ class EncodingDetectionError(CSVError):
         )
 
 
-class CSVHeaderMissingError(CSVError):
-    """CSV に見出し行がない
+class CSVHeaderError(CSVError):
+    """CSV の見出し行に関するエラー
+
+    見出し行がない、見出しに空欄・重複がある、新規 CSV に列を
+    指定できない、といった失敗をまとめて扱う。
 
     対処:
-        見出し行を追加するか、ヘッダーなし CSV なら columns を指定する
+        - 見出し行を追加するか、ヘッダーなし CSV なら ``columns`` を指定する
+        - 1行目にある空欄・重複した見出しを直す
+        - 新規 CSV に書き出すときは ``CSV(columns=[...])`` で列を指定する
     """
 
-    def __init__(self, path: Path | str) -> None:
-        super().__init__(
-            f"CSV に見出し行がありません: {path}\n"
-            "columns を指定するか、見出し行を追加してください。"
-        )
-
-
-class CSVInvalidHeaderError(CSVError):
-    """CSV の見出しに空欄または重複がある
-
-    対処:
-        CSV の1行目にある空欄または重複した見出しを直す
-    """
-
-    def __init__(self, path: Path | str, reason: str) -> None:
-        super().__init__(f"CSV の見出しが不正です: {path}\n{reason}")
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
 
 
 class CSVRowLengthError(CSVError):
@@ -66,17 +57,4 @@ class CSVRowLengthError(CSVError):
         super().__init__(
             f"CSV の{line_number}行目は列数が一致しません: {path}\n"
             f"見出しは{expected}列、データは{actual}列です。"
-        )
-
-
-class CSVColumnsRequiredError(CSVError):
-    """空の新規 CSV に出力する列を決定できない
-
-    対処:
-        CSV(columns=[...]) または Table(columns, []) で列を指定する
-    """
-
-    def __init__(self, path: Path | str) -> None:
-        super().__init__(
-            f"空の新規 CSV の列を決定できません: {path}\nCSV(columns=[...]) を指定してください。"
         )

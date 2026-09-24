@@ -19,9 +19,8 @@ from comken.core.calendar import (
     nth_business_day_of_month,
 )
 from comken.exceptions import (
-    ScheduleWeekdayInvalidError,
+    ScheduleSettingError,
     SheetNotFoundError,
-    UnsupportedScheduleFrequencyError,
 )
 from comken.services.salesforce_downloader.report_master import MasterRow, column
 
@@ -150,18 +149,22 @@ class ScheduleRule(MasterRow):
 
         読み込み時は ``choices=WEEKDAY_NAMES`` で月〜日に絞り込まれているため、
         想定外の表記（例: 「月曜日」）はここに来る前に ``MasterRowValueError``
-        として弾かれる。``ScheduleWeekdayInvalidError`` は既定の挙動を逸脱した
+        として弾かれる。``ScheduleSettingError`` は既定の挙動を逸脱した
         場合に備えた受け皿で、テストや Python から直接 ``ScheduleRule`` を
         組み立てたときにだけ使われる。
 
         Raises:
-            ScheduleWeekdayInvalidError: 想定外の文字列が書かれている場合。
+            ScheduleSettingError: 想定外の文字列が書かれている場合。
         """
         if not self.raw_weekday:
             return None
         text = self.raw_weekday.strip()
         if text not in WEEKDAY_NAMES:
-            raise ScheduleWeekdayInvalidError(self.raw_weekday)
+            raise ScheduleSettingError(
+                f"曜日が正しくありません: {self.raw_weekday}\n"
+                "管理表の「曜日」列の値を 月 / 火 / 水 / 木 / 金 / 土 / 日 の"
+                "いずれかに修正してください（「曜日」を付ける形式でも可）。"
+            )
         return WEEKDAY_NAMES.index(text)
 
     @property
@@ -288,7 +291,11 @@ class ScheduleRule(MasterRow):
             FREQUENCY_BUSINESS_DAY,
         }:
             return self.start_time is None or now.time() >= self.start_time
-        raise UnsupportedScheduleFrequencyError(self.frequency)
+        raise ScheduleSettingError(
+            f"対応していない取得頻度です: {self.frequency}\n"
+            "管理表の「取得頻度」列の値を 毎日 / 毎週 / 毎月 / 毎営業日 の"
+            "いずれかに修正してください。"
+        )
 
     def _raw_date_matches(
         self,
