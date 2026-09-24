@@ -450,7 +450,7 @@ dedup 判定に使わない。スケジュール行に紐付かないレポー�
 
 | 何が起きたか | 成否 | Salesforce取得結果 | 保存結果 | 原因区分 | エラーコード |
 |---|---|---|---|---|---|
-| 保存先フォルダが無い | 失敗 | （空） | （空） | `設定` | `ReportFolderNotFoundError` |
+| 保存先フォルダが無い | 失敗 | （空） | （空） | `設定` | `ComkenFileNotFoundError` |
 | Salesforce への問い合わせが失敗 | 失敗 | 失敗 | （空） | `Salesforce` | 送出された例外のクラス名 |
 | 取得できたが 0 件だった（`0件あり` が `×`） | 失敗 | **成功** | （空） | `データなし` | `EmptyReportError` |
 | 取得できたが CSV 書き込みが失敗 | 失敗 | 成功 | 失敗 | `ファイル` | 送出された例外のクラス名 |
@@ -896,7 +896,7 @@ saved = download_soql_reports()   # SOQL_REPORTS を全部取得・保存
 `ReportNotRegisteredError` / `SoqlReportNotRegisteredError` /
 `GroupNotRegisteredError` / `ReportDisabledError` / `MasterDuplicateValueError` /
 `MasterRowValueError` / `CachedReportNotFoundError` / `EmptyReportError` /
-`ReportFolderNotFoundError` / `ScheduledDownloadFailedError`（いずれも
+`ComkenFileNotFoundError` / `ScheduledDownloadFailedError`（いずれも
 `comken/exceptions/downloader.py`）。
 
 `ScheduledDownloadFailedError` は**取得できたものを保存したうえで**送出する

@@ -13,26 +13,6 @@ class DataLoaderError(ComkenError):
     """
 
 
-class DataLoaderLauncherNotFoundError(DataLoaderError):
-    """Data Loader の実行ファイルが見つからない
-
-    Data Loader がインストールされていないか、launcher_path に渡したパスが
-    間違っている。``run()`` の直前でファイルの有無を確認するため、コンストラクタ
-    には渡せない。``subprocess`` 起動時に発見できない場合はここで止める。
-
-    対処:
-        ``launcher_path`` が正しいか、Data Loader がインストールされているか
-        確認する。バージョンによってバッチファイル名や実行可能jarの位置が違う
-        ので、実際にインストールされたフォルダをエクスプローラーで開いて確かめる
-    """
-
-    def __init__(self, launcher_path: Path | str) -> None:
-        super().__init__(
-            f"Data Loader の実行ファイルが見つかりません: {launcher_path}\n"
-            "パスが正しいか、Data Loader がインストールされているかを確認してください。"
-        )
-
-
 class DataLoaderTimeoutError(DataLoaderError):
     """Data Loader の実行が制限時間内に終わらなかった
 
@@ -81,25 +61,4 @@ class DataLoaderExecutionError(DataLoaderError):
             f"--- stderr ---\n{stderr}\n"
             "config.properties・process-conf.xml の設定と、表示された"
             "標準出力・標準エラー出力を確認してください。"
-        )
-
-
-class DataLoaderResultFileMissingError(DataLoaderError):
-    """指定した成功 / エラー CSV のパスにファイルが無い
-
-    Data Loader プロセスは 0 で終了したが、``success_csv`` / ``error_csv`` に
-    指定したパスにファイルが存在しない。``config.properties`` 側の出力先
-    設定と、ここに渡したパスが食い違っている可能性が高い。
-
-    対処:
-        ``config.properties`` の出力先パスと、``success_csv`` / ``error_csv`` に
-        渡したパスが一致しているか確認する。出力先が相対パスで書かれている場合は、
-        Data Loader を実行したカレントディレクトリから見たパスになる点にも注意する
-    """
-
-    def __init__(self, path: Path | str) -> None:
-        super().__init__(
-            f"Data Loader の結果ファイルが見つかりません: {path}\n"
-            "config.properties の出力先パスと、success_csv / error_csv に"
-            "渡したパスが一致しているか確認してください。"
         )

@@ -8,17 +8,15 @@ import comken.exceptions
 from comken.exceptions import (
     ColumnNotFoundError,
     ComkenError,
+    ComkenFileNotFoundError,
     ConfigError,
-    ConfigFileNotFoundError,
     ConfigMappingEmptyValueError,
     ConfigSectionNotFoundError,
     CSVError,
-    CSVFileNotFoundError,
     EmptyHeaderCellError,
     EncodingDetectionError,
     ExcelColumnNotFoundError,
     ExcelError,
-    ExcelFileNotFoundError,
     ExcelHeadersTooFewError,
     FileFormatMismatchError,
     KeyColumnNotFoundError,
@@ -45,17 +43,34 @@ def test_all_declared_names_are_resolvable() -> None:
 @pytest.mark.parametrize(
     ("error", "base", "message"),
     [
-        (ExcelFileNotFoundError("book.xlsx"), ExcelError, "book.xlsx"),
+        (
+            ComkenFileNotFoundError(
+                "Excel ファイル",
+                "book.xlsx",
+                "パスが正しいか、ファイルが存在するかを確認してください。",
+            ),
+            ComkenError,
+            "book.xlsx",
+        ),
         (SheetNotFoundError("集計", ["Sheet1"]), ExcelError, "集計"),
         (MacroError("Module1.Run", Exception("失敗")), ExcelError, "Module1.Run"),
         (EmptyHeaderCellError([2]), ExcelError, "列番号: [2]"),
         (ExcelHeadersTooFewError(2, 3), ExcelError, "2列"),
         (FileFormatMismatchError(".csv"), ExcelError, ".csv"),
         (EncodingDetectionError("data.csv"), CSVError, "data.csv"),
-        (CSVFileNotFoundError("data.csv"), CSVError, "data.csv"),
+        (ComkenFileNotFoundError("CSV ファイル", "data.csv"), ComkenError, "data.csv"),
         (ExcelColumnNotFoundError(["金額"]), ColumnNotFoundError, "金額"),
         (KeyColumnNotFoundError("ID", ["名前"]), ColumnNotFoundError, "ID"),
-        (ConfigFileNotFoundError("config.ini"), ConfigError, "config.ini"),
+        (
+            ComkenFileNotFoundError(
+                "config.ini",
+                "config.ini",
+                "同じ場所に config.ini.example があるか確認してください。"
+                "あれば、もう一度実行するだけで config.ini が作られます。",
+            ),
+            ComkenError,
+            "config.ini",
+        ),
         (ConfigSectionNotFoundError("FILES", ["LOG"]), ConfigError, "[FILES]"),
         (
             ConfigMappingEmptyValueError("config.ini", "[T_MAPPING]", ["部署名"]),

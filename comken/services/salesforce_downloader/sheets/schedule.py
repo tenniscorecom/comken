@@ -445,7 +445,7 @@ def load_schedule(path: str | Path | None = None) -> list[ScheduleRule]:
         MasterColumnNotFoundError: 宣言した見出しが表に無い場合。
         MasterRowValueError: 値が型・選択肢に合わない、または空にできない列が空の場合。
         MasterDuplicateValueError: スケジュールキーが重複している行がある場合。
-        ExcelFileNotFoundError: ``path`` が存在しない場合。
+        ComkenFileNotFoundError: ``path`` が存在しない場合。
     """
     if path is None:
         from comken.services.salesforce_downloader.paths import MASTER_PATH
@@ -453,7 +453,7 @@ def load_schedule(path: str | Path | None = None) -> list[ScheduleRule]:
         path = MASTER_PATH
     source = Path(path)
     # **シートが無い場合は空リストを返す。** この機能をまだ使っていない管理表を
-    # 読み込み時に壊さないため。``ExcelFileNotFoundError`` などの「ファイル自体に
+    # 読み込み時に壊さないため。``ComkenFileNotFoundError`` などの「ファイル自体に
     # 関するエラー」はそのまま上位へ伝える
     try:
         return ScheduleRule.load(source)

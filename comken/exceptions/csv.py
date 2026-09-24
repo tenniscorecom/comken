@@ -30,17 +30,6 @@ class EncodingDetectionError(CSVError):
         )
 
 
-class CSVFileNotFoundError(CSVError):
-    """読み込む CSV ファイルが存在しない
-
-    対処:
-        パスを確認する。新規出力は columns を指定して write / replace する
-    """
-
-    def __init__(self, path: Path | str) -> None:
-        super().__init__(f"CSV ファイルが見つかりません: {path}")
-
-
 class CSVHeaderMissingError(CSVError):
     """CSV に見出し行がない
 

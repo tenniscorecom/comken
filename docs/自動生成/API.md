@@ -2809,25 +2809,6 @@ class AccessBackupError(AccessError):
 def __init__(self, path: Path | str, backup_path: Path | str, detail: Exception) -> None:
 ```
 
-### `AccessFileNotFoundError`
-
-```text
-class AccessFileNotFoundError(AccessError):
-```
-
-#### 説明
-
-Access ファイルが見つからない
-
-対処:
-    ファイルの置き場所と名前を確認する
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path | str) -> None:
-```
-
 ### `AccessLocalCopyError`
 
 ```text
@@ -2915,27 +2896,6 @@ class DataSheetAccessError(ExcelError):
 
 ```text
 def __init__(self, sheet_name: str, operation: str) -> None:
-```
-
-### `ExcelFileNotFoundError`
-
-```text
-class ExcelFileNotFoundError(ExcelError):
-```
-
-#### 説明
-
-Excel ファイルが見つからない
-
-発生箇所: Excel.__init__() / ExcelCOMHandler.__init__()
-
-対処:
-    ファイルの置き場所と名前を確認する
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path | str) -> None:
 ```
 
 ### `ExcelApplicationNotAvailableError`
@@ -3364,25 +3324,6 @@ CSV の文字コードを判定できない
 def __init__(self, path: Path | str) -> None:
 ```
 
-### `CSVFileNotFoundError`
-
-```text
-class CSVFileNotFoundError(CSVError):
-```
-
-#### 説明
-
-読み込む CSV ファイルが存在しない
-
-対処:
-    パスを確認する。新規出力は columns を指定して write / replace する
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path | str) -> None:
-```
-
 ### `CSVHeaderMissingError`
 
 ```text
@@ -3584,27 +3525,6 @@ config.ini に関するエラー
 対処:
     画面に表示された具体的なエラー名を上の表から探す
 
-### `ConfigFileNotFoundError`
-
-```text
-class ConfigFileNotFoundError(ConfigError):
-```
-
-#### 説明
-
-config.ini が見つからない
-
-発生箇所: Config.__init__() / generate_stub()
-
-対処:
-    config.ini.example が同じ場所にあるか確認する（あれば実行し直すだけで作られる）
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path | str) -> None:
-```
-
 ### `ConfigCreatedFromExampleError`
 
 ```text
@@ -3750,6 +3670,25 @@ class ConfigSubclassingNotSupportedError(ConfigError):
 def __init__(self, subclass_name: str) -> None:
 ```
 
+### `ComkenFileNotFoundError`
+
+```text
+class ComkenFileNotFoundError(ComkenError, FileNotFoundError):
+```
+
+#### 説明
+
+ファイルまたはフォルダが見つからない
+
+対処:
+    エラーに表示されたパスと名前が正しいか、存在するかを確認する
+
+#### `__init__`
+
+```text
+def __init__(self, what: str, path: Path | str, hint: str | None=None) -> None:
+```
+
 ### `UnsupportedFileSuffixError`
 
 ```text
@@ -3865,25 +3804,6 @@ class OutlookFolderNotFoundError(OutlookError):
 
 ```text
 def __init__(self, folder: str, existing_folders: list[str]) -> None:
-```
-
-### `OutlookAttachmentNotFoundError`
-
-```text
-class OutlookAttachmentNotFoundError(OutlookError):
-```
-
-#### 説明
-
-添付ファイルがない
-
-対処:
-    表示されたファイルパスを確認する
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path) -> None:
 ```
 
 ### `CredentialError`
@@ -5317,33 +5237,6 @@ class EmptyReportError(DownloaderError):
 def __init__(self, report_key: str, summary: str, url: str) -> None:
 ```
 
-### `ReportFolderNotFoundError`
-
-```text
-class ReportFolderNotFoundError(DownloaderError):
-```
-
-#### 説明
-
-保存先として組み立てたフォルダが無い
-
-保存先フォルダは、管理表の「グループ」で引いた設定シートの「ベースURL」（フォルダのパス）
-そのものである（`provider.report_folder()`）。そのフォルダが存在しない場合にこの例外になる。
-無いフォルダを作らないのは、書き間違いのことが多いため。
-勝手に作ると、誰も読まない場所へ置き続けることになる。
-
-発生箇所: Salesforceレポートダウンローダー の download_scheduled()
-
-対処:
-    設定シートの「ベースURL」（フォルダのパス）と、管理表の「グループ」を
-    確認する。共有フォルダなら、つながっているか・権限があるかも確認する
-
-#### `__init__`
-
-```text
-def __init__(self, report_key: str, folder: Path) -> None:
-```
-
 ### `ReportReservePathLimitError`
 
 ```text
@@ -5489,31 +5382,6 @@ Data Loader の実行に関するエラー
 対処:
     画面に表示された具体的なエラー名を上の表から探す
 
-### `DataLoaderLauncherNotFoundError`
-
-```text
-class DataLoaderLauncherNotFoundError(DataLoaderError):
-```
-
-#### 説明
-
-Data Loader の実行ファイルが見つからない
-
-Data Loader がインストールされていないか、launcher_path に渡したパスが
-間違っている。``run()`` の直前でファイルの有無を確認するため、コンストラクタ
-には渡せない。``subprocess`` 起動時に発見できない場合はここで止める。
-
-対処:
-    ``launcher_path`` が正しいか、Data Loader がインストールされているか
-    確認する。バージョンによってバッチファイル名や実行可能jarの位置が違う
-    ので、実際にインストールされたフォルダをエクスプローラーで開いて確かめる
-
-#### `__init__`
-
-```text
-def __init__(self, launcher_path: Path | str) -> None:
-```
-
 ### `DataLoaderTimeoutError`
 
 ```text
@@ -5562,31 +5430,6 @@ SOQL のフィールド名不一致、書き出し先パスへの権限不足
 
 ```text
 def __init__(self, launcher_path: Path | str, returncode: int, stdout: str, stderr: str) -> None:
-```
-
-### `DataLoaderResultFileMissingError`
-
-```text
-class DataLoaderResultFileMissingError(DataLoaderError):
-```
-
-#### 説明
-
-指定した成功 / エラー CSV のパスにファイルが無い
-
-Data Loader プロセスは 0 で終了したが、``success_csv`` / ``error_csv`` に
-指定したパスにファイルが存在しない。``config.properties`` 側の出力先
-設定と、ここに渡したパスが食い違っている可能性が高い。
-
-対処:
-    ``config.properties`` の出力先パスと、``success_csv`` / ``error_csv`` に
-    渡したパスが一致しているか確認する。出力先が相対パスで書かれている場合は、
-    Data Loader を実行したカレントディレクトリから見たパスになる点にも注意する
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path | str) -> None:
 ```
 
 ### `TransferDestinationMultipleMatchError`
@@ -11386,11 +11229,11 @@ Returns:
     DataLoaderResult: 成功／エラー CSV を ``Table`` 化した結果。
 
 Raises:
-    DataLoaderLauncherNotFoundError: ``launcher_path`` が存在しない。
+    ComkenFileNotFoundError: ``launcher_path`` が存在しない。
     DataLoaderTimeoutError: ``timeout_seconds`` 内にプロセスが終わらなかった。
     DataLoaderExecutionError: Data Loader が 0 以外の終了コードで終了した
         （stdout / stderr がメッセージに含まれる）。
-    DataLoaderResultFileMissingError: 正常終了したのに ``success_csv`` または
+    ComkenFileNotFoundError: 正常終了したのに ``success_csv`` または
         ``error_csv`` に指定したパスにファイルが無い。
 
 ### `DataLoaderResult`

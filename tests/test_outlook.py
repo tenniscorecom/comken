@@ -9,7 +9,7 @@ import pytest
 from comken import dry_run
 from comken.exceptions import (
     ClassicOutlookNotAvailableError,
-    OutlookAttachmentNotFoundError,
+    ComkenFileNotFoundError,
     OutlookFolderNotFoundError,
 )
 from comken.toolbox.outlook import MailMessage, Outlook
@@ -105,7 +105,7 @@ class TestOutlook:
 
     def test_missing_attachment_does_not_create_draft(self, tmp_path):
         outlook, application, _ = _outlook()
-        with pytest.raises(OutlookAttachmentNotFoundError):
+        with pytest.raises(ComkenFileNotFoundError):
             outlook.save_draft("a@example.com", "件名", "本文", [tmp_path / "missing.csv"])
         application.CreateItem.assert_not_called()
 

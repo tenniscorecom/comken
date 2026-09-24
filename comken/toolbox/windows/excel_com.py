@@ -26,9 +26,9 @@ from comken.core.files.ops import copy_to_local_if_large
 from comken.core.table.model import Table
 from comken.core.timer import measure
 from comken.exceptions import (
+    ComkenFileNotFoundError,
     EmptyHeaderCellError,
     ExcelApplicationNotAvailableError,
-    ExcelFileNotFoundError,
     ExcelHeadersTooFewError,
     FileFormatMismatchError,
     MacroError,
@@ -86,7 +86,11 @@ class ExcelCOMHandler(FileBase):
         super().__init__(path)
         self._original_path = self._path
         if not self._original_path.exists():
-            raise ExcelFileNotFoundError(self._original_path)
+            raise ComkenFileNotFoundError(
+                "Excel ファイル",
+                self._original_path,
+                "パスが正しいか、ファイルが存在するかを確認してください。",
+            )
         # save() は元ファイルへ保存するので、コピーで開いたかどうかは _working_path と
         # _original_path を比べることで判別する。
         self._working_path, self._tmp = copy_to_local_if_large(

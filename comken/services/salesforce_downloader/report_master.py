@@ -345,10 +345,10 @@ def read_raw_rows(source: Path, sheet_name: str) -> CoreTable:
     で落ちる。管理表は共有サーバー (UNC) に置く運用が前提で、現実の失敗は
     「サーバーが落ちた」「パスが変わった」「権限が無い」のいずれか。
     **業務担当者が画面で見ても原因が分かるよう、ファイル不在は
-    ``ExcelFileNotFoundError`` がそのまま上がる経路にする。**
+    ``ComkenFileNotFoundError`` がそのまま上がる経路にする。**
 
     Raises:
-        ExcelFileNotFoundError: ``source`` が存在しない場合。
+        ComkenFileNotFoundError: ``source`` が存在しない場合。
         SheetNotFoundError: ``sheet_name`` がブックに無い場合。
         ExcelApplicationNotAvailableError: 未計算の数式セルが含まれていた場合。
     """

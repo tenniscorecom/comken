@@ -14,8 +14,8 @@ from openpyxl import load_workbook
 
 from comken.core.table import Table
 from comken.exceptions import (
+    ComkenFileNotFoundError,
     ExcelApplicationNotAvailableError,
-    ExcelFileNotFoundError,
     MasterColumnNotFoundError,
     MasterDuplicateValueError,
     MasterRowValueError,
@@ -91,14 +91,14 @@ class TestLoad:
         **書き込みモードで開くと、空ブックを新規作成して「対象テーブルを
         一意に決められません」で落ちる**（ファイル不在の事実が消える）。
         管理表は共有サーバー (UNC) に置く運用で、現実の失敗は「サーバーが
-        落ちた」「パスが変わった」「権限が無い」。 ``ExcelFileNotFoundError``
+        落ちた」「パスが変わった」「権限が無い」。 ``ComkenFileNotFoundError``
         がそのまま上がれば、画面にパスが出るため担当者が IT に連絡できる。
         旧実装 (``Excel(source)`` 書き込みモード) では ``InvalidTableOperationError``
         が送出されるため、このテストは旧実装では落ちる。
         """
         missing = tmp_path / "存在しない管理表.xlsx"
         assert not missing.exists()  # 前提: ファイルが無い
-        with pytest.raises(ExcelFileNotFoundError) as e:
+        with pytest.raises(ComkenFileNotFoundError) as e:
             Item.load(missing)
         assert str(missing) in str(e.value)  # パスがメッセージに出る
 

@@ -11,7 +11,7 @@ import pytest
 
 from comken.core.table import Table
 from comken.exceptions import (
-    ExcelFileNotFoundError,
+    ComkenFileNotFoundError,
     MasterDuplicateValueError,
 )
 from comken.services.salesforce_downloader import provider as provider_module
@@ -55,10 +55,10 @@ class TestLoadGroupSettings:
         assert load_group_settings(tmp_path / "設定.xlsx") == {}
 
     def test_missing_file_raises_excel_file_not_found(self, tmp_path):
-        """ファイル自体が無いと ``ExcelFileNotFoundError``。"""
+        """ファイル自体が無いと ``ComkenFileNotFoundError``。"""
         missing = tmp_path / "無い.xlsx"
         assert not missing.exists()
-        with pytest.raises(ExcelFileNotFoundError):
+        with pytest.raises(ComkenFileNotFoundError):
             load_group_settings(missing)
 
 

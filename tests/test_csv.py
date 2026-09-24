@@ -7,8 +7,8 @@ import pytest
 from comken.constants import Encoding
 from comken.core import Table
 from comken.exceptions import (
+    ComkenFileNotFoundError,
     CSVColumnsRequiredError,
-    CSVFileNotFoundError,
     CSVHeaderMissingError,
     CSVInvalidHeaderError,
     CSVRowLengthError,
@@ -276,7 +276,7 @@ class TestCSV:
 
     def test_missing_and_zero_byte_have_dedicated_errors(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
-        with pytest.raises(CSVFileNotFoundError), CSV(path) as csv_file:
+        with pytest.raises(ComkenFileNotFoundError), CSV(path) as csv_file:
             csv_file.read()
         path.touch()
         with pytest.raises(CSVHeaderMissingError), CSV(path) as csv_file:

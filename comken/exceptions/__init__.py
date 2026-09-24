@@ -5,22 +5,20 @@ ComkenError
 ├── LoggingAlreadyConfiguredError   root logger が設定済み
 ├── LoggingConflictError            root logger に他ライブラリの handler が混ざっている
 ├── LogRootNotConfiguredError       LoggerSite の LOG_ROOT が未設定
+├── ComkenFileNotFoundError         ファイルまたはフォルダが見つからない
 ├── UnsupportedFileSuffixError
 ├── FileDeletionError
 ├── FileSuffixMissingError
 ├── AccessError
-│   ├── AccessFileNotFoundError
 │   ├── AccessBackupError
 │   ├── AccessLocalCopyError
 │   ├── AccessRoutineError
 │   └── AccessSourceNotFoundError
 ├── OutlookError
 │   ├── ClassicOutlookNotAvailableError
-│   ├── OutlookFolderNotFoundError
-│   └── OutlookAttachmentNotFoundError
+│   └── OutlookFolderNotFoundError
 ├── ExcelError
 │   ├── DataSheetAccessError
-│   ├── ExcelFileNotFoundError
 │   ├── ExcelApplicationNotAvailableError
 │   ├── ExcelSaveValidationError
 │   ├── ExcelMacroPreservationError
@@ -41,7 +39,6 @@ ComkenError
 │   └── FileFormatMismatchError
 ├── CSVError
 │   ├── EncodingDetectionError
-│   ├── CSVFileNotFoundError
 │   ├── CSVHeaderMissingError
 │   ├── CSVInvalidHeaderError
 │   ├── CSVRowLengthError
@@ -103,7 +100,6 @@ ComkenError
 │   ├── KeyColumnNotFoundError
 │   └── TransferSourceColumnNotFoundError
 ├── ConfigError
-│   ├── ConfigFileNotFoundError
 │   ├── ConfigCreatedFromExampleError
 │   ├── ConfigLowerCaseNameError
 │   ├── ConfigSectionNotFoundError
@@ -133,25 +129,23 @@ ComkenError
 │   ├── ReportDisabledError
 │   ├── InvalidReportURLError
 │   ├── EmptyReportError
-│   ├── ReportFolderNotFoundError
 │   ├── ReportReservePathLimitError
 │   ├── ScheduledDownloadFailedError
 │   ├── SoqlDownloadFailedError
 │   ├── UnsupportedScheduleFrequencyError
-│   ├── ScheduleWeekdayInvalidError
+│   └── ScheduleWeekdayInvalidError
 └── DataLoaderError
-│   ├── DataLoaderLauncherNotFoundError
 │   ├── DataLoaderTimeoutError
-│   ├── DataLoaderExecutionError
-│   └── DataLoaderResultFileMissingError
+│   └── DataLoaderExecutionError
 
 カテゴリ基底クラスはまとめて捕捉するために使い、直接送出しない。
 """
 
+import warnings
+
 from comken.exceptions.access import (
     AccessBackupError,
     AccessError,
-    AccessFileNotFoundError,
     AccessLocalCopyError,
     AccessRoutineError,
     AccessSourceNotFoundError,
@@ -190,7 +184,6 @@ from comken.exceptions.column import (
 from comken.exceptions.config import (
     ConfigCreatedFromExampleError,
     ConfigError,
-    ConfigFileNotFoundError,
     ConfigKeyNotFoundError,
     ConfigLowerCaseNameError,
     ConfigMappingEmptyValueError,
@@ -209,7 +202,6 @@ from comken.exceptions.credential import (
 from comken.exceptions.csv import (
     CSVColumnsRequiredError,
     CSVError,
-    CSVFileNotFoundError,
     CSVHeaderMissingError,
     CSVInvalidHeaderError,
     CSVRowLengthError,
@@ -218,8 +210,6 @@ from comken.exceptions.csv import (
 from comken.exceptions.dataloader import (
     DataLoaderError,
     DataLoaderExecutionError,
-    DataLoaderLauncherNotFoundError,
-    DataLoaderResultFileMissingError,
     DataLoaderTimeoutError,
 )
 from comken.exceptions.downloader import (
@@ -231,7 +221,6 @@ from comken.exceptions.downloader import (
     HistoryWriteError,
     InvalidReportURLError,
     ReportDisabledError,
-    ReportFolderNotFoundError,
     ReportNotRegisteredError,
     ReportReservePathLimitError,
     ScheduledDownloadFailedError,
@@ -247,7 +236,6 @@ from comken.exceptions.excel import (
     EmptyHeaderCellError,
     ExcelApplicationNotAvailableError,
     ExcelError,
-    ExcelFileNotFoundError,
     ExcelHeadersTooFewError,
     ExcelMacroPreservationError,
     ExcelReadOnlyOperationError,
@@ -264,6 +252,7 @@ from comken.exceptions.excel import (
     TableNotFoundError,
 )
 from comken.exceptions.file import (
+    ComkenFileNotFoundError,
     FileDeletionError,
     FileSuffixMissingError,
     UnsupportedFileSuffixError,
@@ -282,7 +271,6 @@ from comken.exceptions.master_table import (
 )
 from comken.exceptions.outlook import (
     ClassicOutlookNotAvailableError,
-    OutlookAttachmentNotFoundError,
     OutlookError,
     OutlookFolderNotFoundError,
 )
@@ -331,13 +319,11 @@ __all__ = [
     "SiteOwnerRequiredError",
     "AccessError",
     "AccessBackupError",
-    "AccessFileNotFoundError",
     "AccessLocalCopyError",
     "AccessRoutineError",
     "AccessSourceNotFoundError",
     "ExcelError",
     "DataSheetAccessError",
-    "ExcelFileNotFoundError",
     "ExcelApplicationNotAvailableError",
     "SheetNotFoundError",
     "SheetAlreadyExistsError",
@@ -358,7 +344,6 @@ __all__ = [
     "FileFormatMismatchError",
     "CSVError",
     "EncodingDetectionError",
-    "CSVFileNotFoundError",
     "CSVHeaderMissingError",
     "CSVInvalidHeaderError",
     "CSVRowLengthError",
@@ -369,20 +354,19 @@ __all__ = [
     "TransferSourceColumnNotFoundError",
     "InvalidColumnError",
     "ConfigError",
-    "ConfigFileNotFoundError",
     "ConfigCreatedFromExampleError",
     "ConfigLowerCaseNameError",
     "ConfigSectionNotFoundError",
     "ConfigKeyNotFoundError",
     "ConfigMappingEmptyValueError",
     "ConfigSubclassingNotSupportedError",
+    "ComkenFileNotFoundError",
     "UnsupportedFileSuffixError",
     "FileDeletionError",
     "FileSuffixMissingError",
     "OutlookError",
     "ClassicOutlookNotAvailableError",
     "OutlookFolderNotFoundError",
-    "OutlookAttachmentNotFoundError",
     "CredentialError",
     "InvalidCredentialNameError",
     "CredentialNotFoundError",
@@ -446,17 +430,14 @@ __all__ = [
     "ReportDisabledError",
     "InvalidReportURLError",
     "EmptyReportError",
-    "ReportFolderNotFoundError",
     "ReportReservePathLimitError",
     "ScheduledDownloadFailedError",
     "SoqlDownloadFailedError",
     "UnsupportedScheduleFrequencyError",
     "ScheduleWeekdayInvalidError",
     "DataLoaderError",
-    "DataLoaderLauncherNotFoundError",
     "DataLoaderTimeoutError",
     "DataLoaderExecutionError",
-    "DataLoaderResultFileMissingError",
     "TransferDestinationMultipleMatchError",
     "TableNotOpenError",
     "TransferDestinationMissingError",
@@ -472,3 +453,34 @@ __all__ = [
     "LogRootNotConfiguredError",
     "WindowNotFoundError",
 ]
+
+
+# v1.0.0 以前の旧例外名は削除せず、 ``FutureWarning`` 付きの別名として残す。
+# 会社側プロジェクトは ``grep`` できないため、 ``from comken.exceptions
+# import OldName`` を無警告で壊すと、現場のコードがサイレントに止まる。
+# 旧サブモジュール経由（``comken.exceptions.excel.ExcelFileNotFoundError`` など）は
+# 対象外。パッケージ入口からの import / 属性アクセスだけをこの仕組みで救う。
+_RENAMED_EXCEPTIONS: dict[str, str] = {
+    "ExcelFileNotFoundError": "ComkenFileNotFoundError",
+    "CSVFileNotFoundError": "ComkenFileNotFoundError",
+    "AccessFileNotFoundError": "ComkenFileNotFoundError",
+    "ConfigFileNotFoundError": "ComkenFileNotFoundError",
+    "DataLoaderLauncherNotFoundError": "ComkenFileNotFoundError",
+    "DataLoaderResultFileMissingError": "ComkenFileNotFoundError",
+    "OutlookAttachmentNotFoundError": "ComkenFileNotFoundError",
+    "ReportFolderNotFoundError": "ComkenFileNotFoundError",
+}
+
+
+def __getattr__(name: str) -> type[ComkenError]:
+    """旧例外名を ``FutureWarning`` 付きの別名として公開する。"""
+    new_name = _RENAMED_EXCEPTIONS.get(name)
+    if new_name is None:
+        raise AttributeError(f"module 'comken.exceptions' has no attribute {name!r}")
+    new_cls = globals()[new_name]
+    warnings.warn(
+        f"{name} は {new_name} に統合されました。{new_name} に書き換えてください。",
+        FutureWarning,
+        stacklevel=2,
+    )
+    return new_cls  # type: ignore[no-any-return]

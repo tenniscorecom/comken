@@ -9,9 +9,8 @@ from pathlib import Path
 
 from comken.core.table import Table
 from comken.exceptions import (
+    ComkenFileNotFoundError,
     DataLoaderExecutionError,
-    DataLoaderLauncherNotFoundError,
-    DataLoaderResultFileMissingError,
     DataLoaderTimeoutError,
 )
 from comken.toolbox.csv import CSV
@@ -139,16 +138,22 @@ class DataLoaderCLI:
             DataLoaderResult: 成功／エラー CSV を ``Table`` 化した結果。
 
         Raises:
-            DataLoaderLauncherNotFoundError: ``launcher_path`` が存在しない。
+            ComkenFileNotFoundError: ``launcher_path`` が存在しない。
             DataLoaderTimeoutError: ``timeout_seconds`` 内にプロセスが終わらなかった。
             DataLoaderExecutionError: Data Loader が 0 以外の終了コードで終了した
                 （stdout / stderr がメッセージに含まれる）。
-            DataLoaderResultFileMissingError: 正常終了したのに ``success_csv`` または
+            ComkenFileNotFoundError: 正常終了したのに ``success_csv`` または
                 ``error_csv`` に指定したパスにファイルが無い。
         """
         if not self._launcher_path.exists():
             logger.debug("launcher が見つかりません: %s", self._launcher_path)
-            raise DataLoaderLauncherNotFoundError(self._launcher_path)
+            raise ComkenFileNotFoundError(
+                "Data Loader の実行ファイル",
+                self._launcher_path,
+                "パスが正しいか、Data Loader がインストールされているかを確認してください。"
+                "バージョンによってバッチファイル名や実行可能jarの位置が違うので、"
+                "実際にインストールされたフォルダをエクスプローラーで開いて確かめてください",
+            )
 
         command = [str(self._launcher_path), *args]
         logger.debug(
@@ -213,7 +218,7 @@ class DataLoaderCLI:
         """``success_csv`` / ``error_csv`` を ``Table`` に読み込む。
 
         ``None`` のときは空の ``Table``。指定されたパスにファイルが無いと
-        ``DataLoaderResultFileMissingError``。ファイルが有るときは ``CSV`` で読む。
+        ``ComkenFileNotFoundError``。ファイルが有るときは ``CSV`` で読む。
         0 バイトファイル・ヘッダーのみのケースは ``CSV`` クラスの既存動作に任せる。
         """
         if path is None:
@@ -223,6 +228,13 @@ class DataLoaderCLI:
         logger.debug("結果CSVを読み込みます: %s", result_path)
         if not result_path.exists():
             logger.debug("結果CSVが見つかりません: %s", result_path)
-            raise DataLoaderResultFileMissingError(result_path)
+            raise ComkenFileNotFoundError(
+                "Data Loader の結果ファイル",
+                result_path,
+                "config.properties の出力先パスと、success_csv / error_csv に"
+                "渡したパスが一致しているか確認してください。"
+                "出力先が相対パスで書かれている場合は、Data Loader を実行した"
+                "カレントディレクトリから見たパスになる点にも注意してください",
+            )
         with CSV(result_path, read_only=True) as csv_file:
             return csv_file.read()

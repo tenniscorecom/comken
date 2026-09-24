@@ -13,20 +13,6 @@ class AccessError(ComkenError):
     """
 
 
-class AccessFileNotFoundError(AccessError):
-    """Access ファイルが見つからない
-
-    対処:
-        ファイルの置き場所と名前を確認する
-    """
-
-    def __init__(self, path: Path | str) -> None:
-        super().__init__(
-            f"Access ファイルが見つかりません: {path}\n"
-            "パスが正しいか、ファイルが存在するかを確認してください。"
-        )
-
-
 class AccessLocalCopyError(AccessError):
     """Access ファイルを一時フォルダへコピーできない
 

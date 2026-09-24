@@ -16,13 +16,12 @@ from comken.core.table.model import Table
 from comken.core.timer import measure
 from comken.exceptions.csv import (
     CSVColumnsRequiredError,
-    CSVFileNotFoundError,
     CSVHeaderMissingError,
     CSVInvalidHeaderError,
     CSVRowLengthError,
     EncodingDetectionError,
 )
-from comken.exceptions.file import UnsupportedFileSuffixError
+from comken.exceptions.file import ComkenFileNotFoundError, UnsupportedFileSuffixError
 from comken.exceptions.table import (
     InvalidTableInputError,
     InvalidTableOperationError,
@@ -140,7 +139,7 @@ class CSV:
         logger.debug("CSV 読み込み開始: %s", self.path)
         if not self.path.exists():
             logger.debug("CSV ファイルが存在しません: %s", self.path)
-            raise CSVFileNotFoundError(self.path)
+            raise ComkenFileNotFoundError("CSV ファイル", self.path)
         if self.path.stat().st_size == 0:
             logger.debug("CSV は空ファイルです: %s", self.path)
             if self._columns is None:
@@ -197,7 +196,7 @@ class CSV:
             return
         logger.debug("CSV iter_rows 開始: %s", self.path)
         if not self.path.exists():
-            raise CSVFileNotFoundError(self.path)
+            raise ComkenFileNotFoundError("CSV ファイル", self.path)
         if self.path.stat().st_size == 0:
             if self._columns is None:
                 raise CSVHeaderMissingError(self.path)
@@ -303,7 +302,7 @@ class CSV:
         elif self._columns is not None:
             current = Table(self._columns, [], types=self._types)
         else:
-            raise CSVFileNotFoundError(self.path)
+            raise ComkenFileNotFoundError("CSV ファイル", self.path)
         if isinstance(rows, Table):
             additions = rows.to_rows()
         elif isinstance(rows, dict):

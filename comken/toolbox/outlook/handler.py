@@ -21,7 +21,7 @@ from comken.core.clock import now
 from comken.core.timer import measure
 from comken.exceptions import (
     ClassicOutlookNotAvailableError,
-    OutlookAttachmentNotFoundError,
+    ComkenFileNotFoundError,
     OutlookFolderNotFoundError,
 )
 from comken.runtime import dry_run_log, is_dry_run
@@ -113,7 +113,11 @@ class Outlook:
         attachment_paths = [Path(path).resolve() for path in attachments or ()]
         for path in attachment_paths:
             if not path.is_file():
-                raise OutlookAttachmentNotFoundError(path)
+                raise ComkenFileNotFoundError(
+                    "添付ファイル",
+                    path,
+                    "パスを確認してください。下書きは作成していません。",
+                )
 
         recipients = _join_recipients(to)
         carbon_copy = _join_recipients(cc)

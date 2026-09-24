@@ -23,7 +23,7 @@ from pathlib import Path
 from comken.core.config import _is_mapping_section, _parse_value
 from comken.core.files.atomic import atomic_write
 from comken.core.files.ops import cleanup_stale_tmp
-from comken.exceptions import ConfigFileNotFoundError
+from comken.exceptions import ComkenFileNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,12 @@ def generate_stub(
     if not loaded:
         resolved = Path(ini_path).resolve()
         logger.debug("generate_stub 失敗: config.ini が見つかりません: %s", resolved)
-        raise ConfigFileNotFoundError(resolved)
+        raise ComkenFileNotFoundError(
+            "config.ini",
+            resolved,
+            "同じ場所に config.ini.example があるか確認してください。"
+            "あれば、もう一度実行するだけで config.ini が作られます。",
+        )
 
     # 実行時の Config と同じセクション名（前後空白落とし済み）で補完スタブを出す。
     from comken.core.config import _build_section_map

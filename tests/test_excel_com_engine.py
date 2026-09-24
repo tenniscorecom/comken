@@ -20,7 +20,7 @@ import pytest
 win32com = pytest.importorskip("win32com")
 
 from comken.exceptions import (  # noqa: E402
-    ExcelFileNotFoundError,
+    ComkenFileNotFoundError,
     InvalidTableOperationError,
 )
 from comken.toolbox.excel import Excel  # noqa: E402
@@ -210,5 +210,5 @@ def test_com_engine_requires_existing_file(tmp_path) -> None:
     """``engine='com'`` で存在しないファイルを ``__enter__`` するとエラー。"""
     missing = tmp_path / "missing.xlsx"
     excel = Excel(missing, engine="com", local_copy=False)
-    with pytest.raises(ExcelFileNotFoundError):
+    with pytest.raises(ComkenFileNotFoundError):
         excel.__enter__()

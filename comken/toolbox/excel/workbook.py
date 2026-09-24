@@ -23,8 +23,8 @@ from comken.core.files import atomic_write, copy_to_local_if_large
 from comken.core.table.model import Table
 from comken.core.timer import measure
 from comken.exceptions import (
+    ComkenFileNotFoundError,
     EmptyHeaderCellError,
-    ExcelFileNotFoundError,
     ExcelMacroPreservationError,
     ExcelReadOnlyOperationError,
     ExcelSaveValidationError,
@@ -176,7 +176,11 @@ class Excel:
         if not self._working_path.exists():
             # COM は既存ファイルを開くための経路なので、新規ファイル作成は openpyxl に任せる
             logger.debug("COM 用ブックが存在しません: %s", self.path)
-            raise ExcelFileNotFoundError(self.path)
+            raise ComkenFileNotFoundError(
+                "Excel ファイル",
+                self.path,
+                "パスが正しいか、ファイルが存在するかを確認してください。",
+            )
         threshold = self._resolve_com_local_copy_threshold()
         self._com_handler = ExcelCOMHandler(self._working_path, local_copy_threshold_mb=threshold)
         self._is_open = True
@@ -244,7 +248,7 @@ class Excel:
         """``self._read_only`` に応じて openpyxl のブックを開く（``self._workbook`` を設定）。
 
         書き込み用は ``__enter__`` で必ず開く。読み取り専用は遅延オープンのままにし、
-        ``_working_path`` が存在しなければ ``ExcelFileNotFoundError`` を送出する。
+        ``_working_path`` が存在しなければ ``ComkenFileNotFoundError`` を送出する。
         """
         if not self._read_only:
             # 書き込み用ブックは __enter__ で必ず開く。``_read_computed_rows`` のように
@@ -270,7 +274,11 @@ class Excel:
             # 経路は、その時点で ``_ensure_normal_workbook()`` が開く。
             if not self._working_path.exists():
                 logger.debug("読み取り専用ブックが存在しません: %s", self.path)
-                raise ExcelFileNotFoundError(self.path)
+                raise ComkenFileNotFoundError(
+                    "Excel ファイル",
+                    self.path,
+                    "パスが正しいか、ファイルが存在するかを確認してください。",
+                )
             logger.debug(
                 "openpyxl 読み取り専用ブックは遅延オープンします: working_path=%s",
                 self._working_path,
@@ -927,7 +935,11 @@ class Excel:
                     "_ensure_normal_workbook: 読み取り専用ブックが存在しません: %s",
                     self.path,
                 )
-                raise ExcelFileNotFoundError(self.path)
+                raise ComkenFileNotFoundError(
+                    "Excel ファイル",
+                    self.path,
+                    "パスが正しいか、ファイルが存在するかを確認してください。",
+                )
             self._workbook = Workbook()
             logger.debug(
                 "_ensure_normal_workbook: 新規 Workbook を用意しました: working_path=%s",

@@ -16,6 +16,7 @@ import pytest
 import comken.core.config as config_module
 from comken.core.config import Config
 from comken.exceptions import (
+    ComkenError,
     ConfigCreatedFromExampleError,
     ConfigError,
     ConfigLowerCaseNameError,
@@ -121,11 +122,11 @@ def _assert_stub_self_contained(text: str) -> None:
 
 class TestConfigMissingFile:
     def test_missing_file_raises_config_error(self, tmp_path):
-        """config.ini が存在しない場合は ConfigError で即エラーになることを確認する。
+        """config.ini が存在しない場合は ComkenError で即エラーになることを確認する。
 
         （configparser は黙って空になるため、後の分かりにくい AttributeError を防ぐ）
         """
-        with pytest.raises(ConfigError, match=r"config\.ini が見つかりません"):
+        with pytest.raises(ComkenError, match=r"config\.ini.*が見つかりません"):
             Config(tmp_path / "config.ini")
 
 
@@ -896,7 +897,7 @@ class TestConfigCreatedFromExample:
 
     def test_missing_example_keeps_file_not_found_error(self, tmp_path):
         """example も無ければ従来どおり「見つかりません」になることを確認する。"""
-        with pytest.raises(ConfigError, match="見つかりません"):
+        with pytest.raises(ComkenError, match="見つかりません"):
             Config(tmp_path / "config.ini")
 
 
@@ -1087,10 +1088,10 @@ class TestGenerateStub:
         assert "config: _ConfigFacade" in init_text
 
     def test_missing_ini_raises(self, tmp_path):
-        """config.ini がない場合は ConfigError になることを確認する。"""
+        """config.ini がない場合は ComkenError になることを確認する。"""
         from comken.core.config.stubs import generate_stub
 
-        with pytest.raises(ConfigError):
+        with pytest.raises(ComkenError):
             generate_stub(tmp_path / "config.ini", tmp_path / "config.pyi")
 
     def test_stub_is_valid_python(self, ini, tmp_path):

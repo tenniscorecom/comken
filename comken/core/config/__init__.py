@@ -63,8 +63,8 @@ from typing import NoReturn
 from comken.core.data import is_true_word
 from comken.core.files.ops import project_dir
 from comken.exceptions import (
+    ComkenFileNotFoundError,
     ConfigCreatedFromExampleError,
-    ConfigFileNotFoundError,
     ConfigKeyNotFoundError,
     ConfigLowerCaseNameError,
     ConfigMappingEmptyValueError,
@@ -198,7 +198,12 @@ class Config:
             created = _create_from_example(path)
             if created is not None:
                 raise ConfigCreatedFromExampleError(created)
-            raise ConfigFileNotFoundError(path.resolve())
+            raise ComkenFileNotFoundError(
+                "config.ini",
+                path.resolve(),
+                "同じ場所に config.ini.example があるか確認してください。"
+                "あれば、もう一度実行するだけで config.ini が作られます。",
+            )
 
         # configparser はセクション名の前後の空白（全角スペース含む）を落とさないため、
         # 手書きで `[FILES ]` のように書くと別セクション扱いになり、書いた人と
@@ -454,7 +459,7 @@ def _validate_upper_case(
 #   あり、 14 万回のループでは 3.5 秒。 共有サーバー上では ``stat()`` が
 #   ネットワーク往復になり更に遅くなる。 業務ツールは実行中の config.ini
 #   書き換えを想定しない）。
-# - **ファイルが存在しないパスはキャッシュしない**（``ConfigFileNotFoundError``
+# - **ファイルが存在しないパスはキャッシュしない**（``ComkenFileNotFoundError``
 #   を投げる。 ``functools.lru_cache`` は例外をキャッシュしないので、同じパスで
 #   再試行できる）。
 # - **テスト用に ``_reset_cached_config()`` で全エントリを破棄する**。
@@ -490,7 +495,7 @@ def _get_or_build_config(resolved_path_str: str) -> Config:
         - ``stat()`` を持たない理由: 1 回 25 マイクロ秒（Windows）＋ 共有サーバー
           ではネットワーク往復。 業務ツールは実行中の config.ini 書き換えを
           想定しないので、確認コストを毎回払う利点が無い。
-        - **ファイルが存在しない場合は ``ConfigFileNotFoundError``**（または
+        - **ファイルが存在しない場合は ``ComkenFileNotFoundError``**（または
           ``ConfigCreatedFromExampleError``）。 ``functools.lru_cache`` は例外を
           キャッシュしないので、再試行できる。
         - ``maxsize=128``: 業務利用では 1〜2 種類のパスしか使わないので到達しない。
@@ -498,7 +503,7 @@ def _get_or_build_config(resolved_path_str: str) -> Config:
           エントリは自動的に退避される）。
 
     Raises:
-        ConfigFileNotFoundError: パスが存在しない場合。
+        ComkenFileNotFoundError: パスが存在しない場合。
         ConfigCreatedFromExampleError: ``config.ini`` が無いが ``config.ini.example``
             があった場合。
         ConfigLowerCaseNameError: セクション名 / キー名が小文字で書かれていた場合。

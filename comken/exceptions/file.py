@@ -5,6 +5,21 @@ from pathlib import Path
 from comken.exceptions.base import ComkenError
 
 
+class ComkenFileNotFoundError(ComkenError, FileNotFoundError):
+    """ファイルまたはフォルダが見つからない
+
+    対処:
+        エラーに表示されたパスと名前が正しいか、存在するかを確認する
+    """
+
+    def __init__(self, what: str, path: Path | str, hint: str | None = None) -> None:
+        self.path = path
+        message = f"{what}が見つかりません: {path}"
+        if hint is not None:
+            message = f"{message}\n{hint}"
+        super().__init__(message)
+
+
 class UnsupportedFileSuffixError(ComkenError):
     """対応外の拡張子が指定された
 

@@ -1,7 +1,5 @@
 """comken/exceptions/outlook.py — Outlook 操作の例外。"""
 
-from pathlib import Path
-
 from comken.exceptions.base import ComkenError
 
 
@@ -38,17 +36,3 @@ class OutlookFolderNotFoundError(OutlookError):
     def __init__(self, folder: str, existing_folders: list[str]) -> None:
         names = "、".join(existing_folders) if existing_folders else "（なし）"
         super().__init__(f"Outlook フォルダ「{folder}」が見つかりません。存在するフォルダ: {names}")
-
-
-class OutlookAttachmentNotFoundError(OutlookError):
-    """添付ファイルがない
-
-    対処:
-        表示されたファイルパスを確認する
-    """
-
-    def __init__(self, path: Path) -> None:
-        super().__init__(
-            f"添付ファイルが見つかりません: {path}。"
-            "パスを確認してください。下書きは作成していません。"
-        )

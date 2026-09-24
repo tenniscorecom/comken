@@ -46,7 +46,6 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
 | `DataSheetAccessError` | データシートと表示用シートの責務に反する操作をした。 | data_ で始まるシートは table()、それ以外はセル・範囲 API で操作する |
-| `ExcelFileNotFoundError` | Excel ファイルが見つからない | ファイルの置き場所と名前を確認する |
 | `ExcelApplicationNotAvailableError` | Excel を起動できない | この PC に Excel が入っているか確認する。入れられない PC で動かすなら、数式ではなく値で書いてもらう（管理表なら、数式の結果を貼り付けてもらう） |
 | `SheetNotFoundError` | 指定した名前のシートがない | Excel を開いて、下のシート名（タブ）が変わっていないか確認する。変えた場合は元に戻す |
 | `SheetAlreadyExistsError` | 同じ名前のシートが既にある | 別のシート名を指定するか、既存のシート名を変更する |
@@ -71,7 +70,6 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
 | `AccessBackupError` | 元 DB を開く前のバックアップに失敗した | 保存先の空き容量・書き込み権限・元 DB の読み取り権限を確認する |
-| `AccessFileNotFoundError` | Access ファイルが見つからない | ファイルの置き場所と名前を確認する |
 | `AccessLocalCopyError` | Access ファイルを一時フォルダへコピーできない | 使用状況・読み取り権限・空き容量を確認する |
 | `AccessRoutineError` | Access マクロまたは VBA の実行に失敗した | 表示された名前と Access 側の内容を確認する |
 | `AccessSourceNotFoundError` | テーブルまたはクエリが見つからない | エラーに表示された存在する名前を確認する |
@@ -84,7 +82,6 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `OutlookError` | Outlook 関連エラーの分類 | 下の個別エラーを確認する |
 | `ClassicOutlookNotAvailableError` | Classic Outlook を利用できない | Classic Outlook を使うか管理者に相談する |
 | `OutlookFolderNotFoundError` | 指定したフォルダがない | エラーに表示された存在するフォルダ名を確認する |
-| `OutlookAttachmentNotFoundError` | 添付ファイルがない | 表示されたファイルパスを確認する |
 
 ## ファイル・設定などのエラー
 
@@ -92,7 +89,6 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 |---|---|---|
 | `SiteOwnerRequiredError` | `SiteBase` / `SalesforceBase` のサブクラスに `OWNER` が設定されていない | サブクラスに `OWNER = "プロジェクト名 / 担当者"` を1行追加する。ライブラリ（`comken.toolbox.browser.sites/` または`comken.toolbox.salesforce.sites/`）に入れるべきサイトかは`CONVENTIONS.md` の「サイト／組織クラスを昇格させる基準」を参照して判断する。ライブラリに昇格したい場合はライブラリ管理者へ連絡する。 |
 | `EncodingDetectionError` | CSV の文字コードを判定できない | CSV の保存形式を確認し、管理者へ連絡する |
-| `CSVFileNotFoundError` | 読み込む CSV ファイルが存在しない | パスを確認する。新規出力は columns を指定して write / replace する |
 | `CSVHeaderMissingError` | CSV に見出し行がない | 見出し行を追加するか、ヘッダーなし CSV なら columns を指定する |
 | `CSVInvalidHeaderError` | CSV の見出しに空欄または重複がある | CSV の1行目にある空欄または重複した見出しを直す |
 | `CSVRowLengthError` | CSV のデータ行の列数が見出し数と一致しない | 表示された行の区切り文字と値の数を確認する |
@@ -101,13 +97,13 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `KeyColumnNotFoundError` | 比較に使うキー列が見つからない | Excel・CSV の列名を確認する |
 | `TransferSourceColumnNotFoundError` | 列名転記で、lookup の転記元列が見つからない | 転記元データと config.ini のマッピング左側を確認する |
 | `InvalidColumnError` | 列の指定が正しくない（打ち間違いなど） | 列は番号（1, 2, …）か列記号（"A", "AA"）で指定する |
-| `ConfigFileNotFoundError` | config.ini が見つからない | config.ini.example が同じ場所にあるか確認する（あれば実行し直すだけで作られる） |
 | `ConfigCreatedFromExampleError` | config.ini が無かったので example から作った | 作られた config.ini の値を書き換えて、もう一度実行する |
 | `ConfigLowerCaseNameError` | config.ini のセクション名・キー名に小文字がある | 表示された名前を大文字に書き換える（`[files]` → `[FILES]`） |
 | `ConfigSectionNotFoundError` | config.ini の必要な節がない | メッセージに表示された **「読んだファイル」のパス** が、編集しているconfig.ini と一致するかを確認する（2026-08-18 にプロジェクトの場所を基準にするように変えてから、起動方法によって別の config.ini を読むことがあるため）。パスが正しければ、表示されたセクション名をconfig.ini に追加する。**見た目では原因が分からない場合**（行頭に空白が混入していた等）はエディタで行頭空白・全角スペースを確認する |
 | `ConfigKeyNotFoundError` | config.ini のセクションに必要なキーがない | メッセージに表示された **「読んだファイル」のパス** が、編集しているconfig.ini と一致するかを確認する。パスが正しければ、表示されたキー名を該当セクションへ追加する。**セクション名は合っているがキー名を 1 文字タイポした** とき（FILES.OUTPUT_FOLER 等）は、「もしかして」に近いキー名が出るので、それを config.ini に書き直す |
 | `ConfigMappingEmptyValueError` | ``[*_MAPPING]`` セクションの値が空欄 | メッセージに表示された **「読んだファイル」のパス** が、編集しているconfig.ini と一致するかを確認する。パスが正しければ、表示されたキー名の両側に値を書いて config.ini を直す（``列名 = 値``）。``=`` を付け忘れて ``キー`` のように書いた行もここで検出する（``cfg.get()`` が ``None`` を返すので空欄と同じ扱い）。通常セクションの空欄（``READ_PASSWORD =`` のように「設定しない」を示す書き方）はエラーにしないので、``*_MAPPING`` 以外では無視してよい |
 | `ConfigSubclassingNotSupportedError` | ``Config`` を継承できない | ``from comken import config`` で ``config.SECTION.KEY`` を直接読む。サブクラスでメソッドを足しても ``Config.__new__`` がパス単位でキャッシュ済みの素の ``Config`` を返すため、 追加したメソッドは``AttributeError`` になる（キャッシュを ``cls`` 対応にする改修は行わない）。 |
+| `ComkenFileNotFoundError` | ファイルまたはフォルダが見つからない | エラーに表示されたパスと名前が正しいか、存在するかを確認する |
 | `UnsupportedFileSuffixError` | 対応外の拡張子が指定された | CSV / Excel の対応する拡張子のファイルを指定する |
 | `FileDeletionError` | ファイルを削除できなかった | 他のプロセスがファイルを掴んでいないか、読み取り専用になっていないかを確認してもう一度実行する。消せたファイルは消えているAttributes:remaining: 削除できなかったファイルのパス一覧。 |
 | `FileSuffixMissingError` | ファイル名に拡張子が無い | ファイル名に拡張子（例: ``.csv`` / ``.xlsx``）を含めて指定する。拡張子は名前の文字列にだけ書く。引数 ``ext`` / ``extension`` は廃止済みのため使えない。 |
@@ -154,7 +150,6 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `ReportDisabledError` | 管理表で「無効」になっているレポートを取ろうとした | また使うなら管理表の「有効」を「有効」に戻す。使わないなら、呼び出し側のコードから消す |
 | `InvalidReportURLError` | 管理表の URL から Salesforce のレポート ID を取り出せない | Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す |
 | `EmptyReportError` | レポートは実行できたが明細が 0 行だった | Salesforce の画面で同じレポートを開き、本当に 0 件か確認する。0 件が正常に起こるレポートなら、管理表の「0件あり」を「○」にする。 |
-| `ReportFolderNotFoundError` | 保存先として組み立てたフォルダが無い | 設定シートの「ベースURL」（フォルダのパス）と、管理表の「グループ」を確認する。共有フォルダなら、つながっているか・権限があるかも確認する |
 | `ReportReservePathLimitError` | 保存ファイル名の連番が上限に達した | 保存先フォルダが想定どおりか確認する。 共有フォルダなら、 古い取得ファイルを退避するか、 別の保存先に変える。 連発する場合は権限・排他制御の設定も見直す |
 | `ScheduledDownloadFailedError` | 定期取得で1件以上が失敗した | 履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。急いで必要なものは download_scheduled() をスケジュール外で実行する。権限を持つ人が Salesforce から手動でダウンロードしてもよい |
 | `SoqlDownloadFailedError` | SOQL レポートの取得で1件以上が失敗した | 表示された管理番号について、SOQL クエリ・組織の認証情報・保存先フォルダの権限・ネットワークの状態を確認する。急いで必要なものは``download_soql_reports()`` を直接実行してもよい |
@@ -211,10 +206,8 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
 | `DataLoaderError` | Data Loader の実行に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
-| `DataLoaderLauncherNotFoundError` | Data Loader の実行ファイルが見つからない | ``launcher_path`` が正しいか、Data Loader がインストールされているか確認する。バージョンによってバッチファイル名や実行可能jarの位置が違うので、実際にインストールされたフォルダをエクスプローラーで開いて確かめる |
 | `DataLoaderTimeoutError` | Data Loader の実行が制限時間内に終わらなかった | 処理対象の件数を減らすか、``timeout_seconds`` を長くする。プロセスがハングしている場合はタスクマネージャーから Data Loader のプロセスを終了させる |
 | `DataLoaderExecutionError` | Data Loader が 0 以外の終了コードで終わった | 表示された標準出力・標準エラー出力を確認する。``config.properties``・``process-conf.xml`` の設定を見直す。よくある原因はログイン情報の誤り、SOQL のフィールド名不一致、書き出し先パスへの権限不足 |
-| `DataLoaderResultFileMissingError` | 指定した成功 / エラー CSV のパスにファイルが無い | ``config.properties`` の出力先パスと、``success_csv`` / ``error_csv`` に渡したパスが一致しているか確認する。出力先が相対パスで書かれている場合は、Data Loader を実行したカレントディレクトリから見たパスになる点にも注意する |
 
 ## 分類（まとめて捕捉する用）
 

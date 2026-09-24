@@ -22,10 +22,10 @@ from comken.core.table import Table
 from comken.core.timer import measure
 from comken.exceptions import (
     AccessBackupError,
-    AccessFileNotFoundError,
     AccessLocalCopyError,
     AccessRoutineError,
     AccessSourceNotFoundError,
+    ComkenFileNotFoundError,
 )
 from comken.runtime import dry_run_log, is_dry_run
 
@@ -83,7 +83,11 @@ class AccessDatabase(FileBase):
     ) -> None:
         super().__init__(path)
         if not self.path.is_file():
-            raise AccessFileNotFoundError(self.path)
+            raise ComkenFileNotFoundError(
+                "Access ファイル",
+                self.path,
+                "パスが正しいか、ファイルが存在するかを確認してください。",
+            )
         if backup_days < 0:
             raise ValueError("backup_days は0以上で指定してください。")
 

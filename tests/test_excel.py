@@ -7,9 +7,9 @@ from openpyxl.styles import PatternFill
 
 from comken.core.table import Table
 from comken.exceptions import (
+    ComkenFileNotFoundError,
     DataSheetAccessError,
     EmptyHeaderCellError,
-    ExcelFileNotFoundError,
     ExcelReadOnlyOperationError,
     InvalidTableNameError,
     InvalidTableOperationError,
@@ -78,7 +78,7 @@ def test_excel_table_append_accepts_row_list_and_table(tmp_path) -> None:
 
 def test_excel_rejects_missing_read_only_file_and_non_excel_suffix(tmp_path) -> None:
     path = tmp_path / "missing.xlsx"
-    with pytest.raises(ExcelFileNotFoundError), Excel(path, read_only=True):
+    with pytest.raises(ComkenFileNotFoundError), Excel(path, read_only=True):
         pass
     with pytest.raises(UnsupportedFileSuffixError):
         Excel(tmp_path / "book.csv")

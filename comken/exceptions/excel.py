@@ -28,22 +28,6 @@ class DataSheetAccessError(ExcelError):
         )
 
 
-class ExcelFileNotFoundError(ExcelError):
-    """Excel ファイルが見つからない
-
-    発生箇所: Excel.__init__() / ExcelCOMHandler.__init__()
-
-    対処:
-        ファイルの置き場所と名前を確認する
-    """
-
-    def __init__(self, path: Path | str) -> None:
-        super().__init__(
-            f"Excel ファイルが見つかりません: {path}\n"
-            "パスが正しいか、ファイルが存在するかを確認してください。"
-        )
-
-
 class SheetNotFoundError(ExcelError):
     """指定した名前のシートがない
 

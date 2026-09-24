@@ -16,9 +16,8 @@ import pytest
 
 from comken.core.table import Table
 from comken.exceptions import (
+    ComkenFileNotFoundError,
     DataLoaderExecutionError,
-    DataLoaderLauncherNotFoundError,
-    DataLoaderResultFileMissingError,
     DataLoaderTimeoutError,
 )
 from comken.toolbox.salesforce.dataloader import DataLoaderCLI, DataLoaderResult
@@ -41,9 +40,9 @@ class TestDataLoaderCLI:
     """DataLoaderCLI の subprocess 配線と結果 CSV 読み込みの検証。"""
 
     def test_launcher_path_must_be_a_real_file(self, tmp_path: Path) -> None:
-        """launcher が無いパスだと ``DataLoaderLauncherNotFoundError``。"""
+        """launcher が無いパスだと ``ComkenFileNotFoundError``。"""
         cli = DataLoaderCLI(tmp_path / "missing.bat")
-        with pytest.raises(DataLoaderLauncherNotFoundError, match="見つかりません"):
+        with pytest.raises(ComkenFileNotFoundError, match="見つかりません"):
             cli.run([])
 
     def test_constructor_rejects_non_positive_timeout(self, tmp_path: Path) -> None:
@@ -145,24 +144,24 @@ class TestDataLoaderCLI:
         assert isinstance(caught.value, DataLoaderTimeoutError)
 
     def test_missing_success_csv_raises_result_file_missing_error(self, tmp_path: Path) -> None:
-        """指定した ``success_csv`` が無いと ``DataLoaderResultFileMissingError``。"""
+        """指定した ``success_csv`` が無いと ``ComkenFileNotFoundError``。"""
         launcher_source = "print('ok')\n"
         launcher = _write_python_launcher(tmp_path, launcher_source)
         nonexistent = tmp_path / "never_created.csv"
 
         cli = DataLoaderCLI(sys.executable, timeout_seconds=10)
-        with pytest.raises(DataLoaderResultFileMissingError) as caught:
+        with pytest.raises(ComkenFileNotFoundError) as caught:
             cli.run([str(launcher)], success_csv=nonexistent)
         assert str(nonexistent) in str(caught.value)
 
     def test_missing_error_csv_raises_result_file_missing_error(self, tmp_path: Path) -> None:
-        """指定した ``error_csv`` が無いと ``DataLoaderResultFileMissingError``。"""
+        """指定した ``error_csv`` が無いと ``ComkenFileNotFoundError``。"""
         launcher_source = "print('ok')\n"
         launcher = _write_python_launcher(tmp_path, launcher_source)
         nonexistent = tmp_path / "never_created.csv"
 
         cli = DataLoaderCLI(sys.executable, timeout_seconds=10)
-        with pytest.raises(DataLoaderResultFileMissingError) as caught:
+        with pytest.raises(ComkenFileNotFoundError) as caught:
             cli.run([str(launcher)], error_csv=nonexistent)
         assert str(nonexistent) in str(caught.value)
 

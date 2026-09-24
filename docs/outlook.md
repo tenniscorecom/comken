@@ -153,7 +153,7 @@ with Outlook() as mail:
 ```
 
 - 保存先は Outlook の**下書きフォルダ**。送信はされない
-- 添付に指定したファイルが無い場合は `OutlookAttachmentNotFoundError` になる
+- 添付に指定したファイルが無い場合は `ComkenFileNotFoundError` になる
   （空の添付で下書きが作られ、誰も気づかないまま送られるのを防ぐため）
 - 動作確認モード（dry run）のときは、実際には作らずログにだけ出す
 

@@ -99,6 +99,7 @@ ERROR_CATEGORIES = (
     ErrorCategory("Data Loader のエラー", (exceptions.DataLoaderError,)),
 )
 DIRECT_ERROR_CATEGORIES = {
+    exceptions.ComkenFileNotFoundError: "ファイル・設定などのエラー",
     exceptions.UnsupportedFileSuffixError: "ファイル・設定などのエラー",
     exceptions.InvalidColumnError: "ファイル・設定などのエラー",
     exceptions.SiteOwnerRequiredError: "ファイル・設定などのエラー",

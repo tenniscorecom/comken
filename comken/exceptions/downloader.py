@@ -198,31 +198,6 @@ class EmptyReportError(DownloaderError):
         )
 
 
-class ReportFolderNotFoundError(DownloaderError):
-    """保存先として組み立てたフォルダが無い
-
-    保存先フォルダは、管理表の「グループ」で引いた設定シートの「ベースURL」（フォルダのパス）
-    そのものである（`provider.report_folder()`）。そのフォルダが存在しない場合にこの例外になる。
-    無いフォルダを作らないのは、書き間違いのことが多いため。
-    勝手に作ると、誰も読まない場所へ置き続けることになる。
-
-    発生箇所: Salesforceレポートダウンローダー の download_scheduled()
-
-    対処:
-        設定シートの「ベースURL」（フォルダのパス）と、管理表の「グループ」を
-        確認する。共有フォルダなら、つながっているか・権限があるかも確認する
-    """
-
-    def __init__(self, report_key: str, folder: Path) -> None:
-        super().__init__(
-            f"保存先のフォルダがありません: {report_key}\n"
-            f"{folder}\n"
-            "設定シートの「ベースURL」（フォルダのパス）と、管理表の「グループ」を"
-            "確認してください。\n"
-            "共有フォルダの場合は、つながっているか（権限があるか）も確認してください。"
-        )
-
-
 class ReportReservePathLimitError(DownloaderError):
     """保存ファイル名の連番が上限に達した
 

@@ -11,7 +11,7 @@ import pytest
 
 from comken.core.table import Table
 from comken.exceptions import (
-    ExcelFileNotFoundError,
+    ComkenFileNotFoundError,
     MasterDuplicateValueError,
     MasterRowValueError,
 )
@@ -278,7 +278,7 @@ class TestLoadSchedule:
         """シート無しと「ファイル自体が無い」は別のエラー（後者はそのまま上位へ）。"""
         missing = tmp_path / "無い.xlsx"
         assert not missing.exists()
-        with pytest.raises(ExcelFileNotFoundError):
+        with pytest.raises(ComkenFileNotFoundError):
             load_schedule(missing)
 
 

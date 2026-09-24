@@ -65,7 +65,7 @@ assert result.success == result.errors == type(result.success)([], [])
 
 ## 結果 CSV が無いときの対処
 
-`DataLoaderResultFileMissingError` が出たら、`config.properties` 側の
+`ComkenFileNotFoundError` が出たら、`config.properties` 側の
 出力先設定と、`run()` に渡した `success_csv` / `error_csv` のパスが
 食い違っている可能性が高い。
 

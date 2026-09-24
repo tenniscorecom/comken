@@ -35,7 +35,7 @@ docs/salesforce-downloader.md「SOQLレポート（2000件超のレポートを�
    ``CredentialNotFoundError`` になる（実際に何も登録していない環境でこのファイルを
    そのまま実行して確認済み）
 3. ``large_sales_report.py`` の ``FOLDER`` を実際の保存先（共有フォルダ等）へ
-   書き換えてあること（フォルダが無いと ``ReportFolderNotFoundError``。
+   書き換えてあること（フォルダが無いと ``ComkenFileNotFoundError``。
    書き間違いに気づけるよう勝手には作らない設計）
 4. ``soql()`` の中身が、対象組織で実際に通る SOQL であること
 
