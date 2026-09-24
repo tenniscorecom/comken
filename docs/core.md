@@ -367,7 +367,7 @@ write 側に空キーが複数あっても ``TransferDestinationMultipleMatchErr
 ```python
 import comken
 
-comken.__version__        # → "1.0.0"
+comken.__version__        # → "1.1.0"
 
 # デバッグモード: `with debug():` ブロック内でのみ @measure が DEBUG ログを出す。
 with comken.debug():
