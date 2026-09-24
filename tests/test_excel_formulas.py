@@ -4,10 +4,11 @@ import re
 import tempfile
 import zipfile
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from openpyxl import Workbook
+from openpyxl.worksheet.worksheet import Worksheet
 
 from comken.core.table import Table
 from comken.exceptions import TableColumnMismatchError, TableFormulaOverwriteError
@@ -451,13 +452,18 @@ class TestMarkUncalculatedFormulasRowAlignment:
         cached_sheet = _FakeSheet([(1, "a"), (None, None), (None, "b")])
         formula_sheet = _FakeSheet([(1, "a"), (None, None), ("=SUM(1,1)", "b")])
 
-        rows, row_indices, any_none = Excel._collect_cached_rows(cached_sheet, min_row=1)
+        # _FakeSheet は ``Worksheet`` ではないが、``_collect_cached_rows`` /
+        # ``_mark_uncalculated_formulas`` は ``iter_rows`` しか使わない最小スタブ。
+        # 実行時の検証は維持しつつ、型差は ``cast`` で Worksheet として渡す。
+        rows, row_indices, any_none = Excel._collect_cached_rows(
+            cast("Worksheet", cached_sheet), min_row=1
+        )
         assert rows == [(1, "a"), (None, "b")]
         assert row_indices == [0, 2]  # 空行(index=1)がスキップされている
         assert any_none is True
 
         new_rows, needs_com = Excel._mark_uncalculated_formulas(
-            rows, row_indices, formula_sheet, min_row=1
+            rows, row_indices, cast("Worksheet", formula_sheet), min_row=1
         )
 
         # 修正前は zip がズレて formula_sheet の空行(index=1)と突き合わされ、

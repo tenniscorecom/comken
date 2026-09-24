@@ -1,5 +1,6 @@
 """サンプル: 日付入りファイルの検索・命名・移動・コピー・zip。"""
 
+import datetime
 import logging
 from pathlib import Path
 
@@ -30,7 +31,10 @@ def main() -> None:
 
     dated_files = sorted(
         (path for path in input_folder.glob("売上_*.csv") if date_in_name(path.name)),
-        key=lambda path: date_in_name(path.name),
+        # ``date_in_name`` は None を返さないファイルを抽出しているので None にならないはずだが、
+        # 型の上では ``date | None`` のまま。``or datetime.date.min`` で None を
+        # 最小値に丸めて比較可能にする。
+        key=lambda path: date_in_name(path.name) or datetime.date.min,
         reverse=True,
     )
     logger.info("日付入りファイル（新しい順）: %s", [path.name for path in dated_files])

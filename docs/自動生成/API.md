@@ -426,7 +426,7 @@ CSVやExcelに直接依存しないため、加工処理をファイルI/Oから
 #### `__init__`
 
 ```text
-def __init__(self, columns: list[str] | tuple[str, ...], rows: list[dict[str, Any]], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
+def __init__(self, columns: list[str] | tuple[str, ...], rows: Sequence[Mapping[str, Any]], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
 ```
 
 #### `to_rows`
@@ -442,7 +442,7 @@ def to_rows(self) -> list[dict[str, Any]]:
 #### `replace`
 
 ```text
-def replace(self, rows: list[dict]) -> Self:
+def replace(self, rows: Sequence[Mapping[str, Any]]) -> Self:
 ```
 
 ##### 説明
@@ -452,7 +452,7 @@ def replace(self, rows: list[dict]) -> Self:
 #### `append`
 
 ```text
-def append(self, rows: list[dict] | dict) -> Self:
+def append(self, rows: Sequence[Mapping[str, Any]] | Mapping[str, Any]) -> Self:
 ```
 
 ##### 説明
@@ -2427,7 +2427,7 @@ CSVやExcelに直接依存しないため、加工処理をファイルI/Oから
 #### `__init__`
 
 ```text
-def __init__(self, columns: list[str] | tuple[str, ...], rows: list[dict[str, Any]], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
+def __init__(self, columns: list[str] | tuple[str, ...], rows: Sequence[Mapping[str, Any]], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
 ```
 
 #### `to_rows`
@@ -2443,7 +2443,7 @@ def to_rows(self) -> list[dict[str, Any]]:
 #### `replace`
 
 ```text
-def replace(self, rows: list[dict]) -> Self:
+def replace(self, rows: Sequence[Mapping[str, Any]]) -> Self:
 ```
 
 ##### 説明
@@ -2453,7 +2453,7 @@ def replace(self, rows: list[dict]) -> Self:
 #### `append`
 
 ```text
-def append(self, rows: list[dict] | dict) -> Self:
+def append(self, rows: Sequence[Mapping[str, Any]] | Mapping[str, Any]) -> Self:
 ```
 
 ##### 説明
@@ -10418,7 +10418,7 @@ CSV（数万件以上）**ではこちらを使う。``read()`` と同じく見�
 #### `replace`
 
 ```text
-def replace(self, rows: list[dict[str, Value]] | Table) -> None:
+def replace(self, rows: Sequence[Mapping[str, Value]] | Table) -> None:
 ```
 
 ##### 説明
@@ -10428,7 +10428,7 @@ def replace(self, rows: list[dict[str, Value]] | Table) -> None:
 #### `append`
 
 ```text
-def append(self, rows: list[dict[str, Value]] | dict[str, Value] | Table) -> None:
+def append(self, rows: Sequence[Mapping[str, Value]] | Mapping[str, Value] | Table) -> None:
 ```
 
 ##### 説明

@@ -7,8 +7,8 @@ Table はメモリ上の行だけを担当します。CSV や Excel の保存処
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Iterable, Iterator, Mapping
-from typing import Any, Self
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from typing import Any, Self, overload
 
 from comken.exceptions.table import (
     TableColumnNotFoundError,
@@ -31,7 +31,7 @@ class Table:
     def __init__(
         self,
         columns: list[str] | tuple[str, ...],
-        rows: list[dict[str, Any]],
+        rows: Sequence[Mapping[str, Any]],
         *,
         types: Mapping[str, Callable[[Any], Any]] | None = None,
     ) -> None:
@@ -70,7 +70,7 @@ class Table:
     def _from_normalized_rows(
         cls,
         columns: list[str] | tuple[str, ...],
-        rows: list[dict[str, Any]],
+        rows: Sequence[Mapping[str, Any]],
         types: Mapping[str, Callable[[Any], Any]] | None = None,
     ) -> Table:
         """既に types 変換済みの行から Table を作る（変換関数を再実行しない内部専用）。
@@ -95,6 +95,12 @@ class Table:
     def to_rows(self) -> list[dict[str, Any]]:
         """現在の行をコピーして返す。元のTableは変更しない。"""
         return [dict(row) for row in self._rows]
+
+    @overload
+    def __getitem__(self, index: int) -> dict[str, Any]: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> list[dict[str, Any]]: ...
 
     def __getitem__(self, index: int | slice) -> dict[str, Any] | list[dict[str, Any]]:
         """指定位置の行、または行のスライスをコピーして返す。
@@ -125,15 +131,15 @@ class Table:
         # よう ``__eq__`` で ``False`` を返さず ``NotImplemented`` を返す）
         return NotImplemented
 
-    def replace(self, rows: list[dict]) -> Self:
+    def replace(self, rows: Sequence[Mapping[str, Any]]) -> Self:
         """表の全行を置き換え、同じTableを返す。"""
         self._rows = [self._normalize(row, row_number) for row_number, row in enumerate(rows, 1)]
         logger.debug("Table replace: %d 行", len(self._rows))
         return self
 
-    def append(self, rows: list[dict] | dict) -> Self:
+    def append(self, rows: Sequence[Mapping[str, Any]] | Mapping[str, Any]) -> Self:
         """1行または複数行を末尾へ追加する。"""
-        values = [rows] if isinstance(rows, dict) else rows
+        values = [rows] if isinstance(rows, Mapping) else rows
         start = len(self._rows) + 1
         normalized = [self._normalize(row, start + index) for index, row in enumerate(values)]
         self._rows.extend(normalized)

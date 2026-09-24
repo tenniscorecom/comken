@@ -17,7 +17,13 @@ logger = logging.getLogger(__name__)
 
 def main() -> None:
     state = State(STATE_PATH)
-    previous_order_id = int(state.get(LAST_ORDER_KEY, FIRST_ORDER_ID))
+    previous_value = state.get(LAST_ORDER_KEY)
+    # ``state.get`` はキーが無いと ``None``、``StateValue`` には ``list[str]`` も含まれるため、
+    # ``int()`` に渡せる値かどうかを ``None`` / ``list`` 除外で明示してから変換する。
+    if previous_value is None or isinstance(previous_value, list):
+        previous_order_id = FIRST_ORDER_ID
+    else:
+        previous_order_id = int(previous_value)
     next_order_id = previous_order_id + 1
     logger.info("前回の最終注文番号: %d", previous_order_id)
     logger.info("今回処理する注文番号: %d", next_order_id)

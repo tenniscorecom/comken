@@ -84,9 +84,9 @@ def test_imports_follow_layer_direction() -> None:
             if violation is None:
                 continue
             kind, payload = violation
-            if kind == "violation":
+            if kind == "violation" and isinstance(payload, str):
                 violations.append(payload)
-            elif kind == "allowed":
+            elif kind == "allowed" and isinstance(payload, tuple):
                 found_same_layer.add(payload)
 
     unused = ALLOWED_SAME_LAYER - found_same_layer

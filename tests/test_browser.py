@@ -1253,11 +1253,13 @@ class TestBrowsersLaunchSite:
             OPTIONS = KintaiOptions
             OWNER = "test_browser / テスト"
 
-        captured: list[BrowserOptions] = []
+        # ``BrowserSession.__enter__`` の ``options`` は ``BrowserOptions | None``。
+        # テストでは None もそのまま記録して launch_session へ転送する。
+        captured: list[BrowserOptions | None] = []
 
         real_resolve = InternalBrowsers.launch_session
 
-        def capture(self, name, options=None, download_dir=None):
+        def capture(self, name, options: BrowserOptions | None = None, download_dir=None):
             captured.append(options)
             return real_resolve(self, name, options, download_dir)
 

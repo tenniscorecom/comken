@@ -20,7 +20,7 @@ from comken.toolbox.csv import CSV
 
 logger = logging.getLogger(__name__)
 
-CSV_HEADERS = (
+CSV_HEADERS: tuple[str, ...] = (
     "日時",
     "組織",
     "呼び出し元",

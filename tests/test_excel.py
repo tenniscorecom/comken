@@ -1,5 +1,7 @@
 """現行のExcel API（Excel / Sheet / ExcelTable）の契約テスト。"""
 
+from typing import Any, cast
+
 import pytest
 from openpyxl.styles import PatternFill
 
@@ -206,8 +208,11 @@ def test_openpyxl_side_rejects_unknown_style_with_clear_message() -> None:
     """
     from openpyxl.styles import Side
 
+    # テストの意図は「無効な値で ValueError」なので、Literal 集合外の "thinn" を
+    # Any キャストで渡して実行時の検証だけ残す（型検査のノイズはキャストで逃す）。
+    invalid_kwargs = cast(dict[str, Any], {"style": "thinn", "color": "000000"})
     with pytest.raises(ValueError, match="Value must be one of"):
-        Side(style="thinn", color="000000")
+        Side(**invalid_kwargs)
 
 
 def test_excel_outside_with_block_raises_table_not_open_error(tmp_path) -> None:

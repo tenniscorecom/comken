@@ -181,8 +181,11 @@ class TestCsvDiffReport:
 
         outputs = list(tmp_path.glob("*.xlsx"))
         assert len(outputs) == 1
+        # openpyxl の ``Cell.value`` は ``_CellGetValue`` で hashable ではない。
+        # ``values_only=True`` でも要素は ``Cell`` 由来として扱われるため ``str()`` で
+        # 文字列に揃えて ``set`` に入れる（比較対象も ``str``）。
         statuses = {
-            row[0]
+            str(row[0])
             for row in load_workbook(outputs[0]).active.iter_rows(min_row=2, values_only=True)
         }
         # 追加(004)・削除(003)・変更(002) がそれぞれ検出されている

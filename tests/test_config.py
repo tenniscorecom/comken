@@ -1588,7 +1588,10 @@ class TestMappingDictIsDictStrStr:
             "[TRANSFER_MAPPING]\nお名前 = 氏名\nご住所 = 住所\n",
             encoding="utf-8",
         )
-        mapping = Config(ini).TRANSFER_MAPPING
+        # ``Config.__getattr__`` で動的に返される ``*_MAPPING`` セクションは
+        # pyright から ``NoReturn`` に見える。実行時は ``dict[str, str]`` なので
+        # ここで ``cast`` して反復可能であることを型検査側にも伝える。
+        mapping = cast("dict[str, str]", Config(ini).TRANSFER_MAPPING)
 
         assert all(isinstance(v, str) for v in mapping.values())
         assert None not in mapping.values()

@@ -103,6 +103,27 @@ exclude = [".pytest-tmp"]
 # M3 が触る箇所なので整合性はテスト (tests/test_docs_code.py など) で別途担保する。
 reportUnsupportedDunderAll = false
 
+# tools/ 配下のスクリプト（build_calendar / export_for_chat）は pytest からも
+# モジュールとして import されるため、tests/ と同じ PYTHONPATH で探す設定を入れる。
+# 直下に置くとリポジトリのルートが散らかるので tools/ へ移し、その分をここで補う
+# （pytest.ini_options.pythonpath と同じ意図。pyright は pythonpath を読まないため
+# extraPaths で別途指定する）。
+extraPaths = ["tools"]
+
+# tests/ だけを対象にした実行環境。モックの ``x.method = MagicMock()`` や
+# ``x.method.assert_called_*`` は ``MethodType`` に対する属性アクセスで必ず
+# 引っかかるノイズのため 3 ルールを無効化する。``reportArgumentType`` /
+# ``reportCallIssue`` / ``reportPossiblyUnboundVariable`` は tests でも有効のまま
+# （本物の型不整合を取り逃さないため）。ソース側・examples/・tools/ のルールは
+# 一切緩めない。``executionEnvironments`` はメイン設定の extraPaths を継承しないため
+# ここで ``"."``（プロジェクトルート）を指定して comken/ と tools/ の双方を import 解決する。
+[[tool.pyright.executionEnvironments]]
+root = "tests"
+extraPaths = [".", "tools"]
+reportAttributeAccessIssue = "none"
+reportOptionalMemberAccess = "none"
+reportOptionalSubscript = "none"
+
 [tool.mypy]
 # キャッシュを comken/ パッケージの中ではなくリポジトリ直下へ置く。
 # comken は共有サーバー上の1か所を PYTHONPATH で直接参照する配布形態なので、

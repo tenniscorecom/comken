@@ -62,16 +62,26 @@ class TestAccessDatabase:
         original_lock.write_text("元のロック", encoding="utf-8")
         access = MagicMock()
 
-        with (
-            patch("comken.toolbox.access.handler.win32com.client.DispatchEx", return_value=access),
-            pytest.raises(RuntimeError),
-            AccessDatabase(path),
-        ):
-            opened_path = Path(access.OpenCurrentDatabase.call_args.args[0])
-            lock_path = opened_path.with_suffix(".laccdb")
-            lock_path.write_text("コピー側のロック", encoding="utf-8")
-            raise RuntimeError("test")
+        opened_path: Path | None = None
+        lock_path: Path | None = None
+        try:
+            with (
+                patch(
+                    "comken.toolbox.access.handler.win32com.client.DispatchEx",
+                    return_value=access,
+                ),
+                pytest.raises(RuntimeError),
+                AccessDatabase(path),
+            ):
+                opened_path = Path(access.OpenCurrentDatabase.call_args.args[0])
+                lock_path = opened_path.with_suffix(".laccdb")
+                lock_path.write_text("コピー側のロック", encoding="utf-8")
+                raise RuntimeError("test")
+        except RuntimeError:
+            pass
 
+        assert opened_path is not None
+        assert lock_path is not None
         assert not opened_path.exists()
         assert not lock_path.exists()
         assert original_lock.read_text(encoding="utf-8") == "元のロック"
