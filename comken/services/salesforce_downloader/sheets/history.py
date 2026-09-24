@@ -16,23 +16,22 @@ import して使う。読み書きどちらの側も**同じ形式定義を参�
 **管理表とは別のファイルにする。** 書く主体が違う（管理表は人、履歴はプログラム）ので
 分けないと、人が開いている間にプログラムが保存できず履歴が飛ぶ。**CSV に追記する。**
 複数のプロジェクトが同時に走るので、Excel を開いて保存し直す方式だと壊れる。
+
+読み取りは comken 自前の ``CSV`` クラス（``comken.toolbox.csv.CSV``）に委譲する。
+文字コード自動判定・見出しの検証（空・重複）は ``CSV`` が行うので、ここでは
+「ロックを掛けて ``CSV`` で読み、行を ``migrate_row()`` で揃える」だけ繰り返す。
 """
 
-import csv
 import datetime
-import io
 import logging
-from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from comken.constants import Encoding
 from comken.core.clock import today
 from comken.core.table.model import Table
 from comken.core.timer import measure
-from comken.exceptions import HistoryHeaderMismatchError
 from comken.services.salesforce_downloader.history_file_lock import HistoryFileLock
-from comken.toolbox.csv import read_text
+from comken.toolbox.csv import CSV
 
 logger = logging.getLogger(__name__)
 
@@ -153,20 +152,15 @@ def successful_files_today(
         target,
     )
     matches: list[Path] = []
-    with HistoryFileLock(history_path):
-        text = read_text(history_path, encoding=Encoding.AUTO)
-        reader = csv.DictReader(io.StringIO(text))
-        _require_expected_header(history_path, reader.fieldnames)
-        for raw_row in reader:
-            row = migrate_row(raw_row)
-            if (
-                row.get("実行日時", "").startswith(target)
-                and row.get("管理番号", "") == key_text
-                and row.get("成否", "") == SUCCESS
-                and row.get("保存結果", "") == SUCCESS
-                and row.get("ファイル名", "")
-            ):
-                matches.append(Path(row.get("保存先", "")) / row["ファイル名"])
+    for row in _read_rows(history_path):
+        if (
+            row.get("実行日時", "").startswith(target)
+            and row.get("管理番号", "") == key_text
+            and row.get("成否", "") == SUCCESS
+            and row.get("保存結果", "") == SUCCESS
+            and row.get("ファイル名", "")
+        ):
+            matches.append(Path(row.get("保存先", "")) / row["ファイル名"])
     logger.debug("本日成功履歴の検索完了: path=%s, 該当件数=%d", history_path, len(matches))
     return list(reversed(matches))
 
@@ -216,25 +210,20 @@ def schedule_succeeded_today(
         key_text,
         target,
     )
-    with HistoryFileLock(history_path):
-        text = read_text(history_path, encoding=Encoding.AUTO)
-        reader = csv.DictReader(io.StringIO(text))
-        _require_expected_header(history_path, reader.fieldnames)
-        for raw_row in reader:
-            row = migrate_row(raw_row)
-            if (
-                row.get("実行日時", "").startswith(target)
-                and row.get("スケジュールキー", "") == key_text
-                and row.get("成否", "") == SUCCESS
-                and row.get("保存結果", "") == SUCCESS
-            ):
-                logger.debug(
-                    "スケジュールキー当日成功済みを検出: path=%s, schedule_key=%s "
-                    "→ 今日は既に成功済みのためスキップ",
-                    history_path,
-                    key_text,
-                )
-                return True
+    for row in _read_rows(history_path):
+        if (
+            row.get("実行日時", "").startswith(target)
+            and row.get("スケジュールキー", "") == key_text
+            and row.get("成否", "") == SUCCESS
+            and row.get("保存結果", "") == SUCCESS
+        ):
+            logger.debug(
+                "スケジュールキー当日成功済みを検出: path=%s, schedule_key=%s "
+                "→ 今日は既に成功済みのためスキップ",
+                history_path,
+                key_text,
+            )
+            return True
     logger.debug(
         "スケジュールキー当日成功の検出なし: path=%s, schedule_key=%s → False",
         history_path,
@@ -287,25 +276,20 @@ def truncated_today(
         key_text,
         target,
     )
-    with HistoryFileLock(history_path):
-        text = read_text(history_path, encoding=Encoding.AUTO)
-        reader = csv.DictReader(io.StringIO(text))
-        _require_expected_header(history_path, reader.fieldnames)
-        for raw_row in reader:
-            row = migrate_row(raw_row)
-            if (
-                row.get("実行日時", "").startswith(target)
-                and row.get("管理番号", "") == key_text
-                and row.get("成否", "") == FAILURE
-                and row.get("エラーコード", "") == TRUNCATED_ERROR_NAME
-            ):
-                logger.debug(
-                    "2000件超失敗履歴を検出: path=%s, 管理番号=%s "
-                    "→ 当日中のため、この定期実行ではスキップ",
-                    history_path,
-                    key_text,
-                )
-                return True
+    for row in _read_rows(history_path):
+        if (
+            row.get("実行日時", "").startswith(target)
+            and row.get("管理番号", "") == key_text
+            and row.get("成否", "") == FAILURE
+            and row.get("エラーコード", "") == TRUNCATED_ERROR_NAME
+        ):
+            logger.debug(
+                "2000件超失敗履歴を検出: path=%s, 管理番号=%s "
+                "→ 当日中のため、この定期実行ではスキップ",
+                history_path,
+                key_text,
+            )
+            return True
     logger.debug(
         "2000件超失敗履歴の検出なし: path=%s, 管理番号=%s → False",
         history_path,
@@ -318,11 +302,12 @@ def truncated_today(
 def read_history(path: str | Path) -> Table:
     """履歴 CSV を全行読んで Table で返す。フィルタはしない。
 
-    **パッケージ内部専用。** 利用プロジェクト側が「今日この管理番号は
-    成功したか」を知りたいだけなら、この全件読み込みではなく
-    ``downloaded_today()``（bool を返す）を使う方が単純で意図も伝わる。
-    この関数は Salesforceレポートダウンローダー側のように**履歴全体を
-    横断的に見る**必要がある内部処理のためのもの。
+    **Salesforceレポートダウンローダー側からも import して使う共有 API。**
+    利用プロジェクトが「今日この管理番号は成功したか」を知りたいだけなら、
+    この全件読み込みではなく ``downloaded_today()``（bool を返す）の方が
+    単純で意図も伝わる。この関数は履歴全体を横断的に見たい処理のためのもの
+    （例: Salesforceレポートダウンローダーが書き込む前に既存の履歴を
+    一覧したいケース）。
 
     **絞り込みは呼び出し側が行う。** 日付・トリガ・成否の組合せは使う側でしか
     決まらないため、ここでは全件をそのまま Table で返す（列は全て文字列の
@@ -332,7 +317,7 @@ def read_history(path: str | Path) -> Table:
 
     ファイルが無ければ空の Table（``COLUMNS`` の列だけを持つ）を返す。
     見出しが古い構成でも ``migrate_row()`` で新構成に揃え直して返す
-    （致命的に壊れた見出しは ``HistoryHeaderMismatchError`` で止める）。
+    （致命的に壊れた見出しは ``CSV`` クラスが ``CSVInvalidHeaderError`` で止める）。
 
     Args:
         path: 履歴 CSV のパス。
@@ -345,13 +330,28 @@ def read_history(path: str | Path) -> Table:
         logger.debug("履歴ファイル無し: path=%s, 件数=0", history_path)
         return Table(list(COLUMNS), [])
     logger.debug("履歴全件読み込み開始: path=%s", history_path)
-    with HistoryFileLock(history_path):
-        text = read_text(history_path, encoding=Encoding.AUTO)
-        reader = csv.DictReader(io.StringIO(text))
-        _require_expected_header(history_path, reader.fieldnames)
-        rows = [migrate_row(row) for row in reader]
+    rows = _read_rows(history_path)
     logger.debug("履歴全件読み込み完了: path=%s, 件数=%d", history_path, len(rows))
     return Table(list(COLUMNS), rows)
+
+
+def _read_rows(path: Path) -> list[dict[str, str]]:
+    """履歴CSVをロックの中で読み、``COLUMNS`` 順に揃え直した行リストを返す。
+
+    ファイルが無い場合は空リスト。``CSV`` クラスが文字コード自動判定・見出し
+    検証（空・重複）・列数不一致の検出を行い、致命的な破損は ``CSVError``
+    系の例外で通知される。 ``migrate_row()`` で増えた列は捨て、減った列は
+    空文字で埋めて ``COLUMNS`` 順へ並べ直す（通常の列ずれはこの層で吸収）。
+
+    4 つの読み取り関数（``successful_files_today`` / ``schedule_succeeded_today``
+    / ``truncated_today`` / ``read_history``）が共通して通る入口。
+    """
+    if not path.is_file():
+        return []
+    with HistoryFileLock(path):
+        with CSV(path, read_only=True) as csv_file:
+            table = csv_file.read()
+        return [migrate_row(row) for row in table.to_rows()]
 
 
 def migrate_row(row: dict[str, str]) -> dict[str, str]:
@@ -359,7 +359,6 @@ def migrate_row(row: dict[str, str]) -> dict[str, str]:
 
     列が増減・並び替わっていても、既存の値は保持しつつ ``COLUMNS`` の順に
     並べ直す。**増えた列は空文字**、**``COLUMNS`` に無い列は捨てる**。
-    ``_require_expected_header()`` を通した後の生 ``row`` を受け取り、
     読み取りロジックが ``COLUMNS`` の列名を仮定して ``row.get(...)`` できるように
     形を整える役割。
 
@@ -368,33 +367,3 @@ def migrate_row(row: dict[str, str]) -> dict[str, str]:
     comken 側に置いて呼び出し側で import する。
     """
     return {column: row.get(column, "") for column in COLUMNS}
-
-
-def _require_expected_header(path: Path, actual: Sequence[str] | None) -> None:
-    """履歴の見出しが**致命的に壊れていないか**を確認する。
-
-    列の不足・余剰・並び替えなど通常のマイグレーション対象は ``migrate_row()``
-    が吸収するため、ここでは止めない（``logger.debug`` で差分だけ残す）。
-    一方、**見出しが全く読めない／空文字の見出しがある／列名が重複している**
-    のは CSV として整合性が壊れており ``csv.DictReader`` がどの列値をどの
-    キーに入れたか曖昧になるため、``HistoryHeaderMismatchError`` で止める。
-
-    Args:
-        path: 履歴 CSV のパス（エラーメッセージ用）。
-        actual: ``csv.DictReader`` の ``fieldnames``（= 1 行目の列名群）。
-    """
-    actual_columns = tuple(actual or ())
-    if not actual_columns:
-        raise HistoryHeaderMismatchError(path, actual_columns, COLUMNS)
-    if any(column == "" for column in actual_columns):
-        raise HistoryHeaderMismatchError(path, actual_columns, COLUMNS)
-    if len(set(actual_columns)) != len(actual_columns):
-        raise HistoryHeaderMismatchError(path, actual_columns, COLUMNS)
-    if actual_columns != COLUMNS:
-        logger.debug(
-            "履歴の見出しが現在の COLUMNS と異なります: path=%s, actual=%s, expected=%s "
-            "（migrate_row() で吸収）",
-            path,
-            actual_columns,
-            COLUMNS,
-        )

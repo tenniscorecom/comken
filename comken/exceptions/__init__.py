@@ -127,7 +127,6 @@ ComkenError
 ├── DownloaderError
 │   ├── HistoryWriteError
 │   ├── HistoryLockTimeoutError
-│   ├── HistoryHeaderMismatchError
 │   ├── CachedReportNotFoundError
 │   ├── ReportNotRegisteredError
 │   ├── SoqlReportNotRegisteredError
@@ -224,7 +223,6 @@ from comken.exceptions.downloader import (
     DownloaderError,
     EmptyReportError,
     GroupNotRegisteredError,
-    HistoryHeaderMismatchError,
     HistoryLockTimeoutError,
     HistoryWriteError,
     InvalidReportURLError,
@@ -444,7 +442,6 @@ __all__ = [
     "DownloaderError",
     "HistoryWriteError",
     "HistoryLockTimeoutError",
-    "HistoryHeaderMismatchError",
     "CachedReportNotFoundError",
     "ReportNotRegisteredError",
     "SoqlReportNotRegisteredError",

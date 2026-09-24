@@ -43,24 +43,6 @@ class HistoryLockTimeoutError(DownloaderError):
         )
 
 
-class HistoryHeaderMismatchError(DownloaderError):
-    """ダウンロード履歴CSVの見出しが現在の定義と一致しない
-
-    対処:
-        履歴CSVの1行目を確認する。列を手で変更していた場合は元へ戻し、
-        古い形式の履歴なら別名へ退避してから再実行する
-    """
-
-    def __init__(self, path: Path, actual: tuple[str, ...], expected: tuple[str, ...]) -> None:
-        actual_text = "、".join(actual) or "（見出しなし）"
-        expected_text = "、".join(expected)
-        super().__init__(
-            f"ダウンロード履歴の見出しが正しくありません: {path}\n"
-            f"現在: {actual_text}\n"
-            f"必要: {expected_text}"
-        )
-
-
 class ReportNotRegisteredError(DownloaderError):
     """指定した管理番号が管理表に無い
 

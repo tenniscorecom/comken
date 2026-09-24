@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from comken.core.clock import now
-from comken.exceptions import EncodingDetectionError, HistoryHeaderMismatchError
+from comken.exceptions import CSVInvalidHeaderError, EncodingDetectionError
 from comken.services.salesforce_downloader.sheets.history import (
     COLUMNS,
     FAILURE,
@@ -117,18 +117,71 @@ def test_read_history_returns_empty_table_when_history_missing(tmp_path) -> None
 
 def test_read_history_rejects_header_mismatch(tmp_path) -> None:
     """見出しが壊れている（空の見出しがある／列名が重複している）場合は
-    ``HistoryHeaderMismatchError`` で止める。
+    ``CSVInvalidHeaderError`` で止める。
 
     列数が違う／列名が一部欠落している／順序が違う程度の変更は
     ``migrate_row()`` で吸収するため、ここでは**致命的に壊れたケース**
     （=どの列値をどの列に読んだか曖昧になるケース）だけを弾く。
+    検出は comken 自前の ``CSV`` クラスが行い、共通の ``CSVError`` 系の
+    例外で通知される（履歴専用の例外は存在しない）。
     """
     history_path = tmp_path / "履歴.csv"
     # 2列目に空文字の見出し = ``DictReader`` が列値の対応を取れない壊れ方
     history_path.write_text("管理番号,,成否\n1000,x,成功\n", encoding="utf-8-sig")
 
-    with pytest.raises(HistoryHeaderMismatchError):
+    with pytest.raises(CSVInvalidHeaderError):
         read_history(history_path)
+
+
+def test_read_history_rejects_duplicate_headers(tmp_path) -> None:
+    """見出しに重複がある場合も ``CSVInvalidHeaderError`` で止める。
+
+    ``DictReader`` の列名の対応が曖昧になるため、致命的に壊れたケースとして
+    共通の ``CSV`` クラスの例外で通知される。
+    """
+    history_path = tmp_path / "履歴.csv"
+    # 2列目と4列目の見出しが重複している壊れた見出し
+    history_path.write_text(
+        "管理番号,管理番号,成否,管理番号\n1000,x,成功,y\n",
+        encoding="utf-8-sig",
+    )
+
+    with pytest.raises(CSVInvalidHeaderError):
+        read_history(history_path)
+
+
+def test_successful_files_today_rejects_bad_header(tmp_path) -> None:
+    """``successful_files_today`` も見出しの致命的な破損を ``CSVInvalidHeaderError`` で止める。
+
+    4 つの読み取り関数は共通ヘルパー ``_read_rows`` を通るため、同じ例外で
+    検出される（履歴専用の例外クラスを新設しない）。
+    """
+    history_path = tmp_path / "履歴.csv"
+    history_path.write_text(",,,\n1000,x,成功,z\n", encoding="utf-8-sig")
+
+    with pytest.raises(CSVInvalidHeaderError):
+        successful_files_today(history_path, "1001")
+
+
+def test_schedule_succeeded_today_rejects_bad_header(tmp_path) -> None:
+    """``schedule_succeeded_today`` も見出しの致命的な破損を ``CSVInvalidHeaderError`` で止める。"""
+    history_path = tmp_path / "履歴.csv"
+    history_path.write_text(
+        "管理番号,管理番号,成否,管理番号\n1000,x,成功,y\n",
+        encoding="utf-8-sig",
+    )
+
+    with pytest.raises(CSVInvalidHeaderError):
+        schedule_succeeded_today(history_path, "S001")
+
+
+def test_truncated_today_rejects_bad_header(tmp_path) -> None:
+    """``truncated_today`` も見出しの致命的な破損を ``CSVInvalidHeaderError`` で止める。"""
+    history_path = tmp_path / "履歴.csv"
+    history_path.write_text(",,,\n1000,x,成功,z\n", encoding="utf-8-sig")
+
+    with pytest.raises(CSVInvalidHeaderError):
+        truncated_today(history_path, "1001")
 
 
 def test_schedule_succeeded_today_returns_true_after_same_key_success(tmp_path) -> None:
@@ -183,7 +236,7 @@ def test_schedule_succeeded_today_ignores_other_dates(tmp_path) -> None:
             "実行日時,管理番号,スケジュールキー,概要,レポートID,URL,プロジェクト,"
             "成否,Salesforce取得結果,保存結果,保存先,ファイル名,取得件数,処理秒数,"
             "原因区分,エラーコード,エラー内容\n"
-            "2024-01-01 09:00:00,1001,S001,顧客一覧,,,,成功,成功,成功,,a.csv,1,0.10,,,,"
+            "2024-01-01 09:00:00,1001,S001,顧客一覧,,,,成功,成功,成功,,a.csv,1,0.10,,,"
         ),
         encoding="utf-8-sig",
     )
@@ -309,8 +362,8 @@ def test_truncated_today_ignores_other_dates(tmp_path) -> None:
             "実行日時,管理番号,スケジュールキー,概要,レポートID,URL,プロジェクト,"
             "成否,Salesforce取得結果,保存結果,保存先,ファイル名,取得件数,処理秒数,"
             "原因区分,エラーコード,エラー内容\n"
-            "2024-01-01 09:00:00,1001,,,,,,失敗,成功,,,"
-            ",,1.00,Salesforce,SalesforceReportTruncatedError,2000 行で打ち止め"
+            "2024-01-01 09:00:00,1001,,,,,,失敗,成功,,,,,1.00,Salesforce,"
+            "SalesforceReportTruncatedError,2000 行で打ち止め"
         ),
         encoding="utf-8-sig",
     )

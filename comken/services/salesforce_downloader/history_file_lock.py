@@ -1,5 +1,6 @@
 """comken/services/salesforce_downloader/history_file_lock.py — 履歴CSVの排他制御。"""
 
+import contextlib
 import logging
 import msvcrt
 import time
@@ -18,9 +19,19 @@ LOCK_RETRY_SECONDS = 0.05
 class HistoryFileLock:
     """Windows のファイルロックで、履歴CSVの読み書きを別プロセス間で直列化する。
 
-    ロック用ファイル自体は残す。ロックはファイルハンドルに結び付くため、プロセスが
-    異常終了しても Windows が解放する。共有サーバー上でも同じパスを使うプロセス同士が
-    同じ1バイトをロックすることで、見出し作成と1行追記をひとまとまりに保つ。
+    ``__init__`` には**保護したい履歴ファイルのパス**を渡す（ロック用ファイルの
+    パスではない）。ロック用ファイル ``{path}.lock`` はこのクラスが内部で作る。
+    ロックはファイルハンドルに結び付くため、プロセスが異常終了しても Windows が
+    解放する。共有サーバー上でも同じパスを使うプロセス同士が同じ1バイトを
+    ロックすることで、見出し作成と1行追記をひとまとまりに保つ。
+
+    ``__exit__`` でロックを解放した直後に、ロック用ファイルを**ベストエフォートで
+    削除**する。Windows では他プロセスが開いているファイルを削除できない
+    （``PermissionError``）ので、待機中だったプロセスは削除に失敗するが、その
+    プロセスは ``__enter__`` が既に ``self._file = None`` で失敗しているため、
+    自分側からは削除しない（既にロックを保持しているプロセスが ``__exit__`` で
+    消す）。これにより「自分がロックを保持していないのにロック用ファイルを消す」
+    レースは起こらない。共有サーバー上にも古い ``.lock`` が溜まらない。
     """
 
     def __init__(self, history_path: str | Path, timeout: float = LOCK_TIMEOUT_SECONDS) -> None:
@@ -50,6 +61,10 @@ class HistoryFileLock:
                 return self
             except OSError as exc:
                 if time.monotonic() >= deadline:
+                    # ロック取得に失敗しただけ。自分が作ったファイルでも他プロセスが
+                    # 掴んでいる可能性があるので、ここでは削除せず、ファイルだけを
+                    # 閉じて ``HistoryLockTimeoutError`` を送出する。ロックを実際に
+                    # 保持しているプロセスが ``__exit__`` でロック用ファイルを消す。
                     lock_file.close()
                     logger.debug(
                         "履歴CSVのロック取得がタイムアウトしました: path=%s timeout=%s",
@@ -66,6 +81,8 @@ class HistoryFileLock:
         traceback: TracebackType | None,
     ) -> None:
         if self._file is None:
+            # ロックを取得できずに ``__exit__`` まで来た場合（タイムアウト等）。
+            # ロック用ファイルは ``__enter__`` が閉じ済みなので、ここでは何もしない
             return
         try:
             self._file.seek(0)
@@ -74,3 +91,10 @@ class HistoryFileLock:
         finally:
             self._file.close()
             self._file = None
+        # ロック解除とファイルクローズの後、ロック用ファイルを削除する。
+        # ベストエフォート: Windows は他プロセスが開いているファイルを削除できない
+        # ため、待機中だった側で PermissionError が出ても無視する（その側で
+        # 削除する必要はない — 自分がロックを保持していたのは自分だけなので、
+        # 自分だけがファイルを消す）。
+        with contextlib.suppress(OSError):
+            self._path.unlink()

@@ -5873,26 +5873,6 @@ class HistoryLockTimeoutError(DownloaderError):
 def __init__(self, path: Path, timeout: float) -> None:
 ```
 
-### `HistoryHeaderMismatchError`
-
-```text
-class HistoryHeaderMismatchError(DownloaderError):
-```
-
-#### 説明
-
-ダウンロード履歴CSVの見出しが現在の定義と一致しない
-
-対処:
-    履歴CSVの1行目を確認する。列を手で変更していた場合は元へ戻し、
-    古い形式の履歴なら別名へ退避してから再実行する
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path, actual: tuple[str, ...], expected: tuple[str, ...]) -> None:
-```
-
 ### `CachedReportNotFoundError`
 
 ```text
