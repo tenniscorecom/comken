@@ -1,11 +1,11 @@
-"""comken/toolbox/salesforce/browser/sites/solution.py — Solution組織へのブラウザ経由アクセス。
+"""comken/toolbox/browser/sites/salesforce/solution.py — Solution組織へのブラウザ経由アクセス。
 
 ※ URL はAPI版の組織クラス（``comken.toolbox.salesforce.sites.solution.Solution``）が
 持つ ``DOMAIN_URL`` をそのまま使う（同じURLを二重に書かない）。実際の値の書き換えは
 そちら1箇所で済む。
 """
 
-from comken.toolbox.salesforce.browser.site import Salesforce
+from comken.toolbox.browser.sites.salesforce.site import Salesforce
 from comken.toolbox.salesforce.sites.solution import Solution as _SolutionApi
 
 

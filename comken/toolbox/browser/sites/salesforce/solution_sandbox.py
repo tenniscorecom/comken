@@ -1,11 +1,11 @@
-"""comken/toolbox/salesforce/browser/sites/solution_sandbox.py — Sandbox組織のブラウザアクセス。
+"""comken/toolbox/browser/sites/salesforce/solution_sandbox.py — Sandbox組織のブラウザアクセス。
 
 ※ URL はAPI版の組織クラス（``comken.toolbox.salesforce.sites.solution_sandbox.SolutionSandbox``）が
 持つ ``DOMAIN_URL`` をそのまま使う（同じURLを二重に書かない）。実際の値の書き換えは
 そちら1箇所で済む。
 """
 
-from comken.toolbox.salesforce.browser.site import Salesforce
+from comken.toolbox.browser.sites.salesforce.site import Salesforce
 from comken.toolbox.salesforce.sites.solution_sandbox import (
     SolutionSandbox as _SolutionSandboxApi,
 )

@@ -1,4 +1,4 @@
-"""comken.toolbox.salesforce.browser.site のテスト。
+"""comken.toolbox.browser.sites.salesforce.site のテスト。
 
 実際の Edge は起動せず、WebDriver をモックに差し替えて配線だけを確認する
 （tests/test_browser_sites_ntt.py と同じ方針）。
@@ -13,8 +13,8 @@ import pytest
 from comken.exceptions import SalesforceReportExportError, SiteNotStartedError
 from comken.toolbox.browser import BrowserOptions, DownloadDir
 from comken.toolbox.browser.management.sessions import BrowserSession
-from comken.toolbox.salesforce.browser.pages.login_page import LoginPage
-from comken.toolbox.salesforce.browser.site import (
+from comken.toolbox.browser.sites.salesforce.pages.login_page import LoginPage
+from comken.toolbox.browser.sites.salesforce.site import (
     Salesforce,
     _cookies_to_requests_session,
     _domain_of,
@@ -39,7 +39,7 @@ def _make_session(tmp_path, name: str = "test") -> BrowserSession:
 
 
 class TestPublicApi:
-    """URLがダミーのままの雛形。組織別クラスは comken.toolbox.salesforce.browser.sites にある。"""
+    """URLがダミーのままの雛形。組織別クラスは comken.toolbox.browser.sites.salesforce にある。"""
 
     def test_class_attributes(self):
         assert Salesforce.NAME
@@ -218,7 +218,7 @@ class TestExportReports:
         destination_1 = tmp_path / "月次レポート.csv"
         destination_2 = tmp_path / "サブフォルダ" / "四半期レポート.csv"
         with patch(
-            "comken.toolbox.salesforce.browser.site.requests.Session",
+            "comken.toolbox.browser.sites.salesforce.site.requests.Session",
             return_value=http_session,
         ):
             results = dict(
@@ -241,7 +241,7 @@ class TestExportReports:
         http_session.get.return_value = _csv_response()
         destination = tmp_path / "nested" / "dir" / "report.csv"
         with patch(
-            "comken.toolbox.salesforce.browser.site.requests.Session",
+            "comken.toolbox.browser.sites.salesforce.site.requests.Session",
             return_value=http_session,
         ):
             list(sf.export_reports({REPORT_URL_1: destination}))
@@ -258,7 +258,7 @@ class TestExportReports:
         http_session.get.return_value = _html_response()
         with (
             patch(
-                "comken.toolbox.salesforce.browser.site.requests.Session",
+                "comken.toolbox.browser.sites.salesforce.site.requests.Session",
                 return_value=http_session,
             ),
             pytest.raises(SalesforceReportExportError),
@@ -323,7 +323,7 @@ class TestExportReportsKeepAlive:
         http_session = MagicMock()
         http_session.get.return_value = _csv_response()
         with patch(
-            "comken.toolbox.salesforce.browser.site.requests.Session",
+            "comken.toolbox.browser.sites.salesforce.site.requests.Session",
             return_value=http_session,
         ):
             list(
@@ -350,7 +350,7 @@ class TestExportReportsKeepAlive:
         http_session = MagicMock()
         http_session.get.side_effect = _slow_get
         with patch(
-            "comken.toolbox.salesforce.browser.site.requests.Session",
+            "comken.toolbox.browser.sites.salesforce.site.requests.Session",
             return_value=http_session,
         ):
             list(

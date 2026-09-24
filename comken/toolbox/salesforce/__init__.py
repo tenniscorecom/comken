@@ -28,12 +28,12 @@ URL と認証情報のシステム名は組織クラスがクラス定数とし�
     SalesforceCredentialRotator  ECA の資格情報を期限到来時だけローテーションする（既定で無効）
 
 レポートAPIの2000行上限を超える場合（マトリックス／統合などSOQLに書き換えられない
-形式）の最終手段は `comken.toolbox.salesforce.browser`。画面のエクスポート機能を
-ブラウザ経由で叩く。組織ごとの設定（URL・認証情報名）はAPI側の組織クラス
-（`sites/` の `Solution` 等）が持つ値をそのまま使うため、ここに同居させている
-（詳しくは docs/salesforce.md）。
+形式）の最終手段は `comken.toolbox.browser.sites.salesforce`。画面のエクスポート
+機能をブラウザ経由で叩く。組織ごとの設定（URL・認証情報名）は API 側の組織クラス
+（`sites/` の `Solution` 等）からそのまま読むため、API 版とブラウザ版で同じ組織でも
+個別の値を二重に持たなくてよい（詳しくは docs/salesforce.md）。
 
-    from comken.toolbox.salesforce.browser.sites import site_for
+    from comken.toolbox.browser.sites.salesforce import site_for
 
     site_class = site_for(report_url)
     with site_class() as sf:

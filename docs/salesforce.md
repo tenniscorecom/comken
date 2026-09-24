@@ -270,8 +270,8 @@ with site() as sf:
 1区間でも 2000 行を超える場合だけ、画面のエクスポート機能（`?export=1&xf=csv`）を
 使う。API のこの上限自体がかからない。3段目より重い手段なので、3段目で
 足りるかを先に確かめること。使うのは
-`comken.toolbox.salesforce.browser.site.Salesforce`（組織ごとの入口は
-`comken.toolbox.salesforce.browser.sites`）。
+`comken.toolbox.browser.sites.salesforce.Salesforce`（組織ごとの入口は
+`comken.toolbox.browser.sites.salesforce`）。
 
 > [!warning] requests だけでのセッション確立は組織によって通らないことを確認済み
 > `requests` で frontdoor.jsp にアクセストークンを渡すだけでセッションを
@@ -296,7 +296,7 @@ with site() as sf:
 > 渡せばよい）を渡せる。
 
 ```python
-from comken.toolbox.salesforce.browser.sites import site_for
+from comken.toolbox.browser.sites.salesforce import site_for
 
 site_class = site_for(report_url)
 with site_class() as sf:
@@ -309,16 +309,17 @@ with site_class() as sf:
         ...
 ```
 
-**組織ごとのクラス（本番・サンドボックス等）** は `comken.toolbox.salesforce.browser.sites`
+**組織ごとのクラス（本番・サンドボックス等）** は `comken.toolbox.browser.sites.salesforce`
 にある: `Solution` / `SolutionSandbox` は API側の組織クラス
 （`comken.toolbox.salesforce.sites.Solution` / `SolutionSandbox`）が持つ `DOMAIN_URL` を
 そのまま使い、URLを二重に管理しない。`site_for(url)` は API版の同名関数のブラウザ版で、
 レポートURLのドメインから組織のブラウザサイトクラスを返す。
 
-API版の組織クラス（`toolbox.salesforce.sites`）とブラウザ版（`toolbox.salesforce.browser.sites`）を
-同じ `toolbox.salesforce` パッケージに同居させているのは、組織ごとの設定を1箇所にまとめるため。
-このため `toolbox.salesforce` は Selenium を使う `toolbox.browser` に依存する
-（逆方向は無い。`tests/test_layers.py` の `ALLOWED_SAME_LAYER` を参照）。
+ブラウザ版は `comken.toolbox.browser.sites.salesforce` にあり、Selenium を使う
+`toolbox.browser` に依存する。URL・認証情報名は API 側の組織クラス
+（`toolbox.salesforce.sites`）から読む。逆方向
+（`toolbox.salesforce` → `toolbox.browser`）の依存は無い
+（`tests/test_layers.py` の `ALLOWED_SAME_LAYER` を参照）。
 
 **ログイン状態を次回起動でも使い回すには `OPTIONS.PROFILE_ROOT` を設定すること**
 （未設定だと起動のたびにまっさらなプロファイルになり、毎回ログインし直しになる）。

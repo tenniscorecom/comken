@@ -1,4 +1,4 @@
-r"""comken/toolbox/salesforce/browser/site.py — Salesforceレポートのブラウザ経由ダウンロード。
+r"""comken/toolbox/browser/sites/salesforce/site.py — Salesforceレポートのブラウザ経由ダウンロード。
 
 Reports and Dashboards REST APIの2000行上限を超えるレポート（マトリックス／統合など
 SOQLに書き換えられない形式）向けの最終手段。画面のエクスポート機能
@@ -10,12 +10,9 @@ SOQLに書き換えられない形式）向けの最終手段。画面のエク�
 一時的に使いたいだけのときに手早い。ログインさえ済めば、実際のN件のダウンロードは
 requests + ThreadPoolExecutor で並列に行う。
 
-``comken.toolbox.salesforce`` 配下に api（本ファイル以外）と browser（このファイル）を
-同居させているのは、組織ごとの設定（URL・認証情報名）を1箇所にまとめるため
-（``comken.toolbox.salesforce.browser.sites`` が API版の ``DOMAIN_URL`` をそのまま使う）。
-この構成のため ``toolbox.salesforce`` は Selenium を使う ``toolbox.browser`` に依存する
-（``toolbox.browser`` は ``toolbox.salesforce`` に依存しない。
-``tests/test_layers.py`` の ``ALLOWED_SAME_LAYER`` を参照）。
+組織ごとのクラスは同フォルダの ``solution.py`` / ``solution_sandbox.py`` にあり、
+URL と認証情報名は API 側の組織クラス（``comken.toolbox.salesforce.sites``）の
+``DOMAIN_URL`` / ``CREDENTIAL_PREFIX`` をそのまま使う（同じ URL を二重に書かない）。
 
 > [!warning] URL は仮の値
 > **このリポジトリは公開しているので、実際の組織の URL を書かない。**
@@ -37,7 +34,7 @@ import requests
 
 from comken.exceptions import SalesforceReportExportError, SiteNotStartedError
 from comken.toolbox.browser import SiteBase
-from comken.toolbox.salesforce.browser.pages.login_page import LoginPage
+from comken.toolbox.browser.sites.salesforce.pages.login_page import LoginPage
 from comken.toolbox.salesforce.report import report_id_from_url
 
 if TYPE_CHECKING:

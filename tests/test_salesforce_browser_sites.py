@@ -1,4 +1,4 @@
-"""comken.toolbox.salesforce.browser.sites のテスト。
+"""comken.toolbox.browser.sites.salesforce のテスト。
 
 comken.toolbox.salesforce.sites.site_for() のブラウザ版。判定方法が同じなので、
 tests/test_salesforce.py の TestSiteFor と対になるテストにしてある。
@@ -7,8 +7,13 @@ tests/test_salesforce.py の TestSiteFor と対になるテストにしてある
 import pytest
 
 from comken.exceptions import SalesforceSiteNotFoundError
-from comken.toolbox.salesforce.browser.site import Salesforce
-from comken.toolbox.salesforce.browser.sites import SITES, Solution, SolutionSandbox, site_for
+from comken.toolbox.browser.sites.salesforce import (
+    SITES,
+    Solution,
+    SolutionSandbox,
+    site_for,
+)
+from comken.toolbox.browser.sites.salesforce.site import Salesforce
 from comken.toolbox.salesforce.sites import Solution as SolutionApi
 from comken.toolbox.salesforce.sites import SolutionSandbox as SolutionSandboxApi
 

@@ -580,8 +580,8 @@ with Browsers() as browsers:
 既にあったファイル」しか除外しないため、2回目以降の呼び出しは1回目に見つけた
 ファイルを再び返してしまう。1件ずつ落として次へ進みたい場合は、レポートURLを
 直接HTTPで叩くなど、ブラウザのダウンロードフォルダを経由しない方法を検討する
-（`comken/toolbox/salesforce/browser/site.py` の `export_reports()` が実例。
-Salesforce向けの実装は `toolbox.salesforce` 側に同居させている。理由は
+（`comken/toolbox/browser/sites/salesforce/site.py` の `export_reports()` が実例。
+Salesforce向けの実装は `toolbox.browser.sites.salesforce` 側に置いている。理由は
 `docs/salesforce.md` の「4段目」を参照）。
 
 ---
