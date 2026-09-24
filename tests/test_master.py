@@ -112,4 +112,3 @@ class TestDirectConstruction:
         )
         assert entry.exceeds_row_limit is False
         assert entry.use_soql is False
-

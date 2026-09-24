@@ -314,9 +314,7 @@ class ScheduleRule(MasterRow):
             return False
         if self.nth_business_day is not None:
             try:
-                target = nth_business_day_of_month(
-                    date.replace(day=1), self.nth_business_day
-                )
+                target = nth_business_day_of_month(date.replace(day=1), self.nth_business_day)
             except BusinessDayNotFoundError:
                 logger.warning(
                     "スケジュール %s の「第%d営業日」指定が %s年%s月の営業日数を"
