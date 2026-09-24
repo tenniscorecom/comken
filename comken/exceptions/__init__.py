@@ -124,8 +124,6 @@ ComkenError
 カテゴリ基底クラスはまとめて捕捉するために使い、直接送出しない。
 """
 
-import warnings
-
 from comken.exceptions.access import (
     AccessBackupError,
     AccessError,
@@ -402,58 +400,3 @@ __all__ = [
     "LogRootNotConfiguredError",
     "WindowNotFoundError",
 ]
-
-
-# v1.0.0 以前の旧例外名は削除せず、 ``FutureWarning`` 付きの別名として残す。
-# 会社側プロジェクトは ``grep `` できないため、 ``from comken.exceptions
-# import OldName`` を無警告で壊すと、現場のコードがサイレントに止まる。
-# 旧サブモジュール経由（``comken.exceptions.excel.ExcelFileNotFoundError`` など）は
-# 対象外。パッケージ入口からの import / 属性アクセスだけをこの仕組みで救う。
-_RENAMED_EXCEPTIONS: dict[str, str] = {
-    "ExcelFileNotFoundError": "ComkenFileNotFoundError",
-    "CSVFileNotFoundError": "ComkenFileNotFoundError",
-    "AccessFileNotFoundError": "ComkenFileNotFoundError",
-    "ConfigFileNotFoundError": "ComkenFileNotFoundError",
-    "DataLoaderLauncherNotFoundError": "ComkenFileNotFoundError",
-    "DataLoaderResultFileMissingError": "ComkenFileNotFoundError",
-    "OutlookAttachmentNotFoundError": "ComkenFileNotFoundError",
-    "EmptyHeaderCellError": "ExcelHeaderError",
-    "DuplicateHeaderCellError": "ExcelHeaderError",
-    "EmptyExcelTableError": "ExcelHeaderError",
-    "SheetAlreadyExistsError": "ExcelNameError",
-    "TableAlreadyExistsError": "ExcelNameError",
-    "InvalidTableNameError": "ExcelNameError",
-    "ExcelSaveValidationError": "ExcelSaveError",
-    "ExcelMacroPreservationError": "ExcelSaveError",
-    "ExcelHeadersTooFewError": "ExcelUsageError",
-    "FileFormatMismatchError": "ExcelUsageError",
-    "CSVHeaderMissingError": "CSVHeaderError",
-    "CSVInvalidHeaderError": "CSVHeaderError",
-    "CSVColumnsRequiredError": "CSVHeaderError",
-    "SalesforceBulkQueryFailedError": "SalesforceBulkFailedError",
-    "SalesforceBulkIngestFailedError": "SalesforceBulkFailedError",
-    "SalesforceBulkQueryTimeoutError": "SalesforceBulkTimeoutError",
-    "SalesforceBulkIngestTimeoutError": "SalesforceBulkTimeoutError",
-    "InvalidReportURLError": "SalesforceReportIDNotFoundError",
-    "UnsupportedScheduleFrequencyError": "ScheduleSettingError",
-    "ScheduleWeekdayInvalidError": "ScheduleSettingError",
-    "BrowsersNotStartedError": "BrowserNotStartedError",
-    "SessionNotStartedError": "BrowserNotStartedError",
-    "SiteNotStartedError": "BrowserNotStartedError",
-    "BrowsersClosedError": "BrowserClosedError",
-    "SessionClosedError": "BrowserClosedError",
-}
-
-
-def __getattr__(name: str) -> type[ComkenError]:
-    """旧例外名を ``FutureWarning`` 付きの別名として公開する。"""
-    new_name = _RENAMED_EXCEPTIONS.get(name)
-    if new_name is None:
-        raise AttributeError(f"module 'comken.exceptions' has no attribute {name!r}")
-    new_cls = globals()[new_name]
-    warnings.warn(
-        f"{name} は {new_name} に統合されました。{new_name} に書き換えてください。",
-        FutureWarning,
-        stacklevel=2,
-    )
-    return new_cls  # type: ignore[no-any-return]

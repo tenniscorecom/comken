@@ -103,7 +103,7 @@ INI として壊れたファイルは `StateFileCorruptedError` で止める（�
 - 中間基底（`ExcelError` / `CSVError` / `SalesforceError` 等）は **カテゴリ基底としてまとめて捕捉する用途に限り** 公開する。直接送出しない
 - 個別例外は **対処が違う失敗ごとに 1 クラス**（呼び出し側がメッセージ文字列を解析せず、型だけで判別・個別捕捉できるようにする）。対処が同じ失敗は 1 クラスにまとめ、違いはメッセージで示す
 - `ComkenFileNotFoundError` は `ComkenError` と標準の `FileNotFoundError` の両方を継承し、Excel・CSV・Config 等のファイルが無い場合をすべて表す（`ExcelError` などのカテゴリ配下ではない）
-- 統合して無くなった旧名は、`comken/exceptions/__init__.py` の `_RENAMED_EXCEPTIONS` で `FutureWarning` つきの別名として残す
+- 統合して無くなった例外の旧名は残さない（別名も警告も持たない。旧名を使っているコードは `ImportError` になるので、新しいクラスへ書き換える）
 - メッセージは「何が・どこで・どうすればよいか」を含める（非エンジニアが読む前提）
 - 例外を足すときは `comken/exceptions/__init__.py` の import と `__all__` に必ず追加する
 - docstring に「対処:」を書く（`docs/ERRORS.md` はここから生成され、書き忘れると生成が止まって気づける）

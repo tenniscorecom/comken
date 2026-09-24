@@ -521,8 +521,9 @@ API が安定していない前提なので、利用プロジェクト側は「�
 - **comken 内で送出されない例外は「未使用」ではない。** 利用者プロジェクトが送出する想定のもの（`ExcelColumnNotFoundError`・`TransferSourceColumnNotFoundError`・`ScheduledDownloadFailedError`・`LoginFailedError` など）がある。
   また `ReportFolderNotFoundError` は、ダウンローダーが型で原因区分を決め、クラス名を履歴の「エラーコード」に書いていた。
   この4つは一度統合してから、利用側プロジェクトを grep して気づき、元に戻した
-- 旧名は削除せず、警告つき別名で残した。会社側プロジェクトは私の環境から grep できず、
-  `except 旧名` を無警告で壊すと現場のコードが静かに止まるため
+- 旧名は、いったん警告つきの別名で残したが、**同日に別名ごと削除した**（「旧名は全て消していい。警告もなしで」という判断）。
+  v1.0.0 以降の互換性ポリシー（旧名は削除しない）の**例外扱い**。会社側プロジェクトで旧名を使っているコードは
+  `ImportError` になるので、新しいクラス名へ書き換える
 - 代償: `ComkenFileNotFoundError` は `ExcelError` などの配下ではないので、`except ExcelError` では
   「Excel ファイルが無い」を捕まえられなくなった
 
