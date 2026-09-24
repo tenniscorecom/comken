@@ -7,7 +7,10 @@
 
 from pathlib import Path
 
+import pytest
+
 from comken.core.table import Table
+from comken.exceptions import SalesforceReportIDNotFoundError
 from comken.services.salesforce_downloader.sheets.master import ReportEntry, load_master
 from comken.toolbox.excel import Excel
 
@@ -95,6 +98,18 @@ class TestExceedsRowLimitAndUseSoql:
         entry = load_master(master)["1001"]
         assert entry.exceeds_row_limit is False
         assert entry.use_soql is False
+
+
+class TestInvalidReportUrl:
+    """管理表の URL が壊れていると、行番号ではなく管理番号で示して止まる。"""
+
+    def test_error_names_the_management_number(self, tmp_path):
+        row = _row(exceeds="×", soql="×")
+        row[4] = "https://example.com/"  # URL 列
+        rows = [row]
+        master = make_master(tmp_path / "管理表.xlsx", HEADERS, rows)
+        with pytest.raises(SalesforceReportIDNotFoundError, match="管理番号 1001"):
+            load_master(master)
 
 
 class TestDirectConstruction:

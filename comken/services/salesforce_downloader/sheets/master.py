@@ -181,11 +181,10 @@ class ReportEntry(MasterRow):
         """
         try:
             return report_id_from_url(self.url)
-        except SalesforceReportIDNotFoundError:
-            # ``report_id_from_url`` が出す ``SalesforceReportIDNotFoundError`` のメッセージは
-            # URL の生テキストを含むが、管理番号までは出さない。管理表読み込み時は
-            # 「どの管理番号か」も出したいので、ここで同じ型で上げ直す。
-            raise
+        except SalesforceReportIDNotFoundError as e:
+            # ``report_id_from_url`` のメッセージは URL の生テキストしか含まない。
+            # 管理表読み込み時は「どの管理番号か」も出したいので、管理番号を添えて上げ直す。
+            raise SalesforceReportIDNotFoundError(f"{self.url}（管理番号 {self.key}）") from e
 
 
 @measure
