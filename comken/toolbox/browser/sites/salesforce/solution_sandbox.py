@@ -5,17 +5,17 @@
 そちら1箇所で済む。
 """
 
-from comken.toolbox.browser.sites.salesforce.site import Salesforce
+from comken.toolbox.browser.sites.salesforce.base import SalesforceSiteBase
 from comken.toolbox.salesforce.sites.solution_sandbox import (
     SolutionSandbox as _SolutionSandboxApi,
 )
 
 
-class SolutionSandbox(Salesforce):
+class SolutionSandboxSite(SalesforceSiteBase):
     """Solution Sandbox組織へのブラウザ経由アクセス。
 
     使い方:
-        with SolutionSandbox() as sf:
+        with SolutionSandboxSite() as sf:
             sf.login_with_credentials()  # prefix省略 → CREDENTIAL_PREFIXを使う
             sf.wait_for_manual_login()
             for report_id, path in sf.export_reports(reports):

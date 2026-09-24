@@ -4218,7 +4218,7 @@ class SalesforceReportIDNotFoundError(SalesforceError):
 発生箇所: comken.toolbox.salesforce.report.report_id_from_url()
          （呼び出し元の例: comken-salesforce-downloader の master.py。
          2026-08-30 に comken から分離した別リポジトリ。
-         comken.toolbox.browser.sites.salesforce.site.export_reports() も
+         comken.toolbox.browser.sites.salesforce.base.SalesforceSiteBase.export_reports() も
          同じ report_id_from_url() を呼ぶ）
 
 対処:
@@ -4295,7 +4295,7 @@ class SalesforceReportExportError(SalesforceError):
 HTTPステータス自体は200で返るが、本文がCSV/XLSではなくHTMLのログイン画面や
 エラーページになっている場合に出る。
 
-発生箇所: comken.toolbox.browser.sites.salesforce.Salesforce.export_reports()
+発生箇所: comken.toolbox.browser.sites.salesforce.base.SalesforceSiteBase.export_reports()
          （go_login() + wait_for_manual_login() で確立したブラウザのセッション
          Cookieをrequestsへ引き継いで並列ダウンロードする経路。ログインを
          済ませていない、あるいはセッションの有効期限が切れていると起きる）
@@ -8750,43 +8750,21 @@ Browsers から渡されたセッションは触らず、自分で起動した�
 ただし `Browsers.launch()` から持たせてもらったインスタンスでは何もしない
 （持ち主の Browsers が with を抜けるときに閉じるため、二重に閉じない）。
 
-### `Salesforce`
+### `SolutionSite`
 
 ```text
-class Salesforce(SiteBase):
+class SolutionSite(SalesforceSiteBase):
 ```
 
 #### 説明
 
-Salesforceのレポートをブラウザ経由でCSVダウンロードするための雛形。
+Solution組織へのブラウザ経由アクセス。
 
-URL は example の値のまま。利用プロジェクト側で継承して書き換える
-（BASE_URL を実際の組織の My Domain URL へ）。
-
-ログイン方法は2通り:
-
-- ``go_login()`` + ``wait_for_manual_login()`` — 人がブラウザでID/パスワード/
-  MFAを手動入力する
-- ``login_with_credentials(prefix)`` — DPAPIに保存したID/パスワードを自動
-  入力する（MFA等の追加確認が出た場合は、続けて ``wait_for_manual_login()``
-  を呼んで人が対応する）。``prefix`` は省略でき、その場合はクラスの
-  ``CREDENTIAL_PREFIX`` を使う
-
-**ログインを使い回すには OPTIONS.PROFILE_ROOT を設定すること。**
-未設定だと起動のたびにまっさらなプロファイルになり、毎回ログインし直しになる
-（`docs/browser.md` の「ログイン状態を残す」を参照）:
-
-    class MySalesforceOptions(BrowserOptions):
-        PROFILE_ROOT = r"C:\作業\salesforce_profile"
-
-    class MySalesforce(Salesforce):
-        OPTIONS = MySalesforceOptions
-        CREDENTIAL_PREFIX = "salesforce_temp"
-
-    with MySalesforce() as sf:
-        sf.login_with_credentials()     # prefix省略 → CREDENTIAL_PREFIXを使う
-        sf.wait_for_manual_login()      # 初回だけ。2回目以降はプロファイルに残る
-        for report_id, path in sf.export_reports(report_urls, "出力先"):
+使い方:
+    with SolutionSite() as sf:
+        sf.login_with_credentials()  # prefix省略 → CREDENTIAL_PREFIXを使う
+        sf.wait_for_manual_login()
+        for report_id, path in sf.export_reports(reports):
             ...
 
 #### `go_login`
@@ -8897,6 +8875,270 @@ Raises:
     SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
     SalesforceReportExportError: いずれかのレポートでエクスポートが失敗した場合
         （ログイン未実行・セッション切れ等）。
+
+#### `__init__`
+
+```text
+def __init__(self, session: BrowserSession | None=None) -> None:
+```
+
+#### `downloads`
+
+```text
+@property
+def downloads(self) -> DownloadDir:
+```
+
+##### 説明
+
+このサイトのダウンロード先。完了待ちに使う。
+
+    files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
+
+Raises:
+    SiteNotStartedError: まだ起動していない場合。
+
+#### `to`
+
+```text
+def to(self, page_class: type[P]) -> P:
+```
+
+##### 説明
+
+このサイトの画面へ移る。
+
+画面クラスは動かすのにブラウザ（`BrowserSession`）を要るが、
+**それを呼ぶ側に書かせない**ためのもの。
+
+    def go_login(self) -> LoginPage:
+        return self.to(LoginPage).go("/login")
+
+**行き先の型を切り替えるだけで、ブラウザは動かさない。** 実際に動かすのは
+`Page.go("/path")` かリンクのクリックで、それを `go_〇〇()` の中に隠す。
+こうしておくと、その画面から行ける先が `go_〇〇()` の一覧になる。
+
+`Page.to()` と同じ名前にそろえてある。サイトから最初の画面へ移るのも、
+画面から次の画面へ移るのも、利用側から見れば同じ「移る」なので、
+覚える言葉を増やさない。
+
+`LoginPage(self.session)` と書いても同じだが、そう書くと
+「セッションとは何か」を知らないとサイトクラスを書けなくなる。
+
+Args:
+    page_class: 作りたい画面クラス（`Page` のサブクラス）。
+
+Returns:
+    そのサイトのブラウザに紐づいた画面クラスのインスタンス。
+
+#### `close`
+
+```text
+def close(self) -> None:
+```
+
+##### 説明
+
+Browsers から渡されたセッションは触らず、自分で起動したブラウザだけ閉じる。
+
+`with Kintai() as kintai:` で起動したインスタンスを `close()` しても安全。
+ただし `Browsers.launch()` から持たせてもらったインスタンスでは何もしない
+（持ち主の Browsers が with を抜けるときに閉じるため、二重に閉じない）。
+
+### `SolutionSandboxSite`
+
+```text
+class SolutionSandboxSite(SalesforceSiteBase):
+```
+
+#### 説明
+
+Solution Sandbox組織へのブラウザ経由アクセス。
+
+使い方:
+    with SolutionSandboxSite() as sf:
+        sf.login_with_credentials()  # prefix省略 → CREDENTIAL_PREFIXを使う
+        sf.wait_for_manual_login()
+        for report_id, path in sf.export_reports(reports):
+            ...
+
+#### `go_login`
+
+```text
+def go_login(self) -> LoginPage:
+```
+
+##### 説明
+
+ログイン画面を開く。
+
+ID/パスワードを自分で入力するなら ``LoginPage.login()``、人が手動で
+入力するならこの後 ``wait_for_manual_login()`` を呼ぶ。
+
+#### `login_with_credentials`
+
+```text
+def login_with_credentials(self, prefix: str='') -> None:
+```
+
+##### 説明
+
+DPAPIに保存したID/パスワードでログインを試みる。
+
+MFA（認証コード・端末認証など）が要求される組織では、これだけでは
+ログインが完了しない。続けて ``wait_for_manual_login()`` を呼び、
+人がブラウザで残りの確認を終えるのを待つこと。
+
+Args:
+    prefix: DPAPIに登録した認証情報のシステム名
+        （``comken.toolbox.credentials.Credentials`` のサイト名）。
+        ``username`` / ``password`` の2項目を登録しておく
+        （例: ``python -m comken cred gui``）。**省略時はクラスの
+        ``CREDENTIAL_PREFIX``** を使う（本番とテストを切り替えるときだけ渡す）。
+
+Raises:
+    CredentialNotFoundError: prefix配下に username/password が未登録の場合。
+    CredentialDecryptionError: 別のユーザー・PCで登録されていて復号できない場合。
+
+#### `wait_for_manual_login`
+
+```text
+def wait_for_manual_login(self) -> None:
+```
+
+##### 説明
+
+ブラウザでの手動ログインが終わるまで待つ（ターミナルでEnter待ち）。
+
+``BrowserOptions.HEADLESS`` は既定で ``False`` のため、通常はブラウザの
+画面が見える状態で起動している。そこへ人がID/パスワード/MFAを入力し
+（``login_with_credentials()`` 済みならMFAだけ）、ログインが終わったら
+こちらのターミナルで Enter を押す。
+
+#### `export_reports`
+
+```text
+def export_reports(self, reports: Mapping[str, str | Path], *, export_format: str='csv', encoding: str='Shift_JIS', max_workers: int=_DEFAULT_MAX_WORKERS, keep_alive_report_id: str | None=None, keep_alive_interval: float=_DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS) -> Iterator[tuple[str, Path]]:
+```
+
+##### 説明
+
+ログイン済みのブラウザのセッションCookieを requests へ引き継ぎ、
+並列にダウンロードして (report_id, 保存先パス) を返す。
+
+ファイル名・置き場所は呼び出し側が ``reports`` で完全に指定する
+（comken側では report_id ベースの名前を強制しない）。
+
+ブラウザはログインの確立だけに使い、N件のダウンロード自体は
+requests + ThreadPoolExecutor で並列に行う。
+
+    with Salesforce() as sf:
+        sf.login_with_credentials("salesforce_temp")
+        sf.wait_for_manual_login()
+        reports = {
+            report_url: f"出力先/{report_name}.csv"
+            for report_url, report_name in ...
+        }
+        for report_id, path in sf.export_reports(reports):
+            ...
+
+Args:
+    reports: ``{レポート画面のURL（またはレポートID）: 保存先ファイルパス}``
+        の対応表。保存先の親フォルダが無ければ作成する。
+    export_format: "csv" または "xls"。保存先のファイル名の拡張子とは
+        無関係（Salesforceに実際に何形式で吐かせるかだけを決める）。
+    encoding: エクスポートする文字コード。既定は ``Shift_JIS``（CP932相当）。
+        Excel・社内システムでの扱いやすさを優先している。UTF-8で欲しい
+        場合は ``"UTF-8"`` を渡す。
+    max_workers: 同時に投げるリクエストの数。既定10。
+    keep_alive_report_id: ダウンロード中、この間隔でブラウザに開かせ続ける
+        軽いレポートのID（例: 0件のレポート）。ドメインは今のセッションの
+        ものをそのまま使うため、URLではなくIDだけ渡せばよい。省略時は
+        何もしない。件数が多くダウンロードに時間がかかる場合、ブラウザ
+        自体はログイン後なにも操作していないため、途中でSalesforce側の
+        セッションが切れて ``SalesforceReportExportError`` になることが
+        ある。その暫定対処として指定する（恒久対処ではない。根本的には
+        Salesforce管理者にセッションタイムアウトの設定を確認してもらうのが筋）。
+    keep_alive_interval: ``keep_alive_report_id`` を開く間隔（秒）。既定300秒（5分）。
+
+Yields:
+    (report_id, 保存したファイルのパス) のタプル。
+    **完了した順**に返るため、``reports`` の順序とは限らない。
+
+Raises:
+    SiteNotStartedError: 未起動の場合。
+    SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
+    SalesforceReportExportError: いずれかのレポートでエクスポートが失敗した場合
+        （ログイン未実行・セッション切れ等）。
+
+#### `__init__`
+
+```text
+def __init__(self, session: BrowserSession | None=None) -> None:
+```
+
+#### `downloads`
+
+```text
+@property
+def downloads(self) -> DownloadDir:
+```
+
+##### 説明
+
+このサイトのダウンロード先。完了待ちに使う。
+
+    files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
+
+Raises:
+    SiteNotStartedError: まだ起動していない場合。
+
+#### `to`
+
+```text
+def to(self, page_class: type[P]) -> P:
+```
+
+##### 説明
+
+このサイトの画面へ移る。
+
+画面クラスは動かすのにブラウザ（`BrowserSession`）を要るが、
+**それを呼ぶ側に書かせない**ためのもの。
+
+    def go_login(self) -> LoginPage:
+        return self.to(LoginPage).go("/login")
+
+**行き先の型を切り替えるだけで、ブラウザは動かさない。** 実際に動かすのは
+`Page.go("/path")` かリンクのクリックで、それを `go_〇〇()` の中に隠す。
+こうしておくと、その画面から行ける先が `go_〇〇()` の一覧になる。
+
+`Page.to()` と同じ名前にそろえてある。サイトから最初の画面へ移るのも、
+画面から次の画面へ移るのも、利用側から見れば同じ「移る」なので、
+覚える言葉を増やさない。
+
+`LoginPage(self.session)` と書いても同じだが、そう書くと
+「セッションとは何か」を知らないとサイトクラスを書けなくなる。
+
+Args:
+    page_class: 作りたい画面クラス（`Page` のサブクラス）。
+
+Returns:
+    そのサイトのブラウザに紐づいた画面クラスのインスタンス。
+
+#### `close`
+
+```text
+def close(self) -> None:
+```
+
+##### 説明
+
+Browsers から渡されたセッションは触らず、自分で起動したブラウザだけ閉じる。
+
+`with Kintai() as kintai:` で起動したインスタンスを `close()` しても安全。
+ただし `Browsers.launch()` から持たせてもらったインスタンスでは何もしない
+（持ち主の Browsers が with を抜けるときに閉じるため、二重に閉じない）。
 
 
 ## `from comken.toolbox.browser.sites.ams import ...`
@@ -9266,10 +9508,10 @@ def go_login(self) -> LoginPage:
 
 ## `from comken.toolbox.browser.sites.salesforce import ...`
 
-### `Salesforce`
+### `SalesforceSiteBase`
 
 ```text
-class Salesforce(SiteBase):
+class SalesforceSiteBase(SiteBase):
 ```
 
 #### 説明
@@ -9295,7 +9537,7 @@ URL は example の値のまま。利用プロジェクト側で継承して書�
     class MySalesforceOptions(BrowserOptions):
         PROFILE_ROOT = r"C:\作業\salesforce_profile"
 
-    class MySalesforce(Salesforce):
+    class MySalesforce(SalesforceSiteBase):
         OPTIONS = MySalesforceOptions
         CREDENTIAL_PREFIX = "salesforce_temp"
 
@@ -9414,10 +9656,10 @@ Raises:
     SalesforceReportExportError: いずれかのレポートでエクスポートが失敗した場合
         （ログイン未実行・セッション切れ等）。
 
-### `Solution`
+### `SolutionSite`
 
 ```text
-class Solution(Salesforce):
+class SolutionSite(SalesforceSiteBase):
 ```
 
 #### 説明
@@ -9425,7 +9667,7 @@ class Solution(Salesforce):
 Solution組織へのブラウザ経由アクセス。
 
 使い方:
-    with Solution() as sf:
+    with SolutionSite() as sf:
         sf.login_with_credentials()  # prefix省略 → CREDENTIAL_PREFIXを使う
         sf.wait_for_manual_login()
         for report_id, path in sf.export_reports(reports):
@@ -9609,10 +9851,10 @@ Browsers から渡されたセッションは触らず、自分で起動した�
 ただし `Browsers.launch()` から持たせてもらったインスタンスでは何もしない
 （持ち主の Browsers が with を抜けるときに閉じるため、二重に閉じない）。
 
-### `SolutionSandbox`
+### `SolutionSandboxSite`
 
 ```text
-class SolutionSandbox(Salesforce):
+class SolutionSandboxSite(SalesforceSiteBase):
 ```
 
 #### 説明
@@ -9620,7 +9862,7 @@ class SolutionSandbox(Salesforce):
 Solution Sandbox組織へのブラウザ経由アクセス。
 
 使い方:
-    with SolutionSandbox() as sf:
+    with SolutionSandboxSite() as sf:
         sf.login_with_credentials()  # prefix省略 → CREDENTIAL_PREFIXを使う
         sf.wait_for_manual_login()
         for report_id, path in sf.export_reports(reports):
@@ -9811,7 +10053,7 @@ Browsers から渡されたセッションは触らず、自分で起動した�
 ### `site_for`
 
 ```text
-def site_for(url: str) -> type[Salesforce]:
+def site_for(url: str) -> type[SalesforceSiteBase]:
 ```
 
 #### 説明
@@ -9822,7 +10064,7 @@ def site_for(url: str) -> type[Salesforce]:
 （URLのドメイン一致）も同じ。
 
     site_for("https://example.my.salesforce.com/lightning/...")
-    # → Solution
+    # → SolutionSite
 
 Args:
     url: レポートを開いたときのアドレス。**ドメインを含む URL であること**

@@ -270,7 +270,7 @@ with site() as sf:
 1区間でも 2000 行を超える場合だけ、画面のエクスポート機能（`?export=1&xf=csv`）を
 使う。API のこの上限自体がかからない。3段目より重い手段なので、3段目で
 足りるかを先に確かめること。使うのは
-`comken.toolbox.browser.sites.salesforce.Salesforce`（組織ごとの入口は
+`comken.toolbox.browser.sites.salesforce.SalesforceSiteBase`（組織ごとの入口は
 `comken.toolbox.browser.sites.salesforce`）。
 
 > [!warning] requests だけでのセッション確立は組織によって通らないことを確認済み
@@ -278,7 +278,7 @@ with site() as sf:
 > 確立しようとすると、ログイン画面へリダイレクトされて通らない組織がある
 > （2026-09-17 実機確認。考えられる原因はセッションセキュリティレベル・
 > 接続アプリのOAuthスコープ・ログインIP制限の不一致など）。そのため
-> `Salesforce` は**ログインの確立を実ブラウザ（Selenium）で行う**。
+> `SalesforceSiteBase` は**ログインの確立を実ブラウザ（Selenium）で行う**。
 >
 > `go_login()` + `wait_for_manual_login()`（人が手動でログイン）、または
 > `login_with_credentials()`（DPAPIに保存したID/パスワードを自動入力し、
@@ -310,9 +310,12 @@ with site_class() as sf:
 ```
 
 **組織ごとのクラス（本番・サンドボックス等）** は `comken.toolbox.browser.sites.salesforce`
-にある: `Solution` / `SolutionSandbox` は API側の組織クラス
+にある: `SolutionSite` / `SolutionSandboxSite` は API側の組織クラス
 （`comken.toolbox.salesforce.sites.Solution` / `SolutionSandbox`）が持つ `DOMAIN_URL` を
-そのまま使い、URLを二重に管理しない。`site_for(url)` は API版の同名関数のブラウザ版で、
+そのまま使い、URLを二重に管理しない。ブラウザ側のクラスに `Site` の接尾辞を
+付けたのは、API 側と同名の `Solution` / `SolutionSandbox` と import 行・IDE 補完で
+区別するため（基底クラス `SalesforceSiteBase` も API 側 `SalesforceBase` と紛らわしい
+ため）。`site_for(url)` は API版の同名関数のブラウザ版で、
 レポートURLのドメインから組織のブラウザサイトクラスを返す。
 
 ブラウザ版は `comken.toolbox.browser.sites.salesforce` にあり、Selenium を使う
@@ -323,7 +326,7 @@ with site_class() as sf:
 
 **ログイン状態を次回起動でも使い回すには `OPTIONS.PROFILE_ROOT` を設定すること**
 （未設定だと起動のたびにまっさらなプロファイルになり、毎回ログインし直しになる）。
-詳しくは `Salesforce` クラスの docstring と `docs/browser.md` の
+詳しくは `SalesforceSiteBase` クラスの docstring と `docs/browser.md` の
 「ログイン状態を残す」を参照。
 
 ### レポート形式

@@ -1,4 +1,4 @@
-r"""comken/toolbox/browser/sites/salesforce/site.py — Salesforceレポートのブラウザ経由ダウンロード。
+r"""comken/toolbox/browser/sites/salesforce/base.py — SalesforceSiteBase（ブラウザ経由の雛形）。
 
 Reports and Dashboards REST APIの2000行上限を超えるレポート（マトリックス／統合など
 SOQLに書き換えられない形式）向けの最終手段。画面のエクスポート機能
@@ -52,7 +52,7 @@ _DEFAULT_REQUEST_TIMEOUT_SECONDS = 300
 _DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS = 300
 
 
-class Salesforce(SiteBase):
+class SalesforceSiteBase(SiteBase):
     """Salesforceのレポートをブラウザ経由でCSVダウンロードするための雛形。
 
     URL は example の値のまま。利用プロジェクト側で継承して書き換える
@@ -74,7 +74,7 @@ class Salesforce(SiteBase):
         class MySalesforceOptions(BrowserOptions):
             PROFILE_ROOT = r"C:\\作業\\salesforce_profile"
 
-        class MySalesforce(Salesforce):
+        class MySalesforce(SalesforceSiteBase):
             OPTIONS = MySalesforceOptions
             CREDENTIAL_PREFIX = "salesforce_temp"
 
