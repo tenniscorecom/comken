@@ -2417,13 +2417,23 @@ class CompanyHolidaySource(HolidaySource):
 社内 BO 環境（オフライン・pip 制限）でもそのまま動く。
 
 既定の対象範囲は「実行時の今日 - ``DEFAULT_YEARS_BACK`` 年 〜 実行時の
-今日 + ``DEFAULT_YEARS_AHEAD`` 年」。範囲外の日付は会社休日として登録
-されない（国民の祝日は別ソースのため影響しない）。範囲を広げたいときは
-``from_year`` / ``to_year`` を明示する。
+今年 + ``DEFAULT_YEARS_AHEAD`` 年」。
+
+.. note::
+    **既定では来年分までしか生成しない。** 内閣府の祝日 CSV
+    （``data/syukujitsu.csv``）が「実行時の今年の翌年」分までしか
+    公表されないため、それに揃えて年末年始休暇も来年分までに留めてある。
+    **既定の範囲外の日付には会社休日（年末年始休暇）が付かない** ので、
+    来年より先の日付では「国民の祝日は付くが年末年始休暇は付かない」
+    という状態になる（国民の祝日は別ソース ``ComputedHolidaySource`` が
+    2099 年まで計算する）。先の日付まで含めて営業日計算をしたいときは
+    ``to_year`` を明示する。
 
 Args:
     from_year: 対象範囲の開始年。省略時は「実行時の今日の年 - ``DEFAULT_YEARS_BACK``」。
-    to_year: 対象範囲の終了年。省略時は「実行時の今日の年 + ``DEFAULT_YEARS_AHEAD``」。
+    to_year: 対象範囲の終了年。省略時は「実行時の今日の年 +
+        ``DEFAULT_YEARS_AHEAD`` 年」（既定の ``DEFAULT_YEARS_AHEAD = 1``
+        で来年分まで）。
 
 #### `__init__`
 
