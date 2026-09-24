@@ -135,11 +135,11 @@ def _measure_generator_wrapper(func: Callable[..., Any]) -> Callable[..., Any]:
     return generator_wrapper
 
 
-def _measure_wrapper(func: Callable[_P, _R]) -> Callable[_P, _R]:
+def _measure_wrapper[**P, R](func: Callable[P, R]) -> Callable[P, R]:
     """通常関数用の ``measure`` ラッパーを組み立てる。"""
 
     @functools.wraps(func)
-    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         """デバッグ中だけ対象関数の出入りを記録する。"""
         from comken.runtime import is_debug
 
@@ -166,7 +166,7 @@ def _measure_wrapper(func: Callable[_P, _R]) -> Callable[_P, _R]:
     return wrapper
 
 
-def measure(func: Callable[_P, _R]) -> Callable[_P, _R]:
+def measure[**P, R](func: Callable[P, R]) -> Callable[P, R]:
     """デバッグモード時だけ対象関数の出入りを DEBUG ログに出すデコレータ。
 
     呼び出しごとに次の3種のうち、いずれか1組を出す:

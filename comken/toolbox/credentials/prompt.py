@@ -35,7 +35,7 @@ import logging
 import msvcrt
 import time
 from collections.abc import Callable
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING
 
 from comken.exceptions import PasswordRejectedError
 
@@ -43,9 +43,6 @@ if TYPE_CHECKING:
     from comken.toolbox.credentials.store import Credentials
 
 logger = logging.getLogger(__name__)
-
-# submit() の戻り値（change_password() が呼び出し側へそのまま返す型）
-_T = TypeVar("_T")
 
 # Credentials に保存する項目名の既定値。パスワード以外を受け付けたいときだけ
 # 呼び出し側で field を指定する。
@@ -101,15 +98,15 @@ def prompt_new_password(
     return new_value
 
 
-def change_password(
+def change_password[T](
     cred: "Credentials",
-    submit: Callable[[str], _T],
+    submit: Callable[[str], T],
     field: str = DEFAULT_PASSWORD_FIELD,
     *,
     label: str = "新しいパスワード",
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
-) -> _T:
+) -> T:
     """新しいパスワードをCLIから受け付け、``submit()`` でサイトへ送信する。
 
     サイト側が拒否した場合（記号が足りない・文字数が足りない等）は、

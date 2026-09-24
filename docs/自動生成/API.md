@@ -1050,7 +1050,7 @@ Yields:
 ### `measure`
 
 ```text
-def measure(func: Callable[_P, _R]) -> Callable[_P, _R]:
+def measure[**P, R](func: Callable[P, R]) -> Callable[P, R]:
 ```
 
 #### 説明
@@ -7516,7 +7516,7 @@ Args:
 ### `BackgroundTask`
 
 ```text
-class BackgroundTask(Generic[T]):
+class BackgroundTask:
 ```
 
 #### 説明
@@ -7976,7 +7976,7 @@ parallel の中で使う場合、他のスレッドと衝突しないことは�
 ### `BackgroundTask`
 
 ```text
-class BackgroundTask(Generic[T]):
+class BackgroundTask:
 ```
 
 #### 説明
@@ -10313,7 +10313,7 @@ Raises:
 ### `change_password`
 
 ```text
-def change_password(cred: 'Credentials', submit: Callable[[str], _T], field: str=DEFAULT_PASSWORD_FIELD, *, label: str='新しいパスワード', timeout_seconds: float=DEFAULT_TIMEOUT_SECONDS, max_attempts: int=DEFAULT_MAX_ATTEMPTS) -> _T:
+def change_password[T](cred: 'Credentials', submit: Callable[[str], T], field: str=DEFAULT_PASSWORD_FIELD, *, label: str='新しいパスワード', timeout_seconds: float=DEFAULT_TIMEOUT_SECONDS, max_attempts: int=DEFAULT_MAX_ATTEMPTS) -> T:
 ```
 
 #### 説明

@@ -16,14 +16,11 @@ Browsers.run_task() で始めて、必要になったところで wait() で受�
 import logging
 from concurrent.futures import Future
 from concurrent.futures import TimeoutError as FutureTimeoutError
-from typing import Generic, TypeVar
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T")
 
-
-class BackgroundTask(Generic[T]):
+class BackgroundTask[T]:
     """裏で動いている処理の取っ手。Browsers.run_task() が返す。
 
     Attributes:

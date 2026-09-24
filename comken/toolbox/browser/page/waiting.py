@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, TypeAlias
+from typing import TYPE_CHECKING
 
 from selenium.webdriver.support import expected_conditions as EC
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
     from selenium.webdriver.remote.webdriver import WebDriver
 
-    Condition: TypeAlias = Callable[[WebDriver], bool]
+    type Condition = Callable[[WebDriver], bool]
 
 logger = logging.getLogger(__name__)
 

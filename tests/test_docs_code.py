@@ -31,6 +31,7 @@ _DOCS = [
 ]
 
 _CODE_BLOCK = re.compile(r"```python(\s+skip)?\n(.*?)```", re.DOTALL)
+_ANY_FENCED_BLOCK = re.compile(r"```.*?```", re.DOTALL)
 _MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]*]\(([^)]+)\)")
 _HEADING = re.compile(r"^#{1,6}\s+(.+)$", re.MULTILINE)
 _REMOVED_NAMES = (
@@ -328,7 +329,11 @@ def test_markdown_relative_links_resolve(doc):
     text = doc.read_text(encoding="utf-8")
     headings = {_anchor(heading) for heading in _HEADING.findall(text)}
 
-    for raw_target in _MARKDOWN_LINK.findall(text):
+    # フェンスコードブロック内の `[...]  (...)` 風の文字列（PEP 695 のジェネリック関数
+    # シグネチャ ``def f[T](x: Callable[T, ...])`` など）を Markdown リンクと誤認しないよう、
+    # リンク検出の対象からはコードブロックを除く。
+    text_without_code = _ANY_FENCED_BLOCK.sub("", text)
+    for raw_target in _MARKDOWN_LINK.findall(text_without_code):
         target = raw_target.strip("<>")
         if "://" in target:
             continue

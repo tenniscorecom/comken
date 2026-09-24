@@ -10,7 +10,7 @@ from collections.abc import Callable, Mapping
 from datetime import datetime
 from pathlib import Path
 from types import TracebackType
-from typing import TYPE_CHECKING, Any, Literal, Self, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, Literal, Self, cast
 from zipfile import ZipFile
 
 from openpyxl import Workbook, load_workbook
@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 
 Engine = Literal["openpyxl", "com"]
 
-Value: TypeAlias = str | int | float | bool | datetime
+type Value = str | int | float | bool | datetime
 _EXCEL_SUFFIXES = {".xlsx", ".xlsm", ".xltx", ".xltm"}
 
 logger = logging.getLogger(__name__)

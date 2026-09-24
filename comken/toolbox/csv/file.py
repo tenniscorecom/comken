@@ -8,7 +8,7 @@ import logging
 from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 from types import TracebackType
-from typing import Any, Self, TypeAlias, cast
+from typing import Any, Self, cast
 
 from comken.constants import Encoding
 from comken.core.files import atomic_write
@@ -32,7 +32,7 @@ from comken.runtime import is_dry_run
 
 logger = logging.getLogger(__name__)
 
-Value: TypeAlias = str | int | float | bool
+type Value = str | int | float | bool
 
 
 def read_text(path: str | Path, *, encoding: str = Encoding.AUTO) -> str:

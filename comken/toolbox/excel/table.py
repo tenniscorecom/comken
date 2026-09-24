@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime
-from typing import TYPE_CHECKING, TypeAlias
+from typing import TYPE_CHECKING
 
 from openpyxl.formula.translate import Translator
 from openpyxl.utils.cell import range_boundaries
@@ -22,7 +22,7 @@ from comken.exceptions import (
 if TYPE_CHECKING:
     from comken.toolbox.excel.workbook import Excel
 
-Value: TypeAlias = str | int | float | bool | datetime
+type Value = str | int | float | bool | datetime
 
 logger = logging.getLogger(__name__)
 
