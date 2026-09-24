@@ -214,6 +214,48 @@ class TestCsvDateMove:
         assert not (output_folder / mismatching.name).exists()
 
 
+class TestDailyBatchTemplate:
+    def test_reads_todays_csv_and_writes_report(self, tmp_path, monkeypatch):
+        """雛形の main() が、今日の日付つき CSV を探して Excel レポートを作る。"""
+        from types import SimpleNamespace
+
+        from comken.core import today
+        from examples.advanced.daily_batch_template import run
+
+        input_folder = tmp_path / "input"
+        output_folder = tmp_path / "output"
+        input_folder.mkdir()
+        output_folder.mkdir()
+        today = today().strftime("%Y%m%d")
+        (input_folder / f"{today}_売上.csv").write_text(
+            "商品,金額\nA,100\nB,200\n", encoding="utf-8"
+        )
+        files = SimpleNamespace(INPUT_FOLDER=input_folder, OUTPUT_FOLDER=output_folder)
+        monkeypatch.setattr(run, "config", SimpleNamespace(FILES=files))
+
+        run.main()
+
+        outputs = list(output_folder.glob("*日次売上レポート.xlsx"))
+        assert len(outputs) == 1
+        ws = load_workbook(outputs[0])["PY_売上"]
+        assert list(ws.iter_rows(min_row=2, values_only=True)) == [("A", "100"), ("B", "200")]
+
+    def test_skips_when_no_input_today(self, tmp_path, monkeypatch):
+        """今日の入力が無ければ、エラーにせず何も出力しない。"""
+        from types import SimpleNamespace
+
+        from examples.advanced.daily_batch_template import run
+
+        (tmp_path / "input").mkdir()
+        (tmp_path / "output").mkdir()
+        files = SimpleNamespace(INPUT_FOLDER=tmp_path / "input", OUTPUT_FOLDER=tmp_path / "output")
+        monkeypatch.setattr(run, "config", SimpleNamespace(FILES=files))
+
+        run.main()
+
+        assert list((tmp_path / "output").iterdir()) == []
+
+
 class TestSoqlReportMigration:
     def test_downloads_and_saves_via_soql(self, tmp_path, monkeypatch):
         """SOQLレポート移行の例が、疑似APIを通して実際にCSVを保存する。
