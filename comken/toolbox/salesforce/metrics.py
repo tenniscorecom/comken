@@ -10,13 +10,13 @@ r"""comken/toolbox/salesforce/metrics.py — Salesforce API 呼び出しの計�
 `Sforce-Limit-Info` ヘッダーの方が正確なので、そちらを併せて記録する。
 """
 
-import csv
 import logging
 from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from comken.core.clock import now
+from comken.toolbox.csv import CSV
 
 logger = logging.getLogger(__name__)
 
@@ -159,20 +159,23 @@ class APIMetrics:
 
         日ごとに追記していくと、API 消費量の推移と切り捨ての発生が追える。
         ファイルが無ければ見出し行から作る。
+
+        ``CSV.append`` は呼び出しごとにファイル全体を読み直して原子的に
+        書き換えるため、**1 回の呼び出しで書く行数が少なく、累積しても
+        履歴のように巨大にならない用途**（= 1 日 1 実行・呼び出し元数件）
+        にだけ使う。
         """
         path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        is_new_file = not path.exists()
         timestamp = now().strftime("%Y-%m-%d %H:%M:%S")
         truncated = "、".join(self.truncated_reports)
+        is_new_file = not path.exists()
+        columns: list[str] = list(CSV_HEADERS)
 
-        # newline="" は csv モジュールの作法（Windows で空行が入るのを防ぐ）
-        with path.open("a", encoding="utf-8-sig", newline="") as f:
-            writer = csv.writer(f)
-            if is_new_file:
-                writer.writerow(CSV_HEADERS)
-            for component, stat in sorted(self._by_component.items()):
-                writer.writerow(
+        # 列名は CSV_HEADERS と同じ順で対応させる（見出しを二重に書かない）
+        rows = [
+            dict(
+                zip(
+                    CSV_HEADERS,
                     [
                         timestamp,
                         self.org_name,
@@ -184,8 +187,18 @@ class APIMetrics:
                         self.api_usage.used if self.api_usage else "",
                         self.api_usage.limit if self.api_usage else "",
                         truncated,
-                    ]
+                    ],
+                    strict=True,
                 )
+            )
+            for component, stat in sorted(self._by_component.items())
+        ]
+
+        # 新規作成時だけ ``columns`` を渡し、CSV が見出し付きでファイルを作る。
+        # 既存ファイルには ``columns`` を渡さない（渡すとヘッダー行を「データ行1」
+        # として読み、列名が二重になる）。
+        with CSV(path, columns=columns if is_new_file else None) as csv_file:
+            csv_file.append(rows)
 
     def _stat(self, component: str) -> ComponentStat:
         """呼び出し元ごとの集計を取り出す（無ければ作る）。"""

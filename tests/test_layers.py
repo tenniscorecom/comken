@@ -99,6 +99,56 @@ def test_imports_follow_layer_direction() -> None:
     assert not violations, "\n" + "\n".join(violations)
 
 
+# CSV の読み書きは comken.toolbox.csv.CSV に集約する。標準の csv を直接 import
+# してよいのは次の3ファイルだけ（それぞれ事情が違うため許可リストで管理する）。
+CSV_DIRECT_IMPORT_ALLOWLIST = {
+    # CSV クラス本体: 標準 csv を内部実装として使う唯一の正当な使用者
+    REPOSITORY_ROOT / "comken" / "toolbox" / "csv" / "file.py",
+    # Bulk API 2.0 へ送る CSV 文字列をメモリ上で組み立てる（ファイル I/O を伴わない）
+    REPOSITORY_ROOT / "comken" / "toolbox" / "salesforce" / "bulk_ingest.py",
+    # comken.core は層のルールで toolbox を import できないため、ここで csv.reader を直接使う
+    REPOSITORY_ROOT / "comken" / "core" / "calendar" / "_calendar.py",
+}
+
+
+def test_no_direct_csv_import_outside_allowlist() -> None:
+    """標準 csv を直接 import できるのは許可リストのファイルだけ。"""
+    violations: list[str] = []
+    for root in (PACKAGE_ROOT, REPOSITORY_ROOT / "tools"):
+        for path in root.rglob("*.py"):
+            if _is_skippable(path):
+                continue
+            if path in CSV_DIRECT_IMPORT_ALLOWLIST:
+                continue
+            if _imports_stdlib_csv(path):
+                relative = path.relative_to(REPOSITORY_ROOT)
+                violations.append(
+                    f"{relative}: 標準の csv を直接 import しています。"
+                    "CSV の読み書きは comken.toolbox.csv.CSV を使うこと。"
+                    "使えない事情があるなら許可リストに理由付きで追加する。"
+                )
+    assert not violations, "\n" + "\n".join(violations)
+
+
+def _imports_stdlib_csv(path: Path) -> bool:
+    """ファイルが標準ライブラリの csv を import しているか（AST で判定）。
+
+    コメント・docstring 中の文字列にはマッチしないよう、AST の
+    ``Import`` / ``ImportFrom`` ノードだけを走査する。
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "csv" or alias.name.startswith("csv."):
+                    return True
+        elif isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            if module == "csv" or module.startswith("csv."):
+                return True
+    return False
+
+
 def _collect_violations(path: Path) -> list[tuple[str, str | tuple[str, str]]]:
     """ファイル1つ分の import を調べて、違反または許可エッジを yield する。
 

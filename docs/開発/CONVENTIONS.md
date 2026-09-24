@@ -280,6 +280,12 @@ INPUT_受注_HEADER_ROW = 1
 **守られ方:** Ruff の `TID`（flake8-tidy-imports）が
 `ban-relative-imports = "all"` で検知する。書き忘れても `ruff check` で落ちる。
 
+### CSV の読み書きは `comken.toolbox.csv.CSV` を使う
+
+CSV の読み書きは `comken.toolbox.csv.CSV` を使い、標準の `csv` を直接 import しない。
+例外（`CSV` クラス自体・`comken.core`（層のルールで toolbox を import できない）・
+メモリ上の文字列が必要な Bulk API 用）は `tests/test_layers.py` の許可リストで管理する。
+
 ## 関数の複雑さ
 
 **長さは測らない。分岐の絡み合いを測る。**
