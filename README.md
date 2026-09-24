@@ -151,7 +151,7 @@ comken は共有サーバー上の1か所を**直接参照する**（ローカ�
 | 埋まるもの | 入るファイル |
 |---|---|
 | **プロジェクト名** | `main.py`（社内 RPA 基盤へ渡す名前）・`docs/仕様書.md`・`docs/使い方.md` |
-| **comken の場所** | `実行.bat`・`認証情報の登録.bat`（実行時の `PYTHONPATH`）・`.vscode/settings.json`（補完と定義ジャンプ） |
+| **comken の場所** | `実行.bat`（実行時の `PYTHONPATH`）・`.vscode/settings.json`（補完と定義ジャンプ） |
 | — | `README.md` から、ひな形の説明（作り終えたら消す節）が取り除かれる |
 
 ```
@@ -181,21 +181,21 @@ example からコピーされ、**そこで終了コード 1 で止まる**（�
 3. **`src/run.py` の `run()` に処理を書く**
 4. **`docs/使い方.md`・`docs/仕様書.md` の「（ここを書く）」を埋める**
 
-**comken の場所を後から変えたくなったら**、`実行.bat` と `認証情報の登録.bat` と `.vscode/settings.json` の
-3つを直す（片方だけ直すと「動くのに補完が効かない」状態になって原因が分かりにくい）。
+**comken の場所を後から変えたくなったら**、`実行.bat` と `.vscode/settings.json` の
+2つを直す（片方だけ直すと「動くのに補完が効かない」状態になって原因が分かりにくい）。
 `tools/set_python_library.py` は v1.0.0 で削除済み — 各プロジェクトの bat が
 先頭の `PYTHON_LIBRARY` で場所を固定して動く前提になったため。
 
 ### プロジェクトごとに設定する
 
 PCの環境変数を変更したくない場合は、各プロジェクトのルートに
-`comken/templates/新規プロジェクト/実行.bat`（または `認証情報の登録.bat`）をコピーし、
+`comken/templates/新規プロジェクト/実行.bat` をコピーし、
 先頭の`PYTHON_LIBRARY`を共有サーバー上のリポジトリルートに合わせる。この方法ではバッチの実行中だけ`PYTHONPATH`を設定する。
 （`python -m comken init` で作ったプロジェクトには、この bat が場所入りで最初から入る）
 
 ### bat が何をしているか
 
-`実行.bat`・`認証情報の登録.bat` は、この順で動く。
+`実行.bat` は、この順で動く（`認証情報の登録.bat` は場所を持たず、PC に `PYTHONPATH` が配布済みなのを前提に `python -m comken cred gui` を呼ぶだけ）。
 
 1. **すでに`PYTHONPATH`が通っていれば、そのまま処理に入る**（PC イメージ配布で設定済みのケース）
 2. 通っていなければ、bat に書いてある`PYTHON_LIBRARY`を使う
@@ -243,9 +243,8 @@ git update-index --skip-worktree comken/services/salesforce_downloader/paths.py
 ### comken の場所を変えたとき
 
 comken を別の共有フォルダへ移したときは、各プロジェクトの
-`実行.bat` / `認証情報の登録.bat` / `.vscode/settings.json` の3か所（bat×2 と
-`.vscode/settings.json`）を新しい場所に書き換える。`python -m comken init` で
-作ったプロジェクトではこの3か所は最初から `PYTHON_LIBRARY` で固定されているので、
+`実行.bat` / `.vscode/settings.json` の2か所を新しい場所に書き換える。`python -m comken init` で
+作ったプロジェクトではこの2か所は最初から `PYTHON_LIBRARY` で固定されているので、
 共有サーバーのパスが変わったときだけ書き換える。bat は cmd.exe に合わせて CP932、
 `.vscode/settings.json` は UTF-8（`\\\\` を `\\` に、`\` を `/` に直して書く）。
 片方だけ直すと「動くのに補完だけ効かない」状態になり、原因の特定が難しくなる。

@@ -1023,11 +1023,11 @@ class TestGenerateStub:
         assert "config: Config" in text
 
     def test_mapping_section_uses_dictionary_api_only(self, tmp_path):
-        """動的な列名は列挙せず、``MappingDict[str, str]`` として露出する。
+        """動的な列名は列挙せず、``MappingDict`` として露出する。
 
         ``*_MAPPING`` セクションはキーが動的な列名なので個別クラスに列挙しないが、
         ``MappingDict`` 経由で ``in`` / ``.get()`` が書けるよう、
-        ``MappingDict[str, str]`` 属性としてスタブに出す。
+        ``MappingDict`` 属性としてスタブに出す。
         """
         from comken.core.config.stubs import generate_stub
 
@@ -1038,7 +1038,9 @@ class TestGenerateStub:
         # 動的な列名はスタブに列挙しない（補完しても無意味な候補が出るだけ）
         assert "受注No" not in text
         # ``*_MAPPING`` は ``MappingDict`` として attr 露出する
-        assert "COLUMN_MAPPING: MappingDict[str, str]" in text
+        assert "COLUMN_MAPPING: MappingDict" in text
+        # 型引数つき（``MappingDict[...]``）だと、型検査で「型引数を取らないクラス」の誤りになる
+        assert "MappingDict[" not in text
         # ``MappingDict`` は素の ``dict[str, str]`` 派生（ ``__missing__`` は持たない）
         assert "def __missing__" not in text
         # ``Config.mapping()`` メソッドは廃止（``config.SECTION_MAPPING`` で読む）
@@ -1081,6 +1083,12 @@ class TestGenerateStub:
         # __init__.pyi は公開 API と config の属性型を直接宣言する
         init_text = (tmp_path / "typings" / "comken" / "__init__.pyi").read_text(encoding="utf-8")
         assert "dry_run as dry_run" in init_text
+        # comken.__all__ の名前はすべてスタブに出る（モジュール型の comken_logger も含む）。
+        # 抜けると、生成プロジェクトの ``from comken import comken_logger`` が型検査で落ちる
+        import comken
+
+        missing = [name for name in comken.__all__ if name not in init_text]
+        assert not missing, f"__init__.pyi に無い公開名: {missing}"
         # is_debug / is_dry_run は facade から外れたため、スタブにも出ないことを確認
         assert "is_debug" not in init_text
         assert "is_dry_run" not in init_text
@@ -1498,7 +1506,7 @@ class TestStubIncludesMappingDict:
     """スタブ生成後の .pyi に ``MappingDict`` と ``*_MAPPING`` attr が含まれることを検証。
 
     補完が効くようにするには、 ``*_MAPPING`` セクションが「スタブから消える」
-    のではなく「 ``MappingDict[str, str]`` 型として残る」必要がある。
+    のではなく「 ``MappingDict`` 型として残る」必要がある。
     これが消えると Pylance が ``Unknown`` 扱いして、 ``is None`` 判定が書けなくなる。
     """
 
@@ -1515,7 +1523,7 @@ class TestStubIncludesMappingDict:
         assert "class MappingDict(dict[str, str]):" in text
         assert "def __missing__" not in text
         # ``*_MAPPING`` セクションは attr として露出する
-        assert "COLUMN_MAPPING: MappingDict[str, str]" in text
+        assert "COLUMN_MAPPING: MappingDict" in text
         # ``Config.mapping()`` メソッドは廃止（``config.SECTION_MAPPING`` で読む）
         assert "def mapping(self" not in text
 
@@ -1530,7 +1538,7 @@ class TestStubIncludesMappingDict:
         text = (tmp_path / "typings" / "comken" / "core" / "config.pyi").read_text(encoding="utf-8")
 
         assert "class MappingDict(dict[str, str]):" in text
-        assert "COLUMN_MAPPING: MappingDict[str, str]" in text
+        assert "COLUMN_MAPPING: MappingDict" in text
         # module 関数 ``mapping()`` も廃止
         assert "def mapping(section:" not in text
 
@@ -1545,7 +1553,7 @@ class TestStubIncludesMappingDict:
         text = (tmp_path / "typings" / "comken" / "__init__.pyi").read_text(encoding="utf-8")
 
         assert "class MappingDict(dict[str, str]):" in text
-        assert "COLUMN_MAPPING: MappingDict[str, str]" in text
+        assert "COLUMN_MAPPING: MappingDict" in text
 
     def test_mapping_dict_attr_coexists_with_normal_section(self, tmp_path):
         """``*_MAPPING`` と通常セクションが同じ ini に共存しても両方のスタブが正しく出る。"""
@@ -1563,7 +1571,7 @@ class TestStubIncludesMappingDict:
         assert "    YEAR: int" in text
         assert "    REPORT: _REPORT" in text
         # ``*_MAPPING`` は ``MappingDict`` として並ぶ
-        assert "COLUMN_MAPPING: MappingDict[str, str]" in text
+        assert "COLUMN_MAPPING: MappingDict" in text
 
 
 class TestMappingDictIsDictStrStr:
@@ -1575,7 +1583,7 @@ class TestMappingDictIsDictStrStr:
     2. 未知のキーを ``[]`` で読むと素の ``dict`` と同じく ``KeyError`` になる
     3. ``"列名" in config.SECTION_MAPPING`` で有無を判定できる（推奨する書き方）
     4. ``.get("未知の列")`` が ``None`` を返す
-    5. 生成スタブに ``MappingDict[str, str]`` が含まれる（``str | None`` ではない）
+    5. 生成スタブに ``MappingDict`` が含まれる（``str | None`` ではない）
     """
 
     def test_values_are_all_str_no_none(self, tmp_path):
@@ -1654,7 +1662,7 @@ class TestMappingDictIsDictStrStr:
         assert mapping.get("未知の列", "fallback") == "fallback"
 
     def test_generated_stub_uses_dict_str_str_not_none(self, tmp_path):
-        """生成スタブに ``MappingDict[str, str]`` が含まれる（ ``str | None`` ではない）。
+        """生成スタブに ``MappingDict`` が含まれる（ ``str | None`` ではない）。
 
         依頼前は ``MappingDict[str, str | None]`` だったが、 依頼後は ``dict[str, str]``
         派生に揃えたため ``str | None`` を外す。スタブが古い書式のまま
@@ -1668,7 +1676,7 @@ class TestMappingDictIsDictStrStr:
 
         # 新しい書式に揃っている
         assert "class MappingDict(dict[str, str]):" in text
-        assert "COLUMN_MAPPING: MappingDict[str, str]" in text
+        assert "COLUMN_MAPPING: MappingDict" in text
         # ``__missing__`` は持たない（素の ``dict[str, str]`` と同じ振る舞い）
         assert "def __missing__" not in text
         # 古い ``str | None`` 形式は残っていない

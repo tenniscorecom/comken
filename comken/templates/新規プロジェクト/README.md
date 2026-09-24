@@ -21,8 +21,8 @@ comken（社内共通ライブラリ）を使った業務自動化ツールで�
 1. `実行.bat` を1度動かす（または `python main.py`）。`config.ini.example` から `config.ini` が作られるので、値を書き換える
 
 comken の場所（`PYTHON_LIBRARY`）は作成時に入っているので、通常は触らなくてよい。
-comken を別の場所へ移したときだけ、`実行.bat` と `認証情報の登録.bat` と `.vscode/settings.json` の**3つ**を直す
-（前2者は実行用、最後のは VS Code の補完・定義ジャンプ用。片方だけ直すと、動くのに補完が効かなくなる）。
+comken を別の場所へ移したときだけ、`実行.bat` と `.vscode/settings.json` の**2つ**を直す
+（前者は実行用、後者は VS Code の補完・定義ジャンプ用。片方だけ直すと、動くのに補完が効かなくなる）。
 
 ## 実行
 
@@ -46,8 +46,7 @@ RPA 基盤から呼び出すときは `main.py` の末尾のコメント（社�
 
 1. このフォルダをコピーしてプロジェクト名にリネームし、git 初期化する
 2. `src/run.py` の `run()` に処理を書く（`from comken import config` で設定を読む。
-   `config.` まで打つと Pylance が補完する。補完用スタブ typings/ は自動生成される。
-)
+   `config.` まで打つと Pylance が補完する。補完用スタブ typings/ は自動生成される。）
 3. `docs/使い方.md` / `docs/仕様書.md` / この README の `（ここを書く）` を埋める
 4. `docs/ERRORS.md` の「プロジェクト固有のエラー」に、このツールで起きやすいエラーを追記する
 5. この節を README から削除する

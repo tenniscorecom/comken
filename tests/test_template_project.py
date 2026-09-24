@@ -441,3 +441,56 @@ def test_runs_from_another_working_directory(generated: Path, tmp_path: Path) ->
     assert second.returncode == 0, f"2回目が失敗した:\n{second.stdout}\n{second.stderr}"
     assert (generated / "logs").is_dir(), "logs がプロジェクト側に作られていない"
     assert not (elsewhere / "logs").exists(), "カレント側に logs を作っている"
+
+
+# ── 13. src/run.py のコメントの例が、そのまま動く ───────────────────────────────
+
+
+def test_run_py_commented_example_works(generated: Path) -> None:
+    """`src/run.py` にコメントで書いてある「例」を有効にして動かすと、Excel が出力されること。
+
+    「何を防いでいるか」: 例はコメントなので、comken の API が変わっても誰も実行せず、
+    気づかないうちに壊れる（実際に、拡張子なしの名前と `Sheet1` というテーブル名で
+    どちらも例外になっていた）。新規プロジェクトを作った人が最初に真似する箇所なので、
+    例のコメントを外した形を実際に動かして確かめる。
+    """
+    run_py = generated / "src" / "run.py"
+    text = _read(run_py)
+    match = re.search(r"    # 例:\n((?:    #.*\n)+?)    # ─", text)
+    assert match, "src/run.py に「# 例:」のコメントブロックが見つからない"
+    example = "".join(
+        "    " + line[len("    #   ") :] if line.strip() != "#" else "\n"
+        for line in match.group(1).splitlines(keepends=True)
+    )
+    run_py.write_text(
+        text.replace(match.group(0), "    # 例\n" + example + "    # ─"), encoding="utf-8"
+    )
+
+    (generated / "input").mkdir()
+    (generated / "input" / "data.csv").write_text("商品,金額\nA,100\n", encoding="utf-8")
+    env = {**os.environ, "PYTHONPATH": str(_ROOT), "PYTHONIOENCODING": "utf-8"}
+    run = partial(
+        subprocess.run,
+        [sys.executable, str(generated / "main.py")],
+        cwd=generated,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+    )
+    run()  # 1回目: config.ini.example から config.ini が作られて止まる
+    config_ini = generated / "config.ini"
+    config_text = _read(config_ini)
+    assert "; INPUT_CSV = ./input/data.csv" in config_text, (
+        "config.ini.example に INPUT_CSV の例が無い"
+    )
+    config_ini.write_text(
+        config_text.replace("; INPUT_CSV = ./input/data.csv", "INPUT_CSV = ./input/data.csv"),
+        encoding="utf-8",
+    )
+
+    result = run()
+
+    assert result.returncode == 0, f"例が動かなかった:\n{result.stdout}\n{result.stderr}"
+    assert list((generated / "output").glob("*.xlsx")), "Excel が出力されていない"

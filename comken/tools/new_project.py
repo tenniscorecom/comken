@@ -58,10 +58,9 @@ NAMED_FILES = ("main.py", "docs/仕様書.md", "docs/使い方.md")
 PLACEHOLDER_PYTHON_LIBRARY = r"\\server\share\tools"
 
 # comken の場所を書いてあるファイル。bat は \ 区切り、settings.json は JSON なので / 区切り。
-# 雛形には 2 つの bat と settings.json がある（実行.bat・認証情報の登録.bat・settings.json）。
+# 認証情報の登録.bat は場所を持たない（PC に PYTHONPATH が配布済みなのを前提にしている）ので対象外。
 PYTHON_LIBRARY_FILES = (
     "実行.bat",
-    "認証情報の登録.bat",
     ".vscode/settings.json",
 )
 
@@ -135,10 +134,7 @@ def main() -> None:
 
     print(f"作成しました: {target}")
     print(f"comken の場所: {args.python_library}")
-    print(
-        "  （実行.bat と 認証情報の登録.bat と .vscode/settings.json に書きました。"
-        "違う場合は3つとも直してください）"
-    )
+    print("  （実行.bat と .vscode/settings.json に書きました。違う場合は2つとも直してください）")
     print("")
     print("次にやること:")
     print("  1. 実行.bat を1度動かすか python main.py を実行すると config.ini が作られる")
@@ -170,7 +166,7 @@ def _fill_project_name(target: Path, project_name: str) -> None:
 def _fill_python_library(target: Path, python_library: Path) -> None:
     """ひな形に書いてある comken の場所を、実際の場所に置き換える。
 
-    実行.bat と 認証情報の登録.bat（実行時の PYTHONPATH）と .vscode/settings.json
+    実行.bat（実行時の PYTHONPATH）と .vscode/settings.json
     （VS Code の補完・定義ジャンプ）で同じ場所が要る。手で両方を直す形にすると
     片方を忘れ、動くのに補完だけ効かない状態になる。
     忘れようがないよう、ここでまとめて入れる。

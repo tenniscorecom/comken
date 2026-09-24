@@ -11,7 +11,8 @@ from comken import config
 
 logger = logging.getLogger(__name__)
 
-SHEET = "Sheet1"
+# データシート名とテーブル名を兼ねる。Sheet1 のようにセル参照に見える名前は使えない
+SHEET = "レポート"
 
 
 def run() -> None:
@@ -28,7 +29,7 @@ def run() -> None:
     #
     #   with CSV(config.FILES.INPUT_CSV, read_only=True) as csv_file:
     #       table = csv_file.read()
-    #   out = output_folder / DateNameBuilder("レポート").prefix()
+    #   out = output_folder / DateNameBuilder("レポート.xlsx").prefix()
     #   with Excel(out) as excel:
     #       excel.create_data_sheet(SHEET).create_table(SHEET, table)
     #   logger.info("出力しました: %s", out)

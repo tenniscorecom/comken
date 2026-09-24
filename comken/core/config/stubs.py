@@ -17,6 +17,7 @@ Config の属性（config.SECTION.KEY）は config.ini から実行時に動的�
 """
 
 import configparser
+import inspect
 import logging
 from pathlib import Path
 
@@ -237,9 +238,9 @@ def _build_stub_content(
         class_name = f"_{stripped_section.upper()}"
         if _is_mapping_section(stripped_section):
             # ``*_MAPPING`` セクションはキーが動的な列名なので個別クラスを作らず、
-            # ``MappingDict[str, str]`` として属性に並べる。列の有無は ``in`` か
+            # ``MappingDict`` として属性に並べる。列の有無は ``in`` か
             # ``.get()`` で見る（詳細は ``_LenientDict`` の docstring）。
-            config_attrs.append(f"    {stripped_section.upper()}: MappingDict[str, str]")
+            config_attrs.append(f"    {stripped_section.upper()}: MappingDict")
             continue
         config_attrs.append(f"    {stripped_section.upper()}: {class_name}")
         section_lines.append(f"class {class_name}:")
@@ -288,10 +289,10 @@ def _build_module_stub_content(
     for stripped_section, original_section in section_map.items():
         class_name = f"_{stripped_section.upper()}"
         if _is_mapping_section(stripped_section):
-            # ``*_MAPPING`` は ``MappingDict[str, str]`` で宣言する（実行時は
+            # ``*_MAPPING`` は ``MappingDict`` で宣言する（実行時は
             # ``_LenientDict`` = dict のサブクラス）。列の有無は ``in`` か
             # ``.get()`` で見る（詳細は ``_LenientDict`` の docstring）。
-            module_attrs.append(f"{stripped_section.upper()}: MappingDict[str, str]")
+            module_attrs.append(f"{stripped_section.upper()}: MappingDict")
             continue
         module_attrs.append(f"{stripped_section.upper()}: {class_name}")
         section_lines.append(f"class {class_name}:")
@@ -337,8 +338,19 @@ def _build_package_init_stub(
     import comken
 
     by_module: dict[str, list[str]] = {}
+    module_aliases: list[str] = []
     for name in comken.__all__:
-        module = getattr(getattr(comken, name), "__module__", "")
+        exported = getattr(comken, name)
+        if name == "config":
+            continue  # ``config`` は下で ``_ConfigFacade`` として別に宣言する
+        if inspect.ismodule(exported):
+            # ``comken_logger`` のようなモジュールの別名。``__module__`` を持たないので、
+            # 上の関数・クラスとは別に、モジュールを変数へ代入して公開する。
+            # スタブでは ``as`` で名前を変えた import は再エクスポートされないため
+            parent, _, child = exported.__name__.rpartition(".")
+            module_aliases.append(f"from {parent} import {child} as _{name}\n{name} = _{name}")
+            continue
+        module = getattr(exported, "__module__", "")
         if module.startswith("comken."):
             by_module.setdefault(module, []).append(name)
 
@@ -350,6 +362,7 @@ def _build_package_init_stub(
         names = sorted(by_module[module])
         inner = "".join(f"    {name} as {name},\n" for name in names)
         lines.append(f"from {module} import (\n{inner})")
+    lines.extend(sorted(module_aliases))
     # ``MappingDict`` は実行時の ``_LenientDict`` を ``.pyi`` 側で表現する型。
     # ここで宣言しないと ``config.SECTION_MAPPING`` が ``Unknown`` として解決され、
     # Pylance 補完が静かに落ちる。
@@ -359,8 +372,8 @@ def _build_package_init_stub(
     for stripped_section, original_section in section_map.items():
         class_name = f"_{stripped_section.upper()}"
         if _is_mapping_section(stripped_section):
-            # ``*_MAPPING`` は ``MappingDict[str, str]`` として facade に並べる。
-            config_attrs.append(f"    {stripped_section.upper()}: MappingDict[str, str]")
+            # ``*_MAPPING`` は ``MappingDict`` として facade に並べる。
+            config_attrs.append(f"    {stripped_section.upper()}: MappingDict")
             continue
         config_attrs.append(f"    {stripped_section.upper()}: {class_name}")
         lines.append(f"class {class_name}:")

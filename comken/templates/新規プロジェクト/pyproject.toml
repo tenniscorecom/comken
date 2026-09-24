@@ -1,7 +1,9 @@
 # Ruff（リント・フォーマット）の設定。comken 本体と揃える。
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py313"
+# typings/ と src/config.pyi は comken が config.ini から自動生成するスタブ。手で直さないので対象外
+extend-exclude = ["typings", "src/config.pyi"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]  # E=style, F=pyflakes, W=warning, I=import order
