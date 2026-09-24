@@ -728,6 +728,101 @@ class TestCompanyHolidaySource:
         assert is_business_day(_dt.date(2026, 12, 28), calendar=cal) is True
 
 
+class TestCompanyHolidaySourceDefaultRange:
+    """``CompanyHolidaySource`` の既定対象範囲が「実行時の今日」に追従する挙動。"""
+
+    def test_default_range_is_today_minus_40_to_today_plus_50(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """今日=2026-09-24 のとき、既定は 1986-2076。両端が含まれ、外側は含まれない。"""
+        from comken.core import clock as clock_module
+        from comken.core.holidays.sources import company as company_module
+
+        monkeypatch.setattr(clock_module, "today", lambda: _dt.date(2026, 9, 24))
+
+        source = company_module.CompanyHolidaySource()
+        dates = {h.date for h in source.load()}
+
+        # 範囲の両端（年末年始休暇の日付）が含まれる
+        assert _dt.date(1986, 1, 1) in dates
+        assert _dt.date(1986, 12, 31) in dates
+        assert _dt.date(2076, 1, 1) in dates
+        assert _dt.date(2076, 12, 31) in dates
+        # 範囲の外側は含まれない
+        assert _dt.date(1985, 12, 31) not in dates
+        assert _dt.date(2077, 1, 1) not in dates
+
+    def test_default_range_follows_different_today(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """今日=2030-01-15 のとき、既定は 1990-2080（今日の年に追従）。"""
+        from comken.core import clock as clock_module
+        from comken.core.holidays.sources import company as company_module
+
+        monkeypatch.setattr(clock_module, "today", lambda: _dt.date(2030, 1, 15))
+
+        source = company_module.CompanyHolidaySource()
+        dates = {h.date for h in source.load()}
+
+        # 1990 と 2080 の年末年始休暇が含まれる
+        assert _dt.date(1990, 1, 1) in dates
+        assert _dt.date(1990, 12, 31) in dates
+        assert _dt.date(2080, 1, 1) in dates
+        assert _dt.date(2080, 12, 31) in dates
+        # 範囲外は含まれない
+        assert _dt.date(1989, 12, 31) not in dates
+        assert _dt.date(2081, 1, 1) not in dates
+
+    def test_explicit_range_overrides_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """``from_year`` / ``to_year`` を明示したときは既定より優先される。"""
+        from comken.core import clock as clock_module
+        from comken.core.holidays.sources import company as company_module
+
+        monkeypatch.setattr(clock_module, "today", lambda: _dt.date(2026, 9, 24))
+
+        source = company_module.CompanyHolidaySource(from_year=2000, to_year=2001)
+        dates = {h.date for h in source.load()}
+
+        # 2000-2001 の年末年始が含まれる
+        assert _dt.date(2000, 12, 29) in dates
+        assert _dt.date(2001, 1, 3) in dates
+        # 既定範囲 (1986/2076) は含まれない
+        assert _dt.date(1986, 1, 1) not in dates
+        assert _dt.date(2076, 12, 31) not in dates
+
+    def test_only_from_year_uses_default_to_year(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """``from_year`` だけを指定したら ``to_year`` は既定（今年+50）を使う。"""
+        from comken.core import clock as clock_module
+        from comken.core.holidays.sources import company as company_module
+
+        monkeypatch.setattr(clock_module, "today", lambda: _dt.date(2026, 9, 24))
+
+        source = company_module.CompanyHolidaySource(from_year=2000)
+        dates = {h.date for h in source.load()}
+
+        # from_year=2000 を明示しているので 2000 以降が入る
+        assert _dt.date(2000, 1, 1) in dates
+        # to_year は既定 (2026+50=2076) で 2076 まで入る
+        assert _dt.date(2076, 12, 31) in dates
+        # 2000 より前は範囲外
+        assert _dt.date(1999, 12, 31) not in dates
+
+    def test_only_to_year_uses_default_from_year(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """``to_year`` だけを指定したら ``from_year`` は既定（今年-40）を使う。"""
+        from comken.core import clock as clock_module
+        from comken.core.holidays.sources import company as company_module
+
+        monkeypatch.setattr(clock_module, "today", lambda: _dt.date(2026, 9, 24))
+
+        source = company_module.CompanyHolidaySource(to_year=2001)
+        dates = {h.date for h in source.load()}
+
+        # to_year=2001 を明示しているので 2001 まで入る
+        assert _dt.date(2001, 1, 3) in dates
+        # from_year は既定 (2026-40=1986) で 1986 から始まる
+        assert _dt.date(1986, 1, 1) in dates
+        # 2002 以降は範囲外
+        assert _dt.date(2002, 1, 1) not in dates
+
+
 class TestApproximateHoliday:
     """``Holiday.approximate`` 属性の挙動。
 

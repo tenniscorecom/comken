@@ -2416,9 +2416,14 @@ class CompanyHolidaySource(HolidaySource):
 このソースは **外部 I/O を一切しない** 純粋な Python 計算。
 社内 BO 環境（オフライン・pip 制限）でもそのまま動く。
 
+既定の対象範囲は「実行時の今日 - ``DEFAULT_YEARS_BACK`` 年 〜 実行時の
+今日 + ``DEFAULT_YEARS_AHEAD`` 年」。範囲外の日付は会社休日として登録
+されない（国民の祝日は別ソースのため影響しない）。範囲を広げたいときは
+``from_year`` / ``to_year`` を明示する。
+
 Args:
-    from_year: 対象範囲の開始年。省略時は ``DEFAULT_FROM_YEAR`` (1900)。
-    to_year: 対象範囲の終了年。省略時は ``DEFAULT_TO_YEAR`` (2200)。
+    from_year: 対象範囲の開始年。省略時は「実行時の今日の年 - ``DEFAULT_YEARS_BACK``」。
+    to_year: 対象範囲の終了年。省略時は「実行時の今日の年 + ``DEFAULT_YEARS_AHEAD``」。
 
 #### `__init__`
 

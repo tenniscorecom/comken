@@ -14,6 +14,7 @@ import datetime as _dt
 import logging
 from typing import Final
 
+from comken.core import clock
 from comken.core.holidays.calendar import Holiday, HolidaySource
 
 logger = logging.getLogger(__name__)
@@ -32,9 +33,13 @@ COMPANY_HOLIDAYS_EXTRA: Final[tuple[_dt.date, ...]] = ()
 
 EXTRA_HOLIDAY_NAME: Final[str] = "会社休業日"
 
-# 会社休日を生成する範囲。既定はソースの寿命全体を賄うため広めに取ってある。
-DEFAULT_FROM_YEAR: Final[int] = 1900
-DEFAULT_TO_YEAR: Final[int] = 2200
+# 会社休日を生成する既定の対象範囲。「実行時の今日」を基準に前後何年ぶんを
+# カバーするかを、この 2 定数で決める。固定の 1900-2200（301 年ぶん）のように
+# ソースの寿命全体を賄う範囲にすると、年末年始休暇だけで約 1800 件が生成され、
+# 業務で触らない日付までメモリに抱える。実際の業務で参照する日付は
+# 「今日の前後数十年」に収まるため、この幅で十分。
+DEFAULT_YEARS_BACK: Final[int] = 40
+DEFAULT_YEARS_AHEAD: Final[int] = 50
 
 
 class CompanyHolidaySource(HolidaySource):
@@ -51,9 +56,14 @@ class CompanyHolidaySource(HolidaySource):
     このソースは **外部 I/O を一切しない** 純粋な Python 計算。
     社内 BO 環境（オフライン・pip 制限）でもそのまま動く。
 
+    既定の対象範囲は「実行時の今日 - ``DEFAULT_YEARS_BACK`` 年 〜 実行時の
+    今日 + ``DEFAULT_YEARS_AHEAD`` 年」。範囲外の日付は会社休日として登録
+    されない（国民の祝日は別ソースのため影響しない）。範囲を広げたいときは
+    ``from_year`` / ``to_year`` を明示する。
+
     Args:
-        from_year: 対象範囲の開始年。省略時は ``DEFAULT_FROM_YEAR`` (1900)。
-        to_year: 対象範囲の終了年。省略時は ``DEFAULT_TO_YEAR`` (2200)。
+        from_year: 対象範囲の開始年。省略時は「実行時の今日の年 - ``DEFAULT_YEARS_BACK``」。
+        to_year: 対象範囲の終了年。省略時は「実行時の今日の年 + ``DEFAULT_YEARS_AHEAD``」。
     """
 
     def __init__(
@@ -62,8 +72,11 @@ class CompanyHolidaySource(HolidaySource):
         from_year: int | None = None,
         to_year: int | None = None,
     ) -> None:
-        self._from_year = from_year if from_year is not None else DEFAULT_FROM_YEAR
-        self._to_year = to_year if to_year is not None else DEFAULT_TO_YEAR
+        # 「今日」は comken.core.clock.today() から取る。datetime.date.today() を
+        # 直接呼ばないのは、テストで日付を固定できるようにするため。
+        current_year = clock.today().year
+        self._from_year = from_year if from_year is not None else current_year - DEFAULT_YEARS_BACK
+        self._to_year = to_year if to_year is not None else current_year + DEFAULT_YEARS_AHEAD
         if self._from_year > self._to_year:
             raise ValueError(
                 f"from_year ({self._from_year}) が to_year ({self._to_year}) より大きいです。"
@@ -109,7 +122,7 @@ __all__ = [
     "COMPANY_HOLIDAYS",
     "COMPANY_HOLIDAYS_EXTRA",
     "CompanyHolidaySource",
-    "DEFAULT_FROM_YEAR",
-    "DEFAULT_TO_YEAR",
+    "DEFAULT_YEARS_BACK",
+    "DEFAULT_YEARS_AHEAD",
     "EXTRA_HOLIDAY_NAME",
 ]
