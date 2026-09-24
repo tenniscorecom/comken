@@ -42,7 +42,7 @@ def month_end(target: datetime.date) -> datetime.date:
 # 「日」列が文字列で入っていた場合に受け付ける書き方。
 # Excel / CSV から読む業務シートでよくある表記をカバーする。
 # 新しい書式を増やすときは**ここを変えても CSV 内閣府の祝日パーサ
-# （``comken.core.holidays.csv_source`` の ``_parse_date``）には影響しない**。
+# （``comken.core.calendar.csv_source`` の ``_parse_date``）には影響しない**。
 # 祝日 CSV は配布フォーマットの制約で 2 形式に固定しており、 緩めた
 # 場合に「内閣府以外のファイルを取り違えても気付かない」リスクがあるため
 # 別口のままで揃えていない（``_parse_date`` の docstring 参照）。

@@ -51,7 +51,7 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 |---|---|
 | はじめて使う | この README の「[はじめて使う人へ](#はじめて使う人へ)」 |
 | 何が用意されているか探す | このREADMEの「[モジュール一覧](#モジュール一覧)」 |
-| モジュールの使い方を知る | [CSV](docs/csv.md)・[Excel](docs/excel.md)・[Access](docs/access.md)・[Outlook](docs/outlook.md)・[Windows](docs/windows.md)・[ブラウザ](docs/browser.md)・[Salesforce](docs/salesforce.md)・[Data Loader（CLI 実行）](docs/dataloader.md)・[core の部品](docs/core.md)・[認証情報](docs/credentials.md)・[祝日判定](docs/holidays.md)・[Salesforceレポートダウンローダー](docs/salesforce-downloader.md)・[Excel表を型付き設定として読む](docs/master-table.md) |
+| モジュールの使い方を知る | [CSV](docs/csv.md)・[Excel](docs/excel.md)・[Access](docs/access.md)・[Outlook](docs/outlook.md)・[Windows](docs/windows.md)・[ブラウザ](docs/browser.md)・[Salesforce](docs/salesforce.md)・[Data Loader（CLI 実行）](docs/dataloader.md)・[core の部品](docs/core.md)・[認証情報](docs/credentials.md)・[カレンダー判定](docs/calendar.md)・[Salesforceレポートダウンローダー](docs/salesforce-downloader.md)・[Excel表を型付き設定として読む](docs/master-table.md) |
 | **初めて外部システムにつなぐ** | ID とパスワードの[登録](docs/credentials.md#登録初回だけ) → [Salesforce につないで確かめる](docs/salesforce.md#つないで確かめるコマンド) |
 | 引数・戻り値・例外を正確に知る | [公開 API](docs/自動生成/API.md)（**自動生成**） |
 | エラーが出た | [エラー対応ガイド](docs/ERRORS.md)（エラー表は **自動生成**） |
@@ -145,7 +145,7 @@ write 側に空キーが複数あっても ``TransferDestinationMultipleMatchErr
 | [Data Loader（CLI 実行）](docs/dataloader.md) | Salesforce Data Loader の CLI 実行を手伝う（大量データの一括変更。正確な構文は環境ごとに確認が必要） |
 | [Salesforce認証の判断根拠](docs/開発/salesforce-authentication.md) | ECA・Refresh Token Flow を既定にした理由と公式資料 |
 | [credentials（DPAPI）](docs/credentials.md) | パスワード・client_secret の暗号化保存（Windows ユーザーに紐付く） |
-| [祝日判定](docs/holidays.md) | 内閣府の祝日 CSV（CP932）+ コード直書きの会社休日をマージして営業日判定 |
+| [カレンダー判定](docs/calendar.md) | 内閣府の祝日 CSV（CP932）+ コード直書きの会社休日をマージして営業日判定 |
 | [core（部品）](docs/core.md) | `from comken.core import ...` で取る部品群。ファイル検索・操作・圧縮・ファイル名の組み立て／データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時 |
 | [Salesforceレポートダウンローダー（services）](docs/salesforce-downloader.md) | 複数プロジェクトのSalesforceレポート定期取得を1か所に集約するサービス（管理表・履歴・最新実行結果） |
 | [Excel表を型付き設定として読む（master_table）](docs/master-table.md) | 「どのレポートを取るか」のような行が増えていく設定を、Excelの表から型付きの行として読み込む仕組み |

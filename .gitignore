@@ -21,7 +21,6 @@ build/
 logs/
 examples/**/output/
 config.pyi
-comken/core/holidays/data/holidays.csv
 
 # ChatGPT貼り付け用に章ごとへ分割した資料（export_for_chat.py がいつでも作り直せる）
 comken_bundle/

@@ -1,4 +1,4 @@
-"""comken/core/holidays/sources/computed.py — 計算で祝日を組み立てるソース。
+"""comken/core/calendar/computed.py — 計算で祝日を組み立てるソース。
 
 内閣府の ``syukujitsu.csv`` に頼らず、祝日法で定義された規則だけで
 ``Holiday`` を組み立てる。`mokejp/holidays_jp` (MIT) のアルゴリズムを
@@ -15,10 +15,10 @@ import しないため、オフラインの社内 BO 環境でもそのまま動
 - 春分・秋分（近似式。1980-2099 が高精度範囲、2100- は別係数で低精度対応）
 - 国民の休日（1985-。シルバーウィークと 5/4 のサンドイッチ）
 - 振替休日（2007年改正以降。日曜の祝日を後ろに倒す）
-- 2020 年オリンピック特例（海の日・スポーツの日・山の日）
+- 2020 年オリンピック特例（海の日・スポーツの日 /
 - 2019 年 即位関連特例（天皇の即位の日・即位礼正殿の儀の行われる日）
 
-**会社休日**は別ソース ``comken.core.holidays.sources.company`` に切り出してある。
+**会社休日**は別モジュール ``comken.core.calendar.company`` に切り出してある。
 国民の祝日とは概念が違うので混ぜない。
 """
 
@@ -27,7 +27,7 @@ import logging
 from itertools import pairwise
 from typing import Final
 
-from comken.core.holidays.calendar import Holiday, HolidaySource
+from comken.core.calendar._calendar import Holiday, _Source
 
 logger = logging.getLogger(__name__)
 
@@ -43,12 +43,12 @@ DEFAULT_TO_YEAR: Final = 2099
 # ── 公開クラス ────────────────────────────────────────────────────────────
 
 
-class ComputedHolidaySource(HolidaySource):
+class _ComputedSource(_Source):
     """計算で祝日の和集合を返すソース。
 
-    ``HolidaySource`` Protocol を実装する。``load()`` で ``Iterable[Holiday]`` を返す。
-    ``HolidayCalendar.from_sources`` で他の ``HolidaySource``（同梱内閣府 CSV /
-    ``CompanyHolidaySource`` など）と並列に置いて和集合で運用する。
+    ``_Source`` Protocol を実装する。``load()`` で ``Iterable[Holiday]`` を返す。
+    ``_Calendar`` で他の ``_Source``（同梱内閣府 CSV など）と並列に置いて
+    和集合で運用する。
 
     このソースは **純粋計算のみ** — 外部通信・ファイル読み込みは一切しない。
     社内 BO 環境（オフライン・pip 制限）でもそのまま動く。
@@ -74,7 +74,7 @@ class ComputedHolidaySource(HolidaySource):
             )
         if self._from_year < DEFAULT_FROM_YEAR or self._to_year > DEFAULT_TO_YEAR:
             logger.warning(
-                "ComputedHolidaySource の対象範囲 (%d-%d) は高精度範囲 (%d-%d) を"
+                "_ComputedSource の対象範囲 (%d-%d) は高精度範囲 (%d-%d) を"
                 "超えています。春分・秋分の近似精度が下がるため、"
                 "内閣府 CSV などの確定ソースと併用してください。",
                 self._from_year,
@@ -232,7 +232,7 @@ def _equinox_holidays(year: int) -> list[Holiday]:
     """春分・秋分の日を返す。
 
     **近似式のため内閣府発表と ±1 日前後する可能性がある。** ``approximate=True``
-    を付けて、``HolidayCalendar`` 側で WARNING ログが出せるようにする。
+    を付けて、``_Calendar`` 側で WARNING ログが出せるようにする。
     """
     holidays: list[Holiday] = []
     if year >= 1949:
@@ -348,4 +348,4 @@ def _add_national_holidays(holidays: list[Holiday], year: int) -> list[Holiday]:
     return result
 
 
-__all__ = ["ComputedHolidaySource", "DEFAULT_FROM_YEAR", "DEFAULT_TO_YEAR"]
+__all__ = ["_ComputedSource", "DEFAULT_FROM_YEAR", "DEFAULT_TO_YEAR"]

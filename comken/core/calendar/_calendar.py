@@ -1,19 +1,25 @@
-"""comken/core/holidays/calendar.py — 祝日カレンダー本体（facade から呼ばれる）。
+"""comken/core/calendar/_calendar.py — カレンダー本体（実装詳細）。
 
-データ形式は ``Holiday`` 1個に統一し、内閣府 CSV・管理表・テスト用 iterable など
-入手経路（``HolidaySource``）を差し替え可能にする。判定ロジックはここに集約され、
-``is_holiday`` / ``is_business_day`` / ``business_day_after`` / ``expires_after`` を提供する。
+モジュール名は ``_calendar.py`` にしておき、``comken.core.calendar``
+（パッケージ本体）と ``calendar`` （クラス名）が被らないようにしている。
+
+``Holiday`` 1 個に国民の祝日を統一し、内閣府 CSV・管理表・テスト用 iterable など
+入手経路（``_Source``）を差し替え可能にする。国民の祝日と会社休日
+（``comken.core.calendar.company`` で実行時判定）をマージして
+``is_bholiday`` / ``is_business_day`` / ``business_day_after`` などの判定関数が
+直接呼べる形に組み立てる。
 
 ネット系依存（requests）はこのモジュールには入らない。
 """
 
 import datetime as _dt
 import logging
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Protocol, Self, runtime_checkable
 
+from comken.core.calendar.company import company_holiday_name
 from comken.core.clock import month_end, month_start, today
 from comken.exceptions import BusinessDayNotFoundError
 
@@ -35,10 +41,9 @@ class Holiday:
         date: 祝日の日付（時刻・タイムゾーンは持たない業務日付）。
         name: 祝日の日本語名称（例: "建国記念の日"）。
         approximate: ``True`` なら、計算式など内閣府発表と ±1 日前後する
-            可能性がある値。``HolidayCalendar.is_holiday`` などで該当 Holiday
-            を返したときに WARNING ログを出して、業務フローを止めずに気づける
-            ようにする。デフォルトは ``False``（内閣府 CSV 由来または確実な
-            計算結果）。
+            可能性がある値。``is_holiday`` などで該当 Holiday を返したときに
+            WARNING ログを出して、業務フローを止めずに気づけるようにする。
+            デフォルトは ``False``（内閣府 CSV 由来または確実な計算結果）。
     """
 
     date: _dt.date
@@ -47,11 +52,11 @@ class Holiday:
 
 
 @runtime_checkable
-class HolidaySource(Protocol):
-    """祝日を 1セット取り出せる仕組みの共通インタフェース。
+class _Source(Protocol):
+    """祝日を 1セット取り出せる仕組みの共通インタフェース（**非公開**）。
 
-    ``ComputedHolidaySource`` や会社の ``CompanyHolidaySource`` などがこれを
-    実装するため、利用側は入手経路を意識せずに ``from_sources`` に渡せる。
+    ``_ComputedSource`` などがこれを実装するため、利用側は入手経路を
+    意識せずに ``_Calendar`` へ渡せる。
 
     この Protocol はメソッドの型を ``Iterable[Holiday]`` に固定する。
     ``load()`` を呼んだその瞬間に取得が走る（キャッシュは実装側で持つ）のが
@@ -64,23 +69,25 @@ class HolidaySource(Protocol):
         ...
 
 
-class HolidayCalendar:
-    """祝日を保持し、営業日判定を行うカレンダー本体。
+class _Calendar:
+    """国民の祝日を保持し、**会社休日を毎回判定**して返すカレンダー本体。
+
+    国民の祝日データは ``__init__`` で受け取って索引化する。
+    会社休日は ``_Source`` を持たず、呼び出しのたびに
+    ``comken.core.calendar.company.company_holiday_name`` で判定する（年範囲
+    を固定しないルールのため）。
 
     同じ日付に複数の祝日が登録された場合は**先勝ち**で採用する
-    （内閣府 CSV と会社の年末年始休暇など、複数 source の重複は珍しくない）。
-    名称が違う祝日が同じ日に重なっても黙って先を採用する。
-
-    期限切れの警告（``EXPIRING_WARNING_DAYS`` を切った日）は **同じ日に
-    1回だけ**出す。同じ日に ``is_business_day`` が何回呼ばれても
-    ログが埋もれないため。
+    （内閣府 CSV の複数回登録など）。国民の祝日と会社休日が同じ日に重なった
+    ときは **国民の祝日が先勝ち**（会社休日は国民の祝日を上書きしない）。
     """
 
     def __init__(self, holidays: Iterable[Holiday]) -> None:
         """``Holiday`` の iterable から ``{日付: Holiday}`` の索引を作る。
 
         Args:
-            holidays: 祝日の iterable。同じ日付が複数含まれていたら先勝ちで採用。
+            holidays: 国民の祝日の iterable。同じ日付が複数含まれていたら
+                先勝ちで採用。
         """
         self._holidays: dict[_dt.date, Holiday] = {}
         for holiday in holidays:
@@ -90,8 +97,6 @@ class HolidayCalendar:
         # 期限切れ警告を「同じ日に 1度だけ」出すためのキャッシュキー
         self._expiry_warned_on: _dt.date | None = None
 
-    # ── ファクトリ ───────────────────────────────────────────────────────────
-
     @classmethod
     def from_csv(
         cls,
@@ -99,79 +104,52 @@ class HolidayCalendar:
         *,
         encoding: str = "cp932",
     ) -> Self:
-        """内閣府の ``syukujitsu.csv`` を直接読む最短ルート。
-
-        Args:
-            path: CSV のパス。CP932（Shift_JIS）固定。
-            encoding: 文字コード。通常は ``cp932`` のままで良い。
-
-        Returns:
-            読み込み結果から作った ``HolidayCalendar``。
-        """
-        # 遅延 import を避けるため、ここで csv_source を import する。
-        # csv_source は標準ライブラリのみで動く（requests 不要）
-        from comken.core.holidays.csv_source import load_cabinet_office_csv
+        """内閣府の ``syukujitsu.csv`` を直接読む最短ルート。"""
+        from comken.core.calendar.csv_source import load_cabinet_office_csv
 
         return cls(load_cabinet_office_csv(path, encoding=encoding))
 
     @classmethod
-    def from_sources(cls, sources: Iterable[HolidaySource]) -> Self:
-        """複数の ``HolidaySource`` を合体させる（Computed + 内閣府CSV + 会社休日 など）。
-
-        Args:
-            sources: ``load()`` を持つ ``HolidaySource`` の iterable。
-                同じ日付が複数ソースにあれば **最初のソースの Holiday** が優先される。
-
-        Returns:
-            全ソースを結合した ``HolidayCalendar``。
-        """
+    def from_sources(cls, sources: Iterable[_Source]) -> Self:
+        """複数の ``_Source`` を合体させる。"""
         merged: list[Holiday] = []
         for source in sources:
             merged.extend(source.load())
         return cls(merged)
 
-    # ── 判定 ─────────────────────────────────────────────────────────────────
-
     def is_holiday(self, target: _dt.date) -> bool:
-        """``target`` が祝日（または休日）なら ``True``。
+        """``target`` が国民の祝日または会社休日に当たれば ``True``。
 
-        計算式由来の暫定値（``approximate=True``）を返すときは WARNING ログ。
+        国民の祝日を優先し、重複時は国民の祝日側の名前を返す。会社休日は
+        国民の祝日に重なっても黙って上書きしない。
+        """
+        if target in self._holidays:
+            return True
+        return company_holiday_name(target) is not None
+
+    def holiday_name(self, target: _dt.date) -> str | None:
+        """``target`` の祝日・会社休日名称を返す。祝日でも会社休日でも
+        なければ ``None``。
+
+        国民の祝日が先勝ち（会社休日と同日でも国民の祝日を採用）。
         """
         holiday = self._holidays.get(target)
-        if holiday is None:
-            return False
-        if holiday.approximate:
-            logger.warning(
-                "祝日 %s 「%s」 は計算式による暫定値です。実際とは ±1 日前後する可能性があります。",
-                target.isoformat(),
-                holiday.name,
-            )
-        return True
-
-    def holidays_in(self, start: _dt.date, end: _dt.date) -> list[Holiday]:
-        """``start <= 日付 <= end`` の範囲に入る祝日を、日付順に返す。
-
-        Args:
-            start: 範囲開始（含む）。
-            end: 範囲終了（含む）。
-
-        Returns:
-            範囲内の ``Holiday`` を日付昇順で並べたリスト。
-            該当が無ければ空リスト。
-        """
-        if start > end:
-            return []
-        return sorted(
-            (holiday for date, holiday in self._holidays.items() if start <= date <= end),
-            key=lambda h: h.date,
-        )
+        if holiday is not None:
+            if holiday.approximate:
+                logger.warning(
+                    "祝日 %s 「%s」 は計算式による暫定値。"
+                    "実際とは ±1 日前後する可能性があります。",
+                    target.isoformat(),
+                    holiday.name,
+                )
+            return holiday.name
+        return company_holiday_name(target)
 
     def expires_after(self, target: _dt.date) -> bool:
         """``target`` が収録済み最終日以降（＝「収録期限を過ぎた」）なら ``True``。
 
-        「収録済み最終日 <= target」を期限切れとみなす。等号を含めるのは、
-        「収録最終日ぴったり」を「期限の境目」として扱うため（最終日当日は
-        収録済みの祝日として判定できるが、それ以降は収録外）。
+        会社休日はルール判定のため期限を持たないので、ここでは国民の祝日の
+        収録最終日だけを見る。
         """
         last = self.last_known_date()
         if last is None:
@@ -198,19 +176,37 @@ class HolidayCalendar:
             return None
         return max(self._holidays.keys())
 
-    def holiday_names(self, target: _dt.date) -> Sequence[str]:
-        """``target`` に登録された祝日名称のタプル（同日が複数あれば複数要素）。"""
-        holiday = self._holidays.get(target)
-        if holiday is None:
-            return ()
-        return (holiday.name,)
-
     def all_holidays(self) -> list[Holiday]:
-        """保持している祝日を日付順に並べたリストを返す。"""
+        """国民の祝日を日付順に並べたリストを返す（会社休日は含まない）。"""
         return sorted(self._holidays.values(), key=lambda h: h.date)
 
+    def all_entries(self, year_range: tuple[int, int]) -> list[Holiday]:
+        """国民の祝日と会社休日を ``year_range`` で指定した範囲について結合し、
+        日付順に並べたリストを返す。
+
+        ``export_csv`` が国民の祝日＋公司休日を 1 つの CSV にまとめて書き出す
+        ために使う。国民の祝日が会社休日に重なった場合は国民の祝日を先勝ちで
+        採用する（``is_holiday`` と同じ優先順位）。会社休日は ``approximate=False``
+        で出力する。
+
+        Args:
+            year_range: ``(開始年, 終了年)``。両端を含む。
+        """
+        result: list[Holiday] = list(self._holidays.values())
+        from_year, to_year = year_range
+        for year in range(from_year, to_year + 1):
+            for month in range(1, 13):
+                for day in range(1, _days_in_month(year, month) + 1):
+                    target = _dt.date(year, month, day)
+                    if target in self._holidays:
+                        continue  # 国民の祝日が先勝ち
+                    name = company_holiday_name(target)
+                    if name is not None:
+                        result.append(Holiday(date=target, name=name))
+        return sorted(result, key=lambda h: h.date)
+
     def export_csv(self, path: str | Path | None = None, *, encoding: str = "utf-8-sig") -> Path:
-        """保持している祝日を CSV へ書き出す。
+        """保持している国民の祝日＋会社休日を CSV へ書き出す。
 
         Python を使わない Excel・VBA からも同じ祝日データを参照したいときに使う。
         列は ``date``（``YYYY-MM-DD``）・``name``・``approximate``（``True``/``False``）
@@ -232,13 +228,14 @@ class HolidayCalendar:
 
         file_path = Path(path) if path is not None else EXPORTED_CSV_PATH
         file_path.parent.mkdir(parents=True, exist_ok=True)
+        entries = self.all_entries((EXPORTED_FROM_YEAR, EXPORTED_TO_YEAR))
         with file_path.open("w", encoding=encoding, newline="") as file:
             writer = _csv.writer(file)
             writer.writerow(["date", "name", "approximate"])
-            for holiday in self.all_holidays():
+            for holiday in entries:
                 writer.writerow([holiday.date.isoformat(), holiday.name, holiday.approximate])
         logger.debug(
-            "祝日カレンダーをCSVへ書き出しました: %s (%d件)", file_path, len(self._holidays)
+            "祝日カレンダーをCSVへ書き出しました: %s (%d件)", file_path, len(entries)
         )
         return file_path
 
@@ -252,12 +249,89 @@ class HolidayCalendar:
             logger.warning(
                 "祝日カレンダーの収録期限が近づいています: 残り %d 日（最終収録日: %s）。"
                 "内閣府の syukujitsu.csv をダウンロードして"
-                "comken/core/holidays/data/syukujitsu.csv を上書きし、コミット・タグ打ちして"
-                "配布してください（docs/holidays.md の「年1回の手動更新手順」参照）。",
+                "comken/core/calendar/data/syukujitsu.csv を上書きし、コミット・タグ打ちして"
+                "配布してください（docs/calendar.md の「年1回の手動更新手順」参照）。"
+                "なお会社休日（年末年始休暇など）はコードで判定しているため期限はありません。",
                 remaining,
                 last,
             )
             self._expiry_warned_on = today
+
+
+# ── 既定カレンダー ──────────────────────────────────────────────────────
+# 「アプリ起動時に 1度だけ遅延生成」されるシングルトン。ネットワークには出ない
+# （``_ComputedSource`` + 同梱 CSV だけ。会社休日は ``company.py`` の
+# ルールで毎回判定するため保持しない）。
+
+# 内閣府の祝日 CSV を git 管理下に同梱したパス。``_resolve_singleton()`` が
+# 読む正本はここ。PC ごとのキャッシュは持たない。
+# 更新は年 1 回の手動作業（開発機で内閣府から取得 → コミット → 共有サーバーへ配置）。
+BUNDLED_CSV_PATH: Final[Path] = Path(__file__).parent / "data" / "syukujitsu.csv"
+
+# ``export_csv()`` の既定の書き出し先。内閣府 CSV と同じ data/ フォルダに
+# 置くことで、Excel・VBA 側は常にこのパスを見に行けばよい（git 管理下）。
+EXPORTED_CSV_PATH: Final[Path] = BUNDLED_CSV_PATH.parent / "holidays.csv"
+
+# CSV 書き出しの対象期間。固定（内閣府 CSV の収録範囲と同じ 1948-2099）。
+# ``export_csv()`` の結果が呼ぶ日に依存しないよう、ここで固定する。
+EXPORTED_FROM_YEAR: Final = 1948
+EXPORTED_TO_YEAR: Final = 2099
+
+_singleton: _Calendar | None = None
+
+
+def _resolve_singleton() -> _Calendar:
+    """プロセスの遅延生成シングルトンとして保持している ``_Calendar`` を返す。
+
+    **1回だけ**組み立てて以降は同じインスタンスを返す。
+
+    構成は 2 つだけ:
+
+    1. ``_ComputedSource``（純粋計算。土台）
+    2. 同梱の ``syukujitsu.csv`` を ``load_cabinet_office_csv`` で読む
+       （内閣府の実値。計算式の上書き用）
+
+    **ネットワークには一切出ない。** 会社休日は ``company.py`` のルールで
+    毎回判定するため、ここでは保持しない。
+    """
+    global _singleton
+    if _singleton is None:
+        from comken.core.calendar.computed import _ComputedSource
+
+        _singleton = _Calendar.from_sources(
+            [
+                _ComputedSource(),
+                _BundledCabinetCSVSource(BUNDLED_CSV_PATH),
+            ]
+        )
+    return _singleton
+
+
+def _set_calendar_for_test(calendar: _Calendar | None) -> None:
+    """テストで既定カレンダーを差し替えるための **非公開** 入口。
+
+    通常は使わない。テストが個別の ``_Calendar`` を組み立てて
+    ``is_business_day`` などの公開関数の挙動を確かめたいときに使う。
+    ``None`` を渡すと遅延生成に戻る。
+    """
+    global _singleton
+    _singleton = calendar
+
+
+class _BundledCabinetCSVSource:
+    """同梱の ``syukujitsu.csv`` を読むための最小実装。"""
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+
+    def load(self) -> list[Holiday]:
+        """同梱の ``syukujitsu.csv`` を読み ``Holiday`` のリストを返す。"""
+        from comken.core.calendar.csv_source import load_cabinet_office_csv
+
+        return load_cabinet_office_csv(self._path)
+
+
+# ── 公開関数 ────────────────────────────────────────────────────────────
 
 
 def warn_if_calendar_expiring_soon() -> None:
@@ -269,25 +343,32 @@ def warn_if_calendar_expiring_soon() -> None:
     同じ日に複数回呼んでも警告は 1日 1回だけ (``_maybe_warn_expiring``
     の既存の重複防止をそのまま使う)。
     """
-    cal = default_calendar()
+    cal = _resolve_singleton()
     cal._maybe_warn_expiring(today())
+
+
+def is_holiday(target: _dt.date) -> bool:
+    """``target`` が国民の祝日または会社休日に当たれば ``True``。"""
+    return _resolve_singleton().is_holiday(target)
+
+
+def holiday_name(target: _dt.date) -> str | None:
+    """``target`` の祝日・会社休日名称を返す。祝日でも会社休日でも
+    なければ ``None``。
+
+    国民の祝日が先勝ち（会社休日に重なっても国民の祝日を採用）。
+    """
+    return _resolve_singleton().holiday_name(target)
 
 
 def is_business_day(
     target: _dt.date,
     *,
-    calendar: HolidayCalendar | None = None,
     skip_weekends: bool = True,
 ) -> bool:
-    """``target`` が営業日なら ``True``。``calendar`` を省略できる簡易判定。
+    """``target`` が営業日なら ``True``。
 
-    ``calendar=None`` のときは**既定カレンダー**（``default_calendar()``）を使う。
-    アプリ側で ``set_default_calendar()`` を呼んでおけば、利用者は
-    ``HolidayCalendar`` を組み立てなくても「今日が営業日か」を判定できる。
-
-    ``calendar`` をキーワード専用にして、呼び出し側がうっかり位置引数で
-    日付とカレンダーを取り違える事故を防ぐ。
-
+    国民の祝日（内閣府 CSV + 計算値）と会社休日ルールで判定する。
     ``skip_weekends=True``（既定）なら土曜・日曜も休業扱いにする。
     ``False`` を渡すと、土曜・日曜であっても祝日でなければ「営業日」と
     判定される（振替休日を平日扱いするシナリオ向け）。
@@ -296,7 +377,7 @@ def is_business_day(
     通知する。判定自体は通常どおり行う（誤って平日扱いにならないよう、
     **収録範囲外は祝日ではない側に倒す**）。
     """
-    cal = calendar if calendar is not None else default_calendar()
+    cal = _resolve_singleton()
     cal._maybe_warn_expiring(target)
     if skip_weekends and target.weekday() >= 5:  # 5 = Saturday, 6 = Sunday
         return False
@@ -306,7 +387,6 @@ def is_business_day(
 def business_day_after(
     target: _dt.date,
     *,
-    calendar: HolidayCalendar | None = None,
     skip_weekends: bool = True,
 ) -> _dt.date:
     """``target`` より後で最初の営業日（``target`` 自身を含まない）。
@@ -314,18 +394,15 @@ def business_day_after(
     ``target`` が営業日でも翌営業日を返す。収録範囲外でも日付は進むが、
     祝日判定は「祝日ではない」と扱う。期限切れの警告は入口で 1度だけ出す。
 
-    ``calendar=None`` のときは**既定カレンダー**を使う。
-
     Raises:
         BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
             営業日が見つからなかった（祝日データ欠落・社内休日広範囲など）。
     """
-    cal = calendar if calendar is not None else default_calendar()
+    cal = _resolve_singleton()
     cal._maybe_warn_expiring(target)
     return _search_business_day(
         start=target + _dt.timedelta(days=1),
         step_days=1,
-        calendar=cal,
         skip_weekends=skip_weekends,
     )
 
@@ -333,24 +410,19 @@ def business_day_after(
 def business_day_before(
     target: _dt.date,
     *,
-    calendar: HolidayCalendar | None = None,
     skip_weekends: bool = True,
 ) -> _dt.date:
     """``target`` より前で最初の営業日（``target`` 自身を含まない）。
 
     ``target`` が営業日でも前営業日を返す。
 
-    ``calendar=None`` のときは**既定カレンダー**を使う。
-
     Raises:
         BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
             営業日が見つからなかった。
     """
-    cal = calendar if calendar is not None else default_calendar()
     return _search_business_day(
         start=target - _dt.timedelta(days=1),
         step_days=-1,
-        calendar=cal,
         skip_weekends=skip_weekends,
     )
 
@@ -358,7 +430,6 @@ def business_day_before(
 def business_day_on_or_after(
     target: _dt.date,
     *,
-    calendar: HolidayCalendar | None = None,
     skip_weekends: bool = True,
 ) -> _dt.date:
     """``target`` 以降で最初の営業日（``target`` を含む）。
@@ -366,22 +437,18 @@ def business_day_on_or_after(
     ``target`` が営業日なら ``target`` をそのまま返す。
     営業日でなければ、``business_day_after`` と同じ動きで翌日以降を探す。
 
-    ``calendar=None`` のときは**既定カレンダー**を使う。
-
     Raises:
         BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
             営業日が見つからなかった。
     """
-    cal = calendar if calendar is not None else default_calendar()
-    if is_business_day(target, calendar=cal, skip_weekends=skip_weekends):
+    if is_business_day(target, skip_weekends=skip_weekends):
         return target
-    return business_day_after(target, calendar=cal, skip_weekends=skip_weekends)
+    return business_day_after(target, skip_weekends=skip_weekends)
 
 
 def business_day_on_or_before(
     target: _dt.date,
     *,
-    calendar: HolidayCalendar | None = None,
     skip_weekends: bool = True,
 ) -> _dt.date:
     """``target`` 以前で最初の営業日（``target`` を含む）。
@@ -389,35 +456,28 @@ def business_day_on_or_before(
     ``target`` が営業日なら ``target`` をそのまま返す。
     営業日でなければ、``business_day_before`` と同じ動きで前日以前を探す。
 
-    ``calendar=None`` のときは**既定カレンダー**を使う。
-
     Raises:
         BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
             営業日が見つからなかった。
     """
-    cal = calendar if calendar is not None else default_calendar()
-    if is_business_day(target, calendar=cal, skip_weekends=skip_weekends):
+    if is_business_day(target, skip_weekends=skip_weekends):
         return target
-    return business_day_before(target, calendar=cal, skip_weekends=skip_weekends)
+    return business_day_before(target, skip_weekends=skip_weekends)
 
 
 def first_business_day_of_month(
     target: _dt.date,
     *,
-    calendar: HolidayCalendar | None = None,
     skip_weekends: bool = True,
 ) -> _dt.date:
     """``target`` が属する月の最初の営業日。
 
-    ``calendar=None`` のときは**既定カレンダー**を使う。
-
     Raises:
         BusinessDayNotFoundError: その月に営業日が 1日も無いとき。
     """
-    cal = calendar if calendar is not None else default_calendar()
     start = month_start(target)
     try:
-        return business_day_on_or_after(start, calendar=cal, skip_weekends=skip_weekends)
+        return business_day_on_or_after(start, skip_weekends=skip_weekends)
     except BusinessDayNotFoundError as error:
         raise BusinessDayNotFoundError(
             f"{target.year} 年 {target.month} 月に営業日が見つかりません: {error}"
@@ -427,22 +487,18 @@ def first_business_day_of_month(
 def last_business_day_of_month(
     target: _dt.date,
     *,
-    calendar: HolidayCalendar | None = None,
     skip_weekends: bool = True,
 ) -> _dt.date:
     """``target`` が属する月の最後の営業日。
 
     月末が土日・祝日のときは直前の営業日に遡る（例: 8/31 が日曜なら 8/29 金）。
 
-    ``calendar=None`` のときは**既定カレンダー**を使う。
-
     Raises:
         BusinessDayNotFoundError: その月に営業日が 1日も無いとき。
     """
-    cal = calendar if calendar is not None else default_calendar()
     end = month_end(target)
     try:
-        return business_day_on_or_before(end, calendar=cal, skip_weekends=skip_weekends)
+        return business_day_on_or_before(end, skip_weekends=skip_weekends)
     except BusinessDayNotFoundError as error:
         raise BusinessDayNotFoundError(
             f"{target.year} 年 {target.month} 月に営業日が見つかりません: {error}"
@@ -453,7 +509,6 @@ def nth_business_day_of_month(
     target: _dt.date,
     n: int,
     *,
-    calendar: HolidayCalendar | None = None,
     skip_weekends: bool = True,
 ) -> _dt.date:
     """``target`` が属する月の第 ``n`` 営業日を返す（``n`` は 1 始まり）。
@@ -461,12 +516,9 @@ def nth_business_day_of_month(
     月の初日から数えて ``n`` 番目の営業日。
     その月の営業日数を超える ``n`` を渡すと ``BusinessDayNotFoundError``。
 
-    ``calendar=None`` のときは**既定カレンダー**を使う。
-
     Raises:
         BusinessDayNotFoundError: ``n`` が 1 未満、またはその月の営業日数を超える。
     """
-    cal = calendar if calendar is not None else default_calendar()
     if n < 1:
         raise BusinessDayNotFoundError(
             f"第 n 営業日の n は 1 以上で指定してください（指定値: {n}）"
@@ -476,7 +528,7 @@ def nth_business_day_of_month(
     cursor = start
     for _ in range(n):
         try:
-            cursor = business_day_on_or_after(cursor, calendar=cal, skip_weekends=skip_weekends)
+            cursor = business_day_on_or_after(cursor, skip_weekends=skip_weekends)
         except BusinessDayNotFoundError as error:
             raise BusinessDayNotFoundError(
                 f"{target.year} 年 {target.month} 月に {n} 営業日は存在しません: {error}"
@@ -496,7 +548,6 @@ def add_business_days(
     target: _dt.date,
     n: int,
     *,
-    calendar: HolidayCalendar | None = None,
     skip_weekends: bool = True,
 ) -> _dt.date:
     """``target`` から ``n`` 営業日後の日付（``n`` が負なら前）。
@@ -508,12 +559,9 @@ def add_business_days(
     例: 2024/5/2（木、祝日前日）に ``add_business_days(d, 1)`` を呼ぶと
     2024/5/7（火、5/3〜5/6 が祝日＋土日）を返す。
 
-    ``calendar=None`` のときは**既定カレンダー**を使う。
-
     Raises:
         BusinessDayNotFoundError: 探索が ``BUSINESS_DAY_SEARCH_LIMIT`` に達した。
     """
-    cal = calendar if calendar is not None else default_calendar()
     if n == 0:
         return target
     # ``target`` を 0 営業日目と数え、``n`` 回「次の（前の）営業日」へ進める。
@@ -523,80 +571,29 @@ def add_business_days(
     steps = n if n > 0 else -n
     for _ in range(steps):
         if n > 0:
-            cursor = business_day_after(cursor, calendar=cal, skip_weekends=skip_weekends)
+            cursor = business_day_after(cursor, skip_weekends=skip_weekends)
         else:
-            cursor = business_day_before(cursor, calendar=cal, skip_weekends=skip_weekends)
+            cursor = business_day_before(cursor, skip_weekends=skip_weekends)
     return cursor
 
 
-# ── 既定カレンダー ──────────────────────────────────────────────────────
-# 「アプリ起動時に ``set_default_calendar`` を一度呼べば、利用者は何も意識
-# せずに ``is_business_day(target)`` と書ける」ための遅延生成キャッシュ。
-# ネットワークには出ない（``ComputedHolidaySource`` + 同梱 CSV + 会社休日 だけ）。
+def export_csv(path: str | Path | None = None, *, encoding: str = "utf-8-sig") -> Path:
+    """国民の祝日と会社休日を 1948-2099 年ぶんの CSV へ書き出す。
 
-# 内閣府の祝日 CSV を git 管理下に同梱したパス。``default_calendar()`` が
-# 読む正本はここ。PC ごとのキャッシュは持たない。
-# 更新は年 1 回の手動作業（開発機で内閣府から取得 → コミット → 共有サーバーへ配置）。
-BUNDLED_CSV_PATH: Final[Path] = Path(__file__).parent / "data" / "syukujitsu.csv"
+    国民の祝日（内閣府 CSV + 計算値）と会社休日をまとめて 1 ファイルに書き出す。
+    列は ``date`` / ``name`` / ``approximate`` の3列。呼び出した日（実行時の
+    今日）に依存せず、結果は固定（国民の祝日は内閣府 CSV が定める範囲、
+    会社休日は ``COMPANY_HOLIDAYS`` の ``(月, 日)`` ルールで毎回判定）。
 
-# HolidayCalendar.export_csv() の既定の書き出し先。内閣府 CSV と同じ data/ フォルダに
-# 置くことで、Excel・VBA 側は常にこのパスを見に行けばよい（git 管理はしない生成物）。
-EXPORTED_CSV_PATH: Final[Path] = BUNDLED_CSV_PATH.parent / "holidays.csv"
+    Args:
+        path: 書き出し先。省略時は ``EXPORTED_CSV_PATH``
+            （= ``comken/core/calendar/data/holidays.csv``）に書き出す。
+        encoding: 既定は ``utf-8-sig``（BOM付き）。
 
-_default_calendar: HolidayCalendar | None = None
-
-
-def default_calendar() -> HolidayCalendar:
-    """既定カレンダーを取得する（**プロセス内で 1回だけ**遅延生成）。
-
-    構成は 3 つだけ:
-        1. ``ComputedHolidaySource``（純粋計算。土台）
-        2. 同梱の ``syukujitsu.csv`` を ``load_cabinet_office_csv`` で読む
-           （内閣府の実値。計算式の上書き用）
-        3. ``CompanyHolidaySource``（会社独自の休業日。コード直書き）
-
-    **ネットワークには一切出ない。**
+    Returns:
+        書き出した CSV のパス。
     """
-    global _default_calendar
-    if _default_calendar is None:
-        # 遅延 import: csv_source / computed 側を ``import 時点`` で読まないため、
-        # 既定カレンダーを必要とした瞬間にだけ取り込む。いずれも標準ライブラリ
-        # のみで動くので ``requests`` はここを通っても入らない。
-        from comken.core.holidays.sources.company import CompanyHolidaySource
-        from comken.core.holidays.sources.computed import ComputedHolidaySource
-
-        _default_calendar = HolidayCalendar.from_sources(
-            [
-                ComputedHolidaySource(),
-                _BundledCabinetCSVSource(BUNDLED_CSV_PATH),
-                CompanyHolidaySource(),
-            ]
-        )
-    return _default_calendar
-
-
-def set_default_calendar(calendar: HolidayCalendar | None) -> None:
-    """既定カレンダーを差し替える（``None`` を渡すと既定の遅延生成に戻る）。
-
-    通常は使わない（既定カレンダーが ``ComputedHolidaySource`` + 同梱 CSV +
-    ``CompanyHolidaySource`` を既に含むため）。テストや、既定カレンダー全体を
-    別の実装へ置き換えたい特殊用途向け。``None`` を渡すと既定の遅延生成に戻る。
-    """
-    global _default_calendar
-    _default_calendar = calendar
-
-
-class _BundledCabinetCSVSource:
-    """同梱の ``syukujitsu.csv`` を読むための最小実装。"""
-
-    def __init__(self, path: Path) -> None:
-        self._path = path
-
-    def load(self) -> list[Holiday]:
-        """同梱の ``syukujitsu.csv`` を読み ``Holiday`` のリストを返す。"""
-        from comken.core.holidays.csv_source import load_cabinet_office_csv
-
-        return load_cabinet_office_csv(self._path)
+    return _resolve_singleton().export_csv(path, encoding=encoding)
 
 
 # ── 内部ヘルパー ────────────────────────────────────────────────────────
@@ -606,7 +603,6 @@ def _search_business_day(
     *,
     start: _dt.date,
     step_days: int,
-    calendar: HolidayCalendar,
     skip_weekends: bool,
 ) -> _dt.date:
     """``start`` から ``step_days`` 日ずつ進め（または戻し）て最初の営業日を探す。
@@ -618,7 +614,7 @@ def _search_business_day(
         raise ValueError("step_days には 0 以外の値を渡してください")
     cursor = start
     for _ in range(BUSINESS_DAY_SEARCH_LIMIT):
-        if is_business_day(cursor, calendar=calendar, skip_weekends=skip_weekends):
+        if is_business_day(cursor, skip_weekends=skip_weekends):
             return cursor
         cursor += _dt.timedelta(days=step_days)
     raise BusinessDayNotFoundError(
@@ -627,22 +623,8 @@ def _search_business_day(
     )
 
 
-__all__ = [
-    "BUSINESS_DAY_SEARCH_LIMIT",
-    "EXPIRING_WARNING_DAYS",
-    "Holiday",
-    "HolidayCalendar",
-    "HolidaySource",
-    "add_business_days",
-    "business_day_after",
-    "business_day_before",
-    "business_day_on_or_after",
-    "business_day_on_or_before",
-    "default_calendar",
-    "first_business_day_of_month",
-    "is_business_day",
-    "last_business_day_of_month",
-    "nth_business_day_of_month",
-    "set_default_calendar",
-    "warn_if_calendar_expiring_soon",
-]
+def _days_in_month(year: int, month: int) -> int:
+    """``(year, month)`` の月の日数（28/29/30/31）を返す。"""
+    import calendar as _cal
+
+    return _cal.monthrange(year, month)[1]

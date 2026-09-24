@@ -120,9 +120,9 @@ ComkenError
 │   ├── StateLowerCaseNameError
 │   └── StateValueTypeError
 ├── WindowNotFoundError
-├── HolidayCalendarError
-│   ├── HolidayCalendarSourceError
-│   │   └── HolidayCalendarFormatError
+├── CalendarError
+│   ├── CalendarSourceError
+│   │   └── CalendarFormatError
 │   └── BusinessDayNotFoundError
 ├── DownloaderError
 │   ├── HistoryWriteError
@@ -175,6 +175,12 @@ from comken.exceptions.browser import (
     SiteAlreadyInLibraryError,
     SiteConfigError,
     SiteNotStartedError,
+)
+from comken.exceptions.calendar import (
+    BusinessDayNotFoundError,
+    CalendarError,
+    CalendarFormatError,
+    CalendarSourceError,
 )
 from comken.exceptions.column import (
     ColumnNotFoundError,
@@ -263,12 +269,6 @@ from comken.exceptions.file import (
     FileDeletionError,
     FileSuffixMissingError,
     UnsupportedFileSuffixError,
-)
-from comken.exceptions.holiday import (
-    BusinessDayNotFoundError,
-    HolidayCalendarError,
-    HolidayCalendarFormatError,
-    HolidayCalendarSourceError,
 )
 from comken.exceptions.logger import (
     LoggingAlreadyConfiguredError,
@@ -436,9 +436,9 @@ __all__ = [
     "StateLowerCaseNameError",
     "StateValueTypeError",
     "BusinessDayNotFoundError",
-    "HolidayCalendarError",
-    "HolidayCalendarSourceError",
-    "HolidayCalendarFormatError",
+    "CalendarError",
+    "CalendarSourceError",
+    "CalendarFormatError",
     "DownloaderError",
     "HistoryWriteError",
     "HistoryLockTimeoutError",

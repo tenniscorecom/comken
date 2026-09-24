@@ -21,7 +21,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-from comken.core.holidays.calendar import warn_if_calendar_expiring_soon
+from comken.core.calendar import warn_if_calendar_expiring_soon
 
 logger = logging.getLogger(__name__)
 

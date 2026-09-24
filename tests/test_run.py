@@ -13,8 +13,8 @@ from unittest import mock
 
 import pytest
 
+from comken.core.calendar._calendar import Holiday, _Calendar, _set_calendar_for_test
 from comken.core.clock import today
-from comken.core.holidays import Holiday, HolidayCalendar, set_default_calendar
 from comken.run import backoffice, intranet
 
 
@@ -87,25 +87,24 @@ def test_project_name_is_accepted_for_intranet(project_name: str) -> None:
 # ── 起動時の祝日カレンダー期限切れ警告 ─────────────────────────────────────
 
 
-def _near_expiry_calendar(days_until_last: int) -> HolidayCalendar:
+def _near_expiry_calendar(days_until_last: int) -> _Calendar:
     """``days_until_last`` 日後に最終収録日を持つ小さなカレンダーを作る。"""
     last = today() + _dt.timedelta(days=days_until_last)
-    return HolidayCalendar([Holiday(date=last, name="テスト用の最終祝日")])
+    return _Calendar([Holiday(date=last, name="テスト用の最終祝日")])
 
 
 class TestStartupCalendarExpiryWarning:
     """``backoffice`` / ``intranet`` の起動直後に、祝日カレンダーの期限切れ警告を出す。
 
-    ``_default_calendar`` はモジュールグローバルなので、テスト間で
-    リークしないよう ``setup_method`` / ``teardown_method`` で必ず ``None``
-    にリセットする (``TestDefaultCalendar`` と同じ流儀)。
+    ``_singleton``（モジュールグローバル）はテスト間でリークしないよう
+    ``setup_method`` / ``teardown_method`` で必ず ``None`` にリセットする。
     """
 
     def setup_method(self) -> None:
-        set_default_calendar(None)
+        _set_calendar_for_test(None)
 
     def teardown_method(self) -> None:
-        set_default_calendar(None)
+        _set_calendar_for_test(None)
 
     def test_backoffice_warns_before_main_when_near_expiry(
         self, caplog: pytest.LogCaptureFixture
@@ -118,7 +117,7 @@ class TestStartupCalendarExpiryWarning:
         ことを確認する。これで「WARNING が ``main`` より前に評価された」
         ことを担保する。
         """
-        set_default_calendar(_near_expiry_calendar(days_until_last=15))
+        _set_calendar_for_test(_near_expiry_calendar(days_until_last=15))
 
         expiry_warnings_seen_in_main: list[int] = []
 
@@ -132,7 +131,7 @@ class TestStartupCalendarExpiryWarning:
             )
             return "ok"
 
-        with caplog.at_level(logging.WARNING, logger="comken.core.holidays.calendar"):
+        with caplog.at_level(logging.WARNING, logger="comken.core.calendar._calendar"):
             result = backoffice(record_main, "project")
 
         assert result == "ok"
@@ -150,7 +149,7 @@ class TestStartupCalendarExpiryWarning:
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         """``intranet`` も同様に ``main`` より前に WARNING ログを出す。"""
-        set_default_calendar(_near_expiry_calendar(days_until_last=15))
+        _set_calendar_for_test(_near_expiry_calendar(days_until_last=15))
 
         expiry_warnings_seen_in_main: list[int] = []
 
@@ -163,7 +162,7 @@ class TestStartupCalendarExpiryWarning:
                 )
             )
 
-        with caplog.at_level(logging.WARNING, logger="comken.core.holidays.calendar"):
+        with caplog.at_level(logging.WARNING, logger="comken.core.calendar._calendar"):
             intranet(record_main, "project")
 
         assert expiry_warnings_seen_in_main == [1]
@@ -178,9 +177,9 @@ class TestStartupCalendarExpiryWarning:
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         """``EXPIRING_WARNING_DAYS`` 以上先なら警告は出ない（``main`` は普通に動く）。"""
-        set_default_calendar(_near_expiry_calendar(days_until_last=120))
+        _set_calendar_for_test(_near_expiry_calendar(days_until_last=120))
 
-        with caplog.at_level(logging.WARNING, logger="comken.core.holidays.calendar"):
+        with caplog.at_level(logging.WARNING, logger="comken.core.calendar._calendar"):
             assert backoffice(lambda: "ok", "project") == "ok"
 
         expiry_warnings = [
@@ -194,9 +193,9 @@ class TestStartupCalendarExpiryWarning:
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         """``intranet`` も遠い期限なら警告を出さない。"""
-        set_default_calendar(_near_expiry_calendar(days_until_last=120))
+        _set_calendar_for_test(_near_expiry_calendar(days_until_last=120))
 
-        with caplog.at_level(logging.WARNING, logger="comken.core.holidays.calendar"):
+        with caplog.at_level(logging.WARNING, logger="comken.core.calendar._calendar"):
             assert intranet(lambda: "ok", "project") == "ok"
 
         expiry_warnings = [

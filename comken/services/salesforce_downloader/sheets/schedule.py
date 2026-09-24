@@ -11,12 +11,11 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from comken.core.holidays import (
+from comken.core.calendar import (
     BUSINESS_DAY_SEARCH_LIMIT,
     BusinessDayNotFoundError,
-    HolidayCalendar,
-    default_calendar,
     is_business_day,
+    is_holiday,
     nth_business_day_of_month,
 )
 from comken.exceptions import (
@@ -263,17 +262,13 @@ class ScheduleRule(MasterRow):
     def is_due(
         self,
         now: dt.datetime,
-        *,
-        holidays: set[dt.date] | frozenset[dt.date] = frozenset(),
-        calendar: HolidayCalendar | None = None,
     ) -> bool:
         """指定時刻にこのスケジュールを実行すべきか判定する。
 
-        ``calendar`` は「日付」列に「第N営業日」を指定した行の判定と、「1営業日前/
-        1営業日後」で祝日に当たった対象日の前後の営業日探索に使う。省略時は
-        ``default_calendar()`` にフォールバックする。``holidays`` 引数（祝日の
-        ``set[date]``）は独立に残しており、「第N営業日」以外での祝日判定に使う
-        （呼び出し元 ``download_scheduled`` との後方互換のため）。
+        祝日判定は ``comken.core.calendar`` の ``is_holiday`` / ``is_business_day``
+        / ``nth_business_day_of_month`` を直接使う。国民の祝日と会社休日を
+        まとめて判定するため、呼び出し側でカレンダーを差し替える必要はない
+        （既定の統一カレンダー 1 本だけがサポート対象）。
 
         ``FREQUENCY_DAILY`` / ``FREQUENCY_WEEKLY`` / ``FREQUENCY_MONTHLY`` /
         ``FREQUENCY_BUSINESS_DAY`` で ``start_time is None`` のときは「時刻条件なし」
@@ -284,7 +279,7 @@ class ScheduleRule(MasterRow):
         ``holiday_policy`` の組み合わせで実現する（例: 「毎営業日」+「取得しない」で
         土日祝日を除く真の営業日だけになる）。
         """
-        if not self.enabled or not self._date_matches(now.date(), holidays, calendar):
+        if not self.enabled or not self._date_matches(now.date()):
             return False
         if self.frequency in {
             FREQUENCY_DAILY,
@@ -298,7 +293,6 @@ class ScheduleRule(MasterRow):
     def _raw_date_matches(
         self,
         date: dt.date,
-        calendar: HolidayCalendar | None,
     ) -> bool:
         """祝日を考慮せず、``曜日`` / ``日付`` / ``月末`` / ``第N営業日`` の
         条件だけで ``date`` が生の対象日として一致するかを返す。
@@ -319,10 +313,9 @@ class ScheduleRule(MasterRow):
         if self.day_of_month is not None and date.day != self.day_of_month:
             return False
         if self.nth_business_day is not None:
-            cal = calendar if calendar is not None else default_calendar()
             try:
                 target = nth_business_day_of_month(
-                    date.replace(day=1), self.nth_business_day, calendar=cal
+                    date.replace(day=1), self.nth_business_day
                 )
             except BusinessDayNotFoundError:
                 logger.warning(
@@ -341,8 +334,6 @@ class ScheduleRule(MasterRow):
     def _date_matches(
         self,
         date: dt.date,
-        holidays: set[dt.date] | frozenset[dt.date],
-        calendar: HolidayCalendar | None = None,
     ) -> bool:
         """``date`` がこのスケジュールの「取得日」に当たるかを返す。
 
@@ -350,9 +341,8 @@ class ScheduleRule(MasterRow):
 
         1. ``_raw_date_matches()`` で「曜日/日付/月末/第N営業日」の条件だけで
            一致するかを見る。一致する場合、``holiday_policy`` に応じて:
-           - ``HOLIDAY_SKIP``（既定）:  ``date`` が ``holidays`` に含まれていれば
-             ``False``。**後方互換のため祝日判定は ``holidays`` 引数を使う**
-             （``download_scheduled`` が当日1日分のセットを作って渡す運用）
+           - ``HOLIDAY_SKIP``（既定）:  ``date`` が祝日（国民の祝日＋会社休日）なら
+             ``False``
            - ``HOLIDAY_FETCH``: ``True``
            - ``HOLIDAY_BEFORE`` / ``HOLIDAY_AFTER``: ``False``（対象日自体では取得
              せず、前後営業日への前倒し/繰り越し先に判定を委ねる）
@@ -362,25 +352,23 @@ class ScheduleRule(MasterRow):
            営業日かを ``_search_shifted_target()`` で確認する。``date`` 自身が
            非営業日なら即 ``False``（ずらし先になり得ないため）。
         """
-        if self._raw_date_matches(date, calendar):
-            if self.holiday_policy == HOLIDAY_SKIP and date in holidays:
+        if self._raw_date_matches(date):
+            if self.holiday_policy == HOLIDAY_SKIP and is_holiday(date):
                 return False
             # 対象日自体は BEFORE/AFTER のときは False（前後の営業日へ判定を委ねる）。
-            # SKIP/FETCH はここに来る時点で holidays 引数の判定は済んでいるため True
+            # SKIP/FETCH はここに来る時点で祝日判定は済んでいるため True
             return self.holiday_policy not in (HOLIDAY_BEFORE, HOLIDAY_AFTER)
         if self.holiday_policy not in (HOLIDAY_BEFORE, HOLIDAY_AFTER):
             return False
-        cal = calendar if calendar is not None else default_calendar()
-        if not is_business_day(date, calendar=cal):
+        if not is_business_day(date):
             return False
         direction = "before" if self.holiday_policy == HOLIDAY_BEFORE else "after"
-        return self._search_shifted_target(date, direction, cal)
+        return self._search_shifted_target(date, direction)
 
     def _search_shifted_target(
         self,
         date: dt.date,
         direction: str,
-        calendar: HolidayCalendar,
     ) -> bool:
         """``date`` が祝日に当たった対象日のちょうど 1 営業日ぶん前/後かを判定する。
 
@@ -389,21 +377,20 @@ class ScheduleRule(MasterRow):
         「``date`` の前日から前の営業日に達するまで」の非営業日区間を順に走査し、
         **その区間に祝日である対象日が 1 つでも含まれていれば ``True``**。
 
-        探索は ``BUSINESS_DAY_SEARCH_LIMIT`` （``comken.core.holidays`` の営業日
+        探索は ``BUSINESS_DAY_SEARCH_LIMIT`` （``comken.core.calendar`` の営業日
         探索と同じ上限=30 日）で打ち切る。``date`` 自身が非営業日の場合は呼び出し元
         （``_date_matches``）で先に弾く。
 
-        祝日判定は ``calendar`` 経由（``calendar.is_holiday()``）で行う。「未来日/
-        過去日」も含めて対象日条件を満たす祝日を判定する必要があるため、
-        ``_date_matches()`` の ``holidays`` 引数（当日1日分）とは別系統を使う。
+        祝日判定は ``comken.core.calendar.is_holiday`` で行う。「未来日/過去日」も
+        含めて対象日条件を満たす祝日を判定する必要がある。
         """
         step = 1 if direction == "before" else -1
         cursor = date + dt.timedelta(days=step)
         for _ in range(BUSINESS_DAY_SEARCH_LIMIT):
-            if is_business_day(cursor, calendar=calendar):
+            if is_business_day(cursor):
                 # 次の営業日に到達 → 区間内に祝日である対象日は無かった
                 return False
-            if self._raw_date_matches(cursor, calendar) and calendar.is_holiday(cursor):
+            if self._raw_date_matches(cursor) and is_holiday(cursor):
                 return True
             cursor += dt.timedelta(days=step)
         return False

@@ -1,4 +1,4 @@
-"""comken/core/holidays/csv_source.py — 内閣府 CSV の読み取り。
+"""comken/core/calendar/csv_source.py — 内閣府 CSV の読み取り。
 
 内閣府の「祝日データ CSV（syukujitsu.csv）」は CP932（Shift_JIS）で配布され、
 1列目に「国民の祝日・休日月日（yyyy-MM-dd）」、2列目に「国民の祝日・休日名称」
@@ -6,7 +6,7 @@
 ヘッダーで、これは値が日付として読めないので読み飛ばす。
 
 パース時に 1 行でも壊れていると全体が信用できないので、
-**1件も抽出できなかったら HolidayCalendarFormatError** を上げる
+**1件も抽出できなかったら CalendarFormatError** を上げる
 （部分的成功で黙って動く事故を防ぐため）。
 """
 
@@ -16,16 +16,16 @@ import io
 import logging
 from pathlib import Path
 
-from comken.core.holidays.calendar import Holiday
+from comken.core.calendar._calendar import Holiday
 from comken.core.timer import measure
-from comken.exceptions import HolidayCalendarFormatError
+from comken.exceptions import CalendarFormatError
 
 logger = logging.getLogger(__name__)
 
 # 内閣府のヘッダー行1列目（前後の空白は許容）
 _HEADER_FIRST = "国民の祝日・休日月日"
 _HEADER_SECOND = "国民の祝日・休日名称"
-# 内閣府のフォーマット。配布 CSV は ``YYYY/M/D``（スラッシュ・ゼロ埋めなし）だが、
+# 内閣府のフォーマット。配布 CSV は ``YYYY/M/D``（スラッシュ・ゼロ埋めなし）が
 # 配布変更履歴・手書きの差し替えで ``YYYY-MM-DD``（ハイフン・ゼロ埋めあり）が
 # 混ざることもあるので両方を許容する。
 _DATE_FORMATS = ("%Y/%m/%d", "%Y-%m-%d")
@@ -43,27 +43,27 @@ def load_cabinet_office_csv(
     """内閣府の syukujitsu.csv を読み取り、祝日のリストを返す。
 
     Args:
-        path: CSV ファイルのパス。存在しない・読めない場合は ``HolidayCalendarFormatError``。
+        path: CSV のパス。存在しない・読めない場合は ``CalendarFormatError``。
         encoding: CSV の文字コード。既定は ``cp932``（内閣府の配布形式）。
 
     Returns:
         日付順に並んだ ``Holiday`` のリスト。
 
     Raises:
-        HolidayCalendarFormatError: ファイルが無い、壊れている、
+        CalendarFormatError: ファイルが無い、壊れている、
             ヘッダーが内閣府のものではない、日付が解釈できないなどの理由で
             1件も抽出できなかった場合。
     """
     file_path = Path(path)
     if not file_path.exists():
-        raise HolidayCalendarFormatError(
+        raise CalendarFormatError(
             file_path,
             "ファイルが存在しません。ダウンロード済みのものを指定してください。",
         )
     try:
         raw_text = file_path.read_text(encoding=encoding)
     except UnicodeDecodeError as error:
-        raise HolidayCalendarFormatError(
+        raise CalendarFormatError(
             file_path,
             f"文字コード {encoding} で読み取れませんでした。"
             "内閣府の syukujitsu.csv は CP932（Shift_JIS）です。",
@@ -72,7 +72,7 @@ def load_cabinet_office_csv(
     holidays = _parse_csv_text(raw_text, source=file_path)
 
     if not holidays:
-        raise HolidayCalendarFormatError(
+        raise CalendarFormatError(
             file_path,
             "日付として解釈できる行が 1件もありませんでした。"
             "内閣府以外のファイルが指定されていないか確認してください。",
@@ -90,11 +90,11 @@ def parse_cabinet_office_text(text: str, *, source: str = "<text>") -> list[Holi
         source: エラーメッセージに出す由来（ファイルパス・URL など）。
 
     Returns:
-        日付順に並んだ ``Holiday`` のリスト。0件なら ``HolidayCalendarFormatError``。
+        日付順に並んだ ``Holiday`` のリスト。0件なら ``CalendarFormatError``。
     """
     holidays = _parse_csv_text(text, source=source)
     if not holidays:
-        raise HolidayCalendarFormatError(
+        raise CalendarFormatError(
             source,
             "日付として解釈できる行が 1件もありませんでした。",
         )
@@ -118,7 +118,7 @@ def _parse_csv_text(text: str, *, source: object) -> list[Holiday]:
             continue
         try:
             parsed = _parse_date(first)
-        except HolidayCalendarFormatError:
+        except CalendarFormatError:
             # 1行目はヘッダーとは限らないが、日付として読めなければ不正データとして飛ばす
             # （ただし厳格にしたいので 0件なら呼び出し側で FormatError にする）
             logger.warning("内閣府 CSV の日付を解釈できません (%s): %s", source, first)
@@ -136,14 +136,14 @@ def _parse_date(text: str) -> _dt.date:
     内閣府の現行配布は ``YYYY/M/D``（スラッシュ・ゼロ埋めなし）が中心だが、
     過去版・手書き差し替え・テスト fixture では ``YYYY-MM-DD``（ハイフン・
     ゼロ埋めあり）が混ざるので、両方を受け付ける。すべて失敗したら
-    ``HolidayCalendarFormatError`` を呼び出し元へ伝搬する。
+    ``CalendarFormatError`` を呼び出し元へ伝搬する。
     """
     for fmt in _DATE_FORMATS:
         try:
             return _dt.datetime.strptime(text, fmt).date()  # noqa: DTZ007  # 業務日付として naive で扱う
         except ValueError:
             continue
-    raise HolidayCalendarFormatError(
+    raise CalendarFormatError(
         "<日付セル>",
         f"日付として解釈できません: {text!r}",
     )
