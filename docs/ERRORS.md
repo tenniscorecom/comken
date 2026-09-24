@@ -142,10 +142,9 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `StateFileCorruptedError` | state.ini が壊れていて読み取れない | 内容を直す。直せない場合は別名に変更して、空の状態から再実行する |
 | `StateLowerCaseNameError` | state のキー名に小文字がある | 表示されたキー名を大文字に直す（`last_file` → `LAST_FILE`） |
 | `StateValueTypeError` | state に保存できない型の値が渡された | 真偽値・整数・小数・文字列・文字列のリストのいずれかに変更する |
-| `BusinessDayNotFoundError` | 営業日が見つからなかった | n をその月の営業日数以下に直す、対象月の祝日に過不足がないか確認する、社内管理表（会社休日）が広範囲に登録されていないか確認する |
+| `BusinessDayNotFoundError` | 営業日が見つからなかった | n をその月の営業日数以下に直す、対象月の祝日に過不足がないか確認する、社内休日（会社用カレンダーCSV）が広範囲に登録されていないか確認する |
 | `CalendarError` | 祝日カレンダーに関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
-| `CalendarSourceError` | 祝日データの読み取りに失敗した | 内閣府の CSV の場合: 内閣府の仕様変更。管理者へ連絡する |
-| `CalendarFormatError` | 内閣府 CSV 以外のファイルや壊れたファイルを内閣府 CSV として読み込もうとした | 内閣府の syukujitsu.csv を直接取得し直す。文字コードは CP932 (Shift_JIS) |
+| `CalendarFormatError` | 会社用カレンダーCSV 以外のファイルや壊れたファイルを読み込もうとした | ``python tools\build_calendar.py`` を実行して``comken/core/calendar/data/company_calendar.csv`` を再生成する。内閣府の ``syukujitsu.csv`` 形式変更が原因の場合は``tools/build_calendar.py`` 側の解析ロジックを直す |
 | `HistoryWriteError` | 必須のダウンロード履歴を記録できなかった | 履歴CSVの保存先、共有サーバー接続、書込み権限を確認する |
 | `HistoryLockTimeoutError` | ダウンロード履歴の排他ロックを待っても取得できなかった | 同時実行中の処理が終わるのを待って再実行する。繰り返す場合は共有サーバーを確認する |
 | `CachedReportNotFoundError` | 本日の定期取得キャッシュが見つからない | Salesforce からCSVを手動取得し、画面に表示された正確なパス・ファイル名で置いて、同じ python main.py を再実行する |

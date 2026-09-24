@@ -76,7 +76,6 @@ def test_core_exposes_parts() -> None:
         "delete_files",
         "diff_row",
         "diff_rows",
-        "export_csv",
         "first_business_day_of_month",
         "holiday_name",
         "is_business_day",

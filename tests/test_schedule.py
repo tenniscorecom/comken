@@ -58,9 +58,7 @@ def _rule(**overrides: Any) -> ScheduleRule:
 
 def _holiday_calendar(holiday_dates: set[dt.date]) -> _Calendar:
     """国民の祝日として ``holiday_dates`` を持つ ``_Calendar`` を返す。"""
-    from comken.core.calendar._calendar import Holiday
-
-    return _Calendar([Holiday(date=d, name=f"h{d}") for d in sorted(holiday_dates)])
+    return _Calendar({d: f"h{d}" for d in sorted(holiday_dates)})
 
 
 class _CalendarScope:

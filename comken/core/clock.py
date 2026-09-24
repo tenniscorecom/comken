@@ -41,11 +41,11 @@ def month_end(target: datetime.date) -> datetime.date:
 
 # 「日」列が文字列で入っていた場合に受け付ける書き方。
 # Excel / CSV から読む業務シートでよくある表記をカバーする。
-# 新しい書式を増やすときは**ここを変えても CSV 内閣府の祝日パーサ
-# （``comken.core.calendar.csv_source`` の ``_parse_date``）には影響しない**。
+# 新しい書式を増やすときは**ここを変えても会社用カレンダーCSV の日付パーサ
+# （``comken.core.calendar._calendar._Calendar.load`` の日付解釈）には影響しない**。
 # 祝日 CSV は配布フォーマットの制約で 2 形式に固定しており、 緩めた
 # 場合に「内閣府以外のファイルを取り違えても気付かない」リスクがあるため
-# 別口のままで揃えていない（``_parse_date`` の docstring 参照）。
+# 別口のままで揃えていない。
 _DATE_TEXT_FORMATS: tuple[str, ...] = (
     "%Y/%m/%d",
     "%Y-%m-%d",
@@ -70,7 +70,7 @@ def parse_cell_date(value: object) -> datetime.date | None:
     何件スキップしたかだけ報告する業務運用）。
 
     受け付ける書式は ``_DATE_TEXT_FORMATS`` に固定。 新しい書式を足すときは
-    ここにタプル要素として追加する（内閣府 CSV の ``_parse_date`` とは別口
+    ここにタプル要素として追加する（会社用カレンダーCSV の日付解釈とは別口
     なので、 祝日 CSV の安全弁を緩めない）。
     """
     if isinstance(value, datetime.datetime):

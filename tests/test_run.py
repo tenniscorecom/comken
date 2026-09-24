@@ -13,7 +13,7 @@ from unittest import mock
 
 import pytest
 
-from comken.core.calendar._calendar import Holiday, _Calendar, _set_calendar_for_test
+from comken.core.calendar._calendar import _Calendar, _set_calendar_for_test
 from comken.core.clock import today
 from comken.run import backoffice, intranet
 
@@ -90,7 +90,7 @@ def test_project_name_is_accepted_for_intranet(project_name: str) -> None:
 def _near_expiry_calendar(days_until_last: int) -> _Calendar:
     """``days_until_last`` 日後に最終収録日を持つ小さなカレンダーを作る。"""
     last = today() + _dt.timedelta(days=days_until_last)
-    return _Calendar([Holiday(date=last, name="テスト用の最終祝日")])
+    return _Calendar({last: "テスト用の最終祝日"})
 
 
 class TestStartupCalendarExpiryWarning:

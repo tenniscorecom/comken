@@ -19,7 +19,6 @@ from comken.core.calendar._calendar import business_day_after
 from comken.core.calendar._calendar import business_day_before
 from comken.core.calendar._calendar import business_day_on_or_after
 from comken.core.calendar._calendar import business_day_on_or_before
-from comken.core.calendar._calendar import export_csv
 from comken.core.calendar._calendar import first_business_day_of_month
 from comken.core.calendar._calendar import holiday_name
 from comken.core.calendar._calendar import is_business_day
@@ -89,7 +88,6 @@ __all__ = [
     "delete_files",
     "diff_row",
     "diff_rows",
-    "export_csv",
     "first_business_day_of_month",
     "holiday_name",
     "is_business_day",

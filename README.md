@@ -145,7 +145,7 @@ write 側に空キーが複数あっても ``TransferDestinationMultipleMatchErr
 | [Data Loader（CLI 実行）](docs/dataloader.md) | Salesforce Data Loader の CLI 実行を手伝う（大量データの一括変更。正確な構文は環境ごとに確認が必要） |
 | [Salesforce認証の判断根拠](docs/開発/salesforce-authentication.md) | ECA・Refresh Token Flow を既定にした理由と公式資料 |
 | [credentials（DPAPI）](docs/credentials.md) | パスワード・client_secret の暗号化保存（Windows ユーザーに紐付く） |
-| [カレンダー判定](docs/calendar.md) | 内閣府の祝日 CSV（CP932）+ コード直書きの会社休日をマージして営業日判定 |
+| [カレンダー判定](docs/calendar.md) | 内閣府の祝日 CSV と会社休日ルールを合成した「会社用カレンダー CSV」を Python・VBA 共通で読み取って営業日判定 |
 | [core（部品）](docs/core.md) | `from comken.core import ...` で取る部品群。ファイル検索・操作・圧縮・ファイル名の組み立て／データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時 |
 | [Salesforceレポートダウンローダー（services）](docs/salesforce-downloader.md) | 複数プロジェクトのSalesforceレポート定期取得を1か所に集約するサービス（管理表・履歴・最新実行結果） |
 | [Excel表を型付き設定として読む（master_table）](docs/master-table.md) | 「どのレポートを取るか」のような行が増えていく設定を、Excelの表から型付きの行として読み込む仕組み |

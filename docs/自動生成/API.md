@@ -952,29 +952,6 @@ Returns:
 Raises:
     KeyColumnNotFoundError: key で指定した列が存在しない場合。
 
-### `export_csv`
-
-```text
-def export_csv(path: str | Path | None=None, *, encoding: str='utf-8-sig') -> Path:
-```
-
-#### 説明
-
-国民の祝日と会社休日を 1948-2099 年ぶんの CSV へ書き出す。
-
-国民の祝日（内閣府 CSV + 計算値）と会社休日をまとめて 1 ファイルに書き出す。
-列は ``date`` / ``name`` / ``approximate`` の3列。呼び出した日（実行時の
-今日）に依存せず、結果は固定（国民の祝日は内閣府 CSV が定める範囲、
-会社休日は ``COMPANY_HOLIDAYS`` の ``(月, 日)`` ルールで毎回判定）。
-
-Args:
-    path: 書き出し先。省略時は ``EXPORTED_CSV_PATH``
-        （= ``comken/core/calendar/data/holidays.csv``）に書き出す。
-    encoding: 既定は ``utf-8-sig``（BOM付き）。
-
-Returns:
-    書き出した CSV のパス。
-
 ### `first_business_day_of_month`
 
 ```text
@@ -996,10 +973,8 @@ def holiday_name(target: _dt.date) -> str | None:
 
 #### 説明
 
-``target`` の祝日・会社休日名称を返す。祝日でも会社休日でも
-なければ ``None``。
-
-国民の祝日が先勝ち（会社休日に重なっても国民の祝日を採用）。
+``target`` の祝日・会社休日名称を返す。祝日でも会社休日でもなければ
+``None``。
 
 ### `is_business_day`
 
@@ -1011,7 +986,7 @@ def is_business_day(target: _dt.date, *, skip_weekends: bool=True) -> bool:
 
 ``target`` が営業日なら ``True``。
 
-国民の祝日（内閣府 CSV + 計算値）と会社休日ルールで判定する。
+``company_calendar.csv`` の判定で国民の祝日＋会社休日に当たれば休業。
 ``skip_weekends=True``（既定）なら土曜・日曜も休業扱いにする。
 ``False`` を渡すと、土曜・日曜であっても祝日でなければ「営業日」と
 判定される（振替休日を平日扱いするシナリオ向け）。
@@ -1029,6 +1004,11 @@ def is_holiday(target: _dt.date) -> bool:
 #### 説明
 
 ``target`` が国民の祝日または会社休日に当たれば ``True``。
+
+``company_calendar.csv`` の収録範囲（内閣府 CSV の最初の年〜最後の年）
+外の日付は国民の祝日も会社休日も付かない（常に ``False``）。範囲を延ばす
+には内閣府 CSV を入れ替えて ``python tools\build_calendar.py`` で
+再生成する。
 
 ### `last_business_day_of_month`
 
@@ -1257,7 +1237,7 @@ Excel から ``Table`` 行を読むとき、 日付列は
 何件スキップしたかだけ報告する業務運用）。
 
 受け付ける書式は ``_DATE_TEXT_FORMATS`` に固定。 新しい書式を足すときは
-ここにタプル要素として追加する（内閣府 CSV の ``_parse_date`` とは別口
+ここにタプル要素として追加する（会社用カレンダーCSV の日付解釈とは別口
 なので、 祝日 CSV の安全弁を緩めない）。
 
 ### `remove_spaces`
@@ -1520,10 +1500,6 @@ Raises:
 
 ## `from comken.core.calendar import ...`
 
-### `BUNDLED_CSV_PATH`
-
-公開定数。
-
 ### `BUSINESS_DAY_SEARCH_LIMIT`
 
 公開定数。
@@ -1555,13 +1531,17 @@ class BusinessDayNotFoundError(CalendarError):
 
 対処:
     n をその月の営業日数以下に直す、対象月の祝日に過不足がないか
-    確認する、社内管理表（会社休日）が広範囲に登録されていないか確認する
+    確認する、社内休日（会社用カレンダーCSV）が広範囲に登録されていないか確認する
 
 #### `__init__`
 
 ```text
 def __init__(self, detail: str) -> None:
 ```
+
+### `CALENDAR_CSV_PATH`
+
+公開定数。
 
 ### `CalendarError`
 
@@ -1579,17 +1559,20 @@ class CalendarError(ComkenError):
 ### `CalendarFormatError`
 
 ```text
-class CalendarFormatError(CalendarSourceError):
+class CalendarFormatError(CalendarError):
 ```
 
 #### 説明
 
-内閣府 CSV 以外のファイルや壊れたファイルを内閣府 CSV として読み込もうとした
+会社用カレンダーCSV 以外のファイルや壊れたファイルを読み込もうとした
 
-発生箇所: comken.core.calendar.csv_source の load_cabinet_office_csv
+発生箇所: comken.core.calendar._calendar の _Calendar.load
 
 対処:
-    内閣府の syukujitsu.csv を直接取得し直す。文字コードは CP932 (Shift_JIS)
+    ``python tools\build_calendar.py`` を実行して
+    ``comken/core/calendar/data/company_calendar.csv`` を再生成する。
+    内閣府の ``syukujitsu.csv`` 形式変更が原因の場合は
+    ``tools/build_calendar.py`` 側の解析ロジックを直す
 
 #### `__init__`
 
@@ -1597,34 +1580,7 @@ class CalendarFormatError(CalendarSourceError):
 def __init__(self, path: Path | str, detail: str) -> None:
 ```
 
-### `CalendarSourceError`
-
-```text
-class CalendarSourceError(CalendarError):
-```
-
-#### 説明
-
-祝日データの読み取りに失敗した
-
-内閣府の CSV 形式が変わったなどの理由で、祝日を 1件も抽出できない場合に上げる。
-
-発生箇所: comken.core.calendar の csv_source
-
-対処:
-    内閣府の CSV の場合: 内閣府の仕様変更。管理者へ連絡する
-
-#### `__init__`
-
-```text
-def __init__(self, source: str, reason: str) -> None:
-```
-
 ### `EXPIRING_WARNING_DAYS`
-
-公開定数。
-
-### `EXPORTED_CSV_PATH`
 
 公開定数。
 
@@ -1715,29 +1671,6 @@ Raises:
     BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
         営業日が見つからなかった。
 
-### `export_csv`
-
-```text
-def export_csv(path: str | Path | None=None, *, encoding: str='utf-8-sig') -> Path:
-```
-
-#### 説明
-
-国民の祝日と会社休日を 1948-2099 年ぶんの CSV へ書き出す。
-
-国民の祝日（内閣府 CSV + 計算値）と会社休日をまとめて 1 ファイルに書き出す。
-列は ``date`` / ``name`` / ``approximate`` の3列。呼び出した日（実行時の
-今日）に依存せず、結果は固定（国民の祝日は内閣府 CSV が定める範囲、
-会社休日は ``COMPANY_HOLIDAYS`` の ``(月, 日)`` ルールで毎回判定）。
-
-Args:
-    path: 書き出し先。省略時は ``EXPORTED_CSV_PATH``
-        （= ``comken/core/calendar/data/holidays.csv``）に書き出す。
-    encoding: 既定は ``utf-8-sig``（BOM付き）。
-
-Returns:
-    書き出した CSV のパス。
-
 ### `first_business_day_of_month`
 
 ```text
@@ -1759,10 +1692,8 @@ def holiday_name(target: _dt.date) -> str | None:
 
 #### 説明
 
-``target`` の祝日・会社休日名称を返す。祝日でも会社休日でも
-なければ ``None``。
-
-国民の祝日が先勝ち（会社休日に重なっても国民の祝日を採用）。
+``target`` の祝日・会社休日名称を返す。祝日でも会社休日でもなければ
+``None``。
 
 ### `is_business_day`
 
@@ -1774,7 +1705,7 @@ def is_business_day(target: _dt.date, *, skip_weekends: bool=True) -> bool:
 
 ``target`` が営業日なら ``True``。
 
-国民の祝日（内閣府 CSV + 計算値）と会社休日ルールで判定する。
+``company_calendar.csv`` の判定で国民の祝日＋会社休日に当たれば休業。
 ``skip_weekends=True``（既定）なら土曜・日曜も休業扱いにする。
 ``False`` を渡すと、土曜・日曜であっても祝日でなければ「営業日」と
 判定される（振替休日を平日扱いするシナリオ向け）。
@@ -1792,6 +1723,11 @@ def is_holiday(target: _dt.date) -> bool:
 #### 説明
 
 ``target`` が国民の祝日または会社休日に当たれば ``True``。
+
+``company_calendar.csv`` の収録範囲（内閣府 CSV の最初の年〜最後の年）
+外の日付は国民の祝日も会社休日も付かない（常に ``False``）。範囲を延ばす
+には内閣府 CSV を入れ替えて ``python tools\build_calendar.py`` で
+再生成する。
 
 ### `last_business_day_of_month`
 
@@ -1832,13 +1768,13 @@ def warn_if_calendar_expiring_soon() -> None:
 
 #### 説明
 
-既定の祝日カレンダーの収録期限が近ければ、起動時に警告する。
+既定の会社用カレンダーの収録期限が近ければ、起動時に警告する。
 
-祝日判定 (``is_business_day`` 等) を実際に使うかどうかに関わらず、
-RPA スクリプトの起動直後に呼ぶことを想定している
-(``comken.run.backoffice`` / ``intranet`` から呼ばれる)。
-同じ日に複数回呼んでも警告は 1日 1回だけ (``_maybe_warn_expiring``
-の既存の重複防止をそのまま使う)。
+「収録最終日」（=``company_calendar.csv`` の最後の行）が今日から
+``EXPIRING_WARNING_DAYS`` 未満で WARNING ログを 1 度だけ出す。
+同じ日に複数回呼んでも警告は 1 日 1 回だけ（``_maybe_warn_expiring``
+の重複防止をそのまま使う）。年 1 回の内閣府 CSV 更新が必要な時期を
+検知するのが目的。
 
 
 ## `from comken.core.config import ...`
@@ -5103,7 +5039,7 @@ class BusinessDayNotFoundError(CalendarError):
 
 対処:
     n をその月の営業日数以下に直す、対象月の祝日に過不足がないか
-    確認する、社内管理表（会社休日）が広範囲に登録されていないか確認する
+    確認する、社内休日（会社用カレンダーCSV）が広範囲に登録されていないか確認する
 
 #### `__init__`
 
@@ -5124,43 +5060,23 @@ class CalendarError(ComkenError):
 対処:
     画面に表示された具体的なエラー名を上の表から探す
 
-### `CalendarSourceError`
-
-```text
-class CalendarSourceError(CalendarError):
-```
-
-#### 説明
-
-祝日データの読み取りに失敗した
-
-内閣府の CSV 形式が変わったなどの理由で、祝日を 1件も抽出できない場合に上げる。
-
-発生箇所: comken.core.calendar の csv_source
-
-対処:
-    内閣府の CSV の場合: 内閣府の仕様変更。管理者へ連絡する
-
-#### `__init__`
-
-```text
-def __init__(self, source: str, reason: str) -> None:
-```
-
 ### `CalendarFormatError`
 
 ```text
-class CalendarFormatError(CalendarSourceError):
+class CalendarFormatError(CalendarError):
 ```
 
 #### 説明
 
-内閣府 CSV 以外のファイルや壊れたファイルを内閣府 CSV として読み込もうとした
+会社用カレンダーCSV 以外のファイルや壊れたファイルを読み込もうとした
 
-発生箇所: comken.core.calendar.csv_source の load_cabinet_office_csv
+発生箇所: comken.core.calendar._calendar の _Calendar.load
 
 対処:
-    内閣府の syukujitsu.csv を直接取得し直す。文字コードは CP932 (Shift_JIS)
+    ``python tools\build_calendar.py`` を実行して
+    ``comken/core/calendar/data/company_calendar.csv`` を再生成する。
+    内閣府の ``syukujitsu.csv`` 形式変更が原因の場合は
+    ``tools/build_calendar.py`` 側の解析ロジックを直す
 
 #### `__init__`
 

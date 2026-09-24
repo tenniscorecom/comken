@@ -1,8 +1,9 @@
 """comken/exceptions/calendar.py — 祝日カレンダーに関する例外。
 
-内閣府の祝日 CSV の読み取りに関する失敗をまとめる。
-「今日が営業日か」を判定する側は基本的に例外を上げない設計で、
-ここに来るのは「祝日データの用意に失敗した」という業務運用の場面に限定する。
+会社用カレンダー CSV（``comken/core/calendar/data/company_calendar.csv``）
+の読み取り失敗をまとめる。生成物なので壊れる場面は限定的だが、ファイルが
+存在しない・ヘッダーが違う・日付が解釈できない、といった業務運用の場面に
+備えて明示的に例外を定義する。
 """
 
 from pathlib import Path
@@ -18,32 +19,20 @@ class CalendarError(ComkenError):
     """
 
 
-class CalendarSourceError(CalendarError):
-    """祝日データの読み取りに失敗した
+class CalendarFormatError(CalendarError):
+    """会社用カレンダーCSV 以外のファイルや壊れたファイルを読み込もうとした
 
-    内閣府の CSV 形式が変わったなどの理由で、祝日を 1件も抽出できない場合に上げる。
-
-    発生箇所: comken.core.calendar の csv_source
+    発生箇所: comken.core.calendar._calendar の _Calendar.load
 
     対処:
-        内閣府の CSV の場合: 内閣府の仕様変更。管理者へ連絡する
-    """
-
-    def __init__(self, source: str, reason: str) -> None:
-        super().__init__(f"祝日データを読み取れませんでした: {source}\n{reason}")
-
-
-class CalendarFormatError(CalendarSourceError):
-    """内閣府 CSV 以外のファイルや壊れたファイルを内閣府 CSV として読み込もうとした
-
-    発生箇所: comken.core.calendar.csv_source の load_cabinet_office_csv
-
-    対処:
-        内閣府の syukujitsu.csv を直接取得し直す。文字コードは CP932 (Shift_JIS)
+        ``python tools\\build_calendar.py`` を実行して
+        ``comken/core/calendar/data/company_calendar.csv`` を再生成する。
+        内閣府の ``syukujitsu.csv`` 形式変更が原因の場合は
+        ``tools/build_calendar.py`` 側の解析ロジックを直す
     """
 
     def __init__(self, path: Path | str, detail: str) -> None:
-        super().__init__(source=str(path), reason=detail)
+        super().__init__(f"会社用カレンダーCSV を読み取れませんでした: {path}\n{detail}")
 
 
 class BusinessDayNotFoundError(CalendarError):
@@ -66,7 +55,7 @@ class BusinessDayNotFoundError(CalendarError):
 
     対処:
         n をその月の営業日数以下に直す、対象月の祝日に過不足がないか
-        確認する、社内管理表（会社休日）が広範囲に登録されていないか確認する
+        確認する、社内休日（会社用カレンダーCSV）が広範囲に登録されていないか確認する
     """
 
     def __init__(self, detail: str) -> None:
