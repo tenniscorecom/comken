@@ -10321,18 +10321,11 @@ def backoffice(main: Callable[[], Any], project_name: str) -> Any:
 
 #### 説明
 
-バックオフィスの RPA として main を実行する。
-
-現在は最小実装（``main()`` を呼んで結果を返すだけ）。``project_name`` は
-呼び出し側との呼び出し規約（シグネチャ）を保つために受け取るが、現状では
-使っていない。
+バックオフィスの RPA として ``main`` を実行し、``main()`` の戻り値を返す。
 
 Args:
     main: 実行する関数。
-    project_name: プロジェクト名（現状は未使用）。
-
-Returns:
-    ``main()`` の戻り値。
+    project_name: プロジェクト名。開始・終了メッセージに出る。
 
 ### `intranet`
 
@@ -10342,15 +10335,8 @@ def intranet(main: Callable[[], Any], project_name: str) -> Any:
 
 #### 説明
 
-イントラネットの RPA として main を実行する。
-
-現在は最小実装（``main()`` を呼んで結果を返すだけ）。``project_name`` は
-呼び出し側との呼び出し規約（シグネチャ）を保つために受け取るが、現状では
-使っていない。
+イントラネットの RPA として ``main`` を実行し、``main()`` の戻り値を返す。
 
 Args:
     main: 実行する関数。
-    project_name: プロジェクト名（現状は未使用）。
-
-Returns:
-    ``main()`` の戻り値。
+    project_name: プロジェクト名。開始・終了メッセージに出る。
