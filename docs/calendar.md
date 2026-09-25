@@ -11,8 +11,8 @@ RPA 置き換えプロジェクトで「いま取るべきレポートか」を�
 
 ライブラリは **既定カレンダー 1 本だけ** を公開する。利用者が独自のカレンダーを
 組み立てる API は公開していない（差し替え口はテスト用の **非公開** 関数のみ）。
-会社独自の休業日は `comken/core/calendar/data/company_holidays.csv`（会社休日
-ルール CSV）で表現する——Excel で開いて行を足す・直す運用で、コードは触らない。
+会社独自の休業日は `comken/core/calendar/build.py` の冒頭で **コード直書き**
+で表現する（`COMPANY_HOLIDAYS` / `COMPANY_HOLIDAYS_EXTRA`）。
 
 国民の祝日と会社休日をマージして、`is_business_day()` で「今日が営業日か」を
 判定する。国民の祝日と会社休日が同じ日に重なった場合は **国民の祝日が先勝ち**
@@ -23,7 +23,7 @@ RPA 置き換えプロジェクトで「いま取るべきレポートか」を�
 ```mermaid
 graph LR
     A[内閣府 syukujitsu.csv<br/>comken/core/calendar/data/] --> B[comken.core.calendar.build<br/>合成ツール]
-    C[company_holidays.csv<br/>会社休日ルール] --> B
+    C[build.py 冒頭の定数<br/>会社休日ルール] --> B
     B --> D[company_calendar.csv<br/>comken/core/calendar/data/]
     D --> E[Python: comken.core.calendar<br/>読むだけ]
     D --> F[VBA: Excel / Access から参照<br/>読むだけ]
@@ -32,7 +32,6 @@ graph LR
 | 段階 | 知っていること | 知らないこと |
 |---|---|---|
 | 内閣府 CSV（`comken/core/calendar/data/syukujitsu.csv`） | 国民の祝日の「公表値」 | 会社休日・最終的な生成物 |
-| 会社休日ルール（`comken/core/calendar/data/company_holidays.csv`） | 会社独自の休業日（Excel で編集） | 内閣府 CSV・最終的な生成物 |
 | 生成ツール（`comken.core.calendar.build`） | 内閣府 CSV の形式・会社休日ルール | 実行時の利用方法 |
 | **生成物**（`comken/core/calendar/data/company_calendar.csv`） | （国民の祝日＋会社休日を焼いただけ） | ー |
 | 実行時（Python） | （生成物を読むだけ） | 内閣府 CSV・会社休日ルール |
@@ -59,38 +58,28 @@ if is_business_day(date.today()):     # 既定カレンダーで判定
 
 ## 会社休日の定義
 
-会社の休業日は `comken/core/calendar/data/company_holidays.csv`（UTF-8 BOM
-付き・CRLF）で管理する。**Excel で開いて行を足す・直す運用**で、コードを
-触らずに運用できる。
+会社の休業日は `comken/core/calendar/build.py` の冒頭でコードで書く。
 
-ヘッダは `年,月,日,名称`。月の列・日の列は別々の数字で書く（`12-29`
-のような日付形式だと Excel が日付に化かすので NG）。
+```python
+# comken/core/calendar/build.py
+COMPANY_HOLIDAYS = {
+    "年末年始休暇": ((12, 29), (12, 30), (12, 31), (1, 1), (1, 2), (1, 3)),
+}
+COMPANY_HOLIDAYS_EXTRA = ()  # その年だけの臨時休業。date(2026, 12, 28) のように足す
+```
 
-**年が空欄の行** は「毎年その月日が休み」、**年がある行** は「その年だけ
-の臨時休業」。名称を空欄にすれば `会社休業日` になる。
+`COMPANY_HOLIDAYS` は **毎年繰り返す** 休み（年は書かない）。内閣府 CSV の
+収録範囲（最初の年〜最後の年）に合わせて展開される。国民の祝日と重なった日は
+**国民の祝日が先勝ち** で 1 行に焼き込まれる。`COMPANY_HOLIDAYS_EXTRA` は
+その年だけの臨時休業で、名称は `会社休業日` になる。
 
-| 年 | 月 | 日 | 名称 | 意味 |
-|---|---|---|---|---|
-|  | 12 | 29 | 年末年始休暇 | 毎年 12/29 が休み |
-|  | 12 | 30 | 年末年始休暇 | 毎年 12/30 が休み |
-|  | 12 | 31 | 年末年始休暇 | 毎年 12/31 が休み |
-|  | 1 | 1 | 年末年始休暇 | 毎年 1/1 が休み（国民の祝日「元日」と重なり、国民の祝日が先勝ち） |
-|  | 1 | 2 | 年末年始休暇 | 毎年 1/2 が休み |
-|  | 1 | 3 | 年末年始休暇 | 毎年 1/3 が休み |
-| 2026 | 12 | 28 | 会社休業日 | 2026 年だけ 12/28 が休み（その年限定）※書き方の例。今のファイルにこの行は無い |
+休業日を追加するときは `build.py` 冒頭の定数を編集する。
 
-**年が書いてない月日の行** は内閣府 CSV の収録範囲（最初の年〜最後の年）
-に合わせて展開される。生成ツールは国民の祝日と重なった行を国民の祝日で
-上書きして **国民の祝日が先勝ち** で 1 行に焼き込む。
-
-休業日を追加するときは `company_holidays.csv` に行を足す。
-
-- **複数日まとめて 1 つの名称** が要るときは、同じ名称で月日を変えて
-  行を複数書く（上の「年末年始休暇」のように）
-- 1 日だけの休業は 1 行だけ書く
-- 年またぎ（12 月 → 1 月）も各月で 1 行ずつ書けばそのまま毎年適用される
-- **その年だけ臨時の休み** を足したいときは「年」列に数字を入れる。
-  古くなった行は消してよい（消しても過去の判定が変わるだけで、運用に
+- **複数日まとめて 1 つの名称** が要るときは、`COMPANY_HOLIDAYS` の 1 キーに
+  `(月, 日)` を並べる（上の「年末年始休暇」のように）
+- 年またぎ（12 月 → 1 月）も `(月, 日)` で書けばそのまま毎年適用される
+- **その年だけ臨時の休み** を足したいときは `COMPANY_HOLIDAYS_EXTRA` に足す。
+  古くなった年の行は消してよい（消しても過去の判定が変わるだけで、運用に
   影響しない）
 - 編集したら `python -m comken.core.calendar.build` を実行して
   `company_calendar.csv` を更新しコミットする
@@ -161,8 +150,8 @@ End Function
 
 年末年始休暇の日付を変える等、会社休日ルールを変えるとき:
 
-1. `comken/core/calendar/data/company_holidays.csv` を Excel で開いて
-   行を足す・直す（コードは触らない）
+1. `comken/core/calendar/build.py` 冒頭の `COMPANY_HOLIDAYS` /
+   `COMPANY_HOLIDAYS_EXTRA` を直す
 2. `python -m comken.core.calendar.build` を実行する
 3. `company_calendar.csv` の更新をコミットする
 
@@ -295,4 +284,4 @@ business_day_after(date(2026, 8, 20))
 - comken 設計書: `docs/ARCHITECTURE.md`
 - comken 例外階層: `comken/exceptions/__init__.py`
 - 生成ツール: `comken/core/calendar/build.py`（`python -m comken.core.calendar.build`）
-- 会社休日ルール: `comken/core/calendar/data/company_holidays.csv`
+- 会社休日ルール: `comken/core/calendar/build.py` 冒頭の `COMPANY_HOLIDAYS`

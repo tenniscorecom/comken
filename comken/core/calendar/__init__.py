@@ -11,7 +11,7 @@
 
 ライブラリは **既定カレンダー 1 本だけ** を公開する。利用者が独自の
 カレンダーを組み立てる API は公開しない（会社休日を変えるときは
-``comken/core/calendar/data/company_holidays.csv`` を編集する）。
+``comken/core/calendar/build.py`` 冒頭の ``COMPANY_HOLIDAYS`` を直す）。
 
 実行時は内閣府 CSV も会社休日のルールも持たない。会社休日・国民の祝日の
 判定は **生成物である 1 ファイル** だけを読んで行うため、内閣府 CSV の

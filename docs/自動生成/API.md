@@ -1567,15 +1567,12 @@ class CalendarFormatError(CalendarError):
 会社用カレンダーCSV 以外のファイルや壊れたファイルを読み込もうとした
 
 発生箇所: comken.core.calendar._calendar の _Calendar.load
-    / comken.core.calendar.build の _load_company_rules
 
 対処:
     ``python -m comken.core.calendar.build`` を実行して
     ``comken/core/calendar/data/company_calendar.csv`` を再生成する。
     内閣府の ``syukujitsu.csv`` 形式変更が原因の場合は
-    ``comken.core.calendar.build`` 側の解析ロジックを直す。
-    ``company_holidays.csv`` の書式が原因の場合は
-    メッセージに出ている行の「年・月・日・名称」を直す
+    ``comken.core.calendar.build`` 側の解析ロジックを直す
 
 #### `__init__`
 
@@ -4712,15 +4709,12 @@ class CalendarFormatError(CalendarError):
 会社用カレンダーCSV 以外のファイルや壊れたファイルを読み込もうとした
 
 発生箇所: comken.core.calendar._calendar の _Calendar.load
-    / comken.core.calendar.build の _load_company_rules
 
 対処:
     ``python -m comken.core.calendar.build`` を実行して
     ``comken/core/calendar/data/company_calendar.csv`` を再生成する。
     内閣府の ``syukujitsu.csv`` 形式変更が原因の場合は
-    ``comken.core.calendar.build`` 側の解析ロジックを直す。
-    ``company_holidays.csv`` の書式が原因の場合は
-    メッセージに出ている行の「年・月・日・名称」を直す
+    ``comken.core.calendar.build`` 側の解析ロジックを直す
 
 #### `__init__`
 

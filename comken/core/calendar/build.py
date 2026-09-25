@@ -1,8 +1,8 @@
 """comken/core/calendar/build.py — 「会社用カレンダー CSV 1 ファイル」を生成するツール。
 
 内閣府の祝日 CSV（``comken/core/calendar/data/syukujitsu.csv``）と、
-``comken/core/calendar/data/company_holidays.csv`` に書かれた **会社休日ルール** を
-合成し、``comken/core/calendar/data/company_calendar.csv`` を生成する。
+このファイルの先頭で定義している **会社休日ルール** を合成し、
+``comken/core/calendar/data/company_calendar.csv`` を生成する。
 
 生成されたファイルは git 管理下に置かれ、Python 側（``comken.core.calendar``）
 と VBA 側の両方が同じファイルを読み取って営業日判定に使う。生成ツールだけが
@@ -22,7 +22,7 @@
 
 **会社休日を変えるとき**（年末年始休暇の日付を変える等）:
 
-1. ``comken/core/calendar/data/company_holidays.csv`` を Excel で開いて行を足す・直す
+1. このファイル先頭の ``COMPANY_HOLIDAYS`` / ``COMPANY_HOLIDAYS_EXTRA`` を直す
 2. ``python -m comken.core.calendar.build`` を実行する
 3. ``company_calendar.csv`` の更新をコミットする
 
@@ -48,26 +48,30 @@ from comken.exceptions import CalendarFormatError
 logger = logging.getLogger(__name__)
 
 # ── 会社休日の定義 ────────────────────────────────────────────────────────
-# 会社の休業日は ``company_holidays.csv``（UTF-8 BOM 付き・CRLF）で管理する。
-# ヘッダは ``年,月,日,名称``。年を空欄にすれば毎年その月日が休み、数字を
-# 入れればその年だけの臨時休業。名称を空欄にすれば「会社休業日」になる。
+# 毎年繰り返す会社の休業日。**年は書かない**（毎年その月日が休みになる）。
+# 休みを増やすときは (月, 日) を書き足すだけでよい。年またぎの年末年始も
+# 月日で書けばそのまま毎年適用される。
 # ここを変えたら ``python -m comken.core.calendar.build`` を実行して
 # ``comken/core/calendar/data/company_calendar.csv`` を更新する。
-COMPANY_HOLIDAYS_CSV_HEADER: tuple[str, str, str, str] = ("年", "月", "日", "名称")
+COMPANY_HOLIDAYS: dict[str, tuple[tuple[int, int], ...]] = {
+    "年末年始休暇": ((12, 29), (12, 30), (12, 31), (1, 1), (1, 2), (1, 3)),
+}
 
-# 名称が空欄のときに使う名称
-DEFAULT_HOLIDAY_NAME: str = "会社休業日"
+# その年だけの臨時の休み。年月日で書く。
+# 例: 2026 年だけ 12/28 も休みにする → date(2026, 12, 28) を足す。
+# 古くなった年の行は消してよい（消しても過去の判定が変わるだけで、運用に影響しない）。
+COMPANY_HOLIDAYS_EXTRA: tuple[_dt.date, ...] = ()
+
+# ``COMPANY_HOLIDAYS_EXTRA`` に登録された年月日（=年単位の月日ルールに
+# 当てはまらない臨時休業日）の名称。
+EXTRA_HOLIDAY_NAME: str = "会社休業日"
 
 # ── ファイルパス ────────────────────────────────────────────────────────
-# データ置き場は ``comken/core/calendar/data/`` に固定（カレンダーパッケージと
-# 一緒に配布されるため）。
+# データ置き場は ``comken/core/calendar/data/``（このファイルの隣）。
 DATA_DIR: Path = Path(__file__).resolve().parent / "data"
 
 # 内閣府 CSV のパス（生成ツールだけの入力）。
 SYUKUJITSU_CSV_PATH: Path = DATA_DIR / "syukujitsu.csv"
-
-# 会社休日のルール CSV。``company_calendar.csv`` と同じ data/ 配下にある
-COMPANY_HOLIDAYS_CSV_PATH: Path = DATA_DIR / "company_holidays.csv"
 
 # 生成物のパス。comken/core/calendar/data/company_calendar.csv は git 管理下の正本で、
 # Python 実行時と VBA 側の両方がここを読む（共有サーバー上の同じファイル）。
@@ -86,14 +90,15 @@ def build_rows() -> list[tuple[_dt.date, str]]:
     """内閣府 CSV と会社休日ルールを合成して、``(date, name)`` のリストを返す。
 
     国民の祝日（内閣府 CSV 全行）と会社休日（内閣府 CSV の最初の年〜最後の年
-    の各年に会社休日ルールを展開）をマージし、日付順に並べる。同じ日に国民の
+    の各年に ``COMPANY_HOLIDAYS`` の月日と ``COMPANY_HOLIDAYS_EXTRA`` を展開）
+    をマージし、日付順に並べる。同じ日に国民の
     祝日と会社休日の両方が当たる場合は **国民の祝日が先勝ち**（国民の祝日の
     名称が採用され、会社休日は黙って上書きされない）。土日と重なっても振替は
     行わない（国民の祝日側で処理されないものはそのまま）。
 
-    会社休日の名称は ``company_holidays.csv`` の「名称」列。年が空欄の行は
-    「毎年その月日が休み」、年がある行は「その年だけ」。名称が空欄なら
-    ``DEFAULT_HOLIDAY_NAME``（既定 ``"会社休業日"``）を採る。
+    会社休日の名称は ``COMPANY_HOLIDAYS`` のキー（例: ``"年末年始休暇"``）。
+    ``COMPANY_HOLIDAYS_EXTRA`` に登録された年月日は ``EXTRA_HOLIDAY_NAME``
+    （既定 ``"会社休業日"``）。
 
     Returns:
         日付順に並んだ ``(date, name)`` のタプルのリスト。
@@ -106,18 +111,14 @@ def build_rows() -> list[tuple[_dt.date, str]]:
             "内閣府の CSV の形式が変わっていないか確認してください。",
         )
     first_year, last_year = _year_range(national_holidays)
-    yearly, extra = _load_company_rules()
 
     merged: dict[_dt.date, str] = dict(national_holidays)
     for year in range(first_year, last_year + 1):
-        for month, day, name in yearly:
-            try:
-                target = _dt.date(year, month, day)
-            except ValueError:
-                continue  # 2/29 の休みは、閏年でない年には無い
-            merged.setdefault(target, name)
-    for target, name in extra:
-        merged.setdefault(target, name)
+        for name, month_days in COMPANY_HOLIDAYS.items():
+            for month, day in month_days:
+                merged.setdefault(_dt.date(year, month, day), name)
+    for target in COMPANY_HOLIDAYS_EXTRA:
+        merged.setdefault(target, EXTRA_HOLIDAY_NAME)
 
     return sorted(merged.items(), key=lambda item: item[0])
 
@@ -192,82 +193,6 @@ def _year_range(holidays: list[tuple[_dt.date, str]]) -> tuple[int, int]:
         if date_ > last:
             last = date_
     return first.year, last.year
-
-
-# ── 会社休日ルール（company_holidays.csv） ───────────────────────────────
-
-
-def _load_company_rules() -> tuple[list[tuple[int, int, str]], list[tuple[_dt.date, str]]]:
-    """``company_holidays.csv`` を読んで ``(毎年の休み, その年だけの休み)`` を返す。
-
-    毎年の休みは ``(月, 日, 名称)``、その年だけの休みは ``(日付, 名称)``。
-    ファイルが無い・ヘッダが違う・数字でない・存在しない日付といった形式不正は
-    ``CalendarFormatError`` で止める（行番号と直し方をメッセージに入れる）。
-    """
-    if not COMPANY_HOLIDAYS_CSV_PATH.exists():
-        raise CalendarFormatError(COMPANY_HOLIDAYS_CSV_PATH, "ファイルが存在しません。")
-    yearly: list[tuple[int, int, str]] = []
-    extra: list[tuple[_dt.date, str]] = []
-    header_text = ",".join(COMPANY_HOLIDAYS_CSV_HEADER)
-    with COMPANY_HOLIDAYS_CSV_PATH.open(encoding="utf-8-sig", newline="") as file:
-        reader = csv.reader(file)
-        header = next(reader, [])
-        if tuple(cell.strip() for cell in header) != COMPANY_HOLIDAYS_CSV_HEADER:
-            raise CalendarFormatError(
-                COMPANY_HOLIDAYS_CSV_PATH,
-                f"1行目（見出し）が {header_text} ではありません。"
-                f"1行目を {header_text} に戻してください。",
-            )
-        for line_number, row in enumerate(reader, start=2):  # 見出しが1行目
-            if not any(cell.strip() for cell in row):
-                continue
-            year_text, month_text, day_text, name = [
-                *(cell.strip() for cell in row),
-                "",
-                "",
-                "",
-                "",
-            ][:4]
-            month = _to_int(month_text, line_number, "月")
-            day = _to_int(day_text, line_number, "日")
-            name = name or DEFAULT_HOLIDAY_NAME
-            if year_text:
-                year = _to_int(year_text, line_number, "年")
-                extra.append((_check_date(year, month, day, line_number), name))
-            else:
-                # 年が空欄の行は毎年の休み。2/29 も書けるよう、閏年（2000 年）で存在を確かめる
-                _check_date(2000, month, day, line_number)
-                yearly.append((month, day, name))
-    return yearly, extra
-
-
-def _to_int(text: str, line_number: int, column: str) -> int:
-    """会社休日 CSV の数字セルを整数にする。空欄・数字以外は ``CalendarFormatError``。"""
-    if not text:
-        raise CalendarFormatError(
-            COMPANY_HOLIDAYS_CSV_PATH,
-            f"{line_number} 行目の「{column}」列が空欄です。数字（例: 12）を書いてください。",
-        )
-    try:
-        return int(text)
-    except ValueError as error:
-        raise CalendarFormatError(
-            COMPANY_HOLIDAYS_CSV_PATH,
-            f"{line_number} 行目の「{column}」列が数字ではありません: {text!r}。"
-            "数字（例: 12）を書いてください。",
-        ) from error
-
-
-def _check_date(year: int, month: int, day: int, line_number: int) -> _dt.date:
-    """年月日が暦に存在することを確かめて、``date`` を返す。"""
-    try:
-        return _dt.date(year, month, day)
-    except ValueError as error:
-        raise CalendarFormatError(
-            COMPANY_HOLIDAYS_CSV_PATH,
-            f"{line_number} 行目の日付が存在しません: {year}年{month}月{day}日。"
-            "月は 1〜12、日は 1〜31 で、実在する日付を書いてください。",
-        ) from error
 
 
 def write_company_calendar_csv(
