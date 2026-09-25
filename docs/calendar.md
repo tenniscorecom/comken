@@ -208,6 +208,8 @@ End Function
 | `is_business_day(d, *, skip_weekends=True)` | 国民の祝日＋会社休日＋土日を判定して `True`/`False` |
 | `business_day_after(d, *, skip_weekends=True)` | `d` より後で最初の営業日（`d` 自身を含まない） |
 | `business_day_before(d, *, skip_weekends=True)` | `d` より前で最初の営業日（`d` 自身を含まない） |
+| `non_business_days_after(d, *, skip_weekends=True)` | `d` の翌日から、次の営業日の前日までの休みの日（連休）を日付順に返す。翌日が営業日なら空 |
+| `non_business_days_before(d, *, skip_weekends=True)` | `d` の前日から、前の営業日の翌日までの休みの日を、`d` に近い順に返す |
 | `business_day_on_or_after(d, *, skip_weekends=True)` | `d` 以降で最初の営業日（`d` を含む） |
 | `business_day_on_or_before(d, *, skip_weekends=True)` | `d` 以前で最初の営業日（`d` を含む） |
 | `first_business_day_of_month(d, *, skip_weekends=True)` | `d` の月の最初の営業日 |

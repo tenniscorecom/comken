@@ -28,6 +28,8 @@ from comken.core.calendar import (
     is_business_day,
     is_holiday,
     last_business_day_of_month,
+    non_business_days_after,
+    non_business_days_before,
     nth_business_day_of_month,
 )
 from comken.core.calendar._calendar import _Calendar, _set_calendar_for_test
@@ -372,6 +374,73 @@ class TestBusinessDayOffsets:
         _set_calendar_for_test(_holiday_calendar({_dt.date(2024, 5, 6): "架空の祝日"}))
         try:
             assert business_day_on_or_after(_dt.date(2024, 5, 6)) == _dt.date(2024, 5, 7)
+        finally:
+            _set_calendar_for_test(None)
+
+
+class TestNonBusinessDaysRun:
+    """``non_business_days_after`` / ``non_business_days_before``（連休の日付を返す）。"""
+
+    def test_after_weekend(self) -> None:
+        """金曜の後は、土曜・日曜の 2 日（月曜は営業日なので含まない）。"""
+        _set_calendar_for_test(_Calendar({}))
+        try:
+            friday = _dt.date(2024, 5, 3)  # 5/3 は祝日データ無しの金曜として扱う
+            assert non_business_days_after(friday) == [_dt.date(2024, 5, 4), _dt.date(2024, 5, 5)]
+        finally:
+            _set_calendar_for_test(None)
+
+    def test_before_weekend_is_nearest_first(self) -> None:
+        """月曜の前は、日曜・土曜の順（``target`` に近い順）。"""
+        _set_calendar_for_test(_Calendar({}))
+        try:
+            monday = _dt.date(2024, 5, 6)
+            assert non_business_days_before(monday) == [_dt.date(2024, 5, 5), _dt.date(2024, 5, 4)]
+        finally:
+            _set_calendar_for_test(None)
+
+    def test_holiday_extends_the_run(self) -> None:
+        """月曜が祝日なら、土・日・月の 3 連休になる。"""
+        _set_calendar_for_test(_holiday_calendar({_dt.date(2024, 5, 6): "架空の祝日"}))
+        try:
+            assert non_business_days_after(_dt.date(2024, 5, 3)) == [
+                _dt.date(2024, 5, 4),
+                _dt.date(2024, 5, 5),
+                _dt.date(2024, 5, 6),
+            ]
+        finally:
+            _set_calendar_for_test(None)
+
+    def test_empty_when_neighbor_is_business_day(self) -> None:
+        """隣の日が営業日なら空リスト。``target`` 自身が休みでも含めない。"""
+        _set_calendar_for_test(_Calendar({}))
+        try:
+            assert non_business_days_after(_dt.date(2024, 5, 6)) == []
+            assert non_business_days_before(_dt.date(2024, 5, 7)) == []
+            assert non_business_days_after(_dt.date(2024, 5, 5)) == []  # 日曜の翌日は月曜
+        finally:
+            _set_calendar_for_test(None)
+
+    def test_skip_weekends_false_ignores_weekend(self) -> None:
+        """``skip_weekends=False`` なら土日は休みではない（祝日だけを見る）。"""
+        _set_calendar_for_test(_holiday_calendar({_dt.date(2024, 5, 4): "架空の祝日"}))
+        try:
+            assert non_business_days_after(_dt.date(2024, 5, 3), skip_weekends=False) == [
+                _dt.date(2024, 5, 4)
+            ]
+        finally:
+            _set_calendar_for_test(None)
+
+    def test_stops_at_search_limit_without_raising(self) -> None:
+        """休みが探索上限より長く続いても、例外にせず上限の日数分で打ち切る。"""
+        days = {
+            _dt.date(2024, 6, 1) + _dt.timedelta(days=i): "架空の長期休業"
+            for i in range(BUSINESS_DAY_SEARCH_LIMIT + 10)
+        }
+        _set_calendar_for_test(_holiday_calendar(days))
+        try:
+            run = non_business_days_after(_dt.date(2024, 5, 31))
+            assert len(run) == BUSINESS_DAY_SEARCH_LIMIT
         finally:
             _set_calendar_for_test(None)
 

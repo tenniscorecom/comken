@@ -28,6 +28,7 @@ is_holiday                    国民の祝日または会社休日に当たれ�
 holiday_name                  国民の祝日または会社休日の名称（無ければ None）
 is_business_day               簡易判定（国民の祝日＋会社休日＋土日）
 business_day_after/before/on_or_after/on_or_before  営業日オフセット
+non_business_days_after/before                     隣の営業日に着くまでの休みの日（連休）
 first/last/nth_business_day_of_month               月初・月末・第N営業日
 add_business_days             target から n 営業日後（n が負なら前）
 warn_if_calendar_expiring_soon 既定カレンダーの収録期限が近ければ起動時に警告
@@ -50,6 +51,8 @@ from comken.core.calendar._calendar import (
     is_business_day,
     is_holiday,
     last_business_day_of_month,
+    non_business_days_after,
+    non_business_days_before,
     nth_business_day_of_month,
     warn_if_calendar_expiring_soon,
 )
@@ -76,6 +79,8 @@ __all__ = [
     "is_business_day",
     "is_holiday",
     "last_business_day_of_month",
+    "non_business_days_after",
+    "non_business_days_before",
     "nth_business_day_of_month",
     "warn_if_calendar_expiring_soon",
 ]

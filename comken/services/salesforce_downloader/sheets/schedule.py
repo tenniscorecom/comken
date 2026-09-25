@@ -12,12 +12,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from comken.core.calendar import (
-    BUSINESS_DAY_SEARCH_LIMIT,
     BusinessDayNotFoundError,
     is_business_day,
     is_holiday,
+    non_business_days_after,
+    non_business_days_before,
     nth_business_day_of_month,
 )
+from comken.core.clock import month_end
 from comken.exceptions import (
     ScheduleSettingError,
     SheetNotFoundError,
@@ -334,7 +336,7 @@ class ScheduleRule(MasterRow):
                 return False
             if date != target:
                 return False
-        return not self.month_end or (date + dt.timedelta(days=1)).month != date.month
+        return not self.month_end or date == month_end(date)
 
     def _date_matches(
         self,
@@ -379,26 +381,20 @@ class ScheduleRule(MasterRow):
 
         ``direction="before"`` のときは「``date`` の翌日から次の営業日に達するまで」
         の非営業日区間（``date`` 自身を含まない）を、``direction="after"`` のときは
-        「``date`` の前日から前の営業日に達するまで」の非営業日区間を順に走査し、
+        「``date`` の前日から前の営業日に達するまで」の非営業日区間を見て、
         **その区間に祝日である対象日が 1 つでも含まれていれば ``True``**。
 
-        探索は ``BUSINESS_DAY_SEARCH_LIMIT`` （``comken.core.calendar`` の営業日
-        探索と同じ上限=30 日）で打ち切る。``date`` 自身が非営業日の場合は呼び出し元
-        （``_date_matches``）で先に弾く。
-
-        祝日判定は ``comken.core.calendar.is_holiday`` で行う。「未来日/過去日」も
-        含めて対象日条件を満たす祝日を判定する必要がある。
+        非営業日の区間は ``comken.core.calendar`` の ``non_business_days_after`` /
+        ``non_business_days_before`` が返す（探索の上限もカレンダー側が持つ）。
+        ``date`` 自身が非営業日の場合は呼び出し元（``_date_matches``）で先に弾く。
+        「対象日条件を満たすか」（曜日・日付・月末・第N営業日）だけがこのクラスの責務。
         """
-        step = 1 if direction == "before" else -1
-        cursor = date + dt.timedelta(days=step)
-        for _ in range(BUSINESS_DAY_SEARCH_LIMIT):
-            if is_business_day(cursor):
-                # 次の営業日に到達 → 区間内に祝日である対象日は無かった
-                return False
-            if self._raw_date_matches(cursor) and is_holiday(cursor):
-                return True
-            cursor += dt.timedelta(days=step)
-        return False
+        holidays_in_a_row = (
+            non_business_days_after(date)
+            if direction == "before"
+            else non_business_days_before(date)
+        )
+        return any(self._raw_date_matches(day) and is_holiday(day) for day in holidays_in_a_row)
 
 
 def _parse_day_of_month(value: object) -> tuple[bool, int | None, int | None]:

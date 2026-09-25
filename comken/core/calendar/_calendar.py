@@ -166,6 +166,33 @@ def business_day_before(
     )
 
 
+def non_business_days_after(
+    target: _dt.date,
+    *,
+    skip_weekends: bool = True,
+) -> list[_dt.date]:
+    """``target`` の翌日から、次の営業日の前日までの休みの日（連休）を日付順に返す。
+
+    ``target`` の翌日が営業日なら空リスト。``target`` 自身は含まない。
+    ``BUSINESS_DAY_SEARCH_LIMIT`` 日分で打ち切る（``business_day_after`` と違い、
+    営業日が見つからなくても例外にしない。祝日データが壊れているときの無限ループ防止）。
+    """
+    return _non_business_run(target, step_days=1, skip_weekends=skip_weekends)
+
+
+def non_business_days_before(
+    target: _dt.date,
+    *,
+    skip_weekends: bool = True,
+) -> list[_dt.date]:
+    """``target`` の前日から、前の営業日の翌日までの休みの日（連休）を返す。
+
+    ``target`` に近い順に並ぶ。``target`` の前日が営業日なら空リスト。
+    ``target`` 自身は含まない。打ち切りは ``non_business_days_after`` と同じ。
+    """
+    return _non_business_run(target, step_days=-1, skip_weekends=skip_weekends)
+
+
 def business_day_on_or_after(
     target: _dt.date,
     *,
@@ -474,6 +501,23 @@ class _Calendar:
                 last,
             )
             self._expiry_warned_on = today
+
+
+def _non_business_run(
+    target: _dt.date,
+    *,
+    step_days: int,
+    skip_weekends: bool,
+) -> list[_dt.date]:
+    """``target`` の隣から ``step_days`` 日ずつ進み、営業日に着くまでの休みの日を集める。"""
+    run: list[_dt.date] = []
+    cursor = target + _dt.timedelta(days=step_days)
+    for _ in range(BUSINESS_DAY_SEARCH_LIMIT):
+        if is_business_day(cursor, skip_weekends=skip_weekends):
+            break
+        run.append(cursor)
+        cursor += _dt.timedelta(days=step_days)
+    return run
 
 
 def _search_business_day(

@@ -1747,6 +1747,33 @@ def last_business_day_of_month(target: _dt.date, *, skip_weekends: bool=True) ->
 Raises:
     BusinessDayNotFoundError: その月に営業日が 1日も無いとき。
 
+### `non_business_days_after`
+
+```text
+def non_business_days_after(target: _dt.date, *, skip_weekends: bool=True) -> list[_dt.date]:
+```
+
+#### 説明
+
+``target`` の翌日から、次の営業日の前日までの休みの日（連休）を日付順に返す。
+
+``target`` の翌日が営業日なら空リスト。``target`` 自身は含まない。
+``BUSINESS_DAY_SEARCH_LIMIT`` 日分で打ち切る（``business_day_after`` と違い、
+営業日が見つからなくても例外にしない。祝日データが壊れているときの無限ループ防止）。
+
+### `non_business_days_before`
+
+```text
+def non_business_days_before(target: _dt.date, *, skip_weekends: bool=True) -> list[_dt.date]:
+```
+
+#### 説明
+
+``target`` の前日から、前の営業日の翌日までの休みの日（連休）を返す。
+
+``target`` に近い順に並ぶ。``target`` の前日が営業日なら空リスト。
+``target`` 自身は含まない。打ち切りは ``non_business_days_after`` と同じ。
+
 ### `nth_business_day_of_month`
 
 ```text
