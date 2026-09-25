@@ -1,4 +1,4 @@
-"""comken/exceptions/web.py — ブラウザ自動化と Salesforce / Data Loader 呼び出しに関する例外。"""
+"""comken/exceptions/web.py — ブラウザ自動化と Salesforce 呼び出しに関する例外。"""
 
 from comken.exceptions.base import ComkenError
 
@@ -151,11 +151,3 @@ class SalesforceReportIDNotFoundError(SalesforceError):
             "そのまま貼り付けてください。レポート ID（00O で始まる 15 桁か 18 桁）を"
             "直接書いても構いません。"
         )
-
-
-class DataLoaderError(ComkenError):
-    """Data Loader の実行に関するエラー。具体的な状況はメッセージに出る
-
-    対処:
-        メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
-    """

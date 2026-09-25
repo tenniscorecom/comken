@@ -42,7 +42,7 @@
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
 | `FileNotFoundError` | ファイルが見つからない | ファイルの置き場所と名前を確認する。「今日の日付のファイル」を探す処理なら、今日のファイルが作られているか確認する |
-| `ComkenFileNotFoundError` | ファイル・フォルダが見つからない（対象はメッセージに出る） | メッセージに表示された対象（Excel ファイル / CSV ファイル / Access ファイル / config.ini / Outlook 添付 / Data Loader 実行ファイル / 結果 CSV / 保存先フォルダ 等）とパスを見てして、置き場所と名前を確認する |
+| `ComkenFileNotFoundError` | ファイル・フォルダが見つからない（対象はメッセージに出る） | メッセージに表示された対象（Excel ファイル / CSV ファイル / Access ファイル / config.ini / Outlook 添付 / 保存先フォルダ 等）とパスを見てして、置き場所と名前を確認する |
 | `TimeoutError` | ダウンロードが終わらない | ネットワークの状態を確認して再実行する |
 | `UnsupportedFileSuffixError` | 対応外の拡張子が指定された | CSV / Excel の対応する拡張子のファイルを指定する |
 | `InvalidColumnError` | 列の指定が正しくない（打ち間違いなど） | 列は番号（1, 2, …）か列記号（"A", "AA"）で指定する |

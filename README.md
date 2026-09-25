@@ -37,7 +37,7 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 |---|---|
 | はじめて使う | この README の「[はじめて使う人へ](#はじめて使う人へ)」 |
 | 何が用意されているか探す | このREADMEの「[モジュール一覧](#モジュール一覧)」 |
-| モジュールの使い方を知る | [CSV](docs/機能/csv.md)・[Excel](docs/機能/excel.md)・[Access](docs/機能/access.md)・[Outlook](docs/機能/outlook.md)・[Windows](docs/機能/windows.md)・[ブラウザ](docs/機能/browser.md)・[Salesforce](docs/機能/salesforce.md)・[Data Loader（CLI 実行）](docs/機能/dataloader.md)・[core の部品](docs/機能/core.md)・[認証情報](docs/機能/credentials.md)・[祝日・営業日判定](docs/機能/holidays.md)・[Salesforceレポートダウンローダー](docs/機能/salesforce-downloader.md)・[Excel表を型付き設定として読む](docs/機能/master-table.md) |
+| モジュールの使い方を知る | [CSV](docs/機能/csv.md)・[Excel](docs/機能/excel.md)・[Access](docs/機能/access.md)・[Outlook](docs/機能/outlook.md)・[Windows](docs/機能/windows.md)・[ブラウザ](docs/機能/browser.md)・[Salesforce](docs/機能/salesforce.md)・[core の部品](docs/機能/core.md)・[認証情報](docs/機能/credentials.md)・[祝日・営業日判定](docs/機能/holidays.md)・[Salesforceレポートダウンローダー](docs/機能/salesforce-downloader.md)・[Excel表を型付き設定として読む](docs/機能/master-table.md) |
 | **初めて外部システムにつなぐ** | ID とパスワードの[登録](docs/機能/credentials.md#登録初回だけ) → [Salesforce につないで確かめる](docs/機能/salesforce.md#つないで確かめるコマンド) |
 | 引数・戻り値・例外を正確に知る | [公開 API](docs/自動生成/API.md)（**自動生成**） |
 | エラーが出た | [エラー対応ガイド](docs/ERRORS.md)（エラー表は **自動生成**） |
@@ -83,7 +83,6 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 | [Browser（Edge）](docs/機能/browser.md) | Edge ブラウザ操作 |
 | [Browser 公認サイト](docs/機能/browser.md) | ライブラリ公認の `SiteBase` サブクラスを集めた置き場（`comken.toolbox.browser.sites`）。プロジェクト横断で再利用するサイトだけ昇格する |
 | [Salesforce（requests）](docs/機能/salesforce.md) | Salesforce の SOQL・レコード操作・レポート取得・API 使用量の計測 |
-| [Data Loader（CLI 実行）](docs/機能/dataloader.md) | Salesforce Data Loader の CLI 実行を手伝う（大量データの一括変更。正確な構文は環境ごとに確認が必要） |
 | [credentials（DPAPI）](docs/機能/credentials.md) | パスワード・client_secret の暗号化保存（Windows ユーザーに紐付く） |
 | [祝日・営業日判定](docs/機能/holidays.md) | 内閣府の祝日 CSV と会社休日ルールを合成した「会社用カレンダー CSV」を Python・VBA 共通で読み取って営業日判定（Excel の WORKDAY 互換） |
 | [core（部品）](docs/機能/core.md) | `from comken.core import ...` で取る部品群。ファイル検索・操作・圧縮・ファイル名の組み立て／データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時 |

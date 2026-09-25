@@ -54,7 +54,6 @@ ComkenError
 │   ├── ReportReservePathLimitError
 │   ├── ReportFolderNotFoundError
 │   └── ScheduledDownloadFailedError
-└── DataLoaderError
 
 カテゴリ基底クラスはまとめて捕捉するために使い、直接送出しない。
 """
@@ -115,7 +114,6 @@ from comken.exceptions.tables import (
 )
 from comken.exceptions.web import (
     BrowserError,
-    DataLoaderError,
     ElementNotFoundError,
     LoginFailedError,
     SalesforceAuthError,
@@ -172,7 +170,6 @@ __all__ = [
     "ReportFolderNotFoundError",
     "ReportReservePathLimitError",
     "ScheduledDownloadFailedError",
-    "DataLoaderError",
     "TableError",
     "InvalidTableInputError",
     "TableColumnNotFoundError",

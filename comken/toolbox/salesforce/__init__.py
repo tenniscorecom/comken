@@ -19,8 +19,6 @@ URL と認証情報のシステム名は組織クラスがクラス定数とし�
 設計の背景は docs/HISTORY.md「認証方式」を参照。
 
     SalesforceBase              1組織ぶんの API クライアントの土台（組織クラスで継承する）
-    DataLoaderCLI                Salesforce Data Loader の CLI 呼び出し（サブプロセス実行）
-    DataLoaderResult             DataLoaderCLI.run() の戻り値
     RefreshTokenOAuth            Authorization Code + Refresh Token Flow（既定）
     APIMetrics                   API 呼び出しの計測。SalesforceBase.metrics が持っている
     APIUsage                     組織の 24 時間 API 消費量
@@ -45,7 +43,6 @@ URL と認証情報のシステム名は組織クラスがクラス定数とし�
 from types import ModuleType
 from typing import TYPE_CHECKING
 
-from comken.toolbox.salesforce.dataloader import DataLoaderCLI, DataLoaderResult
 from comken.toolbox.salesforce.metrics import APIMetrics, APIUsage
 
 # requests の存在チェックだけ先に行う。依存が無い環境でもこのパッケージを
@@ -102,8 +99,6 @@ def __dir__() -> list[str]:
 
 __all__ = [
     "SalesforceBase",
-    "DataLoaderCLI",
-    "DataLoaderResult",
     "RefreshTokenOAuth",
     "APIMetrics",
     "APIUsage",

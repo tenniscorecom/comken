@@ -667,6 +667,16 @@ master に何をコミットしても本番には流れない。**
 
 ロールバックは共有サーバーで前のタグに戻すだけ。
 
+### Salesforce Data Loader の CLI 呼び出しを削除した（2026-09-26）
+
+`comken.toolbox.salesforce.dataloader.DataLoaderCLI` /
+`DataLoaderResult` と例外 `DataLoaderError`（`comken.exceptions.web`）、
+`tests/test_dataloader.py`、`docs/機能/dataloader.md`、および README と
+テンプレート ERRORS.md の関連記述を削除した。**社内で使っていない**ため
+（YAGNI）。Salesforce の **読み取り側（レポート / SOQL / 認証 / 組織クラス）
+は何も削っていない**。Salesforce 公式の Data Loader（外部製品）への参照は
+「読み取りが主用途」の節などに歴史として残してある。
+
 ## 15. モジュール・公開 API の改名（2026-09-25）
 
 `comken.core.clock` → `comken.core.dates`。コア層の日付・時刻ユーティリティ

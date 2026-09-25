@@ -96,7 +96,6 @@ ERROR_CATEGORIES = (
     ErrorCategory("ブラウザ（Edge 自動操作）のエラー", (exceptions.BrowserError,)),
     ErrorCategory("Table のエラー", (exceptions.TableError,)),
     ErrorCategory("Windows 操作のエラー", (exceptions.WindowNotFoundError,)),
-    ErrorCategory("Data Loader のエラー", (exceptions.DataLoaderError,)),
 )
 DIRECT_ERROR_CATEGORIES = {
     exceptions.ComkenFileNotFoundError: "ファイル・設定などのエラー",
