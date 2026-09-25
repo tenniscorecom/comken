@@ -45,17 +45,9 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
-| `ExcelError` | Excel に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
+| `ExcelError` | Excel に関するエラー。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `ExcelApplicationNotAvailableError` | Excel を起動できない | この PC に Excel が入っているか確認する。入れられない PC で動かすなら、数式ではなく値で書いてもらう（管理表なら、数式の結果を貼り付けてもらう） |
-| `ExcelUsageError` | Excel の使い方に反する操作をした | エラーに表示された操作名・見出し数・拡張子を確認する。- ``read_only=True`` への書き込みは read_only=False で開き直す- データシート／表示用シートの API は ``Excel`` クラスのドキュメントを参照する |
-| `ExcelHeaderError` | Excel の見出し行・テーブル定義に関するエラー | - Excel の1行目（見出し行）の空欄・重複を直す- テーブル定義範囲が狭すぎないか、データシートと表示用シートの取り違えがないか確認する |
-| `ExcelNameError` | Excel のシート名・テーブル名に関するエラー | - 既に存在する名前は避ける（シート／テーブル）- ``PY_`` 接頭辞は ``create_data_sheet`` 用なので ``create_sheet`` には付けない- 空白・数字始まり・セル参照のような名前はテーブル名に使わない |
-| `ExcelSaveError` | 保存時に Excel ファイルを安全に置き換えられなかった | 元ファイルは変更されていない。空き容量・Excel のバージョン整合性・VBA の保存形式（``.xlsm`` になっているか）を確認して再実行する |
 | `SheetNotFoundError` | 指定した名前のシートがない | Excel を開いて、下のシート名（タブ）が変わっていないか確認する。変えた場合は元に戻す |
-| `TableNotFoundError` | 指定したテーブルがシートにない | エラーに表示された既存テーブル名を確認する |
-| `TableFormulaOverwriteError` | テーブル内の人が入れた数式を値で潰そうとした | 数式を保持したい場合は、``replace()`` のあとに該当セルへ元の数式を書き戻す。意図的に値で潰してよいときだけ ``allow_formula_overwrite=True`` を渡す |
-| `TableColumnMismatchError` | 渡された Table の列が既存テーブルの見出しと一致しない | 既存の見出しと一致するように渡す Table の列を修正する。数式で参照される列は渡さない（「金額」のように計算で決まる列をTable に含めない、または数式を保持する前提の列として残す） |
-| `MacroError` | Excel のマクロが失敗した | Excel をすべて閉じて再実行する。続く場合は管理者へ |
 
 ## Access のエラー
 
@@ -81,13 +73,9 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
 | `SiteOwnerRequiredError` | `SiteBase` / `SalesforceBase` のサブクラスに `OWNER` が設定されていない | サブクラスに `OWNER = "プロジェクト名 / 担当者"` を1行追加する。ライブラリ（`comken.toolbox.browser.sites/` または`comken.toolbox.salesforce.sites/`）に入れるべきサイトかは`docs/CONVENTIONS.md` の「サイト／組織クラスを昇格させる基準」を参照して判断する。ライブラリに昇格したい場合はライブラリ管理者へ連絡する。 |
-| `CSVError` | CSV に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
-| `EncodingDetectionError` | CSV の文字コードを判定できない | CSV の保存形式を確認し、管理者へ連絡する |
-| `CSVHeaderError` | CSV の見出し行に関するエラー | - 見出し行を追加するか、ヘッダーなし CSV なら ``columns`` を指定する- 1行目にある空欄・重複した見出しを直す- 新規 CSV に書き出すときは ``CSV(columns=[...])`` で列を指定する |
-| `CSVRowLengthError` | CSV のデータ行の列数が見出し数と一致しない | 表示された行の区切り文字と値の数を確認する |
-| `ColumnNotFoundError` | Excel・CSV・データ比較で列が見つからないエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
+| `CSVError` | CSV に関するエラー。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
+| `ColumnNotFoundError` | Excel・CSV・データ比較で列が見つからないエラー。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `ExcelColumnNotFoundError` | Excel の列見出しが見つからない | Excel の1行目を確認する |
-| `KeyColumnNotFoundError` | 比較に使うキー列が見つからない | Excel・CSV の列名を確認する |
 | `TransferSourceColumnNotFoundError` | 列名転記で、lookup の転記元列が見つからない | 転記元データと config.ini のマッピング左側を確認する |
 | `InvalidColumnError` | 列の指定が正しくない（打ち間違いなど） | 列は番号（1, 2, …）か列記号（"A", "AA"）で指定する |
 | `ConfigError` | config.ini に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
@@ -178,16 +166,12 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
-| `TransferDestinationMultipleMatchError` | 転記先のキーに一致する行が複数ある | mapping の先頭列に対応する転記先列の値を一意にする。キーが ``None`` か ``""`` の行は突合対象外なので、空欄のキーが複数あってもこの例外は出ない。 |
-| `TableNotOpenError` | 表を with 文で開かずに操作した。 | ``with`` 文の中で使う（CSV / Excel などは ``__enter__`` で表を開く） |
-| `TransferDestinationMissingError` | Transfer.apply_mapping() に転記先が None で渡された | matched_rows() を使うか、``transfer_rows()`` の ``(read_row, None)``を ``if write_row is None:`` で分岐してから渡す。 新規行を追加する場合は ``Transfer`` の責務ではなく、``Table.append()`` 等で利用者側で対応する。 |
-| `TableError` | 表データの読み書き・転記に関するエラー | 画面に表示された具体的なエラー内容を確認する |
-| `InvalidTableInputError` | Table API に対応しない入力が渡された。 | columns、rows、types の型と列名を確認する |
 | `InvalidTableOperationError` | Table API で実行できない操作が指定された。 | 対象が読み取り専用でないか、指定したテーブル名が正しいか確認する |
+| `TableNotOpenError` | 表を with 文で開かずに操作した。 | ``with`` 文の中で使う（CSV / Excel などは ``__enter__`` で表を開く） |
+| `TableError` | 表データの読み書き・転記に関するエラー。具体的な状況はメッセージに出る | 画面に表示された具体的なエラー内容を確認する |
+| `InvalidTableInputError` | Table API に対応しない入力が渡された。 | columns、rows、types の型と列名を確認する |
 | `TableColumnNotFoundError` | Table に指定された列が存在しない。 | Table.columns を確認し、存在する列名を指定する |
 | `TableDuplicateKeyError` | Table の索引または比較に使うキーが重複している。 | キー列の値を一意にしてから処理をやり直す |
-| `TableRowColumnsError` | 行の列名が Table.columns と一致しない | 不足列と余分な列を直す。列を絞る場合は select() を使う |
-| `TableTypeConversionError` | Table の値を指定型へ変換できない | 表示された行番号・列名の値を、指定した型へ変換できる内容に直す |
 
 ## Windows 操作のエラー
 

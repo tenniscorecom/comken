@@ -33,7 +33,7 @@ from openpyxl.utils.cell import range_boundaries
 from openpyxl.worksheet.worksheet import Worksheet
 
 from comken.exceptions import (
-    ExcelHeaderError,
+    ExcelError,
     InvalidTableInputError,
 )
 
@@ -182,9 +182,11 @@ def _check_header_not_empty(header_cells: list[Any]) -> None:
             "_check_header_not_empty: 空見出しを検出: empty_columns=%s",
             empty_columns,
         )
-        raise ExcelHeaderError(
+        raise ExcelError(
             f"ヘッダー行に空のセルがあります。列番号: {empty_columns}\n"
             "Excelの1行目（ヘッダー行）を確認してください。"
+            "\n対処: Excel の1行目（見出し行）の空欄を直す。"
+            "テーブル定義範囲が狭すぎないか、データシートと表示用シートの取り違えがないか確認してください。"
         )
 
 
@@ -271,7 +273,9 @@ def _check_no_duplicate_headers(header_cells: list[Any]) -> None:
             "_check_no_duplicate_headers: 重複見出しを検出: duplicates=%s",
             duplicates,
         )
-        raise ExcelHeaderError(
+        raise ExcelError(
             f"ヘッダー行に同じ見出しがあります: {duplicates}\n"
             "Excelの見出し名を重複しない名前に変更してください。"
+            "\n対処: Excel の1行目（見出し行）の重複を直す。"
+            "テーブル定義範囲が狭すぎないか、データシートと表示用シートの取り違えがないか確認してください。"
         )

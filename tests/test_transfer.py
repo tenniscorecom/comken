@@ -6,9 +6,7 @@ from comken.core.table import Table, Transfer
 from comken.exceptions.table import (
     InvalidTableInputError,
     TableColumnNotFoundError,
-    TransferDestinationMissingError,
-    TransferDestinationMultipleMatchError,
-    TransferMappingError,
+    TableError,
 )
 
 
@@ -34,14 +32,14 @@ def test_transfer_init_rejects_non_table() -> None:
 
 
 def test_transfer_init_requires_mapping_and_keys() -> None:
-    """mapping / read_key / write_key が無ければ TransferMappingError。"""
+    """mapping / read_key / write_key が無ければ TableError。"""
     source = Table(["id"], [{"id": 1}])
     destination = Table(["id"], [{"id": 1}])
-    with pytest.raises(TransferMappingError):
+    with pytest.raises(TableError):
         Transfer(source, destination, {}, read_key="id", write_key="id")
-    with pytest.raises(TransferMappingError):
+    with pytest.raises(TableError):
         Transfer(source, destination, {"id": "id"}, read_key=None, write_key="id")
-    with pytest.raises(TransferMappingError):
+    with pytest.raises(TableError):
         Transfer(source, destination, {"id": "id"}, read_key="id", write_key=None)
 
 
@@ -49,7 +47,7 @@ def test_transfer_init_rejects_mismatched_key_lengths() -> None:
     """read_key と write_key の要素数を揃える。"""
     source = Table(["group", "id"], [{"group": "A", "id": 1}])
     destination = Table(["group", "id"], [{"group": "A", "id": 1}])
-    with pytest.raises(TransferMappingError):
+    with pytest.raises(TableError):
         Transfer(
             source,
             destination,
@@ -205,7 +203,7 @@ def test_transfer_apply_mapping_does_not_mutate_input_tables() -> None:
 
 
 def test_transfer_apply_mapping_with_none_destination_raises() -> None:
-    """apply_mapping に None の write_row を渡すと TransferDestinationMissingError。"""
+    """apply_mapping に None の write_row を渡すと TableError。"""
     source = Table(["id", "value"], [{"id": 2, "value": "new"}])
     destination = Table(["id", "value"], [{"id": 1, "value": "old"}])
     transfer = Transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
@@ -213,7 +211,7 @@ def test_transfer_apply_mapping_with_none_destination_raises() -> None:
     # transfer_rows() の (read_row, None) をそのまま渡すと例外になる
     for read_row, write_row in transfer.transfer_rows():
         if write_row is None:
-            with pytest.raises(TransferDestinationMissingError):
+            with pytest.raises(TableError):
                 transfer.apply_mapping(read_row, write_row)
 
 
@@ -315,13 +313,13 @@ def test_transfer_rejects_missing_write_key_column() -> None:
 
 
 def test_transfer_rejects_duplicate_write_key() -> None:
-    """write_key が重複する行を持っていれば TransferDestinationMultipleMatchError。"""
+    """write_key が重複する行を持っていれば TableError。"""
     source = Table(["id", "value"], [{"id": "1", "value": "new"}])
     destination = Table(
         ["id", "value"],
         [{"id": "1", "value": "one"}, {"id": "1", "value": "two"}],
     )
-    with pytest.raises(TransferDestinationMultipleMatchError):
+    with pytest.raises(TableError):
         list(
             Transfer(
                 source, destination, {"value": "value"}, read_key="id", write_key="id"
@@ -422,7 +420,7 @@ def test_blank_key_rows_are_excluded_from_matching() -> None:
     """空キーは照合に使わず、result() にも転記されない。
 
     既存バグの例: write 側の空キーが「一致した行」と判定されて
-    TransferDestinationMultipleMatchError で止まる事故を防ぐ。
+    TableError で止まる事故を防ぐ。
     """
     source = Table(
         ["id", "name"],
@@ -560,7 +558,7 @@ def test_multiple_blank_write_keys_do_not_raise_multiple_match() -> None:
     """write 側に空キーが複数あっても例外にならない。
 
     修正前は同じ空キー（``""``）同士が一致と判定され
-    TransferDestinationMultipleMatchError で止まっていた。
+    TableError で止まっていた。
     """
     source = Table(["id", "value"], [{"id": "1", "value": "new"}])
     destination = Table(

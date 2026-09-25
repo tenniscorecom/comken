@@ -27,10 +27,7 @@ from comken.core.table.model import Table
 from comken.core.timer import measure
 from comken.exceptions import (
     ComkenFileNotFoundError,
-    ExcelHeaderError,
-    ExcelNameError,
-    ExcelSaveError,
-    ExcelUsageError,
+    ExcelError,
     InvalidTableOperationError,
     SheetNotFoundError,
     TableNotOpenError,
@@ -401,7 +398,7 @@ class Excel:
         assert self._workbook is not None
         full_name = self._with_python_prefix(name)
         if full_name in self._workbook.sheetnames:
-            raise ExcelNameError(
+            raise ExcelError(
                 f"シート「{full_name}」は既に存在します。\n"
                 "別のシート名を指定するか、既存のシートをリネームしてください。"
             )
@@ -427,12 +424,12 @@ class Excel:
         self._ensure_writable("create_sheet")
         assert self._workbook is not None
         if self._is_data_sheet_name(name):
-            raise ExcelNameError(
+            raise ExcelError(
                 f"シート「{name}」は表示用シートとして作成できません。\n"
                 "「PY_」で始まる名前はデータシート用なので create_data_sheet() を使ってください。"
             )
         if name in self._workbook.sheetnames:
-            raise ExcelNameError(
+            raise ExcelError(
                 f"シート「{name}」は既に存在します。\n"
                 "別のシート名を指定するか、既存のシートをリネームしてください。"
             )
@@ -604,8 +601,8 @@ class Excel:
         Raises:
             InvalidTableOperationError: ``engine='com'`` で開いたインスタンスで呼ばれたとき。
             InvalidTableInputError: 範囲・結合・空データ行のいずれかが条件違反のとき。
-            ExcelHeaderError: 見出し行に空セルがある／同じ名前が複数あるとき。
-            ExcelNameError: ``table_name`` が命名規則に合わない／既存テーブル名と衝突するとき。
+            ExcelError: 見出し行に空セルがある／同じ名前が複数あるとき、
+                ``table_name`` が命名規則に合わない／既存テーブル名と衝突するとき。
         """
         self._ensure_open()
         if self._engine != "openpyxl":
@@ -640,7 +637,7 @@ class Excel:
         # ``Sheet.create_table`` と異なり ``PY_T_`` プレフィックスは補わない
         # （表示用シートの既存表をそのままテーブル化するため）。
         if table_name in worksheet.tables:
-            raise ExcelNameError(
+            raise ExcelError(
                 f"テーブル「{table_name}」は既に存在します。\n別のテーブル名を指定してください。"
             )
         # テーブル化: 既存値はそのままで ``Table`` 定義だけを書き加える。
@@ -764,9 +761,11 @@ class Excel:
                     self.path,
                     temporary_path,
                 )
-                raise ExcelSaveError(
+                raise ExcelError(
                     f"保存予定のExcelファイルを検証できませんでした: {self.path}\n"
                     f"元ファイルは変更していません。（詳細: {error}）"
+                    "\n対処: 空き容量・Excel のバージョン整合性・VBA の保存形式"
+                    "（.xlsm になっているか）を確認して再実行してください。"
                 ) from error
             finally:
                 if verification is not None:
@@ -776,7 +775,7 @@ class Excel:
                     "保存後に VBA バイナリが変化しました: path=%s",
                     self.path,
                 )
-                raise ExcelSaveError(
+                raise ExcelError(
                     f"VBAを保持できないためExcelを保存しませんでした: {self.path}\n"
                     "元ファイルは変更していません。管理者に連絡してください。"
                 )
@@ -909,7 +908,7 @@ class Excel:
         headers = list(rows[0])
         empty_columns = [index for index, header in enumerate(headers, start=1) if header is None]
         if empty_columns:
-            raise ExcelHeaderError(
+            raise ExcelError(
                 f"ヘッダー行に空のセルがあります。列番号: {empty_columns}\n"
                 "Excelの1行目（ヘッダー行）を確認してください。"
             )
@@ -971,7 +970,7 @@ class Excel:
     def _ensure_writable(self, operation: str) -> None:
         self._ensure_normal_workbook()
         if self._read_only:
-            raise ExcelUsageError(f"read_only=True のExcelでは{operation}できません。")
+            raise ExcelError(f"read_only=True のExcelでは{operation}できません。")
 
     def _sync_working_file(self) -> None:
         """COMへ渡す前に現在状態を作業ファイルへ同期する。"""

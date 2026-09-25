@@ -7,9 +7,7 @@ import pytest
 from comken.core.table import Table
 from comken.exceptions import (
     ExcelError,
-    ExcelHeaderError,
     InvalidTableOperationError,
-    TableColumnMismatchError,
 )
 from comken.toolbox.excel import Excel
 
@@ -27,11 +25,11 @@ def test_read_raises_when_range_read_returns_no_rows(tmp_path) -> None:
         # COM 読み込みを空結果にして rows が空になるシナリオを作る
         with (
             patch.object(excel, "_read_range_with_com", return_value=[]),
-            pytest.raises(ExcelHeaderError) as exc_info,
+            pytest.raises(ExcelError) as exc_info,
         ):
             table.read(force_com=True)
 
-        assert exc_info.value.sheet_name == "PY_Users"
+        assert "PY_Users" in str(exc_info.value)
         assert "テーブル範囲を読み取れませんでした" in str(exc_info.value)
 
 
@@ -43,16 +41,11 @@ def test_read_uses_header_error_when_header_row_is_empty(tmp_path) -> None:
 
         with (
             patch.object(excel, "_read_range_with_com", return_value=[(None,)]),
-            pytest.raises(ExcelHeaderError) as exc_info,
+            pytest.raises(ExcelError) as exc_info,
         ):
             table.read(force_com=True)
 
     assert "列番号: [1]" in str(exc_info.value)
-
-
-def test_empty_excel_table_error_is_a_subclass_of_excel_error() -> None:
-    """ExcelHeaderError が ExcelError の派生であることを確認する。"""
-    assert issubclass(ExcelHeaderError, ExcelError)
 
 
 def test_replace_on_empty_table_adds_first_data_row(tmp_path) -> None:
@@ -75,7 +68,7 @@ def test_replace_on_empty_table_adds_first_data_row(tmp_path) -> None:
 def test_replace_with_empty_rows_raises_when_omitting_non_formula_column(
     tmp_path,
 ) -> None:
-    """``replace()`` で 0 行にしたとき、非数式列を省くと ``TableColumnMismatchError``。"""
+    """``replace()`` で 0 行にしたとき、非数式列を省くと ``ExcelError``。"""
     path = tmp_path / "shrink.xlsx"
     with Excel(path) as excel:
         table = excel.create_data_sheet("Users").create_table(
@@ -84,7 +77,7 @@ def test_replace_with_empty_rows_raises_when_omitting_non_formula_column(
         )
         # 旧 ref は A1:B3。非数式列「name」を省いて 0 行で置換しようとすると
         # データ欠落を防ぐために例外になる。
-        with pytest.raises(TableColumnMismatchError) as exc_info:
+        with pytest.raises(ExcelError) as exc_info:
             table.replace(Table(["id"], []))
         assert "name" in str(exc_info.value)
         # 既存データはそのまま残っている

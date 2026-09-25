@@ -351,7 +351,7 @@ rows = table.to_rows()
 
 **空キー (``None`` / ``""``) は突合対象外**。``0`` / ``False`` は空ではない。
 空キーは read / write のどちらでも ``unmatched()`` 側へ流れるため、
-write 側に空キーが複数あっても ``TransferDestinationMultipleMatchError``
+write 側に空キーが複数あっても ``TableError``
 にはならない。
 
 ---

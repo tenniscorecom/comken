@@ -14,8 +14,6 @@ from comken.exceptions.table import (
     TableColumnNotFoundError,
     TableDuplicateKeyError,
     TableError,
-    TableRowColumnsError,
-    TableTypeConversionError,
 )
 
 logger = logging.getLogger(__name__)
@@ -53,7 +51,13 @@ class Table:
         missing = [column for column in self.columns if column not in row]
         extra = [column for column in row if column not in self.columns]
         if missing or extra:
-            raise TableRowColumnsError(row_number, missing, extra)
+            raise TableError(
+                f"Table の{row_number}件目の列名が columns と一致しません。"
+                f"不足列: {missing}、余分な列: {extra}。"
+                "列を絞る場合は select() を使ってください。"
+                "\n対処: 不足列と余分な列を直してください。"
+                "列を絞る場合は select() を使ってください。"
+            )
         normalized = dict(row)
         for column, converter in self.types.items():
             if column not in self.columns:
@@ -63,7 +67,12 @@ class Table:
             except (KeyboardInterrupt, SystemExit):
                 raise
             except Exception as exc:
-                raise TableTypeConversionError(row_number, column, row[column]) from exc
+                raise TableError(
+                    f"Table の{row_number}件目、列「{column}」の値"
+                    f"「{row[column]}」を型変換できません。"
+                    "\n対処: 表示された行番号・列名の値を、"
+                    "指定した型へ変換できる内容に直してください。"
+                ) from exc
         return normalized
 
     @classmethod

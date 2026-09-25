@@ -1251,7 +1251,7 @@ class TestBulkQuery:
 
         各ページ末尾の改行を維持したまま追記していくとページ境界に
         空行ができ、 ``csv.DictReader`` が空行を読んで
-        ``CSVRowLengthError`` を送出する。``splitlines()`` で末尾改行を
+        ``CSVError`` を送出する。``splitlines()`` で末尾改行を
         落としてから連結する実装が正しければエラーにならない。
         """
         created = _response(json_body={"id": self.JOB_ID, "state": "UploadComplete"})

@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from comken.core.clock import now
-from comken.exceptions import CSVHeaderError, EncodingDetectionError
+from comken.exceptions import CSVError
 from comken.services.salesforce_downloader.sheets.history import (
     COLUMNS,
     FAILURE,
@@ -117,7 +117,7 @@ def test_read_history_returns_empty_table_when_history_missing(tmp_path) -> None
 
 def test_read_history_rejects_header_mismatch(tmp_path) -> None:
     """見出しが壊れている（空の見出しがある／列名が重複している）場合は
-    ``CSVHeaderError`` で止める。
+    ``CSVError`` で止める。
 
     列数が違う／列名が一部欠落している／順序が違う程度の変更は
     ``migrate_row()`` で吸収するため、ここでは**致命的に壊れたケース**
@@ -129,12 +129,12 @@ def test_read_history_rejects_header_mismatch(tmp_path) -> None:
     # 2列目に空文字の見出し = ``DictReader`` が列値の対応を取れない壊れ方
     history_path.write_text("管理番号,,成否\n1000,x,成功\n", encoding="utf-8-sig")
 
-    with pytest.raises(CSVHeaderError):
+    with pytest.raises(CSVError):
         read_history(history_path)
 
 
 def test_read_history_rejects_duplicate_headers(tmp_path) -> None:
-    """見出しに重複がある場合も ``CSVHeaderError`` で止める。
+    """見出しに重複がある場合も ``CSVError`` で止める。
 
     ``DictReader`` の列名の対応が曖昧になるため、致命的に壊れたケースとして
     共通の ``CSV`` クラスの例外で通知される。
@@ -146,12 +146,12 @@ def test_read_history_rejects_duplicate_headers(tmp_path) -> None:
         encoding="utf-8-sig",
     )
 
-    with pytest.raises(CSVHeaderError):
+    with pytest.raises(CSVError):
         read_history(history_path)
 
 
 def test_successful_files_today_rejects_bad_header(tmp_path) -> None:
-    """``successful_files_today`` も見出しの致命的な破損を ``CSVHeaderError`` で止める。
+    """``successful_files_today`` も見出しの致命的な破損を ``CSVError`` で止める。
 
     4 つの読み取り関数は共通ヘルパー ``_read_rows`` を通るため、同じ例外で
     検出される（履歴専用の例外クラスを新設しない）。
@@ -159,28 +159,28 @@ def test_successful_files_today_rejects_bad_header(tmp_path) -> None:
     history_path = tmp_path / "履歴.csv"
     history_path.write_text(",,,\n1000,x,成功,z\n", encoding="utf-8-sig")
 
-    with pytest.raises(CSVHeaderError):
+    with pytest.raises(CSVError):
         successful_files_today(history_path, "1001")
 
 
 def test_schedule_succeeded_today_rejects_bad_header(tmp_path) -> None:
-    """``schedule_succeeded_today`` も見出しの致命的な破損を ``CSVHeaderError`` で止める。"""
+    """``schedule_succeeded_today`` も見出しの致命的な破損を ``CSVError`` で止める。"""
     history_path = tmp_path / "履歴.csv"
     history_path.write_text(
         "管理番号,管理番号,成否,管理番号\n1000,x,成功,y\n",
         encoding="utf-8-sig",
     )
 
-    with pytest.raises(CSVHeaderError):
+    with pytest.raises(CSVError):
         schedule_succeeded_today(history_path, "S001")
 
 
 def test_truncated_today_rejects_bad_header(tmp_path) -> None:
-    """``truncated_today`` も見出しの致命的な破損を ``CSVHeaderError`` で止める。"""
+    """``truncated_today`` も見出しの致命的な破損を ``CSVError`` で止める。"""
     history_path = tmp_path / "履歴.csv"
     history_path.write_text(",,,\n1000,x,成功,z\n", encoding="utf-8-sig")
 
-    with pytest.raises(CSVHeaderError):
+    with pytest.raises(CSVError):
         truncated_today(history_path, "1001")
 
 
@@ -517,12 +517,12 @@ class TestEncodingAutoDetection:
         """UTF-8 / CP932 のどちらでも読めないバイト列は明示的にエラーにする。
 
         エンコーディングを握りつぶすと「読めたように見えて壊れた値」の事故に
-        つながるため、``EncodingDetectionError`` で停止する。
+        つながるため、``CSVError`` で停止する。
         """
         history_path = tmp_path / "履歴.csv"
         history_path.write_bytes(b"\x80\x81\x82\x83")  # UTF-8 / CP932 どちらでも読めないバイト列
 
-        with pytest.raises(EncodingDetectionError):
+        with pytest.raises(CSVError):
             read_history(history_path)
 
 

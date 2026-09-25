@@ -24,13 +24,10 @@
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
 | `SheetNotFoundError` | 指定した名前のシートがない | Excel を開いて、下のシート名（タブ）が変わっていないか確認する。変えた場合は元に戻す |
-| `ExcelNameError` | シート名・テーブル名が衝突・命名規則違反 | 別のシート名／テーブル名を指定するか、既存の名前を変更する。``PY_`` 接頭辞は ``create_data_sheet`` 用 |
-| `TableNotFoundError` | 指定したテーブルがシートにない | エラーに表示された既存テーブル名を確認する |
+| `ExcelApplicationNotAvailableError` | Excel を起動できない | この PC に Excel が入っているか確認する。入れられない PC で動かすなら、数式ではなく値で書いてもらう（管理表なら、数式の結果を貼り付けてもらう） |
 | `ColumnNotFoundError` | 列が見つからない | Excel の1行目を確認する |
-| `MacroError` | Excel のマクロが失敗した | Excel をすべて閉じて再実行する。続く場合は管理者へ |
-| `ExcelHeaderError` | 見出し行に空欄・重複、または空テーブル | Excel の1行目（見出し行）の空欄・重複を直す |
-| `ExcelUsageError` | ``read_only=True`` への書き込み・データシート／表示用シートの API 違反・見出し数不足・保存拡張子の不一致 | エラーに表示された操作名・見出し数・拡張子を確認する |
-| `ExcelSaveError` | 保存時に Excel ファイルを安全に置き換えられない | 元ファイルは変更されていない。空き容量・Excel のバージョン整合性・VBA の保存形式を確認 |
+| `InvalidTableOperationError` | Table API で実行できない操作が指定された。 | 対象が読み取り専用でないか、指定したテーブル名が正しいか確認する |
+| `TableNotOpenError` | 表を with 文で開かずに操作した。 | ``with`` 文の中で使う（CSV / Excel などは ``__enter__`` で表を開く） |
 
 ## Access のエラー
 
@@ -52,10 +49,6 @@
 | `ComkenFileNotFoundError` | ファイル・フォルダが見つからない（対象はメッセージに出る） | メッセージに表示された対象（Excel ファイル / CSV ファイル / Access ファイル / config.ini / Outlook 添付 / Data Loader 実行ファイル / 結果 CSV / 保存先フォルダ 等）とパスを見てして、置き場所と名前を確認する |
 | `TimeoutError` | ダウンロードが終わらない | ネットワークの状態を確認して再実行する |
 | `UnsupportedFileSuffixError` | 対応外の拡張子が指定された | CSV / Excel の対応する拡張子のファイルを指定する |
-| `EncodingDetectionError` | CSV の文字コードを判定できない | CSV の保存形式を確認し、管理者へ連絡する |
-| `CSVHeaderError` | CSV に見出し行がない・空欄・重複・新規 CSV に列を指定できない | 見出し行を追加するか、ヘッダーなし CSV なら ``columns`` を指定する。1行目にある空欄・重複を直す。新規 CSV には ``CSV(columns=[...])`` で列を指定する |
-| `CSVRowLengthError` | CSV のデータ行の列数が見出し数と一致しない | 表示された行の区切り文字と値の数を確認する |
-| `KeyColumnNotFoundError` | 比較に使うキー列が見つからない | Excel・CSV の列名を確認する |
 | `InvalidColumnError` | 列の指定が正しくない（打ち間違いなど） | 列は番号（1, 2, …）か列記号（"A", "AA"）で指定する |
 | `ConfigCreatedFromExampleError` | config.ini が無かったので example から作った | 作られた config.ini の値を書き換えて、もう一度実行する |
 | `ConfigLowerCaseNameError` | config.ini のセクション名・キー名に小文字がある | 表示された名前を大文字に書き換える（`[files]` → `[FILES]`） |
@@ -76,6 +69,7 @@
 | `AccessError` | Access に関するエラー |
 | `CSVError` | CSV に関するエラー |
 | `ColumnNotFoundError` | Excel・CSV・データ比較で列が見つからないエラー |
+| `TableError` | 表データの読み書き・転記に関するエラー |
 | `ConfigError` | config.ini に関するエラー |
 
 ---

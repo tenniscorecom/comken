@@ -8,14 +8,11 @@ from comken.constants import Encoding
 from comken.core import Table
 from comken.exceptions import (
     ComkenFileNotFoundError,
-    CSVHeaderError,
-    CSVRowLengthError,
-    EncodingDetectionError,
+    CSVError,
     InvalidTableInputError,
     InvalidTableOperationError,
+    TableError,
     TableNotOpenError,
-    TableRowColumnsError,
-    TableTypeConversionError,
     UnsupportedFileSuffixError,
 )
 from comken.toolbox import csv as csv_package
@@ -141,14 +138,14 @@ class TestCSV:
     def test_auto_rejects_unknown_encoding_with_csv_exception(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
         path.write_bytes(b"\x81\x20\x81\x20")
-        with pytest.raises(EncodingDetectionError), CSV(path, encoding=Encoding.AUTO) as csv_file:
+        with pytest.raises(CSVError), CSV(path, encoding=Encoding.AUTO) as csv_file:
             csv_file.read()
 
     def test_headerless_rejects_rows_with_too_many_columns(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
         path.write_text("A001,1000,山田\n", encoding="utf-8-sig")
         with (
-            pytest.raises(CSVRowLengthError, match="1行目"),
+            pytest.raises(CSVError, match="1行目"),
             CSV(path, columns=["id", "amount"]) as csv_file,
         ):
             csv_file.read()
@@ -181,13 +178,13 @@ class TestCSV:
     def test_append_requires_matching_columns(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
         path.write_text("id,name\n1,A\n", encoding="utf-8-sig")
-        with pytest.raises(TableRowColumnsError), CSV(path) as csv_file:
+        with pytest.raises(TableError), CSV(path) as csv_file:
             csv_file.append({"id": "2"})
 
     def test_append_table_requires_matching_columns(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
         path.write_text("id\n1\n", encoding="utf-8-sig")
-        with pytest.raises(TableRowColumnsError), CSV(path) as csv_file:
+        with pytest.raises(TableError), CSV(path) as csv_file:
             csv_file.append(Table(["name"], [{"name": "A"}]))
 
     def test_save_writes_header_and_creates_parent(self, tmp_path) -> None:
@@ -208,7 +205,7 @@ class TestCSV:
         path = tmp_path / "data.csv"
         path.write_text("id,amount\n1,invalid\n", encoding="utf-8-sig")
         with (
-            pytest.raises(TableTypeConversionError, match="1件目、列「amount」"),
+            pytest.raises(TableError, match="1件目、列「amount」"),
             CSV(path, types={"amount": int}) as csv_file,
         ):
             csv_file.read()
@@ -230,14 +227,14 @@ class TestCSV:
     def test_rejects_invalid_headers(self, tmp_path, text) -> None:
         path = tmp_path / "data.csv"
         path.write_text(text, encoding="utf-8-sig")
-        with pytest.raises(CSVHeaderError), CSV(path) as csv_file:
+        with pytest.raises(CSVError), CSV(path) as csv_file:
             csv_file.read()
 
     @pytest.mark.parametrize("text", ["id,name\n1\n", "id,name\n1,A,extra\n"])
     def test_rejects_wrong_data_width(self, tmp_path, text) -> None:
         path = tmp_path / "data.csv"
         path.write_text(text, encoding="utf-8-sig")
-        with pytest.raises(CSVRowLengthError, match="2行目"), CSV(path) as csv_file:
+        with pytest.raises(CSVError, match="2行目"), CSV(path) as csv_file:
             csv_file.read()
 
     @pytest.mark.parametrize("text", ["id,name\n1\n", "id,name\n1,A,extra\n"])
@@ -250,7 +247,7 @@ class TestCSV:
         """
         path = tmp_path / "data.csv"
         path.write_text(text, encoding="utf-8-sig")
-        with pytest.raises(CSVRowLengthError, match="2行目"), CSV(path) as csv_file:
+        with pytest.raises(CSVError, match="2行目"), CSV(path) as csv_file:
             list(csv_file.iter_rows())
 
     def test_iter_rows_with_explicit_encoding_rejects_wrong_data_width(self, tmp_path) -> None:
@@ -258,7 +255,7 @@ class TestCSV:
         path = tmp_path / "data.csv"
         path.write_text("id,name\n1,山田\n2\n", encoding="utf-8")
         with (
-            pytest.raises(CSVRowLengthError, match="3行目"),
+            pytest.raises(CSVError, match="3行目"),
             CSV(path, encoding="utf-8") as csv_file,
         ):
             list(csv_file.iter_rows())
@@ -268,7 +265,7 @@ class TestCSV:
         path = tmp_path / "data.csv"
         path.write_text("A001,1000,山田\n", encoding="utf-8-sig")
         with (
-            pytest.raises(CSVRowLengthError, match="1行目"),
+            pytest.raises(CSVError, match="1行目"),
             CSV(path, columns=["id", "amount"]) as csv_file,
         ):
             list(csv_file.iter_rows())
@@ -278,7 +275,7 @@ class TestCSV:
         with pytest.raises(ComkenFileNotFoundError), CSV(path) as csv_file:
             csv_file.read()
         path.touch()
-        with pytest.raises(CSVHeaderError), CSV(path) as csv_file:
+        with pytest.raises(CSVError), CSV(path) as csv_file:
             csv_file.read()
         with CSV(path, columns=["id"]) as csv_file:
             assert csv_file.read() == []
@@ -286,7 +283,7 @@ class TestCSV:
     def test_utf8_bom_only_has_missing_header_error(self, tmp_path) -> None:
         path = tmp_path / "bom_only.csv"
         path.write_bytes(b"\xef\xbb\xbf")
-        with pytest.raises(CSVHeaderError), CSV(path) as csv_file:
+        with pytest.raises(CSVError), CSV(path) as csv_file:
             csv_file.read()
 
     def test_replace_empty_preserves_columns_or_requires_them(self, tmp_path) -> None:
@@ -295,7 +292,7 @@ class TestCSV:
         with CSV(existing) as csv_file:
             csv_file.replace([])
         assert existing.read_text(encoding="utf-8-sig") == "id\n"
-        with pytest.raises(CSVHeaderError), CSV(tmp_path / "new.csv") as csv_file:
+        with pytest.raises(CSVError), CSV(tmp_path / "new.csv") as csv_file:
             csv_file.replace([])
 
     def test_read_outside_with_block_raises_table_not_open_error(self, tmp_path) -> None:

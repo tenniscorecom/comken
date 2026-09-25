@@ -11,7 +11,7 @@ from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
 from comken.core.table import Table
-from comken.exceptions import TableColumnMismatchError, TableFormulaOverwriteError
+from comken.exceptions import ExcelError
 from comken.toolbox.excel import Excel
 
 
@@ -176,7 +176,7 @@ def test_replace_with_formula_raises_default(tmp_path: Path) -> None:
         # 人が「合計」列へ入れた数式
         table._worksheet["B2"] = "=SUM(B2:B3)"
 
-        with pytest.raises(TableFormulaOverwriteError) as exc_info:
+        with pytest.raises(ExcelError) as exc_info:
             table.replace([{"ID": "002", "合計": 200}])
 
         assert "B2" in str(exc_info.value)
@@ -212,7 +212,7 @@ def test_replace_only_checks_data_rows_not_header(tmp_path: Path) -> None:
     """見出し行の先頭が ``=`` だと、その文字列が見出し名として扱われる。
 
     見出しが ``=壊れ見出し`` に変わっているため、渡された Table の列 ``ID`` が
-    既存の見出しと一致せず ``TableColumnMismatchError`` になる。
+    既存の見出しと一致せず ``ExcelError`` になる。
     （数式検出はデータ部のみを見ることが、新しい動作でも保たれている。）
     """
     path = tmp_path / "header-formula.xlsx"
@@ -222,7 +222,7 @@ def test_replace_only_checks_data_rows_not_header(tmp_path: Path) -> None:
         excel.create_data_sheet("顧客").create_table("顧客", Table(["ID"], [{"ID": "001"}]))
         excel._workbook["PY_顧客"]["A1"] = "=壊れ見出し"
         # 既存の見出しと渡された Table の列名が一致しないため例外。
-        with pytest.raises(TableColumnMismatchError) as exc_info:
+        with pytest.raises(ExcelError) as exc_info:
             excel.data_sheet("顧客").table().replace([{"ID": "002"}])
         assert "ID" in str(exc_info.value)
 
@@ -319,12 +319,12 @@ class TestFormulaColumnPreservation:
             assert table._worksheet["D3"].value is None
 
     def test_replace_with_formula_column_in_passed_raises(self, tmp_path: Path) -> None:
-        """数式列を含む Table で ``replace()`` すると ``TableFormulaOverwriteError``。"""
+        """数式列を含む Table で ``replace()`` すると ``ExcelError``。"""
         path = tmp_path / "formula-included.xlsx"
         self._make_order_table(path)
         with Excel(path) as excel:
             table = excel.data_sheet("注文").table()
-            with pytest.raises(TableFormulaOverwriteError) as exc_info:
+            with pytest.raises(ExcelError) as exc_info:
                 table.replace(
                     Table(
                         ["顧客ID", "数量", "単価", "金額"],
@@ -357,7 +357,7 @@ class TestFormulaColumnPreservation:
         self._make_order_table(path)
         with Excel(path) as excel:
             table = excel.data_sheet("注文").table()
-            with pytest.raises(TableColumnMismatchError) as exc_info:
+            with pytest.raises(ExcelError) as exc_info:
                 table.replace(
                     Table(
                         ["顧客ID", "数量", "単価", "謎の列"],
@@ -374,7 +374,7 @@ class TestFormulaColumnPreservation:
         self._make_order_table(path)
         with Excel(path) as excel:
             table = excel.data_sheet("注文").table()
-            with pytest.raises(TableColumnMismatchError) as exc_info:
+            with pytest.raises(ExcelError) as exc_info:
                 # 「数量」を省いて渡すと、非数式列を落とす形になる
                 table.replace(
                     Table(
@@ -403,12 +403,12 @@ class TestFormulaColumnPreservation:
             assert table._worksheet["D4"].value == "=B4*C4"
 
     def test_append_with_formula_in_addition_raises(self, tmp_path: Path) -> None:
-        """``append()`` で数式列の値を渡すと ``TableFormulaOverwriteError``。"""
+        """``append()`` で数式列の値を渡すと ``ExcelError``。"""
         path = tmp_path / "formula-append-error.xlsx"
         self._make_order_table(path)
         with Excel(path) as excel:
             table = excel.data_sheet("注文").table()
-            with pytest.raises(TableFormulaOverwriteError):
+            with pytest.raises(ExcelError):
                 table.append(
                     Table(
                         ["顧客ID", "数量", "単価", "金額"],

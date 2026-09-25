@@ -17,11 +17,9 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from comken.core.table.model import Table
 from comken.exceptions import (
-    ExcelNameError,
-    ExcelUsageError,
+    ExcelError,
     InvalidTableInputError,
     InvalidTableOperationError,
-    TableNotFoundError,
 )
 from comken.toolbox.excel.table import ExcelTable
 
@@ -55,17 +53,17 @@ _FORBIDDEN_TABLE_CHARACTERS = frozenset("[]/\\:*?\"<>|'`#%@$&+={}~")
 logger = logging.getLogger(__name__)
 
 
-def _data_sheet_access_error(sheet_name: str, operation: str) -> ExcelUsageError:
+def _data_sheet_access_error(sheet_name: str, operation: str) -> ExcelError:
     """データシートと表示用シートの責務違反のメッセージを組み立てる。"""
-    return ExcelUsageError(
+    return ExcelError(
         f"シート「{sheet_name}」では {operation} を使用できません。\n"
         "データシートは table()、表示用シートはセル・範囲 API で操作してください。"
     )
 
 
-def _invalid_table_name_error(name: str) -> ExcelNameError:
+def _invalid_table_name_error(name: str) -> ExcelError:
     """テーブル命名規則違反のメッセージを組み立てる。"""
-    return ExcelNameError(
+    return ExcelError(
         f"テーブル名「{name}」は Excel で使用できません。\n"
         "空白を含めず、数字以外から始まり、セル参照（A1、R1C1 など）と"
         "紛らわしくない名前を指定してください。"
@@ -94,7 +92,10 @@ class Sheet:
         if name is not None:
             name = self._with_table_prefix(name)
             if name not in table_names:
-                raise TableNotFoundError(name, table_names)
+                raise ExcelError(
+                    f"テーブルが見つかりません: {name}  存在するテーブル: {table_names}\n"
+                    "対処: エラーに表示された既存テーブル名を確認してください。"
+                )
         if name is None and len(table_names) > 1:
             raise InvalidTableOperationError(
                 "1シートに複数テーブルがあります。table(name)で指定してください。"
@@ -119,7 +120,7 @@ class Sheet:
         workbook = self._excel._workbook
         assert workbook is not None  # Sheet は _ensure_normal_workbook() の後にしか作られない
         if any(full_name in worksheet.tables for worksheet in workbook.worksheets):
-            raise ExcelNameError(
+            raise ExcelError(
                 f"テーブル「{full_name}」は既に存在します。\n別のテーブル名を指定してください。"
             )
         if not isinstance(table, Table):

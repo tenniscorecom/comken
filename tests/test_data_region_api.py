@@ -7,7 +7,7 @@ import pytest
 
 from comken import dry_run
 from comken.core.table import Table
-from comken.exceptions import ExcelUsageError, TableColumnMismatchError
+from comken.exceptions import ExcelError
 from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Excel
 
@@ -75,17 +75,17 @@ class TestExcelTable:
         with Excel(tmp_path / "data.xlsx") as excel:
             sheet = excel.create_data_sheet("Users")
 
-            with pytest.raises(ExcelUsageError):
+            with pytest.raises(ExcelError):
                 sheet.write_value("A1", "禁止")
 
     def test_empty_replace_with_omitted_non_formula_column_raises(self, tmp_path) -> None:
-        """``replace()`` で非数式列を省くと、データ欠落を防ぐため ``TableColumnMismatchError``。"""
+        """``replace()`` で非数式列を省くと、データ欠落を防ぐため ``ExcelError``。"""
         path = tmp_path / "data.xlsx"
         with Excel(path) as excel:
             table = excel.create_data_sheet("Users").create_table(
                 "Users", Table(["id", "name"], [{"id": 1, "name": "A"}, {"id": 2, "name": "B"}])
             )
-            with pytest.raises(TableColumnMismatchError) as exc_info:
+            with pytest.raises(ExcelError) as exc_info:
                 table.replace(Table(["id"], []))
             # 省かれた非数式列「name」がエラーに含まれている
             assert "name" in str(exc_info.value)
@@ -167,7 +167,7 @@ class TestExcelTable:
         with Excel(tmp_path / "dashboard.xlsx") as excel:
             sheet = excel.sheet("Dashboard")
 
-            with pytest.raises(ExcelUsageError):
+            with pytest.raises(ExcelError):
                 sheet.table()
 
     def test_display_sheet_cell_range_and_format(self, tmp_path) -> None:

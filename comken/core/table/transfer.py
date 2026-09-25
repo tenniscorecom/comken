@@ -16,14 +16,43 @@ from comken.core.table.model import Table
 from comken.exceptions.table import (
     InvalidTableInputError,
     TableColumnNotFoundError,
-    TransferDestinationMissingError,
-    TransferDestinationMultipleMatchError,
-    TransferMappingError,
+    TableError,
 )
 
 logger = logging.getLogger(__name__)
 
 Row = dict[str, Any]
+
+
+def _transfer_mapping_error() -> TableError:
+    """``TableError`` の「mapping に転記元列と転記先列が指定されていない」文言。"""
+    return TableError(
+        "mapping には転記元列と転記先列を指定してください。"
+        "\n対処: mapping に転記元列名と転記先列名を指定してください。"
+    )
+
+
+def _transfer_destination_missing_error() -> TableError:
+    """``TableError`` の「apply_mapping に転記先が None で渡された」文言。"""
+    return TableError(
+        "apply_mapping に None の転記先行を渡しました。"
+        "transfer_rows() が返した (read_row, None) は write 側に対応行が無い行です。"
+        "matched_rows() を使うか、None を確認してから渡してください。"
+        "\n対処: matched_rows() を使うか、transfer_rows() の (read_row, None) を"
+        "if write_row is None: で分岐してから渡してください。"
+        "新規行を追加する場合は Transfer の責務ではなく、"
+        "Table.append() 等で利用者側で対応してください。"
+    )
+
+
+def _transfer_destination_multiple_match_error(key_column: str, key: object) -> TableError:
+    """``TableError`` の「転記先のキーに一致する行が複数ある」文言。"""
+    return TableError(
+        f"転記先列「{key_column}」のキー「{key}」に一致する行が複数あります。"
+        "転記先のキーを一意にしてください。"
+        "\n対処: mapping の先頭列に対応する転記先列の値を一意にしてください。"
+        'キーが None か "" の行は突合対象外なので、空欄のキーが複数あってもこの例外は出ません。'
+    )
 
 
 @dataclass(frozen=True)
@@ -100,13 +129,13 @@ class Transfer:
         if not isinstance(read, Table) or not isinstance(write, Table):
             raise InvalidTableInputError("TransferのreadとwriteにはTableを指定してください。")
         if not mapping or read_key is None or write_key is None:
-            raise TransferMappingError
+            raise _transfer_mapping_error()
         self.read, self.write = read, write
         self.mapping = dict(mapping)
         self.read_keys = [read_key] if isinstance(read_key, str) else list(read_key)
         self.write_keys = [write_key] if isinstance(write_key, str) else list(write_key)
         if len(self.read_keys) != len(self.write_keys):
-            raise TransferMappingError
+            raise _transfer_mapping_error()
         # mapping の列名 typo を早期に検知する。実行時の KeyError を未然に防ぐため。
         # 表を引かない素の mapping 検証はここで済ませておく。
         read_existing = list(self.read.columns)
@@ -218,7 +247,7 @@ class Transfer:
         mapping の read 列 / write 列は ``__init__`` で存在を検証済みなので、
         ここで再びキー存在を確かめない。 ``write_row`` が ``None`` の場合
         （``transfer_rows()`` の ``(read_row, None)`` をそのまま渡した場合など）は
-        転記先の行が無いので ``TransferDestinationMissingError`` で停止する。
+        転記先の行が無いので ``TableError`` で停止する。
 
         入力 ``read`` / ``write`` には触れない。書き込みは Transfer 内部の
         作業 Table に紐づいた ``write_row`` に対して行う。
@@ -229,15 +258,11 @@ class Transfer:
                 ``transfer_rows()`` の戻り値で ``None`` でないもの。
 
         Raises:
-            TransferDestinationMissingError: ``write_row`` が ``None`` のとき。
+            TableError: ``write_row`` が ``None`` のとき。
         """
         if write_row is None:
             logger.debug("Transfer apply_mapping: 転記先が None のため中断")
-            raise TransferDestinationMissingError(
-                "apply_mapping に None の転記先行を渡しました。"
-                "transfer_rows() が返した (read_row, None) は write 側に対応行が無い行です。"
-                "matched_rows() を使うか、None を確認してから渡してください。"
-            )
+            raise _transfer_destination_missing_error()
         # mapping は __init__ で検証済み。辞書のキー参照が KeyError になる心配はない。
         for read_column, write_column in self.mapping.items():
             write_row[write_column] = read_row[read_column]
@@ -296,7 +321,7 @@ class Transfer:
                 continue
             if key in index:
                 logger.debug("Transfer _working_index: キー重複を検出: %r", key)
-                raise TransferDestinationMultipleMatchError(",".join(self.write_keys), key)
+                raise _transfer_destination_multiple_match_error(",".join(self.write_keys), key)
             index[key] = write_row
         return index
 

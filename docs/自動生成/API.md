@@ -665,7 +665,7 @@ def apply_mapping(self, read_row: Row, write_row: Row | None) -> None:
 mapping の read 列 / write 列は ``__init__`` で存在を検証済みなので、
 ここで再びキー存在を確かめない。 ``write_row`` が ``None`` の場合
 （``transfer_rows()`` の ``(read_row, None)`` をそのまま渡した場合など）は
-転記先の行が無いので ``TransferDestinationMissingError`` で停止する。
+転記先の行が無いので ``TableError`` で停止する。
 
 入力 ``read`` / ``write`` には触れない。書き込みは Transfer 内部の
 作業 Table に紐づいた ``write_row`` に対して行う。
@@ -676,7 +676,7 @@ Args:
         ``transfer_rows()`` の戻り値で ``None`` でないもの。
 
 Raises:
-    TransferDestinationMissingError: ``write_row`` が ``None`` のとき。
+    TableError: ``write_row`` が ``None`` のとき。
 
 #### `result`
 
@@ -950,7 +950,7 @@ Returns:
     DiffResult（``added`` / ``removed`` は ``Table``、``changed`` は ``list[RowChange]``）。
 
 Raises:
-    KeyColumnNotFoundError: key で指定した列が存在しない場合。
+    ColumnNotFoundError: key で指定した列が存在しない場合。
 
 ### `first_business_day_of_month`
 
@@ -2693,7 +2693,7 @@ def apply_mapping(self, read_row: Row, write_row: Row | None) -> None:
 mapping の read 列 / write 列は ``__init__`` で存在を検証済みなので、
 ここで再びキー存在を確かめない。 ``write_row`` が ``None`` の場合
 （``transfer_rows()`` の ``(read_row, None)`` をそのまま渡した場合など）は
-転記先の行が無いので ``TransferDestinationMissingError`` で停止する。
+転記先の行が無いので ``TableError`` で停止する。
 
 入力 ``read`` / ``write`` には触れない。書き込みは Transfer 内部の
 作業 Table に紐づいた ``write_row`` に対して行う。
@@ -2704,7 +2704,7 @@ Args:
         ``transfer_rows()`` の戻り値で ``None`` でないもの。
 
 Raises:
-    TransferDestinationMissingError: ``write_row`` が ``None`` のとき。
+    TableError: ``write_row`` が ``None`` のとき。
 
 #### `result`
 
@@ -2901,7 +2901,7 @@ class ExcelError(ComkenError):
 
 #### 説明
 
-Excel に関するエラー
+Excel に関するエラー。具体的な状況はメッセージに出る
 
 対処:
     メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
@@ -2936,98 +2936,6 @@ Excel が入っていない PC で、Excel 本体が要る操作をしようと�
 def __init__(self, path: Path, error: Exception) -> None:
 ```
 
-### `ExcelUsageError`
-
-```text
-class ExcelUsageError(ExcelError):
-```
-
-#### 説明
-
-Excel の使い方に反する操作をした
-
-データシートと表示用シートの責務違反、``read_only=True`` への書き込み、
-見出し数不足、保存拡張子の不一致などをまとめて扱う。
-
-対処:
-    エラーに表示された操作名・見出し数・拡張子を確認する。
-    - ``read_only=True`` への書き込みは read_only=False で開き直す
-    - データシート／表示用シートの API は ``Excel`` クラスのドキュメントを参照する
-
-#### `__init__`
-
-```text
-def __init__(self, message: str) -> None:
-```
-
-### `ExcelHeaderError`
-
-```text
-class ExcelHeaderError(ExcelError):
-```
-
-#### 説明
-
-Excel の見出し行・テーブル定義に関するエラー
-
-見出しの空欄・重複、テーブル定義範囲から1行も読み取れない失敗を
-まとめて扱う。``replace()`` / ``append()`` は既定で数式セルを値で潰さない
-ので、空に見えるセルもここで発見できる。
-
-対処:
-    - Excel の1行目（見出し行）の空欄・重複を直す
-    - テーブル定義範囲が狭すぎないか、データシートと表示用シートの取り違えがないか確認する
-
-#### `__init__`
-
-```text
-def __init__(self, message: str, **attributes: object) -> None:
-```
-
-### `ExcelNameError`
-
-```text
-class ExcelNameError(ExcelError):
-```
-
-#### 説明
-
-Excel のシート名・テーブル名に関するエラー
-
-対処:
-    - 既に存在する名前は避ける（シート／テーブル）
-    - ``PY_`` 接頭辞は ``create_data_sheet`` 用なので ``create_sheet`` には付けない
-    - 空白・数字始まり・セル参照のような名前はテーブル名に使わない
-
-#### `__init__`
-
-```text
-def __init__(self, message: str) -> None:
-```
-
-### `ExcelSaveError`
-
-```text
-class ExcelSaveError(ExcelError):
-```
-
-#### 説明
-
-保存時に Excel ファイルを安全に置き換えられなかった
-
-元ファイルは保持される。VBA を保ったまま保存できなかった、
-保存したはずのファイルが Excel で開けないなどで発覚する。
-
-対処:
-    元ファイルは変更されていない。空き容量・Excel のバージョン整合性・
-    VBA の保存形式（``.xlsm`` になっているか）を確認して再実行する
-
-#### `__init__`
-
-```text
-def __init__(self, message: str) -> None:
-```
-
 ### `SheetNotFoundError`
 
 ```text
@@ -3049,98 +2957,6 @@ class SheetNotFoundError(ExcelError):
 def __init__(self, name: str, sheets: list[str]) -> None:
 ```
 
-### `TableNotFoundError`
-
-```text
-class TableNotFoundError(ExcelError):
-```
-
-#### 説明
-
-指定したテーブルがシートにない
-
-対処:
-    エラーに表示された既存テーブル名を確認する
-
-#### `__init__`
-
-```text
-def __init__(self, name: str, tables: list[str]) -> None:
-```
-
-### `TableFormulaOverwriteError`
-
-```text
-class TableFormulaOverwriteError(ExcelError):
-```
-
-#### 説明
-
-テーブル内の人が入れた数式を値で潰そうとした
-
-数式セルがあると ``replace()`` / ``append()`` は既定で止まる。
-黙って値で潰すと、依存セルや集計式が壊れたことに遅れて気づくため。
-
-発生箇所: ExcelTable.replace() / ExcelTable.append()
-
-対処:
-    数式を保持したい場合は、``replace()`` のあとに該当セルへ元の数式を
-    書き戻す。意図的に値で潰してよいときだけ ``allow_formula_overwrite=True`` を渡す
-
-#### `__init__`
-
-```text
-def __init__(self, table_name: str, locations: Sequence[str]) -> None:
-```
-
-### `TableColumnMismatchError`
-
-```text
-class TableColumnMismatchError(ExcelError):
-```
-
-#### 説明
-
-渡された Table の列が既存テーブルの見出しと一致しない
-
-``replace()`` / ``append()`` は、渡された Table の列を既存の見出しと
-名前で対応付ける。**既存の見出しに無い列名が含まれていた場合は例外**にし、
-黙って無視や位置ズレで書き込まない（書き漏らしに気づくのが遅れるため）。
-
-発生箇所: ExcelTable.replace() / ExcelTable.append()
-
-対処:
-    既存の見出しと一致するように渡す Table の列を修正する。
-    数式で参照される列は渡さない（「金額」のように計算で決まる列を
-    Table に含めない、または数式を保持する前提の列として残す）
-
-#### `__init__`
-
-```text
-def __init__(self, table_name: str, missing: Sequence[str]) -> None:
-```
-
-### `MacroError`
-
-```text
-class MacroError(ExcelError):
-```
-
-#### 説明
-
-Excel のマクロが失敗した
-
-発生箇所: ExcelCOMHandler.run_macro()
-
-対処:
-    Excel をすべて閉じて再実行する。続く場合は管理者へ
-
-#### `__init__`
-
-```text
-def __init__(self, name: str, detail: Exception) -> None:
-```
-
 ### `CSVError`
 
 ```text
@@ -3149,75 +2965,10 @@ class CSVError(ComkenError):
 
 #### 説明
 
-CSV に関するエラー
+CSV に関するエラー。具体的な状況はメッセージに出る
 
 対処:
     メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
-
-### `EncodingDetectionError`
-
-```text
-class EncodingDetectionError(CSVError):
-```
-
-#### 説明
-
-CSV の文字コードを判定できない
-
-発生箇所: 文字コード自動判定時（``comken.toolbox.csv.read_text()`` /
-``comken.toolbox.csv.CSV.read()``）
-
-対処:
-    CSV の保存形式を確認し、管理者へ連絡する
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path | str) -> None:
-```
-
-### `CSVHeaderError`
-
-```text
-class CSVHeaderError(CSVError):
-```
-
-#### 説明
-
-CSV の見出し行に関するエラー
-
-見出し行がない、見出しに空欄・重複がある、新規 CSV に列を
-指定できない、といった失敗をまとめて扱う。
-
-対処:
-    - 見出し行を追加するか、ヘッダーなし CSV なら ``columns`` を指定する
-    - 1行目にある空欄・重複した見出しを直す
-    - 新規 CSV に書き出すときは ``CSV(columns=[...])`` で列を指定する
-
-#### `__init__`
-
-```text
-def __init__(self, message: str) -> None:
-```
-
-### `CSVRowLengthError`
-
-```text
-class CSVRowLengthError(CSVError):
-```
-
-#### 説明
-
-CSV のデータ行の列数が見出し数と一致しない
-
-対処:
-    表示された行の区切り文字と値の数を確認する
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path | str, line_number: int, expected: int, actual: int) -> None:
-```
 
 ### `ColumnNotFoundError`
 
@@ -3227,7 +2978,7 @@ class ColumnNotFoundError(ComkenError):
 
 #### 説明
 
-Excel・CSV・データ比較で列が見つからないエラー
+Excel・CSV・データ比較で列が見つからないエラー。具体的な状況はメッセージに出る
 
 対処:
     メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
@@ -3264,27 +3015,6 @@ Excel の列見出しが見つからない
 
 ```text
 def __init__(self, columns: list[str]) -> None:
-```
-
-### `KeyColumnNotFoundError`
-
-```text
-class KeyColumnNotFoundError(ColumnNotFoundError):
-```
-
-#### 説明
-
-比較に使うキー列が見つからない
-
-発生箇所: diff_rows()
-
-対処:
-    Excel・CSV の列名を確認する
-
-#### `__init__`
-
-```text
-def __init__(self, key: str, existing: list[str]) -> None:
 ```
 
 ### `TransferSourceColumnNotFoundError`
@@ -5133,28 +4863,20 @@ SOQL のフィールド名不一致、書き出し先パスへの権限不足
 def __init__(self, launcher_path: Path | str, returncode: int, stdout: str, stderr: str) -> None:
 ```
 
-### `TransferDestinationMultipleMatchError`
+### `InvalidTableOperationError`
 
 ```text
-class TransferDestinationMultipleMatchError(TableError):
+class InvalidTableOperationError(TableError):
 ```
 
 #### 説明
 
-転記先のキーに一致する行が複数ある
+Table API で実行できない操作が指定された。
 
-発生箇所: Transfer()
+発生箇所: Table / CSV / ExcelTable
 
 対処:
-    mapping の先頭列に対応する転記先列の値を一意にする。
-    キーが ``None`` か ``""`` の行は突合対象外なので、
-    空欄のキーが複数あってもこの例外は出ない。
-
-#### `__init__`
-
-```text
-def __init__(self, key_column: str, key: object) -> None:
-```
+    対象が読み取り専用でないか、指定したテーブル名が正しいか確認する
 
 ### `TableNotOpenError`
 
@@ -5175,24 +4897,6 @@ class TableNotOpenError(TableError):
 def __init__(self, table_type: str) -> None:
 ```
 
-### `TransferDestinationMissingError`
-
-```text
-class TransferDestinationMissingError(TableError):
-```
-
-#### 説明
-
-Transfer.apply_mapping() に転記先が None で渡された
-
-発生箇所: Transfer.apply_mapping(read_row, write_row)
-
-対処:
-    matched_rows() を使うか、``transfer_rows()`` の ``(read_row, None)``
-    を ``if write_row is None:`` で分岐してから渡す。 新規行を追加する
-    場合は ``Transfer`` の責務ではなく、``Table.append()`` 等で利用者側で
-    対応する。
-
 ### `TableError`
 
 ```text
@@ -5201,7 +4905,7 @@ class TableError(ComkenError):
 
 #### 説明
 
-表データの読み書き・転記に関するエラー
+表データの読み書き・転記に関するエラー。具体的な状況はメッセージに出る
 
 発生箇所: Transfer
 
@@ -5222,21 +4926,6 @@ Table API に対応しない入力が渡された。
 
 対処:
     columns、rows、types の型と列名を確認する
-
-### `InvalidTableOperationError`
-
-```text
-class InvalidTableOperationError(TableError):
-```
-
-#### 説明
-
-Table API で実行できない操作が指定された。
-
-発生箇所: Table / CSV / ExcelTable
-
-対処:
-    対象が読み取り専用でないか、指定したテーブル名が正しいか確認する
 
 ### `TableColumnNotFoundError`
 
@@ -5278,44 +4967,6 @@ Table の索引または比較に使うキーが重複している。
 
 ```text
 def __init__(self, columns: list[str], key: object) -> None:
-```
-
-### `TableRowColumnsError`
-
-```text
-class TableRowColumnsError(TableError):
-```
-
-#### 説明
-
-行の列名が Table.columns と一致しない
-
-対処:
-    不足列と余分な列を直す。列を絞る場合は select() を使う
-
-#### `__init__`
-
-```text
-def __init__(self, row_number: int, missing: list[str], extra: list[str]) -> None:
-```
-
-### `TableTypeConversionError`
-
-```text
-class TableTypeConversionError(TableError):
-```
-
-#### 説明
-
-Table の値を指定型へ変換できない
-
-対処:
-    表示された行番号・列名の値を、指定した型へ変換できる内容に直す
-
-#### `__init__`
-
-```text
-def __init__(self, row_number: int, column: str, value: object) -> None:
 ```
 
 ### `LoggingAlreadyConfiguredError`
@@ -9648,7 +9299,7 @@ CSV ファイルをバイト列として読み、文字コードを判定して�
      従来どおり ``UTF8_SIG`` → ``CP932`` の順で
      ``UnicodeDecodeError`` をベースに再試行する
 
-``AUTO`` でどちらも読めなければ ``EncodingDetectionError`` を投げる。
+``AUTO`` でどちらも読めなければ ``CSVError`` を投げる。
 ファイルの存在チェック・空ファイル分岐・BOM 除去などは呼び出し側に
 任せる（``CSV.read()`` では BOM 除去も含めて ``csv.reader`` が処理する）。
 
@@ -9879,8 +9530,8 @@ Returns:
 Raises:
     InvalidTableOperationError: ``engine='com'`` で開いたインスタンスで呼ばれたとき。
     InvalidTableInputError: 範囲・結合・空データ行のいずれかが条件違反のとき。
-    ExcelHeaderError: 見出し行に空セルがある／同じ名前が複数あるとき。
-    ExcelNameError: ``table_name`` が命名規則に合わない／既存テーブル名と衝突するとき。
+    ExcelError: 見出し行に空セルがある／同じ名前が複数あるとき、
+        ``table_name`` が命名規則に合わない／既存テーブル名と衝突するとき。
 
 #### `close`
 
@@ -10325,7 +9976,7 @@ def replace(self, rows: list[dict[str, Value]] | Table, *, allow_formula_overwri
 
 データシート全体を置き換える。
 
-既存データ部に人が入れた数式があると、既定では ``TableFormulaOverwriteError``
+既存データ部に人が入れた数式があると、既定では ``ExcelError``
 で止める。数式を値で潰すと依存セルや集計式が壊れたことに遅れて気づくため。
 意図的に上書きしてよいときだけ ``allow_formula_overwrite=True`` を渡す。
 
@@ -10335,7 +9986,7 @@ def replace(self, rows: list[dict[str, Value]] | Table, *, allow_formula_overwri
 行が減ったぶんは、数式セルの値を消す。
 
 見出しの列は **既存の見出しと名前で対応付ける**。既存の見出しに無い
-列名が含まれていた場合は ``TableColumnMismatchError``。
+列名が含まれていた場合は ``ExcelError``。
 
 #### `append`
 
@@ -10348,7 +9999,7 @@ def append(self, rows: list[dict[str, Value]] | dict[str, Value] | Table, *, all
 Table、1行、または行リストを既存テーブルの末尾へ追加する。
 
 既存テーブルに数式列があっても、その列は保持される。渡された行に
-数式列が含まれている場合は ``TableFormulaOverwriteError``
+数式列が含まれている場合は ``ExcelError``
 （``allow_formula_overwrite=True`` で上書き可能）。
 
 #### `count`
@@ -11573,7 +11224,7 @@ close() は保存せずに閉じる（SaveChanges=False）ため、
 write_cell での変更を残す場合は必ず呼ぶこと。
 
 Raises:
-    ExcelUsageError: 保存先の拡張子がワークブックの形式と食い違う場合。
+    ExcelError: 保存先の拡張子がワークブックの形式と食い違う場合。
 
 #### `save_as`
 

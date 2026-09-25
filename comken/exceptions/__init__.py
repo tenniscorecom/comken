@@ -19,19 +19,8 @@ ComkenError
 │   └── OutlookFolderNotFoundError
 ├── ExcelError
 │   ├── ExcelApplicationNotAvailableError
-│   ├── ExcelHeaderError
-│   ├── ExcelNameError
-│   ├── ExcelSaveError
-│   ├── ExcelUsageError
 │   ├── SheetNotFoundError
-│   ├── TableNotFoundError
-│   ├── TableFormulaOverwriteError
-│   ├── TableColumnMismatchError
-│   └── MacroError
 ├── CSVError
-│   ├── EncodingDetectionError
-│   ├── CSVHeaderError
-│   └── CSVRowLengthError
 ├── CredentialError
 │   ├── InvalidCredentialNameError
 │   ├── CredentialNotFoundError
@@ -71,17 +60,12 @@ ComkenError
 ├── InvalidColumnError
 ├── TableError
 │   ├── InvalidTableInputError
-│   ├── InvalidTableOperationError
 │   ├── TableColumnNotFoundError
 │   ├── TableDuplicateKeyError
-│   ├── TableRowColumnsError
-│   ├── TableTypeConversionError
-│   ├── TableNotOpenError
-│   ├── TransferDestinationMissingError
-│   └── TransferDestinationMultipleMatchError
+│   ├── InvalidTableOperationError
+│   └── TableNotOpenError
 ├── ColumnNotFoundError
 │   ├── ExcelColumnNotFoundError
-│   ├── KeyColumnNotFoundError
 │   └── TransferSourceColumnNotFoundError
 ├── ConfigError
 │   ├── ConfigCreatedFromExampleError
@@ -156,7 +140,6 @@ from comken.exceptions.column import (
     ColumnNotFoundError,
     ExcelColumnNotFoundError,
     InvalidColumnError,
-    KeyColumnNotFoundError,
     TransferSourceColumnNotFoundError,
 )
 from comken.exceptions.config import (
@@ -177,12 +160,7 @@ from comken.exceptions.credential import (
     InvalidCredentialNameError,
     PasswordRejectedError,
 )
-from comken.exceptions.csv import (
-    CSVError,
-    CSVHeaderError,
-    CSVRowLengthError,
-    EncodingDetectionError,
-)
+from comken.exceptions.csv import CSVError
 from comken.exceptions.dataloader import (
     DataLoaderError,
     DataLoaderExecutionError,
@@ -207,15 +185,7 @@ from comken.exceptions.downloader import (
 from comken.exceptions.excel import (
     ExcelApplicationNotAvailableError,
     ExcelError,
-    ExcelHeaderError,
-    ExcelNameError,
-    ExcelSaveError,
-    ExcelUsageError,
-    MacroError,
     SheetNotFoundError,
-    TableColumnMismatchError,
-    TableFormulaOverwriteError,
-    TableNotFoundError,
 )
 from comken.exceptions.file import (
     ComkenFileNotFoundError,
@@ -271,10 +241,6 @@ from comken.exceptions.table import (
     TableDuplicateKeyError,
     TableError,
     TableNotOpenError,
-    TableRowColumnsError,
-    TableTypeConversionError,
-    TransferDestinationMissingError,
-    TransferDestinationMultipleMatchError,
 )
 from comken.exceptions.windows import WindowNotFoundError
 
@@ -288,22 +254,10 @@ __all__ = [
     "AccessSourceNotFoundError",
     "ExcelError",
     "ExcelApplicationNotAvailableError",
-    "ExcelUsageError",
-    "ExcelHeaderError",
-    "ExcelNameError",
-    "ExcelSaveError",
     "SheetNotFoundError",
-    "TableNotFoundError",
-    "TableFormulaOverwriteError",
-    "TableColumnMismatchError",
-    "MacroError",
     "CSVError",
-    "EncodingDetectionError",
-    "CSVHeaderError",
-    "CSVRowLengthError",
     "ColumnNotFoundError",
     "ExcelColumnNotFoundError",
-    "KeyColumnNotFoundError",
     "TransferSourceColumnNotFoundError",
     "InvalidColumnError",
     "ConfigError",
@@ -385,16 +339,12 @@ __all__ = [
     "DataLoaderError",
     "DataLoaderTimeoutError",
     "DataLoaderExecutionError",
-    "TransferDestinationMultipleMatchError",
+    "InvalidTableOperationError",
     "TableNotOpenError",
-    "TransferDestinationMissingError",
     "TableError",
     "InvalidTableInputError",
-    "InvalidTableOperationError",
     "TableColumnNotFoundError",
     "TableDuplicateKeyError",
-    "TableRowColumnsError",
-    "TableTypeConversionError",
     "LoggingAlreadyConfiguredError",
     "LoggingConflictError",
     "LogRootNotConfiguredError",

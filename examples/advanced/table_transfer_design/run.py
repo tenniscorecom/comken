@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 def main() -> None:
     OUTPUT_FOLDER.mkdir(parents=True, exist_ok=True)
     # 毎回まっさらな状態から作るため、前回実行分の出力ブックを消しておく
-    # （create_data_sheet() は同名シートが既にあると ExcelNameError になるため）。
+    # （create_data_sheet() は同名シートが既にあると ExcelError になるため）。
     OUTPUT_PATH.unlink(missing_ok=True)
     # 転記元のサンプルデータ（外部入力の代わり）。
     # 4パターンを1回ずつ出すため、read には A001 / A002 / A003 を入れる。

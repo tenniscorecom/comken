@@ -10,7 +10,6 @@ from comken.exceptions.table import (
     TableColumnNotFoundError,
     TableDuplicateKeyError,
     TableError,
-    TransferMappingError,
 )
 from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Excel
@@ -167,7 +166,7 @@ def test_compare_tables_rejects_generated_column_collision() -> None:
     read = Table(["id", "name", "write_name"], [{"id": 1, "name": "A", "write_name": "x"}])
     write = Table(["id", "name", "write_name"], [{"id": 1, "name": "B", "write_name": "y"}])
 
-    with pytest.raises(TransferMappingError):
+    with pytest.raises(TableError):
         compare_tables(read, write, read_key="id", write_key="id")
 
 

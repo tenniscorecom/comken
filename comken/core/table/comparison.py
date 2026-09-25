@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from comken.core.table.model import Table
-from comken.exceptions.table import TableDuplicateKeyError, TransferMappingError
+from comken.exceptions.table import TableDuplicateKeyError, TableError
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +21,14 @@ class TableComparison:
     only_in_write: Table
     changed: Table
     same: Table
+
+
+def _transfer_mapping_error() -> TableError:
+    """``TableError`` の「転記する列の対応が指定されていない」文言。"""
+    return TableError(
+        "mapping には転記元列と転記先列を指定してください。"
+        "\n対処: mapping に転記元列名と転記先列名を指定してください。"
+    )
 
 
 def compare_tables(
@@ -43,18 +51,18 @@ def compare_tables(
         write_keys,
     )
     if len(read_keys) != len(write_keys):
-        raise TransferMappingError
+        raise _transfer_mapping_error()
     read._check_columns(read_keys)
     write._check_columns(write_keys)
     read_value_columns = [column for column in read.columns if column not in read_keys]
     write_value_columns = [column for column in write.columns if column not in write_keys]
     # 辞書行は列順に依存しないため、同じ列名が揃っていれば比較できる。
     if set(read_value_columns) != set(write_value_columns):
-        raise TransferMappingError
+        raise _transfer_mapping_error()
     generated_columns = {f"write_{column}" for column in write.columns}
     if generated_columns.intersection(read.columns):
         # changed の列名が既存列と衝突すると値を区別できないため、曖昧な結果を返さない。
-        raise TransferMappingError
+        raise _transfer_mapping_error()
     read_index = _index_rows(read.to_rows(), read_keys)
     write_index = _index_rows(write.to_rows(), write_keys)
     read_only, write_only, changed, same = [], [], [], []

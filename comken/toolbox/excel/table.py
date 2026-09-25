@@ -13,11 +13,9 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from comken.core.table.model import Table
 from comken.exceptions import (
-    ExcelHeaderError,
+    ExcelError,
     InvalidTableInputError,
     InvalidTableOperationError,
-    TableColumnMismatchError,
-    TableFormulaOverwriteError,
 )
 
 if TYPE_CHECKING:
@@ -29,23 +27,55 @@ logger = logging.getLogger(__name__)
 
 
 def _empty_excel_table_message(sheet_name: str, reason: str) -> str:
-    """``ExcelHeaderError`` の「Excel テーブル定義はあるが1行も読めない」文言。"""
+    """``ExcelError`` の「Excel テーブル定義はあるが1行も読めない」文言。"""
     return f"Excel テーブル「{sheet_name}」が空です: {reason}"
 
 
 def _empty_header_message(columns: list[int]) -> str:
-    """``ExcelHeaderError`` の「見出し行の空セル」文言。"""
+    """``ExcelError`` の「見出し行の空セル」文言。"""
     return (
         f"ヘッダー行に空のセルがあります。列番号: {columns}\n"
         "Excelの1行目（ヘッダー行）を確認してください。"
+        "\n対処: Excel の1行目（見出し行）の空欄を直す。"
+        "テーブル定義範囲が狭すぎないか、データシートと表示用シートの取り違えがないか確認してください。"
     )
 
 
 def _duplicate_header_message(headers: object) -> str:
-    """``ExcelHeaderError`` の「見出しの重複」文言。"""
+    """``ExcelError`` の「見出しの重複」文言。"""
     return (
         f"ヘッダー行に同じ見出しがあります: {headers}\n"
         "Excelの見出し名を重複しない名前に変更してください。"
+        "\n対処: Excel の1行目（見出し行）の重複を直す。"
+        "テーブル定義範囲が狭すぎないか、データシートと表示用シートの取り違えがないか確認してください。"
+    )
+
+
+def _table_formula_overwrite_error(table_name: str, locations: list[str]) -> ExcelError:
+    """``ExcelError`` の「テーブル内の数式セルを値で潰そうとした」文言。"""
+    sample = ", ".join(locations[:3])
+    suffix = "" if len(locations) <= 3 else f" 他 {len(locations) - 3} 件"
+    return ExcelError(
+        f"Excel テーブル「{table_name}」に数式セルがあります: {sample}{suffix}\n"
+        "replace()/append() は既定で数式を値で潰しません。"
+        "数式を保持する場合は replace のあとに該当セルへ書き戻す、"
+        "または allow_formula_overwrite=True で意図的な上書きを明示してください。"
+        "\n対処: 数式を保持したい場合は、replace() のあとに該当セルへ"
+        "元の数式を書き戻してください。"
+        "意図的に値で潰してよいときだけ allow_formula_overwrite=True を渡してください。"
+    )
+
+
+def _table_column_mismatch_error(table_name: str, missing: list[str]) -> ExcelError:
+    """``ExcelError`` の「Table の列が見出しと一致しない」文言。"""
+    sample = ", ".join(str(name) for name in missing)
+    return ExcelError(
+        f"Excel テーブル「{table_name}」の見出しに無い列名が Table に含まれています: {sample}\n"
+        "replace()/append() は既存の見出しと名前で対応付けます。"
+        "既存の見出しと一致するように Table の列を修正してください。"
+        "\n対処: 既存の見出しと一致するように渡す Table の列を修正してください。"
+        "数式で参照される列は渡さない（「金額」のように計算で決まる列を"
+        "Table に含めない、または数式を保持する前提の列として残してください）。"
     )
 
 
@@ -114,24 +144,22 @@ class ExcelTable:
                 )
             ]
         if not rows:
-            raise ExcelHeaderError(
+            raise ExcelError(
                 _empty_excel_table_message(
                     self._worksheet.title, "テーブル範囲を読み取れませんでした"
-                ),
-                sheet_name=self._worksheet.title,
-                reason="テーブル範囲を読み取れませんでした",
+                )
             )
         # ref が定義する列数をそのまま使う。末尾の空見出しを切り捨てると、
         # テーブル定義の壊れを見逃し、後ろの列データを失うため。
         headers = list(rows[0])
         empty_columns = [index for index, header in enumerate(headers, 1) if header is None]
         if empty_columns:
-            raise ExcelHeaderError(_empty_header_message(empty_columns))
+            raise ExcelError(_empty_header_message(empty_columns))
         duplicate_headers = [
             header for header in dict.fromkeys(headers) if headers.count(header) > 1
         ]
         if duplicate_headers:
-            raise ExcelHeaderError(_duplicate_header_message(duplicate_headers))
+            raise ExcelError(_duplicate_header_message(duplicate_headers))
         result = [
             {
                 str(header): (
@@ -163,7 +191,7 @@ class ExcelTable:
     ) -> None:
         """データシート全体を置き換える。
 
-        既存データ部に人が入れた数式があると、既定では ``TableFormulaOverwriteError``
+        既存データ部に人が入れた数式があると、既定では ``ExcelError``
         で止める。数式を値で潰すと依存セルや集計式が壊れたことに遅れて気づくため。
         意図的に上書きしてよいときだけ ``allow_formula_overwrite=True`` を渡す。
 
@@ -173,7 +201,7 @@ class ExcelTable:
         行が減ったぶんは、数式セルの値を消す。
 
         見出しの列は **既存の見出しと名前で対応付ける**。既存の見出しに無い
-        列名が含まれていた場合は ``TableColumnMismatchError``。
+        列名が含まれていた場合は ``ExcelError``。
         """
         self._excel._ensure_writable("replace")
         if self._name is None:
@@ -272,7 +300,7 @@ class ExcelTable:
         """Table、1行、または行リストを既存テーブルの末尾へ追加する。
 
         既存テーブルに数式列があっても、その列は保持される。渡された行に
-        数式列が含まれている場合は ``TableFormulaOverwriteError``
+        数式列が含まれている場合は ``ExcelError``
         （``allow_formula_overwrite=True`` で上書き可能）。
         """
         self._excel._ensure_writable("append")
@@ -335,7 +363,7 @@ class ExcelTable:
                 for cell in row
                 if isinstance(cell.value, str) and cell.value.startswith("=")
             ]
-            raise TableFormulaOverwriteError(self._name, formula_locations)
+            raise _table_formula_overwrite_error(self._name, formula_locations)
 
         # 数式列を含めて既存行を読む（COM 経由の read() を避け、ワークシートから直接読む）
         current_rows = self._read_worksheet_rows(
@@ -404,10 +432,9 @@ class ExcelTable:
 
         Raises:
             InvalidTableOperationError: 列を1つも持たない ``Table`` を渡した場合。
-            TableColumnMismatchError: 既存の見出しに無い列名が含まれる、または
-                数式列でない既存列が渡された ``Table`` から欠けている場合。
-            TableFormulaOverwriteError: ``allow_formula_overwrite`` が偽のまま
-                数式列を上書きしようとした場合。
+            ExcelError: 既存の見出しに無い列名が含まれる、または
+                数式列でない既存列が渡された ``Table`` から欠けている場合、
+                ``allow_formula_overwrite`` が偽のまま数式列を上書きしようとした場合。
         """
         # このメソッドは `replace()` から呼ばれる前提で、`replace()` は冒頭の
         # `if self._name is None` ブロックで必ず値を確定させてから呼ぶ。
@@ -418,13 +445,13 @@ class ExcelTable:
         # 既存の見出しに無い列名はエラー（黙って無視しない）
         missing_in_existing = [c for c in passed_columns if c not in existing_headers]
         if missing_in_existing:
-            raise TableColumnMismatchError(self._name, missing_in_existing)
+            raise _table_column_mismatch_error(self._name, missing_in_existing)
 
         # 既存テーブルから省かれた列は、すべて数式列である必要がある
         omitted = [c for c in existing_headers if c not in passed_columns]
         non_formula_omitted = [c for c in omitted if c not in formula_columns]
         if non_formula_omitted:
-            raise TableColumnMismatchError(self._name, non_formula_omitted)
+            raise _table_column_mismatch_error(self._name, non_formula_omitted)
 
         # 渡された Table に数式列が含まれているならエラー
         if allow_formula_overwrite:
@@ -442,7 +469,7 @@ class ExcelTable:
             for cell in row
             if isinstance(cell.value, str) and cell.value.startswith("=")
         ]
-        raise TableFormulaOverwriteError(self._name, formula_locations)
+        raise _table_formula_overwrite_error(self._name, formula_locations)
 
     def _detect_formula_columns(
         self,

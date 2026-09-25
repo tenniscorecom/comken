@@ -14,11 +14,7 @@ from comken.constants import Encoding
 from comken.core.files import atomic_write
 from comken.core.table.model import Table
 from comken.core.timer import measure
-from comken.exceptions.csv import (
-    CSVHeaderError,
-    CSVRowLengthError,
-    EncodingDetectionError,
-)
+from comken.exceptions.csv import CSVError
 from comken.exceptions.file import ComkenFileNotFoundError, UnsupportedFileSuffixError
 from comken.exceptions.table import (
     InvalidTableInputError,
@@ -33,18 +29,48 @@ type Value = str | int | float | bool
 
 
 def _missing_header_message(path: Path) -> str:
-    """``CSVHeaderError`` の「見出し行が無い」文言。"""
-    return f"CSV に見出し行がありません: {path}\ncolumns を指定するか、見出し行を追加してください。"
+    """``CSVError`` の「見出し行が無い」文言。"""
+    return (
+        f"CSV に見出し行がありません: {path}\n"
+        "columns を指定するか、見出し行を追加してください。"
+        "\n対処: 見出し行を追加するか、ヘッダーなし CSV なら columns を指定してください。"
+    )
 
 
 def _invalid_header_message(path: Path, reason: str) -> str:
-    """``CSVHeaderError`` の「見出しに空欄・重複がある」文言。"""
-    return f"CSV の見出しが不正です: {path}\n{reason}"
+    """``CSVError`` の「見出しに空欄・重複がある」文言。"""
+    return (
+        f"CSV の見出しが不正です: {path}\n{reason}"
+        "\n対処: 1行目にある空欄・重複した見出しを直してください。"
+        "新規 CSV に書き出すときは CSV(columns=[...]) で列を指定してください。"
+    )
 
 
 def _columns_required_message(path: Path) -> str:
-    """``CSVHeaderError`` の「空 CSV に列を決定できない」文言。"""
-    return f"空の新規 CSV の列を決定できません: {path}\nCSV(columns=[...]) を指定してください。"
+    """``CSVError`` の「空 CSV に列を決定できない」文言。"""
+    return (
+        f"空の新規 CSV の列を決定できません: {path}\n"
+        "CSV(columns=[...]) を指定してください。"
+        "\n対処: 新規 CSV に書き出すときは CSV(columns=[...]) で列を指定してください。"
+    )
+
+
+def _row_length_error(path: Path, line_number: int, expected: int, actual: int) -> CSVError:
+    """``CSVError`` の「データ行の列数が見出し数と一致しない」文言。"""
+    return CSVError(
+        f"CSV の{line_number}行目は列数が一致しません: {path}\n"
+        f"見出しは{expected}列、データは{actual}列です。"
+        "\n対処: 表示された行の区切り文字と値の数を確認してください。"
+    )
+
+
+def _encoding_detection_error(path: Path) -> CSVError:
+    """``CSVError`` の「文字コードを判定できない」文言。"""
+    return CSVError(
+        "文字コードを判定できませんでした（UTF-8 / CP932 のどちらでも読めません）: "
+        f"{path}\nencoding 引数で明示してください。"
+        "\n対処: CSV の保存形式を確認し、管理者へ連絡してください。"
+    )
 
 
 def _detect_csv_encoding(raw: bytes) -> str | None:
@@ -101,7 +127,7 @@ def read_text(path: str | Path, *, encoding: str = Encoding.AUTO) -> str:
          従来どおり ``UTF8_SIG`` → ``CP932`` の順で
          ``UnicodeDecodeError`` をベースに再試行する
 
-    ``AUTO`` でどちらも読めなければ ``EncodingDetectionError`` を投げる。
+    ``AUTO`` でどちらも読めなければ ``CSVError`` を投げる。
     ファイルの存在チェック・空ファイル分岐・BOM 除去などは呼び出し側に
     任せる（``CSV.read()`` では BOM 除去も含めて ``csv.reader`` が処理する）。
 
@@ -133,7 +159,7 @@ def read_text(path: str | Path, *, encoding: str = Encoding.AUTO) -> str:
         except UnicodeDecodeError:
             continue
     logger.debug("CSV 読み込み: 文字コードを判定できません: %s", path)
-    raise EncodingDetectionError(path)
+    raise _encoding_detection_error(path)
 
 
 class CSV:
@@ -224,19 +250,19 @@ class CSV:
         if self.path.stat().st_size == 0:
             logger.debug("CSV は空ファイルです: %s", self.path)
             if self._columns is None:
-                raise CSVHeaderError(_missing_header_message(self.path))
+                raise CSVError(_missing_header_message(self.path))
             return Table(self._columns, [], types=self._types)
         raw_rows = list(csv.reader(io.StringIO(self._read_text())))
         if not raw_rows and self._columns is None:
             # UTF-8 BOM は文字ではなく署名なので、BOM だけのファイルにも見出しはない。
-            raise CSVHeaderError(_missing_header_message(self.path))
+            raise CSVError(_missing_header_message(self.path))
         columns = self._columns if self._columns is not None else raw_rows.pop(0)
         self._validate_columns(columns)
         first_data_line = 1 if self._columns is not None else 2
         rows: list[dict[str, str]] = []
         for line_number, values in enumerate(raw_rows, start=first_data_line):
             if len(values) != len(columns):
-                raise CSVRowLengthError(self.path, line_number, len(columns), len(values))
+                raise _row_length_error(self.path, line_number, len(columns), len(values))
             rows.append(dict(zip(columns, values, strict=True)))
         logger.debug(
             "CSV 読み込み完了: %s, %d 行, %d 列",
@@ -280,7 +306,7 @@ class CSV:
             raise ComkenFileNotFoundError("CSV ファイル", self.path)
         if self.path.stat().st_size == 0:
             if self._columns is None:
-                raise CSVHeaderError(_missing_header_message(self.path))
+                raise CSVError(_missing_header_message(self.path))
             return
         if self._encoding == Encoding.AUTO:
             # 自動判定はファイル全体を読んでから順に文字コードを試す必要があるため、
@@ -302,7 +328,7 @@ class CSV:
 
         ``csv.DictReader`` は列数が合わない行を検証せず、余分な値は ``None``
         キー配下へリストで積み、不足した列は ``None`` 値で埋めて黙って返す。
-        ``read()`` は同じ不正入力を ``CSVRowLengthError`` にするため、ここでも
+        ``read()`` は同じ不正入力を ``CSVError`` にするため、ここでも
         ``DictReader`` の戻り値からその2パターンを検出して揃える
         （1行ずつの ``O(1)`` チェックなので、ストリーミングの利点は損なわない）。
         """
@@ -320,25 +346,25 @@ class CSV:
             # その実際のありうる形を明示し、ignore で握りつぶさない。
             extra = cast("dict[str | None, Any]", row).pop(None, None)
             if extra is not None:
-                raise CSVRowLengthError(self.path, line_number, expected, expected + len(extra))
+                raise _row_length_error(self.path, line_number, expected, expected + len(extra))
             missing = sum(1 for value in row.values() if value is None)
             if missing:
-                raise CSVRowLengthError(self.path, line_number, expected, expected - missing)
+                raise _row_length_error(self.path, line_number, expected, expected - missing)
             # DictReader は None を含むキー/値を返さない(上のチェックで排除済み)ので
             # ``dict(row)`` で十分
             yield dict(row)
 
     def _validate_columns(self, columns: list[str]) -> None:
         if not columns:
-            raise CSVHeaderError(_missing_header_message(self.path))
+            raise CSVError(_missing_header_message(self.path))
         empty = [index for index, column in enumerate(columns, 1) if column == ""]
         if empty:
-            raise CSVHeaderError(
+            raise CSVError(
                 _invalid_header_message(self.path, f"空の見出しがあります（{empty}列目）。")
             )
         duplicates = [column for column in dict.fromkeys(columns) if columns.count(column) > 1]
         if duplicates:
-            raise CSVHeaderError(
+            raise CSVError(
                 _invalid_header_message(self.path, f"重複する見出しがあります: {duplicates}")
             )
 
@@ -365,7 +391,7 @@ class CSV:
             if columns is None and self.path.exists() and self.path.stat().st_size > 0:
                 columns = self.read().columns
             if columns is None:
-                raise CSVHeaderError(_columns_required_message(self.path))
+                raise CSVError(_columns_required_message(self.path))
             table = Table(columns, [], types=self._types)
         self._pending = table
         logger.debug(

@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass
 
 from comken.core.table.model import Table
-from comken.exceptions import InvalidColumnError, KeyColumnNotFoundError
+from comken.exceptions import ColumnNotFoundError, InvalidColumnError
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +135,7 @@ def diff_rows(
         DiffResult（``added`` / ``removed`` は ``Table``、``changed`` は ``list[RowChange]``）。
 
     Raises:
-        KeyColumnNotFoundError: key で指定した列が存在しない場合。
+        ColumnNotFoundError: key で指定した列が存在しない場合。
     """
     logger.debug(
         "diff_rows 開始: before=%d 行, after=%d 行, key=%s",
@@ -148,7 +148,10 @@ def diff_rows(
 
     for rows, columns in ((before_rows, before_columns), (after_rows, after_columns)):
         if rows and key not in columns:
-            raise KeyColumnNotFoundError(key, columns)
+            raise ColumnNotFoundError(
+                f"キー列が見つかりません: {key}\n存在する列: {', '.join(columns)}"
+                "\n対処: Excel・CSV の列名を確認してください。"
+            )
 
     before_by_key = {_normalize(row[key]): row for row in before_rows}
     after_by_key = {_normalize(row[key]): row for row in after_rows}

@@ -13,13 +13,8 @@ from comken.exceptions import (
     ConfigMappingEmptyValueError,
     ConfigSectionNotFoundError,
     CSVError,
-    EncodingDetectionError,
     ExcelColumnNotFoundError,
     ExcelError,
-    ExcelHeaderError,
-    ExcelUsageError,
-    KeyColumnNotFoundError,
-    MacroError,
     SheetNotFoundError,
 )
 from comken.exceptions.warning import _warn_coerce
@@ -52,9 +47,13 @@ def test_all_declared_names_are_resolvable() -> None:
             "book.xlsx",
         ),
         (SheetNotFoundError("集計", ["Sheet1"]), ExcelError, "集計"),
-        (MacroError("Module1.Run", Exception("失敗")), ExcelError, "Module1.Run"),
         (
-            ExcelHeaderError(
+            ExcelError("VBA マクロの実行に失敗しました: Module1.Run\n（詳細: 失敗）"),
+            ExcelError,
+            "Module1.Run",
+        ),
+        (
+            ExcelError(
                 "ヘッダー行に空のセルがあります。列番号: [2]\n"
                 "Excelの1行目（ヘッダー行）を確認してください。"
             ),
@@ -62,7 +61,7 @@ def test_all_declared_names_are_resolvable() -> None:
             "列番号: [2]",
         ),
         (
-            ExcelUsageError(
+            ExcelError(
                 "headers の列数（2列）がシートの列数（3列）より少ないため、"
                 "はみ出した列のデータが失われます。\n"
                 "headers にすべての列名を指定してください。"
@@ -71,7 +70,7 @@ def test_all_declared_names_are_resolvable() -> None:
             "2列",
         ),
         (
-            ExcelUsageError(
+            ExcelError(
                 "保存先の拡張子（.csv）が元ファイルの形式と一致しません。\n"
                 "形式を変換して保存する場合は file_format 引数で FileFormat 定数を"
                 "指定してください。（例: file_format=FileFormat.CSV）"
@@ -79,10 +78,22 @@ def test_all_declared_names_are_resolvable() -> None:
             ExcelError,
             ".csv",
         ),
-        (EncodingDetectionError("data.csv"), CSVError, "data.csv"),
+        (
+            CSVError(
+                "文字コードを判定できませんでした"
+                "（UTF-8 / CP932 のどちらでも読めません）: data.csv\n"
+                "encoding 引数で明示してください。"
+            ),
+            CSVError,
+            "data.csv",
+        ),
         (ComkenFileNotFoundError("CSV ファイル", "data.csv"), ComkenError, "data.csv"),
         (ExcelColumnNotFoundError(["金額"]), ColumnNotFoundError, "金額"),
-        (KeyColumnNotFoundError("ID", ["名前"]), ColumnNotFoundError, "ID"),
+        (
+            ColumnNotFoundError("キー列が見つかりません: ID\n存在する列: 名前"),
+            ColumnNotFoundError,
+            "ID",
+        ),
         (
             ComkenFileNotFoundError(
                 "config.ini",

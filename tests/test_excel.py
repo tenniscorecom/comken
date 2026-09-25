@@ -8,9 +8,7 @@ from openpyxl.styles import PatternFill
 from comken.core.table import Table
 from comken.exceptions import (
     ComkenFileNotFoundError,
-    ExcelHeaderError,
-    ExcelNameError,
-    ExcelUsageError,
+    ExcelError,
     InvalidTableOperationError,
     SheetNotFoundError,
     TableNotOpenError,
@@ -53,7 +51,7 @@ def test_excel_rejects_ambiguous_table_name(tmp_path) -> None:
 def test_excel_rejects_duplicate_data_sheet(tmp_path) -> None:
     with Excel(tmp_path / "book.xlsx") as excel:
         excel.create_data_sheet("顧客")
-        with pytest.raises(ExcelNameError):
+        with pytest.raises(ExcelError):
             excel.create_data_sheet("顧客")
 
 
@@ -117,12 +115,12 @@ def test_create_sheet_allows_multiple_display_sheets(tmp_path) -> None:
 def test_create_sheet_rejects_duplicate_name(tmp_path) -> None:
     with Excel(tmp_path / "book.xlsx") as excel:
         excel.create_sheet("集計")
-        with pytest.raises(ExcelNameError):
+        with pytest.raises(ExcelError):
             excel.create_sheet("集計")
 
 
 def test_create_sheet_rejects_python_prefixed_name(tmp_path) -> None:
-    with Excel(tmp_path / "book.xlsx") as excel, pytest.raises(ExcelNameError):
+    with Excel(tmp_path / "book.xlsx") as excel, pytest.raises(ExcelError):
         excel.create_sheet("PY_顧客")
 
 
@@ -130,7 +128,7 @@ def test_create_sheet_rejects_read_only_workbook(tmp_path) -> None:
     path = tmp_path / "book.xlsx"
     with Excel(path) as excel:
         excel.create_sheet("集計")
-    with Excel(path, read_only=True) as excel, pytest.raises(ExcelUsageError):
+    with Excel(path, read_only=True) as excel, pytest.raises(ExcelError):
         excel.create_sheet("別のシート")
 
 
@@ -138,8 +136,8 @@ def test_create_sheet_returns_sheet_that_supports_layout_api(tmp_path) -> None:
     path = tmp_path / "book.xlsx"
     with Excel(path) as excel:
         sheet = excel.create_sheet("集計")
-        # 表示用シートでは table() は ExcelUsageError
-        with pytest.raises(ExcelUsageError):
+        # 表示用シートでは table() は ExcelError
+        with pytest.raises(ExcelError):
             sheet.table()
 
 
@@ -226,7 +224,7 @@ def test_excel_outside_with_block_raises_table_not_open_error(tmp_path) -> None:
 
 
 class TestCreateTableNameValidation:
-    """``Sheet.create_table`` は Excel が受け付けない名前を ``ExcelNameError`` で止める。"""
+    """``Sheet.create_table`` は Excel が受け付けない名前を ``ExcelError`` で止める。"""
 
     @pytest.mark.parametrize(
         "invalid_name",
@@ -245,7 +243,7 @@ class TestCreateTableNameValidation:
     )
     def test_invalid_names_raise(self, tmp_path, invalid_name: str) -> None:
         path = tmp_path / "book.xlsx"
-        with Excel(path) as excel, pytest.raises(ExcelNameError):
+        with Excel(path) as excel, pytest.raises(ExcelError):
             excel.create_data_sheet("S").create_table(invalid_name, Table(["a"], [{"a": "1"}]))
 
     def test_valid_japanese_name_is_accepted(self, tmp_path) -> None:
@@ -348,7 +346,7 @@ class TestReadComputedRowsDropsBlankRows:
         assert table.to_rows() == [{"ID": "1", "名前": "A"}, {"ID": "2", "名前": "B"}]
 
     def test_empty_header_cell_error_still_fires(self, tmp_path) -> None:
-        """見出し行の空セルは従来どおり ``ExcelHeaderError``。"""
+        """見出し行の空セルは従来どおり ``ExcelError``。"""
         path = tmp_path / "header-blank.xlsx"
         with Excel(path) as excel:
             sheet = excel.create_sheet("データ")
@@ -357,7 +355,7 @@ class TestReadComputedRowsDropsBlankRows:
             sheet.write_value("A2", "1")
             sheet.write_value("B2", "A")
 
-        with Excel(path, read_only=True) as excel, pytest.raises(ExcelHeaderError):
+        with Excel(path, read_only=True) as excel, pytest.raises(ExcelError):
             excel.read("データ")
 
     def test_existing_header_and_data_behavior_unchanged(self, tmp_path) -> None:

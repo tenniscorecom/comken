@@ -4,24 +4,11 @@ from comken.exceptions.base import ComkenError
 
 
 class ColumnNotFoundError(ComkenError):
-    """Excel・CSV・データ比較で列が見つからないエラー
+    """Excel・CSV・データ比較で列が見つからないエラー。具体的な状況はメッセージに出る
 
     対処:
         メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
     """
-
-
-class KeyColumnNotFoundError(ColumnNotFoundError):
-    """比較に使うキー列が見つからない
-
-    発生箇所: diff_rows()
-
-    対処:
-        Excel・CSV の列名を確認する
-    """
-
-    def __init__(self, key: str, existing: list[str]) -> None:
-        super().__init__(f"キー列が見つかりません: {key}\n存在する列: {', '.join(existing)}")
 
 
 class ExcelColumnNotFoundError(ColumnNotFoundError):
