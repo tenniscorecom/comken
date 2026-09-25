@@ -127,7 +127,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `StateValueTypeError` | state に保存できない型の値が渡された | 真偽値・整数・小数・文字列・文字列のリストのいずれかに変更する |
 | `BusinessDayNotFoundError` | 営業日が見つからなかった | n をその月の営業日数以下に直す、対象月の祝日に過不足がないか確認する、社内休日（会社用カレンダーCSV）が広範囲に登録されていないか確認する |
 | `CalendarError` | 祝日カレンダーに関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
-| `CalendarFormatError` | 会社用カレンダーCSV 以外のファイルや壊れたファイルを読み込もうとした | ``python tools\build_calendar.py`` を実行して``comken/core/calendar/data/company_calendar.csv`` を再生成する。内閣府の ``syukujitsu.csv`` 形式変更が原因の場合は``tools/build_calendar.py`` 側の解析ロジックを直す |
+| `CalendarFormatError` | 会社用カレンダーCSV 以外のファイルや壊れたファイルを読み込もうとした | ``python -m comken.core.calendar.build`` を実行して``comken/core/calendar/data/company_calendar.csv`` を再生成する。内閣府の ``syukujitsu.csv`` 形式変更が原因の場合は``comken.core.calendar.build`` 側の解析ロジックを直す。``company_holidays.csv`` の書式が原因の場合はメッセージに出ている行の「年・月・日・名称」を直す |
 | `HistoryWriteError` | 必須のダウンロード履歴を記録できなかった | 履歴CSVの保存先、共有サーバー接続、書込み権限を確認する |
 | `HistoryLockTimeoutError` | ダウンロード履歴の排他ロックを待っても取得できなかった | 同時実行中の処理が終わるのを待って再実行する。繰り返す場合は共有サーバーを確認する |
 | `CachedReportNotFoundError` | 本日の定期取得キャッシュが見つからない | Salesforce からCSVを手動取得し、画面に表示された正確なパス・ファイル名で置いて、同じ python main.py を再実行する |

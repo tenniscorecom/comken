@@ -103,7 +103,7 @@ exclude = [".pytest-tmp"]
 # M3 が触る箇所なので整合性はテスト (tests/test_docs_code.py など) で別途担保する。
 reportUnsupportedDunderAll = false
 
-# tools/ 配下のスクリプト（build_calendar / export_for_chat）は pytest からも
+# tools/ 配下のスクリプト（export_for_chat）は pytest からも
 # モジュールとして import されるため、tests/ と同じ PYTHONPATH で探す設定を入れる。
 # 直下に置くとリポジトリのルートが散らかるので tools/ へ移し、その分をここで補う
 # （pytest.ini_options.pythonpath と同じ意図。pyright は pythonpath を読まないため

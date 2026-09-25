@@ -11,15 +11,15 @@
 
 ライブラリは **既定カレンダー 1 本だけ** を公開する。利用者が独自の
 カレンダーを組み立てる API は公開しない（会社休日を変えるときは
-生成ツール ``tools/build_calendar.py`` の ``COMPANY_HOLIDAYS`` を直す）。
+``comken/core/calendar/data/company_holidays.csv`` を編集する）。
 
 実行時は内閣府 CSV も会社休日のルールも持たない。会社休日・国民の祝日の
 判定は **生成物である 1 ファイル** だけを読んで行うため、内閣府 CSV の
 形式変更は生成ツールだけが対応すればよい。
 
-**年 1 回の手動更新**（開発機で内閣府から取得 → ``tools/build_calendar.py``
-を実行 → ``company_calendar.csv`` をコミット）で配布する。自動ダウンロード
-機能は無い。
+**年 1 回の手動更新**（開発機で内閣府から取得 →
+``python -m comken.core.calendar.build`` を実行 → ``company_calendar.csv``
+をコミット）で配布する。自動ダウンロード機能は無い。
 
 CALENDAR_CSV_PATH             会社用カレンダーCSV のパス（git 管理下の正本）
 BUSINESS_DAY_SEARCH_LIMIT     「次の営業日」探索の日数上限

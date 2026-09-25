@@ -1,7 +1,7 @@
 """comken.core.calendar のテスト。
 
 会社用カレンダー CSV（``company_calendar.csv``）を読んで国民の祝日＋会社休日
-を判定する実行時 API の挙動を検証する。生成ツール（``tools/build_calendar.py``）
+を判定する実行時 API の挙動を検証する。生成ツール（``comken/core/calendar/build.py``）
 側の内閣府 CSV 解析・会社休日ルールの展開は ``tests/test_build_calendar.py``
 で検証する。
 """

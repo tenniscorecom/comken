@@ -7,7 +7,7 @@
 国民の祝日＋会社休日を判定する。会社休日のルール判定・内閣府 CSV の解析・
 計算ソース・``approximate``・``Holiday`` 値オブジェクトは持たない。
 **実行時は内閣府 CSV も会社休日のルールも知らない。** 生成ツール
-（``tools/build_calendar.py``）だけがそれらを持ち、生成物である
+（``comken.core.calendar.build``）だけがそれらを持ち、生成物である
 ``company_calendar.csv`` に焼き込む。
 
 ネット系依存（requests）はこのモジュールには入らない。
@@ -87,7 +87,7 @@ def is_holiday(target: _dt.date) -> bool:
 
     ``company_calendar.csv`` の収録範囲（内閣府 CSV の最初の年〜最後の年）
     外の日付は国民の祝日も会社休日も付かない（常に ``False``）。範囲を延ばす
-    には内閣府 CSV を入れ替えて ``python tools\\build_calendar.py`` で
+    には内閣府 CSV を入れ替えて ``python -m comken.core.calendar.build`` で
     再生成する。
     """
     return _resolve_singleton().is_holiday(target)
@@ -352,7 +352,8 @@ class _Calendar:
             raise CalendarFormatError(
                 file_path,
                 "ファイルが存在しません。"
-                "tools/build_calendar.py を実行して company_calendar.csv を生成してください。",
+                "python -m comken.core.calendar.build を実行して"
+                " company_calendar.csv を生成してください。",
             )
         # 文字コードは UTF-8 BOM 付き（書き出し側 fix）。CP932 で読もうとすると
         # 日本語が化けるので、明示的に utf-8-sig を渡す
@@ -399,7 +400,7 @@ class _Calendar:
             raise CalendarFormatError(
                 file_path,
                 "日付として解釈できる行が 1件もありませんでした。"
-                "tools/build_calendar.py を再実行してください。",
+                "python -m comken.core.calendar.build を再実行してください。",
             )
         return cls(holidays)
 
@@ -447,8 +448,8 @@ class _Calendar:
                 "（最終収録日: %s）。"
                 "この日以降は国民の祝日・会社休日が付きません。"
                 "内閣府の syukujitsu.csv を更新して"
-                "tools/calendar_data/syukujitsu.csv を上書きし、"
-                "python tools\\build_calendar.py を実行して"
+                "comken/core/calendar/data/syukujitsu.csv を上書きし、"
+                "python -m comken.core.calendar.build を実行して"
                 "comken/core/calendar/data/company_calendar.csv を"
                 "再生成してください（docs/calendar.md の「年1回の更新手順」参照）。",
                 today,
@@ -464,8 +465,8 @@ class _Calendar:
                 "会社用カレンダーの収録期限が近づいています: 残り %d 日"
                 "（最終収録日: %s）。"
                 "内閣府の syukujitsu.csv をダウンロードして"
-                "tools/calendar_data/syukujitsu.csv を上書きし、"
-                "python tools\\build_calendar.py を実行して"
+                "comken/core/calendar/data/syukujitsu.csv を上書きし、"
+                "python -m comken.core.calendar.build を実行して"
                 "comken/core/calendar/data/company_calendar.csv を更新し、"
                 "コミット・タグ打ちして配布してください"
                 "（docs/calendar.md の「年1回の更新手順」参照）。",

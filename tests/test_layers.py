@@ -108,6 +108,11 @@ CSV_DIRECT_IMPORT_ALLOWLIST = {
     REPOSITORY_ROOT / "comken" / "toolbox" / "salesforce" / "bulk_ingest.py",
     # comken.core は層のルールで toolbox を import できないため、ここで csv.reader を直接使う
     REPOSITORY_ROOT / "comken" / "core" / "calendar" / "_calendar.py",
+    # 同じく comken.core 配下のカレンダーデータ生成ツール。
+    # 内閣府 CSV (CP932) と company_holidays.csv (UTF-8 BOM 付き) を
+    # 読んで company_calendar.csv に書き出すため toolbox.csv.CSV を
+    # 経由できないので、標準 csv を直接使う。
+    REPOSITORY_ROOT / "comken" / "core" / "calendar" / "build.py",
 }
 
 
