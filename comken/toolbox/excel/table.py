@@ -1,5 +1,8 @@
 """comken/toolbox/excel/table.py — Excel データシートを操作する。"""
 
+# Excel を TYPE_CHECKING 内だけで import して注釈に使うため、注釈の評価を遅延する。
+from __future__ import annotations
+
 import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -53,7 +56,7 @@ class ExcelTable:
     意図せず影響されないようにしている。
     """
 
-    def __init__(self, excel: "Excel", worksheet: Worksheet, name: str | None = None) -> None:
+    def __init__(self, excel: Excel, worksheet: Worksheet, name: str | None = None) -> None:
         self._excel = excel
         self._worksheet = worksheet
         self._name = name

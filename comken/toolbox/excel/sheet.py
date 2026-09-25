@@ -1,5 +1,8 @@
 """comken/toolbox/excel/sheet.py — Excel シートを操作する。"""
 
+# Excel を TYPE_CHECKING 内だけで import して注釈に使うため、注釈の評価を遅延する。
+from __future__ import annotations
+
 import logging
 import re
 from copy import copy
@@ -74,7 +77,7 @@ class Sheet:
 
     PY_TABLE_PREFIX = "PY_T_"
 
-    def __init__(self, excel: "Excel", worksheet: Worksheet) -> None:
+    def __init__(self, excel: Excel, worksheet: Worksheet) -> None:
         self._excel = excel
         self._worksheet = worksheet
 

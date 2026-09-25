@@ -33,6 +33,9 @@ Windows ログオンユーザーに紐付けて暗号化し、ユーザープロ
     password = load_credential("oju_sys", "password")
 """
 
+# 定義中の Credentials を注釈に使うため、注釈の評価を遅延する。
+from __future__ import annotations
+
 import json
 import logging
 import re
@@ -465,10 +468,10 @@ def _save_all(data: dict[str, dict[str, str]], path: Path) -> None:
 # インスタンスは GC で自然に消え、 レジストリも膨らまない。
 # ``Credentials`` は ``__getattr__`` を定義しているが ``__weakref__`` はクラスメンバ
 # として普通に解決されるため weakref はそのまま使える（ ``__slots__`` は不要）。
-_instances_by_path: dict[str, weakref.WeakSet["Credentials"]] = {}
+_instances_by_path: dict[str, weakref.WeakSet[Credentials]] = {}
 
 
-def _register_instance(instance: "Credentials") -> None:
+def _register_instance(instance: Credentials) -> None:
     """``Credentials._decrypted()`` から呼ばれ、 ``path`` ごとにインスタンスを覚える。
 
     ``WeakSet`` は同じインスタンスを ``add`` しても 1 つしか持たない（多重登録

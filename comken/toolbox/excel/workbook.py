@@ -1,5 +1,8 @@
 """comken/toolbox/excel/workbook.py — Excel ブックとデータ領域を操作する。"""
 
+# Sheet / ExcelCOMHandler は TYPE_CHECKING 内だけで import して注釈に使うため、評価を遅延する。
+from __future__ import annotations
+
 import hashlib
 import logging
 import os
@@ -297,7 +300,7 @@ class Excel:
         )
         self.close(save=exc_type is None)
 
-    def sheet(self, name: str | None = None) -> "Sheet":
+    def sheet(self, name: str | None = None) -> Sheet:
         """名前でシートを取得する。未存在の新規ブックでは最初のシートを改名する。"""
         # engine='com' は Worksheet を返さない設計（``Sheet`` 系 API は openpyxl 前提）。
         # 共通 API（``list_sheets`` / ``last_row`` / ``has_sheet`` など）か
@@ -370,7 +373,7 @@ class Excel:
             last_error = SheetNotFoundError(name, self._workbook.sheetnames)
         raise last_error
 
-    def data_sheet(self, name: str | None = None) -> "Sheet":
+    def data_sheet(self, name: str | None = None) -> Sheet:
         """データシートを取得する。名前を省略できるのは1枚のときだけ。"""
         if self._engine == "com":
             self._ensure_open()
@@ -386,7 +389,7 @@ class Excel:
             name = names[0]
         return self.sheet(self._with_python_prefix(name))
 
-    def create_data_sheet(self, name: str) -> "Sheet":
+    def create_data_sheet(self, name: str) -> Sheet:
         """指定名の空のデータシートを作成する。"""
         if self._engine == "com":
             self._ensure_open()
@@ -407,7 +410,7 @@ class Excel:
         logger.debug("データシートを作成しました: name=%s", full_name)
         return Sheet(self, worksheet)
 
-    def create_sheet(self, name: str) -> "Sheet":
+    def create_sheet(self, name: str) -> Sheet:
         """指定名の空の表示用シートを作成する。
 
         ``create_data_sheet`` は ``PY_`` プレフィックスを補ってデータシート専用
@@ -474,7 +477,7 @@ class Excel:
             return excel_com.read_block(sheet_name, min_col, min_row, max_col, max_row)
 
     @property
-    def com_handler(self) -> "ExcelCOMHandler":
+    def com_handler(self) -> ExcelCOMHandler:
         """engine='com' で開いている内部の ``ExcelCOMHandler`` を返す。
 
         ``run_macro`` / ``save_as``（パスワード付き保存）など、Phase 1 で

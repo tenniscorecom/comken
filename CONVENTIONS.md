@@ -711,6 +711,9 @@ HTTP の `get()`、キー・値ストアの `get()` / `set()` のように、そ
 `TYPE_CHECKING` 内だけで import する名前を型注釈に使う場合など、注釈の遅延評価が必要な
 ファイルにだけ入れる。残す場合は、必要な理由を import の直前にコメントで書く。
 
+**型注釈のクラス名を `"Table"` のようにダブルクォーテーションで囲まない。** 前方参照や
+`TYPE_CHECKING` 内だけの import は、上の `from __future__ import annotations` で解決する。
+
 ### dataclass・定数クラス・Enum
 
 #### frozen の使い分け

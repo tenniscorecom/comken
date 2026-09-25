@@ -26,11 +26,13 @@ timeout_seconds を過ぎても入力が確定しなければ TimeoutError で�
 （入力待ちのままハングし続けない）。
 """
 
+# Credentials を TYPE_CHECKING 内だけで import して注釈に使うため、注釈の評価を遅延する。
+from __future__ import annotations
+
 # 対話的にパスワードを受け付けるモジュールのため、プロンプト表示・マスク文字の
 # 表示に print を使う（logging はログファイル向けで、対話プロンプトの
 # 相手には届かない）
 # ruff: noqa: T201
-
 import logging
 import msvcrt
 import time
@@ -62,7 +64,7 @@ _MISMATCH_MESSAGE = "入力が一致しませんでした。もう一度入力�
 
 
 def prompt_new_password(
-    cred: "Credentials",
+    cred: Credentials,
     field: str = DEFAULT_PASSWORD_FIELD,
     *,
     label: str = "新しいパスワード",
@@ -99,7 +101,7 @@ def prompt_new_password(
 
 
 def change_password[T](
-    cred: "Credentials",
+    cred: Credentials,
     submit: Callable[[str], T],
     field: str = DEFAULT_PASSWORD_FIELD,
     *,
