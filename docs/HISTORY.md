@@ -340,8 +340,6 @@ Excel / ExcelCOMHandler 側の自動コピールーチンだけが直接 `import
   `SiteBase` だけが登録・解除の入口なので、整合性のリスクが無い
 - 同じサイトを 2 アカウントで開くときは `Kintai(name="kintai_a")` のように
   `name=` でセッション名を分ける。`download_dir` / `profile_dir` も自動で分かれる
-- 旧名 → 新名の対応: `Browsers` / `launch()` / `launch_session()` / `names` /
-  `browsers["..."]` はすべて存在しない（同じ名前で取り出す代替手段は無くなった）
 
 失敗が怖いのは「`Browsers` を使い慣れた人が読み返すと書き方が変わった」と
 感じる点だが、`with` を並べる書き方の方が短く、概念も1つ少ない（同時実行
@@ -724,22 +722,6 @@ Python 側に持ち込んでいなかったため）。
 祝日・営業日関数を Excel の `WORKDAY` に寄せて改名。**「次の営業日」「前の
 営業日」を表す関数は削除**し、`workday(d, ±1)` に統一した。`business_day_*`
 系は内部で `add_business_days` を呼んでいたが、`workday` を自己完結で書き直した。
-
-旧名 → 新名:
-
-| 旧名 | 新名 |
-|---|---|
-| `is_business_day` | `is_workday` |
-| `add_business_days` | `workday` |
-| `business_day_after` | （削除。`workday(d, 1)` で代替） |
-| `business_day_before` | （削除。`workday(d, -1)` で代替） |
-| `business_day_on_or_after` | `workday_on_or_after` |
-| `business_day_on_or_before` | `workday_on_or_before` |
-| `first_business_day_of_month` | `first_workday` |
-| `last_business_day_of_month` | `last_workday` |
-| `nth_business_day_of_month` | `nth_workday` |
-| `non_business_days_after` | `non_workdays_after` |
-| `non_business_days_before` | `non_workdays_before` |
 
 `count_workdays`（Excel の `NETWORKDAYS(開始, 終了)` 相当）を追加。両端を含む
 営業日数を返し、`start > end` のときは負の数を返す（`is_workday` と同じ判定）。
