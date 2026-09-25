@@ -818,10 +818,11 @@ SELECTに無くフィルタだけに現れる列キーもカタログへ残る�
 
 #### 5. `SoqlReport` サブクラスとして実装する
 
-`comken/services/salesforce_downloader/soql_reports/` 配下に**1レポート=1ファイル**で書く。
+`comken/services/salesforce_downloader/soql_reports/reports/` 配下に
+**1レポート=1ファイル**で書く。
 
 ```python
-# comken/services/salesforce_downloader/soql_reports/large_sales_report.py
+# comken/services/salesforce_downloader/soql_reports/reports/large_sales_report.py
 from comken.services.salesforce_downloader.soql_reports.base import SoqlReport
 
 
@@ -842,25 +843,22 @@ class LargeSalesReport(SoqlReport):
 
 Excel の「スケジュール」シートとは独立しており、いつ呼ぶかは呼び出し側が決める。
 
-#### 6. `SOQL_REPORTS` へ登録する
+#### 6. 登録は不要（`reports/` に置くだけ）
 
-**自動登録の仕組みは持たない。** `_registry.py` のタプルへ1行足す。
+**登録は自動。** ファイルを `reports/` に置いた時点で `_registry.registered_reports()`
+が `pkgutil.iter_modules` で走査し、`SoqlReport` のサブクラスを集めて登録する
+（ファイル名が `_` で始まるモジュールは対象外 — `reports/_template.py` のような
+雛形を登録せずに済ませる）。
 
-```python
-# comken/services/salesforce_downloader/soql_reports/_registry.py
-from comken.services.salesforce_downloader.soql_reports.large_sales_report import (
-    LargeSalesReport,
-)
-
-SOQL_REPORTS: tuple[type[SoqlReport], ...] = (LargeSalesReport,)
-```
+`KEY` が空のまま残ると登録時に `DownloaderError` で止まる。**必ず管理番号を
+埋めてから**コミットする。
 
 #### 7. 動作確認する
 
 ```python
 from comken.services.salesforce_downloader.soql_reports import download_soql_reports
 
-saved = download_soql_reports()   # SOQL_REPORTS を全部取得・保存
+saved = download_soql_reports()   # registered_reports() を全部取得・保存
 ```
 
 履歴（history.csv）への記録は対象外。1件失敗しても残りは続け、保存ファイル名の
@@ -950,7 +948,7 @@ comken 側のドキュメントを参照。
 | 管理表・履歴の置き場所を変える | `paths.py` の `MASTER_PATH` / `HISTORY_PATH` |
 | Salesforce の認証・API の叩き方を変える | `comken/toolbox/salesforce/`（Downloader ではない） |
 | 接続先の組織を足す | `comken/toolbox/salesforce/sites/` |
-| 2000件超のレポートをSOQLで取る | `soql_reports/`（1レポート=1ファイル＋`_registry.py`へ登録）＋管理表の「SOQL」列を`○` |
+| 2000件超のレポートをSOQLで取る | `soql_reports/reports/`（1レポート=1ファイルを置くだけ）＋管理表の「SOQL」列を`○` |
 | API／ブラウザ／SOQLのどれで取るか変える | 管理表の「2000件超」「SOQL」列（コードは触らない） |
 
 右列に「**全プロジェクトに効く**」と書いているのは、軽く触ってよい場所と、触ると全

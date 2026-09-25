@@ -72,7 +72,8 @@ def main() -> None:
         return_value=_fake_site(),
     ):
         # reports に明示的にリストを渡すとテスト・デモ用に対象を絞れる。
-        # 本番では _registry.py の SOQL_REPORTS へ登録し、引数なしで呼ぶ。
+        # 本番では reports/ に置くだけで registered_reports() が拾うので
+        # 引数なしで呼べる
         saved_paths = download_soql_reports([LargeSalesReport])
     # ↑↑↑ ここまで ↑↑↑
 

@@ -40,10 +40,10 @@ docs/機能/salesforce-downloader.md「SOQLレポート（2000件超のレポー
 4. ``soql()`` の中身が、対象組織で実際に通る SOQL であること
 
 実プロジェクトへ組み込むときは、``large_sales_report.py`` を
-``comken/services/salesforce_downloader/soql_reports/`` 配下へコピーし、
-``_registry.py`` の ``SOQL_REPORTS`` タプルへ登録すれば、以下のように
-``reports`` を明示せず ``download_soql_reports()`` を引数なしで呼べる
-（このテンプレートのように呼び出し側でリストを渡す形のままでもよい）。
+``comken/services/salesforce_downloader/soql_reports/reports/`` 配下へ
+コピーするだけで、ファイル名を ``_`` で始めなければ ``registered_reports()`` が
+自動で拾う。``reports`` を明示せず ``download_soql_reports()`` を引数なしで
+呼べる（このテンプレートのように呼び出し側でリストを渡す形のままでもよい）。
 
 **いつ呼ぶか（スケジュール）はこのファイルに書かない。** 呼び出し側の
 プロジェクトが決める（docs/機能/salesforce-downloader.md「利用プロジェクト側の
@@ -68,8 +68,9 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> None:
-    # reports を明示せず download_soql_reports() だけ呼ぶ場合は、
-    # あらかじめ _registry.py の SOQL_REPORTS へ登録しておく。
+    # 自動で拾わせるなら download_soql_reports() を引数なしで呼べるが、
+    # このサンプルは「対象のレポートを明示する形」を見せるために
+    # 引数で渡している
     saved_paths = download_soql_reports([LargeSalesReport])
     for path in saved_paths:
         logger.info("保存: %s", path)

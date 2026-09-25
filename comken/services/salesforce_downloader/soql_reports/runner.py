@@ -1,11 +1,11 @@
 r"""comken/services/salesforce_downloader/soql_reports/runner.py — SOQLレポートの取得実行。
 
     from comken.services.salesforce_downloader.soql_reports import (
-        SOQL_REPORTS,
+        registered_reports,
         download_soql_reports,
     )
 
-    saved = download_soql_reports()             # SOQL_REPORTS を全部
+    saved = download_soql_reports()             # registered_reports() を全部
     saved = download_soql_reports([Large, ...])  # テスト用に取り違え
 
 ``download_scheduled()`` と同じく **1件失敗しても残りは続ける**。
@@ -86,7 +86,7 @@ def download_soql_reports(
 ) -> list[Path]:
     """登録された SOQL レポートを全て取得し、保存先のパスを返す。
 
-    ``reports`` を省略すると ``SOQL_REPORTS`` を使う（テストでは差し替え可能）。
+    ``reports`` を省略すると ``registered_reports()`` を使う（テストでは差し替え可能）。
     **1件失敗しても残りは続ける**（``download_scheduled()`` と同じ方針）。
 
     想定した失敗（``ComkenError`` / ``OSError``）はログに残して次のレポートへ進む。
@@ -96,12 +96,12 @@ def download_soql_reports(
 
     Args:
         reports: 取得対象の ``SoqlReport`` サブクラスのシーケンス。
-            ``None`` のときは ``SOQL_REPORTS`` を使う。
+            ``None`` のときは ``registered_reports()`` を使う。
 
     Returns:
         保存したファイルのパス一覧（**成功したぶんだけ**）。
     """
-    targets = _registry.SOQL_REPORTS if reports is None else tuple(reports)
+    targets = _registry.registered_reports() if reports is None else tuple(reports)
     logger.info("SOQL 取得の対象: %d 件", len(targets))
 
     saved: list[Path] = []

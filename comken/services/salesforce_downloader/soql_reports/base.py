@@ -1,9 +1,11 @@
 r"""comken/services/salesforce_downloader/soql_reports/base.py — SOQLで取るレポートの基底クラス。
 
 Report API（2000行上限）で取れない大きなレポートは、SOQL（`SalesforceBase.query()`、
-上限なし）で取る。サブクラスは1レポート=1ファイルで書き、`__init__.py` の
-``SOQL_REPORTS`` タプルへ明示的に登録する。**自動登録の仕組みは持たない**
-（新しいレポートを増やすたびに1行タプルへ足す運用）。
+上限なし）で取る。サブクラスは1レポート=1ファイルで ``reports/`` に書く。
+**登録は自動** — ファイルを置くと ``_registry.registered_reports()`` が
+``pkgutil.iter_modules`` で走査して ``SoqlReport`` サブクラスを集める（明示的な
+タプル編集は不要）。ファイル名が ``_`` で始まるモジュールは走査対象外
+（``reports/_template.py`` のような雛形を登録せずに済む）。
 
     class LargeSalesReport(SoqlReport):
         KEY = "9001"
@@ -27,8 +29,9 @@ class SoqlReport:
     """Report API（2000行上限）で取れない大きなレポートを SOQL で取る基底クラス。
 
     サブクラスは ``KEY`` / ``SUMMARY`` / ``URL`` / ``FOLDER`` を上書きし、
-    ``soql()`` を実装する。1レポート=1ファイルで ``__init__.py`` の
-    ``SOQL_REPORTS`` タプルへ明示的に登録する（**自動登録の仕組みは持たない**）。
+    ``soql()`` を実装する。1レポート=1ファイルで ``reports/`` に置くと
+    ``_registry.registered_reports()`` が自動で登録する（ファイル名が ``_``
+    で始まるモジュールは対象外）。
 
     Excel の「スケジュール」シートとは独立している。いつ呼ぶかは呼び出し側
     （プロジェクトの定期実行）が決める前提なので、この基底クラスには
@@ -37,7 +40,7 @@ class SoqlReport:
     Attributes:
         KEY: 管理番号。``download_scheduled()`` の ``ReportEntry.key`` と
             同じ意味で、社内で決める論理的な番号（前ゼロ・記号入りも可）。
-            Salesforce のレポート ID ではない。
+            Salesforce のレポート ID ではない。**空のままでは登録に失敗する**。
         SUMMARY: 人が読んで何のレポートか分かる説明。保存するファイル名にも使われる。
         URL: レポートを開いた組織の My Domain の URL。``site_for()`` で
             組織を解決するために使う（``ReportEntry.url`` と同じ運用）。

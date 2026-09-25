@@ -3568,16 +3568,17 @@ class SoqlReportNotRegisteredError(DownloaderError):
 
 管理表の「SOQL」列が「○」なのに、同じ管理番号の SoqlReport が登録されていない
 
-管理表と ``SOQL_REPORTS`` は別々に編集できるため、「SOQL」列だけ「○」にして
-``SoqlReport`` の追加・登録（``soql_reports/_registry.py``）を忘れると、
-どの SOQL クエリを使えばいいか決められない。
+管理表と ``reports/`` 配下の ``SoqlReport`` 実装は別々に編集できるため、「SOQL」
+列だけ「○」にして ``SoqlReport`` の追加（``reports/<ファイル>.py`` への
+サブクラス定義）を忘れると、どの SOQL クエリを使えばいいか決められない。
 
 発生箇所: comken.services.salesforce_downloader.soql_reports の soql_report_for()
 
 対処:
-    管理番号に対応する ``SoqlReport`` サブクラスを追加し、``KEY`` を管理表と
-    同じ値にして ``soql_reports/_registry.py`` の ``SOQL_REPORTS`` へ登録する。
-    まだ SOQL 化していないなら、管理表の「SOQL」列を「×」に戻す
+    管理番号に対応する ``SoqlReport`` サブクラスを ``reports/`` 配下に追加し、
+    ``KEY`` を管理表と同じ値にする（ファイル名を ``_`` で始めると
+    走査対象外になるので、必ず実レポート名にする）。まだ SOQL 化していないなら、
+    管理表の「SOQL」列を「×」に戻す
 
 #### `__init__`
 
@@ -4137,8 +4138,9 @@ class SoqlReport:
 Report API（2000行上限）で取れない大きなレポートを SOQL で取る基底クラス。
 
 サブクラスは ``KEY`` / ``SUMMARY`` / ``URL`` / ``FOLDER`` を上書きし、
-``soql()`` を実装する。1レポート=1ファイルで ``__init__.py`` の
-``SOQL_REPORTS`` タプルへ明示的に登録する（**自動登録の仕組みは持たない**）。
+``soql()`` を実装する。1レポート=1ファイルで ``reports/`` に置くと
+``_registry.registered_reports()`` が自動で登録する（ファイル名が ``_``
+で始まるモジュールは対象外）。
 
 Excel の「スケジュール」シートとは独立している。いつ呼ぶかは呼び出し側
 （プロジェクトの定期実行）が決める前提なので、この基底クラスには
@@ -4147,7 +4149,7 @@ Excel の「スケジュール」シートとは独立している。いつ呼�
 Attributes:
     KEY: 管理番号。``download_scheduled()`` の ``ReportEntry.key`` と
         同じ意味で、社内で決める論理的な番号（前ゼロ・記号入りも可）。
-        Salesforce のレポート ID ではない。
+        Salesforce のレポート ID ではない。**空のままでは登録に失敗する**。
     SUMMARY: 人が読んで何のレポートか分かる説明。保存するファイル名にも使われる。
     URL: レポートを開いた組織の My Domain の URL。``site_for()`` で
         組織を解決するために使う（``ReportEntry.url`` と同じ運用）。
@@ -4168,9 +4170,32 @@ def soql(self) -> str:
 
 実行する SOQL クエリ文字列を返す。サブクラスで実装する。
 
-### `SOQL_REPORTS`
+### `registered_reports`
 
-公開定数。
+```text
+def registered_reports() -> tuple[type[SoqlReport], ...]:
+```
+
+#### 説明
+
+``reports/`` パッケージに置かれた ``SoqlReport`` サブクラスを集めて返す。
+
+走査は ``pkgutil.iter_modules(reports.__path__)`` で ``reports/`` 直下の
+``.py`` を1つずつ ``importlib.import_module`` し、そのモジュール自身で
+定義された ``SoqlReport`` のサブクラス（``cls.__module__ == module.__name__``
+を満たすもの）だけを拾う。**ファイル名が ``_`` で始まるモジュールは
+走査対象外**（``_template.py`` のような雛形を登録せずに済む）。
+
+``KEY`` の昇順で返す。**キャッシュはしない** — ``importlib.import_module``
+は既に import 済みなら再 load しない（``sys.modules`` 経由で軽い）ので、
+呼ぶたびに ``reports/`` を全走査し直してもコストは無視できる。
+ファイル追加のたびに再起動は不要。
+
+Raises:
+    DownloaderError: ``KEY`` が空のレポートが含まれているか、複数の
+        レポートが同じ ``KEY`` を持っている。メッセージには
+        ``reports/<ファイル>.py`` のパスとクラス名を含め、
+        対処（``KEY`` を埋める／重複を直す）を併記する。
 
 ### `download_soql_reports`
 
@@ -4182,7 +4207,7 @@ def download_soql_reports(reports: Sequence[type[SoqlReport]] | None=None) -> li
 
 登録された SOQL レポートを全て取得し、保存先のパスを返す。
 
-``reports`` を省略すると ``SOQL_REPORTS`` を使う（テストでは差し替え可能）。
+``reports`` を省略すると ``registered_reports()`` を使う（テストでは差し替え可能）。
 **1件失敗しても残りは続ける**（``download_scheduled()`` と同じ方針）。
 
 想定した失敗（``ComkenError`` / ``OSError``）はログに残して次のレポートへ進む。
@@ -4192,7 +4217,7 @@ def download_soql_reports(reports: Sequence[type[SoqlReport]] | None=None) -> li
 
 Args:
     reports: 取得対象の ``SoqlReport`` サブクラスのシーケンス。
-        ``None`` のときは ``SOQL_REPORTS`` を使う。
+        ``None`` のときは ``registered_reports()`` を使う。
 
 Returns:
     保存したファイルのパス一覧（**成功したぶんだけ**）。
@@ -4216,7 +4241,7 @@ Returns:
     該当する ``SoqlReport`` サブクラス。
 
 Raises:
-    SoqlReportNotRegisteredError: ``SOQL_REPORTS`` に該当する ``KEY`` が無い場合
+    SoqlReportNotRegisteredError: ``registered_reports()`` に該当する ``KEY`` が無い場合
         （管理表の「SOQL」列を「○」にしたのに登録を忘れている設定ミス）。
 
 

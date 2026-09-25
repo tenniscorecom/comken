@@ -6,7 +6,10 @@
 
 from __future__ import annotations
 
+import importlib
+import sys
 from pathlib import Path
+from types import ModuleType
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -101,6 +104,32 @@ def folder(tmp_path: Path) -> Path:
     return target
 
 
+@pytest.fixture
+def isolated_reports_dir(tmp_path: Path, monkeypatch):
+    """``reports/`` の ``__path__`` を ``tmp_path`` に差し替えるフィクスチャ。
+
+    ``registered_reports()`` は ``pkgutil.iter_modules(reports.__path__)`` で
+    走査するので、``reports`` モジュールの ``__path__`` を一時ディレクトリに
+    差し替えれば、その中へ ``.py`` を書くだけでテスト用レポートを追加できる。
+    monkeypatch が終了時に ``__path__`` と ``sys.modules`` を元に戻す。
+    """
+    from comken.services.salesforce_downloader.soql_reports import reports as reports_module
+
+    monkeypatch.setattr(reports_module, "__path__", [str(tmp_path)])
+    yield tmp_path
+
+
+def _load_module(reports_module, stem: str) -> ModuleType:
+    """``reports/__path__`` 内の ``<stem>.py`` を ``importlib.import_module`` で読み込む。
+
+    既に ``sys.modules`` にあれば削除してから読み直す（テスト間のキー衝突を避ける）。
+    """
+    full_name = f"{reports_module.__name__}.{stem}"
+    if full_name in sys.modules:
+        del sys.modules[full_name]
+    return importlib.import_module(full_name)
+
+
 class TestSoqlReportBase:
     """``SoqlReport`` 基底クラスの挙動確認。"""
 
@@ -133,26 +162,20 @@ class TestDownloadSoqlReports:
         with CSV(csv_path, read_only=True) as csv_file:
             assert csv_file.read().to_rows() == ROWS
 
-    def test_uses_default_soql_reports_when_argument_is_none(self, folder):
-        """``reports=None`` のときは ``SOQL_REPORTS`` が使われる。"""
-        original = _registry.SOQL_REPORTS
+    def test_uses_default_registered_reports_when_argument_is_none(self, folder):
+        """``reports=None`` のときは ``registered_reports()`` が使われる。"""
         _DummyReport.FOLDER = str(folder)
-        _registry.SOQL_REPORTS = (_DummyReport,)
-        try:
-            with patch.object(runner_module, "site_for", return_value=fake_salesforce()):
-                saved = download_soql_reports()
-            assert len(saved) == 1
-        finally:
-            _registry.SOQL_REPORTS = original
-
-    def test_empty_soql_reports_returns_empty_list_when_default(self):
-        """``SOQL_REPORTS`` が空タプルのときは何もせず空リストを返す。"""
-        original = _registry.SOQL_REPORTS
-        _registry.SOQL_REPORTS = ()
-        try:
+        with (
+            patch.object(_registry, "registered_reports", return_value=(_DummyReport,)),
+            patch.object(runner_module, "site_for", return_value=fake_salesforce()),
+        ):
             saved = download_soql_reports()
-        finally:
-            _registry.SOQL_REPORTS = original
+        assert len(saved) == 1
+
+    def test_empty_registered_reports_returns_empty_list_when_default(self):
+        """``registered_reports()`` が空のときは何もせず空リストを返す。"""
+        with patch.object(_registry, "registered_reports", return_value=()):
+            saved = download_soql_reports()
         assert saved == []
 
     def test_continues_after_one_failure(self, folder):
@@ -290,51 +313,193 @@ class TestReservePath:
         assert "9001" in str(caught.value)
 
 
-class TestSoqlReportsRegistry:
-    """``SOQL_REPORTS`` の既定値と公開面。"""
+class TestRegisteredReports:
+    """``registered_reports()`` の自動登録挙動（``reports/`` を ``tmp_path`` に差し替えて検証）。"""
 
-    def test_default_is_empty_tuple(self):
-        """初期状態では ``SOQL_REPORTS`` は空タプル。"""
-        assert _registry.SOQL_REPORTS == ()
+    def test_returns_empty_tuple_when_no_reports(self, isolated_reports_dir):
+        """``reports/`` に実レポートが無い状態では空タプル。"""
+        from comken.services.salesforce_downloader.soql_reports import _registry as registry_module
 
-    def test_subclass_is_acceptable(self):
-        """``SoqlReport`` 派生クラスはそのまま登録できる（型チェックが通る）。"""
-        # 型注釈は実行時に強制されないが、tuple として受け入れることを確認
-        items: tuple[type[SoqlReport], ...] = (_DummyReport, _AllowEmptyReport)
-        assert all(issubclass(item, SoqlReport) for item in items)
+        # フィクスチャで ``reports/__path__`` は ``isolated_reports_dir`` に差し替え済み。
+        # このテストでは何も置かないので何も見つからない
+        assert registry_module.registered_reports() == ()
+
+    def test_picks_up_real_module_under_reports(self, isolated_reports_dir):
+        """``reports/`` に置いたファイルのクラスが拾われる。"""
+        from comken.services.salesforce_downloader.soql_reports import _registry as registry_module
+        from comken.services.salesforce_downloader.soql_reports import reports as reports_module
+
+        # 一意な KEY にして他のテストとぶつけない
+        body = (
+            "from comken.services.salesforce_downloader.soql_reports.base import SoqlReport\n"
+            "class RealPickReport(SoqlReport):\n"
+            "    KEY = '8001'\n"
+            "    def soql(self):\n"
+            "        return 'SELECT Id FROM Account'\n"
+        )
+        (isolated_reports_dir / "real_pick.py").write_text(body, encoding="utf-8")
+        _load_module(reports_module, "real_pick")
+
+        classes = registry_module.registered_reports()
+        assert len(classes) == 1
+        assert classes[0].__name__ == "RealPickReport"
+        assert classes[0].KEY == "8001"
+
+    def test_skips_underscored_module(self, isolated_reports_dir):
+        """``_`` で始まるモジュール（``_template.py`` 等）は走査対象外。"""
+        from comken.services.salesforce_downloader.soql_reports import _registry as registry_module
+
+        body = (
+            "from comken.services.salesforce_downloader.soql_reports.base import SoqlReport\n"
+            "class SkipMe(SoqlReport):\n"
+            "    KEY = '8002'\n"
+            "    def soql(self):\n"
+            "        return 'SELECT Id FROM Account'\n"
+        )
+        (isolated_reports_dir / "_skipped.py").write_text(body, encoding="utf-8")
+        # 走査対象外なので import すらされない（sys.modules に登録されないことを確認するため
+        # ここで ``importlib.import_module`` は呼ばない）
+
+        assert registry_module.registered_reports() == ()
+
+    def test_does_not_pick_up_imported_only_class(self, isolated_reports_dir):
+        """他モジュールから ``from ... import`` しただけのクラスは拾わない。"""
+        from comken.services.salesforce_downloader.soql_reports import _registry as registry_module
+        from comken.services.salesforce_downloader.soql_reports import reports as reports_module
+
+        # ``definitions.py`` で ``SoqlReport`` サブクラスを定義し、
+        # ``importer.py`` はそれを再 import するだけにする
+        definitions_body = (
+            "from comken.services.salesforce_downloader.soql_reports.base import SoqlReport\n"
+            "class ImportedReport(SoqlReport):\n"
+            "    KEY = '8003'\n"
+            "    def soql(self):\n"
+            "        return 'SELECT Id FROM Account'\n"
+        )
+        (isolated_reports_dir / "definitions.py").write_text(definitions_body, encoding="utf-8")
+        _load_module(reports_module, "definitions")
+
+        importer_body = (
+            "from comken.services.salesforce_downloader.soql_reports.reports.definitions import (\n"
+            "    ImportedReport,\n"
+            ")\n"
+        )
+        (isolated_reports_dir / "importer.py").write_text(importer_body, encoding="utf-8")
+        _load_module(reports_module, "importer")
+
+        classes = registry_module.registered_reports()
+        # ``ImportedReport`` は ``definitions`` モジュールで定義されているので拾われるが、
+        # ``importer`` モジュールでは再 import しているだけなので件数が増えない
+        assert len(classes) == 1
+        assert classes[0].__name__ == "ImportedReport"
+        assert classes[0].__module__.endswith(".definitions")
+
+    def test_returns_reports_sorted_by_key(self, isolated_reports_dir):
+        """複数レポートを ``KEY`` 昇順で返す。"""
+        from comken.services.salesforce_downloader.soql_reports import _registry as registry_module
+        from comken.services.salesforce_downloader.soql_reports import reports as reports_module
+
+        for key, name in [("8103", "c_report"), ("8101", "a_report"), ("8102", "b_report")]:
+            body = (
+                "from comken.services.salesforce_downloader.soql_reports.base import SoqlReport\n"
+                f"class {name.capitalize()}(SoqlReport):\n"
+                f"    KEY = '{key}'\n"
+                "    def soql(self):\n"
+                "        return 'SELECT Id FROM Account'\n"
+            )
+            (isolated_reports_dir / f"{name}.py").write_text(body, encoding="utf-8")
+            _load_module(reports_module, name)
+
+        keys = [cls.KEY for cls in registry_module.registered_reports()]
+        assert keys == ["8101", "8102", "8103"]
+
+    def test_duplicate_keys_raise_downloader_error_with_filenames(self, isolated_reports_dir):
+        """``KEY`` 重複は、どのファイルのどのクラスかをメッセージに出して ``DownloaderError``。"""
+        from comken.services.salesforce_downloader.soql_reports import _registry as registry_module
+        from comken.services.salesforce_downloader.soql_reports import reports as reports_module
+
+        # 同じ KEY="9001" を2つのモジュールで定義
+        body_a = (
+            "from comken.services.salesforce_downloader.soql_reports.base import SoqlReport\n"
+            "class DupA(SoqlReport):\n"
+            "    KEY = '9001'\n"
+            "    def soql(self):\n"
+            "        return 'SELECT Id FROM Account'\n"
+        )
+        body_b = (
+            "from comken.services.salesforce_downloader.soql_reports.base import SoqlReport\n"
+            "class DupB(SoqlReport):\n"
+            "    KEY = '9001'\n"
+            "    def soql(self):\n"
+            "        return 'SELECT Id FROM Account'\n"
+        )
+        (isolated_reports_dir / "dup_a.py").write_text(body_a, encoding="utf-8")
+        _load_module(reports_module, "dup_a")
+        (isolated_reports_dir / "dup_b.py").write_text(body_b, encoding="utf-8")
+        _load_module(reports_module, "dup_b")
+
+        with pytest.raises(DownloaderError) as caught:
+            registry_module.registered_reports()
+        message = str(caught.value)
+        # 両方のファイル名とクラス名が出ていること（1件だけだと直せないので両方必要）
+        assert "DupA" in message and "dup_a.py" in message
+        assert "DupB" in message and "dup_b.py" in message
+        # 対処が書いてある
+        assert "対処" in message
+
+    def test_empty_key_raises_downloader_error_with_filename(self, isolated_reports_dir):
+        """``KEY`` 空のレポートはファイル名付きで ``DownloaderError``。"""
+        from comken.services.salesforce_downloader.soql_reports import _registry as registry_module
+        from comken.services.salesforce_downloader.soql_reports import reports as reports_module
+
+        body = (
+            "from comken.services.salesforce_downloader.soql_reports.base import SoqlReport\n"
+            "class EmptyKey(SoqlReport):\n"
+            "    KEY = ''\n"
+            "    def soql(self):\n"
+            "        return 'SELECT Id FROM Account'\n"
+        )
+        (isolated_reports_dir / "empty_key.py").write_text(body, encoding="utf-8")
+        _load_module(reports_module, "empty_key")
+
+        with pytest.raises(DownloaderError) as caught:
+            registry_module.registered_reports()
+        message = str(caught.value)
+        assert "EmptyKey" in message and "empty_key.py" in message
+        assert "対処" in message
 
 
 class TestSoqlReportFor:
     """``soql_report_for()`` — 管理番号から ``SoqlReport`` サブクラスを引く。"""
 
     def test_returns_matching_report_class(self):
-        original = _registry.SOQL_REPORTS
-        _registry.SOQL_REPORTS = (_DummyReport, _AllowEmptyReport)
-        try:
+        """差し替えた ``registered_reports()`` から該当する ``KEY`` のクラスを返す。"""
+        with patch.object(
+            _registry,
+            "registered_reports",
+            return_value=(_DummyReport, _AllowEmptyReport),
+        ):
             assert soql_report_for("9001") is _DummyReport
             assert soql_report_for("9002") is _AllowEmptyReport
-        finally:
-            _registry.SOQL_REPORTS = original
 
     def test_raises_when_key_not_registered(self):
-        original = _registry.SOQL_REPORTS
-        _registry.SOQL_REPORTS = (_DummyReport,)
-        try:
-            with pytest.raises(SoqlReportNotRegisteredError) as caught:
-                soql_report_for("9999")
-        finally:
-            _registry.SOQL_REPORTS = original
+        """該当 ``KEY`` が無いと ``SoqlReportNotRegisteredError``。"""
+        with (
+            patch.object(_registry, "registered_reports", return_value=(_DummyReport,)),
+            pytest.raises(SoqlReportNotRegisteredError) as caught,
+        ):
+            soql_report_for("9999")
         assert "9999" in str(caught.value)
         assert "9001" in str(caught.value)
 
     def test_picks_up_registry_changes(self):
-        """import 時点のスナップショットではなく、``_registry`` を都度読む。"""
-        original = _registry.SOQL_REPORTS
-        _registry.SOQL_REPORTS = ()
-        try:
+        """import 時点のスナップショットではなく、``_registry.registered_reports()`` を都度呼ぶ。"""
+        with patch.object(_registry, "registered_reports", return_value=()):
             with pytest.raises(SoqlReportNotRegisteredError):
                 soql_report_for("9001")
-            _registry.SOQL_REPORTS = (_DummyReport,)
-            assert soql_report_for("9001") is _DummyReport
-        finally:
-            _registry.SOQL_REPORTS = original
+            with patch.object(
+                _registry,
+                "registered_reports",
+                return_value=(_DummyReport,),
+            ):
+                assert soql_report_for("9001") is _DummyReport

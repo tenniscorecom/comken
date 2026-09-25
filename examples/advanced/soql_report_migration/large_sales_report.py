@@ -5,9 +5,10 @@ docs/機能/salesforce-downloader.md「SOQLレポート（2000件超のレポー
 手順5（SoqlReport サブクラスとして実装する）に対応する。
 
 **このファイルの中身はサンプル固有の部分（``OUTPUT_DIR``）を除けば本番そのまま。**
-実際に使うときは ``comken/services/salesforce_downloader/soql_reports/`` 配下へ
-コピーし、``FOLDER`` を実際の保存先へ書き換え、``_registry.py`` の
-``SOQL_REPORTS`` タプルへ登録する。
+実際に使うときは ``comken/services/salesforce_downloader/soql_reports/reports/`` 配下へ
+コピーし、``FOLDER`` を実際の保存先へ書き換える。ファイル名は ``_`` で始めない
+（``_`` で始まるファイルは ``registered_reports()`` の走査対象外）。
+置いただけで自動登録される（明示的なタプル編集は不要）。
 """
 
 from pathlib import Path

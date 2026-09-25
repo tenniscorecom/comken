@@ -1,10 +1,11 @@
-"""comken/services/salesforce_downloader/soql_reports/new_report.py — SOQLレポートの雛形（未使用）。
+"""comken/services/salesforce_downloader/soql_reports/reports/_template.py — 雛形（未使用）。
 
-**このファイルはプレースホルダー。** 値が決まったら埋めて、ファイル名・クラス名を
-実際のレポートに合わせてリネームし、`_registry.py` の `SOQL_REPORTS` へ登録する
-（登録するまでは `download_soql_reports()` から呼ばれない）。書き方は
-`base.py` のモジュール docstring、詳しい手順は docs/機能/salesforce-downloader.md の
-「SOQLレポート（2000件超のレポートを移行する）」を参照。
+**このファイルはプレースホルダー。** コピーして ``reports/`` に実際のレポート名で
+リネームして使う。ファイル名が ``_`` で始まるので ``registered_reports()`` の
+走査対象にならず、登録されない（リネームすると自動で登録される）。
+``KEY`` が空のまま残すと登録時にエラーになるので、**必ず管理番号を埋めてから**
+使うこと。書き方は ``base.py`` のモジュール docstring、詳しい手順は
+docs/機能/salesforce-downloader.md「SOQLレポート（2000件超のレポートを移行する）」を参照。
 """
 
 from comken.services.salesforce_downloader.soql_reports.base import SoqlReport
