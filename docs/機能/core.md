@@ -423,7 +423,7 @@ folder = local_config.REPORT.OUTPUT_FOLDER
 > **補完（Pylance）:** config を初めて読むと、config.ini から補完用スタブ
 > `typings/comken/core/`（config.pyi）と `typings/comken/__init__.pyi` が自動生成される。
 > VS Code + Pylance で `config.SECTION.KEY` が型付き補完される（typings/ は .gitignore 推奨）。
-> スタブの手動生成 CLI（`python -m comken config`）は v1.0.0 で削除済み。Config() を一度呼ぶだけで自動更新される。
+> `Config()` を一度呼ぶだけで、スタブは自動更新される。
 
 明示的にインスタンスを持ちたい場合（テストや複数 ini の読み分けに）:
 

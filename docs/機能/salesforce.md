@@ -35,7 +35,7 @@ comken のコード（変数名・引数名）は `client_id` / `client_secret` 
 ローテーション API のレスポンスを読むときだけ**で、`rotation.py` が境界で
 `client_id` へ変換している。
 
-認証方式（Client Credentials / Refresh Token）による名前の違いは**ない**。
+認証方式による名前の違いは**ない**。
 
 ### 既定は Refresh Token Flow
 
@@ -43,11 +43,6 @@ comken のコード（変数名・引数名）は `client_id` / `client_secret` 
 
 Client Credentials Flow は `client_secret` だけでアクセストークンを取れてしまうため、
 **本番では使わない**（判断の根拠は [設計判断の履歴](../HISTORY.md#認証方式-external-client-app-authorization-code-refresh-token-flow)）。
-
-> [!note] 補足（2026-09-08）
-> Client Credentials Flow は社内の運用上もう使えないため、comken からも
-> コード（`oauth_credentials.py` / `ClientCredentialsOAuth`）を削除した。
-> 開発中だけ Client Credentials Flow を使う節は、歴史的記録として残している。
 
 `request_token() -> (access_token, instance_url)` を実装する認証方式は
 将来差し替えられるよう、`auth` 引数で渡せる形にしてある（既定は Refresh Token）。
@@ -83,30 +78,6 @@ with Solution(auth=auth) as sf:
 **`python -m comken sf setup`（CLI）はここまでを対話的にまとめて行う。** 認可URLを
 表示し、承認後にリダイレクトされたURL全体を貼り付けると、`code`/`code_verifier`
 を組み立てて `exchange_code()` まで呼ぶ（[つないで確かめる](#つないで確かめるコマンド)）。
-
-### Client Credentials Flow（歴史的記録・現在は使わない）
-
-初回の対話的な認可を挟まずに動かせるため、当初は開発中だけ使う想定だった
-（→ [判断の根拠](../HISTORY.md#認証方式-external-client-app-authorization-code-refresh-token-flow)）。
-
-> [!note] 補足（2026-09-08 / 2026-09-10）
-> Client Credentials Flow は社内の運用上もう使えないため、comken からも
-> コード（`oauth_credentials.py` / `ClientCredentialsOAuth`）を削除した。
-> Refresh Token Flow の初回認可は組織ごとに1回だけの手作業で済み、それ以降は
-> 自動更新されるため、**開発中も含めて使わない。** この節は歴史的記録として
-> 残している。
-
-認証を `auth=` で差し替える仕組みは将来別の方式（JWT など）を生やす余地として
-残してあり、`Solution()` の既定経路（Refresh Token）と独立に扱える。
-
-### Client Credentials Flow を使うときの落とし穴
-
-- **My Domain の URL 必須。** 同じドキュメントに
-  「`login.salesforce.com` と `test.salesforce.com` はサポートされない」と明記がある
-- 接続アプリ側で「クライアントクレデンシャルフローを有効化」＋
-  **実行ユーザー（Run As）の指定**が要る。未指定だと `invalid_grant` になる
-- 実行ユーザーに「API の有効化（API Enabled）」権限が要る
-- 接続アプリの作成直後は反映まで数分かかる
 
 ### アクセストークンの有効期限は「測らない」
 
@@ -275,7 +246,7 @@ with site() as sf:
 > [!warning] requests だけでのセッション確立は組織によって通らないことを確認済み
 > `requests` で frontdoor.jsp にアクセストークンを渡すだけでセッションを
 > 確立しようとすると、ログイン画面へリダイレクトされて通らない組織がある
-> （2026-09-17 実機確認。考えられる原因はセッションセキュリティレベル・
+> （実機で確認済み。考えられる原因はセッションセキュリティレベル・
 > 接続アプリのOAuthスコープ・ログインIP制限の不一致など）。そのため
 > `SalesforceReportBrowser` は**ログインの確立を実ブラウザ（Selenium）で行う**。
 >
@@ -600,7 +571,6 @@ python -m comken sf report --report-id 00O...
 **応答の項目名**を実機で確かめるためにある（公開資料で確認できていないため）。
 `--stage-only` は staged POST までで止めるが、Salesforce 側で**新しい secret が発行される**
 点に注意。値そのものは画面に出さず、項目名と桁数だけを表示する。
-v1.0.0 で `check --app-id` は削除済み（ECA の `consumerId` だけ取れても用途が限られるため）。
 
 ## 失効時の対応
 
