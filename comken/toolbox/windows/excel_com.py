@@ -30,7 +30,7 @@ from comken.exceptions import (
     ExcelApplicationNotAvailableError,
     ExcelError,
 )
-from comken.exceptions.warning import _warn_coerce
+from comken.exceptions.tables import _warn_coerce
 from comken.runtime import dry_run_log, is_dry_run
 
 logger = logging.getLogger(__name__)

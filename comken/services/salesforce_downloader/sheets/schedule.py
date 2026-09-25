@@ -435,7 +435,7 @@ def load_schedule(path: str | Path | None = None) -> list[ScheduleRule]:
 
     ``ScheduleRule.load()`` が `unique=True` の列で重複を検出すると
     ``MasterDuplicateValueError`` を上げ、必須列が空だと
-    ``MasterRowValueError`` を上げる。これらは `comken/exceptions/master_table.py`
+    ``MasterRowValueError`` を上げる。これらは `comken/exceptions/tables.py`
     の例外で、メッセージに**行番号・列名・値**が入る（業務担当者が表の
     どこを直せばいいか分かる形式）。
 

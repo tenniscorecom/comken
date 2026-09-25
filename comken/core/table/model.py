@@ -10,7 +10,7 @@ import logging
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from typing import Any, Self
 
-from comken.exceptions.table import (
+from comken.exceptions.tables import (
     TableColumnNotFoundError,
     TableDuplicateKeyError,
     TableError,

@@ -1,4 +1,4 @@
-"""comken/exceptions/excel.py — Excel 操作に関する例外。"""
+"""comken/exceptions/office.py — Excel / Access / Outlook / Windows 操作に関する例外。"""
 
 from pathlib import Path
 
@@ -51,4 +51,36 @@ class ExcelApplicationNotAvailableError(ExcelError):
             "この PC に Excel が入っているか確認してください。\n"
             "数式の計算結果を読むときだけ Excel が必要です。"
             "数式をやめて値で書いてもらえば、Excel なしで動きます。"
+        )
+
+
+class AccessError(ComkenError):
+    """Access に関するエラー。具体的な状況はメッセージに出る
+
+    対処:
+        メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
+    """
+
+
+class OutlookError(ComkenError):
+    """Outlook 関連エラーの分類。具体的な状況はメッセージに出る
+
+    対処:
+        メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
+    """
+
+
+class WindowNotFoundError(ComkenError):
+    """指定したウィンドウが見つからない
+
+    発生箇所: ``WindowHandler.__init__``
+
+    対処:
+        対象ウィンドウが開いているか、タイトル（完全一致）が想定どおりかを確認する
+    """
+
+    def __init__(self, title: str) -> None:
+        super().__init__(
+            f"ウィンドウが見つかりません: {title}\n"
+            "対象のウィンドウが開いているか、タイトル（完全一致）が想定どおりかを確認してください。"
         )

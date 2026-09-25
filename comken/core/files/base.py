@@ -8,7 +8,7 @@ Excel の内部基底クラスなど、
 
 from pathlib import Path
 
-from comken.exceptions.file import UnsupportedFileSuffixError
+from comken.exceptions.files import UnsupportedFileSuffixError
 
 
 class FileBase:

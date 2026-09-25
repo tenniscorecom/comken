@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from comken.core.table.model import Table
-from comken.exceptions.table import (
+from comken.exceptions.tables import (
     InvalidTableInputError,
     TableColumnNotFoundError,
     TableError,

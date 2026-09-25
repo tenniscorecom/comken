@@ -1,7 +1,6 @@
 """comken/exceptions/downloader.py — Salesforce レポートの集約ダウンローダーの例外。
 
-管理表（Excel）と履歴（CSV）に関する失敗をここにまとめる。
-Salesforce との通信そのものの失敗は salesforce.py の例外を使う。
+管理表と履歴に関する失敗をまとめる。Salesforce との通信そのものの失敗は web.py を使う。
 """
 
 from pathlib import Path

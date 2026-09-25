@@ -1,13 +1,6 @@
-"""comken/exceptions/calendar.py — 祝日カレンダーに関する例外。
+"""comken/exceptions/holidays.py — 祝日カレンダーに関する例外。
 
-会社用カレンダー CSV（``comken/core/holidays/data/company_calendar.csv``）
-の読み取り失敗をまとめる。生成物なので壊れる場面は限定的だが、ファイルが
-存在しない・ヘッダーが違う・日付が解釈できない、といった業務運用の場面に
-備えて明示的に例外を定義する。
-
-このファイルは当面 **改名しない**（カレンダーが主題ではないため、関数群と
-同時に動かすと業務ツールへの参照漏れが起きる。関数改名とは別タスク）。
-"""
+旧 calendar.py を改名したもの。会社用カレンダー CSV の読み取り失敗をまとめる。"""
 
 from comken.exceptions.base import ComkenError
 

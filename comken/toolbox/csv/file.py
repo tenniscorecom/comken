@@ -14,9 +14,12 @@ from comken.constants import Encoding
 from comken.core.files import atomic_write
 from comken.core.table.model import Table
 from comken.core.timer import measure
-from comken.exceptions.csv import CSVError
-from comken.exceptions.file import ComkenFileNotFoundError, UnsupportedFileSuffixError
-from comken.exceptions.table import InvalidTableInputError, TableError
+from comken.exceptions.files import (
+    ComkenFileNotFoundError,
+    CSVError,
+    UnsupportedFileSuffixError,
+)
+from comken.exceptions.tables import InvalidTableInputError, TableError
 from comken.runtime import is_dry_run
 
 logger = logging.getLogger(__name__)

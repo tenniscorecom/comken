@@ -6,7 +6,7 @@ Transfer 関連は tests/test_transfer.py へ移した。
 import pytest
 
 from comken.core.table import Table, compare_tables
-from comken.exceptions.table import (
+from comken.exceptions.tables import (
     TableColumnNotFoundError,
     TableDuplicateKeyError,
     TableError,

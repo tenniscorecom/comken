@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from comken.core.table.model import Table
-from comken.exceptions.table import TableDuplicateKeyError, TableError
+from comken.exceptions.tables import TableDuplicateKeyError, TableError
 
 logger = logging.getLogger(__name__)
 

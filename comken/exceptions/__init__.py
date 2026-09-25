@@ -59,24 +59,14 @@ ComkenError
 カテゴリ基底クラスはまとめて捕捉するために使い、直接送出しない。
 """
 
-from comken.exceptions.access import AccessError
 from comken.exceptions.base import ComkenError, SiteOwnerRequiredError
-from comken.exceptions.browser import BrowserError, ElementNotFoundError, LoginFailedError
-from comken.exceptions.calendar import HolidayError, WorkdayNotFoundError
-from comken.exceptions.column import (
-    ColumnNotFoundError,
-    ExcelColumnNotFoundError,
-    InvalidColumnError,
-    TransferSourceColumnNotFoundError,
-)
-from comken.exceptions.config import ConfigError, ConfigKeyNotFoundError
-from comken.exceptions.credential import (
+from comken.exceptions.config import (
+    ConfigError,
+    ConfigKeyNotFoundError,
     CredentialError,
     CredentialNotFoundError,
     PasswordRejectedError,
 )
-from comken.exceptions.csv import CSVError
-from comken.exceptions.dataloader import DataLoaderError
 from comken.exceptions.downloader import (
     CachedReportNotFoundError,
     DownloaderError,
@@ -90,43 +80,50 @@ from comken.exceptions.downloader import (
     ScheduledDownloadFailedError,
     SoqlReportNotRegisteredError,
 )
-from comken.exceptions.excel import (
-    ExcelApplicationNotAvailableError,
-    ExcelError,
-    SheetNotFoundError,
-)
-from comken.exceptions.file import (
+from comken.exceptions.files import (
     ComkenFileNotFoundError,
+    CSVError,
     FileDeletionError,
     FileSuffixMissingError,
-    UnsupportedFileSuffixError,
-)
-from comken.exceptions.logger import (
     LoggingAlreadyConfiguredError,
     LoggingConflictError,
     LogRootNotConfiguredError,
+    StateError,
+    UnsupportedFileSuffixError,
 )
-from comken.exceptions.master_table import (
+from comken.exceptions.holidays import HolidayError, WorkdayNotFoundError
+from comken.exceptions.office import (
+    AccessError,
+    ExcelApplicationNotAvailableError,
+    ExcelError,
+    OutlookError,
+    SheetNotFoundError,
+    WindowNotFoundError,
+)
+from comken.exceptions.tables import (
+    ColumnNotFoundError,
+    ExcelColumnNotFoundError,
+    InvalidColumnError,
+    InvalidTableInputError,
     MasterDuplicateValueError,
     MasterRowValueError,
     MasterTableError,
+    TableColumnNotFoundError,
+    TableDuplicateKeyError,
+    TableError,
+    TransferSourceColumnNotFoundError,
 )
-from comken.exceptions.outlook import OutlookError
-from comken.exceptions.salesforce import (
+from comken.exceptions.web import (
+    BrowserError,
+    DataLoaderError,
+    ElementNotFoundError,
+    LoginFailedError,
     SalesforceAuthError,
     SalesforceError,
     SalesforceReportIDNotFoundError,
     SalesforceReportTruncatedError,
     SalesforceRequestError,
 )
-from comken.exceptions.state import StateError
-from comken.exceptions.table import (
-    InvalidTableInputError,
-    TableColumnNotFoundError,
-    TableDuplicateKeyError,
-    TableError,
-)
-from comken.exceptions.windows import WindowNotFoundError
 
 __all__ = [
     "ComkenError",

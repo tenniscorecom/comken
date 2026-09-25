@@ -3,7 +3,7 @@
 import pytest
 
 from comken.core.table import Table, Transfer
-from comken.exceptions.table import (
+from comken.exceptions.tables import (
     InvalidTableInputError,
     TableColumnNotFoundError,
     TableError,
