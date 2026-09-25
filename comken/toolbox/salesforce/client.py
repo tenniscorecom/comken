@@ -171,9 +171,9 @@ class SalesforceBase:
                 その場合だけ prefix / domain_url は使われない。
 
         Raises:
-            InvalidCredentialNameError: システム名が空、または使えない文字を含む場合。
+            CredentialError: システム名が空、または使えない文字を含む場合、
+                別のユーザー・PC で登録されていて復号できない場合。
             CredentialNotFoundError: 選択方式に必要な認証情報が未登録の場合。
-            CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
             SalesforceAuthError: 認証に失敗した場合。
             SalesforceError: ネットワークの問題で接続できない場合。
         """

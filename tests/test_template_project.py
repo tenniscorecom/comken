@@ -164,7 +164,7 @@ def test_no_manual_copy_instructions_for_config_ini() -> None:
     """「example をコピーして名前を `config.ini` に変える」式の案内が雛形に無いこと。
 
     「何を防いでいるか」: 実際には `実行.bat`（または `python main.py`）を1度動かせば
-    自動で作られる（`ConfigCreatedFromExampleError` で止まる）。Windows は拡張子を隠すので
+    自動で作られる（`ConfigError` で止まる）。Windows は拡張子を隠すので
     「コピーして名前を変える」を非エンジニアがやると `config.ini.example - コピー`
     ができて詰まる。**自動で作られるので手コピーは不要**、と README が案内している。
 

@@ -43,7 +43,7 @@ import datetime as _dt
 import logging
 from pathlib import Path
 
-from comken.exceptions import CalendarFormatError
+from comken.exceptions import CalendarError
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ def build_rows() -> list[tuple[_dt.date, str]]:
     """
     national_holidays = _load_national_holidays()
     if not national_holidays:
-        raise CalendarFormatError(
+        raise _format_error(
             SYUKUJITSU_CSV_PATH,
             "国民の祝日を 1 件も読み取れませんでした。"
             "内閣府の CSV の形式が変わっていないか確認してください。",
@@ -236,3 +236,13 @@ if __name__ == "__main__":
     # ``__main__`` として実行されたときだけ basicConfig する。
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     main()
+
+
+# ── CalendarError の文言ヘルパー ─────────────────────────────────────────
+# 呼び出し側が型で分ける必要が無い Calendar 由来エラーは、 ``CalendarError`` を
+# 直接送出して具体的な状況をメッセージで伝える。
+
+
+def _format_error(path: Path | str, detail: str) -> CalendarError:
+    """会社用カレンダーCSV 以外を読んだときの ``CalendarError``。"""
+    return CalendarError(f"会社用カレンダーCSV を読み取れませんでした: {path}\n{detail}")

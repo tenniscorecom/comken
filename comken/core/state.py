@@ -13,7 +13,7 @@ from pathlib import Path
 from comken.core.files.atomic import atomic_write
 from comken.core.files.ops import cleanup_stale_tmp, project_dir
 from comken.core.timer import measure
-from comken.exceptions import StateFileCorruptedError, StateLowerCaseNameError, StateValueTypeError
+from comken.exceptions import StateError
 from comken.runtime import dry_run_log, is_dry_run
 
 logger = logging.getLogger(__name__)
@@ -70,7 +70,7 @@ class State:
         """値を保存する。dry-run 中はファイルもメモリ上の状態も変更しない。"""
         self._validate_key(key)
         if not _is_state_value(value):
-            raise StateValueTypeError(value)
+            raise _value_type_error(value)
         if is_dry_run():
             # dry-run が本番の「処理済み」判定を変えないことを最優先する。
             dry_run_log("状態を保存: %s = %r (%s)", key, value, self._path)
@@ -89,18 +89,18 @@ class State:
             with self._path.open(encoding="utf-8-sig") as state_file:
                 parser.read_file(state_file)
             if parser.sections() != [STATE_SECTION]:
-                raise StateFileCorruptedError(self._path.resolve())
+                raise _file_corrupted_error(self._path.resolve())
             values: dict[str, StateValue] = {}
             for key, raw_value in parser.items(STATE_SECTION):
                 self._validate_key(key)
                 value = json.loads(raw_value)
                 if not _is_state_value(value):
-                    raise StateFileCorruptedError(self._path.resolve())
+                    raise _file_corrupted_error(self._path.resolve())
                 values[key] = value
             logger.debug("State読み込み完了: 件数=%d", len(values))
             return values
         except (configparser.Error, UnicodeError, json.JSONDecodeError) as error:
-            raise StateFileCorruptedError(self._path.resolve()) from error
+            raise _file_corrupted_error(self._path.resolve()) from error
 
     def _write(self, values: dict[str, StateValue]) -> None:
         logger.debug("State書き込み開始: %s 件数=%d", self._path, len(values))
@@ -121,7 +121,35 @@ class State:
     @staticmethod
     def _validate_key(key: str) -> None:
         if key != key.upper():
-            raise StateLowerCaseNameError(key)
+            raise _lower_case_name_error(key)
+
+
+# ── StateError の文言ヘルパー ─────────────────────────────────────────────
+# 呼び出し側が型で分ける必要が無い State 由来エラーは、すべて ``StateError`` を
+# 直接送出して具体的な状況をメッセージで伝える。
+
+
+def _file_corrupted_error(path: Path) -> StateError:
+    """state.ini が壊れていて読み取れないときの ``StateError``。"""
+    return StateError(
+        f"state.ini を読み取れません: {path}\n"
+        "ファイルの内容を確認してください。直せない場合は state.ini を別名に変更してから、"
+        "再実行してください。"
+    )
+
+
+def _lower_case_name_error(key: str) -> StateError:
+    """state のキー名に小文字があるときの ``StateError``。"""
+    return StateError(f"state のキー名は大文字で指定してください: {key} → {key.upper()}")
+
+
+def _value_type_error(value: object) -> StateError:
+    """state に保存できない型の値が渡されたときの ``StateError``。"""
+    return StateError(
+        f"state に保存できない値の型です: {type(value).__name__}\n"
+        "保存できる型は、真偽値・整数・小数・文字列・文字列のリストです。"
+        "渡す値を保存できる型に変更してください。"
+    )
 
 
 def _new_parser() -> configparser.ConfigParser:

@@ -140,7 +140,7 @@ class SalesforceReportBrowser(SiteBase):
 
         Raises:
             CredentialNotFoundError: prefix配下に username/password が未登録の場合。
-            CredentialDecryptionError: 別のユーザー・PCで登録されていて復号できない場合。
+            CredentialError: 別のユーザー・PCで登録されていて復号できない場合。
         """
         from comken.toolbox.credentials import Credentials
 

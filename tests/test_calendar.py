@@ -36,7 +36,6 @@ from comken.core.calendar._calendar import _Calendar, _set_calendar_for_test
 from comken.exceptions import (
     BusinessDayNotFoundError,
     CalendarError,
-    CalendarFormatError,
 )
 
 # ── 公開関数の基本動作 ──────────────────────────────────────────────────
@@ -308,7 +307,7 @@ class TestExceptionHierarchy:
     @pytest.mark.parametrize(
         ("exception", "expected_name"),
         [
-            (CalendarFormatError(Path("dummy.csv"), "dummy"), "CalendarFormatError"),
+            (CalendarError("dummy.csv 形式エラー"), "CalendarError"),
         ],
     )
     def test_isinstance_of_base(self, exception: CalendarError, expected_name: str) -> None:
@@ -686,35 +685,35 @@ class TestCompanyCalendarCsvFormatError:
     """``company_calendar.csv`` の形式エラー時の挙動。"""
 
     def test_missing_file_raises_format_error(self, tmp_path: Path) -> None:
-        """ファイルが無ければ ``CalendarFormatError``。"""
-        with pytest.raises(CalendarFormatError):
+        """ファイルが無ければ ``CalendarError``。"""
+        with pytest.raises(CalendarError):
             _Calendar.load(tmp_path / "nope.csv")
 
     def test_wrong_header_raises_format_error(self, tmp_path: Path) -> None:
-        """ヘッダーが ``date,name`` でないと ``CalendarFormatError``。"""
+        """ヘッダーが ``date,name`` でないと ``CalendarError``。"""
         bad = tmp_path / "bad.csv"
         bad.write_text(
             "col1,col2\n2024-01-01,元日\n",
             encoding="utf-8-sig",
         )
-        with pytest.raises(CalendarFormatError):
+        with pytest.raises(CalendarError):
             _Calendar.load(bad)
 
     def test_bad_date_raises_format_error(self, tmp_path: Path) -> None:
-        """日付が解釈できない行があると ``CalendarFormatError``。"""
+        """日付が解釈できない行があると ``CalendarError``。"""
         bad = tmp_path / "bad.csv"
         bad.write_text(
             "date,name\nhello,元日\n",
             encoding="utf-8-sig",
         )
-        with pytest.raises(CalendarFormatError):
+        with pytest.raises(CalendarError):
             _Calendar.load(bad)
 
     def test_empty_after_header_raises_format_error(self, tmp_path: Path) -> None:
-        """データ行が無ければ ``CalendarFormatError``。"""
+        """データ行が無ければ ``CalendarError``。"""
         bad = tmp_path / "bad.csv"
         bad.write_text("date,name\n", encoding="utf-8-sig")
-        with pytest.raises(CalendarFormatError):
+        with pytest.raises(CalendarError):
             _Calendar.load(bad)
 
 

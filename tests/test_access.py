@@ -11,12 +11,7 @@ import pytest
 
 from comken import dry_run
 from comken.constants import Encoding
-from comken.exceptions import (
-    AccessBackupError,
-    AccessLocalCopyError,
-    AccessSourceNotFoundError,
-    UnsupportedFileSuffixError,
-)
+from comken.exceptions import AccessError, UnsupportedFileSuffixError
 from comken.toolbox.access import AccessDatabase
 
 
@@ -207,7 +202,7 @@ class TestAccessDatabase:
                 "comken.toolbox.access.handler.shutil.copy2", side_effect=PermissionError("拒否")
             ),
             patch("comken.toolbox.access.handler.win32com.client.DispatchEx", return_value=access),
-            pytest.raises(AccessBackupError, match="更新を中止"),
+            pytest.raises(AccessError, match="更新を中止"),
         ):
             AccessDatabase(path, local_copy=False, backup_dir=tmp_path / "backup")
         access.OpenCurrentDatabase.assert_not_called()
@@ -219,7 +214,7 @@ class TestAccessDatabase:
         with (
             patch("comken.toolbox.access.handler.Path.mkdir", side_effect=PermissionError("拒否")),
             patch("comken.toolbox.access.handler.win32com.client.DispatchEx", return_value=access),
-            pytest.raises(AccessBackupError, match=r"backup_dir.*ローカルフォルダ"),
+            pytest.raises(AccessError, match=r"backup_dir.*ローカルフォルダ"),
         ):
             AccessDatabase(path, local_copy=False)
         access.OpenCurrentDatabase.assert_not_called()
@@ -296,7 +291,7 @@ class TestAccessDatabase:
             patch(
                 "comken.toolbox.access.handler.shutil.copy2", side_effect=PermissionError("使用中")
             ),
-            pytest.raises(AccessLocalCopyError, match="読み取り権限"),
+            pytest.raises(AccessError, match="読み取り権限"),
         ):
             AccessDatabase(path)
 
@@ -322,7 +317,7 @@ class TestAccessDatabase:
         database, access = _database(tmp_path)
         _set_sources(access, [], ["Q_日次更新"])
 
-        with pytest.raises(AccessSourceNotFoundError, match=r"Q_なし.*Q_日次更新"):
+        with pytest.raises(AccessError, match=r"Q_なし.*Q_日次更新"):
             database.run_query("Q_なし")
 
     def test_export_csv_calls_transfer_text(self, tmp_path):
@@ -393,7 +388,7 @@ class TestAccessDatabase:
     def test_missing_source_lists_existing_names(self, tmp_path):
         database, access = _database(tmp_path)
         _set_sources(access, ["T_顧客"], ["Q_出力"])
-        with pytest.raises(AccessSourceNotFoundError, match=r"T_顧客.*Q_出力"):
+        with pytest.raises(AccessError, match=r"T_顧客.*Q_出力"):
             database.export_csv("T_なし", tmp_path / "out.csv")
 
     def test_dry_run_skips_external_operations(self, tmp_path):

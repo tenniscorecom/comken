@@ -34,7 +34,6 @@ add_business_days             target から n 営業日後（n が負なら前�
 warn_if_calendar_expiring_soon 既定カレンダーの収録期限が近ければ起動時に警告
 BusinessDayNotFoundError      月内に該当営業日が無い／探索上限到達
 CalendarError                 祝日カレンダーに関する基底例外
-CalendarFormatError           会社用カレンダーCSV として解釈できない形式
 """
 
 from comken.core.calendar._calendar import (
@@ -56,18 +55,13 @@ from comken.core.calendar._calendar import (
     nth_business_day_of_month,
     warn_if_calendar_expiring_soon,
 )
-from comken.exceptions import (
-    BusinessDayNotFoundError,
-    CalendarError,
-    CalendarFormatError,
-)
+from comken.exceptions import BusinessDayNotFoundError, CalendarError
 
 __all__ = [
     "BUSINESS_DAY_SEARCH_LIMIT",
     "BusinessDayNotFoundError",
     "CALENDAR_CSV_PATH",
     "CalendarError",
-    "CalendarFormatError",
     "EXPIRING_WARNING_DAYS",
     "add_business_days",
     "business_day_after",

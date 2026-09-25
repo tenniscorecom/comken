@@ -9,9 +9,8 @@ import pytest
 from comken import dry_run
 from comken.core.table import Table
 from comken.exceptions import (
-    ComkenError,
+    CredentialError,
     CredentialNotFoundError,
-    InvalidCredentialNameError,
     SalesforceError,
     SalesforceReportIDNotFoundError,
     SalesforceReportTruncatedError,
@@ -25,6 +24,7 @@ from comken.toolbox.salesforce import (
     SalesforceBase,
 )
 from comken.toolbox.salesforce.bulk_ingest import BulkIngestAPI
+from comken.toolbox.salesforce.cli import _site_selection_error
 from comken.toolbox.salesforce.report import report_id_from_url
 from comken.toolbox.salesforce.sites import SITES, Solution, SolutionSandbox, site_for
 
@@ -975,29 +975,24 @@ class TestCallbackUrl:
             assert site.CALLBACK_URL == "http://localhost:8080/callback"
 
 
-class TestSalesforceError:
-    """対話的な組織選択で、番号にも組織名にも一致しなかった場合の例外。"""
-
-    def test_inherits_from_salesforce_error(self):
-        """SalesforceError 経由で ComkenError に連なり、main() が拾える。"""
-        assert issubclass(SalesforceError, SalesforceError)
-        assert issubclass(SalesforceError, ComkenError)
+class TestSiteSelectionError:
+    """対話的な組織選択で、番号にも組織名にも一致しなかったときのメッセージ。"""
 
     def test_message_includes_the_user_answer(self):
         """入力値がそのままメッセージへ出て、ユーザーが何を間違えたか分かる。"""
-        error = SalesforceError("99", ["Solution", "SolutionSandbox"])
+        error = _site_selection_error("99", ["Solution", "SolutionSandbox"])
+        assert isinstance(error, SalesforceError)
         assert "99" in str(error)
 
     def test_message_lists_the_registered_sites(self):
         """登録済みの組織名を列挙し、打ち間違いを直せるようにする。"""
-        error = SalesforceError("99", ["Solution", "SolutionSandbox"])
-        message = str(error)
+        message = str(_site_selection_error("99", ["Solution", "SolutionSandbox"]))
         assert "Solution" in message
         assert "SolutionSandbox" in message
 
     def test_empty_list_does_not_crash(self):
         """登録済み組織が0件のときでも、メッセージ生成で落ちない。"""
-        error = SalesforceError("?", [])
+        error = _site_selection_error("?", [])
         assert "?" in str(error)
 
 
@@ -1071,7 +1066,7 @@ class TestCredentialsInitialization:
             OWNER = "test_salesforce / テスト"
 
         monkeypatch.setattr(store, "CREDENTIALS_PATH", self._store(tmp_path))
-        with pytest.raises(InvalidCredentialNameError):
+        with pytest.raises(CredentialError):
             PrefixUnsetSalesforce()
 
     def test_missing_credential_raises(self, tmp_path, monkeypatch):

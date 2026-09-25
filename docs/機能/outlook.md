@@ -11,7 +11,7 @@ Outlook の受信メールを読み取り、確認用の下書きを作るため
 **従来版（Classic）Outlook でしか動かない。**
 
 新しい Outlook（New Outlook）は COM の窓口を持たないため、このモジュールからは操作できない。
-起動できない場合は `ClassicOutlookNotAvailableError` になる。
+起動できない場合は `OutlookError` になる。
 
 | できること | できないこと |
 |---|---|
@@ -161,12 +161,12 @@ with Outlook() as mail:
 
 ## よくあるつまずき
 
-### `ClassicOutlookNotAvailableError` が出る
+### `OutlookError`（Classic がない）が出る
 
 New Outlook が使われている。従来版（Classic）Outlook に切り替えるか、管理者に相談する。
 Outlook が起動していない場合も起きるので、まず Outlook を開いてから実行する。
 
-### `OutlookFolderNotFoundError` が出る
+### `OutlookError`（フォルダが見つからない）が出る
 
 エラーに**実際に存在するフォルダ名の一覧**が出るので、そこから正しい名前を選ぶ。
 よくある原因:

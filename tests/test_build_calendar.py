@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from comken.core.calendar import build as build_calendar
-from comken.exceptions import CalendarFormatError
+from comken.exceptions import CalendarError
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "holidays" / "syukujitsu_sample.csv"
 
@@ -48,7 +48,7 @@ class TestCabinetOfficeCsvLoader:
         assert all(name != "国民の祝日・休日名称" for _, name in holidays)
 
     def test_garbage_text_raises_format_error(self, tmp_path: Path) -> None:
-        """内閣府 CSV として読めない（国民の祝日が 0 件）場合は ``CalendarFormatError``。"""
+        """内閣府 CSV として読めない（国民の祝日が 0 件）場合は ``CalendarError``。"""
         original = build_calendar.SYUKUJITSU_CSV_PATH
         build_calendar.SYUKUJITSU_CSV_PATH = tmp_path / "bad.csv"  # type: ignore[misc]
         try:
@@ -57,7 +57,7 @@ class TestCabinetOfficeCsvLoader:
                 encoding="cp932",
             )
             with pytest.raises(
-                CalendarFormatError,
+                CalendarError,
                 match="国民の祝日を 1 件も読み取れませんでした",
             ):
                 build_calendar.build_rows()

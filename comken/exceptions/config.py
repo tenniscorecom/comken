@@ -70,80 +70,11 @@ def find_close_names(
 
 
 class ConfigError(ComkenError):
-    """config.ini に関するエラー
+    """config.ini に関するエラー。具体的な状況はメッセージに出る
 
     対処:
         メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
     """
-
-
-class ConfigCreatedFromExampleError(ConfigError):
-    """config.ini が無かったので example から作った
-
-    発生箇所: Config.__init__()
-
-    対処:
-        作られた config.ini の値を書き換えて、もう一度実行する
-    """
-
-    def __init__(self, path: Path | str) -> None:
-        super().__init__(
-            f"config.ini が無かったので、config.ini.example から作成しました: {path}\n"
-            "中の値（フォルダの場所など）を確認して書き換えてから、もう一度実行してください。"
-        )
-
-
-class ConfigLowerCaseNameError(ConfigError):
-    """config.ini のセクション名・キー名に小文字がある
-
-    発生箇所: Config.__init__()
-
-    対処:
-        表示された名前を大文字に書き換える（`[files]` → `[FILES]`）
-    """
-
-    def __init__(self, path: Path | str, wrong: list[str]) -> None:
-        super().__init__(
-            f"config.ini のセクション名とキー名は大文字で書いてください: {path}\n"
-            + "\n".join(f"  {item}" for item in wrong)
-        )
-
-
-class ConfigSectionNotFoundError(ConfigError):
-    """config.ini の必要な節がない
-
-    発生箇所: Config.__getattr__()
-
-    対処:
-        メッセージに表示された **「読んだファイル」のパス** が、編集している
-        config.ini と一致するかを確認する（2026-08-18 にプロジェクトの場所を
-        基準にするように変えてから、起動方法によって別の config.ini を読む
-        ことがあるため）。パスが正しければ、表示されたセクション名を
-        config.ini に追加する。**見た目では原因が分からない場合**（行頭に
-        空白が混入していた等）はエディタで行頭空白・全角スペースを確認する
-    """
-
-    def __init__(self, name: str, existing: list[str], path: Path | str | None = None) -> None:
-        # 2026-08-18 に「プロジェクトのフォルダ基準」に変える前は path を出さなくて
-        # よかった。変えた後は「利用者が見ている config.ini」と違う場所を
-        # 読んでいることがある（例: `python src/run.py` で起動すると src/ 配下を
-        # 探しに行く）。だから path を必ず添えて、利用者が diff を取れるようにする。
-        # path は configparser 等の挙動確認用に None を許容するが、内部利用では
-        # 必ず Config が知っている _path を渡す。
-        location = f"\n読んだファイル: {path}" if path is not None else ""
-        # 防いでいる事故: セクション名を 1 文字タイポすると「セクションがありません」
-        # とだけ出て、近い名前（FILE と FILES のように 1 文字違い）が目視で
-        # 並んでいるのにも気付けない。編集距離で候補を出し、「もしかして」を添える。
-        # 候補が無ければ何も足さない（誤誘導しない）。
-        suggestion = _suggest_close_matches(name, existing)
-        suggestion_line = f"\nもしかして: [{suggestion[0]}]" if len(suggestion) == 1 else ""
-        if len(suggestion) >= 2:
-            suggestion_line = f"\nもしかして: [{suggestion[0]}], [{suggestion[1]}]"
-        super().__init__(
-            f"config.ini に [{name}] セクションがありません。{location}\n"
-            f"存在するセクション: {existing}{suggestion_line}\n"
-            "セクション名の綴りと、config.ini に定義されているかを確認してください。"
-        )
 
 
 class ConfigKeyNotFoundError(ConfigError, AttributeError):
@@ -177,66 +108,6 @@ class ConfigKeyNotFoundError(ConfigError, AttributeError):
             f"config.ini の [{section}] セクションに {name} キーがありません。{location}\n"
             f"存在するキー: {existing}{suggestion_line}\n"
             "キー名の綴りと、config.ini に定義されているかを確認してください。"
-        )
-
-
-class ConfigMappingEmptyValueError(ConfigError):
-    """``[*_MAPPING]`` セクションの値が空欄
-
-    発生箇所: Config.__init__()（``*_MAPPING`` の ``_LenientDict`` 組み立て時）
-
-    対処:
-        メッセージに表示された **「読んだファイル」のパス** が、編集している
-        config.ini と一致するかを確認する。パスが正しければ、表示された
-        キー名の両側に値を書いて config.ini を直す（``列名 = 値``）。
-        ``=`` を付け忘れて ``キー`` のように書いた行もここで検出する
-        （``cfg.get()`` が ``None`` を返すので空欄と同じ扱い）。
-        通常セクションの空欄（``READ_PASSWORD =`` のように「設定しない」を
-        示す書き方）はエラーにしないので、``*_MAPPING`` 以外では無視してよい
-    """
-
-    def __init__(
-        self,
-        path: Path | str,
-        section: str,
-        empty_keys: list[str],
-    ) -> None:
-        # 値は configparser 側に前後トリムが任せているので、書かれたキーの
-        # そのままの表記を提示する（利用者が diff を見て直せるように）。
-        # キーが複数あっても 1 メッセージにまとめて出す。1 つ直して再実行、
-        # また 1 つ直して再実行、…のループに落ちると、修正の全体像が見え
-        # なくなり「次はどれだっけ」の状態になるため、最初に見つけた時点で
-        # 全件並べて渡す。
-        keys_line = ", ".join(empty_keys)
-        super().__init__(
-            f"config.ini の [{section}] セクションに、値が空欄のキーがあります。"
-            f"\n読んだファイル: {path}"
-            f"\n値が空欄のキー: {keys_line}"
-            "\n左右に値を書いたうえで、もう一度実行してください。"
-            "\n例: ご依頼番号 = 受付番号"
-        )
-
-
-class ConfigSubclassingNotSupportedError(ConfigError):
-    """``Config`` を継承できない
-
-    発生箇所: ``class AppConfig(Config)`` のようなサブクラス定義時
-
-    対処:
-        ``from comken import config`` で ``config.SECTION.KEY`` を直接読む。
-        サブクラスでメソッドを足しても ``Config.__new__`` がパス単位で
-        キャッシュ済みの素の ``Config`` を返すため、 追加したメソッドは
-        ``AttributeError`` になる（キャッシュを ``cls`` 対応にする改修は
-        行わない）。
-    """
-
-    def __init__(self, subclass_name: str) -> None:
-        super().__init__(
-            f"Config は継承できません: {subclass_name}\n"
-            "Config.__new__ はパス単位でキャッシュ済みの Config を返すため、"
-            "AppConfig(path) を呼んでも素の Config が返り、"
-            f"{subclass_name} で足したメソッドは AttributeError になります。\n"
-            "代わりに from comken import config で config.SECTION.KEY を直接読んでください。"
         )
 
 

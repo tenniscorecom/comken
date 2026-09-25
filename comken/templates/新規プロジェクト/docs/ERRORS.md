@@ -32,10 +32,7 @@
 
 | エラー名 | 意味 | 対処 |
 |---|---|---|
-| `AccessBackupError` | 元 DB を開く前のバックアップに失敗した | 保存先の空き容量・書き込み権限・元 DB の読み取り権限を確認する |
-| `AccessLocalCopyError` | Access ファイルを一時フォルダへコピーできない | 使用状況・読み取り権限・空き容量を確認する |
-| `AccessRoutineError` | Access マクロまたは VBA の実行に失敗した | 表示された名前と Access 側の内容を確認する |
-| `AccessSourceNotFoundError` | テーブルまたはクエリが見つからない | エラーに表示された存在する名前を確認する |
+| `AccessError` | Access に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `PermissionError` | ファイルが誰かに開かれている | 自分や他の人がそのファイルを開いていないか確認して閉じる |
 
 ---
@@ -49,9 +46,7 @@
 | `TimeoutError` | ダウンロードが終わらない | ネットワークの状態を確認して再実行する |
 | `UnsupportedFileSuffixError` | 対応外の拡張子が指定された | CSV / Excel の対応する拡張子のファイルを指定する |
 | `InvalidColumnError` | 列の指定が正しくない（打ち間違いなど） | 列は番号（1, 2, …）か列記号（"A", "AA"）で指定する |
-| `ConfigCreatedFromExampleError` | config.ini が無かったので example から作った | 作られた config.ini の値を書き換えて、もう一度実行する |
-| `ConfigLowerCaseNameError` | config.ini のセクション名・キー名に小文字がある | 表示された名前を大文字に書き換える（`[files]` → `[FILES]`） |
-| `ConfigSectionNotFoundError` | config.ini の必要な節がない | 表示されたセクション名を config.ini に追加する |
+| `ConfigError` | config.ini に関するエラー（example からの作成・セクション名・キー名・大文字小文字 等） | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 
 ---
 
@@ -88,9 +83,7 @@
 
 | エラー名 | 意味 | 対処 |
 |---|---|---|
-| `OutlookError` | Outlook 関連エラーの分類 | 下の個別エラーを確認する |
-| `ClassicOutlookNotAvailableError` | Classic Outlook を利用できない | Classic Outlook を使うか管理者に相談する |
-| `OutlookFolderNotFoundError` | 指定したフォルダがない | エラーに表示された存在するフォルダ名を確認する |
+| `OutlookError` | Outlook 関連エラー（Classic が無い・フォルダが無い 等） | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 
 ---
 

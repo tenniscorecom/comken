@@ -19,11 +19,7 @@ import win32com.client
 
 from comken.core.clock import now
 from comken.core.timer import measure
-from comken.exceptions import (
-    ClassicOutlookNotAvailableError,
-    ComkenFileNotFoundError,
-    OutlookFolderNotFoundError,
-)
+from comken.exceptions import ComkenFileNotFoundError, OutlookError
 from comken.runtime import dry_run_log, is_dry_run
 
 logger = logging.getLogger(__name__)
@@ -60,7 +56,7 @@ class Outlook:
             # COM オブジェクトは型を持たず、閉じたあとは None になる（Access と同じ）
             self._application: Any = win32com.client.Dispatch("Outlook.Application")
         except Exception as error:
-            raise ClassicOutlookNotAvailableError() from error
+            raise _classic_not_available_error() from error
         self._namespace: Any = self._application.GetNamespace("MAPI")
 
     def __enter__(self) -> Self:
@@ -151,7 +147,7 @@ class Outlook:
         for name in names:
             if name == folder:
                 return folders.Item(name)
-        raise OutlookFolderNotFoundError(folder, names)
+        raise _folder_not_found_error(folder, names)
 
     def _to_message(self, item: Any) -> MailMessage:
         received_at = item.ReceivedTime
@@ -180,3 +176,23 @@ def _sender_address(item: Any) -> str:
         if exchange_user is not None and exchange_user.PrimarySmtpAddress:
             return str(exchange_user.PrimarySmtpAddress)
     return str(item.SenderEmailAddress or "")
+
+
+# ── OutlookError の文言ヘルパー ──────────────────────────────────────────
+# 呼び出し側が型で分ける必要が無い Outlook 由来エラーは、すべて ``OutlookError``
+# を直接送出して具体的な状況をメッセージで伝える。
+
+
+def _classic_not_available_error() -> OutlookError:
+    """Classic Outlook を利用できないときの ``OutlookError``。"""
+    return OutlookError(
+        "この PC では従来版（Classic）の Outlook が見つかりません。"
+        "新しい Outlook は自動操作に対応していないため、この処理は使えません。"
+        "従来版の Outlook を使うか、管理者に相談してください。"
+    )
+
+
+def _folder_not_found_error(folder: str, existing_folders: list[str]) -> OutlookError:
+    """指定したフォルダがないときの ``OutlookError``。"""
+    names = "、".join(existing_folders) if existing_folders else "（なし）"
+    return OutlookError(f"Outlook フォルダ「{folder}」が見つかりません。存在するフォルダ: {names}")

@@ -15,13 +15,7 @@ import pytest
 
 import comken.core.config as config_module
 from comken.core.config import Config
-from comken.exceptions import (
-    ComkenError,
-    ConfigCreatedFromExampleError,
-    ConfigError,
-    ConfigLowerCaseNameError,
-    ConfigMappingEmptyValueError,
-)
+from comken.exceptions import ComkenError, ConfigError
 
 
 @pytest.fixture(autouse=True)
@@ -162,7 +156,7 @@ class TestConfigBasic:
         """小文字のセクション名は読み込んだ時点でエラーになることを確認する。"""
         ini = tmp_path / "config.ini"
         ini.write_text("[files]\nINPUT = x\n", encoding="utf-8")
-        with pytest.raises(ConfigLowerCaseNameError) as exc:
+        with pytest.raises(ConfigError) as exc:
             Config(ini)
         # 直し方が分かるよう、書き換え後の名前まで出すこと
         assert "[files] → [FILES]" in str(exc.value)
@@ -171,7 +165,7 @@ class TestConfigBasic:
         """小文字のキー名は読み込んだ時点でエラーになることを確認する。"""
         ini = tmp_path / "config.ini"
         ini.write_text("[FILES]\ninput = x\n", encoding="utf-8")
-        with pytest.raises(ConfigLowerCaseNameError) as exc:
+        with pytest.raises(ConfigError) as exc:
             Config(ini)
         assert "input → INPUT" in str(exc.value)
 
@@ -276,7 +270,7 @@ class TestConfigMapping:
         ini = tmp_path / "config.ini"
         ini.write_text(f"[REPORT]\n{key} = value\n", encoding="utf-8")
 
-        with pytest.raises(ConfigLowerCaseNameError):
+        with pytest.raises(ConfigError):
             Config(ini)
 
     def test_empty_value_raises_mapping_empty_error(self, tmp_path):
@@ -289,7 +283,7 @@ class TestConfigMapping:
         ini = tmp_path / "config.ini"
         ini.write_text("[TRANSFER_MAPPING]\n部署名 =\n", encoding="utf-8")
 
-        with pytest.raises(ConfigMappingEmptyValueError) as exc:
+        with pytest.raises(ConfigError) as exc:
             Config(ini)
 
         # どこに直すかが分かる要素を全部入れる（ファイル / セクション / キー / 書き方）
@@ -309,7 +303,7 @@ class TestConfigMapping:
         ini = tmp_path / "config.ini"
         ini.write_text("[TRANSFER_MAPPING]\n部署名 =   　  \n", encoding="utf-8")
 
-        with pytest.raises(ConfigMappingEmptyValueError) as exc:
+        with pytest.raises(ConfigError) as exc:
             Config(ini)
         assert "部署名" in str(exc.value)
 
@@ -318,11 +312,11 @@ class TestConfigMapping:
 
         依頼書では「 ``cfg.get()`` が ``None`` を返す」と想定していたが、
         configparser の標準動作では ``=`` 無しの行は **パーサ段階**で
-        ``ParsingError`` になるため、 ``ConfigMappingEmptyValueError`` に
+        ``ParsingError`` になるため、 ``ConfigError`` に
         届く前に止まる。 「``=`` を付け忘れた」という利用者側の問題は
         ParsingError でも十分に分かるので、 ``*_MAPPING`` に限らず
         同じ動作になる（通常セクションでも ParsingError）。
-        「 ``=`` 無しを ``MappingEmptyValueError`` で受け取る」挙動を
+        「 ``=`` 無しを ``ConfigError`` で受け取る」挙動を
         望むなら、 ``configparser.ConfigParser(allow_no_value=True)`` を
         有効にする変更が要るため、依頼者の判断を仰ぎたい（実装せず報告）。
         """
@@ -352,7 +346,7 @@ class TestConfigMapping:
             encoding="utf-8",
         )
 
-        with pytest.raises(ConfigMappingEmptyValueError) as exc:
+        with pytest.raises(ConfigError) as exc:
             Config(ini)
         message = str(exc.value)
         # 空欄のキーは両方、値は入っているキーは出ないことを確認
@@ -616,12 +610,10 @@ class TestConfigMissingSection:
         つかなくなる（例: `python src/run.py` で起動すると src/ 配下を
         探しに行く）。パスを出しておけば「読んだのはこのファイル」とすぐ分かる。
         """
-        from comken.exceptions import ConfigSectionNotFoundError
-
         ini = tmp_path / "config.ini"
         ini.write_text("[REPORT]\nK = v\n", encoding="utf-8")
         config = Config(ini)
-        with pytest.raises(ConfigSectionNotFoundError) as exc:
+        with pytest.raises(ConfigError) as exc:
             _ = config.FILES
         assert str(ini.resolve()) in str(exc.value)
 
@@ -631,24 +623,20 @@ class TestConfigMissingSection:
         防いでいる事故: セクション名を 1 文字タイポすると「セクションがありません」
         とだけ出て、近い名前が既存セクション一覧に並んでいても気付けない。
         """
-        from comken.exceptions import ConfigSectionNotFoundError
-
         ini = tmp_path / "config.ini"
         ini.write_text("[RUN]\nK = 1\n[FILE]\nK = 2\n[REPORT]\nK = 3\n", encoding="utf-8")
         config = Config(ini)
-        with pytest.raises(ConfigSectionNotFoundError) as exc:
+        with pytest.raises(ConfigError) as exc:
             _ = config.FILES
         message = str(exc.value)
         assert "もしかして: [FILE]" in message
 
     def test_missing_section_suggests_transposed_name(self, tmp_path):
         """隣り合う 2 文字の入れ替わりも 1 回の編集として候補に出す。"""
-        from comken.exceptions import ConfigSectionNotFoundError
-
         ini = tmp_path / "config.ini"
         ini.write_text("[FILSE]\nK = 1\n", encoding="utf-8")
         config = Config(ini)
-        with pytest.raises(ConfigSectionNotFoundError) as exc:
+        with pytest.raises(ConfigError) as exc:
             _ = config.FILES
         assert "もしかして: [FILSE]" in str(exc.value)
 
@@ -658,12 +646,10 @@ class TestConfigMissingSection:
         防いでいる事故: difflib は ASCII でも日本語でも動くが、誤って
         日本語だけカットオフが厳しくなっている実装にされることがある。
         """
-        from comken.exceptions import ConfigSectionNotFoundError
-
         ini = tmp_path / "config.ini"
         ini.write_text("[受注_MAPPNG]\n年度 = 2026\n[RUN]\nK = v\n", encoding="utf-8")
         config = Config(ini)
-        with pytest.raises(ConfigSectionNotFoundError) as exc:
+        with pytest.raises(ConfigError) as exc:
             _ = config.受注_MAPPING
         assert "もしかして: [受注_MAPPNG]" in str(exc.value)
 
@@ -674,12 +660,10 @@ class TestConfigMissingSection:
         出してしまうと、利用者は「候補が無いのか、表示バグなのか」が
         判別できない。候補が無ければ行ごと出さない。
         """
-        from comken.exceptions import ConfigSectionNotFoundError
-
         ini = tmp_path / "config.ini"
         ini.write_text("[RUN]\nK = v\n[REPORT]\nK = v\n[BROWSER]\nK = v\n", encoding="utf-8")
         config = Config(ini)
-        with pytest.raises(ConfigSectionNotFoundError) as exc:
+        with pytest.raises(ConfigError) as exc:
             _ = config.FILES
         message = str(exc.value)
         assert "もしかして" not in message
@@ -689,8 +673,8 @@ class TestConfigMissingKey:
     """セクション内のキー名のタイポを ``ConfigKeyNotFoundError`` で案内する。
 
     旧来は ``SimpleNamespace`` の素の ``AttributeError`` だったが、原因の
-    切り分けがつかないので、``ConfigSectionNotFoundError`` と同じ形式で
-    「読んだファイル」と「もしかして」を添える。
+    切り分けがつかないので、 ``ConfigError`` と同じ形式で「読んだファイル」と
+    「もしかして」を添える。
     """
 
     def test_missing_key_raises_config_error(self, tmp_path):
@@ -839,7 +823,7 @@ class TestConfigMethodNameTypo:
     """`Config(path).save()` のような、メソッド名の取り違えを検出して案内する。"""
 
     def test_lowercase_typo_raises_attribute_error(self, tmp_path):
-        """小文字始まり（=セクション名ではあり得ない名前）は ConfigSectionNotFoundError ではない。
+        """小文字始まり（=セクション名ではあり得ない名前）は ConfigError ではない。
 
         `Config(path).save()` のように存在しないメソッドを呼ぶと、
         `save` がセクション名として解釈され「[save] セクションがありません」という
@@ -851,7 +835,7 @@ class TestConfigMethodNameTypo:
         config = Config(ini)
 
         # Config のメソッドでもセクション名でもない名前は AttributeError になる
-        # （ConfigSectionNotFoundError ではない = セクション名として解釈されない）
+        # （ConfigError ではない = セクション名として解釈されない）
         with pytest.raises(AttributeError):
             _ = config.read  # Config には存在しない小文字名を attribute として引いた
 
@@ -874,7 +858,7 @@ class TestConfigCreatedFromExample:
         example.write_text("[FILES]\nINPUT = x\n", encoding="utf-8")
         ini = tmp_path / "config.ini"
 
-        with pytest.raises(ConfigCreatedFromExampleError):
+        with pytest.raises(ConfigError):
             Config(ini)
 
         assert ini.is_file()
@@ -883,7 +867,7 @@ class TestConfigCreatedFromExample:
     def test_stops_instead_of_running_with_example_values(self, tmp_path):
         """作っただけで止め、確認を促すことを確認する。"""
         (tmp_path / "config.ini.example").write_text("[FILES]\nINPUT = x\n", encoding="utf-8")
-        with pytest.raises(ConfigCreatedFromExampleError) as exc:
+        with pytest.raises(ConfigError) as exc:
             Config(tmp_path / "config.ini")
         assert "もう一度実行" in str(exc.value)
 
@@ -891,7 +875,7 @@ class TestConfigCreatedFromExample:
         """2回目は作られた config.ini を読めることを確認する。"""
         (tmp_path / "config.ini.example").write_text("[FILES]\nINPUT = x\n", encoding="utf-8")
         ini = tmp_path / "config.ini"
-        with pytest.raises(ConfigCreatedFromExampleError):
+        with pytest.raises(ConfigError):
             Config(ini)
         assert Config(ini).FILES.INPUT == "x"
 
@@ -1589,7 +1573,7 @@ class TestMappingDictIsDictStrStr:
     def test_values_are_all_str_no_none(self, tmp_path):
         """``*_MAPPING`` の値は全て ``str`` として扱われ、 ``.values()`` に ``None`` が混じらない。
 
-        ``ConfigMappingEmptyValueError`` で空欄を拒否しているので、 設定済みの値は
+        ``ConfigError`` で空欄を拒否しているので、 設定済みの値は
         必ず ``str``。 ``dict[str, str]`` 派生の意義そのものを確かめる回帰テスト。
         """
         ini = tmp_path / "config.ini"
@@ -1685,7 +1669,7 @@ class TestMappingDictIsDictStrStr:
 
 
 class TestConfigSubclassing:
-    """``Config`` を継承しようとすると ``ConfigSubclassingNotSupportedError`` で
+    """``Config`` を継承しようとすると ``ConfigError`` で
     はっきり止まることを確かめる回帰テスト。
 
     ``Config.__new__`` はパス単位でキャッシュ済みの素の ``Config`` を返すため、
@@ -1703,12 +1687,12 @@ class TestConfigSubclassing:
         """
         snippet = (
             "from comken.core.config import Config\n"
-            "from comken.exceptions import ConfigSubclassingNotSupportedError\n"
+            "from comken.exceptions import ConfigError\n"
             "captured = None\n"
             "try:\n"
             "    class AppConfig(Config):\n"
             "        pass\n"
-            "except ConfigSubclassingNotSupportedError as exc:\n"
+            "except ConfigError as exc:\n"
             "    captured = str(exc)\n"
         )
         namespace: dict[str, object] = {}

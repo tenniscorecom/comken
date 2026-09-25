@@ -28,7 +28,7 @@ config.ini を読み込み、config.SECTION.KEY の形式でアクセスでき�
 ``_LenientDict`` は内部実装。
 
 ``*_MAPPING`` セクションの **値（対応先）が空欄のときは読み込みエラー**にする
-（``ConfigMappingEmptyValueError``）。空欄のまま進めると「対応列の最初の値が
+（``ConfigError``）。空欄のまま進めると「対応列の最初の値が
 空文字列」と解釈されて、業務データが空欄で書き戻される事故になるため、
 書いた人と実行の挙動が乖離しないよう読み込み時点で止める。 ``=`` を
 付け忘れた行（``cfg.get()`` が ``None`` を返す行）もまとめて空欄扱いにする。
@@ -62,17 +62,92 @@ from typing import NoReturn
 
 from comken.core.data import is_true_word
 from comken.core.files.ops import project_dir
-from comken.exceptions import (
-    ComkenFileNotFoundError,
-    ConfigCreatedFromExampleError,
-    ConfigKeyNotFoundError,
-    ConfigLowerCaseNameError,
-    ConfigMappingEmptyValueError,
-    ConfigSectionNotFoundError,
-    ConfigSubclassingNotSupportedError,
-)
+from comken.exceptions import ComkenFileNotFoundError, ConfigError, ConfigKeyNotFoundError
 
 logger = logging.getLogger(__name__)
+
+
+# ── ConfigError の文言ヘルパー ───────────────────────────────────────────
+# 呼び出し側が型で分岐する必要が無い Config 由来エラーは、すべて ``ConfigError``
+# を直接送出し、メッセージで具体的な状況を伝える。複数の呼び出し箇所で同じ文言を
+# 組み立てないよう、 文言をここで1箇所に集約する（メッセージが変わったら、ここ
+# を直すだけで全箇所へ追随する）。
+
+
+def _created_from_example_error(path: Path) -> ConfigError:
+    """``config.ini`` が無いので example から作った場合に送出する ``ConfigError``。"""
+    return ConfigError(
+        f"config.ini が無かったので、config.ini.example から作成しました: {path}\n"
+        "中の値（フォルダの場所など）を確認して書き換えてから、もう一度実行してください。"
+    )
+
+
+def _lower_case_name_error(path: Path, wrong: list[str]) -> ConfigError:
+    """config.ini のセクション名・キー名に小文字がある場合の ``ConfigError``。"""
+    return ConfigError(
+        f"config.ini のセクション名とキー名は大文字で書いてください: {path}\n"
+        + "\n".join(f"  {item}" for item in wrong)
+    )
+
+
+def _section_not_found_error(
+    name: str, existing: list[str], path: Path | str | None = None
+) -> ConfigError:
+    """config.ini の必要な節がない場合の ``ConfigError``。"""
+    # 2026-08-18 に「プロジェクトのフォルダ基準」に変える前は path を出さなくて
+    # よかった。変えた後は「利用者が見ている config.ini」と違う場所を
+    # 読んでいることがある（例: `python src/run.py` で起動すると src/ 配下を
+    # 探しに行く）。だから path を必ず添えて、利用者が diff を取れるようにする。
+    # path は configparser 等の挙動確認用に None を許容するが、内部利用では
+    # 必ず Config が知っている _path を渡す。
+    location = f"\n読んだファイル: {path}" if path is not None else ""
+    # 防いでいる事故: セクション名を 1 文字タイポすると「セクションがありません」
+    # とだけ出て、近い名前（FILE と FILES のように 1 文字違い）が目視で
+    # 並んでいるのにも気付けない。編集距離で候補を出し、「もしかして」を添える。
+    # 候補が無ければ何も足さない（誤誘導しない）。
+    from comken.exceptions.config import _suggest_close_matches
+
+    suggestion = _suggest_close_matches(name, existing)
+    suggestion_line = f"\nもしかして: [{suggestion[0]}]" if len(suggestion) == 1 else ""
+    if len(suggestion) >= 2:
+        suggestion_line = f"\nもしかして: [{suggestion[0]}], [{suggestion[1]}]"
+    return ConfigError(
+        f"config.ini に [{name}] セクションがありません。{location}\n"
+        f"存在するセクション: {existing}{suggestion_line}\n"
+        "セクション名の綴りと、config.ini に定義されているかを確認してください。"
+    )
+
+
+def _mapping_empty_value_error(
+    path: Path | str, section: str, empty_keys: list[str]
+) -> ConfigError:
+    """``[*_MAPPING]`` セクションの値が空欄のときの ``ConfigError``。"""
+    # 値は configparser 側に前後トリムが任せているので、書かれたキーの
+    # そのままの表記を提示する（利用者が diff を見て直せるように）。
+    # キーが複数あっても 1 メッセージにまとめて出す。1 つ直して再実行、
+    # また 1 つ直して再実行、…のループに落ちると、修正の全体像が見え
+    # なくなり「次はどれだっけ」の状態になるため、最初に見つけた時点で
+    # 全件並べて渡す。
+    keys_line = ", ".join(empty_keys)
+    return ConfigError(
+        f"config.ini の [{section}] セクションに、値が空欄のキーがあります。"
+        f"\n読んだファイル: {path}"
+        f"\n値が空欄のキー: {keys_line}"
+        "\n左右に値を書いたうえで、もう一度実行してください。"
+        "\n例: ご依頼番号 = 受付番号"
+    )
+
+
+def _subclassing_not_supported_error(subclass_name: str) -> ConfigError:
+    """``Config`` を継承できないときの ``ConfigError``。"""
+    return ConfigError(
+        f"Config は継承できません: {subclass_name}\n"
+        "Config.__new__ はパス単位でキャッシュ済みの Config を返すため、"
+        "AppConfig(path) を呼んでも素の Config が返り、"
+        f"{subclass_name} で足したメソッドは AttributeError になります。\n"
+        "代わりに from comken import config で config.SECTION.KEY を直接読んでください。"
+    )
+
 
 # ── 公開 API ────────────────────────────────────────────────────────────────
 # 利用者が ``from comken.core.config import ...`` で直接取りに来る名前だけを
@@ -143,7 +218,7 @@ class Config:
         # 追加したメソッドは ``AttributeError`` になる。黙って壊さず、定義時点で
         # 例外を出して「``from comken import config`` で読む」形へ誘導する。
         super().__init_subclass__(**kwargs)
-        raise ConfigSubclassingNotSupportedError(cls.__name__)
+        raise _subclassing_not_supported_error(cls.__name__)
 
     def __new__(cls, path: str | Path | None = None) -> Config:
         # ``__new__`` でキャッシュ済みのインスタンスを返す。 ``__init__`` は
@@ -197,7 +272,7 @@ class Config:
             # （後で config.FILES 等が分かりにくい AttributeError になるのを防ぐ）
             created = _create_from_example(path)
             if created is not None:
-                raise ConfigCreatedFromExampleError(created)
+                raise _created_from_example_error(created)
             raise ComkenFileNotFoundError(
                 "config.ini",
                 path.resolve(),
@@ -242,7 +317,7 @@ class Config:
                         else:
                             pairs.append((key.strip(), value.strip()))
                     if empty_keys:
-                        raise ConfigMappingEmptyValueError(self._path, stripped_section, empty_keys)
+                        raise _mapping_empty_value_error(self._path, stripped_section, empty_keys)
                     ld = _LenientDict(pairs)
                     self._mappings[stripped_section] = ld
                     setattr(self, stripped_section.upper(), ld)
@@ -284,9 +359,9 @@ class Config:
         # 未定義セクションのアクセスだけがここに来るので、分かりやすいエラーにする。
         if name.startswith("_"):  # copy/pickle 等の内部属性探索は通常の AttributeError に
             raise AttributeError(name)
-        # セクション名は大文字と決まっている（ConfigLowerCaseNameError で読み込み時に止める）。
+        # セクション名は大文字と決まっている（小文字は読み込み時に止める）。
         # 小文字始まりが __getattr__ に来るのは、`Config(path).save()` のような
-        # 存在しないメソッドを呼んでいるケースがほとんど。ConfigSectionNotFoundError の
+        # 存在しないメソッドを呼んでいるケースがほとんど。ConfigError の
         # 「セクションがありません」は完全な的外れなので、 AttributeError に変えて
         # 「セクションの話ではない」と気付けるようにする。
         if name and name[0].islower():
@@ -296,7 +371,7 @@ class Config:
                 "小文字で始まる名前はセクションではありません。"
             )
         sections = [k for k in vars(self) if k.isupper()]
-        raise ConfigSectionNotFoundError(name, sections, self._path)
+        raise _section_not_found_error(name, sections, self._path)
 
 
 def _is_mapping_section(section: str) -> bool:
@@ -313,7 +388,7 @@ class _LenientDict(dict[str, str]):
     昇格させ、利用者は ``config.SECTION_MAPPING`` でこの dict 互換オブジェクトに触れる。
 
     型は ``dict[str, str]`` に揃えた。中身（config.ini で書いた対応表）は
-    ``ConfigMappingEmptyValueError`` で空欄が拒否されているので、**値は必ず ``str``**。
+    ``ConfigError`` で空欄が拒否されているので、**値は必ず ``str``**。
     dict 互換なので ``for k, v in CONFIG.SECTION_MAPPING.items()`` のような
     既存呼び出しはそのまま動く（後方互換）。
 
@@ -414,7 +489,7 @@ def _validate_upper_case(
     小文字のままアクセスしたときに初めて「そんなセクションはない」と言われる。
     書いた場所から遠いエラーになるので、読み込んだ時点で止める。
 
-    空白を落とした後の名前で判定する。`[files]` の小文字検知を `ConfigSectionNotFoundError`
+    空白を落とした後の名前で判定する。`[files]` の小文字検知を `ConfigError`
     の空白落としで誤って見逃すことがないように。
     """
     wrong = [
@@ -430,7 +505,7 @@ def _validate_upper_case(
         if k != k.upper()
     ]
     if wrong:
-        raise ConfigLowerCaseNameError(path.resolve(), wrong)
+        raise _lower_case_name_error(path.resolve(), wrong)
 
 
 # ── `Config(path)` のプロセス内キャッシュ ────────────────────────────────
@@ -496,7 +571,7 @@ def _get_or_build_config(resolved_path_str: str) -> Config:
           ではネットワーク往復。 業務ツールは実行中の config.ini 書き換えを
           想定しないので、確認コストを毎回払う利点が無い。
         - **ファイルが存在しない場合は ``ComkenFileNotFoundError``**（または
-          ``ConfigCreatedFromExampleError``）。 ``functools.lru_cache`` は例外を
+          ``ConfigError``）。 ``functools.lru_cache`` は例外を
           キャッシュしないので、再試行できる。
         - ``maxsize=128``: 業務利用では 1〜2 種類のパスしか使わないので到達しない。
           テストで大量の ``tmp_path`` を読んでもエントリ数が増え続けない（古い
@@ -504,10 +579,9 @@ def _get_or_build_config(resolved_path_str: str) -> Config:
 
     Raises:
         ComkenFileNotFoundError: パスが存在しない場合。
-        ConfigCreatedFromExampleError: ``config.ini`` が無いが ``config.ini.example``
-            があった場合。
-        ConfigLowerCaseNameError: セクション名 / キー名が小文字で書かれていた場合。
-        ConfigMappingEmptyValueError: ``*_MAPPING`` の値が空欄だった場合。
+        ConfigError: ``config.ini`` が無いが ``config.ini.example`` があった場合、
+            セクション名・キー名が小文字で書かれていた場合、 ``*_MAPPING`` の値が
+            空欄だった場合（メッセージに書かれた対処に従う）。
     """
     config = object.__new__(Config)
     config._initialize(Path(resolved_path_str))

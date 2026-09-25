@@ -208,7 +208,7 @@ End Function
 | `BUSINESS_DAY_SEARCH_LIMIT` | 「次の営業日」探索の上限日数（既定 30） |
 | `EXPIRING_WARNING_DAYS` | 期限切れ警告を出すまでの日数（既定 30） |
 | `CALENDAR_CSV_PATH` | 会社用カレンダーCSV のパス（git 管理下の正本） |
-| `CalendarError` 系 | 例外（`CalendarFormatError` / `BusinessDayNotFoundError`） |
+| `CalendarError` 系 | 例外（`CalendarError` / `BusinessDayNotFoundError`） |
 
 `skip_weekends=False` にすると土曜・日曜でも祝日でなければ「営業日」と
 判定する（振替休日を平日扱いしたいシナリオ用）。
@@ -273,7 +273,7 @@ business_day_after(date(2026, 8, 20))
 - 収録範囲外の日付は国民の祝日も会社休日も付かない（`is_holiday()` が
   `False`）。範囲を延ばすには内閣府 CSV を入れ替えて再生成する。
 - 会社用カレンダーCSV が壊れている・ヘッダーが違う・日付が解釈できない場合は
-  `CalendarFormatError` で止める（業務運用の場面）。
+  `CalendarError` で止める（業務運用の場面）。
 - **ネットワークには一切出ない。** `comken.core` は `requests` を import
   しないので、オフライン環境・社内 BO 端末でもそのまま動く。
 

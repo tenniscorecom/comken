@@ -1551,34 +1551,10 @@ class CalendarError(ComkenError):
 
 #### 説明
 
-祝日カレンダーに関するエラー
+祝日カレンダーに関するエラー。具体的な状況はメッセージに出る
 
 対処:
     メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
-
-### `CalendarFormatError`
-
-```text
-class CalendarFormatError(CalendarError):
-```
-
-#### 説明
-
-会社用カレンダーCSV 以外のファイルや壊れたファイルを読み込もうとした
-
-発生箇所: comken.core.calendar._calendar の _Calendar.load
-
-対処:
-    ``python -m comken.core.calendar.build`` を実行して
-    ``comken/core/calendar/data/company_calendar.csv`` を再生成する。
-    内閣府の ``syukujitsu.csv`` 形式変更が原因の場合は
-    ``comken.core.calendar.build`` 側の解析ロジックを直す
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path | str, detail: str) -> None:
-```
 
 ### `EXPIRING_WARNING_DAYS`
 
@@ -2812,86 +2788,10 @@ class AccessError(ComkenError):
 
 #### 説明
 
-Access に関するエラー
+Access に関するエラー。具体的な状況はメッセージに出る
 
 対処:
     メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
-
-### `AccessBackupError`
-
-```text
-class AccessBackupError(AccessError):
-```
-
-#### 説明
-
-元 DB を開く前のバックアップに失敗した
-
-対処:
-    保存先の空き容量・書き込み権限・元 DB の読み取り権限を確認する
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path | str, backup_path: Path | str, detail: Exception) -> None:
-```
-
-### `AccessLocalCopyError`
-
-```text
-class AccessLocalCopyError(AccessError):
-```
-
-#### 説明
-
-Access ファイルを一時フォルダへコピーできない
-
-対処:
-    使用状況・読み取り権限・空き容量を確認する
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path | str, detail: Exception) -> None:
-```
-
-### `AccessRoutineError`
-
-```text
-class AccessRoutineError(AccessError):
-```
-
-#### 説明
-
-Access マクロまたは VBA の実行に失敗した
-
-対処:
-    表示された名前と Access 側の内容を確認する
-
-#### `__init__`
-
-```text
-def __init__(self, name: str, kind: str, detail: Exception) -> None:
-```
-
-### `AccessSourceNotFoundError`
-
-```text
-class AccessSourceNotFoundError(AccessError):
-```
-
-#### 説明
-
-テーブルまたはクエリが見つからない
-
-対処:
-    エラーに表示された存在する名前を確認する
-
-#### `__init__`
-
-```text
-def __init__(self, name: str, sources: list[str]) -> None:
-```
 
 ### `ExcelError`
 
@@ -3069,78 +2969,10 @@ class ConfigError(ComkenError):
 
 #### 説明
 
-config.ini に関するエラー
+config.ini に関するエラー。具体的な状況はメッセージに出る
 
 対処:
     メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
-
-### `ConfigCreatedFromExampleError`
-
-```text
-class ConfigCreatedFromExampleError(ConfigError):
-```
-
-#### 説明
-
-config.ini が無かったので example から作った
-
-発生箇所: Config.__init__()
-
-対処:
-    作られた config.ini の値を書き換えて、もう一度実行する
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path | str) -> None:
-```
-
-### `ConfigLowerCaseNameError`
-
-```text
-class ConfigLowerCaseNameError(ConfigError):
-```
-
-#### 説明
-
-config.ini のセクション名・キー名に小文字がある
-
-発生箇所: Config.__init__()
-
-対処:
-    表示された名前を大文字に書き換える（`[files]` → `[FILES]`）
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path | str, wrong: list[str]) -> None:
-```
-
-### `ConfigSectionNotFoundError`
-
-```text
-class ConfigSectionNotFoundError(ConfigError):
-```
-
-#### 説明
-
-config.ini の必要な節がない
-
-発生箇所: Config.__getattr__()
-
-対処:
-    メッセージに表示された **「読んだファイル」のパス** が、編集している
-    config.ini と一致するかを確認する（2026-08-18 にプロジェクトの場所を
-    基準にするように変えてから、起動方法によって別の config.ini を読む
-    ことがあるため）。パスが正しければ、表示されたセクション名を
-    config.ini に追加する。**見た目では原因が分からない場合**（行頭に
-    空白が混入していた等）はエディタで行頭空白・全角スペースを確認する
-
-#### `__init__`
-
-```text
-def __init__(self, name: str, existing: list[str], path: Path | str | None=None) -> None:
-```
 
 ### `ConfigKeyNotFoundError`
 
@@ -3165,58 +2997,6 @@ config.ini のセクションに必要なキーがない
 
 ```text
 def __init__(self, section: str, name: str, existing: list[str], path: Path | str | None=None) -> None:
-```
-
-### `ConfigMappingEmptyValueError`
-
-```text
-class ConfigMappingEmptyValueError(ConfigError):
-```
-
-#### 説明
-
-``[*_MAPPING]`` セクションの値が空欄
-
-発生箇所: Config.__init__()（``*_MAPPING`` の ``_LenientDict`` 組み立て時）
-
-対処:
-    メッセージに表示された **「読んだファイル」のパス** が、編集している
-    config.ini と一致するかを確認する。パスが正しければ、表示された
-    キー名の両側に値を書いて config.ini を直す（``列名 = 値``）。
-    ``=`` を付け忘れて ``キー`` のように書いた行もここで検出する
-    （``cfg.get()`` が ``None`` を返すので空欄と同じ扱い）。
-    通常セクションの空欄（``READ_PASSWORD =`` のように「設定しない」を
-    示す書き方）はエラーにしないので、``*_MAPPING`` 以外では無視してよい
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path | str, section: str, empty_keys: list[str]) -> None:
-```
-
-### `ConfigSubclassingNotSupportedError`
-
-```text
-class ConfigSubclassingNotSupportedError(ConfigError):
-```
-
-#### 説明
-
-``Config`` を継承できない
-
-発生箇所: ``class AppConfig(Config)`` のようなサブクラス定義時
-
-対処:
-    ``from comken import config`` で ``config.SECTION.KEY`` を直接読む。
-    サブクラスでメソッドを足しても ``Config.__new__`` がパス単位で
-    キャッシュ済みの素の ``Config`` を返すため、 追加したメソッドは
-    ``AttributeError`` になる（キャッシュを ``cls`` 対応にする改修は
-    行わない）。
-
-#### `__init__`
-
-```text
-def __init__(self, subclass_name: str) -> None:
 ```
 
 ### `ComkenFileNotFoundError`
@@ -3312,48 +3092,10 @@ class OutlookError(ComkenError):
 
 #### 説明
 
-Outlook 関連エラーの分類
+Outlook 関連エラーの分類。具体的な状況はメッセージに出る
 
 対処:
     メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
-
-### `ClassicOutlookNotAvailableError`
-
-```text
-class ClassicOutlookNotAvailableError(OutlookError):
-```
-
-#### 説明
-
-Classic Outlook を利用できない
-
-対処:
-    Classic Outlook を使うか管理者に相談する
-
-#### `__init__`
-
-```text
-def __init__(self) -> None:
-```
-
-### `OutlookFolderNotFoundError`
-
-```text
-class OutlookFolderNotFoundError(OutlookError):
-```
-
-#### 説明
-
-指定したフォルダがない
-
-対処:
-    エラーに表示された存在するフォルダ名を確認する
-
-#### `__init__`
-
-```text
-def __init__(self, folder: str, existing_folders: list[str]) -> None:
-```
 
 ### `CredentialError`
 
@@ -3363,31 +3105,10 @@ class CredentialError(ComkenError):
 
 #### 説明
 
-認証情報の保存・取得に関するエラー
+認証情報の保存・取得に関するエラー。具体的な状況はメッセージに出る
 
 対処:
     メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
-
-### `InvalidCredentialNameError`
-
-```text
-class InvalidCredentialNameError(CredentialError):
-```
-
-#### 説明
-
-認証情報のキー名に使えない文字がある
-
-発生箇所: comken.toolbox.credentials の Credentials() / save_credential() / 取り込み
-
-対処:
-    半角英数字とアンダースコアだけにする（漢字・スペース・記号は使えない）
-
-#### `__init__`
-
-```text
-def __init__(self, label: str, name: str) -> None:
-```
 
 ### `CredentialNotFoundError`
 
@@ -3409,76 +3130,6 @@ class CredentialNotFoundError(CredentialError):
 
 ```text
 def __init__(self, name: str, registered: list[str]) -> None:
-```
-
-### `CredentialDecryptionError`
-
-```text
-class CredentialDecryptionError(CredentialError):
-```
-
-#### 説明
-
-認証情報を復号できない
-
-DPAPI は「登録したときの Windows ユーザー × PC」でしか復号できない。
-別のアカウントで実行した・別の PC にファイルをコピーした場合がほとんど。
-
-発生箇所: comken.toolbox.credentials の読み書き全般
-
-対処:
-    登録したときと**同じ Windows アカウント・同じ PC** で実行しているか確認する。
-    タスクスケジューラの実行ユーザー違いが最も多い
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path, detail: Exception) -> None:
-```
-
-### `CredentialStoreCorruptedError`
-
-```text
-class CredentialStoreCorruptedError(CredentialError):
-```
-
-#### 説明
-
-認証情報の中身が壊れている
-
-復号できない（別ユーザー・別 PC）のとは対処が違う。こちらは実行アカウントを
-直しても直らないので、ファイルを捨てて取り込み直すしかない。
-
-発生箇所: comken.toolbox.credentials の読み書き全般
-
-対処:
-    実行アカウントの問題ではない。表示されたファイルを削除して、もう一度取り込み直す
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path, detail: str) -> None:
-```
-
-### `CredentialImportError`
-
-```text
-class CredentialImportError(CredentialError):
-```
-
-#### 説明
-
-取り込む JSON が壊れている・形式が違う
-
-発生箇所: comken.toolbox.credentials の import_json()
-
-対処:
-    表示された形式のとおりに書き直す。値は必ず `" "` で囲む
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path, detail: str) -> None:
 ```
 
 ### `PasswordRejectedError`
@@ -3748,67 +3399,10 @@ class StateError(ComkenError):
 
 #### 説明
 
-state.ini に関するエラー
+state.ini に関するエラー。具体的な状況はメッセージに出る
 
 対処:
     メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
-
-### `StateFileCorruptedError`
-
-```text
-class StateFileCorruptedError(StateError):
-```
-
-#### 説明
-
-state.ini が壊れていて読み取れない
-
-対処:
-    内容を直す。直せない場合は別名に変更して、空の状態から再実行する
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path | str) -> None:
-```
-
-### `StateLowerCaseNameError`
-
-```text
-class StateLowerCaseNameError(StateError):
-```
-
-#### 説明
-
-state のキー名に小文字がある
-
-対処:
-    表示されたキー名を大文字に直す（`last_file` → `LAST_FILE`）
-
-#### `__init__`
-
-```text
-def __init__(self, key: str) -> None:
-```
-
-### `StateValueTypeError`
-
-```text
-class StateValueTypeError(StateError):
-```
-
-#### 説明
-
-state に保存できない型の値が渡された
-
-対処:
-    真偽値・整数・小数・文字列・文字列のリストのいずれかに変更する
-
-#### `__init__`
-
-```text
-def __init__(self, value: object) -> None:
-```
 
 ### `BusinessDayNotFoundError`
 
@@ -3853,34 +3447,10 @@ class CalendarError(ComkenError):
 
 #### 説明
 
-祝日カレンダーに関するエラー
+祝日カレンダーに関するエラー。具体的な状況はメッセージに出る
 
 対処:
     メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
-
-### `CalendarFormatError`
-
-```text
-class CalendarFormatError(CalendarError):
-```
-
-#### 説明
-
-会社用カレンダーCSV 以外のファイルや壊れたファイルを読み込もうとした
-
-発生箇所: comken.core.calendar._calendar の _Calendar.load
-
-対処:
-    ``python -m comken.core.calendar.build`` を実行して
-    ``comken/core/calendar/data/company_calendar.csv`` を再生成する。
-    内閣府の ``syukujitsu.csv`` 形式変更が原因の場合は
-    ``comken.core.calendar.build`` 側の解析ロジックを直す
-
-#### `__init__`
-
-```text
-def __init__(self, path: Path | str, detail: str) -> None:
-```
 
 ### `DownloaderError`
 
@@ -7651,7 +7221,7 @@ Args:
 
 Raises:
     CredentialNotFoundError: prefix配下に username/password が未登録の場合。
-    CredentialDecryptionError: 別のユーザー・PCで登録されていて復号できない場合。
+    CredentialError: 別のユーザー・PCで登録されていて復号できない場合。
 
 #### `wait_for_manual_login`
 
@@ -7776,7 +7346,7 @@ Args:
 
 Raises:
     CredentialNotFoundError: prefix配下に username/password が未登録の場合。
-    CredentialDecryptionError: 別のユーザー・PCで登録されていて復号できない場合。
+    CredentialError: 別のユーザー・PCで登録されていて復号できない場合。
 
 #### `wait_for_manual_login`
 
@@ -7970,7 +7540,7 @@ Args:
 
 Raises:
     CredentialNotFoundError: prefix配下に username/password が未登録の場合。
-    CredentialDecryptionError: 別のユーザー・PCで登録されていて復号できない場合。
+    CredentialError: 別のユーザー・PCで登録されていて復号できない場合。
 
 #### `wait_for_manual_login`
 
@@ -8168,9 +7738,9 @@ class Credentials:
     cred = Credentials(config.CREDENTIALS.SITE_A)
 
 Raises:
-    InvalidCredentialNameError: サイト名に使えない文字が含まれている場合。
+    CredentialError: サイト名に使えない文字が含まれている場合、
+        別のユーザー・PC で登録されていて復号できない場合。
     CredentialNotFoundError: 属性に対応するキーが未登録の場合。
-    CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
 
 #### `__init__`
 
@@ -8230,9 +7800,9 @@ Args:
     path: 保存先ファイル。省略時は CREDENTIALS_PATH（通常は省略する）。
 
 Raises:
-    InvalidCredentialNameError: サイト名・項目名に使えない文字が含まれている場合。
+    CredentialError: サイト名・項目名に使えない文字が含まれている場合、
+        別のユーザー・PC で登録されていて復号できない場合。
     CredentialNotFoundError: 指定した（サイト, 項目）が未登録の場合。
-    CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
 
 ### `save_credential`
 
@@ -8252,8 +7822,8 @@ Args:
     path: 保存先ファイル。省略時は CREDENTIALS_PATH（通常は省略する）。
 
 Raises:
-    InvalidCredentialNameError: サイト名・項目名に使えない文字が含まれている場合。
-    CredentialDecryptionError: 既存ファイルを復号できない場合。
+    CredentialError: サイト名・項目名に使えない文字が含まれている場合、
+        既存ファイルを復号できない場合。
 
 ### `save_credentials`
 
@@ -8276,8 +7846,8 @@ Args:
     path: 保存先ファイル。省略時は CREDENTIALS_PATH（通常は省略する）。
 
 Raises:
-    InvalidCredentialNameError: サイト名・項目名に使えない文字が含まれている場合。
-    CredentialDecryptionError: 既存ファイルを復号できない場合。
+    CredentialError: サイト名・項目名に使えない文字が含まれている場合、
+        既存ファイルを復号できない場合。
     TypeError: 値が文字列でない・入れ子の構造が壊れている場合（呼び出し側のバグ）。
 
 ### `delete_credential`
@@ -8292,9 +7862,9 @@ def delete_credential(site: str, field: str, path: Path | None=None) -> None:
 登録済みの認証情報を1件削除する。
 
 Raises:
-    InvalidCredentialNameError: サイト名・項目名に使えない文字が含まれている場合。
+    CredentialError: サイト名・項目名に使えない文字が含まれている場合、
+        既存ファイルを復号できない場合。
     CredentialNotFoundError: 指定した（サイト, 項目）が未登録の場合。
-    CredentialDecryptionError: 既存ファイルを復号できない場合。
 
 ### `list_names`
 
@@ -8311,7 +7881,8 @@ def list_names(path: Path | None=None) -> list[tuple[str, str]]:
 表示されるので、 ``cli list`` のようなグルーピング表示がタプル1要素目だけで済む。
 
 Raises:
-    CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
+    CredentialError: 別のユーザー・PC で登録されていて復号できない場合、
+        認証情報の中身が壊れている場合。
 
 ### `import_json`
 
@@ -8336,11 +7907,8 @@ Returns:
     ``list_names()`` と同じ並び順（サイト名→項目名でソート）。
 
 Raises:
-    CredentialImportError: JSON が見つからない・壊れている・形式が違う場合
-        （サイト名・項目名に使えない文字が含まれている場合を含む。
-        ``_read_nested()`` が ``save_credentials()`` を呼ぶ前に検証するため、
-        ``InvalidCredentialNameError`` はここでは送出されない）。
-    CredentialDecryptionError: 既存ファイルを復号できない場合。
+    CredentialError: JSON が見つからない・壊れている・形式が違う場合、
+        既存ファイルを復号できない場合。
 
 ### `prompt_new_password`
 
@@ -9679,9 +9247,9 @@ Args:
         その場合だけ prefix / domain_url は使われない。
 
 Raises:
-    InvalidCredentialNameError: システム名が空、または使えない文字を含む場合。
+    CredentialError: システム名が空、または使えない文字を含む場合、
+        別のユーザー・PC で登録されていて復号できない場合。
     CredentialNotFoundError: 選択方式に必要な認証情報が未登録の場合。
-    CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
     SalesforceAuthError: 認証に失敗した場合。
     SalesforceError: ネットワークの問題で接続できない場合。
 
@@ -9994,9 +9562,9 @@ Args:
         その場合だけ prefix / domain_url は使われない。
 
 Raises:
-    InvalidCredentialNameError: システム名が空、または使えない文字を含む場合。
+    CredentialError: システム名が空、または使えない文字を含む場合、
+        別のユーザー・PC で登録されていて復号できない場合。
     CredentialNotFoundError: 選択方式に必要な認証情報が未登録の場合。
-    CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
     SalesforceAuthError: 認証に失敗した場合。
     SalesforceError: ネットワークの問題で接続できない場合。
 

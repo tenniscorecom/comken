@@ -48,12 +48,7 @@ import win32crypt
 from comken.core.files.atomic import atomic_write
 from comken.core.files.ops import cleanup_stale_tmp
 from comken.core.timer import measure
-from comken.exceptions import (
-    CredentialDecryptionError,
-    CredentialNotFoundError,
-    CredentialStoreCorruptedError,
-    InvalidCredentialNameError,
-)
+from comken.exceptions import CredentialError, CredentialNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -93,9 +88,9 @@ class Credentials:
         cred = Credentials(config.CREDENTIALS.SITE_A)
 
     Raises:
-        InvalidCredentialNameError: サイト名に使えない文字が含まれている場合。
+        CredentialError: サイト名に使えない文字が含まれている場合、
+            別のユーザー・PC で登録されていて復号できない場合。
         CredentialNotFoundError: 属性に対応するキーが未登録の場合。
-        CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
     """
 
     def __init__(self, site: str, path: Path | None = None) -> None:
@@ -105,7 +100,7 @@ class Credentials:
             path: 保存先ファイル。省略時は CREDENTIALS_PATH（通常は省略する）。
         """
         if not CREDENTIAL_NAME_PATTERN.fullmatch(site):
-            raise InvalidCredentialNameError("サイト名", site)
+            raise _invalid_name_error("サイト名", site)
         self._site = site
         self._path = path
         # 初回の属性アクセスで復号結果を丸ごと持っておく。 詳しくは __getattr__ の
@@ -151,7 +146,7 @@ class Credentials:
             object.__setattr__(self, name, value)
             return
         if not CREDENTIAL_NAME_PATTERN.fullmatch(name):
-            raise InvalidCredentialNameError("項目名", name)
+            raise _invalid_name_error("項目名", name)
         if not isinstance(value, str):
             raise TypeError(
                 f"認証情報の値は文字列で渡してください: "
@@ -249,8 +244,8 @@ def save_credential(site: str, field: str, value: str, path: Path | None = None)
         path: 保存先ファイル。省略時は CREDENTIALS_PATH（通常は省略する）。
 
     Raises:
-        InvalidCredentialNameError: サイト名・項目名に使えない文字が含まれている場合。
-        CredentialDecryptionError: 既存ファイルを復号できない場合。
+        CredentialError: サイト名・項目名に使えない文字が含まれている場合、
+            既存ファイルを復号できない場合。
     """
     save_credentials({site: {field: value}}, path)
 
@@ -269,13 +264,13 @@ def save_credentials(items: dict[str, dict[str, str]], path: Path | None = None)
         path: 保存先ファイル。省略時は CREDENTIALS_PATH（通常は省略する）。
 
     Raises:
-        InvalidCredentialNameError: サイト名・項目名に使えない文字が含まれている場合。
-        CredentialDecryptionError: 既存ファイルを復号できない場合。
+        CredentialError: サイト名・項目名に使えない文字が含まれている場合、
+            既存ファイルを復号できない場合。
         TypeError: 値が文字列でない・入れ子の構造が壊れている場合（呼び出し側のバグ）。
     """
     for site, fields in items.items():
         if not CREDENTIAL_NAME_PATTERN.fullmatch(site):
-            raise InvalidCredentialNameError("サイト名", site)
+            raise _invalid_name_error("サイト名", site)
         if not isinstance(fields, dict):
             raise TypeError(
                 f"認証情報の値はサイトごとの dict で渡してください: "
@@ -283,7 +278,7 @@ def save_credentials(items: dict[str, dict[str, str]], path: Path | None = None)
             )
         for field, value in fields.items():
             if not CREDENTIAL_NAME_PATTERN.fullmatch(field):
-                raise InvalidCredentialNameError("項目名", field)
+                raise _invalid_name_error("項目名", field)
             if not isinstance(value, str):
                 raise TypeError(
                     f"認証情報の値は文字列で渡してください: "
@@ -312,14 +307,14 @@ def load_credential(site: str, field: str, path: Path | None = None) -> str:
         path: 保存先ファイル。省略時は CREDENTIALS_PATH（通常は省略する）。
 
     Raises:
-        InvalidCredentialNameError: サイト名・項目名に使えない文字が含まれている場合。
+        CredentialError: サイト名・項目名に使えない文字が含まれている場合、
+            別のユーザー・PC で登録されていて復号できない場合。
         CredentialNotFoundError: 指定した（サイト, 項目）が未登録の場合。
-        CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
     """
     if not CREDENTIAL_NAME_PATTERN.fullmatch(site):
-        raise InvalidCredentialNameError("サイト名", site)
+        raise _invalid_name_error("サイト名", site)
     if not CREDENTIAL_NAME_PATTERN.fullmatch(field):
-        raise InvalidCredentialNameError("項目名", field)
+        raise _invalid_name_error("項目名", field)
     path = path or CREDENTIALS_PATH
     data = _load_all(path)
     site_dict = data.get(site)
@@ -339,14 +334,14 @@ def delete_credential(site: str, field: str, path: Path | None = None) -> None:
     """登録済みの認証情報を1件削除する。
 
     Raises:
-        InvalidCredentialNameError: サイト名・項目名に使えない文字が含まれている場合。
+        CredentialError: サイト名・項目名に使えない文字が含まれている場合、
+            既存ファイルを復号できない場合。
         CredentialNotFoundError: 指定した（サイト, 項目）が未登録の場合。
-        CredentialDecryptionError: 既存ファイルを復号できない場合。
     """
     if not CREDENTIAL_NAME_PATTERN.fullmatch(site):
-        raise InvalidCredentialNameError("サイト名", site)
+        raise _invalid_name_error("サイト名", site)
     if not CREDENTIAL_NAME_PATTERN.fullmatch(field):
-        raise InvalidCredentialNameError("項目名", field)
+        raise _invalid_name_error("項目名", field)
     path = path or CREDENTIALS_PATH
     data = _load_all(path)
     site_dict = data.get(site)
@@ -381,7 +376,8 @@ def list_names(path: Path | None = None) -> list[tuple[str, str]]:
     表示されるので、 ``cli list`` のようなグルーピング表示がタプル1要素目だけで済む。
 
     Raises:
-        CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
+        CredentialError: 別のユーザー・PC で登録されていて復号できない場合、
+            認証情報の中身が壊れている場合。
     """
     path = path or CREDENTIALS_PATH
     data = _load_all(path)
@@ -394,7 +390,7 @@ def _load_all(path: Path) -> dict[str, dict[str, str]]:
     """暗号化ファイルを復号して ``{サイト名: {項目名: 値}}`` の dict を返す。未作成なら空 dict。
 
     「復号できない」と「復号はできたが中身が壊れている」は対処が違うので、
-    別の例外に分ける（前者は実行アカウントの問題、後者は取り込み直し）。
+    メッセージで区別する（前者は実行アカウントの問題、後者は取り込み直し）。
     """
     if not path.exists():
         logger.debug("_load_all: ファイル未作成: path=%s", path)
@@ -404,15 +400,15 @@ def _load_all(path: Path) -> dict[str, dict[str, str]]:
         _, decrypted = win32crypt.CryptUnprotectData(encrypted, None, None, None, 0)
     except pywintypes.error as e:
         # 原因（別ユーザー・別 PC・暗号文の破損）を DPAPI は区別して返さないので、
-        # 確認する順番を示した1つの例外にまとめる
+        # 確認する順番を示したメッセージにまとめる
         logger.debug("_load_all: DPAPI 復号に失敗: path=%s", path)
-        raise CredentialDecryptionError(path, e) from e
+        raise _decryption_error(path, e) from e
 
     try:
         data = json.loads(decrypted.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as e:
         logger.debug("_load_all: JSON 解析に失敗: path=%s", path)
-        raise CredentialStoreCorruptedError(path, str(e)) from e
+        raise _store_corrupted_error(path, str(e)) from e
     if (
         not isinstance(data, dict)
         or not all(isinstance(key, str) for key in data)
@@ -425,7 +421,7 @@ def _load_all(path: Path) -> dict[str, dict[str, str]]:
         )
     ):
         logger.debug("_load_all: 復号済み JSON の形が不正: path=%s", path)
-        raise CredentialStoreCorruptedError(path, "キーと値がすべて文字列の形になっていません。")
+        raise _store_corrupted_error(path, "キーと値がすべて文字列の形になっていません。")
     return data
 
 
@@ -502,3 +498,50 @@ def _invalidate_instances_for(path: Path) -> None:
             object.__setattr__(instance, "_cache", None)
             invalidated += 1
     logger.debug("_invalidate_instances_for: path=%s のキャッシュを %d 件破棄", key, invalidated)
+
+
+# ── CredentialError の文言ヘルパー ───────────────────────────────────────
+# 呼び出し側が型で分ける必要が無い Credential 由来エラーは、すべて
+# ``CredentialError`` を直接送出して具体的な状況をメッセージで伝える。
+
+
+def _invalid_name_error(label: str, name: str) -> CredentialError:
+    """認証情報のキー名に使えない文字があるときの ``CredentialError``。"""
+    return CredentialError(
+        f"{label}に使えない文字が含まれています: {name or '（空）'}\n"
+        "使えるのは半角英数字とアンダースコアだけです（例: site_a, site_a_client_secret）。\n"
+        "漢字・スペース・記号は使えません。"
+    )
+
+
+def _decryption_error(path: Path, detail: Exception) -> CredentialError:
+    """認証情報を復号できないときの ``CredentialError``。
+
+    DPAPI は「登録したときの Windows ユーザー × PC」でしか復号できない。
+    別のアカウントで実行した・別の PC にファイルをコピーした場合がほとんど。
+    """
+    return CredentialError(
+        f"認証情報を復号できませんでした: {path}\n"
+        f"（{detail}）\n"
+        "次を順に確認してください。\n"
+        "  1. 登録したときと同じ Windows アカウントで実行しているか\n"
+        "     （タスクスケジューラの実行ユーザーが違う、が最も多い原因）\n"
+        "  2. 登録したときと同じ PC か（別 PC にコピーしても読めません）\n"
+        "  3. どちらも合っている場合はファイルが壊れている。\n"
+        "     ファイルを削除して、もう一度取り込み直してください。"
+    )
+
+
+def _store_corrupted_error(path: Path, detail: str) -> CredentialError:
+    """認証情報の中身が壊れているときの ``CredentialError``。
+
+    復号できない（別ユーザー・別 PC）のとは対処が違う。こちらは実行アカウントを
+    直しても直らないので、ファイルを捨てて取り込み直すしかない。
+    """
+    return CredentialError(
+        f"認証情報の中身が壊れています: {path}\n"
+        f"（{detail}）\n"
+        "復号はできているので、実行アカウントの問題ではありません。\n"
+        "このファイルを削除して、もう一度取り込み直してください。\n"
+        "  python -m comken cred import 認証情報.json"
+    )

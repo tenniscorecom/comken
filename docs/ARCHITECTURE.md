@@ -65,13 +65,13 @@
 
 `config.ini` は **非エンジニアが自分で変える値だけ** を置く。エンジニアしか触らない固定値は Python コードに書く（プロジェクト名・RPA 基盤へ渡す名前など）。両方を `config.ini` に入れると「触ってよい値」と「触ってはいけない値」が混ざり、渡された人がどれを変えてよいか判断できなくなる。
 
-セクション名・キー名は大文字で書き、Python 側の `config.SECTION.KEY` と表記を一致させる。小文字混じりは読み込み時点で `ConfigLowerCaseNameError` で止める。
+セクション名・キー名は大文字で書き、Python 側の `config.SECTION.KEY` と表記を一致させる。小文字混じりは読み込み時点で `ConfigError` で止める。
 
 機密値（パスワード・トークン・client_secret・refresh_token）は `config.ini` や git には含めず、Windows DPAPI に保管する。`comken.toolbox.credentials` が暗号化保存・読み込み・JSON 取り込みの入口になる。
 
 必須項目を事前チェックする API は持たない。`Config.xxx.yyy` を参照した時点で `ConfigKeyNotFoundError` が止まる。
 
-`config.ini` が無ければ `config.ini.example` からコピーして `ConfigCreatedFromExampleError` で止める。2 回目以降の実行からは通常どおり動く。
+`config.ini` が無ければ `config.ini.example` からコピーして `ConfigError` で止める。2 回目以降の実行からは通常どおり動く。
 
 ### 実行モード
 
@@ -90,7 +90,7 @@
 
 `state.ini` は前回処理位置など **プログラムが書く状態** を持つファイルで、`config.ini`（人が書く設定）と分離する。両者を分けると、人が調整した設定をプログラムが上書きする事故を防げる。dry-run 中の `State.set()` はログだけを出して保存しない（本番で処理済みと誤判定されるのを防ぐ）。
 
-INI として壊れたファイルは `StateFileCorruptedError` で止める（前回の続きから再開が静かに失敗するのを防ぐため）。
+INI として壊れたファイルは `StateError` で止める（前回の続きから再開が静かに失敗するのを防ぐため）。
 
 ## 5. 例外体系
 

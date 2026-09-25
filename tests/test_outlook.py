@@ -7,11 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from comken import dry_run
-from comken.exceptions import (
-    ClassicOutlookNotAvailableError,
-    ComkenFileNotFoundError,
-    OutlookFolderNotFoundError,
-)
+from comken.exceptions import ComkenFileNotFoundError, OutlookError
 from comken.toolbox.outlook import MailMessage, Outlook
 
 
@@ -46,7 +42,7 @@ class TestOutlook:
                 side_effect=OSError("COM error"),
             ),
             pytest.raises(
-                ClassicOutlookNotAvailableError,
+                OutlookError,
                 match=r"Classic.*新しい Outlook.*管理者",
             ),
         ):
@@ -84,7 +80,7 @@ class TestOutlook:
             MagicMock(Name="処理済み"),
             MagicMock(Name="共有"),
         ]
-        with pytest.raises(OutlookFolderNotFoundError, match=r"処理済み.*共有"):
+        with pytest.raises(OutlookError, match=r"処理済み.*共有"):
             list(outlook.read_messages(folder="なし"))
 
     def test_save_draft_saves_but_does_not_send(self, tmp_path):

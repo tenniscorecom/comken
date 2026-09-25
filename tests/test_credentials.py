@@ -15,13 +15,7 @@ from unittest.mock import patch
 import pytest
 import win32crypt
 
-from comken.exceptions import (
-    CredentialDecryptionError,
-    CredentialImportError,
-    CredentialNotFoundError,
-    CredentialStoreCorruptedError,
-    InvalidCredentialNameError,
-)
+from comken.exceptions import CredentialError, CredentialNotFoundError
 from comken.toolbox.credentials import (
     Credentials,
     delete_credential,
@@ -73,18 +67,18 @@ class TestSaveAndLoad:
         assert list_names(store) == []
 
     def test_invalid_site_raises(self, store):
-        with pytest.raises(InvalidCredentialNameError):
+        with pytest.raises(CredentialError):
             save_credential("サイトA", "client_id", "A", store)
 
     def test_invalid_field_raises(self, store):
         """項目名側に使えない文字を入れた場合も、 サイト名が正しくても弾く。"""
-        with pytest.raises(InvalidCredentialNameError):
+        with pytest.raises(CredentialError):
             save_credential("site_a", "クライアントID", "A", store)
 
     def test_invalid_pair_is_not_saved(self, store):
         """1件でも不正なら、正しいほうも書き込まない（全部入るか1つも入らないか）。"""
         save_credential("site_a", "client_id", "A", store)
-        with pytest.raises(InvalidCredentialNameError):
+        with pytest.raises(CredentialError):
             save_credentials(
                 {"site_b": {"client_id": "B"}, "site c": {"client_id": "C"}},
                 store,
@@ -104,14 +98,14 @@ class TestSaveAndLoad:
     def test_broken_file_raises_decryption_error(self, store):
         save_credential("site_a", "client_id", "A", store)
         store.write_bytes(b"broken")
-        with pytest.raises(CredentialDecryptionError):
+        with pytest.raises(CredentialError):
             load_credential("site_a", "client_id", store)
 
     def test_decryptable_but_broken_content_is_a_different_error(self, store):
         """復号できるのに中身が JSON でない場合は、取り込み直しを促す別の例外にする。"""
         store.parent.mkdir(parents=True, exist_ok=True)
         store.write_bytes(win32crypt.CryptProtectData(b"not json", None, None, None, None, 0))
-        with pytest.raises(CredentialStoreCorruptedError):
+        with pytest.raises(CredentialError):
             list_names(store)
 
     def test_decryptable_but_wrong_shape_is_corrupted(self, store):
@@ -120,7 +114,7 @@ class TestSaveAndLoad:
         # 値が dict ではなく list のケースは「キーと値がすべて文字列の形になっていない」
         raw = json.dumps({"site_a": ["A"]}).encode("utf-8")
         store.write_bytes(win32crypt.CryptProtectData(raw, None, None, None, None, 0))
-        with pytest.raises(CredentialStoreCorruptedError):
+        with pytest.raises(CredentialError):
             list_names(store)
 
     def test_decryptable_with_flat_shape_is_corrupted(self, store):
@@ -128,7 +122,7 @@ class TestSaveAndLoad:
         store.parent.mkdir(parents=True, exist_ok=True)
         raw = json.dumps({"site_a_client_id": "A"}).encode("utf-8")
         store.write_bytes(win32crypt.CryptProtectData(raw, None, None, None, None, 0))
-        with pytest.raises(CredentialStoreCorruptedError):
+        with pytest.raises(CredentialError):
             list_names(store)
 
     def test_no_temporary_file_is_left_behind(self, store):
@@ -177,11 +171,11 @@ class TestCredentialsAttributes:
         assert Credentials("site_a_test", store).client_id == "テスト"
 
     def test_invalid_site_raises(self, store):
-        with pytest.raises(InvalidCredentialNameError):
+        with pytest.raises(CredentialError):
             Credentials("site a", store)
 
     def test_empty_site_raises(self, store):
-        with pytest.raises(InvalidCredentialNameError):
+        with pytest.raises(CredentialError):
             Credentials("", store)
 
     def test_unregistered_attribute_raises(self, store):
@@ -283,7 +277,7 @@ class TestCredentialsSave:
 
     def test_assigning_invalid_field_name_raises(self, store):
         cred = Credentials("site_a", store)
-        with pytest.raises(InvalidCredentialNameError):
+        with pytest.raises(CredentialError):
             cred.クライアントID = "A"
 
 
@@ -361,47 +355,47 @@ class TestImportJson:
         assert load_credential("site_a", "client_id", store) == "new"
 
     def test_missing_file_raises(self, tmp_path, store):
-        with pytest.raises(CredentialImportError):
+        with pytest.raises(CredentialError):
             import_json(tmp_path / "ない.json", store)
 
     def test_broken_json_raises(self, tmp_path, store):
         json_path = tmp_path / "壊れた.json"
         json_path.write_text('{"site_a": ', encoding="utf-8")
-        with pytest.raises(CredentialImportError):
+        with pytest.raises(CredentialError):
             import_json(json_path, store)
 
     def test_flat_json_raises(self, tmp_path, store):
         """入れ子ではなく平らな JSON は形式違いとして弾く。"""
         json_path = self._write(tmp_path, {"site_a_client_id": "A-ID"})
-        with pytest.raises(CredentialImportError):
+        with pytest.raises(CredentialError):
             import_json(json_path, store)
 
     def test_non_string_value_raises(self, tmp_path, store):
         json_path = self._write(tmp_path, {"site_a": {"client_id": 12345}})
-        with pytest.raises(CredentialImportError):
+        with pytest.raises(CredentialError):
             import_json(json_path, store)
 
     def test_empty_json_raises(self, tmp_path, store):
         json_path = self._write(tmp_path, {})
-        with pytest.raises(CredentialImportError):
+        with pytest.raises(CredentialError):
             import_json(json_path, store)
 
     def test_invalid_key_raises_and_saves_nothing(self, tmp_path, store):
         json_path = self._write(tmp_path, {"サイトA": {"client_id": "A-ID"}})
-        with pytest.raises(CredentialImportError):
+        with pytest.raises(CredentialError):
             import_json(json_path, store)
         assert list_names(store) == []
 
     def test_empty_value_raises(self, tmp_path, store):
         """空の秘密値は書き忘れなので、登録の時点で止める。"""
         json_path = self._write(tmp_path, {"site_a": {"client_id": ""}})
-        with pytest.raises(CredentialImportError):
+        with pytest.raises(CredentialError):
             import_json(json_path, store)
 
     def test_empty_field_name_raises(self, tmp_path, store):
         """項目名が空だと登録しようがない（キーが空の dict になる）。"""
         json_path = self._write(tmp_path, {"site_a": {"": "A-ID"}})
-        with pytest.raises(CredentialImportError):
+        with pytest.raises(CredentialError):
             import_json(json_path, store)
 
     def test_duplicate_json_key_raises(self, tmp_path, store):
@@ -410,7 +404,7 @@ class TestImportJson:
         json_path.write_text(
             '{"site_a": {"client_id": "A"}, "site_a": {"client_id": "B"}}', encoding="utf-8"
         )
-        with pytest.raises(CredentialImportError):
+        with pytest.raises(CredentialError):
             import_json(json_path, store)
 
 

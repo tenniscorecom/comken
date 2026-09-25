@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Final
 
 from comken.core.clock import month_end, month_start, today
-from comken.exceptions import BusinessDayNotFoundError, CalendarFormatError
+from comken.exceptions import BusinessDayNotFoundError, CalendarError
 
 logger = logging.getLogger(__name__)
 
@@ -372,11 +372,11 @@ class _Calendar:
 
         列は ``date`` / ``name`` の 2 列のみ。文字コードは UTF-8 BOM 付き
         （Excel・VBA 双方で文字化けしないため）。ヘッダーが違ったり日付が
-        解釈できない行があれば ``CalendarFormatError`` を上げる。
+        解釈できない行があれば ``CalendarError`` を上げる。
         """
         file_path = Path(path)
         if not file_path.exists():
-            raise CalendarFormatError(
+            raise _format_error(
                 file_path,
                 "ファイルが存在しません。"
                 "python -m comken.core.calendar.build を実行して"
@@ -389,11 +389,11 @@ class _Calendar:
             try:
                 header = next(reader)
             except StopIteration:
-                raise CalendarFormatError(
+                raise _format_error(
                     file_path, "ヘッダー行がありません（date, name が必要です）。"
                 ) from None
             if [h.strip() for h in header] != ["date", "name"]:
-                raise CalendarFormatError(
+                raise _format_error(
                     file_path,
                     f"ヘッダーが date, name ではありません: {header!r}",
                 )
@@ -402,7 +402,7 @@ class _Calendar:
                 if not row or (len(row) == 1 and not row[0]):
                     continue
                 if len(row) < 2:
-                    raise CalendarFormatError(
+                    raise _format_error(
                         file_path,
                         f"{line_number} 行目の列数が不足しています: {row!r}",
                     )
@@ -418,13 +418,13 @@ class _Calendar:
                         date_text, "%Y-%m-%d"
                     ).date()
                 except ValueError as error:
-                    raise CalendarFormatError(
+                    raise _format_error(
                         file_path,
                         f"{line_number} 行目の日付を解釈できません: {date_text!r}",
                     ) from error
                 holidays[parsed] = name
         if not holidays:
-            raise CalendarFormatError(
+            raise _format_error(
                 file_path,
                 "日付として解釈できる行が 1件もありませんでした。"
                 "python -m comken.core.calendar.build を再実行してください。",
@@ -542,3 +542,13 @@ def _search_business_day(
         f"{BUSINESS_DAY_SEARCH_LIMIT} 日探索しても営業日が見つかりません。"
         "祝日データに過不足がないか、社内休日が広範囲に登録されていないか確認してください。"
     )
+
+
+# ── CalendarError の文言ヘルパー ─────────────────────────────────────────
+# 呼び出し側が型で分ける必要が無い Calendar 由来エラーは、 ``CalendarError`` を
+# 直接送出して具体的な状況をメッセージで伝える。
+
+
+def _format_error(path: Path | str, detail: str) -> CalendarError:
+    """会社用カレンダーCSV 以外を読んだときの ``CalendarError``。"""
+    return CalendarError(f"会社用カレンダーCSV を読み取れませんでした: {path}\n{detail}")

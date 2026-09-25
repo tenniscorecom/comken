@@ -10,23 +10,13 @@ ComkenError
 ├── FileDeletionError
 ├── FileSuffixMissingError
 ├── AccessError
-│   ├── AccessBackupError
-│   ├── AccessLocalCopyError
-│   ├── AccessRoutineError
-│   └── AccessSourceNotFoundError
 ├── OutlookError
-│   ├── ClassicOutlookNotAvailableError
-│   └── OutlookFolderNotFoundError
 ├── ExcelError
 │   ├── ExcelApplicationNotAvailableError
 │   ├── SheetNotFoundError
 ├── CSVError
 ├── CredentialError
-│   ├── InvalidCredentialNameError
 │   ├── CredentialNotFoundError
-│   ├── CredentialDecryptionError
-│   ├── CredentialStoreCorruptedError
-│   ├── CredentialImportError
 │   └── PasswordRejectedError
 ├── SalesforceError
 │   ├── SalesforceAuthError
@@ -45,22 +35,13 @@ ComkenError
 │   ├── ExcelColumnNotFoundError
 │   └── TransferSourceColumnNotFoundError
 ├── ConfigError
-│   ├── ConfigCreatedFromExampleError
-│   ├── ConfigLowerCaseNameError
-│   ├── ConfigSectionNotFoundError
-│   ├── ConfigKeyNotFoundError
-│   ├── ConfigMappingEmptyValueError
-│   └── ConfigSubclassingNotSupportedError
+│   └── ConfigKeyNotFoundError
 ├── MasterTableError
 │   ├── MasterRowValueError
 │   └── MasterDuplicateValueError
 ├── StateError
-│   ├── StateFileCorruptedError
-│   ├── StateLowerCaseNameError
-│   └── StateValueTypeError
 ├── WindowNotFoundError
 ├── CalendarError
-│   ├── CalendarFormatError
 │   └── BusinessDayNotFoundError
 ├── DownloaderError
 │   ├── HistoryWriteError
@@ -78,42 +59,20 @@ ComkenError
 カテゴリ基底クラスはまとめて捕捉するために使い、直接送出しない。
 """
 
-from comken.exceptions.access import (
-    AccessBackupError,
-    AccessError,
-    AccessLocalCopyError,
-    AccessRoutineError,
-    AccessSourceNotFoundError,
-)
+from comken.exceptions.access import AccessError
 from comken.exceptions.base import ComkenError, SiteOwnerRequiredError
 from comken.exceptions.browser import BrowserError, ElementNotFoundError, LoginFailedError
-from comken.exceptions.calendar import (
-    BusinessDayNotFoundError,
-    CalendarError,
-    CalendarFormatError,
-)
+from comken.exceptions.calendar import BusinessDayNotFoundError, CalendarError
 from comken.exceptions.column import (
     ColumnNotFoundError,
     ExcelColumnNotFoundError,
     InvalidColumnError,
     TransferSourceColumnNotFoundError,
 )
-from comken.exceptions.config import (
-    ConfigCreatedFromExampleError,
-    ConfigError,
-    ConfigKeyNotFoundError,
-    ConfigLowerCaseNameError,
-    ConfigMappingEmptyValueError,
-    ConfigSectionNotFoundError,
-    ConfigSubclassingNotSupportedError,
-)
+from comken.exceptions.config import ConfigError, ConfigKeyNotFoundError
 from comken.exceptions.credential import (
-    CredentialDecryptionError,
     CredentialError,
-    CredentialImportError,
     CredentialNotFoundError,
-    CredentialStoreCorruptedError,
-    InvalidCredentialNameError,
     PasswordRejectedError,
 )
 from comken.exceptions.csv import CSVError
@@ -152,11 +111,7 @@ from comken.exceptions.master_table import (
     MasterRowValueError,
     MasterTableError,
 )
-from comken.exceptions.outlook import (
-    ClassicOutlookNotAvailableError,
-    OutlookError,
-    OutlookFolderNotFoundError,
-)
+from comken.exceptions.outlook import OutlookError
 from comken.exceptions.salesforce import (
     SalesforceAuthError,
     SalesforceError,
@@ -164,12 +119,7 @@ from comken.exceptions.salesforce import (
     SalesforceReportTruncatedError,
     SalesforceRequestError,
 )
-from comken.exceptions.state import (
-    StateError,
-    StateFileCorruptedError,
-    StateLowerCaseNameError,
-    StateValueTypeError,
-)
+from comken.exceptions.state import StateError
 from comken.exceptions.table import (
     InvalidTableInputError,
     TableColumnNotFoundError,
@@ -182,10 +132,6 @@ __all__ = [
     "ComkenError",
     "SiteOwnerRequiredError",
     "AccessError",
-    "AccessBackupError",
-    "AccessLocalCopyError",
-    "AccessRoutineError",
-    "AccessSourceNotFoundError",
     "ExcelError",
     "ExcelApplicationNotAvailableError",
     "SheetNotFoundError",
@@ -195,25 +141,14 @@ __all__ = [
     "TransferSourceColumnNotFoundError",
     "InvalidColumnError",
     "ConfigError",
-    "ConfigCreatedFromExampleError",
-    "ConfigLowerCaseNameError",
-    "ConfigSectionNotFoundError",
     "ConfigKeyNotFoundError",
-    "ConfigMappingEmptyValueError",
-    "ConfigSubclassingNotSupportedError",
     "ComkenFileNotFoundError",
     "UnsupportedFileSuffixError",
     "FileDeletionError",
     "FileSuffixMissingError",
     "OutlookError",
-    "ClassicOutlookNotAvailableError",
-    "OutlookFolderNotFoundError",
     "CredentialError",
-    "InvalidCredentialNameError",
     "CredentialNotFoundError",
-    "CredentialDecryptionError",
-    "CredentialStoreCorruptedError",
-    "CredentialImportError",
     "PasswordRejectedError",
     "SalesforceError",
     "SalesforceAuthError",
@@ -227,12 +162,8 @@ __all__ = [
     "MasterRowValueError",
     "MasterDuplicateValueError",
     "StateError",
-    "StateFileCorruptedError",
-    "StateLowerCaseNameError",
-    "StateValueTypeError",
     "BusinessDayNotFoundError",
     "CalendarError",
-    "CalendarFormatError",
     "DownloaderError",
     "HistoryWriteError",
     "HistoryLockTimeoutError",

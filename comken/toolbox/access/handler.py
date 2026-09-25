@@ -20,13 +20,7 @@ from comken.core.files import DateNameBuilder
 from comken.core.files.base import FileBase
 from comken.core.table import Table
 from comken.core.timer import measure
-from comken.exceptions import (
-    AccessBackupError,
-    AccessLocalCopyError,
-    AccessRoutineError,
-    AccessSourceNotFoundError,
-    ComkenFileNotFoundError,
-)
+from comken.exceptions import AccessError, ComkenFileNotFoundError
 from comken.runtime import dry_run_log, is_dry_run
 
 logger = logging.getLogger(__name__)
@@ -116,7 +110,7 @@ class AccessDatabase(FileBase):
             except Exception as e:
                 self._temporary_directory.cleanup()
                 self._temporary_directory = None
-                raise AccessLocalCopyError(self._path, e) from e
+                raise _local_copy_error(self._path, e) from e
 
         # DispatchEx は利用者が手で開いている Access とは別のプロセスを起動する。
         try:
@@ -152,7 +146,7 @@ class AccessDatabase(FileBase):
         try:
             self._access.DoCmd.RunMacro(name)
         except Exception as e:
-            raise AccessRoutineError(name, "マクロ", e) from e
+            raise _routine_error(name, "マクロ", e) from e
 
     @measure
     def run_function(self, name: str, *args: object) -> object | None:
@@ -168,7 +162,7 @@ class AccessDatabase(FileBase):
         try:
             return self._access.Run(name, *args)
         except Exception as e:
-            raise AccessRoutineError(name, "VBA", e) from e
+            raise _routine_error(name, "VBA", e) from e
 
     @measure
     def run_query(self, name: str) -> None:
@@ -186,7 +180,7 @@ class AccessDatabase(FileBase):
             # DAO_FAIL_ON_ERROR により、一部の行だけ更新して処理を続ける事故を防ぐ。
             self._access.CurrentDb().QueryDefs(name).Execute(DAO_FAIL_ON_ERROR)
         except Exception as e:
-            raise AccessRoutineError(name, "クエリ", e) from e
+            raise _routine_error(name, "クエリ", e) from e
 
     @measure
     def export_csv(
@@ -302,7 +296,7 @@ class AccessDatabase(FileBase):
     def _ensure_source(self, source: str) -> None:
         names = self.table_names()
         if source not in names:
-            raise AccessSourceNotFoundError(source, names)
+            raise _source_not_found_error(source, names)
 
     def _ensure_query(self, name: str) -> None:
         query_names = [
@@ -310,7 +304,7 @@ class AccessDatabase(FileBase):
             for index in range(self._access.CurrentData.AllQueries.Count)
         ]
         if name not in query_names:
-            raise AccessSourceNotFoundError(name, query_names)
+            raise _source_not_found_error(name, query_names)
 
     def _backup(self, backup_days: int) -> None:
         backup_folder = self._backup_dir
@@ -331,7 +325,7 @@ class AccessDatabase(FileBase):
             _remove_expired_backups(backup_folder, self._path, backup_days)
             backup_path = _reserve_backup_path(backup_folder, self._path)
         except OSError as e:
-            raise AccessBackupError(self._path, backup_path, e) from e
+            raise _backup_error(self._path, backup_path, e) from e
         lock_path = self._path.with_suffix(".laccdb" if self._path.suffix == ".accdb" else ".ldb")
         if lock_path.exists():
             logger.warning(
@@ -350,7 +344,7 @@ class AccessDatabase(FileBase):
                     backup_path,
                     cleanup_error,
                 )
-            raise AccessBackupError(self._path, backup_path, e) from e
+            raise _backup_error(self._path, backup_path, e) from e
         logger.info("バックアップを作りました: %s", backup_path)
 
 
@@ -396,3 +390,44 @@ def _remove_expired_backups(folder: Path, source: Path, backup_days: int) -> Non
             backup_days,
             removed_count,
         )
+
+
+# ── AccessError の文言ヘルパー ───────────────────────────────────────────
+# 呼び出し側が型で分ける必要が無い Access 由来エラーは、すべて ``AccessError``
+# を直接送出して具体的な状況をメッセージで伝える。
+
+
+def _local_copy_error(path: Path | str, detail: Exception) -> AccessError:
+    """Access ファイルを一時フォルダへコピーできないときの ``AccessError``。"""
+    return AccessError(
+        f"Access ファイルをローカルにコピーできませんでした: {path}\n"
+        "ファイルがほかの処理で使用中でないか、読み取り権限があるか、"
+        f"一時フォルダに空き容量があるかを確認してください。（詳細: {detail}）"
+    )
+
+
+def _backup_error(path: Path | str, backup_path: Path | str, detail: Exception) -> AccessError:
+    """元 DB を開く前のバックアップに失敗したときの ``AccessError``。"""
+    return AccessError(
+        f"Access ファイルをバックアップできませんでした: {path}\n"
+        f"保存先: {backup_path}\n"
+        "更新を中止しました。読み取り権限・保存先の空き容量・書き込み権限を"
+        "確認してください。共有フォルダに書き込めない場合は、backup_dir で"
+        f"書き込み可能なローカルフォルダを指定してください。（詳細: {detail}）"
+    )
+
+
+def _routine_error(name: str, kind: str, detail: Exception) -> AccessError:
+    """Access マクロまたは VBA の実行に失敗したときの ``AccessError``。"""
+    return AccessError(
+        f"Access {kind}の実行に失敗しました: {name}\n"
+        f"名前と内容を確認してください。（詳細: {detail}）"
+    )
+
+
+def _source_not_found_error(name: str, sources: list[str]) -> AccessError:
+    """テーブルまたはクエリが見つからないときの ``AccessError``。"""
+    return AccessError(
+        f"Access のテーブルまたはクエリが見つかりません: {name}  "
+        f"存在するテーブル／クエリ: {sources}"
+    )

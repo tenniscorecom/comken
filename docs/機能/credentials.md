@@ -121,7 +121,7 @@ if isinstance(result, ChangePasswordPage):
 
 DPAPI は **Windows アカウント × PC** に紐付く。復号できない場合の挙動・
 最も多い事故（タスクスケジューラの実行ユーザーが登録時と違う）・壊れている
-場合との違いは `CredentialDecryptionError` / `CredentialStoreCorruptedError`
+場合との違いは `CredentialError`（復号失敗）と `CredentialError`（中身が壊れている）
 の docstring（[エラー対応ガイド](../ERRORS.md)）を参照。
 
 読んで足して書き戻す作りなので、**同時に2つのプロセスから書かない**こと

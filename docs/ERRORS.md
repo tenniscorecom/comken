@@ -53,20 +53,14 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
-| `AccessError` | Access に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
-| `AccessBackupError` | 元 DB を開く前のバックアップに失敗した | 保存先の空き容量・書き込み権限・元 DB の読み取り権限を確認する |
-| `AccessLocalCopyError` | Access ファイルを一時フォルダへコピーできない | 使用状況・読み取り権限・空き容量を確認する |
-| `AccessRoutineError` | Access マクロまたは VBA の実行に失敗した | 表示された名前と Access 側の内容を確認する |
-| `AccessSourceNotFoundError` | テーブルまたはクエリが見つからない | エラーに表示された存在する名前を確認する |
+| `AccessError` | Access に関するエラー。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `PermissionError` | ファイルが誰かに開かれている | 自分や他の人がそのファイルを開いていないか確認して閉じる |
 
 ## Outlook のエラー
 
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
-| `OutlookError` | Outlook 関連エラーの分類 | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
-| `ClassicOutlookNotAvailableError` | Classic Outlook を利用できない | Classic Outlook を使うか管理者に相談する |
-| `OutlookFolderNotFoundError` | 指定したフォルダがない | エラーに表示された存在するフォルダ名を確認する |
+| `OutlookError` | Outlook 関連エラーの分類。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 
 ## ファイル・設定などのエラー
 
@@ -78,23 +72,14 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `ExcelColumnNotFoundError` | Excel の列見出しが見つからない | Excel の1行目を確認する |
 | `TransferSourceColumnNotFoundError` | 列名転記で、lookup の転記元列が見つからない | 転記元データと config.ini のマッピング左側を確認する |
 | `InvalidColumnError` | 列の指定が正しくない（打ち間違いなど） | 列は番号（1, 2, …）か列記号（"A", "AA"）で指定する |
-| `ConfigError` | config.ini に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
-| `ConfigCreatedFromExampleError` | config.ini が無かったので example から作った | 作られた config.ini の値を書き換えて、もう一度実行する |
-| `ConfigLowerCaseNameError` | config.ini のセクション名・キー名に小文字がある | 表示された名前を大文字に書き換える（`[files]` → `[FILES]`） |
-| `ConfigSectionNotFoundError` | config.ini の必要な節がない | メッセージに表示された **「読んだファイル」のパス** が、編集しているconfig.ini と一致するかを確認する（2026-08-18 にプロジェクトの場所を基準にするように変えてから、起動方法によって別の config.ini を読むことがあるため）。パスが正しければ、表示されたセクション名をconfig.ini に追加する。**見た目では原因が分からない場合**（行頭に空白が混入していた等）はエディタで行頭空白・全角スペースを確認する |
+| `ConfigError` | config.ini に関するエラー。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `ConfigKeyNotFoundError` | config.ini のセクションに必要なキーがない | メッセージに表示された **「読んだファイル」のパス** が、編集しているconfig.ini と一致するかを確認する。パスが正しければ、表示されたキー名を該当セクションへ追加する。**セクション名は合っているがキー名を 1 文字タイポした** とき（FILES.OUTPUT_FOLER 等）は、「もしかして」に近いキー名が出るので、それを config.ini に書き直す |
-| `ConfigMappingEmptyValueError` | ``[*_MAPPING]`` セクションの値が空欄 | メッセージに表示された **「読んだファイル」のパス** が、編集しているconfig.ini と一致するかを確認する。パスが正しければ、表示されたキー名の両側に値を書いて config.ini を直す（``列名 = 値``）。``=`` を付け忘れて ``キー`` のように書いた行もここで検出する（``cfg.get()`` が ``None`` を返すので空欄と同じ扱い）。通常セクションの空欄（``READ_PASSWORD =`` のように「設定しない」を示す書き方）はエラーにしないので、``*_MAPPING`` 以外では無視してよい |
-| `ConfigSubclassingNotSupportedError` | ``Config`` を継承できない | ``from comken import config`` で ``config.SECTION.KEY`` を直接読む。サブクラスでメソッドを足しても ``Config.__new__`` がパス単位でキャッシュ済みの素の ``Config`` を返すため、 追加したメソッドは``AttributeError`` になる（キャッシュを ``cls`` 対応にする改修は行わない）。 |
 | `ComkenFileNotFoundError` | ファイルまたはフォルダが見つからない | エラーに表示されたパスと名前が正しいか、存在するかを確認する |
 | `UnsupportedFileSuffixError` | 対応外の拡張子が指定された | CSV / Excel の対応する拡張子のファイルを指定する |
 | `FileDeletionError` | ファイルを削除できなかった | 他のプロセスがファイルを掴んでいないか、読み取り専用になっていないかを確認してもう一度実行する。消せたファイルは消えているAttributes:remaining: 削除できなかったファイルのパス一覧。 |
 | `FileSuffixMissingError` | ファイル名に拡張子が無い | ファイル名に拡張子（例: ``.csv`` / ``.xlsx``）を含めて指定する。拡張子は名前の文字列にだけ書く。引数 ``ext`` / ``extension`` は廃止済みのため使えない。 |
-| `CredentialError` | 認証情報の保存・取得に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
-| `InvalidCredentialNameError` | 認証情報のキー名に使えない文字がある | 半角英数字とアンダースコアだけにする（漢字・スペース・記号は使えない） |
+| `CredentialError` | 認証情報の保存・取得に関するエラー。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `CredentialNotFoundError` | 認証情報（パスワード・client_secret など）が登録されていない | 表示された登録済みキー名と見比べる。無ければ `python -m comken cred import 認証情報.json` で取り込む |
-| `CredentialDecryptionError` | 認証情報を復号できない | 登録したときと**同じ Windows アカウント・同じ PC** で実行しているか確認する。タスクスケジューラの実行ユーザー違いが最も多い |
-| `CredentialStoreCorruptedError` | 認証情報の中身が壊れている | 実行アカウントの問題ではない。表示されたファイルを削除して、もう一度取り込み直す |
-| `CredentialImportError` | 取り込む JSON が壊れている・形式が違う | 表示された形式のとおりに書き直す。値は必ず `" "` で囲む |
 | `PasswordRejectedError` | サイト側が新しいパスワードを拒否した（記号が足りない・文字数が足りない等） | 表示されたエラー内容（サイト側の拒否理由）を確認し、要件を満たすパスワードを入力し直す |
 | `SalesforceError` | Salesforce に関するエラー。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `SalesforceAuthError` | Salesforce にログインできない | 表示された確認項目を上から順に見る。それでも直らなければ管理者へ連絡する |
@@ -104,13 +89,9 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `MasterTableError` | Excel の管理表に関するエラー。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `MasterRowValueError` | 管理表の値が正しくない | メッセージに出ている行と列を、管理表で確認して直す |
 | `MasterDuplicateValueError` | 一意であるべき列に、同じ値が2つ以上ある | 管理表を開いて、重複している値のどちらかを別の値に変える |
-| `StateError` | state.ini に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
-| `StateFileCorruptedError` | state.ini が壊れていて読み取れない | 内容を直す。直せない場合は別名に変更して、空の状態から再実行する |
-| `StateLowerCaseNameError` | state のキー名に小文字がある | 表示されたキー名を大文字に直す（`last_file` → `LAST_FILE`） |
-| `StateValueTypeError` | state に保存できない型の値が渡された | 真偽値・整数・小数・文字列・文字列のリストのいずれかに変更する |
+| `StateError` | state.ini に関するエラー。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `BusinessDayNotFoundError` | 営業日が見つからなかった | n をその月の営業日数以下に直す、対象月の祝日に過不足がないか確認する、社内休日（会社用カレンダーCSV）が広範囲に登録されていないか確認する |
-| `CalendarError` | 祝日カレンダーに関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
-| `CalendarFormatError` | 会社用カレンダーCSV 以外のファイルや壊れたファイルを読み込もうとした | ``python -m comken.core.calendar.build`` を実行して``comken/core/calendar/data/company_calendar.csv`` を再生成する。内閣府の ``syukujitsu.csv`` 形式変更が原因の場合は``comken.core.calendar.build`` 側の解析ロジックを直す |
+| `CalendarError` | 祝日カレンダーに関するエラー。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `DownloaderError` | Salesforce レポートの集約取得に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `HistoryWriteError` | 必須のダウンロード履歴を記録できなかった | 履歴CSVの保存先、共有サーバー接続、書込み権限を確認する |
 | `HistoryLockTimeoutError` | ダウンロード履歴の排他ロックを待っても取得できなかった | 同時実行中の処理が終わるのを待って再実行する。繰り返す場合は共有サーバーを確認する |

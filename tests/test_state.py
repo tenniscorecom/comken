@@ -4,11 +4,7 @@ import pytest
 
 from comken import dry_run
 from comken.core.state import State
-from comken.exceptions import (
-    StateFileCorruptedError,
-    StateLowerCaseNameError,
-    StateValueTypeError,
-)
+from comken.exceptions import StateError
 
 
 class TestState:
@@ -61,7 +57,7 @@ class TestState:
         state.set("VALUE", "before")
         before = path.read_bytes()
 
-        with pytest.raises(StateValueTypeError):
+        with pytest.raises(StateError):
             state.set("VALUE", value)  # type: ignore[arg-type]  # 実行時の型検証を確認する
 
         assert path.read_bytes() == before
@@ -70,14 +66,14 @@ class TestState:
     def test_rejects_unsupported_value_during_dry_run(self, tmp_path: Path) -> None:
         state = State(tmp_path / "state.ini")
 
-        with dry_run(), pytest.raises(StateValueTypeError):
+        with dry_run(), pytest.raises(StateError):
             state.set("VALUE", [1])  # type: ignore[list-item]  # 実行時の型検証を確認する
 
     def test_raises_dedicated_error_for_corrupted_file(self, tmp_path: Path) -> None:
         path = tmp_path / "state.ini"
         path.write_text("[STATE\nLAST_FILE = broken", encoding="utf-8")
 
-        with pytest.raises(StateFileCorruptedError):
+        with pytest.raises(StateError):
             State(path)
 
     def test_does_not_leave_temporary_file(self, tmp_path: Path) -> None:
@@ -88,5 +84,5 @@ class TestState:
         assert list(tmp_path.glob("state.ini.*.tmp")) == []
 
     def test_rejects_lower_case_key(self, tmp_path: Path) -> None:
-        with pytest.raises(StateLowerCaseNameError):
+        with pytest.raises(StateError):
             State(tmp_path / "state.ini").set("last_file", "data.csv")

@@ -6,33 +6,15 @@
 備えて明示的に例外を定義する。
 """
 
-from pathlib import Path
-
 from comken.exceptions.base import ComkenError
 
 
 class CalendarError(ComkenError):
-    """祝日カレンダーに関するエラー
+    """祝日カレンダーに関するエラー。具体的な状況はメッセージに出る
 
     対処:
         メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
     """
-
-
-class CalendarFormatError(CalendarError):
-    """会社用カレンダーCSV 以外のファイルや壊れたファイルを読み込もうとした
-
-    発生箇所: comken.core.calendar._calendar の _Calendar.load
-
-    対処:
-        ``python -m comken.core.calendar.build`` を実行して
-        ``comken/core/calendar/data/company_calendar.csv`` を再生成する。
-        内閣府の ``syukujitsu.csv`` 形式変更が原因の場合は
-        ``comken.core.calendar.build`` 側の解析ロジックを直す
-    """
-
-    def __init__(self, path: Path | str, detail: str) -> None:
-        super().__init__(f"会社用カレンダーCSV を読み取れませんでした: {path}\n{detail}")
 
 
 class BusinessDayNotFoundError(CalendarError):
