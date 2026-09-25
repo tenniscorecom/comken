@@ -12,11 +12,7 @@ from openpyxl.utils.cell import range_boundaries
 from openpyxl.worksheet.worksheet import Worksheet
 
 from comken.core.table.model import Table
-from comken.exceptions import (
-    ExcelError,
-    InvalidTableInputError,
-    InvalidTableOperationError,
-)
+from comken.exceptions import ExcelError, InvalidTableInputError, TableError
 
 if TYPE_CHECKING:
     from comken.toolbox.excel.workbook import Excel
@@ -24,6 +20,29 @@ if TYPE_CHECKING:
 type Value = str | int | float | bool | datetime
 
 logger = logging.getLogger(__name__)
+
+
+def _table_not_unique_error(operation: str) -> TableError:
+    """``TableError`` の「対象テーブルを一意に決められない」文言。
+
+    シートにテーブルが複数あるのに ``name`` 指定が無いとき、
+    書き込み対象テーブルを選ぶ手段が無いため止める。
+    """
+    del operation
+    return TableError(
+        "対象テーブルを一意に決められません。"
+        "\n対処: 対象が読み取り専用でないか、指定したテーブル名が正しいか確認してください。"
+        "テーブルを1つに絞るか、table(name=...) のように明示してください。"
+    )
+
+
+def _empty_columns_error() -> TableError:
+    """``TableError`` の「Table に列が無い」文言。"""
+    return TableError(
+        "列のないTableはExcelテーブルにできません。"
+        "\n対処: 対象が読み取り専用でないか、指定したテーブル名が正しいか確認してください。"
+        "Table.columns に1つ以上の列名を指定してください。"
+    )
 
 
 def _empty_excel_table_message(sheet_name: str, reason: str) -> str:
@@ -103,7 +122,7 @@ class ExcelTable:
         if self._name is None:
             table_names = list(self._worksheet.tables)
             if len(table_names) != 1:
-                raise InvalidTableOperationError("対象テーブルを一意に決められません。")
+                raise _table_not_unique_error("read")
             self._name = table_names[0]
         excel_table = self._worksheet.tables[self._name]
         min_col, min_row, max_col, max_row = _table_boundaries(excel_table.ref)
@@ -207,7 +226,7 @@ class ExcelTable:
         if self._name is None:
             names = list(self._worksheet.tables)
             if len(names) != 1:
-                raise InvalidTableOperationError("書き込み対象テーブルを一意に決められません。")
+                raise _table_not_unique_error("replace")
             self._name = names[0]
         excel_table = self._worksheet.tables[self._name]
         min_col, min_row, max_col, max_row = _table_boundaries(excel_table.ref)
@@ -307,7 +326,7 @@ class ExcelTable:
         if self._name is None:
             names = list(self._worksheet.tables)
             if len(names) != 1:
-                raise InvalidTableOperationError("対象テーブルを一意に決められません。")
+                raise _table_not_unique_error("append")
             self._name = names[0]
         excel_table = self._worksheet.tables[self._name]
         min_col, min_row, max_col, max_row = _table_boundaries(excel_table.ref)
@@ -431,7 +450,7 @@ class ExcelTable:
         混ぜないためで、判定内容はここに集約する。
 
         Raises:
-            InvalidTableOperationError: 列を1つも持たない ``Table`` を渡した場合。
+            TableError: 列を1つも持たない ``Table`` を渡した場合。
             ExcelError: 既存の見出しに無い列名が含まれる、または
                 数式列でない既存列が渡された ``Table`` から欠けている場合、
                 ``allow_formula_overwrite`` が偽のまま数式列を上書きしようとした場合。
@@ -440,7 +459,7 @@ class ExcelTable:
         # `if self._name is None` ブロックで必ず値を確定させてから呼ぶ。
         assert self._name is not None
         if not any(passed_columns):
-            raise InvalidTableOperationError("列のないTableはExcelテーブルにできません。")
+            raise _empty_columns_error()
 
         # 既存の見出しに無い列名はエラー（黙って無視しない）
         missing_in_existing = [c for c in passed_columns if c not in existing_headers]

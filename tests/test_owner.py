@@ -15,10 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from comken.exceptions import (
-    SiteAlreadyInLibraryError,
-    SiteOwnerRequiredError,
-)
+from comken.exceptions import BrowserError, SiteOwnerRequiredError
 from comken.toolbox.browser import Browsers, SiteBase
 from comken.toolbox.browser.management.sessions import BrowserSession
 from comken.toolbox.salesforce.client import SalesforceBase
@@ -207,7 +204,7 @@ class TestSiteBaseLibraryConflict:
     """ライブラリ公認サイトとの NAME 衝突検出のテスト。"""
 
     def test_project_site_with_library_name_raises(self, monkeypatch):
-        """SITES に登録済みの NAME をプロジェクト側で定義すると SiteAlreadyInLibraryError。"""
+        """SITES に登録済みの NAME をプロジェクト側で定義すると BrowserError。"""
 
         class LibrarySite(SiteBase):
             NAME = "library_shared_site"
@@ -224,7 +221,7 @@ class TestSiteBaseLibraryConflict:
             NAME = "library_shared_site"
             OWNER = "project / テスト"
 
-        with Browsers() as browsers, pytest.raises(SiteAlreadyInLibraryError):
+        with Browsers() as browsers, pytest.raises(BrowserError, match="ライブラリにすでに登録"):
             browsers.launch(ProjectSite)
 
     def test_project_site_with_different_name_passes(self, monkeypatch):

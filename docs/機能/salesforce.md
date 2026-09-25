@@ -260,7 +260,7 @@ with site() as sf:
 > OAuth初回認可を挟まないため、一時的に使いたいだけのときに手早い。
 >
 > ダウンロードに時間がかかる場合、ブラウザ自体はログイン後なにも操作しない
-> ため、途中でSalesforce側のセッションが切れて `SalesforceReportExportError`
+> ため、途中でSalesforce側のセッションが切れて `SalesforceError`
 > になることがある。その暫定対処として `keep_alive_report_id`（軽いレポートの
 > IDを一定間隔で開き直す。ドメインは今のセッションのものを使うのでIDだけ
 > 渡せばよい）を渡せる。
@@ -316,7 +316,7 @@ with site_class() as sf:
   comken はそちらを使っていない・使えない。検索するとこの製品が先に出てきて混乱する。
 
 `sf.report.run()` 系が 401 / 403 で失敗したときの意味（comken が間違ったエンドポイントを
-叩いたのではないこと）と管理者への確認事項は `SalesforceReportAccessDeniedError` にある。
+叩いたのではないこと）と管理者への確認事項は `SalesforceError` にある。
 
 ### 定義だけ取る（describe）
 
@@ -344,7 +344,7 @@ with Solution() as sf:
 404 等のときは例外にせず、全列を `(不明)` ＋理由の備考で返す（複合レポートタイプで
 主オブジェクト名が実在の sObject と一致しないケースを、道具として壊さず扱うため）。
 Object Describe の 401 / 403 は Analytics API とは別の権限系統なので、
-`SalesforceReportAccessDeniedError` には変換せず `SalesforceRequestError`
+`SalesforceError` には変換せず `SalesforceRequestError`
 のまま送出する。
 
 ---
@@ -381,8 +381,8 @@ delete）は次の「Bulk API 2.0 の Ingest ジョブ」節の `bulk_ingest` �
 
 ### エラー
 
-- `SalesforceBulkFailedError`: ジョブが `Failed` / `Aborted` で終わったとき
-- `SalesforceBulkTimeoutError`: `timeout_seconds` 以内にジョブが完了しなかったとき（既定600秒）
+- `SalesforceError`: ジョブが `Failed` / `Aborted` で終わったとき
+- `SalesforceError`: `timeout_seconds` 以内にジョブが完了しなかったとき（既定600秒）
 
 ### 未検証の前提
 
@@ -435,7 +435,7 @@ with Solution() as sf:
 ### 設計判断: 失敗行は例外にしない
 
 `BulkIngestResult.failed` が空でないときに例外は送出しない。これとは別に、
-`SalesforceBulkFailedError` は**ジョブ自体が `Failed` / `Aborted`
+`SalesforceError` は**ジョブ自体が `Failed` / `Aborted`
 で終わった場合**（CSV の形式不正・対象オブジェクトが存在しない等、
 個々の行ではなくジョブ全体を実行できなかった場合）に限って送出される。
 
@@ -446,8 +446,8 @@ HTTP 呼び出しが1回も発生せず、空の `BulkIngestResult` を返す。
 
 ### エラー
 
-- `SalesforceBulkFailedError`: ジョブが `Failed` / `Aborted` で終わったとき（メッセージに `errorMessage` の内容を含める）
-- `SalesforceBulkTimeoutError`: `timeout_seconds` 以内にジョブが完了しなかったとき（既定600秒）
+- `SalesforceError`: ジョブが `Failed` / `Aborted` で終わったとき（メッセージに `errorMessage` の内容を含める）
+- `SalesforceError`: `timeout_seconds` 以内にジョブが完了しなかったとき（既定600秒）
 
 ### 未検証の前提
 

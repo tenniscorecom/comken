@@ -19,8 +19,8 @@ import pytest
 from comken.core.table import Table
 from comken.exceptions import (
     CachedReportNotFoundError,
+    DownloaderError,
     GroupNotRegisteredError,
-    ReportDisabledError,
     ReportNotRegisteredError,
 )
 from comken.services.salesforce_downloader import (
@@ -396,7 +396,7 @@ class TestCachedReport:
     def test_disabled_report_raises(self, paths):
         """無効なレポートは「定期」指定でも例外（取る前段で止める）。"""
         _ = paths  # autouse fixture が `MASTER_PATH` を差し替えるのに使う
-        with pytest.raises(ReportDisabledError):
+        with pytest.raises(DownloaderError, match="無効"):
             cached_report("1003")
 
 

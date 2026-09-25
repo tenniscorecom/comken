@@ -7,7 +7,7 @@ import pytest
 from comken.core.table import Table
 from comken.exceptions import (
     ExcelError,
-    InvalidTableOperationError,
+    TableError,
 )
 from comken.toolbox.excel import Excel
 
@@ -95,7 +95,7 @@ def test_replace_with_empty_list_raises(tmp_path) -> None:
             "Users",
             Table(["id", "name"], [{"id": 1, "name": "A"}]),
         )
-        with pytest.raises(InvalidTableOperationError) as exc_info:
+        with pytest.raises(TableError) as exc_info:
             table.replace([])
         assert "列のないTable" in str(exc_info.value)
         # 既存ヘッダとデータはそのまま残っている

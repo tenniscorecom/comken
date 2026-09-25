@@ -38,12 +38,7 @@ import logging
 from types import TracebackType
 from typing import TYPE_CHECKING, ClassVar, Self, TypeVar
 
-from comken.exceptions import (
-    BrowserNotStartedError,
-    SiteAlreadyInLibraryError,
-    SiteConfigError,
-    SiteOwnerRequiredError,
-)
+from comken.exceptions import BrowserError, SiteOwnerRequiredError
 from comken.toolbox.browser.download import DownloadDir
 from comken.toolbox.browser.options import BrowserOptions
 
@@ -60,6 +55,54 @@ P = TypeVar("P", bound="Page")
 _COMKEN_MODULE_PREFIX = "comken."
 
 logger = logging.getLogger(__name__)
+
+
+def _site_config_error(site_cls: type, missing: str) -> BrowserError:
+    """``BrowserError`` の「SiteBase サブクラスの設定が不足している」文言。
+
+    発生箇所: Browsers.launch(SiteBase)
+    """
+    return BrowserError(
+        f"{site_cls.__name__} に {missing} が設定されていません。\n"
+        "SiteBase サブクラスでは、次のクラス定数を決めてください:\n"
+        f"  class {site_cls.__name__}(SiteBase):\n"
+        f"      {missing} = ...\n"
+        "  NAME      セッション名（ログ・ダウンロード先で使われる）\n"
+        "  BASE_URL  このサイトの入口 URL（SitePage から参照される）\n"
+        "  OPTIONS   起動オプション（BrowserOptions のサブクラス）"
+        "\n対処: サブクラスに NAME を定義してください"
+        "（BASE_URL / OPTIONS も同じ）。"
+    )
+
+
+def _site_not_started_error(instance: SiteBase) -> BrowserError:
+    """``BrowserError`` の「SiteBase を起動前に操作した」文言。"""
+    return BrowserError(
+        f"{instance.__class__.__name__} はまだ起動していません。"
+        f"`with {instance.__class__.__name__}() as site:` の中で使ってください。"
+        "\n対処: `with Browsers() as browsers:` または `with SiteBase() as site:` の中で"
+        "使ってください（ブラウザは起動していないので実害はない）。"
+    )
+
+
+def _site_already_in_library_error(site_cls: type, library_cls: type) -> BrowserError:
+    """``BrowserError`` の「ライブラリ公認のサイトと同じ NAME を再定義した」文言。
+
+    発生箇所: SiteBase.__enter__() / Browsers.launch(SiteBase)
+    """
+    return BrowserError(
+        f'{site_cls.__name__}（NAME="{site_cls.NAME}"）はライブラリにすでに登録されています: '
+        f"{library_cls.__module__}.{library_cls.__name__}\n"
+        "ライブラリ公認のクラスを取り出して使う形に書き換えてください:\n"
+        f"  from {library_cls.__module__} import {library_cls.__name__}\n"
+        "  with Browsers() as browsers:\n"
+        f"      site = browsers.launch({library_cls.__name__})\n"
+        "プロジェクト側に独自実装を残したい場合は、クラス名と NAME を別のものへ変えてください。"
+        "\n対処: ライブラリから `from comken.toolbox.browser.sites import <クラス名>` で"
+        "取り出して使ってください。プロジェクト側の定義は消してください。"
+        "ライブラリへ昇格する基準は `docs/CONVENTIONS.md` の"
+        "「サイト／組織クラスを昇格させる基準」を参照。"
+    )
 
 
 class SiteBase:
@@ -99,7 +142,7 @@ class SiteBase:
         from comken.toolbox.browser.management import Browsers
 
         if not self.NAME:
-            raise SiteConfigError(self.__class__, "NAME")
+            raise _site_config_error(self.__class__, "NAME")
         type(self)._check_start()
         self._browsers = Browsers()
         self._browsers.__enter__()
@@ -161,13 +204,10 @@ class SiteBase:
             files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
 
         Raises:
-            BrowserNotStartedError: まだ起動していない場合。
+            BrowserError: まだ起動していない場合。
         """
         if self.session is None:
-            raise BrowserNotStartedError(
-                f"{self.__class__.__name__} はまだ起動していません。"
-                f"`with {self.__class__.__name__}() as site:` の中で使ってください。"
-            )
+            raise _site_not_started_error(self)
         return self.session.download_dir
 
     def to(self, page_class: type[P]) -> P:
@@ -197,10 +237,7 @@ class SiteBase:
             そのサイトのブラウザに紐づいた画面クラスのインスタンス。
         """
         if self.session is None:
-            raise BrowserNotStartedError(
-                f"{self.__class__.__name__} はまだ起動していません。"
-                f"`with {self.__class__.__name__}() as site:` の中で使ってください。"
-            )
+            raise _site_not_started_error(self)
         return page_class(self.session)
 
     def close(self) -> None:
@@ -223,7 +260,7 @@ def _check_not_in_library(cls: type[SiteBase]) -> None:
     """起動しようとしているクラスと同じ NAME がライブラリ公認サイトにあれば止める。
 
     ライブラリに同じ NAME のクラスがあるなら、プロジェクト側で再定義するのではなく
-    ライブラリから import して使う形に直してほしい。`SiteAlreadyInLibraryError` で
+    ライブラリから import して使う形に直してほしい。`BrowserError` で
     「取り出して使う import パス」まで案内する。
     """
     # 循環 import 回避のため、ここで import する（`site.py` が `sites` を import する形になる）
@@ -231,4 +268,4 @@ def _check_not_in_library(cls: type[SiteBase]) -> None:
 
     for library_cls in SITES:
         if library_cls.NAME == cls.NAME:
-            raise SiteAlreadyInLibraryError(cls, library_cls)
+            raise _site_already_in_library_error(cls, library_cls)

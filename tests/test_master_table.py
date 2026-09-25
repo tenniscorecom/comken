@@ -16,10 +16,7 @@ from comken.core.table import Table
 from comken.exceptions import (
     ComkenFileNotFoundError,
     ExcelApplicationNotAvailableError,
-    MasterColumnNotFoundError,
-    MasterDuplicateValueError,
-    MasterRowValueError,
-    MasterSheetNotDefinedError,
+    MasterTableError,
 )
 from comken.services.salesforce_downloader.report_master import MasterRow, column
 from comken.toolbox.excel import Excel
@@ -70,19 +67,19 @@ class TestLoad:
     def test_blank_in_required_column_raises(self, tmp_path):
         """既定値の無い列が空欄なら止める（→ 理由は TestBlankPolicy）。"""
         row = ["1001", "受注一覧", r"\\server\a.csv", "毎日", None, ""]
-        with pytest.raises(MasterRowValueError):
+        with pytest.raises(MasterTableError):
             Item.load(make_sheet(tmp_path / "一覧.xlsx", [row]))
 
     def test_blank_without_default_raises(self, tmp_path):
         """既定値の無い列が空なら、その行と列を示して止める。"""
         row = ["1001", None, r"\\server\a.csv", "毎日", "○", ""]
-        with pytest.raises(MasterRowValueError) as e:
+        with pytest.raises(MasterTableError) as e:
             Item.load(make_sheet(tmp_path / "一覧.xlsx", [row]))
         assert "2 行目" in str(e.value)  # 見出しが1行目なので、最初のデータは2行目
         assert "名前" in str(e.value)
 
     def test_path_without_default_raises(self, tmp_path):
-        with pytest.raises(MasterSheetNotDefinedError):
+        with pytest.raises(MasterTableError):
             Item.load()  # PATH も引数も無い
 
     def test_missing_path_raises_with_path_in_message(self, tmp_path):
@@ -93,7 +90,7 @@ class TestLoad:
         管理表は共有サーバー (UNC) に置く運用で、現実の失敗は「サーバーが
         落ちた」「パスが変わった」「権限が無い」。 ``ComkenFileNotFoundError``
         がそのまま上がれば、画面にパスが出るため担当者が IT に連絡できる。
-        旧実装 (``Excel(source)`` 書き込みモード) では ``InvalidTableOperationError``
+        旧実装 (``Excel(source)`` 書き込みモード) では ``TableError``
         が送出されるため、このテストは旧実装では落ちる。
         """
         missing = tmp_path / "存在しない管理表.xlsx"
@@ -108,7 +105,7 @@ class TestValidation:
 
     def test_value_outside_choices_raises(self, tmp_path):
         row = ["1001", "受注一覧", r"\\server\a.csv", "毎週", "○", ""]
-        with pytest.raises(MasterRowValueError) as e:
+        with pytest.raises(MasterTableError) as e:
             Item.load(make_sheet(tmp_path / "一覧.xlsx", [row]))
         assert "「毎日」か「手動」" in str(e.value)  # 書ける値を示す
 
@@ -132,14 +129,14 @@ class TestValidation:
 
     def test_duplicate_unique_value_raises(self, tmp_path):
         rows = [ROW_A, ["1001", "別の名前", r"\\server\b.csv", "手動", "○", ""]]
-        with pytest.raises(MasterDuplicateValueError) as e:
+        with pytest.raises(MasterTableError) as e:
             Item.load(make_sheet(tmp_path / "一覧.xlsx", rows))
         assert "ID" in str(e.value)
 
     def test_missing_header_raises_with_existing_headers(self, tmp_path):
         """見出しを変えられたら、今ある見出しを示して止める。"""
         headers = ["ID", "名称", "コピー元", "方式", "有効", "備考"]  # 「名前」を「名称」に変えた
-        with pytest.raises(MasterColumnNotFoundError) as e:
+        with pytest.raises(MasterTableError) as e:
             Item.load(make_sheet(tmp_path / "一覧.xlsx", [ROW_A], headers))
         assert "名前" in str(e.value)
         assert "名称" in str(e.value)  # 今ある見出しも出す
@@ -147,7 +144,7 @@ class TestValidation:
     def test_value_outside_bool_choices_raises(self, tmp_path):
         """`enabled` を「○」「×」以外にするとエラー。表記が1つに絞られる。"""
         row = ["1001", "受注一覧", r"\\server\a.csv", "毎日", "有効", ""]
-        with pytest.raises(MasterRowValueError) as e:
+        with pytest.raises(MasterTableError) as e:
             Item.load(make_sheet(tmp_path / "一覧.xlsx", [row]))
         assert "「○」か「×」" in str(e.value)
 
@@ -191,7 +188,7 @@ class TestColumnAdded:
             enabled: bool = column("有効", choices=("○", "×"))
             owner: str = column("担当", help="この一覧の持ち主")  # 既定値なし
 
-        with pytest.raises(MasterColumnNotFoundError) as e:
+        with pytest.raises(MasterTableError) as e:
             WithRequiredColumn.load(make_sheet(tmp_path / "一覧.xlsx", [ROW_A]))
         assert "担当" in str(e.value)
 
@@ -278,7 +275,7 @@ class TestBlankPolicy:
             enabled: bool = column("有効", choices=("○", "×"))  # 既定値を持たせない
 
         path = make_sheet(tmp_path / "一覧.xlsx", [["1001", None]], ["ID", "有効"])
-        with pytest.raises(MasterRowValueError) as e:
+        with pytest.raises(MasterTableError) as e:
             Strict.load(path)
         assert "有効" in str(e.value)
 
@@ -454,7 +451,7 @@ class TestCandidateTypes:
 
 class TestConvertTimeValueError:
     """``_convert()`` は時刻変換の ``ValueError`` を行番号・列名付きの
-    ``MasterRowValueError`` に変換する。"""
+    ``MasterTableError`` に変換する。"""
 
     def test_invalid_time_value_raises_master_row_value_error(self, tmp_path):
         """``"25:00"`` のような範囲外は、業務担当者に届く形（行番号・列名）で上がる。"""
@@ -473,7 +470,7 @@ class TestConvertTimeValueError:
             at: dt.time = column("時刻", help="実行時刻")
 
         spec = ColumnSpec(header="時刻")
-        with pytest.raises(MasterRowValueError) as caught:
+        with pytest.raises(MasterTableError) as caught:
             _convert("25:00", dt.time, spec, 7, WithTime)
         # 行番号・列名・正しい書き方のヒントが業務担当者に届く
         assert "7 行目" in str(caught.value)
@@ -481,7 +478,7 @@ class TestConvertTimeValueError:
         assert "9:00" in str(caught.value)
 
     def test_invalid_time_in_union_returns_master_row_value_error(self, tmp_path):
-        """``dt.time | None`` 型ヒントでも、不正値は ``MasterRowValueError`` に変換される。"""
+        """``dt.time | None`` 型ヒントでも、不正値は ``MasterTableError`` に変換される。"""
         from comken.services.salesforce_downloader.report_master import (
             ColumnSpec,
             _convert,
@@ -497,7 +494,7 @@ class TestConvertTimeValueError:
             at: dt.time | None = column("時刻", default=None, help="空欄可")
 
         spec = ColumnSpec(header="時刻")
-        with pytest.raises(MasterRowValueError) as caught:
+        with pytest.raises(MasterTableError) as caught:
             _convert("abc", dt.time | None, spec, 3, WithOptionalTime)
         assert "3 行目" in str(caught.value)
         assert "時刻" in str(caught.value)

@@ -9,52 +9,11 @@ from comken.exceptions.base import ComkenError
 
 
 class MasterTableError(ComkenError):
-    """Excel の管理表に関するエラー
+    """Excel の管理表に関するエラー。具体的な状況はメッセージに出る
 
     対処:
         メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
     """
-
-
-class MasterSheetNotDefinedError(MasterTableError):
-    """管理表の場所が決まっていない
-
-    `load()` を引数なしで呼ぶには、クラス変数 `PATH` に既定の場所を書いておく必要がある。
-
-    発生箇所: comken.services.salesforce_downloader.report_master の load()
-
-    対処:
-        `load(パス)` のようにファイルを渡すか、クラスに PATH を書く（コードの直し方の話なので、
-        非エンジニアが見た場合は管理者へ連絡する）
-    """
-
-    def __init__(self, class_name: str) -> None:
-        super().__init__(
-            f"{class_name} に管理表の場所が指定されていません。\n"
-            "load(パス) でファイルを渡すか、クラス変数 PATH を書いてください。"
-        )
-
-
-class MasterColumnNotFoundError(MasterTableError):
-    """管理表に必要な列（見出し）が無い
-
-    見出しの行を書き換えた・列を消した・別のシートを見ている、のいずれか。
-    **プログラムは見出しの名前で列を探す**ので、見出しが変わると読めなくなる。
-
-    発生箇所: comken.services.salesforce_downloader.report_master の load()
-
-    対処:
-        管理表の1行目（見出し）を元に戻す。消してしまった場合は、
-        メッセージに出ている「今ある見出し」と見比べて足す
-    """
-
-    def __init__(self, header: str, existing: list[str], path: Path, sheet_name: str) -> None:
-        known = "、".join(str(name) for name in existing) or "（見出しなし）"
-        super().__init__(
-            f"管理表に「{header}」の列がありません: {path}（シート: {sheet_name}）\n"
-            f"今ある見出し: {known}\n"
-            "1行目の見出しは変えないでください。"
-        )
 
 
 class MasterRowValueError(MasterTableError):

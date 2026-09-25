@@ -6,7 +6,7 @@ tests/test_salesforce.py の TestSiteFor と対になるテストにしてある
 
 import pytest
 
-from comken.exceptions import SalesforceSiteNotFoundError
+from comken.exceptions import SalesforceError
 from comken.toolbox.browser.sites.salesforce import (
     SITES,
     SalesforceReportBrowser,
@@ -55,14 +55,14 @@ class TestSiteFor:
         assert site_for(url) is SolutionSandbox
 
     def test_unknown_domain_raises(self):
-        with pytest.raises(SalesforceSiteNotFoundError) as error:
+        with pytest.raises(SalesforceError) as error:
             site_for("https://other.my.salesforce.com/lightning/r/Report/00O/view")
         assert SolutionSandbox.BASE_URL in str(error.value)
 
     def test_report_id_alone_raises(self):
-        with pytest.raises(SalesforceSiteNotFoundError):
+        with pytest.raises(SalesforceError):
             site_for("00O5g00000ABCDE")
 
     def test_empty_raises(self):
-        with pytest.raises(SalesforceSiteNotFoundError):
+        with pytest.raises(SalesforceError):
             site_for("")

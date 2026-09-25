@@ -34,12 +34,23 @@ from typing import TYPE_CHECKING, Self
 import requests
 
 from comken.core.timer import measure
-from comken.exceptions import SalesforceAuthError, SalesforceConnectionError
+from comken.exceptions import SalesforceAuthError, SalesforceError
 
 if TYPE_CHECKING:
     from comken.toolbox.credentials import Credentials
 
 logger = logging.getLogger(__name__)
+
+
+def _connection_error(url: str, detail: Exception) -> SalesforceError:
+    """``SalesforceError`` の「Salesforce につながらない」文言。"""
+    return SalesforceError(
+        f"Salesforce に接続できませんでした: {url}\n"
+        f"（{detail}）\n"
+        "ネットワーク接続と URL を確認してください。"
+        "\n対処: ネットワークの状態を確認して、少し待ってから再実行してください。"
+    )
+
 
 AUTHORIZATION_PATH = "/services/oauth2/authorize"
 AUTHORIZATION_CODE_GRANT = "authorization_code"
@@ -284,7 +295,7 @@ def _post_token(
         response = requests.post(url, data=data, timeout=TIMEOUT_SECONDS)
     except requests.exceptions.RequestException as e:
         logger.debug("トークンエンドポイントへ接続できませんでした: url=%s", url)
-        raise SalesforceConnectionError(url, e) from e
+        raise _connection_error(url, e) from e
     logger.debug("トークンエンドポイントの応答: status=%d", response.status_code)
     if response.status_code >= 400:
         detail = response.text

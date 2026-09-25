@@ -21,10 +21,7 @@ from typing import TYPE_CHECKING
 
 from comken.core.table import Table
 from comken.core.timer import measure
-from comken.exceptions import (
-    SalesforceBulkFailedError,
-    SalesforceBulkTimeoutError,
-)
+from comken.exceptions import SalesforceError
 from comken.runtime import dry_run_log, is_dry_run
 from comken.toolbox.salesforce._bulk_paging import fetch_paged_csv_as_table
 
@@ -34,6 +31,26 @@ if TYPE_CHECKING:  # 実行時は import しない（client と相互参照に�
 logger = logging.getLogger(__name__)
 
 __all__ = ["BulkIngestAPI", "BulkIngestResult"]
+
+
+def _bulk_failed_error(message: str) -> SalesforceError:
+    """``SalesforceError`` の「Bulk API のジョブが失敗して終わった」文言。"""
+    return SalesforceError(
+        f"{message}\n"
+        "\n対処: 表示されたエラー内容を確認してください。クエリ経路は SOQL 構文・"
+        "参照項目・実行ユーザーの権限、Ingest 経路は CSV の列名・データ型・"
+        "実行ユーザーの権限を見直してください。"
+    )
+
+
+def _bulk_timeout_error(message: str) -> SalesforceError:
+    """``SalesforceError`` の「Bulk API のジョブが制限時間内に終わらなかった」文言。"""
+    return SalesforceError(
+        f"{message}\n"
+        "\n対処: timeout_seconds を長くするか、対象を絞って再実行してください。"
+        "Ingest 経路はデータを分割して再実行してもよいです。"
+    )
+
 
 COMPONENT = "bulk_ingest"
 JOBS_PATH = "/jobs/ingest"
@@ -120,9 +137,9 @@ class BulkIngestAPI:
             実行結果を表す ``BulkIngestResult``。
 
         Raises:
-            SalesforceBulkFailedError: ジョブが失敗して終わった場合
+            _bulk_failed_error: ジョブが失敗して終わった場合
                 （状態が ``Failed`` / ``Aborted``）。
-            SalesforceBulkTimeoutError: ``timeout_seconds`` 以内に
+            _bulk_timeout_error: ``timeout_seconds`` 以内に
                 ジョブが完了しなかった場合。
         """
         return self._run(object_name, "insert", rows, None, timeout_seconds)
@@ -150,8 +167,8 @@ class BulkIngestAPI:
             実行結果を表す ``BulkIngestResult``。
 
         Raises:
-            SalesforceBulkFailedError: ``insert()`` から伝播。
-            SalesforceBulkTimeoutError: ``insert()`` から伝播。
+            _bulk_failed_error: ``insert()`` から伝播。
+            _bulk_timeout_error: ``insert()`` から伝播。
         """
         return self._run(object_name, "update", rows, None, timeout_seconds)
 
@@ -179,8 +196,8 @@ class BulkIngestAPI:
             実行結果を表す ``BulkIngestResult``。
 
         Raises:
-            SalesforceBulkFailedError: ``insert()`` から伝播。
-            SalesforceBulkTimeoutError: ``insert()`` から伝播。
+            _bulk_failed_error: ``insert()`` から伝播。
+            _bulk_timeout_error: ``insert()`` から伝播。
         """
         return self._run(object_name, "upsert", rows, external_id_field, timeout_seconds)
 
@@ -207,8 +224,8 @@ class BulkIngestAPI:
             実行結果を表す ``BulkIngestResult``。
 
         Raises:
-            SalesforceBulkFailedError: ``insert()`` から伝播。
-            SalesforceBulkTimeoutError: ``insert()`` から伝播。
+            _bulk_failed_error: ``insert()`` から伝播。
+            _bulk_timeout_error: ``insert()`` から伝播。
         """
         return self._run(object_name, "delete", rows, None, timeout_seconds)
 
@@ -298,8 +315,8 @@ class BulkIngestAPI:
 
         ``state`` が ``JobComplete`` になるまで ``POLL_INTERVAL_SECONDS`` 秒
         間隔で ``GET /jobs/ingest/{jobId}`` を投げる。``Failed`` / ``Aborted``
-        になったら ``SalesforceBulkFailedError`` を、``timeout_seconds``
-        以内に ``JobComplete`` にならなければ ``SalesforceBulkTimeoutError``
+        になったら ``_bulk_failed_error`` を、``timeout_seconds``
+        以内に ``JobComplete`` にならなければ ``_bulk_timeout_error``
         を送出する。
 
         Returns:
@@ -318,14 +335,14 @@ class BulkIngestAPI:
                     if isinstance(data, dict)
                     else "詳細情報なし"
                 )
-                raise SalesforceBulkFailedError(
+                raise _bulk_failed_error(
                     f"Salesforce の Bulk API Ingest ジョブが失敗しました"
                     f"（状態: {state}）: {job_id}\n"
                     f"{error_message}\n"
                     "CSV の列名・データ型・実行ユーザーの権限を確認してください。"
                 )
             time.sleep(POLL_INTERVAL_SECONDS)
-        raise SalesforceBulkTimeoutError(
+        raise _bulk_timeout_error(
             f"Salesforce の Bulk API Ingest ジョブが {timeout_seconds} 秒以内に"
             f"終わりませんでした: {job_id}\n"
             "timeout_seconds を長くするか、データを分割して再実行してください。"

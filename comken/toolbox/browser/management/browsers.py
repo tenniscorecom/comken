@@ -55,13 +55,7 @@ from types import TracebackType
 from typing import Self, TypeVar
 
 from comken.core.timer import measure
-from comken.exceptions import (
-    BrowserClosedError,
-    BrowserNotStartedError,
-    SessionNameConflictError,
-    SessionNotFoundError,
-    SiteConfigError,
-)
+from comken.exceptions import BrowserError
 from comken.toolbox.browser.download import DownloadDir
 from comken.toolbox.browser.management.sessions import BrowserSession
 from comken.toolbox.browser.management.tasks import BackgroundTask
@@ -69,6 +63,80 @@ from comken.toolbox.browser.options import BrowserOptions
 from comken.toolbox.browser.sitebase import SiteBase
 
 logger = logging.getLogger(__name__)
+
+
+def _session_name_conflict_error(name: str) -> BrowserError:
+    """``BrowserError`` の「同じ名前で2回 launch した」文言。
+
+    発生箇所: Browsers.launch() / Browsers.launch_session()
+    """
+    return BrowserError(
+        f"セッション名が重複しています: {name}\n"
+        "1つの Browsers の中で同じ名前は使えません。\n"
+        "同じサイトに2つのアカウントでログインする場合は、"
+        "「kintai_a」「kintai_b」のように名前を分けてください。"
+        "\n対処: 名前を変えてください（同一サイトの別アカウントなら "
+        "kintai_a / kintai_b など）。"
+    )
+
+
+def _session_not_found_error(name: str, launched: list[str]) -> BrowserError:
+    """``BrowserError`` の「launch していない名前を取り出した」文言。
+
+    発生箇所: Browsers.__getitem__()
+    """
+    launched_text = "、".join(launched) if launched else "（まだ1つも起動していません）"
+    return BrowserError(
+        f"起動していないセッションです: {name}\n"
+        f"起動済み: {launched_text}\n"
+        "Browsers.launch(name) で起動してから使ってください。"
+        "\n対処: 先に launch してください。エラーに起動済みの一覧が出ます。"
+    )
+
+
+def _browser_not_started_error(operation: str) -> BrowserError:
+    """``BrowserError`` の「`with` を使わずにブラウザを操作した」文言。"""
+    return BrowserError(
+        f"with に入れずに Browsers を使いました: {operation}\n"
+        "Browsers は with 文の中でだけ使えます。\n"
+        "  with Browsers() as browsers:\n"
+        "      kintai = browsers.launch(Kintai)\n"
+        "      ...\n"
+        "こうしておくと、途中でエラーが出てもブラウザは必ず閉じられます。"
+        "\n対処: `with Browsers() as browsers:` の中で使ってください"
+        "（ブラウザは起動していないので実害はない）。"
+    )
+
+
+def _browser_closed_error(operation: str) -> BrowserError:
+    """``BrowserError`` の「`with` を抜けた後のブラウザを操作した」文言。"""
+    return BrowserError(
+        f"with を抜けた後の Browsers を使いました: {operation}\n"
+        "ブラウザはすでに全部閉じています。\n"
+        "続けて操作したい処理は with の中に入れてください。\n"
+        "with の外へ持ち出すのはブラウザではなく、取り出した値にします。"
+        "\n対処: 続けたい処理を `with` の中に入れてください。"
+        "外へ持ち出すのは取り出した値だけにしてください。"
+    )
+
+
+def _site_config_error(site_cls: type, missing: str) -> BrowserError:
+    """``BrowserError`` の「SiteBase サブクラスの設定が不足している」文言。
+
+    発生箇所: Browsers.launch(SiteBase)
+    """
+    return BrowserError(
+        f"{site_cls.__name__} に {missing} が設定されていません。\n"
+        "SiteBase サブクラスでは、次のクラス定数を決めてください:\n"
+        f"  class {site_cls.__name__}(SiteBase):\n"
+        f"      {missing} = ...\n"
+        "  NAME      セッション名（ログ・ダウンロード先で使われる）\n"
+        "  BASE_URL  このサイトの入口 URL（SitePage から参照される）\n"
+        "  OPTIONS   起動オプション（BrowserOptions のサブクラス）"
+        "\n対処: サブクラスに NAME を定義してください"
+        "（BASE_URL / OPTIONS も同じ）。"
+    )
+
 
 T = TypeVar("T")
 # launch() の戻り値を渡したサブクラスの型に合わせるための束縛 TypeVar。
@@ -88,7 +156,7 @@ class Browsers:
     どこで例外が出ても、起動済みのブラウザはすべて閉じる。
     1つのブラウザの終了に失敗しても、残りの終了は続行される。
 
-    with を使わずに launch すると BrowserNotStartedError になる（ブラウザは起動しない）。
+    with を使わずに launch すると BrowserError になる（ブラウザは起動しない）。
     with を必須にしているのは、途中で例外が出たときにブラウザのプロセスが残り、
     次の実行でドライバーの更新まで邪魔するのを防ぐため。
 
@@ -152,7 +220,7 @@ class Browsers:
         取り違えが起きにくく、固有の値が1か所に集まる。
 
         Args:
-            site: 起動する SiteBase サブクラス。`NAME` が必須（空だと SiteConfigError）。
+            site: 起動する SiteBase サブクラス。`NAME` が必須（空だと BrowserError）。
             download_dir: ダウンロード先。省略時は OPTIONS.DOWNLOAD_DIR/<NAME>、
                           それも未設定なら一時フォルダを作り、終了時に削除する。
 
@@ -160,12 +228,12 @@ class Browsers:
             起動済みの SiteBase インスタンス。`.session` で BrowserSession に繋がる。
 
         Raises:
-            SiteConfigError: サブクラスに NAME が設定されていない場合。
-            SessionNameConflictError: 同じ NAME ですでに起動している場合。
-            DriverStartError: ブラウザを起動できなかった場合。
+            BrowserError: サブクラスに NAME が設定されていない場合、
+                同じ NAME ですでに起動している場合、ブラウザを起動できなかった場合
+                （具体的な理由はメッセージに出る）。
         """
         if not site.NAME:
-            raise SiteConfigError(site, "NAME")
+            raise _site_config_error(site, "NAME")
         operation = f"launch({site.__name__})"
         self._require_in_with(operation)
         # OWNER 検査と SITES 衝突検査は SiteBase._check_start() に集約。
@@ -211,12 +279,12 @@ class Browsers:
             起動済みの BrowserSession。この with を抜けるまで使える。
 
         Raises:
-            SessionNameConflictError: 同じ名前ですでに起動している場合。
-            DriverStartError: ブラウザを起動できなかった場合。
+            BrowserError: 同じ名前ですでに起動している場合、
+                ブラウザを起動できなかった場合（具体的な理由はメッセージに出る）。
         """
         self._require_in_with(f"launch_session({name!r})")
         if name in self._sessions:
-            raise SessionNameConflictError(name)
+            raise _session_name_conflict_error(name)
 
         logger.debug("ブラウザセッション起動開始: %s", name)
         resolved_options = _resolve_options(options)
@@ -244,7 +312,7 @@ class Browsers:
             days = kintai.wait()                        # 戻って結果を受け取る
 
         **裏で動かす処理と、その後に自分で書く処理で、同じセッションを触らないこと。**
-        同じセッションを同時に触ると ConcurrentSessionUseError で止まる
+        同じセッションを同時に触ると BrowserError で止まる
         （黙って別の画面を操作するより、早く気づけるほうが安全なため）。
 
         Args:
@@ -292,7 +360,7 @@ class Browsers:
         受け取るタイミングを自分で決めたい場合は run_task() を使う。
 
         1つの処理では1つのセッションだけを触ること。同じセッションを2つの処理から
-        触ると ConcurrentSessionUseError で止まる。
+        触ると BrowserError で止まる。
 
         Args:
             *tasks: 引数を取らない呼び出し可能オブジェクト。
@@ -349,7 +417,7 @@ class Browsers:
         """
         self._require_in_with(f"browsers[{name!r}]")
         if name not in self._sessions:
-            raise SessionNotFoundError(name, self.names)
+            raise _session_not_found_error(name, self.names)
         return self._sessions[name]
 
     def _require_in_with(self, operation: str) -> None:
@@ -359,25 +427,13 @@ class Browsers:
         起動してしまう前にここで止めるので、弾かれた時点では何も起きていない。
 
         Raises:
-            BrowserNotStartedError: with に入れずに使った場合。
-            BrowserClosedError: with を抜けた後に使った場合。
+            BrowserError: with に入れずに使った場合、または with を抜けた後に使った場合
+                （具体的な理由はメッセージに出る）。
         """
         if self._is_closed:
-            raise BrowserClosedError(
-                f"with を抜けた後の Browsers を使いました: {operation}\n"
-                "ブラウザはすでに全部閉じています。\n"
-                "続けて操作したい処理は with の中に入れてください。\n"
-                "with の外へ持ち出すのはブラウザではなく、取り出した値にします。"
-            )
+            raise _browser_closed_error(operation)
         if not self._is_started:
-            raise BrowserNotStartedError(
-                f"with に入れずに Browsers を使いました: {operation}\n"
-                "Browsers は with 文の中でだけ使えます。\n"
-                "  with Browsers() as browsers:\n"
-                "      kintai = browsers.launch(Kintai)\n"
-                "      ...\n"
-                "こうしておくと、途中でエラーが出てもブラウザは必ず閉じられます。"
-            )
+            raise _browser_not_started_error(operation)
 
     def _finish_background_tasks(self) -> None:
         """裏で動いている処理の終了を待ってから、実行の仕組みを片付ける。
@@ -459,7 +515,7 @@ def _resolve_profile_dir(name: str, options: BrowserOptions) -> Path | None:
     msedge.exe 側の作業ディレクトリが Python の実行時カレントディレクトリと
     一致しない場合にプロファイルの初期化に失敗し、Selenium 側には
     「Edge のバージョンが合わない」という紛らわしいメッセージで
-    DriverStartError になる（実際はバージョンではなくパスの問題）。
+    BrowserError になる（実際はバージョンではなくパスの問題）。
     """
     if not options.PROFILE_ROOT:
         return None

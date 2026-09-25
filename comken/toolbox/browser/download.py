@@ -17,9 +17,27 @@ from types import TracebackType
 from typing import Self
 
 from comken.core.timer import measure
-from comken.exceptions import DownloadTimeoutError
+from comken.exceptions import BrowserError
 
 logger = logging.getLogger(__name__)
+
+
+def _download_timeout_error(directory: object, seconds: int) -> BrowserError:
+    """``BrowserError`` の「ダウンロードが終わらない」文言。
+
+    発生箇所: DownloadDir.wait()
+    """
+    return BrowserError(
+        f"ダウンロードが {seconds} 秒以内に完了しませんでした: {directory}\n"
+        "次を確認してください:\n"
+        "  1. ダウンロード操作が実際に始まっているか（画面にエラーが出ていないか）\n"
+        "  2. ファイルが大きく時間がかかるだけではないか（wait(timeout=...) を長くする）\n"
+        "  3. ブラウザの保存先がこのフォルダになっているか"
+        "（セッションごとに download_dir を分けている場合は取り違えに注意）"
+        "\n対処: ネットワークの状態を確認して再実行してください。"
+        "大きいファイルなら時間がかかっているだけのこともあります。"
+    )
+
 
 # ダウンロード完了を確認する間隔（秒）
 _POLL_INTERVAL_SECONDS = 0.5
@@ -106,7 +124,7 @@ class DownloadDir:
             新しくダウンロードされたファイルのパスリスト（更新日時順）。
 
         Raises:
-            DownloadTimeoutError: timeout 秒以内にダウンロードが完了しなかった場合。
+            BrowserError: timeout 秒以内にダウンロードが完了しなかった場合。
         """
         logger.debug("ダウンロード完了待ちを開始します: path=%s timeout=%d秒", self.path, timeout)
         deadline = time.monotonic() + timeout
@@ -130,7 +148,7 @@ class DownloadDir:
         logger.warning(
             "ダウンロード完了を確認できませんでした: path=%s timeout=%d秒", self.path, timeout
         )
-        raise DownloadTimeoutError(self.path, timeout)
+        raise _download_timeout_error(self.path, timeout)
 
     def remove(self, force: bool = False) -> None:
         """フォルダごと削除する。ファイルを残したい場合は呼ばなくてよい。

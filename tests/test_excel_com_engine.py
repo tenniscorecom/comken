@@ -21,7 +21,7 @@ win32com = pytest.importorskip("win32com")
 
 from comken.exceptions import (  # noqa: E402
     ComkenFileNotFoundError,
-    InvalidTableOperationError,
+    TableError,
 )
 from comken.toolbox.excel import Excel  # noqa: E402
 
@@ -195,14 +195,14 @@ def test_com_engine_local_copy_true_passes_negative_threshold(tmp_path) -> None:
 def test_openpyxl_engine_com_handler_raises(tmp_path) -> None:
     """``engine='openpyxl'`` の ``Excel`` で ``com_handler`` を触ると例外。"""
     path = tmp_path / "book.xlsx"
-    with Excel(path) as excel, pytest.raises(InvalidTableOperationError, match="com_handler"):
+    with Excel(path) as excel, pytest.raises(TableError, match="com_handler"):
         _ = excel.com_handler
 
 
 def test_com_engine_sheet_method_raises(tmp_path) -> None:
-    """``engine='com'`` で ``sheet()`` を呼ぶと ``InvalidTableOperationError``。"""
+    """``engine='com'`` で ``sheet()`` を呼ぶと ``TableError``。"""
     excel, _ = _build_com_excel(tmp_path, names=["Sheet1"])
-    with pytest.raises(InvalidTableOperationError, match="engine='com'"):
+    with pytest.raises(TableError, match="engine='com'"):
         excel.sheet("Sheet1")
 
 

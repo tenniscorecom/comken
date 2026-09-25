@@ -2,7 +2,7 @@
 
 CSV は `CSV` クラスで開き、Excelと同じ `Table` を読み書きします。既定ではすべて文字列として読み、必要な列だけ `types` で変換します。
 
-**読み取り専用でも `with` 必須**。`with` を外れたインスタンスを触ると `TableNotOpenError` で停止する。
+**読み取り専用でも `with` 必須**。`with` を外れたインスタンスを触ると `TableError` で停止する。
 
 ```python
 from comken.toolbox.csv import CSV

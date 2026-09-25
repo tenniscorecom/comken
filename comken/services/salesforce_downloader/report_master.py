@@ -75,14 +75,43 @@ from comken.core.table.model import Table as CoreTable
 from comken.core.timer import measure
 from comken.exceptions import (
     ExcelApplicationNotAvailableError,
-    MasterColumnNotFoundError,
     MasterDuplicateValueError,
     MasterRowValueError,
-    MasterSheetNotDefinedError,
+    MasterTableError,
 )
 from comken.toolbox.excel import Excel
 
 logger = logging.getLogger(__name__)
+
+
+def _sheet_not_defined_error(class_name: str) -> MasterTableError:
+    """``MasterTableError`` の「管理表の場所が決まっていない」文言。
+
+    `load()` を引数なしで呼ぶには、クラス変数 `PATH` に既定の場所を書いておく必要がある。
+    """
+    return MasterTableError(
+        f"{class_name} に管理表の場所が指定されていません。\n"
+        "対処: load(パス) でファイルを渡すか、クラス変数 PATH を書いてください。"
+        "（コードの直し方の話なので、非エンジニアが見た場合は管理者へ連絡してください）"
+    )
+
+
+def _column_not_found_error(
+    header: str, existing: list[str], path: Path, sheet_name: str
+) -> MasterTableError:
+    """``MasterTableError`` の「管理表に必要な列が無い」文言。
+
+    見出しの行を書き換えた・列を消した・別のシートを見ている、のいずれか。
+    プログラムは見出しの名前で列を探すので、見出しが変わると読めなくなる。
+    """
+    known = "、".join(str(name) for name in existing) or "（見出しなし）"
+    return MasterTableError(
+        f"管理表に「{header}」の列がありません: {path}（シート: {sheet_name}）\n"
+        f"今ある見出し: {known}\n"
+        "対処: 管理表の1行目（見出し）を元に戻してください。"
+        "消してしまった場合は、メッセージに出ている「今ある見出し」と見比べて足してください。"
+    )
+
 
 # フィールドの metadata に入れるときのキー
 _SPEC_KEY = "comken_master_column"
@@ -167,14 +196,13 @@ class MasterRow:
             宣言した順のまま、1行ずつのインスタンス。
 
         Raises:
-            MasterSheetNotDefinedError: path も PATH も無い場合。
-            MasterColumnNotFoundError: 宣言した見出しが表に無い場合。
+            MasterTableError: path も PATH も無い場合、宣言した見出しが表に無い場合。
             MasterRowValueError: 値が型・選択肢に合わない場合。
             MasterDuplicateValueError: unique の列に同じ値がある場合。
         """
         source = Path(path) if path is not None else cls.PATH
         if source is None:
-            raise MasterSheetNotDefinedError(cls.__name__)
+            raise _sheet_not_defined_error(cls.__name__)
 
         logger.debug(
             "管理表読込開始: class=%s, path=%s, sheet=%s", cls.__name__, source, cls.SHEET_NAME
@@ -382,7 +410,7 @@ def _require_headers(cls: type[MasterRow], raw: dict, source: Path) -> None:
             continue
         if _default_of(cls, name) is not dataclasses.MISSING:
             continue  # 既定値があるので、列が無くても埋められる
-        raise MasterColumnNotFoundError(spec.header, sorted(raw), source, cls.SHEET_NAME)
+        raise _column_not_found_error(spec.header, sorted(raw), source, cls.SHEET_NAME)
 
 
 def _default_of(cls: type[MasterRow], name: str) -> Any:

@@ -635,7 +635,7 @@ PEP 8 は CapWords の中で略語を使う場合、**略語の文字をすべ�
 | 種別 | 例 | 備考 |
 |---|---|---|
 | 一般的な略語（クラス名） | `CSVError`, `APIMetrics`, `ExcelCOMHandler`, `SalesforceReportIDNotFoundError`, `CalendarError` | すべて大文字 |
-| 複合語の略語（例外名） | `SalesforceExternalIDMissingError`, `SalesforceReportIDNotFoundError` | `ID` も2文字だが大文字 |
+| 複合語の略語（例外名） | `SalesforceReportIDNotFoundError`, `SalesforceReportTruncatedError` | `ID` も2文字だが大文字 |
 | 固有名詞・ブランド名 | `OAuth`, `DPAPI`, `HTTP` | 固有名詞としての表記をそのまま使う（例: `RefreshTokenOAuth`） |
 
 snake_case の世界（関数名・変数名・モジュール名・パッケージ名・config キー）は PEP 8
@@ -890,7 +890,7 @@ logger.debug("詳細: %s", expensive_repr(value))
 ### 衝突防止
 
 ライブラリへ昇格したあと、プロジェクト側で同じ `NAME` のクラスを定義すると、
-**起動時に `SiteAlreadyInLibraryError`** で止まる。「すでにライブラリにあるものを
+**起動時に `BrowserError`** で止まる。「すでにライブラリにあるものを
 自作している」状態を自動で捕まえるのが目的。
 
 ### 管理者が扱うのは、連絡が来たものだけ

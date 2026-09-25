@@ -33,7 +33,7 @@ from urllib.parse import urlsplit
 
 import requests
 
-from comken.exceptions import BrowserNotStartedError, SalesforceReportExportError
+from comken.exceptions import BrowserError, SalesforceError
 from comken.toolbox.browser import SiteBase
 from comken.toolbox.browser.sites.salesforce.pages.login_page import LoginPage
 from comken.toolbox.salesforce.report import report_id_from_url
@@ -42,6 +42,27 @@ if TYPE_CHECKING:
     from comken.toolbox.browser.management import BrowserSession
 
 logger = logging.getLogger(__name__)
+
+
+def _report_export_error(report_id: str, status_code: int, content_type: str) -> SalesforceError:
+    """``SalesforceError`` の「画面のエクスポート機能でレポートを取得できなかった」文言。
+
+    HTTPステータス自体は200で返るが、本文がCSV/XLSではなくHTMLのログイン画面や
+    エラーページになっている場合に出る。
+    """
+    return SalesforceError(
+        f"レポートのエクスポートに失敗しました: {report_id}"
+        f"（HTTP {status_code}、Content-Type={content_type!r}）\n"
+        "CSV/XLSではなくHTML（ログイン画面やエラーページ）が返っています。\n"
+        "go_login() + wait_for_manual_login() でログインを済ませているか、"
+        "セッションが切れていないかを確認してください。"
+        "\n対処: 1. go_login() + wait_for_manual_login() でログインを済ませてから"
+        "export_reports() を呼んでいるか確認してください。"
+        "2. 時間が経ってセッションが切れていないか（長時間のバッチの後半で"
+        "発生する場合はこれが疑わしい）。"
+        "3. レポートそのものへのアクセス権・組織の Edition を確認してください。"
+    )
+
 
 # export_reports() で同時に投げるHTTPリクエストの既定数
 _DEFAULT_MAX_WORKERS = 10
@@ -184,7 +205,7 @@ class SalesforceReportBrowser(SiteBase):
                 ものをそのまま使うため、URLではなくIDだけ渡せばよい。省略時は
                 何もしない。件数が多くダウンロードに時間がかかる場合、ブラウザ
                 自体はログイン後なにも操作していないため、途中でSalesforce側の
-                セッションが切れて ``SalesforceReportExportError`` になることが
+                セッションが切れて ``SalesforceError`` になることが
                 ある。その暫定対処として指定する（恒久対処ではない。根本的には
                 Salesforce管理者にセッションタイムアウトの設定を確認してもらうのが筋）。
             keep_alive_interval: ``keep_alive_report_id`` を開く間隔（秒）。既定300秒（5分）。
@@ -194,10 +215,9 @@ class SalesforceReportBrowser(SiteBase):
             **完了した順**に返るため、``reports`` の順序とは限らない。
 
         Raises:
-            BrowserNotStartedError: 未起動の場合。
-            SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
-            SalesforceReportExportError: いずれかのレポートでエクスポートが失敗した場合
-                （ログイン未実行・セッション切れ等）。
+            BrowserError: 未起動の場合。
+            SalesforceError: URLからレポートIDを取り出せない場合、または
+                いずれかのレポートでエクスポートが失敗した場合（ログイン未実行・セッション切れ等）。
         """
         session = self._require_session()
         domain = _domain_of(session.current_url)
@@ -250,9 +270,11 @@ class SalesforceReportBrowser(SiteBase):
     def _require_session(self) -> BrowserSession:
         """起動済みの BrowserSession を返す。未起動なら理由を示して落とす。"""
         if self.session is None:
-            raise BrowserNotStartedError(
+            raise BrowserError(
                 f"{self.__class__.__name__} はまだ起動していません。"
                 f"`with {self.__class__.__name__}() as site:` の中で使ってください。"
+                "\n対処: `with Browsers() as browsers:` または `with SiteBase() as site:` の中で"
+                "使ってください（ブラウザは起動していないので実害はない）。"
             )
         return self.session
 
@@ -333,7 +355,7 @@ def _export_via_http(
             response.status_code,
             content_type,
         )
-        raise SalesforceReportExportError(report_id, response.status_code, content_type)
+        raise _report_export_error(report_id, response.status_code, content_type)
     logger.debug(
         "レポートのエクスポートに成功しました: report_id=%s bytes=%d",
         report_id,

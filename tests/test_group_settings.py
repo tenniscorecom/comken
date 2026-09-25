@@ -12,7 +12,7 @@ import pytest
 from comken.core.table import Table
 from comken.exceptions import (
     ComkenFileNotFoundError,
-    MasterDuplicateValueError,
+    MasterTableError,
 )
 from comken.services.salesforce_downloader import provider as provider_module
 from comken.services.salesforce_downloader.sheets.group_settings import (
@@ -73,7 +73,7 @@ class TestUniqueGroup:
                 ["営業本部", str(tmp_path / "B")],  # 同じグループ名が2行
             ],
         )
-        with pytest.raises(MasterDuplicateValueError) as caught:
+        with pytest.raises(MasterTableError) as caught:
             load_group_settings(tmp_path / "設定.xlsx")
         assert "グループ" in str(caught.value)
 

@@ -1,234 +1,22 @@
 """comken/exceptions/browser.py — ブラウザ操作に関する例外。
 
-BrowserError
-├── 起動・終了に関するもの
-│   ├── DriverStartError                ドライバーの起動に失敗した
-│   ├── BrowserNotStartedError           with に入らずにブラウザを操作した
-│   └── BrowserClosedError               with を抜けた後にブラウザを操作した
-├── 並列実行に関するもの
-│   └── ConcurrentSessionUseError        1つのセッションを複数スレッドから同時に操作した
-├── 複数サイト管理に関するもの
-│   ├── SessionNameConflictError         同じ名前で2回起動した
-│   ├── SessionNotFoundError             起動していない名前を取り出そうとした
-│   ├── SiteConfigError                  サブクラスの NAME が空
-│   └── SiteAlreadyInLibraryError        ライブラリにあるサイトをプロジェクト側で再定義した
-└── 画面操作に関するもの
-    ├── ElementNotFoundError             要素が時間内に見つからなかった
-    ├── PopupTabNotOpenedError           新しいタブが時間内に開かなかった
-    └── DownloadTimeoutError             ダウンロードが時間内に完了しなかった
-
-例外メッセージには「何が起きたか」だけでなく「次に何を確認すればよいか」まで書く。
-ブラウザ操作の失敗は画面側の変更が原因であることが多く、
-ログだけを見る人が原因にたどり着けるようにするため。
+BrowserError は、画面側でしか起きない失敗をまとめて分類するための
+カテゴリ基底。直接送出しない。
 """
 
 from comken.exceptions.base import ComkenError
 
 
 class BrowserError(ComkenError):
-    """ブラウザ操作に関するエラー
+    """ブラウザ操作に関するエラー。具体的な状況はメッセージに出る
 
     対処:
         メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
     """
 
 
-# ------------------------------------------------------------ 起動・終了
-
-
-class DriverStartError(BrowserError):
-    """ブラウザを起動できない
-
-    発生箇所: Browsers.launch()
-
-    対処:
-        エラーの本文にある確認事項をそのまま試す。
-        Windows Update で Edge が更新された直後に起きやすい。
-
-        メッセージが「バージョンが合わない」でも、``PROFILE_ROOT`` に
-        **相対パス**を設定している場合は疑わしい。``--user-data-dir`` に
-        相対パスが渡ると、msedge.exe 側の作業ディレクトリ次第でプロファイル
-        初期化に失敗し、実際の原因と無関係に同じメッセージで落ちることがある
-        （``Browsers._resolve_profile_dir()`` は絶対パスへ解決して渡すが、
-        念のため確認する）
-    """
-
-    def __init__(self, driver_path: str, detail: Exception) -> None:
-        super().__init__(
-            f"Edge WebDriver を起動できませんでした: {driver_path}\n"
-            f"（{detail}）\n"
-            "次を確認してください:\n"
-            "  1. そのパスに msedgedriver.exe があるか\n"
-            "  2. msedgedriver.exe のバージョンが、今インストールされている Edge と一致しているか\n"
-            "     （Edge のバージョンは edge://version で確認できます）\n"
-            "  3. PROFILE_ROOT に相対パスを設定していないか\n"
-            "     （メッセージがバージョン不一致でも、実際はこちらが原因のことがある）"
-        )
-
-
-class BrowserNotStartedError(BrowserError):
-    """`with` を使わずにブラウザを操作した
-
-    ``Browsers`` 本体の ``launch`` / ``launch_session`` / ``run_task`` / ``__getitem__`` 、
-    ``BrowserSession`` の ``open`` / ``driver`` など、 ``Browsers / BrowserSession`` を
-    ``with`` に入れずに呼ぶとここで止める。with を使わないと、処理の途中で例外が
-    出たときにブラウザのプロセスが残り続けるため。
-
-    ``SiteBase.to()`` / ``SiteBase.downloads`` のように、サイト単位で ``with`` に入る
-    経路も同じく ``with`` の外で使うとここで止まる。
-
-        # 誤り
-        browsers = Browsers()
-        browsers.launch(Kintai)     # ← ここで送出される（ブラウザは起動しない）
-
-        # 正しい
-        with Browsers() as browsers:
-            kintai = browsers.launch(Kintai)
-
-    対処:
-        `with Browsers() as browsers:` の中で使う（ブラウザは起動していないので実害はない）
-    """
-
-    def __init__(self, message: str) -> None:
-        super().__init__(message)
-
-
-class BrowserClosedError(BrowserError):
-    """`with` を抜けた後のブラウザを操作した
-
-    with の外へブラウザを持ち出すと起きる。with を抜けた時点で
-    ブラウザはすべて閉じているため、そこから起動や操作はできない。
-    取得したデータを with の外で使いたい場合は、セッションではなく
-    取り出した値（文字列やファイルパス）を返すようにする。
-
-    対処:
-        続けたい処理を `with` の中に入れる。外へ持ち出すのは取り出した値だけにする
-    """
-
-    def __init__(self, message: str) -> None:
-        super().__init__(message)
-
-
-# ------------------------------------------------------------ 並列実行
-
-
-class ConcurrentSessionUseError(BrowserError):
-    """1つのブラウザを複数の処理から同時に操作した
-
-    WebDriver は1つの接続でコマンドを順番に処理するため、
-    同じセッションを2スレッドから同時に操作すると応答が入れ替わり、
-    「別の画面を操作していた」という追跡困難な不具合になる。
-    サイトごとにセッションを分けること（Browsers.launch で1サイト1セッション）。
-
-    対処:
-        サイトごとに `launch` でブラウザを分ける
-    """
-
-    def __init__(self, name: str, operation: str, holder_thread: str) -> None:
-        super().__init__(
-            f"セッション「{name}」を複数スレッドから同時に操作しました: {operation}\n"
-            f"（先に操作中のスレッド: {holder_thread}）\n"
-            "1つのセッションを同時に操作できるのは1スレッドだけです。\n"
-            "並列にしたい場合は Browsers.launch でサイトごとにセッションを分け、\n"
-            "Browsers.parallel で実行してください。"
-        )
-
-
-# ------------------------------------------------------------ 複数サイト管理
-
-
-class SessionNameConflictError(BrowserError):
-    """同じ名前で2回 `launch` した
-
-    発生箇所: Browsers.launch() / Browsers.launch_session()
-
-    対処:
-        名前を変える（同一サイトの別アカウントなら `kintai_a` / `kintai_b` など）
-    """
-
-    def __init__(self, name: str) -> None:
-        super().__init__(
-            f"セッション名が重複しています: {name}\n"
-            "1つの Browsers の中で同じ名前は使えません。\n"
-            "同じサイトに2つのアカウントでログインする場合は、"
-            "「kintai_a」「kintai_b」のように名前を分けてください。"
-        )
-
-
-class SiteConfigError(BrowserError):
-    """`SiteBase` サブクラスの設定が不足している
-
-    ブラウザを起動する前に、必要なクラス定数が設定されていないとここで止まる。
-    起動してから「どのサイトか分からない」では遅いので、設定不足は呼び出し時点で
-    確実に発見する。
-
-    発生箇所: Browsers.launch(SiteBase)
-
-    対処:
-        サブクラスに NAME を定義する（BASE_URL / OPTIONS も同じ）
-    """
-
-    def __init__(self, site_cls: type, missing: str) -> None:
-        super().__init__(
-            f"{site_cls.__name__} に {missing} が設定されていません。\n"
-            "SiteBase サブクラスでは、次のクラス定数を決めてください:\n"
-            f"  class {site_cls.__name__}(SiteBase):\n"
-            f"      {missing} = ...\n"
-            "  NAME      セッション名（ログ・ダウンロード先で使われる）\n"
-            "  BASE_URL  このサイトの入口 URL（SitePage から参照される）\n"
-            "  OPTIONS   起動オプション（BrowserOptions のサブクラス）"
-        )
-
-
-class SessionNotFoundError(BrowserError):
-    """`launch` していない名前を取り出した
-
-    発生箇所: Browsers.__getitem__()
-
-    対処:
-        先に `launch` する。エラーに起動済みの一覧が出ます
-    """
-
-    def __init__(self, name: str, launched: list[str]) -> None:
-        launched_text = "、".join(launched) if launched else "（まだ1つも起動していません）"
-        super().__init__(
-            f"起動していないセッションです: {name}\n"
-            f"起動済み: {launched_text}\n"
-            "Browsers.launch(name) で起動してから使ってください。"
-        )
-
-
-class SiteAlreadyInLibraryError(BrowserError):
-    """ライブラリ公認のサイトと同じ NAME のサイトをプロジェクト側で定義した
-
-    ライブラリ（`comken.toolbox.browser.sites`）に同じ NAME のクラスが
-    登録されているものを、プロジェクト側で再定義するとここで止まる。
-    「すでにライブラリにあるものを自作している」状態を自動で捕まえるのが目的。
-    どちらもプロジェクト側に置くと、片方を直してもう片方が追従できない事故になる。
-
-    発生箇所: SiteBase.__enter__() / Browsers.launch(SiteBase)
-
-    対処:
-        ライブラリから `from comken.toolbox.browser.sites import <クラス名>` で取り出して使う。
-        プロジェクト側の定義は消す。ライブラリへ昇格する基準は
-        `docs/CONVENTIONS.md` の「サイト／組織クラスを昇格させる基準」を参照。
-    """
-
-    def __init__(self, site_cls: type, library_cls: type) -> None:
-        super().__init__(
-            f'{site_cls.__name__}（NAME="{site_cls.NAME}"）はライブラリにすでに登録されています: '
-            f"{library_cls.__module__}.{library_cls.__name__}\n"
-            "ライブラリ公認のクラスを取り出して使う形に書き換えてください:\n"
-            f"  from {library_cls.__module__} import {library_cls.__name__}\n"
-            "  with Browsers() as browsers:\n"
-            f"      site = browsers.launch({library_cls.__name__})\n"
-            "プロジェクト側に独自実装を残したい場合は、クラス名と NAME を別のものへ変えてください。"
-        )
-
-
-# ------------------------------------------------------------ 画面操作
-
-
+# 利用者プロジェクトのサイト・ページが送出する前提のエラー。
+# 呼び出し側が型で分岐するので、カテゴリにはまとめない
 class ElementNotFoundError(BrowserError):
     """画面の部品が時間内に見つからない
 
@@ -247,26 +35,6 @@ class ElementNotFoundError(BrowserError):
             "  2. 前の画面から遷移しきる前に操作していないか\n"
             "  3. iframe の中の要素ではないか（その場合は frame() で切り替えが必要）\n"
             "待つだけで解決する場合は wait_seconds を長くしてください。"
-        )
-
-
-class PopupTabNotOpenedError(BrowserError):
-    """別タブが開かない
-
-    発生箇所: BrowserSession.popup_tab()
-
-    対処:
-        もう一度実行する。続く場合は、その画面の「別ウィンドウで開く」ボタンが変わった可能性があるので管理者へ
-    """
-
-    def __init__(self, seconds: int) -> None:
-        super().__init__(
-            f"新しいタブが {seconds} 秒以内に開きませんでした。\n"
-            "次を確認してください:\n"
-            "  1. popup_tab() に入る前に、タブを開く操作（リンクのクリック等）を済ませているか\n"
-            "  2. ポップアップがブラウザにブロックされていないか"
-            "（BrowserOptions.DISABLE_POPUP_BLOCKING を True にする）\n"
-            "  3. 実際は同じタブで開いていないか（その場合 popup_tab は不要）"
         )
 
 
@@ -289,23 +57,3 @@ class LoginFailedError(BrowserError):
 
     def __init__(self, reason: str) -> None:
         super().__init__(f"ログインに失敗しました: {reason}")
-
-
-class DownloadTimeoutError(BrowserError):
-    """ダウンロードが終わらない
-
-    発生箇所: DownloadDir.wait()
-
-    対処:
-        ネットワークの状態を確認して再実行する。大きいファイルなら時間がかかっているだけのこともある
-    """
-
-    def __init__(self, directory: object, seconds: int) -> None:
-        super().__init__(
-            f"ダウンロードが {seconds} 秒以内に完了しませんでした: {directory}\n"
-            "次を確認してください:\n"
-            "  1. ダウンロード操作が実際に始まっているか（画面にエラーが出ていないか）\n"
-            "  2. ファイルが大きく時間がかかるだけではないか（wait(timeout=...) を長くする）\n"
-            "  3. ブラウザの保存先がこのフォルダになっているか"
-            "（セッションごとに download_dir を分けている場合は取り違えに注意）"
-        )

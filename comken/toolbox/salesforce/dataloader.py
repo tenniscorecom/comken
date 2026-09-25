@@ -8,16 +8,52 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from comken.core.table import Table
-from comken.exceptions import (
-    ComkenFileNotFoundError,
-    DataLoaderExecutionError,
-    DataLoaderTimeoutError,
-)
+from comken.exceptions import ComkenFileNotFoundError, DataLoaderError
 from comken.toolbox.csv import CSV
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT_SECONDS = 3600
+
+
+def _timeout_error(launcher_path: Path | str, timeout_seconds: float) -> DataLoaderError:
+    """``DataLoaderError`` の「タイムアウト」文言。
+
+    ``timeout_seconds`` を超えてもプロセスが生きている場合に出す。大量データを
+    処理する場合は既定値（3600秒 = 1時間）でも足りないことがある。
+    """
+    return DataLoaderError(
+        f"Data Loader の実行が {timeout_seconds:.1f} 秒以内に終わりませんでした: "
+        f"{launcher_path}\n"
+        "対処: 処理対象の件数を減らすか、timeout_seconds を長くしてください。"
+        "プロセスがハングしている場合はタスクマネージャーから Data Loader の"
+        "プロセスを終了させてください。"
+    )
+
+
+def _execution_error(
+    launcher_path: Path | str,
+    returncode: int,
+    stdout: str,
+    stderr: str,
+) -> DataLoaderError:
+    """``DataLoaderError`` の「0以外の終了コード」文言。
+
+    Data Loader プロセス自体が起動・実行に失敗した場合に出る。
+    1件1件のレコードの成否とは別（個別レコードの失敗は ``DataLoaderResult.errors``
+    で確認する。プロセス自体は正常終了しつつ一部レコードだけ失敗するのは
+    普通に起きることなので、ここでは例外にしない）。
+    """
+    return DataLoaderError(
+        f"Data Loader が 0 以外の終了コードで終了しました: {launcher_path}\n"
+        f"returncode: {returncode}\n"
+        f"--- stdout ---\n{stdout}\n"
+        f"--- stderr ---\n{stderr}\n"
+        "対処: 表示された標準出力・標準エラー出力を確認してください。"
+        "config.properties・process-conf.xml の設定を見直してください。"
+        "よくある原因はログイン情報の誤り、SOQL のフィールド名不一致、"
+        "書き出し先パスへの権限不足です。"
+    )
 
 
 @dataclass(frozen=True)
@@ -139,9 +175,9 @@ class DataLoaderCLI:
 
         Raises:
             ComkenFileNotFoundError: ``launcher_path`` が存在しない。
-            DataLoaderTimeoutError: ``timeout_seconds`` 内にプロセスが終わらなかった。
-            DataLoaderExecutionError: Data Loader が 0 以外の終了コードで終了した
-                （stdout / stderr がメッセージに含まれる）。
+            DataLoaderError: ``timeout_seconds`` 内にプロセスが終わらなかった、
+                または Data Loader が 0 以外の終了コードで終了した
+                （メッセージに stdout / stderr を含む）。
             ComkenFileNotFoundError: 正常終了したのに ``success_csv`` または
                 ``error_csv`` に指定したパスにファイルが無い。
         """
@@ -184,7 +220,7 @@ class DataLoaderCLI:
                 self._launcher_path,
                 self._timeout_seconds,
             )
-            raise DataLoaderTimeoutError(self._launcher_path, self._timeout_seconds) from e
+            raise _timeout_error(self._launcher_path, self._timeout_seconds) from e
 
         stdout = completed.stdout or ""
         stderr = completed.stderr or ""
@@ -195,9 +231,7 @@ class DataLoaderCLI:
             stderr,
         )
         if completed.returncode != 0:
-            raise DataLoaderExecutionError(
-                self._launcher_path, completed.returncode, stdout, stderr
-            )
+            raise _execution_error(self._launcher_path, completed.returncode, stdout, stderr)
 
         success_table = self._read_result_csv(success_csv)
         error_table = self._read_result_csv(error_csv)

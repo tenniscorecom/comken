@@ -13,8 +13,8 @@ import pytest
 
 from comken.core.table import Table
 from comken.exceptions import (
-    SalesforceSiteNotFoundError,
-    SoqlDownloadFailedError,
+    DownloaderError,
+    SalesforceError,
     SoqlReportNotRegisteredError,
 )
 from comken.services.salesforce_downloader.soql_reports import _registry, soql_report_for
@@ -161,7 +161,7 @@ class TestDownloadSoqlReports:
         def query_side_effect(soql: str) -> Table:
             # ``9003`` だけ例外を投げる（SOQL 文字列で識別）。
             if "FROM Bogus" in soql:
-                raise SalesforceSiteNotFoundError(URL, [URL])
+                raise SalesforceError(f"この URL の組織が登録されていません: {URL}")
             table = Table(["Id", "Name"], ROWS)
             return table
 
@@ -171,30 +171,30 @@ class TestDownloadSoqlReports:
         client.__enter__.return_value.query.side_effect = query_side_effect
         site = MagicMock(return_value=client)
         with (
-            pytest.raises(SoqlDownloadFailedError) as caught,
+            pytest.raises(DownloaderError) as caught,
             patch.object(runner_module, "site_for", return_value=site),
         ):
             download_soql_reports([_DummyReport, _FailingReport])
         # 失敗したのは ``_FailingReport``（KEY="9003"）だけ
-        assert caught.value.failed_keys == ["9003"]
-        assert isinstance(caught.value.__cause__, SalesforceSiteNotFoundError)
+        assert "9003" in str(caught.value)
+        assert isinstance(caught.value.__cause__, SalesforceError)
 
     def test_raises_soql_download_failed_when_all_fail(self, folder):
-        """全件失敗のときも ``SoqlDownloadFailedError`` が送出される。"""
+        """全件失敗のときも ``DownloaderError`` が送出される。"""
         _DummyReport.FOLDER = str(folder)
 
         def query_side_effect(_soql: str) -> Table:
-            raise SalesforceSiteNotFoundError(URL, [URL])
+            raise SalesforceError(f"この URL の組織が登録されていません: {URL}")
 
         client = MagicMock()
         client.__enter__.return_value.query.side_effect = query_side_effect
         site = MagicMock(return_value=client)
         with (
-            pytest.raises(SoqlDownloadFailedError) as caught,
+            pytest.raises(DownloaderError) as caught,
             patch.object(runner_module, "site_for", return_value=site),
         ):
             download_soql_reports([_DummyReport])
-        assert caught.value.failed_keys == ["9001"]
+        assert "9001" in str(caught.value)
 
     def test_propagates_unexpected_exception(self, folder):
         """想定外の例外（``TypeError`` 等）はそのまま伝播する。"""
@@ -217,14 +217,14 @@ class TestSaveSemantics:
     """``_save()`` の ``ALLOW_EMPTY`` 制御とフォルダ存在チェック。"""
 
     def test_empty_rows_with_allow_empty_false_raises(self, folder):
-        """0 行・``ALLOW_EMPTY=False`` は ``SoqlDownloadFailedError`` に変換される。"""
+        """0 行・``ALLOW_EMPTY=False`` は ``DownloaderError`` に変換される。"""
         _EmptyReport.FOLDER = str(folder)
         with (
             patch.object(runner_module, "site_for", return_value=fake_empty_salesforce()),
-            pytest.raises(SoqlDownloadFailedError) as caught,
+            pytest.raises(DownloaderError) as caught,
         ):
             download_soql_reports([_EmptyReport])
-        assert caught.value.failed_keys == ["9004"]
+        assert "9004" in str(caught.value)
 
     def test_empty_rows_with_allow_empty_true_saves_empty_csv(self, folder):
         """0 行・``ALLOW_EMPTY=True`` は空 CSV を保存する（失敗扱いしない）。"""
@@ -241,15 +241,15 @@ class TestSaveSemantics:
         assert table.columns == ["Id", "Name"]
 
     def test_missing_folder_raises(self, tmp_path):
-        """保存先フォルダが無ければ ``SoqlDownloadFailedError`` に変換される。"""
+        """保存先フォルダが無ければ ``DownloaderError`` に変換される。"""
         missing = tmp_path / "存在しないフォルダ"
         _DummyReport.FOLDER = str(missing)
         with (
-            pytest.raises(SoqlDownloadFailedError) as caught,
+            pytest.raises(DownloaderError) as caught,
             patch.object(runner_module, "site_for", return_value=fake_salesforce()),
         ):
             download_soql_reports([_DummyReport])
-        assert caught.value.failed_keys == ["9001"]
+        assert "9001" in str(caught.value)
 
 
 class TestReservePath:
@@ -271,9 +271,7 @@ class TestReservePath:
         assert saved[0].is_file()
 
     def test_limit_exceeded_raises(self, folder, monkeypatch):
-        """連番の上限に達したら ``ReportReservePathLimitError`` を内側で出し、
-        ``download_soql_reports()`` が ``SoqlDownloadFailedError`` に変換する。
-        """
+        """連番の上限に達したら ``DownloaderError`` に変換する。"""
         monkeypatch.setattr(runner_module, "RESERVE_PATH_LIMIT", 5)
         _DummyReport.FOLDER = str(folder)
         base_name = f"{_DummyReport.KEY}_売上明細（テスト用）_limit.csv"
@@ -285,11 +283,11 @@ class TestReservePath:
             )
             candidate.write_text("埋まり", encoding="utf-8")
         with (
-            pytest.raises(SoqlDownloadFailedError) as caught,
+            pytest.raises(DownloaderError) as caught,
             patch.object(runner_module, "site_for", return_value=fake_salesforce()),
         ):
             download_soql_reports([_DummyReport])
-        assert caught.value.failed_keys == ["9001"]
+        assert "9001" in str(caught.value)
 
 
 class TestSoqlReportsRegistry:

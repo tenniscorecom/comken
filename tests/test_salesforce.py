@@ -12,18 +12,10 @@ from comken.exceptions import (
     ComkenError,
     CredentialNotFoundError,
     InvalidCredentialNameError,
-    SalesforceBulkFailedError,
-    SalesforceBulkTimeoutError,
     SalesforceError,
-    SalesforceExternalIDMissingError,
-    SalesforceReportAccessDeniedError,
-    SalesforceReportExecutionError,
-    SalesforceReportFormatError,
     SalesforceReportIDNotFoundError,
     SalesforceReportTruncatedError,
     SalesforceRequestError,
-    SalesforceSiteNotFoundError,
-    SalesforceSiteSelectionError,
 )
 from comken.toolbox.credentials import save_credentials, store
 from comken.toolbox.csv import CSV
@@ -372,7 +364,7 @@ class TestSalesforceCrud:
         """外部 ID 不在は KeyError ではなく利用者向けの個別例外にする。"""
         with (
             _salesforce([]) as (client, session, _),
-            pytest.raises(SalesforceExternalIDMissingError, match="ExternalId__c"),
+            pytest.raises(SalesforceError, match="ExternalId__c"),
         ):
             client.upsert("Account", "ExternalId__c", {"Name": "取引先"})
         session.request.assert_not_called()
@@ -481,7 +473,7 @@ class TestReportApi:
         body = _report_body([], report_format="SUMMARY")
         with (
             _salesforce([_response(json_body=body)]) as (client, _, _),
-            pytest.raises(SalesforceReportFormatError, match=r"(?s)SUMMARY.*明細"),
+            pytest.raises(SalesforceError, match=r"(?s)SUMMARY.*明細"),
         ):
             client.report.get("00O000000000001")
 
@@ -509,7 +501,7 @@ class TestReportApi:
         failed = _response(json_body={"status": "Error", "message": "権限がありません"})
         with (
             _salesforce([started, failed]) as (client, _, _),
-            pytest.raises(SalesforceReportExecutionError, match="権限がありません"),
+            pytest.raises(SalesforceError, match="権限がありません"),
         ):
             client.report.run_async("00O000000000001")
 
@@ -734,7 +726,7 @@ class TestDescribeFields:
 
     def test_object_describe_401_keeps_salesforce_request_error(self):
         """Object Describe が 401 を返しても Analytics API とは別の権限系統なので、
-        ``SalesforceReportAccessDeniedError`` に変換せず ``SalesforceRequestError``
+        ``SalesforceError`` に変換せず ``SalesforceRequestError``
         のまま送出される。
         """
         describe_body = _describe_fields_body()
@@ -784,7 +776,7 @@ class TestDescribeFields:
 
 class TestReportAccessDenied:
     """Reports API が 401 / 403 を返したときに限り、``SalesforceRequestError`` ではなく
-    ``SalesforceReportAccessDeniedError`` に変換されることを検証する。
+    ``SalesforceError`` に変換されることを検証する。
 
     文字列一致ではなく HTTP ステータスコードだけで判定する設計なので、
     500 / 400 など他のステータスは **変換されず** 元のまま送出される
@@ -805,9 +797,7 @@ class TestReportAccessDenied:
                 _,
                 _,
             ),
-            pytest.raises(
-                SalesforceReportAccessDeniedError, match=r"(?s)HTTP 403.*00O000000000001"
-            ),
+            pytest.raises(SalesforceError, match=r"(?s)HTTP 403.*00O000000000001"),
         ):
             client.report.get(self.REPORT_ID)
 
@@ -822,9 +812,7 @@ class TestReportAccessDenied:
         unauthorized_after_reauth = _response(401, text="INVALID_SESSION_ID")
         with (
             _salesforce([unauthorized, unauthorized_after_reauth]) as (client, _, _),
-            pytest.raises(
-                SalesforceReportAccessDeniedError, match=r"(?s)HTTP 401.*00O000000000001"
-            ),
+            pytest.raises(SalesforceError, match=r"(?s)HTTP 401.*00O000000000001"),
         ):
             client.report.get(self.REPORT_ID)
 
@@ -852,7 +840,7 @@ class TestReportAccessDenied:
             client.report.get(self.REPORT_ID)
 
     def test_describe_converts_403_to_access_denied_error(self):
-        """describe() も 403 で ``SalesforceReportAccessDeniedError`` に変換する。
+        """describe() も 403 で ``SalesforceError`` に変換する。
 
         ``describe()`` は今までは一律 ``SalesforceRequestError`` を流していたので、
         レポート API 全体に対する権限エラーが分かりにくかった。401 / 403 は
@@ -864,14 +852,12 @@ class TestReportAccessDenied:
                 _,
                 _,
             ),
-            pytest.raises(
-                SalesforceReportAccessDeniedError, match=r"(?s)HTTP 403.*00O000000000001"
-            ),
+            pytest.raises(SalesforceError, match=r"(?s)HTTP 403.*00O000000000001"),
         ):
             client.report.describe(self.REPORT_ID)
 
     def test_run_async_post_converts_403_to_access_denied_error(self):
-        """run_async() の POST（実行開始）でも 403 は ``SalesforceReportAccessDeniedError``
+        """run_async() の POST（実行開始）でも 403 は ``SalesforceError``
         に変換される。インスタンスを開始する前の失敗なので、ポーリングには進まない。
         """
         with (
@@ -880,9 +866,7 @@ class TestReportAccessDenied:
                 _,
                 _,
             ),
-            pytest.raises(
-                SalesforceReportAccessDeniedError, match=r"(?s)HTTP 403.*00O000000000001"
-            ),
+            pytest.raises(SalesforceError, match=r"(?s)HTTP 403.*00O000000000001"),
         ):
             client.report.run_async(self.REPORT_ID)
 
@@ -930,17 +914,17 @@ class TestSiteFor:
 
     def test_unknown_domain_raises(self):
         """未登録のドメインでは、黙って別組織へつながず止まる。"""
-        with pytest.raises(SalesforceSiteNotFoundError) as error:
+        with pytest.raises(SalesforceError) as error:
             site_for("https://other.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE/view")
         assert SolutionSandbox.DOMAIN_URL in str(error.value)  # 登録済みの組織を案内する
 
     def test_report_id_alone_raises(self):
         """ID だけでは、どの組織のレポートか決められない。"""
-        with pytest.raises(SalesforceSiteNotFoundError):
+        with pytest.raises(SalesforceError):
             site_for("00O5g00000ABCDE")
 
     def test_empty_raises(self):
-        with pytest.raises(SalesforceSiteNotFoundError):
+        with pytest.raises(SalesforceError):
             site_for("")
 
     def test_registered_sites_are_salesforce_clients(self):
@@ -991,29 +975,29 @@ class TestCallbackUrl:
             assert site.CALLBACK_URL == "http://localhost:8080/callback"
 
 
-class TestSalesforceSiteSelectionError:
+class TestSalesforceError:
     """対話的な組織選択で、番号にも組織名にも一致しなかった場合の例外。"""
 
     def test_inherits_from_salesforce_error(self):
         """SalesforceError 経由で ComkenError に連なり、main() が拾える。"""
-        assert issubclass(SalesforceSiteSelectionError, SalesforceError)
-        assert issubclass(SalesforceSiteSelectionError, ComkenError)
+        assert issubclass(SalesforceError, SalesforceError)
+        assert issubclass(SalesforceError, ComkenError)
 
     def test_message_includes_the_user_answer(self):
         """入力値がそのままメッセージへ出て、ユーザーが何を間違えたか分かる。"""
-        error = SalesforceSiteSelectionError("99", ["Solution", "SolutionSandbox"])
+        error = SalesforceError("99", ["Solution", "SolutionSandbox"])
         assert "99" in str(error)
 
     def test_message_lists_the_registered_sites(self):
         """登録済みの組織名を列挙し、打ち間違いを直せるようにする。"""
-        error = SalesforceSiteSelectionError("99", ["Solution", "SolutionSandbox"])
+        error = SalesforceError("99", ["Solution", "SolutionSandbox"])
         message = str(error)
         assert "Solution" in message
         assert "SolutionSandbox" in message
 
     def test_empty_list_does_not_crash(self):
         """登録済み組織が0件のときでも、メッセージ生成で落ちない。"""
-        error = SalesforceSiteSelectionError("?", [])
+        error = SalesforceError("?", [])
         assert "?" in str(error)
 
 
@@ -1195,7 +1179,7 @@ class TestBulkQuery:
 
     def test_run_raises_failed_error_when_job_fails(self):
         """状態確認が Failed のとき
-        SalesforceBulkFailedError を送出し、
+        SalesforceError を送出し、
         errorMessage をメッセージに含む。"""
         created = _response(json_body={"id": self.JOB_ID, "state": "UploadComplete"})
         failed = _response(
@@ -1208,19 +1192,19 @@ class TestBulkQuery:
         with (
             _salesforce([created, failed]) as (client, _, _),
             patch("comken.toolbox.salesforce.bulk_query.time.sleep"),
-            pytest.raises(SalesforceBulkFailedError, match="SOQL 構文エラー"),
+            pytest.raises(SalesforceError, match="SOQL 構文エラー"),
         ):
             client.bulk_query.run(self.SOQL)
 
     def test_run_raises_timeout_error_when_job_stays_in_progress(self):
-        """timeout_seconds を 0 にするとループに入らず SalesforceBulkTimeoutError になる。"""
+        """timeout_seconds を 0 にするとループに入らず SalesforceError になる。"""
         created = _response(json_body={"id": self.JOB_ID, "state": "UploadComplete"})
         in_progress = _response(json_body={"id": self.JOB_ID, "state": "InProgress"})
 
         with (
             _salesforce([created, in_progress]) as (client, _, _),
             patch("comken.toolbox.salesforce.bulk_query.time.sleep"),
-            pytest.raises(SalesforceBulkTimeoutError, match=r"0 秒"),
+            pytest.raises(SalesforceError, match=r"0 秒"),
         ):
             client.bulk_query.run(self.SOQL, timeout_seconds=0)
 
@@ -1464,7 +1448,7 @@ class TestBulkIngest:
 
     def test_failed_job_raises_with_error_message(self):
         """状態確認が ``Failed``（errorMessage 付き）なら
-        ``SalesforceBulkFailedError`` を送出し、メッセージに
+        ``SalesforceError`` を送出し、メッセージに
         ``errorMessage`` の内容を含める。"""
         responses = [
             _response(json_body={"id": self.JOB_ID, "state": "UploadComplete"}),
@@ -1481,12 +1465,12 @@ class TestBulkIngest:
         with (
             _salesforce(responses) as (client, _, _),
             patch("comken.toolbox.salesforce.bulk_ingest.time.sleep"),
-            pytest.raises(SalesforceBulkFailedError, match="項目 Name がありません"),
+            pytest.raises(SalesforceError, match="項目 Name がありません"),
         ):
             client.bulk_ingest.insert(self.OBJECT_NAME, [{"Name": "A"}])
 
     def test_timeout_raises_when_job_does_not_finish(self):
-        """``timeout_seconds=0`` なら ``SalesforceBulkTimeoutError`` になる。"""
+        """``timeout_seconds=0`` なら ``SalesforceError`` になる。"""
         responses = [
             _response(json_body={"id": self.JOB_ID, "state": "UploadComplete"}),
             _response(204),  # アップロード成功
@@ -1496,7 +1480,7 @@ class TestBulkIngest:
         with (
             _salesforce(responses) as (client, _, _),
             patch("comken.toolbox.salesforce.bulk_ingest.time.sleep"),
-            pytest.raises(SalesforceBulkTimeoutError, match=r"0 秒"),
+            pytest.raises(SalesforceError, match=r"0 秒"),
         ):
             client.bulk_ingest.insert(self.OBJECT_NAME, [{"Name": "A"}], timeout_seconds=0)
 

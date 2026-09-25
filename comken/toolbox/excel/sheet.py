@@ -16,11 +16,7 @@ from openpyxl.worksheet.table import TableStyleInfo
 from openpyxl.worksheet.worksheet import Worksheet
 
 from comken.core.table.model import Table
-from comken.exceptions import (
-    ExcelError,
-    InvalidTableInputError,
-    InvalidTableOperationError,
-)
+from comken.exceptions import ExcelError, InvalidTableInputError, TableError
 from comken.toolbox.excel.table import ExcelTable
 
 if TYPE_CHECKING:
@@ -97,8 +93,9 @@ class Sheet:
                     "対処: エラーに表示された既存テーブル名を確認してください。"
                 )
         if name is None and len(table_names) > 1:
-            raise InvalidTableOperationError(
+            raise TableError(
                 "1シートに複数テーブルがあります。table(name)で指定してください。"
+                "\n対処: 対象が読み取り専用でないか、指定したテーブル名が正しいか確認してください。"
             )
         logger.debug(
             "Sheet.table を取得しました: sheet=%s name=%s",

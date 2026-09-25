@@ -31,7 +31,7 @@ from comken.toolbox.browser.sites.ntt import NTTEast, NTTWest
 
 # ライブラリ公認サイトの一覧。最初に空で置いておき、昇格するサイトが出てきたら
 # ここで追加していく。**プロジェクト側で同じ NAME のクラスを作ると、
-# 起動時に `SiteAlreadyInLibraryError` で止まる。**
+# 起動時に `BrowserError` で止まる。**
 # NTTWest・NTTEast は URL がダミーのままなので SITES には含めない
 # （配置時に実際の値へ書き換えたら登録する）。Salesforce のクラスは
 # API 側（`comken.toolbox.salesforce.sites`）と同名でパッケージで区別するため、

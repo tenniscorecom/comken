@@ -29,14 +29,55 @@ from typing import TYPE_CHECKING, Any
 from comken.core.table import Table
 from comken.core.timer import measure
 from comken.exceptions import (
-    SalesforceReportAccessDeniedError,
-    SalesforceReportExecutionError,
-    SalesforceReportFormatError,
+    SalesforceError,
     SalesforceReportIDNotFoundError,
     SalesforceReportTruncatedError,
     SalesforceRequestError,
 )
 from comken.toolbox.csv import CSV
+
+
+def _report_format_error(report_id: str, report_format: str) -> SalesforceError:
+    """``SalesforceError`` の「レポートの形式が対応していない」文言。
+
+    集計（サマリ・マトリックス）形式は行の入れ物の構造が変わり、
+    そのまま読むと無言で空を返すため、明示的に弾く。
+    """
+    return SalesforceError(
+        f"このレポートは {report_format} 形式です: {report_id}\n"
+        "取得できるのは明細（TABULAR）形式のレポートだけです。\n"
+        "レポート側を明細形式に変更するか、SOQL（query）で取得してください。"
+        "\n対処: レポートを明細形式にするか、管理者へ連絡してください。"
+    )
+
+
+def _report_access_denied_error(report_id: str, status_code: int, detail: str) -> SalesforceError:
+    """``SalesforceError`` の「レポート API へのアクセスを拒否された」文言。"""
+    return SalesforceError(
+        f"Salesforce のレポート API（Analytics API）へのアクセスが"
+        f"拒否されました（HTTP {status_code}）: {report_id}\n"
+        f"{detail}\n"
+        "Salesforce 管理者に、実行ユーザーの「API Enabled」権限・"
+        "レポートへのアクセス権・組織の Edition が Reports and Dashboards "
+        "REST API に対応しているかを確認してもらってください。"
+        "\n対処: Salesforce 管理者に、refresh_token を発行したユーザーについて"
+        "次を確認してもらってください。"
+        "  1. Profile / Permission Set に「API Enabled」権限があるか"
+        "  2. 対象のレポート・レポートフォルダへのアクセス権があるか"
+        "  3. 組織の Edition・ライセンスが Reports and Dashboards REST API"
+        "に対応しているか（一部の制限ライセンスでは使えない）"
+    )
+
+
+def _report_execution_error(report_id: str, detail: str) -> SalesforceError:
+    """``SalesforceError`` の「Salesforce 側でレポート実行に失敗した」文言。"""
+    return SalesforceError(
+        f"Salesforce のレポート実行に失敗しました: {report_id}\n"
+        f"{detail}\n"
+        "Salesforce でレポートを直接実行し、条件・権限・参照項目を確認してください。"
+        "\n対処: Salesforce で同じレポートを直接実行し、表示された内容を管理者へ連絡してください。"
+    )
+
 
 # レポート ID は接頭辞 00O ＋ 英数字で、15 桁（画面）か 18 桁（API）。
 # URL のどこに入っていても拾えるよう、前後は語の区切りだけを見る
@@ -110,7 +151,7 @@ def _parse_report_payload(
     # 集計レポートは行が factMap のグループ別キーに入るため、明細用のキーを
     # そのまま読むと無言で空のリストを返してしまう。だから明示的に弾く
     if report_format and report_format != TABULAR_FORMAT:
-        raise SalesforceReportFormatError(report_id, report_format)
+        raise _report_format_error(report_id, report_format)
 
     # allData が偽なら上限で切り捨てられている。全件と誤認させない
     if data.get("allData") is False:
@@ -285,9 +326,7 @@ class ReportAPI:
             return self._client.request(method, path, body=body, component=COMPONENT)
         except SalesforceRequestError as exc:
             if exc.status_code in (401, 403):
-                raise SalesforceReportAccessDeniedError(
-                    report_id, exc.status_code, exc.detail
-                ) from exc
+                raise _report_access_denied_error(report_id, exc.status_code, exc.detail) from exc
             raise
 
     @measure
@@ -316,8 +355,8 @@ class ReportAPI:
         Raises:
             SalesforceReportTruncatedError: 上限で切り捨てられた場合
                 （allow_truncated=True のときは送出しない）。
-            SalesforceReportFormatError: 明細（TABULAR）形式でない場合。
-            SalesforceReportAccessDeniedError: レポート API への権限が無い場合
+            SalesforceError: 明細（TABULAR）形式でない場合。
+            SalesforceError: レポート API への権限が無い場合
                 （HTTP 401 / 403）。
         """
         return self._fetch_report_table(report_id, filters, allow_truncated)
@@ -348,9 +387,9 @@ class ReportAPI:
         Raises:
             SalesforceReportTruncatedError: 上限で切り捨てられた場合
                 （``get()`` から伝播）。
-            SalesforceReportFormatError: 明細（TABULAR）形式でない場合
+            SalesforceError: 明細（TABULAR）形式でない場合
                 （``get()`` から伝播）。
-            SalesforceReportAccessDeniedError: レポート API への権限が無い場合
+            SalesforceError: レポート API への権限が無い場合
                 （HTTP 401 / 403、``get()`` から伝播）。
         """
         table = self.get(report_id, filters, allow_truncated)
@@ -378,9 +417,9 @@ class ReportAPI:
 
         Raises:
             SalesforceReportTruncatedError: 上限で切り捨てられた場合。
-            SalesforceReportFormatError: 明細（TABULAR）形式でない場合。
-            SalesforceReportExecutionError: Salesforce 側で実行が失敗した場合。
-            SalesforceReportAccessDeniedError: レポート API への権限が無い場合
+            SalesforceError: 明細（TABULAR）形式でない場合。
+            SalesforceError: Salesforce 側で実行が失敗した場合。
+            SalesforceError: レポート API への権限が無い場合
                 （HTTP 401 / 403）。
             TimeoutError: 制限時間内に完了しなかった場合。
         """
@@ -399,9 +438,9 @@ class ReportAPI:
                 )
             if status == "Error":
                 if not isinstance(data, dict):
-                    raise SalesforceReportExecutionError(report_id, "詳細情報なし")
+                    raise _report_execution_error(report_id, "詳細情報なし")
                 detail = str(data.get("error", data.get("message", "詳細情報なし")))
-                raise SalesforceReportExecutionError(report_id, detail)
+                raise _report_execution_error(report_id, detail)
             time.sleep(POLL_INTERVAL_SECONDS)
 
         raise TimeoutError(
@@ -440,7 +479,7 @@ class ReportAPI:
             API が dict 以外を返した場合（パース失敗時など）は空 dict。
 
         Raises:
-            SalesforceReportAccessDeniedError: レポート API への権限が無い場合
+            SalesforceError: レポート API への権限が無い場合
                 （HTTP 401 / 403）。HTTP 401 / 403 以外は ``SalesforceRequestError``
                 のまま送出される（``_request`` 経由で 401 / 403 だけ変換するため）。
         """
@@ -568,7 +607,7 @@ class ReportAPI:
         object_name = report_metadata.get("reportType", {}).get("type", "")
 
         # Object Describe 自体は /analytics/ ではないため、self._request() を
-        # 通すと 401/403 が SalesforceReportAccessDeniedError に変換されてしまう。
+        # 通すと 401/403 が SalesforceError に変換されてしまう。
         # ここは別系統の権限（オブジェクトへの参照）なので、変換せず
         # SalesforceRequestError のまま伝播させる。
         field_index: dict[str, list[dict]] | None

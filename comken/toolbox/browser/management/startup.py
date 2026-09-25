@@ -10,11 +10,35 @@ from selenium import webdriver
 from selenium.webdriver.edge.options import Options
 from selenium.webdriver.edge.service import Service
 
-from comken.exceptions import DriverStartError
+from comken.exceptions import BrowserError
 from comken.toolbox.browser.download import DownloadDir
 from comken.toolbox.browser.options import BrowserOptions
 
 logger = logging.getLogger(__name__)
+
+
+def _driver_start_error(driver_path: str, detail: Exception) -> BrowserError:
+    """``BrowserError`` の「ブラウザを起動できない」文言。
+
+    発生箇所: Browsers.launch()
+    """
+    return BrowserError(
+        f"Edge WebDriver を起動できませんでした: {driver_path}\n"
+        f"（{detail}）\n"
+        "次を確認してください:\n"
+        "  1. そのパスに msedgedriver.exe があるか\n"
+        "  2. msedgedriver.exe のバージョンが、今インストールされている Edge と一致しているか\n"
+        "     （Edge のバージョンは edge://version で確認できます）\n"
+        "  3. PROFILE_ROOT に相対パスを設定していないか\n"
+        "     （メッセージがバージョン不一致でも、実際はこちらが原因のことがある）"
+        "\n対処: エラーの本文にある確認事項をそのまま試してください。"
+        "Windows Update で Edge が更新された直後に起きやすいです。"
+        "メッセージが「バージョンが合わない」でも、PROFILE_ROOT に"
+        "**相対パス**を設定している場合は疑わしいです。"
+        "（``--user-data-dir`` に相対パスが渡ると、msedge.exe 側の作業"
+        "ディレクトリ次第でプロファイル初期化に失敗し、実際の原因と無関係に"
+        "同じメッセージで落ちることがあります）"
+    )
 
 
 def create_service(driver_path: Path, suppress_logs: bool) -> Service:
@@ -53,7 +77,7 @@ def start_driver(
         # 一時フォルダを残さない。download_dir は with 想定だが、__enter__ 失敗時は
         # ここで __exit__ を呼んで後始末する必要がある
         download_dir.__exit__(None, None, None)
-        raise DriverStartError(str(driver_path), error) from error
+        raise _driver_start_error(str(driver_path), error) from error
 
 
 def _build_driver(

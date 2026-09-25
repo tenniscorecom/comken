@@ -23,27 +23,6 @@ class InvalidTableInputError(TableError):
     """
 
 
-class InvalidTableOperationError(TableError):
-    """Table API で実行できない操作が指定された。
-
-    発生箇所: Table / CSV / ExcelTable
-
-    対処:
-        対象が読み取り専用でないか、指定したテーブル名が正しいか確認する
-    """
-
-
-class TableNotOpenError(TableError):
-    """表を with 文で開かずに操作した。
-
-    対処:
-        ``with`` 文の中で使う（CSV / Excel などは ``__enter__`` で表を開く）
-    """
-
-    def __init__(self, table_type: str) -> None:
-        super().__init__(f"{table_type} は with 文の中で使ってください。")
-
-
 class TableColumnNotFoundError(TableError):
     """Table に指定された列が存在しない。
 

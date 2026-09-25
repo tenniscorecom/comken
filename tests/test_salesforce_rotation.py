@@ -5,7 +5,7 @@ from unittest.mock import Mock, call, patch
 
 import pytest
 
-from comken.exceptions import SalesforceCredentialRotationError
+from comken.exceptions import SalesforceError
 from comken.toolbox.salesforce.auth.rotation import SalesforceCredentialRotator
 
 TODAY = datetime.date(2026, 8, 13)
@@ -85,7 +85,7 @@ class TestSalesforceCredentialRotator:
         with (
             patch(f"{_ROTATION}.load_credential", return_value="2026-06-01"),
             patch(f"{_ROTATION}.save_credentials", side_effect=OSError("保存失敗")),
-            pytest.raises(SalesforceCredentialRotationError, match="DPAPI"),
+            pytest.raises(SalesforceError, match="DPAPI"),
         ):
             rotator.rotate_if_due(TODAY)
 

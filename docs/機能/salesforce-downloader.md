@@ -321,7 +321,7 @@ Excel の数式 (VLOOKUP 等) で組み立てる案も検討したが、openpyxl
 
 | 列 | 何を書くか |
 |---|---|
-| **グループ** | 社内のグループ名・部署名。管理表の「グループ」列と一致させる。同じ名前は1行しか登録できない（重複は `MasterDuplicateValueError`） |
+| **グループ** | 社内のグループ名・部署名。管理表の「グループ」列と一致させる。同じ名前は1行しか登録できない（重複は `MasterTableError`） |
 | **ベースURL** | そのグループの出力先の起点パス。出力ファイルはこのベースパスの直下に置かれる（`report_folder()` の戻り値をそのまま保存先フォルダとして使う） |
 
 設定シートは雛形自動生成の対象外（手で追加する運用）。列の宣言は
@@ -894,14 +894,14 @@ saved = download_soql_reports()   # SOQL_REPORTS を全部取得・保存
 エラー名と対処法は [docs/ERRORS.md](../ERRORS.md)（comken 全体の例外クラスの docstring
 から自動生成、docstring が正）にまとまっている。Downloader 由来のものは
 `ReportNotRegisteredError` / `SoqlReportNotRegisteredError` /
-`GroupNotRegisteredError` / `ReportDisabledError` / `MasterDuplicateValueError` /
+`GroupNotRegisteredError` / `MasterDuplicateValueError` /
 `MasterRowValueError` / `CachedReportNotFoundError` / `EmptyReportError` /
 `ReportFolderNotFoundError` / `ScheduledDownloadFailedError`（いずれも
 `comken/exceptions/downloader.py`）。
 
 定期取得で 1 件以上失敗した場合は **取得できたものを保存したうえで**例外で知らせる
-（理由は `SoqlDownloadFailedError` の docstring 参照）。直したあと再実行すれば、
-残りだけが落ちる。
+（`DownloaderError` が SOQL 経路向けに担う。`SalesforceError` 経由で
+理由がメッセージに出る）。直したあと再実行すれば、残りだけが落ちる。
 
 ---
 

@@ -157,10 +157,9 @@ True として読みます。bool 列に2つの `choices` を指定すると、�
 
 | エラー | いつ | 対処 |
 |---|---|---|
-| `MasterColumnNotFoundError` | 宣言した見出しが表に無い | 1行目の見出しを元に戻す |
-| `MasterRowValueError` | 値が型・選択肢に合わない、空にできない列が空 | メッセージの行と列を直す |
+| `MasterTableError` | 宣言した見出しが表に無い／`load()` を引数なしで呼んだが `PATH` が無い（具体的な理由はメッセージに出る） | 1行目の見出しを元に戻すか、`load(パス)` を使うか `PATH` を書く |
+| `MasterRowValueError` | 値が型・選択肢に合わない、空にできない列が空 | メッセージの行と列を、管理表で確認して直す |
 | `MasterDuplicateValueError` | `unique` の列に同じ値がある | どちらかを変える |
-| `MasterSheetNotDefinedError` | `load()` を引数なしで呼んだが `PATH` が無い | `load(パス)` を使うか `PATH` を書く |
 
 ---
 

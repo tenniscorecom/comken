@@ -96,25 +96,12 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `CredentialStoreCorruptedError` | 認証情報の中身が壊れている | 実行アカウントの問題ではない。表示されたファイルを削除して、もう一度取り込み直す |
 | `CredentialImportError` | 取り込む JSON が壊れている・形式が違う | 表示された形式のとおりに書き直す。値は必ず `" "` で囲む |
 | `PasswordRejectedError` | サイト側が新しいパスワードを拒否した（記号が足りない・文字数が足りない等） | 表示されたエラー内容（サイト側の拒否理由）を確認し、要件を満たすパスワードを入力し直す |
-| `SalesforceError` | Salesforce に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
+| `SalesforceError` | Salesforce に関するエラー。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `SalesforceAuthError` | Salesforce にログインできない | 表示された確認項目を上から順に見る。それでも直らなければ管理者へ連絡する |
-| `SalesforceConnectionError` | Salesforce につながらない | ネットワークの状態を確認して、少し待ってから再実行する |
 | `SalesforceRequestError` | Salesforce が処理を断った | 表示されたメッセージをそのまま添えて管理者へ連絡する（権限か項目名の問題が多い） |
-| `SalesforceExternalIDMissingError` | upsert 用データに外部 ID がない | 管理者へ連絡する |
-| `SalesforceCredentialRotationError` | consumer key / secret のローテーションを安全に完了できない | Salesforce の ECA 設定・API レスポンス・DPAPI の保存先を確認する |
 | `SalesforceReportTruncatedError` | レポートが上限の 2000 行で切れた（**全件ではない**） | 期間を狭めて何回かに分けて実行する。1回で全部必要なら管理者へ連絡する |
-| `SalesforceReportFormatError` | レポートの形式が対応していない | レポートを明細形式にするか、管理者へ連絡する |
 | `SalesforceReportIDNotFoundError` | レポートの URL からレポート ID を取り出せない | Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す |
-| `SalesforceReportExecutionError` | Salesforce 側でレポート実行に失敗した | Salesforce で同じレポートを直接実行し、表示された内容を管理者へ連絡する |
-| `SalesforceReportAccessDeniedError` | レポート API（Reports and Dashboards REST API）へのアクセスを拒否された | Salesforce 管理者に、refresh_token を発行したユーザーについて次を確認してもらう。1. Profile / Permission Set に「API Enabled」」権限があるか2. 対象のレポート・レポートフォルダへのアクセス権があるか3. 組織の Edition・ライセンスが Reports and Dashboards REST APIに対応しているか（一部の制限ライセンスでは使えない） |
-| `SalesforceReportExportError` | 画面のエクスポート機能でレポートをCSV/XLS取得できなかった | 1. go_login() + wait_for_manual_login() でログインを済ませてからexport_reports() を呼んでいるか確認する2. 時間が経ってセッションが切れていないか（長時間のバッチの後半で発生する場合はこれが疑わしい）3. レポートそのものへのアクセス権・組織の Edition を確認してもらう |
-| `SalesforceSiteNotFoundError` | URL のドメインに対応する組織が登録されていない | URL のドメインを見直す。新しい組織なら管理者へ連絡する（組織クラスの追加が要る） |
-| `SalesforceSiteSelectionError` | 対話的な組織選択で、番号にも組織名にも一致しなかった | 表示された番号（1〜件数）か、組織名（大文字小文字は区別しない）を入力し直す |
-| `SalesforceBulkFailedError` | Bulk API のジョブが失敗して終わった（Failed / Aborted） | 表示されたエラー内容を確認する。クエリ経路は SOQL 構文・参照項目・実行ユーザーの権限、Ingest 経路は CSV の列名・データ型・実行ユーザーの権限を見直す |
-| `SalesforceBulkTimeoutError` | Bulk API のジョブが制限時間内に終わらなかった | ``timeout_seconds`` を長くするか、対象を絞って再実行する。Ingest 経路はデータを分割して再実行してもよい |
-| `MasterTableError` | Excel の管理表に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
-| `MasterSheetNotDefinedError` | 管理表の場所が決まっていない | `load(パス)` のようにファイルを渡すか、クラスに PATH を書く（コードの直し方の話なので、非エンジニアが見た場合は管理者へ連絡する） |
-| `MasterColumnNotFoundError` | 管理表に必要な列（見出し）が無い | 管理表の1行目（見出し）を元に戻す。消してしまった場合は、メッセージに出ている「今ある見出し」と見比べて足す |
+| `MasterTableError` | Excel の管理表に関するエラー。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `MasterRowValueError` | 管理表の値が正しくない | メッセージに出ている行と列を、管理表で確認して直す |
 | `MasterDuplicateValueError` | 一意であるべき列に、同じ値が2つ以上ある | 管理表を開いて、重複している値のどちらかを別の値に変える |
 | `StateError` | state.ini に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
@@ -131,13 +118,10 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `ReportNotRegisteredError` | 指定した管理番号が管理表に無い | 管理表を開いて、その管理番号の行があるか確認する。新しく使うレポートは、先に管理表へ登録する |
 | `SoqlReportNotRegisteredError` | 管理表の「SOQL」列が「○」なのに、同じ管理番号の SoqlReport が登録されていない | 管理番号に対応する ``SoqlReport`` サブクラスを追加し、``KEY`` を管理表と同じ値にして ``soql_reports/_registry.py`` の ``SOQL_REPORTS`` へ登録する。まだ SOQL 化していないなら、管理表の「SOQL」列を「×」に戻す |
 | `GroupNotRegisteredError` | 管理表の「グループ」列に設定シートに登録されていない値が書かれている | 管理表の「グループ」列に書かれた値が、設定シート（`group_settings.py` の`GroupSetting`）の「グループ」列に存在するか確認する。新しく部署・グループを追加するときは、設定シート側にも同じ名前で行を足す |
-| `ReportDisabledError` | 管理表で「無効」になっているレポートを取ろうとした | また使うなら管理表の「有効」を「有効」に戻す。使わないなら、呼び出し側のコードから消す |
 | `EmptyReportError` | レポートは実行できたが明細が 0 行だった | Salesforce の画面で同じレポートを開き、本当に 0 件か確認する。0 件が正常に起こるレポートなら、管理表の「0件あり」を「○」にする。 |
 | `ReportFolderNotFoundError` | 保存先として組み立てたフォルダが無い | 設定シートの「ベースURL」（フォルダのパス）と、管理表の「グループ」を確認する。共有フォルダなら、つながっているか・権限があるかも確認する |
 | `ReportReservePathLimitError` | 保存ファイル名の連番が上限に達した | 保存先フォルダが想定どおりか確認する。 共有フォルダなら、 古い取得ファイルを退避するか、 別の保存先に変える。 連発する場合は権限・排他制御の設定も見直す |
-| `ScheduleSettingError` | 管理表のスケジュール列（取得頻度・曜日）に想定外の値が書かれている | 管理表の「取得頻度」列を ``毎日`` / ``毎週`` / ``毎月`` / ``毎営業日`` のいずれかに、「曜日」列を月〜日のいずれかに修正する（「曜日」接尾辞付きも可） |
 | `ScheduledDownloadFailedError` | 定期取得で1件以上が失敗した | 履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。急いで必要なものは download_scheduled() をスケジュール外で実行する。権限を持つ人が Salesforce から手動でダウンロードしてもよい |
-| `SoqlDownloadFailedError` | SOQL レポートの取得で1件以上が失敗した | 表示された管理番号について、SOQL クエリ・組織の認証情報・保存先フォルダの権限・ネットワークの状態を確認する。急いで必要なものは``download_soql_reports()`` を直接実行してもよい |
 | `LoggingAlreadyConfiguredError` | root logger がすでに設定されている | setup_logging() または setup_local_logging() はアプリの入口で1回だけ呼ぶ。実行基盤がログを設定する場合は呼ばない。 |
 | `LoggingConflictError` | root logger に comken 以外の handler が設定されている | 上の handler 一覧をそのままライブラリの管理者へ連絡してください（連絡先は環境ごとに異なるので、ここには書かない）。やむを得ず共存させたい場合は、呼び出し時に ``allow_existing=True``を指定すれば処理は続きますが、comken のハンドラーが追加されることで既存ライブラリのログが**二重**に出たり、出力先が想定と変わる可能性があります。 |
 | `LogRootNotConfiguredError` | LoggerSite の LOG_ROOT が設定されていない | サブクラスに ``LOG_ROOT = "\\server\share\logs"`` を1行追加する（絶対パスまたは UNC 文字列。LOG_FOLDER_NAMES のフォルダ名はこの下に作られる）。 |
@@ -147,18 +131,8 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
-| `BrowserError` | ブラウザ操作に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
-| `DriverStartError` | ブラウザを起動できない | エラーの本文にある確認事項をそのまま試す。Windows Update で Edge が更新された直後に起きやすい。メッセージが「バージョンが合わない」でも、``PROFILE_ROOT`` に**相対パス**を設定している場合は疑わしい。``--user-data-dir`` に相対パスが渡ると、msedge.exe 側の作業ディレクトリ次第でプロファイル初期化に失敗し、実際の原因と無関係に同じメッセージで落ちることがある（``Browsers._resolve_profile_dir()`` は絶対パスへ解決して渡すが、念のため確認する） |
-| `BrowserNotStartedError` | `with` を使わずにブラウザを操作した | `with Browsers() as browsers:` の中で使う（ブラウザは起動していないので実害はない） |
-| `BrowserClosedError` | `with` を抜けた後のブラウザを操作した | 続けたい処理を `with` の中に入れる。外へ持ち出すのは取り出した値だけにする |
-| `ConcurrentSessionUseError` | 1つのブラウザを複数の処理から同時に操作した | サイトごとに `launch` でブラウザを分ける |
-| `SessionNameConflictError` | 同じ名前で2回 `launch` した | 名前を変える（同一サイトの別アカウントなら `kintai_a` / `kintai_b` など） |
-| `SessionNotFoundError` | `launch` していない名前を取り出した | 先に `launch` する。エラーに起動済みの一覧が出ます |
-| `SiteConfigError` | `SiteBase` サブクラスの設定が不足している | サブクラスに NAME を定義する（BASE_URL / OPTIONS も同じ） |
-| `SiteAlreadyInLibraryError` | ライブラリ公認のサイトと同じ NAME のサイトをプロジェクト側で定義した | ライブラリから `from comken.toolbox.browser.sites import <クラス名>` で取り出して使う。プロジェクト側の定義は消す。ライブラリへ昇格する基準は`docs/CONVENTIONS.md` の「サイト／組織クラスを昇格させる基準」を参照。 |
+| `BrowserError` | ブラウザ操作に関するエラー。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `ElementNotFoundError` | 画面の部品が時間内に見つからない | もう一度実行する。サイトが重いだけのことが多い。毎回出るなら画面が変わった可能性があるので管理者へ（エラーに、どの部品を探していたかが出ます） |
-| `PopupTabNotOpenedError` | 別タブが開かない | もう一度実行する。続く場合は、その画面の「別ウィンドウで開く」ボタンが変わった可能性があるので管理者へ |
-| `DownloadTimeoutError` | ダウンロードが終わらない | ネットワークの状態を確認して再実行する。大きいファイルなら時間がかかっているだけのこともある |
 | `LoginFailedError` | ログインに失敗した（ユーザー名・パスワードが違う等） | 表示されたエラー内容（サイト側のエラーメッセージ）を確認する。DPAPI に保存した認証情報が古くなっていないか`python -m comken cred list` で確認し、必要なら`python -m comken cred gui` で登録し直す |
 | `WebDriverException` | ブラウザ操作の一般的なエラー | Edge のウィンドウをすべて閉じて再実行する |
 
@@ -166,8 +140,6 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
-| `InvalidTableOperationError` | Table API で実行できない操作が指定された。 | 対象が読み取り専用でないか、指定したテーブル名が正しいか確認する |
-| `TableNotOpenError` | 表を with 文で開かずに操作した。 | ``with`` 文の中で使う（CSV / Excel などは ``__enter__`` で表を開く） |
 | `TableError` | 表データの読み書き・転記に関するエラー。具体的な状況はメッセージに出る | 画面に表示された具体的なエラー内容を確認する |
 | `InvalidTableInputError` | Table API に対応しない入力が渡された。 | columns、rows、types の型と列名を確認する |
 | `TableColumnNotFoundError` | Table に指定された列が存在しない。 | Table.columns を確認し、存在する列名を指定する |
@@ -183,9 +155,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
-| `DataLoaderError` | Data Loader の実行に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
-| `DataLoaderTimeoutError` | Data Loader の実行が制限時間内に終わらなかった | 処理対象の件数を減らすか、``timeout_seconds`` を長くする。プロセスがハングしている場合はタスクマネージャーから Data Loader のプロセスを終了させる |
-| `DataLoaderExecutionError` | Data Loader が 0 以外の終了コードで終わった | 表示された標準出力・標準エラー出力を確認する。``config.properties``・``process-conf.xml`` の設定を見直す。よくある原因はログイン情報の誤り、SOQL のフィールド名不一致、書き出し先パスへの権限不足 |
+| `DataLoaderError` | Data Loader の実行に関するエラー。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 
 ## すべてのエラーに共通の親
 

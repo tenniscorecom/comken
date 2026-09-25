@@ -18,12 +18,24 @@ from comken.core.clock import today as local_today
 from comken.exceptions import (
     CredentialError,
     CredentialNotFoundError,
-    SalesforceCredentialRotationError,
+    SalesforceError,
 )
 from comken.toolbox.credentials import load_credential, save_credentials
 from comken.toolbox.salesforce.client import SalesforceBase
 
 logger = logging.getLogger(__name__)
+
+
+def _credential_rotation_error(detail: str) -> SalesforceError:
+    """``SalesforceError`` の「consumer key / secret のローテーションを安全に完了できない」文言。"""
+    return SalesforceError(
+        "Salesforce の認証情報をローテーションできませんでした。\n"
+        f"{detail}\n"
+        "旧認証情報はまだ有効です。Salesforce の ECA 設定、API レスポンス、"
+        "DPAPI の保存先を確認してください。"
+        "\n対処: Salesforce の ECA 設定・API レスポンス・DPAPI の保存先を確認してください。"
+    )
+
 
 DEFAULT_ROTATION_INTERVAL_DAYS = 60
 ROTATION_COMPONENT = "credential_rotation"
@@ -102,7 +114,7 @@ class SalesforceCredentialRotator:
         try:
             last_rotation_date = datetime.date.fromisoformat(raw_date)
         except ValueError as error:
-            raise SalesforceCredentialRotationError(
+            raise _credential_rotation_error(
                 f"最終ローテーション日が YYYY-MM-DD 形式ではありません: {raw_date}"
             ) from error
         elapsed_days = (today - last_rotation_date).days
@@ -150,7 +162,7 @@ class SalesforceCredentialRotator:
                 self._credential_path,
             )
         except (CredentialError, OSError) as error:
-            raise SalesforceCredentialRotationError(
+            raise _credential_rotation_error(
                 f"新しい認証情報を DPAPI へ保存できませんでした: {error}"
             ) from error
 
@@ -177,7 +189,7 @@ class _StagedCredentials:
 def _staged_credentials_of(response: dict | list | str | None) -> _StagedCredentials:
     """未確認のレスポンススキーマから必要な3項目を取り出す唯一の場所。"""
     if not isinstance(response, dict):
-        raise SalesforceCredentialRotationError(
+        raise _credential_rotation_error(
             "staged 作成 API の応答が JSON オブジェクトではありません。"
         )
     try:
@@ -187,7 +199,7 @@ def _staged_credentials_of(response: dict | list | str | None) -> _StagedCredent
             consumer_secret=str(response["consumerSecret"]),
         )
     except KeyError as error:
-        raise SalesforceCredentialRotationError(
+        raise _credential_rotation_error(
             f"staged 作成 API の応答に必要な項目がありません: {error.args[0]}"
         ) from error
 
@@ -196,7 +208,5 @@ def _consumer_id_of(response: dict | list | str | None) -> str:
     """未確認の資格情報一覧スキーマから consumer ID を取り出す唯一の場所。"""
     candidate = response[0] if isinstance(response, list) and response else response
     if not isinstance(candidate, dict) or "consumerId" not in candidate:
-        raise SalesforceCredentialRotationError(
-            "資格情報取得 API の応答に consumerId がありません。"
-        )
+        raise _credential_rotation_error("資格情報取得 API の応答に consumerId がありません。")
     return str(candidate["consumerId"])

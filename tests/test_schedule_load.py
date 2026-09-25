@@ -12,8 +12,7 @@ import pytest
 from comken.core.table import Table
 from comken.exceptions import (
     ComkenFileNotFoundError,
-    MasterDuplicateValueError,
-    MasterRowValueError,
+    MasterTableError,
 )
 from comken.services.salesforce_downloader.sheets.schedule import (
     SCHEDULE_SHEET_NAME,
@@ -164,14 +163,14 @@ class TestLoadSchedule:
                 ["S001", "1002", "毎週", "10:00", "", "火", "", "取得しない", "○"],  # 重複
             ],
         )
-        with pytest.raises(MasterDuplicateValueError) as e:
+        with pytest.raises(MasterTableError) as e:
             load_schedule(master)
         # 業務担当者に「どの値が」「どの見出しで」重複したかが届く
         assert "スケジュールキー" in str(e.value)
         assert "S001" in str(e.value)
 
     def test_missing_required_value_raises_with_row_number(self, tmp_path):
-        """必須列（スケジュールキー）が空のとき、行番号付き ``MasterRowValueError`` で抜ける。"""
+        """必須列（スケジュールキー）が空のとき、行番号付き ``MasterTableError`` で抜ける。"""
         master = make_master_with_schedule(
             tmp_path / "管理表.xlsx",
             [
@@ -199,14 +198,14 @@ class TestLoadSchedule:
                 ],  # スケジュールキー空
             ],
         )
-        with pytest.raises(MasterRowValueError) as e:
+        with pytest.raises(MasterTableError) as e:
             load_schedule(master)
         # 見出しの次の行（offset=0, row_number=2）が指摘される
         assert "2 行目" in str(e.value)
         assert "スケジュールキー" in str(e.value)
 
     def test_invalid_frequency_raises(self, tmp_path):
-        """choices に無い取得頻度は ``MasterRowValueError``（=許可された選択肢が並ぶ）。"""
+        """choices に無い取得頻度は ``MasterTableError``（=許可された選択肢が並ぶ）。"""
         master = make_master_with_schedule(
             tmp_path / "管理表.xlsx",
             [
@@ -224,7 +223,7 @@ class TestLoadSchedule:
                 ["S001", "1001", "ときどき", "09:00", "", "", "", "取得しない", "○"],
             ],
         )
-        with pytest.raises(MasterRowValueError) as e:
+        with pytest.raises(MasterTableError) as e:
             load_schedule(master)
         assert "取得頻度" in str(e.value)
 
@@ -247,7 +246,7 @@ class TestLoadSchedule:
                 ["S001", "1001", "毎週", "09:00", "", "月", "", "取得しない", ""],
             ],
         )
-        with pytest.raises(MasterRowValueError) as e:
+        with pytest.raises(MasterTableError) as e:
             load_schedule(master)
         assert "有効" in str(e.value)
 
@@ -284,7 +283,7 @@ class TestLoadSchedule:
 
 class TestScheduleValidation:
     """``ScheduleRule.validate()`` は「取得頻度」と「曜日」「日付」の組み合わせと、
-    「日付」列の解釈不能値を読み込み時に ``MasterRowValueError`` で止める。"""
+    「日付」列の解釈不能値を読み込み時に ``MasterTableError`` で止める。"""
 
     @staticmethod
     def _row(**overrides: str) -> list[str]:
@@ -333,7 +332,7 @@ class TestScheduleValidation:
                 self._row(曜日=""),  # 「毎週」なのに曜日が空
             ],
         )
-        with pytest.raises(MasterRowValueError) as caught:
+        with pytest.raises(MasterTableError) as caught:
             load_schedule(master)
         message = str(caught.value)
         assert "2 行目" in message
@@ -366,7 +365,7 @@ class TestScheduleValidation:
                 self._row(取得頻度="毎月", 曜日="", 日付=""),
             ],
         )
-        with pytest.raises(MasterRowValueError) as caught:
+        with pytest.raises(MasterTableError) as caught:
             load_schedule(master)
         message = str(caught.value)
         assert "2 行目" in message
@@ -394,7 +393,7 @@ class TestScheduleValidation:
                 self._row(取得頻度="毎日", 曜日="月"),  # 「毎日」だが曜日が書かれている
             ],
         )
-        with pytest.raises(MasterRowValueError) as caught:
+        with pytest.raises(MasterTableError) as caught:
             load_schedule(master)
         message = str(caught.value)
         assert "2 行目" in message
@@ -422,7 +421,7 @@ class TestScheduleValidation:
                 self._row(取得頻度="毎週", 日付="15"),
             ],
         )
-        with pytest.raises(MasterRowValueError) as caught:
+        with pytest.raises(MasterTableError) as caught:
             load_schedule(master)
         message = str(caught.value)
         assert "2 行目" in message
@@ -450,7 +449,7 @@ class TestScheduleValidation:
                 self._row(取得頻度="毎月", 日付="来月"),
             ],
         )
-        with pytest.raises(MasterRowValueError) as caught:
+        with pytest.raises(MasterTableError) as caught:
             load_schedule(master)
         message = str(caught.value)
         assert "2 行目" in message
@@ -460,7 +459,7 @@ class TestScheduleValidation:
         assert "(" not in message.split("行目", 1)[1].split("」", 1)[0]
 
     def test_invalid_time_value_raises_with_row_and_column(self, tmp_path):
-        """時刻の不正値（範囲外）も読み込み時に ``MasterRowValueError`` で行番号・列名付き。"""
+        """時刻の不正値（範囲外）も読み込み時に ``MasterTableError`` で行番号・列名付き。"""
         master = make_master_with_schedule(
             tmp_path / "管理表.xlsx",
             [
@@ -478,7 +477,7 @@ class TestScheduleValidation:
                 self._row(取得開始時刻="25:00"),
             ],
         )
-        with pytest.raises(MasterRowValueError) as caught:
+        with pytest.raises(MasterTableError) as caught:
             load_schedule(master)
         message = str(caught.value)
         assert "2 行目" in message
@@ -512,9 +511,9 @@ class TestScheduleValidation:
                 ),
             ],
         )
-        # 1行目で ``MasterRowValueError`` が出れば、2行目の検査には進まない。
+        # 1行目で ``MasterTableError`` が出れば、2行目の検査には進まない。
         # 「1件目で止める」のが読み込み時の自然な挙動（業務担当者は直して再実行する）
-        with pytest.raises(MasterRowValueError) as caught:
+        with pytest.raises(MasterTableError) as caught:
             load_schedule(master)
         message = str(caught.value)
         assert "2 行目" in message

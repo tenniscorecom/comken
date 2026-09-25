@@ -42,7 +42,7 @@ from comken.exceptions import (
     ComkenError,
     CredentialNotFoundError,
     SalesforceAuthError,
-    SalesforceSiteSelectionError,
+    SalesforceError,
 )
 from comken.toolbox.credentials import Credentials
 from comken.toolbox.salesforce.auth.oauth_redirect import CallbackResult, parse_redirect_url
@@ -202,20 +202,34 @@ def _confirm(message: str) -> bool:
     return answer.strip().lower() == "y"
 
 
+def _site_selection_error(answer: str, site_names: list[str]) -> SalesforceError:
+    """``SalesforceError`` の「対話的な組織選択で一致しなかった」文言。
+
+    発生箇所: comken.toolbox.salesforce.cli._select_site()
+    """
+    listed = "\n".join(f"  {name}" for name in site_names) or "  （登録なし）"
+    return SalesforceError(
+        f"「{answer}」に一致する組織がありません。番号か、次のいずれかの"
+        f"組織名（大文字小文字は区別しない）を入力してください:\n{listed}"
+        "\n対処: 表示された番号（1〜件数）か、組織名（大文字小文字は区別しない）を"
+        "入力し直してください。"
+    )
+
+
 def _resolve_site(answer: str) -> type[SalesforceBase]:
     """番号または組織名（大文字小文字を区別しない）から組織クラスを引く。"""
     if answer.isdigit():
         position = int(answer)
         if 1 <= position <= len(SITES):
             return SITES[position - 1]
-        raise SalesforceSiteSelectionError(answer, [s.__name__ for s in SITES])
+        raise _site_selection_error(answer, [s.__name__ for s in SITES])
 
     matches = [
         site_class for site_class in SITES if site_class.__name__.casefold() == answer.casefold()
     ]
     if len(matches) == 1:
         return matches[0]
-    raise SalesforceSiteSelectionError(answer, [s.__name__ for s in SITES])
+    raise _site_selection_error(answer, [s.__name__ for s in SITES])
 
 
 def _select_site() -> type[SalesforceBase]:

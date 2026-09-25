@@ -10,9 +10,7 @@ from comken.exceptions import (
     ComkenFileNotFoundError,
     CSVError,
     InvalidTableInputError,
-    InvalidTableOperationError,
     TableError,
-    TableNotOpenError,
     UnsupportedFileSuffixError,
 )
 from comken.toolbox import csv as csv_package
@@ -153,7 +151,7 @@ class TestCSV:
     def test_read_only_rejects_replace_and_does_not_save(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
         path.write_text("id\nold\n", encoding="utf-8-sig")
-        with pytest.raises(InvalidTableOperationError), CSV(path, read_only=True) as csv_file:
+        with pytest.raises(TableError), CSV(path, read_only=True) as csv_file:
             csv_file.replace([{"id": "new"}])
         with CSV(path) as csv_file:
             assert csv_file.read().column("id") == ["old"]
@@ -298,15 +296,15 @@ class TestCSV:
     def test_read_outside_with_block_raises_table_not_open_error(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
         path.write_text("id\n1\n", encoding="utf-8-sig")
-        with pytest.raises(TableNotOpenError, match="CSV"):
+        with pytest.raises(TableError, match="CSV"):
             CSV(path).read()
-        with pytest.raises(TableNotOpenError, match="CSV"):
+        with pytest.raises(TableError, match="CSV"):
             CSV(path).replace([{"id": "1"}])
-        with pytest.raises(TableNotOpenError, match="CSV"):
+        with pytest.raises(TableError, match="CSV"):
             CSV(path).save()
-        with pytest.raises(TableNotOpenError, match="CSV"):
+        with pytest.raises(TableError, match="CSV"):
             CSV(path).count()
-        with pytest.raises(TableNotOpenError, match="CSV"):
+        with pytest.raises(TableError, match="CSV"):
             CSV(path).iter_rows()
 
     def test_append_preserves_cp932_encoding(self, tmp_path) -> None:

@@ -41,8 +41,8 @@ from comken.core.table.model import Table
 from comken.core.timer import measure
 from comken.exceptions import (
     CachedReportNotFoundError,
+    DownloaderError,
     GroupNotRegisteredError,
-    ReportDisabledError,
     ReportNotRegisteredError,
 )
 from comken.services.salesforce_downloader.paths import MASTER_PATH
@@ -56,6 +56,21 @@ from comken.services.salesforce_downloader.sheets.master import (
 from comken.toolbox.csv import CSV
 
 logger = logging.getLogger(__name__)
+
+
+def _report_disabled_error(report_key: str, summary: str, master_path: Path) -> DownloaderError:
+    """``DownloaderError`` の「管理表で『無効』になっているレポートを取ろうとした」文言。
+
+    発生箇所: comken.services.salesforce_downloader の cached_report() / cached_report_path()
+    """
+    return DownloaderError(
+        f"このレポートは無効になっています: {report_key}（{summary}）\n"
+        f"管理表: {master_path}\n"
+        "また使うなら「有効」列を有効に戻してください。"
+        "\n対処: また使うなら管理表の「有効」を「有効」に戻してください。"
+        "使わないなら、呼び出し側のコードから消してください。"
+    )
+
 
 # ── 管理表のプロセス内キャッシュ ──────────────────────────────────────
 # `_find()` が `cached_report` / `cached_report_path` などの公開 API から
@@ -111,7 +126,7 @@ def cached_report(report_key: str, project: str = "") -> Table:
 
     Raises:
         ReportNotRegisteredError: 管理表に無い管理番号の場合。
-        ReportDisabledError: 管理表で無効になっている場合。
+        DownloaderError: 管理表で無効になっている場合。
         CachedReportNotFoundError: 本日のキャッシュが無い場合。
         GroupNotRegisteredError: 設定シートにないグループ名が管理表に書かれている場合。
     """
@@ -144,7 +159,7 @@ def cached_report_path(report_key: str) -> Path:
 
     Raises:
         ReportNotRegisteredError: 管理表に無い管理番号の場合。
-        ReportDisabledError: 管理表で無効になっている場合。
+        DownloaderError: 管理表で無効になっている場合。
         GroupNotRegisteredError: 設定シートにないグループ名が管理表に書かれている場合。
     """
     entry = _find(report_key, MASTER_PATH)
@@ -273,7 +288,7 @@ def _find(report_key: str, master_path: Path) -> ReportEntry:
     if entry is None:
         raise ReportNotRegisteredError(report_key, sorted(entries), master_path)
     if not entry.enabled:
-        raise ReportDisabledError(entry.key, entry.summary, master_path)
+        raise _report_disabled_error(entry.key, entry.summary, master_path)
     return entry
 
 

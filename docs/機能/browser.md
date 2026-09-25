@@ -97,7 +97,7 @@ with Kintai() as kintai:
 
 ```python
 browsers = Browsers()
-browsers.launch(Kintai)   # ← BrowserNotStartedError（ブラウザは起動しない）
+browsers.launch(Kintai)   # ← BrowserError（ブラウザは起動しない）
 ```
 
 `with` を忘れるとエラーで落ちたときにブラウザのプロセスが残り続け、
@@ -640,7 +640,7 @@ with session.popup_tab():            # 開いたタブへ移る
 # ← 別タブを閉じて、元のタブへ戻る
 ```
 
-### ブラウザが起動しない（`DriverStartError`）
+### ブラウザが起動しない（`BrowserError`）
 
 Windows Update で Edge だけが新しくなり、`msedgedriver.exe` が取り残されると起きる。
 
@@ -787,14 +787,14 @@ unfilled, pending = browsers.parallel(
 ```
 
 裏で動かしている処理と、自分で書いている処理で、同じセッションを触らないこと。
-同時に触ると `ConcurrentSessionUseError` で即座に止まります
+同時に触ると `BrowserError` で即座に止まります
 （黙って別の画面を操作するより安全なため）。
 
 ---
 
 ### BrowserSession（1サイト分のブラウザ）
 
-`with` の中でだけ使える。使わずに操作すると `BrowserNotStartedError` になる
+`with` の中でだけ使える。使わずに操作すると `BrowserError` になる
 （エラーで落ちたときにブラウザのプロセスが残り続けるのを防ぐため）。
 
 ```python
@@ -894,7 +894,7 @@ with Browsers() as browsers:
 ```
 
 - `wait()` は前回のファイルが残っていても誤検出しない（新しく増えた分だけを返す）
-- 時間内に終わらなければ `DownloadTimeoutError` になる
+- 時間内に終わらなければ `BrowserError` になる
 
 ---
 

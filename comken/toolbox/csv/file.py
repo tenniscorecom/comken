@@ -16,14 +16,33 @@ from comken.core.table.model import Table
 from comken.core.timer import measure
 from comken.exceptions.csv import CSVError
 from comken.exceptions.file import ComkenFileNotFoundError, UnsupportedFileSuffixError
-from comken.exceptions.table import (
-    InvalidTableInputError,
-    InvalidTableOperationError,
-    TableNotOpenError,
-)
+from comken.exceptions.table import InvalidTableInputError, TableError
 from comken.runtime import is_dry_run
 
 logger = logging.getLogger(__name__)
+
+
+def _table_not_open_error(table_type: str) -> TableError:
+    """``TableError`` の「with 文の外で表を操作した」文言。
+
+    ``with`` の中で使うべきテーブルを、外で操作したときに使う。CSV は
+    ``__enter__`` でファイルを開き、``__exit__`` で書き出すため、
+    外で開くとファイルが閉じている。
+    """
+    return TableError(
+        f"{table_type} は with 文の中で使ってください。"
+        "\n対処: with 文の中で使う（CSV / Excel などは __enter__ で表を開く）。"
+    )
+
+
+def _read_only_write_error() -> TableError:
+    """``TableError`` の「read_only のテーブルに書き込もうとした」文言。"""
+    return TableError(
+        "read_only=True のCSVには書き込めません。"
+        "\n対処: 対象が読み取り専用でないか確認してください。"
+        "書き込みたいときは read_only=True を外してください。"
+    )
+
 
 type Value = str | int | float | bool
 
@@ -227,7 +246,7 @@ class CSV:
 
     def _ensure_open(self) -> None:
         if not self._is_open:
-            raise TableNotOpenError("CSV")
+            raise _table_not_open_error("CSV")
 
     @measure
     def read(self) -> Table:
@@ -283,12 +302,12 @@ class CSV:
         だけ）。先に ``csv.read().columns`` または ``csv.columns`` 引数で
         列名を取得しておく。
 
-        このメソッドは ``with`` の中でだけ呼ぶこと（``TableNotOpenError``）。
+        このメソッドは ``with`` の中でだけ呼ぶこと（``TableError``）。
         文字コードの自動判定（``Encoding.AUTO`` のとき）は ``read()`` と
         同じ ``_read_text`` を使う。
         """
         # generator 関数のため body は ``next()`` まで遅延評価される。
-        # ``with`` 外での呼び出しを即座に ``TableNotOpenError`` で止めるため、
+        # ``with`` 外での呼び出しを即座に ``TableError`` で止めるため、
         # 先に ``_ensure_open`` だけを実行する内部ヘルパーを通す。
         self._ensure_open()
         return self._iter_rows()
@@ -376,7 +395,7 @@ class CSV:
         """ファイルのデータ領域を全置換する。"""
         self._ensure_open()
         if self._read_only:
-            raise InvalidTableOperationError("read_only=True のCSVには書き込めません。")
+            raise _read_only_write_error()
         if not isinstance(rows, (list, Table)):
             raise InvalidTableInputError("CSV の置換には Table または行リストを指定してください。")
         if isinstance(rows, Table):
@@ -407,7 +426,7 @@ class CSV:
         """行を保留中のTableへ追加する。確定はsaveまたはwith正常終了で行う。"""
         self._ensure_open()
         if self._read_only:
-            raise InvalidTableOperationError("read_only=True のCSVには書き込めません。")
+            raise _read_only_write_error()
         if self._pending is not None or self.path.exists():
             current = self.read()
         elif self._columns is not None:

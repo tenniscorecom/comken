@@ -8,10 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from comken.exceptions import (
-    ExcelError,
-    InvalidTableInputError,
-)
+from comken.exceptions import ExcelError, InvalidTableInputError, TableError
 from comken.toolbox.excel import Excel
 from comken.toolbox.excel.workbook import ExcelTable
 
@@ -210,7 +207,7 @@ class TestConvertRangeToTableErrors:
 
 
 class TestConvertRangeToTableComEngine:
-    """``engine='com'`` で ``convert_range_to_table`` を呼ぶと ``InvalidTableOperationError``。
+    """``engine='com'`` で ``convert_range_to_table`` を呼ぶと ``TableError``。
 
     他の engine='com' 限定 API（``sheet()`` など）と例外型を揃えている。
     """
@@ -218,7 +215,6 @@ class TestConvertRangeToTableComEngine:
     def test_com_engine_raises_invalid_table_operation(self, tmp_path) -> None:
         from unittest.mock import MagicMock
 
-        from comken.exceptions import InvalidTableOperationError
         from comken.toolbox.excel import Excel as ExcelCls
 
         path = tmp_path / "book.xlsx"
@@ -233,6 +229,6 @@ class TestConvertRangeToTableComEngine:
             )
             with (
                 ExcelCls(path, engine="com", local_copy=False) as excel,
-                pytest.raises(InvalidTableOperationError, match="openpyxl で開いたブック"),
+                pytest.raises(TableError, match="openpyxl で開いたブック"),
             ):
                 excel.convert_range_to_table("案件一覧", range="A1:C4", table_name="案件")

@@ -3517,7 +3517,7 @@ class SalesforceError(ComkenError):
 
 #### 説明
 
-Salesforce に関するエラー
+Salesforce に関するエラー。具体的な状況はメッセージに出る
 
 対処:
     メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
@@ -3543,27 +3543,6 @@ Salesforce にログインできない
 def __init__(self, status_code: int, detail: str) -> None:
 ```
 
-### `SalesforceConnectionError`
-
-```text
-class SalesforceConnectionError(SalesforceError):
-```
-
-#### 説明
-
-Salesforce につながらない
-
-発生箇所: comken.toolbox.salesforce.SalesforceBase の全リクエスト
-
-対処:
-    ネットワークの状態を確認して、少し待ってから再実行する
-
-#### `__init__`
-
-```text
-def __init__(self, url: str, detail: Exception) -> None:
-```
-
 ### `SalesforceRequestError`
 
 ```text
@@ -3583,44 +3562,6 @@ Salesforce が処理を断った
 
 ```text
 def __init__(self, method: str, path: str, status_code: int, detail: str) -> None:
-```
-
-### `SalesforceExternalIDMissingError`
-
-```text
-class SalesforceExternalIDMissingError(SalesforceError):
-```
-
-#### 説明
-
-upsert 用データに外部 ID がない
-
-対処:
-    管理者へ連絡する
-
-#### `__init__`
-
-```text
-def __init__(self, object_name: str, external_id_field: str) -> None:
-```
-
-### `SalesforceCredentialRotationError`
-
-```text
-class SalesforceCredentialRotationError(SalesforceError):
-```
-
-#### 説明
-
-consumer key / secret のローテーションを安全に完了できない
-
-対処:
-    Salesforce の ECA 設定・API レスポンス・DPAPI の保存先を確認する
-
-#### `__init__`
-
-```text
-def __init__(self, detail: str) -> None:
 ```
 
 ### `SalesforceReportTruncatedError`
@@ -3647,30 +3588,6 @@ class SalesforceReportTruncatedError(SalesforceError):
 def __init__(self, report_id: str, row_limit: int) -> None:
 ```
 
-### `SalesforceReportFormatError`
-
-```text
-class SalesforceReportFormatError(SalesforceError):
-```
-
-#### 説明
-
-レポートの形式が対応していない
-
-集計（サマリ・マトリックス）形式は行の入れ物の構造が変わり、
-そのまま読むと無言で空を返すため、明示的に弾く。
-
-発生箇所: comken.toolbox.salesforce.ReportAPI.run() / run_async()
-
-対処:
-    レポートを明細形式にするか、管理者へ連絡する
-
-#### `__init__`
-
-```text
-def __init__(self, report_id: str, report_format: str) -> None:
-```
-
 ### `SalesforceReportIDNotFoundError`
 
 ```text
@@ -3686,7 +3603,6 @@ class SalesforceReportIDNotFoundError(SalesforceError):
 
 発生箇所: comken.toolbox.salesforce.report.report_id_from_url()
          （呼び出し元の例: comken-salesforce-downloader の master.py。
-         2026-08-30 に comken から分離した別リポジトリ。
          comken.toolbox.browser.sites.salesforce.base
          .SalesforceReportBrowser.export_reports() も
          同じ report_id_from_url() を呼ぶ）
@@ -3700,194 +3616,6 @@ class SalesforceReportIDNotFoundError(SalesforceError):
 def __init__(self, text: str) -> None:
 ```
 
-### `SalesforceReportExecutionError`
-
-```text
-class SalesforceReportExecutionError(SalesforceError):
-```
-
-#### 説明
-
-Salesforce 側でレポート実行に失敗した
-
-対処:
-    Salesforce で同じレポートを直接実行し、表示された内容を管理者へ連絡する
-
-#### `__init__`
-
-```text
-def __init__(self, report_id: str, detail: str) -> None:
-```
-
-### `SalesforceReportAccessDeniedError`
-
-```text
-class SalesforceReportAccessDeniedError(SalesforceError):
-```
-
-#### 説明
-
-レポート API（Reports and Dashboards REST API）へのアクセスを拒否された
-
-Salesforce はこの API を「Analytics API」と呼ぶことがあり、別ライセンス製品の
-CRM Analytics（旧 Einstein Analytics / Tableau CRM）と紛らわしい。
-このエラーは comken が誤ったエンドポイントを叩いたのではなく、
-Reports and Dashboards REST API そのものへのアクセスが HTTP 401 / 403 で
-拒否された場合に出る。メッセージの文言ではなくステータスコードで判定する。
-
-発生箇所: comken.toolbox.salesforce.report.ReportAPI の全メソッド
-          （get / run_csv / run_async / describe）
-
-対処:
-    Salesforce 管理者に、refresh_token を発行したユーザーについて
-    次を確認してもらう。
-      1. Profile / Permission Set に「API Enabled」」権限があるか
-      2. 対象のレポート・レポートフォルダへのアクセス権があるか
-      3. 組織の Edition・ライセンスが Reports and Dashboards REST API
-         に対応しているか（一部の制限ライセンスでは使えない）
-
-#### `__init__`
-
-```text
-def __init__(self, report_id: str, status_code: int, detail: str) -> None:
-```
-
-### `SalesforceReportExportError`
-
-```text
-class SalesforceReportExportError(SalesforceError):
-```
-
-#### 説明
-
-画面のエクスポート機能でレポートをCSV/XLS取得できなかった
-
-HTTPステータス自体は200で返るが、本文がCSV/XLSではなくHTMLのログイン画面や
-エラーページになっている場合に出る。
-
-発生箇所: comken.toolbox.browser.sites.salesforce.base.SalesforceReportBrowser.export_reports()
-         （go_login() + wait_for_manual_login() で確立したブラウザのセッション
-         Cookieをrequestsへ引き継いで並列ダウンロードする経路。ログインを
-         済ませていない、あるいはセッションの有効期限が切れていると起きる）
-
-対処:
-    1. go_login() + wait_for_manual_login() でログインを済ませてから
-       export_reports() を呼んでいるか確認する
-    2. 時間が経ってセッションが切れていないか（長時間のバッチの後半で
-       発生する場合はこれが疑わしい）
-    3. レポートそのものへのアクセス権・組織の Edition を確認してもらう
-
-#### `__init__`
-
-```text
-def __init__(self, report_id: str, status_code: int, content_type: str) -> None:
-```
-
-### `SalesforceSiteNotFoundError`
-
-```text
-class SalesforceSiteNotFoundError(SalesforceError):
-```
-
-#### 説明
-
-URL のドメインに対応する組織が登録されていない
-
-管理表には複数の組織のレポート URL が混ざる。どの組織へつなぐかは
-URL のドメインで決めるので、未登録のドメインでは接続先を選べない。
-
-発生箇所: comken.toolbox.salesforce.sites.site_for()
-         comken.toolbox.browser.sites.salesforce.site_for()
-         （ブラウザ経由でのレポートダウンロードの組織振り分け）
-
-対処:
-    URL のドメインを見直す。新しい組織なら管理者へ連絡する
-    （組織クラスの追加が要る）
-
-#### `__init__`
-
-```text
-def __init__(self, url: str, known_domains: list[str]) -> None:
-```
-
-### `SalesforceSiteSelectionError`
-
-```text
-class SalesforceSiteSelectionError(SalesforceError):
-```
-
-#### 説明
-
-対話的な組織選択で、番号にも組織名にも一致しなかった
-
-発生箇所: comken.toolbox.salesforce.cli._select_site()
-
-対処:
-    表示された番号（1〜件数）か、組織名（大文字小文字は区別しない）を
-    入力し直す
-
-#### `__init__`
-
-```text
-def __init__(self, answer: str, site_names: list[str]) -> None:
-```
-
-### `SalesforceBulkFailedError`
-
-```text
-class SalesforceBulkFailedError(SalesforceError):
-```
-
-#### 説明
-
-Bulk API のジョブが失敗して終わった（Failed / Aborted）
-
-クエリ（``bulk_query``）と Ingest（``bulk_ingest``）の両方で共通する
-ジョブ失敗を扱う。SOQL 構文・項目参照・CSV 列名・データ型など、
-原因は経路ごとに違うのでメッセージで個別に示す。
-
-発生箇所: comken.toolbox.salesforce.bulk_query.BulkQueryAPI.run()
-         comken.toolbox.salesforce.bulk_ingest.BulkIngestAPI の
-         insert() / update() / upsert() / delete()
-
-対処:
-    表示されたエラー内容を確認する。クエリ経路は SOQL 構文・参照項目・
-    実行ユーザーの権限、Ingest 経路は CSV の列名・データ型・実行ユーザーの
-権限を見直す
-
-#### `__init__`
-
-```text
-def __init__(self, message: str) -> None:
-```
-
-### `SalesforceBulkTimeoutError`
-
-```text
-class SalesforceBulkTimeoutError(SalesforceError):
-```
-
-#### 説明
-
-Bulk API のジョブが制限時間内に終わらなかった
-
-クエリ（``bulk_query``）と Ingest（``bulk_ingest``）の両方で共通する
-タイムアウトを扱う。
-
-発生箇所: comken.toolbox.salesforce.bulk_query.BulkQueryAPI.run()
-         comken.toolbox.salesforce.bulk_ingest.BulkIngestAPI の
-         insert() / update() / upsert() / delete()
-
-対処:
-    ``timeout_seconds`` を長くするか、対象を絞って再実行する。
-    Ingest 経路はデータを分割して再実行してもよい
-
-#### `__init__`
-
-```text
-def __init__(self, message: str) -> None:
-```
-
 ### `BrowserError`
 
 ```text
@@ -3896,217 +3624,10 @@ class BrowserError(ComkenError):
 
 #### 説明
 
-ブラウザ操作に関するエラー
+ブラウザ操作に関するエラー。具体的な状況はメッセージに出る
 
 対処:
     メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
-
-### `DriverStartError`
-
-```text
-class DriverStartError(BrowserError):
-```
-
-#### 説明
-
-ブラウザを起動できない
-
-発生箇所: Browsers.launch()
-
-対処:
-    エラーの本文にある確認事項をそのまま試す。
-    Windows Update で Edge が更新された直後に起きやすい。
-
-    メッセージが「バージョンが合わない」でも、``PROFILE_ROOT`` に
-    **相対パス**を設定している場合は疑わしい。``--user-data-dir`` に
-    相対パスが渡ると、msedge.exe 側の作業ディレクトリ次第でプロファイル
-    初期化に失敗し、実際の原因と無関係に同じメッセージで落ちることがある
-    （``Browsers._resolve_profile_dir()`` は絶対パスへ解決して渡すが、
-    念のため確認する）
-
-#### `__init__`
-
-```text
-def __init__(self, driver_path: str, detail: Exception) -> None:
-```
-
-### `BrowserNotStartedError`
-
-```text
-class BrowserNotStartedError(BrowserError):
-```
-
-#### 説明
-
-`with` を使わずにブラウザを操作した
-
-``Browsers`` 本体の ``launch`` / ``launch_session`` / ``run_task`` / ``__getitem__`` 、
-``BrowserSession`` の ``open`` / ``driver`` など、 ``Browsers / BrowserSession`` を
-``with`` に入れずに呼ぶとここで止める。with を使わないと、処理の途中で例外が
-出たときにブラウザのプロセスが残り続けるため。
-
-``SiteBase.to()`` / ``SiteBase.downloads`` のように、サイト単位で ``with`` に入る
-経路も同じく ``with`` の外で使うとここで止まる。
-
-    # 誤り
-    browsers = Browsers()
-    browsers.launch(Kintai)     # ← ここで送出される（ブラウザは起動しない）
-
-    # 正しい
-    with Browsers() as browsers:
-        kintai = browsers.launch(Kintai)
-
-対処:
-    `with Browsers() as browsers:` の中で使う（ブラウザは起動していないので実害はない）
-
-#### `__init__`
-
-```text
-def __init__(self, message: str) -> None:
-```
-
-### `BrowserClosedError`
-
-```text
-class BrowserClosedError(BrowserError):
-```
-
-#### 説明
-
-`with` を抜けた後のブラウザを操作した
-
-with の外へブラウザを持ち出すと起きる。with を抜けた時点で
-ブラウザはすべて閉じているため、そこから起動や操作はできない。
-取得したデータを with の外で使いたい場合は、セッションではなく
-取り出した値（文字列やファイルパス）を返すようにする。
-
-対処:
-    続けたい処理を `with` の中に入れる。外へ持ち出すのは取り出した値だけにする
-
-#### `__init__`
-
-```text
-def __init__(self, message: str) -> None:
-```
-
-### `ConcurrentSessionUseError`
-
-```text
-class ConcurrentSessionUseError(BrowserError):
-```
-
-#### 説明
-
-1つのブラウザを複数の処理から同時に操作した
-
-WebDriver は1つの接続でコマンドを順番に処理するため、
-同じセッションを2スレッドから同時に操作すると応答が入れ替わり、
-「別の画面を操作していた」という追跡困難な不具合になる。
-サイトごとにセッションを分けること（Browsers.launch で1サイト1セッション）。
-
-対処:
-    サイトごとに `launch` でブラウザを分ける
-
-#### `__init__`
-
-```text
-def __init__(self, name: str, operation: str, holder_thread: str) -> None:
-```
-
-### `SessionNameConflictError`
-
-```text
-class SessionNameConflictError(BrowserError):
-```
-
-#### 説明
-
-同じ名前で2回 `launch` した
-
-発生箇所: Browsers.launch() / Browsers.launch_session()
-
-対処:
-    名前を変える（同一サイトの別アカウントなら `kintai_a` / `kintai_b` など）
-
-#### `__init__`
-
-```text
-def __init__(self, name: str) -> None:
-```
-
-### `SessionNotFoundError`
-
-```text
-class SessionNotFoundError(BrowserError):
-```
-
-#### 説明
-
-`launch` していない名前を取り出した
-
-発生箇所: Browsers.__getitem__()
-
-対処:
-    先に `launch` する。エラーに起動済みの一覧が出ます
-
-#### `__init__`
-
-```text
-def __init__(self, name: str, launched: list[str]) -> None:
-```
-
-### `SiteConfigError`
-
-```text
-class SiteConfigError(BrowserError):
-```
-
-#### 説明
-
-`SiteBase` サブクラスの設定が不足している
-
-ブラウザを起動する前に、必要なクラス定数が設定されていないとここで止まる。
-起動してから「どのサイトか分からない」では遅いので、設定不足は呼び出し時点で
-確実に発見する。
-
-発生箇所: Browsers.launch(SiteBase)
-
-対処:
-    サブクラスに NAME を定義する（BASE_URL / OPTIONS も同じ）
-
-#### `__init__`
-
-```text
-def __init__(self, site_cls: type, missing: str) -> None:
-```
-
-### `SiteAlreadyInLibraryError`
-
-```text
-class SiteAlreadyInLibraryError(BrowserError):
-```
-
-#### 説明
-
-ライブラリ公認のサイトと同じ NAME のサイトをプロジェクト側で定義した
-
-ライブラリ（`comken.toolbox.browser.sites`）に同じ NAME のクラスが
-登録されているものを、プロジェクト側で再定義するとここで止まる。
-「すでにライブラリにあるものを自作している」状態を自動で捕まえるのが目的。
-どちらもプロジェクト側に置くと、片方を直してもう片方が追従できない事故になる。
-
-発生箇所: SiteBase.__enter__() / Browsers.launch(SiteBase)
-
-対処:
-    ライブラリから `from comken.toolbox.browser.sites import <クラス名>` で取り出して使う。
-    プロジェクト側の定義は消す。ライブラリへ昇格する基準は
-    `docs/CONVENTIONS.md` の「サイト／組織クラスを昇格させる基準」を参照。
-
-#### `__init__`
-
-```text
-def __init__(self, site_cls: type, library_cls: type) -> None:
-```
 
 ### `ElementNotFoundError`
 
@@ -4128,48 +3649,6 @@ selenium の TimeoutException を、どのセレクターで失敗したかが�
 
 ```text
 def __init__(self, locator: object, seconds: int, condition: str) -> None:
-```
-
-### `PopupTabNotOpenedError`
-
-```text
-class PopupTabNotOpenedError(BrowserError):
-```
-
-#### 説明
-
-別タブが開かない
-
-発生箇所: BrowserSession.popup_tab()
-
-対処:
-    もう一度実行する。続く場合は、その画面の「別ウィンドウで開く」ボタンが変わった可能性があるので管理者へ
-
-#### `__init__`
-
-```text
-def __init__(self, seconds: int) -> None:
-```
-
-### `DownloadTimeoutError`
-
-```text
-class DownloadTimeoutError(BrowserError):
-```
-
-#### 説明
-
-ダウンロードが終わらない
-
-発生箇所: DownloadDir.wait()
-
-対処:
-    ネットワークの状態を確認して再実行する。大きいファイルなら時間がかかっているだけのこともある
-
-#### `__init__`
-
-```text
-def __init__(self, directory: object, seconds: int) -> None:
 ```
 
 ### `LoginFailedError`
@@ -4209,59 +3688,10 @@ class MasterTableError(ComkenError):
 
 #### 説明
 
-Excel の管理表に関するエラー
+Excel の管理表に関するエラー。具体的な状況はメッセージに出る
 
 対処:
     メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
-
-### `MasterSheetNotDefinedError`
-
-```text
-class MasterSheetNotDefinedError(MasterTableError):
-```
-
-#### 説明
-
-管理表の場所が決まっていない
-
-`load()` を引数なしで呼ぶには、クラス変数 `PATH` に既定の場所を書いておく必要がある。
-
-発生箇所: comken.services.salesforce_downloader.report_master の load()
-
-対処:
-    `load(パス)` のようにファイルを渡すか、クラスに PATH を書く（コードの直し方の話なので、
-    非エンジニアが見た場合は管理者へ連絡する）
-
-#### `__init__`
-
-```text
-def __init__(self, class_name: str) -> None:
-```
-
-### `MasterColumnNotFoundError`
-
-```text
-class MasterColumnNotFoundError(MasterTableError):
-```
-
-#### 説明
-
-管理表に必要な列（見出し）が無い
-
-見出しの行を書き換えた・列を消した・別のシートを見ている、のいずれか。
-**プログラムは見出しの名前で列を探す**ので、見出しが変わると読めなくなる。
-
-発生箇所: comken.services.salesforce_downloader.report_master の load()
-
-対処:
-    管理表の1行目（見出し）を元に戻す。消してしまった場合は、
-    メッセージに出ている「今ある見出し」と見比べて足す
-
-#### `__init__`
-
-```text
-def __init__(self, header: str, existing: list[str], path: Path, sheet_name: str) -> None:
-```
 
 ### `MasterRowValueError`
 
@@ -4612,31 +4042,6 @@ class GroupNotRegisteredError(DownloaderError):
 def __init__(self, group: str, registered: list[str], master_path: Path) -> None:
 ```
 
-### `ReportDisabledError`
-
-```text
-class ReportDisabledError(DownloaderError):
-```
-
-#### 説明
-
-管理表で「無効」になっているレポートを取ろうとした
-
-使うのをやめたレポートは、行を消さずに「無効」にして履歴との対応を残す。
-無効のものを黙って取りに行くと、やめたはずの取得が続いてしまう。
-
-発生箇所: comken.services.salesforce_downloader の cached_report() / cached_report_path()
-
-対処:
-    また使うなら管理表の「有効」を「有効」に戻す。
-    使わないなら、呼び出し側のコードから消す
-
-#### `__init__`
-
-```text
-def __init__(self, report_key: str, summary: str, master_path: Path) -> None:
-```
-
 ### `EmptyReportError`
 
 ```text
@@ -4716,35 +4121,6 @@ class ReportReservePathLimitError(DownloaderError):
 def __init__(self, report_key: str, base_path: Path, limit: int) -> None:
 ```
 
-### `ScheduleSettingError`
-
-```text
-class ScheduleSettingError(DownloaderError):
-```
-
-#### 説明
-
-管理表のスケジュール列（取得頻度・曜日）に想定外の値が書かれている
-
-- 「取得頻度」は ``毎日`` / ``毎週`` / ``毎月`` / ``毎営業日`` の4種類
-- 「曜日」は ``月`` 〜 ``日`` の漢字1文字（「曜日」接尾辞付きも可）
-
-これら以外（手書きのタイポ・想定外の列挙値）が入っていると、取得の判定が
-できない。
-
-発生箇所: comken.services.salesforce_downloader.sheets.schedule の is_due() /
-ScheduleRule.weekday
-
-対処:
-    管理表の「取得頻度」列を ``毎日`` / ``毎週`` / ``毎月`` / ``毎営業日`` の
-    いずれかに、「曜日」列を月〜日のいずれかに修正する（「曜日」接尾辞付きも可）
-
-#### `__init__`
-
-```text
-def __init__(self, message: str) -> None:
-```
-
 ### `ScheduledDownloadFailedError`
 
 ```text
@@ -4772,34 +4148,6 @@ class ScheduledDownloadFailedError(DownloaderError):
 def __init__(self, failed_keys: list[str], history_path: Path) -> None:
 ```
 
-### `SoqlDownloadFailedError`
-
-```text
-class SoqlDownloadFailedError(DownloaderError):
-```
-
-#### 説明
-
-SOQL レポートの取得で1件以上が失敗した
-
-取得できたものは保存済み。**1件失敗しても残りは続けたうえで、最後にまとめて知らせる。**
-`download_scheduled()` と同じ「ログだけだと気づけない」問題なので、最後に例外で
-上げる。定期取得は履歴 CSV の存在を前提にしたメッセージになるため、
-履歴機能を持たない SOQL レポート経路ではこの例外を使う。
-
-発生箇所: comken.services.salesforce_downloader.soql_reports の download_soql_reports()
-
-対処:
-    表示された管理番号について、SOQL クエリ・組織の認証情報・保存先フォルダの
-    権限・ネットワークの状態を確認する。急いで必要なものは
-    ``download_soql_reports()`` を直接実行してもよい
-
-#### `__init__`
-
-```text
-def __init__(self, failed_keys: list[str]) -> None:
-```
-
 ### `DataLoaderError`
 
 ```text
@@ -4808,94 +4156,10 @@ class DataLoaderError(ComkenError):
 
 #### 説明
 
-Data Loader の実行に関するエラー
+Data Loader の実行に関するエラー。具体的な状況はメッセージに出る
 
 対処:
     メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
-
-### `DataLoaderTimeoutError`
-
-```text
-class DataLoaderTimeoutError(DataLoaderError):
-```
-
-#### 説明
-
-Data Loader の実行が制限時間内に終わらなかった
-
-``timeout_seconds`` を超えてもプロセスが生きている。大量データを処理する場合
-は既定値（3600秒 = 1時間）でも足りないことがある。
-
-対処:
-    処理対象の件数を減らすか、``timeout_seconds`` を長くする。
-    プロセスがハングしている場合はタスクマネージャーから Data Loader の
-    プロセスを終了させる
-
-#### `__init__`
-
-```text
-def __init__(self, launcher_path: Path | str, timeout_seconds: float) -> None:
-```
-
-### `DataLoaderExecutionError`
-
-```text
-class DataLoaderExecutionError(DataLoaderError):
-```
-
-#### 説明
-
-Data Loader が 0 以外の終了コードで終わった
-
-Data Loader プロセス自体が起動・実行に失敗した場合に出る。
-**1件1件のレコードの成否とは別**（個別レコードの失敗は
-``DataLoaderResult.errors`` で確認する。プロセス自体は正常終了しつつ
-一部レコードだけ失敗するのは普通に起きることなので、ここでは例外にしない）。
-
-対処:
-    表示された標準出力・標準エラー出力を確認する。``config.properties``・
-    ``process-conf.xml`` の設定を見直す。よくある原因はログイン情報の誤り、
-SOQL のフィールド名不一致、書き出し先パスへの権限不足
-
-#### `__init__`
-
-```text
-def __init__(self, launcher_path: Path | str, returncode: int, stdout: str, stderr: str) -> None:
-```
-
-### `InvalidTableOperationError`
-
-```text
-class InvalidTableOperationError(TableError):
-```
-
-#### 説明
-
-Table API で実行できない操作が指定された。
-
-発生箇所: Table / CSV / ExcelTable
-
-対処:
-    対象が読み取り専用でないか、指定したテーブル名が正しいか確認する
-
-### `TableNotOpenError`
-
-```text
-class TableNotOpenError(TableError):
-```
-
-#### 説明
-
-表を with 文で開かずに操作した。
-
-対処:
-    ``with`` 文の中で使う（CSV / Excel などは ``__enter__`` で表を開く）
-
-#### `__init__`
-
-```text
-def __init__(self, table_type: str) -> None:
-```
 
 ### `TableError`
 
@@ -5200,12 +4464,12 @@ def weekday(self) -> int | None:
 
 読み込み時は ``choices=WEEKDAY_NAMES`` で月〜日に絞り込まれているため、
 想定外の表記（例: 「月曜日」）はここに来る前に ``MasterRowValueError``
-として弾かれる。``ScheduleSettingError`` は既定の挙動を逸脱した
+として弾かれる。``DownloaderError`` は既定の挙動を逸脱した
 場合に備えた受け皿で、テストや Python から直接 ``ScheduleRule`` を
 組み立てたときにだけ使われる。
 
 Raises:
-    ScheduleSettingError: 想定外の文字列が書かれている場合。
+    DownloaderError: 想定外の文字列が書かれている場合。
 
 #### `day_of_month`
 
@@ -5353,7 +4617,7 @@ def download_soql_reports(reports: Sequence[type[SoqlReport]] | None=None) -> li
 
 想定した失敗（``ComkenError`` / ``OSError``）はログに残して次のレポートへ進む。
 想定外（``TypeError`` などのプログラムバグ）はそのまま伝播させ、気づける
-ようにする。1件でも失敗したら最後に ``SoqlDownloadFailedError`` を
+ようにする。1件でも失敗したら最後に ``DownloaderError`` を
 ``__cause__`` 付きで送出する。
 
 Args:
@@ -5537,7 +4801,7 @@ class Browsers:
 どこで例外が出ても、起動済みのブラウザはすべて閉じる。
 1つのブラウザの終了に失敗しても、残りの終了は続行される。
 
-with を使わずに launch すると BrowserNotStartedError になる（ブラウザは起動しない）。
+with を使わずに launch すると BrowserError になる（ブラウザは起動しない）。
 with を必須にしているのは、途中で例外が出たときにブラウザのプロセスが残り、
 次の実行でドライバーの更新まで邪魔するのを防ぐため。
 
@@ -5569,7 +4833,7 @@ def launch(self, site: type[S], download_dir: str | Path | None=None) -> S:
 取り違えが起きにくく、固有の値が1か所に集まる。
 
 Args:
-    site: 起動する SiteBase サブクラス。`NAME` が必須（空だと SiteConfigError）。
+    site: 起動する SiteBase サブクラス。`NAME` が必須（空だと BrowserError）。
     download_dir: ダウンロード先。省略時は OPTIONS.DOWNLOAD_DIR/<NAME>、
                   それも未設定なら一時フォルダを作り、終了時に削除する。
 
@@ -5577,9 +4841,9 @@ Returns:
     起動済みの SiteBase インスタンス。`.session` で BrowserSession に繋がる。
 
 Raises:
-    SiteConfigError: サブクラスに NAME が設定されていない場合。
-    SessionNameConflictError: 同じ NAME ですでに起動している場合。
-    DriverStartError: ブラウザを起動できなかった場合。
+    BrowserError: サブクラスに NAME が設定されていない場合、
+        同じ NAME ですでに起動している場合、ブラウザを起動できなかった場合
+        （具体的な理由はメッセージに出る）。
 
 #### `launch_session`
 
@@ -5612,8 +4876,8 @@ Returns:
     起動済みの BrowserSession。この with を抜けるまで使える。
 
 Raises:
-    SessionNameConflictError: 同じ名前ですでに起動している場合。
-    DriverStartError: ブラウザを起動できなかった場合。
+    BrowserError: 同じ名前ですでに起動している場合、
+        ブラウザを起動できなかった場合（具体的な理由はメッセージに出る）。
 
 #### `run_task`
 
@@ -5633,7 +4897,7 @@ def run_task(self, task: Callable[[], T], label: str='') -> BackgroundTask[T]:
     days = kintai.wait()                        # 戻って結果を受け取る
 
 **裏で動かす処理と、その後に自分で書く処理で、同じセッションを触らないこと。**
-同じセッションを同時に触ると ConcurrentSessionUseError で止まる
+同じセッションを同時に触ると BrowserError で止まる
 （黙って別の画面を操作するより、早く気づけるほうが安全なため）。
 
 Args:
@@ -5670,7 +4934,7 @@ run_task() で始めて wait() で受け取るのを、まとめて書けるよ�
 受け取るタイミングを自分で決めたい場合は run_task() を使う。
 
 1つの処理では1つのセッションだけを触ること。同じセッションを2つの処理から
-触ると ConcurrentSessionUseError で止まる。
+触ると BrowserError で止まる。
 
 Args:
     *tasks: 引数を取らない呼び出し可能オブジェクト。
@@ -5709,7 +4973,7 @@ class BrowserSession:
 
 with を必須にしているのは、処理の途中で例外が出たときに
 ブラウザのプロセスと一時フォルダを確実に片付けるため。
-with を使わずに操作すると BrowserNotStartedError になる。
+with を使わずに操作すると BrowserError になる。
 
 ダウンロード先・ログイン状態・起動オプションはこのセッションが専有する。
 他のセッションと混ざらないので、サイトごとに違う設定を安心して使える。
@@ -5848,7 +5112,7 @@ Yields:
     自分自身。中では今までどおり session と Page をそのまま使える。
 
 Raises:
-    PopupTabNotOpenedError: 時間内に新しいタブが開かなかった場合。
+    BrowserError: 時間内に新しいタブが開かなかった場合（具体的な理由はメッセージに出る）。
 
 #### `load_many`
 
@@ -5888,8 +5152,8 @@ Yields:
     Page のメソッドがそのまま使える。
 
 Raises:
-    BrowserNotStartedError: with に入る前に呼んだ場合。
-    ConcurrentSessionUseError: 他のスレッドが同じセッションを操作している場合。
+    BrowserError: with に入る前に呼んだ場合、または
+        他のスレッドが同じセッションを操作している場合（具体的な理由はメッセージに出る）。
 
 #### `raw`
 
@@ -5950,7 +5214,7 @@ def downloads(self) -> DownloadDir:
     files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
 
 Raises:
-    BrowserNotStartedError: まだ起動していない場合。
+    BrowserError: まだ起動していない場合。
 
 #### `to`
 
@@ -6689,7 +5953,7 @@ Returns:
     新しくダウンロードされたファイルのパスリスト（更新日時順）。
 
 Raises:
-    DownloadTimeoutError: timeout 秒以内にダウンロードが完了しなかった場合。
+    BrowserError: timeout 秒以内にダウンロードが完了しなかった場合。
 
 #### `remove`
 
@@ -6796,7 +6060,7 @@ class Browsers:
 どこで例外が出ても、起動済みのブラウザはすべて閉じる。
 1つのブラウザの終了に失敗しても、残りの終了は続行される。
 
-with を使わずに launch すると BrowserNotStartedError になる（ブラウザは起動しない）。
+with を使わずに launch すると BrowserError になる（ブラウザは起動しない）。
 with を必須にしているのは、途中で例外が出たときにブラウザのプロセスが残り、
 次の実行でドライバーの更新まで邪魔するのを防ぐため。
 
@@ -6828,7 +6092,7 @@ def launch(self, site: type[S], download_dir: str | Path | None=None) -> S:
 取り違えが起きにくく、固有の値が1か所に集まる。
 
 Args:
-    site: 起動する SiteBase サブクラス。`NAME` が必須（空だと SiteConfigError）。
+    site: 起動する SiteBase サブクラス。`NAME` が必須（空だと BrowserError）。
     download_dir: ダウンロード先。省略時は OPTIONS.DOWNLOAD_DIR/<NAME>、
                   それも未設定なら一時フォルダを作り、終了時に削除する。
 
@@ -6836,9 +6100,9 @@ Returns:
     起動済みの SiteBase インスタンス。`.session` で BrowserSession に繋がる。
 
 Raises:
-    SiteConfigError: サブクラスに NAME が設定されていない場合。
-    SessionNameConflictError: 同じ NAME ですでに起動している場合。
-    DriverStartError: ブラウザを起動できなかった場合。
+    BrowserError: サブクラスに NAME が設定されていない場合、
+        同じ NAME ですでに起動している場合、ブラウザを起動できなかった場合
+        （具体的な理由はメッセージに出る）。
 
 #### `launch_session`
 
@@ -6871,8 +6135,8 @@ Returns:
     起動済みの BrowserSession。この with を抜けるまで使える。
 
 Raises:
-    SessionNameConflictError: 同じ名前ですでに起動している場合。
-    DriverStartError: ブラウザを起動できなかった場合。
+    BrowserError: 同じ名前ですでに起動している場合、
+        ブラウザを起動できなかった場合（具体的な理由はメッセージに出る）。
 
 #### `run_task`
 
@@ -6892,7 +6156,7 @@ def run_task(self, task: Callable[[], T], label: str='') -> BackgroundTask[T]:
     days = kintai.wait()                        # 戻って結果を受け取る
 
 **裏で動かす処理と、その後に自分で書く処理で、同じセッションを触らないこと。**
-同じセッションを同時に触ると ConcurrentSessionUseError で止まる
+同じセッションを同時に触ると BrowserError で止まる
 （黙って別の画面を操作するより、早く気づけるほうが安全なため）。
 
 Args:
@@ -6929,7 +6193,7 @@ run_task() で始めて wait() で受け取るのを、まとめて書けるよ�
 受け取るタイミングを自分で決めたい場合は run_task() を使う。
 
 1つの処理では1つのセッションだけを触ること。同じセッションを2つの処理から
-触ると ConcurrentSessionUseError で止まる。
+触ると BrowserError で止まる。
 
 Args:
     *tasks: 引数を取らない呼び出し可能オブジェクト。
@@ -6968,7 +6232,7 @@ class BrowserSession:
 
 with を必須にしているのは、処理の途中で例外が出たときに
 ブラウザのプロセスと一時フォルダを確実に片付けるため。
-with を使わずに操作すると BrowserNotStartedError になる。
+with を使わずに操作すると BrowserError になる。
 
 ダウンロード先・ログイン状態・起動オプションはこのセッションが専有する。
 他のセッションと混ざらないので、サイトごとに違う設定を安心して使える。
@@ -7107,7 +6371,7 @@ Yields:
     自分自身。中では今までどおり session と Page をそのまま使える。
 
 Raises:
-    PopupTabNotOpenedError: 時間内に新しいタブが開かなかった場合。
+    BrowserError: 時間内に新しいタブが開かなかった場合（具体的な理由はメッセージに出る）。
 
 #### `load_many`
 
@@ -7147,8 +6411,8 @@ Yields:
     Page のメソッドがそのまま使える。
 
 Raises:
-    BrowserNotStartedError: with に入る前に呼んだ場合。
-    ConcurrentSessionUseError: 他のスレッドが同じセッションを操作している場合。
+    BrowserError: with に入る前に呼んだ場合、または
+        他のスレッドが同じセッションを操作している場合（具体的な理由はメッセージに出る）。
 
 #### `raw`
 
@@ -7802,7 +7066,7 @@ def downloads(self) -> DownloadDir:
     files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
 
 Raises:
-    BrowserNotStartedError: まだ起動していない場合。
+    BrowserError: まだ起動していない場合。
 
 #### `to`
 
@@ -7895,7 +7159,7 @@ def downloads(self) -> DownloadDir:
     files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
 
 Raises:
-    BrowserNotStartedError: まだ起動していない場合。
+    BrowserError: まだ起動していない場合。
 
 #### `to`
 
@@ -8111,7 +7375,7 @@ def downloads(self) -> DownloadDir:
     files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
 
 Raises:
-    BrowserNotStartedError: まだ起動していない場合。
+    BrowserError: まだ起動していない場合。
 
 #### `to`
 
@@ -8204,7 +7468,7 @@ def downloads(self) -> DownloadDir:
     files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
 
 Raises:
-    BrowserNotStartedError: まだ起動していない場合。
+    BrowserError: まだ起動していない場合。
 
 #### `to`
 
@@ -8445,7 +7709,7 @@ Args:
         ものをそのまま使うため、URLではなくIDだけ渡せばよい。省略時は
         何もしない。件数が多くダウンロードに時間がかかる場合、ブラウザ
         自体はログイン後なにも操作していないため、途中でSalesforce側の
-        セッションが切れて ``SalesforceReportExportError`` になることが
+        セッションが切れて ``SalesforceError`` になることが
         ある。その暫定対処として指定する（恒久対処ではない。根本的には
         Salesforce管理者にセッションタイムアウトの設定を確認してもらうのが筋）。
     keep_alive_interval: ``keep_alive_report_id`` を開く間隔（秒）。既定300秒（5分）。
@@ -8455,10 +7719,9 @@ Yields:
     **完了した順**に返るため、``reports`` の順序とは限らない。
 
 Raises:
-    BrowserNotStartedError: 未起動の場合。
-    SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
-    SalesforceReportExportError: いずれかのレポートでエクスポートが失敗した場合
-        （ログイン未実行・セッション切れ等）。
+    BrowserError: 未起動の場合。
+    SalesforceError: URLからレポートIDを取り出せない場合、または
+        いずれかのレポートでエクスポートが失敗した場合（ログイン未実行・セッション切れ等）。
 
 ### `Solution`
 
@@ -8571,7 +7834,7 @@ Args:
         ものをそのまま使うため、URLではなくIDだけ渡せばよい。省略時は
         何もしない。件数が多くダウンロードに時間がかかる場合、ブラウザ
         自体はログイン後なにも操作していないため、途中でSalesforce側の
-        セッションが切れて ``SalesforceReportExportError`` になることが
+        セッションが切れて ``SalesforceError`` になることが
         ある。その暫定対処として指定する（恒久対処ではない。根本的には
         Salesforce管理者にセッションタイムアウトの設定を確認してもらうのが筋）。
     keep_alive_interval: ``keep_alive_report_id`` を開く間隔（秒）。既定300秒（5分）。
@@ -8581,10 +7844,9 @@ Yields:
     **完了した順**に返るため、``reports`` の順序とは限らない。
 
 Raises:
-    BrowserNotStartedError: 未起動の場合。
-    SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
-    SalesforceReportExportError: いずれかのレポートでエクスポートが失敗した場合
-        （ログイン未実行・セッション切れ等）。
+    BrowserError: 未起動の場合。
+    SalesforceError: URLからレポートIDを取り出せない場合、または
+        いずれかのレポートでエクスポートが失敗した場合（ログイン未実行・セッション切れ等）。
 
 #### `__init__`
 
@@ -8606,7 +7868,7 @@ def downloads(self) -> DownloadDir:
     files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
 
 Raises:
-    BrowserNotStartedError: まだ起動していない場合。
+    BrowserError: まだ起動していない場合。
 
 #### `to`
 
@@ -8766,7 +8028,7 @@ Args:
         ものをそのまま使うため、URLではなくIDだけ渡せばよい。省略時は
         何もしない。件数が多くダウンロードに時間がかかる場合、ブラウザ
         自体はログイン後なにも操作していないため、途中でSalesforce側の
-        セッションが切れて ``SalesforceReportExportError`` になることが
+        セッションが切れて ``SalesforceError`` になることが
         ある。その暫定対処として指定する（恒久対処ではない。根本的には
         Salesforce管理者にセッションタイムアウトの設定を確認してもらうのが筋）。
     keep_alive_interval: ``keep_alive_report_id`` を開く間隔（秒）。既定300秒（5分）。
@@ -8776,10 +8038,9 @@ Yields:
     **完了した順**に返るため、``reports`` の順序とは限らない。
 
 Raises:
-    BrowserNotStartedError: 未起動の場合。
-    SalesforceReportIDNotFoundError: URLからレポートIDを取り出せない場合。
-    SalesforceReportExportError: いずれかのレポートでエクスポートが失敗した場合
-        （ログイン未実行・セッション切れ等）。
+    BrowserError: 未起動の場合。
+    SalesforceError: URLからレポートIDを取り出せない場合、または
+        いずれかのレポートでエクスポートが失敗した場合（ログイン未実行・セッション切れ等）。
 
 #### `__init__`
 
@@ -8801,7 +8062,7 @@ def downloads(self) -> DownloadDir:
     files = kintai.downloads.wait()   # .crdownload が消えるまで待つ
 
 Raises:
-    BrowserNotStartedError: まだ起動していない場合。
+    BrowserError: まだ起動していない場合。
 
 #### `to`
 
@@ -8872,7 +8133,7 @@ Args:
         （レポート ID だけでは、どの組織のものか決められない）。
 
 Raises:
-    SalesforceSiteNotFoundError: 登録済みのどの組織にも当てはまらない場合。
+    SalesforceError: 登録済みのどの組織にも当てはまらない場合。
 
 
 ## `from comken.toolbox.credentials import ...`
@@ -9227,7 +8488,7 @@ CSV（数万件以上）**ではこちらを使う。``read()`` と同じく見�
 だけ）。先に ``csv.read().columns`` または ``csv.columns`` 引数で
 列名を取得しておく。
 
-このメソッドは ``with`` の中でだけ呼ぶこと（``TableNotOpenError``）。
+このメソッドは ``with`` の中でだけ呼ぶこと（``TableError``）。
 文字コードの自動判定（``Encoding.AUTO`` のとき）は ``read()`` と
 同じ ``_read_text`` を使う。
 
@@ -9445,7 +8706,7 @@ engine='com' で開いている内部の ``ExcelCOMHandler`` を返す。
 
 ``run_macro`` / ``save_as``（パスワード付き保存）など、Phase 1 で
 共通化しない COM 機能への直接アクセス用。``engine='openpyxl'`` の
-インスタンスで触ると ``InvalidTableOperationError`` で止める。
+インスタンスで触ると ``TableError`` で止める。
 
 #### `list_sheets`
 
@@ -9528,7 +8789,7 @@ Returns:
     作成された ``ExcelTable``。
 
 Raises:
-    InvalidTableOperationError: ``engine='com'`` で開いたインスタンスで呼ばれたとき。
+    TableError: ``engine='com'`` で開いたインスタンスで呼ばれたとき。
     InvalidTableInputError: 範囲・結合・空データ行のいずれかが条件違反のとき。
     ExcelError: 見出し行に空セルがある／同じ名前が複数あるとき、
         ``table_name`` が命名規則に合わない／既存テーブル名と衝突するとき。
@@ -10205,9 +9466,9 @@ Returns:
 
 Raises:
     ComkenFileNotFoundError: ``launcher_path`` が存在しない。
-    DataLoaderTimeoutError: ``timeout_seconds`` 内にプロセスが終わらなかった。
-    DataLoaderExecutionError: Data Loader が 0 以外の終了コードで終了した
-        （stdout / stderr がメッセージに含まれる）。
+    DataLoaderError: ``timeout_seconds`` 内にプロセスが終わらなかった、
+        または Data Loader が 0 以外の終了コードで終了した
+        （メッセージに stdout / stderr を含む）。
     ComkenFileNotFoundError: 正常終了したのに ``success_csv`` または
         ``error_csv`` に指定したパスにファイルが無い。
 
@@ -10422,7 +9683,7 @@ Raises:
     CredentialNotFoundError: 選択方式に必要な認証情報が未登録の場合。
     CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
     SalesforceAuthError: 認証に失敗した場合。
-    SalesforceConnectionError: ネットワークの問題で接続できない場合。
+    SalesforceError: ネットワークの問題で接続できない場合。
 
 #### `close`
 
@@ -10576,7 +9837,7 @@ Args:
     data: 項目と値。external_id_field の値を含めること。
 
 Raises:
-    SalesforceExternalIDMissingError: data に external_id_field が無い場合。
+    SalesforceError: data に external_id_field が無い場合。
 
 #### `delete`
 
@@ -10623,7 +9884,7 @@ Args:
 
 Raises:
     SalesforceRequestError: API がエラーを返した場合。
-    SalesforceConnectionError: ネットワークの問題で接続できない場合。
+    SalesforceError: ネットワークの問題で接続できない場合。
 
 #### `request_csv`
 
@@ -10737,7 +9998,7 @@ Raises:
     CredentialNotFoundError: 選択方式に必要な認証情報が未登録の場合。
     CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
     SalesforceAuthError: 認証に失敗した場合。
-    SalesforceConnectionError: ネットワークの問題で接続できない場合。
+    SalesforceError: ネットワークの問題で接続できない場合。
 
 #### `close`
 
@@ -10891,7 +10152,7 @@ Args:
     data: 項目と値。external_id_field の値を含めること。
 
 Raises:
-    SalesforceExternalIDMissingError: data に external_id_field が無い場合。
+    SalesforceError: data に external_id_field が無い場合。
 
 #### `delete`
 
@@ -10938,7 +10199,7 @@ Args:
 
 Raises:
     SalesforceRequestError: API がエラーを返した場合。
-    SalesforceConnectionError: ネットワークの問題で接続できない場合。
+    SalesforceError: ネットワークの問題で接続できない場合。
 
 #### `request_csv`
 
@@ -11021,7 +10282,7 @@ Args:
         （レポート ID だけでは、どの組織のものか決められない）。
 
 Raises:
-    SalesforceSiteNotFoundError: 登録済みのどの組織にも当てはまらない場合。
+    SalesforceError: 登録済みのどの組織にも当てはまらない場合。
 
 
 ## `from comken.toolbox.windows import ...`

@@ -10,8 +10,8 @@ r"""comken/services/salesforce_downloader/soql_reports/runner.py — SOQLレポ�
 
 ``download_scheduled()`` と同じく **1件失敗しても残りは続ける**。
 戻り値は ``list[Path]``。定期取得（履歴 CSV 前提）の失敗用の例外は
-``SoqlDownloadFailedError`` が SOQL 経路向けに担う（履歴前提のメッセージは
-合わないため、SOQL 経路は専用例外にする）。
+``DownloaderError`` が SOQL 経路向けに担う（履歴前提のメッセージは
+合わないため、SOQL 経路は専用文言にする）。
 
 履歴（history.csv）への記録は **今回対象外**。``ReportEntry`` 前提の
 ``history.record()`` を無理に流用せず、まずは「取得して保存する」ところまで
@@ -36,10 +36,10 @@ from comken.core.files import DateNameBuilder, atomic_write
 from comken.core.table.model import Table
 from comken.exceptions import (
     ComkenError,
+    DownloaderError,
     EmptyReportError,
     ReportFolderNotFoundError,
     ReportReservePathLimitError,
-    SoqlDownloadFailedError,
 )
 from comken.services.salesforce_downloader.soql_reports import _registry
 from comken.services.salesforce_downloader.soql_reports.base import SoqlReport
@@ -47,6 +47,23 @@ from comken.toolbox.csv import CSV
 from comken.toolbox.salesforce.sites import site_for
 
 logger = logging.getLogger(__name__)
+
+
+def _soql_download_failed_error(failed_keys: list[str]) -> DownloaderError:
+    """``DownloaderError`` の「SOQL レポートの取得で1件以上が失敗した」文言。
+
+    発生箇所: comken.services.salesforce_downloader.soql_reports の download_soql_reports()
+    """
+    keys = "、".join(str(key) for key in failed_keys)
+    return DownloaderError(
+        f"SOQL レポートの取得で {len(failed_keys)} 件が失敗しました: {keys}\n"
+        "失敗した管理番号について、SOQL クエリ・組織の認証情報・保存先フォルダの"
+        "権限・ネットワークの状態を確認してください。"
+        "\n対処: 表示された管理番号について、SOQL クエリ・組織の認証情報・保存先フォルダの"
+        "権限・ネットワークの状態を確認してください。"
+        "急いで必要なものは download_soql_reports() を直接実行してもよいです。"
+    )
+
 
 # ``_reserve_path`` が連番を足して空きファイル名を探索する回数の上限。
 # Salesforceレポートダウンローダー の ``service.RESERVE_PATH_LIMIT`` と同じ
@@ -74,7 +91,7 @@ def download_soql_reports(
 
     想定した失敗（``ComkenError`` / ``OSError``）はログに残して次のレポートへ進む。
     想定外（``TypeError`` などのプログラムバグ）はそのまま伝播させ、気づける
-    ようにする。1件でも失敗したら最後に ``SoqlDownloadFailedError`` を
+    ようにする。1件でも失敗したら最後に ``DownloaderError`` を
     ``__cause__`` 付きで送出する。
 
     Args:
@@ -98,7 +115,7 @@ def download_soql_reports(
             # ``download_scheduled()`` と同じ判断:
             # - ``ComkenError`` は ``docs/ERRORS.md`` に対処法が載っている想定内の失敗なので続行
             # - ``OSError`` は共有サーバー断・権限・パスなど運用上の失敗
-            # - それ以外（``TypeError`` など）は ``SoqlDownloadFailedError``
+            # - それ以外（``TypeError`` など）は ``DownloaderError``
             #   （=「1件取れませんでした」）の顔で出てくると非エンジニアが
             #   「もう一度実行してみる」を繰り返すだけなので、捕捉せずその場で落とす
             logger.error("SOQL 取得に失敗しました: %s（%s）", report_cls.KEY, e)
@@ -109,7 +126,7 @@ def download_soql_reports(
     if failed:
         # 続けたぶん、最後に必ず知らせる（終了コードで落ちたことが分かるように）。
         # 直近の失敗を ``__cause__`` に乗せて送出する
-        raise SoqlDownloadFailedError(failed) from last_exception
+        raise _soql_download_failed_error(failed) from last_exception
     return saved
 
 
@@ -136,7 +153,7 @@ def _fetch(report_cls: type[SoqlReport]) -> Table:
     """Salesforce へ問い合わせて明細表を返す。
 
     ``download_scheduled()`` と同じく、つなぐ組織は URL のドメインで決まる
-    （``site_for()``）。サブクラス側で URL を間違えれば ``SalesforceSiteNotFoundError``
+    （``site_for()``）。サブクラス側で URL を間違えれば ``SalesforceError``
     で即座に気付ける。
     """
     instance = report_cls()

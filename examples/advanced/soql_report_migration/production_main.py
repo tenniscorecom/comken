@@ -12,7 +12,7 @@ docs/機能/salesforce-downloader.md「SOQLレポート（2000件超のレポー
 
 1. ``LargeSalesReport.URL`` のドメインが ``comken/toolbox/salesforce/sites/`` の
    ``SITES`` に登録済みであること（未登録だと ``site_for()`` が
-   ``SalesforceSiteNotFoundError`` を投げる）
+   ``SalesforceError`` を投げる）
 2. その組織の ``api_client_id`` / ``api_client_secret`` / ``api_refresh_token`` が、
    実行するユーザー・PCで DPAPI に登録済みであること（項目名の ``api_`` は
    Salesforce 専用の認証情報だと分かるようにする接頭辞）。**登録は

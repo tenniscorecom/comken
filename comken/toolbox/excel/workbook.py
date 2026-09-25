@@ -28,9 +28,8 @@ from comken.core.timer import measure
 from comken.exceptions import (
     ComkenFileNotFoundError,
     ExcelError,
-    InvalidTableOperationError,
     SheetNotFoundError,
-    TableNotOpenError,
+    TableError,
     UnsupportedFileSuffixError,
 )
 from comken.runtime import dry_run_log, is_dry_run
@@ -47,6 +46,33 @@ type Value = str | int | float | bool | datetime
 _EXCEL_SUFFIXES = {".xlsx", ".xlsm", ".xltx", ".xltm"}
 
 logger = logging.getLogger(__name__)
+
+
+def _engine_not_supported_error(operation: str) -> TableError:
+    """``TableError`` の「engine='com' で openpyxl 専用 API を呼んだ」文言。"""
+    return TableError(
+        f"engine='com' では excel.{operation}() は使えません。"
+        "Sheet 系の API は openpyxl 経路で開いてください。"
+        "\n対処: 対象が読み取り専用でないか、指定したテーブル名が正しいか確認してください。"
+    )
+
+
+def _engine_openpyxl_only_error(operation: str) -> TableError:
+    """``TableError`` の「engine='openpyxl' で COM 専用 API を呼んだ」文言。"""
+    return TableError(
+        f"engine='openpyxl' では excel.{operation}() は使えません。"
+        f"engine='com' で開いた Excel インスタンス、または "
+        f"excel.com_handler.{operation}() を使ってください。"
+        "\n対処: 対象が読み取り専用でないか、指定したテーブル名が正しいか確認してください。"
+    )
+
+
+def _table_not_open_error(table_type: str) -> TableError:
+    """``TableError`` の「with 文の外で表を操作した」文言。"""
+    return TableError(
+        f"{table_type} は with 文の中で使ってください。"
+        "\n対処: with 文の中で使う（CSV / Excel などは __enter__ で表を開く）。"
+    )
 
 
 def _force_local_copy(path: Path) -> tuple[Path, Path]:
@@ -304,10 +330,7 @@ class Excel:
         # ``excel.com_handler`` 経由で操作する。
         if self._engine == "com":
             self._ensure_open()
-            raise InvalidTableOperationError(
-                "engine='com' では excel.sheet() は使えません。"
-                "Sheet 系の API は openpyxl 経路（engine='openpyxl'）で開いてください。"
-            )
+            raise _engine_not_supported_error("sheet")
         self._ensure_normal_workbook()
         assert self._workbook is not None
         if name is None:
@@ -353,10 +376,7 @@ class Excel:
         """
         if self._engine == "com":
             self._ensure_open()
-            raise InvalidTableOperationError(
-                "engine='com' では excel.find_sheet() は使えません。"
-                "has_sheet() / list_sheets() を使ってください。"
-            )
+            raise _engine_not_supported_error("find_sheet")
         self._ensure_normal_workbook()
         assert self._workbook is not None
         last_error = SheetNotFoundError(
@@ -374,10 +394,7 @@ class Excel:
         """データシートを取得する。名前を省略できるのは1枚のときだけ。"""
         if self._engine == "com":
             self._ensure_open()
-            raise InvalidTableOperationError(
-                "engine='com' では excel.data_sheet() は使えません。"
-                "Sheet 系の API は openpyxl 経路で開いてください。"
-            )
+            raise _engine_not_supported_error("data_sheet")
         self._ensure_normal_workbook()
         names = self.list_data_sheets()
         if name is None:
@@ -390,10 +407,7 @@ class Excel:
         """指定名の空のデータシートを作成する。"""
         if self._engine == "com":
             self._ensure_open()
-            raise InvalidTableOperationError(
-                "engine='com' では excel.create_data_sheet() は使えません。"
-                "Sheet 系の API は openpyxl 経路で開いてください。"
-            )
+            raise _engine_not_supported_error("create_data_sheet")
         self._ensure_writable("create_data_sheet")
         assert self._workbook is not None
         full_name = self._with_python_prefix(name)
@@ -417,10 +431,7 @@ class Excel:
         """
         if self._engine == "com":
             self._ensure_open()
-            raise InvalidTableOperationError(
-                "engine='com' では excel.create_sheet() は使えません。"
-                "Sheet 系の API は openpyxl 経路で開いてください。"
-            )
+            raise _engine_not_supported_error("create_sheet")
         self._ensure_writable("create_sheet")
         assert self._workbook is not None
         if self._is_data_sheet_name(name):
@@ -442,10 +453,7 @@ class Excel:
         """データシート名をブック内の順序で返す。"""
         if self._engine == "com":
             self._ensure_open()
-            raise InvalidTableOperationError(
-                "engine='com' では excel.list_data_sheets() は使えません。"
-                "list_sheets() を使ってください。"
-            )
+            raise _engine_not_supported_error("list_data_sheets")
         self._ensure_normal_workbook()
         assert self._workbook is not None
         names = [name for name in self._workbook.sheetnames if self._is_data_sheet_name(name)]
@@ -479,14 +487,11 @@ class Excel:
 
         ``run_macro`` / ``save_as``（パスワード付き保存）など、Phase 1 で
         共通化しない COM 機能への直接アクセス用。``engine='openpyxl'`` の
-        インスタンスで触ると ``InvalidTableOperationError`` で止める。
+        インスタンスで触ると ``TableError`` で止める。
         """
         self._ensure_open()
         if self._com_handler is None:
-            raise InvalidTableOperationError(
-                "engine='openpyxl' では com_handler にアクセスできません。"
-                "engine='com' で開いた Excel インスタンスで使ってください。"
-            )
+            raise _engine_openpyxl_only_error("com_handler")
         return self._com_handler
 
     @measure
@@ -599,7 +604,7 @@ class Excel:
             作成された ``ExcelTable``。
 
         Raises:
-            InvalidTableOperationError: ``engine='com'`` で開いたインスタンスで呼ばれたとき。
+            TableError: ``engine='com'`` で開いたインスタンスで呼ばれたとき。
             InvalidTableInputError: 範囲・結合・空データ行のいずれかが条件違反のとき。
             ExcelError: 見出し行に空セルがある／同じ名前が複数あるとき、
                 ``table_name`` が命名規則に合わない／既存テーブル名と衝突するとき。
@@ -609,10 +614,11 @@ class Excel:
             # engine='com' では Worksheet を保持しないため、openpyxl の Table オブジェクトを
             # 作成するこの API は対応しない。COM 経路でテーブル化したい場合は openpyxl で
             # 開いたブックで実行してから COM で読む、という流れにする。
-            # 他の engine 限定 API（sheet() など）と同じく InvalidTableOperationError で統一する。
-            raise InvalidTableOperationError(
+            # 他の engine 限定 API（sheet() など）と同じく TableError で統一する。
+            raise TableError(
                 "convert_range_to_table は openpyxl で開いたブックでのみ対応しています。"
                 "engine='openpyxl' で開いてください。"
+                "\n対処: 対象が読み取り専用でないか、指定したテーブル名が正しいか確認してください。"
             )
         self._ensure_writable("convert_range_to_table")
         self._ensure_normal_workbook()
@@ -723,10 +729,7 @@ class Excel:
         if self._engine == "com":
             # engine='com' 経路では変更しない設計のため保存経路は用意しない。
             # 保存したい場合は ``excel.com_handler.save()`` を使う。
-            raise InvalidTableOperationError(
-                "engine='com' では excel.save() は使えません。"
-                "保存は excel.com_handler.save() を利用してください。"
-            )
+            raise _engine_not_supported_error("save")
         self._ensure_normal_workbook()
         assert self._workbook is not None
         if self._read_only or not self._is_dirty:
@@ -800,10 +803,7 @@ class Excel:
             self._ensure_open()
             # engine='com' のブックは既に COM で開かれている。COM 専用 API
             # （``excel.com_handler.run_macro``）を使ってもらう。
-            raise InvalidTableOperationError(
-                "engine='com' では excel.run_macro() は使えません。"
-                "excel.com_handler.run_macro() を利用してください。"
-            )
+            raise _engine_not_supported_error("run_macro")
         self._ensure_writable("run_macro")
         if is_dry_run():
             logger.debug(
@@ -923,7 +923,7 @@ class Excel:
 
     def _ensure_open(self) -> None:
         if not self._is_open or self._is_closed:
-            raise TableNotOpenError("Excel")
+            raise _table_not_open_error("Excel")
 
     def _ensure_normal_workbook(self) -> None:
         """通常モード Workbook がまだなら遅延オープンする。

@@ -32,14 +32,31 @@ comken.toolbox.salesforce（API版）の Reports and Dashboards REST API は2000
 
 from urllib.parse import urlsplit
 
-from comken.exceptions import SalesforceSiteNotFoundError
+from comken.exceptions import SalesforceError
 from comken.toolbox.browser.sites.salesforce.base import SalesforceReportBrowser
 from comken.toolbox.browser.sites.salesforce.solution import Solution
 from comken.toolbox.browser.sites.salesforce.solution_sandbox import SolutionSandbox
 
+
+def _site_not_found_error(url: str, known_domains: list[str]) -> SalesforceError:
+    """``SalesforceError`` の「URL のドメインに対応する組織が登録されていない」文言。
+
+    発生箇所: comken.toolbox.browser.sites.salesforce.site_for()
+    """
+    known = "\n".join(f"  {domain}" for domain in known_domains) or "  （登録なし）"
+    return SalesforceError(
+        f"この URL の組織が登録されていません: {url}\n"
+        f"登録済みの組織:\n{known}\n"
+        "レポートを開いたときのアドレスをそのまま貼ってください。\n"
+        "新しい組織の場合は、組織クラスの追加が必要です（管理者へ連絡してください）。"
+        "\n対処: URL のドメインを見直してください。新しい組織なら管理者へ連絡してください"
+        "（組織クラスの追加が要る）。"
+    )
+
+
 # 登録済みの組織。URL からどの組織へつなぐかを引くのに使う。
 # **組織を増やしたらここにも足す。** 足し忘れると、その組織の URL だけが
-# SalesforceSiteNotFoundError になる（黙って別組織へつなぐことはない）
+# SalesforceError になる（黙って別組織へつなぐことはない）
 SITES: tuple[type[SalesforceReportBrowser], ...] = (Solution, SolutionSandbox)
 
 __all__ = [
@@ -62,13 +79,13 @@ def site_for(url: str) -> type[SalesforceReportBrowser]:
             （レポート ID だけでは、どの組織のものか決められない）。
 
     Raises:
-        SalesforceSiteNotFoundError: 登録済みのどの組織にも当てはまらない場合。
+        SalesforceError: 登録済みのどの組織にも当てはまらない場合。
     """
     host = _host_of(url)
     for site in SITES:
         if host and _host_of(site.BASE_URL) == host:
             return site
-    raise SalesforceSiteNotFoundError(url, [site.BASE_URL for site in SITES])
+    raise _site_not_found_error(url, [site.BASE_URL for site in SITES])
 
 
 def _host_of(url: str) -> str:

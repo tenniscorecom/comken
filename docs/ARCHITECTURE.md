@@ -124,7 +124,7 @@ Excel は VBA マクロで書かれていた業務の Python 置き換えが主�
 
 Excel / Excel 内の表データ連携は `Transfer(read, write, mapping)` に統一する。CSV / Excel / Access など読み取った `Table` を渡せば、CSV → Excel、Excel → CSV、Excel → Excel、CSV → CSV は同じ API で扱える。形式別の転記クラスは作らない。
 
-`with` を必須とする（読み取り専用でも）。`with` ブロックを外れたインスタンスを触ると `TableNotOpenError` で停止する。`Excel.close()` がローカル作業コピーを削除するため、`with` を使わないと一時ファイルが残り続ける。
+`with` を必須とする（読み取り専用でも）。`with` ブロックを外れたインスタンスを触ると `TableError` で停止する。`Excel.close()` がローカル作業コピーを削除するため、`with` を使わないと一時ファイルが残り続ける。
 
 ファイル名には拡張子を含める。`ext=` / `extension=` 引数は廃止し、拡張子なしの名前は `FileSuffixMissingError` で止める。
 

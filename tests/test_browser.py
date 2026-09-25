@@ -19,17 +19,7 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 
-from comken.exceptions import (
-    BrowserClosedError,
-    BrowserNotStartedError,
-    ConcurrentSessionUseError,
-    DriverStartError,
-    ElementNotFoundError,
-    PopupTabNotOpenedError,
-    SessionNameConflictError,
-    SessionNotFoundError,
-    SiteConfigError,
-)
+from comken.exceptions import BrowserError, ElementNotFoundError
 from comken.toolbox import browser
 from comken.toolbox.browser import (
     BackgroundTask,
@@ -76,22 +66,22 @@ class TestSessionRequiresWith:
     """with を使わない・使い終わったセッションを弾くことのテスト。"""
 
     def test_rejects_operation_before_with(self, tmp_path):
-        """with に入る前に操作すると BrowserNotStartedError になる。"""
+        """with に入る前に操作すると BrowserError になる。"""
         session = BrowserSession(
             name="test",
             options=BrowserOptions(),
             download_dir=DownloadDir(path=tmp_path / "dl"),
         )
 
-        with pytest.raises(BrowserNotStartedError):
+        with pytest.raises(BrowserError):
             session.open("https://example.com")
 
     def test_rejects_operation_after_close(self, tmp_path):
-        """with を抜けた後に操作すると BrowserClosedError になる。"""
+        """with を抜けた後に操作すると BrowserError になる。"""
         session = _make_session(tmp_path)
         session.__exit__(None, None, None)
 
-        with pytest.raises(BrowserClosedError):
+        with pytest.raises(BrowserError):
             session.open("https://example.com")
 
     def test_quit_failure_still_cleans_download_dir(self, tmp_path):
@@ -226,7 +216,7 @@ class TestSessionStartFailure:
             download_dir=DownloadDir(path=tmp_path / "dl"),
         )
 
-        with pytest.raises(DriverStartError):
+        with pytest.raises(BrowserError):
             session.__enter__()
 
         driver.quit.assert_called_once_with()
@@ -246,7 +236,7 @@ class TestSessionStartFailure:
 
         session = BrowserSession(name="test", options=BrowserOptions(), download_dir=download_dir)
 
-        with pytest.raises(DriverStartError):
+        with pytest.raises(BrowserError):
             session.__enter__()
 
         download_dir.__exit__.assert_called_once()
@@ -262,7 +252,7 @@ class TestSessionStartFailure:
             download_dir=DownloadDir(path=tmp_path / "dl"),
         )
 
-        with pytest.raises(DriverStartError):
+        with pytest.raises(BrowserError):
             session.__enter__()
 
         assert edge.call_count == 1
@@ -372,7 +362,7 @@ class TestSessionConcurrencyGuard:
     """1セッションを複数スレッドから同時に触らせないことのテスト。"""
 
     def test_rejects_concurrent_use_from_another_thread(self, tmp_path):
-        """他スレッドが操作中のセッションを触ると ConcurrentSessionUseError になる。"""
+        """他スレッドが操作中のセッションを触ると BrowserError になる。"""
         session = _make_session(tmp_path)
         holding = threading.Event()
         release = threading.Event()
@@ -386,7 +376,7 @@ class TestSessionConcurrencyGuard:
         holder.start()
         try:
             assert holding.wait(timeout=5)
-            with pytest.raises(ConcurrentSessionUseError):
+            with pytest.raises(BrowserError):
                 session.open("https://example.com")
         finally:
             release.set()
@@ -447,13 +437,13 @@ class TestPopupTab:
             del type(driver).window_handles
 
     def test_raises_when_no_new_tab(self, tmp_path):
-        """新しいタブが開かなければ PopupTabNotOpenedError になる。"""
+        """新しいタブが開かなければ BrowserError になる。"""
         session = _make_session(tmp_path)
         driver = session._driver
         driver.current_window_handle = "main"
         driver.window_handles = ["main"]
 
-        with pytest.raises(PopupTabNotOpenedError), session.popup_tab(timeout=1):
+        with pytest.raises(BrowserError), session.popup_tab(timeout=1):
             pass
 
 
@@ -467,7 +457,7 @@ class TestBrowsersRequiresWith:
 
         browsers = Browsers()
 
-        with pytest.raises(BrowserNotStartedError):
+        with pytest.raises(BrowserError):
             browsers.launch_session("kintai")
 
         edge.assert_not_called()  # 弾かれた時点で何も起きていない
@@ -476,32 +466,32 @@ class TestBrowsersRequiresWith:
         """with に入れずに start しても動かない。"""
         browsers = Browsers()
 
-        with pytest.raises(BrowserNotStartedError):
+        with pytest.raises(BrowserError):
             browsers.run_task(lambda: "動いてしまった")
 
     def test_rejects_getitem_without_with(self):
         """with に入れずにセッションを取り出すこともできない。"""
         browsers = Browsers()
 
-        with pytest.raises(BrowserNotStartedError):
+        with pytest.raises(BrowserError):
             browsers["kintai"]
 
     def test_rejects_launch_after_with(self, monkeypatch):
-        """with を抜けた後に使うと BrowserClosedError になる。"""
+        """with を抜けた後に使うと BrowserError になる。"""
         monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
         monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
 
         with Browsers() as browsers:
             browsers.launch_session("kintai")
 
-        with pytest.raises(BrowserClosedError):
+        with pytest.raises(BrowserError):
             browsers.launch_session("keiri")
 
     def test_error_message_shows_correct_form(self):
         """エラーメッセージに、正しい書き方が載っている。"""
         browsers = Browsers()
 
-        with pytest.raises(BrowserNotStartedError) as exc_info:
+        with pytest.raises(BrowserError) as exc_info:
             browsers.launch_session("kintai")
 
         assert "with Browsers() as browsers:" in str(exc_info.value)
@@ -511,17 +501,17 @@ class TestBrowsers:
     """複数サイトのまとめ管理のテスト。"""
 
     def test_rejects_duplicate_name(self, tmp_path, monkeypatch):
-        """同じ名前で2回起動すると SessionNameConflictError になる。"""
+        """同じ名前で2回起動すると BrowserError になる。"""
         monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
         monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
 
         with Browsers() as browsers:
             browsers.launch_session("kintai")
-            with pytest.raises(SessionNameConflictError):
+            with pytest.raises(BrowserError):
                 browsers.launch_session("kintai")
 
     def test_getitem_reports_launched_names(self, tmp_path, monkeypatch):
-        """未起動の名前を取り出すと、起動済みの一覧つきで SessionNotFoundError になる。"""
+        """未起動の名前を取り出すと、起動済みの一覧つきで BrowserError になる。"""
         monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
         monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
 
@@ -529,7 +519,7 @@ class TestBrowsers:
             browsers.launch_session("kintai")
 
             assert browsers.names == ["kintai"]
-            with pytest.raises(SessionNotFoundError) as exc_info:
+            with pytest.raises(BrowserError) as exc_info:
                 browsers["keiri"]
             assert "kintai" in str(exc_info.value)
 
@@ -686,7 +676,7 @@ class TestBrowsersStart:
         """動き出すのが遅れたタスクからでも、ブラウザを取り出せる。
 
         閉じたことにするタイミングが早すぎると、まだ閉じていないのに
-        BrowserClosedError になる。
+        BrowserError になる。
         """
         monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
         monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
@@ -726,7 +716,7 @@ class TestBrowsersStart:
         """with に入れずに parallel を呼ぶと、引数が空でも弾かれる。"""
         browsers = Browsers()
 
-        with pytest.raises(BrowserNotStartedError):
+        with pytest.raises(BrowserError):
             browsers.parallel()
 
     def test_reports_uncollected_error(self, caplog):
@@ -969,9 +959,9 @@ class TestPage:
         holder.start()
         try:
             assert holding.wait(timeout=5)
-            with pytest.raises(ConcurrentSessionUseError):
+            with pytest.raises(BrowserError):
                 page.find_element(Locator.id("x"))
-            with pytest.raises(ConcurrentSessionUseError):
+            with pytest.raises(BrowserError):
                 page.execute_script("return 1;")
         finally:
             release.set()
@@ -1272,7 +1262,7 @@ class TestBrowsersLaunchSite:
         assert captured[0] is KintaiOptions
 
     def test_rejects_site_without_name(self, monkeypatch):
-        """NAME が空の SiteBase サブクラスを渡すと SiteConfigError で止まる。"""
+        """NAME が空の SiteBase サブクラスを渡すと BrowserError で止まる。"""
 
         class Unnamed(SiteBase):
             BASE_URL = "https://example.co.jp"
@@ -1281,7 +1271,7 @@ class TestBrowsersLaunchSite:
         monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
         monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
 
-        with Browsers() as browsers, pytest.raises(SiteConfigError) as exc_info:
+        with Browsers() as browsers, pytest.raises(BrowserError) as exc_info:
             browsers.launch(Unnamed)
 
         assert "Unnamed" in str(exc_info.value)
@@ -1299,13 +1289,13 @@ class TestBrowsersLaunchSite:
 
         browsers = Browsers()
 
-        with pytest.raises(BrowserNotStartedError):
+        with pytest.raises(BrowserError):
             browsers.launch(Kintai)
 
         edge.assert_not_called()  # 弾かれた時点で何も起きていない
 
     def test_rejects_duplicate_site_name(self, tmp_path, monkeypatch):
-        """同じ NAME の SiteBase を2回起動すると SessionNameConflictError になる。"""
+        """同じ NAME の SiteBase を2回起動すると BrowserError になる。"""
         monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
         monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
 
@@ -1316,7 +1306,7 @@ class TestBrowsersLaunchSite:
 
         with Browsers() as browsers:
             browsers.launch(Kintai)
-            with pytest.raises(SessionNameConflictError):
+            with pytest.raises(BrowserError):
                 browsers.launch(Kintai)
 
 
@@ -1325,7 +1315,7 @@ class TestResolveProfileDir:
 
     相対パスのまま --user-data-dir に渡すと、msedge.exe 側の作業ディレクトリ
     次第でプロファイル初期化に失敗し、紛らわしいバージョン不一致メッセージで
-    DriverStartError になる回帰の再発防止。
+    BrowserError になる回帰の再発防止。
     """
 
     def test_resolves_relative_profile_root_to_absolute(self, tmp_path, monkeypatch):
@@ -1386,7 +1376,7 @@ class TestBrowsersLaunchSession:
 
         browsers = Browsers()
 
-        with pytest.raises(BrowserNotStartedError):
+        with pytest.raises(BrowserError):
             browsers.launch_session("kintai")
 
         edge.assert_not_called()
@@ -1517,7 +1507,7 @@ class TestSessionIsNotExposedToCallers:
             NAME = "kintai"
             OWNER = "test_browser / テスト"
 
-        with pytest.raises(BrowserNotStartedError):
+        with pytest.raises(BrowserError):
             Kintai().to(Page)
 
     def test_downloads_before_start_is_rejected(self):
@@ -1527,5 +1517,5 @@ class TestSessionIsNotExposedToCallers:
             NAME = "kintai"
             OWNER = "test_browser / テスト"
 
-        with pytest.raises(BrowserNotStartedError):
+        with pytest.raises(BrowserError):
             _ = Kintai().downloads

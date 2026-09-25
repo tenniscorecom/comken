@@ -2,7 +2,7 @@
 
 Excel と CSV は、どちらも `Table` を読み書きする入口です。Excel固有のシート操作だけが `Excel` にあります。
 **読み取り専用も含めて `with` の中でだけ操作する**——`with` を外れた `Sheet` / `Excel` /
-`ExcelTable` を触ると `TableNotOpenError` で止まる（→ [`with` 必須](#with-必須)）。
+`ExcelTable` を触ると `TableError` で止まる（→ [`with` 必須](#with-必須)）。
 
 ```python
 from comken.core.table import Table
@@ -110,7 +110,7 @@ with Excel("重い.xlsx", engine="com", local_copy=False) as excel:
   エスケープハッチ）。
 - `engine="com"` で `sheet()` / `data_sheet()` / `create_sheet()` / `create_data_sheet()` /
   `find_sheet()` / `list_data_sheets()` / `save()` / `run_macro()` を呼ぶと
-  `InvalidTableOperationError` で止める（`Sheet` 系は openpyxl 前提のため）。
+  `TableError` で止める（`Sheet` 系は openpyxl 前提のため）。
 - pywin32 が無い PC では `engine="com"` 自体を import 段階で使えない。openpyxl 経路は
   pywin32 非依存なので、普段は `engine="openpyxl"` のままで良い。
 
@@ -140,12 +140,12 @@ with Excel("帳票.xlsx") as excel:
   - 同名のテーブルが既に存在 → `ExcelError`
 - 表示用シート・データシートどちらでも利用可能。`PY_T_` プレフィックスは補わない
   （指定された名前をそのまま使う）。
-- `engine="com"` で呼ぶと `InvalidTableOperationError`（openpyxl 経路のみ対応）。
+- `engine="com"` で呼ぶと `TableError`（openpyxl 経路のみ対応）。
 
 ## `with` 必須
 
 `CSV` / `Excel` は**読み取り専用でも `with` 必須**。`with` を外れたインスタンスを触ると
-`TableNotOpenError` で停止する。`Excel` については、`with` を使わないとローカル作業
+`TableError` で停止する。`Excel` については、`with` を使わないとローカル作業
 コピーが消されず残ってしまう実バグがあるため。
 
 ## 関連

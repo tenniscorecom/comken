@@ -13,10 +13,28 @@ from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support.ui import WebDriverWait
 
 from comken.core.timer import measure
-from comken.exceptions import PopupTabNotOpenedError
+from comken.exceptions import BrowserError
 from comken.toolbox.browser.locator import Locator
 
 logger = logging.getLogger(__name__)
+
+
+def _popup_tab_not_opened_error(seconds: int) -> BrowserError:
+    """``BrowserError`` の「別タブが開かない」文言。
+
+    発生箇所: BrowserSession.popup_tab()
+    """
+    return BrowserError(
+        f"新しいタブが {seconds} 秒以内に開きませんでした。\n"
+        "次を確認してください:\n"
+        "  1. popup_tab() に入る前に、タブを開く操作（リンクのクリック等）を済ませているか\n"
+        "  2. ポップアップがブラウザにブロックされていないか"
+        "（BrowserOptions.DISABLE_POPUP_BLOCKING を True にする）\n"
+        "  3. 実際は同じタブで開いていないか（その場合 popup_tab は不要）"
+        "\n対処: もう一度実行してください。続く場合は、その画面の「別ウィンドウで開く」ボタンが"
+        "変わった可能性があるので管理者へ連絡してください。"
+    )
+
 
 TAB_POLL_INTERVAL_SECONDS = 0.5
 NEW_TAB_TIMEOUT_SECONDS = 10
@@ -140,4 +158,4 @@ class _TabManager:
                 lambda driver: any(handle != original for handle in driver.window_handles)
             )
         except TimeoutException as error:
-            raise PopupTabNotOpenedError(seconds) from error
+            raise _popup_tab_not_opened_error(seconds) from error

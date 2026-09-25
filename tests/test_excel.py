@@ -9,9 +9,8 @@ from comken.core.table import Table
 from comken.exceptions import (
     ComkenFileNotFoundError,
     ExcelError,
-    InvalidTableOperationError,
     SheetNotFoundError,
-    TableNotOpenError,
+    TableError,
     UnsupportedFileSuffixError,
 )
 from comken.toolbox.excel import Excel
@@ -44,7 +43,7 @@ def test_excel_rejects_ambiguous_table_name(tmp_path) -> None:
         sheet = excel.create_data_sheet("顧客")
         sheet.create_table("基本", Table(["ID"], [{"ID": "001"}]), "A1")
         sheet.create_table("連絡", Table(["電話"], [{"電話": "000"}]), "D1")
-        with pytest.raises(InvalidTableOperationError):
+        with pytest.raises(TableError):
             sheet.table().read()
 
 
@@ -213,13 +212,13 @@ def test_openpyxl_side_rejects_unknown_style_with_clear_message() -> None:
 def test_excel_outside_with_block_raises_table_not_open_error(tmp_path) -> None:
     path = tmp_path / "book.xlsx"
     excel = Excel(path)
-    with pytest.raises(TableNotOpenError, match="Excel"):
+    with pytest.raises(TableError, match="Excel"):
         excel.list_data_sheets()
-    with pytest.raises(TableNotOpenError, match="Excel"):
+    with pytest.raises(TableError, match="Excel"):
         excel.data_sheet("顧客")
-    with pytest.raises(TableNotOpenError, match="Excel"):
+    with pytest.raises(TableError, match="Excel"):
         excel.create_sheet("集計")
-    with pytest.raises(TableNotOpenError, match="Excel"):
+    with pytest.raises(TableError, match="Excel"):
         excel.save()
 
 

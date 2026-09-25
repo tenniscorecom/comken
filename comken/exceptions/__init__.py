@@ -30,40 +30,17 @@ ComkenError
 │   └── PasswordRejectedError
 ├── SalesforceError
 │   ├── SalesforceAuthError
-│   ├── SalesforceConnectionError
 │   ├── SalesforceRequestError
-│   ├── SalesforceExternalIDMissingError
-│   ├── SalesforceCredentialRotationError
 │   ├── SalesforceReportTruncatedError
-│   ├── SalesforceReportFormatError
-│   ├── SalesforceReportIDNotFoundError
-│   ├── SalesforceSiteNotFoundError
-│   ├── SalesforceSiteSelectionError
-│   ├── SalesforceReportExecutionError
-│   ├── SalesforceReportAccessDeniedError
-│   ├── SalesforceReportExportError
-│   ├── SalesforceBulkFailedError
-│   └── SalesforceBulkTimeoutError
+│   └── SalesforceReportIDNotFoundError
 ├── BrowserError
-│   ├── DriverStartError
-│   ├── BrowserNotStartedError
-│   ├── BrowserClosedError
-│   ├── ConcurrentSessionUseError
-│   ├── SessionNameConflictError
-│   ├── SessionNotFoundError
-│   ├── SiteConfigError
-│   ├── SiteAlreadyInLibraryError
 │   ├── ElementNotFoundError
-│   ├── PopupTabNotOpenedError
-│   ├── DownloadTimeoutError
 │   └── LoginFailedError
 ├── InvalidColumnError
 ├── TableError
 │   ├── InvalidTableInputError
 │   ├── TableColumnNotFoundError
-│   ├── TableDuplicateKeyError
-│   ├── InvalidTableOperationError
-│   └── TableNotOpenError
+│   └── TableDuplicateKeyError
 ├── ColumnNotFoundError
 │   ├── ExcelColumnNotFoundError
 │   └── TransferSourceColumnNotFoundError
@@ -75,8 +52,6 @@ ComkenError
 │   ├── ConfigMappingEmptyValueError
 │   └── ConfigSubclassingNotSupportedError
 ├── MasterTableError
-│   ├── MasterSheetNotDefinedError
-│   ├── MasterColumnNotFoundError
 │   ├── MasterRowValueError
 │   └── MasterDuplicateValueError
 ├── StateError
@@ -94,16 +69,11 @@ ComkenError
 │   ├── ReportNotRegisteredError
 │   ├── SoqlReportNotRegisteredError
 │   ├── GroupNotRegisteredError
-│   ├── ReportDisabledError
 │   ├── EmptyReportError
 │   ├── ReportReservePathLimitError
-│   ├── ScheduleSettingError
 │   ├── ReportFolderNotFoundError
-│   ├── ScheduledDownloadFailedError
-│   └── SoqlDownloadFailedError
+│   └── ScheduledDownloadFailedError
 └── DataLoaderError
-│   ├── DataLoaderTimeoutError
-│   └── DataLoaderExecutionError
 
 カテゴリ基底クラスはまとめて捕捉するために使い、直接送出しない。
 """
@@ -116,21 +86,7 @@ from comken.exceptions.access import (
     AccessSourceNotFoundError,
 )
 from comken.exceptions.base import ComkenError, SiteOwnerRequiredError
-from comken.exceptions.browser import (
-    BrowserClosedError,
-    BrowserError,
-    BrowserNotStartedError,
-    ConcurrentSessionUseError,
-    DownloadTimeoutError,
-    DriverStartError,
-    ElementNotFoundError,
-    LoginFailedError,
-    PopupTabNotOpenedError,
-    SessionNameConflictError,
-    SessionNotFoundError,
-    SiteAlreadyInLibraryError,
-    SiteConfigError,
-)
+from comken.exceptions.browser import BrowserError, ElementNotFoundError, LoginFailedError
 from comken.exceptions.calendar import (
     BusinessDayNotFoundError,
     CalendarError,
@@ -161,11 +117,7 @@ from comken.exceptions.credential import (
     PasswordRejectedError,
 )
 from comken.exceptions.csv import CSVError
-from comken.exceptions.dataloader import (
-    DataLoaderError,
-    DataLoaderExecutionError,
-    DataLoaderTimeoutError,
-)
+from comken.exceptions.dataloader import DataLoaderError
 from comken.exceptions.downloader import (
     CachedReportNotFoundError,
     DownloaderError,
@@ -173,13 +125,10 @@ from comken.exceptions.downloader import (
     GroupNotRegisteredError,
     HistoryLockTimeoutError,
     HistoryWriteError,
-    ReportDisabledError,
     ReportFolderNotFoundError,
     ReportNotRegisteredError,
     ReportReservePathLimitError,
     ScheduledDownloadFailedError,
-    ScheduleSettingError,
-    SoqlDownloadFailedError,
     SoqlReportNotRegisteredError,
 )
 from comken.exceptions.excel import (
@@ -199,10 +148,8 @@ from comken.exceptions.logger import (
     LogRootNotConfiguredError,
 )
 from comken.exceptions.master_table import (
-    MasterColumnNotFoundError,
     MasterDuplicateValueError,
     MasterRowValueError,
-    MasterSheetNotDefinedError,
     MasterTableError,
 )
 from comken.exceptions.outlook import (
@@ -212,21 +159,10 @@ from comken.exceptions.outlook import (
 )
 from comken.exceptions.salesforce import (
     SalesforceAuthError,
-    SalesforceBulkFailedError,
-    SalesforceBulkTimeoutError,
-    SalesforceConnectionError,
-    SalesforceCredentialRotationError,
     SalesforceError,
-    SalesforceExternalIDMissingError,
-    SalesforceReportAccessDeniedError,
-    SalesforceReportExecutionError,
-    SalesforceReportExportError,
-    SalesforceReportFormatError,
     SalesforceReportIDNotFoundError,
     SalesforceReportTruncatedError,
     SalesforceRequestError,
-    SalesforceSiteNotFoundError,
-    SalesforceSiteSelectionError,
 )
 from comken.exceptions.state import (
     StateError,
@@ -236,11 +172,9 @@ from comken.exceptions.state import (
 )
 from comken.exceptions.table import (
     InvalidTableInputError,
-    InvalidTableOperationError,
     TableColumnNotFoundError,
     TableDuplicateKeyError,
     TableError,
-    TableNotOpenError,
 )
 from comken.exceptions.windows import WindowNotFoundError
 
@@ -283,36 +217,13 @@ __all__ = [
     "PasswordRejectedError",
     "SalesforceError",
     "SalesforceAuthError",
-    "SalesforceConnectionError",
     "SalesforceRequestError",
-    "SalesforceExternalIDMissingError",
-    "SalesforceCredentialRotationError",
     "SalesforceReportTruncatedError",
-    "SalesforceReportFormatError",
     "SalesforceReportIDNotFoundError",
-    "SalesforceReportExecutionError",
-    "SalesforceReportAccessDeniedError",
-    "SalesforceReportExportError",
-    "SalesforceSiteNotFoundError",
-    "SalesforceSiteSelectionError",
-    "SalesforceBulkFailedError",
-    "SalesforceBulkTimeoutError",
     "BrowserError",
-    "DriverStartError",
-    "BrowserNotStartedError",
-    "BrowserClosedError",
-    "ConcurrentSessionUseError",
-    "SessionNameConflictError",
-    "SessionNotFoundError",
-    "SiteConfigError",
-    "SiteAlreadyInLibraryError",
     "ElementNotFoundError",
-    "PopupTabNotOpenedError",
-    "DownloadTimeoutError",
     "LoginFailedError",
     "MasterTableError",
-    "MasterSheetNotDefinedError",
-    "MasterColumnNotFoundError",
     "MasterRowValueError",
     "MasterDuplicateValueError",
     "StateError",
@@ -329,18 +240,11 @@ __all__ = [
     "ReportNotRegisteredError",
     "SoqlReportNotRegisteredError",
     "GroupNotRegisteredError",
-    "ReportDisabledError",
     "EmptyReportError",
     "ReportFolderNotFoundError",
     "ReportReservePathLimitError",
-    "ScheduleSettingError",
     "ScheduledDownloadFailedError",
-    "SoqlDownloadFailedError",
     "DataLoaderError",
-    "DataLoaderTimeoutError",
-    "DataLoaderExecutionError",
-    "InvalidTableOperationError",
-    "TableNotOpenError",
     "TableError",
     "InvalidTableInputError",
     "TableColumnNotFoundError",

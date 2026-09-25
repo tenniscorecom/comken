@@ -15,11 +15,7 @@ from pathlib import Path
 import pytest
 
 from comken.core.table import Table
-from comken.exceptions import (
-    ComkenFileNotFoundError,
-    DataLoaderExecutionError,
-    DataLoaderTimeoutError,
-)
+from comken.exceptions import ComkenFileNotFoundError, DataLoaderError
 from comken.toolbox.salesforce.dataloader import DataLoaderCLI, DataLoaderResult
 
 
@@ -103,7 +99,7 @@ class TestDataLoaderCLI:
         assert result.success.columns == []
 
     def test_non_zero_returncode_raises_with_stdout_and_stderr(self, tmp_path: Path) -> None:
-        """0 以外の終了コードだと ``DataLoaderExecutionError``。stdout / stderr が残る。"""
+        """0 以外の終了コードだと ``DataLoaderError``。stdout / stderr が残る。"""
         launcher_source = (
             "import sys\n"
             # 疑似 launcher 自身の stdout/stderr を明示的に UTF-8 にする。
@@ -120,7 +116,7 @@ class TestDataLoaderCLI:
         launcher = _write_python_launcher(tmp_path, launcher_source)
 
         cli = DataLoaderCLI(sys.executable, timeout_seconds=10)
-        with pytest.raises(DataLoaderExecutionError) as caught:
+        with pytest.raises(DataLoaderError) as caught:
             cli.run([str(launcher)])
 
         message = str(caught.value)
@@ -129,19 +125,19 @@ class TestDataLoaderCLI:
         assert "何かの標準出力" in message
         assert "何かの標準エラー" in message
         # 個別例外の派生元が ``DataLoaderError`` / ``ComkenError``
-        assert isinstance(caught.value, DataLoaderExecutionError)
+        assert isinstance(caught.value, DataLoaderError)
 
     def test_timeout_raises_data_loader_timeout_error(self, tmp_path: Path) -> None:
-        """``timeout_seconds`` を超えると ``DataLoaderTimeoutError``。"""
+        """``timeout_seconds`` を超えると ``DataLoaderError``。"""
         # sleep する launcher
         launcher_source = "import time\ntime.sleep(5)\n"
         launcher = _write_python_launcher(tmp_path, launcher_source)
 
         cli = DataLoaderCLI(sys.executable, timeout_seconds=0.5)
-        with pytest.raises(DataLoaderTimeoutError, match=r"0\.5 秒以内") as caught:
+        with pytest.raises(DataLoaderError, match=r"0\.5 秒以内") as caught:
             cli.run([str(launcher)])
 
-        assert isinstance(caught.value, DataLoaderTimeoutError)
+        assert isinstance(caught.value, DataLoaderError)
 
     def test_missing_success_csv_raises_result_file_missing_error(self, tmp_path: Path) -> None:
         """指定した ``success_csv`` が無いと ``ComkenFileNotFoundError``。"""

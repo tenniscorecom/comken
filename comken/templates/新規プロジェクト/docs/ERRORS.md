@@ -26,8 +26,7 @@
 | `SheetNotFoundError` | 指定した名前のシートがない | Excel を開いて、下のシート名（タブ）が変わっていないか確認する。変えた場合は元に戻す |
 | `ExcelApplicationNotAvailableError` | Excel を起動できない | この PC に Excel が入っているか確認する。入れられない PC で動かすなら、数式ではなく値で書いてもらう（管理表なら、数式の結果を貼り付けてもらう） |
 | `ColumnNotFoundError` | 列が見つからない | Excel の1行目を確認する |
-| `InvalidTableOperationError` | Table API で実行できない操作が指定された。 | 対象が読み取り専用でないか、指定したテーブル名が正しいか確認する |
-| `TableNotOpenError` | 表を with 文で開かずに操作した。 | ``with`` 文の中で使う（CSV / Excel などは ``__enter__`` で表を開く） |
+| `TableError` | 表データの読み書き・転記に関するエラー（with 文の外で操作した／テーブルが一意に決まらない／`engine='com'` で `Sheet` 系 API を呼んだ等。具体的な理由はメッセージに出る） | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 
 ## Access のエラー
 

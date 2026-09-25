@@ -113,27 +113,6 @@ class SoqlReportNotRegisteredError(DownloaderError):
         )
 
 
-class ReportDisabledError(DownloaderError):
-    """管理表で「無効」になっているレポートを取ろうとした
-
-    使うのをやめたレポートは、行を消さずに「無効」にして履歴との対応を残す。
-    無効のものを黙って取りに行くと、やめたはずの取得が続いてしまう。
-
-    発生箇所: comken.services.salesforce_downloader の cached_report() / cached_report_path()
-
-    対処:
-        また使うなら管理表の「有効」を「有効」に戻す。
-        使わないなら、呼び出し側のコードから消す
-    """
-
-    def __init__(self, report_key: str, summary: str, master_path: Path) -> None:
-        super().__init__(
-            f"このレポートは無効になっています: {report_key}（{summary}）\n"
-            f"管理表: {master_path}\n"
-            "また使うなら「有効」列を有効に戻してください。"
-        )
-
-
 class CachedReportNotFoundError(DownloaderError):
     """本日の定期取得キャッシュが見つからない
 
@@ -251,50 +230,3 @@ class ScheduledDownloadFailedError(DownloaderError):
             f"定期取得で {len(failed_keys)} 件が失敗しました: {keys}\n"
             f"失敗した理由は履歴を確認してください: {history_path}"
         )
-
-
-class SoqlDownloadFailedError(DownloaderError):
-    """SOQL レポートの取得で1件以上が失敗した
-
-    取得できたものは保存済み。**1件失敗しても残りは続けたうえで、最後にまとめて知らせる。**
-    `download_scheduled()` と同じ「ログだけだと気づけない」問題なので、最後に例外で
-    上げる。定期取得は履歴 CSV の存在を前提にしたメッセージになるため、
-    履歴機能を持たない SOQL レポート経路ではこの例外を使う。
-
-    発生箇所: comken.services.salesforce_downloader.soql_reports の download_soql_reports()
-
-    対処:
-        表示された管理番号について、SOQL クエリ・組織の認証情報・保存先フォルダの
-        権限・ネットワークの状態を確認する。急いで必要なものは
-        ``download_soql_reports()`` を直接実行してもよい
-    """
-
-    def __init__(self, failed_keys: list[str]) -> None:
-        self.failed_keys = failed_keys
-        keys = "、".join(str(key) for key in failed_keys)
-        super().__init__(
-            f"SOQL レポートの取得で {len(failed_keys)} 件が失敗しました: {keys}\n"
-            "失敗した管理番号について、SOQL クエリ・組織の認証情報・保存先フォルダの"
-            "権限・ネットワークの状態を確認してください。"
-        )
-
-
-class ScheduleSettingError(DownloaderError):
-    """管理表のスケジュール列（取得頻度・曜日）に想定外の値が書かれている
-
-    - 「取得頻度」は ``毎日`` / ``毎週`` / ``毎月`` / ``毎営業日`` の4種類
-    - 「曜日」は ``月`` 〜 ``日`` の漢字1文字（「曜日」接尾辞付きも可）
-
-    これら以外（手書きのタイポ・想定外の列挙値）が入っていると、取得の判定が
-    できない。
-
-    発生箇所: comken.services.salesforce_downloader.sheets.schedule の is_due() /
-    ScheduleRule.weekday
-
-    対処:
-        管理表の「取得頻度」列を ``毎日`` / ``毎週`` / ``毎月`` / ``毎営業日`` の
-        いずれかに、「曜日」列を月〜日のいずれかに修正する（「曜日」接尾辞付きも可）
-    """
-
-    def __init__(self, message: str) -> None:
-        super().__init__(message)

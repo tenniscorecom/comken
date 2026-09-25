@@ -31,8 +31,7 @@ import requests
 from comken.core.table import Table
 from comken.core.timer import measure
 from comken.exceptions import (
-    SalesforceConnectionError,
-    SalesforceExternalIDMissingError,
+    SalesforceError,
     SalesforceRequestError,
     SiteOwnerRequiredError,
 )
@@ -45,6 +44,27 @@ from comken.toolbox.salesforce.metrics import APIMetrics, RetryReason
 from comken.toolbox.salesforce.report import ReportAPI
 
 logger = logging.getLogger(__name__)
+
+
+def _connection_error(url: str, detail: Exception) -> SalesforceError:
+    """``SalesforceError`` の「Salesforce につながらない」文言。"""
+    return SalesforceError(
+        f"Salesforce に接続できませんでした: {url}\n"
+        f"（{detail}）\n"
+        "ネットワーク接続と URL を確認してください。"
+        "\n対処: ネットワークの状態を確認して、少し待ってから再実行してください。"
+    )
+
+
+def _external_id_missing_error(object_name: str, external_id_field: str) -> SalesforceError:
+    """``SalesforceError`` の「upsert 用データに外部 ID がない」文言。"""
+    return SalesforceError(
+        f"Salesforce の upsert データに外部 ID 項目がありません: "
+        f"{object_name}.{external_id_field}\n"
+        f"data に {external_id_field} の値を含めてください。"
+        "\n対処: 管理者へ連絡してください。"
+    )
+
 
 # comken 配下のクラスは OWNER 検査の対象外（管理者が既に昇格を判断した印）。
 # SiteBase 側と同じ定数を同じ目的で置く
@@ -155,7 +175,7 @@ class SalesforceBase:
             CredentialNotFoundError: 選択方式に必要な認証情報が未登録の場合。
             CredentialDecryptionError: 別のユーザー・PC で登録されていて復号できない場合。
             SalesforceAuthError: 認証に失敗した場合。
-            SalesforceConnectionError: ネットワークの問題で接続できない場合。
+            SalesforceError: ネットワークの問題で接続できない場合。
         """
         # 認証やネットワークに触れる前に OWNER を確かめる。`_check_start()` は
         # OWNER 必須検査だけを行う classmethod。comken 配下の組織クラスは検査しない
@@ -388,13 +408,13 @@ class SalesforceBase:
             data: 項目と値。external_id_field の値を含めること。
 
         Raises:
-            SalesforceExternalIDMissingError: data に external_id_field が無い場合。
+            SalesforceError: data に external_id_field が無い場合。
         """
         if is_dry_run():
             dry_run_log("Salesforce %s を upsert（%s）: %s", object_name, external_id_field, data)
             return
         if external_id_field not in data:
-            raise SalesforceExternalIDMissingError(object_name, external_id_field)
+            raise _external_id_missing_error(object_name, external_id_field)
         external_id = urllib.parse.quote(str(data[external_id_field]), safe="")
         # 外部 ID は URL 側で指定するため、本文からは取り除く
         body = {key: value for key, value in data.items() if key != external_id_field}
@@ -452,7 +472,7 @@ class SalesforceBase:
 
         Raises:
             SalesforceRequestError: API がエラーを返した場合。
-            SalesforceConnectionError: ネットワークの問題で接続できない場合。
+            SalesforceError: ネットワークの問題で接続できない場合。
         """
         start = time.perf_counter()
         # 初回送信をバックオフの外で行い、response を必ず束縛する。下のループは
@@ -609,7 +629,7 @@ class SalesforceBase:
                 method, url, json=body, data=data, headers=headers, timeout=self.TIMEOUT_SECONDS
             )
         except requests.exceptions.RequestException as e:
-            raise SalesforceConnectionError(url, e) from e
+            raise _connection_error(url, e) from e
 
     @staticmethod
     def _body_of(response: requests.Response) -> dict | list | str | None:
