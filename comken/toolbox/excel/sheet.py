@@ -6,9 +6,9 @@ from __future__ import annotations
 import logging
 import re
 from copy import copy
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
-from openpyxl.styles import Border, PatternFill, Side
+from openpyxl.styles import PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.utils.cell import coordinate_from_string, range_boundaries
 from openpyxl.worksheet.table import Table as OpenPyXLTable
@@ -27,24 +27,6 @@ from comken.toolbox.excel.table import ExcelTable
 
 if TYPE_CHECKING:
     from comken.toolbox.excel.workbook import Excel
-
-# openpyxl の Side が受け付ける境界線のスタイル。
-# 値の一覧は openpyxl.styles.Side.style の NoneSet に従う。
-BorderStyle = Literal[
-    "dashDot",
-    "dashDotDot",
-    "dashed",
-    "dotted",
-    "double",
-    "hair",
-    "medium",
-    "mediumDashDot",
-    "mediumDashDotDot",
-    "mediumDashed",
-    "slantDashDot",
-    "thick",
-    "thin",
-]
 
 # Excel テーブル名でセル参照と紛らわしい形（A1, R1C1 など）に該当するパターン。
 # 数字始まりは別条件ではじくので、ここでは数字を含まない / 含み得る両方を許容する。
@@ -392,68 +374,6 @@ class Sheet:
         )
         return top_left, bottom_right
 
-    def set_row_height(self, row: int, height: float) -> None:
-        """行の高さを設定する。"""
-        self._ensure_display_sheet("set_row_height")
-        self._worksheet.row_dimensions[row].height = height
-        self._excel._mark_dirty()
-        logger.debug("set_row_height: sheet=%s row=%d", self._worksheet.title, row)
-
-    def set_column_width(self, col: str, width: float) -> None:
-        """列の幅を設定する。"""
-        self._ensure_display_sheet("set_column_width")
-        self._worksheet.column_dimensions[col].width = width
-        self._excel._mark_dirty()
-        logger.debug("set_column_width: sheet=%s col=%s", self._worksheet.title, col)
-
-    def hide_row(self, row: int) -> None:
-        """指定した行を非表示にする。
-
-        行の表示設定はデータ表の内容ではなく画面レイアウトなので、データシート
-        ではなく表示シートに限定している。
-        """
-        self._set_row_hidden(row, True)
-
-    def show_row(self, row: int) -> None:
-        """指定した行の非表示を解除する。"""
-        self._set_row_hidden(row, False)
-
-    def hide_column(self, col: str) -> None:
-        """指定した列を非表示にする。"""
-        self._set_column_hidden(col, True)
-
-    def show_column(self, col: str) -> None:
-        """指定した列の非表示を解除する。"""
-        self._set_column_hidden(col, False)
-
-    def insert_row(self, row: int) -> None:
-        """指定位置に表示用の行を挿入する。"""
-        self._ensure_display_sheet("insert_row")
-        self._worksheet.insert_rows(row)
-        self._excel._mark_dirty()
-        logger.debug("insert_row: sheet=%s row=%d", self._worksheet.title, row)
-
-    def delete_row(self, row: int) -> None:
-        """指定位置の表示用の行を削除する。"""
-        self._ensure_display_sheet("delete_row")
-        self._worksheet.delete_rows(row)
-        self._excel._mark_dirty()
-        logger.debug("delete_row: sheet=%s row=%d", self._worksheet.title, row)
-
-    def insert_column(self, col: str) -> None:
-        """指定位置に表示用の列を挿入する。"""
-        self._ensure_display_sheet("insert_column")
-        self._worksheet.insert_cols(col_to_num(col))
-        self._excel._mark_dirty()
-        logger.debug("insert_column: sheet=%s col=%s", self._worksheet.title, col)
-
-    def delete_column(self, col: str) -> None:
-        """指定位置の表示用の列を削除する。"""
-        self._ensure_display_sheet("delete_column")
-        self._worksheet.delete_cols(col_to_num(col))
-        self._excel._mark_dirty()
-        logger.debug("delete_column: sheet=%s col=%s", self._worksheet.title, col)
-
     def format(
         self,
         cell: str,
@@ -495,7 +415,7 @@ class Sheet:
         if name is not None:
             font.name = name
         if color is not None:
-            # ``set_border()`` と同じく ``#`` 付きを許容する
+            # ``#`` 付きの色指定も許容する（set_background と同じ）
             font.color = color.removeprefix("#")
         if any(value is not None for value in (bold, italic, size, name, color)):
             # 既存フォントの属性（太字・色など）を保ったまま反映するため、
@@ -523,47 +443,6 @@ class Sheet:
         self._excel._mark_dirty()
         logger.debug("set_background: sheet=%s cell=%s", self._worksheet.title, cell)
 
-    def set_border(
-        self,
-        cell: str,
-        *,
-        style: BorderStyle = "thin",
-        color: str = "000000",
-    ) -> None:
-        """セルの四辺に同じ境界線を設定する。
-
-        よく使う ``style``: ``"thin"`` / ``"medium"`` / ``"thick"`` /
-        ``"dashed"`` / ``"double"``。全種類は ``BorderStyle`` 型を参照。
-
-        Args:
-            cell: 対象のセル参照 (例: ``"A1"``)。
-            style: 線の種類。 ``BorderStyle`` で定義したいずれかの値。
-            color: 16進数 6 桁の色 (``#`` 付きでも可)。既定は ``"000000"``。
-
-        Raises:
-            ValueError: ``style`` が ``BorderStyle`` のいずれにも該当しない
-                (openpyxl の検証による)。
-        """
-        self._ensure_display_sheet("set_border")
-        side = Side(style=style, color=color.removeprefix("#"))
-        self._worksheet[cell].border = Border(left=side, right=side, top=side, bottom=side)
-        self._excel._mark_dirty()
-        logger.debug("set_border: sheet=%s cell=%s style=%s", self._worksheet.title, cell, style)
-
-    def merge_cells(self, cell_range: str) -> None:
-        """指定範囲のセルを結合する。"""
-        self._ensure_display_sheet("merge_cells")
-        self._worksheet.merge_cells(cell_range)
-        self._excel._mark_dirty()
-        logger.debug("merge_cells: sheet=%s range=%s", self._worksheet.title, cell_range)
-
-    def unmerge_cells(self, cell_range: str) -> None:
-        """指定範囲のセル結合を解除する。"""
-        self._ensure_display_sheet("unmerge_cells")
-        self._worksheet.unmerge_cells(cell_range)
-        self._excel._mark_dirty()
-        logger.debug("unmerge_cells: sheet=%s range=%s", self._worksheet.title, cell_range)
-
     def freeze_panes(self, cell: str) -> None:
         """指定セルより上・左の領域を固定表示する。"""
         self._ensure_display_sheet("freeze_panes")
@@ -575,13 +454,3 @@ class Sheet:
         self._excel._ensure_open()
         if self.is_data_sheet:
             raise _data_sheet_access_error(self._worksheet.title, operation)
-
-    def _set_row_hidden(self, row: int, is_hidden: bool) -> None:
-        self._ensure_display_sheet("hide/show_row")
-        self._worksheet.row_dimensions[row].hidden = is_hidden
-        self._excel._mark_dirty()
-
-    def _set_column_hidden(self, col: str, is_hidden: bool) -> None:
-        self._ensure_display_sheet("hide/show_column")
-        self._worksheet.column_dimensions[col].hidden = is_hidden
-        self._excel._mark_dirty()

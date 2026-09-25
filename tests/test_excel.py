@@ -1,7 +1,5 @@
 """現行のExcel API（Excel / Sheet / ExcelTable）の契約テスト。"""
 
-from typing import Any, cast
-
 import pytest
 from openpyxl.styles import PatternFill
 
@@ -9,7 +7,6 @@ from comken.core.table import Table
 from comken.exceptions import (
     ComkenFileNotFoundError,
     ExcelError,
-    InvalidColumnError,
     SheetNotFoundError,
     TableError,
     UnsupportedFileSuffixError,
@@ -84,7 +81,6 @@ def test_create_sheet_uses_name_as_is_and_supports_layout_api(tmp_path) -> None:
     with Excel(path) as excel:
         sheet = excel.create_sheet("集計")
         assert sheet.is_data_sheet is False
-        sheet.set_column_width("A", 12)
         sheet.freeze_panes("B2")
         sheet.write_value("A1", "見出し")
         sheet.format("A1", bold=True)
@@ -139,75 +135,6 @@ def test_create_sheet_returns_sheet_that_supports_layout_api(tmp_path) -> None:
         # 表示用シートでは table() は ExcelError
         with pytest.raises(ExcelError):
             sheet.table()
-
-
-def test_set_border_uses_thin_by_default(tmp_path) -> None:
-    """set_border() は style を省略すると thin が使われる。"""
-    import inspect
-
-    from comken.toolbox.excel.sheet import Sheet
-
-    path = tmp_path / "book.xlsx"
-    with Excel(path) as excel:
-        sheet = excel.create_sheet("集計")
-        sheet.write_value("A1", "x")
-        sheet.set_border("A1")
-    with Excel(path, read_only=True) as excel:
-        cell = excel.sheet("集計")._worksheet["A1"]
-        assert cell.border.left.style == "thin"
-        # openpyxl は 8 桁の ARGB 形式で色を保存する（先頭 2 桁はアルファチャンネル）
-        assert cell.border.left.color.value == "00000000"
-    # 型定義の Literal として受け付ける値の一覧（実行時の網羅チェック）
-    sig = inspect.signature(Sheet.set_border)
-    if sig.parameters["style"].default != "thin":
-        pytest.fail(f"style 既定値が 'thin' ではない: {sig.parameters['style'].default!r}")
-    if sig.parameters["color"].default != "000000":
-        pytest.fail(f"color 既定値が '000000' ではない: {sig.parameters['color'].default!r}")
-
-
-def test_set_border_accepts_style_and_strips_hash(tmp_path) -> None:
-    """style / color を指定でき、color の '#' は落ちる。"""
-    path = tmp_path / "book.xlsx"
-    with Excel(path) as excel:
-        sheet = excel.create_sheet("集計")
-        sheet.write_value("A1", "x")
-        sheet.set_border("A1", style="thick", color="#FF0000")
-    with Excel(path, read_only=True) as excel:
-        cell = excel.sheet("集計")._worksheet["A1"]
-        assert cell.border.left.style == "thick"
-        assert cell.border.right.style == "thick"
-        assert cell.border.top.style == "thick"
-        assert cell.border.bottom.style == "thick"
-        # openpyxl は 8 桁の ARGB 形式で色を保存する（先頭 2 桁はアルファチャンネル）
-        assert cell.border.left.color.value == "00FF0000"
-
-
-def test_set_border_rejects_unknown_keyword() -> None:
-    """未知のキーワードは Python の呼び出し時点で TypeError。"""
-    import inspect
-
-    from comken.toolbox.excel.sheet import Sheet
-
-    sig = inspect.signature(Sheet.set_border)
-    # set_border() は style / color しか受け付けないため、
-    # 未知のキーワードを bind しようとすると TypeError になる。
-    with pytest.raises(TypeError):
-        sig.bind("A1", thickness=2)
-
-
-def test_openpyxl_side_rejects_unknown_style_with_clear_message() -> None:
-    """openpyxl の Side は無効な style を ValueError にして、有効値の一覧を返す。
-
-    comken の Sheet.set_border() は Literal 型でビルド時に不正値を防ぐので、
-    openpyxl 側の例外メッセージはここで直接確認する。
-    """
-    from openpyxl.styles import Side
-
-    # テストの意図は「無効な値で ValueError」なので、Literal 集合外の "thinn" を
-    # Any キャストで渡して実行時の検証だけ残す（型検査のノイズはキャストで逃す）。
-    invalid_kwargs = cast(dict[str, Any], {"style": "thinn", "color": "000000"})
-    with pytest.raises(ValueError, match="Value must be one of"):
-        Side(**invalid_kwargs)
 
 
 def test_excel_outside_with_block_raises_table_not_open_error(tmp_path) -> None:
@@ -458,21 +385,3 @@ class TestFindSheet:
             # 表示用シート名を候補にしても見つからない。
             with pytest.raises(SheetNotFoundError):
                 excel.find_sheet("案件一覧")
-
-
-class TestColumnLetterValidation:
-    """``Sheet.insert_column`` / ``Sheet.delete_column`` は列記号の不正を
-    ``InvalidColumnError`` で止める（``col_to_num`` 経由）。
-    """
-
-    @pytest.mark.parametrize("invalid_letter", ["", "1", "A1", "1A"])
-    def test_insert_column_rejects_invalid_letter(self, tmp_path, invalid_letter: str) -> None:
-        path = tmp_path / "book.xlsx"
-        with Excel(path) as excel, pytest.raises(InvalidColumnError):
-            excel.create_sheet("集計").insert_column(invalid_letter)
-
-    @pytest.mark.parametrize("invalid_letter", ["", "1", "A1", "1A"])
-    def test_delete_column_rejects_invalid_letter(self, tmp_path, invalid_letter: str) -> None:
-        path = tmp_path / "book.xlsx"
-        with Excel(path) as excel, pytest.raises(InvalidColumnError):
-            excel.create_sheet("集計").delete_column(invalid_letter)

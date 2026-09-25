@@ -55,7 +55,7 @@ class TestConvertRangeToTableSuccess:
             sheet = excel.create_sheet("案件一覧")
             # 1 行目には結合（タイトル）を入れ、2 行目が空、3 行目から見出し
             sheet.write_value("A1", "案件一覧（タイトル）")
-            sheet.merge_cells("A1:C1")
+            sheet._worksheet.merge_cells("A1:C1")
             sheet.write_range("A3:C3", [["ID", "名前", "備考"]])
             for index in range(4, 7):
                 sheet.write_value(f"A{index}", str(index - 3))
@@ -81,7 +81,7 @@ class TestA2Rule:
             sheet = excel.create_sheet("案件一覧")
             # 1 行目: タイトル（結合）
             sheet.write_value("A1", "案件一覧")
-            sheet.merge_cells("A1:C1")
+            sheet._worksheet.merge_cells("A1:C1")
             # 2 行目: 見出し
             sheet.write_range("A2:C2", [["ID", "名前", "備考"]])
             for index in range(3, 6):
@@ -127,7 +127,7 @@ class TestConvertRangeToTableErrors:
             sheet.write_range("A1:C1", [["ID", "名前", "備考"]])
             sheet.write_value("A2", "1")
             sheet.write_value("B2", "A")
-            sheet.merge_cells("B3:C3")
+            sheet._worksheet.merge_cells("B3:C3")
             sheet.write_value("A3", "2")
             with pytest.raises(InvalidTableInputError, match="結合セル"):
                 excel.convert_range_to_table("案件一覧", range="A1:C3", table_name="案件")

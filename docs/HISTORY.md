@@ -688,6 +688,26 @@ master に何をコミットしても本番には流れない。**
 移動。状態（作業ファイル・ストリーム Workbook キャッシュなど）は引き続き
 `Excel` 側に保持する。
 
+### `Sheet` から使われていない書式・構造系13メソッドを削除した（2026-09-26）
+
+`comken.toolbox.excel.sheet.Sheet` から、社内で利用が無い書式・構造系メソッド
+13 個（`set_border` / `merge_cells` / `unmerge_cells` / `set_row_height` /
+`set_column_width` / `hide_row` / `show_row` / `hide_column` / `show_column` /
+`insert_row` / `delete_row` / `insert_column` / `delete_column`）を削除した。
+**Excel の見た目・構造の調整は VBA、複数ファイルにまたがる処理は Python**、
+という責任区分に合わせた（VBA 側で持たせる方が保守しやすい操作を
+Python 側に持ち込んでいなかったため）。
+
+`set_background` / `format` / `freeze_panes` の 3 メソッドは残した。
+社内でレポート雛形作成の基本として使われている可能性があるため。
+
+同時に、上記 13 メソッド専用だったヘルパー（`_set_row_hidden` /
+`_set_column_hidden`）、`BorderStyle` 型エイリアス、`openpyxl.styles` からの
+`Border` / `Side` の import を削除した。`tests/test_excel.py` から該当テスト
+を削除し、`tests/test_convert_range_to_table.py` で結合セルの準備に使っていた
+3 箇所は `sheet._worksheet.merge_cells(...)` で openpyxl を直接呼ぶ形に直した
+（テストの意図・検証内容は変えていない）。
+
 ## 15. モジュール・公開 API の改名（2026-09-25）
 
 `comken.core.clock` → `comken.core.dates`。コア層の日付・時刻ユーティリティ
