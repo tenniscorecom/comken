@@ -697,28 +697,6 @@ master に何をコミットしても本番には流れない。**
 Python 側に持ち込んでいなかったため）。
 
 `set_background` / `format` / `freeze_panes` の 3 メソッドは残した。
-
-### ブラウザ操作の見本サイト `ouju` / `ams` を削除した（2026-09-26）
-
-ブラウザ操作の書き方の見本として置いていた `comken/toolbox/browser/sites/ouju/`
-と `comken/toolbox/browser/sites/ams/`（どちらもダミーの値を入れた雛形）を削除した。
-
-- 両フォルダと、`tests/test_browser_sites_ouju.py` /
-  `tests/test_browser_sites_ams.py` を削除（フォルダを消せば `browser/sites/SITES`
-  から自動で外れる。手で書き換えていない）
-- 書き方の見本は運用中の `ntt/` に一本化した。`ntt/` は NTT西・NTT東 を 1 フォルダで
-  束ねる例外形のため、姉妹サイトを持たない単独サイト用の 1 サイト＝1 フォルダ形の
-  解説は `docs/機能/browser.md` を正本とする旨を、`comken/toolbox/browser/sites/__init__.py`
-  の docstring と `docs/機能/browser.md` に書き残した
-- ブラウザの公認サイト一覧（`comken.toolbox.browser.sites.SITES`）は
-  `ntt_east` / `ntt_west` / `salesforce_solution` / `salesforce_solution_sandbox`
-  の 4 件になった
-- `config.CREDENTIALS.AMS` という設定キーの例（`comken/toolbox/credentials/prompt.py`
-  の docstring、`store.py` の docstring、`docs/機能/credentials.md`）は
-  `sites.ams` クラスを import・参照していないため、**例としてそのまま残した**
-- `docs/ERRORS.md` と `docs/自動生成/API.md` は `tools/export_for_chat.py` で
-  再生成した
-- 過去の経緯・列挙としての記述（`docs/HISTORY.md` 内の旧名への言及）は歴史なので残した
 社内でレポート雛形作成の基本として使われている可能性があるため。
 
 同時に、上記 13 メソッド専用だったヘルパー（`_set_row_hidden` /

@@ -165,9 +165,7 @@ src/
 
 `python -m comken init` が作る雛形には `src/sites/` は**含まれていない**。ブラウザ操作を使う
 プロジェクトでは、この節の形に合わせて `src/sites/<サイト名>/` を自分で追加する
-（書き方の見本はライブラリ側の `comken/toolbox/browser/sites/ntt/` にある。
-`ntt/` は NTT西・NTT東 の 2 サイトを 1 フォルダで束ねる例外形のため、
-姉妹サイトを持たない単独サイト用の 1 サイト＝1 フォルダ形の構成は本節を正本とする）。
+（書き方の見本はライブラリ側の `comken/toolbox/browser/sites/ouju/` にある）。
 サイトを増やすには、`src/sites/<サイト名>/` を隣にもう1つ作るだけ。
 
 **ライブラリ側の `SITES` は自動登録される** — `comken/core/discovery.py` の
@@ -470,14 +468,15 @@ def ensure_login(self, user_id: str, password: str) -> "HomePage":
 
 パスワード期限切れの変更画面（`ChangePasswordPage`）・単純な認証情報間違い
 （`LoginFailedError`）・非同期でボタンや表示が遅れて出るサイトへの対処は、
-`comken.toolbox.browser.sites.<サイト名>/pages/login_page.py` に同等の
-実装がある。実装の詳細は `LoginPage.login()` を直接読む。
-DPAPI への反映まで含めた使い方は
+雛形（`comken/toolbox/browser/sites/ams/pages/login_page.py`・
+`change_password_page.py`、`ouju/pages/login_page.py`）に実装済み。
+実装の詳細は `LoginPage.login()` / `ChangePasswordPage.submit_new_password()`
+を直接読む。DPAPI への反映まで含めた使い方は
 [認証情報のパスワードの変更](credentials.md#パスワードの変更) を参照。
 
 `click_if_present()` / `raise_if_shown()` / `wait_for_result()` は
 `comken.toolbox.browser.Page`（`SitePage` も継承先）が持つ汎用メソッドで、
-どのサイトの画面クラスでも使える。ログイン以外の
+`ams`・`ouju` に限らずどのサイトの画面クラスでも使える。ログイン以外の
 フォーム送信（例: 検索条件の送信でエラーが出る画面）でも同じ形になりやすい。
 
 ---
@@ -858,24 +857,18 @@ class LoginPage(SitePage):
 
 ### サンプル実装
 
-`comken/toolbox/browser/sites/ntt/` にサイト実装の見本がある
-（NTT西・NTT東 の 2 サイトを 1 フォルダで束ねる形。実行スクリプトの例は examples/README.md 参照）。
+`comken/toolbox/browser/sites/ouju/` にサイト実装の見本がある
+（実行スクリプトの例は examples/README.md 参照）。
 
-`ntt/` は **NTT西・NTT東 を 1 フォルダで共有する例外形**のため、上の「1サイト＝1フォルダ」
-をそのまま当てはめる参考にはならない（`ntt/base.py` の docstring に意図的に破ると書いてある）。
-姉妹サイトを持たない単独サイト用の 1 サイト＝1 フォルダ形は、本節の第 1〜4 項の構成に従う。
-
-`ntt/` の実際のツリー:
+**上の「1サイト＝1フォルダ」で書いてある**ので、形の見本としてそのまま真似できる。
 
 ```
-comken/toolbox/browser/sites/ntt/
-├── base.py                # NTTSiteBase / NTTBrowserOptions（2 サイト共通の土台）
-├── east.py                # NTT東（NTTSiteBase を継承）
-├── west.py                # NTT西（NTTSiteBase を継承）
-└── pages/                 # 2 サイトの pages/（NTT西・NTT東で共有）
-    ├── app_page.py        # この画面の BasePage
-    ├── login_page.py      # ログイン画面
-    └── secure_page.py     # ログイン後の画面
+comken/toolbox/browser/sites/ouju/
+├── site.py                 # サイトクラス＋このサイトの BrowserOptions
+└── pages/
+    ├── app_page.py         # このサイトの画面に共通
+    ├── login_page.py       # ログイン画面
+    └── secure_page.py      # ログイン後の画面
 ```
 
 プロジェクト側でサイトを増やすときは `sites/<サイト名>/` をもう1つ作るだけで、
@@ -889,4 +882,4 @@ comken/toolbox/browser/sites/ntt/
 
 - [公開 API](../自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外
 - [エラー対応ガイド](../ERRORS.md#ブラウザedge-自動操作のエラー) — エラー名から対処を引く
-- `comken/toolbox/browser/sites/ntt/` — サイト実装の見本（NTT西・NTT東 を束ねる例外形）
+- `comken/toolbox/browser/sites/ouju/` — サイト実装の見本
