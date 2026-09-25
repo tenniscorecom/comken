@@ -66,6 +66,7 @@ def test_core_exposes_parts() -> None:
         "WORKDAY_SEARCH_LIMIT",
         "compare_tables",
         "copy_file",
+        "count_workdays",
         "date_in_name",
         "dates_in_name",
         "delete_file",

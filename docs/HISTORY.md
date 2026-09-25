@@ -633,6 +633,9 @@ master に何をコミットしても本番には流れない。**
 | `non_business_days_after` | `non_workdays_after` |
 | `non_business_days_before` | `non_workdays_before` |
 
+`count_workdays`（Excel の `NETWORKDAYS(開始, 終了)` 相当）を追加。両端を含む
+営業日数を返し、`start > end` のときは負の数を返す（`is_workday` と同じ判定）。
+
 例外ファイル `comken/exceptions/calendar.py` のファイル名・配置は当面変えない
 （カレンダーが主題ではないため、関数改名とは別タスクで動かす）。`HolidayError`
 / `WorkdayNotFoundError` のクラス定義だけはこの中に置いたまま。

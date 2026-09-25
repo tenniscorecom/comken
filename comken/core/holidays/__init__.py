@@ -31,6 +31,8 @@ holiday_name                国民の祝日または会社休日の名称（無�
 is_workday                  簡易判定（国民の祝日＋会社休日＋土日）
 workday                     target から n 営業日後（n=0 ならそのまま、負なら前）
                              Excel の WORKDAY 互換
+count_workdays              start から end までの両端を含む営業日数
+                             Excel の NETWORKDAYS 互換
 workday_on_or_after         d 以降で最初の営業日（d 自身を含む）
 workday_on_or_before        d 以前で最初の営業日（d 自身を含む）
 first_workday               d の月の最初の営業日
@@ -47,6 +49,7 @@ from comken.core.holidays._holidays import (
     EXPIRING_WARNING_DAYS,
     HOLIDAYS_CSV_PATH,
     WORKDAY_SEARCH_LIMIT,
+    count_workdays,
     first_workday,
     holiday_name,
     is_holiday,
@@ -68,6 +71,7 @@ __all__ = [
     "HolidayError",
     "WORKDAY_SEARCH_LIMIT",
     "WorkdayNotFoundError",
+    "count_workdays",
     "first_workday",
     "holiday_name",
     "is_holiday",

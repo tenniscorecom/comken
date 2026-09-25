@@ -201,6 +201,7 @@ End Function
 | `holiday_name(d)` | 国民の祝日または会社休日の名称を返す（無ければ `None`） |
 | `is_workday(d, *, skip_weekends=True)` | 国民の祝日＋会社休日＋土日を判定して `True`/`False` |
 | `workday(d, n, *, skip_weekends=True)` | `d` から `n` 営業日後の日付（`n=0` なら `d` をそのまま、`n` が負なら前方向）。Excel の `WORKDAY(d, n)` 互換 |
+| `count_workdays(start, end, *, skip_weekends=True)` | `start` から `end` までの**両端を含む**営業日数。Excel の `NETWORKDAYS(開始, 終了)` 互換 |
 | `workday_on_or_after(d, *, skip_weekends=True)` | `d` 以降で最初の営業日（`d` を含む） |
 | `workday_on_or_before(d, *, skip_weekends=True)` | `d` 以前で最初の営業日（`d` を含む） |
 | `first_workday(d, *, skip_weekends=True)` | `d` の月の最初の営業日 |

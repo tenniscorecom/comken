@@ -719,6 +719,24 @@ def compare_tables(read: Table, write: Table, *, read_key: str | Sequence[str], 
 
 2つのTableをキーで比較し、4種類のTableに分けて返す。
 
+### `count_workdays`
+
+```text
+def count_workdays(start: _dt.date, end: _dt.date, *, skip_weekends: bool=True) -> int:
+```
+
+#### 説明
+
+``start`` から ``end`` までの**両端を含む**営業日数を返す（Excel の ``NETWORKDAYS(start, end)`` 互換）。
+
+``start <= end`` のときは正の数を、``start > end`` のときは負の数を返す
+（``end`` から ``start`` までの営業日数に -1 を掛けた値）。
+``start == end`` のとき、その日が営業日なら ``1``、休みなら ``0``。
+
+営業日判定は ``is_workday`` と同じ（``skip_weekends`` の意味も同じ）。
+``WORKDAY_SEARCH_LIMIT`` は使わない（日数を数えるだけなので、
+祝日データが壊れていても上限に当たって例外にはならない）。
+
 ### `copy_file`
 
 ```text
@@ -2083,6 +2101,24 @@ class WorkdayNotFoundError(HolidayError):
 ```text
 def __init__(self, detail: str) -> None:
 ```
+
+### `count_workdays`
+
+```text
+def count_workdays(start: _dt.date, end: _dt.date, *, skip_weekends: bool=True) -> int:
+```
+
+#### 説明
+
+``start`` から ``end`` までの**両端を含む**営業日数を返す（Excel の ``NETWORKDAYS(start, end)`` 互換）。
+
+``start <= end`` のときは正の数を、``start > end`` のときは負の数を返す
+（``end`` から ``start`` までの営業日数に -1 を掛けた値）。
+``start == end`` のとき、その日が営業日なら ``1``、休みなら ``0``。
+
+営業日判定は ``is_workday`` と同じ（``skip_weekends`` の意味も同じ）。
+``WORKDAY_SEARCH_LIMIT`` は使わない（日数を数えるだけなので、
+祝日データが壊れていても上限に当たって例外にはならない）。
 
 ### `first_workday`
 

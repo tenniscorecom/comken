@@ -37,6 +37,7 @@ from comken.core.files.ops import project_dir
 from comken.core.holidays._holidays import EXPIRING_WARNING_DAYS
 from comken.core.holidays._holidays import HOLIDAYS_CSV_PATH
 from comken.core.holidays._holidays import WORKDAY_SEARCH_LIMIT
+from comken.core.holidays._holidays import count_workdays
 from comken.core.holidays._holidays import first_workday
 from comken.core.holidays._holidays import holiday_name
 from comken.core.holidays._holidays import is_holiday
@@ -78,6 +79,7 @@ __all__ = [
     "Transfer",
     "WORKDAY_SEARCH_LIMIT",
     "compare_tables",
+    "count_workdays",
     "copy_file",
     "date_in_name",
     "dates_in_name",

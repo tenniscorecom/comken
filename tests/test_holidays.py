@@ -18,6 +18,7 @@ from comken.core.holidays import (
     EXPIRING_WARNING_DAYS,
     HOLIDAYS_CSV_PATH,
     WORKDAY_SEARCH_LIMIT,
+    count_workdays,
     first_workday,
     holiday_name,
     is_holiday,
@@ -595,6 +596,137 @@ class TestWorkday:
         try:
             # 2024-05-07 (火、GW明け) - 1 営業日 → 2024-05-02 (木、GW前最終営業日)
             assert workday(_dt.date(2024, 5, 7), -1) == _dt.date(2024, 5, 2)
+        finally:
+            _set_calendar_for_test(None)
+
+    def test_workday_skip_weekends_false_from_weekday(self) -> None:
+        """``skip_weekends=False`` なら平日起点で翌暦日がそのまま返る（営業日でも祝日に注意）。"""
+        # 4/30 は祝日なしの火曜 → +1 暦日 = 5/1 (水、祝日なし)
+        assert workday(_dt.date(2024, 4, 30), 1, skip_weekends=False) == _dt.date(2024, 5, 1)
+
+    def test_workday_skip_weekends_false_from_holiday(self) -> None:
+        """``skip_weekends=False`` で起点が祝日（平日）でも、翌暦日が営業日ならそれが返る。"""
+        # 4/29 (月) は昭和の日で祝日 → +1 暦日 = 4/30 (火、祝日なし)
+        assert workday(_dt.date(2024, 4, 29), 1, skip_weekends=False) == _dt.date(2024, 4, 30)
+
+    def test_workday_skip_weekends_false_from_saturday(self) -> None:
+        """``skip_weekends=False`` なら土曜起点でも翌日（日曜）が営業日になり得る。"""
+        # 4/27 (土) は祝日ではない → +1 暦日 = 4/28 (日、祝日ではない)
+        assert workday(_dt.date(2024, 4, 27), 1, skip_weekends=False) == _dt.date(2024, 4, 28)
+
+
+class TestCountWorkdays:
+    """``count_workdays`` の挙動（Excel の ``NETWORKDAYS(start, end)`` 互換）。"""
+
+    def test_weekdays_only_range(self) -> None:
+        """祝日のない平日区間（1/8 月〜1/12 金）は両端含めて 5。"""
+        # 1/8(月)-1/12(金): 全部営業日、5 日
+        _set_calendar_for_test(_Holidays({}))
+        try:
+            assert count_workdays(_dt.date(2024, 1, 8), _dt.date(2024, 1, 12)) == 5
+        finally:
+            _set_calendar_for_test(None)
+
+    def test_range_spans_weekend(self) -> None:
+        """週末をまたぐ区間（1/8 月〜1/14 日）は 5（土日を含まない）。"""
+        # 1/8-1/14: 月火水木金=5、土日=0
+        _set_calendar_for_test(_Holidays({}))
+        try:
+            assert count_workdays(_dt.date(2024, 1, 8), _dt.date(2024, 1, 14)) == 5
+        finally:
+            _set_calendar_for_test(None)
+
+    def test_range_spans_golden_week(self) -> None:
+        """2024 GW（5/3〜5/6 全部祝日）をまたぐ区間は 6（5/1, 5/2 + 5/7〜5/10）。"""
+        # 5/1(水)-5/10(金):
+        #   5/1, 5/2 = 2 営業日
+        #   5/3(祝), 5/4(土), 5/5(日), 5/6(祝) = 0
+        #   5/7, 5/8, 5/9, 5/10 = 4 営業日
+        #   合計 6
+        _set_calendar_for_test(
+            _holiday_calendar(
+                {
+                    _dt.date(2024, 5, 3): "憲法",
+                    _dt.date(2024, 5, 4): "みどり",
+                    _dt.date(2024, 5, 5): "こどもの日",
+                    _dt.date(2024, 5, 6): "振替",
+                }
+            )
+        )
+        try:
+            assert count_workdays(_dt.date(2024, 5, 1), _dt.date(2024, 5, 10)) == 6
+        finally:
+            _set_calendar_for_test(None)
+
+    def test_same_day_workday_returns_one(self) -> None:
+        """``start == end`` で営業日なら 1。"""
+        # 1/9 火曜、祝日でも会社休日でもない
+        _set_calendar_for_test(_Holidays({}))
+        try:
+            assert count_workdays(_dt.date(2024, 1, 9), _dt.date(2024, 1, 9)) == 1
+        finally:
+            _set_calendar_for_test(None)
+
+    def test_same_day_holiday_returns_zero(self) -> None:
+        """``start == end`` で祝日なら 0。"""
+        # 5/3 金曜、憲法記念日
+        _set_calendar_for_test(_holiday_calendar({_dt.date(2024, 5, 3): "憲法"}))
+        try:
+            assert count_workdays(_dt.date(2024, 5, 3), _dt.date(2024, 5, 3)) == 0
+        finally:
+            _set_calendar_for_test(None)
+
+    def test_start_after_end_returns_negative(self) -> None:
+        """``start > end`` のとき負の数（同じ範囲を逆向きで数えて -1 倍）。"""
+        # 5/10→5/1 は 5/1→5/10 の符号反転 → -6
+        _set_calendar_for_test(
+            _holiday_calendar(
+                {
+                    _dt.date(2024, 5, 3): "憲法",
+                    _dt.date(2024, 5, 4): "みどり",
+                    _dt.date(2024, 5, 5): "こどもの日",
+                    _dt.date(2024, 5, 6): "振替",
+                }
+            )
+        )
+        try:
+            assert count_workdays(_dt.date(2024, 5, 10), _dt.date(2024, 5, 1)) == -6
+        finally:
+            _set_calendar_for_test(None)
+
+    def test_skip_weekends_false_counts_saturday_and_sunday(self) -> None:
+        """``skip_weekends=False`` なら土日も数える（祝日は数えない）。"""
+        # 1/8(月)-1/14(日)、祝日はなし → 月火水木金土日 = 7
+        _set_calendar_for_test(_Holidays({}))
+        try:
+            assert (
+                count_workdays(_dt.date(2024, 1, 8), _dt.date(2024, 1, 14), skip_weekends=False)
+                == 7
+            )
+        finally:
+            _set_calendar_for_test(None)
+
+    def test_skip_weekends_false_excludes_holidays(self) -> None:
+        """``skip_weekends=False`` でも国民の祝日は営業日として数えない。"""
+        # 4/27(土)〜5/5(日)、4/29 と 5/3〜5/5 が祝日
+        #   4/27(土), 4/28(日), 4/29(月祝), 4/30(火), 5/1(水), 5/2(木),
+        #   5/3(金祝), 5/4(土祝), 5/5(日祝)
+        #   skip_weekends=False で営業日: 4/27, 4/28, 4/30, 5/1, 5/2 = 5
+        _set_calendar_for_test(
+            _holiday_calendar(
+                {
+                    _dt.date(2024, 4, 29): "昭和",
+                    _dt.date(2024, 5, 3): "憲法",
+                    _dt.date(2024, 5, 4): "みどり",
+                    _dt.date(2024, 5, 5): "こどもの日",
+                }
+            )
+        )
+        try:
+            assert (
+                count_workdays(_dt.date(2024, 4, 27), _dt.date(2024, 5, 5), skip_weekends=False)
+                == 5
+            )
         finally:
             _set_calendar_for_test(None)
 
