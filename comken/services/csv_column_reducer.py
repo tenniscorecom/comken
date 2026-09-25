@@ -12,12 +12,23 @@ Access へ取り込めなくなる。既定では旧ロール相当の列だけ�
 
     reduce_ouju_csv_file("応需.csv")  # 旧ロール列だけに絞って同じ名前で書き戻す
 
+**bat から呼んで、同じフォルダの CSV を全部変換する**（元の新ロールのファイルは ``_bak`` に残る）:
+
+    @echo off
+    pushd "%~dp0"
+    python -m comken.services.csv_column_reducer
+
+bat に CSV ファイルやフォルダを**ドラッグ＆ドロップ**すると、落としたものだけが対象になる
+（何も落とさずに実行すれば、bat のあるフォルダ）。すでに旧ロールの列だけになっているファイルと、
+``_bak`` のファイルは飛ばす（2回実行しても、新ロールのバックアップは上書きされない）。
+
 列名・リネーム対応表は環境依存の実データなので、ここはダミーのまま
 （利用プロジェクト側で実際の値へ書き換える前提）。
 
 **このファイルが持つもの:**
 - 応需CSV向けの既定の列リスト・リネーム対応表（雛形。実データは利用側で埋める）
-- Table 単位の削減（reduce_ouju_csv）・ファイル単位の削減（reduce_ouju_csv_file）
+- Table 単位の削減（reduce_ouju_csv）・ファイル単位の削減（reduce_ouju_csv_file）・
+  フォルダ単位の削減（reduce_ouju_csv_folder。bat からは ``python -m`` で呼ぶ）
 
 **ここに書かないもの:**
 - 列選択そのもの（列名ゆれの吸収を含む） → comken.core.table.model.Table.select()
@@ -27,11 +38,16 @@ Access へ取り込めなくなる。既定では旧ロール相当の列だけ�
 
 from __future__ import annotations
 
+import argparse
+import logging
 from pathlib import Path
 
 from comken.core.files import copy_file
 from comken.core.table.model import Table
+from comken.exceptions import ComkenError, CSVError
 from comken.toolbox.csv import CSV
+
+logger = logging.getLogger(__name__)
 
 # 旧ロールで残す列名（この並び順で出力される）。
 # TODO: 実際の旧ロールの列名に書き換える
@@ -103,6 +119,95 @@ def reduce_ouju_csv_file(
     return backup_path
 
 
+def reduce_ouju_csv_files(
+    paths: list[Path],
+    *,
+    columns: list[str] | None = None,
+    backup_suffix: str = "_bak",
+) -> list[Path]:
+    """指定した CSV を、旧ロールの列だけに絞る（``reduce_ouju_csv_file`` を順に呼ぶ）。
+
+    次のファイルは飛ばす（ログに出す）:
+
+    - ``backup_suffix`` で終わるファイル（バックアップそのもの）
+    - **すでに旧ロールの列だけになっているファイル。** 飛ばさないと、2回目の実行で
+      新ロールのバックアップが、旧ロールに絞ったファイルで上書きされて失われる。
+      「バックアップがあるか」では判定しない（同じ名前で新しくダウンロードした CSV が
+      飛ばされてしまうため）
+
+    1ファイルが失敗（欲しい列が無い等）しても、残りは処理する。失敗したファイルは
+    最後にまとめて ``CSVError`` で知らせる（bat が終了コードで気づけるように）。
+
+    Returns:
+        変換したファイルのバックアップのパス。
+    """
+    wanted = columns if columns is not None else OLD_ROLE_COLUMNS
+    backups: list[Path] = []
+    failures: list[str] = []
+    for path in paths:
+        if path.stem.endswith(backup_suffix):
+            logger.info("バックアップのファイルなので飛ばします: %s", path.name)
+            continue
+        try:
+            with CSV(path, read_only=True) as source:
+                if source.read().columns == wanted:
+                    logger.info("すでに旧ロールの列だけなので飛ばします: %s", path.name)
+                    continue
+            backups.append(reduce_ouju_csv_file(path, columns=columns, backup_suffix=backup_suffix))
+        except ComkenError as error:
+            logger.error("変換できませんでした: %s（%s）", path.name, error)
+            failures.append(path.name)
+        else:
+            logger.info("旧ロールの列に変換しました: %s", path.name)
+    if failures:
+        raise CSVError(
+            f"{len(failures)} 件の CSV を変換できませんでした: {', '.join(failures)}\n"
+            "上のログで、それぞれの原因（欲しい列が無い等）を確認してください。"
+            "変換できなかったファイルは、元のまま変更していません。"
+        )
+    return backups
+
+
+def reduce_ouju_csv_folder(
+    folder: str | Path,
+    *,
+    columns: list[str] | None = None,
+    backup_suffix: str = "_bak",
+) -> list[Path]:
+    """フォルダ内の ``*.csv`` を、すべて旧ロールの列だけに絞る。
+
+    飛ばす条件・失敗したときの扱いは ``reduce_ouju_csv_files`` と同じ。
+    """
+    csv_files = sorted(path for path in Path(folder).glob("*.csv") if path.is_file())
+    return reduce_ouju_csv_files(csv_files, columns=columns, backup_suffix=backup_suffix)
+
+
+def main(argv: list[str] | None = None) -> None:
+    """``python -m comken.services.csv_column_reducer [ファイルやフォルダ ...]``。
+
+    引数はファイルでもフォルダでもよい（bat へのドラッグ＆ドロップで渡される）。
+    フォルダは中の ``*.csv`` を対象にする。何も渡さなければ現在のフォルダを対象にする。
+    """
+    parser = argparse.ArgumentParser(description="CSV を旧ロールの列だけにする")
+    parser.add_argument(
+        "paths", nargs="*", type=Path, help="対象のファイルやフォルダ（省略時は現在のフォルダ）"
+    )
+    args = parser.parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    targets: list[Path] = []
+    for path in args.paths or [Path()]:
+        if path.is_dir():
+            targets += sorted(p for p in path.glob("*.csv") if p.is_file())
+        else:
+            targets.append(path)
+    try:
+        backups = reduce_ouju_csv_files(targets)
+    except CSVError as error:
+        logger.error("%s", error)
+        raise SystemExit(1) from error
+    logger.info("完了: %d 件を変換しました", len(backups))
+
+
 def _resolve_asterisk_aliases(
     table_columns: list[str], wanted_columns: list[str]
 ) -> dict[str, str]:
@@ -121,3 +226,7 @@ def _resolve_asterisk_aliases(
         if actual is not None:
             aliases[wanted] = actual
     return aliases
+
+
+if __name__ == "__main__":
+    main()
