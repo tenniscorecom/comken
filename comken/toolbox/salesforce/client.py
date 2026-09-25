@@ -15,7 +15,7 @@ r"""comken/toolbox/salesforce/client.py — Salesforce API クライアント
 
 認証・レポート・計測は継承せず**持たせている**。認証は「トークンを取る部品」で
 あって Salesforce の一種ではなく、合成にしておくと JWT フローへの差し替えが
-`auth` の入れ替えだけで済むため（詳しくは docs/salesforce.md）。
+`auth` の入れ替えだけで済むため（詳しくは docs/機能/salesforce.md）。
 """
 
 import logging

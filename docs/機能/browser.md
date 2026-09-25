@@ -1,6 +1,6 @@
 # ブラウザ操作
 
-[README（ドキュメントの入口）へ戻る](../README.md)
+[README（ドキュメントの入口）へ戻る](../../README.md)
 
 Edge を自動で動かして、社内システムから情報を取ったり入力したりするための仕組み。
 
@@ -582,7 +582,7 @@ with Browsers() as browsers:
 直接HTTPで叩くなど、ブラウザのダウンロードフォルダを経由しない方法を検討する
 （`comken/toolbox/browser/sites/salesforce/base.py` の `export_reports()` が実例。
 Salesforce向けの実装は `toolbox.browser.sites.salesforce` 側に置いている。理由は
-`docs/salesforce.md` の「4段目」を参照）。
+`docs/機能/salesforce.md` の「4段目」を参照）。
 
 ---
 
@@ -924,7 +924,7 @@ class LoginPage(SitePage):
 ```
 
 **メソッドの探し方**: 正確な名前・シグネチャは
-[自動生成 API.md の `Page`](自動生成/API.md#page) を参照する
+[自動生成 API.md の `Page`](../自動生成/API.md#page) を参照する
 （`python tools/export_for_chat.py` で生成されるため、実装と食い違わない）。
 ここでは用途別の見取り図だけ示す。
 
@@ -980,6 +980,6 @@ comken/toolbox/browser/sites/ouju/
 
 ## 関連
 
-- [公開 API](自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外
-- [エラー対応ガイド](ERRORS.md#ブラウザedge-自動操作のエラー) — エラー名から対処を引く
+- [公開 API](../自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外
+- [エラー対応ガイド](../ERRORS.md#ブラウザedge-自動操作のエラー) — エラー名から対処を引く
 - `comken/toolbox/browser/sites/ouju/` — サイト実装の見本

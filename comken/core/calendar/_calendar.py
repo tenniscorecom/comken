@@ -478,7 +478,7 @@ class _Calendar:
                 "comken/core/calendar/data/syukujitsu.csv を上書きし、"
                 "python -m comken.core.calendar.build を実行して"
                 "comken/core/calendar/data/company_calendar.csv を"
-                "再生成してください（docs/calendar.md の「年1回の更新手順」参照）。",
+                "再生成してください（docs/機能/calendar.md の「年1回の更新手順」参照）。",
                 today,
                 last,
             )
@@ -496,7 +496,7 @@ class _Calendar:
                 "python -m comken.core.calendar.build を実行して"
                 "comken/core/calendar/data/company_calendar.csv を更新し、"
                 "コミット・タグ打ちして配布してください"
-                "（docs/calendar.md の「年1回の更新手順」参照）。",
+                "（docs/機能/calendar.md の「年1回の更新手順」参照）。",
                 remaining,
                 last,
             )

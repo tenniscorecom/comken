@@ -31,7 +31,7 @@ URL と認証情報のシステム名は組織クラスがクラス定数とし�
 形式）の最終手段は `comken.toolbox.browser.sites.salesforce`。画面のエクスポート
 機能をブラウザ経由で叩く。組織ごとの設定（URL・認証情報名）は API 側の組織クラス
 （`sites/` の `Solution` 等）からそのまま読むため、API 版とブラウザ版で同じ組織でも
-個別の値を二重に持たなくてよい（詳しくは docs/salesforce.md）。
+個別の値を二重に持たなくてよい（詳しくは docs/機能/salesforce.md）。
 
     from comken.toolbox.browser.sites.salesforce import site_for
 

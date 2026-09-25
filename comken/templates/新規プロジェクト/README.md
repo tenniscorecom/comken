@@ -51,5 +51,5 @@ RPA 基盤から呼び出すときは `main.py` の末尾のコメント（社�
 4. `docs/ERRORS.md` の「プロジェクト固有のエラー」に、このツールで起きやすいエラーを追記する
 5. この節を README から削除する
 
-コーディング規約は comken リポジトリの `CONVENTIONS.md` に従う。
+コーディング規約は comken リポジトリの `docs/CONVENTIONS.md` に従う。
 使える機能の探し方と使うときの約束は comken の `README.md`。

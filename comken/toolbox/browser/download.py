@@ -57,7 +57,7 @@ class DownloadDir:
         if path:
             # 相対パスのまま Chrome の download.default_directory prefs へ渡すと、
             # ブラウザプロセス側の作業ディレクトリ次第で解決先がずれる
-            # （PROFILE_ROOT の --user-data-dir と同じ理由。docs/browser.md 参照）
+            # （PROFILE_ROOT の --user-data-dir と同じ理由。docs/機能/browser.md 参照）
             self.path = Path(path).resolve()
             self.path.mkdir(parents=True, exist_ok=True)
             self._is_temp = False

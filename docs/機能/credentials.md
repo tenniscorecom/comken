@@ -1,6 +1,6 @@
 # 認証情報
 
-[README（ドキュメントの入口）へ戻る](../README.md)
+[README（ドキュメントの入口）へ戻る](../../README.md)
 
 README の「credentials」から移した、モジュールを使うときの詳しい説明です。
 
@@ -22,7 +22,7 @@ Windows 標準の **DPAPI** で暗号化して保管し、コードからは（�
 プログラムが実行中に受け取った値（Salesforce のリフレッシュトークンなど）を保存するのは
 コマンドではなく、`Credentials` の仕事で、人の操作は要らない。既に読み込み済みの
 `Credentials` インスタンスがあれば `cred.save()`（[使う側](#使う側)参照）、まだ
-インスタンスを持っていない場合だけ [`save_credential()` / `save_credentials()`](自動生成/API.md)
+インスタンスを持っていない場合だけ [`save_credential()` / `save_credentials()`](../自動生成/API.md)
 を直接使う。
 
 #### gui — 画面から登録する
@@ -122,18 +122,18 @@ if isinstance(result, ChangePasswordPage):
 DPAPI は **Windows アカウント × PC** に紐付く。復号できない場合の挙動・
 最も多い事故（タスクスケジューラの実行ユーザーが登録時と違う）・壊れている
 場合との違いは `CredentialDecryptionError` / `CredentialStoreCorruptedError`
-の docstring（[エラー対応ガイド](ERRORS.md)）を参照。
+の docstring（[エラー対応ガイド](../ERRORS.md)）を参照。
 
 読んで足して書き戻す作りなので、**同時に2つのプロセスから書かない**こと
 （取り込みは人が1回だけ実行する前提で、排他制御は無い）。
 
 複数台へ配る必要が出てきたら公開鍵ハイブリッド方式を足す余地がある
-（準備は [docs/salesforce.md](salesforce.md) の付録）。
+（準備は [docs/機能/salesforce.md](salesforce.md) の付録）。
 まずローカル保管で動かし、配布が現実の問題になってから入れる。
 
 ---
 
 ## 関連
 
-- [README](../README.md) — ライブラリ全体の概要と環境構築
-- [公開 API](自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外
+- [README](../../README.md) — ライブラリ全体の概要と環境構築
+- [公開 API](../自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外

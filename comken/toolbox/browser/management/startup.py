@@ -37,7 +37,7 @@ def start_driver(
 ) -> webdriver.Edge:
     """Edgeを起動する。失敗したら一時フォルダを片付けてから例外を送出する。"""
     # 相対パスのまま Service へ渡すと、実行時のカレントディレクトリ次第で
-    # 見つからなくなる（PROFILE_ROOT と同じ理由。docs/browser.md 参照）
+    # 見つからなくなる（PROFILE_ROOT と同じ理由。docs/機能/browser.md 参照）
     driver_path = Path(options_config.DRIVER_PATH).resolve()
     logger.debug(
         "Edgeを起動します: driver_path=%s profile_dir=%s download_dir=%s headless=%s",

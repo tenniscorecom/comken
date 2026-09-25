@@ -41,7 +41,7 @@ comken の使い方を「動くコード」で覚えるためのサンプル。
 | 6 | daily_batch_template | 日次バッチの流れ（入力を探す → 加工 → Excel 出力） | comken.run / FileFinder / Excel | config.ini + 社内ライブラリ |
 | 7 | outlook_inbox | 受信メール → CSV → 結果メールの下書き | Outlook / MailMessage / CSV | Classic Outlook |
 | 8 | copy_then_macro | 当日ファイルをコピー → Excel マクロ → 配布 | FileFinder / Excel.run_macro / copy_file | Microsoft Excel + パス設定 |
-| 9 | soql_report_migration | 2000件超のレポートをSOQLで取り直す | SoqlReport / download_soql_reports / site_for | `run.py`はなし（疑似APIで動く）。`production_main.py`は本番用テンプレート（組織登録+DPAPI認証情報が必要）。詳細は [docs/salesforce-downloader.md](../docs/salesforce-downloader.md#soqlレポート2000件超のレポートを移行する) |
+| 9 | soql_report_migration | 2000件超のレポートをSOQLで取り直す | SoqlReport / download_soql_reports / site_for | `run.py`はなし（疑似APIで動く）。`production_main.py`は本番用テンプレート（組織登録+DPAPI認証情報が必要）。詳細は [docs/機能/salesforce-downloader.md](../docs/機能/salesforce-downloader.md#soqlレポート2000件超のレポートを移行する) |
 
 ### 実行方法
 
@@ -54,7 +54,7 @@ python -m examples.advanced.csv_to_excel_report.run
   （8 は Salesforce 組織そのものが無くても動くよう、`run.py` の中だけで疑似APIに差し替えている）
 - 4〜7 は各フォルダの Python ファイル冒頭に書いてある事前準備を済ませてから実行する
 
-> **run.py という名前について**: 実プロジェクトのエントリポイントは規約どおり `main.py`（CONVENTIONS.md 参照）。
+> **run.py という名前について**: 実プロジェクトのエントリポイントは規約どおり `main.py`（docs/CONVENTIONS.md 参照）。
 > examples 内は複数のサンプルが同居し `python -m examples.advanced.<フォルダ名>.run` とモジュール実行するため、
 > プロジェクトの main.py と区別して run.py にしている。**サンプルをコピーして実プロジェクトにするときは
 > main.py にリネームする**（既存プロジェクトを run.py に合わせる必要はない）。
@@ -72,4 +72,4 @@ VS Code のターミナルで **`python -m comken init プロジェクト名`** 
 エラー処理・ログ・config.ini の書き方が入っている。
 
 ブラウザ自動化のツールなら、`comken/toolbox/browser/sites/ouju/pages/` にある
-Page Object Model 構成を合わせて使う。書き方は `docs/browser.md` を参照。
+Page Object Model 構成を合わせて使う。書き方は `docs/機能/browser.md` を参照。

@@ -1,6 +1,6 @@
 # core（部品）
 
-[README（ドキュメントの入口）へ戻る](../README.md)
+[README（ドキュメントの入口）へ戻る](../../README.md)
 
 `from comken.core import ...` で取る部品の詳しい説明です。
 **特定のアプリや外部サービスを触らない**ものだけがここに入る
@@ -362,7 +362,7 @@ write 側に空キーが複数あっても ``TransferDestinationMultipleMatchErr
 
 実行モードの切り替えは **`with dry_run():` / `with debug():` の context manager**。
 **設計上の理由**（`config.ini` を読まない理由・旧 `[RUN]` セクションの廃止経緯など）は
-[**設計書「4. 設定と実行モード」**](ARCHITECTURE.md#4-設定と実行モード)と [**HISTORY.md**](HISTORY.md#1-設定と非機密情報の扱い)を参照。
+[**設計書「4. 設定と実行モード」**](../ARCHITECTURE.md#4-設定と実行モード)と [**HISTORY.md**](../HISTORY.md#1-設定と非機密情報の扱い)を参照。
 
 ```python
 import comken
@@ -396,7 +396,7 @@ def build_report():
 
 雛形プロジェクトでは `with comken.debug():` を `main()` を囲む形で
 `main.py` に書き、止めたい処理単位で on/off する（`config.ini` の旧 `[RUN]` セクションは
-廃止済みのため、書いても効きません。詳細は[**HISTORY.md**](HISTORY.md#1-設定と非機密情報の扱い)）。
+廃止済みのため、書いても効きません。詳細は[**HISTORY.md**](../HISTORY.md#1-設定と非機密情報の扱い)）。
 
 ---
 
@@ -532,7 +532,7 @@ state.set("LAST_FILE", "data.csv")    # その場で保存
 
 `state.ini` が無い初回実行は空の状態で続行する。値は文字列・数値・bool・文字列リストの
 型を保って読み戻せる。壊れたファイルは続きの位置を失わないよう、初回扱いにせずエラーで止まる
-（dry-run 中の `set()` の扱いなど、詳細は[**設計書「4. 設定と実行モード」**](ARCHITECTURE.md#4-設定と実行モード)）。
+（dry-run 中の `set()` の扱いなど、詳細は[**設計書「4. 設定と実行モード」**](../ARCHITECTURE.md#4-設定と実行モード)）。
 
 実際に保存される内容:
 
@@ -548,7 +548,7 @@ POSITION = 42
 
 社内環境では `setup_logging()` に環境クラスを渡し、root logger を設定する。
 二重呼び出し時の挙動や `LOG_ROOT` / `LOG_FOLDER_NAMES` の二段構成など、詳細は
-[**HISTORY.md**](HISTORY.md#9-ロギング)を参照。
+[**HISTORY.md**](../HISTORY.md#9-ロギング)を参照。
 
 ```python
 from comken.core.logger import Backoffice, setup_logging
@@ -580,5 +580,5 @@ logger.info("CSV読み込み完了: %d件", len(rows))
 
 ## 関連
 
-- [README](../README.md) — ライブラリ全体の概要と環境構築
-- [公開 API](自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外
+- [README](../../README.md) — ライブラリ全体の概要と環境構築
+- [公開 API](../自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外

@@ -5,7 +5,7 @@
 実プロジェクトへ移すときは ``main.py`` にリネームしてコピーする
 （``run.py`` という名前についての注意は examples/README.md 参照）。
 
-docs/salesforce-downloader.md「SOQLレポート（2000件超のレポートを移行する）」
+docs/機能/salesforce-downloader.md「SOQLレポート（2000件超のレポートを移行する）」
 の手順7（動作確認する）を、``run.py`` の疑似APIではなく本物の組織で行う版。
 
 事前準備（このまま実行しても、以下が済んでいなければ失敗する。それが正しい挙動）:
@@ -17,7 +17,7 @@ docs/salesforce-downloader.md「SOQLレポート（2000件超のレポートを�
    実行するユーザー・PCで DPAPI に登録済みであること（項目名の ``api_`` は
    Salesforce 専用の認証情報だと分かるようにする接頭辞）。**登録は
    「サイト名: {項目名: 値}」の入れ子 JSON を一時的に用意し、取り込みコマンドで
-   流し込む**（平文はその場で消える。docs/credentials.md「登録」参照）:
+   流し込む**（平文はその場で消える。docs/機能/credentials.md「登録」参照）:
 
        {
          "solution": {
@@ -46,7 +46,7 @@ docs/salesforce-downloader.md「SOQLレポート（2000件超のレポートを�
 （このテンプレートのように呼び出し側でリストを渡す形のままでもよい）。
 
 **いつ呼ぶか（スケジュール）はこのファイルに書かない。** 呼び出し側の
-プロジェクトが決める（docs/salesforce-downloader.md「利用プロジェクト側の
+プロジェクトが決める（docs/機能/salesforce-downloader.md「利用プロジェクト側の
 設計判断」と同じ理由: 「今すぐ取りに行く」専用の仕組みを増やすと、定期取得が
 止まっていることに誰も気づかなくなる）。
 

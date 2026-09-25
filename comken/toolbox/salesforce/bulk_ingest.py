@@ -77,7 +77,7 @@ class BulkIngestAPI:
                 print(f"{len(result.failed)} 行が失敗しました")
 
     **書き込み経路が ``DataLoaderCLI`` と異なる点:**  ``DataLoaderCLI``
-    （docs/dataloader.md）はデスクトップアプリ版 Data Loader を
+    （docs/機能/dataloader.md）はデスクトップアプリ版 Data Loader を
     サブプロセスで呼び出す方式で、デスクトップアプリのインストールが
     必要になる。``BulkIngestAPI`` は Salesforce の REST API を直接
     叩くため、**デスクトップアプリのインストールは不要**。ブラウザで

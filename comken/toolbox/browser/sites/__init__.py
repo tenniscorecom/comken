@@ -3,7 +3,7 @@
 `SiteBase` を継承したサイトクラスのうち、**複数プロジェクトから共通で参照される
 社内システム**をここに置く。プロジェクト側で個別に使うサイトは置かない
 （プロジェクト側の `src/sites/` に置く。判断基準は
-`CONVENTIONS.md` の「サイト／組織クラスを昇格させる基準」を参照）。
+`docs/CONVENTIONS.md` の「サイト／組織クラスを昇格させる基準」を参照）。
 書き方の見本は `ouju/` を参照。
 
     from comken.toolbox.browser.sites import SITES    # 公認サイトの一覧

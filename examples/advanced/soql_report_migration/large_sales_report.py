@@ -1,7 +1,7 @@
 """examples/advanced/soql_report_migration/large_sales_report.py — SoqlReport の実装例。
 
 Report API（2000行上限）の切り捨てに当たった商談明細レポートを、SOQL で取り直す例。
-docs/salesforce-downloader.md「SOQLレポート（2000件超のレポートを移行する）」の
+docs/機能/salesforce-downloader.md「SOQLレポート（2000件超のレポートを移行する）」の
 手順5（SoqlReport サブクラスとして実装する）に対応する。
 
 **このファイルの中身はサンプル固有の部分（``OUTPUT_DIR``）を除けば本番そのまま。**
@@ -31,7 +31,7 @@ class LargeSalesReport(SoqlReport):
     ALLOW_EMPTY = False  # 0件を失敗として扱う（対象月に商談が無いのは想定外のため）
 
     def soql(self) -> str:
-        # docs/salesforce-downloader.md の手順4（reportFilters → WHERE句変換）の
+        # docs/機能/salesforce-downloader.md の手順4（reportFilters → WHERE句変換）の
         # 結果できあがる SOQL の例。実際のフィールド名は describe_fields() の
         # 「対応フィールドAPI名」列を見て埋める。
         return (

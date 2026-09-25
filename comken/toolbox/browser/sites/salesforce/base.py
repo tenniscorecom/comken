@@ -70,7 +70,7 @@ class SalesforceReportBrowser(SiteBase):
 
     **ログインを使い回すには OPTIONS.PROFILE_ROOT を設定すること。**
     未設定だと起動のたびにまっさらなプロファイルになり、毎回ログインし直しになる
-    （`docs/browser.md` の「ログイン状態を残す」を参照）:
+    （`docs/機能/browser.md` の「ログイン状態を残す」を参照）:
 
         class MySalesforceOptions(BrowserOptions):
             PROFILE_ROOT = r"C:\\作業\\salesforce_profile"

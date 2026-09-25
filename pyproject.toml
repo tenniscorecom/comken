@@ -52,7 +52,7 @@ extend-immutable-calls = [
 
 [tool.ruff.lint.flake8-tidy-imports]
 # 相対 import は禁止。ドットを数える作業を残さないため。
-# 必ず `from comken.X import Y` のようにパッケージルートから書く（CONVENTIONS.md 参照）
+# 必ず `from comken.X import Y` のようにパッケージルートから書く（docs/CONVENTIONS.md 参照）
 ban-relative-imports = "all"
 
 [tool.ruff.lint.mccabe]

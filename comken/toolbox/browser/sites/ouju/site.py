@@ -12,7 +12,7 @@ Python）に書き、設定できる項目は ``print(OujuBrowserOptions())`` �
 （片方の設定がもう片方へ影響しない）。
 
 行ける画面は `go_〇〇()` で書き、コードがそのまま遷移図になるようにする
-（書き方の正本は docs/browser.md）。
+（書き方の正本は docs/機能/browser.md）。
 """
 
 # 遷移先の import を型注釈だけ TYPE_CHECKING、実行時はメソッド内に分けているのは、

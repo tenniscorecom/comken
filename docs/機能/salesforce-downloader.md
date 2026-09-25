@@ -647,7 +647,7 @@ apply_schedule_dropdowns("レポート管理表.xlsx")
 ## SOQLレポート（2000件超のレポートを移行する）
 
 Report API（`sf.report.get()` / `download_scheduled()`）は同期・非同期どちらも
-**2000行が上限**（[docs/salesforce.md「レポート — 2000行の壁」](salesforce.md#レポート-2000行の壁)参照）。
+**2000行が上限**（[docs/機能/salesforce.md「レポート — 2000行の壁」](salesforce.md#レポート-2000行の壁)参照）。
 3段構えの3段目「SOQLへ書き換え」に該当するレポートは、`comken/services/salesforce_downloader/soql_reports/`
 の基盤を使って個別に実装する。
 
@@ -656,7 +656,7 @@ Report API（`sf.report.get()` / `download_scheduled()`）は同期・非同期�
 最終的な `WHERE`句・`SELECT`句は人が読んで組み立てる。以下は最短で下準備を終える手順。
 
 **手順1〜7を通しで実際に動くコードで確認したい場合は
-[examples/advanced/soql_report_migration](../examples/advanced/soql_report_migration/) を参照。**
+[examples/advanced/soql_report_migration](../../examples/advanced/soql_report_migration) を参照。**
 このフォルダには2つの実行方法がある:
 
 - **`run.py`**（動作確認用）: 実際のSalesforce組織には接続せず、
@@ -703,7 +703,7 @@ metadata["reportMetadata"]["reportType"]["type"]   # 主オブジェクト（例
 
 **9割自動で埋めて、残りを可視化する道具。** 何十件もまとめて下書きしたいときは
 `describe_fields_csv()` でCSVへ落とす（詳細は
-[docs/salesforce.md「列-フィールド対応表」](salesforce.md#列-フィールド対応表describe_fields-describe_fields_csv)）。
+[docs/機能/salesforce.md「列-フィールド対応表」](salesforce.md#列-フィールド対応表describe_fields-describe_fields_csv)）。
 
 ```python
 with Solution() as sf:
@@ -891,7 +891,7 @@ saved = download_soql_reports()   # SOQL_REPORTS を全部取得・保存
 
 ## エラー
 
-エラー名と対処法は [docs/ERRORS.md](ERRORS.md)（comken 全体の例外クラスの docstring
+エラー名と対処法は [docs/ERRORS.md](../ERRORS.md)（comken 全体の例外クラスの docstring
 から自動生成、docstring が正）にまとまっている。Downloader 由来のものは
 `ReportNotRegisteredError` / `SoqlReportNotRegisteredError` /
 `GroupNotRegisteredError` / `ReportDisabledError` / `MasterDuplicateValueError` /

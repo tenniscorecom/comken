@@ -1,7 +1,7 @@
 """comken/toolbox/browser/sites/salesforce/__init__.py — Salesforceのブラウザ経由ダウンロード。
 
 comken.toolbox.salesforce（API版）の Reports and Dashboards REST API は2000行が
-上限のため（詳しくは docs/salesforce.md）、それを超えるレポートは画面のエクスポート
+上限のため（詳しくは docs/機能/salesforce.md）、それを超えるレポートは画面のエクスポート
 機能をブラウザ経由で叩いて取るしかない。ここはその手段を提供する。
 
 ``SalesforceReportBrowser`` は雛形（``BASE_URL`` がダミー）なので、実際の組織別の値

@@ -2795,7 +2795,7 @@ class SiteOwnerRequiredError(ComkenError):
     サブクラスに `OWNER = "プロジェクト名 / 担当者"` を1行追加する。
     ライブラリ（`comken.toolbox.browser.sites/` または
     `comken.toolbox.salesforce.sites/`）に入れるべきサイトかは
-    `CONVENTIONS.md` の「サイト／組織クラスを昇格させる基準」を
+    `docs/CONVENTIONS.md` の「サイト／組織クラスを昇格させる基準」を
     参照して判断する。ライブラリに昇格したい場合はライブラリ管理者へ連絡する。
 
 #### `__init__`
@@ -4370,7 +4370,7 @@ class SiteAlreadyInLibraryError(BrowserError):
 対処:
     ライブラリから `from comken.toolbox.browser.sites import <クラス名>` で取り出して使う。
     プロジェクト側の定義は消す。ライブラリへ昇格する基準は
-    `CONVENTIONS.md` の「サイト／組織クラスを昇格させる基準」を参照。
+    `docs/CONVENTIONS.md` の「サイト／組織クラスを昇格させる基準」を参照。
 
 #### `__init__`
 
@@ -6896,7 +6896,7 @@ class Locator(NamedTuple):
 
 セレクター（探し方 + 値）。Locator.id(...) 等のファクトリで作る。
 
-セレクターの優先順位（CONVENTIONS.md と同じ）:
+セレクターの優先順位（docs/CONVENTIONS.md と同じ）:
     1. Locator.id                … id 属性
     2. Locator.name              … name 属性
     3. Locator.css               … CSS セレクター
@@ -8685,7 +8685,7 @@ URL は example の値のまま。利用プロジェクト側で継承して書�
 
 **ログインを使い回すには OPTIONS.PROFILE_ROOT を設定すること。**
 未設定だと起動のたびにまっさらなプロファイルになり、毎回ログインし直しになる
-（`docs/browser.md` の「ログイン状態を残す」を参照）:
+（`docs/機能/browser.md` の「ログイン状態を残す」を参照）:
 
     class MySalesforceOptions(BrowserOptions):
         PROFILE_ROOT = r"C:\作業\salesforce_profile"
@@ -9433,7 +9433,7 @@ Raises:
 ### `prompt_new_password`
 
 ```text
-def prompt_new_password(cred: 'Credentials', field: str=DEFAULT_PASSWORD_FIELD, *, label: str='新しいパスワード', timeout_seconds: float=DEFAULT_TIMEOUT_SECONDS) -> str:
+def prompt_new_password(cred: Credentials, field: str=DEFAULT_PASSWORD_FIELD, *, label: str='新しいパスワード', timeout_seconds: float=DEFAULT_TIMEOUT_SECONDS) -> str:
 ```
 
 #### 説明
@@ -9464,7 +9464,7 @@ Raises:
 ### `change_password`
 
 ```text
-def change_password[T](cred: 'Credentials', submit: Callable[[str], T], field: str=DEFAULT_PASSWORD_FIELD, *, label: str='新しいパスワード', timeout_seconds: float=DEFAULT_TIMEOUT_SECONDS, max_attempts: int=DEFAULT_MAX_ATTEMPTS) -> T:
+def change_password[T](cred: Credentials, submit: Callable[[str], T], field: str=DEFAULT_PASSWORD_FIELD, *, label: str='新しいパスワード', timeout_seconds: float=DEFAULT_TIMEOUT_SECONDS, max_attempts: int=DEFAULT_MAX_ATTEMPTS) -> T:
 ```
 
 #### 説明
@@ -9702,7 +9702,7 @@ def __init__(self, source: str | Path, *, types: Mapping[str, Callable[[Any], An
 #### `sheet`
 
 ```text
-def sheet(self, name: str | None=None) -> 'Sheet':
+def sheet(self, name: str | None=None) -> Sheet:
 ```
 
 ##### 説明
@@ -9739,7 +9739,7 @@ def find_sheet(self, *candidates: str) -> str:
 #### `data_sheet`
 
 ```text
-def data_sheet(self, name: str | None=None) -> 'Sheet':
+def data_sheet(self, name: str | None=None) -> Sheet:
 ```
 
 ##### 説明
@@ -9749,7 +9749,7 @@ def data_sheet(self, name: str | None=None) -> 'Sheet':
 #### `create_data_sheet`
 
 ```text
-def create_data_sheet(self, name: str) -> 'Sheet':
+def create_data_sheet(self, name: str) -> Sheet:
 ```
 
 ##### 説明
@@ -9759,7 +9759,7 @@ def create_data_sheet(self, name: str) -> 'Sheet':
 #### `create_sheet`
 
 ```text
-def create_sheet(self, name: str) -> 'Sheet':
+def create_sheet(self, name: str) -> Sheet:
 ```
 
 ##### 説明
@@ -9785,7 +9785,7 @@ def list_data_sheets(self) -> list[str]:
 
 ```text
 @property
-def com_handler(self) -> 'ExcelCOMHandler':
+def com_handler(self) -> ExcelCOMHandler:
 ```
 
 ##### 説明
@@ -9961,7 +9961,7 @@ Excel シートのデータ領域または表示領域を操作する。
 #### `__init__`
 
 ```text
-def __init__(self, excel: 'Excel', worksheet: Worksheet) -> None:
+def __init__(self, excel: Excel, worksheet: Worksheet) -> None:
 ```
 
 #### `is_data_sheet`
@@ -10297,7 +10297,7 @@ Sheet の表示操作と分けることで、表データの読み書きがレ�
 #### `__init__`
 
 ```text
-def __init__(self, excel: 'Excel', worksheet: Worksheet, name: str | None=None) -> None:
+def __init__(self, excel: Excel, worksheet: Worksheet, name: str | None=None) -> None:
 ```
 
 #### `read`

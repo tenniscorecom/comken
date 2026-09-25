@@ -3,7 +3,7 @@
 **このファイルはプレースホルダー。** 値が決まったら埋めて、ファイル名・クラス名を
 実際のレポートに合わせてリネームし、`_registry.py` の `SOQL_REPORTS` へ登録する
 （登録するまでは `download_soql_reports()` から呼ばれない）。書き方は
-`base.py` のモジュール docstring、詳しい手順は docs/salesforce-downloader.md の
+`base.py` のモジュール docstring、詳しい手順は docs/機能/salesforce-downloader.md の
 「SOQLレポート（2000件超のレポートを移行する）」を参照。
 """
 

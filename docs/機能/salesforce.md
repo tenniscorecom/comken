@@ -1,8 +1,8 @@
 # comken.toolbox.salesforce
 
-[README（ドキュメントの入口）へ戻る](../README.md)
+[README（ドキュメントの入口）へ戻る](../../README.md)
 
-認証方式を社内へ説明するときは、判断理由をまとめた [設計判断の履歴「認証方式」](HISTORY.md#認証方式-external-client-app-authorization-code-refresh-token-flow) を参照する。
+認証方式を社内へ説明するときは、判断理由をまとめた [設計判断の履歴「認証方式」](../HISTORY.md#認証方式-external-client-app-authorization-code-refresh-token-flow) を参照する。
 
 背景: Salesforce Solution 組織 1つから、レポートとレコードを API で取得したい。
 本書には現行仕様と、保守に必要な設計理由だけを記載する。
@@ -42,7 +42,7 @@ comken のコード（変数名・引数名）は `client_id` / `client_secret` 
 組織クラスをそのまま使えばこの方式になる。
 
 Client Credentials Flow は `client_secret` だけでアクセストークンを取れてしまうため、
-**本番では使わない**（判断の根拠は [設計判断の履歴](HISTORY.md#認証方式-external-client-app-authorization-code-refresh-token-flow)）。
+**本番では使わない**（判断の根拠は [設計判断の履歴](../HISTORY.md#認証方式-external-client-app-authorization-code-refresh-token-flow)）。
 
 > [!note] 補足（2026-09-08）
 > Client Credentials Flow は社内の運用上もう使えないため、comken からも
@@ -87,7 +87,7 @@ with Solution(auth=auth) as sf:
 ### Client Credentials Flow（歴史的記録・現在は使わない）
 
 初回の対話的な認可を挟まずに動かせるため、当初は開発中だけ使う想定だった
-（→ [判断の根拠](HISTORY.md#認証方式-external-client-app-authorization-code-refresh-token-flow)）。
+（→ [判断の根拠](../HISTORY.md#認証方式-external-client-app-authorization-code-refresh-token-flow)）。
 
 > [!note] 補足（2026-09-08 / 2026-09-10）
 > Client Credentials Flow は社内の運用上もう使えないため、comken からも
@@ -325,7 +325,7 @@ with site_class() as sf:
 
 **ログイン状態を次回起動でも使い回すには `OPTIONS.PROFILE_ROOT` を設定すること**
 （未設定だと起動のたびにまっさらなプロファイルになり、毎回ログインし直しになる）。
-詳しくは `SalesforceReportBrowser` クラスの docstring と `docs/browser.md` の
+詳しくは `SalesforceReportBrowser` クラスの docstring と `docs/機能/browser.md` の
 「ログイン状態を残す」を参照。
 
 ### レポート形式
@@ -406,7 +406,7 @@ with Solution() as sf:
 
 `bulk_query` は**読み取り専用**。書き込み系（insert / update / upsert /
 delete）は次の「Bulk API 2.0 の Ingest ジョブ」節の `bulk_ingest` か、
-`DataLoaderCLI`（docs/dataloader.md）を使う。
+`DataLoaderCLI`（docs/機能/dataloader.md）を使う。
 
 ### エラー
 
@@ -457,7 +457,7 @@ with Solution() as sf:
 
 ### `DataLoaderCLI` との使い分け
 
-`DataLoaderCLI`（docs/dataloader.md）は Data Loader デスクトップアプリの
+`DataLoaderCLI`（docs/機能/dataloader.md）は Data Loader デスクトップアプリの
 インストールが要り、サブプロセス経由で動く。`BulkIngestAPI` はインストール
 不要で、REST を直接叩く。
 
@@ -632,7 +632,7 @@ DPAPI へ自動で書き戻す。運用としてやることは増えない。
 1インスタンスが1組織を受け持つ。認証は既定で **Authorization Code + Refresh Token Flow**
 （ユーザー名・パスワード・セキュリティトークンは使わない）。`refresh_token` は DPAPI に
 保管され、`sf setup` の初回認可のあとは自動で更新・保存される
-（ローテーションされたときの書き戻しも含む。[判断の根拠](HISTORY.md#認証方式-external-client-app-authorization-code-refresh-token-flow)）。
+（ローテーションされたときの書き戻しも含む。[判断の根拠](../HISTORY.md#認証方式-external-client-app-authorization-code-refresh-token-flow)）。
 
 ```python
 from comken.toolbox.salesforce.sites import Solution
@@ -712,12 +712,12 @@ api_client_id / api_client_secret を読む（[credentials](credentials.md#crede
 社内ライブラリの名前は出てこない）。
 
 書き込み系（`insert` / `update` / `upsert` / `delete`）は `dry_run` を尊重する。
-使い方の一覧は [README](../README.md#モジュール一覧)、
-認証の判断根拠は [設計判断の履歴](HISTORY.md#認証方式-external-client-app-authorization-code-refresh-token-flow) を参照。
+使い方の一覧は [README](../../README.md#モジュール一覧)、
+認証の判断根拠は [設計判断の履歴](../HISTORY.md#認証方式-external-client-app-authorization-code-refresh-token-flow) を参照。
 
 ---
 
 ## 関連
 
-- [README](../README.md) — ライブラリ全体の概要と環境構築
-- [公開 API](自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外
+- [README](../../README.md) — ライブラリ全体の概要と環境構築
+- [公開 API](../自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外

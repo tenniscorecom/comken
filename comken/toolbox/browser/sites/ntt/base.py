@@ -2,7 +2,7 @@
 
 ※ URL はダミー。配置するときに実際の値へ書き換える（詳細は sites/__init__.py）。
 
-**このフォルダだけ、docs/browser.md の「1サイト＝1フォルダで完結」を意図的に破る。**
+**このフォルダだけ、docs/機能/browser.md の「1サイト＝1フォルダで完結」を意図的に破る。**
 NTT西・NTT東はログイン画面・共通操作がほぼ同一の姉妹サイトのため、Salesforce の
 `comken.toolbox.salesforce.client.SalesforceBase`（1組織用の共通ロジックを1か所に
 まとめ、組織ごとのクラスは差分だけを持つ）と同じ考え方を踏襲する。片方の実装を

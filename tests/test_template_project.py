@@ -285,7 +285,7 @@ def test_template_has_no_src_sites_directory(generated: Path) -> None:
     「何を防いでいるか」: 2026-08-20 の Phase 5 で雛形最小化のため
     ``src/sites/example/`` 配下のサンプルを削除した。ブラウザ操作を使うか
     どうかはプロジェクトごとに違うので、雛形には入れず、必要になった時点で
-    ``docs/browser.md`` を参照してプロジェクト側で追加する運用にした。
+    ``docs/機能/browser.md`` を参照してプロジェクト側で追加する運用にした。
     ここに ``src/sites/`` が復活する回帰をここで防ぐ。
 
     ブラウザ操作の見本（書き方・最小形）はライブラリ側の
@@ -295,7 +295,7 @@ def test_template_has_no_src_sites_directory(generated: Path) -> None:
     sites_dir = generated / "src" / "sites"
     assert not sites_dir.exists(), (
         f"雛形に {sites_dir.relative_to(generated)} が残っている"
-        "（Phase 5 で雛形最小化のため削除済み。再度入れたい場合は docs/browser.md "
+        "（Phase 5 で雛形最小化のため削除済み。再度入れたい場合は docs/機能/browser.md "
         "を参照し、ブラウザ操作を使うプロジェクト側で個別に追加すること）"
     )
 

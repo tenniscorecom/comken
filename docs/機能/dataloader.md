@@ -1,6 +1,6 @@
 # Data Loader（CLI 実行）
 
-[README（ドキュメントの入口）へ戻る](../README.md)
+[README（ドキュメントの入口）へ戻る](../../README.md)
 
 README の「Data Loader（CLI 実行）」から移した、Salesforce Data Loader を
 Python から呼び出すときの詳しい説明です。
@@ -71,6 +71,6 @@ assert result.success == result.errors == type(result.success)([], [])
 
 ## 関連
 
-- [README](../README.md) — ライブラリ全体の概要と環境構築
-- [公開 API](自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外
-- [エラー対応ガイド](ERRORS.md) — Data Loader の例外と対処
+- [README](../../README.md) — ライブラリ全体の概要と環境構築
+- [公開 API](../自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外
+- [エラー対応ガイド](../ERRORS.md) — Data Loader の例外と対処

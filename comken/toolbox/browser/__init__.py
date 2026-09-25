@@ -9,7 +9,7 @@
         data = KintaiFlow(kintai.session).fetch()
 
 サイトを増やすときは launch を1行足す。同時に走らせたくなったら parallel で包む。
-詳しくは docs/browser.md を参照。
+詳しくは docs/機能/browser.md を参照。
 
     Browsers        複数サイトのブラウザをまとめて起動・終了する（入口）
     BrowserSession  1サイト分のブラウザ。launch(SiteBase) では SiteBase.session 経由で扱う

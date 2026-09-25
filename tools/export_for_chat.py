@@ -528,7 +528,7 @@ def _bundle_sections() -> list[tuple[str, str]]:
     章ごとに別ファイルへ書き出す前提のため、1ファイルへ結合したときに使う
     区切り線（``---``）はここでは入れない。
     """
-    conventions_text = (ROOT / "CONVENTIONS.md").read_text(encoding="utf-8").rstrip()
+    conventions_text = (ROOT / "docs/CONVENTIONS.md").read_text(encoding="utf-8").rstrip()
     architecture_text = (ROOT / "docs" / "ARCHITECTURE.md").read_text(encoding="utf-8").rstrip()
     history_text = (ROOT / "docs" / "HISTORY.md").read_text(encoding="utf-8").rstrip()
 
@@ -561,7 +561,7 @@ def _bundle_sections() -> list[tuple[str, str]]:
     )
 
     reference_parts = [
-        "# 1. コーディング規約（CONVENTIONS.md）\n" + conventions_text,
+        "# 1. コーディング規約（docs/CONVENTIONS.md）\n" + conventions_text,
         "# 2. 公開 API 索引\n" + api_text.rstrip(),
     ]
     if examples_chunks:
@@ -627,7 +627,7 @@ def _bundle_readme(
         "",
         "## 中身のサマリ",
         "",
-        "- コーディング規約（CONVENTIONS.md）: あり",
+        "- コーディング規約（docs/CONVENTIONS.md）: あり",
         f"- 公開 API 索引の名前数: {public_api_names}",
         f"- 動く実例（examples/）のファイル数: {len(examples_files)}",
         f"- 実装全文（comken/）の .py ファイル数: {len(package_files)}",

@@ -12,7 +12,7 @@ Python）に書き、設定できる項目は ``print(AMSBrowserOptions())`` で
 （片方の設定がもう片方へ影響しない）。
 
 行ける画面は `go_〇〇()` で書き、コードがそのまま遷移図になるようにする
-（書き方の正本は docs/browser.md）。
+（書き方の正本は docs/機能/browser.md）。
 
 > [!note] 雛形の値
 > BASE_URL は HTTPS 非対応・IP アドレス直打ちの社内システムを想定したダミー値

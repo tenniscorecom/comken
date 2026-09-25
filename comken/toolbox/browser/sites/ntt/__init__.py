@@ -4,7 +4,7 @@
 利用側は ``from comken.toolbox.browser.sites.ntt import NTTWest`` で
 直接取り出せる（``.west`` の中まで降りなくて良い）。
 
-**このフォルダだけ、docs/browser.md の「1サイト＝1フォルダで完結」を意図的に破る。**
+**このフォルダだけ、docs/機能/browser.md の「1サイト＝1フォルダで完結」を意図的に破る。**
 理由・トレードオフは ``base.py`` の docstring を参照。
 """
 

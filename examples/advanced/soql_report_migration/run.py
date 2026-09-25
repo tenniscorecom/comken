@@ -2,7 +2,7 @@
 
 2000件超で Report API の上限に当たったレポートを SOQL で取り直す流れを、
 実際に動くコードで示す。手順の全体は
-docs/salesforce-downloader.md「SOQLレポート（2000件超のレポートを移行する）」参照。
+docs/機能/salesforce-downloader.md「SOQLレポート（2000件超のレポートを移行する）」参照。
 
 **外部の Salesforce 組織には接続しない。** ``site_for()`` をこのファイルの中だけで
 差し替え、疑似的な明細データを返す最小限のスタブに置き換えて実行する
@@ -63,7 +63,7 @@ def _fake_site() -> MagicMock:
 
 def main() -> None:
     # 保存先フォルダを用意する。download_soql_reports() は無いフォルダへは書かない
-    # （書き間違いに気づけるよう勝手に作らない設計。docs/salesforce-downloader.md 参照）。
+    # （書き間違いに気づけるよう勝手に作らない設計。docs/機能/salesforce-downloader.md 参照）。
     OUTPUT_DIR.mkdir(exist_ok=True)
 
     # ↓↓↓ ここから疑似APIへの差し替え（本番では不要）↓↓↓

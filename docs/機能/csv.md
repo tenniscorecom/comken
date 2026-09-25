@@ -54,6 +54,6 @@ with CSV("ヘッダーなし.csv", columns=["顧客ID", "氏名"]) as csv:
 
 ## 関連
 
-- [README](../README.md) — ライブラリ全体の概要
-- [公開 API](自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外
+- [README](../../README.md) — ライブラリ全体の概要
+- [公開 API](../自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外
 

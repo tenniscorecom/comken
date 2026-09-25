@@ -7,7 +7,7 @@ r"""comken/toolbox/salesforce/report.py — レポート API
 非同期にすれば超えられる、というのは誤りで、非同期の利点は
 「重いレポートで HTTP タイムアウトしにくい」ことと実行枠の違いだけ。
 
-2000 行を超えるときの対処は3段構え（docs/salesforce.md）:
+2000 行を超えるときの対処は3段構え（docs/機能/salesforce.md）:
 
     1. 切り捨てを検知して止める  ← 既定。allow_truncated=True で警告に落とせる
     2. filters で日付などを区切り、複数回に分けて取得する

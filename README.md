@@ -37,17 +37,16 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 |---|---|
 | はじめて使う | この README の「[はじめて使う人へ](#はじめて使う人へ)」 |
 | 何が用意されているか探す | このREADMEの「[モジュール一覧](#モジュール一覧)」 |
-| モジュールの使い方を知る | [CSV](docs/csv.md)・[Excel](docs/excel.md)・[Access](docs/access.md)・[Outlook](docs/outlook.md)・[Windows](docs/windows.md)・[ブラウザ](docs/browser.md)・[Salesforce](docs/salesforce.md)・[Data Loader（CLI 実行）](docs/dataloader.md)・[core の部品](docs/core.md)・[認証情報](docs/credentials.md)・[カレンダー判定](docs/calendar.md)・[Salesforceレポートダウンローダー](docs/salesforce-downloader.md)・[Excel表を型付き設定として読む](docs/master-table.md) |
-| **初めて外部システムにつなぐ** | ID とパスワードの[登録](docs/credentials.md#登録初回だけ) → [Salesforce につないで確かめる](docs/salesforce.md#つないで確かめるコマンド) |
+| モジュールの使い方を知る | [CSV](docs/機能/csv.md)・[Excel](docs/機能/excel.md)・[Access](docs/機能/access.md)・[Outlook](docs/機能/outlook.md)・[Windows](docs/機能/windows.md)・[ブラウザ](docs/機能/browser.md)・[Salesforce](docs/機能/salesforce.md)・[Data Loader（CLI 実行）](docs/機能/dataloader.md)・[core の部品](docs/機能/core.md)・[認証情報](docs/機能/credentials.md)・[カレンダー判定](docs/機能/calendar.md)・[Salesforceレポートダウンローダー](docs/機能/salesforce-downloader.md)・[Excel表を型付き設定として読む](docs/機能/master-table.md) |
+| **初めて外部システムにつなぐ** | ID とパスワードの[登録](docs/機能/credentials.md#登録初回だけ) → [Salesforce につないで確かめる](docs/機能/salesforce.md#つないで確かめるコマンド) |
 | 引数・戻り値・例外を正確に知る | [公開 API](docs/自動生成/API.md)（**自動生成**） |
 | エラーが出た | [エラー対応ガイド](docs/ERRORS.md)（エラー表は **自動生成**） |
 | 動くコードを見る | [examples](examples/README.md) |
 | なぜこの設計なのか知る | [設計判断の歴史](docs/HISTORY.md) |
-| コードを書く規約 / comken 本体を直す | [CONVENTIONS.md](CONVENTIONS.md)（利用者向け＝1〜14 章、本体編集者向け＝15 章以降） |
-
+| コードを書く規約 / comken 本体を直す | [CONVENTIONS.md](docs/CONVENTIONS.md)（利用者向け＝1〜14 章、本体編集者向け＝15 章以降） |
 | 開発してリリースする | [ARCHITECTURE.md「開発とリリース」](docs/ARCHITECTURE.md#11-開発とリリース)（タグを打つ → 共有サーバーで checkout） |
 | comken を使うツールを作る | `python -m comken init プロジェクト名` で雛形を作る（作られた `README.md` が中を案内する） |
-| コードを読む・レビューする | [コードを読む順番](CONVENTIONS.md#24-コードを読む順番) |
+| コードを読む・レビューする | [コードを読む順番](docs/CONVENTIONS.md#24-コードを読む順番) |
 
 ## 使うときの約束
 
@@ -64,7 +63,7 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 - **ファイル・ブラウザ・COM は `with` で開く。** 途中で失敗しても閉じられる
 - **エラーは細かい方から受ける。** 個別（`SheetNotFoundError`）→ 分野（`ExcelError`）→
   全体（`ComkenError`）の3段。階層は[例外体系](docs/ARCHITECTURE.md#5-例外体系)
-- **機密は config.ini に書かない。** [認証情報](docs/credentials.md)（DPAPI）に入れ、
+- **機密は config.ini に書かない。** [認証情報](docs/機能/credentials.md)（DPAPI）に入れ、
   config.ini にはキー名だけ書く
 
 ## モジュール一覧
@@ -77,20 +76,20 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 | runtime | `with debug():` / `with dry_run():` による実行モード |
 | constants | CSV・Excel・ファイル検索で使う公開定数 |
 | exceptions | comken 固有の例外（エラー名別に対処可能） |
-| [CSV](docs/csv.md) | CSV の読み込み・検索・抽出 |
-| [Excel（openpyxl）](docs/excel.md) | Excel の読み書き（既存数式の計算結果・マクロは必要時に win32com を使用） |
-| [Access](docs/access.md) | Access のマクロ・VBA 実行、テーブル／クエリの CSV 出力 |
-| [Outlook](docs/outlook.md) | Classic Outlook の受信メール読み取り・下書き作成 |
-| [Windows（pywin32）](docs/windows.md) | Excel COM 操作・ウィンドウ操作・レジストリ読み取り |
-| [Browser（Edge）](docs/browser.md) | Edge ブラウザ操作 |
-| [Browser 公認サイト](docs/browser.md) | ライブラリ公認の `SiteBase` サブクラスを集めた置き場（`comken.toolbox.browser.sites`）。プロジェクト横断で再利用するサイトだけ昇格する |
-| [Salesforce（requests）](docs/salesforce.md) | Salesforce の SOQL・レコード操作・レポート取得・API 使用量の計測 |
-| [Data Loader（CLI 実行）](docs/dataloader.md) | Salesforce Data Loader の CLI 実行を手伝う（大量データの一括変更。正確な構文は環境ごとに確認が必要） |
-| [credentials（DPAPI）](docs/credentials.md) | パスワード・client_secret の暗号化保存（Windows ユーザーに紐付く） |
-| [カレンダー判定](docs/calendar.md) | 内閣府の祝日 CSV と会社休日ルールを合成した「会社用カレンダー CSV」を Python・VBA 共通で読み取って営業日判定 |
-| [core（部品）](docs/core.md) | `from comken.core import ...` で取る部品群。ファイル検索・操作・圧縮・ファイル名の組み立て／データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時 |
-| [Salesforceレポートダウンローダー（services）](docs/salesforce-downloader.md) | 複数プロジェクトのSalesforceレポート定期取得を1か所に集約するサービス（管理表・履歴・最新実行結果） |
-| [Excel表を型付き設定として読む（master_table）](docs/master-table.md) | 「どのレポートを取るか」のような行が増えていく設定を、Excelの表から型付きの行として読み込む仕組み |
+| [CSV](docs/機能/csv.md) | CSV の読み込み・検索・抽出 |
+| [Excel（openpyxl）](docs/機能/excel.md) | Excel の読み書き（既存数式の計算結果・マクロは必要時に win32com を使用） |
+| [Access](docs/機能/access.md) | Access のマクロ・VBA 実行、テーブル／クエリの CSV 出力 |
+| [Outlook](docs/機能/outlook.md) | Classic Outlook の受信メール読み取り・下書き作成 |
+| [Windows（pywin32）](docs/機能/windows.md) | Excel COM 操作・ウィンドウ操作・レジストリ読み取り |
+| [Browser（Edge）](docs/機能/browser.md) | Edge ブラウザ操作 |
+| [Browser 公認サイト](docs/機能/browser.md) | ライブラリ公認の `SiteBase` サブクラスを集めた置き場（`comken.toolbox.browser.sites`）。プロジェクト横断で再利用するサイトだけ昇格する |
+| [Salesforce（requests）](docs/機能/salesforce.md) | Salesforce の SOQL・レコード操作・レポート取得・API 使用量の計測 |
+| [Data Loader（CLI 実行）](docs/機能/dataloader.md) | Salesforce Data Loader の CLI 実行を手伝う（大量データの一括変更。正確な構文は環境ごとに確認が必要） |
+| [credentials（DPAPI）](docs/機能/credentials.md) | パスワード・client_secret の暗号化保存（Windows ユーザーに紐付く） |
+| [カレンダー判定](docs/機能/calendar.md) | 内閣府の祝日 CSV と会社休日ルールを合成した「会社用カレンダー CSV」を Python・VBA 共通で読み取って営業日判定 |
+| [core（部品）](docs/機能/core.md) | `from comken.core import ...` で取る部品群。ファイル検索・操作・圧縮・ファイル名の組み立て／データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時 |
+| [Salesforceレポートダウンローダー（services）](docs/機能/salesforce-downloader.md) | 複数プロジェクトのSalesforceレポート定期取得を1か所に集約するサービス（管理表・履歴・最新実行結果） |
+| [Excel表を型付き設定として読む（master_table）](docs/機能/master-table.md) | 「どのレポートを取るか」のような行が増えていく設定を、Excelの表から型付きの行として読み込む仕組み |
 
 ## 定数クラス一覧
 

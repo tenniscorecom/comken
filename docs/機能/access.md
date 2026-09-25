@@ -1,6 +1,6 @@
 # Access 操作
 
-[README（ドキュメントの入口）へ戻る](../README.md)
+[README（ドキュメントの入口）へ戻る](../../README.md)
 
 README の「Access」から移した、モジュールを使うときの詳しい説明です。
 
@@ -33,5 +33,5 @@ with AccessDatabase(r"C:\作業\顧客.accdb") as db:
 
 ## 関連
 
-- [README](../README.md) — ライブラリ全体の概要と環境構築
-- [公開 API](自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外
+- [README](../../README.md) — ライブラリ全体の概要と環境構築
+- [公開 API](../自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外

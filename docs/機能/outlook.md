@@ -1,6 +1,6 @@
 # Outlook 操作
 
-[README（ドキュメントの入口）へ戻る](../README.md)
+[README（ドキュメントの入口）へ戻る](../../README.md)
 
 Outlook の受信メールを読み取り、確認用の下書きを作るための仕組み。
 
@@ -190,7 +190,7 @@ Outlook が起動していない場合も起きるので、まず Outlook を開
 
 README に掲載していた概要とコード例です。
 
-詳しい使い方は [docs/outlook.md](outlook.md) を参照。
+詳しい使い方は [docs/機能/outlook.md](outlook.md) を参照。
 
 ```python
 import logging
@@ -218,5 +218,5 @@ New Outlook は利用できません。Graph API は認証とネットワーク�
 
 ## 関連
 
-- [README](../README.md#モジュール一覧) — モジュール一覧
-- [エラー対応ガイド](ERRORS.md#outlook-のエラー) — エラー名から対処を引く
+- [README](../../README.md#モジュール一覧) — モジュール一覧
+- [エラー対応ガイド](../ERRORS.md#outlook-のエラー) — エラー名から対処を引く

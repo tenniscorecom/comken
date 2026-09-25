@@ -101,7 +101,7 @@ from ..foo import Bar
 from comken.toolbox.utils import *
 ```
 
-comken のどの名前を import してよいかは [README「使うときの約束」](README.md#使うときの約束)を参照してください。
+comken のどの名前を import してよいかは [README「使うときの約束」](../README.md#使うときの約束)を参照してください。
 
 ---
 
@@ -216,7 +216,7 @@ logger.warning("ファイルが見つかりません: %s", path)
 logger.error("エラーが発生しました", exc_info=True)  # exc_info=True でスタックトレースも出力
 ```
 
-実行するときのログ設定の呼び出し方は [core「Logger」](docs/core.md#logger)を参照してください。
+実行するときのログ設定の呼び出し方は [core「Logger」](機能/core.md#logger)を参照してください。
 
 ### ブラウザのページオブジェクトに書くとき
 
@@ -228,7 +228,7 @@ logger.error("エラーが発生しました", exc_info=True)  # exc_info=True �
 自分でログを足すのは、汎用ログだけでは残らない**分岐の理由**があるときだけにしてください。
 
 その際は `logger.info` を使ってください。**既定のログレベルは INFO で、DEBUG は
-出ません**（[core「Logger」](docs/core.md#logger) の `setup_logging()` /
+出ません**（[core「Logger」](機能/core.md#logger) の `setup_logging()` /
 `setup_local_logging()` とも、既定のコンソール・ファイル出力は INFO 以上）。
 comken 側の操作ログが `logger.debug` なのは、1操作ごとに出ると量が多すぎるため
 既定で抑制しているからで、ページオブジェクト側で足す「分岐の理由」は逆に、
@@ -256,7 +256,7 @@ self.click(self.LOGIN_BTN)
 `has_element()` + `click()` / `raise SomeError(...)` を自分で書く前に、
 comken の `Page` が既に持っている汎用メソッドで済まないか確認してください。
 
-具体例は [browser.md「ログイン失敗まわり」](docs/browser.md#ログイン失敗まわり期限切れ認証エラー非同期の揺れ)を参照してください。
+具体例は [browser.md「ログイン失敗まわり」](機能/browser.md#ログイン失敗まわり期限切れ認証エラー非同期の揺れ)を参照してください。
 
 ---
 
@@ -583,7 +583,7 @@ except pywintypes.error as e:
 
 `BrowserSession` の `with` ブロック内で例外が発生すると、その時点の画面が
 `logs/error_セッション名_YYYYMMDD_HHMMSS.png` に**自動保存**される
-（[docs/browser.md](docs/browser.md) の「BrowserSession」参照）。
+（[docs/機能/browser.md](機能/browser.md) の「BrowserSession」参照）。
 
 ```python
 # 良い（何もしない。失敗時の画面は自動で logs/error_*.png に残る）
@@ -918,7 +918,7 @@ logger.debug("詳細: %s", expensive_repr(value))
 素の `Exception` を投げない等）は [7. 例外](#7-例外) に従う。本体へ例外を足すときは、
 それに加えて次を守る。
 
-階層の全体像は [`docs/ARCHITECTURE.md`「5. 例外体系」](docs/ARCHITECTURE.md#5-例外体系) が正本
+階層の全体像は [`docs/ARCHITECTURE.md`「5. 例外体系」](ARCHITECTURE.md#5-例外体系) が正本
 （ここに図を再掲しない。例外を足すたびに2箇所を直すことになり、片方が必ず古くなる）。
 
 ### 例外クラスを足す基準（いつ足して、いつ既存で済ませるか）
@@ -952,7 +952,7 @@ logger.debug("詳細: %s", expensive_repr(value))
 
 | 項目 | 参照 |
 |---|---|
-| `ComkenError` または既存中間クラスを継承する | [`docs/ARCHITECTURE.md`「5. 例外体系」](docs/ARCHITECTURE.md#5-例外体系) |
+| `ComkenError` または既存中間クラスを継承する | [`docs/ARCHITECTURE.md`「5. 例外体系」](ARCHITECTURE.md#5-例外体系) |
 | docstring に「対処:」を書く | 同上（`ERRORS.md` 生成が止まって気づける） |
 | 既存例外との統合余地がないかもう一度確認する | 本節 |
 
@@ -997,7 +997,7 @@ logger.debug("詳細: %s", expensive_repr(value))
    ここで「docstring の書き方」「定数クラス」「with 文」のパターンをつかむ
 6. **`toolbox/windows/handler.py`** — OS 依存の処理
 7. **`toolbox/browser/`** — 外部アプリ（Edge）依存。まず
-   [設計書「8. ブラウザ内部設計」](docs/ARCHITECTURE.md#8-ブラウザ内部設計) の全体図を読み、
+   [設計書「8. ブラウザ内部設計」](ARCHITECTURE.md#8-ブラウザ内部設計) の全体図を読み、
    `site.py`（`SiteBase` の定義。サイトを書く人が最初に読むファイル）→
    `options.py`（`BrowserOptions` の既定値一覧）→
    `sites/`（`SITES` の置き場。ライブラリ公認サイトの集まり）→
@@ -1030,22 +1030,22 @@ logger.debug("詳細: %s", expensive_repr(value))
 
 | やりたいこと | サンプル |
 |---|---|
-| CSV を読み書きする | [examples/csv_read.py](examples/csv_read.py), [examples/csv_write.py](examples/csv_write.py) |
-| Excel を読み書きする | [examples/excel_read.py](examples/excel_read.py), [examples/excel_write.py](examples/excel_write.py) |
-| CSV/Excel 間で列を転記する | [examples/column_mapping.py](examples/column_mapping.py) |
-| Table / Transfer の詳しい使い方 | [examples/advanced/table_transfer_design/run.py](examples/advanced/table_transfer_design/run.py) |
-| config.ini を使う | [examples/constants.py](examples/constants.py) |
-| ログを設定する | [examples/logger.py](examples/logger.py) |
-| dry-run・debug モード | [examples/runtime.py](examples/runtime.py) |
-| 例外の使い方 | [examples/exceptions.py](examples/exceptions.py) |
+| CSV を読み書きする | [examples/csv_read.py](../examples/csv_read.py), [examples/csv_write.py](../examples/csv_write.py) |
+| Excel を読み書きする | [examples/excel_read.py](../examples/excel_read.py), [examples/excel_write.py](../examples/excel_write.py) |
+| CSV/Excel 間で列を転記する | [examples/column_mapping.py](../examples/column_mapping.py) |
+| Table / Transfer の詳しい使い方 | [examples/advanced/table_transfer_design/run.py](../examples/advanced/table_transfer_design/run.py) |
+| config.ini を使う | [examples/constants.py](../examples/constants.py) |
+| ログを設定する | [examples/logger.py](../examples/logger.py) |
+| dry-run・debug モード | [examples/runtime.py](../examples/runtime.py) |
+| 例外の使い方 | [examples/exceptions.py](../examples/exceptions.py) |
 
-すべてのサンプルは [examples/README.md](examples/README.md) にも一覧があります。
+すべてのサンプルは [examples/README.md](../examples/README.md) にも一覧があります。
 
 ---
 
 ## 関連
 
-- [README](README.md) — comken 全体の使い方
-- [公開 API](docs/自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外
-- [設計書](docs/ARCHITECTURE.md) — 現在の設計
-- [設計判断の履歴](docs/HISTORY.md) — 理由・却下した案
+- [README](../README.md) — comken 全体の使い方
+- [公開 API](自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外
+- [設計書](ARCHITECTURE.md) — 現在の設計
+- [設計判断の履歴](HISTORY.md) — 理由・却下した案

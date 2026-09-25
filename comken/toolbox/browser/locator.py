@@ -17,7 +17,7 @@ from selenium.webdriver.common.by import By
 class Locator(NamedTuple):
     """セレクター（探し方 + 値）。Locator.id(...) 等のファクトリで作る。
 
-    セレクターの優先順位（CONVENTIONS.md と同じ）:
+    セレクターの優先順位（docs/CONVENTIONS.md と同じ）:
         1. Locator.id                … id 属性
         2. Locator.name              … name 属性
         3. Locator.css               … CSS セレクター

@@ -4,7 +4,7 @@
 > 経緯・却下した代替案・理由は [`HISTORY.md`](HISTORY.md) を参照する。
 > API の使い方（引数・戻り値・例外）は docstring が一次情報で、
 > [`自動生成/API.md`](自動生成/API.md) はそこから自動生成される。
-> コーディング規約は [`CONVENTIONS.md`](../CONVENTIONS.md) を参照。
+> コーディング規約は [`CONVENTIONS.md`](CONVENTIONS.md) を参照。
 
 ## 1. 基本方針
 
@@ -148,7 +148,7 @@ Excel / Excel 内の表データ連携は `Transfer(read, write, mapping)` に�
 - `save_draft` でこちら側から添付を付ける操作は **制限しない**（受信物を開く話とは別）
 - 添付を保存・展開する名前のメソッドが生えていないことは `tests/test_outlook.py` が検証する
 
-詳細は [`outlook.md`](outlook.md) を参照。
+詳細は [`outlook.md`](機能/outlook.md) を参照。
 
 ### Access
 
@@ -158,7 +158,7 @@ Excel / Excel 内の表データ連携は `Transfer(read, write, mapping)` に�
 - 元 DB を直接開く直前に日時付きバックアップを `backup/` へ取り、既定で 7 日間残す。壊れた DB で正常な控えを上書きしないよう同名で上書きせず世代を残す
 - 更新結果を共有 DB へ戻すことが目的なら、まず CSV / Excel 別出力・結果専用 DB の分離を検討する
 
-詳細は [`access.md`](access.md) を参照。
+詳細は [`access.md`](機能/access.md) を参照。
 
 ### Salesforce
 
@@ -172,7 +172,7 @@ Excel / Excel 内の表データ連携は `Transfer(read, write, mapping)` に�
 
 レポート取得は `comken/services/salesforce_downloader` に集約し、**何を取るかは管理表（Excel）に、いつ何を取ったかは履歴（CSV）** に集める。0 件がありえるかどうかは管理表の `0件あり` 列で宣言させる（履歴の回数から自動判定しない）。履歴に「原因区分」を持たせ、`設定` / `Salesforce` / `データなし` / `ファイル` / `プログラム` の 5 値で運用者が履歴だけから一次対応者（管理表を直す人・Salesforce 管理者へ連絡する人）を判断できる。例外クラス名との対応表は持たず、**例外の型だけから**機械的に判定する。
 
-詳細は [`salesforce.md`](salesforce.md) ・ [`salesforce-downloader.md`](salesforce-downloader.md) ・ [`master-table.md`](master-table.md) を参照。
+詳細は [`salesforce.md`](機能/salesforce.md) ・ [`salesforce-downloader.md`](機能/salesforce-downloader.md) ・ [`master-table.md`](機能/master-table.md) を参照。
 
 ### ブラウザ
 
@@ -184,7 +184,7 @@ Excel / Excel 内の表データ連携は `Transfer(read, write, mapping)` に�
 
 サイト／組織クラス（`SiteBase` / `SalesforceBase` のサブクラス）には **`OWNER = "プロジェクト名 / 担当者"` を必須** とし、未設定だと `SiteOwnerRequiredError` で止める。ライブラリ側で昇格された `comken.toolbox.browser.sites` / `comken.toolbox.salesforce.sites` 配下のクラスは `OWNER = "comken"` を書いて検査を免除する。
 
-詳細は [`browser.md`](browser.md) を参照。
+詳細は [`browser.md`](機能/browser.md) を参照。
 
 ## 8. ブラウザ内部設計
 
@@ -327,8 +327,12 @@ BO と intranet でバージョンを分けることはしない（版を分け�
 
 ## 12. 関連ドキュメント
 
+`docs/` は、**機能別のドキュメント**（`機能/`。使い方・仕様。csv・excel・browser など）と、
+**それ以外**（この設計書・規約・履歴・エラー対応・自動生成 API）に分けている。
+
+- [`機能/`](機能/): 機能ごとの使い方・仕様（`csv.md`・`excel.md`・`browser.md`・`salesforce.md` など）。入口は [`README.md`](../README.md) の「モジュール一覧」
 - [`HISTORY.md`](HISTORY.md): 設計判断の **経緯・却下した代替案・理由** だけを集めた文書。現状の説明はここに書かない
-- [`CONVENTIONS.md`](../CONVENTIONS.md): **コーディング規約**（1〜14 章は利用者向け、15 章以降は comken 本体の編集者向け）
+- [`CONVENTIONS.md`](CONVENTIONS.md): **コーディング規約**（1〜14 章は利用者向け、15 章以降は comken 本体の編集者向け）
 - [`自動生成/API.md`](自動生成/API.md): 公開 API の署名・docstring（**生成物**、手で編集しない）
 - [`ERRORS.md`](ERRORS.md): 例外クラスと非エンジニア向けの対処（**生成物**、手で編集しない）
 - [`README.md`](../README.md): 入口とモジュール一覧

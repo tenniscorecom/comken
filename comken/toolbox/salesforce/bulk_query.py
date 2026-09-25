@@ -9,7 +9,7 @@ Bulk API はジョブを作って完了を待つ非同期方式のため、重�
 タイムアウトしにくい。
 
 **書き込み系（Ingest）は対象外。** 大量データの書き込みは既存の
-``DataLoaderCLI``（docs/dataloader.md）に任せる。
+``DataLoaderCLI``（docs/機能/dataloader.md）に任せる。
 
 **本物の Salesforce 組織に対して未検証。** ジョブ作成・状態確認・結果取得の
 エンドポイントとレスポンス構造は Salesforce の公式リファレンスに基づいて
