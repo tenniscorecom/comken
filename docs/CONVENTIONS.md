@@ -870,7 +870,10 @@ logger.debug("詳細: %s", expensive_repr(value))
    `comken/toolbox/browser/sites/<システム>.py`（Salesforce の場合は
    `comken/toolbox/salesforce/sites/<システム>.py`）へ移す
 2. クラス内の `OWNER` を `"comken"` に変える（管理者が昇格した印）
-3. ライブラリ側の `__init__.py` の `SITES` タプルにクラスを追加する
+3. **`SITES` への登録は不要** — `comken/core/discovery.py` の `find_subclasses()` が
+   配下のファイルを自動走査して拾う。**`NAME`（Salesforce の組織クラスは
+   `DOMAIN_URL`）を空のままにしない**こと。空だと土台クラス扱いで除外される。
+   ファイル・フォルダ名が `_` で始まるものも除外される（雛形置き場）
 4. 利用側の import を `from comken.toolbox.browser.sites import <クラス名>` へ書き換える
 
 **独立リポジトリへ分離する手順**:

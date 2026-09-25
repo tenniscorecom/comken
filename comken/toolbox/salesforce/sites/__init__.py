@@ -18,7 +18,12 @@ URL と認証情報のシステム名はクラス定数なので、呼び出し�
 client_id / client_secret は DPAPI から読む（`comken.toolbox.credentials`）ので、
 コードにも config.ini にも秘密の値は現れない。
 
-組織を増やすときは、このフォルダにファイルを1つ足して `SalesforceBase` を継承する。
+組織を増やすときは、このフォルダに `SalesforceBase` を継承したファイルを1つ足す。
+**`DOMAIN_URL` を空のままにしない**（空だと土台クラス扱いで登録されない）。
+ファイル名が `_` で始まるものは無視される（雛形置き場）。
+
+CLI は `SITES` の**番号**をユーザーに見せるので、順序は決定的
+（モジュール名の昇順）。
 
 > [!warning] 組織名と URL は仮の値
 > **このリポジトリは公開しているので、実際の組織名・URL を書かない。**
@@ -29,8 +34,12 @@ client_id / client_secret は DPAPI から読む（`comken.toolbox.credentials`�
 > 組織名を出すならクラス名。**実名をこのリポジトリへ書き戻さないこと。**
 """
 
+from __future__ import annotations
+
+import sys
 from urllib.parse import urlsplit
 
+from comken.core.discovery import find_subclasses
 from comken.exceptions import SalesforceError
 from comken.toolbox.salesforce.client import SalesforceBase
 from comken.toolbox.salesforce.sites.solution import Solution
@@ -54,9 +63,11 @@ def _site_not_found_error(url: str, known_domains: list[str]) -> SalesforceError
 
 
 # 登録済みの組織。URL からどの組織へつなぐかを引くのに使う。
-# **組織を増やしたらここにも足す。** 足し忘れると、その組織の URL だけが
-# SalesforceError になる（黙って別組織へつなぐことはない）
-SITES: tuple[type[SalesforceBase], ...] = (Solution, SolutionSandbox)
+# ``find_subclasses`` で同フォルダの ``SalesforceBase`` サブクラスを自動収集する
+# （モジュール名昇順・決定的）。``DOMAIN_URL`` が空のクラスは土台扱いで除外される。
+SITES: tuple[type[SalesforceBase], ...] = find_subclasses(
+    sys.modules[__name__], SalesforceBase, include=lambda cls: bool(cls.DOMAIN_URL)
+)
 
 __all__ = ["SITES", "Solution", "SolutionSandbox", "site_for"]
 

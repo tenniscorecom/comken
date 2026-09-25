@@ -39,6 +39,24 @@ class TestOrgClasses:
         for site in SITES:
             assert issubclass(site, SalesforceReportBrowser)
 
+    def test_sites_order_is_deterministic_solution_then_sandbox(self):
+        """``SITES`` はモジュール名昇順。``base.py`` の ``SalesforceReportBrowser``
+        は ``find_subclasses`` 内の ``cls is base`` 判定で土台クラスとして除外される
+        （組織として直接起動する想定ではないため）。結果として ``Solution →
+        SolutionSandbox`` の順になる。
+        """
+        assert (Solution, SolutionSandbox) == SITES
+
+    def test_base_class_is_excluded_from_sites(self):
+        """``SalesforceReportBrowser`` は ``cls is base`` の判定で SITES に入らない
+        （include 判定より ``find_subclasses`` 内部の除外が優先される）。
+        """
+        from comken.toolbox.browser.sites.salesforce.base import (
+            SalesforceReportBrowser as _Base,
+        )
+
+        assert _Base not in SITES
+
 
 class TestSiteFor:
     """レポートの URL から、ブラウザ経由でつなぐ組織を決める。"""

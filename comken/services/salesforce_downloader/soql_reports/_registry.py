@@ -8,9 +8,7 @@
 
 from __future__ import annotations
 
-import importlib
-import pkgutil
-
+from comken.core.discovery import find_subclasses
 from comken.exceptions import DownloaderError
 from comken.services.salesforce_downloader.soql_reports import reports
 from comken.services.salesforce_downloader.soql_reports.base import SoqlReport
@@ -19,11 +17,11 @@ from comken.services.salesforce_downloader.soql_reports.base import SoqlReport
 def registered_reports() -> tuple[type[SoqlReport], ...]:
     """``reports/`` パッケージに置かれた ``SoqlReport`` サブクラスを集めて返す。
 
-    走査は ``pkgutil.iter_modules(reports.__path__)`` で ``reports/`` 直下の
-    ``.py`` を1つずつ ``importlib.import_module`` し、そのモジュール自身で
-    定義された ``SoqlReport`` のサブクラス（``cls.__module__ == module.__name__``
-    を満たすもの）だけを拾う。**ファイル名が ``_`` で始まるモジュールは
-    走査対象外**（``_template.py`` のような雛形を登録せずに済む）。
+    走査は ``comken.core.discovery.find_subclasses()`` に任せる
+    （``pkgutil.walk_packages`` で ``reports/`` 直下の ``.py`` を1つずつ
+    ``importlib.import_module`` し、そのモジュール自身で定義された
+    ``SoqlReport`` のサブクラスを拾う）。**ファイル名が ``_`` で始まる
+    モジュールは走査対象外**（``_template.py`` のような雛形を登録せずに済む）。
 
     ``KEY`` の昇順で返す。**キャッシュはしない** — ``importlib.import_module``
     は既に import 済みなら再 load しない（``sys.modules`` 経由で軽い）ので、
@@ -36,42 +34,25 @@ def registered_reports() -> tuple[type[SoqlReport], ...]:
             ``reports/<ファイル>.py`` のパスとクラス名を含め、
             対処（``KEY`` を埋める／重複を直す）を併記する。
     """
-    found: list[tuple[str, type[SoqlReport], str]] = []
-    for module_info in pkgutil.iter_modules(reports.__path__):
-        module_name = module_info.name
-        if module_name.startswith("_"):
-            # ``_template.py`` のような雛形は登録しない
-            continue
-        module = importlib.import_module(f"{reports.__name__}.{module_name}")
-        for cls in vars(module).values():
-            if not isinstance(cls, type) or not issubclass(cls, SoqlReport):
-                continue
-            if cls is SoqlReport:
-                continue
-            # 他モジュールから ``from ... import`` しただけのクラスは拾わない
-            if cls.__module__ != module.__name__:
-                continue
-            found.append((cls.KEY, cls, module.__name__))
-
-    _validate_keys(found)
-    found.sort(key=lambda item: item[0])
-    return tuple(item[1] for item in found)
+    classes = find_subclasses(reports, SoqlReport)
+    _validate_keys(classes)
+    return tuple(sorted(classes, key=lambda cls: cls.KEY))
 
 
-def _validate_keys(found: list[tuple[str, type[SoqlReport], str]]) -> None:
+def _validate_keys(classes: tuple[type[SoqlReport], ...]) -> None:
     """``KEY`` の空と重複を検査し、問題があれば ``DownloaderError`` を送出する。
 
     Args:
-        found: ``(KEY, クラス, モジュール名)`` のリスト（ソート前）。
+        classes: ``find_subclasses()`` が返したクラスのタプル（ソート前）。
     """
-    by_key: dict[str, list[tuple[type[SoqlReport], str]]] = {}
-    for key, cls, module_name in found:
-        by_key.setdefault(key, []).append((cls, module_name))
+    by_key: dict[str, list[type[SoqlReport]]] = {}
+    for cls in classes:
+        by_key.setdefault(cls.KEY, []).append(cls)
 
-    empties = [(cls, module_name) for key, cls, module_name in found if not key]
+    empties = [cls for cls in classes if not cls.KEY]
     if empties:
-        cls, module_name = empties[0]
-        path = _report_path(module_name)
+        cls = empties[0]
+        path = _report_path(cls.__module__)
         raise DownloaderError(
             f"SOQLレポートの KEY が空です: {cls.__name__}（{path}）\n"
             f"対処: {path} のクラス {cls.__name__} の KEY に、社内で決める管理番号"
@@ -84,7 +65,7 @@ def _validate_keys(found: list[tuple[str, type[SoqlReport], str]]) -> None:
         lines: list[str] = []
         for key, entries in duplicates.items():
             paths = ", ".join(
-                f"{cls.__name__}（{_report_path(module_name)}）" for cls, module_name in entries
+                f"{cls.__name__}（{_report_path(cls.__module__)}）" for cls in entries
             )
             lines.append(f"  KEY={key!r}: {paths}")
         joined = "\n".join(lines)

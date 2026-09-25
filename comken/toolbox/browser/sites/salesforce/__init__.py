@@ -18,8 +18,9 @@ comken.toolbox.salesforce（API版）の Reports and Dashboards REST API は2000
         for report_id, path in sf.export_reports(reports):
             print(report_id, path)
 
-組織を増やすときは、このフォルダにファイルを1つ足して ``SalesforceReportBrowser``
-を継承し、このファイルの ``SITES`` にも登録する。
+組織を増やすときは、このフォルダに ``SalesforceReportBrowser`` を継承したファイルを
+1つ足す。**`BASE_URL` または `NAME` を空のままにしない**（空だと土台クラス扱いで
+登録されない）。ファイル名が `_` で始まるものは無視される（雛形置き場）。
 
 > [!note] クラス名は API 側と同名
 > ``Solution`` / ``SolutionSandbox`` は API 側
@@ -30,8 +31,12 @@ comken.toolbox.salesforce（API版）の Reports and Dashboards REST API は2000
 >（URL のドメイン一致）。
 """
 
+from __future__ import annotations
+
+import sys
 from urllib.parse import urlsplit
 
+from comken.core.discovery import find_subclasses
 from comken.exceptions import SalesforceError
 from comken.toolbox.browser.sites.salesforce.base import SalesforceReportBrowser
 from comken.toolbox.browser.sites.salesforce.solution import Solution
@@ -55,9 +60,14 @@ def _site_not_found_error(url: str, known_domains: list[str]) -> SalesforceError
 
 
 # 登録済みの組織。URL からどの組織へつなぐかを引くのに使う。
-# **組織を増やしたらここにも足す。** 足し忘れると、その組織の URL だけが
-# SalesforceError になる（黙って別組織へつなぐことはない）
-SITES: tuple[type[SalesforceReportBrowser], ...] = (Solution, SolutionSandbox)
+# ``find_subclasses`` で同フォルダの ``SalesforceReportBrowser`` サブクラスを
+# 自動収集する（モジュール名昇順・決定的）。
+# ``BASE_URL`` または ``NAME`` を空のままにすると土台クラス扱いで除外される。
+SITES: tuple[type[SalesforceReportBrowser], ...] = find_subclasses(
+    sys.modules[__name__],
+    SalesforceReportBrowser,
+    include=lambda cls: bool(cls.BASE_URL) or bool(cls.NAME),
+)
 
 __all__ = [
     "SalesforceReportBrowser",

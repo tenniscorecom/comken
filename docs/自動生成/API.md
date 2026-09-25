@@ -4178,11 +4178,11 @@ def registered_reports() -> tuple[type[SoqlReport], ...]:
 
 ``reports/`` パッケージに置かれた ``SoqlReport`` サブクラスを集めて返す。
 
-走査は ``pkgutil.iter_modules(reports.__path__)`` で ``reports/`` 直下の
-``.py`` を1つずつ ``importlib.import_module`` し、そのモジュール自身で
-定義された ``SoqlReport`` のサブクラス（``cls.__module__ == module.__name__``
-を満たすもの）だけを拾う。**ファイル名が ``_`` で始まるモジュールは
-走査対象外**（``_template.py`` のような雛形を登録せずに済む）。
+走査は ``comken.core.discovery.find_subclasses()`` に任せる
+（``pkgutil.walk_packages`` で ``reports/`` 直下の ``.py`` を1つずつ
+``importlib.import_module`` し、そのモジュール自身で定義された
+``SoqlReport`` のサブクラスを拾う）。**ファイル名が ``_`` で始まる
+モジュールは走査対象外**（``_template.py`` のような雛形を登録せずに済む）。
 
 ``KEY`` の昇順で返す。**キャッシュはしない** — ``importlib.import_module``
 は既に import 済みなら再 load しない（``sys.modules`` 経由で軽い）ので、

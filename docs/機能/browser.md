@@ -168,6 +168,14 @@ src/
 （書き方の見本はライブラリ側の `comken/toolbox/browser/sites/ouju/` にある）。
 サイトを増やすには、`src/sites/<サイト名>/` を隣にもう1つ作るだけ。
 
+**ライブラリ側の `SITES` は自動登録される** — `comken/core/discovery.py` の
+`find_subclasses()` が `comken/toolbox/browser/sites/` 配下の全サブパッケージから
+`SiteBase` サブクラスを自動収集する。**`NAME` を空のままにしない**こと
+（空だと土台クラス扱いで除外される）。ファイル・フォルダ名が `_` で始まるものも
+除外される（雛形置き場）。`SiteBase._check_not_in_library()` がプロジェクト側と
+の `NAME` 衝突を起動時に `BrowserError` で止めるので、同じ `NAME` のクラスを
+1つのプロセス内に2つ作らないこと。
+
 **サイトクラスと画面共通クラスは別物。** サイトクラスは「どのサイトか」を表し、
 画面共通クラスは「その画面群に共通の操作」を持つ。
 

@@ -930,6 +930,12 @@ class TestSiteFor:
         assert SITES
         assert all(issubclass(site, SalesforceBase) for site in SITES)
 
+    def test_sites_order_is_deterministic_with_solution_first(self):
+        """``SITES`` はモジュール名昇順なので ``Solution → SolutionSandbox`` の順で並ぶ。
+        CLI が番号を見せるので、順序が崩れたら報告する。
+        """
+        assert (Solution, SolutionSandbox) == SITES
+
 
 class TestDisplayName:
     """``SalesforceBase.display_name()`` は人が読む組織名を返す。"""

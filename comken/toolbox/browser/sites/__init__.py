@@ -15,28 +15,32 @@
 > 実際の値へ書き換える（`comken/toolbox/salesforce/sites/` の `Solution` と同じ扱い）。
 > 書き換えた値は組織内の配布物に置き、**このリポジトリへ書き戻さないこと。**
 
-昇格の手順:
-  1. ライブラリ側へファイルを移す（`comken/toolbox/browser/sites/<サイト名>.py`）
-  2. クラス内の `OWNER` を `"comken"` に変える（管理者が既に判断済みの印）
-  3. この `SITES` タプルにクラスを追加する
-  4. 利用側の import を `from comken.toolbox.browser.sites import <クラス名>` へ書き換える
-
-**移すかどうかはライブラリ管理者が判断する。** プロジェクト側が勝手に
-`comken` 配下へファイルを置いても、起動時に「comken 配下のクラスは OWNER = "comken"
-にすること」と案内するだけで、自動的に `SITES` には入らない。
+**登録は自動**: ファイルを置けば `find_subclasses()` が拾って `SITES` へ加える。
+**`NAME` を空のままにしない**（空だと土台クラス扱いで登録されない）。
+ファイル・フォルダ名が `_` で始まるものは無視される（雛形置き場）。
+クラスは**同じ `NAME` で 1 つだけ**にすること — `SiteBase._check_not_in_library()`
+がプロジェクト側との衝突を起動時に `BrowserError` で止める。
 """
 
+from __future__ import annotations
+
+import sys
+
+from comken.core.discovery import find_subclasses
 from comken.toolbox.browser.sitebase import SiteBase
 from comken.toolbox.browser.sites.ntt import NTTEast, NTTWest
+from comken.toolbox.browser.sites.salesforce.base import SalesforceReportBrowser
 
-# ライブラリ公認サイトの一覧。最初に空で置いておき、昇格するサイトが出てきたら
-# ここで追加していく。**プロジェクト側で同じ NAME のクラスを作ると、
-# 起動時に `BrowserError` で止まる。**
-# NTTWest・NTTEast は URL がダミーのままなので SITES には含めない
-# （配置時に実際の値へ書き換えたら登録する）。Salesforce のクラスは
-# API 側（`comken.toolbox.salesforce.sites`）と同名でパッケージで区別するため、
-# ここでは再エクスポートせず、各利用側で
-# `comken.toolbox.browser.sites.salesforce` から直接 import する。
-SITES: tuple[type[SiteBase], ...] = ()
+# ライブラリ公認サイトの一覧。``find_subclasses`` で配下のサブパッケージから
+# ``SiteBase`` サブクラスを自動収集する（モジュール名昇順・決定的）。
+# ``NAME`` が空のクラス（NTTSiteBase などの土台）と、``SalesforceReportBrowser``
+# （NAME を持つが組織ごとのクラスの土台で、公認サイトではない）は除外される。
+# プロジェクト側で同じ ``NAME`` のクラスを定義すると、起動時に
+# ``SiteBase._check_not_in_library()`` が ``BrowserError`` で止める。
+SITES: tuple[type[SiteBase], ...] = find_subclasses(
+    sys.modules[__name__],
+    SiteBase,
+    include=lambda cls: bool(cls.NAME) and cls is not SalesforceReportBrowser,
+)
 
 __all__ = ["SITES", "NTTWest", "NTTEast"]

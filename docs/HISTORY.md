@@ -680,3 +680,29 @@ master に何をコミットしても本番には流れない。**
 （2026-09-25 補足） 同日、例外ファイル 21→8 への統合に合わせて `calendar.py` を
 `holidays.py` へ改名した。標準ライブラリの `calendar` と被るため。クラス本体は変えず、
 ファイル名と配置だけを動かした。
+
+### サイト・組織クラスを自動登録にした（2026-09-25）
+
+`comken.toolbox.salesforce.sites`・`comken.toolbox.browser.sites`・
+`comken.toolbox.browser.sites.salesforce` の 3 つの `SITES` を手書きのタプルから、
+**`comken.core.discovery.find_subclasses()` による自動収集**へ切り替えた。
+`pkgutil.walk_packages()` でサブパッケージも再帰的にたどる。**ファイル・フォルダ名
+のどこかの階層が `_` で始まるものは登録されない**（雛形置き場の慣例を維持）。
+**土台の基底クラス（`NAME` または `DOMAIN_URL` を空のままにしたクラス）は
+`include` フィルタで除外される**。
+
+- 共通関数を `comken/core/discovery.py` に置いた（`comken.core.__init__` の
+  ファサードには入れない、`toolbox`・`services` からの内部用）
+- `soql_reports/_registry.py` も同関数を使う形にリファクタ。**外から見た挙動と
+  エラーメッセージは変えていない**（`KEY` の空・重複の検査は `_registry.py`
+  に残した）
+- `browser/sites/` の `SITES` は今まで空だったが、NTT を含む全公認サイト
+  （AMS / NTTEast / NTTWest / Ouju / SalesforceReportBrowser / Solution /
+  SolutionSandbox）が `_check_not_in_library()` の検査対象になった
+- 順序はモジュール完全名の昇順（決定的）。CLI が `SITES.index(...) + 1` の
+  番号を見せるので、`salesforce/sites` は `Solution → SolutionSandbox` の順を
+  維持する
+- 既存の「`SITES` タプルにクラスを追加する」「昇格の手順 3」「NTT は SITES に
+  含めない」は廃止。`docs/CONVENTIONS.md` と `docs/機能/browser.md` を
+  「ファイルを置けば自動で登録される」に書き換えた
+- 空の `comken/toolbox/browser/sites/sample/` を削除（git 管理外、`__pycache__` のみ）

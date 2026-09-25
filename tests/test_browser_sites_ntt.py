@@ -27,20 +27,59 @@ def _make_session(tmp_path, site, name: str = "test") -> BrowserSession:
 
 
 class TestPublicApi:
-    """雛形（sample）と同じ扱いで公開する。"""
+    """NTT西・NTT東 は SITE 配下の公開名前空間に出す。"""
 
-    def test_exports_ntt_sites_without_registering_as_library_sites(self):
-        """URL がダミーのままなので、SITES（公認一覧）には登録しない。"""
+    def test_exports_ntt_sites_as_library_sites(self):
+        """`NAME` と `BASE_URL` を上書きしているので、SITES（公認一覧）に登録される。"""
         for site in (NTTWest, NTTEast):
             assert site.NAME
             assert site.BASE_URL
             assert site.OWNER
-            assert site not in SITES
+            assert site in SITES
 
     def test_west_and_east_have_distinct_name_and_url(self):
         """NAME・BASE_URL は姉妹サイトでも別々。"""
         assert NTTWest.NAME != NTTEast.NAME
         assert NTTWest.BASE_URL != NTTEast.BASE_URL
+
+
+class TestSITESAutoRegistration:
+    """``browser/sites/__init__.py`` の SITES は ``find_subclasses`` で自動収集される。
+    NTTWest / NTTEast も ``NAME`` を上書きしているので SITES に入る。
+    """
+
+    def test_ntt_sites_in_sites_tuple(self):
+        """NTTWest / NTTEast は SITES に含まれる（順序はモジュール名の昇順で east → west）。"""
+        assert NTTEast in SITES
+        assert NTTWest in SITES
+        ntt_modules = [c.__module__ for c in SITES if c.__name__ in ("NTTEast", "NTTWest")]
+        assert ntt_modules == [
+            "comken.toolbox.browser.sites.ntt.east",
+            "comken.toolbox.browser.sites.ntt.west",
+        ]
+
+    def test_base_ntt_site_is_excluded_by_empty_name(self):
+        """``NTTSiteBase`` は ``NAME`` を空のままにしているので SITES に入らない。"""
+        from comken.toolbox.browser.sites.ntt.base import NTTSiteBase
+
+        assert NTTSiteBase not in SITES
+        assert all(s.NAME for s in SITES)
+
+    def test_salesforce_report_browser_base_is_not_a_library_site(self):
+        """``SalesforceReportBrowser`` は組織クラスの土台なので、NAME を持っていても入らない。
+
+        入ってしまうと、プロジェクト側が NAME を書かずに継承したクラスが
+        この土台の NAME と衝突して、起動時に BrowserError になる。
+        """
+        from comken.toolbox.browser.sites.salesforce.base import SalesforceReportBrowser
+
+        assert SalesforceReportBrowser.NAME
+        assert SalesforceReportBrowser not in SITES
+
+    def test_all_sites_have_unique_names(self):
+        """``_check_not_in_library()`` の衝突検出が正しく動くよう、NAME はサイト間で重複しない。"""
+        names = [site.NAME for site in SITES]
+        assert len(names) == len(set(names))
 
 
 class TestSharedPagesResolvePerSiteBaseUrl:

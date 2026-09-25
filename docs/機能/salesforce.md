@@ -573,6 +573,14 @@ api_client_id / api_client_secret を読む（[credentials](credentials.md#crede
 社内ライブラリの名前は出てこない）。
 
 書き込み系（`insert` / `update` / `upsert` / `delete`）は `dry_run` を尊重する。
+
+**組織を増やすときは `comken/toolbox/salesforce/sites/` に
+`SalesforceBase` を継承したファイルを1つ足す**。**`DOMAIN_URL` を空のままにしない**
+（空だと土台クラス扱いで `SITES` から除外される）。ファイル名が `_` で始まる
+ものは無視される（雛形置き場）。`SITES` は `comken/core/discovery.py` の
+`find_subclasses()` が**自動収集**するので、手でタプルへ追加する必要はない。
+`SITES` の順序はモジュール名の昇順で決定的（CLI が番号を見せるので、順序が
+崩れたら報告する）。
 使い方の一覧は [README](../../README.md#モジュール一覧)、
 認証の判断根拠は [設計判断の履歴](../HISTORY.md#認証方式-external-client-app-authorization-code-refresh-token-flow) を参照。
 
