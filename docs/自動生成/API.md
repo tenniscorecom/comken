@@ -6279,72 +6279,6 @@ Returns:
     そのサイトのブラウザに紐づいた画面クラスのインスタンス。
 
 
-## `from comken.toolbox.browser.sites.ams import ...`
-
-### `AMSBrowserOptions`
-
-```text
-class AMSBrowserOptions(BrowserOptions):
-```
-
-#### 説明
-
-ams 用のブラウザオプション。
-
-デフォルト（BrowserOptions）から変更したいものだけ上書きする。
-全オプションのデフォルト値は comken/toolbox/browser/options.py を参照。
-
-#### `build`
-
-```text
-def build(self, profile_dir: Path | None=None) -> list[str]:
-```
-
-##### 説明
-
-有効なオプションを Edge の起動引数リストに変換する。
-
-Args:
-    profile_dir: ログイン状態を残すプロファイルフォルダ。
-                 指定するとシークレットモードは自動的に外れる
-                 （シークレットは Cookie を残さないため、永続化と両立しない）。
-
-Returns:
-    webdriver に渡す起動引数のリスト。
-
-### `AMS`
-
-```text
-class AMS(SiteBase):
-```
-
-#### 説明
-
-ams 雛形用の SiteBase。
-
-URL や要素セレクタは example の値のまま。利用プロジェクト側で継承して書き換える。
-
-#### `go_login`
-
-```text
-def go_login(self) -> LoginPage:
-```
-
-##### 説明
-
-ログイン画面を開く。
-
-#### `go_customer_list`
-
-```text
-def go_customer_list(self) -> CustomerListPage:
-```
-
-##### 説明
-
-お客様一覧画面を開く（ログイン後、URL 直飛びで行ける）。
-
-
 ## `from comken.toolbox.browser.sites.ntt import ...`
 
 ### `NTTBrowserOptions`
@@ -6584,62 +6518,6 @@ Args:
 
 Returns:
     そのサイトのブラウザに紐づいた画面クラスのインスタンス。
-
-
-## `from comken.toolbox.browser.sites.ouju import ...`
-
-### `OujuBrowserOptions`
-
-```text
-class OujuBrowserOptions(BrowserOptions):
-```
-
-#### 説明
-
-ouju 用のブラウザオプション。
-
-デフォルト（BrowserOptions）から変更したいものだけ上書きする。
-全オプションのデフォルト値は comken/toolbox/browser/options.py を参照。
-
-#### `build`
-
-```text
-def build(self, profile_dir: Path | None=None) -> list[str]:
-```
-
-##### 説明
-
-有効なオプションを Edge の起動引数リストに変換する。
-
-Args:
-    profile_dir: ログイン状態を残すプロファイルフォルダ。
-                 指定するとシークレットモードは自動的に外れる
-                 （シークレットは Cookie を残さないため、永続化と両立しない）。
-
-Returns:
-    webdriver に渡す起動引数のリスト。
-
-### `Ouju`
-
-```text
-class Ouju(SiteBase):
-```
-
-#### 説明
-
-ouju 雛形用の SiteBase。
-
-URL や要素セレクタは example の値のまま。利用プロジェクト側で継承して書き換える。
-
-#### `go_login`
-
-```text
-def go_login(self) -> LoginPage:
-```
-
-##### 説明
-
-ログイン画面を開く。
 
 
 ## `from comken.toolbox.browser.sites.salesforce import ...`

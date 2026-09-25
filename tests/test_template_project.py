@@ -289,8 +289,11 @@ def test_template_has_no_src_sites_directory(generated: Path) -> None:
     ここに ``src/sites/`` が復活する回帰をここで防ぐ。
 
     ブラウザ操作の見本（書き方・最小形）はライブラリ側の
-    ``comken/toolbox/browser/sites/ouju/`` に残っているので、雛形側で持つ
-    必要はない。
+    ``comken/toolbox/browser/sites/ntt/`` に残っている（NTT西・NTT東 を
+    1 フォルダで束ねる例外形）。姉妹サイトを持たない単独サイト用の
+    1 サイト＝1 フォルダ形は、テスト時点で運用中の実装がないため
+    ``docs/機能/browser.md`` の第 1〜4 項の構成を正本とする。雛形側で
+    持つ必要はない。
     """
     sites_dir = generated / "src" / "sites"
     assert not sites_dir.exists(), (
