@@ -156,7 +156,7 @@ class TestExcelComPromotion:
             patch("comken.toolbox.windows.excel_com.ExcelCOMHandler", return_value=com) as handler,
             Excel(path) as excel,
         ):
-            rows = excel._read_computed_rows("Sheet")
+            rows = excel._computed._read_computed_rows("Sheet")
 
         assert rows == [(10, 20)]
         handler.assert_called_once_with(path, local_copy_threshold_mb=0)
@@ -173,7 +173,7 @@ class TestExcelComPromotion:
             patch("comken.toolbox.windows.excel_com.ExcelCOMHandler") as handler,
             Excel(path) as excel,
         ):
-            assert excel._read_computed_rows("Sheet") == [(10,)]
+            assert excel._computed._read_computed_rows("Sheet") == [(10,)]
 
         handler.assert_not_called()
 
@@ -184,9 +184,9 @@ class TestExcelComPromotion:
         with (
             patch("comken.toolbox.windows.excel_com.ExcelCOMHandler") as handler,
             Excel(path) as excel,
-            patch.object(excel, "_cached_rows", return_value=([(20,)], False)),
+            patch.object(excel._computed, "_cached_rows", return_value=([(20,)], False)),
         ):
-            assert excel._read_computed_rows("Sheet") == [(20,)]
+            assert excel._computed._read_computed_rows("Sheet") == [(20,)]
 
         handler.assert_not_called()
 

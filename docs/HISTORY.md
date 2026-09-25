@@ -677,6 +677,17 @@ master に何をコミットしても本番には流れない。**
 は何も削っていない**。Salesforce 公式の Data Loader（外部製品）への参照は
 「読み取りが主用途」の節などに歴史として残してある。
 
+### `Excel` の数式計算結果の読み取りを `computed.py` に分割した（2026-09-26）
+
+`comken.toolbox.excel.workbook.Excel` から、数式計算結果の読み取り専用メソッド群
+（`_read_computed_rows` / `_open_stream_workbook` / `_cached_rows` /
+`_cached_rows_from_memory` / `_cached_rows_from_stream` / `_collect_cached_rows` /
+`_mark_uncalculated_formulas` / `_cached_range`）を、新ファイル
+`comken/toolbox/excel/computed.py` の `ComputedValueReader` へコンポジションで
+移した。挙動は1バイトも変えず、`self.X` を `self._excel.X` に読み替えるだけの
+移動。状態（作業ファイル・ストリーム Workbook キャッシュなど）は引き続き
+`Excel` 側に保持する。
+
 ## 15. モジュール・公開 API の改名（2026-09-25）
 
 `comken.core.clock` → `comken.core.dates`。コア層の日付・時刻ユーティリティ

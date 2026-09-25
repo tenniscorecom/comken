@@ -119,7 +119,9 @@ class TestExcelTable:
             table._worksheet["B2"] = "=A2*2"
             with (
                 patch.object(
-                    excel, "_cached_range", return_value=([("id", "total"), (1, 2)], False)
+                    excel._computed,
+                    "_cached_range",
+                    return_value=([("id", "total"), (1, 2)], False),
                 ),
                 patch.object(excel, "_read_range_with_com") as read_with_com,
             ):

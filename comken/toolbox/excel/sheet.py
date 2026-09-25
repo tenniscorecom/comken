@@ -242,7 +242,7 @@ class Sheet:
                 self._worksheet.title, column_index, row, column_index, row
             )
             return rows[0][0] if rows else ("" if raw is None else raw)
-        cached_rows, needs_com = self._excel._cached_range(
+        cached_rows, needs_com = self._excel._computed._cached_range(
             self._worksheet.title, column_index, row, column_index, row
         )
         if not needs_com and cached_rows:
@@ -334,7 +334,7 @@ class Sheet:
                     self._worksheet.title, min_col, min_row, max_col, max_row
                 )
             else:
-                cached_rows, needs_com = self._excel._cached_range(
+                cached_rows, needs_com = self._excel._computed._cached_range(
                     self._worksheet.title, min_col, min_row, max_col, max_row
                 )
                 if needs_com:

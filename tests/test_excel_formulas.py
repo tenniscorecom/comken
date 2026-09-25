@@ -13,6 +13,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 from comken.core.table import Table
 from comken.exceptions import ExcelError
 from comken.toolbox.excel import Excel
+from comken.toolbox.excel.computed import ComputedValueReader
 
 
 def _book_with_cached_formulas(
@@ -455,14 +456,14 @@ class TestMarkUncalculatedFormulasRowAlignment:
         # _FakeSheet は ``Worksheet`` ではないが、``_collect_cached_rows`` /
         # ``_mark_uncalculated_formulas`` は ``iter_rows`` しか使わない最小スタブ。
         # 実行時の検証は維持しつつ、型差は ``cast`` で Worksheet として渡す。
-        rows, row_indices, any_none = Excel._collect_cached_rows(
+        rows, row_indices, any_none = ComputedValueReader._collect_cached_rows(
             cast("Worksheet", cached_sheet), min_row=1
         )
         assert rows == [(1, "a"), (None, "b")]
         assert row_indices == [0, 2]  # 空行(index=1)がスキップされている
         assert any_none is True
 
-        new_rows, needs_com = Excel._mark_uncalculated_formulas(
+        new_rows, needs_com = ComputedValueReader._mark_uncalculated_formulas(
             rows, row_indices, cast("Worksheet", formula_sheet), min_row=1
         )
 

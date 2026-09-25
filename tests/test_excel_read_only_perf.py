@@ -18,6 +18,7 @@ from openpyxl import Workbook, load_workbook
 
 from comken.core.table import Table
 from comken.toolbox.excel import Excel
+from comken.toolbox.excel.computed import ComputedValueReader
 
 
 def _book(path, value: str = "x") -> None:
@@ -57,6 +58,7 @@ def test_read_only_normal_workbook_lazy(tmp_path) -> None:
 
     with (
         patch("comken.toolbox.excel.workbook.load_workbook") as load_spy,
+        patch("comken.toolbox.excel.computed.load_workbook", new=load_spy),
         Excel(path, read_only=True),
     ):
         # __enter__ は終わってもまだ Excel 経由の値参照をしていないので Workbook を遅延。
@@ -75,7 +77,7 @@ def _read_with_excel(path) -> int:
     """ベンチ用ヘルパ：_read_computed_rows で行を読む。"""
     total = 0
     with Excel(path, read_only=True) as excel:
-        rows = excel._read_computed_rows("Sheet", min_row=1)
+        rows = excel._computed._read_computed_rows("Sheet", min_row=1)
         total += sum(len(r) for r in rows)
     return total
 
@@ -101,9 +103,10 @@ def test_read_only_stream_only_uses_openpyxl_read_only(tmp_path) -> None:
 
     with (
         patch("comken.toolbox.excel.workbook.load_workbook", side_effect=record),
+        patch("comken.toolbox.excel.computed.load_workbook", new=record),
         Excel(path, read_only=True) as excel,
     ):
-        excel._read_computed_rows("Sheet", min_row=1)
+        excel._computed._read_computed_rows("Sheet", min_row=1)
 
     # 通常 Workbook は開かれない（__enter__ で read_only=True のときは遅延）
     assert normal_calls == []
@@ -141,6 +144,7 @@ def test_read_only_excel_table_opens_workbook_on_demand(tmp_path) -> None:
 
     with (
         patch("comken.toolbox.excel.workbook.load_workbook", side_effect=record),
+        patch("comken.toolbox.excel.computed.load_workbook", new=record),
         Excel(path, read_only=True) as excel,
     ):
         assert normal_calls == []  # __enter__ では遅延
@@ -158,7 +162,7 @@ def test_read_only_cached_rows_no_formula_skips_formula_stream(tmp_path) -> None
         sheet.write_value("B1", "b")
     formula_workbook_open_count = 0
 
-    original_open = Excel._open_stream_workbook
+    original_open = ComputedValueReader._open_stream_workbook
 
     def counting_open(self, *, data_only):
         nonlocal formula_workbook_open_count
@@ -167,10 +171,10 @@ def test_read_only_cached_rows_no_formula_skips_formula_stream(tmp_path) -> None
         return original_open(self, data_only=data_only)
 
     with (
-        patch.object(Excel, "_open_stream_workbook", counting_open),
+        patch.object(ComputedValueReader, "_open_stream_workbook", counting_open),
         Excel(path, read_only=True) as excel,
     ):
-        rows = excel._read_computed_rows("結果", min_row=1)
+        rows = excel._computed._read_computed_rows("結果", min_row=1)
     assert rows == [("a", "b")]
     # data_only=False ストリームは 1 度も開かれない
     assert formula_workbook_open_count == 0

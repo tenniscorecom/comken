@@ -120,6 +120,18 @@ Excel は VBA マクロで書かれていた業務の Python 置き換えが主�
 
 シート操作は `Sheet` に集約する。セル書き込み・書式・キー突合転記・構造化テーブルなどシートに対する操作はすべて `Sheet` に置き、ブックに対する操作だけを `Excel` に置く（入口が 2 経路になると一貫性が崩れるため）。
 
+`comken/toolbox/excel/` のファイル構成（2026-09-26 時点）:
+
+| ファイル | 役割 |
+|---|---|
+| `__init__.py` | 公開 API の集約（`Excel` / `Sheet` / `ExcelTable` / `Color`）。`ComputedValueReader` は **入れない**（内部用） |
+| `workbook.py` | `Excel` クラス本体。ブックのライフサイクル・作業コピー管理・COM 昇格の入口 |
+| `computed.py` | `ComputedValueReader`。`Excel` から委譲される「数式計算結果の読み取り」（キャッシュ済み値・未計算数式の検出） |
+| `sheet.py` | `Sheet` クラス。表示用シートのセル操作 |
+| `table.py` | `ExcelTable` クラス。Excel の構造化テーブルへの読み書き |
+| `table_validation.py` | テーブル化の前提検証 |
+| `colors.py` | `Color` 定数 |
+
 テーブルは **定義を壊さず、中のデータを操作する** 方針で、`ExcelTable` のメソッドも「中のデータを書き換える」操作に限定する。テーブル名変更・削除は持たない（openpyxl では構造化参照が追随せず `#NAME?` になるため）。
 
 Excel / Excel 内の表データ連携は `Transfer(read, write, mapping)` に統一する。CSV / Excel / Access など読み取った `Table` を渡せば、CSV → Excel、Excel → CSV、Excel → Excel、CSV → CSV は同じ API で扱える。形式別の転記クラスは作らない。

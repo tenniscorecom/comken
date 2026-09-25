@@ -277,7 +277,7 @@ class TestReadComputedRowsDropsBlankRows:
             sheet._worksheet.cell(row=5000, column=40).fill = PatternFill("solid", fgColor="FFFF00")
 
         with Excel(path, read_only=True) as excel:
-            rows = excel._read_computed_rows("データ")
+            rows = excel._computed._read_computed_rows("データ")
 
         assert len(rows) == 200
 
@@ -297,7 +297,7 @@ class TestReadComputedRowsDropsBlankRows:
             sheet.write_value("B6", "B")
 
         with Excel(path, read_only=True) as excel:
-            rows = excel._read_computed_rows("データ")
+            rows = excel._computed._read_computed_rows("データ")
 
         assert rows == [("1", "A"), ("2", "B")]
 
@@ -312,7 +312,7 @@ class TestReadComputedRowsDropsBlankRows:
             sheet.write_value("C2", False)
 
         with Excel(path, read_only=True) as excel:
-            rows = excel._read_computed_rows("データ")
+            rows = excel._computed._read_computed_rows("データ")
 
         assert rows == [("1", 0, False)]
 
@@ -325,7 +325,7 @@ class TestReadComputedRowsDropsBlankRows:
             # 2 行目以降は空
 
         with Excel(path, read_only=True) as excel:
-            rows = excel._read_computed_rows("データ")
+            rows = excel._computed._read_computed_rows("データ")
 
         assert rows == []
 
@@ -371,7 +371,7 @@ class TestReadComputedRowsDropsBlankRows:
         # を使うため、別々の ``with`` ブロックで呼ぶ。同じブロックで 2 回呼ぶと
         # Workbook のライフサイクル管理との兼ね合いで既存の問題が表面化する。
         with Excel(path, read_only=True) as excel:
-            rows = excel._read_computed_rows("データ")
+            rows = excel._computed._read_computed_rows("データ")
         with Excel(path, read_only=True) as excel:
             table = excel.read("データ")
 

@@ -146,7 +146,7 @@ class ExcelTable:
                 self._worksheet.title, min_col, min_row, max_col, max_row
             )
         elif formula_cells:
-            rows, needs_com = self._excel._cached_range(
+            rows, needs_com = self._excel._computed._cached_range(
                 self._worksheet.title, min_col, min_row, max_col, max_row
             )
             if needs_com:
