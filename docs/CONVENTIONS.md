@@ -649,7 +649,7 @@ snake_case の世界（関数名・変数名・モジュール名・パッケー
 
 | 操作 | 動詞 | 例 |
 |---|---|---|
-| 処理・マクロ・クエリを実行する | `run_` | `run_macro()`, `run_query()`, `run_task()` |
+| 処理・マクロ・クエリを実行する | `run_` | `run_macro()`, `run_query()` |
 | データや値を読み取る | `read_` | `read_row_values()`, `read_text()`, `read_messages()` |
 | 1件を検索する | `find_` | `find_element()` |
 | 複数件を絞り込む | `filter_` | `filter_rows()` |

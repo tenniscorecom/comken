@@ -47,7 +47,7 @@ Edge を自動で動かして、社内システムから情報を取ったり入
 **ブラウザ自体は継承しない。** サイトクラスがブラウザを継承する書き方
 （`class 勤怠(Chrome)` のような形）もあるが、そうすると
 ログイン状態や現在のページといった**状態がクラス側に載る**。
-同じサイトを2つ同時に開いた瞬間に壊れるので、並列で動かせなくなる。
+同じサイトを2つ同時に開いた瞬間に壊れる。
 `SitePage` はセッションを**持つ**だけなので、同じサイトの2アカウントでも並べられる。
 
 ---
@@ -146,81 +146,6 @@ with Browsers() as browsers:
 ```
 
 `NAME` だけ変えたサブクラスを作る。URL もセレクターも継承されるので、書くのは1行。
-
----
-
-## 待ち時間を使って別のことを進める
-
-**書いた順に上から動くのが基本。** 何も指定しなければ、1行ずつ順番に終わってから次へ進む。
-
-重い画面の読み込みを待っている間に別のことを進めたいときだけ、`start()` で先に始めておく。
-結果が必要になったところで `wait()` で受け取る。
-
-```python
-with Browsers() as browsers:
-    kintai = browsers.launch(Kintai)
-    keiri = browsers.launch(Keiri)
-
-    kintai_task = browsers.run_task(lambda: kintai.go_login().login(USER, PW).unfilled_days(), label="勤怠")
-
-    pending = keiri.go_login().login(USER, PW).pending_rows()   # 勤怠の読み込み中にこちらが進む
-
-    unfilled = kintai_task.wait()                       # 戻って結果を受け取る
-```
-
-実際にこうなる（勤怠の open が8秒かかる場合）:
-
-```
- 0.0秒  勤怠   open（重い画面）…
- 0.0秒  経理   ID入力
- 1.0秒  経理   パスワード入力
- 2.0秒  経理   ログインボタン
- 3.0秒  経理   一覧取得
- 4.0秒  経理   取得おわり
- 8.0秒  勤怠   ★読み込み完了 → すぐ検索へ
- 9.0秒  勤怠   取得おわり
-
-合計 9.0秒（順番に書いたら 13.0秒）
-```
-
-勤怠が待っている間、ブラウザは何も消費していないので経理がその時間を使える。
-そして読み込みが終わった瞬間、勤怠は誰の指示も待たずに自分で続きを始める。
-**「終わったほうを優先する」ような指示を書く必要はない。**
-
-| メソッド | 何をするか |
-|---|---|
-| `browsers.run_task(処理, label="名前")` | 裏で始めて、すぐ次の行へ進む。取っ手を返す |
-| `取っ手.wait()` | 終わるのを待って結果を受け取る。すでに終わっていればすぐ返る |
-| `取っ手.is_done` | 終わったかどうかだけ見る（待たない） |
-
-`label` はログとエラーに出るので、付けておくと原因を追いやすい。
-
-### 全部同時でよければ parallel が短い
-
-「全部いっぺんに始めて、全部の結果が欲しい」だけなら、`start` と `wait` を並べる代わりに
-1つにまとめられる。やっていることは同じ。
-
-```python
-unfilled, pending = browsers.parallel(
-    lambda: kintai.go_login().login(USER, PW).unfilled_days(),
-    lambda: keiri.go_login().login(USER, PW).pending_rows(),
-)
-```
-
-結果は**渡した順**で返る（終わった順ではない）。
-
-### 守ること
-
-**裏で動かしている処理と、自分で書いている処理で、同じブラウザを触らないこと。**
-
-```python
-kintai_task = browsers.run_task(lambda: kintai.go_login().login(USER, PW).unfilled_days())
-keiri.go_login().login(USER, PW).pending_rows()   # ⭕ 別のブラウザなので問題ない
-kintai.go_login().login(USER, PW)                  # ❌ 裏で使っている勤怠を触っている
-```
-
-`wait()` を呼び忘れたまま `with` を抜けても、ブラウザを閉じる前に処理の終了は待つ。
-その処理が失敗していた場合はログに残る（黙って消えることはない）。
 
 ---
 
@@ -749,46 +674,14 @@ with Browsers() as browsers:
 |---|---|
 | `launch(SiteBase, download_dir=None)` | SiteBase サブクラスを渡してブラウザを1つ起動し、SiteBase インスタンスを返す |
 | `launch_session(name, options=None, download_dir=None)` | 低レベル経路。`Browsers` を使わずに名前とオプションで直接起動する |
-| `run_task(処理, label="")` | 処理を裏で始めて、すぐ次の行へ進む。`BackgroundTask` を返す |
-| `parallel(*tasks)` | 複数の処理を同時に実行し、渡した順に結果を返す |
 | `names` | 起動済みのセッション名（起動した順） |
 | `browsers["kintai"]` | 名前でセッションを取り出す |
 
-**待ち時間を使って別のことを進める**: 書いた順に動くのが基本で、
-待ちたくないところだけ `start()` にする。
-
-```python
-with Browsers() as browsers:
-    kintai = browsers.launch(Kintai)
-    keiri = browsers.launch(Keiri)
-
-    kintai_task = browsers.run_task(lambda: kintai.go_login().login(USER, PW).unfilled_days(), label="勤怠")
-
-    pending = keiri.go_login().login(USER, PW).pending_rows()   # 勤怠の読み込み中にこちらが進む
-
-    unfilled = kintai_task.wait()                       # 戻って結果を受け取る
-```
-
-重い画面を待っている間、ブラウザは何も消費しないので他方がその時間を使えます。
-読み込みが終われば、そちらも自分で続きを始めます（「優先する」指示は不要）。
-
-| `BackgroundTask` | 何をするか |
-|---|---|
-| `wait(timeout=None)` | 終わるのを待って結果を返す。中で起きた例外はここで送出される |
-| `is_done` | 終わったかどうかだけ見る（待たない） |
-
-**全部同時でよければ** `parallel` が短く書けます（`start` と `wait` を並べるのと同じ）:
-
-```python
-unfilled, pending = browsers.parallel(
-    lambda: kintai.go_login().login(USER, PW).unfilled_days(),
-    lambda: keiri.go_login().login(USER, PW).pending_rows(),
-)
-```
-
-裏で動かしている処理と、自分で書いている処理で、同じセッションを触らないこと。
-同時に触ると `BrowserError` で即座に止まります
-（黙って別の画面を操作するより安全なため）。
+書いた順に上から動く（同期）のが基本。**複数を同時に動かしたい場合は、
+`Browsers.launch()` でサイトごとにセッションを分けて**、それぞれを
+別々に書き下す。読み込みの待ち時間は `session.load_many()`
+（[複数ページをまとめて開く](#複数ページをまとめて開くload_many)）で
+ブラウザ側で重ねられる。
 
 ---
 

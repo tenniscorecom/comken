@@ -175,7 +175,7 @@ Excel / Excel 内の表データ連携は `Transfer(read, write, mapping)` に�
 - 入口は **`Browsers`** に集約し、サイトが 1 つでも複数でも書き方を変えない
 - **サイトごとに 1 ブラウザを起動** し、タブでは分けない（ダウンロード先・ログイン状態がブラウザ単位で決まるため、タブで複数サイトを扱うと取り違え事故が構造的に避けられない）
 - **`with` を必須** にする。`with` なしで起動できると、途中で例外が出たときに Edge のプロセスが残り、次の実行でドライバーの更新まで妨げる
-- 同期が基本。`start` / `wait` を書いたところだけ非同期にする（重画面の読み込み中に別サイトを進めたい場合）。`parallel` はこの 2 つを並べた短縮形
+- 書いた順に上から動く（同期）が基本。読み込みの待ち時間を有効に使うには `session.load_many()` を使う（[機能/browser.md#複数ページをまとめて開く](機能/browser.md) を参照）
 - 設定は `config.ini` ではなく **クラス変数**（`BrowserOptions` の `DRIVER_PATH` / `WAIT_SECONDS` 等）。プロジェクト固有ではなく環境共通のデフォルトで、差はサブクラスで上書きする
 
 サイト／組織クラス（`SiteBase` / `SalesforceBase` のサブクラス）には **`OWNER = "プロジェクト名 / 担当者"` を必須** とし、未設定だと `SiteOwnerRequiredError` で止める。ライブラリ側で昇格された `comken.toolbox.browser.sites` / `comken.toolbox.salesforce.sites` 配下のクラスは `OWNER = "comken"` を書いて検査を免除する。
@@ -204,11 +204,10 @@ browser/
 ├── site.py                     SiteBase（サイトを書く人が最初に読む土台クラス）
 ├── sites/                      ライブラリ公認サイトの置き場
 ├── options.py                  Edge の起動設定
-├── management/                 ブラウザーと非同期処理の管理
+├── management/                 ブラウザーの管理
 │   ├── browsers.py             複数ブラウザーをまとめて起動・終了する
-│   ├── sessions.py             1 サイト分の WebDriver と排他制御
+│   ├── sessions.py             1 サイト分の WebDriver
 │   ├── startup.py              Edge の起動・初期化
-│   ├── tasks.py                裏で動かした処理の結果・例外を受け取る
 │   └── tabs.py                 1 セッション内のタブを開閉する
 ├── page.py                     Page Object の共通操作
 ├── locator.py                  画面要素の指定方法
@@ -220,9 +219,8 @@ browser/
 | 変更したいこと | 主に読むファイル |
 |---|---|
 | ブラウザーを追加・終了する流れ | `management/browsers.py` |
-| Edge の起動・終了、同時操作の防止 | `management/sessions.py` |
+| Edge の起動・終了 | `management/sessions.py` |
 | Edge 起動失敗、起動引数 | `management/startup.py` |
-| 複数サイトの並列処理 | `management/browsers.py`、`management/tasks.py` |
 | ポップアップ、複数タブ読み込み | `management/tabs.py` |
 | クリック、入力、待機 | `page.py` |
 | Edge の起動引数 | `options.py` |

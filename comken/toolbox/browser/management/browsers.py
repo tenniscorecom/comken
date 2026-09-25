@@ -3,7 +3,7 @@
 公開クラスは ``Browsers``。
 
 このファイルは管理の入口だけを担当する。1つのブラウザーの起動・操作・終了は
-``sessions.py``、バックグラウンド処理の結果管理は ``tasks.py`` が担う。
+``sessions.py`` が担う。
 
 サイトが1つでも複数でも、書き方は変わらない。`SiteBase` サブクラスを `launch` に
 渡せば、戻り値から `.session` 経由で BrowserSession に繋がる:
@@ -21,23 +21,7 @@
         kintai_data = KintaiFlow(kintai.session).fetch()
         keiri_data = KeiriFlow(keiri.session).fetch()
 
-**書いた順に上から動く（同期）のが基本。** 待っている間に別のことを進めたいときだけ、
-run_task() で先に始めておき、結果が必要になったところで wait() で受け取る:
-
-        task = browsers.run_task(lambda: kintai.fetch())  # 始めるだけ。待たない
-        keiri_data = keiri.fetch()                        # その間にこちらを進める
-        kintai_data = task.wait()                         # 戻って結果を受け取る
-
-重い画面の読み込みを待っている間、ブラウザは何も消費していないので、
-その時間で別のサイトの操作が進む。読み込みが終われば、そちらも自分で続きを始める。
-
-全部まとめて同時に始めて、全部の結果を受け取るだけなら parallel で短く書ける
-（start して wait するのと同じことをしている）:
-
-        kintai_data, keiri_data = browsers.parallel(
-            lambda: KintaiFlow(kintai.session).fetch(),
-            lambda: KeiriFlow(keiri.session).fetch(),
-        )
+**書いた順に上から動く（同期）が基本。**
 
 ダウンロードフォルダとログイン状態はセッション名ごとに自動で分かれるので、
 サイトを増やしても「どちらのファイルか分からない」状態にならない。
@@ -47,8 +31,6 @@ run_task() で先に始めておき、結果が必要になったところで wa
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 from pathlib import Path
 from types import TracebackType
@@ -58,7 +40,6 @@ from comken.core.timer import measure
 from comken.exceptions import BrowserError
 from comken.toolbox.browser.download import DownloadDir
 from comken.toolbox.browser.management.sessions import BrowserSession
-from comken.toolbox.browser.management.tasks import BackgroundTask
 from comken.toolbox.browser.options import BrowserOptions
 from comken.toolbox.browser.sitebase import SiteBase
 
@@ -85,7 +66,7 @@ def _session_not_found_error(name: str, launched: list[str]) -> BrowserError:
 
     発生箇所: Browsers.__getitem__()
     """
-    launched_text = "、".join(launched) if launched else "（まだ1つも起動していません）"
+    launched_text = "、".join(launched) if launched else "（まだ1つも起動もしていません）"
     return BrowserError(
         f"起動していないセッションです: {name}\n"
         f"起動済み: {launched_text}\n"
@@ -102,7 +83,7 @@ def _browser_not_started_error(operation: str) -> BrowserError:
         "  with Browsers() as browsers:\n"
         "      kintai = browsers.launch(Kintai)\n"
         "      ...\n"
-        "こうしておくと、途中でエラーが出てもブラウザは必ず閉じられます。"
+        "こうしておくと、途中でエラーが出てもブラウザは必ず閉じます。"
         "\n対処: `with Browsers() as browsers:` の中で使ってください"
         "（ブラウザは起動していないので実害はない）。"
     )
@@ -138,16 +119,11 @@ def _site_config_error(site_cls: type, missing: str) -> BrowserError:
     )
 
 
-T = TypeVar("T")
 # launch() の戻り値を渡したサブクラスの型に合わせるための束縛 TypeVar。
 # 素の T だと SiteBase 以外も受理してしまい、束縛しないと pyright が
 # launch(Kintai) の戻り値を SiteBase 止まりで推論し、Kintai 固有の
 # メソッド（go_login() など）が補完に出なくなる。
 S = TypeVar("S", bound=SiteBase)
-
-# 裏で動かす処理の同時実行数の上限。ブラウザ操作は待ち時間がほとんどで
-# CPU を使わないため、サイト数として現実的な範囲を確保しておけばよい
-_MAX_BACKGROUND_TASKS = 16
 
 
 class Browsers:
@@ -160,10 +136,6 @@ class Browsers:
     with を必須にしているのは、途中で例外が出たときにブラウザのプロセスが残り、
     次の実行でドライバーの更新まで邪魔するのを防ぐため。
 
-    **run_task() で始めた処理が終わらないと、with も終わらない。** ブラウザを閉じる前に
-    裏の処理の終了を待つため（操作の途中でブラウザが消えると原因が分かりにくいエラーになる）。
-    終わらない可能性がある処理には、その中で待ち時間の上限を設けること。
-
     Attributes:
         names: 起動済みのセッション名（起動した順）。
     """
@@ -171,11 +143,6 @@ class Browsers:
     def __init__(self) -> None:
         self._stack = ExitStack()
         self._sessions: dict[str, BrowserSession] = {}
-        self._executor: ThreadPoolExecutor | None = None
-        self._tasks: list[BackgroundTask] = []
-        # 既定の名前（処理1、処理2 …）の連番。回収済みを捨てても番号が戻らないよう、
-        # リストの長さではなく開始した総数で数える
-        self._started_count = 0
         self._is_started = False
         self._is_closed = False
 
@@ -191,22 +158,14 @@ class Browsers:
         traceback: TracebackType | None,
     ) -> None:
         # 待っている途中で Ctrl+C を押されても、ブラウザだけは必ず閉じる。
-        # ここを try/finally にしないと、待ち合わせで例外が飛んだ時点で
-        # 下のブラウザ終了に到達せず、Edge のプロセスが残る
+        # ここを try/finally にしないと、ブラウザ終了に到達せず Edge のプロセスが残る
         try:
-            # ブラウザを閉じる前に、裏で動いている処理の終了を待つ。
-            # 先に閉じると、操作の途中でブラウザが消えて追いにくいエラーになる
-            self._finish_background_tasks()
+            # ExitStack が起動と逆順にすべてのセッションを閉じる。
+            # 途中の終了処理が失敗しても、残りの終了は実行される
+            self._stack.__exit__(exc_type, exc_value, traceback)
         finally:
-            # 裏の処理が終わってから閉じたことにする。先に閉じたことにすると、
-            # 動き出すのが遅れたタスクが browsers[...] を使えなくなる
             self._is_closed = True
-            try:
-                # ExitStack が起動と逆順にすべてのセッションを閉じる。
-                # 途中の終了処理が失敗しても、残りの終了は実行される
-                self._stack.__exit__(exc_type, exc_value, traceback)
-            finally:
-                self._sessions.clear()
+            self._sessions.clear()
 
     def launch(
         self,
@@ -301,109 +260,6 @@ class Browsers:
         logger.debug("ブラウザセッション起動完了: %s", name)
         return session
 
-    def run_task(self, task: Callable[[], T], label: str = "") -> BackgroundTask[T]:
-        """処理を裏で始めて、すぐ次の行へ進む。結果は wait() で受け取る。
-
-        普通に書けば上から順に動く。時間のかかる処理を待っている間に
-        別のことを進めたいときだけ、これで先に始めておく:
-
-            kintai = browsers.run_task(lambda: KintaiFlow(kintai).search())
-            KeiriFlow(keiri).login(user, password)   # 勤怠の読み込み中にこちらが進む
-            days = kintai.wait()                        # 戻って結果を受け取る
-
-        **裏で動かす処理と、その後に自分で書く処理で、同じセッションを触らないこと。**
-        同じセッションを同時に触ると BrowserError で止まる
-        （黙って別の画面を操作するより、早く気づけるほうが安全なため）。
-
-        Args:
-            task: 引数を取らない呼び出し可能オブジェクト。lambda で包んで渡す。
-            label: 何の処理か。省略するとセッション名の代わりに連番が付く。
-                   ログとエラーメッセージに出るので、付けておくと原因を追いやすい。
-
-        Returns:
-            結果を受け取るための取っ手。wait() で結果、is_done で終了確認ができる。
-        """
-        self._require_in_with("start")
-        if self._executor is None:
-            self._executor = ThreadPoolExecutor(
-                max_workers=_MAX_BACKGROUND_TASKS, thread_name_prefix="browser"
-            )
-
-        # 受け取り済みのものは手放す。ここで捨てないと、繰り返し start する処理で
-        # 結果や例外の情報を持ったまま溜まり続ける。
-        # 未回収のものは、終了時に報告するために残す
-        self._tasks = [pending for pending in self._tasks if not pending.is_collected]
-
-        name = label or f"処理{self._started_count + 1}"
-        self._started_count += 1
-        background_task = BackgroundTask(self._executor.submit(task), name)
-        self._tasks.append(background_task)
-        logger.debug("裏で開始しました: %s", name)
-        return background_task
-
-    def parallel(self, *tasks: Callable[[], T]) -> list[T]:
-        """複数の処理を同時に始めて、全部終わるまで待ち、渡した順に結果を返す。
-
-        run_task() で始めて wait() で受け取るのを、まとめて書けるようにしたもの。
-        「全部同時に始めて、全部の結果が欲しい」だけならこちらが短い:
-
-            # 逐次（上から順に動く）
-            a = KintaiFlow(kintai).fetch()
-            b = KeiriFlow(keiri).fetch()
-
-            # 同時（同じ呼び出しを lambda で包む）
-            a, b = browsers.parallel(
-                lambda: KintaiFlow(kintai).fetch(),
-                lambda: KeiriFlow(keiri).fetch(),
-            )
-
-        受け取るタイミングを自分で決めたい場合は run_task() を使う。
-
-        1つの処理では1つのセッションだけを触ること。同じセッションを2つの処理から
-        触ると BrowserError で止まる。
-
-        Args:
-            *tasks: 引数を取らない呼び出し可能オブジェクト。
-
-        Returns:
-            各処理の戻り値を、渡した順に並べたリスト。
-
-        Raises:
-            Exception: 失敗が **1件**のときはその例外をそのまま送出する
-                （既存の呼び出し側を壊さないため）。
-            BaseExceptionGroup[Exception]: 失敗が **2件以上**のときは
-                ``ExceptionGroup`` でまとめて送出する。Python 3.11 以降の
-                ``except*`` で個別に取り出せる。すべての失敗は呼び出し前に
-                ``logger.error`` でログにも出している。
-        """
-        self._require_in_with("parallel")
-        if not tasks:
-            return []
-
-        started = [
-            self.run_task(task, label=f"処理{index + 1}") for index, task in enumerate(tasks)
-        ]
-
-        # 例外が出ても、走り出した処理は最後まで待つ。
-        # 途中で打ち切るとブラウザを操作中のまま放置することになるため
-        results: list[T] = []
-        errors: list[Exception] = []
-        for background_task in started:
-            try:
-                results.append(background_task.wait())
-            except Exception as exc:
-                logger.error("「%s」が失敗しました: %s", background_task.label, exc)
-                errors.append(exc)
-
-        if errors:
-            # 1件ならそのまま（既存の呼び出し側を壊さない）、 2件以上は
-            # ``ExceptionGroup`` でまとめて送出する。Python 3.11 以降は
-            # ``except*`` で個別に取り出せる。
-            if len(errors) == 1:
-                raise errors[0]
-            raise ExceptionGroup("parallel() で複数の処理が失敗しました", errors)
-        return results
-
     @property
     def names(self) -> list[str]:
         """起動済みのセッション名（起動した順）。"""
@@ -434,38 +290,6 @@ class Browsers:
             raise _browser_closed_error(operation)
         if not self._is_started:
             raise _browser_not_started_error(operation)
-
-    def _finish_background_tasks(self) -> None:
-        """裏で動いている処理の終了を待ってから、実行の仕組みを片付ける。
-
-        待ち時間に上限は設けない。処理の途中でブラウザを閉じるより、
-        終わるまで待つほうが安全なため（終わらない処理があると with も終わらない）。
-
-        wait() を呼ばずに with を抜けた処理があると、その中で起きた例外は
-        誰にも渡らない。黙って消えると原因調査ができないため、ここでログに出す。
-        """
-        if self._executor is None:
-            return
-
-        self._executor.shutdown(wait=True)
-        for background_task in self._tasks:
-            if background_task.is_collected:
-                continue
-            try:
-                background_task.wait(timeout=0)
-                logger.warning(
-                    "「%s」の結果が受け取られないまま終了しました（wait の呼び忘れ）",
-                    background_task.label,
-                )
-            except Exception as exc:
-                logger.error(
-                    "「%s」が失敗していました（wait で受け取られないまま終了）: %s",
-                    background_task.label,
-                    exc,
-                )
-
-        self._executor = None
-        self._tasks.clear()
 
     def __repr__(self) -> str:
         launched = "、".join(self.names) if self._sessions else "なし"

@@ -6,10 +6,7 @@ CI でも手元でも安定しないため、ここでは扱わない。
 """
 
 import inspect
-import logging
 import os
-import threading
-import time
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -22,7 +19,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from comken.exceptions import BrowserError, ElementNotFoundError
 from comken.toolbox import browser
 from comken.toolbox.browser import (
-    BackgroundTask,
     BrowserOptions,
     Browsers,
     BrowserSession,
@@ -36,18 +32,16 @@ from comken.toolbox.browser.management import sessions as sessions_module
 from comken.toolbox.browser.management.browsers import Browsers as InternalBrowsers
 from comken.toolbox.browser.management.sessions import BrowserSession as InternalBrowserSession
 from comken.toolbox.browser.management.startup import _build_driver, create_service
-from comken.toolbox.browser.management.tasks import BackgroundTask as InternalBackgroundTask
 
 
 class TestPublicApi:
     """内部整理後も comken.toolbox.browser の公開入口を維持する。"""
 
     def test_exports_management_classes_from_browser_package(self):
-        """管理クラス3つを従来どおり comken.toolbox.browser からimportできる。"""
+        """管理クラス2つを従来どおり comken.toolbox.browser からimportできる。"""
         assert BrowserSession is InternalBrowserSession
         assert Browsers is InternalBrowsers
-        assert BackgroundTask is InternalBackgroundTask
-        assert {"Browsers", "BrowserSession", "BackgroundTask"} <= set(browser.__all__)
+        assert {"Browsers", "BrowserSession"} <= set(browser.__all__)
 
 
 def _make_session(tmp_path, name: str = "test") -> BrowserSession:
@@ -358,40 +352,6 @@ class TestExternalLogSuppression:
         assert "excludeSwitches" not in edge_options.experimental_options
 
 
-class TestSessionConcurrencyGuard:
-    """1セッションを複数スレッドから同時に触らせないことのテスト。"""
-
-    def test_rejects_concurrent_use_from_another_thread(self, tmp_path):
-        """他スレッドが操作中のセッションを触ると BrowserError になる。"""
-        session = _make_session(tmp_path)
-        holding = threading.Event()
-        release = threading.Event()
-
-        def hold_session():
-            with session._operating("hold"):
-                holding.set()
-                release.wait(timeout=5)
-
-        holder = threading.Thread(target=hold_session, name="holder")
-        holder.start()
-        try:
-            assert holding.wait(timeout=5)
-            with pytest.raises(BrowserError):
-                session.open("https://example.com")
-        finally:
-            release.set()
-            holder.join(timeout=5)
-
-    def test_allows_nested_use_in_same_thread(self, tmp_path):
-        """同じスレッドの中で操作がネストしても止まらない（RLock のため）。"""
-        session = _make_session(tmp_path)
-
-        with session._operating("outer"):
-            session.open("https://example.com")
-
-        session._driver.get.assert_called_once_with("https://example.com")
-
-
 class TestPopupTab:
     """別タブの操作と後始末のテスト。"""
 
@@ -461,13 +421,6 @@ class TestBrowsersRequiresWith:
             browsers.launch_session("kintai")
 
         edge.assert_not_called()  # 弾かれた時点で何も起きていない
-
-    def test_rejects_start_without_with(self):
-        """with に入れずに start しても動かない。"""
-        browsers = Browsers()
-
-        with pytest.raises(BrowserError):
-            browsers.run_task(lambda: "動いてしまった")
 
     def test_rejects_getitem_without_with(self):
         """with に入れずにセッションを取り出すこともできない。"""
@@ -565,264 +518,6 @@ class TestBrowsers:
 
         # ExitStack は起動と逆順に閉じる
         assert closed == ["keiri", "kintai"]
-
-
-class TestBrowsersStart:
-    """「先に始めておいて、あとで受け取る」形のテスト。"""
-
-    def test_returns_before_task_finishes(self):
-        """start は処理の終了を待たずに、すぐ次の行へ進む。"""
-        release = threading.Event()
-
-        with Browsers() as browsers:
-            task = browsers.run_task(lambda: release.wait(timeout=5) and "done")
-
-            # 処理はまだ終わっていないのに、ここまで進んでいる
-            assert not task.is_done
-            release.set()
-            assert task.wait(timeout=5) == "done"
-            assert task.is_done
-
-    def test_other_work_progresses_while_waiting(self):
-        """重い処理を待っている間に、後続の行が進む。"""
-        heavy_started = threading.Event()
-        light_finished = threading.Event()
-
-        def heavy():
-            heavy_started.set()
-            # 後続の処理が先に終わるまで待つ。順番に動いていればここで詰まる
-            assert light_finished.wait(timeout=5)
-            return "重い方"
-
-        with Browsers() as browsers:
-            task = browsers.run_task(heavy, label="勤怠")
-            assert heavy_started.wait(timeout=5)
-
-            light_finished.set()  # 後続の処理（軽い方）がここで終わったとみなす
-
-            assert task.wait(timeout=5) == "重い方"
-
-    def test_wait_reraises_error(self):
-        """裏で起きた例外は、wait で受け取ったときに送出される。"""
-
-        def fail():
-            raise ValueError("取得に失敗")
-
-        with Browsers() as browsers:
-            task = browsers.run_task(fail)
-
-            with pytest.raises(ValueError, match="取得に失敗"):
-                task.wait(timeout=5)
-
-    def test_wait_timeout_keeps_task_running(self):
-        """待ち時間を過ぎても、処理自体は動き続ける。"""
-        release = threading.Event()
-
-        with Browsers() as browsers:
-            task = browsers.run_task(lambda: release.wait(timeout=5) and "done", label="勤怠")
-
-            with pytest.raises(TimeoutError, match="勤怠"):
-                task.wait(timeout=0.1)
-
-            release.set()
-            assert task.wait(timeout=5) == "done"
-
-    def test_waits_for_tasks_before_closing_browsers(self, tmp_path, monkeypatch):
-        """with を抜けるとき、裏の処理が終わってからブラウザを閉じる。
-
-        先に閉じると、操作の途中でブラウザが消えて原因の分かりにくいエラーになる。
-        """
-        events = []
-        monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
-        monkeypatch.setattr(
-            BrowserSession, "__exit__", lambda self, *args: events.append("ブラウザを閉じた")
-        )
-
-        def slow_task():
-            time.sleep(0.1)
-            events.append("処理がおわった")
-
-        with Browsers() as browsers:
-            browsers.launch_session("kintai")
-            browsers.run_task(slow_task)
-
-        assert events == ["処理がおわった", "ブラウザを閉じた"]
-
-    def test_closes_browsers_even_if_waiting_is_interrupted(self, monkeypatch):
-        """終了待ちの最中に中断されても、ブラウザは必ず閉じる。
-
-        ここで閉じ損ねると、with を必須にした意味がなくなる
-        （Ctrl+C のたびに Edge のプロセスが残る）。
-        """
-        closed = []
-        monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
-        monkeypatch.setattr(
-            BrowserSession, "__exit__", lambda self, *args: closed.append(self.name)
-        )
-
-        with pytest.raises(KeyboardInterrupt), Browsers() as browsers:
-            browsers.launch_session("kintai")
-            browsers.launch_session("keiri")
-            # 終了待ちが中断された状況を作る
-            monkeypatch.setattr(
-                browsers,
-                "_finish_background_tasks",
-                MagicMock(side_effect=KeyboardInterrupt()),
-            )
-
-        assert closed == ["keiri", "kintai"]
-
-    def test_late_task_can_still_use_sessions(self, monkeypatch):
-        """動き出すのが遅れたタスクからでも、ブラウザを取り出せる。
-
-        閉じたことにするタイミングが早すぎると、まだ閉じていないのに
-        BrowserError になる。
-        """
-        monkeypatch.setattr(BrowserSession, "__enter__", lambda self: self)
-        monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *args: None)
-        released = threading.Event()
-        taken = []
-
-        def late_task():
-            # with を抜ける処理が始まってから動き出す状況を作る
-            released.wait(timeout=5)
-            taken.append(browsers["kintai"].name)
-
-        with Browsers() as browsers:
-            browsers.launch_session("kintai")
-            browsers.run_task(late_task, label="遅れて動く処理")
-            released.set()
-
-        assert taken == ["kintai"]
-
-    def test_releases_collected_tasks(self):
-        """受け取り済みの処理は保持し続けない（繰り返し start しても溜まらない）。"""
-        with Browsers() as browsers:
-            for _ in range(20):
-                browsers.run_task(lambda: "ok").wait(timeout=5)
-
-            assert len(browsers._tasks) <= 1
-
-    def test_label_numbering_keeps_increasing(self):
-        """既定の名前は、受け取り済みを手放しても番号が戻らない。"""
-        with Browsers() as browsers:
-            first = browsers.run_task(lambda: "ok")
-            first.wait(timeout=5)
-            second = browsers.run_task(lambda: "ok")
-
-            assert (first.label, second.label) == ("処理1", "処理2")
-
-    def test_rejects_parallel_without_with(self):
-        """with に入れずに parallel を呼ぶと、引数が空でも弾かれる。"""
-        browsers = Browsers()
-
-        with pytest.raises(BrowserError):
-            browsers.parallel()
-
-    def test_reports_uncollected_error(self, caplog):
-        """wait を呼び忘れた処理の例外も、黙って消えずにログへ出す。"""
-
-        def fail():
-            raise ValueError("誰にも受け取られない失敗")
-
-        with caplog.at_level(logging.ERROR), Browsers() as browsers:
-            browsers.run_task(fail, label="勤怠")
-
-        assert "勤怠" in caplog.text
-        assert "誰にも受け取られない失敗" in caplog.text
-
-    def test_does_not_report_collected_error_twice(self, caplog):
-        """wait で受け取り済みの失敗は、終了時に重ねて報告しない。"""
-
-        def fail():
-            raise ValueError("受け取り済みの失敗")
-
-        with caplog.at_level(logging.ERROR), Browsers() as browsers:
-            task = browsers.run_task(fail, label="勤怠")
-            with pytest.raises(ValueError):
-                task.wait(timeout=5)
-
-        assert "受け取られないまま終了" not in caplog.text
-
-
-class TestBrowsersParallel:
-    """まとめて同時実行するときのテスト。"""
-
-    def test_returns_results_in_given_order(self):
-        """結果は、渡した順で返る（終わった順ではない）。"""
-        with Browsers() as browsers:
-            results = browsers.parallel(lambda: "a", lambda: "b", lambda: "c")
-
-        assert results == ["a", "b", "c"]
-
-    def test_runs_tasks_concurrently(self):
-        """各処理が同時に走る（全員が揃うまで待てることで確認する）。"""
-        barrier = threading.Barrier(3, timeout=5)
-
-        def wait_for_others() -> int:
-            # 3つ同時に走っていなければ、ここで BrokenBarrierError になる
-            return barrier.wait()
-
-        with Browsers() as browsers:
-            results = browsers.parallel(wait_for_others, wait_for_others, wait_for_others)
-
-        assert sorted(results) == [0, 1, 2]
-
-    def test_raises_first_error(self):
-        """失敗した処理があれば例外を送出する。"""
-
-        def fail():
-            raise ValueError("取得に失敗")
-
-        with Browsers() as browsers, pytest.raises(ValueError, match="取得に失敗"):
-            browsers.parallel(fail, lambda: "ok")
-
-    def test_waits_for_all_tasks_even_when_one_fails(self):
-        """1つ失敗しても、走り出した処理は最後まで待つ（操作中に放置しない）。"""
-        finished = []
-
-        def fail():
-            raise ValueError("失敗")
-
-        def slow():
-            threading.Event().wait(0.05)
-            finished.append("slow")
-            return "ok"
-
-        with Browsers() as browsers, pytest.raises(ValueError):
-            browsers.parallel(fail, slow)
-
-        assert finished == ["slow"]
-
-    def test_returns_empty_for_no_tasks(self):
-        """処理を渡さなければ空リストを返す。"""
-        with Browsers() as browsers:
-            assert browsers.parallel() == []
-
-    def test_raises_exception_group_when_two_or_more_fail(self):
-        """2件以上失敗したときは ``ExceptionGroup`` でまとめて送出する。
-
-        Python 3.11+ の ``except*`` で個別に取り出せるのが要件。 1件失敗の
-        ときはそのまま送出する（既存呼び出し側を壊さない）ので、 2件以上で
-        初めて ``ExceptionGroup`` に切り替わる。
-        """
-
-        def fail_a():
-            raise ValueError("A が失敗")
-
-        def fail_b():
-            raise RuntimeError("B が失敗")
-
-        with Browsers() as browsers, pytest.raises(ExceptionGroup) as info:
-            browsers.parallel(fail_a, fail_b)
-
-        # ``except*`` で個別に取り出して、それぞれの中身も残っている
-        value_errors = [e for e in info.value.exceptions if isinstance(e, ValueError)]
-        runtime_errors = [e for e in info.value.exceptions if isinstance(e, RuntimeError)]
-        assert len(value_errors) == 1
-        assert str(value_errors[0]) == "A が失敗"
-        assert len(runtime_errors) == 1
-        assert str(runtime_errors[0]) == "B が失敗"
 
 
 class TestOptionsBuild:
@@ -940,32 +635,6 @@ class TestPage:
             page.find_elements(Locator.css("table tr"))
 
         assert "table tr" in str(exc_info.value)
-
-    def test_escape_hatches_are_guarded_too(self, tmp_path):
-        """逃げ道（element / js）も同時操作の見張りを通る。
-
-        ここが素通りだと、並列実行時に一番気づきにくい形で壊れる。
-        """
-        page = self._page(tmp_path)
-        holding = threading.Event()
-        release = threading.Event()
-
-        def hold_session():
-            with page.session._operating("hold"):
-                holding.set()
-                release.wait(timeout=5)
-
-        holder = threading.Thread(target=hold_session, name="holder")
-        holder.start()
-        try:
-            assert holding.wait(timeout=5)
-            with pytest.raises(BrowserError):
-                page.find_element(Locator.id("x"))
-            with pytest.raises(BrowserError):
-                page.execute_script("return 1;")
-        finally:
-            release.set()
-            holder.join(timeout=5)
 
     def test_frame_returns_to_default_content_on_error(self, tmp_path):
         """iframe の中で例外が出ても、元の画面へ戻る。"""

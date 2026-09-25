@@ -4400,10 +4400,6 @@ with を使わずに launch すると BrowserError になる（ブラウザは�
 with を必須にしているのは、途中で例外が出たときにブラウザのプロセスが残り、
 次の実行でドライバーの更新まで邪魔するのを防ぐため。
 
-**run_task() で始めた処理が終わらないと、with も終わらない。** ブラウザを閉じる前に
-裏の処理の終了を待つため（操作の途中でブラウザが消えると原因が分かりにくいエラーになる）。
-終わらない可能性がある処理には、その中で待ち時間の上限を設けること。
-
 Attributes:
     names: 起動済みのセッション名（起動した順）。
 
@@ -4473,77 +4469,6 @@ Returns:
 Raises:
     BrowserError: 同じ名前ですでに起動している場合、
         ブラウザを起動できなかった場合（具体的な理由はメッセージに出る）。
-
-#### `run_task`
-
-```text
-def run_task(self, task: Callable[[], T], label: str='') -> BackgroundTask[T]:
-```
-
-##### 説明
-
-処理を裏で始めて、すぐ次の行へ進む。結果は wait() で受け取る。
-
-普通に書けば上から順に動く。時間のかかる処理を待っている間に
-別のことを進めたいときだけ、これで先に始めておく:
-
-    kintai = browsers.run_task(lambda: KintaiFlow(kintai).search())
-    KeiriFlow(keiri).login(user, password)   # 勤怠の読み込み中にこちらが進む
-    days = kintai.wait()                        # 戻って結果を受け取る
-
-**裏で動かす処理と、その後に自分で書く処理で、同じセッションを触らないこと。**
-同じセッションを同時に触ると BrowserError で止まる
-（黙って別の画面を操作するより、早く気づけるほうが安全なため）。
-
-Args:
-    task: 引数を取らない呼び出し可能オブジェクト。lambda で包んで渡す。
-    label: 何の処理か。省略するとセッション名の代わりに連番が付く。
-           ログとエラーメッセージに出るので、付けておくと原因を追いやすい。
-
-Returns:
-    結果を受け取るための取っ手。wait() で結果、is_done で終了確認ができる。
-
-#### `parallel`
-
-```text
-def parallel(self, *tasks: Callable[[], T]) -> list[T]:
-```
-
-##### 説明
-
-複数の処理を同時に始めて、全部終わるまで待ち、渡した順に結果を返す。
-
-run_task() で始めて wait() で受け取るのを、まとめて書けるようにしたもの。
-「全部同時に始めて、全部の結果が欲しい」だけならこちらが短い:
-
-    # 逐次（上から順に動く）
-    a = KintaiFlow(kintai).fetch()
-    b = KeiriFlow(keiri).fetch()
-
-    # 同時（同じ呼び出しを lambda で包む）
-    a, b = browsers.parallel(
-        lambda: KintaiFlow(kintai).fetch(),
-        lambda: KeiriFlow(keiri).fetch(),
-    )
-
-受け取るタイミングを自分で決めたい場合は run_task() を使う。
-
-1つの処理では1つのセッションだけを触ること。同じセッションを2つの処理から
-触ると BrowserError で止まる。
-
-Args:
-    *tasks: 引数を取らない呼び出し可能オブジェクト。
-
-Returns:
-    各処理の戻り値を、渡した順に並べたリスト。
-
-Raises:
-    Exception: 失敗が **1件**のときはその例外をそのまま送出する
-        （既存の呼び出し側を壊さないため）。
-    BaseExceptionGroup[Exception]: 失敗が **2件以上**のときは
-        ``ExceptionGroup`` でまとめて送出する。Python 3.11 以降の
-        ``except*`` で個別に取り出せる。すべての失敗は呼び出し前に
-        ``logger.error`` でログにも出している。
 
 #### `names`
 
@@ -4747,8 +4672,8 @@ Yields:
     Page のメソッドがそのまま使える。
 
 Raises:
-    BrowserError: with に入る前に呼んだ場合、または
-        他のスレッドが同じセッションを操作している場合（具体的な理由はメッセージに出る）。
+    BrowserError: with に入る前に呼んだ場合
+        （具体的な理由はメッセージに出る）。
 
 #### `raw`
 
@@ -4764,9 +4689,6 @@ selenium の WebDriver そのもの。
 このクラスと Page に用意されていない機能を使うときの逃げ道。
 ここから switch_to でタブを移動すると、セッションが今どのタブにいるかを
 見失うことがあるので、タブ操作は popup_tab() を使うこと。
-
-ここから直接操作すると、同時操作の見張り（operating）を通らない。
-parallel の中で使う場合、他のスレッドと衝突しないことは呼び出し側の責任になる。
 
 ### `SiteBase`
 
@@ -5567,78 +5489,6 @@ def remove(self, force: bool=False) -> None:
 Args:
     force: True にすると path 指定した固定フォルダも削除する。
 
-### `BackgroundTask`
-
-```text
-class BackgroundTask:
-```
-
-#### 説明
-
-裏で動いている処理の取っ手。Browsers.run_task() が返す。
-
-Attributes:
-    label: 何の処理か。ログとエラーメッセージに出る。
-
-#### `__init__`
-
-```text
-def __init__(self, future: Future[T], label: str) -> None:
-```
-
-##### 説明
-
-直接呼ばず、Browsers.run_task() から作る。
-
-#### `wait`
-
-```text
-def wait(self, timeout: float | None=None) -> T:
-```
-
-##### 説明
-
-終わるのを待って、結果を返す。
-
-すでに終わっていれば、待たずにすぐ返る。
-中で例外が起きていた場合は、ここで送出される
-（裏で起きた失敗が黙って消えないよう、必ず受け取る側で表に出す）。
-
-Args:
-    timeout: 待つ秒数の上限。省略すると終わるまで待つ。
-
-Returns:
-    渡した処理の戻り値。
-
-Raises:
-    TimeoutError: timeout 秒以内に終わらなかった場合。処理自体は動き続ける。
-    Exception: 処理の中で起きた例外をそのまま送出する。
-
-#### `is_collected`
-
-```text
-@property
-def is_collected(self) -> bool:
-```
-
-##### 説明
-
-wait() で結果や例外を受け取り済みなら True。
-
-#### `is_done`
-
-```text
-@property
-def is_done(self) -> bool:
-```
-
-##### 説明
-
-終わっていれば True。まだ動いていれば False。
-
-待たずに様子だけ見たいときに使う。
-True になっていても、結果や例外を受け取るには wait() を呼ぶ。
-
 
 ## `from comken.toolbox.browser.management import ...`
 
@@ -5658,10 +5508,6 @@ class Browsers:
 with を使わずに launch すると BrowserError になる（ブラウザは起動しない）。
 with を必須にしているのは、途中で例外が出たときにブラウザのプロセスが残り、
 次の実行でドライバーの更新まで邪魔するのを防ぐため。
-
-**run_task() で始めた処理が終わらないと、with も終わらない。** ブラウザを閉じる前に
-裏の処理の終了を待つため（操作の途中でブラウザが消えると原因が分かりにくいエラーになる）。
-終わらない可能性がある処理には、その中で待ち時間の上限を設けること。
 
 Attributes:
     names: 起動済みのセッション名（起動した順）。
@@ -5732,77 +5578,6 @@ Returns:
 Raises:
     BrowserError: 同じ名前ですでに起動している場合、
         ブラウザを起動できなかった場合（具体的な理由はメッセージに出る）。
-
-#### `run_task`
-
-```text
-def run_task(self, task: Callable[[], T], label: str='') -> BackgroundTask[T]:
-```
-
-##### 説明
-
-処理を裏で始めて、すぐ次の行へ進む。結果は wait() で受け取る。
-
-普通に書けば上から順に動く。時間のかかる処理を待っている間に
-別のことを進めたいときだけ、これで先に始めておく:
-
-    kintai = browsers.run_task(lambda: KintaiFlow(kintai).search())
-    KeiriFlow(keiri).login(user, password)   # 勤怠の読み込み中にこちらが進む
-    days = kintai.wait()                        # 戻って結果を受け取る
-
-**裏で動かす処理と、その後に自分で書く処理で、同じセッションを触らないこと。**
-同じセッションを同時に触ると BrowserError で止まる
-（黙って別の画面を操作するより、早く気づけるほうが安全なため）。
-
-Args:
-    task: 引数を取らない呼び出し可能オブジェクト。lambda で包んで渡す。
-    label: 何の処理か。省略するとセッション名の代わりに連番が付く。
-           ログとエラーメッセージに出るので、付けておくと原因を追いやすい。
-
-Returns:
-    結果を受け取るための取っ手。wait() で結果、is_done で終了確認ができる。
-
-#### `parallel`
-
-```text
-def parallel(self, *tasks: Callable[[], T]) -> list[T]:
-```
-
-##### 説明
-
-複数の処理を同時に始めて、全部終わるまで待ち、渡した順に結果を返す。
-
-run_task() で始めて wait() で受け取るのを、まとめて書けるようにしたもの。
-「全部同時に始めて、全部の結果が欲しい」だけならこちらが短い:
-
-    # 逐次（上から順に動く）
-    a = KintaiFlow(kintai).fetch()
-    b = KeiriFlow(keiri).fetch()
-
-    # 同時（同じ呼び出しを lambda で包む）
-    a, b = browsers.parallel(
-        lambda: KintaiFlow(kintai).fetch(),
-        lambda: KeiriFlow(keiri).fetch(),
-    )
-
-受け取るタイミングを自分で決めたい場合は run_task() を使う。
-
-1つの処理では1つのセッションだけを触ること。同じセッションを2つの処理から
-触ると BrowserError で止まる。
-
-Args:
-    *tasks: 引数を取らない呼び出し可能オブジェクト。
-
-Returns:
-    各処理の戻り値を、渡した順に並べたリスト。
-
-Raises:
-    Exception: 失敗が **1件**のときはその例外をそのまま送出する
-        （既存の呼び出し側を壊さないため）。
-    BaseExceptionGroup[Exception]: 失敗が **2件以上**のときは
-        ``ExceptionGroup`` でまとめて送出する。Python 3.11 以降の
-        ``except*`` で個別に取り出せる。すべての失敗は呼び出し前に
-        ``logger.error`` でログにも出している。
 
 #### `names`
 
@@ -6006,8 +5781,8 @@ Yields:
     Page のメソッドがそのまま使える。
 
 Raises:
-    BrowserError: with に入る前に呼んだ場合、または
-        他のスレッドが同じセッションを操作している場合（具体的な理由はメッセージに出る）。
+    BrowserError: with に入る前に呼んだ場合
+        （具体的な理由はメッセージに出る）。
 
 #### `raw`
 
@@ -6023,81 +5798,6 @@ selenium の WebDriver そのもの。
 このクラスと Page に用意されていない機能を使うときの逃げ道。
 ここから switch_to でタブを移動すると、セッションが今どのタブにいるかを
 見失うことがあるので、タブ操作は popup_tab() を使うこと。
-
-ここから直接操作すると、同時操作の見張り（operating）を通らない。
-parallel の中で使う場合、他のスレッドと衝突しないことは呼び出し側の責任になる。
-
-### `BackgroundTask`
-
-```text
-class BackgroundTask:
-```
-
-#### 説明
-
-裏で動いている処理の取っ手。Browsers.run_task() が返す。
-
-Attributes:
-    label: 何の処理か。ログとエラーメッセージに出る。
-
-#### `__init__`
-
-```text
-def __init__(self, future: Future[T], label: str) -> None:
-```
-
-##### 説明
-
-直接呼ばず、Browsers.run_task() から作る。
-
-#### `wait`
-
-```text
-def wait(self, timeout: float | None=None) -> T:
-```
-
-##### 説明
-
-終わるのを待って、結果を返す。
-
-すでに終わっていれば、待たずにすぐ返る。
-中で例外が起きていた場合は、ここで送出される
-（裏で起きた失敗が黙って消えないよう、必ず受け取る側で表に出す）。
-
-Args:
-    timeout: 待つ秒数の上限。省略すると終わるまで待つ。
-
-Returns:
-    渡した処理の戻り値。
-
-Raises:
-    TimeoutError: timeout 秒以内に終わらなかった場合。処理自体は動き続ける。
-    Exception: 処理の中で起きた例外をそのまま送出する。
-
-#### `is_collected`
-
-```text
-@property
-def is_collected(self) -> bool:
-```
-
-##### 説明
-
-wait() で結果や例外を受け取り済みなら True。
-
-#### `is_done`
-
-```text
-@property
-def is_done(self) -> bool:
-```
-
-##### 説明
-
-終わっていれば True。まだ動いていれば False。
-
-待たずに様子だけ見たいときに使う。
-True になっていても、結果や例外を受け取るには wait() を呼ぶ。
 
 
 ## `from comken.toolbox.browser.page import ...`

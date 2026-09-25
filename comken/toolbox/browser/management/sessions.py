@@ -1,7 +1,7 @@
 """comken/toolbox/browser/management/sessions.py — 1サイト分のブラウザーを表す ``BrowserSession``。
 
-このファイルはWebDriverの生存期間と、1セッションを同時に操作させない排他制御を担当する。
-複数ブラウザーの管理は ``browsers.py``、タブの開閉は ``tabs.py`` が担当する。
+このファイルはWebDriverの生存期間を担当する。複数ブラウザーの管理は ``browsers.py``、
+タブの開閉は ``tabs.py`` が担当する。
 
 1つのサイトにつき1つのブラウザを起動する。タブで複数サイトを扱わないのは、
 ダウンロード先・起動オプション・ログイン状態がすべてブラウザ単位で決まるため。
@@ -22,7 +22,6 @@
 from __future__ import annotations
 
 import logging
-import threading
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
@@ -71,18 +70,6 @@ def _browser_not_started_error(operation: str) -> BrowserError:
         "サイトを増やすときは launch を1行足してください。"
         "\n対処: `with Browsers() as browsers:` の中で使ってください"
         "（ブラウザは起動していないので実害はない）。"
-    )
-
-
-def _concurrent_session_use_error(name: str, operation: str, holder_thread: str) -> BrowserError:
-    """``BrowserError`` の「1つのセッションを複数スレッドから同時に操作した」文言。"""
-    return BrowserError(
-        f"セッション「{name}」を複数スレッドから同時に操作しました: {operation}\n"
-        f"（先に操作中のスレッド: {holder_thread}）\n"
-        "1つのセッションを同時に操作できるのは1スレッドだけです。\n"
-        "並列にしたい場合は Browsers.launch でサイトごとにセッションを分け、\n"
-        "Browsers.parallel で実行してください。"
-        "\n対処: サイトごとに `launch` でブラウザを分けてください。"
     )
 
 
@@ -139,11 +126,6 @@ class BrowserSession:
         # SiteBase.__enter__）があとから結びつける。ここで宣言しておかないと、
         # 外から代入している箇所が「属性が無い」と警告される
         self._site: SiteBase | None = None
-
-        # 同じセッションを2スレッドから同時に操作していないかを見張る。
-        # RLock なので、同じスレッドの中で操作がネストしても止まらない
-        self._lock = threading.RLock()
-        self._holder_name = ""
 
     # ------------------------------------------------------------ with 管理
 
@@ -310,8 +292,8 @@ class BrowserSession:
             Page のメソッドがそのまま使える。
 
         Raises:
-            BrowserError: with に入る前に呼んだ場合、または
-                他のスレッドが同じセッションを操作している場合（具体的な理由はメッセージに出る）。
+            BrowserError: with に入る前に呼んだ場合
+                （具体的な理由はメッセージに出る）。
         """
         seconds = timeout if timeout is not None else self.wait_seconds
         with self._operating("load_many"):
@@ -327,9 +309,6 @@ class BrowserSession:
         このクラスと Page に用意されていない機能を使うときの逃げ道。
         ここから switch_to でタブを移動すると、セッションが今どのタブにいるかを
         見失うことがあるので、タブ操作は popup_tab() を使うこと。
-
-        ここから直接操作すると、同時操作の見張り（operating）を通らない。
-        parallel の中で使う場合、他のスレッドと衝突しないことは呼び出し側の責任になる。
         """
         return self._require_driver()
 
@@ -337,30 +316,22 @@ class BrowserSession:
     def _operating(self, operation: str) -> Iterator[None]:
         """このセッションを操作している間の目印。Page から使う。
 
-        with に入っているか、すでに閉じていないか、他のスレッドが同時に
-        触っていないかをまとめて確認する。
+        with に入っているか、すでに閉じていないか、をまとめて確認する。
+        各操作の入口に置いて、「操作できない状態のときはここで止める」役割に
+        特化している。
 
         Args:
             operation: 何をしようとしているか（エラーメッセージに出る）。
 
         Raises:
-            BrowserError: with に入る前に操作した場合、with を抜けた後に操作した場合、
-                他のスレッドが同時に操作している場合（具体的な理由はメッセージに出る）。
+            BrowserError: with に入る前に操作した場合、with を抜けた後に操作した場合
+                （具体的な理由はメッセージに出る）。
         """
         if self._is_closed:
             raise _browser_closed_error(self.name, operation)
         if self._driver is None:
             raise _browser_not_started_error(operation)
-
-        # blocking=False にして「待つ」のではなく「弾く」。待ってしまうと
-        # 設計ミスが性能劣化として現れるだけで、原因に気づけないため
-        if not self._lock.acquire(blocking=False):
-            raise _concurrent_session_use_error(self.name, operation, self._holder_name)
-        self._holder_name = threading.current_thread().name
-        try:
-            yield
-        finally:
-            self._lock.release()
+        yield
 
     # ------------------------------------------------------------ 内部処理
 
