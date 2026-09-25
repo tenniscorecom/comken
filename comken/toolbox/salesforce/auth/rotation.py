@@ -14,7 +14,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from comken.core.clock import today as local_today
+from comken.core.dates import today as local_today
 from comken.exceptions import (
     CredentialError,
     CredentialNotFoundError,

@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 from typing import Literal, overload
 
-from comken.core.clock import today
+from comken.core.dates import today
 from comken.core.files.name import _split_suffix
 from comken.core.timer import measure
 

@@ -13,7 +13,7 @@ import os
 import socket
 from pathlib import Path
 
-from comken.core.clock import today
+from comken.core.dates import today
 from comken.core.logger.site import LoggerSite
 from comken.exceptions import (
     LoggingAlreadyConfiguredError,

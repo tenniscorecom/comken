@@ -22,7 +22,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from comken.core.calendar import warn_if_calendar_expiring_soon
+from comken.core.holidays import warn_if_holidays_expiring_soon
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ def _run(main: Callable[[], Any], project_name: str, label: str) -> Any:
 
     ``main()`` が例外を出したときも、異常終了のメッセージと実行時間を出してから再送出する。
     """
-    warn_if_calendar_expiring_soon()
+    warn_if_holidays_expiring_soon()
     logger.info(_START_MESSAGE, label, project_name)
     start = time.perf_counter()
     try:

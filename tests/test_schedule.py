@@ -11,12 +11,12 @@ from typing import Any
 
 import pytest
 
-from comken.core.calendar import (
-    is_business_day,
+from comken.core.holidays import (
     is_holiday,
-    nth_business_day_of_month,
+    is_workday,
+    nth_workday,
 )
-from comken.core.calendar._calendar import _Calendar, _set_calendar_for_test
+from comken.core.holidays._holidays import _Holidays, _set_calendar_for_test
 from comken.exceptions import DownloaderError
 from comken.services.salesforce_downloader.sheets.schedule import (
     FREQUENCY_BUSINESS_DAY,
@@ -56,12 +56,12 @@ def _rule(**overrides: Any) -> ScheduleRule:
 # ``_set_calendar_for_test(None)`` でリセットする。
 
 
-def _holiday_calendar(holiday_dates: set[dt.date]) -> _Calendar:
-    """国民の祝日として ``holiday_dates`` を持つ ``_Calendar`` を返す。"""
-    return _Calendar({d: f"h{d}" for d in sorted(holiday_dates)})
+def _holiday_calendar(holiday_dates: set[dt.date]) -> _Holidays:
+    """国民の祝日として ``holiday_dates`` を持つ ``_Holidays`` を返す。"""
+    return _Holidays({d: f"h{d}" for d in sorted(holiday_dates)})
 
 
-class _CalendarScope:
+class _HolidaysScope:
     """``_set_calendar_for_test`` のセットアップ／後始末コンテキスト。
 
     pytest fixture ではなく with `` ``ブロックで使う。テスト中に祝日判定が
@@ -71,7 +71,7 @@ class _CalendarScope:
     def __init__(self, holiday_dates: set[dt.date]) -> None:
         self._holiday_dates = holiday_dates
 
-    def __enter__(self) -> _Calendar:
+    def __enter__(self) -> _Holidays:
         cal = _holiday_calendar(self._holiday_dates)
         _set_calendar_for_test(cal)
         return cal
@@ -168,8 +168,8 @@ class TestNthBusinessDayIsDue:
         1月の第2営業日が ``rule.is_due()`` で True になることを確認する。
         """
         holidays_set = {dt.date(2026, 1, 1)}  # 1/1（木）だけ国民の祝日扱い
-        with _CalendarScope(holidays_set):
-            second_business_day = nth_business_day_of_month(dt.date(2026, 1, 1), 2)
+        with _HolidaysScope(holidays_set):
+            second_business_day = nth_workday(dt.date(2026, 1, 1), 2)
             rule = self._monthly_rule("第2営業日")
             on_target = dt.datetime.combine(second_business_day, dt.time(12, 0))
             assert rule.is_due(on_target) is True
@@ -185,10 +185,10 @@ class TestNthBusinessDayIsDue:
     def test_exceeding_business_days_returns_false_silently(self):
         """「第35営業日」のような月の営業日数を超える指定で ``False`` を返す。
 
-        ``BusinessDayNotFoundError`` を上位へ伝播させず、この日を「対象外」として
+        ``WorkdayNotFoundError`` を上位へ伝播させず、この日を「対象外」として
         扱う（``service.py`` の「1件失敗でも他は続ける」設計を守るため）。
         """
-        with _CalendarScope(set()):  # 祝日は 1 件も無い想定
+        with _HolidaysScope(set()):  # 祝日は 1 件も無い想定
             rule = self._monthly_rule("第35営業日")
             for day in range(1, 32):
                 when = dt.datetime(2026, 1, day, 12, 0)  # noqa: DTZ001
@@ -198,11 +198,11 @@ class TestNthBusinessDayIsDue:
         """``_set_calendar_for_test`` されていないとき ``is_due`` が既定カレンダーで動く。
 
         正月休みの影響を受けたくないので 2 月を使う。
-        計算上の第 2 営業日を ``nth_business_day_of_month`` で取得して、
+        計算上の第 2 営業日を ``nth_workday`` で取得して、
         その日だけ ``is_due`` が True になることを確認する。
         """
         rule = self._monthly_rule("第2営業日")
-        expected_second = nth_business_day_of_month(dt.date(2026, 2, 1), 2)
+        expected_second = nth_workday(dt.date(2026, 2, 1), 2)
         on_target = dt.datetime.combine(expected_second, dt.time(12, 0))
         assert rule.is_due(on_target) is True
 
@@ -285,7 +285,7 @@ class TestBusinessDayFrequency:
         国民の祝日が月曜だけあるテスト用カレンダーを差し込み、
         「毎営業日」+「取得しない」の行がその月曜で False を返すことを確認する。
         """
-        with _CalendarScope({dt.date(2026, 3, 9)}):  # 1/5(月)だけ国民の祝日
+        with _HolidaysScope({dt.date(2026, 3, 9)}):  # 1/5(月)だけ国民の祝日
             rule = _rule(
                 frequency=FREQUENCY_BUSINESS_DAY,
                 raw_weekday="",
@@ -330,26 +330,26 @@ class TestHolidayPolicySkipFetch:
     """``HOLIDAY_SKIP`` / ``HOLIDAY_FETCH`` の既存挙動が変わっていないこと（回帰確認）。
 
     「1営業日前」「1営業日後」は ``TestHolidayPolicyShifted`` で別クラスにまとめる。
-    祝日判定は ``comken.core.calendar.is_holiday`` を直接使う（=既定カレンダー）。
+    祝日判定は ``comken.core.holidays.is_holiday`` を直接使う（=既定カレンダー）。
     """
 
     def test_skip_does_not_match_on_holiday(self):
         """「取得しない」行で、対象日が国民の祝日なら ``False``。"""
-        with _CalendarScope({dt.date(2026, 3, 9)}):  # 1/5(月)だけ国民の祝日
+        with _HolidaysScope({dt.date(2026, 3, 9)}):  # 1/5(月)だけ国民の祝日
             rule = _rule(frequency="毎週", raw_weekday="月", holiday_policy=HOLIDAY_SKIP)
             when = dt.datetime(2026, 3, 9, 12, 0)  # noqa: DTZ001
             assert rule.is_due(when) is False
 
     def test_fetch_matches_even_on_holiday(self):
         """「取得する」行は祝日でもそのまま取得する。"""
-        with _CalendarScope({dt.date(2026, 3, 9)}):  # 1/5(月)だけ国民の祝日
+        with _HolidaysScope({dt.date(2026, 3, 9)}):  # 1/5(月)だけ国民の祝日
             rule = _rule(frequency="毎週", raw_weekday="月", holiday_policy=HOLIDAY_FETCH)
             when = dt.datetime(2026, 3, 9, 12, 0)  # noqa: DTZ001
             assert rule.is_due(when) is True
 
     def test_skip_does_not_match_on_non_weekday_even_when_not_holiday(self):
         """曜日条件を満たさない日は祝日でなくても False（既存挙動）。"""
-        with _CalendarScope({dt.date(2026, 3, 9)}):
+        with _HolidaysScope({dt.date(2026, 3, 9)}):
             rule = _rule(frequency="毎週", raw_weekday="月", holiday_policy=HOLIDAY_SKIP)
             when = dt.datetime(2026, 3, 11, 12, 0)  # noqa: DTZ001
             assert rule.is_due(when) is False
@@ -376,7 +376,7 @@ class TestHolidayPolicyShifted:
         国民の祝日が月曜だけあるテスト用カレンダーを差し込み、
         「1営業日前」行の前金曜が True になることを確認する。
         """
-        with _CalendarScope({dt.date(2026, 3, 9)}):  # 1/5(月)だけ国民の祝日
+        with _HolidaysScope({dt.date(2026, 3, 9)}):  # 1/5(月)だけ国民の祝日
             rule = self._weekly_rule("月", HOLIDAY_BEFORE)
 
             assert (
@@ -391,7 +391,7 @@ class TestHolidayPolicyShifted:
 
     def test_shifted_after_single_monday_holiday(self):
         """「1営業日後」: 月曜が祝日 → 翌火曜が True、月曜自身は False。"""
-        with _CalendarScope({dt.date(2026, 3, 9)}):  # 1/5(月)だけ国民の祝日
+        with _HolidaysScope({dt.date(2026, 3, 9)}):  # 1/5(月)だけ国民の祝日
             rule = self._weekly_rule("月", HOLIDAY_AFTER)
 
             assert (
@@ -406,7 +406,7 @@ class TestHolidayPolicyShifted:
 
     def test_shifted_before_consecutive_monday_tuesday_holidays(self):
         """「1営業日前」: 月・火が祝日 → 前の金曜が True、火曜は False。"""
-        with _CalendarScope({dt.date(2026, 3, 9), dt.date(2026, 3, 10)}):
+        with _HolidaysScope({dt.date(2026, 3, 9), dt.date(2026, 3, 10)}):
             rule = self._weekly_rule("月", HOLIDAY_BEFORE)
 
             assert (
@@ -424,7 +424,7 @@ class TestHolidayPolicyShifted:
 
     def test_shifted_after_only_one_of_consecutive_holidays_triggers(self):
         """「1営業日後」: 月・火が祝日で対象日が月曜 → 水曜が True、火曜が False。"""
-        with _CalendarScope({dt.date(2026, 3, 9), dt.date(2026, 3, 10)}):
+        with _HolidaysScope({dt.date(2026, 3, 9), dt.date(2026, 3, 10)}):
             rule = self._weekly_rule("月", HOLIDAY_AFTER)
 
             assert (
@@ -439,7 +439,7 @@ class TestHolidayPolicyShifted:
 
     def test_shifted_before_target_date_itself_is_never_true(self):
         """「1営業日前」: 対象日が祝日でも非祝日でも、対象日自体は常に False。"""
-        with _CalendarScope({dt.date(2026, 3, 9)}):
+        with _HolidaysScope({dt.date(2026, 3, 9)}):
             rule = self._weekly_rule("月", HOLIDAY_BEFORE)
 
             assert (
@@ -451,7 +451,7 @@ class TestHolidayPolicyShifted:
 
     def test_shifted_non_business_day_target_is_false(self):
         """「1営業日前/後」: ``date`` 自身が非営業日（土日）なら False。"""
-        with _CalendarScope({dt.date(2026, 3, 9)}):
+        with _HolidaysScope({dt.date(2026, 3, 9)}):
             rule = self._weekly_rule("月", HOLIDAY_BEFORE)
 
             assert (
@@ -463,7 +463,7 @@ class TestHolidayPolicyShifted:
 
     def test_shifted_before_does_not_trigger_when_no_holiday_target_between(self):
         """「1営業日前」: 間に祝日対象日がなければ False（翌営業日に直接ぶつかる）。"""
-        with _CalendarScope(set()):  # 祝日は無い
+        with _HolidaysScope(set()):  # 祝日は無い
             rule = self._weekly_rule("月", HOLIDAY_BEFORE)
 
             assert (
@@ -472,7 +472,7 @@ class TestHolidayPolicyShifted:
 
     def test_shifted_before_with_three_consecutive_holidays(self):
         """「1営業日前」: 月・火・水と3日連続の祝日 → 探索区間に複数の祝日があっても True。"""
-        with _CalendarScope(
+        with _HolidaysScope(
             {
                 dt.date(2026, 3, 9),
                 dt.date(2026, 3, 10),
@@ -493,23 +493,23 @@ class TestHolidayPolicyShifted:
 
 
 class TestBusinessDayHelpers:
-    """``is_business_day`` / ``is_holiday`` がテスト用カレンダーで動くことの確認。
+    """``is_workday`` / ``is_holiday`` がテスト用カレンダーで動くことの確認。
 
     国民の祝日を直接コントロールして、営業日判定が期待通り変わることを確かめる。
     """
 
-    def test_is_business_day_respects_test_calendar(self):
-        """``is_business_day`` がテスト専用カレンダーを反映する。"""
-        with _CalendarScope({dt.date(2026, 3, 9)}):  # 1/5(月)を国民の祝日に
-            assert is_business_day(dt.date(2026, 3, 9)) is False
+    def test_is_workday_respects_test_calendar(self):
+        """``is_workday`` がテスト専用カレンダーを反映する。"""
+        with _HolidaysScope({dt.date(2026, 3, 9)}):  # 1/5(月)を国民の祝日に
+            assert is_workday(dt.date(2026, 3, 9)) is False
             assert is_holiday(dt.date(2026, 3, 9)) is True
             # 翌月曜は国民の祝日ではないので通常通り
-            assert is_business_day(dt.date(2026, 3, 16)) is True
+            assert is_workday(dt.date(2026, 3, 16)) is True
             assert is_holiday(dt.date(2026, 3, 16)) is False
 
     def test_implicit_calendar_resets_after_scope(self):
-        """``_CalendarScope`` を抜けると既定カレンダーに戻る。"""
-        with _CalendarScope({dt.date(2026, 3, 9)}):
+        """``_HolidaysScope`` を抜けると既定カレンダーに戻る。"""
+        with _HolidaysScope({dt.date(2026, 3, 9)}):
             pass
         # スコープ外では 1/5 は会社の年末年始休暇に含まれないので国民の祝日でも
         # 会社休日でもない（=False）

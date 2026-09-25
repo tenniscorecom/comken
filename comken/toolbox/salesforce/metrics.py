@@ -15,7 +15,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from comken.core.clock import now
+from comken.core.dates import now
 from comken.toolbox.csv import CSV
 from comken.toolbox.csv.file import Value
 

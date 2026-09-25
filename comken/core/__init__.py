@@ -1,7 +1,7 @@
 """comken/core/__init__.py — 直下にだけ依存する部品を置く場所。
 
 `comken.core` には、外側（ファイル・Excel・ブラウザ・Salesforce 等）を触らない
-純粋な部品だけを置く。logger / state / config / clock / text / data / files などが
+純粋な部品だけを置く。logger / state / config / dates / text / data / files などが
 ここに入る。外に触る道具は toolbox に置く。
 
 利用者は、``comken`` 直下にない50数個の部品を ``from comken.core import ...`` で取る。
@@ -12,28 +12,15 @@
 ``from comken.core import ...`` を toolbox 内部から行うことも許容する。
 """
 
-from comken.core.calendar._calendar import BUSINESS_DAY_SEARCH_LIMIT
-from comken.core.calendar._calendar import EXPIRING_WARNING_DAYS
-from comken.core.calendar._calendar import add_business_days
-from comken.core.calendar._calendar import business_day_after
-from comken.core.calendar._calendar import business_day_before
-from comken.core.calendar._calendar import business_day_on_or_after
-from comken.core.calendar._calendar import business_day_on_or_before
-from comken.core.calendar._calendar import first_business_day_of_month
-from comken.core.calendar._calendar import holiday_name
-from comken.core.calendar._calendar import is_business_day
-from comken.core.calendar._calendar import is_holiday
-from comken.core.calendar._calendar import last_business_day_of_month
-from comken.core.calendar._calendar import nth_business_day_of_month
-from comken.core.clock import month_end
-from comken.core.clock import month_start
-from comken.core.clock import now
-from comken.core.clock import parse_cell_date
-from comken.core.clock import today
 from comken.core.data import DiffResult
 from comken.core.data import RowChange
 from comken.core.data import diff_row
 from comken.core.data import diff_rows
+from comken.core.dates import month_end
+from comken.core.dates import month_start
+from comken.core.dates import now
+from comken.core.dates import parse_cell_date
+from comken.core.dates import today
 from comken.core.files.archive import unzip
 from comken.core.files.archive import zip_files
 from comken.core.files.archive import zip_folder
@@ -47,6 +34,20 @@ from comken.core.files.ops import delete_files
 from comken.core.files.ops import local_copy
 from comken.core.files.ops import move_file
 from comken.core.files.ops import project_dir
+from comken.core.holidays._holidays import EXPIRING_WARNING_DAYS
+from comken.core.holidays._holidays import HOLIDAYS_CSV_PATH
+from comken.core.holidays._holidays import WORKDAY_SEARCH_LIMIT
+from comken.core.holidays._holidays import first_workday
+from comken.core.holidays._holidays import holiday_name
+from comken.core.holidays._holidays import is_holiday
+from comken.core.holidays._holidays import is_workday
+from comken.core.holidays._holidays import last_workday
+from comken.core.holidays._holidays import non_workdays_after
+from comken.core.holidays._holidays import non_workdays_before
+from comken.core.holidays._holidays import nth_workday
+from comken.core.holidays._holidays import workday
+from comken.core.holidays._holidays import workday_on_or_after
+from comken.core.holidays._holidays import workday_on_or_before
 from comken.core.retry import retry
 from comken.core.state import State
 from comken.core.table.comparison import TableComparison
@@ -64,22 +65,18 @@ from comken.core.wait import wait_until
 from comken.core.wait import wait_until_stable
 
 __all__ = [
-    "BUSINESS_DAY_SEARCH_LIMIT",
     "DateNameBuilder",
     "DateFileFinder",
     "DiffResult",
     "EXPIRING_WARNING_DAYS",
+    "HOLIDAYS_CSV_PATH",
     "RowChange",
     "State",
     "Timer",
     "Table",
     "TableComparison",
     "Transfer",
-    "add_business_days",
-    "business_day_after",
-    "business_day_before",
-    "business_day_on_or_after",
-    "business_day_on_or_before",
+    "WORKDAY_SEARCH_LIMIT",
     "compare_tables",
     "copy_file",
     "date_in_name",
@@ -88,18 +85,20 @@ __all__ = [
     "delete_files",
     "diff_row",
     "diff_rows",
-    "first_business_day_of_month",
+    "first_workday",
     "holiday_name",
-    "is_business_day",
     "is_holiday",
-    "last_business_day_of_month",
+    "is_workday",
+    "last_workday",
     "local_copy",
     "measure",
     "month_end",
     "month_start",
     "move_file",
-    "nth_business_day_of_month",
+    "non_workdays_after",
+    "non_workdays_before",
     "now",
+    "nth_workday",
     "project_dir",
     "normalize",
     "parse_cell_date",
@@ -112,6 +111,9 @@ __all__ = [
     "wait_seconds",
     "wait_until",
     "wait_until_stable",
+    "workday",
+    "workday_on_or_after",
+    "workday_on_or_before",
     "zip_files",
     "zip_folder",
 ]

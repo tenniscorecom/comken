@@ -599,3 +599,40 @@ master に何をコミットしても本番には流れない。**
 `DEPLOYMENT.txt` を見ないと分からなくなる。
 
 ロールバックは共有サーバーで前のタグに戻すだけ。
+
+## 15. モジュール・公開 API の改名（2026-09-25）
+
+`comken.core.clock` → `comken.core.dates`。コア層の日付・時刻ユーティリティ
+は時計ではなく「業務日付」を表すものが多く、ファイル名から中身を想像しにくい
+ため改名した。中の関数（`now` / `today` / `month_start` / `month_end` /
+`parse_cell_date`）は変えない。
+
+`comken.core.calendar` → `comken.core.holidays`（**標準ライブラリの
+`calendar` と被る**ため）。`CalendarError` → `HolidayError`、
+`BusinessDayNotFoundError` → `WorkdayNotFoundError`、`CALENDAR_CSV_PATH` →
+`HOLIDAYS_CSV_PATH`、`BUSINESS_DAY_SEARCH_LIMIT` → `WORKDAY_SEARCH_LIMIT`、
+`warn_if_calendar_expiring_soon` → `warn_if_holidays_expiring_soon`。
+
+祝日・営業日関数を Excel の `WORKDAY` に寄せて改名。**「次の営業日」「前の
+営業日」を表す関数は削除**し、`workday(d, ±1)` に統一した。`business_day_*`
+系は内部で `add_business_days` を呼んでいたが、`workday` を自己完結で書き直した。
+
+旧名 → 新名:
+
+| 旧名 | 新名 |
+|---|---|
+| `is_business_day` | `is_workday` |
+| `add_business_days` | `workday` |
+| `business_day_after` | （削除。`workday(d, 1)` で代替） |
+| `business_day_before` | （削除。`workday(d, -1)` で代替） |
+| `business_day_on_or_after` | `workday_on_or_after` |
+| `business_day_on_or_before` | `workday_on_or_before` |
+| `first_business_day_of_month` | `first_workday` |
+| `last_business_day_of_month` | `last_workday` |
+| `nth_business_day_of_month` | `nth_workday` |
+| `non_business_days_after` | `non_workdays_after` |
+| `non_business_days_before` | `non_workdays_before` |
+
+例外ファイル `comken/exceptions/calendar.py` のファイル名・配置は当面変えない
+（カレンダーが主題ではないため、関数改名とは別タスクで動かす）。`HolidayError`
+/ `WorkdayNotFoundError` のクラス定義だけはこの中に置いたまま。

@@ -36,7 +36,7 @@ import re
 from collections import OrderedDict
 from pathlib import Path
 
-from comken.core.clock import now as clock_now
+from comken.core.dates import now as clock_now
 from comken.core.table.model import Table
 from comken.core.timer import measure
 from comken.exceptions import (
@@ -196,7 +196,7 @@ def output_path(
             （``ScheduleRule.desired_time``）。判定には使われない記録用の希望時刻で、
             ファイル名に ``%H%M`` として埋め込む。無ければ ``now`` にフォールバックする。
         now: ``schedule_run_time`` が無いときに使う時刻。省略時は現在時刻
-            （``comken.core.clock.now()`` を使う）。
+            （``comken.core.dates.now()`` を使う）。
 
     Raises:
         GroupNotRegisteredError: 設定シートにないグループ名の場合（``report_folder()`` 経由）。

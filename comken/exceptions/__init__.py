@@ -41,8 +41,8 @@ ComkenError
 │   └── MasterDuplicateValueError
 ├── StateError
 ├── WindowNotFoundError
-├── CalendarError
-│   └── BusinessDayNotFoundError
+├── HolidayError
+│   └── WorkdayNotFoundError
 ├── DownloaderError
 │   ├── HistoryWriteError
 │   ├── HistoryLockTimeoutError
@@ -62,7 +62,7 @@ ComkenError
 from comken.exceptions.access import AccessError
 from comken.exceptions.base import ComkenError, SiteOwnerRequiredError
 from comken.exceptions.browser import BrowserError, ElementNotFoundError, LoginFailedError
-from comken.exceptions.calendar import BusinessDayNotFoundError, CalendarError
+from comken.exceptions.calendar import HolidayError, WorkdayNotFoundError
 from comken.exceptions.column import (
     ColumnNotFoundError,
     ExcelColumnNotFoundError,
@@ -162,8 +162,8 @@ __all__ = [
     "MasterRowValueError",
     "MasterDuplicateValueError",
     "StateError",
-    "BusinessDayNotFoundError",
-    "CalendarError",
+    "HolidayError",
+    "WorkdayNotFoundError",
     "DownloaderError",
     "HistoryWriteError",
     "HistoryLockTimeoutError",

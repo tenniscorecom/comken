@@ -143,10 +143,6 @@ OWNER が未設定ならログ構築前に停止する。
 
 ## `from comken.core import ...`
 
-### `BUSINESS_DAY_SEARCH_LIMIT`
-
-公開定数。
-
 ### `DateNameBuilder`
 
 ```text
@@ -326,6 +322,10 @@ diff_rows の結果。
 時系列の差分なので ``added`` / ``removed`` の語彙を維持する。
 
 ### `EXPIRING_WARNING_DAYS`
+
+公開定数。
+
+### `HOLIDAYS_CSV_PATH`
 
 公開定数。
 
@@ -705,92 +705,9 @@ Example:
         transfer.apply_mapping(source_row, destination_row)
     final_table = transfer.result()  # 変更後の Table
 
-### `add_business_days`
+### `WORKDAY_SEARCH_LIMIT`
 
-```text
-def add_business_days(target: _dt.date, n: int, *, skip_weekends: bool=True) -> _dt.date:
-```
-
-#### 説明
-
-``target`` から ``n`` 営業日後の日付（``n`` が負なら前）。
-
-``n == 0`` のときは ``target`` を**そのまま**返す（``target`` が営業日か
-どうかを問わない）。これは Excel の ``WORKDAY`` と同じ挙動で、
-「今日から N 営業日後」を組み立てるときに条件分岐を書かなくて済む。
-
-例: 2024/5/2（木、祝日前日）に ``add_business_days(d, 1)`` を呼ぶと
-2024/5/7（火、5/3〜5/6 が祝日＋土日）を返す。
-
-Raises:
-    BusinessDayNotFoundError: 探索が ``BUSINESS_DAY_SEARCH_LIMIT`` に達した。
-
-### `business_day_after`
-
-```text
-def business_day_after(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
-```
-
-#### 説明
-
-``target`` より後で最初の営業日（``target`` 自身を含まない）。
-
-``target`` が営業日でも翌営業日を返す。収録範囲外でも日付は進むが、
-祝日判定は「祝日ではない」と扱う。期限切れの警告は入口で 1度だけ出す。
-
-Raises:
-    BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
-        営業日が見つからなかった（祝日データ欠落・社内休日広範囲など）。
-
-### `business_day_before`
-
-```text
-def business_day_before(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
-```
-
-#### 説明
-
-``target`` より前で最初の営業日（``target`` 自身を含まない）。
-
-``target`` が営業日でも前営業日を返す。
-
-Raises:
-    BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
-        営業日が見つからなかった。
-
-### `business_day_on_or_after`
-
-```text
-def business_day_on_or_after(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
-```
-
-#### 説明
-
-``target`` 以降で最初の営業日（``target`` を含む）。
-
-``target`` が営業日なら ``target`` をそのまま返す。
-営業日でなければ、``business_day_after`` と同じ動きで翌日以降を探す。
-
-Raises:
-    BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
-        営業日が見つからなかった。
-
-### `business_day_on_or_before`
-
-```text
-def business_day_on_or_before(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
-```
-
-#### 説明
-
-``target`` 以前で最初の営業日（``target`` を含む）。
-
-``target`` が営業日なら ``target`` をそのまま返す。
-営業日でなければ、``business_day_before`` と同じ動きで前日以前を探す。
-
-Raises:
-    BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
-        営業日が見つからなかった。
+公開定数。
 
 ### `compare_tables`
 
@@ -952,10 +869,10 @@ Returns:
 Raises:
     ColumnNotFoundError: key で指定した列が存在しない場合。
 
-### `first_business_day_of_month`
+### `first_workday`
 
 ```text
-def first_business_day_of_month(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
+def first_workday(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
 ```
 
 #### 説明
@@ -963,7 +880,7 @@ def first_business_day_of_month(target: _dt.date, *, skip_weekends: bool=True) -
 ``target`` が属する月の最初の営業日。
 
 Raises:
-    BusinessDayNotFoundError: その月に営業日が 1日も無いとき。
+    WorkdayNotFoundError: その月に営業日が 1日も無いとき。
 
 ### `holiday_name`
 
@@ -976,10 +893,25 @@ def holiday_name(target: _dt.date) -> str | None:
 ``target`` の祝日・会社休日名称を返す。祝日でも会社休日でもなければ
 ``None``。
 
-### `is_business_day`
+### `is_holiday`
 
 ```text
-def is_business_day(target: _dt.date, *, skip_weekends: bool=True) -> bool:
+def is_holiday(target: _dt.date) -> bool:
+```
+
+#### 説明
+
+``target`` が国民の祝日または会社休日に当たれば ``True``。
+
+``company_calendar.csv`` の収録範囲（内閣府 CSV の最初の年〜最後の年）
+外の日付は国民の祝日も会社休日も付かない（常に ``False``）。範囲を延ばす
+には内閣府 CSV を入れ替えて ``python -m comken.core.holidays.build`` で
+再生成する。
+
+### `is_workday`
+
+```text
+def is_workday(target: _dt.date, *, skip_weekends: bool=True) -> bool:
 ```
 
 #### 説明
@@ -995,25 +927,10 @@ def is_business_day(target: _dt.date, *, skip_weekends: bool=True) -> bool:
 通知する。判定自体は通常どおり行う（誤って平日扱いにならないよう、
 **収録範囲外は祝日ではない側に倒す**）。
 
-### `is_holiday`
+### `last_workday`
 
 ```text
-def is_holiday(target: _dt.date) -> bool:
-```
-
-#### 説明
-
-``target`` が国民の祝日または会社休日に当たれば ``True``。
-
-``company_calendar.csv`` の収録範囲（内閣府 CSV の最初の年〜最後の年）
-外の日付は国民の祝日も会社休日も付かない（常に ``False``）。範囲を延ばす
-には内閣府 CSV を入れ替えて ``python -m comken.core.calendar.build`` で
-再生成する。
-
-### `last_business_day_of_month`
-
-```text
-def last_business_day_of_month(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
+def last_workday(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
 ```
 
 #### 説明
@@ -1023,7 +940,7 @@ def last_business_day_of_month(target: _dt.date, *, skip_weekends: bool=True) ->
 月末が土日・祝日のときは直前の営業日に遡る（例: 8/31 が日曜なら 8/29 金）。
 
 Raises:
-    BusinessDayNotFoundError: その月に営業日が 1日も無いとき。
+    WorkdayNotFoundError: その月に営業日が 1日も無いとき。
 
 ### `local_copy`
 
@@ -1133,21 +1050,32 @@ Args:
 Returns:
     移動後のファイルパス。
 
-### `nth_business_day_of_month`
+### `non_workdays_after`
 
 ```text
-def nth_business_day_of_month(target: _dt.date, n: int, *, skip_weekends: bool=True) -> _dt.date:
+def non_workdays_after(target: _dt.date, *, skip_weekends: bool=True) -> list[_dt.date]:
 ```
 
 #### 説明
 
-``target`` が属する月の第 ``n`` 営業日を返す（``n`` は 1 始まり）。
+``target`` の翌日から、次の営業日の前日までの休みの日（連休）を日付順に返す。
 
-月の初日から数えて ``n`` 番目の営業日。
-その月の営業日数を超える ``n`` を渡すと ``BusinessDayNotFoundError``。
+``target`` の翌日が営業日なら空リスト。``target`` 自身は含まない。
+``WORKDAY_SEARCH_LIMIT`` 日分で打ち切る（``workday`` と違い、
+営業日が見つからなくても例外にしない。祝日データが壊れているときの無限ループ防止）。
 
-Raises:
-    BusinessDayNotFoundError: ``n`` が 1 未満、またはその月の営業日数を超える。
+### `non_workdays_before`
+
+```text
+def non_workdays_before(target: _dt.date, *, skip_weekends: bool=True) -> list[_dt.date]:
+```
+
+#### 説明
+
+``target`` の前日から、前の営業日の翌日までの休みの日（連休）を返す。
+
+``target`` に近い順に並ぶ。``target`` の前日が営業日なら空リスト。
+``target`` 自身は含まない。打ち切りは ``non_workdays_after`` と同じ。
 
 ### `now`
 
@@ -1158,6 +1086,23 @@ def now() -> datetime.datetime:
 #### 説明
 
 タイムゾーン付きの現在時刻（この PC のローカル時刻）を返す。
+
+### `nth_workday`
+
+```text
+def nth_workday(target: _dt.date, n: int, *, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` が属する月の第 ``n`` 営業日を返す（``n`` は 1 始まり）。
+
+月の初日から数えて ``n`` 番目の営業日。
+その月の営業日数を超える ``n`` を渡すと ``WorkdayNotFoundError``。
+負の ``n`` は受け付けない。
+
+Raises:
+    WorkdayNotFoundError: ``n`` が 1 未満、またはその月の営業日数を超える。
 
 ### `project_dir`
 
@@ -1454,6 +1399,59 @@ Raises:
     FileNotFoundError: ファイルが無い場合。待っている間に消えた場合も同じ。
     TimeoutError: ``timeout`` までに書き込みが終わらなかった場合。
 
+### `workday`
+
+```text
+def workday(target: _dt.date, n: int, *, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` から ``n`` 営業日後の日付を返す（Excel の ``WORKDAY(d, n)`` 互換）。
+
+``n == 0`` のときは ``target`` を**そのまま**返す（``target`` が営業日か
+どうかを問わない）。``n`` が負なら前方向に進む。
+
+例: 2024/5/2（木、祝日前日）に ``workday(d, 1)`` を呼ぶと
+2024/5/7（火、5/3〜5/6 が祝日＋土日）を返す。
+
+Raises:
+    WorkdayNotFoundError: 探索が ``WORKDAY_SEARCH_LIMIT`` に達した。
+
+### `workday_on_or_after`
+
+```text
+def workday_on_or_after(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` 以降で最初の営業日（``target`` を含む）。
+
+``target`` が営業日なら ``target`` をそのまま返す。
+営業日でなければ、``workday(target, 1)`` と同じ動きで翌日以降を探す。
+
+Raises:
+    WorkdayNotFoundError: ``WORKDAY_SEARCH_LIMIT`` 日探索しても
+        営業日が見つからなかった。
+
+### `workday_on_or_before`
+
+```text
+def workday_on_or_before(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` 以前で最初の営業日（``target`` を含む）。
+
+``target`` が営業日なら ``target`` をそのまま返す。
+営業日でなければ、``workday(target, -1)`` と同じ動きで前日以前を探す。
+
+Raises:
+    WorkdayNotFoundError: ``WORKDAY_SEARCH_LIMIT`` 日探索しても
+        営業日が見つからなかった。
+
 ### `zip_files`
 
 ```text
@@ -1496,288 +1494,6 @@ Returns:
 
 Raises:
     FileNotFoundError: folder が存在しない場合。
-
-
-## `from comken.core.calendar import ...`
-
-### `BUSINESS_DAY_SEARCH_LIMIT`
-
-公開定数。
-
-### `BusinessDayNotFoundError`
-
-```text
-class BusinessDayNotFoundError(CalendarError):
-```
-
-#### 説明
-
-営業日が見つからなかった
-
-月の途中で「指定した月の営業日数を超える n 番目」を求めたとき、
-その月に営業日が 1 日も無いとき、祝日データ欠落などで 30 日探索しても
-次の営業日にたどり着けなかったときに送る。
-いずれも「カレンダー側がおかしい」または「指定値が暦と合わない」場合に
-起き、業務ロジック側のミスではないので、呼び出し側で握り潰さずユーザーに
-顕在化させる必要がある。
-
-発生箇所: comken.core.calendar
-    - nth_business_day_of_month（n が月の営業日数超え、または n < 1）
-    - first_business_day_of_month / last_business_day_of_month
-      （その月に営業日が 1 日も無い）
-    - business_day_after / business_day_before /
-      business_day_on_or_after / business_day_on_or_before
-      （30 日の探索上限に達した）
-
-対処:
-    n をその月の営業日数以下に直す、対象月の祝日に過不足がないか
-    確認する、社内休日（会社用カレンダーCSV）が広範囲に登録されていないか確認する
-
-#### `__init__`
-
-```text
-def __init__(self, detail: str) -> None:
-```
-
-### `CALENDAR_CSV_PATH`
-
-公開定数。
-
-### `CalendarError`
-
-```text
-class CalendarError(ComkenError):
-```
-
-#### 説明
-
-祝日カレンダーに関するエラー。具体的な状況はメッセージに出る
-
-対処:
-    メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
-
-### `EXPIRING_WARNING_DAYS`
-
-公開定数。
-
-### `add_business_days`
-
-```text
-def add_business_days(target: _dt.date, n: int, *, skip_weekends: bool=True) -> _dt.date:
-```
-
-#### 説明
-
-``target`` から ``n`` 営業日後の日付（``n`` が負なら前）。
-
-``n == 0`` のときは ``target`` を**そのまま**返す（``target`` が営業日か
-どうかを問わない）。これは Excel の ``WORKDAY`` と同じ挙動で、
-「今日から N 営業日後」を組み立てるときに条件分岐を書かなくて済む。
-
-例: 2024/5/2（木、祝日前日）に ``add_business_days(d, 1)`` を呼ぶと
-2024/5/7（火、5/3〜5/6 が祝日＋土日）を返す。
-
-Raises:
-    BusinessDayNotFoundError: 探索が ``BUSINESS_DAY_SEARCH_LIMIT`` に達した。
-
-### `business_day_after`
-
-```text
-def business_day_after(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
-```
-
-#### 説明
-
-``target`` より後で最初の営業日（``target`` 自身を含まない）。
-
-``target`` が営業日でも翌営業日を返す。収録範囲外でも日付は進むが、
-祝日判定は「祝日ではない」と扱う。期限切れの警告は入口で 1度だけ出す。
-
-Raises:
-    BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
-        営業日が見つからなかった（祝日データ欠落・社内休日広範囲など）。
-
-### `business_day_before`
-
-```text
-def business_day_before(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
-```
-
-#### 説明
-
-``target`` より前で最初の営業日（``target`` 自身を含まない）。
-
-``target`` が営業日でも前営業日を返す。
-
-Raises:
-    BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
-        営業日が見つからなかった。
-
-### `business_day_on_or_after`
-
-```text
-def business_day_on_or_after(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
-```
-
-#### 説明
-
-``target`` 以降で最初の営業日（``target`` を含む）。
-
-``target`` が営業日なら ``target`` をそのまま返す。
-営業日でなければ、``business_day_after`` と同じ動きで翌日以降を探す。
-
-Raises:
-    BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
-        営業日が見つからなかった。
-
-### `business_day_on_or_before`
-
-```text
-def business_day_on_or_before(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
-```
-
-#### 説明
-
-``target`` 以前で最初の営業日（``target`` を含む）。
-
-``target`` が営業日なら ``target`` をそのまま返す。
-営業日でなければ、``business_day_before`` と同じ動きで前日以前を探す。
-
-Raises:
-    BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
-        営業日が見つからなかった。
-
-### `first_business_day_of_month`
-
-```text
-def first_business_day_of_month(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
-```
-
-#### 説明
-
-``target`` が属する月の最初の営業日。
-
-Raises:
-    BusinessDayNotFoundError: その月に営業日が 1日も無いとき。
-
-### `holiday_name`
-
-```text
-def holiday_name(target: _dt.date) -> str | None:
-```
-
-#### 説明
-
-``target`` の祝日・会社休日名称を返す。祝日でも会社休日でもなければ
-``None``。
-
-### `is_business_day`
-
-```text
-def is_business_day(target: _dt.date, *, skip_weekends: bool=True) -> bool:
-```
-
-#### 説明
-
-``target`` が営業日なら ``True``。
-
-``company_calendar.csv`` の判定で国民の祝日＋会社休日に当たれば休業。
-``skip_weekends=True``（既定）なら土曜・日曜も休業扱いにする。
-``False`` を渡すと、土曜・日曜であっても祝日でなければ「営業日」と
-判定される（振替休日を平日扱いするシナリオ向け）。
-
-「収録済み最終日 <= target」のときは期限切れを WARNING ログで 1度だけ
-通知する。判定自体は通常どおり行う（誤って平日扱いにならないよう、
-**収録範囲外は祝日ではない側に倒す**）。
-
-### `is_holiday`
-
-```text
-def is_holiday(target: _dt.date) -> bool:
-```
-
-#### 説明
-
-``target`` が国民の祝日または会社休日に当たれば ``True``。
-
-``company_calendar.csv`` の収録範囲（内閣府 CSV の最初の年〜最後の年）
-外の日付は国民の祝日も会社休日も付かない（常に ``False``）。範囲を延ばす
-には内閣府 CSV を入れ替えて ``python -m comken.core.calendar.build`` で
-再生成する。
-
-### `last_business_day_of_month`
-
-```text
-def last_business_day_of_month(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
-```
-
-#### 説明
-
-``target`` が属する月の最後の営業日。
-
-月末が土日・祝日のときは直前の営業日に遡る（例: 8/31 が日曜なら 8/29 金）。
-
-Raises:
-    BusinessDayNotFoundError: その月に営業日が 1日も無いとき。
-
-### `non_business_days_after`
-
-```text
-def non_business_days_after(target: _dt.date, *, skip_weekends: bool=True) -> list[_dt.date]:
-```
-
-#### 説明
-
-``target`` の翌日から、次の営業日の前日までの休みの日（連休）を日付順に返す。
-
-``target`` の翌日が営業日なら空リスト。``target`` 自身は含まない。
-``BUSINESS_DAY_SEARCH_LIMIT`` 日分で打ち切る（``business_day_after`` と違い、
-営業日が見つからなくても例外にしない。祝日データが壊れているときの無限ループ防止）。
-
-### `non_business_days_before`
-
-```text
-def non_business_days_before(target: _dt.date, *, skip_weekends: bool=True) -> list[_dt.date]:
-```
-
-#### 説明
-
-``target`` の前日から、前の営業日の翌日までの休みの日（連休）を返す。
-
-``target`` に近い順に並ぶ。``target`` の前日が営業日なら空リスト。
-``target`` 自身は含まない。打ち切りは ``non_business_days_after`` と同じ。
-
-### `nth_business_day_of_month`
-
-```text
-def nth_business_day_of_month(target: _dt.date, n: int, *, skip_weekends: bool=True) -> _dt.date:
-```
-
-#### 説明
-
-``target`` が属する月の第 ``n`` 営業日を返す（``n`` は 1 始まり）。
-
-月の初日から数えて ``n`` 番目の営業日。
-その月の営業日数を超える ``n`` を渡すと ``BusinessDayNotFoundError``。
-
-Raises:
-    BusinessDayNotFoundError: ``n`` が 1 未満、またはその月の営業日数を超える。
-
-### `warn_if_calendar_expiring_soon`
-
-```text
-def warn_if_calendar_expiring_soon() -> None:
-```
-
-#### 説明
-
-既定の会社用カレンダーの収録期限が近ければ、起動時に警告する。
-
-「収録最終日」（=``company_calendar.csv`` の最後の行）が今日から
-``EXPIRING_WARNING_DAYS`` 未満で WARNING ログを 1 度だけ出す。
-同じ日に複数回呼んでも警告は 1 日 1 回だけ（``_maybe_warn_expiring``
-の重複防止をそのまま使う）。年 1 回の内閣府 CSV 更新が必要な時期を
-検知するのが目的。
 
 
 ## `from comken.core.config import ...`
@@ -2306,6 +2022,253 @@ Returns:
 
 Raises:
     FileNotFoundError: folder が存在しない場合。
+
+
+## `from comken.core.holidays import ...`
+
+### `EXPIRING_WARNING_DAYS`
+
+公開定数。
+
+### `HOLIDAYS_CSV_PATH`
+
+公開定数。
+
+### `HolidayError`
+
+```text
+class HolidayError(ComkenError):
+```
+
+#### 説明
+
+祝日カレンダーに関するエラー。具体的な状況はメッセージに出る
+
+対処:
+    メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
+
+### `WORKDAY_SEARCH_LIMIT`
+
+公開定数。
+
+### `WorkdayNotFoundError`
+
+```text
+class WorkdayNotFoundError(HolidayError):
+```
+
+#### 説明
+
+営業日が見つからなかった
+
+月の途中で「指定した月の営業日数を超える n 番目」を求めたとき、
+その月に営業日が 1 日も無いとき、祝日データ欠落などで 30 日探索しても
+次の営業日にたどり着けなかったときに送る。
+いずれも「カレンダー側がおかしい」または「指定値が暦と合わない」場合に
+起き、業務ロジック側のミスではないので、呼び出し側で握り潰さずユーザーに
+顕在化させる必要がある。
+
+発生箇所: comken.core.holidays
+    - nth_workday（n が月の営業日数超え、または n < 1）
+    - first_workday / last_workday（その月に営業日が 1 日も無い）
+    - workday / workday_on_or_after / workday_on_or_before
+      （30 日の探索上限に達した）
+
+対処:
+    n をその月の営業日数以下に直す、対象月の祝日に過不足がないか
+    確認する、社内休日（会社用カレンダーCSV）が広範囲に登録されていないか確認する
+
+#### `__init__`
+
+```text
+def __init__(self, detail: str) -> None:
+```
+
+### `first_workday`
+
+```text
+def first_workday(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` が属する月の最初の営業日。
+
+Raises:
+    WorkdayNotFoundError: その月に営業日が 1日も無いとき。
+
+### `holiday_name`
+
+```text
+def holiday_name(target: _dt.date) -> str | None:
+```
+
+#### 説明
+
+``target`` の祝日・会社休日名称を返す。祝日でも会社休日でもなければ
+``None``。
+
+### `is_holiday`
+
+```text
+def is_holiday(target: _dt.date) -> bool:
+```
+
+#### 説明
+
+``target`` が国民の祝日または会社休日に当たれば ``True``。
+
+``company_calendar.csv`` の収録範囲（内閣府 CSV の最初の年〜最後の年）
+外の日付は国民の祝日も会社休日も付かない（常に ``False``）。範囲を延ばす
+には内閣府 CSV を入れ替えて ``python -m comken.core.holidays.build`` で
+再生成する。
+
+### `is_workday`
+
+```text
+def is_workday(target: _dt.date, *, skip_weekends: bool=True) -> bool:
+```
+
+#### 説明
+
+``target`` が営業日なら ``True``。
+
+``company_calendar.csv`` の判定で国民の祝日＋会社休日に当たれば休業。
+``skip_weekends=True``（既定）なら土曜・日曜も休業扱いにする。
+``False`` を渡すと、土曜・日曜であっても祝日でなければ「営業日」と
+判定される（振替休日を平日扱いするシナリオ向け）。
+
+「収録済み最終日 <= target」のときは期限切れを WARNING ログで 1度だけ
+通知する。判定自体は通常どおり行う（誤って平日扱いにならないよう、
+**収録範囲外は祝日ではない側に倒す**）。
+
+### `last_workday`
+
+```text
+def last_workday(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` が属する月の最後の営業日。
+
+月末が土日・祝日のときは直前の営業日に遡る（例: 8/31 が日曜なら 8/29 金）。
+
+Raises:
+    WorkdayNotFoundError: その月に営業日が 1日も無いとき。
+
+### `non_workdays_after`
+
+```text
+def non_workdays_after(target: _dt.date, *, skip_weekends: bool=True) -> list[_dt.date]:
+```
+
+#### 説明
+
+``target`` の翌日から、次の営業日の前日までの休みの日（連休）を日付順に返す。
+
+``target`` の翌日が営業日なら空リスト。``target`` 自身は含まない。
+``WORKDAY_SEARCH_LIMIT`` 日分で打ち切る（``workday`` と違い、
+営業日が見つからなくても例外にしない。祝日データが壊れているときの無限ループ防止）。
+
+### `non_workdays_before`
+
+```text
+def non_workdays_before(target: _dt.date, *, skip_weekends: bool=True) -> list[_dt.date]:
+```
+
+#### 説明
+
+``target`` の前日から、前の営業日の翌日までの休みの日（連休）を返す。
+
+``target`` に近い順に並ぶ。``target`` の前日が営業日なら空リスト。
+``target`` 自身は含まない。打ち切りは ``non_workdays_after`` と同じ。
+
+### `nth_workday`
+
+```text
+def nth_workday(target: _dt.date, n: int, *, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` が属する月の第 ``n`` 営業日を返す（``n`` は 1 始まり）。
+
+月の初日から数えて ``n`` 番目の営業日。
+その月の営業日数を超える ``n`` を渡すと ``WorkdayNotFoundError``。
+負の ``n`` は受け付けない。
+
+Raises:
+    WorkdayNotFoundError: ``n`` が 1 未満、またはその月の営業日数を超える。
+
+### `warn_if_holidays_expiring_soon`
+
+```text
+def warn_if_holidays_expiring_soon() -> None:
+```
+
+#### 説明
+
+既定の会社用カレンダーの収録期限が近ければ、起動時に警告する。
+
+「収録最終日」（=``company_calendar.csv`` の最後の行）が今日から
+``EXPIRING_WARNING_DAYS`` 未満で WARNING ログを 1 度だけ出す。
+同じ日に複数回呼んでも警告は 1 日 1 回だけ（``_maybe_warn_expiring``
+の重複防止をそのまま使う）。年 1 回の内閣府 CSV 更新が必要な時期を
+検知するのが目的。
+
+### `workday`
+
+```text
+def workday(target: _dt.date, n: int, *, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` から ``n`` 営業日後の日付を返す（Excel の ``WORKDAY(d, n)`` 互換）。
+
+``n == 0`` のときは ``target`` を**そのまま**返す（``target`` が営業日か
+どうかを問わない）。``n`` が負なら前方向に進む。
+
+例: 2024/5/2（木、祝日前日）に ``workday(d, 1)`` を呼ぶと
+2024/5/7（火、5/3〜5/6 が祝日＋土日）を返す。
+
+Raises:
+    WorkdayNotFoundError: 探索が ``WORKDAY_SEARCH_LIMIT`` に達した。
+
+### `workday_on_or_after`
+
+```text
+def workday_on_or_after(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` 以降で最初の営業日（``target`` を含む）。
+
+``target`` が営業日なら ``target`` をそのまま返す。
+営業日でなければ、``workday(target, 1)`` と同じ動きで翌日以降を探す。
+
+Raises:
+    WorkdayNotFoundError: ``WORKDAY_SEARCH_LIMIT`` 日探索しても
+        営業日が見つからなかった。
+
+### `workday_on_or_before`
+
+```text
+def workday_on_or_before(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
+```
+
+#### 説明
+
+``target`` 以前で最初の営業日（``target`` を含む）。
+
+``target`` が営業日なら ``target`` をそのまま返す。
+営業日でなければ、``workday(target, -1)`` と同じ動きで前日以前を探す。
+
+Raises:
+    WorkdayNotFoundError: ``WORKDAY_SEARCH_LIMIT`` 日探索しても
+        営業日が見つからなかった。
 
 
 ## `from comken.core.logger import ...`
@@ -3404,10 +3367,23 @@ state.ini に関するエラー。具体的な状況はメッセージに出る
 対処:
     メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
 
-### `BusinessDayNotFoundError`
+### `HolidayError`
 
 ```text
-class BusinessDayNotFoundError(CalendarError):
+class HolidayError(ComkenError):
+```
+
+#### 説明
+
+祝日カレンダーに関するエラー。具体的な状況はメッセージに出る
+
+対処:
+    メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
+
+### `WorkdayNotFoundError`
+
+```text
+class WorkdayNotFoundError(HolidayError):
 ```
 
 #### 説明
@@ -3421,12 +3397,10 @@ class BusinessDayNotFoundError(CalendarError):
 起き、業務ロジック側のミスではないので、呼び出し側で握り潰さずユーザーに
 顕在化させる必要がある。
 
-発生箇所: comken.core.calendar
-    - nth_business_day_of_month（n が月の営業日数超え、または n < 1）
-    - first_business_day_of_month / last_business_day_of_month
-      （その月に営業日が 1 日も無い）
-    - business_day_after / business_day_before /
-      business_day_on_or_after / business_day_on_or_before
+発生箇所: comken.core.holidays
+    - nth_workday（n が月の営業日数超え、または n < 1）
+    - first_workday / last_workday（その月に営業日が 1 日も無い）
+    - workday / workday_on_or_after / workday_on_or_before
       （30 日の探索上限に達した）
 
 対処:
@@ -3438,19 +3412,6 @@ class BusinessDayNotFoundError(CalendarError):
 ```text
 def __init__(self, detail: str) -> None:
 ```
-
-### `CalendarError`
-
-```text
-class CalendarError(ComkenError):
-```
-
-#### 説明
-
-祝日カレンダーに関するエラー。具体的な状況はメッセージに出る
-
-対処:
-    メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
 
 ### `DownloaderError`
 
@@ -4110,8 +4071,8 @@ def is_due(self, now: dt.datetime) -> bool:
 
 指定時刻にこのスケジュールを実行すべきか判定する。
 
-祝日判定は ``comken.core.calendar`` の ``is_holiday`` / ``is_business_day``
-/ ``nth_business_day_of_month`` を直接使う。国民の祝日と会社休日を
+祝日判定は ``comken.core.holidays`` の ``is_holiday`` / ``is_workday``
+/ ``nth_workday`` を直接使う。国民の祝日と会社休日を
 まとめて判定するため、呼び出し側でカレンダーを差し替える必要はない
 （既定の統一カレンダー 1 本だけがサポート対象）。
 

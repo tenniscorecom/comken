@@ -17,7 +17,7 @@ from typing import Any, Self
 
 import win32com.client
 
-from comken.core.clock import now
+from comken.core.dates import now
 from comken.core.timer import measure
 from comken.exceptions import ComkenFileNotFoundError, OutlookError
 from comken.runtime import dry_run_log, is_dry_run

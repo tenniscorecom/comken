@@ -1,15 +1,18 @@
 """comken/exceptions/calendar.py — 祝日カレンダーに関する例外。
 
-会社用カレンダー CSV（``comken/core/calendar/data/company_calendar.csv``）
+会社用カレンダー CSV（``comken/core/holidays/data/company_calendar.csv``）
 の読み取り失敗をまとめる。生成物なので壊れる場面は限定的だが、ファイルが
 存在しない・ヘッダーが違う・日付が解釈できない、といった業務運用の場面に
 備えて明示的に例外を定義する。
+
+このファイルは当面 **改名しない**（カレンダーが主題ではないため、関数群と
+同時に動かすと業務ツールへの参照漏れが起きる。関数改名とは別タスク）。
 """
 
 from comken.exceptions.base import ComkenError
 
 
-class CalendarError(ComkenError):
+class HolidayError(ComkenError):
     """祝日カレンダーに関するエラー。具体的な状況はメッセージに出る
 
     対処:
@@ -17,7 +20,7 @@ class CalendarError(ComkenError):
     """
 
 
-class BusinessDayNotFoundError(CalendarError):
+class WorkdayNotFoundError(HolidayError):
     """営業日が見つからなかった
 
     月の途中で「指定した月の営業日数を超える n 番目」を求めたとき、
@@ -27,12 +30,10 @@ class BusinessDayNotFoundError(CalendarError):
     起き、業務ロジック側のミスではないので、呼び出し側で握り潰さずユーザーに
     顕在化させる必要がある。
 
-    発生箇所: comken.core.calendar
-        - nth_business_day_of_month（n が月の営業日数超え、または n < 1）
-        - first_business_day_of_month / last_business_day_of_month
-          （その月に営業日が 1 日も無い）
-        - business_day_after / business_day_before /
-          business_day_on_or_after / business_day_on_or_before
+    発生箇所: comken.core.holidays
+        - nth_workday（n が月の営業日数超え、または n < 1）
+        - first_workday / last_workday（その月に営業日が 1 日も無い）
+        - workday / workday_on_or_after / workday_on_or_before
           （30 日の探索上限に達した）
 
     対処:

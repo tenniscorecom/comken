@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Self
 
 from selenium import webdriver
 
-from comken.core.clock import now
+from comken.core.dates import now
 from comken.core.files.ops import project_dir
 from comken.core.timer import measure
 from comken.exceptions import BrowserError

@@ -11,15 +11,15 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from comken.core.calendar import (
-    BusinessDayNotFoundError,
-    is_business_day,
+from comken.core.dates import month_end
+from comken.core.holidays import (
+    WorkdayNotFoundError,
     is_holiday,
-    non_business_days_after,
-    non_business_days_before,
-    nth_business_day_of_month,
+    is_workday,
+    non_workdays_after,
+    non_workdays_before,
+    nth_workday,
 )
-from comken.core.clock import month_end
 from comken.exceptions import (
     DownloaderError,
     SheetNotFoundError,
@@ -273,8 +273,8 @@ class ScheduleRule(MasterRow):
     ) -> bool:
         """指定時刻にこのスケジュールを実行すべきか判定する。
 
-        祝日判定は ``comken.core.calendar`` の ``is_holiday`` / ``is_business_day``
-        / ``nth_business_day_of_month`` を直接使う。国民の祝日と会社休日を
+        祝日判定は ``comken.core.holidays`` の ``is_holiday`` / ``is_workday``
+        / ``nth_workday`` を直接使う。国民の祝日と会社休日を
         まとめて判定するため、呼び出し側でカレンダーを差し替える必要はない
         （既定の統一カレンダー 1 本だけがサポート対象）。
 
@@ -315,7 +315,7 @@ class ScheduleRule(MasterRow):
         「1営業日前」「1営業日後」の判定で「対象日条件を満たす祝日」を探すときの
         ヘルパーとして ``_date_matches()`` の内外から呼ばれる。既存の判定
         ロジックは変えず、そのまま ``_date_matches()`` から移しただけ。
-        ``BusinessDayNotFoundError`` が起きた「月の営業日数を超える」設定ミスは
+        ``WorkdayNotFoundError`` が起きた「月の営業日数を超える」設定ミスは
         ``_date_matches()`` と同じ方針で、この日は対象外として ``False`` を返す
         （呼び出し元 ``download_scheduled`` 全体を止めるのを避けるため）。
         """
@@ -329,8 +329,8 @@ class ScheduleRule(MasterRow):
             return False
         if self.nth_business_day is not None:
             try:
-                target = nth_business_day_of_month(date.replace(day=1), self.nth_business_day)
-            except BusinessDayNotFoundError:
+                target = nth_workday(date.replace(day=1), self.nth_business_day)
+            except WorkdayNotFoundError:
                 logger.warning(
                     "スケジュール %s の「第%d営業日」指定が %s年%s月の営業日数を"
                     "超えています。この日は対象外として扱います。",
@@ -373,7 +373,7 @@ class ScheduleRule(MasterRow):
             return self.holiday_policy not in (HOLIDAY_BEFORE, HOLIDAY_AFTER)
         if self.holiday_policy not in (HOLIDAY_BEFORE, HOLIDAY_AFTER):
             return False
-        if not is_business_day(date):
+        if not is_workday(date):
             return False
         direction = "before" if self.holiday_policy == HOLIDAY_BEFORE else "after"
         return self._search_shifted_target(date, direction)
@@ -390,15 +390,13 @@ class ScheduleRule(MasterRow):
         「``date`` の前日から前の営業日に達するまで」の非営業日区間を見て、
         **その区間に祝日である対象日が 1 つでも含まれていれば ``True``**。
 
-        非営業日の区間は ``comken.core.calendar`` の ``non_business_days_after`` /
-        ``non_business_days_before`` が返す（探索の上限もカレンダー側が持つ）。
+        非営業日の区間は ``comken.core.holidays`` の ``non_workdays_after`` /
+        ``non_workdays_before`` が返す（探索の上限もカレンダー側が持つ）。
         ``date`` 自身が非営業日の場合は呼び出し元（``_date_matches``）で先に弾く。
         「対象日条件を満たすか」（曜日・日付・月末・第N営業日）だけがこのクラスの責務。
         """
         holidays_in_a_row = (
-            non_business_days_after(date)
-            if direction == "before"
-            else non_business_days_before(date)
+            non_workdays_after(date) if direction == "before" else non_workdays_before(date)
         )
         return any(self._raw_date_matches(day) and is_holiday(day) for day in holidays_in_a_row)
 

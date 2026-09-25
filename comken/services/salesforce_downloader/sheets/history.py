@@ -27,7 +27,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from comken.core.clock import today
+from comken.core.dates import today
 from comken.core.table.model import Table
 from comken.core.timer import measure
 from comken.services.salesforce_downloader.history_file_lock import HistoryFileLock

@@ -17,7 +17,7 @@ import logging
 from datetime import date, datetime
 from pathlib import Path
 
-from comken.core.clock import now
+from comken.core.dates import now
 from comken.exceptions import FileSuffixMissingError
 
 logger = logging.getLogger(__name__)

@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from comken.core.clock import now
+from comken.core.dates import now
 from comken.exceptions import CSVError
 from comken.services.salesforce_downloader.sheets.history import (
     COLUMNS,

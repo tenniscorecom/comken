@@ -1,13 +1,13 @@
-"""comken/core/calendar/_calendar.py — カレンダー本体（実装詳細）。
+"""comken/core/holidays/_holidays.py — 祝日カレンダー本体（実装詳細）。
 
-モジュール名は ``_calendar.py`` にしておき、``comken.core.calendar``
-（パッケージ本体）と ``calendar`` （クラス名）が被らないようにしている。
+モジュール名は ``_holidays.py`` にしておき、``comken.core.holidays``
+（パッケージ本体）と ``holidays`` （クラス名）が被らないようにしている。
 
-実行時は ``comken/core/calendar/data/company_calendar.csv`` を**読むだけ**で
+実行時は ``comken/core/holidays/data/company_calendar.csv`` を**読むだけ**で
 国民の祝日＋会社休日を判定する。会社休日のルール判定・内閣府 CSV の解析・
 計算ソース・``approximate``・``Holiday`` 値オブジェクトは持たない。
 **実行時は内閣府 CSV も会社休日のルールも知らない。** 生成ツール
-（``comken.core.calendar.build``）だけがそれらを持ち、生成物である
+（``comken.core.holidays.build``）だけがそれらを持ち、生成物である
 ``company_calendar.csv`` に焼き込む。
 
 ネット系依存（requests）はこのモジュールには入らない。
@@ -21,8 +21,8 @@ import logging
 from pathlib import Path
 from typing import Final
 
-from comken.core.clock import month_end, month_start, today
-from comken.exceptions import BusinessDayNotFoundError, CalendarError
+from comken.core.dates import month_end, month_start, today
+from comken.exceptions import HolidayError, WorkdayNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -31,45 +31,45 @@ EXPIRING_WARNING_DAYS = 30
 
 # 「次の営業日」を探すときの日数上限。祝日データが壊れていたり、社内管理表に
 # 会社休日が広範囲に登録されていたりすると無限ループになるため、必ず上限を切る。
-BUSINESS_DAY_SEARCH_LIMIT = 30
+WORKDAY_SEARCH_LIMIT = 30
 
 
 # 生成された「会社用カレンダー CSV」のパス。git 管理下の正本。
 # Python 実行時と VBA 側の両方が同じファイルを読む
 # （comken は共有サーバーへ直接参照で配布されるため）。
-CALENDAR_CSV_PATH: Final[Path] = Path(__file__).parent / "data" / "company_calendar.csv"
+HOLIDAYS_CSV_PATH: Final[Path] = Path(__file__).parent / "data" / "company_calendar.csv"
 
 # ── テスト用差し替え口 ────────────────────────────────────────────────────
-# 既定カレンダーを遅延生成する代わりに、テストから ``_Calendar`` を直接差し込める
-# ようにする。``None`` を渡すと次の呼び出しで ``CALENDAR_CSV_PATH`` から
+# 既定カレンダーを遅延生成する代わりに、テストから ``_Holidays`` を直接差し込める
+# ようにする。``None`` を渡すと次の呼び出しで ``HOLIDAYS_CSV_PATH`` から
 # 遅延生成される（=既定カレンダー）。
-_singleton: _Calendar | None = None
+_singleton: _Holidays | None = None
 
 
-def _set_calendar_for_test(calendar: _Calendar | None) -> None:
+def _set_calendar_for_test(calendar: _Holidays | None) -> None:
     """テストで既定カレンダーを差し替えるための **非公開** 入口。
 
-    通常は使わない。テストが個別の ``_Calendar`` を組み立てて
-    ``is_business_day`` などの公開関数の挙動を確かめたいときに使う。
+    通常は使わない。テストが個別の ``_Holidays`` を組み立てて
+    ``is_workday`` などの公開関数の挙動を確かめたいときに使う。
     ``None`` を渡すと遅延生成に戻る（次の ``_resolve_singleton()`` で
-    ``CALENDAR_CSV_PATH`` から読み直す）。
+    ``HOLIDAYS_CSV_PATH`` から読み直す）。
     """
     global _singleton
     _singleton = calendar
 
 
-def _resolve_singleton() -> _Calendar:
-    """プロセスで遅延生成された ``_Calendar`` を返す（差し替えがあれば優先）。"""
+def _resolve_singleton() -> _Holidays:
+    """プロセスで遅延生成された ``_Holidays`` を返す（差し替えがあれば優先）。"""
     global _singleton
     if _singleton is None:
-        _singleton = _Calendar.load(CALENDAR_CSV_PATH)
+        _singleton = _Holidays.load(HOLIDAYS_CSV_PATH)
     return _singleton
 
 
 # ── 公開関数 ────────────────────────────────────────────────────────────
 
 
-def warn_if_calendar_expiring_soon() -> None:
+def warn_if_holidays_expiring_soon() -> None:
     """既定の会社用カレンダーの収録期限が近ければ、起動時に警告する。
 
     「収録最終日」（=``company_calendar.csv`` の最後の行）が今日から
@@ -87,7 +87,7 @@ def is_holiday(target: _dt.date) -> bool:
 
     ``company_calendar.csv`` の収録範囲（内閣府 CSV の最初の年〜最後の年）
     外の日付は国民の祝日も会社休日も付かない（常に ``False``）。範囲を延ばす
-    には内閣府 CSV を入れ替えて ``python -m comken.core.calendar.build`` で
+    には内閣府 CSV を入れ替えて ``python -m comken.core.holidays.build`` で
     再生成する。
     """
     return _resolve_singleton().is_holiday(target)
@@ -100,7 +100,7 @@ def holiday_name(target: _dt.date) -> str | None:
     return _resolve_singleton().holiday_name(target)
 
 
-def is_business_day(
+def is_workday(
     target: _dt.date,
     *,
     skip_weekends: bool = True,
@@ -123,50 +123,48 @@ def is_business_day(
     return not cal.is_holiday(target)
 
 
-def business_day_after(
+def workday(
     target: _dt.date,
+    n: int,
     *,
     skip_weekends: bool = True,
 ) -> _dt.date:
-    """``target`` より後で最初の営業日（``target`` 自身を含まない）。
+    """``target`` から ``n`` 営業日後の日付を返す（Excel の ``WORKDAY(d, n)`` 互換）。
 
-    ``target`` が営業日でも翌営業日を返す。収録範囲外でも日付は進むが、
-    祝日判定は「祝日ではない」と扱う。期限切れの警告は入口で 1度だけ出す。
+    ``n == 0`` のときは ``target`` を**そのまま**返す（``target`` が営業日か
+    どうかを問わない）。``n`` が負なら前方向に進む。
+
+    例: 2024/5/2（木、祝日前日）に ``workday(d, 1)`` を呼ぶと
+    2024/5/7（火、5/3〜5/6 が祝日＋土日）を返す。
 
     Raises:
-        BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
-            営業日が見つからなかった（祝日データ欠落・社内休日広範囲など）。
+        WorkdayNotFoundError: 探索が ``WORKDAY_SEARCH_LIMIT`` に達した。
     """
-    cal = _resolve_singleton()
-    cal._maybe_warn_expiring(target)
-    return _search_business_day(
-        start=target + _dt.timedelta(days=1),
-        step_days=1,
+    if n == 0:
+        return target
+    cursor = target
+    steps = abs(n)
+    step_days = 1 if n > 0 else -1
+    for _ in range(steps):
+        cursor = _step_workday(cursor, step_days, skip_weekends=skip_weekends)
+    return cursor
+
+
+def _step_workday(
+    target: _dt.date,
+    step_days: int,
+    *,
+    skip_weekends: bool,
+) -> _dt.date:
+    """``target`` から ``step_days`` 日方向へ 1 営業日分進める。"""
+    return _search_workday(
+        start=target + _dt.timedelta(days=step_days),
+        step_days=step_days,
         skip_weekends=skip_weekends,
     )
 
 
-def business_day_before(
-    target: _dt.date,
-    *,
-    skip_weekends: bool = True,
-) -> _dt.date:
-    """``target`` より前で最初の営業日（``target`` 自身を含まない）。
-
-    ``target`` が営業日でも前営業日を返す。
-
-    Raises:
-        BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
-            営業日が見つからなかった。
-    """
-    return _search_business_day(
-        start=target - _dt.timedelta(days=1),
-        step_days=-1,
-        skip_weekends=skip_weekends,
-    )
-
-
-def non_business_days_after(
+def non_workdays_after(
     target: _dt.date,
     *,
     skip_weekends: bool = True,
@@ -174,13 +172,13 @@ def non_business_days_after(
     """``target`` の翌日から、次の営業日の前日までの休みの日（連休）を日付順に返す。
 
     ``target`` の翌日が営業日なら空リスト。``target`` 自身は含まない。
-    ``BUSINESS_DAY_SEARCH_LIMIT`` 日分で打ち切る（``business_day_after`` と違い、
+    ``WORKDAY_SEARCH_LIMIT`` 日分で打ち切る（``workday`` と違い、
     営業日が見つからなくても例外にしない。祝日データが壊れているときの無限ループ防止）。
     """
-    return _non_business_run(target, step_days=1, skip_weekends=skip_weekends)
+    return _non_workday_run(target, step_days=1, skip_weekends=skip_weekends)
 
 
-def non_business_days_before(
+def non_workdays_before(
     target: _dt.date,
     *,
     skip_weekends: bool = True,
@@ -188,12 +186,12 @@ def non_business_days_before(
     """``target`` の前日から、前の営業日の翌日までの休みの日（連休）を返す。
 
     ``target`` に近い順に並ぶ。``target`` の前日が営業日なら空リスト。
-    ``target`` 自身は含まない。打ち切りは ``non_business_days_after`` と同じ。
+    ``target`` 自身は含まない。打ち切りは ``non_workdays_after`` と同じ。
     """
-    return _non_business_run(target, step_days=-1, skip_weekends=skip_weekends)
+    return _non_workday_run(target, step_days=-1, skip_weekends=skip_weekends)
 
 
-def business_day_on_or_after(
+def workday_on_or_after(
     target: _dt.date,
     *,
     skip_weekends: bool = True,
@@ -201,18 +199,18 @@ def business_day_on_or_after(
     """``target`` 以降で最初の営業日（``target`` を含む）。
 
     ``target`` が営業日なら ``target`` をそのまま返す。
-    営業日でなければ、``business_day_after`` と同じ動きで翌日以降を探す。
+    営業日でなければ、``workday(target, 1)`` と同じ動きで翌日以降を探す。
 
     Raises:
-        BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
+        WorkdayNotFoundError: ``WORKDAY_SEARCH_LIMIT`` 日探索しても
             営業日が見つからなかった。
     """
-    if is_business_day(target, skip_weekends=skip_weekends):
+    if is_workday(target, skip_weekends=skip_weekends):
         return target
-    return business_day_after(target, skip_weekends=skip_weekends)
+    return _step_workday(target, 1, skip_weekends=skip_weekends)
 
 
-def business_day_on_or_before(
+def workday_on_or_before(
     target: _dt.date,
     *,
     skip_weekends: bool = True,
@@ -220,18 +218,18 @@ def business_day_on_or_before(
     """``target`` 以前で最初の営業日（``target`` を含む）。
 
     ``target`` が営業日なら ``target`` をそのまま返す。
-    営業日でなければ、``business_day_before`` と同じ動きで前日以前を探す。
+    営業日でなければ、``workday(target, -1)`` と同じ動きで前日以前を探す。
 
     Raises:
-        BusinessDayNotFoundError: ``BUSINESS_DAY_SEARCH_LIMIT`` 日探索しても
+        WorkdayNotFoundError: ``WORKDAY_SEARCH_LIMIT`` 日探索しても
             営業日が見つからなかった。
     """
-    if is_business_day(target, skip_weekends=skip_weekends):
+    if is_workday(target, skip_weekends=skip_weekends):
         return target
-    return business_day_before(target, skip_weekends=skip_weekends)
+    return _step_workday(target, -1, skip_weekends=skip_weekends)
 
 
-def first_business_day_of_month(
+def first_workday(
     target: _dt.date,
     *,
     skip_weekends: bool = True,
@@ -239,18 +237,18 @@ def first_business_day_of_month(
     """``target`` が属する月の最初の営業日。
 
     Raises:
-        BusinessDayNotFoundError: その月に営業日が 1日も無いとき。
+        WorkdayNotFoundError: その月に営業日が 1日も無いとき。
     """
     start = month_start(target)
     try:
-        return business_day_on_or_after(start, skip_weekends=skip_weekends)
-    except BusinessDayNotFoundError as error:
-        raise BusinessDayNotFoundError(
+        return workday_on_or_after(start, skip_weekends=skip_weekends)
+    except WorkdayNotFoundError as error:
+        raise WorkdayNotFoundError(
             f"{target.year} 年 {target.month} 月に営業日が見つかりません: {error}"
         ) from error
 
 
-def last_business_day_of_month(
+def last_workday(
     target: _dt.date,
     *,
     skip_weekends: bool = True,
@@ -260,18 +258,18 @@ def last_business_day_of_month(
     月末が土日・祝日のときは直前の営業日に遡る（例: 8/31 が日曜なら 8/29 金）。
 
     Raises:
-        BusinessDayNotFoundError: その月に営業日が 1日も無いとき。
+        WorkdayNotFoundError: その月に営業日が 1日も無いとき。
     """
     end = month_end(target)
     try:
-        return business_day_on_or_before(end, skip_weekends=skip_weekends)
-    except BusinessDayNotFoundError as error:
-        raise BusinessDayNotFoundError(
+        return workday_on_or_before(end, skip_weekends=skip_weekends)
+    except WorkdayNotFoundError as error:
+        raise WorkdayNotFoundError(
             f"{target.year} 年 {target.month} 月に営業日が見つかりません: {error}"
         ) from error
 
 
-def nth_business_day_of_month(
+def nth_workday(
     target: _dt.date,
     n: int,
     *,
@@ -280,27 +278,26 @@ def nth_business_day_of_month(
     """``target`` が属する月の第 ``n`` 営業日を返す（``n`` は 1 始まり）。
 
     月の初日から数えて ``n`` 番目の営業日。
-    その月の営業日数を超える ``n`` を渡すと ``BusinessDayNotFoundError``。
+    その月の営業日数を超える ``n`` を渡すと ``WorkdayNotFoundError``。
+    負の ``n`` は受け付けない。
 
     Raises:
-        BusinessDayNotFoundError: ``n`` が 1 未満、またはその月の営業日数を超える。
+        WorkdayNotFoundError: ``n`` が 1 未満、またはその月の営業日数を超える。
     """
     if n < 1:
-        raise BusinessDayNotFoundError(
-            f"第 n 営業日の n は 1 以上で指定してください（指定値: {n}）"
-        )
+        raise WorkdayNotFoundError(f"第 n 営業日の n は 1 以上で指定してください（指定値: {n}）")
     start = month_start(target)
     end = month_end(target)
     cursor = start
     for _ in range(n):
         try:
-            cursor = business_day_on_or_after(cursor, skip_weekends=skip_weekends)
-        except BusinessDayNotFoundError as error:
-            raise BusinessDayNotFoundError(
+            cursor = workday_on_or_after(cursor, skip_weekends=skip_weekends)
+        except WorkdayNotFoundError as error:
+            raise WorkdayNotFoundError(
                 f"{target.year} 年 {target.month} 月に {n} 営業日は存在しません: {error}"
             ) from error
         if cursor > end:
-            raise BusinessDayNotFoundError(
+            raise WorkdayNotFoundError(
                 f"{target.year} 年 {target.month} 月に {n} 営業日は存在しません"
                 f"（最終営業日: {end}）"
             )
@@ -310,44 +307,11 @@ def nth_business_day_of_month(
     return cursor - _dt.timedelta(days=1)
 
 
-def add_business_days(
-    target: _dt.date,
-    n: int,
-    *,
-    skip_weekends: bool = True,
-) -> _dt.date:
-    """``target`` から ``n`` 営業日後の日付（``n`` が負なら前）。
-
-    ``n == 0`` のときは ``target`` を**そのまま**返す（``target`` が営業日か
-    どうかを問わない）。これは Excel の ``WORKDAY`` と同じ挙動で、
-    「今日から N 営業日後」を組み立てるときに条件分岐を書かなくて済む。
-
-    例: 2024/5/2（木、祝日前日）に ``add_business_days(d, 1)`` を呼ぶと
-    2024/5/7（火、5/3〜5/6 が祝日＋土日）を返す。
-
-    Raises:
-        BusinessDayNotFoundError: 探索が ``BUSINESS_DAY_SEARCH_LIMIT`` に達した。
-    """
-    if n == 0:
-        return target
-    # ``target`` を 0 営業日目と数え、``n`` 回「次の（前の）営業日」へ進める。
-    # ``target`` が営業日のとき n=1 で翌日営業日、非営業日のときでも
-    # ``business_day_after`` が翌営業日にスナップするので結果は同じになる。
-    cursor = target
-    steps = n if n > 0 else -n
-    for _ in range(steps):
-        if n > 0:
-            cursor = business_day_after(cursor, skip_weekends=skip_weekends)
-        else:
-            cursor = business_day_before(cursor, skip_weekends=skip_weekends)
-    return cursor
-
-
 # ── 内部実装 ────────────────────────────────────────────────────────────
 
 
-class _Calendar:
-    """``company_calendar.csv`` を読み込んで保持するカレンダー本体。
+class _Holidays:
+    """``company_calendar.csv`` を読み込んで保持する祝日カレンダー本体。
 
     国民の祝日と会社休日を区別せず、``{日付: 名称}`` の単純な辞書に保持する
     （生成ツールが「国民の祝日が先勝ち」で1行に焼き込んでいるため、実行時に
@@ -362,24 +326,24 @@ class _Calendar:
         self._out_of_range_warned: bool = False
 
     @classmethod
-    def load_default(cls) -> _Calendar:
-        """``CALENDAR_CSV_PATH``（``company_calendar.csv``）を読んで返す。"""
-        return cls.load(CALENDAR_CSV_PATH)
+    def load_default(cls) -> _Holidays:
+        """``HOLIDAYS_CSV_PATH``（``company_calendar.csv``）を読んで返す。"""
+        return cls.load(HOLIDAYS_CSV_PATH)
 
     @classmethod
-    def load(cls, path: str | Path) -> _Calendar:
-        """``company_calendar.csv`` 形式のファイルを読み ``_Calendar`` を返す。
+    def load(cls, path: str | Path) -> _Holidays:
+        """``company_calendar.csv`` 形式のファイルを読み ``_Holidays`` を返す。
 
         列は ``date`` / ``name`` の 2 列のみ。文字コードは UTF-8 BOM 付き
         （Excel・VBA 双方で文字化けしないため）。ヘッダーが違ったり日付が
-        解釈できない行があれば ``CalendarError`` を上げる。
+        解釈できない行があれば ``HolidayError`` を上げる。
         """
         file_path = Path(path)
         if not file_path.exists():
             raise _format_error(
                 file_path,
                 "ファイルが存在しません。"
-                "python -m comken.core.calendar.build を実行して"
+                "python -m comken.core.holidays.build を実行して"
                 " company_calendar.csv を生成してください。",
             )
         # 文字コードは UTF-8 BOM 付き（書き出し側 fix）。CP932 で読もうとすると
@@ -427,7 +391,7 @@ class _Calendar:
             raise _format_error(
                 file_path,
                 "日付として解釈できる行が 1件もありませんでした。"
-                "python -m comken.core.calendar.build を再実行してください。",
+                "python -m comken.core.holidays.build を再実行してください。",
             )
         return cls(holidays)
 
@@ -475,10 +439,10 @@ class _Calendar:
                 "（最終収録日: %s）。"
                 "この日以降は国民の祝日・会社休日が付きません。"
                 "内閣府の syukujitsu.csv を更新して"
-                "comken/core/calendar/data/syukujitsu.csv を上書きし、"
-                "python -m comken.core.calendar.build を実行して"
-                "comken/core/calendar/data/company_calendar.csv を"
-                "再生成してください（docs/機能/calendar.md の「年1回の更新手順」参照）。",
+                "comken/core/holidays/data/syukujitsu.csv を上書きし、"
+                "python -m comken.core.holidays.build を実行して"
+                "comken/core/holidays/data/company_calendar.csv を"
+                "再生成してください（docs/機能/holidays.md の「年1回の更新手順」参照）。",
                 today,
                 last,
             )
@@ -492,18 +456,18 @@ class _Calendar:
                 "会社用カレンダーの収録期限が近づいています: 残り %d 日"
                 "（最終収録日: %s）。"
                 "内閣府の syukujitsu.csv をダウンロードして"
-                "comken/core/calendar/data/syukujitsu.csv を上書きし、"
-                "python -m comken.core.calendar.build を実行して"
-                "comken/core/calendar/data/company_calendar.csv を更新し、"
+                "comken/core/holidays/data/syukujitsu.csv を上書きし、"
+                "python -m comken.core.holidays.build を実行して"
+                "comken/core/holidays/data/company_calendar.csv を更新し、"
                 "コミット・タグ打ちして配布してください"
-                "（docs/機能/calendar.md の「年1回の更新手順」参照）。",
+                "（docs/機能/holidays.md の「年1回の更新手順」参照）。",
                 remaining,
                 last,
             )
             self._expiry_warned_on = today
 
 
-def _non_business_run(
+def _non_workday_run(
     target: _dt.date,
     *,
     step_days: int,
@@ -512,15 +476,15 @@ def _non_business_run(
     """``target`` の隣から ``step_days`` 日ずつ進み、営業日に着くまでの休みの日を集める。"""
     run: list[_dt.date] = []
     cursor = target + _dt.timedelta(days=step_days)
-    for _ in range(BUSINESS_DAY_SEARCH_LIMIT):
-        if is_business_day(cursor, skip_weekends=skip_weekends):
+    for _ in range(WORKDAY_SEARCH_LIMIT):
+        if is_workday(cursor, skip_weekends=skip_weekends):
             break
         run.append(cursor)
         cursor += _dt.timedelta(days=step_days)
     return run
 
 
-def _search_business_day(
+def _search_workday(
     *,
     start: _dt.date,
     step_days: int,
@@ -528,27 +492,27 @@ def _search_business_day(
 ) -> _dt.date:
     """``start`` から ``step_days`` 日ずつ進め（または戻し）て最初の営業日を探す。
 
-    ``BUSINESS_DAY_SEARCH_LIMIT`` を超えると ``BusinessDayNotFoundError``
+    ``WORKDAY_SEARCH_LIMIT`` を超えると ``WorkdayNotFoundError``
     を上げる（祝日データが壊れている／社内休日が広範囲なときの無限ループ防止）。
     """
     if step_days == 0:
         raise ValueError("step_days には 0 以外の値を渡してください")
     cursor = start
-    for _ in range(BUSINESS_DAY_SEARCH_LIMIT):
-        if is_business_day(cursor, skip_weekends=skip_weekends):
+    for _ in range(WORKDAY_SEARCH_LIMIT):
+        if is_workday(cursor, skip_weekends=skip_weekends):
             return cursor
         cursor += _dt.timedelta(days=step_days)
-    raise BusinessDayNotFoundError(
-        f"{BUSINESS_DAY_SEARCH_LIMIT} 日探索しても営業日が見つかりません。"
+    raise WorkdayNotFoundError(
+        f"{WORKDAY_SEARCH_LIMIT} 日探索しても営業日が見つかりません。"
         "祝日データに過不足がないか、社内休日が広範囲に登録されていないか確認してください。"
     )
 
 
-# ── CalendarError の文言ヘルパー ─────────────────────────────────────────
-# 呼び出し側が型で分ける必要が無い Calendar 由来エラーは、 ``CalendarError`` を
+# ── HolidayError の文言ヘルパー ─────────────────────────────────────────
+# 呼び出し側が型で分ける必要が無い Holidays 由来エラーは、 ``HolidayError`` を
 # 直接送出して具体的な状況をメッセージで伝える。
 
 
-def _format_error(path: Path | str, detail: str) -> CalendarError:
-    """会社用カレンダーCSV 以外を読んだときの ``CalendarError``。"""
-    return CalendarError(f"会社用カレンダーCSV を読み取れませんでした: {path}\n{detail}")
+def _format_error(path: Path | str, detail: str) -> HolidayError:
+    """会社用カレンダーCSV 以外を読んだときの ``HolidayError``。"""
+    return HolidayError(f"会社用カレンダーCSV を読み取れませんでした: {path}\n{detail}")

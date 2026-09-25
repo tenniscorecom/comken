@@ -15,8 +15,8 @@ from unittest.mock import patch
 import pytest
 
 from comken import dry_run
-from comken.core.clock import now, parse_cell_date, today
 from comken.core.data import diff_row, diff_rows, is_true_word
+from comken.core.dates import now, parse_cell_date, today
 from comken.core.files import (
     DateFileFinder,
     DateNameBuilder,

@@ -14,8 +14,8 @@ from unittest import mock
 import pytest
 
 from comken import run as run_module
-from comken.core.calendar._calendar import _Calendar, _set_calendar_for_test
-from comken.core.clock import today
+from comken.core.dates import today
+from comken.core.holidays._holidays import _Holidays, _set_calendar_for_test
 from comken.run import backoffice, intranet
 
 
@@ -88,10 +88,10 @@ def test_project_name_is_accepted_for_intranet(project_name: str) -> None:
 # ── 起動時の祝日カレンダー期限切れ警告 ─────────────────────────────────────
 
 
-def _near_expiry_calendar(days_until_last: int) -> _Calendar:
+def _near_expiry_calendar(days_until_last: int) -> _Holidays:
     """``days_until_last`` 日後に最終収録日を持つ小さなカレンダーを作る。"""
     last = today() + _dt.timedelta(days=days_until_last)
-    return _Calendar({last: "テスト用の最終祝日"})
+    return _Holidays({last: "テスト用の最終祝日"})
 
 
 class TestStartupCalendarExpiryWarning:
@@ -132,7 +132,7 @@ class TestStartupCalendarExpiryWarning:
             )
             return "ok"
 
-        with caplog.at_level(logging.WARNING, logger="comken.core.calendar._calendar"):
+        with caplog.at_level(logging.WARNING, logger="comken.core.holidays._holidays"):
             result = backoffice(record_main, "project")
 
         assert result == "ok"
@@ -163,7 +163,7 @@ class TestStartupCalendarExpiryWarning:
                 )
             )
 
-        with caplog.at_level(logging.WARNING, logger="comken.core.calendar._calendar"):
+        with caplog.at_level(logging.WARNING, logger="comken.core.holidays._holidays"):
             intranet(record_main, "project")
 
         assert expiry_warnings_seen_in_main == [1]
@@ -180,7 +180,7 @@ class TestStartupCalendarExpiryWarning:
         """``EXPIRING_WARNING_DAYS`` 以上先なら警告は出ない（``main`` は普通に動く）。"""
         _set_calendar_for_test(_near_expiry_calendar(days_until_last=120))
 
-        with caplog.at_level(logging.WARNING, logger="comken.core.calendar._calendar"):
+        with caplog.at_level(logging.WARNING, logger="comken.core.holidays._holidays"):
             assert backoffice(lambda: "ok", "project") == "ok"
 
         expiry_warnings = [
@@ -196,7 +196,7 @@ class TestStartupCalendarExpiryWarning:
         """``intranet`` も遠い期限なら警告を出さない。"""
         _set_calendar_for_test(_near_expiry_calendar(days_until_last=120))
 
-        with caplog.at_level(logging.WARNING, logger="comken.core.calendar._calendar"):
+        with caplog.at_level(logging.WARNING, logger="comken.core.holidays._holidays"):
             assert intranet(lambda: "ok", "project") == "ok"
 
         expiry_warnings = [

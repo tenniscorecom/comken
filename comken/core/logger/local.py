@@ -8,7 +8,7 @@ import logging
 import os
 from pathlib import Path
 
-from comken.core.clock import today
+from comken.core.dates import today
 from comken.core.files.ops import project_dir
 from comken.core.logger.environment import (
     CONSOLE_HANDLER_NAME,
