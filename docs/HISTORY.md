@@ -723,3 +723,23 @@ master に何をコミットしても本番には流れない。**
   にそろえる。CSV の `encoding=` を **省略すると自動判定**になる
 - README の `SortBy` は `comken.constants` に存在しない誤記だったので削除した
 - `tests/test_layers.py` から `constants` 層（`LAYERS["constants"] = 0`）を削除
+
+### `core/data.py` を廃止した（2026-09-25）
+
+雑多な入れ物だった `comken/core/data.py` を役目ごとに 3 ファイルへ分割した。
+
+- **行の差分**（`diff_row` / `diff_rows` / `RowChange` / `DiffResult`）→ `comken/core/diff.py`（新規）
+- **Excel の列記号と列番号の変換**（`col_to_num` / `column_number`）→
+  `comken/core/columns.py`（新規）。`col_to_num` は Excel でも CSV でも使う
+- **`is_true_word`** → `comken/core/text.py` の末尾へ追記（既存の文字列正規化と同じファイル）
+- `comken/core/data.py` は削除。`comken.core.data` は import できなくなった
+  （別名・re-export は持たない）
+- `comken/core/__init__.py` のファサード再 export（`DiffResult` / `RowChange` /
+  `diff_row` / `diff_rows`）は import 元を `comken.core.diff` へ付け替えただけ。
+  公開名は変わっていない
+- `toolbox/excel/sheet.py` が openpyxl の `column_index_from_string` を 4 か所
+  で使っていたのを `comken.core.columns.col_to_num` に置き換えた
+  （`get_column_letter` はそのまま openpyxl を使う）。`col_to_num` は
+  `InvalidColumnError` を出すため、`create_table` の `start_cell` 検証だけは
+  `except (TypeError, ValueError)` に `InvalidColumnError` を加えて
+  `InvalidTableInputError` への変換を保った

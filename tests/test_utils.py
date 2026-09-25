@@ -15,8 +15,8 @@ from unittest.mock import patch
 import pytest
 
 from comken import dry_run
-from comken.core.data import diff_row, diff_rows, is_true_word
 from comken.core.dates import now, parse_cell_date, today
+from comken.core.diff import diff_row, diff_rows
 from comken.core.files import (
     DateFileFinder,
     DateNameBuilder,
@@ -27,7 +27,13 @@ from comken.core.files import (
     move_file,
 )
 from comken.core.files.ops import copy_to_local_if_large, project_dir
-from comken.core.text import normalize, normalize_encoding, remove_spaces, strip_spaces
+from comken.core.text import (
+    is_true_word,
+    normalize,
+    normalize_encoding,
+    remove_spaces,
+    strip_spaces,
+)
 from comken.core.wait import wait_seconds, wait_until
 from comken.exceptions import BrowserError, ColumnNotFoundError, FileSuffixMissingError
 from comken.toolbox.browser.download import DownloadDir

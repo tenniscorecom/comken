@@ -19,7 +19,7 @@ from typing import Any, Self
 
 import win32com.client
 
-from comken.core.data import column_number
+from comken.core.columns import column_number
 from comken.core.files.base import FileBase
 from comken.core.files.ops import copy_to_local_if_large
 from comken.core.table.model import Table

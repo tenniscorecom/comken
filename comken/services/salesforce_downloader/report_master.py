@@ -70,8 +70,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar, Self
 
-from comken.core.data import is_true_word
 from comken.core.table.model import Table as CoreTable
+from comken.core.text import is_true_word
 from comken.core.timer import measure
 from comken.exceptions import (
     ExcelApplicationNotAvailableError,

@@ -60,8 +60,8 @@ import types
 from pathlib import Path
 from typing import NoReturn
 
-from comken.core.data import is_true_word
 from comken.core.files.ops import project_dir
+from comken.core.text import is_true_word
 from comken.exceptions import ComkenFileNotFoundError, ConfigError, ConfigKeyNotFoundError
 
 logger = logging.getLogger(__name__)

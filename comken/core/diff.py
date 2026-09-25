@@ -1,58 +1,12 @@
-"""comken/core/data.py — データ変換・比較ユーティリティ"""
+"""comken/core/diff.py — 行の差分を取る。"""
 
 import logging
 from dataclasses import dataclass
 
 from comken.core.table.model import Table
-from comken.exceptions import ColumnNotFoundError, InvalidColumnError
+from comken.exceptions import ColumnNotFoundError
 
 logger = logging.getLogger(__name__)
-
-
-def is_true_word(text: str) -> bool:
-    """英語の "true" 表記かどうかを判定する（大文字小文字は問わない）。
-
-    config.ini の bool 変換と、Excel 管理表（レポート管理表・スケジュール管理表など）の
-    「有効」列判定の両方が使う、共通の "true" 判定。前後の空白は無視する
-    （config.ini 側は事前に ``strip()`` 済みの値を渡す想定だが、
-    Excel のセル値は前後に空白が付いたまま渡ってくることがあるため、ここでも取る）。
-
-    Args:
-        text: 判定する文字列。
-
-    Returns:
-        "true"（大文字小文字問わず）と一致すれば True。
-    """
-    return text.strip().lower() == "true"
-
-
-def col_to_num(letter: str) -> int:
-    """Excel の列レターを列番号に変換する（A→1, B→2, AA→27）。
-
-    config.ini に「Q列」のように列レターで書かれた設定を、
-    ExcelCOMHandler.read_cell() 等の col 引数（数値）に変換するときに使う。
-
-    Args:
-        letter: 列レター（大文字・小文字どちらでも可。A〜Z または AA〜ZZZ 形式）。
-
-    Returns:
-        1始まりの列番号。
-
-    Raises:
-        InvalidColumnError: 空文字列または半角英字以外が含まれる場合。
-    """
-    normalized = letter.strip().upper()
-    if not normalized or not normalized.isascii() or not normalized.isalpha():
-        raise InvalidColumnError(letter)
-    result = 0
-    for char in normalized:
-        result = result * 26 + (ord(char) - ord("A") + 1)
-    return result
-
-
-def column_number(col: int | str) -> int:
-    """列番号または列記号を1始まりの列番号に揃える。"""
-    return col_to_num(col) if isinstance(col, str) else int(col)
 
 
 def diff_row(before: dict, after: dict) -> dict[str, tuple]:

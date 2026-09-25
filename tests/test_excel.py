@@ -9,6 +9,7 @@ from comken.core.table import Table
 from comken.exceptions import (
     ComkenFileNotFoundError,
     ExcelError,
+    InvalidColumnError,
     SheetNotFoundError,
     TableError,
     UnsupportedFileSuffixError,
@@ -457,3 +458,21 @@ class TestFindSheet:
             # 表示用シート名を候補にしても見つからない。
             with pytest.raises(SheetNotFoundError):
                 excel.find_sheet("案件一覧")
+
+
+class TestColumnLetterValidation:
+    """``Sheet.insert_column`` / ``Sheet.delete_column`` は列記号の不正を
+    ``InvalidColumnError`` で止める（``col_to_num`` 経由）。
+    """
+
+    @pytest.mark.parametrize("invalid_letter", ["", "1", "A1", "1A"])
+    def test_insert_column_rejects_invalid_letter(self, tmp_path, invalid_letter: str) -> None:
+        path = tmp_path / "book.xlsx"
+        with Excel(path) as excel, pytest.raises(InvalidColumnError):
+            excel.create_sheet("集計").insert_column(invalid_letter)
+
+    @pytest.mark.parametrize("invalid_letter", ["", "1", "A1", "1A"])
+    def test_delete_column_rejects_invalid_letter(self, tmp_path, invalid_letter: str) -> None:
+        path = tmp_path / "book.xlsx"
+        with Excel(path) as excel, pytest.raises(InvalidColumnError):
+            excel.create_sheet("集計").delete_column(invalid_letter)

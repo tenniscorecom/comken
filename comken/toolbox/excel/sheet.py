@@ -9,14 +9,20 @@ from copy import copy
 from typing import TYPE_CHECKING, Any, Literal
 
 from openpyxl.styles import Border, PatternFill, Side
-from openpyxl.utils import column_index_from_string, get_column_letter
+from openpyxl.utils import get_column_letter
 from openpyxl.utils.cell import coordinate_from_string, range_boundaries
 from openpyxl.worksheet.table import Table as OpenPyXLTable
 from openpyxl.worksheet.table import TableStyleInfo
 from openpyxl.worksheet.worksheet import Worksheet
 
+from comken.core.columns import col_to_num
 from comken.core.table.model import Table
-from comken.exceptions import ExcelError, InvalidTableInputError, TableError
+from comken.exceptions import (
+    ExcelError,
+    InvalidColumnError,
+    InvalidTableInputError,
+    TableError,
+)
 from comken.toolbox.excel.table import ExcelTable
 
 if TYPE_CHECKING:
@@ -126,8 +132,8 @@ class Sheet:
             raise InvalidTableInputError("列がないTableはExcelテーブルにできません。")
         try:
             start_column, start_row = coordinate_from_string(start_cell)
-            start_column_number = column_index_from_string(start_column)
-        except (TypeError, ValueError):
+            start_column_number = col_to_num(start_column)
+        except (TypeError, ValueError, InvalidColumnError):
             raise InvalidTableInputError(f"start_cell が不正です: {start_cell!r}") from None
         logger.debug(
             "create_table を開始: sheet=%s name=%s start_cell=%s columns=%d rows=%d",
@@ -224,7 +230,7 @@ class Sheet:
             )
             return "" if raw is None else raw
         column, row = coordinate_from_string(cell)
-        column_index = column_index_from_string(column)
+        column_index = col_to_num(column)
         self._excel._ensure_open()
         if force_com:
             logger.debug(
@@ -437,14 +443,14 @@ class Sheet:
     def insert_column(self, col: str) -> None:
         """指定位置に表示用の列を挿入する。"""
         self._ensure_display_sheet("insert_column")
-        self._worksheet.insert_cols(column_index_from_string(col))
+        self._worksheet.insert_cols(col_to_num(col))
         self._excel._mark_dirty()
         logger.debug("insert_column: sheet=%s col=%s", self._worksheet.title, col)
 
     def delete_column(self, col: str) -> None:
         """指定位置の表示用の列を削除する。"""
         self._ensure_display_sheet("delete_column")
-        self._worksheet.delete_cols(column_index_from_string(col))
+        self._worksheet.delete_cols(col_to_num(col))
         self._excel._mark_dirty()
         logger.debug("delete_column: sheet=%s col=%s", self._worksheet.title, col)
 

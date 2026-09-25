@@ -1,8 +1,8 @@
 """comken/core/__init__.py — 直下にだけ依存する部品を置く場所。
 
 `comken.core` には、外側（ファイル・Excel・ブラウザ・Salesforce 等）を触らない
-純粋な部品だけを置く。logger / state / config / dates / text / data / files などが
-ここに入る。外に触る道具は toolbox に置く。
+純粋な部品だけを置く。logger / state / config / dates / text / diff / columns /
+files などがここに入る。外に触る道具は toolbox に置く。
 
 利用者は、``comken`` 直下にない50数個の部品を ``from comken.core import ...`` で取る。
 ``comken`` 直下と ``comken.core`` に同じ名前は公開しない。
@@ -12,10 +12,10 @@
 ``from comken.core import ...`` を toolbox 内部から行うことも許容する。
 """
 
-from comken.core.data import DiffResult
-from comken.core.data import RowChange
-from comken.core.data import diff_row
-from comken.core.data import diff_rows
+from comken.core.diff import DiffResult
+from comken.core.diff import RowChange
+from comken.core.diff import diff_row
+from comken.core.diff import diff_rows
 from comken.core.dates import month_end
 from comken.core.dates import month_start
 from comken.core.dates import now

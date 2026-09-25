@@ -377,12 +377,12 @@ class TestDiffLeadingZero:
 
         社員番号・郵便番号などの先頭ゼロの消失を「差分なし」と誤判定しない。
         """
-        from comken.core.data import diff_row
+        from comken.core.diff import diff_row
 
         assert diff_row({"社員番号": "0001"}, {"社員番号": 1}) == {"社員番号": ("0001", 1)}
 
     def test_leading_zero_strings_match(self):
         """ "0001" 同士は差分にならないことを確認する。"""
-        from comken.core.data import diff_row
+        from comken.core.diff import diff_row
 
         assert diff_row({"社員番号": "0001"}, {"社員番号": "0001"}) == {}
