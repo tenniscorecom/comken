@@ -109,8 +109,6 @@ class SalesforceBase:
 
     Attributes:
         report: レポート API（sf.report.get(...)）。
-        bulk_query: Bulk API 2.0 のクエリジョブ（sf.bulk_query.run(...)）。
-        bulk_ingest: Bulk API 2.0 の Ingest ジョブ（sf.bulk_ingest.insert(...)）。
         metrics: API 呼び出しの計測（sf.metrics.log_summary()）。
         DOMAIN_URL: 組織の My Domain の URL。組織クラスで指定する。
         CREDENTIAL_PREFIX: 認証情報のキー名の頭。組織クラスで指定する。
@@ -194,14 +192,6 @@ class SalesforceBase:
         self.auth = auth
         self.metrics = APIMetrics(org_name or type(self).__name__)
         self.report = ReportAPI(self)
-        # BulkQueryAPI / BulkIngestAPI は request() を共有するので遅延 import で
-        # 読み込み、requests 非依存の経路でも comken.toolbox.salesforce.client だけ
-        # を import したくなったときに循環 import を避ける
-        from comken.toolbox.salesforce.bulk_ingest import BulkIngestAPI
-        from comken.toolbox.salesforce.bulk_query import BulkQueryAPI
-
-        self.bulk_query = BulkQueryAPI(self)
-        self.bulk_ingest = BulkIngestAPI(self)
 
         self._session = requests.Session()
         self._access_token = ""
@@ -557,51 +547,6 @@ class SalesforceBase:
             self._authenticate()
             response = self._send(method, self._request_url(path), body, headers, data)
         return response
-
-    def request_csv(self, method: str, path: str, component: str = "other") -> tuple[str, dict]:
-        """CSV 形式のレスポンスを返す API を呼ぶ（Bulk API 2.0 の結果取得専用）。
-
-        ``request()`` と同じ 5xx/429 リトライ・401 再認証を共有するため、
-        Accept ヘッダーだけ text/csv に差し替えて ``request()`` を呼ぶ薄いラッパー。
-
-        Args:
-            method: HTTP メソッド。
-            path: "/services/data/..." から始まるパス。
-            component: 計測での呼び出し元の区別。
-
-        Returns:
-            (CSV本文の文字列, レスポンスヘッダーの辞書)。本文が無ければ空文字。
-        """
-        body, headers = self.request(
-            method, path, component=component, headers={"Accept": "text/csv"}
-        )
-        return (body if isinstance(body, str) else ""), headers
-
-    def request_upload_csv(
-        self, method: str, path: str, csv_text: str, component: str = "other"
-    ) -> tuple[dict | list | str | None, dict]:
-        """CSV 本体をアップロードする API を呼ぶ（Bulk API 2.0 の Ingest データ送信専用）。
-
-        ``request()`` と同じ 5xx/429 リトライ・401 再認証を共有するため、
-        Content-Type ヘッダーだけ text/csv に差し替えて ``request()`` を呼ぶ薄いラッパー。
-        JSON ではなく CSV の生テキストを本体として送る点が ``request()`` の ``body=`` と異なる。
-
-        Args:
-            method: HTTP メソッド（Bulk Ingest のデータ送信は PUT）。
-            path: "/services/data/..." から始まるパス。
-            csv_text: アップロードする CSV 本文（1行目はヘッダー行）。
-            component: 計測での呼び出し元の区別。
-
-        Returns:
-            (レスポンス本文, レスポンスヘッダーの辞書)。
-        """
-        return self.request(
-            method,
-            path,
-            component=component,
-            headers={"Content-Type": "text/csv"},
-            data=csv_text,
-        )
 
     def _request_url(self, path: str) -> str:
         """相対パスと Salesforce が返す絶対 URL の両方を送信用 URL にする。

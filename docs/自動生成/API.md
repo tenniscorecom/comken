@@ -8902,26 +8902,6 @@ class MailMessage:
 
 定義を解決できませんでした。
 
-### `BulkIngestResult`
-
-```text
-class BulkIngestResult:
-```
-
-#### 説明
-
-Bulk Ingest ジョブの実行結果。
-
-Attributes:
-    successful: 成功した行の ``Table``（例: sf__Id, sf__Created, 元の列 ...）。
-    failed: 失敗した行の ``Table``（例: sf__Id, sf__Error, 元の列 ...）。
-        **1件以上の失敗行が含まれていても例外ではない**（ジョブ自体は
-        正常終了しつつ一部の行が失敗することは仕様上起こり得るため、
-        ここでは例外にしない。呼び出し側で ``len(result.failed)`` を
-        見て判断する）。
-    job_id: ジョブID。
-    state: ジョブの最終状態（"JobComplete" など）。
-
 ### `DataLoaderCLI`
 
 ```text
@@ -9454,50 +9434,6 @@ Raises:
     SalesforceRequestError: API がエラーを返した場合。
     SalesforceError: ネットワークの問題で接続できない場合。
 
-#### `request_csv`
-
-```text
-def request_csv(self, method: str, path: str, component: str='other') -> tuple[str, dict]:
-```
-
-##### 説明
-
-CSV 形式のレスポンスを返す API を呼ぶ（Bulk API 2.0 の結果取得専用）。
-
-``request()`` と同じ 5xx/429 リトライ・401 再認証を共有するため、
-Accept ヘッダーだけ text/csv に差し替えて ``request()`` を呼ぶ薄いラッパー。
-
-Args:
-    method: HTTP メソッド。
-    path: "/services/data/..." から始まるパス。
-    component: 計測での呼び出し元の区別。
-
-Returns:
-    (CSV本文の文字列, レスポンスヘッダーの辞書)。本文が無ければ空文字。
-
-#### `request_upload_csv`
-
-```text
-def request_upload_csv(self, method: str, path: str, csv_text: str, component: str='other') -> tuple[dict | list | str | None, dict]:
-```
-
-##### 説明
-
-CSV 本体をアップロードする API を呼ぶ（Bulk API 2.0 の Ingest データ送信専用）。
-
-``request()`` と同じ 5xx/429 リトライ・401 再認証を共有するため、
-Content-Type ヘッダーだけ text/csv に差し替えて ``request()`` を呼ぶ薄いラッパー。
-JSON ではなく CSV の生テキストを本体として送る点が ``request()`` の ``body=`` と異なる。
-
-Args:
-    method: HTTP メソッド（Bulk Ingest のデータ送信は PUT）。
-    path: "/services/data/..." から始まるパス。
-    csv_text: アップロードする CSV 本文（1行目はヘッダー行）。
-    component: 計測での呼び出し元の区別。
-
-Returns:
-    (レスポンス本文, レスポンスヘッダーの辞書)。
-
 #### `data_path`
 
 ```text
@@ -9768,50 +9704,6 @@ Args:
 Raises:
     SalesforceRequestError: API がエラーを返した場合。
     SalesforceError: ネットワークの問題で接続できない場合。
-
-#### `request_csv`
-
-```text
-def request_csv(self, method: str, path: str, component: str='other') -> tuple[str, dict]:
-```
-
-##### 説明
-
-CSV 形式のレスポンスを返す API を呼ぶ（Bulk API 2.0 の結果取得専用）。
-
-``request()`` と同じ 5xx/429 リトライ・401 再認証を共有するため、
-Accept ヘッダーだけ text/csv に差し替えて ``request()`` を呼ぶ薄いラッパー。
-
-Args:
-    method: HTTP メソッド。
-    path: "/services/data/..." から始まるパス。
-    component: 計測での呼び出し元の区別。
-
-Returns:
-    (CSV本文の文字列, レスポンスヘッダーの辞書)。本文が無ければ空文字。
-
-#### `request_upload_csv`
-
-```text
-def request_upload_csv(self, method: str, path: str, csv_text: str, component: str='other') -> tuple[dict | list | str | None, dict]:
-```
-
-##### 説明
-
-CSV 本体をアップロードする API を呼ぶ（Bulk API 2.0 の Ingest データ送信専用）。
-
-``request()`` と同じ 5xx/429 リトライ・401 再認証を共有するため、
-Content-Type ヘッダーだけ text/csv に差し替えて ``request()`` を呼ぶ薄いラッパー。
-JSON ではなく CSV の生テキストを本体として送る点が ``request()`` の ``body=`` と異なる。
-
-Args:
-    method: HTTP メソッド（Bulk Ingest のデータ送信は PUT）。
-    path: "/services/data/..." から始まるパス。
-    csv_text: アップロードする CSV 本文（1行目はヘッダー行）。
-    component: 計測での呼び出し元の区別。
-
-Returns:
-    (レスポンス本文, レスポンスヘッダーの辞書)。
 
 #### `data_path`
 

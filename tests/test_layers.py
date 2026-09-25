@@ -116,12 +116,10 @@ def test_imports_follow_layer_direction() -> None:
 
 
 # CSV の読み書きは comken.toolbox.csv.CSV に集約する。標準の csv を直接 import してよいのは、
-# CSV クラス自身（toolbox/csv/）、toolbox を使えない core 層、Bulk API の CSV 文字列を
-# メモリ上で組み立てる bulk_ingest.py だけ。
+# CSV クラス自身（toolbox/csv/）と toolbox を使えない core 層だけ。
 CSV_DIRECT_IMPORT_ALLOWED = (
     PACKAGE_ROOT / "toolbox" / "csv",
     PACKAGE_ROOT / "core",
-    PACKAGE_ROOT / "toolbox" / "salesforce" / "bulk_ingest.py",
 )
 
 

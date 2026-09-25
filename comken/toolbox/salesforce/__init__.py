@@ -24,7 +24,6 @@ URL と認証情報のシステム名は組織クラスがクラス定数とし�
     RefreshTokenOAuth            Authorization Code + Refresh Token Flow（既定）
     APIMetrics                   API 呼び出しの計測。SalesforceBase.metrics が持っている
     APIUsage                     組織の 24 時間 API 消費量
-    BulkIngestResult             Bulk Ingest ジョブの実行結果（成功／失敗行を Table で持つ）
     SalesforceCredentialRotator  ECA の資格情報を期限到来時だけローテーションする（既定で無効）
 
 レポートAPIの2000行上限を超える場合（マトリックス／統合などSOQLに書き換えられない
@@ -46,7 +45,6 @@ URL と認証情報のシステム名は組織クラスがクラス定数とし�
 from types import ModuleType
 from typing import TYPE_CHECKING
 
-from comken.toolbox.salesforce.bulk_ingest import BulkIngestResult
 from comken.toolbox.salesforce.dataloader import DataLoaderCLI, DataLoaderResult
 from comken.toolbox.salesforce.metrics import APIMetrics, APIUsage
 
@@ -104,7 +102,6 @@ def __dir__() -> list[str]:
 
 __all__ = [
     "SalesforceBase",
-    "BulkIngestResult",
     "DataLoaderCLI",
     "DataLoaderResult",
     "RefreshTokenOAuth",
