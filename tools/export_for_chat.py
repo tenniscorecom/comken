@@ -133,20 +133,9 @@ SUPPLEMENTAL_ERRORS = {
         ),
     ),
 }
-CLASSIFICATION_ERRORS = (
-    exceptions.ComkenError,
-    exceptions.ExcelError,
-    exceptions.AccessError,
-    exceptions.CSVError,
-    exceptions.ColumnNotFoundError,
-    exceptions.ConfigError,
-    exceptions.StateError,
-    exceptions.DownloaderError,
-    exceptions.SalesforceError,
-    exceptions.CredentialError,
-    exceptions.BrowserError,
-    exceptions.TableError,
-)
+# すべてのエラーの親。カテゴリ例外（ExcelError など）はメッセージつきで直接送出するので、
+# 各カテゴリの表に普通の行として載せる。
+CLASSIFICATION_ERRORS = (exceptions.ComkenError,)
 
 
 def _parse(path: Path) -> ast.Module:
@@ -410,11 +399,10 @@ def _errors_generated_text() -> str:
         ]
 
     sections += [
-        "## 分類（まとめて捕捉する用）",
+        "## すべてのエラーに共通の親",
         "",
-        "次の名前は、似たエラーをプログラム側でまとめて扱うための分類です。",
-        "これらの名前が単独で表示されることはありません。対処するときは、画面に表示された",
-        "具体的なエラー名を上の表から探してください。",
+        "`ComkenError` は、comken が出すエラーすべての親です。画面に表示されたエラー名を",
+        "上の表から探してください。",
         "",
         *_error_table(list(CLASSIFICATION_ERRORS)),
     ]

@@ -1554,7 +1554,7 @@ class CalendarError(ComkenError):
 祝日カレンダーに関するエラー
 
 対処:
-    画面に表示された具体的なエラー名を上の表から探す
+    メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
 
 ### `CalendarFormatError`
 
@@ -2772,7 +2772,7 @@ class ComkenError(Exception):
 comken が出す固有エラー全体
 
 対処:
-    画面に表示された具体的なエラー名を上の表から探す
+    メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
 
 ### `SiteOwnerRequiredError`
 
@@ -2815,7 +2815,7 @@ class AccessError(ComkenError):
 Access に関するエラー
 
 対処:
-    画面に表示された具体的なエラー名を上の表から探す
+    メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
 
 ### `AccessBackupError`
 
@@ -2904,7 +2904,7 @@ class ExcelError(ComkenError):
 Excel に関するエラー
 
 対処:
-    画面に表示された具体的なエラー名を上の表から探す
+    メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
 
 ### `ExcelApplicationNotAvailableError`
 
@@ -3152,7 +3152,7 @@ class CSVError(ComkenError):
 CSV に関するエラー
 
 対処:
-    画面に表示された具体的なエラー名を上の表から探す
+    メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
 
 ### `EncodingDetectionError`
 
@@ -3230,7 +3230,7 @@ class ColumnNotFoundError(ComkenError):
 Excel・CSV・データ比較で列が見つからないエラー
 
 対処:
-    画面に表示された具体的なエラー名を上の表から探す
+    メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
 
 ### `ExcelColumnNotFoundError`
 
@@ -3342,7 +3342,7 @@ class ConfigError(ComkenError):
 config.ini に関するエラー
 
 対処:
-    画面に表示された具体的なエラー名を上の表から探す
+    メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
 
 ### `ConfigCreatedFromExampleError`
 
@@ -3585,7 +3585,7 @@ class OutlookError(ComkenError):
 Outlook 関連エラーの分類
 
 対処:
-    下の個別エラーを確認する
+    メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
 
 ### `ClassicOutlookNotAvailableError`
 
@@ -3636,7 +3636,7 @@ class CredentialError(ComkenError):
 認証情報の保存・取得に関するエラー
 
 対処:
-    画面に表示された具体的なエラー名を上の表から探す
+    メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
 
 ### `InvalidCredentialNameError`
 
@@ -3790,7 +3790,7 @@ class SalesforceError(ComkenError):
 Salesforce に関するエラー
 
 対処:
-    画面に表示された具体的なエラー名を上の表から探す
+    メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
 
 ### `SalesforceAuthError`
 
@@ -4169,7 +4169,7 @@ class BrowserError(ComkenError):
 ブラウザ操作に関するエラー
 
 対処:
-    画面に表示された具体的なエラー名を上の表から探す
+    メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
 
 ### `DriverStartError`
 
@@ -4482,7 +4482,7 @@ class MasterTableError(ComkenError):
 Excel の管理表に関するエラー
 
 対処:
-    画面に表示された具体的なエラー名を上の表から探す
+    メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
 
 ### `MasterSheetNotDefinedError`
 
@@ -4591,7 +4591,7 @@ class StateError(ComkenError):
 state.ini に関するエラー
 
 対処:
-    画面に表示された具体的なエラー名を上の表から探す
+    メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
 
 ### `StateFileCorruptedError`
 
@@ -4696,7 +4696,7 @@ class CalendarError(ComkenError):
 祝日カレンダーに関するエラー
 
 対処:
-    画面に表示された具体的なエラー名を上の表から探す
+    メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
 
 ### `CalendarFormatError`
 
@@ -4733,7 +4733,7 @@ class DownloaderError(ComkenError):
 Salesforce レポートの集約取得に関するエラー
 
 対処:
-    画面に表示された具体的なエラー名を上の表から探す
+    メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
 
 ### `HistoryWriteError`
 
@@ -5081,7 +5081,7 @@ class DataLoaderError(ComkenError):
 Data Loader の実行に関するエラー
 
 対処:
-    画面に表示された具体的なエラー名を上の表から探す
+    メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
 
 ### `DataLoaderTimeoutError`
 

@@ -45,6 +45,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
+| `ExcelError` | Excel に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `ExcelApplicationNotAvailableError` | Excel を起動できない | この PC に Excel が入っているか確認する。入れられない PC で動かすなら、数式ではなく値で書いてもらう（管理表なら、数式の結果を貼り付けてもらう） |
 | `ExcelUsageError` | Excel の使い方に反する操作をした | エラーに表示された操作名・見出し数・拡張子を確認する。- ``read_only=True`` への書き込みは read_only=False で開き直す- データシート／表示用シートの API は ``Excel`` クラスのドキュメントを参照する |
 | `ExcelHeaderError` | Excel の見出し行・テーブル定義に関するエラー | - Excel の1行目（見出し行）の空欄・重複を直す- テーブル定義範囲が狭すぎないか、データシートと表示用シートの取り違えがないか確認する |
@@ -60,6 +61,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
+| `AccessError` | Access に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `AccessBackupError` | 元 DB を開く前のバックアップに失敗した | 保存先の空き容量・書き込み権限・元 DB の読み取り権限を確認する |
 | `AccessLocalCopyError` | Access ファイルを一時フォルダへコピーできない | 使用状況・読み取り権限・空き容量を確認する |
 | `AccessRoutineError` | Access マクロまたは VBA の実行に失敗した | 表示された名前と Access 側の内容を確認する |
@@ -70,7 +72,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
-| `OutlookError` | Outlook 関連エラーの分類 | 下の個別エラーを確認する |
+| `OutlookError` | Outlook 関連エラーの分類 | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `ClassicOutlookNotAvailableError` | Classic Outlook を利用できない | Classic Outlook を使うか管理者に相談する |
 | `OutlookFolderNotFoundError` | 指定したフォルダがない | エラーに表示された存在するフォルダ名を確認する |
 
@@ -79,13 +81,16 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
 | `SiteOwnerRequiredError` | `SiteBase` / `SalesforceBase` のサブクラスに `OWNER` が設定されていない | サブクラスに `OWNER = "プロジェクト名 / 担当者"` を1行追加する。ライブラリ（`comken.toolbox.browser.sites/` または`comken.toolbox.salesforce.sites/`）に入れるべきサイトかは`docs/CONVENTIONS.md` の「サイト／組織クラスを昇格させる基準」を参照して判断する。ライブラリに昇格したい場合はライブラリ管理者へ連絡する。 |
+| `CSVError` | CSV に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `EncodingDetectionError` | CSV の文字コードを判定できない | CSV の保存形式を確認し、管理者へ連絡する |
 | `CSVHeaderError` | CSV の見出し行に関するエラー | - 見出し行を追加するか、ヘッダーなし CSV なら ``columns`` を指定する- 1行目にある空欄・重複した見出しを直す- 新規 CSV に書き出すときは ``CSV(columns=[...])`` で列を指定する |
 | `CSVRowLengthError` | CSV のデータ行の列数が見出し数と一致しない | 表示された行の区切り文字と値の数を確認する |
+| `ColumnNotFoundError` | Excel・CSV・データ比較で列が見つからないエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `ExcelColumnNotFoundError` | Excel の列見出しが見つからない | Excel の1行目を確認する |
 | `KeyColumnNotFoundError` | 比較に使うキー列が見つからない | Excel・CSV の列名を確認する |
 | `TransferSourceColumnNotFoundError` | 列名転記で、lookup の転記元列が見つからない | 転記元データと config.ini のマッピング左側を確認する |
 | `InvalidColumnError` | 列の指定が正しくない（打ち間違いなど） | 列は番号（1, 2, …）か列記号（"A", "AA"）で指定する |
+| `ConfigError` | config.ini に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `ConfigCreatedFromExampleError` | config.ini が無かったので example から作った | 作られた config.ini の値を書き換えて、もう一度実行する |
 | `ConfigLowerCaseNameError` | config.ini のセクション名・キー名に小文字がある | 表示された名前を大文字に書き換える（`[files]` → `[FILES]`） |
 | `ConfigSectionNotFoundError` | config.ini の必要な節がない | メッセージに表示された **「読んだファイル」のパス** が、編集しているconfig.ini と一致するかを確認する（2026-08-18 にプロジェクトの場所を基準にするように変えてから、起動方法によって別の config.ini を読むことがあるため）。パスが正しければ、表示されたセクション名をconfig.ini に追加する。**見た目では原因が分からない場合**（行頭に空白が混入していた等）はエディタで行頭空白・全角スペースを確認する |
@@ -96,12 +101,14 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `UnsupportedFileSuffixError` | 対応外の拡張子が指定された | CSV / Excel の対応する拡張子のファイルを指定する |
 | `FileDeletionError` | ファイルを削除できなかった | 他のプロセスがファイルを掴んでいないか、読み取り専用になっていないかを確認してもう一度実行する。消せたファイルは消えているAttributes:remaining: 削除できなかったファイルのパス一覧。 |
 | `FileSuffixMissingError` | ファイル名に拡張子が無い | ファイル名に拡張子（例: ``.csv`` / ``.xlsx``）を含めて指定する。拡張子は名前の文字列にだけ書く。引数 ``ext`` / ``extension`` は廃止済みのため使えない。 |
+| `CredentialError` | 認証情報の保存・取得に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `InvalidCredentialNameError` | 認証情報のキー名に使えない文字がある | 半角英数字とアンダースコアだけにする（漢字・スペース・記号は使えない） |
 | `CredentialNotFoundError` | 認証情報（パスワード・client_secret など）が登録されていない | 表示された登録済みキー名と見比べる。無ければ `python -m comken cred import 認証情報.json` で取り込む |
 | `CredentialDecryptionError` | 認証情報を復号できない | 登録したときと**同じ Windows アカウント・同じ PC** で実行しているか確認する。タスクスケジューラの実行ユーザー違いが最も多い |
 | `CredentialStoreCorruptedError` | 認証情報の中身が壊れている | 実行アカウントの問題ではない。表示されたファイルを削除して、もう一度取り込み直す |
 | `CredentialImportError` | 取り込む JSON が壊れている・形式が違う | 表示された形式のとおりに書き直す。値は必ず `" "` で囲む |
 | `PasswordRejectedError` | サイト側が新しいパスワードを拒否した（記号が足りない・文字数が足りない等） | 表示されたエラー内容（サイト側の拒否理由）を確認し、要件を満たすパスワードを入力し直す |
+| `SalesforceError` | Salesforce に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `SalesforceAuthError` | Salesforce にログインできない | 表示された確認項目を上から順に見る。それでも直らなければ管理者へ連絡する |
 | `SalesforceConnectionError` | Salesforce につながらない | ネットワークの状態を確認して、少し待ってから再実行する |
 | `SalesforceRequestError` | Salesforce が処理を断った | 表示されたメッセージをそのまま添えて管理者へ連絡する（権限か項目名の問題が多い） |
@@ -117,17 +124,19 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `SalesforceSiteSelectionError` | 対話的な組織選択で、番号にも組織名にも一致しなかった | 表示された番号（1〜件数）か、組織名（大文字小文字は区別しない）を入力し直す |
 | `SalesforceBulkFailedError` | Bulk API のジョブが失敗して終わった（Failed / Aborted） | 表示されたエラー内容を確認する。クエリ経路は SOQL 構文・参照項目・実行ユーザーの権限、Ingest 経路は CSV の列名・データ型・実行ユーザーの権限を見直す |
 | `SalesforceBulkTimeoutError` | Bulk API のジョブが制限時間内に終わらなかった | ``timeout_seconds`` を長くするか、対象を絞って再実行する。Ingest 経路はデータを分割して再実行してもよい |
-| `MasterTableError` | Excel の管理表に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
+| `MasterTableError` | Excel の管理表に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `MasterSheetNotDefinedError` | 管理表の場所が決まっていない | `load(パス)` のようにファイルを渡すか、クラスに PATH を書く（コードの直し方の話なので、非エンジニアが見た場合は管理者へ連絡する） |
 | `MasterColumnNotFoundError` | 管理表に必要な列（見出し）が無い | 管理表の1行目（見出し）を元に戻す。消してしまった場合は、メッセージに出ている「今ある見出し」と見比べて足す |
 | `MasterRowValueError` | 管理表の値が正しくない | メッセージに出ている行と列を、管理表で確認して直す |
 | `MasterDuplicateValueError` | 一意であるべき列に、同じ値が2つ以上ある | 管理表を開いて、重複している値のどちらかを別の値に変える |
+| `StateError` | state.ini に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `StateFileCorruptedError` | state.ini が壊れていて読み取れない | 内容を直す。直せない場合は別名に変更して、空の状態から再実行する |
 | `StateLowerCaseNameError` | state のキー名に小文字がある | 表示されたキー名を大文字に直す（`last_file` → `LAST_FILE`） |
 | `StateValueTypeError` | state に保存できない型の値が渡された | 真偽値・整数・小数・文字列・文字列のリストのいずれかに変更する |
 | `BusinessDayNotFoundError` | 営業日が見つからなかった | n をその月の営業日数以下に直す、対象月の祝日に過不足がないか確認する、社内休日（会社用カレンダーCSV）が広範囲に登録されていないか確認する |
-| `CalendarError` | 祝日カレンダーに関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
+| `CalendarError` | 祝日カレンダーに関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `CalendarFormatError` | 会社用カレンダーCSV 以外のファイルや壊れたファイルを読み込もうとした | ``python -m comken.core.calendar.build`` を実行して``comken/core/calendar/data/company_calendar.csv`` を再生成する。内閣府の ``syukujitsu.csv`` 形式変更が原因の場合は``comken.core.calendar.build`` 側の解析ロジックを直す |
+| `DownloaderError` | Salesforce レポートの集約取得に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `HistoryWriteError` | 必須のダウンロード履歴を記録できなかった | 履歴CSVの保存先、共有サーバー接続、書込み権限を確認する |
 | `HistoryLockTimeoutError` | ダウンロード履歴の排他ロックを待っても取得できなかった | 同時実行中の処理が終わるのを待って再実行する。繰り返す場合は共有サーバーを確認する |
 | `CachedReportNotFoundError` | 本日の定期取得キャッシュが見つからない | Salesforce からCSVを手動取得し、画面に表示された正確なパス・ファイル名で置いて、同じ python main.py を再実行する |
@@ -150,6 +159,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
+| `BrowserError` | ブラウザ操作に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `DriverStartError` | ブラウザを起動できない | エラーの本文にある確認事項をそのまま試す。Windows Update で Edge が更新された直後に起きやすい。メッセージが「バージョンが合わない」でも、``PROFILE_ROOT`` に**相対パス**を設定している場合は疑わしい。``--user-data-dir`` に相対パスが渡ると、msedge.exe 側の作業ディレクトリ次第でプロファイル初期化に失敗し、実際の原因と無関係に同じメッセージで落ちることがある（``Browsers._resolve_profile_dir()`` は絶対パスへ解決して渡すが、念のため確認する） |
 | `BrowserNotStartedError` | `with` を使わずにブラウザを操作した | `with Browsers() as browsers:` の中で使う（ブラウザは起動していないので実害はない） |
 | `BrowserClosedError` | `with` を抜けた後のブラウザを操作した | 続けたい処理を `with` の中に入れる。外へ持ち出すのは取り出した値だけにする |
@@ -171,6 +181,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `TransferDestinationMultipleMatchError` | 転記先のキーに一致する行が複数ある | mapping の先頭列に対応する転記先列の値を一意にする。キーが ``None`` か ``""`` の行は突合対象外なので、空欄のキーが複数あってもこの例外は出ない。 |
 | `TableNotOpenError` | 表を with 文で開かずに操作した。 | ``with`` 文の中で使う（CSV / Excel などは ``__enter__`` で表を開く） |
 | `TransferDestinationMissingError` | Transfer.apply_mapping() に転記先が None で渡された | matched_rows() を使うか、``transfer_rows()`` の ``(read_row, None)``を ``if write_row is None:`` で分岐してから渡す。 新規行を追加する場合は ``Transfer`` の責務ではなく、``Table.append()`` 等で利用者側で対応する。 |
+| `TableError` | 表データの読み書き・転記に関するエラー | 画面に表示された具体的なエラー内容を確認する |
 | `InvalidTableInputError` | Table API に対応しない入力が渡された。 | columns、rows、types の型と列名を確認する |
 | `InvalidTableOperationError` | Table API で実行できない操作が指定された。 | 対象が読み取り専用でないか、指定したテーブル名が正しいか確認する |
 | `TableColumnNotFoundError` | Table に指定された列が存在しない。 | Table.columns を確認し、存在する列名を指定する |
@@ -188,27 +199,15 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
-| `DataLoaderError` | Data Loader の実行に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
+| `DataLoaderError` | Data Loader の実行に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `DataLoaderTimeoutError` | Data Loader の実行が制限時間内に終わらなかった | 処理対象の件数を減らすか、``timeout_seconds`` を長くする。プロセスがハングしている場合はタスクマネージャーから Data Loader のプロセスを終了させる |
 | `DataLoaderExecutionError` | Data Loader が 0 以外の終了コードで終わった | 表示された標準出力・標準エラー出力を確認する。``config.properties``・``process-conf.xml`` の設定を見直す。よくある原因はログイン情報の誤り、SOQL のフィールド名不一致、書き出し先パスへの権限不足 |
 
-## 分類（まとめて捕捉する用）
+## すべてのエラーに共通の親
 
-次の名前は、似たエラーをプログラム側でまとめて扱うための分類です。
-これらの名前が単独で表示されることはありません。対処するときは、画面に表示された
-具体的なエラー名を上の表から探してください。
+`ComkenError` は、comken が出すエラーすべての親です。画面に表示されたエラー名を
+上の表から探してください。
 
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
-| `ComkenError` | comken が出す固有エラー全体 | 画面に表示された具体的なエラー名を上の表から探す |
-| `ExcelError` | Excel に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
-| `AccessError` | Access に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
-| `CSVError` | CSV に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
-| `ColumnNotFoundError` | Excel・CSV・データ比較で列が見つからないエラー | 画面に表示された具体的なエラー名を上の表から探す |
-| `ConfigError` | config.ini に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
-| `StateError` | state.ini に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
-| `DownloaderError` | Salesforce レポートの集約取得に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
-| `SalesforceError` | Salesforce に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
-| `CredentialError` | 認証情報の保存・取得に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
-| `BrowserError` | ブラウザ操作に関するエラー | 画面に表示された具体的なエラー名を上の表から探す |
-| `TableError` | 表データの読み書き・転記に関するエラー | 画面に表示された具体的なエラー内容を確認する |
+| `ComkenError` | comken が出す固有エラー全体 | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
