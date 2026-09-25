@@ -970,7 +970,7 @@ raise ExcelError(f"シート「{name}」が見つかりません。存在する�
    `site.py`（`SiteBase` の定義。サイトを書く人が最初に読むファイル）→
    `options.py`（`BrowserOptions` の既定値一覧）→
    `sites/`（`SITES` の置き場。ライブラリ公認サイトの集まり）→
-   `management/browsers.py`（複数管理）→ `management/sessions.py`（1サイト分）
+   `management/sessions.py`（1サイト分の WebDriver）
    → `page.py`（画面操作）の順に読む
 
 ### どのファイルも同じ形

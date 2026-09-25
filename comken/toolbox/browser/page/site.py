@@ -22,7 +22,7 @@ class SitePage(Page):
 
     BASE_URL は次の順で解決する:
       1. 自身（または親クラス）に `BASE_URL` が定義されていればそれ
-      2. 無ければ、`browsers.launch(SiteBase)` で起動した `SiteBase` の `BASE_URL`
+      2. 無ければ、`with SiteBase()` で起動した `SiteBase` の `BASE_URL`
     """
 
     BASE_URL: str = ""

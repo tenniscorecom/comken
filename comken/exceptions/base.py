@@ -16,8 +16,7 @@ class SiteOwnerRequiredError(ComkenError):
     同じ社内システムのクラスが複数プロジェクトで重複しても気づけない。
     ドキュメントの努力目標では守れないので、起動時に OWNER の設定を強制する。
 
-    発生箇所: SiteBase.__enter__() / Browsers.launch(SiteBase) /
-             SalesforceBase.__init__()
+    発生箇所: SiteBase.__enter__() / SalesforceBase.__init__()
 
     対処:
         サブクラスに `OWNER = "プロジェクト名 / 担当者"` を1行追加する。

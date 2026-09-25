@@ -11,7 +11,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from comken.exceptions import BrowserError, SalesforceError
-from comken.toolbox.browser import BrowserOptions, DownloadDir
 from comken.toolbox.browser.management.sessions import BrowserSession
 from comken.toolbox.browser.sites.salesforce.base import (
     SalesforceReportBrowser,
@@ -25,17 +24,20 @@ REPORT_URL_1 = "https://example.my.salesforce.com/lightning/r/Report/00O5g00000A
 REPORT_URL_2 = "https://example.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE2AS/view"
 
 
-def _make_session(tmp_path, name: str = "test") -> BrowserSession:
-    """Edge を起動せずに、Salesforce に紐づいた起動済みセッションを作る。"""
-    session = BrowserSession(
-        name=name,
-        options=BrowserOptions(),
-        download_dir=DownloadDir(path=tmp_path / f"dl_{name}"),
-        profile_dir=None,
-    )
-    session._driver = MagicMock()
-    session._site = SalesforceReportBrowser()
-    return session
+def _patch_browser(monkeypatch) -> None:
+    """Edge を起動せずに、``with SalesforceReportBrowser() as sf:`` の経路を通す。
+
+    `BrowserSession.__enter__` の戻り値を self にして _driver に MagicMock を入れる。
+    `SiteBase.__enter__` が BrowserSession を作って `session.__enter__()` を
+    呼ぶ流れに差し込む。
+    """
+
+    def enter(self):
+        self._driver = MagicMock()
+        return self
+
+    monkeypatch.setattr(BrowserSession, "__enter__", enter)
+    monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *a: None)
 
 
 class TestPublicApi:
@@ -54,13 +56,14 @@ class TestPublicApi:
 class TestGoLogin:
     """go_login() — 人が手動でログインする画面を開く。"""
 
-    def test_opens_base_url(self, tmp_path):
-        session = _make_session(tmp_path)
-        sf = SalesforceReportBrowser(session)
+    def test_opens_base_url(self, monkeypatch):
+        _patch_browser(monkeypatch)
 
-        sf.go_login()
+        with SalesforceReportBrowser() as sf:
+            driver = sf.session._driver
+            sf.go_login()
 
-        session._driver.get.assert_called_once_with(SalesforceReportBrowser.BASE_URL)
+        driver.get.assert_called_once_with(SalesforceReportBrowser.BASE_URL)
 
     def test_raises_when_not_started(self):
         sf = SalesforceReportBrowser()
@@ -84,29 +87,31 @@ class TestWaitForManualLogin:
 class TestLoginPageLogin:
     """LoginPage.login() — ID/パスワードを入力してログインボタンを押す。"""
 
-    def test_fills_username_and_password_and_clicks_login(self, tmp_path):
-        session = _make_session(tmp_path)
-        page = LoginPage(session)
-        page._wait = MagicMock()
-        element = MagicMock()
-        page._wait.until.return_value = element
+    def test_fills_username_and_password_and_clicks_login(self, monkeypatch):
+        _patch_browser(monkeypatch)
 
-        page.login("user@example.com", "secret")
+        with SalesforceReportBrowser() as sf:
+            page = sf.to(LoginPage)
+            page._wait = MagicMock()
+            element = MagicMock()
+            page._wait.until.return_value = element
 
-        element.send_keys.assert_any_call("user@example.com")
-        element.send_keys.assert_any_call("secret")
-        element.click.assert_called_once()
+            page.login("user@example.com", "secret")
+
+            element.send_keys.assert_any_call("user@example.com")
+            element.send_keys.assert_any_call("secret")
+            element.click.assert_called_once()
 
 
 class TestLoginWithCredentials:
     """login_with_credentials() — DPAPIのID/パスワードでログインフォームへ入力する。"""
 
-    def test_uses_credentials_to_login(self, tmp_path):
-        session = _make_session(tmp_path)
-        sf = SalesforceReportBrowser(session)
+    def test_uses_credentials_to_login(self, monkeypatch):
+        _patch_browser(monkeypatch)
         cred = MagicMock(username="user@example.com", password="secret")
         login_page = MagicMock()
         with (
+            SalesforceReportBrowser() as sf,
             patch("comken.toolbox.credentials.Credentials", return_value=cred) as cred_class,
             patch.object(SalesforceReportBrowser, "go_login", return_value=login_page) as go_login,
         ):
@@ -116,17 +121,16 @@ class TestLoginWithCredentials:
         go_login.assert_called_once()
         login_page.login.assert_called_once_with("user@example.com", "secret")
 
-    def test_falls_back_to_class_credential_prefix_when_omitted(self, tmp_path):
+    def test_falls_back_to_class_credential_prefix_when_omitted(self, monkeypatch):
         """prefix省略時は、クラスの CREDENTIAL_PREFIX を使う。"""
 
         class _MyOrg(SalesforceReportBrowser):
             CREDENTIAL_PREFIX = "salesforce_solution"
 
-        session = _make_session(tmp_path)
-        session._site = _MyOrg()
-        sf = _MyOrg(session)
+        _patch_browser(monkeypatch)
         cred = MagicMock(username="user@example.com", password="secret")
         with (
+            _MyOrg() as sf,
             patch("comken.toolbox.credentials.Credentials", return_value=cred) as cred_class,
             patch.object(SalesforceReportBrowser, "go_login", return_value=MagicMock()),
         ):
@@ -134,17 +138,16 @@ class TestLoginWithCredentials:
 
         cred_class.assert_called_once_with("salesforce_solution")
 
-    def test_explicit_prefix_overrides_class_credential_prefix(self, tmp_path):
+    def test_explicit_prefix_overrides_class_credential_prefix(self, monkeypatch):
         """明示的に渡した prefix は、クラスの CREDENTIAL_PREFIX より優先される。"""
 
         class _MyOrg(SalesforceReportBrowser):
             CREDENTIAL_PREFIX = "salesforce_solution"
 
-        session = _make_session(tmp_path)
-        session._site = _MyOrg()
-        sf = _MyOrg(session)
+        _patch_browser(monkeypatch)
         cred = MagicMock(username="user@example.com", password="secret")
         with (
+            _MyOrg() as sf,
             patch("comken.toolbox.credentials.Credentials", return_value=cred) as cred_class,
             patch.object(SalesforceReportBrowser, "go_login", return_value=MagicMock()),
         ):
@@ -202,14 +205,8 @@ def _html_response(status: int = 200):
 class TestExportReports:
     """export_reports() — セッションCookieをrequestsへ引き継ぎ並列ダウンロードする。"""
 
-    def test_downloads_reports_to_the_given_destinations(self, tmp_path):
-        session = _make_session(tmp_path)
-        session._driver.current_url = REPORT_URL_1
-        session._driver.get_cookies.return_value = [
-            {"name": "sid", "value": "TOKEN", "domain": ".salesforce.com"}
-        ]
-        sf = SalesforceReportBrowser(session)
-
+    def test_downloads_reports_to_the_given_destinations(self, monkeypatch, tmp_path):
+        _patch_browser(monkeypatch)
         http_session = MagicMock()
         http_session.get.side_effect = [
             _csv_response(b"report1"),
@@ -217,10 +214,17 @@ class TestExportReports:
         ]
         destination_1 = tmp_path / "月次レポート.csv"
         destination_2 = tmp_path / "サブフォルダ" / "四半期レポート.csv"
-        with patch(
-            "comken.toolbox.browser.sites.salesforce.base.requests.Session",
-            return_value=http_session,
+        with (
+            SalesforceReportBrowser() as sf,
+            patch(
+                "comken.toolbox.browser.sites.salesforce.base.requests.Session",
+                return_value=http_session,
+            ),
         ):
+            sf.session._driver.current_url = REPORT_URL_1
+            sf.session._driver.get_cookies.return_value = [
+                {"name": "sid", "value": "TOKEN", "domain": ".salesforce.com"}
+            ]
             results = dict(
                 sf.export_reports({REPORT_URL_1: destination_1, REPORT_URL_2: destination_2})
             )
@@ -231,38 +235,38 @@ class TestExportReports:
         assert destination_1.exists()
         assert destination_2.exists()
 
-    def test_creates_parent_directory_of_destination(self, tmp_path):
-        session = _make_session(tmp_path)
-        session._driver.current_url = REPORT_URL_1
-        session._driver.get_cookies.return_value = []
-        sf = SalesforceReportBrowser(session)
-
+    def test_creates_parent_directory_of_destination(self, monkeypatch, tmp_path):
+        _patch_browser(monkeypatch)
         http_session = MagicMock()
         http_session.get.return_value = _csv_response()
         destination = tmp_path / "nested" / "dir" / "report.csv"
-        with patch(
-            "comken.toolbox.browser.sites.salesforce.base.requests.Session",
-            return_value=http_session,
+        with (
+            SalesforceReportBrowser() as sf,
+            patch(
+                "comken.toolbox.browser.sites.salesforce.base.requests.Session",
+                return_value=http_session,
+            ),
         ):
+            sf.session._driver.current_url = REPORT_URL_1
+            sf.session._driver.get_cookies.return_value = []
             list(sf.export_reports({REPORT_URL_1: destination}))
 
         assert destination.exists()
 
-    def test_raises_when_response_is_html(self, tmp_path):
-        session = _make_session(tmp_path)
-        session._driver.current_url = REPORT_URL_1
-        session._driver.get_cookies.return_value = []
-        sf = SalesforceReportBrowser(session)
-
+    def test_raises_when_response_is_html(self, monkeypatch, tmp_path):
+        _patch_browser(monkeypatch)
         http_session = MagicMock()
         http_session.get.return_value = _html_response()
         with (
+            SalesforceReportBrowser() as sf,
             patch(
                 "comken.toolbox.browser.sites.salesforce.base.requests.Session",
                 return_value=http_session,
             ),
             pytest.raises(SalesforceError),
         ):
+            sf.session._driver.current_url = REPORT_URL_1
+            sf.session._driver.get_cookies.return_value = []
             list(sf.export_reports({REPORT_URL_1: tmp_path / "report.csv"}))
 
     def test_raises_when_not_started(self):
@@ -275,37 +279,47 @@ class TestExportReports:
 class TestStartKeepAlive:
     """_start_keep_alive() — export_reports() 中、ブラウザにURLを開かせ続ける暫定対処。"""
 
-    def test_returns_none_thread_when_url_is_none(self, tmp_path):
-        session = _make_session(tmp_path)
+    def test_returns_none_thread_when_url_is_none(self, monkeypatch):
+        _patch_browser(monkeypatch)
 
-        thread, stop = _start_keep_alive(session, None, 300)
+        with SalesforceReportBrowser() as sf:
+            assert sf.session is not None
+            session = sf.session
+            thread, stop = _start_keep_alive(session, None, 300)
 
         assert thread is None
         assert not stop.is_set()
 
-    def test_opens_url_repeatedly_until_stopped(self, tmp_path):
-        session = _make_session(tmp_path)
+    def test_opens_url_repeatedly_until_stopped(self, monkeypatch):
+        _patch_browser(monkeypatch)
 
-        thread, stop = _start_keep_alive(session, REPORT_URL_1, 0.02)
-        try:
-            time.sleep(0.1)
-        finally:
-            stop.set()
-            thread.join(timeout=1)
+        with SalesforceReportBrowser() as sf:
+            assert sf.session is not None
+            session = sf.session
+            thread, stop = _start_keep_alive(session, REPORT_URL_1, 0.02)
+            try:
+                time.sleep(0.1)
+            finally:
+                stop.set()
+                thread.join(timeout=1)
 
         assert not thread.is_alive()
         assert session._driver.get.call_count >= 2
 
-    def test_survives_open_failure_and_keeps_running(self, tmp_path):
-        session = _make_session(tmp_path)
-        session._driver.get.side_effect = RuntimeError("開けませんでした")
+    def test_survives_open_failure_and_keeps_running(self, monkeypatch):
+        _patch_browser(monkeypatch)
 
-        thread, stop = _start_keep_alive(session, REPORT_URL_1, 0.02)
-        try:
-            time.sleep(0.1)
-        finally:
-            stop.set()
-            thread.join(timeout=1)
+        with SalesforceReportBrowser() as sf:
+            assert sf.session is not None
+            session = sf.session
+            session._driver.get.side_effect = RuntimeError("開けませんでした")
+
+            thread, stop = _start_keep_alive(session, REPORT_URL_1, 0.02)
+            try:
+                time.sleep(0.1)
+            finally:
+                stop.set()
+                thread.join(timeout=1)
 
         assert not thread.is_alive()
         assert session._driver.get.call_count >= 2
@@ -314,18 +328,19 @@ class TestStartKeepAlive:
 class TestExportReportsKeepAlive:
     """export_reports() の keep_alive_report_id — ダウンロード終了後は必ず止まる。"""
 
-    def test_keep_alive_thread_stops_after_completion(self, tmp_path):
-        session = _make_session(tmp_path)
-        session._driver.current_url = REPORT_URL_1
-        session._driver.get_cookies.return_value = []
-        sf = SalesforceReportBrowser(session)
-
+    def test_keep_alive_thread_stops_after_completion(self, monkeypatch, tmp_path):
+        _patch_browser(monkeypatch)
         http_session = MagicMock()
         http_session.get.return_value = _csv_response()
-        with patch(
-            "comken.toolbox.browser.sites.salesforce.base.requests.Session",
-            return_value=http_session,
+        with (
+            SalesforceReportBrowser() as sf,
+            patch(
+                "comken.toolbox.browser.sites.salesforce.base.requests.Session",
+                return_value=http_session,
+            ),
         ):
+            sf.session._driver.current_url = REPORT_URL_1
+            sf.session._driver.get_cookies.return_value = []
             list(
                 sf.export_reports(
                     {REPORT_URL_1: tmp_path / "report.csv"},
@@ -337,11 +352,8 @@ class TestExportReportsKeepAlive:
         active_threads = [t for t in threading.enumerate() if t.name == "salesforce-keep-alive"]
         assert active_threads == []
 
-    def test_keep_alive_url_is_built_from_current_domain(self, tmp_path):
-        session = _make_session(tmp_path)
-        session._driver.current_url = REPORT_URL_1
-        session._driver.get_cookies.return_value = []
-        sf = SalesforceReportBrowser(session)
+    def test_keep_alive_url_is_built_from_current_domain(self, monkeypatch, tmp_path):
+        _patch_browser(monkeypatch)
 
         def _slow_get(*args, **kwargs):
             time.sleep(0.1)
@@ -349,10 +361,16 @@ class TestExportReportsKeepAlive:
 
         http_session = MagicMock()
         http_session.get.side_effect = _slow_get
-        with patch(
-            "comken.toolbox.browser.sites.salesforce.base.requests.Session",
-            return_value=http_session,
+        with (
+            SalesforceReportBrowser() as sf,
+            patch(
+                "comken.toolbox.browser.sites.salesforce.base.requests.Session",
+                return_value=http_session,
+            ),
         ):
+            driver = sf.session._driver
+            sf.session._driver.current_url = REPORT_URL_1
+            sf.session._driver.get_cookies.return_value = []
             list(
                 sf.export_reports(
                     {REPORT_URL_1: tmp_path / "report.csv"},
@@ -361,4 +379,4 @@ class TestExportReportsKeepAlive:
                 )
             )
 
-        session._driver.get.assert_any_call("https://example.my.salesforce.com/00O5g00000ABCDE9AS")
+        driver.get.assert_any_call("https://example.my.salesforce.com/00O5g00000ABCDE9AS")

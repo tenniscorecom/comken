@@ -2765,8 +2765,7 @@ class SiteOwnerRequiredError(ComkenError):
 同じ社内システムのクラスが複数プロジェクトで重複しても気づけない。
 ドキュメントの努力目標では守れないので、起動時に OWNER の設定を強制する。
 
-発生箇所: SiteBase.__enter__() / Browsers.launch(SiteBase) /
-         SalesforceBase.__init__()
+発生箇所: SiteBase.__enter__() / SalesforceBase.__init__()
 
 対処:
     サブクラスに `OWNER = "プロジェクト名 / 担当者"` を1行追加する。
@@ -4382,104 +4381,6 @@ def table_names(self) -> list[str]:
 
 ## `from comken.toolbox.browser import ...`
 
-### `Browsers`
-
-```text
-class Browsers:
-```
-
-#### 説明
-
-複数サイト分のブラウザをまとめて起動・終了する。**with 文の中でだけ使える。**
-
-どこで例外が出ても、起動済みのブラウザはすべて閉じる。
-1つのブラウザの終了に失敗しても、残りの終了は続行される。
-
-with を使わずに launch すると BrowserError になる（ブラウザは起動しない）。
-with を必須にしているのは、途中で例外が出たときにブラウザのプロセスが残り、
-次の実行でドライバーの更新まで邪魔するのを防ぐため。
-
-Attributes:
-    names: 起動済みのセッション名（起動した順）。
-
-#### `__init__`
-
-```text
-def __init__(self) -> None:
-```
-
-#### `launch`
-
-```text
-def launch(self, site: type[S], download_dir: str | Path | None=None) -> S:
-```
-
-##### 説明
-
-サイトクラスを渡してブラウザを1つ起動する（推奨経路）。
-
-サブクラスの NAME と OPTIONS を読んで、内部で `launch_session()` を
-呼び出す。呼び出し側に「名前」と「オプション」を別々に書かせないことで、
-取り違えが起きにくく、固有の値が1か所に集まる。
-
-Args:
-    site: 起動する SiteBase サブクラス。`NAME` が必須（空だと BrowserError）。
-    download_dir: ダウンロード先。省略時は OPTIONS.DOWNLOAD_DIR/<NAME>、
-                  それも未設定なら一時フォルダを作り、終了時に削除する。
-
-Returns:
-    起動済みの SiteBase インスタンス。`.session` で BrowserSession に繋がる。
-
-Raises:
-    BrowserError: サブクラスに NAME が設定されていない場合、
-        同じ NAME ですでに起動している場合、ブラウザを起動できなかった場合
-        （具体的な理由はメッセージに出る）。
-
-#### `launch_session`
-
-```text
-@measure
-def launch_session(self, name: str, options: type[BrowserOptions] | BrowserOptions | None=None, download_dir: str | Path | None=None) -> BrowserSession:
-```
-
-##### 説明
-
-名前とオプションを直接渡してブラウザを1つ起動する（低レベル経路）。
-
-`launch(SiteBase)` の中から呼ばれる雑務用。SiteBase サブクラスが用意できない
-場面（テスト・一時的な検証）で使う。通常は `launch(SiteBase)` を使う。
-
-ダウンロードフォルダとログイン状態はこの名前ごとに分かれる。
-同じサイトへ2つのアカウントでログインしたい場合も、
-「kintai_a」「kintai_b」と名前を分ければ混ざらない。
-
-Args:
-    name: セッション名。ログとエラーメッセージに出るので、
-          「kintai」「keiri」のようにサイトが分かる名前にする。
-    options: 起動オプション。BrowserOptions のサブクラスをそのまま渡せる
-             （セッションごとに別インスタンスを作るので、設定が混ざらない）。
-             省略時は BrowserOptions の初期値で起動する。
-    download_dir: ダウンロード先。省略時は options.DOWNLOAD_DIR/<name>、
-                  それも未設定なら一時フォルダを作り、終了時に削除する。
-
-Returns:
-    起動済みの BrowserSession。この with を抜けるまで使える。
-
-Raises:
-    BrowserError: 同じ名前ですでに起動している場合、
-        ブラウザを起動できなかった場合（具体的な理由はメッセージに出る）。
-
-#### `names`
-
-```text
-@property
-def names(self) -> list[str]:
-```
-
-##### 説明
-
-起動済みのセッション名（起動した順）。
-
 ### `BrowserSession`
 
 ```text
@@ -4512,7 +4413,7 @@ def __init__(self, name: str, options: BrowserOptions, download_dir: DownloadDir
 
 ##### 説明
 
-直接呼ばず、Browsers.launch() から作る。
+直接呼ばず、SiteBase.__enter__() から作る。
 
 Args:
     name: セッション名。
@@ -4703,9 +4604,16 @@ class SiteBase:
 （current_url や cookie など）は持たない — 同じサイトを2アカウントで並列に
 開けるようにするため。
 
-使い方は2つ:
-  - `with Kintai() as kintai:` … 1サイトだけ。Browsers を内側で抱えて起動する
-  - `with Browsers() as browsers: kintai = browsers.launch(Kintai)` … 複数サイト
+使い方は ``with Kintai() as kintai:`` だけ。複数サイトは with を並べればよい。
+
+Args:
+    name: セッション名の上書き。省略時は ``NAME`` が使われる。
+          ダウンロードフォルダ・ログイン状態はセッション名ごとに分かれるので、
+          同じサイトを2アカウントで開くときは ``name="kintai_a"`` のように分ける。
+    download_dir: ダウンロード先の固定パス。``None`` のときは
+                  ``OPTIONS.DOWNLOAD_DIR/<セッション名>``、
+                  これも未設定なら一時フォルダになる（一時フォルダは with を
+                  抜けると自動削除）。
 
 Attributes:
     session: このサイトに紐づく BrowserSession。Page に渡して操作する。
@@ -4713,8 +4621,21 @@ Attributes:
 #### `__init__`
 
 ```text
-def __init__(self, session: BrowserSession | None=None) -> None:
+def __init__(self, name: str | None=None, *, download_dir: str | Path | None=None) -> None:
 ```
+
+#### `close`
+
+```text
+def close(self) -> None:
+```
+
+##### 説明
+
+自分で起動したブラウザだけ閉じる。
+
+`with Kintai() as kintai:` で起動したインスタンスを `close()` しても安全。
+2回呼んでも安全（何もしないだけ）。
 
 #### `downloads`
 
@@ -4764,20 +4685,6 @@ Args:
 
 Returns:
     そのサイトのブラウザに紐づいた画面クラスのインスタンス。
-
-#### `close`
-
-```text
-def close(self) -> None:
-```
-
-##### 説明
-
-Browsers から渡されたセッションは触らず、自分で起動したブラウザだけ閉じる。
-
-`with Kintai() as kintai:` で起動したインスタンスを `close()` しても安全。
-ただし `Browsers.launch()` から持たせてもらったインスタンスでは何もしない
-（持ち主の Browsers が with を抜けるときに閉じるため、二重に閉じない）。
 
 ### `BrowserOptions`
 
@@ -4861,7 +4768,7 @@ def __init__(self, session: BrowserSession, wait_seconds: int | None=None) -> No
 ##### 説明
 
 Args:
-    session: Browsers.launch() で起動したセッション。
+    session: ``with SiteBase()`` で起動したセッション。
     wait_seconds: 要素待機のタイムアウト秒数。
                   省略時はセッションの設定（BrowserOptions.WAIT_SECONDS）を引き継ぐ。
 
@@ -5302,7 +5209,7 @@ BASE_URL とログインなど、そのサイトのどの画面でも使う処�
 
 BASE_URL は次の順で解決する:
   1. 自身（または親クラス）に `BASE_URL` が定義されていればそれ
-  2. 無ければ、`browsers.launch(SiteBase)` で起動した `SiteBase` の `BASE_URL`
+  2. 無ければ、`with SiteBase()` で起動した `SiteBase` の `BASE_URL`
 
 #### `go`
 
@@ -5418,7 +5325,8 @@ class DownloadDir:
 
 ブラウザダウンロード用のフォルダ。作成・完了待ち・後片付けをまとめて扱う。
 
-通常は Browsers.launch() がセッションごとに1つ用意するので、自分で作る必要はない
+通常は ``with SiteBase() as ...`` したセッションごとに1つ用意されるので、
+自分で作る必要はない
 （session.download_dir で受け取り、session.download_dir.wait() で完了を待つ）。
 
 一時フォルダの場合、セッションの with を抜けた時点で自動削除される（消し忘れ防止）。
@@ -5426,9 +5334,8 @@ class DownloadDir:
 ダウンロードしたものを残したい場合は、起動時に保存先を指定する
 （固定フォルダは with を抜けても削除されない）:
 
-    with Browsers() as browsers:
-        kintai = browsers.launch(Kintai, download_dir=r"C:\作業\downloads")
-        files = kintai.session.download_dir.wait()
+    with Kintai(download_dir=r"C:\作業\downloads") as kintai:
+        files = kintai.downloads.wait()
     # ← C:\作業\downloads とファイルはそのまま残る
 
 wait() は作成時点で既にあったファイルを無視し、新しく増えたファイルだけを完了対象にする。
@@ -5491,104 +5398,6 @@ Args:
 
 ## `from comken.toolbox.browser.management import ...`
 
-### `Browsers`
-
-```text
-class Browsers:
-```
-
-#### 説明
-
-複数サイト分のブラウザをまとめて起動・終了する。**with 文の中でだけ使える。**
-
-どこで例外が出ても、起動済みのブラウザはすべて閉じる。
-1つのブラウザの終了に失敗しても、残りの終了は続行される。
-
-with を使わずに launch すると BrowserError になる（ブラウザは起動しない）。
-with を必須にしているのは、途中で例外が出たときにブラウザのプロセスが残り、
-次の実行でドライバーの更新まで邪魔するのを防ぐため。
-
-Attributes:
-    names: 起動済みのセッション名（起動した順）。
-
-#### `__init__`
-
-```text
-def __init__(self) -> None:
-```
-
-#### `launch`
-
-```text
-def launch(self, site: type[S], download_dir: str | Path | None=None) -> S:
-```
-
-##### 説明
-
-サイトクラスを渡してブラウザを1つ起動する（推奨経路）。
-
-サブクラスの NAME と OPTIONS を読んで、内部で `launch_session()` を
-呼び出す。呼び出し側に「名前」と「オプション」を別々に書かせないことで、
-取り違えが起きにくく、固有の値が1か所に集まる。
-
-Args:
-    site: 起動する SiteBase サブクラス。`NAME` が必須（空だと BrowserError）。
-    download_dir: ダウンロード先。省略時は OPTIONS.DOWNLOAD_DIR/<NAME>、
-                  それも未設定なら一時フォルダを作り、終了時に削除する。
-
-Returns:
-    起動済みの SiteBase インスタンス。`.session` で BrowserSession に繋がる。
-
-Raises:
-    BrowserError: サブクラスに NAME が設定されていない場合、
-        同じ NAME ですでに起動している場合、ブラウザを起動できなかった場合
-        （具体的な理由はメッセージに出る）。
-
-#### `launch_session`
-
-```text
-@measure
-def launch_session(self, name: str, options: type[BrowserOptions] | BrowserOptions | None=None, download_dir: str | Path | None=None) -> BrowserSession:
-```
-
-##### 説明
-
-名前とオプションを直接渡してブラウザを1つ起動する（低レベル経路）。
-
-`launch(SiteBase)` の中から呼ばれる雑務用。SiteBase サブクラスが用意できない
-場面（テスト・一時的な検証）で使う。通常は `launch(SiteBase)` を使う。
-
-ダウンロードフォルダとログイン状態はこの名前ごとに分かれる。
-同じサイトへ2つのアカウントでログインしたい場合も、
-「kintai_a」「kintai_b」と名前を分ければ混ざらない。
-
-Args:
-    name: セッション名。ログとエラーメッセージに出るので、
-          「kintai」「keiri」のようにサイトが分かる名前にする。
-    options: 起動オプション。BrowserOptions のサブクラスをそのまま渡せる
-             （セッションごとに別インスタンスを作るので、設定が混ざらない）。
-             省略時は BrowserOptions の初期値で起動する。
-    download_dir: ダウンロード先。省略時は options.DOWNLOAD_DIR/<name>、
-                  それも未設定なら一時フォルダを作り、終了時に削除する。
-
-Returns:
-    起動済みの BrowserSession。この with を抜けるまで使える。
-
-Raises:
-    BrowserError: 同じ名前ですでに起動している場合、
-        ブラウザを起動できなかった場合（具体的な理由はメッセージに出る）。
-
-#### `names`
-
-```text
-@property
-def names(self) -> list[str]:
-```
-
-##### 説明
-
-起動済みのセッション名（起動した順）。
-
 ### `BrowserSession`
 
 ```text
@@ -5621,7 +5430,7 @@ def __init__(self, name: str, options: BrowserOptions, download_dir: DownloadDir
 
 ##### 説明
 
-直接呼ばず、Browsers.launch() から作る。
+直接呼ばず、SiteBase.__enter__() から作る。
 
 Args:
     name: セッション名。
@@ -5853,7 +5662,7 @@ def __init__(self, session: BrowserSession, wait_seconds: int | None=None) -> No
 ##### 説明
 
 Args:
-    session: Browsers.launch() で起動したセッション。
+    session: ``with SiteBase()`` で起動したセッション。
     wait_seconds: 要素待機のタイムアウト秒数。
                   省略時はセッションの設定（BrowserOptions.WAIT_SECONDS）を引き継ぐ。
 
@@ -6294,7 +6103,7 @@ BASE_URL とログインなど、そのサイトのどの画面でも使う処�
 
 BASE_URL は次の順で解決する:
   1. 自身（または親クラス）に `BASE_URL` が定義されていればそれ
-  2. 無ければ、`browsers.launch(SiteBase)` で起動した `SiteBase` の `BASE_URL`
+  2. 無ければ、`with SiteBase()` で起動した `SiteBase` の `BASE_URL`
 
 #### `go`
 
@@ -6343,8 +6152,21 @@ def go_login(self) -> LoginPage:
 #### `__init__`
 
 ```text
-def __init__(self, session: BrowserSession | None=None) -> None:
+def __init__(self, name: str | None=None, *, download_dir: str | Path | None=None) -> None:
 ```
+
+#### `close`
+
+```text
+def close(self) -> None:
+```
+
+##### 説明
+
+自分で起動したブラウザだけ閉じる。
+
+`with Kintai() as kintai:` で起動したインスタンスを `close()` しても安全。
+2回呼んでも安全（何もしないだけ）。
 
 #### `downloads`
 
@@ -6394,20 +6216,6 @@ Args:
 
 Returns:
     そのサイトのブラウザに紐づいた画面クラスのインスタンス。
-
-#### `close`
-
-```text
-def close(self) -> None:
-```
-
-##### 説明
-
-Browsers から渡されたセッションは触らず、自分で起動したブラウザだけ閉じる。
-
-`with Kintai() as kintai:` で起動したインスタンスを `close()` しても安全。
-ただし `Browsers.launch()` から持たせてもらったインスタンスでは何もしない
-（持ち主の Browsers が with を抜けるときに閉じるため、二重に閉じない）。
 
 ### `NTTEast`
 
@@ -6436,8 +6244,21 @@ def go_login(self) -> LoginPage:
 #### `__init__`
 
 ```text
-def __init__(self, session: BrowserSession | None=None) -> None:
+def __init__(self, name: str | None=None, *, download_dir: str | Path | None=None) -> None:
 ```
+
+#### `close`
+
+```text
+def close(self) -> None:
+```
+
+##### 説明
+
+自分で起動したブラウザだけ閉じる。
+
+`with Kintai() as kintai:` で起動したインスタンスを `close()` しても安全。
+2回呼んでも安全（何もしないだけ）。
 
 #### `downloads`
 
@@ -6487,20 +6308,6 @@ Args:
 
 Returns:
     そのサイトのブラウザに紐づいた画面クラスのインスタンス。
-
-#### `close`
-
-```text
-def close(self) -> None:
-```
-
-##### 説明
-
-Browsers から渡されたセッションは触らず、自分で起動したブラウザだけ閉じる。
-
-`with Kintai() as kintai:` で起動したインスタンスを `close()` しても安全。
-ただし `Browsers.launch()` から持たせてもらったインスタンスでは何もしない
-（持ち主の Browsers が with を抜けるときに閉じるため、二重に閉じない）。
 
 
 ## `from comken.toolbox.browser.sites.ams import ...`
@@ -6652,8 +6459,21 @@ def go_login(self) -> LoginPage:
 #### `__init__`
 
 ```text
-def __init__(self, session: BrowserSession | None=None) -> None:
+def __init__(self, name: str | None=None, *, download_dir: str | Path | None=None) -> None:
 ```
+
+#### `close`
+
+```text
+def close(self) -> None:
+```
+
+##### 説明
+
+自分で起動したブラウザだけ閉じる。
+
+`with Kintai() as kintai:` で起動したインスタンスを `close()` しても安全。
+2回呼んでも安全（何もしないだけ）。
 
 #### `downloads`
 
@@ -6703,20 +6523,6 @@ Args:
 
 Returns:
     そのサイトのブラウザに紐づいた画面クラスのインスタンス。
-
-#### `close`
-
-```text
-def close(self) -> None:
-```
-
-##### 説明
-
-Browsers から渡されたセッションは触らず、自分で起動したブラウザだけ閉じる。
-
-`with Kintai() as kintai:` で起動したインスタンスを `close()` しても安全。
-ただし `Browsers.launch()` から持たせてもらったインスタンスでは何もしない
-（持ち主の Browsers が with を抜けるときに閉じるため、二重に閉じない）。
 
 ### `NTTEast`
 
@@ -6745,8 +6551,21 @@ def go_login(self) -> LoginPage:
 #### `__init__`
 
 ```text
-def __init__(self, session: BrowserSession | None=None) -> None:
+def __init__(self, name: str | None=None, *, download_dir: str | Path | None=None) -> None:
 ```
+
+#### `close`
+
+```text
+def close(self) -> None:
+```
+
+##### 説明
+
+自分で起動したブラウザだけ閉じる。
+
+`with Kintai() as kintai:` で起動したインスタンスを `close()` しても安全。
+2回呼んでも安全（何もしないだけ）。
 
 #### `downloads`
 
@@ -6796,20 +6615,6 @@ Args:
 
 Returns:
     そのサイトのブラウザに紐づいた画面クラスのインスタンス。
-
-#### `close`
-
-```text
-def close(self) -> None:
-```
-
-##### 説明
-
-Browsers から渡されたセッションは触らず、自分で起動したブラウザだけ閉じる。
-
-`with Kintai() as kintai:` で起動したインスタンスを `close()` しても安全。
-ただし `Browsers.launch()` から持たせてもらったインスタンスでは何もしない
-（持ち主の Browsers が with を抜けるときに閉じるため、二重に閉じない）。
 
 
 ## `from comken.toolbox.browser.sites.ouju import ...`
@@ -7145,8 +6950,21 @@ Raises:
 #### `__init__`
 
 ```text
-def __init__(self, session: BrowserSession | None=None) -> None:
+def __init__(self, name: str | None=None, *, download_dir: str | Path | None=None) -> None:
 ```
+
+#### `close`
+
+```text
+def close(self) -> None:
+```
+
+##### 説明
+
+自分で起動したブラウザだけ閉じる。
+
+`with Kintai() as kintai:` で起動したインスタンスを `close()` しても安全。
+2回呼んでも安全（何もしないだけ）。
 
 #### `downloads`
 
@@ -7196,20 +7014,6 @@ Args:
 
 Returns:
     そのサイトのブラウザに紐づいた画面クラスのインスタンス。
-
-#### `close`
-
-```text
-def close(self) -> None:
-```
-
-##### 説明
-
-Browsers から渡されたセッションは触らず、自分で起動したブラウザだけ閉じる。
-
-`with Kintai() as kintai:` で起動したインスタンスを `close()` しても安全。
-ただし `Browsers.launch()` から持たせてもらったインスタンスでは何もしない
-（持ち主の Browsers が with を抜けるときに閉じるため、二重に閉じない）。
 
 ### `SolutionSandbox`
 
@@ -7339,8 +7143,21 @@ Raises:
 #### `__init__`
 
 ```text
-def __init__(self, session: BrowserSession | None=None) -> None:
+def __init__(self, name: str | None=None, *, download_dir: str | Path | None=None) -> None:
 ```
+
+#### `close`
+
+```text
+def close(self) -> None:
+```
+
+##### 説明
+
+自分で起動したブラウザだけ閉じる。
+
+`with Kintai() as kintai:` で起動したインスタンスを `close()` しても安全。
+2回呼んでも安全（何もしないだけ）。
 
 #### `downloads`
 
@@ -7390,20 +7207,6 @@ Args:
 
 Returns:
     そのサイトのブラウザに紐づいた画面クラスのインスタンス。
-
-#### `close`
-
-```text
-def close(self) -> None:
-```
-
-##### 説明
-
-Browsers から渡されたセッションは触らず、自分で起動したブラウザだけ閉じる。
-
-`with Kintai() as kintai:` で起動したインスタンスを `close()` しても安全。
-ただし `Browsers.launch()` から持たせてもらったインスタンスでは何もしない
-（持ち主の Browsers が with を抜けるときに閉じるため、二重に閉じない）。
 
 ### `SITES`
 

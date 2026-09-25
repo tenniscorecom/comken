@@ -1,8 +1,7 @@
 """SiteBase / SalesforceBase の OWNER 必須検査と起動時 INFO ログのテスト。
 
 ライブラリ管理者が「同じ社内システムのクラスが複数プロジェクトで重複していないか」
-把握できる仕組みを、`with SiteBase()` と `Browsers.launch()` の両方の経路、
-および Salesforce の起動経路で確認する。
+把握できる仕組みを、`with SiteBase()` 経路と Salesforce の起動経路で確認する。
 
 INFO ログは**起動が成功した後**にだけ出す。失敗したのに「使った」というログが
 残ると記録が嘘になるので、失敗したらログが出ないことも確かめる。
@@ -16,7 +15,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from comken.exceptions import BrowserError, SiteOwnerRequiredError
-from comken.toolbox.browser import Browsers, SiteBase
+from comken.toolbox.browser import SiteBase
 from comken.toolbox.browser.management.sessions import BrowserSession
 from comken.toolbox.salesforce.client import SalesforceBase
 
@@ -87,16 +86,6 @@ class TestSiteBaseOwner:
         with pytest.raises(SiteOwnerRequiredError), Kintai():
             pass
 
-    def test_launch_rejects_missing_owner(self, monkeypatch):
-        """`Browsers.launch(Kintai)` 経路でも OWNER 未設定だと SiteOwnerRequiredError。"""
-        _patch_browser_session(monkeypatch)
-
-        class Kintai(SiteBase):
-            NAME = "kintai"
-
-        with Browsers() as browsers, pytest.raises(SiteOwnerRequiredError):
-            browsers.launch(Kintai)
-
     def test_error_message_guides_to_the_rule(self, monkeypatch):
         """エラー文が「書き方」と「判断基準の在り処」と「管理者へ連絡」を案内する。"""
         _patch_browser_session(monkeypatch)
@@ -104,8 +93,8 @@ class TestSiteBaseOwner:
         class Kintai(SiteBase):
             NAME = "kintai"
 
-        with pytest.raises(SiteOwnerRequiredError) as raised, Browsers() as browsers:
-            browsers.launch(Kintai)
+        with pytest.raises(SiteOwnerRequiredError) as raised, Kintai():
+            pass
 
         message = str(raised.value)
         assert "OWNER =" in message
@@ -124,32 +113,15 @@ class TestSiteBaseOwner:
 
         ComkenInternalSite.__module__ = COMKEN_BROWSER_MODULE
 
-        with Browsers() as browsers:
-            assert isinstance(browsers.launch(ComkenInternalSite), ComkenInternalSite)
+        with ComkenInternalSite() as site:
+            assert isinstance(site, ComkenInternalSite)
 
 
 class TestSiteBaseStartedLog:
     """起動が成功した後に出る INFO ログのテスト。"""
 
-    def test_logs_once_on_launch(self, caplog, monkeypatch):
-        """`Browsers.launch()` 経路で `site=` `owner=` `defined=` が1行出る。"""
-        _patch_browser_session(monkeypatch)
-
-        class Kintai(SiteBase):
-            NAME = "kintai"
-            OWNER = "勤怠 / 小栗"
-
-        with caplog.at_level(logging.INFO, logger=BROWSER_LOGGER), Browsers() as browsers:
-            browsers.launch(Kintai)
-
-        messages = _info_messages(caplog)
-        assert len(messages) == 1
-        assert "site=kintai" in messages[0]
-        assert "owner=勤怠 / 小栗" in messages[0]
-        assert f"defined={Kintai.__module__}" in messages[0]
-
     def test_logs_once_with_site(self, caplog, monkeypatch):
-        """`with Kintai()` 経路でも同じログが1行だけ出る（二重に出さない）。"""
+        """`with Kintai()` 経路で `site=` `owner=` `defined=` が1行出る。"""
         _patch_browser_session(monkeypatch)
 
         class Kintai(SiteBase):
@@ -162,14 +134,17 @@ class TestSiteBaseStartedLog:
         messages = _info_messages(caplog)
         assert len(messages) == 1
         assert "site=kintai" in messages[0]
+        assert "owner=勤怠 / 小栗" in messages[0]
+        assert f"defined={Kintai.__module__}" in messages[0]
 
     def test_no_log_when_launch_fails(self, caplog, monkeypatch):
         """ブラウザの起動に失敗したらログは出ない（「使った」という嘘を残さない）。"""
 
-        def _fail(*args, **kwargs):
+        def _fail_enter(self):
             raise RuntimeError("ブラウザを起動できなかった")
 
-        monkeypatch.setattr(Browsers, "launch_session", _fail)
+        monkeypatch.setattr(BrowserSession, "__enter__", _fail_enter)
+        monkeypatch.setattr(BrowserSession, "__exit__", lambda self, *a: None)
 
         class Kintai(SiteBase):
             NAME = "kintai"
@@ -177,10 +152,10 @@ class TestSiteBaseStartedLog:
 
         with (
             caplog.at_level(logging.INFO, logger=BROWSER_LOGGER),
-            Browsers() as browsers,
             pytest.raises(RuntimeError),
+            Kintai(),
         ):
-            browsers.launch(Kintai)
+            pass
 
         assert _info_messages(caplog) == []
 
@@ -194,8 +169,8 @@ class TestSiteBaseStartedLog:
 
         ComkenInternalSite.__module__ = COMKEN_BROWSER_MODULE
 
-        with caplog.at_level(logging.INFO, logger=BROWSER_LOGGER), Browsers() as browsers:
-            browsers.launch(ComkenInternalSite)
+        with caplog.at_level(logging.INFO, logger=BROWSER_LOGGER), ComkenInternalSite():
+            pass
 
         assert _info_messages(caplog) == []
 
@@ -221,8 +196,8 @@ class TestSiteBaseLibraryConflict:
             NAME = "library_shared_site"
             OWNER = "project / テスト"
 
-        with Browsers() as browsers, pytest.raises(BrowserError, match="ライブラリにすでに登録"):
-            browsers.launch(ProjectSite)
+        with pytest.raises(BrowserError, match="ライブラリにすでに登録"), ProjectSite():
+            pass
 
     def test_project_site_with_different_name_passes(self, monkeypatch):
         """ライブラリ側と NAME が違うプロジェクト側はそのまま起動できる。"""
@@ -240,8 +215,7 @@ class TestSiteBaseLibraryConflict:
             NAME = "project_site"
             OWNER = "project / テスト"
 
-        with Browsers() as browsers:
-            site = browsers.launch(ProjectSite)
+        with ProjectSite() as site:
             assert isinstance(site, ProjectSite)
 
 

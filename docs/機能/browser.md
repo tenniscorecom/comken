@@ -37,7 +37,7 @@ Edge を自動で動かして、社内システムから情報を取ったり入
 | 固有の値の置き場 | `DOMAIN_URL` / `CREDENTIAL_PREFIX` / `OWNER` | `NAME` / `BASE_URL` / `OPTIONS` / `OWNER` |
 | 機能は継承せず持たせる | `.auth` / `.report` / `.metrics` | `.to(画面クラス)` で画面を作る |
 | 単体で使う入口 | `with Solution() as sf:` | `with Kintai() as kintai:` |
-| 複数まとめて扱う入口 | `sites/` の `site_for()` | `Browsers` |
+| 複数まとめて扱う入口 | `sites/` の `site_for()` | `with A() as a, B() as b:` で2つ並べるだけ |
 | 画面／機能の分割 | `.report` / `.metrics` | `Page` のサブクラス |
 
 `OWNER` は「プロジェクト名 / 担当者」の形式で必ず書く（起動時に検査される）。
@@ -93,33 +93,29 @@ with Kintai() as kintai:
 
 `with` を抜けるとブラウザは必ず閉じる。途中でエラーが出ても閉じる。
 
-**`with` は必須。** 使わずに書くとエラーで止まる。
+**`with` は必須。** 起動は `with` の中だけで起きる。`SiteBase()` を作っても
+`with` に入れなければブラウザは起動せず、`.session` も `None` のまま。
 
 ```python
-browsers = Browsers()
-browsers.launch(Kintai)   # ← BrowserError（ブラウザは起動しない）
+kintai = Kintai()              # 起動しない（session は None）
+kintai.go_login()              # ← BrowserError（ブラウザは起動していない）
 ```
 
-`with` を忘れるとエラーで落ちたときにブラウザのプロセスが残り続け、
-次の実行で「ドライバーを上書きできない」といった別の問題を生むため。
-弾かれた時点ではまだ何も起きていないので、`with` を付けて書き直せばよい。
+`with` を入れないと `with` の中で例外が出たときに Edge のプロセスが残り続け、
+次の実行で「ドライバーを上書きできない」といった別の問題を生む。
+`with` を付けて書き直せばよい。
 
 ---
 
 ## サイトを増やす
 
-`launch` を1行足すだけ。ほかは何も変わらない。
+`with` を1行足すだけ。ほかは何も変わらない。
 
 ```python
-with Browsers() as browsers:
-    kintai = browsers.launch(Kintai)
-    keiri = browsers.launch(Keiri)          # ← 増えるのはこの行だけ
-
+with Kintai() as kintai, Keiri() as keiri:    # ← 増えるのはこの行だけ
     unfilled = kintai.go_login().login(USER, PW).unfilled_days()
     pending = keiri.go_login().login(USER, PW).pending_rows()
 ```
-
-サイトが2つ以上になったら `Browsers` を使う。1つだけなら `with Kintai() as kintai:` で足りる。
 
 サイトクラスの `NAME`（`"kintai"`）は、次の3つを分ける鍵になる:
 
@@ -132,20 +128,14 @@ with Browsers() as browsers:
 同じサイトに2つのアカウントでログインしたいときも、名前を分ければ混ざらない:
 
 ```python
-class KintaiAdmin(Kintai):
-    NAME = "kintai_admin"
-
-
-class KintaiMember(Kintai):
-    NAME = "kintai_member"
-
-
-with Browsers() as browsers:
-    admin = browsers.launch(KintaiAdmin)
-    member = browsers.launch(KintaiMember)
+with Kintai(name="kintai_a") as a, Kintai(name="kintai_b") as b:
+    a_admin = a.go_login().login(ADMIN_USER, ADMIN_PW)
+    b_staff = b.go_login().login(STAFF_USER, STAFF_PW)
 ```
 
-`NAME` だけ変えたサブクラスを作る。URL もセレクターも継承されるので、書くのは1行。
+`name=` を付けるとセッション名が分かれる。URL やセレクターは継承されるので、
+書くのは変える箇所だけ。同じ `NAME`（または同じ `name=`）を2つ同時に開こうとすると
+`BrowserError` になるので、起動の直前にログを見ればその場で気付ける。
 
 ---
 
@@ -490,9 +480,7 @@ def ensure_login(self, user_id: str, password: str) -> "HomePage":
 ```python
 from comken.core import move_file
 
-with Browsers() as browsers:
-    kintai = browsers.launch(Kintai)
-
+with Kintai() as kintai:
     kintai.to(HomePage).export_csv()
     files = kintai.downloads.wait()                     # .crdownload が消えるまで待つ
     move_file(files[0], r"C:\作業\output")       # with の中で移動する
@@ -518,9 +506,7 @@ Salesforce向けの実装は `toolbox.browser.sites.salesforce` 側に置いて�
 待ち時間がブラウザ側で重なるため、全体が大幅に短くなる。
 
 ```python
-with Browsers() as browsers:
-    site = browsers.launch(Site)
-
+with Site() as site:
     for url in site.session.load_many(report_urls, ready=ReportPage.TABLE, max_open=10):
         rows = ReportPage(site.session).rows()     # そのページのタブに切り替わっている
         save(url, rows)
@@ -597,7 +583,7 @@ comken は自動更新を行わない。**バージョンが合わなくなっ�
 |---|---|
 | `time.sleep(3)` で待つ | `wait_visible(LOC)` で待つ。速くて確実 |
 | `selenium` を直接 import する | `Page` のメソッドを使う。無ければ `Page` に足す |
-| `with` を使わずに起動する | 必ず `with Browsers() as browsers:` の中で使う |
+| `with` を使わずに起動する | 必ず `with Kintai() as kintai:` の中で使う |
 | セレクターをメソッドの中に直接書く | クラス先頭の `Locator` 定数にまとめる |
 | 絶対 XPath を使う | id / name / css で指定する |
 | ID・パスワードをコードに書く | config.ini に置き、config.ini は git に入れない |
@@ -648,38 +634,54 @@ class ReportPage(SitePage):
 
 ここまでの説明で使ったクラスとメソッドを、実装時に引ける形でまとめる。
 
-### Browsers（入口）
+### SiteBase（入口）
 
 **1サイトにつき1ブラウザを起動する。タブでは分けない。**
 ダウンロード先・起動オプション・ログイン状態はすべてブラウザ単位で決まるため、
 タブで分けるとサイト間で取り違えが起きる。
 
-サイトが1つでも複数でも書き方は同じで、増やすときは `launch` を1行足すだけ:
+`SiteBase` を `with` に入れるだけでブラウザが起動する。複数サイトは `with` を
+並べるだけ:
 
 ```python
-from comken.toolbox.browser import Browsers
+from comken.toolbox.browser import SiteBase
 
-with Browsers() as browsers:
-    kintai = browsers.launch(Kintai)
-    keiri = browsers.launch(Keiri)      # ← 増えるのはこの行だけ
+class Kintai(SiteBase):
+    NAME = "kintai"
+    BASE_URL = "https://kintai.example.co.jp"
+    OWNER = "..."
 
+with Kintai() as kintai:
+    kintai_days = kintai.go_login().login(USER, PW).unfilled_days()
+
+# 複数サイトは with を並べるだけ
+with Kintai() as kintai, Keiri() as keiri:
     kintai_days = kintai.go_login().login(USER, PW).unfilled_days()
     keiri_rows = keiri.go_login().login(USER, PW).pending_rows()
+
+# 同じサイトを2アカウントで開くときは name= でセッション名を分ける
+with Kintai(name="kintai_a") as a, Kintai(name="kintai_b") as b:
+    ...
 ```
 
-`SiteBase.NAME` が、ダウンロードフォルダ・ログイン状態・ログのファイル名を分ける鍵になる。
-同じサイトを2アカウントで開く場合も、NAME を変えれば混ざらない。
-
-| メソッド | 何をするか |
+| コンストラクタ引数 | 何をするか |
 |---|---|
-| `launch(SiteBase, download_dir=None)` | SiteBase サブクラスを渡してブラウザを1つ起動し、SiteBase インスタンスを返す |
-| `launch_session(name, options=None, download_dir=None)` | 低レベル経路。`Browsers` を使わずに名前とオプションで直接起動する |
-| `names` | 起動済みのセッション名（起動した順） |
-| `browsers["kintai"]` | 名前でセッションを取り出す |
+| `name=` | セッション名の上書き。省略時は `SiteBase.NAME` |
+| `download_dir=` | ダウンロード先の固定パス。省略時は `OPTIONS.DOWNLOAD_DIR/<セッション名>` か一時フォルダ |
+
+| メソッド／属性 | 何をするか |
+|---|---|
+| `.session` | 起動後の `BrowserSession` |
+| `.downloads` | ダウンロードフォルダ（`download_dir.wait()` などで完了待ち） |
+| `.to(画面クラス)` | `Page` を作って遷移する |
+| `.close()` | 起動したブラウザを閉じる（`with` を抜けたのと同じ） |
+
+`SiteBase.NAME`（または `name=`）が、ダウンロードフォルダ・ログイン状態・ログの
+ファイル名を分ける鍵になる。同じ名前を2つ同時に開こうとすると `BrowserError`
+になるので、起動の直後にログを見れば気付ける。
 
 書いた順に上から動く（同期）のが基本。**複数を同時に動かしたい場合は、
-`Browsers.launch()` でサイトごとにセッションを分けて**、それぞれを
-別々に書き下す。読み込みの待ち時間は `session.load_many()`
+`with` を並べる**。読み込みの待ち時間は `session.load_many()`
 （[複数ページをまとめて開く](#複数ページをまとめて開くload_many)）で
 ブラウザ側で重ねられる。
 
@@ -715,7 +717,7 @@ session.raw.set_window_size(1200, 800)   # ここにない機能は raw（生の
 ### BrowserOptions（起動オプション）
 
 サイトごとにサブクラスを作り、変えたい項目だけ上書きする。
-`Browsers.launch` にクラスのまま渡せば、セッションごとに別インスタンスが作られる。
+`SiteBase.OPTIONS` にクラスのまま書けば、セッションごとに別インスタンスが作られる。
 
 ```python
 # src/browser_options.py（プロジェクト側）
@@ -776,11 +778,8 @@ Edge がダウンロード中に作る `.crdownload` を監視して完了を判
 
 ```python
 from comken.core import move_file
-from comken.toolbox.browser import Browsers
 
-with Browsers() as browsers:
-    kintai = browsers.launch(Kintai)
-
+with Kintai() as kintai:
     kintai.to(HomePage).export_csv()
     files = kintai.downloads.wait()                     # .crdownload が消えるまで待つ
     move_file(files[0], r"C:\作業\output")       # with の中で移動する

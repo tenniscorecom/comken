@@ -37,7 +37,7 @@ class _PageBase:
     def __init__(self, session: BrowserSession, wait_seconds: int | None = None) -> None:
         """
         Args:
-            session: Browsers.launch() で起動したセッション。
+            session: ``with SiteBase()`` で起動したセッション。
             wait_seconds: 要素待機のタイムアウト秒数。
                           省略時はセッションの設定（BrowserOptions.WAIT_SECONDS）を引き継ぐ。
         """

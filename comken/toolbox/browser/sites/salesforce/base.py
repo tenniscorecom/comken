@@ -273,8 +273,8 @@ class SalesforceReportBrowser(SiteBase):
             raise BrowserError(
                 f"{self.__class__.__name__} はまだ起動していません。"
                 f"`with {self.__class__.__name__}() as site:` の中で使ってください。"
-                "\n対処: `with Browsers() as browsers:` または `with SiteBase() as site:` の中で"
-                "使ってください（ブラウザは起動していないので実害はない）。"
+                "\n対処: `with SiteBase() as site:` の中で使ってください"
+                "（ブラウザは起動していないので実害はない）。"
             )
         return self.session
 

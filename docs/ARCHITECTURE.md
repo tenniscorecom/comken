@@ -172,9 +172,11 @@ Excel / Excel 内の表データ連携は `Transfer(read, write, mapping)` に�
 
 ### ブラウザ
 
-- 入口は **`Browsers`** に集約し、サイトが 1 つでも複数でも書き方を変えない
+- 入口は **`SiteBase`** 自身に集約し、`with SiteBase() as site:` でそのまま起動する
+- 複数サイトは `with` を並べる（`with Kintai() as kintai, Keiri() as keiri:`）
 - **サイトごとに 1 ブラウザを起動** し、タブでは分けない（ダウンロード先・ログイン状態がブラウザ単位で決まるため、タブで複数サイトを扱うと取り違え事故が構造的に避けられない）
-- **`with` を必須** にする。`with` なしで起動できると、途中で例外が出たときに Edge のプロセスが残り、次の実行でドライバーの更新まで妨げる
+- **`with` を必須** にする。`with` なしで起動したければ、`SiteBase.__init__()` では起動せず、`with` に入った瞬間に起動する。途中で例外が出たときに Edge のプロセスが残り、次の実行でドライバーの更新まで妨げる
+- 同じサイトを 2 アカウントで開くときは `name=` でセッション名を分ける（`with Kintai(name="kintai_a") as a, Kintai(name="kintai_b") as b:`）。同じ名前を 2 つ同時に開こうとすると `BrowserError` になる
 - 書いた順に上から動く（同期）が基本。読み込みの待ち時間を有効に使うには `session.load_many()` を使う（[機能/browser.md#複数ページをまとめて開く](機能/browser.md) を参照）
 - 設定は `config.ini` ではなく **クラス変数**（`BrowserOptions` の `DRIVER_PATH` / `WAIT_SECONDS` 等）。プロジェクト固有ではなく環境共通のデフォルトで、差はサブクラスで上書きする
 
@@ -191,10 +193,13 @@ Excel / Excel 内の表データ連携は `Transfer(read, write, mapping)` に�
 利用プロジェクトは内部ファイルを直接 import せず、次の入口だけを使う。
 
 ```python
-from comken.toolbox.browser import BrowserOptions, Browsers, Locator, Page
+from comken.toolbox.browser import BrowserOptions, Locator, Page, SiteBase
 ```
 
-`Browsers` / `BrowserSession` などの公開名は互換性のため維持する。内部ファイルは役割が伝わる短い名詞にし、ディレクトリ名と意味が重複する複合ファイル名は避ける。
+`BrowserSession` / `SiteBase` などの公開名は互換性のため維持する（昔に
+`Browsers` を使っていたプロジェクトは `with` を並べる形に読み替える）。
+内部ファイルは役割が伝わる短い名詞にし、ディレクトリ名と意味が重複する
+複合ファイル名は避ける。
 
 ### ディレクトリ構成
 
@@ -205,7 +210,6 @@ browser/
 ├── sites/                      ライブラリ公認サイトの置き場
 ├── options.py                  Edge の起動設定
 ├── management/                 ブラウザーの管理
-│   ├── browsers.py             複数ブラウザーをまとめて起動・終了する
 │   ├── sessions.py             1 サイト分の WebDriver
 │   ├── startup.py              Edge の起動・初期化
 │   └── tabs.py                 1 セッション内のタブを開閉する
@@ -218,7 +222,7 @@ browser/
 
 | 変更したいこと | 主に読むファイル |
 |---|---|
-| ブラウザーを追加・終了する流れ | `management/browsers.py` |
+| SiteBase の起動・所有・終了 | `sitebase.py` |
 | Edge の起動・終了 | `management/sessions.py` |
 | Edge 起動失敗、起動引数 | `management/startup.py` |
 | ポップアップ、複数タブ読み込み | `management/tabs.py` |

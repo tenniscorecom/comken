@@ -2,15 +2,13 @@
 
 読む順番:
 
-1. ``browsers.py`` — 複数ブラウザーをまとめる公開入口
-2. ``sessions.py`` — 1サイト分のWebDriverと排他制御
-3. ``startup.py`` — Edgeの起動・初期化・ドライバー更新
-4. ``tabs.py`` — 1セッション内のタブ開閉
+1. ``sessions.py`` — 1サイト分の WebDriver
+2. ``startup.py`` — Edge の起動・初期化・ドライバー更新
+3. ``tabs.py`` — 1セッション内のタブ開閉
 
 利用側はこの内部構造へ依存せず、``from comken.toolbox.browser import ...`` を使う。
 """
 
-from comken.toolbox.browser.management.browsers import Browsers
 from comken.toolbox.browser.management.sessions import BrowserSession
 
-__all__ = ["Browsers", "BrowserSession"]
+__all__ = ["BrowserSession"]

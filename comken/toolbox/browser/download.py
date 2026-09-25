@@ -49,7 +49,8 @@ _IN_PROGRESS_SUFFIXES = (".crdownload", ".tmp")
 class DownloadDir:
     """ブラウザダウンロード用のフォルダ。作成・完了待ち・後片付けをまとめて扱う。
 
-    通常は Browsers.launch() がセッションごとに1つ用意するので、自分で作る必要はない
+    通常は ``with SiteBase() as ...`` したセッションごとに1つ用意されるので、
+    自分で作る必要はない
     （session.download_dir で受け取り、session.download_dir.wait() で完了を待つ）。
 
     一時フォルダの場合、セッションの with を抜けた時点で自動削除される（消し忘れ防止）。
@@ -57,9 +58,8 @@ class DownloadDir:
     ダウンロードしたものを残したい場合は、起動時に保存先を指定する
     （固定フォルダは with を抜けても削除されない）:
 
-        with Browsers() as browsers:
-            kintai = browsers.launch(Kintai, download_dir=r"C:\\作業\\downloads")
-            files = kintai.session.download_dir.wait()
+        with Kintai(download_dir=r"C:\\作業\\downloads") as kintai:
+            files = kintai.downloads.wait()
         # ← C:\\作業\\downloads とファイルはそのまま残る
 
     wait() は作成時点で既にあったファイルを無視し、新しく増えたファイルだけを完了対象にする。

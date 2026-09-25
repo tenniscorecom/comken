@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 def _driver_start_error(driver_path: str, detail: Exception) -> BrowserError:
     """``BrowserError`` の「ブラウザを起動できない」文言。
 
-    発生箇所: Browsers.launch()
+    発生箇所: SiteBase.__enter__()
     """
     return BrowserError(
         f"Edge WebDriver を起動できませんでした: {driver_path}\n"

@@ -1,21 +1,25 @@
 """comken/toolbox/browser/management/sessions.py — 1サイト分のブラウザーを表す ``BrowserSession``。
 
-このファイルはWebDriverの生存期間を担当する。複数ブラウザーの管理は ``browsers.py``、
-タブの開閉は ``tabs.py`` が担当する。
+このファイルはWebDriverの生存期間を担当する。タブの開閉は ``tabs.py`` が担当する。
 
 1つのサイトにつき1つのブラウザを起動する。タブで複数サイトを扱わないのは、
 ダウンロード先・起動オプション・ログイン状態がすべてブラウザ単位で決まるため。
 タブで分けると「サイトAのCSVがサイトBのフォルダに落ちる」といった取り違えが起きる。
 
-このクラスを直接作らず、Browsersから起動する:
+このクラスを直接作らず、SiteBaseの ``with`` から起動する:
 
-    from comken.toolbox.browser import Browsers
+    from comken.toolbox.browser import SiteBase
 
-    with Browsers() as browsers:
-        kintai = browsers.launch(Kintai)
+    class Kintai(SiteBase):
+        NAME = "kintai"
+
+    with Kintai() as kintai:
         kintai.session.open("https://kintai.example.co.jp")
 
-サイトが1つでも複数でも書き方は同じで、増やすときは launch を1行足すだけにしてある。
+複数サイトは ``with`` を並べる:
+
+    with Kintai() as kintai, Keiri() as keiri:
+        ...
 """
 
 # 定義中の BrowserSession を型注釈に使うため、注釈の評価を遅延する。
@@ -64,11 +68,10 @@ def _browser_not_started_error(operation: str) -> BrowserError:
     return BrowserError(
         f"with に入る前のセッションを操作しました: {operation}\n"
         "BrowserSession は with 文の中でだけ使えます。\n"
-        "  with Browsers() as browsers:\n"
-        "      kintai = browsers.launch(Kintai)\n"
+        "  with Kintai() as kintai:\n"
         "      kintai.session.open(...)\n"
-        "サイトを増やすときは launch を1行足してください。"
-        "\n対処: `with Browsers() as browsers:` の中で使ってください"
+        "サイトを増やすときは with を1行足してください。"
+        "\n対処: `with Kintai() as kintai:` の中で使ってください"
         "（ブラウザは起動していないので実害はない）。"
     )
 
@@ -106,7 +109,7 @@ class BrowserSession:
         download_dir: DownloadDir,
         profile_dir: Path | None = None,
     ) -> None:
-        """直接呼ばず、Browsers.launch() から作る。
+        """直接呼ばず、SiteBase.__enter__() から作る。
 
         Args:
             name: セッション名。
@@ -122,8 +125,8 @@ class BrowserSession:
         self._profile_dir = profile_dir
         self._driver: webdriver.Edge | None = None
         self._is_closed = False
-        # SitePage.BASE_URL が未設定のときの参照先。起動した側（Browsers.launch /
-        # SiteBase.__enter__）があとから結びつける。ここで宣言しておかないと、
+        # SitePage.BASE_URL が未設定のときの参照先。起動した側（SiteBase.__enter__）
+        # があとから結びつける。ここで宣言しておかないと、
         # 外から代入している箇所が「属性が無い」と警告される
         self._site: SiteBase | None = None
 
