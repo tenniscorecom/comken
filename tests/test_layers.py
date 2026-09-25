@@ -1,4 +1,13 @@
-"""comken の層をまたぐ import の向きを固定するテスト。"""
+"""comken の層をまたぐ import の向きを守るテスト。
+
+目的は依存関係を完全に固定することではなく、**明らかな逆方向の依存を防ぐ**こと。
+
+    直下（exceptions / constants / runtime）→ core → toolbox → services
+
+上の層から下の層への import は自由。下の層から上の層への import は禁止する。
+同じ層の別コンポーネント同士（例: toolbox.excel → toolbox.windows）は、必要なものだけ
+`ALLOWED_SAME_LAYER` に書く。増やす前に「その依存は本当に必要か」を先に考える。
+"""
 
 import ast
 from pathlib import Path
@@ -12,6 +21,7 @@ LAYERS = {
     "services": 4,
 }
 
+# 同じ層の別コンポーネント同士で、実際に必要な依存。ここへ足して済ませず、まず設計を見直す。
 ALLOWED_SAME_LAYER = {
     ("toolbox.excel", "toolbox.windows"),  # 既存数式・マクロ時の COM フォールバック
     ("toolbox.salesforce", "toolbox.credentials"),  # Salesforce の認証情報を安全に保存する
@@ -44,13 +54,9 @@ def _component(module: str) -> str | None:
 def _is_skippable(path: Path) -> bool:
     """層ルールの検査対象から外すファイルか。
 
-    - `__main__.py` は CLI 入口で層の外から呼ぶので対象外
-    - `cli.py` は `__main__.py` と同じく CLI 入口。`__main__.py` から委譲
-      されるだけで、ライブラリとして import される層ではないため対象外
-    - `run.py` は RPA スクリプトが直接呼び出す入口で、`backoffice` /
-      `intranet` を提供する。CLI 入口と同じく「層ルールの外側」から
-      利用される単一ファイルのため対象外
-    - `templates/` は配布される雛形ファイル群で comken パッケージの一部ではない
+    - `__main__.py` / `cli.py` は CLI 入口で、ライブラリとして import される層ではない
+    - `run.py` は RPA スクリプトが直接呼び出す入口（`backoffice` / `intranet`）
+    - `templates/` は配布される雛形で、comken パッケージの一部ではない
     """
     if path.name in ("__main__.py", "cli.py", "run.py"):
         return True
@@ -72,133 +78,81 @@ def _resolve_import(
     return [base] if base else []
 
 
-def test_imports_follow_layer_direction() -> None:
-    """上向き import と未承認の同層 import を禁止する。"""
-    found_same_layer: set[tuple[str, str]] = set()
-    violations: list[str] = []
-
-    for path in PACKAGE_ROOT.rglob("*.py"):
-        if _is_skippable(path):
+def _violations_in(path: Path) -> list[str]:
+    """ファイル1つ分の import を調べて、禁止された依存の説明を返す。"""
+    module = _module_name(path)
+    source = _component(module)
+    if source is None or source.split(".")[0] not in LAYERS:
+        return []  # 層に属さないもの（comken/tools/ など）は対象外
+    source_layer = LAYERS[source.split(".")[0]]
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    found: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Import, ast.ImportFrom)):
             continue
-        for violation in _collect_violations(path):
-            if violation is None:
+        for imported in _resolve_import(module, node, is_package=path.name == "__init__.py"):
+            target = _component(imported)
+            if target is None or target == source or target.split(".")[0] not in LAYERS:
                 continue
-            kind, payload = violation
-            if kind == "violation" and isinstance(payload, str):
-                violations.append(payload)
-            elif kind == "allowed" and isinstance(payload, tuple):
-                found_same_layer.add(payload)
+            target_layer = LAYERS[target.split(".")[0]]
+            if target_layer < source_layer or (source, target) in ALLOWED_SAME_LAYER:
+                continue
+            found.append(
+                f"{path.relative_to(REPOSITORY_ROOT)}:{node.lineno}: 禁止された依存 "
+                f"{source} → {target}。下の層だけを import するか、設計を見直してください。"
+            )
+    return found
 
-    unused = ALLOWED_SAME_LAYER - found_same_layer
-    for source, target in sorted(unused):
-        violations.append(
-            f"許可一覧の依存 {source} → {target} は実際には存在しません。"
-            "不要になった行を ALLOWED_SAME_LAYER から削除してください。"
-        )
 
+def test_imports_follow_layer_direction() -> None:
+    """下の層から上の層への import と、許可されていない同層 import を禁止する。"""
+    violations = [
+        message
+        for path in PACKAGE_ROOT.rglob("*.py")
+        if not _is_skippable(path)
+        for message in _violations_in(path)
+    ]
     assert not violations, "\n" + "\n".join(violations)
 
 
-# CSV の読み書きは comken.toolbox.csv.CSV に集約する。標準の csv を直接 import
-# してよいのは次の3ファイルだけ（それぞれ事情が違うため許可リストで管理する）。
-CSV_DIRECT_IMPORT_ALLOWLIST = {
-    # CSV クラス本体: 標準 csv を内部実装として使う唯一の正当な使用者
-    REPOSITORY_ROOT / "comken" / "toolbox" / "csv" / "file.py",
-    # Bulk API 2.0 へ送る CSV 文字列をメモリ上で組み立てる（ファイル I/O を伴わない）
-    REPOSITORY_ROOT / "comken" / "toolbox" / "salesforce" / "bulk_ingest.py",
-    # comken.core は層のルールで toolbox を import できないため、ここで csv.reader を直接使う
-    REPOSITORY_ROOT / "comken" / "core" / "calendar" / "_calendar.py",
-    # 同じく comken.core 配下のカレンダーデータ生成ツール。
-    # 内閣府 CSV (CP932) を読んで company_calendar.csv に書き出すため、
-    # toolbox.csv.CSV を経由できないので、標準 csv を直接使う。
-    REPOSITORY_ROOT / "comken" / "core" / "calendar" / "build.py",
-}
+# CSV の読み書きは comken.toolbox.csv.CSV に集約する。標準の csv を直接 import してよいのは、
+# CSV クラス自身（toolbox/csv/）、toolbox を使えない core 層、Bulk API の CSV 文字列を
+# メモリ上で組み立てる bulk_ingest.py だけ。
+CSV_DIRECT_IMPORT_ALLOWED = (
+    PACKAGE_ROOT / "toolbox" / "csv",
+    PACKAGE_ROOT / "core",
+    PACKAGE_ROOT / "toolbox" / "salesforce" / "bulk_ingest.py",
+)
 
 
-def test_no_direct_csv_import_outside_allowlist() -> None:
-    """標準 csv を直接 import できるのは許可リストのファイルだけ。"""
+def _is_csv_import_allowed(path: Path) -> bool:
+    return any(path == allowed or allowed in path.parents for allowed in CSV_DIRECT_IMPORT_ALLOWED)
+
+
+def test_no_direct_csv_import_outside_allowed_places() -> None:
+    """標準 csv を直接 import できるのは、許可された場所だけ。"""
     violations: list[str] = []
     for root in (PACKAGE_ROOT, REPOSITORY_ROOT / "tools"):
         for path in root.rglob("*.py"):
-            if _is_skippable(path):
-                continue
-            if path in CSV_DIRECT_IMPORT_ALLOWLIST:
+            if _is_skippable(path) or _is_csv_import_allowed(path):
                 continue
             if _imports_stdlib_csv(path):
-                relative = path.relative_to(REPOSITORY_ROOT)
                 violations.append(
-                    f"{relative}: 標準の csv を直接 import しています。"
+                    f"{path.relative_to(REPOSITORY_ROOT)}: 標準の csv を直接 import しています。"
                     "CSV の読み書きは comken.toolbox.csv.CSV を使うこと。"
-                    "使えない事情があるなら許可リストに理由付きで追加する。"
                 )
     assert not violations, "\n" + "\n".join(violations)
 
 
 def _imports_stdlib_csv(path: Path) -> bool:
-    """ファイルが標準ライブラリの csv を import しているか（AST で判定）。
-
-    コメント・docstring 中の文字列にはマッチしないよう、AST の
-    ``Import`` / ``ImportFrom`` ノードだけを走査する。
-    """
+    """ファイルが標準ライブラリの csv を import しているか（AST で判定）。"""
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            for alias in node.names:
-                if alias.name == "csv" or alias.name.startswith("csv."):
-                    return True
+            if any(alias.name == "csv" or alias.name.startswith("csv.") for alias in node.names):
+                return True
         elif isinstance(node, ast.ImportFrom):
             module = node.module or ""
             if module == "csv" or module.startswith("csv."):
                 return True
     return False
-
-
-def _collect_violations(path: Path) -> list[tuple[str, str | tuple[str, str]]]:
-    """ファイル1つ分の import を調べて、違反または許可エッジを yield する。
-
-    Returns:
-        各 import について ``("violation", message)`` または
-        ``("allowed", (source, target))`` を yield する。
-        検査対象外のモジュール・import 形式は None 相当（yield しない）。
-    """
-    module = _module_name(path)
-    source = _component(module)
-    if source is None:
-        return []
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    results: list[tuple[str, str | tuple[str, str]]] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, (ast.Import, ast.ImportFrom)):
-            continue
-        for imported_module in _resolve_import(module, node, is_package=path.name == "__init__.py"):
-            outcome = _classify_edge(source, imported_module, node, path)
-            if outcome is not None:
-                results.append(outcome)
-    return results
-
-
-def _classify_edge(
-    source: str,
-    imported_module: str,
-    node: ast.Import | ast.ImportFrom,
-    path: Path,
-) -> tuple[str, str | tuple[str, str]] | None:
-    """1つの import について、違反か許可かを判定する。"""
-    target = _component(imported_module)
-    if target is None or target == source:
-        return None
-    edge = (source, target)
-    source_layer = LAYERS[source.split(".")[0]]
-    target_layer = LAYERS[target.split(".")[0]]
-    if source_layer == target_layer and edge in ALLOWED_SAME_LAYER:
-        return ("allowed", edge)
-    if source_layer < target_layer and edge in ALLOWED_SAME_LAYER:
-        return ("allowed", edge)
-    if target_layer >= source_layer:
-        relative_path = path.relative_to(REPOSITORY_ROOT)
-        return (
-            "violation",
-            f"{relative_path}:{node.lineno}: 禁止された依存 {source} → {target}。"
-            "下の層だけを import するか、設計を見直してください。",
-        )
-    return None

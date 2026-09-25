@@ -31,13 +31,9 @@
 
 依存方向は **下から上にだけ向ける**。上の層は下の層に依存してよいが、下の層は上の層に依存しない。
 
-層の定義と同層依存の例外一覧は **`tests/test_layers.py` を正本** とする。現時点で許可されている同層依存は次の 5 組だけである（許可されていない組を見つけた場合は `ALLOWED_SAME_LAYER` の追加ではなく設計を見直す）。
-
-- `toolbox.excel` ↔ `toolbox.windows`（既存数式・マクロ時の COM フォールバック）
-- `toolbox.salesforce` ↔ `toolbox.credentials`（Salesforce 認証情報の安全な保管）
-- `toolbox.salesforce` ↔ `toolbox.csv`（CSV/Table への結果変換）
-- `toolbox.browser` ↔ `toolbox.salesforce`（レポート API の 2000 行上限の回避）
-- `toolbox.browser` ↔ `toolbox.credentials`（DPAPI に保存した ID/パスワードでのログイン）
+`tests/test_layers.py` が、**明らかな逆方向の依存**（下の層から上の層への import）を防ぐ。目的は依存関係を固定することではない。
+同じ層の別コンポーネント同士（例: `toolbox.excel` → `toolbox.windows`）は、必要なものだけをテスト内の `ALLOWED_SAME_LAYER` に書く。
+新しい同層依存が出たら、書き足して済ませる前に「その依存は本当に必要か」を考える。同層依存の一覧はテストが正本で、ここには再掲しない。
 
 `comken` 直下には `__all__` で公開する名前だけを集め、深掘りした機能は toolbox / services 配下の深いパスのまま残す（import 行から「どの機能群に依存しているか」が読める）。
 
@@ -100,8 +96,8 @@ INI として壊れたファイルは `StateFileCorruptedError` で止める（�
 
 すべての例外は **`ComkenError`** を基底とする 1 本の階層。`except ComkenError` でライブラリ由来のエラーをまとめて捕捉できるようにするためである。
 
-- 中間基底（`ExcelError` / `CSVError` / `SalesforceError` 等）は **カテゴリ基底としてまとめて捕捉する用途に限り** 公開する。直接送出しない
-- 個別例外は **対処が違う失敗ごとに 1 クラス**（呼び出し側がメッセージ文字列を解析せず、型だけで判別・個別捕捉できるようにする）。対処が同じ失敗は 1 クラスにまとめ、違いはメッセージで示す
+- 中間基底（`ExcelError` / `CSVError` / `SalesforceError` 等）は **カテゴリ基底**。まとめて捕捉するために使い、メッセージをつけて直接送出してもよい
+- **個別例外は、呼び出し側が型によって異なる処理をする必要がある場合に作る**。対処が同じ失敗はカテゴリ例外にまとめ、具体的な状況はメッセージで伝える
 - `ComkenFileNotFoundError` は `ComkenError` と標準の `FileNotFoundError` の両方を継承し、Excel・CSV・Config 等のファイルが無い場合をすべて表す（`ExcelError` などのカテゴリ配下ではない）
 - 統合して無くなった例外の旧名は残さない（別名も警告も持たない。旧名を使っているコードは `ImportError` になるので、新しいクラスへ書き換える）
 - メッセージは「何が・どこで・どうすればよいか」を含める（非エンジニアが読む前提）
