@@ -9,7 +9,15 @@
     がすべて同時に適用される。
 """
 
+import codecs
 import unicodedata
+
+# Windows の Shift_JIS は cp932（Microsoft 拡張）で扱う。Python の ``codecs`` で
+# ``Shift_JIS`` を指定しても同じとは限らないため、業務ファイルが前提の comken では
+# cp932 に寄せる。
+_CP932_ALIASES = frozenset(
+    {"sjis", "shift-jis", "shiftjis", "windows-31j", "ms932", "mskanji", "ms-kanji"}
+)
 
 
 def normalize(value: object) -> str:
@@ -58,3 +66,48 @@ def remove_spaces(text: str) -> str:
         スペースを除去した文字列。
     """
     return text.replace("　", "").replace(" ", "").replace("\t", "")
+
+
+def normalize_encoding(name: str) -> str:
+    """文字コードの表記を Python の codec 名にそろえる。
+
+    仕様:
+        - 前後の空白を除き、小文字化し ``_`` を ``-`` に置き換える
+          （``UTF-8`` → ``utf-8``、``Shift_JIS`` → ``shift-jis``）
+        - 別名を次の対応で ``cp932`` / ``utf-8`` / ``utf-8-sig`` にそろえる:
+            ``utf8`` → ``utf-8``、``utf8-sig`` / ``utf-8-bom`` → ``utf-8-sig``、
+            ``sjis`` / ``shift-jis`` / ``shiftjis`` / ``windows-31j`` /
+            ``ms932`` / ``mskanji`` / ``ms-kanji`` → ``cp932``
+        - 上の対応に無い名前は ``codecs.lookup(name)`` で有効か確かめ、
+          有効なら **正規化後の名前（小文字・``-`` 区切り）のまま** 返す
+        - 無効なら ``ValueError``
+
+    ``"auto"`` は特別扱いしない。``None`` が自動判定で、``"auto"`` は無効な名前。
+
+    Args:
+        name: 表記ゆれを含む文字コード名。
+
+    Returns:
+        Python の codec 名として使える正規化された名前。
+
+    Raises:
+        ValueError: ``name`` が既知の別名にも有効な codec 名にも一致しないとき。
+            メッセージには、渡された名前、省略すると自動判定であること、
+            主に使う名前（``cp932`` / ``utf-8-sig`` / ``utf-8``）を含める。
+    """
+    normalized = name.strip().lower().replace("_", "-")
+    if normalized == "utf8":
+        return "utf-8"
+    if normalized in ("utf8-sig", "utf-8-bom"):
+        return "utf-8-sig"
+    if normalized in _CP932_ALIASES:
+        return "cp932"
+    try:
+        codecs.lookup(normalized)
+    except LookupError as error:
+        raise ValueError(
+            f"未知の文字コード名です: {name!r}。"
+            "\n対処: encoding 引数を省略すると自動判定します。"
+            "明示するときは主に cp932 / utf-8-sig / utf-8 を指定してください。"
+        ) from error
+    return normalized

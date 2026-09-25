@@ -43,7 +43,7 @@ with ExcelCOMHandler("data.xlsx") as h:
     # h.save_as("output.xlsx", read_pw=READ_PW)  # 読み取り保護のみ
 
     # 形式を変換して保存する場合だけ file_format を明示する
-    # from comken.constants import FileFormat
+    # from comken.toolbox.windows import FileFormat
     # h.save_as("output.csv", file_format=FileFormat.CSV)
 ```
 

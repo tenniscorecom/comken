@@ -16,11 +16,10 @@ diff_rows で追加・削除・変更を検出し、区分ごとに色分けし�
 import logging
 from pathlib import Path
 
-from comken.constants import Color
 from comken.core import DateNameBuilder, diff_rows
 from comken.toolbox.csv import CSV
 from comken.toolbox.csv.file import Value
-from comken.toolbox.excel import Excel
+from comken.toolbox.excel import Color, Excel
 
 HERE = Path(__file__).parent
 OUTPUT_FOLDER = HERE / "output"

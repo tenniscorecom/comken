@@ -19,11 +19,13 @@ CSVを連結する場合は、列名の集合が完全に同じ `Table` 同士�
 
 ## 文字コード
 
-- **読み込み**: `encoding=` を `Encoding.AUTO`（既定）にしておくと、
+- **読み込み**: `encoding=` を省略（既定）しておくと、
   UTF-8 BOM 付き → BOM なし UTF-8 → CP932 の順で自動判定する。
   `encoding=` を明示すればその codec で読む。
+  `CP932` / `sjis` などの表記ゆれは `normalize_encoding` が
+  `cp932` にそろえる（`csv.reader` 側の codec 名としてそのまま使える）。
 - **書き込み**: `encoding=` を明示すればその codec をそのまま使う。
-  `Encoding.AUTO` のときは**既存ファイルの文字コードを保つ**
+  省略のときは**既存ファイルの文字コードを保つ**
   （人が Excel で開いて CP932 へ化けたファイルに `append` / `replace`
   しても、CP932 のまま書き戻される）。新規ファイルや中身が無い
   ファイル、ASCII だけで判定できないファイルは UTF-8 BOM 付きを

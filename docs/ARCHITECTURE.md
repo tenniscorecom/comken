@@ -24,7 +24,7 @@
 
 | 層 | 役割 | 主な置き場 |
 |---|---|---|
-| 直下 | 何にも依存しない共通語彙（例外・定数・実行モード） | `comken/exceptions/`・`comken/constants.py`・`comken/runtime.py` |
+| 直下 | 何にも依存しない共通語彙（例外・実行モード） | `comken/exceptions/`・`comken/runtime.py` |
 | core | 直下にだけ依存する部品（外にあるものを触らない） | `comken/core/` 配下 |
 | toolbox | 外にあるもの（Excel・CSV・ブラウザ・Salesforce 等）を触る道具 | `comken/toolbox/` 配下 |
 | services | 単一消費者向けの業務シナリオ実装 | `comken/services/`（現在 `salesforce_downloader`） |
@@ -247,7 +247,6 @@ browser/
 ### パッケージ構成
 
 - **ライブラリのコードは `src/` レイアウトにしない**（リポジトリ直下に `comken/` を置く）。各 PC が共有サーバーのリポジトリルートを `PYTHONPATH` で参照するため、`comken/` が直下にある構成を前提にする
-- 小規模な公開定数は `comken/constants.py` にまとめ、何にも依存しない最下層とする
 - 機能パッケージ同士は **原則独立** にする。下から上にだけ向け、toolbox は core・直下・同層に依存してよい。例外的な依存（`excel` → `windows` の COM フォールバック等）は遅延 import にして、片方が入っていない環境でも単体で動くようにする
 
 ### 配置時に書き換える3ファイル

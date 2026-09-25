@@ -19,7 +19,6 @@ from typing import Any, Self
 
 import win32com.client
 
-from comken.constants import FileFormat
 from comken.core.data import column_number
 from comken.core.files.base import FileBase
 from comken.core.files.ops import copy_to_local_if_large
@@ -34,6 +33,19 @@ from comken.exceptions.tables import _warn_coerce
 from comken.runtime import dry_run_log, is_dry_run
 
 logger = logging.getLogger(__name__)
+
+
+class FileFormat:
+    """``Workbook.SaveAs`` に渡す Excel の保存形式定数。"""
+
+    XLSX = 51
+    XLSM = 52
+    XLTM = 53
+    XLTX = 54
+    XLSB = 50
+    XLS = 56
+    CSV = 6
+
 
 _SUFFIX_TO_FORMAT = {
     ".xlsx": FileFormat.XLSX,

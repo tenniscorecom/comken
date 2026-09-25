@@ -10,7 +10,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from comken import dry_run
-from comken.constants import Encoding
 from comken.exceptions import AccessError, UnsupportedFileSuffixError
 from comken.toolbox.access import AccessDatabase
 
@@ -324,7 +323,7 @@ class TestAccessDatabase:
         database, access = _database(tmp_path)
         _set_sources(access, ["T_出力"])
         target = tmp_path / "out.csv"
-        database.export_csv("T_出力", target, Encoding.CP932)
+        database.export_csv("T_出力", target, "cp932")
         access.DoCmd.TransferText.assert_called_once_with(
             2, "", "T_出力", str(target.resolve()), True, "", 932
         )

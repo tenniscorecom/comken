@@ -14,11 +14,11 @@ from typing import Any, Self
 
 import win32com.client
 
-from comken.constants import Encoding
 from comken.core.dates import now
 from comken.core.files import DateNameBuilder
 from comken.core.files.base import FileBase
 from comken.core.table import Table
+from comken.core.text import normalize_encoding
 from comken.core.timer import measure
 from comken.exceptions import AccessError, ComkenFileNotFoundError
 from comken.runtime import dry_run_log, is_dry_run
@@ -39,8 +39,8 @@ BACKUP_FOLDER_NAME = "backup"
 # 大量データは iter_rows() か export_csv() を使うよう、利用者へ知らせる境界。
 _LARGE_TABLE_WARNING_THRESHOLD = 50_000
 _ENCODING_CODE_PAGES = {
-    Encoding.CP932: CP932_CODE_PAGE,
-    Encoding.UTF8_SIG: UTF8_CODE_PAGE,
+    "cp932": CP932_CODE_PAGE,
+    "utf-8-sig": UTF8_CODE_PAGE,
 }
 
 
@@ -187,18 +187,24 @@ class AccessDatabase(FileBase):
         self,
         source: str,
         dst: str | Path,
-        encoding: str = Encoding.CP932,
+        encoding: str = "cp932",
     ) -> None:
         """テーブルまたはクエリを Access から直接 CSV に書き出す。
 
         数十万件でも Python のメモリにデータを載せない、大量件数向けの方法。
+        ``encoding`` は ``cp932`` / ``utf-8-sig`` を受け付け、別名（``sjis`` /
+        ``utf8`` など）は ``cp932`` / ``utf-8-sig`` にそろえる。
         """
         self._ensure_source(source)
+        normalized = normalize_encoding(encoding)
         try:
-            code_page = _ENCODING_CODE_PAGES[encoding]
+            code_page = _ENCODING_CODE_PAGES[normalized]
         except KeyError as e:
             choices = list(_ENCODING_CODE_PAGES)
-            raise ValueError(f"encoding は次から指定してください: {choices}") from e
+            raise ValueError(
+                f"encoding は次から指定してください: {choices}"
+                "\n対処: encoding は cp932（既定）か utf-8-sig を指定してください。"
+            ) from e
         destination = Path(dst)
         if is_dry_run():
             dry_run_log("Access「%s」を CSV に出力: %s", source, destination)

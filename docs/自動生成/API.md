@@ -4326,7 +4326,7 @@ SELECT クエリの結果を読む場合は ``iter_rows()``、CSVへ出す場合
 
 ```text
 @measure
-def export_csv(self, source: str, dst: str | Path, encoding: str=Encoding.CP932) -> None:
+def export_csv(self, source: str, dst: str | Path, encoding: str='cp932') -> None:
 ```
 
 ##### 説明
@@ -4334,6 +4334,8 @@ def export_csv(self, source: str, dst: str | Path, encoding: str=Encoding.CP932)
 テーブルまたはクエリを Access から直接 CSV に書き出す。
 
 数十万件でも Python のメモリにデータを載せない、大量件数向けの方法。
+``encoding`` は ``cp932`` / ``utf-8-sig`` を受け付け、別名（``sjis`` /
+``utf8`` など）は ``cp932`` / ``utf-8-sig`` にそろえる。
 
 #### `iter_rows`
 
@@ -7530,11 +7532,11 @@ Table と同じ「行の集合」として Transfer へ渡せる境界を提供�
 
 文字コード:
 
-- 読み込み時（``encoding=`` を ``Encoding.AUTO`` にした既定）は
+- 読み込み時（``encoding=`` を ``None`` にした既定）は
   ``UTF-8 BOM 付き → BOM なし UTF-8 → CP932`` の順で自動判定する。
   詳細は ``read_text`` を参照。
 - 書き込み時は ``encoding=`` を明示すればその codec をそのまま使う。
-  明示しない ``Encoding.AUTO`` のときは、**既存ファイルの文字コードを保つ**
+  明示しない ``None`` のときは、**既存ファイルの文字コードを保つ**
   （BOM 付き UTF-8 は BOM 付きのまま、BOM なし UTF-8 は BOM なしのまま、
   CP932 は CP932 のまま）。新規ファイルや中身が空のファイル、
   ASCII だけで判定できないファイルは ``UTF-8 BOM 付き`` を既定にする。
@@ -7546,7 +7548,7 @@ Table と同じ「行の集合」として Transfer へ渡せる境界を提供�
 #### `__init__`
 
 ```text
-def __init__(self, source: str | Path, *, encoding: str=Encoding.AUTO, columns: list[str] | None=None, types: Mapping[str, Callable[[Any], Any]] | None=None, read_only: bool=False, dry_run: bool=False) -> None:
+def __init__(self, source: str | Path, *, encoding: str | None=None, columns: list[str] | None=None, types: Mapping[str, Callable[[Any], Any]] | None=None, read_only: bool=False, dry_run: bool=False) -> None:
 ```
 
 #### `read`
@@ -7584,7 +7586,7 @@ CSV（数万件以上）**ではこちらを使う。``read()`` と同じく見�
 列名を取得しておく。
 
 このメソッドは ``with`` の中でだけ呼ぶこと（``TableError``）。
-文字コードの自動判定（``Encoding.AUTO`` のとき）は ``read()`` と
+文字コードの自動判定（``encoding=None`` のとき）は ``read()`` と
 同じ ``_read_text`` を使う。
 
 #### `replace`
@@ -7636,7 +7638,7 @@ def count(self) -> int:
 ### `read_text`
 
 ```text
-def read_text(path: str | Path, *, encoding: str=Encoding.AUTO) -> str:
+def read_text(path: str | Path, *, encoding: str | None=None) -> str:
 ```
 
 #### 説明
@@ -7645,17 +7647,18 @@ CSV ファイルをバイト列として読み、文字コードを判定して�
 
 文字コードは次の順で試す:
 
-1. ``encoding`` が ``Encoding.AUTO`` 以外なら、それをそのまま使う
-   （`csv.reader` 側にも渡す想定なので、Python の codec 名を入れる）
-2. ``Encoding.AUTO`` のときは ``_detect_csv_encoding`` で判定する:
+1. ``encoding`` が ``None`` 以外なら、それをそのまま使う
+   （`csv.reader` 側にも渡す想定なので、Python の codec 名を入れる。
+   ``normalize_encoding`` で表記ゆれを吸収してから復号する）
+2. ``None``（既定）のときは ``_detect_csv_encoding`` で判定する:
    - ``utf-8-sig`` / ``utf-8`` の判定 → ``utf-8-sig`` codec で復号する
      （``utf-8-sig`` は BOM の有無を codec が吸収する）
    - ``cp932`` の判定 → ``cp932`` codec で復号する
    - 判定不能（空 / 全部 ASCII / どちらも読めない）→
-     従来どおり ``UTF8_SIG`` → ``CP932`` の順で
+     従来どおり ``utf-8-sig`` → ``cp932`` の順で
      ``UnicodeDecodeError`` をベースに再試行する
 
-``AUTO`` でどちらも読めなければ ``CSVError`` を投げる。
+``None`` でどちらも読めなければ ``CSVError`` を投げる。
 ファイルの存在チェック・空ファイル分岐・BOM 除去などは呼び出し側に
 任せる（``CSV.read()`` では BOM 除去も含めて ``csv.reader`` が処理する）。
 
@@ -7665,6 +7668,16 @@ CP932 へ化けることがあるため、書き込みでも既存ファイル�
 
 
 ## `from comken.toolbox.excel import ...`
+
+### `Color`
+
+```text
+class Color:
+```
+
+#### 説明
+
+Excel でよく使う色の定数（RGB 16進値）。
 
 ### `Excel`
 
@@ -7954,6 +7967,86 @@ Args:
 
 Returns:
     シートの内容を表す ``Table``。全セルが空の行は除外される。
+
+### `ExcelTable`
+
+```text
+class ExcelTable:
+```
+
+#### 説明
+
+データシート全体を1つのテーブルとして操作する。
+
+Sheet の表示操作と分けることで、表データの読み書きがレイアウト変更へ
+意図せず影響されないようにしている。
+
+#### `__init__`
+
+```text
+def __init__(self, excel: Excel, worksheet: Worksheet, name: str | None=None) -> None:
+```
+
+#### `read`
+
+```text
+def read(self, *, force_com: bool=False) -> Table:
+```
+
+##### 説明
+
+Excelテーブルの実際の定義範囲だけを読み、値を返す。
+
+シートの使用範囲ではなく Excel が保持する ``ref`` を使うため、表の外に
+ある無関係なセルを現在の Table に混ぜません。数式の計算結果が
+保存されていない場合だけ内部でCOMへ切り替えます。``force_com=True``
+はキャッシュを信頼できないブックをExcel実機で強制再計算します。
+
+#### `replace`
+
+```text
+def replace(self, rows: list[dict[str, Value]] | Table, *, allow_formula_overwrite: bool=False) -> None:
+```
+
+##### 説明
+
+データシート全体を置き換える。
+
+既存データ部に人が入れた数式があると、既定では ``ExcelError``
+で止める。数式を値で潰すと依存セルや集計式が壊れたことに遅れて気づくため。
+意図的に上書きしてよいときだけ ``allow_formula_overwrite=True`` を渡す。
+
+渡された ``Table`` が **既存の数式列を含まない** 場合、その列はそのまま
+保持される。行が増えたぶんは、既存の数式を
+``openpyxl.formula.translate.Translator`` で下方向へずらして埋める。
+行が減ったぶんは、数式セルの値を消す。
+
+見出しの列は **既存の見出しと名前で対応付ける**。既存の見出しに無い
+列名が含まれていた場合は ``ExcelError``。
+
+#### `append`
+
+```text
+def append(self, rows: list[dict[str, Value]] | dict[str, Value] | Table, *, allow_formula_overwrite: bool=False) -> None:
+```
+
+##### 説明
+
+Table、1行、または行リストを既存テーブルの末尾へ追加する。
+
+既存テーブルに数式列があっても、その列は保持される。渡された行に
+数式列が含まれている場合は ``ExcelError``
+（``allow_formula_overwrite=True`` で上書き可能）。
+
+#### `count`
+
+```text
+def count(self) -> int:
+```
+
+##### 説明
+
+データ行数を返す。
 
 ### `Sheet`
 
@@ -8287,86 +8380,6 @@ def freeze_panes(self, cell: str) -> None:
 ##### 説明
 
 指定セルより上・左の領域を固定表示する。
-
-### `ExcelTable`
-
-```text
-class ExcelTable:
-```
-
-#### 説明
-
-データシート全体を1つのテーブルとして操作する。
-
-Sheet の表示操作と分けることで、表データの読み書きがレイアウト変更へ
-意図せず影響されないようにしている。
-
-#### `__init__`
-
-```text
-def __init__(self, excel: Excel, worksheet: Worksheet, name: str | None=None) -> None:
-```
-
-#### `read`
-
-```text
-def read(self, *, force_com: bool=False) -> Table:
-```
-
-##### 説明
-
-Excelテーブルの実際の定義範囲だけを読み、値を返す。
-
-シートの使用範囲ではなく Excel が保持する ``ref`` を使うため、表の外に
-ある無関係なセルを現在の Table に混ぜません。数式の計算結果が
-保存されていない場合だけ内部でCOMへ切り替えます。``force_com=True``
-はキャッシュを信頼できないブックをExcel実機で強制再計算します。
-
-#### `replace`
-
-```text
-def replace(self, rows: list[dict[str, Value]] | Table, *, allow_formula_overwrite: bool=False) -> None:
-```
-
-##### 説明
-
-データシート全体を置き換える。
-
-既存データ部に人が入れた数式があると、既定では ``ExcelError``
-で止める。数式を値で潰すと依存セルや集計式が壊れたことに遅れて気づくため。
-意図的に上書きしてよいときだけ ``allow_formula_overwrite=True`` を渡す。
-
-渡された ``Table`` が **既存の数式列を含まない** 場合、その列はそのまま
-保持される。行が増えたぶんは、既存の数式を
-``openpyxl.formula.translate.Translator`` で下方向へずらして埋める。
-行が減ったぶんは、数式セルの値を消す。
-
-見出しの列は **既存の見出しと名前で対応付ける**。既存の見出しに無い
-列名が含まれていた場合は ``ExcelError``。
-
-#### `append`
-
-```text
-def append(self, rows: list[dict[str, Value]] | dict[str, Value] | Table, *, allow_formula_overwrite: bool=False) -> None:
-```
-
-##### 説明
-
-Table、1行、または行リストを既存テーブルの末尾へ追加する。
-
-既存テーブルに数式列があっても、その列は保持される。渡された行に
-数式列が含まれている場合は ``ExcelError``
-（``allow_formula_overwrite=True`` で上書き可能）。
-
-#### `count`
-
-```text
-def count(self) -> int:
-```
-
-##### 説明
-
-データ行数を返す。
 
 
 ## `from comken.toolbox.outlook import ...`
@@ -9510,6 +9523,16 @@ Excel を閉じる。with 文を使う場合は自動で呼ばれる。
 Close が失敗しても Quit は必ず実行する（Excel プロセスを残さないため）。
 2回呼んでも安全。
 
+### `FileFormat`
+
+```text
+class FileFormat:
+```
+
+#### 説明
+
+``Workbook.SaveAs`` に渡す Excel の保存形式定数。
+
 ### `WindowHandler`
 
 ```text
@@ -9695,39 +9718,6 @@ def kill_excel() -> bool:
 
 Returns:
     True: 終了に成功した。False: 起動していなかった、または終了に失敗した。
-
-
-## `from comken.constants import ...`
-
-### `Encoding`
-
-```text
-class Encoding:
-```
-
-#### 説明
-
-CSV の encoding 引数に使う定数。
-
-### `Color`
-
-```text
-class Color:
-```
-
-#### 説明
-
-Excel でよく使う色の定数（RGB 16進値）。
-
-### `FileFormat`
-
-```text
-class FileFormat:
-```
-
-#### 説明
-
-Workbook.SaveAs に渡す Excel の保存形式定数。
 
 
 ## `from comken.run import ...`

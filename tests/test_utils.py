@@ -27,7 +27,7 @@ from comken.core.files import (
     move_file,
 )
 from comken.core.files.ops import copy_to_local_if_large, project_dir
-from comken.core.text import normalize, remove_spaces, strip_spaces
+from comken.core.text import normalize, normalize_encoding, remove_spaces, strip_spaces
 from comken.core.wait import wait_seconds, wait_until
 from comken.exceptions import BrowserError, ColumnNotFoundError, FileSuffixMissingError
 from comken.toolbox.browser.download import DownloadDir
@@ -842,6 +842,49 @@ class TestRemoveSpaces:
     def test_removes_tabs(self):
         """タブも除去されることを確認する。"""
         assert remove_spaces("A\tB") == "AB"
+
+
+class TestNormalizeEncoding:
+    """normalize_encoding（文字コード名の正規化）のテスト。"""
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("UTF-8", "utf-8"),
+            ("utf_8", "utf-8"),
+            ("  utf-8-sig  ", "utf-8-sig"),
+            ("utf8", "utf-8"),
+            ("utf8-sig", "utf-8-sig"),
+            ("utf-8-bom", "utf-8-sig"),
+            ("sjis", "cp932"),
+            ("Shift_JIS", "cp932"),
+            ("shift-jis", "cp932"),
+            ("shiftjis", "cp932"),
+            ("windows-31j", "cp932"),
+            ("MS932", "cp932"),
+            ("mskanji", "cp932"),
+            ("ms-kanji", "cp932"),
+            ("CP932", "cp932"),
+            ("utf-8-sig", "utf-8-sig"),
+        ],
+    )
+    def test_normalizes_known_aliases(self, raw: str, expected: str) -> None:
+        """表記ゆれを正規の codec 名へそろえることを確認する。"""
+        assert normalize_encoding(raw) == expected
+
+    def test_returns_known_codec_as_lowercase_dash_form(self) -> None:
+        """別名対応に無い既知の codec は正規化してそのまま返す。"""
+        assert normalize_encoding("EUC-JP") == "euc-jp"
+
+    def test_rejects_unknown_name_with_helpful_message(self) -> None:
+        """未知の名前は ``ValueError``、対処法の文言を含む。"""
+        with pytest.raises(ValueError, match="省略すると自動判定"):
+            normalize_encoding("foo")
+
+    def test_rejects_auto_string_as_unknown(self) -> None:
+        """``"auto"`` は特別扱いせず未知の名前として ``ValueError``。"""
+        with pytest.raises(ValueError, match="省略すると自動判定"):
+            normalize_encoding("auto")
 
 
 class TestWait:

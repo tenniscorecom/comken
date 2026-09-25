@@ -706,3 +706,20 @@ master に何をコミットしても本番には流れない。**
   含めない」は廃止。`docs/CONVENTIONS.md` と `docs/機能/browser.md` を
   「ファイルを置けば自動で登録される」に書き換えた
 - 空の `comken/toolbox/browser/sites/sample/` を削除（git 管理外、`__pycache__` のみ）
+
+### `comken/constants.py` を廃止した（2026-09-25）
+
+小さな公開定数を 1 ファイルにまとめる `comken/constants.py` を廃止した。
+
+- `Color`（セルの背景色）は `comken.toolbox.excel` に移し、
+  `from comken.toolbox.excel import Color` で取る
+- `FileFormat`（`Workbook.SaveAs` の保存形式）は
+  `comken.toolbox.windows.excel_com` に移し、
+  `from comken.toolbox.windows import FileFormat` で取る
+- `Encoding`（CSV の `encoding` 引数の値）は廃止し、
+  `"cp932"` / `"utf-8-sig"` / `"utf-8"` などの **Python の codec 名を文字列で渡す**
+  形に合わせた。`CP932` / `sjis` / `utf8-sig` などの表記ゆれは
+  `comken.core.text.normalize_encoding` が吸収して正規名（`cp932` / `utf-8-sig`）
+  にそろえる。CSV の `encoding=` を **省略すると自動判定**になる
+- README の `SortBy` は `comken.constants` に存在しない誤記だったので削除した
+- `tests/test_layers.py` から `constants` 層（`LAYERS["constants"] = 0`）を削除

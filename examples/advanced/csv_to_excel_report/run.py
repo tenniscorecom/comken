@@ -15,10 +15,9 @@ Excel レポートの作成・見た目調整（Excel + Sheet）を通しで行�
 import logging
 from pathlib import Path
 
-from comken.constants import Color
 from comken.core import DateNameBuilder
 from comken.toolbox.csv import CSV
-from comken.toolbox.excel import Excel
+from comken.toolbox.excel import Color, Excel
 
 # 入出力はこのフォルダ内で完結させる（サンプル用。実プロジェクトではパスは config.ini に書く）
 HERE = Path(__file__).parent

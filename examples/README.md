@@ -19,7 +19,7 @@ comken の使い方を「動くコード」で覚えるためのサンプル。
 | runtime.py | debug / dry-run の範囲と書き込み抑止 | `python -m examples.runtime` |
 | files.py | 日付入りファイルの検索・移動・コピー・zip | `python -m examples.files` |
 | utils.py | 差分・再試行・待機・文字列正規化・現在時刻 | `python -m examples.utils` |
-| constants.py | 文字コード・色・形式・並び順の定数 | `python -m examples.constants` |
+| constants.py | 色定数の使い方と、文字列で渡す encoding の例 | `python -m examples.constants` |
 | exceptions.py | comken 例外の粒度別の検出 | `python -m examples.exceptions` |
 
 成果物は `examples/output/` に出力される。

@@ -8,19 +8,18 @@ README の「Access」から移した、モジュールを使うときの詳し�
 
 Access がインストールされた Windows PC で、マクロや VBA による整形結果を CSV に出力する。
 数十万件では `rows()` の結果をリスト化せず、Python のメモリを使わない `export_csv()` を使う。
-既定の文字コードは Excel で開きやすい CP932。`Encoding.UTF8_SIG` も指定できる。
+既定の文字コードは Excel で開きやすい CP932。`utf-8-sig` も指定できる（`utf8-sig` / `utf-8-bom` などの表記ゆれは `normalize_encoding` が吸収する）。
 既定では DB を一時フォルダへコピーして開き、終了時にコピーとロックファイルを削除する。
 NAS・共有フォルダ・クラウド同期フォルダを直接開かないため、速度・排他・破損リスクを抑えられる。
 
 ```python
 from comken.toolbox.access import AccessDatabase
-from comken.constants import Encoding
 
 with AccessDatabase(r"C:\作業\顧客.accdb") as db:
     db.run_macro("日次整形")  # Access マクロ
     db.run_function("集計処理", "東日本")  # VBA のプロシージャ／関数
     db.run_query("Q_日次更新")  # 保存済みの更新・追加・削除・テーブル作成クエリ
-    db.export_csv("T_出力", r"C:\作業\顧客.csv", encoding=Encoding.CP932)
+    db.export_csv("T_出力", r"C:\作業\顧客.csv", encoding="cp932")
 
     for row in db.iter_rows("T_出力"):  # Python 側で逐次処理するときだけ
         ...

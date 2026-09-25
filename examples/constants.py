@@ -1,11 +1,11 @@
-"""サンプル: 生の値ではなく公開定数を使って選択肢を指定する。"""
+"""サンプル: 公開定数の使い方（color は Excel 専用、encoding は文字列で渡す）。"""
 
 import logging
 from pathlib import Path
 
-from comken.constants import Color, Encoding, FileFormat
 from comken.core.logger import setup_local_logging
 from comken.toolbox.csv import CSV
+from comken.toolbox.excel import Color
 
 HERE = Path(__file__).parent
 OUTPUT_FOLDER = HERE / "output" / "constants"
@@ -16,17 +16,16 @@ logger = logging.getLogger(__name__)
 
 def main() -> None:
     OUTPUT_FOLDER.mkdir(parents=True, exist_ok=True)
-    # 定数なら IDE の補完が効き、"utf8-sgi" のような打ち間違いを防げる。
-    with CSV(CSV_PATH, encoding=Encoding.UTF8_SIG) as csv_file:
+    # encoding は文字列で渡す（"utf8-sig" の打ち間違いは normalize_encoding が吸収する）
+    with CSV(CSV_PATH, encoding="utf-8-sig") as csv_file:
         csv_file.replace([{"社員番号": "001", "氏名": "山田"}])
-    with CSV(CSV_PATH, encoding=Encoding.AUTO) as csv_file:
+    with CSV(CSV_PATH) as csv_file:
         rows = csv_file.read()
     latest = max(OUTPUT_FOLDER.glob("*.csv"), key=lambda path: path.stat().st_mtime)
 
-    logger.info("Encoding: %s（%d 件）", Encoding.UTF8_SIG, len(rows))
+    logger.info("encoding: utf-8-sig（%d 件）", len(rows))
     logger.info("更新日時が最新のCSV: %s", latest.name)
     logger.info("Color: %s（Excel の色指定）", Color.LIGHT_BLUE)
-    logger.info("FileFormat: %s（Excel COM の xlsx 保存形式）", FileFormat.XLSX)
 
 
 if __name__ == "__main__":

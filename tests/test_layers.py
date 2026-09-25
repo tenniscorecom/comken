@@ -2,7 +2,7 @@
 
 目的は依存関係を完全に固定することではなく、**明らかな逆方向の依存を防ぐ**こと。
 
-    直下（exceptions / constants / runtime）→ core → toolbox → services
+    直下（exceptions / runtime）→ core → toolbox → services
 
 上の層から下の層への import は自由。下の層から上の層への import は禁止する。
 同じ層の別コンポーネント同士（例: toolbox.excel → toolbox.windows）は、必要なものだけ
@@ -14,7 +14,6 @@ from pathlib import Path
 
 LAYERS = {
     "exceptions": 0,
-    "constants": 0,
     "runtime": 0,
     "core": 1,
     "toolbox": 2,

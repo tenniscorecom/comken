@@ -74,7 +74,6 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 | DateFileFinder / DateNameBuilder | 日付付きファイルの検索・命名 |
 | Transfer | 既存の CSV / Excel クラス間の列マッピング転記 |
 | runtime | `with debug():` / `with dry_run():` による実行モード |
-| constants | CSV・Excel・ファイル検索で使う公開定数 |
 | exceptions | comken 固有の例外（エラー名別に対処可能） |
 | [CSV](docs/機能/csv.md) | CSV の読み込み・検索・抽出 |
 | [Excel（openpyxl）](docs/機能/excel.md) | Excel の読み書き（既存数式の計算結果・マクロは必要時に win32com を使用） |
@@ -97,22 +96,22 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 
 | 定数クラス | import | 用途 | 例 |
 |---|---|---|---|
-| `Color` | `from comken.constants import Color` | セルの背景色 | `set_fill(color=Color.RED)` |
-| `SortBy` | `from comken.constants import SortBy` | FileFinder.latest の並び順 | `latest(by=SortBy.UPDATED)` |
-| `Encoding` | `from comken.constants import Encoding` | CSV の文字コード | `CSV(path, encoding=Encoding.CP932)` |
-| `FileFormat` | `from comken.constants import FileFormat` | Excel COM の別名保存形式 | `save_as(path, file_format=FileFormat.CSV)` |
+| `Color` | `from comken.toolbox.excel import Color` | セルの背景色（RGB 16進）。`Sheet.set_background(cell, color)` に渡す | `set_background(cell, Color.RED)` |
+| `FileFormat` | `from comken.toolbox.windows import FileFormat` | Excel COM の別名保存形式 | `save_as(path, file_format=FileFormat.CSV)` |
+
+CSV の `encoding` は **`"cp932"` / `"utf-8-sig"` / `"utf-8"` などの Python の codec 名を文字列で渡す**（`CP932` / `sjis` などの書き方の違いは `normalize_encoding` が吸収する）。省略すれば自動判定。
 
 ---
 ## 機能の追加・変更の要望
 
-「このエンコーディングを `Encoding` に追加してほしい」「この色を `Color` に追加してほしい」など、
+「この色を `Color` に追加してほしい」など、
 **複数のプロジェクトで使えそうな機能は管理者に連絡してください。**
 
 要望の例:
 
 | 種類 | 例 |
 |---|---|
-| 定数クラスへの値の追加 | `Encoding` に新しい文字コード、`Color` に色を追加したい |
+| 定数クラスへの値の追加 | `Color` に色を追加したい |
 | デフォルト値の変更 | `BrowserOptions` のデフォルトを変えたい |
 | ユーティリティの追加 | よく使うファイル操作・文字列変換などを共通化したい |
 | 新モジュール | 複数プロジェクトで同じような処理を書いている |

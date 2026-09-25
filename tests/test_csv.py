@@ -4,7 +4,6 @@ from unittest.mock import patch
 
 import pytest
 
-from comken.constants import Encoding
 from comken.core import Table
 from comken.exceptions import (
     ComkenFileNotFoundError,
@@ -93,7 +92,7 @@ class TestCSV:
     def test_auto_reads_cp932(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
         path.write_text("名前\n山田\n", encoding="cp932")
-        with CSV(path, encoding=Encoding.AUTO) as csv_file:
+        with CSV(path) as csv_file:
             assert csv_file.read().column("名前") == ["山田"]
 
     def test_columns_treats_first_row_as_data(self, tmp_path) -> None:
@@ -130,13 +129,13 @@ class TestCSV:
     def test_auto_reads_utf8_bom_without_bom_in_header(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
         path.write_text("id,name\n1,山田\n", encoding="utf-8-sig")
-        with CSV(path, encoding=Encoding.AUTO) as csv_file:
+        with CSV(path) as csv_file:
             assert csv_file.read() == [{"id": "1", "name": "山田"}]
 
     def test_auto_rejects_unknown_encoding_with_csv_exception(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
         path.write_bytes(b"\x81\x20\x81\x20")
-        with pytest.raises(CSVError), CSV(path, encoding=Encoding.AUTO) as csv_file:
+        with pytest.raises(CSVError), CSV(path) as csv_file:
             csv_file.read()
 
     def test_headerless_rejects_rows_with_too_many_columns(self, tmp_path) -> None:

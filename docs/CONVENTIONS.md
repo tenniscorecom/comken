@@ -149,7 +149,7 @@ if file_size > LOCAL_COPY_THRESHOLD_BYTES:
 | **大文字スネークケース** | `SHEET_NAME`, `MAX_RETRY_COUNT` |
 | **場所** | ファイルの先頭またはクラスの先頭（メソッドより上）にまとめる |
 | **計算式はそのまま書く** | `10 * 1024 * 1024`（`10485760` より意味が伝わる） |
-| **選択肢を渡す引数は comken の定数クラスを使う** | `CSV(encoding=Encoding.CP932)` のように。生の文字列（`encoding="cp932"`）は書かない |
+| **選択肢を渡す引数は comken の定数クラスを使う** | `save_as(path, file_format=FileFormat.CSV)` のように。Excel COM の保存形式など、列挙に意味があるものは定数クラスで渡す |
 
 ---
 
@@ -340,7 +340,7 @@ with Excel("data.xlsx") as f:
 
 | やりたいこと | 使うもの | 例 |
 |---|---|---|
-| 決まった値の一覧を名前で持つ（インスタンスを作らない） | ただのクラス属性（定数クラス） | `Color.RED`, `Encoding.CP932` |
+| 決まった値の一覧を名前で持つ（インスタンスを作らない） | ただのクラス属性（定数クラス） | `Color.RED`, `FileFormat.CSV` |
 | 複数の値をひとまとまりで持ち運ぶ「データの箱」 | `@dataclass` | 集計結果・検索結果など |
 
 ```python
