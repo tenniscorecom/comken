@@ -48,7 +48,7 @@ def main() -> None:
 
     # 1. 当日のデータを受け取る。ファイル名に日付が入っている前提で選ぶ。
     #    見つからなければここで例外になる（bat と違い、古いファイルで先へ進まない）
-    source = DateFileFinder(SOURCE_FOLDER).prefix(".xlsx")
+    source = DateFileFinder(SOURCE_FOLDER).find(".xlsx")
     logger.info("受信ファイル: %s", source.name)
 
     # 2. 作業フォルダへコピーする。同名があれば上書きされる

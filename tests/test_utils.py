@@ -135,15 +135,22 @@ def test_dates_in_name_returns_all_dates_in_order() -> None:
 
 
 class TestDateFileFinder:
-    """DateFileFinder.dated() のテスト。"""
+    """``DateFileFinder.find()`` / ``DateFileFinder.find_all()`` のテスト。
 
-    def test_dated_returns_all_matches_sorted_by_date_desc(self, tmp_path):
+    ``find()`` は「名前を含み、ファイル名の日付が対象日 (``for_date`` / 今日) のファイル」
+    を mtime 新しい順で 1 件返す。``find_all()`` は「名前を含み、日付が 1 つ以上あるファイル」
+    を全件、日付の新しい順（同じ日付は mtime 新しい順）で返す。
+    """
+
+    # ---------- find_all() ----------
+
+    def test_find_all_returns_matches_sorted_by_date_desc(self, tmp_path):
         """複数の日付のファイルがあるとき、日付の新しい順で全件返る。"""
         (tmp_path / "売上_20260728.xlsx").write_text("a", encoding="utf-8")
         (tmp_path / "売上_20260730.xlsx").write_text("b", encoding="utf-8")
         (tmp_path / "売上_20260729.xlsx").write_text("c", encoding="utf-8")
 
-        result = DateFileFinder(tmp_path).dated("売上_.xlsx")
+        result = DateFileFinder(tmp_path).find_all("売上.xlsx")
 
         assert [p.name for p in result] == [
             "売上_20260730.xlsx",
@@ -151,7 +158,7 @@ class TestDateFileFinder:
             "売上_20260728.xlsx",
         ]
 
-    def test_dated_same_date_sorted_by_mtime_desc(self, tmp_path):
+    def test_find_all_same_date_sorted_by_mtime_desc(self, tmp_path):
         """同じ日付のファイルが複数あるとき、更新日時が新しい順に並ぶ。"""
         older = tmp_path / "売上_20260729_old.xlsx"
         newer = tmp_path / "売上_20260729.xlsx"
@@ -163,56 +170,217 @@ class TestDateFileFinder:
         os.utime(older, (older_ts, older_ts))
         os.utime(newer, (newer_ts, newer_ts))
 
-        result = DateFileFinder(tmp_path).dated("売上_.xlsx")
+        result = DateFileFinder(tmp_path).find_all("売上.xlsx")
 
         assert [p.name for p in result] == ["売上_20260729.xlsx", "売上_20260729_old.xlsx"]
 
-    def test_dated_filters_by_extension(self, tmp_path):
-        """prefix に拡張子を含めて絞れる（``.csv`` を指定したら ``.xlsx`` は返らない）。"""
+    def test_find_all_filters_by_extension(self, tmp_path):
+        """拡張子は含めて指定し、同じ拡張子のファイルだけが対象。"""
         (tmp_path / "売上_20260729.xlsx").write_text("a", encoding="utf-8")
         (tmp_path / "売上_20260729.csv").write_text("b", encoding="utf-8")
 
-        result = DateFileFinder(tmp_path).dated("売上_.csv")
+        result = DateFileFinder(tmp_path).find_all("売上.xlsx")
 
-        assert [p.name for p in result] == ["売上_20260729.csv"]
+        assert [p.name for p in result] == ["売上_20260729.xlsx"]
 
-    def test_dated_excludes_files_without_date_in_name(self, tmp_path):
+    def test_find_all_excludes_files_without_date_in_name(self, tmp_path):
         """日付を含まないファイル（数字が日付として成立しない場合も）は除外される。"""
         (tmp_path / "売上_20260729.xlsx").write_text("a", encoding="utf-8")
         (tmp_path / "売上_no_date.xlsx").write_text("b", encoding="utf-8")
         # 数字は揃っているが日付として成立しないものは date_in_name() で None になり除外される
         (tmp_path / "売上_20261345.xlsx").write_text("c", encoding="utf-8")
 
-        result = DateFileFinder(tmp_path).dated("売上_.xlsx")
+        result = DateFileFinder(tmp_path).find_all("売上.xlsx")
 
         assert [p.name for p in result] == ["売上_20260729.xlsx"]
 
-    def test_dated_returns_empty_list_when_no_match(self, tmp_path):
+    def test_find_all_returns_empty_list_when_no_match(self, tmp_path):
         """一致するものが無ければ空リスト（例外を投げない）。"""
         (tmp_path / "違う_20260729.xlsx").write_text("a", encoding="utf-8")
 
-        result = DateFileFinder(tmp_path).dated("売上_.xlsx")
+        result = DateFileFinder(tmp_path).find_all("売上.xlsx")
 
         assert result == []
 
-    def test_dated_ignores_other_prefix(self, tmp_path):
-        """prefix が違うファイルは返らない。"""
+    def test_find_all_ignores_other_name(self, tmp_path):
+        """名前（拡張子を除いた本体）が違うファイルは返らない。
+
+        部分一致なので ``売上`` を含む ``売上明細`` は残る。
+        """
         (tmp_path / "売上_20260729.xlsx").write_text("a", encoding="utf-8")
         (tmp_path / "原価_20260729.xlsx").write_text("b", encoding="utf-8")
+        (tmp_path / "売上明細_20260729.xlsx").write_text("c", encoding="utf-8")
 
-        result = DateFileFinder(tmp_path).dated("売上_.xlsx")
+        result = DateFileFinder(tmp_path).find_all("売上.xlsx")
 
-        assert [p.name for p in result] == ["売上_20260729.xlsx"]
+        assert {p.name for p in result} == {"売上_20260729.xlsx", "売上明細_20260729.xlsx"}
 
-    def test_dated_ignores_for_date(self, tmp_path):
-        """for_date を渡しても結果が変わらない（このメソッドは日付を問わないため）。"""
+    def test_find_all_ignores_for_date(self, tmp_path):
+        """for_date を渡しても結果が変わらない（``find_all()`` は for_date を使わない）。"""
         (tmp_path / "売上_20260729.xlsx").write_text("a", encoding="utf-8")
         (tmp_path / "売上_20260730.xlsx").write_text("b", encoding="utf-8")
 
-        # for_date は prefix() で使うもの。dated() はフォルダ内の全件が対象で日付は問わない
-        result = DateFileFinder(tmp_path, for_date=datetime.date(2026, 7, 29)).dated("売上_.xlsx")
+        result = DateFileFinder(tmp_path, for_date=datetime.date(2026, 7, 29)).find_all("売上.xlsx")
 
         assert [p.name for p in result] == ["売上_20260730.xlsx", "売上_20260729.xlsx"]
+
+    def test_find_all_other_extension_excluded(self, tmp_path):
+        """拡張子が違うファイルは対象外（``.csv`` を指定したら ``.xlsx`` は返らない）。"""
+        (tmp_path / "売上_20260729.xlsx").write_text("a", encoding="utf-8")
+        (tmp_path / "売上_20260729.csv").write_text("b", encoding="utf-8")
+
+        result = DateFileFinder(tmp_path).find_all("売上.csv")
+
+        assert [p.name for p in result] == ["売上_20260729.csv"]
+
+    def test_find_all_raises_when_folder_missing(self, tmp_path):
+        """フォルダが無いときは ``ComkenFileNotFoundError``
+        （``FileNotFoundError`` でもある）。
+        """
+        from comken.exceptions import ComkenFileNotFoundError
+
+        with pytest.raises(ComkenFileNotFoundError):
+            DateFileFinder(tmp_path / "no_such_folder").find_all("売上.xlsx")
+
+    def test_find_all_raises_when_path_is_file(self, tmp_path):
+        """パスがファイル（フォルダではない）のときは ``ComkenFileNotFoundError``。"""
+        from comken.exceptions import ComkenFileNotFoundError
+
+        file_path = tmp_path / "not_a_folder.txt"
+        file_path.write_text("x", encoding="utf-8")
+        with pytest.raises(ComkenFileNotFoundError):
+            DateFileFinder(file_path).find_all("売上.xlsx")
+
+    def test_find_all_missing_extension_raises(self, tmp_path):
+        """拡張子なしの名前は ``FileSuffixMissingError``。"""
+        with pytest.raises(FileSuffixMissingError):
+            DateFileFinder(tmp_path).find_all("売上")
+
+    # ---------- find() ----------
+
+    def test_find_returns_today_file_with_yyyymmdd_at_end(self, tmp_path):
+        """今日の日付のファイルが取れる（日付が末尾、書式 ``YYYYMMDD``）。"""
+        today_text = today().strftime("%Y%m%d")
+        (tmp_path / f"売上_{today_text}.xlsx").write_text("a", encoding="utf-8")
+        (tmp_path / "売上_20260101.xlsx").write_text("b", encoding="utf-8")
+
+        result = DateFileFinder(tmp_path).find("売上.xlsx")
+
+        assert result.name == f"売上_{today_text}.xlsx"
+
+    def test_find_returns_today_file_with_date_at_start(self, tmp_path):
+        """日付が先頭にあっても取れる（書式 ``YYYY-MM-DD``）。"""
+        today_text = today().strftime("%Y-%m-%d")
+        (tmp_path / f"{today_text}_売上.xlsx").write_text("a", encoding="utf-8")
+        (tmp_path / "2020-01-01_売上.xlsx").write_text("b", encoding="utf-8")
+
+        result = DateFileFinder(tmp_path).find("売上.xlsx")
+
+        assert result.name == f"{today_text}_売上.xlsx"
+
+    def test_find_returns_today_file_with_date_in_middle(self, tmp_path):
+        """日付が途中にあっても取れる（書式 ``YYYY_MM_DD``）。"""
+        today_text = today().strftime("%Y_%m_%d")
+        (tmp_path / f"売上_{today_text}_明細.xlsx").write_text("a", encoding="utf-8")
+        (tmp_path / "売上_2020_01_01_明細.xlsx").write_text("b", encoding="utf-8")
+
+        result = DateFileFinder(tmp_path).find("売上.xlsx")
+
+        assert result.name == f"売上_{today_text}_明細.xlsx"
+
+    def test_find_returns_today_file_with_dot_separator(self, tmp_path):
+        """区切りがドットでも取れる。"""
+        today_text = today().strftime("%Y.%m.%d")
+        (tmp_path / f"売上{today_text}.xlsx").write_text("a", encoding="utf-8")
+        (tmp_path / "売上2020.01.01.xlsx").write_text("b", encoding="utf-8")
+
+        result = DateFileFinder(tmp_path).find("売上.xlsx")
+
+        assert result.name == f"売上{today_text}.xlsx"
+
+    def test_find_ignores_other_date(self, tmp_path):
+        """別の日付のファイルは取れない。"""
+        (tmp_path / "売上_20260101.xlsx").write_text("a", encoding="utf-8")
+        (tmp_path / "売上_20200229.xlsx").write_text("b", encoding="utf-8")
+
+        with pytest.raises(FileNotFoundError):
+            DateFileFinder(tmp_path).find("売上.xlsx")
+
+    def test_find_respects_for_date(self, tmp_path):
+        """``for_date`` を指定するとその日のファイルが取れる。"""
+        target = datetime.date(2026, 7, 29)
+        (tmp_path / "売上_20260729.xlsx").write_text("a", encoding="utf-8")
+        (tmp_path / "売上_20260730.xlsx").write_text("b", encoding="utf-8")
+
+        result = DateFileFinder(tmp_path, for_date=target).find("売上.xlsx")
+
+        assert result.name == "売上_20260729.xlsx"
+
+    def test_find_returns_latest_mtime_when_multiple_match(self, tmp_path):
+        """今日のファイルが複数あるとき mtime が新しい方が返る。"""
+        today_text = today().strftime("%Y%m%d")
+        older = tmp_path / f"売上_{today_text}_old.xlsx"
+        newer = tmp_path / f"売上_{today_text}_new.xlsx"
+        older.write_text("old", encoding="utf-8")
+        newer.write_text("new", encoding="utf-8")
+        # mtime を明示的に 10 秒ずらす（書込順では 1 秒未満の差に縮まる環境がある）
+        older_ts = 1_700_000_000.0
+        newer_ts = older_ts + 10.0
+        os.utime(older, (older_ts, older_ts))
+        os.utime(newer, (newer_ts, newer_ts))
+
+        result = DateFileFinder(tmp_path).find("売上.xlsx")
+
+        # 部分一致: stem に 売上 を含むファイルが対象。mtime 新しい方が返る
+        assert result.name == f"売上_{today_text}_new.xlsx"
+
+    def test_find_raises_file_not_found_when_no_match(self, tmp_path):
+        """今日のファイルが無いときは ``ComkenFileNotFoundError``。
+        ``FileNotFoundError`` でも捕まる。
+        """
+        from comken.exceptions import ComkenFileNotFoundError
+
+        (tmp_path / "売上_20200101.xlsx").write_text("a", encoding="utf-8")
+
+        # 2 つの経路でどちらも同じ例外を取れる
+        # （ComkenFileNotFoundError は FileNotFoundError も継承）
+        with pytest.raises(FileNotFoundError):
+            DateFileFinder(tmp_path).find("売上.xlsx")
+        with pytest.raises(ComkenFileNotFoundError):
+            DateFileFinder(tmp_path).find("売上.xlsx")
+
+    def test_find_other_extension_excluded(self, tmp_path):
+        """拡張子が違うファイルは対象外。"""
+        today_text = today().strftime("%Y%m%d")
+        (tmp_path / f"売上_{today_text}.xlsx").write_text("a", encoding="utf-8")
+        (tmp_path / f"売上_{today_text}.csv").write_text("b", encoding="utf-8")
+
+        result = DateFileFinder(tmp_path).find("売上.csv")
+
+        assert result.name == f"売上_{today_text}.csv"
+
+    def test_find_missing_extension_raises(self, tmp_path):
+        """拡張子なしの名前は ``FileSuffixMissingError``。"""
+        with pytest.raises(FileSuffixMissingError):
+            DateFileFinder(tmp_path).find("売上")
+
+    def test_find_raises_when_folder_missing(self, tmp_path):
+        """フォルダが無いときは ``ComkenFileNotFoundError``（``FileNotFoundError`` でもある）。"""
+        from comken.exceptions import ComkenFileNotFoundError
+
+        with pytest.raises(FileNotFoundError):
+            DateFileFinder(tmp_path / "no_such_folder").find("売上.xlsx")
+        with pytest.raises(ComkenFileNotFoundError):
+            DateFileFinder(tmp_path / "no_such_folder").find("売上.xlsx")
+
+    def test_find_raises_when_path_is_file(self, tmp_path):
+        """パスがファイルのときは ``ComkenFileNotFoundError``。"""
+        from comken.exceptions import ComkenFileNotFoundError
+
+        file_path = tmp_path / "not_a_folder.txt"
+        file_path.write_text("x", encoding="utf-8")
+        with pytest.raises(ComkenFileNotFoundError):
+            DateFileFinder(file_path).find("売上.xlsx")
 
 
 class TestMoveFile:

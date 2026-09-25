@@ -42,29 +42,29 @@ file_date = date_in_name("売上_20260729.csv")            # → datetime.date(2
 # ファイル名に含まれる日付を **すべて** 出現順で取得（なければ空リスト）
 all_dates = dates_in_name("一覧_20260801_20260831.xlsx") # → [date(2026, 8, 1), date(2026, 8, 31)]
 
-# 今日の日付を含むファイルを取得（見つからなければ FileNotFoundError）
-# 探す名前には拡張子を含める。`stem + YYYYMMDD + 拡張子` に一致するファイルを返す
-path = DateFileFinder(FOLDER).prefix("売上レポート.xlsx")               # → 売上レポートYYYYMMDD.xlsx
-path = DateFileFinder(FOLDER).prefix("売上レポート.csv")                # → 売上レポートYYYYMMDD.csv
-# name 側に "{:%Y-%m-%d}" のような日付書式を書けば、その位置へ日付が入る
-path = DateFileFinder(FOLDER).prefix("{:%Y-%m-%d}_月次.xlsx")           # → 2026-07-29_月次.xlsx
+# 名前を含み、ファイル名の日付が対象日（コンストラクタの for_date。省略時=今日）のファイルを取得。
+# 探す名前には拡張子を含める。判定は「同じ拡張子（大文字小文字は区別しない）で、`name` の拡張子を
+# 除いた本体部分がファイル名の本体部分に **含まれている**（部分一致）」。日付の位置・書式は問わない
+path = DateFileFinder(FOLDER).find("売上レポート.xlsx")               # → 売上レポート_20260711.xlsx など
+path = DateFileFinder(FOLDER).find("売上レポート.csv")                # → 売上レポート_20260711.csv など
 
 # 別日のファイルを探したいときは for_date を渡す
 import datetime
-path = DateFileFinder(FOLDER, for_date=datetime.date(2026, 7, 29)).prefix("売上レポート.xlsx")
+path = DateFileFinder(FOLDER, for_date=datetime.date(2026, 7, 29)).find("売上レポート.xlsx")
 
-# 見つからなくても処理を続けたい場合は required=False（None が返る）
-path = DateFileFinder(FOLDER).prefix("売上レポート.xlsx", required=False)
-if path is None:
-    ...  # スキップ処理など
+# 見つからないときは ComkenFileNotFoundError（FileNotFoundError でもある）。
+# メッセージにフォルダ・名前・探した日付と対処が出る。
 
-# 日付付きファイルを全件、日付の新しい順で取得（見つからなければ空リスト）
-# 第1引数の接頭辞には拡張子を含めてもよく、含めなくてもよい（含める場合は絞り込みになる）
-paths = DateFileFinder(FOLDER).dated("売上レポート.xlsx")                  # → [売上レポート20260730.xlsx, 売上レポート20260729.xlsx, ...]
-paths = DateFileFinder(FOLDER).dated("売上レポート.csv")
-# `prefix()` と違い、`prefix` 内の日付書式（{:%Y-%m-%d} 等）は解釈しない
-# `for_date` を指定しても結果は同じ（フォルダ内の全件が対象）
+# 日付を含むファイルを全件、日付の新しい順で取得（見つからなければ空リスト）
+# 上の条件に加えて、ファイル名に日付が 1 つ以上あるファイルだけ。for_date は使わない
+paths = DateFileFinder(FOLDER).find_all("売上レポート.xlsx")       # → [売上レポート20260730.xlsx, 売上レポート20260729.xlsx, ...]
+paths = DateFileFinder(FOLDER).find_all("売上レポート.csv")
+# 同じ日付が複数あるときは mtime が新しい順
 ```
+
+> 部分一致なので、`売上.csv` を探すと `売上明細_20260711.csv` も対象になる。
+> 紛らわしい名前が同じフォルダにある場合は、探したい名前を長くする
+> （`売上明細.csv` を探すなど）。
 
 ### データ比較（diff_row / diff_rows）
 
@@ -274,7 +274,7 @@ path = wait_until_stable(r"\\server\share\in\data.csv", stable_for=2.0)
 | ファイルが無い / 待っている間に消えた | `FileNotFoundError` |
 | ファイルは有るが `timeout` までに書き終わらない | `TimeoutError` |
 
-`DateFileFinder.prefix()` は1 回探すだけなので「無ければ待つ」はこちらを使う。
+`DateFileFinder.find()` は1 回探すだけなので「無ければ待つ」は `wait_for_file()` を使う。
 
 ### zip 圧縮・展開（zip_folder / zip_files / unzip）
 

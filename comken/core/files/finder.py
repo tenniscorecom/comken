@@ -7,11 +7,11 @@ import datetime
 import logging
 import re
 from pathlib import Path
-from typing import Literal, overload
 
 from comken.core.dates import today
 from comken.core.files.name import _split_suffix
 from comken.core.timer import measure
+from comken.exceptions import ComkenFileNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -26,110 +26,149 @@ class DateFileFinder:
     探す名前に **拡張子を含める**（例: ``"売上レポート.csv"``）。拡張子無しの名前を
     渡すと ``FileSuffixMissingError`` で止める。
 
-    **注意: ``prefix()`` / ``dated()`` は呼ぶたびにフォルダを走査する**。 同じ結果を
+    **注意: ``find()`` / ``find_all()`` は呼ぶたびにフォルダを走査する。** 同じ結果を
     何度も使うなら変数に受けること（業務時間中に新しいファイルが降ってくる前提の
     道具なので、 敢えてキャッシュしていない）。
+
+    判定の規則:
+
+    - 「名前を含む」: ``name`` の拡張子を除いた本体部分が、ファイル名の本体部分に
+      **含まれている**（部分一致）。同じ拡張子（大文字小文字は区別しない）のファイル
+      だけが対象。日付の位置や書式（``20260711`` / ``2026-07-11`` / ``2026_07_11`` /
+      ``2026.07.11``）は問わない
+    - ``find(name)``: 上の条件に加えて、ファイル名の日付の中に ``for_date``
+      （コンストラクタで指定。省略時は今日）が **含まれる** ファイルだけが対象。
+      複数見つかったときは **更新日時（mtime）が新しい方** を返す。
+      1つも無ければ ``ComkenFileNotFoundError``
+    - ``find_all(name)``: 上の名前の条件に加えて、ファイル名に日付が 1 つ以上ある
+      ファイルだけが対象。**``for_date`` は使わない**。並び順は ``date_in_name``
+      の日付の降順、同じ日付なら mtime の降順。該当するファイルが無ければ
+      空リスト（例外は出さない）
     """
 
     def __init__(self, folder: str | Path, for_date: datetime.date | None = None) -> None:
         self._folder = Path(folder)
         self._date = for_date or today()
 
-    @overload
-    def prefix(self, name: str, required: Literal[True] = True) -> Path: ...
-    @overload
-    def prefix(self, name: str, required: Literal[False]) -> Path | None: ...
     @measure
-    def prefix(
-        self,
-        name: str,
-        required: bool = True,
-    ) -> Path | None:
-        """``prefix + 日付 + 拡張子`` に一致するファイルを返す。
+    def find(self, name: str) -> Path:
+        """名前を含み、ファイル名の日付が ``for_date`` のファイルを返す。
 
-        ``name`` に ``{:%Y-%m-%d}`` のような日付書式があれば、その位置へ日付を
-        入れる。書式がなければ末尾へ ``YYYYMMDD`` を付ける。日付は **拡張子の手前** に入る。
+        同じ拡張子（大文字小文字は区別しない）で、``name`` の拡張子を除いた本体部分が
+        ファイル名の本体部分に **含まれている** ファイルのうち、ファイル名から
+        ``dates_in_name`` で取り出した日付リストの中に ``for_date`` が含まれるもの
+        を返す。日付の位置・書式は問わない。
 
-        ``required=True``（既定）では見つからないと例外になるため、戻り値は
-        ``Path``（``None`` にならない）。``required=False`` のときだけ
-        ``Path | None`` になる（呼び出し側の型チェッカーにもそう伝わる）。
-        """
-        stem, extension = _split_suffix(name)
-        dated_name = (
-            name.format(self._date) if "{:" in name else f"{stem}{self._date:%Y%m%d}{extension}"
-        )
-        logger.debug(
-            "日付付きファイル検索開始: フォルダ=%s ファイル名=%s", self._folder, dated_name
-        )
-        matches = [
-            path for path in self._folder.iterdir() if path.is_file() and path.name == dated_name
-        ]
-        if matches:
-            logger.debug("日付付きファイル検索完了: 件数=%d", len(matches))
-            return matches[0]
-        logger.debug("日付付きファイル検索完了: 件数=0")
-        if required:
-            raise FileNotFoundError(
-                f"日付付きファイルが見つかりません: {self._folder / dated_name}"
-            )
-        return None
-
-    @measure
-    def dated(
-        self,
-        prefix: str,
-    ) -> list[Path]:
-        """``prefix`` で始まり日付を含むファイルを全件、日付の新しい順で返す。
-
-        ``prefix`` には **拡張子を含む完全なファイル名の一部** を渡す（例:
-        ``"売上レポート.csv"`` — 拡張子は必須）。フォルダ内のファイル名から
-        ``date_in_name`` で日付を取り出し、**日付の新しい順** に並べる。同じ日付の
-        ときは更新日時が新しい方を先にする。該当するファイルが無ければ空リストを
-        返す（例外は出さない）。
-
-        ``prefix()`` との違い:
-
-        - ``prefix`` 内の日付書式（``{:%Y-%m-%d}`` 等）は解釈せず、文字どおりの前方一致だけを行う。
-        - コンストラクタの ``for_date`` は使わない。フォルダ内の全件が対象になる。
-        - 見つからないときに例外を上げず、空リストを返す（``required`` 相当の引数も無い）。
+        候補が複数見つかったときは **更新日時（mtime）が新しい方** を返す。
+        1 つも無ければ ``ComkenFileNotFoundError``
+        （``FileNotFoundError`` としても送出される）。
 
         Args:
-            prefix: ファイル名の先頭（この通りの前方一致。日付書式は解釈しない）。
-                拡張子は必須。
+            name: 探すファイル名。**拡張子を含める**（例: ``"売上レポート.csv"``）。
 
         Returns:
-            日付の新しい順に並んだ ``Path`` のリスト。同じ日付のときは更新日時が新しい順。
-            該当するファイルが無ければ空リスト。
+            条件に合うファイルのうち mtime が最新の ``Path``。
 
         Raises:
-            FileSuffixMissingError: ``prefix`` に拡張子が含まれていないとき。
+            FileSuffixMissingError: ``name`` に拡張子が含まれていないとき。
+            ComkenFileNotFoundError: フォルダが存在しない／フォルダではない、
+                もしくは条件に合うファイルが無いとき。
         """
-        _, extension = _split_suffix(prefix)
+        stem, extension = _split_suffix(name)
+        folder = self._resolve_folder()
         logger.debug(
-            "日付付きファイル全件検索開始: フォルダ=%s 接頭辞=%s 拡張子=%s",
-            self._folder,
-            prefix,
-            extension,
+            "日付付きファイル検索開始: フォルダ=%s 名前=%s 対象日=%s",
+            folder,
+            name,
+            self._date,
         )
-        dated_paths: list[tuple[datetime.date, float, Path]] = []
-        for path in self._folder.iterdir():
+        matches: list[tuple[float, Path]] = []
+        for path in folder.iterdir():
             if not path.is_file():
                 continue
-            # ``prefix`` に拡張子を含めて渡されたケースも、ファイル名の先頭一致としては
-            # 拡張子を除いた stem 部分で照合する（"売上_.xlsx" を渡したら "売上_" で始まるファイル）
-            if not path.name.startswith(prefix[: -len(extension)]):
+            if path.suffix.lower() != extension.lower():
                 continue
-            if not path.name.endswith(extension):
+            if stem not in path.stem:
+                continue
+            if self._date not in dates_in_name(path.name):
+                continue
+            matches.append((path.stat().st_mtime, path))
+        if matches:
+            matches.sort(key=lambda item: item[0], reverse=True)
+            chosen = matches[0][1]
+            logger.debug("日付付きファイル検索完了: 件数=%d 採用=%s", len(matches), chosen.name)
+            return chosen
+        logger.debug("日付付きファイル検索完了: 件数=0")
+        raise ComkenFileNotFoundError(
+            "日付付きファイル",
+            folder / name,
+            hint=(
+                f"探した日付: {self._date}\n"
+                f"フォルダに『日付が今日のファイル』が置かれているか、"
+                "名前（拡張子を含む）を確認してください。"
+            ),
+        )
+
+    @measure
+    def find_all(self, name: str) -> list[Path]:
+        """名前を含み、日付を含むファイルを全部、新しい日付順で返す。
+
+        ``name`` の拡張子を除いた本体部分がファイル名の本体部分に **含まれている**
+        （部分一致）ファイルのうち、ファイル名から取り出した日付が 1 つ以上ある
+        ファイルだけを返す。日付の位置・書式は問わない。
+
+        並び順は ``dates_in_name`` の先頭日付の降順、同じ日付なら mtime の降順。
+        ``for_date`` は使わない（フォルダ内の全件が対象）。
+        該当するファイルが無ければ空リストを返す（例外は出さない）。
+
+        Args:
+            name: 探すファイル名。**拡張子を含める**（例: ``"売上レポート.csv"``）。
+
+        Returns:
+            条件に合うファイルの ``Path`` リスト。新しい日付順。
+
+        Raises:
+            FileSuffixMissingError: ``name`` に拡張子が含まれていないとき。
+            ComkenFileNotFoundError: フォルダが存在しない／フォルダではないとき。
+        """
+        stem, extension = _split_suffix(name)
+        folder = self._resolve_folder()
+        logger.debug(
+            "日付付きファイル全件検索開始: フォルダ=%s 名前=%s",
+            folder,
+            name,
+        )
+        dated_paths: list[tuple[datetime.date, float, Path]] = []
+        for path in folder.iterdir():
+            if not path.is_file():
+                continue
+            if path.suffix.lower() != extension.lower():
+                continue
+            if stem not in path.stem:
                 continue
             file_date = date_in_name(path.name)
             if file_date is None:
                 continue
             dated_paths.append((file_date, path.stat().st_mtime, path))
-        # 日付の降順 → 同じ日付なら更新日時が新しい方（mtime 降順）
+        # 先頭日付の降順 → 同じ日付なら mtime の降順
         dated_paths.sort(key=lambda item: (item[0], item[1]), reverse=True)
         matches = [path for _, _, path in dated_paths]
         logger.debug("日付付きファイル全件検索完了: 件数=%d", len(matches))
         return matches
+
+    def _resolve_folder(self) -> Path:
+        """フォルダが存在してディレクトリであることを確認し、``Path`` を返す。
+
+        Raises:
+            ComkenFileNotFoundError: フォルダが無い／フォルダではないとき。
+        """
+        if not self._folder.exists() or not self._folder.is_dir():
+            raise ComkenFileNotFoundError(
+                "フォルダ",
+                self._folder,
+                hint="指定したパスがフォルダとして存在するか確認してください。",
+            )
+        return self._folder
 
 
 def date_in_name(name: str) -> datetime.date | None:

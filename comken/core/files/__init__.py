@@ -12,7 +12,6 @@ from comken.core.files.finder import DateFileFinder, date_in_name, dates_in_name
 from comken.core.files.name import DateNameBuilder
 from comken.core.files.ops import (
     copy_file,
-    copy_to_local_if_large,
     delete_file,
     delete_files,
     local_copy,
@@ -25,7 +24,6 @@ __all__ = [
     "DateFileFinder",
     "atomic_write",
     "copy_file",
-    "copy_to_local_if_large",
     "date_in_name",
     "dates_in_name",
     "delete_file",

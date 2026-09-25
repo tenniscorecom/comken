@@ -22,7 +22,8 @@ from openpyxl.worksheet.table import Table as OpenPyXLTable
 from openpyxl.worksheet.table import TableStyleInfo
 from openpyxl.worksheet.worksheet import Worksheet
 
-from comken.core.files import atomic_write, copy_to_local_if_large
+from comken.core.files import atomic_write
+from comken.core.files.ops import copy_to_local_if_large
 from comken.core.table.model import Table
 from comken.core.timer import measure
 from comken.exceptions import (

@@ -223,9 +223,24 @@ class DateFileFinder:
 探す名前に **拡張子を含める**（例: ``"売上レポート.csv"``）。拡張子無しの名前を
 渡すと ``FileSuffixMissingError`` で止める。
 
-**注意: ``prefix()`` / ``dated()`` は呼ぶたびにフォルダを走査する**。 同じ結果を
+**注意: ``find()`` / ``find_all()`` は呼ぶたびにフォルダを走査する。** 同じ結果を
 何度も使うなら変数に受けること（業務時間中に新しいファイルが降ってくる前提の
 道具なので、 敢えてキャッシュしていない）。
+
+判定の規則:
+
+- 「名前を含む」: ``name`` の拡張子を除いた本体部分が、ファイル名の本体部分に
+  **含まれている**（部分一致）。同じ拡張子（大文字小文字は区別しない）のファイル
+  だけが対象。日付の位置や書式（``20260711`` / ``2026-07-11`` / ``2026_07_11`` /
+  ``2026.07.11``）は問わない
+- ``find(name)``: 上の条件に加えて、ファイル名の日付の中に ``for_date``
+  （コンストラクタで指定。省略時は今日）が **含まれる** ファイルだけが対象。
+  複数見つかったときは **更新日時（mtime）が新しい方** を返す。
+  1つも無ければ ``ComkenFileNotFoundError``
+- ``find_all(name)``: 上の名前の条件に加えて、ファイル名に日付が 1 つ以上ある
+  ファイルだけが対象。**``for_date`` は使わない**。並び順は ``date_in_name``
+  の日付の降順、同じ日付なら mtime の降順。該当するファイルが無ければ
+  空リスト（例外は出さない）
 
 #### `__init__`
 
@@ -233,71 +248,65 @@ class DateFileFinder:
 def __init__(self, folder: str | Path, for_date: datetime.date | None=None) -> None:
 ```
 
-#### `prefix`
-
-```text
-@overload
-def prefix(self, name: str, required: Literal[True]=True) -> Path:
-```
-
-#### `prefix`
-
-```text
-@overload
-def prefix(self, name: str, required: Literal[False]) -> Path | None:
-```
-
-#### `prefix`
+#### `find`
 
 ```text
 @measure
-def prefix(self, name: str, required: bool=True) -> Path | None:
+def find(self, name: str) -> Path:
 ```
 
 ##### 説明
 
-``prefix + 日付 + 拡張子`` に一致するファイルを返す。
+名前を含み、ファイル名の日付が ``for_date`` のファイルを返す。
 
-``name`` に ``{:%Y-%m-%d}`` のような日付書式があれば、その位置へ日付を
-入れる。書式がなければ末尾へ ``YYYYMMDD`` を付ける。日付は **拡張子の手前** に入る。
+同じ拡張子（大文字小文字は区別しない）で、``name`` の拡張子を除いた本体部分が
+ファイル名の本体部分に **含まれている** ファイルのうち、ファイル名から
+``dates_in_name`` で取り出した日付リストの中に ``for_date`` が含まれるもの
+を返す。日付の位置・書式は問わない。
 
-``required=True``（既定）では見つからないと例外になるため、戻り値は
-``Path``（``None`` にならない）。``required=False`` のときだけ
-``Path | None`` になる（呼び出し側の型チェッカーにもそう伝わる）。
-
-#### `dated`
-
-```text
-@measure
-def dated(self, prefix: str) -> list[Path]:
-```
-
-##### 説明
-
-``prefix`` で始まり日付を含むファイルを全件、日付の新しい順で返す。
-
-``prefix`` には **拡張子を含む完全なファイル名の一部** を渡す（例:
-``"売上レポート.csv"`` — 拡張子は必須）。フォルダ内のファイル名から
-``date_in_name`` で日付を取り出し、**日付の新しい順** に並べる。同じ日付の
-ときは更新日時が新しい方を先にする。該当するファイルが無ければ空リストを
-返す（例外は出さない）。
-
-``prefix()`` との違い:
-
-- ``prefix`` 内の日付書式（``{:%Y-%m-%d}`` 等）は解釈せず、文字どおりの前方一致だけを行う。
-- コンストラクタの ``for_date`` は使わない。フォルダ内の全件が対象になる。
-- 見つからないときに例外を上げず、空リストを返す（``required`` 相当の引数も無い）。
+候補が複数見つかったときは **更新日時（mtime）が新しい方** を返す。
+1 つも無ければ ``ComkenFileNotFoundError``
+（``FileNotFoundError`` としても送出される）。
 
 Args:
-    prefix: ファイル名の先頭（この通りの前方一致。日付書式は解釈しない）。
-        拡張子は必須。
+    name: 探すファイル名。**拡張子を含める**（例: ``"売上レポート.csv"``）。
 
 Returns:
-    日付の新しい順に並んだ ``Path`` のリスト。同じ日付のときは更新日時が新しい順。
-    該当するファイルが無ければ空リスト。
+    条件に合うファイルのうち mtime が最新の ``Path``。
 
 Raises:
-    FileSuffixMissingError: ``prefix`` に拡張子が含まれていないとき。
+    FileSuffixMissingError: ``name`` に拡張子が含まれていないとき。
+    ComkenFileNotFoundError: フォルダが存在しない／フォルダではない、
+        もしくは条件に合うファイルが無いとき。
+
+#### `find_all`
+
+```text
+@measure
+def find_all(self, name: str) -> list[Path]:
+```
+
+##### 説明
+
+名前を含み、日付を含むファイルを全部、新しい日付順で返す。
+
+``name`` の拡張子を除いた本体部分がファイル名の本体部分に **含まれている**
+（部分一致）ファイルのうち、ファイル名から取り出した日付が 1 つ以上ある
+ファイルだけを返す。日付の位置・書式は問わない。
+
+並び順は ``dates_in_name`` の先頭日付の降順、同じ日付なら mtime の降順。
+``for_date`` は使わない（フォルダ内の全件が対象）。
+該当するファイルが無ければ空リストを返す（例外は出さない）。
+
+Args:
+    name: 探すファイル名。**拡張子を含める**（例: ``"売上レポート.csv"``）。
+
+Returns:
+    条件に合うファイルの ``Path`` リスト。新しい日付順。
+
+Raises:
+    FileSuffixMissingError: ``name`` に拡張子が含まれていないとき。
+    ComkenFileNotFoundError: フォルダが存在しない／フォルダではないとき。
 
 ### `DiffResult`
 
@@ -1652,9 +1661,24 @@ class DateFileFinder:
 探す名前に **拡張子を含める**（例: ``"売上レポート.csv"``）。拡張子無しの名前を
 渡すと ``FileSuffixMissingError`` で止める。
 
-**注意: ``prefix()`` / ``dated()`` は呼ぶたびにフォルダを走査する**。 同じ結果を
+**注意: ``find()`` / ``find_all()`` は呼ぶたびにフォルダを走査する。** 同じ結果を
 何度も使うなら変数に受けること（業務時間中に新しいファイルが降ってくる前提の
 道具なので、 敢えてキャッシュしていない）。
+
+判定の規則:
+
+- 「名前を含む」: ``name`` の拡張子を除いた本体部分が、ファイル名の本体部分に
+  **含まれている**（部分一致）。同じ拡張子（大文字小文字は区別しない）のファイル
+  だけが対象。日付の位置や書式（``20260711`` / ``2026-07-11`` / ``2026_07_11`` /
+  ``2026.07.11``）は問わない
+- ``find(name)``: 上の条件に加えて、ファイル名の日付の中に ``for_date``
+  （コンストラクタで指定。省略時は今日）が **含まれる** ファイルだけが対象。
+  複数見つかったときは **更新日時（mtime）が新しい方** を返す。
+  1つも無ければ ``ComkenFileNotFoundError``
+- ``find_all(name)``: 上の名前の条件に加えて、ファイル名に日付が 1 つ以上ある
+  ファイルだけが対象。**``for_date`` は使わない**。並び順は ``date_in_name``
+  の日付の降順、同じ日付なら mtime の降順。該当するファイルが無ければ
+  空リスト（例外は出さない）
 
 #### `__init__`
 
@@ -1662,71 +1686,65 @@ class DateFileFinder:
 def __init__(self, folder: str | Path, for_date: datetime.date | None=None) -> None:
 ```
 
-#### `prefix`
-
-```text
-@overload
-def prefix(self, name: str, required: Literal[True]=True) -> Path:
-```
-
-#### `prefix`
-
-```text
-@overload
-def prefix(self, name: str, required: Literal[False]) -> Path | None:
-```
-
-#### `prefix`
+#### `find`
 
 ```text
 @measure
-def prefix(self, name: str, required: bool=True) -> Path | None:
+def find(self, name: str) -> Path:
 ```
 
 ##### 説明
 
-``prefix + 日付 + 拡張子`` に一致するファイルを返す。
+名前を含み、ファイル名の日付が ``for_date`` のファイルを返す。
 
-``name`` に ``{:%Y-%m-%d}`` のような日付書式があれば、その位置へ日付を
-入れる。書式がなければ末尾へ ``YYYYMMDD`` を付ける。日付は **拡張子の手前** に入る。
+同じ拡張子（大文字小文字は区別しない）で、``name`` の拡張子を除いた本体部分が
+ファイル名の本体部分に **含まれている** ファイルのうち、ファイル名から
+``dates_in_name`` で取り出した日付リストの中に ``for_date`` が含まれるもの
+を返す。日付の位置・書式は問わない。
 
-``required=True``（既定）では見つからないと例外になるため、戻り値は
-``Path``（``None`` にならない）。``required=False`` のときだけ
-``Path | None`` になる（呼び出し側の型チェッカーにもそう伝わる）。
-
-#### `dated`
-
-```text
-@measure
-def dated(self, prefix: str) -> list[Path]:
-```
-
-##### 説明
-
-``prefix`` で始まり日付を含むファイルを全件、日付の新しい順で返す。
-
-``prefix`` には **拡張子を含む完全なファイル名の一部** を渡す（例:
-``"売上レポート.csv"`` — 拡張子は必須）。フォルダ内のファイル名から
-``date_in_name`` で日付を取り出し、**日付の新しい順** に並べる。同じ日付の
-ときは更新日時が新しい方を先にする。該当するファイルが無ければ空リストを
-返す（例外は出さない）。
-
-``prefix()`` との違い:
-
-- ``prefix`` 内の日付書式（``{:%Y-%m-%d}`` 等）は解釈せず、文字どおりの前方一致だけを行う。
-- コンストラクタの ``for_date`` は使わない。フォルダ内の全件が対象になる。
-- 見つからないときに例外を上げず、空リストを返す（``required`` 相当の引数も無い）。
+候補が複数見つかったときは **更新日時（mtime）が新しい方** を返す。
+1 つも無ければ ``ComkenFileNotFoundError``
+（``FileNotFoundError`` としても送出される）。
 
 Args:
-    prefix: ファイル名の先頭（この通りの前方一致。日付書式は解釈しない）。
-        拡張子は必須。
+    name: 探すファイル名。**拡張子を含める**（例: ``"売上レポート.csv"``）。
 
 Returns:
-    日付の新しい順に並んだ ``Path`` のリスト。同じ日付のときは更新日時が新しい順。
-    該当するファイルが無ければ空リスト。
+    条件に合うファイルのうち mtime が最新の ``Path``。
 
 Raises:
-    FileSuffixMissingError: ``prefix`` に拡張子が含まれていないとき。
+    FileSuffixMissingError: ``name`` に拡張子が含まれていないとき。
+    ComkenFileNotFoundError: フォルダが存在しない／フォルダではない、
+        もしくは条件に合うファイルが無いとき。
+
+#### `find_all`
+
+```text
+@measure
+def find_all(self, name: str) -> list[Path]:
+```
+
+##### 説明
+
+名前を含み、日付を含むファイルを全部、新しい日付順で返す。
+
+``name`` の拡張子を除いた本体部分がファイル名の本体部分に **含まれている**
+（部分一致）ファイルのうち、ファイル名から取り出した日付が 1 つ以上ある
+ファイルだけを返す。日付の位置・書式は問わない。
+
+並び順は ``dates_in_name`` の先頭日付の降順、同じ日付なら mtime の降順。
+``for_date`` は使わない（フォルダ内の全件が対象）。
+該当するファイルが無ければ空リストを返す（例外は出さない）。
+
+Args:
+    name: 探すファイル名。**拡張子を含める**（例: ``"売上レポート.csv"``）。
+
+Returns:
+    条件に合うファイルの ``Path`` リスト。新しい日付順。
+
+Raises:
+    FileSuffixMissingError: ``name`` に拡張子が含まれていないとき。
+    ComkenFileNotFoundError: フォルダが存在しない／フォルダではないとき。
 
 ### `atomic_write`
 
@@ -1782,46 +1800,6 @@ Args:
 
 Returns:
     コピー後のファイルパス。
-
-### `copy_to_local_if_large`
-
-```text
-@measure
-def copy_to_local_if_large(path: str | Path, threshold_mb: float) -> tuple[Path, Path | None]:
-```
-
-#### 説明
-
-ファイルサイズが閾値を超えていればローカルへコピーして、そのパスを返す。
-
-NAS・ネットワークドライブ上のファイルを openpyxl や win32com が開くときに
-遅い・不安定になる事があり、社内ルールで許可されていればローカルへコピーして
-安定化させる。``threshold_mb=0`` を指定すればコピーせず元のまま返す
-（社内ルールでローカルコピーが禁止されている場合のオプトアウト）。
-
-返り値は ``(working_path, tmp_path_or_None)``。第2要素が ``None`` 以外の
-ときは呼び出し側がローカルコピーの所有者となり、不要になったら
-``tmp_path.unlink(missing_ok=True)`` で削除する。
-``local_copy`` のような ``with`` ブロックでの自動削除はしない
-（openpyxl / win32com は ``close()`` までパスを保持する必要があるため、
-スコープがクラス側に寄る）。
-
-この関数は ``comken.core.files`` の ``__all__`` にのみ入れる
-（``comken.core`` からは再エクスポートしない）。利用者が直接呼ぶことは
-想定せず、Excel / ExcelCOMHandler などクラス側の自動コピールーチンが使う。
-
-Args:
-    path: 元のファイルパス。
-    threshold_mb: この値（MB）を**超える**ファイルはコピーする。
-                  0 を指定するとコピーしない。
-                  ``local_copy=True`` の強制コピー経路は内部で ``-1`` を渡す
-                  （``stat().st_size <= 負の MB`` は常に False になり、
-                  必ずコピー側に分岐する）。
-
-Returns:
-    (working_path, tmp_path_or_None) のタプル。
-    コピーしたときは ``(ローカルコピーへのPath, そのPath)``、
-    コピーしなかったときは ``(元のパス, None)``。
 
 ### `date_in_name`
 
@@ -3072,7 +3050,7 @@ class FileSuffixMissingError(ComkenError):
 
 ファイル名に拡張子が無い
 
-発生箇所: comken.core.files.DateNameBuilder() / DateFileFinder.prefix() / DateFileFinder.dated()
+発生箇所: comken.core.files.DateNameBuilder() / DateFileFinder.find() / DateFileFinder.find_all()
 
 対処:
     ファイル名に拡張子（例: ``.csv`` / ``.xlsx``）を含めて指定する。

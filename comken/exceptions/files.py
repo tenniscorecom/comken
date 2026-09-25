@@ -62,7 +62,9 @@ class FileDeletionError(ComkenError):
 class FileSuffixMissingError(ComkenError):
     """ファイル名に拡張子が無い
 
-    発生箇所: comken.core.files.DateNameBuilder() / DateFileFinder.prefix() / DateFileFinder.dated()
+    発生箇所:
+        comken.core.files.DateNameBuilder() / DateFileFinder.find() /
+        DateFileFinder.find_all()
 
     対処:
         ファイル名に拡張子（例: ``.csv`` / ``.xlsx``）を含めて指定する。

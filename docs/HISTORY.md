@@ -278,6 +278,36 @@ JWT 移行を再評価する。
 **厳しい側（エラー）へ倒れる**。誤報が出るだけでデータは失われない。列を足した
 瞬間に既存管理表が読めなくなり全プロジェクトの業務が止まる事故を防げる。
 
+### `DateFileFinder` を `find()` / `find_all()` に整理した（2026-09-25）
+
+`DateFileFinder.prefix()`（日付書式を解釈する完全一致）と
+`DateFileFinder.dated()`（フォルダ内全件を日付降順）の **2 メソッドを
+廃止**し、`find()` / `find_all()` の **2 メソッド**に整理した。
+
+`prefix()` は「``name`` に ``{:%Y-%m-%d}`` を埋めた完全一致」を探していたが、
+
+- 引数の ``name`` を **文字列のフォーマット** と **一致判定** の両方に使う二重の責務が
+  初学者に読み解きにくく、実装側にも ``name.format(...)`` と ``Path.name == ...`` の
+  二段構えが必要
+- 一致判定が「完全一致」なので、本体に `売上` を含んで日付が後ろに付く運用
+  （`売上_20260711.xlsx` を `売上.xlsx` で見つけたい）が表現できない
+
+を解消するため、判定を **「同じ拡張子（大文字小文字は区別しない）で、
+`name` の拡張子を除いた本体部分がファイル名に **含まれている**（部分一致）」**
+に統一した。日付は `dates_in_name` で取り出し `for_date` が含まれていれば対象。
+`for_date` 省略時は今日。`find_all()` は `for_date` を見ず、日付を含む全件を
+新しい日付順で返す。旧 `prefix()` の `required=False`（無ければ `None`）相当は
+**廃止**した（戻り値が `Path` 固定になった）。`try / except FileNotFoundError`
+で「見つからないとき何もしない」を表現できる。
+
+同時に `copy_to_local_if_large` を `comken.core.files` の **公開窓口
+（`__all__`）から外した**。利用者は `local_copy` を使う前提で、この関数は
+Excel / ExcelCOMHandler 側の自動コピールーチンだけが直接 `import` する
+内部関数。利用者が呼ぶことを想定しない内部関数を `__all__` に並べると、
+「`from comken.core.files import X` で何でも取れる」という誤解を招くため。
+`comken.core.files.ops` からの `import` に付け替えるのは同パッケージ内
+（`workbook.py` / `excel_com.py`）だけの影響。
+
 ### Salesforce Bulk API 2.0 のコードを削除した（2026-09-25）
 
 `bulk_query` / `bulk_ingest`（約 600 行）を、**一度も使っていない**ため削除した（YAGNI）。

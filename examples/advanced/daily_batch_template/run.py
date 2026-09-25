@@ -27,17 +27,19 @@ from .config import config
 
 SHEET = "Sheet1"
 BATCH_NAME = "日次売上レポート"
-# 探す名前。{:%Y%m%d} の位置へ今日の日付が入る（例: 20260713_売上.csv）。拡張子まで含めて書く
-INPUT_NAME = "{:%Y%m%d}_売上.csv"
+# 探すファイル名。拡張子まで含めて書く
+INPUT_NAME = "売上.csv"
 
 logger = logging.getLogger(__name__)
 
 
 def main() -> None:
     # 入力フォルダから「今日の日付が名前に入ったファイル」を探す。
-    # required=False にすると見つからないとき None が返る（エラーにせずスキップ運用できる）
-    source = DateFileFinder(config.FILES.INPUT_FOLDER).prefix(INPUT_NAME, required=False)
-    if source is None:
+    # 本日のファイルが無いときスキップ運用したいので ``FileNotFoundError``
+    # （``ComkenFileNotFoundError`` の親）を捕まえて早期 return する
+    try:
+        source = DateFileFinder(config.FILES.INPUT_FOLDER).find(INPUT_NAME)
+    except FileNotFoundError:
         logger.info("本日分の入力ファイルがないため何もしません")
         return
 
