@@ -3,7 +3,7 @@
 NTT西・NTT東はドメイン（BASE_URL）だけが違う姉妹サイトのため、``BASE_URL`` を
 ここで固定せず、起動したサイトクラス（``NTTWest`` / ``NTTEast``）の
 ``BASE_URL`` へ委ねる（``Page.BASE_URL`` の解決順は
-``comken/toolbox/browser/page.py`` を参照）。1サイトだけの画面共通クラス
+``comken/toolbox/browser/page/`` を参照）。1サイトだけの画面共通クラス
 （例: ``sites/ouju/pages/app_page.py``）と違い、ここで ``BASE_URL`` を
 書くと片方のサイトでしか動かなくなる点に注意。
 """

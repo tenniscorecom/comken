@@ -102,7 +102,7 @@ def create(project_name: str, into: Path, python_library: Path = IMPORT_ROOT) ->
 
 
 def main() -> None:
-    """``python tools/new_project.py <名前>`` 形式で直接呼ばれたときの本体。
+    """``python -m comken.tools.new_project <名前>`` 形式で直接呼ばれたときの本体。
 
     ``python -m comken init ...`` から呼ぶ形が標準。**テストや動作確認用**
     に残してある（``if __name__ == "__main__"`` ブロックから呼ばれる）。

@@ -52,7 +52,7 @@ def main() -> None:
         strip_spaces("　山田　"),
         remove_spaces("03 1234　5678"),
     )
-    logger.info("clock.now(): %s", now().isoformat())
+    logger.info("now(): %s", now().isoformat())
 
 
 if __name__ == "__main__":

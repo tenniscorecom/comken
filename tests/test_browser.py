@@ -39,7 +39,7 @@ class TestPublicApi:
     def test_exports_management_classes_from_browser_package(self):
         """BrowserSession を comken.toolbox.browser から import できる。
 
-        ``Browsers`` は無くなったので ``BrowserSession`` だけが対象。
+        公開対象は ``BrowserSession`` のみ。
         """
         assert BrowserSession is InternalBrowserSession
         assert "BrowserSession" in set(browser.__all__)
@@ -726,8 +726,8 @@ class TestSitePage:
 class TestSiteBaseOwnership:
     """SiteBase が 1 つずつ自分の BrowserSession を持つことのテスト。
 
-    `Browsers` クラスは無くなり、`with SiteBase() as site:` だけがブラウザを
-    起動する入口になった。「1サイト=1ブラウザ」の前提と整合しているかを確認する。
+    `with SiteBase() as site:` がブラウザを起動する入口。「1サイト=1ブラウザ」
+    の前提と整合しているかを確認する。
     """
 
     @staticmethod
@@ -980,8 +980,8 @@ class TestSiteBaseSessionNameConflict:
 class TestSiteBaseSiteOptions:
     """SiteBase の定数が BrowserSession に正しく伝わることのテスト。
 
-    `Browsers.launch(SiteBase)` の代わりに `with SiteBase()` で起動する形に
-    なったので、`NAME` / `OPTIONS` がどう反映されるかを確認する。
+    `with SiteBase()` 経由の起動で、`NAME` / `OPTIONS` がどう反映されるかを
+    確認する。
     """
 
     def test_uses_site_NAME_as_session_name(self, monkeypatch):
@@ -1074,8 +1074,8 @@ class TestSiteBaseSiteOptions:
 class TestSiteBaseDownloadDir:
     """DOWNLOAD_DIR を OPTIONS に設定したときの、自動サブフォルダ分割のテスト。
 
-    `Browsers` があった頃は「同じ DOWNLOAD_DIR を OPTIONS にしても、セッション名
-    ごとにサブフォルダに分かれていた」。この保証が SiteBase 経由でも維持されるか。
+    「同じ DOWNLOAD_DIR を OPTIONS にしても、セッション名ごとにサブフォルダに
+    分かれる」ことを SiteBase 経由でも確認する。
     """
 
     def test_download_dir_is_separated_per_site(self, monkeypatch, tmp_path):

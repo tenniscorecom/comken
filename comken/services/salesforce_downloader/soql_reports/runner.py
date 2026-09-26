@@ -72,12 +72,10 @@ def _soql_download_failed_error(failed_keys: list[str]) -> DownloaderError:
 RESERVE_PATH_LIMIT = 1000
 
 # ファイル名に使えない文字。概要をファイル名に混ぜるので、ここで落とす
-# （``comken/services/salesforce_downloader/provider.py`` と同じ規約）
 _FORBIDDEN_IN_NAME = '\\/:*?"<>|'
 # 概要が長いとパスが伸びすぎるので、ファイル名に使うのはこの長さまで
 _SUMMARY_LIMIT = 30
-# ``DateNameBuilder.suffix()`` に渡す書式。``provider.file_path_of()`` と揃えて
-# 「管理番号_概要_日付_時刻_マイクロ秒.csv」になる
+# ``DateNameBuilder.suffix()`` に渡す書式。「管理番号_概要_日付_時刻_マイクロ秒.csv」になる
 _DATETIME_FORMAT = "%Y%m%d_%H%M%S_%f"
 
 
@@ -187,7 +185,7 @@ def _reserve_path(report_cls: type[SoqlReport]) -> Path:
     同じフォルダに既存ファイルがあると連番（ ``_1`` / ``_2`` …）を足して別の
     ファイル名を探す。 ``RESERVE_PATH_LIMIT`` を超えると ``ReportReservePathLimitError``
     を送出する（権限・同期の異常で ``FileExistsError`` が返り続ける無限ループを
-    避けるため）。``service._reserve_path()`` と同じアルゴリズム。
+    避けるため）。``service._reserve_unique_path()`` と同じアルゴリズム。
     """
     base_path = _file_path_of(report_cls)
     candidate = base_path
@@ -205,9 +203,8 @@ def _reserve_path(report_cls: type[SoqlReport]) -> Path:
 def _file_path_of(report_cls: type[SoqlReport]) -> Path:
     """そのレポートを保存するパス。
 
-    ファイル名は「管理番号_概要_日付_時刻_マイクロ秒」（``provider.file_path_of()``
-    と同じ組み立て）。**管理番号を先頭に置く**のは、概要や参照先のレポートが
-    変わっても番号は変わらないため。拡張子は ``.csv``。
+    ファイル名は「管理番号_概要_日付_時刻_マイクロ秒」。**管理番号を先頭に置く**のは、
+    概要や参照先のレポートが変わっても番号は変わらないため。拡張子は ``.csv``。
     """
     name = f"{report_cls.KEY}_{_safe_summary(report_cls.SUMMARY)}.csv"
     return Path(report_cls.FOLDER) / DateNameBuilder(name).suffix(_DATETIME_FORMAT)
@@ -216,8 +213,8 @@ def _file_path_of(report_cls: type[SoqlReport]) -> Path:
 def _safe_summary(summary: str) -> str:
     """概要をファイル名に使える形にする。
 
-    ``provider._safe_summary()`` と同じ規約。SOQL レポート経路で再利用するため、
-    ここに複写する（``provider._safe_summary`` は公開していない）。
+    ファイル名に使えない文字を除き、``_SUMMARY_LIMIT`` 文字までに切る
+    （空になったら「レポート」）。
     """
     cleaned = "".join(char for char in summary if char not in _FORBIDDEN_IN_NAME).strip()
     return cleaned[:_SUMMARY_LIMIT] or "レポート"

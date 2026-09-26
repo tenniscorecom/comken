@@ -37,7 +37,7 @@
 
 `comken` 直下には `__all__` で公開する名前だけを集め、深掘りした機能は toolbox / services 配下の深いパスのまま残す（import 行から「どの機能群に依存しているか」が読める）。
 
-`core/` 配下には曖昧な名前のフォルダ（`utils` / `common` / `helpers` / `misc`）を置かない。具体名が立つ単位（`files` / `clock` など）で切る。
+`core/` 配下には曖昧な名前のフォルダ（`utils` / `common` / `helpers` / `misc`）を置かない。具体名が立つ単位（`files` / `dates` など）で切る。
 
 外部ライブラリに依存するフォルダは、import 時に対処法つきのエラーを出し、そのフォルダを使わなければ影響しないようにする。
 
@@ -208,8 +208,7 @@ Excel / Excel 内の表データ連携は `Transfer(read, write, mapping)` に�
 from comken.toolbox.browser import BrowserOptions, Locator, Page, SiteBase
 ```
 
-`BrowserSession` / `SiteBase` などの公開名は互換性のため維持する（昔に
-`Browsers` を使っていたプロジェクトは `with` を並べる形に読み替える）。
+`BrowserSession` / `SiteBase` などの公開名は互換性のため維持する。
 内部ファイルは役割が伝わる短い名詞にし、ディレクトリ名と意味が重複する
 複合ファイル名は避ける。
 
@@ -218,14 +217,23 @@ from comken.toolbox.browser import BrowserOptions, Locator, Page, SiteBase
 ```
 browser/
 ├── __init__.py                 公開 API の入口
-├── site.py                     SiteBase（サイトを書く人が最初に読む土台クラス）
+├── sitebase.py                 SiteBase（サイトを書く人が最初に読む土台クラス）
 ├── sites/                      ライブラリ公認サイトの置き場
 ├── options.py                  Edge の起動設定
 ├── management/                 ブラウザーの管理
 │   ├── sessions.py             1 サイト分の WebDriver
 │   ├── startup.py              Edge の起動・初期化
 │   └── tabs.py                 1 セッション内のタブを開閉する
-├── page.py                     Page Object の共通操作
+├── page/                       Page Object の共通操作（パッケージ）
+│   ├── base.py                 共有状態と内部ヘルパー
+│   ├── navigation.py           open() / save_screenshot()
+│   ├── operations.py           click() / input() / select_*() など
+│   ├── reading.py              read_*() / count_elements() / has_element()
+│   ├── waiting.py              wait_visible() / wait_invisible()
+│   ├── alerts.py               alert_*()
+│   ├── escape.py               frame() / find_element*() / execute_script()
+│   ├── model.py                Page 本体
+│   └── site.py                 SitePage
 ├── locator.py                  画面要素の指定方法
 └── download.py                 ダウンロード先と完了待ち
 ```
@@ -238,7 +246,7 @@ browser/
 | Edge の起動・終了 | `management/sessions.py` |
 | Edge 起動失敗、起動引数 | `management/startup.py` |
 | ポップアップ、複数タブ読み込み | `management/tabs.py` |
-| クリック、入力、待機 | `page.py` |
+| クリック、入力、待機 | `page/` |
 | Edge の起動引数 | `options.py` |
 | ダウンロード完了の判定 | `download.py` |
 

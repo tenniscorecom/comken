@@ -423,7 +423,7 @@ def unfilled_names(self) -> list[str]:
     return self.read_texts(self.ROW_NAMES)
 ```
 
-`count()` と `has()` は**その場で数えるだけで待たない**。
+`count_elements()` と `has_element()` は**その場で数えるだけで待たない**。
 読み込みが終わる前に呼ぶと、「まだ描画されていない」を「0件だった」と読み違える。
 
 なお、行が動的に増減する画面では、クリックのたびに一覧が作り直されて

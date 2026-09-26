@@ -137,7 +137,7 @@ parse_cell_date("日付ではない")                            # → None
 parse_cell_date(None)                                     # → None
 ```
 
-新しい書式を足すときは `clock.py` の `_DATE_TEXT_FORMATS` にタプル要素を追加する。
+新しい書式を足すときは `dates.py` の `_DATE_TEXT_FORMATS` にタプル要素を追加する。
 
 ### テキスト正規化（normalize / strip_spaces / remove_spaces)
 
@@ -346,8 +346,6 @@ rows = table.to_rows()
 加工は ``transfer.apply_mapping(read_row, write_row)`` 1 行で済み、
 ``unmatched().only_in_read`` の行は ``transfer.result().append()`` で
 新規行として追加できる。保存は CSV / Excel の ``with`` を正常終了した時に行う。
-列対応ではなくExcelシートのセル内容と基本レイアウトを複製するときは
-``Sheet.copy_to()`` を使う（画像・グラフ・印刷設定等は対象外）。
 
 **空キー (``None`` / ``""``) は突合対象外**。``0`` / ``False`` は空ではない。
 空キーは read / write のどちらでも ``unmatched()`` 側へ流れるため、

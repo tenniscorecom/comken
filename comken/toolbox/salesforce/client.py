@@ -1,7 +1,7 @@
 r"""comken/toolbox/salesforce/client.py — Salesforce API クライアント
 
 1インスタンスが1組織を受け持つ。**このクラスは直接使わず、組織ごとに継承する**
-（`comken/salesforce/sites/`）。組織の My Domain の URL と認証情報のシステム名は
+（`comken/toolbox/salesforce/sites/`）。組織の My Domain の URL と認証情報のシステム名は
 サブクラスがクラス定数として持ち、呼び出し側は組織クラスを作るだけでつながる。
 
     # 組織クラス側（sites/）

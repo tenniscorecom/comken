@@ -1,6 +1,6 @@
 """comken/toolbox/excel/colors.py — Excel でよく使う色の定数（RGB 16進値）。
 
-``comken.toolbox.excel.set_background(cell, color)`` の ``color`` に渡すと、
+``Sheet.set_background(cell, color)`` の ``color`` に渡すと、
 セル背景色を ``PatternFill("solid", fgColor=color)`` で塗れる。
 """
 

@@ -959,7 +959,7 @@ raise ExcelError(f"シート「{name}」が見つかりません。存在する�
 1. **この規約（1〜23 章）** — 全ファイル共通のルール。これを先に読むと以降が速い
 2. **`exceptions/`** — カテゴリ別ファイルと個別例外。エラーメッセージの方針
    （業務側の非エンジニアが読んで対処できる文面）もここで分かる
-3. **`constants.py` → `core/clock.py` → `core/files/`** — 依存の少ない基盤
+3. **`exceptions/` → `core/dates.py` → `core/files/`** — 依存の少ない基盤
 4. **`runtime.py` → `core/config/`** — 実行モードと設定。
    `core/config/__init__.py` は config.ini の初回読み込み完了時に、障害調査用の
    comken バージョンを INFO ログへ1回だけ記録する
@@ -970,11 +970,11 @@ raise ExcelError(f"シート「{name}」が見つかりません。存在する�
 6. **`toolbox/windows/handler.py`** — OS 依存の処理
 7. **`toolbox/browser/`** — 外部アプリ（Edge）依存。まず
    [設計書「8. ブラウザ内部設計」](ARCHITECTURE.md#8-ブラウザ内部設計) の全体図を読み、
-   `site.py`（`SiteBase` の定義。サイトを書く人が最初に読むファイル）→
+   `sitebase.py`（`SiteBase` の定義。サイトを書く人が最初に読むファイル）→
    `options.py`（`BrowserOptions` の既定値一覧）→
    `sites/`（`SITES` の置き場。ライブラリ公認サイトの集まり）→
    `management/sessions.py`（1サイト分の WebDriver）
-   → `page.py`（画面操作）の順に読む
+   → `page/`（画面操作。`Page` 本体は `model.py`）の順に読む
 
 ### どのファイルも同じ形
 

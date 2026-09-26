@@ -3208,7 +3208,7 @@ class SalesforceReportTruncatedError(SalesforceError):
 レポート API は同期・非同期とも 2000 行が上限。非同期にしても超えられない。
 黙って欠けたデータで処理を続けないよう、既定ではこの例外で止める。
 
-発生箇所: comken.toolbox.salesforce.ReportAPI.run() / run_async()
+発生箇所: comken.toolbox.salesforce.ReportAPI.run_csv() / run_async()
 
 対処:
     期間を狭めて何回かに分けて実行する。1回で全部必要なら管理者へ連絡する
