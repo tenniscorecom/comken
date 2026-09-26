@@ -710,17 +710,6 @@ class Excel:
         if workbook is not None:
             workbook.close()
 
-    @staticmethod
-    def _row_is_blank(values: Any) -> bool:
-        """行の全セルが「空」（``None`` または空文字 ``""``）かを返す。
-
-        Excel の ``dimension`` は書式の残ったセルにも広がるため、宣言された
-        範囲をそのまま信じると思わぬ数の空行が返る（症状: 2000 行のブックから
-        30 万行返る）。 ``0`` や ``False`` は値として残す（数値の 0 を落とすと
-        集計が狂うため）。共通判定をここに集約する。
-        """
-        return all(value is None or value == "" for value in values)
-
     @measure
     def save(self) -> None:
         """変更を元ファイルへ保存する。

@@ -136,12 +136,7 @@ class ComputedValueReader:
         needs_com = False
         for formula_row in formula_sheet.iter_rows(min_row=min_row, values_only=True):
             row_tuple = tuple(formula_row)
-            # ``_row_is_blank`` は ``Excel`` 側に残してある（移動対象に含めなかった）。
-            # ``computed.py`` が ``workbook.py`` を import すると循環になるため、
-            # 関数内で遅延 import する。
-            from comken.toolbox.excel.workbook import Excel
-
-            if Excel._row_is_blank(row_tuple):
+            if self._row_is_blank(row_tuple):
                 # 空行は tuple 化せずにスキップ
                 continue
             rows.append(row_tuple)
@@ -224,11 +219,7 @@ class ComputedValueReader:
         cached_stream = cached_sheet.iter_rows(min_row=min_row, values_only=True)
         for index, cached_row in enumerate(cached_stream):
             row_tuple = tuple(cached_row)
-            # ``_row_is_blank`` は ``Excel`` 側に残してある（移動対象に含めなかった）。
-            # 循環 import を避けるため関数内で遅延 import する。
-            from comken.toolbox.excel.workbook import Excel
-
-            if Excel._row_is_blank(row_tuple):
+            if ComputedValueReader._row_is_blank(row_tuple):
                 # 空行はメモリに積まずにスキップ
                 continue
             rows.append(row_tuple)
@@ -282,6 +273,17 @@ class ComputedValueReader:
                 new_row.append(cached_value)
             new_rows.append(tuple(new_row))
         return new_rows, needs_com
+
+    @staticmethod
+    def _row_is_blank(values: Any) -> bool:
+        """行の全セルが「空」（``None`` または空文字 ``""``）かを返す。
+
+        Excel の ``dimension`` は書式の残ったセルにも広がるため、宣言された
+        範囲をそのまま信じると思わぬ数の空行が返る（症状: 2000 行のブックから
+        30 万行返る）。 ``0`` や ``False`` は値として残す（数値の 0 を落とすと
+        集計が狂うため）。共通判定をここに集約する。
+        """
+        return all(value is None or value == "" for value in values)
 
     def _cached_range(
         self, sheet_name: str, min_col: int, min_row: int, max_col: int, max_row: int
