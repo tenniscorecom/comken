@@ -962,6 +962,32 @@ class TestLatestAndTodayReports:
 
         assert has_today_report(entry.key) is False
 
+    def test_has_today_report_does_not_read_csv_contents(self, history_path, tmp_path) -> None:
+        """``has_today_report()`` は CSV の中身を読まない（ファイルの有無だけ判定する）。
+
+        履歴が指すファイルが CSV として読めないバイト列でも True を返し、
+        例外にならない。大きなレポートで CSV を読み直す無駄を排除するための
+        不変条件。``today_report()`` のように ``CSV.read()`` を呼ぶと、
+        ここで例外が飛んで ``has_today_report()`` も巻き添えで失敗する。
+        """
+        entry = _entry()
+        base = tmp_path / "out"
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="broken.csv"),
+            timestamp=now().strftime("%Y-%m-%d %H:%M:%S"),
+            target_folder=base,
+        )
+        # CSV として読めない中身（UTF-8 / CP932 どちらでも失敗するバイト列）
+        base.mkdir(parents=True, exist_ok=True)
+        broken = base / "broken.csv"
+        broken.write_bytes(b"\x80\x81\x82\x83")
+
+        # 中身を読まないため、ファイルの有無だけで True を返す
+        assert has_today_report(entry.key) is True
+
     def test_latest_report_raises_when_record_but_file_missing(
         self, history_path, tmp_path
     ) -> None:

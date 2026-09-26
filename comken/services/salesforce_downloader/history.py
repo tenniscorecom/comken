@@ -537,6 +537,10 @@ def has_today_report(key: str) -> bool:
 
     「今日取れているか」を**履歴だけで**判定する（ファイルの有無は確認する
     ので、履歴に残っていても手作業で消されたものは False になる）。
+    **中身（CSV）は読まない。** ``today_report()`` と同じ判定を
+    ``_latest_success_path()`` と ``path.is_file()`` で行うが、CSV を開く
+    ``CSV.read()`` までは呼ばない（大きなレポートで無駄に時間がかかる問題を
+    避けるため）。
 
     Args:
         key: 管理番号。
@@ -545,14 +549,21 @@ def has_today_report(key: str) -> bool:
         当日分の成功記録があり、かつ実ファイルも残っている場合は True。
         記録が無い／失敗／ファイルが消えている場合は False（例外を投げない）。
     """
-    try:
-        today_report(key)
-    except ReportNotDownloadedError as error:
+    from comken.services.salesforce_downloader.paths import HISTORY_PATH
+
+    history_path = Path(HISTORY_PATH)
+    path = _latest_success_path(history_path, key, date=today())
+    if path is None:
+        logger.debug("本日の取得ファイル: 管理番号=%s → 当日分なし", key)
+        logger.debug("本日の取得ファイルの有無: 管理番号=%s → False", key)
+        return False
+    if not path.is_file():
         logger.debug(
-            "本日の取得ファイルの有無: 管理番号=%s → False（%s）",
+            "本日の取得ファイル: 管理番号=%s path=%s → ファイルが消えている",
             key,
-            error,
+            path,
         )
+        logger.debug("本日の取得ファイルの有無: 管理番号=%s → False", key)
         return False
     logger.debug("本日の取得ファイルの有無: 管理番号=%s → True", key)
     return True
