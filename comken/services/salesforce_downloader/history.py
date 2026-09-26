@@ -428,6 +428,7 @@ def _latest_success_path(
     return latest_path
 
 
+@measure
 def latest_report_path(key: str) -> Path:
     """管理番号に対する「最も新しい成功履歴」のパスを返す。
 
@@ -458,12 +459,20 @@ def latest_report_path(key: str) -> Path:
     history_path = Path(HISTORY_PATH)
     path = _latest_success_path(history_path, key)
     if path is None:
+        logger.debug("最新の取得ファイル: 管理番号=%s → 履歴に該当なし", key)
         raise ReportNotDownloadedError(key, None, history_path)
     if not path.is_file():
+        logger.debug(
+            "最新の取得ファイル: 管理番号=%s path=%s → ファイルが消えている",
+            key,
+            path,
+        )
         raise ReportNotDownloadedError(key, path, history_path)
+    logger.debug("最新の取得ファイル: 管理番号=%s path=%s", key, path)
     return path
 
 
+@measure
 def latest_report(key: str) -> Table:
     """管理番号に対する「最も新しい成功履歴」のファイルを ``Table`` で返す。
 
@@ -482,11 +491,12 @@ def latest_report(key: str) -> Table:
         ComkenFileNotFoundError: パスは履歴にあるがファイルが消えている場合。
     """
     path = latest_report_path(key)
-    logger.info("履歴が指す最新の取得ファイルを使います: %s", path)
+    logger.debug("履歴が指す最新の取得ファイルを使います: 管理番号=%s path=%s", key, path)
     with CSV(path, read_only=True) as csv_file:
         return csv_file.read()
 
 
+@measure
 def today_report(key: str) -> Table:
     """管理番号について、**今日**成功した履歴のうち最も新しいファイルを ``Table`` で返す。
 
@@ -507,13 +517,21 @@ def today_report(key: str) -> Table:
     history_path = Path(HISTORY_PATH)
     path = _latest_success_path(history_path, key, date=today())
     if path is None:
+        logger.debug("本日の取得ファイル: 管理番号=%s → 当日分なし", key)
         raise ReportNotDownloadedError(key, None, history_path)
     if not path.is_file():
+        logger.debug(
+            "本日の取得ファイル: 管理番号=%s path=%s → ファイルが消えている",
+            key,
+            path,
+        )
         raise ReportNotDownloadedError(key, path, history_path)
+    logger.debug("本日の取得ファイル: 管理番号=%s path=%s", key, path)
     with CSV(path, read_only=True) as csv_file:
         return csv_file.read()
 
 
+@measure
 def has_today_report(key: str) -> bool:
     """管理番号について、今日成功した履歴があり実ファイルも残っていれば True。
 
@@ -529,8 +547,14 @@ def has_today_report(key: str) -> bool:
     """
     try:
         today_report(key)
-    except ReportNotDownloadedError:
+    except ReportNotDownloadedError as error:
+        logger.debug(
+            "本日の取得ファイルの有無: 管理番号=%s → False（%s）",
+            key,
+            error,
+        )
         return False
+    logger.debug("本日の取得ファイルの有無: 管理番号=%s → True", key)
     return True
 
 

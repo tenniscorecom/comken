@@ -44,6 +44,7 @@ from pathlib import Path
 
 from comken.core.files import copy_file
 from comken.core.table.model import Table
+from comken.core.timer import measure
 from comken.exceptions import ComkenError, CSVError
 from comken.toolbox.csv import CSV
 
@@ -76,6 +77,7 @@ def reduce_ouju_csv(table: Table, *, columns: list[str] | None = None) -> Table:
     return table.select(*wanted, aliases=aliases)
 
 
+@measure
 def reduce_ouju_csv_file(
     path: str | Path,
     *,
@@ -119,6 +121,7 @@ def reduce_ouju_csv_file(
     return backup_path
 
 
+@measure
 def reduce_ouju_csv_files(
     paths: list[Path],
     *,
@@ -168,6 +171,7 @@ def reduce_ouju_csv_files(
     return backups
 
 
+@measure
 def reduce_ouju_csv_folder(
     folder: str | Path,
     *,
