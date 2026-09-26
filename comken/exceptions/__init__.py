@@ -13,7 +13,7 @@ ComkenError
 ├── OutlookError
 ├── ExcelError
 │   ├── ExcelApplicationNotAvailableError
-│   ├── SheetNotFoundError
+│   └── SheetNotFoundError
 ├── CSVError
 ├── CredentialError
 │   ├── CredentialNotFoundError
@@ -36,9 +36,6 @@ ComkenError
 │   └── TransferSourceColumnNotFoundError
 ├── ConfigError
 │   └── ConfigKeyNotFoundError
-├── MasterTableError
-│   ├── MasterRowValueError
-│   └── MasterDuplicateValueError
 ├── StateError
 ├── WindowNotFoundError
 ├── HolidayError
@@ -46,14 +43,7 @@ ComkenError
 ├── DownloaderError
 │   ├── HistoryWriteError
 │   ├── HistoryLockTimeoutError
-│   ├── CachedReportNotFoundError
-│   ├── ReportNotRegisteredError
-│   ├── SoqlReportNotRegisteredError
-│   ├── GroupNotRegisteredError
-│   ├── EmptyReportError
-│   ├── ReportReservePathLimitError
-│   ├── ReportFolderNotFoundError
-│   └── ScheduledDownloadFailedError
+│   └── ReportNotDownloadedError
 
 カテゴリ基底クラスはまとめて捕捉するために使い、直接送出しない。
 """
@@ -67,17 +57,10 @@ from comken.exceptions.config import (
     PasswordRejectedError,
 )
 from comken.exceptions.downloader import (
-    CachedReportNotFoundError,
     DownloaderError,
-    EmptyReportError,
-    GroupNotRegisteredError,
     HistoryLockTimeoutError,
     HistoryWriteError,
-    ReportFolderNotFoundError,
-    ReportNotRegisteredError,
-    ReportReservePathLimitError,
-    ScheduledDownloadFailedError,
-    SoqlReportNotRegisteredError,
+    ReportNotDownloadedError,
 )
 from comken.exceptions.files import (
     ComkenFileNotFoundError,
@@ -104,9 +87,6 @@ from comken.exceptions.tables import (
     ExcelColumnNotFoundError,
     InvalidColumnError,
     InvalidTableInputError,
-    MasterDuplicateValueError,
-    MasterRowValueError,
-    MasterTableError,
     TableColumnNotFoundError,
     TableDuplicateKeyError,
     TableError,
@@ -153,23 +133,13 @@ __all__ = [
     "BrowserError",
     "ElementNotFoundError",
     "LoginFailedError",
-    "MasterTableError",
-    "MasterRowValueError",
-    "MasterDuplicateValueError",
     "StateError",
     "HolidayError",
     "WorkdayNotFoundError",
     "DownloaderError",
     "HistoryWriteError",
     "HistoryLockTimeoutError",
-    "CachedReportNotFoundError",
-    "ReportNotRegisteredError",
-    "SoqlReportNotRegisteredError",
-    "GroupNotRegisteredError",
-    "EmptyReportError",
-    "ReportFolderNotFoundError",
-    "ReportReservePathLimitError",
-    "ScheduledDownloadFailedError",
+    "ReportNotDownloadedError",
     "TableError",
     "InvalidTableInputError",
     "TableColumnNotFoundError",

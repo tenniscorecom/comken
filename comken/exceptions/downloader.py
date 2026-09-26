@@ -1,11 +1,18 @@
-"""comken/exceptions/downloader.py — Salesforce レポートの集約ダウンローダーの例外。
+"""comken/exceptions/downloader.py — Salesforce レポートの履歴・読取に関する例外。
 
-管理表と履歴に関する失敗をまとめる。Salesforce との通信そのものの失敗は web.py を使う。
+管理表・取得実行（`download_scheduled()`）は 2026-09 に comken の外
+（`Salesforceレポートダウンローダー` リポジトリ）へ切り出した。comken 側に
+残っているのは履歴の読み書きと管理番号での読取に関する例外。Salesforce との
+通信そのものの失敗は web.py を使う。
 """
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from comken.exceptions.base import ComkenError
+
+if TYPE_CHECKING:
+    pass
 
 
 class DownloaderError(ComkenError):
@@ -42,191 +49,37 @@ class HistoryLockTimeoutError(DownloaderError):
         )
 
 
-class ReportNotRegisteredError(DownloaderError):
-    """指定した管理番号が管理表に無い
+class ReportNotDownloadedError(DownloaderError):
+    """指定した管理番号の取得済みレポートが見つからない
 
-    管理番号はコードに定数で書く（CUSTOMER_LIST = "1001"）。管理表から行を消したり、
-    番号を打ち間違えたりすると、どのレポートを指しているか決められない。
+    履歴には「成功」の記録が無い、記録はあるがファイルが消えている、
+    のいずれか。**comken 側は勝手に Salesforce へ取りに行わない。**
+    「取っておいたものを受け取る」だけの関数なので、ここで自動的に
+    取りに行くと、定期取得が動いていないことに誰も気づかなくなる。
 
-    発生箇所: Salesforceレポートダウンローダー の download_scheduled() /
-    comken.services.salesforce_downloader の cached_report()
-
-    対処:
-        管理表を開いて、その管理番号の行があるか確認する。
-        新しく使うレポートは、先に管理表へ登録する
-    """
-
-    def __init__(self, report_key: str, registered: list[str], master_path: Path) -> None:
-        known = "、".join(str(key) for key in registered) or "（登録なし）"
-        super().__init__(
-            f"管理表に登録されていない管理番号です: {report_key}\n"
-            f"登録済みの管理番号: {known}\n"
-            f"管理表: {master_path}"
-        )
-
-
-class GroupNotRegisteredError(DownloaderError):
-    """管理表の「グループ」列に設定シートに登録されていない値が書かれている
-
-    出力先フォルダは「グループ→ベースパス」の対応を、設定シート（レポート管理表
-    と同じブック内の「設定」シート）で管理する。管理表にないグループ名が書かれて
-    いると、出力先を決められない。
-
-    発生箇所: comken.services.salesforce_downloader.provider の report_folder()
+    発生箇所: comken.services.salesforce_downloader.history の
+              latest_report_path() / latest_report() / today_report()
 
     対処:
-        管理表の「グループ」列に書かれた値が、設定シート（`group_settings.py` の
-        `GroupSetting`）の「グループ」列に存在するか確認する。新しく部署・グループを
-        追加するときは、設定シート側にも同じ名前で行を足す
+        定期取得（Salesforceレポートダウンローダー）が動いているか、
+        ``ダウンロード履歴.csv`` を確認する。ファイルが消えている場合は
+        メッセージに表示されたパスに復旧する
     """
 
-    def __init__(self, group: str, registered: list[str], master_path: Path) -> None:
-        known = "、".join(registered) or "（登録なし）"
-        super().__init__(
-            f"管理表の「グループ」列に設定されていないグループ名です: {group}\n"
-            f"設定シートに登録済みのグループ: {known}\n"
-            f"管理表: {master_path}"
-        )
-
-
-class SoqlReportNotRegisteredError(DownloaderError):
-    """管理表の「SOQL」列が「○」なのに、同じ管理番号の SoqlReport が登録されていない
-
-    管理表と ``reports/`` 配下の ``SoqlReport`` 実装は別々に編集できるため、「SOQL」
-    列だけ「○」にして ``SoqlReport`` の追加（``reports/<ファイル>.py`` への
-    サブクラス定義）を忘れると、どの SOQL クエリを使えばいいか決められない。
-
-    発生箇所: comken.services.salesforce_downloader.soql_reports の soql_report_for()
-
-    対処:
-        管理番号に対応する ``SoqlReport`` サブクラスを ``reports/`` 配下に追加し、
-        ``KEY`` を管理表と同じ値にする（ファイル名を ``_`` で始めると
-        走査対象外になるので、必ず実レポート名にする）。まだ SOQL 化していないなら、
-        管理表の「SOQL」列を「×」に戻す
-    """
-
-    def __init__(self, report_key: str, registered: list[str]) -> None:
-        known = "、".join(str(key) for key in registered) or "（登録なし）"
-        super().__init__(
-            f"管理番号 {report_key} はSOQL列が「○」ですが、SoqlReportが登録されていません。\n"
-            f"登録済みのSOQL管理番号: {known}"
-        )
-
-
-class CachedReportNotFoundError(DownloaderError):
-    """本日の定期取得キャッシュが見つからない
-
-    定期取得の時刻より前に呼ばれた、定期取得が失敗した、その日に管理表へ
-    追加されて今日の分に間に合わなかった、のいずれか。
-
-    **勝手に Salesforce へ取りに行かない。** cached_report() は
-    「取っておいたものを受け取る」関数で、取りに行く関数ではない。
-    ここで自動的に取りに行くと、定期取得が動いていないことに誰も気づかない。
-
-    発生箇所: comken.services.salesforce_downloader の cached_report()
-
-    対処:
-        Salesforce からCSVを手動取得し、画面に表示された正確なパス・ファイル名で置いて、
-        同じ python main.py を再実行する
-    """
-
-    def __init__(self, report_key: str, summary: str, cache_path: Path) -> None:
-        super().__init__(
-            f"本日の定期取得キャッシュが見つかりません: {report_key}（{summary}）\n"
-            "SalesforceからCSVを手動取得し、次の正確なパス・ファイル名で置いてください:\n"
-            f"{cache_path}\n"
-            "配置後、同じ python main.py を再実行してください。"
-        )
-
-
-class EmptyReportError(DownloaderError):
-    """レポートは実行できたが明細が 0 行だった
-
-    空のファイルを置くと、使う側は「データが無い日」と「取得が失敗した日」を
-    区別できなくなる。0 行のときはファイルを作らず、失敗として扱う。
-
-    発生箇所: Salesforceレポートダウンローダー の download_scheduled()
-
-    対処:
-        Salesforce の画面で同じレポートを開き、本当に 0 件か確認する。
-        0 件が正常に起こるレポートなら、管理表の「0件あり」を「○」にする。
-    """
-
-    def __init__(self, report_key: str, summary: str, url: str) -> None:
-        super().__init__(
-            f"レポートの明細が 0 行でした: {report_key}（{summary}）\n"
-            f"{url}\n"
-            "取得の失敗と区別できないため、ファイルは作りません。"
-        )
-
-
-class ReportFolderNotFoundError(DownloaderError):
-    """保存先として組み立てたフォルダが無い
-
-    保存先フォルダは、管理表の「グループ」で引いた設定シートの「ベースURL」（フォルダのパス）
-    そのものである（`provider.report_folder()`）。そのフォルダが存在しない場合にこの例外になる。
-    無いフォルダを作らないのは、書き間違いのことが多いため。
-    勝手に作ると、誰も読まない場所へ置き続けることになる。
-
-    発生箇所: Salesforceレポートダウンローダー の download_scheduled()
-
-    対処:
-        設定シートの「ベースURL」（フォルダのパス）と、管理表の「グループ」を
-        確認する。共有フォルダなら、つながっているか・権限があるかも確認する
-    """
-
-    def __init__(self, report_key: str, folder: Path) -> None:
-        super().__init__(
-            f"保存先のフォルダがありません: {report_key}\n"
-            f"{folder}\n"
-            "設定シートの「ベースURL」（フォルダのパス）と、管理表の「グループ」を"
-            "確認してください。\n"
-            "共有フォルダの場合は、つながっているか（権限があるか）も確認してください。"
-        )
-
-
-class ReportReservePathLimitError(DownloaderError):
-    """保存ファイル名の連番が上限に達した
-
-    `_reserve_path()` は同じフォルダに既存ファイルがあると連番を足して別の
-    ファイル名を探す。 上限（ ``RESERVE_PATH_LIMIT`` ）まで試しても確保できない
-    のは権限・同期の異常など、運用側に原因があることが多い。
-
-    発生箇所: Salesforceレポートダウンローダー の _reserve_path()
-
-    対処:
-        保存先フォルダが想定どおりか確認する。 共有フォルダなら、 古い取得
-        ファイルを退避するか、 別の保存先に変える。 連発する場合は権限・排他
-        制御の設定も見直す
-    """
-
-    def __init__(self, report_key: str, base_path: Path, limit: int) -> None:
-        super().__init__(
-            f"保存ファイル名の連番が上限に達しました: {report_key}\n"
-            f"{base_path}\n"
-            f"{limit} 回試しても空きのファイル名が見つかりませんでした。\n"
-            "保存先フォルダの権限・排他制御と、 古い取得ファイルの数を確認してください。"
-        )
-
-
-class ScheduledDownloadFailedError(DownloaderError):
-    """定期取得で1件以上が失敗した
-
-    取得できたものは保存済み。**1件失敗しても残りは続けたうえで、最後にまとめて知らせる。**
-    ログだけに出して正常終了すると、スケジューラや RPA 基盤から見て成功と区別が付かず、
-    落ちていることに誰も気づかない。
-
-    発生箇所: Salesforceレポートダウンローダー の download_scheduled()
-
-    対処:
-        履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。
-        急いで必要なものは download_scheduled() をスケジュール外で実行する。
-        権限を持つ人が Salesforce から手動でダウンロードしてもよい
-    """
-
-    def __init__(self, failed_keys: list[str], history_path: Path) -> None:
-        keys = "、".join(str(key) for key in failed_keys)
-        super().__init__(
-            f"定期取得で {len(failed_keys)} 件が失敗しました: {keys}\n"
-            f"失敗した理由は履歴を確認してください: {history_path}"
-        )
+    def __init__(self, report_key: str, missing_path: Path | None, history_path: Path) -> None:
+        if missing_path is None:
+            message = (
+                f"管理番号 {report_key} の成功履歴がありません。\n"
+                f"履歴: {history_path}\n"
+                "Salesforceレポートダウンローダーの定期取得が動いているか、"
+                "「ダウンロード履歴.csv」を確認してください。"
+            )
+        else:
+            message = (
+                f"管理番号 {report_key} の成功履歴はありますが、ファイルが消えています。\n"
+                f"履歴が指していたパス: {missing_path}\n"
+                f"履歴: {history_path}\n"
+                "Salesforceレポートダウンローダーの定期取得が動いているか、"
+                "「ダウンロード履歴.csv」を確認してください。"
+            )
+        super().__init__(message)

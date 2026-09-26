@@ -86,23 +86,13 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `SalesforceRequestError` | Salesforce が処理を断った | 表示されたメッセージをそのまま添えて管理者へ連絡する（権限か項目名の問題が多い） |
 | `SalesforceReportTruncatedError` | レポートが上限の 2000 行で切れた（**全件ではない**） | 期間を狭めて何回かに分けて実行する。1回で全部必要なら管理者へ連絡する |
 | `SalesforceReportIDNotFoundError` | レポートの URL からレポート ID を取り出せない | Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す |
-| `MasterTableError` | Excel の管理表に関するエラー。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
-| `MasterRowValueError` | 管理表の値が正しくない | メッセージに出ている行と列を、管理表で確認して直す |
-| `MasterDuplicateValueError` | 一意であるべき列に、同じ値が2つ以上ある | 管理表を開いて、重複している値のどちらかを別の値に変える |
 | `StateError` | state.ini に関するエラー。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `HolidayError` | 祝日カレンダーに関するエラー。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `WorkdayNotFoundError` | 営業日が見つからなかった | n をその月の営業日数以下に直す、対象月の祝日に過不足がないか確認する、社内休日（会社用カレンダーCSV）が広範囲に登録されていないか確認する |
 | `DownloaderError` | Salesforce レポートの集約取得に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `HistoryWriteError` | 必須のダウンロード履歴を記録できなかった | 履歴CSVの保存先、共有サーバー接続、書込み権限を確認する |
 | `HistoryLockTimeoutError` | ダウンロード履歴の排他ロックを待っても取得できなかった | 同時実行中の処理が終わるのを待って再実行する。繰り返す場合は共有サーバーを確認する |
-| `CachedReportNotFoundError` | 本日の定期取得キャッシュが見つからない | Salesforce からCSVを手動取得し、画面に表示された正確なパス・ファイル名で置いて、同じ python main.py を再実行する |
-| `ReportNotRegisteredError` | 指定した管理番号が管理表に無い | 管理表を開いて、その管理番号の行があるか確認する。新しく使うレポートは、先に管理表へ登録する |
-| `SoqlReportNotRegisteredError` | 管理表の「SOQL」列が「○」なのに、同じ管理番号の SoqlReport が登録されていない | 管理番号に対応する ``SoqlReport`` サブクラスを ``reports/`` 配下に追加し、``KEY`` を管理表と同じ値にする（ファイル名を ``_`` で始めると走査対象外になるので、必ず実レポート名にする）。まだ SOQL 化していないなら、管理表の「SOQL」列を「×」に戻す |
-| `GroupNotRegisteredError` | 管理表の「グループ」列に設定シートに登録されていない値が書かれている | 管理表の「グループ」列に書かれた値が、設定シート（`group_settings.py` の`GroupSetting`）の「グループ」列に存在するか確認する。新しく部署・グループを追加するときは、設定シート側にも同じ名前で行を足す |
-| `EmptyReportError` | レポートは実行できたが明細が 0 行だった | Salesforce の画面で同じレポートを開き、本当に 0 件か確認する。0 件が正常に起こるレポートなら、管理表の「0件あり」を「○」にする。 |
-| `ReportFolderNotFoundError` | 保存先として組み立てたフォルダが無い | 設定シートの「ベースURL」（フォルダのパス）と、管理表の「グループ」を確認する。共有フォルダなら、つながっているか・権限があるかも確認する |
-| `ReportReservePathLimitError` | 保存ファイル名の連番が上限に達した | 保存先フォルダが想定どおりか確認する。 共有フォルダなら、 古い取得ファイルを退避するか、 別の保存先に変える。 連発する場合は権限・排他制御の設定も見直す |
-| `ScheduledDownloadFailedError` | 定期取得で1件以上が失敗した | 履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。急いで必要なものは download_scheduled() をスケジュール外で実行する。権限を持つ人が Salesforce から手動でダウンロードしてもよい |
+| `ReportNotDownloadedError` | 指定した管理番号の取得済みレポートが見つからない | 定期取得（Salesforceレポートダウンローダー）が動いているか、``ダウンロード履歴.csv`` を確認する。ファイルが消えている場合はメッセージに表示されたパスに復旧する |
 | `LoggingAlreadyConfiguredError` | root logger がすでに設定されている | setup_logging() または setup_local_logging() はアプリの入口で1回だけ呼ぶ。実行基盤がログを設定する場合は呼ばない。 |
 | `LoggingConflictError` | root logger に comken 以外の handler が設定されている | 上の handler 一覧をそのままライブラリの管理者へ連絡してください（連絡先は環境ごとに異なるので、ここには書かない）。やむを得ず共存させたい場合は、呼び出し時に ``allow_existing=True``を指定すれば処理は続きますが、comken のハンドラーが追加されることで既存ライブラリのログが**二重**に出たり、出力先が想定と変わる可能性があります。 |
 | `LogRootNotConfiguredError` | LoggerSite の LOG_ROOT が設定されていない | サブクラスに ``LOG_ROOT = "\\server\share\logs"`` を1行追加する（絶対パスまたは UNC 文字列。LOG_FOLDER_NAMES のフォルダ名はこの下に作られる）。 |

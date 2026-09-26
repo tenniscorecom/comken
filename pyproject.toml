@@ -47,7 +47,6 @@ ignore = [
 # （呼び出しの結果を共有してしまう「可変デフォルト」には当たらない）
 extend-immutable-calls = [
     "comken.toolbox.master_table.column",
-    "comken.services.salesforce_downloader.report_master.column",
 ]
 
 [tool.ruff.lint.flake8-tidy-imports]
@@ -70,7 +69,6 @@ max-complexity = 10
 "comken/core/config/check.py" = ["T20"]
 "comken/toolbox/credentials/cli.py" = ["T20"]
 "comken/toolbox/salesforce/direct/cli.py" = ["T20"]
-"comken/services/salesforce_downloader/cli.py" = ["T20"]
 "comken/tools/new_project.py" = ["T20"]
 # examples/ は comken を使う側のサンプルコードで、内部が独自の小さなパッケージ
 # 構成を持つ。comken 本体の規約で縛ると「サンプルを comken パッケージとして動かす」

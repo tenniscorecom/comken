@@ -38,12 +38,19 @@ class TestHelpListing:
         「何を防いでいるか」: サブコマンドを追加するときに ``add_parser`` を
         呼び忘れると、利用者が ``python -m comken <新コマンド>`` を打ったときに
         「unknown command」になる。help 一覧は利用者が最初に読む場所なので、
-        ここで名前を固定する。
+        ここで名前を固定する。``sfdl`` は 2026-09 に
+        ``Salesforceレポートダウンローダー`` リポジトリ側へ移したので、ここには
+        出ない。
         """
         main_cli(["--help"])
         out = capsys.readouterr().out
-        for name in ("init", "sf", "cred", "sfdl", "holidays"):
+        for name in ("init", "sf", "cred", "holidays"):
             assert name in out, f"--help に {name} が無い: {out!r}"
+        # ``sfdl`` は comken の CLI から外れた
+        assert "sfdl" not in out, (
+            f"--help に sfdl が残っています（Salesforceレポートダウンローダー側へ"
+            f"移したので comken からは外すべき）: {out!r}"
+        )
 
     def test_help_lists_holidays_alias(self) -> None:
         """``--help`` に ``holidays`` の別名 ``holiday`` も並ぶ。

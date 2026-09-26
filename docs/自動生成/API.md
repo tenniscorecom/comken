@@ -3368,66 +3368,6 @@ class LoginFailedError(BrowserError):
 def __init__(self, reason: str) -> None:
 ```
 
-### `MasterTableError`
-
-```text
-class MasterTableError(ComkenError):
-```
-
-#### 説明
-
-Excel の管理表に関するエラー。具体的な状況はメッセージに出る
-
-対処:
-    メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
-
-### `MasterRowValueError`
-
-```text
-class MasterRowValueError(MasterTableError):
-```
-
-#### 説明
-
-管理表の値が正しくない
-
-数字を書く列に文字が入っている、決まった書き方以外を書いた、空にできない列が空、など。
-
-発生箇所: comken.services.salesforce_downloader.report_master の load()
-
-対処:
-    メッセージに出ている行と列を、管理表で確認して直す
-
-#### `__init__`
-
-```text
-def __init__(self, row_number: int, header: str, value: object, reason: str) -> None:
-```
-
-### `MasterDuplicateValueError`
-
-```text
-class MasterDuplicateValueError(MasterTableError):
-```
-
-#### 説明
-
-一意であるべき列に、同じ値が2つ以上ある
-
-管理番号のように「1つに決まる」ことが前提の列で重複すると、
-どの行を指しているか決められない。
-
-発生箇所: comken.services.salesforce_downloader.report_master の load()
-
-対処:
-    管理表を開いて、重複している値のどちらかを別の値に変える
-
-#### `__init__`
-
-```text
-def __init__(self, header: str, value: object, path: Path) -> None:
-```
-
 ### `StateError`
 
 ```text
@@ -3538,220 +3478,33 @@ class HistoryLockTimeoutError(DownloaderError):
 def __init__(self, path: Path, timeout: float) -> None:
 ```
 
-### `CachedReportNotFoundError`
+### `ReportNotDownloadedError`
 
 ```text
-class CachedReportNotFoundError(DownloaderError):
+class ReportNotDownloadedError(DownloaderError):
 ```
 
 #### 説明
 
-本日の定期取得キャッシュが見つからない
+指定した管理番号の取得済みレポートが見つからない
 
-定期取得の時刻より前に呼ばれた、定期取得が失敗した、その日に管理表へ
-追加されて今日の分に間に合わなかった、のいずれか。
+履歴には「成功」の記録が無い、記録はあるがファイルが消えている、
+のいずれか。**comken 側は勝手に Salesforce へ取りに行わない。**
+「取っておいたものを受け取る」だけの関数なので、ここで自動的に
+取りに行くと、定期取得が動いていないことに誰も気づかなくなる。
 
-**勝手に Salesforce へ取りに行かない。** cached_report() は
-「取っておいたものを受け取る」関数で、取りに行く関数ではない。
-ここで自動的に取りに行くと、定期取得が動いていないことに誰も気づかない。
-
-発生箇所: comken.services.salesforce_downloader の cached_report()
+発生箇所: comken.services.salesforce_downloader.history の
+          latest_report_path() / latest_report() / today_report()
 
 対処:
-    Salesforce からCSVを手動取得し、画面に表示された正確なパス・ファイル名で置いて、
-    同じ python main.py を再実行する
+    定期取得（Salesforceレポートダウンローダー）が動いているか、
+    ``ダウンロード履歴.csv`` を確認する。ファイルが消えている場合は
+    メッセージに表示されたパスに復旧する
 
 #### `__init__`
 
 ```text
-def __init__(self, report_key: str, summary: str, cache_path: Path) -> None:
-```
-
-### `ReportNotRegisteredError`
-
-```text
-class ReportNotRegisteredError(DownloaderError):
-```
-
-#### 説明
-
-指定した管理番号が管理表に無い
-
-管理番号はコードに定数で書く（CUSTOMER_LIST = "1001"）。管理表から行を消したり、
-番号を打ち間違えたりすると、どのレポートを指しているか決められない。
-
-発生箇所: Salesforceレポートダウンローダー の download_scheduled() /
-comken.services.salesforce_downloader の cached_report()
-
-対処:
-    管理表を開いて、その管理番号の行があるか確認する。
-    新しく使うレポートは、先に管理表へ登録する
-
-#### `__init__`
-
-```text
-def __init__(self, report_key: str, registered: list[str], master_path: Path) -> None:
-```
-
-### `SoqlReportNotRegisteredError`
-
-```text
-class SoqlReportNotRegisteredError(DownloaderError):
-```
-
-#### 説明
-
-管理表の「SOQL」列が「○」なのに、同じ管理番号の SoqlReport が登録されていない
-
-管理表と ``reports/`` 配下の ``SoqlReport`` 実装は別々に編集できるため、「SOQL」
-列だけ「○」にして ``SoqlReport`` の追加（``reports/<ファイル>.py`` への
-サブクラス定義）を忘れると、どの SOQL クエリを使えばいいか決められない。
-
-発生箇所: comken.services.salesforce_downloader.soql_reports の soql_report_for()
-
-対処:
-    管理番号に対応する ``SoqlReport`` サブクラスを ``reports/`` 配下に追加し、
-    ``KEY`` を管理表と同じ値にする（ファイル名を ``_`` で始めると
-    走査対象外になるので、必ず実レポート名にする）。まだ SOQL 化していないなら、
-    管理表の「SOQL」列を「×」に戻す
-
-#### `__init__`
-
-```text
-def __init__(self, report_key: str, registered: list[str]) -> None:
-```
-
-### `GroupNotRegisteredError`
-
-```text
-class GroupNotRegisteredError(DownloaderError):
-```
-
-#### 説明
-
-管理表の「グループ」列に設定シートに登録されていない値が書かれている
-
-出力先フォルダは「グループ→ベースパス」の対応を、設定シート（レポート管理表
-と同じブック内の「設定」シート）で管理する。管理表にないグループ名が書かれて
-いると、出力先を決められない。
-
-発生箇所: comken.services.salesforce_downloader.provider の report_folder()
-
-対処:
-    管理表の「グループ」列に書かれた値が、設定シート（`group_settings.py` の
-    `GroupSetting`）の「グループ」列に存在するか確認する。新しく部署・グループを
-    追加するときは、設定シート側にも同じ名前で行を足す
-
-#### `__init__`
-
-```text
-def __init__(self, group: str, registered: list[str], master_path: Path) -> None:
-```
-
-### `EmptyReportError`
-
-```text
-class EmptyReportError(DownloaderError):
-```
-
-#### 説明
-
-レポートは実行できたが明細が 0 行だった
-
-空のファイルを置くと、使う側は「データが無い日」と「取得が失敗した日」を
-区別できなくなる。0 行のときはファイルを作らず、失敗として扱う。
-
-発生箇所: Salesforceレポートダウンローダー の download_scheduled()
-
-対処:
-    Salesforce の画面で同じレポートを開き、本当に 0 件か確認する。
-    0 件が正常に起こるレポートなら、管理表の「0件あり」を「○」にする。
-
-#### `__init__`
-
-```text
-def __init__(self, report_key: str, summary: str, url: str) -> None:
-```
-
-### `ReportFolderNotFoundError`
-
-```text
-class ReportFolderNotFoundError(DownloaderError):
-```
-
-#### 説明
-
-保存先として組み立てたフォルダが無い
-
-保存先フォルダは、管理表の「グループ」で引いた設定シートの「ベースURL」（フォルダのパス）
-そのものである（`provider.report_folder()`）。そのフォルダが存在しない場合にこの例外になる。
-無いフォルダを作らないのは、書き間違いのことが多いため。
-勝手に作ると、誰も読まない場所へ置き続けることになる。
-
-発生箇所: Salesforceレポートダウンローダー の download_scheduled()
-
-対処:
-    設定シートの「ベースURL」（フォルダのパス）と、管理表の「グループ」を
-    確認する。共有フォルダなら、つながっているか・権限があるかも確認する
-
-#### `__init__`
-
-```text
-def __init__(self, report_key: str, folder: Path) -> None:
-```
-
-### `ReportReservePathLimitError`
-
-```text
-class ReportReservePathLimitError(DownloaderError):
-```
-
-#### 説明
-
-保存ファイル名の連番が上限に達した
-
-`_reserve_path()` は同じフォルダに既存ファイルがあると連番を足して別の
-ファイル名を探す。 上限（ ``RESERVE_PATH_LIMIT`` ）まで試しても確保できない
-のは権限・同期の異常など、運用側に原因があることが多い。
-
-発生箇所: Salesforceレポートダウンローダー の _reserve_path()
-
-対処:
-    保存先フォルダが想定どおりか確認する。 共有フォルダなら、 古い取得
-    ファイルを退避するか、 別の保存先に変える。 連発する場合は権限・排他
-    制御の設定も見直す
-
-#### `__init__`
-
-```text
-def __init__(self, report_key: str, base_path: Path, limit: int) -> None:
-```
-
-### `ScheduledDownloadFailedError`
-
-```text
-class ScheduledDownloadFailedError(DownloaderError):
-```
-
-#### 説明
-
-定期取得で1件以上が失敗した
-
-取得できたものは保存済み。**1件失敗しても残りは続けたうえで、最後にまとめて知らせる。**
-ログだけに出して正常終了すると、スケジューラや RPA 基盤から見て成功と区別が付かず、
-落ちていることに誰も気づかない。
-
-発生箇所: Salesforceレポートダウンローダー の download_scheduled()
-
-対処:
-    履歴（ダウンロード履歴.csv）の「エラー内容」で、失敗した理由を確認する。
-    急いで必要なものは download_scheduled() をスケジュール外で実行する。
-    権限を持つ人が Salesforce から手動でダウンロードしてもよい
-
-#### `__init__`
-
-```text
-def __init__(self, failed_keys: list[str], history_path: Path) -> None:
+def __init__(self, report_key: str, missing_path: Path | None, history_path: Path) -> None:
 ```
 
 ### `TableError`
@@ -3927,344 +3680,55 @@ def __init__(self, title: str) -> None:
 
 ## `from comken.services.salesforce_downloader import ...`
 
-### `cached_report`
+### `latest_report_path`
 
 定義を解決できませんでした。
 
-### `cached_report_path`
+### `latest_report`
 
 定義を解決できませんでした。
 
-### `output_path`
+### `today_report`
 
 定義を解決できませんでした。
 
-### `load_master`
+### `has_today_report`
 
-```text
-@measure
-def load_master(path: str | Path | None=None) -> dict[str, ReportEntry]:
-```
-
-#### 説明
-
-管理表を読んで、管理番号をキーにした辞書を返す。
-
-Args:
-    path: 管理表（Excel）のパス。
-
-Returns:
-    {管理番号: ReportEntry}。管理表に並んでいる順を保つ。
-
-### `shared_report_ids`
-
-```text
-def shared_report_ids(entries: dict[str, ReportEntry]) -> dict[str, list[str]]:
-```
-
-#### 説明
-
-同じ Salesforce レポートを指している管理番号を返す。
-
-**同じレポートを複数のプロジェクトが別々の管理番号で使っている**ことが分かる。
-エラーにはしない——意図してそうしている場合（保存先を分けたい等）もあるため、
-気づけるようにするだけにする。
-
-Returns:
-    {Salesforce のレポート ID: [管理番号, ...]}。2つ以上のものだけ。
+定義を解決できませんでした。
 
 ### `downloaded_today`
 
 定義を解決できませんでした。
 
-### `ReportEntry`
+### `read_history`
+
+定義を解決できませんでした。
+
+### `append_history`
+
+定義を解決できませんでした。
+
+### `HistoryRow`
 
 ```text
-class ReportEntry(MasterRow):
+class HistoryRow:
 ```
 
 #### 説明
 
-レポート管理表の1行。
+履歴1行の「呼び出し側が組み立てる部分」。履歴の列と1対1。
 
-#### `report_id`
+`fetched_from_salesforce` / `saved_to_file` は `True` / `False` / `None` の3状態で、
+未到達は `None`。`schedule_key` はスケジュール行に紐付く取得で値が入り、
+スケジュール行が無いレポートの取得（後方互換）は空文字。
 
-```text
-@property
-def report_id(self) -> str:
-```
+`append_history()` を直接書く用途でも、書き込み側（Salesforceレポートダウン
+ローダー）が `ReportEntry` から組み立てた値を `Mapping` で渡す流儀をサポート
+するため、公開は残す（フィールド名は呼び出し側の組み立てに依らない）。
 
-##### 説明
+### `COLUMNS`
 
-URL から取り出した Salesforce のレポート ID。
-
-**行番号ではなく管理番号で示す。** 空行を飛ばして読むので行番号はズレうるが、
-管理番号なら管理表を検索して一発で見つかる。
-
-Raises:
-    SalesforceReportIDNotFoundError: URL からレポート ID を取り出せない場合。
-
-### `ScheduleRule`
-
-```text
-class ScheduleRule(MasterRow):
-```
-
-#### 説明
-
-「スケジュール」シートの1行。1行 = 1つの取得ルール。
-
-列定義は `column()` に集約されている。``曜日`` / ``日付`` 列は自由記述
-（空欄を許す）なので ``choices`` を付けず、``weekday`` /
-``day_of_month`` / ``month_end`` / ``nth_business_day`` の 4 つの
-`@property` でパース結果だけを公開する（``ReportEntry.report_id`` が
-URL から計算派生するのと同じ考え方）。
-
-Attributes:
-    schedule_key: 列「スケジュールキー」。このルールを一意に識別するキー。
-        履歴の「スケジュールキー」列に記録され、同じ行を同日に何度も
-        実行しないための dedup 判定にも使う。
-    report_key: 列「レポートキー」。対象のレポートの管理番号
-        （レポート管理表シートの ID と対応する）。
-    frequency: 列「取得頻度」。`FREQUENCY_DAILY` / `FREQUENCY_WEEKLY` /
-        `FREQUENCY_MONTHLY` / `FREQUENCY_BUSINESS_DAY` のいずれか。
-    start_time: 列「取得開始時刻」。毎日・毎週・毎月・毎営業日の実行開始時刻
-        （この時刻を過ぎたら取得してよい）。空欄可。
-    desired_time: 列「取得時刻」。このレポートが何時までに欲しいかの目安
-        （記録用）。判定には使わない。
-    raw_weekday: 列「曜日」。`frequency` が毎週のときだけ使う
-        （下の `weekday` property で 0=月〜6=日 に変換）。
-    raw_day_of_month: 列「日付」。`frequency` が毎月のときだけ使う
-        （1〜31 の数字 / `月末` / `第N営業日` のいずれかを下の
-        `day_of_month` / `month_end` / `nth_business_day` property で
-        分解する）。
-    holiday_policy: 列「祝日対応」。`HOLIDAY_SKIP`（既定、祝日はスキップ）/
-        `HOLIDAY_FETCH`（曜日/日付/月末/第N営業日が祝日でも取得）/
-        `HOLIDAY_BEFORE`（対象日が祝日なら前営業日へ前倒し）/
-        `HOLIDAY_AFTER`（対象日が祝日なら翌営業日へ繰り越し）の 4 値から選ぶ。
-    enabled: 列「有効」。`○`/`×`。既定値なし（書き忘れはエラー）。
-
-#### `weekday`
-
-```text
-@property
-def weekday(self) -> int | None:
-```
-
-##### 説明
-
-「曜日」列の値を 0=月〜6=日 の整数に変換する。空欄は None。
-
-読み込み時は ``choices=WEEKDAY_NAMES`` で月〜日に絞り込まれているため、
-想定外の表記（例: 「月曜日」）はここに来る前に ``MasterRowValueError``
-として弾かれる。``DownloaderError`` は既定の挙動を逸脱した
-場合に備えた受け皿で、テストや Python から直接 ``ScheduleRule`` を
-組み立てたときにだけ使われる。
-
-Raises:
-    DownloaderError: 想定外の文字列が書かれている場合。
-
-#### `day_of_month`
-
-```text
-@property
-def day_of_month(self) -> int | None:
-```
-
-##### 説明
-
-「日付」列が 1〜31 の数字で書かれたとき、その値。
-
-#### `month_end`
-
-```text
-@property
-def month_end(self) -> bool:
-```
-
-##### 説明
-
-「日付」列が「月末」のとき True。
-
-#### `nth_business_day`
-
-```text
-@property
-def nth_business_day(self) -> int | None:
-```
-
-##### 説明
-
-「日付」列が「第N営業日」のとき、N。
-
-#### `validate`
-
-```text
-def validate(self) -> tuple[str, str] | None:
-```
-
-##### 説明
-
-行ごとの追加検証。頻度と「曜日」「日付」の組み合わせをここで検査する。
-
-列単体では ``choices`` で「曜日=月〜日」「日付=空欄OK」までしか表せず、
-「毎週なのに曜日が空」「毎週以外で曜日が書かれている」「毎月なのに日付が空」
-のような行をまたぐ組み合わせは、``choices`` だけでは弾けない。読み込み時に
-一括して ``MasterRowValueError``（行番号・列名付き）に変換するので、
-業務担当者は「どの行の、どの列をどう直せばいいか」がメッセージで分かる。
-
-``_parsed_day_of_month`` は ``int()`` 由来などの ``ValueError`` をそのまま
-投げるので、ここで「日付」列の解釈不能値を検出して ``(Excel の見出し,
-メッセージ)`` を返す。
-
-Returns:
-    問題がなければ ``None``。問題があれば ``(Excel の見出し, 直し方の
-    メッセージ)``。``_build()`` 側が行番号を付けて ``MasterRowValueError``
-    に変換する。
-
-#### `is_due`
-
-```text
-def is_due(self, now: dt.datetime) -> bool:
-```
-
-##### 説明
-
-指定時刻にこのスケジュールを実行すべきか判定する。
-
-祝日判定は ``comken.core.holidays`` の ``is_holiday`` / ``is_workday``
-/ ``nth_workday`` を直接使う。国民の祝日と会社休日を
-まとめて判定するため、呼び出し側でカレンダーを差し替える必要はない
-（既定の統一カレンダー 1 本だけがサポート対象）。
-
-``FREQUENCY_DAILY`` / ``FREQUENCY_WEEKLY`` / ``FREQUENCY_MONTHLY`` /
-``FREQUENCY_BUSINESS_DAY`` で ``start_time is None`` のときは「時刻条件なし」
-を意味し、日付条件が合えば常に ``True`` を返す（例: 前日以前の確定済みデータの
-ように、いつ取っても同じ内容のレポート用）。
-
-「毎営業日」は曜日フィルタ（土日を除く）のみで、祝日の除外は
-``holiday_policy`` の組み合わせで実現する（例: 「毎営業日」+「取得しない」で
-土日祝日を除く真の営業日だけになる）。
-
-
-## `from comken.services.salesforce_downloader.soql_reports import ...`
-
-### `SoqlReport`
-
-```text
-class SoqlReport:
-```
-
-#### 説明
-
-Report API（2000行上限）で取れない大きなレポートを SOQL で取る基底クラス。
-
-サブクラスは ``KEY`` / ``SUMMARY`` / ``URL`` / ``FOLDER`` を上書きし、
-``soql()`` を実装する。1レポート=1ファイルで ``reports/`` に置くと
-``_registry.registered_reports()`` が自動で登録する（ファイル名が ``_``
-で始まるモジュールは対象外）。
-
-Excel の「スケジュール」シートとは独立している。いつ呼ぶかは呼び出し側
-（プロジェクトの定期実行）が決める前提なので、この基底クラスには
-スケジュール判定を持たせない。
-
-Attributes:
-    KEY: 管理番号。``download_scheduled()`` の ``ReportEntry.key`` と
-        同じ意味で、社内で決める論理的な番号（前ゼロ・記号入りも可）。
-        Salesforce のレポート ID ではない。**空のままでは登録に失敗する**。
-    SUMMARY: 人が読んで何のレポートか分かる説明。保存するファイル名にも使われる。
-    URL: レポートを開いた組織の My Domain の URL。``site_for()`` で
-        組織を解決するために使う（``ReportEntry.url`` と同じ運用）。
-    FOLDER: 保存先フォルダの絶対パス／UNC 文字列。**フォルダが無いと
-        エラーにする**（``_reserve_path()`` と同じ判断。書き間違いに
-        気づけるよう、勝手には作らない）。
-    ALLOW_EMPTY: ``True`` なら 0 件のときも空 CSV を保存して成功扱い、
-        ``False`` なら 0 件を ``EmptyReportError`` として失敗扱いする
-        （``ReportEntry.allow_empty`` と同じ運用）。
-
-#### `soql`
-
-```text
-def soql(self) -> str:
-```
-
-##### 説明
-
-実行する SOQL クエリ文字列を返す。サブクラスで実装する。
-
-### `registered_reports`
-
-```text
-def registered_reports() -> tuple[type[SoqlReport], ...]:
-```
-
-#### 説明
-
-``reports/`` パッケージに置かれた ``SoqlReport`` サブクラスを集めて返す。
-
-走査は ``comken.core.discovery.find_subclasses()`` に任せる
-（``pkgutil.walk_packages`` で ``reports/`` 直下の ``.py`` を1つずつ
-``importlib.import_module`` し、そのモジュール自身で定義された
-``SoqlReport`` のサブクラスを拾う）。**ファイル名が ``_`` で始まる
-モジュールは走査対象外**（``_template.py`` のような雛形を登録せずに済む）。
-
-``KEY`` の昇順で返す。**キャッシュはしない** — ``importlib.import_module``
-は既に import 済みなら再 load しない（``sys.modules`` 経由で軽い）ので、
-呼ぶたびに ``reports/`` を全走査し直してもコストは無視できる。
-ファイル追加のたびに再起動は不要。
-
-Raises:
-    DownloaderError: ``KEY`` が空のレポートが含まれているか、複数の
-        レポートが同じ ``KEY`` を持っている。メッセージには
-        ``reports/<ファイル>.py`` のパスとクラス名を含め、
-        対処（``KEY`` を埋める／重複を直す）を併記する。
-
-### `download_soql_reports`
-
-```text
-def download_soql_reports(reports: Sequence[type[SoqlReport]] | None=None) -> list[Path]:
-```
-
-#### 説明
-
-登録された SOQL レポートを全て取得し、保存先のパスを返す。
-
-``reports`` を省略すると ``registered_reports()`` を使う（テストでは差し替え可能）。
-**1件失敗しても残りは続ける**（``download_scheduled()`` と同じ方針）。
-
-想定した失敗（``ComkenError`` / ``OSError``）はログに残して次のレポートへ進む。
-想定外（``TypeError`` などのプログラムバグ）はそのまま伝播させ、気づける
-ようにする。1件でも失敗したら最後に ``DownloaderError`` を
-``__cause__`` 付きで送出する。
-
-Args:
-    reports: 取得対象の ``SoqlReport`` サブクラスのシーケンス。
-        ``None`` のときは ``registered_reports()`` を使う。
-
-Returns:
-    保存したファイルのパス一覧（**成功したぶんだけ**）。
-
-### `soql_report_for`
-
-```text
-def soql_report_for(key: str) -> type[SoqlReport]:
-```
-
-#### 説明
-
-管理番号（``ReportEntry.key`` と同じ値）から ``SoqlReport`` サブクラスを引く。
-
-管理表の「SOQL」列が「○」の行を取得実行側が処理するときに使う想定。
-
-Args:
-    key: 管理番号。``SoqlReport.KEY`` と一致するものを探す。
-
-Returns:
-    該当する ``SoqlReport`` サブクラス。
-
-Raises:
-    SoqlReportNotRegisteredError: ``registered_reports()`` に該当する ``KEY`` が無い場合
-        （管理表の「SOQL」列を「○」にしたのに登録を忘れている設定ミス）。
+公開定数。
 
 
 ## `from comken.toolbox.access import ...`

@@ -140,7 +140,7 @@ Excel / Excel 内の表データ連携は `Transfer(read, write, mapping)` に�
 
 ファイル名には拡張子を含める。`ext=` / `extension=` 引数は廃止し、拡張子なしの名前は `FileSuffixMissingError` で止める。
 
-`MasterRow` / `column()` は `comken.services.salesforce_downloader.report_master` に置く Excel の表駆動設定で、読み込み・検証・雛形生成を集約する。`column()` の第 1 引数が見出しになるので、Python 側の命名規約を崩さずスペースを含む見出し（例: `Salesforce URL`）も扱える。列定義の正本は dataclass（`row["名前"]` 形式の辞書アクセスは使わない）。
+`MasterRow` / `column()` は `comken.toolbox.master_table` に置く Excel の表駆動設定で、読み込み・検証を集約する。`column()` の第 1 引数が見出しになるので、Python 側の命名規約を崩さずスペースを含む見出し（例: `Salesforce URL`）も扱える。列定義の正本は dataclass（`row["名前"]` 形式の辞書アクセスは使わない）。雛形生成は利用側プロジェクトの責務（2026-09 に管理表・雛形は `Salesforceレポートダウンローダー` 側へ移った）。
 
 大きなブックはローカルにコピーしてから開くため、読み込み後に他の PC が元のブックを更新しても検出せずに上書き保存する。複数 PC が同じブックを同時に更新する運用では、プロジェクト側で排他制御を用意する。
 
@@ -180,7 +180,7 @@ Excel / Excel 内の表データ連携は `Transfer(read, write, mapping)` に�
 
 レポート取得は `comken/services/salesforce_downloader` に集約し、**何を取るかは管理表（Excel）に、いつ何を取ったかは履歴（CSV）** に集める。0 件がありえるかどうかは管理表の `0件あり` 列で宣言させる（履歴の回数から自動判定しない）。履歴に「原因区分」を持たせ、`設定` / `Salesforce` / `データなし` / `ファイル` / `プログラム` の 5 値で運用者が履歴だけから一次対応者（管理表を直す人・Salesforce 管理者へ連絡する人）を判断できる。例外クラス名との対応表は持たず、**例外の型だけから**機械的に判定する。
 
-詳細は [`salesforce.md`](機能/salesforce.md) ・ [`salesforce-downloader.md`](機能/salesforce-downloader.md) ・ [`master-table.md`](機能/master-table.md) を参照。
+詳細は [`salesforce.md`](機能/salesforce.md) ・ [`salesforce-downloader.md`](機能/salesforce-downloader.md) を参照。
 
 ### ブラウザ
 
@@ -275,7 +275,8 @@ browser/
 
 - `comken/toolbox/salesforce/sites/solution.py` — 本番組織の My Domain・認証情報の接頭辞
 - `comken/toolbox/salesforce/sites/solution_sandbox.py` — サンドボックス組織の同
-- `comken/services/salesforce_downloader/paths.py` — レポート管理表・履歴を置く共有フォルダ
+- `comken/services/salesforce_downloader/paths.py` — ダウンロード履歴を置く共有フォルダ
+  （管理表の場所は `Salesforceレポートダウンローダー` 側へ移ったので、ここには無い）
 
 値の置き場所は **「値を使う場所」**（クラス定義の隣）に閉じる（`settings.ini` / `settings.py` へは集約しない。理由は [`HISTORY.md`](HISTORY.md) §14）。書き換え忘れは必ず組織接続エラー・フォルダ未発見エラーになるので、仮名のまま黙って動いて間違った結果を出すことはない。
 

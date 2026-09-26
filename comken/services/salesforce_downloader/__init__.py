@@ -1,81 +1,61 @@
-r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポート管理表・履歴の共有契約。
+r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポートの履歴と読取。
 
-**取得を実行する側（旧 `download_scheduled()`）は 2026-09 に comken の外
-（`Salesforceレポートダウンローダー` リポジトリ）へ切り出した。** このパッケージに
-残っているのは、取得を実行する側・取得済みを読む側の**両方が従う共有の形**——
-管理表（Excel）の列定義、履歴（CSV）の列定義、保存先パスの組み立て——と、
-**「取っておいたものを受け取る」読み取り側の実装**だけ。経緯は本ファイル末尾を参照。
+**2026-09 に「取る側」と「読む側」をはっきり分けた。**
 
-    from comken.services.salesforce_downloader import cached_report
+- **取る側**（管理表・スケジュール・SOQL レポート・取得の実行）は
+  `Salesforceレポートダウンローダー` リポジトリ（`src/`）。管理表を
+  読み、スケジュールを判定し、Salesforce から取り、保存し、履歴へ書く
+  `download_scheduled()` まで全部こちらにある
+- **comken に残ったもの**は、履歴の**形式**（`COLUMNS` / `HistoryRow`）と、
+  **管理番号だけで取得済みレポートを引く読み取り関数**だけ
+  （`latest_report_path` / `latest_report` / `today_report` / `has_today_report`）
+- 境界を**履歴（ダウンロード履歴.csv）**にしたので、管理表を変えても
+  comken は変えなくてよい
+
+    from comken.services.salesforce_downloader import has_today_report, latest_report
 
     CUSTOMER_LIST = "1001"        # プロジェクトごとに、意味の分かる名前を付ける
 
-    by_code = cached_report(CUSTOMER_LIST).index("顧客コード")
+    by_code = latest_report(CUSTOMER_LIST).index("顧客コード")
+    if not has_today_report(CUSTOMER_LIST):
+        # 定期取得が動いていない可能性 — 履歴の「成功」記録がない
+        ...
 
 **プロジェクトのコードに Salesforce の URL もレポート ID も書かない。** 書くのは
-管理番号だけで、参照先の差し替えは管理表を直せば済む（コードは変えない）。
+管理番号だけで、参照先の差し替えはダウンローダー側の管理表を直せば済む（コードは変えない）。
 
-    cached_report         本日の定期取得キャッシュを CSV で返す（取りに行かない）
-    cached_report_path    本日の定期取得キャッシュが置かれるパスを返す（中身は読まない）
-    output_path           そのレポートの唯一の保存先パスを返す
-    load_master           管理表を読む
-    shared_report_ids     同じ Salesforce レポートを指している管理番号を返す
-    ReportEntry           管理表の1行
-    ScheduleRule          取得スケジュール管理表の1行
+    latest_report_path    最も新しい成功履歴が指すパスを返す（中身は読まない）
+    latest_report         最も新しい成功履歴の中身を ``Table`` で返す
+    today_report          今日成功した履歴のうち最も新しい中身を ``Table`` で返す
+    has_today_report      今日成功した履歴があり実ファイルも残っていれば True
     downloaded_today      指定した管理番号が今日すでに成功しているかを履歴から調べる
+    read_history          履歴 CSV を全件 ``Table`` で返す（フィルタはしない）
+    append_history        履歴を1行追記する（ダウンローダー側から呼ばれる共有書き込み）
+    HistoryRow            履歴1行の形（呼び出し側で ``Mapping`` を組み立てるための参考）
+    COLUMNS               履歴の列順と列名
 
 **「今すぐ取りに行く」関数はここには無い。** 取得の実行（`download_scheduled()`）は
 `Salesforceレポートダウンローダー` リポジトリ側にある。急ぎの取得は権限を持つ人が
 Salesforce から手動ダウンロードするか、そちらのプロジェクトで `download_scheduled()`
 をスケジュール外で直接実行する。
 
-管理表の検査はコマンドから呼べる（保守用。業務の定期実行ではない）:
+分担が変わってきた経緯は `docs/HISTORY.md`（6 章・15 章）を参照。
 
-    python -m comken sfdl check
-
----
-
-**このパッケージと `Salesforceレポートダウンローダー` の分担は何度か変わっている。**
-経緯は次のとおり（新しい方を先に書く）:
-
-- **2026-09: 取得実行部分（旧 `service.py` / `download_scheduled()`）を再度
-  comken の外（`Salesforceレポートダウンローダー`）へ切り出した。** 実際に
-  `download_scheduled()`（管理表・履歴を読んで Salesforce へ取りに行き、
-  履歴へ書く）を呼ぶプロジェクトは今のところこの1つだけで、しかもそこで
-  完結している。「1つのプロジェクトだけが困っているなら、そのプロジェクトに
-  書く」という下の判定基準に照らすと、単一消費者の実行部分を comken に
-  置き続ける理由が無くなっていた。一方で、管理表・履歴の**形式そのもの**
-  （列定義・読み取り関数）は、将来別プロジェクトが `cached_report()` で
-  読みに来たときに毎回書き方を揃え直さずに済むよう、引き続き comken 側に
-  置く。取得実行側は `paths.MASTER_PATH` / `history.HistoryRow` /
-  `history.COLUMNS` / `history_file_lock.HistoryFileLock` /
-  `provider.daily_cache_path_of` など、ここで定義する形式を import して使う
-  （これらのモジュール・シンボルにアンダースコアを付けていないのは、この
-  外部からの import を想定しているため）。
-- 2026-09: 出力パスの組み立てを3系統（``file_path_of`` / ``daily_cache_path_of`` /
-  ``rpa_output_path``）から1本化した。フォルダは設定シートのベースパスのみ、
-  ファイル名は ``{管理番号}_{スケジュール時刻}.csv`` に統一。``cached_report()`` /
-  ``cached_report_path()`` は固定パスを直接読む方式から、フォルダ内検索で当日分の
-  最新ファイルを返す方式に変更。
-- 2026-08-30 に comken から分離し、外部の別リポジトリ
-  （`comken-salesforce-downloader` → 最終的に `Salesforceレポートダウンローダー`）として
-  運用していた
-- 他のプロジェクトが呼び出すたびに comken 用とは別の `PYTHONPATH` / `pip install`
-  設定が必要になる不便が判明したため、2026-08-31 に comken 本体へ再統合した
-  （※ この時点では取得実行部分も含めて丸ごと comken 側にあった）
-
-comken 本体側の共有例外（`ComkenError` / `SalesforceReportIDNotFoundError` など）は
-引き続き `from comken.exceptions import ...` で読み込む。
+comken 本体側の共有例外（`ComkenError` / `HistoryWriteError` /
+`ReportNotDownloadedError` など）は `from comken.exceptions import ...` で読み込む。
 
 ---
 
 **このファイルが持つもの:**
-- Salesforce レポート管理表・履歴の「形式（列定義）」
-- 取得済みを読み取る側の実装（`cached_report` など）
+- 履歴CSVの形式（列定義 `COLUMNS` / 行の形 `HistoryRow`）
+- 取得済みを読み取る側の実装（`latest_report` / `today_report` / `has_today_report`）
+- 履歴書き込み（`append_history`）
+- 履歴の置き場所（`paths.HISTORY_PATH`）
 
 **ここに書かないもの:**
-- 取得を実行する側（Salesforce への問い合わせ・保存・履歴書き込み） → `Salesforceレポート
-  ダウンローダー`
+- 取得を実行する側（Salesforce への問い合わせ・保存・履歴に書く値の組み立て） →
+  `Salesforceレポートダウンローダー`
+- 管理表・スケジュール・設定・SOQL レポート → `Salesforceレポートダウンローダー`
 - いつ取るか（毎日・平日・月末などのスケジュール判定） → 取得を実行する側のプロジェクト
 - 取ったデータの加工・DB登録・帳票化 → 利用プロジェクト
 - 取得成功時の通知（メール・チャット等） → 利用プロジェクト
@@ -90,47 +70,49 @@ comken 本体側の共有例外（`ComkenError` / `SalesforceReportIDNotFoundErr
 
 ---
 
-**`__init__.py` 経由の import で `openpyxl` 以外の重い依存を読み込ませない設計。**
-取得実行部分（`requests` / `selenium` が要る）が外へ出たため、このパッケージ自体は
-もう `requests` を必要としない。`__getattr__` (PEP 562) による遅延 import は、
-Excel だけで完結する軽い用途と SOQL・履歴読み取りなど別の依存を切り分ける
-目的で残してある。
+**`__init__.py` 経由の import で重い依存を読み込ませない設計。**
+`requests` などを必要としないため、このパッケージ単体では何も追加で import
+しない。`__getattr__` (PEP 562) による遅延 import は、読み取り関数の入口を
+1 か所に集約する目的だけに残してある
+（`from comken.services.salesforce_downloader import latest_report` が動くように）。
 """
 
 from typing import TYPE_CHECKING
 
-from comken.services.salesforce_downloader.sheets.master import (
-    ReportEntry,
-    load_master,
-    shared_report_ids,
-)
-from comken.services.salesforce_downloader.sheets.schedule import ScheduleRule
+from comken.services.salesforce_downloader.history import COLUMNS, HistoryRow
 
 if TYPE_CHECKING:
-    from comken.services.salesforce_downloader.provider import (
-        cached_report,
-        cached_report_path,
-        output_path,
+    from comken.services.salesforce_downloader.history import (
+        append_history,
+        downloaded_today,
+        has_today_report,
+        latest_report,
+        latest_report_path,
+        read_history,
+        today_report,
     )
-    from comken.services.salesforce_downloader.sheets.history import downloaded_today
 
 __all__ = [
-    "cached_report",
-    "cached_report_path",
-    "output_path",
-    "load_master",
-    "shared_report_ids",
+    "latest_report_path",
+    "latest_report",
+    "today_report",
+    "has_today_report",
     "downloaded_today",
-    "ReportEntry",
-    "ScheduleRule",
+    "read_history",
+    "append_history",
+    "HistoryRow",
+    "COLUMNS",
 ]
 
 # 遅延 import する対象。値はその属性が定義されているサブモジュールの絶対パス。
 _LAZY_TARGETS: dict[str, str] = {
-    "cached_report": "comken.services.salesforce_downloader.provider",
-    "cached_report_path": "comken.services.salesforce_downloader.provider",
-    "output_path": "comken.services.salesforce_downloader.provider",
-    "downloaded_today": "comken.services.salesforce_downloader.sheets.history",
+    "append_history": "comken.services.salesforce_downloader.history",
+    "downloaded_today": "comken.services.salesforce_downloader.history",
+    "has_today_report": "comken.services.salesforce_downloader.history",
+    "latest_report": "comken.services.salesforce_downloader.history",
+    "latest_report_path": "comken.services.salesforce_downloader.history",
+    "read_history": "comken.services.salesforce_downloader.history",
+    "today_report": "comken.services.salesforce_downloader.history",
 }
 
 

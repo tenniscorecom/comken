@@ -1,39 +1,77 @@
-"""ダウンロード履歴の読み取り関数を検証する。
+"""ダウンロード履歴の読み取り・書き込み関数を検証する。
 
-履歴の書き込み（旧 `record()`、同時追記の排他制御を含む）は 2026-09 に comken の外
-（Salesforceレポートダウンローダー）へ切り出した。書き込み側のテスト（同時追記・
-書き込み時のヘッダー検証）はそちらの `tests/` にある。ここでは読み取り関数
-（`successful_files_today` / `schedule_succeeded_today` / `truncated_today` /
-`read_history`）だけを検証し、テストデータは `_write_row()` で直接 CSV へ書く
-（`record()` が内部でやっていたことの最小限の再現）。
+2026-09 に「取る側」を comken の外（Salesforceレポートダウンローダー）へ移し、
+comken 側は履歴の形式と「管理番号で取得済みレポートを引く」読み取り関数、
+およびダウンローダー側から呼ばれる `append_history()` を共有している。
+読み取り関数（`successful_files_today` / `schedule_succeeded_today` /
+`truncated_today` / `read_history` / `latest_report_path` / `latest_report` /
+`today_report` / `has_today_report`）と書き込み（`append_history`）の両方を
+検証する。
 """
 
 import csv
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
 from comken.core.dates import now
-from comken.exceptions import CSVError
-from comken.services.salesforce_downloader.sheets.history import (
+from comken.exceptions import (
+    CSVError,
+    HistoryWriteError,
+    InvalidTableInputError,
+    ReportNotDownloadedError,
+)
+from comken.services.salesforce_downloader.history import (
     COLUMNS,
     FAILURE,
     SUCCESS,
     HistoryRow,
+    append_history,
+    has_today_report,
+    latest_report,
+    latest_report_path,
     read_history,
     schedule_succeeded_today,
     successful_files_today,
+    today_report,
     truncated_today,
 )
-from comken.services.salesforce_downloader.sheets.master import ReportEntry
+
+
+@dataclass(frozen=True)
+class _Entry:
+    """テスト用の管理表1行のスタブ。
+
+    ReportEntry 自体は comken の外（Salesforceレポートダウンローダー）へ移ったため、
+    テストでは ``_Entry`` で代用し、``_write_row`` はキー・概要・レポートID・URL
+    だけを ``_Entry`` から取る。
+    """
+
+    key: str = "1001"
+    summary: str = "顧客一覧"
+    url: str = "https://example.com/Report/00O5g00000ABCDE/view"
+
+    @property
+    def report_id(self) -> str:
+        return "00O5g00000ABCDE"
+
 
 # マイグレーションテスト用の固定 URL。``test_service.py`` と同じ値を使う（管理表の URL
 # からレポート ID を取り出すテストは ``report_id`` 列が実 URL を要求するため）
 URL_A = "https://example--sandbox.sandbox.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE/view"
 
 
-def _write_row(path: Path, *, entry: ReportEntry, project: str, row: HistoryRow) -> None:
+def _write_row(
+    path: Path,
+    *,
+    entry: _Entry,
+    project: str,
+    row: HistoryRow,
+    timestamp: str | None = None,
+    target_folder: Path | None = None,
+) -> None:
     """テスト用: 旧 `record()` 相当の1行をCSVへ直接書く（書き込み側は別リポジトリへ移動）。"""
 
     def _stage(value: bool | None) -> str:
@@ -42,7 +80,7 @@ def _write_row(path: Path, *, entry: ReportEntry, project: str, row: HistoryRow)
         return SUCCESS if value else FAILURE
 
     values = [
-        now().strftime("%Y-%m-%d %H:%M:%S"),
+        timestamp or now().strftime("%Y-%m-%d %H:%M:%S"),
         entry.key,
         row.schedule_key,
         entry.summary,
@@ -52,8 +90,7 @@ def _write_row(path: Path, *, entry: ReportEntry, project: str, row: HistoryRow)
         SUCCESS if row.succeeded else FAILURE,
         _stage(row.fetched_from_salesforce),
         _stage(row.saved_to_file),
-        # 保存先の組み立て（group_settings 経由）は他の場所で扱うので、ここでは概要だけ書く
-        entry.summary,
+        str(target_folder) if target_folder is not None else entry.summary,
         row.file_name,
         "" if row.row_count is None else row.row_count,
         f"{row.seconds:.2f}",
@@ -74,7 +111,7 @@ def _write_row(path: Path, *, entry: ReportEntry, project: str, row: HistoryRow)
 def test_successful_file_requires_both_overall_and_save_success(tmp_path) -> None:
     """成否だけが成功でも、保存成功が無い履歴を取得済みにしない。"""
     history_path = tmp_path / "履歴.csv"
-    entry = _entry(tmp_path)
+    entry = _entry()
     _write_row(
         history_path,
         entry=entry,
@@ -88,7 +125,7 @@ def test_successful_file_requires_both_overall_and_save_success(tmp_path) -> Non
 def test_read_history_returns_every_row_in_order(tmp_path) -> None:
     """絞り込みはせず、書かれた順のまま全行を Table で返す。"""
     history_path = tmp_path / "履歴.csv"
-    entry = _entry(tmp_path)
+    entry = _entry()
     _write_row(
         history_path,
         entry=entry,
@@ -187,7 +224,7 @@ def test_truncated_today_rejects_bad_header(tmp_path) -> None:
 def test_schedule_succeeded_today_returns_true_after_same_key_success(tmp_path) -> None:
     """同じスケジュールキーで当日成功した履歴があれば True を返す。"""
     history_path = tmp_path / "履歴.csv"
-    entry = _entry(tmp_path)
+    entry = _entry()
     _write_row(
         history_path,
         entry=entry,
@@ -211,7 +248,7 @@ def test_schedule_succeeded_today_returns_false_when_no_record(tmp_path) -> None
 def test_schedule_succeeded_today_ignores_other_keys(tmp_path) -> None:
     """別スケジュールキーの成功履歴は True にしない。"""
     history_path = tmp_path / "履歴.csv"
-    entry = _entry(tmp_path)
+    entry = _entry()
     _write_row(
         history_path,
         entry=entry,
@@ -246,7 +283,7 @@ def test_schedule_succeeded_today_ignores_other_dates(tmp_path) -> None:
 def test_schedule_succeeded_today_requires_save_success(tmp_path) -> None:
     """成否=成功でも保存結果=失敗なら True にしない（保存できていないので再試行可）。"""
     history_path = tmp_path / "履歴.csv"
-    entry = _entry(tmp_path)
+    entry = _entry()
     _write_row(
         history_path,
         entry=entry,
@@ -269,7 +306,7 @@ def test_schedule_succeeded_today_rejects_empty_key(tmp_path) -> None:
     False を返す（誤マッチで別行と一致させないため）。
     """
     history_path = tmp_path / "履歴.csv"
-    entry = _entry(tmp_path)
+    entry = _entry()
     _write_row(
         history_path,
         entry=entry,
@@ -288,7 +325,7 @@ def test_schedule_succeeded_today_rejects_empty_key(tmp_path) -> None:
 def test_truncated_today_returns_true_when_today_failed_with_truncated_error(tmp_path) -> None:
     """今日 ``SalesforceReportTruncatedError`` で失敗した履歴があれば True。"""
     history_path = tmp_path / "履歴.csv"
-    entry = _entry(tmp_path)
+    entry = _entry()
     _write_row(
         history_path,
         entry=entry,
@@ -315,7 +352,7 @@ def test_truncated_today_returns_false_for_other_error_codes(tmp_path) -> None:
     以外（例: 通信エラー、``OSError``）なら False。2000件超以外の失敗は
     毎回リトライしてよい、という既存挙動を壊さない。"""
     history_path = tmp_path / "履歴.csv"
-    entry = _entry(tmp_path)
+    entry = _entry()
     _write_row(
         history_path,
         entry=entry,
@@ -335,7 +372,7 @@ def test_truncated_today_returns_false_for_other_error_codes(tmp_path) -> None:
 def test_truncated_today_ignores_other_report_keys(tmp_path) -> None:
     """別の管理番号の 2000件超 失敗履歴は True にしない。"""
     history_path = tmp_path / "履歴.csv"
-    entry = _entry(tmp_path)
+    entry = _entry()
     _write_row(
         history_path,
         entry=entry,
@@ -374,7 +411,7 @@ def test_truncated_today_ignores_successful_rows_with_same_code(tmp_path) -> Non
     """同じエラーコードの文字列が成否=成功の行に書かれていても False
     （あり得ない組合せだが、列値の照合順の防御として明示的に区別する）。"""
     history_path = tmp_path / "履歴.csv"
-    entry = _entry(tmp_path)
+    entry = _entry()
     _write_row(
         history_path,
         entry=entry,
@@ -390,21 +427,12 @@ def test_truncated_today_ignores_successful_rows_with_same_code(tmp_path) -> Non
     assert truncated_today(history_path, entry.key) is False
 
 
-def _entry(tmp_path: Path) -> ReportEntry:
+def _entry() -> _Entry:
     """各テストで同じ管理表1行を使う。"""
-    _ = tmp_path  # フォルダは組み立てないので受け取るだけ
-    return ReportEntry(
-        key="1001",
-        summary="顧客一覧",
-        url="https://example.com/Report/00O5g00000ABCDE/view",
-        group="営業本部",
-        assignee="山田太郎",
-        enabled=True,
-        allow_empty=False,
-    )
+    return _Entry()
 
 
-def _write_row_cp932(path: Path, *, entry: ReportEntry, project: str, row: HistoryRow) -> None:
+def _write_row_cp932(path: Path, *, entry: _Entry, project: str, row: HistoryRow) -> None:
     """テスト用: ``CP932`` で1行書く（Excel で開いて保存し直した履歴を再現）。
 
     人が Excel で開いて上書き保存すると CP932 化するため、``read_text()`` 側が
@@ -454,7 +482,7 @@ class TestEncodingAutoDetection:
     def test_read_history_handles_cp932_encoded_file(self, tmp_path) -> None:
         """CP932 で保存された履歴も読み取れる（Excel 経由で再保存した履歴）。"""
         history_path = tmp_path / "履歴.csv"
-        entry = _entry(tmp_path)
+        entry = _entry()
         _write_row_cp932(
             history_path,
             entry=entry,
@@ -471,7 +499,7 @@ class TestEncodingAutoDetection:
     def test_successful_files_today_handles_cp932_encoded_file(self, tmp_path) -> None:
         """CP932 の履歴から当日の成功ファイル名を取れる。"""
         history_path = tmp_path / "履歴.csv"
-        entry = _entry(tmp_path)
+        entry = _entry()
         _write_row_cp932(
             history_path,
             entry=entry,
@@ -485,7 +513,7 @@ class TestEncodingAutoDetection:
     def test_schedule_succeeded_today_handles_cp932_encoded_file(self, tmp_path) -> None:
         """CP932 の履歴から当日同キーの成功を判定できる。"""
         history_path = tmp_path / "履歴.csv"
-        entry = _entry(tmp_path)
+        entry = _entry()
         _write_row_cp932(
             history_path,
             entry=entry,
@@ -497,7 +525,7 @@ class TestEncodingAutoDetection:
     def test_truncated_today_handles_cp932_encoded_file(self, tmp_path) -> None:
         """CP932 の履歴から ``SalesforceReportTruncatedError`` の当日失敗を拾える。"""
         history_path = tmp_path / "履歴.csv"
-        entry = _entry(tmp_path)
+        entry = _entry()
         _write_row_cp932(
             history_path,
             entry=entry,
@@ -670,7 +698,7 @@ class TestHeaderMigration:
         extra_header = [*COLUMNS, "新列"]
         _write_csv_raw(
             history_path,
-            header=extra_header,
+            header=[*extra_header],
             rows=[[*_today_row_values(), "追加された値"]],
         )
 
@@ -762,3 +790,311 @@ class TestHeaderMigration:
         assert rows[0]["ファイル名"] == ""
         # 他の列は保持
         assert rows[0]["管理番号"] == "1001"
+
+
+# ── 管理番号で取得済みレポートを引く読み取り関数 ───────────────────────────────
+class TestLatestAndTodayReports:
+    """管理番号だけをキーに、履歴から「最新の成功ファイル」を引く 4 関数。
+
+    どれも**履歴だけを見る**（管理表は Salesforceレポートダウンローダー側に
+    あり、comken は管理表を知らない）。テストでは ``HISTORY_PATH`` を
+    ``tmp_path`` 配下に差し替え、実ファイルも一緒に作って成功／失敗の
+    組み合わせを網羅する。
+    """
+
+    @pytest.fixture(autouse=True)
+    def history_path(self, tmp_path, monkeypatch):
+        """``paths.HISTORY_PATH`` を ``tmp_path`` の ``履歴.csv`` に差し替える。
+
+        ``latest_report_path()`` / ``latest_report()`` / ``today_report()`` /
+        ``has_today_report()`` は呼び出し時点で ``paths.HISTORY_PATH`` を
+        読み直すため、``monkeypatch.setattr`` で差し替えれば反映される。
+        """
+        history_path = tmp_path / "履歴.csv"
+        monkeypatch.setattr(
+            "comken.services.salesforce_downloader.paths.HISTORY_PATH", history_path
+        )
+        yield history_path
+
+    def _make_report_file(self, folder: Path, name: str = "1001.csv") -> Path:
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / name
+        path.write_text("col\nval\n", encoding="utf-8-sig")
+        return path
+
+    def test_latest_report_path_returns_newest_success(self, history_path, tmp_path) -> None:
+        """成功行が複数あるとき最新のものを返す（実行日時で降順）。"""
+        entry = _entry()
+        base = tmp_path / "out"
+        # 古い → 新しい の順で 2 行書く
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="old.csv"),
+            timestamp="2024-01-01 09:00:00",
+            target_folder=base,
+        )
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="new.csv"),
+            timestamp="2024-01-02 09:00:00",
+            target_folder=base,
+        )
+        self._make_report_file(base, "old.csv")
+        self._make_report_file(base, "new.csv")
+
+        assert latest_report_path(entry.key) == base / "new.csv"
+
+    def test_latest_report_path_ignores_failure_rows(self, history_path, tmp_path) -> None:
+        """失敗行は「最新」に含めない。
+
+        「実装を壊して落ちる」代表例: 失敗行を除外しないと、最新の失敗で
+        取れていないのに ``FileNotFoundError`` が出る／存在しないパスが
+        返る事故になる。
+        """
+        entry = _entry()
+        base = tmp_path / "out"
+        # 成功 → 失敗 の順。失敗のほうが新しい時刻
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="ok.csv"),
+            timestamp="2024-01-01 09:00:00",
+            target_folder=base,
+        )
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(False, False, None, file_name="ng.csv"),
+            timestamp="2024-01-02 09:00:00",
+            target_folder=base,
+        )
+        self._make_report_file(base, "ok.csv")
+
+        # 失敗行を無視して成功のうち最新を返す
+        assert latest_report_path(entry.key) == base / "ok.csv"
+
+    def test_latest_report_returns_newest_table(self, history_path, tmp_path) -> None:
+        """``latest_report()`` がパスを ``Table`` で返す。"""
+        entry = _entry()
+        base = tmp_path / "out"
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="x.csv"),
+            target_folder=base,
+        )
+        self._make_report_file(base, "x.csv")
+
+        table = latest_report(entry.key)
+        assert list(table.to_rows()) == [{"col": "val"}]
+
+    def test_today_report_requires_today_success(self, history_path, tmp_path) -> None:
+        """``today_report()`` は今日の成功が無いとエラー。"""
+        entry = _entry()
+        base = tmp_path / "out"
+        # 昨日の成功のみ
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="yest.csv"),
+            timestamp="2024-01-01 09:00:00",
+            target_folder=base,
+        )
+        self._make_report_file(base, "yest.csv")
+
+        with pytest.raises(ReportNotDownloadedError):
+            today_report(entry.key)
+
+    def test_has_today_report_returns_false_when_no_today(self, history_path, tmp_path) -> None:
+        """今日の成功が無ければ ``has_today_report()`` は False。"""
+        entry = _entry()
+        base = tmp_path / "out"
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="yest.csv"),
+            timestamp="2024-01-01 09:00:00",
+            target_folder=base,
+        )
+        self._make_report_file(base, "yest.csv")
+
+        assert has_today_report(entry.key) is False
+
+    def test_has_today_report_returns_true_when_today_ok(self, history_path, tmp_path) -> None:
+        """今日の成功と実ファイルがあれば True。"""
+        entry = _entry()
+        base = tmp_path / "out"
+        today_str = now().strftime("%Y-%m-%d %H:%M:%S")
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="today.csv"),
+            timestamp=today_str,
+            target_folder=base,
+        )
+        self._make_report_file(base, "today.csv")
+
+        assert has_today_report(entry.key) is True
+
+    def test_has_today_report_returns_false_when_file_missing(self, history_path, tmp_path) -> None:
+        """今日の成功記録はあるが実ファイルが消えていれば False。"""
+        entry = _entry()
+        base = tmp_path / "out"
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="gone.csv"),
+            timestamp=now().strftime("%Y-%m-%d %H:%M:%S"),
+            target_folder=base,
+        )
+        # ファイルは作らない
+
+        assert has_today_report(entry.key) is False
+
+    def test_latest_report_raises_when_record_but_file_missing(
+        self, history_path, tmp_path
+    ) -> None:
+        """記録はあるがファイルが消えていると ``ReportNotDownloadedError``。
+        メッセージに消えているパスが入る（業務担当者が見つけやすいように）。"""
+        entry = _entry()
+        base = tmp_path / "out"
+        missing = base / "gone.csv"
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="gone.csv"),
+            timestamp=now().strftime("%Y-%m-%d %H:%M:%S"),
+            target_folder=base,
+        )
+
+        with pytest.raises(ReportNotDownloadedError) as excinfo:
+            latest_report_path(entry.key)
+        # メッセージに消えているパスが入っている（業務担当者が見つけられる）
+        assert str(missing) in str(excinfo.value)
+
+    def test_latest_report_ignores_other_keys_partial_match(self, history_path, tmp_path) -> None:
+        """別の管理番号の行を拾わない（"1001" と "10010" の部分一致に注意）。
+
+        「実装を壊して落ちる」代表例: ``startswith`` 等で部分一致にすると、
+        管理番号 "1001" を引いたつもりが "10010" の履歴を返してしまう
+        （``"10010".startswith("1001")`` は True）。
+        """
+        base = tmp_path / "out"
+        # "11001" のほうを**新しい時刻**で書いて罠にする
+        _write_row(
+            history_path,
+            entry=_Entry(key="11001", summary="別レポート", url=URL_A),
+            project="P",
+            row=HistoryRow(True, True, True, file_name="other.csv"),
+            timestamp=now().strftime("%Y-%m-%d %H:%M:%S"),
+            target_folder=base,
+        )
+        self._make_report_file(base, "other.csv")
+
+        with pytest.raises(ReportNotDownloadedError):
+            latest_report_path("1001")
+
+
+# ── append_history ─────────────────────────────────────────────────────
+class TestAppendHistory:
+    """``append_history()`` の書き込み仕様の検証。
+
+    ダウンローダー側（旧 `record()`）がやっていた「ロック → ヘッダ確認 → 追記」を
+    そのまま comken 側へ持ってきた。テストでは `Mapping` で `values` を組み立て、
+    期待される CSV の中身・例外・ロック中の挙動を確かめる。
+    """
+
+    def test_appends_one_row_in_columns_order(self, tmp_path) -> None:
+        """``COLUMNS`` の順に1行追記され、`実行日時` は ``now()`` から作られる。"""
+        history_path = tmp_path / "履歴.csv"
+        append_history(
+            history_path,
+            {
+                "管理番号": "1001",
+                "スケジュールキー": "",
+                "概要": "顧客一覧",
+                "レポートID": "00O5g00000ABCDE",
+                "URL": URL_A,
+                "プロジェクト": "P",
+                "成否": SUCCESS,
+                "Salesforce取得結果": SUCCESS,
+                "保存結果": SUCCESS,
+                "保存先": str(tmp_path),
+                "ファイル名": "a.csv",
+                "取得件数": "1",
+                "処理秒数": "0.10",
+                "原因区分": "",
+                "エラーコード": "",
+                "エラー内容": "",
+            },
+        )
+        table = read_history(history_path)
+        assert len(table) == 1
+        row = table.to_rows()[0]
+        assert row["管理番号"] == "1001"
+        assert row["ファイル名"] == "a.csv"
+        assert row["実行日時"].startswith(now().strftime("%Y-%m-%d"))
+        # 知らない列は無いこと
+        assert list(row.keys()) == list(COLUMNS)
+
+    def test_missing_columns_are_filled_with_empty(self, tmp_path) -> None:
+        """``COLUMNS`` のうち ``values`` に無い列は空文字で埋められる。"""
+        history_path = tmp_path / "履歴.csv"
+        # 必要最小限のキーだけ渡す（不足する列は空文字で埋める）
+        append_history(
+            history_path,
+            {
+                "管理番号": "1001",
+                "成否": SUCCESS,
+                "ファイル名": "a.csv",
+            },
+        )
+        row = read_history(history_path).to_rows()[0]
+        # 渡さなかった列は空文字
+        assert row["保存先"] == ""
+        assert row["URL"] == ""
+        # 渡した列は保持
+        assert row["管理番号"] == "1001"
+        assert row["ファイル名"] == "a.csv"
+
+    def test_unknown_key_raises_invalid_table_input_error(self, tmp_path) -> None:
+        """``COLUMNS`` に無いキーは ``InvalidTableInputError`` 相当で止める。
+
+        タイポ・想定外の列名を早期発見できるよう、書き込みは止まる。
+        """
+        history_path = tmp_path / "履歴.csv"
+        with pytest.raises(InvalidTableInputError):
+            append_history(
+                history_path,
+                {
+                    "管理番号": "1001",
+                    "想定外の列": "x",
+                },
+            )
+
+    def test_write_failure_raises_history_write_error(self, tmp_path) -> None:
+        """書き込みに失敗したら ``HistoryWriteError`` で止める。
+
+        例: 親ディレクトリが**ファイル**になっていると、その下に CSV を
+        作れないので ``OSError`` が飛んで ``HistoryWriteError`` にラップされる。
+        """
+        blocker = tmp_path / "blocker"
+        blocker.write_text("not a directory", encoding="utf-8")
+        history_path = blocker / "履歴.csv"  # 親がファイルなので作れない
+        with pytest.raises(HistoryWriteError):
+            append_history(
+                history_path,
+                {"管理番号": "1001"},
+            )

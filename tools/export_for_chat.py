@@ -85,7 +85,6 @@ ERROR_CATEGORIES = (
             exceptions.CSVError,
             exceptions.ColumnNotFoundError,
             exceptions.ConfigError,
-            exceptions.MasterTableError,
             exceptions.StateError,
             exceptions.DownloaderError,
             exceptions.SalesforceError,

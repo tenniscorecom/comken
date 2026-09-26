@@ -199,6 +199,11 @@ comken が提供する例外（`ComkenError` 系）か、Python の標準例外�
 
 例外は握りつぶさないでください（`except: pass` は禁止）。失敗を隠すと原因究明ができなくなります。
 
+**例外: 他の処理の土台になる基幹プロジェクト**（例: `Salesforceレポートダウンローダー`）
+**は、自分の例外クラスを持ってよい。** その場合も comken の例外（`ComkenError`
+やカテゴリ例外）を継承し、個別のクラスは呼び出し側が型で処理を変えるものだけにする
+（22 章と同じ基準）。
+
 ---
 
 ## 8. ロギング
@@ -859,8 +864,10 @@ logger.debug("詳細: %s", expensive_repr(value))
 - 上記の「ライブラリへ昇格する」基準を満たし、かつ
 - **管理表・履歴・スケジュール判定など、社内の運用ルール（≒「このプロジェクトでは
   こう運用する」）を抱え込む場合**。`salesforce_downloader` が代表例（取得を実行する
-  部分（`download_scheduled()`）だけを別リポジトリ「Salesforceレポートダウンローダー」へ
-  切り出し、管理表・履歴の形式とスケジュール判定は comken に残した）。
+  部分（管理表・スケジュール・SOQL レポート・取得実行）は `Salesforceレポートダウンローダー`
+  プロジェクトへ切り出し、comken 側は履歴の形式と「管理番号で取得済みレポートを
+  引く読み取り関数」だけを残した。境界を履歴にしたので、管理表を変えても他の
+  プロジェクトは変えなくてよい）。
 - 切り出したものは comken を import する独立したプロジェクトとして置き、comken 側からは
   import しない。`pip install` で配るパッケージにはしない（利用側ごとに `pip install` が
   要るのが不便で、一度やめた。HISTORY 6 章「サービス層の分離と再統合」）。
@@ -876,17 +883,6 @@ logger.debug("詳細: %s", expensive_repr(value))
    `DOMAIN_URL`）を空のままにしない**こと。空だと土台クラス扱いで除外される。
    ファイル・フォルダ名が `_` で始まるものも除外される（雛形置き場）
 4. 利用側の import を `from comken.toolbox.browser.sites import <クラス名>` へ書き換える
-
-**独立リポジトリへ分離する手順**:
-
-1. 切り出すディレクトリ（例: `comken/services/salesforce_downloader/`）と
-   関連例外（例: `comken/exceptions/downloader.py`）のファイルを、
-   新リポジトリへ移動する
-2. 新リポジトリの `pyproject.toml` でパッケージ名（例: `comken_salesforce_downloader`）を
-   決め、`pip install` 可能な形に整える
-3. comken 側の import 元を新パッケージへ切り替え、利用プロジェクトの
-   import 文を更新する
-4. comken 側からは旧ディレクトリと旧例外を削除する
 
 **移すかどうかはライブラリ管理者が判断する。** プロジェクト側は勝手に
 `comken` 配下へファイルを置かず、必ず管理者へ連絡する。
