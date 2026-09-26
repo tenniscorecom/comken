@@ -66,39 +66,95 @@ paths = DateFileFinder(FOLDER).find_all("売上レポート.csv")
 > 紛らわしい名前が同じフォルダにある場合は、探したい名前を長くする
 > （`売上明細.csv` を探すなど）。
 
-### データ比較（diff_row / diff_rows）
+### データ比較（Table.diff / Table.changes / diff_row）
 
 CSV・Excel から読んだ行（辞書）同士の差分を取る。for ループを自分で書かなくてよい。
 **CSV の文字列と Excel の数値は同一視される**（`"1000"` と `1000` は差分にならない。
 空セルの `None` と `""` も同じ扱い）ので、CSV ↔ Excel をまたいだ比較にそのまま使える。
 
+#### 表どうし（`Table.diff(other, key=...)`）
+
+「昨日の表」と「今日の表」をキー列で突合し、追加・削除・変更を一度に取る。
+正規化後のキー（`"1000"` と `1000`）がどちらの表でも重複していたら
+`TableDuplicateKeyError`（`Table.index()` と同じ例外）で止める。
+**黙って後の行で上書きはしない。**
+
 ```python
-from comken.core import diff_row, diff_rows
+from comken.toolbox.csv import CSV
 
-# 1行同士の差分（値が違う列だけ返る）
-before = {"注文番号": "A001", "金額": "1000", "担当者": "山田"}
-after = {"注文番号": "A001", "金額": 2000, "担当者": "山田"}
-
-diff_row(before, after)
-# → {"金額": ("1000", 2000)}
-# 差分がなければ {} が返るので、if diff_row(a, b): で「変更あり」を判定できる
-
-# データセット同士の差分（キー列で突合）
 with CSV("昨日.csv") as csv_file:
-    before = csv_file.read()
-with Excel("今日.xlsx") as f:
-    after = f.read("Sheet1")
+    yesterday = csv_file.read()  # Table が返る
+with CSV("今日.csv") as csv_file:
+    today = csv_file.read()
 
-result = diff_rows(before, after, key="社員番号")
-result.added    # → after にだけある行のリスト
-result.removed  # → before にだけある行のリスト
+result = yesterday.diff(today, key="社員番号")
+result.added    # → today にだけある行（Table）
+result.removed  # → yesterday にだけある行（Table）
 result.changed  # → 値が変わった行のリスト（RowChange）
 
 for change in result.changed:
-    print(change.key)      # → "001"（キー列の値）
+    print(change.key)      # → "001"（キー列の正規化後の値）
     print(change.columns)  # → {"氏名": ("山田", "山田太郎")}（変わった列だけ）
     print(change.before)   # → 変更前の行全体
     print(change.after)    # → 変更後の行全体
+```
+
+`added` / `removed` は `Table` なので `filter` / `select` / `count` などの
+Table 標準の操作が直接使える。
+
+#### 同じ表の中の履歴（`Table.changes(key=..., order_by=...)`）
+
+社員番号ごとに履歴が並んでいるとき、`order_by`（変更時刻など）で
+昇順に並べてから隣り合う行を比べる。同じ社員番号でも変更時刻が
+時系列順でないと誤判定になるため、`order_by` は省略しない方が安全。
+
+`order_by` を**省略すると、表の並び順のまま**比べる（入力順を信用する場合）。
+比較する列から `key` と `order_by` の列は除く（変更時刻は毎回違うので、
+含めると全部が「変わった」になる）。
+
+```python
+history = Table(
+    ["社員番号", "変更時刻", "部署", "役職"],
+    [
+        {"社員番号": "1001", "変更時刻": "2026-09-03", "部署": "総務", "役職": "主任"},
+        {"社員番号": "1001", "変更時刻": "2026-09-01", "部署": "営業", "役職": "一般"},
+        {"社員番号": "1001", "変更時刻": "2026-09-02", "部署": "営業", "役職": "主任"},
+    ],
+)
+
+for change in history.changes(key="社員番号", order_by="変更時刻"):
+    print(change.key, change.columns)
+# 1001 {'役職': ('一般', '主任')}
+# 1001 {'部署': ('営業', '総務')}
+```
+
+`order_by` の列に空（`None` / `""`）の行がある、または値の型が混ざって
+いて比較できない（`TypeError`）ときは `TableError` で止める。
+
+#### 行どうし（`diff_row(before, after)`）
+
+`diff_row` は1行同士を比べる。**同じ社員番号の行が複数あって、自分で
+比べ方を決めたいとき**は、`group_by()` で同じキーの行をまとめ、
+`itertools.pairwise` で隣り合う2行を取って `diff_row` に渡す。
+
+```python
+from comken.core import diff_row
+from comken.core.table import Table
+from itertools import pairwise
+
+table = Table(
+    ["社員番号", "氏名", "所属"],
+    [
+        {"社員番号": "001", "氏名": "山田", "所属": "営業"},
+        {"社員番号": "001", "氏名": "山田", "所属": "企画"},
+        {"社員番号": "002", "氏名": "佐藤", "所属": "総務"},
+    ],
+)
+for emp_id, rows in table.group_by("社員番号").items():
+    for before, after in pairwise(rows):
+        columns = diff_row(before, after)
+        if columns:
+            print(emp_id, columns)
 ```
 
 

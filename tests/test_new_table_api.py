@@ -5,7 +5,7 @@ Transfer 関連は tests/test_transfer.py へ移した。
 
 import pytest
 
-from comken.core.table import Table, compare_tables
+from comken.core.table import Table
 from comken.exceptions.tables import (
     TableColumnNotFoundError,
     TableDuplicateKeyError,
@@ -134,42 +134,6 @@ def test_table_filter_predicate_cannot_change_source() -> None:
     assert filtered.to_rows() == [{"id": 1, "name": "before"}]
 
 
-def test_compare_tables_accepts_different_column_order() -> None:
-    read = Table(["id", "name", "area"], [{"id": 1, "name": "A", "area": "東"}])
-    write = Table(["area", "id", "name"], [{"area": "東", "id": 1, "name": "A"}])
-
-    comparison = compare_tables(read, write, read_key="id", write_key="id")
-
-    assert len(comparison.same) == 1
-
-
-def test_compare_tables_accepts_different_key_names() -> None:
-    read = Table(["read_id", "name"], [{"read_id": 1, "name": "A"}])
-    write = Table(["write_id", "name"], [{"write_id": 1, "name": "A"}])
-
-    comparison = compare_tables(read, write, read_key="read_id", write_key="write_id")
-
-    assert comparison.same.to_rows() == [{"read_id": 1, "name": "A"}]
-
-
-@pytest.mark.parametrize("duplicate_side", ["read", "write"])
-def test_compare_tables_rejects_duplicate_keys_on_both_sides(duplicate_side) -> None:
-    unique = Table(["id", "name"], [{"id": 1, "name": "A"}])
-    duplicate = Table(["id", "name"], [{"id": 1, "name": "A"}, {"id": 1, "name": "B"}])
-    read, write = (duplicate, unique) if duplicate_side == "read" else (unique, duplicate)
-
-    with pytest.raises(TableDuplicateKeyError):
-        compare_tables(read, write, read_key="id", write_key="id")
-
-
-def test_compare_tables_rejects_generated_column_collision() -> None:
-    read = Table(["id", "name", "write_name"], [{"id": 1, "name": "A", "write_name": "x"}])
-    write = Table(["id", "name", "write_name"], [{"id": 1, "name": "B", "write_name": "y"}])
-
-    with pytest.raises(TableError):
-        compare_tables(read, write, read_key="id", write_key="id")
-
-
 def test_select_keeps_only_types_for_selected_columns() -> None:
     """``select()`` は選択されなかった列の変換関数まで持ち回らない。"""
     table = Table(
@@ -277,3 +241,152 @@ def test_table_not_equal_to_unrelated_type() -> None:
     assert table != 42
     # ``==`` も ``NotImplemented`` を ``False`` に畳む
     assert table != "string"
+
+
+class TestTableChanges:
+    """``Table.changes()``（同じ表の中の履歴）のテスト。"""
+
+    def test_returns_changes_in_order_by_order_by(self) -> None:
+        """社員番号ごとに変更時刻の古い順に並べ、隣り合う行を比べる。
+
+        表の並び順はわざと変更時刻順とバラバラにしてある（1001 が 9/3・9/1・9/2
+        の順）。``order_by`` で昇順ソートしてから隣り合う行を比べるので、結果は
+        9/1→9/2（一般→主任）と 9/2→9/3（営業→総務）の2件になる。
+        """
+        history = Table(
+            ["社員番号", "変更時刻", "部署", "役職"],
+            [
+                # 1001 は 9/3, 9/1, 9/2 の順で並んでいる（バラバラ）
+                {"社員番号": "1001", "変更時刻": "2026-09-03", "部署": "総務", "役職": "主任"},
+                {"社員番号": "1001", "変更時刻": "2026-09-01", "部署": "営業", "役職": "一般"},
+                {"社員番号": "1001", "変更時刻": "2026-09-02", "部署": "営業", "役職": "主任"},
+                # 1002 は 9/1, 9/5（変化なし）
+                {"社員番号": "1002", "変更時刻": "2026-09-01", "部署": "経理", "役職": "一般"},
+                {"社員番号": "1002", "変更時刻": "2026-09-05", "部署": "経理", "役職": "一般"},
+            ],
+        )
+
+        result = history.changes(key="社員番号", order_by="変更時刻")
+
+        assert len(result) == 2
+        # 9/1 → 9/2: 役職だけ変わる（部署は営業のまま）
+        assert result[0].key == "1001"
+        assert result[0].columns == {"役職": ("一般", "主任")}
+        # 9/2 → 9/3: 部署だけ変わる（役職は主任のまま）
+        assert result[1].key == "1001"
+        assert result[1].columns == {"部署": ("営業", "総務")}
+
+    def test_order_by_column_is_excluded_from_columns(self) -> None:
+        """変更時刻の列は ``columns`` に入らない（含めると毎回「変わった」になる）。"""
+        history = Table(
+            ["社員番号", "変更時刻", "部署"],
+            [
+                {"社員番号": "1001", "変更時刻": "2026-09-01", "部署": "営業"},
+                {"社員番号": "1001", "変更時刻": "2026-09-02", "部署": "営業"},
+            ],
+        )
+
+        result = history.changes(key="社員番号", order_by="変更時刻")
+
+        assert len(result) == 0  # 部署は変わっていない、変更時刻も除外される
+        assert result == []
+
+    def test_without_order_by_uses_table_order(self) -> None:
+        """``order_by`` なしでは表の並び順のまま比べる。
+
+        表順と変更時刻順が食い違うデータで、並べ替えた場合と結果が変わることを
+        確かめる（表順は 9/2(A)→9/1(B)→9/3(A)）。
+        """
+        history = Table(
+            ["社員番号", "変更時刻", "部署"],
+            [
+                {"社員番号": "1001", "変更時刻": "2026-09-02", "部署": "A"},
+                {"社員番号": "1001", "変更時刻": "2026-09-01", "部署": "B"},
+                {"社員番号": "1001", "変更時刻": "2026-09-03", "部署": "A"},
+            ],
+        )
+
+        # order_by なし: 表の並び順（A→B→A）で比べる → 2 件
+        result = history.changes(key="社員番号")
+        assert len(result) == 2
+        assert result[0].columns == {"変更時刻": ("2026-09-02", "2026-09-01"), "部署": ("A", "B")}
+        assert result[1].columns == {"変更時刻": ("2026-09-01", "2026-09-03"), "部署": ("B", "A")}
+
+        # order_by あり: 変更時刻の昇順（B→A→A）で比べる → 1 件だけ
+        result_ordered = history.changes(key="社員番号", order_by="変更時刻")
+        assert len(result_ordered) == 1
+        assert result_ordered[0].columns == {"部署": ("B", "A")}
+
+    def test_single_row_key_returns_empty(self) -> None:
+        """行が1つしかないキーからは何も出ない。"""
+        history = Table(
+            ["社員番号", "変更時刻", "部署"],
+            [
+                {"社員番号": "1001", "変更時刻": "2026-09-01", "部署": "営業"},
+                {"社員番号": "1002", "変更時刻": "2026-09-01", "部署": "経理"},
+                {"社員番号": "1002", "変更時刻": "2026-09-02", "部署": "経理"},
+            ],
+        )
+
+        result = history.changes(key="社員番号", order_by="変更時刻")
+
+        assert result == []
+
+    def test_empty_order_by_value_raises(self) -> None:
+        """``order_by`` の列に空（``None`` / ``""``）の行があると ``TableError``。"""
+        history = Table(
+            ["社員番号", "変更時刻", "部署"],
+            [
+                {"社員番号": "1001", "変更時刻": None, "部署": "営業"},
+                {"社員番号": "1001", "変更時刻": "2026-09-02", "部署": "営業"},
+            ],
+        )
+
+        with pytest.raises(TableError, match="空"):
+            history.changes(key="社員番号", order_by="変更時刻")
+
+    def test_mixed_types_in_order_by_raises(self) -> None:
+        """``order_by`` の列の型が混ざっていると ``TableError``。"""
+        history = Table(
+            ["社員番号", "変更時刻", "部署"],
+            [
+                {"社員番号": "1001", "変更時刻": "2026-09-01", "部署": "営業"},
+                {"社員番号": "1001", "変更時刻": 1, "部署": "営業"},  # 型が違う
+            ],
+        )
+
+        with pytest.raises(TableError, match="型"):
+            history.changes(key="社員番号", order_by="変更時刻")
+
+    def test_string_and_int_keys_are_grouped(self) -> None:
+        """``"1001"`` と ``1001`` が同じキーとしてまとめられる（``_normalize`` 後）。"""
+        history = Table(
+            ["社員番号", "変更時刻", "部署"],
+            [
+                {"社員番号": "1001", "変更時刻": "2026-09-01", "部署": "営業"},
+                {"社員番号": 1001, "変更時刻": "2026-09-02", "部署": "総務"},
+            ],
+        )
+
+        result = history.changes(key="社員番号", order_by="変更時刻")
+
+        assert len(result) == 1
+        assert result[0].key == "1001"  # 正規化後は文字列
+        assert result[0].columns == {"部署": ("営業", "総務")}
+
+    def test_missing_key_column_raises(self) -> None:
+        """``key`` の列が無いと ``Table`` の既存と同じ例外（``TableColumnNotFoundError``）。"""
+        history = Table(["変更時刻", "部署"], [{"変更時刻": "2026-09-01", "部署": "営業"}])
+
+        with pytest.raises(TableColumnNotFoundError):
+            history.changes(key="社員番号", order_by="変更時刻")
+
+    def test_missing_order_by_column_raises(self) -> None:
+        """``order_by`` の列が無いと ``Table`` の既存と同じ例外。"""
+        history = Table(
+            ["社員番号", "部署"],
+            [{"社員番号": "1001", "部署": "営業"}, {"社員番号": "1001", "部署": "総務"}],
+        )
+
+        with pytest.raises(TableColumnNotFoundError):
+            history.changes(key="社員番号", order_by="変更時刻")

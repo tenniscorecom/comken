@@ -14,13 +14,12 @@
     1. サンプルデータを output/ に生成する（注文マスタ.csv・注文明細.csv・請求一覧.xlsx）
     2. マスタを index() で引いて、顧客名を転記する
     3. 明細を group_by() でまとめ、合計してから金額を転記する
-    4. 転記前後を diff_rows で比較して「どの行のどの列が変わったか」をログに出す
+    4. 転記前後を Table.diff() で比較して「どの行のどの列が変わったか」をログに出す
 """
 
 import logging
 from pathlib import Path
 
-from comken.core import diff_rows
 from comken.core.table import Table, Transfer
 from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Excel
@@ -129,7 +128,9 @@ def main() -> None:
     logger.info("%d 件転記した", len(working))
 
     # 転記前後を突合して、どの行のどの列が書き換わったかを確認する
-    result = diff_rows(before, after, key=KEY)
+    before_table = Table(destination.columns, before)
+    after_table = Table(working.columns, after)
+    result = before_table.diff(after_table, key=KEY)
     for change in result.changed:
         logger.info("変更 %s: %s", change.key, change.columns)
 

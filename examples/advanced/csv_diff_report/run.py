@@ -2,21 +2,21 @@
 サンプル: 昨日と今日の CSV を比較して差分レポート（Excel）を作る
 
 「毎日更新されるデータの変更点だけ知りたい」という定番処理を動かす。
-diff_rows で追加・削除・変更を検出し、区分ごとに色分けした Excel レポートにまとめる。
+Table.diff() で追加・削除・変更を検出し、区分ごとに色分けした Excel レポートにまとめる。
 
 実行方法:
     リポジトリのルートで python -m examples.advanced.csv_diff_report.run
 
 実行の流れ（外部システム・ネット接続は不要）:
     1. サンプルデータを output/ に生成する（名簿_昨日.csv と 名簿_今日.csv）
-    2. diff_rows で社員番号をキーに突合し、追加・削除・変更を検出する
+    2. Table.diff() で社員番号をキーに突合し、追加・削除・変更を検出する
     3. 区分（追加=緑 / 削除=赤 / 変更=黄）で色分けした Excel レポートを出力する
 """
 
 import logging
 from pathlib import Path
 
-from comken.core import DateNameBuilder, diff_rows
+from comken.core import DateNameBuilder
 from comken.toolbox.csv import CSV
 from comken.toolbox.csv.file import Value
 from comken.toolbox.excel import Color, Excel
@@ -74,7 +74,7 @@ def main() -> None:
         after = csv_file.read()
 
     # キー列で突合して差分を取る（added / removed / changed に分かれて返る）
-    result = diff_rows(before, after, key=KEY)
+    result = before.diff(after, key=KEY)
     logger.info(
         "追加 %d 件 / 削除 %d 件 / 変更 %d 件",
         len(result.added),

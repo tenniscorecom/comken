@@ -5,7 +5,6 @@ import logging
 from comken.core import (
     DiffResult,
     RowChange,
-    diff_rows,
     normalize,
     now,
     remove_spaces,
@@ -14,6 +13,7 @@ from comken.core import (
     wait_until,
 )
 from comken.core.logger import setup_local_logging
+from comken.core.table import Table
 
 RETRY_COUNT = 2
 
@@ -21,15 +21,21 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> None:
-    before = [
-        {"社員番号": "001", "氏名": "山田", "所属": "営業"},
-        {"社員番号": "002", "氏名": "佐藤", "所属": "総務"},
-    ]
-    after = [
-        {"社員番号": "001", "氏名": "山田", "所属": "企画"},
-        {"社員番号": "003", "氏名": "鈴木", "所属": "営業"},
-    ]
-    result: DiffResult = diff_rows(before, after, key="社員番号")
+    before = Table(
+        ["社員番号", "氏名", "所属"],
+        [
+            {"社員番号": "001", "氏名": "山田", "所属": "営業"},
+            {"社員番号": "002", "氏名": "佐藤", "所属": "総務"},
+        ],
+    )
+    after = Table(
+        ["社員番号", "氏名", "所属"],
+        [
+            {"社員番号": "001", "氏名": "山田", "所属": "企画"},
+            {"社員番号": "003", "氏名": "鈴木", "所属": "営業"},
+        ],
+    )
+    result: DiffResult = before.diff(after, key="社員番号")
     change: RowChange = result.changed[0]
     logger.info("DiffResult: 追加=%s 削除=%s", result.added, result.removed)
     logger.info("RowChange: key=%s columns=%s", change.key, change.columns)

@@ -4,8 +4,7 @@
 アダプタは toolbox 側に置き、保存の挙動が境界で見えるようにする。
 """
 
-from comken.core.table.comparison import TableComparison, compare_tables
 from comken.core.table.model import Table
 from comken.core.table.transfer import Transfer, UnmatchedRows
 
-__all__ = ["Table", "TableComparison", "Transfer", "UnmatchedRows", "compare_tables"]
+__all__ = ["Table", "Transfer", "UnmatchedRows"]

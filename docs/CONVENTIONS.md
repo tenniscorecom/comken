@@ -655,7 +655,7 @@ snake_case の世界（関数名・変数名・モジュール名・パッケー
 | 複数件を絞り込む | `filter_` | `filter_rows()` |
 | 存在・状態を判定する | `is_` / `has_` / `can_` | `is_empty()`, `has_element()` |
 | 件数を数える | `count_` | `count_elements()` |
-| 差分を求める | `diff_` | `diff_row()`, `diff_rows()` |
+| 差分を求める | `diff_` | `diff_row()`, `Table.diff()`, `Table.changes()` |
 | 書き込む・保存する | `write_` / `save_` | `write_rows()`, `save_draft()` |
 | 末尾へ追加する | `append_` | `append_rows()` |
 | 生のスクリプトを実行する | `execute_` | `execute_script()` |

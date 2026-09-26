@@ -12,10 +12,6 @@ files などがここに入る。外に触る道具は toolbox に置く。
 ``from comken.core import ...`` を toolbox 内部から行うことも許容する。
 """
 
-from comken.core.diff import DiffResult
-from comken.core.diff import RowChange
-from comken.core.diff import diff_row
-from comken.core.diff import diff_rows
 from comken.core.dates import month_end
 from comken.core.dates import month_start
 from comken.core.dates import now
@@ -51,8 +47,9 @@ from comken.core.holidays._holidays import workday_on_or_after
 from comken.core.holidays._holidays import workday_on_or_before
 from comken.core.retry import retry
 from comken.core.state import State
-from comken.core.table.comparison import TableComparison
-from comken.core.table.comparison import compare_tables
+from comken.core.table.diff import DiffResult
+from comken.core.table.diff import RowChange
+from comken.core.table.diff import diff_row
 from comken.core.table.model import Table
 from comken.core.table.transfer import Transfer
 from comken.core.text import normalize
@@ -75,10 +72,8 @@ __all__ = [
     "State",
     "Timer",
     "Table",
-    "TableComparison",
     "Transfer",
     "WORKDAY_SEARCH_LIMIT",
-    "compare_tables",
     "count_workdays",
     "copy_file",
     "date_in_name",
@@ -86,7 +81,6 @@ __all__ = [
     "delete_file",
     "delete_files",
     "diff_row",
-    "diff_rows",
     "first_workday",
     "holiday_name",
     "is_holiday",

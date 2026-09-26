@@ -46,7 +46,7 @@ class TableColumnNotFoundError(TableError):
 class TableDuplicateKeyError(TableError):
     """Table の索引または比較に使うキーが重複している。
 
-    発生箇所: Table.index() / compare_tables()
+    発生箇所: Table.index() / Table.diff()
 
     対処:
         キー列の値を一意にしてから処理をやり直す

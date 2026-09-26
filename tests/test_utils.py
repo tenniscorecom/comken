@@ -15,8 +15,8 @@ from unittest.mock import patch
 import pytest
 
 from comken import dry_run
+from comken.core import diff_row
 from comken.core.dates import now, parse_cell_date, today
-from comken.core.diff import diff_row, diff_rows
 from comken.core.files import (
     DateFileFinder,
     DateNameBuilder,
@@ -27,6 +27,7 @@ from comken.core.files import (
     move_file,
 )
 from comken.core.files.ops import copy_to_local_if_large, project_dir
+from comken.core.table import Table
 from comken.core.text import (
     is_true_word,
     normalize,
@@ -36,6 +37,7 @@ from comken.core.text import (
 )
 from comken.core.wait import wait_seconds, wait_until
 from comken.exceptions import BrowserError, ColumnNotFoundError, FileSuffixMissingError
+from comken.exceptions.tables import TableDuplicateKeyError
 from comken.toolbox.browser.download import DownloadDir
 from comken.toolbox.windows import Paths
 
@@ -896,20 +898,26 @@ class TestDiffRow:
 
 
 class TestDiffRows:
-    """diff_rows（データセット同士の差分）のテスト。"""
+    """Table.diff()（表どうしの差分）のテスト。"""
 
     def test_detects_added_removed_changed(self):
         """追加・削除・変更をそれぞれ検出することを確認する。"""
-        before = [
-            {"社員番号": "001", "氏名": "山田"},
-            {"社員番号": "002", "氏名": "佐藤"},
-        ]
-        after = [
-            {"社員番号": "001", "氏名": "山田太郎"},  # 変更
-            {"社員番号": "003", "氏名": "鈴木"},  # 追加（002 は削除）
-        ]
+        before = Table(
+            ["社員番号", "氏名"],
+            [
+                {"社員番号": "001", "氏名": "山田"},
+                {"社員番号": "002", "氏名": "佐藤"},
+            ],
+        )
+        after = Table(
+            ["社員番号", "氏名"],
+            [
+                {"社員番号": "001", "氏名": "山田太郎"},  # 変更
+                {"社員番号": "003", "氏名": "鈴木"},  # 追加（002 は削除）
+            ],
+        )
 
-        result = diff_rows(before, after, key="社員番号")
+        result = before.diff(after, key="社員番号")
 
         assert result.added == [{"社員番号": "003", "氏名": "鈴木"}]
         assert result.removed == [{"社員番号": "002", "氏名": "佐藤"}]
@@ -921,7 +929,10 @@ class TestDiffRows:
         """同じデータなら added / removed / changed すべて空になることを確認する。"""
         rows = [{"社員番号": "001", "氏名": "山田"}]
 
-        result = diff_rows(rows, [dict(r) for r in rows], key="社員番号")
+        before = Table(["社員番号", "氏名"], rows)
+        after = Table(["社員番号", "氏名"], [dict(r) for r in rows])
+
+        result = before.diff(after, key="社員番号")
 
         assert result.added == []
         assert result.removed == []
@@ -929,10 +940,16 @@ class TestDiffRows:
 
     def test_key_matches_across_csv_and_excel(self):
         """CSV の "1001" と Excel の 1001.0 がキーとして突合できることを確認する。"""
-        before = [{"注文番号": "1001", "金額": "1000"}]  # CSV（全部 str）
-        after = [{"注文番号": 1001.0, "金額": 2000}]  # Excel（数値）
+        before = Table(
+            ["注文番号", "金額"],
+            [{"注文番号": "1001", "金額": "1000"}],  # CSV（全部 str）
+        )
+        after = Table(
+            ["注文番号", "金額"],
+            [{"注文番号": 1001.0, "金額": 2000}],  # Excel（数値）
+        )
 
-        result = diff_rows(before, after, key="注文番号")
+        result = before.diff(after, key="注文番号")
 
         assert result.added == []
         assert result.removed == []
@@ -942,8 +959,37 @@ class TestDiffRows:
         """key で指定した列が存在しないと ColumnNotFoundError になることを確認する。"""
         rows = [{"注文番号": "A001"}]
 
+        before = Table(["注文番号"], rows)
+        after = Table(["注文番号"], rows)
+
         with pytest.raises(ColumnNotFoundError, match="キー列"):
-            diff_rows(rows, rows, key="社員番号")
+            before.diff(after, key="社員番号")
+
+    def test_duplicate_key_raises_on_either_side(self):
+        """正規化後のキーが重複していたら TableDuplicateKeyError になることを確認する。
+
+        ``Table.diff()`` は ``Table.index()`` と同じく例外で止める
+        （どちらの表でも）。
+        """
+        before = Table(
+            ["社員番号", "氏名"],
+            [{"社員番号": "001", "氏名": "山田"}, {"社員番号": "001", "氏名": "山田2"}],
+        )
+        after = Table(["社員番号", "氏名"], [{"社員番号": "001", "氏名": "別"}])
+
+        with pytest.raises(TableDuplicateKeyError):
+            before.diff(after, key="社員番号")
+
+    def test_duplicate_key_on_other_side_raises(self):
+        """other 側でも重複していたら TableDuplicateKeyError になることを確認する。"""
+        before = Table(["社員番号", "氏名"], [{"社員番号": "001", "氏名": "山田"}])
+        after = Table(
+            ["社員番号", "氏名"],
+            [{"社員番号": "001", "氏名": "別1"}, {"社員番号": "001", "氏名": "別2"}],
+        )
+
+        with pytest.raises(TableDuplicateKeyError):
+            before.diff(after, key="社員番号")
 
 
 class TestIsTrueWord:

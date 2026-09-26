@@ -316,19 +316,14 @@ class DiffResult:
 
 #### 説明
 
-diff_rows の結果。
+``Table.diff()`` の結果。
 
-なぜ added / removed が ``Table`` で changed が ``list[RowChange]`` なのか —
-``changed`` の1件は「変更前・変更後・差分列」の3つを抱えており、表の1行に収まらない
-（同じ列名で2つの値を並べると区別できない）ため ``RowChange`` のリストのままで持つ。
-一方 ``added`` / ``removed`` は表の行と同じ形なので ``Table`` へ揃え、
-``filter`` / ``select`` / ``count`` などの Table 標準の操作が直接使えるようにしてある。
-
-この ``added`` / ``removed`` と ``TableComparison.only_in_read`` / ``only_in_write``
-は名前こそ近いが別の系統で、前者は時系列の差分（昨日のデータ → 今日のデータ）、
-後者は2つの表の突合（read 側と write 側）であり、方向の意味が違う。
-1つに統一せず、用途が違うものは別の名前で持つのが正しい。``diff_rows`` は
-時系列の差分なので ``added`` / ``removed`` の語彙を維持する。
+なぜ ``added`` / ``removed`` が ``Table`` で ``changed`` が ``list[RowChange]``
+なのか — ``changed`` の1件は「変更前・変更後・差分列」の3つを抱えており、
+表の1行に収まらない（同じ列名で2つの値を並べると区別できない）ため
+``RowChange`` のリストのままで持つ。 一方 ``added`` / ``removed`` は表の行と
+同じ形なので ``Table`` へ揃え、 ``filter`` / ``select`` / ``count`` などの
+Table 標準の操作が直接使えるようにしてある。
 
 ### `EXPIRING_WARNING_DAYS`
 
@@ -346,7 +341,13 @@ class RowChange:
 
 #### 説明
 
-diff_rows が返す「変更のあった行」の情報。
+``Table.diff()`` / ``Table.changes()`` が返す「変更のあった行」の情報。
+
+Attributes:
+    key: キー列の正規化後の値（``_normalize`` を通した文字列）。
+    before: 変更前の行全体。
+    after: 変更後の行全体。
+    columns: 変わった列だけ {列名: (変更前, 変更後)}。
 
 ### `State`
 
@@ -538,15 +539,62 @@ def concat(self, other: Table) -> Table:
 別のデータとして扱う。列不足を空欄で補うと、入力ミスに気づけず
 データ欠落につながるため、ここでは明示的にエラーにする。
 
-### `TableComparison`
+#### `diff`
 
 ```text
-class TableComparison:
+def diff(self, other: Table, *, key: str) -> DiffResult:
 ```
 
-#### 説明
+##### 説明
 
-readとwriteの比較結果を、方向が分かる名前で保持する。
+self と other を ``key`` 列で突合し、差分を返す。
+
+CSV と Excel をまたいだ比較にも使える（"1000" と 1000 は同一視される）。
+正規化後のキーがどちらの表でも重複していたら ``TableDuplicateKeyError``
+を送出する（``Table.index()`` と同じ例外）。
+
+Args:
+    other: 突合先の ``Table``。
+    key: 行を一意に識別するキー列名。
+
+Returns:
+    ``DiffResult``（``added`` / ``removed`` は ``Table``、``changed`` は
+    ``list[RowChange]``）。
+
+#### `changes`
+
+```text
+def changes(self, *, key: str, order_by: str | None=None) -> list[RowChange]:
+```
+
+##### 説明
+
+``key`` の値ごとに行を分け、隣り合う行同士を比べる履歴の差分を取る。
+
+``key`` の値（``_normalize`` 後）ごとに行を分け、``order_by`` が指定されていれば
+その列の値の**昇順（古い順）**に**安定ソート**してから、**隣り合う行どうし**
+（1番目と2番目、2番目と3番目…）を比べる。値が変わった組だけを
+``RowChange(key=正規化後のキー, before=前の行, after=次の行, columns=変わった列)``
+で返す。
+
+比べる列から ``key`` と ``order_by`` の列を除く（変更時刻は毎回違うので、
+含めると全部が「変わった」になる）。
+
+``order_by`` が ``None`` なら、並べ替えずに表の並び順のまま比べる。
+
+返す順: キーが最初に出てきた順、その中は並べ替え後の順。
+
+Args:
+    key: 履歴をまとめるキー列名。
+    order_by: 並べ替えに使う列名。``None`` なら表の並び順のまま比べる。
+
+Returns:
+    値が変わった隣り合う行の組 (``RowChange``) のリスト。
+
+Raises:
+    TableColumnNotFoundError: ``key`` / ``order_by`` の列が無いとき。
+    TableError: ``order_by`` の列に空 (``None`` / ``""``) の行がある、
+        または値の型が混ざっていて比較できない (``TypeError``) とき。
 
 ### `Transfer`
 
@@ -718,16 +766,6 @@ Example:
 
 公開定数。
 
-### `compare_tables`
-
-```text
-def compare_tables(read: Table, write: Table, *, read_key: str | Sequence[str], write_key: str | Sequence[str]) -> TableComparison:
-```
-
-#### 説明
-
-2つのTableをキーで比較し、4種類のTableに分けて返す。
-
 ### `count_workdays`
 
 ```text
@@ -866,36 +904,6 @@ Args:
 
 Returns:
     {列名: (変更前の値, 変更後の値)} の辞書。値は元の型のまま返す。
-
-### `diff_rows`
-
-```text
-def diff_rows(before: Table | list[dict[str, Any]], after: Table | list[dict[str, Any]], key: str) -> DiffResult:
-```
-
-#### 説明
-
-2つのデータセットをキー列で突合し、差分を返す。
-
-CSV と Excel をまたいだ比較にも使える（"1000" と 1000 は同一視される）。
-キーが重複する場合は後の行が優先される。
-
-``before`` / ``after`` には ``Table`` または辞書のリストを渡せる。
-``CSV.read()`` のように ``Table`` を返す API と組み合わせるときは ``Table`` を、
-既存の ``list[dict]`` をそのまま渡すときはリストを指定する。戻り値の
-``added`` / ``removed`` は ``Table`` になり、``filter`` / ``select`` /
-``count`` などの Table 標準の操作が直接使える。Table インスタンスから
-``list[dict]`` を取り出すには ``Table.to_rows()`` を使う。
-Args:
-    before: 変更前のデータ（``Table`` または辞書のリスト）。
-    after: 変更後のデータ（``Table`` または辞書のリスト）。
-    key: 行を一意に識別するキー列名。
-
-Returns:
-    DiffResult（``added`` / ``removed`` は ``Table``、``changed`` は ``list[RowChange]``）。
-
-Raises:
-    ColumnNotFoundError: key で指定した列が存在しない場合。
 
 ### `first_workday`
 
@@ -2512,15 +2520,62 @@ def concat(self, other: Table) -> Table:
 別のデータとして扱う。列不足を空欄で補うと、入力ミスに気づけず
 データ欠落につながるため、ここでは明示的にエラーにする。
 
-### `TableComparison`
+#### `diff`
 
 ```text
-class TableComparison:
+def diff(self, other: Table, *, key: str) -> DiffResult:
 ```
 
-#### 説明
+##### 説明
 
-readとwriteの比較結果を、方向が分かる名前で保持する。
+self と other を ``key`` 列で突合し、差分を返す。
+
+CSV と Excel をまたいだ比較にも使える（"1000" と 1000 は同一視される）。
+正規化後のキーがどちらの表でも重複していたら ``TableDuplicateKeyError``
+を送出する（``Table.index()`` と同じ例外）。
+
+Args:
+    other: 突合先の ``Table``。
+    key: 行を一意に識別するキー列名。
+
+Returns:
+    ``DiffResult``（``added`` / ``removed`` は ``Table``、``changed`` は
+    ``list[RowChange]``）。
+
+#### `changes`
+
+```text
+def changes(self, *, key: str, order_by: str | None=None) -> list[RowChange]:
+```
+
+##### 説明
+
+``key`` の値ごとに行を分け、隣り合う行同士を比べる履歴の差分を取る。
+
+``key`` の値（``_normalize`` 後）ごとに行を分け、``order_by`` が指定されていれば
+その列の値の**昇順（古い順）**に**安定ソート**してから、**隣り合う行どうし**
+（1番目と2番目、2番目と3番目…）を比べる。値が変わった組だけを
+``RowChange(key=正規化後のキー, before=前の行, after=次の行, columns=変わった列)``
+で返す。
+
+比べる列から ``key`` と ``order_by`` の列を除く（変更時刻は毎回違うので、
+含めると全部が「変わった」になる）。
+
+``order_by`` が ``None`` なら、並べ替えずに表の並び順のまま比べる。
+
+返す順: キーが最初に出てきた順、その中は並べ替え後の順。
+
+Args:
+    key: 履歴をまとめるキー列名。
+    order_by: 並べ替えに使う列名。``None`` なら表の並び順のまま比べる。
+
+Returns:
+    値が変わった隣り合う行の組 (``RowChange``) のリスト。
+
+Raises:
+    TableColumnNotFoundError: ``key`` / ``order_by`` の列が無いとき。
+    TableError: ``order_by`` の列に空 (``None`` / ``""``) の行がある、
+        または値の型が混ざっていて比較できない (``TypeError``) とき。
 
 ### `Transfer`
 
@@ -2702,16 +2757,6 @@ class UnmatchedRows:
 ``result()`` にも影響しない。
 ``only_in_write`` は **作業 Table の実体行**（``list[Row]``）。書き換えると
 ``result()`` に反映される。型が違うのはこの違いを表すため。
-
-### `compare_tables`
-
-```text
-def compare_tables(read: Table, write: Table, *, read_key: str | Sequence[str], write_key: str | Sequence[str]) -> TableComparison:
-```
-
-#### 説明
-
-2つのTableをキーで比較し、4種類のTableに分けて返す。
 
 
 ## `from comken.exceptions import ...`
@@ -3758,7 +3803,7 @@ class TableDuplicateKeyError(TableError):
 
 Table の索引または比較に使うキーが重複している。
 
-発生箇所: Table.index() / compare_tables()
+発生箇所: Table.index() / Table.diff()
 
 対処:
     キー列の値を一意にしてから処理をやり直す
