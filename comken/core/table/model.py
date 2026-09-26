@@ -58,26 +58,30 @@ class Table:
             raise TableError(
                 f"Table の{row_number}件目の列名が columns と一致しません。"
                 f"不足列: {missing}、余分な列: {extra}。"
-                "列を絞る場合は select() を使ってください。"
                 "\n対処: 不足列と余分な列を直してください。"
                 "列を絞る場合は select() を使ってください。"
             )
         normalized = dict(row)
-        for column, converter in self.types.items():
+        for column in self.types:
             if column not in self.columns:
                 continue
-            try:
-                normalized[column] = converter(row[column])
-            except (KeyboardInterrupt, SystemExit):
-                raise
-            except Exception as exc:
-                raise TableError(
-                    f"Table の{row_number}件目、列「{column}」の値"
-                    f"「{row[column]}」を型変換できません。"
-                    "\n対処: 表示された行番号・列名の値を、"
-                    "指定した型へ変換できる内容に直してください。"
-                ) from exc
+            normalized[column] = self._convert_one(column, row[column], row_number)
         return normalized
+
+    def _convert_one(self, column: str, value: Any, row_number: int) -> Any:
+        """``self.types[column]`` で 1 つの値を変換する（``concat()`` からも使う）。"""
+        converter = self.types[column]
+        try:
+            return converter(value)
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except Exception as exc:
+            raise TableError(
+                f"Table の{row_number}件目、列「{column}」の値"
+                f"「{value}」を型変換できません。"
+                "\n対処: 表示された行番号・列名の値を、"
+                "指定した型へ変換できる内容に直してください。"
+            ) from exc
 
     @classmethod
     def _from_normalized_rows(
@@ -230,21 +234,34 @@ class Table:
         列の順番は異なっていても構わないが、列名の集合が異なる表は
         別のデータとして扱う。列不足を空欄で補うと、入力ミスに気づけず
         データ欠落につながるため、ここでは明示的にエラーにする。
+
+        結果の型定義は ``self.types``。``other`` の値は、``other.types``
+        に ``self.types`` と**同じ変換関数（``is`` で同一のオブジェクト）**
+        が設定されている列はそのまま使い、それ以外は ``self.types`` で変換する
+        （変換済みの値に同じ変換を二重にかけないため）。``other.types`` は
+        結果に引き継がない。
         """
         if set(self.columns) != set(other.columns):
             raise TableError("concatする表の列名が一致しません。")
         columns = self.columns
-        # ``other`` は自分と別の Table なので types が異なりうる（または無い）。
-        # other 側の値だけ self.types で変換し、self.types 変換済みの値と
-        # 未変換の値が同じ列に混在しないようにする。
-        # self 側の行は既に self.types で変換済みなので、ここでもう一度
-        # converter へ通さない（非冪等な converter（例: 文字列前提のパース
-        # 関数）を変換済みの値に再適用すると壊れる／例外になるため）。
+        # self 側の行は既に self.types で変換済みなので、再変換しない。
+        # other 側の各列について、other.types に同じ変換関数が登録されていれば
+        # 変換済みとみなしてそのまま使う（``is`` で同一判定する。非冪等な
+        # converter を変換済みの値へ適用するのを避けるため）。
+        # other.types に無い列、または別の関数の列は self.types で変換する。
         self_rows = [{column: row[column] for column in columns} for row in self._rows]
-        other_rows = [
-            self._normalize({column: row[column] for column in columns}, row_number)
-            for row_number, row in enumerate(other._rows, 1)
-        ]
+        other_rows: list[dict[str, Any]] = []
+        for row_number, row in enumerate(other._rows, 1):
+            converted: dict[str, Any] = {}
+            for column in columns:
+                value = row[column]
+                if column in self.types and self.types[column] is other.types.get(column):
+                    # other 側も同じ converter で変換済み → そのまま使う
+                    converted[column] = value
+                else:
+                    # other が未変換／別関数で変換済み → self.types で揃える
+                    converted[column] = self._convert_one(column, value, row_number)
+            other_rows.append(converted)
         result = Table._from_normalized_rows(columns, [*self_rows, *other_rows], types=self.types)
         logger.debug(
             "Table concat: %d 行 + %d 行 = %d 行",

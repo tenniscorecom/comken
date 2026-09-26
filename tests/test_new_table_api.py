@@ -83,6 +83,48 @@ def test_table_concat_does_not_reapply_types_to_self_rows() -> None:
     assert result.to_rows() == [{"x": 5}, {"x": 7}]
 
 
+def test_table_concat_same_types_skips_reconversion_for_other() -> None:
+    """両側で同じ converter を使った Table 同士を concat しても壊れない。
+
+    other 側は既に self 側と同じ converter で変換済みなので、再適用しない。
+    修正前は other 側の値（既に ``int``）に ``s2i`` を再適用して
+    ``TableError`` になっていた。
+    """
+
+    def s2i(value: object) -> int:
+        if not isinstance(value, str):
+            raise TypeError(f"文字列以外は受け付けません: {value!r}")
+        return int(value)
+
+    left = Table(["x"], [{"x": "5"}], types={"x": s2i})
+    right = Table(["x"], [{"x": "7"}], types={"x": s2i})
+
+    result = left.concat(right)
+
+    assert result.to_rows() == [{"x": 5}, {"x": 7}]
+    assert all(isinstance(row["x"], int) for row in result.to_rows())
+
+
+def test_table_concat_same_date_types_keeps_date_values() -> None:
+    """両側で同じ日付 converter を使った Table 同士を concat しても date のまま。
+
+    修正前は other 側の ``date`` を ``strptime`` で再パースしようとして
+    ``TableError`` になっていた。
+    """
+    from datetime import datetime
+
+    date_converter = lambda v: datetime.strptime(v, "%Y/%m/%d").date()  # noqa: E731, DTZ007
+    left = Table(["d"], [{"d": "2024/01/02"}], types={"d": date_converter})
+    right = Table(["d"], [{"d": "2024/03/04"}], types={"d": date_converter})
+
+    result = left.concat(right)
+
+    from datetime import date
+
+    assert result.to_rows() == [{"d": date(2024, 1, 2)}, {"d": date(2024, 3, 4)}]
+    assert all(isinstance(row["d"], date) for row in result.to_rows())
+
+
 def test_csv_is_string_by_default_and_types_are_explicit(tmp_path) -> None:
     path = tmp_path / "data.csv"
     path.write_text("id,name\n1,山田\n", encoding="utf-8-sig")

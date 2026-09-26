@@ -17,7 +17,7 @@ _R = TypeVar("_R")
 
 
 def retry(
-    times: int = 3, wait: float = 1.0, on: tuple[type[BaseException], ...] = (Exception,)
+    times: int = 3, wait: float = 1.0, on: tuple[type[Exception], ...] = (Exception,)
 ) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
     """失敗したら wait 秒空けて実行し直すデコレータ。
 
@@ -25,9 +25,9 @@ def retry(
         times: 合計の実行回数（デフォルト: 3。「3回試して全部失敗ならエラー」）。
         wait: 失敗から次の実行までの待機秒数（デフォルト: 1秒）。
         on: リトライ対象の例外のタプル（デフォルト: すべての Exception 系）。
-            ``Exception`` のサブクラスを指定する。**``BaseException`` 系
-            （``KeyboardInterrupt`` / ``SystemExit``）は ``on`` に含まれていても
-            リトライしない**（Ctrl+C で止められることを保証するため）。
+            ``Exception`` のサブクラスを指定する。``KeyboardInterrupt`` /
+            ``SystemExit`` は ``Exception`` ではないので ``on`` に含まれていても
+            リトライされない（Ctrl+C で止められることを保証するため）。
             ``on`` に含まれない例外は即座にそのまま出る。
 
     Raises:
@@ -50,7 +50,7 @@ def retry(
         raise ValueError(f"wait は 0 以上で指定してください (got {wait!r})")
 
     total = times
-    retry_targets: tuple[type[BaseException], ...] = tuple(on)
+    retry_targets: tuple[type[Exception], ...] = tuple(on)
 
     def decorator(func: Callable[_P, _R]) -> Callable[_P, _R]:
         """対象関数へ再実行処理を適用する。"""
@@ -61,15 +61,11 @@ def retry(
             for attempt in range(1, total + 1):
                 try:
                     return func(*args, **kwargs)
-                except BaseException as e:
-                    # BaseException 系（KeyboardInterrupt / SystemExit）は
-                    # リトライしない。on に含まれていても、ユーザーの
-                    # 「今ここで止めたい」を尊重する。
-                    # isinstance(e, BaseException) は常に True なので
-                    # isinstance(e, Exception) が False = BaseException 直系
-                    if not isinstance(e, Exception):
-                        raise
-                    # on に含まれない例外もリトライしない
+                except Exception as e:
+                    # ``KeyboardInterrupt`` / ``SystemExit`` は ``Exception`` 派生
+                    # ではないので、ここで捕まらずそのまま外へ出る（``except Exception``
+                    # は BaseException 直系を通さない）。``on`` に含まれていない例外も
+                    # 即座に外へ出る。
                     if not isinstance(e, retry_targets):
                         raise
                     if attempt == total:

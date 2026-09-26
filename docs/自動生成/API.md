@@ -539,6 +539,12 @@ def concat(self, other: Table) -> Table:
 別のデータとして扱う。列不足を空欄で補うと、入力ミスに気づけず
 データ欠落につながるため、ここでは明示的にエラーにする。
 
+結果の型定義は ``self.types``。``other`` の値は、``other.types``
+に ``self.types`` と**同じ変換関数（``is`` で同一のオブジェクト）**
+が設定されている列はそのまま使い、それ以外は ``self.types`` で変換する
+（変換済みの値に同じ変換を二重にかけないため）。``other.types`` は
+結果に引き継がない。
+
 #### `diff`
 
 ```text
@@ -1242,7 +1248,7 @@ Returns:
 ### `retry`
 
 ```text
-def retry(times: int=3, wait: float=1.0, on: tuple[type[BaseException], ...]=(Exception,)) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
+def retry(times: int=3, wait: float=1.0, on: tuple[type[Exception], ...]=(Exception,)) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
 ```
 
 #### 説明
@@ -1253,9 +1259,9 @@ Args:
     times: 合計の実行回数（デフォルト: 3。「3回試して全部失敗ならエラー」）。
     wait: 失敗から次の実行までの待機秒数（デフォルト: 1秒）。
     on: リトライ対象の例外のタプル（デフォルト: すべての Exception 系）。
-        ``Exception`` のサブクラスを指定する。**``BaseException`` 系
-        （``KeyboardInterrupt`` / ``SystemExit``）は ``on`` に含まれていても
-        リトライしない**（Ctrl+C で止められることを保証するため）。
+        ``Exception`` のサブクラスを指定する。``KeyboardInterrupt`` /
+        ``SystemExit`` は ``Exception`` ではないので ``on`` に含まれていても
+        リトライされない（Ctrl+C で止められることを保証するため）。
         ``on`` に含まれない例外は即座にそのまま出る。
 
 Raises:
@@ -2520,6 +2526,12 @@ def concat(self, other: Table) -> Table:
 別のデータとして扱う。列不足を空欄で補うと、入力ミスに気づけず
 データ欠落につながるため、ここでは明示的にエラーにする。
 
+結果の型定義は ``self.types``。``other`` の値は、``other.types``
+に ``self.types`` と**同じ変換関数（``is`` で同一のオブジェクト）**
+が設定されている列はそのまま使い、それ以外は ``self.types`` で変換する
+（変換済みの値に同じ変換を二重にかけないため）。``other.types`` は
+結果に引き継がない。
+
 #### `diff`
 
 ```text
@@ -3253,7 +3265,7 @@ class SalesforceReportTruncatedError(SalesforceError):
 レポート API は同期・非同期とも 2000 行が上限。非同期にしても超えられない。
 黙って欠けたデータで処理を続けないよう、既定ではこの例外で止める。
 
-発生箇所: comken.toolbox.salesforce.ReportAPI.run_csv() / run_async()
+発生箇所: comken.toolbox.salesforce.report.ReportAPI.run_csv() / run_async()
 
 対処:
     期間を狭めて何回かに分けて実行する。1回で全部必要なら管理者へ連絡する

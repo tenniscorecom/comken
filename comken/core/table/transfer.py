@@ -5,6 +5,11 @@
 ``apply_mapping(read_row, write_row)`` を呼ぶ書き方が公式。
 mapping の列名はコンストラクタで検証するので、typo は早期に例外になる。
 入力 ``read`` / ``write`` は直接変更せず、内部の作業 Table に書き込む。
+
+キーは Table の値そのもの（``==``）で比べる。``"1000"`` と ``1000`` は一致しない。
+型が揃った Table 同士を突合する前提なので、揃っていなければ CSV / Excel の
+``types=`` でそろえてから渡す（``Table.diff()`` はキーを正規化して比べるが、
+Transfer は正規化しない）。
 """
 
 import logging

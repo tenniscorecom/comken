@@ -858,11 +858,12 @@ logger.debug("詳細: %s", expensive_repr(value))
 
 - 上記の「ライブラリへ昇格する」基準を満たし、かつ
 - **管理表・履歴・スケジュール判定など、社内の運用ルール（≒「このプロジェクトでは
-  こう運用する」）を抱え込む場合**。`salesforce_downloader` が代表例（管理表の
-  スキーマ・履歴 CSV の形式・スケジュール判定を抱えていたため、別リポジトリへ
-  切り出した）。
-- 切り出したものは `pip install` 可能な独立パッケージ（`comken_xxx` のように
-  アンダースコア区切りで import）として配布し、comken 自体は依存を増やさない。
+  こう運用する」）を抱え込む場合**。`salesforce_downloader` が代表例（取得を実行する
+  部分（`download_scheduled()`）だけを別リポジトリ「Salesforceレポートダウンローダー」へ
+  切り出し、管理表・履歴の形式とスケジュール判定は comken に残した）。
+- 切り出したものは comken を import する独立したプロジェクトとして置き、comken 側からは
+  import しない。`pip install` で配るパッケージにはしない（利用側ごとに `pip install` が
+  要るのが不便で、一度やめた。HISTORY 6 章「サービス層の分離と再統合」）。
 
 ### 昇格の手順
 

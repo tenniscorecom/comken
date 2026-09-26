@@ -17,7 +17,7 @@ LAYERS = {
     "runtime": 0,
     "core": 1,
     "toolbox": 2,
-    "services": 4,
+    "services": 3,
 }
 
 # 同じ層の別コンポーネント同士で、実際に必要な依存。ここへ足して済ませず、まず設計を見直す。
