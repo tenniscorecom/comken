@@ -180,7 +180,7 @@ class ExcelCOMHandler(FileBase):
         self._sheet(sheet_name).Cells(int(row), column_number(col)).Value = value
 
     @measure
-    def read_row_values(self, sheet_name: str, min_row: int = 2) -> list[tuple]:
+    def read_row_values(self, sheet_name: str, min_row: int = 2) -> list[tuple[Any, ...]]:
         """指定シートの行データをタプルのリストで返す。
 
         Args:
@@ -434,7 +434,7 @@ class ExcelCOMHandler(FileBase):
             self._tmp = None
 
 
-def _block_values(ws: Any, first_row: int, last_row: int, last_col: int) -> list[tuple]:
+def _block_values(ws: Any, first_row: int, last_row: int, last_col: int) -> list[tuple[Any, ...]]:
     """シートの矩形範囲をまとめて読み、行ごとのタプルにして返す。
 
     セルを1つずつ読むと COM の往復が「行数 × 列数」になり、数万行では実用にならない。

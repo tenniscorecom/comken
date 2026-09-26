@@ -20,6 +20,7 @@ import configparser
 import inspect
 import logging
 from pathlib import Path
+from typing import Any
 
 from comken.core.config import _is_mapping_section, _parse_value
 from comken.core.files.atomic import atomic_write
@@ -209,7 +210,7 @@ def _write_stub_atomic(stub_path: Path, content: str) -> None:
 # ── 内部ヘルパー ──────────────────────────────────────────────────────────────
 
 
-def _stub_type_name(value: bool | int | float | Path | list | str) -> str:
+def _stub_type_name(value: bool | int | float | Path | list[Any] | str) -> str:
     """スタブに書く型名を返す。"""
     if isinstance(value, bool):  # bool は int のサブクラスなので先に判定する
         return "bool"

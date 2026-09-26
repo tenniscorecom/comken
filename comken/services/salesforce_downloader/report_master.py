@@ -213,7 +213,7 @@ class MasterRow:
         raw_rows = read_raw_rows(source, cls.SHEET_NAME)
 
         rows: list[Self] = []
-        seen: dict[str, set] = {}
+        seen: dict[str, set[Any]] = {}
         for offset, raw in enumerate(raw_rows):
             if _is_blank(raw):
                 continue  # 表の下に残った空行は読み飛ばす
@@ -224,7 +224,9 @@ class MasterRow:
         return rows
 
     @classmethod
-    def _build(cls, raw: dict, row_number: int, seen: dict[str, set], source: Path) -> Self:
+    def _build(
+        cls, raw: dict[str, Any], row_number: int, seen: dict[str, set[Any]], source: Path
+    ) -> Self:
         """1行ぶんの生の値を、型付きのインスタンスにする。"""
         values = {}
         for name, spec, value_type in cls._columns():
@@ -355,7 +357,7 @@ class _Empty:
 _EMPTY = _Empty()
 
 
-def _is_blank(raw: dict) -> bool:
+def _is_blank(raw: dict[str, Any]) -> bool:
     """すべての列が空の行か。"""
     return all(value in (None, "") for value in raw.values())
 
@@ -398,7 +400,7 @@ def read_raw_rows(source: Path, sheet_name: str) -> CoreTable:
     return raw_rows
 
 
-def _require_headers(cls: type[MasterRow], raw: dict, source: Path) -> None:
+def _require_headers(cls: type[MasterRow], raw: dict[str, Any], source: Path) -> None:
     """宣言した見出しが表にあるか確かめる。
 
     **既定値のある列は、見出しごと無くてもよい。** 列を1つ足した瞬間に、既存の管理表が

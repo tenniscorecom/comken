@@ -189,7 +189,7 @@ def _normalize_label(label: str) -> str:
     return label.strip().lower()
 
 
-def _build_field_index(data: object) -> tuple[dict[str, list[dict]], None]:
+def _build_field_index(data: object) -> tuple[dict[str, list[dict[str, Any]]], None]:
     """Object Describe の ``fields`` 配列を ``{正規化表示名: [field, ...]}`` に組み立てる。
 
     同じ表示名を持つフィールドが複数ある場合は、最初に見つかった1件だけを
@@ -201,7 +201,7 @@ def _build_field_index(data: object) -> tuple[dict[str, list[dict]], None]:
     （``describe_fields()`` のポリシーと揃えるため）。
     """
     fields = data.get("fields", []) if isinstance(data, dict) else []
-    index: dict[str, list[dict]] = {}
+    index: dict[str, list[dict[str, Any]]] = {}
     for field in fields:
         if not isinstance(field, dict):
             continue
@@ -228,7 +228,7 @@ def _filter_only_columns(report_filters: object) -> list[str]:
     ]
 
 
-def _grouping_columns(report_metadata: dict) -> list[str]:
+def _grouping_columns(report_metadata: dict[str, Any]) -> list[str]:
     """``groupingsDown`` / ``groupingsAcross``（``SUMMARY``/``MATRIX``）の列キーを返す。"""
     columns = []
     for grouping_key in ("groupingsDown", "groupingsAcross"):
@@ -253,7 +253,7 @@ def _aggregate_field_columns(aggregates: object) -> list[str]:
     ]
 
 
-def _collect_describable_columns(report_metadata: dict) -> list[str]:
+def _collect_describable_columns(report_metadata: dict[str, Any]) -> list[str]:
     """``describe_fields()`` が解決を試みる列キーの一覧を組み立てる（重複除去済み）。
 
     ``detailColumns``（SELECT に出す列）に加え、SELECT には出ないが
@@ -272,7 +272,7 @@ def _collect_describable_columns(report_metadata: dict) -> list[str]:
     return columns
 
 
-def _collect_column_info(metadata: dict) -> dict:
+def _collect_column_info(metadata: dict[str, Any]) -> dict[str, Any]:
     """``describe_fields()`` の表示名引き当てに使う列情報を組み立てる。
 
     グルーピング列・集計列の表示名は ``detailColumnInfo`` ではなく
@@ -280,10 +280,10 @@ def _collect_column_info(metadata: dict) -> dict:
     （本物の組織で未検証）ため、同じ列キー空間としてマージする
     （キーの重複は無い前提）。
     """
-    extended_metadata: dict = (
+    extended_metadata: dict[str, Any] = (
         metadata.get("reportExtendedMetadata", {}) if isinstance(metadata, dict) else {}
     )
-    column_info: dict = dict(extended_metadata.get("detailColumnInfo", {}) or {})
+    column_info: dict[str, Any] = dict(extended_metadata.get("detailColumnInfo", {}) or {})
     for info_key in ("groupingColumnInfo", "aggregateColumnInfo"):
         info = extended_metadata.get(info_key)
         if isinstance(info, dict):
@@ -306,15 +306,17 @@ class ReportAPI:
             client: このレポート API を使う Salesforce クライアント。
         """
         self._client = client
-        self._object_field_results: dict[str, tuple[dict[str, list[dict]] | None, str | None]] = {}
+        self._object_field_results: dict[
+            str, tuple[dict[str, list[dict[str, Any]]] | None, str | None]
+        ] = {}
 
     def _request(
         self,
         report_id: str,
         method: str,
         path: str,
-        body: dict | None = None,
-    ) -> tuple[dict | list | str | None, dict]:
+        body: dict[str, Any] | None = None,
+    ) -> tuple[dict[str, Any] | list[Any] | str | None, dict[str, str]]:
         """``self._client.request()`` を呼び、401 / 403 だけレポート専用の
         分かりやすいエラーに差し替える。それ以外のステータスは元の例外のまま。
 
@@ -333,7 +335,7 @@ class ReportAPI:
     def get(
         self,
         report_id: str,
-        filters: list[dict] | None = None,
+        filters: list[dict[str, Any]] | None = None,
         allow_truncated: bool = False,
     ) -> Table:
         """レポートを同期実行して明細行を ``Table`` で返す（上限 2000 行）。
@@ -366,7 +368,7 @@ class ReportAPI:
         self,
         report_id: str,
         path: str | Path,
-        filters: list[dict] | None = None,
+        filters: list[dict[str, Any]] | None = None,
         allow_truncated: bool = False,
     ) -> Path:
         """レポートを同期実行して、結果をそのまま CSV へ保存する。
@@ -402,7 +404,7 @@ class ReportAPI:
     def run_async(
         self,
         report_id: str,
-        filters: list[dict] | None = None,
+        filters: list[dict[str, Any]] | None = None,
         allow_truncated: bool = False,
     ) -> Table:
         """レポートを非同期実行して明細行を返す（**上限は同期と同じ 2000 行**）。
@@ -449,7 +451,7 @@ class ReportAPI:
         )
 
     @measure
-    def describe(self, report_id: str) -> dict:
+    def describe(self, report_id: str) -> dict[str, Any]:
         """レポートを実行せず、定義（列・フィルタ・形式）を取得する。
 
         `get()` / `run_async()` はどちらもレポートを**実行**するため 2000 行の
@@ -494,7 +496,7 @@ class ReportAPI:
 
     def _object_field_index(
         self, object_name: str
-    ) -> tuple[dict[str, list[dict]] | None, str | None]:
+    ) -> tuple[dict[str, list[dict[str, Any]]] | None, str | None]:
         """Object Describe をオブジェクト名単位で取得・キャッシュする。"""
         cached_result = self._object_field_results.get(object_name)
         if cached_result is not None:
@@ -510,7 +512,7 @@ class ReportAPI:
                 f"自動判定できません（HTTP {exc.status_code}: {exc.detail}）。"
                 "手動で確認してください"
             )
-            result: tuple[dict[str, list[dict]] | None, str | None] = (None, reason)
+            result: tuple[dict[str, list[dict[str, Any]]] | None, str | None] = (None, reason)
             self._object_field_results[object_name] = result
             return result
         field_index, _ = _build_field_index(data)
@@ -521,7 +523,7 @@ class ReportAPI:
     def _fetch_report_table(
         self,
         report_id: str,
-        filters: list[dict] | None,
+        filters: list[dict[str, Any]] | None,
         allow_truncated: bool,
     ) -> Table:
         """HTTP 取得とパースを行い ``Table`` を返す。"""
@@ -586,7 +588,9 @@ class ReportAPI:
         table, _ = self.describe_fields_with_object_status(metadata)
         return table
 
-    def describe_fields_with_object_status(self, metadata: dict) -> tuple[Table, str | None]:
+    def describe_fields_with_object_status(
+        self, metadata: dict[str, Any]
+    ) -> tuple[Table, str | None]:
         """取得済み Report Describe から列対応表を作る（describe_fields() の下請け）。
 
         `describe_fields(report_id)` は内部で `describe()` を呼ぶが、何十件もの
@@ -610,7 +614,7 @@ class ReportAPI:
         # 通すと 401/403 が SalesforceError に変換されてしまう。
         # ここは別系統の権限（オブジェクトへの参照）なので、変換せず
         # SalesforceRequestError のまま伝播させる。
-        field_index: dict[str, list[dict]] | None
+        field_index: dict[str, list[dict[str, Any]]] | None
         object_error_reason: str | None
         if not object_name:
             field_index = None

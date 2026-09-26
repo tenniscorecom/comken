@@ -29,7 +29,7 @@ import secrets
 import urllib.parse
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, Any, Self
 
 import requests
 
@@ -284,7 +284,7 @@ def _post_token(
     data: dict[str, str],
     *,
     secrets_to_redact: tuple[str, ...],
-) -> dict:
+) -> dict[str, Any]:
     url = f"{domain_url}{TOKEN_PATH}"
     # リクエストの中身（client_secret・code・refresh_token）は秘密なので、
     # ログに残すのは宛先 URL と grant_type、結果のステータスコードだけにする。
@@ -312,7 +312,7 @@ def _post_token(
     return body
 
 
-def _token_pair(body: dict) -> tuple[str, str]:
+def _token_pair(body: dict[str, Any]) -> tuple[str, str]:
     try:
         return body["access_token"], body["instance_url"]
     except (KeyError, TypeError) as e:

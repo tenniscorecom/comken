@@ -17,7 +17,7 @@ _R = TypeVar("_R")
 
 
 def retry(
-    times: int = 3, wait: float = 1.0, on: tuple = (Exception,)
+    times: int = 3, wait: float = 1.0, on: tuple[type[BaseException], ...] = (Exception,)
 ) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
     """失敗したら wait 秒空けて実行し直すデコレータ。
 

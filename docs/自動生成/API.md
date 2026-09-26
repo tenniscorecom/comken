@@ -451,7 +451,7 @@ def to_rows(self) -> list[dict[str, Any]]:
 #### `replace`
 
 ```text
-def replace(self, rows: list[dict]) -> Self:
+def replace(self, rows: list[dict[str, Any]]) -> Self:
 ```
 
 ##### 説明
@@ -461,7 +461,7 @@ def replace(self, rows: list[dict]) -> Self:
 #### `append`
 
 ```text
-def append(self, rows: list[dict] | dict) -> Self:
+def append(self, rows: list[dict[str, Any]] | dict[str, Any]) -> Self:
 ```
 
 ##### 説明
@@ -487,7 +487,7 @@ columns 側（欲しい名前）に揃う。aliases に無い列は、そのま�
 #### `filter`
 
 ```text
-def filter(self, predicate: Callable[[dict], bool]) -> Table:
+def filter(self, predicate: Callable[[dict[str, Any]], bool]) -> Table:
 ```
 
 ##### 説明
@@ -507,7 +507,7 @@ def column(self, name: str) -> list[Any]:
 #### `index`
 
 ```text
-def index(self, key: str) -> dict[Any, dict]:
+def index(self, key: str) -> dict[Any, dict[str, Any]]:
 ```
 
 ##### 説明
@@ -848,7 +848,7 @@ Raises:
 ### `diff_row`
 
 ```text
-def diff_row(before: dict, after: dict) -> dict[str, tuple]:
+def diff_row(before: dict[str, Any], after: dict[str, Any]) -> dict[str, tuple[Any, Any]]:
 ```
 
 #### 説明
@@ -870,7 +870,7 @@ Returns:
 ### `diff_rows`
 
 ```text
-def diff_rows(before: Table | list[dict], after: Table | list[dict], key: str) -> DiffResult:
+def diff_rows(before: Table | list[dict[str, Any]], after: Table | list[dict[str, Any]], key: str) -> DiffResult:
 ```
 
 #### 説明
@@ -1234,7 +1234,7 @@ Returns:
 ### `retry`
 
 ```text
-def retry(times: int=3, wait: float=1.0, on: tuple=(Exception,)) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
+def retry(times: int=3, wait: float=1.0, on: tuple[type[BaseException], ...]=(Exception,)) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
 ```
 
 #### 説明
@@ -2425,7 +2425,7 @@ def to_rows(self) -> list[dict[str, Any]]:
 #### `replace`
 
 ```text
-def replace(self, rows: list[dict]) -> Self:
+def replace(self, rows: list[dict[str, Any]]) -> Self:
 ```
 
 ##### 説明
@@ -2435,7 +2435,7 @@ def replace(self, rows: list[dict]) -> Self:
 #### `append`
 
 ```text
-def append(self, rows: list[dict] | dict) -> Self:
+def append(self, rows: list[dict[str, Any]] | dict[str, Any]) -> Self:
 ```
 
 ##### 説明
@@ -2461,7 +2461,7 @@ columns 側（欲しい名前）に揃う。aliases に無い列は、そのま�
 #### `filter`
 
 ```text
-def filter(self, predicate: Callable[[dict], bool]) -> Table:
+def filter(self, predicate: Callable[[dict[str, Any]], bool]) -> Table:
 ```
 
 ##### 説明
@@ -2481,7 +2481,7 @@ def column(self, name: str) -> list[Any]:
 #### `index`
 
 ```text
-def index(self, key: str) -> dict[Any, dict]:
+def index(self, key: str) -> dict[Any, dict[str, Any]]:
 ```
 
 ##### 説明
@@ -8470,7 +8470,7 @@ HTTP セッションを閉じる。with を使う場合は自動で呼ばれる�
 
 ```text
 @measure
-def query_rows(self, soql: str) -> Iterator[dict]:
+def query_rows(self, soql: str) -> Iterator[dict[str, Any]]:
 ```
 
 ##### 説明
@@ -8544,7 +8544,7 @@ Returns:
 
 ```text
 @measure
-def get(self, object_name: str, record_id: str) -> dict:
+def get(self, object_name: str, record_id: str) -> dict[str, Any]:
 ```
 
 ##### 説明
@@ -8564,7 +8564,7 @@ Args:
 
 ```text
 @measure
-def insert(self, object_name: str, data: dict) -> str:
+def insert(self, object_name: str, data: dict[str, Any]) -> str:
 ```
 
 ##### 説明
@@ -8579,7 +8579,7 @@ Args:
 
 ```text
 @measure
-def update(self, object_name: str, record_id: str, data: dict) -> None:
+def update(self, object_name: str, record_id: str, data: dict[str, Any]) -> None:
 ```
 
 ##### 説明
@@ -8595,7 +8595,7 @@ Args:
 
 ```text
 @measure
-def upsert(self, object_name: str, external_id_field: str, data: dict) -> None:
+def upsert(self, object_name: str, external_id_field: str, data: dict[str, Any]) -> None:
 ```
 
 ##### 説明
@@ -8628,7 +8628,7 @@ Args:
 #### `request`
 
 ```text
-def request(self, method: str, path: str, body: dict | None=None, component: str='other', headers: dict[str, str] | None=None, data: str | None=None) -> tuple[dict | list | str | None, dict]:
+def request(self, method: str, path: str, body: dict[str, Any] | None=None, component: str='other', headers: dict[str, str] | None=None, data: str | None=None) -> tuple[dict[str, Any] | list[Any] | str | None, dict[str, str]]:
 ```
 
 ##### 説明
@@ -8741,7 +8741,7 @@ HTTP セッションを閉じる。with を使う場合は自動で呼ばれる�
 
 ```text
 @measure
-def query_rows(self, soql: str) -> Iterator[dict]:
+def query_rows(self, soql: str) -> Iterator[dict[str, Any]]:
 ```
 
 ##### 説明
@@ -8815,7 +8815,7 @@ Returns:
 
 ```text
 @measure
-def get(self, object_name: str, record_id: str) -> dict:
+def get(self, object_name: str, record_id: str) -> dict[str, Any]:
 ```
 
 ##### 説明
@@ -8835,7 +8835,7 @@ Args:
 
 ```text
 @measure
-def insert(self, object_name: str, data: dict) -> str:
+def insert(self, object_name: str, data: dict[str, Any]) -> str:
 ```
 
 ##### 説明
@@ -8850,7 +8850,7 @@ Args:
 
 ```text
 @measure
-def update(self, object_name: str, record_id: str, data: dict) -> None:
+def update(self, object_name: str, record_id: str, data: dict[str, Any]) -> None:
 ```
 
 ##### 説明
@@ -8866,7 +8866,7 @@ Args:
 
 ```text
 @measure
-def upsert(self, object_name: str, external_id_field: str, data: dict) -> None:
+def upsert(self, object_name: str, external_id_field: str, data: dict[str, Any]) -> None:
 ```
 
 ##### 説明
@@ -8899,7 +8899,7 @@ Args:
 #### `request`
 
 ```text
-def request(self, method: str, path: str, body: dict | None=None, component: str='other', headers: dict[str, str] | None=None, data: str | None=None) -> tuple[dict | list | str | None, dict]:
+def request(self, method: str, path: str, body: dict[str, Any] | None=None, component: str='other', headers: dict[str, str] | None=None, data: str | None=None) -> tuple[dict[str, Any] | list[Any] | str | None, dict[str, str]]:
 ```
 
 ##### 説明
@@ -9044,7 +9044,7 @@ Args:
 
 ```text
 @measure
-def read_row_values(self, sheet_name: str, min_row: int=2) -> list[tuple]:
+def read_row_values(self, sheet_name: str, min_row: int=2) -> list[tuple[Any, ...]]:
 ```
 
 ##### 説明

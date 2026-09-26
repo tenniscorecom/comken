@@ -2,6 +2,7 @@
 
 import logging
 from dataclasses import dataclass
+from typing import Any
 
 from comken.core.table.model import Table
 from comken.exceptions import ColumnNotFoundError
@@ -9,7 +10,7 @@ from comken.exceptions import ColumnNotFoundError
 logger = logging.getLogger(__name__)
 
 
-def diff_row(before: dict, after: dict) -> dict[str, tuple]:
+def diff_row(before: dict[str, Any], after: dict[str, Any]) -> dict[str, tuple[Any, Any]]:
     """1行同士を比較し、値が異なる列だけを {列名: (変更前, 変更後)} で返す。
 
     CSV の str と Excel の数値は同一視する（"1000" と 1000 は差分にならない）。
@@ -37,9 +38,9 @@ class RowChange:
     """diff_rows が返す「変更のあった行」の情報。"""
 
     key: str  # キー列の複合キー（複数列指定時は複合キーとして扱われる）
-    before: dict  # 変更前の行全体
-    after: dict  # 変更後の行全体
-    columns: dict[str, tuple]  # 変わった列だけ {列名: (変更前, 変更後)}
+    before: dict[str, Any]  # 変更前の行全体
+    after: dict[str, Any]  # 変更後の行全体
+    columns: dict[str, tuple[Any, Any]]  # 変わった列だけ {列名: (変更前, 変更後)}
 
 
 @dataclass
@@ -65,8 +66,8 @@ class DiffResult:
 
 
 def diff_rows(
-    before: Table | list[dict],
-    after: Table | list[dict],
+    before: Table | list[dict[str, Any]],
+    after: Table | list[dict[str, Any]],
     key: str,
 ) -> DiffResult:
     """2つのデータセットをキー列で突合し、差分を返す。
@@ -135,7 +136,7 @@ def diff_rows(
     )
 
 
-def _materialize(data: Table | list[dict]) -> tuple[list[dict], list[str]]:
+def _materialize(data: Table | list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str]]:
     """``Table`` / ``list[dict]`` を (行リスト, 列名リスト) に揃える。"""
     if isinstance(data, Table):
         return data.to_rows(), list(data.columns)

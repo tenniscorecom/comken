@@ -24,7 +24,7 @@ import urllib.parse
 from collections.abc import Iterator
 from pathlib import Path
 from types import TracebackType
-from typing import Protocol, Self
+from typing import Any, Protocol, Self
 
 import requests
 
@@ -250,7 +250,7 @@ class SalesforceBase:
 
     # ------------------------------------------------------------------ query
     @measure
-    def query_rows(self, soql: str) -> Iterator[dict]:
+    def query_rows(self, soql: str) -> Iterator[dict[str, Any]]:
         """SOQL クエリを実行し ``{項目: 値}`` の dict を 1 件ずつ返す（全件・ページ送り自動）。
 
         レポートは上限 2000 行だが、SOQL に上限はない。**ページ受信のたびに**
@@ -333,7 +333,7 @@ class SalesforceBase:
 
     # ------------------------------------------------------------------- CRUD
     @measure
-    def get(self, object_name: str, record_id: str) -> dict:
+    def get(self, object_name: str, record_id: str) -> dict[str, Any]:
         """レコードを1件取得する。
 
         ``sf.report.get(...)`` ではなく ``sf.get(...)``（CRUD）で使う。
@@ -354,7 +354,7 @@ class SalesforceBase:
         return {}
 
     @measure
-    def insert(self, object_name: str, data: dict) -> str:
+    def insert(self, object_name: str, data: dict[str, Any]) -> str:
         """レコードを作成して Id を返す。
 
         Args:
@@ -370,7 +370,7 @@ class SalesforceBase:
         return result["id"] if isinstance(result, dict) else ""
 
     @measure
-    def update(self, object_name: str, record_id: str, data: dict) -> None:
+    def update(self, object_name: str, record_id: str, data: dict[str, Any]) -> None:
         """レコードを更新する。
 
         Args:
@@ -389,7 +389,7 @@ class SalesforceBase:
         )
 
     @measure
-    def upsert(self, object_name: str, external_id_field: str, data: dict) -> None:
+    def upsert(self, object_name: str, external_id_field: str, data: dict[str, Any]) -> None:
         """外部 ID で upsert する（一致すれば更新、なければ作成）。
 
         Args:
@@ -435,11 +435,11 @@ class SalesforceBase:
         self,
         method: str,
         path: str,
-        body: dict | None = None,
+        body: dict[str, Any] | None = None,
         component: str = "other",
         headers: dict[str, str] | None = None,
         data: str | None = None,
-    ) -> tuple[dict | list | str | None, dict]:
+    ) -> tuple[dict[str, Any] | list[Any] | str | None, dict[str, str]]:
         """REST API を呼び、(レスポンス本文, レスポンスヘッダー) を返す。
 
         すべての API 呼び出しがここを通る。計測と、401 のときの再認証もここで行う。
@@ -491,7 +491,7 @@ class SalesforceBase:
         self,
         method: str,
         path: str,
-        body: dict | None,
+        body: dict[str, Any] | None,
         headers: dict[str, str] | None,
         data: str | None,
         component: str,
@@ -529,7 +529,7 @@ class SalesforceBase:
         response: requests.Response,
         method: str,
         path: str,
-        body: dict | None,
+        body: dict[str, Any] | None,
         headers: dict[str, str] | None,
         data: str | None,
         component: str,
@@ -564,7 +564,7 @@ class SalesforceBase:
         self,
         method: str,
         url: str,
-        body: dict | None,
+        body: dict[str, Any] | None,
         headers: dict[str, str] | None = None,
         data: str | None = None,
     ) -> requests.Response:
@@ -577,7 +577,7 @@ class SalesforceBase:
             raise _connection_error(url, e) from e
 
     @staticmethod
-    def _body_of(response: requests.Response) -> dict | list | str | None:
+    def _body_of(response: requests.Response) -> dict[str, Any] | list[Any] | str | None:
         """レスポンス本文を、内容に応じて辞書・リスト・文字列・None で返す。"""
         if not response.text:
             return None  # DELETE や PATCH は本文が空で返る

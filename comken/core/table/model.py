@@ -133,13 +133,13 @@ class Table:
         # よう ``__eq__`` で ``False`` を返さず ``NotImplemented`` を返す）
         return NotImplemented
 
-    def replace(self, rows: list[dict]) -> Self:
+    def replace(self, rows: list[dict[str, Any]]) -> Self:
         """表の全行を置き換え、同じTableを返す。"""
         self._rows = [self._normalize(row, row_number) for row_number, row in enumerate(rows, 1)]
         logger.debug("Table replace: %d 行", len(self._rows))
         return self
 
-    def append(self, rows: list[dict] | dict) -> Self:
+    def append(self, rows: list[dict[str, Any]] | dict[str, Any]) -> Self:
         """1行または複数行を末尾へ追加する。"""
         values = [rows] if isinstance(rows, dict) else rows
         start = len(self._rows) + 1
@@ -178,7 +178,7 @@ class Table:
         logger.debug("Table select: %d 列, %d 行", len(result.columns), len(result))
         return result
 
-    def filter(self, predicate: Callable[[dict], bool]) -> Table:
+    def filter(self, predicate: Callable[[dict[str, Any]], bool]) -> Table:
         """条件に一致する行だけを持つ新しいTableを返す。"""
         # predicate は利用者コードなので、渡すのはコピー（誤って行を書き換えても
         # 元の Table へ影響させない）。採用した行そのもの（コピーではない）を
@@ -194,10 +194,10 @@ class Table:
         self._check_columns([name])
         return [row[name] for row in self._rows]
 
-    def index(self, key: str) -> dict[Any, dict]:
+    def index(self, key: str) -> dict[Any, dict[str, Any]]:
         """指定列をキーにした行の索引を返す。"""
         self._check_columns([key])
-        result: dict[Any, dict] = {}
+        result: dict[Any, dict[str, Any]] = {}
         for row in self._rows:
             value = row[key]
             if value in result:
@@ -210,7 +210,7 @@ class Table:
     def group_by(self, key: str) -> dict[Any, Table]:
         """指定列の値ごとにTableを分けて返す。"""
         self._check_columns([key])
-        grouped: dict[Any, list[dict]] = {}
+        grouped: dict[Any, list[dict[str, Any]]] = {}
         for row in self._rows:
             grouped.setdefault(row[key], []).append(row)
         result = {

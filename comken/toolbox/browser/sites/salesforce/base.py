@@ -28,7 +28,7 @@ import threading
 from collections.abc import Iterator, Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
 import requests
@@ -318,7 +318,7 @@ def _domain_of(url: str) -> str:
     return f"{parts.scheme}://{parts.netloc}"
 
 
-def _cookies_to_requests_session(driver_cookies: list[dict]) -> requests.Session:
+def _cookies_to_requests_session(driver_cookies: list[dict[str, Any]]) -> requests.Session:
     """Seleniumの driver.get_cookies() を requests.Session の Cookie へ移す。
 
     ブラウザで確立したログインセッションを、requests 側でもそのまま使えるようにする。

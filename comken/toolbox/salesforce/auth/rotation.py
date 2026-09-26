@@ -13,6 +13,7 @@ import datetime
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from comken.core.dates import today as local_today
 from comken.exceptions import (
@@ -186,7 +187,7 @@ class _StagedCredentials:
     consumer_secret: str
 
 
-def _staged_credentials_of(response: dict | list | str | None) -> _StagedCredentials:
+def _staged_credentials_of(response: dict[str, Any] | list[Any] | str | None) -> _StagedCredentials:
     """未確認のレスポンススキーマから必要な3項目を取り出す唯一の場所。"""
     if not isinstance(response, dict):
         raise _credential_rotation_error(
@@ -204,7 +205,7 @@ def _staged_credentials_of(response: dict | list | str | None) -> _StagedCredent
         ) from error
 
 
-def _consumer_id_of(response: dict | list | str | None) -> str:
+def _consumer_id_of(response: dict[str, Any] | list[Any] | str | None) -> str:
     """未確認の資格情報一覧スキーマから consumer ID を取り出す唯一の場所。"""
     candidate = response[0] if isinstance(response, list) and response else response
     if not isinstance(candidate, dict) or "consumerId" not in candidate:
