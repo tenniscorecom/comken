@@ -646,107 +646,21 @@ apply_schedule_dropdowns("レポート管理表.xlsx")
 
 ## SOQLレポート（2000件超のレポートを移行する）
 
-Report API（`sf.report.get()` / `download_scheduled()`）は同期・非同期どちらも
-**2000行が上限**（[docs/機能/salesforce.md「レポート — 2000行の壁」](salesforce.md#レポート-2000行の壁)参照）。
-3段構えの3段目「SOQLへ書き換え」に該当するレポートは、`comken/services/salesforce_downloader/soql_reports/`
-の基盤を使って個別に実装する。
+Report API（`sf.report.get()` / `download_scheduled()`）は **2000行が上限**
+（[salesforce.md「レポート — 2000行の壁」](salesforce.md#レポート-2000行の壁)）。
+これを超えるレポートは、同じ内容を SOQL で取る `SoqlReport` を書いて置き換える。
 
-**このパッケージは「レポートのURLからSOQLで取れる状態にする」までの下準備ツール一式であって、
-自動変換はしない。** レポートの列名とSOQLのフィールドAPI名は1対1に対応しないため、
-最終的な `WHERE`句・`SELECT`句は人が読んで組み立てる。以下は最短で下準備を終える手順。
+SOQL は人が組み立てる（レポートの列名と SOQL のフィールド名は 1 対 1 に対応しない）。
+組み立てるときは、レポートを実行せずに定義を読む `sf.report.describe()` と、
+列 → フィールド API 名の対応を出す `sf.report.describe_fields()` を使う
+（[salesforce.md「列-フィールド対応表」](salesforce.md#列-フィールド対応表describe_fields-describe_fields_csv)）。
+管理表の全件についての SOQL の下書きは、別プロジェクト（soql-collector）が作る。
 
-**手順1〜7を通しで実際に動くコードで確認したい場合は
-[examples/advanced/soql_report_migration](../../examples/advanced/soql_report_migration) を参照。**
-このフォルダには2つの実行方法がある:
+### 書き方
 
-- **`run.py`**（動作確認用）: 実際のSalesforce組織には接続せず、
-  `python -m examples.advanced.soql_report_migration.run` だけでそのまま実行できる
-  （疑似APIに差し替えている。詳細はそのファイルの冒頭コメント参照）
-- **`production_main.py`**（本番用テンプレート）: モックを一切使わない、実際に
-  Salesforceへ接続する本番コードそのもの。事前準備（組織の登録・DPAPIへの認証情報
-  登録・保存先フォルダ）が済んでいなければ意図的に失敗する（そのファイルの冒頭
-  コメントに手順あり）。実プロジェクトへ移すときは `main.py` にリネームしてコピーする
-
-### 手順
-
-#### 1. URLからレポートIDを取り出す
-
-管理表に貼ってあるレポートURLをそのまま渡せる（IDだけ抜き出す工程は不要）。
-
-```python
-from comken.toolbox.salesforce.report import report_id_from_url
-
-report_id = report_id_from_url(
-    "https://example.my.salesforce.com/lightning/r/Report/00O5g00000ABCDEfgh/view"
-)
-# "00O5g00000ABCDEfgh"
-```
-
-#### 2. `describe()` でレポート定義（形式・フィルタ）を確認する
-
-**レポートを実行しない**ため、2000行の上限も実行枠も消費しない。何度でも叩ける。
-
-```python
-with Solution() as sf:
-    metadata = sf.report.describe(report_id)
-
-metadata["reportMetadata"]["reportFormat"]        # "TABULAR" / "SUMMARY" / "MATRIX"
-metadata["reportMetadata"]["reportFilters"]        # 絞り込み条件（次のステップで使う）
-metadata["reportMetadata"]["reportType"]["type"]   # 主オブジェクト（例: "Opportunity"）
-```
-
-**`TABULAR`（明細）以外は個別対応が必要。** `SUMMARY`/`MATRIX` はグルーピング・集計を
-持つため、SOQLでは`GROUP BY`・集計関数（`COUNT()`/`SUM()`等）で作り直す必要があり、
-この手順の「列を1対1で移す」だけでは済まない。
-
-#### 3. `describe_fields()` で列→フィールドAPI名の対応表を作る
-
-**9割自動で埋めて、残りを可視化する道具。** 何十件もまとめて下書きしたいときは
-`describe_fields_csv()` でCSVへ落とす（詳細は
-[docs/機能/salesforce.md「列-フィールド対応表」](salesforce.md#列-フィールド対応表describe_fields-describe_fields_csv)）。
-
-```python
-with Solution() as sf:
-    fields_table = sf.report.describe_fields(report_id)
-    # または: sf.report.describe_fields_csv(report_id, "fields.csv")
-```
-
-戻る `Table` の列: `列キー` / `表示名` / `対応フィールドAPI名` / `型` / `備考`。
-`対応フィールドAPI名` が `(不明)` または `備考` に「複数候補あり」と出た列は、
-Salesforceの設定画面（オブジェクトマネージャ）で手動確認する。
-
-#### 4. `reportFilters` をSOQLの `WHERE` 句に変換する
-
-`reportFilters` の各要素は `{"column": ..., "operator": ..., "value": ...}` の形
-（**`"field"` ではない**。過去にこのキー名を取り違えていたことがあるので注意）。
-
-演算子の対応関係は次のとおり（**一般的な知識に基づくもので、本物のSalesforce組織に対して
-未検証。実際の `describe()` の返り値と突き合わせて確認すること**）:
-
-| Reportの`operator` | 意味 | SOQLでの書き方 |
-|---|---|---|
-| `equals` | 等しい | `= 値` |
-| `notEqual` | 等しくない | `!= 値` |
-| `lessThan` | より小さい | `< 値` |
-| `greaterThan` | より大きい | `> 値` |
-| `lessOrEqual` | 以下 | `<= 値` |
-| `greaterOrEqual` | 以上 | `>= 値` |
-| `contains` | 含む | `LIKE '%値%'` |
-| `notContain` | 含まない | `NOT (項目 LIKE '%値%')` |
-| `startsWith` | で始まる | `LIKE '値%'` |
-| `includes` | 複数選択リストのいずれかを含む | `INCLUDES(値1, 値2, ...)`（個別対応） |
-| `excludes` | 複数選択リストのいずれも含まない | `EXCLUDES(値1, 値2, ...)`（個別対応） |
-| `within` | 地理位置の範囲内 | `DISTANCE()`関数等で個別対応（1対1変換不可） |
-
-`includes` / `excludes` / `within` はSOQL側の書き方がReport側と1対1にならないため、
-機械的に変換せず個別に読んで組み立てる。
-
-**管理表の全件についてのドラフト作成は、別プロジェクト（soql-collector）が担う。**
-
-#### 5. `SoqlReport` サブクラスとして実装する
-
-`comken/services/salesforce_downloader/soql_reports/reports/` 配下に
-**1レポート=1ファイル**で書く。
+`comken/services/salesforce_downloader/soql_reports/reports/` に **1レポート=1ファイル**で置く。
+**置くだけで登録される**（`_` で始まるファイルは対象外。雛形は `reports/_template.py`）。
+`KEY` が空・重複していると、読み込み時に `DownloaderError` で止まる。
 
 ```python
 # comken/services/salesforce_downloader/soql_reports/reports/large_sales_report.py
@@ -768,49 +682,21 @@ class LargeSalesReport(SoqlReport):
         )
 ```
 
-Excel の「スケジュール」シートとは独立しており、いつ呼ぶかは呼び出し側が決める。
+動く例は [examples/advanced/soql_report_migration](../../examples/advanced/soql_report_migration)
+（`run.py` は Salesforce に接続せずに動く。`production_main.py` は本番用の形）。
 
-#### 6. 登録は不要（`reports/` に置くだけ）
+### 取り方（2つの経路）
 
-**登録は自動。** ファイルを `reports/` に置いた時点で `_registry.registered_reports()`
-が `pkgutil.iter_modules` で走査し、`SoqlReport` のサブクラスを集めて登録する
-（ファイル名が `_` で始まるモジュールは対象外 — `reports/_template.py` のような
-雛形を登録せずに済ませる）。
-
-`KEY` が空のまま残ると登録時に `DownloaderError` で止まる。**必ず管理番号を
-埋めてから**コミットする。
-
-#### 7. 動作確認する
-
-```python
-from comken.services.salesforce_downloader.soql_reports import download_soql_reports
-
-saved = download_soql_reports()   # registered_reports() を全部取得・保存
-```
-
-履歴（history.csv）への記録は対象外。1件失敗しても残りは続け、保存ファイル名の
-組み立て方は `download_scheduled()` と同じ。
-
-**この `download_soql_reports()` は、管理表に行を作らず SOQL レポートだけを
-まとめて取りたいときの経路。** 管理表に既にあるレポートを SOQL 化した場合は、
-こちらを呼ぶのではなく、管理表の「SOQL」列を `○` にする（`ReportEntry.key` と
-同じ `KEY` の `SoqlReport` が必要）。この経路なら `download_scheduled()` が
-`_fetch()` 経由で自動的に SOQL を使い、履歴（history.csv）にも記録される。
-2つの経路の違いは次のとおり:
-
-| | `download_soql_reports()` | 管理表「SOQL」列 |
+| | 管理表の「SOQL」列を `○` にする | `download_soql_reports()` を直接呼ぶ |
 |---|---|---|
-| 管理表への登録 | 不要 | 必要（行がある前提） |
-| スケジュール判定 | 呼び出し側が個別に用意 | 「スケジュール」シートが使える |
-| 履歴（history.csv） | 記録しない | 記録する |
-| 呼び方 | `download_soql_reports()` を直接呼ぶ | `download_scheduled()` から自動 |
+| 使う場面 | 管理表にあるレポートを SOQL に切り替える | 管理表に行を作らず、SOQL レポートだけ取る |
+| 管理表への登録 | 必要（同じ管理番号の `KEY` が要る） | 不要 |
+| スケジュール | 「スケジュール」シートが使える | 呼び出し側が決める |
+| 履歴（history.csv） | 記録する | 記録しない |
 
-### この手順が対象にしないもの
-
-- `SUMMARY` / `MATRIX` 形式のレポート（グルーピング・集計はSOQLの`GROUP BY`で作り直す）
-- 複合レポートタイプ（主オブジェクトが1つに定まらず `describe_fields()` の自動判定が効かない）
-- スケジュール判定・履歴記録（`download_soql_reports()` を直接呼ぶ経路の場合。
-  管理表の「SOQL」列を使う経路ならどちらも自動で付いてくる）
+どちらも 1 件失敗しても残りは続け、保存ファイル名の組み立て方は `download_scheduled()` と同じ。
+`SUMMARY` / `MATRIX` 形式（グルーピング・集計）と複合レポートタイプは、SOQL の `GROUP BY`
+などで個別に作り直す。
 
 ---
 
