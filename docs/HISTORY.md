@@ -466,15 +466,9 @@ API が安定していない前提なので、利用プロジェクト側は「�
 
 ### v2.0.0 にする（2026-09-26 決定）
 
-15 章の整理で、公開名・モジュールを大量に消した（旧名の別名は残さない）。
-**破壊的変更なので MAJOR を上げて v2.0.0 にする。**
-
-- **旧タグを消して 1.0 からやり直す案は採らない**。共有サーバーは `v1.1.0` / `v1.1.1` を
-  知っているので番号を巻き戻すとどれが新しいか分からなくなり、旧タグを消すと旧版へ戻せなくなる
-- **旧名→新名の対応表は置かない**。使えなくなった名前は `tools/check_v2_migration.py` が
-  社内プロジェクトのフォルダから機械的に探す（手作業の grep では漏れる）
-- **タグは、社内プロジェクトの確認が済んでから打つ**。`__version__` は先に 2.0.0 にした
-  （起動ログにバージョンが出るので、master を動かした人に 1.1.1 と見えないように）
+15 章で公開名・モジュールを大量に消したので、MAJOR を上げて v2.0.0 にする。
+旧タグを消して 1.0 からやり直す案は、旧版に戻せなくなるので採らない。
+旧名の別名や旧名→新名の対応表は置かない。利用側はエラーが出たところを直す。
 
 ### 例外クラスの統合（2026-09-25）
 
@@ -600,214 +594,63 @@ master に何をコミットしても本番には流れない。**
 
 ## 15. v2.0.0 に向けた整理（2026-09-25〜26）
 
-レビュー・改善指示書の「機能を足すのではなく、ドキュメント・テスト・例外・ルールを軽くする」
-に沿って、**広げすぎたものを絞った**。判断の基準は次の 3 つ。
+指示書の「機能を足さず、軽くする」に沿って、広げすぎたものを絞った。
+旧名の別名は残していない（11 章）。
 
-- **使われていないものは消す**。ただし「comken と手元の利用リポジトリを grep して
-  見つからない」だけでは決めない。会社側のコードは見えないので、消す前に利用者に確認する
+**判断の基準**
+
+- 使われていないものは消す。ただし grep で見つからないだけでは決めず、利用者に確認する
   （`Color` と `ouju` / `ams` は grep では見つからなかったが、実際には使われていた）
-- **Excel の見た目・構造の調整（1 ファイルで完結する処理）は VBA、複数ファイルに
-  またがる処理（転記など）は Python**。VBA で面倒なのは、複数ファイルの範囲をセル番号で
-  指定するほうだから
-- **旧名は残さない**（別名・警告なし）。まとめて v2.0.0 にする（11 章）
+- Excel の見た目・構造の調整（1 ファイルで完結する処理）は VBA、複数ファイルにまたがる
+  処理（転記など）は Python。VBA で面倒なのは、複数ファイルの範囲をセル番号で指すほうだから
+- 名前は標準ライブラリや Excel の関数に合わせ、覚える言葉を増やさない
 
-### 例外ファイルを 21→8 にまとめた（2026-09-25）
+**消したもの**（どれも社内で使っていなかった）
 
-`comken/exceptions/` の例外定義ファイルを 21 ファイルから 8 ファイル（`base.py` / `files.py` /
-`tables.py` / `config.py` / `office.py` / `web.py` / `holidays.py` / `downloader.py`）に
-まとめた。**クラス（名前・継承・docstring・コンストラクタ）は変更していない**。旧モジュール
-パス（`comken.exceptions.table` など）は廃止し、別名・re-export は残さないため、
-旧パスから import していたコードは `from comken.exceptions import X` 形式へ書き換えるか、
-`from comken.exceptions.tables import …` のように新パスへ切り替える。
-`comken.exceptions.calendar` は標準ライブラリと被るため `holidays.py` へ改名した（クラスを
-新ファイルへ動かすときにファイル名だけ整理した）。
+- Salesforce の Bulk API 2.0 と、Data Loader の CLI 呼び出し。書き込みは Salesforce 公式の
+  Data Loader に任せ、読み取りは REST とブラウザで足りている
+- ブラウザの非同期実行（`run_task` / `parallel`）と、セッションの排他ロック。初学者に分かりにくい
+- `Browsers`。非同期が無くなると役目は「まとめて閉じる」くらいで、`with A() as a, B() as b:` を
+  並べれば足りる。同じサイトを 2 つ開くときは `Kintai(name="kintai_a")` で名前を分ける。
+  同じ名前で 2 つ開くと起動時にエラーにする（黙って同じブラウザを共有する案は、
+  別アカウントのつもりで `name=` を書き忘れたときに気づけないので採らなかった）
+- `Sheet` の書式・構造系 13 メソッド（罫線・結合・行列の挿入削除・幅と高さなど）。
+  上の責任区分による。`set_background` / `format` / `freeze_panes` は社内で使っている
+  可能性があるので残した
 
-### モジュール・公開 API の改名（2026-09-25）
+**まとめ直したもの**
 
-`comken.core.clock` → `comken.core.dates`。コア層の日付・時刻ユーティリティ
-は時計ではなく「業務日付」を表すものが多く、ファイル名から中身を想像しにくい
-ため改名した。中の関数（`now` / `today` / `month_start` / `month_end` /
-`parse_cell_date`）は変えない。
+- 例外ファイルを 21 → 8 にした（クラスは変えていない）
+- `comken/constants.py` を廃止した。`Color` は `toolbox.excel`、`FileFormat` は `toolbox.windows` へ。
+  `Encoding` はやめて `open()` と同じ文字列にした（`CSV(path, encoding="cp932")`、省略で自動判定）。
+  `CP932` / `sjis` などの書き方の違いは吸収する
+- 雑多な入れ物だった `core/data.py` を `diff.py` / `columns.py` / `text.py` に分けた
+- `DateFileFinder` を `find()` / `find_all()` の 2 つにした。旧 `prefix()` は名前に日付書式を
+  埋めた完全一致で、`売上_20260711.xlsx` を `売上.xlsx` で探せなかった。今は
+  「名前を含み、拡張子が同じで、ファイル名の日付が対象日」
+- `workbook.py`（1,349 行）から、数式の計算結果を読む処理を `computed.py` に分けた（挙動は同じ）。
+  `engine="com"` の分岐は、Excel の呼び出しを 1 つにする設計として残した
 
-`comken.core.calendar` → `comken.core.holidays`（**標準ライブラリの
-`calendar` と被る**ため）。`CalendarError` → `HolidayError`、
-`BusinessDayNotFoundError` → `WorkdayNotFoundError`、`CALENDAR_CSV_PATH` →
-`HOLIDAYS_CSV_PATH`、`BUSINESS_DAY_SEARCH_LIMIT` → `WORKDAY_SEARCH_LIMIT`、
-`warn_if_calendar_expiring_soon` → `warn_if_holidays_expiring_soon`。
+**名前を変えたもの**
 
-祝日・営業日関数を Excel の `WORKDAY` に寄せて改名。**「次の営業日」「前の
-営業日」を表す関数は削除**し、`workday(d, ±1)` に統一した。`business_day_*`
-系は内部で `add_business_days` を呼んでいたが、`workday` を自己完結で書き直した。
+- `core.calendar` → `core.holidays`（標準の `calendar` と被る）、`core.clock` → `core.dates`
+- 営業日の関数を Excel に寄せた。`workday(d, n)` が `WORKDAY`、`count_workdays` が `NETWORKDAYS`。
+  「次・前の営業日」専用の関数はやめて `workday(d, ±1)` にした。月の第 N 営業日は、
+  年・月と負の n を渡す案より、日付を 1 つ渡す `first_workday` / `last_workday` / `nth_workday` の
+  ほうが使いやすいので、そちらにした
+- 7 章の節に出てくる関数名・モジュール名は、当時のまま残している
 
-`count_workdays`（Excel の `NETWORKDAYS(開始, 終了)` 相当）を追加。両端を含む
-営業日数を返し、`start > end` のときは負の数を返す（`is_workday` と同じ判定）。
+**自動登録にしたもの**
 
-例外ファイル `comken/exceptions/calendar.py` も、同じ理由で `holidays.py` に改名した
-（例外ファイルを 21→8 にまとめたとき）。
+- SOQL レポート（`soql_reports/reports/`）と、サイト・組織クラスの一覧（`SITES`）。
+  数が増えるので手書きのタプルをやめ、ファイルを置けば登録される形にした
+  （`comken/core/discovery.py`）。`_` で始まるファイルと、`NAME` / `DOMAIN_URL` が空の
+  土台クラスは入らない
+- ブラウザの公認サイト一覧は今まで空だったので、`ams` / `ouju` / NTT / Salesforce の組織クラスが
+  名前の衝突検査の対象になった。プロジェクト側で同じ `NAME` のクラスを作ると起動時にエラーになる
 
-7 章の節に出てくる `comken.core.calendar` / `non_business_days_*` / `clock` は、
-その判断をした当時の名前のまま残している。
+**やらなかったこと**
 
-### `comken/constants.py` を廃止した（2026-09-25）
-
-小さな公開定数を 1 ファイルにまとめる `comken/constants.py` を廃止した。
-
-- `Color`（セルの背景色）は `comken.toolbox.excel` に移し、
-  `from comken.toolbox.excel import Color` で取る
-- `FileFormat`（`Workbook.SaveAs` の保存形式）は
-  `comken.toolbox.windows.excel_com` に移し、
-  `from comken.toolbox.windows import FileFormat` で取る
-- `Encoding`（CSV の `encoding` 引数の値）は廃止し、
-  `"cp932"` / `"utf-8-sig"` / `"utf-8"` などの **Python の codec 名を文字列で渡す**
-  形に合わせた。`CP932` / `sjis` / `utf8-sig` などの表記ゆれは
-  `comken.core.text.normalize_encoding` が吸収して正規名（`cp932` / `utf-8-sig`）
-  にそろえる。CSV の `encoding=` を **省略すると自動判定**になる
-- README の `SortBy` は `comken.constants` に存在しない誤記だったので削除した
-- `tests/test_layers.py` から `constants` 層（`LAYERS["constants"] = 0`）を削除
-
-### `core/data.py` を廃止した（2026-09-25）
-
-雑多な入れ物だった `comken/core/data.py` を役目ごとに 3 ファイルへ分割した。
-
-- **行の差分**（`diff_row` / `diff_rows` / `RowChange` / `DiffResult`）→ `comken/core/diff.py`（新規）
-- **Excel の列記号と列番号の変換**（`col_to_num` / `column_number`）→
-  `comken/core/columns.py`（新規）。Excel からも CSV からも使える場所として core に置いた
-- **`is_true_word`** → `comken/core/text.py` の末尾へ追記（既存の文字列正規化と同じファイル）
-- `comken/core/data.py` は削除。`comken.core.data` は import できなくなった
-  （別名・re-export は持たない）
-- `comken/core/__init__.py` のファサード再 export（`DiffResult` / `RowChange` /
-  `diff_row` / `diff_rows`）は import 元を `comken.core.diff` へ付け替えただけ。
-  公開名は変わっていない
-- `toolbox/excel/sheet.py` の列記号→列番号の変換も `col_to_num` にそろえた
-  （列番号→列記号は、core に同等の関数が無いので openpyxl の `get_column_letter` のまま）
-
-### `DateFileFinder` を `find()` / `find_all()` に整理した（2026-09-25）
-
-`DateFileFinder.prefix()`（日付書式を解釈する完全一致）と
-`DateFileFinder.dated()`（フォルダ内全件を日付降順）の **2 メソッドを
-廃止**し、`find()` / `find_all()` の **2 メソッド**に整理した。
-
-`prefix()` は「``name`` に ``{:%Y-%m-%d}`` を埋めた完全一致」を探していたが、
-
-- 引数の ``name`` を **文字列のフォーマット** と **一致判定** の両方に使う二重の責務が
-  初学者に読み解きにくく、実装側にも ``name.format(...)`` と ``Path.name == ...`` の
-  二段構えが必要
-- 一致判定が「完全一致」なので、本体に `売上` を含んで日付が後ろに付く運用
-  （`売上_20260711.xlsx` を `売上.xlsx` で見つけたい）が表現できない
-
-を解消するため、判定を **「同じ拡張子（大文字小文字は区別しない）で、
-`name` の拡張子を除いた本体部分がファイル名に **含まれている**（部分一致）」**
-に統一した。日付は `dates_in_name` で取り出し `for_date` が含まれていれば対象。
-`for_date` 省略時は今日。`find_all()` は `for_date` を見ず、日付を含む全件を
-新しい日付順で返す。旧 `prefix()` の `required=False`（無ければ `None`）相当は
-**廃止**した（戻り値が `Path` 固定になった）。`try / except FileNotFoundError`
-で「見つからないとき何もしない」を表現できる。
-
-同時に `copy_to_local_if_large` を `comken.core.files` の **公開窓口
-（`__all__`）から外した**。利用者は `local_copy` を使う前提で、この関数は
-Excel / ExcelCOMHandler 側の自動コピールーチンだけが直接 `import` する
-内部関数。利用者が呼ぶことを想定しない内部関数を `__all__` に並べると、
-「`from comken.core.files import X` で何でも取れる」という誤解を招くため。
-`comken.core.files.ops` からの `import` に付け替えるのは同パッケージ内
-（`workbook.py` / `excel_com.py`）だけの影響。
-
-### サイト・組織クラスを自動登録にした（2026-09-25）
-
-`comken.toolbox.salesforce.sites`・`comken.toolbox.browser.sites`・
-`comken.toolbox.browser.sites.salesforce` の 3 つの `SITES` を手書きのタプルから、
-**`comken.core.discovery.find_subclasses()` による自動収集**へ切り替えた。
-`pkgutil.walk_packages()` でサブパッケージも再帰的にたどる。**ファイル・フォルダ名
-のどこかの階層が `_` で始まるものは登録されない**（雛形置き場の慣例を維持）。
-**土台の基底クラス（`NAME` または `DOMAIN_URL` を空のままにしたクラス）は
-`include` フィルタで除外される**。
-
-- 共通関数を `comken/core/discovery.py` に置いた（`comken.core.__init__` の
-  ファサードには入れない、`toolbox`・`services` からの内部用）
-- `soql_reports/_registry.py` も同関数を使う形にリファクタ。**外から見た挙動と
-  エラーメッセージは変えていない**（`KEY` の空・重複の検査は `_registry.py`
-  に残した）
-- `browser/sites/` の `SITES` は今まで空だったが、NTT を含む全公認サイト
-  （AMS / NTTEast / NTTWest / Ouju / Solution / SolutionSandbox）が
-  `_check_not_in_library()` の検査対象になった。**プロジェクト側で同じ `NAME` の
-  サイトクラスを作ると、起動時に `BrowserError` になる**（挙動の変更）
-- 組織クラスの土台 `SalesforceReportBrowser` は `NAME` を持つが、公認サイトには入れない。
-  入れると、`NAME` を書かずに継承したプロジェクト側のクラスが土台の `NAME` と衝突するため
-- 順序はモジュール完全名の昇順（決定的）。CLI が `SITES.index(...) + 1` の
-  番号を見せるので、`salesforce/sites` は `Solution → SolutionSandbox` の順を
-  維持する
-- 既存の「`SITES` タプルにクラスを追加する」「昇格の手順 3」「NTT は SITES に
-  含めない」は廃止。`docs/CONVENTIONS.md` と `docs/機能/browser.md` を
-  「ファイルを置けば自動で登録される」に書き換えた
-
-### Salesforce Bulk API 2.0 のコードを削除した（2026-09-25）
-
-`bulk_query` / `bulk_ingest`（約 600 行）を、**一度も使っていない**ため削除した（YAGNI）。
-書き込み系は Salesforce 公式の Data Loader に任せる方針（上の「読み取りが主用途」）で、
-レポート取得は REST とブラウザで足りている。Bulk 専用だった `request_csv` / `request_upload_csv` もあわせて削除した。
-必要になったときは、Git の履歴（このコミットの直前）から戻せる。
-
-### Salesforce Data Loader の CLI 呼び出しを削除した（2026-09-26）
-
-`comken.toolbox.salesforce.dataloader.DataLoaderCLI` /
-`DataLoaderResult` と例外 `DataLoaderError`（`comken.exceptions.web`）、
-`tests/test_dataloader.py`、`docs/機能/dataloader.md`、および README と
-テンプレート ERRORS.md の関連記述を削除した。**社内で使っていない**ため
-（YAGNI）。Salesforce の **読み取り側（レポート / SOQL / 認証 / 組織クラス）
-は何も削っていない**。
-
-### ブラウザの非同期実行を削除した（2026-09-25）
-
-`Browsers.run_task` / `Browsers.parallel` / `BackgroundTask`（`management/tasks.py`）を
-削除した。初学者に分かりにくく、社内利用も無かったため。`BrowserSession` の
-スレッド間排他ロック（`_lock` / `_holder_name`）も同理由で外した。再入を
-している箇所は現状ないため、RLock を残す必要はなかった。
-書き方の基本は「書いた順に上から動く（同期）」のままで、読み込みの待ち時間を
-重ねたいときは引き続き `session.load_many()` を使う。
-
-### `Browsers` クラスを削除した（2026-09-25）
-
-`comken.toolbox.browser.Browsers`（`management/browsers.py`、約 350 行）を削除した。
-残った役目は「複数サイトを 1 つの with でまとめて閉じる」「同名セッションの
-重複検査」「名前で取り出す」の 3 つだけだが、**個別に `with` を並べる**
-（`with Kintai() as kintai, Keiri() as keiri:`）だけで同じことができるため。
-
-- **複数サイト**: `with A() as a, B() as b:` で並んで書く（`Browsers.launch()` の
-  連鎖は要らなくなった）
-- **名前で取り出す**: 変数に入れないなら要らない。関数へ渡したいなら `a.session`
-  をそのまま渡す
-- **同名セッションの重複**はモジュール全体の `_ACTIVE_SESSION_NAMES` で
-  検査する（`__enter__` で成功後に登録、`__exit__` / `close()` で必ず解除）。
-  `SiteBase` だけが登録・解除の入口なので、整合性のリスクが無い
-- 同じサイトを 2 アカウントで開くときは `Kintai(name="kintai_a")` のように
-  `name=` でセッション名を分ける。`download_dir` / `profile_dir` も自動で分かれる
-
-失敗が怖いのは「`Browsers` を使い慣れた人が読み返すと書き方が変わった」と
-感じる点だが、`with` を並べる書き方の方が短く、概念も1つ少ない（同時実行
-を管理する箱が消えた）。API を 1 段挟むと壊れる箇所が増える（名前引き渡し・
-`__exit__` の分担・所有権の記録）のと同等に、**API を 1 段減らすと壊れる
-箇所も減る**、という判断。
-
-### `Sheet` から使われていない書式・構造系13メソッドを削除した（2026-09-26）
-
-`comken.toolbox.excel.sheet.Sheet` から、社内で利用が無い書式・構造系メソッド
-13 個（`set_border` / `merge_cells` / `unmerge_cells` / `set_row_height` /
-`set_column_width` / `hide_row` / `show_row` / `hide_column` / `show_column` /
-`insert_row` / `delete_row` / `insert_column` / `delete_column`）を削除した。
-**Excel の見た目・構造の調整は VBA、複数ファイルにまたがる処理は Python**、
-という責任区分に合わせた（VBA 側で持たせる方が保守しやすい操作を
-Python 側に持ち込んでいなかったため）。
-
-`set_background` / `format` / `freeze_panes` の 3 メソッドは残した。
-社内でレポート雛形作成の基本として使われている可能性があるため。
-
-### `Excel` の数式計算結果の読み取りを `computed.py` に分割した（2026-09-26）
-
-`comken.toolbox.excel.workbook.Excel` から、数式計算結果の読み取り専用メソッド群
-（`_read_computed_rows` / `_open_stream_workbook` / `_cached_rows` /
-`_cached_rows_from_memory` / `_cached_rows_from_stream` / `_collect_cached_rows` /
-`_mark_uncalculated_formulas` / `_cached_range`）を、新ファイル
-`comken/toolbox/excel/computed.py` の `ComputedValueReader` へコンポジションで
-移した。挙動は1バイトも変えず、`self.X` を `self._excel.X` に読み替えるだけの
-移動。状態（作業ファイル・ストリーム Workbook キャッシュなど）は引き続き
-`Excel` 側に保持する。`workbook.py` が 1 ファイルで 1,349 行になり、読む場所を
-探しにくかったため。`engine="com"` の分岐は、Excel の呼び出しを 1 つにする設計として残した。
+- `import comken` の時点でログを設定する案。root に handler があると `basicConfig` が黙って
+  効かなくなり、社内基盤のログ設定とも衝突する
+- Excel の列・行を見出しで指定して色を付ける API。上の責任区分で VBA 側の仕事とした
