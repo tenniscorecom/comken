@@ -20,7 +20,7 @@
 形式変更は生成ツールだけが対応すればよい。
 
 **年 1 回の手動更新**（開発機で内閣府から取得 →
-``python -m comken.core.holidays.build`` を実行 → ``company_calendar.csv``
+``python -m comken holidays`` を実行 → ``company_calendar.csv``
 をコミット）で配布する。自動ダウンロード機能は無い。
 
 HOLIDAYS_CSV_PATH           会社用カレンダーCSV のパス（git 管理下の正本）

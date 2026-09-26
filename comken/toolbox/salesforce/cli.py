@@ -6,7 +6,7 @@ r"""comken/toolbox/salesforce/cli.py — 接続と資格情報ローテーショ
     python -m comken sf rotate --app-id 1CE... --stage-only
 
 **このモジュールは `comken/__main__.py` から呼ばれる。** `main(argv)` を直接
-呼ぶすと（テスト等）動くが、`python -m comken.toolbox.salesforce` は
+呼ぶと（テスト等）動くが、`python -m comken.toolbox.salesforce` は
 もう動かない（入口は `python -m comken` に集約）。
 
 つなぎ先は組織クラス（`sites/`）の DOMAIN_URL と CREDENTIAL_PREFIX。

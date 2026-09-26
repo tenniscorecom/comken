@@ -6,16 +6,18 @@
 `comken` が作って確認を促す作り）。
 
 **このファイルはパッケージに同梱されている（配布される）。** ``comken init``
-（``comken/__main__.py`` から）はここを呼ぶ。リポジトリ直下の ``tools/`` に
-入っている開発用スクリプト（``export_for_chat.py``）とは役割が違うので、
-混同しないこと。
+（``comken/__main__.py`` から）は ``create()`` を直接呼ぶ。CLI の入口は
+``python -m comken init`` 1か所に集約されているので、このモジュールを
+直接 ``python -m`` で起動する経路は無い。
+
+リポジトリ直下の ``tools/`` に入っている開発用スクリプト（``export_for_chat.py``）
+とは役割が違うので、混同しないこと。
 
 使い方:
     python -m comken init 受注取込
     python -m comken init 受注取込 --into "C:\\作業\\tools"
 """
 
-import argparse
 import logging
 import shutil
 from pathlib import Path
@@ -101,48 +103,6 @@ def create(project_name: str, into: Path, python_library: Path = IMPORT_ROOT) ->
     return target
 
 
-def main() -> None:
-    """``python -m comken.tools.new_project <名前>`` 形式で直接呼ばれたときの本体。
-
-    ``python -m comken init ...`` から呼ぶ形が標準。**テストや動作確認用**
-    に残してある（``if __name__ == "__main__"`` ブロックから呼ばれる）。
-    """
-    parser = argparse.ArgumentParser(description="新しいプロジェクトのひな形を作る")
-    parser.add_argument("project_name", help="プロジェクト名（フォルダ名になる）")
-    parser.add_argument(
-        "--into",
-        type=Path,
-        default=Path.cwd(),
-        help="作成先のフォルダ（省略すると今いるフォルダ）",
-    )
-    parser.add_argument(
-        "--python-library",
-        type=Path,
-        default=IMPORT_ROOT,
-        help="PYTHONPATH へ入れる場所（comken パッケージの親）",
-    )
-    args = parser.parse_args()
-
-    # 非エンジニアがダブルクリックで使うため、想定内の失敗は traceback を見せない。
-    # OSError で受けるのは、使えない文字（: * ?）をフォルダ名に入れた場合も拾うため。
-    try:
-        target = create(args.project_name, args.into, args.python_library)
-    except OSError as e:
-        print(f"[!] {e}")
-        print(r'[!] フォルダ名に使えない文字（\ / : * ? " < > |）が無いか確認してください。')
-        raise SystemExit(1) from None
-
-    print(f"作成しました: {target}")
-    print(f"comken の場所: {args.python_library}")
-    print("  （実行.bat と .vscode/settings.json に書きました。違う場合は2つとも直してください）")
-    print("")
-    print("次にやること:")
-    print("  1. 実行.bat を1度動かすか python main.py を実行すると config.ini が作られる")
-    print("     ので、値を書き換える")
-    print("  2. src/run.py の run() に処理を書く")
-    print("  3. docs/使い方.md・docs/仕様書.md の（ここを書く）を埋める")
-
-
 def _encoding_of(path: Path) -> str:
     """そのファイルの文字コード。bat は cmd.exe に合わせて CP932。"""
     return "cp932" if path.suffix.lower() == ".bat" else "utf-8"
@@ -198,7 +158,3 @@ def _strip_template_notes(readme: Path, project_name: str) -> None:
     else:
         logger.debug("README にひな形向けの節が見つかりません: %s", readme)
     readme.write_text(head.replace(PLACEHOLDER_NAME, project_name), encoding="utf-8")
-
-
-if __name__ == "__main__":
-    main()

@@ -634,6 +634,9 @@ master に何をコミットしても本番には流れない。**
   汎用の並べ替えは公開せず、`changes()` の中だけで使う
 - `workbook.py`（1,349 行）から、数式の計算結果を読む処理を `computed.py` に分けた（挙動は同じ）。
   `engine="com"` の分岐は、Excel の呼び出しを 1 つにする設計として残した
+- CLI の入口を `python -m comken` に統一した。カレンダーの生成は
+  `python -m comken holidays`（旧 `python -m comken.core.holidays.build`）。
+  `tools/new_project.py` の直接実行は `init` と重複していたので消した
 
 **名前を変えたもの**
 

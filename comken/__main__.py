@@ -9,9 +9,11 @@
     python -m comken sf report --report-id 00O...    レポートを実行
     python -m comken cred import 認証情報.json        認証情報を取り込み
     python -m comken sfdl check                      Salesforce レポート管理表の検査
+    python -m comken holidays                        会社用カレンダー CSV を作り直す（年1回）
 
-``sf`` / ``cred`` / ``sfdl`` は ``salesforce`` / ``credentials`` /
-``salesforce-downloader`` の別名（``argparse`` の ``add_parser(..., aliases=[...])``）。
+``sf`` / ``cred`` / ``sfdl`` / ``holidays`` は ``salesforce`` / ``credentials`` /
+``salesforce-downloader`` / ``holidays`` の別名
+（``argparse`` の ``add_parser(..., aliases=[...])``）。
 
 CLI の入口はこの ``python -m comken`` 1か所に集約済み。旧来の
 ``python -m comken.toolbox.salesforce ...`` のようなサブモジュール直接呼び出しは
@@ -127,6 +129,21 @@ def _build_parser() -> argparse.ArgumentParser:
         run=_run_salesforce_downloader, _prog="python -m comken sfdl"
     )
 
+    # holidays（会社用カレンダー CSV の再生成）
+    holidays = subparsers.add_parser(
+        "holidays",
+        aliases=["holiday"],
+        help="会社用カレンダー CSV を内閣府 CSV と会社休日から作り直す（年1回）",
+        add_help=False,
+    )
+    holidays.add_argument(
+        "--path",
+        type=Path,
+        default=None,
+        help=("書き出し先（省略時は comken/core/holidays/data/company_calendar.csv）"),
+    )
+    holidays.set_defaults(run=_run_holidays, _prog="python -m comken holidays")
+
     return parser
 
 
@@ -200,6 +217,21 @@ def _run_salesforce_downloader(_args: argparse.Namespace, remaining: list[str]) 
     from comken.services.salesforce_downloader.cli import main as sfdl_main
 
     return sfdl_main(remaining)
+
+
+def _run_holidays(args: argparse.Namespace, _remaining: list[str]) -> int:
+    """``python -m comken holidays`` / ``python -m comken holiday`` の本体。
+
+    ``comken/core/holidays/build.py`` の ``main()`` へ委譲する。import を関数内に
+    置くのは ``_run_salesforce`` と同じ意図（依存の有無で ``python -m comken`` 全体が
+    起動できなくなるのを避けるため）。
+    """
+    from comken.core.holidays.build import main as holidays_main
+
+    # ``--path`` が省略されたときは build.py 側の既定（git 管理下の正本）に
+    # 委ねる。None を渡せば既定がそのまま使われる
+    argv = ["--path", str(args.path)] if args.path is not None else []
+    return holidays_main(argv)
 
 
 if __name__ == "__main__":

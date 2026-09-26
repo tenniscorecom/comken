@@ -16,14 +16,14 @@
 
 1. 開発機で内閣府から ``syukujitsu.csv`` を取得する
 2. ``comken/core/holidays/data/syukujitsu.csv`` をダウンロードしたファイルで上書きする
-3. ``python -m comken.core.holidays.build`` を実行して
+3. ``python -m comken holidays`` を実行して
    ``comken/core/holidays/data/company_calendar.csv`` を再生成する
 4. ``syukujitsu.csv`` と ``company_calendar.csv`` の更新をまとめてコミットする
 
 **会社休日を変えるとき**（年末年始休暇の日付を変える等）:
 
 1. このファイル先頭の ``COMPANY_HOLIDAYS`` / ``COMPANY_HOLIDAYS_EXTRA`` を直す
-2. ``python -m comken.core.holidays.build`` を実行する
+2. ``python -m comken holidays`` を実行する
 3. ``company_calendar.csv`` の更新をコミットする
 
 ``--path`` で任意の書き出し先を指定できる（既定は
@@ -31,8 +31,11 @@
 
 ::
 
-    python -m comken.core.holidays.build
-    python -m comken.core.holidays.build --path tmp/company_calendar.csv
+    python -m comken holidays
+    python -m comken holidays --path tmp/company_calendar.csv
+
+CLI の入口は ``comken/__main__.py`` 1か所に集約されている。
+``main(argv)`` を直接呼べばテストや動作確認用に動かせる。
 """
 
 from __future__ import annotations
@@ -51,7 +54,7 @@ logger = logging.getLogger(__name__)
 # 毎年繰り返す会社の休業日。**年は書かない**（毎年その月日が休みになる）。
 # 休みを増やすときは (月, 日) を書き足すだけでよい。年またぎの年末年始も
 # 月日で書けばそのまま毎年適用される。
-# ここを変えたら ``python -m comken.core.holidays.build`` を実行して
+# ここを変えたら ``python -m comken holidays`` を実行して
 # ``comken/core/holidays/data/company_calendar.csv`` を更新する。
 COMPANY_HOLIDAYS: dict[str, tuple[tuple[int, int], ...]] = {
     "年末年始休暇": ((12, 29), (12, 30), (12, 31), (1, 1), (1, 2), (1, 3)),
@@ -213,9 +216,15 @@ def write_company_calendar_csv(
     return path
 
 
-def main() -> None:
-    """内閣府 CSV + 会社休日ルール → ``company_calendar.csv`` を生成する。"""
+def main(argv: list[str] | None = None) -> int:
+    """内閣府 CSV + 会社休日ルール → ``company_calendar.csv`` を生成する。
+
+    CLI の入口は ``comken/__main__.py``。``main(argv)`` を直接呼べばテストや
+    動作確認用に動かせる（直接 ``python -m`` でこのモジュールを起動する入口は
+    もう無い）。
+    """
     parser = argparse.ArgumentParser(
+        prog="python -m comken holidays",
         description="内閣府CSVと会社休日ルールを合成して company_calendar.csv を生成する",
     )
     parser.add_argument(
@@ -224,18 +233,20 @@ def main() -> None:
         default=COMPANY_HOLIDAYS_CSV_PATH,
         help="書き出し先（省略時は comken/core/holidays/data/company_calendar.csv）",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+
+    # ``logging.basicConfig`` を import 時点で走らせると、import しただけで root
+    # に handler が付いてしまう。root に既に handler がいる環境（社内基盤の
+    # ログ設定が動いている等）では basicConfig が黙って無効化されるが、
+    # それでも import 時の副作用は避けたいので、main() の中で root に handler
+    # が無いときだけ INFO で設定する。
+    if not logging.getLogger().handlers:
+        logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
     rows = build_rows()
     written = write_company_calendar_csv(rows, path=args.path)
     logger.info("書き出し完了: %s (%d 件)", written, len(rows))
-
-
-if __name__ == "__main__":
-    # モジュールとして import されたときに勝手にログ設定が走るのを避けるため、
-    # ``__main__`` として実行されたときだけ basicConfig する。
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
-    main()
+    return 0
 
 
 # ── HolidayError の文言ヘルパー ─────────────────────────────────────────

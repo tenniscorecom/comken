@@ -941,7 +941,7 @@ def is_holiday(target: _dt.date) -> bool:
 
 ``company_calendar.csv`` の収録範囲（内閣府 CSV の最初の年〜最後の年）
 外の日付は国民の祝日も会社休日も付かない（常に ``False``）。範囲を延ばす
-には内閣府 CSV を入れ替えて ``python -m comken.core.holidays.build`` で
+には内閣府 CSV を入れ替えて ``python -m comken holidays`` で
 再生成する。
 
 ### `is_workday`
@@ -2144,7 +2144,7 @@ def is_holiday(target: _dt.date) -> bool:
 
 ``company_calendar.csv`` の収録範囲（内閣府 CSV の最初の年〜最後の年）
 外の日付は国民の祝日も会社休日も付かない（常に ``False``）。範囲を延ばす
-には内閣府 CSV を入れ替えて ``python -m comken.core.holidays.build`` で
+には内閣府 CSV を入れ替えて ``python -m comken holidays`` で
 再生成する。
 
 ### `is_workday`

@@ -6,7 +6,7 @@
     python -m comken cred delete site_a client_id   1件削除する
 
 **このモジュールは `comken/__main__.py` から呼ばれる。** `main(argv)` を直接
-呼ぶすと（テスト等）動くが、`python -m comken.toolbox.credentials` は
+呼ぶと（テスト等）動くが、`python -m comken.toolbox.credentials` は
 もう動かない（入口は `python -m comken` に集約）。
 
 **登録の入口は2つある。** 1台で登録するときは `gui`（平文のファイルを作らずに済む）。

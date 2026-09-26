@@ -5,6 +5,9 @@
 また、生成ツールの ``build_rows()`` の結果が追跡している
 ``comken/core/holidays/data/company_calendar.csv`` と行単位で一致することを
 確認する（同期テスト）。
+
+CLI 入口は ``comken.__main__``。``python -m comken holidays`` のテストは
+``tests/test_main_cli.py`` に別ファイルで置く。
 """
 
 from __future__ import annotations
@@ -174,7 +177,7 @@ class TestCsvSynchronization:
     ``build_rows()`` の結果が ``comken/core/holidays/data/company_calendar.csv``
     （git 管理下）と行単位で一致していることを確認する。CSV のフォーマット
     変更・内閣府 CSV 更新・会社休日ルール変更後に
-    ``python -m comken.core.holidays.build`` を再実行するのを忘れた場合に落ちる。
+    ``python -m comken holidays`` を再実行するのを忘れた場合に落ちる。
     """
 
     def test_build_rows_matches_bundled_company_calendar_csv(self) -> None:
@@ -182,7 +185,7 @@ class TestCsvSynchronization:
         bundled = build_holidays.COMPANY_HOLIDAYS_CSV_PATH
         assert bundled.exists(), (
             "data/company_calendar.csv がまだ生成されていません。"
-            " `python -m comken.core.holidays.build` を実行してください。"
+            " `python -m comken holidays` を実行してください。"
         )
 
         with bundled.open(encoding="utf-8-sig", newline="") as file:
@@ -192,14 +195,14 @@ class TestCsvSynchronization:
         bundled_header, bundled_data = bundled_rows[0], bundled_rows[1:]
         assert bundled_header == ["date", "name"], (
             "data/company_calendar.csv のヘッダーが date, name ではありません。"
-            " `python -m comken.core.holidays.build` を実行して company_calendar.csv を"
+            " `python -m comken holidays` を実行して company_calendar.csv を"
             " 更新しコミットしてください。"
         )
 
         built = build_holidays.build_rows()
         assert len(bundled_data) == len(built), (
             "data/company_calendar.csv の行数が build_rows() と一致しません。"
-            " `python -m comken.core.holidays.build` を実行して company_calendar.csv を"
+            " `python -m comken holidays` を実行して company_calendar.csv を"
             " 更新しコミットしてください。"
         )
         for line_number, ((date_, name), bundled_row) in enumerate(
@@ -208,6 +211,6 @@ class TestCsvSynchronization:
             assert bundled_row == [date_.isoformat(), name], (
                 f"{line_number} 行目が一致しません: bundled={bundled_row!r}, "
                 f"build_rows={[date_.isoformat(), name]!r}。"
-                " `python -m comken.core.holidays.build` を実行して company_calendar.csv を"
+                " `python -m comken holidays` を実行して company_calendar.csv を"
                 " 更新しコミットしてください。"
             )

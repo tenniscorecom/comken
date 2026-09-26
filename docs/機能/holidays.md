@@ -86,7 +86,7 @@ COMPANY_HOLIDAYS_EXTRA = ()  # その年だけの臨時休業。date(2026, 12, 2
 - **その年だけ臨時の休み** を足したいときは `COMPANY_HOLIDAYS_EXTRA` に足す。
   古くなった年の行は消してよい（消しても過去の判定が変わるだけで、運用に
   影響しない）
-- 編集したら `python -m comken.core.holidays.build` を実行して
+- 編集したら `python -m comken holidays` を実行して
   `company_calendar.csv` を更新しコミットする
 
 ## 生成物（`company_calendar.csv`）
@@ -145,7 +145,7 @@ End Function
    （URL: <https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv>）
 2. `comken/core/holidays/data/syukujitsu.csv` をダウンロードしたファイルで
    上書きする（文字コード CP932 のまま。中身を変換しない）
-3. `python -m comken.core.holidays.build` を実行して
+3. `python -m comken holidays` を実行して
    `comken/core/holidays/data/company_calendar.csv` を再生成する
 4. `syukujitsu.csv` と `company_calendar.csv` をまとめてコミットし、push する
 5. リリースタグを打つ（共有サーバーのチェックアウトは**リリース済みのタグだけ**に保つ運用のため。`docs/ARCHITECTURE.md` の「パッケージ構成と配置・運用」を参照）
@@ -157,7 +157,7 @@ End Function
 
 1. `comken/core/holidays/build.py` 冒頭の `COMPANY_HOLIDAYS` /
    `COMPANY_HOLIDAYS_EXTRA` を直す
-2. `python -m comken.core.holidays.build` を実行する
+2. `python -m comken holidays` を実行する
 3. `company_calendar.csv` の更新をコミットする
 
 ## 範囲外の扱い
@@ -285,5 +285,5 @@ holidays.workday(date(2026, 8, 20), 1)
 - 内閣府: <https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv>
 - comken 設計書: `docs/ARCHITECTURE.md`
 - comken 例外階層: `comken/exceptions/__init__.py`
-- 生成ツール: `comken/core/holidays/build.py`（`python -m comken.core.holidays.build`）
+- 生成ツール: `comken/core/holidays/build.py`（`python -m comken holidays`）
 - 会社休日ルール: `comken/core/holidays/build.py` 冒頭の `COMPANY_HOLIDAYS`
