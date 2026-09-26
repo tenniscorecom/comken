@@ -73,7 +73,6 @@ max-complexity = 10
 "comken/toolbox/salesforce/direct/cli.py" = ["T20"]
 "comken/services/salesforce_downloader/cli.py" = ["T20"]
 "comken/tools/new_project.py" = ["T20"]
-"tools/check_v2_migration.py" = ["T20"]
 # examples/ は comken を使う側のサンプルコードで、内部が独自の小さなパッケージ
 # 構成を持つ。comken 本体の規約で縛ると「サンプルを comken パッケージとして動かす」
 # 前提を押し付けることになるため、ここでは TID（相対 import 禁止）のみ外す。
