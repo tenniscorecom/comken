@@ -5,6 +5,9 @@ Reports and Dashboards REST APIの2000行上限を超えるレポート（マト
 SOQLに書き換えられない形式）向けの最終手段。画面のエクスポート機能
 （``?export=1&xf=csv``）を直接叩く。
 
+CSV 出力には、データ末尾に空行を挟んで著作権・機密情報表示などのフッターが付く。
+``export_reports()`` は保存前にこのフッター（最初の空行以降）を取り除く。
+
 ログインは ``go_login()`` + ``wait_for_manual_login()``（人が手動で入力）、または
 ``login_with_credentials()``（DPAPIに保存したID/パスワードを自動入力、MFA等は
 引き続き人が対応）のどちらか。接続アプリの登録・OAuth初回認可を挟まないため、
@@ -33,6 +36,7 @@ from urllib.parse import urlsplit
 
 import requests
 
+from comken.core.text import normalize_encoding
 from comken.exceptions import BrowserError, SalesforceError
 from comken.toolbox.browser import SiteBase
 from comken.toolbox.browser.sites.salesforce.pages.login_page import LoginPage
@@ -214,6 +218,11 @@ class SalesforceReportBrowser(SiteBase):
             (report_id, 保存したファイルのパス) のタプル。
             **完了した順**に返るため、``reports`` の順序とは限らない。
 
+        CSV の場合、Salesforce の画面エクスポートはデータ末尾に空行を挟んだ
+        フッター（著作権・機密情報表示など）を付けるため、**保存前に最初の
+        空行以降を取り除いてから保存する**。``export_format`` が ``"csv"`` 以外の
+        ときは中身を変えない。
+
         Raises:
             BrowserError: 未起動の場合。
             SalesforceError: URLからレポートIDを取り出せない場合、または
@@ -250,6 +259,8 @@ class SalesforceReportBrowser(SiteBase):
                 for future in as_completed(futures):
                     destination = futures[future]
                     report_id, content = future.result()
+                    if export_format == "csv":
+                        content = _strip_report_footer(content, encoding)
                     destination.parent.mkdir(parents=True, exist_ok=True)
                     destination.write_bytes(content)
                     done += 1
@@ -362,3 +373,118 @@ def _export_via_http(
         len(response.content),
     )
     return report_id, response.content
+
+
+def _strip_report_footer(content: bytes, encoding: str) -> bytes:
+    """Salesforce の画面CSV書き出しの末尾フッター（最初の空行以降）を取り除く。
+
+    Salesforce の ``?export=1&xf=csv`` の出力は、データ末尾に空行を挟んで
+    著作権表示・機密情報表示・作成者と日時・会社名などの1列だけの行を付ける。
+    comken の ``CSV`` でそのまま読むとフッター行の列数が見出しと合わずに
+    ``CSVError`` で止まるため、保存前にここで取り除く。
+
+    Excel 形式（``export_format="xls"`` など）は中身を変更しないので、この関数は
+    CSV のときだけ ``export_reports()`` から呼ばれる。
+
+    ルール:
+
+    - データ末尾の「**引用符の外にある最初の空行**」から後ろを全部削る
+      （``""`` は引用符の中の ``"`` 1文字として扱う）
+    - 空行 = 空白以外の文字が無い行。``\\r\\n`` / ``\\n`` どちらでも扱う
+    - ヘッダを含めて1行以上のデータ行を見ていない場合は空行を
+      フッター扱いしない（ヘッダ無しCSVをそのまま通す）
+    - 残す部分は1バイトも変えない。``normalize_encoding`` で codec 名に
+      そろえてから decode し、同じ codec で encode する
+    - decode に失敗した場合は **何も削らずそのまま返す**（warning を出して取得は止めない）
+
+    Args:
+        content: HTTP 応答の生バイト列。
+        encoding: ``export_reports()`` の ``encoding`` 引数の値（既定 ``"Shift_JIS"``）。
+
+    Returns:
+        フッターを取り除いたバイト列。フッターが無い、または decode に失敗した
+        場合は ``content`` をそのまま返す（呼び出し側の ``write_bytes`` が保存する）。
+    """
+    try:
+        codec = normalize_encoding(encoding)
+    except ValueError:
+        logger.warning(
+            "Salesforce レポートCSVのフッターを取り除くために encoding を正規化できません: %r。"
+            " 元のまま保存します。",
+            encoding,
+        )
+        return content
+
+    try:
+        text = content.decode(codec)
+    except (UnicodeDecodeError, LookupError) as error:
+        logger.warning(
+            "Salesforce レポートCSVのデコードに失敗したためフッターを取り除きません "
+            "(encoding=%r)。元のまま保存します: %s",
+            codec,
+            error,
+        )
+        return content
+
+    cut_at = _find_footer_start(text)
+    if cut_at is None:
+        return content
+
+    first_line = text.split("\n", 1)[0] if "\n" in text else text
+    removed_text = text[cut_at:]
+    removed_lines = removed_text.count("\n")
+    stripped_bytes = text[:cut_at].encode(codec)
+    logger.debug(
+        "Salesforce レポートCSVのフッターを取り除きました: 先頭行=%r 削除行数=%d",
+        first_line,
+        removed_lines,
+    )
+    return stripped_bytes
+
+
+def _find_footer_start(text: str) -> int | None:
+    """CSV の本文中、引用符の外側で空白のみの最初の行の開始位置（文字インデックス）を返す。
+
+    「データ行を1行以上見た後にある最初の空行」を探す。空行は無視できる
+    引用符の外にある空白のみの行とする。``""`` は引用符の中の ``"`` 1文字として
+    扱い、引用符の中にある改行や空行は区切りと見なさない。
+
+    ヘッダを含めて1行以上のデータ行を見ていない場合は ``None`` を返す
+    （ヘッダ無しCSVを空のまま通す）。
+
+    Args:
+        text: CSV のデコード済み文字列。
+
+    Returns:
+        フッター開始位置の文字インデックス。見つからなければ ``None``。
+    """
+    in_quotes = False
+    line_start = 0
+    seen_non_blank_line = False
+    n = len(text)
+    pos = 0
+    while pos < n:
+        c = text[pos]
+        if c == '"':
+            # 引用符の中の "" はリテラルの " 一文字として扱う
+            if in_quotes and pos + 1 < n and text[pos + 1] == '"':
+                pos += 2
+                continue
+            in_quotes = not in_quotes
+            pos += 1
+            continue
+        if c == "\n" and not in_quotes:
+            line = text[line_start:pos]
+            # \r\n の \r を取り除き、両端の空白を判定用に外す
+            line_content = line.rstrip("\r").strip()
+            if line_content:
+                seen_non_blank_line = True
+            elif seen_non_blank_line:
+                # 空行で、データ行を既に1行以上見ている。
+                # 後ろにもう1行以上あるなら、フッター開始とみなす。
+                rest = text[pos + 1 :]
+                if rest.strip():
+                    return line_start
+            line_start = pos + 1
+        pos += 1
+    return None

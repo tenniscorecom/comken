@@ -265,6 +265,11 @@ with site() as sf:
 > IDを一定間隔で開き直す。ドメインは今のセッションのものを使うのでIDだけ
 > 渡せばよい）を渡せる。
 
+CSV の出力には、Salesforce がデータ末尾に空行を挟んで著作権・機密情報表示などの
+フッターを付けるため、`export_reports()` は保存前にこのフッター（最初の空行以降）を
+取り除いて保存する。`comken.toolbox.csv.CSV` でそのまま読める形にしておきたい
+ための処理。Excel 形式（`export_format="xls"`）など CSV 以外のときは中身を変えない。
+
 ```python
 from comken.toolbox.browser.sites.salesforce import site_for
 

@@ -4,6 +4,7 @@
 （tests/test_browser_sites_ntt.py と同じ方針）。
 """
 
+import logging
 import threading
 import time
 from unittest.mock import MagicMock, patch
@@ -16,7 +17,9 @@ from comken.toolbox.browser.sites.salesforce.base import (
     SalesforceReportBrowser,
     _cookies_to_requests_session,
     _domain_of,
+    _find_footer_start,
     _start_keep_alive,
+    _strip_report_footer,
 )
 from comken.toolbox.browser.sites.salesforce.pages.login_page import LoginPage
 
@@ -380,3 +383,258 @@ class TestExportReportsKeepAlive:
             )
 
         driver.get.assert_any_call("https://example.my.salesforce.com/00O5g00000ABCDE9AS")
+
+
+# CSV フッター除去で使うデータ（テスト本体で .encode("cp932") する）
+_HEADER = "col1,col2"
+_DATA_LINE = "1,2"
+_FOOTER_LINES = [
+    "Copyright (c) 2024 Example Inc. All rights reserved.",
+    "機密情報 - 配布禁止",
+    "作成者: 山田 太郎 / 2024-01-01 12:00",
+    "株式会社サンプル",
+]
+
+
+def _build_csv_with_footer(
+    body: str = "\n".join([_HEADER, _DATA_LINE, _DATA_LINE]),
+    footer: list[str] | None = None,
+    line_sep: str = "\n",
+) -> bytes:
+    """Salesforce 風の本体 + 空行 + フッターを cp932 で組み立てる。"""
+    if footer is None:
+        footer = list(_FOOTER_LINES)
+    return (body + line_sep + line_sep + line_sep.join(footer) + line_sep).encode("cp932")
+
+
+def _bytes_to_path(data: bytes, suffix: str = ".csv"):
+    """テスト用: バイト列を一時ファイルに書き出して Path を返す。"""
+    import os
+    import tempfile
+    from pathlib import Path
+
+    fd, name = tempfile.mkstemp(suffix=suffix)
+    with os.fdopen(fd, "wb") as f:
+        f.write(data)
+    return Path(name)
+
+
+class TestFindFooterStart:
+    """_find_footer_start() — 引用符の外にある最初の空行（フッター開始）を見つける。"""
+
+    def test_finds_blank_line_before_footer(self):
+        text = "col1,col2\n1,2\n\nフッター"
+
+        # 「2」の直後、空白行の開始位置
+        assert _find_footer_start(text) == len("col1,col2\n1,2\n")
+
+    def test_returns_none_when_no_blank_line(self):
+        assert _find_footer_start("col1,col2\n1,2\n") is None
+
+    def test_treats_blank_line_before_data_as_not_footer(self):
+        # 先頭が空白行だけだとデータ行が無いのでフッター扱いにしない
+        assert _find_footer_start("\n\n1,2\n") is None
+
+    def test_does_not_split_quoted_field_with_embedded_blank_line(self):
+        # 値の中の \r\n\r\n は空行扱いしない（"1行目\r\n\r\n3行目" が一塊の値）
+        text = 'col1,col2\n"1行目\r\n\r\n3行目",x\n\n'
+
+        assert _find_footer_start(text) is None
+
+    def test_handles_unix_only_newlines(self):
+        assert _find_footer_start("a\nb\n\n\n") is None
+        assert _find_footer_start("a\nb\n\nc\n") == len("a\nb\n")
+
+    def test_handles_cr_lf_newlines(self):
+        text = "col1,col2\r\n1,2\r\n\r\n"
+        assert _find_footer_start(text) is None
+        text = "col1,col2\r\n1,2\r\n\r\nfooter\r\n"
+        assert _find_footer_start(text) == len("col1,col2\r\n1,2\r\n")
+
+    def test_does_not_split_double_quote_inside_quoted_field(self):
+        # "a""b" 中の "" はリテラルの " 1 文字として扱い、引用符は閉じない
+        text = '"a""b",1\n2,3\n\nfooter\n'
+        assert _find_footer_start(text) == len('"a""b",1\n2,3\n')
+
+
+class TestStripReportFooter:
+    """_strip_report_footer() — Salesforce の画面CSVが末尾に付けるフッターを取り除く。"""
+
+    def test_strips_japanese_footer_and_preserves_data_bytes(self):
+        body = _HEADER + "\n" + _DATA_LINE + "\n" + _DATA_LINE
+        content = _build_csv_with_footer(body=body)
+
+        stripped = _strip_report_footer(content, encoding="Shift_JIS")
+
+        # 取り除いた結果は元のデータ部分（+ 区切りの改行1個まで）とバイト単位で同じ
+        assert stripped == (body + "\n").encode("cp932")
+        # comken の CSV で読めてエラーにならない
+        from comken.toolbox.csv import CSV
+
+        path = _bytes_to_path(stripped)
+        with CSV(path, encoding="cp932", read_only=True) as csv:
+            table = csv.read()
+
+        assert len(table) == 2
+        assert table.columns == ["col1", "col2"]
+
+    def test_keeps_embedded_blank_line_in_quoted_value(self):
+        body = _HEADER + "\n" + '"1行目\r\n\r\n3行目",x'
+        content = (body + "\n\n" + "\n".join(_FOOTER_LINES) + "\n").encode("cp932")
+
+        stripped = _strip_report_footer(content, encoding="Shift_JIS")
+
+        # 値の中の空行は残し、フッター（空行以降）は消える
+        assert stripped == (body + "\n").encode("cp932")
+
+    def test_returns_content_unchanged_when_there_is_no_footer(self):
+        body_bytes = (_HEADER + "\n" + _DATA_LINE + "\n" + _DATA_LINE + "\n").encode("cp932")
+
+        assert _strip_report_footer(body_bytes, encoding="Shift_JIS") == body_bytes
+
+    def test_works_with_unix_only_newlines(self):
+        body = _HEADER + "\n" + _DATA_LINE + "\n" + _DATA_LINE
+        content = (body + "\n\n" + "\n".join(_FOOTER_LINES) + "\n").encode("cp932")
+
+        stripped = _strip_report_footer(content, encoding="Shift_JIS")
+
+        assert stripped == (body + "\n").encode("cp932")
+
+    def test_works_with_utf8(self):
+        body = _HEADER + "\n" + _DATA_LINE + "\n" + _DATA_LINE
+        content = (body + "\n\n" + "\n".join(_FOOTER_LINES) + "\n").encode("utf-8")
+
+        stripped = _strip_report_footer(content, encoding="UTF-8")
+
+        assert stripped == (body + "\n").encode("utf-8")
+
+    def test_preserves_cp932_only_characters_through_roundtrip(self):
+        # ① と 髙 は cp932 にはあるが標準の shift_jis には無い文字
+        body = "col1,col2\n①,髙橋\n"
+        footer = "Copyright (c) 2024 例示 / 機密情報 - 配布禁止 / 株式会社サンプル"
+        content = (body + "\n" + footer + "\n").encode("cp932")
+
+        stripped = _strip_report_footer(content, encoding="Shift_JIS")
+
+        # decode→encode の往復で残す部分のバイト列が変わらない
+        assert stripped == body.encode("cp932")
+
+    def test_logs_warning_and_returns_content_unchanged_when_decode_fails(self, caplog):
+        # cp932 として不正なバイト列を含む
+        body = _HEADER + "\n" + _DATA_LINE + "\n" + _DATA_LINE
+        footer_bytes = "バットモジデス".encode()
+        content = body.encode("cp932") + b"\n\n" + footer_bytes + b"\n"
+
+        module_logger = "comken.toolbox.browser.sites.salesforce.base"
+        with caplog.at_level(logging.WARNING, logger=module_logger):
+            stripped = _strip_report_footer(content, encoding="Shift_JIS")
+
+        # decode に失敗したのでフッターは削らずそのまま返す
+        assert stripped == content
+        assert any("デコードに失敗" in record.getMessage() for record in caplog.records)
+
+    def test_break_quote_aware_search(self):
+        """引用符判定を壊したら値の中の空行で切られてテストが落ちること。
+
+        実装が quote を無視して空行を探しているなら、quoted field の
+        埋め込み空行 ``\\n\\n`` の位置をフッター開始と誤認して本文の途中で
+        切ってしまい、結果がバイト単位で一致しなくなる。
+
+        ここではデータ行とフッター行の間に**空行を挟まない**入力を与え、
+        quoted field 内の ``\\n\\n`` が「引用符の外側の唯一の空行」に
+        見えるかどうかで挙動を確かめる。
+        """
+        body = _HEADER + "\n" + '"1行目\n\n3行目",x'
+        footer = "\n".join(_FOOTER_LINES)
+        # データ末尾とフッターの間に空行を挟まない。値の中の \n\n が
+        # 「唯一の空行候補」となり、引用符を見ない壊れた実装ならここで切られる。
+        content = (body + "\n" + footer + "\n").encode("cp932")
+
+        stripped = _strip_report_footer(content, encoding="Shift_JIS")
+
+        # 引用符の外に空行が無いので何も削らない（= バイト単位で同じ）
+        assert stripped == content
+
+    def test_break_must_actually_strip_footer(self):
+        """フッターを削らない素朴な実装なら comken の CSV が列数不一致で落ちる。
+
+        ここで扱う入力をそのまま comken の ``CSV`` に読ませると ``CSVError``
+        になる（= フッターが残っていることを確認）。同時に ``_strip_report_footer``
+        を通すと読み込める（= フッターが落ちていることを確認）。
+        """
+        from comken.exceptions import CSVError
+        from comken.toolbox.csv import CSV
+
+        body = _HEADER + "\n" + _DATA_LINE + "\n" + _DATA_LINE
+        csv_with_footer = _build_csv_with_footer(body=body)
+
+        # フッター付き CSV は comken の CSV で CSVError（列数不一致）
+        path_with = _bytes_to_path(csv_with_footer)
+        with (
+            pytest.raises(CSVError),
+            CSV(path_with, encoding="cp932", read_only=True) as csv,
+        ):
+            csv.read()
+
+        # フッター除去後は comken の CSV で 2 行として読める
+        stripped = _strip_report_footer(csv_with_footer, encoding="Shift_JIS")
+        path_without = _bytes_to_path(stripped)
+        with CSV(path_without, encoding="cp932", read_only=True) as csv:
+            table = csv.read()
+
+        assert len(table) == 2
+        assert table.columns == ["col1", "col2"]
+
+
+class TestExportReportsStripsFooter:
+    """export_reports() — CSV のとき保存前にフッターを取り除く（xls は変えない）。"""
+
+    def test_csv_destination_has_no_footer(self, monkeypatch, tmp_path):
+        _patch_browser(monkeypatch)
+        body = _HEADER + "\n" + _DATA_LINE + "\n" + _DATA_LINE
+        csv_bytes = _build_csv_with_footer(body=body)
+        http_session = MagicMock()
+        http_session.get.return_value = _csv_response(csv_bytes)
+        destination = tmp_path / "report.csv"
+
+        with (
+            SalesforceReportBrowser() as sf,
+            patch(
+                "comken.toolbox.browser.sites.salesforce.base.requests.Session",
+                return_value=http_session,
+            ),
+        ):
+            sf.session._driver.current_url = REPORT_URL_1
+            sf.session._driver.get_cookies.return_value = []
+            list(sf.export_reports({REPORT_URL_1: destination}))
+
+        # ファイルに保存された中身はデータ部分 + 区切りの改行（フッターは無い）
+        assert destination.read_bytes() == (body + "\n").encode("cp932")
+
+    def test_xls_destination_is_unchanged(self, monkeypatch, tmp_path):
+        _patch_browser(monkeypatch)
+        xls_bytes = b"not-a-real-xls-but-export_reports_should_not_touch_it"
+        response = MagicMock()
+        response.status_code = 200
+        response.headers = {
+            "Content-Type": "application/vnd.ms-excel",
+            "Content-Disposition": "attachment; filename=report.xls",
+        }
+        response.content = xls_bytes
+        http_session = MagicMock()
+        http_session.get.return_value = response
+        destination = tmp_path / "report.xls"
+
+        with (
+            SalesforceReportBrowser() as sf,
+            patch(
+                "comken.toolbox.browser.sites.salesforce.base.requests.Session",
+                return_value=http_session,
+            ),
+        ):
+            sf.session._driver.current_url = REPORT_URL_1
+            sf.session._driver.get_cookies.return_value = []
+            list(sf.export_reports({REPORT_URL_1: destination}, export_format="xls"))
+
+        # Excel 形式は中身を変更しないのでフッター除去も走らない
+        assert destination.read_bytes() == xls_bytes
