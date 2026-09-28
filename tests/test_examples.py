@@ -215,12 +215,47 @@ class TestCsvDateMove:
 
 
 class TestDailyBatchTemplate:
-    def test_reads_todays_csv_and_writes_report(self, tmp_path, monkeypatch):
+    @pytest.fixture
+    def run_module(self, monkeypatch):
+        """``run`` を ``config.ini`` 無しの状態で import して返す。
+
+        ``examples.advanced.daily_batch_template.config`` はモジュール読込時に
+        ``Config(...)`` で ``config.ini`` を読む。CI では
+        ``config.ini`` が .gitignore 対象で存在しないため、素直に import した
+        だけで ``ConfigError`` が出てしまう（さらに副作用で example から
+        ``config.ini`` を生成してしまう）。
+        ``run`` を import する前にダミーの ``config`` モジュールを ``sys.modules``
+        に差し込んで ``from .config import config`` が ``config.ini`` を読まない
+        ようにする。
+        """
+        import importlib
+        import sys
+        from types import ModuleType
+
+        dummy_config = ModuleType("examples.advanced.daily_batch_template.config")
+        dummy_config.config = None
+        monkeypatch.setitem(
+            sys.modules,
+            "examples.advanced.daily_batch_template.config",
+            dummy_config,
+        )
+        # 既に import 済みだと本物の config を読んだ run が残っている可能性が
+        # あるので、毎回ダミーで取り直せるよう run も外しておく。
+        # ``from パッケージ import run`` はパッケージの属性に run が残っていると
+        # import し直さないので、import_module で読み直す
+        monkeypatch.delitem(
+            sys.modules,
+            "examples.advanced.daily_batch_template.run",
+            raising=False,
+        )
+
+        return importlib.import_module("examples.advanced.daily_batch_template.run")
+
+    def test_reads_todays_csv_and_writes_report(self, tmp_path, monkeypatch, run_module):
         """雛形の main() が、今日の日付つき CSV を探して Excel レポートを作る。"""
         from types import SimpleNamespace
 
         from comken.core import today
-        from examples.advanced.daily_batch_template import run
 
         input_folder = tmp_path / "input"
         output_folder = tmp_path / "output"
@@ -231,27 +266,25 @@ class TestDailyBatchTemplate:
             "商品,金額\nA,100\nB,200\n", encoding="utf-8"
         )
         files = SimpleNamespace(INPUT_FOLDER=input_folder, OUTPUT_FOLDER=output_folder)
-        monkeypatch.setattr(run, "config", SimpleNamespace(FILES=files))
+        monkeypatch.setattr(run_module, "config", SimpleNamespace(FILES=files))
 
-        run.main()
+        run_module.main()
 
         outputs = list(output_folder.glob("*日次売上レポート.xlsx"))
         assert len(outputs) == 1
         ws = load_workbook(outputs[0])["PY_売上"]
         assert list(ws.iter_rows(min_row=2, values_only=True)) == [("A", "100"), ("B", "200")]
 
-    def test_skips_when_no_input_today(self, tmp_path, monkeypatch):
+    def test_skips_when_no_input_today(self, tmp_path, monkeypatch, run_module):
         """今日の入力が無ければ、エラーにせず何も出力しない。"""
         from types import SimpleNamespace
-
-        from examples.advanced.daily_batch_template import run
 
         (tmp_path / "input").mkdir()
         (tmp_path / "output").mkdir()
         files = SimpleNamespace(INPUT_FOLDER=tmp_path / "input", OUTPUT_FOLDER=tmp_path / "output")
-        monkeypatch.setattr(run, "config", SimpleNamespace(FILES=files))
+        monkeypatch.setattr(run_module, "config", SimpleNamespace(FILES=files))
 
-        run.main()
+        run_module.main()
 
         assert list((tmp_path / "output").iterdir()) == []
 
