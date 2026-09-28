@@ -40,6 +40,11 @@ from comken.toolbox.csv import CSV
 
 logger = logging.getLogger(__name__)
 
+# ``today`` は ``report_path()`` / ``read_report()`` の ``today=`` キーワード
+# 引数名と同じ綴り。引数が同名だと関数内で ``today()`` が引数（``bool``）を
+# 参照してしまい ``today()`` が呼べないので、関数内ではこの別名を使う
+_today = today
+
 # 履歴CSVの列。順序は出力ファイルそのものなので、追加・並び替えは全プロジェクトの
 # 既存履歴を読む処理へ影響する（互換性ポリシーに従う）
 COLUMNS: tuple[str, ...] = (
@@ -353,9 +358,8 @@ def _read_rows(path: Path) -> list[dict[str, str]]:
     空文字で埋めて ``COLUMNS`` 順へ並べ直す（通常の列ずれはこの層で吸収）。
 
     読み取り関数（``successful_files_today`` / ``schedule_succeeded_today`` /
-    ``truncated_today`` / ``read_history``）と、管理番号で取得済みを引く
-    ``latest_report_path`` / ``latest_report`` / ``today_report`` /
-    ``has_today_report`` が共通して通る入口。
+    ``truncated_today`` / ``read_history`` / ``report_path`` /
+    ``read_report``）が共通して通る入口。
     """
     if not path.is_file():
         return []
@@ -380,7 +384,7 @@ def migrate_row(row: dict[str, str]) -> dict[str, str]:
 
 
 # ── 管理番号で取得済みレポートを引く読み取り関数 ────────────────────────
-# どれも**履歴だけを見る**（管理表は Salesforceレポートダウンローダー側に
+# どちらも**履歴だけを見る**（管理表は Salesforceレポートダウンローダー側に
 # あり、comken は管理表を知らない）。「成功」は、履歴の `成否` が成功で、
 # `保存先` / `ファイル名` が空でない行。パスは `保存先` / `ファイル名` から
 # 組み立てる。「最も新しい」は `実行日時` で判断する（同じ時刻なら履歴の
@@ -391,13 +395,19 @@ def _latest_success_path(
     history_path: Path,
     report_key: str,
     date: datetime.date | None = None,
+    schedule_key: str | None = None,
 ) -> Path | None:
     """管理番号について、今日（または指定日）の成功行のうち最も新しいパスを返す。
 
-    **「今日」指定が無い呼び出し（`latest_report_path()`）では、日付フィルタを
-    使わず全ての履歴を見る**。今日だけの指定（`today_report()` /
-    `has_today_report()`）では、`successful_files_today()` と同じ判定で当日
-    分だけを走査する。
+    ``date`` を ``None`` にすると日付フィルタを使わず全ての履歴を見る
+    （``report_path()`` で ``today=False`` の呼び出し経路）。``date`` を
+    与えると、その日付で始まる ``実行日時`` の行だけを走査する
+    （``report_path()`` で ``today=True`` の呼び出し経路、当日分だけ）。
+
+    ``schedule_key`` を指定すると、履歴の「スケジュールキー」列がその値と
+    **完全一致**する行だけを対象にする（部分一致にはしない）。``None``
+    （省略）のときはスケジュールキーでの絞り込みは行わない。 ``S09``
+    のような途中までで ``S0900`` の行を拾わないのはこのため。
 
     該当する成功行が無ければ ``None`` を返す。
     """
@@ -405,6 +415,7 @@ def _latest_success_path(
     if not history_path.is_file():
         return None
     target_prefix = (date or today()).strftime("%Y-%m-%d") if date is not None else None
+    schedule_key_text = None if schedule_key is None else str(schedule_key)
     latest_timestamp = ""
     latest_path: Path | None = None
     for row in _read_rows(history_path):
@@ -418,6 +429,8 @@ def _latest_success_path(
         timestamp = row.get("実行日時", "")
         if target_prefix is not None and not timestamp.startswith(target_prefix):
             continue
+        if schedule_key_text is not None and row.get("スケジュールキー", "") != schedule_key_text:
+            continue
         # 同じ実行日時のときは履歴の後ろの行を採用する（==、>= だと
         # 最初の同値、> だと最後の同値）。`successful_files_today()` と
         # 同じく reversed で末尾側を最新と扱う単純さで揃えるため、
@@ -428,145 +441,178 @@ def _latest_success_path(
     return latest_path
 
 
+def _resolve_history_path() -> Path:
+    """``paths.HISTORY_PATH`` を**呼び出した時点で**読んで ``Path`` で返す。
+
+    テストで ``monkeypatch.setattr`` で差し替えられるように、関数内で読む
+    （import 時に確定しない）。
+    """
+    from comken.services.salesforce_downloader.paths import HISTORY_PATH
+
+    return Path(HISTORY_PATH)
+
+
 @measure
-def latest_report_path(key: str) -> Path:
-    """管理番号に対する「最も新しい成功履歴」のパスを返す。
+def report_path(
+    key: str,
+    *,
+    today: bool = False,
+    schedule_key: str | None = None,
+) -> Path | None:
+    """管理番号に対する、条件に合う**最も新しい成功履歴**が指すパスを返す。
 
     **履歴だけを参照する**（管理表は Salesforceレポートダウンローダー側）。
     「成功」は履歴の ``成否 == 成功`` かつ ``保存結果 == 成功`` かつ
     ``保存先``/``ファイル名`` が空でない行。「最も新しい」は ``実行日時``
     の降順で、同値なら履歴の後ろの行（同じ時刻で複数行あるケースを吸収）。
 
-    履歴が無い／該当行が無い／記録はあるがファイルが消えている場合は
-    ``ReportNotDownloadedError`` を送出する。メッセージに管理番号と
-    対処（定期取得が動いているか履歴を確認、ファイルが消えていれば
-    そのパス）を書く。
+    ``today=True`` を指定すると、当日分（``実行日時`` が今日の日付で
+    始まる行）だけを走査する。省略時（``False``）は日付フィルタを掛けず、
+    全ての履歴の中の最も新しい成功記録を返す。**``today=True`` のとき
+    と ``False`` のときで、戻り値の ``Path`` が指すファイルの日付が違う
+    だけ**で、絞り込み方が変わる以外は同じ判定。実ファイルの存在まで
+    含めて判定するため、``today=True`` で返ってきたパスは実ファイル
+    として存在している（消えていれば ``None``）。
+
+    ``schedule_key`` を指定すると、スケジュールキー列がその値と**完全一致**
+    する行だけを対象にする（部分一致にはしない）。省略（``None``）のときは
+    スケジュールキーでは絞り込まない。同じ管理番号に複数のスケジュール行
+    から取得しているレポートで、スケジュール行ごとに分けたパスを引きたい
+    ときの指定。例: ``report_path("1001", today=True, schedule_key="S0900")``。
+
+    **見つからないときは ``None`` を返す**（例外にしない）。ここでの
+    「見つからない」は:
+        - 履歴ファイル自体が無い
+        - 条件に合う成功行が履歴の中に無い
+        - 条件に合う行はあるが、指しているファイルが消えている
+    のいずれか。 ``read_report()`` が ``ReportNotDownloadedError`` を
+    投げるかどうかの判定を兼ねるため、ファイルが消えているときも ``None``
+    を返す（呼び出し側で ``is not None`` を ``read_report()`` の前に
+    挟む必要はない）。
+
+    **ファイルの中身は読まない。** ファイルの有無（``Path.is_file()``）
+    までで判定が終わるため、大きなレポートで CSV を開かない分、
+    「今日取れているか」だけ確認する用途で使っても無駄なコストが
+    掛からない。
 
     履歴の場所は ``paths.HISTORY_PATH`` を**呼び出した時点で**読む
     （テストで差し替えられるように）。
 
     Args:
         key: 管理番号。
+        today: ``True`` なら当日分だけを走査する（省略時は ``False``、
+            日付フィルタを掛けない）。
+        schedule_key: 絞り込みに使うスケジュールキー（完全一致）。
+            ``None``（省略）のときは絞り込まない。
 
     Returns:
-        該当する最新の取得済みファイルのパス。
-
-    Raises:
-        ReportNotDownloadedError: 該当行が無い／記録はあるが実ファイルが無い場合。
+        条件に合う最新の取得済みファイルのパス。見つからないときは ``None``。
     """
-    from comken.services.salesforce_downloader.paths import HISTORY_PATH
-
-    history_path = Path(HISTORY_PATH)
-    path = _latest_success_path(history_path, key)
+    history_path = _resolve_history_path()
+    date_value = _today() if today else None
+    path = _latest_success_path(
+        history_path,
+        key,
+        date=date_value,
+        schedule_key=schedule_key,
+    )
     if path is None:
-        logger.debug("最新の取得ファイル: 管理番号=%s → 履歴に該当なし", key)
-        raise ReportNotDownloadedError(key, None, history_path)
+        logger.debug(
+            "取得ファイル: 管理番号=%s, today=%s, schedule_key=%s → 履歴に該当なし",
+            key,
+            today,
+            schedule_key,
+        )
+        return None
     if not path.is_file():
         logger.debug(
-            "最新の取得ファイル: 管理番号=%s path=%s → ファイルが消えている",
+            "取得ファイル: 管理番号=%s, today=%s, schedule_key=%s path=%s → ファイルが消えている",
             key,
+            today,
+            schedule_key,
             path,
         )
-        raise ReportNotDownloadedError(key, path, history_path)
-    logger.debug("最新の取得ファイル: 管理番号=%s path=%s", key, path)
+        return None
+    logger.debug(
+        "取得ファイル: 管理番号=%s, today=%s, schedule_key=%s path=%s",
+        key,
+        today,
+        schedule_key,
+        path,
+    )
     return path
 
 
 @measure
-def latest_report(key: str) -> Table:
-    """管理番号に対する「最も新しい成功履歴」のファイルを ``Table`` で返す。
+def read_report(
+    key: str,
+    *,
+    today: bool = False,
+    schedule_key: str | None = None,
+) -> Table:
+    """管理番号に対する、条件に合う**最も新しい成功履歴**のファイルを ``Table`` で返す。
 
-    内部で ``latest_report_path()`` を呼ぶ。``CSV(..., read_only=True)`` で
-    読むので、ファイルが巨大でも全件メモリに展開する前に ``Table`` で受ける
-    （呼び出し側で ``to_rows()`` / ``index()`` などを使える）。
+    内部で ``_latest_success_path()`` を呼んでパスを引き、 ``CSV(path, read_only=True)``
+    で読むので、ファイルが巨大でも全件メモリに展開する前に ``Table`` で
+    受ける（呼び出し側で ``to_rows()`` / ``index()`` などを使える）。
+
+    ``today=True`` を指定すると当日分だけを、 ``schedule_key=`` を指定すると
+    そのスケジュールキーに完全一致する行だけを、対象とする。 ``report_path()``
+    と同じ絞り込み方がそのまま使える。
+
+    見つからないときは ``ReportNotDownloadedError`` を送出する。メッセージには
+    管理番号・今日の指定・``schedule_key``（指定していれば）・対処
+    （定期取得が動いているか履歴を確認）・ファイルが消えているときの
+    そのパス、が入る（``ReportNotDownloadedError`` 側の組み立てに従う）。
 
     Args:
         key: 管理番号。
+        today: ``True`` なら当日分だけを走査する（省略時は ``False``）。
+        schedule_key: 絞り込みに使うスケジュールキー（完全一致）。
+            ``None``（省略）のときは絞り込まない。
 
     Returns:
-        該当ファイルから読み取った ``Table``。
+        条件に合う最新の取得済みファイルから読み取った ``Table``。
 
     Raises:
-        ReportNotDownloadedError: 該当行が無い／記録はあるが実ファイルが無い場合。
-        ComkenFileNotFoundError: パスは履歴にあるがファイルが消えている場合。
+        ReportNotDownloadedError: 条件に合う成功行が無い／指しているファイルが
+            消えている場合。メッセージに管理番号・``schedule_key``（指定時）・
+            消えているパス、が入る。
     """
-    path = latest_report_path(key)
-    logger.debug("履歴が指す最新の取得ファイルを使います: 管理番号=%s path=%s", key, path)
-    with CSV(path, read_only=True) as csv_file:
-        return csv_file.read()
-
-
-@measure
-def today_report(key: str) -> Table:
-    """管理番号について、**今日**成功した履歴のうち最も新しいファイルを ``Table`` で返す。
-
-    当日分の成功記録が無い場合は ``ReportNotDownloadedError`` を送出する
-    （定期取得が動いていないか、実行時刻より前に呼ばれた、等）。
-
-    Args:
-        key: 管理番号。
-
-    Returns:
-        当日分の最新ファイルを読み取った ``Table``。
-
-    Raises:
-        ReportNotDownloadedError: 当日分の成功記録が無い／ファイルが消えている場合。
-    """
-    from comken.services.salesforce_downloader.paths import HISTORY_PATH
-
-    history_path = Path(HISTORY_PATH)
-    path = _latest_success_path(history_path, key, date=today())
+    history_path = _resolve_history_path()
+    date_value = _today() if today else None
+    path = _latest_success_path(
+        history_path,
+        key,
+        date=date_value,
+        schedule_key=schedule_key,
+    )
     if path is None:
-        logger.debug("本日の取得ファイル: 管理番号=%s → 当日分なし", key)
-        raise ReportNotDownloadedError(key, None, history_path)
+        logger.debug(
+            "取得ファイル: 管理番号=%s, today=%s, schedule_key=%s → 履歴に該当なし",
+            key,
+            today,
+            schedule_key,
+        )
+        raise ReportNotDownloadedError(key, None, history_path, schedule_key=schedule_key)
     if not path.is_file():
         logger.debug(
-            "本日の取得ファイル: 管理番号=%s path=%s → ファイルが消えている",
+            "取得ファイル: 管理番号=%s, today=%s, schedule_key=%s path=%s → ファイルが消えている",
             key,
+            today,
+            schedule_key,
             path,
         )
-        raise ReportNotDownloadedError(key, path, history_path)
-    logger.debug("本日の取得ファイル: 管理番号=%s path=%s", key, path)
+        raise ReportNotDownloadedError(key, path, history_path, schedule_key=schedule_key)
+    logger.debug(
+        "取得ファイル: 管理番号=%s, today=%s, schedule_key=%s path=%s を読み取り",
+        key,
+        today,
+        schedule_key,
+        path,
+    )
     with CSV(path, read_only=True) as csv_file:
         return csv_file.read()
-
-
-@measure
-def has_today_report(key: str) -> bool:
-    """管理番号について、今日成功した履歴があり実ファイルも残っていれば True。
-
-    「今日取れているか」を**履歴だけで**判定する（ファイルの有無は確認する
-    ので、履歴に残っていても手作業で消されたものは False になる）。
-    **中身（CSV）は読まない。** ``today_report()`` と同じ判定を
-    ``_latest_success_path()`` と ``path.is_file()`` で行うが、CSV を開く
-    ``CSV.read()`` までは呼ばない（大きなレポートで無駄に時間がかかる問題を
-    避けるため）。
-
-    Args:
-        key: 管理番号。
-
-    Returns:
-        当日分の成功記録があり、かつ実ファイルも残っている場合は True。
-        記録が無い／失敗／ファイルが消えている場合は False（例外を投げない）。
-    """
-    from comken.services.salesforce_downloader.paths import HISTORY_PATH
-
-    history_path = Path(HISTORY_PATH)
-    path = _latest_success_path(history_path, key, date=today())
-    if path is None:
-        logger.debug("本日の取得ファイル: 管理番号=%s → 当日分なし", key)
-        logger.debug("本日の取得ファイルの有無: 管理番号=%s → False", key)
-        return False
-    if not path.is_file():
-        logger.debug(
-            "本日の取得ファイル: 管理番号=%s path=%s → ファイルが消えている",
-            key,
-            path,
-        )
-        logger.debug("本日の取得ファイルの有無: 管理番号=%s → False", key)
-        return False
-    logger.debug("本日の取得ファイルの有無: 管理番号=%s → True", key)
-    return True
 
 
 # ── 書き込み ────────────────────────────────────────────────────────────

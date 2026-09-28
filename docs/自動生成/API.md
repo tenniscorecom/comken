@@ -3494,7 +3494,7 @@ class ReportNotDownloadedError(DownloaderError):
 取りに行くと、定期取得が動いていないことに誰も気づかなくなる。
 
 発生箇所: comken.services.salesforce_downloader.history の
-          latest_report_path() / latest_report() / today_report()
+          report_path() / read_report()
 
 対処:
     定期取得（Salesforceレポートダウンローダー）が動いているか、
@@ -3504,7 +3504,7 @@ class ReportNotDownloadedError(DownloaderError):
 #### `__init__`
 
 ```text
-def __init__(self, report_key: str, missing_path: Path | None, history_path: Path) -> None:
+def __init__(self, report_key: str, missing_path: Path | None, history_path: Path, *, schedule_key: str | None=None) -> None:
 ```
 
 ### `TableError`
@@ -3680,19 +3680,11 @@ def __init__(self, title: str) -> None:
 
 ## `from comken.services.salesforce_downloader import ...`
 
-### `latest_report_path`
+### `report_path`
 
 定義を解決できませんでした。
 
-### `latest_report`
-
-定義を解決できませんでした。
-
-### `today_report`
-
-定義を解決できませんでした。
-
-### `has_today_report`
+### `read_report`
 
 定義を解決できませんでした。
 

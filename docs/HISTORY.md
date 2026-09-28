@@ -614,6 +614,8 @@ master に何をコミットしても本番には流れない。**
 残した。境界を履歴（ダウンロード履歴.csv）にしたので、管理表を変えても他の
 プロジェクトは変えなくてよい。以前の `cached_report` は管理表を読んでいた
 が、新しい読み取り関数（`latest_report` / `today_report`）は履歴だけを見る。
+読み取り関数は `report_path()`（無ければ `None`）と `read_report()`（無ければ
+`ReportNotDownloadedError`）の2つにまとめた（`today=` / `schedule_key=` で絞る）。
 
 **判断の基準**
 

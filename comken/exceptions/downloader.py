@@ -58,7 +58,7 @@ class ReportNotDownloadedError(DownloaderError):
     取りに行くと、定期取得が動いていないことに誰も気づかなくなる。
 
     発生箇所: comken.services.salesforce_downloader.history の
-              latest_report_path() / latest_report() / today_report()
+              report_path() / read_report()
 
     対処:
         定期取得（Salesforceレポートダウンローダー）が動いているか、
@@ -66,17 +66,26 @@ class ReportNotDownloadedError(DownloaderError):
         メッセージに表示されたパスに復旧する
     """
 
-    def __init__(self, report_key: str, missing_path: Path | None, history_path: Path) -> None:
+    def __init__(
+        self,
+        report_key: str,
+        missing_path: Path | None,
+        history_path: Path,
+        *,
+        schedule_key: str | None = None,
+    ) -> None:
+        schedule_text = f"（スケジュールキー {schedule_key}）" if schedule_key else ""
         if missing_path is None:
             message = (
-                f"管理番号 {report_key} の成功履歴がありません。\n"
+                f"管理番号 {report_key}{schedule_text} の成功履歴がありません。\n"
                 f"履歴: {history_path}\n"
                 "Salesforceレポートダウンローダーの定期取得が動いているか、"
                 "「ダウンロード履歴.csv」を確認してください。"
             )
         else:
             message = (
-                f"管理番号 {report_key} の成功履歴はありますが、ファイルが消えています。\n"
+                f"管理番号 {report_key}{schedule_text} の成功履歴はありますが、"
+                "ファイルが消えています。\n"
                 f"履歴が指していたパス: {missing_path}\n"
                 f"履歴: {history_path}\n"
                 "Salesforceレポートダウンローダーの定期取得が動いているか、"

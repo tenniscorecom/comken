@@ -19,7 +19,7 @@ Salesforce の定期取得は「取る側」と「読む側」を分離し、**�
         ↓                                      ↑
   Salesforceレポートダウンローダー       ──→ Salesforce
         ↓
-  各プロジェクト（comken.services.salesforce_downloader の latest_report 等）
+  各プロジェクト（comken.services.salesforce_downloader の read_report 等）
 ```
 
 ```mermaid
@@ -27,7 +27,7 @@ graph TD
     A["レポート管理表.xlsx<br/>（人が編集）"] --> B["Salesforceレポートダウンローダー"]
     B <--> C["Salesforce"]
     B --> D["ダウンロード履歴.csv<br/>（追記）"]
-    D --> F["各プロジェクト<br/>latest_report / today_report"]
+    D --> F["各プロジェクト<br/>read_report / report_path"]
 ```
 
 ---
@@ -36,27 +36,25 @@ graph TD
 
 ```python
 from comken.services.salesforce_downloader import (
-    latest_report,
-    today_report,
-    has_today_report,
-    latest_report_path,
+    read_report,
+    report_path,
 )
 
 CUSTOMER_LIST = "1001"    # 管理表の「ID」。意味の分かる名前を付ける
 SALES_RESULT = "1003"
 
 # 履歴が指す最新の取得ファイルを Table で受け取る
-by_code = latest_report(SALES_RESULT).index("顧客コード")
+by_code = read_report(SALES_RESULT).index("顧客コード")
 
 # 今日の分だけ取りたいとき
-if has_today_report(CUSTOMER_LIST):
-    rows = today_report(CUSTOMER_LIST).to_rows()
+if report_path(CUSTOMER_LIST, today=True) is not None:
+    rows = read_report(CUSTOMER_LIST, today=True).to_rows()
 else:
     # 定期取得が動いていない可能性 — 履歴の「成功」記録が無い
     ...
 
-# 中身が要らずファイルパスだけ欲しいときは latest_report_path()
-print(latest_report_path(CUSTOMER_LIST))
+# 中身が要らずファイルパスだけ欲しいときは report_path()
+print(report_path(CUSTOMER_LIST))
 ```
 
 **プロジェクトのコードに Salesforce の URL もレポート ID も書かない。** 書くのは管理番号だけ。
@@ -65,34 +63,58 @@ print(latest_report_path(CUSTOMER_LIST))
 戻り値は `Table`（`comken.core.table.model.Table`）。`index()` / `filter()` /
 `replace()` / `append()` など、`Table` の API がそのまま使える。CSV / Excel の
 読み込みは中で吸収するので、利用側は中身の形式を意識しなくてよい。
-ファイルパスだけ欲しいときは `latest_report_path()` を別関数として用意している
-（戻り値は `Path`）。
+ファイルパスだけ欲しいときは `report_path()` を、別関数を増やさず
+「ファイルを読むか読まないか」の差だけにして用意している（戻り値は `Path`）。
+見つからないときはどちらも同じ `Path | None` を返すが、
+`report_path()` は `None`、`read_report()` は `ReportNotDownloadedError`
+と違う形で表現する（呼ぶ側で受け取れる型が違う＝分岐の意図が違う）。
 
-### 4 つの関数の使い分け
+### 2 つの関数の使い分け
 
 | | 意味 | いつ使うか |
 |---|---|---|
-| `latest_report_path(key)` | 履歴の最も新しい成功行が指すパスを返す（中身は読まない） | ファイル自体を別ツールに渡したいとき |
-| `latest_report(key)` | 上記を `Table` で返す | 直近の（当日とは限らない）取得ファイルを読む |
-| `today_report(key)` | **今日**成功した履歴のうち最も新しいものを `Table` で返す | 「今日のキャッシュ」が必要なとき。記録が無ければ `ReportNotDownloadedError` |
-| `has_today_report(key)` | 今日成功した履歴があり実ファイルも残っていれば True（例外を出さない） | 定期取得が動いているかを履歴だけで判定したいとき |
+| `report_path(key, *, today=False, schedule_key=None)` | 履歴の最も新しい成功行が指すパスを返す（中身は読まない）。見つからないときは `None` | ファイル自体を別ツールに渡したいとき、「今日取れているか」だけを判定したいとき |
+| `read_report(key, *, today=False, schedule_key=None)` | 上記を `Table` で返す。見つからないときは `ReportNotDownloadedError` | 直近の（当日とは限らない）取得ファイルを読みたいとき |
+
+**条件は両方の関数で同じ**。 `today=True` を指定すると当日分だけを、
+`schedule_key=` を指定するとそのスケジュールキーに完全一致する行だけを
+対象とする（既定は「日付フィルタ無し」かつ「絞り込み無し」、最も新しい
+成功行）。 `report_path()` と `read_report()` は同じ判定を使うため、
+「`report_path() is not None` を見てから `read_report()` を呼ぶ」と
+二重チェックになり、意味が無い。**判定と読み取りを分けたいときは
+`report_path()` の戻り値だけで判定し、読む側は別途 `read_report()` を呼ぶ。**
+なお、`report_path()` はファイルが履歴にあっても実ファイルが消えている
+ときも `None` を返す（`read_report()` が同じ条件で `ReportNotDownloadedError`
+を投げる）ため、ファイルの有無もこの関数1つで分かる。
+
+**同じ管理番号でもスケジュール行が複数あるときは `schedule_key=` キーワードで完全一致で取り分けられる**
+（`schedule_key="S0900"` のように指定。省略時は絞り込まない）。`S09` のような
+途中まででは一致しない（部分一致にしない）。
+
+```python
+path = report_path("1001", today=True, schedule_key="S0900")
+table = read_report("1001", today=True, schedule_key="S0900")
+```
+
+見つからないときの `ReportNotDownloadedError` のメッセージには、
+`schedule_key=` を指定していれば `（スケジュールキー S0900）` のように入る。
 
 **「今すぐ取りに行く」関数はここには無い。** 取得の実行（`download_scheduled()`）は
 `Salesforceレポートダウンローダー` リポジトリ側にある。急ぎの取得は権限を持つ人が
 Salesforce から手動ダウンロードするか、そちらのプロジェクトで `download_scheduled()`
 をスケジュール外で直接実行する。
 
-**`latest_report()` 系が自動的に取りに行わない理由**は、ここで自動的に
+**`read_report()` 系が自動的に取りに行わない理由**は、ここで自動的に
 取りに行くと、定期取得が動いていないことに誰も気づかなくなるため。
 「取っておいたものを受け取る」だけの関数として、利用側プロジェクトが必要なとき
 だけ明示的に読む。
 
 ### 「今日取れているか」を履歴で判定する
 
-`has_today_report()` は履歴だけを見て判定する。保存先に今日の日付のファイルが
-あっても、それが定期取得で置かれたのか手で置いたのかは、履歴を正として履歴の
-「成功」記録で判断する（ファイルの有無でも判定はしているが、履歴の判定が
-真の根拠）。`ReportNotDownloadedError` のメッセージにも「Salesforceレポート
+`report_path(..., today=True) is not None` の形で履歴を判定する。保存先に
+今日の日付のファイルがあっても、それが定期取得で置かれたのか手で置いたのかは、
+履歴を正として履歴の「成功」記録で判断する（ファイルの有無でも判定はしているが、
+履歴の判定が真の根拠）。`ReportNotDownloadedError` のメッセージにも「Salesforceレポート
 ダウンローダーの定期取得が動いているか、`ダウンロード履歴.csv` を確認する」
 と書いてある。
 
@@ -103,8 +125,8 @@ Salesforce から手動ダウンロードするか、そちらのプロジェク
 履歴を読むだけのプロジェクト側で行う作業はほぼ無い。取る側プロジェクト
 （`Salesforceレポートダウンローダー`）が管理表と履歴を置く場所を
 `comken/services/salesforce_downloader/paths.py` の `HISTORY_PATH` に書いて、
-共有サーバーに配置するだけで、読む側プロジェクトは `latest_report()` /
-`today_report()` で取得済みファイルを受け取れる。
+共有サーバーに配置するだけで、読む側プロジェクトは `read_report()` /
+`report_path()` で取得済みファイルを受け取れる。
 
 取る側・管理表・スケジュール・雛形・検査コマンドの説明は
 `Salesforceレポートダウンローダー` リポジトリの README / docs を参照。

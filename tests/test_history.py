@@ -4,9 +4,8 @@
 comken 側は履歴の形式と「管理番号で取得済みレポートを引く」読み取り関数、
 およびダウンローダー側から呼ばれる `append_history()` を共有している。
 読み取り関数（`successful_files_today` / `schedule_succeeded_today` /
-`truncated_today` / `read_history` / `latest_report_path` / `latest_report` /
-`today_report` / `has_today_report`）と書き込み（`append_history`）の両方を
-検証する。
+`truncated_today` / `read_history` / `report_path` / `read_report`）と
+書き込み（`append_history`）の両方を検証する。
 """
 
 import csv
@@ -29,13 +28,11 @@ from comken.services.salesforce_downloader.history import (
     SUCCESS,
     HistoryRow,
     append_history,
-    has_today_report,
-    latest_report,
-    latest_report_path,
     read_history,
+    read_report,
+    report_path,
     schedule_succeeded_today,
     successful_files_today,
-    today_report,
     truncated_today,
 )
 
@@ -793,11 +790,14 @@ class TestHeaderMigration:
 
 
 # ── 管理番号で取得済みレポートを引く読み取り関数 ───────────────────────────────
-class TestLatestAndTodayReports:
-    """管理番号だけをキーに、履歴から「最新の成功ファイル」を引く 4 関数。
+class TestReportPathAndReadReport:
+    """管理番号だけをキーに、履歴から「最新の成功ファイル」を引く 2 関数。
 
-    どれも**履歴だけを見る**（管理表は Salesforceレポートダウンローダー側に
-    あり、comken は管理表を知らない）。テストでは ``HISTORY_PATH`` を
+    どちらも**履歴だけを見る**（管理表は Salesforceレポートダウンローダー側に
+    あり、comken は管理表を知らない）。``report_path()`` はパスを返すか
+    見つからなければ ``None`` を返し、 ``read_report()`` は同じパス
+    ファイルの中身を ``Table`` で返すか見つからなければ
+    ``ReportNotDownloadedError`` を投げる。テストでは ``HISTORY_PATH`` を
     ``tmp_path`` 配下に差し替え、実ファイルも一緒に作って成功／失敗の
     組み合わせを網羅する。
     """
@@ -806,9 +806,9 @@ class TestLatestAndTodayReports:
     def history_path(self, tmp_path, monkeypatch):
         """``paths.HISTORY_PATH`` を ``tmp_path`` の ``履歴.csv`` に差し替える。
 
-        ``latest_report_path()`` / ``latest_report()`` / ``today_report()`` /
-        ``has_today_report()`` は呼び出し時点で ``paths.HISTORY_PATH`` を
-        読み直すため、``monkeypatch.setattr`` で差し替えれば反映される。
+        ``report_path()`` / ``read_report()`` は呼び出し時点で
+        ``paths.HISTORY_PATH`` を読み直すため、 ``monkeypatch.setattr`` で
+        差し替えれば反映される。
         """
         history_path = tmp_path / "履歴.csv"
         monkeypatch.setattr(
@@ -822,7 +822,7 @@ class TestLatestAndTodayReports:
         path.write_text("col\nval\n", encoding="utf-8-sig")
         return path
 
-    def test_latest_report_path_returns_newest_success(self, history_path, tmp_path) -> None:
+    def test_report_path_returns_newest_success(self, history_path, tmp_path) -> None:
         """成功行が複数あるとき最新のものを返す（実行日時で降順）。"""
         entry = _entry()
         base = tmp_path / "out"
@@ -846,9 +846,9 @@ class TestLatestAndTodayReports:
         self._make_report_file(base, "old.csv")
         self._make_report_file(base, "new.csv")
 
-        assert latest_report_path(entry.key) == base / "new.csv"
+        assert report_path(entry.key) == base / "new.csv"
 
-    def test_latest_report_path_ignores_failure_rows(self, history_path, tmp_path) -> None:
+    def test_report_path_ignores_failure_rows(self, history_path, tmp_path) -> None:
         """失敗行は「最新」に含めない。
 
         「実装を壊して落ちる」代表例: 失敗行を除外しないと、最新の失敗で
@@ -877,10 +877,10 @@ class TestLatestAndTodayReports:
         self._make_report_file(base, "ok.csv")
 
         # 失敗行を無視して成功のうち最新を返す
-        assert latest_report_path(entry.key) == base / "ok.csv"
+        assert report_path(entry.key) == base / "ok.csv"
 
-    def test_latest_report_returns_newest_table(self, history_path, tmp_path) -> None:
-        """``latest_report()`` がパスを ``Table`` で返す。"""
+    def test_read_report_returns_newest_table(self, history_path, tmp_path) -> None:
+        """``read_report()`` がパスを ``Table`` で返す。"""
         entry = _entry()
         base = tmp_path / "out"
         _write_row(
@@ -892,11 +892,11 @@ class TestLatestAndTodayReports:
         )
         self._make_report_file(base, "x.csv")
 
-        table = latest_report(entry.key)
+        table = read_report(entry.key)
         assert list(table.to_rows()) == [{"col": "val"}]
 
-    def test_today_report_requires_today_success(self, history_path, tmp_path) -> None:
-        """``today_report()`` は今日の成功が無いとエラー。"""
+    def test_read_report_with_today_requires_today_success(self, history_path, tmp_path) -> None:
+        """``read_report(..., today=True)`` は今日の成功が無いとエラー。"""
         entry = _entry()
         base = tmp_path / "out"
         # 昨日の成功のみ
@@ -911,10 +911,10 @@ class TestLatestAndTodayReports:
         self._make_report_file(base, "yest.csv")
 
         with pytest.raises(ReportNotDownloadedError):
-            today_report(entry.key)
+            read_report(entry.key, today=True)
 
-    def test_has_today_report_returns_false_when_no_today(self, history_path, tmp_path) -> None:
-        """今日の成功が無ければ ``has_today_report()`` は False。"""
+    def test_report_path_today_false_when_no_today(self, history_path, tmp_path) -> None:
+        """今日分の成功が無ければ ``report_path(..., today=True)`` は ``None``。"""
         entry = _entry()
         base = tmp_path / "out"
         _write_row(
@@ -927,10 +927,10 @@ class TestLatestAndTodayReports:
         )
         self._make_report_file(base, "yest.csv")
 
-        assert has_today_report(entry.key) is False
+        assert report_path(entry.key, today=True) is None
 
-    def test_has_today_report_returns_true_when_today_ok(self, history_path, tmp_path) -> None:
-        """今日の成功と実ファイルがあれば True。"""
+    def test_report_path_today_returns_path_when_today_ok(self, history_path, tmp_path) -> None:
+        """今日の成功と実ファイルがあれば ``report_path(..., today=True)`` がそのパスを返す。"""
         entry = _entry()
         base = tmp_path / "out"
         today_str = now().strftime("%Y-%m-%d %H:%M:%S")
@@ -944,10 +944,15 @@ class TestLatestAndTodayReports:
         )
         self._make_report_file(base, "today.csv")
 
-        assert has_today_report(entry.key) is True
+        assert report_path(entry.key, today=True) == base / "today.csv"
 
-    def test_has_today_report_returns_false_when_file_missing(self, history_path, tmp_path) -> None:
-        """今日の成功記録はあるが実ファイルが消えていれば False。"""
+    def test_report_path_today_returns_none_when_file_missing(self, history_path, tmp_path) -> None:
+        """今日の成功記録はあるが実ファイルが消えていれば ``None``。
+
+        ``report_path()`` は「ファイルが履歴を指しているか」まで含めて
+        判定するため、消えているときには ``None`` を返す（``read_report()``
+        が同じ条件で ``ReportNotDownloadedError`` を投げる）。
+        """
         entry = _entry()
         base = tmp_path / "out"
         _write_row(
@@ -960,15 +965,16 @@ class TestLatestAndTodayReports:
         )
         # ファイルは作らない
 
-        assert has_today_report(entry.key) is False
+        assert report_path(entry.key, today=True) is None
 
-    def test_has_today_report_does_not_read_csv_contents(self, history_path, tmp_path) -> None:
-        """``has_today_report()`` は CSV の中身を読まない（ファイルの有無だけ判定する）。
+    def test_report_path_today_does_not_read_csv_contents(self, history_path, tmp_path) -> None:
+        """``report_path(..., today=True)`` は CSV の中身を読まない。
 
-        履歴が指すファイルが CSV として読めないバイト列でも True を返し、
+        履歴が指すファイルが CSV として読めないバイト列でもパスを返し、
         例外にならない。大きなレポートで CSV を読み直す無駄を排除するための
-        不変条件。``today_report()`` のように ``CSV.read()`` を呼ぶと、
-        ここで例外が飛んで ``has_today_report()`` も巻き添えで失敗する。
+        不変条件。``read_report()`` のように ``CSV.read()`` を呼ぶと、
+        ここで例外が飛んで ``report_path()`` も巻き添えで失敗するため、
+        このテストは ``read_report()`` ではなく ``report_path()`` で行う。
         """
         entry = _entry()
         base = tmp_path / "out"
@@ -985,14 +991,18 @@ class TestLatestAndTodayReports:
         broken = base / "broken.csv"
         broken.write_bytes(b"\x80\x81\x82\x83")
 
-        # 中身を読まないため、ファイルの有無だけで True を返す
-        assert has_today_report(entry.key) is True
+        # 中身を読まないため、ファイルの有無だけでパスを返す
+        assert report_path(entry.key, today=True) == broken
 
-    def test_latest_report_raises_when_record_but_file_missing(
+    def test_read_report_when_record_but_file_missing_raises_with_path(
         self, history_path, tmp_path
     ) -> None:
-        """記録はあるがファイルが消えていると ``ReportNotDownloadedError``。
-        メッセージに消えているパスが入る（業務担当者が見つけやすいように）。"""
+        """記録はあるがファイルが消えていると ``read_report()`` は
+        ``ReportNotDownloadedError`` を出し、メッセージに消えているパスが入る。
+
+        ``report_path()`` も同じ条件で ``None`` を返す
+        （``read_report()`` の手前でファイルの有無だけ確認できる）。
+        """
         entry = _entry()
         base = tmp_path / "out"
         missing = base / "gone.csv"
@@ -1005,12 +1015,15 @@ class TestLatestAndTodayReports:
             target_folder=base,
         )
 
+        # ``report_path()`` はファイルが消えていると ``None``
+        assert report_path(entry.key) is None
+        # ``read_report()`` は同じ条件で ``ReportNotDownloadedError``
         with pytest.raises(ReportNotDownloadedError) as excinfo:
-            latest_report_path(entry.key)
+            read_report(entry.key)
         # メッセージに消えているパスが入っている（業務担当者が見つけられる）
         assert str(missing) in str(excinfo.value)
 
-    def test_latest_report_ignores_other_keys_partial_match(self, history_path, tmp_path) -> None:
+    def test_read_report_ignores_other_keys_partial_match(self, history_path, tmp_path) -> None:
         """別の管理番号の行を拾わない（"1001" と "10010" の部分一致に注意）。
 
         「実装を壊して落ちる」代表例: ``startswith`` 等で部分一致にすると、
@@ -1029,8 +1042,239 @@ class TestLatestAndTodayReports:
         )
         self._make_report_file(base, "other.csv")
 
+        # ``report_path()`` は ``None`` を返す
+        assert report_path("1001") is None
+        # ``read_report()`` は ``ReportNotDownloadedError``
         with pytest.raises(ReportNotDownloadedError):
-            latest_report_path("1001")
+            read_report("1001")
+
+    def test_report_path_filters_by_schedule_key(self, history_path, tmp_path) -> None:
+        """``schedule_key=`` を指定すると、そのキーの成功行のうち最新のものを返す。
+
+        同じ管理番号でも、スケジュールキーが違う行は対象外。
+        """
+        entry = _entry()
+        base = tmp_path / "out"
+        # S0900（古い）と S1300（新しい）の両方を書く
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="s0900.csv", schedule_key="S0900"),
+            timestamp="2024-01-01 09:00:00",
+            target_folder=base,
+        )
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="s1300.csv", schedule_key="S1300"),
+            timestamp="2024-01-02 09:00:00",
+            target_folder=base,
+        )
+        self._make_report_file(base, "s0900.csv")
+        self._make_report_file(base, "s1300.csv")
+
+        # S0900 を指定 → S0900 の行のパス
+        assert report_path(entry.key, schedule_key="S0900") == base / "s0900.csv"
+        # S1300 を指定 → S1300 の行のパス
+        assert report_path(entry.key, schedule_key="S1300") == base / "s1300.csv"
+
+    def test_report_path_without_schedule_key_returns_newest(self, history_path, tmp_path) -> None:
+        """``schedule_key=`` を省略したときは、今までどおり最も新しい行を返す。
+
+        「実装を壊して落ちる」代表例: 絞り込みを追加する変更で、省略時の
+        挙動が「絞り込まない（最も新しい）」から変わっていないことを確かめる。
+        """
+        entry = _entry()
+        base = tmp_path / "out"
+        # S0900 のほうが古い、S1300 のほうが新しい
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="s0900.csv", schedule_key="S0900"),
+            timestamp="2024-01-01 09:00:00",
+            target_folder=base,
+        )
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="s1300.csv", schedule_key="S1300"),
+            timestamp="2024-01-02 09:00:00",
+            target_folder=base,
+        )
+        self._make_report_file(base, "s0900.csv")
+        self._make_report_file(base, "s1300.csv")
+
+        # 省略 → 最も新しい（S1300 のほう）
+        assert report_path(entry.key) == base / "s1300.csv"
+
+    def test_report_path_schedule_key_requires_exact_match(self, history_path, tmp_path) -> None:
+        """途中までの値では一致しない（完全一致、部分一致にしない）。
+
+        「実装を壊して落ちる」代表例: ``startswith`` で部分一致にしてしまうと、
+        ``"S0900".startswith("S09")`` で True になり、S0900 の行が拾われてしまう。
+        """
+        entry = _entry()
+        base = tmp_path / "out"
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="s0900.csv", schedule_key="S0900"),
+            timestamp=now().strftime("%Y-%m-%d %H:%M:%S"),
+            target_folder=base,
+        )
+        self._make_report_file(base, "s0900.csv")
+
+        # "S09" は途中まで → 一致しない（missing_path=None の ReportNotDownloadedError）
+        assert report_path(entry.key, schedule_key="S09") is None
+        with pytest.raises(ReportNotDownloadedError):
+            read_report(entry.key, schedule_key="S09")
+
+    def test_read_report_schedule_key_miss_includes_key_in_message(
+        self, history_path, tmp_path
+    ) -> None:
+        """見つからないときの例外メッセージに ``schedule_key`` が含まれる。"""
+        entry = _entry()
+        base = tmp_path / "out"
+        # S0900 の成功行だけある
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="s0900.csv", schedule_key="S0900"),
+            timestamp=now().strftime("%Y-%m-%d %H:%M:%S"),
+            target_folder=base,
+        )
+        self._make_report_file(base, "s0900.csv")
+
+        with pytest.raises(ReportNotDownloadedError) as excinfo:
+            read_report(entry.key, schedule_key="S1300")
+        message = str(excinfo.value)
+        # スケジュールキーがメッセージに入る（業務担当者が見つけやすいように）
+        assert "S1300" in message
+        # 「スケジュールキー S1300」のような形（括弧つき）で出る
+        assert "（スケジュールキー S1300）" in message
+
+    def test_read_report_schedule_key_miss_without_key_omits_bracket(self) -> None:
+        """``schedule_key`` を指定していないときは、括弧部分が入らない。"""
+        entry = _entry()
+        # 成功履歴なし → missing_path=None の ReportNotDownloadedError
+
+        with pytest.raises(ReportNotDownloadedError) as excinfo:
+            read_report(entry.key)
+        message = str(excinfo.value)
+        # schedule_key 未指定 → 括弧部分なし
+        assert "（スケジュールキー" not in message
+
+    def test_read_report_today_filters_by_schedule_key(self, history_path, tmp_path) -> None:
+        """``read_report(..., today=True)`` も ``schedule_key=`` で絞り込まれる。"""
+        entry = _entry()
+        base = tmp_path / "out"
+        today_str = now().strftime("%Y-%m-%d %H:%M:%S")
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="s0900.csv", schedule_key="S0900"),
+            timestamp=today_str,
+            target_folder=base,
+        )
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="s1300.csv", schedule_key="S1300"),
+            timestamp=today_str,
+            target_folder=base,
+        )
+        self._make_report_file(base, "s0900.csv")
+        self._make_report_file(base, "s1300.csv")
+
+        # S0900 を指定 → S0900 のファイル
+        assert read_report(entry.key, today=True, schedule_key="S0900").to_rows() == [
+            {"col": "val"}
+        ]
+        # S1300 を指定 → S1300 のファイル
+        s1300_table = read_report(entry.key, today=True, schedule_key="S1300")
+        assert s1300_table.to_rows() == [{"col": "val"}]
+
+    def test_read_report_today_schedule_key_miss_raises_with_key(
+        self, history_path, tmp_path
+    ) -> None:
+        """今日の S0900 だけ成功しているとき、S1300 を指定するとエラー（メッセージにキー入り）。"""
+        entry = _entry()
+        base = tmp_path / "out"
+        today_str = now().strftime("%Y-%m-%d %H:%M:%S")
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="s0900.csv", schedule_key="S0900"),
+            timestamp=today_str,
+            target_folder=base,
+        )
+        self._make_report_file(base, "s0900.csv")
+
+        with pytest.raises(ReportNotDownloadedError) as excinfo:
+            read_report(entry.key, today=True, schedule_key="S1300")
+        assert "S1300" in str(excinfo.value)
+
+    def test_report_path_today_filters_by_schedule_key(self, history_path, tmp_path) -> None:
+        """``report_path(..., today=True)`` も ``schedule_key=`` で絞り込まれる。
+
+        今日の S0900 だけ成功していれば、S1300 を指定すると ``None``。
+        """
+        entry = _entry()
+        base = tmp_path / "out"
+        today_str = now().strftime("%Y-%m-%d %H:%M:%S")
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="s0900.csv", schedule_key="S0900"),
+            timestamp=today_str,
+            target_folder=base,
+        )
+        self._make_report_file(base, "s0900.csv")
+
+        # S0900 を指定 → S0900 のパス
+        assert report_path(entry.key, today=True, schedule_key="S0900") == base / "s0900.csv"
+        # S1300 を指定 → None（S0900 だけなので）
+        assert report_path(entry.key, today=True, schedule_key="S1300") is None
+        # 省略 → パス（絞り込まない）
+        assert report_path(entry.key, today=True) == base / "s0900.csv"
+
+    def test_read_report_filters_by_schedule_key(self, history_path, tmp_path) -> None:
+        """``read_report()`` も ``schedule_key=`` で絞り込まれる。"""
+        entry = _entry()
+        base = tmp_path / "out"
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="s0900.csv", schedule_key="S0900"),
+            timestamp="2024-01-01 09:00:00",
+            target_folder=base,
+        )
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="s1300.csv", schedule_key="S1300"),
+            timestamp="2024-01-02 09:00:00",
+            target_folder=base,
+        )
+        self._make_report_file(base, "s0900.csv")
+        self._make_report_file(base, "s1300.csv")
+
+        # S0900 を指定 → S0900 のファイル（古いほう）
+        assert read_report(entry.key, schedule_key="S0900").to_rows() == [{"col": "val"}]
+        # S1300 を指定 → S1300 のファイル（新しいほう）
+        assert read_report(entry.key, schedule_key="S1300").to_rows() == [{"col": "val"}]
 
 
 # ── append_history ─────────────────────────────────────────────────────
