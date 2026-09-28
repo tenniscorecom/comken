@@ -4,6 +4,7 @@
 （tests/test_browser_sites_ntt.py と同じ方針）。
 """
 
+import contextlib
 import logging
 import threading
 import time
@@ -11,13 +12,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from comken.exceptions import BrowserError, SalesforceError
+from comken.exceptions import BrowserError, LoginFailedError, SalesforceError
 from comken.toolbox.browser.management.sessions import BrowserSession
 from comken.toolbox.browser.sites.salesforce.base import (
     SalesforceReportBrowser,
     _cookies_to_requests_session,
     _domain_of,
     _find_footer_start,
+    _is_logged_in,
     _start_keep_alive,
     _strip_report_footer,
 )
@@ -25,6 +27,13 @@ from comken.toolbox.browser.sites.salesforce.pages.login_page import LoginPage
 
 REPORT_URL_1 = "https://example.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE1AS/view"
 REPORT_URL_2 = "https://example.my.salesforce.com/lightning/r/Report/00O5g00000ABCDE2AS/view"
+
+# ログイン済み: Lightning のホーム（入力欄なし + /lightning/...）
+_LOGGED_IN_URL = "https://example.my.salesforce.com/lightning/page/home"
+# ログイン済み: Classic のホーム（/home/home.jsp を含む + 入力欄なし）
+_LOGGED_IN_CLASSIC_URL = "https://example.my.salesforce.com/home/home.jsp"
+# ログイン画面: 入力欄あり + 任意のパス
+_LOGIN_URL = "https://example.my.salesforce.com/"
 
 
 def _patch_browser(monkeypatch) -> None:
@@ -75,16 +84,345 @@ class TestGoLogin:
             sf.go_login()
 
 
+class TestIsLoggedIn:
+    """_is_logged_in() — ログイン画面の入力欄と URL パスから「ログイン済み」を判定する。"""
+
+    def test_returns_true_when_no_username_field_and_lightning_url(self):
+        driver = MagicMock()
+        driver.find_elements.return_value = []  # ログイン入力欄が無い
+        driver.current_url = _LOGGED_IN_URL
+
+        assert _is_logged_in(driver) is True
+
+    def test_returns_true_when_no_username_field_and_classic_home_url(self):
+        driver = MagicMock()
+        driver.find_elements.return_value = []
+        driver.current_url = _LOGGED_IN_CLASSIC_URL
+
+        assert _is_logged_in(driver) is True
+
+    def test_returns_false_when_username_field_is_present(self):
+        driver = MagicMock()
+        driver.find_elements.return_value = [MagicMock()]  # 入力欄がある（ログイン画面）
+        driver.current_url = _LOGIN_URL
+
+        assert _is_logged_in(driver) is False
+
+    def test_returns_false_for_mfa_intermediate_url(self):
+        """MFA 検証途中など、入力欄は無いがパスが想定外の画面は「まだ」と判定する。"""
+        driver = MagicMock()
+        driver.find_elements.return_value = []
+        driver.current_url = (
+            "https://example.my.salesforce.com/_ui/identity/verification/SetupVerification"
+        )
+
+        assert _is_logged_in(driver) is False
+
+    def test_break_url_path_check(self):
+        """URL パス判定を壊したら、``/secur/frontdoor.jsp``（Lightning / Classic ホーム
+        以外の URL）で「ログイン済み」と誤判定する実装が落ちることの確認用。
+        username が無い + Lightning/Classic 以外の URL のとき False を返すべき。"""
+        driver = MagicMock()
+        driver.find_elements.return_value = []  # username 入力欄は無い
+        driver.current_url = "https://example.my.salesforce.com/secur/frontdoor.jsp"
+
+        # /secur/frontdoor.jsp は Lightning でも Classic ホームでもないので
+        # ログイン済みと判定してはいけない（壊れた実装ならここで True になる）
+        assert _is_logged_in(driver) is False
+
+
 class TestWaitForManualLogin:
-    """wait_for_manual_login() — 人がブラウザでログインを終えるのをEnter待ちする。"""
+    """wait_for_manual_login() — ブラウザ状態をポーリングして人のログイン完了を待つ。
 
-    def test_waits_for_enter_key(self, monkeypatch):
-        calls = []
-        monkeypatch.setattr("builtins.input", lambda prompt="": calls.append(prompt))
+    各テストは ``sf.__enter__()`` で起動し ``finally`` で ``__exit__()`` する形に
+    統一している（``_patch_browser`` が ``BrowserSession.__enter__`` を差し替えて
+    ``_driver = MagicMock()`` を入れるため、テスト用のドライバを後付けできる）。
+    """
 
-        SalesforceReportBrowser().wait_for_manual_login()
+    @staticmethod
+    def _enter_sf(monkeypatch, driver: object) -> SalesforceReportBrowser:
+        _patch_browser(monkeypatch)
+        sf = SalesforceReportBrowser()
+        sf.__enter__()
+        assert sf.session is not None
+        sf.session._driver = driver
+        return sf
 
-        assert len(calls) == 1
+    @staticmethod
+    def _exit_sf(sf: SalesforceReportBrowser) -> None:
+        with contextlib.suppress(Exception):
+            sf.__exit__(None, None, None)
+
+    @staticmethod
+    def _driver(*, username_field_present: bool, current_url: str) -> MagicMock:
+        """username 入力欄の有無と URL を固定で返す単純なドライバモック。"""
+        driver = MagicMock()
+        driver.find_elements.return_value = [MagicMock()] if username_field_present else []
+        driver.current_url = current_url
+        return driver
+
+    @staticmethod
+    def _stateful_driver(username_per_call: list[bool], urls: list[str]) -> object:
+        """``find_elements`` の戻り値と ``current_url`` を呼び出しごとに変えるドライバ。
+
+        ``username_per_call[i]`` が True なら username 入力欄がある状態、
+        ``urls[i]`` が ``current_url`` の戻り値。``_is_logged_in`` は
+        ``find_elements`` を1回、``current_url`` を1回呼ぶので、
+        1回の判定につきリストのインデックスが1つ進む。
+        """
+        # find_elements の戻り値を組み立てる: True → [MagicMock()], False → []
+        find_side_effect = [[MagicMock()] if u else [] for u in username_per_call]
+
+        class _Driver:
+            def __init__(self):
+                self._urls = list(urls)
+                self._idx = 0
+                self.find_elements = MagicMock(side_effect=find_side_effect)
+
+            @property
+            def current_url(self) -> str:
+                if self._idx >= len(self._urls):
+                    return self._urls[-1]  # 範囲外なら最後の値を返し続ける（=タイムアウト前提）
+                v = self._urls[self._idx]
+                self._idx += 1
+                return v
+
+        return _Driver()
+
+    def test_returns_immediately_when_already_logged_in(self, monkeypatch):
+        """ログイン済みなら _sleep を呼ばずにすぐ return する。"""
+        driver = self._driver(username_field_present=False, current_url=_LOGGED_IN_URL)
+        sf = self._enter_sf(monkeypatch, driver)
+        try:
+            sleeps: list[float] = []
+            monkeypatch.setattr(
+                "comken.toolbox.browser.sites.salesforce.base._sleep",
+                lambda seconds: sleeps.append(seconds),
+            )
+            input_calls: list[str] = []
+            monkeypatch.setattr("builtins.input", lambda prompt="": input_calls.append(prompt))
+
+            sf.wait_for_manual_login(timeout=600, interval=3)
+        finally:
+            self._exit_sf(sf)
+
+        # ログイン済みならポーリングに入らないので sleep は呼ばれない
+        assert sleeps == []
+        # 1回目は「ログイン済みか」の判定で find_elements が呼ばれている
+        assert driver.find_elements.call_count >= 1
+        # input() は絶対に呼ばれない（無人の定期実行からも安全に呼べる）
+        assert input_calls == []
+
+    def test_polls_and_returns_when_login_completes(self, monkeypatch, caplog):
+        """最初はログイン画面、何回かの確認の後にログイン済みになって return する。
+
+        確認する性質:
+        - WARNING（「ログインが切れています」）が1回出る
+        - INFO（「手動ログインを確認しました」）が1回出る
+        - sleep が少なくとも1回呼ばれる（ポーリングしている証拠）
+        - find_elements が複数回呼ばれる（ポーリング中に状態を見ている証拠）
+        - ループから正常に return する（timeout で死なない）
+        """
+        # 初回: ログイン画面 → False
+        # 以降: Lightning に切り替わる → どこかで True になって return
+        # URL は WARNING log（1回）と username 入力欄が消えた後の _is_logged_in で読まれる
+        driver = self._stateful_driver(
+            username_per_call=[True, True, False, False],
+            urls=[_LOGIN_URL, _LOGIN_URL, _LOGGED_IN_URL, _LOGIN_URL],
+        )
+        sf = self._enter_sf(monkeypatch, driver)
+        try:
+            sleeps: list[float] = []
+            monkeypatch.setattr(
+                "comken.toolbox.browser.sites.salesforce.base._sleep",
+                lambda seconds: sleeps.append(seconds),
+            )
+
+            with caplog.at_level(
+                logging.WARNING, logger="comken.toolbox.browser.sites.salesforce.base"
+            ):
+                sf.wait_for_manual_login(timeout=600, interval=3)
+        finally:
+            self._exit_sf(sf)
+
+        # sleep が少なくとも1回は呼ばれている（ポーリングしている証拠）
+        assert len(sleeps) >= 1
+        assert all(s == 3 for s in sleeps)
+        # find_elements が複数回呼ばれている（状態を見ている証拠）
+        assert driver.find_elements.call_count >= 2
+        # WARNING は1回（「ログインが切れています」）
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warnings) == 1
+        assert "ログインが切れています" in warnings[0].getMessage()
+        # INFO は caplog の対象レベル外だが、ループから正常に return したことで
+        # 「ポーリング中にログイン完了を検知して抜けた」ことを確認できる
+        # （timeout で死んだ場合は LoginFailedError が出るのでここに来ない）
+
+    def test_mfa_intermediate_state_is_treated_as_not_logged_in(self, monkeypatch):
+        """MFA 検証の途中画面（入力欄なし / パスが /lightning/ でも /home/home.jsp でもない）
+        は「まだ」と判定され、ログイン済みになるまで待つ。"""
+        # 1回目: MFA 中 → False（username は消えたが URL が想定外）
+        # 2回目: Lightning に遷移済み → True
+        # URL は WARNING log でも読まれる
+        mfa_url = "https://example.my.salesforce.com/_ui/identity/verification/SetupVerification"
+        driver = self._stateful_driver(
+            username_per_call=[False, False, False, False],
+            urls=[mfa_url, mfa_url, mfa_url, _LOGGED_IN_URL],
+        )
+        sf = self._enter_sf(monkeypatch, driver)
+        try:
+            sleeps: list[float] = []
+            monkeypatch.setattr(
+                "comken.toolbox.browser.sites.salesforce.base._sleep",
+                lambda seconds: sleeps.append(seconds),
+            )
+
+            sf.wait_for_manual_login(timeout=600, interval=3)
+        finally:
+            self._exit_sf(sf)
+
+        # MFA 中と Lightning ログイン済みで計2回以上 find_elements が呼ばれる
+        assert driver.find_elements.call_count >= 2
+        # sleep も少なくとも1回は呼ばれる（MFA 中で止まったままになっていない）
+        assert len(sleeps) >= 1
+
+    def test_raises_login_failed_error_on_timeout(self, monkeypatch):
+        """timeout を過ぎたら LoginFailedError。メッセージに待った時間と対処が入る。"""
+        driver = self._driver(username_field_present=True, current_url=_LOGIN_URL)
+        sf = self._enter_sf(monkeypatch, driver)
+        try:
+            # 時計を進めてタイムアウトさせる
+            clock = [0.0]
+
+            def fake_monotonic() -> float:
+                return clock[0]
+
+            def fake_sleep(seconds: float) -> None:
+                clock[0] += seconds
+
+            monkeypatch.setattr(
+                "comken.toolbox.browser.sites.salesforce.base._monotonic", fake_monotonic
+            )
+            monkeypatch.setattr("comken.toolbox.browser.sites.salesforce.base._sleep", fake_sleep)
+
+            with pytest.raises(LoginFailedError) as exc_info:
+                sf.wait_for_manual_login(timeout=600, interval=300)
+        finally:
+            self._exit_sf(sf)
+
+        message = str(exc_info.value)
+        # 待った時間（分）と対処の文言が含まれる
+        assert "10 分待ちましたが" in message
+        assert "Edge でログインしてから" in message
+
+    def test_headless_raises_browser_error_immediately(self, monkeypatch):
+        """HEADLESS でログインが切れていたら、待たずに BrowserError。"""
+
+        # OPTIONS は BrowserOptions のサブクラスである必要がある
+        from comken.toolbox.browser.options import BrowserOptions
+
+        class _HeadlessOptions(BrowserOptions):
+            HEADLESS = True
+
+        class _Sf(SalesforceReportBrowser):
+            OPTIONS = _HeadlessOptions
+
+        _patch_browser(monkeypatch)
+        driver = self._driver(username_field_present=True, current_url=_LOGIN_URL)
+        sf = _Sf()
+        sf.__enter__()
+        assert sf.session is not None
+        sf.session._driver = driver
+        try:
+            sleeps: list[float] = []
+            monkeypatch.setattr(
+                "comken.toolbox.browser.sites.salesforce.base._sleep",
+                lambda seconds: sleeps.append(seconds),
+            )
+
+            with pytest.raises(BrowserError) as exc_info:
+                sf.wait_for_manual_login(timeout=600, interval=3)
+        finally:
+            self._exit_sf(sf)
+
+        # 待たずにエラー（sleep は呼ばれない）
+        assert sleeps == []
+        message = str(exc_info.value)
+        assert "HEADLESS" in message
+        assert "HEADLESS を False" in message
+
+    def test_headless_with_already_logged_in_returns_normally(self, monkeypatch):
+        """HEADLESS でも、最初からログイン済みならそのまま return。"""
+        from comken.toolbox.browser.options import BrowserOptions
+
+        class _HeadlessOptions(BrowserOptions):
+            HEADLESS = True
+
+        class _Sf(SalesforceReportBrowser):
+            OPTIONS = _HeadlessOptions
+
+        _patch_browser(monkeypatch)
+        driver = self._driver(username_field_present=False, current_url=_LOGGED_IN_URL)
+        sf = _Sf()
+        sf.__enter__()
+        assert sf.session is not None
+        sf.session._driver = driver
+        try:
+            sleeps: list[float] = []
+            monkeypatch.setattr(
+                "comken.toolbox.browser.sites.salesforce.base._sleep",
+                lambda seconds: sleeps.append(seconds),
+            )
+
+            sf.wait_for_manual_login(timeout=600, interval=3)
+        finally:
+            self._exit_sf(sf)
+
+        # ログイン済みなら HEADLESS でもポーリングに入らない
+        assert sleeps == []
+
+    def test_does_not_call_builtins_input(self, monkeypatch):
+        """input() を絶対に呼ばない（無人の定期実行からも安全に呼べるため）。"""
+        driver = self._driver(username_field_present=False, current_url=_LOGGED_IN_URL)
+        sf = self._enter_sf(monkeypatch, driver)
+        try:
+
+            def fail_on_input(prompt=""):
+                raise AssertionError(f"input() が呼ばれました: {prompt!r}")
+
+            monkeypatch.setattr("builtins.input", fail_on_input)
+            monkeypatch.setattr(
+                "comken.toolbox.browser.sites.salesforce.base._sleep",
+                lambda seconds: None,
+            )
+
+            # 既にログイン済みなので sleep もせず input() も呼ばない
+            sf.wait_for_manual_login(timeout=600, interval=3)
+        finally:
+            self._exit_sf(sf)
+
+    def test_breaks_when_poll_check_is_removed(self, monkeypatch):
+        """ポーリングを実装しなかったら sleep が一度も呼ばれないまま timeout になる。
+        正しい実装では sleep が少なくとも1回は呼ばれてから return する。"""
+        # 初回 False (username 見える)、2回目 True (username 消えて URL が Lightning)
+        driver = self._stateful_driver(
+            username_per_call=[True, False],
+            urls=[_LOGIN_URL, _LOGGED_IN_URL],
+        )
+        sf = self._enter_sf(monkeypatch, driver)
+        try:
+            sleeps: list[float] = []
+            monkeypatch.setattr(
+                "comken.toolbox.browser.sites.salesforce.base._sleep",
+                lambda seconds: sleeps.append(seconds),
+            )
+
+            sf.wait_for_manual_login(timeout=600, interval=3)
+        finally:
+            self._exit_sf(sf)
+
+        # ポーリング無し（sleep 0回）の壊れた実装なら、ここが 0 になってテストが落ちる
+        assert sleeps == [3]
 
 
 class TestLoginPageLogin:

@@ -6229,7 +6229,7 @@ DPAPIに保存したID/パスワードでログインを試みる。
 
 MFA（認証コード・端末認証など）が要求される組織では、これだけでは
 ログインが完了しない。続けて ``wait_for_manual_login()`` を呼び、
-人がブラウザで残りの確認を終えるのを待つこと。
+ブラウザで残りの確認を終えると自動で検知して return する。
 
 Args:
     prefix: DPAPIに登録した認証情報のシステム名
@@ -6245,17 +6245,49 @@ Raises:
 #### `wait_for_manual_login`
 
 ```text
-def wait_for_manual_login(self) -> None:
+def wait_for_manual_login(self, timeout: float=_DEFAULT_MANUAL_LOGIN_TIMEOUT_SECONDS, interval: float=_DEFAULT_MANUAL_LOGIN_INTERVAL_SECONDS) -> None:
 ```
 
 ##### 説明
 
-ブラウザでの手動ログインが終わるまで待つ（ターミナルでEnter待ち）。
+ブラウザでの手動ログインが終わるまで、ブラウザを定期的にポーリングして待つ。
 
-``BrowserOptions.HEADLESS`` は既定で ``False`` のため、通常はブラウザの
-画面が見える状態で起動している。そこへ人がID/パスワード/MFAを入力し
-（``login_with_credentials()`` 済みならMFAだけ）、ログインが終わったら
-こちらのターミナルで Enter を押す。
+``go_login()`` の直後（``BASE_URL`` のログイン画面を開いた直後）に呼ぶ。
+すでにログイン済み（ログイン画面の入力欄 ``id="username"`` が無く、URL が
+Lightning のホーム ``/lightning/...`` または Classic のホーム
+``/home/home.jsp``）なら、**待たずにすぐ return する**。
+
+まだログインしていなければ ``interval`` 秒おきにブラウザ状態を確認し、
+ログイン済みになった時点で ``logger.info`` を出して return する。人が
+ターミナルで Enter を押す必要はない（無人の定期実行からも安全に呼べる）。
+
+``timeout`` 秒を過ぎてもログインが確認できなかった場合は
+``LoginFailedError`` を送出する。
+
+``OPTIONS.HEADLESS`` が ``True`` のときは人がログインできないので、
+ログインが切れた瞬間に待たずに ``BrowserError`` を送出する
+（ただし呼び出し時点でログイン済みなら、HEADLESS でもそのまま return する）。
+
+.. note::
+   ログイン済み判定は Salesforce の一般的な動き（ログイン後に
+   ``/lightning/`` のホームへ遷移する）に基づく**推測**で、実際の組織で
+   完全に正しいことは未確認。MFA・パスワード変更の途中画面
+   （``/_ui/identity/verification/...`` など）は「まだ」と判定される
+   （仕様の想定通り）。組織固有の動きがある場合は ``_is_logged_in()`` を
+   拡張すること。
+
+Args:
+    timeout: 待機の最大秒数。既定10分
+        （``_DEFAULT_MANUAL_LOGIN_TIMEOUT_SECONDS``）。
+    interval: ブラウザ状態の確認間隔（秒）。既定3秒
+        （``_DEFAULT_MANUAL_LOGIN_INTERVAL_SECONDS``）。
+
+Raises:
+    LoginFailedError: ``timeout`` 秒待ってもログイン済みにならなかった場合。
+    BrowserError: HEADLESS で起動中、かつログインが切れていた場合
+        （人がブラウザを操作できないため、待たずにエラー）。
+    WebDriverException: ブラウザが閉じられた・一時的に操作不能になった
+        場合（そのまま例外を上げる）。
 
 #### `export_reports`
 
@@ -6359,7 +6391,7 @@ DPAPIに保存したID/パスワードでログインを試みる。
 
 MFA（認証コード・端末認証など）が要求される組織では、これだけでは
 ログインが完了しない。続けて ``wait_for_manual_login()`` を呼び、
-人がブラウザで残りの確認を終えるのを待つこと。
+ブラウザで残りの確認を終えると自動で検知して return する。
 
 Args:
     prefix: DPAPIに登録した認証情報のシステム名
@@ -6375,17 +6407,49 @@ Raises:
 #### `wait_for_manual_login`
 
 ```text
-def wait_for_manual_login(self) -> None:
+def wait_for_manual_login(self, timeout: float=_DEFAULT_MANUAL_LOGIN_TIMEOUT_SECONDS, interval: float=_DEFAULT_MANUAL_LOGIN_INTERVAL_SECONDS) -> None:
 ```
 
 ##### 説明
 
-ブラウザでの手動ログインが終わるまで待つ（ターミナルでEnter待ち）。
+ブラウザでの手動ログインが終わるまで、ブラウザを定期的にポーリングして待つ。
 
-``BrowserOptions.HEADLESS`` は既定で ``False`` のため、通常はブラウザの
-画面が見える状態で起動している。そこへ人がID/パスワード/MFAを入力し
-（``login_with_credentials()`` 済みならMFAだけ）、ログインが終わったら
-こちらのターミナルで Enter を押す。
+``go_login()`` の直後（``BASE_URL`` のログイン画面を開いた直後）に呼ぶ。
+すでにログイン済み（ログイン画面の入力欄 ``id="username"`` が無く、URL が
+Lightning のホーム ``/lightning/...`` または Classic のホーム
+``/home/home.jsp``）なら、**待たずにすぐ return する**。
+
+まだログインしていなければ ``interval`` 秒おきにブラウザ状態を確認し、
+ログイン済みになった時点で ``logger.info`` を出して return する。人が
+ターミナルで Enter を押す必要はない（無人の定期実行からも安全に呼べる）。
+
+``timeout`` 秒を過ぎてもログインが確認できなかった場合は
+``LoginFailedError`` を送出する。
+
+``OPTIONS.HEADLESS`` が ``True`` のときは人がログインできないので、
+ログインが切れた瞬間に待たずに ``BrowserError`` を送出する
+（ただし呼び出し時点でログイン済みなら、HEADLESS でもそのまま return する）。
+
+.. note::
+   ログイン済み判定は Salesforce の一般的な動き（ログイン後に
+   ``/lightning/`` のホームへ遷移する）に基づく**推測**で、実際の組織で
+   完全に正しいことは未確認。MFA・パスワード変更の途中画面
+   （``/_ui/identity/verification/...`` など）は「まだ」と判定される
+   （仕様の想定通り）。組織固有の動きがある場合は ``_is_logged_in()`` を
+   拡張すること。
+
+Args:
+    timeout: 待機の最大秒数。既定10分
+        （``_DEFAULT_MANUAL_LOGIN_TIMEOUT_SECONDS``）。
+    interval: ブラウザ状態の確認間隔（秒）。既定3秒
+        （``_DEFAULT_MANUAL_LOGIN_INTERVAL_SECONDS``）。
+
+Raises:
+    LoginFailedError: ``timeout`` 秒待ってもログイン済みにならなかった場合。
+    BrowserError: HEADLESS で起動中、かつログインが切れていた場合
+        （人がブラウザを操作できないため、待たずにエラー）。
+    WebDriverException: ブラウザが閉じられた・一時的に操作不能になった
+        場合（そのまま例外を上げる）。
 
 #### `export_reports`
 
@@ -6557,7 +6621,7 @@ DPAPIに保存したID/パスワードでログインを試みる。
 
 MFA（認証コード・端末認証など）が要求される組織では、これだけでは
 ログインが完了しない。続けて ``wait_for_manual_login()`` を呼び、
-人がブラウザで残りの確認を終えるのを待つこと。
+ブラウザで残りの確認を終えると自動で検知して return する。
 
 Args:
     prefix: DPAPIに登録した認証情報のシステム名
@@ -6573,17 +6637,49 @@ Raises:
 #### `wait_for_manual_login`
 
 ```text
-def wait_for_manual_login(self) -> None:
+def wait_for_manual_login(self, timeout: float=_DEFAULT_MANUAL_LOGIN_TIMEOUT_SECONDS, interval: float=_DEFAULT_MANUAL_LOGIN_INTERVAL_SECONDS) -> None:
 ```
 
 ##### 説明
 
-ブラウザでの手動ログインが終わるまで待つ（ターミナルでEnter待ち）。
+ブラウザでの手動ログインが終わるまで、ブラウザを定期的にポーリングして待つ。
 
-``BrowserOptions.HEADLESS`` は既定で ``False`` のため、通常はブラウザの
-画面が見える状態で起動している。そこへ人がID/パスワード/MFAを入力し
-（``login_with_credentials()`` 済みならMFAだけ）、ログインが終わったら
-こちらのターミナルで Enter を押す。
+``go_login()`` の直後（``BASE_URL`` のログイン画面を開いた直後）に呼ぶ。
+すでにログイン済み（ログイン画面の入力欄 ``id="username"`` が無く、URL が
+Lightning のホーム ``/lightning/...`` または Classic のホーム
+``/home/home.jsp``）なら、**待たずにすぐ return する**。
+
+まだログインしていなければ ``interval`` 秒おきにブラウザ状態を確認し、
+ログイン済みになった時点で ``logger.info`` を出して return する。人が
+ターミナルで Enter を押す必要はない（無人の定期実行からも安全に呼べる）。
+
+``timeout`` 秒を過ぎてもログインが確認できなかった場合は
+``LoginFailedError`` を送出する。
+
+``OPTIONS.HEADLESS`` が ``True`` のときは人がログインできないので、
+ログインが切れた瞬間に待たずに ``BrowserError`` を送出する
+（ただし呼び出し時点でログイン済みなら、HEADLESS でもそのまま return する）。
+
+.. note::
+   ログイン済み判定は Salesforce の一般的な動き（ログイン後に
+   ``/lightning/`` のホームへ遷移する）に基づく**推測**で、実際の組織で
+   完全に正しいことは未確認。MFA・パスワード変更の途中画面
+   （``/_ui/identity/verification/...`` など）は「まだ」と判定される
+   （仕様の想定通り）。組織固有の動きがある場合は ``_is_logged_in()`` を
+   拡張すること。
+
+Args:
+    timeout: 待機の最大秒数。既定10分
+        （``_DEFAULT_MANUAL_LOGIN_TIMEOUT_SECONDS``）。
+    interval: ブラウザ状態の確認間隔（秒）。既定3秒
+        （``_DEFAULT_MANUAL_LOGIN_INTERVAL_SECONDS``）。
+
+Raises:
+    LoginFailedError: ``timeout`` 秒待ってもログイン済みにならなかった場合。
+    BrowserError: HEADLESS で起動中、かつログインが切れていた場合
+        （人がブラウザを操作できないため、待たずにエラー）。
+    WebDriverException: ブラウザが閉じられた・一時的に操作不能になった
+        場合（そのまま例外を上げる）。
 
 #### `export_reports`
 

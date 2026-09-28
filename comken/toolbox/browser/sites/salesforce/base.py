@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from collections.abc import Iterator, Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -37,7 +38,7 @@ from urllib.parse import urlsplit
 import requests
 
 from comken.core.text import normalize_encoding
-from comken.exceptions import BrowserError, SalesforceError
+from comken.exceptions import BrowserError, LoginFailedError, SalesforceError
 from comken.toolbox.browser import SiteBase
 from comken.toolbox.browser.sites.salesforce.pages.login_page import LoginPage
 from comken.toolbox.salesforce.report import report_id_from_url
@@ -76,6 +77,19 @@ _DEFAULT_REQUEST_TIMEOUT_SECONDS = 300
 
 # keep_alive_report_id を開く既定の間隔（秒）
 _DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS = 300
+
+# wait_for_manual_login(): 最大の待ち時間（秒）。MFA まで含めて人が終えるのに
+# 十分な時間を取る（既定10分）。タイムアウト後は LoginFailedError を送出する
+_DEFAULT_MANUAL_LOGIN_TIMEOUT_SECONDS = 600
+
+# wait_for_manual_login(): ブラウザ状態を確認する間隔（秒）。
+# 短すぎるとポーリングの負荷、長すぎると完了検知が遅れる。3秒は両者の妥協点
+_DEFAULT_MANUAL_LOGIN_INTERVAL_SECONDS = 3
+
+# time.monotonic / time.sleep はテストで差し替えられるよう、モジュールの属性として
+# 参照する（テストでは _monotonic / _sleep を monkeypatch で差し替える）
+_monotonic = time.monotonic
+_sleep = time.sleep
 
 
 class SalesforceReportBrowser(SiteBase):
@@ -133,7 +147,7 @@ class SalesforceReportBrowser(SiteBase):
 
         MFA（認証コード・端末認証など）が要求される組織では、これだけでは
         ログインが完了しない。続けて ``wait_for_manual_login()`` を呼び、
-        人がブラウザで残りの確認を終えるのを待つこと。
+        ブラウザで残りの確認を終えると自動で検知して return する。
 
         Args:
             prefix: DPAPIに登録した認証情報のシステム名
@@ -154,17 +168,90 @@ class SalesforceReportBrowser(SiteBase):
         login_page = self.go_login()
         login_page.login(cred.username, cred.password)
 
-    def wait_for_manual_login(self) -> None:
-        """ブラウザでの手動ログインが終わるまで待つ（ターミナルでEnter待ち）。
+    def wait_for_manual_login(
+        self,
+        timeout: float = _DEFAULT_MANUAL_LOGIN_TIMEOUT_SECONDS,
+        interval: float = _DEFAULT_MANUAL_LOGIN_INTERVAL_SECONDS,
+    ) -> None:
+        """ブラウザでの手動ログインが終わるまで、ブラウザを定期的にポーリングして待つ。
 
-        ``BrowserOptions.HEADLESS`` は既定で ``False`` のため、通常はブラウザの
-        画面が見える状態で起動している。そこへ人がID/パスワード/MFAを入力し
-        （``login_with_credentials()`` 済みならMFAだけ）、ログインが終わったら
-        こちらのターミナルで Enter を押す。
+        ``go_login()`` の直後（``BASE_URL`` のログイン画面を開いた直後）に呼ぶ。
+        すでにログイン済み（ログイン画面の入力欄 ``id="username"`` が無く、URL が
+        Lightning のホーム ``/lightning/...`` または Classic のホーム
+        ``/home/home.jsp``）なら、**待たずにすぐ return する**。
+
+        まだログインしていなければ ``interval`` 秒おきにブラウザ状態を確認し、
+        ログイン済みになった時点で ``logger.info`` を出して return する。人が
+        ターミナルで Enter を押す必要はない（無人の定期実行からも安全に呼べる）。
+
+        ``timeout`` 秒を過ぎてもログインが確認できなかった場合は
+        ``LoginFailedError`` を送出する。
+
+        ``OPTIONS.HEADLESS`` が ``True`` のときは人がログインできないので、
+        ログインが切れた瞬間に待たずに ``BrowserError`` を送出する
+        （ただし呼び出し時点でログイン済みなら、HEADLESS でもそのまま return する）。
+
+        .. note::
+           ログイン済み判定は Salesforce の一般的な動き（ログイン後に
+           ``/lightning/`` のホームへ遷移する）に基づく**推測**で、実際の組織で
+           完全に正しいことは未確認。MFA・パスワード変更の途中画面
+           （``/_ui/identity/verification/...`` など）は「まだ」と判定される
+           （仕様の想定通り）。組織固有の動きがある場合は ``_is_logged_in()`` を
+           拡張すること。
+
+        Args:
+            timeout: 待機の最大秒数。既定10分
+                （``_DEFAULT_MANUAL_LOGIN_TIMEOUT_SECONDS``）。
+            interval: ブラウザ状態の確認間隔（秒）。既定3秒
+                （``_DEFAULT_MANUAL_LOGIN_INTERVAL_SECONDS``）。
+
+        Raises:
+            LoginFailedError: ``timeout`` 秒待ってもログイン済みにならなかった場合。
+            BrowserError: HEADLESS で起動中、かつログインが切れていた場合
+                （人がブラウザを操作できないため、待たずにエラー）。
+            WebDriverException: ブラウザが閉じられた・一時的に操作不能になった
+                場合（そのまま例外を上げる）。
         """
-        logger.info("手動ログインの完了待ちに入ります（ターミナルでEnter待ち）")
-        input("ブラウザでログイン（必要ならMFAも）を完了したら、ここで Enter を押してください...")
-        logger.info("手動ログインの完了を受け付けました")
+        session = self._require_session()
+        driver = session.raw
+
+        if _is_logged_in(driver):
+            logger.debug("Salesforce はログイン済みです: url=%s", driver.current_url)
+            return
+
+        # HEADLESS だとブラウザ画面が見えず人がログインできないので、待たずにエラー
+        headless = bool(self.OPTIONS.HEADLESS) if self.OPTIONS else False
+        if headless:
+            raise BrowserError(
+                "Salesforce のログインが切れていますが、HEADLESS で起動中のため"
+                "人手でログインできません。\n"
+                "対処: OPTIONS.HEADLESS を False にして（既定値）起動してから"
+                "再度実行してください。"
+            )
+
+        timeout_minutes = max(1, int(timeout // 60))
+        logger.warning(
+            "Salesforce のログインが切れています。"
+            "表示中の Edge でログイン（MFA も含めて）してください。"
+            "最大 %d 分待ちます: url=%s",
+            timeout_minutes,
+            driver.current_url,
+        )
+
+        started = _monotonic()
+        deadline = started + timeout
+        while True:
+            _sleep(interval)
+            if _is_logged_in(driver):
+                elapsed = int(_monotonic() - started)
+                logger.info("手動ログインを確認しました（%d 秒）", elapsed)
+                return
+            if _monotonic() >= deadline:
+                raise LoginFailedError(
+                    f"{timeout_minutes} 分待ちましたがログインが確認できませんでした: "
+                    f"url={driver.current_url}\n"
+                    "対処: Edge でログインしてから、もう一度実行してください。"
+                )
 
     def export_reports(
         self,
@@ -327,6 +414,34 @@ def _domain_of(url: str) -> str:
     """URL から scheme + netloc だけを取り出す（例: https://example.my.salesforce.com）。"""
     parts = urlsplit(url)
     return f"{parts.scheme}://{parts.netloc}"
+
+
+def _is_logged_in(driver: Any) -> bool:
+    """現在のブラウザ状態が「Salesforce にログイン済み」かを判定する。
+
+    判定基準:
+        - ログイン画面の入力欄 ``LoginPage.USERNAME``（``id="username"``）が**無い**
+          （ログイン画面そのものでは無い）
+        - **かつ** 現在 URL のパスが ``/lightning/`` で始まる、または
+          ``/home/home.jsp`` を含む（Lightning / Classic のホーム）
+
+    どちらか一方でも欠ければ「まだ」と判定する。MFA・パスワード変更の途中画面
+    （``/_ui/identity/verification/...`` など）はパスが上の条件に当てはまらない
+    ため「まだ」と判定される（想定通り）。
+
+    .. note::
+       Salesforce の一般的な動き（ログイン済みで ``BASE_URL`` を開くと Lightning の
+       ホーム ``/lightning/`` へ移る）に基づく**推測**で、実際の組織で完全に正しい
+       ことは未確認。組織固有の動き（独自ドメインへのリダイレクト、別のログイン
+       後パスなど）がある場合は、ここを拡張すること。
+    """
+    # find_elements は要素が無いと空リストを返す（NoSuchElementException は出ない）。
+    # 入力欄が見えていれば、まだログイン画面（あるいはその残骸）
+    if driver.find_elements(*LoginPage.USERNAME):
+        return False
+    current_url = driver.current_url
+    path = urlsplit(current_url).path
+    return path.startswith("/lightning/") or "/home/home.jsp" in current_url
 
 
 def _cookies_to_requests_session(driver_cookies: list[dict[str, Any]]) -> requests.Session:
