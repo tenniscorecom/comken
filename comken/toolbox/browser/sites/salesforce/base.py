@@ -8,11 +8,14 @@ SOQLに書き換えられない形式）向けの最終手段。画面のエク�
 CSV 出力には、データ末尾に空行を挟んで著作権・機密情報表示などのフッターが付く。
 ``export_reports()`` は保存前にこのフッター（最初の空行以降）を取り除く。
 
-ログインは ``go_login()`` + ``wait_for_manual_login()``（人が手動で入力）、または
-``login_with_credentials()``（DPAPIに保存したID/パスワードを自動入力、MFA等は
-引き続き人が対応）のどちらか。接続アプリの登録・OAuth初回認可を挟まないため、
-一時的に使いたいだけの時に手早い。ログインさえ済めば、実際のN件のダウンロードは
-requests + ThreadPoolExecutor で並列に行う。
+ログインは ``ensure_login()`` を**推奨**（DPAPIに保存したID/パスワードを自動入力し、
+MFA等の追加確認は人が承認する。ログイン済みのセッションが残っているときは何も
+せず return する）、または ``go_login()`` + ``wait_for_manual_login()``
+（人が手動で入力）、``login_with_credentials()``（ID/パスワードの自動入力だけ
+行い、MFA等は別途 ``wait_for_manual_login()`` を呼ぶ必要がある）の3通り。
+接続アプリの登録・OAuth初回認可を挟まないため、一時的に使いたいだけの時に手早い。
+ログインさえ済めば、実際のN件のダウンロードは requests + ThreadPoolExecutor で
+並列に行う。
 
 組織ごとのクラスは同フォルダの ``solution.py`` / ``solution_sandbox.py`` にあり、
 URL と認証情報名は API 側の組織クラス（``comken.toolbox.salesforce.sites``）の
@@ -98,8 +101,12 @@ class SalesforceReportBrowser(SiteBase):
     URL は example の値のまま。利用プロジェクト側で継承して書き換える
     （BASE_URL を実際の組織の My Domain URL へ）。
 
-    ログイン方法は2通り:
+    ログイン方法は3通り:
 
+    - ``ensure_login()`` （**推奨**）— 既にログイン済みなら何もせず return。
+      未ログインなら DPAPIに保存したID/パスワードを自動入力し、MFA等の追加確認は
+      人が承認する。``prefix`` は省略でき、その場合はクラスの ``CREDENTIAL_PREFIX``
+      を使う
     - ``go_login()`` + ``wait_for_manual_login()`` — 人がブラウザでID/パスワード/
       MFAを手動入力する
     - ``login_with_credentials(prefix)`` — DPAPIに保存したID/パスワードを自動
@@ -119,8 +126,7 @@ class SalesforceReportBrowser(SiteBase):
             CREDENTIAL_PREFIX = "salesforce_temp"
 
         with MySalesforce() as sf:
-            sf.login_with_credentials()     # prefix省略 → CREDENTIAL_PREFIXを使う
-            sf.wait_for_manual_login()      # 初回だけ。2回目以降はプロファイルに残る
+            sf.ensure_login()              # 推奨。1行でログインまで完結
             for report_id, path in sf.export_reports(report_urls, "出力先"):
                 ...
     """
@@ -149,6 +155,9 @@ class SalesforceReportBrowser(SiteBase):
         ログインが完了しない。続けて ``wait_for_manual_login()`` を呼び、
         ブラウザで残りの確認を終えると自動で検知して return する。
 
+        ログイン済みの判定や未登録時の扱いまで含めたいなら ``ensure_login()``
+        を使うこと。
+
         Args:
             prefix: DPAPIに登録した認証情報のシステム名
                 （``comken.toolbox.credentials.Credentials`` のサイト名）。
@@ -167,6 +176,79 @@ class SalesforceReportBrowser(SiteBase):
         cred = Credentials(prefix)
         login_page = self.go_login()
         login_page.login(cred.username, cred.password)
+
+    def ensure_login(
+        self,
+        prefix: str = "",
+        timeout: float = _DEFAULT_MANUAL_LOGIN_TIMEOUT_SECONDS,
+        interval: float = _DEFAULT_MANUAL_LOGIN_INTERVAL_SECONDS,
+    ) -> None:
+        """ログイン画面を開き、ID/パスワードを自動入力したうえで MFA の承認を待つ。
+
+        推奨のログイン方法。次の順で動く:
+
+        1. ``go_login()`` でログイン画面を開く
+        2. 既にログイン済み（``_is_logged_in(driver)`` が真）なら、認証情報を
+           読まずに何もせず return する
+        3. 未ログインなら ``Credentials(prefix or self.CREDENTIAL_PREFIX)`` から
+           ``username`` / ``password`` を取り出し、``LoginPage.login()`` で
+           入力して送信する
+        4. ``wait_for_manual_login(timeout, interval)`` を呼ぶ
+
+        DPAPI の認証情報が未登録（``CredentialNotFoundError``）や、別の
+        ユーザー・PC で登録されていて復号できない（``CredentialError``）
+        場合は**止めずに** WARNING をログへ出し、ID/パスワードの自動入力は
+        スキップして ``wait_for_manual_login()`` へ進む。人が Edge で
+        ID/パスワードから手入力する「今までの手動ログインと同じ動き」に
+        なるため。WARNING には ``python -m comken cred gui`` で
+        ``<prefix>`` に ``username`` / ``password`` を登録すれば自動入力に
+        切り替わる旨を書く。**パスワードはログに出さない。**
+
+        Args:
+            prefix: DPAPIに登録した認証情報のシステム名。**省略時はクラスの
+                ``CREDENTIAL_PREFIX``** を使う。
+            timeout: ``wait_for_manual_login()`` に渡す最大待ち秒数。既定10分。
+            interval: ``wait_for_manual_login()`` に渡す確認間隔（秒）。既定3秒。
+        """
+        from comken.exceptions import CredentialError
+        from comken.toolbox.credentials import Credentials
+
+        login_page = self.go_login()
+        session = self._require_session()
+        driver = session.raw
+
+        if _is_logged_in(driver):
+            logger.debug(
+                "Salesforce は既にログイン済みのため ID/パスワードは入力しません: url=%s",
+                driver.current_url,
+            )
+            return
+
+        prefix = prefix or self.CREDENTIAL_PREFIX
+        try:
+            cred = Credentials(prefix)
+            username, password = cred.username, cred.password
+        except CredentialError as error:
+            logger.warning(
+                "Salesforce のID/パスワードをDPAPIから取得できなかったため、"
+                "ID/パスワードは自動入力しません。"
+                "表示中の Edge でID/パスワードから手入力してください（手動ログインと同じ動き）。"
+                "自動入力に切り替えるには `python -m comken cred gui` を実行し、"
+                "サイト名「%s」に username と password を登録してください: %s",
+                prefix,
+                error,
+            )
+            self.wait_for_manual_login(timeout=timeout, interval=interval)
+            return
+
+        logger.info(
+            "Salesforce のIDとパスワードを自動入力しました。"
+            "続けて MFA を承認してください（スマホ）。"
+            "Edge 側の操作が終わると自動で検知して処理を続行します: prefix=%s",
+            prefix,
+        )
+        login_page.login(username, password)
+        self.wait_for_manual_login(timeout=timeout, interval=interval)
 
     def wait_for_manual_login(
         self,
@@ -232,7 +314,7 @@ class SalesforceReportBrowser(SiteBase):
         timeout_minutes = max(1, int(timeout // 60))
         logger.warning(
             "Salesforce のログインが切れています。"
-            "表示中の Edge でログイン（MFA も含めて）してください。"
+            "表示中の Edge でログイン、または MFA の承認をしてください。"
             "最大 %d 分待ちます: url=%s",
             timeout_minutes,
             driver.current_url,

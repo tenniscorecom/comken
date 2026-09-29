@@ -20,8 +20,7 @@ class SolutionSandbox(SalesforceReportBrowser):
 
     使い方:
         with SolutionSandbox() as sf:
-            sf.login_with_credentials()  # prefix省略 → CREDENTIAL_PREFIXを使う
-            sf.wait_for_manual_login()
+            sf.ensure_login()
             for report_id, path in sf.export_reports(reports):
                 ...
     """
