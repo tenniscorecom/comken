@@ -853,7 +853,9 @@ class TestReportPathAndReadReport:
 
         「実装を壊して落ちる」代表例: 失敗行を除外しないと、最新の失敗で
         取れていないのに ``FileNotFoundError`` が出る／存在しないパスが
-        返る事故になる。
+        返る事故になる。**「最新の取得が失敗のときは古い成功には遡らない」**
+        という本仕様の不変条件でもある（古い成功ファイルを読んで業務側が
+        古いデータで動く事故を防ぐ）。
         """
         entry = _entry()
         base = tmp_path / "out"
@@ -876,8 +878,8 @@ class TestReportPathAndReadReport:
         )
         self._make_report_file(base, "ok.csv")
 
-        # 失敗行を無視して成功のうち最新を返す
-        assert report_path(entry.key) == base / "ok.csv"
+        # 最新の行は失敗 → 古い成功には遡らず None
+        assert report_path(entry.key) is None
 
     def test_read_report_returns_newest_table(self, history_path, tmp_path) -> None:
         """``read_report()`` がパスを ``Table`` で返す。"""
@@ -895,11 +897,20 @@ class TestReportPathAndReadReport:
         table = read_report(entry.key)
         assert list(table.to_rows()) == [{"col": "val"}]
 
-    def test_read_report_with_today_requires_today_success(self, history_path, tmp_path) -> None:
-        """``read_report(..., today=True)`` は今日の成功が無いとエラー。"""
+    def test_read_report_latest_is_failure_raises_with_failure_info(
+        self, history_path, tmp_path
+    ) -> None:
+        """最新の取得が失敗のとき、``read_report()`` は ``ReportNotDownloadedError`` を出し、
+        メッセージに失敗行の ``実行日時`` と ``エラー内容`` が入る。
+
+        旧 ``today=True`` の挙動に似せて「最新の取得が失敗なら例外」を確かめる
+        テスト。**「古い成功 → 新しい失敗」の順で、古い成功には遡らない**こと
+        も同時に検証する（業務担当者のメッセージで「実行日時」と「エラー内容」を
+        見て Salesforce 側の問題を判断できる形に整っているかも見る）。
+        """
         entry = _entry()
         base = tmp_path / "out"
-        # 昨日の成功のみ
+        # 古い成功 → 新しい失敗。最新の取得は失敗
         _write_row(
             history_path,
             entry=entry,
@@ -908,29 +919,140 @@ class TestReportPathAndReadReport:
             timestamp="2024-01-01 09:00:00",
             target_folder=base,
         )
-        self._make_report_file(base, "yest.csv")
-
-        with pytest.raises(ReportNotDownloadedError):
-            read_report(entry.key, today=True)
-
-    def test_report_path_today_false_when_no_today(self, history_path, tmp_path) -> None:
-        """今日分の成功が無ければ ``report_path(..., today=True)`` は ``None``。"""
-        entry = _entry()
-        base = tmp_path / "out"
         _write_row(
             history_path,
             entry=entry,
             project="P",
-            row=HistoryRow(True, True, True, file_name="yest.csv"),
-            timestamp="2024-01-01 09:00:00",
-            target_folder=base,
+            row=HistoryRow(
+                succeeded=False,
+                fetched_from_salesforce=False,
+                saved_to_file=None,
+                cause="Salesforce",
+                error_code="SalesforceAuthError",
+                error="資格情報が無効です",
+            ),
+            timestamp="2024-01-02 09:00:05",
         )
-        self._make_report_file(base, "yest.csv")
 
-        assert report_path(entry.key, today=True) is None
+        with pytest.raises(ReportNotDownloadedError) as excinfo:
+            read_report(entry.key)
+        message = str(excinfo.value)
+        # 失敗行の実行日時とエラー内容（原因区分 / エラーコード / エラー内容）が
+        # 業務担当者に届く形になっている
+        assert "2024-01-02 09:00:05" in message
+        assert "Salesforce" in message
+        assert "資格情報が無効です" in message
 
-    def test_report_path_today_returns_path_when_today_ok(self, history_path, tmp_path) -> None:
-        """今日の成功と実ファイルがあれば ``report_path(..., today=True)`` がそのパスを返す。"""
+    def test_read_report_latest_failure_with_empty_timestamp_still_says_failure(
+        self, history_path, tmp_path
+    ) -> None:
+        """失敗行の ``実行日時`` が空でも「最新の取得が失敗」の文面が出る。
+
+        修正前は ``ReportNotDownloadedError`` が ``failed_at is not None`` で
+        失敗分岐を判定しており、 ``実行日時`` が空だと ``None`` に化けて
+        「取得の履歴がありません」の文面になっていた（業務担当者が
+        「定期取得が止まっている」と誤認する方角に倒れる）。修正後は
+        呼び出し側が ``実行日時`` が空のとき「（日時不明）」を渡す。「最新の取得が失敗」の文面が出る
+        （「取得の履歴がありません」にならない）ことを確かめる。
+
+        古い成功行を足すと ``_latest_row()`` の「``実行日時`` の降順」の比較で
+        実行日時空の行が古い成功行に負けて「最新」にならない（``"" < "2024-..."``
+        のため）ので、ここでは**失敗行だけ**を書き、 ``実行日時`` が空の
+        失敗行が単独で「最新」になる形にする。 ``_write_row()`` は
+        ``timestamp=""`` を渡すと ``now()`` にフォールバックするため、
+        ``_write_csv_raw()`` で ``実行日時`` を直接空文字で書く。
+        """
+        entry = _entry()
+        _write_csv_raw(
+            history_path,
+            header=list(COLUMNS),
+            rows=[
+                [
+                    "",  # 実行日時（空）
+                    entry.key,  # 管理番号
+                    "",  # スケジュールキー
+                    entry.summary,  # 概要
+                    entry.report_id,  # レポートID
+                    URL_A,  # URL
+                    "P",  # プロジェクト
+                    FAILURE,  # 成否
+                    "",  # Salesforce取得結果
+                    "",  # 保存結果
+                    "",  # 保存先
+                    "",  # ファイル名
+                    "",  # 取得件数
+                    "",  # 処理秒数
+                    "Salesforce",  # 原因区分
+                    "SalesforceAuthError",  # エラーコード
+                    "資格情報が無効です",  # エラー内容
+                ]
+            ],
+        )
+
+        with pytest.raises(ReportNotDownloadedError) as excinfo:
+            read_report(entry.key)
+        message = str(excinfo.value)
+        # 「最新の取得が失敗」の文面が出る（履歴無しではない）
+        assert "が失敗しています" in message
+        assert "取得の履歴がありません" not in message
+        # 日時が空のときは「（日時不明）」と表示される
+        assert "（日時不明）" in message
+        # 失敗行の原因区分 / エラーコード / エラー内容は引き続き出る
+        assert "Salesforce" in message
+        assert "資格情報が無効です" in message
+
+    def test_read_report_latest_failure_without_cause_still_says_failure(
+        self, history_path, tmp_path
+    ) -> None:
+        """原因区分・エラーコード・エラー内容が全部空の失敗行でも「最新の取得が失敗」になる。
+
+        ``成否 == 成功`` でも ``保存結果`` が空の行は失敗扱いだが、原因の記録は空になりうる。
+        原因の有無で失敗を判定すると「取得の履歴がありません」の文面に化ける。
+        """
+        entry = _entry()
+        _write_csv_raw(
+            history_path,
+            header=list(COLUMNS),
+            rows=[
+                [
+                    "2024-01-02 09:00:05",  # 実行日時
+                    entry.key,  # 管理番号
+                    "",  # スケジュールキー
+                    entry.summary,  # 概要
+                    entry.report_id,  # レポートID
+                    URL_A,  # URL
+                    "P",  # プロジェクト
+                    SUCCESS,  # 成否
+                    SUCCESS,  # Salesforce取得結果
+                    "",  # 保存結果（到達しなかった）
+                    "",  # 保存先
+                    "",  # ファイル名
+                    "",  # 取得件数
+                    "",  # 処理秒数
+                    "",  # 原因区分
+                    "",  # エラーコード
+                    "",  # エラー内容
+                ]
+            ],
+        )
+
+        with pytest.raises(ReportNotDownloadedError) as excinfo:
+            read_report(entry.key)
+        message = str(excinfo.value)
+        assert "2024-01-02 09:00:05" in message
+        assert "が失敗しています" in message
+        assert "取得の履歴がありません" not in message
+
+    def test_report_path_returns_none_when_no_history_for_key(self, history_path, tmp_path) -> None:
+        """該当行が無い（履歴自体が無い場合も含む）とき ``None``。"""
+        entry = _entry()
+        # 何も書かない
+        assert report_path(entry.key) is None
+
+    def test_report_path_returns_path_when_latest_row_is_success(
+        self, history_path, tmp_path
+    ) -> None:
+        """最新の行が成功で実ファイルがあれば、そのパスを返す。"""
         entry = _entry()
         base = tmp_path / "out"
         today_str = now().strftime("%Y-%m-%d %H:%M:%S")
@@ -944,10 +1066,10 @@ class TestReportPathAndReadReport:
         )
         self._make_report_file(base, "today.csv")
 
-        assert report_path(entry.key, today=True) == base / "today.csv"
+        assert report_path(entry.key) == base / "today.csv"
 
-    def test_report_path_today_returns_none_when_file_missing(self, history_path, tmp_path) -> None:
-        """今日の成功記録はあるが実ファイルが消えていれば ``None``。
+    def test_report_path_returns_none_when_file_missing(self, history_path, tmp_path) -> None:
+        """最新の成功行はあるが実ファイルが消えていれば ``None``。
 
         ``report_path()`` は「ファイルが履歴を指しているか」まで含めて
         判定するため、消えているときには ``None`` を返す（``read_report()``
@@ -965,10 +1087,10 @@ class TestReportPathAndReadReport:
         )
         # ファイルは作らない
 
-        assert report_path(entry.key, today=True) is None
+        assert report_path(entry.key) is None
 
-    def test_report_path_today_does_not_read_csv_contents(self, history_path, tmp_path) -> None:
-        """``report_path(..., today=True)`` は CSV の中身を読まない。
+    def test_report_path_does_not_read_csv_contents(self, history_path, tmp_path) -> None:
+        """``report_path()`` は CSV の中身を読まない。
 
         履歴が指すファイルが CSV として読めないバイト列でもパスを返し、
         例外にならない。大きなレポートで CSV を読み直す無駄を排除するための
@@ -992,7 +1114,7 @@ class TestReportPathAndReadReport:
         broken.write_bytes(b"\x80\x81\x82\x83")
 
         # 中身を読まないため、ファイルの有無だけでパスを返す
-        assert report_path(entry.key, today=True) == broken
+        assert report_path(entry.key) == broken
 
     def test_read_report_when_record_but_file_missing_raises_with_path(
         self, history_path, tmp_path
@@ -1161,51 +1283,20 @@ class TestReportPathAndReadReport:
 
     def test_read_report_schedule_key_miss_without_key_omits_bracket(self) -> None:
         """``schedule_key`` を指定していないときは、括弧部分が入らない。"""
-        entry = _entry()
         # 成功履歴なし → missing_path=None の ReportNotDownloadedError
-
         with pytest.raises(ReportNotDownloadedError) as excinfo:
-            read_report(entry.key)
+            read_report(_entry().key)
         message = str(excinfo.value)
         # schedule_key 未指定 → 括弧部分なし
         assert "（スケジュールキー" not in message
 
-    def test_read_report_today_filters_by_schedule_key(self, history_path, tmp_path) -> None:
-        """``read_report(..., today=True)`` も ``schedule_key=`` で絞り込まれる。"""
-        entry = _entry()
-        base = tmp_path / "out"
-        today_str = now().strftime("%Y-%m-%d %H:%M:%S")
-        _write_row(
-            history_path,
-            entry=entry,
-            project="P",
-            row=HistoryRow(True, True, True, file_name="s0900.csv", schedule_key="S0900"),
-            timestamp=today_str,
-            target_folder=base,
-        )
-        _write_row(
-            history_path,
-            entry=entry,
-            project="P",
-            row=HistoryRow(True, True, True, file_name="s1300.csv", schedule_key="S1300"),
-            timestamp=today_str,
-            target_folder=base,
-        )
-        self._make_report_file(base, "s0900.csv")
-        self._make_report_file(base, "s1300.csv")
+    def test_read_report_schedule_key_miss_raises_with_key(self, history_path, tmp_path) -> None:
+        """S0900 の成功行だけあるとき、S1300 を指定するとエラー（メッセージにキー入り）。
 
-        # S0900 を指定 → S0900 のファイル
-        assert read_report(entry.key, today=True, schedule_key="S0900").to_rows() == [
-            {"col": "val"}
-        ]
-        # S1300 を指定 → S1300 のファイル
-        s1300_table = read_report(entry.key, today=True, schedule_key="S1300")
-        assert s1300_table.to_rows() == [{"col": "val"}]
-
-    def test_read_report_today_schedule_key_miss_raises_with_key(
-        self, history_path, tmp_path
-    ) -> None:
-        """今日の S0900 だけ成功しているとき、S1300 を指定するとエラー（メッセージにキー入り）。"""
+        ``read_report()`` も ``schedule_key=`` の絞り込みを尊重し、該当行が無い
+        ときは ``ReportNotDownloadedError`` を投げる。スケジュールキーが
+        メッセージに入って業務担当者が見つけやすい。
+        """
         entry = _entry()
         base = tmp_path / "out"
         today_str = now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1220,13 +1311,16 @@ class TestReportPathAndReadReport:
         self._make_report_file(base, "s0900.csv")
 
         with pytest.raises(ReportNotDownloadedError) as excinfo:
-            read_report(entry.key, today=True, schedule_key="S1300")
+            read_report(entry.key, schedule_key="S1300")
         assert "S1300" in str(excinfo.value)
 
-    def test_report_path_today_filters_by_schedule_key(self, history_path, tmp_path) -> None:
-        """``report_path(..., today=True)`` も ``schedule_key=`` で絞り込まれる。
+    def test_report_path_filters_by_schedule_key_when_only_one_present(
+        self, history_path, tmp_path
+    ) -> None:
+        """``report_path()`` も ``schedule_key=`` で絞り込まれる。
 
-        今日の S0900 だけ成功していれば、S1300 を指定すると ``None``。
+        S0900 の成功行だけがあるとき、S0900 を指定するとそのパス、S1300 を
+        指定すると ``None``、省略すると S0900 のパスが返る。
         """
         entry = _entry()
         base = tmp_path / "out"
@@ -1242,11 +1336,11 @@ class TestReportPathAndReadReport:
         self._make_report_file(base, "s0900.csv")
 
         # S0900 を指定 → S0900 のパス
-        assert report_path(entry.key, today=True, schedule_key="S0900") == base / "s0900.csv"
+        assert report_path(entry.key, schedule_key="S0900") == base / "s0900.csv"
         # S1300 を指定 → None（S0900 だけなので）
-        assert report_path(entry.key, today=True, schedule_key="S1300") is None
+        assert report_path(entry.key, schedule_key="S1300") is None
         # 省略 → パス（絞り込まない）
-        assert report_path(entry.key, today=True) == base / "s0900.csv"
+        assert report_path(entry.key) == base / "s0900.csv"
 
     def test_read_report_filters_by_schedule_key(self, history_path, tmp_path) -> None:
         """``read_report()`` も ``schedule_key=`` で絞り込まれる。"""
@@ -1275,6 +1369,205 @@ class TestReportPathAndReadReport:
         assert read_report(entry.key, schedule_key="S0900").to_rows() == [{"col": "val"}]
         # S1300 を指定 → S1300 のファイル（新しいほう）
         assert read_report(entry.key, schedule_key="S1300").to_rows() == [{"col": "val"}]
+
+    # ── 「最新の取得が失敗なら古い成功には遡らない」不変条件 ──────────────
+    # 旧実装（成功行の最新を選ぶ）では以下が成立しない。新仕様はこの5ケース
+    # が成立することで「取れていないときに古いデータを黙って読まない」を担保する
+    def test_report_path_oldest_success_then_newer_failure_returns_none(
+        self, history_path, tmp_path
+    ) -> None:
+        """古い成功 → 新しい失敗 の順のとき ``report_path()`` は ``None``。
+
+        旧実装では「最も新しい成功行のパス」を返していたため、このケースで
+        古い成功ファイル（``old.csv``）が返っていた。新仕様では最新の行が
+        失敗のときは遡らず ``None`` を返す（業務側が古いデータで動く事故を防ぐ）。
+        """
+        entry = _entry()
+        base = tmp_path / "out"
+        # 古い成功 → 新しい失敗
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="old.csv"),
+            timestamp="2024-01-01 09:00:00",
+            target_folder=base,
+        )
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(
+                succeeded=False,
+                fetched_from_salesforce=False,
+                saved_to_file=None,
+                cause="Salesforce",
+                error_code="SalesforceAuthError",
+                error="資格情報が無効です",
+            ),
+            timestamp="2024-01-02 09:00:00",
+        )
+        self._make_report_file(base, "old.csv")
+
+        # 古い成功には遡らない
+        assert report_path(entry.key) is None
+
+    def test_report_path_oldest_failure_then_newer_success_returns_newest(
+        self, history_path, tmp_path
+    ) -> None:
+        """古い失敗 → 新しい成功 の順のとき、新しい成功のパスを返す。
+
+        「最新が成功」の通常ケース。失敗行は無視され、新しい成功のパスが
+        返る。 ``_latest_row()`` が全行を見て最新の1行を取り、その行の
+        成否で ``report_path()`` が判定する。
+        """
+        entry = _entry()
+        base = tmp_path / "out"
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(
+                succeeded=False,
+                fetched_from_salesforce=False,
+                saved_to_file=None,
+                cause="Salesforce",
+                error_code="SalesforceAuthError",
+                error="資格情報が無効です",
+            ),
+            timestamp="2024-01-01 09:00:00",
+        )
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="new.csv"),
+            timestamp="2024-01-02 09:00:00",
+            target_folder=base,
+        )
+        self._make_report_file(base, "new.csv")
+
+        # 新しい成功が返る（古い失敗は無視される）
+        assert report_path(entry.key) == base / "new.csv"
+
+    def test_report_path_schedule_key_ignores_failure_of_other_schedule_key(
+        self, history_path, tmp_path
+    ) -> None:
+        """``schedule_key`` 指定時、別のスケジュールキーの新しい失敗には影響されない。
+
+        全体としては「新しい失敗」だが、絞り込み後の最新行（指定した
+        スケジュールキーの中での最新）は成功 → そのパスが返る。**別
+        スケジュールキーの失敗は対象ではない**（業務ロジック上、分けて
+        実行しているものを混ぜると別物の判定になる）。
+        """
+        entry = _entry()
+        base = tmp_path / "out"
+        # S0900（成功・古い）と S1300（失敗・新しい）
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="s0900.csv", schedule_key="S0900"),
+            timestamp="2024-01-01 09:00:00",
+            target_folder=base,
+        )
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(
+                succeeded=False,
+                fetched_from_salesforce=False,
+                saved_to_file=None,
+                schedule_key="S1300",
+                cause="Salesforce",
+                error_code="SalesforceAuthError",
+                error="資格情報が無効です",
+            ),
+            timestamp="2024-01-02 09:00:00",
+        )
+        self._make_report_file(base, "s0900.csv")
+
+        # S0900 を指定 → S0900 の成功行（古い失敗は別キーなので影響しない）
+        assert report_path(entry.key, schedule_key="S0900") == base / "s0900.csv"
+
+    def test_report_path_overall_success_save_failure_is_treated_as_failure(
+        self, history_path, tmp_path
+    ) -> None:
+        """``成否 == 成功`` でも ``保存結果 == 失敗`` の最新行は失敗扱い。
+
+        「成否だけ成功、保存に失敗」は履歴上は「取れていない」と同じ。古い
+        成功には遡らず ``None`` を返す。
+        """
+        entry = _entry()
+        base = tmp_path / "out"
+        # 古い成功 → 新しい「成否=成功 / 保存結果=失敗」
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="old.csv"),
+            timestamp="2024-01-01 09:00:00",
+            target_folder=base,
+        )
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(
+                succeeded=True,
+                fetched_from_salesforce=True,
+                saved_to_file=False,
+                file_name="not-saved.csv",
+                cause="ファイル",
+                error_code="OSError",
+                error="共有サーバー断",
+            ),
+            timestamp="2024-01-02 09:00:00",
+            target_folder=base,
+        )
+        self._make_report_file(base, "old.csv")
+
+        # 保存結果=失敗の最新行 → 古い成功には遡らず None
+        assert report_path(entry.key) is None
+
+    def test_report_path_same_timestamp_picks_later_row(self, history_path, tmp_path) -> None:
+        """同じ実行日時のとき、履歴の後ろの行を採用する。
+
+        同じ時刻で複数行あるケース（例: 同じ管理番号を同日に 2 回取得）を
+        「後ろを採用」で吸収する。古い成功 → 新しい失敗 の同時刻版で、
+        後ろの失敗が採用されることを確認する。
+        """
+        entry = _entry()
+        base = tmp_path / "out"
+        # 同じ実行日時で 2 行: 古い成功 → 同じ時刻の失敗
+        same_timestamp = "2024-01-01 09:00:00"
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="old.csv"),
+            timestamp=same_timestamp,
+            target_folder=base,
+        )
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(
+                succeeded=False,
+                fetched_from_salesforce=False,
+                saved_to_file=None,
+                cause="Salesforce",
+                error_code="SalesforceAuthError",
+                error="資格情報が無効です",
+            ),
+            timestamp=same_timestamp,
+        )
+        self._make_report_file(base, "old.csv")
+
+        # 後ろの行（同値の採用）が失敗 → None
+        assert report_path(entry.key) is None
 
 
 # ── append_history ─────────────────────────────────────────────────────

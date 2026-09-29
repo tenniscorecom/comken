@@ -3488,10 +3488,11 @@ class ReportNotDownloadedError(DownloaderError):
 
 指定した管理番号の取得済みレポートが見つからない
 
-履歴には「成功」の記録が無い、記録はあるがファイルが消えている、
-のいずれか。**comken 側は勝手に Salesforce へ取りに行わない。**
-「取っておいたものを受け取る」だけの関数なので、ここで自動的に
-取りに行くと、定期取得が動いていないことに誰も気づかなくなる。
+履歴に該当行が無い、最新の取得が失敗している、最新の取得は成功だが
+ファイルが消えている、のいずれか。**comken 側は勝手に Salesforce へ
+取りに行わない。**「取っておいたものを受け取る」だけの関数なので、
+ここで自動的に取りに行くと、定期取得が動いていないことに誰も気づか
+なくなる。
 
 発生箇所: comken.services.salesforce_downloader.history の
           report_path() / read_report()
@@ -3499,12 +3500,14 @@ class ReportNotDownloadedError(DownloaderError):
 対処:
     定期取得（Salesforceレポートダウンローダー）が動いているか、
     ``ダウンロード履歴.csv`` を確認する。ファイルが消えている場合は
-    メッセージに表示されたパスに復旧する
+    メッセージに表示されたパスに復旧する。最新の取得が失敗している
+    場合は、表示された実行日時・原因区分・エラー内容を見て対処する
+    （定期取得のログ / Salesforce の状態 / 管理表 / 共有サーバー）
 
 #### `__init__`
 
 ```text
-def __init__(self, report_key: str, missing_path: Path | None, history_path: Path, *, schedule_key: str | None=None) -> None:
+def __init__(self, report_key: str, missing_path: Path | None, history_path: Path, *, schedule_key: str | None=None, failed_at: str | None=None, failure: str | None=None) -> None:
 ```
 
 ### `TableError`

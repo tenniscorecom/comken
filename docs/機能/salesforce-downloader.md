@@ -47,10 +47,10 @@ SALES_RESULT = "1003"
 by_code = read_report(SALES_RESULT).index("顧客コード")
 
 # 今日の分だけ取りたいとき
-if report_path(CUSTOMER_LIST, today=True) is not None:
-    rows = read_report(CUSTOMER_LIST, today=True).to_rows()
+if report_path(CUSTOMER_LIST) is not None:
+    rows = read_report(CUSTOMER_LIST).to_rows()
 else:
-    # 定期取得が動いていない可能性 — 履歴の「成功」記録が無い
+    # 定期取得が動いていない可能性 — 履歴の「最新の取得」が無い／失敗
     ...
 
 # 中身が要らずファイルパスだけ欲しいときは report_path()
@@ -73,31 +73,43 @@ print(report_path(CUSTOMER_LIST))
 
 | | 意味 | いつ使うか |
 |---|---|---|
-| `report_path(key, *, today=False, schedule_key=None)` | 履歴の最も新しい成功行が指すパスを返す（中身は読まない）。見つからないときは `None` | ファイル自体を別ツールに渡したいとき、「今日取れているか」だけを判定したいとき |
-| `read_report(key, *, today=False, schedule_key=None)` | 上記を `Table` で返す。見つからないときは `ReportNotDownloadedError` | 直近の（当日とは限らない）取得ファイルを読みたいとき |
+| `report_path(key, *, schedule_key=None)` | 履歴の **最新の取得** が指すパスを返す（中身は読まない）。見つからないときは `None` | ファイル自体を別ツールに渡したいとき、「最新の取得が成功しているか」だけを判定したいとき |
+| `read_report(key, *, schedule_key=None)` | 上記を `Table` で返す。見つからないときは `ReportNotDownloadedError` | 直近の取得ファイルを読みたいとき |
 
-**条件は両方の関数で同じ**。 `today=True` を指定すると当日分だけを、
-`schedule_key=` を指定するとそのスケジュールキーに完全一致する行だけを
-対象とする（既定は「日付フィルタ無し」かつ「絞り込み無し」、最も新しい
-成功行）。 `report_path()` と `read_report()` は同じ判定を使うため、
-「`report_path() is not None` を見てから `read_report()` を呼ぶ」と
-二重チェックになり、意味が無い。**判定と読み取りを分けたいときは
+**両方の関数は「最新の 1 行だけ」を見る**。古い成功行へ遡らない。最新の行が
+失敗していれば、その管理番号は「取れていない」として扱う（古い成功ファイルを
+読んで業務が古いデータで動く事故を防ぐ）。**「最新の取得が失敗 → 古い成功
+には遡らない」がこの 2 関数の不変条件**で、 `report_path()` は `None`、
+`read_report()` は `ReportNotDownloadedError` を返す。例外メッセージには
+失敗行の `実行日時`・`原因区分`・`エラー内容` が入る（業務担当者が
+Salesforce 側の問題を判断できる形）。
+
+`schedule_key=` を指定するとそのスケジュールキーに**完全一致**する行だけを
+対象とする（部分一致にしない）。省略時は絞り込まない。同じ管理番号に複数の
+スケジュール行から取得しているレポートで、スケジュール行ごとに分けた
+パスを引きたいときの指定。 `report_path()` と `read_report()` は同じ
+判定を使うため、「`report_path() is not None` を見てから `read_report()` を
+呼ぶ」と二重チェックになり、意味が無い。**判定と読み取りを分けたいときは
 `report_path()` の戻り値だけで判定し、読む側は別途 `read_report()` を呼ぶ。**
 なお、`report_path()` はファイルが履歴にあっても実ファイルが消えている
 ときも `None` を返す（`read_report()` が同じ条件で `ReportNotDownloadedError`
 を投げる）ため、ファイルの有無もこの関数1つで分かる。
 
-**同じ管理番号でもスケジュール行が複数あるときは `schedule_key=` キーワードで完全一致で取り分けられる**
-（`schedule_key="S0900"` のように指定。省略時は絞り込まない）。`S09` のような
-途中まででは一致しない（部分一致にしない）。
-
 ```python
-path = report_path("1001", today=True, schedule_key="S0900")
-table = read_report("1001", today=True, schedule_key="S0900")
+path = report_path("1001", schedule_key="S0900")
+table = read_report("1001", schedule_key="S0900")
 ```
 
 見つからないときの `ReportNotDownloadedError` のメッセージには、
 `schedule_key=` を指定していれば `（スケジュールキー S0900）` のように入る。
+最新の取得が失敗しているときは、 `実行日時` と `原因区分` / `エラーコード` /
+`エラー内容` がメッセージに入る。
+
+**残る穴**: ダウンローダー自体が止まっていて履歴に新しい行が増えないと、
+その管理番号の最新は依然として「古い成功ファイル」のままで、**取れている
+ように見える**（古い成功ファイルを読んで業務側が古いデータで動く）が起きる。
+定期取得が止まったことの検知はこの 2 関数の守備範囲外 — 監視（ログ / 通知）で
+別個に扱う。
 
 **「今すぐ取りに行く」関数はここには無い。** 取得の実行（`download_scheduled()`）は
 `Salesforceレポートダウンローダー` リポジトリ側にある。急ぎの取得は権限を持つ人が
@@ -108,15 +120,6 @@ Salesforce から手動ダウンロードするか、そちらのプロジェク
 取りに行くと、定期取得が動いていないことに誰も気づかなくなるため。
 「取っておいたものを受け取る」だけの関数として、利用側プロジェクトが必要なとき
 だけ明示的に読む。
-
-### 「今日取れているか」を履歴で判定する
-
-`report_path(..., today=True) is not None` の形で履歴を判定する。保存先に
-今日の日付のファイルがあっても、それが定期取得で置かれたのか手で置いたのかは、
-履歴を正として履歴の「成功」記録で判断する（ファイルの有無でも判定はしているが、
-履歴の判定が真の根拠）。`ReportNotDownloadedError` のメッセージにも「Salesforceレポート
-ダウンローダーの定期取得が動いているか、`ダウンロード履歴.csv` を確認する」
-と書いてある。
 
 ---
 

@@ -17,24 +17,27 @@ r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポー�
     CUSTOMER_LIST = "1001"        # プロジェクトごとに、意味の分かる名前を付ける
 
     by_code = read_report(CUSTOMER_LIST).index("顧客コード")
-    if report_path(CUSTOMER_LIST, today=True) is None:
-        # 定期取得が動いていない可能性 — 履歴の「成功」記録がない
+    if report_path(CUSTOMER_LIST) is None:
+        # 履歴に該当行が無い／最新の取得が失敗 — 古い成功ファイルへは遡らない
         ...
 
     # 同じ管理番号でも、スケジュール行が複数あるときは ``schedule_key=`` で
     # 取り分けられる（完全一致、省略時は絞り込まない）
-    #   report_path(CUSTOMER_LIST, today=True, schedule_key="S0900")
-    #   read_report(CUSTOMER_LIST, today=True, schedule_key="S1300")
+    #   report_path(CUSTOMER_LIST, schedule_key="S0900")
+    #   read_report(CUSTOMER_LIST, schedule_key="S1300")
 
 **プロジェクトのコードに Salesforce の URL もレポート ID も書かない。** 書くのは
 管理番号だけで、参照先の差し替えはダウンローダー側の管理表を直せば済む（コードは変えない）。
 
-    report_path           条件に合う最も新しい成功履歴が指すパスを返す
-                          （中身は読まない。見つからないときは ``None``）
+    report_path           **最新の取得**が指すパスを返す
+                          （中身は読まない。見つからないときは ``None``。
+                          最新の取得が失敗のときも ``None`` — 古い成功には遡らない）
     read_report           同じ条件でファイルを ``Table`` で返す
-                          （見つからないときは ``ReportNotDownloadedError``）
-                          （2 関数とも ``today=`` / ``schedule_key=`` キーワードで
-                          絞り込める。省略時は ``today=False`` / 絞り込まない）
+                          （見つからないときは ``ReportNotDownloadedError``。
+                          最新の取得が失敗のときはメッセージに失敗行の
+                          ``実行日時``・``原因区分``・``エラー内容`` が入る）
+                          （2 関数とも ``schedule_key=`` キーワードで
+                          絞り込める。省略時は絞り込まない）
     downloaded_today      指定した管理番号が今日すでに成功しているかを履歴から調べる
     read_history          履歴 CSV を全件 ``Table`` で返す（フィルタはしない）
     append_history        履歴を1行追記する（ダウンローダー側から呼ばれる共有書き込み）

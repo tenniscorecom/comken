@@ -615,7 +615,9 @@ master に何をコミットしても本番には流れない。**
 プロジェクトは変えなくてよい。以前の `cached_report` は管理表を読んでいた
 が、新しい読み取り関数（`latest_report` / `today_report`）は履歴だけを見る。
 読み取り関数は `report_path()`（無ければ `None`）と `read_report()`（無ければ
-`ReportNotDownloadedError`）の2つにまとめた（`today=` / `schedule_key=` で絞る）。
+`ReportNotDownloadedError`）の2つにまとめた（`schedule_key=` で絞る）。
+**最新の取得が失敗のときは古い成功へ遡らず「取れていない」扱い**にする
+（古い成功ファイルを業務側が読み、定期取得が止まったことに気づけなくなるのを防ぐ）。
 
 **判断の基準**
 

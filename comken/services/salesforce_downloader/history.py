@@ -40,11 +40,6 @@ from comken.toolbox.csv import CSV
 
 logger = logging.getLogger(__name__)
 
-# ``today`` は ``report_path()`` / ``read_report()`` の ``today=`` キーワード
-# 引数名と同じ綴り。引数が同名だと関数内で ``today()`` が引数（``bool``）を
-# 参照してしまい ``today()`` が呼べないので、関数内ではこの別名を使う
-_today = today
-
 # 履歴CSVの列。順序は出力ファイルそのものなので、追加・並び替えは全プロジェクトの
 # 既存履歴を読む処理へ影響する（互換性ポリシーに従う）
 COLUMNS: tuple[str, ...] = (
@@ -385,60 +380,55 @@ def migrate_row(row: dict[str, str]) -> dict[str, str]:
 
 # ── 管理番号で取得済みレポートを引く読み取り関数 ────────────────────────
 # どちらも**履歴だけを見る**（管理表は Salesforceレポートダウンローダー側に
-# あり、comken は管理表を知らない）。「成功」は、履歴の `成否` が成功で、
-# `保存先` / `ファイル名` が空でない行。パスは `保存先` / `ファイル名` から
-# 組み立てる。「最も新しい」は `実行日時` で判断する（同じ時刻なら履歴の
-# 後ろの行）。
+# あり、comken は管理表を知らない）。「最も新しい」は ``実行日時`` の降順で、
+# 同値なら履歴の後ろの行。同じ実行日時の複数行を「後ろを採用」で吸収する。
+#
+# 重要なのは **「最新の行だけを見る」** こと: 古い成功行は「直近は取れていない」
+# の救済には使わない。最新の行が失敗していれば、その管理番号は「取れていない」
+# として扱う（古い成功ファイルを読んで業務が古いデータで動く事故を防ぐ）。
+# 成否の判定は履歴の ``成否 == 成功`` かつ ``保存結果 == 成功`` かつ
+# ``ファイル名`` が空でないこと。パスは ``保存先`` / ``ファイル名`` から組み立てる。
 
 
-def _latest_success_path(
+def _latest_row(
     history_path: Path,
     report_key: str,
-    date: datetime.date | None = None,
     schedule_key: str | None = None,
-) -> Path | None:
-    """管理番号について、今日（または指定日）の成功行のうち最も新しいパスを返す。
+) -> dict[str, str] | None:
+    """管理番号（と任意のスケジュールキー）に合う履歴のうち、最も新しい1行を返す。
 
-    ``date`` を ``None`` にすると日付フィルタを使わず全ての履歴を見る
-    （``report_path()`` で ``today=False`` の呼び出し経路）。``date`` を
-    与えると、その日付で始まる ``実行日時`` の行だけを走査する
-    （``report_path()`` で ``today=True`` の呼び出し経路、当日分だけ）。
+    日付フィルタは**使わない**。``report_path()`` / ``read_report()`` は
+    全履歴の中の最新行を見て「最新の取得が成功しているか」を判定するため、
+    ここで日付を切ると古い成功ファイルを「取れている」と誤認する事故になる。
 
     ``schedule_key`` を指定すると、履歴の「スケジュールキー」列がその値と
     **完全一致**する行だけを対象にする（部分一致にはしない）。``None``
-    （省略）のときはスケジュールキーでの絞り込みは行わない。 ``S09``
+    （省略）のときはスケジュールキーでの絞り込みは行わない。``S09``
     のような途中までで ``S0900`` の行を拾わないのはこのため。
 
-    該当する成功行が無ければ ``None`` を返す。
+    成否は問わない（呼び出し側で判定する）。履歴ファイルが無い／該当行が
+    無いときは ``None`` を返す。
     """
     key_text = str(report_key)
+    schedule_key_text = None if schedule_key is None else str(schedule_key)
     if not history_path.is_file():
         return None
-    target_prefix = (date or today()).strftime("%Y-%m-%d") if date is not None else None
-    schedule_key_text = None if schedule_key is None else str(schedule_key)
     latest_timestamp = ""
-    latest_path: Path | None = None
+    latest_row: dict[str, str] | None = None
     for row in _read_rows(history_path):
         if row.get("管理番号", "") != key_text:
             continue
-        if row.get("成否", "") != SUCCESS or row.get("保存結果", "") != SUCCESS:
-            continue
-        file_name = row.get("ファイル名", "")
-        if not file_name:
-            continue
-        timestamp = row.get("実行日時", "")
-        if target_prefix is not None and not timestamp.startswith(target_prefix):
-            continue
         if schedule_key_text is not None and row.get("スケジュールキー", "") != schedule_key_text:
             continue
+        timestamp = row.get("実行日時", "")
         # 同じ実行日時のときは履歴の後ろの行を採用する（==、>= だと
         # 最初の同値、> だと最後の同値）。`successful_files_today()` と
         # 同じく reversed で末尾側を最新と扱う単純さで揃えるため、
         # 「同じなら履歴の後ろ」を実現するために ``>=`` を使う
         if timestamp >= latest_timestamp:
             latest_timestamp = timestamp
-            latest_path = Path(row.get("保存先", "")) / file_name
-    return latest_path
+            latest_row = row
+    return latest_row
 
 
 def _resolve_history_path() -> Path:
@@ -456,43 +446,42 @@ def _resolve_history_path() -> Path:
 def report_path(
     key: str,
     *,
-    today: bool = False,
     schedule_key: str | None = None,
 ) -> Path | None:
-    """管理番号に対する、条件に合う**最も新しい成功履歴**が指すパスを返す。
+    """管理番号に対する、**最新の取得**が指すパスを返す。
 
     **履歴だけを参照する**（管理表は Salesforceレポートダウンローダー側）。
-    「成功」は履歴の ``成否 == 成功`` かつ ``保存結果 == 成功`` かつ
-    ``保存先``/``ファイル名`` が空でない行。「最も新しい」は ``実行日時``
-    の降順で、同値なら履歴の後ろの行（同じ時刻で複数行あるケースを吸収）。
+    「最新の取得」は ``実行日時`` の降順で、同値なら履歴の後ろの行を採用した
+    1行を指す。**「最新の取得が失敗なら、古い成功ファイルへ遡らない。**
+    古い成功行を返すと、業務側が古いデータで動いて定期取得が止まったことに気づけ
+    なくなるため）。この関数が ``Path`` を返すのは「**最新の行が成功**かつ
+    実ファイルが存在する」ときだけ。
 
-    ``today=True`` を指定すると、当日分（``実行日時`` が今日の日付で
-    始まる行）だけを走査する。省略時（``False``）は日付フィルタを掛けず、
-    全ての履歴の中の最も新しい成功記録を返す。**``today=True`` のとき
-    と ``False`` のときで、戻り値の ``Path`` が指すファイルの日付が違う
-    だけ**で、絞り込み方が変わる以外は同じ判定。実ファイルの存在まで
-    含めて判定するため、``today=True`` で返ってきたパスは実ファイル
-    として存在している（消えていれば ``None``）。
+    成功の判定は履歴の ``成否 == 成功`` かつ ``保存結果 == 成功`` かつ
+    ``ファイル名`` が空でないこと。パスは ``保存先`` / ``ファイル名`` から
+    組み立てる。
 
     ``schedule_key`` を指定すると、スケジュールキー列がその値と**完全一致**
     する行だけを対象にする（部分一致にはしない）。省略（``None``）のときは
     スケジュールキーでは絞り込まない。同じ管理番号に複数のスケジュール行
     から取得しているレポートで、スケジュール行ごとに分けたパスを引きたい
-    ときの指定。例: ``report_path("1001", today=True, schedule_key="S0900")``。
+    ときの指定。例: ``report_path("1001", schedule_key="S0900")``。
 
     **見つからないときは ``None`` を返す**（例外にしない）。ここでの
     「見つからない」は:
         - 履歴ファイル自体が無い
-        - 条件に合う成功行が履歴の中に無い
-        - 条件に合う行はあるが、指しているファイルが消えている
+        - 条件に合う行が無い（成否を問わない）
+        - 条件に合う行のうち最新のものが成功だが、指しているファイルが消えている
+        - 条件に合う行のうち最新のものが失敗（成功行が古いだけ）
+
     のいずれか。 ``read_report()`` が ``ReportNotDownloadedError`` を
-    投げるかどうかの判定を兼ねるため、ファイルが消えているときも ``None``
-    を返す（呼び出し側で ``is not None`` を ``read_report()`` の前に
-    挟む必要はない）。
+    投げるかどうかの判定を兼ねるため、ファイルが消えているとき／最新の取得
+    が失敗しているときも ``None`` を返す（呼び出し側で ``is not None`` を
+    ``read_report()`` の前に挟む必要はない）。
 
     **ファイルの中身は読まない。** ファイルの有無（``Path.is_file()``）
     までで判定が終わるため、大きなレポートで CSV を開かない分、
-    「今日取れているか」だけ確認する用途で使っても無駄なコストが
+    「取れているか」だけ確認する用途で使っても無駄なコストが
     掛からない。
 
     履歴の場所は ``paths.HISTORY_PATH`` を**呼び出した時点で**読む
@@ -500,43 +489,93 @@ def report_path(
 
     Args:
         key: 管理番号。
-        today: ``True`` なら当日分だけを走査する（省略時は ``False``、
-            日付フィルタを掛けない）。
         schedule_key: 絞り込みに使うスケジュールキー（完全一致）。
             ``None``（省略）のときは絞り込まない。
 
     Returns:
-        条件に合う最新の取得済みファイルのパス。見つからないときは ``None``。
+        最新の取得が成功で実ファイルが存在するときだけそのパス。見つからない
+        ときは ``None``（最新の取得が失敗している場合も含む）。
+    """
+    try:
+        return _find_report(key, schedule_key)
+    except ReportNotDownloadedError:
+        return None
+
+
+def _find_report(key: str, schedule_key: str | None = None) -> Path:
+    """管理番号（と任意のスケジュールキー）に合う履歴の最新行から、ファイルパスを返す。
+
+    判定のすべてをここに集約する:
+        - 履歴の ``管理番号`` が ``key`` と一致し、 ``schedule_key`` が ``None`` で
+          ないときは ``スケジュールキー`` 列も完全一致する行のうち、最新の 1 行を見る
+        - その最新行が「``成否 == 成功`` かつ ``保存結果 == 成功`` かつ
+          ``ファイル名`` が空でない」かつ、組み立てた ``Path`` が実在すればそれを返す
+        - 上記のいずれかが満たされないときは ``ReportNotDownloadedError`` を投げる
+
+    「見つからない」の 3 通り（該当行が無い／最新が失敗／ファイルが消えている）
+    を区別して ``ReportNotDownloadedError`` のメッセージに反映する。
+    「実行日時」が空の失敗行でも「最新の取得が失敗」の文面が出るよう、
+    ``failed_at`` には ``"（日時不明）"`` を補って渡す
+    （``ReportNotDownloadedError`` は ``failed_at`` が渡されたかで「最新が失敗」を判定する）。
+
+    ``logger.debug`` もここに 1 回ずつだけ書く（``report_path()`` と
+    ``read_report()`` の両方で同じログが重複しないように）。
+
+    Raises:
+        ReportNotDownloadedError: 該当行が無い／最新の取得が失敗／指している
+            ファイルが消えている場合。
     """
     history_path = _resolve_history_path()
-    date_value = _today() if today else None
-    path = _latest_success_path(
-        history_path,
-        key,
-        date=date_value,
-        schedule_key=schedule_key,
-    )
-    if path is None:
+    latest = _latest_row(history_path, key, schedule_key=schedule_key)
+    if latest is None:
         logger.debug(
-            "取得ファイル: 管理番号=%s, today=%s, schedule_key=%s → 履歴に該当なし",
+            "取得ファイル: 管理番号=%s, schedule_key=%s → 履歴に該当なし",
             key,
-            today,
             schedule_key,
         )
-        return None
+        raise ReportNotDownloadedError(key, None, history_path, schedule_key=schedule_key)
+    file_name = latest.get("ファイル名", "")
+    if latest.get("成否", "") != SUCCESS or latest.get("保存結果", "") != SUCCESS or not file_name:
+        # 最新の取得が失敗 → 古い成功行へは遡らない。メッセージに失敗行の情報を載せる
+        failure_text = " / ".join(
+            part
+            for part in (
+                latest.get("原因区分", ""),
+                latest.get("エラーコード", ""),
+                latest.get("エラー内容", ""),
+            )
+            if part
+        )
+        raw_failed_at = latest.get("実行日時", "")
+        # 「実行日時」が空でも「最新の取得が失敗」の文面にするため、表示用に補完
+        display_failed_at = raw_failed_at or "（日時不明）"
+        logger.debug(
+            "取得ファイル: 管理番号=%s, schedule_key=%s → 最新行が失敗"
+            "（実行日時=%s）のため返さない",
+            key,
+            schedule_key,
+            raw_failed_at,
+        )
+        raise ReportNotDownloadedError(
+            key,
+            None,
+            history_path,
+            schedule_key=schedule_key,
+            failed_at=display_failed_at,
+            failure=failure_text or None,
+        )
+    path = Path(latest.get("保存先", "")) / file_name
     if not path.is_file():
         logger.debug(
-            "取得ファイル: 管理番号=%s, today=%s, schedule_key=%s path=%s → ファイルが消えている",
+            "取得ファイル: 管理番号=%s, schedule_key=%s path=%s → ファイルが消えている",
             key,
-            today,
             schedule_key,
             path,
         )
-        return None
+        raise ReportNotDownloadedError(key, path, history_path, schedule_key=schedule_key)
     logger.debug(
-        "取得ファイル: 管理番号=%s, today=%s, schedule_key=%s path=%s",
+        "取得ファイル: 管理番号=%s, schedule_key=%s path=%s",
         key,
-        today,
         schedule_key,
         path,
     )
@@ -547,67 +586,41 @@ def report_path(
 def read_report(
     key: str,
     *,
-    today: bool = False,
     schedule_key: str | None = None,
 ) -> Table:
-    """管理番号に対する、条件に合う**最も新しい成功履歴**のファイルを ``Table`` で返す。
+    """管理番号に対する、**最新の取得**のファイルを ``Table`` で返す。
 
-    内部で ``_latest_success_path()`` を呼んでパスを引き、 ``CSV(path, read_only=True)``
-    で読むので、ファイルが巨大でも全件メモリに展開する前に ``Table`` で
-    受ける（呼び出し側で ``to_rows()`` / ``index()`` などを使える）。
+    内部で ``_find_report()`` を呼んで最新の行を引き、それが成功でファイルが
+    残っていれば ``CSV(path, read_only=True)`` で読むので、ファイルが巨大でも
+    全件メモリに展開する前に ``Table`` で受ける（呼び出し側で ``to_rows()`` /
+    ``index()`` などを使える）。
 
-    ``today=True`` を指定すると当日分だけを、 ``schedule_key=`` を指定すると
-    そのスケジュールキーに完全一致する行だけを、対象とする。 ``report_path()``
-    と同じ絞り込み方がそのまま使える。
+    ``schedule_key=`` を指定するとそのスケジュールキーに完全一致する行だけを
+    対象とする。 ``report_path()`` と同じ判定を使う。
 
     見つからないときは ``ReportNotDownloadedError`` を送出する。メッセージには
-    管理番号・今日の指定・``schedule_key``（指定していれば）・対処
-    （定期取得が動いているか履歴を確認）・ファイルが消えているときの
-    そのパス、が入る（``ReportNotDownloadedError`` 側の組み立てに従う）。
+    管理番号・``schedule_key``（指定していれば）・対処（定期取得が動いているか
+    履歴を確認）・最新の取得が失敗しているときの ``実行日時``・``原因区分``・
+    ``エラー内容``・ファイルが消えているときのそのパス、が入る
+    （``ReportNotDownloadedError`` 側の組み立てに従う）。
 
     Args:
         key: 管理番号。
-        today: ``True`` なら当日分だけを走査する（省略時は ``False``）。
         schedule_key: 絞り込みに使うスケジュールキー（完全一致）。
             ``None``（省略）のときは絞り込まない。
 
     Returns:
-        条件に合う最新の取得済みファイルから読み取った ``Table``。
+        最新の取得が成功のとき、そのファイルから読み取った ``Table``。
 
     Raises:
-        ReportNotDownloadedError: 条件に合う成功行が無い／指しているファイルが
-            消えている場合。メッセージに管理番号・``schedule_key``（指定時）・
-            消えているパス、が入る。
+        ReportNotDownloadedError: 該当行が無い／最新の取得が失敗／指している
+            ファイルが消えている場合。最新の取得が失敗のときはメッセージに
+            その ``実行日時`` と ``原因区分`` / ``エラー内容`` が入る。
     """
-    history_path = _resolve_history_path()
-    date_value = _today() if today else None
-    path = _latest_success_path(
-        history_path,
-        key,
-        date=date_value,
-        schedule_key=schedule_key,
-    )
-    if path is None:
-        logger.debug(
-            "取得ファイル: 管理番号=%s, today=%s, schedule_key=%s → 履歴に該当なし",
-            key,
-            today,
-            schedule_key,
-        )
-        raise ReportNotDownloadedError(key, None, history_path, schedule_key=schedule_key)
-    if not path.is_file():
-        logger.debug(
-            "取得ファイル: 管理番号=%s, today=%s, schedule_key=%s path=%s → ファイルが消えている",
-            key,
-            today,
-            schedule_key,
-            path,
-        )
-        raise ReportNotDownloadedError(key, path, history_path, schedule_key=schedule_key)
+    path = _find_report(key, schedule_key)
     logger.debug(
-        "取得ファイル: 管理番号=%s, today=%s, schedule_key=%s path=%s を読み取り",
+        "取得ファイル: 管理番号=%s, schedule_key=%s path=%s を読み取り",
         key,
-        today,
         schedule_key,
         path,
     )

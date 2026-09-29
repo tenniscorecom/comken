@@ -92,7 +92,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `DownloaderError` | Salesforce レポートの集約取得に関するエラー | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `HistoryWriteError` | 必須のダウンロード履歴を記録できなかった | 履歴CSVの保存先、共有サーバー接続、書込み権限を確認する |
 | `HistoryLockTimeoutError` | ダウンロード履歴の排他ロックを待っても取得できなかった | 同時実行中の処理が終わるのを待って再実行する。繰り返す場合は共有サーバーを確認する |
-| `ReportNotDownloadedError` | 指定した管理番号の取得済みレポートが見つからない | 定期取得（Salesforceレポートダウンローダー）が動いているか、``ダウンロード履歴.csv`` を確認する。ファイルが消えている場合はメッセージに表示されたパスに復旧する |
+| `ReportNotDownloadedError` | 指定した管理番号の取得済みレポートが見つからない | 定期取得（Salesforceレポートダウンローダー）が動いているか、``ダウンロード履歴.csv`` を確認する。ファイルが消えている場合はメッセージに表示されたパスに復旧する。最新の取得が失敗している場合は、表示された実行日時・原因区分・エラー内容を見て対処する（定期取得のログ / Salesforce の状態 / 管理表 / 共有サーバー） |
 | `LoggingAlreadyConfiguredError` | root logger がすでに設定されている | setup_logging() または setup_local_logging() はアプリの入口で1回だけ呼ぶ。実行基盤がログを設定する場合は呼ばない。 |
 | `LoggingConflictError` | root logger に comken 以外の handler が設定されている | 上の handler 一覧をそのままライブラリの管理者へ連絡してください（連絡先は環境ごとに異なるので、ここには書かない）。やむを得ず共存させたい場合は、呼び出し時に ``allow_existing=True``を指定すれば処理は続きますが、comken のハンドラーが追加されることで既存ライブラリのログが**二重**に出たり、出力先が想定と変わる可能性があります。 |
 | `LogRootNotConfiguredError` | LoggerSite の LOG_ROOT が設定されていない | サブクラスに ``LOG_ROOT = "\\server\share\logs"`` を1行追加する（絶対パスまたは UNC 文字列。LOG_FOLDER_NAMES のフォルダ名はこの下に作られる）。 |
