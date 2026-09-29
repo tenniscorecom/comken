@@ -34,8 +34,7 @@ URL と認証情報のシステム名は組織クラスがクラス定数とし�
 
     site_class = site_for(report_url)
     with site_class() as sf:
-        sf.login_with_credentials()  # prefix省略 → CREDENTIAL_PREFIXを使う
-        sf.wait_for_manual_login()
+        sf.login_with_credentials()  # prefix省略 → CREDENTIAL_PREFIX / MFA承認は人が行う
         for report_id, path in sf.export_reports(reports):
             ...
 """

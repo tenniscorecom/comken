@@ -13,7 +13,7 @@ comken.toolbox.salesforce（API版）の Reports and Dashboards REST API は2000
 
     site_class = site_for(report_url)
     with site_class() as sf:
-        sf.ensure_login()
+        sf.login_with_credentials()  # prefix省略 → CREDENTIAL_PREFIX / MFA承認は人が行う
         for report_id, path in sf.export_reports(reports):
             print(report_id, path)
 

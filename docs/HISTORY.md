@@ -28,7 +28,6 @@
 13. Config のキャッシュ
 14. 配置・運用
 15. v2.0.0 に向けた整理
-16. Salesforce ブラウザ経由ログインの `ensure_login()` 追加（2026-09-29）
 
 ## 1. 設定と非機密情報の扱い
 
@@ -682,21 +681,3 @@ master に何をコミットしても本番には流れない。**
 - `import comken` の時点でログを設定する案。root に handler があると `basicConfig` が黙って
   効かなくなり、社内基盤のログ設定とも衝突する
 - Excel の列・行を見出しで指定して色を付ける API。上の責任区分で VBA 側の仕事とした
-
-## 16. Salesforce ブラウザ経由ログインの ``ensure_login()`` 追加（2026-09-29）
-
-`SalesforceReportBrowser` に ``ensure_login()`` を足し、推奨入口にした。
-DPAPI の ``Credentials`` から ID/パスワードを取れるときは自動で入力し、
-取れないとき（``CredentialError`` / ``CredentialNotFoundError``）は止めずに
-WARNING を 1 行出して ``wait_for_manual_login()`` へ進む——これは今まで
-``go_login()`` + ``wait_for_manual_login()`` で人がやっていた動きと一致する。
-``login_with_credentials()`` は残し（互換）、docstring に「ログイン済みの判定や
-未登録時の扱いまで含めたいなら ``ensure_login()`` を使う」と 1 行足した。
-
-- **理由**: MFA が必須（スマホのプッシュ承認で自動化できない）で、セッションが約2時間で
-  切れる組織では、ログインのたびに人が ID/パスワードから打つことになる。ID/パスワードを
-  自動入力すれば、人の操作は MFA の承認だけになる
-- ブラウザを閉じるとログインが消える組織では、``PROFILE_ROOT`` を固定してもログインは
-  次回に持ち越せなかった（利用者が確認）。起動のたびに ID/パスワードの入力と MFA が要る
-- ``login_with_credentials()`` は既存の呼び出し元のために残した。``__init__.py`` や
-  ``Solution`` / ``SolutionSandbox`` のサンプルは ``ensure_login()`` に揃えた

@@ -250,12 +250,11 @@ with site() as sf:
 > 接続アプリのOAuthスコープ・ログインIP制限の不一致など）。そのため
 > `SalesforceReportBrowser` は**ログインの確立を実ブラウザ（Selenium）で行う**。
 >
-> `ensure_login()` （**推奨**。DPAPIに保存したID/パスワードを自動入力し、
-> MFA等の追加確認は人が承認する。ログイン済みのセッションが残っているときは
-> 何もせず return する）、または `go_login()` + `wait_for_manual_login()`
-> （ブラウザを自動でポーリングして人のログイン完了を待つ。ターミナルでの操作は
-> 不要、無人の定期実行からも呼べる）、`login_with_credentials()`（ID/パスワードの
-> 自動入力だけ行い、MFA等は別途 `wait_for_manual_login()` を呼ぶ必要がある）で
+> `go_login()` + `wait_for_manual_login()`（ブラウザを自動でポーリングして
+> 人のログイン完了を待つ。ターミナルでの操作は不要、無人の定期実行からも呼べる）、
+> または `login_with_credentials()`（DPAPIに保存したID/パスワードを自動入力し、
+> 送信後にそのまま `wait_for_manual_login()` を内側で呼んで MFA 承認を人の
+> 操作で待つ。`prefix` 省略時は組織クラスの `CREDENTIAL_PREFIX` を使う）で
 > ログインし、確立したセッションCookieを `export_reports()` が requests へ
 > 引き継いで、実際のN件のダウンロードは `ThreadPoolExecutor` で並列に投げる。
 > ブラウザの起動は最初のログイン確立のときだけで済む。接続アプリの登録・
@@ -277,7 +276,7 @@ from comken.toolbox.browser.sites.salesforce import site_for
 
 site_class = site_for(report_url)
 with site_class() as sf:
-    sf.ensure_login()                                # ID/パスワード自動入力 + MFA承認待ち
+    sf.login_with_credentials()  # prefix省略 → CREDENTIAL_PREFIX / MFA承認は人が行う
 
     # ファイル名・置き場所は呼び出し側が {URL: 保存先パス} で指定する
     reports = {report_url: f"出力先/{report_name}.csv" for report_url, report_name in ...}

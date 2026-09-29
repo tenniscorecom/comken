@@ -18,7 +18,7 @@ class Solution(SalesforceReportBrowser):
 
     使い方:
         with Solution() as sf:
-            sf.ensure_login()
+            sf.login_with_credentials()  # prefix省略 → CREDENTIAL_PREFIX / MFA承認は人が行う
             for report_id, path in sf.export_reports(reports):
                 ...
     """

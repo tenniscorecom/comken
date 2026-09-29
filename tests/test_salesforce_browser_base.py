@@ -12,15 +12,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from comken.exceptions import (
-    BrowserError,
-    CredentialError,
-    CredentialNotFoundError,
-    LoginFailedError,
-    SalesforceError,
-)
+from comken.exceptions import BrowserError, LoginFailedError, SalesforceError
 from comken.toolbox.browser.management.sessions import BrowserSession
 from comken.toolbox.browser.sites.salesforce.base import (
+    _DEFAULT_MANUAL_LOGIN_INTERVAL_SECONDS,
+    _DEFAULT_MANUAL_LOGIN_TIMEOUT_SECONDS,
     SalesforceReportBrowser,
     _cookies_to_requests_session,
     _domain_of,
@@ -461,6 +457,7 @@ class TestLoginWithCredentials:
             SalesforceReportBrowser() as sf,
             patch("comken.toolbox.credentials.Credentials", return_value=cred) as cred_class,
             patch.object(SalesforceReportBrowser, "go_login", return_value=login_page) as go_login,
+            patch.object(SalesforceReportBrowser, "wait_for_manual_login"),
         ):
             sf.login_with_credentials("salesforce_temp")
 
@@ -480,6 +477,7 @@ class TestLoginWithCredentials:
             _MyOrg() as sf,
             patch("comken.toolbox.credentials.Credentials", return_value=cred) as cred_class,
             patch.object(SalesforceReportBrowser, "go_login", return_value=MagicMock()),
+            patch.object(SalesforceReportBrowser, "wait_for_manual_login"),
         ):
             sf.login_with_credentials()
 
@@ -497,277 +495,94 @@ class TestLoginWithCredentials:
             _MyOrg() as sf,
             patch("comken.toolbox.credentials.Credentials", return_value=cred) as cred_class,
             patch.object(SalesforceReportBrowser, "go_login", return_value=MagicMock()),
+            patch.object(SalesforceReportBrowser, "wait_for_manual_login"),
         ):
             sf.login_with_credentials("salesforce_temp")
 
         cred_class.assert_called_once_with("salesforce_temp")
 
-
-class TestEnsureLogin:
-    """ensure_login() — ログイン済みなら何もせず、未ログインならID/パスワードを
-    自動入力して MFA を待つ。認証情報の取得に失敗しても止まらない。
-    """
-
-    @staticmethod
-    def _enter_sf(
-        monkeypatch, driver: object, cls: type[SalesforceReportBrowser] | None = None
-    ) -> SalesforceReportBrowser:
-        """Edge を起動せずに ``with SalesforceReportBrowser()`` の経路を通す
-
-        ``cls`` を渡すとそのサブクラスで起動する（クラスの ``CREDENTIAL_PREFIX``
-        を試したいテスト用）。省略時は ``SalesforceReportBrowser``。
-        """
+    def test_calls_wait_for_manual_login_after_login_with_timeout_and_interval(self, monkeypatch):
+        """ID/パスワード送信後に ``wait_for_manual_login()`` が timeout/interval 付きで呼ばれる。"""
         _patch_browser(monkeypatch)
-        sf = (cls or SalesforceReportBrowser)()
-        sf.__enter__()
-        assert sf.session is not None
-        sf.session._driver = driver
-        return sf
+        cred = MagicMock(username="user@example.com", password="secret")
+        login_page = MagicMock()
+        with (
+            SalesforceReportBrowser() as sf,
+            patch("comken.toolbox.credentials.Credentials", return_value=cred),
+            patch.object(SalesforceReportBrowser, "go_login", return_value=login_page),
+            patch.object(SalesforceReportBrowser, "wait_for_manual_login") as wait_method,
+        ):
+            sf.login_with_credentials("salesforce_temp", timeout=42, interval=7)
 
-    @staticmethod
-    def _exit_sf(sf: SalesforceReportBrowser) -> None:
-        with contextlib.suppress(Exception):
-            sf.__exit__(None, None, None)
+        # 順序: login → wait（送信が先で、その後に MFA 承認を待つ）
+        login_page.login.assert_called_once_with("user@example.com", "secret")
+        wait_method.assert_called_once_with(timeout=42, interval=7)
 
-    @staticmethod
-    def _driver(*, username_field_present: bool, current_url: str) -> MagicMock:
-        """username 入力欄の有無と URL を固定で返す単純なドライバモック"""
-        driver = MagicMock()
-        driver.find_elements.return_value = [MagicMock()] if username_field_present else []
-        driver.current_url = current_url
-        return driver
-
-    def test_returns_immediately_when_already_logged_in(self, monkeypatch, caplog):
-        """ログイン済みなら Credentials を読まず、LoginPage.login も呼ばずに return する"""
-        driver = self._driver(username_field_present=False, current_url=_LOGGED_IN_URL)
-        sf = self._enter_sf(monkeypatch, driver)
-        try:
-            cred_class = MagicMock()
-            monkeypatch.setattr(SalesforceReportBrowser, "go_login", MagicMock())
-            monkeypatch.setattr("comken.toolbox.credentials.Credentials", cred_class)
-
-            with caplog.at_level(
-                logging.DEBUG, logger="comken.toolbox.browser.sites.salesforce.base"
-            ):
-                sf.ensure_login("salesforce_temp")
-        finally:
-            self._exit_sf(sf)
-
-        # 既にログイン済み → Credentials も LoginPage.login も呼ばれない
-        cred_class.assert_not_called()
-        # DEBUG で1行「ログイン済み」を出している
-        debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
-        assert any("既にログイン済み" in r.getMessage() for r in debug_records)
-
-    def test_auto_fills_credentials_and_waits_for_manual_login(self, monkeypatch, caplog):
-        """未ログインなら Credentials の username/password で LoginPage.login が呼ばれ、
-        その後 wait_for_manual_login が呼ばれる"""
-        # _is_logged_in の呼び出し順:
-        #   (1) ensure_login の冒頭 → username 見える（find_elements のみ、URL 読まない）
-        #   (2) wait_for_manual_login の冒頭 → username まだ見える（同上）
-        #   (3) wait_for_manual_login の WARNING log → current_url のみ
-        #   (4) ループの _is_logged_in → username 消えた + Lightning URL → True
-        driver = MagicMock()
-        find_call_count = [0]
-
-        def find_side_effect(*args, **kwargs):
-            find_call_count[0] += 1
-            if find_call_count[0] <= 2:
-                return [MagicMock()]  # username が見える
-            return []  # username が見えない
-
-        driver.find_elements.side_effect = find_side_effect
-
-        url_call_count = [0]
-
-        def get_current_url(self):
-            url_call_count[0] += 1
-            # (3) WARNING log の current_url はまだログイン画面
-            # (4) ループの _is_logged_in は Lightning
-            if url_call_count[0] <= 1:
-                return _LOGIN_URL
-            return _LOGGED_IN_URL
-
-        type(driver).current_url = property(get_current_url)
-
-        sf = self._enter_sf(monkeypatch, driver)
-        try:
-            cred = MagicMock(username="user@example.com", password="secret-pw")
-            login_page = MagicMock()
-            with (
-                patch("comken.toolbox.credentials.Credentials", return_value=cred) as cred_class,
-                patch.object(SalesforceReportBrowser, "go_login", return_value=login_page),
-                caplog.at_level(
-                    logging.INFO, logger="comken.toolbox.browser.sites.salesforce.base"
-                ),
-            ):
-                sf.ensure_login("salesforce_temp")
-        finally:
-            self._exit_sf(sf)
-
-        # 認証情報の取得と login_page.login の両方
-        cred_class.assert_called_once_with("salesforce_temp")
-        login_page.login.assert_called_once_with("user@example.com", "secret-pw")
-        # MFA 承認の依頼が INFO で出ている
-        info_records = [r for r in caplog.records if r.levelno == logging.INFO]
-        assert any("MFA" in r.getMessage() for r in info_records)
-        # パスワード文字列がログに残っていない
-        all_text = "\n".join(r.getMessage() for r in caplog.records)
-        assert "secret-pw" not in all_text
-
-    def test_uses_class_credential_prefix_when_omitted(self, monkeypatch):
-        """prefix 省略時はクラスの CREDENTIAL_PREFIX を使う"""
-
-        class _MyOrg(SalesforceReportBrowser):
-            CREDENTIAL_PREFIX = "salesforce_solution"
-
+    def test_default_timeout_and_interval_are_passed_to_wait(self, monkeypatch):
+        """timeout/interval 省略時は既定値（wait_for_manual_login と同じ定数）が wait に渡る。"""
         _patch_browser(monkeypatch)
-        # 未ログイン → Credentials で取得 → MFA 待ちでループに入る
-        driver = self._driver(username_field_present=True, current_url=_LOGIN_URL)
-        sf = self._enter_sf(monkeypatch, driver, cls=_MyOrg)
-        try:
-            cred = MagicMock(username="user@example.com", password="secret")
-            login_page = MagicMock()
-            with (
-                patch("comken.toolbox.credentials.Credentials", return_value=cred) as cred_class,
-                patch.object(SalesforceReportBrowser, "go_login", return_value=login_page),
-                patch.object(
-                    SalesforceReportBrowser,
-                    "wait_for_manual_login",
-                    MagicMock(side_effect=_stop_loop),
-                ),
-                contextlib.suppress(_StopLoop),
-            ):
-                sf.ensure_login()
-        finally:
-            self._exit_sf(sf)
+        cred = MagicMock(username="user@example.com", password="secret")
+        login_page = MagicMock()
+        with (
+            SalesforceReportBrowser() as sf,
+            patch("comken.toolbox.credentials.Credentials", return_value=cred),
+            patch.object(SalesforceReportBrowser, "go_login", return_value=login_page),
+            patch.object(SalesforceReportBrowser, "wait_for_manual_login") as wait_method,
+        ):
+            sf.login_with_credentials()
 
-        cred_class.assert_called_once_with("salesforce_solution")
+        wait_method.assert_called_once_with(
+            timeout=_DEFAULT_MANUAL_LOGIN_TIMEOUT_SECONDS,
+            interval=_DEFAULT_MANUAL_LOGIN_INTERVAL_SECONDS,
+        )
 
-    def test_credential_not_found_does_not_raise_but_warns(self, monkeypatch, caplog):
-        """認証情報が未登録（CredentialNotFoundError）でも例外にならず、
-        LoginPage.login を呼ばずに wait_for_manual_login が呼ばれ、WARNING が出る"""
+    def test_login_is_called_before_wait(self, monkeypatch):
+        """login_page.login() の**後に** wait_for_manual_login() が呼ばれる（順序の保証）。"""
         _patch_browser(monkeypatch)
-        driver = self._driver(username_field_present=True, current_url=_LOGIN_URL)
-        sf = self._enter_sf(monkeypatch, driver)
-        try:
-            login_page = MagicMock()
+        cred = MagicMock(username="user@example.com", password="secret")
+        login_page = MagicMock()
+        order: list[str] = []
+        login_page.login.side_effect = lambda *_args, **_kwargs: order.append("login")
 
-            def raise_not_found(prefix: str):
-                raise CredentialNotFoundError(prefix, [])
+        def _record_wait(*_args, **_kwargs):
+            order.append("wait")
 
-            with (
-                patch(
-                    "comken.toolbox.credentials.Credentials",
-                    side_effect=raise_not_found,
-                ),
-                patch.object(
-                    SalesforceReportBrowser, "go_login", return_value=login_page
-                ) as go_login,
-                patch.object(
-                    SalesforceReportBrowser,
-                    "wait_for_manual_login",
-                    MagicMock(side_effect=_stop_loop),
-                ) as wait_mock,
-                caplog.at_level(
-                    logging.WARNING, logger="comken.toolbox.browser.sites.salesforce.base"
-                ),
-                contextlib.suppress(_StopLoop),
-            ):
-                sf.ensure_login("missing_site")
-        finally:
-            self._exit_sf(sf)
+        with (
+            SalesforceReportBrowser() as sf,
+            patch("comken.toolbox.credentials.Credentials", return_value=cred),
+            patch.object(SalesforceReportBrowser, "go_login", return_value=login_page),
+            patch.object(
+                SalesforceReportBrowser,
+                "wait_for_manual_login",
+                side_effect=_record_wait,
+            ),
+        ):
+            sf.login_with_credentials()
 
-        # LoginPage.login は呼ばれずに MFA 待ちへ進む
-        login_page.login.assert_not_called()
-        # wait_for_manual_login は呼ばれている
-        wait_mock.assert_called_once()
-        # go_login は URL を開くために呼ばれる
-        go_login.assert_called_once()
-        # WARNING が出ている（未登録の旨 + cred gui への誘導）
-        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
-        assert any("cred gui" in r.getMessage() for r in warnings)
-        assert any("missing_site" in r.getMessage() for r in warnings)
+        assert order == ["login", "wait"]
 
-    def test_credential_decryption_error_does_not_raise_but_warns(self, monkeypatch, caplog):
-        """復号できない（CredentialError）ときも同様"""
-
+    def test_does_not_log_password(self, monkeypatch, caplog):
+        """パスワードがログに残らない（MFA 待ちの INFO 1行は出るが、パスワード値は出さない）。"""
         _patch_browser(monkeypatch)
-        driver = self._driver(username_field_present=True, current_url=_LOGIN_URL)
-        sf = self._enter_sf(monkeypatch, driver)
-        try:
-            login_page = MagicMock()
+        secret_password = "DO-NOT-LOG-secret-value"
+        cred = MagicMock(username="user@example.com", password=secret_password)
+        login_page = MagicMock()
+        with (
+            SalesforceReportBrowser() as sf,
+            patch("comken.toolbox.credentials.Credentials", return_value=cred),
+            patch.object(SalesforceReportBrowser, "go_login", return_value=login_page),
+            patch.object(SalesforceReportBrowser, "wait_for_manual_login"),
+            caplog.at_level(logging.INFO, logger="comken.toolbox.browser.sites.salesforce.base"),
+        ):
+            sf.login_with_credentials("salesforce_temp")
 
-            def raise_decrypt_error(prefix: str):
-                # 別のPC・ユーザーで暗号化した場合に出る CredentialError
-                raise CredentialError(f"認証情報を復号できませんでした: {prefix}")
-
-            with (
-                patch(
-                    "comken.toolbox.credentials.Credentials",
-                    side_effect=raise_decrypt_error,
-                ),
-                patch.object(SalesforceReportBrowser, "go_login", return_value=login_page),
-                patch.object(
-                    SalesforceReportBrowser,
-                    "wait_for_manual_login",
-                    MagicMock(side_effect=_stop_loop),
-                ) as wait_mock,
-                caplog.at_level(
-                    logging.WARNING, logger="comken.toolbox.browser.sites.salesforce.base"
-                ),
-                contextlib.suppress(_StopLoop),
-            ):
-                sf.ensure_login("salesforce_temp")
-        finally:
-            self._exit_sf(sf)
-
-        login_page.login.assert_not_called()
-        wait_mock.assert_called_once()
-        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
-        assert any("cred gui" in r.getMessage() for r in warnings)
-
-    def test_password_is_not_logged_on_success(self, monkeypatch, caplog):
-        """ログにパスワード文字列が含まれない（caplog で確認）"""
-        driver = MagicMock()
-        driver.find_elements.side_effect = [[MagicMock()], [MagicMock()], [], []]
-        urls = [_LOGIN_URL, _LOGIN_URL, _LOGGED_IN_URL, _LOGGED_IN_URL]
-        url_iter = iter(urls)
-        type(driver).current_url = property(lambda self: next(url_iter))
-
-        sf = self._enter_sf(monkeypatch, driver)
-        try:
-            cred = MagicMock(username="user@example.com", password="S3cret!PW")
-            login_page = MagicMock()
-            with (
-                patch("comken.toolbox.credentials.Credentials", return_value=cred),
-                patch.object(SalesforceReportBrowser, "go_login", return_value=login_page),
-                caplog.at_level(logging.DEBUG),
-            ):
-                sf.ensure_login("salesforce_temp")
-        finally:
-            self._exit_sf(sf)
-
-        all_text = "\n".join(r.getMessage() for r in caplog.records)
-        # パスワード文字列が caplog に一切現れない
-        assert "S3cret!PW" not in all_text
-
-
-def _stop_loop(*args, **kwargs):
-    """テスト用: wait_for_manual_login のループから抜けるための例外送出。
-
-    本物の ``wait_for_manual_login`` は状態によってループするので、
-    テストでは呼ばれたら必ず例外で抜ける。呼び出し側は ``contextlib.suppress``
-    で受け止める。
-    """
-    raise _StopLoop()
-
-
-class _StopLoop(Exception):
-    """テスト用の脱出マーカー。"""
+        all_messages = "\n".join(record.getMessage() for record in caplog.records)
+        assert secret_password not in all_messages
 
 
 class TestDomainOf:
+    """_domain_of() — URLから scheme + netloc だけを取り出す。"""
+
     def test_extracts_scheme_and_netloc(self):
         assert _domain_of(REPORT_URL_1) == "https://example.my.salesforce.com"
 

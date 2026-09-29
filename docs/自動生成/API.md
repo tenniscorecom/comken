@@ -6170,18 +6170,13 @@ Salesforceのレポートをブラウザ経由でCSVダウンロードするた�
 URL は example の値のまま。利用プロジェクト側で継承して書き換える
 （BASE_URL を実際の組織の My Domain URL へ）。
 
-ログイン方法は3通り:
+ログイン方法は2通り:
 
-- ``ensure_login()`` （**推奨**）— 既にログイン済みなら何もせず return。
-  未ログインなら DPAPIに保存したID/パスワードを自動入力し、MFA等の追加確認は
-  人が承認する。``prefix`` は省略でき、その場合はクラスの ``CREDENTIAL_PREFIX``
-  を使う
 - ``go_login()`` + ``wait_for_manual_login()`` — 人がブラウザでID/パスワード/
   MFAを手動入力する
 - ``login_with_credentials(prefix)`` — DPAPIに保存したID/パスワードを自動
-  入力する（MFA等の追加確認が出た場合は、続けて ``wait_for_manual_login()``
-  を呼んで人が対応する）。``prefix`` は省略でき、その場合はクラスの
-  ``CREDENTIAL_PREFIX`` を使う
+  入力し、送信後にそのまま ``wait_for_manual_login()`` で人の MFA 承認を待つ。
+  ``prefix`` は省略でき、その場合はクラスの ``CREDENTIAL_PREFIX`` を使う
 
 **ログインを使い回すには OPTIONS.PROFILE_ROOT を設定すること。**
 未設定だと起動のたびにまっさらなプロファイルになり、毎回ログインし直しになる
@@ -6195,7 +6190,7 @@ URL は example の値のまま。利用プロジェクト側で継承して書�
         CREDENTIAL_PREFIX = "salesforce_temp"
 
     with MySalesforce() as sf:
-        sf.ensure_login()              # 推奨。1行でログインまで完結
+        sf.login_with_credentials()     # prefix省略 → CREDENTIAL_PREFIX / MFAはそのまま人が承認
         for report_id, path in sf.export_reports(report_urls, "出力先"):
             ...
 
@@ -6215,65 +6210,35 @@ ID/パスワードを自分で入力するなら ``LoginPage.login()``、人が�
 #### `login_with_credentials`
 
 ```text
-def login_with_credentials(self, prefix: str='') -> None:
+def login_with_credentials(self, prefix: str='', timeout: float=_DEFAULT_MANUAL_LOGIN_TIMEOUT_SECONDS, interval: float=_DEFAULT_MANUAL_LOGIN_INTERVAL_SECONDS) -> None:
 ```
 
 ##### 説明
 
-DPAPIに保存したID/パスワードでログインを試みる。
+DPAPIに保存したID/パスワードでログインし、MFA承認を人の操作で待つ。
 
-MFA（認証コード・端末認証など）が要求される組織では、これだけでは
-ログインが完了しない。続けて ``wait_for_manual_login()`` を呼び、
-ブラウザで残りの確認を終えると自動で検知して return する。
-
-ログイン済みの判定や未登録時の扱いまで含めたいなら ``ensure_login()``
-を使うこと。
+ID/パスワードを ``LoginPage.login()`` で入力・送信したあと、そのまま
+``wait_for_manual_login()`` を呼んでブラウザをポーリングし、MFA（認証
+コード・端末認証など）の承認を人が終えるのを待つ。承認が完了して
+ログイン済みになった時点で return する。
 
 Args:
     prefix: DPAPIに登録した認証情報のシステム名
         （``comken.toolbox.credentials.Credentials`` のサイト名）。
         ``username`` / ``password`` の2項目を登録しておく
-        （例: ``python -m comken cred gui`` ）。**省略時はクラスの
+        （例: ``python -m comken cred gui``）。**省略時はクラスの
         ``CREDENTIAL_PREFIX``** を使う（本番とテストを切り替えるときだけ渡す）。
+    timeout: MFA 承認を待つ最大の秒数。既定10分
+        （``_DEFAULT_MANUAL_LOGIN_TIMEOUT_SECONDS``）。
+    interval: ブラウザ状態の確認間隔（秒）。既定3秒
+        （``_DEFAULT_MANUAL_LOGIN_INTERVAL_SECONDS``）。
 
 Raises:
     CredentialNotFoundError: prefix配下に username/password が未登録の場合。
     CredentialError: 別のユーザー・PCで登録されていて復号できない場合。
-
-#### `ensure_login`
-
-```text
-def ensure_login(self, prefix: str='', timeout: float=_DEFAULT_MANUAL_LOGIN_TIMEOUT_SECONDS, interval: float=_DEFAULT_MANUAL_LOGIN_INTERVAL_SECONDS) -> None:
-```
-
-##### 説明
-
-ログイン画面を開き、ID/パスワードを自動入力したうえで MFA の承認を待つ。
-
-推奨のログイン方法。次の順で動く:
-
-1. ``go_login()`` でログイン画面を開く
-2. 既にログイン済み（``_is_logged_in(driver)`` が真）なら、認証情報を
-   読まずに何もせず return する
-3. 未ログインなら ``Credentials(prefix or self.CREDENTIAL_PREFIX)`` から
-   ``username`` / ``password`` を取り出し、``LoginPage.login()`` で
-   入力して送信する
-4. ``wait_for_manual_login(timeout, interval)`` を呼ぶ
-
-DPAPI の認証情報が未登録（``CredentialNotFoundError``）や、別の
-ユーザー・PC で登録されていて復号できない（``CredentialError``）
-場合は**止めずに** WARNING をログへ出し、ID/パスワードの自動入力は
-    スキップして ``wait_for_manual_login()`` へ進む。人が Edge で
-ID/パスワードから手入力する「今までの手動ログインと同じ動き」に
-なるため。WARNING には ``python -m comken cred gui`` で
-``<prefix>`` に ``username`` / ``password`` を登録すれば自動入力に
-切り替わる旨を書く。**パスワードはログに出さない。**
-
-Args:
-    prefix: DPAPIに登録した認証情報のシステム名。**省略時はクラスの
-        ``CREDENTIAL_PREFIX``** を使う。
-    timeout: ``wait_for_manual_login()`` に渡す最大待ち秒数。既定10分。
-    interval: ``wait_for_manual_login()`` に渡す確認間隔（秒）。既定3秒。
+    LoginFailedError: ``timeout`` 秒待ってもログイン済みにならなかった場合。
+    BrowserError: HEADLESS で起動中、かつログインが切れていた場合
+        （人がブラウザを操作できないため、待たずにエラー）。
 
 #### `wait_for_manual_login`
 
@@ -6341,7 +6306,6 @@ requests + ThreadPoolExecutor で並列に行う。
 
     with Salesforce() as sf:
         sf.login_with_credentials("salesforce_temp")
-        sf.wait_for_manual_login()
         reports = {
             report_url: f"出力先/{report_name}.csv"
             for report_url, report_name in ...
@@ -6394,7 +6358,7 @@ Solution組織へのブラウザ経由アクセス。
 
 使い方:
     with Solution() as sf:
-        sf.ensure_login()
+        sf.login_with_credentials()  # prefix省略 → CREDENTIAL_PREFIX / MFA承認は人が行う
         for report_id, path in sf.export_reports(reports):
             ...
 
@@ -6414,65 +6378,35 @@ ID/パスワードを自分で入力するなら ``LoginPage.login()``、人が�
 #### `login_with_credentials`
 
 ```text
-def login_with_credentials(self, prefix: str='') -> None:
+def login_with_credentials(self, prefix: str='', timeout: float=_DEFAULT_MANUAL_LOGIN_TIMEOUT_SECONDS, interval: float=_DEFAULT_MANUAL_LOGIN_INTERVAL_SECONDS) -> None:
 ```
 
 ##### 説明
 
-DPAPIに保存したID/パスワードでログインを試みる。
+DPAPIに保存したID/パスワードでログインし、MFA承認を人の操作で待つ。
 
-MFA（認証コード・端末認証など）が要求される組織では、これだけでは
-ログインが完了しない。続けて ``wait_for_manual_login()`` を呼び、
-ブラウザで残りの確認を終えると自動で検知して return する。
-
-ログイン済みの判定や未登録時の扱いまで含めたいなら ``ensure_login()``
-を使うこと。
+ID/パスワードを ``LoginPage.login()`` で入力・送信したあと、そのまま
+``wait_for_manual_login()`` を呼んでブラウザをポーリングし、MFA（認証
+コード・端末認証など）の承認を人が終えるのを待つ。承認が完了して
+ログイン済みになった時点で return する。
 
 Args:
     prefix: DPAPIに登録した認証情報のシステム名
         （``comken.toolbox.credentials.Credentials`` のサイト名）。
         ``username`` / ``password`` の2項目を登録しておく
-        （例: ``python -m comken cred gui`` ）。**省略時はクラスの
+        （例: ``python -m comken cred gui``）。**省略時はクラスの
         ``CREDENTIAL_PREFIX``** を使う（本番とテストを切り替えるときだけ渡す）。
+    timeout: MFA 承認を待つ最大の秒数。既定10分
+        （``_DEFAULT_MANUAL_LOGIN_TIMEOUT_SECONDS``）。
+    interval: ブラウザ状態の確認間隔（秒）。既定3秒
+        （``_DEFAULT_MANUAL_LOGIN_INTERVAL_SECONDS``）。
 
 Raises:
     CredentialNotFoundError: prefix配下に username/password が未登録の場合。
     CredentialError: 別のユーザー・PCで登録されていて復号できない場合。
-
-#### `ensure_login`
-
-```text
-def ensure_login(self, prefix: str='', timeout: float=_DEFAULT_MANUAL_LOGIN_TIMEOUT_SECONDS, interval: float=_DEFAULT_MANUAL_LOGIN_INTERVAL_SECONDS) -> None:
-```
-
-##### 説明
-
-ログイン画面を開き、ID/パスワードを自動入力したうえで MFA の承認を待つ。
-
-推奨のログイン方法。次の順で動く:
-
-1. ``go_login()`` でログイン画面を開く
-2. 既にログイン済み（``_is_logged_in(driver)`` が真）なら、認証情報を
-   読まずに何もせず return する
-3. 未ログインなら ``Credentials(prefix or self.CREDENTIAL_PREFIX)`` から
-   ``username`` / ``password`` を取り出し、``LoginPage.login()`` で
-   入力して送信する
-4. ``wait_for_manual_login(timeout, interval)`` を呼ぶ
-
-DPAPI の認証情報が未登録（``CredentialNotFoundError``）や、別の
-ユーザー・PC で登録されていて復号できない（``CredentialError``）
-場合は**止めずに** WARNING をログへ出し、ID/パスワードの自動入力は
-    スキップして ``wait_for_manual_login()`` へ進む。人が Edge で
-ID/パスワードから手入力する「今までの手動ログインと同じ動き」に
-なるため。WARNING には ``python -m comken cred gui`` で
-``<prefix>`` に ``username`` / ``password`` を登録すれば自動入力に
-切り替わる旨を書く。**パスワードはログに出さない。**
-
-Args:
-    prefix: DPAPIに登録した認証情報のシステム名。**省略時はクラスの
-        ``CREDENTIAL_PREFIX``** を使う。
-    timeout: ``wait_for_manual_login()`` に渡す最大待ち秒数。既定10分。
-    interval: ``wait_for_manual_login()`` に渡す確認間隔（秒）。既定3秒。
+    LoginFailedError: ``timeout`` 秒待ってもログイン済みにならなかった場合。
+    BrowserError: HEADLESS で起動中、かつログインが切れていた場合
+        （人がブラウザを操作できないため、待たずにエラー）。
 
 #### `wait_for_manual_login`
 
@@ -6540,7 +6474,6 @@ requests + ThreadPoolExecutor で並列に行う。
 
     with Salesforce() as sf:
         sf.login_with_credentials("salesforce_temp")
-        sf.wait_for_manual_login()
         reports = {
             report_url: f"出力先/{report_name}.csv"
             for report_url, report_name in ...
@@ -6661,7 +6594,7 @@ Solution Sandbox組織へのブラウザ経由アクセス。
 
 使い方:
     with SolutionSandbox() as sf:
-        sf.ensure_login()
+        sf.login_with_credentials()  # prefix省略 → CREDENTIAL_PREFIX / MFA承認は人が行う
         for report_id, path in sf.export_reports(reports):
             ...
 
@@ -6681,65 +6614,35 @@ ID/パスワードを自分で入力するなら ``LoginPage.login()``、人が�
 #### `login_with_credentials`
 
 ```text
-def login_with_credentials(self, prefix: str='') -> None:
+def login_with_credentials(self, prefix: str='', timeout: float=_DEFAULT_MANUAL_LOGIN_TIMEOUT_SECONDS, interval: float=_DEFAULT_MANUAL_LOGIN_INTERVAL_SECONDS) -> None:
 ```
 
 ##### 説明
 
-DPAPIに保存したID/パスワードでログインを試みる。
+DPAPIに保存したID/パスワードでログインし、MFA承認を人の操作で待つ。
 
-MFA（認証コード・端末認証など）が要求される組織では、これだけでは
-ログインが完了しない。続けて ``wait_for_manual_login()`` を呼び、
-ブラウザで残りの確認を終えると自動で検知して return する。
-
-ログイン済みの判定や未登録時の扱いまで含めたいなら ``ensure_login()``
-を使うこと。
+ID/パスワードを ``LoginPage.login()`` で入力・送信したあと、そのまま
+``wait_for_manual_login()`` を呼んでブラウザをポーリングし、MFA（認証
+コード・端末認証など）の承認を人が終えるのを待つ。承認が完了して
+ログイン済みになった時点で return する。
 
 Args:
     prefix: DPAPIに登録した認証情報のシステム名
         （``comken.toolbox.credentials.Credentials`` のサイト名）。
         ``username`` / ``password`` の2項目を登録しておく
-        （例: ``python -m comken cred gui`` ）。**省略時はクラスの
+        （例: ``python -m comken cred gui``）。**省略時はクラスの
         ``CREDENTIAL_PREFIX``** を使う（本番とテストを切り替えるときだけ渡す）。
+    timeout: MFA 承認を待つ最大の秒数。既定10分
+        （``_DEFAULT_MANUAL_LOGIN_TIMEOUT_SECONDS``）。
+    interval: ブラウザ状態の確認間隔（秒）。既定3秒
+        （``_DEFAULT_MANUAL_LOGIN_INTERVAL_SECONDS``）。
 
 Raises:
     CredentialNotFoundError: prefix配下に username/password が未登録の場合。
     CredentialError: 別のユーザー・PCで登録されていて復号できない場合。
-
-#### `ensure_login`
-
-```text
-def ensure_login(self, prefix: str='', timeout: float=_DEFAULT_MANUAL_LOGIN_TIMEOUT_SECONDS, interval: float=_DEFAULT_MANUAL_LOGIN_INTERVAL_SECONDS) -> None:
-```
-
-##### 説明
-
-ログイン画面を開き、ID/パスワードを自動入力したうえで MFA の承認を待つ。
-
-推奨のログイン方法。次の順で動く:
-
-1. ``go_login()`` でログイン画面を開く
-2. 既にログイン済み（``_is_logged_in(driver)`` が真）なら、認証情報を
-   読まずに何もせず return する
-3. 未ログインなら ``Credentials(prefix or self.CREDENTIAL_PREFIX)`` から
-   ``username`` / ``password`` を取り出し、``LoginPage.login()`` で
-   入力して送信する
-4. ``wait_for_manual_login(timeout, interval)`` を呼ぶ
-
-DPAPI の認証情報が未登録（``CredentialNotFoundError``）や、別の
-ユーザー・PC で登録されていて復号できない（``CredentialError``）
-場合は**止めずに** WARNING をログへ出し、ID/パスワードの自動入力は
-    スキップして ``wait_for_manual_login()`` へ進む。人が Edge で
-ID/パスワードから手入力する「今までの手動ログインと同じ動き」に
-なるため。WARNING には ``python -m comken cred gui`` で
-``<prefix>`` に ``username`` / ``password`` を登録すれば自動入力に
-切り替わる旨を書く。**パスワードはログに出さない。**
-
-Args:
-    prefix: DPAPIに登録した認証情報のシステム名。**省略時はクラスの
-        ``CREDENTIAL_PREFIX``** を使う。
-    timeout: ``wait_for_manual_login()`` に渡す最大待ち秒数。既定10分。
-    interval: ``wait_for_manual_login()`` に渡す確認間隔（秒）。既定3秒。
+    LoginFailedError: ``timeout`` 秒待ってもログイン済みにならなかった場合。
+    BrowserError: HEADLESS で起動中、かつログインが切れていた場合
+        （人がブラウザを操作できないため、待たずにエラー）。
 
 #### `wait_for_manual_login`
 
@@ -6807,7 +6710,6 @@ requests + ThreadPoolExecutor で並列に行う。
 
     with Salesforce() as sf:
         sf.login_with_credentials("salesforce_temp")
-        sf.wait_for_manual_login()
         reports = {
             report_url: f"出力先/{report_name}.csv"
             for report_url, report_name in ...
