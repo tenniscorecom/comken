@@ -496,7 +496,7 @@ config = Config("path/to/config.ini")  # パスを指定する場合
 ```ini
 ; config.ini（プロジェクト固有の非機密設定を書く）。
 ; 命名・配置の規約（セクション名・キー名は大文字、パスは config.ini からの相対パスが既定）は
-; [**CONVENTIONS.md**](../CONVENTIONS.md#11-configini-の書き方) を参照。
+; [**CONVENTIONS.md**](../CONVENTIONS.md#5-configini-の書き方) を参照。
 
 [REPORT]
 OUTPUT_FOLDER = ./output

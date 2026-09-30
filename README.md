@@ -43,10 +43,10 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 | エラーが出た | [エラー対応ガイド](docs/ERRORS.md)（エラー表は **自動生成**） |
 | 動くコードを見る | [examples](examples/README.md) |
 | なぜこの設計なのか知る | [設計判断の歴史](docs/HISTORY.md) |
-| コードを書く規約 / comken 本体を直す | [CONVENTIONS.md](docs/CONVENTIONS.md)（利用者向け＝1〜14 章、本体編集者向け＝15 章以降） |
+| コードを書く規約 / comken 本体を直す | [共通](docs/CONVENTIONS_COMMON.md)（入口）・[Python](docs/CONVENTIONS_PYTHON.md)・[VBA](docs/CONVENTIONS_VBA.md)・[comken 固有](docs/CONVENTIONS.md) |
 | 開発してリリースする | [ARCHITECTURE.md「開発とリリース」](docs/ARCHITECTURE.md#11-開発とリリース)（タグを打つ → 共有サーバーで checkout） |
 | comken を使うツールを作る | `python -m comken init プロジェクト名` で雛形を作る（作られた `README.md` が中を案内する） |
-| コードを読む・レビューする | [コードを読む順番](docs/CONVENTIONS.md#24-コードを読む順番) |
+| コードを読む・レビューする | [コードを読む順番](docs/CONVENTIONS.md#13-コードを読む順番) |
 
 ## 使うときの約束
 

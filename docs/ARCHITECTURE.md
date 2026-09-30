@@ -4,7 +4,7 @@
 > 経緯・却下した代替案・理由は [`HISTORY.md`](HISTORY.md) を参照する。
 > API の使い方（引数・戻り値・例外）は docstring が一次情報で、
 > [`自動生成/API.md`](自動生成/API.md) はそこから自動生成される。
-> コーディング規約は [`CONVENTIONS.md`](CONVENTIONS.md) を参照。
+> コーディング規約は [`CONVENTIONS_COMMON.md`](CONVENTIONS_COMMON.md)（入口）を参照。
 
 ## 1. 基本方針
 
@@ -350,7 +350,7 @@ BO と intranet でバージョンを分けることはしない（版を分け�
 
 - [`機能/`](機能/): 機能ごとの使い方・仕様（`csv.md`・`excel.md`・`browser.md`・`salesforce.md` など）。入口は [`README.md`](../README.md) の「モジュール一覧」
 - [`HISTORY.md`](HISTORY.md): 設計判断の **経緯・却下した代替案・理由** だけを集めた文書。現状の説明はここに書かない
-- [`CONVENTIONS.md`](CONVENTIONS.md): **コーディング規約**（1〜14 章は利用者向け、15 章以降は comken 本体の編集者向け）
+- [`CONVENTIONS_COMMON.md`](CONVENTIONS_COMMON.md): **コーディング規約**の入口（言語共通）。Python は [`CONVENTIONS_PYTHON.md`](CONVENTIONS_PYTHON.md)、VBA は [`CONVENTIONS_VBA.md`](CONVENTIONS_VBA.md)、comken 固有は [`CONVENTIONS.md`](CONVENTIONS.md)
 - [`自動生成/API.md`](自動生成/API.md): 公開 API の署名・docstring（**生成物**、手で編集しない）
 - [`ERRORS.md`](ERRORS.md): 例外クラスと非エンジニア向けの対処（**生成物**、手で編集しない）
 - [`README.md`](../README.md): 入口とモジュール一覧
