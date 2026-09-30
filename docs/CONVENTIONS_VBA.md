@@ -49,6 +49,21 @@
 | モジュール | PascalCase で役割が分かる名前 | `SalesReport`, `Formatting` |
 | ユーザーフォーム | 頭に `frm` | `frmSearch` |
 | 名前付き範囲（設定シート） | UPPER_SNAKE_CASE | `INPUT_FOLDER` |
+| VBA が書き換えるシート（データシート） | 頭に `VBA_` | `VBA_顧客` |
+| VBA が作る・書き換える Excel のテーブル | 頭に `VBA_T_` | `VBA_T_顧客` |
+| 人が見る表示用シート（帳票・設定） | 接頭辞なし | `集計`, `設定` |
+
+シートとテーブルの接頭辞は、Python（comken）の `PY_` / `PY_T_` と対になる決まりです
+（理由と「相手の接頭辞のシートは読むだけ」のルールは [共通規約 4 章](CONVENTIONS_COMMON.md#プログラムが管理するシートテーブルの名前)）。
+comken と違って自動では付かないので、名前は定数にして必ず接頭辞込みで書きます。
+
+```vba
+Private Const SHEET_CUSTOMER As String = "VBA_顧客"
+Private Const TABLE_CUSTOMER As String = "VBA_T_顧客"
+
+Dim customerTable As ListObject
+Set customerTable = ThisWorkbook.Worksheets(SHEET_CUSTOMER).ListObjects(TABLE_CUSTOMER)
+```
 
 - `Module1` / `Sheet1` / `CommandButton1` のような自動で付いた名前のままにしない
 - シートには「オブジェクト名」（プロパティウィンドウの `(Name)`）も付ける（例: `shtSetting`）。
@@ -56,7 +71,7 @@
 - 動詞は Python と揃える（`Read` / `Save` / `Find` / `Create` / `Run`）
 
 **Python と書き方が違う理由**: Python は関数・変数を snake_case にしますが、VBA では
-`_` を名前に入れません。VBA は `Worksheet_Change` や `CommandButton1_Click` のように
+プロシージャ名・変数名に `_` を入れません（シート名・テーブル名は Excel 側の名前なので `VBA_` を使ってよい）。VBA は `Worksheet_Change` や `CommandButton1_Click` のように
 「`_` の左がオブジェクト、右がイベント」という決まりで `_` を使っているため、
 自分の名前に `_` を入れると区別がつかなくなります。定数だけは大文字で目立たせたいので、Python と同じ UPPER_SNAKE_CASE にします。
 
