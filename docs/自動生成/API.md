@@ -329,6 +329,26 @@ Table 標準の操作が直接使えるようにしてある。
 
 公開定数。
 
+### `HierarchyResult`
+
+```text
+class HierarchyResult:
+```
+
+#### 説明
+
+``Table.split_hierarchy()`` の結果。
+
+``details`` / ``subtotals`` は ``Table`` なので、``select / filter / count``
+などの Table 標準の操作が直接使える（``DiffResult`` と同じ意図の設計）。
+
+Attributes:
+    details: 明細の行（全階層が current で埋まった状態）。
+    subtotals: 小計の行。matched level より上は current、matched level は
+        元の値、下は None。
+    unmatched: 「計」で終わる値があるのに小計と判定しなかった行の
+        **件目**（1始まり、元の Table の何件目か）。
+
 ### `HOLIDAYS_CSV_PATH`
 
 公開定数。
@@ -566,6 +586,58 @@ Args:
 Returns:
     ``DiffResult``（``added`` / ``removed`` は ``Table``、``changed`` は
     ``list[RowChange]``）。
+
+#### `split_hierarchy`
+
+```text
+def split_hierarchy(self, levels: list[str] | tuple[str, ...], *, subtotal_words: Iterable[str]=SUBTOTAL_WORDS, subtotal_suffixes: Iterable[str]=SUBTOTAL_SUFFIXES) -> HierarchyResult:
+```
+
+##### 説明
+
+階層の列を上の階層で埋め、小計の行を分けて ``HierarchyResult`` を返す。
+
+Excel で多い次のパターンを扱うための関数:
+
+- 上の階層はグループの最初の行にしか値が無い（下は空欄）
+- 途中に「小計」「合計」「野菜計」のような小計の行が挟まっている
+
+上の階層（``levels`` の前の方）に値があれば、その下の階層の ``current`` を
+空に戻し、前の中分類を持ち越さない。小計の判定は ``subtotal_words``
+との完全一致、``subtotal_suffixes`` の末尾一致、「現在のグループの
+代表名 + 計」の3段構えで、「計」で終わるだけの値（時計・会計など）は
+小計にしない。元の Table は変えない（新しい Table を返す）。
+
+Args:
+    levels: 階層の列名（上から順）。1 つ以上。
+    subtotal_words: 小計と完全一致で扱う値の iterable。既定は
+        ``SUBTOTAL_WORDS = ("計", "小計", "合計", "総計")``。
+    subtotal_suffixes: 小計として扱う接尾辞の iterable。既定は
+        ``SUBTOTAL_SUFFIXES = ("小計", "合計", "総計")``。
+
+Returns:
+    ``HierarchyResult``（``details`` / ``subtotals`` は ``Table``、
+    ``unmatched`` は「計」で終わる値があるのに小計と判定しなかった行の
+    件目（1始まり））。
+
+Raises:
+    TableColumnNotFoundError: ``levels`` の列が存在しない。
+    TableError: 階層の列に Excel のエラー値（``#REF!`` 等）がある。
+
+Example:
+    >>> table = Table(
+    ...     ["大分類", "中分類", "小分類", "金額"],
+    ...     [
+    ...         {"大分類": "食品", "中分類": "野菜", "小分類": "にんじん", "金額": 100},
+    ...         {"大分類": None,   "中分類": None,   "小分類": "たまねぎ", "金額": 50},
+    ...         {"大分類": None,   "中分類": "野菜計", "小分類": None,   "金額": 150},
+    ...     ],
+    ... )
+    >>> result = table.split_hierarchy(["大分類", "中分類", "小分類"])
+    >>> len(result.details)
+    2
+    >>> len(result.subtotals)
+    1
 
 #### `changes`
 
@@ -2407,6 +2479,26 @@ handler が混ざっている場合は ``LoggingAlreadyConfiguredError`` を送�
 
 ## `from comken.core.table import ...`
 
+### `HierarchyResult`
+
+```text
+class HierarchyResult:
+```
+
+#### 説明
+
+``Table.split_hierarchy()`` の結果。
+
+``details`` / ``subtotals`` は ``Table`` なので、``select / filter / count``
+などの Table 標準の操作が直接使える（``DiffResult`` と同じ意図の設計）。
+
+Attributes:
+    details: 明細の行（全階層が current で埋まった状態）。
+    subtotals: 小計の行。matched level より上は current、matched level は
+        元の値、下は None。
+    unmatched: 「計」で終わる値があるのに小計と判定しなかった行の
+        **件目**（1始まり、元の Table の何件目か）。
+
 ### `Table`
 
 ```text
@@ -2553,6 +2645,58 @@ Args:
 Returns:
     ``DiffResult``（``added`` / ``removed`` は ``Table``、``changed`` は
     ``list[RowChange]``）。
+
+#### `split_hierarchy`
+
+```text
+def split_hierarchy(self, levels: list[str] | tuple[str, ...], *, subtotal_words: Iterable[str]=SUBTOTAL_WORDS, subtotal_suffixes: Iterable[str]=SUBTOTAL_SUFFIXES) -> HierarchyResult:
+```
+
+##### 説明
+
+階層の列を上の階層で埋め、小計の行を分けて ``HierarchyResult`` を返す。
+
+Excel で多い次のパターンを扱うための関数:
+
+- 上の階層はグループの最初の行にしか値が無い（下は空欄）
+- 途中に「小計」「合計」「野菜計」のような小計の行が挟まっている
+
+上の階層（``levels`` の前の方）に値があれば、その下の階層の ``current`` を
+空に戻し、前の中分類を持ち越さない。小計の判定は ``subtotal_words``
+との完全一致、``subtotal_suffixes`` の末尾一致、「現在のグループの
+代表名 + 計」の3段構えで、「計」で終わるだけの値（時計・会計など）は
+小計にしない。元の Table は変えない（新しい Table を返す）。
+
+Args:
+    levels: 階層の列名（上から順）。1 つ以上。
+    subtotal_words: 小計と完全一致で扱う値の iterable。既定は
+        ``SUBTOTAL_WORDS = ("計", "小計", "合計", "総計")``。
+    subtotal_suffixes: 小計として扱う接尾辞の iterable。既定は
+        ``SUBTOTAL_SUFFIXES = ("小計", "合計", "総計")``。
+
+Returns:
+    ``HierarchyResult``（``details`` / ``subtotals`` は ``Table``、
+    ``unmatched`` は「計」で終わる値があるのに小計と判定しなかった行の
+    件目（1始まり））。
+
+Raises:
+    TableColumnNotFoundError: ``levels`` の列が存在しない。
+    TableError: 階層の列に Excel のエラー値（``#REF!`` 等）がある。
+
+Example:
+    >>> table = Table(
+    ...     ["大分類", "中分類", "小分類", "金額"],
+    ...     [
+    ...         {"大分類": "食品", "中分類": "野菜", "小分類": "にんじん", "金額": 100},
+    ...         {"大分類": None,   "中分類": None,   "小分類": "たまねぎ", "金額": 50},
+    ...         {"大分類": None,   "中分類": "野菜計", "小分類": None,   "金額": 150},
+    ...     ],
+    ... )
+    >>> result = table.split_hierarchy(["大分類", "中分類", "小分類"])
+    >>> len(result.details)
+    2
+    >>> len(result.subtotals)
+    1
 
 #### `changes`
 

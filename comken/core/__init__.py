@@ -50,6 +50,7 @@ from comken.core.state import State
 from comken.core.table.diff import DiffResult
 from comken.core.table.diff import RowChange
 from comken.core.table.diff import diff_row
+from comken.core.table.hierarchy import HierarchyResult
 from comken.core.table.model import Table
 from comken.core.table.transfer import Transfer
 from comken.core.text import normalize
@@ -67,6 +68,7 @@ __all__ = [
     "DateFileFinder",
     "DiffResult",
     "EXPIRING_WARNING_DAYS",
+    "HierarchyResult",
     "HOLIDAYS_CSV_PATH",
     "RowChange",
     "State",

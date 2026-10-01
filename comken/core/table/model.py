@@ -11,6 +11,12 @@ from collections.abc import Callable, Iterable, Iterator, Mapping
 from itertools import pairwise
 from typing import TYPE_CHECKING, Any, Self
 
+from comken.core.table.hierarchy import (
+    SUBTOTAL_SUFFIXES,
+    SUBTOTAL_WORDS,
+    HierarchyResult,
+    split_hierarchy_rows,
+)
 from comken.exceptions.tables import (
     TableColumnNotFoundError,
     TableDuplicateKeyError,
@@ -337,6 +343,86 @@ class Table:
             removed=Table._from_normalized_rows(self.columns, removed_rows, types=self.types),
             changed=changed,
         )
+
+    def split_hierarchy(
+        self,
+        levels: list[str] | tuple[str, ...],
+        *,
+        subtotal_words: Iterable[str] = SUBTOTAL_WORDS,
+        subtotal_suffixes: Iterable[str] = SUBTOTAL_SUFFIXES,
+    ) -> HierarchyResult:
+        """階層の列を上の階層で埋め、小計の行を分けて ``HierarchyResult`` を返す。
+
+        Excel で多い次のパターンを扱うための関数:
+
+        - 上の階層はグループの最初の行にしか値が無い（下は空欄）
+        - 途中に「小計」「合計」「野菜計」のような小計の行が挟まっている
+
+        上の階層（``levels`` の前の方）に値があれば、その下の階層の ``current`` を
+        空に戻し、前の中分類を持ち越さない。小計の判定は ``subtotal_words``
+        との完全一致、``subtotal_suffixes`` の末尾一致、「現在のグループの
+        代表名 + 計」の3段構えで、「計」で終わるだけの値（時計・会計など）は
+        小計にしない。元の Table は変えない（新しい Table を返す）。
+
+        Args:
+            levels: 階層の列名（上から順）。1 つ以上。
+            subtotal_words: 小計と完全一致で扱う値の iterable。既定は
+                ``SUBTOTAL_WORDS = ("計", "小計", "合計", "総計")``。
+            subtotal_suffixes: 小計として扱う接尾辞の iterable。既定は
+                ``SUBTOTAL_SUFFIXES = ("小計", "合計", "総計")``。
+
+        Returns:
+            ``HierarchyResult``（``details`` / ``subtotals`` は ``Table``、
+            ``unmatched`` は「計」で終わる値があるのに小計と判定しなかった行の
+            件目（1始まり））。
+
+        Raises:
+            TableColumnNotFoundError: ``levels`` の列が存在しない。
+            TableError: 階層の列に Excel のエラー値（``#REF!`` 等）がある。
+
+        Example:
+            >>> table = Table(
+            ...     ["大分類", "中分類", "小分類", "金額"],
+            ...     [
+            ...         {"大分類": "食品", "中分類": "野菜", "小分類": "にんじん", "金額": 100},
+            ...         {"大分類": None,   "中分類": None,   "小分類": "たまねぎ", "金額": 50},
+            ...         {"大分類": None,   "中分類": "野菜計", "小分類": None,   "金額": 150},
+            ...     ],
+            ... )
+            >>> result = table.split_hierarchy(["大分類", "中分類", "小分類"])
+            >>> len(result.details)
+            2
+            >>> len(result.subtotals)
+            1
+        """
+        levels_list = list(levels)
+        self._check_columns(levels_list)
+        if not levels_list:
+            raise TableError("levels は 1 つ以上必要です。")
+        words = tuple(subtotal_words)
+        suffixes = tuple(subtotal_suffixes)
+        logger.debug(
+            "Table split_hierarchy 開始: %d 行, levels=%s",
+            len(self),
+            levels_list,
+        )
+        details_rows, subtotal_rows, unmatched = split_hierarchy_rows(
+            self._rows,
+            levels_list,
+            subtotal_words=words,
+            subtotal_suffixes=suffixes,
+        )
+        details = Table._from_normalized_rows(self.columns, details_rows, types=self.types)
+        subtotals = Table._from_normalized_rows(
+            self.columns, subtotal_rows, types=self.types
+        )
+        logger.debug(
+            "Table split_hierarchy 完了: details=%d 行, subtotals=%d 行, unmatched=%d 行",
+            len(details),
+            len(subtotals),
+            len(unmatched),
+        )
+        return HierarchyResult(details=details, subtotals=subtotals, unmatched=unmatched)
 
     def changes(self, *, key: str, order_by: str | None = None) -> list[RowChange]:
         """``key`` の値ごとに行を分け、隣り合う行同士を比べる履歴の差分を取る。

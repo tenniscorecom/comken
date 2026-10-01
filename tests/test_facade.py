@@ -56,6 +56,7 @@ def test_core_exposes_parts() -> None:
         "DateFileFinder",
         "DiffResult",
         "EXPIRING_WARNING_DAYS",
+        "HierarchyResult",
         "HOLIDAYS_CSV_PATH",
         "RowChange",
         "State",
