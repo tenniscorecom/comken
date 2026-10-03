@@ -125,6 +125,58 @@ def test_table_concat_same_date_types_keeps_date_values() -> None:
     assert all(isinstance(row["d"], date) for row in result.to_rows())
 
 
+def test_table_concat_skips_conversion_for_columns_not_in_self_types() -> None:
+    """``concat()`` は ``self.types`` に登録されていない列の値を変換しない。
+
+    修正前は ``self.types`` に無い列も ``_convert_one`` へ渡していたため、
+    ``_convert_one`` 内の ``self.types[column]`` で ``KeyError`` になっていた。
+    ``_normalize_row`` と同じく ``types`` のある列だけが変換対象なので、
+    concat でも ``self.types`` に無い列は値のまま使う。
+    """
+    left = Table(
+        ["お客様ID", "金額"],
+        [{"お客様ID": "C001", "金額": "100"}],
+        types={"金額": int},
+    )
+    right = Table(
+        ["お客様ID", "金額"],
+        [{"お客様ID": "C002", "金額": "200"}],
+        types={"金額": int},
+    )
+
+    result = left.concat(right)
+
+    # self.types に無い列は変換せずそのまま、types にある列は self.types で変換
+    assert result.to_rows() == [
+        {"お客様ID": "C001", "金額": 100},
+        {"お客様ID": "C002", "金額": 200},
+    ]
+    assert all(isinstance(row["金額"], int) for row in result.to_rows())
+    assert all(isinstance(row["お客様ID"], str) for row in result.to_rows())
+
+
+def test_table_concat_partial_types_with_untyped_other() -> None:
+    """片方が ``types`` 未指定でも、``self.types`` に無い列はそのまま通る。"""
+    left = Table(
+        ["id", "name", "value"],
+        [{"id": "1", "name": "山田", "value": "10"}],
+        types={"value": int},
+    )
+    # 右側は types を一切指定しない（他の列も変換しない）
+    right = Table(
+        ["id", "name", "value"],
+        [{"id": "2", "name": "鈴木", "value": "20"}],
+    )
+
+    result = left.concat(right)
+
+    assert result.to_rows() == [
+        {"id": "1", "name": "山田", "value": 10},
+        {"id": "2", "name": "鈴木", "value": 20},
+    ]
+    assert all(isinstance(row["value"], int) for row in result.to_rows())
+
+
 def test_csv_is_string_by_default_and_types_are_explicit(tmp_path) -> None:
     path = tmp_path / "data.csv"
     path.write_text("id,name\n1,山田\n", encoding="utf-8-sig")

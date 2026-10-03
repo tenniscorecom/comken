@@ -241,9 +241,11 @@ class Table:
         別のデータとして扱う。列不足を空欄で補うと、入力ミスに気づけず
         データ欠落につながるため、ここでは明示的にエラーにする。
 
-        結果の型定義は ``self.types``。``other`` の値は、``other.types``
-        に ``self.types`` と**同じ変換関数（``is`` で同一のオブジェクト）**
-        が設定されている列はそのまま使い、それ以外は ``self.types`` で変換する
+        結果の型定義は ``self.types``。``other`` の値は、``self.types`` に無い列は
+        変換せずそのまま使う（``_normalize_row`` と同じく types のある列だけが
+        変換対象のため）。``self.types`` にある列は、``other.types`` に
+        ``self.types`` と**同じ変換関数（``is`` で同一のオブジェクト）**が
+        設定されている列はそのまま使い、それ以外は ``self.types`` で変換する
         （変換済みの値に同じ変換を二重にかけないため）。``other.types`` は
         結果に引き継がない。
         """
@@ -254,14 +256,18 @@ class Table:
         # other 側の各列について、other.types に同じ変換関数が登録されていれば
         # 変換済みとみなしてそのまま使う（``is`` で同一判定する。非冪等な
         # converter を変換済みの値へ適用するのを避けるため）。
-        # other.types に無い列、または別の関数の列は self.types で変換する。
+        # self.types に無い列は変換しない（types のない列は _normalize_row で
+        # そのまま扱う方針と揃えるため）。それ以外の列は self.types で変換する。
         self_rows = [{column: row[column] for column in columns} for row in self._rows]
         other_rows: list[dict[str, Any]] = []
         for row_number, row in enumerate(other._rows, 1):
             converted: dict[str, Any] = {}
             for column in columns:
                 value = row[column]
-                if column in self.types and self.types[column] is other.types.get(column):
+                if column not in self.types:
+                    # self.types に無い列は変換しない（_normalize_row と同じ方針）
+                    converted[column] = value
+                elif self.types[column] is other.types.get(column):
                     # other 側も同じ converter で変換済み → そのまま使う
                     converted[column] = value
                 else:
