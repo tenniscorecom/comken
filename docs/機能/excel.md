@@ -74,6 +74,31 @@ ids = sheet.read_column("G").column("お客様ID")
 見出しがシートの1行目にない（タイトル行や結合セルの下にある）ときは `header_row` で
 指定する。`header_row=2` なら `G2:G{最終行}` を読み、G2 を見出し・G3 以降をデータとして扱う。
 
+## ストリーム読み取り（大量データ）
+
+`Sheet.iter_rows(*, header_row=1) -> Iterator[dict[str, Any]]` は、見出し行の次から
+1 行ずつ `{列名: 値}` の dict で流す。**数万件以上のシート**では `read()` /
+`read_range()` ではなくこちらを使う。シート全体をメモリに展開しない。
+
+- 戻り値は `read_range` の数式なし経路と同じ形（空セルは `""`、それ以外はセルの値そのまま）。
+  見出しは `str(value)`。
+- 数式セルは保存済みの計算値（openpyxl の `data_only=True`）。**計算値が保存されていない
+  数式セルに当たったら `ExcelError`**（「Excel で開いて保存し直すか、
+  `read_range(force_com=True)` を使ってください」）。COM で全件再計算する経路は持たない。
+- `Excel(path, read_only=True)` で開いた Excel でしか使えない。
+  `read_only=False` で呼んだら `ExcelError`（呼んだ時点で発火する）。
+- 見出し行の空セル・重複は `read_range` と同じ例外クラス／文言で、呼んだ時点で止める。
+- 全部空の行は飛ばす（`read_only` のストリームは末尾に空行を報告することがあるため）。
+- 途中で `break` しても、`finally` でストリーム Workbook を閉じるため
+  Windows でもファイルをリネームできる。
+
+```python
+with Excel("big.xlsx", read_only=True) as excel:
+    sheet = excel.sheet("Sheet1")
+    for row in sheet.iter_rows():
+        process(row)
+```
+
 ## 保存とCOM
 
 正常に `with` を抜けたときだけ自動保存します。例外終了、`read_only=True`、dry-run では保存しません。保存時は同じフォルダの一時ファイルへ書き、再度開けることとVBAが変化していないことを確認してから元ファイルを置き換えます。

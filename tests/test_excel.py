@@ -1,6 +1,13 @@
 """現行のExcel API（Excel / Sheet / ExcelTable）の契約テスト。"""
 
+import re
+import tempfile
+import zipfile
+from datetime import datetime
+from pathlib import Path
+
 import pytest
+from openpyxl import Workbook
 from openpyxl.styles import PatternFill
 
 from comken.core.table import Table
@@ -385,3 +392,237 @@ class TestFindSheet:
             # 表示用シート名を候補にしても見つからない。
             with pytest.raises(SheetNotFoundError):
                 excel.find_sheet("案件一覧")
+
+
+def _write_cached_formula_xlsx(
+    path: Path,
+    *,
+    sheet_name: str,
+    formulas_with_values: dict[str, tuple[str, str]],
+    plain_values: dict[str, int | str | datetime] | None = None,
+) -> None:
+    """数式セルにキャッシュ値（計算結果）を埋めた xlsx を作る。
+
+    openpyxl は保存時に再計算しないので、保存後の zip 内
+    ``xl/worksheets/sheet1.xml`` を直接編集して ``<c><f>...</f><v>...</v></c>``
+    の ``<v>`` に計算結果を入れる。Excel が開いたときは「キャッシュ済み」と
+    みなされ、``Excel._cached_range`` は再計算しないで値を返す。
+    """
+    workbook = Workbook()
+    sheet = workbook.active
+    if sheet is None:
+        raise AssertionError("Workbook に active sheet がない")
+    sheet.title = sheet_name
+    for coord, formula_value in formulas_with_values.items():
+        sheet[coord] = formula_value[0]
+    for coord, value in (plain_values or {}).items():
+        sheet[coord] = value
+    workbook.save(path)
+    if not formulas_with_values:
+        return
+    with tempfile.TemporaryDirectory() as tmp_str:
+        tmp_path = Path(tmp_str)
+        with zipfile.ZipFile(path) as archive:
+            archive.extractall(tmp_path)
+        sheet_xml_path = tmp_path / "xl" / "worksheets" / "sheet1.xml"
+        text = sheet_xml_path.read_text(encoding="utf-8")
+        for coord, formula_value in formulas_with_values.items():
+            cached = formula_value[1]
+            pattern = re.compile(
+                r'(<c r="' + re.escape(coord) + r'"[^/>]*>)'
+                r"(<f[^<]*</f>)"
+                r"(<v[^<]*</v>|<v\s*/>)"
+                r"(</c>)"
+            )
+            replacement = r"\1\2<v>" + cached + r"</v>\4"
+            text, count = pattern.subn(replacement, text)
+            if count == 0:
+                raise AssertionError(f"数式セルが見つかりません: {coord}")
+        sheet_xml_path.write_text(text, encoding="utf-8")
+        path.unlink()
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
+            for file in sorted(tmp_path.rglob("*")):
+                if file.is_file():
+                    archive.write(file, file.relative_to(tmp_path).as_posix())
+
+
+class TestSheetIterRows:
+    """``Sheet.iter_rows`` の契約テスト。
+
+    ``read_range`` / ``read`` と同じく dict を返すが、ファイル全体をメモリに
+    載せずストリームで 1 行ずつ ``yield`` する。``Excel(path, read_only=True)``
+    で開いた Excel でしか使えない。
+    """
+
+    def test_results_match_read_range_for_mixed_values(self, tmp_path: Path) -> None:
+        """``iter_rows`` の結果が ``read_range`` の行と一致する（数値・日付・空欄・文字列）。"""
+        path = tmp_path / "values.xlsx"
+        with Excel(path) as excel:
+            sheet = excel.create_sheet("Sheet1")
+            sheet.write_range("A1:C1", [["ID", "名前", "日付"]])
+            sheet.write_value("A2", 1)
+            sheet.write_value("B2", "山田")
+            # openpyxl が timezone 付き datetime を受け付けないため、
+            # テストでは ``naive`` を使う（``read_range`` も同じ datetime インスタンスを返す）
+            sheet.write_value("C2", datetime(2024, 1, 2))  # noqa: DTZ001
+            # 3 行目は B 列が空欄、4 行目は C 列が空欄
+            sheet.write_value("A3", 2)
+            sheet.write_value("C3", datetime(2024, 1, 3))  # noqa: DTZ001
+            sheet.write_value("A4", 3)
+            sheet.write_value("B4", "佐藤")
+            sheet.write_value("A6", 7)
+            sheet.write_value("B6", "鈴木")
+            sheet.write_value("C6", datetime(2024, 1, 7))  # noqa: DTZ001
+
+        with Excel(path, read_only=True) as excel:
+            sheet = excel.sheet("Sheet1")
+            iter_rows = list(sheet.iter_rows())
+            # ``read_range`` は宣言範囲をそのまま読むので、空行も返す。
+            # 比較対象は同じく空行を落とした ``Table`` 相当のリストにする。
+            read_range = [
+                row
+                for row in sheet.read_range("A1:C6").to_rows()
+                if any(value not in (None, "") for value in row.values())
+            ]
+
+        assert iter_rows == read_range
+        # 途中の空行（5 行目）は飛ばしている
+        assert len(iter_rows) == 4
+
+    def test_formula_cells_return_cached_value(self, tmp_path: Path) -> None:
+        """数式セルは保存済みの計算値（``data_only=True``）を返す。"""
+        path = tmp_path / "cached.xlsx"
+        _write_cached_formula_xlsx(
+            path,
+            sheet_name="Sheet1",
+            formulas_with_values={"A2": ("=1+1", "2"), "B2": ("=A2*10", "20")},
+            plain_values={"A1": "値", "B1": "結果"},
+        )
+        with Excel(path, read_only=True) as excel:
+            sheet = excel.sheet("Sheet1")
+            assert list(sheet.iter_rows()) == [{"値": 2, "結果": 20}]
+
+    def test_uncalculated_formula_raises_with_cell_coordinate(self, tmp_path: Path) -> None:
+        """計算値が無い数式セルに当たったら ``ExcelError``（セル座標入り）。"""
+        path = tmp_path / "uncached.xlsx"
+        # openpyxl の標準保存は数式セルにキャッシュ値を入れない。
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Sheet1"
+        sheet["A1"] = "値"
+        sheet["B1"] = "結果"
+        sheet["A2"] = 5
+        sheet["B2"] = "=A2*2"  # キャッシュなし
+        workbook.save(path)
+
+        with Excel(path, read_only=True) as excel, pytest.raises(ExcelError) as exc_info:
+            list(excel.sheet("Sheet1").iter_rows())
+        # メッセージにセル座標と対処法のヒントが含まれる
+        assert "B2" in str(exc_info.value)
+        assert "read_range" in str(exc_info.value)
+
+    def test_raises_when_excel_not_read_only_at_call_time(self, tmp_path: Path) -> None:
+        """``read_only=False`` の Excel で呼ぶと ``ExcelError``（呼んだ時点で）。"""
+        path = tmp_path / "writable.xlsx"
+        with Excel(path) as excel, pytest.raises(ExcelError, match="read_only=True"):
+            excel.sheet("Sheet").iter_rows()
+
+    def test_duplicate_header_raises_table_error(self, tmp_path: Path) -> None:
+        """見出し重複は ``TableError`` (``Table(...)`` と同じ文言)。"""
+        path = tmp_path / "dupe.xlsx"
+        with Excel(path) as excel:
+            sheet = excel.create_sheet("Sheet1")
+            sheet.write_range("A1:C1", [["ID", "名前", "ID"]])
+            sheet.write_value("A2", "1")
+            sheet.write_value("B2", "山田")
+            sheet.write_value("C2", "2")
+        with (
+            Excel(path, read_only=True) as excel,
+            pytest.raises(TableError, match="重複"),
+        ):
+            list(excel.sheet("Sheet1").iter_rows())
+
+    def test_empty_header_cell_raises_excel_error(self, tmp_path: Path) -> None:
+        """見出し行の空セルは ``ExcelError``（``read()`` と同じ文言）。"""
+        path = tmp_path / "empty.xlsx"
+        with Excel(path) as excel:
+            sheet = excel.create_sheet("Sheet1")
+            sheet.write_value("A1", "ID")
+            # B1 は空の見出し
+            sheet.write_value("A2", "1")
+            sheet.write_value("B2", "山田")
+        with (
+            Excel(path, read_only=True) as excel,
+            pytest.raises(ExcelError, match="B1"),
+        ):
+            list(excel.sheet("Sheet1").iter_rows())
+
+    def test_blank_rows_in_middle_are_skipped(self, tmp_path: Path) -> None:
+        """途中の空行（全部空の行）は飛ばされる。"""
+        path = tmp_path / "blanks.xlsx"
+        with Excel(path) as excel:
+            sheet = excel.create_sheet("Sheet1")
+            sheet.write_range("A1:B1", [["ID", "名前"]])
+            sheet.write_value("A2", "1")
+            sheet.write_value("B2", "A")
+            # 3 行目は空、4 行目も空、5 行目にデータ
+            sheet.write_value("A5", "2")
+            sheet.write_value("B5", "B")
+        with Excel(path, read_only=True) as excel:
+            assert list(excel.sheet("Sheet1").iter_rows()) == [
+                {"ID": "1", "名前": "A"},
+                {"ID": "2", "名前": "B"},
+            ]
+
+    def test_uses_read_only_stream_workbook(self, tmp_path: Path) -> None:
+        """内部で read_only=True の Workbook からストリームで読んでいる。"""
+        path = tmp_path / "stream.xlsx"
+        with Excel(path) as excel:
+            sheet = excel.create_sheet("Sheet1")
+            sheet.write_range("A1:B1", [["ID", "名前"]])
+            sheet.write_value("A2", "1")
+            sheet.write_value("B2", "山田")
+        with Excel(path, read_only=True) as excel:
+            sheet = excel.sheet("Sheet1")
+            # 1 回目の next で Workbook が 1 度は開かれる。開いた Workbook が
+            # read_only=True であることを、``wb.read_only`` で確認する。
+            iterator = sheet.iter_rows()
+            workbook = excel._computed._open_single_stream_workbook(data_only=True)
+            try:
+                assert workbook.read_only is True
+            finally:
+                workbook.close()
+            next(iterator)
+
+    def test_break_then_rename_succeeds_on_windows(self, tmp_path: Path) -> None:
+        """途中で ``break`` してもファイルをリネームできる（Windows で zip ハンドル解放）。"""
+        path = tmp_path / "break.xlsx"
+        with Excel(path) as excel:
+            sheet = excel.create_sheet("Sheet1")
+            sheet.write_range("A1:B1", [["ID", "名前"]])
+            for index in range(1, 51):
+                sheet.write_value(f"A{index + 1}", str(index))
+                sheet.write_value(f"B{index + 1}", f"ユーザー{index}")
+        with Excel(path, read_only=True) as excel:
+            sheet = excel.sheet("Sheet1")
+            iterator = sheet.iter_rows()
+            first = next(iterator)
+            # 1 行だけ取って break する（Windows でも zip が閉じられている必要がある）
+            assert first == {"ID": "1", "名前": "ユーザー1"}
+            # generator を明示的に閉じて、``finally`` で Workbook を閉じる
+            iterator.close()
+
+        # ``with`` ブロック内でリネームできれば OK
+        renamed = path.with_suffix(".xlsx.bak")
+        path.replace(renamed)
+        assert renamed.exists()
+        assert not path.exists()
+
+    def test_works_inside_with_only(self, tmp_path: Path) -> None:
+        """``with`` の外で呼ぶと ``TableError``。"""
+        path = tmp_path / "outside.xlsx"
+        with Excel(path) as excel:
+            excel.create_sheet("Sheet1")
+        excel = Excel(path, read_only=True)
+        with pytest.raises(TableError):
+            excel.sheet("Sheet1").iter_rows()
