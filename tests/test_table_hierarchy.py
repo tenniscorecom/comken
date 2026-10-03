@@ -303,9 +303,7 @@ def test_split_hierarchy_custom_subtotal_words_and_suffixes() -> None:
     assert default_result.unmatched == [3]
 
     # subtotal_suffixes に "部署計" を足すと小計になる
-    result = table.split_hierarchy(
-        ["部署"], subtotal_suffixes=("部署計",)
-    )
+    result = table.split_hierarchy(["部署"], subtotal_suffixes=("部署計",))
     assert len(result.subtotals) == 1
     assert result.subtotals.to_rows()[0] == {"部署": "営業部署計", "金額": 150}
     assert result.unmatched == []

@@ -413,9 +413,7 @@ class Table:
             subtotal_suffixes=suffixes,
         )
         details = Table._from_normalized_rows(self.columns, details_rows, types=self.types)
-        subtotals = Table._from_normalized_rows(
-            self.columns, subtotal_rows, types=self.types
-        )
+        subtotals = Table._from_normalized_rows(self.columns, subtotal_rows, types=self.types)
         logger.debug(
             "Table split_hierarchy 完了: details=%d 行, subtotals=%d 行, unmatched=%d 行",
             len(details),
