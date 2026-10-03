@@ -78,6 +78,7 @@ class ErrorCategory:
 ERROR_CATEGORIES = (
     ErrorCategory("Excel のエラー", (exceptions.ExcelError,)),
     ErrorCategory("Access のエラー", (exceptions.AccessError,)),
+    ErrorCategory("SQLite のエラー", (exceptions.SQLiteError,)),
     ErrorCategory("Outlook のエラー", (exceptions.OutlookError,)),
     ErrorCategory(
         "ファイル・設定などのエラー",
@@ -113,6 +114,15 @@ SUPPLEMENTAL_ERRORS = {
             "PermissionError",
             "ファイルが誰かに開かれている",
             "自分や他の人がそのファイルを開いていないか確認して閉じる",
+        ),
+    ),
+    "SQLite のエラー": (
+        (
+            "sqlite3.OperationalError",
+            "ファイルがロックされている（database is locked）",
+            "他の人がその SQLite ファイルを使っていないか確認する。"
+            "SQLite は共有フォルダ上で複数人が同時に書くと壊れることがあるので、"
+            "書き込むファイルはローカルか1人だけが書く場所に置く",
         ),
     ),
     "ファイル・設定などのエラー": (

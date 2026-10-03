@@ -62,6 +62,14 @@ class AccessError(ComkenError):
     """
 
 
+class SQLiteError(ComkenError):
+    """SQLite に関するエラー。具体的な状況はメッセージに出る
+
+    対処:
+        メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
+    """
+
+
 class OutlookError(ComkenError):
     """Outlook 関連エラーの分類。具体的な状況はメッセージに出る
 
