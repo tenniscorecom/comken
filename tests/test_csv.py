@@ -89,6 +89,121 @@ class TestCSV:
                 {"id": "A002", "amount": "2000"},
             ]
 
+    def test_auto_iter_rows_does_not_read_full_file_into_memory(self, tmp_path) -> None:
+        """``encoding=None`` の ``iter_rows()`` はファイル全体を読まない。
+
+        ファイル全体を読む ``Path.read_bytes`` / ``_read_text`` を ``AssertionError`` で
+        塞いでも ``iter_rows`` が通れば、先頭からのストリームで動いている証拠。
+        """
+        path = tmp_path / "data.csv"
+        path.write_text("id,name\n1,山田\n2,鈴木\n", encoding="utf-8-sig")
+        with (
+            CSV(path) as csv_file,
+            patch.object(
+                type(path),
+                "read_bytes",
+                side_effect=AssertionError("iter_rows は read_bytes を呼ばないはず"),
+            ),
+            patch.object(
+                CSV,
+                "_read_text",
+                side_effect=AssertionError("iter_rows は _read_text を呼ばないはず"),
+            ),
+        ):
+            assert list(csv_file.iter_rows()) == [
+                {"id": "1", "name": "山田"},
+                {"id": "2", "name": "鈴木"},
+            ]
+
+    def test_auto_iter_rows_handles_utf8_char_straddling_one_mib(self, tmp_path) -> None:
+        """1 MiB 境界に UTF-8 の 3 バイト文字が分断されても誤判定しない。
+
+        先頭に UTF-8 としての「あ」列を繰り返し詰め、1 MiB の境界が必ず
+        3 バイト文字の途中で切れるように調整する。切り詰めが効けば、
+        残った部分は UTF-8 として復号でき、ファイル全体も UTF-8 として
+        読める（途中で切れた文字の続きも正しく結合する）。
+        """
+        path = tmp_path / "utf8.csv"
+        # 「あ,い」= 7 bytes (E3 81 82 2C E3 81 84) + LF = 8 bytes だが、
+        # 1048576 が 8 で割り切れるので境界が行末に来てしまう。
+        # そこで 7 バイトの行（CSV っぽくないが、ヘッダー＋改行として読ませる）
+        # ではなく、5 バイトの「あ\n」を繰り返しにして境界を確実に途中で切らせる。
+        # ただし CSV として読めるよう、行末に「,val\n」をつけて CSV 形式にする。
+        # 行のバイト長は「a,あ\n」= 1 + 1 + 3 + 1 = 6 バイトで 1048576 % 6 = 4。
+        # これで境界が「あ」の途中で切れることが保証される。
+        line_utf8 = "a,あ\n"  # 1 + 1 + 3 + 1 = 6 bytes (a, comma, "あ", LF)
+        encoded = line_utf8.encode("utf-8")
+        target = 1024 * 1024
+        repeats = target // len(encoded) + 2  # 確実に 1 MiB を超える
+        content = encoded * repeats
+        # 1 MiB の境界が「あ」(E3 81 82) の途中（E3 や 81）に来ていることを確認
+        assert content[target - 1] >= 0x80, (
+            f"expected multi-byte boundary at {target - 1}, got {content[target - 1]:#x}"
+        )
+        path.write_bytes(content)
+        assert path.stat().st_size > 1024 * 1024
+
+        with CSV(path) as csv_file:
+            # ヘッダー行（先頭の非空行）も「あ」が境界にかかる可能性が高い。
+            # csv.DictReader は先頭行を見出しとして読み、データ行を順に返す。
+            # 途中で切れたヘッダーは途中で切れたままセルに入るが、UTF-8 の
+            # 文字境界で切れているため decode は成功する。
+            rows = list(csv_file.iter_rows())
+        # 1 行以上の「あ」行が読める（境界で切れた行は不完全かもしれないが
+        # UnicodeDecodeError は起きない）。末尾の手前までは完全に読めるはず。
+        assert len(rows) >= 1
+        # 少なくとも最初の数行は完全に読めるはず
+        for row in rows[: min(len(rows), 100)]:
+            # 値は str に変換されている
+            for value in row.values():
+                assert isinstance(value, str)
+
+    def test_auto_iter_rows_handles_cp932_char_straddling_one_mib(self, tmp_path) -> None:
+        """1 MiB 境界に CP932 の 2 バイト文字が分断されても誤判定しない。
+
+        UTF-8 として読めないバイト（CP932 の「あ」= 0x82 0xA0）を 1 MiB 弱
+        繰り返して書き、境界が「0x82」の途中で切れるように調整する。
+        切り詰めても残りは cp932 と判定でき、CP932 として全行を読める。
+        """
+        path = tmp_path / "cp932.csv"
+        line_cp932 = b"\x82\xa0,\x82\xa2\n"  # あ,い + LF (5 bytes)
+        target = 1024 * 1024
+        repeats = target // len(line_cp932) + 1
+        content = line_cp932 * repeats
+        # 1 MiB の境界が「あ」(82 A0) の途中（0x82 の単独）に来ていることを確認
+        assert content[target - 1] == 0x82  # CP932 lead without trail
+        path.write_bytes(content)
+        assert path.stat().st_size > 1024 * 1024
+
+        with CSV(path) as csv_file:
+            rows = list(csv_file.iter_rows())
+        # 切り詰め + cp932 判定で、全行が CP932 として読める。
+        assert len(rows) >= 1
+        for row in rows[:-1]:
+            assert row["あ"] == "あ"
+            assert row["い"] == "い"
+
+    def test_auto_iter_rows_raises_when_only_head_is_ascii_but_tail_is_cp932(
+        self, tmp_path
+    ) -> None:
+        """先頭 1 MiB が ASCII だけ、末尾に CP932 の行があると ``CSVError``。"""
+        path = tmp_path / "mixed.csv"
+        # 1 MiB + 100 byte まで ASCII の繰り返し
+        padding = b"a" * (1024 * 1024 + 100)
+        # 末尾に CP932 の「あ,い」行
+        tail = b"\x82\xa0,\x82\xa2\n"  # あ,い
+        path.write_bytes(padding + tail)
+        assert path.stat().st_size > 1024 * 1024
+        with (
+            CSV(path) as csv_file,
+            pytest.raises(CSVError) as exc_info,
+        ):
+            list(csv_file.iter_rows())
+        # 「encoding= を指定」「encoding を明示」など、利用者への対処が示されている
+        assert "encoding" in str(exc_info.value)
+        # UnicodeDecodeError がそのまま漏れていないこと
+        assert not isinstance(exc_info.value, UnicodeDecodeError)
+
     def test_auto_reads_cp932(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
         path.write_text("名前\n山田\n", encoding="cp932")

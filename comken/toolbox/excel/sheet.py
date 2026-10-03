@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Iterator
 from copy import copy
 from typing import TYPE_CHECKING, Any
 
+from openpyxl import Workbook
 from openpyxl.styles import PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.utils.cell import coordinate_from_string, range_boundaries
@@ -23,6 +25,7 @@ from comken.exceptions import (
     InvalidTableInputError,
     TableError,
 )
+from comken.toolbox.excel.computed import ComputedValueReader
 from comken.toolbox.excel.table import ExcelTable
 
 if TYPE_CHECKING:
@@ -454,3 +457,224 @@ class Sheet:
         self._excel._ensure_open()
         if self.is_data_sheet:
             raise _data_sheet_access_error(self._worksheet.title, operation)
+
+    def iter_rows(self, *, header_row: int = 1) -> Iterator[dict[str, Any]]:
+        """シートの行を 1 行ずつ ``{列名: 値}`` の dict で返すイテレーター。
+
+        ``read_range`` / ``read`` と違ってファイル全体をメモリに展開しないため、
+        **行数が大きいシート（数万件以上）** ではこちらを使う。
+
+        戻り値の形式:
+
+        - 各 dict のキーは ``str(value)`` で見出しセルを変換したもの
+          （``read_range`` のヘッダー行と同じ ``str(...)`` 規約）
+        - 値は ``read_range`` の数式なし経路と同じ形（空セルは ``""``、
+          それ以外はセルの値そのまま）
+        - 数式セルは保存済みの計算値（openpyxl の ``data_only=True``）。
+          計算値が保存されていない数式セルに当たったら ``ExcelError``
+          （どのセルか、「Excel で開いて保存し直すか、
+          ``read_range(force_com=True)`` を使ってください」）
+        - 全部空の行（セル全が ``None`` または空文字 ``""``）は飛ばす
+          （``read_only`` のストリームは宣言上の ``dimension`` に従って末尾に
+          空行を報告することがあるため）
+
+        制約:
+
+        - ``Excel(path, read_only=True)`` で開いた Excel でしか使えない。
+          ``read_only=False`` の Excel で呼ぶと ``ExcelError``
+          （「``read_only=True`` で開いてください」）
+        - ``with`` の中でだけ呼べる（``TableError``）
+        - 表示用シート（``PY_`` プレフィックス無し）でしか使えない
+          （データシートでは ``_ensure_display_sheet`` 由来のエラー）
+
+        途中で ``break`` しても ``finally`` でストリーム Workbook を閉じるため、
+        Windows でもファイルをリネームできる（キャッシュ版 Workbook ではないので
+        ``Excel`` セッション内の他の ``read()`` 等は影響を受けない）。
+        """
+        self._ensure_display_sheet("iter_rows")
+        if not self._excel._read_only:
+            raise _iter_rows_requires_read_only_error()
+        # 見出し検証は **呼んだ時点で** 発火させる必要があるため、生成器ではなく
+        # この時点で 2 本のストリーム Workbook を開き、見出しを読んで検証まで
+        # 済ませる。検証中の例外は両 Workbook を閉じてから再送する
+        # （閉じずに放置すると Windows で zip ハンドルがファイルに
+        # 居座り、リネームすらできない）。
+        workbook = self._excel._computed._open_single_stream_workbook(data_only=True)
+        formula_workbook = self._excel._computed._open_single_stream_workbook(data_only=False)
+        try:
+            cached_sheet = workbook[self._worksheet.title]
+            formula_sheet = formula_workbook[self._worksheet.title]
+            cached_iter = cached_sheet.iter_rows(min_row=header_row, values_only=True)
+            formula_iter = formula_sheet.iter_rows(min_row=header_row, values_only=True)
+            headers = self._iter_rows_read_and_validate_header(
+                cached_iter, formula_iter, header_row
+            )
+        except BaseException:
+            workbook.close()
+            formula_workbook.close()
+            raise
+        if headers is None:
+            # ``header_row`` の行が無く（シート外）、または完全に空で
+            # その下にもデータが無いときは 0 行で終わる。
+            workbook.close()
+            formula_workbook.close()
+            return iter(())
+        logger.debug(
+            "Sheet.iter_rows: sheet=%s header_row=%d columns=%d",
+            self._worksheet.title,
+            header_row,
+            len(headers),
+        )
+        # 見出し行を既に消費した cached_iter / formula_iter をそのまま引き継ぎ、
+        # 残りの行を 1 行ずつ ``dict`` で流す。最後まで進めば / ``break`` すれば
+        # ``finally`` で workbook が閉じられる。
+        return self._iter_rows_yield(
+            workbook,
+            formula_workbook,
+            cached_iter,
+            formula_iter,
+            headers,
+            header_row + 1,
+        )
+
+    def _iter_rows_read_and_validate_header(
+        self,
+        cached_iter: Iterator[tuple[Any, ...]],
+        formula_iter: Iterator[tuple[Any, ...]],
+        header_row: int,
+    ) -> list[str] | None:
+        """``header_row`` の行そのものを見出しとして読み、検証する。
+
+        戻り値:
+
+        - ``list[str]``: 検証済みの見出し（列名のリスト）
+        - ``None``: ``header_row`` の行が存在しない、または完全に空で
+          その下にもデータ行が無い → 0 行で終わる
+
+        ``header_row`` の行が完全に空（セル全が ``None`` または空文字 ``""``）
+        だが、その下にデータ行がある場合は ``ExcelError`` を発火する
+        （``header_row`` を黙って次の非空行へ流用しない）。
+        """
+        cached_row = next(cached_iter, None)
+        # ``formula_iter`` は空行を消費しないので cached と 1:1 対応になるよう
+        # 同期して読み進める。
+        next(formula_iter, None)
+        if cached_row is None:
+            # ``header_row`` の行自体が無い → 0 行
+            return None
+        if ComputedValueReader._row_is_blank(cached_row):
+            # 見出し行が完全に空。次にデータ行があるか確かめる
+            next_cached = next(cached_iter, None)
+            next(formula_iter, None)
+            if next_cached is None:
+                return None
+            raise _iter_rows_blank_header_error(header_row)
+        self._iter_rows_validate_header(cached_row, header_row)
+        headers = [str(value) for value in cached_row]
+        if len(headers) != len(set(headers)):
+            raise TableError("列名は重複させられません。")
+        return headers
+
+    @staticmethod
+    def _iter_rows_validate_header(cached_row: tuple[Any, ...], row_index: int) -> None:
+        """見出し行のセルが ``None`` のときに ``ExcelError`` を発火する。"""
+        for column_index, value in enumerate(cached_row, start=1):
+            if value is None:
+                cell_coord = f"{get_column_letter(column_index)}{row_index}"
+                raise _iter_rows_empty_header_error(cell_coord)
+
+    def _iter_rows_yield(
+        self,
+        workbook: Workbook,
+        formula_workbook: Workbook,
+        cached_iter: Iterator[tuple[Any, ...]],
+        formula_iter: Iterator[tuple[Any, ...]],
+        headers: list[str],
+        data_min_row: int,
+    ) -> Iterator[dict[str, Any]]:
+        """データ行を 1 行ずつ ``dict`` で ``yield`` する。
+
+        ``workbook`` / ``formula_workbook`` は ``iter_rows()`` が開いたまま
+        渡される。``StopIteration`` で消費し切ったとき、``break`` で抜けたとき、
+        ``generator.close()`` が呼ばれたときのいずれでも ``finally`` で閉じるため、
+        Windows でもファイルのリネームが当たる。
+        """
+        try:
+            for row_index, cached_row in enumerate(cached_iter, start=data_min_row):
+                formula_row = next(formula_iter, None)
+                if ComputedValueReader._row_is_blank(cached_row):
+                    continue
+                self._iter_rows_check_uncalculated_formula(cached_row, formula_row, row_index)
+                values = self._iter_rows_normalize_row(cached_row, headers)
+                yield dict(zip(headers, values, strict=False))
+        finally:
+            workbook.close()
+            formula_workbook.close()
+
+    @staticmethod
+    def _iter_rows_check_uncalculated_formula(
+        cached_row: tuple[Any, ...],
+        formula_row: tuple[Any, ...] | None,
+        row_index: int,
+    ) -> None:
+        """``cached`` 側で ``None`` のセルが ``formula`` 側で数式なら ``ExcelError``。"""
+        for column_index, value in enumerate(cached_row, start=1):
+            if value is None:
+                formula_value = (
+                    formula_row[column_index - 1]
+                    if formula_row is not None and column_index - 1 < len(formula_row)
+                    else None
+                )
+                if isinstance(formula_value, str) and formula_value.startswith("="):
+                    cell_coord = f"{get_column_letter(column_index)}{row_index}"
+                    raise _iter_rows_uncalculated_formula_error(cell_coord)
+
+    @staticmethod
+    def _iter_rows_normalize_row(
+        cached_row: tuple[Any, ...],
+        headers: list[str],
+    ) -> list[Any]:
+        """1 行のセル値を ``read_range`` の数式なし経路と同じ形（空欄 → ``""``）に整える。"""
+        values = ["" if value is None else value for value in cached_row]
+        if len(values) < len(headers):
+            values.extend([""] * (len(headers) - len(values)))
+        elif len(values) > len(headers):
+            values = values[: len(headers)]
+        return values
+
+
+def _iter_rows_requires_read_only_error() -> ExcelError:
+    """``Sheet.iter_rows`` を ``read_only=False`` の Excel で呼んだときの文言。"""
+    return ExcelError(
+        "Sheet.iter_rows は read_only=True で開いた Excel でのみ使えます。"
+        "\n対処: Excel(path, read_only=True) で開いてください。"
+    )
+
+
+def _iter_rows_empty_header_error(cell_coord: str) -> ExcelError:
+    """``Sheet.iter_rows`` の「見出し行に空セル」文言。"""
+    return ExcelError(
+        f"ヘッダー行に空のセルがあります: {cell_coord}"
+        "\nExcel の見出し行の空セルを埋めてからもう一度実行してください。"
+    )
+
+
+def _iter_rows_blank_header_error(row_number: int) -> ExcelError:
+    """``Sheet.iter_rows`` の「``header_row`` の行が完全に空」の文言。
+
+    指定行がセル全で ``None`` または空文字 ``""`` のまま、その下に
+    データ行があるときに発火する。「指定行は空だが、続く行がデータだから
+    黙って次の非空行を見出しに使う」という振る舞いをしないための防御。
+    """
+    return ExcelError(
+        f"見出し行（{row_number} 行目）が空です。"
+        "\n対処: header_row= の指定行に見出しがあるか確認してください。"
+    )
+
+
+def _iter_rows_uncalculated_formula_error(cell_coord: str) -> ExcelError:
+    """``Sheet.iter_rows`` の「未計算の数式セル」文言。"""
+    return ExcelError(
+        f"未計算の数式セルがあります: {cell_coord}"
+        "\n対処: Excel で開いて保存し直すか、read_range(force_com=True) を使ってください。"
+    )

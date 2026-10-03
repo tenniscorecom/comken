@@ -42,6 +42,15 @@ with CSV("big.csv") as csv_file:
         process(row)  # 1 行ずつ処理
 ```
 
+数万行を超える CSV（**数万件以上を目安**）は `read()` ではなくこちらを使う。
+`iter_rows()` はファイル全体をメモリに載せず、1 行ずつ `dict` で流す。
+`encoding=None` の自動判定もファイル全体を読まずに、**先頭 1 MiB だけ**から
+文字コードを推定する（`utf-8-sig` → `utf-8` → `cp932` の順）。
+判定した文字コードで途中の行が読めなかったときは `CSVError`
+（`encoding=` を指定してくださいという対処法を一緒に出す）。
+列名は `read()` または `columns` 引数で先に取っておく（`iter_rows()`
+の戻り値の dict から直接取れない）。
+
 ヘッダーのない CSV は、`headers` ではなくほかの Table API と同じ `columns` で
 列名を指定します。
 

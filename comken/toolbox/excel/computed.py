@@ -96,6 +96,29 @@ class ComputedValueReader:
         )
         return workbook
 
+    def _open_single_stream_workbook(self, *, data_only: bool) -> Workbook:
+        """``_open_stream_workbook`` と同じ形式で、ただし **キャッシュしない** Workbook を開く。
+
+        ``Sheet.iter_rows`` のように generator の ``close()`` / ``break`` で
+        zip ハンドルを解放したい場面でだけ使う。共有キャッシュを閉じてしまうと
+        ``read()`` など同じ ``Excel`` セッション内の後続呼び出しで「閉じた zip を
+        使おうとする」例外になるため、ダウンロード時点で別インスタンスにして
+        ``try/finally`` でこちら側だけが閉じるようにする。
+        """
+        workbook = load_workbook(
+            self._excel._working_path,
+            read_only=True,
+            data_only=data_only,
+            keep_vba=self._excel.path.suffix.casefold() in {".xlsm", ".xltm"},
+        )
+        logger.debug(
+            "_open_single_stream_workbook: 新しいストリーム Workbook を開きました: "
+            "data_only=%s path=%s",
+            data_only,
+            self._excel._working_path,
+        )
+        return workbook
+
     def _cached_rows(self, sheet_name: str, min_row: int) -> tuple[list[tuple[Any, ...]], bool]:
         """キャッシュ値と数式を並べ、値がない数式だけをCOM昇格対象にする。
 
