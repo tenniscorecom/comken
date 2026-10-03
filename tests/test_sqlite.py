@@ -680,3 +680,253 @@ def test_iter_rows_returns_iterator(tmp_path: Path) -> None:
     _seed(db)
     result = db.table("顧客").iter_rows()
     assert isinstance(result, Iterator)
+
+
+# ── ファイルを作らない経路 ──────────────────────────────────────────────
+
+
+class TestNoSideEffectsOnRead:
+    """``_open()`` がファイルを作らないこと・dry-run 中で create=true でも作らないこと。"""
+
+    def test_tables_on_missing_file_in_dry_run_returns_empty(self, tmp_path: Path) -> None:
+        """dry-run 中でファイルが無い状態でも ``tables()`` は ``[]`` を返し、ファイルを作らない。"""
+        path = tmp_path / "missing.db"
+        assert not path.exists()
+        with dry_run():
+            SQLite(path, create=True)  # dry-run 中はファイルが作られない
+            db = SQLite(path)  # dry-run 中はインスタンスだけ作れる
+            assert db.tables() == []
+        assert not path.exists()
+
+    def test_tables_does_not_grow_file(self, tmp_path: Path) -> None:
+        """通常時で ``tables()`` を呼んでも既存のファイルサイズは変化しない。"""
+        path = tmp_path / "data.db"
+        SQLite(path, create=True)  # 0 byte のファイルを作る
+        before_size = path.stat().st_size
+        db = SQLite(path)
+        db.tables()
+        assert path.stat().st_size == before_size
+
+    def test_read_on_missing_table_raises_table_not_found(self, tmp_path: Path) -> None:
+        """ファイルが有っても存在しない表を ``read()`` すると「表が見つかりません」。"""
+        db, _ = _new_db(tmp_path)
+        with pytest.raises(SQLiteError, match="表が見つかりません"):
+            db.table("存在しない表").read()
+
+    def test_iter_rows_on_missing_table_raises_table_not_found(self, tmp_path: Path) -> None:
+        """``iter_rows()`` も呼んだ時点で「表が見つかりません」を出す。"""
+        db, _ = _new_db(tmp_path)
+        with pytest.raises(SQLiteError, match="表が見つかりません"):
+            db.table("存在しない表").iter_rows()
+
+    def test_where_on_missing_table_raises_table_not_found(self, tmp_path: Path) -> None:
+        """``where()`` で存在しない表の列を指定すると「列が見つかりません」ではなく
+        「表が見つかりません」を出す（打ち間違いの利用者向け）。"""
+        db, _ = _new_db(tmp_path)
+        with pytest.raises(SQLiteError, match="表が見つかりません"):
+            db.table("存在しない表").where("顧客ID", "=", "001")
+
+    def test_order_by_on_missing_table_raises_table_not_found(self, tmp_path: Path) -> None:
+        """``order_by()`` でも同じ。"""
+        db, _ = _new_db(tmp_path)
+        with pytest.raises(SQLiteError, match="表が見つかりません"):
+            db.table("存在しない表").order_by("顧客ID")
+
+    def test_count_on_missing_table_raises_table_not_found(self, tmp_path: Path) -> None:
+        """``count()`` でも表を先に確かめる。"""
+        db, _ = _new_db(tmp_path)
+        with pytest.raises(SQLiteError, match="表が見つかりません"):
+            db.table("存在しない表").count()
+
+    def test_insert_on_missing_table_raises_table_not_found(self, tmp_path: Path) -> None:
+        """``insert()`` も表を先に確かめる（既存表への列チェックで失敗する前に）。"""
+        db, _ = _new_db(tmp_path)
+        with pytest.raises(SQLiteError, match="表が見つかりません"):
+            db.table("存在しない表").insert(Table(["顧客ID"], [{"顧客ID": "1"}]))
+
+    def test_update_on_missing_table_raises_table_not_found(self, tmp_path: Path) -> None:
+        """``update()`` も表を先に確かめる。"""
+        db, _ = _new_db(tmp_path)
+        with pytest.raises(SQLiteError, match="表が見つかりません"):
+            db.table("存在しない表").where("顧客ID", "=", "001").update({"状態": "退会"})
+
+    def test_delete_on_missing_table_raises_table_not_found(self, tmp_path: Path) -> None:
+        """``delete()`` も表を先に確かめる。"""
+        db, _ = _new_db(tmp_path)
+        with pytest.raises(SQLiteError, match="表が見つかりません"):
+            db.table("存在しない表").where("顧客ID", "=", "001").delete()
+
+
+class TestDryRunNoFileCreation:
+    """``dry-run`` 中で ``create=True`` にしても、その後の操作でファイルができないこと。"""
+
+    def test_tables_does_not_create_file_in_dry_run(self, tmp_path: Path) -> None:
+        path = tmp_path / "dryrun.db"
+        assert not path.exists()
+        with dry_run():
+            SQLite(path, create=True)
+            db = SQLite(path)
+            assert db.tables() == []
+        assert not path.exists()
+
+    def test_create_table_does_not_create_file_in_dry_run(self, tmp_path: Path) -> None:
+        path = tmp_path / "dryrun.db"
+        assert not path.exists()
+        with dry_run():
+            SQLite(path, create=True)
+            db = SQLite(path)
+            db.table("t").create(columns=["a", "b"], primary_key="a")
+        # dry-run 中の create().table() はファイルも表も作らない
+        assert not path.exists()
+
+    def test_insert_does_not_create_file_in_dry_run(self, tmp_path: Path) -> None:
+        path = tmp_path / "dryrun.db"
+        assert not path.exists()
+        with dry_run():
+            SQLite(path, create=True)
+            db = SQLite(path)
+            n = db.table("t").insert(Table(["a", "b"], [{"a": "1", "b": "x"}]))
+        # 渡した件数を返す
+        assert n == 1
+        # ファイルは作られない
+        assert not path.exists()
+
+    def test_read_does_not_create_file_in_dry_run(self, tmp_path: Path) -> None:
+        """dry-run 中でファイルが無い場合の read は「表が見つかりません」を投げる。"""
+        path = tmp_path / "dryrun.db"
+        assert not path.exists()
+        with dry_run():
+            SQLite(path, create=True)
+            db = SQLite(path)
+            with pytest.raises(SQLiteError, match="表が見つかりません"):
+                db.table("t").read()
+        assert not path.exists()
+
+    def test_count_does_not_create_file_in_dry_run(self, tmp_path: Path) -> None:
+        """dry-run 中でファイルが無い場合の count は「表が見つかりません」を投げる。"""
+        path = tmp_path / "dryrun.db"
+        with dry_run():
+            SQLite(path, create=True)
+            db = SQLite(path)
+            with pytest.raises(SQLiteError, match="表が見つかりません"):
+                db.table("t").count()
+        assert not path.exists()
+
+    def test_update_does_not_create_file_in_dry_run_returns_zero(self, tmp_path: Path) -> None:
+        """dry-run 中でファイルが無い場合の update は 0 件を返す。"""
+        path = tmp_path / "dryrun.db"
+        with dry_run():
+            SQLite(path, create=True)
+            db = SQLite(path)
+            n = db.table("t").where("a", "=", "1").update({"b": "y"})
+        assert n == 0
+        assert not path.exists()
+
+    def test_delete_does_not_create_file_in_dry_run_returns_zero(self, tmp_path: Path) -> None:
+        """dry-run 中でファイルが無い場合の delete は 0 件を返す。"""
+        path = tmp_path / "dryrun.db"
+        with dry_run():
+            SQLite(path, create=True)
+            db = SQLite(path)
+            n = db.table("t").where("a", "=", "1").delete()
+        assert n == 0
+        assert not path.exists()
+
+
+class TestFileMissingRaises:
+    """``dry-run`` で無い通常時にファイルが消えていたら ``ComkenFileNotFoundError``。"""
+
+    def test_init_raises_file_not_found_when_missing(self, tmp_path: Path) -> None:
+        """通常時、ファイルが無いと ``SQLite(path)`` 時点で ``ComkenFileNotFoundError``。"""
+        path = tmp_path / "missing.db"
+        with pytest.raises(ComkenFileNotFoundError):
+            SQLite(path)
+
+    def test_tables_raises_file_not_found_after_delete(self, tmp_path: Path) -> None:
+        """ファイル作成後にファイルが消えていたら ``tables()`` で ``ComkenFileNotFoundError``。"""
+        path = tmp_path / "data.db"
+        SQLite(path, create=True)
+        db = SQLite(path)
+        path.unlink()
+        with pytest.raises(ComkenFileNotFoundError):
+            db.tables()
+
+    def test_read_raises_file_not_found_after_delete(self, tmp_path: Path) -> None:
+        """ファイル作成後にファイルが消えていたら ``read()`` で ``ComkenFileNotFoundError``。"""
+        path = tmp_path / "data.db"
+        SQLite(path, create=True)
+        db = SQLite(path)
+        db.table("t").create(columns=["a"], primary_key="a")
+        path.unlink()
+        with pytest.raises(ComkenFileNotFoundError):
+            db.table("t").read()
+
+
+# ── パス周りの特殊ケース ──────────────────────────────────────────────
+
+
+class TestPathEdgeCases:
+    def test_japanese_folder_and_filename_with_space_and_hash(self, tmp_path: Path) -> None:
+        """日本語・空白・``#`` を含むフォルダ名・ファイル名でも読み書きできる。"""
+        folder = tmp_path / "顧客 #1 フォルダ"
+        folder.mkdir()
+        path = folder / "data #2.db"
+        SQLite(path, create=True)
+        db = SQLite(path)
+        db.table("顧客マスタ").create(
+            columns=["顧客ID", "氏名"],
+            types={"顧客ID": str, "氏名": str},
+            primary_key="顧客ID",
+        )
+        rows = Table(
+            ["顧客ID", "氏名"],
+            [
+                {"顧客ID": "001", "氏名": "山田太郎"},
+                {"顧客ID": "002", "氏名": "鈴木花子"},
+            ],
+        )
+        db.table("顧客マスタ").insert(rows)
+        result = db.table("顧客マスタ").where("氏名", "like", "%山%").read().to_rows()
+        assert len(result) == 1
+        assert result[0]["氏名"] == "山田太郎"
+        # tables() でも取れる
+        assert "顧客マスタ" in db.tables()
+
+    def test_relative_path_works(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """相対パスで open / create / insert / read できる。"""
+        monkeypatch.chdir(tmp_path)
+        # 相対パスで SQLite を作る
+        SQLite("rel.db", create=True)
+        assert (tmp_path / "rel.db").exists()
+        db = SQLite("rel.db")
+        db.table("t").create(columns=["id", "value"], primary_key="id")
+        db.table("t").insert(Table(["id", "value"], [{"id": "1", "value": "x"}]))
+        rows = db.table("t").read().to_rows()
+        assert len(rows) == 1
+        assert rows[0]["value"] == "x"
+
+    def test_drive_letter_uppercase_no_resolve_to_unc(self, tmp_path: Path) -> None:
+        """``resolve()`` を使わないので、ドライブレターが UNC に変わらない。"""
+        # tmp_path は既にドライブレター付きの絶対パス
+        path = tmp_path / "drive.db"
+        SQLite(path, create=True)
+        db = SQLite(path)
+        # tables() が動くこと（接続できれば UNC になっていない）
+        assert db.tables() == []
+        db.table("t").create(columns=["a"], primary_key="a")
+        assert "t" in db.tables()
+
+
+# ── `ComkenFileNotFoundError` のメッセージ ──────────────────────────────────────────────
+
+
+class TestErrorMessages:
+    def test_table_not_found_lists_existing_tables(self, tmp_path: Path) -> None:
+        """表が見つからないときは「存在する表: [...]」も表示する。"""
+        db, _ = _new_db(tmp_path)
+        with pytest.raises(SQLiteError) as exc_info:
+            db.table("typo").read()
+        message = str(exc_info.value)
+        assert "表が見つかりません" in message
+        assert "typo" in message
+        assert "顧客" in message  # 存在する表が含まれる

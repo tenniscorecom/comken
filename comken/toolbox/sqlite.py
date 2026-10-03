@@ -20,6 +20,11 @@ SQLite は Python 標準の ``sqlite3`` だけで扱い、追加の依存は入�
 - ``dry-run`` 中は書き込みを実行せずログだけ出し、戻り値は insert なら
   渡した件数、update / delete は ``SELECT COUNT(*)`` で数えた件数、
   create は何もしない。
+- 接続は URI 形式で ``mode=rw`` を使うため、ファイルが無いと
+  ``OperationalError`` が飛ぶ（黙って新規ファイルを作る挙動を抑止）。
+  ファイル作成は ``__init__`` の ``create=True`` だけが担う。
+  ``dry-run`` 中でファイルが無い場合は各メソッドが個別に no-op /
+  ログのみに分岐する。
 """
 
 from __future__ import annotations
@@ -32,6 +37,7 @@ from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from comken.core.table.model import Table
 from comken.exceptions import ComkenFileNotFoundError
@@ -99,14 +105,16 @@ class SQLite:
     拡張子の制限はしない（``.db`` / ``.sqlite`` / ``.sqlite3`` 以外でも可）。
     """
 
-    # 拡張子の検証は行わない（SQLite は拡張子フリーのため）。
-    SUFFIXES: tuple[str, ...] = ()
-
     def __init__(self, path: str | Path, *, create: bool = False) -> None:
         self._path = Path(path)
         if self._path.is_file():
             return
         if not create:
+            if is_dry_run():
+                # dry-run 中は create=False でもインスタンスを作る（ファイルは作らない）。
+                # ファイルが無いままでも、その後の各操作は個別に no-op / ログだけになる。
+                logger.debug("SQLite dry-run: ファイル無しでもインスタンス作成: %s", self._path)
+                return
             raise ComkenFileNotFoundError("SQLite ファイル", self._path)
         if is_dry_run():
             # dry-run 中は create=True でもファイルを作らない（仕様 §9）。
@@ -127,7 +135,13 @@ class SQLite:
 
         SQLite 内部の表（``sqlite_`` で始まる名前）は除外する。
         並びはSQL の ``ORDER BY`` に任せて決定的になるよう整列済みで返す。
+        ``dry-run`` 中でファイルが無いときは ``[]`` を返す（ファイルが
+        無いので表も無い）。
         """
+        if not self._path.is_file():
+            if is_dry_run():
+                return []
+            raise ComkenFileNotFoundError("SQLite ファイル", self._path)
         with closing(self._open()) as connection:
             rows = connection.execute(
                 "SELECT name FROM sqlite_master"
@@ -152,11 +166,46 @@ class SQLite:
         return SQLiteQuery(db=self, table=name)
 
     def _open(self) -> sqlite3.Connection:
-        """新しい接続を開いて返す。``sqlite3.Error`` は ``SQLiteError`` に包む。"""
+        """新しい接続を開いて返す。``sqlite3.Error`` は ``SQLiteError`` に包む。
+
+        URI 形式で ``mode=rw`` を指定するため、ファイルが無いと
+        ``sqlite3.OperationalError`` が飛ぶ（``mode=rwc`` と違い、無ければ
+        作らない）。ファイル作成は ``__init__`` の ``create=True`` だけが
+        担う（仕様 §3）。``pathlib.Path.resolve()`` を使うと割り当て
+        ドライブが UNC に変わるため使わない。
+        """
         try:
-            return sqlite3.connect(str(self._path.resolve()), timeout=CONNECT_TIMEOUT_SECONDS)
+            return sqlite3.connect(
+                self._file_uri(),
+                uri=True,
+                timeout=CONNECT_TIMEOUT_SECONDS,
+            )
+        except sqlite3.OperationalError as exc:
+            # ``mode=rw`` で既存ファイルが無いときは "unable to open ..." 形式
+            # のエラーが返る。それを ``ComkenFileNotFoundError`` に変換する。
+            if "unable to open" in str(exc).lower():
+                raise ComkenFileNotFoundError("SQLite ファイル", self._path) from exc
+            raise _connection_error(self._path, exc) from exc
         except sqlite3.Error as exc:
             raise _connection_error(self._path, exc) from exc
+
+    def _file_uri(self) -> str:
+        """``file:...?mode=rw`` 形式の URI を作る。
+
+        Windows パス・日本語・空白・``#`` ``?`` を含むパスでも壊れない
+        ように ``urllib.parse.quote`` でエスケープする。ドライブレターは
+        先頭に ``/`` を足して ``file:/C:/...`` 形式にする（SQLite の URI
+        仕様）。``pathlib.Path.resolve()`` は使わない（割り当てドライブが
+        UNC に変わるため）。
+        """
+        abs_path = self._path if self._path.is_absolute() else self._path.absolute()
+        posix = abs_path.as_posix()
+        if not posix.startswith("/"):
+            posix = "/" + posix
+        # ``/`` と ``:`` はそのまま、他はエスケープ（``#`` ``?`` ``%``
+        # 日本語・空白 等）。
+        escaped = quote(posix, safe="/:")
+        return f"file:{escaped}?mode=rw"
 
     def _ensure_table_exists(self, name: str) -> None:
         """表が ``sqlite_master`` に無ければエラー。"""
@@ -178,7 +227,17 @@ class SQLite:
         return [row[1] for row in rows]
 
     def _ensure_column_exists(self, table: str, column: str) -> None:
-        """列が無ければエラー。"""
+        """列が無ければエラー。
+
+        ``dry-run`` 中でファイルが無いときは列チェックをスキップする
+        （``update`` / ``delete`` のメソッド本体でファイル無し判定を
+        先に行うため、ここでは通す）。通常時でファイルが無いと
+        ``ComkenFileNotFoundError`` を投げる。
+        """
+        if not self._path.is_file():
+            if is_dry_run():
+                return
+            raise ComkenFileNotFoundError("SQLite ファイル", self._path)
         existing = self._table_columns(table)
         if column not in existing:
             raise _column_not_found_error(table, column, existing)
@@ -212,6 +271,11 @@ class SQLiteQuery:
     ``dry-run`` 中は書き込みを実行せずログだけ出し、戻り値は
     ``insert`` なら渡した件数、``update`` / ``delete`` なら ``SELECT COUNT(*)``
     で数えた件数、``create`` は何もしない（仕様 §9）。
+
+    ``dry-run`` 中でファイルが無い場合は、各メソッドが個別に
+    no-op / 「表が見つかりません」 / ログだけ 0 件 / 渡した件数 のいずれかに
+    分岐する（仕様 §9、§10）。通常時にファイルが消えていたら
+    ``ComkenFileNotFoundError`` を投げる。
     """
 
     db: SQLite
@@ -259,6 +323,9 @@ class SQLiteQuery:
                     )
                 if len(value) == 0:
                     raise ValueError(f"where の op が {op!r} のときは value を空にできません。")
+        # 列の前に表の存在を先に確かめる。表が無ければ「列が見つかりません」ではなく
+        # 「表が見つかりません」を出す（打ち間違いの利用者向け、仕様 §4 補足）。
+        self._ensure_table_for_query()
         self.db._ensure_column_exists(self.table, column)
         return replace(
             self,
@@ -267,6 +334,9 @@ class SQLiteQuery:
 
     def order_by(self, column: str, *, desc: bool = False) -> SQLiteQuery:
         """並び順を追加した新しいクエリを返す。複数回で優先順に並ぶ（仕様 §6）。"""
+        # 列の前に表の存在を先に確かめる。表が無ければ「列が見つかりません」ではなく
+        # 「表が見つかりません」を出す。
+        self._ensure_table_for_query()
         self.db._ensure_column_exists(self.table, column)
         return replace(
             self,
@@ -289,7 +359,6 @@ class SQLiteQuery:
         """
         # 表が無ければここで明示的にエラー（``_resolve_columns`` が PRAGMA だけ
         # 叩いて空リストを返すケースを放置しない）。
-        self.db._ensure_table_exists(self.table)
         result_columns = self._resolve_columns(columns)
         sql, params = self._compile_select(result_columns)
         logger.debug(
@@ -298,7 +367,7 @@ class SQLiteQuery:
             len(result_columns),
             len(self.wheres),
             len(self.order_bys),
-            self.limit,
+            self._limit,
         )
         with closing(self.db._open()) as connection:
             try:
@@ -326,7 +395,7 @@ class SQLiteQuery:
             len(result_columns),
             len(self.wheres),
             len(self.order_bys),
-            self.limit,
+            self._limit,
         )
         return self._iter_rows(sql, params, result_columns)
 
@@ -336,11 +405,22 @@ class SQLiteQuery:
         params: Sequence[Any],
         result_columns: Sequence[str],
     ) -> Iterator[dict[str, Any]]:
-        """``iter_rows()`` の生成器本体。``with closing(...)`` で接続を確実に閉じる。"""
+        """``iter_rows()`` の生成器本体。``with closing(...)`` で接続を確実に閉じる。
+
+        ``execute`` / ``fetchmany`` が ``sqlite3.Error`` を投げたら
+        ``_wrap_sqlite_error`` で包む（仕様 §12）。接続の ``_open`` 中に
+        ``ComkenFileNotFoundError`` が出るのは呼び出し側で先に処理する想定。
+        """
         with closing(self.db._open()) as connection:
-            cursor = connection.execute(sql, params)
+            try:
+                cursor = connection.execute(sql, params)
+            except sqlite3.Error as exc:
+                raise _wrap_sqlite_error("iter_rows", self.table, exc) from exc
             while True:
-                rows = cursor.fetchmany(ROWS_BATCH_SIZE)
+                try:
+                    rows = cursor.fetchmany(ROWS_BATCH_SIZE)
+                except sqlite3.Error as exc:
+                    raise _wrap_sqlite_error("iter_rows", self.table, exc) from exc
                 if not rows:
                     break
                 for row in rows:
@@ -348,6 +428,12 @@ class SQLiteQuery:
 
     def count(self) -> int:
         """クエリに合致する行数を ``SELECT COUNT(*)`` で返す。"""
+        # 表が無ければ先に「表が見つかりません」を出す（``_compile_select`` だけ
+        # 叩いて空 Table を返すケースを放置しない）。``dry-run`` 中でファイルが
+        # 無いときも「表が見つかりません」を投げる（仕様 §1）。
+        self._ensure_table_for_query()
+        if is_dry_run() and not self.db._path.is_file():
+            raise _table_not_found_error(self.table, [])
         sql, params = self._compile_select((), count_only=True)
         with closing(self.db._open()) as connection:
             try:
@@ -365,9 +451,22 @@ class SQLiteQuery:
         ``Table`` の列が表に全部あること（無ければエラー）。``Table`` の値を
         そのまま渡す（``None`` → ``NULL``、日付は ISO 文字列に変換）。
         """
+        # dry-run 中でファイルが無い場合は、表が無い扱いにして列の検査を
+        # 飛ばしログだけ出して渡した件数を返す（仕様 §9）。
+        if not self.db._path.is_file():
+            if is_dry_run():
+                dry_run_log(
+                    "SQLite dry-run: 表は未作成（dry-run）のため挿入をスキップ: %s, %d 行, 列=%s",
+                    self.table,
+                    len(rows),
+                    list(rows.columns),
+                )
+                return len(rows)
+            raise ComkenFileNotFoundError("SQLite ファイル", self.db._path)
         # Table の列が DB の表に全部あるか先に検証する。1 行でも欠けると
         # 途中で SQL 落ちして中途半端にコミットされる事故になるため、
         # 表側の存在チェックはトランザクションの外で済ませておく。
+        self.db._ensure_table_exists(self.table)
         existing = self.db._table_columns(self.table)
         for column in rows.columns:
             if column not in existing:
@@ -406,6 +505,17 @@ class SQLiteQuery:
         （意図しない行が当たるのを防ぐため）。
         """
         self._validate_write_preconditions("update")
+        # dry-run 中でファイルが無い、または表が無いときは 0 件を返す（仕様 §9）。
+        if not self.db._path.is_file():
+            if is_dry_run():
+                dry_run_log(
+                    "SQLite dry-run: 表は未作成（dry-run）のため update は 0 件: %s, 値=%s",
+                    self.table,
+                    values,
+                )
+                return 0
+            raise ComkenFileNotFoundError("SQLite ファイル", self.db._path)
+        self.db._ensure_table_exists(self.table)
         existing = self.db._table_columns(self.table)
         for column in values:
             if column not in existing:
@@ -443,6 +553,16 @@ class SQLiteQuery:
         ``order_by`` を付けたクエリでも送らない。
         """
         self._validate_write_preconditions("delete")
+        # dry-run 中でファイルが無い、または表が無いときは 0 件を返す（仕様 §9）。
+        if not self.db._path.is_file():
+            if is_dry_run():
+                dry_run_log(
+                    "SQLite dry-run: 表は未作成（dry-run）のため delete は 0 件: %s",
+                    self.table,
+                )
+                return 0
+            raise ComkenFileNotFoundError("SQLite ファイル", self.db._path)
+        self.db._ensure_table_exists(self.table)
         if is_dry_run():
             count = self.count()
             dry_run_log("SQLite から削除: %s, %d 件", self.table, count)
@@ -473,6 +593,18 @@ class SQLiteQuery:
         """
         if not columns:
             raise ValueError("create の columns は 1 つ以上指定してください。")
+        # dry-run 中でファイルが無いときは表作成をスキップしログだけ出す
+        # （仕様 §9）。ファイル作成は ``__init__`` の ``create=True`` だけが
+        # 担うので、ここでは ``touch()`` しない。
+        if not self.db._path.is_file():
+            if is_dry_run():
+                dry_run_log(
+                    "SQLite dry-run: ファイル未作成のため表作成をスキップ: %s, columns=%s",
+                    self.table,
+                    list(columns),
+                )
+                return
+            raise ComkenFileNotFoundError("SQLite ファイル", self.db._path)
         if self.db._table_exists_in_master(self.table):
             raise SQLiteError(
                 f"表が既に存在します: {self.table}\n"
@@ -506,6 +638,22 @@ class SQLiteQuery:
 
     # ── 内部 ────────────────────────────────────────────────────────────
 
+    def _ensure_table_for_query(self) -> None:
+        """クエリ用の表・ファイルの存在を確認する。
+
+        通常時はファイルが無いと ``ComkenFileNotFoundError`` を投げ、
+        ``dry-run`` 中でファイルが無いときはスキップする（``update`` /
+        ``delete`` はメソッド本体でログだけ 0 件に分岐する。読み込み系は
+        ``_resolve_columns`` 側で「表が見つかりません」を投げる）。
+        表の打ち間違いを「列が見つかりません」扱いしないための入口チェック
+        （仕様 §4 補足）。
+        """
+        if not self.db._path.is_file():
+            if is_dry_run():
+                return
+            raise ComkenFileNotFoundError("SQLite ファイル", self.db._path)
+        self.db._ensure_table_exists(self.table)
+
     def _validate_write_preconditions(self, op: str) -> None:
         """書き込み前の必須条件（``where`` 必須、``limit`` / ``order_by`` 不可）を検査する。"""
         if not self.wheres:
@@ -532,9 +680,12 @@ class SQLiteQuery:
         表が無ければ先に ``SQLiteError``（表が見つかりません）を投げる。
         ``_table_columns`` は ``PRAGMA table_info`` を叩くため、存在しない表は
         空リストを返してしまう。それで「列が見つかりません」を返すと、原因が
-        「表が無いこと」だと利用者に伝わらないため。
+        「表が無いこと」だと利用者に伝わらないため。``dry-run`` 中でファイルが
+        無いときは「表が見つかりません」を投げる（仕様 §1）。
         """
-        self.db._ensure_table_exists(self.table)
+        self._ensure_table_for_query()
+        if is_dry_run() and not self.db._path.is_file():
+            raise _table_not_found_error(self.table, [])
         if columns is None:
             return self.db._table_columns(self.table)
         result = list(columns)
