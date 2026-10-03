@@ -528,7 +528,10 @@ class TestSheetIterRows:
             excel.sheet("Sheet").iter_rows()
 
     def test_duplicate_header_raises_table_error(self, tmp_path: Path) -> None:
-        """見出し重複は ``TableError`` (``Table(...)`` と同じ文言)。"""
+        """見出し重複は ``TableError`` (``Table(...)`` と同じ文言)。
+
+        ``list(...)`` も ``next(...)`` もしない（呼んだ時点で発火する）。
+        """
         path = tmp_path / "dupe.xlsx"
         with Excel(path) as excel:
             sheet = excel.create_sheet("Sheet1")
@@ -540,10 +543,14 @@ class TestSheetIterRows:
             Excel(path, read_only=True) as excel,
             pytest.raises(TableError, match="重複"),
         ):
-            list(excel.sheet("Sheet1").iter_rows())
+            # ``list(...)`` を外しても呼んだ時点で例外が出る
+            excel.sheet("Sheet1").iter_rows()
 
     def test_empty_header_cell_raises_excel_error(self, tmp_path: Path) -> None:
-        """見出し行の空セルは ``ExcelError``（``read()`` と同じ文言）。"""
+        """見出し行の空セルは ``ExcelError``（``read()`` と同じ文言）。
+
+        ``list(...)`` も ``next(...)`` もしない（呼んだ時点で発火する）。
+        """
         path = tmp_path / "empty.xlsx"
         with Excel(path) as excel:
             sheet = excel.create_sheet("Sheet1")
@@ -555,7 +562,56 @@ class TestSheetIterRows:
             Excel(path, read_only=True) as excel,
             pytest.raises(ExcelError, match="B1"),
         ):
-            list(excel.sheet("Sheet1").iter_rows())
+            excel.sheet("Sheet1").iter_rows()
+
+    def test_blank_header_row_raises_excel_error(self, tmp_path: Path) -> None:
+        """``header_row`` の行が完全に空だと ``ExcelError``（呼んだ時点で）。
+
+        「先頭の空行を黙って飛ばして次の非空行を見出しにする」振る舞いをしない。
+        """
+        path = tmp_path / "blank_header.xlsx"
+        with Excel(path) as excel:
+            sheet = excel.create_sheet("Sheet1")
+            # A1 / B1 は未書き込み（= None）、A2 / B2 にデータ
+            sheet.write_value("A2", "1")
+            sheet.write_value("B2", "山田")
+        with (
+            Excel(path, read_only=True) as excel,
+            pytest.raises(ExcelError, match=r"見出し行（1 行目）が空"),
+        ):
+            # list() も next() もしない
+            excel.sheet("Sheet1").iter_rows()
+
+    def test_blank_header_row_with_no_data_returns_zero_rows(self, tmp_path: Path) -> None:
+        """``header_row`` の行が空で、シートにそれ以降データが無くても例外を出さず 0 行で終わる。
+
+        「空の見出しだがデータが無い」場合はエラー扱いしない（書き出し直後で
+        ヘッダーだけ後で書く、のような使い方を壊さないため）。
+        """
+        path = tmp_path / "empty_sheet.xlsx"
+        with Excel(path) as excel:
+            excel.create_sheet("Sheet1")  # 何も書かない
+        with Excel(path, read_only=True) as excel:
+            assert list(excel.sheet("Sheet1").iter_rows()) == []
+
+    def test_header_error_releases_file_lock_so_rename_succeeds(self, tmp_path: Path) -> None:
+        """見出しエラーが呼んだ時点で出ても zip ハンドルを閉じているため、Windows でリネームできる。
+
+        ``list(...)`` を呼ばない場合、エラーが ``iter_rows()`` の呼び出し時点で
+        出る。検証中に開いた 2 本のストリーム Workbook は ``except`` で閉じるため、
+        例外が抜けても zip ハンドルが残らない。
+        """
+        path = tmp_path / "lock.xlsx"
+        with Excel(path) as excel:
+            sheet = excel.create_sheet("Sheet1")
+            sheet.write_range("A1:C1", [["ID", "名前", "ID"]])  # 見出し重複
+        with Excel(path, read_only=True) as excel, pytest.raises(TableError):
+            excel.sheet("Sheet1").iter_rows()
+        # 例外後に ``with`` を抜けてもファイルがリネームできれば OK
+        renamed = path.with_suffix(".xlsx.bak")
+        path.replace(renamed)
+        assert renamed.exists()
+        assert not path.exists()
 
     def test_blank_rows_in_middle_are_skipped(self, tmp_path: Path) -> None:
         """途中の空行（全部空の行）は飛ばされる。"""

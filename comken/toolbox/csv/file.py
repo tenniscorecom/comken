@@ -98,8 +98,7 @@ def _encoding_detection_error(path: Path) -> CSVError:
 def _encoding_mismatch_error(path: Path, detected: str) -> CSVError:
     """``CSVError`` の「先頭で判定した文字コードと途中の行が一致しない」文言。"""
     return CSVError(
-        f"CSV の途中から判定した文字コード {detected!r} で読めない行があります: {path}\n"
-        "encoding= 引数で文字コードを明示してください。"
+        f"CSV の途中から判定した文字コード {detected!r} で読めない行があります: {path}"
         "\n対処: encoding= 引数で文字コード（cp932 / utf-8-sig / utf-8 など）を明示してください。"
     )
 

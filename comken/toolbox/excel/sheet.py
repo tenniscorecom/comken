@@ -494,76 +494,86 @@ class Sheet:
         self._ensure_display_sheet("iter_rows")
         if not self._excel._read_only:
             raise _iter_rows_requires_read_only_error()
-        return self._iter_rows(header_row=header_row)
-
-    def _iter_rows(self, *, header_row: int) -> Iterator[dict[str, Any]]:
-        """``iter_rows()`` のジェネレータ本体。ストリームを 2 本並行で流す。
-
-        cached 側（``data_only=True``）から値を読み、空行を飛ばし、見出しを確定し、
-        データ行を 1 行ずつ ``dict`` で ``yield`` する。各 ``None`` セルについてだけ
-        formula 側（``data_only=False``）を並行に読み進めて数式かどうかを判定し、
-        数式なら「計算値が未保存」として ``ExcelError`` で止める。
-        ``_open_single_stream_workbook`` は Excel の共有キャッシュを汚さないので、
-        同じセッション内の ``read()`` と干渉しない。
-        """
+        # 見出し検証は **呼んだ時点で** 発火させる必要があるため、生成器ではなく
+        # この時点で 2 本のストリーム Workbook を開き、見出しを読んで検証まで
+        # 済ませる。検証中の例外は両 Workbook を閉じてから再送する
+        # （閉じずに放置すると Windows で zip ハンドルがファイルに
+        # 居座り、リネームすらできない）。
         workbook = self._excel._computed._open_single_stream_workbook(data_only=True)
         formula_workbook = self._excel._computed._open_single_stream_workbook(data_only=False)
         try:
-            yield from self._iter_rows_inner(workbook, formula_workbook, header_row=header_row)
-        finally:
+            cached_sheet = workbook[self._worksheet.title]
+            formula_sheet = formula_workbook[self._worksheet.title]
+            cached_iter = cached_sheet.iter_rows(min_row=header_row, values_only=True)
+            formula_iter = formula_sheet.iter_rows(min_row=header_row, values_only=True)
+            headers = self._iter_rows_read_and_validate_header(
+                cached_iter, formula_iter, header_row
+            )
+        except BaseException:
             workbook.close()
             formula_workbook.close()
-
-    def _iter_rows_inner(
-        self,
-        workbook: Workbook,
-        formula_workbook: Workbook,
-        *,
-        header_row: int,
-    ) -> Iterator[dict[str, Any]]:
-        cached_sheet = workbook[self._worksheet.title]
-        formula_sheet = formula_workbook[self._worksheet.title]
-        cached_iter = cached_sheet.iter_rows(min_row=header_row, values_only=True)
-        formula_iter = formula_sheet.iter_rows(min_row=header_row, values_only=True)
-
-        headers, data_min_row = self._iter_rows_locate_header(cached_iter, formula_iter, header_row)
+            raise
         if headers is None:
-            return
-
+            # ``header_row`` の行が無く（シート外）、または完全に空で
+            # その下にもデータが無いときは 0 行で終わる。
+            workbook.close()
+            formula_workbook.close()
+            return iter(())
         logger.debug(
-            "Sheet.iter_rows: sheet=%s header_row=%d data_min_row=%d columns=%d",
+            "Sheet.iter_rows: sheet=%s header_row=%d columns=%d",
             self._worksheet.title,
             header_row,
-            data_min_row,
             len(headers),
         )
+        # 見出し行を既に消費した cached_iter / formula_iter をそのまま引き継ぎ、
+        # 残りの行を 1 行ずつ ``dict`` で流す。最後まで進めば / ``break`` すれば
+        # ``finally`` で workbook が閉じられる。
+        return self._iter_rows_yield(
+            workbook,
+            formula_workbook,
+            cached_iter,
+            formula_iter,
+            headers,
+            header_row + 1,
+        )
 
-        yield from self._iter_rows_yield_data(cached_iter, formula_iter, headers, data_min_row)
-
-    def _iter_rows_locate_header(
+    def _iter_rows_read_and_validate_header(
         self,
         cached_iter: Iterator[tuple[Any, ...]],
         formula_iter: Iterator[tuple[Any, ...]],
         header_row: int,
-    ) -> tuple[list[str] | None, int]:
-        """先頭非空行を見出しとして確定し、検証エラーを呼んだ時点で発火させる。
+    ) -> list[str] | None:
+        """``header_row`` の行そのものを見出しとして読み、検証する。
 
-        戻り値は ``(見出し, 次のデータ行)``。シート全体が空のときは
-        ``(None, header_row)`` を返し、呼び出し側で何も yield せずに終わる。
+        戻り値:
+
+        - ``list[str]``: 検証済みの見出し（列名のリスト）
+        - ``None``: ``header_row`` の行が存在しない、または完全に空で
+          その下にもデータ行が無い → 0 行で終わる
+
+        ``header_row`` の行が完全に空（セル全が ``None`` または空文字 ``""``）
+        だが、その下にデータ行がある場合は ``ExcelError`` を発火する
+        （``header_row`` を黙って次の非空行へ流用しない）。
         """
-        data_min_row = header_row
-        for current_row_index, cached_row in enumerate(cached_iter, start=header_row):
-            # formula 側は空白行でも読み進めて cached と位置を同期させる
+        cached_row = next(cached_iter, None)
+        # ``formula_iter`` は空行を消費しないので cached と 1:1 対応になるよう
+        # 同期して読み進める。
+        next(formula_iter, None)
+        if cached_row is None:
+            # ``header_row`` の行自体が無い → 0 行
+            return None
+        if ComputedValueReader._row_is_blank(cached_row):
+            # 見出し行が完全に空。次にデータ行があるか確かめる
+            next_cached = next(cached_iter, None)
             next(formula_iter, None)
-            if ComputedValueReader._row_is_blank(cached_row):
-                data_min_row = current_row_index + 1
-                continue
-            self._iter_rows_validate_header(cached_row, current_row_index)
-            headers = [str(value) for value in cached_row]
-            if len(headers) != len(set(headers)):
-                raise TableError("列名は重複させられません。")
-            return headers, current_row_index + 1
-        return None, data_min_row
+            if next_cached is None:
+                return None
+            raise _iter_rows_blank_header_error(header_row)
+        self._iter_rows_validate_header(cached_row, header_row)
+        headers = [str(value) for value in cached_row]
+        if len(headers) != len(set(headers)):
+            raise TableError("列名は重複させられません。")
+        return headers
 
     @staticmethod
     def _iter_rows_validate_header(cached_row: tuple[Any, ...], row_index: int) -> None:
@@ -573,21 +583,33 @@ class Sheet:
                 cell_coord = f"{get_column_letter(column_index)}{row_index}"
                 raise _iter_rows_empty_header_error(cell_coord)
 
-    def _iter_rows_yield_data(
+    def _iter_rows_yield(
         self,
+        workbook: Workbook,
+        formula_workbook: Workbook,
         cached_iter: Iterator[tuple[Any, ...]],
         formula_iter: Iterator[tuple[Any, ...]],
         headers: list[str],
         data_min_row: int,
     ) -> Iterator[dict[str, Any]]:
-        """データ行を 1 行ずつ ``dict`` で ``yield`` する。"""
-        for row_index, cached_row in enumerate(cached_iter, start=data_min_row):
-            formula_row = next(formula_iter, None)
-            if ComputedValueReader._row_is_blank(cached_row):
-                continue
-            self._iter_rows_check_uncalculated_formula(cached_row, formula_row, row_index)
-            values = self._iter_rows_normalize_row(cached_row, headers)
-            yield dict(zip(headers, values, strict=False))
+        """データ行を 1 行ずつ ``dict`` で ``yield`` する。
+
+        ``workbook`` / ``formula_workbook`` は ``iter_rows()`` が開いたまま
+        渡される。``StopIteration`` で消費し切ったとき、``break`` で抜けたとき、
+        ``generator.close()`` が呼ばれたときのいずれでも ``finally`` で閉じるため、
+        Windows でもファイルのリネームが当たる。
+        """
+        try:
+            for row_index, cached_row in enumerate(cached_iter, start=data_min_row):
+                formula_row = next(formula_iter, None)
+                if ComputedValueReader._row_is_blank(cached_row):
+                    continue
+                self._iter_rows_check_uncalculated_formula(cached_row, formula_row, row_index)
+                values = self._iter_rows_normalize_row(cached_row, headers)
+                yield dict(zip(headers, values, strict=False))
+        finally:
+            workbook.close()
+            formula_workbook.close()
 
     @staticmethod
     def _iter_rows_check_uncalculated_formula(
@@ -634,6 +656,19 @@ def _iter_rows_empty_header_error(cell_coord: str) -> ExcelError:
     return ExcelError(
         f"ヘッダー行に空のセルがあります: {cell_coord}"
         "\nExcel の見出し行の空セルを埋めてからもう一度実行してください。"
+    )
+
+
+def _iter_rows_blank_header_error(row_number: int) -> ExcelError:
+    """``Sheet.iter_rows`` の「``header_row`` の行が完全に空」の文言。
+
+    指定行がセル全で ``None`` または空文字 ``""`` のまま、その下に
+    データ行があるときに発火する。「指定行は空だが、続く行がデータだから
+    黙って次の非空行を見出しに使う」という振る舞いをしないための防御。
+    """
+    return ExcelError(
+        f"見出し行（{row_number} 行目）が空です。"
+        "\n対処: header_row= の指定行に見出しがあるか確認してください。"
     )
 
 
