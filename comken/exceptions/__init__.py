@@ -10,6 +10,7 @@ ComkenError
 ├── FileDeletionError
 ├── FileSuffixMissingError
 ├── AccessError
+├── SQLiteError
 ├── OutlookError
 ├── ExcelError
 │   ├── ExcelApplicationNotAvailableError
@@ -80,6 +81,7 @@ from comken.exceptions.office import (
     ExcelError,
     OutlookError,
     SheetNotFoundError,
+    SQLiteError,
     WindowNotFoundError,
 )
 from comken.exceptions.tables import (
@@ -107,6 +109,7 @@ __all__ = [
     "ComkenError",
     "SiteOwnerRequiredError",
     "AccessError",
+    "SQLiteError",
     "ExcelError",
     "ExcelApplicationNotAvailableError",
     "SheetNotFoundError",

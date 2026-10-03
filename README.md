@@ -37,7 +37,7 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 |---|---|
 | はじめて使う | この README の「[はじめて使う人へ](#はじめて使う人へ)」 |
 | 何が用意されているか探す | このREADMEの「[モジュール一覧](#モジュール一覧)」 |
-| モジュールの使い方を知る | [CSV](docs/機能/csv.md)・[Excel](docs/機能/excel.md)・[Access](docs/機能/access.md)・[Outlook](docs/機能/outlook.md)・[Windows](docs/機能/windows.md)・[ブラウザ](docs/機能/browser.md)・[Salesforce](docs/機能/salesforce.md)・[core の部品](docs/機能/core.md)・[認証情報](docs/機能/credentials.md)・[祝日・営業日判定](docs/機能/holidays.md)・[Salesforceレポートダウンローダー](docs/機能/salesforce-downloader.md) |
+| モジュールの使い方を知る | [CSV](docs/機能/csv.md)・[Excel](docs/機能/excel.md)・[Access](docs/機能/access.md)・[SQLite](docs/機能/sqlite.md)・[Outlook](docs/機能/outlook.md)・[Windows](docs/機能/windows.md)・[ブラウザ](docs/機能/browser.md)・[Salesforce](docs/機能/salesforce.md)・[core の部品](docs/機能/core.md)・[認証情報](docs/機能/credentials.md)・[祝日・営業日判定](docs/機能/holidays.md)・[Salesforceレポートダウンローダー](docs/機能/salesforce-downloader.md) |
 | **初めて外部システムにつなぐ** | ID とパスワードの[登録](docs/機能/credentials.md#登録初回だけ) → [Salesforce につないで確かめる](docs/機能/salesforce.md#つないで確かめるコマンド) |
 | 引数・戻り値・例外を正確に知る | [公開 API](docs/自動生成/API.md)（**自動生成**） |
 | エラーが出た | [エラー対応ガイド](docs/ERRORS.md)（エラー表は **自動生成**） |
@@ -78,6 +78,7 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 | [CSV](docs/機能/csv.md) | CSV の読み込み・検索・抽出 |
 | [Excel（openpyxl）](docs/機能/excel.md) | Excel の読み書き（既存数式の計算結果・マクロは必要時に win32com を使用） |
 | [Access](docs/機能/access.md) | Access のマクロ・VBA 実行、テーブル／クエリの CSV 出力 |
+| [SQLite](docs/機能/sqlite.md) | SQLite（sqlite3 標準ライブラリ）の読み書き。SQL 文を直接書かずにメソッドで読み書きできる |
 | [Outlook](docs/機能/outlook.md) | Classic Outlook の受信メール読み取り・下書き作成 |
 | [Windows（pywin32）](docs/機能/windows.md) | Excel COM 操作・ウィンドウ操作・レジストリ読み取り |
 | [Browser（Edge）](docs/機能/browser.md) | Edge ブラウザ操作 |
