@@ -95,6 +95,49 @@ def _encoding_detection_error(path: Path) -> CSVError:
     )
 
 
+def _encoding_mismatch_error(path: Path, detected: str) -> CSVError:
+    """``CSVError`` の「先頭で判定した文字コードと途中の行が一致しない」文言。"""
+    return CSVError(
+        f"CSV の途中から判定した文字コード {detected!r} で読めない行があります: {path}\n"
+        "encoding= 引数で文字コードを明示してください。"
+        "\n対処: encoding= 引数で文字コード（cp932 / utf-8-sig / utf-8 など）を明示してください。"
+    )
+
+
+_CSV_DETECTION_HEAD_BYTES = 1024 * 1024
+
+
+def _trim_incomplete_multibyte_tail(raw: bytes) -> bytes:
+    """末尾の不完全なマルチバイトシーケンスを切り詰める。
+
+    ファイル先頭から 1 MiB を読み出したとき、その境界で UTF-8 や CP932 の
+    文字が切れていると ``raw.decode("utf-8")`` / ``raw.decode("cp932")`` が
+    失敗し、``_detect_csv_encoding`` が誤判定する（切れたバイトをゴミとして
+    扱い、違う文字コードと判定される）。末尾から「両方の codec が strict で
+    復号できる最後の位置」を見つけて切り詰めることで、境界にある曖昧さだけを
+    取り除き、判定材料はできるかぎり残す。
+    """
+    if not raw:
+        return raw
+    n = len(raw)
+    # 末尾の UTF-8 は最大 4 バイト、CP932 は最大 2 バイト。
+    # 8 バイト以内のトリムで必ず安全な位置が見つかる想定で走査する。
+    for trim in range(8):
+        if trim >= n:
+            break
+        candidate = raw[: n - trim]
+        try:
+            candidate.decode("utf-8")
+        except UnicodeDecodeError:
+            continue
+        try:
+            candidate.decode("cp932")
+        except UnicodeDecodeError:
+            continue
+        return candidate
+    return raw[: max(n - 8, 0)]
+
+
 def _detect_csv_encoding(raw: bytes) -> str | None:
     """CSV バイト列の文字コードを推定する（読み込みと書き込みで共有）。
 
@@ -358,9 +401,40 @@ class CSV:
                 raise CSVError(_missing_header_message(self.path))
             return
         if self._encoding is None:
-            # 自動判定はファイル全体を読んでから順に文字コードを試す必要があるため、
-            # 従来どおり全文字列を読み ``io.StringIO`` に乗せて ``DictReader`` に渡す。
-            yield from self._iter_rows_from_source(io.StringIO(self._read_text()))
+            # 自動判定は先頭 1 MiB を読んで ``_detect_csv_encoding`` に渡す。
+            # ファイル全体を読み出す ``read_text`` 経由はメモリに全行を載せてしまうため、
+            # 数万件以上の CSV では避けたい。境界で切れたマルチバイト文字は
+            # ``_trim_incomplete_multibyte_tail`` で取り除いて誤判定を防ぐ。
+            with self.path.open("rb") as raw_stream:
+                head = raw_stream.read(_CSV_DETECTION_HEAD_BYTES)
+            head = _trim_incomplete_multibyte_tail(head)
+            detected = _detect_csv_encoding(head)
+            if detected is None:
+                # 判定不能（空 / 全部 ASCII）: 既存仕様の utf-8-sig を既定にする。
+                encoding = "utf-8-sig"
+            elif detected == "utf-8":
+                # BOM なし UTF-8。``utf-8-sig`` codec は BOM が無くても復号できる。
+                encoding = "utf-8-sig"
+            else:
+                # ``utf-8-sig`` (BOM あり) / ``cp932`` の判定結果そのまま。
+                encoding = detected
+            logger.debug(
+                "CSV iter_rows: 文字コードを自動判定しました: %s, encoding=%s",
+                self.path,
+                encoding,
+            )
+            try:
+                with self.path.open("r", encoding=encoding, newline="") as text_stream:
+                    yield from self._iter_rows_from_source(text_stream)
+            except UnicodeDecodeError as error:
+                # 先頭 1 MiB から判定した文字コードで、途中のバイト列が読めない。
+                # 文字コードを明示してもらうために ``CSVError`` に揃えて送出する。
+                logger.debug(
+                    "CSV iter_rows: 自動判定した文字コードで読めませんでした: %s, encoding=%s",
+                    self.path,
+                    encoding,
+                )
+                raise _encoding_mismatch_error(self.path, encoding) from error
             return
         # encoding が明示されているときはファイルをストリームとして開き、
         # 全体を読み込まずに 1 行ずつ ``DictReader`` に流す。``yield`` を含む
