@@ -193,14 +193,28 @@ class SQLite:
         """``file:...?mode=rw`` 形式の URI を作る。
 
         Windows パス・日本語・空白・``#`` ``?`` を含むパスでも壊れない
-        ように ``urllib.parse.quote`` でエスケープする。ドライブレターは
-        先頭に ``/`` を足して ``file:/C:/...`` 形式にする（SQLite の URI
-        仕様）。``pathlib.Path.resolve()`` は使わない（割り当てドライブが
+        ように ``urllib.parse.quote`` でエスケープする。
+
+        ドライブレターは先頭に ``/`` を足して ``file:/C:/...`` 形式に
+        する（SQLite の URI 仕様）。UNC パス（``\\\\host\\share\\...``、
+        ``as_posix()`` で ``//host/share/...`` になるもの）は
+        ``file:////host/share/...`` の 4 つのスラッシュで書く必要がある。
+        ``//`` が 2 つだけの ``file://host/...`` は SQLite が「ホスト名
+        host」として解釈して開けない（Access の置き換え用途では共有
+        フォルダが主な置き場なので、ここで止まると致命的）。
+
+        ``pathlib.Path.resolve()`` は使わない（割り当てドライブが
         UNC に変わるため）。
         """
         abs_path = self._path if self._path.is_absolute() else self._path.absolute()
         posix = abs_path.as_posix()
-        if not posix.startswith("/"):
+        if posix.startswith("//"):
+            # UNC: ``//host/share/...`` → URI 上で ``////host`` にするため
+            # もう一段 ``//`` を足す（4 つのスラッシュ）。
+            posix = "//" + posix
+        elif not posix.startswith("/"):
+            # ドライブレター: ``C:/...`` → 先頭に ``/`` を足して
+            # ``file:/C:/...`` にする（``file:C:/...`` ではない）。
             posix = "/" + posix
         # ``/`` と ``:`` はそのまま、他はエスケープ（``#`` ``?`` ``%``
         # 日本語・空白 等）。

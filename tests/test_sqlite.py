@@ -22,6 +22,16 @@ from comken.toolbox.sqlite import SQLite
 # ── テスト用フィクスチャ ──────────────────────────────────────────────────
 
 
+def _admin_share_for(tmp_path: Path) -> str:
+    """``tmp_path`` のドライブレターに対応する Windows 管理共有パスを返す。
+
+    ``C:\\...`` なら ``\\\\localhost\\C$``。Home エディション等では
+    管理共有が無効なので ``Path.is_dir()`` で開けるか別途確かめる。
+    """
+    drive_letter = tmp_path.drive.rstrip(":")
+    return f"\\\\localhost\\{drive_letter}$"
+
+
 def _new_db(tmp_path: Path, *, name: str = "顧客") -> tuple[SQLite, Path]:
     """テスト用の DB を作り、``顧客`` 表を作る。"""
     path = tmp_path / "data.db"
@@ -915,6 +925,124 @@ class TestPathEdgeCases:
         assert db.tables() == []
         db.table("t").create(columns=["a"], primary_key="a")
         assert "t" in db.tables()
+
+    def test_unc_path_create_insert_read(self, tmp_path: Path) -> None:
+        """管理共有（``\\\\localhost\\<drv>$``）経由で create / insert / read できる。
+
+        SQLite は UNC パスを ``file:////server/share/path`` の 4 つのスラッシュで
+        開ける（``file://server/share/path`` の 2 つだと「ホスト名 server」と
+        解釈されて開けない）。Home エディション等、管理共有が無効な環境では
+        ``Path.is_dir()`` で開けないため ``pytest.skip`` で逃げる。
+        """
+        admin_share = _admin_share_for(tmp_path)
+        if not Path(admin_share).is_dir():
+            pytest.skip(f"管理共有 {admin_share} が開けないため UNC 経由のテストをスキップ")
+        # 共有フォルダ内に書き戻す（tmp_path を経由せず直接 touch しても良いが、
+        # クリーンアップを pytest に任せるために tmp_path 側で内容を確定させる）
+        relative = tmp_path.name + "_unc.db"
+        unc_path = Path(admin_share) / tmp_path.relative_to(tmp_path.anchor) / relative
+        try:
+            SQLite(unc_path, create=True)
+            db = SQLite(unc_path)
+            db.table("t").create(columns=["id", "value"], primary_key="id")
+            db.table("t").insert(Table(["id", "value"], [{"id": "1", "value": "x"}]))
+            rows = db.table("t").read().to_rows()
+            assert len(rows) == 1
+            assert rows[0]["value"] == "x"
+        finally:
+            if unc_path.exists():
+                unc_path.unlink()
+
+
+# ── `_file_uri()` の文字列組み立て ──────────────────────────────────────────────
+
+
+class TestFileUri:
+    """``SQLite._file_uri()`` の URI 文字列が想定どおり組み立てられるか。
+
+    環境（ファイルシステムの UNC 共有可否）に依らず、文字列の組み立て
+    ルール自体は常に同じなので、ここは ``tmp_path`` を経由せず
+    ``SQLite(path)`` を直接作って ``_file_uri()`` を呼ぶ（ファイル本体
+    が無いと ``__init__`` が ``ComkenFileNotFoundError`` を投げるので、
+    touch で空ファイルを作ってから覗く）。
+    """
+
+    @staticmethod
+    def _uri(path: Path) -> str:
+        """``_file_uri()`` を呼ぶために、ファイルを一時的に用意してから覗く。"""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+        return SQLite(path)._file_uri()
+
+    def test_drive_letter_path(self, tmp_path: Path) -> None:
+        """ドライブレターは ``file:/C:/...`` の 1 つのスラッシュで組み立てる。"""
+        uri = self._uri(tmp_path / "x.db")
+        # ``file:/C:/...`` の形になること。``file://`` 始まりだと UNC と
+        # 同じ形になり SQLite が誤認する。
+        assert uri.startswith("file:/")
+        assert not uri.startswith("file://")
+        # ``file:/`` の後に ``as_posix()`` のパスがそのまま続き、最後が
+        # ``?mode=rw`` で終わる。
+        assert uri.endswith("/x.db?mode=rw")
+        # ドライブレター（例: ``C:``）が ``/`` の直後に来ること
+        drive = tmp_path.drive  # 例: ``C:``
+        assert f"file:/{drive}/" in uri
+
+    def test_unc_path_uses_four_slashes(self, tmp_path: Path) -> None:
+        """UNC パスは ``file:////server/share/...`` の 4 つのスラッシュで組み立てる。
+
+        ``//`` 2 つだけの ``file://server/...`` は SQLite がホスト名として
+        解釈して開けない（Access の置き換え用途で致命的）。
+        ``as_posix()`` が ``//server/share/...`` を作るパスを直接 ``_path``
+        に流し込んで ``_file_uri()`` だけを覗く（ファイル本体は touch で
+        用意し、``_path`` を差し替えて URI だけ取り出す）。
+        """
+        path = tmp_path / "unc_marker.db"
+        path.touch()
+        db = SQLite(path)
+        # ``_path`` は通常の属性（``@dataclass`` ではない）なので代入できる。
+        # ``_file_uri()`` は ``self._path`` しか見ないので、本物のファイル
+        # を開かずに URI の文字列だけ確認できる。
+        db._path = Path("//test_server/share/dir/x.db")  # type: ignore[misc]
+        assert db._file_uri() == "file:////test_server/share/dir/x.db?mode=rw"
+
+    def test_special_characters_are_escaped(self, tmp_path: Path) -> None:
+        """``#`` 空白 日本語は ``%XX`` エスケープされる。
+
+        エスケープ漏れがあると ``mode=rw`` のクエリが効かなくなる /
+        ファイル名の一部がクエリと誤認される事故になる。
+        ファイル名に使えない ``?`` は下の ``test_question_mark_is_escaped``
+        で ``_path`` を差し替えて ``_file_uri()`` だけを覗く。
+        """
+        folder = tmp_path / "顧客 #1 フォルダ"
+        folder.mkdir()
+        path = folder / "data.db"
+        uri = self._uri(path)
+        path_part, query = uri.rsplit("?", 1)
+        # クエリは必ず ``mode=rw`` 1 つだけ
+        assert query == "mode=rw"
+        # パス部に生の ``#`` 空白 は残らない（URI として壊れる）
+        assert "#" not in path_part
+        assert " " not in path_part
+        # 日本語はパーセントエンコードされる（``%E5%AE%A2`` のような形に
+        # 分解される）
+        assert "%" in path_part
+
+    def test_question_mark_is_escaped(self, tmp_path: Path) -> None:
+        """``?`` がファイル名にあっても URI でエスケープされる。
+
+        Windows のファイル名には ``?`` を使えないので ``_path`` を直接
+        差し替えて ``_file_uri()`` の出力だけ覗く。エスケープ漏れがあると
+        ``?`` 以降がクエリ文字列として扱われ ``mode=rw`` が効かなくなる。
+        """
+        path = tmp_path / "marker.db"
+        path.touch()
+        db = SQLite(path)
+        db._path = Path("C:/data/x.db?q=1")  # type: ignore[misc]
+        # ``?`` と ``=`` はどちらも ``safe="/:"`` に含まれないので
+        # パーセントエンコードされる（``?`` がクエリ区切りとして
+        # 効くと ``mode=rw`` が壊れる）。
+        assert db._file_uri() == "file:/C:/data/x.db%3Fq%3D1?mode=rw"
 
 
 # ── `ComkenFileNotFoundError` のメッセージ ──────────────────────────────────────────────
