@@ -25,6 +25,11 @@ from comken.exceptions import (
 from comken.services.salesforce_downloader.history import (
     COLUMNS,
     FAILURE,
+    ROUTE_API,
+    ROUTE_BROWSER,
+    ROUTE_BROWSER_FALLBACK_EMPTY,
+    ROUTE_BROWSER_FALLBACK_TRUNCATED,
+    ROUTE_SOQL,
     SUCCESS,
     HistoryRow,
     append_history,
@@ -94,6 +99,7 @@ def _write_row(
         row.cause,
         row.error_code,
         row.error.replace("\n", " "),
+        row.route,
     ]
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -424,6 +430,74 @@ def test_truncated_today_ignores_successful_rows_with_same_code(tmp_path) -> Non
     assert truncated_today(history_path, entry.key) is False
 
 
+# ── 「取得経路」列（2026-10 追加） ────────────────────────────
+class TestRouteColumn:
+    """``取得経路`` 列の読み書き・マイグレーションを検証する。``ROUTE_*`` 定数が
+    定義されていること、``HistoryRow.route`` の既定が空文字で後方互換なこと、
+    古い履歴（この列が無いもの）が ``migrate_row()`` で空文字に補われて読めること
+    を確認する。"""
+
+    def test_route_constants_are_defined(self) -> None:
+        from comken.services.salesforce_downloader.history import (
+            ROUTE_BROWSER_FALLBACK_TRUNCATED,
+        )
+
+        # 書き込み側（Salesforceレポートダウンローダー側 ``src.service``）が
+        # この文字列をそのまま履歴に書くので、業務担当者に見える値になる
+        assert ROUTE_API == "API"
+        assert ROUTE_SOQL == "SOQL"
+        assert ROUTE_BROWSER == "ブラウザ"
+        assert ROUTE_BROWSER_FALLBACK_TRUNCATED == "ブラウザ（自動切替：2000件超）"
+        assert ROUTE_BROWSER_FALLBACK_EMPTY == "ブラウザ（自動切替：0件）"
+
+    def test_route_column_is_in_columns_tuple(self) -> None:
+        """``COLUMNS`` の最後尾に「取得経路」がある（順序が既存列の契約）。"""
+        assert COLUMNS[-1] == "取得経路"
+
+    def test_history_row_route_default_is_empty_string(self) -> None:
+        """``HistoryRow.route`` の既定値は空文字。古い呼び出し側が ``route=`` を
+        指定しなくても例外にならない（後方互換）。"""
+        row = HistoryRow(True, True, True, file_name="a.csv")
+        assert row.route == ""
+
+    def test_read_history_returns_route_value(self, tmp_path) -> None:
+        """``_write_row()`` で ``route=`` を指定した値が履歴からそのまま読める。"""
+        history_path = tmp_path / "履歴.csv"
+        entry = _entry()
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(
+                True, True, True, file_name="a.csv", route=ROUTE_BROWSER_FALLBACK_TRUNCATED
+            ),
+        )
+
+        rows = read_history(history_path).to_rows()
+        assert len(rows) == 1
+        assert rows[0]["取得経路"] == ROUTE_BROWSER_FALLBACK_TRUNCATED
+
+    def test_legacy_history_without_route_column_is_migrated_with_empty_string(
+        self, tmp_path
+    ) -> None:
+        """「取得経路」列が無い古い履歴（17 列構成）でも ``migrate_row()`` が
+        空文字に補って ``COLUMNS`` 順で読める。例外を出さず、業務担当者が
+        「列が壊れた」と誤認しないこと。
+        """
+        history_path = tmp_path / "履歴.csv"
+        # 17 列の古い構成（取得経路が無い）。``COLUMNS[:-1]`` で 17 列を再現
+        legacy_header = list(COLUMNS[:-1])
+        legacy_values = _today_row_values()[: len(legacy_header)]
+        _write_csv_raw(history_path, header=legacy_header, rows=[legacy_values])
+
+        rows = read_history(history_path).to_rows()
+        assert len(rows) == 1
+        # 増えた列は空文字で埋められる
+        assert rows[0]["取得経路"] == ""
+        # 既存列の値は保持
+        assert rows[0]["管理番号"] == "1001"
+
+
 def _entry() -> _Entry:
     """各テストで同じ管理表1行を使う。"""
     return _Entry()
@@ -461,6 +535,7 @@ def _write_row_cp932(path: Path, *, entry: _Entry, project: str, row: HistoryRow
         row.cause,
         row.error_code,
         row.error.replace("\n", " "),
+        row.route,
     ]
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -591,6 +666,7 @@ def _today_row_values(
         "",  # 原因区分
         error_code,  # エラーコード
         "",  # エラー内容
+        "",  # 取得経路
     ]
 
 
@@ -678,6 +754,7 @@ class TestHeaderMigration:
             "",  # 原因区分
             "",  # エラーコード
             "",  # エラー内容
+            "",  # 取得経路
         ]
         _write_csv_raw(history_path, header=reordered_header, rows=[reordered_values])
 
@@ -759,6 +836,7 @@ class TestHeaderMigration:
             "1.00",  # 処理秒数
             "Salesforce",  # 原因区分
             "",  # エラー内容
+            "",  # 取得経路
         ]
         _write_csv_raw(history_path, header=reordered_header, rows=[truncated_values])
 
@@ -985,6 +1063,7 @@ class TestReportPathAndReadReport:
                     "Salesforce",  # 原因区分
                     "SalesforceAuthError",  # エラーコード
                     "資格情報が無効です",  # エラー内容
+                    "",  # 取得経路
                 ]
             ],
         )
@@ -1032,6 +1111,7 @@ class TestReportPathAndReadReport:
                     "",  # 原因区分
                     "",  # エラーコード
                     "",  # エラー内容
+                    "",  # 取得経路
                 ]
             ],
         )

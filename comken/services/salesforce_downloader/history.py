@@ -64,6 +64,13 @@ COLUMNS: tuple[str, ...] = (
     "原因区分",
     "エラーコード",  # 例外クラス名。成功時・到達しなかった段階は空
     "エラー内容",
+    # API / SOQL / ブラウザ / 自動切替2種のいずれかを履歴に書く。管理表の
+    # 「2000件超」「SOQL」列で経路が決まる（src/service.py::_fetch()）。
+    # 2000件超 × かつ SOQL × の Report API 経路で失敗したときは、自動で
+    # ブラウザ経由に切り替え（``SalesforceReportTruncatedError`` → 2000件超用 /
+    # 0件 × → 0件用の2種）。初期導入前の履歴（この列が無い）は
+    # ``migrate_row()`` で空文字に補われて読める
+    "取得経路",
 )
 
 SUCCESS = "成功"
@@ -78,6 +85,19 @@ TRIGGER_SCHEDULED = "定期"
 # Salesforce の例外クラスを import しない（依存を増やさない）ので、import せず
 # 文字列リテラルで扱う
 TRUNCATED_ERROR_NAME = "SalesforceReportTruncatedError"
+
+# 「取得経路」列に書く定数値。``history.py`` は経路の判定（管理表の列）を持たない
+# ので、**実際にどう走ったか**だけを文字列として記録する。書き込み側
+# （Salesforceレポートダウンローダー側 ``src/service.py::_fetch()``）が管理表
+# の「2000件超」「SOQL」列を見て決め、これらの定数をそのまま履歴に書く。
+# 自動切替2種は「Report API で失敗 → ブラウザで取り直して成功」の意味を持つ
+# （Salesforce側で 2000件超で打ち止められていた／0件だった可能性があるので、
+# 管理表を直すか SOQL 化を検討する運用ログとしても残す）
+ROUTE_API = "API"
+ROUTE_SOQL = "SOQL"
+ROUTE_BROWSER = "ブラウザ"
+ROUTE_BROWSER_FALLBACK_TRUNCATED = "ブラウザ（自動切替：2000件超）"
+ROUTE_BROWSER_FALLBACK_EMPTY = "ブラウザ（自動切替：0件）"
 
 _TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
 
@@ -105,6 +125,7 @@ class HistoryRow:
     error_code: str = ""
     error: str = ""
     schedule_key: str = ""
+    route: str = ""  # API / SOQL / ブラウザ / 自動切替2種。空文字は不明または書き込まれなかった
 
 
 # ── 読み取り ────────────────────────────────────────────────────────────
