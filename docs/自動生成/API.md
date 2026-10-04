@@ -559,9 +559,11 @@ def concat(self, other: Table) -> Table:
 別のデータとして扱う。列不足を空欄で補うと、入力ミスに気づけず
 データ欠落につながるため、ここでは明示的にエラーにする。
 
-結果の型定義は ``self.types``。``other`` の値は、``other.types``
-に ``self.types`` と**同じ変換関数（``is`` で同一のオブジェクト）**
-が設定されている列はそのまま使い、それ以外は ``self.types`` で変換する
+結果の型定義は ``self.types``。``other`` の値は、``self.types`` に無い列は
+変換せずそのまま使う（``_normalize_row`` と同じく types のある列だけが
+変換対象のため）。``self.types`` にある列は、``other.types`` に
+``self.types`` と**同じ変換関数（``is`` で同一のオブジェクト）**が
+設定されている列はそのまま使い、それ以外は ``self.types`` で変換する
 （変換済みの値に同じ変換を二重にかけないため）。``other.types`` は
 結果に引き継がない。
 
@@ -2618,9 +2620,11 @@ def concat(self, other: Table) -> Table:
 別のデータとして扱う。列不足を空欄で補うと、入力ミスに気づけず
 データ欠落につながるため、ここでは明示的にエラーにする。
 
-結果の型定義は ``self.types``。``other`` の値は、``other.types``
-に ``self.types`` と**同じ変換関数（``is`` で同一のオブジェクト）**
-が設定されている列はそのまま使い、それ以外は ``self.types`` で変換する
+結果の型定義は ``self.types``。``other`` の値は、``self.types`` に無い列は
+変換せずそのまま使う（``_normalize_row`` と同じく types のある列だけが
+変換対象のため）。``self.types`` にある列は、``other.types`` に
+``self.types`` と**同じ変換関数（``is`` で同一のオブジェクト）**が
+設定されている列はそのまま使い、それ以外は ``self.types`` で変換する
 （変換済みの値に同じ変換を二重にかけないため）。``other.types`` は
 結果に引き継がない。
 
@@ -7990,6 +7994,46 @@ def freeze_panes(self, cell: str) -> None:
 ##### 説明
 
 指定セルより上・左の領域を固定表示する。
+
+#### `iter_rows`
+
+```text
+def iter_rows(self, *, header_row: int=1) -> Iterator[dict[str, Any]]:
+```
+
+##### 説明
+
+シートの行を 1 行ずつ ``{列名: 値}`` の dict で返すイテレーター。
+
+``read_range`` / ``read`` と違ってファイル全体をメモリに展開しないため、
+**行数が大きいシート（数万件以上）** ではこちらを使う。
+
+戻り値の形式:
+
+- 各 dict のキーは ``str(value)`` で見出しセルを変換したもの
+  （``read_range`` のヘッダー行と同じ ``str(...)`` 規約）
+- 値は ``read_range`` の数式なし経路と同じ形（空セルは ``""``、
+  それ以外はセルの値そのまま）
+- 数式セルは保存済みの計算値（openpyxl の ``data_only=True``）。
+  計算値が保存されていない数式セルに当たったら ``ExcelError``
+  （どのセルか、「Excel で開いて保存し直すか、
+  ``read_range(force_com=True)`` を使ってください」）
+- 全部空の行（セル全が ``None`` または空文字 ``""``）は飛ばす
+  （``read_only`` のストリームは宣言上の ``dimension`` に従って末尾に
+  空行を報告することがあるため）
+
+制約:
+
+- ``Excel(path, read_only=True)`` で開いた Excel でしか使えない。
+  ``read_only=False`` の Excel で呼ぶと ``ExcelError``
+  （「``read_only=True`` で開いてください」）
+- ``with`` の中でだけ呼べる（``TableError``）
+- 表示用シート（``PY_`` プレフィックス無し）でしか使えない
+  （データシートでは ``_ensure_display_sheet`` 由来のエラー）
+
+途中で ``break`` しても ``finally`` でストリーム Workbook を閉じるため、
+Windows でもファイルをリネームできる（キャッシュ版 Workbook ではないので
+``Excel`` セッション内の他の ``read()`` 等は影響を受けない）。
 
 
 ## `from comken.toolbox.outlook import ...`
