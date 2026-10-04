@@ -2,20 +2,23 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [main, master]
   pull_request:
 
 jobs:
   test:
     # comken は Windows 専用機能（pywin32・COM）を含むため Windows ランナーで検証する
     runs-on: windows-latest
+    strategy:
+      matrix:
+        python-version: ["3.13", "3.14"]
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
