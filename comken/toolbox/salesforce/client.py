@@ -37,6 +37,7 @@ from comken.exceptions import (
 )
 from comken.runtime import dry_run_log, is_dry_run
 from comken.toolbox.csv import CSV
+from comken.toolbox.csv.file import parse_text
 
 # 既定は Refresh Token Flow（→ docs/HISTORY.md）。
 from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth
@@ -331,6 +332,59 @@ class SalesforceBase:
             csv_file.replace(table)
         return csv_path
 
+    # Bulk API 2.0 Query のポーリング間隔。Salesforce 側の負荷を下げるため短すぎない値
+    BULK_POLL_SECONDS = 5
+    # Bulk API 2.0 Query 全体のタイムアウト。30 分を超えたら中止して例外
+    BULK_TIMEOUT_SECONDS = 1800
+
+    @measure
+    def bulk_query(self, soql: str) -> Table:
+        """SOQL クエリを Bulk API 2.0 で実行し ``Table`` を返す（大量データ向け）。
+
+        ``query()`` は REST API を同期でページを送りながら返すため、件数が
+        非常に多い取得では往復回数と 1 リクエストあたりの処理時間がともに
+        効いてくる。Bulk API 2.0 Query はジョブを Salesforce 側に登録して
+        から結果 CSV をページ単位で取り出す形のため、長時間ジョブをサーバ側で
+        実行でき、件数が多い・定期取得で同じ SOQL を回す用途に向く。
+
+        一方で Bulk API 2.0 Query が**受け付けない SOQL 構文**がある
+        （集計関数・``GROUP BY``・``OFFSET``・親→子のサブクエリなど）。
+        この場合は Salesforce がジョブ作成時に 400 を返すため、
+        ``REST 版（query()）へ黙って切り替えず``そのまま
+        ``SalesforceRequestError`` で止まる。集計や少量の対話的な取得は
+        ``query()`` を使うこと。
+
+        列は CSV の見出しから取得するため **0 件ヒットでも列情報が残る**
+        （``records[0]`` からの推測に依存しない）。値は**全て文字列のまま**
+        （数値・真偽値への変換は行わない。"0012" の先頭ゼロや "1234567890"
+        を整数化しない）。``Account.Name`` のような参照項目も見出しの名前を
+        そのまま列名にする（平坦化しない）。null のセルは空文字にする。
+        複数ページの見出しが食い違うときは例外を呼ぶ。
+
+        通信は既存の ``self.request()`` を通すため、計測・5xx/429 のバック
+        オフ・401 の再認証は ``query()`` と共通。タイムアウト
+        （``BULK_TIMEOUT_SECONDS`` 秒）で完了しなかった場合は、ジョブを
+        ``Aborted`` に遷移させてから例外を投げる。中止の PATCH が失敗
+        しても例外にはしない（ログだけ残す）。
+
+        Args:
+            soql: 実行する SOQL クエリ文字列。
+
+        Returns:
+            SOQL の結果を表す ``Table``。列は CSV の見出し順、値は全て文字列。
+        """
+        job_id = self._bulk_create_job(soql)
+        try:
+            self._bulk_wait_for_job(job_id)
+        except _BulkTimeoutError as exc:
+            self._bulk_abort_job(job_id)
+            raise SalesforceError(
+                f"Bulk API 2.0 のジョブが {self.BULK_TIMEOUT_SECONDS} 秒以内に"
+                f"終わりませんでした: {exc.job_id}\n"
+                "対処: データの量・SOQL の条件・Salesforce 側の負荷を確認してください。"
+            ) from exc
+        return self._bulk_fetch_results(job_id)
+
     # ------------------------------------------------------------------- CRUD
     @measure
     def get(self, object_name: str, record_id: str) -> dict[str, Any]:
@@ -578,12 +632,23 @@ class SalesforceBase:
 
     @staticmethod
     def _body_of(response: requests.Response) -> dict[str, Any] | list[Any] | str | None:
-        """レスポンス本文を、内容に応じて辞書・リスト・文字列・None で返す。"""
-        if not response.text:
+        """レスポンス本文を、内容に応じて辞書・リスト・文字列・None で返す。
+
+        非 JSON（CSV など）の本文は Content-Type に ``charset`` が付いていれば
+        ``response.text``（requests が charset で復号した結果）を使い、付いて
+        いなければ ``response.content`` を UTF-8 で復号する。``response.text``
+        は Content-Type に charset が無いと requests が ISO-8859-1 で復号する
+        ため、CSV のような非 JSON 本文は明示的に UTF-8 復号する。
+        JSON 経路は ``response.json()`` を使うので影響を受けない。
+        """
+        if not response.content:
             return None  # DELETE や PATCH は本文が空で返る
         if response.headers.get("Content-Type", "").startswith("application/json"):
             return response.json()
-        return response.text
+        content_type = response.headers.get("Content-Type", "")
+        if "charset=" in content_type.lower():
+            return response.text
+        return response.content.decode("utf-8")
 
     def _authenticate(self) -> None:
         """トークンを取り直し、以降のリクエストに使うヘッダーを差し替える。"""
@@ -605,8 +670,172 @@ class SalesforceBase:
         """
         return f"/services/data/v{self.API_VERSION}{path}"
 
+    # ---------------------------------------------------------------- Bulk
+    def _bulk_create_job(self, soql: str) -> str:
+        """Bulk API 2.0 の Query ジョブを作成し、ジョブ ID を返す。
+
+        ジョブ作成時に Salesforce が SOQL を検証する。集計関数・
+        ``GROUP BY``・``OFFSET``・親→子のサブクエリなどはこの時点で
+        400 が返る。REST 版 ``query()`` へのフォールバックはしない
+        （呼び出し側で使い分けてもらう）。
+        """
+        started, _ = self.request(
+            "POST",
+            self.data_path("/jobs/query"),
+            body={"operation": "query", "query": soql},
+            component="bulk",
+        )
+        if not isinstance(started, dict) or not started.get("id"):
+            raise SalesforceError(
+                "Bulk API 2.0 のジョブ作成に失敗しました（id が返っていません）。\n"
+                "対処: 通信状況と SOQL を確認し、しばらく待ってから再実行してください。"
+            )
+        return str(started["id"])
+
+    def _bulk_wait_for_job(self, job_id: str) -> None:
+        """ジョブの完了（``JobComplete``）をポーリングして待つ。
+
+        ``Failed`` / ``Aborted`` を見たら ``SalesforceError`` で例外。
+        ``BULK_TIMEOUT_SECONDS`` を超えたら ``_BulkTimeoutError``
+        を投げる（``bulk_query()`` が捕捉して Aborted に遷移する）。
+        """
+        path = self.data_path(f"/jobs/query/{job_id}")
+        deadline = time.monotonic() + self.BULK_TIMEOUT_SECONDS
+        while True:
+            data, _ = self.request("GET", path, component="bulk")
+            if not isinstance(data, dict):
+                raise SalesforceError(
+                    f"Bulk API 2.0 のジョブ状態取得に失敗しました: {job_id}\n"
+                    "対処: 通信状況を確認し、しばらく待ってから再実行してください。"
+                )
+            state = str(data.get("state", ""))
+            if state == "JobComplete":
+                return
+            if state in ("Failed", "Aborted"):
+                error_message = data.get("errorMessage") or "詳細情報なし"
+                raise SalesforceError(
+                    f"Bulk API 2.0 のジョブが {state} になりました: {job_id}\n"
+                    f"{error_message}\n"
+                    "対処: SOQL の構文・参照項目・権限を確認してください。"
+                )
+            if time.monotonic() >= deadline:
+                raise _BulkTimeoutError(job_id)
+            time.sleep(self.BULK_POLL_SECONDS)
+
+    def _bulk_abort_job(self, job_id: str) -> None:
+        """ジョブを ``Aborted`` に遷移させる。失敗はログだけで例外にはしない。
+
+        タイムアウトで残ったジョブを放置しないために呼ぶ。既に
+        Failed / Aborted のときは PATCH しても 400 が返る可能性が
+        あるが、そのときは例外にせずログだけ残す（呼び出し側は
+        元の例外を再送出すべき）。
+        """
+        try:
+            self.request(
+                "PATCH",
+                self.data_path(f"/jobs/query/{job_id}"),
+                body={"state": "Aborted"},
+                component="bulk",
+            )
+        except SalesforceError as exc:
+            logger.warning("Bulk API 2.0 のジョブ中止に失敗しました: %s (%s)", job_id, exc)
+
+    def _bulk_fetch_results(self, job_id: str) -> Table:
+        """結果 CSV をページ送りしながら ``Table`` に組み立てる。
+
+        列は **1 ページ目の見出し**から取り、2 ページ目以降の見出し行は
+        捨てる。2 ページ目以降の見出しが食い違ったら ``SalesforceError``
+        を送出する（ページ間で列構造が変わることはない想定のため）。
+
+        結果の本文が空（``None``）のときは 0 行として扱う。Salesforce は
+        0 件のときに本文を空で返す場合があり、そのときに後続ページが無い
+        ケース（=1 ページ目が空）を「列も空・0 行の ``Table``」として返す。
+        """
+        rows: list[dict[str, str]] = []
+        columns: list[str] = []
+        locator: str | None = None
+        first_page = True
+        while True:
+            path = self.data_path(f"/jobs/query/{job_id}/results")
+            if locator:
+                path = f"{path}?locator={urllib.parse.quote(locator)}"
+            body, response_headers = self.request(
+                "GET",
+                path,
+                headers={"Accept": "text/csv"},
+                component="bulk",
+            )
+            if body is None:
+                # 0 件で本文が空のときは空ページとして扱う。1 ページ目なら
+                # 「列も空・0 行」の Table を返し、ループを抜ける
+                if first_page:
+                    return Table([], [])
+                raise SalesforceError(
+                    f"Bulk API 2.0 の結果取得に失敗しました: {job_id}\n"
+                    "対処: 通信状況を確認し、しばらく待ってから再実行してください。"
+                )
+            if not isinstance(body, str):
+                raise SalesforceError(
+                    f"Bulk API 2.0 の結果取得に失敗しました: {job_id}\n"
+                    "対処: 通信状況を確認し、しばらく待ってから再実行してください。"
+                )
+            page_rows, page_columns = _parse_bulk_csv(body)
+            if first_page:
+                columns = page_columns
+                rows.extend(page_rows)
+                first_page = False
+            elif page_columns != columns:
+                raise SalesforceError(
+                    f"Bulk API 2.0 の結果ページで見出しが一致しません: {job_id}\n"
+                    f"1 ページ目: {columns}\n2 ページ目以降: {page_columns}\n"
+                    "対処: Salesforce 側のレスポンスを確認してください。"
+                )
+            else:
+                rows.extend(page_rows)
+            locator_header = response_headers.get("Sforce-Locator", "")
+            if not locator_header or locator_header == "null":
+                return Table(columns, rows)
+            locator = locator_header
+
 
 # ── 内部ヘルパー ──────────────────────────────────────────────────────────────
+
+
+class _BulkTimeoutError(Exception):
+    """``_bulk_wait_for_job()`` が ``BULK_TIMEOUT_SECONDS`` を超えたときに送出する内部例外。
+
+    公開 API（``bulk_query()``）側で ``Aborted`` に遷移させてから
+    ``SalesforceError`` に積み直して送出すためだけに使う。モジュール外に
+    漏らさない前提の薄い例外。
+    """
+
+    def __init__(self, job_id: str) -> None:
+        super().__init__(job_id)
+        self.job_id = job_id
+
+
+def _parse_bulk_csv(text: str) -> tuple[list[dict[str, str]], list[str]]:
+    """Bulk API 2.0 の結果 CSV を (行 dict のリスト, 列名リスト) に分解する。
+
+    列数は **1 行目の見出し**で固定する。データ行の列数が見出しと一致しない
+    ときは ``SalesforceError`` で停止する（短い行を空文字で埋めたり長い行の
+    余りを捨てると、データが黙ってずれたり消えたりするため）。null セルは
+    CSV 側で空文字として届くため、空文字のまま ``row`` に入れる。
+    """
+    raw_rows = parse_text(text)
+    if not raw_rows:
+        return [], []
+    columns = list(raw_rows[0])
+    data_rows: list[dict[str, str]] = []
+    for line_number, raw in enumerate(raw_rows[1:], start=2):
+        if len(raw) != len(columns):
+            raise SalesforceError(
+                f"Bulk API 2.0 の結果 CSV の{line_number}行目は列数が一致しません: \n"
+                f"見出しは{len(columns)}列、データは{len(raw)}列です。\n"
+                "対処: SOQL の SELECT 項目と結果の列数を確認してください。"
+            )
+        data_rows.append(dict(zip(columns, raw, strict=True)))
+    return data_rows, columns
 
 
 def _retry_reason(status_code: int) -> str:

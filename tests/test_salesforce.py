@@ -77,15 +77,26 @@ class TestReportIdFromUrl:
 
 
 def _response(status: int = 200, json_body: object = None, text: str = "", headers=None):
-    """requests.Response の代わりに使うモックを作る。"""
+    """requests.Response の代わりに使うモックを作る。
+
+    ``client._body_of`` は Content-Type が JSON でない本文を
+    ``response.content`` から UTF-8 で復号するため、CSV 用の
+    レスポンスモックでは ``content`` にもバイト列を入れる。
+    JSON 用のレスポンスモックでは ``.json()`` の戻り値を直接見るので
+    ``content`` の値は使わないが ``b""`` を入れて ``if not response.content``
+    を成立させる（空 204 のときに None 判定を確実にするため）。
+    """
     response = MagicMock()
     response.status_code = status
     if json_body is not None:
-        response.text = text or json.dumps(json_body)
+        body_text = text or json.dumps(json_body)
+        response.text = body_text
+        response.content = body_text.encode("utf-8")
         response.headers = headers or {"Content-Type": "application/json"}
         response.json.return_value = json_body
     else:
         response.text = text
+        response.content = text.encode("utf-8") if text else b""
         response.headers = headers or {}
     return response
 
@@ -1121,3 +1132,340 @@ class TestApiMetrics:
         with caplog.at_level("INFO"):
             metrics.log_summary()
         assert "10.0%" in caplog.text
+
+
+class TestSalesforceBulkQuery:
+    """``SalesforceBase.bulk_query()`` を Bulk API 2.0 Query のフローで検証する。
+
+    ジョブ作成 → 状態ポーリング → 結果ページ送りを実通信なしでテストする。
+    通信は既存の ``_salesforce()`` ヘルパーと同じくモックする。
+    """
+
+    # ジョブ作成 / ポーリング / 結果ページで共通するパス
+    JOB_ID = "7500g000000001AAA"
+    JOB_PATH = f"/services/data/v67.0/jobs/query/{JOB_ID}"
+    RESULTS_PATH = f"/services/data/v67.0/jobs/query/{JOB_ID}/results"
+    SOQL = "SELECT Id, Name FROM Account"
+
+    def _job_create(self, job_id: str | None = None) -> MagicMock:
+        job_id = job_id or self.JOB_ID
+        return _response(json_body={"id": job_id, "operation": "query"})
+
+    def _job_state(self, state: str, **extra: object) -> _response:
+        return _response(json_body={"id": self.JOB_ID, "state": state, **extra})
+
+    def _results_page(self, csv_text: str, locator: str | None = None) -> _response:
+        headers = {"Content-Type": "text/csv"}
+        if locator is not None:
+            headers["Sforce-Locator"] = locator
+        return _response(text=csv_text, headers=headers)
+
+    def test_returns_full_result_with_pagination(self):
+        """ジョブ作成 → InProgress 2回 → JobComplete → 結果2ページで全行取得。"""
+        # 結果の CSV はカンマ・改行・" を含む値、0012、空欄、日本語を含む
+        # 1件目: BillingCity が空欄（null）+ 改行入り + 日本語 を含むセル
+        # 2件目: Name に "" のエスケープ、3件目はカンマ入り
+        page1_csv = (
+            "Id,Name,BillingCity\n"
+            '0012,"Acme, Inc.",\n'  # 1件目: BillingCity が空文字（null）
+            '0013,"Say ""hi""",東京\n'  # 2件目: "" のエスケープ + 日本語
+        )
+        page2_csv = 'Id,Name,BillingCity\n0014,"Beta, Co.",Osaka\n'
+        responses = [
+            self._job_create(),
+            self._job_state("InProgress"),
+            self._job_state("InProgress"),
+            self._job_state("JobComplete"),
+            self._results_page(page1_csv, locator="NEXT_LOCATOR"),
+            self._results_page(page2_csv, locator="null"),
+        ]
+        with (
+            _salesforce(responses) as (client, session, _),
+            patch("comken.toolbox.salesforce.client.time.sleep"),
+        ):
+            table = client.bulk_query(self.SOQL)
+
+        assert table.columns == ["Id", "Name", "BillingCity"]
+        rows = table.to_rows()
+        # 全行（ページまたぎで2+1=3件）
+        assert [row["Id"] for row in rows] == ["0012", "0013", "0014"]
+        # 文字列のまま（"0012" が "12" に化けない）
+        assert rows[0]["Id"] == "0012"
+        # 空欄（null）は空文字
+        assert rows[0]["BillingCity"] == ""
+        # カンマ入り値
+        assert rows[0]["Name"] == "Acme, Inc."
+        # " のエスケープ解除
+        assert rows[1]["Name"] == 'Say "hi"'
+        # 日本語
+        assert rows[1]["BillingCity"] == "東京"
+        # 2ページ目
+        assert rows[2]["Name"] == "Beta, Co."
+        # 結果ページには Accept: text/csv が渡る
+        results_call_args = [
+            call
+            for call in session.request.call_args_list
+            if call[0][1].endswith(self.RESULTS_PATH)
+            or call[0][1].startswith(INSTANCE_URL + self.RESULTS_PATH + "?locator=")
+        ]
+        assert len(results_call_args) == 2
+        assert results_call_args[0][1].get("headers", {}).get("Accept") == "text/csv"
+        # 2ページ目は URL に ?locator=... が含まれる
+        assert "locator=NEXT_LOCATOR" in results_call_args[1][0][1]
+        # 計測の component は "bulk"
+        assert client.metrics.component_stats()["bulk"].calls == 6
+
+    def test_utf8_decoding_when_charset_missing(self):
+        """Content-Type に charset が無くても日本語が化けない（ISO-8859-1 復号を回避）。"""
+        csv_text = "Id,Name\n0012,山田\n0013,鈴木\n"
+        # Content-Type に charset を付けない（requests は本来 ISO-8859-1 で復号する）
+        responses = [
+            self._job_create(),
+            self._job_state("JobComplete"),
+            _response(
+                text=csv_text,
+                headers={"Content-Type": "text/csv", "Sforce-Locator": "null"},
+            ),
+        ]
+        with _salesforce(responses) as (client, _, _):
+            table = client.bulk_query(self.SOQL)
+
+        assert table.to_rows()[0]["Name"] == "山田"
+        assert table.to_rows()[1]["Name"] == "鈴木"
+
+    def test_zero_rows_returns_table_with_columns(self):
+        """0 件（見出しだけ）でも列あり・0行の Table を返す。"""
+        csv_text = "Id,Name,BillingCity\n"
+        responses = [
+            self._job_create(),
+            self._job_state("JobComplete"),
+            self._results_page(csv_text, locator="null"),
+        ]
+        with _salesforce(responses) as (client, _, _):
+            table = client.bulk_query(self.SOQL)
+
+        assert table.columns == ["Id", "Name", "BillingCity"]
+        assert table.to_rows() == []
+
+    def test_failed_state_raises_with_error_message(self):
+        """Failed で例外（errorMessage が文言に入る）。"""
+        responses = [
+            self._job_create(),
+            self._job_state("Failed", errorMessage="INVALID_FIELD: Bogus__c"),
+        ]
+        with (
+            _salesforce(responses) as (client, _, _),
+            pytest.raises(SalesforceError) as caught,
+        ):
+            client.bulk_query(self.SOQL)
+        message = str(caught.value)
+        assert "Failed" in message
+        assert "INVALID_FIELD: Bogus__c" in message
+        assert "対処" in message
+
+    def test_timeout_aborts_job_then_raises(self):
+        """``BULK_TIMEOUT_SECONDS`` を超えると Aborted の PATCH が送られ、例外が出る。
+
+        タイムアウト発火を確実にするため ``BULK_TIMEOUT_SECONDS`` を小さくし、
+        ``time.monotonic`` をモックして1回目で deadline を超えるようにする。
+        """
+        # クライアント側の小さいタイムアウトで試す
+        small_timeout = 1
+        responses = [
+            self._job_create(),
+            # 1回目: InProgress → そのまま
+            self._job_state("InProgress"),
+            # 2回目: InProgress → deadline 超過でタイムアウト
+            self._job_state("InProgress"),
+            # Aborted の PATCH レスポンス
+            _response(json_body={"id": self.JOB_ID, "state": "Aborted"}),
+        ]
+        # monotonic の戻り値: 初回=0, 1回目=0(未超過), 2回目=100(超過)
+        monotonic_values = iter([0.0, 0.0, 100.0])
+        with (
+            _salesforce(responses) as (client, session, _),
+            patch(
+                "comken.toolbox.salesforce.client.time.monotonic",
+                side_effect=lambda: next(monotonic_values),
+            ),
+            patch("comken.toolbox.salesforce.client.time.sleep"),
+            patch.object(SalesforceBase, "BULK_TIMEOUT_SECONDS", small_timeout),
+            pytest.raises(SalesforceError, match=r"以内に終わりません"),
+        ):
+            client.bulk_query(self.SOQL)
+        # Aborted の PATCH が送られている
+        patch_calls = [call for call in session.request.call_args_list if call[0][0] == "PATCH"]
+        assert len(patch_calls) == 1
+        assert patch_calls[0][1]["json"] == {"state": "Aborted"}
+
+    def test_aborted_state_raises_with_error_message(self):
+        """Aborted 状態も Failed と同様に例外（errorMessage が文言に入る）。"""
+        responses = [
+            self._job_create(),
+            self._job_state("Aborted", errorMessage="Aborted by user"),
+        ]
+        with (
+            _salesforce(responses) as (client, _, _),
+            pytest.raises(SalesforceError, match=r"(?s)Aborted.*Aborted by user"),
+        ):
+            client.bulk_query(self.SOQL)
+
+    def test_page_header_mismatch_raises(self):
+        """2ページ目の見出しが違うと例外。"""
+        page1 = "Id,Name\n0012,Acme\n"
+        page2 = "Id,BillingCity\n0013,Beta\n"
+        responses = [
+            self._job_create(),
+            self._job_state("JobComplete"),
+            self._results_page(page1, locator="NEXT"),
+            self._results_page(page2, locator="null"),
+        ]
+        with (
+            _salesforce(responses) as (client, _, _),
+            pytest.raises(SalesforceError, match=r"(?s)見出しが一致しません"),
+        ):
+            client.bulk_query(self.SOQL)
+
+    def test_data_row_with_short_width_raises(self):
+        """データ行が見出しより短いと ``SalesforceError`` で停止する。
+
+        短い行を空文字で黙って埋める実装だと、列がずれたまま返って気づけない
+        ため、行番号・見出し列数・データ列数・対処文を添えて例外にする。
+        """
+        page1 = "Id,Name,BillingCity\n0012,Acme,\n0013\n"  # 2 行目が 1 列しかない
+        responses = [
+            self._job_create(),
+            self._job_state("JobComplete"),
+            self._results_page(page1, locator="null"),
+        ]
+        with (
+            _salesforce(responses) as (client, _, _),
+            pytest.raises(SalesforceError, match=r"(?s)3行目.*列数が一致しません.*3列.*1列.*対処"),
+        ):
+            client.bulk_query(self.SOQL)
+
+    def test_data_row_with_long_width_raises(self):
+        """データ行が見出しより長いと ``SalesforceError`` で停止する。
+
+        長い行の余りを黙って捨てると、列がずれたまま返って気づけないため、
+        短い行と同様に例外にする。
+        """
+        page1 = "Id,Name\n0012,Acme,Tokyo,Extra\n"  # 2 行目が 4 列ある
+        responses = [
+            self._job_create(),
+            self._job_state("JobComplete"),
+            self._results_page(page1, locator="null"),
+        ]
+        with (
+            _salesforce(responses) as (client, _, _),
+            pytest.raises(SalesforceError, match=r"(?s)2行目.*列数が一致しません.*2列.*4列"),
+        ):
+            client.bulk_query(self.SOQL)
+
+    def test_dry_run_still_calls_bulk_query(self):
+        """dry-run でも読み取りは通常どおり実行する（bulk_query は副作用なし）。"""
+        csv_text = "Id,Name\n0012,Acme\n"
+        responses = [
+            self._job_create(),
+            self._job_state("JobComplete"),
+            self._results_page(csv_text, locator="null"),
+        ]
+        with (
+            _salesforce(responses) as (client, session, _),
+            dry_run(),
+        ):
+            table = client.bulk_query(self.SOQL)
+        assert table.to_rows()[0]["Name"] == "Acme"
+        session.request.assert_called()
+
+
+class TestSalesforceBodyOfCharset:
+    """``_body_of()`` は Content-Type の charset を見て本文の復号を切り替える。
+
+    charset がない場合は ``response.content`` を UTF-8 で復号して ISO-8859-1
+    復号を回避し、charset がある場合は ``response.text``（requests が charset
+    で復号した結果）を使う。
+    """
+
+    def test_uses_text_when_charset_is_present(self):
+        """Content-Type に ``charset=UTF-8`` が付いていれば ``response.text`` を使う。
+
+        ``response.text`` が ``response.content`` の UTF-8 復号結果になっている
+        ことを確かめる。日本語を含む CSV を charset 付きで返すレスポンスでも
+        問題なく読める。
+        """
+        csv_bytes = "Id,Name\n0012,山田\n".encode()
+        response = MagicMock()
+        response.status_code = 200
+        response.content = csv_bytes
+        # ``response.text`` は requests が charset で復号した結果を返す
+        response.text = csv_bytes.decode("utf-8")
+        response.headers = {"Content-Type": "text/csv; charset=UTF-8"}
+        response.json.return_value = {}
+
+        body = SalesforceBase._body_of(response)
+        assert body == "Id,Name\n0012,山田\n"
+
+    def test_decodes_content_as_utf8_when_charset_missing(self):
+        """Content-Type に charset が無いときは ``response.content`` を UTF-8 で復号する。
+
+        ``response.text`` を ISO-8859-1 で復号した壊れた値にしても、UTF-8 で
+        正しく読める。
+        """
+        csv_bytes = "Id,Name\n0012,山田\n".encode()
+        response = MagicMock()
+        response.status_code = 200
+        response.content = csv_bytes
+        # charset 無しだと requests は ISO-8859-1 で復号するため、``response.text``
+        # は壊れた値になる
+        response.text = csv_bytes.decode("iso-8859-1")
+        response.headers = {"Content-Type": "text/csv"}
+        response.json.return_value = {}
+
+        body = SalesforceBase._body_of(response)
+        assert body == "Id,Name\n0012,山田\n"
+
+    def test_returns_none_when_content_is_empty(self):
+        """本文が空（``response.content`` が falsy）のときは ``None`` を返す。"""
+        response = MagicMock()
+        response.status_code = 204
+        response.content = b""
+        response.headers = {"Content-Type": "text/csv"}
+
+        assert SalesforceBase._body_of(response) is None
+
+
+class TestBulkQueryEmptyPage:
+    """0 件で本文が空のときは、空ページを「0 行」として扱う。
+
+    Salesforce は 0 件のときに結果 CSV の本文を空で返す場合があり、そのとき
+    1 ページ目が空なら「列も空・0 行の ``Table``」を返す。後続ページで空が
+    返るのは通信エラーなので、引き続き ``SalesforceError`` で止める。
+    """
+
+    def _csv_response(self, locator: str = "null") -> MagicMock:
+        """本文が空の結果ページを返すモック。
+
+        ``_body_of()`` は空本文を ``None`` に丸めるので、空ページを表すために
+        ``content`` も空バイト列にする。
+        """
+        response = MagicMock()
+        response.status_code = 200
+        response.content = b""
+        response.text = ""
+        response.headers = {"Content-Type": "text/csv", "Sforce-Locator": locator}
+        response.json.return_value = {}
+        return response
+
+    def test_empty_first_page_returns_empty_table(self):
+        """1 ページ目が空本文のときは列が空・0 行の ``Table`` を返す。"""
+        responses = [
+            _response(json_body={"id": "7500g000000001AAA", "operation": "query"}),
+            _response(json_body={"id": "7500g000000001AAA", "state": "JobComplete"}),
+            self._csv_response(locator="null"),
+        ]
+        with _salesforce(responses) as (client, _, _):
+            table = client.bulk_query("SELECT Id, Name FROM Account")
+
+        assert table.columns == []
+        assert table.to_rows() == []

@@ -543,6 +543,40 @@ rows = sf.report.get(
 rows = sf.query("SELECT Name, Amount FROM Opportunity WHERE CreatedDate > 2026-01-01T00:00:00Z")
 ```
 
+### SOQL の大量取得は `bulk_query()`（Bulk API 2.0）
+
+SOQL 自体には行数上限はないが、同期でページを送りながら取る `query()` は
+件数が多いと往復回数と 1 リクエストの処理時間がともに効く。**件数が多い
+・定期取得で同じ SOQL を回す**用途には `bulk_query()` を使う。Bulk API
+2.0 の Query ジョブを Salesforce 側に登録し、結果 CSV をページ単位で
+取り出すため、長時間ジョブをサーバ側で実行できる。
+
+```python
+with Solution() as sf:
+    rows = sf.bulk_query("SELECT Id, Name FROM Account")
+```
+
+`query()` との使い分け:
+
+| 場面 | 使うメソッド | 理由 |
+|---|---|---|
+| 件数が多い・定期取得 | `bulk_query()` | サーバ側でジョブを実行でき、往復回数が少ない |
+| 集計や少量の対話的な取得 | `query()` | Bulk API 2.0 は集計関数・`GROUP BY`・`OFFSET` 等を受け付けない |
+
+**制約**:
+
+- 集計関数・`GROUP BY`・`OFFSET`・親→子のサブクエリなど Bulk API 2.0 が
+  受け付けない SOQL は、ジョブ作成時に Salesforce が 400 を返す。
+  `REST 版（query()）へ黙って切り替えることはしない**ので、その SOQL は
+  `query()` 側で実行するか、書き換える。
+- 戻り値の**値はすべて文字列**（数値・真偽値への変換は行わない）。
+  "0012" の先頭ゼロや "1234567890" が化けるのを防ぐため。数値として
+  扱いたいときは呼び出し側で変換する。
+- 列は CSV の見出しから取得するため、**0 件ヒットでも列情報が残る**
+  （`records[0]` からの推測に依存しない）。
+- `Account.Name` のような参照項目は見出しの名前そのままの列になる
+  （平坦化しない）。
+
 ### 組織（サイト）ごとのクラス
 
 組織は My Domain の URL と固有処理をまとめるため、1組織につき1クラスにする。
