@@ -8,7 +8,7 @@ tests/test_new_table_api.py で確認する。ここでは応需固有の部分
 import pytest
 
 from comken.core import Table
-from comken.exceptions import CSVError, TableColumnNotFoundError
+from comken.exceptions import ComkenError, CSVError, TableColumnNotFoundError
 from comken.services.csv_column_reducer import (
     reduce_ouju_csv,
     reduce_ouju_csv_file,
@@ -226,6 +226,65 @@ class TestReduceOujuCsvFolder:
         with CSV(tmp_path / "bad.csv", read_only=True) as untouched:
             assert untouched.read().columns == ["x", "y"]  # 失敗したファイルは元のまま
         assert not (tmp_path / "bad_bak.csv").exists()
+
+
+class TestEmptyColumnsGuard:
+    """``OLD_ROLE_COLUMNS`` が空のまま ``main`` を呼ぶと、 全 CSV を空にする事故が起きる。
+    ファイルに触る前に ``ComkenError`` 系の例外で止める。"""
+
+    def test_empty_old_role_columns_raises_inside_reduce_files(self, tmp_path, monkeypatch):
+        """``OLD_ROLE_COLUMNS = []`` のまま ``reduce_ouju_csv_files`` を呼ぶと
+        ``ComkenError`` で抜け、 CSV のバイト列・更新日時とも不変、 ``_bak`` も作られない。"""
+        import comken.services.csv_column_reducer as module
+
+        monkeypatch.setattr(module, "OLD_ROLE_COLUMNS", [])
+
+        csv_path = tmp_path / "応需.csv"
+        original_bytes = "a,b,c\n1,2,3\n".encode("utf-8-sig")
+        csv_path.write_bytes(original_bytes)
+        original_mtime = csv_path.stat().st_mtime_ns
+
+        with pytest.raises(ComkenError, match="OLD_ROLE_COLUMNS が空"):
+            module.reduce_ouju_csv_files([csv_path])
+
+        # 元 CSV のバイト列・更新日時とも不変
+        assert csv_path.read_bytes() == original_bytes
+        assert csv_path.stat().st_mtime_ns == original_mtime
+        # ``_bak`` が作られていない
+        assert not (tmp_path / "応需_bak.csv").exists()
+
+    def test_explicit_empty_columns_also_raises(self, tmp_path, monkeypatch):
+        """``columns=[]`` を明示的に渡しても同じ ``ComkenError`` で止まる。"""
+        import comken.services.csv_column_reducer as module
+
+        monkeypatch.setattr(module, "OLD_ROLE_COLUMNS", ["a"])
+
+        csv_path = tmp_path / "応需.csv"
+        original_bytes = "a,b,c\n1,2,3\n".encode("utf-8-sig")
+        csv_path.write_bytes(original_bytes)
+
+        with pytest.raises(ComkenError, match="OLD_ROLE_COLUMNS が空"):
+            module.reduce_ouju_csv_files([csv_path], columns=[])
+
+        assert csv_path.read_bytes() == original_bytes
+        assert not (tmp_path / "応需_bak.csv").exists()
+
+    def test_main_exits_with_code_1_when_columns_are_empty(self, tmp_path, monkeypatch):
+        """``main`` 経由では ``SystemExit(1)`` に変換され、 ``_bak`` も作られない。"""
+        import comken.services.csv_column_reducer as module
+
+        monkeypatch.setattr(module, "OLD_ROLE_COLUMNS", [])
+
+        csv_path = tmp_path / "応需.csv"
+        original_bytes = "a,b,c\n1,2,3\n".encode("utf-8-sig")
+        csv_path.write_bytes(original_bytes)
+
+        with pytest.raises(SystemExit) as caught_exit:
+            module.main([str(tmp_path)])
+
+        assert caught_exit.value.code == 1
+        assert csv_path.read_bytes() == original_bytes
+        assert not (tmp_path / "応需_bak.csv").exists()
 
 
 class TestMain:

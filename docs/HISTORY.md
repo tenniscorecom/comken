@@ -449,6 +449,14 @@ comken の handler 自体の二重呼び出しは引き続き `LoggingAlreadyCon
 判定は `tests/test_facade.py`（直下と `core` の `__all__` の内容・重複が無いこと）と
 `tests/test_layers.py`（層をまたぐ import の向き）を正本とする。
 
+### services は「ファイルを書く前」に設定不備を止める
+
+`services/csv_column_reducer.py` の `OLD_ROLE_COLUMNS` が空のまま bat を実行すると、
+ファイル単位の絞り込みが空 Table を返して全 CSV が空のファイルに書き換えられ、
+元データを失う。 ファイルを開かずに `ComkenError` で止め、 `main` 経由では
+`SystemExit(1)` に変換する。 ファイルを書かない `reduce_ouju_csv()`
+（Table を返す側）には歯止めを入れない。
+
 ## 11. リリースと後方互換
 
 ### v1.0.0 リリース宣言と SemVer 採用（2026-09-24）

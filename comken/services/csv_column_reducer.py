@@ -92,6 +92,12 @@ def reduce_ouju_csv_file(
     退避してから削減する順序だと、失敗するたびに直前の正常なバックアップが
     次のリトライで上書きされ、失敗を繰り返すと元データを失いかねない）。
 
+    **残す列（ ``columns`` 引数、無ければ ``OLD_ROLE_COLUMNS`` ）が空のときは
+    ファイルに触る前に ``ComkenError`` で停止する。** 設定ミスのまま bat を
+    実行すると、全 CSV が空のファイルに書き換えられて元データを失う事故になる
+    ため、ファイルを開かずに止める。 ``main`` から呼ばれた場合は
+    ``SystemExit(1)`` に変換される。
+
     バックアップは拡張子の前に ``backup_suffix`` を挟んだ名前
     （例: ``応需.csv`` → ``応需_bak.csv``）で、削減成功後の元ファイルの複製。
     ``.csv`` のまま残すのは、CSV クラスが ``.csv`` 以外の拡張子を受け付けない
@@ -107,6 +113,8 @@ def reduce_ouju_csv_file(
     Returns:
         バックアップファイルのパス。
     """
+    wanted = columns if columns is not None else OLD_ROLE_COLUMNS
+    _raise_if_columns_empty(wanted)
     path = Path(path)
     with CSV(path, read_only=True) as source:
         table = source.read()
@@ -145,6 +153,10 @@ def reduce_ouju_csv_files(
         変換したファイルのバックアップのパス。
     """
     wanted = columns if columns is not None else OLD_ROLE_COLUMNS
+    # 設定ミスのまま bat を実行すると全 CSV が空にされる事故になるため、
+    # ファイルに触る前に止める。 ここで例外が出れば ``for`` 内の ``try`` 節に
+    # 入らず、 CSV には一切触らない
+    _raise_if_columns_empty(wanted)
     backups: list[Path] = []
     failures: list[str] = []
     for path in paths:
@@ -206,7 +218,11 @@ def main(argv: list[str] | None = None) -> None:
             targets.append(path)
     try:
         backups = reduce_ouju_csv_files(targets)
-    except CSVError as error:
+    except ComkenError as error:
+        # ``reduce_ouju_csv_files`` 内の ``_raise_if_columns_empty`` が出す
+        # ``ComkenError``（設定ミス）と、 1 ファイルが失敗したときに
+        # まとめる ``CSVError``（ ``ComkenError`` のサブクラス）を同じ
+        # ハンドラで受けて、終了コード 1 で bat に伝える
         logger.error("%s", error)
         raise SystemExit(1) from error
     logger.info("完了: %d 件を変換しました", len(backups))
@@ -230,6 +246,22 @@ def _resolve_asterisk_aliases(
         if actual is not None:
             aliases[wanted] = actual
     return aliases
+
+
+def _raise_if_columns_empty(wanted: list[str]) -> None:
+    """残す列リストが空のとき、 ``ComkenError`` で止める。
+
+    ``OLD_ROLE_COLUMNS`` 未設定（ ``[]`` ）のまま ``main`` を実行すると、
+    全 CSV が空のファイルに書き換えられて元データを失う事故になる。 ファイル
+    に触る前に、 非エンジニアにも分かる文言で止める。
+    """
+    if wanted:
+        return
+    raise ComkenError(
+        "残す列が設定されていません（OLD_ROLE_COLUMNS が空）。\n"
+        "対処: comken/services/csv_column_reducer.py の OLD_ROLE_COLUMNS に、"
+        "残したい列名（実ファイルの列名）を設定してください。"
+    )
 
 
 if __name__ == "__main__":
