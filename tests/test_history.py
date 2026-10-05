@@ -4,7 +4,7 @@
 comken 側は履歴の形式と「管理番号で取得済みレポートを引く」読み取り関数、
 およびダウンローダー側から呼ばれる `append_history()` を共有している。
 読み取り関数（`successful_files_today` / `schedule_succeeded_today` /
-`truncated_today` / `read_history` / `report_path` / `read_report`）と
+`read_history` / `report_path` / `read_report`）と
 書き込み（`append_history`）の両方を検証する。
 """
 
@@ -38,7 +38,6 @@ from comken.services.salesforce_downloader.history import (
     report_path,
     schedule_succeeded_today,
     successful_files_today,
-    truncated_today,
 )
 
 
@@ -215,15 +214,6 @@ def test_schedule_succeeded_today_rejects_bad_header(tmp_path) -> None:
         schedule_succeeded_today(history_path, "S001")
 
 
-def test_truncated_today_rejects_bad_header(tmp_path) -> None:
-    """``truncated_today`` も見出しの致命的な破損を ``CSVError`` で止める。"""
-    history_path = tmp_path / "履歴.csv"
-    history_path.write_text(",,,\n1000,x,成功,z\n", encoding="utf-8-sig")
-
-    with pytest.raises(CSVError):
-        truncated_today(history_path, "1001")
-
-
 def test_schedule_succeeded_today_returns_true_after_same_key_success(tmp_path) -> None:
     """同じスケジュールキーで当日成功した履歴があれば True を返す。"""
     history_path = tmp_path / "履歴.csv"
@@ -323,111 +313,6 @@ def test_schedule_succeeded_today_rejects_empty_key(tmp_path) -> None:
         ),
     )
     assert schedule_succeeded_today(history_path, "") is False
-
-
-def test_truncated_today_returns_true_when_today_failed_with_truncated_error(tmp_path) -> None:
-    """今日 ``SalesforceReportTruncatedError`` で失敗した履歴があれば True。"""
-    history_path = tmp_path / "履歴.csv"
-    entry = _entry()
-    _write_row(
-        history_path,
-        entry=entry,
-        project="P",
-        row=HistoryRow(
-            succeeded=False,
-            fetched_from_salesforce=True,
-            saved_to_file=None,
-            cause="Salesforce",
-            error_code="SalesforceReportTruncatedError",
-            error="2000 行で打ち止め",
-        ),
-    )
-    assert truncated_today(history_path, entry.key) is True
-
-
-def test_truncated_today_returns_false_when_history_missing(tmp_path) -> None:
-    """履歴ファイルが無い場合は例外を出さず False。"""
-    assert truncated_today(tmp_path / "無い.csv", "1001") is False
-
-
-def test_truncated_today_returns_false_for_other_error_codes(tmp_path) -> None:
-    """今日の失敗でも、エラーコードが ``SalesforceReportTruncatedError``
-    以外（例: 通信エラー、``OSError``）なら False。2000件超以外の失敗は
-    毎回リトライしてよい、という既存挙動を壊さない。"""
-    history_path = tmp_path / "履歴.csv"
-    entry = _entry()
-    _write_row(
-        history_path,
-        entry=entry,
-        project="P",
-        row=HistoryRow(
-            succeeded=False,
-            fetched_from_salesforce=True,
-            saved_to_file=False,
-            cause="ファイル",
-            error_code="OSError",
-            error="共有サーバー断",
-        ),
-    )
-    assert truncated_today(history_path, entry.key) is False
-
-
-def test_truncated_today_ignores_other_report_keys(tmp_path) -> None:
-    """別の管理番号の 2000件超 失敗履歴は True にしない。"""
-    history_path = tmp_path / "履歴.csv"
-    entry = _entry()
-    _write_row(
-        history_path,
-        entry=entry,
-        project="P",
-        row=HistoryRow(
-            succeeded=False,
-            fetched_from_salesforce=True,
-            saved_to_file=None,
-            cause="Salesforce",
-            error_code="SalesforceReportTruncatedError",
-            error="2000 行で打ち止め",
-        ),
-    )
-    assert truncated_today(history_path, "別の管理番号") is False
-
-
-def test_truncated_today_ignores_other_dates(tmp_path) -> None:
-    """昨日の ``SalesforceReportTruncatedError`` 失敗は True にしない
-    （翌日に改めて1回だけ試すため、日付をまたいだらリセットする）。"""
-    history_path = tmp_path / "履歴.csv"
-    history_path.parent.mkdir(parents=True, exist_ok=True)
-    history_path.write_text(
-        (
-            "実行日時,管理番号,スケジュールキー,概要,レポートID,URL,プロジェクト,"
-            "成否,Salesforce取得結果,保存結果,保存先,ファイル名,取得件数,処理秒数,"
-            "原因区分,エラーコード,エラー内容\n"
-            "2024-01-01 09:00:00,1001,,,,,,失敗,成功,,,,,1.00,Salesforce,"
-            "SalesforceReportTruncatedError,2000 行で打ち止め"
-        ),
-        encoding="utf-8-sig",
-    )
-    assert truncated_today(history_path, "1001") is False
-
-
-def test_truncated_today_ignores_successful_rows_with_same_code(tmp_path) -> None:
-    """同じエラーコードの文字列が成否=成功の行に書かれていても False
-    （あり得ない組合せだが、列値の照合順の防御として明示的に区別する）。"""
-    history_path = tmp_path / "履歴.csv"
-    entry = _entry()
-    _write_row(
-        history_path,
-        entry=entry,
-        project="P",
-        row=HistoryRow(
-            succeeded=True,
-            fetched_from_salesforce=True,
-            saved_to_file=True,
-            file_name="a.csv",
-            error_code="SalesforceReportTruncatedError",
-        ),
-    )
-    assert truncated_today(history_path, entry.key) is False
 
 
 # ── 「取得経路」列（2026-10 追加） ────────────────────────────
@@ -593,25 +478,6 @@ class TestEncodingAutoDetection:
             row=HistoryRow(True, True, True, file_name="a.csv", schedule_key="S001"),
         )
         assert schedule_succeeded_today(history_path, "S001") is True
-
-    def test_truncated_today_handles_cp932_encoded_file(self, tmp_path) -> None:
-        """CP932 の履歴から ``SalesforceReportTruncatedError`` の当日失敗を拾える。"""
-        history_path = tmp_path / "履歴.csv"
-        entry = _entry()
-        _write_row_cp932(
-            history_path,
-            entry=entry,
-            project="P",
-            row=HistoryRow(
-                succeeded=False,
-                fetched_from_salesforce=True,
-                saved_to_file=None,
-                cause="Salesforce",
-                error_code="SalesforceReportTruncatedError",
-                error="2000 行で打ち止め",
-            ),
-        )
-        assert truncated_today(history_path, entry.key) is True
 
     def test_read_history_rejects_undecodable_file(self, tmp_path) -> None:
         """UTF-8 / CP932 のどちらでも読めないバイト列は明示的にエラーにする。
@@ -801,46 +667,6 @@ class TestHeaderMigration:
 
         # 旧バージョンのヘッダーでも例外を出さず、防御的に False を返す
         assert schedule_succeeded_today(history_path, "S001") is False
-
-    def test_reordered_columns_do_not_break_truncated_today(self, tmp_path) -> None:
-        """列並び替えがあっても ``truncated_today()`` が truncated エラーを拾える。"""
-        history_path = tmp_path / "履歴.csv"
-        # 失敗行（``SalesforceReportTruncatedError``）を「管理番号/実行日時/成否/
-        # エラーコード」が先頭に並ぶ古い順で書く
-        reordered_header = [
-            "管理番号",
-            "実行日時",
-            "成否",
-            "エラーコード",
-            *[
-                column
-                for column in COLUMNS
-                if column not in {"管理番号", "実行日時", "成否", "エラーコード"}
-            ],
-        ]
-        truncated_values = [
-            "1001",
-            now().strftime("%Y-%m-%d %H:%M:%S"),
-            FAILURE,
-            "SalesforceReportTruncatedError",
-            "",  # スケジュールキー
-            "顧客一覧",  # 概要
-            "00O5g00000ABCDE",  # レポートID
-            URL_A,  # URL
-            "定期実行",  # プロジェクト
-            SUCCESS,  # Salesforce取得結果
-            "",  # 保存結果
-            "",  # 保存先
-            "",  # ファイル名
-            "",  # 取得件数
-            "1.00",  # 処理秒数
-            "Salesforce",  # 原因区分
-            "",  # エラー内容
-            "",  # 取得経路
-        ]
-        _write_csv_raw(history_path, header=reordered_header, rows=[truncated_values])
-
-        assert truncated_today(history_path, "1001") is True
 
     def test_renamed_known_column_is_treated_as_new_column(self, tmp_path) -> None:
         """既存列を**リネーム**した古いCSVでは、旧名の値は捨てられ、新名は空文字。

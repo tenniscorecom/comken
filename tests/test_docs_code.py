@@ -85,6 +85,7 @@ _REMOVED_NAMES = (
     "count_a",
     "core.holidays",
     "strip_spaces",
+    "truncated_today",
 )
 
 

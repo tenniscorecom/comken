@@ -848,3 +848,12 @@ core/dates はファイルに触らない層のまま（dates から files を i
 撤去した。`temp_dir()` は `tempfile.gettempdir()` の `Path` ラッパーだけで
 価値が無い、`read_title()` は未使用。docs/機能/{windows,browser}.md の
 対応する例とテストも消した。
+
+## 27. `truncated_today()` を外した（2026-10-05）
+
+`comken.services.salesforce_downloader.history.truncated_today()` と、
+その関数専用の定数 `TRUNCATED_ERROR_NAME` を削除した。**ダウンローダーが
+Report API 失敗を自動で取り直す（自動切替）ようになった結果、
+「当日中の再実行でスキップ」する用途が無くなったため**。
+撤去済み名の検出テスト（`tests/test_docs_code.py` の `_REMOVED_NAMES`）に
+`truncated_today` を追加した。

@@ -80,12 +80,6 @@ FAILURE = "失敗"
 # 互換のため名前は残してある（外部ツールが定数名参照に備えて）
 TRIGGER_SCHEDULED = "定期"
 
-# 2000件超で失敗したときの例外クラス名。書き込み側が `error_code=type(exc).__name__`
-# で例外クラス名を履歴に書くため、比較対象も同じ文字列にする。``history.py`` は
-# Salesforce の例外クラスを import しない（依存を増やさない）ので、import せず
-# 文字列リテラルで扱う
-TRUNCATED_ERROR_NAME = "SalesforceReportTruncatedError"
-
 # 「取得経路」列に書く定数値。``history.py`` は経路の判定（管理表の列）を持たない
 # ので、**実際にどう走ったか**だけを文字列として記録する。書き込み側
 # （Salesforceレポートダウンローダー側 ``src/service.py::_fetch()``）が管理表
@@ -263,72 +257,6 @@ def schedule_succeeded_today(
 
 
 @measure
-def truncated_today(
-    path: str | Path,
-    report_key: str,
-    date: datetime.date | None = None,
-) -> bool:
-    """その日すでに2000件超（SalesforceReportTruncatedError）で失敗したかを返す。
-
-    定期実行のたびに同じレポートが失敗し続けるのを防ぐため、``download_scheduled()``
-    が対象選定の前に呼ぶ。1日1回失敗すれば、その日の残りの定期実行では
-    スキップする（翌日になれば改めて1回だけ試す）。
-
-    2000件超で失敗したまま放置すると毎日同じ失敗ログが積み上がるので、
-    1日1回だけ試す方針にしてある。**永久に試さなくすると、レポートの
-    規模が縮小した・SOQL へ切り替えたなどで状況が直ったあとに気づかず
-    放置される**ため、翌日には改めて1回だけ試す形にした。
-    ``downloaded_today()`` と同じ「履歴を正とする」判定で、ファイルの有無
-    には依存しない。
-
-    Args:
-        path: 履歴 CSV のパス。
-        report_key: 管理番号。
-        date: 調べる日付。省略すると今日。
-
-    Returns:
-        ``SalesforceReportTruncatedError`` で失敗した履歴がその日に1件でも
-        あれば True。履歴が無い／失敗の記録が無い／別のエラーコードの失敗は
-        全て False。
-    """
-    history_path = Path(path)
-    target = (date or today()).strftime("%Y-%m-%d")
-    key_text = str(report_key)
-    if not history_path.is_file():
-        logger.debug(
-            "2000件超失敗履歴の検索: path=%s → 履歴無しのため False",
-            history_path,
-        )
-        return False
-    logger.debug(
-        "2000件超失敗履歴の検索開始: path=%s, 管理番号=%s, 日付=%s",
-        history_path,
-        key_text,
-        target,
-    )
-    for row in _read_rows(history_path):
-        if (
-            row.get("実行日時", "").startswith(target)
-            and row.get("管理番号", "") == key_text
-            and row.get("成否", "") == FAILURE
-            and row.get("エラーコード", "") == TRUNCATED_ERROR_NAME
-        ):
-            logger.debug(
-                "2000件超失敗履歴を検出: path=%s, 管理番号=%s "
-                "→ 当日中のため、この定期実行ではスキップ",
-                history_path,
-                key_text,
-            )
-            return True
-    logger.debug(
-        "2000件超失敗履歴の検出なし: path=%s, 管理番号=%s → False",
-        history_path,
-        key_text,
-    )
-    return False
-
-
-@measure
 def read_history(path: str | Path) -> Table:
     """履歴 CSV を全行読んで Table で返す。フィルタはしない。
 
@@ -374,8 +302,7 @@ def _read_rows(path: Path) -> list[dict[str, str]]:
     空文字で埋めて ``COLUMNS`` 順へ並べ直す（通常の列ずれはこの層で吸収）。
 
     読み取り関数（``successful_files_today`` / ``schedule_succeeded_today`` /
-    ``truncated_today`` / ``read_history`` / ``report_path`` /
-    ``read_report``）が共通して通る入口。
+    ``read_history`` / ``report_path`` / ``read_report``）が共通して通る入口。
     """
     if not path.is_file():
         return []
