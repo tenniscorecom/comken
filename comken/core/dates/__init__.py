@@ -48,20 +48,18 @@ non_workdays_before             d の前日から前の営業日の翌日まで�
 （``from comken.exceptions import ...``）。
 ``warn_if_holidays_expiring_soon`` / ``WORKDAY_SEARCH_LIMIT`` /
 ``EXPIRING_WARNING_DAYS`` / ``HOLIDAYS_CSV_PATH`` / ``FISCAL_YEAR_START_MONTH``
-は内部実装。comken の起動時に ``comken/run.py`` から ``comken.core.dates._holidays``
-/ ``comken.core.dates._fiscal`` 経由で直接 import して使う。
+は内部実装。comken の起動時に ``comken/run.py`` から ``comken.core.dates.holidays``
+/ ``comken.core.dates.fiscal`` 経由で直接 import して使う。
 """
 
-from comken.core.dates._dates import (
-    date_in_name,
+from comken.core.dates.clock import (
     month_end,
     month_start,
     now,
-    parse_cell_date,
     today,
 )
-from comken.core.dates._fiscal import fiscal_year
-from comken.core.dates._holidays import (
+from comken.core.dates.fiscal import fiscal_year
+from comken.core.dates.holidays import (
     count_workdays,
     first_workday,
     holiday_name,
@@ -74,6 +72,10 @@ from comken.core.dates._holidays import (
     workday,
     workday_on_or_after,
     workday_on_or_before,
+)
+from comken.core.dates.parse import (
+    date_in_name,
+    parse_cell_date,
 )
 
 __all__ = [

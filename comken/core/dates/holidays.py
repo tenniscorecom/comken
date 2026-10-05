@@ -1,16 +1,9 @@
-"""comken/core/dates/_holidays.py — 祝日カレンダー本体（実装詳細）。
+"""comken/core/dates/holidays.py — 祝日・会社休日と営業日の判定。
 
-モジュール名は ``_holidays.py`` にしておき、``comken.core.dates``
-（パッケージ本体）と ``holidays`` （クラス名）が被らないようにしている。
-
-実行時は ``comken/core/dates/data/company_calendar.csv`` を**読むだけ**で
-国民の祝日＋会社休日を判定する。会社休日のルール判定・内閣府 CSV の解析・
-計算ソース・``approximate``・``Holiday`` 値オブジェクトは持たない。
-**実行時は内閣府 CSV も会社休日のルールも知らない。** 生成ツール
-（``comken.core.dates.build``）だけがそれらを持ち、生成物である
-``company_calendar.csv`` に焼き込む。CLI の入口は ``python -m comken holidays``。
-
-ネット系依存（requests）はこのモジュールには入らない。
+comken/core/dates/data/company_calendar.csv（国民の祝日＋会社休日を1つに
+合成したもの）を読むだけで判定する。内閣府 CSV の読み取りと会社休日の
+ルールは生成ツール（comken/core/dates/build.py、CLI は
+python -m comken holidays）だけが持ち、このモジュールは知らない。
 """
 
 from __future__ import annotations
@@ -21,7 +14,7 @@ import logging
 from pathlib import Path
 from typing import Final
 
-from comken.core.dates._dates import month_end, month_start, today
+from comken.core.dates.clock import month_end, month_start, today
 from comken.exceptions import HolidayError, WorkdayNotFoundError
 
 logger = logging.getLogger(__name__)

@@ -1,52 +1,17 @@
-"""comken/core/dates/_dates.py — 日付・時刻まわりのユーティリティ。
+"""comken/core/dates/parse.py — セルの値やファイル名から日付を読み取る。
 
-タイムゾーンが必要なのは「今の時刻を取るとき」だけ。
-業務で扱う日付（CSV に書かれた日付、ファイル名に入っている日付、帳票の日付）は
-「その日」を表すただの日付であり、時刻もタイムゾーンも持たない。
-これらは datetime.date のまま扱い、タイムゾーンを付けようとしないこと。
-
-モジュール名は ``_dates.py`` にしておき、``comken.core.dates``
-（パッケージ本体）が被らないようにしている。
+parse_cell_date() は Excel・CSV のセル（date / datetime / 文字列）を date に
+揃え、読めなければ None を返す。date_in_name() / dates_in_name() は
+ファイル名の中の日付（20260729・2026-07-29・2026_07_29・2026.07.29）を読む。
 """
 
-import calendar as _calendar
 import datetime
 import re
-
-
-def now() -> datetime.datetime:
-    """タイムゾーン付きの現在時刻（この PC のローカル時刻）を返す。"""
-    # NOTE: Windows のオフライン環境で追加の tzdata を要求しないよう ZoneInfo は使わない。
-    return datetime.datetime.now(datetime.UTC).astimezone()
-
-
-def today() -> datetime.date:
-    """この PC のローカルの今日の日付を返す。"""
-    return now().date()
-
-
-def month_start(target: datetime.date) -> datetime.date:
-    """``target`` が属する月の 1日を返す。
-
-    祝日に依存しない純粋な暦計算。営業日計算の前段として
-    「その月の最初の営業日を探す」ために使う。
-    """
-    return target.replace(day=1)
-
-
-def month_end(target: datetime.date) -> datetime.date:
-    """``target`` が属する月の最終日を返す。
-
-    月ごとの日数・閏年を ``calendar.monthrange`` で正しく扱う。
-    """
-    last_day = _calendar.monthrange(target.year, target.month)[1]
-    return target.replace(day=last_day)
-
 
 # 「日」列が文字列で入っていた場合に受け付ける書き方。
 # Excel / CSV から読む業務シートでよくある表記をカバーする。
 # 新しい書式を増やすときは**ここを変えても会社用カレンダーCSV の日付パーサ
-# （``comken.core.dates._holidays._Holidays.load`` の日付解釈）には影響しない**。
+# （``comken.core.dates.holidays._Holidays.load`` の日付解釈）には影響しない**。
 # 祝日 CSV は配布フォーマットの制約で 2 形式に固定しており、 緩めた
 # 場合に「内閣府以外のファイルを取り違えても気付かない」リスクがあるため
 # 別口のままで揃えていない。

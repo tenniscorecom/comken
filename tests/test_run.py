@@ -15,7 +15,7 @@ import pytest
 
 from comken import run as run_module
 from comken.core.dates import today
-from comken.core.dates._holidays import _Holidays, _set_calendar_for_test
+from comken.core.dates.holidays import _Holidays, _set_calendar_for_test
 from comken.run import backoffice, intranet
 
 
@@ -132,7 +132,7 @@ class TestStartupCalendarExpiryWarning:
             )
             return "ok"
 
-        with caplog.at_level(logging.WARNING, logger="comken.core.dates._holidays"):
+        with caplog.at_level(logging.WARNING, logger="comken.core.dates.holidays"):
             result = backoffice(record_main, "project")
 
         assert result == "ok"
@@ -163,7 +163,7 @@ class TestStartupCalendarExpiryWarning:
                 )
             )
 
-        with caplog.at_level(logging.WARNING, logger="comken.core.dates._holidays"):
+        with caplog.at_level(logging.WARNING, logger="comken.core.dates.holidays"):
             intranet(record_main, "project")
 
         assert expiry_warnings_seen_in_main == [1]
@@ -180,7 +180,7 @@ class TestStartupCalendarExpiryWarning:
         """``EXPIRING_WARNING_DAYS`` 以上先なら警告は出ない（``main`` は普通に動く）。"""
         _set_calendar_for_test(_near_expiry_calendar(days_until_last=120))
 
-        with caplog.at_level(logging.WARNING, logger="comken.core.dates._holidays"):
+        with caplog.at_level(logging.WARNING, logger="comken.core.dates.holidays"):
             assert backoffice(lambda: "ok", "project") == "ok"
 
         expiry_warnings = [
@@ -196,7 +196,7 @@ class TestStartupCalendarExpiryWarning:
         """``intranet`` も遠い期限なら警告を出さない。"""
         _set_calendar_for_test(_near_expiry_calendar(days_until_last=120))
 
-        with caplog.at_level(logging.WARNING, logger="comken.core.dates._holidays"):
+        with caplog.at_level(logging.WARNING, logger="comken.core.dates.holidays"):
             assert intranet(lambda: "ok", "project") == "ok"
 
         expiry_warnings = [

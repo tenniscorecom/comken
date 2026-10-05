@@ -857,3 +857,20 @@ Report API 失敗を自動で取り直す（自動切替）ようになった結
 「当日中の再実行でスキップ」する用途が無くなったため**。
 撤去済み名の検出テスト（`tests/test_docs_code.py` の `_REMOVED_NAMES`）に
 `truncated_today` を追加した。
+
+## 28. `comken.core.dates` の内部モジュールの `_` を外した（2026-10-05）
+
+`comken/core/dates/_dates.py` を `basic.py` に、`_holidays.py` を `holidays.py` に、
+`_fiscal.py` を `fiscal.py` に変えた。公開するものは `__init__.py` の `__all__`
+で決めているのでファイル名の `_` は要らない（中まで直接 import する人には
+`from comken.core.dates.holidays import ...` と書ける方がよい）。
+comken 内部からの import とコメント・docstring のパス表記、テスト・docs も
+すべて新名称に揃えた。`__all__` の中身は変えず、サブモジュール名（`holidays`,
+`basic`, `fiscal`）は `__all__` に追加していない。
+
+`basic.py` は名前から中身が分からないので `clock.py`（`now` / `today` /
+`month_start` / `month_end`）と `parse.py`（`parse_cell_date` /
+`date_in_name` / `dates_in_name` と、それだけが使う定数）に分けた。
+`__init__.py` に直接書く案は `holidays.py` が `month_end` などを使うため
+読み込みが循環するので採っていない（`clock` / `parse` を別モジュールに置く
+ことで import 方向を一方向に保った）。

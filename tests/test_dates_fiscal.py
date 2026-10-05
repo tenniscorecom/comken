@@ -1,14 +1,14 @@
 """comken.core.dates の年度のテスト。
 
-`comken/core/dates/_fiscal.py`（`fiscal_year` / `FISCAL_YEAR_START_MONTH`）の
-境界を検証する。営業日判定本体（`_holidays.py`）は
+`comken/core/dates/fiscal.py`（`fiscal_year` / `FISCAL_YEAR_START_MONTH`）の
+境界を検証する。営業日判定本体（`holidays.py`）は
 `tests/test_holidays.py` で別途検証する。
 """
 
 import datetime as _dt
 
 from comken.core.dates import fiscal_year
-from comken.core.dates._fiscal import FISCAL_YEAR_START_MONTH
+from comken.core.dates.fiscal import FISCAL_YEAR_START_MONTH
 
 # ── fiscal_year ─────────────────────────────────────────────────────────
 

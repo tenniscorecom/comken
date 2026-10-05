@@ -12,25 +12,25 @@ files などがここに入る。外に触る道具は toolbox に置く。
 ``from comken.core import ...`` を toolbox 内部から行うことも許容する。
 """
 
-from comken.core.dates._dates import date_in_name
-from comken.core.dates._dates import month_end
-from comken.core.dates._dates import month_start
-from comken.core.dates._dates import now
-from comken.core.dates._dates import parse_cell_date
-from comken.core.dates._dates import today
-from comken.core.dates._fiscal import fiscal_year
-from comken.core.dates._holidays import count_workdays
-from comken.core.dates._holidays import first_workday
-from comken.core.dates._holidays import holiday_name
-from comken.core.dates._holidays import is_holiday
-from comken.core.dates._holidays import is_workday
-from comken.core.dates._holidays import last_workday
-from comken.core.dates._holidays import non_workdays_after
-from comken.core.dates._holidays import non_workdays_before
-from comken.core.dates._holidays import nth_workday
-from comken.core.dates._holidays import workday
-from comken.core.dates._holidays import workday_on_or_after
-from comken.core.dates._holidays import workday_on_or_before
+from comken.core.dates.clock import month_end
+from comken.core.dates.clock import month_start
+from comken.core.dates.clock import now
+from comken.core.dates.clock import today
+from comken.core.dates.fiscal import fiscal_year
+from comken.core.dates.parse import date_in_name
+from comken.core.dates.parse import parse_cell_date
+from comken.core.dates.holidays import count_workdays
+from comken.core.dates.holidays import first_workday
+from comken.core.dates.holidays import holiday_name
+from comken.core.dates.holidays import is_holiday
+from comken.core.dates.holidays import is_workday
+from comken.core.dates.holidays import last_workday
+from comken.core.dates.holidays import non_workdays_after
+from comken.core.dates.holidays import non_workdays_before
+from comken.core.dates.holidays import nth_workday
+from comken.core.dates.holidays import workday
+from comken.core.dates.holidays import workday_on_or_after
+from comken.core.dates.holidays import workday_on_or_before
 from comken.core.files.archive import unzip
 from comken.core.files.archive import zip_files
 from comken.core.files.archive import zip_folder

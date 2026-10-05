@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 
 from comken.core.dates import today
-from comken.core.dates._dates import dates_in_name
+from comken.core.dates.parse import dates_in_name
 from comken.core.timer import measure
 from comken.exceptions import ComkenFileNotFoundError, FileSuffixMissingError
 

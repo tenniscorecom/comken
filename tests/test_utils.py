@@ -16,7 +16,7 @@ import pytest
 
 from comken import dry_run
 from comken.core.dates import now, parse_cell_date, today
-from comken.core.dates._dates import date_in_name, dates_in_name
+from comken.core.dates.parse import date_in_name, dates_in_name
 from comken.core.files import (
     copy_file,
     delete_file,

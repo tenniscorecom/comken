@@ -24,7 +24,7 @@ class WorkdayNotFoundError(HolidayError):
     起き、業務ロジック側のミスではないので、呼び出し側で握り潰さずユーザーに
     顕在化させる必要がある。
 
-    発生箇所: comken.core.dates._holidays
+    発生箇所: comken.core.dates.holidays
         - nth_workday（n が月の営業日数超え、または n < 1）
         - first_workday / last_workday（その月に営業日が 1 日も無い）
         - workday / workday_on_or_after / workday_on_or_before

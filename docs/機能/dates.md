@@ -257,7 +257,7 @@ fiscal_year(date(2026, 1, 1))      # → 2025
 | `datetime.datetime` | 日付部分（`date()`）だけで判定 |
 
 年度の開始月は **4 月** に固定（会社で変わる値ではないため、設定ファイル化していない）。
-内部実装で参照する場合は `comken.core.dates._fiscal.FISCAL_YEAR_START_MONTH` を使う。
+内部実装で参照する場合は `comken.core.dates.fiscal.FISCAL_YEAR_START_MONTH` を使う。
 
 ## 書式の変換
 

@@ -158,7 +158,7 @@ parse_cell_date("日付ではない")                            # → None
 parse_cell_date(None)                                     # → None
 ```
 
-新しい書式を足すときは `comken/core/dates/_dates.py` の `_DATE_TEXT_FORMATS` に
+新しい書式を足すときは `comken/core/dates/parse.py` の `_DATE_TEXT_FORMATS` に
 タプル要素を追加する。
 
 `month_start` / `month_end` / 年度 (`fiscal_year`) の使い方は
