@@ -36,8 +36,3 @@ class WindowHandler:
         """ウィンドウを前面に表示する。最小化されている場合は復元する。"""
         win32gui.ShowWindow(self._hwnd, win32con.SW_RESTORE)
         win32gui.SetForegroundWindow(self._hwnd)
-
-    @measure
-    def read_title(self) -> str:
-        """ウィンドウのタイトルを返す。"""
-        return win32gui.GetWindowText(self._hwnd)

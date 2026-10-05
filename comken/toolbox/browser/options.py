@@ -33,7 +33,7 @@ class BrowserOptions:
     # フォルダを指定するときは Paths を使うと、OneDrive でダウンロードや
     # デスクトップの場所が移されていても実際の場所に付いていける:
     #     from comken.toolbox.windows import Paths
-    #     DOWNLOAD_DIR = Paths.downloads()   # ほかに desktop() / temp_dir()
+    #     DOWNLOAD_DIR = Paths.downloads()   # ほかに desktop()
     DOWNLOAD_DIR: str | Path | None = None
     # 調査時にドライバーと Edge 自身のログが必要な場合だけ False にする。
     # comken の logging によるログには影響しない

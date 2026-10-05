@@ -9,7 +9,6 @@
 
 import logging
 import os
-import tempfile
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -42,17 +41,6 @@ class Paths:
         """デスクトップのパスを返す（OneDrive リダイレクトにも追従する、結果はキャッシュ）。"""
         return _get_shell_folder("Desktop", Path.home() / "Desktop")
 
-    @staticmethod
-    def temp_dir() -> Path:
-        """システムの一時フォルダのパスを返す。
-
-        ``tempfile.gettempdir()`` 自体が **プロセス内で1度だけ解決して
-        キャッシュ** しているので、ここではそれをそのまま ``Path`` に包むだけ。
-        標準ライブラリ側のキャッシュに乗せてもらっているので、 ラッパ側で
-        さらにキャッシュする必要は無い。
-        """
-        return Path(tempfile.gettempdir())
-
 
 # ── レジストリ結果のモジュールレベル遅延キャッシュ ────────────────────────────
 # ``Paths.downloads()`` が呼ばれるたびに ``winreg.OpenKey`` + ``QueryValueEx`` を
@@ -62,9 +50,6 @@ class Paths:
 # ``value_name → Path`` の 1 度だけのキャッシュにする。 ``Config`` や
 # ``load_master`` で使ったのと同じ「呼び出しごとに外部リソースへ触らない」
 # 方針の延長。
-#
-# ``temp_dir()`` は ``tempfile.gettempdir()`` が標準ライブラリ側で
-# キャッシュしているので、 ラッパ側でさらにキャッシュする必要は無い。
 _shell_folder_cache: dict[str, Path] = {}
 
 

@@ -59,7 +59,6 @@ WINDOW_TITLE = "メモ帳"
 
 w = WindowHandler(WINDOW_TITLE)
 w.activate() # ウィンドウを前面に表示
-w.read_title() # タイトルを取得
 ```
 
 ### RegistryHandler
@@ -83,7 +82,6 @@ from comken.toolbox.windows import Paths
 
 Paths.downloads()   # → C:\Users\xxx\Downloads
 Paths.desktop()     # → C:\Users\xxx\OneDrive\Desktop（リダイレクトされている場合）
-Paths.temp_dir()    # → C:\Users\xxx\AppData\Local\Temp
 ```
 
 ### Excel 孤立プロセスの後始末（is_excel_running / kill_excel）

@@ -842,3 +842,9 @@ core/dates はファイルに触らない層のまま（dates から files を i
 全角スペース（U+3000）も取るので完全に重複していた。comken 内部での
 呼び出しは `.strip()` に置き換え、関数とテストを消した。撤去済み名の検出
 テスト（`tests/test_docs_code.py` の `_REMOVED_NAMES`）に `strip_spaces` を追加した。
+
+`Paths.temp_dir()`（`comken/toolbox/windows/paths.py`）と
+`WindowHandler.read_title()`（`comken/toolbox/windows/window.py`）は
+撤去した。`temp_dir()` は `tempfile.gettempdir()` の `Path` ラッパーだけで
+価値が無い、`read_title()` は未使用。docs/機能/{windows,browser}.md の
+対応する例とテストも消した。

@@ -8530,17 +8530,6 @@ def activate(self) -> None:
 
 ウィンドウを前面に表示する。最小化されている場合は復元する。
 
-#### `read_title`
-
-```text
-@measure
-def read_title(self) -> str:
-```
-
-##### 説明
-
-ウィンドウのタイトルを返す。
-
 ### `Paths`
 
 ```text
@@ -8581,22 +8570,6 @@ def desktop() -> Path:
 ##### 説明
 
 デスクトップのパスを返す（OneDrive リダイレクトにも追従する、結果はキャッシュ）。
-
-#### `temp_dir`
-
-```text
-@staticmethod
-def temp_dir() -> Path:
-```
-
-##### 説明
-
-システムの一時フォルダのパスを返す。
-
-``tempfile.gettempdir()`` 自体が **プロセス内で1度だけ解決して
-キャッシュ** しているので、ここではそれをそのまま ``Path`` に包むだけ。
-標準ライブラリ側のキャッシュに乗せてもらっているので、 ラッパ側で
-さらにキャッシュする必要は無い。
 
 ### `is_excel_running`
 

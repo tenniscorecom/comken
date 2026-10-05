@@ -947,16 +947,6 @@ class TestPaths:
 
         assert _read_shell_folder("存在しない値名", tmp_path) == tmp_path
 
-    def test_temp_dir_is_path(self):
-        """temp_dir() が Path オブジェクトを返すことを確認する。"""
-        from pathlib import Path
-
-        assert isinstance(Paths.temp_dir(), Path)
-
-    def test_temp_dir_exists(self):
-        """temp_dir() が実在するディレクトリを返すことを確認する。"""
-        assert Paths.temp_dir().is_dir()
-
 
 class TestProjectDir:
     """project_dir() の挙動を固める。

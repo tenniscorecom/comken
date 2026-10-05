@@ -760,7 +760,7 @@ class KintaiOptions(BrowserOptions):
     DOWNLOAD_DIR = r"C:\作業\downloads"   # サイト名のサブフォルダへ自動で分かれる
     # 標準のフォルダへ入れるなら Paths を使う（OneDrive で場所が移されていても
     # 実際の場所に付いていける）
-    # DOWNLOAD_DIR = Paths.downloads()    # ほかに desktop() / temp_dir()
+    # DOWNLOAD_DIR = Paths.downloads()    # ほかに desktop()
     WAIT_SECONDS = 20                     # 要素待機のタイムアウト秒
 
     # 指定するとログイン状態が次回も残る（サイトごとに別フォルダへ自動で分かれる）
