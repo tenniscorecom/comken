@@ -1218,14 +1218,24 @@ class TestSalesforceBulkQuery:
     def test_utf8_decoding_when_charset_missing(self):
         """Content-Type に charset が無くても日本語が化けない（ISO-8859-1 復号を回避）。"""
         csv_text = "Id,Name\n0012,山田\n0013,鈴木\n"
+        csv_bytes = csv_text.encode("utf-8")
         # Content-Type に charset を付けない（requests は本来 ISO-8859-1 で復号する）
+        # 結果ページだけ手で作る。``_response()`` ヘルパは ``.text`` にもそのまま
+        # 入るので、本物の requests の挙動（charset なしは ISO-8859-1 復号）を再現
+        # できない。``_body_of`` の charset なしの分岐が ``response.text`` を
+        # そのまま返してしまうと、このテストが落ちるように作る。
+        results_response = MagicMock()
+        results_response.status_code = 200
+        results_response.content = csv_bytes
+        # charset 無しだと requests は ISO-8859-1 で復号するため、``.text``
+        # は壊れた値になる
+        results_response.text = csv_bytes.decode("iso-8859-1")
+        results_response.headers = {"Content-Type": "text/csv", "Sforce-Locator": "null"}
+        results_response.json.return_value = {}
         responses = [
             self._job_create(),
             self._job_state("JobComplete"),
-            _response(
-                text=csv_text,
-                headers={"Content-Type": "text/csv", "Sforce-Locator": "null"},
-            ),
+            results_response,
         ]
         with _salesforce(responses) as (client, _, _):
             table = client.bulk_query(self.SOQL)
