@@ -25,18 +25,28 @@ _R = TypeVar("_R")
 # ログに出す文言の既定値。次のプレースホルダを使える。
 #
 # - ``{name}``: ``__init__`` の ``name``
-# - ``{elapsed}``: HH:MM:SS 形式の経過時間
+# - ``{elapsed}``: ``time_format`` を ``str.format`` で整形した経過時間
+#
+# 経過時間の書式は ``message`` ではなく ``_TIME_FORMAT``（``time_format=``）
+# の側で扱う。``message`` で使えるのは ``{name}`` と ``{elapsed}`` だけにし、
+# 「文言」と「時間の整形」を役割で分ける。
+#
+# 呼び出し側で ``message=`` を渡すとこの文言を差し替えられる。
+_MESSAGE = "{name}: {elapsed}"
+
+# 経過時間の既定フォーマット。次のキーを ``str.format`` で参照する。
+#
 # - ``{hours}`` / ``{minutes}`` / ``{seconds}``: 経過時間を時・分・秒に
 #   分けた int（秒未満は切り捨て。``hours`` は 24 を超えても繰り上げない）
 # - ``{total_seconds}``: 経過秒数の float（``self.elapsed`` そのもの）
 #
-# 呼び出し側で ``message=`` を渡すとこの文言を差し替えられる。
-#
 # 例::
 #
-#     "{name}: {minutes}分{seconds}秒"
-#     "{name}: {total_seconds:.2f}秒"
-_MESSAGE = "{name}: {elapsed}"
+#     "{minutes}分{seconds}秒"
+#     "{total_seconds:.2f}秒"
+#
+# 未知のキーは ``KeyError``。
+_TIME_FORMAT = "{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
 def _split_seconds(seconds: float) -> tuple[int, int, int]:
@@ -50,10 +60,15 @@ def _split_seconds(seconds: float) -> tuple[int, int, int]:
     return hours, minutes, secs
 
 
-def _format_hhmmss(seconds: float) -> str:
-    """経過秒数を ``HH:MM:SS`` にする（秒未満は切り捨て。100 時間を超えても時は桁が増えるだけ）。"""
+def _format_elapsed(seconds: float, time_format: str) -> str:
+    """経過秒数を ``time_format`` で文字列にする（``_split_seconds`` を内側で呼ぶ）。"""
     hours, minutes, secs = _split_seconds(seconds)
-    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+    return time_format.format(
+        hours=hours,
+        minutes=minutes,
+        seconds=secs,
+        total_seconds=seconds,
+    )
 
 
 class Timer:
@@ -63,14 +78,27 @@ class Timer:
         elapsed: 経過秒数（float）。with を抜けた後に参照できる。
     """
 
-    def __init__(self, name: str = "処理", message: str = _MESSAGE) -> None:
+    def __init__(
+        self,
+        name: str = "処理",
+        message: str = _MESSAGE,
+        time_format: str = _TIME_FORMAT,
+    ) -> None:
         """
         Args:
             name: ログに出す処理名（例: "CSV読み込み"）。
             message: ログに出す文言。次のプレースホルダを使える:
 
                 - ``{name}``: ``__init__`` の ``name``
-                - ``{elapsed}``: HH:MM:SS 形式の経過時間
+                - ``{elapsed}``: ``time_format`` で整形した経過時間
+
+                例::
+
+                    "{name} -> {elapsed}"
+
+            time_format: 経過時間の整形書式。次のキーを ``str.format`` で
+                参照する:
+
                 - ``{hours}`` / ``{minutes}`` / ``{seconds}``: 経過時間を
                   時・分・秒に分けた int（秒未満は切り捨て。``hours`` は
                   24 を超えても繰り上げない）
@@ -79,13 +107,16 @@ class Timer:
 
                 例::
 
-                    "{name}: {minutes}分{seconds}秒"
-                    "{name}: {total_seconds:.2f}秒"
+                    "{minutes}分{seconds}秒"
+                    "{total_seconds:.2f}秒"
 
-                未知のプレースホルダは ``KeyError``。
+                未知のキーは ``KeyError``。
+
+                ``{elapsed}`` の中身はこの ``time_format`` で決まる。
         """
         self._name = name
         self._message = message
+        self._time_format = time_format
         self._start = 0.0
         self.elapsed = 0.0
 
@@ -101,16 +132,11 @@ class Timer:
         traceback: TracebackType | None,
     ) -> None:
         self.elapsed = time.perf_counter() - self._start
-        hours, minutes, secs = _split_seconds(self.elapsed)
         logger.info(
             "%s",
             self._message.format(
                 name=self._name,
-                elapsed=_format_hhmmss(self.elapsed),
-                hours=hours,
-                minutes=minutes,
-                seconds=secs,
-                total_seconds=self.elapsed,
+                elapsed=_format_elapsed(self.elapsed, self._time_format),
             ),
         )
 
@@ -121,8 +147,8 @@ class Timer:
         def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
             """呼び出しごとに独立したTimerで処理時間を測る。"""
             # 呼び出しごとに独立して計測する（同じ Timer を使い回さない）。
-            # message も一緒に引き継ぐ（忘れると差し替えが効かない）
-            with Timer(self._name, self._message):
+            # message / time_format も一緒に引き継ぐ（忘れると差し替えが効かない）
+            with Timer(self._name, self._message, self._time_format):
                 return func(*args, **kwargs)
 
         return wrapper

@@ -113,23 +113,23 @@ class TestTimer:
         assert messages == ["CSV読み込み: 01:01:01"]
 
     @pytest.mark.parametrize(
-        ("message", "expected"),
+        ("time_format", "expected"),
         [
-            # 時・分・秒の個別プレースホルダ（秒未満切り捨て）
-            ("{name}: {hours}時間{minutes}分{seconds}秒", "処理: 1時間1分1秒"),
+            # 時・分・秒の個別キー（秒未満切り捨て）
+            ("{hours}時間{minutes}分{seconds}秒", "処理: 1時間1分1秒"),
             # 経過秒数の float をフォーマット指定付きで使う
-            ("{name}: {total_seconds:.2f}秒", "処理: 3661.70秒"),
+            ("{total_seconds:.2f}秒", "処理: 3661.70秒"),
             # 分・秒のゼロ埋めフォーマット指定
-            ("{minutes:02d}:{seconds:02d}", "01:01"),
+            ("{minutes:02d}:{seconds:02d}", "処理: 01:01"),
         ],
     )
-    def test_logs_new_placeholders(self, message, expected, caplog, monkeypatch):
-        """経過 3661.7 秒で新プレースホルダが正しく埋められることを確認する。"""
+    def test_logs_time_format_placeholders(self, time_format, expected, caplog, monkeypatch):
+        """経過 3661.7 秒で ``time_format`` のキーが正しく埋められることを確認する。"""
         # ``__enter__`` で 0.0、``__exit__`` で 3661.7 を返すようにして経過 3661.7 秒に固定する
         clock = iter([0.0, 3661.7])
         monkeypatch.setattr(timer_module.time, "perf_counter", lambda: next(clock))
 
-        with caplog.at_level(logging.INFO), Timer("処理", message=message):
+        with caplog.at_level(logging.INFO), Timer("処理", time_format=time_format):
             pass
 
         messages = [record.getMessage() for record in caplog.records]
@@ -147,9 +147,9 @@ class TestTimer:
             (100 * 3600, "100:00:00"),  # 100 時間を超えても時は桁が増えるだけ
         ],
     )
-    def test_format_hhmmss(self, seconds, expected):
-        """``_format_hhmmss`` が ``HH:MM:SS`` に整形することを確認する。"""
-        assert timer_module._format_hhmmss(seconds) == expected
+    def test_format_elapsed(self, seconds, expected):
+        """``_format_elapsed`` が ``_TIME_FORMAT`` で ``HH:MM:SS`` に整形することを確認する。"""
+        assert timer_module._format_elapsed(seconds, timer_module._TIME_FORMAT) == expected
 
     @pytest.mark.parametrize(
         ("seconds", "expected"),
@@ -187,6 +187,43 @@ class TestTimer:
 
         messages = [record.getMessage() for record in caplog.records]
         assert messages == ["00:00:00 [売上集計]"]
+
+    def test_custom_message_and_time_format_in_with_block(self, caplog, monkeypatch):
+        """message と time_format を両方変えたとき、with でその形で出ることを確認する。"""
+        clock = iter([0.0, 3661.7])
+        monkeypatch.setattr(timer_module.time, "perf_counter", lambda: next(clock))
+
+        with (
+            caplog.at_level(logging.INFO),
+            Timer(
+                "CSV読み込み",
+                message="{name} -> {elapsed}",
+                time_format="{minutes}分{seconds}秒",
+            ),
+        ):
+            pass
+
+        messages = [record.getMessage() for record in caplog.records]
+        assert messages == ["CSV読み込み -> 1分1秒"]
+
+    def test_custom_message_and_time_format_in_decorator(self, caplog, monkeypatch):
+        """デコレータでも message と time_format の両方が引き継がれて出ることを確認する。
+
+        ``__call__`` が ``time_format`` を内側 Timer に渡していないと、
+        ここで time_format が無視されて落ちる（引き継ぎ漏れの検出用）。
+        """
+        clock = iter([0.0, 3661.7])
+        monkeypatch.setattr(timer_module.time, "perf_counter", lambda: next(clock))
+
+        @Timer("売上集計", message="{name} -> {elapsed}", time_format="{minutes}分{seconds}秒")
+        def aggregate():
+            return 42
+
+        with caplog.at_level(logging.INFO):
+            assert aggregate() == 42
+
+        messages = [record.getMessage() for record in caplog.records]
+        assert messages == ["売上集計 -> 1分1秒"]
 
     def test_decorator_measures_each_call(self, caplog):
         """デコレータ形式で使え、呼び出しごとにログが出ることを確認する。"""
