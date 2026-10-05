@@ -6,11 +6,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from comken.exceptions import SalesforceAuthError
-from comken.toolbox.salesforce import (
-    RefreshTokenOAuth,
-    SalesforceBase,
-)
-from comken.toolbox.salesforce.auth.oauth_refresh import _code_challenge_of
+from comken.toolbox.salesforce import SalesforceBase
+from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth, _code_challenge_of
 
 DOMAIN_URL = "https://example.my.salesforce.com"
 INSTANCE_URL = "https://instance.my.salesforce.com"

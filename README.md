@@ -71,7 +71,7 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 | モジュール | 概要 |
 |---|---|
 | Config | INI ファイルの読み込み |
-| DateFileFinder / DateNameBuilder | 日付付きファイルの検索・命名 |
+| find_dated_file / date_in_name | 日付付きファイルの検索・ファイル名からの日付抽出 |
 | Transfer | 既存の CSV / Excel クラス間の列マッピング転記 |
 | runtime | `with debug():` / `with dry_run():` による実行モード |
 | exceptions | comken 固有の例外（エラー名別に対処可能） |

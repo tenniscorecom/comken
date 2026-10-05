@@ -781,3 +781,64 @@ Salesforce 例外クラスを import すると依存が増えるので、書き�
 以前: `format_yyyymmdd` / `parse_yyyymmdd` を用意していた。新しい考え: 持たない。
 理由: 書式は yyyymm など複数あり、書式ごとに関数が増える。`strftime` / `strptime` の1行で足りる。
 `DateFormatError` も `_format.py` ごと削除した。
+
+## 26. `DateNameBuilder` と `DateFileFinder` クラスを外した（2026-10-05）
+
+以前: `DateNameBuilder` と `DateFileFinder` クラスを `comken.core.files` に置いていた。
+新しい考え: 名前の組み立ては f-string（または `Path.with_stem()`）の1行で書く。
+探すのは関数 `find_dated_file()` 1 つだけ。`find_all()` は廃止。
+理由: 名前の組み立ては `DateNameBuilder(name).prefix()` のような呼び出しでも
+f-string 1 行でも同じ結果になり、クラスにすると書式の扱いが見えにくくなる。
+`DateFileFinder` は残る `find()` 1 つしかなく、クラスにする意味が無い。
+`find_all()` は誰も使っていなかった（確認済み）。
+
+`_split_suffix` は `finder.py` 内に移し、`name.py` は削除した（空ファイルになるため）。
+`comken.core.files.name` パッケージの公開 import 経路は無くなった。
+`DateFileFinder.find_all()` と `DateNameBuilder` のテストは捨て、
+撤去済み名の検出テスト（`tests/test_docs_code.py` の `_REMOVED_NAMES`）に
+両方の名前を追加した。
+
+## 18. 公開名を「使う側に要るものだけ」に絞った（2026-10-05）
+
+配布前なので、公開一覧（パッケージの `__init__.py` の再エクスポートと `__all__`）を
+「使う側が触る名前」だけにした。定義はモジュールに残し、comken 内部や利用側は
+モジュールのパス（例 `from comken.core.timer import measure`）から import する。
+名前に `_` は付けない（comken は `_core` をやめたときに「アンダースコアの規約を
+増やさない」と決めている）。
+
+何を「非公開」にしたか:
+
+- `comken.core`:
+    - 定数: `WORKDAY_SEARCH_LIMIT`、`EXPIRING_WARNING_DAYS`、
+      `HOLIDAYS_CSV_PATH`、`FISCAL_YEAR_START_MONTH`（実装は `_holidays.py` /
+      `_fiscal.py` に残す）
+    - `diff_row`（`Table.diff()` の内部部品）
+    - `dates_in_name`（`find_dated_file` の内部部品。`date_in_name` は公開のまま）
+    - `measure`（`Timer` は公開のまま）
+    - `wait_seconds`
+- `comken.toolbox.credentials`:
+    - `CREDENTIALS_PATH`、`save_credentials`、`delete_credential`、`list_names`、
+      `import_json`、`prompt_new_password`、`change_password`
+      （登録画面・CLI の内部部品）
+    - 公開に残したのは `load_credential`、`save_credential`、`Credentials`。
+      `Credentials` は **属性アクセスで値を取る**形の利用側のメイン入口なので残した
+      （外すと `from comken.toolbox.credentials.store import Credentials` を
+      利用側に強いることになり、利用側に内部パスを晒すことになるため）
+- `comken.toolbox.salesforce`:
+    - `RefreshTokenOAuth`、`APIMetrics`、`APIUsage`、`SalesforceCredentialRotator`。
+      公開は `SalesforceBase` だけ
+- `comken.toolbox.windows`:
+    - `RegistryHandler`
+
+理由: 使う側が触らない定数や内部部品を公開していると、
+「変えてよい値」「使うべき道具」に見える。配布前なので絞る。
+
+`date_in_name` / `dates_in_name` と正規表現 `_DATE_IN_NAME` を
+`comken/core/files/finder.py` から `comken/core/dates/_dates.py` へ移した。
+`find_dated_file` は files に残し、dates から import する。
+core/dates はファイルに触らない層のまま（dates から files を import しない）。
+
+`strip_spaces`（`comken/core/text.py`）は削除した。Python の `str.strip()` が
+全角スペース（U+3000）も取るので完全に重複していた。comken 内部での
+呼び出しは `.strip()` に置き換え、関数とテストを消した。撤去済み名の検出
+テスト（`tests/test_docs_code.py` の `_REMOVED_NAMES`）に `strip_spaces` を追加した。

@@ -9,7 +9,6 @@ from comken.core import (
     now,
     remove_spaces,
     retry,
-    strip_spaces,
     wait_until,
 )
 from comken.core.logger import setup_local_logging
@@ -55,7 +54,7 @@ def main() -> None:
     logger.info(
         "正規化: %s / 前後空白: %s / 全空白: %s",
         normalize("ＡＢＣ１２３"),
-        strip_spaces("　山田　"),
+        "　山田　".strip(),
         remove_spaces("03 1234　5678"),
     )
     logger.info("now(): %s", now().isoformat())

@@ -22,37 +22,24 @@ Windows ログオンユーザーに紐付けて暗号化して保管する。
                        cred.save() で更新もできる）
     load_credential    (サイト名, 項目名) を指定して1件取り出す
     save_credential    (サイト名, 項目名) を指定して1件保存する
-    save_credentials   まとめて保存する（書き込みは1回）
-    delete_credential  1件削除する
-    list_names         登録済みの (サイト名, 項目名) の一覧（値は返さない）
-    import_json        平文 JSON を読み込んで取り込む
+    save_credentials   まとめて保存する（書き込みは1回）— **内部用**。1件ずつ書く
+                       ときは ``save_credential`` を使う
+    delete_credential  1件削除する — **内部用**。CLI/ツールの用途
+    list_names         登録済みの (サイト名, 項目名) の一覧（値は返さない）— **内部用**
+    import_json        平文 JSON を読み込んで取り込む — **内部用**。``python -m comken cred import``
+                       の CLI 入口から呼ばれる
     prompt_new_password  新しいパスワードをCLIから2回入力させ、Credentials へ保存する
+                        — **内部用**。CLI/ツールの用途
     change_password    prompt_new_password に加え、サイト側への送信・拒否時の
                        自動再試行までを行う（PasswordRejectedError を使う）
-    CREDENTIALS_PATH   保存先のパス
+                       — **内部用**
+    CREDENTIALS_PATH   保存先のパス — **内部用**
 """
 
-from comken.toolbox.credentials.importer import import_json
-from comken.toolbox.credentials.prompt import change_password, prompt_new_password
-from comken.toolbox.credentials.store import (
-    CREDENTIALS_PATH,
-    Credentials,
-    delete_credential,
-    list_names,
-    load_credential,
-    save_credential,
-    save_credentials,
-)
+from comken.toolbox.credentials.store import Credentials, load_credential, save_credential
 
 __all__ = [
-    "CREDENTIALS_PATH",
     "Credentials",
     "load_credential",
     "save_credential",
-    "save_credentials",
-    "delete_credential",
-    "list_names",
-    "import_json",
-    "prompt_new_password",
-    "change_password",
 ]

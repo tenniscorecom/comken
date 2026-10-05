@@ -25,48 +25,38 @@ copy_file("report.xlsx", r"C:\作業\backup")             # コピー（元フ�
 ### ファイル名の組み立て・検索
 
 ```python
-from comken.core import DateNameBuilder, DateFileFinder, date_in_name, dates_in_name
+from comken.core import date_in_name, find_dated_file, today
 
 FOLDER = r"\\nas-server\share"
 
-# 今日の日付付きファイル名を組み立てる
-# 拡張子は **名前の文字列に含めて** 渡す（引数 ext / extension は廃止）
-DateNameBuilder("売上レポート.xlsx").prefix()               # → "20260711_売上レポート.xlsx"
-DateNameBuilder("売上レポート.xlsx").suffix()               # → "売上レポート_20260711.xlsx"
-DateNameBuilder("ログ.csv").prefix()                       # → "20260711_ログ.csv"
-DateNameBuilder("月次レポート.xlsx").prefix("{:%Y%m}_")    # → "202607_月次レポート.xlsx"
+# 今日の日付付きファイル名を組み立てる。f-string と ``Path.with_stem()`` のどちらか。
+# 拡張子は **名前の文字列に含めて** 書く（引数 ext / extension は廃止）
+f"売上レポート_{today():%Y%m%d}.xlsx"           # → "売上レポート_20260711.xlsx"
+f"{today():%Y%m_%}月次レポート.xlsx"             # → "202607_月次レポート.xlsx"
 # 拡張子なしの名前は FileSuffixMissingError で止める（黙って ".xlsx" は付けない）
 
 # ファイル名に含まれる最初の日付を取得（なければ None）
 file_date = date_in_name("売上_20260729.csv")            # → datetime.date(2026, 7, 29)
-# ファイル名に含まれる日付を **すべて** 出現順で取得（なければ空リスト）
-all_dates = dates_in_name("一覧_20260801_20260831.xlsx") # → [date(2026, 8, 1), date(2026, 8, 31)]
 
-# 名前を含み、ファイル名の日付が対象日（コンストラクタの for_date。省略時=今日）のファイルを取得。
+# 名前を含み、ファイル名の日付が対象日（省略時=今日）のファイルを 1 件返す。
 # 探す名前には拡張子を含める。判定は「同じ拡張子（大文字小文字は区別しない）で、`name` の拡張子を
 # 除いた本体部分がファイル名の本体部分に **含まれている**（部分一致）」。日付の位置・書式は問わない
-path = DateFileFinder(FOLDER).find("売上レポート.xlsx")               # → 売上レポート_20260711.xlsx など
-path = DateFileFinder(FOLDER).find("売上レポート.csv")                # → 売上レポート_20260711.csv など
+path = find_dated_file(FOLDER, "売上レポート.xlsx")               # → 売上レポート_20260711.xlsx など
+path = find_dated_file(FOLDER, "売上レポート.csv")                # → 売上レポート_20260711.csv など
 
 # 別日のファイルを探したいときは for_date を渡す
 import datetime
-path = DateFileFinder(FOLDER, for_date=datetime.date(2026, 7, 29)).find("売上レポート.xlsx")
+path = find_dated_file(FOLDER, "売上レポート.xlsx", for_date=datetime.date(2026, 7, 29))
 
 # 見つからないときは ComkenFileNotFoundError（FileNotFoundError でもある）。
 # メッセージにフォルダ・名前・探した日付と対処が出る。
-
-# 日付を含むファイルを全件、日付の新しい順で取得（見つからなければ空リスト）
-# 上の条件に加えて、ファイル名に日付が 1 つ以上あるファイルだけ。for_date は使わない
-paths = DateFileFinder(FOLDER).find_all("売上レポート.xlsx")       # → [売上レポート20260730.xlsx, 売上レポート20260729.xlsx, ...]
-paths = DateFileFinder(FOLDER).find_all("売上レポート.csv")
-# 同じ日付が複数あるときは mtime が新しい順
 ```
 
 > 部分一致なので、`売上.csv` を探すと `売上明細_20260711.csv` も対象になる。
 > 紛らわしい名前が同じフォルダにある場合は、探したい名前を長くする
 > （`売上明細.csv` を探すなど）。
 
-### データ比較（Table.diff / Table.changes / diff_row）
+### データ比較（Table.diff / Table.changes）
 
 CSV・Excel から読んだ行（辞書）同士の差分を取る。for ループを自分で書かなくてよい。
 **CSV の文字列と Excel の数値は同一視される**（`"1000"` と `1000` は差分にならない。
@@ -131,39 +121,14 @@ for change in history.changes(key="社員番号", order_by="変更時刻"):
 `order_by` の列に空（`None` / `""`）の行がある、または値の型が混ざって
 いて比較できない（`TypeError`）ときは `TableError` で止める。
 
-#### 行どうし（`diff_row(before, after)`）
-
-`diff_row` は1行同士を比べる。**同じ社員番号の行が複数あって、自分で
-比べ方を決めたいとき**は、`group_by()` で同じキーの行をまとめ、
-`itertools.pairwise` で隣り合う2行を取って `diff_row` に渡す。
-
-```python
-from comken.core import diff_row
-from comken.core.table import Table
-from itertools import pairwise
-
-table = Table(
-    ["社員番号", "氏名", "所属"],
-    [
-        {"社員番号": "001", "氏名": "山田", "所属": "営業"},
-        {"社員番号": "001", "氏名": "山田", "所属": "企画"},
-        {"社員番号": "002", "氏名": "佐藤", "所属": "総務"},
-    ],
-)
-for emp_id, rows in table.group_by("社員番号").items():
-    for before, after in pairwise(rows):
-        columns = diff_row(before, after)
-        if columns:
-            print(emp_id, columns)
-```
-
 
 ### 待機（wait）
 
 `time.sleep` の代わりに単位を明示して書ける。「条件が満たされるまで待つ」もループを書かずに済む。
 
 ```python
-from comken.core import wait_seconds, wait_until
+from comken.core import wait_until
+from comken.core.wait import wait_seconds
 
 wait_seconds(3)     # 3秒待つ
 wait_seconds(0.5)   # 0.5秒待つ
@@ -200,19 +165,20 @@ parse_cell_date(None)                                     # → None
 [dates.md](dates.md) を参照。日付書式の変換は `strftime` / `strptime` を
 そのまま使う（[dates.md「書式の変換」](dates.md#書式の変換)）。
 
-### テキスト正規化（normalize / strip_spaces / remove_spaces)
+### テキスト正規化（normalize / remove_spaces)
 
 業務データによくある表記揺れ（全角英数・半角カナ・全角スペース）を揃える。
 突合キーの正規化に使うと「見た目は同じなのに一致しない」問題を防げる。
 
 ```python
-from comken.core import normalize, remove_spaces, strip_spaces
+from comken.core import normalize, remove_spaces
 
 normalize("ＡＢＣ１２３")          # → "ABC123"（全角英数 → 半角）
 normalize("ｱｲｳ")                  # → "アイウ"（半角カナ → 全角）
 normalize("（株）")                # → "(株)"（全角記号 → 半角）
 
-strip_spaces("　山田　太郎　")     # → "山田　太郎"（前後のみ除去。全角スペースも対象）
+# 前後のスペース除去は組み込みの str.strip() を使う（全角スペース U+3000 も取れる）
+"　山田　太郎　".strip()           # → "山田　太郎"
 remove_spaces("０３－１２３４　５６７８")  # → "０３－１２３４５６７８"（全部除去）
 
 # 突合前にキーを正規化する例
@@ -268,7 +234,7 @@ DEBUG ログが出る。普段は無音で、止まったときだけ `with comk
 後から分かる。
 
 ```python
-from comken.core import measure
+from comken.core.timer import measure
 
 @measure
 def build_report():
@@ -335,7 +301,7 @@ path = wait_until_stable(r"\\server\share\in\data.csv", stable_for=2.0)
 | ファイルが無い / 待っている間に消えた | `FileNotFoundError` |
 | ファイルは有るが `timeout` までに書き終わらない | `TimeoutError` |
 
-`DateFileFinder.find()` は1 回探すだけなので「無ければ待つ」は `wait_for_file()` を使う。
+`find_dated_file()` は1 回探すだけなので「無ければ待つ」は `wait_for_file()` を使う。
 
 ### zip 圧縮・展開（zip_folder / zip_files / unzip）
 
@@ -446,7 +412,7 @@ with comken.dry_run():
 自作関数の出入りを同じ仕組みで記録できる（デバッグモード中だけログが出る）:
 
 ```python
-from comken.core import measure
+from comken.core.timer import measure
 
 @measure
 def build_report():
