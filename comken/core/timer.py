@@ -22,16 +22,38 @@ logger = logging.getLogger(__name__)
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
 
-# ログに出す文言の既定値。``{name}`` は ``__init__`` の ``name``、
-# ``{elapsed}`` は HH:MM:SS 形式の経過時間。呼び出し側で ``message=``
-# を渡すとこの文言を差し替えられる。
+# ログに出す文言の既定値。次のプレースホルダを使える。
+#
+# - ``{name}``: ``__init__`` の ``name``
+# - ``{elapsed}``: HH:MM:SS 形式の経過時間
+# - ``{hours}`` / ``{minutes}`` / ``{seconds}``: 経過時間を時・分・秒に
+#   分けた int（秒未満は切り捨て。``hours`` は 24 を超えても繰り上げない）
+# - ``{total_seconds}``: 経過秒数の float（``self.elapsed`` そのもの）
+#
+# 呼び出し側で ``message=`` を渡すとこの文言を差し替えられる。
+#
+# 例::
+#
+#     "{name}: {minutes}分{seconds}秒"
+#     "{name}: {total_seconds:.2f}秒"
 _MESSAGE = "{name}: {elapsed}"
+
+
+def _split_seconds(seconds: float) -> tuple[int, int, int]:
+    """経過秒数を ``(時, 分, 秒)`` の int に分解する（秒未満は切り捨て）。
+
+    ``hours`` は 24 を超えても繰り上げない（100 時間は ``(100, 0, 0)``）。
+    """
+    total = int(seconds)
+    hours, remainder = divmod(total, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return hours, minutes, secs
 
 
 def _format_hhmmss(seconds: float) -> str:
     """経過秒数を ``HH:MM:SS`` にする（秒未満は切り捨て。100 時間を超えても時は桁が増えるだけ）。"""
-    total_seconds = int(seconds)
-    return f"{total_seconds // 3600:02d}:{total_seconds % 3600 // 60:02d}:{total_seconds % 60:02d}"
+    hours, minutes, secs = _split_seconds(seconds)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
 class Timer:
@@ -45,9 +67,22 @@ class Timer:
         """
         Args:
             name: ログに出す処理名（例: "CSV読み込み"）。
-            message: ログに出す文言。プレースホルダ ``{name}`` と
-                ``{elapsed}`` （HH:MM:SS 形式）を使える。未知の
-                プレースホルダは ``KeyError``。
+            message: ログに出す文言。次のプレースホルダを使える:
+
+                - ``{name}``: ``__init__`` の ``name``
+                - ``{elapsed}``: HH:MM:SS 形式の経過時間
+                - ``{hours}`` / ``{minutes}`` / ``{seconds}``: 経過時間を
+                  時・分・秒に分けた int（秒未満は切り捨て。``hours`` は
+                  24 を超えても繰り上げない）
+                - ``{total_seconds}``: 経過秒数の float
+                  （``self.elapsed`` そのもの）
+
+                例::
+
+                    "{name}: {minutes}分{seconds}秒"
+                    "{name}: {total_seconds:.2f}秒"
+
+                未知のプレースホルダは ``KeyError``。
         """
         self._name = name
         self._message = message
@@ -66,9 +101,17 @@ class Timer:
         traceback: TracebackType | None,
     ) -> None:
         self.elapsed = time.perf_counter() - self._start
+        hours, minutes, secs = _split_seconds(self.elapsed)
         logger.info(
             "%s",
-            self._message.format(name=self._name, elapsed=_format_hhmmss(self.elapsed)),
+            self._message.format(
+                name=self._name,
+                elapsed=_format_hhmmss(self.elapsed),
+                hours=hours,
+                minutes=minutes,
+                seconds=secs,
+                total_seconds=self.elapsed,
+            ),
         )
 
     def __call__(self, func: Callable[_P, _R]) -> Callable[_P, _R]:

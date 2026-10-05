@@ -113,6 +113,29 @@ class TestTimer:
         assert messages == ["CSV読み込み: 01:01:01"]
 
     @pytest.mark.parametrize(
+        ("message", "expected"),
+        [
+            # 時・分・秒の個別プレースホルダ（秒未満切り捨て）
+            ("{name}: {hours}時間{minutes}分{seconds}秒", "処理: 1時間1分1秒"),
+            # 経過秒数の float をフォーマット指定付きで使う
+            ("{name}: {total_seconds:.2f}秒", "処理: 3661.70秒"),
+            # 分・秒のゼロ埋めフォーマット指定
+            ("{minutes:02d}:{seconds:02d}", "01:01"),
+        ],
+    )
+    def test_logs_new_placeholders(self, message, expected, caplog, monkeypatch):
+        """経過 3661.7 秒で新プレースホルダが正しく埋められることを確認する。"""
+        # ``__enter__`` で 0.0、``__exit__`` で 3661.7 を返すようにして経過 3661.7 秒に固定する
+        clock = iter([0.0, 3661.7])
+        monkeypatch.setattr(timer_module.time, "perf_counter", lambda: next(clock))
+
+        with caplog.at_level(logging.INFO), Timer("処理", message=message):
+            pass
+
+        messages = [record.getMessage() for record in caplog.records]
+        assert messages == [expected]
+
+    @pytest.mark.parametrize(
         ("seconds", "expected"),
         [
             (0, "00:00:00"),
@@ -127,6 +150,22 @@ class TestTimer:
     def test_format_hhmmss(self, seconds, expected):
         """``_format_hhmmss`` が ``HH:MM:SS`` に整形することを確認する。"""
         assert timer_module._format_hhmmss(seconds) == expected
+
+    @pytest.mark.parametrize(
+        ("seconds", "expected"),
+        [
+            (0, (0, 0, 0)),
+            (59, (0, 0, 59)),
+            (59.9, (0, 0, 59)),  # 秒未満は切り捨て
+            (60, (0, 1, 0)),
+            (3661.7, (1, 1, 1)),  # 3661.7 → (1h, 1m, 1s) 寄り
+            (86400 + 90, (24, 1, 30)),
+            (100 * 3600, (100, 0, 0)),  # 100 時間を超えても時は桁が増えるだけ
+        ],
+    )
+    def test_split_seconds(self, seconds, expected):
+        """``_split_seconds`` が経過秒数を ``(時, 分, 秒)`` に分解することを確認する。"""
+        assert timer_module._split_seconds(seconds) == expected
 
     def test_custom_message_in_with_block(self, caplog):
         """message を差し替えると with でその文言で出ることを確認する。"""

@@ -229,6 +229,16 @@ print(t.elapsed)              # 経過秒数を値として使える
 with Timer("CSV読み込み", message="{elapsed} [{name}]"):
     ...
 # ログ: 00:00:03 [CSV読み込み]
+
+# 経過時間の分・秒を個別プレースホルダで出す
+with Timer("CSV読み込み", message="{name}: {minutes}分{seconds}秒"):
+    ...
+# ログ: CSV読み込み: 1分3秒
+
+# 経過秒数を小数2桁で出す（フォーマット指定もそのまま使える）
+with Timer("CSV読み込み", message="{name}: {total_seconds:.2f}秒"):
+    ...
+# ログ: CSV読み込み: 63.00秒
 ```
 
 ### デバッグ用 measure（`comken.debug()` 中だけログ）
