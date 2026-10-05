@@ -234,6 +234,15 @@ def read_text(path: str | Path, *, encoding: str | None = None) -> str:
     raise _encoding_detection_error(path)
 
 
+def parse_text(text: str) -> list[list[str]]:
+    """CSV 文字列を行ごとに ``list[str]`` へ分解する（comken 内部用）。
+
+    公開 API（``csv/__init__.py`` の ``__all__``）には出さない。Bulk API 2.0 の
+    結果 CSV を ``toolbox.salesforce`` から分解するためだけに置く。
+    """
+    return list(csv.reader(io.StringIO(text)))
+
+
 def _invalid_encoding_message(path: Path, encoding: str, error: BaseException) -> str:
     """``CSVError`` の「指定された encoding が使えない」文言。"""
     return (
