@@ -10,6 +10,7 @@ import zipfile
 
 import pytest
 
+from comken.core import timer as timer_module
 from comken.core.files import atomic_write, unzip, zip_files, zip_folder
 from comken.core.retry import retry
 from comken.core.timer import Timer
@@ -99,13 +100,54 @@ class TestTimer:
 
         assert t.elapsed >= 0
 
-    def test_logs_name_and_seconds(self, caplog):
-        """処理名と秒数が INFO ログに出ることを確認する。"""
+    def test_logs_name_and_hhmmss(self, caplog, monkeypatch):
+        """経過時間が ``HH:MM:SS`` で INFO ログに出ることを確認する。"""
+        # ``__enter__`` で 0.0、``__exit__`` で 3661.0 を返すようにして経過 3661 秒に固定する
+        clock = iter([0.0, 3661.0])
+        monkeypatch.setattr(timer_module.time, "perf_counter", lambda: next(clock))
+
         with caplog.at_level(logging.INFO), Timer("CSV読み込み"):
             pass
 
-        assert "CSV読み込み" in caplog.text
-        assert "秒" in caplog.text
+        messages = [record.getMessage() for record in caplog.records]
+        assert messages == ["CSV読み込み: 01:01:01"]
+
+    @pytest.mark.parametrize(
+        ("seconds", "expected"),
+        [
+            (0, "00:00:00"),
+            (59, "00:00:59"),
+            (59.9, "00:00:59"),  # 秒未満は切り捨て
+            (60, "00:01:00"),
+            (3661, "01:01:01"),
+            (86400 + 90, "24:01:30"),
+            (100 * 3600, "100:00:00"),  # 100 時間を超えても時は桁が増えるだけ
+        ],
+    )
+    def test_format_hhmmss(self, seconds, expected):
+        """``_format_hhmmss`` が ``HH:MM:SS`` に整形することを確認する。"""
+        assert timer_module._format_hhmmss(seconds) == expected
+
+    def test_custom_message_in_with_block(self, caplog):
+        """message を差し替えると with でその文言で出ることを確認する。"""
+        with caplog.at_level(logging.INFO), Timer("CSV読み込み", message="{elapsed} [{name}]"):
+            pass
+
+        messages = [record.getMessage() for record in caplog.records]
+        assert messages == ["00:00:00 [CSV読み込み]"]
+
+    def test_custom_message_in_decorator(self, caplog):
+        """デコレータでも差し替えた文言で出ることを確認する（``__call__`` の引き継ぎ漏れ検出）。"""
+
+        @Timer("売上集計", message="{elapsed} [{name}]")
+        def aggregate():
+            return 42
+
+        with caplog.at_level(logging.INFO):
+            assert aggregate() == 42
+
+        messages = [record.getMessage() for record in caplog.records]
+        assert messages == ["00:00:00 [売上集計]"]
 
     def test_decorator_measures_each_call(self, caplog):
         """デコレータ形式で使え、呼び出しごとにログが出ることを確認する。"""

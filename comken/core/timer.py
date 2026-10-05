@@ -22,6 +22,17 @@ logger = logging.getLogger(__name__)
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
 
+# ログに出す文言の既定値。``{name}`` は ``__init__`` の ``name``、
+# ``{elapsed}`` は HH:MM:SS 形式の経過時間。呼び出し側で ``message=``
+# を渡すとこの文言を差し替えられる。
+_MESSAGE = "{name}: {elapsed}"
+
+
+def _format_hhmmss(seconds: float) -> str:
+    """経過秒数を ``HH:MM:SS`` にする（秒未満は切り捨て。100 時間を超えても時は桁が増えるだけ）。"""
+    total_seconds = int(seconds)
+    return f"{total_seconds // 3600:02d}:{total_seconds % 3600 // 60:02d}:{total_seconds % 60:02d}"
+
 
 class Timer:
     """処理時間を計測して INFO ログに出す。with・デコレータ両対応。
@@ -30,12 +41,16 @@ class Timer:
         elapsed: 経過秒数（float）。with を抜けた後に参照できる。
     """
 
-    def __init__(self, name: str = "処理") -> None:
+    def __init__(self, name: str = "処理", message: str = _MESSAGE) -> None:
         """
         Args:
             name: ログに出す処理名（例: "CSV読み込み"）。
+            message: ログに出す文言。プレースホルダ ``{name}`` と
+                ``{elapsed}`` （HH:MM:SS 形式）を使える。未知の
+                プレースホルダは ``KeyError``。
         """
         self._name = name
+        self._message = message
         self._start = 0.0
         self.elapsed = 0.0
 
@@ -51,7 +66,10 @@ class Timer:
         traceback: TracebackType | None,
     ) -> None:
         self.elapsed = time.perf_counter() - self._start
-        logger.info("%s: %.2f秒", self._name, self.elapsed)
+        logger.info(
+            "%s",
+            self._message.format(name=self._name, elapsed=_format_hhmmss(self.elapsed)),
+        )
 
     def __call__(self, func: Callable[_P, _R]) -> Callable[_P, _R]:
         """デコレータとして使う（@Timer("処理名")）。"""
@@ -59,8 +77,9 @@ class Timer:
         @functools.wraps(func)
         def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
             """呼び出しごとに独立したTimerで処理時間を測る。"""
-            # 呼び出しごとに独立して計測する（同じ Timer を使い回さない）
-            with Timer(self._name):
+            # 呼び出しごとに独立して計測する（同じ Timer を使い回さない）。
+            # message も一緒に引き継ぐ（忘れると差し替えが効かない）
+            with Timer(self._name, self._message):
                 return func(*args, **kwargs)
 
         return wrapper

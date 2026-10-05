@@ -214,7 +214,7 @@ from comken.core import Timer
 
 with Timer("CSV読み込み"), CSV("data.csv") as csv_file:
     rows = csv_file.read()
-# ログ: CSV読み込み: 3.21秒
+# ログ: CSV読み込み: 00:00:03
 
 @Timer("売上集計")            # デコレータでも使える
 def aggregate():
@@ -224,6 +224,11 @@ t = Timer("転記処理")
 with t:
     ...
 print(t.elapsed)              # 経過秒数を値として使える
+
+# ログ文言を変えたいときは message を渡す（{name} / {elapsed} が使える）
+with Timer("CSV読み込み", message="{elapsed} [{name}]"):
+    ...
+# ログ: 00:00:03 [CSV読み込み]
 ```
 
 ### デバッグ用 measure（`comken.debug()` 中だけログ）
