@@ -129,7 +129,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--path",
         type=Path,
         default=None,
-        help=("書き出し先（省略時は comken/core/holidays/data/company_calendar.csv）"),
+        help=("書き出し先（省略時は comken/core/dates/data/company_calendar.csv）"),
     )
     holidays.set_defaults(run=_run_holidays, _prog="python -m comken holidays")
 
@@ -197,18 +197,25 @@ def _run_credentials(_args: argparse.Namespace, remaining: list[str]) -> int:
     return cred_main(remaining)
 
 
-def _run_holidays(args: argparse.Namespace, _remaining: list[str]) -> int:
+def _run_holidays(args: argparse.Namespace, remaining: list[str]) -> int:
     """``python -m comken holidays`` / ``python -m comken holiday`` の本体。
 
-    ``comken/core/holidays/build.py`` の ``main()`` へ委譲する。import を関数内に
+    ``comken/core/dates/build.py`` の ``main()`` へ委譲する。import を関数内に
     置くのは ``_run_salesforce`` と同じ意図（依存の有無で ``python -m comken`` 全体が
     起動できなくなるのを避けるため）。
+
+    下流の ``build.main()`` は ``argparse`` を内蔵しているので、``--help`` /
+    ``-h`` や未知引数はそちらで処理させる。**残りを捨てずに渡す** --
+    渡さないと ``python -m comken holidays --help`` を打っただけで
+    ``company_calendar.csv`` が書き直されてしまう（CLI のヘルプなのに副作用が
+    出るのは事故）。
     """
-    from comken.core.holidays.build import main as holidays_main
+    from comken.core.dates.build import main as holidays_main
 
     # ``--path`` が省略されたときは build.py 側の既定（git 管理下の正本）に
     # 委ねる。None を渡せば既定がそのまま使われる
     argv = ["--path", str(args.path)] if args.path is not None else []
+    argv.extend(remaining)
     return holidays_main(argv)
 
 

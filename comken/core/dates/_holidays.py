@@ -1,13 +1,13 @@
-"""comken/core/holidays/_holidays.py — 祝日カレンダー本体（実装詳細）。
+"""comken/core/dates/_holidays.py — 祝日カレンダー本体（実装詳細）。
 
-モジュール名は ``_holidays.py`` にしておき、``comken.core.holidays``
+モジュール名は ``_holidays.py`` にしておき、``comken.core.dates``
 （パッケージ本体）と ``holidays`` （クラス名）が被らないようにしている。
 
-実行時は ``comken/core/holidays/data/company_calendar.csv`` を**読むだけ**で
+実行時は ``comken/core/dates/data/company_calendar.csv`` を**読むだけ**で
 国民の祝日＋会社休日を判定する。会社休日のルール判定・内閣府 CSV の解析・
 計算ソース・``approximate``・``Holiday`` 値オブジェクトは持たない。
 **実行時は内閣府 CSV も会社休日のルールも知らない。** 生成ツール
-（``comken.core.holidays.build``）だけがそれらを持ち、生成物である
+（``comken.core.dates.build``）だけがそれらを持ち、生成物である
 ``company_calendar.csv`` に焼き込む。CLI の入口は ``python -m comken holidays``。
 
 ネット系依存（requests）はこのモジュールには入らない。
@@ -21,7 +21,7 @@ import logging
 from pathlib import Path
 from typing import Final
 
-from comken.core.dates import month_end, month_start, today
+from comken.core.dates._dates import month_end, month_start, today
 from comken.exceptions import HolidayError, WorkdayNotFoundError
 
 logger = logging.getLogger(__name__)
@@ -472,10 +472,10 @@ class _Holidays:
                 "（最終収録日: %s）。"
                 "この日以降は国民の祝日・会社休日が付きません。"
                 "内閣府の syukujitsu.csv を更新して"
-                "comken/core/holidays/data/syukujitsu.csv を上書きし、"
+                "comken/core/dates/data/syukujitsu.csv を上書きし、"
                 "python -m comken holidays を実行して"
-                "comken/core/holidays/data/company_calendar.csv を"
-                "再生成してください（docs/機能/holidays.md の「年1回の更新手順」参照）。",
+                "comken/core/dates/data/company_calendar.csv を"
+                "再生成してください（docs/機能/dates.md の「年1回の更新手順」参照）。",
                 today,
                 last,
             )
@@ -489,11 +489,11 @@ class _Holidays:
                 "会社用カレンダーの収録期限が近づいています: 残り %d 日"
                 "（最終収録日: %s）。"
                 "内閣府の syukujitsu.csv をダウンロードして"
-                "comken/core/holidays/data/syukujitsu.csv を上書きし、"
+                "comken/core/dates/data/syukujitsu.csv を上書きし、"
                 "python -m comken holidays を実行して"
-                "comken/core/holidays/data/company_calendar.csv を更新し、"
+                "comken/core/dates/data/company_calendar.csv を更新し、"
                 "コミット・タグ打ちして配布してください"
-                "（docs/機能/holidays.md の「年1回の更新手順」参照）。",
+                "（docs/機能/dates.md の「年1回の更新手順」参照）。",
                 remaining,
                 last,
             )

@@ -22,7 +22,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from comken.core.holidays import warn_if_holidays_expiring_soon
+from comken.core.dates import warn_if_holidays_expiring_soon
 
 logger = logging.getLogger(__name__)
 

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import io
 import logging
+import unittest.mock as mock
 from pathlib import Path
 from typing import Any, cast
 
@@ -83,18 +84,16 @@ class TestHolidaysSubcommand:
     ) -> None:
         """``holidays --path`` が ``company_calendar.csv`` をバイト単位で再現する。
 
-        「何を防いでいるか」: 入口が ``comken.core.holidays.build.main()`` へ
+        「何を防いでいるか」: 入口が ``comken.core.dates.build.main()`` へ
         委譲されていること -- ここで日付フォーマットや改行コードが変わると
         VBA 側の ``ADODB.Stream`` が読めなくなり、業務が止まる。
         """
         out_path = tmp_path / "out.csv"
-        with caplog.at_level(logging.INFO, logger="comken.core.holidays.build"):
+        with caplog.at_level(logging.INFO, logger="comken.core.dates.build"):
             code = main_cli(["holidays", "--path", str(out_path)])
         assert code == 0, "holidays の終了コードが 0 ではない"
 
-        bundled = (
-            Path(comken.__file__).parent / "core" / "holidays" / "data" / "company_calendar.csv"
-        )
+        bundled = Path(comken.__file__).parent / "core" / "dates" / "data" / "company_calendar.csv"
         assert out_path.is_file(), f"holidays の書き出し先が無い: {out_path}"
         assert out_path.read_bytes() == bundled.read_bytes(), (
             "holidays の出力とバンドル済みの company_calendar.csv がバイト単位で一致しない"
@@ -125,14 +124,12 @@ class TestHolidaysSubcommand:
         """
         # 既定パスを tmp_path 配下へ差し替える（バンドル先を汚さないため）
         target = tmp_path / "default_company_calendar.csv"
-        from comken.core.holidays import build as build_mod
+        from comken.core.dates import build as build_mod
 
         monkeypatch.setattr(build_mod, "COMPANY_HOLIDAYS_CSV_PATH", target)
         assert main_cli(["holidays"]) == 0
 
-        bundled = (
-            Path(comken.__file__).parent / "core" / "holidays" / "data" / "company_calendar.csv"
-        )
+        bundled = Path(comken.__file__).parent / "core" / "dates" / "data" / "company_calendar.csv"
         assert target.read_bytes() == bundled.read_bytes(), (
             "既定パスへの出力とバンドル済み company_calendar.csv が一致しない"
         )
@@ -207,3 +204,64 @@ class TestRegressionGuard:
             if removed_alias is not None:
                 choices["holiday"] = removed_alias
             command_action._choices_actions.extend(removed_actions)  # type: ignore[attr-defined]
+
+
+class TestHolidaysHelpGuard:
+    """``python -m comken holidays --help`` が副作用なしで help を出せること。
+
+    「何を防いでいるか」: ``__main__._run_holidays`` が ``build.main()`` へ
+    ``--path`` だけを渡して ``--help`` 等の残りを捨てていると、help を
+    見ただけで ``company_calendar.csv`` が書き直される（CLI 経由の help に
+    副作用が出るのは事故）。下流の ``build.main()`` は ``argparse`` を
+    内蔵しているので、残りを渡せばそちらで ``SystemExit(0)`` してくれる。
+    """
+
+    def _patch_writer(self, monkeypatch: pytest.MonkeyPatch) -> mock.Mock:
+        """``write_company_calendar_csv`` を ``Mock`` でつぶす。"""
+        from comken.core.dates import build as build_mod
+
+        sentinel = mock.Mock()
+        monkeypatch.setattr(build_mod, "write_company_calendar_csv", sentinel)
+        return sentinel
+
+    def test_help_long_form_does_not_write_csv(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """``holidays --help`` が ``write_company_calendar_csv`` を呼ばない。"""
+        writer = self._patch_writer(monkeypatch)
+        with pytest.raises(SystemExit) as excinfo:
+            main_cli(["holidays", "--help"])
+        assert excinfo.value.code == 0, f"--help の終了コードが 0 ではない: {excinfo.value.code!r}"
+        writer.assert_not_called()
+
+    def test_help_short_form_does_not_write_csv(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """``holidays -h`` も ``write_company_calendar_csv`` を呼ばない。"""
+        writer = self._patch_writer(monkeypatch)
+        with pytest.raises(SystemExit) as excinfo:
+            main_cli(["holidays", "-h"])
+        assert excinfo.value.code == 0
+        writer.assert_not_called()
+
+    def test_help_output_mentions_path_option(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """``holidays --help`` の出力に ``--path`` が説明付きで出る。
+
+        下流の ``build.main()`` の ``argparse`` が出しているので、利用者が
+        ``--path`` の存在に気付けることが見るべき不変条件。
+        """
+        with pytest.raises(SystemExit):
+            main_cli(["holidays", "--help"])
+        out = capsys.readouterr().out
+        assert "--path" in out, f"holidays --help に --path が無い: {out!r}"
+
+    def test_unknown_option_does_not_write_csv_and_exits_non_zero(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """知らないオプションで ``write_company_calendar_csv`` が呼ばれず、0 以外の code。
+
+        ``argparse`` の ``parser.error()`` は ``SystemExit(2)`` を投げる。
+        ``main_cli`` は ``ComkenError`` しか拾わないので、``SystemExit`` は
+        そのまま伝播する。
+        """
+        writer = self._patch_writer(monkeypatch)
+        with pytest.raises(SystemExit) as excinfo:
+            main_cli(["holidays", "--foo"])
+        assert excinfo.value.code != 0, f"未知引数の終了コードが 0: {excinfo.value.code!r}"
+        writer.assert_not_called()

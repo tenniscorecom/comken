@@ -43,6 +43,7 @@ _REMOVED_NAMES = (
     "transfer_by_key",
     "used_last_row",
     "count_a",
+    "core.holidays",
 )
 
 

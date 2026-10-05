@@ -1,10 +1,10 @@
-"""comken/core/holidays/build.py — 「会社用カレンダー CSV 1 ファイル」を生成するツール。
+"""comken/core/dates/build.py — 「会社用カレンダー CSV 1 ファイル」を生成するツール。
 
-内閣府の祝日 CSV（``comken/core/holidays/data/syukujitsu.csv``）と、
+内閣府の祝日 CSV（``comken/core/dates/data/syukujitsu.csv``）と、
 このファイルの先頭で定義している **会社休日ルール** を合成し、
-``comken/core/holidays/data/company_calendar.csv`` を生成する。
+``comken/core/dates/data/company_calendar.csv`` を生成する。
 
-生成されたファイルは git 管理下に置かれ、Python 側（``comken.core.holidays``）
+生成されたファイルは git 管理下に置かれ、Python 側（``comken.core.dates``）
 と VBA 側の両方が同じファイルを読み取って営業日判定に使う。生成ツールだけが
 内閣府 CSV の形式を知っていればよく、実行時は内閣府 CSV も会社休日のルールも
 知らずに CSV を判定するだけになる（内閣府 CSV の形式変更は生成ツールだけが
@@ -15,9 +15,9 @@
 **年 1 回の内閣府 CSV 更新**（毎年 2 月頃、内閣府が翌年分を公表）:
 
 1. 開発機で内閣府から ``syukujitsu.csv`` を取得する
-2. ``comken/core/holidays/data/syukujitsu.csv`` をダウンロードしたファイルで上書きする
+2. ``comken/core/dates/data/syukujitsu.csv`` をダウンロードしたファイルで上書きする
 3. ``python -m comken holidays`` を実行して
-   ``comken/core/holidays/data/company_calendar.csv`` を再生成する
+   ``comken/core/dates/data/company_calendar.csv`` を再生成する
 4. ``syukujitsu.csv`` と ``company_calendar.csv`` の更新をまとめてコミットする
 
 **会社休日を変えるとき**（年末年始休暇の日付を変える等）:
@@ -27,7 +27,7 @@
 3. ``company_calendar.csv`` の更新をコミットする
 
 ``--path`` で任意の書き出し先を指定できる（既定は
-``comken/core/holidays/data/company_calendar.csv``）。
+``comken/core/dates/data/company_calendar.csv``）。
 
 ::
 
@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 # 休みを増やすときは (月, 日) を書き足すだけでよい。年またぎの年末年始も
 # 月日で書けばそのまま毎年適用される。
 # ここを変えたら ``python -m comken holidays`` を実行して
-# ``comken/core/holidays/data/company_calendar.csv`` を更新する。
+# ``comken/core/dates/data/company_calendar.csv`` を更新する。
 COMPANY_HOLIDAYS: dict[str, tuple[tuple[int, int], ...]] = {
     "年末年始休暇": ((12, 29), (12, 30), (12, 31), (1, 1), (1, 2), (1, 3)),
 }
@@ -70,13 +70,13 @@ COMPANY_HOLIDAYS_EXTRA: tuple[_dt.date, ...] = ()
 EXTRA_HOLIDAY_NAME: str = "会社休業日"
 
 # ── ファイルパス ────────────────────────────────────────────────────────
-# データ置き場は ``comken/core/holidays/data/``（このファイルの隣）。
+# データ置き場は ``comken/core/dates/data/``（このファイルの隣）。
 DATA_DIR: Path = Path(__file__).resolve().parent / "data"
 
 # 内閣府 CSV のパス（生成ツールだけの入力）。
 SYUKUJITSU_CSV_PATH: Path = DATA_DIR / "syukujitsu.csv"
 
-# 生成物のパス。comken/core/holidays/data/company_calendar.csv は git 管理下の正本で、
+# 生成物のパス。comken/core/dates/data/company_calendar.csv は git 管理下の正本で、
 # Python 実行時と VBA 側の両方がここを読む（共有サーバー上の同じファイル）。
 COMPANY_HOLIDAYS_CSV_PATH: Path = DATA_DIR / "company_calendar.csv"
 
@@ -231,7 +231,7 @@ def main(argv: list[str] | None = None) -> int:
         "--path",
         type=Path,
         default=COMPANY_HOLIDAYS_CSV_PATH,
-        help="書き出し先（省略時は comken/core/holidays/data/company_calendar.csv）",
+        help="書き出し先（省略時は comken/core/dates/data/company_calendar.csv）",
     )
     args = parser.parse_args(argv)
 
