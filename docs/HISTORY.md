@@ -775,3 +775,9 @@ master に何をコミットしても本番には流れない。**
 依然として文字列リテラル `SalesforceReportTruncatedError` との比較で判定する。
 Salesforce 例外クラスを import すると依存が増えるので、書き込み側
 （`type(exc).__name__`）と読み取り側（文字列リテラル）が同じ文字列を見る関係に変わりは無い。
+
+## 25. yyyymmdd の変換関数を外した（2026-10-05）
+
+以前: `format_yyyymmdd` / `parse_yyyymmdd` を用意していた。新しい考え: 持たない。
+理由: 書式は yyyymm など複数あり、書式ごとに関数が増える。`strftime` / `strptime` の1行で足りる。
+`DateFormatError` も `_format.py` ごと削除した。

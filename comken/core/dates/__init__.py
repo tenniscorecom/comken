@@ -1,6 +1,6 @@
 """comken/core/dates/__init__.py — 日付・祝日・営業日・年度まわりのユーティリティ。
 
-業務で使う日付計算・祝日判定・営業日オフセット・yyyymmdd 変換を 1 パッケージにまとめる。
+業務で使う日付計算・祝日判定・営業日オフセットを 1 パッケージにまとめる。
 「国民の祝日 + 会社休日」を 1 ファイルに合成した **会社用カレンダー CSV**
 （``comken/core/dates/data/company_calendar.csv``）を読み、「今日が営業日か」
 「次の営業日」「収録期限の警告」を提供する。
@@ -29,8 +29,6 @@ month_start / month_end         その月の 1 日 / 末日
 parse_cell_date                 セルの値を date に（読めなければ None）
 FISCAL_YEAR_START_MONTH         年度の開始月（既定 4 月）
 fiscal_year                     その日付が属する年度（4 月始まり）
-format_yyyymmdd                 date → "YYYYMMDD" の 8 桁文字列
-parse_yyyymmdd                  "YYYYMMDD" → date（不正は DateFormatError）
 EXPIRING_WARNING_DAYS           会社用カレンダー期限切れ警告の閾値日数
 WORKDAY_SEARCH_LIMIT            「次の営業日」探索の日数上限
 is_holiday                      国民の祝日または会社休日に当たれば True
@@ -49,14 +47,12 @@ non_workdays_after              d の翌日から次の営業日の前日まで�
 non_workdays_before             d の前日から前の営業日の翌日までの休みの日（連休）
 warn_if_holidays_expiring_soon  既定カレンダーの収録期限が近ければ起動時に警告
 HOLIDAYS_CSV_PATH               会社用カレンダーCSV のパス（git 管理下の正本）
-DateFormatError                 yyyymmdd⇔日付の変換失敗（読めない入力を弾く）
 HolidayError                    祝日カレンダーに関する基底例外
 WorkdayNotFoundError            月内に該当営業日が無い／探索上限到達
 """
 
 from comken.core.dates._dates import month_end, month_start, now, parse_cell_date, today
 from comken.core.dates._fiscal import FISCAL_YEAR_START_MONTH, fiscal_year
-from comken.core.dates._format import format_yyyymmdd, parse_yyyymmdd
 from comken.core.dates._holidays import (
     EXPIRING_WARNING_DAYS,
     HOLIDAYS_CSV_PATH,
@@ -75,10 +71,9 @@ from comken.core.dates._holidays import (
     workday_on_or_after,
     workday_on_or_before,
 )
-from comken.exceptions import DateFormatError, HolidayError, WorkdayNotFoundError
+from comken.exceptions import HolidayError, WorkdayNotFoundError
 
 __all__ = [
-    "DateFormatError",
     "EXPIRING_WARNING_DAYS",
     "FISCAL_YEAR_START_MONTH",
     "HOLIDAYS_CSV_PATH",
@@ -88,7 +83,6 @@ __all__ = [
     "count_workdays",
     "fiscal_year",
     "first_workday",
-    "format_yyyymmdd",
     "holiday_name",
     "is_holiday",
     "is_workday",
@@ -100,7 +94,6 @@ __all__ = [
     "now",
     "nth_workday",
     "parse_cell_date",
-    "parse_yyyymmdd",
     "today",
     "warn_if_holidays_expiring_soon",
     "workday",

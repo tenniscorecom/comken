@@ -2,7 +2,7 @@
 
 RPA 置き換えプロジェクトで「いま取るべきレポートか」を判定するために使う、
 **会社用カレンダー CSV** ベースの営業日判定と、業務で使う日付計算
-（月の初日・末日、yyyymmdd ⇔ 日付、年度）をまとめたライブラリ。
+（月の初日・末日、年度）をまとめたライブラリ。
 
 実装本体は `comken/core/dates/` 配下にある（外部ライブラリに依存しない）。
 内閣府の祝日 CSV と会社休日ルールを合成した「会社用カレンダー CSV」を
@@ -30,7 +30,6 @@ RPA 置き換えプロジェクトで「いま取るべきレポートか」を�
 - [期限切れの警告](#期限切れの警告)
 - [日付の計算](#日付の計算)
 - [年度（fiscal_year）](#年度fiscal_year)
-- [yyyymmdd 変換（format_yyyymmdd / parse_yyyymmdd）](#yyyymmdd-変換format_yyyymmdd-parse_yyyymmdd)
 - [公開 API](#公開-api)
 - [注意事項](#注意事項)
 
@@ -235,8 +234,6 @@ parse_cell_date(None)                       # → None
 
 `parse_cell_date` は読めなかった値を `None` で返す（例外にしない）方針なので、
 「日付じゃない値を弾きたい」場合は呼び出し側で `None` を判定する。
-逆に「明示的に変換を頼んだ入力が不正」なものは `parse_yyyymmdd()` 側の
-`DateFormatError` で止める（下の yyyymmdd 変換を参照）。
 
 ## 年度（`fiscal_year`）
 
@@ -263,41 +260,21 @@ fiscal_year(date(2026, 1, 1))      # → 2025
 これは **会社で変わる値ではない**（会社ごと設定ファイル化しない）ので、
 コードに直書きしてある。
 
-## yyyymmdd 変換（format_yyyymmdd / parse_yyyymmdd）
+## 書式の変換
 
-業務ファイル名・API のリクエスト・yyyymmdd で来る文字列など、**8 桁数字列**
-と `datetime.date` の相互変換。和暦・日本語表記・Excel シリアル値は扱わない
-（必要になったら別関数を足す）。
+業務で使う書式（yyyymmdd / yyyy-mm-dd / yyyy/mm/dd など）は複数あるため、
+comken は書式ごとの変換関数を **持たない**。 `datetime` 標準の `strftime` / `strptime` の 1 行で足りる:
 
 ```python
 from datetime import date, datetime
 
-from comken.core import format_yyyymmdd, parse_yyyymmdd
-
-format_yyyymmdd(date(2026, 10, 5))        # → "20261005"
-format_yyyymmdd(datetime(2026, 10, 5, 12))  # → "20261005"（時刻は捨てる）
-
-parse_yyyymmdd("20261005")                # → date(2026, 10, 5)
-parse_yyyymmdd(" 20261005 ")              # → date(2026, 10, 5)（前後の空白は除去）
-parse_yyyymmdd("20240229")                # → date(2024, 2, 29)（閏日は通る）
-
-# 失敗は DateFormatError
-parse_yyyymmdd("2026105")                 # → 7 桁なので DateFormatError
-parse_yyyymmdd("2026-10-05")              # → 区切り文字付きは DateFormatError
-parse_yyyymmdd("２０２６１００５")          # → 全角数字は DateFormatError
-parse_yyyymmdd("20250229")                # → 存在しない日付は DateFormatError
-parse_yyyymmdd("20260230")                # → 存在しない日付は DateFormatError
+date(2026, 10, 5).strftime("%Y%m%d")           # → "20261005"
+datetime.strptime("20261005", "%Y%m%d").date() # → date(2026, 10, 5)
+datetime.strptime("202610", "%Y%m").date()     # → date(2026, 10, 1)（年月用）
 ```
 
-| 状況 | 例外 |
-|---|---|
-| 入力が 8 桁の数字列でない（桁過不足、区切り文字、全角、英字混入） | `DateFormatError` |
-| 8 桁でも存在しない日付（`"20260230"` / `"20250229"` のような平年の閏日） | `DateFormatError` |
-| 値が `None` かもしれない行を数える場面 | `parse_cell_date()` を使う（こちらは読めなければ `None`） |
-
-`parse_yyyymmdd` は **明示的に変換を頼んだ** 入口なので、読めない値を黙って
-`None` で返すと「渡した文字列が想定と違った」ことに呼び出し側が気付けない。
-そのため例外で止める。
+日本語表記も書式の文字列で書ける（`"%Y年%m月%d日"`）。和暦と Excel の
+シリアル値は `strftime` / `strptime` では扱えないので、必要になったときに考える。
 
 ## 公開 API
 
@@ -310,8 +287,6 @@ parse_yyyymmdd("20260230")                # → 存在しない日付は DateFor
 | `parse_cell_date(v)` | セルの値 → `date`。読めなければ `None`（例外にしない） |
 | `fiscal_year(d)` | `d` が属する年度（4 月始まり）。`d` は `date` または `datetime` |
 | `FISCAL_YEAR_START_MONTH` | 年度の開始月（既定 4） |
-| `format_yyyymmdd(d)` | `date` / `datetime` → `"YYYYMMDD"` の 8 桁文字列 |
-| `parse_yyyymmdd(s)` | `"YYYYMMDD"` → `date`。不正は `DateFormatError` |
 | `is_holiday(d)` | 国民の祝日または会社休日に当たれば `True` |
 | `holiday_name(d)` | 国民の祝日または会社休日の名称を返す（無ければ `None`） |
 | `is_workday(d, *, skip_weekends=True)` | 国民の祝日＋会社休日＋土日を判定して `True`/`False` |
@@ -328,7 +303,6 @@ parse_yyyymmdd("20260230")                # → 存在しない日付は DateFor
 | `WORKDAY_SEARCH_LIMIT` | 「次の営業日」探索の上限日数（既定 30） |
 | `EXPIRING_WARNING_DAYS` | 期限切れ警告を出すまでの日数（既定 30） |
 | `HOLIDAYS_CSV_PATH` | 会社用カレンダーCSV のパス（git 管理下の正本） |
-| `DateFormatError` | yyyymmdd⇔日付の変換失敗（読めない入力を弾く） |
 | `HolidayError` 系 | 例外（`HolidayError` / `WorkdayNotFoundError`） |
 
 `skip_weekends=False` にすると土曜・日曜でも祝日でなければ「営業日」と
@@ -395,12 +369,6 @@ dates.workday(date(2026, 8, 20), 1)
   `HolidayError` で止める（業務運用の場面）。
 - **ネットワークには一切出ない。** `comken.core` は `requests` を import
   しないので、オフライン環境・社内 BO 端末でもそのまま動く。
-- `parse_cell_date()` と `parse_yyyymmdd()` は目的が違う。
-  `parse_cell_date()` は読めない値を `None` で返して呼び出し側で件数カウント
-  する運用（Excel / CSV 列から読む場面）、`parse_yyyymmdd()` は明示的に
-  変換を頼んだ場面で読めない入力を `DateFormatError` で止める
-  （ファイル名・yyyymmdd 形式の入力）。両方必要な場面があり、片方では代替
-  できないので、両方を持っている。
 
 ## 関連
 

@@ -1021,26 +1021,6 @@ Args:
 Returns:
     ``target`` が属する年度の西暦。
 
-### `format_yyyymmdd`
-
-```text
-def format_yyyymmdd(target: _dt.date | _dt.datetime) -> str:
-```
-
-#### 説明
-
-``target`` を ``yyyymmdd`` 形式の 8 桁文字列に変換する。
-
-1 桁の月日でもゼロ埋めする（``2026-10-05`` → ``"20261005"``）。
-``datetime.datetime`` を渡されたときは ``date()`` で日付部分だけ変換する
-（時刻は捨て、日付だけを 8 桁にする）。
-
-Args:
-    target: 変換対象の日付（``datetime.date`` または ``datetime.datetime``）。
-
-Returns:
-    ``"20261005"`` のような 8 桁数字文字列。
-
 ### `holiday_name`
 
 ```text
@@ -1287,30 +1267,6 @@ Excel から ``Table`` 行を読むとき、 日付列は
 受け付ける書式は ``_DATE_TEXT_FORMATS`` に固定。 新しい書式を足すときは
 ここにタプル要素として追加する（会社用カレンダーCSV の日付解釈とは別口
 なので、 祝日 CSV の安全弁を緩めない）。
-
-### `parse_yyyymmdd`
-
-```text
-def parse_yyyymmdd(text: str) -> _dt.date:
-```
-
-#### 説明
-
-``yyyymmdd`` 形式の 8 桁文字列を ``datetime.date`` に変換する。
-
-前後の空白は ``str.strip()`` で取り除いてから判定する。
-**数字ちょうど 8 桁** 以外（区切り文字付き、全角、桁過不足）は
-``DateFormatError``。存在しない日付（``"20260230"``）も ``DateFormatError``
-（``datetime`` 側のチェックで弾かれる）。
-
-Args:
-    text: ``"20261005"`` のような 8 桁数字文字列（前後の空白は許容）。
-
-Returns:
-    変換した ``datetime.date``。
-
-Raises:
-    DateFormatError: 8 桁でない・数字以外を含む・存在しない日付のとき。
 
 ### `project_dir`
 
@@ -1736,27 +1692,6 @@ def __init__(self, path: str | Path | None=None) -> None:
 
 ## `from comken.core.dates import ...`
 
-### `DateFormatError`
-
-```text
-class DateFormatError(ComkenError):
-```
-
-#### 説明
-
-日付書式の変換に失敗した
-
-``parse_yyyymmdd()`` が、入力が 8 桁の数字列でない、または数字列でも
-存在しない日付（``"20260230"`` など）のときに送る。
-``parse_cell_date()`` のように読めなかった値を ``None`` で返すのではなく、
-**明示的に変換を頼んだ呼び出し側へ失敗を返す**ための例外。
-
-対処:
-    入力を見直す（区切り文字付き・全角・桁過不足は無効）。
-    8 桁の数字列 ``YYYYMMDD`` に直す。
-    値が ``None`` かもしれないときは ``parse_cell_date()`` を使う（こちらは
-    読めなければ ``None`` を返す方針）。
-
 ### `EXPIRING_WARNING_DAYS`
 
 公開定数。
@@ -1869,26 +1804,6 @@ def first_workday(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
 
 Raises:
     WorkdayNotFoundError: その月に営業日が 1日も無いとき。
-
-### `format_yyyymmdd`
-
-```text
-def format_yyyymmdd(target: _dt.date | _dt.datetime) -> str:
-```
-
-#### 説明
-
-``target`` を ``yyyymmdd`` 形式の 8 桁文字列に変換する。
-
-1 桁の月日でもゼロ埋めする（``2026-10-05`` → ``"20261005"``）。
-``datetime.datetime`` を渡されたときは ``date()`` で日付部分だけ変換する
-（時刻は捨て、日付だけを 8 桁にする）。
-
-Args:
-    target: 変換対象の日付（``datetime.date`` または ``datetime.datetime``）。
-
-Returns:
-    ``"20261005"`` のような 8 桁数字文字列。
 
 ### `holiday_name`
 
@@ -2053,30 +1968,6 @@ Excel から ``Table`` 行を読むとき、 日付列は
 受け付ける書式は ``_DATE_TEXT_FORMATS`` に固定。 新しい書式を足すときは
 ここにタプル要素として追加する（会社用カレンダーCSV の日付解釈とは別口
 なので、 祝日 CSV の安全弁を緩めない）。
-
-### `parse_yyyymmdd`
-
-```text
-def parse_yyyymmdd(text: str) -> _dt.date:
-```
-
-#### 説明
-
-``yyyymmdd`` 形式の 8 桁文字列を ``datetime.date`` に変換する。
-
-前後の空白は ``str.strip()`` で取り除いてから判定する。
-**数字ちょうど 8 桁** 以外（区切り文字付き、全角、桁過不足）は
-``DateFormatError``。存在しない日付（``"20260230"``）も ``DateFormatError``
-（``datetime`` 側のチェックで弾かれる）。
-
-Args:
-    text: ``"20261005"`` のような 8 桁数字文字列（前後の空白は許容）。
-
-Returns:
-    変換した ``datetime.date``。
-
-Raises:
-    DateFormatError: 8 桁でない・数字以外を含む・存在しない日付のとき。
 
 ### `today`
 
@@ -3753,27 +3644,6 @@ state.ini に関するエラー。具体的な状況はメッセージに出る
 
 対処:
     メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
-
-### `DateFormatError`
-
-```text
-class DateFormatError(ComkenError):
-```
-
-#### 説明
-
-日付書式の変換に失敗した
-
-``parse_yyyymmdd()`` が、入力が 8 桁の数字列でない、または数字列でも
-存在しない日付（``"20260230"`` など）のときに送る。
-``parse_cell_date()`` のように読めなかった値を ``None`` で返すのではなく、
-**明示的に変換を頼んだ呼び出し側へ失敗を返す**ための例外。
-
-対処:
-    入力を見直す（区切り文字付き・全角・桁過不足は無効）。
-    8 桁の数字列 ``YYYYMMDD`` に直す。
-    値が ``None`` かもしれないときは ``parse_cell_date()`` を使う（こちらは
-    読めなければ ``None`` を返す方針）。
 
 ### `HolidayError`
 

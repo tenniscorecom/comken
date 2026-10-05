@@ -196,9 +196,9 @@ parse_cell_date(None)                                     # → None
 新しい書式を足すときは `comken/core/dates/_dates.py` の `_DATE_TEXT_FORMATS` に
 タプル要素を追加する。
 
-`month_start` / `month_end` / 年度 (`fiscal_year`) / yyyymmdd 変換
-(`format_yyyymmdd` / `parse_yyyymmdd`) の使い方は
-[dates.md](dates.md) を参照。
+`month_start` / `month_end` / 年度 (`fiscal_year`) の使い方は
+[dates.md](dates.md) を参照。日付書式の変換は `strftime` / `strptime` を
+そのまま使う（[dates.md「書式の変換」](dates.md#書式の変換)）。
 
 ### テキスト正規化（normalize / strip_spaces / remove_spaces)
 

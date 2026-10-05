@@ -1,7 +1,6 @@
-"""comken/exceptions/dates.py — 日付・祝日まわりの例外。
+"""comken/exceptions/dates.py — 祝日カレンダーまわりの例外。
 
-祝日カレンダー（``HolidayError`` / ``WorkdayNotFoundError``）と、
-日付書式（``DateFormatError``）をまとめる。
+祝日カレンダー（``HolidayError`` / ``WorkdayNotFoundError``）をまとめる。
 """
 
 from comken.exceptions.base import ComkenError
@@ -38,19 +37,3 @@ class WorkdayNotFoundError(HolidayError):
 
     def __init__(self, detail: str) -> None:
         super().__init__(detail)
-
-
-class DateFormatError(ComkenError):
-    """日付書式の変換に失敗した
-
-    ``parse_yyyymmdd()`` が、入力が 8 桁の数字列でない、または数字列でも
-    存在しない日付（``"20260230"`` など）のときに送る。
-    ``parse_cell_date()`` のように読めなかった値を ``None`` で返すのではなく、
-    **明示的に変換を頼んだ呼び出し側へ失敗を返す**ための例外。
-
-    対処:
-        入力を見直す（区切り文字付き・全角・桁過不足は無効）。
-        8 桁の数字列 ``YYYYMMDD`` に直す。
-        値が ``None`` かもしれないときは ``parse_cell_date()`` を使う（こちらは
-        読めなければ ``None`` を返す方針）。
-    """
