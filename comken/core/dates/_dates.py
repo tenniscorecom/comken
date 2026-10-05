@@ -1,9 +1,12 @@
-"""comken/core/dates.py — 日付・時刻まわりのユーティリティ。
+"""comken/core/dates/_dates.py — 日付・時刻まわりのユーティリティ。
 
 タイムゾーンが必要なのは「今の時刻を取るとき」だけ。
 業務で扱う日付（CSV に書かれた日付、ファイル名に入っている日付、帳票の日付）は
 「その日」を表すただの日付であり、時刻もタイムゾーンも持たない。
 これらは datetime.date のまま扱い、タイムゾーンを付けようとしないこと。
+
+モジュール名は ``_dates.py`` にしておき、``comken.core.dates``
+（パッケージ本体）が被らないようにしている。
 """
 
 import calendar as _calendar
@@ -42,7 +45,7 @@ def month_end(target: datetime.date) -> datetime.date:
 # 「日」列が文字列で入っていた場合に受け付ける書き方。
 # Excel / CSV から読む業務シートでよくある表記をカバーする。
 # 新しい書式を増やすときは**ここを変えても会社用カレンダーCSV の日付パーサ
-# （``comken.core.holidays._holidays._Holidays.load`` の日付解釈）には影響しない**。
+# （``comken.core.dates._holidays._Holidays.load`` の日付解釈）には影響しない**。
 # 祝日 CSV は配布フォーマットの制約で 2 形式に固定しており、 緩めた
 # 場合に「内閣府以外のファイルを取り違えても気付かない」リスクがあるため
 # 別口のままで揃えていない。

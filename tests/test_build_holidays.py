@@ -1,9 +1,9 @@
-"""comken.core.holidays.build のテスト。
+"""comken.core.dates.build のテスト。
 
 内閣府 CSV の解析（CP932・形式エラー・年の範囲など）と会社休日の展開
 （年非依存・COMPANY_HOLIDAYS_EXTRA・国民の祝日との重なり）を検証する。
 また、生成ツールの ``build_rows()`` の結果が追跡している
-``comken/core/holidays/data/company_calendar.csv`` と行単位で一致することを
+``comken/core/dates/data/company_calendar.csv`` と行単位で一致することを
 確認する（同期テスト）。
 
 CLI 入口は ``comken.__main__``。``python -m comken holidays`` のテストは
@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from comken.core.holidays import build as build_holidays
+from comken.core.dates import build as build_holidays
 from comken.exceptions import HolidayError
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "holidays" / "syukujitsu_sample.csv"
@@ -174,7 +174,7 @@ class TestBuildRows:
 class TestCsvSynchronization:
     """生成物 ``data/company_calendar.csv`` との同期テスト。
 
-    ``build_rows()`` の結果が ``comken/core/holidays/data/company_calendar.csv``
+    ``build_rows()`` の結果が ``comken/core/dates/data/company_calendar.csv``
     （git 管理下）と行単位で一致していることを確認する。CSV のフォーマット
     変更・内閣府 CSV 更新・会社休日ルール変更後に
     ``python -m comken holidays`` を再実行するのを忘れた場合に落ちる。

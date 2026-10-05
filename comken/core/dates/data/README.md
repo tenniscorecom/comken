@@ -1,4 +1,4 @@
-# comken/core/holidays/data/
+# comken/core/dates/data/
 
 会社用カレンダーの元データ置き場。**`company_calendar.csv` を直接編集してはいけません**。
 元データを変えたら、必ず `python -m comken holidays` を実行して
@@ -11,12 +11,12 @@
 | `syukujitsu.csv` | 内閣府の祝日一覧（CP932） | 更新手順で差し替え |
 | `company_calendar.csv` | 生成物（Python/VBA が読む正本） | **いいえ**（`build` で再生成） |
 
-会社の休業日は CSV ではなく、`comken/core/holidays/build.py` の冒頭
+会社の休業日は CSV ではなく、`comken/core/dates/build.py` の冒頭
 （`COMPANY_HOLIDAYS` / `COMPANY_HOLIDAYS_EXTRA`）に書きます。
 
 ## 会社休日を変える
 
-1. `comken/core/holidays/build.py` 冒頭の定数を直す
+1. `comken/core/dates/build.py` 冒頭の定数を直す
    - 毎年の休み: `COMPANY_HOLIDAYS` に `(月, 日)` を足す
    - その年だけの休み: `COMPANY_HOLIDAYS_EXTRA` に `date(2026, 12, 28)` のように足す
 2. `python -m comken holidays` を実行

@@ -1,7 +1,7 @@
-"""comken.core.holidays のテスト。
+"""comken.core.dates の祝日判定部分のテスト。
 
 会社用カレンダー CSV（``company_calendar.csv``）を読んで国民の祝日＋会社休日
-を判定する実行時 API の挙動を検証する。生成ツール（``comken/core/holidays/build.py``）
+を判定する実行時 API の挙動を検証する。生成ツール（``comken/core/dates/build.py``）
 側の内閣府 CSV 解析・会社休日ルールの展開は ``tests/test_build_holidays.py``
 で検証する。
 """
@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from comken.core.holidays import (
+from comken.core.dates import (
     EXPIRING_WARNING_DAYS,
     HOLIDAYS_CSV_PATH,
     WORKDAY_SEARCH_LIMIT,
@@ -31,7 +31,7 @@ from comken.core.holidays import (
     workday_on_or_after,
     workday_on_or_before,
 )
-from comken.core.holidays._holidays import _Holidays, _set_calendar_for_test
+from comken.core.dates._holidays import _Holidays, _set_calendar_for_test
 from comken.exceptions import HolidayError, WorkdayNotFoundError
 
 # ── 公開関数の基本動作 ──────────────────────────────────────────────────
@@ -195,7 +195,7 @@ class TestExpiringWarning:
         _set_calendar_for_test(_holiday_calendar({_dt.date(2024, 5, 5): "こどもの日"}))
         try:
             today = _dt.date(2024, 4, 20)  # 残り 15 日
-            with caplog.at_level(logging.WARNING, logger="comken.core.holidays._holidays"):
+            with caplog.at_level(logging.WARNING, logger="comken.core.dates._holidays"):
                 is_workday(today)
                 is_workday(today)  # 2回呼んでも 1度だけ
             warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
@@ -211,7 +211,7 @@ class TestExpiringWarning:
         _set_calendar_for_test(_holiday_calendar({_dt.date(2025, 5, 5): "こどもの日"}))
         try:
             today = _dt.date(2024, 1, 1)
-            with caplog.at_level(logging.WARNING, logger="comken.core.holidays._holidays"):
+            with caplog.at_level(logging.WARNING, logger="comken.core.dates._holidays"):
                 is_workday(today)
             assert not [r for r in caplog.records if r.levelno == logging.WARNING]
         finally:
@@ -221,7 +221,7 @@ class TestExpiringWarning:
         """翌日にもう一度 ``is_workday`` を呼ぶと、その日では 1度だけ出る。"""
         _set_calendar_for_test(_holiday_calendar({_dt.date(2024, 5, 5): "こどもの日"}))
         try:
-            with caplog.at_level(logging.WARNING, logger="comken.core.holidays._holidays"):
+            with caplog.at_level(logging.WARNING, logger="comken.core.dates._holidays"):
                 is_workday(_dt.date(2024, 4, 20))
                 is_workday(_dt.date(2024, 4, 21))
                 is_workday(_dt.date(2024, 4, 21))
@@ -237,7 +237,7 @@ class TestExpiringWarning:
         _set_calendar_for_test(_holiday_calendar({_dt.date(2024, 5, 5): "こどもの日"}))
         try:
             after = _dt.date(2025, 1, 1)  # 最終収録日 5/5 より後
-            with caplog.at_level(logging.WARNING, logger="comken.core.holidays._holidays"):
+            with caplog.at_level(logging.WARNING, logger="comken.core.dates._holidays"):
                 is_workday(after)
                 is_workday(after)  # 同じ日の 2回目以降は増えない
                 is_workday(after + _dt.timedelta(days=10))  # 範囲外でも別の日でも増えない
@@ -255,7 +255,7 @@ class TestExpiringWarning:
         # 最終収録日を十分に先に置き、範囲外にも期限切れ警告にも該当させない
         _set_calendar_for_test(_holiday_calendar({_dt.date(2025, 12, 31): "年末"}))
         try:
-            with caplog.at_level(logging.WARNING, logger="comken.core.holidays._holidays"):
+            with caplog.at_level(logging.WARNING, logger="comken.core.dates._holidays"):
                 is_workday(_dt.date(2024, 1, 1))
                 is_workday(_dt.date(2025, 6, 1))
             warnings = [r for r in caplog.records if r.levelno == logging.WARNING]

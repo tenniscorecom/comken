@@ -38,6 +38,7 @@ ComkenError
 │   └── ConfigKeyNotFoundError
 ├── StateError
 ├── WindowNotFoundError
+├── DateFormatError
 ├── HolidayError
 │   └── WorkdayNotFoundError
 ├── DownloaderError
@@ -56,6 +57,7 @@ from comken.exceptions.config import (
     CredentialNotFoundError,
     PasswordRejectedError,
 )
+from comken.exceptions.dates import DateFormatError, HolidayError, WorkdayNotFoundError
 from comken.exceptions.downloader import (
     DownloaderError,
     HistoryLockTimeoutError,
@@ -73,7 +75,6 @@ from comken.exceptions.files import (
     StateError,
     UnsupportedFileSuffixError,
 )
-from comken.exceptions.holidays import HolidayError, WorkdayNotFoundError
 from comken.exceptions.office import (
     AccessError,
     ExcelApplicationNotAvailableError,
@@ -134,6 +135,7 @@ __all__ = [
     "ElementNotFoundError",
     "LoginFailedError",
     "StateError",
+    "DateFormatError",
     "HolidayError",
     "WorkdayNotFoundError",
     "DownloaderError",

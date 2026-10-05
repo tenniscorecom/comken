@@ -667,12 +667,13 @@ master に何をコミットしても本番には流れない。**
 - `workbook.py`（1,349 行）から、数式の計算結果を読む処理を `computed.py` に分けた（挙動は同じ）。
   `engine="com"` の分岐は、Excel の呼び出しを 1 つにする設計として残した
 - CLI の入口を `python -m comken` に統一した。カレンダーの生成は
-  `python -m comken holidays`（旧 `python -m comken.core.holidays.build`）。
+  `python -m comken holidays`（旧祝日生成ツールの CLI 入口）。
   `tools/new_project.py` の直接実行は `init` と重複していたので消した
 
 **名前を変えたもの**
 
-- `core.calendar` → `core.holidays`（標準の `calendar` と被る）、`core.clock` → `core.dates`
+- `core.calendar` → 祝日パッケージ（標準の `calendar` と被らない名前に改名）、
+  `core.clock` → `core.dates`
 - 営業日の関数を Excel に寄せた。`workday(d, n)` が `WORKDAY`、`count_workdays` が `NETWORKDAYS`。
   「次・前の営業日」専用の関数はやめて `workday(d, ±1)` にした。月の第 N 営業日は、
   年・月と負の n を渡す案より、日付を 1 つ渡す `first_workday` / `last_workday` / `nth_workday` の
@@ -732,6 +733,43 @@ master に何をコミットしても本番には流れない。**
 （致命的に壊れた見出しは `CSVError` で止める既存挙動は変えない）。
 **`truncated_today()` は残した**（呼び出し側が「自動切替で取れるようになったので
 外す」と判断するまでは副作用を避ける）。
+
+## 18. 祝日パッケージを `core.dates` へ統合（2026-10-05）
+
+`comken.core.dates`（日付の utils）と **祝日パッケージ（旧名）**の 2 つに
+分かれていた道具を **`comken.core.dates` パッケージ 1 つ**にまとめた。
+理由はシンプルで、「日付まわりの道具が 2 か所に分散すると、年度のような道具を
+どちらに置くか迷う」場面が出てきたため。
+
+配布前（社内複製機能しないうちに）に**破壊的変更でよい**と確認がとれたので、
+旧名は残さず消している（旧祝日パッケージの `from ... import ...` は `ImportError`
+になる）。
+
+**統合後の構成** — `comken/core/dates/` パッケージに
+- `_dates.py`（`now` / `today` / `month_start` / `month_end` / `parse_cell_date`）
+- `_holidays.py`（祝日カレンダー本体。営業日の判定・オフセット・警告）
+- `_fiscal.py`（`fiscal_year` と `FISCAL_YEAR_START_MONTH`）
+- `_format.py`（`format_yyyymmdd` / `parse_yyyymmdd` と `DateFormatError`）
+- `build.py`（内閣府 CSV + 会社休日 → `company_calendar.csv` を生成）
+- `data/`（`syukujitsu.csv` / `company_calendar.csv`）
+
+`_dates.py` のファイル名はモジュール本体（`comken.core.dates`）と被らないよう
+`_` プレフィックス付きにし、`comken.core.dates` パッケージの `__init__.py` で
+**全部を再エクスポート**している（`from comken.core.dates import is_workday` も
+`from comken.core.dates import fiscal_year` もそのまま動く）。
+
+**足した道具** — `fiscal_year(target)`（4 月始まりの年度を返す）と
+`format_yyyymmdd` / `parse_yyyymmdd` の 8 桁数字列 ⇔ 日付。
+年度初日・末日や上期/下期・四半期は要件に出てこなかったので作っていない
+（年度の「関数名番号」だけが欲しい前提）。
+`parse_yyyymmdd` は 8 桁でない・数字以外を含む・存在しない日付
+（`"20260230"`）を `DateFormatError` で止める。明示的に変換を頼んだ
+入口なので、読めない値を `None` で黙って返す `parse_cell_date()` とは
+方針が違う（役割分担）。
+
+**CLI 入口は変えない** — `python -m comken holidays` のまま
+（祝日 CSV の再生成コマンドなので、コマンド名とやっていることは一致させた）。
+中の import と help メッセージのパスだけ `core.dates` へ移している。
 
 **`Salesforce.com` の `Truncated` エラーを `error_code` だけで判定しない設計を貫く** — `truncated_today()` は
 依然として文字列リテラル `SalesforceReportTruncatedError` との比較で判定する。
