@@ -314,3 +314,123 @@ class TestTableTransferDesign:
         assert rows["A001"][3] == "消費税: 1200"
         assert rows["A003"][3] == "新規追加"
         assert rows["A099"][3] == "転記元に無し"
+
+
+class TestSalesforceQuery:
+    """``examples.advanced.salesforce_query`` のサンプルを疑似組織で通す。
+
+    Salesforce 組織・認証情報が無くても ``_fake_org.FakeOpportunityOrg``
+    が ``_send`` だけを差し替えるため、``bulk_query()`` / ``query()`` 本体の
+    ロジックはそのまま動き、CSV 出力と集計が本物と同じコードで検証できる。
+    """
+
+    def test_main_writes_csv_and_aggregates(self, tmp_path, monkeypatch):
+        """``main()`` が CSV を作って won_total と count_by_stage を回すこと。"""
+        from examples.advanced.salesforce_query import run
+
+        monkeypatch.setattr(run, "OUTPUT_DIR", tmp_path)
+        run.main()
+
+        # 1. CSV ができる・5件・ヘッダーがそのまま・文字列のまま・参照項目 Account.Name を含む
+        csv_path = tmp_path / "opportunities.csv"
+        assert csv_path.exists()
+        # comken の CSV は既定で BOM 付き (utf-8-sig) で書く
+        rows = list(csv_path.read_text(encoding="utf-8-sig").splitlines())
+        # ヘッダー + データ5件 = 6行
+        assert len(rows) == 6
+        assert rows[0] == "Id,Name,Account.Name,Amount,IsWon,CloseDate"
+        # bulk の値は全て文字列のまま: Amount=100000 (前ゼロなし)、IsWon="true" (bool ではない)
+        assert "100000" in rows[1]
+        assert ",true," in rows[1]
+        assert "250000" in rows[2]
+        assert ",false," in rows[2]
+        # null のセルは空文字のまま (案件C の Amount・案件D の Account.Name)
+        assert ",,false," in rows[3]
+        assert ",,50000," in rows[4]
+
+    def test_won_total_is_decimal_sum_of_true_rows(self):
+        """``won_total`` は IsWon="true" だけ Decimal 合計する。
+
+        "false" も空文字も真と判定されないこと (``row["IsWon"] != "true"``
+        で判定するコメントの動作）を担保する。
+        """
+        from decimal import Decimal
+
+        from comken.core.table import Table
+        from comken.toolbox.csv.file import parse_text
+        from examples.advanced.salesforce_query._fake_org import (
+            OPPORTUNITIES_BULK_PAGE_1,
+            OPPORTUNITIES_BULK_PAGE_2,
+        )
+        from examples.advanced.salesforce_query.run import won_total
+
+        # bulk の結果をパースして Table に詰める
+        raw_rows = parse_text(OPPORTUNITIES_BULK_PAGE_1 + OPPORTUNITIES_BULK_PAGE_2)
+        columns = list(raw_rows[0])
+        data_rows = [dict(zip(columns, row, strict=True)) for row in raw_rows[1:]]
+        table = Table(columns, data_rows)
+
+        total = won_total(table)
+        # 案件A(100000) + 案件D(50000) + 案件E(75000) = 225000
+        # 案件B/C は IsWon=false、案件C は Amount 空欄で Decimal 変換不可のため除外
+        assert total == Decimal("225000")
+
+    def test_count_by_stage_returns_int_dict(self):
+        """``count_by_stage`` は集計結果を ``{str: int}`` で返す。
+
+        bulk_query() は GROUP BY を 400 で弾くため query() 側に振り分ける
+        必要があり、``cnt`` が int で返ることを担保する。件数は bulk CSV の
+        5件と合う: Closed Won=3 (IsWon=true) / Prospecting=1 / Negotiation/Review=1。
+        """
+        from examples.advanced.salesforce_query._fake_org import FakeOpportunityOrg
+        from examples.advanced.salesforce_query.run import count_by_stage
+
+        sf = FakeOpportunityOrg()
+        try:
+            counts = count_by_stage(sf)
+        finally:
+            sf.close()
+
+        assert counts == {
+            "Prospecting": 1,
+            "Negotiation/Review": 1,
+            "Closed Won": 3,
+        }
+        # 値が int 型で返ること (bulk のように "5" ではない)
+        assert all(isinstance(value, int) for value in counts.values())
+
+    def test_find_account_returns_first_row_dict_without_attributes(self):
+        """``find_account`` は 1件の dict を返す (``attributes`` は取り除かれている)。"""
+        from examples.advanced.salesforce_query._fake_org import FakeOpportunityOrg
+        from examples.advanced.salesforce_query.run import find_account
+
+        sf = FakeOpportunityOrg()
+        try:
+            account = find_account(sf, "株式会社アルファ")
+        finally:
+            sf.close()
+
+        assert account == {"Id": "001000000000001XXX", "Name": "株式会社アルファ"}
+        # 見つからないときは None (例外にならないこと)
+        sf = FakeOpportunityOrg()
+        try:
+            assert find_account(sf, "存在しない") is None
+        finally:
+            sf.close()
+
+    def test_find_account_escapes_single_quote(self):
+        """``find_account`` は ``'`` を含む名前でも例外を出さず ``None`` を返す。
+
+        利用者入力を SOQL に埋める前に ``\\`` / ``'`` をエスケープしている
+        ことを担保する (``O'Brien`` のような名前で ``WHERE Name = 'O'Brien'``
+        のように壊れたクエリにならないこと)。
+        """
+        from examples.advanced.salesforce_query._fake_org import FakeOpportunityOrg
+        from examples.advanced.salesforce_query.run import find_account
+
+        sf = FakeOpportunityOrg()
+        try:
+            # 該当アカウントは疑似組織に登録していないので None。例外が出ないことだけが確認点
+            assert find_account(sf, "O'Brien & Sons") is None
+        finally:
+            sf.close()
