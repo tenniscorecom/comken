@@ -8,12 +8,33 @@
 import ast
 import importlib
 import re
+import subprocess
 from pathlib import Path
 
 import export_for_chat
 import pytest
 
 _ROOT = Path(__file__).resolve().parent.parent
+
+
+def _git_tracked(pattern: str) -> list[Path] | None:
+    """``git ls-files -z -- <pattern>`` を実行し、git 管理下のファイルを
+    ``_ROOT`` 起点の ``Path`` リストで返す。git が無い・失敗時は ``None``。"""
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "-z", "--", pattern],
+            cwd=_ROOT,
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    if result.returncode != 0:
+        return None
+    text = result.stdout.decode("utf-8", errors="replace")
+    return [_ROOT / name for name in text.split("\x00") if name]
+
+
 # pytest --basetemp で指定した作業ディレクトリ（.pytest-tmp/）はテスト用の一時領域で、
 # リポジトリのドキュメントとしては存在しないので走査対象外にする。
 # test_batch_files.py と同じ除外セットを使う。
@@ -21,14 +42,31 @@ _ROOT = Path(__file__).resolve().parent.parent
 # 削除済み名（pdf 等）や相対リンク（../../README.md）を含むため、 ここで検査すると
 # 「中身に含まれる名前すべて」を検査対象にできない（バンドル用の検証は
 # tests/test_export_for_chat.py が別途担う）。
-_DOCS = [
-    path
-    for path in _ROOT.rglob("*.md")
-    if ".git" not in path.parts
-    and ".pytest-tmp" not in path.parts
-    and "comken_bundle" not in path.parts
-    and path.name != "CODEX_TASK.md"
-]
+def _list_docs() -> list[Path]:
+    """git 管理下の ``*.md`` を ``_ROOT`` 起点の ``Path`` で列挙する。
+
+    リポジトリ全体を ``rglob`` すると、``.venv/`` など ``.gitignore`` の対象が
+    検査に巻き込まれ、``.venv/Lib/site-packages/.../NOTICE.md`` のようなリンクが
+    「リンク先がありません」で落ちる。git が使える環境では ``git ls-files`` の
+    結果を使い、git が無い・失敗した場合だけ元の ``rglob`` 走査へ戻る。"""
+    tracked = _git_tracked("*.md")
+    if tracked is not None:
+        # git 管理下のファイルだけ列挙すれば ``.git``・``.pytest-tmp``・
+        # ``comken_bundle`` は最初から含まれない（``.gitignore`` で除外済みのため）。
+        # ``CODEX_TASK.md`` は実装側の理由で個別に除外する（rglob フォールバックでも
+        # 同じ除外を保つ）。
+        return sorted(path for path in tracked if path.name != "CODEX_TASK.md")
+    return [
+        path
+        for path in _ROOT.rglob("*.md")
+        if ".git" not in path.parts
+        and ".pytest-tmp" not in path.parts
+        and "comken_bundle" not in path.parts
+        and path.name != "CODEX_TASK.md"
+    ]
+
+
+_DOCS = _list_docs()
 
 _CODE_BLOCK = re.compile(r"```python(\s+skip)?\n(.*?)```", re.DOTALL)
 _ANY_FENCED_BLOCK = re.compile(r"```.*?```", re.DOTALL)

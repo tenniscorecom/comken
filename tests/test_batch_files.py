@@ -9,6 +9,7 @@ UNC パス（`\\\\サーバー名\\...`）から起動されると、cmd.exe は
 """
 
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -23,7 +24,39 @@ def _is_test_artifact(path: Path) -> bool:
     return any(part == ".git" or part.startswith(".pytest-") for part in path.parts)
 
 
-_BAT_FILES = sorted(path for path in _ROOT.rglob("*.bat") if not _is_test_artifact(path))
+def _git_tracked(pattern: str) -> list[Path] | None:
+    """``git ls-files -z -- <pattern>`` を実行し、git 管理下のファイルを
+    ``_ROOT`` 起点の ``Path`` リストで返す。git が無い・失敗時は ``None``。"""
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "-z", "--", pattern],
+            cwd=_ROOT,
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    if result.returncode != 0:
+        return None
+    text = result.stdout.decode("utf-8", errors="replace")
+    return [_ROOT / name for name in text.split("\x00") if name]
+
+
+def _list_bat_files() -> list[Path]:
+    """git 管理下の ``*.bat`` を ``_ROOT`` 起点の ``Path`` で列挙する。
+
+    リポジトリ全体を ``rglob`` すると、``.venv/`` など ``.gitignore`` の対象が
+    検査に巻き込まれて落ちる。git が使える環境では ``git ls-files`` の結果を
+    使い、git が無い・失敗した場合だけ元の ``rglob`` 走査へ戻る。"""
+    tracked = _git_tracked("*.bat")
+    if tracked is not None:
+        # git 管理下のファイルだけ列挙すれば ``.venv/`` 等の作業用フォルダは
+        # 最初から含まれない（``.gitignore`` で除外済みのため）。
+        return sorted(tracked)
+    return sorted(path for path in _ROOT.rglob("*.bat") if not _is_test_artifact(path))
+
+
+_BAT_FILES = _list_bat_files()
 
 
 def _read(path: Path) -> str:
