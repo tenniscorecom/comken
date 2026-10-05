@@ -1,4 +1,4 @@
-"""comken/core/table/model.py — 保存先を持たない、初学者向けの表データモデル。
+"""comken/core/table/model.py — 保存先を持たない表データモデル。
 
 Table はメモリ上の行だけを担当します。CSV や Excel の保存処理をここへ
 入れないことで、加工処理とファイル I/O の責任を分けています。

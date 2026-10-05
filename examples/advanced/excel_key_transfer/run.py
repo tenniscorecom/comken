@@ -138,5 +138,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    # ログの設定は社内の共通ライブラリ側で行う。ここでは logging をそのまま使う
+    # ログの設定は、実プロジェクトでは setup_logging() / setup_local_logging()
+    # が行う。このサンプルでは設定しない
     main()

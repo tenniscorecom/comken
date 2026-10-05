@@ -6,9 +6,8 @@
 利用者から見ても実装と一致する。
 """
 
-from comken.core.logger.environment import setup_logging
 from comken.core.logger.local import setup_local_logging
-from comken.core.logger.site import Backoffice, Intranet
+from comken.core.logger.site import Backoffice, Intranet, setup_logging
 
 __all__ = [
     "Backoffice",

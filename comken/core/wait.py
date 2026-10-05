@@ -5,7 +5,7 @@
 ファイル I/O 待ち (``wait_for_file`` / ``wait_until_stable``) もここに置くことで、
 ``core.wait`` を見れば「待ち」の API が全部そろうようにする。
 
-    from comken.core import wait_for_file, wait_seconds, wait_until
+    from comken.core import wait_for_file, wait_until
 
     path = wait_for_file(
         folder=r"\\server\\share\\input",

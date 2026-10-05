@@ -874,3 +874,17 @@ comken 内部からの import とコメント・docstring のパス表記、テ�
 `__init__.py` に直接書く案は `holidays.py` が `month_end` などを使うため
 読み込みが循環するので採っていない（`clock` / `parse` を別モジュールに置く
 ことで import 方向を一方向に保った）。
+
+## 29. `comken.core.logger.environment` を `site.py` に統合した（2026-10-05）
+
+`comken/core/logger/environment.py`（`setup_logging` と内部の
+ヘルパー `_compute_root_level` / `_classify_root_handlers` /
+`_guard_root_handlers` / `_format_external_handlers` /
+`_warn_external_handlers_allowed`、定数）を `comken/core/logger/site.py`
+へ統合し、`environment.py` を消した。「社内環境の定義」と「root logger
+構築」を別ファイルに分けていたが、片方からしか import されない 2 段構成に
+意味が無かったため。`logger` パッケージは `site.py`（社内環境の定義と
+そのログ設定）と `local.py`（単体実行用）の2ファイルになった。
+公開名（`comken.core.logger.__all__` と `comken` 直下の再公開）は変えて
+いない。`local.py` / `tests/test_logger.py` の monkeypatch 対象パスは
+`comken.core.logger.site` へ揃えた。

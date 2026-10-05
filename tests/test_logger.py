@@ -12,17 +12,17 @@ import pytest
 
 from comken.core import logger
 from comken.core.logger import Backoffice, Intranet, setup_local_logging, setup_logging
-from comken.core.logger.environment import (
+from comken.core.logger.site import (
     CONSOLE_HANDLER_NAME,
     ENVIRONMENT_HANDLER_NAME,
     ETC_FOLDER_NAME,
     LOCAL_HANDLER_NAME,
+    LoggerSite,
     _format_external_handlers,
 )
-from comken.core.logger.environment import (
+from comken.core.logger.site import (
     setup_logging as environment_setup_logging,
 )
-from comken.core.logger.site import LoggerSite
 from comken.exceptions import (
     LoggingAlreadyConfiguredError,
     LoggingConflictError,
@@ -72,7 +72,7 @@ def _prepare_site(
     for site in (Backoffice, Intranet):
         monkeypatch.setattr(site, "LOG_ROOT", str(tmp_path))
         monkeypatch.setattr(site, "LOG_FOLDER_NAMES", {hostname: folder_name})
-    monkeypatch.setattr("comken.core.logger.environment.today", lambda: date(2026, 8, 21))
+    monkeypatch.setattr("comken.core.logger.site.today", lambda: date(2026, 8, 21))
     return tmp_path / folder_name
 
 
@@ -153,7 +153,7 @@ class TestSetup:
         mixed_case = "MixedCase-Host-01"
         # 取得側は mixed case（大小が混在）として固定する。
         monkeypatch.setattr(
-            "comken.core.logger.environment.socket.gethostname",
+            "comken.core.logger.site.socket.gethostname",
             lambda: mixed_case,
         )
         # 登録側はわざと違うケース（upper）で書く。
@@ -163,7 +163,7 @@ class TestSetup:
             "LOG_FOLDER_NAMES",
             {mixed_case.upper(): "test-folder"},
         )
-        monkeypatch.setattr("comken.core.logger.environment.today", lambda: date(2026, 8, 21))
+        monkeypatch.setattr("comken.core.logger.site.today", lambda: date(2026, 8, 21))
 
         setup_logging(Backoffice)
 

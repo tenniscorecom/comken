@@ -1,9 +1,9 @@
 """comken/core/files/base.py — 1つのファイルを扱うクラスに共通する薄い基底クラス。
 
-Excel の内部基底クラスなど、
-「1つのファイルを読み書きするクラス」の共通祖先。サブクラス側で ``SUFFIXES``
-を宣言しておくと、``__init__`` で拡張子を自動で検証して
-``UnsupportedFileSuffixError`` を投げる。
+``AccessDatabase`` (``toolbox/access/handler.py``) と
+``ExcelCOMHandler`` (``toolbox/windows/excel_com.py``) の共通祖先。
+サブクラス側で ``SUFFIXES`` を宣言しておくと、``__init__`` で拡張子を
+自動で検証して ``UnsupportedFileSuffixError`` を投げる。
 """
 
 from pathlib import Path

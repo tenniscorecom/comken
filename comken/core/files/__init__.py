@@ -1,9 +1,6 @@
 """comken/core/files/__init__.py — ファイル関連機能の公開窓口
 
-検索・操作・圧縮・命名をまとめて公開する。
-
-パス取得（``Paths``）はレジストリを触るため toolbox/windows/ へ移した。
-コアの外にあるものを触らない、という ``comken.core`` の定義に従ったもの。
+検索・操作・圧縮をまとめて公開する。
 """
 
 from comken.core.files.archive import unzip, zip_files, zip_folder
