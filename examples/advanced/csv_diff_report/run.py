@@ -16,7 +16,7 @@ Table.diff() で追加・削除・変更を検出し、区分ごとに色分け�
 import logging
 from pathlib import Path
 
-from comken.core import DateNameBuilder
+from comken.core import today
 from comken.toolbox.csv import CSV
 from comken.toolbox.csv.file import Value
 from comken.toolbox.excel import Color, Excel
@@ -96,7 +96,7 @@ def main() -> None:
         detail = " / ".join(f"{col}: {old} → {new}" for col, (old, new) in change.columns.items())
         report_rows.append({STATUS_COL: STATUS_CHANGED, DETAIL_COL: detail, **change.after})
 
-    output_path = OUTPUT_FOLDER / DateNameBuilder("差分レポート.xlsx").suffix()
+    output_path = OUTPUT_FOLDER / f"差分レポート_{today():%Y%m%d}.xlsx"
     with Excel(output_path) as excel:
         sheet = excel.sheet(SHEET)
         values = [

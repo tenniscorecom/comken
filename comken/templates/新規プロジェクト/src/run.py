@@ -23,13 +23,13 @@ def run() -> None:
 
     # ── ここに処理を書く ──────────────────────────────────────────────
     # 例:
-    #   from comken.core import DateNameBuilder
+    #   from comken.core import find_dated_file, today
     #   from comken.toolbox.csv import CSV
     #   from comken.toolbox.excel import Excel
     #
     #   with CSV(config.FILES.INPUT_CSV, read_only=True) as csv_file:
     #       table = csv_file.read()
-    #   out = output_folder / DateNameBuilder("レポート.xlsx").prefix()
+    #   out = output_folder / f"レポート_{today():%Y%m%d}.xlsx"
     #   with Excel(out) as excel:
     #       excel.create_data_sheet(SHEET).create_table(SHEET, table)
     #   logger.info("出力しました: %s", out)

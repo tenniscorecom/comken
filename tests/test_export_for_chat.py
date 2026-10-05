@@ -19,12 +19,12 @@ def test_api_text_contains_csv_docstring() -> None:
 def test_find_definition_follows_nested_reexport() -> None:
     package_file = export_for_chat.PACKAGE_ROOT / "core" / "files" / "__init__.py"
 
-    definition = export_for_chat._find_definition(package_file, "DateNameBuilder")
+    definition = export_for_chat._find_definition(package_file, "find_dated_file")
 
     assert definition is not None
     _, node = definition
-    assert isinstance(node, ast.ClassDef)
-    assert node.name == "DateNameBuilder"
+    assert isinstance(node, ast.FunctionDef)
+    assert node.name == "find_dated_file"
 
 
 def test_split_preserves_text() -> None:

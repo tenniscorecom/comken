@@ -17,7 +17,7 @@
 
 import logging
 
-from comken.core import DateFileFinder, DateNameBuilder
+from comken.core import find_dated_file, today
 from comken.exceptions import ComkenError
 from comken.run import backoffice  # イントラネットのツールなら intranet に変える
 from comken.toolbox.csv import CSV
@@ -38,7 +38,7 @@ def main() -> None:
     # 本日のファイルが無いときスキップ運用したいので ``FileNotFoundError``
     # （``ComkenFileNotFoundError`` の親）を捕まえて早期 return する
     try:
-        source = DateFileFinder(config.FILES.INPUT_FOLDER).find(INPUT_NAME)
+        source = find_dated_file(config.FILES.INPUT_FOLDER, INPUT_NAME)
     except FileNotFoundError:
         logger.info("本日分の入力ファイルがないため何もしません")
         return
@@ -51,7 +51,7 @@ def main() -> None:
 
     # ↑↑↑ ここまで ↑↑↑
 
-    output_path = config.FILES.OUTPUT_FOLDER / DateNameBuilder(f"{BATCH_NAME}.xlsx").prefix()
+    output_path = config.FILES.OUTPUT_FOLDER / f"{today():%Y%m%d}_{BATCH_NAME}.xlsx"
     with Excel(output_path) as excel:
         excel.create_data_sheet("売上").create_table("売上", table)
     logger.info("出力: %s", output_path)

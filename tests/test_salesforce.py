@@ -15,14 +15,13 @@ from comken.exceptions import (
     SalesforceReportTruncatedError,
     SalesforceRequestError,
 )
-from comken.toolbox.credentials import save_credentials, store
+from comken.toolbox.credentials import store
+from comken.toolbox.credentials.store import save_credentials
 from comken.toolbox.csv import CSV
-from comken.toolbox.salesforce import (
-    APIMetrics,
-    RefreshTokenOAuth,
-    SalesforceBase,
-)
+from comken.toolbox.salesforce import SalesforceBase
+from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth
 from comken.toolbox.salesforce.cli import _site_selection_error
+from comken.toolbox.salesforce.metrics import APIMetrics
 from comken.toolbox.salesforce.report import report_id_from_url
 from comken.toolbox.salesforce.sites import SITES, Solution, SolutionSandbox, site_for
 

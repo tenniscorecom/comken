@@ -39,11 +39,14 @@ _REMOVED_NAMES = (
     "setup_logger",
     "ExcelFile",
     "FileNameBuilder",
+    "DateNameBuilder",
+    "DateFileFinder",
     "cleanup_stale_tmp",
     "transfer_by_key",
     "used_last_row",
     "count_a",
     "core.holidays",
+    "strip_spaces",
 )
 
 
@@ -316,6 +319,9 @@ def test_generated_api_covers_all_public_api():
 def test_removed_names_do_not_remain_in_docs(doc):
     if doc.name == "API.md":
         pytest.skip("docstring 全文から作る生成物では、通常語や例外名の部分一致を許容する")
+    if doc.name == "HISTORY.md":
+        # 設計判断の履歴なので、旧クラス名・新名・理由がそのまま残ってよい
+        pytest.skip("HISTORY は設計判断の履歴。旧名を新名と並べて書いてよい")
     text = doc.read_text(encoding="utf-8")
     found = [
         name

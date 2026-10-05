@@ -27,10 +27,8 @@
 now / today                     この PC のローカル「今の時刻」「今日の日付」
 month_start / month_end         その月の 1 日 / 末日
 parse_cell_date                 セルの値を date に（読めなければ None）
-FISCAL_YEAR_START_MONTH         年度の開始月（既定 4 月）
+date_in_name                    ファイル名に含まれる最初の日付（無ければ None）
 fiscal_year                     その日付が属する年度（4 月始まり）
-EXPIRING_WARNING_DAYS           会社用カレンダー期限切れ警告の閾値日数
-WORKDAY_SEARCH_LIMIT            「次の営業日」探索の日数上限
 is_holiday                      国民の祝日または会社休日に当たれば True
 holiday_name                    国民の祝日または会社休日の名称（無ければ None）
 is_workday                      簡易判定（国民の祝日＋会社休日＋土日）
@@ -45,18 +43,25 @@ last_workday                    d の月の最後の営業日
 nth_workday                     d の月の第 n 営業日（n は 1 以上）
 non_workdays_after              d の翌日から次の営業日の前日までの休みの日（連休）
 non_workdays_before             d の前日から前の営業日の翌日までの休みの日（連休）
-warn_if_holidays_expiring_soon  既定カレンダーの収録期限が近ければ起動時に警告
-HOLIDAYS_CSV_PATH               会社用カレンダーCSV のパス（git 管理下の正本）
-HolidayError                    祝日カレンダーに関する基底例外
-WorkdayNotFoundError            月内に該当営業日が無い／探索上限到達
+
+``HolidayError`` / ``WorkdayNotFoundError`` は ``comken.exceptions`` から取る
+（``from comken.exceptions import ...``）。
+``warn_if_holidays_expiring_soon`` / ``WORKDAY_SEARCH_LIMIT`` /
+``EXPIRING_WARNING_DAYS`` / ``HOLIDAYS_CSV_PATH`` / ``FISCAL_YEAR_START_MONTH``
+は内部実装。comken の起動時に ``comken/run.py`` から ``comken.core.dates._holidays``
+/ ``comken.core.dates._fiscal`` 経由で直接 import して使う。
 """
 
-from comken.core.dates._dates import month_end, month_start, now, parse_cell_date, today
-from comken.core.dates._fiscal import FISCAL_YEAR_START_MONTH, fiscal_year
+from comken.core.dates._dates import (
+    date_in_name,
+    month_end,
+    month_start,
+    now,
+    parse_cell_date,
+    today,
+)
+from comken.core.dates._fiscal import fiscal_year
 from comken.core.dates._holidays import (
-    EXPIRING_WARNING_DAYS,
-    HOLIDAYS_CSV_PATH,
-    WORKDAY_SEARCH_LIMIT,
     count_workdays,
     first_workday,
     holiday_name,
@@ -66,21 +71,14 @@ from comken.core.dates._holidays import (
     non_workdays_after,
     non_workdays_before,
     nth_workday,
-    warn_if_holidays_expiring_soon,
     workday,
     workday_on_or_after,
     workday_on_or_before,
 )
-from comken.exceptions import HolidayError, WorkdayNotFoundError
 
 __all__ = [
-    "EXPIRING_WARNING_DAYS",
-    "FISCAL_YEAR_START_MONTH",
-    "HOLIDAYS_CSV_PATH",
-    "HolidayError",
-    "WORKDAY_SEARCH_LIMIT",
-    "WorkdayNotFoundError",
     "count_workdays",
+    "date_in_name",
     "fiscal_year",
     "first_workday",
     "holiday_name",
@@ -95,7 +93,6 @@ __all__ = [
     "nth_workday",
     "parse_cell_date",
     "today",
-    "warn_if_holidays_expiring_soon",
     "workday",
     "workday_on_or_after",
     "workday_on_or_before",

@@ -16,16 +16,10 @@ import pytest
 import win32crypt
 
 from comken.exceptions import CredentialError, CredentialNotFoundError
-from comken.toolbox.credentials import (
-    Credentials,
-    delete_credential,
-    import_json,
-    list_names,
-    load_credential,
-    save_credential,
-    save_credentials,
-)
+from comken.toolbox.credentials import Credentials, load_credential, save_credential
 from comken.toolbox.credentials.cli import main
+from comken.toolbox.credentials.importer import import_json
+from comken.toolbox.credentials.store import delete_credential, list_names, save_credentials
 
 SECRET = "s3cret-値-🔑"  # 日本語と絵文字を含めて UTF-8 の往復も確かめる
 

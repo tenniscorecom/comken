@@ -25,7 +25,7 @@ r"""サンプル: bat でやっていた「コピー → マクロ → 配る」
 import logging
 from pathlib import Path
 
-from comken.core import DateFileFinder, copy_file
+from comken.core import copy_file, find_dated_file
 from comken.core.logger import setup_local_logging
 from comken.toolbox.excel import Excel
 
@@ -35,6 +35,9 @@ SOURCE_FOLDER = Path(r"\\server\share\受信")
 WORK_FOLDER = Path(r"C:\作業")
 DELIVERY_FOLDER = Path(r"\\server\share\完成")
 
+# 当日の受信ファイル名（拡張子まで含めて指定する。find_dated_file は名前の本体を含み、
+# ファイル名の日付が今日のファイルを拾う（例 日次データ_20261005.xlsx））
+SOURCE_NAME = "日次データ.xlsx"
 BOOK_NAME = "集計.xlsm"  # マクロ入りブック（作業フォルダに置いてある）
 MACRO_NAME = "Module1.日次集計"  # 「モジュール名.プロシージャ名」で指定する
 OUTPUT_NAME = "完成.xlsx"
@@ -48,7 +51,7 @@ def main() -> None:
 
     # 1. 当日のデータを受け取る。ファイル名に日付が入っている前提で選ぶ。
     #    見つからなければここで例外になる（bat と違い、古いファイルで先へ進まない）
-    source = DateFileFinder(SOURCE_FOLDER).find(".xlsx")
+    source = find_dated_file(SOURCE_FOLDER, SOURCE_NAME)
     logger.info("受信ファイル: %s", source.name)
 
     # 2. 作業フォルダへコピーする。同名があれば上書きされる

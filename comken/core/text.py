@@ -39,21 +39,6 @@ def normalize(value: object) -> str:
     return unicodedata.normalize("NFKC", str(value)).strip()
 
 
-def strip_spaces(text: str) -> str:
-    """前後の半角・全角スペースを除去する。
-
-    str.strip() は全角スペース（U+3000）を除去しないため、
-    業務データの氏名・住所フィールドで使うのに向いている。
-
-    Args:
-        text: 処理する文字列。
-
-    Returns:
-        前後のスペースを除去した文字列。
-    """
-    return text.strip("　 \t\n\r")
-
-
 def remove_spaces(text: str) -> str:
     """文字列中の半角・全角スペースをすべて除去する。
 

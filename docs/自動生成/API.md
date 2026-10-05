@@ -143,171 +143,6 @@ OWNER が未設定ならログ構築前に停止する。
 
 ## `from comken.core import ...`
 
-### `DateNameBuilder`
-
-```text
-class DateNameBuilder:
-```
-
-#### 説明
-
-今日の日付を付けたファイル名を組み立てる。
-
-日付は ``__init__`` 時点で確定する。``for_date=None`` のときだけ
-``__init__`` 呼び出し時点の日付を使い、``prefix()`` / ``suffix()`` を
-呼ぶたびに日付を取り直すことはない。
-
-日付はコンストラクタで固定できる。テストや過去日付のファイル名を組み立てる
-ときは ``date(2026, 8, 20)`` 等を渡す。省略時は呼び出し時点の日付。
-
-拡張子は **名前の文字列に含めて** 渡す（例: ``DateNameBuilder("ログ.csv")``）。
-拡張子なしの名前は ``FileSuffixMissingError`` を送出して止める。
-
-#### `__init__`
-
-```text
-def __init__(self, name: str, for_date: date | datetime | None=None) -> None:
-```
-
-##### 説明
-
-Args:
-    name: ファイル名（**拡張子を含む**）。例: ``"売上.xlsx"`` / ``"ログ.csv"``。
-        拡張子が無いと ``FileSuffixMissingError``。
-    for_date: ファイル名に付ける日付。``None``（既定）なら ``__init__``
-        呼び出し時点の日付。``prefix()`` / ``suffix()`` を呼ぶたびに
-        日付を取り直すことはない。``date`` / ``datetime`` どちらも
-        受け付ける（``datetime`` は内部で ``.date()`` に変換）。
-
-Raises:
-    FileSuffixMissingError: ``name`` に拡張子が含まれていないとき。
-
-#### `prefix`
-
-```text
-def prefix(self, prefix: str='{:%Y%m%d}_') -> str:
-```
-
-##### 説明
-
-``prefix + 日付 + ベース名 + 拡張子`` を返す（例: ``"20260825_売上.xlsx"``）。
-
-``prefix("DIY_{:%Y%m%d}_")`` のように日付の位置と書式を指定する。
-日付書式を含まない prefix には ``YYYYMMDD`` を末尾へ補う。
-日付は **拡張子の手前** に入る。
-
-#### `suffix`
-
-```text
-def suffix(self, date_format: str='%Y%m%d') -> str:
-```
-
-##### 説明
-
-今日の日付を後ろに付けたファイル名を返す（例: ``"売上_20260825.xlsx"``）。
-
-日付は **拡張子の手前** に入る。メソッド名 ``suffix()`` と「拡張子（suffix）」が
-紛らわしいため、内部状態は ``_extension``（= 拡張子）と ``_stem``（= 拡張子を除いた
-ベース名）で持つ。``self._extension`` は常にドット付きで ``".xlsx"`` / ``".csv"`` 等。
-
-### `DateFileFinder`
-
-```text
-class DateFileFinder:
-```
-
-#### 説明
-
-指定した名前と日付を持つファイルを探す。
-
-探す名前に **拡張子を含める**（例: ``"売上レポート.csv"``）。拡張子無しの名前を
-渡すと ``FileSuffixMissingError`` で止める。
-
-**注意: ``find()`` / ``find_all()`` は呼ぶたびにフォルダを走査する。** 同じ結果を
-何度も使うなら変数に受けること（業務時間中に新しいファイルが降ってくる前提の
-道具なので、 敢えてキャッシュしていない）。
-
-判定の規則:
-
-- 「名前を含む」: ``name`` の拡張子を除いた本体部分が、ファイル名の本体部分に
-  **含まれている**（部分一致）。同じ拡張子（大文字小文字は区別しない）のファイル
-  だけが対象。日付の位置や書式（``20260711`` / ``2026-07-11`` / ``2026_07_11`` /
-  ``2026.07.11``）は問わない
-- ``find(name)``: 上の条件に加えて、ファイル名の日付の中に ``for_date``
-  （コンストラクタで指定。省略時は今日）が **含まれる** ファイルだけが対象。
-  複数見つかったときは **更新日時（mtime）が新しい方** を返す。
-  1つも無ければ ``ComkenFileNotFoundError``
-- ``find_all(name)``: 上の名前の条件に加えて、ファイル名に日付が 1 つ以上ある
-  ファイルだけが対象。**``for_date`` は使わない**。並び順は ``date_in_name``
-  の日付の降順、同じ日付なら mtime の降順。該当するファイルが無ければ
-  空リスト（例外は出さない）
-
-#### `__init__`
-
-```text
-def __init__(self, folder: str | Path, for_date: datetime.date | None=None) -> None:
-```
-
-#### `find`
-
-```text
-@measure
-def find(self, name: str) -> Path:
-```
-
-##### 説明
-
-名前を含み、ファイル名の日付が ``for_date`` のファイルを返す。
-
-同じ拡張子（大文字小文字は区別しない）で、``name`` の拡張子を除いた本体部分が
-ファイル名の本体部分に **含まれている** ファイルのうち、ファイル名から
-``dates_in_name`` で取り出した日付リストの中に ``for_date`` が含まれるもの
-を返す。日付の位置・書式は問わない。
-
-候補が複数見つかったときは **更新日時（mtime）が新しい方** を返す。
-1 つも無ければ ``ComkenFileNotFoundError``
-（``FileNotFoundError`` としても送出される）。
-
-Args:
-    name: 探すファイル名。**拡張子を含める**（例: ``"売上レポート.csv"``）。
-
-Returns:
-    条件に合うファイルのうち mtime が最新の ``Path``。
-
-Raises:
-    FileSuffixMissingError: ``name`` に拡張子が含まれていないとき。
-    ComkenFileNotFoundError: フォルダが存在しない／フォルダではない、
-        もしくは条件に合うファイルが無いとき。
-
-#### `find_all`
-
-```text
-@measure
-def find_all(self, name: str) -> list[Path]:
-```
-
-##### 説明
-
-名前を含み、日付を含むファイルを全部、新しい日付順で返す。
-
-``name`` の拡張子を除いた本体部分がファイル名の本体部分に **含まれている**
-（部分一致）ファイルのうち、ファイル名から取り出した日付が 1 つ以上ある
-ファイルだけを返す。日付の位置・書式は問わない。
-
-並び順は ``dates_in_name`` の先頭日付の降順、同じ日付なら mtime の降順。
-``for_date`` は使わない（フォルダ内の全件が対象）。
-該当するファイルが無ければ空リストを返す（例外は出さない）。
-
-Args:
-    name: 探すファイル名。**拡張子を含める**（例: ``"売上レポート.csv"``）。
-
-Returns:
-    条件に合うファイルの ``Path`` リスト。新しい日付順。
-
-Raises:
-    FileSuffixMissingError: ``name`` に拡張子が含まれていないとき。
-    ComkenFileNotFoundError: フォルダが存在しない／フォルダではないとき。
-
 ### `DiffResult`
 
 ```text
@@ -324,14 +159,6 @@ class DiffResult:
 ``RowChange`` のリストのままで持つ。 一方 ``added`` / ``removed`` は表の行と
 同じ形なので ``Table`` へ揃え、 ``filter`` / ``select`` / ``count`` などの
 Table 標準の操作が直接使えるようにしてある。
-
-### `EXPIRING_WARNING_DAYS`
-
-公開定数。
-
-### `FISCAL_YEAR_START_MONTH`
-
-公開定数。
 
 ### `HierarchyResult`
 
@@ -352,10 +179,6 @@ Attributes:
         元の値、下は None。
     unmatched: 「計」で終わる値があるのに小計と判定しなかった行の
         **件目**（1始まり、元の Table の何件目か）。
-
-### `HOLIDAYS_CSV_PATH`
-
-公開定数。
 
 ### `RowChange`
 
@@ -419,30 +242,6 @@ def set(self, key: str, value: StateValue) -> None:
 ##### 説明
 
 値を保存する。dry-run 中はファイルもメモリ上の状態も変更しない。
-
-### `Timer`
-
-```text
-class Timer:
-```
-
-#### 説明
-
-処理時間を計測して INFO ログに出す。with・デコレータ両対応。
-
-Attributes:
-    elapsed: 経過秒数（float）。with を抜けた後に参照できる。
-
-#### `__init__`
-
-```text
-def __init__(self, name: str='処理') -> None:
-```
-
-##### 説明
-
-Args:
-    name: ログに出す処理名（例: "CSV読み込み"）。
 
 ### `Table`
 
@@ -680,6 +479,30 @@ Raises:
     TableError: ``order_by`` の列に空 (``None`` / ``""``) の行がある、
         または値の型が混ざっていて比較できない (``TypeError``) とき。
 
+### `Timer`
+
+```text
+class Timer:
+```
+
+#### 説明
+
+処理時間を計測して INFO ログに出す。with・デコレータ両対応。
+
+Attributes:
+    elapsed: 経過秒数（float）。with を抜けた後に参照できる。
+
+#### `__init__`
+
+```text
+def __init__(self, name: str='処理') -> None:
+```
+
+##### 説明
+
+Args:
+    name: ログに出す処理名（例: "CSV読み込み"）。
+
 ### `Transfer`
 
 ```text
@@ -846,10 +669,6 @@ Example:
         transfer.apply_mapping(source_row, destination_row)
     final_table = transfer.result()  # 変更後の Table
 
-### `WORKDAY_SEARCH_LIMIT`
-
-公開定数。
-
 ### `count_workdays`
 
 ```text
@@ -906,21 +725,6 @@ def date_in_name(name: str) -> datetime.date | None:
 ファイル名の日付とファイル内容の日付を突き合わせる業務で使うため公開している。
 すべての日付が要るときは ``dates_in_name`` を使う。
 
-### `dates_in_name`
-
-```text
-def dates_in_name(name: str) -> list[datetime.date]:
-```
-
-#### 説明
-
-ファイル名に含まれる日付を **すべて** 出現順で返す。無ければ空リスト。
-
-``_DATE_IN_NAME`` 正規表現で日付らしい数字（``20260729`` / ``2026-07-29`` /
-``2026_07_29`` / ``2026.07.29``）を抜き出し、``date`` に変換できたものだけを
-順番に並べる。``20261345`` のように数字は揃っていても日付として成立しないものは
-結果に含まない。
-
 ### `delete_file`
 
 ```text
@@ -967,27 +771,47 @@ Raises:
     FileDeletionError: 1件以上のファイルを削除できなかった場合。
         残ったパスは ``.remaining`` で読める。
 
-### `diff_row`
+### `find_dated_file`
 
 ```text
-def diff_row(before: dict[str, Any], after: dict[str, Any]) -> dict[str, tuple[Any, Any]]:
+@measure
+def find_dated_file(folder: str | Path, name: str, for_date: datetime.date | None=None) -> Path:
 ```
 
 #### 説明
 
-1行同士を比較し、値が異なる列だけを {列名: (変更前, 変更後)} で返す。
+指定した名前と日付を持つファイルを 1 件返す。
 
-CSV の str と Excel の数値は同一視する（"1000" と 1000 は差分にならない）。
-片方にしか存在しない列は、もう片方を空文字（``""``）に揃えて比較する。
+探す名前に **拡張子を含める**（例: ``"売上レポート.csv"``）。拡張子無しの名前を
+渡すと ``FileSuffixMissingError`` で止める。
 
-先頭ゼロ付きの文字列（社員番号 "0001" 等）は数値化しない。
-"0001" と 1 は別の値として差分になる（先頭ゼロの消失を検出できる）。
+**注意: 呼ぶたびにフォルダを走査する。** 同じ結果を何度も使うなら変数に受けること
+（業務時間中に新しいファイルが降ってくる前提の道具なので、敢えてキャッシュしていない）。
+
+判定の規則:
+
+- 「名前を含む」: ``name`` の拡張子を除いた本体部分が、ファイル名の本体部分に
+  **含まれている**（部分一致）。同じ拡張子（大文字小文字は区別しない）のファイル
+  だけが対象。日付の位置や書式（``20260711`` / ``2026-07-11`` / ``2026_07_11`` /
+  ``2026.07.11``）は問わない
+- ファイル名から ``dates_in_name`` で取り出した日付リストの中に ``for_date``
+  （省略時は今日）が **含まれる** ファイルだけが対象。
+  複数見つかったときは **更新日時（mtime）が新しい方** を返す。
+  1 つも無ければ ``ComkenFileNotFoundError``
+
 Args:
-    before: 変更前の行（辞書）。
-    after: 変更後の行（辞書）。
+    folder: 探すフォルダ。
+    name: 探すファイル名。**拡張子を含める**（例: ``"売上レポート.csv"``）。
+    for_date: ファイル名から取り出した日付のどれかと一致する対象日。
+        ``None``（既定）なら呼んだ時点の ``today()``。
 
 Returns:
-    {列名: (変更前の値, 変更後の値)} の辞書。値は元の型のまま返す。
+    条件に合うファイルのうち mtime が最新の ``Path``。
+
+Raises:
+    FileSuffixMissingError: ``name`` に拡張子が含まれていないとき。
+    ComkenFileNotFoundError: フォルダが存在しない／フォルダではない、
+        もしくは条件に合うファイルが無いとき。
 
 ### `first_workday`
 
@@ -1103,45 +927,6 @@ Args:
 Yields:
     ローカルのテンポラリファイルパス（Path）。
 
-### `measure`
-
-```text
-def measure[**P, R](func: Callable[P, R]) -> Callable[P, R]:
-```
-
-#### 説明
-
-デバッグモード時だけ対象関数の出入りを DEBUG ログに出すデコレータ。
-
-呼び出しごとに次の3種のうち、いずれか1組を出す:
-
-- 開始
-- 完了 ○.○○○秒        （正常終了）
-- 中断 ○.○○○秒        （例外で抜けた場合。BaseException も拾う）
-
-**「開始」を必ず出してから本体を呼ぶ。** 処理が外部待ちで止まったとき、
-ログの末尾が「開始」で終わっていれば、そこが停止位置だと分かる。
-終了時にしかログを出さないと、止まった処理の記録は永久に残らない。
-
-**引数・戻り値はログに出さない。** comken は DPAPI のトークン・client_secret・
-パスワードを扱うため、汎用デコレータが自動で引数を出せる形になっていると、
-いつか秘密の値がログへ載る危険がある。「どのメソッドで止まったか」までは
-ライブラリが受け持ち、「どのファイル・どの行で止まったか」は呼び出し側が
-処理対象を DEBUG ログへ出す形にする。
-
-例外は `BaseException` で捕捉し、`raise` で必ず再送出する
-（`KeyboardInterrupt` も拾う。ハングして Ctrl+C で止めたときに
-「どこで待っていたか」が分かるのが狙い）。
-
-ジェネレータ関数に付けた場合は、本体が `next()` で評価され始めるまで
-「開始」を出さない（呼び出しただけで完了ログが出る事故を防ぐ）。専用の
-ラッパーがジェネレータを返し、最初の `next()` で開始、消費し切ったら完了、
-例外や `GeneratorExit` で抜けたら中断を出す。
-
-Timer との使い分け:
-    - Timer: 常にログに出したい・経過秒数を値として使いたい場合
-    - measure: 普段は出さず、調査のときだけ with debug(): で出したい場合
-
 ### `month_end`
 
 ```text
@@ -1243,31 +1028,6 @@ def nth_workday(target: _dt.date, n: int, *, skip_weekends: bool=True) -> _dt.da
 Raises:
     WorkdayNotFoundError: ``n`` が 1 未満、またはその月の営業日数を超える。
 
-### `parse_cell_date`
-
-```text
-def parse_cell_date(value: object) -> datetime.date | None:
-```
-
-#### 説明
-
-セルの値を ``datetime.date`` に変換する。読めなければ `` ``None`` 。
-
-Excel から ``Table`` 行を読むとき、 日付列は
-
-- ``datetime.datetime`` オブジェクト（Excel の日付型セル）
-- ``datetime.date`` オブジェクト
-- 文字列（手入力・他システムからのエクスポート）
-
-のどれでも来うる。 それぞれを ``date`` に揃え、 **読めなかった値は
-``None`` を返す**（例外にはしない）。 利用側は ``None`` を「対象外の行」
-として数えて ``WARNING`` に出す形に向いている（読み込みは止めずに、
-何件スキップしたかだけ報告する業務運用）。
-
-受け付ける書式は ``_DATE_TEXT_FORMATS`` に固定。 新しい書式を足すときは
-ここにタプル要素として追加する（会社用カレンダーCSV の日付解釈とは別口
-なので、 祝日 CSV の安全弁を緩めない）。
-
 ### `project_dir`
 
 ```text
@@ -1324,6 +1084,31 @@ Args:
 Returns:
     正規化後の文字列。
 
+### `parse_cell_date`
+
+```text
+def parse_cell_date(value: object) -> datetime.date | None:
+```
+
+#### 説明
+
+セルの値を ``datetime.date`` に変換する。読めなければ `` ``None`` 。
+
+Excel から ``Table`` 行を読むとき、 日付列は
+
+- ``datetime.datetime`` オブジェクト（Excel の日付型セル）
+- ``datetime.date`` オブジェクト
+- 文字列（手入力・他システムからのエクスポート）
+
+のどれでも来うる。 それぞれを ``date`` に揃え、 **読めなかった値は
+``None`` を返す**（例外にはしない）。 利用側は ``None`` を「対象外の行」
+として数えて ``WARNING`` に出す形に向いている（読み込みは止めずに、
+何件スキップしたかだけ報告する業務運用）。
+
+受け付ける書式は ``_DATE_TEXT_FORMATS`` に固定。 新しい書式を足すときは
+ここにタプル要素として追加する（会社用カレンダーCSV の日付解釈とは別口
+なので、 祝日 CSV の安全弁を緩めない）。
+
 ### `remove_spaces`
 
 ```text
@@ -1369,25 +1154,6 @@ Note:
     入力値検証で ``ValueError`` を投げる。``times`` を 0 以下にしたいケースは
     ループ自体を不要としているので、黙って 1 にするのではなく例外で知らせる
     （誤って ``times=None`` を渡して 1 回しか実行されない事故を防ぐ）。
-
-### `strip_spaces`
-
-```text
-def strip_spaces(text: str) -> str:
-```
-
-#### 説明
-
-前後の半角・全角スペースを除去する。
-
-str.strip() は全角スペース（U+3000）を除去しないため、
-業務データの氏名・住所フィールドで使うのに向いている。
-
-Args:
-    text: 処理する文字列。
-
-Returns:
-    前後のスペースを除去した文字列。
 
 ### `today`
 
@@ -1464,19 +1230,6 @@ Raises:
         待っている間にフォルダが消えた場合も同じ（``timeout`` 到達時）。
     NotADirectoryError: ``folder`` にフォルダではなくファイルを渡した場合。
     FileNotFoundError: ``timeout`` 秒経っても該当ファイルが見つからなかった場合。
-
-### `wait_seconds`
-
-```text
-def wait_seconds(n: float) -> None:
-```
-
-#### 説明
-
-``n`` 秒待機する。
-
-Args:
-    n: 待機秒数。小数も指定できる（例: 0.5）。
 
 ### `wait_until`
 
@@ -1692,68 +1445,6 @@ def __init__(self, path: str | Path | None=None) -> None:
 
 ## `from comken.core.dates import ...`
 
-### `EXPIRING_WARNING_DAYS`
-
-公開定数。
-
-### `FISCAL_YEAR_START_MONTH`
-
-公開定数。
-
-### `HOLIDAYS_CSV_PATH`
-
-公開定数。
-
-### `HolidayError`
-
-```text
-class HolidayError(ComkenError):
-```
-
-#### 説明
-
-祝日カレンダーに関するエラー。具体的な状況はメッセージに出る
-
-対処:
-    メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
-
-### `WORKDAY_SEARCH_LIMIT`
-
-公開定数。
-
-### `WorkdayNotFoundError`
-
-```text
-class WorkdayNotFoundError(HolidayError):
-```
-
-#### 説明
-
-営業日が見つからなかった
-
-月の途中で「指定した月の営業日数を超える n 番目」を求めたとき、
-その月に営業日が 1 日も無いとき、祝日データ欠落などで 30 日探索しても
-次の営業日にたどり着けなかったときに送る。
-いずれも「カレンダー側がおかしい」または「指定値が暦と合わない」場合に
-起き、業務ロジック側のミスではないので、呼び出し側で握り潰さずユーザーに
-顕在化させる必要がある。
-
-発生箇所: comken.core.dates._holidays
-    - nth_workday（n が月の営業日数超え、または n < 1）
-    - first_workday / last_workday（その月に営業日が 1 日も無い）
-    - workday / workday_on_or_after / workday_on_or_before
-      （30 日の探索上限に達した）
-
-対処:
-    n をその月の営業日数以下に直す、対象月の祝日に過不足がないか
-    確認する、社内休日（会社用カレンダーCSV）が広範囲に登録されていないか確認する
-
-#### `__init__`
-
-```text
-def __init__(self, detail: str) -> None:
-```
-
 ### `count_workdays`
 
 ```text
@@ -1772,6 +1463,20 @@ def count_workdays(start: _dt.date, end: _dt.date, *, skip_weekends: bool=True) 
 営業日判定は ``is_workday`` と同じ（``skip_weekends`` の意味も同じ）。
 ``WORKDAY_SEARCH_LIMIT`` は使わない（日数を数えるだけなので、
 祝日データが壊れていても上限に当たって例外にはならない）。
+
+### `date_in_name`
+
+```text
+def date_in_name(name: str) -> datetime.date | None:
+```
+
+#### 説明
+
+ファイル名に含まれる **最初の日付** を返す。日付が無ければ None。
+
+1つのファイル名に日付が複数あるときは、先に出てくる方を使う。
+ファイル名の日付とファイル内容の日付を突き合わせる業務で使うため公開している。
+すべての日付が要るときは ``dates_in_name`` を使う。
 
 ### `fiscal_year`
 
@@ -1979,22 +1684,6 @@ def today() -> datetime.date:
 
 この PC のローカルの今日の日付を返す。
 
-### `warn_if_holidays_expiring_soon`
-
-```text
-def warn_if_holidays_expiring_soon() -> None:
-```
-
-#### 説明
-
-既定の会社用カレンダーの収録期限が近ければ、起動時に警告する。
-
-「収録最終日」（=``company_calendar.csv`` の最後の行）が今日から
-``EXPIRING_WARNING_DAYS`` 未満で WARNING ログを 1 度だけ出す。
-同じ日に複数回呼んでも警告は 1 日 1 回だけ（``_maybe_warn_expiring``
-の重複防止をそのまま使う）。年 1 回の内閣府 CSV 更新が必要な時期を
-検知するのが目的。
-
 ### `workday`
 
 ```text
@@ -2051,171 +1740,6 @@ Raises:
 
 ## `from comken.core.files import ...`
 
-### `DateNameBuilder`
-
-```text
-class DateNameBuilder:
-```
-
-#### 説明
-
-今日の日付を付けたファイル名を組み立てる。
-
-日付は ``__init__`` 時点で確定する。``for_date=None`` のときだけ
-``__init__`` 呼び出し時点の日付を使い、``prefix()`` / ``suffix()`` を
-呼ぶたびに日付を取り直すことはない。
-
-日付はコンストラクタで固定できる。テストや過去日付のファイル名を組み立てる
-ときは ``date(2026, 8, 20)`` 等を渡す。省略時は呼び出し時点の日付。
-
-拡張子は **名前の文字列に含めて** 渡す（例: ``DateNameBuilder("ログ.csv")``）。
-拡張子なしの名前は ``FileSuffixMissingError`` を送出して止める。
-
-#### `__init__`
-
-```text
-def __init__(self, name: str, for_date: date | datetime | None=None) -> None:
-```
-
-##### 説明
-
-Args:
-    name: ファイル名（**拡張子を含む**）。例: ``"売上.xlsx"`` / ``"ログ.csv"``。
-        拡張子が無いと ``FileSuffixMissingError``。
-    for_date: ファイル名に付ける日付。``None``（既定）なら ``__init__``
-        呼び出し時点の日付。``prefix()`` / ``suffix()`` を呼ぶたびに
-        日付を取り直すことはない。``date`` / ``datetime`` どちらも
-        受け付ける（``datetime`` は内部で ``.date()`` に変換）。
-
-Raises:
-    FileSuffixMissingError: ``name`` に拡張子が含まれていないとき。
-
-#### `prefix`
-
-```text
-def prefix(self, prefix: str='{:%Y%m%d}_') -> str:
-```
-
-##### 説明
-
-``prefix + 日付 + ベース名 + 拡張子`` を返す（例: ``"20260825_売上.xlsx"``）。
-
-``prefix("DIY_{:%Y%m%d}_")`` のように日付の位置と書式を指定する。
-日付書式を含まない prefix には ``YYYYMMDD`` を末尾へ補う。
-日付は **拡張子の手前** に入る。
-
-#### `suffix`
-
-```text
-def suffix(self, date_format: str='%Y%m%d') -> str:
-```
-
-##### 説明
-
-今日の日付を後ろに付けたファイル名を返す（例: ``"売上_20260825.xlsx"``）。
-
-日付は **拡張子の手前** に入る。メソッド名 ``suffix()`` と「拡張子（suffix）」が
-紛らわしいため、内部状態は ``_extension``（= 拡張子）と ``_stem``（= 拡張子を除いた
-ベース名）で持つ。``self._extension`` は常にドット付きで ``".xlsx"`` / ``".csv"`` 等。
-
-### `DateFileFinder`
-
-```text
-class DateFileFinder:
-```
-
-#### 説明
-
-指定した名前と日付を持つファイルを探す。
-
-探す名前に **拡張子を含める**（例: ``"売上レポート.csv"``）。拡張子無しの名前を
-渡すと ``FileSuffixMissingError`` で止める。
-
-**注意: ``find()`` / ``find_all()`` は呼ぶたびにフォルダを走査する。** 同じ結果を
-何度も使うなら変数に受けること（業務時間中に新しいファイルが降ってくる前提の
-道具なので、 敢えてキャッシュしていない）。
-
-判定の規則:
-
-- 「名前を含む」: ``name`` の拡張子を除いた本体部分が、ファイル名の本体部分に
-  **含まれている**（部分一致）。同じ拡張子（大文字小文字は区別しない）のファイル
-  だけが対象。日付の位置や書式（``20260711`` / ``2026-07-11`` / ``2026_07_11`` /
-  ``2026.07.11``）は問わない
-- ``find(name)``: 上の条件に加えて、ファイル名の日付の中に ``for_date``
-  （コンストラクタで指定。省略時は今日）が **含まれる** ファイルだけが対象。
-  複数見つかったときは **更新日時（mtime）が新しい方** を返す。
-  1つも無ければ ``ComkenFileNotFoundError``
-- ``find_all(name)``: 上の名前の条件に加えて、ファイル名に日付が 1 つ以上ある
-  ファイルだけが対象。**``for_date`` は使わない**。並び順は ``date_in_name``
-  の日付の降順、同じ日付なら mtime の降順。該当するファイルが無ければ
-  空リスト（例外は出さない）
-
-#### `__init__`
-
-```text
-def __init__(self, folder: str | Path, for_date: datetime.date | None=None) -> None:
-```
-
-#### `find`
-
-```text
-@measure
-def find(self, name: str) -> Path:
-```
-
-##### 説明
-
-名前を含み、ファイル名の日付が ``for_date`` のファイルを返す。
-
-同じ拡張子（大文字小文字は区別しない）で、``name`` の拡張子を除いた本体部分が
-ファイル名の本体部分に **含まれている** ファイルのうち、ファイル名から
-``dates_in_name`` で取り出した日付リストの中に ``for_date`` が含まれるもの
-を返す。日付の位置・書式は問わない。
-
-候補が複数見つかったときは **更新日時（mtime）が新しい方** を返す。
-1 つも無ければ ``ComkenFileNotFoundError``
-（``FileNotFoundError`` としても送出される）。
-
-Args:
-    name: 探すファイル名。**拡張子を含める**（例: ``"売上レポート.csv"``）。
-
-Returns:
-    条件に合うファイルのうち mtime が最新の ``Path``。
-
-Raises:
-    FileSuffixMissingError: ``name`` に拡張子が含まれていないとき。
-    ComkenFileNotFoundError: フォルダが存在しない／フォルダではない、
-        もしくは条件に合うファイルが無いとき。
-
-#### `find_all`
-
-```text
-@measure
-def find_all(self, name: str) -> list[Path]:
-```
-
-##### 説明
-
-名前を含み、日付を含むファイルを全部、新しい日付順で返す。
-
-``name`` の拡張子を除いた本体部分がファイル名の本体部分に **含まれている**
-（部分一致）ファイルのうち、ファイル名から取り出した日付が 1 つ以上ある
-ファイルだけを返す。日付の位置・書式は問わない。
-
-並び順は ``dates_in_name`` の先頭日付の降順、同じ日付なら mtime の降順。
-``for_date`` は使わない（フォルダ内の全件が対象）。
-該当するファイルが無ければ空リストを返す（例外は出さない）。
-
-Args:
-    name: 探すファイル名。**拡張子を含める**（例: ``"売上レポート.csv"``）。
-
-Returns:
-    条件に合うファイルの ``Path`` リスト。新しい日付順。
-
-Raises:
-    FileSuffixMissingError: ``name`` に拡張子が含まれていないとき。
-    ComkenFileNotFoundError: フォルダが存在しない／フォルダではないとき。
-
 ### `atomic_write`
 
 ```text
@@ -2271,35 +1795,6 @@ Args:
 Returns:
     コピー後のファイルパス。
 
-### `date_in_name`
-
-```text
-def date_in_name(name: str) -> datetime.date | None:
-```
-
-#### 説明
-
-ファイル名に含まれる **最初の日付** を返す。日付が無ければ None。
-
-1つのファイル名に日付が複数あるときは、先に出てくる方を使う。
-ファイル名の日付とファイル内容の日付を突き合わせる業務で使うため公開している。
-すべての日付が要るときは ``dates_in_name`` を使う。
-
-### `dates_in_name`
-
-```text
-def dates_in_name(name: str) -> list[datetime.date]:
-```
-
-#### 説明
-
-ファイル名に含まれる日付を **すべて** 出現順で返す。無ければ空リスト。
-
-``_DATE_IN_NAME`` 正規表現で日付らしい数字（``20260729`` / ``2026-07-29`` /
-``2026_07_29`` / ``2026.07.29``）を抜き出し、``date`` に変換できたものだけを
-順番に並べる。``20261345`` のように数字は揃っていても日付として成立しないものは
-結果に含まない。
-
 ### `delete_file`
 
 ```text
@@ -2345,6 +1840,48 @@ Args:
 Raises:
     FileDeletionError: 1件以上のファイルを削除できなかった場合。
         残ったパスは ``.remaining`` で読める。
+
+### `find_dated_file`
+
+```text
+@measure
+def find_dated_file(folder: str | Path, name: str, for_date: datetime.date | None=None) -> Path:
+```
+
+#### 説明
+
+指定した名前と日付を持つファイルを 1 件返す。
+
+探す名前に **拡張子を含める**（例: ``"売上レポート.csv"``）。拡張子無しの名前を
+渡すと ``FileSuffixMissingError`` で止める。
+
+**注意: 呼ぶたびにフォルダを走査する。** 同じ結果を何度も使うなら変数に受けること
+（業務時間中に新しいファイルが降ってくる前提の道具なので、敢えてキャッシュしていない）。
+
+判定の規則:
+
+- 「名前を含む」: ``name`` の拡張子を除いた本体部分が、ファイル名の本体部分に
+  **含まれている**（部分一致）。同じ拡張子（大文字小文字は区別しない）のファイル
+  だけが対象。日付の位置や書式（``20260711`` / ``2026-07-11`` / ``2026_07_11`` /
+  ``2026.07.11``）は問わない
+- ファイル名から ``dates_in_name`` で取り出した日付リストの中に ``for_date``
+  （省略時は今日）が **含まれる** ファイルだけが対象。
+  複数見つかったときは **更新日時（mtime）が新しい方** を返す。
+  1 つも無ければ ``ComkenFileNotFoundError``
+
+Args:
+    folder: 探すフォルダ。
+    name: 探すファイル名。**拡張子を含める**（例: ``"売上レポート.csv"``）。
+    for_date: ファイル名から取り出した日付のどれかと一致する対象日。
+        ``None``（既定）なら呼んだ時点の ``today()``。
+
+Returns:
+    条件に合うファイルのうち mtime が最新の ``Path``。
+
+Raises:
+    FileSuffixMissingError: ``name`` に拡張子が含まれていないとき。
+    ComkenFileNotFoundError: フォルダが存在しない／フォルダではない、
+        もしくは条件に合うファイルが無いとき。
 
 ### `local_copy`
 
@@ -3372,8 +2909,7 @@ class FileSuffixMissingError(ComkenError):
 ファイル名に拡張子が無い
 
 発生箇所:
-    comken.core.files.DateNameBuilder() / DateFileFinder.find() /
-    DateFileFinder.find_all()
+    comken.core.files.find_dated_file()
 
 対処:
     ファイル名に拡張子（例: ``.csv`` / ``.xlsx``）を含めて指定する。
@@ -7112,10 +6648,6 @@ Raises:
 
 ## `from comken.toolbox.credentials import ...`
 
-### `CREDENTIALS_PATH`
-
-公開定数。
-
 ### `Credentials`
 
 ```text
@@ -7228,166 +6760,6 @@ Args:
 Raises:
     CredentialError: サイト名・項目名に使えない文字が含まれている場合、
         既存ファイルを復号できない場合。
-
-### `save_credentials`
-
-```text
-@measure
-def save_credentials(items: dict[str, dict[str, str]], path: Path | None=None) -> None:
-```
-
-#### 説明
-
-認証情報をまとめて暗号化して保存する。同じ（サイト, 項目）は上書きされる。
-
-1件ずつ save_credential() を呼ぶと、件数ぶん復号と暗号化を繰り返し、
-途中で失敗すると一部だけ入った状態になる。まとめて渡せば書き込みは1回で、
-「全部入るか、1つも入らないか」のどちらかになる。
-
-Args:
-    items: ``{サイト名: {項目名: 値}}`` の入れ子 dict（例:
-        ``{"site_a": {"client_id": "..."}}``）。
-    path: 保存先ファイル。省略時は CREDENTIALS_PATH（通常は省略する）。
-
-Raises:
-    CredentialError: サイト名・項目名に使えない文字が含まれている場合、
-        既存ファイルを復号できない場合。
-    TypeError: 値が文字列でない・入れ子の構造が壊れている場合（呼び出し側のバグ）。
-
-### `delete_credential`
-
-```text
-@measure
-def delete_credential(site: str, field: str, path: Path | None=None) -> None:
-```
-
-#### 説明
-
-登録済みの認証情報を1件削除する。
-
-Raises:
-    CredentialError: サイト名・項目名に使えない文字が含まれている場合、
-        既存ファイルを復号できない場合。
-    CredentialNotFoundError: 指定した（サイト, 項目）が未登録の場合。
-
-### `list_names`
-
-```text
-@measure
-def list_names(path: Path | None=None) -> list[tuple[str, str]]:
-```
-
-#### 説明
-
-登録済みの ``(サイト名, 項目名)`` のタプル一覧を返す（値そのものは返さない）。
-
-並び順は **サイト名 → 項目名** でソートする。同じサイト名の項目が固まって
-表示されるので、 ``cli list`` のようなグルーピング表示がタプル1要素目だけで済む。
-
-Raises:
-    CredentialError: 別のユーザー・PC で登録されていて復号できない場合、
-        認証情報の中身が壊れている場合。
-
-### `import_json`
-
-```text
-@measure
-def import_json(json_path: str | Path, path: Path | None=None) -> list[tuple[str, str]]:
-```
-
-#### 説明
-
-平文 JSON を読み、暗号化ファイルへ取り込む。
-
-取り込みは「全部入るか、1つも入らないか」のどちらかになる。
-途中のキーが不正なら、1件も書き込まずに例外を送出する。
-
-Args:
-    json_path: 読み込む平文 JSON のパス。
-    path: 保存先ファイル。省略時は CREDENTIALS_PATH（通常は省略する）。
-
-Returns:
-    取り込んだ ``(サイト名, 項目名)`` のタプルのリスト（値は含まない）。
-    ``list_names()`` と同じ並び順（サイト名→項目名でソート）。
-
-Raises:
-    CredentialError: JSON が見つからない・壊れている・形式が違う場合、
-        既存ファイルを復号できない場合。
-
-### `prompt_new_password`
-
-```text
-def prompt_new_password(cred: Credentials, field: str=DEFAULT_PASSWORD_FIELD, *, label: str='新しいパスワード', timeout_seconds: float=DEFAULT_TIMEOUT_SECONDS) -> str:
-```
-
-#### 説明
-
-新しいパスワードをCLIから2回入力させ、一致したら cred へ保存して返す。
-
-入力文字は画面に表示しない。1回目と2回目が食い違う間、または未入力の間は
-確定させず何度でも聞き直す。timeout_seconds 以内に入力が確定しなければ
-TimeoutError にする（無人実行でハングし続けるのを防ぐ）。
-
-確定した値は ``cred.<field> = 値`` の形で代入し、その場で ``cred.save()``
-まで行う。ログイン時に読む側（``cred.password`` 等）と同じインスタンスを
-渡すことで、site 名を書き直す必要がない（typo で別サイトへ保存される
-事故を防ぐ）。
-
-Args:
-    cred: 保存先。``Credentials(config.CREDENTIALS.<サイト>)`` で作ったもの。
-    field: 保存する項目名。既定は ``"password"``。
-    label: プロンプトに表示する項目名（表示用で、保存先の項目名とは独立）。
-    timeout_seconds: 入力待ちの上限秒数。既定 300 秒（5分）。
-
-Returns:
-    2回とも一致した入力値（保存済み）。
-
-Raises:
-    TimeoutError: timeout_seconds 以内に入力が確定しなかった場合。
-
-### `change_password`
-
-```text
-def change_password[T](cred: Credentials, submit: Callable[[str], T], field: str=DEFAULT_PASSWORD_FIELD, *, label: str='新しいパスワード', timeout_seconds: float=DEFAULT_TIMEOUT_SECONDS, max_attempts: int=DEFAULT_MAX_ATTEMPTS) -> T:
-```
-
-#### 説明
-
-新しいパスワードをCLIから受け付け、``submit()`` でサイトへ送信する。
-
-サイト側が拒否した場合（記号が足りない・文字数が足りない等）は、
-自動でCLIへ戻って聞き直す。呼び出し側のプロジェクトで再試行ループを
-書く必要はない。
-
-``submit`` はサイト固有の画面クラスのメソッド（例:
-``change_password_page.submit_new_password``）を渡す。サイト側が
-拒否したことを検知したら ``PasswordRejectedError`` を送出する実装に
-しておくこと（検知の方法はサイトごとに違うため、ここでは決められない
-――画面クラス側の責務にする）。
-
-再試行させたくない場合は ``max_attempts=1`` を指定する（1回失敗したら
-``PasswordRejectedError`` をそのまま呼び出し側へ返す）。
-
-DPAPI への保存（``cred.save()``）は ``submit()`` が成功した後にだけ行う。
-サイト側に拒否された値を DPAPI へ残さないため（読む側とサイト側の
-パスワードがずれる事故を防ぐ）。
-
-Args:
-    cred: 保存先。``Credentials(config.CREDENTIALS.<サイト>)`` で作ったもの。
-    submit: 新しいパスワードを受け取ってサイトへ送信する関数。サイトが
-        拒否した場合は ``PasswordRejectedError`` を送出すること。
-    field: 保存する項目名。既定は ``"password"``。
-    label: プロンプトに表示する項目名。
-    timeout_seconds: 1回あたりの入力待ちの上限秒数（聞き直すたびにリセットされる）。
-    max_attempts: 最大試行回数。既定3回。1にすると再試行しない。
-
-Returns:
-    ``submit()`` の戻り値（通常はサイト側の遷移先の画面インスタンス）。
-
-Raises:
-    ValueError: ``max_attempts`` が1未満の場合。
-    TimeoutError: 入力待ちがタイムアウトした場合。
-    PasswordRejectedError: ``max_attempts`` 回すべてサイト側に拒否された場合。
 
 
 ## `from comken.toolbox.csv import ...`
@@ -8209,135 +7581,6 @@ class MailMessage:
 ## `from comken.toolbox.salesforce import ...`
 
 ### `SalesforceBase`
-
-定義を解決できませんでした。
-
-### `RefreshTokenOAuth`
-
-定義を解決できませんでした。
-
-### `APIMetrics`
-
-```text
-class APIMetrics:
-```
-
-#### 説明
-
-API 呼び出しの計測を貯める。
-
-使い方:
-    metrics = APIMetrics("sandbox")
-    # …API を呼ぶ…
-    metrics.log_summary()
-    metrics.append_csv(Path("logs/salesforce_metrics.csv"))
-
-#### `record_call`
-
-```text
-def record_call(self, component: str, elapsed_seconds: float, is_error: bool=False) -> None:
-```
-
-##### 説明
-
-API 呼び出しを1件記録する。
-
-#### `record_retry`
-
-```text
-def record_retry(self, component: str, reason: str) -> None:
-```
-
-##### 説明
-
-リトライを1件記録する。reason は RetryReason の値を渡す。
-
-#### `record_truncated_report`
-
-```text
-def record_truncated_report(self, report_id: str) -> None:
-```
-
-##### 説明
-
-レポートが上限で切り捨てられたことを記録する。
-
-止めずに続けた場合（allow_truncated=True）でも記録は残す。
-あとから「どのレポートを SOQL へ移すか」を実測で決めるための材料になる。
-
-#### `component_stats`
-
-```text
-def component_stats(self) -> dict[str, ComponentStat]:
-```
-
-##### 説明
-
-呼び出し元別の集計を、読み取り用のコピーとして返す。
-
-#### `retry_reason_counts`
-
-```text
-def retry_reason_counts(self) -> dict[str, int]:
-```
-
-##### 説明
-
-リトライ理由別の回数を、読み取り用のコピーとして返す。
-
-#### `update_api_usage`
-
-```text
-def update_api_usage(self, limit_info: str) -> None:
-```
-
-##### 説明
-
-`Sforce-Limit-Info` ヘッダーの値から API 消費量を取り出して更新する。
-
-Args:
-    limit_info: "api-usage=1234/15000" の形式。
-                解釈できない形式は無視する（計測のために本処理を止めない）。
-
-#### `log_summary`
-
-```text
-def log_summary(self) -> None:
-```
-
-##### 説明
-
-集計結果を INFO ログに出す。実行の最後に1回呼ぶ。
-
-#### `append_csv`
-
-```text
-def append_csv(self, path: str | Path) -> None:
-```
-
-##### 説明
-
-集計結果を CSV に1行ずつ追記する（呼び出し元ごとに1行）。
-
-日ごとに追記していくと、API 消費量の推移と切り捨ての発生が追える。
-ファイルが無ければ見出し行から作る。
-
-``CSV.append`` は呼び出しごとにファイル全体を読み直して原子的に
-書き換えるため、**1 回の呼び出しで書く行数が少なく、累積しても
-履歴のように巨大にならない用途**（= 1 日 1 実行・呼び出し元数件）
-にだけ使う。
-
-### `APIUsage`
-
-```text
-class APIUsage:
-```
-
-#### 説明
-
-組織の 24 時間 API 消費量（Sforce-Limit-Info ヘッダーの値）。
-
-### `SalesforceCredentialRotator`
 
 定義を解決できませんでした。
 
@@ -9297,56 +8540,6 @@ def read_title(self) -> str:
 ##### 説明
 
 ウィンドウのタイトルを返す。
-
-### `RegistryHandler`
-
-```text
-class RegistryHandler:
-```
-
-#### 説明
-
-レジストリ値の読み取りクラス。with 文で確実にキーを閉じる。
-
-#### `__init__`
-
-```text
-def __init__(self, hive: int, key_path: str) -> None:
-```
-
-##### 説明
-
-Args:
-    hive: レジストリのルートキー（例: win32con.HKEY_CURRENT_USER）。
-    key_path: キーのパス（例: r"Software\MyApp"）。
-
-#### `read`
-
-```text
-@measure
-def read(self, value_name: str) -> str:
-```
-
-##### 説明
-
-レジストリ値を読み取る。
-
-Args:
-    value_name: 読み取る値の名前。
-
-Returns:
-    レジストリ値の文字列。
-
-#### `close`
-
-```text
-@measure
-def close(self) -> None:
-```
-
-##### 説明
-
-レジストリキーを閉じる。with 文を使う場合は自動で呼ばれる。
 
 ### `Paths`
 

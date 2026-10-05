@@ -256,9 +256,8 @@ fiscal_year(date(2026, 1, 1))      # → 2025
 | `datetime.date` | その日が属する年度の西暦 |
 | `datetime.datetime` | 日付部分（`date()`）だけで判定 |
 
-年度の開始月は `FISCAL_YEAR_START_MONTH`（既定 4）で参照できる。
-これは **会社で変わる値ではない**（会社ごと設定ファイル化しない）ので、
-コードに直書きしてある。
+年度の開始月は **4 月** に固定（会社で変わる値ではないため、設定ファイル化していない）。
+内部実装で参照する場合は `comken.core.dates._fiscal.FISCAL_YEAR_START_MONTH` を使う。
 
 ## 書式の変換
 
@@ -286,7 +285,6 @@ datetime.strptime("202610", "%Y%m").date()     # → date(2026, 10, 1)（年月�
 | `month_end(d)` | `d` が属する月の最終日（閏年も `calendar.monthrange` で扱う） |
 | `parse_cell_date(v)` | セルの値 → `date`。読めなければ `None`（例外にしない） |
 | `fiscal_year(d)` | `d` が属する年度（4 月始まり）。`d` は `date` または `datetime` |
-| `FISCAL_YEAR_START_MONTH` | 年度の開始月（既定 4） |
 | `is_holiday(d)` | 国民の祝日または会社休日に当たれば `True` |
 | `holiday_name(d)` | 国民の祝日または会社休日の名称を返す（無ければ `None`） |
 | `is_workday(d, *, skip_weekends=True)` | 国民の祝日＋会社休日＋土日を判定して `True`/`False` |
@@ -299,11 +297,7 @@ datetime.strptime("202610", "%Y%m").date()     # → date(2026, 10, 1)（年月�
 | `nth_workday(d, n, *, skip_weekends=True)` | `d` の月の第 `n` 営業日（`n` は 1 始まり） |
 | `non_workdays_after(d, *, skip_weekends=True)` | `d` の翌日から、次の営業日の前日までの休みの日（連休）を日付順に返す。翌日が営業日なら空 |
 | `non_workdays_before(d, *, skip_weekends=True)` | `d` の前日から、前の営業日の翌日までの休みの日を、`d` に近い順に返す |
-| `warn_if_holidays_expiring_soon()` | 既定カレンダーの収録期限が近ければ起動時に WARNING を出す |
-| `WORKDAY_SEARCH_LIMIT` | 「次の営業日」探索の上限日数（既定 30） |
-| `EXPIRING_WARNING_DAYS` | 期限切れ警告を出すまでの日数（既定 30） |
-| `HOLIDAYS_CSV_PATH` | 会社用カレンダーCSV のパス（git 管理下の正本） |
-| `HolidayError` 系 | 例外（`HolidayError` / `WorkdayNotFoundError`） |
+| `date_in_name(name)` | ファイル名に含まれる **最初の日付**（無ければ `None`） |
 
 `skip_weekends=False` にすると土曜・日曜でも祝日でなければ「営業日」と
 判定する（振替休日を平日扱いしたいシナリオ用）。

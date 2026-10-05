@@ -15,7 +15,6 @@ from typing import Any, Self
 import win32com.client
 
 from comken.core.dates import now
-from comken.core.files import DateNameBuilder
 from comken.core.files.base import FileBase
 from comken.core.table import Table
 from comken.core.text import normalize_encoding
@@ -323,9 +322,7 @@ class AccessDatabase(FileBase):
             )
             return
 
-        backup_path = backup_folder / DateNameBuilder(self._path.name).prefix(
-            f"{{:{BACKUP_DATE_FORMAT}}}_"
-        )
+        backup_path = backup_folder / f"{now():{BACKUP_DATE_FORMAT}}_{self._path.name}"
         try:
             backup_folder.mkdir(parents=True, exist_ok=True)
             _remove_expired_backups(backup_folder, self._path, backup_days)
@@ -355,7 +352,7 @@ class AccessDatabase(FileBase):
 
 
 def _reserve_backup_path(folder: Path, source: Path) -> Path:
-    filename = DateNameBuilder(source.name).prefix(f"{{:{BACKUP_DATE_FORMAT}}}_")
+    filename = f"{now():{BACKUP_DATE_FORMAT}}_{source.name}"
     sequence = 2
     candidate = folder / filename
     while True:

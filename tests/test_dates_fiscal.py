@@ -7,7 +7,8 @@
 
 import datetime as _dt
 
-from comken.core.dates import FISCAL_YEAR_START_MONTH, fiscal_year
+from comken.core.dates import fiscal_year
+from comken.core.dates._fiscal import FISCAL_YEAR_START_MONTH
 
 # ── fiscal_year ─────────────────────────────────────────────────────────
 

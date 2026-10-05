@@ -19,10 +19,9 @@ URL と認証情報のシステム名は組織クラスがクラス定数とし�
 設計の背景は docs/HISTORY.md「認証方式」を参照。
 
     SalesforceBase              1組織ぶんの API クライアントの土台（組織クラスで継承する）
-    RefreshTokenOAuth            Authorization Code + Refresh Token Flow（既定）
-    APIMetrics                   API 呼び出しの計測。SalesforceBase.metrics が持っている
-    APIUsage                     組織の 24 時間 API 消費量
-    SalesforceCredentialRotator  ECA の資格情報を期限到来時だけローテーションする（既定で無効）
+
+``RefreshTokenOAuth`` / ``APIMetrics`` / ``APIUsage`` / ``SalesforceCredentialRotator`` は
+内部実装（SalesforceBase から呼ばれる）で、利用側で直接 import する必要はない。
 
 レポートAPIの2000行上限を超える場合（マトリックス／統合などSOQLに書き換えられない
 形式）の最終手段は `comken.toolbox.browser.sites.salesforce`。画面のエクスポート
@@ -42,8 +41,6 @@ URL と認証情報のシステム名は組織クラスがクラス定数とし�
 from types import ModuleType
 from typing import TYPE_CHECKING
 
-from comken.toolbox.salesforce.metrics import APIMetrics, APIUsage
-
 # requests の存在チェックだけ先に行う。依存が無い環境でもこのパッケージを
 # import だけはできるようにしておき、実際に API を叩く経路
 # （`oauth_refresh` / `client` / `rotation` 等）で
@@ -59,8 +56,6 @@ except ImportError:
 # import 可能にするため
 _LAZY_TARGETS: dict[str, str] = {
     "SalesforceBase": "comken.toolbox.salesforce.client",
-    "RefreshTokenOAuth": "comken.toolbox.salesforce.auth.oauth_refresh",
-    "SalesforceCredentialRotator": "comken.toolbox.salesforce.auth.rotation",
 }
 
 if TYPE_CHECKING:
@@ -69,8 +64,6 @@ if TYPE_CHECKING:
     # エラーになる）。TYPE_CHECKING はここでだけ True 扱いになり実行時には
     # 一切評価されないため、requests 非依存という遅延importの目的を壊さずに
     # 型だけ正しく解決できる。
-    from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth
-    from comken.toolbox.salesforce.auth.rotation import SalesforceCredentialRotator
     from comken.toolbox.salesforce.client import SalesforceBase
 
 
@@ -98,8 +91,4 @@ def __dir__() -> list[str]:
 
 __all__ = [
     "SalesforceBase",
-    "RefreshTokenOAuth",
-    "APIMetrics",
-    "APIUsage",
-    "SalesforceCredentialRotator",
 ]

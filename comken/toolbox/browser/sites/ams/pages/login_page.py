@@ -44,7 +44,7 @@ class LoginPage(AppPage):
             cred = Credentials(config.CREDENTIALS.AMS)
             result = login_page.login(cred.username, cred.password)
             if isinstance(result, ChangePasswordPage):
-                from comken.toolbox.credentials import change_password
+                from comken.toolbox.credentials.prompt import change_password
 
                 # CLIで2回入力→サイトへ送信→DPAPI保存まで1行で完結する。
                 # サイト側が拒否した場合（ChangePasswordPage.submit_new_password()

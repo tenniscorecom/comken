@@ -2,7 +2,7 @@
 
 「comken 直下」には、**何をするプロジェクトかに関係なく使う**土台だけを置く。
 設定・ログ・実行モードの7個で、それ以外の部品は ``comken.core`` から取る
-（``from comken.core import DateFileFinder``）。
+（``from comken.core import find_dated_file``）。
 
 書くときは ``from comken import X`` が第一選択。そこに無いものだけ
 ``from comken.core import Y`` で取る（docs/ARCHITECTURE.md §3）。

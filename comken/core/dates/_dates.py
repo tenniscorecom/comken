@@ -11,6 +11,7 @@
 
 import calendar as _calendar
 import datetime
+import re
 
 
 def now() -> datetime.datetime:
@@ -91,3 +92,37 @@ def parse_cell_date(value: object) -> datetime.date | None:
         except ValueError:
             continue
     return None
+
+
+# ファイル名に含まれる日付らしい数字（20260729 / 2026-07-29 / 2026_07_29 / 2026.07.29）。
+# 前後を数字で挟まれたものは日付とみなさない（社員番号・伝票番号の一部を拾わないため）
+_DATE_IN_NAME = re.compile(r"(?<!\d)([0-9]{4})([-_.]?)([0-9]{2})\2([0-9]{2})(?!\d)")
+
+
+def dates_in_name(name: str) -> list[datetime.date]:
+    """ファイル名に含まれる日付を **すべて** 出現順で返す。無ければ空リスト。
+
+    ``_DATE_IN_NAME`` 正規表現で日付らしい数字（``20260729`` / ``2026-07-29`` /
+    ``2026_07_29`` / ``2026.07.29``）を抜き出し、``date`` に変換できたものだけを
+    順番に並べる。``20261345`` のように数字は揃っていても日付として成立しないものは
+    結果に含まない。
+    """
+    results: list[datetime.date] = []
+    for match in _DATE_IN_NAME.finditer(name):
+        year, _, month, day = match.groups()
+        try:
+            results.append(datetime.date(int(year), int(month), int(day)))
+        except ValueError:
+            continue  # 20261345 のように数字は揃っていても日付として成立しないもの
+    return results
+
+
+def date_in_name(name: str) -> datetime.date | None:
+    """ファイル名に含まれる **最初の日付** を返す。日付が無ければ None。
+
+    1つのファイル名に日付が複数あるときは、先に出てくる方を使う。
+    ファイル名の日付とファイル内容の日付を突き合わせる業務で使うため公開している。
+    すべての日付が要るときは ``dates_in_name`` を使う。
+    """
+    dates = dates_in_name(name)
+    return dates[0] if dates else None

@@ -21,7 +21,8 @@ from comken.exceptions import (
     CredentialNotFoundError,
     SalesforceError,
 )
-from comken.toolbox.credentials import load_credential, save_credentials
+from comken.toolbox.credentials import load_credential
+from comken.toolbox.credentials.store import save_credentials
 from comken.toolbox.salesforce.client import SalesforceBase
 
 logger = logging.getLogger(__name__)
