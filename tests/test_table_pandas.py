@@ -219,8 +219,12 @@ def _with_pandas_blocked(
 def test_from_dataframe_raises_when_pandas_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     """pandas が無い環境で from_dataframe を呼ぶと ``MissingOptionalDependencyError``。"""
 
+    # DataFrame は pandas を止める前に作る（pandas 3 は DataFrame の処理の途中でも
+    # 内部で import するため、止めた後に作ると comken に届く前に失敗する）
+    df = pd.DataFrame({"x": [1]})
+
     def call() -> Any:
-        return Table.from_dataframe(pd.DataFrame({"x": [1]}))  # type: ignore[arg-type]
+        return Table.from_dataframe(df)
 
     with pytest.raises(MissingOptionalDependencyError, match="pip install pandas"):
         _with_pandas_blocked(monkeypatch, call)
@@ -239,8 +243,12 @@ def test_to_dataframe_raises_when_pandas_missing(monkeypatch: pytest.MonkeyPatch
 def test_missing_optional_dependency_is_comken_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """``MissingOptionalDependencyError`` は ``ComkenError`` 系の例外で受け取れる。"""
 
+    # DataFrame は pandas を止める前に作る（pandas 3 は DataFrame の処理の途中でも
+    # 内部で import するため、止めた後に作ると comken に届く前に失敗する）
+    df = pd.DataFrame({"x": [1]})
+
     def call() -> Any:
-        return Table.from_dataframe(pd.DataFrame({"x": [1]}))  # type: ignore[arg-type]
+        return Table.from_dataframe(df)
 
     with pytest.raises(ComkenError, match="pandas"):
         _with_pandas_blocked(monkeypatch, call)
