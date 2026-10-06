@@ -36,28 +36,36 @@ _MESSAGE = "{name}: {elapsed}"
 
 # 経過時間の既定フォーマット。次のキーを ``str.format`` で参照する。
 #
-# - ``{hours}`` / ``{minutes}`` / ``{seconds}``: 経過時間を時・分・秒に
-#   分けた int（秒未満は切り捨て。``hours`` は 24 を超えても繰り上げない）
+# - ``{hours}`` / ``{minutes}``: 経過時間を時・分に分けた int
+#   （``hours`` は 24 を超えても繰り上げない）
+# - ``{seconds}``: 経過秒数のうち時・分を引いた残り（**float**）。
+#   秒未満を含むので、桁数は ``time_format`` 側のフォーマット指定で
+#   決める（既定は ``{seconds:05.2f}`` で 2 桁）。
 # - ``{total_seconds}``: 経過秒数の float（``self.elapsed`` そのもの）
+#
+# 表示の桁で丸めるため、59.996 秒のような値は ``"00:00:60.00"`` と
+# 表示されることがあります（繰り上げはしません）。
 #
 # 例::
 #
-#     "{minutes}分{seconds}秒"
+#     "{minutes}分{seconds:.1f}秒"
 #     "{total_seconds:.2f}秒"
 #
 # 未知のキーは ``KeyError``。
-_TIME_FORMAT = "{hours:02d}:{minutes:02d}:{seconds:02d}"
+_TIME_FORMAT = "{hours:02d}:{minutes:02d}:{seconds:05.2f}"
 
 
-def _split_seconds(seconds: float) -> tuple[int, int, int]:
-    """経過秒数を ``(時, 分, 秒)`` の int に分解する（秒未満は切り捨て）。
+def _split_seconds(seconds: float) -> tuple[int, int, float]:
+    """経過秒数を ``(時, 分, 秒)`` に分解する。
 
-    ``hours`` は 24 を超えても繰り上げない（100 時間は ``(100, 0, 0)``）。
+    ``hours`` / ``minutes`` は int（``hours`` は 24 を超えても繰り上げない）、
+    ``seconds`` は **float**（秒未満を含む。例: 3661.7 秒 → ``(1, 1, 1.7)``）。
+    秒未満の扱い（桁数・丸め）は ``time_format`` 側のフォーマット指定で
+    決める（既定の ``_TIME_FORMAT`` は ``{seconds:05.2f}``）。
     """
-    total = int(seconds)
-    hours, remainder = divmod(total, 3600)
+    hours, remainder = divmod(seconds, 3600)
     minutes, secs = divmod(remainder, 60)
-    return hours, minutes, secs
+    return int(hours), int(minutes), secs
 
 
 def _format_elapsed(seconds: float, time_format: str) -> str:
@@ -99,15 +107,17 @@ class Timer:
             time_format: 経過時間の整形書式。次のキーを ``str.format`` で
                 参照する:
 
-                - ``{hours}`` / ``{minutes}`` / ``{seconds}``: 経過時間を
-                  時・分・秒に分けた int（秒未満は切り捨て。``hours`` は
-                  24 を超えても繰り上げない）
+                - ``{hours}`` / ``{minutes}``: 経過時間を時・分に分けた
+                  int（``hours`` は 24 を超えても繰り上げない）
+                - ``{seconds}``: 経過秒数のうち時・分を引いた残りの
+                  **float**（秒未満を含む）。桁数は ``time_format``
+                  側のフォーマット指定で決める（例 ``"{seconds:.1f}"``）。
                 - ``{total_seconds}``: 経過秒数の float
                   （``self.elapsed`` そのもの）
 
                 例::
 
-                    "{minutes}分{seconds}秒"
+                    "{minutes}分{seconds:.1f}秒"
                     "{total_seconds:.2f}秒"
 
                 未知のキーは ``KeyError``。
