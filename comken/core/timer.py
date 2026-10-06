@@ -12,6 +12,7 @@ from __future__ import annotations
 import functools
 import inspect
 import logging
+import re
 import time
 from collections.abc import Callable
 from types import TracebackType
@@ -25,62 +26,69 @@ _R = TypeVar("_R")
 # ログに出す文言の既定値。次のプレースホルダを使える。
 #
 # - ``{name}``: ``__init__`` の ``name``
-# - ``{elapsed}``: ``time_format`` を ``str.format`` で整形した経過時間
+# - ``{elapsed}``: ``time_format`` で整形した経過時間
 #
-# 経過時間の書式は ``message`` ではなく ``_TIME_FORMAT``（``time_format=``）
-# の側で扱う。``message`` で使えるのは ``{name}`` と ``{elapsed}`` だけにし、
+# 経過時間の書式は ``message`` ではなく ``time_format`` の側で扱う。
+# ``message`` で使えるのは ``{name}`` と ``{elapsed}`` だけにし、
 # 「文言」と「時間の整形」を役割で分ける。
 #
 # 呼び出し側で ``message=`` を渡すとこの文言を差し替えられる。
 _MESSAGE = "{name}: {elapsed}"
 
-# 経過時間の既定フォーマット。次のキーを ``str.format`` で参照する。
-#
-# - ``{hours}`` / ``{minutes}``: 経過時間を時・分に分けた int
-#   （``hours`` は 24 を超えても繰り上げない）
-# - ``{seconds}``: 経過秒数のうち時・分を引いた残り（**float**）。
-#   秒未満を含むので、桁数は ``time_format`` 側のフォーマット指定で
-#   決める（例 ``"{seconds:.1f}"`` で 1 桁）
-# - ``{total_seconds}``: 経過秒数の float（``self.elapsed`` そのもの）
-#
-# ``HH:MM:SS`` 書式で秒未満を出すときは、表示の桁で丸めるため
-# 59.996 秒のような値が ``"00:00:60.00"`` と表示されることがあります
-# （繰り上げはしません）。
-#
-# 例::
-#
-#     "{hours:02d}:{minutes:02d}:{seconds:05.2f}"  # → "00:00:03.21"
-#     "{hours:02d}:{minutes:02d}:{seconds:02.0f}"  # → 秒未満を出さない HH:MM:SS。
-#                                                  # ただし .0f は四捨五入なので
-#                                                  # 59.6 秒が "60" になりうる
-#     "{minutes}分{seconds:.1f}秒"
-#     "{total_seconds:.2f}秒"
-#
-# 未知のキーは ``KeyError``。
-_TIME_FORMAT = "{total_seconds:.2f}秒"
+# 経過時間の既定フォーマット。``None`` のときは下の ``_DEFAULT_FORMAT_ELAPSED``
+# （``"{total_seconds:.2f}秒"`` 相当）で出す。秒未満をそのまま残し、
+# 「0.30秒」のように単位つきの形でログへ載せる形。
+_TIME_FORMAT: str | None = None
+
+# ``time_format=None`` のときに適用する既定の表示。 ``str.format`` で
+# 経過秒数を小数2桁で出す。 ``{total_seconds}`` のキーは外部仕様ではなく
+# 内部実装（``_format_elapsed`` の第2分岐）にだけ存在するため、利用側は
+#  ``time_format=None`` と ``time_format="hh:mm:ss"`` を切り替えれば十分。
+_DEFAULT_FORMAT_ELAPSED = "{total_seconds:.2f}秒"
+
+# ``hh`` / ``mm`` / ``ss`` の3つだけを許す ``time_format`` のパターン。
+# 大文字小文字は区別しない（re.IGNORECASE）。
+# 一致した ``hh`` / ``mm`` / ``ss`` は、その位置の前後を残したまま
+# 経過時・分・秒に置き換える（str.format のキーではないので、``hh:mm:ss``
+# のような固定文字列にそのまま埋め込める）。
+_TIME_PLACEHOLDER_RE = re.compile("hh|mm|ss", re.IGNORECASE)
 
 
-def _split_seconds(seconds: float) -> tuple[int, int, float]:
-    """経過秒数を ``(時, 分, 秒)`` に分解する。
+def _split_seconds(seconds: float) -> tuple[int, int, int]:
+    """経過秒数を ``(時, 分, 秒)`` に分解する（すべて整数）。
 
-    ``hours`` / ``minutes`` は int（``hours`` は 24 を超えても繰り上げない）、
-    ``seconds`` は **float**（秒未満を含む。例: 3661.7 秒 → ``(1, 1, 1.7)``）。
-    秒未満の扱い（桁数・丸め）は ``time_format`` 側のフォーマット指定で
-    決める（既定の ``_TIME_FORMAT`` は ``{seconds:05.2f}``）。
+    経過秒は **切り捨て**て整数秒にする（四捨五入しない）。
+    ``hh:mm:ss`` 形式の ``time_format`` で 59.6 秒が ``00:00:60`` と
+    表示される問題をなくすための仕様。 ``hours`` は 24 を超えても
+    繰り上げない（``hh`` 部分の桁が増えるだけ）。
+
+    ``time_format`` の ``hh`` / ``mm`` / ``ss`` 置換で直接使う値。
     """
-    hours, remainder = divmod(seconds, 3600)
+    total = int(seconds)
+    hours, remainder = divmod(total, 3600)
     minutes, secs = divmod(remainder, 60)
-    return int(hours), int(minutes), secs
+    return hours, minutes, secs
 
 
-def _format_elapsed(seconds: float, time_format: str) -> str:
-    """経過秒数を ``time_format`` で文字列にする（``_split_seconds`` を内側で呼ぶ）。"""
+def _format_elapsed(seconds: float, time_format: str | None) -> str:
+    """経過秒数を ``time_format`` で文字列にする。
+
+    ``time_format`` が ``None`` のときは ``_DEFAULT_FORMAT_ELAPSED``
+    （小数2桁＋「秒」）で返す。文字列のときはその中の ``hh`` / ``mm`` / ``ss``
+    （大文字小文字区別なし）を経過時・分・秒に置き換え、それ以外はそのまま返す。
+    ``hh`` / ``mm`` / ``ss`` のいずれも含まれない文字列は、
+    ``time_format`` が無視される事故を防ぐため ``__init__`` で ``ValueError``
+    にしてある（この関数が直接呼ばれる場合は呼び出し側の責務）。
+    """
+    if time_format is None:
+        # ``_TIME_FORMAT`` の既定値。``{total_seconds:.2f}秒`` の形にする。
+        return _DEFAULT_FORMAT_ELAPSED.format(total_seconds=seconds)
     hours, minutes, secs = _split_seconds(seconds)
-    return time_format.format(
-        hours=hours,
-        minutes=minutes,
-        seconds=secs,
-        total_seconds=seconds,
+    return _TIME_PLACEHOLDER_RE.sub(
+        lambda m: {"hh": f"{hours:02d}", "mm": f"{minutes:02d}", "ss": f"{secs:02d}"}[
+            m.group(0).lower()
+        ],
+        time_format,
     )
 
 
@@ -95,7 +103,7 @@ class Timer:
         self,
         name: str = "処理",
         message: str = _MESSAGE,
-        time_format: str = _TIME_FORMAT,
+        time_format: str | None = _TIME_FORMAT,
     ) -> None:
         """
         Args:
@@ -109,34 +117,43 @@ class Timer:
 
                     "{name} -> {elapsed}"
 
-            time_format: 経過時間の整形書式。次のキーを ``str.format`` で
-                参照する:
+            time_format: 経過時間の整形書式。
 
-                - ``{hours}`` / ``{minutes}``: 経過時間を時・分に分けた
-                  int（``hours`` は 24 を超えても繰り上げない）
-                - ``{seconds}``: 経過秒数のうち時・分を引いた残りの
-                  **float**（秒未満を含む）。桁数は ``time_format``
-                  側のフォーマット指定で決める（例 ``"{seconds:.1f}"``）。
-                - ``{total_seconds}``: 経過秒数の float
-                  （``self.elapsed`` そのもの）
+                - ``None``（既定）: 小数2桁＋「秒」（例 ``"3.21秒"``）
+                - 文字列: その中の ``hh`` / ``mm`` / ``ss`` を経過時間で
+                  置き換える。大文字小文字は区別しない（``HH:MM:SS`` も同じ）。
 
-                ``HH:MM:SS`` 書式で秒未満を出すときは、表示の桁で
-                丸めるため 59.996 秒のような値が ``"00:00:60.00"`` と
-                表示されることがあります（繰り上げはしません）。
+                  経過秒は **整数秒に切り捨て**てから時・分・秒に分解する
+                  （四捨五入しない。59.6 秒が ``00:00:60`` と表示される問題を
+                  なくすため）。
 
-                例::
+                  - ``hh`` = 時（24 を超えても繰り上げない。100 時間超なら
+                    桁が増える）
+                  - ``mm`` = 時を引いた残りの分
+                  - ``ss`` = 分を引いた残りの秒
 
-                    "{hours:02d}:{minutes:02d}:{seconds:05.2f}"  # → "00:00:03.21"
-                    "{hours:02d}:{minutes:02d}:{seconds:02.0f}"  # → 秒未満を出さない
-                                                                 # ただし .0f は四捨五入なので
-                                                                 # 59.6 秒が "60" になりうる
-                    "{minutes}分{seconds:.1f}秒"
-                    "{total_seconds:.2f}秒"
+                  それぞれ2桁ゼロ埋め。
 
-                未知のキーは ``KeyError``。
+                  例::
+
+                      "hh:mm:ss"        # → "01:02:05"
+                      "HH:MM:SS"        # 大文字小文字どちらでも同じ
+                      "mm分ss秒"        # 3725 秒 → "02分05秒"（mm は時を引いた残り）
+                      "hh時間mm分ss秒"
+
+                ``hh`` / ``mm`` / ``ss`` の **どれも** 含まない文字列は
+                ``ValueError`` にする（``hh`` なしの ``"h:m:s"`` や
+                ``"{hours:02d}"`` のような旧 ``str.format`` キーが来ても、
+                黙って意味の違う表示にしないため）。
 
                 ``{elapsed}`` の中身はこの ``time_format`` で決まる。
         """
+        if time_format is not None and not _TIME_PLACEHOLDER_RE.search(time_format):
+            raise ValueError(
+                "time_format には hh / mm / ss のいずれかを含めてください。"
+                ' 例: "hh:mm:ss"、"mm分ss秒"。'
+                f" 受け取った書式: {time_format!r}"
+            )
         self._name = name
         self._message = message
         self._time_format = time_format

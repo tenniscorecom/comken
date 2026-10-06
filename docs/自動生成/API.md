@@ -569,7 +569,7 @@ Attributes:
 #### `__init__`
 
 ```text
-def __init__(self, name: str='処理', message: str=_MESSAGE, time_format: str=_TIME_FORMAT) -> None:
+def __init__(self, name: str='処理', message: str=_MESSAGE, time_format: str | None=_TIME_FORMAT) -> None:
 ```
 
 ##### 説明
@@ -585,31 +585,34 @@ Args:
 
             "{name} -> {elapsed}"
 
-    time_format: 経過時間の整形書式。次のキーを ``str.format`` で
-        参照する:
+    time_format: 経過時間の整形書式。
 
-        - ``{hours}`` / ``{minutes}``: 経過時間を時・分に分けた
-          int（``hours`` は 24 を超えても繰り上げない）
-        - ``{seconds}``: 経過秒数のうち時・分を引いた残りの
-          **float**（秒未満を含む）。桁数は ``time_format``
-          側のフォーマット指定で決める（例 ``"{seconds:.1f}"``）。
-        - ``{total_seconds}``: 経過秒数の float
-          （``self.elapsed`` そのもの）
+        - ``None``（既定）: 小数2桁＋「秒」（例 ``"3.21秒"``）
+        - 文字列: その中の ``hh`` / ``mm`` / ``ss`` を経過時間で
+          置き換える。大文字小文字は区別しない（``HH:MM:SS`` も同じ）。
 
-        ``HH:MM:SS`` 書式で秒未満を出すときは、表示の桁で
-        丸めるため 59.996 秒のような値が ``"00:00:60.00"`` と
-        表示されることがあります（繰り上げはしません）。
+          経過秒は **整数秒に切り捨て**てから時・分・秒に分解する
+          （四捨五入しない。59.6 秒が ``00:00:60`` と表示される問題を
+          なくすため）。
 
-        例::
+          - ``hh`` = 時（24 を超えても繰り上げない。100 時間超なら
+            桁が増える）
+          - ``mm`` = 時を引いた残りの分
+          - ``ss`` = 分を引いた残りの秒
 
-            "{hours:02d}:{minutes:02d}:{seconds:05.2f}"  # → "00:00:03.21"
-            "{hours:02d}:{minutes:02d}:{seconds:02.0f}"  # → 秒未満を出さない
-                                                         # ただし .0f は四捨五入なので
-                                                         # 59.6 秒が "60" になりうる
-            "{minutes}分{seconds:.1f}秒"
-            "{total_seconds:.2f}秒"
+          それぞれ2桁ゼロ埋め。
 
-        未知のキーは ``KeyError``。
+          例::
+
+              "hh:mm:ss"        # → "01:02:05"
+              "HH:MM:SS"        # 大文字小文字どちらでも同じ
+              "mm分ss秒"        # 3725 秒 → "02分05秒"（mm は時を引いた残り）
+              "hh時間mm分ss秒"
+
+        ``hh`` / ``mm`` / ``ss`` の **どれも** 含まない文字列は
+        ``ValueError`` にする（``hh`` なしの ``"h:m:s"`` や
+        ``"{hours:02d}"`` のような旧 ``str.format`` キーが来ても、
+        黙って意味の違う表示にしないため）。
 
         ``{elapsed}`` の中身はこの ``time_format`` で決まる。
 

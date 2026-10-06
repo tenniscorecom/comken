@@ -100,8 +100,8 @@ class TestTimer:
 
         assert t.elapsed >= 0
 
-    def test_logs_name_and_total_seconds(self, caplog, monkeypatch):
-        """経過時間が ``{total_seconds:.2f}秒`` で INFO ログに出ることを確認する。"""
+    def test_logs_default_format(self, caplog, monkeypatch):
+        """``time_format`` 既定（``None``）で ``"{total_seconds:.2f}秒"`` が出ることを確認する。"""
         # ``__enter__`` で 0.0、``__exit__`` で 3661.0 を返すようにして経過 3661 秒に固定する
         clock = iter([0.0, 3661.0])
         monkeypatch.setattr(timer_module.time, "perf_counter", lambda: next(clock))
@@ -124,42 +124,83 @@ class TestTimer:
         messages = [record.getMessage() for record in caplog.records]
         assert messages == ["処理: 3.21秒"]
 
-    @pytest.mark.parametrize(
-        ("seconds", "expected"),
-        [
-            (3661.7, "処理: 01:01:01.70"),  # 1h 1m 1.7s
-            (3.21, "処理: 00:00:03.21"),  # 秒未満をそのまま残す
-        ],
-    )
-    def test_logs_hhmmss_format(self, seconds, expected, caplog, monkeypatch):
-        """``time_format`` に ``HH:MM:SS.ff`` を指定するとその形で出ることを確認する。"""
-        clock = iter([0.0, seconds])
+    def test_logs_hhmmss_truncates_subsecond(self, caplog, monkeypatch):
+        """``time_format="hh:mm:ss"`` で秒未満が切り捨てられて表示されることを確認する。
+
+        3661.7 秒 → ``01:01:01``（``.7`` が捨てられる）。
+        """
+        clock = iter([0.0, 3661.7])
         monkeypatch.setattr(timer_module.time, "perf_counter", lambda: next(clock))
 
         with (
             caplog.at_level(logging.INFO),
-            Timer("処理", time_format="{hours:02d}:{minutes:02d}:{seconds:05.2f}"),
+            Timer("処理", time_format="hh:mm:ss"),
         ):
             pass
 
         messages = [record.getMessage() for record in caplog.records]
-        assert messages == [expected]
+        assert messages == ["処理: 01:01:01"]
+
+    def test_logs_hhmmss_does_not_round_up_59_6(self, caplog, monkeypatch):
+        """59.6 秒で ``00:00:59`` が出ることを確認する（四捨五入なら ``00:00:60`` になる）。
+
+        旧 ``str.format`` キーでは ``.0f`` が四捨五入のため ``60`` が出ていたが、
+        整数秒への切り捨てに統一したことでこの問題をなくした。
+        """
+        clock = iter([0.0, 59.6])
+        monkeypatch.setattr(timer_module.time, "perf_counter", lambda: next(clock))
+
+        with (
+            caplog.at_level(logging.INFO),
+            Timer("処理", time_format="hh:mm:ss"),
+        ):
+            pass
+
+        messages = [record.getMessage() for record in caplog.records]
+        assert messages == ["処理: 00:00:59"]
+
+    def test_logs_hhmmss_uppercase_works_too(self, caplog, monkeypatch):
+        """大文字の ``HH:MM:SS`` でも同じ結果になることを確認する（大文字小文字を区別しない）。"""
+        clock = iter([0.0, 3661.7])
+        monkeypatch.setattr(timer_module.time, "perf_counter", lambda: next(clock))
+
+        with (
+            caplog.at_level(logging.INFO),
+            Timer("処理", time_format="HH:MM:SS"),
+        ):
+            pass
+
+        messages = [record.getMessage() for record in caplog.records]
+        assert messages == ["処理: 01:01:01"]
+
+    def test_logs_hh_keeps_extra_digits_for_over_100_hours(self, caplog, monkeypatch):
+        """100 時間を超えても ``hh`` が桁増えするだけで繰り上げないことを確認する。"""
+        clock = iter([0.0, 360000.0])  # ちょうど 100 時間
+        monkeypatch.setattr(timer_module.time, "perf_counter", lambda: next(clock))
+
+        with (
+            caplog.at_level(logging.INFO),
+            Timer("処理", time_format="hh:mm:ss"),
+        ):
+            pass
+
+        messages = [record.getMessage() for record in caplog.records]
+        assert messages == ["処理: 100:00:00"]
 
     @pytest.mark.parametrize(
         ("time_format", "expected"),
         [
-            # 時・分・秒の個別キー（{seconds} は float）
-            ("{hours}時間{minutes}分{seconds:.1f}秒", "処理: 1時間1分1.7秒"),
-            # 経過秒数の float をフォーマット指定付きで使う
-            ("{total_seconds:.2f}秒", "処理: 3661.70秒"),
-            # 分・秒のゼロ埋めフォーマット指定（{seconds} は float）
-            ("{minutes:02d}:{seconds:04.1f}", "処理: 01:01.7"),
+            # "mm" は時を引いた残りの分（3725 秒 = 1時間2分5秒 → "02分05秒"）。
+            ("mm分ss秒", "処理: 02分05秒"),
+            # hh / mm / ss を同時に使った複合書式（3725 秒 = 1h 2m 5s）。
+            ("hh時間mm分ss秒", "処理: 01時間02分05秒"),
+            # hh / mm / ss を再利用できる（同じ hh を2回書いても2回置換される）。
+            ("hh:hh", "処理: 01:01"),
         ],
     )
     def test_logs_time_format_placeholders(self, time_format, expected, caplog, monkeypatch):
-        """経過 3661.7 秒で ``time_format`` のキーが正しく埋められることを確認する。"""
-        # ``__enter__`` で 0.0、``__exit__`` で 3661.7 を返すようにして経過 3661.7 秒に固定する
-        clock = iter([0.0, 3661.7])
+        """``hh`` / ``mm`` / ``ss`` の組み合わせと繰り返し置換が効くことを確認する。"""
+        clock = iter([0.0, 3725.0])
         monkeypatch.setattr(timer_module.time, "perf_counter", lambda: next(clock))
 
         with caplog.at_level(logging.INFO), Timer("処理", time_format=time_format):
@@ -171,42 +212,61 @@ class TestTimer:
     @pytest.mark.parametrize(
         ("seconds", "expected"),
         [
-            (0, "00:00:00.00"),
-            (59, "00:00:59.00"),
-            (59.9, "00:00:59.90"),  # 秒未満はそのまま残す
-            (60, "00:01:00.00"),
-            (3661, "01:01:01.00"),
-            (3661.7, "01:01:01.70"),  # 秒未満を含む
-            (86400 + 90, "24:01:30.00"),
-            (100 * 3600, "100:00:00.00"),  # 100 時間を超えても時は桁が増えるだけ
+            (0, "00:00:00"),
+            (59, "00:00:59"),
+            (59.9, "00:00:59"),  # 秒未満は切り捨て
+            (60, "00:01:00"),
+            (3661, "01:01:01"),
+            (3661.7, "01:01:01"),  # 秒未満を切り捨て
+            (86400 + 90, "24:01:30"),
+            (100 * 3600, "100:00:00"),  # 100 時間を超えても時は桁が増えるだけ
         ],
     )
     def test_format_elapsed_hhmmss(self, seconds, expected):
-        """``_format_elapsed`` が ``HH:MM:SS.ff`` 書式で正しく整形することを確認する。"""
-        assert (
-            timer_module._format_elapsed(seconds, "{hours:02d}:{minutes:02d}:{seconds:05.2f}")
-            == expected
-        )
+        """``_format_elapsed`` が ``hh:mm:ss`` 書式（切り捨て）で正しく整形することを確認する。"""
+        assert timer_module._format_elapsed(seconds, "hh:mm:ss") == expected
 
     def test_format_elapsed_default(self):
-        """``_format_elapsed`` が既定書式で ``{total_seconds:.2f}秒`` に整形することを確認する。"""
-        assert timer_module._format_elapsed(3.21, timer_module._TIME_FORMAT) == "3.21秒"
+        """``time_format=None`` で小数2桁＋「秒」の形に整形されることを確認する。"""
+        assert timer_module._format_elapsed(3.21, None) == "3.21秒"
+
+    def test_format_elapsed_uppercase(self):
+        """``_format_elapsed`` が大文字の ``HH:MM:SS`` でも同じ結果になることを確認する。"""
+        assert timer_module._format_elapsed(3661.7, "HH:MM:SS") == "01:01:01"
 
     @pytest.mark.parametrize(
         ("seconds", "expected"),
         [
-            (0, (0, 0, pytest.approx(0))),
-            (59, (0, 0, pytest.approx(59))),
-            (59.9, (0, 0, pytest.approx(59.9))),  # 秒未満はそのまま残す
-            (60, (0, 1, pytest.approx(0))),
-            (3661.7, (1, 1, pytest.approx(1.7))),  # 3661.7 → (1h, 1m, 1.7s)
-            (86400 + 90, (24, 1, pytest.approx(30))),
-            (100 * 3600, (100, 0, pytest.approx(0))),  # 100 時間を超えても時は桁が増えるだけ
+            (0, (0, 0, 0)),
+            (59, (0, 0, 59)),
+            (59.9, (0, 0, 59)),  # 秒未満は切り捨て
+            (60, (0, 1, 0)),
+            (3661.7, (1, 1, 1)),  # 3661.7 → (1h, 1m, 1s)。.7 は捨てられる
+            (86400 + 90, (24, 1, 30)),
+            (100 * 3600, (100, 0, 0)),  # 100 時間を超えても時は桁が増えるだけ
         ],
     )
     def test_split_seconds(self, seconds, expected):
-        """``_split_seconds`` が経過秒数を ``(時, 分, 秒)`` に分解することを確認する。"""
+        """``_split_seconds`` が経過秒数を ``(時, 分, 秒)`` の int に分解することを確認する。"""
         assert timer_module._split_seconds(seconds) == expected
+
+    @pytest.mark.parametrize(
+        "bad_format",
+        [
+            # hh / mm / ss のいずれも無い単純な文字列。
+            "h:m:s",
+            # 旧 str.format のキー（タイポ防止のため ValueError にする）。
+            "{hours:02d}:{minutes:02d}:{seconds:05.2f}",
+            "{total_seconds:.2f}秒",
+            # 空文字や、ランダムな日本語だけ。
+            "",
+            "3.21秒",
+        ],
+    )
+    def test_time_format_without_placeholder_raises(self, bad_format):
+        """``hh`` / ``mm`` / ``ss`` のいずれも含まない ``time_format`` は ``ValueError`` にする。"""
+        with pytest.raises(ValueError, match="hh"):
+            Timer("処理", time_format=bad_format)
 
     def test_custom_message_in_with_block(self, caplog):
         """message を差し替えると with でその文言で出ることを確認する。"""
@@ -230,8 +290,8 @@ class TestTimer:
         assert messages == ["0.00秒 [売上集計]"]
 
     def test_custom_message_and_time_format_in_with_block(self, caplog, monkeypatch):
-        """message と time_format を両方変えたとき、with でその形で出ることを確認する。"""
-        clock = iter([0.0, 3661.7])
+        """message と ``hh:mm:ss`` を両方変えたとき、with でその形で出ることを確認する。"""
+        clock = iter([0.0, 3725.0])  # 1h 2m 5s
         monkeypatch.setattr(timer_module.time, "perf_counter", lambda: next(clock))
 
         with (
@@ -239,24 +299,25 @@ class TestTimer:
             Timer(
                 "CSV読み込み",
                 message="{name} -> {elapsed}",
-                time_format="{minutes}分{seconds:.1f}秒",
+                time_format="hh時間mm分ss秒",
             ),
         ):
             pass
 
         messages = [record.getMessage() for record in caplog.records]
-        assert messages == ["CSV読み込み -> 1分1.7秒"]
+        assert messages == ["CSV読み込み -> 01時間02分05秒"]
 
     def test_custom_message_and_time_format_in_decorator(self, caplog, monkeypatch):
-        """デコレータでも message と time_format の両方が引き継がれて出ることを確認する。
+        """デコレータでも message と ``hh:mm:ss`` の両方が引き継がれて出ることを確認する。
 
         ``__call__`` が ``time_format`` を内側 Timer に渡していないと、
-        ここで time_format が無視されて落ちる（引き継ぎ漏れの検出用）。
+        ここで ``time_format`` が無視されて既定の ``"0.00秒"`` が出る
+        （引き継ぎ漏れの検出用）。
         """
-        clock = iter([0.0, 3661.7])
+        clock = iter([0.0, 3725.0])
         monkeypatch.setattr(timer_module.time, "perf_counter", lambda: next(clock))
 
-        @Timer("売上集計", message="{name} -> {elapsed}", time_format="{minutes}分{seconds:.1f}秒")
+        @Timer("売上集計", message="{name} -> {elapsed}", time_format="hh時間mm分ss秒")
         def aggregate():
             return 42
 
@@ -264,7 +325,7 @@ class TestTimer:
             assert aggregate() == 42
 
         messages = [record.getMessage() for record in caplog.records]
-        assert messages == ["売上集計 -> 1分1.7秒"]
+        assert messages == ["売上集計 -> 01時間02分05秒"]
 
     def test_decorator_measures_each_call(self, caplog):
         """デコレータ形式で使え、呼び出しごとにログが出ることを確認する。"""

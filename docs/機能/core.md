@@ -231,13 +231,14 @@ with Timer("CSV読み込み", message="{elapsed} [{name}]"):
 # ログ: 3.21秒 [CSV読み込み]
 
 # 経過時間の書式を変えたいときは time_format を渡す
-# （{hours} {minutes} {seconds} {total_seconds} が使える。{seconds} は float）
-with Timer("CSV読み込み", time_format="{hours:02d}:{minutes:02d}:{seconds:05.2f}"):
+# hh / mm / ss だけを使える（大文字小文字は区別しない）。
+# 経過秒は整数秒に切り捨ててから時・分・秒に分解する。
+with Timer("CSV読み込み", time_format="hh:mm:ss"):
     ...
-# ログ: CSV読み込み: 00:00:03.21
+# ログ: CSV読み込み: 00:00:03
 
-# 経過秒数を小数2桁で出す（フォーマット指定もそのまま使える）
-with Timer("CSV読み込み", time_format="{total_seconds:.2f}秒"):
+# 既定（time_format=None）は小数2桁＋「秒」の形
+with Timer("CSV読み込み"):
     ...
 # ログ: CSV読み込み: 3.21秒
 ```
