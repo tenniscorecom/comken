@@ -40,19 +40,24 @@ _MESSAGE = "{name}: {elapsed}"
 #   （``hours`` は 24 を超えても繰り上げない）
 # - ``{seconds}``: 経過秒数のうち時・分を引いた残り（**float**）。
 #   秒未満を含むので、桁数は ``time_format`` 側のフォーマット指定で
-#   決める（既定は ``{seconds:05.2f}`` で 2 桁）。
+#   決める（例 ``"{seconds:.1f}"`` で 1 桁）
 # - ``{total_seconds}``: 経過秒数の float（``self.elapsed`` そのもの）
 #
-# 表示の桁で丸めるため、59.996 秒のような値は ``"00:00:60.00"`` と
-# 表示されることがあります（繰り上げはしません）。
+# ``HH:MM:SS`` 書式で秒未満を出すときは、表示の桁で丸めるため
+# 59.996 秒のような値が ``"00:00:60.00"`` と表示されることがあります
+# （繰り上げはしません）。
 #
 # 例::
 #
+#     "{hours:02d}:{minutes:02d}:{seconds:05.2f}"  # → "00:00:03.21"
+#     "{hours:02d}:{minutes:02d}:{seconds:02.0f}"  # → 秒未満を出さない HH:MM:SS。
+#                                                  # ただし .0f は四捨五入なので
+#                                                  # 59.6 秒が "60" になりうる
 #     "{minutes}分{seconds:.1f}秒"
 #     "{total_seconds:.2f}秒"
 #
 # 未知のキーは ``KeyError``。
-_TIME_FORMAT = "{hours:02d}:{minutes:02d}:{seconds:05.2f}"
+_TIME_FORMAT = "{total_seconds:.2f}秒"
 
 
 def _split_seconds(seconds: float) -> tuple[int, int, float]:
@@ -115,8 +120,16 @@ class Timer:
                 - ``{total_seconds}``: 経過秒数の float
                   （``self.elapsed`` そのもの）
 
+                ``HH:MM:SS`` 書式で秒未満を出すときは、表示の桁で
+                丸めるため 59.996 秒のような値が ``"00:00:60.00"`` と
+                表示されることがあります（繰り上げはしません）。
+
                 例::
 
+                    "{hours:02d}:{minutes:02d}:{seconds:05.2f}"  # → "00:00:03.21"
+                    "{hours:02d}:{minutes:02d}:{seconds:02.0f}"  # → 秒未満を出さない
+                                                                 # ただし .0f は四捨五入なので
+                                                                 # 59.6 秒が "60" になりうる
                     "{minutes}分{seconds:.1f}秒"
                     "{total_seconds:.2f}秒"
 
