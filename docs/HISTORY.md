@@ -30,6 +30,7 @@
 15. v2.0.0 に向けた整理
 16. 階層の上埋めと小計の分離
 17. 履歴に「取得経路」列を追加
+18. 日付とファイル名まわりで持たないもの・ファイルの分け方
 
 ## 1. 設定と非機密情報の扱い
 
@@ -120,6 +121,7 @@ VBA マクロ・パスワード付き保存が必要なときだけ `ExcelCOMHan
 使う側は列を宣言するだけ。
 
 理由:
+
 - **列の定義を1か所に集約**: 「dataclass」と「列名の定数」を別々に持つと
   片方を直しても Excel 編集が反映されない事故になるため
 - **辞書で読まない**: `row["名前"]` と書くと打ち間違いが実行時まで分からないため
@@ -177,7 +179,7 @@ Graph API は認証とネットワークが必要でオフライン社内では�
 `allow_duplicates` フラグを持たない理由: 「重複を許す」としか言えず、**どう扱うか
 （後勝ちにするのか、全件返すのか）が読めない**うえ、全件返す形にすると戻り値の型が
 `dict[str, dict]` から `dict[str, list[dict]]` へ変わる。**引数で戻り値の型が変わる**のは
-補完も効かず、規約の「bool 引数よりメソッド名で意味にする」に反する。
+補完も効かす、規約の「bool 引数よりメソッド名で意味にする」に反する。
 
 ## 6. Salesforce 関連
 
@@ -225,7 +227,7 @@ Salesforce は Spring '26 から新規 Connected App の作成を制限。ECA �
 
 #### なぜ Refresh Token Flow を既定にするのか
 
-Client Credentials Flow は無人実行に最も素直に合うが、撤回した。決め手は**漏えいした
+Client Credentials Flow は無人実行に最も素直に合うが、撤回した。決め手は **漏えいした
 ときに何が起きるか**。
 
 `client_id` と `client_secret` の 2 値が漏れた場合、Client Credentials Flow では
@@ -280,18 +282,20 @@ JWT 移行を再評価する。
 **厳しい側（エラー）へ倒れる**。誤報が出るだけでデータは失われない。列を足した
 瞬間に既存管理表が読めなくなり全プロジェクトの業務が止まる事故を防げる。
 
-### サービス層の分離と再統合（2026-08-30 → 2026-08-31）
+### 取得のプロジェクトへの移管
 
-2026-08-30 に `comken/services/salesforce_downloader` を別リポジトリ
-`comken-salesforce-downloader` へ分離したが、翌日中に再統合した —
-他プロジェクトから呼ぶには `pip install` が別途要ることに気づいたため。
+「取得を実行する側」（管理表・スケジュール・SOQL レポート・取得実行）は
+`Salesforceレポートダウンローダー` プロジェクトへ移し、comken には履歴の形式と
+「管理番号で取得済みレポートを引く読み取り関数」だけを残した。
+境界を履歴にしたので、管理表を変えても他のプロジェクトは変えなくてよい。
+読み取り関数は `report_path()`（無ければ `None`）と `read_report()`（無ければ
+`ReportNotDownloadedError`）の2つにまとめた（`schedule_key=` で絞る）。
 
-その後 2026-09 に、取得を実行する側（`download_scheduled()`・旧 `service.py`）だけが
-単一消費者向けに再度切り出され、管理表・履歴の形式は comken 側に残った。
-`_paths.py` は外部プロジェクトから import できる `paths.py` へ改名した。
-2026-09-26 に分け方を改めた（15 章）— 管理表・スケジュール・SOQL レポート・取得実行を
-プロジェクトへ移し、comken には履歴の形式と「管理番号で取得済みレポートを引く
-読み取り関数」だけを残した。
+別リポジトリ（`pip install` で配る形）に分けたことがあるが、利用側プロジェクトから
+呼ぶのが不便なので comken へ戻した上での最終形（15 章）。
+
+**最新の取得が失敗のときは古い成功へ遡らず「取れていない」扱い**にする
+（古い成功ファイルを業務側が読み、定期取得が止まったことに気づけなくなるのを防ぐ）。
 
 ## 7. 祝日・カレンダー判定
 
@@ -321,12 +325,11 @@ JWT 移行を再評価する。
 
 - **理由**: comken の利用者が見られるのは**パッケージ（`comken/comken`）の中だけ**で、リポジトリ直下の
   `tools/` は見えない。会社休日を変えたい人が、ルールも生成ツールも見つけられなかった
-- **会社休日のルールは `build.py` 冒頭の Python 定数のまま**（2026-08-25 の「コード直書き」の判断を維持）。
-  いったん `company_holidays.csv`（Excel で編集できる形）にしたが、同日のうちに定数へ戻した。
-  `build.py` をパッケージ内へ移した時点で、利用者は定数を直接直せる。CSV にすると読み込み・検証・
-  テスト・説明が増える一方、会社休日は 6 行で年に数回しか変わらず、直すのは `build` を実行するエンジニア自身なので、割に合わなかった
+- **会社休日のルールは `build.py` 冒頭の Python 定数のまま**。CSV（Excel で編集できる形）に
+  すると読み込み・検証・テスト・説明が増える一方、会社休日は 6 行で年に数回しか変わらず、
+  直すのは `build` を実行するエンジニア自身なので、割に合わない
 - 生成ツールは `python -m comken.core.calendar.build` で動く。標準の `csv` だけを使う（core 層は toolbox に依存できないため）
-- 実行時の設計（判定は `company_calendar.csv` だけを読む）は変えていない。移行の前後で生成物がバイト単位で同一なことを確認した
+- 実行時の設計（判定は `company_calendar.csv` だけを読む）は変えていない
 - 同梱の `company_calendar.csv` が入力から作り直した結果と一致するかを、テストで毎回確かめる（ルールを直して再生成し忘れるのを防ぐ）
 
 ### ダウンローダーの日付計算をカレンダーへ移した（2026-09-25）
@@ -340,6 +343,41 @@ Salesforce レポートダウンローダーの `ScheduleRule`（`sheets/schedul
 - **`ScheduleRule` に残したもの**: 管理表の文字列を読む部分（「曜日」「日付」「第N営業日」「月末」）と、取得日の条件（曜日・日付・月末・第N営業日）に合うかの判定。
   これは管理表の仕様そのものなので、カレンダーへは移さない。カレンダーに「日付の条件を表す仕組み」を作ると、抽象化のしすぎになる
 - 移した前後で、既存の祝日ずらしのテスト 8 件を 1 つも変えずに通ることを確認した（連休を 1 日分しか返さない壊れた版では、それらが落ちる）
+
+### 祝日パッケージを `comken.core.dates` へ統合（2026-10-05）
+
+日付の utils（`comken.core.dates`）と祝日パッケージ（旧名）の 2 つに分かれていた
+道具を `comken.core.dates` パッケージ 1 つにまとめた。
+日付まわりの道具が 2 か所に分散すると、年度のような道具をどちらに置くか迷う場面が
+出てきたため。
+
+`comken/core/dates/` パッケージの構成:
+
+- `basic.py`（`now` / `today` / `month_start` / `month_end`）
+- `parse.py`（`parse_cell_date` / `date_in_name` / `dates_in_name` と、それが使う定数）
+- `holidays.py`（祝日カレンダー本体。営業日の判定・オフセット・警告）
+- `fiscal.py`（`fiscal_year` と `FISCAL_YEAR_START_MONTH`）
+- `build.py`（内閣府 CSV + 会社休日 → `company_calendar.csv` を生成）
+- `data/`（`syukujitsu.csv` / `company_calendar.csv`）
+
+`__init__.py` で全部を再エクスポートしている（`from comken.core.dates import is_workday` も
+`from comken.core.dates import fiscal_year` もそのまま動く）。
+`holidays.py` が `month_end` などを使うため、`clock` / `parse` を別モジュールに置くことで
+import 方向を一方向に保った。
+
+足した道具は `fiscal_year(target)`（4 月始まりの年度を返す）1 つ。
+年度初日・末日や上期/下期・四半期は要件に出てこなかったので作っていない
+（年度の「関数名番号」だけが欲しい前提）。
+
+CLI 入口は変えない — `python -m comken holidays` のまま
+（祝日 CSV の再生成コマンドなので、コマンド名とやっていることは一致させた）。
+中の import と help メッセージのパスだけ `core.dates` へ移している。
+
+**`Salesforce.com` の `Truncated` エラーは `error_code` だけで判定しない設計を貫く** —
+`comken.services.salesforce_downloader.history` のこの判定は
+文字列リテラル `SalesforceReportTruncatedError` との比較で判定する。
+Salesforce 例外クラスを import すると依存が増えるので、書き込み側
+（`type(exc).__name__`）と読み取り側（文字列リテラル）が同じ文字列を見る関係に変わりは無い。
 
 ## 8. デバッグモード
 
@@ -396,6 +434,14 @@ comken の handler 自体の二重呼び出しは引き続き `LoggingAlreadyCon
 ことを示すためキーワード引数で書かせる。comken の handler が両方走った後にもう一度
 `setup_logging()` / `setup_local_logging()` を呼ぶケースは許可しない — 何が 3 つ目に
 追加されるか曖昧になり、誤りに気付くのが遅れるため。
+
+### logger パッケージの構成
+
+`comken/core/logger/` は `site.py`（社内環境の定義と `setup_logging` 等の root logger 構築）と
+`local.py`（単体実行用）の 2 ファイル。
+「社内環境の定義」と「root logger 構築」は同じ役割（環境別のログ設定を作る）の両輪であり、
+片方からしか import されない 2 段構成に意味は無い。
+公開名（`comken.core.logger.__all__` と `comken` 直下の再公開）は変えていない。
 
 ## 10. 層構造とパッケージング
 
@@ -497,8 +543,7 @@ API が安定していない前提なので、利用プロジェクト側は「�
 - **`ComkenFileNotFoundError`**: ファイル・フォルダが無い失敗をまとめた。標準の `FileNotFoundError` も継承する（`ConfigKeyNotFoundError` が `AttributeError` を継承するのと同じ形）。
   `ExcelError` などの配下ではないので、`except ExcelError` では「Excel ファイルが無い」を捕まえられなくなった
 - **分類を持たない単独の例外**（ファイル名・ログ設定・`SiteOwnerRequiredError` など）は、受け皿となる分類を新設しないので、そのまま残した
-- **旧名は残さない**。いったん警告つきの別名で残したが、同日に別名ごと削除した（会社側プロジェクトで旧名を使っているコードは `ImportError` になる）。
-  v1.0.0 以降の互換性ポリシー（旧名は削除しない）から外れるので、v2.0.0 に含めた
+- **旧名は残さない**。v1.0.0 以降の互換性ポリシー（旧名は削除しない）から外れるので、v2.0.0 に含めた
 - **失敗と教訓**: 「comken 内で送出されない＝未使用」と判断して、`ExcelColumnNotFoundError`・`TransferSourceColumnNotFoundError`・`ScheduledDownloadFailedError` を一度統合した。
   これらは利用者プロジェクトが送出する想定のクラスだった。`ReportFolderNotFoundError` も、ダウンローダーが型で原因区分を決め、クラス名を履歴のエラーコードに書いていた。
   統合の前に、利用側プロジェクトを grep する（CONVENTIONS 22 章）
@@ -558,7 +603,6 @@ API が安定していない前提なので、利用プロジェクト側は「�
 業務では 1〜2 種類のパスしか使わないので到達しない。
 
 ## 14. 配置・運用
-15. v2.0.0 に向けた整理
 
 **3ファイルだけを配置時に書き換える**。このリポジトリは公開しているため、社内の名前・
 URL・共有フォルダのパスは仮名で書いてある。配置時に書き換える 3 か所:
@@ -610,7 +654,7 @@ master に何をコミットしても本番には流れない。**
 指示書の「機能を足さず、軽くする」に沿って、広げすぎたものを絞った。
 旧名の別名は残していない（11 章）。
 
-**判断の基準**
+### 判断の基準
 
 - 使われていないものは消す。ただし grep で見つからないだけでは決めず、利用者に確認する
   （`Color` と `ouju` / `ams` は grep では見つからなかったが、実際には使われていた）
@@ -618,200 +662,20 @@ master に何をコミットしても本番には流れない。**
   処理（転記など）は Python。VBA で面倒なのは、複数ファイルの範囲をセル番号で指すほうだから
 - 名前は標準ライブラリや Excel の関数に合わせ、覚える言葉を増やさない
 
-**Salesforce レポートの定期取得を分けた** — 「取る側」（管理表・スケジュール・SOQL
-レポート・取得の実行）は `Salesforceレポートダウンローダー` プロジェクトに、
-「読む側」（管理番号で取得済みレポートを引く関数）と履歴の形式は comken に
-残した。境界を履歴（ダウンロード履歴.csv）にしたので、管理表を変えても他の
-プロジェクトは変えなくてよい。以前の `cached_report` は管理表を読んでいた
-が、新しい読み取り関数（`latest_report` / `today_report`）は履歴だけを見る。
-読み取り関数は `report_path()`（無ければ `None`）と `read_report()`（無ければ
-`ReportNotDownloadedError`）の2つにまとめた（`schedule_key=` で絞る）。
-**最新の取得が失敗のときは古い成功へ遡らず「取れていない」扱い**にする
-（古い成功ファイルを業務側が読み、定期取得が止まったことに気づけなくなるのを防ぐ）。
+### 公開 API を「使う側に要るものだけ」に絞った
 
-**判断の基準**
-
-- 使われていないものは消す。ただし grep で見つからないだけでは決めず、利用者に確認する
-  （`Color` と `ouju` / `ams` は grep では見つからなかったが、実際には使われていた）
-- Excel の見た目・構造の調整（1 ファイルで完結する処理）は VBA、複数ファイルにまたがる
-  処理（転記など）は Python。VBA で面倒なのは、複数ファイルの範囲をセル番号で指すほうだから
-- 名前は標準ライブラリや Excel の関数に合わせ、覚える言葉を増やさない
-
-**消したもの**（どれも社内で使っていなかった）
-
-- Salesforce の Bulk API 2.0 と、Data Loader の CLI 呼び出し。書き込みは Salesforce 公式の
-  Data Loader に任せ、読み取りは REST とブラウザで足りている
-- ブラウザの非同期実行（`run_task` / `parallel`）と、セッションの排他ロック。初学者に分かりにくい
-- `Browsers`。非同期が無くなると役目は「まとめて閉じる」くらいで、`with A() as a, B() as b:` を
-  並べれば足りる。同じサイトを 2 つ開くときは `Kintai(name="kintai_a")` で名前を分ける。
-  同じ名前で 2 つ開くと起動時にエラーにする（黙って同じブラウザを共有する案は、
-  別アカウントのつもりで `name=` を書き忘れたときに気づけないので採らなかった）
-- `Sheet` の書式・構造系 13 メソッド（罫線・結合・行列の挿入削除・幅と高さなど）。
-  上の責任区分による。`set_background` / `format` / `freeze_panes` は社内で使っている
-  可能性があるので残した
-
-**まとめ直したもの**
-
-- 例外ファイルを 21 → 8 にした（クラスは変えていない）
-- `comken/constants.py` を廃止した。`Color` は `toolbox.excel`、`FileFormat` は `toolbox.windows` へ。
-  `Encoding` はやめて `open()` と同じ文字列にした（`CSV(path, encoding="cp932")`、省略で自動判定）。
-  `CP932` / `sjis` などの書き方の違いは吸収する
-- 雑多な入れ物だった `core/data.py` を `diff.py` / `columns.py` / `text.py` に分けた
-- `DateFileFinder` を `find()` / `find_all()` の 2 つにした。旧 `prefix()` は名前に日付書式を
-  埋めた完全一致で、`売上_20260711.xlsx` を `売上.xlsx` で探せなかった。今は
-  「名前を含み、拡張子が同じで、ファイル名の日付が対象日」
-- 差分は `Table.diff()`（表どうし）と `Table.changes()`（同じ表の中の履歴）と
-  `diff_row()`（行どうし）の3つにした。使われていなかった `compare_tables` は削除し、
-  `diff_rows` は `Table.diff()` にした。キーの重複は黙って上書きせずエラーにした。
-  汎用の並べ替えは公開せず、`changes()` の中だけで使う
-- `workbook.py`（1,349 行）から、数式の計算結果を読む処理を `computed.py` に分けた（挙動は同じ）。
-  `engine="com"` の分岐は、Excel の呼び出しを 1 つにする設計として残した
-- CLI の入口を `python -m comken` に統一した。カレンダーの生成は
-  `python -m comken holidays`（旧祝日生成ツールの CLI 入口）。
-  `tools/new_project.py` の直接実行は `init` と重複していたので消した
-
-**名前を変えたもの**
-
-- `core.calendar` → 祝日パッケージ（標準の `calendar` と被らない名前に改名）、
-  `core.clock` → `core.dates`
-- 営業日の関数を Excel に寄せた。`workday(d, n)` が `WORKDAY`、`count_workdays` が `NETWORKDAYS`。
-  「次・前の営業日」専用の関数はやめて `workday(d, ±1)` にした。月の第 N 営業日は、
-  年・月と負の n を渡す案より、日付を 1 つ渡す `first_workday` / `last_workday` / `nth_workday` の
-  ほうが使いやすいので、そちらにした
-- 7 章の節に出てくる関数名・モジュール名は、当時のまま残している
-
-**自動登録にしたもの**
-
-- SOQL レポート（`soql_reports/reports/`）と、サイト・組織クラスの一覧（`SITES`）。
-  数が増えるので手書きのタプルをやめ、ファイルを置けば登録される形にした
-  （`comken/core/discovery.py`）。`_` で始まるファイルと、`NAME` / `DOMAIN_URL` が空の
-  土台クラスは入らない
-- ブラウザの公認サイト一覧は今まで空だったので、`ams` / `ouju` / NTT / Salesforce の組織クラスが
-  名前の衝突検査の対象になった。プロジェクト側で同じ `NAME` のクラスを作ると起動時にエラーになる
-
-**やらなかったこと**
-
-- `import comken` の時点でログを設定する案。root に handler があると `basicConfig` が黙って
-  効かなくなり、社内基盤のログ設定とも衝突する
-- Excel の列・行を見出しで指定して色を付ける API。上の責任区分で VBA 側の仕事とした
-
-## 16. 階層の上埋めと小計の分離（2026-10-02）
-
-`Table.split_hierarchy()` を足した。職場の Excel に多い次の形の表を、比較・集計できる
-平らな表にするため:
-
-- 大分類・中分類・小分類のような階層の列があり、上の階層はグループの最初の行にしか
-  値が無い（下は空欄）
-- 途中に「小計」「合計」「野菜計」のような小計の行が挟まっている
-
-「階層を上から埋める」「小計の行を分ける」「小計の判定」の3つを同時に扱う処理で、
-1段でも間違えると集計結果が大きくぶれる（気づかれにくい）。テストで守れる側に置く
-べきなので Python にした（VBA にも作りかけたが、Excel の無い環境でテストを
-回せず、テスト不能なリグレッションが残るため Python を正にした）。
-
-**「計」で終わるだけでは小計にしない** — 「時計」「会計」が小計に拾われてしまうと
-集計が壊れるため、ルールを3段構えにした: (1) `SUBTOTAL_WORDS`（"計" / "小計" /
-"合計" / "総計"）との完全一致、(2) `SUBTOTAL_SUFFIXES`（"小計" / "合計" / "総計"）
-の末尾一致、(3) **現在のグループの代表名 + "計"**（current に "野菜" が
-あるときの "野菜計" など）。どのルールも「計」で終わるだけの値（時計・会計など）は拾わない。
-
-**上の階層が変わったら下の引き継ぎを切る** — 大分類が「食品」から「日用品」に
-変わった行で、中分類が前の「野菜」のまま残ると集計が崩れる。階層ごとに
-「current」を持ち、上の階層で値が出たら **それより下の current を空に戻す**
-（同じ値の場合はそのまま）。大分類を毎行書いてある表で、中分類が空の行が
-**前の中分類を引き継げる**ようにしているのはこの逆で、上の階層が前と同じ値なら
-下の current を切らないため。切ってしまうと、大分類を毎行書く表で中分類が
-空の行が引き継げず、データを再編集する手間が増える。
-
-## 17. 履歴に「取得経路」列を追加（2026-10-02）
-
-ダウンロード履歴（CSV）の `COLUMNS` の最後尾に「取得経路」を足した。
-実際に走った経路を `API` / `SOQL` / `ブラウザ` / 自動切替2種（`ブラウザ（自動切替：2000件超）` /
-`ブラウザ（自動切替：0件）`）のいずれかで記録する。`HistoryRow.route` は既定値 `""` で後方互換
-（呼び出し側が `route=` を指定しなくても例外にならない）。`COLUMNS` への追加は
-`migrate_row()` で吸収されるため、列が無い古い履歴も空文字に補われて読める
-（致命的に壊れた見出しは `CSVError` で止める既存挙動は変えない）。
-**`truncated_today()` は残した**（呼び出し側が「自動切替で取れるようになったので
-外す」と判断するまでは副作用を避ける）。
-
-## 18. 祝日パッケージを `core.dates` へ統合（2026-10-05）
-
-`comken.core.dates`（日付の utils）と **祝日パッケージ（旧名）**の 2 つに
-分かれていた道具を **`comken.core.dates` パッケージ 1 つ**にまとめた。
-理由はシンプルで、「日付まわりの道具が 2 か所に分散すると、年度のような道具を
-どちらに置くか迷う」場面が出てきたため。
-
-配布前（社内複製機能しないうちに）に**破壊的変更でよい**と確認がとれたので、
-旧名は残さず消している（旧祝日パッケージの `from ... import ...` は `ImportError`
-になる）。
-
-**統合後の構成** — `comken/core/dates/` パッケージに
-- `_dates.py`（`now` / `today` / `month_start` / `month_end` / `parse_cell_date`）
-- `_holidays.py`（祝日カレンダー本体。営業日の判定・オフセット・警告）
-- `_fiscal.py`（`fiscal_year` と `FISCAL_YEAR_START_MONTH`）
-- `_format.py`（`format_yyyymmdd` / `parse_yyyymmdd` と `DateFormatError`）
-- `build.py`（内閣府 CSV + 会社休日 → `company_calendar.csv` を生成）
-- `data/`（`syukujitsu.csv` / `company_calendar.csv`）
-
-`_dates.py` のファイル名はモジュール本体（`comken.core.dates`）と被らないよう
-`_` プレフィックス付きにし、`comken.core.dates` パッケージの `__init__.py` で
-**全部を再エクスポート**している（`from comken.core.dates import is_workday` も
-`from comken.core.dates import fiscal_year` もそのまま動く）。
-
-**足した道具** — `fiscal_year(target)`（4 月始まりの年度を返す）と
-`format_yyyymmdd` / `parse_yyyymmdd` の 8 桁数字列 ⇔ 日付。
-年度初日・末日や上期/下期・四半期は要件に出てこなかったので作っていない
-（年度の「関数名番号」だけが欲しい前提）。
-`parse_yyyymmdd` は 8 桁でない・数字以外を含む・存在しない日付
-（`"20260230"`）を `DateFormatError` で止める。明示的に変換を頼んだ
-入口なので、読めない値を `None` で黙って返す `parse_cell_date()` とは
-方針が違う（役割分担）。
-
-**CLI 入口は変えない** — `python -m comken holidays` のまま
-（祝日 CSV の再生成コマンドなので、コマンド名とやっていることは一致させた）。
-中の import と help メッセージのパスだけ `core.dates` へ移している。
-
-**`Salesforce.com` の `Truncated` エラーを `error_code` だけで判定しない設計を貫く** — `truncated_today()` は
-依然として文字列リテラル `SalesforceReportTruncatedError` との比較で判定する。
-Salesforce 例外クラスを import すると依存が増えるので、書き込み側
-（`type(exc).__name__`）と読み取り側（文字列リテラル）が同じ文字列を見る関係に変わりは無い。
-
-## 25. yyyymmdd の変換関数を外した（2026-10-05）
-
-以前: `format_yyyymmdd` / `parse_yyyymmdd` を用意していた。新しい考え: 持たない。
-理由: 書式は yyyymm など複数あり、書式ごとに関数が増える。`strftime` / `strptime` の1行で足りる。
-`DateFormatError` も `_format.py` ごと削除した。
-
-## 26. `DateNameBuilder` と `DateFileFinder` クラスを外した（2026-10-05）
-
-以前: `DateNameBuilder` と `DateFileFinder` クラスを `comken.core.files` に置いていた。
-新しい考え: 名前の組み立ては f-string（または `Path.with_stem()`）の1行で書く。
-探すのは関数 `find_dated_file()` 1 つだけ。`find_all()` は廃止。
-理由: 名前の組み立ては `DateNameBuilder(name).prefix()` のような呼び出しでも
-f-string 1 行でも同じ結果になり、クラスにすると書式の扱いが見えにくくなる。
-`DateFileFinder` は残る `find()` 1 つしかなく、クラスにする意味が無い。
-`find_all()` は誰も使っていなかった（確認済み）。
-
-`_split_suffix` は `finder.py` 内に移し、`name.py` は削除した（空ファイルになるため）。
-`comken.core.files.name` パッケージの公開 import 経路は無くなった。
-`DateFileFinder.find_all()` と `DateNameBuilder` のテストは捨て、
-撤去済み名の検出テスト（`tests/test_docs_code.py` の `_REMOVED_NAMES`）に
-両方の名前を追加した。
-
-## 18. 公開名を「使う側に要るものだけ」に絞った（2026-10-05）
-
-配布前なので、公開一覧（パッケージの `__init__.py` の再エクスポートと `__all__`）を
-「使う側が触る名前」だけにした。定義はモジュールに残し、comken 内部や利用側は
-モジュールのパス（例 `from comken.core.timer import measure`）から import する。
+配布前なので、`comken.core` / `comken.toolbox.*` の `__init__.py` の再エクスポートと
+`__all__` を「使う側が触る名前」だけにした。定義はモジュールに残し、import は
+`from comken.core.timer import measure` のようなモジュールパスから取る。
 名前に `_` は付けない（comken は `_core` をやめたときに「アンダースコアの規約を
 増やさない」と決めている）。
 
-何を「非公開」にしたか:
+非公開にしたもの:
 
 - `comken.core`:
-    - 定数: `WORKDAY_SEARCH_LIMIT`、`EXPIRING_WARNING_DAYS`、
-      `HOLIDAYS_CSV_PATH`、`FISCAL_YEAR_START_MONTH`（実装は `_holidays.py` /
-      `_fiscal.py` に残す）
+    - 実装を持つ定数: `WORKDAY_SEARCH_LIMIT`、`EXPIRING_WARNING_DAYS`、
+      `HOLIDAYS_CSV_PATH`、`FISCAL_YEAR_START_MONTH`（実装は `holidays.py` /
+      `fiscal.py` に残す）
     - `diff_row`（`Table.diff()` の内部部品）
     - `dates_in_name`（`find_dated_file` の内部部品。`date_in_name` は公開のまま）
     - `measure`（`Timer` は公開のまま）
@@ -834,66 +698,131 @@ f-string 1 行でも同じ結果になり、クラスにすると書式の扱い
 「変えてよい値」「使うべき道具」に見える。配布前なので絞る。
 
 `date_in_name` / `dates_in_name` と正規表現 `_DATE_IN_NAME` を
-`comken/core/files/finder.py` から `comken/core/dates/_dates.py` へ移した。
+`comken/core/files/finder.py` から `comken/core/dates/parse.py` へ移した。
 `find_dated_file` は files に残し、dates から import する。
 core/dates はファイルに触らない層のまま（dates から files を import しない）。
 
-`strip_spaces`（`comken/core/text.py`）は削除した。Python の `str.strip()` が
-全角スペース（U+3000）も取るので完全に重複していた。comken 内部での
-呼び出しは `.strip()` に置き換え、関数とテストを消した。撤去済み名の検出
-テスト（`tests/test_docs_code.py` の `_REMOVED_NAMES`）に `strip_spaces` を追加した。
+### 公開に含むけれど単独で消したもの
 
-`Paths.temp_dir()`（`comken/toolbox/windows/paths.py`）と
-`WindowHandler.read_title()`（`comken/toolbox/windows/window.py`）は
-撤去した。`temp_dir()` は `tempfile.gettempdir()` の `Path` ラッパーだけで
-価値が無い、`read_title()` は未使用。docs/機能/{windows,browser}.md の
-対応する例とテストも消した。
+- `comken.core.text.strip_spaces` — Python の `str.strip()` が全角スペース（U+3000）
+  も取るので完全に重複していた
+- `comken.toolbox.windows.paths.temp_dir()` — `tempfile.gettempdir()` の `Path`
+  ラッパーだけで価値が無い
+- `comken.toolbox.windows.window.read_title()` — 未使用
+- `comken.services.salesforce_downloader.history.truncated_today()` と
+  `TRUNCATED_ERROR_NAME` — ダウンローダーが Report API 失敗を自動で取り直す
+  （自動切替）ようになった結果、「当日中の再実行でスキップ」する用途が無くなった
 
-## 27. `truncated_today()` を外した（2026-10-05）
+### 消したもの（社内で使っていなかったもの）
 
-`comken.services.salesforce_downloader.history.truncated_today()` と、
-その関数専用の定数 `TRUNCATED_ERROR_NAME` を削除した。**ダウンローダーが
-Report API 失敗を自動で取り直す（自動切替）ようになった結果、
-「当日中の再実行でスキップ」する用途が無くなったため**。
-撤去済み名の検出テスト（`tests/test_docs_code.py` の `_REMOVED_NAMES`）に
-`truncated_today` を追加した。
+- Salesforce の Bulk API 2.0 と、Data Loader の CLI 呼び出し。書き込みは Salesforce 公式の
+  Data Loader に任せ、読み取りは REST とブラウザで足りている
+- ブラウザの非同期実行（`run_task` / `parallel`）と、セッションの排他ロック。初学者に分かりにくい
+- `Browsers`。非同期が無くなると役目は「まとめて閉じる」くらいで、`with A() as a, B() as b:` を
+  並べれば足りる。同じサイトを 2 つ開くときは `Kintai(name="kintai_a")` で名前を分ける。
+  同じ名前で 2 つ開くと起動時にエラーにする（黙って同じブラウザを共有する案は、
+  別アカウントのつもりで `name=` を書き忘れたときに気づけないので採らなかった）
+- `Sheet` の書式・構造系 13 メソッド（罫線・結合・行列の挿入削除・幅と高さなど）。
+  上の責任区分による。`set_background` / `format` / `freeze_panes` は社内で使っている
+  可能性があるので残した
 
-## 28. `comken.core.dates` の内部モジュールの `_` を外した（2026-10-05）
+### まとめ直したもの
 
-`comken/core/dates/_dates.py` を `basic.py` に、`_holidays.py` を `holidays.py` に、
-`_fiscal.py` を `fiscal.py` に変えた。公開するものは `__init__.py` の `__all__`
-で決めているのでファイル名の `_` は要らない（中まで直接 import する人には
-`from comken.core.dates.holidays import ...` と書ける方がよい）。
-comken 内部からの import とコメント・docstring のパス表記、テスト・docs も
-すべて新名称に揃えた。`__all__` の中身は変えず、サブモジュール名（`holidays`,
-`basic`, `fiscal`）は `__all__` に追加していない。
+- 例外ファイルを 21 → 8 にした（クラスは変えていない）
+- `comken/constants.py` を廃止した。`Color` は `toolbox.excel`、`FileFormat` は `toolbox.windows` へ。
+  `Encoding` はやめて `open()` と同じ文字列にした（`CSV(path, encoding="cp932")`、省略で自動判定）。
+  `CP932` / `sjis` などの書き方の違いは吸収する
+- 雑多な入れ物だった `core/data.py` を `diff.py` / `columns.py` / `text.py` に分けた
+- `DateFileFinder` を `find()` / `find_all()` の 2 つにした。旧 `prefix()` は名前に日付書式を
+  埋めた完全一致で、`売上_20260711.xlsx` を `売上.xlsx` で探せなかった。今は
+  「名前を含み、拡張子が同じで、ファイル名の日付が対象日」
+- 差分は `Table.diff()`（表どうし）と `Table.changes()`（同じ表の中の履歴）と
+  `diff_row()`（行どうし）の3つにした。使われていなかった `compare_tables` は削除し、
+  `diff_rows` は `Table.diff()` にした。キーの重複は黙って上書きせずエラーにした。
+  汎用の並べ替えは公開せず、`changes()` の中だけで使う
+- `workbook.py`（1,349 行）から、数式の計算結果を読む処理を `computed.py` に分けた（挙動は同じ）。
+  `engine="com"` の分岐は、Excel の呼び出しを 1 つにする設計として残した
+- CLI の入口を `python -m comken` に統一した。カレンダーの生成は
+  `python -m comken holidays`（旧祝日生成ツールの CLI 入口）。
+  `tools/new_project.py` の直接実行は `init` と重複していたので消した
 
-`basic.py` は名前から中身が分からないので `clock.py`（`now` / `today` /
-`month_start` / `month_end`）と `parse.py`（`parse_cell_date` /
-`date_in_name` / `dates_in_name` と、それだけが使う定数）に分けた。
-`__init__.py` に直接書く案は `holidays.py` が `month_end` などを使うため
-読み込みが循環するので採っていない（`clock` / `parse` を別モジュールに置く
-ことで import 方向を一方向に保った）。
+### 名前を変えたもの
 
-## 29. `comken.core.logger.environment` を `site.py` に統合した（2026-10-05）
+- `core.calendar` → 祝日パッケージ（標準の `calendar` と被らない名前に改名）、
+  `core.clock` → `core.dates`
+- 営業日の関数を Excel に寄せた。`workday(d, n)` が `WORKDAY`、`count_workdays` が `NETWORKDAYS`。
+  「次・前の営業日」専用の関数はやめて `workday(d, ±1)` にした。月の第 N 営業日は、
+  年・月と負の n を渡す案より、日付を 1 つ渡す `first_workday` / `last_workday` / `nth_workday` の
+  ほうが使いやすいので、そちらにした
+- 7 章の節に出てくる関数名・モジュール名は、当時のまま残している
 
-`comken/core/logger/environment.py`（`setup_logging` と内部の
-ヘルパー `_compute_root_level` / `_classify_root_handlers` /
-`_guard_root_handlers` / `_format_external_handlers` /
-`_warn_external_handlers_allowed`、定数）を `comken/core/logger/site.py`
-へ統合し、`environment.py` を消した。「社内環境の定義」と「root logger
-構築」を別ファイルに分けていたが、片方からしか import されない 2 段構成に
-意味が無かったため。`logger` パッケージは `site.py`（社内環境の定義と
-そのログ設定）と `local.py`（単体実行用）の2ファイルになった。
-公開名（`comken.core.logger.__all__` と `comken` 直下の再公開）は変えて
-いない。`local.py` / `tests/test_logger.py` の monkeypatch 対象パスは
-`comken.core.logger.site` へ揃えた。
+### 自動登録にしたもの
 
-## 30. `comken.core.logger.environment` を復活させた（2026-10-06）
+- SOQL レポート（`soql_reports/reports/`）と、サイト・組織クラスの一覧（`SITES`）。
+  数が増えるので手書きのタプルをやめ、ファイルを置けば登録される形にした
+  （`comken/core/discovery.py`）。`_` で始まるファイルと、`NAME` / `DOMAIN_URL` が空の
+  土台クラスは入らない
+- ブラウザの公認サイト一覧は今まで空だったので、`ams` / `ouju` / NTT / Salesforce の組織クラスが
+  名前の衝突検査の対象になった。プロジェクト側で同じ `NAME` のクラスを作ると起動時にエラーになる
 
-29 の統合を取り消し、`environment.py`（`setup_logging` と内部のヘルパー、定数）を
-統合前の内容で戻した。`site.py` は社内環境の定義（`LoggerSite` / `Backoffice` /
-`Intranet`）だけに戻り、`logger` パッケージは `site.py`・`environment.py`・`local.py`
-の3ファイルになる。`local.py` / `tests/test_logger.py` の import と monkeypatch
-対象パスも `comken.core.logger.environment` に戻した。公開名は変えていない。
-29 の記録は経緯として残す。
+### やらなかったこと
+
+- `import comken` の時点でログを設定する案。root に handler があると `basicConfig` が黙って
+  効かなくなり、社内基盤のログ設定とも衝突する
+- Excel の列・行を見出しで指定して色を付ける API。上の責任区分で VBA 側の仕事とした
+
+## 16. 階層の上埋めと小計の分離（2026-10-02）
+
+`Table.split_hierarchy()` を足した。職場の Excel に多い次の形の表を、比較・集計できる
+平らな表にするため:
+
+- 大分類・中分類・小分類のような階層の列があり、上の階層はグループの最初の行にしか
+  値が無い（下は空欄）
+- 途中に「小計」「合計」「野菜計」のような小計の行が挟まっている
+
+「階層を上から埋める」「小計の行を分ける」「小計の判定」の3つを同時に扱う処理で、
+1段でも間違えると集計結果が大きくぶれる（気づかれにくい）。テストで守れる側に置く
+べきなので Python にした（VBA にも作りかけたが、Excel の無い環境でテストを
+回せず、テスト不能なリグレッションが残るため Python を正にした）。
+
+**「計」で終わるだけでは小計にしない** — 「時計」「会計」が小計に拾われてしまうと
+集計が壊れるため、ルールを3段構えにした: (1) `SUBTOTAL_WORDS`（"計" / "小計" /
+"合計" / "総計"）との完全一致、(2) `SUBTOTAL_SUFFIXES`（"小計" / "合計" /
+"総計"）の末尾一致、(3) **現在のグループの代表名 + "計"**（current に "野菜" が
+あるときの "野菜計" など）。どのルールも「計」で終わるだけの値（時計・会計など）は拾わない。
+
+**上の階層が変わったら下の引き継ぎを切る** — 大分類が「食品」から「日用品」に
+変わった行で、中分類が前の「野菜」のまま残ると集計が崩れる。階層ごとに
+「current」を持ち、上の階層で値が出たら **それより下の current を空に戻す**
+（同じ値の場合はそのまま）。大分類を毎行書いてある表で、中分類が空の行が
+**前の中分類を引き継げる**ようにしているのはこの逆で、上の階層が前と同じ値なら
+下の current を切らないため。切ってしまうと、大分類を毎行書く表で中分類が
+空の行が引き継げず、データを再編集する手間が増える。
+
+## 17. 履歴に「取得経路」列を追加（2026-10-02）
+
+ダウンロード履歴（CSV）の `COLUMNS` の最後尾に「取得経路」を足した。
+実際に走った経路を `API` / `SOQL` / `ブラウザ` / 自動切替2種（`ブラウザ（自動切替：2000件超）` /
+`ブラウザ（自動切替：0件）`）のいずれかで記録する。`HistoryRow.route` は既定値 `""` で後方互換
+（呼び出し側が `route=` を指定しなくても例外にならない）。`COLUMNS` への追加は
+`migrate_row()` で吸収されるため、列が無い古い履歴も空文字に補われて読める
+（致命的に壊れた見出しは `CSVError` で止める既存挙動は変えない）。
+
+「その日すでに 2000 件超で失敗したか」を返す `truncated_today()` は持たない。
+ダウンローダーが Report API の失敗をブラウザで自動的に取り直すので、
+同じ日の再実行で取得を飛ばす用途が無いため。
+
+## 18. 日付とファイル名まわりで持たないもの・ファイルの分け方（2026-10-05）
+
+- **書式の変換関数（`format_yyyymmdd` / `parse_yyyymmdd` など）は持たない。** 書式は
+  yyyymm など複数あり、書式ごとに関数が増える。`strftime` / `strptime` の 1 行で足りる。
+- **日付入りのファイル名を組み立てるクラスは持たない。** 名前の組み立ては f-string
+  （または `Path.with_stem()`）の 1 行で書く。クラスにすると書式の扱いが見えにくくなる。
+  日付入りのファイルを探すのは関数 `find_dated_file()` 1 つだけ。
+- **`comken.core.dates` の中のファイル名に `_` を付けない。** 公開するものは `__init__.py`
+  の `__all__` で決めているので、ファイル名の `_` は要らない。中まで直接 import する人は
+  `from comken.core.dates.holidays import ...` のように書ける。
+- **`clock.py`（`now` / `today` / `month_start` / `month_end`）と `parse.py`
+  （`parse_cell_date` / `date_in_name` / `dates_in_name`）に分けている。** 名前から中身が
+  分かるようにするため。`__init__.py` に直接書くと、`holidays.py` が `month_end` などを
+  使うので読み込みが循環する。別モジュールに置いて import の向きを一方向に保つ。
