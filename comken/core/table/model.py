@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from itertools import pairwise
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any, Self, cast
 
 from comken.core.table.hierarchy import (
     SUBTOTAL_SUFFIXES,
@@ -24,9 +24,25 @@ from comken.exceptions.tables import (
 )
 
 if TYPE_CHECKING:
+    import pandas as pd
+
     from comken.core.table.diff import DiffResult, RowChange
 
 logger = logging.getLogger(__name__)
+
+
+def _import_pandas() -> Any:
+    """pandas を遅延 import して返す。pandas が無いときは ``MissingOptionalDependencyError``。
+
+    to_dataframe / from_dataframe の両方から呼ぶ共通処理として切り出した。
+    """
+    try:
+        import pandas as pd
+    except ImportError as exc:
+        from comken.exceptions import MissingOptionalDependencyError
+
+        raise MissingOptionalDependencyError("pandas") from exc
+    return pd
 
 
 class Table:
@@ -118,6 +134,98 @@ class Table:
     def to_rows(self) -> list[dict[str, Any]]:
         """現在の行をコピーして返す。元のTableは変更しない。"""
         return [dict(row) for row in self._rows]
+
+    def to_dataframe(self) -> pd.DataFrame:
+        """pandas の ``DataFrame`` に変換する。
+
+        列の順番を保ったまま、行の値はそのまま ``DataFrame`` へ渡す（型変換は
+        行わない）。0 行の ``Table`` でも列は残る。
+
+        pandas はこのメソッドを呼んだときにだけ import するため、pandas が無い
+        環境で ``comken`` を使っただけでは ImportError は出ない。pandas が無い
+        環境でこのメソッドを呼ぶと ``MissingOptionalDependencyError`` を
+        送出し、メッセージに ``pip install pandas`` の手順が出る。
+
+        Returns:
+            ``self.columns`` の順番を保った ``pd.DataFrame``。
+
+        Raises:
+            MissingOptionalDependencyError: pandas がインストールされていない。
+
+        Example:
+            Excel/CSV で読んだ ``Table`` を pandas で集計する:
+
+            >>> from comken.toolbox.csv import CSV                            # doctest: +SKIP
+            >>> with CSV("売上.csv") as csv_file:                            # doctest: +SKIP
+            ...     table = csv_file.read()                                   # doctest: +SKIP
+            >>> df = table.to_dataframe()                                    # doctest: +SKIP
+            >>> by_store = df.groupby("支店")["金額"].sum().reset_index()     # doctest: +SKIP
+            >>> summary = Table.from_dataframe(by_store)                     # doctest: +SKIP
+        """
+        pd = _import_pandas()
+        logger.debug("Table to_dataframe: %d 列, %d 行", len(self.columns), len(self._rows))
+        # pd.DataFrame の ``columns`` 引数のスタブは ``Axes | None`` で、
+        # ``list[str]`` を直接渡すと SequenceNotStr の variance で弾かれる。
+        # ランタイムは list[str] を受け付けるため、cast で意図を伝える。
+        return pd.DataFrame(self.to_rows(), columns=cast(Any, self.columns))
+
+    @classmethod
+    def from_dataframe(
+        cls,
+        df: pd.DataFrame,
+        *,
+        types: Mapping[str, Callable[[Any], Any]] | None = None,
+    ) -> Table:
+        """pandas の ``DataFrame`` から ``Table`` を作る。
+
+        列名は ``str()`` して使う（``str()`` 後に重複したら ``TableError``）。
+        欠損値（``NaN`` / ``None`` / ``pd.NA`` / ``pd.NaT``）は ``None`` に
+        揃える（判定は ``pd.isna`` で行う。リスト・辞書などスカラー以外の値は
+        判定しない）。``DataFrame`` の index は捨てる（``Table`` には index が
+        ない）。
+
+        pandas はこのメソッドを呼んだときにだけ import するため、pandas が無い
+        環境で ``comken`` を使っただけでは ImportError は出ない。
+
+        Args:
+            df: 取り込み元の ``pd.DataFrame``。
+            types: ``Table`` と同じ。列ごとの型変換関数の mapping を ``Table``
+                にそのまま渡す。
+
+        Returns:
+            ``df`` の列順を保った ``Table``（列名は ``str()`` 済み）。
+
+        Raises:
+            MissingOptionalDependencyError: pandas がインストールされていない。
+            TableError: ``str()`` 後の列名が重複している。
+
+        Example:
+            pandas で集計した ``DataFrame`` を ``Table`` に戻して Excel へ書く:
+
+            >>> from comken.toolbox.excel import Excel                       # doctest: +SKIP
+            >>> summary = Table.from_dataframe(by_store)                    # doctest: +SKIP
+            >>> with Excel("report.xlsx") as excel:                          # doctest: +SKIP
+            ...     excel.create_data_sheet("集計").create_table("集計", summary)  # doctest: +SKIP
+        """
+        pd = _import_pandas()
+
+        original_columns = list(df.columns)
+        columns = [str(col) for col in original_columns]
+        if len(columns) != len(set(columns)):
+            raise TableError("列名は重複させられません。")
+        rows: list[dict[str, Any]] = []
+        for record in df.to_dict("records"):
+            converted: dict[str, Any] = {}
+            for original_col, str_col in zip(original_columns, columns, strict=True):
+                value = record[original_col]
+                # pd.isna はリスト・辞書などに対して TypeError や配列を返すことがある。
+                # スカラーの欠損値だけを None に置き換え、リスト等はそのまま保持する。
+                converted[str_col] = (
+                    None if pd.api.types.is_scalar(value) and pd.isna(value) else value
+                )
+            rows.append(converted)
+        logger.debug("Table from_dataframe: %d 列, %d 行", len(columns), len(rows))
+        return cls(columns, rows, types=types)
 
     def __getitem__(self, index: int) -> dict[str, Any]:
         """指定位置の行をコピーして返す。

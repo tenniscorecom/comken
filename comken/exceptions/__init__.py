@@ -44,11 +44,16 @@ ComkenError
 │   ├── HistoryWriteError
 │   ├── HistoryLockTimeoutError
 │   └── ReportNotDownloadedError
+├── MissingOptionalDependencyError  optional-dependencies のライブラリが入っていない
 
 カテゴリ基底クラスはまとめて捕捉するために使い、直接送出しない。
 """
 
-from comken.exceptions.base import ComkenError, SiteOwnerRequiredError
+from comken.exceptions.base import (
+    ComkenError,
+    MissingOptionalDependencyError,
+    SiteOwnerRequiredError,
+)
 from comken.exceptions.config import (
     ConfigError,
     ConfigKeyNotFoundError,
@@ -105,6 +110,7 @@ from comken.exceptions.web import (
 
 __all__ = [
     "ComkenError",
+    "MissingOptionalDependencyError",
     "SiteOwnerRequiredError",
     "AccessError",
     "ExcelError",

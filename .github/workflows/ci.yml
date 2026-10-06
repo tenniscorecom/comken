@@ -23,7 +23,9 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          # pandas は任意の依存だが、Table.to_dataframe / from_dataframe のテストを
+          # CI でも動かすために入れる（無いときのエラーはテスト内で再現している）
+          pip install -e .[pandas]
           # ruff / pytest はバージョンを固定する。未固定だと CI に最新版が入り、
           # 手元と formatter の挙動がずれて「ローカルは通るのに CI だけ落ちる」
           # 状態になる（実際 0.15 と 0.16 の差で 12 ファイルが不一致になった）。

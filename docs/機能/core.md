@@ -400,6 +400,50 @@ write 側に空キーが複数あっても ``TableError``
 CSV / Excel の ``types=`` でそろえてから渡す。``Table.diff()`` はキーを
 正規化して比べるが、Transfer は正規化しない。
 
+### pandas と行き来する
+
+`Table` ↔ `pandas.DataFrame` を相互変換できる。`Table` だけでは書きにくい集計や
+ピボット操作は pandas 側に投げ、加工結果を `Table` に戻して Excel / CSV へ
+書き戻す、という使い分けができる。
+
+**pandas は comken の必須依存にしていない**（会社の実行環境に入っていない
+ことがあるため）。使う前にインストールが必要:
+
+```bash
+pip install pandas                   # 単体で入れる
+pip install -e .[pandas]             # リポジトリ開発時のインストール
+```
+
+- `Table.to_dataframe() → pandas.DataFrame`: 列の順番を保ったまま、行の値は
+  そのまま `DataFrame` へ渡す（型変換しない）。0 行の `Table` でも列は残る。
+- `Table.from_dataframe(df) → Table`: 列名は `str()` して使う（重複したら
+  `TableError`）。欠損値（`NaN` / `None` / `pd.NA` / `pd.NaT`）は `None` に
+  揃える（判定は `pd.isna`。リスト・辞書などスカラー以外の値は判定しない）。
+  `DataFrame` の index は捨てる（`Table` には index がない）。`types=` は
+  `Table` の `types` にそのまま渡せる。
+- pandas はこの 2 つのメソッドを呼んだときにだけ import する。pandas が無い
+  環境で `comken` を import しても ImportError は出ない。
+
+pandas が無い環境で `to_dataframe()` / `from_dataframe()` を呼ぶと
+`MissingOptionalDependencyError` を送出し、メッセージに
+`pip install pandas` の手順が出る。
+
+```python
+from comken.toolbox.csv import CSV
+from comken.toolbox.excel import Excel
+
+# CSV → pandas で集計 → Excel へ書き戻す
+with CSV("売上.csv") as csv_file:
+    table = csv_file.read()
+
+df = table.to_dataframe()                       # Table → DataFrame
+summary = df.groupby("支店")["金額"].sum().reset_index()
+result = Table.from_dataframe(summary)          # DataFrame → Table
+
+with Excel("report.xlsx") as excel:
+    excel.create_data_sheet("集計").create_table("集計", result)
+```
+
 ---
 
 ## 設定・状態・ログ・実行モード

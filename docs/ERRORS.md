@@ -66,6 +66,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 
 | エラー名 | 意味 | 自分でできる対処 |
 |---|---|---|
+| `MissingOptionalDependencyError` | ``optional-dependencies`` に分類した外部ライブラリがインストールされていない | メッセージに出たライブラリを pip install でインストールする（``pyproject.toml`` に optional-dependencies として定義されていれば``pip install -e .[pandas]`` のように extra 経由でも入れられる）。 |
 | `SiteOwnerRequiredError` | `SiteBase` / `SalesforceBase` のサブクラスに `OWNER` が設定されていない | サブクラスに `OWNER = "プロジェクト名 / 担当者"` を1行追加する。ライブラリ（`comken.toolbox.browser.sites/` または`comken.toolbox.salesforce.sites/`）に入れるべきサイトかは`docs/CONVENTIONS.md` の「サイト／組織クラスを昇格させる基準」を参照して判断する。ライブラリに昇格したい場合はライブラリ管理者へ連絡する。 |
 | `CSVError` | CSV に関するエラー。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `ColumnNotFoundError` | Excel・CSV・データ比較で列が見つからないエラー。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |

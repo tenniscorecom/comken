@@ -272,6 +272,80 @@ def to_rows(self) -> list[dict[str, Any]]:
 
 現在の行をコピーして返す。元のTableは変更しない。
 
+#### `to_dataframe`
+
+```text
+def to_dataframe(self) -> pd.DataFrame:
+```
+
+##### 説明
+
+pandas の ``DataFrame`` に変換する。
+
+列の順番を保ったまま、行の値はそのまま ``DataFrame`` へ渡す（型変換は
+行わない）。0 行の ``Table`` でも列は残る。
+
+pandas はこのメソッドを呼んだときにだけ import するため、pandas が無い
+環境で ``comken`` を使っただけでは ImportError は出ない。pandas が無い
+環境でこのメソッドを呼ぶと ``MissingOptionalDependencyError`` を
+送出し、メッセージに ``pip install pandas`` の手順が出る。
+
+Returns:
+    ``self.columns`` の順番を保った ``pd.DataFrame``。
+
+Raises:
+    MissingOptionalDependencyError: pandas がインストールされていない。
+
+Example:
+    Excel/CSV で読んだ ``Table`` を pandas で集計する:
+
+    >>> from comken.toolbox.csv import CSV                            # doctest: +SKIP
+    >>> with CSV("売上.csv") as csv_file:                            # doctest: +SKIP
+    ...     table = csv_file.read()                                   # doctest: +SKIP
+    >>> df = table.to_dataframe()                                    # doctest: +SKIP
+    >>> by_store = df.groupby("支店")["金額"].sum().reset_index()     # doctest: +SKIP
+    >>> summary = Table.from_dataframe(by_store)                     # doctest: +SKIP
+
+#### `from_dataframe`
+
+```text
+@classmethod
+def from_dataframe(cls, df: pd.DataFrame, *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> Table:
+```
+
+##### 説明
+
+pandas の ``DataFrame`` から ``Table`` を作る。
+
+列名は ``str()`` して使う（``str()`` 後に重複したら ``TableError``）。
+欠損値（``NaN`` / ``None`` / ``pd.NA`` / ``pd.NaT``）は ``None`` に
+揃える（判定は ``pd.isna`` で行う。リスト・辞書などスカラー以外の値は
+判定しない）。``DataFrame`` の index は捨てる（``Table`` には index が
+ない）。
+
+pandas はこのメソッドを呼んだときにだけ import するため、pandas が無い
+環境で ``comken`` を使っただけでは ImportError は出ない。
+
+Args:
+    df: 取り込み元の ``pd.DataFrame``。
+    types: ``Table`` と同じ。列ごとの型変換関数の mapping を ``Table``
+        にそのまま渡す。
+
+Returns:
+    ``df`` の列順を保った ``Table``（列名は ``str()`` 済み）。
+
+Raises:
+    MissingOptionalDependencyError: pandas がインストールされていない。
+    TableError: ``str()`` 後の列名が重複している。
+
+Example:
+    pandas で集計した ``DataFrame`` を ``Table`` に戻して Excel へ書く:
+
+    >>> from comken.toolbox.excel import Excel                       # doctest: +SKIP
+    >>> summary = Table.from_dataframe(by_store)                    # doctest: +SKIP
+    >>> with Excel("report.xlsx") as excel:                          # doctest: +SKIP
+    ...     excel.create_data_sheet("集計").create_table("集計", summary)  # doctest: +SKIP
+
 #### `replace`
 
 ```text
@@ -495,13 +569,49 @@ Attributes:
 #### `__init__`
 
 ```text
-def __init__(self, name: str='処理') -> None:
+def __init__(self, name: str='処理', message: str=_MESSAGE, time_format: str=_TIME_FORMAT) -> None:
 ```
 
 ##### 説明
 
 Args:
     name: ログに出す処理名（例: "CSV読み込み"）。
+    message: ログに出す文言。次のプレースホルダを使える:
+
+        - ``{name}``: ``__init__`` の ``name``
+        - ``{elapsed}``: ``time_format`` で整形した経過時間
+
+        例::
+
+            "{name} -> {elapsed}"
+
+    time_format: 経過時間の整形書式。次のキーを ``str.format`` で
+        参照する:
+
+        - ``{hours}`` / ``{minutes}``: 経過時間を時・分に分けた
+          int（``hours`` は 24 を超えても繰り上げない）
+        - ``{seconds}``: 経過秒数のうち時・分を引いた残りの
+          **float**（秒未満を含む）。桁数は ``time_format``
+          側のフォーマット指定で決める（例 ``"{seconds:.1f}"``）。
+        - ``{total_seconds}``: 経過秒数の float
+          （``self.elapsed`` そのもの）
+
+        ``HH:MM:SS`` 書式で秒未満を出すときは、表示の桁で
+        丸めるため 59.996 秒のような値が ``"00:00:60.00"`` と
+        表示されることがあります（繰り上げはしません）。
+
+        例::
+
+            "{hours:02d}:{minutes:02d}:{seconds:05.2f}"  # → "00:00:03.21"
+            "{hours:02d}:{minutes:02d}:{seconds:02.0f}"  # → 秒未満を出さない
+                                                         # ただし .0f は四捨五入なので
+                                                         # 59.6 秒が "60" になりうる
+            "{minutes}分{seconds:.1f}秒"
+            "{total_seconds:.2f}秒"
+
+        未知のキーは ``KeyError``。
+
+        ``{elapsed}`` の中身はこの ``time_format`` で決まる。
 
 ### `Transfer`
 
@@ -2183,6 +2293,80 @@ def to_rows(self) -> list[dict[str, Any]]:
 
 現在の行をコピーして返す。元のTableは変更しない。
 
+#### `to_dataframe`
+
+```text
+def to_dataframe(self) -> pd.DataFrame:
+```
+
+##### 説明
+
+pandas の ``DataFrame`` に変換する。
+
+列の順番を保ったまま、行の値はそのまま ``DataFrame`` へ渡す（型変換は
+行わない）。0 行の ``Table`` でも列は残る。
+
+pandas はこのメソッドを呼んだときにだけ import するため、pandas が無い
+環境で ``comken`` を使っただけでは ImportError は出ない。pandas が無い
+環境でこのメソッドを呼ぶと ``MissingOptionalDependencyError`` を
+送出し、メッセージに ``pip install pandas`` の手順が出る。
+
+Returns:
+    ``self.columns`` の順番を保った ``pd.DataFrame``。
+
+Raises:
+    MissingOptionalDependencyError: pandas がインストールされていない。
+
+Example:
+    Excel/CSV で読んだ ``Table`` を pandas で集計する:
+
+    >>> from comken.toolbox.csv import CSV                            # doctest: +SKIP
+    >>> with CSV("売上.csv") as csv_file:                            # doctest: +SKIP
+    ...     table = csv_file.read()                                   # doctest: +SKIP
+    >>> df = table.to_dataframe()                                    # doctest: +SKIP
+    >>> by_store = df.groupby("支店")["金額"].sum().reset_index()     # doctest: +SKIP
+    >>> summary = Table.from_dataframe(by_store)                     # doctest: +SKIP
+
+#### `from_dataframe`
+
+```text
+@classmethod
+def from_dataframe(cls, df: pd.DataFrame, *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> Table:
+```
+
+##### 説明
+
+pandas の ``DataFrame`` から ``Table`` を作る。
+
+列名は ``str()`` して使う（``str()`` 後に重複したら ``TableError``）。
+欠損値（``NaN`` / ``None`` / ``pd.NA`` / ``pd.NaT``）は ``None`` に
+揃える（判定は ``pd.isna`` で行う。リスト・辞書などスカラー以外の値は
+判定しない）。``DataFrame`` の index は捨てる（``Table`` には index が
+ない）。
+
+pandas はこのメソッドを呼んだときにだけ import するため、pandas が無い
+環境で ``comken`` を使っただけでは ImportError は出ない。
+
+Args:
+    df: 取り込み元の ``pd.DataFrame``。
+    types: ``Table`` と同じ。列ごとの型変換関数の mapping を ``Table``
+        にそのまま渡す。
+
+Returns:
+    ``df`` の列順を保った ``Table``（列名は ``str()`` 済み）。
+
+Raises:
+    MissingOptionalDependencyError: pandas がインストールされていない。
+    TableError: ``str()`` 後の列名が重複している。
+
+Example:
+    pandas で集計した ``DataFrame`` を ``Table`` に戻して Excel へ書く:
+
+    >>> from comken.toolbox.excel import Excel                       # doctest: +SKIP
+    >>> summary = Table.from_dataframe(by_store)                    # doctest: +SKIP
+    >>> with Excel("report.xlsx") as excel:                          # doctest: +SKIP
+    ...     excel.create_data_sheet("集計").create_table("集計", summary)  # doctest: +SKIP
+
 #### `replace`
 
 ```text
@@ -2586,6 +2770,32 @@ comken が出す固有エラー全体
 
 対処:
     メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ
+
+### `MissingOptionalDependencyError`
+
+```text
+class MissingOptionalDependencyError(ComkenError):
+```
+
+#### 説明
+
+``optional-dependencies`` に分類した外部ライブラリがインストールされていない
+
+comken 本体には含めず、利用者の判断で入れるライブラリ（``pandas`` など）を
+使おうとしたときに送出する。
+
+発生箇所: Table.to_dataframe() / Table.from_dataframe() など
+
+対処:
+    メッセージに出たライブラリを pip install でインストールする
+    （``pyproject.toml`` に optional-dependencies として定義されていれば
+    ``pip install -e .[pandas]`` のように extra 経由でも入れられる）。
+
+#### `__init__`
+
+```text
+def __init__(self, library: str) -> None:
+```
 
 ### `SiteOwnerRequiredError`
 

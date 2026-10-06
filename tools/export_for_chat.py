@@ -106,6 +106,7 @@ DIRECT_ERROR_CATEGORIES = {
     exceptions.LoggingAlreadyConfiguredError: "ファイル・設定などのエラー",
     exceptions.LoggingConflictError: "ファイル・設定などのエラー",
     exceptions.LogRootNotConfiguredError: "ファイル・設定などのエラー",
+    exceptions.MissingOptionalDependencyError: "ファイル・設定などのエラー",
 }
 SUPPLEMENTAL_ERRORS = {
     "Access のエラー": (

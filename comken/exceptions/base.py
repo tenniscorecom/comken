@@ -9,6 +9,24 @@ class ComkenError(Exception):
     """
 
 
+class MissingOptionalDependencyError(ComkenError):
+    """``optional-dependencies`` に分類した外部ライブラリがインストールされていない
+
+    comken 本体には含めず、利用者の判断で入れるライブラリ（``pandas`` など）を
+    使おうとしたときに送出する。
+
+    発生箇所: Table.to_dataframe() / Table.from_dataframe() など
+
+    対処:
+        メッセージに出たライブラリを pip install でインストールする
+        （``pyproject.toml`` に optional-dependencies として定義されていれば
+        ``pip install -e .[pandas]`` のように extra 経由でも入れられる）。
+    """
+
+    def __init__(self, library: str) -> None:
+        super().__init__(f"{library} が入っていません。pip install {library} で入れてください。")
+
+
 class SiteOwnerRequiredError(ComkenError):
     """`SiteBase` / `SalesforceBase` のサブクラスに `OWNER` が設定されていない
 

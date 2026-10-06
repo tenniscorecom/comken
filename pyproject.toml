@@ -16,6 +16,11 @@ dependencies = [
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
+[project.optional-dependencies]
+# 必須依存にしない: 会社の実行環境に入っていないことがあるため。
+# 使いたい機能に対応する extra を ``pip install comken[<extra>]`` で選ぶ。
+pandas = ["pandas>=2.2"]
+
 [tool.setuptools.dynamic]
 version = {attr = "comken.__version__"}
 
