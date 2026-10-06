@@ -10,7 +10,7 @@ from pathlib import Path
 
 from comken.core.dates import today
 from comken.core.files.ops import project_dir
-from comken.core.logger.site import (
+from comken.core.logger.environment import (
     CONSOLE_HANDLER_NAME,
     DATE_FORMAT,
     ENVIRONMENT_HANDLER_NAME,

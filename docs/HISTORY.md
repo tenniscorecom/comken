@@ -888,3 +888,12 @@ comken 内部からの import とコメント・docstring のパス表記、テ�
 公開名（`comken.core.logger.__all__` と `comken` 直下の再公開）は変えて
 いない。`local.py` / `tests/test_logger.py` の monkeypatch 対象パスは
 `comken.core.logger.site` へ揃えた。
+
+## 30. `comken.core.logger.environment` を復活させた（2026-10-06）
+
+29 の統合を取り消し、`environment.py`（`setup_logging` と内部のヘルパー、定数）を
+統合前の内容で戻した。`site.py` は社内環境の定義（`LoggerSite` / `Backoffice` /
+`Intranet`）だけに戻り、`logger` パッケージは `site.py`・`environment.py`・`local.py`
+の3ファイルになる。`local.py` / `tests/test_logger.py` の import と monkeypatch
+対象パスも `comken.core.logger.environment` に戻した。公開名は変えていない。
+29 の記録は経緯として残す。
