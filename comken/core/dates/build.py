@@ -113,10 +113,10 @@ def build_rows() -> list[tuple[_dt.date, str]]:
             "国民の祝日を 1 件も読み取れませんでした。"
             "内閣府の CSV の形式が変わっていないか確認してください。",
         )
-    first_year, last_year = _year_range(national_holidays)
+    years = [date_.year for date_, _ in national_holidays]
 
     merged: dict[_dt.date, str] = dict(national_holidays)
-    for year in range(first_year, last_year + 1):
+    for year in range(min(years), max(years) + 1):
         for name, month_days in COMPANY_HOLIDAYS.items():
             for month, day in month_days:
                 merged.setdefault(_dt.date(year, month, day), name)
@@ -184,18 +184,6 @@ def _parse_date(text: str) -> _dt.date:
         except ValueError:
             continue
     raise ValueError(f"内閣府 CSV の日付を解釈できません: {text!r}")
-
-
-def _year_range(holidays: list[tuple[_dt.date, str]]) -> tuple[int, int]:
-    """国民の祝日のうち最も古い年・最も新しい年を返す。"""
-    first = holidays[0][0]
-    last = holidays[0][0]
-    for date_, _ in holidays[1:]:
-        if date_ < first:
-            first = date_
-        if date_ > last:
-            last = date_
-    return first.year, last.year
 
 
 def write_company_calendar_csv(
