@@ -1,10 +1,11 @@
-"""comken/services/__init__.py — 複数の業務領域を組み合わせた業務ワークフロー・
-業務固有のデータを持つ処理を置く場所。
+"""comken/services/__init__.py — core / toolbox の機能を組み合わせて、
+まとまった業務処理を実現する場所。
 
 `toolbox/` は Salesforce API クライアントのような単一領域の薄い部品を置く。
 `services/` は Excel 入力・スケジュール判定・通知・ファイル配置など **複数領域を
-組み合わせた業務ワークフロー**、または **会社・組織で決まる業務固有のデータ**
+組み合わせた業務処理**、または **会社・組織で決まる業務固有のデータ**
 （列名・IDのリスト等）を持つ処理の置き場所として棲み分けている。
+使う人が1人か複数かは問わない（利用者の数は services に置く条件ではない）。
 
     services/salesforce_downloader/   Salesforce レポートの集約取得と履歴管理
     services/csv_column_reducer.py    応需CSVの新ロール→旧ロール列削減（業務固有の列リストを持つ）

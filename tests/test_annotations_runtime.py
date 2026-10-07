@@ -2,15 +2,14 @@
 評価される型注釈に使っていないかを ``comken/`` パッケージ全体に対して
 静的に検査する。
 
-comken の ``requires-python`` は ``>=3.13``、CI（.github/workflows/ci.yml）
-も Python 3.13 で pytest を回している。3.13 では関数の注釈は定義時に
+comken の ``requires-python`` は ``>=3.13``。3.13 では関数の注釈は定義時に
 そのまま評価されるので、``if TYPE_CHECKING:`` の中でだけ import した名前を
-注釈に書くと ``NameError`` で実行時クラッシュする。開発機は Python 3.14
-で PEP 649 により関数の注釈は遅延評価されるので、手元の pytest も
-pyright もこの違反をすり抜ける。CI が 3.13 だとしても、テストから
-import されないモジュールは pytest のカバー範囲外なので CI でも見つからない。
-この静的検査はその両方（手元 3.14 と CI 3.13 で取りこぼす違反）を pytest
-で検出する。文字列注釈や ``from __future__ import annotations`` が
+注釈に書くと ``NameError`` で実行時クラッシュする。3.14 では PEP 649 により
+関数の注釈は遅延評価されるので、3.14 で動かすだけでは pytest も pyright も
+この違反をすり抜ける。また、テストから import されないモジュールは pytest の
+カバー範囲外なので、CI を 3.13 で回しても見つからない。
+この静的検査は、その両方（3.14 での取りこぼし、テストから import されない
+モジュール）を pytest で検出する。文字列注釈や ``from __future__ import annotations`` が
 付いたファイルは評価されないので対象外、関数本体の中の ``AnnAssign``
 （ローカル変数の注釈）も評価されないので対象外。
 

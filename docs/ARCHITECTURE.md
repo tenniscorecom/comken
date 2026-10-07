@@ -27,7 +27,7 @@
 | 直下 | 何にも依存しない共通語彙（例外・実行モード） | `comken/exceptions/`・`comken/runtime.py` |
 | core | 直下にだけ依存する部品（外にあるものを触らない） | `comken/core/` 配下 |
 | toolbox | 外にあるもの（Excel・CSV・ブラウザ・Salesforce 等）を触る道具 | `comken/toolbox/` 配下 |
-| services | 単一消費者向けの業務シナリオ実装 | `comken/services/`（現在 `salesforce_downloader`） |
+| services | core / toolbox の機能を組み合わせて、まとまった業務処理を実現する | `comken/services/`（現在 `salesforce_downloader` など） |
 
 依存方向は **下から上にだけ向ける**。上の層は下の層に依存してよいが、下の層は上の層に依存しない。
 
@@ -256,7 +256,7 @@ browser/
 
 | 項目 | 内容 |
 |---|---|
-| Python | 3.13 以上（`requires-python = ">=3.13"`）。実行環境は 3.14、CI は 3.13 |
+| Python | 3.13 以上（`requires-python = ">=3.13"`）。3.14 も可。CI は 3.13 と 3.14 の両方で回す |
 | OS | Windows（`toolbox.windows` / `toolbox.browser` は Windows 専用） |
 | 必須依存 | openpyxl, selenium, pywin32, requests |
 | Outlook 操作 | 従来版（Classic）Outlook が必要。New Outlook は非対応 |
