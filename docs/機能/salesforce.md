@@ -337,32 +337,6 @@ with site_class() as sf:
 しない）。SOQL 移行の下書き材料にする用途で、列名は SOQL のフィールドパスと
 1対1ではない点に注意する。
 
-#### 列-フィールド対応表（`describe_fields` / `describe_fields_csv`）
-
-「3. SOQL へ書き換え」の下書きを何十件もまとめてやりたいとき、
-**`describe_fields(report_id)`** で「レポートの列」と「実フィールド API 名」
-の対応表を `Table` で取れる。さらに **`describe_fields_csv(report_id, path)`** で
-そのまま CSV へ落とせる（9 割自動で埋めて残りを可視化する道具）。
-
-```python
-with Solution() as sf:
-    for report_id in report_ids:
-        sf.report.describe_fields_csv(report_id, f"fields_{report_id}.csv")
-```
-
-実装の補足（docstring に無い分）: グルーピング列・集計列の表示名は
-`groupingColumnInfo`/`aggregateColumnInfo`（`detailColumnInfo` とは別枠）から
-引く。同じ接続中に同一オブジェクトを複数レポートで使う場合、Object Describe は
-オブジェクト単位でキャッシュして再利用する。主オブジェクトの Object Describe が
-404 等のときは例外にせず、全列を `(不明)` ＋理由の備考で返す（複合レポートタイプで
-主オブジェクト名が実在の sObject と一致しないケースを、道具として壊さず扱うため）。
-レポートタイプ (`reportType.type`) に `$` / `@` / 空白などの URL を壊す文字が
-含まれる（カスタムレポートタイプなど）と `describe_object()` が HTTP を呼ぶ前に
-`ValueError` で弾くが、これも 404 と同じく全列 `(不明)` ＋理由の備考に縮退する。
-Object Describe の 401 / 403 は Analytics API とは別の権限系統なので、
-`SalesforceError` には変換せず `SalesforceRequestError`
-のまま送出する。
-
 ---
 
 ## 計測
@@ -604,13 +578,11 @@ with Solution() as sf:
 ```
 
 戻り値は Salesforce のレスポンス dict（`fields` / `childRelationships` /
-`recordTypeInfos` などを含む）をそのまま返す。レポートの列⇔実フィールド
-対応づけ（`report.describe_fields`）や、別ツールで関連オブジェクトを
+`recordTypeInfos` などを含む）をそのまま返す。別ツールで関連オブジェクトを
 調べるときに使う。
 
 - **キャッシュはしない。** 1 回の呼び出しごとに HTTP を打つ。結果を再利用
-  したい呼び出し側で `ReportAPI._object_field_results` のような
-  キャッシュを持つか、`functools.lru_cache` 相当を被せる
+  したい呼び出し側で `functools.lru_cache` 相当を被せる
 - 名前は英数字と `_` のみ受け付ける（`Account` / `Opportunity` /
   `Custom__c` / `_Tag`）。URL を壊す文字（`/` `?` `#` 空白など）は
   HTTP を呼ぶ前に `ValueError` で弾く

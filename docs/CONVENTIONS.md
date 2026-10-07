@@ -315,11 +315,11 @@ HTTP の `get()`、キー・値ストアの `get()` / `set()` のように、そ
 `sf.report.get()` の方が自然という判断）。
 
 **`Salesforce Report API` の `describe()` 系も動詞表の例外。**
-`sf.report.describe()` / `describe_fields()` / `describe_fields_csv()` は
-レポートを実行せず定義（列・フィルタ・形式）だけを取得する。Salesforce REST API 自身が
-`sobjects/describe` のように「describe」をメタデータ取得の動詞として定義しており、
-`read_` へ統一すると Salesforce のドキュメント・エラーメッセージとの対応が取りにくく
-なる（ドメインで確立した語を優先する）。
+`sf.report.describe()` はレポートを実行せず定義（列・フィルタ・形式）だけを
+取得する。Salesforce REST API 自身が `sobjects/describe` のように
+「describe」をメタデータ取得の動詞として定義しており、`read_` へ統一すると
+Salesforce のドキュメント・エラーメッセージとの対応が取りにくくなる
+（ドメインで確立した語を優先する）。
 
 ---
 

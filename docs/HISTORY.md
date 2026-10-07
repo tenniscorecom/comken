@@ -39,6 +39,7 @@
 19. Timer の時間書式を `datetime.strftime` と同じにした（2026-10-07）
 20. 文字コードの名前・別名・コードページ番号を `core/encoding.py` にまとめた（2026-10-07）
 21. オブジェクトの describe は公開の入口を1つにする（2026-10-07）
+22. レポート列⇔フィールド対応表は soql-collector へ移した（2026-10-08）
 
 ## 1. 設定と非機密情報の扱い
 
@@ -861,3 +862,12 @@ core/dates はファイルに触らない層のまま（dates から files を i
 
 カスタムレポートタイプの名前には `$` / `@` が入り、`describe_object()` の名前の検査（`ValueError`）に
 触れる。主オブジェクトの判定では、これを落とさずに `(不明)` ＋理由に縮退して受け止める。
+
+## 22. レポート列⇔フィールド対応表は soql-collector へ移した（2026-10-08）
+
+レポートの列と Salesforce の実フィールド API 名の対応表を作る `ReportAPI.describe_fields()` 系の
+ロジック（`describe_fields` / `describe_fields_with_object_status` / `describe_fields_csv` /
+`main_object` と、列キー収集・主オブジェクト判定・Object Describe キャッシュ）は、SOQL 移行の
+下書き専用で利用者も soql-collector 1 本だった。comken からは削除し、soql-collector 側へ
+移した。comken はレポートの `describe()`（実行せず定義を取る）と `SalesforceBase.describe_object()`
+（オブジェクトのメタデータを取る）の生データ取得までを担う。
