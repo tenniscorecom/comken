@@ -587,6 +587,33 @@ with Solution() as sf:
 
 動くサンプル: `examples/advanced/salesforce_query/`
 
+### オブジェクトのメタデータを取る (`describe_object`)
+
+SOQL のクエリ結果からは「**今ある行**」しか取れず、項目名・参照先・必須属性
+などのメタデータは取れない。それらは `/services/data/v{version}/sobjects/{object_name}/describe`
+を直接呼ぶ必要があり、**`describe_object(object_name)`** で取れる。
+
+```python
+with Solution() as sf:
+    account = sf.describe_object("Account")
+    # account["fields"] に項目ごとの name / type / label / referenceTo ... が入る
+    custom = sf.describe_object("Custom__c")
+```
+
+戻り値は Salesforce のレスポンス dict（`fields` / `childRelationships` /
+`recordTypeInfos` などを含む）をそのまま返す。レポートの列⇔実フィールド
+対応づけ（`report.describe_fields`）や、別ツールで関連オブジェクトを
+調べるときに使う。
+
+- **キャッシュはしない。** 1 回の呼び出しごとに HTTP を打つ。結果を再利用
+  したい呼び出し側で `ReportAPI._object_field_results` のような
+  キャッシュを持つか、`functools.lru_cache` 相当を被せる
+- 名前は英数字と `_` のみ受け付ける（`Account` / `Opportunity` /
+  `Custom__c` / `_Tag`）。URL を壊す文字（`/` `?` `#` 空白など）は
+  HTTP を呼ぶ前に `ValueError` で弾く
+- 401 / 403 は `SalesforceRequestError` のまま送出される（Analytics API
+  への変換はしない）
+
 ### 組織（サイト）ごとのクラス
 
 組織は My Domain の URL と固有処理をまとめるため、1組織につき1クラスにする。

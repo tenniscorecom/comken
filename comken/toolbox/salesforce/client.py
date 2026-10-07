@@ -19,6 +19,7 @@ r"""comken/toolbox/salesforce/client.py — Salesforce API クライアント
 """
 
 import logging
+import re
 import time
 import urllib.parse
 from collections.abc import Iterator
@@ -76,6 +77,12 @@ HTTP_TOO_MANY_REQUESTS = 429
 HTTP_SERVER_ERROR = 500
 HTTP_BAD_REQUEST = 400
 DRY_RUN_RECORD_ID = "DRYRUN00000000000A"
+
+# オブジェクトの API 参照名（``/sobjects/{object_name}/describe`` の ``object_name``）。
+# ``/`` ``?`` ``#`` や空白を含めると URL を壊したり別パスを指したりできるため、
+# HTTP を呼ぶ前に弾く。英字・数字・ ``_`` だけを許す（標準オブジェクト・ ``__c``
+# カスタムオブジェクト・ ``_`` 始まりの内部オブジェクトを含む）。
+_OBJECT_NAME_PATTERN = re.compile(r"\A[A-Za-z0-9_]+\Z")
 
 # 一時的な失敗をやり直す回数と待ち時間。待ち時間は試行回数に比例して伸ばす
 MAX_ATTEMPTS = 3
@@ -384,6 +391,48 @@ class SalesforceBase:
                 "対処: データの量・SOQL の条件・Salesforce 側の負荷を確認してください。"
             ) from exc
         return self._bulk_fetch_results(job_id)
+
+    # ---------------------------------------------------------------- describe
+    @measure
+    def describe_object(self, object_name: str) -> dict[str, Any]:
+        """オブジェクトの describe（項目の一覧・型・参照先など）を返す。
+
+        Salesforce の ``/services/data/v{API_VERSION}/sobjects/{object_name}/describe``
+        を GET で呼び、API のレスポンス dict をそのまま返す。
+        ``fields`` / ``childRelationships`` / ``recordTypeInfos`` など、メタデータに
+        載るすべての情報を含むため、レポートの列⇔実フィールド対応づけ
+        （``report.describe_fields()``）や、関連オブジェクトを調べるときの
+        下敷きに使う。
+
+        ``record`` 1 件を取りたい ``get()`` / レコードを更新する ``upsert()``
+        など CRUD の動詞群とは目的が違うため、``describe_object()`` と
+        別名で切っている。SOQL の ``query()`` と同じく「読むだけ」だが、
+        戻り値は行ではなく dict なので ``Table`` には包まない。
+
+        **キャッシュはしない。** 1 回の呼び出しごとに HTTP を打つ。
+        結果を再利用したい呼び出し側で ``functools.lru_cache`` 相当を持たせるか、
+        ``ReportAPI._object_field_results`` のように呼び出し側でキャッシュする。
+
+        Args:
+            object_name: オブジェクトの API 参照名（例: ``"Account"``、
+                ``"Opportunity"``、``"Custom__c"``）。
+
+        Returns:
+            API のレスポンス dict。API が dict 以外を返したときは空 dict。
+
+        Raises:
+            ValueError: ``object_name`` が空文字、または英数字と ``_`` 以外の
+                文字を含む場合（URL を壊す名前を HTTP を呼ぶ前に弾く）。
+            SalesforceRequestError: HTTP エラー。
+        """
+        if not _OBJECT_NAME_PATTERN.match(object_name):
+            raise ValueError(
+                f"無効なオブジェクト名です: {object_name!r}"
+                "（英数字と _ のみ。例: 'Account'、'Custom__c'）"
+            )
+        path = self.data_path(f"/sobjects/{object_name}/describe")
+        result, _ = self.request("GET", path, component="describe")
+        return result if isinstance(result, dict) else {}
 
     # ------------------------------------------------------------------- CRUD
     @measure

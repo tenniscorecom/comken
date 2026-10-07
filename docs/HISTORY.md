@@ -33,6 +33,7 @@
 18. 日付とファイル名まわりで持たないもの・ファイルの分け方
 19. Timer の時間書式を `datetime.strftime` と同じにした（2026-10-07）
 20. 文字コードの名前・別名・コードページ番号を `core/encoding.py` にまとめた（2026-10-07）
+21. オブジェクトの describe を公開の関数にした（2026-10-07）
 
 ## 1. 設定と非機密情報の扱い
 
@@ -847,3 +848,12 @@ Salesforce に渡す名前（`Shift_JIS` / `UTF-8`）も `charset_name()` で作
 そろえて Salesforce へ送る。使う場所ごとに表記が違う問題を呼ぶ側が意識しなくて
 済むようにするためで、Access の `code_page()` と同じ「文字コード名 → 受け側ごとの
 形」の責務を `core/encoding.py` に閉じ込めた。
+
+## 21. オブジェクトの describe を公開の関数にした（2026-10-07）
+
+`SalesforceBase.describe_object(object_name)` を公開メソッドにした。
+レポート API の列⇔実フィールド対応づけ（`ReportAPI._object_field_index`）も、
+利用側（soql-collector など）が関連オブジェクトを調べるときも、同じ入口を使えるようにするため。
+`_object_field_index` は `ReportAPI` 内のオブジェクト単位キャッシュはそのまま残し、
+`_client.request` を直接触る重複を消した。
+キャッシュは公開側に持たせず、必要とする呼び出し側で持つ（再利用スコープが違うため）。

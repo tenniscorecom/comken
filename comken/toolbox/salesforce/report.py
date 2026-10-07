@@ -501,9 +501,8 @@ class ReportAPI:
         cached_result = self._object_field_results.get(object_name)
         if cached_result is not None:
             return cached_result
-        path = self._client.data_path(f"/sobjects/{object_name}/describe")
         try:
-            data, _ = self._client.request("GET", path, component=COMPONENT)
+            data = self._client.describe_object(object_name)
         except SalesforceRequestError as exc:
             if exc.status_code in (401, 403):
                 raise

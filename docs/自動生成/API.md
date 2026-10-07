@@ -7991,6 +7991,45 @@ Args:
 Returns:
     SOQL の結果を表す ``Table``。列は CSV の見出し順、値は全て文字列。
 
+#### `describe_object`
+
+```text
+@measure
+def describe_object(self, object_name: str) -> dict[str, Any]:
+```
+
+##### 説明
+
+オブジェクトの describe（項目の一覧・型・参照先など）を返す。
+
+Salesforce の ``/services/data/v{API_VERSION}/sobjects/{object_name}/describe``
+を GET で呼び、API のレスポンス dict をそのまま返す。
+``fields`` / ``childRelationships`` / ``recordTypeInfos`` など、メタデータに
+載るすべての情報を含むため、レポートの列⇔実フィールド対応づけ
+（``report.describe_fields()``）や、関連オブジェクトを調べるときの
+下敷きに使う。
+
+``record`` 1 件を取りたい ``get()`` / レコードを更新する ``upsert()``
+など CRUD の動詞群とは目的が違うため、``describe_object()`` と
+別名で切っている。SOQL の ``query()`` と同じく「読むだけ」だが、
+戻り値は行ではなく dict なので ``Table`` には包まない。
+
+**キャッシュはしない。** 1 回の呼び出しごとに HTTP を打つ。
+結果を再利用したい呼び出し側で ``functools.lru_cache`` 相当を持たせるか、
+``ReportAPI._object_field_results`` のように呼び出し側でキャッシュする。
+
+Args:
+    object_name: オブジェクトの API 参照名（例: ``"Account"``、
+        ``"Opportunity"``、``"Custom__c"``）。
+
+Returns:
+    API のレスポンス dict。API が dict 以外を返したときは空 dict。
+
+Raises:
+    ValueError: ``object_name`` が空文字、または英数字と ``_`` 以外の
+        文字を含む場合（URL を壊す名前を HTTP を呼ぶ前に弾く）。
+    SalesforceRequestError: HTTP エラー。
+
 #### `get`
 
 ```text
@@ -8304,6 +8343,45 @@ Args:
 
 Returns:
     SOQL の結果を表す ``Table``。列は CSV の見出し順、値は全て文字列。
+
+#### `describe_object`
+
+```text
+@measure
+def describe_object(self, object_name: str) -> dict[str, Any]:
+```
+
+##### 説明
+
+オブジェクトの describe（項目の一覧・型・参照先など）を返す。
+
+Salesforce の ``/services/data/v{API_VERSION}/sobjects/{object_name}/describe``
+を GET で呼び、API のレスポンス dict をそのまま返す。
+``fields`` / ``childRelationships`` / ``recordTypeInfos`` など、メタデータに
+載るすべての情報を含むため、レポートの列⇔実フィールド対応づけ
+（``report.describe_fields()``）や、関連オブジェクトを調べるときの
+下敷きに使う。
+
+``record`` 1 件を取りたい ``get()`` / レコードを更新する ``upsert()``
+など CRUD の動詞群とは目的が違うため、``describe_object()`` と
+別名で切っている。SOQL の ``query()`` と同じく「読むだけ」だが、
+戻り値は行ではなく dict なので ``Table`` には包まない。
+
+**キャッシュはしない。** 1 回の呼び出しごとに HTTP を打つ。
+結果を再利用したい呼び出し側で ``functools.lru_cache`` 相当を持たせるか、
+``ReportAPI._object_field_results`` のように呼び出し側でキャッシュする。
+
+Args:
+    object_name: オブジェクトの API 参照名（例: ``"Account"``、
+        ``"Opportunity"``、``"Custom__c"``）。
+
+Returns:
+    API のレスポンス dict。API が dict 以外を返したときは空 dict。
+
+Raises:
+    ValueError: ``object_name`` が空文字、または英数字と ``_`` 以外の
+        文字を含む場合（URL を壊す名前を HTTP を呼ぶ前に弾く）。
+    SalesforceRequestError: HTTP エラー。
 
 #### `get`
 

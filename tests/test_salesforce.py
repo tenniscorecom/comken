@@ -782,6 +782,94 @@ class TestDescribeFields:
         assert rows[0]["対応フィールドAPI名"] == "Name"
 
 
+class TestDescribeObject:
+    """``SalesforceBase.describe_object()`` はオブジェクトのメタデータ（項目・
+    参照・必須属性など）を API の返す形のまま dict で取り出す。
+
+    ``/sobjects/{object_name}/describe`` を 1 呼び出しごとに叩き、キャッシュは
+    しない。``_object_field_results`` を持つ ``ReportAPI`` がこのキャッシュを
+    担うので、公開側はキャッシュを持たずに済む。
+    """
+
+    def test_sends_get_request_to_describe_endpoint(self):
+        """``/sobjects/{object_name}/describe`` を GET で呼び、レスポンス dict をそのまま返す。"""
+        body = {"fields": [{"name": "Id", "type": "id"}], "label": "Account"}
+        with _salesforce([_response(json_body=body)]) as (client, session, _):
+            described = client.describe_object("Account")
+
+        assert described is body
+        method, url = session.request.call_args[0]
+        assert method == "GET"
+        assert url == f"{INSTANCE_URL}{DATA_PREFIX}/sobjects/Account/describe"
+        # 計測の component は "describe"（query / crud / bulk / report とは別系統）
+        assert client.metrics.component_stats()["describe"].calls == 1
+
+    def test_returns_empty_dict_when_response_is_not_dict(self):
+        """dict 以外のレスポンスは空 dict に丸める（``describe(report_id)`` と同じ考え方）。"""
+        with _salesforce([_response(json_body=["not", "a", "dict"])]) as (client, _, _):
+            assert client.describe_object("Account") == {}
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "",
+            "Account/../x",
+            "Acc ount",
+            "Account?x=1",
+            "Account#fragment",
+            "Account%2F..%2Fx",
+        ],
+    )
+    def test_invalid_names_raise_value_error_without_http(self, name):
+        """無効な名前は HTTP を呼ぶ前に ValueError。
+
+        URL を壊す文字（``/`` ``?`` ``#`` ``%`` `` `` 等）は HTTP を呼ぶ前に弾く。
+        呼び出し側が受け取った名前と、許される例（``Account`` /
+        ``Custom__c``）をメッセージに含める。
+        """
+        with (
+            _salesforce([]) as (client, session, _),
+            pytest.raises(ValueError) as caught,
+        ):
+            client.describe_object(name)
+
+        session.request.assert_not_called()
+        message = str(caught.value)
+        assert repr(name) in message, "渡した名前をそのまま埋め込む"
+        assert "Account" in message and "Custom__c" in message, "例を入れる"
+
+    def test_http_error_passes_through_as_salesforce_request_error(self):
+        """HTTP エラーは ``request()`` が出す ``SalesforceRequestError`` のまま通す。
+
+        ``SalesforceError`` への変換は挟まない。``_object_field_index``
+        （Report API 側）が 401 / 403 を再送出する契約を守れるようにするため。
+        """
+        not_found = _response(404, text="NOT_FOUND")
+        with (
+            _salesforce([not_found]) as (client, _, _),
+            pytest.raises(SalesforceRequestError, match=r"(?s)HTTP 404.*NOT_FOUND"),
+        ):
+            client.describe_object("Account")
+
+    def test_same_name_called_twice_calls_http_twice(self):
+        """同じ名前で 2 回呼ぶと HTTP も 2 回呼ぶ（キャッシュしない）。
+
+        結果を再利用したい呼び出し側で ``functools.lru_cache`` 相当を被せるか、
+        ``ReportAPI._object_field_results`` のような呼び出し側キャッシュを
+        使う前提。公開側はキャッシュを持たない。
+        """
+        body = {"fields": []}
+        with _salesforce([_response(json_body=body), _response(json_body=body)]) as (
+            client,
+            session,
+            _,
+        ):
+            client.describe_object("Account")
+            client.describe_object("Account")
+
+        assert session.request.call_count == 2
+
+
 class TestReportAccessDenied:
     """Reports API が 401 / 403 を返したときに限り、``SalesforceRequestError`` ではなく
     ``SalesforceError`` に変換されることを検証する。
