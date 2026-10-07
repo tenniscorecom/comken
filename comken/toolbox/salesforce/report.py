@@ -582,10 +582,10 @@ class ReportAPI:
         と同じく結果をキャッシュする。
 
         ``reportType.type`` に ``$`` / ``@`` を含む値が入ったときは、
-        ``describe_fields_with_object_status()`` が ``_report_type_candidates()``
-        で先に候補を抽出してからこのメソッドを候補単位で呼ぶため、ここへ渡る
-        引数は候補（``Foo__c`` など、``$`` / ``@`` を含まない通常の
-        オブジェクト名）の形をしている。
+        ``describe_fields_with_object_status()`` / ``main_object()`` が
+        ``_resolve_main_object_candidates()`` で先に候補を抽出してからこの
+        メソッドを候補単位で呼ぶため、ここへ渡る引数は候補（``Foo__c`` など、
+        ``$`` / ``@`` を含まない通常のオブジェクト名）の形をしている。
         """
         cached_result = self._object_field_results.get(object_name)
         if cached_result is not None:
@@ -619,6 +619,45 @@ class ReportAPI:
         result = (field_index, None)
         self._object_field_results[object_name] = result
         return result
+
+    def _resolve_main_object_candidates(
+        self, object_name: str
+    ) -> tuple[dict[str, list[dict[str, Any]]] | None, str | None, str | None]:
+        """``$`` / ``@`` を含む ``object_name`` から主オブジェクトを候補単位で解決する。
+
+        ``_report_type_candidates()`` で候補を取り、先頭から
+        ``_object_field_index()`` を試して、最初に field_index が得られた候補を
+        採用する。401 / 403 は ``_object_field_index()`` の既存挙動どおり送出する
+        （呼び出し側で受け取れる）。
+
+        全候補失敗（または候補が空）のときは ``field_index`` / ``resolved_name`` を
+        ``None`` にし、``failure_reason`` に元の ``object_name`` と試した候補名を
+        含めた理由文言を返す。``describe_fields_with_object_status()`` の備考列に
+        そのまま埋め込める形。
+
+        戻り値 ``(field_index, resolved_name, failure_reason)`` は
+        ``field_index`` が ``None`` なら ``resolved_name`` も ``None``、
+        ``field_index`` が ``None`` でなければ ``failure_reason`` が ``None``
+        という関係を持つ。
+
+        Args:
+            object_name: ``reportType.type`` の値（``$`` または ``@`` を含む想定）。
+
+        Returns:
+            ``(field_index, resolved_name, failure_reason)`` のタプル。
+        """
+        candidates = _report_type_candidates(object_name)
+        for candidate in candidates:
+            # 401/403 は ``_object_field_index()`` がそのまま送出する
+            # （``_object_field_index`` の既存挙動）。HTTP エラー
+            # （404 等）と ``ValueError``（候補が ``_object_name``
+            # 検証に引っかかる場合）は同じ形式で理由が返るので次候補へ。
+            candidate_index, _ = self._object_field_index(candidate)
+            if candidate_index is not None:
+                return candidate_index, candidate, None
+        # for ループで break せず field_index が None のまま = 候補が
+        # 空か全候補失敗。元の値と試した候補を理由に含めて縮退する
+        return None, None, _report_type_candidates_failure_reason(object_name, candidates)
 
     def _fetch_report_table(
         self,
@@ -741,23 +780,9 @@ class ReportAPI:
             # 完全に同じになるため、特別扱いせず従来のパスを通す
             field_index, object_error_reason = self._object_field_index(object_name)
         else:
-            candidates = _report_type_candidates(object_name)
-            field_index = None
-            for candidate in candidates:
-                # 401/403 は ``_object_field_index()`` がそのまま送出する
-                # （``_object_field_index`` の既存挙動）。HTTP エラー
-                # （404 等）と ``ValueError``（候補が ``_object_name``
-                # 検証に引っかかる場合）は同じ形式で理由が返るので次候補へ。
-                candidate_index, _ = self._object_field_index(candidate)
-                if candidate_index is not None:
-                    field_index = candidate_index
-                    break
-            if field_index is None:
-                # for ループで break せず field_index が None のまま = 候補が
-                # 空か全候補失敗。元の値と試した候補を理由に含めて縮退する
-                object_error_reason = _report_type_candidates_failure_reason(
-                    object_name, candidates
-                )
+            # ``$`` / ``@`` を含む値の候補ループは ``_resolve_main_object_candidates()``
+            # に集約する（``main_object()`` からも同じ経路を使う）
+            field_index, _, object_error_reason = self._resolve_main_object_candidates(object_name)
 
         rows: list[dict[str, str]] = []
         for column_key in columns:
@@ -792,6 +817,40 @@ class ReportAPI:
             ),
             object_error_reason,
         )
+
+    def main_object(self, metadata: dict[str, Any]) -> str | None:
+        """``describe()`` 結果からレポートの主オブジェクト名を返す。
+
+        ``describe_fields_with_object_status()`` がレポート全体の列対応表を
+        埋めるための道具であるのに対し、こちらは主オブジェクト名だけが欲しい
+        場面（SOQL の ``FROM`` 句にしたい、等）で使う薄い層。``$`` / ``@``
+        を含まない ``reportType.type``（``Opportunity`` のような標準レポート
+        タイプ）はそのまま返す（HTTP を呼ばず、``_object_field_index()`` の
+        キャッシュにも触れない）。``$`` / ``@`` を含む値（カスタムレポート
+        タイプの ``CustomEntity$Project__c`` / ``Account@Contact`` など）は
+        ``_resolve_main_object_candidates()`` で候補から解決し、最初に
+        ``describe_object()`` が通った候補名を返す。全滅（または候補なし）
+        のときは ``None``。
+
+        401 / 403 は ``_object_field_index()`` の既存挙動どおり送出する。
+
+        Args:
+            metadata: ``describe(report_id)`` の戻り値。
+
+        Returns:
+            主オブジェクト名（``Foo__c`` / ``Account`` などの API 名前）。
+            解決できなかったときは ``None``。
+        """
+        report_metadata = metadata.get("reportMetadata", {}) if isinstance(metadata, dict) else {}
+        object_name = report_metadata.get("reportType", {}).get("type", "")
+        # ``$`` / ``@`` を含まない値は ``_report_type_candidates()`` でも
+        # 候補が1つ（=元の値そのもの）になり、HTTP を呼ぶ意味も
+        # ``_object_field_index()`` のキャッシュを汚す意味もない。従来どおり
+        # 値そのままを返す（利用側に ``describe_object()`` を委ねる形）
+        if not object_name or ("$" not in object_name and "@" not in object_name):
+            return object_name or None
+        _, resolved_name, _ = self._resolve_main_object_candidates(object_name)
+        return resolved_name
 
     @measure
     def describe_fields_csv(self, report_id: str, path: str | Path) -> Path:

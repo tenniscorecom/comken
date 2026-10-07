@@ -950,6 +950,100 @@ class TestDescribeFields:
         assert rows[0]["対応フィールドAPI名"] == "Name"
 
 
+class TestMainObject:
+    """``ReportAPI.main_object()`` は ``describe()`` 結果の ``reportType.type``
+    から主オブジェクト名だけを返す薄い層。``$`` / ``@`` を含まない値は
+    HTTP を呼ばずそのまま返し、含む値は候補から ``describe_object()`` が
+    通ったものを採用する。
+    """
+
+    def test_returns_value_as_is_when_no_separator_is_present(self):
+        """``$`` / ``@`` を含まない ``reportType.type`` はそのまま返す（HTTP なし）。"""
+        describe_body = _describe_fields_body(object_name="Opportunity")
+        with _salesforce([]) as (client, session, _):
+            assert client.report.main_object(describe_body) == "Opportunity"
+        # HTTP を一度も呼ばない（``_object_field_index`` のキャッシュにも触れない）
+        session.request.assert_not_called()
+
+    def test_second_candidate_is_returned_when_first_returns_http_404(self):
+        """候補が複数あり1つ目が 404、2つ目が成功 → 2つ目の候補名を返す。
+
+        ``_object_field_index()`` が 1 つ目の 404 をキャッシュするため、
+        ``main_object()`` 単独で ``describe_fields_with_object_status()``
+        と同じ結果を後追いで得ても追加 HTTP は発生しない。
+        """
+        describe_body = _describe_fields_body(object_name="CustomEntity$Foo__c$Project__c")
+        not_found = _response(404, text="NOT_FOUND")
+        object_body = {"fields": [{"name": "Name", "label": "商談名", "type": "Text"}]}
+        with _salesforce([not_found, _response(json_body=object_body)]) as (
+            client,
+            session,
+            _,
+        ):
+            assert client.report.main_object(describe_body) == "Project__c"
+        # 候補 2 つ分の Object Describe で 2 回
+        assert session.request.call_count == 2
+
+    def test_returns_none_when_all_candidates_fail(self):
+        """候補を全て試して全滅 → ``None``。"""
+        describe_body = _describe_fields_body(object_name="CustomEntity$Foo__c$Bar__c")
+        not_found1 = _response(404, text="NOT_FOUND_1")
+        not_found2 = _response(404, text="NOT_FOUND_2")
+        with _salesforce([not_found1, not_found2]) as (client, _, _):
+            assert client.report.main_object(describe_body) is None
+
+    def test_returns_none_when_candidate_list_is_empty(self):
+        """``CustomEntity$`` のように候補が空のときは ``None``（HTTP なし）。"""
+        describe_body = _describe_fields_body(object_name="CustomEntity$")
+        with _salesforce([]) as (client, session, _):
+            assert client.report.main_object(describe_body) is None
+        session.request.assert_not_called()
+
+    def test_returns_none_when_report_type_is_missing(self):
+        """``reportType`` が無い / ``type`` が空のときは ``None``（HTTP なし）。"""
+        metadata = {
+            "reportMetadata": {
+                "reportFormat": "TABULAR",
+                "detailColumns": ["NAME"],
+            }
+        }
+        with _salesforce([]) as (client, session, _):
+            assert client.report.main_object(metadata) is None
+        session.request.assert_not_called()
+
+    def test_shares_cache_with_describe_fields_with_object_status(self):
+        """同じ ``metadata`` に対して ``describe_fields_with_object_status()`` と
+        ``main_object()`` の順に呼んでも、``main_object()`` が候補を試す分は
+        すべてキャッシュから返り、``session.request`` の呼び出し回数は
+        ``describe_fields_with_object_status()`` 単独時と同じになる。
+        """
+        describe_body = _describe_fields_body(object_name="CustomEntity$Foo__c$Project__c")
+        not_found = _response(404, text="NOT_FOUND")
+        object_body = {"fields": [{"name": "Name", "label": "商談名", "type": "Text"}]}
+
+        # まず ``describe_fields_with_object_status()`` 単独時の HTTP 回数を取る
+        with _salesforce([not_found, _response(json_body=object_body)]) as (
+            client,
+            session_before,
+            _,
+        ):
+            client.report.describe_fields_with_object_status(describe_body)
+        calls_before = session_before.request.call_count
+
+        # 同じ ``metadata`` で ``describe_fields_with_object_status()`` →
+        # ``main_object()`` の順に呼んでも HTTP 回数が増えないこと
+        not_found2 = _response(404, text="NOT_FOUND")
+        object_body2 = {"fields": [{"name": "Name", "label": "商談名", "type": "Text"}]}
+        with _salesforce([not_found2, _response(json_body=object_body2)]) as (
+            client,
+            session_after,
+            _,
+        ):
+            client.report.describe_fields_with_object_status(describe_body)
+            assert client.report.main_object(describe_body) == "Project__c"
+        assert session_after.request.call_count == calls_before
+
+
 class TestDescribeObject:
     """``SalesforceBase.describe_object()`` はオブジェクトのメタデータ（項目・
     参照・必須属性など）を API の返す形のまま dict で取り出す。
