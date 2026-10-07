@@ -732,6 +732,60 @@ class TestDescribeFields:
         assert "Opportunity の Object Describe に失敗" in only_reason
         assert "HTTP 404" in only_reason
 
+    @pytest.mark.parametrize(
+        "object_name",
+        [
+            "CustomEntity$Foo__c",
+            "Account@Contact",
+            "A B",
+        ],
+    )
+    def test_invalid_report_type_name_degrades_to_unknown(self, object_name):
+        """``reportType.type`` に ``$`` / ``@`` / 空白など ``describe_object()``
+        が ``ValueError`` で弾く文字が含まれるときも、HTTP エラーと同じく
+        全列を ``(不明)`` ＋理由の備考に縮退する。
+
+        受け取った名前をそのまま理由に入れ、「手動で確認」の手引きを添える。
+        HTTP は ``describe_object()`` が ``ValueError`` で即返るため一度も
+        呼ばれない。
+        """
+        describe_body = _describe_fields_body(object_name=object_name)
+        with _salesforce([]) as (client, session, _):
+            table, reason = client.report.describe_fields_with_object_status(describe_body)
+
+        # 戻り値の表は全行 ``(不明)``、備考は同じ文言
+        rows = table.to_rows()
+        assert len(rows) == 4
+        for row in rows:
+            assert row["対応フィールドAPI名"] == "(不明)"
+            assert row["型"] == ""
+        reasons = {row["備考"] for row in rows}
+        assert len(reasons) == 1
+        only_reason = reasons.pop()
+        # 受け取った名前をそのまま埋め込み、「手動で確認」の手引きを添える
+        assert object_name in only_reason
+        assert "手動で確認" in only_reason
+        # 2 つ目の戻り値（理由）も同じ文言
+        assert reason == only_reason
+        # ``describe_object()`` は ``ValueError`` で即返るため HTTP は一度も呼ばれない
+        session.request.assert_not_called()
+
+    def test_invalid_report_type_name_value_error_is_cached(self):
+        """``describe_object()`` が ``ValueError`` を出す名前も ``(None, reason)``
+        としてキャッシュされ、同じ名前は 2 回目はキャッシュから返る。
+        ``describe_object()`` は 1 回しか呼ばれない。
+        """
+        describe_body = _describe_fields_body(object_name="CustomEntity$Foo__c")
+        with (
+            _salesforce([]) as (client, _, _),
+            patch.object(
+                client, "describe_object", side_effect=ValueError("無効なオブジェクト名")
+            ) as mocked_describe,
+        ):
+            client.report.describe_fields_with_object_status(describe_body)
+            client.report.describe_fields_with_object_status(describe_body)
+            assert mocked_describe.call_count == 1
+
     def test_object_describe_401_keeps_salesforce_request_error(self):
         """Object Describe が 401 を返しても Analytics API とは別の権限系統なので、
         ``SalesforceError`` に変換せず ``SalesforceRequestError``

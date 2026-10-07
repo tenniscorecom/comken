@@ -497,7 +497,15 @@ class ReportAPI:
     def _object_field_index(
         self, object_name: str
     ) -> tuple[dict[str, list[dict[str, Any]]] | None, str | None]:
-        """Object Describe をオブジェクト名単位で取得・キャッシュする。"""
+        """Object Describe をオブジェクト名単位で取得・キャッシュする。
+
+        ``describe_object()`` が ``ValueError`` を出す（英数字と ``_`` 以外の
+        文字を含む）ときも HTTP エラーと同じく縮退し、主オブジェクト判定
+        できなかった理由として返す。カスタムレポートタイプの
+        ``reportType.type`` には ``$`` や ``@`` を含む値が入ることがある
+        （``CustomEntity$Foo__c`` / ``Account@Contact`` など）。同じ正規化
+        経路を通るため、HTTP エラーと同じく結果をキャッシュする。
+        """
         cached_result = self._object_field_results.get(object_name)
         if cached_result is not None:
             return cached_result
@@ -510,6 +518,19 @@ class ReportAPI:
                 f"主オブジェクト {object_name} の Object Describe に失敗したため"
                 f"自動判定できません（HTTP {exc.status_code}: {exc.detail}）。"
                 "手動で確認してください"
+            )
+            result: tuple[dict[str, list[dict[str, Any]]] | None, str | None] = (None, reason)
+            self._object_field_results[object_name] = result
+            return result
+        except ValueError:
+            # 英数字と ``_`` 以外の文字を含む名前（カスタムレポートタイプの
+            # ``CustomEntity$Foo__c`` など）は HTTP を呼ぶ前に ``ValueError``
+            # で弾かれる。レポート全体として列対応づけが壊れないよう、
+            # HTTP エラーと同じ形に縮退し、同じ正規化経路のキャッシュに乗せる
+            reason = (
+                f"レポートタイプ {object_name} はオブジェクト名として使えない文字"
+                "（$ @ など）を含むため、主オブジェクトを特定できず自動判定できません"
+                "（カスタムレポートタイプなど）。手動で確認してください"
             )
             result: tuple[dict[str, list[dict[str, Any]]] | None, str | None] = (None, reason)
             self._object_field_results[object_name] = result

@@ -356,6 +356,9 @@ with Solution() as sf:
 オブジェクト単位でキャッシュして再利用する。主オブジェクトの Object Describe が
 404 等のときは例外にせず、全列を `(不明)` ＋理由の備考で返す（複合レポートタイプで
 主オブジェクト名が実在の sObject と一致しないケースを、道具として壊さず扱うため）。
+レポートタイプ (`reportType.type`) に `$` / `@` / 空白などの URL を壊す文字が
+含まれる（カスタムレポートタイプなど）と `describe_object()` が HTTP を呼ぶ前に
+`ValueError` で弾くが、これも 404 と同じく全列 `(不明)` ＋理由の備考に縮退する。
 Object Describe の 401 / 403 は Analytics API とは別の権限系統なので、
 `SalesforceError` には変換せず `SalesforceRequestError`
 のまま送出する。
