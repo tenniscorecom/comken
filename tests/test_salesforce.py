@@ -22,7 +22,10 @@ from comken.toolbox.salesforce import SalesforceBase
 from comken.toolbox.salesforce.auth.oauth_refresh import RefreshTokenOAuth
 from comken.toolbox.salesforce.cli import _site_selection_error
 from comken.toolbox.salesforce.metrics import APIMetrics
-from comken.toolbox.salesforce.report import report_id_from_url
+from comken.toolbox.salesforce.report import (
+    _report_type_candidates,
+    report_id_from_url,
+)
 from comken.toolbox.salesforce.sites import SITES, Solution, SolutionSandbox, site_for
 
 DOMAIN_URL = "https://example.my.salesforce.com"
@@ -735,19 +738,20 @@ class TestDescribeFields:
     @pytest.mark.parametrize(
         "object_name",
         [
-            "CustomEntity$Foo__c",
-            "Account@Contact",
             "A B",
+            "Foo Bar__c",
         ],
     )
-    def test_invalid_report_type_name_degrades_to_unknown(self, object_name):
-        """``reportType.type`` に ``$`` / ``@`` / 空白など ``describe_object()``
-        が ``ValueError`` で弾く文字が含まれるときも、HTTP エラーと同じく
-        全列を ``(不明)`` ＋理由の備考に縮退する。
+    def test_invalid_candidate_name_degrades_without_http(self, object_name):
+        """``$`` / ``@`` を含まない ``reportType.type`` で、候補自体が
+        ``describe_object()`` の ``ValueError`` で弾かれる文字（空白など）を
+        含む場合は、HTTP を呼ばずに全列を ``(不明)`` ＋理由の備考に縮退する。
 
-        受け取った名前をそのまま理由に入れ、「手動で確認」の手引きを添える。
-        HTTP は ``describe_object()`` が ``ValueError`` で即返るため一度も
-        呼ばれない。
+        ``$`` / ``@`` を含まない値はそのまま ``_object_field_index()`` へ
+        渡されるため、``describe_object()`` が URL 検証で即 ``ValueError``
+        を出す名前（候補側にもそのまま渡ってくる）は HTTP を呼ぶ前に
+        止まり、HTTP エラーと同じ縮退経路を通る。受け取った名前をそのまま
+        理由に入れ、「手動で確認」の手引きを添える。
         """
         describe_body = _describe_fields_body(object_name=object_name)
         with _salesforce([]) as (client, session, _):
@@ -768,6 +772,116 @@ class TestDescribeFields:
         # 2 つ目の戻り値（理由）も同じ文言
         assert reason == only_reason
         # ``describe_object()`` は ``ValueError`` で即返るため HTTP は一度も呼ばれない
+        session.request.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("report_type", "expected"),
+        [
+            ("CustomEntity$Project__c", ["Project__c"]),
+            (
+                "CustomEntityCustomEntity$Project__c$Task__c",
+                ["Project__c", "Task__c"],
+            ),
+            ("CustomEntity$Project__c@Project__c.Account__c", ["Project__c"]),
+            ("Account@Contact", ["Account"]),
+            ("Opportunity", ["Opportunity"]),
+            ("CustomEntity$", []),
+        ],
+    )
+    def test_report_type_candidates(self, report_type, expected):
+        """``reportType.type`` から ``$`` / ``@`` を取り除いて主オブジェクト
+        候補を取り出す。``CustomEntity`` の繰り返しだけのトークンは除外し、
+        重複は出現順を保ったまま除く。
+        """
+        assert _report_type_candidates(report_type) == expected
+
+    def test_first_valid_candidate_wins_for_custom_report_type(self):
+        """``CustomEntity$Project__c`` のような値で、``Project__c`` の
+        ``describe_object()`` が成功すればそのフィールドインデックスで
+        列を埋める（「(不明)」に縮退しない）。
+        """
+        describe_body = _describe_fields_body(object_name="CustomEntity$Project__c")
+        object_body = {"fields": [{"name": "Name", "label": "商談名", "type": "Text"}]}
+        with _salesforce([_response(json_body=object_body)]) as (client, _, _):
+            table, reason = client.report.describe_fields_with_object_status(describe_body)
+
+        rows = table.to_rows()
+        name_row = next(row for row in rows if row["列キー"] == "NAME")
+        assert name_row["対応フィールドAPI名"] == "Name"
+        assert name_row["型"] == "Text"
+        assert name_row["備考"] == ""
+        # 候補が1つ成功したので理由は None
+        assert reason is None
+
+    def test_second_candidate_used_when_first_returns_http_404(self):
+        """候補が複数あり1つ目が HTTP 404、2つ目が成功 → 2つ目で対応づく。
+        1つ目の失敗は ``_object_field_index()`` がキャッシュして理由を残し、
+        2つ目が ``field_index`` を返した時点で採用される。
+        """
+        describe_body = _describe_fields_body(object_name="CustomEntity$Foo__c$Project__c")
+        not_found = _response(404, text="NOT_FOUND")
+        object_body = {"fields": [{"name": "Name", "label": "商談名", "type": "Text"}]}
+        with _salesforce([not_found, _response(json_body=object_body)]) as (client, _, _):
+            table, reason = client.report.describe_fields_with_object_status(describe_body)
+
+        rows = table.to_rows()
+        name_row = next(row for row in rows if row["列キー"] == "NAME")
+        assert name_row["対応フィールドAPI名"] == "Name"
+        assert name_row["型"] == "Text"
+        assert name_row["備考"] == ""
+        # 候補のいずれかが成功したので理由は None
+        assert reason is None
+
+    def test_all_candidates_failing_lists_original_and_candidates(self):
+        """候補を全て試したが全滅したときは、全列が ``(不明)`` になり、
+        理由には元の ``reportType.type`` の値と試した候補名が含まれる。
+        「手動で確認してください」の手引きも添える。
+        """
+        describe_body = _describe_fields_body(object_name="CustomEntity$Foo__c$Bar__c")
+        not_found1 = _response(404, text="NOT_FOUND_1")
+        not_found2 = _response(404, text="NOT_FOUND_2")
+        with _salesforce([not_found1, not_found2]) as (client, _, _):
+            table, reason = client.report.describe_fields_with_object_status(describe_body)
+
+        rows = table.to_rows()
+        assert len(rows) == 4
+        for row in rows:
+            assert row["対応フィールドAPI名"] == "(不明)"
+            assert row["型"] == ""
+        reasons = {row["備考"] for row in rows}
+        assert len(reasons) == 1
+        only_reason = reasons.pop()
+        # 元の ``reportType.type`` の値（repr 形式）と分割した候補（repr 形式）
+        # が両方とも理由に入る。候補分割をしない壊れた実装だと ``'CustomEntity$Foo__c$Bar__c'``
+        # がそのまま候補として並ぶだけになり ``'Foo__c'`` / ``'Bar__c'`` 個別には現れない
+        assert "'CustomEntity$Foo__c$Bar__c'" in only_reason
+        assert "'Foo__c'" in only_reason
+        assert "'Bar__c'" in only_reason
+        assert "手動で確認" in only_reason
+        # 2 つ目の戻り値（理由）も同じ文言
+        assert reason == only_reason
+
+    def test_empty_candidate_list_lists_only_original(self):
+        """候補が空（``CustomEntity$`` のように ``CustomEntity`` だけで終わる）
+        のときは、元の値だけが入った理由を返す。
+        """
+        describe_body = _describe_fields_body(object_name="CustomEntity$")
+        with _salesforce([]) as (client, session, _):
+            table, reason = client.report.describe_fields_with_object_status(describe_body)
+
+        rows = table.to_rows()
+        assert len(rows) == 4
+        for row in rows:
+            assert row["対応フィールドAPI名"] == "(不明)"
+        reasons = {row["備考"] for row in rows}
+        assert len(reasons) == 1
+        only_reason = reasons.pop()
+        assert "'CustomEntity$'" in only_reason
+        # 候補が空のときは「候補を抽出できなかった」の文言に分岐する
+        assert "候補を抽出できなかった" in only_reason
+        assert "手動で確認" in only_reason
+        assert reason == only_reason
+        # 候補が無いので ``_object_field_index()`` は一度も呼ばれない
         session.request.assert_not_called()
 
     def test_invalid_report_type_name_value_error_is_cached(self):

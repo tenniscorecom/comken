@@ -122,6 +122,83 @@ DETAIL_ROWS_KEY = "T!T"  # 明細レポートの行が入っている factMap �
 POLL_INTERVAL_SECONDS = 3
 ASYNC_TIMEOUT_SECONDS = 120
 
+# カスタムレポートタイプの ``reportType.type`` には ``CustomEntity$Foo__c``
+# のように ``$`` 区切りで ``CustomEntity`` プレースホルダが前置される。
+# 候補抽出時にこの繰り返しだけのトークンを落とすための正規表現。
+_CUSTOM_ENTITY_TOKEN_PATTERN = re.compile(r"\A(?:CustomEntity)+\Z")
+
+
+def _report_type_candidates(report_type: str) -> list[str]:
+    """``reportType.type`` から主オブジェクトの候補を取り出す（純粋関数）。
+
+    カスタムレポートタイプでは ``CustomEntity$Project__c`` や
+    ``Account@Contact`` のように ``$`` や ``@`` を含む値が入ることがある
+    （値の正確な形は実物で未確認の推測）。そのまま ``describe_object()`` に
+    渡すと ``ValueError`` で止まるため、``$`` / ``@`` で区切って候補の
+    リストにし、先頭から ``describe_object()`` が通るものを採る。
+
+    ルール:
+
+    - ``@`` が含まれるときは、最初の ``@`` より左だけを使う
+    - 残りを ``$`` で区切る
+    - 空文字と、``CustomEntity`` を 1 回以上繰り返しただけのトークン
+      （``CustomEntity`` / ``CustomEntityCustomEntity`` など）を除く
+    - 重複は除き、出現順を保つ
+    - ``$`` も ``@`` も無ければ ``[report_type]``（従来どおり）
+
+    Examples:
+        >>> _report_type_candidates("CustomEntity$Project__c")
+        ['Project__c']
+        >>> _report_type_candidates("CustomEntityCustomEntity$Project__c$Task__c")
+        ['Project__c', 'Task__c']
+        >>> _report_type_candidates("CustomEntity$Project__c@Project__c.Account__c")
+        ['Project__c']
+        >>> _report_type_candidates("Account@Contact")
+        ['Account']
+        >>> _report_type_candidates("Opportunity")
+        ['Opportunity']
+        >>> _report_type_candidates("CustomEntity$")
+        []
+    """
+    # ``@`` が含まれるときは最初の ``@`` より左だけを使う
+    if "@" in report_type:
+        report_type = report_type.split("@", 1)[0]
+    # 残りを ``$`` で区切る
+    tokens = report_type.split("$")
+    # 空文字と ``CustomEntity`` だけの繰り返しを除く
+    cleaned = [
+        token for token in tokens if token and not _CUSTOM_ENTITY_TOKEN_PATTERN.fullmatch(token)
+    ]
+    # 重複を除くが出現順は保つ
+    seen: set[str] = set()
+    unique: list[str] = []
+    for token in cleaned:
+        if token not in seen:
+            seen.add(token)
+            unique.append(token)
+    return unique
+
+
+def _report_type_candidates_failure_reason(original: str, candidates: list[str]) -> str:
+    """``$`` / ``@`` を含む ``reportType.type`` で候補を試したが全滅した
+    （または候補が空だった）ときの理由文言を組み立てる。
+
+    元の ``reportType.type`` の値と試した候補の一覧を添え、「手動で確認」
+    の手引きを入れる。``describe_fields_with_object_status()`` の備考列
+    にそのまま埋め込む 1 行分のテキスト。
+    """
+    if candidates:
+        candidate_text = ", ".join(repr(candidate) for candidate in candidates)
+        return (
+            f"レポートタイプ {original!r} から主オブジェクト候補"
+            f" {candidate_text} を順に確認しましたが、どれも Object Describe"
+            " できず自動判定できません。手動で確認してください"
+        )
+    return (
+        f"レポートタイプ {original!r} からは主オブジェクト候補を抽出できなかったため"
+        "自動判定できません。手動で確認してください"
+    )
+
 
 def _parse_report_payload(
     data: object,
@@ -501,10 +578,14 @@ class ReportAPI:
 
         ``describe_object()`` が ``ValueError`` を出す（英数字と ``_`` 以外の
         文字を含む）ときも HTTP エラーと同じく縮退し、主オブジェクト判定
-        できなかった理由として返す。カスタムレポートタイプの
-        ``reportType.type`` には ``$`` や ``@`` を含む値が入ることがある
-        （``CustomEntity$Foo__c`` / ``Account@Contact`` など）。同じ正規化
-        経路を通るため、HTTP エラーと同じく結果をキャッシュする。
+        できなかった理由として返す。同じ正規化経路を通るため、HTTP エラー
+        と同じく結果をキャッシュする。
+
+        ``reportType.type`` に ``$`` / ``@`` を含む値が入ったときは、
+        ``describe_fields_with_object_status()`` が ``_report_type_candidates()``
+        で先に候補を抽出してからこのメソッドを候補単位で呼ぶため、ここへ渡る
+        引数は候補（``Foo__c`` など、``$`` / ``@`` を含まない通常の
+        オブジェクト名）の形をしている。
         """
         cached_result = self._object_field_results.get(object_name)
         if cached_result is not None:
@@ -523,14 +604,13 @@ class ReportAPI:
             self._object_field_results[object_name] = result
             return result
         except ValueError:
-            # 英数字と ``_`` 以外の文字を含む名前（カスタムレポートタイプの
-            # ``CustomEntity$Foo__c`` など）は HTTP を呼ぶ前に ``ValueError``
-            # で弾かれる。レポート全体として列対応づけが壊れないよう、
-            # HTTP エラーと同じ形に縮退し、同じ正規化経路のキャッシュに乗せる
+            # 英数字と ``_`` 以外の文字を含む名前は ``describe_object()`` の
+            # URL 検証で HTTP を呼ぶ前に ``ValueError`` が返る。レポート全体
+            # として列対応づけが壊れないよう、HTTP エラーと同じ形に縮退し、
+            # 同じ正規化経路のキャッシュに乗せる
             reason = (
-                f"レポートタイプ {object_name} はオブジェクト名として使えない文字"
-                "（$ @ など）を含むため、主オブジェクトを特定できず自動判定できません"
-                "（カスタムレポートタイプなど）。手動で確認してください"
+                f"主オブジェクト {object_name} は英数字と _ 以外の文字を含むため"
+                " Object Describe できず、自動判定できません。手動で確認してください"
             )
             result: tuple[dict[str, list[dict[str, Any]]] | None, str | None] = (None, reason)
             self._object_field_results[object_name] = result
@@ -618,6 +698,18 @@ class ReportAPI:
         `describe()` 結果から読みたいことが多い）では `describe()` を二重に
         呼ばずに済むよう、取得済みの `metadata` を受け取るこちらを公開している。
 
+        主オブジェクトの特定は ``reportType.type`` の値の形によって2通りに
+        分かれる。``$`` / ``@`` を含まない普通の値（標準レポートタイプなど）
+        は従来どおり ``reportType.type`` をそのまま ``_object_field_index()``
+        に渡して Object Describe を試す。``$`` / ``@`` を含む値
+        （カスタムレポートタイプの ``CustomEntity$Foo__c`` /
+        ``Account@Contact`` など）は ``_report_type_candidates()`` で候補を
+        取り出し、先頭から順に ``_object_field_index()`` で試して、最初に
+        通ったものを採用する。全候補が失敗したとき、または候補が空のときは
+        全列を ``(不明)`` ＋理由の備考に縮退し、理由には **元の
+        ``reportType.type`` の値** と試した候補名を入れて「手動で確認
+        してください」と添える。
+
         Args:
             metadata: `describe(report_id)` の戻り値。
 
@@ -635,15 +727,37 @@ class ReportAPI:
         # ここは別系統の権限（オブジェクトへの参照）なので、変換せず
         # SalesforceRequestError のまま伝播させる。
         field_index: dict[str, list[dict[str, Any]]] | None
-        object_error_reason: str | None
+        object_error_reason: str | None = None
         if not object_name:
+            # レポートタイプが空のときは主オブジェクトがそもそも判別できない
             field_index = None
             object_error_reason = (
                 "レポートタイプから主オブジェクトを特定できないため自動判定できません。"
                 "手動で確認してください"
             )
-        else:
+        elif "$" not in object_name and "@" not in object_name:
+            # ``$`` / ``@`` を含まない値は ``_report_type_candidates()`` でも
+            # 候補が1つ（=元の値そのもの）になり、挙動も理由文言も従来と
+            # 完全に同じになるため、特別扱いせず従来のパスを通す
             field_index, object_error_reason = self._object_field_index(object_name)
+        else:
+            candidates = _report_type_candidates(object_name)
+            field_index = None
+            for candidate in candidates:
+                # 401/403 は ``_object_field_index()`` がそのまま送出する
+                # （``_object_field_index`` の既存挙動）。HTTP エラー
+                # （404 等）と ``ValueError``（候補が ``_object_name``
+                # 検証に引っかかる場合）は同じ形式で理由が返るので次候補へ。
+                candidate_index, _ = self._object_field_index(candidate)
+                if candidate_index is not None:
+                    field_index = candidate_index
+                    break
+            if field_index is None:
+                # for ループで break せず field_index が None のまま = 候補が
+                # 空か全候補失敗。元の値と試した候補を理由に含めて縮退する
+                object_error_reason = _report_type_candidates_failure_reason(
+                    object_name, candidates
+                )
 
         rows: list[dict[str, str]] = []
         for column_key in columns:
