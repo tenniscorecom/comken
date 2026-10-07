@@ -9,6 +9,7 @@ import zipfile
 from collections.abc import Sequence
 from pathlib import Path
 
+from comken.core.encoding import CP932
 from comken.core.files.atomic import atomic_write
 from comken.core.timer import measure
 
@@ -122,7 +123,7 @@ def unzip(src: str | Path, dst: str | Path | None = None) -> Path:
     logger.debug("unzip 開始: src=%s, dst=%s", src, dst)
 
     # UTF-8 フラグのないエントリ（Windows 製 zip）にだけ cp932 を適用する。
-    with zipfile.ZipFile(src, metadata_encoding="cp932") as zf:
+    with zipfile.ZipFile(src, metadata_encoding=CP932) as zf:
         zf.extractall(dst)
         entry_count = len(zf.namelist())
     logger.debug("unzip 完了: %d エントリ展開, dst=%s", entry_count, dst)

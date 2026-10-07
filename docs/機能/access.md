@@ -8,7 +8,7 @@ README の「Access」から移した、モジュールを使うときの詳し�
 
 Access がインストールされた Windows PC で、マクロや VBA による整形結果を CSV に出力する。
 数十万件では `rows()` の結果をリスト化せず、Python のメモリを使わない `export_csv()` を使う。
-既定の文字コードは Excel で開きやすい CP932。`utf-8-sig` も指定できる（`utf8-sig` / `utf-8-bom` などの表記ゆれは `normalize_encoding` が吸収する）。
+既定の文字コードは Excel で開きやすい CP932。`utf-8-sig` も指定できる（`utf8-sig` / `utf-8-bom` などの表記ゆれは `comken.core.encoding.normalize_encoding` が吸収する）。
 既定では DB を一時フォルダへコピーして開き、終了時にコピーとロックファイルを削除する。
 NAS・共有フォルダ・クラウド同期フォルダを直接開かないため、速度・排他・破損リスクを抑えられる。
 

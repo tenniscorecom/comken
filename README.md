@@ -97,7 +97,7 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 | `Color` | `from comken.toolbox.excel import Color` | セルの背景色（RGB 16進）。`Sheet.set_background(cell, color)` に渡す | `set_background(cell, Color.RED)` |
 | `FileFormat` | `from comken.toolbox.windows import FileFormat` | Excel COM の別名保存形式 | `save_as(path, file_format=FileFormat.CSV)` |
 
-CSV の `encoding` は **`"cp932"` / `"utf-8-sig"` / `"utf-8"` などの Python の codec 名を文字列で渡す**（`CP932` / `sjis` などの書き方の違いは `normalize_encoding` が吸収する）。省略すれば自動判定。
+CSV の `encoding` は **`"cp932"` / `"utf-8-sig"` / `"utf-8"` などの Python の codec 名を文字列で渡す**（`CP932` / `sjis` などの書き方の違いは `comken.core.encoding.normalize_encoding` が吸収する）。省略すれば自動判定。
 
 ---
 ## 機能の追加・変更の要望

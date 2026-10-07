@@ -32,6 +32,7 @@
 17. 履歴に「取得経路」列を追加
 18. 日付とファイル名まわりで持たないもの・ファイルの分け方
 19. Timer の時間書式を `datetime.strftime` と同じにした（2026-10-07）
+20. 文字コードの名前・別名・コードページ番号を `core/encoding.py` にまとめた（2026-10-07）
 
 ## 1. 設定と非機密情報の扱い
 
@@ -832,3 +833,10 @@ core/dates はファイルに触らない層のまま（dates から files を i
 
 `Timer.time_format` は `datetime.strftime` と同じ書き方にした（`"%H:%M:%S"` など）。
 独自の記号を持たないので覚えることが増えない。24 時間を超えると `%H` は 0 に戻る。
+
+## 20. 文字コードの名前・別名・コードページ番号を `core/encoding.py` にまとめた（2026-10-07）
+
+文字コードの名前・別名・Windows コードページ番号を `comken/core/encoding.py` の1か所にまとめた。
+別名の吸収は Python の `codecs.lookup` に任せ、comken 固有の規則（`shift_jis` を `cp932` に寄せる、
+`utf8-sig` / `utf-8-bom` の2つ）だけを持つ。`code_page()` が Access の `TransferText` に渡す番号を返し、
+`encode.py` と同じ文字列が Access / CSV / Salesforce / 日付データで重複しないようにした。

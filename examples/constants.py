@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 def main() -> None:
     OUTPUT_FOLDER.mkdir(parents=True, exist_ok=True)
     # encoding は文字列で渡す（"utf8-sig" の打ち間違いは normalize_encoding が吸収する）
+    # `normalize_encoding` の正本は `comken.core.encoding` 配下。
     with CSV(CSV_PATH, encoding="utf-8-sig") as csv_file:
         csv_file.replace([{"社員番号": "001", "氏名": "山田"}])
     with CSV(CSV_PATH) as csv_file:

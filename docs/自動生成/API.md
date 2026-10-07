@@ -3817,7 +3817,7 @@ SELECT クエリの結果を読む場合は ``iter_rows()``、CSVへ出す場合
 
 ```text
 @measure
-def export_csv(self, source: str, dst: str | Path, encoding: str='cp932') -> None:
+def export_csv(self, source: str, dst: str | Path, encoding: str=CP932) -> None:
 ```
 
 ##### 説明

@@ -10,9 +10,9 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, Self, cast
 
+from comken.core.encoding import CP932, UTF8, UTF8_SIG, normalize_encoding
 from comken.core.files import atomic_write
 from comken.core.table.model import Table
-from comken.core.text import normalize_encoding
 from comken.core.timer import measure
 from comken.exceptions.files import (
     ComkenFileNotFoundError,
@@ -126,11 +126,11 @@ def _trim_incomplete_multibyte_tail(raw: bytes) -> bytes:
             break
         candidate = raw[: n - trim]
         try:
-            candidate.decode("utf-8")
+            candidate.decode(UTF8)
         except UnicodeDecodeError:
             continue
         try:
-            candidate.decode("cp932")
+            candidate.decode(CP932)
         except UnicodeDecodeError:
             continue
         return candidate
@@ -159,19 +159,19 @@ def _detect_csv_encoding(raw: bytes) -> str | None:
     if not raw:
         return None
     if raw.startswith(b"\xef\xbb\xbf"):
-        return "utf-8-sig"
+        return UTF8_SIG
     # ASCII だけなら UTF-8 / CP932 どちらも復号でき、区別できない。
     # 呼び出し側で新規ファイルと同じ既定（``utf-8-sig``）を選んでもらう。
     if not any(byte > 0x7F for byte in raw):
         return None
     try:
-        raw.decode("utf-8")
-        return "utf-8"
+        raw.decode(UTF8)
+        return UTF8
     except UnicodeDecodeError:
         pass
     try:
-        raw.decode("cp932")
-        return "cp932"
+        raw.decode(CP932)
+        return CP932
     except UnicodeDecodeError:
         return None
 
@@ -216,10 +216,10 @@ def read_text(path: str | Path, *, encoding: str | None = None) -> str:
     if detected is None:
         # 判定不能（空 / 全部 ASCII）: 従来の utf-8-sig → cp932 の順で再試行する。
         # ASCII ファイルでは utf-8-sig が必ず成功する。
-        candidates: tuple[str, ...] = ("utf-8-sig", "cp932")
-    elif detected == "utf-8":
+        candidates: tuple[str, ...] = (UTF8_SIG, CP932)
+    elif detected == UTF8:
         # BOM なし UTF-8。``utf-8-sig`` codec なら BOM が無くても復号できる。
-        candidates = ("utf-8-sig",)
+        candidates = (UTF8_SIG,)
     else:
         # ``utf-8-sig`` (BOM あり) / ``cp932`` の判定結果そのまま。
         candidates = (detected,)
@@ -419,10 +419,10 @@ class CSV:
             detected = _detect_csv_encoding(head)
             if detected is None:
                 # 判定不能（空 / 全部 ASCII）: 既存仕様の utf-8-sig を既定にする。
-                encoding = "utf-8-sig"
-            elif detected == "utf-8":
+                encoding = UTF8_SIG
+            elif detected == UTF8:
                 # BOM なし UTF-8。``utf-8-sig`` codec は BOM が無くても復号できる。
-                encoding = "utf-8-sig"
+                encoding = UTF8_SIG
             else:
                 # ``utf-8-sig`` (BOM あり) / ``cp932`` の判定結果そのまま。
                 encoding = detected
@@ -639,11 +639,11 @@ class CSV:
         if not self.path.exists() or self.path.stat().st_size == 0:
             # 既存ファイルが無い、または中身が無い。判定しようがないので
             # 新規ファイルと同じ既定（``utf-8-sig``）にする。
-            return "utf-8-sig"
+            return UTF8_SIG
         detected = _detect_csv_encoding(self.path.read_bytes())
         # 判定不能（全部 ASCII / どちらも読めない）は既定の ``utf-8-sig`` に
         # フォールバックする。
-        return detected if detected is not None else "utf-8-sig"
+        return detected if detected is not None else UTF8_SIG
 
     def count(self) -> int:
         """データ行数を返す。"""

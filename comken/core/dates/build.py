@@ -46,6 +46,7 @@ import datetime as _dt
 import logging
 from pathlib import Path
 
+from comken.core.encoding import CP932, UTF8_SIG
 from comken.exceptions import HolidayError
 
 logger = logging.getLogger(__name__)
@@ -82,7 +83,7 @@ COMPANY_HOLIDAYS_CSV_PATH: Path = DATA_DIR / "company_calendar.csv"
 
 # 内閣府 CSV を読み取るときの優先エンコーディング（CP932）。
 # 読めなければ UTF-8 BOM 付きにフォールバックする。
-SYUKUJITSU_ENCODINGS: tuple[str, ...] = ("cp932", "utf-8-sig")
+SYUKUJITSU_ENCODINGS: tuple[str, ...] = (CP932, UTF8_SIG)
 
 # company_calendar.csv の列名（Python 実行時と VBA の両方が同じ前提で見る）。
 CSV_HEADER_DATE = "date"
@@ -196,7 +197,7 @@ def write_company_calendar_csv(
     文字コードは **UTF-8 BOM 付き**（Excel・VBA 双方で文字化けしない）、
     改行は **CRLF**。日付順に並べて出力する。
     """
-    with path.open("w", encoding="utf-8-sig", newline="") as file:
+    with path.open("w", encoding=UTF8_SIG, newline="") as file:
         writer = csv.writer(file, lineterminator="\r\n")
         writer.writerow([CSV_HEADER_DATE, CSV_HEADER_NAME])
         for date_, name in rows:

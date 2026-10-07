@@ -39,7 +39,7 @@ from urllib.parse import urlsplit
 
 import requests
 
-from comken.core.text import normalize_encoding
+from comken.core.encoding import normalize_encoding
 from comken.exceptions import BrowserError, LoginFailedError, SalesforceError
 from comken.toolbox.browser import SiteBase
 from comken.toolbox.browser.sites.salesforce.pages.login_page import LoginPage

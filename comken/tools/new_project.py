@@ -22,6 +22,8 @@ import logging
 import shutil
 from pathlib import Path
 
+from comken.core.encoding import CP932, UTF8, UTF8_SIG
+
 logger = logging.getLogger(__name__)
 
 # このファイルは comken/tools/ にあるので、comken パッケージのルートは1つ上。
@@ -105,7 +107,7 @@ def create(project_name: str, into: Path, python_library: Path = IMPORT_ROOT) ->
 
 def _encoding_of(path: Path) -> str:
     """そのファイルの文字コード。bat は cmd.exe に合わせて CP932。"""
-    return "cp932" if path.suffix.lower() == ".bat" else "utf-8"
+    return CP932 if path.suffix.lower() == ".bat" else UTF8
 
 
 def _fill_project_name(target: Path, project_name: str) -> None:
@@ -115,9 +117,9 @@ def _fill_project_name(target: Path, project_name: str) -> None:
         if not path.is_file():
             logger.debug("プロジェクト名差し込みの対象外: %s", path)
             continue
-        text = path.read_text(encoding="utf-8-sig")
+        text = path.read_text(encoding=UTF8_SIG)
         if PLACEHOLDER_NAME in text:
-            path.write_text(text.replace(PLACEHOLDER_NAME, project_name), encoding="utf-8")
+            path.write_text(text.replace(PLACEHOLDER_NAME, project_name), encoding=UTF8)
             logger.debug("プロジェクト名を差し込みました: %s", path)
         else:
             logger.debug("プレースホルダが見つからず差し込みをスキップ: %s", path)
@@ -149,7 +151,7 @@ def _fill_python_library(target: Path, python_library: Path) -> None:
 
 def _strip_template_notes(readme: Path, project_name: str) -> None:
     """README からひな形向けの節を落とし、プロジェクト名を入れる。"""
-    text = readme.read_text(encoding="utf-8-sig")
+    text = readme.read_text(encoding=UTF8_SIG)
     head, separator, _ = text.partition(TEMPLATE_ONLY_HEADING)
     if separator:
         # 節の直前の区切り線（---）も一緒に落とす
@@ -157,4 +159,4 @@ def _strip_template_notes(readme: Path, project_name: str) -> None:
         logger.debug("README からひな形向けの節を落としました: %s", readme)
     else:
         logger.debug("README にひな形向けの節が見つかりません: %s", readme)
-    readme.write_text(head.replace(PLACEHOLDER_NAME, project_name), encoding="utf-8")
+    readme.write_text(head.replace(PLACEHOLDER_NAME, project_name), encoding=UTF8)

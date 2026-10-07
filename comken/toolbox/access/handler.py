@@ -15,9 +15,9 @@ from typing import Any, Self
 import win32com.client
 
 from comken.core.dates import now
+from comken.core.encoding import CP932, code_page
 from comken.core.files.base import FileBase
 from comken.core.table import Table
-from comken.core.text import normalize_encoding
 from comken.core.timer import measure
 from comken.exceptions import AccessError, ComkenFileNotFoundError
 from comken.runtime import dry_run_log, is_dry_run
@@ -28,8 +28,6 @@ ACCESS_EXPORT_DELIMITED = 2
 ACCESS_OPEN_TABLE = 0
 ACCESS_OPEN_QUERY = 1
 DAO_FAIL_ON_ERROR = 128
-CP932_CODE_PAGE = 932
-UTF8_CODE_PAGE = 65001
 ROWS_BATCH_SIZE = 1000
 DEFAULT_BACKUP_DAYS = 7
 BACKUP_DATE_FORMAT = "%Y%m%d_%H%M%S"
@@ -37,10 +35,6 @@ BACKUP_FOLDER_NAME = "backup"
 # read_table() は全件を list にして返すため、この件数を超えるとメモリに厳しい。
 # 大量データは iter_rows() か export_csv() を使うよう、利用者へ知らせる境界。
 _LARGE_TABLE_WARNING_THRESHOLD = 50_000
-_ENCODING_CODE_PAGES = {
-    "cp932": CP932_CODE_PAGE,
-    "utf-8-sig": UTF8_CODE_PAGE,
-}
 
 
 class AccessDatabase(FileBase):
@@ -186,7 +180,7 @@ class AccessDatabase(FileBase):
         self,
         source: str,
         dst: str | Path,
-        encoding: str = "cp932",
+        encoding: str = CP932,
     ) -> None:
         """テーブルまたはクエリを Access から直接 CSV に書き出す。
 
@@ -195,15 +189,7 @@ class AccessDatabase(FileBase):
         ``utf8`` など）は ``cp932`` / ``utf-8-sig`` にそろえる。
         """
         self._ensure_source(source)
-        normalized = normalize_encoding(encoding)
-        try:
-            code_page = _ENCODING_CODE_PAGES[normalized]
-        except KeyError as e:
-            choices = list(_ENCODING_CODE_PAGES)
-            raise ValueError(
-                f"encoding は次から指定してください: {choices}"
-                "\n対処: encoding は cp932（既定）か utf-8-sig を指定してください。"
-            ) from e
+        codepage = code_page(encoding)
         destination = Path(dst)
         if is_dry_run():
             dry_run_log("Access「%s」を CSV に出力: %s", source, destination)
@@ -215,7 +201,7 @@ class AccessDatabase(FileBase):
             str(destination.resolve()),
             True,
             "",
-            code_page,
+            codepage,
         )
 
     def iter_rows(self, source: str) -> Iterator[dict[str, object]]:
