@@ -114,7 +114,7 @@ class TestTimer:
 
     def test_logs_keeps_subsecond_precision(self, caplog, monkeypatch):
         """経過 3.21 秒で既定ログが ``"処理: 3.21秒"`` になることを確認する。"""
-        # 秒未満が切り捨てられないことを示すため、3.21 秒に固定する
+        # 秒未満がそのまま残ることを示すため、3.21 秒に固定する
         clock = iter([0.0, 3.21])
         monkeypatch.setattr(timer_module.time, "perf_counter", lambda: next(clock))
 
@@ -124,10 +124,12 @@ class TestTimer:
         messages = [record.getMessage() for record in caplog.records]
         assert messages == ["処理: 3.21秒"]
 
-    def test_logs_hhmmss_truncates_subsecond(self, caplog, monkeypatch):
-        """``time_format="hh:mm:ss"`` で秒未満が切り捨てられて表示されることを確認する。
+    def test_logs_hhmmss_rounds_subsecond(self, caplog, monkeypatch):
+        """``time_format="hh:mm:ss"`` で秒未満が四捨五入されて表示されることを確認する。
 
-        3661.7 秒 → ``01:01:01``（``.7`` が捨てられる）。
+        3661.7 秒 → ``01:01:02``（``.7`` が ``02`` に丸められる）。
+        整数秒に丸めてから時・分・秒に分解するので、``00:00:60`` の形には
+        ならない（時・分・秒を別々に丸めない）。
         """
         clock = iter([0.0, 3661.7])
         monkeypatch.setattr(timer_module.time, "perf_counter", lambda: next(clock))
@@ -139,13 +141,14 @@ class TestTimer:
             pass
 
         messages = [record.getMessage() for record in caplog.records]
-        assert messages == ["処理: 01:01:01"]
+        assert messages == ["処理: 01:01:02"]
 
-    def test_logs_hhmmss_does_not_round_up_59_6(self, caplog, monkeypatch):
-        """59.6 秒で ``00:00:59`` が出ることを確認する（四捨五入なら ``00:00:60`` になる）。
+    def test_logs_hhmmss_rounds_59_6_up_to_next_minute(self, caplog, monkeypatch):
+        """59.6 秒は ``00:01:00`` に丸められることを確認する（秒未満の四捨五入）。
 
-        旧 ``str.format`` キーでは ``.0f`` が四捨五入のため ``60`` が出ていたが、
-        整数秒への切り捨てに統一したことでこの問題をなくした。
+        旧 ``str.format`` キーでは ``.0f`` が四捨五入のため ``ss`` 部分が
+        ``60`` になっていたが、整数秒に丸めてから時・分・秒に分解するので
+        ``ss`` は ``59`` 以下にしかならない（分への繰り上げで吸収する）。
         """
         clock = iter([0.0, 59.6])
         monkeypatch.setattr(timer_module.time, "perf_counter", lambda: next(clock))
@@ -157,7 +160,7 @@ class TestTimer:
             pass
 
         messages = [record.getMessage() for record in caplog.records]
-        assert messages == ["処理: 00:00:59"]
+        assert messages == ["処理: 00:01:00"]
 
     def test_logs_hhmmss_uppercase_works_too(self, caplog, monkeypatch):
         """大文字の ``HH:MM:SS`` でも同じ結果になることを確認する（大文字小文字を区別しない）。"""
@@ -171,7 +174,7 @@ class TestTimer:
             pass
 
         messages = [record.getMessage() for record in caplog.records]
-        assert messages == ["処理: 01:01:01"]
+        assert messages == ["処理: 01:01:02"]
 
     def test_logs_hh_keeps_extra_digits_for_over_100_hours(self, caplog, monkeypatch):
         """100 時間を超えても ``hh`` が桁増えするだけで繰り上げないことを確認する。"""
@@ -214,16 +217,28 @@ class TestTimer:
         [
             (0, "00:00:00"),
             (59, "00:00:59"),
-            (59.9, "00:00:59"),  # 秒未満は切り捨て
+            (59.4, "00:00:59"),  # 秒未満は四捨五入（.4 は捨て）
+            (59.6, "00:01:00"),  # .6 で分へ繰り上げ（ss 60 にはしない）
+            (59.9, "00:01:00"),  # .9 で分へ繰り上げ
             (60, "00:01:00"),
             (3661, "01:01:01"),
-            (3661.7, "01:01:01"),  # 秒未満を切り捨て
+            (3661.7, "01:01:02"),  # 秒未満を四捨五入
             (86400 + 90, "24:01:30"),
             (100 * 3600, "100:00:00"),  # 100 時間を超えても時は桁が増えるだけ
+            # 0.5 秒は 1 秒側に丸める（偶数丸めでは 0 になる値の代表）。
+            (0.5, "00:00:01"),
+            (2.5, "00:00:03"),  # round() 偶数丸めなら 00:00:02 になるところで 03
+            (3599.5, "01:00:00"),  # round() 偶数丸めなら 00:59:59 になるところで 01:00:00
         ],
     )
     def test_format_elapsed_hhmmss(self, seconds, expected):
-        """``_format_elapsed`` が ``hh:mm:ss`` 書式（切り捨て）で正しく整形することを確認する。"""
+        """``_format_elapsed`` が ``hh:mm:ss`` 書式（四捨五入）で正しく整形することを確認する。
+
+        整数秒に四捨五入してから時・分・秒に分解するので、``ss`` 部分が
+        ``60`` になる値は出ない（分への繰り上げで吸収する）。 ``0.5`` と
+        ``2.5`` と ``3599.5`` は偶数丸め（``round()``）と結果が分かれる値で、
+        ここで実装が ``int(seconds + 0.5)`` であることを保証する。
+        """
         assert timer_module._format_elapsed(seconds, "hh:mm:ss") == expected
 
     def test_format_elapsed_default(self):
@@ -232,22 +247,35 @@ class TestTimer:
 
     def test_format_elapsed_uppercase(self):
         """``_format_elapsed`` が大文字の ``HH:MM:SS`` でも同じ結果になることを確認する。"""
-        assert timer_module._format_elapsed(3661.7, "HH:MM:SS") == "01:01:01"
+        assert timer_module._format_elapsed(3661.7, "HH:MM:SS") == "01:01:02"
 
     @pytest.mark.parametrize(
         ("seconds", "expected"),
         [
             (0, (0, 0, 0)),
             (59, (0, 0, 59)),
-            (59.9, (0, 0, 59)),  # 秒未満は切り捨て
+            (59.4, (0, 0, 59)),  # 秒未満は四捨五入（.4 は捨て）
+            (59.6, (0, 1, 0)),  # .6 で分へ繰り上げ（ss 60 にはしない）
+            (59.9, (0, 1, 0)),  # .9 で分へ繰り上げ
             (60, (0, 1, 0)),
-            (3661.7, (1, 1, 1)),  # 3661.7 → (1h, 1m, 1s)。.7 は捨てられる
+            (3661.7, (1, 1, 2)),  # 3661.7 → (1h, 1m, 2s)。.7 が 02 に丸められる
             (86400 + 90, (24, 1, 30)),
             (100 * 3600, (100, 0, 0)),  # 100 時間を超えても時は桁が増えるだけ
+            # 0.5 秒は 1 秒側に丸める（偶数丸めでは 0 になる値の代表）。
+            (0.5, (0, 0, 1)),
+            (2.5, (0, 0, 3)),  # round() 偶数丸めなら (0, 0, 2) になるところで (0, 0, 3)
+            (3599.5, (1, 0, 0)),  # round() 偶数丸めなら (0, 59, 59) になるところで (1, 0, 0)
         ],
     )
     def test_split_seconds(self, seconds, expected):
-        """``_split_seconds`` が経過秒数を ``(時, 分, 秒)`` の int に分解することを確認する。"""
+        """``_split_seconds`` が経過秒数を ``(時, 分, 秒)`` の int に分解することを確認する。
+
+        整数秒に四捨五入（``int(seconds + 0.5)``、0.5 は切り上げ）してから
+        時・分・秒に分解する。 ``59.9`` のように秒未満で ``60`` をまたぐ値は
+        分への繰り上げで吸収する（``ss`` が ``60`` になることはない）。
+        ``0.5`` / ``2.5`` / ``3599.5`` は偶数丸め（``round()``）と結果が
+        分かれる値で、ここで実装が ``int(seconds + 0.5)`` であることを保証する。
+        """
         assert timer_module._split_seconds(seconds) == expected
 
     @pytest.mark.parametrize(
