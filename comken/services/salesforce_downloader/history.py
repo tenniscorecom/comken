@@ -94,6 +94,7 @@ ROUTE_BROWSER_FALLBACK_TRUNCATED = "ブラウザ（自動切替：2000件超）"
 ROUTE_BROWSER_FALLBACK_EMPTY = "ブラウザ（自動切替：0件）"
 
 _TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
+_DATE_FORMAT = "%Y-%m-%d"
 
 
 @dataclass(frozen=True)
@@ -165,7 +166,7 @@ def successful_files_today(
     """
     _ = trigger  # 旧コードでは履歴の「実行方式」列を見ていたが、列を廃止したので未使用
     history_path = Path(path)
-    target = (date or today()).strftime("%Y-%m-%d")
+    target = (date or today()).strftime(_DATE_FORMAT)
     key_text = str(report_key)
     if not history_path.is_file():
         logger.debug("履歴ファイル無し: path=%s, 件数=0", history_path)
@@ -218,7 +219,7 @@ def schedule_succeeded_today(
         当日に ``schedule_key`` で成功した履歴があれば True。
     """
     history_path = Path(path)
-    target = (date or today()).strftime("%Y-%m-%d")
+    target = (date or today()).strftime(_DATE_FORMAT)
     key_text = str(schedule_key)
     if not history_path.is_file():
         logger.debug("履歴ファイル無し: path=%s, schedule_key=%s → False", history_path, key_text)
@@ -605,7 +606,7 @@ def append_history(
         values: ``COLUMNS`` の列名をキーにした ``Mapping``。例::
 
             {
-                "実行日時": now().strftime("%Y-%m-%d %H:%M:%S"),
+                "実行日時": now().strftime(_TIMESTAMP_FORMAT),
                 "管理番号": entry.key,
                 "スケジュールキー": row.schedule_key,
                 "概要": entry.summary,
