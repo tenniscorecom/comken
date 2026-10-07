@@ -9,10 +9,10 @@ with とデコレータの両方で使える。結果は logging に出る。
 # 定義中の Timer を戻り値の型注釈に使うため、注釈の評価を遅延する。
 from __future__ import annotations
 
+import datetime
 import functools
 import inspect
 import logging
-import re
 import time
 from collections.abc import Callable
 from types import TracebackType
@@ -43,57 +43,28 @@ _TIME_FORMAT: str | None = None
 # ``time_format=None`` のときに適用する既定の表示。 ``str.format`` で
 # 経過秒数を小数2桁で出す。 ``{total_seconds}`` のキーは外部仕様ではなく
 # 内部実装（``_format_elapsed`` の第2分岐）にだけ存在するため、利用側は
-#  ``time_format=None`` と ``time_format="hh:mm:ss"`` を切り替えれば十分。
+# ``time_format=None`` と ``time_format="%H:%M:%S"`` を切り替えれば十分。
 _DEFAULT_FORMAT_ELAPSED = "{total_seconds:.2f}秒"
-
-# ``hh`` / ``mm`` / ``ss`` の3つだけを許す ``time_format`` のパターン。
-# 大文字小文字は区別しない（re.IGNORECASE）。
-# 一致した ``hh`` / ``mm`` / ``ss`` は、その位置の前後を残したまま
-# 経過時・分・秒に置き換える（str.format のキーではないので、``hh:mm:ss``
-# のような固定文字列にそのまま埋め込める）。
-_TIME_PLACEHOLDER_RE = re.compile("hh|mm|ss", re.IGNORECASE)
-
-
-def _split_seconds(seconds: float) -> tuple[int, int, int]:
-    """経過秒数を ``(時, 分, 秒)`` に分解する（すべて整数）。
-
-    経過秒は **整数秒に四捨五入（0.5 は切り上げ）**してから時・分・秒に
-    分解する。 ``int(seconds + 0.5)`` の形で丸めるので、Python の
-    ``round()``（偶数丸め）とは違う（0.5 秒 → ``01``、1.5 秒 → ``02``、
-    2.5 秒 → ``03``）。 整数秒に丸めてから分解するので、59.6 秒のような
-    秒未満の秒だけ後の値でも ``hh:mm:ss`` の秒が ``60`` になる事故は
-    出ない（時・分・秒を別々に丸めない）。
-
-    ``hours`` は 24 を超えても繰り上げない（``hh`` 部分の桁が増えるだけ）。
-
-    ``time_format`` の ``hh`` / ``mm`` / ``ss`` 置換で直接使う値。
-    """
-    total = int(seconds + 0.5)
-    hours, remainder = divmod(total, 3600)
-    minutes, secs = divmod(remainder, 60)
-    return hours, minutes, secs
 
 
 def _format_elapsed(seconds: float, time_format: str | None) -> str:
     """経過秒数を ``time_format`` で文字列にする。
 
     ``time_format`` が ``None`` のときは ``_DEFAULT_FORMAT_ELAPSED``
-    （小数2桁＋「秒」）で返す。文字列のときはその中の ``hh`` / ``mm`` / ``ss``
-    （大文字小文字区別なし）を経過時・分・秒に置き換え、それ以外はそのまま返す。
-    ``hh`` / ``mm`` / ``ss`` のいずれも含まれない文字列は、
-    ``time_format`` が無視される事故を防ぐため ``__init__`` で ``ValueError``
-    にしてある（この関数が直接呼ばれる場合は呼び出し側の責務）。
+    （小数2桁＋「秒」）で返す。文字列のときは ``datetime.time`` に詰めて
+    ``time.strftime`` と同じ書き方で整形する（``"%H:%M:%S"`` / ``"%M分%S秒"``
+    など）。経過秒は整数秒に四捨五入（0.5 は切り上げ、``int(seconds + 0.5)``）
+    してから時・分・秒に分解するので、秒未満で分が繰り上がる事故は出ない。
+    ``datetime.time`` を使うため 24 時間を超えると ``%H`` は 0 に戻る
+    （``strftime`` と同じ挙動）。
     """
     if time_format is None:
         # ``_TIME_FORMAT`` の既定値。``{total_seconds:.2f}秒`` の形にする。
         return _DEFAULT_FORMAT_ELAPSED.format(total_seconds=seconds)
-    hours, minutes, secs = _split_seconds(seconds)
-    return _TIME_PLACEHOLDER_RE.sub(
-        lambda m: {"hh": f"{hours:02d}", "mm": f"{minutes:02d}", "ss": f"{secs:02d}"}[
-            m.group(0).lower()
-        ],
-        time_format,
-    )
+    total = int(seconds + 0.5)
+    hours, remainder = divmod(total, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return datetime.time(hour=hours % 24, minute=minutes, second=secs).strftime(time_format)
 
 
 class Timer:
@@ -121,44 +92,36 @@ class Timer:
 
                     "{name} -> {elapsed}"
 
-            time_format: 経過時間の整形書式。
+            time_format: 経過時間の整形書式。 ``datetime.strftime`` と
+                **同じ書き方**で指定する（独自記号は持たない）。
 
                 - ``None``（既定）: 小数2桁＋「秒」（例 ``"3.21秒"``）
-                - 文字列: その中の ``hh`` / ``mm`` / ``ss`` を経過時間で
-                  置き換える。大文字小文字は区別しない（``HH:MM:SS`` も同じ）。
+                - 文字列: 経過秒を **整数秒に四捨五入（0.5 は切り上げ、
+                  ``int(seconds + 0.5)``）** してから ``datetime.time`` に
+                  詰め、 ``time.strftime(time_format)`` の結果を返す。
+                  ``round()``（偶数丸め）とは違うため、0.5 秒 → ``01``、
+                  1.5 秒 → ``02``、2.5 秒 → ``03`` のように丸める。
+                  秒未満は捨てて整数秒にするため、``%f`` は ``000000`` 固定。
 
-                  経過秒は **整数秒に四捨五入（0.5 は切り上げ）**してから
-                  時・分・秒に分解する。 ``int(seconds + 0.5)`` の形で丸めるので
-                  Python の ``round()``（偶数丸め）とは違う（0.5 秒 → ``01``、
-                  1.5 秒 → ``02``、2.5 秒 → ``03``）。 整数秒に丸めてから分解するので、
-                  秒未満の値（59.6 秒など）が ``hh:mm:ss`` の ``ss`` を ``60``
-                  に進める事故は出ない。
-
-                  - ``hh`` = 時（24 を超えても繰り上げない。100 時間超なら
-                    桁が増える）
-                  - ``mm`` = 時を引いた残りの分
-                  - ``ss`` = 分を引いた残りの秒
-
-                  それぞれ2桁ゼロ埋め。
+                  ``datetime.time`` の制約で 24 時間を超えると ``%H`` は 0 に戻る
+                  （``strftime`` と同じ挙動。仕様として受け入れる）。
 
                   例::
 
-                      "hh:mm:ss"        # → "01:02:05"
-                      "HH:MM:SS"        # 大文字小文字どちらでも同じ
-                      "mm分ss秒"        # 3725 秒 → "02分05秒"（mm は時を引いた残り）
-                      "hh時間mm分ss秒"
+                      "%H:%M:%S"        # → "01:02:05"
+                      "%M分%S秒"        # 3725 秒 → "02分05秒"
+                      "%I:%M %p"        # strftime の他の記号もそのまま使える
+                      "%H%%"            # "%" を文字として出力
 
-                ``hh`` / ``mm`` / ``ss`` の **どれも** 含まない文字列は
-                ``ValueError`` にする（``hh`` なしの ``"h:m:s"`` や
-                ``"{hours:02d}"`` のような旧 ``str.format`` キーが来ても、
+                ``%`` を **1つも** 含まない文字列は ``__init__`` で
+                ``ValueError`` にする（``"abc"`` のように ``%`` が無いと
+                strftime では何も置き換わらずそのまま出てしまうので、
                 黙って意味の違う表示にしないため）。
-
-                ``{elapsed}`` の中身はこの ``time_format`` で決まる。
         """
-        if time_format is not None and not _TIME_PLACEHOLDER_RE.search(time_format):
+        if time_format is not None and "%" not in time_format:
             raise ValueError(
-                "time_format には hh / mm / ss のいずれかを含めてください。"
-                ' 例: "hh:mm:ss"、"mm分ss秒"。'
+                "time_format には %H:%M:%S のように strftime の書き方で指定してください。"
+                ' 例: "%H:%M:%S"、"%M分%S秒"。'
                 f" 受け取った書式: {time_format!r}"
             )
         self._name = name
