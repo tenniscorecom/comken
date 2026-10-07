@@ -8,7 +8,7 @@ import codecs
 
 import pytest
 
-from comken.core.encoding import CP932, UTF8, UTF8_SIG, code_page, normalize_encoding
+from comken.core.encoding import CP932, UTF8, UTF8_SIG, charset_name, code_page, normalize_encoding
 
 
 class TestNormalizeEncoding:
@@ -122,3 +122,64 @@ class TestCodePage:
         """``euc-jp`` は ``code_page`` の表に無く ``ValueError``。"""
         with pytest.raises(ValueError, match="次から指定してください"):
             code_page("euc-jp")
+
+
+class TestCharsetName:
+    """``charset_name``（Web 側に渡す文字コード名）のテスト。"""
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            # CP932 系: Salesforce は ``Shift_JIS`` を受け付ける
+            ("cp932", "Shift_JIS"),
+            ("sjis", "Shift_JIS"),
+            ("Shift_JIS", "Shift_JIS"),
+            ("shift-jis", "Shift_JIS"),
+            ("shiftjis", "Shift_JIS"),
+            ("windows-31j", "Shift_JIS"),
+            # UTF-8 系: 表にヒットすれば ``UTF-8`` にそろえる
+            ("utf-8", "UTF-8"),
+            ("UTF8", "UTF-8"),
+            ("utf-8-sig", "UTF-8"),
+            ("utf8-sig", "UTF-8"),
+            # 表にない有効な名前は渡した文字列をそのまま返す
+            # （Salesforce が受け付ける名前を comken が全部は知らないため）
+            ("ISO-8859-1", "ISO-8859-1"),
+            ("euc-jp", "euc-jp"),
+            ("latin-1", "latin-1"),
+        ],
+    )
+    def test_known_aliases_map_to_web_charset(self, raw: str, expected: str) -> None:
+        """表にヒットする名前は Web 側の名前にそろえ、ヒットしなければそのまま返す。"""
+        assert charset_name(raw) == expected
+
+    @pytest.mark.parametrize("raw", ["foo", "auto", ""])
+    def test_unknown_name_raises_value_error(self, raw: str) -> None:
+        """``normalize_encoding`` が ``ValueError`` にする名前はそのまま通す。"""
+        with pytest.raises(ValueError, match="未知の文字コード名"):
+            charset_name(raw)
+
+    def test_breaks_when_cp932_is_removed_from_table(self) -> None:
+        """``_CHARSET_NAMES`` から ``CP932: "Shift_JIS"`` を消すと、``cp932`` が
+        そのまま返る（= 表の効果を確かめる）。"""
+        from comken.core import encoding as encoding_module
+
+        original_table = dict(encoding_module._CHARSET_NAMES)
+        try:
+            encoding_module._CHARSET_NAMES = {k: v for k, v in original_table.items() if k != CP932}
+            assert charset_name("cp932") == "cp932"
+        finally:
+            encoding_module._CHARSET_NAMES = original_table
+
+    def test_returns_user_string_when_table_misses(self) -> None:
+        """表を空にした状態で、未知の名前はそのまま返る（= 表を引かない時の挙動）。"""
+        from comken.core import encoding as encoding_module
+
+        original_table = dict(encoding_module._CHARSET_NAMES)
+        try:
+            encoding_module._CHARSET_NAMES = {}
+            # 有効だが表にない名前はそのまま返る
+            assert charset_name("cp932") == "cp932"
+            assert charset_name("utf-8") == "utf-8"
+        finally:
+            encoding_module._CHARSET_NAMES = original_table

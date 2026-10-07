@@ -840,3 +840,10 @@ core/dates はファイルに触らない層のまま（dates から files を i
 別名の吸収は Python の `codecs.lookup` に任せ、comken 固有の規則（`shift_jis` を `cp932` に寄せる、
 `utf8-sig` / `utf-8-bom` の2つ）だけを持つ。`code_page()` が Access の `TransferText` に渡す番号を返し、
 `encode.py` と同じ文字列が Access / CSV / Salesforce / 日付データで重複しないようにした。
+
+Salesforce に渡す名前（`Shift_JIS` / `UTF-8`）も `charset_name()` で作る。Salesforce の
+画面エクスポート機能（`?export=1&xf=csv&enc=...`）は `cp932` のような codec 名を
+そのままでは受け付けないため、ユーザーが `cp932` と書けば内部で `Shift_JIS` に
+そろえて Salesforce へ送る。使う場所ごとに表記が違う問題を呼ぶ側が意識しなくて
+済むようにするためで、Access の `code_page()` と同じ「文字コード名 → 受け側ごとの
+形」の責務を `core/encoding.py` に閉じ込めた。

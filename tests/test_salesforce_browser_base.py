@@ -693,6 +693,102 @@ class TestExportReports:
             sf.session._driver.get_cookies.return_value = []
             list(sf.export_reports({REPORT_URL_1: tmp_path / "report.csv"}))
 
+    def test_default_encoding_sends_shift_jis_to_salesforce(self, monkeypatch, tmp_path):
+        """引数なし（既定 ``cp932``）で ``enc=Shift_JIS`` が Salesforce へ送られる。"""
+        _patch_browser(monkeypatch)
+        http_session = MagicMock()
+        http_session.get.return_value = _csv_response()
+        with (
+            SalesforceReportBrowser() as sf,
+            patch(
+                "comken.toolbox.browser.sites.salesforce.base.requests.Session",
+                return_value=http_session,
+            ),
+        ):
+            sf.session._driver.current_url = REPORT_URL_1
+            sf.session._driver.get_cookies.return_value = []
+            list(sf.export_reports({REPORT_URL_1: tmp_path / "report.csv"}))
+
+        # 1回以上呼ばれていて、その中の enc は "Shift_JIS"
+        assert http_session.get.call_count >= 1
+        params = http_session.get.call_args.kwargs["params"]
+        assert params["enc"] == "Shift_JIS"
+
+    @pytest.mark.parametrize(
+        ("encoding_arg", "expected_enc"),
+        [
+            ("cp932", "Shift_JIS"),
+            ("UTF-8", "UTF-8"),
+            ("utf-8", "UTF-8"),
+            ("ISO-8859-1", "ISO-8859-1"),
+            ("euc-jp", "euc-jp"),
+        ],
+    )
+    def test_salesforce_enc_param_is_charset_name(
+        self, monkeypatch, tmp_path, encoding_arg: str, expected_enc: str
+    ):
+        """``encoding=`` 引数の表記ゆれを ``charset_name()`` で吸収して Salesforce に送る。
+
+        表にヒットする ``cp932`` / ``UTF-8`` は Web 側の名前にそろい、表にない
+        ``ISO-8859-1`` / ``euc-jp`` は渡した文字列のまま送られる。
+        """
+        _patch_browser(monkeypatch)
+        http_session = MagicMock()
+        http_session.get.return_value = _csv_response()
+        with (
+            SalesforceReportBrowser() as sf,
+            patch(
+                "comken.toolbox.browser.sites.salesforce.base.requests.Session",
+                return_value=http_session,
+            ),
+        ):
+            sf.session._driver.current_url = REPORT_URL_1
+            sf.session._driver.get_cookies.return_value = []
+            list(
+                sf.export_reports(
+                    {REPORT_URL_1: tmp_path / "report.csv"},
+                    encoding=encoding_arg,
+                )
+            )
+
+        params = http_session.get.call_args.kwargs["params"]
+        assert params["enc"] == expected_enc
+
+    def test_break_when_charset_name_table_misses_cp932(self, monkeypatch, tmp_path):
+        """``_CHARSET_NAMES`` から ``CP932: "Shift_JIS"`` を消したら
+        既定 ``encoding=cp932`` で Salesforce へ ``enc="cp932"`` がそのまま
+        送られる（= 表の効果が効いていることの確認）。
+
+        正しい実装（表に ``CP932: "Shift_JIS"`` がある）では ``enc="Shift_JIS"`` なので、
+        ここで表を消した状態の ``enc="cp932"`` を assert することで、表が正しく
+        引かれていることを保証する。"""
+        from comken.core import encoding as encoding_module
+
+        _patch_browser(monkeypatch)
+        http_session = MagicMock()
+        http_session.get.return_value = _csv_response()
+        original_table = dict(encoding_module._CHARSET_NAMES)
+        try:
+            encoding_module._CHARSET_NAMES = {
+                k: v for k, v in original_table.items() if k != "cp932"
+            }
+            with (
+                SalesforceReportBrowser() as sf,
+                patch(
+                    "comken.toolbox.browser.sites.salesforce.base.requests.Session",
+                    return_value=http_session,
+                ),
+            ):
+                sf.session._driver.current_url = REPORT_URL_1
+                sf.session._driver.get_cookies.return_value = []
+                list(sf.export_reports({REPORT_URL_1: tmp_path / "report.csv"}))
+        finally:
+            encoding_module._CHARSET_NAMES = original_table
+
+        # 表から cp932 を消したので Salesforce には "cp932" がそのまま送られる
+        params = http_session.get.call_args.kwargs["params"]
+        assert params["enc"] == "cp932"
+
     def test_raises_when_not_started(self):
         sf = SalesforceReportBrowser()
 

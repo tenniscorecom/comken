@@ -271,6 +271,14 @@ CSV の出力には、Salesforce がデータ末尾に空行を挟んで著作�
 取り除いて保存する。`comken.toolbox.csv.CSV` でそのまま読める形にしておきたい
 ための処理。Excel 形式（`export_format="xls"`）など CSV 以外のときは中身を変えない。
 
+`export_reports()` の `encoding` 引数の既定は `cp932`。Salesforce 側に送る
+`enc` パラメータは内部で `charset_name()` が Salesforce が受け付ける名前
+（`Shift_JIS` / `UTF-8`）にそろえるため、ユーザーは `cp932` と書くだけで
+Salesforce には `Shift_JIS` が送られる。`UTF-8` や `sjis` のような表記も
+そのまま使える。`comken/core/encoding.py` の `charset_name()` がこの変換を
+担っており、表にない名前（例: `ISO-8859-1`）は渡した文字列のまま Salesforce
+へ送られる。
+
 ```python
 from comken.toolbox.browser.sites.salesforce import site_for
 

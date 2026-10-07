@@ -6301,7 +6301,7 @@ Raises:
 #### `export_reports`
 
 ```text
-def export_reports(self, reports: Mapping[str, str | Path], *, export_format: str='csv', encoding: str='Shift_JIS', max_workers: int=_DEFAULT_MAX_WORKERS, keep_alive_report_id: str | None=None, keep_alive_interval: float=_DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS) -> Iterator[tuple[str, Path]]:
+def export_reports(self, reports: Mapping[str, str | Path], *, export_format: str='csv', encoding: str=CP932, max_workers: int=_DEFAULT_MAX_WORKERS, keep_alive_report_id: str | None=None, keep_alive_interval: float=_DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS) -> Iterator[tuple[str, Path]]:
 ```
 
 ##### 説明
@@ -6329,9 +6329,12 @@ Args:
         の対応表。保存先の親フォルダが無ければ作成する。
     export_format: "csv" または "xls"。保存先のファイル名の拡張子とは
         無関係（Salesforceに実際に何形式で吐かせるかだけを決める）。
-    encoding: エクスポートする文字コード。既定は ``Shift_JIS``（CP932相当）。
-        Excel・社内システムでの扱いやすさを優先している。UTF-8で欲しい
-        場合は ``"UTF-8"`` を渡す。
+    encoding: エクスポートする文字コード。既定は ``cp932``。表記ゆれ
+        （``Shift_JIS`` / ``sjis`` / ``utf-8`` など）は内部で吸収する。
+        Salesforce に送る ``enc`` パラメータの名前は ``charset_name()``
+        で自動生成するため、ユーザーは ``cp932`` と書くだけで ``Shift_JIS``
+        が送られる。Excel・社内システムでの扱いやすさを優先している。
+        UTF-8で欲しい場合は ``"UTF-8"`` を渡す。
     max_workers: 同時に投げるリクエストの数。既定10。
     keep_alive_report_id: ダウンロード中、この間隔でブラウザに開かせ続ける
         軽いレポートのID（例: 0件のレポート）。ドメインは今のセッションの
@@ -6469,7 +6472,7 @@ Raises:
 #### `export_reports`
 
 ```text
-def export_reports(self, reports: Mapping[str, str | Path], *, export_format: str='csv', encoding: str='Shift_JIS', max_workers: int=_DEFAULT_MAX_WORKERS, keep_alive_report_id: str | None=None, keep_alive_interval: float=_DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS) -> Iterator[tuple[str, Path]]:
+def export_reports(self, reports: Mapping[str, str | Path], *, export_format: str='csv', encoding: str=CP932, max_workers: int=_DEFAULT_MAX_WORKERS, keep_alive_report_id: str | None=None, keep_alive_interval: float=_DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS) -> Iterator[tuple[str, Path]]:
 ```
 
 ##### 説明
@@ -6497,9 +6500,12 @@ Args:
         の対応表。保存先の親フォルダが無ければ作成する。
     export_format: "csv" または "xls"。保存先のファイル名の拡張子とは
         無関係（Salesforceに実際に何形式で吐かせるかだけを決める）。
-    encoding: エクスポートする文字コード。既定は ``Shift_JIS``（CP932相当）。
-        Excel・社内システムでの扱いやすさを優先している。UTF-8で欲しい
-        場合は ``"UTF-8"`` を渡す。
+    encoding: エクスポートする文字コード。既定は ``cp932``。表記ゆれ
+        （``Shift_JIS`` / ``sjis`` / ``utf-8`` など）は内部で吸収する。
+        Salesforce に送る ``enc`` パラメータの名前は ``charset_name()``
+        で自動生成するため、ユーザーは ``cp932`` と書くだけで ``Shift_JIS``
+        が送られる。Excel・社内システムでの扱いやすさを優先している。
+        UTF-8で欲しい場合は ``"UTF-8"`` を渡す。
     max_workers: 同時に投げるリクエストの数。既定10。
     keep_alive_report_id: ダウンロード中、この間隔でブラウザに開かせ続ける
         軽いレポートのID（例: 0件のレポート）。ドメインは今のセッションの
@@ -6705,7 +6711,7 @@ Raises:
 #### `export_reports`
 
 ```text
-def export_reports(self, reports: Mapping[str, str | Path], *, export_format: str='csv', encoding: str='Shift_JIS', max_workers: int=_DEFAULT_MAX_WORKERS, keep_alive_report_id: str | None=None, keep_alive_interval: float=_DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS) -> Iterator[tuple[str, Path]]:
+def export_reports(self, reports: Mapping[str, str | Path], *, export_format: str='csv', encoding: str=CP932, max_workers: int=_DEFAULT_MAX_WORKERS, keep_alive_report_id: str | None=None, keep_alive_interval: float=_DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS) -> Iterator[tuple[str, Path]]:
 ```
 
 ##### 説明
@@ -6733,9 +6739,12 @@ Args:
         の対応表。保存先の親フォルダが無ければ作成する。
     export_format: "csv" または "xls"。保存先のファイル名の拡張子とは
         無関係（Salesforceに実際に何形式で吐かせるかだけを決める）。
-    encoding: エクスポートする文字コード。既定は ``Shift_JIS``（CP932相当）。
-        Excel・社内システムでの扱いやすさを優先している。UTF-8で欲しい
-        場合は ``"UTF-8"`` を渡す。
+    encoding: エクスポートする文字コード。既定は ``cp932``。表記ゆれ
+        （``Shift_JIS`` / ``sjis`` / ``utf-8`` など）は内部で吸収する。
+        Salesforce に送る ``enc`` パラメータの名前は ``charset_name()``
+        で自動生成するため、ユーザーは ``cp932`` と書くだけで ``Shift_JIS``
+        が送られる。Excel・社内システムでの扱いやすさを優先している。
+        UTF-8で欲しい場合は ``"UTF-8"`` を渡す。
     max_workers: 同時に投げるリクエストの数。既定10。
     keep_alive_report_id: ダウンロード中、この間隔でブラウザに開かせ続ける
         軽いレポートのID（例: 0件のレポート）。ドメインは今のセッションの
