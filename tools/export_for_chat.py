@@ -20,6 +20,7 @@
 
 import argparse
 import ast
+import fnmatch
 import inspect
 import shutil
 import sys
@@ -65,6 +66,27 @@ EXCLUDED_DIR_NAMES = frozenset(
 
 # .py 連結時に「ディレクトリ名 + .egg-info で終わるもの」を除外する接尾辞
 _EXCLUDED_DIR_SUFFIXES = (".egg-info",)
+
+# 新規プロジェクトのひな形（comken/templates/新規プロジェクト/）を読み込むときに
+# 除外するもの。``comken/tools/new_project.py`` の ``IGNORED`` と同じ意図だが、
+# ``shutil.ignore_patterns`` の戻り値（callable）は直接共有できないので、ここで
+# 同じパターン集合を別の形で持つ。意味が変わったら両方直す。
+#   - ディレクトリの名前は ``EXCLUDED_DIR_NAMES`` に追加する形でも除外できる
+#     （.ruff_cache, __pycache__ は既に含まれている）
+#   - ``typings`` / ``logs`` はここでは追加していないので ``_TEMPLATE_EXCLUDED_DIRS`` に置く
+#   - ``config.ini``（テンプレートの本物。``config.ini.example`` は残す）はファイル名一致
+#   - ``*.pyc`` は拡張子
+TEMPLATE_DIR = PACKAGE_ROOT / "templates" / "新規プロジェクト"
+_TEMPLATE_EXCLUDED_DIRS = frozenset(
+    {
+        "typings",
+        "logs",
+    }
+)
+_TEMPLATE_EXCLUDED_FILE_PATTERNS = (
+    "config.ini",
+    "*.pyc",
+)
 
 
 @dataclass(frozen=True)
@@ -476,6 +498,69 @@ def _collect_python_files(package_root: Path) -> list[Path]:
     return files
 
 
+def _detect_encoding_and_text(path: Path) -> tuple[str, str, str]:
+    """ファイルを読み込み、(エンコーディング名, 改行, 本文 \n 揃え) を返す。
+
+    1. ``utf-8-sig``（BOM 付き UTF-8 を含む）で読み、失敗したら
+    2. ``cp932`` で読む（``実行.bat`` など cmd.exe 向けファイル用）。
+       ``.bat`` は cp932 前提だが、UTF-8 で読めないことが cp932 判定の根拠なので、
+       拡張子による分岐は持たない。
+
+    改行は本文中の ``\\r\\n`` の有無で判定する。判定結果はヘッダへ載せるだけで、
+    本文は読み込み直後に ``\\n`` へ正規化する（``_split`` の行判定と揃えるため）。
+
+    読めないファイルは黙って飛ばさず例外を投げる（``comken/tools/new_project.py``
+    のように「壊れたひな形をそっと流す」と、後段の外部 AI が壊れたファイルだけ
+    落とす事故になる）。
+    """
+    data = path.read_bytes()
+    try:
+        text = data.decode("utf-8-sig")
+        encoding = "utf-8"
+    except UnicodeDecodeError:
+        try:
+            text = data.decode("cp932")
+            encoding = "cp932"
+        except UnicodeDecodeError as exc:
+            raise ValueError(f"{path} を UTF-8 / cp932 どちらでも読めません: {exc}") from exc
+    line_ending = "CRLF" if "\r\n" in text else "LF"
+    return encoding, line_ending, text.replace("\r\n", "\n")
+
+
+def _is_template_excluded(path: Path, template_root: Path) -> bool:
+    """``comken/templates/新規プロジェクト/`` 配下で、資料に載せないものかを返す。
+
+    ``EXCLUDED_DIR_NAMES`` のディレクトリ・``.ruff_cache``/``__pycache__`` 等の
+    開発ツール由来・``config.ini``（本物。example は残す）・``*.pyc`` を除く。
+    バイナリは拡張子で機械的に判定できないので、ここでは除外しない（読めなければ
+    ``_detect_encoding_and_text`` で例外にする）。
+    """
+    parts = path.relative_to(template_root).parts
+    for part in parts:
+        if part in EXCLUDED_DIR_NAMES or part in _TEMPLATE_EXCLUDED_DIRS:
+            return True
+    return any(fnmatch.fnmatch(path.name, pattern) for pattern in _TEMPLATE_EXCLUDED_FILE_PATTERNS)
+
+
+def _collect_template_files(template_root: Path) -> list[Path]:
+    """ひな形 ``comken/templates/新規プロジェクト/`` の全ファイル（除外後）を返す。
+
+    並び順は ``README.md`` を先頭にしたうえで、残りは相対パスの昇順。
+    ``examples/`` と同じ流儀で、AI が「入口→ 設定 → 本体 → 補助」の順で読める
+    ようにするため。
+    """
+    if not template_root.is_dir():
+        raise FileNotFoundError(f"ひな形が見つかりません: {template_root}")
+    candidates = [path for path in template_root.rglob("*") if path.is_file()]
+    files = [path for path in candidates if not _is_template_excluded(path, template_root)]
+    readmes = sorted(path for path in files if path.name == "README.md")
+    others = sorted(
+        (path for path in files if path.name != "README.md"),
+        key=lambda p: p.relative_to(template_root).as_posix(),
+    )
+    return readmes + others
+
+
 def _concatenate_files(files: list[Path], package_root: Path) -> tuple[str, int, int]:
     """各ファイルの前に区切りヘッダを差し込み、結合テキストと統計を返す。
 
@@ -502,7 +587,7 @@ def _bundle_sections() -> list[tuple[str, str]]:
     """社外 AI へ貼るための資料を、章（カテゴリ）ごとの (タイトル, 本文) の並びで組み立てる。
 
     章は少数の大きなまとまりにしている（細かく分けすぎると、逆にどれを渡せば
-    いいか分かりにくくなるため）。1章が ``--max-chars``（既定40万字）を超える
+    いいか分かりにくくなるため）。1章が ``--max-bytes``（既定10万バイト）を超える
     ときだけ、書き出し側の ``_split()`` で機械的に複数ファイルへ割る
     （章の中身で分け方を変えたりはしない）。
 
@@ -553,12 +638,23 @@ def _bundle_sections() -> list[tuple[str, str]]:
                 examples_chunks[-1] += "\n"
             examples_files.append(path)
 
-    new_project_docs_dir = PACKAGE_ROOT / "templates" / "新規プロジェクト" / "docs"
-    new_project_text = "\n\n---\n\n".join(
-        f"# ===== FILE: {path.relative_to(ROOT).as_posix()} =====\n\n"
-        + path.read_text(encoding="utf-8").rstrip()
-        for path in (new_project_docs_dir / "仕様書.md", new_project_docs_dir / "使い方.md")
-    )
+    new_project_guide_path = ROOT / "docs" / "新規プロジェクトの作り方.md"
+    new_project_guide_text = new_project_guide_path.read_text(encoding="utf-8").rstrip()
+
+    template_files = _collect_template_files(TEMPLATE_DIR)
+    template_chunks: list[str] = []
+    for path in template_files:
+        encoding, _, body = _detect_encoding_and_text(path)
+        relative = path.relative_to(ROOT).as_posix()
+        # 改行コードは作業ツリーの状態（PC ごとの autocrlf で変わる）なので載せない。
+        # 守らせたいのは「.bat は cp932・CRLF で保存する」だけで、作り方の文書に書いてある
+        if path.suffix == ".bat":
+            note = "文字コード: cp932 / 改行: CRLF で保存する"
+        else:
+            note = f"文字コード: {encoding}"
+        header = f"# ===== FILE: {relative} （{note}）=====\n\n"
+        template_chunks.append(header + body.rstrip())
+    template_text = "\n\n---\n\n".join(template_chunks)
 
     reference_parts = [
         "# 1. コーディング規約（docs/CONVENTIONS*.md）\n" + conventions_text,
@@ -566,6 +662,14 @@ def _bundle_sections() -> list[tuple[str, str]]:
     ]
     if examples_chunks:
         reference_parts.append("# 3. 動く実例（examples/）\n" + "".join(examples_chunks).rstrip())
+
+    new_project_section = (
+        "# 新規プロジェクトの作り方（docs/新規プロジェクトの作り方.md）\n"
+        + new_project_guide_text
+        + "\n\n---\n\n"
+        + "# 新規プロジェクトのひな形（comken/templates/新規プロジェクト/ の全ファイル）\n"
+        + template_text
+    )
 
     return [
         (
@@ -587,7 +691,7 @@ def _bundle_sections() -> list[tuple[str, str]]:
         ),
         (
             "4_新規プロジェクト向け",
-            "# 新規プロジェクトのテンプレ\n" + new_project_text,
+            new_project_section,
         ),
     ]
 
@@ -611,8 +715,10 @@ def _bundle_readme(
         "- comken は業務自動化の共通ライブラリです。",
         "- 章（規約・API索引・実例 → 実装全文 → エラー対応表・設計判断 →"
         " 新規プロジェクト向け）ごとにファイルを分けています。1章が数百万文字に"
-        " なる場合は --max-chars（既定40万字）ごとに機械的に複数ファイルへ割ります"
+        " なる場合は --max-bytes（既定10万バイト）ごとに機械的に複数ファイルへ割ります"
         "（``_1of2`` のような接尾辞が付きます）。",
+        "- **新規プロジェクトを作るときは 4_新規プロジェクト向け を読み、"
+        "`docs/新規プロジェクトの作り方.md` の『AI が守ること』に従うこと。**",
         "- **1_規約_API索引_実例 を必ず先に読んでください。** 命名・型ヒント・"
         "定数・例外・ロギングの書き方（コーディング規約）はここで固定されています。"
         "ここを読まずに書いたコードは規約違反で修正対象になります。公開APIも"
@@ -622,8 +728,10 @@ def _bundle_readme(
         "ここで実在を確かめてください。",
         "- 3_エラー対応表_設計判断 は、利用者が読む画面の説明とその例外が送出される"
         "条件（エラー対応表）、「なぜその設計にしたか」（設計書と設計判断の履歴）です。",
-        "- 4_新規プロジェクト向け は、comken を使う新しいツールのドキュメントを"
-        "書くときのひな形です。comken を使うだけなら不要です。",
+        "- 4_新規プロジェクト向け は、新しいツール（プロジェクト）を作るよう頼まれた"
+        "ときは**必読**。作り方の手順（AI が守ること・作ったあとの確認）と、"
+        "ひな形の全ファイルが入っている。ひな形の構成を変えずに、そこから作ること。"
+        "comken を使う既存コードを直すだけなら不要。",
         "",
         "## 中身のサマリ",
         "",

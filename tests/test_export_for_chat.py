@@ -150,3 +150,131 @@ def test_excluded_dir_names_includes_build_and_dist() -> None:
     assert "build" in excluded
     assert "dist" in excluded
     assert ".venv" in excluded
+
+
+def test_section_4_contains_new_project_guide() -> None:
+    """4章に作り方の文書（``docs/新規プロジェクトの作り方.md``）の本文がそのまま入る。
+
+    見出し行（"# 新規プロジェクトの作り方（docs/新規プロジェクトの作り方.md）"）と、
+    「2. AI が守ること」の節が含まれていることだけを確かめれば十分。
+    """
+    sections = dict(export_for_chat._bundle_sections())
+    section_4 = sections["4_新規プロジェクト向け"]
+
+    assert "# 新規プロジェクトの作り方（docs/新規プロジェクトの作り方.md）" in section_4
+    assert "## 2. AI が守ること" in section_4
+
+
+def test_section_4_contains_all_template_files() -> None:
+    """4章に、ひな形の全ファイル（除外後）が ``# ===== FILE: ...`` 形式で入っている。"""
+    sections = dict(export_for_chat._bundle_sections())
+    section_4 = sections["4_新規プロジェクト向け"]
+
+    import re
+
+    # 除外後の実ファイル一覧（テスト側で再計算）とバンドル側のヘッダ件数が一致する。
+    expected_files = export_for_chat._collect_template_files(export_for_chat.TEMPLATE_DIR)
+    expected_headers = [
+        f"# ===== FILE: {path.relative_to(export_for_chat.ROOT).as_posix()}"
+        for path in expected_files
+    ]
+    for header in expected_headers:
+        assert header in section_4, f"ヘッダが見つかりません: {header}"
+
+    # 逆方向: バンドル側にあるヘッダはすべて実ファイルに対応している。
+    actual_headers = re.findall(r"^# ===== FILE: (.+?) （", section_4, re.MULTILINE)
+    assert len(actual_headers) == len(expected_files)
+    assert set(actual_headers) == {
+        path.relative_to(export_for_chat.ROOT).as_posix() for path in expected_files
+    }
+
+
+def test_section_4_keeps_bat_japanese_without_mojibake() -> None:
+    """``実行.bat`` の中身（日本語コメント・``PYTHON_LIBRARY``）が文字化けせず、
+    見出しに ``cp932`` が書かれている。
+    """
+    sections = dict(export_for_chat._bundle_sections())
+    section_4 = sections["4_新規プロジェクト向け"]
+
+    bat_header = "# ===== FILE: comken/templates/新規プロジェクト/実行.bat"
+    assert bat_header in section_4
+    # ヘッダに cp932 が書かれている（cp932 ファイルはそう判定される）
+    assert "文字コード: cp932" in section_4
+    # .bat は CRLF で保存させる。作業ツリーの改行は PC ごとに違うので、
+    # 見出しには「必須の形」を書き、それ以外のファイルには改行コードを書かない
+    assert "改行: CRLF で保存する" in section_4
+    assert "改行: LF" not in section_4
+    # 日本語のコメントが本文にそのまま入っている
+    assert "このツールの起動用" in section_4
+    # PYTHON_LIBRARY の値もそのまま
+    assert "PYTHON_LIBRARY=\\\\server\\share\\tools" in section_4
+
+
+def test_section_4_excludes_ruff_cache_and_pyc_and_real_config() -> None:
+    """4章の ``# ===== FILE: ...`` ヘッダに、除外対象（``.ruff_cache`` /
+    ``__pycache__`` / ``config.ini`` 本物）が現れない。
+
+    ``.gitignore`` の本文に ``.ruff_cache/`` という文字列が現れるのは除外対象とは
+    無関係なので、ヘッダ行だけを抜き出して判定する。
+    """
+    import re
+
+    sections = dict(export_for_chat._bundle_sections())
+    section_4 = sections["4_新規プロジェクト向け"]
+    headers = re.findall(r"^# ===== FILE: (.+?) （", section_4, re.MULTILINE)
+
+    for forbidden in (".ruff_cache", "__pycache__"):
+        assert not any(forbidden in h for h in headers), (
+            f"除外されるべき {forbidden} のヘッダが4章に含まれています"
+        )
+    # config.ini（本物）はテンプレートの config.ini.example とは別。example は残す。
+    assert "comken/templates/新規プロジェクト/config.ini" not in headers
+    # example は入っている
+    assert "comken/templates/新規プロジェクト/config.ini.example" in headers
+
+
+def test_readme_mentions_new_project_section_and_drops_old_phrase() -> None:
+    """``0_読み方`` に「新規プロジェクト」の案内と ``docs/新規プロジェクトの作り方.md``
+    への参照が入り、旧文言「comken を使うだけなら不要です」は消えている。
+    """
+    sections = dict(export_for_chat._bundle_sections())
+    readme = sections["0_読み方"]
+
+    assert "新規プロジェクト" in readme
+    assert "docs/新規プロジェクトの作り方.md" in readme
+    assert "comken を使うだけなら不要です" not in readme
+
+
+def test_collect_template_files_matches_disk_and_excludes_expected() -> None:
+    """``_collect_template_files`` は除外後の実ファイルだけを、
+    相対パスの昇順（README.md 先頭）で返す。"""
+    files = export_for_chat._collect_template_files(export_for_chat.TEMPLATE_DIR)
+    rels = [p.relative_to(export_for_chat.ROOT).as_posix() for p in files]
+
+    # README.md が先頭
+    assert rels[0] == "comken/templates/新規プロジェクト/README.md"
+    # 除外対象が含まれない（パス区切り単位）
+    for forbidden in (".ruff_cache", "__pycache__"):
+        assert not any(f"/{forbidden}/" in r or r.endswith(f"/{forbidden}") for r in rels)
+    # config.ini（本物）は無く、config.ini.example はある
+    assert "comken/templates/新規プロジェクト/config.ini" not in rels
+    assert "comken/templates/新規プロジェクト/config.ini.example" in rels
+    # 残りは相対パスの昇順
+    rest = rels[1:]
+    assert rest == sorted(rest)
+
+
+def test_detect_encoding_and_text_handles_both_encodings() -> None:
+    """UTF-8 と cp932 を読み分け、改行を ``\\n`` に正規化する。"""
+    utf8_path = export_for_chat.TEMPLATE_DIR / "README.md"
+    cp932_path = export_for_chat.TEMPLATE_DIR / "実行.bat"
+
+    encoding, _, body = export_for_chat._detect_encoding_and_text(utf8_path)
+    assert encoding == "utf-8"
+    assert "\r\n" not in body
+
+    encoding, _, body = export_for_chat._detect_encoding_and_text(cp932_path)
+    assert encoding == "cp932"
+    assert "\r\n" not in body
+    # 日本語が読める（cp932 で読めていればOK）
+    assert "このツールの起動用" in body
