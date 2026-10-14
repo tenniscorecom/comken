@@ -475,8 +475,11 @@ raise ExcelError(f"シート「{name}」が見つかりません。存在する�
    （業務側の非エンジニアが読んで対処できる文面）もここで分かる
 3. **`exceptions/` → `core/dates.py` → `core/files/`** — 依存の少ない基盤
 4. **`runtime.py` → `core/config/`** — 実行モードと設定。
-   `core/config/__init__.py` は config.ini の初回読み込み完了時に、障害調査用の
-   comken バージョンを INFO ログへ1回だけ記録する
+   `core/logger/environment.py` / `core/logger/local.py` の
+   `setup_logging()` / `setup_local_logging()` は、 ログの出力先を root に
+   用意し終えた直後に、障害調査用の comken バージョンを INFO ログへ1回だけ
+   記録する（27 章）。config 経由ではなくロガー側で出すため、 config を使わない
+   利用側（Salesforce レポートダウンローダー等）でも出る
 5. **`toolbox/csv/file.py` →
    `toolbox/excel/workbook.py` → `toolbox/excel/sheet.py` →
    `toolbox/excel/table.py`** — 一番よく使われる部分。

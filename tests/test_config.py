@@ -127,16 +127,23 @@ class TestConfigMissingFile:
 class TestConfigBasic:
     """Config の基本的な読み込みのテスト。"""
 
-    def test_logs_version_only_once(self, tmp_path, caplog, monkeypatch):
+    def test_config_does_not_emit_version_log(self, tmp_path, caplog):
+        """``Config(path)`` だけではバージョンのログを出しません。
+
+        バージョンの記録は config ではなく ``setup_logging()`` /
+        ``setup_local_logging()`` の責務です（27 章出力ログのこと）。 config.ini
+        を読んだだけで INFO ログが出ると、ログ設定前に出したログは捨てられる
+        のに「出した」印だけが立ち、あとでログを設定しても出ない事故が起きた
+        ため、 config からは出さない形に戻しました（cf. HISTORY.md 27 章）。
+        """
         ini = tmp_path / "config.ini"
         ini.write_text("[S]\nK = value\n", encoding="utf-8")
-        monkeypatch.setattr(config_module, "_is_version_logged", False)
 
         with caplog.at_level(logging.INFO, logger="comken.core.config"):
             Config(ini)
             Config(ini)
 
-        assert caplog.text.count("comken v") == 1
+        assert "comken v" not in caplog.text
 
     def test_reads_string_value(self, tmp_path):
         """文字列の設定値を正しく読み込めることを確認する。"""

@@ -18,6 +18,7 @@ from comken.core.logger.environment import (
     LOG_FORMAT,
     _compute_root_level,
     _guard_root_handlers,
+    _log_version_once,
     _warn_external_handlers_allowed,
 )
 from comken.runtime import is_debug
@@ -101,3 +102,7 @@ def setup_local_logging(
     # 警告が comken のログファイルに残らず、何と共存したか追跡できなくなる。
     if external_allowed:
         _warn_external_handlers_allowed("setup_local_logging()", existing)
+    # 出力先が用意できた直後（かつ例外で途中終了しなかったとき）にだけ記録する。
+    # ``setup_logging()`` と ``setup_local_logging()`` のどちらから先に呼んでも
+    # 1 回しか出ない（cf. HISTORY.md 27 章）。
+    _log_version_once()
