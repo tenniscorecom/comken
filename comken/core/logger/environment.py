@@ -36,6 +36,14 @@ COMKEN_HANDLER_NAMES = frozenset(
     {CONSOLE_HANDLER_NAME, ENVIRONMENT_HANDLER_NAME, LOCAL_HANDLER_NAME}
 )
 
+logger = logging.getLogger(__name__)
+
+# comken のバージョンを INFO ログへ出す 1 プロセス 1 回だけのフラグ。
+# モジュール側に持ち、 ``setup_logging()`` と ``setup_local_logging()`` の両方で
+# 共有する。 出力先を用意する関数が出力先を確定した直後にだけ True にするので、
+# 出力先が用意できずに終わったときは log が出ず、フラグも立たない。
+_version_logged = False
+
 
 def setup_logging(site: type[LoggerSite], *, allow_existing: bool = False) -> None:
     """site の指定に従い root logger を設定する。
@@ -112,12 +120,46 @@ def setup_logging(site: type[LoggerSite], *, allow_existing: bool = False) -> No
     # 警告が comken のログファイルに残らず、何と共存したか追跡できなくなる。
     if external_allowed:
         _warn_external_handlers_allowed("setup_logging()", existing)
+    # 出力先が用意できた直後（かつ例外で途中終了しなかったとき）にだけ記録する。
+    # 出力先が無い段階で出すと、その行は捨てられてフラグだけ立ち、
+    # あとでログを設定しても 1 行も出ない（cf. HISTORY.md 27 章）。
+    _log_version_once()
 
 
 def _compute_root_level(handlers: list[logging.Handler]) -> int:
     """comken 管理下の handler のうち最も低いレベルを返す。"""
     levels = [h.level for h in handlers if h.name in COMKEN_HANDLER_NAMES]
     return min(levels) if levels else logging.INFO
+
+
+def _log_version_once() -> None:
+    """comken のバージョンを INFO ログへ 1 回だけ記録する。
+
+    ``setup_logging()`` / ``setup_local_logging()`` の両方で呼ばれても
+    1 回しか出さない（プロセス内 1 回）。 モジュール ``comken`` の
+    ``__version__`` は import 順で循環しないよう関数内で遅延 import する。
+    config.ini を読む経路とは無関係に動くので、 config を使わない利用側
+    （Salesforce レポートダウンローダー等）でもログが出せる。
+    """
+    global _version_logged
+    if _version_logged:
+        return
+    from comken import __version__
+
+    logger.info("comken v%s", __version__)
+    _version_logged = True
+
+
+def _reset_version_log() -> None:
+    """バージョン記録のフラグを破棄する（テスト用）。
+
+    ``isolated_logging`` フィクスチャで root の handler を片付けても、
+    フラグはモジュール側に残るため、 別テストで「最初の呼び出しで
+    バージョンが出る」ことを検証したいときは明示的にこの関数を呼ぶこと。
+    公開 API ではない。
+    """
+    global _version_logged
+    _version_logged = False
 
 
 def _classify_root_handlers(

@@ -18,6 +18,7 @@ from comken.core.logger.environment import (
     ETC_FOLDER_NAME,
     LOCAL_HANDLER_NAME,
     _format_external_handlers,
+    _reset_version_log,
 )
 from comken.core.logger.environment import (
     setup_logging as environment_setup_logging,
@@ -59,6 +60,21 @@ def isolated_logging():
             handler.close()
         root_logger.handlers.extend(original_handlers)
         root_logger.setLevel(original_level)
+
+
+@pytest.fixture(autouse=True)
+def _reset_version_log_flag():
+    """バージョン記録のフラグをテストごとにリセットする。
+
+    ``isolated_logging`` は root logger の handler だけを片付け、 モジュール側の
+    ``_version_logged`` は触らない。 フラグが残っていると、別テストの
+    「最初の呼び出しでバージョンが出る」検証が通らないため autouse で必ず破棄する。
+    """
+    _reset_version_log()
+    try:
+        yield
+    finally:
+        _reset_version_log()
 
 
 def _prepare_site(
@@ -268,6 +284,41 @@ class TestSetup:
         )
         file_handler.flush()
         assert "処理が完了しました" in Path(file_handler.baseFilename).read_text(encoding="utf-8")
+
+    def test_setup_logging_writes_version_to_log_file(
+        self, isolated_logging, tmp_path, monkeypatch
+    ):
+        """``setup_logging()`` のあとに ``comken v{__version__}`` が 1 行出ている。"""
+        from comken import __version__
+
+        _prepare_site(monkeypatch, tmp_path)
+        setup_logging(Backoffice)
+        file_handler = next(
+            handler
+            for handler in isolated_logging.handlers
+            if handler.name == ENVIRONMENT_HANDLER_NAME
+        )
+        file_handler.flush()
+        text = Path(file_handler.baseFilename).read_text(encoding="utf-8")
+        assert f"comken v{__version__}" in text
+
+    def test_setup_logging_writes_version_only_once(self, isolated_logging, tmp_path, monkeypatch):
+        """``setup_logging()`` を 2 回呼ぼうとしても、1 回目は通って 2 回目は
+        ``LoggingAlreadyConfiguredError`` で止まる。 バージョン記録は 1 回しか出ない。"""
+        from comken import __version__
+
+        _prepare_site(monkeypatch, tmp_path)
+        setup_logging(Backoffice)
+        with pytest.raises(LoggingAlreadyConfiguredError):
+            setup_logging(Backoffice)
+        file_handler = next(
+            handler
+            for handler in isolated_logging.handlers
+            if handler.name == ENVIRONMENT_HANDLER_NAME
+        )
+        file_handler.flush()
+        text = Path(file_handler.baseFilename).read_text(encoding="utf-8")
+        assert text.count(f"comken v{__version__}") == 1
 
 
 class TestLocal:
@@ -586,6 +637,130 @@ class TestLocal:
         # 修正前は NOTSET になっていた。修正後は自分の handler の低い方 (INFO) になる。
         assert isolated_logging.level != logging.NOTSET
         assert isolated_logging.level == logging.INFO
+
+    def test_setup_local_logging_writes_version_to_log_file(
+        self, isolated_logging, tmp_path, monkeypatch
+    ):
+        """``setup_local_logging()`` のあとに ``comken v{__version__}`` が 1 行出ている。
+
+        config.ini を使わない利用側（Salesforce レポートダウンローダー等）でも
+        バージョンを残せるのが本来の要件。 ``setup_logging()`` と挙動を
+        揃えるため、両関数で同じヘルパー（``_log_version_once``）を呼ぶ。
+        """
+        from comken import __version__
+
+        self._prepare(monkeypatch, tmp_path)
+        setup_local_logging()
+        file_handler = next(
+            handler for handler in isolated_logging.handlers if handler.name == LOCAL_HANDLER_NAME
+        )
+        file_handler.flush()
+        text = Path(file_handler.baseFilename).read_text(encoding="utf-8")
+        assert f"comken v{__version__}" in text
+
+    def test_setup_local_logging_writes_version_only_once(
+        self, isolated_logging, tmp_path, monkeypatch
+    ):
+        """``setup_local_logging()`` を 2 回呼ぼうとしても、1 回目は通って 2 回目は
+        ``LoggingAlreadyConfiguredError`` で止まる。 バージョン記録は 1 回しか出ない。"""
+        from comken import __version__
+
+        self._prepare(monkeypatch, tmp_path)
+        setup_local_logging()
+        with pytest.raises(LoggingAlreadyConfiguredError):
+            setup_local_logging()
+        file_handler = next(
+            handler for handler in isolated_logging.handlers if handler.name == LOCAL_HANDLER_NAME
+        )
+        file_handler.flush()
+        text = Path(file_handler.baseFilename).read_text(encoding="utf-8")
+        assert text.count(f"comken v{__version__}") == 1
+
+    def test_version_logged_once_across_both_calls(self, isolated_logging, tmp_path, monkeypatch):
+        """``setup_local_logging()`` と ``setup_logging()`` の両方を呼んでも、
+        バージョン記録はファイルごとに 1 行ずつではなく、プロセス全体で 1 回。
+
+        ``_version_logged`` を ``_log_version_once`` の側で持つことで、
+        どちらの関数から先に呼んでも 2 行に膨らまないことを担保する
+        （ローカルファイルと環境ファイルでそれぞれ 1 行だと、 バージョン調査
+        のたびに「同じ行が 2 か所にある」状態になって見落としやすい）。
+
+        ファイルパスは ``_prepare_site`` のデフォルト（``test-folder``）と
+        別名（``other-folder``）で分け、 フェーズ間で出力先が衝突しないよう
+        にする。 ``comken.core.logger.environment.today`` も両フェーズで
+        同じ日付に固定してファイル名を再現可能にしている。
+        """
+        from comken import __version__
+
+        # フェーズ1: setup_logging() が先、 出力先フォルダは ``test-folder``
+        _prepare_site(monkeypatch, tmp_path, folder_name="test-folder")
+        monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
+        monkeypatch.setattr(local_module, "today", lambda: date(2026, 8, 21))
+
+        setup_logging(Backoffice)
+        setup_local_logging()
+        env_file = next(h for h in isolated_logging.handlers if h.name == ENVIRONMENT_HANDLER_NAME)
+        local_file = next(h for h in isolated_logging.handlers if h.name == LOCAL_HANDLER_NAME)
+        env_file.flush()
+        local_file.flush()
+        env_text = Path(env_file.baseFilename).read_text(encoding="utf-8")
+        local_text = Path(local_file.baseFilename).read_text(encoding="utf-8")
+        assert env_text.count(f"comken v{__version__}") == 1
+        # setup_logging() 側で出たので、setup_local_logging() 側のファイルには出ない
+        assert local_text.count(f"comken v{__version__}") == 0
+
+        # フェーズ2: setup_local_logging() が先、 出力先フォルダは ``other-folder``
+        # にして env ファイルパスが衝突しないようにする。
+        for handler in isolated_logging.handlers[:]:
+            isolated_logging.removeHandler(handler)
+            handler.close()
+        _reset_version_log()
+        _prepare_site(monkeypatch, tmp_path, folder_name="other-folder")
+        monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
+        monkeypatch.setattr(local_module, "today", lambda: date(2026, 8, 21))
+
+        setup_local_logging()
+        setup_logging(Backoffice)
+        env_file = next(h for h in isolated_logging.handlers if h.name == ENVIRONMENT_HANDLER_NAME)
+        local_file = next(h for h in isolated_logging.handlers if h.name == LOCAL_HANDLER_NAME)
+        env_file.flush()
+        local_file.flush()
+        env_text = Path(env_file.baseFilename).read_text(encoding="utf-8")
+        local_text = Path(local_file.baseFilename).read_text(encoding="utf-8")
+        # setup_local_logging() 側で出たので、setup_logging() 側のファイルには出ない
+        assert env_text.count(f"comken v{__version__}") == 0
+        assert local_text.count(f"comken v{__version__}") == 1
+
+    def test_version_not_logged_when_setup_raises(self, monkeypatch):
+        """``setup_local_logging()`` が途中で例外で抜けたときは、バージョン記録が出ない。
+
+        出力先が確保できない段階で出すと、その行は捨てられ、 フラグだけ立っ
+        てしまう。 あとで ``setup_*`` を呼んでもフラグのせいで出ないため、
+        例外で抜けた場合は出さない形にする。
+
+        モジュール ``comken.core.logger.environment`` を介して参照しないと、
+        ``global`` で書き換えた ``_version_logged`` がテスト側に反映されない
+        （``from X import Y`` の参照は imut 時に固定される）。
+        """
+        import comken.core.logger.environment as environment_module
+
+        # _guard_root_handlers で LoggingConflictError を出すため、
+        # 既に comken 以外の handler を root に乗せた状態を作る。
+        existing = logging.StreamHandler()
+        existing.set_name("external.library")
+        logging.getLogger().addHandler(existing)
+        try:
+            with pytest.raises(LoggingConflictError):
+                setup_local_logging()
+            # 例外で抜けたので、 フラグは立っていない。
+            assert environment_module._version_logged is False
+            # フラグを直接 True にしてから ``_log_version_once`` を呼ぶと、
+            # 今度は 1 行出力されフラグが True のままになる（逆確認）。
+            environment_module._log_version_once()
+            assert environment_module._version_logged is True
+        finally:
+            logging.getLogger().removeHandler(existing)
+            existing.close()
 
 
 class TestOwner:

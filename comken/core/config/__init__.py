@@ -156,7 +156,6 @@ def _subclassing_not_supported_error(subclass_name: str) -> ConfigError:
 # 内部実装なので載せない（``MappingDict = _LenientDict`` で公開型に昇格済み）。
 __all__ = ["Config", "MappingDict"]
 
-_is_version_logged = False
 MAPPING_SECTION_SUFFIX = "MAPPING"
 
 
@@ -352,7 +351,6 @@ class Config:
         from comken.core.config.stubs import update_stub
 
         update_stub(cfg, path, section_map)
-        _log_version_once()
 
     def __getattr__(self, name: str) -> NoReturn:
         # 通常の属性（設定済みセクション）は __dict__ にあり、ここには来ない。
@@ -680,19 +678,6 @@ def _split_list_items(text: str) -> list[str]:
     """カンマまたは改行区切りの文字列をリストに変換する。空文字は除外する。"""
     items = text.replace("\n", ",").split(",")
     return [s.strip() for s in items if s.strip()]
-
-
-def _log_version_once() -> None:
-    """設定の初回読み込み後に障害調査用のバージョンを1回だけ記録する。"""
-    global _is_version_logged
-    if not _is_version_logged:
-        # 親パッケージ側の __version__ は comken/__init__.py で定義されるため、
-        # モジュール先頭で `from ... import __version__` すると import 順序に
-        # 依存した循環が起きる。関数の内側で取る形にすることで循環を断つ。
-        from comken import __version__
-
-        logger.info("comken v%s", __version__)
-        _is_version_logged = True
 
 
 def _looks_like_path(value: str) -> bool:

@@ -44,6 +44,7 @@
 24. CMS サイト用の雛形を足した（2026-10-13）
 25. Report API でサマリー・マトリックスの明細行を返す（2026-10-14）
 26. Report API のサマリー・マトリックス・レスポンス形の読み違いを直した（2026-10-14）
+27. comken バージョンの記録を config からロガー設定へ移した（2026-10-14）
 
 ## 1. 設定と非機密情報の扱い
 
@@ -902,6 +903,7 @@ core/dates はファイルに触らない層のまま（dates から files を i
 
 ## 25. Report API でサマリー・マトリックスの明細行を返す（2026-10-14）
 26. Report API のサマリー・マトリックス・レスポンス形の読み違いを直した（2026-10-14）
+27. comken バージョンの記録を config からロガー設定へ移した（2026-10-14）
 
 `ReportAPI.get()` / `run_async()` が、TABULAR だけでなく SUMMARY / MATRIX でも
 明細の行を 1 枚の `Table` に並べて返せるようにした。Salesforce レポートダウンローダー
@@ -959,3 +961,24 @@ dict のように `.get("groupings")` していたため、本物のレスポン
 木は `data["groupingsDown"]["groupings"]` の下）に作り直し、SUMMARY 2 段 /
 MATRIX 1 段 × 1 段 / SUMMARY での `groupingsAcross: {"groupings": []}` /
 形が違う返り値での `SalesforceError` / 木の枝が段数より浅い を追加した。
+
+## 27. comken バージョンの記録を config からロガー設定へ移した（2026-10-14）
+
+`comken/__init__.py` の `__version__` を障害調査用に INFO ログへ出す位置を、
+`comken/core/config/__init__.py` の `Config._initialize` から
+`comken/core/logger/environment.py` の `setup_logging()` /
+`comken/core/logger/local.py` の `setup_local_logging()` へ移した。
+`__version__` の遅延 import と「出力先を root に確定する」順序はそのまま
+（setup_* が途中で例外で抜けたときは記録しない）。
+
+ログの出力先を用意する前に config を読むと、そのときのログは捨てられるのに
+「出した」印だけが立ち、あとでログを設定しても出なくなる。出力先を用意する
+瞬間の 1 か所にまとめた。config を使わない利用側（Salesforce レポート
+ダウンローダー等）でも、`setup_local_logging()` を一度呼ぶだけで
+`comken v{__version__}` がファイルへ 1 行残る。
+
+フラグは `comken/core/logger/environment.py` 側にモジュール変数として
+持ち、両関数で共有する。`setup_*` の入口で `_guard_root_handlers` が
+`LoggingAlreadyConfiguredError` / `LoggingConflictError` を投げた場合は
+出力先が確保できていないので、 `setup_*` が返す直前に呼ぶ位置でもバージョンは
+記録されない（cf. `test_version_not_logged_when_setup_raises`）。
