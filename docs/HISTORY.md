@@ -43,6 +43,7 @@
 23. 外部 AI にはひな形の中身ごと渡す（2026-10-09）
 24. CMS サイト用の雛形を足した（2026-10-13）
 25. Report API でサマリー・マトリックスの明細行を返す（2026-10-14）
+26. Report API のサマリー・マトリックス・レスポンス形の読み違いを直した（2026-10-14）
 
 ## 1. 設定と非機密情報の扱い
 
@@ -900,6 +901,7 @@ core/dates はファイルに触らない層のまま（dates から files を i
 **このリポジトリへ書き戻さないこと**（公開リポジトリなので、書き戻すと実際の社内情報が漏れる）。
 
 ## 25. Report API でサマリー・マトリックスの明細行を返す（2026-10-14）
+26. Report API のサマリー・マトリックス・レスポンス形の読み違いを直した（2026-10-14）
 
 `ReportAPI.get()` / `run_async()` が、TABULAR だけでなく SUMMARY / MATRIX でも
 明細の行を 1 枚の `Table` に並べて返せるようにした。Salesforce レポートダウンローダー
@@ -926,3 +928,34 @@ core/dates はファイルに触らない層のまま（dates から files を i
 ためドキュメントには「実機で未確認」を残し、もし形が違ったら受け側で例外で
 止まるように作ってある（実装側の責務は「形式ごとに正しく Table に並べる」まで
 とし、API の仕様の細部が変わったら呼び出し側の調査に切り替わる）。
+
+## 26. Report API のサマリー・マトリックス・レスポンス形の読み違いを直した（2026-10-14）
+
+25 で組んだ報告ロジックが **レポートの返り値の形の読み違い**で、本物のサマリー
+レポートで `AttributeError: 'list' object has no attribute 'get'` を出すことが
+判明した（ダウンローダー側で `ComkenError` として扱われないため、サマリーレポー
+ト 1 本で取得全体が止まる症状）。
+
+実機の Analytics API の形は次のとおり:
+
+- グループ列メタ（段ごとの定義）は `reportMetadata.groupingsDown` /
+  `groupingsAcross` に **list**（`{name, sortOrder, dateGranularity}` の配列）で来る
+- グループの値のツリーは返り値**一番上**の `data["groupingsDown"]["groupings"]` /
+  `data["groupingsAcross"]["groupings"]` に来る（dict の下に list）
+- 木の各ノードには `name` が無い（列メタは list 側で持つ）
+
+25 では `reportMetadata.groupingsDown` を「木のルート」と読み違えて list を
+dict のように `.get("groupings")` していたため、本物のレスポンスで
+`AttributeError` が出ていた。これを直し、
+
+- 列メタは `reportMetadata.groupingsDown`（list）から順に取る
+- 木のルートは一番上の `data["groupingsDown"]["groupings"]` から取る
+- 木の枝が段数より浅いときは、足りない段の列を空文字で埋める
+- 形が違う返り値（list のはずが dict、dict のはずが list など）は
+  `AttributeError` / `TypeError` をそのまま外に出さず、`SalesforceError` で
+  「レポートの返り値の形が想定と違います（どのキーか）」と止める
+
+ようにした。テストの偽データも実機の形（`reportMetadata.groupingsDown` は list、
+木は `data["groupingsDown"]["groupings"]` の下）に作り直し、SUMMARY 2 段 /
+MATRIX 1 段 × 1 段 / SUMMARY での `groupingsAcross: {"groupings": []}` /
+形が違う返り値での `SalesforceError` / 木の枝が段数より浅い を追加した。

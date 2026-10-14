@@ -148,8 +148,9 @@ def _with_include_details_body(body: dict[str, Any] | None) -> dict[str, Any]:
 def _walk_groupings(
     groupings: list[dict[str, Any]],
 ) -> Any:
-    """``groupingsDown.groupings`` / ``groupingsAcross.groupings`` を深さ優先で歩き、
-    各リーフ（``groupings`` が空配列）に対して ``(key_tuple, label_tuple)`` を yield する。
+    """``data["groupingsDown"]["groupings"]`` / ``data["groupingsAcross"]["groupings"]``
+    を深さ優先で歩き、各リーフ（``groupings`` が空配列）に対して
+    ``(key_tuple, label_tuple)`` を yield する。
 
     ``key_tuple`` は **リーフ自体の ``group["key"]`` のタプル**で、親キーを連結した
     形は含まない（``factMap`` のキーを ``"_".join(key_tuple)`` で組み立てるため、
@@ -175,89 +176,101 @@ def _walk_groupings(
             yield (key,), (label,)
 
 
-def _max_grouping_depth(groupings: list[dict[str, Any]]) -> int:
-    """``groupingsDown.groupings`` / ``groupingsAcross.groupings`` のツリー全体の
-    最大深さを返す。空のときは 0。
-
-    各段とも「グループ列 1 つ」を表すとみなして段数を数える（枝分かれしている
-    部分は代表深さに影響しない）。
-    """
-    if not groupings:
-        return 0
-
-    max_depth = 0
-
-    def depth_of(node: dict[str, Any], current: int) -> None:
-        """``node`` から下をたどって最深の深さを ``max_depth`` に反映する。"""
-        nonlocal max_depth
-        if current > max_depth:
-            max_depth = current
-        for child in node.get("groupings", []) or []:
-            depth_of(child, current + 1)
-
-    for node in groupings:
-        depth_of(node, 1)
-    return max_depth
-
-
-def _first_node_at_depth(root: dict[str, Any], target_depth: int) -> dict[str, Any] | None:
-    """ルート要素 ``root`` から見て、深さ ``target_depth``（1 始まり）に
-    ある最初の要素を DFS で返す。見つからなければ ``None`` を返す。
-
-    ルートの深さは 1 とし、深さ ``target_depth`` の要素が無い枝は探索しない。
-    """
-    if target_depth < 1:
-        return None
-
-    def walk(node: dict[str, Any], current: int) -> dict[str, Any] | None:
-        """``node`` から下を DFS し、``current`` が ``target_depth`` の要素を返す。"""
-        if current == target_depth:
-            return node
-        for child in node.get("groupings", []) or []:
-            found = walk(child, current + 1)
-            if found is not None:
-                return found
-        return None
-
-    return walk(root, 1)
-
-
 def _grouping_column_definitions(
-    grouping_info: dict[str, Any], groupings: list[dict[str, Any]]
+    grouping_info: dict[str, Any], definitions: list[dict[str, Any]]
 ) -> list[tuple[str, str]]:
-    """``groupingsDown.groupings`` / ``groupingsAcross.groupings`` の列メタを
-    段ごとに取り、 ``(name, label)`` を段の浅い順に並べて返す。
+    """グループ列のメタを ``reportMetadata.groupingsDown``（または ``groupingsAcross``）
+    の list（段ごとの定義）から取り、 ``(name, label)`` を段の浅い順に並べて返す。
 
-    各段の代表（その深さで最初に出てくる要素）の ``name`` を ``groupingColumnInfo``
-    のキーとして使う。``name`` が空や重複に当たったらそこで打ち切る
-    （「この段に対応する name は無い」という意味）。
-    表示名は ``reportExtendedMetadata.groupingColumnInfo[name].label``、取れなければ
-    内部名そのまま。
+    各要素の ``name`` を ``reportExtendedMetadata.groupingColumnInfo`` のキーとして使い、
+    表示名は ``groupingColumnInfo[name].label``、取れなければ内部名をそのまま使う。
+    ``name`` が空や重複に当たったらそこで打ち切る（この段以降に対応する列メタは
+    無いという意味）。
 
-    ツリー全体の最大深さを段数として、段ごとに 1 つずつ name を取りに行くので、
-    ルートしか持たない 1 段 SUMMARY でも、深い入れ子でも同じ手順で列が決まる。
+    ツリー側 (``data["groupingsDown"]["groupings"]``) の ``name`` を探して段数を
+    数える方式はやめた — 実物のレスポンスでは木のノードに ``name`` が無い。
+    代わりに ``reportMetadata.groupingsDown`` 側の list 段数で決めるので、列メタは
+    API 定義だけを情報源として組み立てられる。
 
     ``grouping_info`` は呼び出し側で ``reportExtendedMetadata.groupingColumnInfo``
     を渡したもの（``{name: {"label": ...}}`` の dict）。
     """
-    if not groupings:
+    if not definitions:
         return []
 
     column_info = grouping_info or {}
-    max_depth = _max_grouping_depth(groupings)
     names: list[str] = []
     seen: set[str] = set()
-    for depth in range(1, max_depth + 1):
-        node = _first_node_at_depth(groupings[0], depth)
-        if node is None:
+    for entry in definitions:
+        if not isinstance(entry, dict):
             break
-        name = node.get("name", "")
+        name = entry.get("name", "") or ""
         if not name or name in seen:
             break
         seen.add(name)
         names.append(name)
 
     return [(name, column_info.get(name, {}).get("label", name)) for name in names]
+
+
+def _check_grouping_section(
+    data: dict[str, Any], report_id: str, direction: str
+) -> list[dict[str, Any]]:
+    """``data[direction]["groupings"]`` の木と ``reportMetadata[direction]`` の
+    list（段の定義）を取り出し、形が違うときは ``SalesforceError`` で止める。
+
+    戻り値は ``reportMetadata[direction]`` の list。SUMMARY で列グループが無い
+    ときは ``data["groupingsAcross"]`` が ``{"groupings": []}`` という dict で来る
+    ため、木側は ``list`` で返るが list 長は 0 になる（list で来ることを前提にする）。
+    ``reportMetadata[direction]`` 側は本来 list で来る想定だが、実装上は dict /
+    欠落 / その他の型も考慮して ``SalesforceError`` で止める。
+
+    Raises:
+        SalesforceError: 返り値の ``data`` または ``reportMetadata`` の形が想定外。
+    """
+    section = data.get(direction)
+    if section is None:
+        # 返り値に ``groupingsAcross`` 自体が無いのは、SUMMARY で列グループ無し
+        # のとき（一番上が ``{"groupings": []}``）とは違うので、データ欠落とみなす。
+        raise SalesforceError(
+            f"レポートの返り値の形が想定と違います（{direction} が無い）: {report_id}\n"
+            "Salesforce の Reports and Dashboards REST API のドキュメント"
+            "（groupingsDown / groupingsAcross の形）と実機のレスポンスを"
+            "突き合わせて確認してください。\n"
+            "対処: ライブラリ側を更新するか、Salesforce サポートへ報告してください。"
+        )
+    if not isinstance(section, dict):
+        raise SalesforceError(
+            f"レポートの返り値の形が想定と違います（{direction} が dict ではない）: {report_id}\n"
+            " 実際の型: " + type(section).__name__ + "\n"
+            "対処: ライブラリ側を更新するか、Salesforce サポートへ報告してください。"
+        )
+    # 木の ``groupings`` は list で来る（空でも list）。dict や欠落は形が違う。
+    tree_groupings = section.get("groupings")
+    if not isinstance(tree_groupings, list):
+        raise SalesforceError(
+            f"レポートの返り値の形が想定と違います"
+            f"（{direction}.groupings が list ではない）: {report_id}\n"
+            "対処: ライブラリ側を更新するか、Salesforce サポートへ報告してください。"
+        )
+
+    metadata_section = data.get("reportMetadata", {}) or {}
+    if direction not in metadata_section:
+        # ``reportMetadata.groupingsDown`` 自体が無いなら形が違う（API 仕様と齟齬）
+        raise SalesforceError(
+            f"レポートの返り値の形が想定と違います"
+            f"（reportMetadata.{direction} が無い）: {report_id}\n"
+            "対処: ライブラリ側を更新するか、Salesforce サポートへ報告してください。"
+        )
+    definitions = metadata_section.get(direction)
+    if not isinstance(definitions, list):
+        raise SalesforceError(
+            f"レポートの返り値の形が想定と違います"
+            f"（reportMetadata.{direction} が list ではない）: {report_id}\n"
+            " 実際の型: " + type(definitions).__name__ + "\n"
+            "対処: ライブラリ側を更新するか、Salesforce サポートへ報告してください。"
+        )
+    return definitions
 
 
 def _factmap_key(row_keys: tuple[str, ...], col_keys: tuple[str, ...] | None) -> str:
@@ -346,21 +359,22 @@ def _prepare_grouped_parse(
         )
 
     grouping_info = extended.get("groupingColumnInfo", {}) or {}
-    down_columns = _grouping_column_definitions(
-        grouping_info,
-        (metadata.get("groupingsDown", {}) or {}).get("groupings", []) or [],
-    )
+    # グループの列メタは ``reportMetadata.groupingsDown``（段ごとの定義 list）から取り、
+    # 木の ``groupings`` 側（``data["groupingsDown"]["groupings"]``）には ``name`` が
+    # 無いので列メタの抽出元に使わない。形が違うときは ``_check_grouping_section``
+    # の中で ``SalesforceError`` に変換する（``AttributeError`` のまま外に出さない）。
+    down_definitions = _check_grouping_section(data, report_id, "groupingsDown")
+    down_columns = _grouping_column_definitions(grouping_info, down_definitions)
     if report_format == MATRIX_FORMAT:
-        across_columns = _grouping_column_definitions(
-            grouping_info,
-            (metadata.get("groupingsAcross", {}) or {}).get("groupings", []) or [],
-        )
+        across_definitions = _check_grouping_section(data, report_id, "groupingsAcross")
+        across_columns = _grouping_column_definitions(grouping_info, across_definitions)
     else:
         across_columns = []
 
-    down_groupings = (metadata.get("groupingsDown", {}) or {}).get("groupings", []) or []
+    # 木のルートは ``data["groupingsDown"]["groupings"]``（一番上）にある。
+    down_groupings = (data.get("groupingsDown", {}) or {}).get("groupings", []) or []
     if report_format == MATRIX_FORMAT:
-        across_groupings = (metadata.get("groupingsAcross", {}) or {}).get("groupings", []) or []
+        across_groupings = (data.get("groupingsAcross", {}) or {}).get("groupings", []) or []
     else:
         across_groupings = []
 

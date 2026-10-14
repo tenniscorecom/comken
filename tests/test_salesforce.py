@@ -485,12 +485,21 @@ class TestReportApi:
         assert client.metrics.truncated_reports == ["00O000000000001"]
 
     def test_summary_report_is_rejected_explicitly(self):
-        """SUMMARY は明細行として取りに行く。詳細は ``TestReportSummary`` を参照。"""
-        body = _report_body([], report_format="SUMMARY")
+        """SUMMARY は明細行として取りに行く。詳細は ``TestReportSummary`` を参照。
+
+        薄い確認（SUMMARY の ``report.get()`` が ``Table`` を返せる・入口として
+        列を持つ）のため、``_report_body`` ではなく ``_summary_body_one_level``
+        を使って実物の Analytics API の形を作る。
+        """
+        body = _summary_body_one_level(
+            "TYPE",
+            "種別",
+            [("0", "種別A", [("A1", "1")])],
+        )
         with _salesforce([_response(json_body=body)]) as (client, _, _):
             table = client.report.get("00O000000000001")
 
-        assert table.columns == ["名前", "金額"]
+        assert table.columns == ["種別", "名前", "金額"]
 
     def test_missing_label_falls_back_to_internal_name(self):
         """表示名が取れない列は内部名をキーにする。"""
@@ -568,29 +577,26 @@ def _summary_body_one_level(
     """SUMMARY 1 段のレポートレスポンスを組み立てるテスト用ヘルパー。
 
     ``leaf_groups`` は ``[(行リーフのkey, グループの表示値, [(行 cells), ...]), ...]``。
-    各グループの ``value`` / ``label`` フィールドに ``表示値`` を入れ、
-    ``name`` に列メタのキー (``groupingColumnInfo`` 側) を持つ。
-
-    ツリーは ``groupingsDown.groupings`` の各要素の ``groupings`` が空配列で
-    「リーフ」、ツリーは持たない単純な SUMMARY を作る。
+    API の実物どおり ``reportMetadata.groupingsDown`` は**段ごとの定義の list**
+    （``name``/``sortOrder``/``dateGranularity`` のみ）として返し、木自体は
+    ``data["groupingsDown"]["groupings"]`` の下に置く。
     """
+    tree_groupings = [
+        {
+            "key": key,
+            "value": value,
+            "label": value,
+            "groupings": [],
+        }
+        for key, value, _ in leaf_groups
+    ]
     return {
         "allData": all_data,
         "reportMetadata": {
             "reportFormat": "SUMMARY",
             "detailColumns": list(detail_columns),
-            "groupingsDown": {
-                "groupings": [
-                    {
-                        "name": down_name,
-                        "key": key,
-                        "value": value,
-                        "label": value,
-                        "groupings": [],
-                    }
-                    for key, value, _ in leaf_groups
-                ]
-            },
+            "groupingsDown": [{"name": down_name, "sortOrder": "Asc", "dateGranularity": "None"}],
+            "groupingsAcross": [],
         },
         "reportExtendedMetadata": {
             "detailColumnInfo": {
@@ -599,6 +605,8 @@ def _summary_body_one_level(
             },
             "groupingColumnInfo": {down_name: {"label": down_label}},
         },
+        "groupingsDown": {"groupings": tree_groupings},
+        "groupingsAcross": {"groupings": []},
         "factMap": {
             f"{key}!T": {"rows": [{"dataCells": [{"label": v} for v in row]} for row in rows_list]}
             for key, _, rows_list in leaf_groups
@@ -619,24 +627,23 @@ def _summary_body_two_level(
 ) -> dict:
     """SUMMARY 2 段（入れ子）のレポートレスポンスを組み立てる。
 
-    ``tree`` は ``groupingsDown.groupings`` の中身の入れ子ツリー。
-    各要素は ``{"name", "key", "value", "label", "groupings": [...]}``。
-    リーフには ``name`` を付けない（親と同じ列メタを継承する想定）。
+    ``tree`` は ``groupingsDown["groupings"]`` の中身の入れ子ツリー
+    （``key`` / ``value`` / ``label`` / ``groupings`` のみ。``name`` は**付けない** —
+    実物の API では木のノードに ``name`` が来ない）。
+    段の定義は ``reportMetadata.groupingsDown``（list）に ``name`` だけ並べる。
 
     ``leaf_facts`` は ``{リーフキー: [(行 cells), ...]}`` で ``{key}!T`` の
     ``factMap`` 行に展開する。``include_intermediate_rows`` を渡すと、
     中間の段（``T`` で終わるキー）の ``rows`` もモックに混ぜる。
     ライブラリ側は中間段を無視して、リーフだけから明細を取ることを確認する。
     """
-    groupings: list[dict] = [
+    tree_groupings: list[dict] = [
         {
-            "name": down_names[0],
             "key": node["key"],
             "value": node["value"],
             "label": node["value"],
             "groupings": [
                 {
-                    "name": down_names[1],
                     "key": f"{node['key']}_{child['key']}",
                     "value": child["value"],
                     "label": child["value"],
@@ -661,7 +668,11 @@ def _summary_body_two_level(
         "reportMetadata": {
             "reportFormat": "SUMMARY",
             "detailColumns": list(detail_columns),
-            "groupingsDown": {"groupings": groupings},
+            "groupingsDown": [
+                {"name": down_names[0], "sortOrder": "Asc", "dateGranularity": "None"},
+                {"name": down_names[1], "sortOrder": "Asc", "dateGranularity": "None"},
+            ],
+            "groupingsAcross": [],
         },
         "reportExtendedMetadata": {
             "detailColumnInfo": {
@@ -669,10 +680,12 @@ def _summary_body_two_level(
                 for column, label in zip(detail_columns, detail_column_labels, strict=True)
             },
             "groupingColumnInfo": {
-                down_names[0]: {"label": down_labels[0]},
-                down_names[1]: {"label": down_labels[1]},
+                down_names[0]: {"label": down_labels[0], "groupingLevel": 0},
+                down_names[1]: {"label": down_labels[1], "groupingLevel": 1},
             },
         },
+        "groupingsDown": {"groupings": tree_groupings},
+        "groupingsAcross": {"groupings": []},
         "factMap": fact_map,
     }
 
@@ -686,48 +699,51 @@ def _matrix_body(
     across_tree: list[dict],
     leaf_facts: dict[tuple[str, str], list[tuple[str, ...]]],
     *,
+    down_child_name: str | None = None,
+    down_child_label: str | None = None,
     detail_columns: tuple[str, ...] = ("NAME", "AMOUNT"),
     detail_column_labels: tuple[str, ...] = ("名前", "金額"),
     all_data: bool = True,
 ) -> dict:
     """MATRIX（行グループ × 列グループ）のレポートレスポンスを組み立てる。
 
-    行・列のツリーは ``key`` / ``value`` / ``label`` / ``groupings``。
-    リーフキーが ``{行key}!{列key}`` の ``factMap`` エントリに紐付く。
-
-    行グループが入れ子になるときは、子グループの ``name`` に ``down_name + "_CHILD"`` を
-    使い、``groupingColumnInfo`` 側に ``"サブ"`` ラベルを足す（API のように各段に
-    別の name を持たせる想定）。
+    行・列のツリーは ``key`` / ``value`` / ``label`` / ``groupings``（``name`` 無し）。
+    段の定義は ``reportMetadata.groupingsDown``（list）と ``groupingsAcross``
+    （list）に ``name`` だけ並べる。``down_child_name`` / ``down_child_label`` を
+    指定すると、行 2 段目（子）の定義も ``groupingsDown`` list に足し、
+    ``groupingColumnInfo`` にもエントリを足す。
     """
-    has_nested_down = any(node.get("groupings") for node in down_tree)
-    down_groupings = [
-        {
-            "name": down_name,
-            "key": node["key"],
-            "value": node["value"],
-            "label": node["value"],
-            "groupings": [
-                {
-                    "name": down_name + "_CHILD",
-                    "key": f"{node['key']}_{child['key']}",
-                    "value": child["value"],
-                    "label": child["value"],
-                    "groupings": [],
-                }
-                for child in node["groupings"]
-            ],
-        }
-        for node in down_tree
+    down_tree_groupings: list[dict] = []
+    down_definitions: list[dict] = [
+        {"name": down_name, "sortOrder": "Asc", "dateGranularity": "None"}
     ]
-    if has_nested_down:
-        # 入れ子を作らない要素にも空の ``groupings`` を入れてツリー構造に揃える
-        for entry in down_groupings:
-            if entry["groupings"] is None:
-                entry["groupings"] = []
+    if down_child_name is not None:
+        down_definitions.append(
+            {"name": down_child_name, "sortOrder": "Asc", "dateGranularity": "None"}
+        )
+    for node in down_tree:
+        children = node.get("groupings") or []
+        down_tree_groupings.append(
+            {
+                "key": node["key"],
+                "value": node["value"],
+                "label": node["value"],
+                "groupings": [
+                    {
+                        "key": f"{node['key']}_{child['key']}",
+                        "value": child["value"],
+                        "label": child["value"],
+                        "groupings": [],
+                    }
+                    for child in children
+                ]
+                if children
+                else [],
+            }
+        )
 
-    across_groupings = [
+    across_tree_groupings: list[dict] = [
         {
-            "name": across_name,
             "key": node["key"],
             "value": node["value"],
             "label": node["value"],
@@ -735,6 +751,7 @@ def _matrix_body(
         }
         for node in across_tree
     ]
+
     fact_map = {
         f"{row_key}!{col_key}": {
             "rows": [{"dataCells": [{"label": v} for v in row]} for row in rows_list]
@@ -745,15 +762,17 @@ def _matrix_body(
         down_name: {"label": down_label},
         across_name: {"label": across_label},
     }
-    if has_nested_down:
-        grouping_column_info[down_name + "_CHILD"] = {"label": "サブ"}
+    if down_child_name is not None and down_child_label is not None:
+        grouping_column_info[down_child_name] = {"label": down_child_label}
     return {
         "allData": all_data,
         "reportMetadata": {
             "reportFormat": "MATRIX",
             "detailColumns": list(detail_columns),
-            "groupingsDown": {"groupings": down_groupings},
-            "groupingsAcross": {"groupings": across_groupings},
+            "groupingsDown": down_definitions,
+            "groupingsAcross": [
+                {"name": across_name, "sortOrder": "Asc", "dateGranularity": "None"}
+            ],
         },
         "reportExtendedMetadata": {
             "detailColumnInfo": {
@@ -762,6 +781,8 @@ def _matrix_body(
             },
             "groupingColumnInfo": grouping_column_info,
         },
+        "groupingsDown": {"groupings": down_tree_groupings},
+        "groupingsAcross": {"groupings": across_tree_groupings},
         "factMap": fact_map,
     }
 
@@ -793,38 +814,45 @@ class TestReportSummary:
         ]
 
     def test_nested_grouping_walks_depth_first_and_skips_intermediate_rows(self):
-        """2 段 SUMMARY は深さ優先で歩かれ、中間の ``rows`` は二重に数えない。"""
-        # 行グループ: A→A1/A2、B（1 段目は 1 つ）、C→C1
+        """2 段 SUMMARY は深さ優先で歩かれ、中間の ``rows`` は二重に数えない。
+
+        実機の Analytics API の形に ``ACCOUNT_NAME`` → ``STAGE_NAME`` の 2 段を
+        当てはめて、列メタが ``reportMetadata.groupingsDown``（list）に来る
+        ケースを通す。木のノードは ``name`` を持たない（API 実物のとおり）。
+        """
+        # 行グループ: A社→Prospecting/Qualification、B社（1 段のみ）。
+        # 1 段のみで止まっている B 社の枝は段数より浅く、2 段目の列が空文字で
+        # 埋まることも同時に確かめる（``test_branch_shorter_than_definitions``）。
         tree = [
             {
                 "key": "0",
-                "value": "種別A",
+                "value": "A社",
                 "groupings": [
-                    {"key": "0", "value": "サブA1"},
-                    {"key": "1", "value": "サブA2"},
+                    {"key": "0", "value": "Prospecting"},
+                    {"key": "1", "value": "Qualification"},
                 ],
             },
             {
                 "key": "1",
-                "value": "種別B",
+                "value": "B社",
                 "groupings": [
-                    {"key": "0", "value": "サブB1"},
+                    {"key": "0", "value": "Prospecting"},
                 ],
             },
         ]
         leaf_facts = {
-            "0_0": [("A1-1", "10"), ("A1-2", "20")],
-            "0_1": [("A2-1", "30")],
-            "1_0": [("B1-1", "40")],
+            "0_0": [("A1-Oppo-1", "10"), ("A1-Oppo-2", "20")],
+            "0_1": [("A1-Qual-1", "30")],
+            "1_0": [("B1-Oppo-1", "40")],
         }
         # 中間段 "0!T" と合計 "T!T" に rows を入れても、無視されることを確認
         body = _summary_body_two_level(
-            ("TYPE", "SUBTYPE"),
-            ("種別", "サブ"),
+            ("ACCOUNT_NAME", "STAGE_NAME"),
+            ("取引先名", "フェーズ"),
             tree,
             leaf_facts,
             include_intermediate_rows=[
-                ("0", [("集計A1", "999")]),
+                ("0", [("集計A社", "999")]),
                 ("T", [("総計", "9999")]),
             ],
         )
@@ -832,10 +860,10 @@ class TestReportSummary:
             rows = client.report.get("00O000000000001").to_rows()
 
         assert rows == [
-            {"種別": "種別A", "サブ": "サブA1", "名前": "A1-1", "金額": "10"},
-            {"種別": "種別A", "サブ": "サブA1", "名前": "A1-2", "金額": "20"},
-            {"種別": "種別A", "サブ": "サブA2", "名前": "A2-1", "金額": "30"},
-            {"種別": "種別B", "サブ": "サブB1", "名前": "B1-1", "金額": "40"},
+            {"取引先名": "A社", "フェーズ": "Prospecting", "名前": "A1-Oppo-1", "金額": "10"},
+            {"取引先名": "A社", "フェーズ": "Prospecting", "名前": "A1-Oppo-2", "金額": "20"},
+            {"取引先名": "A社", "フェーズ": "Qualification", "名前": "A1-Qual-1", "金額": "30"},
+            {"取引先名": "B社", "フェーズ": "Prospecting", "名前": "B1-Oppo-1", "金額": "40"},
         ]
 
     def test_zero_rows_returns_table_with_grouping_and_detail_columns(self):
@@ -918,11 +946,169 @@ class TestReportSummary:
         get_call = session.request.call_args_list[1]
         assert "includeDetails=true" in get_call[0][1]
 
+    def test_summary_top_level_groupings_across_is_an_empty_groupings_dict(self):
+        """SUMMARY では一番上の ``groupingsAcross`` が ``{"groupings": []}`` で来る
+        （実機の Analytics API のとおり）。パースで落ちないことと、列グループが
+        付かないことを確認する。
+        """
+        body = _summary_body_one_level(
+            "TYPE",
+            "種別",
+            [
+                ("0", "種別A", [("A1", "10")]),
+                ("1", "種別B", [("B1", "20")]),
+            ],
+        )
+        # ヘルパーが ``{"groupings": []}`` を返す前提なので、念のため確認
+        assert body["groupingsAcross"] == {"groupings": []}
+        assert body["reportMetadata"]["groupingsAcross"] == []
+        with _salesforce([_response(json_body=body)]) as (client, _, _):
+            table = client.report.get("00O000000000001")
+
+        assert table.columns == ["種別", "名前", "金額"]
+        assert table.to_rows() == [
+            {"種別": "種別A", "名前": "A1", "金額": "10"},
+            {"種別": "種別B", "名前": "B1", "金額": "20"},
+        ]
+
+    def test_branch_shorter_than_definitions_leaves_missing_columns_blank(self):
+        """木の枝の深さが段数より浅い（グループの値が空）とき、足りない段の
+        列は空文字で埋めて明細行を返す。
+
+        2 段 SUMMARY で、ある枝が 1 段目でリーフになっているケースを再現する
+        （Salesforce の実機でも、フィルタでグループの値が無いと起きる）。
+        """
+        # A社は A1/A2 まで伸びるが、B社は 1 段で止まっている
+        tree = [
+            {
+                "key": "0",
+                "value": "種別A",
+                "groupings": [
+                    {"key": "0", "value": "サブA1"},
+                    {"key": "1", "value": "サブA2"},
+                ],
+            },
+            {
+                "key": "1",
+                "value": "種別B",
+                "groupings": [],
+            },
+        ]
+        leaf_facts = {
+            "0_0": [("A1-1", "10")],
+            "0_1": [("A2-1", "20")],
+            # B社は 1 段でリーフ。key は "1" のまま。
+            "1": [("B-1", "30")],
+        }
+        body = _summary_body_two_level(
+            ("TYPE", "SUBTYPE"),
+            ("種別", "サブ"),
+            tree,
+            leaf_facts,
+        )
+        with _salesforce([_response(json_body=body)]) as (client, _, _):
+            table = client.report.get("00O000000000001")
+
+        assert table.columns == ["種別", "サブ", "名前", "金額"]
+        assert table.to_rows() == [
+            {"種別": "種別A", "サブ": "サブA1", "名前": "A1-1", "金額": "10"},
+            {"種別": "種別A", "サブ": "サブA2", "名前": "A2-1", "金額": "20"},
+            # 1 段で止まる枝は 2 段目の列が空文字
+            {"種別": "種別B", "サブ": "", "名前": "B-1", "金額": "30"},
+        ]
+
+    @pytest.mark.parametrize(
+        "shape_break",
+        [
+            # ``reportMetadata.groupingsDown`` が list ではなく dict のまま来ている
+            # （テストの旧形式と同じ形）
+            "metadata_groupings_down_is_dict",
+            # 木の ``groupingsDown`` が list で来ている（dict ではない）
+            "data_groupings_down_is_list",
+            # ``groupingsDown`` 自体が無い
+            "data_groupings_down_missing",
+        ],
+    )
+    def test_unexpected_response_shape_raises_salesforce_error(self, shape_break):
+        """返り値の形が想定外（dict のはずが list、list のはずが dict など）のとき、
+        ``AttributeError`` / ``TypeError`` をそのまま外に出さず、``SalesforceError``
+        で「レポートの返り値の形が想定と違います」と止める。
+
+        利用側（ダウンローダー）で ``ComkenError`` として扱えるように、
+        ``SalesforceError`` に統一してある。
+        """
+        base = _summary_body_one_level(
+            "TYPE",
+            "種別",
+            [("0", "種別A", [("A1", "1")])],
+        )
+        if shape_break == "metadata_groupings_down_is_dict":
+            # 旧テストの偽データと同じ形に ``groupingsDown`` を dict 化
+            base["reportMetadata"]["groupingsDown"] = {
+                "groupings": [
+                    {
+                        "name": "TYPE",
+                        "key": "0",
+                        "value": "種別A",
+                        "label": "種別A",
+                        "groupings": [],
+                    }
+                ]
+            }
+            expected_key = "reportMetadata.groupingsDown が list ではない"
+        elif shape_break == "data_groupings_down_is_list":
+            # 木の ``groupingsDown`` を list 化（dict ではない）
+            base["groupingsDown"] = base["groupingsDown"]["groupings"]
+            expected_key = "groupingsDown が dict ではない"
+        else:
+            # ``groupingsDown`` 自体を消す
+            base.pop("groupingsDown")
+            expected_key = "groupingsDown が無い"
+
+        with (
+            _salesforce([_response(json_body=base)]) as (client, _, _),
+            pytest.raises(SalesforceError, match=expected_key),
+        ):
+            client.report.get("00O000000000001")
+
 
 class TestReportMatrix:
     """MATRIX のレポートは、行方向 × 列方向のリーフを ``{行key}!{列key}`` の
     ``factMap`` から取り、列は「行グループ列 → 列グループ列 → 明細列」の順。
     """
+
+    def test_matrix_one_level_returns_rows_in_row_then_column_order(self):
+        """MATRIX（行 1 段 × 列 1 段）の各セルの ``rows`` が、行→列の順で並ぶ。"""
+        body = _matrix_body(
+            "TYPE",
+            "種別",
+            [
+                {"key": "0", "value": "種別A", "groupings": []},
+                {"key": "1", "value": "種別B", "groupings": []},
+            ],
+            "PERIOD",
+            "期",
+            [
+                {"key": "a", "value": "期1", "groupings": []},
+                {"key": "b", "value": "期2", "groupings": []},
+            ],
+            {
+                ("0", "a"): [("A-期1", "10")],
+                ("0", "b"): [("A-期2", "20")],
+                ("1", "a"): [("B-期1", "30")],
+                ("1", "b"): [("B-期2", "40")],
+            },
+        )
+        with _salesforce([_response(json_body=body)]) as (client, _, _):
+            table = client.report.get("00O000000000001")
+
+        assert table.columns == ["種別", "期", "名前", "金額"]
+        assert table.to_rows() == [
+            {"種別": "種別A", "期": "期1", "名前": "A-期1", "金額": "10"},
+            {"種別": "種別A", "期": "期2", "名前": "A-期2", "金額": "20"},
+            {"種別": "種別B", "期": "期1", "名前": "B-期1", "金額": "30"},
+            {"種別": "種別B", "期": "期2", "名前": "B-期2", "金額": "40"},
+        ]
 
     def test_matrix_returns_rows_in_row_then_column_order(self):
         """MATRIX は行方向の順を維持しつつ、各行グループ内で列グループを順に展開。"""
@@ -951,6 +1137,8 @@ class TestReportMatrix:
                 ("1", "a"): [("B-期1", "30")],
                 ("1", "b"): [("B-期2", "40")],
             },
+            down_child_name="TYPE_CHILD",
+            down_child_label="サブ",
         )
         with _salesforce([_response(json_body=body)]) as (client, _, _):
             table = client.report.get("00O000000000001")

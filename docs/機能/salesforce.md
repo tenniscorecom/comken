@@ -333,6 +333,14 @@ with site_class() as sf:
 **グループの列の値**: グループの表示用の `label`（`groupingColumnInfo[name].label`、
 取れなければ内部名）。
 
+**段ごとの定義 vs 木の取り方**: 列メタ（`name`）は `reportMetadata.groupingsDown`
+（または `groupingsAcross`）の **list**（段ごとの定義）から順に取り、
+明細の行が並ぶ木は返り値の **一番上** の `data["groupingsDown"]["groupings"]`
+（および `data["groupingsAcross"]["groupings"]`）から取る。木のノードには
+`name` が無いので列メタの抽出元には使えない。`reportMetadata.groupingsDown`
+は list で来る前提（list 以外なら `SalesforceError` で「返り値の形が想定と
+違います」と停止）。
+
 **0 件の `Table`**: 列（グループ列 + 明細列）が落ちないよう、`detailColumns` /
 `detailColumnInfo` と `groupingsDown.groupings` の代表 `name` から組み立てる。
 
