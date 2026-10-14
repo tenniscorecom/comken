@@ -437,7 +437,9 @@ class TestReportApi:
 
         assert rows == [{"名前": "A社", "金額": "1,000"}, {"名前": "B社", "金額": "2,000"}]
         url = session.request.call_args[0][1]
-        assert url == f"{INSTANCE_URL}{DATA_PREFIX}/analytics/reports/00O000000000001"
+        assert url == (
+            f"{INSTANCE_URL}{DATA_PREFIX}/analytics/reports/00O000000000001?includeDetails=true"
+        )
 
     def test_run_csv_saves_the_report_result(self, tmp_path):
         """run_csv() は get() と同じ結果をそのまま CSV へ保存する。"""
@@ -455,8 +457,14 @@ class TestReportApi:
             client.report.get("00O000000000001", filters=filters)
 
         assert session.request.call_args[0][0] == "POST"
-        expected_body = {"reportMetadata": {"reportFilters": filters}}
+        expected_body = {
+            "reportMetadata": {"reportFilters": filters},
+            "includeDetails": True,
+        }
         assert session.request.call_args[1]["json"] == expected_body
+        assert "includeDetails=true" in session.request.call_args[0][1], (
+            "URL 側にも付けて二重に守る"
+        )
 
     def test_truncated_report_raises_by_default(self):
         """2000 行で切り捨てられたら既定では例外で止める。"""
@@ -477,13 +485,12 @@ class TestReportApi:
         assert client.metrics.truncated_reports == ["00O000000000001"]
 
     def test_summary_report_is_rejected_explicitly(self):
-        """集計形式は無言で空を返さず、明示的に弾く。"""
+        """SUMMARY は明細行として取りに行く。詳細は ``TestReportSummary`` を参照。"""
         body = _report_body([], report_format="SUMMARY")
-        with (
-            _salesforce([_response(json_body=body)]) as (client, _, _),
-            pytest.raises(SalesforceError, match=r"(?s)SUMMARY.*明細"),
-        ):
-            client.report.get("00O000000000001")
+        with _salesforce([_response(json_body=body)]) as (client, _, _):
+            table = client.report.get("00O000000000001")
+
+        assert table.columns == ["名前", "金額"]
 
     def test_missing_label_falls_back_to_internal_name(self):
         """表示名が取れない列は内部名をキーにする。"""
@@ -547,6 +554,428 @@ class TestReportApi:
             table = client.report.get("00O000000000001")
 
         assert table.columns == ["名前", "金額"]
+
+
+def _summary_body_one_level(
+    down_name: str,
+    down_label: str,
+    leaf_groups: list[tuple[str, str, list[tuple[str, ...]]]],
+    *,
+    detail_columns: tuple[str, ...] = ("NAME", "AMOUNT"),
+    detail_column_labels: tuple[str, ...] = ("名前", "金額"),
+    all_data: bool = True,
+) -> dict:
+    """SUMMARY 1 段のレポートレスポンスを組み立てるテスト用ヘルパー。
+
+    ``leaf_groups`` は ``[(行リーフのkey, グループの表示値, [(行 cells), ...]), ...]``。
+    各グループの ``value`` / ``label`` フィールドに ``表示値`` を入れ、
+    ``name`` に列メタのキー (``groupingColumnInfo`` 側) を持つ。
+
+    ツリーは ``groupingsDown.groupings`` の各要素の ``groupings`` が空配列で
+    「リーフ」、ツリーは持たない単純な SUMMARY を作る。
+    """
+    return {
+        "allData": all_data,
+        "reportMetadata": {
+            "reportFormat": "SUMMARY",
+            "detailColumns": list(detail_columns),
+            "groupingsDown": {
+                "groupings": [
+                    {
+                        "name": down_name,
+                        "key": key,
+                        "value": value,
+                        "label": value,
+                        "groupings": [],
+                    }
+                    for key, value, _ in leaf_groups
+                ]
+            },
+        },
+        "reportExtendedMetadata": {
+            "detailColumnInfo": {
+                column: {"label": label}
+                for column, label in zip(detail_columns, detail_column_labels, strict=True)
+            },
+            "groupingColumnInfo": {down_name: {"label": down_label}},
+        },
+        "factMap": {
+            f"{key}!T": {"rows": [{"dataCells": [{"label": v} for v in row]} for row in rows_list]}
+            for key, _, rows_list in leaf_groups
+        },
+    }
+
+
+def _summary_body_two_level(
+    down_names: tuple[str, str],
+    down_labels: tuple[str, str],
+    tree: list[dict],
+    leaf_facts: dict[str, list[tuple[str, ...]]],
+    *,
+    detail_columns: tuple[str, ...] = ("NAME", "AMOUNT"),
+    detail_column_labels: tuple[str, ...] = ("名前", "金額"),
+    all_data: bool = True,
+    include_intermediate_rows: list[tuple[str, list[tuple[str, ...]]]] | None = None,
+) -> dict:
+    """SUMMARY 2 段（入れ子）のレポートレスポンスを組み立てる。
+
+    ``tree`` は ``groupingsDown.groupings`` の中身の入れ子ツリー。
+    各要素は ``{"name", "key", "value", "label", "groupings": [...]}``。
+    リーフには ``name`` を付けない（親と同じ列メタを継承する想定）。
+
+    ``leaf_facts`` は ``{リーフキー: [(行 cells), ...]}`` で ``{key}!T`` の
+    ``factMap`` 行に展開する。``include_intermediate_rows`` を渡すと、
+    中間の段（``T`` で終わるキー）の ``rows`` もモックに混ぜる。
+    ライブラリ側は中間段を無視して、リーフだけから明細を取ることを確認する。
+    """
+    groupings: list[dict] = [
+        {
+            "name": down_names[0],
+            "key": node["key"],
+            "value": node["value"],
+            "label": node["value"],
+            "groupings": [
+                {
+                    "name": down_names[1],
+                    "key": f"{node['key']}_{child['key']}",
+                    "value": child["value"],
+                    "label": child["value"],
+                    "groupings": [],
+                }
+                for child in node["groupings"]
+            ],
+        }
+        for node in tree
+    ]
+    fact_map: dict[str, dict] = {
+        f"{key}!T": {"rows": [{"dataCells": [{"label": v} for v in row]} for row in rows_list]}
+        for key, rows_list in leaf_facts.items()
+    }
+    if include_intermediate_rows:
+        for key, rows_list in include_intermediate_rows:
+            fact_map[f"{key}!T"] = {
+                "rows": [{"dataCells": [{"label": v} for v in row]} for row in rows_list]
+            }
+    return {
+        "allData": all_data,
+        "reportMetadata": {
+            "reportFormat": "SUMMARY",
+            "detailColumns": list(detail_columns),
+            "groupingsDown": {"groupings": groupings},
+        },
+        "reportExtendedMetadata": {
+            "detailColumnInfo": {
+                column: {"label": label}
+                for column, label in zip(detail_columns, detail_column_labels, strict=True)
+            },
+            "groupingColumnInfo": {
+                down_names[0]: {"label": down_labels[0]},
+                down_names[1]: {"label": down_labels[1]},
+            },
+        },
+        "factMap": fact_map,
+    }
+
+
+def _matrix_body(
+    down_name: str,
+    down_label: str,
+    down_tree: list[dict],
+    across_name: str,
+    across_label: str,
+    across_tree: list[dict],
+    leaf_facts: dict[tuple[str, str], list[tuple[str, ...]]],
+    *,
+    detail_columns: tuple[str, ...] = ("NAME", "AMOUNT"),
+    detail_column_labels: tuple[str, ...] = ("名前", "金額"),
+    all_data: bool = True,
+) -> dict:
+    """MATRIX（行グループ × 列グループ）のレポートレスポンスを組み立てる。
+
+    行・列のツリーは ``key`` / ``value`` / ``label`` / ``groupings``。
+    リーフキーが ``{行key}!{列key}`` の ``factMap`` エントリに紐付く。
+
+    行グループが入れ子になるときは、子グループの ``name`` に ``down_name + "_CHILD"`` を
+    使い、``groupingColumnInfo`` 側に ``"サブ"`` ラベルを足す（API のように各段に
+    別の name を持たせる想定）。
+    """
+    has_nested_down = any(node.get("groupings") for node in down_tree)
+    down_groupings = [
+        {
+            "name": down_name,
+            "key": node["key"],
+            "value": node["value"],
+            "label": node["value"],
+            "groupings": [
+                {
+                    "name": down_name + "_CHILD",
+                    "key": f"{node['key']}_{child['key']}",
+                    "value": child["value"],
+                    "label": child["value"],
+                    "groupings": [],
+                }
+                for child in node["groupings"]
+            ],
+        }
+        for node in down_tree
+    ]
+    if has_nested_down:
+        # 入れ子を作らない要素にも空の ``groupings`` を入れてツリー構造に揃える
+        for entry in down_groupings:
+            if entry["groupings"] is None:
+                entry["groupings"] = []
+
+    across_groupings = [
+        {
+            "name": across_name,
+            "key": node["key"],
+            "value": node["value"],
+            "label": node["value"],
+            "groupings": [],
+        }
+        for node in across_tree
+    ]
+    fact_map = {
+        f"{row_key}!{col_key}": {
+            "rows": [{"dataCells": [{"label": v} for v in row]} for row in rows_list]
+        }
+        for (row_key, col_key), rows_list in leaf_facts.items()
+    }
+    grouping_column_info: dict[str, dict] = {
+        down_name: {"label": down_label},
+        across_name: {"label": across_label},
+    }
+    if has_nested_down:
+        grouping_column_info[down_name + "_CHILD"] = {"label": "サブ"}
+    return {
+        "allData": all_data,
+        "reportMetadata": {
+            "reportFormat": "MATRIX",
+            "detailColumns": list(detail_columns),
+            "groupingsDown": {"groupings": down_groupings},
+            "groupingsAcross": {"groupings": across_groupings},
+        },
+        "reportExtendedMetadata": {
+            "detailColumnInfo": {
+                column: {"label": label}
+                for column, label in zip(detail_columns, detail_column_labels, strict=True)
+            },
+            "groupingColumnInfo": grouping_column_info,
+        },
+        "factMap": fact_map,
+    }
+
+
+class TestReportSummary:
+    """SUMMARY のレポートは ``includeDetails=true`` で取り、各リーフの ``rows`` を
+    1 枚の ``Table`` に並べる。合計・小計（``T!T`` や中間の ``{key}!T``）は
+    集計セルとして捨てる（明細の行だけ返すため）。
+    """
+
+    def test_one_level_grouping_returns_detail_rows_with_group_label(self):
+        """SUMMARY 1 段（2 グループ、各 2 行）が、グループのラベル付きで並ぶ。"""
+        body = _summary_body_one_level(
+            "TYPE",
+            "種別",
+            [
+                ("0", "種別A", [("A1", "100"), ("A2", "200")]),
+                ("1", "種別B", [("B1", "300"), ("B2", "400")]),
+            ],
+        )
+        with _salesforce([_response(json_body=body)]) as (client, _, _):
+            rows = client.report.get("00O000000000001").to_rows()
+
+        assert rows == [
+            {"種別": "種別A", "名前": "A1", "金額": "100"},
+            {"種別": "種別A", "名前": "A2", "金額": "200"},
+            {"種別": "種別B", "名前": "B1", "金額": "300"},
+            {"種別": "種別B", "名前": "B2", "金額": "400"},
+        ]
+
+    def test_nested_grouping_walks_depth_first_and_skips_intermediate_rows(self):
+        """2 段 SUMMARY は深さ優先で歩かれ、中間の ``rows`` は二重に数えない。"""
+        # 行グループ: A→A1/A2、B（1 段目は 1 つ）、C→C1
+        tree = [
+            {
+                "key": "0",
+                "value": "種別A",
+                "groupings": [
+                    {"key": "0", "value": "サブA1"},
+                    {"key": "1", "value": "サブA2"},
+                ],
+            },
+            {
+                "key": "1",
+                "value": "種別B",
+                "groupings": [
+                    {"key": "0", "value": "サブB1"},
+                ],
+            },
+        ]
+        leaf_facts = {
+            "0_0": [("A1-1", "10"), ("A1-2", "20")],
+            "0_1": [("A2-1", "30")],
+            "1_0": [("B1-1", "40")],
+        }
+        # 中間段 "0!T" と合計 "T!T" に rows を入れても、無視されることを確認
+        body = _summary_body_two_level(
+            ("TYPE", "SUBTYPE"),
+            ("種別", "サブ"),
+            tree,
+            leaf_facts,
+            include_intermediate_rows=[
+                ("0", [("集計A1", "999")]),
+                ("T", [("総計", "9999")]),
+            ],
+        )
+        with _salesforce([_response(json_body=body)]) as (client, _, _):
+            rows = client.report.get("00O000000000001").to_rows()
+
+        assert rows == [
+            {"種別": "種別A", "サブ": "サブA1", "名前": "A1-1", "金額": "10"},
+            {"種別": "種別A", "サブ": "サブA1", "名前": "A1-2", "金額": "20"},
+            {"種別": "種別A", "サブ": "サブA2", "名前": "A2-1", "金額": "30"},
+            {"種別": "種別B", "サブ": "サブB1", "名前": "B1-1", "金額": "40"},
+        ]
+
+    def test_zero_rows_returns_table_with_grouping_and_detail_columns(self):
+        """0 件の SUMMARY でも、列（グループ列 + 明細列）が残る。"""
+        body = _summary_body_one_level(
+            "TYPE",
+            "種別",
+            [
+                ("0", "種別A", []),
+                ("1", "種別B", []),
+            ],
+        )
+        with _salesforce([_response(json_body=body)]) as (client, _, _):
+            table = client.report.get("00O000000000001")
+
+        assert table.columns == ["種別", "名前", "金額"]
+        assert table.to_rows() == []
+
+    def test_truncated_raises_by_default_and_warns_with_allow_truncated(self):
+        """SUMMARY でも 2000 行の上限は同じ（既定で例外、allow_truncated=True で警告）。"""
+        truncated = _summary_body_one_level(
+            "TYPE",
+            "種別",
+            [("0", "種別A", [("A1", "1")])],
+            all_data=False,
+        )
+        with (
+            _salesforce([_response(json_body=truncated)]) as (client, _, _),
+            pytest.raises(SalesforceReportTruncatedError, match=r"(?s)2000 行.*SOQL"),
+        ):
+            client.report.get("00O000000000001")
+
+        truncated_again = _summary_body_one_level(
+            "TYPE",
+            "種別",
+            [("0", "種別A", [("A1", "1")])],
+            all_data=False,
+        )
+        with _salesforce([_response(json_body=truncated_again)]) as (client, _, _):
+            rows = client.report.get("00O000000000001", allow_truncated=True)
+
+        assert rows.to_rows() == [{"種別": "種別A", "名前": "A1", "金額": "1"}]
+        assert client.metrics.truncated_reports == ["00O000000000001"]
+
+    def test_without_detail_columns_raises_salesforce_error(self):
+        """明細の列が無い SUMMARY は「明細の列が無いレポート」で止める。"""
+        body = _summary_body_one_level(
+            "TYPE",
+            "種別",
+            [("0", "種別A", [("A1", "100")])],
+            detail_columns=(),
+            detail_column_labels=(),
+        )
+        with (
+            _salesforce([_response(json_body=body)]) as (client, _, _),
+            pytest.raises(SalesforceError, match=r"(?s)明細の列が無い"),
+        ):
+            client.report.get("00O000000000001")
+
+    def test_async_run_polls_with_include_details_and_parses_summary(self):
+        """非同期実行でも ``includeDetails`` を付け、SUMMARY を取れる。"""
+        started = _response(json_body={"id": "0LG000000000001"})
+        body = _summary_body_one_level(
+            "TYPE",
+            "種別",
+            [("0", "種別A", [("A1", "1")])],
+        )
+        body_with_status = {**body, "status": "Success"}
+        with _salesforce([started, _response(json_body=body_with_status)]) as (
+            client,
+            session,
+            _,
+        ):
+            rows = client.report.run_async("00O000000000001")
+
+        assert rows.to_rows() == [{"種別": "種別A", "名前": "A1", "金額": "1"}]
+        # インスタンス POST と status GET の両方に includeDetails が乗る
+        post_call = session.request.call_args_list[0]
+        assert post_call[1]["json"]["includeDetails"] is True
+        get_call = session.request.call_args_list[1]
+        assert "includeDetails=true" in get_call[0][1]
+
+
+class TestReportMatrix:
+    """MATRIX のレポートは、行方向 × 列方向のリーフを ``{行key}!{列key}`` の
+    ``factMap`` から取り、列は「行グループ列 → 列グループ列 → 明細列」の順。
+    """
+
+    def test_matrix_returns_rows_in_row_then_column_order(self):
+        """MATRIX は行方向の順を維持しつつ、各行グループ内で列グループを順に展開。"""
+        body = _matrix_body(
+            "TYPE",
+            "種別",
+            [
+                {
+                    "key": "0",
+                    "value": "種別A",
+                    "groupings": [
+                        {"key": "0", "value": "サブA1"},
+                    ],
+                },
+                {"key": "1", "value": "種別B", "groupings": []},
+            ],
+            "PERIOD",
+            "期",
+            [
+                {"key": "a", "value": "期1", "groupings": []},
+                {"key": "b", "value": "期2", "groupings": []},
+            ],
+            {
+                ("0_0", "a"): [("A1-期1", "10")],
+                ("0_0", "b"): [("A1-期2", "20")],
+                ("1", "a"): [("B-期1", "30")],
+                ("1", "b"): [("B-期2", "40")],
+            },
+        )
+        with _salesforce([_response(json_body=body)]) as (client, _, _):
+            table = client.report.get("00O000000000001")
+
+        assert table.columns == ["種別", "サブ", "期", "名前", "金額"]
+        rows = table.to_rows()
+        assert rows == [
+            {"種別": "種別A", "サブ": "サブA1", "期": "期1", "名前": "A1-期1", "金額": "10"},
+            {"種別": "種別A", "サブ": "サブA1", "期": "期2", "名前": "A1-期2", "金額": "20"},
+            {"種別": "種別B", "サブ": "", "期": "期1", "名前": "B-期1", "金額": "30"},
+            {"種別": "種別B", "サブ": "", "期": "期2", "名前": "B-期2", "金額": "40"},
+        ]
+
+
+class TestReportUnknownFormat:
+    """対応外形式（MULTI_BLOCK など）は明示的にエラーで止める。"""
+
+    def test_multi_block_report_raises_format_error(self):
+        """MULTI_BLOCK（結合レポート）は、無言で空を返さずエラーにする。"""
+        body = _report_body([], report_format="MULTI_BLOCK")
+        with (
+            _salesforce([_response(json_body=body)]) as (client, _, _),
+            pytest.raises(SalesforceError, match=r"(?s)MULTI_BLOCK.*SUMMARY"),
+        ):
+            client.report.get("00O000000000001")
 
 
 class TestDescribeObject:

@@ -236,10 +236,12 @@ with site() as sf:
 
 ### 4段目（最終手段）: 画面のエクスポート機能を直接叩く
 
-マトリックス／統合レポートなど、SOQL に書き換えられない形式のレポートで
-1区間でも 2000 行を超える場合だけ、画面のエクスポート機能（`?export=1&xf=csv`）を
-使う。API のこの上限自体がかからない。3段目より重い手段なので、3段目で
-足りるかを先に確かめること。使うのは
+統合レポート（`MULTI_BLOCK`）や、1区間でも 2000 行を超えて Report API
+（`report.get()` / `run_async()`）で取り切れないレポートの場合だけ、画面の
+エクスポート機能（`?export=1&xf=csv`）を使う。サマリー・マトリックスは Report API
+でも取れる（[レポート形式](#レポート形式)）ので、画面エクスポートが必要になるのは
+その2形式のどれにも当たらないケースにほぼ絞られる。3段目より重い手段なので、
+3段目で足りるかを先に確かめること。使うのは
 `comken.toolbox.browser.sites.salesforce.SalesforceReportBrowser`（組織ごとの入口は
 `comken.toolbox.browser.sites.salesforce`）。
 
@@ -314,9 +316,38 @@ with site_class() as sf:
 
 ### レポート形式
 
-明細（TABULAR）以外は `factMap` の構造が変わり、そのまま読むと**無言で空を返す**。
-`reportFormat` を見て、明細以外は明示的にエラーにする。
-実際にどの形式かは触れば分かるので、事前に決め打ちしない。
+`reportFormat` で 3 形式（TABULAR / SUMMARY / MATRIX）を判別し、すべて**明細の行
+だけを 1 枚の `Table` に並べて返す**。いずれも同期・非同期とも `includeDetails=true`
+を付けて取りに行く（入れないと詳細が返らない）。
+
+| 形式 | 行グループの列 | 列グループの列 | 値の読み方 |
+|---|---|---|---|
+| TABULAR | 無し | 無し | `T!T` の `rows` の `dataCells` をそのまま |
+| SUMMARY | `groupingsDown` の段数ぶん | 無し | 各リーフ（最深グループ）の `{key}!T` の `rows` を集約 |
+| MATRIX | `groupingsDown` の段数ぶん | `groupingsAcross` の段数ぶん | 各組み合わせのリーフの `{行key}!{列key}` の `rows` を集約 |
+
+**集計は無視する**：`T!T` の合計、中間の `{key}!T` の小計は明細ではないので
+**含めない**。一番深いグループの `rows` だけを取り出し、深さ優先の順で並べる
+（同じ親の下では列グループの順 → 行グループの順）。
+
+**グループの列の値**: グループの表示用の `label`（`groupingColumnInfo[name].label`、
+取れなければ内部名）。
+
+**0 件の `Table`**: 列（グループ列 + 明細列）が落ちないよう、`detailColumns` /
+`detailColumnInfo` と `groupingsDown.groupings` の代表 `name` から組み立てる。
+
+**2000 行の上限・切り捨て**: TABULAR と同じ動作（`allData=false` で検知、
+`allow_truncated=True` で警告に落とせる）。
+
+**明細の列が無い SUMMARY**: そのレポートは取れないので `_report_format_error`
+と同じ系統のエラーで止める（集計だけのレポートを空の `Table` で「成功」扱いしない）。
+
+**対応外形式（MULTI_BLOCK など）**: 例外で止める。明細・サマリー・マトリックス
+以外の形式は、API の単位で違うため `report.get()` の入口では取らない。
+
+`describe(report_id)` は実行せず定義だけを取り、レスポンスは API の構造のまま返す
+（`get()` のように `[{}]` に畳まない）。SOQL 移行の下書き材料にする用途で、
+SOQL のフィールドパスとは 1 対 1 ではない点に注意する。
 
 ### 用語の整理:「Analytics API」と「Reports and Dashboards REST API」
 
