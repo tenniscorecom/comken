@@ -48,6 +48,7 @@ from comken.core.table.diff import DiffResult
 from comken.core.table.diff import RowChange
 from comken.core.table.hierarchy import HierarchyResult
 from comken.core.table.model import Table
+from comken.core.table.row import Row
 from comken.core.table.transfer import Transfer
 from comken.core.text import normalize
 from comken.core.text import remove_spaces
@@ -61,6 +62,7 @@ __all__ = [
     "HierarchyResult",
     "RowChange",
     "State",
+    "Row",
     "Table",
     "Timer",
     "Transfer",

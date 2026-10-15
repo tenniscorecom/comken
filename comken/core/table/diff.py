@@ -11,13 +11,15 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from comken.core.table.row import Row
+
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from comken.core.table.model import Table
 
 
-def diff_row(before: dict[str, Any], after: dict[str, Any]) -> dict[str, tuple[Any, Any]]:
+def diff_row(before: Row, after: Row) -> dict[str, tuple[Any, Any]]:
     """1行同士を比較し、値が異なる列だけを {列名: (変更前, 変更後)} で返す。
 
     CSV の str と Excel の数値は同一視する（"1000" と 1000 は差分にならない）。
@@ -52,8 +54,8 @@ class RowChange:
     """
 
     key: str
-    before: dict[str, Any]
-    after: dict[str, Any]
+    before: Row
+    after: Row
     columns: dict[str, tuple[Any, Any]]
 
 
@@ -91,9 +93,9 @@ def _normalize(value: object) -> str:
 
 
 def index_for_diff(
-    rows: list[dict[str, Any]],
+    rows: list[Row],
     key: str,
-) -> dict[str, dict[str, Any]]:
+) -> dict[str, Row]:
     """``Table.diff()`` のために、``_normalize`` 後のキーで索引化する。
 
     正規化後のキーが重複していたら ``TableDuplicateKeyError`` を送出する
@@ -101,7 +103,7 @@ def index_for_diff(
     """
     from comken.exceptions.tables import TableDuplicateKeyError
 
-    index: dict[str, dict[str, Any]] = {}
+    index: dict[str, Row] = {}
     for row in rows:
         normalized_key = _normalize(row[key])
         if normalized_key in index:

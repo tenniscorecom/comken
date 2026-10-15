@@ -361,12 +361,17 @@ len(table)                   # → 2
 rows = table.to_rows()
 ```
 
+表全体は `Table`（pandas でいう DataFrame）、1 行は `Row`（Series にあたる。実体は
+`dict[str, Any]` の別名）です。`table[n]` / `for row in table` / `to_rows()` / `iter_rows()` など、
+行を返すものの注釈は `Row` で、型の名前が表と行で分かれています。注釈に使うときは
+`from comken.core import Row` です（実行時の動作は `dict` のままです）。
+
 | やりたいこと | API |
 |---|---|
 | `n` 行目を 1 件取りたい | `table[n]` |
 | 全行を回したい | `for row in table:` |
 | 行数 | `len(table)` |
-| `list[dict]` で受け取る | `table.to_rows()` |
+| `list[Row]`（`list[dict]`）で受け取る | `table.to_rows()` |
 | 全行を置き換え | `table.replace(rows)` |
 | 1 行 / 複数行を末尾に追加 | `table.append(row)` / `table.append(rows)` |
 

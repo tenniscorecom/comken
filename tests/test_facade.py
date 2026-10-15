@@ -54,6 +54,7 @@ def test_core_exposes_parts() -> None:
     expected = {
         "DiffResult",
         "HierarchyResult",
+        "Row",
         "RowChange",
         "State",
         "Table",

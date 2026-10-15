@@ -21,6 +21,7 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from comken.core.table.row import Row
 from comken.exceptions.tables import TableError
 
 if TYPE_CHECKING:
@@ -128,7 +129,7 @@ def _matches_subtotal(
 
 
 def _find_topmost_subtotal_level(
-    row: dict[str, Any],
+    row: Row,
     levels: list[str],
     current: list[Any],
     subtotal_words: tuple[str, ...],
@@ -146,7 +147,7 @@ def _find_topmost_subtotal_level(
 
 
 def _check_excel_errors(
-    row: dict[str, Any],
+    row: Row,
     levels: list[str],
     row_number: int,
 ) -> None:
@@ -166,11 +167,11 @@ def _check_excel_errors(
 
 
 def _build_subtotal_row(
-    row: dict[str, Any],
+    row: Row,
     levels: list[str],
     current: list[Any],
     topmost_idx: int,
-) -> dict[str, Any]:
+) -> Row:
     """小計行の出力を作る。matched level より上は current、matched level は
     元の値、下は None。階層以外の列は元の値のまま。"""
     out_row = dict(row)
@@ -184,7 +185,7 @@ def _build_subtotal_row(
     return out_row
 
 
-def _advance_current(row: dict[str, Any], levels: list[str], current: list[Any]) -> None:
+def _advance_current(row: Row, levels: list[str], current: list[Any]) -> None:
     """明細行を見て current を進める。
 
     上の階層から順に、値があれば current を更新し、それより下をクリアする
@@ -205,7 +206,7 @@ def _advance_current(row: dict[str, Any], levels: list[str], current: list[Any])
 
 
 def _collect_unmatched_for_row(
-    row: dict[str, Any],
+    row: Row,
     levels: list[str],
     row_number: int,
     unmatched: list[int],
@@ -232,10 +233,10 @@ def _collect_unmatched_for_row(
 
 
 def _build_detail_row(
-    row: dict[str, Any],
+    row: Row,
     levels: list[str],
     current: list[Any],
-) -> dict[str, Any]:
+) -> Row:
     """明細行の出力を作る。全階層を current の値で埋める（階層以外は元の値）。"""
     out_row = dict(row)
     for level_idx, level_name in enumerate(levels):
@@ -244,12 +245,12 @@ def _build_detail_row(
 
 
 def split_hierarchy_rows(
-    rows: list[dict[str, Any]],
+    rows: list[Row],
     levels: list[str],
     *,
     subtotal_words: tuple[str, ...],
     subtotal_suffixes: tuple[str, ...],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[int]]:
+) -> tuple[list[Row], list[Row], list[int]]:
     """行データを階層で分けて ``(details, subtotals, unmatched)`` を返す。
 
     ``Table.split_hierarchy()`` から呼ばれる内部用。``_from_normalized_rows``
@@ -268,8 +269,8 @@ def split_hierarchy_rows(
     Raises:
         TableError: 階層の列に Excel のエラー値文字列がある。
     """
-    detail_rows: list[dict[str, Any]] = []
-    subtotal_rows: list[dict[str, Any]] = []
+    detail_rows: list[Row] = []
+    subtotal_rows: list[Row] = []
     unmatched: list[int] = []
     # 各階層の現在の値。上の階層が変わったら「それより下」を None に戻す
     current: list[Any] = [None] * len(levels)

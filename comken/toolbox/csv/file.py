@@ -13,6 +13,7 @@ from typing import Any, Self, cast
 from comken.core.encoding import CP932, UTF8, UTF8_SIG, normalize_encoding
 from comken.core.files import atomic_write
 from comken.core.table.model import Table
+from comken.core.table.row import Row
 from comken.core.timer import measure
 from comken.exceptions.files import (
     ComkenFileNotFoundError,
@@ -475,7 +476,7 @@ class CSV:
         )
         return Table(columns, rows, types=self._types)
 
-    def iter_rows(self) -> Iterator[dict[str, str]]:
+    def iter_rows(self) -> Iterator[Row]:
         """CSV を 1 行ずつ ``{列名: 値}`` の dict で返すイテレーター。
 
         ``read()`` と違ってファイル全体を内存に展開しないため、**行数が大きい
@@ -496,7 +497,7 @@ class CSV:
         self._ensure_open()
         return self._iter_rows()
 
-    def _iter_rows(self) -> Iterator[dict[str, str]]:
+    def _iter_rows(self) -> Iterator[Row]:
         """``iter_rows()`` のジェネレータ本体（事前条件は ``_ensure_open`` が済んでいること）。"""
         self._materialize_appended()
         if self._pending is not None:
@@ -554,7 +555,7 @@ class CSV:
         with self.path.open("r", encoding=self._encoding, newline="") as stream:
             yield from self._iter_rows_from_source(stream)
 
-    def _iter_rows_from_source(self, source: io.TextIOBase) -> Iterator[dict[str, str]]:
+    def _iter_rows_from_source(self, source: io.TextIOBase) -> Iterator[Row]:
         """``DictReader`` の ``source`` を受けて、見出し列の扱いだけを共通化する内部ヘルパー。
 
         ``source`` は ``io.StringIO`` でも ``Path.open()`` したファイルでも

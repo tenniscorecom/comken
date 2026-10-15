@@ -243,6 +243,10 @@ def set(self, key: str, value: StateValue) -> None:
 
 値を保存する。dry-run 中はファイルもメモリ上の状態も変更しない。
 
+### `Row`
+
+公開定数。
+
 ### `Table`
 
 ```text
@@ -259,13 +263,13 @@ CSVやExcelに直接依存しないため、加工処理をファイルI/Oから
 #### `__init__`
 
 ```text
-def __init__(self, columns: list[str] | tuple[str, ...], rows: list[dict[str, Any]], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
+def __init__(self, columns: list[str] | tuple[str, ...], rows: list[Row], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
 ```
 
 #### `to_rows`
 
 ```text
-def to_rows(self) -> list[dict[str, Any]]:
+def to_rows(self) -> list[Row]:
 ```
 
 ##### 説明
@@ -349,7 +353,7 @@ Example:
 #### `replace`
 
 ```text
-def replace(self, rows: list[dict[str, Any]]) -> Self:
+def replace(self, rows: list[Row]) -> Self:
 ```
 
 ##### 説明
@@ -359,7 +363,7 @@ def replace(self, rows: list[dict[str, Any]]) -> Self:
 #### `append`
 
 ```text
-def append(self, rows: list[dict[str, Any]] | dict[str, Any]) -> Self:
+def append(self, rows: list[Row] | Row) -> Self:
 ```
 
 ##### 説明
@@ -385,7 +389,7 @@ columns 側（欲しい名前）に揃う。aliases に無い列は、そのま�
 #### `filter`
 
 ```text
-def filter(self, predicate: Callable[[dict[str, Any]], bool]) -> Table:
+def filter(self, predicate: Callable[[Row], bool]) -> Table:
 ```
 
 ##### 説明
@@ -405,7 +409,7 @@ def column(self, name: str) -> list[Any]:
 #### `index`
 
 ```text
-def index(self, key: str) -> dict[Any, dict[str, Any]]:
+def index(self, key: str) -> dict[Any, Row]:
 ```
 
 ##### 説明
@@ -2262,6 +2266,10 @@ Attributes:
     unmatched: 「計」で終わる値があるのに小計と判定しなかった行の
         **件目**（1始まり、元の Table の何件目か）。
 
+### `Row`
+
+公開定数。
+
 ### `Table`
 
 ```text
@@ -2278,13 +2286,13 @@ CSVやExcelに直接依存しないため、加工処理をファイルI/Oから
 #### `__init__`
 
 ```text
-def __init__(self, columns: list[str] | tuple[str, ...], rows: list[dict[str, Any]], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
+def __init__(self, columns: list[str] | tuple[str, ...], rows: list[Row], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
 ```
 
 #### `to_rows`
 
 ```text
-def to_rows(self) -> list[dict[str, Any]]:
+def to_rows(self) -> list[Row]:
 ```
 
 ##### 説明
@@ -2368,7 +2376,7 @@ Example:
 #### `replace`
 
 ```text
-def replace(self, rows: list[dict[str, Any]]) -> Self:
+def replace(self, rows: list[Row]) -> Self:
 ```
 
 ##### 説明
@@ -2378,7 +2386,7 @@ def replace(self, rows: list[dict[str, Any]]) -> Self:
 #### `append`
 
 ```text
-def append(self, rows: list[dict[str, Any]] | dict[str, Any]) -> Self:
+def append(self, rows: list[Row] | Row) -> Self:
 ```
 
 ##### 説明
@@ -2404,7 +2412,7 @@ columns 側（欲しい名前）に揃う。aliases に無い列は、そのま�
 #### `filter`
 
 ```text
-def filter(self, predicate: Callable[[dict[str, Any]], bool]) -> Table:
+def filter(self, predicate: Callable[[Row], bool]) -> Table:
 ```
 
 ##### 説明
@@ -2424,7 +2432,7 @@ def column(self, name: str) -> list[Any]:
 #### `index`
 
 ```text
-def index(self, key: str) -> dict[Any, dict[str, Any]]:
+def index(self, key: str) -> dict[Any, Row]:
 ```
 
 ##### 説明
@@ -3284,6 +3292,77 @@ class SalesforceReportTruncatedError(SalesforceError):
 def __init__(self, report_id: str, row_limit: int) -> None:
 ```
 
+### `SalesforceReportFormatError`
+
+```text
+class SalesforceReportFormatError(SalesforceError):
+```
+
+#### 説明
+
+対応外形式、または明細の列が無いレポートで止めた
+
+明細を取れるのは ``TABULAR`` / ``SUMMARY`` / ``MATRIX`` の 3 形式で、
+それ以外（``MULTI_BLOCK`` などの結合レポート）は対応しないため明示的に
+止める。形式は対応内でも ``detailColumns`` が空（集計だけで明細が無い
+サマリー / マトリックス）のときもここに入る。無言で空の ``Table`` を
+「成功」として返さないための例外。
+
+メッセージ本文は旧来の ``SalesforceError`` の文言と同じままにしてあるため、
+``str(exc)`` でログを見ていた既存テストや運用ログも壊れない。
+
+発生箇所: comken.toolbox.salesforce.report.ReportAPI.get() / run_async()
+         （内部の ``_parse_report_payload``）
+
+対処:
+    レポート形式を ``TABULAR`` / ``SUMMARY`` / ``MATRIX`` のいずれかに
+    変えるか、SOQL（``query``）で取得してください。集計だけで明細が無い
+    レポートのときは、SOQL で組み立て直すか、レポート定義に明細列を足して
+    もらうかを管理者に相談してください
+
+#### `__init__`
+
+```text
+def __init__(self, report_id: str, report_format: str) -> None:
+```
+
+### `SalesforceReportAccessDeniedError`
+
+```text
+class SalesforceReportAccessDeniedError(SalesforceError):
+```
+
+#### 説明
+
+レポート API（Analytics API）への権限が無い（HTTP 401 / 403）
+
+Reports and Dashboards REST API を叩いたときに 401 / 403 を返された
+場合に、汎用 ``SalesforceRequestError`` から専用のエラーへ差し替える。
+CRM Analytics と紛らわしいので、判定はメッセージ本文ではなく
+**HTTP ステータスコード（401 / 403）**だけで行う。401 は 1 回だけ
+再認証してからもう一度判定するので、再認証後の 401 も対象。
+
+メッセージ本文は旧来の ``SalesforceError`` の文言と同じままにしてあるため、
+``str(exc)`` でログを見ていた既存テストや運用ログも壊れない。
+
+発生箇所: comken.toolbox.salesforce.report.ReportAPI.get() / run_async()
+         / describe() の ``_request``（SalesforceRequestError を
+         401 / 403 のときだけ入れ替える）
+
+対処:
+    Salesforce 管理者に、refresh_token を発行したユーザーについて
+    次を確認してもらってください:
+      1. Profile / Permission Set に「API Enabled」権限があるか
+      2. 対象のレポート・レポートフォルダへのアクセス権があるか
+      3. 組織の Edition・ライセンスが Reports and Dashboards REST API
+        に対応しているか（一部の制限ライセンスでは使えない）
+
+#### `__init__`
+
+```text
+def __init__(self, report_id: str, status_code: int, detail: str) -> None:
+```
+
 ### `SalesforceReportIDNotFoundError`
 
 ```text
@@ -3831,7 +3910,7 @@ def export_csv(self, source: str, dst: str | Path, encoding: str=CP932) -> None:
 #### `iter_rows`
 
 ```text
-def iter_rows(self, source: str) -> Iterator[dict[str, object]]:
+def iter_rows(self, source: str) -> Iterator[Row]:
 ```
 
 ##### 説明
@@ -5869,6 +5948,75 @@ def go_customer_list(self) -> CustomerListPage:
 お客様一覧画面を開く（ログイン後、URL 直飛びで行ける）。
 
 
+## `from comken.toolbox.browser.sites.cms import ...`
+
+### `CMSBrowserOptions`
+
+```text
+class CMSBrowserOptions(BrowserOptions):
+```
+
+#### 説明
+
+cms 用のブラウザオプション。
+
+デフォルト（BrowserOptions）から変更したいものだけ上書きする。
+全オプションのデフォルト値は comken/toolbox/browser/options.py を参照。
+
+#### `build`
+
+```text
+def build(self, profile_dir: Path | None=None) -> list[str]:
+```
+
+##### 説明
+
+有効なオプションを Edge の起動引数リストに変換する。
+
+Args:
+    profile_dir: ログイン状態を残すプロファイルフォルダ。
+                 指定するとシークレットモードは自動的に外れる
+                 （シークレットは Cookie を残さないため、永続化と両立しない）。
+
+Returns:
+    webdriver に渡す起動引数のリスト。
+
+### `CMS`
+
+```text
+class CMS(SiteBase):
+```
+
+#### 説明
+
+cms 雛形用の SiteBase。
+
+URL や要素セレクタは example の値のまま。利用プロジェクト側で継承して書き換える。
+
+#### `go_login`
+
+```text
+def go_login(self) -> LoginPage:
+```
+
+##### 説明
+
+ログイン画面を開く。
+
+#### `go_top`
+
+```text
+def go_top(self) -> TopPage:
+```
+
+##### 説明
+
+ログイン後の最初の画面（トップ画面）を開く。
+
+セッションがログイン済み前提。ログイン前なら ``go_login()`` から
+``LoginPage.login()`` を経由して ``TopPage`` へ辿る形が基本。
+
+
 ## `from comken.toolbox.browser.sites.ntt import ...`
 
 ### `NTTBrowserOptions`
@@ -7034,7 +7182,7 @@ def read(self) -> Table:
 #### `iter_rows`
 
 ```text
-def iter_rows(self) -> Iterator[dict[str, str]]:
+def iter_rows(self) -> Iterator[Row]:
 ```
 
 ##### 説明
@@ -7071,7 +7219,13 @@ def append(self, rows: list[dict[str, Value]] | dict[str, Value] | Table) -> Non
 
 ##### 説明
 
-行を保留中のTableへ追加する。確定はsaveまたはwith正常終了で行う。
+行を保留して追加する。確定は save または with 正常終了で行う。
+
+既存ファイルの文字コードが見出しから決まるとき（BOM 付き UTF-8、見出しに日本語が
+ある UTF-8 / CP932）で、``columns=`` と ``types=`` を指定していないときは、
+**ファイルの中身を読まず**、確定のときに末尾へ書き足す（行数によらず一定の時間）。
+それ以外は、従来どおり全件を読んで書き直す。追記のあとに ``read()`` などを
+呼ぶと、そこで初めてファイルを読む。
 
 #### `save`
 
@@ -7703,7 +7857,7 @@ def freeze_panes(self, cell: str) -> None:
 #### `iter_rows`
 
 ```text
-def iter_rows(self, *, header_row: int=1) -> Iterator[dict[str, Any]]:
+def iter_rows(self, *, header_row: int=1) -> Iterator[Row]:
 ```
 
 ##### 説明

@@ -18,6 +18,7 @@ from comken.core.dates import now
 from comken.core.encoding import CP932, code_page
 from comken.core.files.base import FileBase
 from comken.core.table import Table
+from comken.core.table.row import Row
 from comken.core.timer import measure
 from comken.exceptions import AccessError, ComkenFileNotFoundError
 from comken.runtime import dry_run_log, is_dry_run
@@ -204,7 +205,7 @@ class AccessDatabase(FileBase):
             codepage,
         )
 
-    def iter_rows(self, source: str) -> Iterator[dict[str, object]]:
+    def iter_rows(self, source: str) -> Iterator[Row]:
         """テーブルまたはクエリを辞書で1行ずつ返すジェネレータ。
 
         COM 往復を減らすため小さなバッチで取得する。数十万件を ``list`` にすると

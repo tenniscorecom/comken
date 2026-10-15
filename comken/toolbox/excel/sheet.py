@@ -19,6 +19,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from comken.core.columns import col_to_num
 from comken.core.table.model import Table
+from comken.core.table.row import Row
 from comken.exceptions import (
     ExcelError,
     InvalidColumnError,
@@ -458,7 +459,7 @@ class Sheet:
         if self.is_data_sheet:
             raise _data_sheet_access_error(self._worksheet.title, operation)
 
-    def iter_rows(self, *, header_row: int = 1) -> Iterator[dict[str, Any]]:
+    def iter_rows(self, *, header_row: int = 1) -> Iterator[Row]:
         """シートの行を 1 行ずつ ``{列名: 値}`` の dict で返すイテレーター。
 
         ``read_range`` / ``read`` と違ってファイル全体をメモリに展開しないため、
@@ -591,7 +592,7 @@ class Sheet:
         formula_iter: Iterator[tuple[Any, ...]],
         headers: list[str],
         data_min_row: int,
-    ) -> Iterator[dict[str, Any]]:
+    ) -> Iterator[Row]:
         """データ行を 1 行ずつ ``dict`` で ``yield`` する。
 
         ``workbook`` / ``formula_workbook`` は ``iter_rows()`` が開いたまま

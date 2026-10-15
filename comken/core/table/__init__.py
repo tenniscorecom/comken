@@ -6,6 +6,7 @@
 
 from comken.core.table.hierarchy import HierarchyResult
 from comken.core.table.model import Table
+from comken.core.table.row import Row
 from comken.core.table.transfer import Transfer, UnmatchedRows
 
-__all__ = ["HierarchyResult", "Table", "Transfer", "UnmatchedRows"]
+__all__ = ["HierarchyResult", "Row", "Table", "Transfer", "UnmatchedRows"]

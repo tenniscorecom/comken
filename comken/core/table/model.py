@@ -17,6 +17,7 @@ from comken.core.table.hierarchy import (
     HierarchyResult,
     split_hierarchy_rows,
 )
+from comken.core.table.row import Row
 from comken.exceptions.tables import (
     TableColumnNotFoundError,
     TableDuplicateKeyError,
@@ -55,7 +56,7 @@ class Table:
     def __init__(
         self,
         columns: list[str] | tuple[str, ...],
-        rows: list[dict[str, Any]],
+        rows: list[Row],
         *,
         types: Mapping[str, Callable[[Any], Any]] | None = None,
     ) -> None:
@@ -63,7 +64,7 @@ class Table:
         if len(self.columns) != len(set(self.columns)):
             raise TableError("列名は重複させられません。")
         self.types = dict(types or {})
-        self._rows: list[dict[str, Any]] = [
+        self._rows: list[Row] = [
             self._normalize(row, row_number) for row_number, row in enumerate(rows, 1)
         ]
         logger.debug(
@@ -73,7 +74,7 @@ class Table:
             len(self.types),
         )
 
-    def _normalize(self, row: Mapping[str, Any], row_number: int) -> dict[str, Any]:
+    def _normalize(self, row: Mapping[str, Any], row_number: int) -> Row:
         missing = [column for column in self.columns if column not in row]
         extra = [column for column in row if column not in self.columns]
         if missing or extra:
@@ -109,7 +110,7 @@ class Table:
     def _from_normalized_rows(
         cls,
         columns: list[str] | tuple[str, ...],
-        rows: list[dict[str, Any]],
+        rows: list[Row],
         types: Mapping[str, Callable[[Any], Any]] | None = None,
     ) -> Table:
         """既に types 変換済みの行から Table を作る（変換関数を再実行しない内部専用）。
@@ -131,7 +132,7 @@ class Table:
         instance._rows = [dict(row) for row in rows]
         return instance
 
-    def to_rows(self) -> list[dict[str, Any]]:
+    def to_rows(self) -> list[Row]:
         """現在の行をコピーして返す。元のTableは変更しない。"""
         return [dict(row) for row in self._rows]
 
@@ -213,9 +214,9 @@ class Table:
         columns = [str(col) for col in original_columns]
         if len(columns) != len(set(columns)):
             raise TableError("列名は重複させられません。")
-        rows: list[dict[str, Any]] = []
+        rows: list[Row] = []
         for record in df.to_dict("records"):
-            converted: dict[str, Any] = {}
+            converted: Row = {}
             for original_col, str_col in zip(original_columns, columns, strict=True):
                 value = record[original_col]
                 # pd.isna はリスト・辞書などに対して TypeError や配列を返すことがある。
@@ -227,7 +228,7 @@ class Table:
         logger.debug("Table from_dataframe: %d 列, %d 行", len(columns), len(rows))
         return cls(columns, rows, types=types)
 
-    def __getitem__(self, index: int) -> dict[str, Any]:
+    def __getitem__(self, index: int) -> Row:
         """指定位置の行をコピーして返す。
 
         返るのはコピーなので、``table[0]["列"] = x`` と書いても Table は変わらない。
@@ -235,7 +236,7 @@ class Table:
         """
         return dict(self._rows[index])
 
-    def __iter__(self) -> Iterator[dict[str, Any]]:
+    def __iter__(self) -> Iterator[Row]:
         """各行のコピーを返す。反復中の変更は元のTableへ反映しない。"""
         for row in self._rows:
             yield dict(row)
@@ -255,13 +256,13 @@ class Table:
         # よう ``__eq__`` で ``False`` を返さず ``NotImplemented`` を返す）
         return NotImplemented
 
-    def replace(self, rows: list[dict[str, Any]]) -> Self:
+    def replace(self, rows: list[Row]) -> Self:
         """表の全行を置き換え、同じTableを返す。"""
         self._rows = [self._normalize(row, row_number) for row_number, row in enumerate(rows, 1)]
         logger.debug("Table replace: %d 行", len(self._rows))
         return self
 
-    def append(self, rows: list[dict[str, Any]] | dict[str, Any]) -> Self:
+    def append(self, rows: list[Row] | Row) -> Self:
         """1行または複数行を末尾へ追加する。"""
         values = [rows] if isinstance(rows, dict) else rows
         start = len(self._rows) + 1
@@ -300,7 +301,7 @@ class Table:
         logger.debug("Table select: %d 列, %d 行", len(result.columns), len(result))
         return result
 
-    def filter(self, predicate: Callable[[dict[str, Any]], bool]) -> Table:
+    def filter(self, predicate: Callable[[Row], bool]) -> Table:
         """条件に一致する行だけを持つ新しいTableを返す。"""
         # predicate は利用者コードなので、渡すのはコピー（誤って行を書き換えても
         # 元の Table へ影響させない）。採用した行そのもの（コピーではない）を
@@ -316,10 +317,10 @@ class Table:
         self._check_columns([name])
         return [row[name] for row in self._rows]
 
-    def index(self, key: str) -> dict[Any, dict[str, Any]]:
+    def index(self, key: str) -> dict[Any, Row]:
         """指定列をキーにした行の索引を返す。"""
         self._check_columns([key])
-        result: dict[Any, dict[str, Any]] = {}
+        result: dict[Any, Row] = {}
         for row in self._rows:
             value = row[key]
             if value in result:
@@ -332,7 +333,7 @@ class Table:
     def group_by(self, key: str) -> dict[Any, Table]:
         """指定列の値ごとにTableを分けて返す。"""
         self._check_columns([key])
-        grouped: dict[Any, list[dict[str, Any]]] = {}
+        grouped: dict[Any, list[Row]] = {}
         for row in self._rows:
             grouped.setdefault(row[key], []).append(row)
         result = {
@@ -367,9 +368,9 @@ class Table:
         # self.types に無い列は変換しない（types のない列は _normalize_row で
         # そのまま扱う方針と揃えるため）。それ以外の列は self.types で変換する。
         self_rows = [{column: row[column] for column in columns} for row in self._rows]
-        other_rows: list[dict[str, Any]] = []
+        other_rows: list[Row] = []
         for row_number, row in enumerate(other._rows, 1):
-            converted: dict[str, Any] = {}
+            converted: Row = {}
             for column in columns:
                 value = row[column]
                 if column not in self.types:
@@ -575,7 +576,7 @@ class Table:
         columns_to_check = [key] if order_by is None else [key, order_by]
         self._check_columns(columns_to_check)
 
-        rows_by_key: dict[str, list[dict[str, Any]]] = {}
+        rows_by_key: dict[str, list[Row]] = {}
         for row in self._rows:
             normalized_key = _normalize(row[key])
             rows_by_key.setdefault(normalized_key, []).append(row)
@@ -627,6 +628,6 @@ class Table:
         logger.debug("Table changes 完了: %d 件", len(result))
         return result
 
-    def _iter_rows_for_update(self) -> Iterator[dict[str, Any]]:
+    def _iter_rows_for_update(self) -> Iterator[Row]:
         """ライブラリ内部で更新する実体行を返す。"""
         return iter(self._rows)

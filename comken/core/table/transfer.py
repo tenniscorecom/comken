@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from comken.core.table.model import Table
+from comken.core.table.row import Row
 from comken.exceptions.tables import (
     InvalidTableInputError,
     TableColumnNotFoundError,
@@ -25,8 +26,6 @@ from comken.exceptions.tables import (
 )
 
 logger = logging.getLogger(__name__)
-
-Row = dict[str, Any]
 
 
 def _transfer_mapping_error() -> TableError:
