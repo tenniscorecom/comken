@@ -284,6 +284,42 @@ def delete_files(paths: Iterable[str | Path], missing_ok: bool = True) -> None:
         raise FileDeletionError(remaining)
 
 
+@measure
+def ensure_dir(path: str | Path) -> Path:
+    """フォルダが無ければ作成して、Path を返す。dry-run 中は作らない。
+
+    ``path.mkdir(parents=True, exist_ok=True)`` の代わりに使う版。
+    利用側で ``path.mkdir(parents=True, exist_ok=True)`` が 9 か所以上
+    散らばっていたため、dry-run 中も作ってしまう経路を 1 か所にまとめる。
+
+    - **dry-run 外**: ``mkdir(parents=True, exist_ok=True)`` で親も含めて作成し、
+      そのまま ``Path`` を返す
+    - **dry-run 中**: 実際に作らず ``dry_run_log`` を出して ``Path`` を返す。
+      呼び出し側は返ったパスを使い続けてよい（空のフォルダでファイル書き込み
+      だけがスキップされても、上位の ``Excel`` / ``CSV`` クラスの dry-run 判定で
+      抑止されるため問題ない）
+
+    ``atomic_write`` の **「親フォルダは作らない」セマンティクスは変えない**。
+    あちらは「保存先を typo したときに、誰も見ない場所へ出力し続けても
+    気づけない」問題への安全弁として残っている動作で、その役目を引き続き
+    果たす。この関数は **保存先ではなく作業フォルダを準備する** 場面で
+    使う（例: ``OUTPUT_FOLDER`` の初回作成）。
+
+    Args:
+        path: 作成対象のフォルダパス。``str`` / ``Path`` どちらでも可。
+
+    Returns:
+        渡されたパスを ``Path`` に直した値。dry-run 中も dry-run 外も
+        同じ ``Path`` が返る（dry-run で作成をスキップしてもパス自体は有効）。
+    """
+    target = Path(path)
+    if is_dry_run():
+        dry_run_log("フォルダを作成: %s", target)
+        return target
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
+
 def cleanup_stale_tmp(target: str | Path, max_age_seconds: float = 3600) -> None:
     """アトミック書き込みで残った一時ファイルの残骸を削除する（ライブラリ内部用）。
 
