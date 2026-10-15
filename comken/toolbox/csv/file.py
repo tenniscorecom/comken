@@ -24,6 +24,9 @@ from comken.runtime import is_dry_run
 
 logger = logging.getLogger(__name__)
 
+# 追記のとき、見出し行と文字コードを調べるために読むバイト数。全件は読まない
+_APPEND_HEAD_BYTES = 64 * 1024
+
 
 def _table_not_open_error(table_type: str) -> TableError:
     """``TableError`` の「with 文の外で表を操作した」文言。
@@ -92,6 +95,61 @@ def _encoding_detection_error(path: Path) -> CSVError:
         "文字コードを判定できませんでした（UTF-8 / CP932 のどちらでも読めません）: "
         f"{path}\nencoding 引数で明示してください。"
         "\n対処: CSV の保存形式を確認し、管理者へ連絡してください。"
+    )
+
+
+def _inspect_csv_head(head: bytes) -> tuple[list[str], str, str] | None:
+    """ファイルの先頭から ``(見出し, 文字コード, 改行)`` を読む。決められなければ ``None``。
+
+    文字コードは、BOM 付きなら ``utf-8-sig``、見出しに ASCII 以外があれば ``utf-8`` →
+    ``cp932`` の順。見出しが ASCII だけで BOM も無いものは、先頭だけでは決められないので ``None``
+    （全件を書き直す経路は、こういうファイルを UTF-8 BOM 付きにそろえる約束がある）。
+    """
+    has_bom = head.startswith(b"\xef\xbb\xbf")
+    body = head[3:] if has_bom else head
+    newline_at = body.find(b"\n")
+    if newline_at == -1:
+        return None
+    line = body[:newline_at]
+    terminator = "\n"
+    if line.endswith(b"\r"):
+        line = line[:-1]
+        terminator = "\r\n"
+    if has_bom:
+        encoding, text = UTF8_SIG, line.decode(UTF8, errors="replace")
+    elif line.isascii():
+        return None
+    else:
+        for candidate in (UTF8, CP932):
+            try:
+                text = line.decode(candidate)
+            except UnicodeDecodeError:
+                continue
+            encoding = candidate
+            break
+        else:
+            return None
+    if text.count('"') % 2:
+        return None
+    parsed = list(csv.reader([text]))
+    if len(parsed) != 1:
+        return None
+    return parsed[0], encoding, terminator
+
+
+def _unencodable_error(
+    path: Path, encoding: str, exc: UnicodeEncodeError
+) -> InvalidTableInputError:
+    """保った文字コードで表せない文字があるときのエラー（``?`` への暗黙の置換はしない）。"""
+    offending = ""
+    if exc.object is not None and exc.start is not None and exc.end is not None:
+        offending = repr(exc.object[exc.start : exc.end])
+    return InvalidTableInputError(
+        f"CSV を {encoding} で書き込めません（保った文字コードで表せない文字があります）: "
+        f"{path}\n"
+        f"表せない文字: {offending}\n"
+        "対処: ファイルを UTF-8 (BOM 付き) で保存し直すか、"
+        "表せない文字を含む行を修正してください。"
     )
 
 
@@ -342,6 +400,11 @@ class CSV:
         self._read_only = read_only
         self._dry_run = dry_run
         self._pending: Table | None = None
+        # 既存ファイルへ「行を足すだけ」のときの保留。ファイルの中身は読まず、足す行だけを
+        # 持つ（確定時にファイルの末尾へ書き足す）。``_plan_in_place_append`` が参照
+        self._appended: Table | None = None
+        # 末尾へ書き足すときの (文字コード, 改行) 。``_appended`` と同時に入る
+        self._append_plan: tuple[str, str] | None = None
         # ``with`` の中だけで操作させるため、開いたかどうかを追跡する。
         self._is_open = False
 
@@ -355,13 +418,13 @@ class CSV:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
-        if (
-            exc_type is None
-            and not (self._read_only or self._dry_run or is_dry_run())
-            and self._pending is not None
-        ):
-            logger.debug("CSV withブロック終了時に保留内容を書き出し: %s", self.path)
-            self._write(self._pending)
+        if exc_type is None and not (self._read_only or self._dry_run or is_dry_run()):
+            if self._appended is not None:
+                logger.debug("CSV withブロック終了時に追記分を書き足し: %s", self.path)
+                self._flush_appended()
+            elif self._pending is not None:
+                logger.debug("CSV withブロック終了時に保留内容を書き出し: %s", self.path)
+                self._write(self._pending)
         self._is_open = False
 
     def _ensure_open(self) -> None:
@@ -378,6 +441,7 @@ class CSV:
         列名は ``read()`` または ``columns`` 引数で先に取っておく。
         """
         self._ensure_open()
+        self._materialize_appended()
         if self._pending is not None:
             # replace/write の結果は保存前でも、同じ処理中の「現在の Table」として読める。
             logger.debug("CSV read は保留中 Table を返します: %s", self.path)
@@ -434,6 +498,7 @@ class CSV:
 
     def _iter_rows(self) -> Iterator[dict[str, str]]:
         """``iter_rows()`` のジェネレータ本体（事前条件は ``_ensure_open`` が済んでいること）。"""
+        self._materialize_appended()
         if self._pending is not None:
             # ``read()`` と同じく保留中の Table を 1 行ずつ返す。読み取り経路で
             # ``replace`` された結果はここでストリーム消費できる。
@@ -549,6 +614,7 @@ class CSV:
             raise _read_only_write_error()
         if not isinstance(rows, (list, Table)):
             raise InvalidTableInputError("CSV の置換には Table または行リストを指定してください。")
+        self._materialize_appended()
         if isinstance(rows, Table):
             table = rows
         elif rows:
@@ -574,16 +640,17 @@ class CSV:
         # それまでの一部だけがファイルへ残ると復旧しにくいためである。
 
     def append(self, rows: list[dict[str, Value]] | dict[str, Value] | Table) -> None:
-        """行を保留中のTableへ追加する。確定はsaveまたはwith正常終了で行う。"""
+        """行を保留して追加する。確定は save または with 正常終了で行う。
+
+        既存ファイルの文字コードが見出しから決まるとき（BOM 付き UTF-8、見出しに日本語が
+        ある UTF-8 / CP932）で、``columns=`` と ``types=`` を指定していないときは、
+        **ファイルの中身を読まず**、確定のときに末尾へ書き足す（行数によらず一定の時間）。
+        それ以外は、従来どおり全件を読んで書き直す。追記のあとに ``read()`` などを
+        呼ぶと、そこで初めてファイルを読む。
+        """
         self._ensure_open()
         if self._read_only:
             raise _read_only_write_error()
-        if self._pending is not None or self.path.exists():
-            current = self.read()
-        elif self._columns is not None:
-            current = Table(self._columns, [], types=self._types)
-        else:
-            raise ComkenFileNotFoundError("CSV ファイル", self.path)
         if isinstance(rows, Table):
             additions = rows.to_rows()
         elif isinstance(rows, dict):
@@ -594,6 +661,30 @@ class CSV:
             raise InvalidTableInputError(
                 "CSV の追記には Table、1行、または行リストを指定してください。"
             )
+        if self._appended is not None:
+            self._appended.append(additions)
+            logger.debug(
+                "CSV append を保留（末尾へ書き足し）: %s, +%d 行", self.path, len(additions)
+            )
+            return
+        plan = self._plan_in_place_append()
+        if plan is not None:
+            # ファイルの中身は読まない。足す行だけを持っておき、確定のときに末尾へ書き足す
+            columns, encoding, terminator = plan
+            staged = Table(columns, [])
+            staged.append(additions)
+            self._appended = staged
+            self._append_plan = (encoding, terminator)
+            logger.debug(
+                "CSV append を保留（末尾へ書き足し）: %s, +%d 行", self.path, len(additions)
+            )
+            return
+        if self._pending is not None or self.path.exists():
+            current = self.read()
+        elif self._columns is not None:
+            current = Table(self._columns, [], types=self._types)
+        else:
+            raise ComkenFileNotFoundError("CSV ファイル", self.path)
         current.append(additions)
         self._pending = current
         logger.debug(
@@ -614,14 +705,90 @@ class CSV:
         """
         self._ensure_open()
         # replace はメモリ上で準備し、save または正常終了した with でだけファイルへ反映する。
-        if (
-            self._pending is not None
-            and not self._read_only
-            and not self._dry_run
-            and not is_dry_run()
-        ):
+        if self._read_only or self._dry_run or is_dry_run():
+            return
+        if self._appended is not None:
+            self._flush_appended()
+        elif self._pending is not None:
             self._write(self._pending)
             self._pending = None
+
+    def _plan_in_place_append(self) -> tuple[list[str], str, str] | None:
+        """既存ファイルの末尾へ、行を足すだけで済むかを調べる（内部用）。
+
+        足せるときは ``(列名, 書き足す文字コード, 改行)`` を返す。足せないとき
+        （従来どおり全件を読んで書き直す）は ``None``。**ファイルの先頭だけを読み**、
+        全件は読まない。次のどれかに当たるときは ``None``:
+
+        - すでに保留中の内容がある、``columns=`` や ``types=`` を指定している
+          （見出しの無いファイル・値の変換は、全件を書き直す従来の経路が担当する）
+        - ファイルが無い・空・先頭 64 KiB に見出し行の終わりが無い・見出しの引用符が閉じていない
+        - 文字コードが先頭だけでは決められない（見出しが ASCII だけで BOM も無い。全件を書き直す
+          経路は、こういうファイルを UTF-8 BOM 付きにそろえる約束がある）、または ``encoding=`` の
+          明示がファイルの文字コードと違う（変換して書き直す必要がある）
+        """
+        if self._pending is not None or self._columns is not None or self._types:
+            return None
+        try:
+            if not self.path.is_file() or self.path.stat().st_size == 0:
+                return None
+            with self.path.open("rb") as binary:
+                head = binary.read(_APPEND_HEAD_BYTES)
+        except OSError:
+            return None
+        inspected = _inspect_csv_head(head)
+        if inspected is None:
+            return None
+        columns, header_encoding, terminator = inspected
+        self._validate_columns(columns)
+        if self._encoding is not None and self._encoding != header_encoding:
+            # 明示した文字コードがファイルのものと違えば、変換して全件を書き直す従来の経路へ
+            return None
+        # BOM はファイルの先頭にだけあればよい。書き足す分には付けない
+        return columns, (UTF8 if header_encoding == UTF8_SIG else header_encoding), terminator
+
+    def _flush_appended(self) -> None:
+        """``_plan_in_place_append`` で保留した行を、ファイルの末尾へ書き足す（内部用）。"""
+        table, plan = self._appended, self._append_plan
+        self._appended = None
+        self._append_plan = None
+        if table is None or plan is None or len(table) == 0:
+            return
+        encoding, terminator = plan
+        buffer = io.StringIO(newline="")
+        writer = csv.DictWriter(
+            buffer, fieldnames=table.columns, extrasaction="raise", lineterminator=terminator
+        )
+        writer.writerows(table.to_rows())
+        try:
+            payload = buffer.getvalue().encode(encoding)
+        except UnicodeEncodeError as exc:
+            raise _unencodable_error(self.path, encoding, exc) from exc
+        logger.debug("CSV 書き足し: %s, +%d 行, encoding=%s", self.path, len(table), encoding)
+        with self.path.open("r+b") as binary:
+            binary.seek(0, io.SEEK_END)
+            if binary.tell() > 0:
+                # 前回の書き込みが途中で切れて末尾が改行で終わっていないときは、
+                # 改行を足してから書く
+                binary.seek(-1, io.SEEK_END)
+                if binary.read(1) != b"\n":
+                    binary.write(terminator.encode("ascii"))
+            binary.write(payload)
+
+    def _materialize_appended(self) -> None:
+        """保留した「足すだけの行」を、全件の Table（``_pending``）に展開する（内部用）。
+
+        追記のあとに ``read()`` / ``iter_rows()`` / ``replace()`` が呼ばれたとき、
+        「ファイルの中身 + 足した行」を返す必要があるので、そこで初めてファイルを読む。
+        """
+        if self._appended is None:
+            return
+        additions = self._appended.to_rows()
+        self._appended = None
+        self._append_plan = None
+        current = self.read()
+        current.append(additions)
+        self._pending = current
 
     def _write(self, table: Table) -> None:
         encoding = self._write_encoding
@@ -647,16 +814,7 @@ class CSV:
             # 保った文字コード（``encoding``）で表せない文字が含まれている。
             # ``atomic_write`` が一時ファイルを片付けるので、元のファイルは
             # 置き換えられずに無傷で残る。``?`` への暗黙の置換はしない。
-            offending = ""
-            if exc.object is not None and exc.start is not None and exc.end is not None:
-                offending = repr(exc.object[exc.start : exc.end])
-            raise InvalidTableInputError(
-                f"CSV を {encoding} で書き込めません（保った文字コードで表せない文字があります）: "
-                f"{self.path}\n"
-                f"表せない文字: {offending}\n"
-                "対処: ファイルを UTF-8 (BOM 付き) で保存し直すか、"
-                "表せない文字を含む行を修正してください。"
-            ) from exc
+            raise _unencodable_error(self.path, encoding, exc) from exc
 
     @property
     def _write_encoding(self) -> str:
