@@ -17,8 +17,10 @@ dry-run モードとデバッグモードの管理。
 """
 
 import logging
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+
+from comken.exceptions import ComkenError
 
 logger = logging.getLogger(__name__)
 
@@ -79,3 +81,73 @@ def debug(enabled: bool = True) -> Iterator[None]:
 def dry_run_log(action: str, *args: object) -> None:
     """dry-run でスキップした操作をログに出す（ライブラリ内部用）。"""
     logger.info("[DRY-RUN] %s", action % args if args else action)
+
+
+def run_main(
+    main: Callable[[], int | None],
+    *,
+    debug_mode: bool = False,
+    dry_run_mode: bool = False,
+) -> int:
+    """``main()`` を dry-run / debug の有無で囲んで呼び出し、終了コードを返す。
+
+    4 リポジトリの ``main.py`` に同形だった次のセットを 1 か所にまとめる:
+
+    - ``comken_logger.setup_local_logging()`` を前提とする（``main.py`` 側で 1 回呼ぶ）
+    - ``with dry_run():`` / ``with debug():`` を ``debug_mode`` / ``dry_run_mode`` で切り替え
+    - ``main()`` の戻り値が ``int`` ならそのまま、``None`` なら 0
+    - ``ComkenError`` のときは ``logger.error("処理を中断しました: %s", e)`` を出した上で 1
+    - 想定外の例外は ``logger.exception(...)`` した上で **そのまま再送出** する
+      （RPA 基盤／スケジューラが受け取れるように）
+
+    新しい状態を持たず、既存の ``with dry_run():`` / ``with debug():`` の
+    仕組みをそのまま使う。``main`` の内部で ``is_dry_run()`` / ``is_debug()``
+    が True になるかどうかは、``debug_mode`` / ``dry_run_mode`` 引数どおり。
+
+    典型的な ``main.py``::
+
+        from comken import comken_logger
+        from comken.runtime import run_main
+        from src.run import run
+
+        def main() -> int:
+            return run()
+
+        if __name__ == "__main__":
+            comken_logger.setup_local_logging()
+            raise SystemExit(run_main(main))
+
+    Args:
+        main: 実行する処理。戻り値は ``int``（終了コード）か ``None``。
+        debug_mode: True なら呼び出し中だけ ``with debug():`` で囲む。
+        dry_run_mode: True なら呼び出し中だけ ``with dry_run():`` で囲む。
+
+    Returns:
+        ``main()`` の戻り値（``int``）か、``None`` のときの ``0``。
+        ``ComkenError`` で止まったときは ``1``。
+    """
+    if debug_mode and dry_run_mode:
+        with debug(), dry_run():
+            return _invoke_main(main)
+    if debug_mode:
+        with debug():
+            return _invoke_main(main)
+    if dry_run_mode:
+        with dry_run():
+            return _invoke_main(main)
+    return _invoke_main(main)
+
+
+def _invoke_main(main: Callable[[], int | None]) -> int:
+    """``run_main`` の本体。``with`` を一段減らして表を見やすくする内部用ヘルパー。"""
+    try:
+        result = main()
+    except ComkenError as e:
+        # comken の例外メッセージには対処法が含まれている（docs/ERRORS.md も参照）。
+        logger.error("処理を中断しました: %s", e)
+        return 1
+    except Exception:
+        # 想定外は RPA 基盤／スケジューラに届くよう、ログだけ残して再送出する
+        logger.exception("予期しないエラーが発生しました")
+        raise
+    return 0 if result is None else int(result)

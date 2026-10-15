@@ -7894,6 +7894,29 @@ def iter_rows(self, *, header_row: int=1) -> Iterator[Row]:
 Windows でもファイルをリネームできる（キャッシュ版 Workbook ではないので
 ``Excel`` セッション内の他の ``read()`` 等は影響を受けない）。
 
+### `column_letter`
+
+```text
+def column_letter(index: int) -> str:
+```
+
+#### 説明
+
+1始まりの列番号を Excel の列記号に変換する（``1 → "A"``）。
+
+``col_to_num()`` の逆関数。Excel の列は A, B, ..., Z, AA, AB, ..., AZ, BA,
+... と続き、これは **1始まり 26進数**（桁は A〜Z）で表せる。
+1始まりなので ``Z`` の次は ``AA``（=0,0 ではない点だけ注意）。
+
+Args:
+    index: 1始まりの列番号。
+
+Returns:
+    ``"A"`` 〜 ``"ZZZ"`` の列記号。
+
+Raises:
+    ValueError: ``index`` が 1 未満の場合。
+
 
 ## `from comken.toolbox.outlook import ...`
 

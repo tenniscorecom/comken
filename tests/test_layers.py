@@ -22,6 +22,7 @@ LAYERS = {
 
 # 同じ層の別コンポーネント同士で、実際に必要な依存。ここへ足して済ませず、まず設計を見直す。
 ALLOWED_SAME_LAYER = {
+    ("runtime", "exceptions"),  # run_main() が ComkenError を捕捉して終了コードに直す
     ("toolbox.excel", "toolbox.windows"),  # 既存数式・マクロ時の COM フォールバック
     ("toolbox.salesforce", "toolbox.credentials"),  # Salesforce の認証情報を安全に保存する
     ("toolbox.salesforce", "toolbox.csv"),  # レポート・SOQL の結果を CSV/Table にする
