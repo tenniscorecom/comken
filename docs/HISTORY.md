@@ -45,6 +45,7 @@
 25. Report API でサマリー・マトリックスの明細行を返す（2026-10-14）
 26. Report API のサマリー・マトリックス・レスポンス形の読み違いを直した（2026-10-14）
 27. comken バージョンの記録を config からロガー設定へ移した（2026-10-14）
+28. 対象の Python を 3.13 だけにした（2026-10-15）
 
 ## 1. 設定と非機密情報の扱い
 
@@ -902,8 +903,6 @@ core/dates はファイルに触らない層のまま（dates から files を i
 **このリポジトリへ書き戻さないこと**（公開リポジトリなので、書き戻すと実際の社内情報が漏れる）。
 
 ## 25. Report API でサマリー・マトリックスの明細行を返す（2026-10-14）
-26. Report API のサマリー・マトリックス・レスポンス形の読み違いを直した（2026-10-14）
-27. comken バージョンの記録を config からロガー設定へ移した（2026-10-14）
 
 `ReportAPI.get()` / `run_async()` が、TABULAR だけでなく SUMMARY / MATRIX でも
 明細の行を 1 枚の `Table` に並べて返せるようにした。Salesforce レポートダウンローダー
@@ -982,3 +981,14 @@ MATRIX 1 段 × 1 段 / SUMMARY での `groupingsAcross: {"groupings": []}` /
 `LoggingAlreadyConfiguredError` / `LoggingConflictError` を投げた場合は
 出力先が確保できていないので、 `setup_*` が返す直前に呼ぶ位置でもバージョンは
 記録されない（cf. `test_version_not_logged_when_setup_raises`）。
+
+## 28. 対象の Python を 3.13 だけにした（2026-10-15）
+
+対象を Python 3.13 だけにし、CI も 3.13 だけで回す。Python を安定版として使いたいため。
+3.15 を最低版にするかはまだ決めていない。3.15 専用に書き直したブランチ（`py315`）で、
+3.15.0 でテストが全件通ること、`from __future__ import annotations` と UTF-8 の
+`encoding=` の明示を外せること、手書きの遅延 import を `lazy from` に置き換えられることは確かめてある。
+3.15 にするときは、この `py315` を土台にする。
+
+`requires-python` に上限（`<3.14`）は付けない。3.14 以降の PC でも `pip install` はでき、
+動作の確認を CI でしていないだけ。
