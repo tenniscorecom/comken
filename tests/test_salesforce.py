@@ -11,6 +11,8 @@ from comken.exceptions import (
     CredentialError,
     CredentialNotFoundError,
     SalesforceError,
+    SalesforceReportAccessDeniedError,
+    SalesforceReportFormatError,
     SalesforceReportIDNotFoundError,
     SalesforceReportTruncatedError,
     SalesforceRequestError,
@@ -1165,6 +1167,21 @@ class TestReportUnknownFormat:
         ):
             client.report.get("00O000000000001")
 
+    def test_multi_block_report_raises_specific_format_error_subclass(self):
+        """``SalesforceReportFormatError`` は専用の ``SalesforceError`` 子クラス。
+        利用側は型で分岐でき、``except SalesforceError`` も後方互換で動く。
+        """
+        body = _report_body([], report_format="MULTI_BLOCK")
+        with (
+            _salesforce([_response(json_body=body)]) as (client, _, _),
+            pytest.raises(SalesforceReportFormatError) as caught,
+        ):
+            client.report.get("00O000000000001")
+        assert isinstance(caught.value, SalesforceError)
+        assert caught.value.report_id == "00O000000000001"
+        assert caught.value.report_format == "MULTI_BLOCK"
+        assert "MULTI_BLOCK" in str(caught.value)
+
 
 class TestDescribeObject:
     """``SalesforceBase.describe_object()`` はオブジェクトのメタデータ（項目・
@@ -1348,6 +1365,26 @@ class TestReportAccessDenied:
             pytest.raises(SalesforceError, match=r"(?s)HTTP 403.*00O000000000001"),
         ):
             client.report.run_async(self.REPORT_ID)
+
+    def test_get_403_raises_specific_access_denied_subclass(self):
+        """``SalesforceReportAccessDeniedError`` は ``SalesforceError`` の
+        子クラス。利用側は ``except SalesforceError`` も維持しつつ、
+        専用の型でも捕捉できる（``report_id``/``status_code``/``detail`` 属性で
+        機械的に判定できる）。
+        """
+        with (
+            _salesforce([_response(403, text="Analytics API 権限がありません")]) as (
+                client,
+                _,
+                _,
+            ),
+            pytest.raises(SalesforceReportAccessDeniedError) as caught,
+        ):
+            client.report.get(self.REPORT_ID)
+        assert isinstance(caught.value, SalesforceError)
+        assert caught.value.report_id == self.REPORT_ID
+        assert caught.value.status_code == 403
+        assert caught.value.detail == "Analytics API 権限がありません"
 
 
 class TestSites:

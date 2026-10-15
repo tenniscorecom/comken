@@ -22,6 +22,8 @@ ComkenError
 │   ├── SalesforceAuthError
 │   ├── SalesforceRequestError
 │   ├── SalesforceReportTruncatedError
+│   ├── SalesforceReportFormatError
+│   ├── SalesforceReportAccessDeniedError
 │   └── SalesforceReportIDNotFoundError
 ├── BrowserError
 │   ├── ElementNotFoundError
@@ -103,6 +105,8 @@ from comken.exceptions.web import (
     LoginFailedError,
     SalesforceAuthError,
     SalesforceError,
+    SalesforceReportAccessDeniedError,
+    SalesforceReportFormatError,
     SalesforceReportIDNotFoundError,
     SalesforceReportTruncatedError,
     SalesforceRequestError,
@@ -135,6 +139,8 @@ __all__ = [
     "SalesforceAuthError",
     "SalesforceRequestError",
     "SalesforceReportTruncatedError",
+    "SalesforceReportFormatError",
+    "SalesforceReportAccessDeniedError",
     "SalesforceReportIDNotFoundError",
     "BrowserError",
     "ElementNotFoundError",

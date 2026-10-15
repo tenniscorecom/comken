@@ -151,3 +151,86 @@ class SalesforceReportIDNotFoundError(SalesforceError):
             "そのまま貼り付けてください。レポート ID（00O で始まる 15 桁か 18 桁）を"
             "直接書いても構いません。"
         )
+
+
+class SalesforceReportFormatError(SalesforceError):
+    """対応外形式、または明細の列が無いレポートで止めた
+
+    明細を取れるのは ``TABULAR`` / ``SUMMARY`` / ``MATRIX`` の 3 形式で、
+    それ以外（``MULTI_BLOCK`` などの結合レポート）は対応しないため明示的に
+    止める。形式は対応内でも ``detailColumns`` が空（集計だけで明細が無い
+    サマリー / マトリックス）のときもここに入る。無言で空の ``Table`` を
+    「成功」として返さないための例外。
+
+    メッセージ本文は旧来の ``SalesforceError`` の文言と同じままにしてあるため、
+    ``str(exc)`` でログを見ていた既存テストや運用ログも壊れない。
+
+    発生箇所: comken.toolbox.salesforce.report.ReportAPI.get() / run_async()
+             （内部の ``_parse_report_payload``）
+
+    対処:
+        レポート形式を ``TABULAR`` / ``SUMMARY`` / ``MATRIX`` のいずれかに
+        変えるか、SOQL（``query``）で取得してください。集計だけで明細が無い
+        レポートのときは、SOQL で組み立て直すか、レポート定義に明細列を足して
+        もらうかを管理者に相談してください
+    """
+
+    def __init__(self, report_id: str, report_format: str) -> None:
+        super().__init__(
+            f"このレポートは {report_format} 形式です: {report_id}\n"
+            "取得できるのは明細（TABULAR）・サマリー（SUMMARY）・"
+            "マトリックス（MATRIX）形式のレポートだけです。\n"
+            "レポート形式を確認するか、SOQL（query）で取得してください。"
+            "\n対処: レポート形式を確認するか、管理者へ連絡してください。"
+        )
+        # 利用側プログラムが型で分岐できるよう、レポート ID と形式の短い理由は
+        # 属性としても持たせておく（メッセージからの抽出ではなく機械的に判定できる）
+        self.report_id = report_id
+        self.report_format = report_format
+
+
+class SalesforceReportAccessDeniedError(SalesforceError):
+    """レポート API（Analytics API）への権限が無い（HTTP 401 / 403）
+
+    Reports and Dashboards REST API を叩いたときに 401 / 403 を返された
+    場合に、汎用 ``SalesforceRequestError`` から専用のエラーへ差し替える。
+    CRM Analytics と紛らわしいので、判定はメッセージ本文ではなく
+    **HTTP ステータスコード（401 / 403）**だけで行う。401 は 1 回だけ
+    再認証してからもう一度判定するので、再認証後の 401 も対象。
+
+    メッセージ本文は旧来の ``SalesforceError`` の文言と同じままにしてあるため、
+    ``str(exc)`` でログを見ていた既存テストや運用ログも壊れない。
+
+    発生箇所: comken.toolbox.salesforce.report.ReportAPI.get() / run_async()
+             / describe() の ``_request``（SalesforceRequestError を
+             401 / 403 のときだけ入れ替える）
+
+    対処:
+        Salesforce 管理者に、refresh_token を発行したユーザーについて
+        次を確認してもらってください:
+          1. Profile / Permission Set に「API Enabled」権限があるか
+          2. 対象のレポート・レポートフォルダへのアクセス権があるか
+          3. 組織の Edition・ライセンスが Reports and Dashboards REST API
+            に対応しているか（一部の制限ライセンスでは使えない）
+    """
+
+    def __init__(self, report_id: str, status_code: int, detail: str) -> None:
+        super().__init__(
+            f"Salesforce のレポート API（Analytics API）へのアクセスが"
+            f"拒否されました（HTTP {status_code}）: {report_id}\n"
+            f"{detail}\n"
+            "Salesforce 管理者に、実行ユーザーの「API Enabled」権限・"
+            "レポートへのアクセス権・組織の Edition が Reports and Dashboards "
+            "REST API に対応しているかを確認してもらってください。"
+            "\n対処: Salesforce 管理者に、refresh_token を発行したユーザーについて"
+            "次を確認してもらってください。"
+            "  1. Profile / Permission Set に「API Enabled」権限があるか"
+            "  2. 対象のレポート・レポートフォルダへのアクセス権があるか"
+            "  3. 組織の Edition・ライセンスが Reports and Dashboards REST API"
+            "に対応しているか（一部の制限ライセンスでは使えない）"
+        )
+        # 401 / 403 以外の ``SalesforceRequestError`` の ``detail`` を引き継ぐので、
+        # プログラムからは HTTP コードとレポート ID で機械的に判定できる
+        self.report_id = report_id
+        self.status_code = status_code
+        self.detail = detail

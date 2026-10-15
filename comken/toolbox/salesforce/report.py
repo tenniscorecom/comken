@@ -31,6 +31,8 @@ from comken.core.table import Table
 from comken.core.timer import measure
 from comken.exceptions import (
     SalesforceError,
+    SalesforceReportAccessDeniedError,
+    SalesforceReportFormatError,
     SalesforceReportIDNotFoundError,
     SalesforceReportTruncatedError,
     SalesforceRequestError,
@@ -38,39 +40,29 @@ from comken.exceptions import (
 from comken.toolbox.csv import CSV
 
 
-def _report_format_error(report_id: str, report_format: str) -> SalesforceError:
-    """``SalesforceError`` の「レポートの形式が対応していない」文言。
+def _report_format_error(report_id: str, report_format: str) -> SalesforceReportFormatError:
+    """``SalesforceReportFormatError`` を生成する。
 
     取得対象は明細（TABULAR）・サマリー（SUMMARY）・マトリックス（MATRIX）の
     3 形式に限り、それ以外（MULTI_BLOCK など）は対応しないので明示的に止める。
     「明細の列が無いサマリー」のような、形式は対応内だが中身が取れない
     ケースでも使う（呼び出し側で ``report_format`` に短い理由を渡す）。
+
+    専用クラスにすることで、利用側が ``except SalesforceError`` の文字列判定ではなく
+    型で分岐できる。メッセージ本文は旧 ``SalesforceError`` の文言と同じまま。
     """
-    return SalesforceError(
-        f"このレポートは {report_format} 形式です: {report_id}\n"
-        "取得できるのは明細（TABULAR）・サマリー（SUMMARY）・"
-        "マトリックス（MATRIX）形式のレポートだけです。\n"
-        "レポート形式を確認するか、SOQL（query）で取得してください。"
-        "\n対処: レポート形式を確認するか、管理者へ連絡してください。"
-    )
+    return SalesforceReportFormatError(report_id, report_format)
 
 
-def _report_access_denied_error(report_id: str, status_code: int, detail: str) -> SalesforceError:
-    """``SalesforceError`` の「レポート API へのアクセスを拒否された」文言。"""
-    return SalesforceError(
-        f"Salesforce のレポート API（Analytics API）へのアクセスが"
-        f"拒否されました（HTTP {status_code}）: {report_id}\n"
-        f"{detail}\n"
-        "Salesforce 管理者に、実行ユーザーの「API Enabled」権限・"
-        "レポートへのアクセス権・組織の Edition が Reports and Dashboards "
-        "REST API に対応しているかを確認してもらってください。"
-        "\n対処: Salesforce 管理者に、refresh_token を発行したユーザーについて"
-        "次を確認してもらってください。"
-        "  1. Profile / Permission Set に「API Enabled」権限があるか"
-        "  2. 対象のレポート・レポートフォルダへのアクセス権があるか"
-        "  3. 組織の Edition・ライセンスが Reports and Dashboards REST API"
-        "に対応しているか（一部の制限ライセンスでは使えない）"
-    )
+def _report_access_denied_error(
+    report_id: str, status_code: int, detail: str
+) -> SalesforceReportAccessDeniedError:
+    """``SalesforceReportAccessDeniedError`` を生成する。
+
+    401 / 403 は Reports and Dashboards REST API への権限不足なので
+    メッセージから判定させず、専用クラスにする（利用側が型で分岐できるように）。
+    """
+    return SalesforceReportAccessDeniedError(report_id, status_code, detail)
 
 
 def _report_execution_error(report_id: str, detail: str) -> SalesforceError:
@@ -629,11 +621,12 @@ class ReportAPI:
         Raises:
             SalesforceReportTruncatedError: 上限で切り捨てられた場合
                 （allow_truncated=True のときは送出しない）。
-            SalesforceError: 対応外形式（MULTI_BLOCK など）の場合、または
-                サマリー・マトリックスで ``detailColumns`` が空（明細の列が無い）
-                の場合。
-            SalesforceError: レポート API への権限が無い場合
-                （HTTP 401 / 403）。
+            SalesforceReportFormatError: 対応外形式（MULTI_BLOCK など）の場合、
+                またはサマリー・マトリックスで ``detailColumns`` が空
+                （明細の列が無い）の場合。``SalesforceError`` の子クラスの
+                ため ``except SalesforceError`` でも捕捉できる。
+            SalesforceReportAccessDeniedError: レポート API への権限が無い場合
+                （HTTP 401 / 403）。同上、``SalesforceError`` で捕捉できる。
         """
         return self._fetch_report_table(report_id, filters, allow_truncated)
 
@@ -663,9 +656,9 @@ class ReportAPI:
         Raises:
             SalesforceReportTruncatedError: 上限で切り捨てられた場合
                 （``get()`` から伝播）。
-            SalesforceError: 対応外形式、または明細の列が無い場合
+            SalesforceReportFormatError: 対応外形式、または明細の列が無い場合
                 （``get()`` から伝播）。
-            SalesforceError: レポート API への権限が無い場合
+            SalesforceReportAccessDeniedError: レポート API への権限が無い場合
                 （HTTP 401 / 403、``get()`` から伝播）。
         """
         table = self.get(report_id, filters, allow_truncated)
@@ -693,9 +686,9 @@ class ReportAPI:
 
         Raises:
             SalesforceReportTruncatedError: 上限で切り捨てられた場合。
-            SalesforceError: 対応外形式、または明細の列が無い場合。
-            SalesforceError: Salesforce 側で実行が失敗した場合。
-            SalesforceError: レポート API への権限が無い場合
+            SalesforceReportFormatError: 対応外形式、または明細の列が無い場合。
+            SalesforceError: Salesforce 側で実行が失敗した場合（``_report_execution_error``）。
+            SalesforceReportAccessDeniedError: レポート API への権限が無い場合
                 （HTTP 401 / 403）。
             TimeoutError: 制限時間内に完了しなかった場合。
         """
@@ -764,7 +757,7 @@ class ReportAPI:
             API が dict 以外を返した場合（パース失敗時など）は空 dict。
 
         Raises:
-            SalesforceError: レポート API への権限が無い場合
+            SalesforceReportAccessDeniedError: レポート API への権限が無い場合
                 （HTTP 401 / 403）。HTTP 401 / 403 以外は ``SalesforceRequestError``
                 のまま送出される（``_request`` 経由で 401 / 403 だけ変換するため）。
         """

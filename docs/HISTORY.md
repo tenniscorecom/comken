@@ -46,6 +46,7 @@
 26. Report API のサマリー・マトリックス・レスポンス形の読み違いを直した（2026-10-14）
 27. comken バージョンの記録を config からロガー設定へ移した（2026-10-14）
 28. 対象の Python を 3.13 だけにした（2026-10-15）
+29. レポートの形式エラーと権限エラーを専用例外にした（2026-10-15）
 
 ## 1. 設定と非機密情報の扱い
 
@@ -992,3 +993,27 @@ MATRIX 1 段 × 1 段 / SUMMARY での `groupingsAcross: {"groupings": []}` /
 
 `requires-python` に上限（`<3.14`）は付けない。3.14 以降の PC でも `pip install` はでき、
 動作の確認を CI でしていないだけ。
+
+## 29. レポートの形式エラーと権限エラーを専用例外にした（2026-10-15）
+
+`comken.toolbox.salesforce.report` が出していた 2 つのエラーは、これまで基底の
+`SalesforceError` を直接生成していた。利用側（soql-collector）がメッセージの
+文字列（「このレポートは ◯◯ 形式です」「レポート API へのアクセスが拒否されました」）
+で分岐していて、メッセージ文言を 1 文字でも直すと `except SalesforceError`
+ベースのロジックが誤動作する状態だった。
+
+そこで、
+
+- `SalesforceReportFormatError(SalesforceError)` — 対応外形式や明細の列が無いレポート
+- `SalesforceReportAccessDeniedError(SalesforceError)` — レポート API への権限拒否
+  （HTTP 401 / 403）
+
+の 2 つを `comken.exceptions.web` に足した。属性として `report_id` /
+`report_format` / `status_code` / `detail` を持たせておき、プログラムからは
+型で分岐できる。**メッセージ本文は旧 `SalesforceError` の文言と同じまま**にして
+あるので、既存ログ・既存テスト・利用者の `str(exc)` ベースの分岐は壊れない。
+`SalesforceError` の子クラスのため `except SalesforceError` も後方互換でそのまま残る。
+
+`report.py` 内の `_report_format_error` / `_report_access_denied_error` は
+新クラスを返す薄い生成関数になり、`SalesforceError` を直接組み立てていた文は
+そこにだけ閉じている。

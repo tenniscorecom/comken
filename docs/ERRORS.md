@@ -86,6 +86,8 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `SalesforceAuthError` | Salesforce にログインできない | 表示された確認項目を上から順に見る。それでも直らなければ管理者へ連絡する |
 | `SalesforceRequestError` | Salesforce が処理を断った | 表示されたメッセージをそのまま添えて管理者へ連絡する（権限か項目名の問題が多い） |
 | `SalesforceReportTruncatedError` | レポートが上限の 2000 行で切れた（**全件ではない**） | 期間を狭めて何回かに分けて実行する。1回で全部必要なら管理者へ連絡する |
+| `SalesforceReportFormatError` | 対応外形式、または明細の列が無いレポートで止めた | レポート形式を ``TABULAR`` / ``SUMMARY`` / ``MATRIX`` のいずれかに変えるか、SOQL（``query``）で取得してください。集計だけで明細が無いレポートのときは、SOQL で組み立て直すか、レポート定義に明細列を足してもらうかを管理者に相談してください |
+| `SalesforceReportAccessDeniedError` | レポート API（Analytics API）への権限が無い（HTTP 401 / 403） | Salesforce 管理者に、refresh_token を発行したユーザーについて次を確認してもらってください:1. Profile / Permission Set に「API Enabled」権限があるか2. 対象のレポート・レポートフォルダへのアクセス権があるか3. 組織の Edition・ライセンスが Reports and Dashboards REST APIに対応しているか（一部の制限ライセンスでは使えない） |
 | `SalesforceReportIDNotFoundError` | レポートの URL からレポート ID を取り出せない | Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す |
 | `StateError` | state.ini に関するエラー。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `HolidayError` | 祝日カレンダーに関するエラー。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
