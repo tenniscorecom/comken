@@ -187,6 +187,34 @@ class TestExpiry:
         assert empty.last_known_date() is None
         assert empty.days_until_expiry(_dt.date(2024, 1, 1)) == -1
 
+    def test_is_workday_does_not_scan_all_holidays(self) -> None:
+        """``is_workday`` を何度呼んでも、収録した祝日の全件を走査し直さない。
+
+        期限切れの確認（``_maybe_warn_expiring``）は ``is_workday`` のたびに走る。
+        収録最終日を毎回 ``max()`` で求めると、1 回 50 µs ほどかかり、
+        ``workday`` / ``count_workdays`` のように何度も呼ぶ関数が約 100 倍遅くなる。
+        """
+
+        class CountingDict(dict[_dt.date, str]):
+            iterations = 0
+
+            def __iter__(self):  # type: ignore[no-untyped-def]
+                type(self).iterations += 1
+                return super().__iter__()
+
+        cal = _Holidays(
+            CountingDict({_dt.date(2030, 1, 1): "元日", _dt.date(2030, 5, 5): "こどもの日"})
+        )
+        CountingDict.iterations = 0  # 読み込み時の走査（収録最終日を求める分）は数えない
+        _set_calendar_for_test(cal)
+        try:
+            for offset in range(100):
+                is_workday(_dt.date(2026, 10, 1) + _dt.timedelta(days=offset))
+        finally:
+            _set_calendar_for_test(None)
+
+        assert CountingDict.iterations == 0
+
 
 class TestExpiringWarning:
     """期限切れ警告（30日切ったら 1度だけ WARNING）の挙動。"""

@@ -346,6 +346,9 @@ class _Holidays:
 
     def __init__(self, holidays: dict[_dt.date, str]) -> None:
         self._holidays = holidays
+        # 収録最終日。``is_workday`` が呼ばれるたびに期限切れの確認（``_maybe_warn_expiring``）
+        # が走るので、毎回 ``max()`` で全件をなめないよう、読み込み時に1度だけ求める
+        self._last_known: _dt.date | None = max(holidays) if holidays else None
         # 期限切れ警告を「同じ日に 1度だけ」出すためのキャッシュキー
         self._expiry_warned_on: _dt.date | None = None
         # 収録範囲外の日付を問い合わせたときの警告を「プロセスで 1度だけ」出すためのフラグ
@@ -431,9 +434,7 @@ class _Holidays:
 
     def last_known_date(self) -> _dt.date | None:
         """収録済みのうち最も新しい日付。無ければ ``None``。"""
-        if not self._holidays:
-            return None
-        return max(self._holidays)
+        return self._last_known
 
     def days_until_expiry(self, today: _dt.date) -> int:
         """``today`` から収録最終日までの日数。最終日を過ぎていれば負の値。
