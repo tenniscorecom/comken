@@ -256,7 +256,7 @@ browser/
 
 | 項目 | 内容 |
 |---|---|
-| Python | 3.13 以上（`requires-python = ">=3.13"`）。3.14 も可。CI は 3.13 と 3.14 の両方で回す |
+| Python | 3.13（`requires-python = ">=3.13"`）。CI は 3.13 だけで回す。3.14 以降は動作を確認していない |
 | OS | Windows（`toolbox.windows` / `toolbox.browser` は Windows 専用） |
 | 必須依存 | openpyxl, selenium, pywin32, requests |
 | Outlook 操作 | 従来版（Classic）Outlook が必要。New Outlook は非対応 |

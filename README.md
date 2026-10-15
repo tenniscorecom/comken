@@ -2,7 +2,7 @@
 
 業務自動化で使う Python 共通ライブラリ。
 
-動作環境: Windows / Python 3.13 以上（3.14 も可）。詳細は [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) の「9. 動作環境」。
+動作環境: Windows / Python 3.13（3.14 以降は動作を確認していない）。詳細は [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) の「9. 動作環境」。
 
 設計は [設計書](docs/ARCHITECTURE.md) を参照。
 
