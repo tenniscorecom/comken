@@ -22,11 +22,28 @@
 読み取りは「ロックを掛けて ``CSV`` で読み、行を ``migrate_row()`` で揃える」だけ、
 書き込みは「ロックを掛けて ``CSV`` で ``read`` → マイグレーション or そのまま追記
 → ``replace`` で1回書き直し」を繰り返す。
+
+**読み取りはファイルが更新されるまで結果を再利用する。** 履歴は増える一方で、
+ダウンローダーの 1 実行で数百回判定するために ``_read_rows()`` を経由する。
+``_read_rows()`` は ``(絶対パス, st_mtime_ns, st_size)`` をキーに結果を
+キャッシュし、有効なら ``HistoryFileLock`` なしで返す（書き込み側がロックの
+中でファイルを原子的に置き換えるため、読み取り側でロックを取る必要は無い）。
+キャッシュの TTL は持たない（サイズの自然増加で無効化される）。詳細は
+``_read_rows()`` の docstring と ``docs/HISTORY.md`` の新章を参照。
+
+**追記は既存ファイルに対して末尾に1行だけ足す。** 既存実装は「ロック → 全件
+``CSV.read()`` → 追記 → ``CSV.replace()``（原子的に全件書換え）」だったが、
+履歴の行数が増えると 1 回の追記コストが膨らむため、見出しが現在の ``COLUMNS``
+と一致し文字コードが UTF-8 のときは **速い経路** で ``open(path, "ab")`` の
+``write()`` 1回だけにする（CSV 全体は書き換えない）。古い構成の見出しや
+CP932 のときは従来どおり全件書換えの **遅い経路** に落ちる（マイグレーションと
+文字コード正規化を1回の保存で済ませる）。詳細は ``_append()`` の docstring。
 """
 
 import datetime
 import datetime as dt
 import logging
+import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -37,6 +54,7 @@ from comken.core.timer import measure
 from comken.exceptions import InvalidTableInputError, ReportNotDownloadedError
 from comken.services.salesforce_downloader.history_file_lock import HistoryFileLock
 from comken.toolbox.csv import CSV
+from comken.toolbox.csv.file import encode_rows_as_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +113,27 @@ ROUTE_BROWSER_FALLBACK_EMPTY = "ブラウザ（自動切替：0件）"
 
 _TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
 _DATE_FORMAT = "%Y-%m-%d"
+
+
+# ── 読み取りキャッシュ（直近の1ファイルぶんのみ）────────────────────────
+# キーは ``(絶対パス, st_mtime_ns, ファイルサイズ)``。TTL は持たない
+# （サイズの自然増加で無効化される）。テストから差し替えられるよう別関数
+# ``_clear_read_cache()`` を用意する。複数ファイルのキャッシュは持たない
+# （履歴は1つだけ）。
+_READ_CACHE_KEY: tuple[str, int, int] | None = None
+_READ_CACHE_ROWS: list[dict[str, str]] | None = None
+
+
+def _clear_read_cache() -> None:
+    """読み取りキャッシュを破棄する（テスト専用）。
+
+    本番の書き込み経路では ``_append`` 後にサイズが自然に増えるため
+    不要だが、念のため ``append_history()`` からも明示的に呼ぶ。
+    テストでは autouse fixture から呼んでテスト間の状態を切る。
+    """
+    global _READ_CACHE_KEY, _READ_CACHE_ROWS
+    _READ_CACHE_KEY = None
+    _READ_CACHE_ROWS = None
 
 
 @dataclass(frozen=True)
@@ -295,7 +334,24 @@ def read_history(path: str | Path) -> Table:
 
 
 def _read_rows(path: Path) -> list[dict[str, str]]:
-    """履歴CSVをロックの中で読み、``COLUMNS`` 順に揃え直した行リストを返す。
+    """履歴CSVを読み、``COLUMNS`` 順に揃え直した行リストを返す。
+
+    **ファイルが更新されるまで結果を再利用する（キャッシュ）。** キーは
+    ``(絶対パス, st_mtime_ns, ファイルサイズ)``。TTL は持たない
+    （サイズの自然増加で無効化される）。キャッシュが有効なら
+    ``HistoryFileLock`` を取らずにそのまま返す。書き込み側はロックの中で
+    ファイル全体を原子的に置き換えるので、読み取り側でロックを取る必要は無い
+    （キャッシュの中身は「ロック中に読まれた整合性の取れた状態」）。
+
+    **返り値は読み取り専用。** 呼び出し側は dict / list を書き換えない前提。
+    同一プロセス内で使い回されるため、変更すると後続の呼び出しや他の読み取り
+    経路にも影響する。 ``read_history()`` は ``Table`` を返すが、Table
+    構築時に ``dict(row)`` でコピーされるため、利用側が ``read_history()``
+    の ``to_rows()`` を書き換えても影響しない。
+
+    読み込みの前後で ``stat`` が変わっていたら、そのキーでキャッシュに保存
+    せずそのまま返す（読んでいる間に書き込まれたかもしれない古い結果を
+    残さないため）。
 
     ファイルが無い場合は空リスト。``CSV`` クラスが文字コード自動判定・見出し
     検証（空・重複）・列数不一致の検出を行い、致命的な破損は ``CSVError``
@@ -305,12 +361,34 @@ def _read_rows(path: Path) -> list[dict[str, str]]:
     読み取り関数（``successful_files_today`` / ``schedule_succeeded_today`` /
     ``read_history`` / ``report_path`` / ``read_report``）が共通して通る入口。
     """
+    global _READ_CACHE_KEY, _READ_CACHE_ROWS
+    abs_path = path.resolve()
     if not path.is_file():
         return []
+    try:
+        before_stat = abs_path.stat()
+    except FileNotFoundError:
+        return []
+    cache_key = (str(abs_path), before_stat.st_mtime_ns, before_stat.st_size)
+    if cache_key == _READ_CACHE_KEY and _READ_CACHE_ROWS is not None:
+        return _READ_CACHE_ROWS
     with HistoryFileLock(path):
         with CSV(path, read_only=True) as csv_file:
             table = csv_file.read()
-        return [migrate_row(row) for row in table.to_rows()]
+        rows = [migrate_row(row) for row in table.to_rows()]
+    try:
+        after_stat = abs_path.stat()
+    except FileNotFoundError:
+        # 読んでいるうちにファイルが消えた場合は、結果を返すがキャッシュには残さない
+        return rows
+    if (
+        after_stat.st_mtime_ns == before_stat.st_mtime_ns
+        and after_stat.st_size == before_stat.st_size
+    ):
+        # 読み込み前後でファイルが変わっていない → このキーで安心してキャッシュできる
+        _READ_CACHE_KEY = cache_key
+        _READ_CACHE_ROWS = rows
+    return rows
 
 
 def migrate_row(row: dict[str, str]) -> dict[str, str]:
@@ -663,43 +741,62 @@ def append_history(
         # （絵文字など）を書こうとした場合。履歴は必須データなので、記録失敗として扱う
         # （文字コードは変えない。元のファイルは無傷で残る）
         raise HistoryWriteError(path, str(exc)) from exc
+    # 書き込み後は明示的に読み取りキャッシュを捨てる。サイズは増えているので
+    # stat の自然変化でも無効化されるが、念のため（テスト間のリーク防止も兼ねる）
+    if _READ_CACHE_KEY is not None and Path(_READ_CACHE_KEY[0]).resolve() == path.resolve():
+        _clear_read_cache()
     logger.debug("履歴追記完了: path=%s", path)
 
 
 def _append(path: Path, record_dict: dict[str, object]) -> None:
     """1行を追記する。見出し行はファイルを作るときだけ書く。
 
-    既存見出しが古い構成のときは、全行を ``migrate_row()`` で今の ``COLUMNS``
-    に揃え直したうえで、新しい1行を足して **1回の保存で** 書き込む
-    （マイグレーションと追記を別々に2回書き直さない）。既存見出しが
-    重複・空など致命的に壊れていると、 ``CSV`` クラスがそのまま例外を
-    上げてファイルは何も書き換えない。
+    **速い経路（通常）**: 既存ファイルの見出しが現在の ``COLUMNS`` と一致し、
+    文字コードが UTF-8 (BOM 付き／無し) のときは ``HistoryFileLock`` の中で
+    ``open(path, "ab")`` の ``write()`` 1回で **末尾に1行だけ** 追記する。
+    CSV 全体を書き直さない。 ``_append`` 以前の設計（CSV 追記＋
+    Windows ファイルロックで直列化）に沿った動き。
 
-    書き込みは ``comken.toolbox.csv.CSV`` クラスに委譲する。文字コード自動判定
-    （UTF-8 BOM / CP932）・見出しの検証（空・重複）・列数不一致の検出は
-    ``CSV`` クラスが担当する。書き換え後は次の追記と同じく UTF-8 BOM 付きへ
-    正規化される（同じ ``with`` からの追記と整合させるため）。
+    **遅い経路（フォールバック）**: 次のどれかに該当するときは従来どおり
+    ``CSV`` クラスで全件読み、 ``migrate_row()`` で ``COLUMNS`` 順に揃え直した
+    うえで ``replace()`` で **1回の保存で** 書き直す（マイグレーションと追記
+    を別々に2回書き直さない）:
 
-    パフォーマンス面の注意: 1 回あたりにファイル全体を原子的に書き直すため、
-    行数が増えるほど 1 回の書き込みコストは増える。履歴の規模
-    （1 日数十件程度）では許容できる。
+    - ファイルが無い／サイズが 0（新規ファイル扱い）
+    - 見出しが ``COLUMNS`` と一致しない（古い構成。マイグレーションが必要）
+    - 文字コードが UTF-8 でない（CP932 など。UTF-8 BOM 付きへの正規化が必要）
+    - 見出しが壊れている（空・重複）→ そのまま ``CSVError`` で停止
+
+    速い経路と遅い経路で、**書かれる行のバイト列は同じ** （Excel ダイヤの
+    ``csv.DictWriter`` 出力と UTF-8 (BOM 付き／無し) エンコード）。
+
+    **改行補正**: 速い経路で既存ファイルの末尾が改行で終わっていない（前回の
+    書き込みが途中で切れた）場合は、先に改行（``\\n``）を足してから新しい行を
+    書く。 CSV クラスが書く末尾の改行は ``\\r\\n`` だが、``\\n`` が末尾に
+    あれば ``csv.reader`` が正しく ``\\r\\n`` 終端の1行を読めるので問題ない。
 
     この関数は ``HistoryFileLock`` の中で呼び出される前提になっている
     （``append_history()`` の呼び出し経路が ``with HistoryFileLock(path):`` 内）。
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     is_new = not path.exists() or path.stat().st_size == 0
-    # ``is_new=True`` のときだけ ``columns=`` を渡す。既存ファイルに ``columns=``
-    # を渡すと「見出しなしのファイル」扱いとなり、最初の1行をデータとして読んで
-    # しまうため、渡すのは新規ファイル限定。
-    with CSV(path, columns=list(COLUMNS) if is_new else None) as csv_file:
-        if is_new:
-            # CSV.append は ``dict[str, Value]`` を要求するが、``record_dict``
-            # は ``Mapping[str, object]``。全ての値が文字列として扱えるので
-            # ``str`` へ局所キャストして渡す
-            csv_file.append({k: str(v) for k, v in record_dict.items()})
+    if is_new:
+        # 新規ファイル: 見出し + 1 データ行を UTF-8 BOM 付きで書き出す。
+        # 遅い経路と同じバイト列にするため ``csv.DictWriter`` の出力を
+        # ``utf-8-sig`` でエンコードする
+        _write_initial_history(path, record_dict)
+        return
+    # 既存ファイル: 速い経路を試す。判定に失敗したら遅い経路にフォールバック
+    inspection = _inspect_existing_header(path)
+    if inspection is not None:
+        header_bytes, encoding = inspection
+        expected_header_bytes = ",".join(COLUMNS).encode("utf-8")
+        if header_bytes == expected_header_bytes and encoding in ("utf-8", "utf-8-sig"):
+            _append_one_line(path, record_dict)
             return
-        # 既存ファイル: ``CSV.read()`` が見出し検証（重複・空）を行う。
+    # 遅い経路: 既存実装どおり全件書換え（マイグレーションまたは文字コード正規化）
+    with CSV(path, columns=None) as csv_file:
+        # ``CSV.read()`` が見出し検証（重複・空）を行う。
         # 検証失敗時の ``CSVError`` はそのまま呼出側へ伝播する
         table = csv_file.read()
         if tuple(table.columns) == COLUMNS:
@@ -713,3 +810,71 @@ def _append(path: Path, record_dict: dict[str, object]) -> None:
         new_table = Table(list(COLUMNS), migrated_rows)
         new_table.append({k: str(v) for k, v in record_dict.items()})
         csv_file.replace(new_table)
+
+
+def _write_initial_history(path: Path, record_dict: dict[str, object]) -> None:
+    """新規ファイルに見出し + 1 データ行を UTF-8 BOM 付きで書く（内部用）。
+
+    既存実装（``CSV(columns=...)`` で構築して ``append``）とバイト列が同じに
+    なるよう ``comken.toolbox.csv.encode_rows_as_bytes`` の出力をそのまま
+    ``utf-8-sig`` で書く。
+    """
+    column_row = {column: column for column in COLUMNS}
+    data_row = {column: str(record_dict.get(column, "")) for column in COLUMNS}
+    payload = encode_rows_as_bytes([column_row, data_row], write_bom=True, write_header=False)
+    with path.open("wb") as binary:
+        binary.write(payload)
+
+
+def _inspect_existing_header(path: Path) -> tuple[bytes, str] | None:
+    """既存ファイルの先頭 1 行を読み、文字コードと「先頭行のバイト列」を返す（内部用）。
+
+    戻り値の 1 要素目は「改行を除いた最初の 1 行」を ``bytes`` で返す
+    （``COLUMNS`` 順であるかの判定に使う）。2 要素目は ``utf-8-sig``
+    （BOM 付き）または ``utf-8`` （BOM なし）。判定できなかったときは
+    ``None`` を返し、呼び出し側で遅い経路にフォールバックする。
+    """
+    try:
+        with path.open("rb") as binary:
+            raw = binary.read(64 * 1024)
+    except OSError:
+        return None
+    if not raw:
+        return None
+    if raw.startswith(b"\xef\xbb\xbf"):
+        encoding = "utf-8-sig"
+        raw = raw[3:]
+    else:
+        encoding = "utf-8"
+    newline_pos = raw.find(b"\n")
+    header_bytes = raw if newline_pos == -1 else raw[:newline_pos]
+    # ``\r\n`` 改行（Excel ダイヤ）では \r が末尾に残る
+    if header_bytes.endswith(b"\r"):
+        header_bytes = header_bytes[:-1]
+    return header_bytes, encoding
+
+
+def _append_one_line(path: Path, record_dict: dict[str, object]) -> None:
+    """既存ファイルに1行だけ追記する（内部用・速い経路）。
+
+    ``CSV._write`` が ``csv.DictWriter`` で書く出力（``\\r\\n`` 区切り・
+    Excel ダイヤの引用符規則）をバイト列化し、ファイル末尾が改行で終わって
+    いなければ先に ``\\n`` を足してから ``open(path, "r+b")`` の ``write()``
+    1回で書く。 ``comken.toolbox.csv.encode_rows_as_bytes`` が
+    ``CSV._write`` とバイト互換であることを保証している。
+    """
+    new_row = {column: str(record_dict.get(column, "")) for column in COLUMNS}
+    payload = encode_rows_as_bytes([new_row], write_bom=False, write_header=False)
+    with path.open("r+b") as binary:
+        binary.seek(0, os.SEEK_END)
+        size = binary.tell()
+        if size > 0:
+            # 末尾の 1 バイトを読んで改行で終わっているか確認する。
+            # 前回の書き込みが途中で切れたケース（電源断・プロセス強制終了）に
+            # 対応する。 ``csv.reader`` は ``\n`` 終端の ``\r\n`` 行を正しく
+            # 読めるので、補正は ``\n`` 1 文字で十分
+            binary.seek(-1, os.SEEK_END)
+            last_byte = binary.read(1)
+            if last_byte != b"\n":
+                binary.write(b"\n")
+        binary.write(payload)

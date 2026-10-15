@@ -243,6 +243,45 @@ def parse_text(text: str) -> list[list[str]]:
     return list(csv.reader(io.StringIO(text)))
 
 
+def encode_rows_as_bytes(
+    rows: list[dict[str, str]],
+    *,
+    write_bom: bool,
+    write_header: bool,
+) -> bytes:
+    """``rows`` を ``csv.DictWriter`` の Excel ダイヤで ``\\r\\n`` 区切りに書き、
+    バイト列で返す（comken 内部用）。
+
+    ``CSV._write`` が ``csv.DictWriter`` で書く出力と同じバイト列になるダイヤ
+    （Excel ダイヤ）を使う。 ``atomically ではない`` （``atomic_write`` 経由
+    を**しない**）ので、``history.py`` のような「既存ファイルに末尾 1 行だけ
+    足す」用途に使える。
+
+    ``write_bom=True`` のときは先頭に BOM を付ける（新規ファイル用）、
+    ``False`` のときは BOM を付けない（既存ファイルへの追記用）。
+    ``write_header=True`` のときは ``csv.DictWriter.writeheader()`` の出力を
+    先頭に書き足す（_新規ファイル_用）。既存ファイルへの追記では
+    ``False`` を渡す（見出しは既にファイルにあるので二重に出力しない）。
+
+    文字コードは UTF-8 系（``utf-8-sig`` / ``utf-8``）で、``CSV._write``
+    の出力とバイト互換。
+
+    公開 API には出さない（``csv/__init__.py`` の ``__all__`` に入れない）。
+    """
+    if not rows:
+        return b""
+    text_buf = io.StringIO(newline="")
+    columns = list(rows[0].keys())
+    writer = csv.DictWriter(text_buf, fieldnames=columns, extrasaction="raise")
+    if write_header:
+        writer.writeheader()
+    writer.writerows(rows)
+    text = text_buf.getvalue()
+    if write_bom:
+        return text.encode("utf-8-sig")
+    return text.encode("utf-8")
+
+
 def _invalid_encoding_message(path: Path, encoding: str, error: BaseException) -> str:
     """``CSVError`` の「指定された encoding が使えない」文言。"""
     return (

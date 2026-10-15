@@ -9,6 +9,7 @@ comken 側は履歴の形式と「管理番号で取得済みレポートを引�
 """
 
 import csv
+import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -1567,3 +1568,520 @@ class TestAppendHistory:
                 history_path,
                 {"管理番号": "1001"},
             )
+
+
+# ── 読み取りキャッシュと速い経路の追記 ────────────────────────────────────────
+class TestReadCacheAndFastPathAppend:
+    """``_read_rows()`` のキャッシュと ``_append()`` の速い経路の挙動を検証する。
+
+    既存の挙動を変えないことが大前提なので、追加した分だけを確認する:
+
+    - **キャッシュを使い回す**: 同じ履歴ファイルへの連続呼び出しで
+      ``CSV.read()`` （=低速経路）が走らない
+    - **キャッシュを自動で無効化**: 自分で ``append_history()`` した後と、
+      別の手段で書き換えられた後
+    - **読み込み中に変化が起きた場合は保存しない**: ロックを取った読み込みの
+      前後で ``stat`` が違うときは、そのキーで残さない
+    - **速い経路**: 既存ファイルで ``COLUMNS`` 見出し＋UTF-8 のときに
+      ``atomic_write`` を呼ばず、既存行のバイト列が変わらず、追記行が
+      遅い経路のバイト列と一致する
+    - **末尾が改行で終わっていないとき**: 先に改行を足してから書く
+    - **遅い経路は今まで通り**（古い見出し、CP932、空／重複の見出しで例外）
+    """
+
+    @pytest.fixture(autouse=True)
+    def _clear(self):
+        """読み取りキャッシュをテストごとに捨てる。
+
+        1 ファイルぶんだけ保持するキャッシュが、テスト間で漏れないようにする。
+        """
+        from comken.services.salesforce_downloader import history as history_module
+
+        history_module._clear_read_cache()
+        yield
+        history_module._clear_read_cache()
+
+    # ── 1. キャッシュを使い回す ────────────────────────────────────────
+    def test_repeated_reads_use_cache(self, tmp_path, monkeypatch) -> None:
+        """``schedule_succeeded_today`` を 50 回続けて呼んでも ``CSV.read`` は 1 回だけ。
+
+        ``_read_rows()`` 経由の ``CSV.read`` 呼び出し回数でキャッシュを効いている
+        ことを確認する。``schedule_succeeded_today`` は ``_read_rows`` だけを
+        経由する経路（最も呼び出し回数の多い代表例）として使う。
+        """
+        history_path = tmp_path / "履歴.csv"
+        entry = _entry()
+        # 当日成功 1 行＋別日行（無視される）の 2 行を直接書く
+        with history_path.open("w", encoding="utf-8-sig", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(COLUMNS)
+            writer.writerow(_today_row_values(schedule_key="S000"))
+            # 昨日の行（無視される）
+            writer.writerow(
+                [
+                    "2024-01-01 09:00:00",
+                    entry.key,
+                    "S009",
+                    entry.summary,
+                    entry.report_id,
+                    entry.url,
+                    "P",
+                    SUCCESS,
+                    SUCCESS,
+                    SUCCESS,
+                    entry.summary,
+                    "old.csv",
+                    "1",
+                    "0.10",
+                    "",
+                    "",
+                    "",
+                    "",
+                ]
+            )
+
+        # ``CSV.read`` の呼び出し回数を数える
+        from comken.toolbox.csv import CSV as _CSV
+
+        original_read = _CSV.read
+        read_calls: list[Path] = []
+
+        def spy_read(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            read_calls.append(self.path)
+            return original_read(self, *args, **kwargs)
+
+        monkeypatch.setattr(_CSV, "read", spy_read)
+
+        for _ in range(50):
+            assert schedule_succeeded_today(history_path, "S000") is True
+
+        # キャッシュが効いていれば 1 回だけ。されなければ 50 回以上
+        assert len(read_calls) == 1, f"CSV.read was called {len(read_calls)} times"
+
+    # ── 2. キャッシュの無効化 ──────────────────────────────────────────
+    def test_cache_invalidates_after_own_append(self, tmp_path) -> None:
+        """``append_history()`` で書いたあとは次の読み取りが新しい行を含む。
+
+        キャッシュが古いまま残って「追記したのに反映されない」事故を防ぐ。
+        """
+        history_path = tmp_path / "履歴.csv"
+        entry = _entry()
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="a.csv", schedule_key="S001"),
+        )
+
+        # 1 回目: 読み取ってキャッシュに入れる
+        assert schedule_succeeded_today(history_path, "S001") is True
+        # 同じ読み取りを再実行してもキャッシュが効くだけで True のまま
+        assert schedule_succeeded_today(history_path, "S001") is True
+
+        # 自分自身の append: "S002" の成功行を足す
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="b.csv", schedule_key="S002"),
+        )
+
+        # S002 は履歴に存在する → True を返す（キャッシュが正しく無効化された）
+        assert schedule_succeeded_today(history_path, "S002") is True
+
+    def test_cache_invalidates_when_file_modified_externally(self, tmp_path) -> None:
+        """外部から書き換えられた（サイズが同じでも mtime が変わった）後に読み直される。
+
+        別プロセスが書き込んだケースを想定。サイズが変わらなくても
+        ``os.utime`` で mtime を変えれば ``_read_rows`` はキャッシュを
+        捨てて読み直す。
+        """
+        history_path = tmp_path / "履歴.csv"
+        entry = _entry()
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="a.csv", schedule_key="S001"),
+        )
+
+        # 1 回目: 読み取ってキャッシュに入れる
+        from comken.services.salesforce_downloader import history as history_module
+
+        assert schedule_succeeded_today(history_path, "S001") is True
+        assert history_module._READ_CACHE_KEY is not None
+
+        # 外部から「同じサイズで mtime だけ進める」= 別プロセスが同じバイト数で
+        # 書き換えた想定。stat の ``st_size`` を変えないように、
+        # mtime だけ進める
+        stat = history_path.stat()
+        os.utime(history_path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 10_000_000))
+
+        # キャッシュ無効化 → 再読み込みが走る。
+        # 古い結果（True）は変わらないが、キャッシュキーが変わっているはず
+        before_key = history_module._READ_CACHE_KEY
+        assert schedule_succeeded_today(history_path, "S001") is True
+        after_key = history_module._READ_CACHE_KEY
+        assert before_key != after_key, "キャッシュキーが外部更新を検知していない"
+
+    def test_cache_invalidates_when_only_size_changes(self, tmp_path) -> None:
+        """``st_size`` だけが変化したときもキャッシュを破棄する。
+
+        ``st_mtime_ns`` を見ないキャッシュ実装（``st_size`` をキーから外した
+        ミューテーション）の検知用。同じ mtime で違うサイズになった状況を
+        ``Path.stat`` を monkeypatch して再現する。同じパス・同じ mtime で
+        サイズだけを増やす → 「ファイルが差し替わった」= キャッシュ無効化、
+        という不変条件を見る。
+        """
+        history_path = tmp_path / "履歴.csv"
+        entry = _entry()
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="a.csv", schedule_key="S001"),
+        )
+        from comken.services.salesforce_downloader import history as history_module
+
+        # 1 回目: キャッシュに入れる
+        assert schedule_succeeded_today(history_path, "S001") is True
+        cached_size = history_module._READ_CACHE_KEY[2]
+        assert cached_size == history_path.stat().st_size
+
+        # ``Path.stat`` の結果を一律に「現在の mtime, +100 サイズ」に偽装する。
+        # これで「mtime は同じ、 size が増えた」= 別のファイルが同じ mtime で
+        # 上書きされた状況を再現できる
+        real_stat = Path.stat
+
+        class _FakeStat:
+            def __init__(self, inner, mtime_ns: int, size: int) -> None:
+                self._inner = inner
+                self._mtime_ns = mtime_ns
+                self._size = size
+
+            @property
+            def st_mtime_ns(self) -> int:
+                return self._mtime_ns
+
+            @property
+            def st_size(self) -> int:
+                return self._size
+
+            def __getattr__(self, name: str) -> object:
+                return getattr(self._inner, name)
+
+        original_size = history_path.stat().st_size
+        original_mtime_ns = history_path.stat().st_mtime_ns
+
+        # ファイルサイズが +100 された ``stat`` を返す
+        def fake_stat(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            real = real_stat(self, *args, **kwargs)
+            return _FakeStat(real, original_mtime_ns, original_size + 100)
+
+        # monkeypatch は両側から見た stat を差し替える
+        history_module.Path.stat = fake_stat  # type: ignore[method-assign]
+
+        try:
+            before_key = history_module._READ_CACHE_KEY
+            assert schedule_succeeded_today(history_path, "S001") is True
+            after_key = history_module._READ_CACHE_KEY
+            # キャッシュキーが変わったこと（= キャッシュミス扱い）を見る。
+            # ``st_size`` をキーから外した実装ではキーが変わらないので、ここが落ちる
+            assert before_key != after_key, (
+                "st_size が変わったのにキャッシュキーが変わらない（st_size がキーに無い）"
+            )
+        finally:
+            history_module.Path.stat = real_stat  # type: ignore[method-assign]
+
+    # ── 3. 読み込み中に変化が起きた場合は保存しない ─────────────────────────
+    def test_read_cache_not_saved_when_stat_changes_during_read(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """読み込みの前後で ``stat`` が違うとき、そのキーで保存しない。
+
+        ロック中に「ファイルが書き換えられた」レースを再現する:
+        ``CSV.read()`` を monkeypatch して、その中で ``os.utime`` を呼ぶ。
+        実装が before/after の stat を比較してキャッシュ可否を決めることを確認する。
+        """
+        history_path = tmp_path / "履歴.csv"
+        entry = _entry()
+        _write_row(
+            history_path,
+            entry=entry,
+            project="P",
+            row=HistoryRow(True, True, True, file_name="a.csv", schedule_key="S001"),
+        )
+        from comken.services.salesforce_downloader import history as history_module
+
+        # キャッシュを確実に空にする
+        history_module._clear_read_cache()
+
+        # レースを再現: CSV.read を呼ぶ瞬間に mtime を進める
+        from comken.toolbox.csv import CSV as _CSV
+
+        original_read = _CSV.read
+
+        def racing_read(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            # 「ロックの中で読み込みが走っている最中」に mtime を進めて
+            # before_stat と after_stat が食い違う状態を再現する。
+            st = self.path.stat()
+            os.utime(self.path, ns=(st.st_atime_ns, st.st_mtime_ns + 5_000_000))
+            return original_read(self, *args, **kwargs)
+
+        monkeypatch.setattr(_CSV, "read", racing_read)
+
+        # 呼び出し: 戻り値は返るが、キャッシュには保存されない
+        assert schedule_succeeded_today(history_path, "S001") is True
+        # before/after の mtime が違うので、そのキーで保存されていない
+        assert history_module._READ_CACHE_KEY is None
+
+    # ── 4. 速い経路: 末尾に1行足す ────────────────────────────────────
+    def test_append_fast_path_does_not_call_atomic_write(self, tmp_path, monkeypatch) -> None:
+        """速い経路: ``atomic_write`` が呼ばれず、既存行のバイト列が変わらない。
+
+        CSV 全件書き換えは ``CSV._write`` が ``atomic_write`` 経由で一時ファイルを
+        作る。速い経路はその中間に入らず、ファイル先頭から追記前までのバイト列が
+        そのまま残っていることで確認する。``os.replace`` を spy して
+        ``atomic_write`` 由来の呼び出しがないことも副次的に見る。
+        """
+        # 1,000 行の履歴を ``_write_row`` ヘルパーで書く
+        history_path = tmp_path / "履歴.csv"
+        for i in range(1000):
+            _write_row(
+                history_path,
+                entry=_entry(),
+                project="P",
+                row=HistoryRow(
+                    True,
+                    True,
+                    True,
+                    file_name=f"a{i}.csv",
+                    schedule_key=f"S{i % 10:03d}",
+                ),
+                timestamp=f"2026-01-{(i % 28) + 1:02d} 09:00:00",
+            )
+
+        # 既存のスナップショット（ファイル先頭からこの時点まで）
+        snapshot = history_path.read_bytes()
+        snapshot_len = len(snapshot)
+
+        # ``atomic_write`` は ``comken.toolbox.csv.file`` から import されている。
+        # 遅い経路（``CSV.replace`` → ``CSV._write`` → ``atomic_write``）では
+        # これが呼ばれて一時ファイルへの ``replace`` が走る。速い経路では
+        # 一時ファイルが作られないので ``atomic_write`` の呼び出しがゼロ
+        # であることを確認する。
+        atomic_calls: list[object] = []
+        import comken.toolbox.csv.file as csv_file_module
+
+        real_atomic_write = csv_file_module.atomic_write
+
+        def spy_atomic_write(target, *args, **kwargs):  # type: ignore[no-untyped-def]
+            atomic_calls.append(target)
+            return real_atomic_write(target, *args, **kwargs)
+
+        monkeypatch.setattr(csv_file_module, "atomic_write", spy_atomic_write)
+
+        # 速く追記
+        append_history(
+            history_path,
+            {
+                "管理番号": "9999",
+                "成否": SUCCESS,
+                "ファイル名": "new.csv",
+            },
+        )
+
+        # ``atomic_write`` が呼ばれない（速い経路で CSV 全体は書き換えない）
+        assert atomic_calls == [], f"速い経路で atomic_write が呼ばれた: {atomic_calls}"
+        # 追記後のファイルの先頭 snapshot_len バイトはスナップショットと一致
+        # （既存行が書き換えられていない）。
+        after_bytes = history_path.read_bytes()
+        assert after_bytes[:snapshot_len] == snapshot
+        # 新しい行が末尾に付加されている
+        assert len(after_bytes) > snapshot_len
+
+    def test_append_fast_path_bytes_match_slow_path(self, tmp_path) -> None:
+        """速い経路で書かれる行が、``csv.DictWriter`` の Excel ダイヤ出力と一致する。
+
+        「速い経路と ``CSV._write`` のバイト互換」不変条件。``append_history()``
+        は ``実行日時`` を ``now()`` で埋めるので、書き込まれた後に実際の
+        ``実行日時`` を読んで、``csv.DictWriter`` が出力するであろうバイト列
+        と完全一致するかを確かめる。引用符・エスケープ規則が Excel ダイヤと
+        同じであれば、 ``CSV._write`` （遅い経路）と同じバイト列になる。
+        """
+        # ファイル: 速い経路だけを使う（COLUMNS 一致＋UTF-8 BOM 付き）
+        fast_path = tmp_path / "fast.csv"
+        fast_path.open("wb").write(b"\xef\xbb\xbf" + ",".join(COLUMNS).encode("utf-8") + b"\r\n")
+        record = {
+            "管理番号": "1001",
+            "スケジュールキー": "S001",
+            "概要": "顧客一覧",
+            "レポートID": "00O5g00000ABCDE",
+            "URL": URL_A,
+            "プロジェクト": "P",
+            "成否": SUCCESS,
+            "Salesforce取得結果": SUCCESS,
+            "保存結果": SUCCESS,
+            "保存先": "/out",
+            "ファイル名": "a.csv",
+            "取得件数": "1",
+            "処理秒数": "0.10",
+            "原因区分": "エラー値",
+            "エラーコード": "Err",
+            "エラー内容": 'カンマ, "quote", newline\n区切り',
+            "取得経路": "",
+        }
+        # 速い経路で追記
+        append_history(fast_path, record)
+
+        # 末尾 1 行（改行含む）を取り出す
+        fast_bytes = fast_path.read_bytes()
+        parts = fast_bytes.split(b"\r\n")
+        # 末尾の ``\r\n`` で split した最後の 2 要素を ``\r\n`` で繋ぐと
+        # 「データ行 + 末尾改行」が取り出せる（最後の要素は末尾改行の残りなので ``""``）
+        last_data_line = parts[-2] + b"\r\n"
+
+        # ``実行日時`` を実際の内容で取り出し、参照実装を構成する
+        table = read_history(fast_path)
+        written = table.to_rows()[-1]
+        reference_row = {c: str(written[c]) for c in COLUMNS}
+
+        # 参照実装: ``csv.DictWriter`` を直接 ``io.StringIO`` に書く
+        # （CSV._write が出力する ``\r\n`` 区切りの行とバイト互換）
+        import io as _io
+
+        ref_buf = _io.StringIO(newline="")
+        ref_writer = csv.DictWriter(ref_buf, fieldnames=list(COLUMNS), extrasaction="raise")
+        ref_writer.writerow(reference_row)
+        reference_line = ref_buf.getvalue().encode("utf-8")
+
+        # 速い経路の「最終行」が ``csv.DictWriter`` の出力と一致
+        assert last_data_line == reference_line, (
+            f"fast-path byte mismatch:\n  expected: {reference_line!r}\n"
+            f"  got last: {last_data_line!r}"
+        )
+        # 既存行はそのまま、追記行は末尾に ``\r\n`` で終わる
+        assert fast_bytes.endswith(b"\r\n")
+
+    # ── 5. 末尾が改行で終わっていない ─────────────────────────────────────
+    def test_append_fast_path_adds_newline_when_missing(self, tmp_path) -> None:
+        """既存ファイルが改行で終わっていないときは、改行を足してから書く。
+
+        電源断・プロセス強制終了で前回の追記の途中で切れたケースの補正。
+        ``csv.reader`` は ``\n`` 終端の ``\r\n`` 行を正しく読めるので、
+        末尾が ``\r`` で終わっていても次の行が正しく読める。改行補正が
+        効かないと、追記前の最後の行と追記行が ``csv.reader`` からは
+        1 行に連結されてしまい、 ``read_history()`` の結果が壊れる。
+        """
+        history_path = tmp_path / "履歴.csv"
+        header = ",".join(COLUMNS)
+        # 既存行の中身: 18 フィールド分の値を組み立てる
+        legacy_values = [str(i) for i in range(len(COLUMNS))]
+        legacy_values[0] = "first-row-running-no-newline"
+        # BOM + 見出し + 既存 1 行（改行なし）
+        body = ",".join(legacy_values).encode("utf-8")
+        history_path.open("wb").write(b"\xef\xbb\xbf" + header.encode("utf-8") + b"\r\n" + body)
+
+        # 追記前は CSV.reader から「既存行」と「追記行」が連結して 1 行に見える
+        # 状態。速い経路で ``\n`` を補ってから追記する（実装の不変条件）。
+        record = {
+            "管理番号": "1001",
+            "成否": SUCCESS,
+            "ファイル名": "a.csv",
+            "スケジュールキー": "S001",
+        }
+        append_history(history_path, record)
+
+        # ファイル末尾を確認
+        final = history_path.read_bytes()
+        # 末尾は必ず ``\r\n`` で終わる（CSV ダイヤ）
+        assert final.endswith(b"\r\n"), f"file doesn't end with CRLF: {final[-20:]!r}"
+
+        # 既存行＋追記行の 2 行が ``csv.reader`` で読める
+        # （改行補正が効かないと、追記前の行と追記行が 1 行に連結されて 1 行しか読めない）
+        table = read_history(history_path)
+        assert len(table) == 2, (
+            f"期待: 既存行 + 追記行の 2 行、実際: {len(table)} 行"
+            f"（改行補正が効かないと追記前の行と追記行が連結される）"
+        )
+
+    # ── 6. 遅い経路: 既存ケース ─────────────────────────────────────
+    def test_append_slow_path_migrates_legacy_header(self, tmp_path) -> None:
+        """古い見出しのファイルは今まで通り ``COLUMNS`` 順へ揃えて全件書換え。
+
+        旧構成（``COLUMNS[:-1]`` 17 列）の見出しに対して ``append_history()`` を
+        呼ぶと、 ``_append()`` は遅い経路に落ち、 ``migrate_row()`` で全件を
+        ``COLUMNS`` 順の 18 列に揃えた上で 1 行を足し、 ``CSV.replace()`` で
+        1 回の保存で書き直す。最終的なファイルは ``COLUMNS`` 順の 18 列になる。
+        """
+        history_path = tmp_path / "履歴.csv"
+        legacy_header = list(COLUMNS[:-1])  # 17 列
+        legacy_values = _today_row_values()[: len(legacy_header)]
+        _write_csv_raw(history_path, header=legacy_header, rows=[legacy_values])
+
+        append_history(
+            history_path,
+            {
+                "管理番号": "1001",
+                "成否": SUCCESS,
+                "ファイル名": "a.csv",
+                "原因区分": "",
+                "エラーコード": "",
+                "エラー内容": "",
+                "取得経路": "",
+                "スケジュールキー": "S001",
+            },
+        )
+
+        rows = read_history(history_path).to_rows()
+        # ヘッダーは ``COLUMNS`` 順の 18 列へ揃え直されている
+        assert list(rows[0].keys()) == list(COLUMNS)
+        # 既存の 17 列→ 18 列へのマイグレーションで増えた列（取得経路）が空文字
+        assert rows[0]["取得経路"] == ""
+        # 古い列の値は保持される
+        assert rows[0]["管理番号"] == "1001"
+
+    def test_append_slow_path_normalizes_cp932_to_utf8_bom(self, tmp_path) -> None:
+        """CP932 のファイルは ``CSV._write`` がそのままの文字コードで保持する。
+
+        CP932 は ``CSV._write`` の ``_write_encoding`` がファイル先頭から
+        検出した文字コードをそのまま使うので、追記後も CP932 のままになる
+        （保存できる文字はすべて CP932 で書けることが前提）。
+        ``read_text()`` 側の自動判定（UTF-8 / CP932）で読み取れることが、
+        共有契約の肝。
+        """
+        history_path = tmp_path / "履歴.csv"
+        # CP932 で書く（Excel 経由で再保存した履歴の再現）
+        header = list(COLUMNS)
+        values = _today_row_values()
+        with history_path.open("w", encoding="cp932", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(header)
+            w.writerow(values)
+
+        append_history(
+            history_path,
+            {
+                "管理番号": "1001",
+                "成否": SUCCESS,
+                "ファイル名": "a.csv",
+                "原因区分": "",
+                "エラーコード": "",
+                "エラー内容": "",
+                "取得経路": "",
+                "スケジュールキー": "S002",
+            },
+        )
+
+        # CSV 全体は CP932 のまま残る（自動判定で読み取れる）
+        # ファイル先頭は BOM ではなく CP932 の見出し
+        head = history_path.read_bytes()[:32]
+        assert not head.startswith(b"\xef\xbb\xbf"), (
+            f"CP932 ファイルの先頭に BOM がついていないこと: {head!r}"
+        )
+        # ``read_history`` が読める（``read_text`` の自動判定が CP932 を引ける）
+        rows = read_history(history_path).to_rows()
+        assert len(rows) == 2
+        # 2 行目（今回追記した行）が読み取れる
+        assert rows[1]["スケジュールキー"] == "S002"
+        assert rows[1]["ファイル名"] == "a.csv"
