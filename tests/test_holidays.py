@@ -33,9 +33,9 @@ from comken.core.dates.holidays import (
     HOLIDAYS_CSV_PATH,
     WORKDAY_SEARCH_LIMIT,
     _Holidays,
-    _set_calendar_for_test,
 )
 from comken.exceptions import HolidayError, WorkdayNotFoundError
+from tests.state_reset import set_holiday_calendar
 
 # ── 公開関数の基本動作 ──────────────────────────────────────────────────
 
@@ -206,12 +206,12 @@ class TestExpiry:
             CountingDict({_dt.date(2030, 1, 1): "元日", _dt.date(2030, 5, 5): "こどもの日"})
         )
         CountingDict.iterations = 0  # 読み込み時の走査（収録最終日を求める分）は数えない
-        _set_calendar_for_test(cal)
+        set_holiday_calendar(cal)
         try:
             for offset in range(100):
                 is_workday(_dt.date(2026, 10, 1) + _dt.timedelta(days=offset))
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
         assert CountingDict.iterations == 0
 
@@ -223,7 +223,7 @@ class TestExpiringWarning:
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         """残り 30 日未満のとき WARNING が出る（同じ日で 1度だけ）。"""
-        _set_calendar_for_test(_holiday_calendar({_dt.date(2024, 5, 5): "こどもの日"}))
+        set_holiday_calendar(_holiday_calendar({_dt.date(2024, 5, 5): "こどもの日"}))
         try:
             today = _dt.date(2024, 4, 20)  # 残り 15 日
             with caplog.at_level(logging.WARNING, logger="comken.core.dates.holidays"):
@@ -233,24 +233,24 @@ class TestExpiringWarning:
             assert len(warnings) == 1
             assert "15" in warnings[0].getMessage()
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_warning_not_logged_when_far_from_expiry(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         """30日以上先なら警告は出ない。"""
-        _set_calendar_for_test(_holiday_calendar({_dt.date(2025, 5, 5): "こどもの日"}))
+        set_holiday_calendar(_holiday_calendar({_dt.date(2025, 5, 5): "こどもの日"}))
         try:
             today = _dt.date(2024, 1, 1)
             with caplog.at_level(logging.WARNING, logger="comken.core.dates.holidays"):
                 is_workday(today)
             assert not [r for r in caplog.records if r.levelno == logging.WARNING]
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_warning_not_repeated_on_next_day(self, caplog: pytest.LogCaptureFixture) -> None:
         """翌日にもう一度 ``is_workday`` を呼ぶと、その日では 1度だけ出る。"""
-        _set_calendar_for_test(_holiday_calendar({_dt.date(2024, 5, 5): "こどもの日"}))
+        set_holiday_calendar(_holiday_calendar({_dt.date(2024, 5, 5): "こどもの日"}))
         try:
             with caplog.at_level(logging.WARNING, logger="comken.core.dates.holidays"):
                 is_workday(_dt.date(2024, 4, 20))
@@ -259,13 +259,13 @@ class TestExpiringWarning:
             warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
             assert len(warnings) == 2
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_warning_logged_once_when_querying_after_last_known_date(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         """収録最終日より後の日付を問い合わせると、範囲外 WARNING が 1度だけ出る。"""
-        _set_calendar_for_test(_holiday_calendar({_dt.date(2024, 5, 5): "こどもの日"}))
+        set_holiday_calendar(_holiday_calendar({_dt.date(2024, 5, 5): "こどもの日"}))
         try:
             after = _dt.date(2025, 1, 1)  # 最終収録日 5/5 より後
             with caplog.at_level(logging.WARNING, logger="comken.core.dates.holidays"):
@@ -277,14 +277,14 @@ class TestExpiringWarning:
             assert "収録範囲外" in warnings[0].getMessage()
             assert str(after) in warnings[0].getMessage()
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_no_out_of_range_warning_when_target_is_on_or_before_last_known_date(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         """最終日以前の日付では範囲外警告は出ない（期限切れ警告だけ）。"""
         # 最終収録日を十分に先に置き、範囲外にも期限切れ警告にも該当させない
-        _set_calendar_for_test(_holiday_calendar({_dt.date(2025, 12, 31): "年末"}))
+        set_holiday_calendar(_holiday_calendar({_dt.date(2025, 12, 31): "年末"}))
         try:
             with caplog.at_level(logging.WARNING, logger="comken.core.dates.holidays"):
                 is_workday(_dt.date(2024, 1, 1))
@@ -292,7 +292,7 @@ class TestExpiringWarning:
             warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
             assert not [w for w in warnings if "収録範囲外" in w.getMessage()]
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
 
 # ── 例外の型階層 ──────────────────────────────────────────────────────────
@@ -322,55 +322,55 @@ class TestWorkdayOffsets:
 
     def test_on_or_after_includes_target(self) -> None:
         """``workday_on_or_after`` は ``target`` が営業日ならそのまま返す。"""
-        _set_calendar_for_test(_Holidays({}))
+        set_holiday_calendar(_Holidays({}))
         try:
             assert workday_on_or_after(_dt.date(2024, 5, 6)) == _dt.date(2024, 5, 6)
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_workday_positive_one_skips_target_when_workday(self) -> None:
         """``workday(d, 1)`` は ``target`` が営業日でも翌日以降を返す（Excel WORKDAY 互換）。"""
-        _set_calendar_for_test(_Holidays({}))
+        set_holiday_calendar(_Holidays({}))
         try:
             # 2024-05-06 は月曜で営業日 → workday(d, 1) は 5/7 火
             assert workday(_dt.date(2024, 5, 6), 1) == _dt.date(2024, 5, 7)
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_workday_negative_one_skips_target_when_workday(self) -> None:
         """``workday(d, -1)`` は ``target`` が営業日でも前営業日を返す。"""
-        _set_calendar_for_test(_Holidays({}))
+        set_holiday_calendar(_Holidays({}))
         try:
             # 2024-05-06 (月) -1 → 5/3 (金)
             assert workday(_dt.date(2024, 5, 6), -1) == _dt.date(2024, 5, 3)
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_workday_on_or_after_vs_workday(self) -> None:
         """営業日を渡したとき、前者はその日自身・後者は翌日を返す。"""
-        _set_calendar_for_test(_Holidays({}))
+        set_holiday_calendar(_Holidays({}))
         try:
             d = _dt.date(2024, 5, 6)  # 月曜・営業日
             assert workday_on_or_after(d) == _dt.date(2024, 5, 6)
             assert workday(d, 1) == _dt.date(2024, 5, 7)
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_workday_on_or_before_includes_target(self) -> None:
         """``workday_on_or_before`` は ``target`` が営業日ならそのまま返す。"""
-        _set_calendar_for_test(_Holidays({}))
+        set_holiday_calendar(_Holidays({}))
         try:
             assert workday_on_or_before(_dt.date(2024, 5, 6)) == _dt.date(2024, 5, 6)
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_workday_on_or_after_skips_holiday(self) -> None:
         """``target`` が祝日のとき、``on_or_after`` は翌日以降を探す。"""
-        _set_calendar_for_test(_holiday_calendar({_dt.date(2024, 5, 6): "架空の祝日"}))
+        set_holiday_calendar(_holiday_calendar({_dt.date(2024, 5, 6): "架空の祝日"}))
         try:
             assert workday_on_or_after(_dt.date(2024, 5, 6)) == _dt.date(2024, 5, 7)
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
 
 class TestNonWorkdaysRun:
@@ -378,25 +378,25 @@ class TestNonWorkdaysRun:
 
     def test_after_weekend(self) -> None:
         """金曜の後は、土曜・日曜の 2 日（月曜は営業日なので含まない）。"""
-        _set_calendar_for_test(_Holidays({}))
+        set_holiday_calendar(_Holidays({}))
         try:
             friday = _dt.date(2024, 5, 3)  # 5/3 は祝日データ無しの金曜として扱う
             assert non_workdays_after(friday) == [_dt.date(2024, 5, 4), _dt.date(2024, 5, 5)]
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_before_weekend_is_nearest_first(self) -> None:
         """月曜の前は、日曜・土曜の順（``target`` に近い順）。"""
-        _set_calendar_for_test(_Holidays({}))
+        set_holiday_calendar(_Holidays({}))
         try:
             monday = _dt.date(2024, 5, 6)
             assert non_workdays_before(monday) == [_dt.date(2024, 5, 5), _dt.date(2024, 5, 4)]
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_holiday_extends_the_run(self) -> None:
         """月曜が祝日なら、土・日・月の 3 連休になる。"""
-        _set_calendar_for_test(_holiday_calendar({_dt.date(2024, 5, 6): "架空の祝日"}))
+        set_holiday_calendar(_holiday_calendar({_dt.date(2024, 5, 6): "架空の祝日"}))
         try:
             assert non_workdays_after(_dt.date(2024, 5, 3)) == [
                 _dt.date(2024, 5, 4),
@@ -404,27 +404,27 @@ class TestNonWorkdaysRun:
                 _dt.date(2024, 5, 6),
             ]
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_empty_when_neighbor_is_workday(self) -> None:
         """隣の日が営業日なら空リスト。``target`` 自身が休みでも含めない。"""
-        _set_calendar_for_test(_Holidays({}))
+        set_holiday_calendar(_Holidays({}))
         try:
             assert non_workdays_after(_dt.date(2024, 5, 6)) == []
             assert non_workdays_before(_dt.date(2024, 5, 7)) == []
             assert non_workdays_after(_dt.date(2024, 5, 5)) == []  # 日曜の翌日は月曜
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_skip_weekends_false_ignores_weekend(self) -> None:
         """``skip_weekends=False`` なら土日は休みではない（祝日だけを見る）。"""
-        _set_calendar_for_test(_holiday_calendar({_dt.date(2024, 5, 4): "架空の祝日"}))
+        set_holiday_calendar(_holiday_calendar({_dt.date(2024, 5, 4): "架空の祝日"}))
         try:
             assert non_workdays_after(_dt.date(2024, 5, 3), skip_weekends=False) == [
                 _dt.date(2024, 5, 4)
             ]
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_stops_at_search_limit_without_raising(self) -> None:
         """休みが探索上限より長く続いても、例外にせず上限の日数分で打ち切る。"""
@@ -432,12 +432,12 @@ class TestNonWorkdaysRun:
             _dt.date(2024, 6, 1) + _dt.timedelta(days=i): "架空の長期休業"
             for i in range(WORKDAY_SEARCH_LIMIT + 10)
         }
-        _set_calendar_for_test(_holiday_calendar(days))
+        set_holiday_calendar(_holiday_calendar(days))
         try:
             run = non_workdays_after(_dt.date(2024, 5, 31))
             assert len(run) == WORKDAY_SEARCH_LIMIT
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
 
 class TestNthWorkdayOfMonth:
@@ -445,15 +445,15 @@ class TestNthWorkdayOfMonth:
 
     def test_returns_nth_workday(self) -> None:
         """月の第 ``n`` 営業日を返す。"""
-        _set_calendar_for_test(_Holidays({}))
+        set_holiday_calendar(_Holidays({}))
         try:
             assert nth_workday(_dt.date(2024, 5, 15), 3) == _dt.date(2024, 5, 3)
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_returns_nth_workday_skipping_holidays(self) -> None:
         """祝土日をまたぐ月の第 ``n`` 営業日を返す。"""
-        _set_calendar_for_test(
+        set_holiday_calendar(
             _holiday_calendar(
                 {
                     _dt.date(2024, 5, 3): "憲法",
@@ -466,36 +466,36 @@ class TestNthWorkdayOfMonth:
         try:
             assert nth_workday(_dt.date(2024, 5, 15), 3) == _dt.date(2024, 5, 7)
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_returns_first_workday(self) -> None:
         """``n == 1`` でその月の最初の営業日を返す。"""
-        _set_calendar_for_test(_Holidays({}))
+        set_holiday_calendar(_Holidays({}))
         try:
             assert nth_workday(_dt.date(2024, 5, 15), 1) == _dt.date(2024, 5, 1)
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_raises_when_n_exceeds_month_workdays(self) -> None:
         """``n`` が月の営業日数を超えると ``WorkdayNotFoundError``。"""
         march = {_dt.date(2024, 3, d): f"holiday{d}" for d in range(1, 32)}
-        _set_calendar_for_test(_Holidays(march))
+        set_holiday_calendar(_Holidays(march))
         try:
             with pytest.raises(WorkdayNotFoundError):
                 nth_workday(_dt.date(2024, 3, 15), 1)
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_raises_when_n_is_less_than_one(self) -> None:
         """``n < 1`` で ``WorkdayNotFoundError``。"""
-        _set_calendar_for_test(_Holidays({}))
+        set_holiday_calendar(_Holidays({}))
         try:
             with pytest.raises(WorkdayNotFoundError):
                 nth_workday(_dt.date(2024, 5, 15), 0)
             with pytest.raises(WorkdayNotFoundError):
                 nth_workday(_dt.date(2024, 5, 15), -1)
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
 
 class TestFirstAndLastWorkdayOfMonth:
@@ -503,35 +503,35 @@ class TestFirstAndLastWorkdayOfMonth:
 
     def test_last_workday_when_month_end_is_weekend(self) -> None:
         """月末が土日のとき、直前の営業日に遡る。"""
-        _set_calendar_for_test(_Holidays({}))
+        set_holiday_calendar(_Holidays({}))
         try:
             assert last_workday(_dt.date(2024, 8, 20)) == _dt.date(2024, 8, 30)
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_last_workday_when_month_end_is_sunday(self) -> None:
         """月末が日曜のとき、金曜に戻る。"""
-        _set_calendar_for_test(_Holidays({}))
+        set_holiday_calendar(_Holidays({}))
         try:
             assert last_workday(_dt.date(2024, 6, 15)) == _dt.date(2024, 6, 28)
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_last_workday_when_month_end_is_holiday(self) -> None:
         """月末が祝日のとき、直前の営業日に遡る。"""
-        _set_calendar_for_test(_holiday_calendar({_dt.date(2024, 4, 30): "月末祝日"}))
+        set_holiday_calendar(_holiday_calendar({_dt.date(2024, 4, 30): "月末祝日"}))
         try:
             assert last_workday(_dt.date(2024, 4, 15)) == _dt.date(2024, 4, 29)
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_first_workday_when_month_start_is_weekend(self) -> None:
         """月初が土日のとき、最初の営業日に進む。"""
-        _set_calendar_for_test(_Holidays({}))
+        set_holiday_calendar(_Holidays({}))
         try:
             assert first_workday(_dt.date(2024, 9, 15)) == _dt.date(2024, 9, 2)
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_month_with_no_workdays_raises(self) -> None:
         """前後に ``WORKDAY_SEARCH_LIMIT`` を超える祝日がある月では例外。"""
@@ -540,14 +540,14 @@ class TestFirstAndLastWorkdayOfMonth:
         long_holidays = {
             _dt.date(2023, 1, 1) + _dt.timedelta(days=i): f"h{i}" for i in range(span_days)
         }
-        _set_calendar_for_test(_Holidays(long_holidays))
+        set_holiday_calendar(_Holidays(long_holidays))
         try:
             with pytest.raises(WorkdayNotFoundError):
                 first_workday(_dt.date(2024, 3, 15))
             with pytest.raises(WorkdayNotFoundError):
                 last_workday(_dt.date(2024, 3, 15))
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
 
 class TestWorkday:
@@ -555,48 +555,48 @@ class TestWorkday:
 
     def test_zero_returns_target_unchanged(self) -> None:
         """``n == 0`` は ``target`` をそのまま返す（休日でも）。"""
-        _set_calendar_for_test(_holiday_calendar({_dt.date(2024, 1, 1): "元日"}))
+        set_holiday_calendar(_holiday_calendar({_dt.date(2024, 1, 1): "元日"}))
         try:
             holiday_target = _dt.date(2024, 1, 1)
             assert workday(holiday_target, 0) == holiday_target
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_positive_one_returns_next_workday(self) -> None:
         """``n == 1`` で ``target`` が営業日でも**翌営業日**を返す（Excel WORKDAY 互換）。"""
         # 年末年始休暇の影響を受けない 2024/2 を使う
-        _set_calendar_for_test(_holiday_calendar({_dt.date(2024, 2, 11): "建国記念"}))
+        set_holiday_calendar(_holiday_calendar({_dt.date(2024, 2, 11): "建国記念"}))
         try:
             # 2024-02-13 (火) は祝日ではない営業日 + 1 営業日 → 2/14 (水)
             assert workday(_dt.date(2024, 2, 13), 1) == _dt.date(2024, 2, 14)
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_positive_skips_weekend_and_holiday(self) -> None:
         """``n > 0`` で営業日単位に進む。"""
-        _set_calendar_for_test(_holiday_calendar({_dt.date(2024, 2, 11): "建国記念"}))
+        set_holiday_calendar(_holiday_calendar({_dt.date(2024, 2, 11): "建国記念"}))
         try:
             # 2024-02-13 (火) + 1 営業日 → 2/14 (水)
             assert workday(_dt.date(2024, 2, 13), 1) == _dt.date(2024, 2, 14)
             # 2 営業日 → 2/15 (木)
             assert workday(_dt.date(2024, 2, 13), 2) == _dt.date(2024, 2, 15)
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_negative_returns_previous_workdays(self) -> None:
         """``n < 0`` で ``|n|`` 営業日前に戻る。"""
-        _set_calendar_for_test(_holiday_calendar({_dt.date(2024, 2, 11): "建国記念"}))
+        set_holiday_calendar(_holiday_calendar({_dt.date(2024, 2, 11): "建国記念"}))
         try:
             # 2024-02-14 (水) -1 → 2/13 (火)
             assert workday(_dt.date(2024, 2, 14), -1) == _dt.date(2024, 2, 13)
             # -2 → 2/12 (月)
             assert workday(_dt.date(2024, 2, 14), -2) == _dt.date(2024, 2, 12)
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_workday_positive_across_golden_week(self) -> None:
         """GW をまたぐ ``workday(d, 1)`` で連休を正しく飛ばす（5/2 → 5/7）。"""
-        _set_calendar_for_test(
+        set_holiday_calendar(
             _holiday_calendar(
                 {
                     _dt.date(2024, 5, 3): "憲法",
@@ -610,11 +610,11 @@ class TestWorkday:
             # 2024-05-02 (木、祝日前日) + 1 営業日 → 2024-05-07 (火)
             assert workday(_dt.date(2024, 5, 2), 1) == _dt.date(2024, 5, 7)
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_workday_negative_across_golden_week(self) -> None:
         """GW をまたぐ ``workday(d, -1)`` で連休を正しく飛ばす（5/7 → 5/2）。"""
-        _set_calendar_for_test(
+        set_holiday_calendar(
             _holiday_calendar(
                 {
                     _dt.date(2024, 5, 3): "憲法",
@@ -628,7 +628,7 @@ class TestWorkday:
             # 2024-05-07 (火、GW明け) - 1 営業日 → 2024-05-02 (木、GW前最終営業日)
             assert workday(_dt.date(2024, 5, 7), -1) == _dt.date(2024, 5, 2)
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_workday_skip_weekends_false_from_weekday(self) -> None:
         """``skip_weekends=False`` なら平日起点で翌暦日がそのまま返る（営業日でも祝日に注意）。"""
@@ -652,20 +652,20 @@ class TestCountWorkdays:
     def test_weekdays_only_range(self) -> None:
         """祝日のない平日区間（1/8 月〜1/12 金）は両端含めて 5。"""
         # 1/8(月)-1/12(金): 全部営業日、5 日
-        _set_calendar_for_test(_Holidays({}))
+        set_holiday_calendar(_Holidays({}))
         try:
             assert count_workdays(_dt.date(2024, 1, 8), _dt.date(2024, 1, 12)) == 5
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_range_spans_weekend(self) -> None:
         """週末をまたぐ区間（1/8 月〜1/14 日）は 5（土日を含まない）。"""
         # 1/8-1/14: 月火水木金=5、土日=0
-        _set_calendar_for_test(_Holidays({}))
+        set_holiday_calendar(_Holidays({}))
         try:
             assert count_workdays(_dt.date(2024, 1, 8), _dt.date(2024, 1, 14)) == 5
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_range_spans_golden_week(self) -> None:
         """2024 GW（5/3〜5/6 全部祝日）をまたぐ区間は 6（5/1, 5/2 + 5/7〜5/10）。"""
@@ -674,7 +674,7 @@ class TestCountWorkdays:
         #   5/3(祝), 5/4(土), 5/5(日), 5/6(祝) = 0
         #   5/7, 5/8, 5/9, 5/10 = 4 営業日
         #   合計 6
-        _set_calendar_for_test(
+        set_holiday_calendar(
             _holiday_calendar(
                 {
                     _dt.date(2024, 5, 3): "憲法",
@@ -687,30 +687,30 @@ class TestCountWorkdays:
         try:
             assert count_workdays(_dt.date(2024, 5, 1), _dt.date(2024, 5, 10)) == 6
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_same_day_workday_returns_one(self) -> None:
         """``start == end`` で営業日なら 1。"""
         # 1/9 火曜、祝日でも会社休日でもない
-        _set_calendar_for_test(_Holidays({}))
+        set_holiday_calendar(_Holidays({}))
         try:
             assert count_workdays(_dt.date(2024, 1, 9), _dt.date(2024, 1, 9)) == 1
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_same_day_holiday_returns_zero(self) -> None:
         """``start == end`` で祝日なら 0。"""
         # 5/3 金曜、憲法記念日
-        _set_calendar_for_test(_holiday_calendar({_dt.date(2024, 5, 3): "憲法"}))
+        set_holiday_calendar(_holiday_calendar({_dt.date(2024, 5, 3): "憲法"}))
         try:
             assert count_workdays(_dt.date(2024, 5, 3), _dt.date(2024, 5, 3)) == 0
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_start_after_end_returns_negative(self) -> None:
         """``start > end`` のとき負の数（同じ範囲を逆向きで数えて -1 倍）。"""
         # 5/10→5/1 は 5/1→5/10 の符号反転 → -6
-        _set_calendar_for_test(
+        set_holiday_calendar(
             _holiday_calendar(
                 {
                     _dt.date(2024, 5, 3): "憲法",
@@ -723,19 +723,19 @@ class TestCountWorkdays:
         try:
             assert count_workdays(_dt.date(2024, 5, 10), _dt.date(2024, 5, 1)) == -6
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_skip_weekends_false_counts_saturday_and_sunday(self) -> None:
         """``skip_weekends=False`` なら土日も数える（祝日は数えない）。"""
         # 1/8(月)-1/14(日)、祝日はなし → 月火水木金土日 = 7
-        _set_calendar_for_test(_Holidays({}))
+        set_holiday_calendar(_Holidays({}))
         try:
             assert (
                 count_workdays(_dt.date(2024, 1, 8), _dt.date(2024, 1, 14), skip_weekends=False)
                 == 7
             )
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
     def test_skip_weekends_false_excludes_holidays(self) -> None:
         """``skip_weekends=False`` でも国民の祝日は営業日として数えない。"""
@@ -743,7 +743,7 @@ class TestCountWorkdays:
         #   4/27(土), 4/28(日), 4/29(月祝), 4/30(火), 5/1(水), 5/2(木),
         #   5/3(金祝), 5/4(土祝), 5/5(日祝)
         #   skip_weekends=False で営業日: 4/27, 4/28, 4/30, 5/1, 5/2 = 5
-        _set_calendar_for_test(
+        set_holiday_calendar(
             _holiday_calendar(
                 {
                     _dt.date(2024, 4, 29): "昭和",
@@ -759,7 +759,7 @@ class TestCountWorkdays:
                 == 5
             )
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
 
 class TestWorkdaySearchLimit:
@@ -771,12 +771,12 @@ class TestWorkdaySearchLimit:
             _dt.date(2025, 1, 1) + _dt.timedelta(days=i): "h"
             for i in range(WORKDAY_SEARCH_LIMIT + 100)
         }
-        _set_calendar_for_test(_Holidays(holidays))
+        set_holiday_calendar(_Holidays(holidays))
         try:
             with pytest.raises(WorkdayNotFoundError):
                 workday(_dt.date(2025, 1, 1), 1)
         finally:
-            _set_calendar_for_test(None)
+            set_holiday_calendar(None)
 
 
 # ── 期間計算（既定カレンダー使用） ──────────────────────────────────────

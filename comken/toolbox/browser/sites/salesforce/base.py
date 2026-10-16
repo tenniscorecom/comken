@@ -88,11 +88,6 @@ _DEFAULT_MANUAL_LOGIN_TIMEOUT_SECONDS = 600
 # 短すぎるとポーリングの負荷、長すぎると完了検知が遅れる。3秒は両者の妥協点
 _DEFAULT_MANUAL_LOGIN_INTERVAL_SECONDS = 3
 
-# time.monotonic / time.sleep はテストで差し替えられるよう、モジュールの属性として
-# 参照する（テストでは _monotonic / _sleep を monkeypatch で差し替える）
-_monotonic = time.monotonic
-_sleep = time.sleep
-
 
 class SalesforceReportBrowser(SiteBase):
     """Salesforceのレポートをブラウザ経由でCSVダウンロードするための雛形。
@@ -253,15 +248,15 @@ class SalesforceReportBrowser(SiteBase):
             driver.current_url,
         )
 
-        started = _monotonic()
+        started = time.monotonic()
         deadline = started + timeout
         while True:
-            _sleep(interval)
+            time.sleep(interval)
             if _is_logged_in(driver):
-                elapsed = int(_monotonic() - started)
+                elapsed = int(time.monotonic() - started)
                 logger.info("手動ログインを確認しました（%d 秒）", elapsed)
                 return
-            if _monotonic() >= deadline:
+            if time.monotonic() >= deadline:
                 raise LoginFailedError(
                     f"{timeout_minutes} 分待ちましたがログインが確認できませんでした: "
                     f"url={driver.current_url}\n"

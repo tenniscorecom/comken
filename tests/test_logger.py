@@ -18,7 +18,6 @@ from comken.core.logger.environment import (
     ETC_FOLDER_NAME,
     LOCAL_HANDLER_NAME,
     _format_external_handlers,
-    _reset_version_log,
 )
 from comken.core.logger.environment import (
     setup_logging as environment_setup_logging,
@@ -30,6 +29,7 @@ from comken.exceptions import (
     LogRootNotConfiguredError,
     SiteOwnerRequiredError,
 )
+from tests.state_reset import reset_version_log
 
 local_module = importlib.import_module("comken.core.logger.local")
 
@@ -70,11 +70,11 @@ def _reset_version_log_flag():
     ``_version_logged`` は触らない。 フラグが残っていると、別テストの
     「最初の呼び出しでバージョンが出る」検証が通らないため autouse で必ず破棄する。
     """
-    _reset_version_log()
+    reset_version_log()
     try:
         yield
     finally:
-        _reset_version_log()
+        reset_version_log()
 
 
 def _prepare_site(
@@ -714,7 +714,7 @@ class TestLocal:
         for handler in isolated_logging.handlers[:]:
             isolated_logging.removeHandler(handler)
             handler.close()
-        _reset_version_log()
+        reset_version_log()
         _prepare_site(monkeypatch, tmp_path, folder_name="other-folder")
         monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
         monkeypatch.setattr(local_module, "today", lambda: date(2026, 8, 21))

@@ -11,7 +11,7 @@ config.ini を読み込み、config.SECTION.KEY の形式でアクセスでき�
       別の場所にある config.ini を読むときも ``Config(path)`` でよく、
       同じパスなら **同じインスタンスが返る**（プロセス内で1度だけ読む。
       同じパスのファイルを書き換えても自動では反映されない。反映するには
-      ``_reset_cached_config()`` を呼ぶ）。
+      新しいプロセスを起動する）。
 
 明示的にインスタンスを持ちたい場合:
 
@@ -41,8 +41,7 @@ config.ini を読み込み、config.SECTION.KEY の形式でアクセスでき�
     スタブ（src/config.pyi）が自動更新される。 1度スクリプトを実行すれば
     ``config.SECTION.KEY`` が型付きで補完されるようになる。 config.ini を
     書き換えたら次の実行で追随する（実行中のプロセスはキャッシュ済みなので
-    自動では反映されない。 反映したいときは ``_reset_cached_config()`` を呼ぶか、
-    新しいプロセスを起動する）。
+    自動では反映されない。 反映したいときは新しいプロセスを起動する）。
 
 ※ ブラウザの設定は config.ini ではなく BrowserOptions のインスタンス
    （src/browser_options.py）で行う。config はブラウザ設定を持たない。
@@ -57,8 +56,8 @@ config.ini を読み込み、config.SECTION.KEY の形式でアクセスでき�
 # `_` プレフィックス付き名を再エクスポートしない理由
 実装本体（``comken.core.config.base``）には ``_`` プレフィックス付きの
 ヘルパーが多数あるが、 ここでは ``Config`` / ``MappingDict`` だけを公開し、
-``_reset_cached_config`` のような内部名は再エクスポートしない。
-comken 内部の ``stubs.py`` やテストは ``from comken.core.config.base import _X``
+``_`` 付きの内部名は再エクスポートしない。
+comken 内部の ``stubs.py`` は ``from comken.core.config.base import _X``
 で直接 ``base`` モジュールから取る。 利用者が ``_`` 付き名にアクセスする
 経路を残すと「公開 API なのか内部実装なのか」の境界が曖昧になるため、
 ``__all__`` には載せない方針で揃える。

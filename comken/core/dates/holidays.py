@@ -32,27 +32,12 @@ WORKDAY_SEARCH_LIMIT = 30
 # （comken は共有サーバーへ直接参照で配布されるため）。
 HOLIDAYS_CSV_PATH: Final[Path] = Path(__file__).parent / "data" / "company_calendar.csv"
 
-# ── テスト用差し替え口 ────────────────────────────────────────────────────
-# 既定カレンダーを遅延生成する代わりに、テストから ``_Holidays`` を直接差し込める
-# ようにする。``None`` を渡すと次の呼び出しで ``HOLIDAYS_CSV_PATH`` から
-# 遅延生成される（=既定カレンダー）。
+# 既定カレンダーは初回に ``HOLIDAYS_CSV_PATH`` から遅延生成してプロセス内で使い回す。
 _singleton: _Holidays | None = None
 
 
-def _set_calendar_for_test(calendar: _Holidays | None) -> None:
-    """テストで既定カレンダーを差し替えるための **非公開** 入口。
-
-    通常は使わない。テストが個別の ``_Holidays`` を組み立てて
-    ``is_workday`` などの公開関数の挙動を確かめたいときに使う。
-    ``None`` を渡すと遅延生成に戻る（次の ``_resolve_singleton()`` で
-    ``HOLIDAYS_CSV_PATH`` から読み直す）。
-    """
-    global _singleton
-    _singleton = calendar
-
-
 def _resolve_singleton() -> _Holidays:
-    """プロセスで遅延生成された ``_Holidays`` を返す（差し替えがあれば優先）。"""
+    """プロセスで遅延生成された ``_Holidays`` を返す。"""
     global _singleton
     if _singleton is None:
         _singleton = _Holidays.load(HOLIDAYS_CSV_PATH)

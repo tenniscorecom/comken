@@ -63,17 +63,6 @@ def build_credential_name(system: str, field: str) -> tuple[tuple[str, str] | No
     return (system, field), None
 
 
-def split_name_for_edit(pair: tuple[str, str]) -> tuple[str, str]:
-    """``(サイト名, 項目名)`` をそのままフォームの入力欄2つへ返す。
-
-    入れ子構造では **登録時の ``(サイト名, 項目名)`` がそのままDBに保管される**
-    ので、再分割の曖昧さは構造的に発生しない。分割ロジックを置く必要は無くなったが、
-    テスト用に同じシグネチャで ``pair -> (system, field)`` を返す関数を残している
-    （将来 ``(サイト名, 項目名)`` 以外の表現を扱いたくなった場合の差し替え点）。
-    """
-    return pair[0], pair[1]
-
-
 class CredentialsApp:
     """認証情報の登録画面。
 

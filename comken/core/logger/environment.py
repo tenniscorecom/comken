@@ -150,18 +150,6 @@ def _log_version_once() -> None:
     _version_logged = True
 
 
-def _reset_version_log() -> None:
-    """バージョン記録のフラグを破棄する（テスト用）。
-
-    ``isolated_logging`` フィクスチャで root の handler を片付けても、
-    フラグはモジュール側に残るため、 別テストで「最初の呼び出しで
-    バージョンが出る」ことを検証したいときは明示的にこの関数を呼ぶこと。
-    公開 API ではない。
-    """
-    global _version_logged
-    _version_logged = False
-
-
 def _classify_root_handlers(
     handlers: list[logging.Handler],
 ) -> tuple[bool, bool, bool, bool]:

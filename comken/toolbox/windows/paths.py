@@ -26,8 +26,7 @@ class Paths:
     **結果のキャッシュ**: ``downloads()`` / ``desktop()`` は **モジュールレベル**
     で1度だけレジストリを引き、 以降は同じ ``Path`` を返す。 フォルダの場所は
     プロセスが生きている間に変わらないので、 ループ内で ``Paths.downloads()``
-    が N 回呼ばれてもレジストリ I/O は最初の一度だけ。 テストで挙動を
-    入れ替えるときは内部関数 ``_reset_cached_shell_folders()`` を呼ぶ。
+    が N 回呼ばれてもレジストリ I/O は最初の一度だけ。
 
     """
 
@@ -59,7 +58,7 @@ def _get_shell_folder(value_name: str, default: Path) -> Path:
     キャッシュの無効化条件:
     - **プロセスが生きている間は値を返し続ける**。 「ログオン中のセッションで
       場所が変わる」という業務シナリオは想定しない。 変わったら
-      ``_reset_cached_shell_folders()`` を呼んでからアクセスする。
+      新しいプロセスを起動する。
     - 取得できなかったときは ``default`` を返し、 その結果もキャッシュする
       （OSError が出続ける環境で毎回走らせない）。
     - ``stat()`` による更新確認はしない（業務ツールは実行中のフォルダ移動を
@@ -113,15 +112,3 @@ def _read_shell_folder(value_name: str, default: Path) -> Path:
             default,
         )
         return default
-
-
-def _reset_cached_shell_folders() -> None:
-    """**レジストリ解決のキャッシュを破棄する**（テスト用）。
-
-    テストで別のレジストリ値を偽装したいケースに備えて用意している。 普通の
-    利用では呼ぶ必要は無い（フォルダの場所は実行中に変わらない）。
-    """
-    logger.debug(
-        "_reset_cached_shell_folders: キャッシュを破棄（サイズ=%d）", len(_shell_folder_cache)
-    )
-    _shell_folder_cache.clear()

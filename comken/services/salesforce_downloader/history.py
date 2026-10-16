@@ -105,19 +105,18 @@ _DATE_FORMAT = "%Y-%m-%d"
 
 # ── 読み取りキャッシュ（直近の1ファイルぶんのみ）────────────────────────
 # キーは ``(絶対パス, st_mtime_ns, ファイルサイズ)``。TTL は持たない
-# （サイズの自然増加で無効化される）。テストから差し替えられるよう別関数
-# ``_clear_read_cache()`` を用意する。複数ファイルのキャッシュは持たない
+# （サイズの自然増加で無効化される）。 ``_clear_read_cache()`` で破棄できる。
+# 複数ファイルのキャッシュは持たない
 # （履歴は1つだけ）。
 _READ_CACHE_KEY: tuple[str, int, int] | None = None
 _READ_CACHE_ROWS: list[dict[str, str]] | None = None
 
 
 def _clear_read_cache() -> None:
-    """読み取りキャッシュを破棄する（テスト専用）。
+    """読み取りキャッシュを破棄する。
 
-    本番の書き込み経路では ``_append`` 後にサイズが自然に増えるため
-    不要だが、念のため ``append_history()`` からも明示的に呼ぶ。
-    テストでは autouse fixture から呼んでテスト間の状態を切る。
+    書き込み経路では ``_append`` 後にサイズが自然に増えるため不要だが、
+    念のため ``append_history()`` からも明示的に呼ぶ。
     """
     global _READ_CACHE_KEY, _READ_CACHE_ROWS
     _READ_CACHE_KEY = None
@@ -443,8 +442,7 @@ def _latest_row(
 def _resolve_history_path() -> Path:
     """``paths.HISTORY_PATH`` を**呼び出した時点で**読んで ``Path`` で返す。
 
-    テストで ``monkeypatch.setattr`` で差し替えられるように、関数内で読む
-    （import 時に確定しない）。
+    関数内で読む（import 時に確定しない）。
     """
     from comken.services.salesforce_downloader.paths import HISTORY_PATH
 

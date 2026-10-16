@@ -192,13 +192,13 @@ class TestWaitForManualLogin:
         return _Driver()
 
     def test_returns_immediately_when_already_logged_in(self, monkeypatch):
-        """ログイン済みなら _sleep を呼ばずにすぐ return する。"""
+        """ログイン済みなら time.sleep を呼ばずにすぐ return する。"""
         driver = self._driver(username_field_present=False, current_url=_LOGGED_IN_URL)
         sf = self._enter_sf(monkeypatch, driver)
         try:
             sleeps: list[float] = []
             monkeypatch.setattr(
-                "comken.toolbox.browser.sites.salesforce.base._sleep",
+                "comken.toolbox.browser.sites.salesforce.base.time.sleep",
                 lambda seconds: sleeps.append(seconds),
             )
             input_calls: list[str] = []
@@ -236,7 +236,7 @@ class TestWaitForManualLogin:
         try:
             sleeps: list[float] = []
             monkeypatch.setattr(
-                "comken.toolbox.browser.sites.salesforce.base._sleep",
+                "comken.toolbox.browser.sites.salesforce.base.time.sleep",
                 lambda seconds: sleeps.append(seconds),
             )
 
@@ -275,7 +275,7 @@ class TestWaitForManualLogin:
         try:
             sleeps: list[float] = []
             monkeypatch.setattr(
-                "comken.toolbox.browser.sites.salesforce.base._sleep",
+                "comken.toolbox.browser.sites.salesforce.base.time.sleep",
                 lambda seconds: sleeps.append(seconds),
             )
 
@@ -303,9 +303,11 @@ class TestWaitForManualLogin:
                 clock[0] += seconds
 
             monkeypatch.setattr(
-                "comken.toolbox.browser.sites.salesforce.base._monotonic", fake_monotonic
+                "comken.toolbox.browser.sites.salesforce.base.time.monotonic", fake_monotonic
             )
-            monkeypatch.setattr("comken.toolbox.browser.sites.salesforce.base._sleep", fake_sleep)
+            monkeypatch.setattr(
+                "comken.toolbox.browser.sites.salesforce.base.time.sleep", fake_sleep
+            )
 
             with pytest.raises(LoginFailedError) as exc_info:
                 sf.wait_for_manual_login(timeout=600, interval=300)
@@ -338,7 +340,7 @@ class TestWaitForManualLogin:
         try:
             sleeps: list[float] = []
             monkeypatch.setattr(
-                "comken.toolbox.browser.sites.salesforce.base._sleep",
+                "comken.toolbox.browser.sites.salesforce.base.time.sleep",
                 lambda seconds: sleeps.append(seconds),
             )
 
@@ -372,7 +374,7 @@ class TestWaitForManualLogin:
         try:
             sleeps: list[float] = []
             monkeypatch.setattr(
-                "comken.toolbox.browser.sites.salesforce.base._sleep",
+                "comken.toolbox.browser.sites.salesforce.base.time.sleep",
                 lambda seconds: sleeps.append(seconds),
             )
 
@@ -394,7 +396,7 @@ class TestWaitForManualLogin:
 
             monkeypatch.setattr("builtins.input", fail_on_input)
             monkeypatch.setattr(
-                "comken.toolbox.browser.sites.salesforce.base._sleep",
+                "comken.toolbox.browser.sites.salesforce.base.time.sleep",
                 lambda seconds: None,
             )
 
@@ -415,7 +417,7 @@ class TestWaitForManualLogin:
         try:
             sleeps: list[float] = []
             monkeypatch.setattr(
-                "comken.toolbox.browser.sites.salesforce.base._sleep",
+                "comken.toolbox.browser.sites.salesforce.base.time.sleep",
                 lambda seconds: sleeps.append(seconds),
             )
 

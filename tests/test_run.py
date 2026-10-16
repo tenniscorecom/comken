@@ -15,8 +15,9 @@ import pytest
 
 from comken import run as run_module
 from comken.core.dates import today
-from comken.core.dates.holidays import _Holidays, _set_calendar_for_test
+from comken.core.dates.holidays import _Holidays
 from comken.run import backoffice, intranet
+from tests.state_reset import set_holiday_calendar
 
 
 class TestBackoffice:
@@ -102,10 +103,10 @@ class TestStartupCalendarExpiryWarning:
     """
 
     def setup_method(self) -> None:
-        _set_calendar_for_test(None)
+        set_holiday_calendar(None)
 
     def teardown_method(self) -> None:
-        _set_calendar_for_test(None)
+        set_holiday_calendar(None)
 
     def test_backoffice_warns_before_main_when_near_expiry(
         self, caplog: pytest.LogCaptureFixture
@@ -118,7 +119,7 @@ class TestStartupCalendarExpiryWarning:
         ことを確認する。これで「WARNING が ``main`` より前に評価された」
         ことを担保する。
         """
-        _set_calendar_for_test(_near_expiry_calendar(days_until_last=15))
+        set_holiday_calendar(_near_expiry_calendar(days_until_last=15))
 
         expiry_warnings_seen_in_main: list[int] = []
 
@@ -150,7 +151,7 @@ class TestStartupCalendarExpiryWarning:
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         """``intranet`` も同様に ``main`` より前に WARNING ログを出す。"""
-        _set_calendar_for_test(_near_expiry_calendar(days_until_last=15))
+        set_holiday_calendar(_near_expiry_calendar(days_until_last=15))
 
         expiry_warnings_seen_in_main: list[int] = []
 
@@ -178,7 +179,7 @@ class TestStartupCalendarExpiryWarning:
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         """``EXPIRING_WARNING_DAYS`` 以上先なら警告は出ない（``main`` は普通に動く）。"""
-        _set_calendar_for_test(_near_expiry_calendar(days_until_last=120))
+        set_holiday_calendar(_near_expiry_calendar(days_until_last=120))
 
         with caplog.at_level(logging.WARNING, logger="comken.core.dates.holidays"):
             assert backoffice(lambda: "ok", "project") == "ok"
@@ -194,7 +195,7 @@ class TestStartupCalendarExpiryWarning:
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         """``intranet`` も遠い期限なら警告を出さない。"""
-        _set_calendar_for_test(_near_expiry_calendar(days_until_last=120))
+        set_holiday_calendar(_near_expiry_calendar(days_until_last=120))
 
         with caplog.at_level(logging.WARNING, logger="comken.core.dates.holidays"):
             assert intranet(lambda: "ok", "project") == "ok"

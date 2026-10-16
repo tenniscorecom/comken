@@ -164,7 +164,7 @@ class Config:
     ``Config(path)`` は ``Path.resolve()`` 後の絶対パスをキーに **プロセス内で
     1 度だけ** Config を構築してキャッシュする。 同じパスで 2 回目を呼ぶと
     同じインスタンスが返る。 **同じパスのファイルを書き換えても反映されない**
-    （反映には ``_reset_cached_config()`` を呼ぶ）。 ``stat()`` による更新確認は
+    （反映するには新しいプロセスを起動する）。 ``stat()`` による更新確認は
     しない（業務ツールは実行中の設定変更を想定しない。詳細は
     ``_get_or_build_config`` の docstring）。
 
@@ -196,7 +196,7 @@ class Config:
         # **重要**: プロセスの途中でカレントディレクトリが変わると、同じ相対パスが
         # 別の場所を指すようになるのに、キャッシュは古い解決結果を返す。
         # 業務ツールが実行中に ``os.chdir`` することはまずないので許容している。
-        # もし ``os.chdir`` を使うなら ``_reset_cached_config()`` を併せて呼ぶこと。
+        # ``os.chdir`` を使う処理は想定していない。
         raw = str(path)
         cached = _path_resolution_cache_get(raw)
         if cached is not None:
@@ -487,8 +487,8 @@ def _validate_upper_case(
 # - **プロセス内で1回だけ**構築する。 ``Path.resolve()`` 後の絶対パスを
 #   キーにしているので、相対パスと絶対パスは同一視される（``Path.resolve()`` は
 #   Windows の UNC / 8.3 形式の揺れも吸収する）。
-# - **同じパスのファイルを書き換えても反映されない**。 反映が必要なときは
-#   内部関数 ``_reset_cached_config()`` を呼んでから再アクセスする。
+# - **同じパスのファイルを書き換えても反映されない**。 反映するには新しいプロセスを
+#   起動する。
 #   「ディスクから読む」が必要な操作は明示するのが安全（自動監視にすると
 #   ``path.stat()`` を毎回呼ぶコストが膨らむ。 1 回 25 マイクロ秒（Windows）で
 #   あり、 14 万回のループでは 3.5 秒。 共有サーバー上では ``stat()`` が
@@ -497,7 +497,6 @@ def _validate_upper_case(
 # - **ファイルが存在しないパスはキャッシュしない**（``ComkenFileNotFoundError``
 #   を投げる。 ``functools.lru_cache`` は例外をキャッシュしないので、同じパスで
 #   再試行できる）。
-# - **テスト用に ``_reset_cached_config()`` で全エントリを破棄する**。
 #
 # 入口で ``Config(path)`` を速くするため、**生のパス文字列 → 解決済み絶対パス** の
 # 1段キャッシュを別に持つ (``_path_resolution_cache``)。 ``Path.resolve()`` 自体が
@@ -523,10 +522,9 @@ def _get_or_build_config(resolved_path_str: str) -> Config:
     デフォルト ``Config()``（``from comken import config``）も
     ``_default_config_path()`` で同じ関数を通る。
 
-    キャッシュの無効化条件（``_reset_cached_config`` の docstring にも書いた）:
+    キャッシュの無効化条件:
         - **同じパスのファイルを書き換えても反映されない**（``stat()`` による
-          更新確認は意図的に行わない）。 反映が必要なときは ``_reset_cached_config()``
-          を呼んでから ``Config(path)`` する。
+          更新確認は意図的に行わない）。 反映するには新しいプロセスを起動する。
         - ``stat()`` を持たない理由: 1 回 25 マイクロ秒（Windows）＋ 共有サーバー
           ではネットワーク往復。 業務ツールは実行中の config.ini 書き換えを
           想定しないので、確認コストを毎回払う利点が無い。
@@ -557,8 +555,6 @@ def _default_config_path() -> str:
     （1 万回呼ぶと秒単位で効いてくる）。 ``lru_cache(maxsize=1)`` で
     プロセス内 1 回だけ解決する。
 
-    テストで ``sys.argv`` を差し替えた場合は ``_reset_cached_config()`` で
-    キャッシュをクリアする（``_default_config_path.cache_clear()`` も併せて呼ぶ）。
     """
     return str(Path(project_dir() / "config.ini").resolve())
 
@@ -580,7 +576,7 @@ MappingDict = _LenientDict
 #
 # **相対パスのキャッシュは ``os.chdir`` で無効になる** ことに注意（同じ相対パスが
 # 別の場所を指すようになる）。 業務ツールは実行中に ``os.chdir`` しないので許容
-# している。 ``os.chdir`` を使うなら ``_reset_cached_config()`` を併せて呼ぶこと。
+# している。
 _PATH_RESOLUTION_CACHE_MAXSIZE = 128
 _path_resolution_cache: collections.OrderedDict[str, str] = collections.OrderedDict()
 
@@ -604,24 +600,6 @@ def _path_resolution_cache_put(raw: str, resolved: str) -> None:
     cache[raw] = resolved
     if len(cache) > _PATH_RESOLUTION_CACHE_MAXSIZE:
         cache.popitem(last=False)
-
-
-def _reset_cached_config() -> None:
-    """**すべての庫を破棄する**（テスト用）。
-
-    破棄対象:
-        - ``_get_or_build_config`` の ``lru_cache``（``Config(path)`` のキャッシュ）
-        - ``_default_config_path`` の ``lru_cache``（デフォルトパス解決のキャッシュ）
-        - ``_path_resolution_cache``（生パス文字列 → 解決済み絶対パスのキャッシュ）
-
-    テストでは ``tmp_path`` がテストごとに違う ``config.ini`` を指すため、
-    前のテストのキャッシュが残っていると別テストの設定が漏れる。 各テストの
-    冒頭で呼ぶ想定（``tests/test_config.py`` の autouse fixture から）。 利用者向けの
-    公開 API ではない。
-    """
-    _get_or_build_config.cache_clear()
-    _default_config_path.cache_clear()
-    _path_resolution_cache.clear()
 
 
 # ── 内部ヘルパー：ini 値の型変換 ───────────────────────────────────────────────

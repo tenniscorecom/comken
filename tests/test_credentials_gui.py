@@ -7,7 +7,7 @@
 
 import pytest
 
-from comken.toolbox.credentials.gui import build_credential_name, split_name_for_edit
+from comken.toolbox.credentials.gui import build_credential_name
 
 
 class TestBuildCredentialName:
@@ -47,33 +47,6 @@ class TestBuildCredentialName:
         assert pair is None
         assert error is not None
         assert "半角英数字" in error
-
-
-class TestSplitNameForEdit:
-    """``list_names()`` が返した ``(サイト名, 項目名)`` をフォーム入力へ戻す。
-
-    入れ子構造では ``list_names()`` の戻り値がそのまま ``(サイト名, 項目名)`` の
-    タプルなので、 変換は不要。 ただし画面側では表示用に ``site.field`` 形式へ
-    連結しているので、 テストでも同じ連結ルールを確認する。
-    """
-
-    def test_round_trips_through_display_format(self):
-        """どの組み合わせでも表示形式に戻して組み立て直すと ``(サイト名, 項目名)`` が一致する。"""
-        # ``(site, field)`` を作って、 実際の画面表示と同じ連結→分割を一周する
-        pair = ("kintai_admin", "refresh_token")
-        display = f"{pair[0]}.{pair[1]}"
-
-        recovered_site, recovered_field = split_name_for_edit(pair)
-
-        assert (recovered_site, recovered_field) == pair
-        # 表示形式と ``(サイト, 項目)`` が矛盾しないことを確認
-        assert display == f"{recovered_site}.{recovered_field}"
-
-    def test_works_for_one_word_field_name(self):
-        """1語の項目名でも ``(サイト名, 項目名)`` として素直に返る。"""
-        pair = ("salesforce", "password")
-        recovered_site, recovered_field = split_name_for_edit(pair)
-        assert (recovered_site, recovered_field) == ("salesforce", "password")
 
 
 class TestWindow:
