@@ -23,17 +23,20 @@ jobs:
           # pandas は任意の依存だが、Table.to_dataframe / from_dataframe のテストを
           # CI でも動かすために入れる（無いときのエラーはテスト内で再現している）
           pip install -e .[pandas]
-          # ruff / pytest はバージョンを固定する。未固定だと CI に最新版が入り、
+          # ruff / pytest / pyright はバージョンを固定する。未固定だと CI に最新版が入り、
           # 手元と formatter の挙動がずれて「ローカルは通るのに CI だけ落ちる」
           # 状態になる（実際 0.15 と 0.16 の差で 12 ファイルが不一致になった）。
           # 上げるときは手元でも同じ版に上げ、ruff format をかけ直してから変更する。
-          pip install pytest==9.1.1 ruff==0.15.21
+          pip install pytest==9.1.1 ruff==0.15.21 pyright==1.1.411
 
       - name: Ruff lint
         run: ruff check .
 
       - name: Ruff format check
         run: ruff format --check .
+
+      - name: Pyright
+        run: pyright
 
       - name: Tests
         run: python -m pytest tests -q
