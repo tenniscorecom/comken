@@ -10,9 +10,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from comken.exceptions import CredentialNotFoundError, PasswordRejectedError
-from comken.toolbox.credentials.prompt import change_password, prompt_new_password
-from comken.toolbox.credentials.store import Credentials, load_credential
+# ``comken.toolbox.credentials.prompt`` は module 読込み時に ``msvcrt`` を import するため、
+# Windows 以外ではこの import 自体がエラーになる。先に skip 要求して pytest に
+# ファイル全体を読み飛ばさせる。
+msvcrt = pytest.importorskip("msvcrt")
+
+from comken.exceptions import CredentialNotFoundError, PasswordRejectedError  # noqa: E402
+from comken.toolbox.credentials.prompt import change_password, prompt_new_password  # noqa: E402
+from comken.toolbox.credentials.store import Credentials, load_credential  # noqa: E402
 
 _READ_MASKED = "comken.toolbox.credentials.prompt._read_masked"
 

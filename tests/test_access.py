@@ -9,9 +9,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from comken import dry_run
-from comken.exceptions import AccessError, UnsupportedFileSuffixError
-from comken.toolbox.access import AccessDatabase
+# ``comken.toolbox.access`` は module 読込み時に ``win32com.client`` を import するため、
+# Windows 以外ではこの import 自体がエラーになる。先に skip 要求して pytest に
+# ファイル全体を読み飛ばさせる。
+win32com = pytest.importorskip("win32com.client")
+
+from comken import dry_run  # noqa: E402
+from comken.exceptions import AccessError, UnsupportedFileSuffixError  # noqa: E402
+from comken.toolbox.access import AccessDatabase  # noqa: E402
 
 
 def _database(tmp_path: Path) -> tuple[AccessDatabase, MagicMock]:
