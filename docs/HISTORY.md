@@ -995,10 +995,10 @@ MATRIX 1 段 × 1 段 / SUMMARY での `groupingsAcross: {"groupings": []}` /
 ## 28. 対象の Python を 3.13 だけにした（2026-10-15）
 
 対象を Python 3.13 だけにし、CI も 3.13 だけで回す。Python を安定版として使いたいため。
-3.15 を最低版にするかはまだ決めていない。3.15 専用に書き直したブランチ（`py315`）で、
-3.15.0 でテストが全件通ること、`from __future__ import annotations` と UTF-8 の
-`encoding=` の明示を外せること、手書きの遅延 import を `lazy from` に置き換えられることは確かめてある。
-3.15 にするときは、この `py315` を土台にする。
+3.15 を最低版にすることは、今は決めていない。3.15 専用にした版は、いったん作って確かめたうえで
+（3.15.0 でテストが全件通ること、`from __future__ import annotations` と UTF-8 の `encoding=` の
+明示を外せること、手書きの遅延 import を `lazy from` に置き換えられること）、保管せずに消した。
+3.15 にするときは、その時点の master から作り直す。
 
 `requires-python` に上限（`<3.14`）は付けない。3.14 以降の PC でも `pip install` はでき、
 動作の確認を CI でしていないだけ。
