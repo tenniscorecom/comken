@@ -33,6 +33,12 @@
 
 依存方向は **下から上にだけ向ける**。上の層は下の層に依存してよいが、下の層は上の層に依存しない。
 
+`services` は **読み手と書き手の両方が import する契約（`contract.py` 等）を置く層**
+でもある。 たとえば `salesforce_downloader` の契約（未完成 SOQL の印・列名
+CSV の列・バイト単位の見本）は、 soql-collector（書き手）とダウンローダー
+（読み手）の双方が `comken.services.salesforce_downloader.contract` を
+import して使う1 か所になっている（手書きで文字列を同期しない）。
+
 `tests/test_layers.py` が、**明らかな逆方向の依存**（下の層から上の層への import）を防ぐ。目的は依存関係を固定することではない。
 同じ層の別コンポーネント同士（例: `toolbox.excel` → `toolbox.windows`）は、必要なものだけをテスト内の `ALLOWED_SAME_LAYER` に書く。
 新しい同層依存が出たら、書き足して済ませる前に「その依存は本当に必要か」を考える。同層依存の一覧はテストが正本で、ここには再掲しない。
