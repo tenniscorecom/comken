@@ -774,7 +774,7 @@ def _write_bundle(max_bytes: int) -> None:
             header = "" if number == 1 else f"（{title} の続き {number}/{len(chunks)}）\n\n"
             content = header + chunk
             path.write_text(content, encoding="utf-8")
-            print(f"{path.name}  {len(content.encode('utf-8')):,} バイト")  # noqa: T201
+            print(f"{path.name}  {len(content.encode('utf-8')):,} バイト")  # noqa: T201 — CLI スクリプトの進捗出力（logging は外部ログ向けで、対話実行の進捗とは別経路）
 
 
 def main() -> None:
@@ -792,11 +792,11 @@ def main() -> None:
     bundle_max_bytes = args.max_bytes if args.max_bytes > 0 else sys.maxsize
     API_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     API_OUTPUT_PATH.write_text(_api_text(), encoding="utf-8")
-    print(f"{API_OUTPUT_PATH.relative_to(ROOT)} を生成しました")  # noqa: T201
+    print(f"{API_OUTPUT_PATH.relative_to(ROOT)} を生成しました")  # noqa: T201 — CLI スクリプトの進捗出力（logging は外部ログ向けで、対話実行の進捗とは別経路）
     _write_errors()
-    print(f"{ERRORS_OUTPUT_PATH.relative_to(ROOT)} を生成しました")  # noqa: T201
+    print(f"{ERRORS_OUTPUT_PATH.relative_to(ROOT)} を生成しました")  # noqa: T201 — CLI スクリプトの進捗出力（logging は外部ログ向けで、対話実行の進捗とは別経路）
     _write_bundle(bundle_max_bytes)
-    print(f"{BUNDLE_OUTPUT_DIR.relative_to(ROOT)}/ に章ごとの資料を生成しました")  # noqa: T201
+    print(f"{BUNDLE_OUTPUT_DIR.relative_to(ROOT)}/ に章ごとの資料を生成しました")  # noqa: T201 — CLI スクリプトの進捗出力（logging は外部ログ向けで、対話実行の進捗とは別経路）
 
 
 if __name__ == "__main__":
