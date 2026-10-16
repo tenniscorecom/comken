@@ -6,14 +6,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# ``comken.toolbox.outlook`` は module 読込み時に ``win32com.client`` を import するため、
-# Windows 以外ではこの import 自体がエラーになる。先に skip 要求して pytest に
-# ファイル全体を読み飛ばさせる。
-win32com = pytest.importorskip("win32com.client")
-
-from comken import dry_run  # noqa: E402
-from comken.exceptions import ComkenFileNotFoundError, OutlookError  # noqa: E402
-from comken.toolbox.outlook import MailMessage, Outlook  # noqa: E402
+from comken import dry_run
+from comken.exceptions import ComkenFileNotFoundError, OutlookError
+from comken.toolbox.outlook import MailMessage, Outlook
 
 
 def _outlook():

@@ -13,20 +13,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+import win32crypt
 
-# pywin32（win32crypt）を持たない CI（Linux/macOS 等）では import で失敗するため、
-# ファイル先頭で skip 要求を出して pytest にこのファイル全体を読み飛ばさせる。
-win32crypt = pytest.importorskip("win32crypt")
-
-from comken.exceptions import CredentialError, CredentialNotFoundError  # noqa: E402
-from comken.toolbox.credentials import Credentials, load_credential, save_credential  # noqa: E402
-from comken.toolbox.credentials.cli import main  # noqa: E402
-from comken.toolbox.credentials.importer import import_json  # noqa: E402
-from comken.toolbox.credentials.store import (  # noqa: E402
-    delete_credential,
-    list_names,
-    save_credentials,
-)
+from comken.exceptions import CredentialError, CredentialNotFoundError
+from comken.toolbox.credentials import Credentials, load_credential, save_credential
+from comken.toolbox.credentials.cli import main
+from comken.toolbox.credentials.importer import import_json
+from comken.toolbox.credentials.store import delete_credential, list_names, save_credentials
 
 SECRET = "s3cret-値-🔑"  # 日本語と絵文字を含めて UTF-8 の往復も確かめる
 
