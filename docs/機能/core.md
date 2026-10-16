@@ -554,24 +554,6 @@ if __name__ == "__main__":
 
 `from comken.core import run_main` でも取れる（`comken.runtime` の再エクスポート）。
 
-### フォルダ作成（`ensure_dir`）
-
-`path.mkdir(parents=True, exist_ok=True)` を 9 か所以上で書いていたのを、
-`comken.core.files.ensure_dir` にまとめる。dry-run 中は **実際には作らず**
-`[DRY-RUN]` ログだけ出して `Path` を返す。
-
-```python
-from comken.core import ensure_dir
-
-output_folder = ensure_dir(config.FILES.OUTPUT_FOLDER)
-```
-
-dry-run 外では `mkdir(parents=True, exist_ok=True)` と同じ動作（親も含めて
-無ければ作る・あれば何もしない）。返り値は `Path` で、dry-run 中も dry-run 外も
-同じパスが返る。`atomic_write` の **「親フォルダは作らない」セマンティクスは
-そのまま**——あちらは保存先を typo したときに気付けない問題を防ぐための
-安全弁として残し、`ensure_dir` は作業フォルダ準備用の入口として分ける。
-
 ---
 
 ### Config
