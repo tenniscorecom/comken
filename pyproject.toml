@@ -32,6 +32,11 @@ include = ["comken*"]
 # エディタの補完・型チェックが弱くなる。会社では AI 補助なしで書くため補完の質が効く。
 [tool.setuptools.package-data]
 comken = ["py.typed"]
+# 契約の見本（soql-collector とバイト単位で一致させる）も含める。
+# ``importlib.resources`` で読み込めるようにするため、 package-data へ列挙する。
+# パッケージ名はドット区切り（TOML ではキー全体を引用符で囲む必要がある）。
+# -text は .gitattributes 側で当てている（BOM と CRLF を保つ）。
+"comken.services.salesforce_downloader" = ["contract_samples/*"]
 
 [tool.ruff]
 line-length = 100

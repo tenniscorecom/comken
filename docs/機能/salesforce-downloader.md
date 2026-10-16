@@ -233,6 +233,15 @@ CSV 系の例外（`CSVError`）で止められる。
 （**管理表（`MASTER_PATH`）は 2026-09 にダウンロード側へ移したので、comken 側
 のこのファイルにはもう無い**）。
 
+**契約の正はここ（`contract.py`）。** soql-collector（書き手）とダウンローダー
+（読み手）がやりとりする「未完成 SOQL の印」「`列名の対応.csv` の列」「バイト
+単位の見本」を `comken.services.salesforce_downloader.contract` に集約した。
+両リポジトリはこのモジュールを import して使う（手作業で文字列を同期しない）。
+SOQL の 1 行目に置く印は `INCOMPLETE_MARKER`、先頭一致で検知する部分は
+`INCOMPLETE_MARKER_PREFIX`、CSV の列順は `COLUMN_NAMES_CSV_COLUMNS`、CSV / TXT
+の見本は `load_sample()` で取り出す（バイト単位比較用のため BOM・CRLF は
+そのまま返す）。詳しくはモジュールの docstring を参照。
+
 ```python
 SALESFORCE_DOWNLOADER_FOLDER = Path(r"\\実際のサーバー\share\tools\salesforce")
 HISTORY_FILENAME = "ダウンロード履歴.csv"
