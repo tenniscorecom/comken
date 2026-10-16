@@ -22,7 +22,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from comken.core.config import _is_mapping_section, _parse_value
+from comken.core.config.base import _is_mapping_section, _parse_value
 from comken.core.files.atomic import atomic_write
 from comken.core.files.ops import cleanup_stale_tmp
 from comken.exceptions import ComkenFileNotFoundError
@@ -73,7 +73,7 @@ def generate_stub(
         )
 
     # 実行時の Config と同じセクション名（前後空白落とし済み）で補完スタブを出す。
-    from comken.core.config import _build_section_map
+    from comken.core.config.base import _build_section_map
 
     section_map = _build_section_map(cfg)
     logger.debug(
@@ -130,7 +130,7 @@ def update_stub(
     補完スタブを出せる。省略時は Config と整合させるため内部で再計算する。
     """
     if section_map is None:
-        from comken.core.config import _build_section_map
+        from comken.core.config.base import _build_section_map
 
         section_map = _build_section_map(cfg)
     stub_path = _resolve_stub_path(ini_path)
@@ -168,7 +168,7 @@ def _write_typings_stubs(
     に ``base_dir`` として渡し、相対パスを ``Path`` 型ヒントで出す。
     """
     if section_map is None:
-        from comken.core.config import _build_section_map
+        from comken.core.config.base import _build_section_map
 
         section_map = _build_section_map(cfg)
     comken_core_typings = project_dir / "typings" / "comken" / "core"
