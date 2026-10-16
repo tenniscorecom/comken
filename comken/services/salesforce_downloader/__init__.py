@@ -1,14 +1,13 @@
 r"""comken/services/salesforce_downloader/__init__.py — Salesforce レポートの履歴と読取。
 
-**2026-09 に「取る側」と「読む側」をはっきり分けた。**
+`Salesforceレポートダウンローダー` リポジトリが書き込んだ履歴 CSV を、
+comken 側から読み取るための公開 API を提供する。
 
-- **取る側**（管理表・スケジュール・SOQL レポート・取得の実行）は
-  `Salesforceレポートダウンローダー` リポジトリ（`src/`）。管理表を
-  読み、スケジュールを判定し、Salesforce から取り、保存し、履歴へ書く
-  `download_scheduled()` まで全部こちらにある
-- **comken に残ったもの**は、履歴の**形式**（`COLUMNS` / `HistoryRow`）と、
-  **管理番号だけで取得済みレポートを引く読み取り関数**だけ
-  （`report_path` / `read_report`）
+- **履歴の形式**（`COLUMNS` / `HistoryRow`）と、**管理番号だけで取得済みレポートを
+  引く読み取り関数**（`report_path` / `read_report`）を公開する
+- 取得の実行（管理表の読み取り・スケジュールの判定・Salesforce からの取得・
+  履歴への書き込み）は `Salesforceレポートダウンローダー` 側にあり、comken には
+  含まれない
 - 境界を**履歴（ダウンロード履歴.csv）**にしたので、管理表を変えても
   comken は変えなくてよい
 

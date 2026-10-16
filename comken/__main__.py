@@ -1,7 +1,6 @@
 """comken/__main__.py — ``python -m comken`` の単一入口。
 
-旧来はサブモジュールごとに ``__main__.py`` が散っていて、全体像が見えなかった。
-ここで**振り分けだけ**に集約し、実処理は各サブモジュールの ``main(argv)``
+CLI の振り分けだけを集約し、実処理は各サブモジュールの ``main(argv)``
 に委譲する（ロジックの重複実装はしない）。
 
     python -m comken init [プロジェクト名]            新規プロジェクト
@@ -12,12 +11,10 @@
 
 ``sf`` / ``cred`` / ``holidays`` は ``salesforce`` / ``credentials`` /
 ``holidays`` の別名（``argparse`` の ``add_parser(..., aliases=[...])``）。
-``sfdl``（Salesforceレポートダウンローダーの管理表検査）は 2026-09 に
-``Salesforceレポートダウンローダー`` リポジトリ側へ移したので、ここからは外した。
 
-CLI の入口はこの ``python -m comken`` 1か所に集約済み。旧来の
-``python -m comken.toolbox.salesforce ...`` のようなサブモジュール直接呼び出しは
-もう動かない（サブモジュール側に ``__main__.py`` は無い）。
+CLI の入口はこの ``python -m comken`` 1か所に集約済み。サブモジュール側に
+``__main__.py`` は無いため、``python -m comken.toolbox.salesforce ...`` のような
+サブモジュール直接呼び出しは動かない。
 """
 
 import argparse

@@ -1,13 +1,5 @@
 """comken/services/salesforce_downloader/history.py — 履歴CSVの列と、読み取り・書き込み。
 
-**`sheets/` には、ワークブック・CSVの「1枚（1ファイル）」ごとに、そこにある列と
-意味を宣言するモジュールを集めていたが、2026-09 に管理表・スケジュール・
-設定・SOQL 関連が comken の外（Salesforceレポートダウンローダー）へ移ったので、
-`history.py` を 1 段上へ出した。** ここに残っているのは「履歴CSVの列・1行の形
-（`COLUMNS` / `HistoryRow`）」と、「その形式で書かれた履歴の読み取り関数と、
-管理番号だけで取得済みレポートを引く読み取り関数」、および「ダウンローダーが
-記録する 1 行を追記する `append_history()`」だけ。
-
 **履歴は取得実行側（Salesforceレポートダウンローダー側）と comken 側の両方が
 同じ形式で読み書きする共有契約。** `COLUMNS` / `HistoryRow` / `HistoryFileLock`
 （`history_file_lock.py`）を両方が import して使うので、列やロックの取り方が

@@ -94,12 +94,11 @@ def _section_not_found_error(
     name: str, existing: list[str], path: Path | str | None = None
 ) -> ConfigError:
     """config.ini の必要な節がない場合の ``ConfigError``。"""
-    # 2026-08-18 に「プロジェクトのフォルダ基準」に変える前は path を出さなくて
-    # よかった。変えた後は「利用者が見ている config.ini」と違う場所を
-    # 読んでいることがある（例: `python src/run.py` で起動すると src/ 配下を
-    # 探しに行く）。だから path を必ず添えて、利用者が diff を取れるようにする。
-    # path は configparser 等の挙動確認用に None を許容するが、内部利用では
-    # 必ず Config が知っている _path を渡す。
+    # 「利用者が見ている config.ini」と違う場所を読んでいることがある（例:
+    # `python src/run.py` で起動すると src/ 配下を探しに行く）ため、path を
+    # 必ず添えて利用者が diff を取れるようにする。path は configparser 等の
+    # 挙動確認用に None を許容するが、内部利用では必ず Config が知っている
+    # _path を渡す。
     location = f"\n読んだファイル: {path}" if path is not None else ""
     # 防いでいる事故: セクション名を 1 文字タイポすると「セクションがありません」
     # とだけ出て、近い名前（FILE と FILES のように 1 文字違い）が目視で

@@ -1,8 +1,6 @@
 """comken/exceptions/tables.py — 表データ・列・型変換に関する例外。
 
-WarnCoerce ヘルパーとテーブル／列の例外をまとめる。管理表（Excel）の
-例外（`MasterTableError` 等）は 2026-09 に comken の外
-（`Salesforceレポートダウンローダー`）へ移したため、ここには無い。"""
+WarnCoerce ヘルパーとテーブル／列の例外をまとめる。"""
 
 import warnings
 from collections.abc import Callable

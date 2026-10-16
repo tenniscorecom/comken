@@ -1,8 +1,6 @@
 """comken/exceptions/downloader.py — Salesforce レポートの履歴・読取に関する例外。
 
-管理表・取得実行（`download_scheduled()`）は 2026-09 に comken の外
-（`Salesforceレポートダウンローダー` リポジトリ）へ切り出した。comken 側に
-残っているのは履歴の読み書きと管理番号での読取に関する例外。Salesforce との
+履歴の読み書きと管理番号での読取に関する例外を集めたもの。Salesforce との
 通信そのものの失敗は web.py を使う。
 """
 
