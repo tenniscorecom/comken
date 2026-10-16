@@ -25,7 +25,7 @@ config.ini を読み込み、config.SECTION.KEY の形式でアクセスでき�
 ``.get("未知の列")`` は ``str | None`` を返すので ``is None`` で判定できる。
 未知のキーを ``["未知の列"]`` で読むと素の ``dict`` と同じく ``KeyError`` になる。
 公開型は ``MappingDict``（``from comken.core.config import MappingDict``）で、
-``_LenientDict`` は内部実装。
+``_LenientDict`` は内部実装（``comken.core.config.base`` 内）。
 
 ``*_MAPPING`` セクションの **値（対応先）が空欄のときは読み込みエラー**にする
 （``ConfigError``）。空欄のまま進めると「対応列の最初の値が
@@ -41,8 +41,8 @@ config.ini を読み込み、config.SECTION.KEY の形式でアクセスでき�
     スタブ（src/config.pyi）が自動更新される。 1度スクリプトを実行すれば
     ``config.SECTION.KEY`` が型付きで補完されるようになる。 config.ini を
     書き換えたら次の実行で追随する（実行中のプロセスはキャッシュ済みなので
-    自動では反映されない。 反映したいときは ``_reset_cached_config()`` を
-    呼ぶか、新しいプロセスを起動する）。
+    自動では反映されない。 反映したいときは ``_reset_cached_config()`` を呼ぶか、
+    新しいプロセスを起動する）。
 
 ※ ブラウザの設定は config.ini ではなく BrowserOptions のインスタンス
    （src/browser_options.py）で行う。config はブラウザ設定を持たない。
@@ -51,44 +51,26 @@ config.ini を読み込み、config.SECTION.KEY の形式でアクセスでき�
 ``from comken import config`` だけで ``Config()`` が走ると config.ini 読み込みと
 補完スタブ書き込みが必ず発生する。 ``__init__.py`` の ``__getattr__`` は
 ``config.SECTION`` を初めて読んだ瞬間にだけ ``Config()`` を構築する。
-``Config`` / ``MappingDict`` / ``_reset_cached_config`` は通常の属性なので
-``__getattr__`` に来ない（=import だけで config.ini を読まない）。
+``Config`` / ``MappingDict`` は通常の属性なので ``__getattr__`` に来ない
+（=import だけで config.ini を読まない）。
+
+# `_` プレフィックス付き名を再エクスポートしない理由
+実装本体（``comken.core.config.base``）には ``_`` プレフィックス付きの
+ヘルパーが多数あるが、 ここでは ``Config`` / ``MappingDict`` だけを公開し、
+``_reset_cached_config`` のような内部名は再エクスポートしない。
+comken 内部の ``stubs.py`` やテストは ``from comken.core.config.base import _X``
+で直接 ``base`` モジュールから取る。 利用者が ``_`` 付き名にアクセスする
+経路を残すと「公開 API なのか内部実装なのか」の境界が曖昧になるため、
+``__all__`` には載せない方針で揃える。
 """
 
 from __future__ import annotations
 
-# ── 実装本体は _impl.py ──
-# Config クラス・エラーヘルパー・キャッシュ層（_get_or_build_config / _default_config_path）
-# は _impl.py に置く。 ここでは名前を再エクスポートする（comken 内部の
-# stubs.py と、外部リポジトリの tests/ が ``from comken.core.config import _X``
-# の形で取りに来るための互換性を維持する）。
-# ruff が「未使用の import」を出さないよう、 下の import 文に F401 の noqa を付ける。
-from comken.core.config._impl import (  # noqa: F401
-    _PATH_RESOLUTION_CACHE_MAXSIZE,
-    MAPPING_SECTION_SUFFIX,
+from comken.core.config.base import (
     Config,
     MappingDict,
-    _build_section_map,
-    _CaseSensitiveConfigParser,
-    _create_from_example,
-    _created_from_example_error,
     _default_config_path,
     _get_or_build_config,
-    _is_mapping_section,
-    _LenientDict,
-    _looks_like_path,
-    _lower_case_name_error,
-    _mapping_empty_value_error,
-    _parse_value,
-    _path_resolution_cache,
-    _path_resolution_cache_get,
-    _path_resolution_cache_put,
-    _reset_cached_config,
-    _section_not_found_error,
-    _SectionNamespace,
-    _split_list_items,
-    _subclassing_not_supported_error,
-    _validate_upper_case,
 )
 
 # ── 公開 API ────────────────────────────────────────────────────────────────
