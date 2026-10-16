@@ -50,6 +50,7 @@
 30. 履歴の読み込みを使い回し、追記は末尾に1行足す（2026-10-15）
 31. CSV の追記も、既存ファイルの末尾へ書き足す（2026-10-15）
 32. 表の「行」に名前を付けた（Row）（2026-10-15）
+33. 履歴の `TRIGGER_SCHEDULED` 定数と `trigger=` 引数を削除（2026-10-16）
 
 ## 1. 設定と非機密情報の扱い
 
@@ -1054,3 +1055,24 @@ MATRIX 1 段 × 1 段 / SUMMARY での `groupingsAcross: {"groupings": []}` /
 `dict` を前提にした既存のコードや、行の受け渡し（転記・差分）の約束が変わるため、
 型の名前だけを共通にした。行の列ごとの型（`TypedDict` など）は、`types=` による値の変換と
 役割が重なるので、持たない。
+
+## 33. 履歴の `TRIGGER_SCHEDULED` 定数と `trigger=` 引数を削除（2026-10-16）
+
+`comken/services/salesforce_downloader/history.py` に残っていた「旧実行方式
+列」を由来とする互換用の名残、`TRIGGER_SCHEDULED = "定期"` 定数と、
+`downloaded_today()` / `successful_files_today()` の `trigger=` 引数を削除した。
+
+- 「実行方式」列自体は既に廃止済み（17 章・30 章）。引きずられていた
+  引数／定数を残しておくと「何かに使っているのかもしれない」と読み手を
+  惑わせ、利用側が新しい経路を足すときにこの引数を経由してしまう余地がある
+- soql-collector / Salesforceレポートダウンローダー / 顧客前日差分 /
+  csv-excel-transfer / 請求書内訳テーブル化の **5 リポジトリの `src/` と
+  `tests/` を grep しても、`TRIGGER_SCHEDULED` も `trigger=` 引数の利用も
+  ヒットしなかった**（comken 内の `history.py` だけ）。外部に参照が無い
+  ことを確認できて、はじめて削除できる
+- `cleanup_stale_tmp` の旧命名の glob は「既に配布済みの環境を壊さない」
+  ために残す判断（依頼で明示）
+
+削除に合わせて `docs/HISTORY.md` の目次に 33 章を足し（1 項目）、`history.py`
+からもコメントを片付けている。`docs/ERRORS.md` は例外ガイドのため、`TRIGGER_SCHEDULED`
+は例外ではないことから更新対象なし。

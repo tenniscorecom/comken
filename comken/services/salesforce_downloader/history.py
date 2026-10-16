@@ -94,10 +94,6 @@ COLUMNS: tuple[str, ...] = (
 SUCCESS = "成功"
 FAILURE = "失敗"
 
-# 履歴のトリガ。`download_scheduled()` しか残っていないので、`定期` 1 値だけ。
-# 互換のため名前は残してある（外部ツールが定数名参照に備えて）
-TRIGGER_SCHEDULED = "定期"
-
 # 「取得経路」列に書く定数値。``history.py`` は経路の判定（管理表の列）を持たない
 # ので、**実際にどう走ったか**だけを文字列として記録する。書き込み側
 # （Salesforceレポートダウンローダー側 ``src/service.py::_fetch()``）が管理表
@@ -167,7 +163,6 @@ class HistoryRow:
 def downloaded_today(
     path: str | Path,
     report_key: str,
-    trigger: str = TRIGGER_SCHEDULED,
     date: datetime.date | None = None,
 ) -> bool:
     """その日の取得が成功しているかを履歴から調べる。
@@ -179,31 +174,26 @@ def downloaded_today(
     Args:
         path: 履歴 CSV のパス。
         report_key: 管理番号。
-        trigger: 互換のために残した引数（既定は定期）。`download_scheduled()` 1 本に
-            なった現在、トリガは事実上1値。
         date: 調べる日付。省略すると今日。
 
     Returns:
         その日に成功した記録があれば True。履歴が無ければ False。
     """
     path = Path(path)
-    return bool(successful_files_today(path, report_key, trigger, date))
+    return bool(successful_files_today(path, report_key, date))
 
 
 @measure
 def successful_files_today(
     path: str | Path,
     report_key: str,
-    trigger: str = TRIGGER_SCHEDULED,
     date: datetime.date | None = None,
 ) -> list[Path]:
     """本日の成功履歴に記録された保存先とファイル名を、新しい順で返す。
 
     読み取りにも追記と同じロックを使うため、別プロセスが書いている途中の行を読まない。
     実ファイルの存在確認は呼び出し側で行い、古い成功ファイルへ遡れるよう全候補を返す。
-    `trigger` 引数は互換のために残している（実行方式列は無くなった）。
     """
-    _ = trigger  # 旧コードでは履歴の「実行方式」列を見ていたが、列を廃止したので未使用
     history_path = Path(path)
     target = (date or today()).strftime(_DATE_FORMAT)
     key_text = str(report_key)

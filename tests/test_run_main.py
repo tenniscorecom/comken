@@ -95,9 +95,8 @@ class TestUnexpectedException:
         def main() -> None:
             raise sentinel
 
-        with caplog.at_level(logging.ERROR):
-            with pytest.raises(RuntimeError, match="想定外"):
-                run_main(main)
+        with caplog.at_level(logging.ERROR), pytest.raises(RuntimeError, match="想定外"):
+            run_main(main)
 
         assert "予期しないエラーが発生しました" in caplog.text
 
