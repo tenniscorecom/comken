@@ -521,38 +521,11 @@ def build_report():
 `@measure` は**関数名（qualname）だけ**をログに出す。引数・戻り値は出さない
 （DPAPI のトークン・client_secret・パスワードを扱うため、汎用デコレータが
 自動で引数を出す形になっていると、いつか秘密の値がログへ載る危険があるため）。
-「どのファイルで止まったか」を知りたいときは、呼び出し側が処理対象をログを出す。
+「どのファイルで止まったか」を知りたいときは、呼び出し側が処理対象をログに出す。
 
 雛形プロジェクトでは `with comken.debug():` を `main()` を囲む形で
 `main.py` に書き、止めたい処理単位で on/off する（`config.ini` の旧 `[RUN]` セクションは
 廃止済みのため、書いても効きません。詳細は[**HISTORY.md**](../HISTORY.md#1-設定と非機密情報の扱い)）。
-
-### main の定型（`run_main`）
-
-4 リポジトリの `main.py` で同形だった `setup_local_logging()` → `main()` →
-`except ComkenError / Exception` を受け止めて終了コードを返す流れを、
-`comken.runtime.run_main` に集約してある。
-
-```python
-from comken import comken_logger
-from comken.runtime import run_main
-from src.run import run
-
-def main() -> int:
-    return run()
-
-if __name__ == "__main__":
-    comken_logger.setup_local_logging()
-    raise SystemExit(run_main(main))
-```
-
-- `main()` の戻り値が `int` ならそのまま、`None` なら `0`
-- `ComkenError` は `logger.error("処理を中断しました: %s", e)` して `1` を返す
-- 想定外例外は `logger.exception(...)` した上で **そのまま再送出** する（RPA 基盤／スケジューラが受け取れるよう）
-- `debug_mode=True` / `dry_run_mode=True` を渡すと `main()` を `with debug():` /
-  `with dry_run():` で囲んで呼ぶ（実行後は状態が元に戻る）
-
-`from comken.core import run_main` でも取れる（`comken.runtime` の再エクスポート）。
 
 ---
 
