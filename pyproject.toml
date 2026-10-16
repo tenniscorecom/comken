@@ -96,7 +96,9 @@ pythonpath = ["tools"]
 
 [tool.pyright]
 # pytest が生成する一時パッケージは製品コードではないため、型検査から外す。
-exclude = [".pytest-tmp"]
+# templates/ は新規プロジェクトへコピーされる雛形。`config.FILES.KEY` の型は
+# コピー先で生成される typings スタブで決まり、comken 側からは解決できないため外す。
+exclude = [".pytest-tmp", "comken/templates"]
 
 # __init__.py が `__getattr__` (PEP 562) で遅延公開している属性は
 # pyright の static analysis からは見つからず、`__all__` に書いた名前が

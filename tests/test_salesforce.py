@@ -1658,10 +1658,10 @@ class TestSalesforceBulkQuery:
         job_id = job_id or self.JOB_ID
         return _response(json_body={"id": job_id, "operation": "query"})
 
-    def _job_state(self, state: str, **extra: object) -> _response:
+    def _job_state(self, state: str, **extra: object) -> MagicMock:
         return _response(json_body={"id": self.JOB_ID, "state": state, **extra})
 
-    def _results_page(self, csv_text: str, locator: str | None = None) -> _response:
+    def _results_page(self, csv_text: str, locator: str | None = None) -> MagicMock:
         headers = {"Content-Type": "text/csv"}
         if locator is not None:
             headers["Sforce-Locator"] = locator
