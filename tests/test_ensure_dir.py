@@ -67,6 +67,7 @@ class TestDryRun:
 
         with caplog.at_level(logging.INFO):
             from comken import dry_run as comken_dry_run
+
             with comken_dry_run():
                 result = ensure_dir(target)
 
@@ -81,6 +82,7 @@ class TestDryRun:
 
         with caplog.at_level(logging.INFO):
             from comken import dry_run as comken_dry_run
+
             with comken_dry_run():
                 result = ensure_dir(target)
 
