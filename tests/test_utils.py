@@ -27,6 +27,7 @@ from comken.core.files.ops import copy_to_local_if_large, project_dir
 from comken.core.table import Table
 from comken.core.table.diff import diff_row
 from comken.core.text import (
+    is_enabled_mark,
     is_true_word,
     normalize,
     remove_spaces,
@@ -820,6 +821,90 @@ class TestIsTrueWord:
     def test_other_words_are_not_true(self, text):
         """ "true" 以外の語（config.ini の false、Excel の日本語表記など）は False を確認する。"""
         assert is_true_word(text) is False
+
+
+class TestIsEnabledMark:
+    """is_enabled_mark（Excel / CSV の管理表セル用 "有効" 判定）のテスト。
+
+    soql-collector / report_master の ``"○"``/``"有効"`` 判定を共通化したもの。
+    ``is_true_word`` とは語集合が違う（ ``"1"`` / ``"yes"`` / ``"on"`` /
+    ``"○"`` / ``"有効"`` / ``"はい"`` を含む／ ``is_true_word("1") is False`` ）。
+    """
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "有効",
+            " 有効 ",       # 前後の半角空白
+            "　有効　",     # 前後の全角空白
+            "○",
+            "○ ",
+            "o",
+            "O",            # 大文字
+            "YES",          # 大文字
+            "1",
+            "on",  # 警告のテストデータとして
+            "ON",
+            "はい",
+            "True",
+            "true",
+            " TRUE ",
+        ],
+    )
+    def test_truthy_variants_are_true(self, value):
+        """有効語の各表記（大文字・全角空白付き含む）が True になることを確認する。"""
+        assert is_enabled_mark(value) is True, value
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "×",
+            " ✕ ",
+            "無効",
+            " 無効 ",
+            "no",
+            "0",
+            "off",
+            "いいえ",
+            "",
+            " ",
+            " 　",
+            "Truely",    # "true" の部分一致
+            "有効x",      # 余計な文字が付いた
+            "abc",
+        ],
+    )
+    def test_falsy_variants_are_false(self, value):
+        """無効語・空文字・ノイズ文字付きが False になることを確認する。"""
+        assert is_enabled_mark(value) is False, value
+
+    @pytest.mark.parametrize(
+        "value,expected",
+        [
+            (True, True),
+            (False, False),
+            (1, True),
+            (0, False),
+            (2, False),
+            (-1, False),
+        ],
+    )
+    def test_bool_and_int(self, value, expected):
+        """bool はそのまま、 int は ``1`` だけ True になることを確認する。"""
+        assert is_enabled_mark(value) is expected
+
+    def test_none_is_false(self):
+        """``None`` は False になることを確認する（セルの空白対策）。"""
+        assert is_enabled_mark(None) is False
+
+    def test_is_true_word_does_not_treat_one_as_true(self):
+        """``is_true_word("1")`` が ``False`` のままであることを確認する。
+
+        config.ini の ``1`` を bool 化しないための既存仕様。 ``is_enabled_mark``
+        が ``"1"`` を True にしても、 ``is_true_word`` 側の挙動は壊さないこと
+        （ ``Config`` の ``_parse_value`` が ``is_true_word`` を使うため）。
+        """
+        assert is_true_word("1") is False
 
 
 class TestNormalize:

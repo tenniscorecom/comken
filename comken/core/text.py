@@ -58,5 +58,59 @@ def is_true_word(text: str) -> bool:
 
     Returns:
         "true"（大文字小文字問わず）と一致すれば True。
+
+    Note:
+        仕様上、 ``"1"`` / ``"yes"`` / ``"on"`` などはここで False になる
+        （config.ini の整数 ``1`` が bool 扱いになる事故を防ぐため）。 Excel
+        管理表のような日本語・記号混じりのセルで ``"1"`` を有効扱いにしたい
+        ときは ``is_enabled_mark`` を使う。
     """
     return text.strip().lower() == "true"
+
+
+# Excel 管理表の「有効」列で真とみなす語（``"true"`` を除く）。
+# ``is_true_word`` が ``"true"`` を True にするので、ここでは二重管理しない。
+# 大文字小文字は区別せず、前後の空白（半角・全角）は ``is_enabled_mark`` 側で
+# 落とす。 業務上「○/×」運用を続けるために必要なので、ここで固定の語集合として
+# 持つ（呼び出し側に持たせると呼び出し箇所ごとにズレる）。
+_ENABLED_MARKS: tuple[str, ...] = ("有効", "○", "o", "yes", "1", "on", "はい")
+
+
+def is_enabled_mark(value: object) -> bool:
+    """Excel / CSV の管理表セルが「有効」を表すかどうかを判定する。
+
+    真とみなす値:
+
+    - ``bool``: そのまま返す（ ``True`` / ``False`` ）
+    - ``int``: ``1`` だけ True、 それ以外は False
+    - ``str``: 前後の空白（半角・全角）を除いたあと、大文字小文字を無視して
+      ``is_true_word`` を通すか、以下の語のいずれかに一致すれば True::
+
+          "有効" / "○" / "o" / "yes" / "1" / "on" / "はい" / "true"
+
+    それ以外（ ``None`` / 空文字 / ``"×"`` / ``"無効"`` / ``"no"`` / ``"0"`` /
+    ``"off"`` / ``"いいえ"`` などの数値・文字列）は False。
+
+    Args:
+        value: セルから得た値。 Excel のセルは ``bool`` / ``int`` / ``str`` /
+            ``None`` のどれでも来うる。
+
+    Returns:
+        「有効」とみなせる値なら True。
+
+    Note:
+        ``is_true_word`` とは語集合が違う。 ``"1"`` を True にするのは
+        Excel 管理表の視認性のためで、 ``config.ini`` の ``1`` を bool に
+        しない設計（ ``is_true_word("1") is False`` ）を壊さないために、
+        別の関数として公開している。
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value == 1
+    text = str(value).strip().lower()
+    if not text:
+        return False
+    if is_true_word(text):
+        return True
+    return text in _ENABLED_MARKS

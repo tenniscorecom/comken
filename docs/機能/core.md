@@ -186,6 +186,38 @@ lookup = {normalize(k): v for k, v in lookup.items()}
 row = lookup.get(normalize(key))
 ```
 
+### 管理表セルの真偽判定（`is_enabled_mark`）
+
+Excel / CSV の管理表（レポート管理表・スケジュール管理表など）の
+「有効」列の値を 1 か所で判定する。 `soql-collector` やダウンローダーが
+それぞれで重複していた ``"○"`` / ``"有効"`` / ``"yes"`` 判定を 1 箇所に
+まとめるためのもの。
+
+```python
+from comken.core.text import is_enabled_mark
+
+is_enabled_mark("有効")      # → True
+is_enabled_mark("○")         # → True
+is_enabled_mark("YES")       # → True
+is_enabled_mark("1")         # → True（Excel セルでは文字列として来る）
+is_enabled_mark(1)           # → True（int で来た場合）
+is_enabled_mark(True)        # → True（bool そのまま）
+is_enabled_mark("無効")      # → False
+is_enabled_mark("×")         # → False
+is_enabled_mark("no")        # → False
+is_enabled_mark("0")         # → False
+is_enabled_mark(None)        # → False
+```
+
+真とみなす語（前後の半角・全角空白を除き、大文字小文字は区別しない）:
+`有効` / `○` / `o` / `yes` / `1` / `on` / `はい` / `true`。
+`bool` がそのまま来たら `bool` を返し、 `int` は `1` だけ True。
+それ以外（空文字 / `×` / `無効` / `None` など）は False。
+
+> **config.ini の ``bool`` 変換は変えない。** `is_true_word("1") is False`
+> のまま（config.ini の `1` を bool にすると整数 `1` と区別できなくなる
+> ため）。「○/×」運用を続ける管理表側でだけ `is_enabled_mark` を使う。
+
 ### リトライ（retry）
 
 一時的な失敗（クリックが要素に遮られた、ネットワークが一瞬切れた等）を自動でやり直す。
