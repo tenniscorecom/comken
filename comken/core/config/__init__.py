@@ -62,7 +62,7 @@ from __future__ import annotations
 # は _impl.py に置く。 ここでは名前を再エクスポートする（comken 内部の
 # stubs.py と、外部リポジトリの tests/ が ``from comken.core.config import _X``
 # の形で取りに来るための互換性を維持する）。
-# ruff が「未使用の import」を出さないよう、 各再エクスポートに ``# noqa: F401`` を付ける。
+# ruff が「未使用の import」を出さないよう、 下の import 文に F401 の noqa を付ける。
 from comken.core.config._impl import (  # noqa: F401
     _PATH_RESOLUTION_CACHE_MAXSIZE,
     MAPPING_SECTION_SUFFIX,
