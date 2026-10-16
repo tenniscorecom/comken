@@ -1,9 +1,9 @@
-"""comken/core/config/_impl.py — Config 実装本体。
+"""comken/core/config/base.py — Config 実装本体。
 
-comken/core/config/__init__.py は公開 API の再エクスポートと PEP 562 用の
+comken/core/config/__init__.py は公開 API の入口と PEP 562 用の
 __getattr__ だけを持ち、 実装本体（Config クラス・エラーヘルパー・キャッシュ
-層）はこのモジュールに置く。 __init__.py から from comken.core.config._impl
-import ... で読み出される。
+層）はこのモジュールに置く。 __init__.py から from comken.core.config.base
+import ... で必要な名前を取り出して使う。
 
 Config() の構築は config.ini 読み込みとエディタ補完スタブ（stubs.py）の
 自動更新を含む重い処理。 __init__.py の __getattr__ はこのモジュールが
@@ -111,10 +111,12 @@ def _subclassing_not_supported_error(subclass_name: str) -> ConfigError:
     )
 
 
-# ── 公開 API の再エクスポートは ``comken.core.config.__init__`` 側で行う ──
+# ── 公開 API の公開は ``comken.core.config.__init__`` 側で行う ──
 # ここでは ``__all__`` を持たず、実装本体だけ置く。 ``__init__.py`` が
-# ``from comken.core.config._impl import ...`` で必要な名前を取り出して再束ね、
-# ``__getattr__`` 経由で ``config.SECTION`` の遅延公開を行う。
+# 公開する ``Config`` / ``MappingDict`` を取り込み、 ``__getattr__`` 経由で
+# ``config.SECTION`` の遅延公開を行う。  ``_`` プレフィックス付きの名前は
+# ``__init__.py`` から再エクスポートしない（comken 内部の stubs.py と
+# tests/ は直接 ``from comken.core.config.base import _X`` で取りに来る）。
 
 MAPPING_SECTION_SUFFIX = "MAPPING"
 
