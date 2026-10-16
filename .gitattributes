@@ -7,8 +7,3 @@
 # git の改行・エンコーディング変換で壊さない。**上の text=auto より後に書く**
 # （.gitattributes は後の行が勝つため、順序を入れ替えると bat が LF になる）。
 *.bat -text
-
-# 契約の見本（soql-collector とバイト単位で一致させる）は BOM・改行コードを
-# 保ったままリポジトリへ入れる。 text=auto だとコミット時に CRLF/BOM が
-# 変わる危険があるため、 上の text=auto より後に書いて -text を効かせる。
-comken/services/salesforce_downloader/contract_samples/* -text
