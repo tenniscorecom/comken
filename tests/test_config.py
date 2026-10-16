@@ -15,6 +15,7 @@ import pytest
 
 import comken.core.config as config_module
 from comken.core.config import Config
+from comken.core.config.base import _reset_cached_config
 from comken.exceptions import ComkenError, ConfigError
 
 
@@ -29,11 +30,11 @@ def _reset_default_config_cache():
     別テストの設定が漏れる。各テストの前後で明示的に破棄して、
     「テストごとに別の config.ini を読む」形を担保する。
     """
-    config_module._reset_cached_config()
+    _reset_cached_config()
     try:
         yield
     finally:
-        config_module._reset_cached_config()
+        _reset_cached_config()
 
 
 # .pyi 内で「型注釈に書かれた Name」が、その .pyi の import か組み込みで
@@ -1181,7 +1182,7 @@ class TestAutoStub:
         Config(ini)
 
         ini.write_text("[REPORT]\nCOUNT = 10\nNAME = 月次\n", encoding="utf-8")
-        config_module._reset_cached_config()
+        _reset_cached_config()
         Config(ini)
 
         assert "NAME: str" in stub.read_text(encoding="utf-8")
@@ -1200,7 +1201,7 @@ class TestAutoStub:
         Config(ini)
         stub.write_text("# 壊れた内容", encoding="utf-8")
 
-        config_module._reset_cached_config()
+        _reset_cached_config()
         Config(ini)
 
         assert "COUNT: int" in stub.read_text(encoding="utf-8")
@@ -1369,7 +1370,7 @@ class TestLenientDict:
 
     def test_unknown_key_raises_key_error(self):
         """存在しないキーへアクセスすると素の ``dict`` と同じく ``KeyError``。"""
-        from comken.core.config import _LenientDict
+        from comken.core.config.base import _LenientDict
 
         ld = _LenientDict({"known": "value"})
 
@@ -1380,7 +1381,7 @@ class TestLenientDict:
 
     def test_known_key_returns_configured_string(self):
         """config.ini に書かれたとおりの文字列を返す。"""
-        from comken.core.config import _LenientDict
+        from comken.core.config.base import _LenientDict
 
         ld = _LenientDict({"受注No": "受注番号", "Web受注": "Web受付"})
 
@@ -1392,7 +1393,7 @@ class TestLenientDict:
 
     def test_is_dict_subclass(self):
         """``_LenientDict`` は dict のサブクラス（型判定の後方互換）。"""
-        from comken.core.config import _LenientDict
+        from comken.core.config.base import _LenientDict
 
         ld = _LenientDict()
 
@@ -1402,7 +1403,7 @@ class TestLenientDict:
 
     def test_missing_raises_key_error_for_arbitrary_type(self):
         """未知キーは素の ``dict`` と同じく ``KeyError`` を送出する。"""
-        from comken.core.config import _LenientDict
+        from comken.core.config.base import _LenientDict
 
         ld = _LenientDict({"a": "1"})
 
@@ -1420,7 +1421,7 @@ class TestMappingAttributeAccess:
 
     def test_config_attribute_is_lenient_dict(self, tmp_path):
         """``Config(...).SECTION_MAPPING`` が ``_LenientDict`` として返る。"""
-        from comken.core.config import _LenientDict
+        from comken.core.config.base import _LenientDict
 
         ini = tmp_path / "config.ini"
         ini.write_text(
@@ -1468,7 +1469,8 @@ class TestMappingDictPublicType:
 
     def test_mapping_dict_is_lenient_dict(self):
         """``MappingDict`` は ``_LenientDict`` のエイリアス（型判定で同一）。"""
-        from comken.core.config import MappingDict, _LenientDict
+        from comken.core.config import MappingDict
+        from comken.core.config.base import _LenientDict
 
         assert MappingDict is _LenientDict
         # 未知キーは素の ``dict`` と同じく ``KeyError``
