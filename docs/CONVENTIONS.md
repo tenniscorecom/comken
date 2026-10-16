@@ -33,6 +33,10 @@ comken を使って業務自動化スクリプトを書く人と、comken 本体
 
 ## 1. import してよい名前
 
+この章で守ること:
+- comken のどの名前を import してよいかは README「使うときの約束」に従う
+- 相対 import は使わず、Ruff（`TID`、`ban-relative-imports = "all"`）に守らせる
+
 comken のどの名前を import してよいかは [README「使うときの約束」](../README.md#使うときの約束)を参照してください。
 import の書き方そのもの（相対 import 禁止など）は [Python 3 章](CONVENTIONS_PYTHON.md#3-import-の書き方)。
 comken 本体では相対 import を Ruff（`TID`、`ban-relative-imports = "all"`）が止める。
@@ -40,6 +44,10 @@ comken 本体では相対 import を Ruff（`TID`、`ban-relative-imports = "all
 ---
 
 ## 2. 例外
+
+この章で守ること:
+- プロジェクト固有のカスタム例外クラスを作らず、comken の `ComkenError` 系か Python 標準例外を使う
+- 基幹プロジェクトだけは例外として、自分の例外クラスを持ってよい（comken 例外の継承型で、呼び出し側が型で分岐するものだけ）
 
 **独自のカスタム例外クラスを新しく定義しないでください。** プロジェクト固有の失敗は、
 comken が提供する例外（`ComkenError` 系）か、Python の標準例外（`ValueError` / `RuntimeError` 等）を
@@ -58,6 +66,11 @@ comken が提供する例外（`ComkenError` 系）か、Python の標準例外�
 ---
 
 ## 3. ロギング
+
+この章で守ること:
+- ロガーの作り方・`%s` で渡すこと・レベルの選び方は Python 8 章に従う
+- ページオブジェクトでは comken 側の debug ログと重複する info を足さない
+- 汎用ログに残らない「分岐の理由」だけ `logger.info` で追加する
 
 ロガーの作り方・`%s` で渡すこと・レベルの選び方は [Python 8 章](CONVENTIONS_PYTHON.md#8-ロギング)。
 実行するときのログ設定の呼び出し方は [core「Logger」](機能/core.md#logger)を参照してください。
@@ -106,6 +119,10 @@ comken の `Page` が既に持っている汎用メソッドで済まないか�
 
 ## 4. 日時
 
+この章で守ること:
+- 現在時刻・今日の日付は `comken` の `now()` / `today()` を使う（`datetime.now()` を直接呼ばない）
+- 業務日付・経過時間の扱いは Python 10 章に従う
+
 - 現在時刻・今日の日付は共通の `now()` / `today()`（`comken`）を使い、
   `datetime.datetime.now()` / `datetime.date.today()` を直接呼ばないでください。
 - 業務日付・経過時間の扱いは [Python 10 章](CONVENTIONS_PYTHON.md#10-日時の扱い)。
@@ -113,6 +130,11 @@ comken の `Page` が既に持っている汎用メソッドで済まないか�
 ---
 
 ## 5. config.ini の書き方
+
+この章で守ること:
+- セクション名は決まった並びから選び、プロジェクトごとに違う名前を作らない
+- config.ini には「非エンジニアが自分で変える値」だけを置く（自前の `settings.py` を作らない）
+- パスは config.ini からの相対パスで書く（`./input` のように `./` を付ける）
 
 セクション名は決まった並びから選びます。プロジェクトごとに違う名前を作らないでください。
 
@@ -159,6 +181,10 @@ OUTPUT_FOLDER = ./output
 
 ## 6. 選択肢を渡す引数
 
+この章で守ること:
+- 列挙に意味がある選択肢は生の文字列ではなく comken の定数クラスで渡す
+- 定数クラスの考え方は Python 12 章に従う
+
 Excel COM の保存形式など、列挙に意味がある選択肢は、生の文字列ではなく comken の定数クラスで渡す。
 
 ```python skip
@@ -170,6 +196,10 @@ save_as(path, file_format=FileFormat.CSV)
 ---
 
 ## 7. リソース管理（with 文）
+
+この章で守ること:
+- comken のクラス（`Excel` / `CSV` / `BrowserSession` など）は `with` 文で開く
+- `with` が使えない COM オブジェクトの解放は Python 11 章に従う
 
 comken のクラス（`Excel` / `CSV` / `BrowserSession` など）は `with` 文で開きます。
 
@@ -184,6 +214,11 @@ with Excel("data.xlsx") as f:
 ---
 
 ## 8. 外部依存ライブラリの実装規則（Excel / Windows / ブラウザ）
+
+この章で守ること:
+- Excel は comken の `Excel` を使い、openpyxl を直接触るのは必要なときだけ
+- Windows 操作は pywin32（COM 経由）に限定し、ファイル操作は標準ライブラリ優先
+- ブラウザ自動化は Selenium で、スクリーンショット保存は `logs/` からの相対指定にする
 
 ### Excel（openpyxl）
 
@@ -274,6 +309,11 @@ session.save_screenshot(f"{name}.png", directory="errors")
 
 ## 9. 公開メソッドの動詞
 
+この章で守ること:
+- 同じ操作には同じ動詞を使う（`run_` / `read_` / `find_` / `filter_` / `is_` / `write_` / `save_` / `append_` / `execute_`）
+- 戻り値の型と名前を一致させ、読み取り系は `read_` / `find_` / `is_` / `has_` で分ける
+- 例外として認めるのは、業界で確立した語（HTTP の `get` / Salesforce の `describe`）だけ
+
 ### 同じ操作には同じ動詞
 
 同じ操作には同じ動詞を使う。名詞だけのメソッドや、`js()` のように処理が分からない略称は
@@ -330,6 +370,11 @@ Salesforce のドキュメント・エラーメッセージとの対応が取り
 ---
 
 ## 10. サイト／組織クラスを昇格させる基準
+
+この章で守ること:
+- 新しい社内システムの自動化は最初必ずプロジェクト側（`src/sites/` 等）に置く
+- 2 つ目のプロジェクトが同じシステムを触り始めたら、ライブラリへの昇格を管理者に相談する
+- サイト／組織クラスには `OWNER = "プロジェクト名 / 担当者"` を必ず書く（起動時に検査）
 
 `SiteBase`（ブラウザ）と `SalesforceBase`（組織）は継承して使う前提のクラス。
 ライブラリ管理者は「誰かが継承してサイト／組織クラスを作った」という事実を
@@ -436,6 +481,11 @@ Salesforce のドキュメント・エラーメッセージとの対応が取り
 
 ## 11. 例外クラスを足す基準
 
+この章で守ること:
+- 個別の例外クラスは、呼び出し側が型で分岐する必要がある場合だけ作る
+- 対処が同じ失敗はカテゴリ例外（`ExcelError` 等）にメッセージを添えて送出する
+- 統合・削除の前に利用側プロジェクトを grep し、送出・捕捉・型分岐に使われていないか確かめる
+
 例外の書き方（メッセージに対処を入れる、素の `Exception` を投げない等）は
 [2. 例外](#2-例外) に従う。階層の全体像は
 [`ARCHITECTURE.md`「5. 例外体系」](ARCHITECTURE.md#5-例外体系) が正本（ここに図を再掲しない）。
@@ -458,6 +508,11 @@ raise ExcelError(f"シート「{name}」が見つかりません。存在する�
 
 ## 12. 品質確認
 
+この章で守ること:
+- 変更時に Ruff / format / pytest / Markdown リンク検査を実行する
+- 実行件数や監査日を文書へ転記せず、CI と Git 履歴を正本にする
+- Excel / Outlook / Selenium / Salesforce / DPAPI など外部境界の差異は実機で確認する
+
 変更時はRuff、フォーマット、pytest、Markdownリンク検査を実行する。実行件数や監査日を
 文書へ転記するとすぐ古くなるため、結果はCIとGit履歴を正本にする。
 
@@ -471,6 +526,11 @@ raise ExcelError(f"シート「{name}」が見つかりません。存在する�
 ---
 
 ## 13. コードを読む順番
+
+この章で守ること:
+- 規約 → 例外 → core（日付・ファイル）→ runtime / config → toolbox（CSV / Excel）→ Windows / ブラウザの順で読む
+- ファイル先頭の docstring と主役クラスの docstring だけで全体像をつかむ
+- 「どのファイルも同じ並び順」で書かれている前提を信じて上から読む
 
 本体をレビュー・読解するときの参照地図。
 
