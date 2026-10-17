@@ -250,8 +250,8 @@ def transfer(
     # ---- 索引作成（重複があればここで TableDuplicateKeyError）----
     read_rows = read.to_rows()
     write_rows = write.to_rows()
-    read_index = index_by_key(read_rows, read_keys, skip_blank=True)
-    write_index = index_by_key(write_rows, write_keys, skip_blank=True)
+    read_index = index_by_key(read_rows, read_keys)
+    write_index = index_by_key(write_rows, write_keys)
 
     # ---- 転記ループ ----
     new_rows, matched_count, transferred_count = _apply_transfers(

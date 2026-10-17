@@ -810,47 +810,186 @@ class TestDiffRows:
         with pytest.raises(TableDuplicateKeyError):
             before.diff(after, key="社員番号")
 
+    def test_blank_keys_go_to_removed_and_added(self) -> None:
+        """両方の表に空キー行があると、``added`` / ``removed`` に1行ずつ入り、
+        ``changed`` には何も出ない。
+        """
+        before = Table(
+            ["id", "name"],
+            [
+                {"id": "001", "name": "山田"},
+                {"id": "", "name": "before空"},
+            ],
+        )
+        after = Table(
+            ["id", "name"],
+            [
+                {"id": "001", "name": "山田"},
+                {"id": "", "name": "after空"},
+            ],
+        )
+
+        result = before.diff(after, key="id")
+
+        assert result.added.to_rows() == [{"id": "", "name": "after空"}]
+        assert result.removed.to_rows() == [{"id": "", "name": "before空"}]
+        assert result.changed == []
+
+    def test_blank_key_rows_are_not_duplicate_checked(self) -> None:
+        """同じ表に空キー行が複数あっても ``TableDuplicateKeyError`` にならない。"""
+        before = Table(
+            ["id", "name"],
+            [
+                {"id": "", "name": "空1"},
+                {"id": "", "name": "空2"},
+                {"id": "", "name": "空3"},
+            ],
+        )
+        after = Table(
+            ["id", "name"],
+            [
+                {"id": "001", "name": "山田"},
+                {"id": "", "name": "after空"},
+            ],
+        )
+
+        # エラーにならず、空キー行が ``removed`` / ``added`` に流れる
+        result = before.diff(after, key="id")
+        assert result.removed.to_rows() == [
+            {"id": "", "name": "空1"},
+            {"id": "", "name": "空2"},
+            {"id": "", "name": "空3"},
+        ]
+        # ``001`` は ``before`` に無く、空キー行は索引に入らないため ``added`` 側
+        assert result.added.to_rows() == [
+            {"id": "001", "name": "山田"},
+            {"id": "", "name": "after空"},
+        ]
+        assert result.changed == []
+
+    def test_none_and_whitespace_keys_are_treated_as_blank(self) -> None:
+        """``None`` のキーも空白だけのキーも空キー扱い。``Table`` 構築時に ``None`` は
+        ``""`` にそろうが、空白だけのキー（``"   "``）は ``""`` にそろわない。
+        ただし ``normalize()`` 後の値で空キー判定するため、両方とも ``removed`` 側へ流れる。
+        """
+        before = Table(
+            ["id", "name"],
+            [
+                {"id": "001", "name": "山田"},
+                {"id": None, "name": "Noneキー"},  # Table 構築時に "" にそろう
+                {"id": "   ", "name": "空白キー"},  # "   " のまま（normalize で空扱い）
+            ],
+        )
+        after = Table(
+            ["id", "name"],
+            [
+                {"id": "001", "name": "山田"},
+                {"id": "", "name": "after空"},
+            ],
+        )
+
+        result = before.diff(after, key="id")
+
+        # 空キー行は全部 ``removed`` 側、``after`` の空キー行は ``added`` 側
+        # 空白だけのキーは ``Table`` 構築時にそのまま保持される（``""`` にはそろわない）
+        assert result.removed.to_rows() == [
+            {"id": "", "name": "Noneキー"},
+            {"id": "   ", "name": "空白キー"},
+        ]
+        assert result.added.to_rows() == [{"id": "", "name": "after空"}]
+        assert result.changed == []
+
+    def test_blank_keys_keep_original_row_order_when_mixed(self) -> None:
+        """空キー行と通常の未一致行が混ざったとき、``added`` / ``removed`` は元表の行順。"""
+        before = Table(
+            ["id", "name"],
+            [
+                {"id": "001", "name": "a"},
+                {"id": "", "name": "before空1"},
+                {"id": "002", "name": "b"},
+                {"id": "", "name": "before空2"},
+            ],
+        )
+        after = Table(
+            ["id", "name"],
+            [
+                {"id": "001", "name": "a"},
+                {"id": "003", "name": "c"},
+                {"id": "", "name": "after空1"},
+                {"id": "", "name": "after空2"},
+            ],
+        )
+
+        result = before.diff(after, key="id")
+
+        # ``before`` の行順のまま: 空1 → 002 → 空2
+        assert result.removed.to_rows() == [
+            {"id": "", "name": "before空1"},
+            {"id": "002", "name": "b"},
+            {"id": "", "name": "before空2"},
+        ]
+        # ``after`` の行順のまま: 003 → 空1 → 空2
+        assert result.added.to_rows() == [
+            {"id": "003", "name": "c"},
+            {"id": "", "name": "after空1"},
+            {"id": "", "name": "after空2"},
+        ]
+        assert result.changed == []
+
+    def test_non_blank_duplicate_keys_still_raise(self) -> None:
+        """空でないキーの重複は今まで通り ``TableDuplicateKeyError``。"""
+        before = Table(
+            ["id", "name"],
+            [
+                {"id": "001", "name": "a"},
+                {"id": "", "name": "空1"},  # 空キーは除外
+                {"id": "001", "name": "b"},  # 空でないキーが重複
+            ],
+        )
+        after = Table(["id", "name"], [{"id": "001", "name": "x"}])
+
+        with pytest.raises(TableDuplicateKeyError):
+            before.diff(after, key="id")
+
 
 class TestIndexByKey:
     """``comken.core.table.diff.index_by_key``（索引 / Table.diff() / transfer() 共通部品）。"""
 
-    def test_skip_blank_false_includes_blank_keys(self) -> None:
-        """``skip_blank=False`` のときは空キー行も索引に入れる（``Table.diff()`` の現状）。"""
+    def test_excludes_blank_keys(self) -> None:
+        """空キー行（``normalize`` 後に ``""``）は索引に入らない。"""
         rows = [
             {"id": "1", "name": "a"},
             {"id": "", "name": "空"},
             {"id": "2", "name": "b"},
         ]
-        index = index_by_key(rows, ["id"], skip_blank=False)
-        assert len(index) == 3
-        assert ("1",) in index
-        assert ("",) in index
-        assert ("2",) in index
-
-    def test_skip_blank_true_excludes_blank_keys(self) -> None:
-        """``skip_blank=True`` のときは空キー行を索引に入れない（``transfer()`` の挙動）。"""
-        rows = [
-            {"id": "1", "name": "a"},
-            {"id": "", "name": "空"},
-            {"id": "2", "name": "b"},
-        ]
-        index = index_by_key(rows, ["id"], skip_blank=True)
+        index = index_by_key(rows, ["id"])
         assert len(index) == 2
         assert ("1",) in index
         assert ("2",) in index
         assert ("",) not in index
+
+    def test_blank_keys_are_not_duplicate_checked(self) -> None:
+        """空キー行が複数あっても ``TableDuplicateKeyError`` にならない。"""
+        rows = [
+            {"id": "", "name": "空1"},
+            {"id": "", "name": "空2"},
+            {"id": "", "name": "空3"},
+        ]
+        index = index_by_key(rows, ["id"])
+        # 索引には入らない（空キー行は除外される）ので重複検査も走らない
+        assert index == {}
 
     def test_normalizes_key(self) -> None:
         """キーは ``normalize`` でそろえて索引化する（同じキーなら重複エラー）。"""
         rows = [{"id": " 1001 ", "name": "a"}, {"id": "１００1", "name": "b"}]
         # strip と NFKC で両方とも "1001" になるので重複扱い
         with pytest.raises(TableDuplicateKeyError):
-            index_by_key(rows, ["id"], skip_blank=False)
+            index_by_key(rows, ["id"])
 
     def test_does_not_normalize_case(self) -> None:
         """大文字小文字は区別する（NFKC は小文字化しない）。"""
         rows = [{"id": "A001", "name": "a"}, {"id": "a001", "name": "b"}]
-        index = index_by_key(rows, ["id"], skip_blank=False)
+        index = index_by_key(rows, ["id"])
         # 大文字小文字が違うので別キー
         assert len(index) == 2
 
@@ -861,20 +1000,20 @@ class TestIndexByKey:
             {"group": "A", "id": "2", "name": "b"},
             {"group": "B", "id": "1", "name": "c"},
         ]
-        index = index_by_key(rows, ["group", "id"], skip_blank=False)
+        index = index_by_key(rows, ["group", "id"])
         assert ("A", "1") in index
         assert ("A", "2") in index
         assert ("B", "1") in index
         assert len(index) == 3
 
-    def test_composite_key_partial_blank_is_excluded_when_skip_blank(self) -> None:
-        """複合キーは 1 要素でも空なら ``skip_blank=True`` で索引に入らない。"""
+    def test_composite_key_partial_blank_is_excluded(self) -> None:
+        """複合キーは 1 要素でも空なら索引に入らない。"""
         rows = [
             {"group": "", "id": "1", "name": "a"},
             {"group": "A", "id": "", "name": "b"},
             {"group": "A", "id": "1", "name": "c"},
         ]
-        index = index_by_key(rows, ["group", "id"], skip_blank=True)
+        index = index_by_key(rows, ["group", "id"])
         assert len(index) == 1
         assert ("A", "1") in index
 
@@ -885,7 +1024,7 @@ class TestIndexByKey:
             {"group": "A", "id": "1", "name": "b"},
         ]
         with pytest.raises(TableDuplicateKeyError) as exc_info:
-            index_by_key(rows, ["group", "id"], skip_blank=False)
+            index_by_key(rows, ["group", "id"])
         # メッセージに重複キー（"A,1"）が含まれる
         assert "A,1" in str(exc_info.value)
 

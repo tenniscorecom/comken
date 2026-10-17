@@ -109,33 +109,32 @@ def changes_table(
 def index_by_key(
     rows: list[Row],
     columns: list[str],
-    *,
-    skip_blank: bool = False,
 ) -> dict[tuple[str, ...], Row]:
     """正規化後のキーで索引を作る（``Table.diff()`` / ``transfer()`` の共通部品）。
 
     キーは ``normalize()`` でそろえた後、各列の値を並べた ``tuple[str, ...]``。
     戻り値の辞書は、そのタプルをキーに ``Row`` を引く形になる。
 
-    空キー（``normalize`` 後に ``""`` の要素が 1 つでもある）は ``skip_blank=True``
-    のとき索引に入らない。 ``False`` のときはそのまま入れる（``Table.diff()``
-    の既存挙動を保つため）。
+    空キー（``normalize`` 後に ``""`` の要素が 1 つでもある）は索引に入れない。
+    ``Table.diff()`` / ``Table.changes()`` / ``transfer()`` のいずれも空キーは
+    突合対象外で揃えており、ここでも同じ規則で空キーを除く。空キー行は呼び出し側
+    （``Table.diff()`` / ``transfer()``）が ``added`` / ``removed`` /
+    ``only_in_*`` 側へ集める。
 
-    正規化後のキーが重複していたら ``TableDuplicateKeyError`` を送出する
-    （``Table.index()`` と同じ例外）。 複合キーは列名のリストを渡し、キー値は
-    ``","`` で連結してメッセージに出す。
+    正規化後の**空でない**キーが重複していたら ``TableDuplicateKeyError``
+    を送出する（``Table.index()`` と同じ例外）。複合キーは列名のリストを渡し、
+    キー値は ``","`` で連結してメッセージに出す。
 
     Args:
         rows: 索引対象の行のリスト。
         columns: キー列のリスト（順序を保って ``tuple`` にする）。
-        skip_blank: ``True`` なら空キー行を索引に入れない。
     """
     from comken.exceptions.tables import TableDuplicateKeyError
 
     index: dict[tuple[str, ...], Row] = {}
     for row in rows:
         key = tuple(normalize(row[column]) for column in columns)
-        if skip_blank and any(value == "" for value in key):
+        if any(value == "" for value in key):
             continue
         if key in index:
             raise TableDuplicateKeyError(list(columns), ",".join(key))
@@ -150,11 +149,11 @@ def index_for_diff(
     """``Table.diff()`` のために、``normalize`` 後のキーで索引化する。
 
     正規化後のキーが重複していたら ``TableDuplicateKeyError`` を送出する
-    （``Table.index()`` と同じ例外）。
+    （``Table.index()`` と同じ例外）。空キー行は索引に入らない
+    （``Table.diff()`` は空キー行を ``added`` / ``removed`` 側へ集めるため、
+    索引化対象から除く）。
 
-    ``index_by_key`` の薄いラッパー。 ``Table.diff()`` の既存挙動を保つため
-    ``skip_blank=False``（空キー行も索引に入れる）で呼び、戻り値のキーを
-    単一文字列に展開して返す。
+    ``index_by_key`` の薄いラッパーで、戻り値のキーを単一文字列に展開して返す。
     """
     return {key_tuple[0]: row for key_tuple, row in index_by_key(rows, [key]).items()}
 

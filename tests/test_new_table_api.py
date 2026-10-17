@@ -516,6 +516,50 @@ class TestTableChanges:
         with pytest.raises(TableColumnNotFoundError):
             history.changes(key="社員番号", order_by="変更時刻")
 
+    def test_blank_key_rows_are_ignored(self) -> None:
+        """空キーの行は ``changes()`` で無視される
+        （``Table.diff()`` / ``transfer()`` と同じ規則）。
+        """
+        history = Table(
+            ["社員番号", "変更時刻", "部署"],
+            [
+                {"社員番号": "1001", "変更時刻": "2026-09-01", "部署": "営業"},
+                {"社員番号": "", "変更時刻": "2026-09-02", "部署": "空部署"},  # 空キー行は無視
+                {"社員番号": "1001", "変更時刻": "2026-09-03", "部署": "営業"},
+            ],
+        )
+
+        result = history.changes(key="社員番号", order_by="変更時刻")
+
+        # 空キー行は無視され、1001 の2行は部署が同じなので結果は空
+        assert result == []
+
+    def test_blank_key_rows_with_blank_order_by_do_not_raise(self) -> None:
+        """空キー行の ``order_by`` が空でも ``TableError`` にならない
+        （空キー行自体が対象外なので検査もかからない）。
+        """
+        history = Table(
+            ["社員番号", "変更時刻", "部署"],
+            [
+                {"社員番号": "1001", "変更時刻": "2026-09-01", "部署": "営業"},
+                {"社員番号": "1001", "変更時刻": "2026-09-03", "部署": "総務"},
+                {"社員番号": "", "変更時刻": None, "部署": "空部署"},  # 空キー + 空 order_by
+            ],
+        )
+
+        result = history.changes(key="社員番号", order_by="変更時刻")
+
+        # 1001 の2行は部署が変わったので 1 件出る
+        assert result.to_rows() == [
+            {
+                "社員番号": "1001",
+                "変更時刻": "2026-09-03",
+                "列": "部署",
+                "変更前": "営業",
+                "変更後": "総務",
+            }
+        ]
+
 
 class TestEmptyValueIsEmptyString:
     """空の値は ``None`` ではなく ``""`` にそろう（Table に入れる時点で1回だけ）。"""

@@ -75,6 +75,12 @@ CSV ↔ Excel をまたいだ比較にそのまま使える。空は、`Table` �
 `TableDuplicateKeyError`（`Table.index()` と同じ例外）で止める。
 **黙って後の行で上書きはしない。**
 
+**空キー（`normalize` 後に `""`。`None`・空白だけを含む）は突合しない。**
+self の空キー行は `removed`、other の空キー行は `added` に、**元表の行順で**
+入る。空でないキーの重複は今まで通り `TableDuplicateKeyError` だが、
+**空キーの行は重複検査の対象外**で、同じ表に空キーが何行あってもエラーに
+ならない。Excel の ID が空欄の行が複数あるケースを自然に受け流せる。
+
 ```python
 from comken.toolbox.csv import CSV
 
@@ -132,6 +138,11 @@ changed = history.changes(key="社員番号", order_by="変更時刻")
 
 `order_by` の列に空（`""`）の行がある、または値の型が混ざって
 いて比較できない（`TypeError`）ときは `TableError` で止める。
+
+**空キー（`normalize` 後に `""`）の行は対象外**で、**そもそも比べない**
+（`Table.diff()` / `transfer()` と同じ規則）。空キーが複数あっても
+`TableDuplicateKeyError` にはならず、空キー行の `order_by` が空でも
+エラーにしない。
 
 
 ### 待機（wait）
@@ -576,7 +587,7 @@ with Excel("report.xlsx") as excel:
 ```python
 import comken
 
-comken.__version__        # → "1.1.1"
+comken.__version__        # → "1.3.0"
 
 # デバッグモード: `with debug():` ブロック内でのみ @measure が DEBUG ログを出す。
 with comken.debug():

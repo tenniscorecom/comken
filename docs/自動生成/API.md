@@ -1219,8 +1219,13 @@ def diff(self, other: Table, *, key: str) -> DiffResult:
 self と other を ``key`` 列で突合し、差分を返す。
 
 CSV と Excel をまたいだ比較にも使える（"1000" と 1000 は同一視される）。
-正規化後のキーがどちらの表でも重複していたら ``TableDuplicateKeyError``
-を送出する（``Table.index()`` と同じ例外）。
+正規化後の**空でない**キーがどちらの表でも重複していたら
+``TableDuplicateKeyError`` を送出する（``Table.index()`` と同じ例外）。
+空キー（``normalize`` 後に ``""``。``None``・空白だけを含む）は
+突合対象外で、``self`` の空キー行は ``removed``、``other`` の空キー行は
+``added`` に、**元表の行順で**入れる。空でないキーの重複は
+``TableDuplicateKeyError`` で止める（同じ表に空キーが何行あっても
+エラーにならない）。
 
 Args:
     other: 突合先の ``Table``。
@@ -1306,6 +1311,11 @@ def changes(self, *, key: str, order_by: str | None=None) -> Table:
 ``order_by`` が ``None`` なら、並べ替えずに表の並び順のまま比べる。
 
 返す順: キーが最初に出てきた順、その中は並べ替え後の順。
+
+空キー（``normalize`` 後に ``""``。``None``・空白だけを含む）の行は
+**無視する**。``Table.diff()`` / ``transfer()`` と同じ規則で、
+空キー行は重複検査の対象にもならない。``order_by`` が空の空キー行も
+エラーにしない（そもそも対象から除かれるため）。
 
 Args:
     key: 履歴をまとめるキー列名。

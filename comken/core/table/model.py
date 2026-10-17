@@ -405,8 +405,13 @@ class Table:
         """self と other を ``key`` 列で突合し、差分を返す。
 
         CSV と Excel をまたいだ比較にも使える（"1000" と 1000 は同一視される）。
-        正規化後のキーがどちらの表でも重複していたら ``TableDuplicateKeyError``
-        を送出する（``Table.index()`` と同じ例外）。
+        正規化後の**空でない**キーがどちらの表でも重複していたら
+        ``TableDuplicateKeyError`` を送出する（``Table.index()`` と同じ例外）。
+        空キー（``normalize`` 後に ``""``。``None``・空白だけを含む）は
+        突合対象外で、``self`` の空キー行は ``removed``、``other`` の空キー行は
+        ``added`` に、**元表の行順で**入れる。空でないキーの重複は
+        ``TableDuplicateKeyError`` で止める（同じ表に空キーが何行あっても
+        エラーにならない）。
 
         Args:
             other: 突合先の ``Table``。
@@ -433,16 +438,31 @@ class Table:
                     f"キー列が見つかりません: {key}\n存在する列: {', '.join(target.columns)}"
                     "\n対処: Excel・CSV の列名を確認してください。"
                 )
-        self_by_key = index_for_diff(self.to_rows(), key)
-        other_by_key = index_for_diff(other.to_rows(), key)
+        self_rows = self.to_rows()
+        other_rows = other.to_rows()
+        self_by_key = index_for_diff(self_rows, key)
+        other_by_key = index_for_diff(other_rows, key)
 
-        added_rows = [other_by_key[k] for k in other_by_key if k not in self_by_key]
-        removed_rows = [self_by_key[k] for k in self_by_key if k not in other_by_key]
+        # 空キー行は索引化されない（index_for_diff の挙動）ので、``added`` /
+        # ``removed`` には元表を順に見て「空キーまたは相手側にキーが無い行」を
+        # 集める。``index_for_diff`` は行順を保った dict を返すので、
+        # キーが無い行を相手側の索引から順に取り出す形でも元表順が保たれる。
+        removed_rows = [
+            row
+            for row in self_rows
+            if normalize(row[key]) == "" or normalize(row[key]) not in other_by_key
+        ]
+        added_rows = [
+            row
+            for row in other_rows
+            if normalize(row[key]) == "" or normalize(row[key]) not in self_by_key
+        ]
         changed_cells: list[tuple[str, Any, dict[str, tuple[Any, Any]]]] = []
-        for k in self_by_key:
-            if k not in other_by_key:
+        for k, self_row in self_by_key.items():
+            other_row = other_by_key.get(k)
+            if other_row is None:
                 continue
-            columns = diff_row(self_by_key[k], other_by_key[k])
+            columns = diff_row(self_row, other_row)
             if columns:
                 changed_cells.append((k, None, columns))
         changed = changes_table(key, changed_cells)
@@ -553,6 +573,11 @@ class Table:
 
         返す順: キーが最初に出てきた順、その中は並べ替え後の順。
 
+        空キー（``normalize`` 後に ``""``。``None``・空白だけを含む）の行は
+        **無視する**。``Table.diff()`` / ``transfer()`` と同じ規則で、
+        空キー行は重複検査の対象にもならない。``order_by`` が空の空キー行も
+        エラーにしない（そもそも対象から除かれるため）。
+
         Args:
             key: 履歴をまとめるキー列名。
             order_by: 並べ替えに使う列名。``None`` なら表の並び順のまま比べる。
@@ -579,33 +604,14 @@ class Table:
         rows_by_key: dict[str, list[Row]] = {}
         for row in self._rows:
             normalized_key = normalize(row[key])
+            # 空キー行は changes() の対象外（diff() / transfer() と同じ規則）
+            if normalized_key == "":
+                continue
             rows_by_key.setdefault(normalized_key, []).append(row)
 
         if order_by is not None:
             for rows in rows_by_key.values():
-                # 空セル（``None`` / ``""``）は並べ替えの基準にできない。どちらが
-                # 古いか決められないため、利用側で埋めてから再実行してもらう。
-                empty_index = next(
-                    (index for index, row in enumerate(rows) if row[order_by] == ""),
-                    None,
-                )
-                if empty_index is not None:
-                    bad_row = rows[empty_index]
-                    raise TableError(
-                        f"列「{order_by}」に空の行があるため changes() で並べ替えできません。"
-                        f"（{key}={bad_row[key]!r}）"
-                        "\n対処: 空セルに履歴上の日時を埋めてから実行してください。"
-                    )
-                try:
-                    sorted_rows = sorted(rows, key=lambda r: r[order_by])
-                except TypeError as exc:
-                    raise TableError(
-                        f"列「{order_by}」の値の型が揃っていないため changes() で"
-                        f"並べ替えできません。"
-                        f"（{key}={rows[0][key]!r}）"
-                        "\n対処: 列「{order_by}」の値を文字列か数値に揃えてください。"
-                    ) from exc
-                rows[:] = sorted_rows
+                self._sort_changes_group(rows, order_by, key)
 
         exclude = {key, order_by} if order_by is not None else {key}
         changed_cells: list[tuple[str, Any, dict[str, tuple[Any, Any]]]] = []
@@ -622,6 +628,39 @@ class Table:
 
         logger.debug("Table changes 完了: %d セル", len(result))
         return result
+
+    @staticmethod
+    def _sort_changes_group(rows: list[Row], order_by: str, key: str) -> None:
+        """``changes()`` の 1 キー分の行を ``order_by`` 昇順で並べ替える（内部用）。
+
+        ``order_by`` 列に空（``None`` / ``""``）の行がある、または値の型が混ざって
+        いて ``sorted`` が ``TypeError`` を出すときは ``TableError`` に変換する。
+        rows は破壊的にソートされる。
+        """
+        # 空セル（``None`` / ``""``）は並べ替えの基準にできない。どちらが
+        # 古いか決められないため、利用側で埋めてから再実行してもらう。
+        # 空キー行は既に除外済みなので、ここで空になるのは空でないキーの行だけ。
+        empty_index = next(
+            (index for index, row in enumerate(rows) if row[order_by] == ""),
+            None,
+        )
+        if empty_index is not None:
+            bad_row = rows[empty_index]
+            raise TableError(
+                f"列「{order_by}」に空の行があるため changes() で並べ替えできません。"
+                f"（{key}={bad_row[key]!r}）"
+                "\n対処: 空セルに履歴上の日時を埋めてから実行してください。"
+            )
+        try:
+            sorted_rows = sorted(rows, key=lambda r: r[order_by])
+        except TypeError as exc:
+            raise TableError(
+                f"列「{order_by}」の値の型が揃っていないため changes() で"
+                f"並べ替えできません。"
+                f"（{key}={rows[0][key]!r}）"
+                f"\n対処: 列「{order_by}」の値を文字列か数値に揃えてください。"
+            ) from exc
+        rows[:] = sorted_rows
 
     def _iter_rows_for_update(self) -> Iterator[Row]:
         """ライブラリ内部で更新する実体行を返す。"""
