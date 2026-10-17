@@ -17,11 +17,11 @@ from comken.core.logger.environment import (
     ENVIRONMENT_HANDLER_NAME,
     LOCAL_HANDLER_NAME,
     LOG_FORMAT,
-    _compute_root_level,
-    _external_debug_filter,
-    _guard_root_handlers,
-    _log_version_once,
-    _warn_external_handlers_allowed,
+    compute_root_level,
+    external_debug_filter,
+    guard_root_handlers,
+    log_version_once,
+    warn_external_handlers_allowed,
 )
 from comken.runtime import is_debug
 
@@ -65,7 +65,7 @@ def setup_local_logging(
 
     root_logger = logging.getLogger()
     existing = root_logger.handlers[:]
-    external_allowed = _guard_root_handlers(existing, side="local", allow_existing=allow_existing)
+    external_allowed = guard_root_handlers(existing, side="local", allow_existing=allow_existing)
 
     project_path = project_dir()
     log_path = Path(path) if path is not None else project_path / "logs"
@@ -84,7 +84,7 @@ def setup_local_logging(
     local_file_handler.set_name(LOCAL_HANDLER_NAME)
     local_file_handler.setLevel(file_level)
     local_file_handler.setFormatter(formatter)
-    local_file_handler.addFilter(_external_debug_filter)
+    local_file_handler.addFilter(external_debug_filter)
 
     if ENVIRONMENT_HANDLER_NAME in {h.name for h in existing}:
         # setup_logging() が作った console を使い回し、同じログが画面へ2回出るのを防ぐ。
@@ -95,7 +95,7 @@ def setup_local_logging(
         console_handler.set_name(CONSOLE_HANDLER_NAME)
         console_handler.setLevel(console_level)
         console_handler.setFormatter(formatter)
-        console_handler.addFilter(_external_debug_filter)
+        console_handler.addFilter(external_debug_filter)
         root_logger.addHandler(console_handler)
     console_handler.setLevel(console_level)
     root_logger.addHandler(local_file_handler)
@@ -103,13 +103,13 @@ def setup_local_logging(
     # 他者の handler は対象に含めない — 外部の NOTSET(0) ハンドラーが混ざると
     # min が 0 を返し、root まで NOTSET に巻き戻されて isEnabledFor() が
     # DEBUG まで通す穴になるため。
-    root_logger.setLevel(_compute_root_level(root_logger.handlers))
+    root_logger.setLevel(compute_root_level(root_logger.handlers))
 
     # 警告は comken の handler を root に追加し終えてから出す。先に出すと
     # 警告が comken のログファイルに残らず、何と共存したか追跡できなくなる。
     if external_allowed:
-        _warn_external_handlers_allowed("setup_local_logging()", existing)
+        warn_external_handlers_allowed("setup_local_logging()", existing)
     # 出力先が用意できた直後（かつ例外で途中終了しなかったとき）にだけ記録する。
     # ``setup_logging()`` と ``setup_local_logging()`` のどちらから先に呼んでも
     # 1 回しか出ない（cf. HISTORY.md 27 章）。
-    _log_version_once()
+    log_version_once()

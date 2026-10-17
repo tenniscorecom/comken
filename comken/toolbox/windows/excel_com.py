@@ -29,7 +29,7 @@ from comken.exceptions import (
     ExcelApplicationNotAvailableError,
     ExcelError,
 )
-from comken.exceptions.tables import _coerce_to_str
+from comken.exceptions.tables import coerce_to_str
 from comken.runtime import dry_run_log, is_dry_run
 
 logger = logging.getLogger(__name__)
@@ -154,7 +154,7 @@ class ExcelCOMHandler(FileBase):
 
     def _sheet(self, name: str) -> Any:
         """シートオブジェクトを返す。"""
-        return self._wb.Sheets(_coerce_to_str(name, "sheet_name", stacklevel=3))
+        return self._wb.Sheets(coerce_to_str(name, "sheet_name", stacklevel=3))
 
     @measure
     def read_cell(self, sheet_name: str, row: int, col: int | str) -> Any:

@@ -116,7 +116,7 @@ class _ExternalDebugFilter(logging.Filter):
 # それぞれの handler へ ``addFilter`` する。 同じインスタンスなので setup_logging() が
 # setup_local_logging() の console handler を使い回す場合に ``Handler.addFilter`` 側の
 # 同一性チェック (``filter in self.filters``) で二重に付かない。
-_external_debug_filter = _ExternalDebugFilter()
+external_debug_filter = _ExternalDebugFilter()
 
 
 def setup_logging(site: type[LoggerSite], *, allow_existing: bool = False) -> None:
@@ -139,7 +139,7 @@ def setup_logging(site: type[LoggerSite], *, allow_existing: bool = False) -> No
     """
     root_logger = logging.getLogger()
     existing = root_logger.handlers[:]
-    external_allowed = _guard_root_handlers(existing, side="setup", allow_existing=allow_existing)
+    external_allowed = guard_root_handlers(existing, side="setup", allow_existing=allow_existing)
 
     site.check_owner()
     # ファイルを作る前に止める。空のフォルダが現場へ残ると
@@ -181,34 +181,34 @@ def setup_logging(site: type[LoggerSite], *, allow_existing: bool = False) -> No
         console_handler.set_name(CONSOLE_HANDLER_NAME)
         console_handler.setLevel(logging.INFO)
         console_handler.setFormatter(formatter)
-        console_handler.addFilter(_external_debug_filter)
+        console_handler.addFilter(external_debug_filter)
         root_logger.addHandler(console_handler)
     environment_file_handler = logging.FileHandler(log_path, encoding="utf-8")
     environment_file_handler.set_name(ENVIRONMENT_HANDLER_NAME)
     environment_file_handler.setLevel(logging.INFO)
     environment_file_handler.setFormatter(formatter)
-    environment_file_handler.addFilter(_external_debug_filter)
+    environment_file_handler.addFilter(external_debug_filter)
     root_logger.addHandler(environment_file_handler)
 
-    root_logger.setLevel(_compute_root_level(root_logger.handlers))
+    root_logger.setLevel(compute_root_level(root_logger.handlers))
 
     # 警告は comken の handler を root に追加し終えてから出す。先に出すと
     # 警告が comken のログファイルに残らず、何と共存したか追跡できなくなる。
     if external_allowed:
-        _warn_external_handlers_allowed("setup_logging()", existing)
+        warn_external_handlers_allowed("setup_logging()", existing)
     # 出力先が用意できた直後（かつ例外で途中終了しなかったとき）にだけ記録する。
     # 出力先が無い段階で出すと、その行は捨てられてフラグだけ立ち、
     # あとでログを設定しても 1 行も出ない（cf. HISTORY.md 27 章）。
-    _log_version_once()
+    log_version_once()
 
 
-def _compute_root_level(handlers: list[logging.Handler]) -> int:
+def compute_root_level(handlers: list[logging.Handler]) -> int:
     """comken 管理下の handler のうち最も低いレベルを返す。"""
     levels = [h.level for h in handlers if h.name in COMKEN_HANDLER_NAMES]
     return min(levels) if levels else logging.INFO
 
 
-def _log_version_once() -> None:
+def log_version_once() -> None:
     """comken のバージョンを INFO ログへ 1 回だけ記録する。
 
     ``setup_logging()`` / ``setup_local_logging()`` の両方で呼ばれても
@@ -249,7 +249,7 @@ def _classify_root_handlers(
     return has_environment, has_local, has_both, has_external
 
 
-def _guard_root_handlers(
+def guard_root_handlers(
     handlers: list[logging.Handler],
     side: str,
     allow_existing: bool,
@@ -271,7 +271,7 @@ def _guard_root_handlers(
     Returns:
         外部 handler を ``allow_existing=True`` で通した場合に ``True``。
         呼び出し側は comken の handler を root に追加し終えた**後**に
-        ``_warn_external_handlers_allowed()`` を呼び、警告が comken の
+        ``warn_external_handlers_allowed()`` を呼び、警告が comken の
         ログファイルへ確実に残る順序にする。判定と分岐はこの関数内に
         閉じ、呼び出し側へ散らさない。
     """
@@ -323,7 +323,7 @@ def _format_external_handlers(handlers: list[logging.Handler]) -> list[str]:
     return lines
 
 
-def _warn_external_handlers_allowed(func_name: str, handlers: list[logging.Handler]) -> None:
+def warn_external_handlers_allowed(func_name: str, handlers: list[logging.Handler]) -> None:
     """``allow_existing=True`` で外部 handler を残したまま処理を進めた事実を警告ログに残す。"""
     external_descriptions = _format_external_handlers(handlers)
     logging.getLogger().warning(

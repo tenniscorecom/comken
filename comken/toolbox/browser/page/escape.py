@@ -11,12 +11,12 @@ from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 
 from comken.toolbox.browser.locator import Locator
-from comken.toolbox.browser.page.base import _PageBase
+from comken.toolbox.browser.page.base import PageBase
 
 logger = logging.getLogger(__name__)
 
 
-class EscapeMixin(_PageBase):
+class EscapeMixin(PageBase):
     """用意されていない操作をするための逃げ道（frame / find_element* / execute_script）。"""
 
     @contextmanager

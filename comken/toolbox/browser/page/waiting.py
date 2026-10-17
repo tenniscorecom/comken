@@ -10,7 +10,7 @@ from selenium.webdriver.support import expected_conditions as EC
 
 from comken.exceptions import ElementNotFoundError
 from comken.toolbox.browser.locator import Locator
-from comken.toolbox.browser.page.base import _PageBase
+from comken.toolbox.browser.page.base import PageBase
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class WaitingMixin(_PageBase):
+class WaitingMixin(PageBase):
     """表示・非表示を待つ（wait_visible / wait_invisible / wait_until_any）。"""
 
     def wait_visible(self, locator: Locator) -> None:

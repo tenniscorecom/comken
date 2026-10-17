@@ -65,10 +65,15 @@ comken を使うときのルール（import してよい名前・例外・ログ
 | 変数 | snake_case | `csv_lookup`, `matched_rows` |
 | モジュール・ファイル名 | snake_case | `handler.py`, `driver_update.py` |
 | フォルダ名 | snake_case | `excel/`, `browser/` |
-| 内部用（外から呼ばない） | `_` プレフィックス | `_sheet()`, `_click()` |
+| 内部用（同じファイルの中だけで使う） | `_` プレフィックス | `_sheet()`, `_click()` |
 | config.ini のセクション・キー | UPPER_SNAKE_CASE | `[FILES]`, `OUTPUT_FOLDER` |
 | テストクラス | `Test` + PascalCase | `TestExcel`, `TestCSV` |
 | テストメソッド | `test_` + snake_case | `test_reads_all_rows` |
+
+**`_` は「そのファイルの中だけで使う」印。** 同じパッケージの別ファイルから使う内部の関数・クラスには
+`_` を付けない（例: `Table.transfer_from()` が呼ぶ `transfer_tables()`）。別ファイルから `_` 付きの名前を
+import しない。利用者に公開するかどうかは名前ではなく `__all__`（`tests/test_facade.py` が正本）で決める。
+`tests/test_private_naming.py` が、別ファイルからの `_` 付きの使用を検出する。
 
 `cfg`（config）、`src`（source）、`tmp`（temporary）は広く定着した慣用略語として許容する。
 Excel のブック・シートは `wb` / `ws` と略さず `workbook` / `worksheet` と書く。

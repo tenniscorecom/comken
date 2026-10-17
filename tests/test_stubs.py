@@ -1,19 +1,19 @@
 """stubs.generate_stub() の相対パス処理のテスト。
 
-``_parse_value`` に ``base_dir`` を渡したことで、 ``./input`` のような
+``parse_value`` に ``base_dir`` を渡したことで、 ``./input`` のような
 相対パスを書いた ini からスタブを生成したときも、 ``Path`` 型ヒントが
 出ること（=実行時とスタブの型が揃うこと）を確かめる。
 """
 
 
 class TestStubRelativePath:
-    """スタブ生成が ``_parse_value`` と同じ判定で ``Path`` を返すことを確認する。"""
+    """スタブ生成が ``parse_value`` と同じ判定で ``Path`` を返すことを確認する。"""
 
     def test_relative_path_in_stub_uses_path_type(self, tmp_path):
         """相対パス（``./input``）が書かれた ini から ``generate_stub`` し、
         生成された ``.pyi`` に ``Path`` 型ヒントが出ていることを確認する。
 
-        依頼前は ``_parse_value`` が ``base_dir`` を受け取らず相対パスを
+        依頼前は ``parse_value`` が ``base_dir`` を受け取らず相対パスを
         ``str`` のまま返していたため、スタブも ``INPUT: str`` となり、
         実行時が ``Path`` なら補完が嘘になる。 修正後は ``Path`` が出る。
         """

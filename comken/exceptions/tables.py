@@ -1,6 +1,6 @@
 """comken/exceptions/tables.py — 表データ・列・型変換に関する例外。
 
-_coerce_to_str ヘルパーとテーブル／列の例外をまとめる。"""
+coerce_to_str ヘルパーとテーブル／列の例外をまとめる。"""
 
 import warnings
 
@@ -134,7 +134,7 @@ class _Warnings:
     COERCION = "{param} に {type_name}（{value!r}）が渡されました。{expected} に変換します。"
 
 
-def _coerce_to_str(value: object, param: str, stacklevel: int = 3) -> str:
+def coerce_to_str(value: object, param: str, stacklevel: int = 3) -> str:
     """``object`` を ``str`` に揃える。 ``None`` は ``TypeError``、 ``str`` 以外は警告して変換する。
 
     Args:

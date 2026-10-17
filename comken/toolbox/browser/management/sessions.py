@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     from comken.toolbox.browser.sitebase import SiteBase
 from comken.toolbox.browser.locator import Locator
 from comken.toolbox.browser.management.startup import start_driver
-from comken.toolbox.browser.management.tabs import _TabManager
+from comken.toolbox.browser.management.tabs import TabManager
 from comken.toolbox.browser.options import BrowserOptions
 
 logger = logging.getLogger(__name__)
@@ -254,7 +254,7 @@ class BrowserSession:
         """
         seconds = timeout if timeout is not None else _POPUP_TAB_TIMEOUT_SECONDS
         with self._operating("popup_tab"):
-            tabs = _TabManager(self._require_driver(), self.name)
+            tabs = TabManager(self._require_driver(), self.name)
             with tabs.popup(seconds):
                 yield self
 
@@ -300,7 +300,7 @@ class BrowserSession:
         """
         seconds = timeout if timeout is not None else self.wait_seconds
         with self._operating("load_many"):
-            tabs = _TabManager(self._require_driver(), self.name)
+            tabs = TabManager(self._require_driver(), self.name)
             yield from tabs.load_many(urls, ready, max_open, seconds)
 
     # ------------------------------------------------------------ 内部連携用

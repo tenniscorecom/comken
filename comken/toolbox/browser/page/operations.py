@@ -10,12 +10,12 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
 
 from comken.toolbox.browser.locator import Locator
-from comken.toolbox.browser.page.base import _PageBase
+from comken.toolbox.browser.page.base import PageBase
 
 logger = logging.getLogger(__name__)
 
 
-class OperationsMixin(_PageBase):
+class OperationsMixin(PageBase):
     """要素の操作（click / input / select / drag_drop / scroll）。"""
 
     def click(self, locator: Locator, index: int = 0) -> None:

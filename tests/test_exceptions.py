@@ -18,7 +18,7 @@ from comken.exceptions import (
     SalesforceReportFormatError,
     SheetNotFoundError,
 )
-from comken.exceptions.tables import _coerce_to_str
+from comken.exceptions.tables import coerce_to_str
 
 # 複数のテストで使い回す長めの文字列は定数に置き、行長 100 を超えないようにする
 _ACCESS_DENIED_DETAIL = "Analytics API 権限がありません"
@@ -126,16 +126,16 @@ def test_individual_error_type_and_message(
 
 
 class TestCoerceToStr:
-    """_coerce_to_str のテスト。"""
+    """coerce_to_str のテスト。"""
 
     def test_none_raises_type_error(self) -> None:
         with pytest.raises(TypeError, match="None"):
-            _coerce_to_str(None, "sheet_name")
+            coerce_to_str(None, "sheet_name")
 
     def test_wrong_type_warns_and_converts(self) -> None:
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            result = _coerce_to_str(1, "sheet_name")
+            result = coerce_to_str(1, "sheet_name")
         assert result == "1"
         assert len(caught) == 1
         assert issubclass(caught[0].category, UserWarning)
@@ -143,7 +143,7 @@ class TestCoerceToStr:
     def test_correct_type_no_warning(self) -> None:
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            result = _coerce_to_str("ok", "sheet_name")
+            result = coerce_to_str("ok", "sheet_name")
         assert result == "ok"
         assert len(caught) == 0
 

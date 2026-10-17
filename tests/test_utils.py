@@ -1127,7 +1127,7 @@ class TestIsEnabledMark:
 
         config.ini の ``1`` を bool 化しないための既存仕様。 ``is_enabled_mark``
         が ``"1"`` を True にしても、 ``is_true_word`` 側の挙動は壊さないこと
-        （ ``Config`` の ``_parse_value`` が ``is_true_word`` を使うため）。
+        （ ``Config`` の ``parse_value`` が ``is_true_word`` を使うため）。
         """
         assert is_true_word("1") is False
 

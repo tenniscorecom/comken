@@ -20,7 +20,7 @@ class Config:
 
 config.ini を読み込み、config.SECTION.KEY の形式でアクセスできるクラス。
 
-値の型変換（_parse_value の変換順と同じ）:
+値の型変換（parse_value の変換順と同じ）:
     - true / false → bool
     - [a, b, c] → list[str]
     - 絶対パス（C:\ / \\ / /）→ Path
@@ -46,7 +46,7 @@ config.ini の例（セクション名・キー名は大文字で書く）:
 同じインスタンスが返る。 **同じパスのファイルを書き換えても反映されない**
 （反映するには新しいプロセスを起動する）。 ``stat()`` による更新確認は
 しない（業務ツールは実行中の設定変更を想定しない。詳細は
-``_get_or_build_config`` の docstring）。
+``get_or_build_config`` の docstring）。
 
 **Config は継承できない**。``__new__`` がパス単位でキャッシュ済みの素の
 ``Config`` を返すため、サブクラスを定義してもサブクラス側で足したメソッドは
@@ -153,7 +153,7 @@ class Config:
 
 config.ini を読み込み、config.SECTION.KEY の形式でアクセスできるクラス。
 
-値の型変換（_parse_value の変換順と同じ）:
+値の型変換（parse_value の変換順と同じ）:
     - true / false → bool
     - [a, b, c] → list[str]
     - 絶対パス（C:\ / \\ / /）→ Path
@@ -179,7 +179,7 @@ config.ini の例（セクション名・キー名は大文字で書く）:
 同じインスタンスが返る。 **同じパスのファイルを書き換えても反映されない**
 （反映するには新しいプロセスを起動する）。 ``stat()`` による更新確認は
 しない（業務ツールは実行中の設定変更を想定しない。詳細は
-``_get_or_build_config`` の docstring）。
+``get_or_build_config`` の docstring）。
 
 **Config は継承できない**。``__new__`` がパス単位でキャッシュ済みの素の
 ``Config`` を返すため、サブクラスを定義してもサブクラス側で足したメソッドは
@@ -3309,7 +3309,7 @@ Args:
 #### `to`
 
 ```text
-def to[P: _PageBase](self, page_class: type[P]) -> P:
+def to[P: PageBase](self, page_class: type[P]) -> P:
 ```
 
 ##### 説明
@@ -4203,7 +4203,7 @@ Args:
 #### `to`
 
 ```text
-def to[P: _PageBase](self, page_class: type[P]) -> P:
+def to[P: PageBase](self, page_class: type[P]) -> P:
 ```
 
 ##### 説明

@@ -6,12 +6,12 @@ import logging
 from pathlib import Path
 from typing import Self
 
-from comken.toolbox.browser.page.base import _PageBase
+from comken.toolbox.browser.page.base import PageBase
 
 logger = logging.getLogger(__name__)
 
 
-class NavigationMixin(_PageBase):
+class NavigationMixin(PageBase):
     """画面の移動（open / save_screenshot）。"""
 
     def open(self, url: str) -> Self:

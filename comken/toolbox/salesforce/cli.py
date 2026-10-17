@@ -50,7 +50,7 @@ from comken.toolbox.salesforce.auth.oauth_refresh import AuthorizationRequest, R
 from comken.toolbox.salesforce.auth.rotation import (
     ROTATION_COMPONENT,
     SalesforceCredentialRotator,
-    _staged_credentials_of,
+    staged_credentials_of,
 )
 from comken.toolbox.salesforce.client import SalesforceBase
 from comken.toolbox.salesforce.sites import SITES, SolutionSandbox, site_for
@@ -176,14 +176,14 @@ def _run_rotate(args: argparse.Namespace) -> None:
 def _stage_only(args: argparse.Namespace) -> None:
     """新しい secret を発行するところまでで止める（切り替えない）。"""
     with _open(args) as sf:
-        from comken.toolbox.salesforce.auth.rotation import _consumer_id_of
+        from comken.toolbox.salesforce.auth.rotation import consumer_id_of
 
         credentials, _ = sf.request(
             "GET",
             sf.data_path(f"/apps/oauth/credentials/{args.app_id}"),
             component=ROTATION_COMPONENT,
         )
-        consumer_id = _consumer_id_of(credentials)
+        consumer_id = consumer_id_of(credentials)
         body, _ = sf.request(
             "POST",
             sf.data_path(f"/apps/oauth/credentials/{args.app_id}/{consumer_id}/staged"),
@@ -191,7 +191,7 @@ def _stage_only(args: argparse.Namespace) -> None:
         )
     print("staged 作成の応答:")
     _print_shape(body)
-    staged = _staged_credentials_of(body)  # 取り出せるかをここで確かめる
+    staged = staged_credentials_of(body)  # 取り出せるかをここで確かめる
     print(f"\n必要な3項目を取り出せました（staged id: {staged.staged_id}）")
     print("まだ切り替えていません。切り替えるには --stage-only を外して実行してください。")
 

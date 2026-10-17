@@ -8,12 +8,12 @@ from typing import cast
 from selenium.webdriver.common.alert import Alert
 from selenium.webdriver.support import expected_conditions as EC
 
-from comken.toolbox.browser.page.base import _PageBase
+from comken.toolbox.browser.page.base import PageBase
 
 logger = logging.getLogger(__name__)
 
 
-class AlertsMixin(_PageBase):
+class AlertsMixin(PageBase):
     """警告ダイアログの操作（alert_accept / alert_dismiss / read_alert_text）。"""
 
     def alert_accept(self) -> None:

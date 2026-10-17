@@ -40,7 +40,7 @@ TAB_POLL_INTERVAL_SECONDS = 0.5
 NEW_TAB_TIMEOUT_SECONDS = 10
 
 
-class _TabManager:
+class TabManager:
     """1つの WebDriver のタブを開閉し、元のタブへ確実に戻す。"""
 
     def __init__(self, driver: webdriver.Edge, session_name: str) -> None:

@@ -1,7 +1,7 @@
 """comken/toolbox/browser/page/base.py — Page の共有状態と内部ヘルパー。
 
 Page を構成する各 Mixin（navigation.py / operations.py / reading.py /
-waiting.py / alerts.py / escape.py）はすべてこの _PageBase を継承する。
+waiting.py / alerts.py / escape.py）はすべてこの PageBase を継承する。
 共有する状態（session / _wait_seconds / _wait）と、要素待機の失敗を
 ElementNotFoundError に包み直す _until() をここに置く。
 """
@@ -24,7 +24,7 @@ from comken.toolbox.browser.management import BrowserSession
 logger = logging.getLogger(__name__)
 
 
-class _PageBase:
+class PageBase:
     """Page の共有状態（session / 待機設定）と内部ヘルパーを持つ。
 
     Attributes:
@@ -48,7 +48,7 @@ class _PageBase:
             self._wait_seconds,
         )
 
-    def to[P: _PageBase](self, page_class: type[P]) -> P:
+    def to[P: PageBase](self, page_class: type[P]) -> P:
         """遷移先の画面クラスを作る（同じブラウザを引き継ぐ）。
 
         画面が変わるメソッドの最後で使う。

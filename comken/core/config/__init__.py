@@ -52,8 +52,8 @@ from typing import Any
 
 from comken.core.config.base import (
     Config,
-    _default_config_path,
-    _get_or_build_config,
+    default_config_path,
+    get_or_build_config,
 )
 
 # ── 公開 API ────────────────────────────────────────────────────────────────
@@ -69,5 +69,5 @@ def __getattr__(name: str) -> Any:
     # 戻り値は ``Config.__getattr__`` と同じ理由で ``Any``
     # （セクションは config.ini から実行時に作るため）。
     if name.isupper():
-        return getattr(_get_or_build_config(_default_config_path()), name)
+        return getattr(get_or_build_config(default_config_path()), name)
     raise AttributeError(f"module 'comken.core.config' has no attribute {name!r}")

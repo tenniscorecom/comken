@@ -958,12 +958,12 @@ class TestGenerateStub:
         """
         import configparser
 
-        from comken.core.config.base import _build_section_map
+        from comken.core.config.base import build_section_map
         from comken.core.config.stubs import _build_stub_content
 
         cfg = configparser.ConfigParser(interpolation=None)
         cfg.read(ini, encoding="utf-8")
-        text = _build_stub_content(cfg, _build_section_map(cfg), ini.parent)
+        text = _build_stub_content(cfg, build_section_map(cfg), ini.parent)
 
         assert "from typing import Any" not in text
         assert "-> Any" not in text
@@ -974,12 +974,12 @@ class TestGenerateStub:
         """
         import configparser
 
-        from comken.core.config.base import _build_section_map
+        from comken.core.config.base import build_section_map
         from comken.core.config.stubs import _build_module_stub_content
 
         cfg = configparser.ConfigParser(interpolation=None)
         cfg.read(ini, encoding="utf-8")
-        text = _build_module_stub_content(cfg, _build_section_map(cfg), ini.parent)
+        text = _build_module_stub_content(cfg, build_section_map(cfg), ini.parent)
 
         assert "from typing import Any\n" in text
         assert "def __getattr__" in text

@@ -6,7 +6,7 @@ DPAPI は Windows ユーザーと PC に紐付くため、実行した PC だけ
 
 REST レスポンスの正確なスキーマは公式リファレンスで確認できていない。
 社内環境で確認してフィールド名が異なった場合に1箇所だけ直せるよう、取り出しは
-``_staged_credentials_of`` に集約している。
+``staged_credentials_of`` に集約している。
 """
 
 import datetime
@@ -135,13 +135,13 @@ class SalesforceCredentialRotator:
             self._client.data_path(f"/apps/oauth/credentials/{self._app_id}"),
             component=ROTATION_COMPONENT,
         )
-        consumer_id = _consumer_id_of(credentials_response)
+        consumer_id = consumer_id_of(credentials_response)
         base_path = self._client.data_path(f"/apps/oauth/credentials/{self._app_id}/{consumer_id}")
         logger.debug("staged な新資格情報を作成します: consumer_id=%s", consumer_id)
         response, _ = self._client.request(
             "POST", f"{base_path}/staged", component=ROTATION_COMPONENT
         )
-        staged = _staged_credentials_of(response)
+        staged = staged_credentials_of(response)
         logger.debug("staged な新資格情報を受け取りました: staged_id=%s", staged.staged_id)
 
         # 保存前に rotate すると、新 secret を失ったまま旧 secret の猶予だけが進む。
@@ -188,7 +188,7 @@ class _StagedCredentials:
     consumer_secret: str
 
 
-def _staged_credentials_of(response: dict[str, Any] | list[Any] | str | None) -> _StagedCredentials:
+def staged_credentials_of(response: dict[str, Any] | list[Any] | str | None) -> _StagedCredentials:
     """未確認のレスポンススキーマから必要な3項目を取り出す唯一の場所。"""
     if not isinstance(response, dict):
         raise _credential_rotation_error(
@@ -206,7 +206,7 @@ def _staged_credentials_of(response: dict[str, Any] | list[Any] | str | None) ->
         ) from error
 
 
-def _consumer_id_of(response: dict[str, Any] | list[Any] | str | None) -> str:
+def consumer_id_of(response: dict[str, Any] | list[Any] | str | None) -> str:
     """未確認の資格情報一覧スキーマから consumer ID を取り出す唯一の場所。"""
     candidate = response[0] if isinstance(response, list) and response else response
     if not isinstance(candidate, dict) or "consumerId" not in candidate:

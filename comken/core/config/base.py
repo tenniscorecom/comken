@@ -7,7 +7,7 @@ import ... で必要な名前を取り出して使う。
 
 Config() の構築は config.ini 読み込みとエディタ補完スタブ（stubs.py）の
 自動更新を含む重い処理。 __init__.py の __getattr__ はこのモジュールが
-持つ _get_or_build_config / _default_config_path を経由して
+持つ get_or_build_config / default_config_path を経由して
 Config() を 遅延構築する（初回 config.SECTION アクセス時のみ）。
 """
 
@@ -67,9 +67,9 @@ def _section_not_found_error(
     # とだけ出て、近い名前（FILE と FILES のように 1 文字違い）が目視で
     # 並んでいるのにも気付けない。編集距離で候補を出し、「もしかして」を添える。
     # 候補が無ければ何も足さない（誤誘導しない）。
-    from comken.exceptions.config import _suggest_close_matches
+    from comken.exceptions.config import suggest_close_matches
 
-    suggestion = _suggest_close_matches(name, existing)
+    suggestion = suggest_close_matches(name, existing)
     suggestion_line = f"\nもしかして: [{suggestion[0]}]" if len(suggestion) == 1 else ""
     if len(suggestion) >= 2:
         suggestion_line = f"\nもしかして: [{suggestion[0]}], [{suggestion[1]}]"
@@ -118,7 +118,7 @@ class _CaseSensitiveConfigParser(configparser.ConfigParser):
 class Config:
     """config.ini を読み込み、config.SECTION.KEY の形式でアクセスできるクラス。
 
-    値の型変換（_parse_value の変換順と同じ）:
+    値の型変換（parse_value の変換順と同じ）:
         - true / false → bool
         - [a, b, c] → list[str]
         - 絶対パス（C:\\ / \\\\ / /）→ Path
@@ -144,7 +144,7 @@ class Config:
     同じインスタンスが返る。 **同じパスのファイルを書き換えても反映されない**
     （反映するには新しいプロセスを起動する）。 ``stat()`` による更新確認は
     しない（業務ツールは実行中の設定変更を想定しない。詳細は
-    ``_get_or_build_config`` の docstring）。
+    ``get_or_build_config`` の docstring）。
 
     **Config は継承できない**。``__new__`` がパス単位でキャッシュ済みの素の
     ``Config`` を返すため、サブクラスを定義してもサブクラス側で足したメソッドは
@@ -178,22 +178,22 @@ class Config:
         raw = str(path)
         cached = _path_resolution_cache_get(raw)
         if cached is not None:
-            return _get_or_build_config(cached)
+            return get_or_build_config(cached)
         p = Path(path)
         if not p.is_absolute():
             p = p.resolve()
         resolved_str = str(p)
         _path_resolution_cache_put(raw, resolved_str)
-        return _get_or_build_config(resolved_str)
+        return get_or_build_config(resolved_str)
 
     def __init__(self, path: str | Path | None = None) -> None:
-        # 実際の構築は ``__new__`` → ``_get_or_build_config`` → ``_initialize`` で
+        # 実際の構築は ``__new__`` → ``get_or_build_config`` → ``_initialize`` で
         # 1 度だけ行われる。 2 回目以降の ``Config(path)`` はキャッシュ済みの
         # インスタンスが返るため、ここでは何もしない。
         return
 
     def _initialize(self, resolved_path: Path) -> None:
-        """``Config.__new__`` から ``_get_or_build_config`` を経由して 1 度だけ呼ばれる。
+        """``Config.__new__`` から ``get_or_build_config`` を経由して 1 度だけ呼ばれる。
 
         ``Config.__init__`` は 2 回目以降の呼び出しで何もしないため、副作用はここに
         集約する。 テストや業務コードが ``Config(path)`` を何度呼んでも、ここの
@@ -225,7 +225,7 @@ class Config:
         # 重複したら黙って捨てずに WARNING を出している（同じ値が読まれているか
         # 利用者が疑わざるを得なくなるため）。
         self._path = path.resolve()
-        section_map = _build_section_map(cfg)
+        section_map = build_section_map(cfg)
         # ↑の関数で空文字だけのセクション名は除外しているため、ここで len==0 でも
         # 例外にはせず空の Config として返す。
         if section_map:
@@ -235,7 +235,7 @@ class Config:
             for stripped_section, original_section in section_map.items():
                 # configparser はキー名の前後空白を既に落とすので、二重 strip は不要
                 options = cfg.options(original_section)
-                # ``_parse_value`` に config.ini の親ディレクトリを渡し、相対パスを
+                # ``parse_value`` に config.ini の親ディレクトリを渡し、相対パスを
                 # そこで解決できるようにする（``./input`` → ``<親>/input``）。
                 # ``self._path`` は ``_initialize`` 冒頭で ``path.resolve()`` 済みの
                 # 絶対パスなので ``.parent`` も絶対パス。
@@ -245,14 +245,14 @@ class Config:
                     keys=[key.upper() for key in options],
                     path=self._path,
                     **{
-                        key.upper(): _parse_value(cfg, original_section, key, base_dir=config_dir)
+                        key.upper(): parse_value(cfg, original_section, key, base_dir=config_dir)
                         for key in options
                     },
                 )
                 setattr(self, stripped_section.upper(), ns)
 
         # エディタ補完用スタブ（src/config.pyi）の自動更新。 1プロセス内で
-        # 1回だけ走る（``Config.__new__`` → ``_get_or_build_config`` の
+        # 1回だけ走る（``Config.__new__`` → ``get_or_build_config`` の
         # ``lru_cache`` で本体が再実行されないため）。 同じパスの config.ini を
         # 書き換えても自動では反映されないが、実務では別プロセスなので問題ない。
         # ``update_stub`` の中身は「内容が同じなら書かない」ガードを持つ
@@ -331,7 +331,7 @@ def _create_from_example(path: Path) -> Path | None:
     return path.resolve()
 
 
-def _build_section_map(cfg: configparser.ConfigParser) -> dict[str, str]:
+def build_section_map(cfg: configparser.ConfigParser) -> dict[str, str]:
     """config.ini のセクション名から前後の空白（全角含む）を落として、整理した対応表を作る。
 
     configparser は `[FILES ]` と `[FILES]` を別セクションとして扱うため、
@@ -399,7 +399,7 @@ def _validate_upper_case(
 # 1度だけ読む（import 時ではないので、config.ini を持たないプロジェクトやテストで
 # comken を import しても失敗しない）。
 #
-# `__getattr__` で初回呼び出し時に `_get_or_build_config` 経由で `Config()` を
+# `__getattr__` で初回呼び出し時に `get_or_build_config` 経由で `Config()` を
 # 生成し委譲する。 生成したインスタンスは **プロセス内で再利用**する
 # （ループ内で `config.SECTION.KEY` を呼ぶたびに `Config()` が新規構築されて
 # config.ini の読み直しと `.pyi` スタブのディスク書き込みが走る問題を避けるため）。
@@ -426,26 +426,26 @@ def _validate_upper_case(
 # 入口で ``Config(path)`` を速くするため、**生のパス文字列 → 解決済み絶対パス** の
 # 1段キャッシュを別に持つ (``_path_resolution_cache``)。 ``Path.resolve()`` 自体が
 # Windows で 1 回 100 マイクロ秒以上かかるため、 同じ相対パスをループ内で何度も
-# 渡すときに見た目の差が大きくならないように挟んでいる。 ``_get_or_build_config``
+# 渡すときに見た目の差が大きくならないように挟んでいる。 ``get_or_build_config``
 # とは別レイヤで、業務ツールの ``Config(path)`` 呼び出しが「``tmp_path`` のような
 # 絶対 Path を渡す」が通常の使い方なら、 ``is_absolute()`` も ``resolve()`` も
 # 呼ばずに済む（ヒット時のコストは ``dict.get`` 1 回ぶん）。
 #
 # キャッシュが増え続けないことの担保:
-# - ``_get_or_build_config`` は ``maxsize=128`` の ``functools.lru_cache``。
+# - ``get_or_build_config`` は ``maxsize=128`` の ``functools.lru_cache``。
 # - ``_path_resolution_cache`` は **同じ maxsize の単純な FIFO**。
 #   古いエントリは自動的に退避する。 テストで大量の ``tmp_path`` を読んでも
 #   エントリ数が増え続けない（手動 evict は不要）。
 
 
 @functools.lru_cache(maxsize=128)
-def _get_or_build_config(resolved_path_str: str) -> Config:
+def get_or_build_config(resolved_path_str: str) -> Config:
     """``Path.resolve()`` 後の絶対パスをキーに、プロセス内で 1 度だけ ``Config`` を構築する。
 
     同じパスで 2 回目を呼ぶとキャッシュ済みのインスタンスを返す。 ファイル I/O は
     1 回だけ（``config.ini`` の読み込み・``_validate_upper_case``・スタブ更新）。
     デフォルト ``Config()``（``from comken import config``）も
-    ``_default_config_path()`` で同じ関数を通る。
+    ``default_config_path()`` で同じ関数を通る。
 
     キャッシュの無効化条件:
         - **同じパスのファイルを書き換えても反映されない**（``stat()`` による
@@ -472,7 +472,7 @@ def _get_or_build_config(resolved_path_str: str) -> Config:
 
 
 @functools.lru_cache(maxsize=1)
-def _default_config_path() -> str:
+def default_config_path() -> str:
     """``from comken import config`` 用のデフォルト config.ini パスを解決する。
 
     ``project_dir()`` は ``sys.argv`` を見て ``Path.resolve()`` を呼ぶため、
@@ -486,7 +486,7 @@ def _default_config_path() -> str:
 
 # ── 入口キャッシュ（生パス文字列 → 解決済み絶対パス） ─────────────────────
 # ``Config(path)`` の入口で ``is_absolute()`` も ``resolve()`` も呼ばずに済むように、
-# キー = ``str(path)``、値 = 解決済み絶対パスを覚える。 ``_get_or_build_config`` の
+# キー = ``str(path)``、値 = 解決済み絶対パスを覚える。 ``get_or_build_config`` の
 # キャッシュとは独立で、 ``maxsize`` は同じ ``128``。 ``OrderedDict`` の move_to_end
 # で LRU 風に FIFO 退避する（``functools.lru_cache`` 相当の挙動を ``OrderedDict``
 # で持つ）。
@@ -557,7 +557,7 @@ def _looks_like_path(value: str) -> bool:
     return "/" in value or "\\" in value
 
 
-def _parse_value(
+def parse_value(
     cfg: configparser.ConfigParser,
     section: str,
     key: str,

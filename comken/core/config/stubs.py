@@ -22,7 +22,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from comken.core.config.base import _parse_value
+from comken.core.config.base import parse_value
 from comken.core.files.atomic import atomic_write
 from comken.core.files.ops import cleanup_stale_tmp
 from comken.exceptions import ComkenFileNotFoundError
@@ -73,9 +73,9 @@ def generate_stub(
         )
 
     # 実行時の Config と同じセクション名（前後空白落とし済み）で補完スタブを出す。
-    from comken.core.config.base import _build_section_map
+    from comken.core.config.base import build_section_map
 
-    section_map = _build_section_map(cfg)
+    section_map = build_section_map(cfg)
     logger.debug(
         "generate_stub: ini=%s, sections=%d, output_path=%s",
         Path(ini_path).resolve(),
@@ -130,9 +130,9 @@ def update_stub(
     補完スタブを出せる。省略時は Config と整合させるため内部で再計算する。
     """
     if section_map is None:
-        from comken.core.config.base import _build_section_map
+        from comken.core.config.base import build_section_map
 
-        section_map = _build_section_map(cfg)
+        section_map = build_section_map(cfg)
     stub_path = _resolve_stub_path(ini_path)
     if stub_path is not None:
         logger.debug(
@@ -168,9 +168,9 @@ def _write_typings_stubs(
     に ``base_dir`` として渡し、相対パスを ``Path`` 型ヒントで出す。
     """
     if section_map is None:
-        from comken.core.config.base import _build_section_map
+        from comken.core.config.base import build_section_map
 
-        section_map = _build_section_map(cfg)
+        section_map = build_section_map(cfg)
     comken_core_typings = project_dir / "typings" / "comken" / "core"
     comken_typings = project_dir / "typings" / "comken"
     _write_stub_atomic(
@@ -243,7 +243,7 @@ def _build_stub_content(
         if not options:
             section_lines.append("    pass")
         for key in options:
-            value = _parse_value(cfg, original_section, key, base_dir=base_dir)
+            value = parse_value(cfg, original_section, key, base_dir=base_dir)
             section_lines.append(f"    {key.upper()}: {_stub_type_name(value)}")
         section_lines.append("")
 
@@ -284,7 +284,7 @@ def _build_module_stub_content(
         if not options:
             section_lines.append("    pass")
         for key in options:
-            value = _parse_value(cfg, original_section, key, base_dir=base_dir)
+            value = parse_value(cfg, original_section, key, base_dir=base_dir)
             section_lines.append(f"    {key.upper()}: {_stub_type_name(value)}")
         section_lines.append("")
 
@@ -353,7 +353,7 @@ def _build_package_init_stub(
         if not options:
             lines.append("    pass")
         for key in options:
-            value = _parse_value(cfg, original_section, key, base_dir=base_dir)
+            value = parse_value(cfg, original_section, key, base_dir=base_dir)
             lines.append(f"    {key.upper()}: {_stub_type_name(value)}")
         lines.append("")
     lines.append("class _ConfigFacade:")

@@ -18,8 +18,8 @@ from comken.core.logger.environment import (
     ENVIRONMENT_HANDLER_NAME,
     ETC_FOLDER_NAME,
     LOCAL_HANDLER_NAME,
-    _external_debug_filter,
     _format_external_handlers,
+    external_debug_filter,
 )
 from comken.core.logger.environment import (
     setup_logging as environment_setup_logging,
@@ -647,7 +647,7 @@ class TestLocal:
 
         config.ini を使わない利用側（Salesforce レポートダウンローダー等）でも
         バージョンを残せるのが本来の要件。 ``setup_logging()`` と挙動を
-        揃えるため、両関数で同じヘルパー（``_log_version_once``）を呼ぶ。
+        揃えるため、両関数で同じヘルパー（``log_version_once``）を呼ぶ。
         """
         from comken import __version__
 
@@ -682,7 +682,7 @@ class TestLocal:
         """``setup_local_logging()`` と ``setup_logging()`` の両方を呼んでも、
         バージョン記録はファイルごとに 1 行ずつではなく、プロセス全体で 1 回。
 
-        ``_version_logged`` を ``_log_version_once`` の側で持つことで、
+        ``_version_logged`` を ``log_version_once`` の側で持つことで、
         どちらの関数から先に呼んでも 2 行に膨らまないことを担保する
         （ローカルファイルと環境ファイルでそれぞれ 1 行だと、 バージョン調査
         のたびに「同じ行が 2 か所にある」状態になって見落としやすい）。
@@ -746,7 +746,7 @@ class TestLocal:
         """
         import comken.core.logger.environment as environment_module
 
-        # _guard_root_handlers で LoggingConflictError を出すため、
+        # guard_root_handlers で LoggingConflictError を出すため、
         # 既に comken 以外の handler を root に乗せた状態を作る。
         existing = logging.StreamHandler()
         existing.set_name("external.library")
@@ -756,9 +756,9 @@ class TestLocal:
                 setup_local_logging()
             # 例外で抜けたので、 フラグは立っていない。
             assert environment_module._version_logged is False
-            # フラグを直接 True にしてから ``_log_version_once`` を呼ぶと、
+            # フラグを直接 True にしてから ``log_version_once`` を呼ぶと、
             # 今度は 1 行出力されフラグが True のままになる（逆確認）。
-            environment_module._log_version_once()
+            environment_module.log_version_once()
             assert environment_module._version_logged is True
         finally:
             logging.getLogger().removeHandler(existing)
@@ -1019,7 +1019,7 @@ class TestLoggingConflict:
     def test_setup_allow_existing_writes_warning_to_comken_log_file(self, tmp_path, monkeypatch):
         """allow_existing=True のとき、警告が comken のログファイルに書かれている。
 
-        警告が ``_guard_root_handlers()`` の中で出ていた旧実装では、警告時点では
+        警告が ``guard_root_handlers()`` の中で出ていた旧実装では、警告時点では
         comken の FileHandler がまだ root に付いていないため、ログファイルへ
         記録されず「何と共存したか」追跡できなかった。修正後は comken の
         handler を root に追加し終えてから警告が出るので、ファイルに警告が
@@ -1257,7 +1257,7 @@ class TestExternalDebugFilter:
         self, isolated_logging, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
         """comken が root に付けた console / environment / local の各 handler は
-        すべて同じ _external_debug_filter インスタンスを共有する。
+        すべて同じ external_debug_filter インスタンスを共有する。
 
         ``Handler.addFilter`` の同一性チェックで重複付与を防いでいるため、
         別の setup_*() から流れた handler でも二重に付かない形を保つ。
@@ -1265,9 +1265,9 @@ class TestExternalDebugFilter:
         self._setup_local_logging_in_debug(tmp_path, monkeypatch)
 
         attached = [f for h in logging.getLogger().handlers for f in h.filters]
-        assert _external_debug_filter in attached
+        assert external_debug_filter in attached
         # 同じインスタンスが複数回付与されていないこと（dedup されている）。
-        assert attached.count(_external_debug_filter) == len(logging.getLogger().handlers)
+        assert attached.count(external_debug_filter) == len(logging.getLogger().handlers)
 
     def test_sibling_folder_with_shared_prefix_is_not_treated_as_external(
         self, isolated_logging, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

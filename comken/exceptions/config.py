@@ -102,7 +102,7 @@ class ConfigKeyNotFoundError(ConfigError, AttributeError):
         # セクション名エラーと同じ理屈で「読んだファイル」を添える。
         # キー名エラーはタイポ由来のことが大半なので、候補は常時計算する。
         location = f"\n読んだファイル: {path}" if path is not None else ""
-        suggestion = _suggest_close_matches(name, existing)
+        suggestion = suggest_close_matches(name, existing)
         suggestion_line = f"\nもしかして: {suggestion[0]}" if len(suggestion) == 1 else ""
         if len(suggestion) >= 2:
             suggestion_line = f"\nもしかして: {suggestion[0]}, {suggestion[1]}"
@@ -113,7 +113,7 @@ class ConfigKeyNotFoundError(ConfigError, AttributeError):
         )
 
 
-def _suggest_close_matches(name: str, existing: list[str]) -> list[str]:
+def suggest_close_matches(name: str, existing: list[str]) -> list[str]:
     """名前に対して既存候補から近いものを最大2件まで返す。"""
     return find_close_names(name, existing)
 

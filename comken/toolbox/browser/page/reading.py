@@ -9,12 +9,12 @@ from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.support import expected_conditions as EC
 
 from comken.toolbox.browser.locator import Locator
-from comken.toolbox.browser.page.base import _PageBase
+from comken.toolbox.browser.page.base import PageBase
 
 logger = logging.getLogger(__name__)
 
 
-class ReadingMixin(_PageBase):
+class ReadingMixin(PageBase):
     """画面から値を読む（read_* / has_element / count_elements）。"""
 
     def read_text(self, locator: Locator) -> str:
