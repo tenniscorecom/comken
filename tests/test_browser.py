@@ -1251,15 +1251,11 @@ class TestSeleniumRemoteConnectionLogSuppressed:
         """root を DEBUG にしても Selenium の remote_connection ロガーは DEBUG を
         有効化しない（パスワードや Cookie が平文で残らないように）。
         """
-        import importlib
         import logging
 
-        from comken.toolbox.browser.management import startup as startup_module
-
-        # モジュール本文に書いた ``setLevel`` を副作用として確実に走らせるため、
-        # 明示的に reload する。修正前は ``setLevel`` が無いので、root が DEBUG だと
-        # 子ロガーも DEBUG を継承して ``isEnabledFor(DEBUG)`` が True になる。
-        importlib.reload(startup_module)
+        # ``startup`` の import 時に Selenium の remote_connection ロガーを INFO に
+        # 固定する副作用を起こすため、ここで使う / 使わないに関わらず import する
+        from comken.toolbox.browser.management import startup  # noqa: F401
 
         root = logging.getLogger()
         original_level = root.level

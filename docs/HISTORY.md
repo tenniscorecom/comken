@@ -1106,6 +1106,5 @@ WebDriver への送受信コマンド本文をそのまま出力する。``Page.
 
 そこで ``comken/toolbox/browser/management/startup.py`` のモジュールロード時に
 当該ロガーを INFO に固定し、comken 側の DEBUG 設定が伝播しないようにした。
-「Selenium の入力値を見たい」という要件は comken 側に無いため、ドライバ／Edge
-の標準出力抑制（27 章既述）と同じ流れで「出さない」判断にする。調査時だけ
-一時的に DEBUG へ戻せばよく、利用者のデフォルト状態は INFO のままにする。
+Selenium の入力値を見たいという要件は comken 側に無いため、出さないことにした。
+調査時だけ一時的に DEBUG へ戻せばよく、利用者のデフォルト状態は INFO のままにする。
