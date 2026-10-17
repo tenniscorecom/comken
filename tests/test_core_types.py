@@ -1,7 +1,7 @@
 """``comken.core.types``（共通の型の名前）のテスト。"""
 
 import ast
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from comken.core.types import Row, TypeMap, Value
@@ -16,7 +16,7 @@ def test_value_accepts_cell_values_including_datetime() -> None:
         "整数": 1,
         "小数": 0.5,
         "真偽": True,
-        "日時": datetime(2026, 10, 17),
+        "日時": datetime(2026, 10, 17, tzinfo=UTC),
     }
 
     assert len(cells) == 5
