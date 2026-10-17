@@ -38,7 +38,7 @@ RPA 基盤から呼び出すときは `main.py` の末尾のコメント（社�
 ## エラー一覧を更新する
 
 `src/` にエラー（`ComkenError` のサブクラス）を足したり、その docstring を直したりしたら、
-`エラー一覧の更新.bat` を叩く（または `python エラー一覧の更新.py`）。
+`エラー一覧の更新.bat` を叩く（または `python update_errors.py`）。
 `docs/ERRORS.md` の自動生成部分（プロジェクト固有のエラーと comken のエラーの表）が作り直される。
 comken を新しくしたときも、comken のエラーの説明を合わせるために叩く。
 

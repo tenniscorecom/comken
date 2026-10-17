@@ -1,7 +1,7 @@
 """
-エラー一覧の更新.py — docs/ERRORS.md のエラー名の表を作り直す
+update_errors.py — docs/ERRORS.md のエラー名の表を作り直す
 
-`エラー一覧の更新.bat` か `python エラー一覧の更新.py` で実行する。
+`エラー一覧の更新.bat` か `python update_errors.py` で実行する。
 
 src/ で定義した ComkenError のサブクラスと comken のエラーを、docstring から表にする。
 エラーを足したり docstring を直したりしたら実行する（手で表を直すと、すぐ古くなるため）。

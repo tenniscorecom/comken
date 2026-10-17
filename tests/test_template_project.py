@@ -501,23 +501,37 @@ def test_run_py_commented_example_works(generated: Path) -> None:
 
 
 _ERRORS_BAT = "エラー一覧の更新.bat"
-_ERRORS_PY = "エラー一覧の更新.py"
+_ERRORS_PY = "update_errors.py"
 
 
 def test_errors_update_bat_is_cp932_crlf() -> None:
     """`エラー一覧の更新.bat` が cp932・CRLF で保存されていること。
 
-    「何を防いでいるか」: UTF-8 で保存すると cmd.exe が日本語のファイル名
-    （`エラー一覧の更新.py`）を読み違え、Python が「ファイルが無い」で止まる。
+    「何を防いでいるか」: UTF-8 で保存すると、cmd.exe が日本語のコメントやメッセージを読み違える。
     """
     raw = (TEMPLATE_DIR / _ERRORS_BAT).read_bytes()
 
     assert raw.count(b"\n") == raw.count(b"\r\n"), "改行が CRLF でない行がある"
-    assert 'python "エラー一覧の更新.py"' in raw.decode("cp932")
+    assert "python update_errors.py" in raw.decode("cp932")
+
+
+def test_errors_update_bat_commands_are_ascii() -> None:
+    """`.bat` の中で実行するコマンド（`rem` / `echo` 以外の行）に、日本語を書かない。
+
+    cmd.exe は、実行中のコンソールのコードページで `.bat` のバイト列を読む。日本語以外の
+    コードページ（CI の英語環境など）では、コマンドの中の日本語のファイル名が読み違えられ、
+    Python が「ファイルが無い」で止まる。`rem` と `echo` の日本語は表示されるだけで害が無い。
+    """
+    text = (TEMPLATE_DIR / _ERRORS_BAT).read_bytes().decode("cp932")
+    for line in text.splitlines():
+        if line.lstrip().lower().startswith(("rem ", "@echo")):
+            continue
+        command_part = line.split("echo ", 1)[0] if "echo " in line else line
+        assert command_part.isascii(), f"コマンドに日本語がある: {line}"
 
 
 def test_errors_update_py_is_utf8() -> None:
-    """`エラー一覧の更新.py` が UTF-8 で、プロジェクトの src を渡していること。"""
+    """`update_errors.py` が UTF-8 で、プロジェクトの src を渡していること。"""
     text = (TEMPLATE_DIR / _ERRORS_PY).read_bytes().decode("utf-8")
 
     assert "project_package=src" in text
