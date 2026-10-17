@@ -66,10 +66,11 @@ def project_package(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator
 
 def test_keeps_handwritten_part_exactly(tmp_path: Path) -> None:
     """マーカーより上は1文字も変えず、下だけを作り直す。"""
-    path = tmp_path / "ERRORS.md"
+    path = tmp_path / "docs" / "ERRORS.md"
+    path.parent.mkdir()
     path.write_text(f"{HANDWRITTEN}\n{ERRORS_GENERATED_MARKER}\n\n古い表\n", encoding="utf-8")
 
-    assert update_errors_doc(path) is True
+    assert update_errors_doc(tmp_path) is True
 
     text = _read(path)
     handwritten, marker, generated = text.partition(ERRORS_GENERATED_MARKER)
@@ -81,10 +82,11 @@ def test_keeps_handwritten_part_exactly(tmp_path: Path) -> None:
 
 def test_appends_marker_when_missing(tmp_path: Path) -> None:
     """マーカーが無いファイルは、手書き部分を残して末尾に空行・マーカー・表を足す。"""
-    path = tmp_path / "ERRORS.md"
+    path = tmp_path / "docs" / "ERRORS.md"
+    path.parent.mkdir()
     path.write_text(HANDWRITTEN, encoding="utf-8")
 
-    assert update_errors_doc(path) is True
+    assert update_errors_doc(tmp_path) is True
 
     text = _read(path)
     assert text.startswith(f"{HANDWRITTEN}\n{ERRORS_GENERATED_MARKER}\n\n## ")
@@ -93,12 +95,13 @@ def test_appends_marker_when_missing(tmp_path: Path) -> None:
 
 def test_is_idempotent(tmp_path: Path) -> None:
     """2回目は何も変えず False を返す（内容が同じならファイルを書き直さない）。"""
-    path = tmp_path / "ERRORS.md"
+    path = tmp_path / "docs" / "ERRORS.md"
+    path.parent.mkdir()
     path.write_text(HANDWRITTEN, encoding="utf-8")
-    update_errors_doc(path)
+    update_errors_doc(tmp_path)
     first = path.read_bytes()
 
-    assert update_errors_doc(path) is False
+    assert update_errors_doc(tmp_path) is False
     assert path.read_bytes() == first
 
 
@@ -106,7 +109,7 @@ def test_creates_missing_file(tmp_path: Path) -> None:
     """ファイルもフォルダも無ければ作る。"""
     path = tmp_path / "docs" / "ERRORS.md"
 
-    assert update_errors_doc(path) is True
+    assert update_errors_doc(tmp_path) is True
 
     text = _read(path)
     assert text.startswith(f"{ERRORS_GENERATED_MARKER}\n\n## ")
@@ -117,10 +120,11 @@ def test_project_errors_listed_before_comken_errors(
     tmp_path: Path, project_package: ModuleType
 ) -> None:
     """プロジェクトの例外が、意味と対処つきで comken の表の前に載る。"""
-    path = tmp_path / "ERRORS.md"
+    path = tmp_path / "docs" / "ERRORS.md"
+    path.parent.mkdir()
     path.write_text(HANDWRITTEN, encoding="utf-8")
 
-    update_errors_doc(path, project_package=project_package)
+    update_errors_doc(tmp_path, project_package=project_package)
 
     generated = _read(path).partition(ERRORS_GENERATED_MARKER)[2]
     project_part, excel_heading, _ = generated.partition("## Excel のエラー")
@@ -143,9 +147,9 @@ def test_project_section_absent_without_project_package(
     tmp_path: Path, project_package: ModuleType
 ) -> None:
     """project_package を渡さなければ、プロジェクトの節は出ない。"""
-    path = tmp_path / "ERRORS.md"
+    path = tmp_path / "docs" / "ERRORS.md"
 
-    update_errors_doc(path)
+    update_errors_doc(tmp_path)
 
     text = _read(path)
     assert PROJECT_HEADING not in text
@@ -163,8 +167,8 @@ def test_project_section_absent_when_project_has_no_errors(
     monkeypatch.syspath_prepend(str(package_dir.parent))
     try:
         package = importlib.import_module("errors_doc_emptyproj")
-        path = tmp_path / "ERRORS.md"
-        update_errors_doc(path, project_package=package)
+        path = tmp_path / "docs" / "ERRORS.md"
+        update_errors_doc(tmp_path, project_package=package)
     finally:
         for name in [m for m in sys.modules if m.split(".")[0] == "errors_doc_emptyproj"]:
             del sys.modules[name]
@@ -182,10 +186,10 @@ def test_project_error_without_treatment_stops(tmp_path: Path, project_package: 
     )
     # import 済みのパッケージに後からファイルを足したので、import の探索結果を作り直させる
     importlib.invalidate_caches()
-    path = tmp_path / "ERRORS.md"
+    path = tmp_path / "docs" / "ERRORS.md"
 
     with pytest.raises(ValueError, match="NoTreatmentError"):
-        update_errors_doc(path, project_package=project_package)
+        update_errors_doc(tmp_path, project_package=project_package)
     assert not path.exists()
 
 
@@ -199,3 +203,11 @@ def test_template_errors_doc_is_up_to_date() -> None:
 
     assert text.count(ERRORS_GENERATED_MARKER) == 1
     assert text == errors_doc._merged_errors_text(text)
+
+
+def test_writes_only_docs_errors_md(tmp_path: Path) -> None:
+    """置き場所は ``docs/ERRORS.md`` に固定で、プロジェクトのフォルダの直下などには作らない。"""
+    update_errors_doc(tmp_path)
+
+    created = sorted(p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*") if p.is_file())
+    assert created == ["docs/ERRORS.md"]

@@ -273,29 +273,35 @@ class TestHolidaysHelpGuard:
 
 
 class TestErrors:
-    """``python -m comken errors [パス]`` の動作。"""
+    """``python -m comken errors`` の動作。"""
 
-    def test_writes_given_path_and_reports_no_change_second_time(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    def test_writes_docs_errors_md_and_reports_no_change_second_time(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """指定したファイルに表を書き、2回目は「変更はありません」で何も変えない。"""
-        path = tmp_path / "ERRORS.md"
+        """今いるフォルダの docs/ERRORS.md に表を書く。2回目は何も変えない。"""
+        monkeypatch.chdir(tmp_path)
+        path = tmp_path / "docs" / "ERRORS.md"
 
-        assert main_cli(["errors", str(path)]) == 0
+        assert main_cli(["errors"]) == 0
         first = path.read_bytes()
         assert "| `SheetNotFoundError` |" in path.read_text(encoding="utf-8")
         assert "更新しました" in capsys.readouterr().out
 
-        assert main_cli(["errors", str(path)]) == 0
+        assert main_cli(["errors"]) == 0
         assert path.read_bytes() == first
         assert "変更はありません" in capsys.readouterr().out
 
-    def test_rejects_extra_arguments_without_writing(self, tmp_path: Path) -> None:
-        """余分な引数があれば、何も書かずに 0 以外で終わる。"""
-        path = tmp_path / "ERRORS.md"
+    def test_rejects_a_path_argument_without_writing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """置き場所は変えられない。パスを渡すと、何も書かずに 0 以外で終わる。"""
+        monkeypatch.chdir(tmp_path)
 
-        assert main_cli(["errors", str(path), "--path"]) != 0
-        assert not path.exists()
+        assert main_cli(["errors", str(tmp_path / "ERRORS.md")]) != 0
+        assert list(tmp_path.iterdir()) == []
 
     def test_runs_as_module_with_default_path(self, tmp_path: Path) -> None:
         """``python -m comken errors`` を打ったフォルダの docs/ERRORS.md を作る。"""

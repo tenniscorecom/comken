@@ -622,9 +622,9 @@ def main() -> None:
     API_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     API_OUTPUT_PATH.write_text(_api_text(), encoding="utf-8")
     print(f"{API_OUTPUT_PATH.relative_to(ROOT)} を生成しました")  # noqa: T201 — CLI スクリプトの進捗出力（logging は外部ログ向けで、対話実行の進捗とは別経路）
-    errors_doc.update_errors_doc(ERRORS_OUTPUT_PATH)
+    errors_doc.update_errors_doc(ROOT)
     # ひな形の表も comken の例外から作るので、例外を変えたら同時に作り直す
-    errors_doc.update_errors_doc(TEMPLATE_DIR / "docs" / "ERRORS.md")
+    errors_doc.update_errors_doc(TEMPLATE_DIR)
     print(f"{ERRORS_OUTPUT_PATH.relative_to(ROOT)} を生成しました")  # noqa: T201 — CLI スクリプトの進捗出力（logging は外部ログ向けで、対話実行の進捗とは別経路）
     _write_bundle(bundle_max_bytes)
     print(f"{BUNDLE_OUTPUT_DIR.relative_to(ROOT)}/ に章ごとの資料を生成しました")  # noqa: T201 — CLI スクリプトの進捗出力（logging は外部ログ向けで、対話実行の進捗とは別経路）

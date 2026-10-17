@@ -12,7 +12,7 @@ import logging
 from comken import comken_logger
 from comken.core.files import project_dir
 from comken.exceptions import ComkenError
-from comken.tools.errors_doc import update_errors_doc
+from comken.tools.errors_doc import ERRORS_DOC_PATH, update_errors_doc
 
 import src
 
@@ -21,11 +21,11 @@ logger = logging.getLogger(__name__)
 
 def main() -> None:
     """docs/ERRORS.md の自動生成部分を作り直す。"""
-    path = project_dir() / "docs" / "ERRORS.md"
-    if update_errors_doc(path, project_package=src):
-        logger.info("エラー一覧を更新しました: %s", path)
+    root = project_dir()
+    if update_errors_doc(root, project_package=src):
+        logger.info("エラー一覧を更新しました: %s", root / ERRORS_DOC_PATH)
     else:
-        logger.info("エラー一覧は最新です: %s", path)
+        logger.info("エラー一覧は最新です: %s", root / ERRORS_DOC_PATH)
 
 
 if __name__ == "__main__":

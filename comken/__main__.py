@@ -8,7 +8,7 @@ CLI の振り分けだけを集約し、実処理は各サブモジュールの 
     python -m comken sf report --report-id 00O...    レポートを実行
     python -m comken cred import 認証情報.json        認証情報を取り込み
     python -m comken holidays                        会社用カレンダー CSV を作り直す（年1回）
-    python -m comken errors [パス]                    docs/ERRORS.md のエラー一覧を作り直す
+    python -m comken errors                           docs/ERRORS.md のエラー一覧を作り直す
 
 ``sf`` / ``cred`` / ``holidays`` は ``salesforce`` / ``credentials`` /
 ``holidays`` の別名（``argparse`` の ``add_parser(..., aliases=[...])``）。
@@ -24,7 +24,7 @@ from pathlib import Path
 
 import comken
 from comken.exceptions import ComkenError
-from comken.tools.errors_doc import update_errors_doc
+from comken.tools.errors_doc import ERRORS_DOC_PATH, update_errors_doc
 from comken.tools.new_project import create as create_project
 
 # `--into` の既定値（カレント）は関数のデフォルトとして書く方が自然。
@@ -137,13 +137,6 @@ def _build_parser() -> argparse.ArgumentParser:
         "errors",
         help="docs/ERRORS.md のエラー一覧（自動生成部分）を comken の例外から作り直す",
     )
-    errors.add_argument(
-        "path",
-        nargs="?",
-        type=Path,
-        default=None,
-        help="書き換えるファイル（省略すると今いるフォルダの docs/ERRORS.md）",
-    )
     errors.set_defaults(run=_run_errors)
 
     return parser
@@ -233,10 +226,10 @@ def _run_holidays(args: argparse.Namespace, remaining: list[str]) -> int:
 
 
 def _run_errors(args: argparse.Namespace, remaining: list[str]) -> int:
-    """``python -m comken errors [パス]`` の本体。
+    """``python -m comken errors`` の本体。今いるフォルダの ``docs/ERRORS.md`` を作り直す。
 
     プロジェクトの ``src`` は読まない（どのフォルダから打たれたか分からないため）。
-    既定の場所は ``project_dir()`` ではなくカレント基準にする。``python -m comken`` では
+    場所は ``project_dir()`` ではなくカレント基準にする。``python -m comken`` では
     ``sys.argv[0]`` が comken の ``__main__.py`` になり、comken の中を指してしまうため。
     プロジェクト固有のエラーまで載せるのは、ひな形の ``update_errors.py`` の役目。
     """
@@ -244,9 +237,9 @@ def _run_errors(args: argparse.Namespace, remaining: list[str]) -> int:
     if remaining:
         print(f"解釈できない引数があります: {' '.join(remaining)}", file=sys.stderr)
         return 1
-    path = args.path or Path.cwd() / "docs" / "ERRORS.md"
-    changed = update_errors_doc(path)
-    print(f"{'更新しました' if changed else '変更はありません'}: {path}")
+    root = Path.cwd()
+    changed = update_errors_doc(root)
+    print(f"{'更新しました' if changed else '変更はありません'}: {root / ERRORS_DOC_PATH}")
     return 0
 
 

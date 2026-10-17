@@ -29,6 +29,10 @@ ERRORS_GENERATED_MARKER = "<!-- ここから下は自動生成する。手で編
 
 PROJECT_ERRORS_HEADING = "プロジェクト固有のエラー（自動生成）"
 
+# エラー対応ガイドの置き場所。プロジェクトのフォルダの下の docs/ に固定で、変えられない
+# （場所を引数にすると、思わぬ場所を書き換えられるため）
+ERRORS_DOC_PATH = Path("docs") / "ERRORS.md"
+
 
 @dataclass(frozen=True)
 class ErrorCategory:
@@ -100,8 +104,10 @@ SUPPLEMENTAL_ERRORS = {
 CLASSIFICATION_ERRORS = (exceptions.ComkenError,)
 
 
-def update_errors_doc(path: Path, *, project_package: ModuleType | None = None) -> bool:
-    """``path`` のエラー対応ガイドの自動生成部分を作り直し、変わったら ``True`` を返す。
+def update_errors_doc(project_root: Path, *, project_package: ModuleType | None = None) -> bool:
+    """``project_root/docs/ERRORS.md`` の自動生成部分を作り直し、変わったら ``True`` を返す。
+
+    置き場所は ``ERRORS_DOC_PATH``（``docs/ERRORS.md``）に固定で、変えられない。
 
     ``project_package`` にプロジェクトの ``src`` を渡すと、その中で定義した
     ``ComkenError`` のサブクラスの表を、comken のエラーの表の前に足す。
@@ -109,6 +115,7 @@ def update_errors_doc(path: Path, *, project_package: ModuleType | None = None) 
     マーカーが無いファイルは、手書き部分を消さないよう末尾にマーカーと表を足す。
     ファイルが無ければ作る。
     """
+    path = project_root / ERRORS_DOC_PATH
     current = path.read_text(encoding=UTF8) if path.is_file() else ""
     updated = _merged_errors_text(current, project_package)
     if updated == current:
