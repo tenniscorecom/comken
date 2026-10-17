@@ -7,7 +7,7 @@ tests/test_new_table_api.py で確認する。ここでは応需固有の部分
 
 import pytest
 
-from comken.core import Table
+from comken.core.table import Table
 from comken.exceptions import ComkenError, CSVError, TableColumnNotFoundError
 from comken.services.csv_column_reducer import (
     reduce_ouju_csv,

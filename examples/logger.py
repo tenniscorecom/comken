@@ -3,7 +3,7 @@
 import logging
 from pathlib import Path
 
-from comken.core import today
+from comken.core.dates import today
 from comken.core.logger import setup_local_logging
 
 HERE = Path(__file__).parent

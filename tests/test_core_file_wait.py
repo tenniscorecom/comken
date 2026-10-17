@@ -172,13 +172,12 @@ class TestWaitForFile:
 
 
 class TestFacadeExports:
-    def test_from_comken_core(self) -> None:
-        """``comken.core`` から取得できる。"""
-        import comken.core
+    def test_from_comken_core_wait(self) -> None:
+        """``comken.core.wait`` から取得できる（いちばん浅い `__all__` から取る）。"""
+        from comken.core.wait import wait_for_file, wait_until
 
-        assert hasattr(comken.core, "wait_for_file")
-        assert "wait_for_file" in comken.core.__all__
-        assert callable(comken.core.wait_for_file)
+        assert callable(wait_for_file)
+        assert callable(wait_until)
 
     def test_does_not_leak_to_comken_top(self) -> None:
         """comken 直下には漏らさない（facade 拡張方針に従う）。"""

@@ -17,7 +17,8 @@
 
 import logging
 
-from comken.core import find_dated_file, today
+from comken.core.dates import today
+from comken.core.files import find_dated_file
 from comken.exceptions import ComkenError
 from comken.run import backoffice  # イントラネットのツールなら intranet に変える
 from comken.toolbox.csv import CSV

@@ -23,7 +23,8 @@ def run() -> None:
 
     # ── ここに処理を書く ──────────────────────────────────────────────
     # 例:
-    #   from comken.core import find_dated_file, today
+    #   from comken.core.files import find_dated_file
+    #   from comken.core.dates import today
     #   from comken.toolbox.csv import CSV
     #   from comken.toolbox.excel import Excel
     #

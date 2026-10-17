@@ -13,7 +13,8 @@ import logging
 from pathlib import Path
 
 from comken import Config, dry_run
-from comken.core import date_in_name, move_file
+from comken.core.dates import date_in_name
+from comken.core.files import move_file
 from comken.toolbox.csv import CSV
 
 HERE = Path(__file__).parent

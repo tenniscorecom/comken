@@ -11,6 +11,8 @@ from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
+__all__ = ["retry"]
+
 
 def retry[**P, R](
     times: int = 3, wait: float = 1.0, on: tuple[type[Exception], ...] = (Exception,)

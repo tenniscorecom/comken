@@ -255,7 +255,7 @@ class TestDailyBatchTemplate:
         """雛形の main() が、今日の日付つき CSV を探して Excel レポートを作る。"""
         from types import SimpleNamespace
 
-        from comken.core import today
+        from comken.core.dates import today
 
         input_folder = tmp_path / "input"
         output_folder = tmp_path / "output"

@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 
 from comken import debug, dry_run
-from comken.core import copy_file
+from comken.core.files import copy_file
 from comken.core.logger import setup_local_logging
 
 HERE = Path(__file__).parent

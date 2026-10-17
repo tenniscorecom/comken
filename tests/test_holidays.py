@@ -812,9 +812,9 @@ class TestModuleFunctionsFromCore:
 
     def test_core_reexports_match_holidays_module(self) -> None:
         """``comken.core`` から ``is_workday`` などを取って既定カレンダーで動く。"""
-        from comken.core import is_workday as core_is_workday
-        from comken.core import last_workday as core_last
-        from comken.core import nth_workday as core_nth
+        from comken.core.dates import is_workday as core_is_workday
+        from comken.core.dates import last_workday as core_last
+        from comken.core.dates import nth_workday as core_nth
 
         assert core_is_workday(_dt.date(2026, 5, 3)) is False
         assert core_last(_dt.date(2026, 5, 1)) == _dt.date(2026, 5, 29)

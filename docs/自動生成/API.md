@@ -141,1365 +141,6 @@ OWNER が未設定ならログ構築前に停止する。
 定義を解決できませんでした。
 
 
-## `from comken.core import ...`
-
-### `DiffResult`
-
-```text
-class DiffResult:
-```
-
-#### 説明
-
-``Table.diff()`` の結果。
-
-なぜ ``added`` / ``removed`` が ``Table`` で ``changed`` が ``list[RowChange]``
-なのか — ``changed`` の1件は「変更前・変更後・差分列」の3つを抱えており、
-表の1行に収まらない（同じ列名で2つの値を並べると区別できない）ため
-``RowChange`` のリストのままで持つ。 一方 ``added`` / ``removed`` は表の行と
-同じ形なので ``Table`` へ揃え、 ``filter`` / ``select`` / ``count`` などの
-Table 標準の操作が直接使えるようにしてある。
-
-### `HierarchyResult`
-
-```text
-class HierarchyResult:
-```
-
-#### 説明
-
-``Table.split_hierarchy()`` の結果。
-
-``details`` / ``subtotals`` は ``Table`` なので、``select / filter / count``
-などの Table 標準の操作が直接使える（``DiffResult`` と同じ意図の設計）。
-
-Attributes:
-    details: 明細の行（全階層が current で埋まった状態）。
-    subtotals: 小計の行。matched level より上は current、matched level は
-        元の値、下は None。
-    unmatched: 「計」で終わる値があるのに小計と判定しなかった行の
-        **件目**（1始まり、元の Table の何件目か）。
-
-### `RowChange`
-
-```text
-class RowChange:
-```
-
-#### 説明
-
-``Table.diff()`` / ``Table.changes()`` が返す「変更のあった行」の情報。
-
-Attributes:
-    key: キー列の正規化後の値（``_normalize`` を通した文字列）。
-    before: 変更前の行全体。
-    after: 変更後の行全体。
-    columns: 変わった列だけ {列名: (変更前, 変更後)}。
-
-### `State`
-
-```text
-class State:
-```
-
-#### 説明
-
-プログラムが次回実行へ持ち越す値を state.ini に保存する。
-
-``set()`` は呼び出すたびに UTF-8 で原子的に保存する。dry-run 中に状態を
-書くと、試運転したファイルが本番で処理済みと判断されうるため、ファイルは
-変更せず、書く予定だった内容だけをログへ出す。
-
-保存できる値は、真偽値・整数・小数・文字列・文字列のリスト。
-
-Args:
-    path: state.ini のパス。省略するとプロジェクトのフォルダ（main.py の場所）の
-          state.ini。
-
-#### `__init__`
-
-```text
-def __init__(self, path: str | Path | None=None) -> None:
-```
-
-#### `get`
-
-```text
-def get(self, key: str, default: StateValue | None=None) -> StateValue | None:
-```
-
-##### 説明
-
-保存済みの値を返す。無い場合は default を返す。
-
-#### `set`
-
-```text
-@measure
-def set(self, key: str, value: StateValue) -> None:
-```
-
-##### 説明
-
-値を保存する。dry-run 中はファイルもメモリ上の状態も変更しない。
-
-### `Row`
-
-公開定数。
-
-### `Table`
-
-```text
-class Table:
-```
-
-#### 説明
-
-列と辞書行をメモリで扱う表。
-
-CSVやExcelに直接依存しないため、加工処理をファイルI/Oから分離できます。
-``types`` は入力時に明示された列だけを変換し、暗黙の型推測は行いません。
-
-#### `__init__`
-
-```text
-def __init__(self, columns: list[str] | tuple[str, ...], rows: list[Row], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
-```
-
-#### `to_rows`
-
-```text
-def to_rows(self) -> list[Row]:
-```
-
-##### 説明
-
-現在の行をコピーして返す。元のTableは変更しない。
-
-#### `to_dataframe`
-
-```text
-def to_dataframe(self) -> pd.DataFrame:
-```
-
-##### 説明
-
-pandas の ``DataFrame`` に変換する。
-
-列の順番を保ったまま、行の値はそのまま ``DataFrame`` へ渡す（型変換は
-行わない）。0 行の ``Table`` でも列は残る。
-
-pandas はこのメソッドを呼んだときにだけ import するため、pandas が無い
-環境で ``comken`` を使っただけでは ImportError は出ない。pandas が無い
-環境でこのメソッドを呼ぶと ``MissingOptionalDependencyError`` を
-送出し、メッセージに ``pip install pandas`` の手順が出る。
-
-Returns:
-    ``self.columns`` の順番を保った ``pd.DataFrame``。
-
-Raises:
-    MissingOptionalDependencyError: pandas がインストールされていない。
-
-Example:
-    Excel/CSV で読んだ ``Table`` を pandas で集計する:
-
-    >>> from comken.toolbox.csv import CSV                            # doctest: +SKIP
-    >>> with CSV("売上.csv") as csv_file:                            # doctest: +SKIP
-    ...     table = csv_file.read()                                   # doctest: +SKIP
-    >>> df = table.to_dataframe()                                    # doctest: +SKIP
-    >>> by_store = df.groupby("支店")["金額"].sum().reset_index()     # doctest: +SKIP
-    >>> summary = Table.from_dataframe(by_store)                     # doctest: +SKIP
-
-#### `from_dataframe`
-
-```text
-@classmethod
-def from_dataframe(cls, df: pd.DataFrame, *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> Table:
-```
-
-##### 説明
-
-pandas の ``DataFrame`` から ``Table`` を作る。
-
-列名は ``str()`` して使う（``str()`` 後に重複したら ``TableError``）。
-欠損値（``NaN`` / ``None`` / ``pd.NA`` / ``pd.NaT``）は ``None`` に
-揃える（判定は ``pd.isna`` で行う。リスト・辞書などスカラー以外の値は
-判定しない）。``DataFrame`` の index は捨てる（``Table`` には index が
-ない）。
-
-pandas はこのメソッドを呼んだときにだけ import するため、pandas が無い
-環境で ``comken`` を使っただけでは ImportError は出ない。
-
-Args:
-    df: 取り込み元の ``pd.DataFrame``。
-    types: ``Table`` と同じ。列ごとの型変換関数の mapping を ``Table``
-        にそのまま渡す。
-
-Returns:
-    ``df`` の列順を保った ``Table``（列名は ``str()`` 済み）。
-
-Raises:
-    MissingOptionalDependencyError: pandas がインストールされていない。
-    TableError: ``str()`` 後の列名が重複している。
-
-Example:
-    pandas で集計した ``DataFrame`` を ``Table`` に戻して Excel へ書く:
-
-    >>> from comken.toolbox.excel import Excel                       # doctest: +SKIP
-    >>> summary = Table.from_dataframe(by_store)                    # doctest: +SKIP
-    >>> with Excel("report.xlsx") as excel:                          # doctest: +SKIP
-    ...     excel.create_data_sheet("集計").create_table("集計", summary)  # doctest: +SKIP
-
-#### `replace`
-
-```text
-def replace(self, rows: list[Row]) -> Self:
-```
-
-##### 説明
-
-表の全行を置き換え、同じTableを返す。
-
-#### `append`
-
-```text
-def append(self, rows: list[Row] | Row) -> Self:
-```
-
-##### 説明
-
-1行または複数行を末尾へ追加する。
-
-#### `select`
-
-```text
-def select(self, *columns: str, aliases: Mapping[str, str] | None=None) -> Table:
-```
-
-##### 説明
-
-指定した列だけを持つ新しいTableを返す。
-
-aliases に ``{欲しい列名: 実際にこのTableにある列名}`` を渡すと、
-列名が変わっていてもそちらから値を拾う（例えば CSV の見出しが
-リネームされていても、旧名で選び直せる）。結果の列名は常に
-columns 側（欲しい名前）に揃う。aliases に無い列は、そのままの
-名前で存在する前提で選ぶ。
-
-#### `filter`
-
-```text
-def filter(self, predicate: Callable[[Row], bool]) -> Table:
-```
-
-##### 説明
-
-条件に一致する行だけを持つ新しいTableを返す。
-
-#### `column`
-
-```text
-def column(self, name: str) -> list[Any]:
-```
-
-##### 説明
-
-指定列の値を順番どおりに返す。
-
-#### `index`
-
-```text
-def index(self, key: str) -> dict[Any, Row]:
-```
-
-##### 説明
-
-指定列をキーにした行の索引を返す。
-
-#### `group_by`
-
-```text
-def group_by(self, key: str) -> dict[Any, Table]:
-```
-
-##### 説明
-
-指定列の値ごとにTableを分けて返す。
-
-#### `concat`
-
-```text
-def concat(self, other: Table) -> Table:
-```
-
-##### 説明
-
-同じ列定義の表を縦に連結する。
-
-列の順番は異なっていても構わないが、列名の集合が異なる表は
-別のデータとして扱う。列不足を空欄で補うと、入力ミスに気づけず
-データ欠落につながるため、ここでは明示的にエラーにする。
-
-結果の型定義は ``self.types``。``other`` の値は、``self.types`` に無い列は
-変換せずそのまま使う（``_normalize_row`` と同じく types のある列だけが
-変換対象のため）。``self.types`` にある列は、``other.types`` に
-``self.types`` と**同じ変換関数（``is`` で同一のオブジェクト）**が
-設定されている列はそのまま使い、それ以外は ``self.types`` で変換する
-（変換済みの値に同じ変換を二重にかけないため）。``other.types`` は
-結果に引き継がない。
-
-#### `diff`
-
-```text
-def diff(self, other: Table, *, key: str) -> DiffResult:
-```
-
-##### 説明
-
-self と other を ``key`` 列で突合し、差分を返す。
-
-CSV と Excel をまたいだ比較にも使える（"1000" と 1000 は同一視される）。
-正規化後のキーがどちらの表でも重複していたら ``TableDuplicateKeyError``
-を送出する（``Table.index()`` と同じ例外）。
-
-Args:
-    other: 突合先の ``Table``。
-    key: 行を一意に識別するキー列名。
-
-Returns:
-    ``DiffResult``（``added`` / ``removed`` は ``Table``、``changed`` は
-    ``list[RowChange]``）。
-
-#### `split_hierarchy`
-
-```text
-def split_hierarchy(self, levels: list[str] | tuple[str, ...], *, subtotal_words: Iterable[str]=SUBTOTAL_WORDS, subtotal_suffixes: Iterable[str]=SUBTOTAL_SUFFIXES) -> HierarchyResult:
-```
-
-##### 説明
-
-階層の列を上の階層で埋め、小計の行を分けて ``HierarchyResult`` を返す。
-
-Excel で多い次のパターンを扱うための関数:
-
-- 上の階層はグループの最初の行にしか値が無い（下は空欄）
-- 途中に「小計」「合計」「野菜計」のような小計の行が挟まっている
-
-上の階層（``levels`` の前の方）に値があれば、その下の階層の ``current`` を
-空に戻し、前の中分類を持ち越さない。小計の判定は ``subtotal_words``
-との完全一致、``subtotal_suffixes`` の末尾一致、「現在のグループの
-代表名 + 計」の3段構えで、「計」で終わるだけの値（時計・会計など）は
-小計にしない。元の Table は変えない（新しい Table を返す）。
-
-Args:
-    levels: 階層の列名（上から順）。1 つ以上。
-    subtotal_words: 小計と完全一致で扱う値の iterable。既定は
-        ``SUBTOTAL_WORDS = ("計", "小計", "合計", "総計")``。
-    subtotal_suffixes: 小計として扱う接尾辞の iterable。既定は
-        ``SUBTOTAL_SUFFIXES = ("小計", "合計", "総計")``。
-
-Returns:
-    ``HierarchyResult``（``details`` / ``subtotals`` は ``Table``、
-    ``unmatched`` は「計」で終わる値があるのに小計と判定しなかった行の
-    件目（1始まり））。
-
-Raises:
-    TableColumnNotFoundError: ``levels`` の列が存在しない。
-    TableError: 階層の列に Excel のエラー値（``#REF!`` 等）がある。
-
-Example:
-    >>> table = Table(
-    ...     ["大分類", "中分類", "小分類", "金額"],
-    ...     [
-    ...         {"大分類": "食品", "中分類": "野菜", "小分類": "にんじん", "金額": 100},
-    ...         {"大分類": None,   "中分類": None,   "小分類": "たまねぎ", "金額": 50},
-    ...         {"大分類": None,   "中分類": "野菜計", "小分類": None,   "金額": 150},
-    ...     ],
-    ... )
-    >>> result = table.split_hierarchy(["大分類", "中分類", "小分類"])
-    >>> len(result.details)
-    2
-    >>> len(result.subtotals)
-    1
-
-#### `changes`
-
-```text
-def changes(self, *, key: str, order_by: str | None=None) -> list[RowChange]:
-```
-
-##### 説明
-
-``key`` の値ごとに行を分け、隣り合う行同士を比べる履歴の差分を取る。
-
-``key`` の値（``_normalize`` 後）ごとに行を分け、``order_by`` が指定されていれば
-その列の値の**昇順（古い順）**に**安定ソート**してから、**隣り合う行どうし**
-（1番目と2番目、2番目と3番目…）を比べる。値が変わった組だけを
-``RowChange(key=正規化後のキー, before=前の行, after=次の行, columns=変わった列)``
-で返す。
-
-比べる列から ``key`` と ``order_by`` の列を除く（変更時刻は毎回違うので、
-含めると全部が「変わった」になる）。
-
-``order_by`` が ``None`` なら、並べ替えずに表の並び順のまま比べる。
-
-返す順: キーが最初に出てきた順、その中は並べ替え後の順。
-
-Args:
-    key: 履歴をまとめるキー列名。
-    order_by: 並べ替えに使う列名。``None`` なら表の並び順のまま比べる。
-
-Returns:
-    値が変わった隣り合う行の組 (``RowChange``) のリスト。
-
-Raises:
-    TableColumnNotFoundError: ``key`` / ``order_by`` の列が無いとき。
-    TableError: ``order_by`` の列に空 (``None`` / ``""``) の行がある、
-        または値の型が混ざっていて比較できない (``TypeError``) とき。
-
-### `Timer`
-
-```text
-class Timer:
-```
-
-#### 説明
-
-処理時間を計測して INFO ログに出す。with・デコレータ両対応。
-
-Attributes:
-    elapsed: 経過秒数（float）。with を抜けた後に参照できる。
-
-#### `__init__`
-
-```text
-def __init__(self, name: str='処理', message: str=_MESSAGE, time_format: str | None=_TIME_FORMAT) -> None:
-```
-
-##### 説明
-
-Args:
-    name: ログに出す処理名（例: "CSV読み込み"）。
-    message: ログに出す文言。次のプレースホルダを使える:
-
-        - ``{name}``: ``__init__`` の ``name``
-        - ``{elapsed}``: ``time_format`` で整形した経過時間
-
-        例::
-
-            "{name} -> {elapsed}"
-
-    time_format: 経過時間の整形書式。 ``datetime.strftime`` と
-        **同じ書き方**で指定する（独自記号は持たない）。
-
-        - ``None``（既定）: 小数2桁＋「秒」（例 ``"3.21秒"``）
-        - 文字列: 経過秒を **整数秒に四捨五入（0.5 は切り上げ、
-          ``int(seconds + 0.5)``）** してから ``datetime.time`` に
-          詰め、 ``time.strftime(time_format)`` の結果を返す。
-          ``round()``（偶数丸め）とは違うため、0.5 秒 → ``01``、
-          1.5 秒 → ``02``、2.5 秒 → ``03`` のように丸める。
-          秒未満は捨てて整数秒にするため、``%f`` は ``000000`` 固定。
-
-          ``datetime.time`` の制約で 24 時間を超えると ``%H`` は 0 に戻る
-          （``strftime`` と同じ挙動。仕様として受け入れる）。
-
-          例::
-
-              "%H:%M:%S"        # → "01:02:05"
-              "%M分%S秒"        # 3725 秒 → "02分05秒"
-              "%I:%M %p"        # strftime の他の記号もそのまま使える
-              "%H%%"            # "%" を文字として出力
-
-        ``%`` を **1つも** 含まない文字列は ``__init__`` で
-        ``ValueError`` にする（``"abc"`` のように ``%`` が無いと
-        strftime では何も置き換わらずそのまま出てしまうので、
-        黙って意味の違う表示にしないため）。
-
-### `Transfer`
-
-```text
-class Transfer:
-```
-
-#### 説明
-
-Table 間のキー突合と転記を行う。
-
-基本的な用法は次のとおり。 ``mapping`` は「転記元の列名 → 転記先の列名」。
-3つの取り出し口を使い分けて、read / write を行単位で加工する:
-
-- ``matched_rows()``: 両方にキーが揃う行を ``(read_row, write_row)`` で返す
-  （**両方とも作業 Table の実体行**）
-- ``transfer_rows()``: read 全行を ``(read_row, write_row | None)`` で返す
-  （write に無い行は ``None``、``read_row`` は **コピー**）
-- ``unmatched()``: 突合しなかった行を ``UnmatchedRows`` で返す
-  - ``only_in_read`` は **コピー**（``Table``）。書き換えても ``read`` にも
-    ``result()`` にも影響しない
-  - ``only_in_write`` は **作業 Table の実体行**（``list[Row]``）。書き換えると
-    ``result()`` に反映される
-
-Example:
-    transfer = Transfer(read_table, write_table, mapping,
-                        read_key="顧客ID", write_key="顧客ID")
-    for read_row, write_row in transfer.matched_rows():
-        if 条件:
-            continue                       # この行は破棄
-        transfer.apply_mapping(read_row, write_row)   # mapping の値をコピー
-        # 必要なら write_row["備考"] = "..." のように追加加工
-    # write に無い read 行は result() に追加していく（新規行の追加）
-    for read_row in transfer.unmatched().only_in_read:
-        transfer.result().append({
-            "顧客ID": read_row["顧客ID"],
-            "顧客名": read_row["取引先"],
-            "請求額": read_row["金額"],
-            "備考": "新規追加",
-        })
-    # read に無い write 行は「転記元に無し」と書き換える（result() に出るので別途 filter する）
-    for write_row in transfer.unmatched().only_in_write:
-        write_row["備考"] = "転記元に無し"
-
-**条件は ``apply_mapping()`` より前に書くこと。** Python の ``for`` ループは
-``continue`` したかどうかを呼び出し側に伝えないため、ループ内で
-``apply_mapping()`` を呼ばずに ``continue`` した行は、作業 Table へ反映されない。
-条件判定を ``apply_mapping()`` の後ろに書くと、``continue`` しても mapping が
-適用済みとなり破棄できないので、判定は必ず ``apply_mapping()`` の前に置く。
-
-**空キー (``None`` / ``""``) は突合対象外**。 値が無いキーは read 側・write 側の
-どちらでも照合に使わず、``unmatched()`` 側へ流れる。 ``0`` や ``False`` は
-空ではない（数値・bool の 0 落ち判定を避けるため）。 複合キーは **1要素でも空**
-なら空とみなす。
-
-#### `__init__`
-
-```text
-def __init__(self, read: Table, write: Table, mapping: Mapping[str, str], *, read_key: str | Sequence[str] | None=None, write_key: str | Sequence[str] | None=None) -> None:
-```
-
-#### `transfer_rows`
-
-```text
-def transfer_rows(self) -> Iterator[tuple[Row, Row | None]]:
-```
-
-##### 説明
-
-転記元の全行を ``(read_row, write_row)`` で返す。
-
-転記先に存在しない行は ``(read_row, None)`` として返す。新規行の追加が
-必要かどうかは利用者が ``if write_row is None: ...`` で判定する。
-書き込みは ``apply_mapping(read_row, write_row)`` を中心に行い、
-必要な列だけを ``write_row[write_col] = read_row[read_col]`` の形で
-個別に上書きする。 結果は ``result()`` で取り出す。
-
-#### `matched_rows`
-
-```text
-def matched_rows(self) -> Iterator[tuple[Row, Row]]:
-```
-
-##### 説明
-
-両方に存在する行だけを ``(read_row, write_row)`` で返す。
-
-転記先に存在しない行（``destination`` が ``None``）は含まない。
-
-#### `unmatched`
-
-```text
-def unmatched(self) -> UnmatchedRows:
-```
-
-##### 説明
-
-突合しなかった行を ``UnmatchedRows`` で返す。
-
-``only_in_read`` は write に対応が無い read 行（追加候補）。
-``Table`` として返すので ``.to_rows()`` / ``.filter()`` などの Table 標準の
-インターフェースが使える。 戻り値は ``Table.to_rows()`` と同じく **read 行の
-コピー** で、書き換えても ``read`` にも ``result()`` にも影響しない。
-
-``only_in_write`` は read に対応が無い write 行（破棄候補）。
-戻り値は ``matched_rows()`` が返す ``write_row`` と同じく **作業 Table の
-実体行**。 ``write_row["備考"] = "破棄予定"`` のように書き換えると
-``result()`` の戻り値へ反映される。
-
-空キー (``None`` / ``""``) の行も両側に含む。 キーが空なので照合に使えず、
-必ず対応が無いため。
-
-``transfer_rows()`` / ``matched_rows()`` を呼ばずに呼んでも動く。
-
-#### `apply_mapping`
-
-```text
-def apply_mapping(self, read_row: Row, write_row: Row | None) -> None:
-```
-
-##### 説明
-
-コンストラクタで渡された ``mapping`` どおりに値を ``write_row`` へコピーする。
-
-mapping の read 列 / write 列は ``__init__`` で存在を検証済みなので、
-ここで再びキー存在を確かめない。 ``write_row`` が ``None`` の場合
-（``transfer_rows()`` の ``(read_row, None)`` をそのまま渡した場合など）は
-転記先の行が無いので ``TableError`` で停止する。
-
-入力 ``read`` / ``write`` には触れない。書き込みは Transfer 内部の
-作業 Table に紐づいた ``write_row`` に対して行う。
-
-Args:
-    read_row: 転記元の行。
-    write_row: 転記先の行。 ``matched_rows()`` の戻り値か、
-        ``transfer_rows()`` の戻り値で ``None`` でないもの。
-
-Raises:
-    TableError: ``write_row`` が ``None`` のとき。
-
-#### `result`
-
-```text
-def result(self) -> Table:
-```
-
-##### 説明
-
-変更後の Table を返す。
-
-``transfer_rows()`` / ``matched_rows()`` のイテレーション中に ``write_row``
-に対して行った変更が反映された作業用 Table を返す。 イテレータを 1 度も
-進めないうちに ``result()`` を呼ぶと ``write`` のコピー（変更なし）が返る。
-
-``result()`` は同じ作業 Table インスタンスを返し続けるので、
-``result().append(...)`` のように破壊的に加工した場合や、 ``result()`` を
-呼んだ後に ``unmatched().only_in_write`` の ``write_row`` を書き換えた場合も、
-後続の ``result().to_rows()`` 呼び出しに反映される（``Table._iter_rows_for_update``
-経由で実体 dict を共有しているため）。
-
-Example:
-    transfer = Transfer(source, destination, mapping,
-                        read_key="顧客ID", write_key="顧客ID")
-    for source_row, destination_row in transfer.matched_rows():
-        transfer.apply_mapping(source_row, destination_row)
-    final_table = transfer.result()  # 変更後の Table
-
-### `count_workdays`
-
-```text
-def count_workdays(start: _dt.date, end: _dt.date, *, skip_weekends: bool=True) -> int:
-```
-
-#### 説明
-
-``start`` から ``end`` までの**両端を含む**営業日数を返す
-（Excel の ``NETWORKDAYS(start, end)`` 互換）。
-
-``start <= end`` のときは正の数を、``start > end`` のときは負の数を返す
-（``end`` から ``start`` までの営業日数に -1 を掛けた値）。
-``start == end`` のとき、その日が営業日なら ``1``、休みなら ``0``。
-
-営業日判定は ``is_workday`` と同じ（``skip_weekends`` の意味も同じ）。
-``WORKDAY_SEARCH_LIMIT`` は使わない（日数を数えるだけなので、
-祝日データが壊れていても上限に当たって例外にはならない）。
-
-### `copy_file`
-
-```text
-@measure
-def copy_file(src: str | Path, dst: str | Path) -> Path:
-```
-
-#### 説明
-
-ファイルをコピーする（更新日時などの属性も保持する）。
-
-ルールは move_file と同じ:
-    - dst が既存フォルダなら、その中に同名でコピーする
-    - それ以外はファイルパスとして扱う（親フォルダがなければ自動作成する）
-    - コピー先に同名ファイルがあれば上書きする
-
-Args:
-    src: コピーするファイルのパス。
-    dst: コピー先（フォルダ、またはファイルパス）。
-
-Returns:
-    コピー後のファイルパス。
-
-### `date_in_name`
-
-```text
-def date_in_name(name: str) -> datetime.date | None:
-```
-
-#### 説明
-
-ファイル名に含まれる **最初の日付** を返す。日付が無ければ None。
-
-1つのファイル名に日付が複数あるときは、先に出てくる方を使う。
-ファイル名の日付とファイル内容の日付を突き合わせる業務で使うため公開している。
-すべての日付が要るときは ``dates_in_name`` を使う。
-
-### `delete_file`
-
-```text
-@measure
-def delete_file(path: str | Path, missing_ok: bool=False) -> None:
-```
-
-#### 説明
-
-ファイルを削除する。dry-run ではログを出してスキップする。
-
-削除は不可逆なので、削除したファイルのパスを INFO ログに残す。
-dry-run のときもログだけ出して、実際には消さない。
-
-Args:
-    path: 削除するファイルのパス。
-    missing_ok: True なら対象ファイルが存在しなくても例外を送出しない。
-
-Raises:
-    FileNotFoundError: ファイルが存在せず missing_ok が False の場合。
-
-### `delete_files`
-
-```text
-def delete_files(paths: Iterable[str | Path], missing_ok: bool=True) -> None:
-```
-
-#### 説明
-
-複数のファイルをまとめて削除する。1件目で失敗しても残りは削除する。
-
-各ファイルは ``delete_file()`` に委譲するため、dry-run 対応（ログを出して
-スキップ・dry-run 外で実際に削除）と、「何を消したか」の INFO ログがそのまま効く。
-
-削除できなかったファイルはあきらめずに全部試したうえで、``FileDeletionError`` に
-まとめて乗せて返す。呼び出し側が「消せたものは消したい」場面で使われる想定。
-1件目で例外を投げて止まると、消せたはずの別ファイルまで消さずに終わってしまう。
-
-Args:
-    paths: 削除対象ファイルのパス（Iterable。str / Path 混在可）。
-    missing_ok: True（既定）なら対象が存在しない場合は失敗扱いにしない。
-
-Raises:
-    FileDeletionError: 1件以上のファイルを削除できなかった場合。
-        残ったパスは ``.remaining`` で読める。
-
-### `find_dated_file`
-
-```text
-@measure
-def find_dated_file(folder: str | Path, name: str, for_date: datetime.date | None=None) -> Path:
-```
-
-#### 説明
-
-指定した名前と日付を持つファイルを 1 件返す。
-
-探す名前に **拡張子を含める**（例: ``"売上レポート.csv"``）。拡張子無しの名前を
-渡すと ``FileSuffixMissingError`` で止める。
-
-**注意: 呼ぶたびにフォルダを走査する。** 同じ結果を何度も使うなら変数に受けること
-（業務時間中に新しいファイルが降ってくる前提の道具なので、敢えてキャッシュしていない）。
-
-判定の規則:
-
-- 「名前を含む」: ``name`` の拡張子を除いた本体部分が、ファイル名の本体部分に
-  **含まれている**（部分一致）。同じ拡張子（大文字小文字は区別しない）のファイル
-  だけが対象。日付の位置や書式（``20260711`` / ``2026-07-11`` / ``2026_07_11`` /
-  ``2026.07.11``）は問わない
-- ファイル名から ``dates_in_name`` で取り出した日付リストの中に ``for_date``
-  （省略時は今日）が **含まれる** ファイルだけが対象。
-  複数見つかったときは **更新日時（mtime）が新しい方** を返す。
-  1 つも無ければ ``ComkenFileNotFoundError``
-
-Args:
-    folder: 探すフォルダ。
-    name: 探すファイル名。**拡張子を含める**（例: ``"売上レポート.csv"``）。
-    for_date: ファイル名から取り出した日付のどれかと一致する対象日。
-        ``None``（既定）なら呼んだ時点の ``today()``。
-
-Returns:
-    条件に合うファイルのうち mtime が最新の ``Path``。
-
-Raises:
-    FileSuffixMissingError: ``name`` に拡張子が含まれていないとき。
-    ComkenFileNotFoundError: フォルダが存在しない／フォルダではない、
-        もしくは条件に合うファイルが無いとき。
-
-### `first_workday`
-
-```text
-def first_workday(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
-```
-
-#### 説明
-
-``target`` が属する月の最初の営業日。
-
-Raises:
-    WorkdayNotFoundError: その月に営業日が 1日も無いとき。
-
-### `fiscal_year`
-
-```text
-def fiscal_year(target: _dt.date | _dt.datetime) -> int:
-```
-
-#### 説明
-
-``target`` が属する年度（4月始まり）を返す。
-
-4〜12月は ``target.year`` と同じ、1〜3月は ``target.year - 1``。
-``datetime.datetime`` を渡されたときは ``date()`` で日付部分だけ判定する。
-
-Args:
-    target: 対象日付（``datetime.date`` または ``datetime.datetime``）。
-
-Returns:
-    ``target`` が属する年度の西暦。
-
-### `holiday_name`
-
-```text
-def holiday_name(target: _dt.date) -> str | None:
-```
-
-#### 説明
-
-``target`` の祝日・会社休日名称を返す。祝日でも会社休日でもなければ
-``None``。
-
-### `is_holiday`
-
-```text
-def is_holiday(target: _dt.date) -> bool:
-```
-
-#### 説明
-
-``target`` が国民の祝日または会社休日に当たれば ``True``。
-
-``company_calendar.csv`` の収録範囲（内閣府 CSV の最初の年〜最後の年）
-外の日付は国民の祝日も会社休日も付かない（常に ``False``）。範囲を延ばす
-には内閣府 CSV を入れ替えて ``python -m comken holidays`` で
-再生成する。
-
-### `is_workday`
-
-```text
-def is_workday(target: _dt.date, *, skip_weekends: bool=True) -> bool:
-```
-
-#### 説明
-
-``target`` が営業日なら ``True``。
-
-``company_calendar.csv`` の判定で国民の祝日＋会社休日に当たれば休業。
-``skip_weekends=True``（既定）なら土曜・日曜も休業扱いにする。
-``False`` を渡すと、土曜・日曜であっても祝日でなければ「営業日」と
-判定される（振替休日を平日扱いするシナリオ向け）。
-
-「収録済み最終日 <= target」のときは期限切れを WARNING ログで 1度だけ
-通知する。判定自体は通常どおり行う（誤って平日扱いにならないよう、
-**収録範囲外は祝日ではない側に倒す**）。
-
-### `last_workday`
-
-```text
-def last_workday(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
-```
-
-#### 説明
-
-``target`` が属する月の最後の営業日。
-
-月末が土日・祝日のときは直前の営業日に遡る（例: 8/31 が日曜なら 8/29 金）。
-
-Raises:
-    WorkdayNotFoundError: その月に営業日が 1日も無いとき。
-
-### `local_copy`
-
-```text
-@contextmanager
-def local_copy(path: str | Path) -> Iterator[Path]:
-```
-
-#### 説明
-
-ネットワーク上のファイルをローカルにコピーし、処理後に自動削除する。
-
-NAS やネットワークドライブ上の大きなファイルを直接開くと遅い場合や、
-win32com（Excel COM）でネットワークファイルが不安定な場合に使う。
-
-テンポラリファイルの保存先: C:\Users\<ユーザー名>\AppData\Local\Temp\
-with ブロックを抜けると自動削除される（例外が発生した場合も削除される）。
-Args:
-    path: コピー元のファイルパス（ネットワークパス・UNCパス・マップドドライブ）。
-
-Yields:
-    ローカルのテンポラリファイルパス（Path）。
-
-### `month_end`
-
-```text
-def month_end(target: datetime.date) -> datetime.date:
-```
-
-#### 説明
-
-``target`` が属する月の最終日を返す。
-
-月ごとの日数・閏年を ``calendar.monthrange`` で正しく扱う。
-
-### `month_start`
-
-```text
-def month_start(target: datetime.date) -> datetime.date:
-```
-
-#### 説明
-
-``target`` が属する月の 1日を返す。
-
-祝日に依存しない純粋な暦計算。営業日計算の前段として
-「その月の最初の営業日を探す」ために使う。
-
-### `move_file`
-
-```text
-@measure
-def move_file(src: str | Path, dst: str | Path) -> Path:
-```
-
-#### 説明
-
-ファイルを移動する。
-
-shutil.move の分かりにくい点をなくしたラッパー:
-    - dst が既存フォルダなら、その中に同名で移動する
-    - それ以外はファイルパスとして扱う（親フォルダがなければ自動作成する）
-    - 移動先に同名ファイルがあれば上書きする
-Args:
-    src: 移動するファイルのパス。
-    dst: 移動先（フォルダ、またはファイルパス）。
-
-Returns:
-    移動後のファイルパス。
-
-### `non_workdays_after`
-
-```text
-def non_workdays_after(target: _dt.date, *, skip_weekends: bool=True) -> list[_dt.date]:
-```
-
-#### 説明
-
-``target`` の翌日から、次の営業日の前日までの休みの日（連休）を日付順に返す。
-
-``target`` の翌日が営業日なら空リスト。``target`` 自身は含まない。
-``WORKDAY_SEARCH_LIMIT`` 日分で打ち切る（``workday`` と違い、
-営業日が見つからなくても例外にしない。祝日データが壊れているときの無限ループ防止）。
-
-### `non_workdays_before`
-
-```text
-def non_workdays_before(target: _dt.date, *, skip_weekends: bool=True) -> list[_dt.date]:
-```
-
-#### 説明
-
-``target`` の前日から、前の営業日の翌日までの休みの日（連休）を返す。
-
-``target`` に近い順に並ぶ。``target`` の前日が営業日なら空リスト。
-``target`` 自身は含まない。打ち切りは ``non_workdays_after`` と同じ。
-
-### `now`
-
-```text
-def now() -> datetime.datetime:
-```
-
-#### 説明
-
-タイムゾーン付きの現在時刻（この PC のローカル時刻）を返す。
-
-### `nth_workday`
-
-```text
-def nth_workday(target: _dt.date, n: int, *, skip_weekends: bool=True) -> _dt.date:
-```
-
-#### 説明
-
-``target`` が属する月の第 ``n`` 営業日を返す（``n`` は 1 始まり）。
-
-月の初日から数えて ``n`` 番目の営業日。
-その月の営業日数を超える ``n`` を渡すと ``WorkdayNotFoundError``。
-負の ``n`` は受け付けない。
-
-Raises:
-    WorkdayNotFoundError: ``n`` が 1 未満、またはその月の営業日数を超える。
-
-### `project_dir`
-
-```text
-def project_dir() -> Path:
-```
-
-#### 説明
-
-実行したスクリプトが置かれているフォルダを返す。
-
-`python main.py` で動かしたときの `main.py` の場所、つまりプロジェクトの
-ルートを指す。`src/run.py` のような下の階層から呼んでも同じ場所を返す。
-
-利用側で `Path(__file__).parent` と書かなくて済むようにするためのもの。
-あの書き方はファイルを別の階層へ移した瞬間に指す先が変わるが、
-こちらは呼ぶ場所を選ばない。
-
-入力元・出力先は config.ini に書くのが基本なので、これが要るのは
-**プロジェクトに同梱したファイルを読む**ような場面に限られる。
-
-社内 RPA 基盤は `C:\` など別の場所をカレントにして
-`python <絶対パス>\main.py` と呼ぶ。**カレントではなくスクリプトの場所**を
-返すのはそのためで、config.ini・state.ini・logs/ もこれを基準にしている。
-
-``sys.argv[0]`` が想定外の値になるケースのフォールバック:
-- ``sys.argv[0] == ""`` : 対話実行（REPL）。``Path.cwd()`` を返す
-- ``sys.argv[0]`` が ``-m`` で起動されたパッケージ名を含む形
-  （例: ``.../python -m comken`` など）: ``Path.cwd()`` を返す
-- ``sys.argv[0]`` が解決できない: ``Path.cwd()`` を返す
-
-Returns:
-    実行スクリプトのあるフォルダ。**想定外のときは ``Path.cwd()`` に
-    フォールバック**して例外で止まらないようにする（state.ini / logs/
-    の置き場所が「現在の作業フォルダ」になる）。
-
-### `normalize`
-
-```text
-def normalize(value: object) -> str:
-```
-
-#### 説明
-
-表データの値を比較しやすい文字列へ正規化する。
-
-主な変換:
-    - 全角英数字・記号 → 半角（ａ→a, １→1, （→(, ．→.）
-    - 半角カタカナ     → 全角カタカナ（ｱ→ア, ｶﾞ→ガ）
-    - 合字             → 展開（㌔→km, ㍉→mm）
-
-Args:
-    value: Excel / CSV から得た値。``None`` は空文字として扱う。
-
-Returns:
-    正規化後の文字列。
-
-### `parse_cell_date`
-
-```text
-def parse_cell_date(value: object) -> datetime.date | None:
-```
-
-#### 説明
-
-セルの値を ``datetime.date`` に変換する。読めなければ `` ``None`` 。
-
-Excel から ``Table`` 行を読むとき、 日付列は
-
-- ``datetime.datetime`` オブジェクト（Excel の日付型セル）
-- ``datetime.date`` オブジェクト
-- 文字列（手入力・他システムからのエクスポート）
-
-のどれでも来うる。 それぞれを ``date`` に揃え、 **読めなかった値は
-``None`` を返す**（例外にはしない）。 利用側は ``None`` を「対象外の行」
-として数えて ``WARNING`` に出す形に向いている（読み込みは止めずに、
-何件スキップしたかだけ報告する業務運用）。
-
-受け付ける書式は ``_DATE_TEXT_FORMATS`` に固定。 新しい書式を足すときは
-ここにタプル要素として追加する（会社用カレンダーCSV の日付解釈とは別口
-なので、 祝日 CSV の安全弁を緩めない）。
-
-### `remove_spaces`
-
-```text
-def remove_spaces(text: str) -> str:
-```
-
-#### 説明
-
-文字列中の半角・全角スペースをすべて除去する。
-
-電話番号・郵便番号など、スペースを含んではいけない値の正規化に使う。
-
-Args:
-    text: 処理する文字列。
-
-Returns:
-    スペースを除去した文字列。
-
-### `retry`
-
-```text
-def retry[**P, R](times: int=3, wait: float=1.0, on: tuple[type[Exception], ...]=(Exception,)) -> Callable[[Callable[P, R]], Callable[P, R]]:
-```
-
-#### 説明
-
-失敗したら wait 秒空けて実行し直すデコレータ。
-
-Args:
-    times: 合計の実行回数（デフォルト: 3。「3回試して全部失敗ならエラー」）。
-    wait: 失敗から次の実行までの待機秒数（デフォルト: 1秒）。
-    on: リトライ対象の例外のタプル（デフォルト: すべての Exception 系）。
-        ``Exception`` のサブクラスを指定する。``KeyboardInterrupt`` /
-        ``SystemExit`` は ``Exception`` ではないので ``on`` に含まれていても
-        リトライされない（Ctrl+C で止められることを保証するため）。
-        ``on`` に含まれない例外は即座にそのまま出る。
-
-Raises:
-    ValueError: times が正の整数でない、または wait が負の値。
-    最後の実行で出た例外（times 回すべて失敗した場合）。
-
-Note:
-    入力値検証で ``ValueError`` を投げる。``times`` を 0 以下にしたいケースは
-    ループ自体を不要としているので、黙って 1 にするのではなく例外で知らせる
-    （誤って ``times=None`` を渡して 1 回しか実行されない事故を防ぐ）。
-
-### `today`
-
-```text
-def today() -> datetime.date:
-```
-
-#### 説明
-
-この PC のローカルの今日の日付を返す。
-
-### `unzip`
-
-```text
-@measure
-def unzip(src: str | Path, dst: str | Path | None=None) -> Path:
-```
-
-#### 説明
-
-zip を展開する。
-
-Windows のエクスプローラーで作られた zip（ファイル名が cp932）も
-文字化けせずに展開できる（UTF-8 の zip はそのまま正しく読まれる）。
-
-Args:
-    src: 展開する zip のパス。
-    dst: 展開先フォルダ。省略すると zip の隣に同名フォルダ（data.zip → data\）。
-         同名ファイルがあれば上書きされる。
-
-Returns:
-    展開先フォルダのパス。
-
-### `wait_for_file`
-
-```text
-@measure
-def wait_for_file(folder: str | Path, name_pattern: str, timeout: float=DEFAULT_TIMEOUT_SECONDS, poll_interval: float=DEFAULT_POLL_INTERVAL_SECONDS) -> Path:
-```
-
-#### 説明
-
-``folder`` 内で ``name_pattern`` にマッチするファイルが出現するまで待つ。
-
-1度でも見つかれば、その時点で mtime が最新のファイルを返して終了する。
-``poll_interval`` 秒ごとに再検索し、``timeout`` 秒経っても見つからなければ
-``FileNotFoundError`` を送出する。
-
-**「ファイルが存在するまで」しか待たない。** 作成直後のファイルは
-書き込み途中でも ``is_file()`` が True になるので、書き込み完了まで
-待ってから読みたいときは ``wait_until_stable()`` を続けて呼ぶ::
-
-    path = wait_for_file(folder, "data_*.csv")
-    path = wait_until_stable(path)   # サイズが落ち着くまで待つ
-
-**フォルダが無い場合は待たずに即座に失敗する。** ``Path.glob()`` は
-存在しないフォルダでも例外を出さず空を返すので、そのまま回すと
-「共有サーバーが切れている」「パスを打ち間違えた」も
-「ファイルがまだ来ていない」と同じ形で ``timeout`` 秒後に失敗し、
-原因が分からなくなる。フォルダの不在は待っても直らないので、
-ここで区別して即座に知らせる。
-
-Args:
-    folder: 監視するフォルダ。
-    name_pattern: ファイル名の glob パターン（例: ``"data_*.csv"``）。
-    timeout: 最大待機秒数。デフォルトは 60 秒。
-    poll_interval: 再検索の間隔秒数。デフォルトは 1 秒。
-
-Returns:
-    見つかったファイルのうち mtime が最新のもの。
-
-Raises:
-    FileNotFoundError: 監視するフォルダが存在しない場合（待たずに即座）。
-        待っている間にフォルダが消えた場合も同じ（``timeout`` 到達時）。
-    NotADirectoryError: ``folder`` にフォルダではなくファイルを渡した場合。
-    FileNotFoundError: ``timeout`` 秒経っても該当ファイルが見つからなかった場合。
-
-### `wait_until`
-
-```text
-def wait_until(condition: Callable[[], bool], timeout: float=60, interval: float=1.0) -> bool:
-```
-
-#### 説明
-
-``condition`` が True になるまで待つ。
-
-Args:
-    condition: 引数なしで呼び出せる callable。True を返したら待機終了。
-    timeout: 最大待機秒数（デフォルト: 60秒）。
-    interval: 確認間隔（秒）（デフォルト: 1秒）。
-
-Returns:
-    True: 条件が満たされた。
-    False: タイムアウトした（条件は満たされなかった）。
-
-### `wait_until_stable`
-
-```text
-@measure
-def wait_until_stable(path: str | Path, stable_for: float=DEFAULT_STABLE_FOR_SECONDS, timeout: float=DEFAULT_TIMEOUT_SECONDS, poll_interval: float=DEFAULT_POLL_INTERVAL_SECONDS) -> Path:
-```
-
-#### 説明
-
-ファイルへの書き込みが終わるまで待つ。
-
-サイズと更新時刻を ``poll_interval`` 秒ごとに見て、``stable_for`` 秒のあいだ
-どちらも変わらなければ「書き終わった」とみなして返す。共有サーバーへ
-他のシステムが置きにくるファイルを、途中まで読んでしまうのを防ぐ。
-
-    path = wait_until_stable(r"\\server\share\in\data.csv", stable_for=2.0)
-    rows = read_csv(path)      # 全部書き終わってから読む
-
-**サイズと更新時刻でしか判断できないので、確実ではない。** 書き込み側が
-``stable_for`` より長く止まると、途中でも「書き終わった」と判定する。
-ネットワークが不安定な共有フォルダでは ``stable_for`` を長めに取る。
-
-**書き込み側を自分で書けるなら、この関数より
-「別名で書いてから rename する」ほうが確実**（``comken.core.files`` の
-atomic 系がその形）。rename は一瞬で終わるので、読む側が途中の状態を
-見ることがない。この関数は**書き込み側に手を出せないとき**の手段。
-
-Args:
-    path: 監視するファイル。
-    stable_for: サイズと更新時刻が変わらないでいてほしい秒数。デフォルトは 2 秒。
-        ``0`` 以下を渡すと待たずにそのまま返す。
-    timeout: 最大待機秒数。デフォルトは 60 秒。
-    poll_interval: 確認の間隔秒数。デフォルトは 1 秒。
-
-Returns:
-    書き込みが終わったとみなせるファイルの ``Path``。
-
-Raises:
-    FileNotFoundError: ファイルが無い場合。待っている間に消えた場合も同じ。
-    TimeoutError: ``timeout`` までに書き込みが終わらなかった場合。
-
-### `workday`
-
-```text
-def workday(target: _dt.date, n: int, *, skip_weekends: bool=True) -> _dt.date:
-```
-
-#### 説明
-
-``target`` から ``n`` 営業日後の日付を返す（Excel の ``WORKDAY(d, n)`` 互換）。
-
-``n == 0`` のときは ``target`` を**そのまま**返す（``target`` が営業日か
-どうかを問わない）。``n`` が負なら前方向に進む。
-
-例: 2024/5/2（木、祝日前日）に ``workday(d, 1)`` を呼ぶと
-2024/5/7（火、5/3〜5/6 が祝日＋土日）を返す。
-
-Raises:
-    WorkdayNotFoundError: 探索が ``WORKDAY_SEARCH_LIMIT`` に達した。
-
-### `workday_on_or_after`
-
-```text
-def workday_on_or_after(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
-```
-
-#### 説明
-
-``target`` 以降で最初の営業日（``target`` を含む）。
-
-``target`` が営業日なら ``target`` をそのまま返す。
-営業日でなければ、``workday(target, 1)`` と同じ動きで翌日以降を探す。
-
-Raises:
-    WorkdayNotFoundError: ``WORKDAY_SEARCH_LIMIT`` 日探索しても
-        営業日が見つからなかった。
-
-### `workday_on_or_before`
-
-```text
-def workday_on_or_before(target: _dt.date, *, skip_weekends: bool=True) -> _dt.date:
-```
-
-#### 説明
-
-``target`` 以前で最初の営業日（``target`` を含む）。
-
-``target`` が営業日なら ``target`` をそのまま返す。
-営業日でなければ、``workday(target, -1)`` と同じ動きで前日以前を探す。
-
-Raises:
-    WorkdayNotFoundError: ``WORKDAY_SEARCH_LIMIT`` 日探索しても
-        営業日が見つからなかった。
-
-### `zip_files`
-
-```text
-def zip_files(files: Sequence[str | Path], dst: str | Path) -> Path:
-```
-
-#### 説明
-
-ファイルを選んで zip に圧縮する（zip 内はフラットに並ぶ）。
-
-Args:
-    files: 圧縮するファイルパスのリスト。
-    dst: 出力する zip のパス。親フォルダがなければ自動作成される。
-
-Returns:
-    作成した zip のパス。
-
-Raises:
-    FileNotFoundError: files の中に存在しないファイルがある場合。
-    ValueError: zip 内で同じ名前になるファイルが複数ある場合。
-
-### `zip_folder`
-
-```text
-@measure
-def zip_folder(folder: str | Path, dst: str | Path | None=None) -> Path:
-```
-
-#### 説明
-
-フォルダの中身をまるごと zip に圧縮する（サブフォルダも含む）。
-
-Args:
-    folder: 圧縮するフォルダ。
-    dst: 出力する zip のパス。省略するとフォルダの隣に「フォルダ名.zip」。
-         親フォルダがなければ自動作成される。既存の zip は上書きされる。
-
-Returns:
-    作成した zip のパス。
-
-Raises:
-    FileNotFoundError: folder が存在しない場合。
-
-
 ## `from comken.core.config import ...`
 
 ### `Config`
@@ -2247,7 +888,105 @@ handler が混ざっている場合は ``LoggingAlreadyConfiguredError`` を送�
 DEBUG にしたい、といった用途向け）。
 
 
+## `from comken.core.retry import ...`
+
+### `retry`
+
+```text
+def retry[**P, R](times: int=3, wait: float=1.0, on: tuple[type[Exception], ...]=(Exception,)) -> Callable[[Callable[P, R]], Callable[P, R]]:
+```
+
+#### 説明
+
+失敗したら wait 秒空けて実行し直すデコレータ。
+
+Args:
+    times: 合計の実行回数（デフォルト: 3。「3回試して全部失敗ならエラー」）。
+    wait: 失敗から次の実行までの待機秒数（デフォルト: 1秒）。
+    on: リトライ対象の例外のタプル（デフォルト: すべての Exception 系）。
+        ``Exception`` のサブクラスを指定する。``KeyboardInterrupt`` /
+        ``SystemExit`` は ``Exception`` ではないので ``on`` に含まれていても
+        リトライされない（Ctrl+C で止められることを保証するため）。
+        ``on`` に含まれない例外は即座にそのまま出る。
+
+Raises:
+    ValueError: times が正の整数でない、または wait が負の値。
+    最後の実行で出た例外（times 回すべて失敗した場合）。
+
+Note:
+    入力値検証で ``ValueError`` を投げる。``times`` を 0 以下にしたいケースは
+    ループ自体を不要としているので、黙って 1 にするのではなく例外で知らせる
+    （誤って ``times=None`` を渡して 1 回しか実行されない事故を防ぐ）。
+
+
+## `from comken.core.state import ...`
+
+### `State`
+
+```text
+class State:
+```
+
+#### 説明
+
+プログラムが次回実行へ持ち越す値を state.ini に保存する。
+
+``set()`` は呼び出すたびに UTF-8 で原子的に保存する。dry-run 中に状態を
+書くと、試運転したファイルが本番で処理済みと判断されうるため、ファイルは
+変更せず、書く予定だった内容だけをログへ出す。
+
+保存できる値は、真偽値・整数・小数・文字列・文字列のリスト。
+
+Args:
+    path: state.ini のパス。省略するとプロジェクトのフォルダ（main.py の場所）の
+          state.ini。
+
+#### `__init__`
+
+```text
+def __init__(self, path: str | Path | None=None) -> None:
+```
+
+#### `get`
+
+```text
+def get(self, key: str, default: StateValue | None=None) -> StateValue | None:
+```
+
+##### 説明
+
+保存済みの値を返す。無い場合は default を返す。
+
+#### `set`
+
+```text
+@measure
+def set(self, key: str, value: StateValue) -> None:
+```
+
+##### 説明
+
+値を保存する。dry-run 中はファイルもメモリ上の状態も変更しない。
+
+
 ## `from comken.core.table import ...`
+
+### `DiffResult`
+
+```text
+class DiffResult:
+```
+
+#### 説明
+
+``Table.diff()`` の結果。
+
+なぜ ``added`` / ``removed`` が ``Table`` で ``changed`` が ``list[RowChange]``
+なのか — ``changed`` の1件は「変更前・変更後・差分列」の3つを抱えており、
+表の1行に収まらない（同じ列名で2つの値を並べると区別できない）ため
+``RowChange`` のリストのままで持つ。 一方 ``added`` / ``removed`` は表の行と
+同じ形なので ``Table`` へ揃え、 ``filter`` / ``select`` / ``count`` などの
+Table 標準の操作が直接使えるようにしてある。
 
 ### `HierarchyResult`
 
@@ -2272,6 +1011,22 @@ Attributes:
 ### `Row`
 
 公開定数。
+
+### `RowChange`
+
+```text
+class RowChange:
+```
+
+#### 説明
+
+``Table.diff()`` / ``Table.changes()`` が返す「変更のあった行」の情報。
+
+Attributes:
+    key: キー列の正規化後の値（``_normalize`` を通した文字列）。
+    before: 変更前の行全体。
+    after: 変更後の行全体。
+    columns: 変わった列だけ {列名: (変更前, 変更後)}。
 
 ### `Table`
 
@@ -2763,6 +1518,291 @@ class UnmatchedRows:
 ``result()`` にも影響しない。
 ``only_in_write`` は **作業 Table の実体行**（``list[Row]``）。書き換えると
 ``result()`` に反映される。型が違うのはこの違いを表すため。
+
+
+## `from comken.core.text import ...`
+
+### `is_enabled_mark`
+
+```text
+def is_enabled_mark(value: object) -> bool:
+```
+
+#### 説明
+
+Excel / CSV の管理表セルが「有効」を表すかどうかを判定する。
+
+真とみなす値:
+
+- ``bool``: そのまま返す（ ``True`` / ``False`` ）
+- ``int``: ``1`` だけ True、 それ以外は False
+- ``str``: 前後の空白（半角・全角）を除いたあと、大文字小文字を無視して
+  ``is_true_word`` を通すか、以下の語のいずれかに一致すれば True::
+
+      "有効" / "○" / "o" / "yes" / "1" / "on" / "はい" / "true"
+
+それ以外（ ``None`` / 空文字 / ``"×"`` / ``"無効"`` / ``"no"`` / ``"0"`` /
+``"off"`` / ``"いいえ"`` などの数値・文字列）は False。
+
+Args:
+    value: セルから得た値。 Excel のセルは ``bool`` / ``int`` / ``str`` /
+        ``None`` のどれでも来うる。
+
+Returns:
+    「有効」とみなせる値なら True。
+
+Note:
+    ``is_true_word`` とは語集合が違う。 ``"1"`` を True にするのは
+    Excel 管理表の視認性のためで、 ``config.ini`` の ``1`` を bool に
+    しない設計（ ``is_true_word("1") is False`` ）を壊さないために、
+    別の関数として公開している。
+
+### `is_true_word`
+
+```text
+def is_true_word(text: str) -> bool:
+```
+
+#### 説明
+
+英語の "true" 表記かどうかを判定する（大文字小文字は問わない）。
+
+config.ini の bool 変換と、Excel 管理表（レポート管理表・スケジュール管理表など）の
+「有効」列判定の両方が使う、共通の "true" 判定。前後の空白は無視する
+（config.ini 側は事前に ``strip()`` 済みの値を渡す想定だが、
+Excel のセル値は前後に空白が付いたまま渡ってくることがあるため、ここでも取る）。
+
+Args:
+    text: 判定する文字列。
+
+Returns:
+    "true"（大文字小文字問わず）と一致すれば True。
+
+Note:
+    仕様上、 ``"1"`` / ``"yes"`` / ``"on"`` などはここで False になる
+    （config.ini の整数 ``1`` が bool 扱いになる事故を防ぐため）。 Excel
+    管理表のような日本語・記号混じりのセルで ``"1"`` を有効扱いにしたい
+    ときは ``is_enabled_mark`` を使う。
+
+### `normalize`
+
+```text
+def normalize(value: object) -> str:
+```
+
+#### 説明
+
+表データの値を比較しやすい文字列へ正規化する。
+
+主な変換:
+    - 全角英数字・記号 → 半角（ａ→a, １→1, （→(, ．→.）
+    - 半角カタカナ     → 全角カタカナ（ｱ→ア, ｶﾞ→ガ）
+    - 合字             → 展開（㌔→km, ㍉→mm）
+
+Args:
+    value: Excel / CSV から得た値。``None`` は空文字として扱う。
+
+Returns:
+    正規化後の文字列。
+
+### `remove_spaces`
+
+```text
+def remove_spaces(text: str) -> str:
+```
+
+#### 説明
+
+文字列中の半角・全角スペースをすべて除去する。
+
+電話番号・郵便番号など、スペースを含んではいけない値の正規化に使う。
+
+Args:
+    text: 処理する文字列。
+
+Returns:
+    スペースを除去した文字列。
+
+
+## `from comken.core.timer import ...`
+
+### `Timer`
+
+```text
+class Timer:
+```
+
+#### 説明
+
+処理時間を計測して INFO ログに出す。with・デコレータ両対応。
+
+Attributes:
+    elapsed: 経過秒数（float）。with を抜けた後に参照できる。
+
+#### `__init__`
+
+```text
+def __init__(self, name: str='処理', message: str=_MESSAGE, time_format: str | None=_TIME_FORMAT) -> None:
+```
+
+##### 説明
+
+Args:
+    name: ログに出す処理名（例: "CSV読み込み"）。
+    message: ログに出す文言。次のプレースホルダを使える:
+
+        - ``{name}``: ``__init__`` の ``name``
+        - ``{elapsed}``: ``time_format`` で整形した経過時間
+
+        例::
+
+            "{name} -> {elapsed}"
+
+    time_format: 経過時間の整形書式。 ``datetime.strftime`` と
+        **同じ書き方**で指定する（独自記号は持たない）。
+
+        - ``None``（既定）: 小数2桁＋「秒」（例 ``"3.21秒"``）
+        - 文字列: 経過秒を **整数秒に四捨五入（0.5 は切り上げ、
+          ``int(seconds + 0.5)``）** してから ``datetime.time`` に
+          詰め、 ``time.strftime(time_format)`` の結果を返す。
+          ``round()``（偶数丸め）とは違うため、0.5 秒 → ``01``、
+          1.5 秒 → ``02``、2.5 秒 → ``03`` のように丸める。
+          秒未満は捨てて整数秒にするため、``%f`` は ``000000`` 固定。
+
+          ``datetime.time`` の制約で 24 時間を超えると ``%H`` は 0 に戻る
+          （``strftime`` と同じ挙動。仕様として受け入れる）。
+
+          例::
+
+              "%H:%M:%S"        # → "01:02:05"
+              "%M分%S秒"        # 3725 秒 → "02分05秒"
+              "%I:%M %p"        # strftime の他の記号もそのまま使える
+              "%H%%"            # "%" を文字として出力
+
+        ``%`` を **1つも** 含まない文字列は ``__init__`` で
+        ``ValueError`` にする（``"abc"`` のように ``%`` が無いと
+        strftime では何も置き換わらずそのまま出てしまうので、
+        黙って意味の違う表示にしないため）。
+
+
+## `from comken.core.wait import ...`
+
+### `wait_for_file`
+
+```text
+@measure
+def wait_for_file(folder: str | Path, name_pattern: str, timeout: float=DEFAULT_TIMEOUT_SECONDS, poll_interval: float=DEFAULT_POLL_INTERVAL_SECONDS) -> Path:
+```
+
+#### 説明
+
+``folder`` 内で ``name_pattern`` にマッチするファイルが出現するまで待つ。
+
+1度でも見つかれば、その時点で mtime が最新のファイルを返して終了する。
+``poll_interval`` 秒ごとに再検索し、``timeout`` 秒経っても見つからなければ
+``FileNotFoundError`` を送出する。
+
+**「ファイルが存在するまで」しか待たない。** 作成直後のファイルは
+書き込み途中でも ``is_file()`` が True になるので、書き込み完了まで
+待ってから読みたいときは ``wait_until_stable()`` を続けて呼ぶ::
+
+    path = wait_for_file(folder, "data_*.csv")
+    path = wait_until_stable(path)   # サイズが落ち着くまで待つ
+
+**フォルダが無い場合は待たずに即座に失敗する。** ``Path.glob()`` は
+存在しないフォルダでも例外を出さず空を返すので、そのまま回すと
+「共有サーバーが切れている」「パスを打ち間違えた」も
+「ファイルがまだ来ていない」と同じ形で ``timeout`` 秒後に失敗し、
+原因が分からなくなる。フォルダの不在は待っても直らないので、
+ここで区別して即座に知らせる。
+
+Args:
+    folder: 監視するフォルダ。
+    name_pattern: ファイル名の glob パターン（例: ``"data_*.csv"``）。
+    timeout: 最大待機秒数。デフォルトは 60 秒。
+    poll_interval: 再検索の間隔秒数。デフォルトは 1 秒。
+
+Returns:
+    見つかったファイルのうち mtime が最新のもの。
+
+Raises:
+    FileNotFoundError: 監視するフォルダが存在しない場合（待たずに即座）。
+        待っている間にフォルダが消えた場合も同じ（``timeout`` 到達時）。
+    NotADirectoryError: ``folder`` にフォルダではなくファイルを渡した場合。
+    FileNotFoundError: ``timeout`` 秒経っても該当ファイルが見つからなかった場合。
+
+### `wait_seconds`
+
+```text
+def wait_seconds(n: float) -> None:
+```
+
+#### 説明
+
+``n`` 秒待機する。
+
+Args:
+    n: 待機秒数。小数も指定できる（例: 0.5）。
+
+### `wait_until`
+
+```text
+def wait_until(condition: Callable[[], bool], timeout: float=60, interval: float=1.0) -> bool:
+```
+
+#### 説明
+
+``condition`` が True になるまで待つ。
+
+Args:
+    condition: 引数なしで呼び出せる callable。True を返したら待機終了。
+    timeout: 最大待機秒数（デフォルト: 60秒）。
+    interval: 確認間隔（秒）（デフォルト: 1秒）。
+
+Returns:
+    True: 条件が満たされた。
+    False: タイムアウトした（条件は満たされなかった）。
+
+### `wait_until_stable`
+
+```text
+@measure
+def wait_until_stable(path: str | Path, stable_for: float=DEFAULT_STABLE_FOR_SECONDS, timeout: float=DEFAULT_TIMEOUT_SECONDS, poll_interval: float=DEFAULT_POLL_INTERVAL_SECONDS) -> Path:
+```
+
+#### 説明
+
+ファイルへの書き込みが終わるまで待つ。
+
+サイズと更新時刻を ``poll_interval`` 秒ごとに見て、``stable_for`` 秒のあいだ
+どちらも変わらなければ「書き終わった」とみなして返す。共有サーバーへ
+他のシステムが置きにくるファイルを、途中まで読んでしまうのを防ぐ。
+
+    path = wait_until_stable(r"\\server\share\in\data.csv", stable_for=2.0)
+    rows = read_csv(path)      # 全部書き終わってから読む
+
+**サイズと更新時刻でしか判断できないので、確実ではない。** 書き込み側が
+``stable_for`` より長く止まると、途中でも「書き終わった」と判定する。
+ネットワークが不安定な共有フォルダでは ``stable_for`` を長めに取る。
+
+**書き込み側を自分で書けるなら、この関数より
+「別名で書いてから rename する」ほうが確実**（``comken.core.files`` の
+atomic 系がその形）。rename は一瞬で終わるので、読む側が途中の状態を
+見ることがない。この関数は**書き込み側に手を出せないとき**の手段。
+
+Args:
+    path: 監視するファイル。
+    stable_for: サイズと更新時刻が変わらないでいてほしい秒数。デフォルトは 2 秒。
+        ``0`` 以下を渡すと待たずにそのまま返す。
+    timeout: 最大待機秒数。デフォルトは 60 秒。
+    poll_interval: 確認の間隔秒数。デフォルトは 1 秒。
+
+Returns:
+    書き込みが終わったとみなせるファイルの ``Path``。
+
+Raises:
+    FileNotFoundError: ファイルが無い場合。待っている間に消えた場合も同じ。
+    TimeoutError: ``timeout`` までに書き込みが終わらなかった場合。
 
 
 ## `from comken.exceptions import ...`

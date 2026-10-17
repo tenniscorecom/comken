@@ -58,24 +58,22 @@ CSV を読むだけ。
 
 ## 最短の使い方
 
-**推奨する書き方**は `comken.core` ファサードから `dates` を取り、
-その関数を使う形です。関数を 1 個ずつ import する必要はありません。
+関数を直接 import する書き方が推奨です（いちばん浅い `__all__` から取る）。
 
 ```python
 from datetime import date
 
-from comken.core import dates
+from comken.core.dates import is_workday, today, workday
 
-if dates.is_workday(date.today()):     # 既定カレンダーで判定
+if is_workday(today()):     # 既定カレンダーで判定
     ...  # レポートを取りに行く
 
 # 翌営業日（Excel の WORKDAY(d, 1) と同じ）
-tomorrow = dates.workday(date.today(), 1)
+tomorrow = workday(today(), 1)
 ```
 
-`dates.is_workday` / `dates.workday` / `dates.last_workday` /
-`dates.is_holiday` / `dates.holiday_name` などは **既定カレンダー** を
-そのまま使う。カレンダーを組み立てる API は公開していない。
+`is_workday` / `workday` / `last_workday` / `is_holiday` / `holiday_name` などは
+**既定カレンダー** をそのまま使う。カレンダーを組み立てる API は公開していない。
 
 ## 会社休日の定義
 
@@ -217,7 +215,7 @@ End Function
 ```python
 from datetime import date
 
-from comken.core import now, today, month_start, month_end, parse_cell_date
+from comken.core.dates import month_end, month_start, now, parse_cell_date, today
 
 now()                              # タイムゾーン付きの現在時刻（UTC をローカル変換）
 today()                            # 今日の日付（date）
@@ -243,7 +241,7 @@ parse_cell_date(None)                       # → None
 ```python
 from datetime import date
 
-from comken.core import fiscal_year
+from comken.core.dates import fiscal_year
 
 fiscal_year(date(2026, 4, 1))     # → 2026（4月はじまり）
 fiscal_year(date(2026, 3, 31))     # → 2025（まだ前の年度）
@@ -319,16 +317,17 @@ datetime.strptime("202610", "%Y%m").date()     # → date(2026, 10, 1)（年月�
 
 ```python
 from datetime import date
-from comken.core import dates
+
+from comken.core.dates import first_workday, last_workday, nth_workday
 
 # 月末の最終営業日（例: 月末が土日祝なら直前の営業日）
-dates.last_workday(date(2026, 8, 20))
+last_workday(date(2026, 8, 20))
 
 # 月初の営業日（例: 1日が土日祝なら翌営業日）
-dates.first_workday(date(2026, 8, 20))
+first_workday(date(2026, 8, 20))
 
 # 第 3 営業日
-dates.nth_workday(date(2026, 8, 20), 3)
+nth_workday(date(2026, 8, 20), 3)
 
 # 15 日、休みならその前の営業日
 dates.workday_on_or_before(date(2026, 8, 15))

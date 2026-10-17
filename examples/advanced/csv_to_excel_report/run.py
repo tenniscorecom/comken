@@ -15,7 +15,7 @@ Excel レポートの作成・見た目調整（Excel + Sheet）を通しで行�
 import logging
 from pathlib import Path
 
-from comken.core import today
+from comken.core.dates import today
 from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Color, Excel
 

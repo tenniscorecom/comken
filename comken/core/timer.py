@@ -20,6 +20,8 @@ from typing import Any, Self
 
 logger = logging.getLogger(__name__)
 
+__all__ = ["Timer"]
+
 # ログに出す文言の既定値。次のプレースホルダを使える。
 #
 # - ``{name}``: ``__init__`` の ``name``

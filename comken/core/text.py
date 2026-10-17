@@ -11,6 +11,8 @@
 
 import unicodedata
 
+__all__ = ["is_enabled_mark", "is_true_word", "normalize", "remove_spaces"]
+
 
 def normalize(value: object) -> str:
     """表データの値を比較しやすい文字列へ正規化する。

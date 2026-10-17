@@ -43,19 +43,19 @@
 
 外部ライブラリに依存するフォルダは、import 時に対処法つきのエラーを出し、そのフォルダを使わなければ影響しないようにする。
 
-## 3. 公開 API の2階層
+## 3. 公開 API の階層
 
-| 入口 | 数 | 基準 |
-|---|---|---|
-| `from comken import ...` | `len(comken.__all__)` | 何をするプロジェクトかに関係なく使う土台 |
-| `from comken.core import ...` | `len(comken.core.__all__)` | 特定の操作対象（ファイル・日時・文字列・差分・計測）を持つ部品 |
-| `from comken.toolbox.excel import ...` | 各パッケージの `__all__` | 外にあるものを触る道具 |
+| 入口 | 基準 |
+|---|---|
+| `from comken import ...` | `len(comken.__all__)`。何をするプロジェクトかに関係なく使う土台 |
+| `from comken.<package>.<module> import ...` | `__all__` で公開している **いちばん浅い** パッケージ・モジュールから取る部品（例: `from comken.core.dates import today`、`from comken.core.table import Table`、`from comken.core.timer import Timer`）。同じ名前を 2 か所から取れる形にしない |
+| `from comken.toolbox.excel import ...` | 各パッケージの `__all__`。外にあるものを触る道具 |
 
-第一選択は `from comken import X`。そこに無いものだけ `from comken.core import Y` で取る。同じ名前を両方から取れる状態にしない。
+`comken` 直下が第一選択。そこに無いものは、その名前を `__all__` で公開している **いちばん浅い** パッケージ・モジュールから取る。ライブラリの中（`comken/` 配下）は定義しているモジュールまで書く（`from comken.core.files.ops import project_dir`）。サブパッケージの `__init__.py` 経由で読むと循環 import になりやすい。
 
 公開範囲は **ディレクトリ名ではなく `__all__` で表す**。ディレクトリは「何であるか」で決め、`__init__.py` が公開範囲を決める。公開方針を変えてもファイルが動かない（import パスが壊れない）ようにするためである。
 
-公開／非公開の正本は `tests/test_facade.py`（`__all__` の内容・重複の検査）と `tests/test_layers.py`（層をまたぐ import の向き）。名前の一覧も具体的な数もこの文書には書かない（`README.md` の「モジュール一覧」と同じ数値を 2 箇所に置くと古くなるため）。
+公開／非公開の正本は `tests/test_facade.py`（`comken.__all__` の内容）と `tests/test_layers.py`（層をまたぐ import の向き）。名前の一覧も具体的な数もこの文書には書かない（`README.md` の「モジュール一覧」と同じ数値を 2 箇所に置くと古くなるため）。
 
 新しいクラスを `comken` 直下に追加する基準は「Excel を使わないプロジェクトも通るか」。`Config` が直下、`find_dated_file` が `core` に置かれているのはこの基準による。
 

@@ -25,7 +25,7 @@ r"""サンプル: bat でやっていた「コピー → マクロ → 配る」
 import logging
 from pathlib import Path
 
-from comken.core import copy_file, find_dated_file
+from comken.core.files import copy_file, find_dated_file
 from comken.core.logger import setup_local_logging
 from comken.toolbox.excel import Excel
 

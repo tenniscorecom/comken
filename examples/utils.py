@@ -2,17 +2,12 @@
 
 import logging
 
-from comken.core import (
-    DiffResult,
-    RowChange,
-    normalize,
-    now,
-    remove_spaces,
-    retry,
-    wait_until,
-)
+from comken.core.dates import now
 from comken.core.logger import setup_local_logging
-from comken.core.table import Table
+from comken.core.retry import retry
+from comken.core.table import DiffResult, RowChange, Table
+from comken.core.text import normalize, remove_spaces
+from comken.core.wait import wait_until
 
 RETRY_COUNT = 2
 

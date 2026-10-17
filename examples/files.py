@@ -4,14 +4,8 @@ import datetime
 import logging
 from pathlib import Path
 
-from comken.core import (
-    copy_file,
-    date_in_name,
-    move_file,
-    today,
-    unzip,
-    zip_files,
-)
+from comken.core.dates import date_in_name, today
+from comken.core.files import copy_file, move_file, unzip, zip_files
 from comken.core.logger import setup_local_logging
 
 HERE = Path(__file__).parent

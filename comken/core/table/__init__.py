@@ -4,9 +4,18 @@
 アダプタは toolbox 側に置き、保存の挙動が境界で見えるようにする。
 """
 
+from comken.core.table.diff import DiffResult, RowChange
 from comken.core.table.hierarchy import HierarchyResult
 from comken.core.table.model import Table
 from comken.core.table.row import Row
 from comken.core.table.transfer import Transfer, UnmatchedRows
 
-__all__ = ["HierarchyResult", "Row", "Table", "Transfer", "UnmatchedRows"]
+__all__ = [
+    "DiffResult",
+    "HierarchyResult",
+    "Row",
+    "RowChange",
+    "Table",
+    "Transfer",
+    "UnmatchedRows",
+]

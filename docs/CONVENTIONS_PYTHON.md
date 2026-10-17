@@ -101,6 +101,11 @@ from ..foo import Bar
 from comken.toolbox.utils import *
 ```
 
+| 場面 | 書き方 |
+|---|---|
+| 利用側（`comken/` の外） | その名前を `__all__` で公開している **いちばん浅い** パッケージ・モジュールから取る。`from comken.core.dates import today`、`from comken.core.table import Table`、`from comken.core.timer import Timer` のように書く |
+| ライブラリの中（`comken/` 配下） | 定義しているモジュールまで書く（`from comken.core.files.ops import project_dir` の形）。サブパッケージの `__init__.py` 経由で読まない（循環 import になりやすい） |
+
 ---
 
 ## 4. 型ヒント

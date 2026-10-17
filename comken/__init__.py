@@ -1,13 +1,11 @@
 """comken/__init__.py — comken の基本入口。
 
 「comken 直下」には、**何をするプロジェクトかに関係なく使う**土台だけを置く。
-設定・ログ・実行モードの7個で、それ以外の部品は ``comken.core`` から取る
-（``from comken.core import find_dated_file``）。
+設定・ログ・実行モードの7個で、それ以外の部品は ``__all__`` で公開している
+いちばん浅いパッケージ・モジュールから取る（例: ``comken.core.files`` /
+``comken.core.dates`` 等。``docs/CONVENTIONS_PYTHON.md`` 3 章）。
 
-書くときは ``from comken import X`` が第一選択。そこに無いものだけ
-``from comken.core import Y`` で取る（docs/ARCHITECTURE.md §3）。
-
-toolbox / services はこの2階層に上げない。``from comken.toolbox.excel import Excel``
+toolbox / services はこの階層に上げない。``from comken.toolbox.excel import Excel``
 のように深いパスのままで十分で、そこには「どの機能群に依存しているか」が読める意味があるため。
 """
 

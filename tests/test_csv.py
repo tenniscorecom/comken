@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from comken.core import Table
+from comken.core.table import Table
 from comken.exceptions import (
     ComkenFileNotFoundError,
     CSVError,

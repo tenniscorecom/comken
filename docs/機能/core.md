@@ -2,7 +2,11 @@
 
 [README（ドキュメントの入口）へ戻る](../../README.md)
 
-`from comken.core import ...` で取る部品の詳しい説明です。
+名前を `__all__` で公開している **いちばん浅い** パッケージ・モジュールから取る部品の説明です
+（[CONVENTIONS_PYTHON.md §3](../CONVENTIONS_PYTHON.md#3-import-の書き方)）。
+`comken` 直下にあるものは `from comken import X`、それ以外は
+`from comken.core.dates import today` / `from comken.core.table import Table` /
+`from comken.core.timer import Timer` のように書く。
 **特定のアプリや外部サービスを触らない**ものだけがここに入る
 （Excel・CSV・ブラウザなどは `comken.toolbox`、Windows のフォルダ取得は [Windows 操作](windows.md)）。
 
@@ -14,7 +18,7 @@ shutil を知らなくても使えるラッパー。ルールは共通で
 「**dst が既存フォルダならその中へ、それ以外はファイルパス扱い（親フォルダ自動作成）、同名は上書き**」。
 
 ```python
-from comken.core import copy_file, move_file
+from comken.core.files import copy_file, move_file
 
 move_file("report.xlsx", r"C:\作業\output")            # フォルダの中へ移動
 move_file("report.xlsx", r"C:\作業\output\売上.xlsx")   # 名前を変えて移動（out フォルダがなければ作られる）
@@ -25,7 +29,8 @@ copy_file("report.xlsx", r"C:\作業\backup")             # コピー（元フ�
 ### ファイル名の組み立て・検索
 
 ```python
-from comken.core import date_in_name, find_dated_file, today
+from comken.core.dates import date_in_name, today
+from comken.core.files import find_dated_file
 
 FOLDER = r"\\nas-server\share"
 
@@ -127,7 +132,7 @@ for change in history.changes(key="社員番号", order_by="変更時刻"):
 `time.sleep` の代わりに単位を明示して書ける。「条件が満たされるまで待つ」もループを書かずに済む。
 
 ```python
-from comken.core import wait_until
+from comken.core.wait import wait_until
 from comken.core.wait import wait_seconds
 
 wait_seconds(3)     # 3秒待つ
@@ -148,7 +153,7 @@ Excel の日付列は型がバラバラで来る（`datetime.datetime` / `dateti
 `datetime.date` に揃えて返す関数。
 
 ```python
-from comken.core import parse_cell_date
+from comken.core.dates import parse_cell_date
 
 parse_cell_date(datetime.datetime(2026, 4, 22, 12, 30))  # → date(2026, 4, 22)
 parse_cell_date("2026/04/22")                             # → date(2026, 4, 22)
@@ -171,7 +176,7 @@ parse_cell_date(None)                                     # → None
 突合キーの正規化に使うと「見た目は同じなのに一致しない」問題を防げる。
 
 ```python
-from comken.core import normalize, remove_spaces
+from comken.core.text import normalize, remove_spaces
 
 normalize("ＡＢＣ１２３")          # → "ABC123"（全角英数 → 半角）
 normalize("ｱｲｳ")                  # → "アイウ"（半角カナ → 全角）
@@ -223,7 +228,7 @@ is_enabled_mark(None)        # → False
 一時的な失敗（クリックが要素に遮られた、ネットワークが一瞬切れた等）を自動でやり直す。
 
 ```python
-from comken.core import retry
+from comken.core.retry import retry
 
 @retry()                     # 3回まで試す（間隔1秒）。全部失敗なら最後の例外が出る
 def download_report():
@@ -242,7 +247,7 @@ def click_submit():
 「どこが遅いのか」を調べる。結果は INFO ログに出る。
 
 ```python
-from comken.core import Timer
+from comken.core.timer import Timer
 
 with Timer("CSV読み込み"), CSV("data.csv") as csv_file:
     rows = csv_file.read()
@@ -358,7 +363,7 @@ path = wait_until_stable(r"\\server\share\in\data.csv", stable_for=2.0)
 Windows のエクスプローラーで作られた zip（日本語ファイル名）も文字化けせず展開できる。
 
 ```python
-from comken.core import unzip, zip_files, zip_folder
+from comken.core.files import unzip, zip_files, zip_folder
 
 zip_folder(r"C:\作業\reports")                       # → C:\作業\reports.zip
 zip_files(["a.xlsx", "b.csv"], r"C:\作業\提出用.zip")
@@ -396,7 +401,7 @@ rows = table.to_rows()
 表全体は `Table`（pandas でいう DataFrame）、1 行は `Row`（Series にあたる。実体は
 `dict[str, Any]` の別名）です。`table[n]` / `for row in table` / `to_rows()` / `iter_rows()` など、
 行を返すものの注釈は `Row` で、型の名前が表と行で分かれています。注釈に使うときは
-`from comken.core import Row` です（実行時の動作は `dict` のままです）。
+`from comken.core.table import Row` です（実行時の動作は `dict` のままです）。
 
 | やりたいこと | API |
 |---|---|
@@ -651,7 +656,7 @@ for ループが文字単位になる事故が起きる）。
 使い分ける。人が調整した設定をプログラムが上書きする事故を防ぐため、両者は混ぜない。
 
 ```python
-from comken.core import State
+from comken.core.state import State
 
 state = State()                         # 実行フォルダ直下の state.ini
 last_file = state.get("LAST_FILE")     # 無ければ None

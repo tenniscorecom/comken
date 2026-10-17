@@ -53,13 +53,13 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 - **`from comken import ...` で取れるのは、何をするプロジェクトでも使う7個だけ。**
   `config` / `Config`（設定）、`comken_logger`（ログ）、実行モードの2関数
   （`dry_run` / `debug`）、ログの起動元を表す `Backoffice` / `Intranet`
-- **部品は `from comken.core import ...` から取る。** ファイル検索・日時・文字列・差分・
-  計測など（`FileFinder` / `copy_file` / `project_dir` / `today` / `Timer` / `retry` など。
-  正確な数は増減するため固定値を書かない — 知りたいときは
-  `python -c "import comken.core; print(len(comken.core.__all__))"`）
+- **部品は `__all__` で公開しているいちばん浅いパッケージ・モジュールから取る。**
+  `comken` 直下にあるものは `from comken import X`。それ以外は
+  `from comken.core.dates import today` / `from comken.core.table import Table` /
+  `from comken.core.timer import Timer` のように書く。
+  公開している名前の一覧は [`docs/自動生成/API.md`](docs/自動生成/API.md) にある。
 - **表データは `CSV` / `Excel` と `Table` を使い、ファイル形式に依存しない処理にする**
   （どの機能群に依存しているかが import 行で分かる）
-- **書くときは `from comken import X` が第一選択。** そこに無いものだけ `from comken.core import Y`
 - **ファイル・ブラウザ・COM は `with` で開く。** 途中で失敗しても閉じられる
 - **エラーは細かい方から受ける。** 個別（`SheetNotFoundError`）→ 分野（`ExcelError`）→
   全体（`ComkenError`）の3段。階層は[例外体系](docs/ARCHITECTURE.md#5-例外体系)
@@ -85,7 +85,7 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 | [Salesforce（requests）](docs/機能/salesforce.md) | Salesforce の SOQL・レコード操作・レポート取得・API 使用量の計測 |
 | [credentials（DPAPI）](docs/機能/credentials.md) | パスワード・client_secret の暗号化保存（Windows ユーザーに紐付く） |
 | [祝日・営業日判定](docs/機能/dates.md) | 内閣府の祝日 CSV と会社休日ルールを合成した「会社用カレンダー CSV」を Python・VBA 共通で読み取って営業日判定（Excel の WORKDAY 互換） |
-| [core（部品）](docs/機能/core.md) | `from comken.core import ...` で取る部品群。ファイル検索・操作・圧縮・ファイル名の組み立て／データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時 |
+| [core（部品）](docs/機能/core.md) | `__all__` で公開しているいちばん浅いパッケージ・モジュールから取る部品群。ファイル検索・操作・圧縮・ファイル名の組み立て／データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時 |
 | [Salesforceレポートダウンローダー（services）](docs/機能/salesforce-downloader.md) | 複数プロジェクトのSalesforceレポート定期取得を読み取る側。管理表・履歴・スケジュール・取得実行は `Salesforceレポートダウンローダー` リポジトリ側 |
 
 ## 定数クラス一覧

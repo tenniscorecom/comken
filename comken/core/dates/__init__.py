@@ -5,9 +5,9 @@
 （``comken/core/dates/data/company_calendar.csv``）を読み、「今日が営業日か」
 「次の営業日」「収録期限の警告」を提供する。
 
-    from comken.core import dates
+    from comken.core.dates import is_workday, today
 
-    if dates.is_workday(date.today()):
+    if is_workday(today()):
         ...  # レポートを取りに行く
 
 ``workday(d, n)`` は Excel の ``WORKDAY(d, n)`` と同じ。

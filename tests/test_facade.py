@@ -1,13 +1,10 @@
 """comken の公開 API 検証。
 
-公開は2階層（docs/ARCHITECTURE.md §3）。``from comken import ...`` には
-「何をするプロジェクトかに関係なく使う」土台だけを置き、部品は
-``from comken.core import ...`` から取る。両方の ``__all__`` が意図どおりで、
-互いに重複していないことをここで保証する。
+`from comken import ...` には「何をするプロジェクトかに関係なく使う」土台だけを置く
+（docs/ARCHITECTURE.md §3）。`__all__` が意図どおりであることをここで保証する。
 """
 
 import comken
-import comken.core
 
 
 def test_facade_exposes_all_names() -> None:
@@ -43,84 +40,6 @@ def test_facade_only_expected_names() -> None:
         "comken_logger",
     }
     assert set(comken.__all__) == expected
-
-
-def test_core_exposes_parts() -> None:
-    """comken.core は部品を公開し、その全てが実際に取れる。
-
-    増えるべき時: core に部品を足して、利用側から使わせるとき。
-    ここに書かないと `from comken.core import ...` で届かない。
-    """
-    expected = {
-        "DiffResult",
-        "HierarchyResult",
-        "Row",
-        "RowChange",
-        "State",
-        "Table",
-        "Timer",
-        "Transfer",
-        "copy_file",
-        "count_workdays",
-        "date_in_name",
-        "delete_file",
-        "delete_files",
-        "find_dated_file",
-        "first_workday",
-        "fiscal_year",
-        "holiday_name",
-        "is_holiday",
-        "is_workday",
-        "last_workday",
-        "local_copy",
-        "month_end",
-        "month_start",
-        "move_file",
-        "non_workdays_after",
-        "non_workdays_before",
-        "now",
-        "nth_workday",
-        "project_dir",
-        "normalize",
-        "parse_cell_date",
-        "remove_spaces",
-        "retry",
-        "today",
-        "unzip",
-        "wait_for_file",
-        "wait_until",
-        "wait_until_stable",
-        "workday",
-        "workday_on_or_after",
-        "workday_on_or_before",
-        "zip_files",
-        "zip_folder",
-    }
-    assert set(comken.core.__all__) == expected
-    for name in comken.core.__all__:
-        assert hasattr(comken.core, name), f"公開名 {name} が comken.core から取れない"
-
-
-def test_core_does_not_expose_internal_helpers() -> None:
-    """core の内部実装は公開しない。利用側が触ると変更できなくなるため。"""
-    forbidden = (
-        "FileBase",
-        "cleanup_stale_tmp",
-        "col_to_num",
-        "column_number",
-    )
-    for name in forbidden:
-        assert name not in comken.core.__all__, f"{name} は内部実装なので公開しない"
-
-
-def test_facade_and_core_do_not_overlap() -> None:
-    """同じ名前が2つの入口から取れると、どちらで書くか迷う。
-
-    書くときの優先順位は「comken 直下が第一選択、無いものだけ comken.core」
-    （docs/ARCHITECTURE.md §3）。重複するとこの順序が意味を失う。
-    """
-    overlap = set(comken.__all__) & set(comken.core.__all__)
-    assert not overlap, f"直下と core で名前が重複している: {sorted(overlap)}"
 
 
 def test_facade_attributes_resolve_to_real_objects() -> None:

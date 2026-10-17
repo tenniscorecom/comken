@@ -331,8 +331,12 @@ def _api_text() -> str:
         "",
         "各パッケージの `__all__` にある公開名だけを掲載しています。",
     ]
-    modules = [path for path in PACKAGE_ROOT.glob("*.py") if path.name != "__init__.py"]
-    sources = sorted(PACKAGE_ROOT.rglob("__init__.py")) + sorted(modules)
+    # comken.core は名前を取り込み直さないので、comken/core/*.py の __all__ も見る
+    # （見ないと Timer / retry / wait_until などが一覧から消える）。
+    top_modules = [path for path in PACKAGE_ROOT.glob("*.py") if path.name != "__init__.py"]
+    init_files = sorted(PACKAGE_ROOT.rglob("__init__.py"))
+    core_top_modules = sorted((PACKAGE_ROOT / "core").glob("*.py"))
+    sources = sorted(init_files + core_top_modules) + sorted(top_modules)
     for source in sources:
         names = _all_names(_parse(source))
         if not names:

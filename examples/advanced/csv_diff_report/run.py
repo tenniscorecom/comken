@@ -16,7 +16,7 @@ Table.diff() で追加・削除・変更を検出し、区分ごとに色分け�
 import logging
 from pathlib import Path
 
-from comken.core import today
+from comken.core.dates import today
 from comken.toolbox.csv import CSV
 from comken.toolbox.csv.file import Value
 from comken.toolbox.excel import Color, Excel
