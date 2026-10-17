@@ -254,10 +254,11 @@ def _build_stub_content(
         section_lines.append("")
 
     # Path は Config.__init__ のシグネチャでも使うため常に import する
+    # ``NoReturn`` はここで使う箇所が無いので import しない（下の module スタブでは
+    # ``__getattr__ -> NoReturn`` のために残している）
     lines = [
         _STUB_HEADER,
         "from pathlib import Path\n",
-        "from typing import NoReturn\n",
         "",
         # ``MappingDict`` は実行時の ``_LenientDict`` を ``.pyi`` 側で表現する型。
         # 素の ``dict[str, str]`` と同じ振る舞い（未知キーは ``KeyError``）。

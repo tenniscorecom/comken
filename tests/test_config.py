@@ -1135,6 +1135,44 @@ class TestGenerateStub:
         text = generate_stub(ini, tmp_path / "config.pyi").read_text(encoding="utf-8")
         _assert_stub_self_contained(text)
 
+    def test_class_stub_omits_unused_no_return_import(self, ini):
+        """class スタブ（src/config.pyi）は ``NoReturn`` を使わないので import も出さない。
+
+        ``NoReturn`` を使うのは module スタブの ``__getattr__ -> NoReturn`` だけなので、
+        class スタブ側に ``from typing import NoReturn`` が残ると、使われない
+        import が生成物に残る。
+        """
+        import configparser
+
+        from comken.core.config.base import _build_section_map
+        from comken.core.config.stubs import _build_stub_content
+
+        cfg = configparser.ConfigParser(interpolation=None)
+        cfg.read(ini, encoding="utf-8")
+        text = _build_stub_content(cfg, _build_section_map(cfg), ini.parent)
+
+        assert "from typing import NoReturn" not in text
+        # ``NoReturn`` を型注釈に使う箇所も無い（実行時 Config は未知キーで
+        # ``AttributeError`` を出すだけで ``NoReturn`` 型を返すわけではない）
+        assert "NoReturn" not in text
+
+    def test_module_stub_keeps_no_return_import_for_getattr(self, ini):
+        """module スタブ（typings/comken/core/config.pyi）は ``__getattr__`` の
+        戻り値 ``NoReturn`` のために ``from typing import NoReturn`` を残す。
+        """
+        import configparser
+
+        from comken.core.config.base import _build_section_map
+        from comken.core.config.stubs import _build_module_stub_content
+
+        cfg = configparser.ConfigParser(interpolation=None)
+        cfg.read(ini, encoding="utf-8")
+        text = _build_module_stub_content(cfg, _build_section_map(cfg), ini.parent)
+
+        assert "from typing import NoReturn\n" in text
+        assert "def __getattr__" in text
+        assert "-> NoReturn" in text
+
 
 class TestAutoStub:
     """Config() 実行時のスタブ自動更新のテスト。
