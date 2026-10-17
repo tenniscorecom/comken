@@ -17,7 +17,7 @@ __all__ = ["is_enabled_mark", "is_true_word", "normalize", "remove_spaces"]
 def normalize(value: object) -> str:
     """値を、比較（突合）のための文字列にそろえる。
 
-    ``Table.diff()`` のキー・値の比較と ``Transfer`` のキーの突合は、この関数で
+    ``Table.diff()`` のキー・値の比較と ``transfer()`` のキーの突合は、この関数で
     そろえてから比べる。元に戻せない変換（NFKC）なので、**書き戻すデータには使わず、
     比べるときの鍵にだけ使う**。
 

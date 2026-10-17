@@ -1,27 +1,25 @@
-"""comken/core/table/transfer.py — Table 間のキー突合。
+"""comken/core/table/transfer.py — Table 間のキー突合と転記。
 
-``Transfer(read, write, mapping, read_key=..., write_key=...)`` を作り、
-``matched_rows()`` / ``transfer_rows()`` で ``for`` ループしながら
-``apply_mapping(read_row, write_row)`` を呼ぶ書き方が公式。
-mapping の列名はコンストラクタで検証するので、typo は早期に例外になる。
-入力 ``read`` / ``write`` は直接変更せず、内部の作業 Table に書き込む。
-
-キーは ``comken.core.text.normalize`` でそろえてから比べる（``Table.diff()`` と同じ規則）。
-CSV の ``"1001"`` と Excel の ``1001.0``、全角の ``Ａ１`` と半角の ``A1``、前後の空白の
-違いは同じキーとして突合する。突合に使うだけで、転記するデータは変えない。
+``transfer(read, write, mapping, read_key=..., write_key=..., where=...)`` を
+1 回呼ぶと、転記後の ``Table`` と、``only_in_read`` / ``only_in_write``、
+``matched_count`` / ``transferred_count`` を ``TransferResult`` で返す。
+キーは ``comken.core.text.normalize`` でそろえてから比べる
+（``Table.diff()`` と同じ規則）。CSV の ``"1001"`` と Excel の ``1001.0``、
+全角の ``Ａ１`` と半角の ``A1``、前後の空白は、同じキーとして突合する。
+突合に使うだけで、転記するデータは変えない（ただし ``write.types`` の変換だけは
+転記した値に 1 回だけかける）。
 """
 
 import logging
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
 
+from comken.core.table.diff import index_by_key
 from comken.core.table.model import Table
 from comken.core.text import normalize
 from comken.core.types import Row
 from comken.exceptions.tables import (
     InvalidTableInputError,
-    TableColumnNotFoundError,
     TableError,
 )
 
@@ -36,312 +34,255 @@ def _transfer_mapping_error() -> TableError:
     )
 
 
-def _transfer_destination_missing_error() -> TableError:
-    """``TableError`` の「apply_mapping に転記先が None で渡された」文言。"""
+def _transfer_duplicate_destination_error(duplicates: list[str]) -> TableError:
+    """``TableError`` の「mapping の転記先列が重複している」文言。"""
     return TableError(
-        "apply_mapping に None の転記先行を渡しました。"
-        "transfer_rows() が返した (read_row, None) は write 側に対応行が無い行です。"
-        "matched_rows() を使うか、None を確認してから渡してください。"
-        "\n対処: matched_rows() を使うか、transfer_rows() の (read_row, None) を"
-        "if write_row is None: で分岐してから渡してください。"
-        "新規行を追加する場合は Transfer の責務ではなく、"
-        "Table.append() 等で利用者側で対応してください。"
-    )
-
-
-def _transfer_destination_multiple_match_error(key_column: str, key: object) -> TableError:
-    """``TableError`` の「転記先のキーに一致する行が複数ある」文言。"""
-    return TableError(
-        f"転記先列「{key_column}」のキー「{key}」に一致する行が複数あります。"
-        "転記先のキーを一意にしてください。"
-        "\n対処: mapping の先頭列に対応する転記先列の値を一意にしてください。"
-        'キーが None か "" の行は突合対象外なので、空欄のキーが複数あってもこの例外は出ません。'
+        f"mapping の転記先列に重複があります: {','.join(duplicates)}。"
+        "\n対処: mapping の転記先列を一意にしてください。"
     )
 
 
 @dataclass(frozen=True)
-class UnmatchedRows:
-    """突合しなかった行。
+class TransferResult:
+    """``transfer()`` の結果。
 
-    ``only_in_read`` は **コピー**（``Table``）。書き換えても ``read`` にも
-    ``result()`` にも影響しない。
-    ``only_in_write`` は **作業 Table の実体行**（``list[Row]``）。書き換えると
-    ``result()`` に反映される。型が違うのはこの違いを表すため。
+    Attributes:
+        table: 転記後の ``Table``。 ``write`` と同じ列・同じ行順・同じ行数の
+            **新しい** ``Table``。 入力 ``write`` は変更しない。
+        only_in_read: ``write`` に対応が無かった ``read`` の行（``read`` の列構成・型）。
+            空キーの行も含む。
+        only_in_write: ``read`` に対応が無かった ``write`` の行（``write`` の列構成・型）。
+            **転記前の値** をそのまま持つ。 空キーの行も含む。
+        matched_count: キーが一致した組の数（``where`` の結果に関係なく）。
+        transferred_count: そのうち ``where`` が True で実際に転記した組の数。
     """
 
+    table: Table
     only_in_read: Table
-    only_in_write: list[Row]
+    only_in_write: Table
+    matched_count: int
+    transferred_count: int
 
 
-class Transfer:
-    """Table 間のキー突合と転記を行う。
+def _validate_transfer_inputs(
+    read: Table,
+    write: Table,
+    mapping: Mapping[str, str],
+    read_key: str | Sequence[str],
+    write_key: str | Sequence[str],
+) -> tuple[dict[str, str], list[str], list[str]]:
+    """``transfer()`` の入力検証（データを読む前に全部済ませる）。
 
-    基本的な用法は次のとおり。 ``mapping`` は「転記元の列名 → 転記先の列名」。
-    3つの取り出し口を使い分けて、read / write を行単位で加工する:
+    Returns:
+        ``(mapping_dict, read_keys, write_keys)``。
+    """
+    if not isinstance(read, Table) or not isinstance(write, Table):
+        raise InvalidTableInputError("transferのreadとwriteにはTableを指定してください。")
 
-    - ``matched_rows()``: 両方にキーが揃う行を ``(read_row, write_row)`` で返す
-      （**両方とも作業 Table の実体行**）
-    - ``transfer_rows()``: read 全行を ``(read_row, write_row | None)`` で返す
-      （write に無い行は ``None``、``read_row`` は **コピー**）
-    - ``unmatched()``: 突合しなかった行を ``UnmatchedRows`` で返す
-      - ``only_in_read`` は **コピー**（``Table``）。書き換えても ``read`` にも
-        ``result()`` にも影響しない
-      - ``only_in_write`` は **作業 Table の実体行**（``list[Row]``）。書き換えると
-        ``result()`` に反映される
+    mapping_dict = dict(mapping)
+    read_keys = [read_key] if isinstance(read_key, str) else list(read_key)
+    write_keys = [write_key] if isinstance(write_key, str) else list(write_key)
+
+    if not mapping_dict or not read_keys or not write_keys:
+        raise _transfer_mapping_error()
+    if len(read_keys) != len(write_keys):
+        raise _transfer_mapping_error()
+
+    write_targets = list(mapping_dict.values())
+    duplicates = sorted({column for column in write_targets if write_targets.count(column) > 1})
+    if duplicates:
+        raise _transfer_duplicate_destination_error(duplicates)
+
+    # mapping とキー列の存在をまとめて検証する。 Table._check_columns は
+    # 不足列を ``TableColumnNotFoundError`` にまとめて出す。
+    read._check_columns(read_keys)
+    write._check_columns(write_keys)
+    read._check_columns(list(mapping_dict.keys()))
+    write._check_columns(write_targets)
+
+    return mapping_dict, read_keys, write_keys
+
+
+def _apply_transfers(
+    read_index: dict[tuple[str, ...], Row],
+    write_index: dict[tuple[str, ...], Row],
+    write_rows: list[Row],
+    write: Table,
+    mapping_dict: dict[str, str],
+    where: Callable[[Row, Row], bool] | None,
+) -> tuple[list[Row], int, int]:
+    """matched 組を転記して作業用行を作る（``transfer()`` のコア処理）。
+
+    Returns:
+        ``(new_rows, matched_count, transferred_count)``。
+        ``new_rows`` は ``write`` と同じ行順・同じ行数の新しい行のリスト。
+    """
+    # write の各行の「作業中」位置（write の 1 始まり行番号）を引けるように、
+    # id(row) で位置を覚えておく。
+    write_position: dict[int, int] = {id(row): index for index, row in enumerate(write_rows)}
+    new_rows: list[Row] = [dict(row) for row in write_rows]
+
+    matched_count = 0
+    transferred_count = 0
+
+    for read_key_tuple, read_row in read_index.items():
+        write_row = write_index.get(read_key_tuple)
+        if write_row is None:
+            continue
+        matched_count += 1
+        # write の 1 始まり行番号。 ``Table._convert_one`` のメッセージが
+        # 「Table の N 件目」と出るので、write の何件目かを渡す
+        # （``Table.concat()`` の ``other`` 側の使い方と同じ）。
+        position = write_position[id(write_row)]
+        row_number = position + 1
+        if where is not None and not where(dict(read_row), dict(write_row)):
+            # 条件で外れた行は転記せず、only_in_* にも入れない（キーが一致しているため）
+            continue
+        new_row = new_rows[position]
+        for read_column, write_column in mapping_dict.items():
+            value = read_row[read_column]
+            if write_column in write.types:
+                # 転記した値にだけ 1 回かける。 転記しなかった値には再適用しない。
+                value = write._convert_one(write_column, value, row_number)
+            new_row[write_column] = value
+        transferred_count += 1
+
+    return new_rows, matched_count, transferred_count
+
+
+def _build_unmatched_rows(
+    rows: list[Row],
+    columns: list[str],
+    counterpart_index: dict[tuple[str, ...], Row],
+) -> list[Row]:
+    """未一致行（キーが空、または相手側索引に無い行）だけを ``rows`` の順で集める。"""
+    unmatched: list[Row] = []
+    for row in rows:
+        key = tuple(normalize(row[column]) for column in columns)
+        if any(value == "" for value in key) or key not in counterpart_index:
+            unmatched.append(row)
+    return unmatched
+
+
+def transfer(
+    read: Table,
+    write: Table,
+    mapping: Mapping[str, str],
+    *,
+    read_key: str | Sequence[str],
+    write_key: str | Sequence[str],
+    where: Callable[[Row, Row], bool] | None = None,
+) -> TransferResult:
+    """Table 間のキー突合と転記を 1 回で行う。
+
+    Args:
+        read: 転記元の ``Table``。変更しない。
+        write: 転記先の ``Table``。変更しない。
+        mapping: 「転記元の列名 → 転記先の列名」の ``Mapping``。 1 個以上必須。
+        read_key: ``read`` のキー列。 ``str`` なら 1 列、 ``Sequence[str]`` なら複合キー。
+        write_key: ``write`` のキー列。 ``read_key`` と同じ要素数でなければならない。
+        where: 任意の追加条件 ``(read_row, write_row) -> bool``。 ``True`` のときだけ
+            転記する。 受け取るのはコピー（書き換えても結果にも入力にも影響しない）。
+            判定だけ書く（行を直す処理は書かない）。 ログ出力は可。 例外はそのまま
+            伝わる。 未一致の行では呼ばれない。 1 組につき 1 回。
+
+    Returns:
+        ``TransferResult``。 ``table`` が転記後の ``Table``、 ``only_in_read`` /
+        ``only_in_write`` が未一致の行、 ``matched_count`` / ``transferred_count``
+        が一致数と転記数。
+
+    Raises:
+        InvalidTableInputError: ``read`` / ``write`` が ``Table`` でない。
+        TableError: ``mapping`` が空、 ``read_key`` と ``write_key`` の要素数が違う、
+            ``mapping`` の転記先列が重複している。
+        TableColumnNotFoundError: ``mapping`` の転記元列・転記先列、
+            ``read_key`` / ``write_key`` の列が存在しない（データを読む前に出る）。
+
+    Note:
+        セルの値は ``str`` / ``int`` / ``float`` / ``bool`` / ``datetime`` などの
+        **不変の値であること** を前提とする。 ``list`` や ``dict`` など変更可能な値を
+        セルに入れた場合、浅いコピーによる共有は保証しない。
+
+        ``result.table`` は転記した値に ``write.types`` の変換を 1 回かける。
+        転記しなかった行・列には変換関数を再適用しない（呼び出し回数が増える不具合を
+        防ぐため）。 ``write.types`` に無い列は変換しない。 変換できない値は
+        ``TableError``（行番号・列名・値が出る）。
 
     Example:
-        transfer = Transfer(read_table, write_table, mapping,
-                            read_key="顧客ID", write_key="顧客ID")
-        for read_row, write_row in transfer.matched_rows():
-            if 条件:
-                continue                       # この行は破棄
-            transfer.apply_mapping(read_row, write_row)   # mapping の値をコピー
-            # 必要なら write_row["備考"] = "..." のように追加加工
-        # write に無い read 行は result() に追加していく（新規行の追加）
-        for read_row in transfer.unmatched().only_in_read:
-            transfer.result().append({
-                "顧客ID": read_row["顧客ID"],
-                "顧客名": read_row["取引先"],
-                "請求額": read_row["金額"],
-                "備考": "新規追加",
-            })
-        # read に無い write 行は「転記元に無し」と書き換える（result() に出るので別途 filter する）
-        for write_row in transfer.unmatched().only_in_write:
-            write_row["備考"] = "転記元に無し"
+        通常の転記::
 
-    **条件は ``apply_mapping()`` より前に書くこと。** Python の ``for`` ループは
-    ``continue`` したかどうかを呼び出し側に伝えないため、ループ内で
-    ``apply_mapping()`` を呼ばずに ``continue`` した行は、作業 Table へ反映されない。
-    条件判定を ``apply_mapping()`` の後ろに書くと、``continue`` しても mapping が
-    適用済みとなり破棄できないので、判定は必ず ``apply_mapping()`` の前に置く。
+            from comken.core.table import Table, transfer
+            result = transfer(
+                source, destination, mapping={"顧客名": "name", "金額": "amount"},
+                read_key="顧客ID", write_key="id",
+            )
+            result_table = result.table
 
-    **空キー (``None`` / ``""``) は突合対象外**。 値が無いキーは read 側・write 側の
-    どちらでも照合に使わず、``unmatched()`` 側へ流れる。 ``0`` や ``False`` は
-    空ではない（数値・bool の 0 落ち判定を避けるため）。 複合キーは **1要素でも空**
-    なら空とみなす。
+        ``where`` で条件を満たす行だけ転記::
+
+            def is_confirmed(read_row, write_row):
+                return read_row["金額"] > 0
+            result = transfer(
+                source, destination, mapping, read_key="id", write_key="id", where=is_confirmed,
+            )
+
+        未一致の行を別途処理する::
+
+            for read_row in result.only_in_read:
+                ...  # read 側にしか無い行（write への新規追加候補）
+
+            for write_row in result.only_in_write:
+                ...  # write 側にしか無い行（破棄候補）
     """
+    mapping_dict, read_keys, write_keys = _validate_transfer_inputs(
+        read, write, mapping, read_key, write_key
+    )
 
-    def __init__(
-        self,
-        read: Table,
-        write: Table,
-        mapping: Mapping[str, str],
-        *,
-        read_key: str | Sequence[str] | None = None,
-        write_key: str | Sequence[str] | None = None,
-    ) -> None:
-        if not isinstance(read, Table) or not isinstance(write, Table):
-            raise InvalidTableInputError("TransferのreadとwriteにはTableを指定してください。")
-        if not mapping or read_key is None or write_key is None:
-            raise _transfer_mapping_error()
-        self.read, self.write = read, write
-        self.mapping = dict(mapping)
-        self.read_keys = [read_key] if isinstance(read_key, str) else list(read_key)
-        self.write_keys = [write_key] if isinstance(write_key, str) else list(write_key)
-        if len(self.read_keys) != len(self.write_keys):
-            raise _transfer_mapping_error()
-        # mapping の列名 typo を早期に検知する。実行時の KeyError を未然に防ぐため。
-        # 表を引かない素の mapping 検証はここで済ませておく。
-        read_existing = list(self.read.columns)
-        write_existing = list(self.write.columns)
-        missing_read = [column for column in self.mapping if column not in read_existing]
-        if missing_read:
-            raise TableColumnNotFoundError(missing_read)
-        missing_write = [column for column in self.mapping.values() if column not in write_existing]
-        if missing_write:
-            raise TableColumnNotFoundError(missing_write)
-        # 作業 Table は最初のイテレーションで生成する。入力には触らない。
-        self._working_table: Table | None = None
-        logger.debug(
-            "Transfer 構築: read=%d 行, write=%d 行, mapping=%d 列, keys(read/write)=%d/%d",
-            len(self.read),
-            len(self.write),
-            len(self.mapping),
-            len(self.read_keys),
-            len(self.write_keys),
-        )
+    logger.debug(
+        "transfer 開始: read=%d 行, write=%d 行, mapping=%d 列, keys(read/write)=%d/%d",
+        len(read),
+        len(write),
+        len(mapping_dict),
+        len(read_keys),
+        len(write_keys),
+    )
 
-    def transfer_rows(self) -> Iterator[tuple[Row, Row | None]]:
-        """転記元の全行を ``(read_row, write_row)`` で返す。
+    # ---- 索引作成（重複があればここで TableDuplicateKeyError）----
+    read_rows = read.to_rows()
+    write_rows = write.to_rows()
+    read_index = index_by_key(read_rows, read_keys, skip_blank=True)
+    write_index = index_by_key(write_rows, write_keys, skip_blank=True)
 
-        転記先に存在しない行は ``(read_row, None)`` として返す。新規行の追加が
-        必要かどうかは利用者が ``if write_row is None: ...`` で判定する。
-        書き込みは ``apply_mapping(read_row, write_row)`` を中心に行い、
-        必要な列だけを ``write_row[write_col] = read_row[read_col]`` の形で
-        個別に上書きする。 結果は ``result()`` で取り出す。
-        """
-        self.read._check_columns(self.read_keys)
-        self.write._check_columns(self.write_keys)
-        self._ensure_working_table()
-        write_index = self._working_index()
-        logger.debug(
-            "Transfer transfer_rows 開始: read=%d 行, write index=%d 件",
-            len(self.read),
-            len(write_index),
-        )
-        for read_row in self.read.to_rows():
-            key = self._row_key(read_row, self.read_keys)
-            write_row = write_index.get(key)
-            yield read_row, write_row
+    # ---- 転記ループ ----
+    new_rows, matched_count, transferred_count = _apply_transfers(
+        read_index, write_index, write_rows, write, mapping_dict, where
+    )
+    result_table = Table._from_normalized_rows(write.columns, new_rows, types=write.types)
 
-    def matched_rows(self) -> Iterator[tuple[Row, Row]]:
-        """両方に存在する行だけを ``(read_row, write_row)`` で返す。
+    # ---- 未一致行（入力のコピーを使う。 結果と辞書を共有しない）----
+    only_in_read_rows = _build_unmatched_rows(read_rows, read_keys, write_index)
+    only_in_read = Table._from_normalized_rows(read.columns, only_in_read_rows, types=read.types)
 
-        転記先に存在しない行（``destination`` が ``None``）は含まない。
-        """
-        for read_row, write_row in self.transfer_rows():
-            if write_row is not None:
-                yield read_row, write_row
+    only_in_write_rows = _build_unmatched_rows(write_rows, write_keys, read_index)
+    only_in_write = Table._from_normalized_rows(
+        write.columns, only_in_write_rows, types=write.types
+    )
 
-    def unmatched(self) -> UnmatchedRows:
-        """突合しなかった行を ``UnmatchedRows`` で返す。
+    logger.debug(
+        "transfer 完了: matched=%d, transferred=%d, only_in_read=%d, only_in_write=%d",
+        matched_count,
+        transferred_count,
+        len(only_in_read),
+        len(only_in_write),
+    )
 
-        ``only_in_read`` は write に対応が無い read 行（追加候補）。
-        ``Table`` として返すので ``.to_rows()`` / ``.filter()`` などの Table 標準の
-        インターフェースが使える。 戻り値は ``Table.to_rows()`` と同じく **read 行の
-        コピー** で、書き換えても ``read`` にも ``result()`` にも影響しない。
-
-        ``only_in_write`` は read に対応が無い write 行（破棄候補）。
-        戻り値は ``matched_rows()`` が返す ``write_row`` と同じく **作業 Table の
-        実体行**。 ``write_row["備考"] = "破棄予定"`` のように書き換えると
-        ``result()`` の戻り値へ反映される。
-
-        空キー (``None`` / ``""``) の行も両側に含む。 キーが空なので照合に使えず、
-        必ず対応が無いため。
-
-        ``transfer_rows()`` / ``matched_rows()`` を呼ばずに呼んでも動く。
-        """
-        self.read._check_columns(self.read_keys)
-        self.write._check_columns(self.write_keys)
-        working_table = self._ensure_working_table()
-        write_index = self._working_index()
-
-        read_only: list[Row] = []
-        read_keys_index: set[tuple[Any, ...]] = set()
-        # read は 1 回だけ走査する。空キー行は write_index にキーが無いため常に
-        # only_in_read 側へ流れる。空でないキーで write に居るキーは read_keys_index に
-        # 積み、only_in_write の判定に使う。
-        for read_row in self.read.to_rows():
-            key = self._row_key(read_row, self.read_keys)
-            if self._is_blank_key(key) or key not in write_index:
-                read_only.append(read_row)
-            else:
-                read_keys_index.add(key)
-
-        # write 側の実体行を ``_iter_rows_for_update()`` 経由で取得する。
-        # ここで返した dict を呼び出し側が書き換えると ``result()`` に反映される。
-        write_only: list[Row] = []
-        for write_row in working_table._iter_rows_for_update():
-            key = self._row_key(write_row, self.write_keys)
-            if self._is_blank_key(key) or key not in read_keys_index:
-                write_only.append(write_row)
-
-        only_in_read = Table(list(self.read.columns), read_only, types=self.read.types)
-        logger.debug(
-            "Transfer unmatched: only_in_read=%d 行, only_in_write=%d 行 (matched=%d 行)",
-            len(only_in_read),
-            len(write_only),
-            len(self.read) - len(only_in_read),
-        )
-        return UnmatchedRows(only_in_read, write_only)
-
-    def apply_mapping(self, read_row: Row, write_row: Row | None) -> None:
-        """コンストラクタで渡された ``mapping`` どおりに値を ``write_row`` へコピーする。
-
-        mapping の read 列 / write 列は ``__init__`` で存在を検証済みなので、
-        ここで再びキー存在を確かめない。 ``write_row`` が ``None`` の場合
-        （``transfer_rows()`` の ``(read_row, None)`` をそのまま渡した場合など）は
-        転記先の行が無いので ``TableError`` で停止する。
-
-        入力 ``read`` / ``write`` には触れない。書き込みは Transfer 内部の
-        作業 Table に紐づいた ``write_row`` に対して行う。
-
-        Args:
-            read_row: 転記元の行。
-            write_row: 転記先の行。 ``matched_rows()`` の戻り値か、
-                ``transfer_rows()`` の戻り値で ``None`` でないもの。
-
-        Raises:
-            TableError: ``write_row`` が ``None`` のとき。
-        """
-        if write_row is None:
-            logger.debug("Transfer apply_mapping: 転記先が None のため中断")
-            raise _transfer_destination_missing_error()
-        # mapping は __init__ で検証済み。辞書のキー参照が KeyError になる心配はない。
-        for read_column, write_column in self.mapping.items():
-            write_row[write_column] = read_row[read_column]
-
-    def result(self) -> Table:
-        """変更後の Table を返す。
-
-        ``transfer_rows()`` / ``matched_rows()`` のイテレーション中に ``write_row``
-        に対して行った変更が反映された作業用 Table を返す。 イテレータを 1 度も
-        進めないうちに ``result()`` を呼ぶと ``write`` のコピー（変更なし）が返る。
-
-        ``result()`` は同じ作業 Table インスタンスを返し続けるので、
-        ``result().append(...)`` のように破壊的に加工した場合や、 ``result()`` を
-        呼んだ後に ``unmatched().only_in_write`` の ``write_row`` を書き換えた場合も、
-        後続の ``result().to_rows()`` 呼び出しに反映される（``Table._iter_rows_for_update``
-        経由で実体 dict を共有しているため）。
-
-        Example:
-            transfer = Transfer(source, destination, mapping,
-                                read_key="顧客ID", write_key="顧客ID")
-            for source_row, destination_row in transfer.matched_rows():
-                transfer.apply_mapping(source_row, destination_row)
-            final_table = transfer.result()  # 変更後の Table
-        """
-        return self._ensure_working_table()
-
-    def _ensure_working_table(self) -> Table:
-        """作業 Table を必要になった時点で 1 度だけ作って返す。"""
-        if self._working_table is None:
-            # transfer_rows() / matched_rows() がまだ呼ばれていないので、
-            # write のコピーを作る（変更なし）。
-            self._working_table = Table(
-                self.write.columns, self.write.to_rows(), types=self.write.types
-            )
-            logger.debug(
-                "Transfer 作業 Table を新規作成: %d 行, %d 列",
-                len(self._working_table),
-                len(self._working_table.columns),
-            )
-        return self._working_table
-
-    def _working_index(self) -> dict[tuple[Any, ...], Row]:
-        """作業中の Table を複合キーで検索できる辞書にする。
-
-        ``transfer_rows()`` のキー検索専用。同じキーに複数の行が当たる場合は
-        曖昧な更新をさせないために例外で止める。 空キー (``None`` / ``""``) は
-        突合対象外なので index に入れない。
-        """
-        if self._working_table is None:
-            return {}
-        index: dict[tuple[Any, ...], Row] = {}
-        for write_row in self._working_table._iter_rows_for_update():
-            key = self._row_key(write_row, self.write_keys)
-            if self._is_blank_key(key):
-                # 空キーは照合に使わない。unmatched() 側へ流れる。
-                continue
-            if key in index:
-                logger.debug("Transfer _working_index: キー重複を検出: %r", key)
-                raise _transfer_destination_multiple_match_error(",".join(self.write_keys), key)
-            index[key] = write_row
-        return index
-
-    @staticmethod
-    def _row_key(row: Row, columns: Sequence[str]) -> tuple[str, ...]:
-        """複数キーを順序付きの1つの比較値へまとめる（各キーは ``normalize`` 後の文字列）。"""
-        return tuple(normalize(row[column]) for column in columns)
-
-    @staticmethod
-    def _is_blank_key(key: tuple[str, ...]) -> bool:
-        """空キー判定。 ``normalize`` 後に ``""`` になるもの（``None``・空白だけ）が空。
-
-        ``0`` / ``False`` は ``"0"`` / ``"False"`` になるので空ではない（ゼロ落ち判定を避ける）。
-        複合キーは **1要素でも空** なら空とみなす（部分空のキーは照合に使えないため）。
-        """
-        return any(value == "" for value in key)
+    return TransferResult(
+        table=result_table,
+        only_in_read=only_in_read,
+        only_in_write=only_in_write,
+        matched_count=matched_count,
+        transferred_count=transferred_count,
+    )
 
 
-__all__ = ["Transfer", "UnmatchedRows"]
+__all__ = ["TransferResult", "transfer"]

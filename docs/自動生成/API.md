@@ -1319,186 +1319,94 @@ Raises:
     TableError: ``order_by`` の列に空 (``None`` / ``""``) の行がある、
         または値の型が混ざっていて比較できない (``TypeError``) とき。
 
-### `Transfer`
+### `TransferResult`
 
 ```text
-class Transfer:
+class TransferResult:
 ```
 
 #### 説明
 
-Table 間のキー突合と転記を行う。
+``transfer()`` の結果。
 
-基本的な用法は次のとおり。 ``mapping`` は「転記元の列名 → 転記先の列名」。
-3つの取り出し口を使い分けて、read / write を行単位で加工する:
+Attributes:
+    table: 転記後の ``Table``。 ``write`` と同じ列・同じ行順・同じ行数の
+        **新しい** ``Table``。 入力 ``write`` は変更しない。
+    only_in_read: ``write`` に対応が無かった ``read`` の行（``read`` の列構成・型）。
+        空キーの行も含む。
+    only_in_write: ``read`` に対応が無かった ``write`` の行（``write`` の列構成・型）。
+        **転記前の値** をそのまま持つ。 空キーの行も含む。
+    matched_count: キーが一致した組の数（``where`` の結果に関係なく）。
+    transferred_count: そのうち ``where`` が True で実際に転記した組の数。
 
-- ``matched_rows()``: 両方にキーが揃う行を ``(read_row, write_row)`` で返す
-  （**両方とも作業 Table の実体行**）
-- ``transfer_rows()``: read 全行を ``(read_row, write_row | None)`` で返す
-  （write に無い行は ``None``、``read_row`` は **コピー**）
-- ``unmatched()``: 突合しなかった行を ``UnmatchedRows`` で返す
-  - ``only_in_read`` は **コピー**（``Table``）。書き換えても ``read`` にも
-    ``result()`` にも影響しない
-  - ``only_in_write`` は **作業 Table の実体行**（``list[Row]``）。書き換えると
-    ``result()`` に反映される
-
-Example:
-    transfer = Transfer(read_table, write_table, mapping,
-                        read_key="顧客ID", write_key="顧客ID")
-    for read_row, write_row in transfer.matched_rows():
-        if 条件:
-            continue                       # この行は破棄
-        transfer.apply_mapping(read_row, write_row)   # mapping の値をコピー
-        # 必要なら write_row["備考"] = "..." のように追加加工
-    # write に無い read 行は result() に追加していく（新規行の追加）
-    for read_row in transfer.unmatched().only_in_read:
-        transfer.result().append({
-            "顧客ID": read_row["顧客ID"],
-            "顧客名": read_row["取引先"],
-            "請求額": read_row["金額"],
-            "備考": "新規追加",
-        })
-    # read に無い write 行は「転記元に無し」と書き換える（result() に出るので別途 filter する）
-    for write_row in transfer.unmatched().only_in_write:
-        write_row["備考"] = "転記元に無し"
-
-**条件は ``apply_mapping()`` より前に書くこと。** Python の ``for`` ループは
-``continue`` したかどうかを呼び出し側に伝えないため、ループ内で
-``apply_mapping()`` を呼ばずに ``continue`` した行は、作業 Table へ反映されない。
-条件判定を ``apply_mapping()`` の後ろに書くと、``continue`` しても mapping が
-適用済みとなり破棄できないので、判定は必ず ``apply_mapping()`` の前に置く。
-
-**空キー (``None`` / ``""``) は突合対象外**。 値が無いキーは read 側・write 側の
-どちらでも照合に使わず、``unmatched()`` 側へ流れる。 ``0`` や ``False`` は
-空ではない（数値・bool の 0 落ち判定を避けるため）。 複合キーは **1要素でも空**
-なら空とみなす。
-
-#### `__init__`
+### `transfer`
 
 ```text
-def __init__(self, read: Table, write: Table, mapping: Mapping[str, str], *, read_key: str | Sequence[str] | None=None, write_key: str | Sequence[str] | None=None) -> None:
+def transfer(read: Table, write: Table, mapping: Mapping[str, str], *, read_key: str | Sequence[str], write_key: str | Sequence[str], where: Callable[[Row, Row], bool] | None=None) -> TransferResult:
 ```
 
-#### `transfer_rows`
+#### 説明
 
-```text
-def transfer_rows(self) -> Iterator[tuple[Row, Row | None]]:
-```
-
-##### 説明
-
-転記元の全行を ``(read_row, write_row)`` で返す。
-
-転記先に存在しない行は ``(read_row, None)`` として返す。新規行の追加が
-必要かどうかは利用者が ``if write_row is None: ...`` で判定する。
-書き込みは ``apply_mapping(read_row, write_row)`` を中心に行い、
-必要な列だけを ``write_row[write_col] = read_row[read_col]`` の形で
-個別に上書きする。 結果は ``result()`` で取り出す。
-
-#### `matched_rows`
-
-```text
-def matched_rows(self) -> Iterator[tuple[Row, Row]]:
-```
-
-##### 説明
-
-両方に存在する行だけを ``(read_row, write_row)`` で返す。
-
-転記先に存在しない行（``destination`` が ``None``）は含まない。
-
-#### `unmatched`
-
-```text
-def unmatched(self) -> UnmatchedRows:
-```
-
-##### 説明
-
-突合しなかった行を ``UnmatchedRows`` で返す。
-
-``only_in_read`` は write に対応が無い read 行（追加候補）。
-``Table`` として返すので ``.to_rows()`` / ``.filter()`` などの Table 標準の
-インターフェースが使える。 戻り値は ``Table.to_rows()`` と同じく **read 行の
-コピー** で、書き換えても ``read`` にも ``result()`` にも影響しない。
-
-``only_in_write`` は read に対応が無い write 行（破棄候補）。
-戻り値は ``matched_rows()`` が返す ``write_row`` と同じく **作業 Table の
-実体行**。 ``write_row["備考"] = "破棄予定"`` のように書き換えると
-``result()`` の戻り値へ反映される。
-
-空キー (``None`` / ``""``) の行も両側に含む。 キーが空なので照合に使えず、
-必ず対応が無いため。
-
-``transfer_rows()`` / ``matched_rows()`` を呼ばずに呼んでも動く。
-
-#### `apply_mapping`
-
-```text
-def apply_mapping(self, read_row: Row, write_row: Row | None) -> None:
-```
-
-##### 説明
-
-コンストラクタで渡された ``mapping`` どおりに値を ``write_row`` へコピーする。
-
-mapping の read 列 / write 列は ``__init__`` で存在を検証済みなので、
-ここで再びキー存在を確かめない。 ``write_row`` が ``None`` の場合
-（``transfer_rows()`` の ``(read_row, None)`` をそのまま渡した場合など）は
-転記先の行が無いので ``TableError`` で停止する。
-
-入力 ``read`` / ``write`` には触れない。書き込みは Transfer 内部の
-作業 Table に紐づいた ``write_row`` に対して行う。
+Table 間のキー突合と転記を 1 回で行う。
 
 Args:
-    read_row: 転記元の行。
-    write_row: 転記先の行。 ``matched_rows()`` の戻り値か、
-        ``transfer_rows()`` の戻り値で ``None`` でないもの。
+    read: 転記元の ``Table``。変更しない。
+    write: 転記先の ``Table``。変更しない。
+    mapping: 「転記元の列名 → 転記先の列名」の ``Mapping``。 1 個以上必須。
+    read_key: ``read`` のキー列。 ``str`` なら 1 列、 ``Sequence[str]`` なら複合キー。
+    write_key: ``write`` のキー列。 ``read_key`` と同じ要素数でなければならない。
+    where: 任意の追加条件 ``(read_row, write_row) -> bool``。 ``True`` のときだけ
+        転記する。 受け取るのはコピー（書き換えても結果にも入力にも影響しない）。
+        判定だけ書く（行を直す処理は書かない）。 ログ出力は可。 例外はそのまま
+        伝わる。 未一致の行では呼ばれない。 1 組につき 1 回。
+
+Returns:
+    ``TransferResult``。 ``table`` が転記後の ``Table``、 ``only_in_read`` /
+    ``only_in_write`` が未一致の行、 ``matched_count`` / ``transferred_count``
+    が一致数と転記数。
 
 Raises:
-    TableError: ``write_row`` が ``None`` のとき。
+    InvalidTableInputError: ``read`` / ``write`` が ``Table`` でない。
+    TableError: ``mapping`` が空、 ``read_key`` と ``write_key`` の要素数が違う、
+        ``mapping`` の転記先列が重複している。
+    TableColumnNotFoundError: ``mapping`` の転記元列・転記先列、
+        ``read_key`` / ``write_key`` の列が存在しない（データを読む前に出る）。
 
-#### `result`
+Note:
+    セルの値は ``str`` / ``int`` / ``float`` / ``bool`` / ``datetime`` などの
+    **不変の値であること** を前提とする。 ``list`` や ``dict`` など変更可能な値を
+    セルに入れた場合、浅いコピーによる共有は保証しない。
 
-```text
-def result(self) -> Table:
-```
-
-##### 説明
-
-変更後の Table を返す。
-
-``transfer_rows()`` / ``matched_rows()`` のイテレーション中に ``write_row``
-に対して行った変更が反映された作業用 Table を返す。 イテレータを 1 度も
-進めないうちに ``result()`` を呼ぶと ``write`` のコピー（変更なし）が返る。
-
-``result()`` は同じ作業 Table インスタンスを返し続けるので、
-``result().append(...)`` のように破壊的に加工した場合や、 ``result()`` を
-呼んだ後に ``unmatched().only_in_write`` の ``write_row`` を書き換えた場合も、
-後続の ``result().to_rows()`` 呼び出しに反映される（``Table._iter_rows_for_update``
-経由で実体 dict を共有しているため）。
+    ``result.table`` は転記した値に ``write.types`` の変換を 1 回かける。
+    転記しなかった行・列には変換関数を再適用しない（呼び出し回数が増える不具合を
+    防ぐため）。 ``write.types`` に無い列は変換しない。 変換できない値は
+    ``TableError``（行番号・列名・値が出る）。
 
 Example:
-    transfer = Transfer(source, destination, mapping,
-                        read_key="顧客ID", write_key="顧客ID")
-    for source_row, destination_row in transfer.matched_rows():
-        transfer.apply_mapping(source_row, destination_row)
-    final_table = transfer.result()  # 変更後の Table
+    通常の転記::
 
-### `UnmatchedRows`
+        from comken.core.table import Table, transfer
+        result = transfer(
+            source, destination, mapping={"顧客名": "name", "金額": "amount"},
+            read_key="顧客ID", write_key="id",
+        )
+        result_table = result.table
 
-```text
-class UnmatchedRows:
-```
+    ``where`` で条件を満たす行だけ転記::
 
-#### 説明
+        def is_confirmed(read_row, write_row):
+            return read_row["金額"] > 0
+        result = transfer(
+            source, destination, mapping, read_key="id", write_key="id", where=is_confirmed,
+        )
 
-突合しなかった行。
+    未一致の行を別途処理する::
 
-``only_in_read`` は **コピー**（``Table``）。書き換えても ``read`` にも
-``result()`` にも影響しない。
-``only_in_write`` は **作業 Table の実体行**（``list[Row]``）。書き換えると
-``result()`` に反映される。型が違うのはこの違いを表すため。
+        for read_row in result.only_in_read:
+            ...  # read 側にしか無い行（write への新規追加候補）
+
+        for write_row in result.only_in_write:
+            ...  # write 側にしか無い行（破棄候補）
 
 
 ## `from comken.core.text import ...`
@@ -1575,7 +1483,7 @@ def normalize(value: object) -> str:
 
 値を、比較（突合）のための文字列にそろえる。
 
-``Table.diff()`` のキー・値の比較と ``Transfer`` のキーの突合は、この関数で
+``Table.diff()`` のキー・値の比較と ``transfer()`` のキーの突合は、この関数で
 そろえてから比べる。元に戻せない変換（NFKC）なので、**書き戻すデータには使わず、
 比べるときの鍵にだけ使う**。
 
@@ -2639,7 +2547,7 @@ class TableError(ComkenError):
 
 表データの読み書き・転記に関するエラー。具体的な状況はメッセージに出る
 
-発生箇所: Transfer
+発生箇所: Table / transfer()
 
 対処:
     画面に表示された具体的なエラー内容を確認する
@@ -2690,7 +2598,7 @@ class TableDuplicateKeyError(TableError):
 
 Table の索引または比較に使うキーが重複している。
 
-発生箇所: Table.index() / Table.diff()
+発生箇所: Table.index() / Table.diff() / transfer()
 
 対処:
     キー列の値を一意にしてから処理をやり直す
@@ -6171,7 +6079,7 @@ class CSV:
 
 CSV ファイルを1つのデータ領域として読み書きする。
 
-Table と同じ「行の集合」として Transfer へ渡せる境界を提供する。
+Table と同じ「行の集合」として ``transfer()`` へ渡せる境界を提供する。
 ヘッダーのないファイルは ``columns`` で列名を指定する。
 
 文字コード:

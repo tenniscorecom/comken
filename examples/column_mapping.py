@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 
 from comken.core.logger import setup_local_logging
-from comken.core.table import Table, Transfer
+from comken.core.table import Table, transfer
 from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Excel
 
@@ -34,17 +34,14 @@ def main() -> None:
         ["注文番号", "顧客名", "請求額"],
         [{"注文番号": row["注文番号"], "顧客名": "", "請求額": ""} for row in source.to_rows()],
     )
-    transfer = Transfer(
+    result = transfer(
         source,
         destination_table,
         mapping=TRANSFER_MAPPING,
         read_key="注文番号",
         write_key="注文番号",
     )
-    for read_row, write_row in transfer.matched_rows():
-        # apply_mapping がコンストラクタで渡した mapping を write_row へコピーする
-        transfer.apply_mapping(read_row, write_row)
-    working = transfer.result()
+    working = result.table
     with Excel(OUTPUT_PATH) as destination:
         destination.create_data_sheet("請求一覧").create_table("請求一覧", working)
 

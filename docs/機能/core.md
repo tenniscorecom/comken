@@ -180,7 +180,7 @@ parse_cell_date(None)                                     # → None
 ### テキスト正規化（normalize / remove_spaces)
 
 業務データによくある表記揺れ（全角英数・半角カナ・全角スペース）を揃える。
-**`Table.diff()` と `Transfer` は、キー・値を比べるときに、内部でこの `normalize` を使う**
+**`Table.diff()` と `transfer()` は、キー・値を比べるときに、内部でこの `normalize` を使う**
 （`"1001"` と `1001.0`、`Ａ１` と `A1`、前後の空白の違いは同じとみなす）。
 自分で突合するコードを書くときも、この関数でそろえてから比べると「見た目は同じなのに一致しない」
 問題を防げる。
@@ -444,37 +444,80 @@ converters: TypeMap = {"金額": int}           # types= に渡す「列名 → 
 | 全行を置き換え | `table.replace(rows)` |
 | 1 行 / 複数行を末尾に追加 | `table.append(row)` / `table.append(rows)` |
 
-`Transfer.unmatched()` の `only_in_read` は `Table`（コピー）、
-`only_in_write` は **作業 Table の実体行**（`list[Row]`）。`only_in_write` の
-行を書き換えると `transfer.result()` に出るので、追加候補を `append()` する前に
-加工できる（[Transfer（転記）](#transfer転記) 参照）。
+`transfer()` の `result.only_in_read` / `result.only_in_write` はどちらも入力のコピーの
+`Table`。`result.table` に `append()` して新規行として追加できる
+（[transfer()（転記）](#transfer転記) 参照）。
 
-### Transfer（転記）
+### transfer()（転記）
 
-表データは ``Table`` に統一する。CSV は ``CSV.read()``、Excel は
-``Excel.data_sheet().table().read()`` で ``Table`` を取得し、転記は
-``Transfer(read, write, mapping=...)`` を作って次の 3 つの取り出し口で加工する:
+CSV / Excel / Access などを ``Table`` に統一して読む。CSV は ``CSV.read()``、
+Excel は ``Excel.data_sheet().table().read()`` で ``Table`` を取得し、転記は
+関数 ``transfer()`` 1 回の呼び出しで済ませる。
 
-- ``matched_rows()``: 両側にキーが揃う行を ``(read_row, write_row)`` で返す
-- ``transfer_rows()``: read 全行を ``(read_row, write_row | None)`` で返す
-  （write に無い行は ``None``）
-- ``unmatched()``: 突合しなかった行を ``UnmatchedRows`` で返す
-  - ``only_in_read``: write に無い read 行を返す（追加候補、**コピー**）
-  - ``only_in_write``: read に無い write 行を返す（破棄候補、**作業 Table の実体行**）
+```python
+from comken.core.table import Table, transfer
 
-加工は ``transfer.apply_mapping(read_row, write_row)`` 1 行で済み、
-``unmatched().only_in_read`` の行は ``transfer.result().append()`` で
-新規行として追加できる。保存は CSV / Excel の ``with`` を正常終了した時に行う。
+result = transfer(
+    source, destination,
+    mapping={"取引先": "顧客名", "金額": "請求額"},
+    read_key="注文番号", write_key="注文番号",
+)
+result.table          # 転記後の write（write と同じ列・同じ行順・同じ行数の新しい Table）
+result.only_in_read   # write に対応が無い read の行（Table・read の列構成）
+result.only_in_write  # read に対応が無い write の行（Table・write の列構成・転記前の値）
+result.matched_count  # キーが一致した組の数（where の結果と無関係）
+result.transferred_count  # そのうち where=True で実際に転記した組の数
+```
 
-**空キー (``""``。``None`` は Table に入れた時点で ``""`` になる) は突合対象外**。``0`` / ``False`` は空ではない。
-空キーは read / write のどちらでも ``unmatched()`` 側へ流れるため、
-write 側に空キーが複数あっても ``TableError``
-にはならない。
+戻り値は `TransferResult`。**入力の ``read`` / ``write`` は変更しない**。
+保存は CSV / Excel の ``with`` を正常終了した時に行う。
+
+**``where=`` で追加の条件を指定できる**。呼び出し側は判定だけ書く
+（行を直す処理は書かない。ログは可）。`Callable[[Row, Row], bool]` で
+`True` のときだけ転記する。受け取るのは `Row` のコピー（書き換えても
+結果にも入力にも影響しない）。`where` は matched な組に対して
+1 組につき 1 回だけ呼ばれる（matched だが転記されなかった組は
+`matched_count` には入るが `transferred_count` には入らず、
+`only_in_*` にも入らない）。
+
+```python
+result = transfer(
+    source, destination, mapping,
+    read_key="注文番号", write_key="注文番号",
+    where=lambda read_row, write_row: read_row["金額"] > 0,
+)
+```
+
+**未一致の行は ``result.only_in_read`` / ``result.only_in_write`` に取り出される**。
+それぞれ `Table` なので、`result.table.append(...)` で新規行として追加する、
+`result.table.replace([...])` の内包表記でセルを更新する、`Table.filter()` で
+条件に合う行だけ残す、という Table 標準の操作がそのまま使える。
+
+**空キー（``""``。``None`` は Table に入れた時点で ``""`` になる）は突合対象外**。
+``0`` / ``False`` は空ではない。空キーは read / write のどちらでも ``only_in_*`` 側
+へ流れるため、write 側に空キーが複数あっても ``TableError`` にはならない。
 
 **キーは ``normalize`` でそろえてから比べる**（``Table.diff()`` と同じ規則）。
-CSV の ``"1001"`` と Excel の ``1001.0``、全角の ``Ａ１`` と半角の ``A1``、前後の空白の
-違いは同じキーとして突合する。突合に使うだけで、転記するデータは変えない。
-先頭ゼロ付きの文字列（``"0001"``）は数値の ``1`` と同じにならない。空白だけのキーは空キー。
+CSV の ``"1001"`` と Excel の ``1001.0``、全角の ``Ａ１`` と半角の ``A1``、
+前後の空白の違いは同じキーとして突合する。突合に使うだけで、転記するデータは
+変えない（ただし ``write.types`` の変換だけは転記した値に 1 回かける）。先頭ゼロ付きの
+文字列（``"0001"``）は数値の ``1`` と同じにならない。空白だけのキーは空キー。
+
+**正規化後のキーが重複していたら ``TableDuplicateKeyError``**（`read` 側・`write` 側の
+どちらも。``Table.index()`` / ``Table.diff()`` と同じ例外）。どの行が勝つかを黙って決めて
+上書きしてしまうのを防ぐため。複合キーの場合は ``"カラム1,カラム2"`` の形でメッセージに出る。
+
+**1 対多は事前に ``group_by()`` で 1 行にまとめてから渡す**。`read` 側に同じキーの行が複数
+ある場合（明細など）は、``group_by()`` で合計・先頭の選択などをしてから `read` に渡す。
+`transfer()` 自身は集約をしない。
+
+**転記した値には、転記先列の ``types=`` の変換を 1 回かける**。CSV の ``"1000"`` が文字列の
+まま `int` 列に入るのを防ぐため。転記しなかった行・列には変換をかけない。転記先の列に
+``types=`` が無ければ変換しない（型は推測しない）。変換できない値は ``TableError``。
+
+**セルの値は ``str`` / ``int`` / ``float`` / ``bool`` / ``datetime`` などの不変の値
+であること** を前提とする。``list`` や ``dict`` など変更可能な値をセルに入れた場合、
+浅いコピーによる共有は保証しない。
 
 ### pandas と行き来する
 

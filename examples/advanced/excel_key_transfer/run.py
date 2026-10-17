@@ -20,7 +20,7 @@
 import logging
 from pathlib import Path
 
-from comken.core.table import Table, Transfer
+from comken.core.table import Table, transfer
 from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Excel
 
@@ -98,25 +98,15 @@ def main() -> None:
         [{KEY: row[KEY], "顧客名": "", TOTAL: ""} for row in source.to_rows()],
     )
     before = destination.to_rows()
-    transfer = Transfer(
+    result = transfer(
         source,
         destination,
         mapping=mapping,
         read_key=KEY,
         write_key=KEY,
+        where=lambda read_row, _: read_row[TOTAL] != "",
     )
-    for read_row, write_row in transfer.matched_rows():
-        # 条件は apply_mapping() より前に書く。 ``read_row[TOTAL]`` を見て
-        # 明細が無い行を適用前にスキップする。 この位置で continue した行は
-        # transfer の作業 Table へ反映されない（``apply_mapping`` を呼ばないため、
-        # write_row への書き込みも起こらない）。
-        if read_row[TOTAL] == "":
-            # TOTAL が空のマスタは明細がないため、この行は転記しない。
-            # write_row の TOTAL は初期値 ``""`` のまま残り、``working`` へも反映されない。
-            continue
-        # apply_mapping がコンストラクタで渡した mapping を write_row へコピーする
-        transfer.apply_mapping(read_row, write_row)
-    working = transfer.result()
+    working = result.table
     after = working.to_rows()
     with Excel(INVOICE_XLSX) as excel:
         sheet = excel.sheet(SHEET)
@@ -125,7 +115,7 @@ def main() -> None:
         for row in range(2, len(values) + 1):
             sheet.format(f"{AMOUNT_COL}{row}", number_format=AMOUNT_FORMAT)
 
-    logger.info("%d 件転記した", len(working))
+    logger.info("%d 件転記した", result.transferred_count)
 
     # 転記前後を突合して、どの行のどの列が書き換わったかを確認する
     before_table = Table(destination.columns, before)

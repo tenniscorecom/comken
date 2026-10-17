@@ -106,6 +106,43 @@ def changes_table(
     return Table(columns, rows)
 
 
+def index_by_key(
+    rows: list[Row],
+    columns: list[str],
+    *,
+    skip_blank: bool = False,
+) -> dict[tuple[str, ...], Row]:
+    """正規化後のキーで索引を作る（``Table.diff()`` / ``transfer()`` の共通部品）。
+
+    キーは ``normalize()`` でそろえた後、各列の値を並べた ``tuple[str, ...]``。
+    戻り値の辞書は、そのタプルをキーに ``Row`` を引く形になる。
+
+    空キー（``normalize`` 後に ``""`` の要素が 1 つでもある）は ``skip_blank=True``
+    のとき索引に入らない。 ``False`` のときはそのまま入れる（``Table.diff()``
+    の既存挙動を保つため）。
+
+    正規化後のキーが重複していたら ``TableDuplicateKeyError`` を送出する
+    （``Table.index()`` と同じ例外）。 複合キーは列名のリストを渡し、キー値は
+    ``","`` で連結してメッセージに出す。
+
+    Args:
+        rows: 索引対象の行のリスト。
+        columns: キー列のリスト（順序を保って ``tuple`` にする）。
+        skip_blank: ``True`` なら空キー行を索引に入れない。
+    """
+    from comken.exceptions.tables import TableDuplicateKeyError
+
+    index: dict[tuple[str, ...], Row] = {}
+    for row in rows:
+        key = tuple(normalize(row[column]) for column in columns)
+        if skip_blank and any(value == "" for value in key):
+            continue
+        if key in index:
+            raise TableDuplicateKeyError(list(columns), ",".join(key))
+        index[key] = row
+    return index
+
+
 def index_for_diff(
     rows: list[Row],
     key: str,
@@ -114,16 +151,12 @@ def index_for_diff(
 
     正規化後のキーが重複していたら ``TableDuplicateKeyError`` を送出する
     （``Table.index()`` と同じ例外）。
-    """
-    from comken.exceptions.tables import TableDuplicateKeyError
 
-    index: dict[str, Row] = {}
-    for row in rows:
-        normalized_key = normalize(row[key])
-        if normalized_key in index:
-            raise TableDuplicateKeyError([key], normalized_key)
-        index[normalized_key] = row
-    return index
+    ``index_by_key`` の薄いラッパー。 ``Table.diff()`` の既存挙動を保つため
+    ``skip_blank=False``（空キー行も索引に入れる）で呼び、戻り値のキーを
+    単一文字列に展開して返す。
+    """
+    return {key_tuple[0]: row for key_tuple, row in index_by_key(rows, [key]).items()}
 
 
 __all__ = ["DiffResult"]

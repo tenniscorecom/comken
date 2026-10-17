@@ -26,7 +26,7 @@ from comken.core.files import (
 )
 from comken.core.files.ops import copy_to_local_if_large, project_dir
 from comken.core.table import Table
-from comken.core.table.diff import diff_row
+from comken.core.table.diff import diff_row, index_by_key
 from comken.core.text import (
     is_enabled_mark,
     is_true_word,
@@ -809,6 +809,85 @@ class TestDiffRows:
 
         with pytest.raises(TableDuplicateKeyError):
             before.diff(after, key="社員番号")
+
+
+class TestIndexByKey:
+    """``comken.core.table.diff.index_by_key``（索引 / Table.diff() / transfer() 共通部品）。"""
+
+    def test_skip_blank_false_includes_blank_keys(self) -> None:
+        """``skip_blank=False`` のときは空キー行も索引に入れる（``Table.diff()`` の現状）。"""
+        rows = [
+            {"id": "1", "name": "a"},
+            {"id": "", "name": "空"},
+            {"id": "2", "name": "b"},
+        ]
+        index = index_by_key(rows, ["id"], skip_blank=False)
+        assert len(index) == 3
+        assert ("1",) in index
+        assert ("",) in index
+        assert ("2",) in index
+
+    def test_skip_blank_true_excludes_blank_keys(self) -> None:
+        """``skip_blank=True`` のときは空キー行を索引に入れない（``transfer()`` の挙動）。"""
+        rows = [
+            {"id": "1", "name": "a"},
+            {"id": "", "name": "空"},
+            {"id": "2", "name": "b"},
+        ]
+        index = index_by_key(rows, ["id"], skip_blank=True)
+        assert len(index) == 2
+        assert ("1",) in index
+        assert ("2",) in index
+        assert ("",) not in index
+
+    def test_normalizes_key(self) -> None:
+        """キーは ``normalize`` でそろえて索引化する（同じキーなら重複エラー）。"""
+        rows = [{"id": " 1001 ", "name": "a"}, {"id": "１００1", "name": "b"}]
+        # strip と NFKC で両方とも "1001" になるので重複扱い
+        with pytest.raises(TableDuplicateKeyError):
+            index_by_key(rows, ["id"], skip_blank=False)
+
+    def test_does_not_normalize_case(self) -> None:
+        """大文字小文字は区別する（NFKC は小文字化しない）。"""
+        rows = [{"id": "A001", "name": "a"}, {"id": "a001", "name": "b"}]
+        index = index_by_key(rows, ["id"], skip_blank=False)
+        # 大文字小文字が違うので別キー
+        assert len(index) == 2
+
+    def test_supports_composite_key(self) -> None:
+        """複合キー（複数列）をタプルにして索引化する。"""
+        rows = [
+            {"group": "A", "id": "1", "name": "a"},
+            {"group": "A", "id": "2", "name": "b"},
+            {"group": "B", "id": "1", "name": "c"},
+        ]
+        index = index_by_key(rows, ["group", "id"], skip_blank=False)
+        assert ("A", "1") in index
+        assert ("A", "2") in index
+        assert ("B", "1") in index
+        assert len(index) == 3
+
+    def test_composite_key_partial_blank_is_excluded_when_skip_blank(self) -> None:
+        """複合キーは 1 要素でも空なら ``skip_blank=True`` で索引に入らない。"""
+        rows = [
+            {"group": "", "id": "1", "name": "a"},
+            {"group": "A", "id": "", "name": "b"},
+            {"group": "A", "id": "1", "name": "c"},
+        ]
+        index = index_by_key(rows, ["group", "id"], skip_blank=True)
+        assert len(index) == 1
+        assert ("A", "1") in index
+
+    def test_duplicate_raises_in_composite_key(self) -> None:
+        """複合キーが重複していたら TableDuplicateKeyError（key は ``,`` で連結）。"""
+        rows = [
+            {"group": "A", "id": "1", "name": "a"},
+            {"group": "A", "id": "1", "name": "b"},
+        ]
+        with pytest.raises(TableDuplicateKeyError) as exc_info:
+            index_by_key(rows, ["group", "id"], skip_blank=False)
+        # メッセージに重複キー（"A,1"）が含まれる
+        assert "A,1" in str(exc_info.value)
 
 
 class TestIsTrueWord:

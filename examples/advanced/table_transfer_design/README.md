@@ -1,52 +1,54 @@
-# Table / Transfer サンプル
+# Table / transfer() サンプル
 
-保存先を持たない `Table` と、入力を変更せず新しい `Table` を返す `Transfer` の例です。
+保存先を持たない `Table` と、入力を変更せず新しい `Table` を返す `transfer()` の例です。
 
 ```text
 python -m examples.advanced.table_transfer_design.run
 ```
 
 `mapping` は「転記元の列名 → 転記先の列名」の dict。
-`Transfer(read, write, mapping, read_key=..., write_key=...)` を作り、
-3つの取り出し口を使い分けて read / write を行単位で加工する:
+`transfer(read, write, mapping, read_key=..., write_key=...)` を 1 回呼ぶと、
+突合・転記・未一致行まで一度に揃った `TransferResult` が返る:
 
-- `matched_rows()`: 両方にキーが揃う行を `(read_row, write_row)` で返す
-  （**両方とも作業 Table の実体行**）
-- `transfer_rows()`: read 全行を `(read_row, write_row | None)` で返す
-  （write に無い行は `None`、`read_row` は **コピー**）
-- `unmatched()`: 突合しなかった行を `UnmatchedRows` で返す
-  - `only_in_read`: write に無い read 行（**コピー** / `Table`）
-  - `only_in_write`: read に無い write 行（**作業 Table の実体行** / `list[Row]`）
+- `result.table` — 転記後の write（write と同じ列・同じ行順・同じ行数の新しい `Table`）。
+  入力 `write` は変更しない
+- `result.only_in_read` — write に対応が無い read の行（`Table`・read の列構成）
+- `result.only_in_write` — read に対応が無い write の行（`Table`・write の列構成・転記前の値）
+- `result.matched_count` / `result.transferred_count` — キーが一致した組の数と、
+  そのうち `where` が True で実際に転記した組の数
 
 ```python skip
-for read_row, write_row in transfer.matched_rows():
-    if 条件:
-        continue                          # この行は apply_mapping を呼ばずに終わる
-    transfer.apply_mapping(read_row, write_row)   # mapping の値をコピー
-    write_row["備考"] = "..."             # mapping に無い列を追加加工
+result = transfer(
+    source, destination, mapping,
+    read_key="注文番号", write_key="注文番号",
+    where=lambda read_row, write_row: read_row["金額"] > 0,
+)
+working = result.table
 
-# 転記先に無い read 行は新規行として追加
-result = transfer.result()
-for read_row in transfer.unmatched().only_in_read:
-    result.append({"注文番号": read_row["注文番号"], "顧客名": read_row["取引先"], ...})
+# read にしか無い行は新規行として追加
+for read_row in result.only_in_read:
+    working.append({"注文番号": read_row["注文番号"], "顧客名": read_row["取引先"], ...})
 
-# 転記元に無い write 行は「転記元に無し」と印を付けて残す（必要なら後で filter で取り除く）
-for write_row in transfer.unmatched().only_in_write:
-    write_row["備考"] = "転記元に無し"
+# write にしか無い行は「転記元に無し」と印を付ける（必要なら後で filter で取り除く）
+only_in_write_keys = {row["注文番号"] for row in result.only_in_write}
+working = working.replace([
+    {**row, "備考": "転記元に無し"}
+    if row["注文番号"] in only_in_write_keys else row
+    for row in working.to_rows()
+])
 
-# continue した行は備考が空欄のまま残るので、filter で落とす
-result = result.filter(lambda row: row["備考"] != "")
+# 転記後に空の備考が残った行を落とす
+working = working.filter(lambda row: row["備考"] != "")
 ```
 
-**条件は `apply_mapping()` より前に書く。** `continue` したかどうかを呼び出し側に
-伝える方法がないため、`apply_mapping()` を呼んだ後に判定しても mapping が適用済みになり、filter で取り除くこともできない。
-`matched_rows()` は両側に存在する行だけを返し、転記先に無い行は自動で除かれる。
-**`continue` した行は作業 Table に残るため、`transfer.result()` の戻り値には
-初期値（空欄）のまま含まれる。** 出力から除くには `Table.filter()` などで
-別途除く必要がある。
+`where=` は任意の追加条件 `Callable[[Row, Row], bool]`。`True` のときだけ転記する
+（matched だが転記しなかった組は `matched_count` には入るが `transferred_count` に
+入らず、`only_in_*` にも入らない）。受け取るのは `Row` のコピー（書き換えても結果に
+も入力にも影響しない）。ログ出力は可。
 
-**空キー (`None` / `""`) は突合対象外**。 `0` や `False` は空ではない。
-空キーは read 側・write 側のどちらでも照合に使われず、`unmatched()` 側へ流れる。
+**空キー（`""`。`None` は `Table` に入れた時点で `""` になる）は突合対象外**。
+`0` や `False` は空ではない。空キーは read 側・write 側のどちらでも照合に使われず、
+`result.only_in_read` / `result.only_in_write` 側へ流れる。
 
 CSV や Excel へ保存するときは、結果を `CSV.replace()` / `ExcelTable.replace()` へ渡す。
 `with` を正常終了した場合だけ自動保存される。

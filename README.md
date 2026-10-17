@@ -72,7 +72,7 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 |---|---|
 | Config | INI ファイルの読み込み |
 | find_dated_file / date_in_name | 日付付きファイルの検索・ファイル名からの日付抽出 |
-| Transfer | 既存の CSV / Excel クラス間の列マッピング転記 |
+| transfer | 既存の CSV / Excel クラス間の列マッピング転記 |
 | runtime | `with debug():` / `with dry_run():` による実行モード |
 | exceptions | comken 固有の例外（エラー名別に対処可能） |
 | [CSV](docs/機能/csv.md) | CSV の読み込み・検索・抽出 |
