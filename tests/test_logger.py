@@ -1296,3 +1296,46 @@ class TestExternalDebugFilter:
 
         text = self._read_log_file_text()
         assert "sibling-prefix-marker-36epsilon" in text
+
+    def test_own_library_names_passes_through_and_prefix_match_is_strict(
+        self, isolated_logging, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """``OWN_LIBRARY_NAMES`` に追加した社内ライブラリの DEBUG は pip 経由でも通る。
+
+        ``environment.OWN_LIBRARY_NAMES`` を ``("comken", "inhouse")`` に差し替え、
+        ``<purelib>/inhouse/x.py`` からの DEBUG（name ``inhouse.x``）が
+        comken のファイル handler 経由でファイルに出ることを確認する。
+        同時に、 ``inhousex.y`` （前方一致だが別名）は出ないことで、
+        ``startswith(n + ".")`` の区切りを含む厳密一致を担保する。
+        """
+        import comken.core.logger.environment as environment_module
+
+        monkeypatch.setattr(environment_module, "OWN_LIBRARY_NAMES", ("comken", "inhouse"))
+
+        self._setup_local_logging_in_debug(tmp_path, monkeypatch)
+        inhouse_path = Path(sysconfig.get_paths()["purelib"]) / "inhouse" / "x.py"
+        inhouse_logger = logging.getLogger("inhouse.x")
+
+        inhouse_logger.handle(
+            self._record(
+                "inhouse.x",
+                logging.DEBUG,
+                inhouse_path,
+                "inhouse-debug-marker-37alpha",
+            )
+        )
+
+        # 前方一致するだけの別名（"inhousex"）は出ないこと。
+        prefix_logger = logging.getLogger("inhousex.y")
+        prefix_logger.handle(
+            self._record(
+                "inhousex.y",
+                logging.DEBUG,
+                inhouse_path,
+                "inhouse-prefix-marker-37beta",
+            )
+        )
+
+        text = self._read_log_file_text()
+        assert "inhouse-debug-marker-37alpha" in text
+        assert "inhouse-prefix-marker-37beta" not in text

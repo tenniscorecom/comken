@@ -36,6 +36,8 @@ ETC_FOLDER_NAME = "_etc"
 COMKEN_HANDLER_NAMES = frozenset(
     {CONSOLE_HANDLER_NAME, ENVIRONMENT_HANDLER_NAME, LOCAL_HANDLER_NAME}
 )
+# DEBUG を外部ライブラリ扱いせずに出す社内ライブラリのロガー名。社内ライブラリを作ったらここに足す。
+OWN_LIBRARY_NAMES = ("comken",)
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +56,8 @@ class _ExternalDebugFilter(logging.Filter):
     パスワードがそのまま含まれる。 35 章で ``selenium.webdriver.remote.remote_connection``
     ロガー単体を INFO に固定したが、urllib3・openpyxl・requests など他ライブラリには
     同じ手は取れない。 そこで comken の handler に共通するフィルタとして、
-    「標準ライブラリか pip ライブラリの置き場所にあり、かつ comken 由来でない
-    DEBUG」を一律に落とす方針にした。
+    「標準ライブラリか pip ライブラリの置き場所にあり、かつ ``OWN_LIBRARY_NAMES``
+    に載っていない DEBUG」を一律に落とす方針にした。
 
     判定は ``record.pathname``（``logging.LogRecord`` が log 呼び出し時に収集する
     ソースファイルの絶対パス）と ``sysconfig.get_paths()`` の ``stdlib`` /
@@ -93,10 +95,9 @@ class _ExternalDebugFilter(logging.Filter):
         # エラーを握り潰すと問題に気付けないため。
         if record.levelno >= logging.INFO:
             return True
-        # DEBUG 以下: comken 自身の logger はそのまま通す（comken/core/logger/ 配下の
-        # logger.debug もここで通る）。 comken が pip で site-packages に入っている
-        # 場合も、名前で通す。
-        if record.name == "comken" or record.name.startswith("comken."):
+        # DEBUG 以下: ``OWN_LIBRARY_NAMES`` に載せた社内ライブラリ（comken など）の
+        # logger はそのまま通す（pip で site-packages に入っていても名前で通す）。
+        if any(record.name == n or record.name.startswith(n + ".") for n in OWN_LIBRARY_NAMES):
             return True
         # 利用側プロジェクトの main.py / src/*.py は purelib 外に置く想定なので、
         # ここで startswith に引っかからず True に落ちる。
