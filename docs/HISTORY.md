@@ -57,6 +57,7 @@
 32. 表の「行」に名前を付けた（Row）（2026-10-15）
 33. 履歴の `TRIGGER_SCHEDULED` 定数と `trigger=` 引数を削除（2026-10-16）
 34. バージョンを 1 系に戻した（2026-10-16）
+35. Selenium の通信ログを INFO に固定した（2026-10-17）
 
 ## 1. 設定と非機密情報の扱い
 
@@ -1095,3 +1096,16 @@ MATRIX 1 段 × 1 段 / SUMMARY での `groupingsAcross: {"groupings": []}` /
 - **これからのルール**: 社内で運用を始めた時点（共有サーバーに最初に配置したタグ）から、
   互換性ポリシー（旧名は削除しない）を効かせる。それまでの破壊的変更は MINOR で入れてよい
 - 上の「v2.0.0 にする」の記述は経緯として残す。v2 系のタグは削除した
+
+## 35. Selenium の通信ログを INFO に固定した（2026-10-17）
+
+Selenium の ``selenium.webdriver.remote.remote_connection`` ロガーは DEBUG で
+WebDriver への送受信コマンド本文をそのまま出力する。``Page.input()`` などで
+パスワードを WebDriver に渡しているため、root を DEBUG に上げる ``with debug():``
+ブロックを使うと、入力文字列や Cookie が ``logs/local-*.log`` に平文で残った。
+
+そこで ``comken/toolbox/browser/management/startup.py`` のモジュールロード時に
+当該ロガーを INFO に固定し、comken 側の DEBUG 設定が伝播しないようにした。
+「Selenium の入力値を見たい」という要件は comken 側に無いため、ドライバ／Edge
+の標準出力抑制（27 章既述）と同じ流れで「出さない」判断にする。調査時だけ
+一時的に DEBUG へ戻せばよく、利用者のデフォルト状態は INFO のままにする。

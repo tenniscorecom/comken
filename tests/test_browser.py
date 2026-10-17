@@ -1233,3 +1233,45 @@ class TestSessionIsNotExposedToCallers:
 
         with pytest.raises(BrowserError):
             _ = Kintai().downloads
+
+
+class TestSeleniumRemoteConnectionLogSuppressed:
+    """``with debug():`` 中でも Selenium の通信本文が平文で残らないことの回帰防止。
+
+    Selenium の ``selenium.webdriver.remote.remote_connection`` ロガーは DEBUG で
+    送受信のコマンド本文（入力文字列・Cookie 等）をそのまま出力する。comken は
+    ``Page.input()`` などの操作でパスワードを WebDriver に渡すため、root を
+    DEBUG に上げただけでパスワードが ``logs/local-*.log`` に平文で残る。
+    ``comken.toolbox.browser.management.startup`` の import 時に当該ロガーを
+    INFO に固定している以上、root を DEBUG に上げても DEBUG が有効化されない
+    ことを保証する。
+    """
+
+    def test_remote_connection_logger_is_not_debug_under_root_debug(self):
+        """root を DEBUG にしても Selenium の remote_connection ロガーは DEBUG を
+        有効化しない（パスワードや Cookie が平文で残らないように）。
+        """
+        import importlib
+        import logging
+
+        from comken.toolbox.browser.management import startup as startup_module
+
+        # モジュール本文に書いた ``setLevel`` を副作用として確実に走らせるため、
+        # 明示的に reload する。修正前は ``setLevel`` が無いので、root が DEBUG だと
+        # 子ロガーも DEBUG を継承して ``isEnabledFor(DEBUG)`` が True になる。
+        importlib.reload(startup_module)
+
+        root = logging.getLogger()
+        original_level = root.level
+        original_handlers = root.handlers[:]
+        root.handlers.clear()
+        root.setLevel(logging.DEBUG)
+        try:
+            selenium_logger = logging.getLogger("selenium.webdriver.remote.remote_connection")
+            assert not selenium_logger.isEnabledFor(logging.DEBUG)
+        finally:
+            for handler in root.handlers[:]:
+                root.removeHandler(handler)
+                handler.close()
+            root.handlers.extend(original_handlers)
+            root.setLevel(original_level)

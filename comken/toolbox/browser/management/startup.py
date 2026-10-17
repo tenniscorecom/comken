@@ -16,6 +16,11 @@ from comken.toolbox.browser.options import BrowserOptions
 
 logger = logging.getLogger(__name__)
 
+# Selenium の remote_connection ロガーは DEBUG で送受信コマンド本文をそのまま出すため、
+# ``with debug():`` 中でもパスワード・Cookie が平文でログへ載る。comken 側では DEBUG に
+# 上げないので、ここで INFO に固定して出力を止める。
+logging.getLogger("selenium.webdriver.remote.remote_connection").setLevel(logging.INFO)
+
 
 def _driver_start_error(driver_path: str, detail: Exception) -> BrowserError:
     """``BrowserError`` の「ブラウザを起動できない」文言。
