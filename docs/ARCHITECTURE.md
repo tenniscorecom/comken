@@ -136,7 +136,7 @@ Excel は VBA マクロで書かれていた業務の Python 置き換えが主�
 
 テーブルは **定義を壊さず、中のデータを操作する** 方針で、`ExcelTable` のメソッドも「中のデータを書き換える」操作に限定する。テーブル名変更・削除は持たない（openpyxl では構造化参照が追随せず `#NAME?` になるため）。
 
-Excel / Excel 内の表データ連携は `transfer(read, write, mapping, read_key=..., write_key=...)` に統一する。CSV / Excel / Access など読み取った `Table` を渡せば、CSV → Excel、Excel → CSV、Excel → Excel、CSV → CSV は同じ API で扱える。形式別の転記クラスは作らない。
+Excel / Excel 内の表データ連携は ``Table.transfer_from(read, mapping, read_key=..., write_key=...)`` に統一する。CSV / Excel / Access など読み取った ``Table`` を渡せば、CSV → Excel、Excel → CSV、Excel → Excel、CSV → CSV は同じ API で扱える。形式別の転記クラスは作らない。
 
 `with` を必須とする（読み取り専用でも）。`with` ブロックを外れたインスタンスを触ると `TableError` で停止する。`Excel.close()` がローカル作業コピーを削除するため、`with` を使わないと一時ファイルが残り続ける。
 

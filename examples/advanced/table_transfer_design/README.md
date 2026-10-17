@@ -1,13 +1,13 @@
-# Table / transfer() サンプル
+# Table / `transfer_from()` サンプル
 
-保存先を持たない `Table` と、入力を変更せず新しい `Table` を返す `transfer()` の例です。
+保存先を持たない `Table` と、入力を変更せず新しい `Table` を返す `Table.transfer_from()` の例です。
 
 ```text
 python -m examples.advanced.table_transfer_design.run
 ```
 
 `mapping` は「転記元の列名 → 転記先の列名」の dict。
-`transfer(read, write, mapping, read_key=..., write_key=...)` を 1 回呼ぶと、
+`destination.transfer_from(source, mapping, read_key=..., write_key=...)` を 1 回呼ぶと、
 突合・転記・未一致行まで一度に揃った `TransferResult` が返る:
 
 - `result.table` — 転記後の write（write と同じ列・同じ行順・同じ行数の新しい `Table`）。
@@ -18,8 +18,8 @@ python -m examples.advanced.table_transfer_design.run
   そのうち `where` が True で実際に転記した組の数
 
 ```python skip
-result = transfer(
-    source, destination, mapping,
+result = destination.transfer_from(
+    source, mapping,
     read_key="注文番号", write_key="注文番号",
     where=lambda read_row, write_row: read_row["金額"] > 0,
 )

@@ -1,8 +1,9 @@
 """comken/core/table/transfer.py — Table 間のキー突合と転記。
 
-``transfer(read, write, mapping, read_key=..., write_key=..., where=...)`` を
+``Table.transfer_from(read, mapping, read_key=..., write_key=..., where=...)`` を
 1 回呼ぶと、転記後の ``Table`` と、``only_in_read`` / ``only_in_write``、
 ``matched_count`` / ``transferred_count`` を ``TransferResult`` で返す。
+``Table.transfer_from`` の薄いメソッドから呼ばれる、内部のコア処理を置く。
 キーは ``comken.core.text.normalize`` でそろえてから比べる
 （``Table.diff()`` と同じ規則）。CSV の ``"1001"`` と Excel の ``1001.0``、
 全角の ``Ａ１`` と半角の ``A1``、前後の空白は、同じキーとして突合する。
@@ -44,7 +45,7 @@ def _transfer_duplicate_destination_error(duplicates: list[str]) -> TableError:
 
 @dataclass(frozen=True)
 class TransferResult:
-    """``transfer()`` の結果。
+    """``Table.transfer_from()`` の結果。
 
     Attributes:
         table: 転記後の ``Table``。 ``write`` と同じ列・同じ行順・同じ行数の
@@ -71,13 +72,15 @@ def _validate_transfer_inputs(
     read_key: str | Sequence[str],
     write_key: str | Sequence[str],
 ) -> tuple[dict[str, str], list[str], list[str]]:
-    """``transfer()`` の入力検証（データを読む前に全部済ませる）。
+    """``Table.transfer_from()`` の入力検証（データを読む前に全部済ませる）。
 
     Returns:
         ``(mapping_dict, read_keys, write_keys)``。
     """
-    if not isinstance(read, Table) or not isinstance(write, Table):
-        raise InvalidTableInputError("transferのreadとwriteにはTableを指定してください。")
+    # ``write`` は ``Table.transfer_from()`` 経由の ``self`` なので常に ``Table``
+    # （呼び出し側で保証される）。``read`` だけここで検証する。
+    if not isinstance(read, Table):
+        raise InvalidTableInputError("Table.transfer_fromのreadにはTableを指定してください。")
 
     mapping_dict = dict(mapping)
     read_keys = [read_key] if isinstance(read_key, str) else list(read_key)
@@ -111,7 +114,7 @@ def _apply_transfers(
     mapping_dict: dict[str, str],
     where: Callable[[Row, Row], bool] | None,
 ) -> tuple[list[Row], int, int]:
-    """matched 組を転記して作業用行を作る（``transfer()`` のコア処理）。
+    """matched 組を転記して作業用行を作る（``Table.transfer_from()`` のコア処理）。
 
     Returns:
         ``(new_rows, matched_count, transferred_count)``。
@@ -164,7 +167,7 @@ def _build_unmatched_rows(
     return unmatched
 
 
-def transfer(
+def transfer_tables(
     read: Table,
     write: Table,
     mapping: Mapping[str, str],
@@ -173,7 +176,10 @@ def transfer(
     write_key: str | Sequence[str],
     where: Callable[[Row, Row], bool] | None = None,
 ) -> TransferResult:
-    """Table 間のキー突合と転記を 1 回で行う。
+    """Table 間のキー突合と転記を 1 回で行う（``Table.transfer_from()`` のコア処理）。
+
+    ``Table.transfer_from(read, mapping, read_key=..., write_key=..., where=...)``
+    の薄いメソッドから呼ばれる。直接呼ぶことは想定していない。
 
     Args:
         read: 転記元の ``Table``。変更しない。
@@ -192,7 +198,7 @@ def transfer(
         が一致数と転記数。
 
     Raises:
-        InvalidTableInputError: ``read`` / ``write`` が ``Table`` でない。
+        InvalidTableInputError: ``read`` が ``Table`` でない。
         TableError: ``mapping`` が空、 ``read_key`` と ``write_key`` の要素数が違う、
             ``mapping`` の転記先列が重複している。
         TableColumnNotFoundError: ``mapping`` の転記元列・転記先列、
@@ -207,39 +213,13 @@ def transfer(
         転記しなかった行・列には変換関数を再適用しない（呼び出し回数が増える不具合を
         防ぐため）。 ``write.types`` に無い列は変換しない。 変換できない値は
         ``TableError``（行番号・列名・値が出る）。
-
-    Example:
-        通常の転記::
-
-            from comken.core.table import Table, transfer
-            result = transfer(
-                source, destination, mapping={"顧客名": "name", "金額": "amount"},
-                read_key="顧客ID", write_key="id",
-            )
-            result_table = result.table
-
-        ``where`` で条件を満たす行だけ転記::
-
-            def is_confirmed(read_row, write_row):
-                return read_row["金額"] > 0
-            result = transfer(
-                source, destination, mapping, read_key="id", write_key="id", where=is_confirmed,
-            )
-
-        未一致の行を別途処理する::
-
-            for read_row in result.only_in_read:
-                ...  # read 側にしか無い行（write への新規追加候補）
-
-            for write_row in result.only_in_write:
-                ...  # write 側にしか無い行（破棄候補）
     """
     mapping_dict, read_keys, write_keys = _validate_transfer_inputs(
         read, write, mapping, read_key, write_key
     )
 
     logger.debug(
-        "transfer 開始: read=%d 行, write=%d 行, mapping=%d 列, keys(read/write)=%d/%d",
+        "Table.transfer_from 開始: read=%d 行, write=%d 行, mapping=%d 列, keys(read/write)=%d/%d",
         len(read),
         len(write),
         len(mapping_dict),
@@ -269,7 +249,7 @@ def transfer(
     )
 
     logger.debug(
-        "transfer 完了: matched=%d, transferred=%d, only_in_read=%d, only_in_write=%d",
+        "Table.transfer_from 完了: matched=%d, transferred=%d, only_in_read=%d, only_in_write=%d",
         matched_count,
         transferred_count,
         len(only_in_read),
@@ -285,4 +265,4 @@ def transfer(
     )
 
 
-__all__ = ["TransferResult", "transfer"]
+__all__ = ["TransferResult"]

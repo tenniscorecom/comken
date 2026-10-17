@@ -10,7 +10,7 @@ from comken.exceptions.base import ComkenError
 class TableError(ComkenError):
     """表データの読み書き・転記に関するエラー。具体的な状況はメッセージに出る
 
-    発生箇所: Table / transfer()
+    発生箇所: Table / Table.transfer_from()
 
     対処:
         画面に表示された具体的なエラー内容を確認する
@@ -43,7 +43,7 @@ class TableColumnNotFoundError(TableError):
 class TableDuplicateKeyError(TableError):
     """Table の索引または比較に使うキーが重複している。
 
-    発生箇所: Table.index() / Table.diff() / transfer()
+    発生箇所: Table.index() / Table.diff() / Table.transfer_from()
 
     対処:
         キー列の値を一意にしてから処理をやり直す

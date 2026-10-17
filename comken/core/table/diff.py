@@ -110,15 +110,15 @@ def index_by_key(
     rows: list[Row],
     columns: list[str],
 ) -> dict[tuple[str, ...], Row]:
-    """正規化後のキーで索引を作る（``Table.diff()`` / ``transfer()`` の共通部品）。
+    """正規化後のキーで索引を作る（``Table.diff()`` / ``Table.transfer_from()`` の共通部品）。
 
     キーは ``normalize()`` でそろえた後、各列の値を並べた ``tuple[str, ...]``。
     戻り値の辞書は、そのタプルをキーに ``Row`` を引く形になる。
 
     空キー（``normalize`` 後に ``""`` の要素が 1 つでもある）は索引に入れない。
-    ``Table.diff()`` / ``Table.changes()`` / ``transfer()`` のいずれも空キーは
+    ``Table.diff()`` / ``Table.changes()`` / ``Table.transfer_from()`` のいずれも空キーは
     突合対象外で揃えており、ここでも同じ規則で空キーを除く。空キー行は呼び出し側
-    （``Table.diff()`` / ``transfer()``）が ``added`` / ``removed`` /
+    （``Table.diff()`` / ``Table.transfer_from()``）が ``added`` / ``removed`` /
     ``only_in_*`` 側へ集める。
 
     正規化後の**空でない**キーが重複していたら ``TableDuplicateKeyError``

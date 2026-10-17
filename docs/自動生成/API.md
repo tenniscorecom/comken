@@ -1237,6 +1237,87 @@ Returns:
     ``変更後``（1 つの行で 2 列が変わっていれば 2 行になる）。``key`` の値は
     正規化後の文字列。
 
+#### `transfer_from`
+
+```text
+def transfer_from(self, read: Table, mapping: Mapping[str, str], *, read_key: str | Sequence[str], write_key: str | Sequence[str], where: Callable[[Row, Row], bool] | None=None) -> TransferResult:
+```
+
+##### 説明
+
+``self``（転記先）に ``read``（転記元）をキー突合で転記する。
+
+``self`` を Excel の表、``read`` を CSV の表だと思えば ``excel_table
+.transfer_from(csv_table, ...)`` と書けて、「Excel の表が CSV の表から
+転記を受ける」と向きが読める。``Table.diff()`` と同じく薄いメソッドで、
+コア処理は ``comken.core.table.transfer.transfer_tables`` に置く。
+
+1 回の呼び出しで「突合 → 転記 → 未一致行の収集」がすべて揃う。
+条件は ``where=`` に書く。結果は ``TransferResult``（``table`` /
+``only_in_read`` / ``only_in_write`` / ``matched_count`` /
+``transferred_count``）にまとめ、どれも新しい ``Table`` か数にして、
+入力とは辞書を共有しない。キーの重複は ``read`` / ``self`` のどちらも
+エラーになる（``TableDuplicateKeyError``）。
+
+Args:
+    read: 転記元の ``Table``。変更しない。
+    mapping: 「転記元の列名 → ``self`` の列名」の ``Mapping``。 1 個以上必須。
+    read_key: ``read`` のキー列。 ``str`` なら 1 列、 ``Sequence[str]`` なら複合キー。
+    write_key: ``self`` のキー列。 ``read_key`` と同じ要素数でなければならない。
+    where: 任意の追加条件 ``(read_row, write_row) -> bool``。 ``True`` のときだけ
+        転記する。 受け取るのはコピー（書き換えても結果にも入力にも影響しない）。
+        判定だけ書く（行を直す処理は書かない）。 ログ出力は可。 例外はそのまま
+        伝わる。 未一致の行では呼ばれない。 1 組につき 1 回。
+
+Returns:
+    ``TransferResult``。 ``table`` が転記後の ``Table``（``self`` と同じ
+    列・同じ行順・同じ行数の新しい ``Table``）、 ``only_in_read`` /
+    ``only_in_write`` が未一致の行、 ``matched_count`` / ``transferred_count``
+    が一致数と転記数。
+
+Raises:
+    InvalidTableInputError: ``read`` が ``Table`` でない。
+    TableError: ``mapping`` が空、 ``read_key`` と ``write_key`` の要素数が違う、
+        ``mapping`` の転記先列が重複している。
+    TableColumnNotFoundError: ``mapping`` の転記元列・転記先列、
+        ``read_key`` / ``write_key`` の列が存在しない（データを読む前に出る）。
+
+Note:
+    セルの値は ``str`` / ``int`` / ``float`` / ``bool`` / ``datetime`` などの
+    **不変の値であること** を前提とする。 ``list`` や ``dict`` など変更可能な値を
+    セルに入れた場合、浅いコピーによる共有は保証しない。
+
+    ``result.table`` は転記した値に ``self.types`` の変換を 1 回かける。
+    転記しなかった行・列には変換関数を再適用しない（呼び出し回数が増える不具合を
+    防ぐため）。 ``self.types`` に無い列は変換しない。 変換できない値は
+    ``TableError``（行番号・列名・値が出る）。
+
+Example:
+    通常の転記::
+
+        from comken.core.table import Table
+        result = excel_table.transfer_from(
+            csv_table, mapping={"顧客名": "name", "金額": "amount"},
+            read_key="顧客ID", write_key="id",
+        )
+        result_table = result.table
+
+    ``where`` で条件を満たす行だけ転記::
+
+        def is_confirmed(read_row, write_row):
+            return read_row["金額"] > 0
+        result = excel_table.transfer_from(
+            csv_table, mapping, read_key="id", write_key="id", where=is_confirmed,
+        )
+
+    未一致の行を別途処理する::
+
+        for read_row in result.only_in_read:
+            ...  # read 側にしか無い行（self への新規追加候補）
+
+        for write_row in result.only_in_write:
+            ...  # self 側にしか無い行（破棄候補）
+
 #### `split_hierarchy`
 
 ```text
@@ -1313,7 +1394,7 @@ def changes(self, *, key: str, order_by: str | None=None) -> Table:
 返す順: キーが最初に出てきた順、その中は並べ替え後の順。
 
 空キー（``normalize`` 後に ``""``。``None``・空白だけを含む）の行は
-**無視する**。``Table.diff()`` / ``transfer()`` と同じ規則で、
+**無視する**。``Table.diff()`` / ``Table.transfer_from()`` と同じ規則で、
 空キー行は重複検査の対象にもならない。``order_by`` が空の空キー行も
 エラーにしない（そもそも対象から除かれるため）。
 
@@ -1337,7 +1418,7 @@ class TransferResult:
 
 #### 説明
 
-``transfer()`` の結果。
+``Table.transfer_from()`` の結果。
 
 Attributes:
     table: 転記後の ``Table``。 ``write`` と同じ列・同じ行順・同じ行数の
@@ -1348,75 +1429,6 @@ Attributes:
         **転記前の値** をそのまま持つ。 空キーの行も含む。
     matched_count: キーが一致した組の数（``where`` の結果に関係なく）。
     transferred_count: そのうち ``where`` が True で実際に転記した組の数。
-
-### `transfer`
-
-```text
-def transfer(read: Table, write: Table, mapping: Mapping[str, str], *, read_key: str | Sequence[str], write_key: str | Sequence[str], where: Callable[[Row, Row], bool] | None=None) -> TransferResult:
-```
-
-#### 説明
-
-Table 間のキー突合と転記を 1 回で行う。
-
-Args:
-    read: 転記元の ``Table``。変更しない。
-    write: 転記先の ``Table``。変更しない。
-    mapping: 「転記元の列名 → 転記先の列名」の ``Mapping``。 1 個以上必須。
-    read_key: ``read`` のキー列。 ``str`` なら 1 列、 ``Sequence[str]`` なら複合キー。
-    write_key: ``write`` のキー列。 ``read_key`` と同じ要素数でなければならない。
-    where: 任意の追加条件 ``(read_row, write_row) -> bool``。 ``True`` のときだけ
-        転記する。 受け取るのはコピー（書き換えても結果にも入力にも影響しない）。
-        判定だけ書く（行を直す処理は書かない）。 ログ出力は可。 例外はそのまま
-        伝わる。 未一致の行では呼ばれない。 1 組につき 1 回。
-
-Returns:
-    ``TransferResult``。 ``table`` が転記後の ``Table``、 ``only_in_read`` /
-    ``only_in_write`` が未一致の行、 ``matched_count`` / ``transferred_count``
-    が一致数と転記数。
-
-Raises:
-    InvalidTableInputError: ``read`` / ``write`` が ``Table`` でない。
-    TableError: ``mapping`` が空、 ``read_key`` と ``write_key`` の要素数が違う、
-        ``mapping`` の転記先列が重複している。
-    TableColumnNotFoundError: ``mapping`` の転記元列・転記先列、
-        ``read_key`` / ``write_key`` の列が存在しない（データを読む前に出る）。
-
-Note:
-    セルの値は ``str`` / ``int`` / ``float`` / ``bool`` / ``datetime`` などの
-    **不変の値であること** を前提とする。 ``list`` や ``dict`` など変更可能な値を
-    セルに入れた場合、浅いコピーによる共有は保証しない。
-
-    ``result.table`` は転記した値に ``write.types`` の変換を 1 回かける。
-    転記しなかった行・列には変換関数を再適用しない（呼び出し回数が増える不具合を
-    防ぐため）。 ``write.types`` に無い列は変換しない。 変換できない値は
-    ``TableError``（行番号・列名・値が出る）。
-
-Example:
-    通常の転記::
-
-        from comken.core.table import Table, transfer
-        result = transfer(
-            source, destination, mapping={"顧客名": "name", "金額": "amount"},
-            read_key="顧客ID", write_key="id",
-        )
-        result_table = result.table
-
-    ``where`` で条件を満たす行だけ転記::
-
-        def is_confirmed(read_row, write_row):
-            return read_row["金額"] > 0
-        result = transfer(
-            source, destination, mapping, read_key="id", write_key="id", where=is_confirmed,
-        )
-
-    未一致の行を別途処理する::
-
-        for read_row in result.only_in_read:
-            ...  # read 側にしか無い行（write への新規追加候補）
-
-        for write_row in result.only_in_write:
-            ...  # write 側にしか無い行（破棄候補）
 
 
 ## `from comken.core.text import ...`
@@ -1493,9 +1505,9 @@ def normalize(value: object) -> str:
 
 値を、比較（突合）のための文字列にそろえる。
 
-``Table.diff()`` のキー・値の比較と ``transfer()`` のキーの突合は、この関数で
-そろえてから比べる。元に戻せない変換（NFKC）なので、**書き戻すデータには使わず、
-比べるときの鍵にだけ使う**。
+``Table.diff()`` のキー・値の比較と ``Table.transfer_from()`` のキーの突合は、
+この関数でそろえてから比べる。元に戻せない変換（NFKC）なので、
+**書き戻すデータには使わず、比べるときの鍵にだけ使う**。
 
 主な変換:
     - 全角英数字・記号 → 半角（ａ→a, １→1, （→(, ．→.）
@@ -2557,7 +2569,7 @@ class TableError(ComkenError):
 
 表データの読み書き・転記に関するエラー。具体的な状況はメッセージに出る
 
-発生箇所: Table / transfer()
+発生箇所: Table / Table.transfer_from()
 
 対処:
     画面に表示された具体的なエラー内容を確認する
@@ -2608,7 +2620,7 @@ class TableDuplicateKeyError(TableError):
 
 Table の索引または比較に使うキーが重複している。
 
-発生箇所: Table.index() / Table.diff() / transfer()
+発生箇所: Table.index() / Table.diff() / Table.transfer_from()
 
 対処:
     キー列の値を一意にしてから処理をやり直す
@@ -6089,7 +6101,7 @@ class CSV:
 
 CSV ファイルを1つのデータ領域として読み書きする。
 
-Table と同じ「行の集合」として ``transfer()`` へ渡せる境界を提供する。
+Table と同じ「行の集合」として ``Table.transfer_from()`` へ渡せる境界を提供する。
 ヘッダーのないファイルは ``columns`` で列名を指定する。
 
 文字コード:

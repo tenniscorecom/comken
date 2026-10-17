@@ -587,7 +587,7 @@ raise ExcelError(f"シート「{name}」が見つかりません。存在する�
 | CSV を読み書きする | [examples/csv_read.py](../examples/csv_read.py), [examples/csv_write.py](../examples/csv_write.py) |
 | Excel を読み書きする | [examples/excel_read.py](../examples/excel_read.py), [examples/excel_write.py](../examples/excel_write.py) |
 | CSV/Excel 間で列を転記する | [examples/column_mapping.py](../examples/column_mapping.py) |
-| Table / transfer() の詳しい使い方 | [examples/advanced/table_transfer_design/run.py](../examples/advanced/table_transfer_design/run.py) |
+| Table / `Table.transfer_from()` の詳しい使い方 | [examples/advanced/table_transfer_design/run.py](../examples/advanced/table_transfer_design/run.py) |
 | config.ini を使う | [examples/constants.py](../examples/constants.py) |
 | ログを設定する | [examples/logger.py](../examples/logger.py) |
 | dry-run・debug モード | [examples/runtime.py](../examples/runtime.py) |

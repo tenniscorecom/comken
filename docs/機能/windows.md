@@ -47,7 +47,7 @@ with ExcelCOMHandler("data.xlsx") as h:
     # h.save_as("output.csv", file_format=FileFormat.CSV)
 ```
 
-列マッピングによる CSV / Excel 間の転記には `transfer()`（[`comken.core.table.transfer`](../機能/core.md#transfer転記)）を使う。
+列マッピングによる CSV / Excel 間の転記には ``Table.transfer_from()``（[`comken.core.table.Table.transfer_from`](../機能/core.md#tabletransfer_from転記)）を使う。
 Excel COM は、パスワード保存やマクロなど COM が必要な操作に限定する。
 
 ### WindowHandler

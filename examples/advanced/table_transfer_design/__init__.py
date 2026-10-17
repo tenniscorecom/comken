@@ -1,1 +1,1 @@
-"""Table / transfer() の設計サンプル。"""
+"""Table / ``transfer_from()`` の設計サンプル。"""

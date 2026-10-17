@@ -518,7 +518,7 @@ class TestTableChanges:
 
     def test_blank_key_rows_are_ignored(self) -> None:
         """空キーの行は ``changes()`` で無視される
-        （``Table.diff()`` / ``transfer()`` と同じ規則）。
+        （``Table.diff()`` / ``Table.transfer_from()`` と同じ規則）。
         """
         history = Table(
             ["社員番号", "変更時刻", "部署"],

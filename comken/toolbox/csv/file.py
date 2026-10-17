@@ -350,7 +350,7 @@ def _invalid_encoding_message(path: Path, encoding: str, error: BaseException) -
 class CSV:
     """CSV ファイルを1つのデータ領域として読み書きする。
 
-    Table と同じ「行の集合」として ``transfer()`` へ渡せる境界を提供する。
+    Table と同じ「行の集合」として ``Table.transfer_from()`` へ渡せる境界を提供する。
     ヘッダーのないファイルは ``columns`` で列名を指定する。
 
     文字コード:

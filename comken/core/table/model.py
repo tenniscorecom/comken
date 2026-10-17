@@ -7,7 +7,7 @@ Table はメモリ上の行だけを担当します。CSV や Excel の保存処
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from itertools import pairwise
 from typing import TYPE_CHECKING, Any, Self, cast
 
@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     import pandas as pd
 
     from comken.core.table.diff import DiffResult
+    from comken.core.table.transfer import TransferResult
 
 logger = logging.getLogger(__name__)
 
@@ -479,6 +480,99 @@ class Table:
             changed=changed,
         )
 
+    def transfer_from(
+        self,
+        read: Table,
+        mapping: Mapping[str, str],
+        *,
+        read_key: str | Sequence[str],
+        write_key: str | Sequence[str],
+        where: Callable[[Row, Row], bool] | None = None,
+    ) -> TransferResult:
+        """``self``（転記先）に ``read``（転記元）をキー突合で転記する。
+
+        ``self`` を Excel の表、``read`` を CSV の表だと思えば ``excel_table
+        .transfer_from(csv_table, ...)`` と書けて、「Excel の表が CSV の表から
+        転記を受ける」と向きが読める。``Table.diff()`` と同じく薄いメソッドで、
+        コア処理は ``comken.core.table.transfer.transfer_tables`` に置く。
+
+        1 回の呼び出しで「突合 → 転記 → 未一致行の収集」がすべて揃う。
+        条件は ``where=`` に書く。結果は ``TransferResult``（``table`` /
+        ``only_in_read`` / ``only_in_write`` / ``matched_count`` /
+        ``transferred_count``）にまとめ、どれも新しい ``Table`` か数にして、
+        入力とは辞書を共有しない。キーの重複は ``read`` / ``self`` のどちらも
+        エラーになる（``TableDuplicateKeyError``）。
+
+        Args:
+            read: 転記元の ``Table``。変更しない。
+            mapping: 「転記元の列名 → ``self`` の列名」の ``Mapping``。 1 個以上必須。
+            read_key: ``read`` のキー列。 ``str`` なら 1 列、 ``Sequence[str]`` なら複合キー。
+            write_key: ``self`` のキー列。 ``read_key`` と同じ要素数でなければならない。
+            where: 任意の追加条件 ``(read_row, write_row) -> bool``。 ``True`` のときだけ
+                転記する。 受け取るのはコピー（書き換えても結果にも入力にも影響しない）。
+                判定だけ書く（行を直す処理は書かない）。 ログ出力は可。 例外はそのまま
+                伝わる。 未一致の行では呼ばれない。 1 組につき 1 回。
+
+        Returns:
+            ``TransferResult``。 ``table`` が転記後の ``Table``（``self`` と同じ
+            列・同じ行順・同じ行数の新しい ``Table``）、 ``only_in_read`` /
+            ``only_in_write`` が未一致の行、 ``matched_count`` / ``transferred_count``
+            が一致数と転記数。
+
+        Raises:
+            InvalidTableInputError: ``read`` が ``Table`` でない。
+            TableError: ``mapping`` が空、 ``read_key`` と ``write_key`` の要素数が違う、
+                ``mapping`` の転記先列が重複している。
+            TableColumnNotFoundError: ``mapping`` の転記元列・転記先列、
+                ``read_key`` / ``write_key`` の列が存在しない（データを読む前に出る）。
+
+        Note:
+            セルの値は ``str`` / ``int`` / ``float`` / ``bool`` / ``datetime`` などの
+            **不変の値であること** を前提とする。 ``list`` や ``dict`` など変更可能な値を
+            セルに入れた場合、浅いコピーによる共有は保証しない。
+
+            ``result.table`` は転記した値に ``self.types`` の変換を 1 回かける。
+            転記しなかった行・列には変換関数を再適用しない（呼び出し回数が増える不具合を
+            防ぐため）。 ``self.types`` に無い列は変換しない。 変換できない値は
+            ``TableError``（行番号・列名・値が出る）。
+
+        Example:
+            通常の転記::
+
+                from comken.core.table import Table
+                result = excel_table.transfer_from(
+                    csv_table, mapping={"顧客名": "name", "金額": "amount"},
+                    read_key="顧客ID", write_key="id",
+                )
+                result_table = result.table
+
+            ``where`` で条件を満たす行だけ転記::
+
+                def is_confirmed(read_row, write_row):
+                    return read_row["金額"] > 0
+                result = excel_table.transfer_from(
+                    csv_table, mapping, read_key="id", write_key="id", where=is_confirmed,
+                )
+
+            未一致の行を別途処理する::
+
+                for read_row in result.only_in_read:
+                    ...  # read 側にしか無い行（self への新規追加候補）
+
+                for write_row in result.only_in_write:
+                    ...  # self 側にしか無い行（破棄候補）
+        """
+        from comken.core.table.transfer import transfer_tables
+
+        return transfer_tables(
+            read,
+            self,
+            mapping,
+            read_key=read_key,
+            write_key=write_key,
+            where=where,
+        )
+
     def split_hierarchy(
         self,
         levels: list[str] | tuple[str, ...],
@@ -574,7 +668,7 @@ class Table:
         返す順: キーが最初に出てきた順、その中は並べ替え後の順。
 
         空キー（``normalize`` 後に ``""``。``None``・空白だけを含む）の行は
-        **無視する**。``Table.diff()`` / ``transfer()`` と同じ規則で、
+        **無視する**。``Table.diff()`` / ``Table.transfer_from()`` と同じ規則で、
         空キー行は重複検査の対象にもならない。``order_by`` が空の空キー行も
         エラーにしない（そもそも対象から除かれるため）。
 
@@ -604,7 +698,7 @@ class Table:
         rows_by_key: dict[str, list[Row]] = {}
         for row in self._rows:
             normalized_key = normalize(row[key])
-            # 空キー行は changes() の対象外（diff() / transfer() と同じ規則）
+            # 空キー行は changes() の対象外（diff() / Table.transfer_from() と同じ規則）
             if normalized_key == "":
                 continue
             rows_by_key.setdefault(normalized_key, []).append(row)

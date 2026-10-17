@@ -1,11 +1,11 @@
-"""transfer() の契約テスト。
+"""``Table.transfer_from()`` の契約テスト。
 
 実装をわざと壊したら落ちることを確かめる（バグ検出用）。"""
 # mypy は Callable を `collections.abc` 側で参照する（typing.Callable は pyright で警告）。
 
 import pytest
 
-from comken.core.table import Table, TransferResult, transfer
+from comken.core.table import Table, TransferResult
 from comken.exceptions.tables import (
     InvalidTableInputError,
     TableColumnNotFoundError,
@@ -16,25 +16,12 @@ from comken.exceptions.tables import (
 # ---- 入力検証 ----
 
 
-def test_transfer_rejects_non_table_read() -> None:
+def test_transfer_from_rejects_non_table_read() -> None:
     """read が Table でないと InvalidTableInputError。"""
+    destination = Table(["id"], [{"id": 1}])
     not_a_table: object = "not a table"
     with pytest.raises(InvalidTableInputError):
-        transfer(
-            not_a_table,  # type: ignore[arg-type]
-            Table(["id"], [{"id": 1}]),
-            {"id": "id"},
-            read_key="id",
-            write_key="id",
-        )
-
-
-def test_transfer_rejects_non_table_write() -> None:
-    """write が Table でないと InvalidTableInputError。"""
-    not_a_table: object = "not a table"
-    with pytest.raises(InvalidTableInputError):
-        transfer(
-            Table(["id"], [{"id": 1}]),
+        destination.transfer_from(
             not_a_table,  # type: ignore[arg-type]
             {"id": "id"},
             read_key="id",
@@ -42,36 +29,34 @@ def test_transfer_rejects_non_table_write() -> None:
         )
 
 
-def test_transfer_rejects_empty_mapping() -> None:
+def test_transfer_from_rejects_empty_mapping() -> None:
     """mapping が空だと TableError。"""
     source = Table(["id"], [{"id": 1}])
     destination = Table(["id"], [{"id": 1}])
     with pytest.raises(TableError):
-        transfer(source, destination, {}, read_key="id", write_key="id")
+        destination.transfer_from(source, {}, read_key="id", write_key="id")
 
 
-def test_transfer_rejects_mismatched_key_lengths() -> None:
+def test_transfer_from_rejects_mismatched_key_lengths() -> None:
     """read_key と write_key の要素数が違うと TableError。"""
     source = Table(["group", "id"], [{"group": "A", "id": 1}])
     destination = Table(["group", "id"], [{"group": "A", "id": 1}])
     with pytest.raises(TableError):
-        transfer(
+        destination.transfer_from(
             source,
-            destination,
             {"id": "id"},
             read_key=["group", "id"],
             write_key="id",
         )
 
 
-def test_transfer_rejects_duplicate_destination_columns() -> None:
+def test_transfer_from_rejects_duplicate_destination_columns() -> None:
     """mapping の転記先列が重複していると TableError（末尾に対処）。"""
     source = Table(["a", "b"], [{"a": "1", "b": "2"}])
     destination = Table(["x"], [{"x": "old"}])
     with pytest.raises(TableError) as exc_info:
-        transfer(
+        destination.transfer_from(
             source,
-            destination,
             {"a": "x", "b": "x"},
             read_key="a",
             write_key="a",
@@ -81,74 +66,66 @@ def test_transfer_rejects_duplicate_destination_columns() -> None:
     assert "x" in str(exc_info.value)
 
 
-def test_transfer_rejects_missing_read_key_column() -> None:
+def test_transfer_from_rejects_missing_read_key_column() -> None:
     """read_key が存在しないと TableColumnNotFoundError（データを読む前に）。"""
     source = Table(["id", "name"], [{"id": 1, "name": "A"}])
     destination = Table(["id", "name"], [{"id": 1, "name": "old"}])
     with pytest.raises(TableColumnNotFoundError):
-        transfer(
+        destination.transfer_from(
             source,
-            destination,
             {"name": "name"},
             read_key="missing",
             write_key="id",
         )
 
 
-def test_transfer_rejects_missing_write_key_column() -> None:
+def test_transfer_from_rejects_missing_write_key_column() -> None:
     """write_key が存在しないと TableColumnNotFoundError。"""
     source = Table(["id", "name"], [{"id": 1, "name": "A"}])
     destination = Table(["id", "name"], [{"id": 1, "name": "old"}])
     with pytest.raises(TableColumnNotFoundError):
-        transfer(
+        destination.transfer_from(
             source,
-            destination,
             {"name": "name"},
             read_key="id",
             write_key="missing",
         )
 
 
-def test_transfer_rejects_missing_mapping_read_column() -> None:
+def test_transfer_from_rejects_missing_mapping_read_column() -> None:
     """mapping の転記元列が存在しないと TableColumnNotFoundError。"""
     source = Table(["id", "name"], [{"id": 1, "name": "A"}])
     destination = Table(["id", "name"], [{"id": 1, "name": "old"}])
     with pytest.raises(TableColumnNotFoundError):
-        transfer(
+        destination.transfer_from(
             source,
-            destination,
             {"missing": "name"},
             read_key="id",
             write_key="id",
         )
 
 
-def test_transfer_rejects_missing_mapping_write_column() -> None:
+def test_transfer_from_rejects_missing_mapping_write_column() -> None:
     """mapping の転記先列が存在しないと TableColumnNotFoundError。"""
     source = Table(["id", "name"], [{"id": 1, "name": "A"}])
     destination = Table(["id", "name"], [{"id": 1, "name": "old"}])
     with pytest.raises(TableColumnNotFoundError):
-        transfer(
+        destination.transfer_from(
             source,
-            destination,
             {"name": "missing"},
             read_key="id",
             write_key="id",
         )
 
 
-def test_transfer_column_validation_runs_before_data_reads() -> None:
+def test_transfer_from_column_validation_runs_before_data_reads() -> None:
     """列検証はデータを読む前に出る（存在しない列のとき、行を読まずに失敗する）。"""
-    # read_table のデータを一切読まずに失敗すればよい。 Table 構築自体で失敗するため、
-    # transfer() にはそもそも到達しないが、検証はTableの構築段階ではなく transfer 内で
-    # 走ることを確認するため、エントリポイントで TableColumnNotFoundError を出す。
     source = Table(["id"], [{"id": 1}])
     destination = Table(["id"], [{"id": 2}])
     # read_key の column は存在しない
     with pytest.raises(TableColumnNotFoundError):
-        transfer(
+        destination.transfer_from(
             source,
-            destination,
             {"id": "id"},
             read_key="missing",
             write_key="id",
@@ -158,23 +135,23 @@ def test_transfer_column_validation_runs_before_data_reads() -> None:
 # ---- 通常の転記 ----
 
 
-def test_transfer_writes_mapping_into_write() -> None:
+def test_transfer_from_writes_mapping_into_write() -> None:
     """mapping どおりに転記される。"""
     source = Table(["id", "name"], [{"id": 1, "name": "Alice"}])
     destination = Table(["id", "name"], [{"id": 1, "name": ""}])
-    result = transfer(source, destination, {"name": "name"}, read_key="id", write_key="id")
+    result = destination.transfer_from(source, {"name": "name"}, read_key="id", write_key="id")
     assert result.table.to_rows() == [{"id": 1, "name": "Alice"}]
 
 
-def test_transfer_supports_different_column_names_in_mapping() -> None:
+def test_transfer_from_supports_different_column_names_in_mapping() -> None:
     """mapping の read 列と write 列で名前が違っていても転記できる。"""
     source = Table(["id", "name"], [{"id": 1, "name": "山田"}])
     destination = Table(["id", "label"], [{"id": 1, "label": "旧"}])
-    result = transfer(source, destination, {"name": "label"}, read_key="id", write_key="id")
+    result = destination.transfer_from(source, {"name": "label"}, read_key="id", write_key="id")
     assert result.table.to_rows() == [{"id": 1, "label": "山田"}]
 
 
-def test_transfer_supports_composite_key_with_different_names() -> None:
+def test_transfer_from_supports_composite_key_with_different_names() -> None:
     """複合キー（read と write で列名が違っていても）転記できる。"""
     source = Table(
         ["group", "id", "value"],
@@ -187,9 +164,8 @@ def test_transfer_supports_composite_key_with_different_names() -> None:
         ["grp", "sid", "value"],
         [{"grp": "A", "sid": 1, "value": "old"}],
     )
-    result = transfer(
+    result = destination.transfer_from(
         source,
-        destination,
         {"value": "value"},
         read_key=["group", "id"],
         write_key=["grp", "sid"],
@@ -202,23 +178,37 @@ def test_transfer_supports_composite_key_with_different_names() -> None:
     assert len(result.only_in_write) == 0
 
 
-def test_transfer_keeps_unrelated_columns_unchanged() -> None:
+def test_transfer_from_keeps_unrelated_columns_unchanged() -> None:
     """mapping に無い列は変わらない。"""
     source = Table(["id", "name"], [{"id": 1, "name": "Alice"}])
     destination = Table(["id", "name", "備考"], [{"id": 1, "name": "", "備考": "既存"}])
-    result = transfer(source, destination, {"name": "name"}, read_key="id", write_key="id")
+    result = destination.transfer_from(source, {"name": "name"}, read_key="id", write_key="id")
     assert result.table.to_rows() == [{"id": 1, "name": "Alice", "備考": "既存"}]
 
 
-def test_transfer_keeps_input_tables_unchanged() -> None:
-    """transfer を呼んだ前後で read / write の行は変わらない。"""
+def test_transfer_from_keeps_input_tables_unchanged() -> None:
+    """transfer_from を呼んだ前後で read / write の行は変わらない。"""
     source = Table(["id", "name"], [{"id": 1, "name": "Alice"}])
     destination = Table(["id", "name"], [{"id": 1, "name": "old"}])
     original_source = source.to_rows()
     original_destination = destination.to_rows()
-    transfer(source, destination, {"name": "name"}, read_key="id", write_key="id")
+    destination.transfer_from(source, {"name": "name"}, read_key="id", write_key="id")
     assert source.to_rows() == original_source
     assert destination.to_rows() == original_destination
+
+
+def test_transfer_from_returns_transfer_result_distinct_from_self() -> None:
+    """``result.table`` は ``self``（転記先）と別オブジェクトで、列・行順・行数が同じ。"""
+    source = Table(["id", "name"], [{"id": 1, "name": "Alice"}])
+    destination = Table(["id", "name"], [{"id": 1, "name": ""}])
+    result = destination.transfer_from(source, {"name": "name"}, read_key="id", write_key="id")
+    assert isinstance(result, TransferResult)
+    assert result.table is not destination
+    assert result.table.columns == destination.columns
+    # 行数・行順は ``self`` と同じで、転記したセルだけ ``read`` の値で置き換わる
+    assert len(result.table) == len(destination)
+    assert result.table.to_rows()[0]["id"] == destination.to_rows()[0]["id"]
+    assert result.table.to_rows()[0]["name"] == "Alice"
 
 
 # ---- キーの正規化 ----
@@ -231,7 +221,7 @@ class TestKeysMatchedAfterNormalize:
     def _transfer(read_key_value: object, write_key_value: object) -> TransferResult:
         source = Table(["id", "name"], [{"id": read_key_value, "name": "新"}])
         destination = Table(["id", "name"], [{"id": write_key_value, "name": "旧"}])
-        return transfer(source, destination, {"name": "name"}, read_key="id", write_key="id")
+        return destination.transfer_from(source, {"name": "name"}, read_key="id", write_key="id")
 
     @pytest.mark.parametrize(
         ("read_key", "write_key"),
@@ -280,7 +270,7 @@ def test_blank_key_rows_go_to_only_in() -> None:
         ["id", "name"],
         [{"id": "", "name": ""}, {"id": "1", "name": ""}],
     )
-    result = transfer(source, destination, {"name": "name"}, read_key="id", write_key="id")
+    result = destination.transfer_from(source, {"name": "name"}, read_key="id", write_key="id")
     # id="1" の組だけが転記される
     assert result.matched_count == 1
     assert result.transferred_count == 1
@@ -297,7 +287,7 @@ def test_none_key_is_treated_as_blank() -> None:
     """キー値が None のときは Table 構築時に "" に揃うので空キー扱い。"""
     source = Table(["id", "name"], [{"id": None, "name": "Noneキー"}])
     destination = Table(["id", "name"], [{"id": "1", "name": "既存"}])
-    result = transfer(source, destination, {"name": "name"}, read_key="id", write_key="id")
+    result = destination.transfer_from(source, {"name": "name"}, read_key="id", write_key="id")
     assert result.matched_count == 0
     assert result.only_in_read.to_rows() == [{"id": "", "name": "Noneキー"}]
     assert result.only_in_write.to_rows() == [{"id": "1", "name": "既存"}]
@@ -307,7 +297,7 @@ def test_whitespace_only_key_is_blank() -> None:
     """空白だけのキーも空扱い。"""
     source = Table(["id", "name"], [{"id": "  ", "name": "空白のみ"}])
     destination = Table(["id", "name"], [{"id": "x", "name": "X"}])
-    result = transfer(source, destination, {"name": "name"}, read_key="id", write_key="id")
+    result = destination.transfer_from(source, {"name": "name"}, read_key="id", write_key="id")
     assert result.matched_count == 0
     assert result.only_in_read.to_rows() == [{"id": "  ", "name": "空白のみ"}]
 
@@ -328,9 +318,8 @@ def test_composite_key_with_partially_blank_is_blank() -> None:
             {"group": "A", "id": "1", "value": "w-2"},
         ],
     )
-    result = transfer(
+    result = destination.transfer_from(
         source,
-        destination,
         {"value": "value"},
         read_key=["group", "id"],
         write_key=["group", "id"],
@@ -344,7 +333,7 @@ def test_zero_value_is_a_valid_key() -> None:
     """0 はキーに使っても空扱いにならない。"""
     source = Table(["id", "value"], [{"id": 0, "value": "r"}])
     destination = Table(["id", "value"], [{"id": 0, "value": "w"}])
-    result = transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
+    result = destination.transfer_from(source, {"value": "value"}, read_key="id", write_key="id")
     assert result.matched_count == 1
     assert result.transferred_count == 1
 
@@ -353,7 +342,9 @@ def test_false_value_is_a_valid_key() -> None:
     """False もキーに使っても空扱いにならない。"""
     source = Table(["flag", "value"], [{"flag": False, "value": "r"}])
     destination = Table(["flag", "value"], [{"flag": False, "value": "w"}])
-    result = transfer(source, destination, {"value": "value"}, read_key="flag", write_key="flag")
+    result = destination.transfer_from(
+        source, {"value": "value"}, read_key="flag", write_key="flag"
+    )
     assert result.matched_count == 1
     assert result.transferred_count == 1
 
@@ -369,7 +360,7 @@ def test_blank_keys_are_not_checked_for_duplicates() -> None:
             {"id": "1", "value": "old"},
         ],
     )
-    result = transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
+    result = destination.transfer_from(source, {"value": "value"}, read_key="id", write_key="id")
     assert result.matched_count == 1
     # 空キーは only_in_write に含まれる
     assert len(result.only_in_write) == 2
@@ -386,9 +377,8 @@ def test_read_duplicate_key_raises() -> None:
     )
     destination = Table(["id", "value"], [{"id": "1", "value": "old"}])
     with pytest.raises(TableDuplicateKeyError):
-        transfer(
+        destination.transfer_from(
             source,
-            destination,
             {"value": "value"},
             read_key="id",
             write_key="id",
@@ -403,9 +393,8 @@ def test_write_duplicate_key_raises() -> None:
         [{"id": "1", "value": "one"}, {"id": "1", "value": "two"}],
     )
     with pytest.raises(TableDuplicateKeyError):
-        transfer(
+        destination.transfer_from(
             source,
-            destination,
             {"value": "value"},
             read_key="id",
             write_key="id",
@@ -420,9 +409,8 @@ def test_duplicate_detection_uses_normalized_key() -> None:
     )
     destination = Table(["id", "value"], [{"id": 1, "value": "old"}])
     with pytest.raises(TableDuplicateKeyError):
-        transfer(
+        destination.transfer_from(
             source,
-            destination,
             {"value": "value"},
             read_key="id",
             write_key="id",
@@ -442,9 +430,8 @@ def test_where_false_skips_transfer_but_counts_as_matched() -> None:
         ["id", "value"],
         [{"id": 1, "value": "old1"}, {"id": 2, "value": "old2"}],
     )
-    result = transfer(
+    result = destination.transfer_from(
         source,
-        destination,
         {"value": "value"},
         read_key="id",
         write_key="id",
@@ -462,9 +449,8 @@ def test_where_false_rows_do_not_go_to_only_in() -> None:
     """where=False の行は only_in_* にも入らない（キーが一致しているため）。"""
     source = Table(["id", "value"], [{"id": 1, "value": "skip"}])
     destination = Table(["id", "value"], [{"id": 1, "value": "old"}])
-    result = transfer(
+    result = destination.transfer_from(
         source,
-        destination,
         {"value": "value"},
         read_key="id",
         write_key="id",
@@ -486,9 +472,8 @@ def test_where_is_called_only_for_matched_pairs() -> None:
         called_keys.append((read_row["id"], write_row["value"]))
         return True
 
-    transfer(
+    destination.transfer_from(
         source,
-        destination,
         {"value": "value"},
         read_key="id",
         write_key="id",
@@ -508,9 +493,8 @@ def test_where_is_called_once_per_pair() -> None:
         counter["n"] += 1
         return True
 
-    transfer(
+    destination.transfer_from(
         source,
-        destination,
         {"value": "value"},
         read_key="id",
         write_key="id",
@@ -529,9 +513,8 @@ def test_where_receives_copies() -> None:
         write_row["value"] = "壊した-write"
         return True
 
-    result = transfer(
+    result = destination.transfer_from(
         source,
-        destination,
         {"value": "value"},
         read_key="id",
         write_key="id",
@@ -553,9 +536,8 @@ def test_where_exception_propagates() -> None:
         raise RuntimeError("where から")
 
     with pytest.raises(RuntimeError, match="where から"):
-        transfer(
+        destination.transfer_from(
             source,
-            destination,
             {"value": "value"},
             read_key="id",
             write_key="id",
@@ -583,9 +565,8 @@ def test_where_called_in_read_order() -> None:
         seen.append(read_row["id"])
         return True
 
-    transfer(
+    destination.transfer_from(
         source,
-        destination,
         {"value": "value"},
         read_key="id",
         write_key="id",
@@ -604,7 +585,7 @@ def test_only_in_read_contains_read_only_rows() -> None:
         [{"id": "1", "value": "new"}, {"id": "2", "value": "extra"}],
     )
     destination = Table(["id", "value"], [{"id": "1", "value": "old"}])
-    result = transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
+    result = destination.transfer_from(source, {"value": "value"}, read_key="id", write_key="id")
     assert result.only_in_read.to_rows() == [{"id": "2", "value": "extra"}]
     # 元の read の順
     assert [row["id"] for row in result.only_in_read.to_rows()] == ["2"]
@@ -617,7 +598,7 @@ def test_only_in_write_contains_write_only_rows() -> None:
         ["id", "value"],
         [{"id": "1", "value": "old"}, {"id": "2", "value": "stale"}],
     )
-    result = transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
+    result = destination.transfer_from(source, {"value": "value"}, read_key="id", write_key="id")
     assert result.only_in_write.to_rows() == [{"id": "2", "value": "stale"}]
 
 
@@ -625,7 +606,7 @@ def test_only_in_write_has_original_values_not_transferred() -> None:
     """only_in_write は転記前の値（result.table の転記後の値とは別）。"""
     source = Table(["id", "value"], [{"id": 1, "value": "new"}])
     destination = Table(["id", "value"], [{"id": 1, "value": "old"}])
-    result = transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
+    result = destination.transfer_from(source, {"value": "value"}, read_key="id", write_key="id")
     # matched なので only_in_write は空
     assert len(result.only_in_write) == 0
 
@@ -640,7 +621,7 @@ def test_only_in_write_does_not_share_dicts_with_table() -> None:
     """only_in_write の行と result.table の行は辞書を共有しない。"""
     source = Table(["id", "value"], [{"id": 1, "value": "new"}])
     destination = Table(["id", "value"], [{"id": 2, "value": "stale"}])
-    result = transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
+    result = destination.transfer_from(source, {"value": "value"}, read_key="id", write_key="id")
     assert result.only_in_write.to_rows() == [{"id": 2, "value": "stale"}]
     assert result.table.to_rows() == [{"id": 2, "value": "stale"}]
     # 1 行目の dict は別物
@@ -658,9 +639,8 @@ def test_only_in_read_preserves_read_columns_and_types() -> None:
         ["id", "value", "備考"],
         [{"id": "Y", "value": "w", "備考": ""}],
     )
-    result = transfer(
+    result = destination.transfer_from(
         source,
-        destination,
         {"備考": "備考"},
         read_key="id",
         write_key="id",
@@ -679,9 +659,8 @@ def test_only_in_write_preserves_write_columns_and_types() -> None:
         [{"id": "Y", "金額": "200", "備考": "w"}],
         types={"金額": int},
     )
-    result = transfer(
+    result = destination.transfer_from(
         source,
-        destination,
         {"備考": "備考"},
         read_key="id",
         write_key="id",
@@ -695,12 +674,12 @@ def test_only_in_write_preserves_write_columns_and_types() -> None:
 
 
 def test_input_tables_are_not_modified_after_transfer() -> None:
-    """transfer() の呼び出し前後で read / write は変わらない。"""
+    """transfer_from() の呼び出し前後で read / write は変わらない。"""
     source = Table(["id", "value"], [{"id": 1, "value": "new"}])
     destination = Table(["id", "value"], [{"id": 1, "value": "old"}])
     original_source = source.to_rows()
     original_destination = destination.to_rows()
-    transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
+    destination.transfer_from(source, {"value": "value"}, read_key="id", write_key="id")
     assert source.to_rows() == original_source
     assert destination.to_rows() == original_destination
 
@@ -709,7 +688,7 @@ def test_modifying_result_table_does_not_affect_input() -> None:
     """result.table.append / replace しても入力 read / write は変わらない。"""
     source = Table(["id", "value"], [{"id": 1, "value": "new"}])
     destination = Table(["id", "value"], [{"id": 1, "value": "old"}])
-    result = transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
+    result = destination.transfer_from(source, {"value": "value"}, read_key="id", write_key="id")
     result.table.append({"id": 99, "value": "追加"})
     assert source.to_rows() == [{"id": 1, "value": "new"}]
     assert destination.to_rows() == [{"id": 1, "value": "old"}]
@@ -719,7 +698,7 @@ def test_modifying_only_in_does_not_affect_table() -> None:
     """only_in_* を書き換えても result.table に影響しない。"""
     source = Table(["id", "value"], [{"id": 2, "value": "extra"}])
     destination = Table(["id", "value"], [{"id": 1, "value": "old"}])
-    result = transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
+    result = destination.transfer_from(source, {"value": "value"}, read_key="id", write_key="id")
     only_in_read = result.only_in_read
     only_in_read_rows = only_in_read.to_rows()
     only_in_read_rows[0]["value"] = "壊した"
@@ -750,9 +729,8 @@ def test_matched_and_transferred_counts_match_actual() -> None:
             {"id": 5, "value": "stale"},  # read に無い
         ],
     )
-    result = transfer(
+    result = destination.transfer_from(
         source,
-        destination,
         {"value": "value"},
         read_key="id",
         write_key="id",
@@ -774,7 +752,7 @@ def test_empty_read_with_non_empty_write() -> None:
     """read が空（列は残る）。"""
     source = Table(["id", "value"], [])
     destination = Table(["id", "value"], [{"id": 1, "value": "old"}])
-    result = transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
+    result = destination.transfer_from(source, {"value": "value"}, read_key="id", write_key="id")
     # 全行が only_in_write 側
     assert result.matched_count == 0
     assert result.transferred_count == 0
@@ -788,7 +766,7 @@ def test_non_empty_read_with_empty_write() -> None:
     """write が空（列は残る）。"""
     source = Table(["id", "value"], [{"id": 1, "value": "new"}])
     destination = Table(["id", "value"], [])
-    result = transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
+    result = destination.transfer_from(source, {"value": "value"}, read_key="id", write_key="id")
     assert result.matched_count == 0
     assert result.transferred_count == 0
     assert result.table.to_rows() == []
@@ -800,7 +778,7 @@ def test_both_empty() -> None:
     """両方空でも列は保たれる。"""
     source = Table(["id", "value"], [])
     destination = Table(["id", "value"], [])
-    result = transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
+    result = destination.transfer_from(source, {"value": "value"}, read_key="id", write_key="id")
     assert result.matched_count == 0
     assert result.transferred_count == 0
     assert result.table.columns == ["id", "value"]
@@ -816,7 +794,7 @@ def test_type_conversion_applies_to_transferred_values() -> None:
     """write.types に登録した変換が転記した値に 1 回かかる。"""
     source = Table(["id", "value"], [{"id": 1, "value": "1000"}])
     destination = Table(["id", "value"], [{"id": 1, "value": 0}], types={"value": int})
-    result = transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
+    result = destination.transfer_from(source, {"value": "value"}, read_key="id", write_key="id")
     assert result.table.to_rows() == [{"id": 1, "value": 1000}]
 
 
@@ -845,9 +823,8 @@ def test_conversion_does_not_apply_to_untransferred_cells() -> None:
         ],
         types={"a": counting_converter, "b": counting_converter},
     )
-    result = transfer(
+    result = destination.transfer_from(
         source,
-        destination,
         {"a": "a", "b": "b"},
         read_key="id",
         write_key="id",
@@ -855,7 +832,7 @@ def test_conversion_does_not_apply_to_untransferred_cells() -> None:
     )
 
     # destination 構築時（id=1, 2 の a, b）= 4 回
-    # transfer 内で転記（id=1 の a, b）= 2 回
+    # transfer_from 内で転記（id=1 の a, b）= 2 回
     # id=2 は where=False で転記されない、 id=9 は unmatched で転記されない
     assert len(call_log) == 6
     # 転記された a=100, b=200
@@ -870,9 +847,8 @@ def test_conversion_failure_raises_table_error_with_row_number() -> None:
     source = Table(["id", "value"], [{"id": 1, "value": "abc"}])
     destination = Table(["id", "value"], [{"id": 1, "value": 0}], types={"value": int})
     with pytest.raises(TableError) as exc_info:
-        transfer(
+        destination.transfer_from(
             source,
-            destination,
             {"value": "value"},
             read_key="id",
             write_key="id",
@@ -887,7 +863,7 @@ def test_result_table_keeps_write_types() -> None:
     converter = int
     source = Table(["id", "value"], [{"id": 1, "value": "1000"}])
     destination = Table(["id", "value"], [{"id": 1, "value": 0}], types={"value": converter})
-    result = transfer(source, destination, {"value": "value"}, read_key="id", write_key="id")
+    result = destination.transfer_from(source, {"value": "value"}, read_key="id", write_key="id")
     assert result.table.types.get("value") is converter
 
 
@@ -904,7 +880,7 @@ def test_result_table_diff_against_original_write_shows_only_transferred_changes
         ["id", "name"],
         [{"id": 1, "name": "旧"}, {"id": 2, "name": "旧2"}],
     )
-    result = transfer(source, destination, {"name": "name"}, read_key="id", write_key="id")
+    result = destination.transfer_from(source, {"name": "name"}, read_key="id", write_key="id")
     # result.table と destination を diff
     diff = result.table.diff(destination, key="id")
     # added / removed は空（キーが同じ・行数が同じ）
@@ -918,25 +894,48 @@ def test_result_table_diff_against_original_write_shows_only_transferred_changes
 
 
 def test_old_api_is_removed() -> None:
-    """Transfer / UnmatchedRows はもう公開されていない。"""
-    from comken.core.table import transfer as _transfer
+    """旧 ``Transfer`` クラス / 関数の ``transfer`` はもう公開されていない。
 
-    assert callable(_transfer)
-    # 旧クラス名が公開されていないことを getattr で確認する。
-    # 直接 ``from comken.core.table import Transfer`` と書くと ImportError で
-    # インポート文ごと失敗するため、 ``hasattr`` で属性の有無を見る。
-    import comken.core.table as table_module
-
-    assert not hasattr(table_module, "Transfer"), "Transfer はもう公開されていない"
-    assert not hasattr(table_module, "UnmatchedRows"), "UnmatchedRows はもう公開されていない"
-
-
-def test_transfer_module_exposes_function() -> None:
-    """comken.core.table.transfer モジュールは関数を指す。"""
+    - ``comken.core.table.transfer`` は関数を指さず、サブモジュールを指す
+      （サブモジュールとして ``transfer`` という名前は残る。``hasattr`` が
+      True になっても ``callable`` が False なら関数ではない）
+    - ``comken.core.table.__all__`` に ``transfer`` / ``Transfer`` がない
+    - ``Table`` に ``transfer_from`` メソッドがある
+    """
+    # ``comken.core.table.transfer`` は関数を指さず、サブモジュールを指す
+    import comken.core.table.transfer as direct_transfer
     from comken.core.table import transfer as module_transfer
 
-    assert callable(module_transfer)
-    # transfer.py を直接 import しても関数を指す（モジュール名は同名・関数を export 済み）
-    import comken.core.table.transfer as direct_transfer
-
     assert direct_transfer is module_transfer
+    assert not callable(module_transfer), (
+        "comken.core.table.transfer はモジュール（関数ではない）を指すこと"
+    )
+
+    # ``comken.core.table.__all__`` に ``transfer`` / ``Transfer`` がない
+    # （``hasattr(table_module, "transfer")`` は True になり得る。サブモジュールは
+    # Python が自動的に属性として公開するためで、これを基準にすると落ちる。
+    # 「公開 API として意図して外に出していない」ことは ``__all__`` で判定する）
+    import comken.core.table as table_module
+
+    assert "transfer" not in table_module.__all__, "transfer はもう公開されていない"
+    assert "Transfer" not in table_module.__all__, "Transfer はもう公開されていない"
+    assert not hasattr(table_module, "Transfer"), "Transfer はもう公開されていない"
+
+    # ``Table`` に ``transfer_from`` メソッドがある
+    assert hasattr(Table, "transfer_from"), "Table に transfer_from がある"
+
+
+def test_transfer_from_does_not_depend_on_import_path() -> None:
+    """``from comken.core.table import Transfer`` が ``ImportError`` になる。
+
+    旧 ``Transfer`` クラス名は公開されていない。``comken.core.table`` に
+    ``Transfer`` という属性が無いこと、``comken.core.table.Transfer`` という
+    サブモジュールも無いこと（``ImportError``）を確認する。
+    """
+    import importlib
+
+    with pytest.raises(ImportError):
+        importlib.import_module("comken.core.table.Transfer")
+
+    module = importlib.import_module("comken.core.table")
+    assert not hasattr(module, "Transfer"), "Transfer はもう公開されていない"

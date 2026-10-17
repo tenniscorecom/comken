@@ -953,7 +953,7 @@ class TestDiffRows:
 
 
 class TestIndexByKey:
-    """``comken.core.table.diff.index_by_key``（索引 / Table.diff() / transfer() 共通部品）。"""
+    """`comken.core.table.diff.index_by_key`（索引 / diff() / transfer_from() 共通部品）。"""
 
     def test_excludes_blank_keys(self) -> None:
         """空キー行（``normalize`` 後に ``""``）は索引に入らない。"""

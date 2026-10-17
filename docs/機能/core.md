@@ -140,7 +140,7 @@ changed = history.changes(key="社員番号", order_by="変更時刻")
 いて比較できない（`TypeError`）ときは `TableError` で止める。
 
 **空キー（`normalize` 後に `""`）の行は対象外**で、**そもそも比べない**
-（`Table.diff()` / `transfer()` と同じ規則）。空キーが複数あっても
+（`Table.diff()` / `Table.transfer_from()` と同じ規則）。空キーが複数あっても
 `TableDuplicateKeyError` にはならず、空キー行の `order_by` が空でも
 エラーにしない。
 
@@ -191,7 +191,7 @@ parse_cell_date(None)                                     # → None
 ### テキスト正規化（normalize / remove_spaces)
 
 業務データによくある表記揺れ（全角英数・半角カナ・全角スペース）を揃える。
-**`Table.diff()` と `transfer()` は、キー・値を比べるときに、内部でこの `normalize` を使う**
+**`Table.diff()` と `Table.transfer_from()` は、キー・値を比べるときに、内部でこの `normalize` を使う**
 （`"1001"` と `1001.0`、`Ａ１` と `A1`、前後の空白の違いは同じとみなす）。
 自分で突合するコードを書くときも、この関数でそろえてから比べると「見た目は同じなのに一致しない」
 問題を防げる。
@@ -455,21 +455,24 @@ converters: TypeMap = {"金額": int}           # types= に渡す「列名 → 
 | 全行を置き換え | `table.replace(rows)` |
 | 1 行 / 複数行を末尾に追加 | `table.append(row)` / `table.append(rows)` |
 
-`transfer()` の `result.only_in_read` / `result.only_in_write` はどちらも入力のコピーの
+`Table.transfer_from()` の `result.only_in_read` / `result.only_in_write` はどちらも入力のコピーの
 `Table`。`result.table` に `append()` して新規行として追加できる
-（[transfer()（転記）](#transfer転記) 参照）。
+（[Table.transfer_from()（転記）](#tabletransfer_from転記) 参照）。
 
-### transfer()（転記）
+### `Table.transfer_from()`（転記）
 
 CSV / Excel / Access などを ``Table`` に統一して読む。CSV は ``CSV.read()``、
 Excel は ``Excel.data_sheet().table().read()`` で ``Table`` を取得し、転記は
-関数 ``transfer()`` 1 回の呼び出しで済ませる。
+メソッド ``Table.transfer_from()`` 1 回の呼び出しで済ませる。
+別に ``transfer`` を import しなくても ``Table`` から直接呼べ、
+``excel_table.transfer_from(csv_table, ...)`` と書けて
+「Excel の表が CSV の表から転記を受ける」と向きが読める。
 
 ```python
-from comken.core.table import Table, transfer
+from comken.core.table import Table
 
-result = transfer(
-    source, destination,
+result = destination.transfer_from(
+    source,
     mapping={"取引先": "顧客名", "金額": "請求額"},
     read_key="注文番号", write_key="注文番号",
 )
@@ -492,8 +495,8 @@ result.transferred_count  # そのうち where=True で実際に転記した組�
 `only_in_*` にも入らない）。
 
 ```python
-result = transfer(
-    source, destination, mapping,
+result = destination.transfer_from(
+    source, mapping,
     read_key="注文番号", write_key="注文番号",
     where=lambda read_row, write_row: read_row["金額"] > 0,
 )
@@ -520,7 +523,7 @@ CSV の ``"1001"`` と Excel の ``1001.0``、全角の ``Ａ１`` と半角の 
 
 **1 対多は事前に ``group_by()`` で 1 行にまとめてから渡す**。`read` 側に同じキーの行が複数
 ある場合（明細など）は、``group_by()`` で合計・先頭の選択などをしてから `read` に渡す。
-`transfer()` 自身は集約をしない。
+`Table.transfer_from()` 自身は集約をしない。
 
 **転記した値には、転記先列の ``types=`` の変換を 1 回かける**。CSV の ``"1000"`` が文字列の
 まま `int` 列に入るのを防ぐため。転記しなかった行・列には変換をかけない。転記先の列に

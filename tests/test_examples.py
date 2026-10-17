@@ -290,7 +290,7 @@ class TestDailyBatchTemplate:
 
 class TestTableTransferDesign:
     def test_writes_invoice_with_skip_and_unmatched(self, tmp_path, monkeypatch):
-        """transfer() を使ったサンプルが Excel 出力を作る。``where=`` で
+        """``Table.transfer_from()`` を使ったサンプルが Excel 出力を作る。``where=`` で
         スキップした行は備考が空のまま残り最後の ``filter()`` で落ちる。
         ``result.only_in_read`` の行は新規追加、``result.only_in_write`` の
         行は「転記元に無し」と印が付けられる。

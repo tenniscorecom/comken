@@ -66,7 +66,7 @@
 41. 比べるための正規化を `normalize` 1 つにまとめた（2026-10-17）
 42. エラー一覧の生成をパッケージへ移し、新規プロジェクトでも作れるようにした（2026-10-17）
 43. 共通の型の名前を `core/types.py` に集めた（2026-10-17）
-44. `Transfer` クラスを `transfer()` 関数に置き換えた（2026-10-18）
+44. `Transfer` クラスを `Table.transfer_from()` に置き換えた（2026-10-18）
 
 ## 1. 設定と非機密情報の扱い
 
@@ -1230,7 +1230,7 @@ NFKC は元に戻せない変換なので、Table に入れる時点では行わ
 `Engine` など）は、そのモジュールに置く。`str | Path` は標準の書き方なので別名にしない。
 `comken.core.table` からの `Row` の再公開はやめた（入口を 1 か所にする。37 章と同じ方針）。
 
-## 44. `Transfer` クラスを `transfer()` 関数に置き換えた（2026-10-18）
+## 44. `Transfer` クラスを `Table.transfer_from()` に置き換えた（2026-10-18）
 
 実際の利用は「キーで突合して、複数列を上書きする」だけだった。`Transfer` クラスは、そのために
 行ごとの `for` ループと `apply_mapping()` を書かせていて、次の問題があった。
@@ -1241,10 +1241,13 @@ NFKC は元に戻せない変換なので、Table に入れる時点では行わ
 - 結果の取り出し口が `result()` / `unmatched()` / ループ中の副作用に分かれていた
 - `read` 側のキー重複は検査がなく、後の行が黙って勝っていた
 
-`transfer(read, write, mapping, read_key=..., write_key=..., where=None)` を 1 回呼べば完結する関数にした。
+`excel_table.transfer_from(csv_table, mapping, read_key=..., write_key=..., where=None)` を 1 回呼べば完結するメソッドにした。
 条件は `where=` に書く。結果は `TransferResult`（`table` / `only_in_read` / `only_in_write` /
 `matched_count` / `transferred_count`）に集め、どれも新しい `Table` か数にして、入力とは辞書を共有しない。
-キーの重複は `read` / `write` のどちらもエラーにした。
+キーの重複は `read` / `self` のどちらもエラーにした。
+
+メソッドにしたのは、別に import しなくても `Table` から呼べ、「Excel の表が CSV の表から転記を受ける」と
+向きが読めるため。`Table.diff()` と同じく、メソッドは薄くし、規則は `comken/core/table/transfer.py` に置く。
 
 転記した値には、転記先列の `types=` の変換を 1 回かける。かけないと、CSV の `"1000"` が文字列のまま
 `int` 列に入り、同じ列に数値と文字列が混ざる。転記しなかった値には変換をかけない（以前は作業用の表を
@@ -1253,9 +1256,9 @@ NFKC は元に戻せない変換なので、Table に入れる時点では行わ
 専用の API を持たず `Table` の部品（`index()` と `replace()`）で書く案は採らなかった。キーの正規化が
 利用側で漏れると、エラーも出ずに 0 件一致になる（CSV の `"1001"` と Excel の `1001.0` が一致しない）ため。
 
-空キー（正規化後 `""`。`None`・空白だけを含む）は、`Table.diff()` / `Table.changes()` / `transfer()`
-のどれも突合しない。Excel には ID が空欄の行が複数あることが多く、突合すると
+空キー（正規化後 `""`。`None`・空白だけを含む）は、`Table.diff()` / `Table.changes()` /
+`Table.transfer_from()` のどれも突合しない。Excel には ID が空欄の行が複数あることが多く、突合すると
 重複エラーで止まる／別人の行を同じ行として比べて偽の変更が出るため。
-空キーの行は `diff()` の `added` / `removed`（`transfer()` では `only_in_*`）に入り、
-`diff()` / `transfer()` ともに重複検査の対象外。`Table.changes()` は空キー行を
+空キーの行は `diff()` の `added` / `removed`（`Table.transfer_from()` では `only_in_*`）に入り、
+`diff()` / `Table.transfer_from()` ともに重複検査の対象外。`Table.changes()` は空キー行を
 **そもそも比べない**（対象外として除く。`order_by` が空の空キー行もエラーにしない）。

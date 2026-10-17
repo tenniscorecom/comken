@@ -1,6 +1,6 @@
-"""サンプル: transfer() の使い分け。
+"""サンプル: ``Table.transfer_from()`` の使い分け。
 
-`Table / transfer() の設計サンプル` として、基本サンプル（`examples/column_mapping.py`）
+`Table / transfer_from() の設計サンプル` として、基本サンプル（`examples/column_mapping.py`）
 との違いを示す。 このサンプルでは次の 4 つを取り上げる:
 
 - ``where=`` で金額 0 の行の転記を ``False`` にして、ログだけ出す（呼び出し側の
@@ -16,7 +16,7 @@ import logging
 from pathlib import Path
 
 from comken import comken_logger
-from comken.core.table import Table, transfer
+from comken.core.table import Table
 from comken.core.types import Row
 from comken.toolbox.csv import CSV
 from comken.toolbox.excel import Excel
@@ -80,9 +80,8 @@ def main() -> None:
     # 1 回の呼び出しで突合→転記→結果（table / only_in_read / only_in_write）が揃う。
     # ``where=lambda r, w: ...`` は True のときだけ転記する（matched かつ where=True が
     # transferred_count に入る。A002 は matched だが transferred には入らない）。
-    result = transfer(
+    result = destination_table.transfer_from(
         source,
-        destination_table,
         mapping=mapping,
         read_key="注文番号",
         write_key="注文番号",
