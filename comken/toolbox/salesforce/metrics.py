@@ -16,8 +16,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from comken.core.dates import now
+from comken.core.types import Value
 from comken.toolbox.csv import CSV
-from comken.toolbox.csv.file import Value
 
 logger = logging.getLogger(__name__)
 

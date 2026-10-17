@@ -18,8 +18,8 @@ from comken.core.dates import now
 from comken.core.encoding import CP932, code_page
 from comken.core.files.base import FileBase
 from comken.core.table import Table
-from comken.core.table.row import Row
 from comken.core.timer import measure
+from comken.core.types import Row
 from comken.exceptions import AccessError, ComkenFileNotFoundError
 from comken.runtime import dry_run_log, is_dry_run
 

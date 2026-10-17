@@ -18,7 +18,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from comken.core.columns import col_to_num, num_to_col
 from comken.core.table.model import Table
-from comken.core.table.row import Row
+from comken.core.types import Row
 from comken.exceptions import (
     ExcelError,
     InvalidColumnError,

@@ -13,8 +13,8 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from comken.core.table.row import Row
 from comken.core.text import normalize
+from comken.core.types import Row
 from comken.exceptions.tables import TableError
 
 logger = logging.getLogger(__name__)

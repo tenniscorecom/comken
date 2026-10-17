@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import io
 import logging
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Iterator
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Self, cast
@@ -13,8 +13,8 @@ from typing import Any, Self, cast
 from comken.core.encoding import CP932, UTF8, UTF8_SIG, normalize_encoding
 from comken.core.files import atomic_write
 from comken.core.table.model import Table
-from comken.core.table.row import Row
 from comken.core.timer import measure
+from comken.core.types import Row, TypeMap, Value
 from comken.exceptions.files import (
     ComkenFileNotFoundError,
     CSVError,
@@ -49,9 +49,6 @@ def _read_only_write_error() -> TableError:
         "\n対処: 対象が読み取り専用でないか確認してください。"
         "書き込みたいときは read_only=True を外してください。"
     )
-
-
-type Value = str | int | float | bool
 
 
 def _missing_header_message(path: Path) -> str:
@@ -378,7 +375,7 @@ class CSV:
         *,
         encoding: str | None = None,
         columns: list[str] | None = None,
-        types: Mapping[str, Callable[[Any], Any]] | None = None,
+        types: TypeMap | None = None,
         read_only: bool = False,
         dry_run: bool = False,
     ) -> None:

@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from typing import TYPE_CHECKING
 
 from openpyxl.formula.translate import Translator
@@ -12,12 +11,12 @@ from openpyxl.utils.cell import range_boundaries
 from openpyxl.worksheet.worksheet import Worksheet
 
 from comken.core.table.model import Table
+from comken.core.types import Value
 from comken.exceptions import ExcelError, InvalidTableInputError, TableError
 
 if TYPE_CHECKING:
     from comken.toolbox.excel.workbook import Excel
 
-type Value = str | int | float | bool | datetime
 
 logger = logging.getLogger(__name__)
 

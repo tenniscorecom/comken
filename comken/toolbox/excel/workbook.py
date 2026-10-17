@@ -9,8 +9,6 @@ import os
 import shutil
 import tempfile
 import warnings
-from collections.abc import Callable, Mapping
-from datetime import datetime
 from pathlib import Path
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, Literal, Self, cast
@@ -26,6 +24,7 @@ from comken.core.files import atomic_write
 from comken.core.files.ops import copy_to_local_if_large
 from comken.core.table.model import Table
 from comken.core.timer import measure
+from comken.core.types import TypeMap
 from comken.exceptions import (
     ComkenFileNotFoundError,
     ExcelError,
@@ -44,7 +43,6 @@ if TYPE_CHECKING:
 
 Engine = Literal["openpyxl", "com"]
 
-type Value = str | int | float | bool | datetime
 _EXCEL_SUFFIXES = {".xlsx", ".xlsm", ".xltx", ".xltm"}
 
 logger = logging.getLogger(__name__)
@@ -101,7 +99,7 @@ class Excel:
         self,
         source: str | Path,
         *,
-        types: Mapping[str, Callable[[Any], Any]] | None = None,
+        types: TypeMap | None = None,
         read_only: bool = False,
         local_copy: bool | None = None,
         engine: Engine = "openpyxl",

@@ -702,8 +702,11 @@ def project_dir() -> Path:
 
 ``sys.argv[0]`` が想定外の値になるケースのフォールバック:
 - ``sys.argv[0] == ""`` : 対話実行（REPL）。``Path.cwd()`` を返す
-- ``sys.argv[0]`` が ``-m`` で起動されたパッケージ名を含む形
-  （例: ``.../python -m comken`` など）: ``Path.cwd()`` を返す
+- ``python -m パッケージ名`` で起動した: ``Path.cwd()`` を返す。このとき
+  ``sys.argv[0]`` には、そのパッケージの ``__main__.py`` の絶対パスが入る
+  （``-m`` のときの ``__main__.__spec__`` が ``None`` でないことで見分ける）。
+  見分けないと、パッケージ自身のフォルダ（comken なら共有サーバー上）を返し、
+  ``config.ini`` や ``logs/`` をそこに探しに行ってしまう
 - ``sys.argv[0]`` が解決できない: ``Path.cwd()`` を返す
 
 Returns:
@@ -1003,10 +1006,6 @@ Attributes:
     unmatched: 「計」で終わる値があるのに小計と判定しなかった行の
         **件目**（1始まり、元の Table の何件目か）。
 
-### `Row`
-
-公開定数。
-
 ### `Table`
 
 ```text
@@ -1024,7 +1023,7 @@ CSVやExcelに直接依存しないため、加工処理をファイルI/Oから
 #### `__init__`
 
 ```text
-def __init__(self, columns: list[str] | tuple[str, ...], rows: list[Row], *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> None:
+def __init__(self, columns: list[str] | tuple[str, ...], rows: list[Row], *, types: TypeMap | None=None) -> None:
 ```
 
 #### `to_rows`
@@ -1075,7 +1074,7 @@ Example:
 
 ```text
 @classmethod
-def from_dataframe(cls, df: pd.DataFrame, *, types: Mapping[str, Callable[[Any], Any]] | None=None) -> Table:
+def from_dataframe(cls, df: pd.DataFrame, *, types: TypeMap | None=None) -> Table:
 ```
 
 ##### 説明
@@ -6193,7 +6192,7 @@ Table と同じ「行の集合」として Transfer へ渡せる境界を提供�
 #### `__init__`
 
 ```text
-def __init__(self, source: str | Path, *, encoding: str | None=None, columns: list[str] | None=None, types: Mapping[str, Callable[[Any], Any]] | None=None, read_only: bool=False, dry_run: bool=False) -> None:
+def __init__(self, source: str | Path, *, encoding: str | None=None, columns: list[str] | None=None, types: TypeMap | None=None, read_only: bool=False, dry_run: bool=False) -> None:
 ```
 
 #### `read`
@@ -6343,7 +6342,7 @@ Excel ワークブックを開き、シート単位の操作を提供する。
 #### `__init__`
 
 ```text
-def __init__(self, source: str | Path, *, types: Mapping[str, Callable[[Any], Any]] | None=None, read_only: bool=False, local_copy: bool | None=None, engine: Engine='openpyxl') -> None:
+def __init__(self, source: str | Path, *, types: TypeMap | None=None, read_only: bool=False, local_copy: bool | None=None, engine: Engine='openpyxl') -> None:
 ```
 
 ##### 説明

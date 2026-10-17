@@ -17,8 +17,8 @@ from comken.core.table.hierarchy import (
     HierarchyResult,
     split_hierarchy_rows,
 )
-from comken.core.table.row import Row
 from comken.core.text import normalize
+from comken.core.types import Row, TypeMap
 from comken.exceptions.tables import (
     TableColumnNotFoundError,
     TableDuplicateKeyError,
@@ -60,7 +60,7 @@ class Table:
         columns: list[str] | tuple[str, ...],
         rows: list[Row],
         *,
-        types: Mapping[str, Callable[[Any], Any]] | None = None,
+        types: TypeMap | None = None,
     ) -> None:
         self.columns = list(columns)
         if len(self.columns) != len(set(self.columns)):
@@ -115,7 +115,7 @@ class Table:
         cls,
         columns: list[str] | tuple[str, ...],
         rows: list[Row],
-        types: Mapping[str, Callable[[Any], Any]] | None = None,
+        types: TypeMap | None = None,
     ) -> Table:
         """既に types 変換済みの行から Table を作る（変換関数を再実行しない内部専用）。
 
@@ -179,7 +179,7 @@ class Table:
         cls,
         df: pd.DataFrame,
         *,
-        types: Mapping[str, Callable[[Any], Any]] | None = None,
+        types: TypeMap | None = None,
     ) -> Table:
         """pandas の ``DataFrame`` から ``Table`` を作る。
 

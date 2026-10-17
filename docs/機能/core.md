@@ -423,8 +423,17 @@ rows = table.to_rows()
 
 表全体は `Table`（pandas でいう DataFrame）、1 行は `Row`（Series にあたる。実体は
 `dict[str, Any]` の別名）です。`table[n]` / `for row in table` / `to_rows()` / `iter_rows()` など、
-行を返すものの注釈は `Row` で、型の名前が表と行で分かれています。注釈に使うときは
-`from comken.core.table import Row` です（実行時の動作は `dict` のままです）。
+行を返すものの注釈は `Row` で、型の名前が表と行で分かれています（実行時の動作は `dict` のままです）。
+
+注釈に使う共通の型は、`comken.core.types` から 1 行で import します。
+
+```python
+from comken.core.types import Row, TypeMap, Value
+
+def total(rows: list[Row]) -> int: ...       # 表の 1 行
+cells: dict[str, Value] = {"金額": 1000}      # セルの値（str / int / float / bool / datetime）
+converters: TypeMap = {"金額": int}           # types= に渡す「列名 → 変換する関数」
+```
 
 | やりたいこと | API |
 |---|---|
