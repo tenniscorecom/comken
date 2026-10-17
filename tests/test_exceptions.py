@@ -110,11 +110,6 @@ def test_all_declared_names_are_resolvable() -> None:
             "config.ini",
         ),
         (ConfigError("[FILES] セクションがありません"), ConfigError, "[FILES]"),
-        (
-            ConfigError("[T_MAPPING] セクションに値が空欄のキーがあります"),
-            ConfigError,
-            "[T_MAPPING]",
-        ),
     ],
 )
 def test_individual_error_type_and_message(

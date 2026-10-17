@@ -191,10 +191,6 @@ config.ini の例（セクション名・キー名は大文字で書く）:
 def __init__(self, path: str | Path | None=None) -> None:
 ```
 
-### `MappingDict`
-
-公開定数。
-
 
 ## `from comken.core.dates import ...`
 

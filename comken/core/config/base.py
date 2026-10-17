@@ -80,26 +80,6 @@ def _section_not_found_error(
     )
 
 
-def _mapping_empty_value_error(
-    path: Path | str, section: str, empty_keys: list[str]
-) -> ConfigError:
-    """``[*_MAPPING]`` セクションの値が空欄のときの ``ConfigError``。"""
-    # 値は configparser 側に前後トリムが任せているので、書かれたキーの
-    # そのままの表記を提示する（利用者が diff を見て直せるように）。
-    # キーが複数あっても 1 メッセージにまとめて出す。1 つ直して再実行、
-    # また 1 つ直して再実行、…のループに落ちると、修正の全体像が見え
-    # なくなり「次はどれだっけ」の状態になるため、最初に見つけた時点で
-    # 全件並べて渡す。
-    keys_line = ", ".join(empty_keys)
-    return ConfigError(
-        f"config.ini の [{section}] セクションに、値が空欄のキーがあります。"
-        f"\n読んだファイル: {path}"
-        f"\n値が空欄のキー: {keys_line}"
-        "\n左右に値を書いたうえで、もう一度実行してください。"
-        "\n例: ご依頼番号 = 受付番号"
-    )
-
-
 def _subclassing_not_supported_error(subclass_name: str) -> ConfigError:
     """``Config`` を継承できないときの ``ConfigError``。"""
     return ConfigError(
@@ -113,12 +93,10 @@ def _subclassing_not_supported_error(subclass_name: str) -> ConfigError:
 
 # ── 公開 API の公開は ``comken.core.config.__init__`` 側で行う ──
 # ここでは ``__all__`` を持たず、実装本体だけ置く。 ``__init__.py`` が
-# 公開する ``Config`` / ``MappingDict`` を取り込み、 ``__getattr__`` 経由で
+# 公開する ``Config`` を取り込み、 ``__getattr__`` 経由で
 # ``config.SECTION`` の遅延公開を行う。  ``_`` プレフィックス付きの名前は
 # ``__init__.py`` から再エクスポートしない（comken 内部の stubs.py と
 # tests/ は直接 ``from comken.core.config.base import _X`` で取りに来る）。
-
-MAPPING_SECTION_SUFFIX = "MAPPING"
 
 
 class _CaseSensitiveConfigParser(configparser.ConfigParser):
@@ -249,40 +227,12 @@ class Config:
         self._path = path.resolve()
         section_map = _build_section_map(cfg)
         # ↑の関数で空文字だけのセクション名は除外しているため、ここで len==0 でも
-        # 例外にはせず空の Config として返す（下の _mappings 更新が起きないだけ）。
+        # 例外にはせず空の Config として返す。
         if section_map:
             # 大文字小文字チェックは「落とした後の名前」で行う（小文字の検出は
             # 空白除去と独立なので、検出の意味は変わらない）。
             _validate_upper_case(cfg, path, section_map)
-            self._mappings = {}
             for stripped_section, original_section in section_map.items():
-                if _is_mapping_section(stripped_section):
-                    # ``*_MAPPING`` は列名が動的なので ``_SectionNamespace`` ではなく
-                    # ``_LenientDict`` で attribute 化する。dict のサブクラスなので
-                    # ``isinstance(x, dict)`` が True（後方互換）。列の有無は ``in`` か
-                    # ``.get()`` で見る（詳細は ``_LenientDict`` の docstring）。
-                    #
-                    # 値は ``_LenientDict`` 生成前に全件走査して空欄（前後の空白だけの
-                    # 値も含む）と ``=`` 無しの行（``cfg.get()`` が ``None`` を返す）を
-                    # 集める。空欄のキーは **まとめて** 例外に乗せる（1 件ずつ直させる
-                    # と「次はどれだっけ」のループに落ちるため）。 ``READ_PASSWORD =``
-                    # のように通常セクションで空欄を「設定しない」として使う書き方は
-                    # ここで **対象外**（``_is_mapping_section`` の中だけで検知する）。
-                    options = cfg.options(original_section)
-                    pairs: list[tuple[str, str]] = []
-                    empty_keys: list[str] = []
-                    for key in options:
-                        value = cfg.get(original_section, key)
-                        if value.strip() == "":
-                            empty_keys.append(key)
-                        else:
-                            pairs.append((key.strip(), value.strip()))
-                    if empty_keys:
-                        raise _mapping_empty_value_error(self._path, stripped_section, empty_keys)
-                    ld = _LenientDict(pairs)
-                    self._mappings[stripped_section] = ld
-                    setattr(self, stripped_section.upper(), ld)
-                    continue
                 # configparser はキー名の前後空白を既に落とすので、二重 strip は不要
                 options = cfg.options(original_section)
                 # ``_parse_value`` に config.ini の親ディレクトリを渡し、相対パスを
@@ -300,8 +250,6 @@ class Config:
                     },
                 )
                 setattr(self, stripped_section.upper(), ns)
-        else:
-            self._mappings = {}
 
         # エディタ補完用スタブ（src/config.pyi）の自動更新。 1プロセス内で
         # 1回だけ走る（``Config.__new__`` → ``_get_or_build_config`` の
@@ -335,31 +283,6 @@ class Config:
             )
         sections = [k for k in vars(self) if k.isupper()]
         raise _section_not_found_error(name, sections, self._path)
-
-
-def _is_mapping_section(section: str) -> bool:
-    """列名の対応表として扱うセクションかを返す。"""
-    return section.endswith(MAPPING_SECTION_SUFFIX)
-
-
-class _LenientDict(dict[str, str]):
-    """``MappingDict`` の内部実装（``MappingDict = _LenientDict``）。
-
-    公開型は ``MappingDict``（``from comken.core.config import MappingDict``）。
-    ``_LenientDict`` は実装詳細で、 ``_`` プレフィックスは「comken 内部用」を示す。
-    ``Config.__init__`` が ``setattr(self, SECTION, ld)`` で公開 attribute に
-    昇格させ、利用者は ``config.SECTION_MAPPING`` でこの dict 互換オブジェクトに触れる。
-
-    型は ``dict[str, str]`` に揃えた。中身（config.ini で書いた対応表）は
-    ``ConfigError`` で空欄が拒否されているので、**値は必ず ``str``**。
-    dict 互換なので ``for k, v in CONFIG.SECTION_MAPPING.items()`` のような
-    既存呼び出しはそのまま動く（後方互換）。
-
-    **列の有無は ``in`` か ``.get()`` で見る。** 未知のキーを ``["未知の列"]`` で
-    読むと素の ``dict`` と同じく ``KeyError`` が出る（``__missing__`` は
-    持たない）。型と実行時の値が揃うので、 ``is None`` 判定が必要なケースは
-    ``config.SECTION_MAPPING.get("列名") is None`` を使う。
-    """
 
 
 class _SectionNamespace(types.SimpleNamespace):
@@ -463,7 +386,6 @@ def _validate_upper_case(
     wrong += [
         f"[{section_map[s_strip]}] の {k} → {k.upper()}"
         for s_strip in section_map
-        if not _is_mapping_section(s_strip)
         for k in cfg.options(section_map[s_strip])
         if k != k.upper()
     ]
@@ -541,8 +463,8 @@ def _get_or_build_config(resolved_path_str: str) -> Config:
     Raises:
         ComkenFileNotFoundError: パスが存在しない場合。
         ConfigError: ``config.ini`` が無いが ``config.ini.example`` があった場合、
-            セクション名・キー名が小文字で書かれていた場合、 ``*_MAPPING`` の値が
-            空欄だった場合（メッセージに書かれた対処に従う）。
+            セクション名・キー名が小文字で書かれていた場合（メッセージに書かれた
+            対処に従う）。
     """
     config = object.__new__(Config)
     config._initialize(Path(resolved_path_str))
@@ -560,14 +482,6 @@ def _default_config_path() -> str:
 
     """
     return str(Path(project_dir() / "config.ini").resolve())
-
-
-# 公開型 ``MappingDict`` = 実装 ``_LenientDict``。
-# ``*_MAPPING`` セクションの戻り値は dict 互換（``isinstance(x, dict)`` が True）
-# で、型は ``dict[str, str]``。列の有無は ``in`` か ``.get()`` で見る
-# （詳細は ``_LenientDict`` の docstring）。利用者向けの名前は ``MappingDict`` で、
-# ``_LenientDict`` は内部実装として ``_`` プレフィックスで残す。
-MappingDict = _LenientDict
 
 
 # ── 入口キャッシュ（生パス文字列 → 解決済み絶対パス） ─────────────────────

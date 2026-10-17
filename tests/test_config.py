@@ -13,7 +13,6 @@ from typing import cast
 
 import pytest
 
-import comken.core.config as config_module
 from comken.core.config import Config
 from comken.exceptions import ComkenError, ConfigError
 from tests.state_reset import reset_cached_config
@@ -223,182 +222,21 @@ class TestConfigBasic:
 
 
 class TestConfigMapping:
-    """列名マッピングの読み込み規則を確認する。"""
+    """``[*_MAPPING]`` も普通のセクションとして読む。"""
 
-    def test_preserves_mixed_case_column_names(self, tmp_path):
+    def test_mapping_section_rejects_non_uppercase_keys(self, tmp_path):
+        """``[TRANSFER_MAPPING]`` の小文字のキーも、大文字ルールの ``ConfigError`` になる。"""
         ini = tmp_path / "config.ini"
         ini.write_text(
-            "[受注_MAPPING]\n受注No = 受注番号\nWeb受注 = Web受付\n"
-            "商品cd = 商品コード\nNo = 管理番号\n",
+            "[TRANSFER_MAPPING]\nname = 氏名\n",
             encoding="utf-8",
         )
-
-        assert dict(Config(ini).受注_MAPPING) == {
-            "受注No": "受注番号",
-            "Web受注": "Web受付",
-            "商品cd": "商品コード",
-            "No": "管理番号",
-        }
-
-    def test_keeps_numeric_value_as_string(self, tmp_path):
-        ini = tmp_path / "config.ini"
-        ini.write_text("[MAPPING]\n年度 = 2026\n", encoding="utf-8")
-
-        mapping = Config(ini).MAPPING
-
-        assert mapping["年度"] == "2026"
-        assert isinstance(mapping["年度"], str)
-
-    def test_preserves_japanese_and_symbol_column_names(self, tmp_path):
-        ini = tmp_path / "config.ini"
-        ini.write_text(
-            "[MAPPING]\n担当者・部署 = 担当部署\n金額(税込) = 税込金額\n№ = 番号\n",
-            encoding="utf-8",
-        )
-
-        assert dict(Config(ini).MAPPING) == {
-            "担当者・部署": "担当部署",
-            "金額(税込)": "税込金額",
-            "№": "番号",
-        }
-
-    def test_coexists_with_normal_section(self, tmp_path):
-        ini = tmp_path / "config.ini"
-        ini.write_text(
-            "[REPORT]\nYEAR = 2026\n\n[COLUMN_MAPPING]\n受注No = 受注番号\n",
-            encoding="utf-8",
-        )
-        config = Config(ini)
-
-        assert config.REPORT.YEAR == 2026
-        assert dict(config.COLUMN_MAPPING) == {"受注No": "受注番号"}
-
-    @pytest.mark.parametrize("key", ["受注No", "Web受注", "商品cd", "No"])
-    def test_normal_section_still_rejects_mixed_case_key(self, tmp_path, key):
-        ini = tmp_path / "config.ini"
-        ini.write_text(f"[REPORT]\n{key} = value\n", encoding="utf-8")
-
-        with pytest.raises(ConfigError):
-            Config(ini)
-
-    def test_empty_value_raises_mapping_empty_error(self, tmp_path):
-        """``[*_MAPPING]`` の値が ``キー =``（空欄）ならエラーにする。
-
-        防いでいる事故: 空欄のまま読み進めて「対応列の最初の値が空文字列」と
-        解釈されて、業務データが空欄で書き戻される。利用者が書いた設定と
-        実行時の挙動が乖離するため、読み込んだ時点で止める。
-        """
-        ini = tmp_path / "config.ini"
-        ini.write_text("[TRANSFER_MAPPING]\n部署名 =\n", encoding="utf-8")
 
         with pytest.raises(ConfigError) as exc:
             Config(ini)
-
-        # どこに直すかが分かる要素を全部入れる（ファイル / セクション / キー / 書き方）
         message = str(exc.value)
-        assert str(ini.resolve()) in message
+        assert "name" in message
         assert "[TRANSFER_MAPPING]" in message
-        assert "部署名" in message
-        assert "左右に値を書いたうえで" in message
-
-    def test_whitespace_only_value_raises_mapping_empty_error(self, tmp_path):
-        """``キー =     ``（空白だけ）も空欄として扱う。
-
-        前後の空白を ``strip()`` した結果空文字になるので、視覚的に何か書いて
-        あるように見えてもエラーにする。configparser 側にトリムを任せている
-        ため、 config の側で再判定する必要がある。
-        """
-        ini = tmp_path / "config.ini"
-        ini.write_text("[TRANSFER_MAPPING]\n部署名 =   　  \n", encoding="utf-8")
-
-        with pytest.raises(ConfigError) as exc:
-            Config(ini)
-        assert "部署名" in str(exc.value)
-
-    def test_missing_equals_sign_raises_mapping_empty_error(self, tmp_path):
-        """``キー``（``=`` 無し）は configparser のパーサ段階で ``ParsingError`` になる。
-
-        依頼書では「 ``cfg.get()`` が ``None`` を返す」と想定していたが、
-        configparser の標準動作では ``=`` 無しの行は **パーサ段階**で
-        ``ParsingError`` になるため、 ``ConfigError`` に
-        届く前に止まる。 「``=`` を付け忘れた」という利用者側の問題は
-        ParsingError でも十分に分かるので、 ``*_MAPPING`` に限らず
-        同じ動作になる（通常セクションでも ParsingError）。
-        「 ``=`` 無しを ``ConfigError`` で受け取る」挙動を
-        望むなら、 ``configparser.ConfigParser(allow_no_value=True)`` を
-        有効にする変更が要るため、依頼者の判断を仰ぎたい（実装せず報告）。
-        """
-        import configparser
-
-        ini = tmp_path / "config.ini"
-        ini.write_text("[TRANSFER_MAPPING]\n部署名\n", encoding="utf-8")
-
-        with pytest.raises(configparser.ParsingError) as exc:
-            Config(ini)
-        # ParsingError 経由でも該当行はメッセージに含まれる（行番号付き）。
-        assert "部署名" in str(exc.value)
-
-    def test_multiple_empty_keys_are_listed_in_one_message(self, tmp_path):
-        """空欄が複数あるときは 1 メッセージに全キー名を入れて返す。
-
-        1 件ずつ直させるループに落ちると、非エンジニアは「この部署名を変える
-        のは自分、次は社員番号」と順送りで修正する形になり、全体像が見え
-        なくなる。最初に全部並べることで、 config.ini を 1 回書き換えれば
-        済むことを明示する。
-        """
-        ini = tmp_path / "config.ini"
-        # configparser は ``キー =`` を許容するが、 ``キー `` を空欄値として
-        # 読む。 ``=`` 無しの行は別ケース（上のテスト）で扱う。
-        ini.write_text(
-            "[TRANSFER_MAPPING]\n部署名 =\n社員番号 =\n備考 = 連絡事項\n",
-            encoding="utf-8",
-        )
-
-        with pytest.raises(ConfigError) as exc:
-            Config(ini)
-        message = str(exc.value)
-        # 空欄のキーは両方、値は入っているキーは出ないことを確認
-        assert "部署名" in message
-        assert "社員番号" in message
-        assert "備考" not in message
-        assert "値が空欄のキー" in message
-
-    def test_non_mapping_section_allows_empty_value(self, tmp_path):
-        """``[*_MAPPING]`` 以外の通常セクションでは空欄（``READ_PASSWORD =``）を許可する。
-
-        ``READ_PASSWORD =`` は「パスワードを設定しない」という意味の正しい
-        書き方なので、空欄検知を全セクションに広げると既存の設定が壊れる。
-        ``_is_mapping_section`` が真のときだけ検知するようにしている。
-        """
-        ini = tmp_path / "config.ini"
-        ini.write_text(
-            "[EXCEL]\nREAD_PASSWORD =\nINPUT = C:\\work\n",
-            encoding="utf-8",
-        )
-
-        config = Config(ini)
-
-        # 空欄値がそのまま読める（Password 等の型変換が無いので空文字になる）
-        assert config.EXCEL.READ_PASSWORD == ""
-        assert Path("C:\\work") == config.EXCEL.INPUT
-
-    def test_mapping_section_still_reads_normal_values(self, tmp_path):
-        """正常な ``[*_MAPPING]`` は今までどおり dict として読める。
-
-        既存テスト ``test_preserves_mixed_case_column_names`` などが
-        ``Config(...)`` 経由で同じことを確かめているが、空欄検知を足した
-        経路でも読めることをここで明示する。
-        """
-        ini = tmp_path / "config.ini"
-        ini.write_text(
-            "[TRANSFER_MAPPING]\nご依頼番号 = 受付番号\n商品名 = 商品名\n",
-            encoding="utf-8",
-        )
-
-        mapping = Config(ini).TRANSFER_MAPPING
-
-        assert mapping["ご依頼番号"] == "受付番号"
-        assert mapping["商品名"] == "商品名"
 
 
 class TestConfigBoolConversion:
@@ -649,17 +487,17 @@ class TestConfigMissingSection:
         assert "もしかして: [FILSE]" in str(exc.value)
 
     def test_missing_section_suggests_japanese_close_name(self, tmp_path):
-        """日本語セクション名でも近い候補を出す（``受注_MAPPING`` ↔ ``受注_MAPPNG``）。
+        """日本語セクション名でも近い候補を出す（``月次集計`` ↔ ``月次集計L``）。
 
         防いでいる事故: difflib は ASCII でも日本語でも動くが、誤って
         日本語だけカットオフが厳しくなっている実装にされることがある。
         """
         ini = tmp_path / "config.ini"
-        ini.write_text("[受注_MAPPNG]\n年度 = 2026\n[RUN]\nK = v\n", encoding="utf-8")
+        ini.write_text("[月次集計L]\n年度 = 2026\n[RUN]\nK = v\n", encoding="utf-8")
         config = Config(ini)
         with pytest.raises(ConfigError) as exc:
-            _ = config.受注_MAPPING
-        assert "もしかして: [受注_MAPPNG]" in str(exc.value)
+            _ = config.月次集計
+        assert "もしかして: [月次集計L]" in str(exc.value)
 
     def test_missing_section_no_suggestion_line_when_no_close_match(self, tmp_path):
         """近い名前が無いときは「もしかして」の行を出さない（誤誘導しない）。
@@ -1013,30 +851,6 @@ class TestGenerateStub:
         assert "class Config:" in text
         assert "    BROWSER: _BROWSER" in text
         assert "config: Config" in text
-
-    def test_mapping_section_uses_dictionary_api_only(self, tmp_path):
-        """動的な列名は列挙せず、``MappingDict`` として露出する。
-
-        ``*_MAPPING`` セクションはキーが動的な列名なので個別クラスに列挙しないが、
-        ``MappingDict`` 経由で ``in`` / ``.get()`` が書けるよう、
-        ``MappingDict`` 属性としてスタブに出す。
-        """
-        from comken.core.config.stubs import generate_stub
-
-        ini = tmp_path / "config.ini"
-        ini.write_text("[COLUMN_MAPPING]\n受注No = 受注番号\n", encoding="utf-8")
-        text = generate_stub(ini, tmp_path / "config.pyi").read_text(encoding="utf-8")
-
-        # 動的な列名はスタブに列挙しない（補完しても無意味な候補が出るだけ）
-        assert "受注No" not in text
-        # ``*_MAPPING`` は ``MappingDict`` として attr 露出する
-        assert "COLUMN_MAPPING: MappingDict" in text
-        # 型引数つき（``MappingDict[...]``）だと、型検査で「型引数を取らないクラス」の誤りになる
-        assert "MappingDict[" not in text
-        # ``MappingDict`` は素の ``dict[str, str]`` 派生（ ``__missing__`` は持たない）
-        assert "def __missing__" not in text
-        # ``Config.mapping()`` メソッドは廃止（``config.SECTION_MAPPING`` で読む）
-        assert "def mapping(self" not in text
 
     def test_default_output_is_src_config_pyi(self, ini, tmp_path):
         """src/config.py があるプロジェクトでは src/config.pyi に出力されることを確認する。
@@ -1392,322 +1206,6 @@ class TestCleanupStaleTmp:
         cleanup_stale_tmp(target)
 
         assert fresh.exists()
-
-
-class TestLenientDict:
-    """_LenientDict の振る舞いテスト。
-
-    ``*_MAPPING`` セクションは列名が動的データなので補完が効かない。
-    型は ``dict[str, str]``（値は必ず ``str``）。素の ``dict`` と同じく
-    未知キーは ``KeyError`` が出るので、列の有無は ``in`` か ``.get()`` で
-    見る（推奨）。 ``items()`` / ``keys()`` / ``values()`` 等の既存 API は
-    そのまま動く（後方互換）。
-    """
-
-    def test_unknown_key_raises_key_error(self):
-        """存在しないキーへアクセスすると素の ``dict`` と同じく ``KeyError``。"""
-        from comken.core.config.base import _LenientDict
-
-        ld = _LenientDict({"known": "value"})
-
-        with pytest.raises(KeyError):
-            ld["unknown"]
-        with pytest.raises(KeyError):
-            ld[""]
-
-    def test_known_key_returns_configured_string(self):
-        """config.ini に書かれたとおりの文字列を返す。"""
-        from comken.core.config.base import _LenientDict
-
-        ld = _LenientDict({"受注No": "受注番号", "Web受注": "Web受付"})
-
-        assert ld["受注No"] == "受注番号"
-        assert ld["Web受注"] == "Web受付"
-        # dict の API もそのまま動く（後方互換）
-        assert set(ld.keys()) == {"受注No", "Web受注"}
-        assert dict(ld) == {"受注No": "受注番号", "Web受注": "Web受付"}
-
-    def test_is_dict_subclass(self):
-        """``_LenientDict`` は dict のサブクラス（型判定の後方互換）。"""
-        from comken.core.config.base import _LenientDict
-
-        ld = _LenientDict()
-
-        assert isinstance(ld, dict)
-        # 空 dict として初期化もできる
-        assert dict(ld) == {}
-
-    def test_missing_raises_key_error_for_arbitrary_type(self):
-        """未知キーは素の ``dict`` と同じく ``KeyError`` を送出する。"""
-        from comken.core.config.base import _LenientDict
-
-        ld = _LenientDict({"a": "1"})
-
-        with pytest.raises(KeyError):
-            ld["missing"]
-
-
-class TestMappingAttributeAccess:
-    """Config インスタンスに ``*_MAPPING`` を attribute として露出する回帰テスト。
-
-    ``_SectionNamespace`` ではなく ``_LenientDict`` を ``setattr`` で直接
-    attribute 化することで、補完が静かに落ちるケース（Pylance が ``Unknown`` と
-    判定する）を防ぐ。
-    """
-
-    def test_config_attribute_is_lenient_dict(self, tmp_path):
-        """``Config(...).SECTION_MAPPING`` が ``_LenientDict`` として返る。"""
-        from comken.core.config.base import _LenientDict
-
-        ini = tmp_path / "config.ini"
-        ini.write_text(
-            "[COLUMN_MAPPING]\n受注No = 受注番号\nWeb受注 = Web受付\n",
-            encoding="utf-8",
-        )
-        cfg = Config(ini)
-
-        assert isinstance(cfg.COLUMN_MAPPING, _LenientDict)
-        assert cfg.COLUMN_MAPPING["受注No"] == "受注番号"
-        # 未知の列は ``KeyError``
-        with pytest.raises(KeyError):
-            cfg.COLUMN_MAPPING["存在しない列"]
-
-    def test_attribute_supports_dict_api(self, tmp_path):
-        """``Config.SECTION_MAPPING`` は dict 互換 API（items/keys/values/get）が使える。"""
-        ini = tmp_path / "config.ini"
-        ini.write_text("[COLUMN_MAPPING]\n受注No = 受注番号\n", encoding="utf-8")
-        cfg = Config(ini)
-
-        result = cfg.COLUMN_MAPPING
-
-        assert isinstance(result, dict)  # 後方互換
-        assert result["受注No"] == "受注番号"
-        assert result.get("存在しない列") is None
-        assert list(result.items()) == [("受注No", "受注番号")]
-        # 未知キーは ``KeyError``
-        with pytest.raises(KeyError):
-            result["未知の列"]
-
-
-class TestMappingDictPublicType:
-    """``MappingDict`` 公開型の import と ``_LenientDict`` との同一性を検証。
-
-    公開 API として ``MappingDict`` を ``from comken.core.config import MappingDict``
-    できるようにし、 ``_LenientDict`` は実装詳細（``_`` プレフィックス）として
-    残している。両者は同じ dict のサブクラス（実行時の型も同一）。
-    """
-
-    def test_mapping_dict_is_importable(self):
-        """``from comken.core.config import MappingDict`` できる。"""
-        from comken.core.config import MappingDict
-
-        assert MappingDict is not None
-
-    def test_mapping_dict_is_lenient_dict(self):
-        """``MappingDict`` は ``_LenientDict`` のエイリアス（型判定で同一）。"""
-        from comken.core.config import MappingDict
-        from comken.core.config.base import _LenientDict
-
-        assert MappingDict is _LenientDict
-        # 未知キーは素の ``dict`` と同じく ``KeyError``
-        instance = MappingDict({"known": "v"})
-        with pytest.raises(KeyError):
-            instance["unknown"]
-
-    def test_singleton_attribute_is_mapping_dict(self, tmp_path, monkeypatch):
-        """遅延シングルトン経由（``from comken import config``）でも ``MappingDict`` が返る。"""
-        from comken.core.config import MappingDict
-
-        ini = tmp_path / "config.ini"
-        ini.write_text("[COLUMN_MAPPING]\n受注No = 受注番号\n", encoding="utf-8")
-        # ``__getattr__`` 経由で ``Config()`` を呼ぶため、project_dir() が
-        # tmp_path を指すように sys.argv を差し替える。
-        monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
-
-        assert isinstance(config_module.COLUMN_MAPPING, MappingDict)
-        assert config_module.COLUMN_MAPPING["受注No"] == "受注番号"
-        # 未知キーは ``KeyError``
-        with pytest.raises(KeyError):
-            config_module.COLUMN_MAPPING["unknown"]
-
-
-class TestStubIncludesMappingDict:
-    """スタブ生成後の .pyi に ``MappingDict`` と ``*_MAPPING`` attr が含まれることを検証。
-
-    補完が効くようにするには、 ``*_MAPPING`` セクションが「スタブから消える」
-    のではなく「 ``MappingDict`` 型として残る」必要がある。
-    これが消えると Pylance が ``Unknown`` 扱いして、 ``is None`` 判定が書けなくなる。
-    """
-
-    def test_class_stub_exposes_mapping_attr_and_dict_type(self, tmp_path):
-        """src/config.pyi（class スタブ）に ``MappingDict`` と attr が含まれる。"""
-        from comken.core.config.stubs import generate_stub
-
-        ini = tmp_path / "config.ini"
-        ini.write_text("[COLUMN_MAPPING]\n受注No = 受注番号\n", encoding="utf-8")
-        text = generate_stub(ini, tmp_path / "config.pyi").read_text(encoding="utf-8")
-
-        # ``MappingDict`` は素の ``dict[str, str]`` の派生として表現される
-        # （未知キーは ``KeyError``。 ``__missing__`` は持たない）。
-        assert "class MappingDict(dict[str, str]):" in text
-        assert "def __missing__" not in text
-        # ``*_MAPPING`` セクションは attr として露出する
-        assert "COLUMN_MAPPING: MappingDict" in text
-        # ``Config.mapping()`` メソッドは廃止（``config.SECTION_MAPPING`` で読む）
-        assert "def mapping(self" not in text
-
-    def test_module_stub_exposes_mapping_attr(self, tmp_path, monkeypatch):
-        """typings/comken/core/config.pyi に ``MappingDict`` attr が含まれる。"""
-        from comken.core.config.stubs import generate_stub
-
-        monkeypatch.chdir(tmp_path)
-        ini = tmp_path / "config.ini"
-        ini.write_text("[COLUMN_MAPPING]\n受注No = 受注番号\n", encoding="utf-8")
-        generate_stub(ini)
-        text = (tmp_path / "typings" / "comken" / "core" / "config.pyi").read_text(encoding="utf-8")
-
-        assert "class MappingDict(dict[str, str]):" in text
-        assert "COLUMN_MAPPING: MappingDict" in text
-        # module 関数 ``mapping()`` も廃止
-        assert "def mapping(section:" not in text
-
-    def test_package_init_stub_exposes_mapping_attr(self, tmp_path, monkeypatch):
-        """typings/comken/__init__.pyi に ``MappingDict`` attr が含まれる。"""
-        from comken.core.config.stubs import generate_stub
-
-        monkeypatch.chdir(tmp_path)
-        ini = tmp_path / "config.ini"
-        ini.write_text("[COLUMN_MAPPING]\n受注No = 受注番号\n", encoding="utf-8")
-        generate_stub(ini)
-        text = (tmp_path / "typings" / "comken" / "__init__.pyi").read_text(encoding="utf-8")
-
-        assert "class MappingDict(dict[str, str]):" in text
-        assert "COLUMN_MAPPING: MappingDict" in text
-
-    def test_mapping_dict_attr_coexists_with_normal_section(self, tmp_path):
-        """``*_MAPPING`` と通常セクションが同じ ini に共存しても両方のスタブが正しく出る。"""
-        from comken.core.config.stubs import generate_stub
-
-        ini = tmp_path / "config.ini"
-        ini.write_text(
-            "[REPORT]\nYEAR = 2026\n\n[COLUMN_MAPPING]\n受注No = 受注番号\n",
-            encoding="utf-8",
-        )
-        text = generate_stub(ini, tmp_path / "config.pyi").read_text(encoding="utf-8")
-
-        # 通常セクションは従来どおりクラス化される
-        assert "class _REPORT:" in text
-        assert "    YEAR: int" in text
-        assert "    REPORT: _REPORT" in text
-        # ``*_MAPPING`` は ``MappingDict`` として並ぶ
-        assert "COLUMN_MAPPING: MappingDict" in text
-
-
-class TestMappingDictIsDictStrStr:
-    """``MappingDict`` を ``dict[str, str]`` 派生に揃えた後の振る舞い。
-
-    依頼書「``MappingDict`` の型を ``dict[str, str]`` に揃える」のテスト5節:
-
-    1. ``*_MAPPING`` の値が ``str`` として読まれ、 ``.values()`` に ``None`` が混じらない
-    2. 未知のキーを ``[]`` で読むと素の ``dict`` と同じく ``KeyError`` になる
-    3. ``"列名" in config.SECTION_MAPPING`` で有無を判定できる（推奨する書き方）
-    4. ``.get("未知の列")`` が ``None`` を返す
-    5. 生成スタブに ``MappingDict`` が含まれる（``str | None`` ではない）
-    """
-
-    def test_values_are_all_str_no_none(self, tmp_path):
-        """``*_MAPPING`` の値は全て ``str`` として扱われ、 ``.values()`` に ``None`` が混じらない。
-
-        ``ConfigError`` で空欄を拒否しているので、 設定済みの値は
-        必ず ``str``。 ``dict[str, str]`` 派生の意義そのものを確かめる回帰テスト。
-        """
-        ini = tmp_path / "config.ini"
-        ini.write_text(
-            "[TRANSFER_MAPPING]\nお名前 = 氏名\nご住所 = 住所\n",
-            encoding="utf-8",
-        )
-        mapping = Config(ini).TRANSFER_MAPPING
-
-        assert all(isinstance(v, str) for v in mapping.values())
-        assert None not in mapping.values()
-        # ``.values()`` の長さも設定済みのキー数と一致
-        assert len(list(mapping.values())) == 2
-
-    def test_unknown_key_raises_key_error(self, tmp_path):
-        """未知のキーを ``[]`` で読むと素の ``dict`` と同じく ``KeyError`` になる。
-
-        ``__missing__`` を持たないので、型と実行時の挙動が揃う（ ``m["未知"]`` の
-        戻り値型は ``str``、未存在のときは ``KeyError``）。 列の有無を見たいときは
-        ``in`` か ``.get()`` を使う。
-        """
-        ini = tmp_path / "config.ini"
-        ini.write_text("[TRANSFER_MAPPING]\nお名前 = 氏名\n", encoding="utf-8")
-        mapping = Config(ini).TRANSFER_MAPPING
-
-        with pytest.raises(KeyError):
-            mapping["未知の列"]
-        # 既存のキーでは ``str`` が返る
-        assert mapping["お名前"] == "氏名"
-
-    def test_in_operator_checks_key_existence(self, tmp_path):
-        """``"列名" in config.SECTION_MAPPING`` で有無を判定できる（推奨する書き方）。
-
-        ``in`` は dict の API なので ``dict[str, str]`` の派生でもそのまま使え、
-        型と実行時が正しく揃う。
-        """
-        ini = tmp_path / "config.ini"
-        ini.write_text(
-            "[TRANSFER_MAPPING]\nお名前 = 氏名\nご住所 = 住所\n",
-            encoding="utf-8",
-        )
-        mapping = Config(ini).TRANSFER_MAPPING
-
-        # 存在するキーは True
-        assert "お名前" in mapping
-        assert "ご住所" in mapping
-        # 存在しないキーは False
-        assert "存在しない列" not in mapping
-        # 空文字キーも安全に判定できる（KeyError ではない）
-        assert "" not in mapping
-
-    def test_get_returns_none_for_unknown_key(self, tmp_path):
-        """``.get("未知の列")`` は ``None`` を返す。
-
-        ``dict.get()`` は ``str | None`` を返すので、 ``is None`` 判定が型上も
-        安全に書ける。 ``is None`` 判定をしたいときは ``["..."]`` ではなく
-        ``.get()`` を使う。
-        """
-        ini = tmp_path / "config.ini"
-        ini.write_text("[TRANSFER_MAPPING]\nお名前 = 氏名\n", encoding="utf-8")
-        mapping = Config(ini).TRANSFER_MAPPING
-
-        assert mapping.get("未知の列") is None
-        # 既存のキーは ``str`` が返る
-        assert mapping.get("お名前") == "氏名"
-        # デフォルト引数も動く（dict.get の標準動作）
-        assert mapping.get("未知の列", "fallback") == "fallback"
-
-    def test_generated_stub_uses_dict_str_str_not_none(self, tmp_path):
-        """生成スタブに ``MappingDict`` が含まれる（ ``str | None`` ではない）。
-
-        依頼前は ``MappingDict[str, str | None]`` だったが、 依頼後は ``dict[str, str]``
-        派生に揃えたため ``str | None`` を外す。スタブが古い書式のまま
-        残っている回帰をここで捕まえる。
-        """
-        from comken.core.config.stubs import generate_stub
-
-        ini = tmp_path / "config.ini"
-        ini.write_text("[COLUMN_MAPPING]\n受注No = 受注番号\n", encoding="utf-8")
-        text = generate_stub(ini, tmp_path / "config.pyi").read_text(encoding="utf-8")
-
-        # 新しい書式に揃っている
-        assert "class MappingDict(dict[str, str]):" in text
-        assert "COLUMN_MAPPING: MappingDict" in text
-        # ``__missing__`` は持たない（素の ``dict[str, str]`` と同じ振る舞い）
-        assert "def __missing__" not in text
-        # 古い ``str | None`` 形式は残っていない
-        assert "MappingDict[str, str | None]" not in text
-        assert "dict[str, str | None]" not in text
 
 
 class TestConfigSubclassing:

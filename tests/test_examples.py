@@ -54,7 +54,6 @@ class TestBasicExamples:
         from examples import column_mapping
 
         monkeypatch.setattr(column_mapping, "OUTPUT_FOLDER", tmp_path)
-        monkeypatch.setattr(column_mapping, "CONFIG_PATH", tmp_path / "config.ini")
         monkeypatch.setattr(column_mapping, "SOURCE_CSV", tmp_path / "受注.csv")
         monkeypatch.setattr(column_mapping, "OUTPUT_PATH", tmp_path / "請求一覧.xlsx")
         column_mapping.main()

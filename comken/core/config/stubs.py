@@ -22,7 +22,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from comken.core.config.base import _is_mapping_section, _parse_value
+from comken.core.config.base import _parse_value
 from comken.core.files.atomic import atomic_write
 from comken.core.files.ops import cleanup_stale_tmp
 from comken.exceptions import ComkenFileNotFoundError
@@ -237,12 +237,6 @@ def _build_stub_content(
     config_attrs: list[str] = []
     for stripped_section, original_section in section_map.items():
         class_name = f"_{stripped_section.upper()}"
-        if _is_mapping_section(stripped_section):
-            # ``*_MAPPING`` セクションはキーが動的な列名なので個別クラスを作らず、
-            # ``MappingDict`` として属性に並べる。列の有無は ``in`` か
-            # ``.get()`` で見る（詳細は ``_LenientDict`` の docstring）。
-            config_attrs.append(f"    {stripped_section.upper()}: MappingDict")
-            continue
         config_attrs.append(f"    {stripped_section.upper()}: {class_name}")
         section_lines.append(f"class {class_name}:")
         options = cfg.options(original_section)
@@ -258,11 +252,6 @@ def _build_stub_content(
     lines = [
         _STUB_HEADER,
         "from pathlib import Path\n",
-        "",
-        # ``MappingDict`` は実行時の ``_LenientDict`` を ``.pyi`` 側で表現する型。
-        # 素の ``dict[str, str]`` と同じ振る舞い（未知キーは ``KeyError``）。
-        # 列の有無は ``in`` か ``.get()`` で見る。
-        "class MappingDict(dict[str, str]):\n    pass\n",
         "",
     ]
     lines.extend(section_lines)
@@ -283,18 +272,12 @@ def _build_module_stub_content(
 
     `from comken.core.config import ...` の型をプロジェクトの config.ini に
     合わせて上書きし、config.SECTION.KEY を補完させる。公開シンボル
-    （Config / read）も宣言して他の import を壊さない。
+    （Config）も宣言して他の import を壊さない。
     """
     section_lines: list[str] = []
     module_attrs: list[str] = []
     for stripped_section, original_section in section_map.items():
         class_name = f"_{stripped_section.upper()}"
-        if _is_mapping_section(stripped_section):
-            # ``*_MAPPING`` は ``MappingDict`` で宣言する（実行時は
-            # ``_LenientDict`` = dict のサブクラス）。列の有無は ``in`` か
-            # ``.get()`` で見る（詳細は ``_LenientDict`` の docstring）。
-            module_attrs.append(f"{stripped_section.upper()}: MappingDict")
-            continue
         module_attrs.append(f"{stripped_section.upper()}: {class_name}")
         section_lines.append(f"class {class_name}:")
         options = cfg.options(original_section)
@@ -309,10 +292,6 @@ def _build_module_stub_content(
         _STUB_HEADER,
         "from pathlib import Path\n",
         "from typing import Any\n",
-        "",
-        # ``MappingDict`` は実行時の ``_LenientDict`` を ``.pyi`` 側で表現する型。
-        # 素の ``dict[str, str]`` と同じ振る舞い（未知キーは ``KeyError``）。
-        "class MappingDict(dict[str, str]):\n    pass\n",
         "",
     ]
     lines.extend(section_lines)
@@ -364,18 +343,10 @@ def _build_package_init_stub(
         inner = "".join(f"    {name} as {name},\n" for name in names)
         lines.append(f"from {module} import (\n{inner})")
     lines.extend(sorted(module_aliases))
-    # ``MappingDict`` は実行時の ``_LenientDict`` を ``.pyi`` 側で表現する型。
-    # ここで宣言しないと ``config.SECTION_MAPPING`` が ``Unknown`` として解決され、
-    # Pylance 補完が静かに落ちる。
-    lines.append("class MappingDict(dict[str, str]):\n    pass\n")
     lines.append("")
     config_attrs: list[str] = []
     for stripped_section, original_section in section_map.items():
         class_name = f"_{stripped_section.upper()}"
-        if _is_mapping_section(stripped_section):
-            # ``*_MAPPING`` は ``MappingDict`` として facade に並べる。
-            config_attrs.append(f"    {stripped_section.upper()}: MappingDict")
-            continue
         config_attrs.append(f"    {stripped_section.upper()}: {class_name}")
         lines.append(f"class {class_name}:")
         options = cfg.options(original_section)
