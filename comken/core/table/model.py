@@ -18,6 +18,7 @@ from comken.core.table.hierarchy import (
     split_hierarchy_rows,
 )
 from comken.core.table.row import Row
+from comken.core.text import normalize
 from comken.exceptions.tables import (
     TableColumnNotFoundError,
     TableDuplicateKeyError,
@@ -539,7 +540,7 @@ class Table:
     def changes(self, *, key: str, order_by: str | None = None) -> Table:
         """``key`` の値ごとに行を分け、隣り合う行同士を比べる履歴の差分を取る。
 
-        ``key`` の値（``_normalize`` 後）ごとに行を分け、``order_by`` が指定されていれば
+        ``key`` の値（``normalize`` 後）ごとに行を分け、``order_by`` が指定されていれば
         その列の値の**昇順（古い順）**に**安定ソート**してから、**隣り合う行どうし**
         （1番目と2番目、2番目と3番目…）を比べる。値が変わったセルだけを、
         1 行 = 1 セルの ``Table`` で返す（列は ``key`` / ``order_by``（指定したとき。
@@ -564,7 +565,7 @@ class Table:
             TableError: ``order_by`` の列に空 (``None`` / ``""``) の行がある、
                 または値の型が混ざっていて比較できない (``TypeError``) とき。
         """
-        from comken.core.table.diff import _normalize, changes_table, diff_row
+        from comken.core.table.diff import changes_table, diff_row
 
         logger.debug(
             "Table changes 開始: %d 行, key=%s, order_by=%s",
@@ -577,7 +578,7 @@ class Table:
 
         rows_by_key: dict[str, list[Row]] = {}
         for row in self._rows:
-            normalized_key = _normalize(row[key])
+            normalized_key = normalize(row[key])
             rows_by_key.setdefault(normalized_key, []).append(row)
 
         if order_by is not None:

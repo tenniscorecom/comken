@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from comken.core.table.row import Row
+from comken.core.text import normalize
 from comken.exceptions.tables import TableError
 
 logger = logging.getLogger(__name__)
@@ -40,7 +41,7 @@ def diff_row(before: Row, after: Row) -> dict[str, tuple[Any, Any]]:
     result = {}
     for col in {**before, **after}:
         old, new = before.get(col, ""), after.get(col, "")
-        if _normalize(old) != _normalize(new):
+        if normalize(old) != normalize(new):
             result[col] = (old, new)
     return result
 
@@ -105,24 +106,11 @@ def changes_table(
     return Table(columns, rows)
 
 
-def _normalize(value: object) -> str:
-    """比較用に値を文字列へ揃える。
-
-    CSV は全部 str、Excel は int / float で返ってくるため、そのまま == で比べると
-    「"1000" と 1000」が差分扱いになってしまう。整数値の float（1000.0）は
-    int（1000）を経由して文字列にする。空は Table に入れる時点で ``""`` にそろっている
-    （``None`` は持たない）ので、ここでは扱わない。
-    """
-    if isinstance(value, float) and value.is_integer():
-        value = int(value)
-    return str(value).strip()
-
-
 def index_for_diff(
     rows: list[Row],
     key: str,
 ) -> dict[str, Row]:
-    """``Table.diff()`` のために、``_normalize`` 後のキーで索引化する。
+    """``Table.diff()`` のために、``normalize`` 後のキーで索引化する。
 
     正規化後のキーが重複していたら ``TableDuplicateKeyError`` を送出する
     （``Table.index()`` と同じ例外）。
@@ -131,7 +119,7 @@ def index_for_diff(
 
     index: dict[str, Row] = {}
     for row in rows:
-        normalized_key = _normalize(row[key])
+        normalized_key = normalize(row[key])
         if normalized_key in index:
             raise TableDuplicateKeyError([key], normalized_key)
         index[normalized_key] = row

@@ -6,10 +6,9 @@
 mapping の列名はコンストラクタで検証するので、typo は早期に例外になる。
 入力 ``read`` / ``write`` は直接変更せず、内部の作業 Table に書き込む。
 
-キーは Table の値そのもの（``==``）で比べる。``"1000"`` と ``1000`` は一致しない。
-型が揃った Table 同士を突合する前提なので、揃っていなければ CSV / Excel の
-``types=`` でそろえてから渡す（``Table.diff()`` はキーを正規化して比べるが、
-Transfer は正規化しない）。
+キーは ``comken.core.text.normalize`` でそろえてから比べる（``Table.diff()`` と同じ規則）。
+CSV の ``"1001"`` と Excel の ``1001.0``、全角の ``Ａ１`` と半角の ``A1``、前後の空白の
+違いは同じキーとして突合する。突合に使うだけで、転記するデータは変えない。
 """
 
 import logging
@@ -19,6 +18,7 @@ from typing import Any
 
 from comken.core.table.model import Table
 from comken.core.table.row import Row
+from comken.core.text import normalize
 from comken.exceptions.tables import (
     InvalidTableInputError,
     TableColumnNotFoundError,
@@ -330,18 +330,18 @@ class Transfer:
         return index
 
     @staticmethod
-    def _row_key(row: Row, columns: Sequence[str]) -> tuple[Any, ...]:
-        """複数キーを順序付きの1つの比較値へまとめる。"""
-        return tuple(row[column] for column in columns)
+    def _row_key(row: Row, columns: Sequence[str]) -> tuple[str, ...]:
+        """複数キーを順序付きの1つの比較値へまとめる（各キーは ``normalize`` 後の文字列）。"""
+        return tuple(normalize(row[column]) for column in columns)
 
     @staticmethod
-    def _is_blank_key(key: tuple[Any, ...]) -> bool:
-        """空キー判定。 ``None`` か ``""`` のときだけ空とみなす。
+    def _is_blank_key(key: tuple[str, ...]) -> bool:
+        """空キー判定。 ``normalize`` 後に ``""`` になるもの（``None``・空白だけ）が空。
 
-        ``0`` / ``False`` は空ではない（数値・bool のゼロ落ち判定を避けるため）。
+        ``0`` / ``False`` は ``"0"`` / ``"False"`` になるので空ではない（ゼロ落ち判定を避ける）。
         複合キーは **1要素でも空** なら空とみなす（部分空のキーは照合に使えないため）。
         """
-        return any(value is None or value == "" for value in key)
+        return any(value == "" for value in key)
 
 
 __all__ = ["Transfer", "UnmatchedRows"]

@@ -754,3 +754,50 @@ def test_unmatched_only_in_read_mutation_does_not_affect_inputs_or_result() -> N
     assert transfer.result().to_rows() == [
         {"id": "1", "value": "old"},
     ]
+
+
+class TestKeysAreMatchedAfterNormalize:
+    """キーは ``normalize`` でそろえてから突合する（文字列と数値、全角・半角、空白）。"""
+
+    @staticmethod
+    def _transfer(read_key_value: object, write_key_value: object) -> Transfer:
+        source = Table(["id", "name"], [{"id": read_key_value, "name": "新しい名前"}])
+        destination = Table(["id", "name"], [{"id": write_key_value, "name": "古い名前"}])
+        return Transfer(source, destination, {"name": "name"}, read_key="id", write_key="id")
+
+    @pytest.mark.parametrize(
+        ("read_key", "write_key"),
+        [
+            ("1001", 1001),  # CSV の文字列と Excel の数値
+            ("1001", 1001.0),  # Excel の整数値の小数
+            ("Ａ１", "A1"),  # 全角と半角
+            ("ｱｲｳ", "アイウ"),  # 半角カナと全角カナ
+            (" 1001 ", "1001"),  # 前後の空白
+        ],
+    )
+    def test_keys_that_differ_only_in_representation_match(
+        self, read_key: object, write_key: object
+    ) -> None:
+        transfer = self._transfer(read_key, write_key)
+
+        assert len(list(transfer.matched_rows())) == 1
+
+    def test_matching_does_not_change_the_written_values(self) -> None:
+        """突合にだけ使い、転記先のキーの値は書き換えない。"""
+        transfer = self._transfer("1001", 1001.0)
+        for read_row, write_row in transfer.matched_rows():
+            transfer.apply_mapping(read_row, write_row)
+
+        assert transfer.result().to_rows() == [{"id": 1001.0, "name": "新しい名前"}]
+
+    def test_leading_zero_keys_do_not_match_numbers(self) -> None:
+        """先頭ゼロ付きの文字列（社員番号 "0001"）は数値の 1 と同じにならない。"""
+        transfer = self._transfer("0001", 1)
+
+        assert list(transfer.matched_rows()) == []
+
+    def test_whitespace_only_key_is_blank(self) -> None:
+        transfer = self._transfer("  ", "x")
+
+        assert list(transfer.matched_rows()) == []
+        assert transfer.unmatched().only_in_read.to_rows() == [{"id": "  ", "name": "新しい名前"}]

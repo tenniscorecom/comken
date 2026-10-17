@@ -15,12 +15,20 @@ __all__ = ["is_enabled_mark", "is_true_word", "normalize", "remove_spaces"]
 
 
 def normalize(value: object) -> str:
-    """表データの値を比較しやすい文字列へ正規化する。
+    """値を、比較（突合）のための文字列にそろえる。
+
+    ``Table.diff()`` のキー・値の比較と ``Transfer`` のキーの突合は、この関数で
+    そろえてから比べる。元に戻せない変換（NFKC）なので、**書き戻すデータには使わず、
+    比べるときの鍵にだけ使う**。
 
     主な変換:
         - 全角英数字・記号 → 半角（ａ→a, １→1, （→(, ．→.）
         - 半角カタカナ     → 全角カタカナ（ｱ→ア, ｶﾞ→ガ）
-        - 合字             → 展開（㌔→km, ㍉→mm）
+        - 合字・丸数字     → 展開（㌔→キロ, ㈱→(株), ①→1）
+        - 整数値の小数     → 整数（1000.0 → "1000"。Excel の数値と CSV の文字列を一致させる）
+        - 前後の空白を除く（全角空白も）
+
+    Excel の ``ASC`` / ``JIS`` とは別の変換（NFKC は英数字を半角・カナを全角にする）。
 
     Args:
         value: Excel / CSV から得た値。``None`` は空文字として扱う。
@@ -30,6 +38,8 @@ def normalize(value: object) -> str:
     """
     if value is None:
         return ""
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
     return unicodedata.normalize("NFKC", str(value)).strip()
 
 
