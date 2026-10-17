@@ -11,13 +11,12 @@ from typing import TYPE_CHECKING, Any
 
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill
-from openpyxl.utils import get_column_letter
 from openpyxl.utils.cell import coordinate_from_string, range_boundaries
 from openpyxl.worksheet.table import Table as OpenPyXLTable
 from openpyxl.worksheet.table import TableStyleInfo
 from openpyxl.worksheet.worksheet import Worksheet
 
-from comken.core.columns import col_to_num
+from comken.core.columns import col_to_num, num_to_col
 from comken.core.table.model import Table
 from comken.core.table.row import Row
 from comken.exceptions import (
@@ -141,7 +140,7 @@ class Sheet:
         end_row = max(start_row + len(table.to_rows()), start_row + 1)
         end_column = start_column_number + len(table.columns) - 1
         # Excel の実テーブル範囲は、無関係なセルではなく見出し・データから計算します。
-        ref = f"{start_cell.upper()}:{get_column_letter(end_column)}{end_row}"
+        ref = f"{start_cell.upper()}:{num_to_col(end_column)}{end_row}"
         excel_table = OpenPyXLTable(displayName=full_name, ref=ref)
         excel_table.tableStyleInfo = TableStyleInfo(
             name="TableStyleMedium2",
@@ -369,7 +368,7 @@ class Sheet:
         """使用範囲の左上と右下のセル参照を返す。"""
         self._ensure_display_sheet("read_used_range")
         top_left = "A1"
-        bottom_right = f"{get_column_letter(self._worksheet.max_column)}{self._worksheet.max_row}"
+        bottom_right = f"{num_to_col(self._worksheet.max_column)}{self._worksheet.max_row}"
         logger.debug(
             "read_used_range: sheet=%s range=%s:%s",
             self._worksheet.title,
@@ -581,7 +580,7 @@ class Sheet:
         """見出し行のセルが ``None`` のときに ``ExcelError`` を発火する。"""
         for column_index, value in enumerate(cached_row, start=1):
             if value is None:
-                cell_coord = f"{get_column_letter(column_index)}{row_index}"
+                cell_coord = f"{num_to_col(column_index)}{row_index}"
                 raise _iter_rows_empty_header_error(cell_coord)
 
     def _iter_rows_yield(
@@ -627,7 +626,7 @@ class Sheet:
                     else None
                 )
                 if isinstance(formula_value, str) and formula_value.startswith("="):
-                    cell_coord = f"{get_column_letter(column_index)}{row_index}"
+                    cell_coord = f"{num_to_col(column_index)}{row_index}"
                     raise _iter_rows_uncalculated_formula_error(cell_coord)
 
     @staticmethod

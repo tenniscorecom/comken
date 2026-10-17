@@ -2035,7 +2035,7 @@ class InvalidColumnError(ComkenError):
 #### `__init__`
 
 ```text
-def __init__(self, column: str) -> None:
+def __init__(self, column: str | int) -> None:
 ```
 
 ### `ConfigError`

@@ -121,7 +121,7 @@ class InvalidColumnError(ComkenError):
         列は番号（1, 2, …）か列記号（"A", "AA"）で指定する
     """
 
-    def __init__(self, column: str) -> None:
+    def __init__(self, column: str | int) -> None:
         super().__init__(
             f"列の指定が正しくありません: {column!r}\n"
             '列番号（1始まり）または列記号で指定してください（例: 1, "A", "AA"）。'

@@ -17,11 +17,11 @@ from typing import TYPE_CHECKING, Any, Literal, Self, cast
 from zipfile import ZipFile
 
 from openpyxl import Workbook, load_workbook
-from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table as OpenPyXLTable
 from openpyxl.worksheet.table import TableStyleInfo
 from openpyxl.worksheet.worksheet import Worksheet
 
+from comken.core.columns import num_to_col
 from comken.core.files import atomic_write
 from comken.core.files.ops import copy_to_local_if_large
 from comken.core.table.model import Table
@@ -652,10 +652,7 @@ class Excel:
                 f"テーブル「{table_name}」は既に存在します。\n別のテーブル名を指定してください。"
             )
         # テーブル化: 既存値はそのままで ``Table`` 定義だけを書き加える。
-        ref = (
-            f"{get_column_letter(_min_col)}{header_row}:"
-            f"{get_column_letter(range_max_col)}{range_max_row}"
-        )
+        ref = f"{num_to_col(_min_col)}{header_row}:{num_to_col(range_max_col)}{range_max_row}"
         excel_table = OpenPyXLTable(displayName=table_name, ref=ref)
         excel_table.tableStyleInfo = TableStyleInfo(
             name="TableStyleMedium2",
