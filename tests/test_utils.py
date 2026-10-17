@@ -695,18 +695,20 @@ class TestDiffRow:
         assert diff_row(before, after) == {}
 
     def test_none_equals_empty_string(self):
-        """Excel の空セル（None）と CSV の空文字（""）は差分にならないことを確認する。"""
-        before = {"備考": ""}
-        after = {"備考": None}
+        """Excel の空セル（None）と CSV の空文字（""）は、Table に入れた時点で同じ ``""`` になり、
+        差分にならないことを確認する。"""
+        csv_table = Table(["id", "備考"], [{"id": "1", "備考": ""}])
+        excel_table = Table(["id", "備考"], [{"id": "1", "備考": None}])
 
-        assert diff_row(before, after) == {}
+        assert excel_table.to_rows() == [{"id": "1", "備考": ""}]
+        assert csv_table.diff(excel_table, key="id").changed.to_rows() == []
 
     def test_column_only_in_one_side(self):
-        """片方にしかない列は、もう片方を None として差分になることを確認する。"""
+        """片方にしかない列は、もう片方を空文字 ``""`` として差分になることを確認する。"""
         before = {"注文番号": "A001"}
         after = {"注文番号": "A001", "金額": "1000"}
 
-        assert diff_row(before, after) == {"金額": (None, "1000")}
+        assert diff_row(before, after) == {"金額": ("", "1000")}
 
 
 class TestDiffRows:

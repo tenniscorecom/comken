@@ -64,8 +64,9 @@ path = find_dated_file(FOLDER, "売上レポート.xlsx", for_date=datetime.date
 ### データ比較（Table.diff / Table.changes）
 
 CSV・Excel から読んだ行（辞書）同士の差分を取る。for ループを自分で書かなくてよい。
-**CSV の文字列と Excel の数値は同一視される**（`"1000"` と `1000` は差分にならない。
-空セルの `None` と `""` も同じ扱い）ので、CSV ↔ Excel をまたいだ比較にそのまま使える。
+**CSV の文字列と Excel の数値は同一視される**（`"1000"` と `1000` は差分にならない）ので、
+CSV ↔ Excel をまたいだ比較にそのまま使える。空は、`Table` に入れる時点で `""` にそろう
+（下の「空の値」）ので、空セルの `None` と `""` も同じ扱いになる。
 
 #### 表どうし（`Table.diff(other, key=...)`）
 
@@ -129,7 +130,7 @@ changed = history.changes(key="社員番号", order_by="変更時刻")
 # 1001     | 2026-09-03 | 部署 | 営業   | 総務
 ```
 
-`order_by` の列に空（`None` / `""`）の行がある、または値の型が混ざって
+`order_by` の列に空（`""`）の行がある、または値の型が混ざって
 いて比較できない（`TypeError`）ときは `TableError` で止める。
 
 
@@ -380,6 +381,14 @@ unzip(r"C:\作業\data.zip")                           # → C:\作業\data\ に
 
 ## 表データ（`Table`） — よく使う操作
 
+### 空の値は `""`（`None` は持たない）
+
+`Table` に入れた値のうち `None` は **空文字 `""` にそろう**（`Table(...)`、`append`、
+`CSV` / Excel / Access / Salesforce から読んだ値、`from_dataframe` のどれでも同じ）。
+CSV は空欄が `""`、Excel / Access は空が `None` で返ってくるので、`Table` の入口で1回だけ
+そろえて、「`None` と `""` のどちらで来るか」を利用側が気にしなくて済むようにしている。
+`types=` の変換関数が受け取る値も、`None` ではなく `""` になる。
+
 `CSV.read()` / `ExcelTable.read()` が返す `Table` は **イミュータブルに見えるが
 内部は行を保持している**。表データを扱うときに覚えておく操作をまとめる
 （網羅は公開 API を参照）。
@@ -440,7 +449,7 @@ rows = table.to_rows()
 ``unmatched().only_in_read`` の行は ``transfer.result().append()`` で
 新規行として追加できる。保存は CSV / Excel の ``with`` を正常終了した時に行う。
 
-**空キー (``None`` / ``""``) は突合対象外**。``0`` / ``False`` は空ではない。
+**空キー (``""``。``None`` は Table に入れた時点で ``""`` になる) は突合対象外**。``0`` / ``False`` は空ではない。
 空キーは read / write のどちらでも ``unmatched()`` 側へ流れるため、
 write 側に空キーが複数あっても ``TableError``
 にはならない。
@@ -467,7 +476,7 @@ pip install -e .[pandas]             # リポジトリ開発時のインスト�
 - `Table.to_dataframe() → pandas.DataFrame`: 列の順番を保ったまま、行の値は
   そのまま `DataFrame` へ渡す（型変換しない）。0 行の `Table` でも列は残る。
 - `Table.from_dataframe(df) → Table`: 列名は `str()` して使う（重複したら
-  `TableError`）。欠損値（`NaN` / `None` / `pd.NA` / `pd.NaT`）は `None` に
+  `TableError`）。欠損値（`NaN` / `None` / `pd.NA` / `pd.NaT`）は `""` に
   揃える（判定は `pd.isna`。リスト・辞書などスカラー以外の値は判定しない）。
   `DataFrame` の index は捨てる（`Table` には index がない）。`types=` は
   `Table` の `types` にそのまま渡せる。

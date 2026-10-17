@@ -222,7 +222,9 @@ class AccessDatabase(FileBase):
                 if not columns:
                     break
                 for values in zip(*columns, strict=True):
-                    yield dict(zip(field_names, values, strict=True))
+                    # NULL は空文字にそろえる（Table と同じ。None と空を区別しない）
+                    row = zip(field_names, values, strict=True)
+                    yield {name: ("" if value is None else value) for name, value in row}
         finally:
             recordset.Close()
 

@@ -89,8 +89,8 @@ def test_from_dataframe_round_trip_preserves_values() -> None:
     assert restored.to_rows() == original.to_rows()
 
 
-def test_from_dataframe_normalizes_missing_values_to_none() -> None:
-    """欠損値（NaN / None / pd.NA / NaT）は None に揃える。"""
+def test_from_dataframe_normalizes_missing_values_to_empty_string() -> None:
+    """欠損値（NaN / None / pd.NA / NaT）は空文字 ``""`` に揃える（Table は None を持たない）。"""
     df = pd.DataFrame(
         [
             {"a": 1.0, "b": "x", "c": 1.0, "d": pd.Timestamp("2026-01-01")},
@@ -108,7 +108,7 @@ def test_from_dataframe_normalizes_missing_values_to_none() -> None:
             "c": 1.0,
             "d": pd.Timestamp("2026-01-01"),
         },
-        {"a": None, "b": None, "c": None, "d": None},
+        {"a": "", "b": "", "c": "", "d": ""},
         {
             "a": 3.0,
             "b": "z",
@@ -174,13 +174,13 @@ def test_from_dataframe_applies_types() -> None:
     assert table.column("id") == [1, 2]
 
 
-def test_from_dataframe_with_no_missing_arg_exceptions_is_none() -> None:
-    """None の値は pd.NA ではなく None（pd.isna の戻り値）になる。"""
+def test_from_dataframe_with_no_missing_arg_exceptions_is_empty_string() -> None:
+    """None の値は空文字 ``""`` になる（pd.NA でも None でもない）。"""
     df = pd.DataFrame([{"x": None}])
 
     table = Table.from_dataframe(df)
 
-    assert table.to_rows() == [{"x": None}]
+    assert table.to_rows() == [{"x": ""}]
 
 
 def test_from_dataframe_empty_dataframe() -> None:

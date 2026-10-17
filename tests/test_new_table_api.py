@@ -515,3 +515,37 @@ class TestTableChanges:
 
         with pytest.raises(TableColumnNotFoundError):
             history.changes(key="社員番号", order_by="変更時刻")
+
+
+class TestEmptyValueIsEmptyString:
+    """空の値は ``None`` ではなく ``""`` にそろう（Table に入れる時点で1回だけ）。"""
+
+    def test_table_constructor_and_append_turn_none_into_empty_string(self) -> None:
+        table = Table(["a", "b"], [{"a": None, "b": "x"}])
+        table.append({"a": "y", "b": None})
+
+        assert table.to_rows() == [{"a": "", "b": "x"}, {"a": "y", "b": ""}]
+
+    def test_types_converter_receives_empty_string_not_none(self) -> None:
+        seen: list[object] = []
+
+        def spy(value: object) -> object:
+            seen.append(value)
+            return value
+
+        Table(["a"], [{"a": None}], types={"a": spy})
+
+        assert seen == [""]
+
+    def test_excel_empty_cell_is_read_as_empty_string(self, tmp_path) -> None:
+        from comken.toolbox.excel import Excel
+
+        path = tmp_path / "book.xlsx"
+        with Excel(path) as excel:
+            excel.create_data_sheet("T").create_table(
+                "T", Table(["id", "備考"], [{"id": "1", "備考": ""}, {"id": "2", "備考": None}])
+            )
+        with Excel(path, read_only=True) as excel:
+            rows = excel.read("PY_T").to_rows()
+
+        assert rows == [{"id": "1", "備考": ""}, {"id": "2", "備考": ""}]

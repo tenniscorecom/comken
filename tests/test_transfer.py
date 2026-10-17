@@ -479,7 +479,7 @@ def test_unmatched_only_in_write_includes_blank_keys() -> None:
 
 
 def test_none_key_is_treated_as_blank() -> None:
-    """キー値が ``None`` のときも ``""`` と同じ空キー扱い。"""
+    """キー値が ``None`` のときも ``""`` と同じ空キー扱い（Table に入れる時点で ``""`` になる）。"""
     source = Table(
         ["id", "name"],
         [{"id": None, "name": "Noneキー"}],
@@ -491,7 +491,7 @@ def test_none_key_is_treated_as_blank() -> None:
     assert list(transfer.matched_rows()) == []
     # source 側の None は空キー扱いで only_in_read 側へ流れる
     result = transfer.unmatched()
-    assert result.only_in_read.to_rows() == [{"id": None, "name": "Noneキー"}]
+    assert result.only_in_read.to_rows() == [{"id": "", "name": "Noneキー"}]
     # destination 側の "1" は source に無いので only_in_write 側へ流れる
     assert result.only_in_write == [{"id": "1", "name": "既存"}]
 

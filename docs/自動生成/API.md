@@ -1019,6 +1019,7 @@ class Table:
 
 CSVやExcelに直接依存しないため、加工処理をファイルI/Oから分離できます。
 ``types`` は入力時に明示された列だけを変換し、暗黙の型推測は行いません。
+空の値は ``None`` ではなく空文字 ``""`` にそろえます（``None`` と ``""`` を区別しません）。
 
 #### `__init__`
 
@@ -1082,7 +1083,7 @@ def from_dataframe(cls, df: pd.DataFrame, *, types: Mapping[str, Callable[[Any],
 pandas の ``DataFrame`` から ``Table`` を作る。
 
 列名は ``str()`` して使う（``str()`` 後に重複したら ``TableError``）。
-欠損値（``NaN`` / ``None`` / ``pd.NA`` / ``pd.NaT``）は ``None`` に
+欠損値（``NaN`` / ``None`` / ``pd.NA`` / ``pd.NaT``）は空文字 ``""`` に
 揃える（判定は ``pd.isna`` で行う。リスト・辞書などスカラー以外の値は
 判定しない）。``DataFrame`` の index は捨てる（``Table`` には index が
 ない）。

@@ -39,7 +39,7 @@ def diff_row(before: Row, after: Row) -> dict[str, tuple[Any, Any]]:
     """
     result = {}
     for col in {**before, **after}:
-        old, new = before.get(col), after.get(col)
+        old, new = before.get(col, ""), after.get(col, "")
         if _normalize(old) != _normalize(new):
             result[col] = (old, new)
     return result
@@ -108,14 +108,11 @@ def changes_table(
 def _normalize(value: object) -> str:
     """比較用に値を文字列へ揃える。
 
-    CSV は全部 str、Excel は int / float / None で返ってくるため、
-    そのまま == で比べると「"1000" と 1000」が差分扱いになってしまう。
-    None は ""、整数値の float（1000.0）は int（1000）を経由して文字列にする。
-
-    こちらは行の比較用で None を "" に揃える役割を持つ。
+    CSV は全部 str、Excel は int / float で返ってくるため、そのまま == で比べると
+    「"1000" と 1000」が差分扱いになってしまう。整数値の float（1000.0）は
+    int（1000）を経由して文字列にする。空は Table に入れる時点で ``""`` にそろっている
+    （``None`` は持たない）ので、ここでは扱わない。
     """
-    if value is None:
-        return ""
     if isinstance(value, float) and value.is_integer():
         value = int(value)
     return str(value).strip()

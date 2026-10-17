@@ -51,6 +51,7 @@ class Table:
 
     CSVやExcelに直接依存しないため、加工処理をファイルI/Oから分離できます。
     ``types`` は入力時に明示された列だけを変換し、暗黙の型推測は行いません。
+    空の値は ``None`` ではなく空文字 ``""`` にそろえます（``None`` と ``""`` を区別しません）。
     """
 
     def __init__(
@@ -84,11 +85,13 @@ class Table:
                 "\n対処: 不足列と余分な列を直してください。"
                 "列を絞る場合は select() を使ってください。"
             )
-        normalized = dict(row)
+        # 空は ``""`` にそろえる（``None`` と ``""`` を区別しない）。CSV は空欄が ``""``、
+        # Excel / Access は ``None`` で返ってくるため、Table に入れる時点で 1 回だけそろえる
+        normalized = {column: ("" if value is None else value) for column, value in row.items()}
         for column in self.types:
             if column not in self.columns:
                 continue
-            normalized[column] = self._convert_one(column, row[column], row_number)
+            normalized[column] = self._convert_one(column, normalized[column], row_number)
         return normalized
 
     def _convert_one(self, column: str, value: Any, row_number: int) -> Any:
@@ -180,7 +183,7 @@ class Table:
         """pandas の ``DataFrame`` から ``Table`` を作る。
 
         列名は ``str()`` して使う（``str()`` 後に重複したら ``TableError``）。
-        欠損値（``NaN`` / ``None`` / ``pd.NA`` / ``pd.NaT``）は ``None`` に
+        欠損値（``NaN`` / ``None`` / ``pd.NA`` / ``pd.NaT``）は空文字 ``""`` に
         揃える（判定は ``pd.isna`` で行う。リスト・辞書などスカラー以外の値は
         判定しない）。``DataFrame`` の index は捨てる（``Table`` には index が
         ない）。
@@ -220,9 +223,9 @@ class Table:
             for original_col, str_col in zip(original_columns, columns, strict=True):
                 value = record[original_col]
                 # pd.isna はリスト・辞書などに対して TypeError や配列を返すことがある。
-                # スカラーの欠損値だけを None に置き換え、リスト等はそのまま保持する。
+                # スカラーの欠損値だけを空文字に置き換え、リスト等はそのまま保持する。
                 converted[str_col] = (
-                    None if pd.api.types.is_scalar(value) and pd.isna(value) else value
+                    "" if pd.api.types.is_scalar(value) and pd.isna(value) else value
                 )
             rows.append(converted)
         logger.debug("Table from_dataframe: %d 列, %d 行", len(columns), len(rows))
@@ -582,7 +585,7 @@ class Table:
                 # 空セル（``None`` / ``""``）は並べ替えの基準にできない。どちらが
                 # 古いか決められないため、利用側で埋めてから再実行してもらう。
                 empty_index = next(
-                    (index for index, row in enumerate(rows) if row[order_by] in (None, "")),
+                    (index for index, row in enumerate(rows) if row[order_by] == ""),
                     None,
                 )
                 if empty_index is not None:
