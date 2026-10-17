@@ -58,6 +58,7 @@
 33. 履歴の `TRIGGER_SCHEDULED` 定数と `trigger=` 引数を削除（2026-10-16）
 34. バージョンを 1 系に戻した（2026-10-16）
 35. Selenium の通信ログを INFO に固定した（2026-10-17）
+36. comken の handler 共通の DEBUG フィルタで外部ライブラリの DEBUG を落とした（2026-10-17）
 
 ## 1. 設定と非機密情報の扱い
 
@@ -1108,3 +1109,21 @@ WebDriver への送受信コマンド本文をそのまま出力する。``Page.
 当該ロガーを INFO に固定し、comken 側の DEBUG 設定が伝播しないようにした。
 Selenium の入力値を見たいという要件は comken 側に無いため、出さないことにした。
 調査時だけ一時的に DEBUG へ戻せばよく、利用者のデフォルト状態は INFO のままにする。
+
+## 36. comken の handler 共通の DEBUG フィルタで外部ライブラリの DEBUG を落とした（2026-10-17）
+
+デバッグモードで root の handler を DEBUG にすると、pip で入れたライブラリ
+（selenium・urllib3・openpyxl など）の DEBUG まで画面とファイルに出る。
+Selenium の通信ログのように、入力したパスワードや Cookie を含むものもある。
+ライブラリ名を1つずつ INFO に下げる方法では、ライブラリが増えるたびに漏れる。
+
+そこで comken が root に付ける handler（console / environment / local）に、
+共通のフィルター ``_ExternalDebugFilter`` を付けた。DEBUG のうち、ログを出した
+ファイルが Python 本体または pip のインストール先（``sysconfig.get_paths()`` の
+``stdlib`` / ``platstdlib`` / ``purelib`` / ``platlib``）にあり、ロガー名が
+``comken`` で始まらないものだけを捨てる。comken 自身と利用側プロジェクトの
+DEBUG、外部ライブラリの INFO 以上はこれまでどおり出る。
+
+外部ライブラリの DEBUG を調べたいときは、利用側でそのライブラリのロガーに
+自前の handler を付ける。
+

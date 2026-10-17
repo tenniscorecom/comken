@@ -5,6 +5,7 @@ import logging
 import os
 import socket
 import sys
+import sysconfig
 from datetime import date
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from comken.core.logger.environment import (
     ENVIRONMENT_HANDLER_NAME,
     ETC_FOLDER_NAME,
     LOCAL_HANDLER_NAME,
+    _external_debug_filter,
     _format_external_handlers,
 )
 from comken.core.logger.environment import (
@@ -1095,3 +1097,202 @@ class TestLoggingConflict:
         logging.getLogger().handlers.clear()
         monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
         monkeypatch.setattr(local_module, "today", lambda: date(2026, 8, 21))
+
+
+class TestExternalDebugFilter:
+    """``with debug():`` の中で comken の handler が DEBUG まで通すようになっても、
+    pip で入れた外部ライブラリの DEBUG だけ落ちることを確認する（HISTORY 36 章）。
+
+    判定は ``record.pathname`` を ``sysconfig.get_paths()`` の
+    ``stdlib`` / ``platstdlib`` / ``purelib`` / ``platlib`` のパスの包含で
+    行い、``record.name`` が ``comken`` / ``comken.`` 起点でない DEBUG を
+    落とす。 テストでは LogRecord を手で作って pathname と name を意図的に
+    指定し、 comken が setup_local_logging() で付けた handler を経由して
+    ログファイルへ書かれたかで判定する（filter の振る舞いを直接 assert しない
+    — テスト用のフックをライブラリに足さないため）。
+    """
+
+    def _setup_local_logging_in_debug(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> Path:
+        """``with debug():`` の中で setup_local_logging() を tmp_path へ向ける。"""
+        logging.getLogger().handlers.clear()
+        monkeypatch.setattr(sys, "argv", [str(tmp_path / "main.py")])
+        monkeypatch.setattr(local_module, "today", lambda: date(2026, 8, 21))
+        from comken.runtime import debug
+
+        log_dir = tmp_path / "logs"
+        with debug():
+            setup_local_logging(path=log_dir)
+        return log_dir
+
+    def _read_log_file_text(self) -> str:
+        """setup_local_logging() が書いたファイル handler のテキスト。"""
+        file_handler = next(h for h in logging.getLogger().handlers if h.name == LOCAL_HANDLER_NAME)
+        file_handler.flush()
+        return Path(file_handler.baseFilename).read_text(encoding="utf-8")
+
+    @staticmethod
+    def _record(name: str, level: int, pathname: Path, message: str) -> logging.LogRecord:
+        """pathname を指定して LogRecord を作る。
+
+        テスト用ヘルパー。 Handler.handle() は Logger.handle() の内部経路を
+        通すので logger の level チェックをスキップして record を直接渡せる。
+        """
+        return logging.LogRecord(
+            name=name,
+            level=level,
+            pathname=str(pathname),
+            lineno=1,
+            msg=message,
+            args=None,
+            exc_info=None,
+        )
+
+    def test_external_library_debug_is_dropped(
+        self, isolated_logging, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """``<purelib>/selenium/webdriver/remote/remote_connection.py`` からの
+        DEBUG は comken のファイル handler 経由でファイルに出ない。
+
+        selenium.webdriver.remote.remote_connection の logger と同じ name・pathname
+        を再現した LogRecord を logger.handle() に流し、ファイルへ書かれたかを
+        見る。 formatter は元メッセージをそのまま出すので、ファイルに
+        ``selenium-debug-marker`` が無いことだけ確認すれば十分。
+        """
+        self._setup_local_logging_in_debug(tmp_path, monkeypatch)
+        selenium_path = (
+            Path(sysconfig.get_paths()["purelib"])
+            / "selenium"
+            / "webdriver"
+            / "remote"
+            / "remote_connection.py"
+        )
+        selenium_logger = logging.getLogger("selenium.webdriver.remote.remote_connection")
+
+        selenium_logger.handle(
+            self._record(
+                "selenium.webdriver.remote.remote_connection",
+                logging.DEBUG,
+                selenium_path,
+                "selenium-debug-marker-36alpha",
+            )
+        )
+
+        text = self._read_log_file_text()
+        assert "selenium-debug-marker-36alpha" not in text
+
+    def test_external_library_warning_passes_through(
+        self, isolated_logging, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """同じ selenium のパスからの WARNING はファイルに出る（外部 lib の
+        警告を握り潰さない）。"""
+        self._setup_local_logging_in_debug(tmp_path, monkeypatch)
+        selenium_path = (
+            Path(sysconfig.get_paths()["purelib"])
+            / "selenium"
+            / "webdriver"
+            / "remote"
+            / "remote_connection.py"
+        )
+        selenium_logger = logging.getLogger("selenium.webdriver.remote.remote_connection")
+
+        selenium_logger.handle(
+            self._record(
+                "selenium.webdriver.remote.remote_connection",
+                logging.WARNING,
+                selenium_path,
+                "selenium-warning-marker-36beta",
+            )
+        )
+
+        text = self._read_log_file_text()
+        assert "selenium-warning-marker-36beta" in text
+
+    def test_comken_debug_passes_through(
+        self, isolated_logging, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """comken パッケージ内から出した DEBUG（name ``comken.test.logger``、
+        pathname は comken 配下）はファイルに出る。"""
+        self._setup_local_logging_in_debug(tmp_path, monkeypatch)
+        comken_path = (
+            Path(__file__).resolve().parent.parent / "comken" / "core" / "logger" / "environment.py"
+        )
+        comken_logger = logging.getLogger("comken.test.logger")
+
+        comken_logger.handle(
+            self._record(
+                "comken.test.logger",
+                logging.DEBUG,
+                comken_path,
+                "comken-debug-marker-36gamma",
+            )
+        )
+
+        text = self._read_log_file_text()
+        assert "comken-debug-marker-36gamma" in text
+
+    def test_user_project_debug_passes_through(
+        self, isolated_logging, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """利用側プロジェクトの DEBUG（name ``src.run``、pathname は tmp_path 配下）
+        はファイルに出る。"""
+        self._setup_local_logging_in_debug(tmp_path, monkeypatch)
+        user_path = tmp_path / "src" / "run.py"
+        user_logger = logging.getLogger("src.run")
+
+        user_logger.handle(
+            self._record(
+                "src.run",
+                logging.DEBUG,
+                user_path,
+                "user-debug-marker-36delta",
+            )
+        )
+
+        text = self._read_log_file_text()
+        assert "user-debug-marker-36delta" in text
+
+    def test_filter_is_shared_singleton_across_handlers(
+        self, isolated_logging, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """comken が root に付けた console / environment / local の各 handler は
+        すべて同じ _external_debug_filter インスタンスを共有する。
+
+        ``Handler.addFilter`` の同一性チェックで重複付与を防いでいるため、
+        別の setup_*() から流れた handler でも二重に付かない形を保つ。
+        """
+        self._setup_local_logging_in_debug(tmp_path, monkeypatch)
+
+        attached = [f for h in logging.getLogger().handlers for f in h.filters]
+        assert _external_debug_filter in attached
+        # 同じインスタンスが複数回付与されていないこと（dedup されている）。
+        assert attached.count(_external_debug_filter) == len(logging.getLogger().handlers)
+
+    def test_sibling_folder_with_shared_prefix_is_not_treated_as_external(
+        self, isolated_logging, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """``<stdlib>`` に文字列を足しただけの「兄弟フォルダ」（例: ``Lib2``）は
+        外部ライブラリの置き場所ではない。 パス区切りを含めない ``startswith``
+        判定だと ``Lib2/x.py`` が ``Lib/`` 配下に誤認されて DEBUG が落ちるため、
+        区切り文字まで含めた包含に直したあとの振る舞いを確認する。
+
+        ``name`` は ``other.lib``（``comken`` 起点でない）を渡し、pathname を
+        ``<stdlib> + "2"`` 配下の ``x.py`` にして DEBUG が出ることを確かめる
+        （修正前の startswith だけの判定だと落ちる回帰の検出）。
+        """
+        self._setup_local_logging_in_debug(tmp_path, monkeypatch)
+        sibling_path = Path(sysconfig.get_paths()["stdlib"] + "2") / "x.py"
+        other_logger = logging.getLogger("other.lib")
+
+        other_logger.handle(
+            self._record(
+                "other.lib",
+                logging.DEBUG,
+                sibling_path,
+                "sibling-prefix-marker-36epsilon",
+            )
+        )
+
+        text = self._read_log_file_text()
+        assert "sibling-prefix-marker-36epsilon" in text

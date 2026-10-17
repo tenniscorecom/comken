@@ -2240,8 +2240,11 @@ handler が混ざっている場合は ``LoggingAlreadyConfiguredError`` を送�
 ``console_level`` / ``file_level`` を省略すると、呼び出し時点の
 ``with debug():`` の状態で決まる（有効なら ``DEBUG``、無効なら ``INFO``）。
 **`setup_local_logging()` を `with debug():` の中で呼べば、それだけで
-画面・ファイルとも DEBUG まで出る。** 明示的に渡した場合はそちらを優先する
-（`with debug():` の外でも常時 DEBUG にしたい、といった用途向け）。
+画面・ファイルとも DEBUG まで出る。** ただし pip で入れた外部ライブラリ
+（selenium・urllib3・openpyxl など）の DEBUG は出さない（comken の
+3 つの handler に付くフィルタで落とす。HISTORY 36 章）。
+明示的に渡した場合はそちらを優先する（`with debug():` の外でも常時
+DEBUG にしたい、といった用途向け）。
 
 
 ## `from comken.core.table import ...`

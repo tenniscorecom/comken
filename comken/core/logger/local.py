@@ -1,7 +1,8 @@
 """comken/core/logger/local.py — 単体実行用の root logger 構築。
 
 RPA 基盤外で単体実行するとき、各モジュールの logger が同じ出力先を使えるよう
-root logger を設定する。
+root logger を設定する。comken が root に付ける handler には、外部ライブラリの DEBUG を落とす
+フィルターが共通で付く（HISTORY 36 章）。
 """
 
 import logging
@@ -17,6 +18,7 @@ from comken.core.logger.environment import (
     LOCAL_HANDLER_NAME,
     LOG_FORMAT,
     _compute_root_level,
+    _external_debug_filter,
     _guard_root_handlers,
     _log_version_once,
     _warn_external_handlers_allowed,
@@ -50,8 +52,11 @@ def setup_local_logging(
     ``console_level`` / ``file_level`` を省略すると、呼び出し時点の
     ``with debug():`` の状態で決まる（有効なら ``DEBUG``、無効なら ``INFO``）。
     **`setup_local_logging()` を `with debug():` の中で呼べば、それだけで
-    画面・ファイルとも DEBUG まで出る。** 明示的に渡した場合はそちらを優先する
-    （`with debug():` の外でも常時 DEBUG にしたい、といった用途向け）。
+    画面・ファイルとも DEBUG まで出る。** ただし pip で入れた外部ライブラリ
+    （selenium・urllib3・openpyxl など）の DEBUG は出さない（comken の
+    3 つの handler に付くフィルタで落とす。HISTORY 36 章）。
+    明示的に渡した場合はそちらを優先する（`with debug():` の外でも常時
+    DEBUG にしたい、といった用途向け）。
     """
     if console_level is None:
         console_level = logging.DEBUG if is_debug() else logging.INFO
@@ -79,6 +84,7 @@ def setup_local_logging(
     local_file_handler.set_name(LOCAL_HANDLER_NAME)
     local_file_handler.setLevel(file_level)
     local_file_handler.setFormatter(formatter)
+    local_file_handler.addFilter(_external_debug_filter)
 
     if ENVIRONMENT_HANDLER_NAME in {h.name for h in existing}:
         # setup_logging() が作った console を使い回し、同じログが画面へ2回出るのを防ぐ。
@@ -89,6 +95,7 @@ def setup_local_logging(
         console_handler.set_name(CONSOLE_HANDLER_NAME)
         console_handler.setLevel(console_level)
         console_handler.setFormatter(formatter)
+        console_handler.addFilter(_external_debug_filter)
         root_logger.addHandler(console_handler)
     console_handler.setLevel(console_level)
     root_logger.addHandler(local_file_handler)

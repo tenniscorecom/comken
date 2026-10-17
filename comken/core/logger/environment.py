@@ -11,6 +11,7 @@
 import logging
 import os
 import socket
+import sysconfig
 from pathlib import Path
 
 from comken.core.dates import today
@@ -43,6 +44,78 @@ logger = logging.getLogger(__name__)
 # 共有する。 出力先を用意する関数が出力先を確定した直後にだけ True にするので、
 # 出力先が用意できずに終わったときは log が出ず、フラグも立たない。
 _version_logged = False
+
+
+class _ExternalDebugFilter(logging.Filter):
+    """``with debug():`` で comken の handler が DEBUG まで通すようになった結果、
+    pip で入れた外部ライブラリの DEBUG まで画面とログファイルへ流れるのを止める。
+
+    Selenium の WebDriver 送受信コマンド本文には ``Page.input()`` などが渡した
+    パスワードがそのまま含まれる。 35 章で ``selenium.webdriver.remote.remote_connection``
+    ロガー単体を INFO に固定したが、urllib3・openpyxl・requests など他ライブラリには
+    同じ手は取れない。 そこで comken の handler に共通するフィルタとして、
+    「標準ライブラリか pip ライブラリの置き場所にあり、かつ comken 由来でない
+    DEBUG」を一律に落とす方針にした。
+
+    判定は ``record.pathname``（``logging.LogRecord`` が log 呼び出し時に収集する
+    ソースファイルの絶対パス）と ``sysconfig.get_paths()`` の ``stdlib`` /
+    ``platstdlib`` / ``purelib`` / ``platlib`` のパスの包含で行う。 "site-packages"
+    のような文字列探しではなくパスの包含にしたのは、venv・system Python・ユーザー
+    site など構成が違っても同じロジックで動くようにするため。 大文字小文字は
+    ``os.path.normcase`` で Windows の扱いに合わせる。
+    """
+
+    # sysconfig.get_paths() を見るキー。 4 つの置き場所を 1 度だけ問い合わせて
+    # 以降はローカル参照にする（フィルタは log 1 件ごとに走るため）。
+    _PATH_KEYS = (
+        "stdlib",
+        "platstdlib",
+        "purelib",
+        "platlib",
+    )
+
+    def __init__(self) -> None:
+        super().__init__()
+        # 空文字列が返ることがまれにあり（壊れた venv 等）、空文字を root として
+        # 持つと全 DEBUG が startswith("") で True になり全部落ちる事故になるため、
+        # 真に非空の値だけを拾う。
+        self._external_roots: tuple[str, ...] = tuple(
+            os.path.normcase(p) for key in self._PATH_KEYS if (p := sysconfig.get_paths().get(key))
+        )
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """外部ライブラリ由来の DEBUG を ``False`` で落として握り潰す。
+
+        ``logging.Handler.handle()`` から record ごとに呼ばれ、 ``True`` を
+        返すとその handler は ``emit(record)`` へ進む。
+        """
+        # INFO 以上は comken 内外問わず常に通す。 外部ライブラリの警告や
+        # エラーを握り潰すと問題に気付けないため。
+        if record.levelno >= logging.INFO:
+            return True
+        # DEBUG 以下: comken 自身の logger はそのまま通す（comken/core/logger/ 配下の
+        # logger.debug もここで通る）。 comken が pip で site-packages に入っている
+        # 場合も、名前で通す。
+        if record.name == "comken" or record.name.startswith("comken."):
+            return True
+        # 利用側プロジェクトの main.py / src/*.py は purelib 外に置く想定なので、
+        # ここで startswith に引っかからず True に落ちる。
+        # resolve() は log 1 件ごとにファイルシステムを走るので、 normcase + abspath
+        # だけの正規化に留める。 包含は「root と一致するか、 root + os.sep で
+        # 始まるか」とし、 ``<root>`` の兄弟フォルダ（例: ``<stdlib>`` が
+        # ``.../Lib`` のときの ``.../Lib2``）を誤って含めない。
+        pathname = os.path.normcase(os.path.abspath(record.pathname))  # noqa: PTH100
+        return all(
+            pathname != root and not pathname.startswith(root + os.sep)
+            for root in self._external_roots
+        )
+
+
+# モジュールに 1 つだけのインスタンス。 setup_logging() / setup_local_logging() が
+# それぞれの handler へ ``addFilter`` する。 同じインスタンスなので setup_logging() が
+# setup_local_logging() の console handler を使い回す場合に ``Handler.addFilter`` 側の
+# 同一性チェック (``filter in self.filters``) で二重に付かない。
+_external_debug_filter = _ExternalDebugFilter()
 
 
 def setup_logging(site: type[LoggerSite], *, allow_existing: bool = False) -> None:
@@ -107,11 +180,13 @@ def setup_logging(site: type[LoggerSite], *, allow_existing: bool = False) -> No
         console_handler.set_name(CONSOLE_HANDLER_NAME)
         console_handler.setLevel(logging.INFO)
         console_handler.setFormatter(formatter)
+        console_handler.addFilter(_external_debug_filter)
         root_logger.addHandler(console_handler)
     environment_file_handler = logging.FileHandler(log_path, encoding="utf-8")
     environment_file_handler.set_name(ENVIRONMENT_HANDLER_NAME)
     environment_file_handler.setLevel(logging.INFO)
     environment_file_handler.setFormatter(formatter)
+    environment_file_handler.addFilter(_external_debug_filter)
     root_logger.addHandler(environment_file_handler)
 
     root_logger.setLevel(_compute_root_level(root_logger.handlers))
