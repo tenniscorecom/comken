@@ -5,7 +5,8 @@
 ``new_project.py`` とは役割が違うので、混同しないこと。
 
 各パッケージの ``__all__`` をたどり、型ヒント付き署名と docstring 全文を
-``docs/自動生成/API.md`` へ書き出す。
+``docs/自動生成/API.md`` へ書き出す。``docs/ERRORS.md`` の表は、新規プロジェクトと
+同じ ``comken/tools/errors_doc.py`` で作り直す。
 
 **同時に、社内の外部 AI へ貼るための資料（``comken_bundle/``）も既定で生成する。**
 章ごと（規約・API索引・実例 → 実装全文 → エラー対応表・設計判断 → 新規プロジェクト向け）に
@@ -21,10 +22,8 @@
 import argparse
 import ast
 import fnmatch
-import inspect
 import shutil
 import sys
-from dataclasses import dataclass
 from importlib import import_module
 from pathlib import Path
 
@@ -33,7 +32,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-exceptions = import_module("comken.exceptions")
+errors_doc = import_module("comken.tools.errors_doc")
 
 PACKAGE_ROOT = ROOT / "comken"
 API_OUTPUT_PATH = ROOT / "docs" / "自動生成" / "API.md"
@@ -44,9 +43,6 @@ BUNDLE_OUTPUT_DIR = ROOT / "comken_bundle"
 # さらに複数ファイルへ割る。約53万バイトのファイルがアップロード先（社内の外部AI
 # チャット）で弾かれ、約12万バイトは通った実績を踏まえて10万バイトにしている。
 DEFAULT_MAX_BYTES = 100_000
-ERRORS_GENERATED_MARKER = (
-    "<!-- ここから下は python export_for_chat.py が自動生成する。手で編集しない -->"
-)
 
 # comken/ 配下の .py を連結するときに除外するディレクトリ名。**どの階層でも除外**。
 # rglob のフィルタで弾く。 concat_source.py から引き継いだ除外に加え、
@@ -87,76 +83,6 @@ _TEMPLATE_EXCLUDED_FILE_PATTERNS = (
     "config.ini",
     "*.pyc",
 )
-
-
-@dataclass(frozen=True)
-class ErrorCategory:
-    """エラー表1つ分の見出しと、分類に使う基底例外を持つ。"""
-
-    heading: str
-    bases: tuple[type[BaseException], ...]
-
-
-ERROR_CATEGORIES = (
-    ErrorCategory("Excel のエラー", (exceptions.ExcelError,)),
-    ErrorCategory("Access のエラー", (exceptions.AccessError,)),
-    ErrorCategory("Outlook のエラー", (exceptions.OutlookError,)),
-    ErrorCategory(
-        "ファイル・設定などのエラー",
-        (
-            exceptions.CSVError,
-            exceptions.ColumnNotFoundError,
-            exceptions.ConfigError,
-            exceptions.StateError,
-            exceptions.DownloaderError,
-            exceptions.SalesforceError,
-            exceptions.CredentialError,
-            exceptions.HolidayError,
-        ),
-    ),
-    ErrorCategory("ブラウザ（Edge 自動操作）のエラー", (exceptions.BrowserError,)),
-    ErrorCategory("Table のエラー", (exceptions.TableError,)),
-    ErrorCategory("Windows 操作のエラー", (exceptions.WindowNotFoundError,)),
-)
-DIRECT_ERROR_CATEGORIES = {
-    exceptions.ComkenFileNotFoundError: "ファイル・設定などのエラー",
-    exceptions.UnsupportedFileSuffixError: "ファイル・設定などのエラー",
-    exceptions.InvalidColumnError: "ファイル・設定などのエラー",
-    exceptions.SiteOwnerRequiredError: "ファイル・設定などのエラー",
-    exceptions.FileDeletionError: "ファイル・設定などのエラー",
-    exceptions.FileSuffixMissingError: "ファイル・設定などのエラー",
-    exceptions.LoggingAlreadyConfiguredError: "ファイル・設定などのエラー",
-    exceptions.LoggingConflictError: "ファイル・設定などのエラー",
-    exceptions.LogRootNotConfiguredError: "ファイル・設定などのエラー",
-    exceptions.MissingOptionalDependencyError: "ファイル・設定などのエラー",
-}
-SUPPLEMENTAL_ERRORS = {
-    "Access のエラー": (
-        (
-            "PermissionError",
-            "ファイルが誰かに開かれている",
-            "自分や他の人がそのファイルを開いていないか確認して閉じる",
-        ),
-    ),
-    "ファイル・設定などのエラー": (
-        (
-            "FileNotFoundError",
-            "ファイルが見つからない",
-            "ファイルの置き場所と名前を確認する。「今日の日付のファイル」を探す処理なら、"
-            "今日のファイルが作られているか確認する",
-        ),
-    ),
-    "ブラウザ（Edge 自動操作）のエラー": (
-        (
-            "WebDriverException",
-            "ブラウザ操作の一般的なエラー",
-            "Edge のウィンドウをすべて閉じて再実行する",
-        ),
-    ),
-}
-# すべてのエラーの親。カテゴリ例外（ExcelError など）はメッセージつきで直接送出するので、
-# 各カテゴリの表に普通の行として載せる。
-CLASSIFICATION_ERRORS = (exceptions.ComkenError,)
 
 
 def _parse(path: Path) -> ast.Module:
@@ -354,107 +280,6 @@ def _api_text() -> str:
     return "\n".join(sections).rstrip() + "\n"
 
 
-def _exception_details(exception: type[BaseException]) -> tuple[str, str]:
-    """例外の docstring から、平易な意味と対処を取り出す。"""
-    docstring = inspect.getdoc(exception)
-    if not docstring:
-        raise ValueError(f"{exception.__name__} に docstring がありません")
-    meaning, _, remainder = docstring.partition("\n")
-    treatment_marker = "\n対処:\n"
-    if treatment_marker not in f"\n{remainder}":
-        raise ValueError(f"{exception.__name__} の docstring に「対処:」がありません")
-    treatment = remainder.split(treatment_marker.strip("\n"), maxsplit=1)[1].strip()
-    if not treatment:
-        raise ValueError(f"{exception.__name__} の docstring の「対処:」が空です")
-    return meaning, "".join(line.strip() for line in treatment.splitlines())
-
-
-def _error_category(exception: type[BaseException]) -> str:
-    """継承階層から掲載カテゴリを返し、未分類なら生成を止める。"""
-    direct_category = DIRECT_ERROR_CATEGORIES.get(exception)
-    if direct_category:
-        return direct_category
-    matches = [
-        category.heading
-        for category in ERROR_CATEGORIES
-        if any(issubclass(exception, base) for base in category.bases)
-    ]
-    if len(matches) != 1:
-        raise ValueError(f"{exception.__name__} のカテゴリを一意に決められません: {matches}")
-    return matches[0]
-
-
-def _error_table(
-    exceptions_in_category: list[type[BaseException]],
-    supplemental_rows: tuple[tuple[str, str, str], ...] = (),
-) -> list[str]:
-    """例外一覧を非エンジニア向け Markdown 表にする。"""
-    lines = ["| エラー名 | 意味 | 自分でできる対処 |", "|---|---|---|"]
-    for exception in exceptions_in_category:
-        meaning, treatment = _exception_details(exception)
-        lines.append(f"| `{exception.__name__}` | {meaning} | {treatment} |")
-    for name, meaning, treatment in supplemental_rows:
-        lines.append(f"| `{name}` | {meaning} | {treatment} |")
-    return lines
-
-
-def _errors_generated_text() -> str:
-    """公開例外の docstring と継承階層からエラー一覧を組み立てる。"""
-    public_exceptions = [getattr(exceptions, name) for name in exceptions.__all__]
-    concrete_exceptions = []
-    for exception in public_exceptions:
-        if exception in CLASSIFICATION_ERRORS:
-            continue
-        if exception in concrete_exceptions:
-            continue
-        concrete_exceptions.append(exception)
-    grouped: dict[str, list[type[BaseException]]] = {
-        category.heading: [] for category in ERROR_CATEGORIES
-    }
-    for exception in concrete_exceptions:
-        grouped[_error_category(exception)].append(exception)
-
-    sections: list[str] = []
-    for category in ERROR_CATEGORIES:
-        sections += [
-            f"## {category.heading}",
-            "",
-            *_error_table(grouped[category.heading], SUPPLEMENTAL_ERRORS.get(category.heading, ())),
-            "",
-        ]
-
-    sections += [
-        "## すべてのエラーに共通の親",
-        "",
-        "`ComkenError` は、comken が出すエラーすべての親です。画面に表示されたエラー名を",
-        "上の表から探してください。",
-        "",
-        *_error_table(list(CLASSIFICATION_ERRORS)),
-    ]
-    return "\n".join(sections).rstrip() + "\n"
-
-
-def _merged_errors_text(current: str) -> str:
-    """マーカーより上の手書き部分と、新しい生成部分を結合する。
-
-    マーカーが見つからない場合は、手書き部分を誤って消さないため ValueError にする。
-    """
-    if ERRORS_GENERATED_MARKER not in current:
-        raise ValueError(
-            f"{ERRORS_OUTPUT_PATH.name} に自動生成マーカーがありません。"
-            "手書き部分は変更していません"
-        )
-    handwritten = current.split(ERRORS_GENERATED_MARKER, maxsplit=1)[0].rstrip()
-    generated = _errors_generated_text()
-    return f"{handwritten}\n\n{ERRORS_GENERATED_MARKER}\n\n{generated}"
-
-
-def _write_errors() -> None:
-    """ERRORS.md の手書き部分を残して、生成部分だけを書き換える。"""
-    current = ERRORS_OUTPUT_PATH.read_text(encoding="utf-8")
-    ERRORS_OUTPUT_PATH.write_text(_merged_errors_text(current), encoding="utf-8")
-
-
 def _split(text: str, max_bytes: int) -> list[str]:
     """行の途中で切らず、指定バイト数（UTF-8）を目安に分割する。
 
@@ -622,7 +447,7 @@ def _bundle_sections() -> list[tuple[str, str]]:
     history_text = (ROOT / "docs" / "HISTORY.md").read_text(encoding="utf-8").rstrip()
 
     api_text = _api_text()
-    errors_text = _errors_generated_text()
+    errors_text = errors_doc.generated_errors_text()
     package_files = _collect_python_files(PACKAGE_ROOT)
     impl_text, impl_line_count, impl_byte_count = _concatenate_files(package_files, PACKAGE_ROOT)
 
@@ -797,7 +622,9 @@ def main() -> None:
     API_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     API_OUTPUT_PATH.write_text(_api_text(), encoding="utf-8")
     print(f"{API_OUTPUT_PATH.relative_to(ROOT)} を生成しました")  # noqa: T201 — CLI スクリプトの進捗出力（logging は外部ログ向けで、対話実行の進捗とは別経路）
-    _write_errors()
+    errors_doc.update_errors_doc(ERRORS_OUTPUT_PATH)
+    # ひな形の表も comken の例外から作るので、例外を変えたら同時に作り直す
+    errors_doc.update_errors_doc(TEMPLATE_DIR / "docs" / "ERRORS.md")
     print(f"{ERRORS_OUTPUT_PATH.relative_to(ROOT)} を生成しました")  # noqa: T201 — CLI スクリプトの進捗出力（logging は外部ログ向けで、対話実行の進捗とは別経路）
     _write_bundle(bundle_max_bytes)
     print(f"{BUNDLE_OUTPUT_DIR.relative_to(ROOT)}/ に章ごとの資料を生成しました")  # noqa: T201 — CLI スクリプトの進捗出力（logging は外部ログ向けで、対話実行の進捗とは別経路）

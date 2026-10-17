@@ -384,8 +384,9 @@ def test_template_still_has_placeholder_server_path() -> None:
     )
 
 
-def test_credentials_bat_has_no_server_path() -> None:
-    """`認証情報の登録.bat` に共有サーバーのパスが1つも出てこないこと。
+@pytest.mark.parametrize("name", ["認証情報の登録.bat", "エラー一覧の更新.bat"])
+def test_bat_without_python_library_has_no_server_path(name: str) -> None:
+    """`認証情報の登録.bat` / `エラー一覧の更新.bat` に共有サーバーのパスが1つも出てこないこと。
 
     「何を防いでいるか」: この bat は `python -m comken init` が作ったプロジェクトに
     入るので、comken への PATH は既に通っている。だからサーバーの場所を書く必要が
@@ -396,7 +397,7 @@ def test_credentials_bat_has_no_server_path() -> None:
     書き込まれても通ってしまい**、公開リポジトリへの流出を止められない。
     UNC パス（`\\\\` 始まり）が出てこないことを直接見る。
     """
-    path = TEMPLATE_DIR / "認証情報の登録.bat"
+    path = TEMPLATE_DIR / name
     text = _read(path, encoding="cp932")
     assert "\\\\" not in text, (
         f"{path.name} に共有サーバーのパスらしき記述がある"
@@ -494,3 +495,73 @@ def test_run_py_commented_example_works(generated: Path) -> None:
 
     assert result.returncode == 0, f"例が動かなかった:\n{result.stdout}\n{result.stderr}"
     assert list((generated / "output").glob("*.xlsx")), "Excel が出力されていない"
+
+
+# ── 14. エラー一覧の更新（.bat と .py） ───────────────────────────────────────────
+
+
+_ERRORS_BAT = "エラー一覧の更新.bat"
+_ERRORS_PY = "エラー一覧の更新.py"
+
+
+def test_errors_update_bat_is_cp932_crlf() -> None:
+    """`エラー一覧の更新.bat` が cp932・CRLF で保存されていること。
+
+    「何を防いでいるか」: UTF-8 で保存すると cmd.exe が日本語のファイル名
+    （`エラー一覧の更新.py`）を読み違え、Python が「ファイルが無い」で止まる。
+    """
+    raw = (TEMPLATE_DIR / _ERRORS_BAT).read_bytes()
+
+    assert raw.count(b"\n") == raw.count(b"\r\n"), "改行が CRLF でない行がある"
+    assert 'python "エラー一覧の更新.py"' in raw.decode("cp932")
+
+
+def test_errors_update_py_is_utf8() -> None:
+    """`エラー一覧の更新.py` が UTF-8 で、プロジェクトの src を渡していること。"""
+    text = (TEMPLATE_DIR / _ERRORS_PY).read_bytes().decode("utf-8")
+
+    assert "project_package=src" in text
+
+
+def test_generated_project_has_errors_update_files(generated: Path) -> None:
+    """create() で作ったプロジェクトに 2 ファイルが入り、bat はバイト単位でひな形のまま。"""
+    assert (generated / _ERRORS_PY).is_file()
+    assert (generated / _ERRORS_BAT).read_bytes() == (TEMPLATE_DIR / _ERRORS_BAT).read_bytes()
+
+
+def test_errors_update_bat_lists_project_errors(generated: Path, tmp_path: Path) -> None:
+    """**別のカレントから** `エラー一覧の更新.bat` を叩くと、src の例外が
+    docs/ERRORS.md に載ること。
+
+    「何を防いでいるか」: bat → py → src の import → 表の書き込み、のどこかが切れると、
+    利用者には「叩いたのに何も変わらない」としか見えない。手書き部分が残ることも見る。
+    """
+    (generated / "src" / "errors.py").write_text(
+        "from comken.exceptions import ComkenError\n\n\n"
+        "class OrderFileMissingError(ComkenError):\n"
+        '    """受注ファイルが届いていない\n\n'
+        "    対処:\n"
+        '        受注システムから出力し直す\n    """\n',
+        encoding="utf-8",
+    )
+    errors_md = generated / "docs" / "ERRORS.md"
+    handwritten = _read(errors_md).split("<!--", 1)[0]
+    elsewhere = tmp_path / "別のカレント"
+    elsewhere.mkdir()
+    env = {**os.environ, "PYTHONPATH": str(_ROOT), "PYTHONIOENCODING": "utf-8"}
+
+    result = subprocess.run(
+        ["cmd", "/c", str(generated / _ERRORS_BAT)],
+        cwd=elsewhere,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout.decode("cp932", errors="replace") + (
+        result.stderr.decode("utf-8", errors="replace")
+    )
+    text = _read(errors_md)
+    assert text.startswith(handwritten)
+    row = "| `OrderFileMissingError` | 受注ファイルが届いていない | 受注システムから出力し直す |"
+    assert row in text

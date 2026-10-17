@@ -19,6 +19,9 @@ from __future__ import annotations
 
 import io
 import logging
+import os
+import subprocess
+import sys
 import unittest.mock as mock
 from pathlib import Path
 from typing import Any, cast
@@ -28,6 +31,8 @@ import pytest
 import comken
 from comken.__main__ import _build_parser
 from comken.__main__ import main as main_cli
+
+_ROOT = Path(__file__).resolve().parent.parent
 
 
 class TestHelpListing:
@@ -45,7 +50,7 @@ class TestHelpListing:
         """
         main_cli(["--help"])
         out = capsys.readouterr().out
-        for name in ("init", "sf", "cred", "holidays"):
+        for name in ("init", "sf", "cred", "holidays", "errors"):
             assert name in out, f"--help に {name} が無い: {out!r}"
         # ``sfdl`` は comken の CLI から外れた
         assert "sfdl" not in out, (
@@ -265,3 +270,47 @@ class TestHolidaysHelpGuard:
             main_cli(["holidays", "--foo"])
         assert excinfo.value.code != 0, f"未知引数の終了コードが 0: {excinfo.value.code!r}"
         writer.assert_not_called()
+
+
+class TestErrors:
+    """``python -m comken errors [パス]`` の動作。"""
+
+    def test_writes_given_path_and_reports_no_change_second_time(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """指定したファイルに表を書き、2回目は「変更はありません」で何も変えない。"""
+        path = tmp_path / "ERRORS.md"
+
+        assert main_cli(["errors", str(path)]) == 0
+        first = path.read_bytes()
+        assert "| `SheetNotFoundError` |" in path.read_text(encoding="utf-8")
+        assert "更新しました" in capsys.readouterr().out
+
+        assert main_cli(["errors", str(path)]) == 0
+        assert path.read_bytes() == first
+        assert "変更はありません" in capsys.readouterr().out
+
+    def test_rejects_extra_arguments_without_writing(self, tmp_path: Path) -> None:
+        """余分な引数があれば、何も書かずに 0 以外で終わる。"""
+        path = tmp_path / "ERRORS.md"
+
+        assert main_cli(["errors", str(path), "--path"]) != 0
+        assert not path.exists()
+
+    def test_runs_as_module_with_default_path(self, tmp_path: Path) -> None:
+        """``python -m comken errors`` を打ったフォルダの docs/ERRORS.md を作る。"""
+        env = {**os.environ, "PYTHONPATH": str(_ROOT), "PYTHONIOENCODING": "utf-8"}
+
+        result = subprocess.run(
+            [sys.executable, "-m", "comken", "errors"],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=env,
+            check=False,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert "| `ComkenError` |" in (tmp_path / "docs" / "ERRORS.md").read_text(encoding="utf-8")

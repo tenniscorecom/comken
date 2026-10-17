@@ -8,6 +8,7 @@ CLI の振り分けだけを集約し、実処理は各サブモジュールの 
     python -m comken sf report --report-id 00O...    レポートを実行
     python -m comken cred import 認証情報.json        認証情報を取り込み
     python -m comken holidays                        会社用カレンダー CSV を作り直す（年1回）
+    python -m comken errors [パス]                    docs/ERRORS.md のエラー一覧を作り直す
 
 ``sf`` / ``cred`` / ``holidays`` は ``salesforce`` / ``credentials`` /
 ``holidays`` の別名（``argparse`` の ``add_parser(..., aliases=[...])``）。
@@ -23,6 +24,7 @@ from pathlib import Path
 
 import comken
 from comken.exceptions import ComkenError
+from comken.tools.errors_doc import update_errors_doc
 from comken.tools.new_project import create as create_project
 
 # `--into` の既定値（カレント）は関数のデフォルトとして書く方が自然。
@@ -130,6 +132,20 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     holidays.set_defaults(run=_run_holidays, _prog="python -m comken holidays")
 
+    # errors（エラー対応ガイドの自動生成部分を作り直す）
+    errors = subparsers.add_parser(
+        "errors",
+        help="docs/ERRORS.md のエラー一覧（自動生成部分）を comken の例外から作り直す",
+    )
+    errors.add_argument(
+        "path",
+        nargs="?",
+        type=Path,
+        default=None,
+        help="書き換えるファイル（省略すると今いるフォルダの docs/ERRORS.md）",
+    )
+    errors.set_defaults(run=_run_errors)
+
     return parser
 
 
@@ -214,6 +230,24 @@ def _run_holidays(args: argparse.Namespace, remaining: list[str]) -> int:
     argv = ["--path", str(args.path)] if args.path is not None else []
     argv.extend(remaining)
     return holidays_main(argv)
+
+
+def _run_errors(args: argparse.Namespace, remaining: list[str]) -> int:
+    """``python -m comken errors [パス]`` の本体。
+
+    プロジェクトの ``src`` は読まない（どのフォルダから打たれたか分からないため）。
+    既定の場所は ``project_dir()`` ではなくカレント基準にする。``python -m comken`` では
+    ``sys.argv[0]`` が comken の ``__main__.py`` になり、comken の中を指してしまうため。
+    プロジェクト固有のエラーまで載せるのは、ひな形の ``エラー一覧の更新.py`` の役目。
+    """
+    # 打ち間違えた引数を黙って捨てると、意図しない場所を書き換えたように見えるので止める
+    if remaining:
+        print(f"解釈できない引数があります: {' '.join(remaining)}", file=sys.stderr)
+        return 1
+    path = args.path or Path.cwd() / "docs" / "ERRORS.md"
+    changed = update_errors_doc(path)
+    print(f"{'更新しました' if changed else '変更はありません'}: {path}")
+    return 0
 
 
 if __name__ == "__main__":

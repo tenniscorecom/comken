@@ -11,8 +11,9 @@ import re
 import subprocess
 from pathlib import Path
 
-import export_for_chat
 import pytest
+
+from comken.tools import errors_doc
 
 _ROOT = Path(__file__).resolve().parent.parent
 
@@ -186,7 +187,7 @@ def test_exception_guide_covers_all_public_exceptions():
     #       件数だけ固定すると API を1つ足すたびに無関係な失敗が出る。
     assert names, "公開例外を読み取れていない（__all__ の解析に失敗している）"
     assert not [name for name in names if f"`{name}`" not in guide]
-    assert guide == export_for_chat._merged_errors_text(guide)
+    assert guide == errors_doc._merged_errors_text(guide)
 
 
 def test_all_public_exceptions_have_treatment():
@@ -194,9 +195,9 @@ def test_all_public_exceptions_have_treatment():
     names = _all_names(_ROOT / "comken" / "exceptions" / "__init__.py")
     missing = []
     for name in names:
-        exception = getattr(export_for_chat.exceptions, name)
+        exception = getattr(errors_doc.exceptions, name)
         try:
-            export_for_chat._exception_details(exception)
+            errors_doc._exception_details(exception)
         except ValueError:
             missing.append(name)
     assert not missing
@@ -315,24 +316,6 @@ def test_exception_docstring_tree_matches_public_api():
             f"{name} は {actual_parent_name} を継承しているが、"
             f"ツリーでは {declared_parent} の下にある"
         )
-
-
-def test_error_guide_generation_is_idempotent_and_preserves_handwritten_part():
-    """再生成を繰り返しても同じで、マーカーより上は変更しない。"""
-    handwritten = "# 手書きの前書き\n\nこの内容は残す。"
-    source = f"{handwritten}\n\n{export_for_chat.ERRORS_GENERATED_MARKER}\n\n古い生成部分\n"
-    generated_once = export_for_chat._merged_errors_text(source)
-    generated_twice = export_for_chat._merged_errors_text(generated_once)
-
-    assert generated_once == generated_twice
-    preserved = generated_once.split(export_for_chat.ERRORS_GENERATED_MARKER, maxsplit=1)[0]
-    assert preserved.rstrip() == handwritten
-
-
-def test_error_guide_generation_requires_marker():
-    """マーカーがない文書を黙って上書きしない。"""
-    with pytest.raises(ValueError, match="自動生成マーカーがありません"):
-        export_for_chat._merged_errors_text("# 手書きだけのガイド\n")
 
 
 def test_generated_api_covers_all_public_api():

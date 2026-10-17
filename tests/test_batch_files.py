@@ -191,6 +191,7 @@ def test_batch_file_does_not_rely_on_dp0_alone(path: Path):
 _PAUSE_FORBIDDEN_BATS = (
     "実行.bat",
     "認証情報の登録.bat",
+    "エラー一覧の更新.bat",
 )
 
 
