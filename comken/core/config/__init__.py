@@ -65,6 +65,8 @@ comken 内部の ``stubs.py`` は ``from comken.core.config.base import _X``
 
 from __future__ import annotations
 
+from typing import Any
+
 from comken.core.config.base import (
     Config,
     MappingDict,
@@ -80,10 +82,12 @@ from comken.core.config.base import (
 __all__ = ["Config", "MappingDict"]
 
 
-def __getattr__(name: str) -> object:
+def __getattr__(name: str) -> Any:
     # PEP 562: `comken.core.config.FILES` のようにモジュール属性として見つからない名前で呼ばれる。
     # セクションは大文字なので、大文字名のときだけ Config() を生成して委譲する
     # （Config / MappingDict などの実体は通常の属性解決で見つかるためここには来ない）。
+    # 戻り値は ``Config.__getattr__`` と同じ理由で ``Any``
+    # （セクションは config.ini から実行時に作るため）。
     if name.isupper():
         return getattr(_get_or_build_config(_default_config_path()), name)
     raise AttributeError(f"module 'comken.core.config' has no attribute {name!r}")
