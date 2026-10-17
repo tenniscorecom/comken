@@ -91,10 +91,18 @@ def main() -> None:
         report_rows.append({STATUS_COL: STATUS_ADDED, DETAIL_COL: "", **row})
     for row in result.removed:
         report_rows.append({STATUS_COL: STATUS_REMOVED, DETAIL_COL: "", **row})
-    for change in result.changed:
-        # 変わった列だけ「部署: 総務部 → 経理部」の形で並べる
-        detail = " / ".join(f"{col}: {old} → {new}" for col, (old, new) in change.columns.items())
-        report_rows.append({STATUS_COL: STATUS_CHANGED, DETAIL_COL: detail, **change.after})
+    # changed は 1 行 = 1 セルの変更。変わった列だけ「部署: 総務部 → 経理部」の形にして、
+    # 社員ごとにまとめる
+    details: dict[str, list[str]] = {}
+    for cell in result.changed:
+        details.setdefault(cell[KEY], []).append(
+            f"{cell['列']}: {cell['変更前']} → {cell['変更後']}"
+        )
+    after_by_key = {str(row[KEY]): row for row in after}
+    for key, parts in details.items():
+        report_rows.append(
+            {STATUS_COL: STATUS_CHANGED, DETAIL_COL: " / ".join(parts), **after_by_key[key]}
+        )
 
     output_path = OUTPUT_FOLDER / f"差分レポート_{today():%Y%m%d}.xlsx"
     with Excel(output_path) as excel:

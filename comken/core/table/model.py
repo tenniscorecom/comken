@@ -27,7 +27,7 @@ from comken.exceptions.tables import (
 if TYPE_CHECKING:
     import pandas as pd
 
-    from comken.core.table.diff import DiffResult, RowChange
+    from comken.core.table.diff import DiffResult
 
 logger = logging.getLogger(__name__)
 
@@ -409,10 +409,12 @@ class Table:
             key: 行を一意に識別するキー列名。
 
         Returns:
-            ``DiffResult``（``added`` / ``removed`` は ``Table``、``changed`` は
-            ``list[RowChange]``）。
+            ``DiffResult``（``added`` / ``removed`` / ``changed`` のどれも ``Table``）。
+            ``changed`` は 1 行 = 1 セルの変更で、列は ``key`` / ``列`` / ``変更前`` /
+            ``変更後``（1 つの行で 2 列が変わっていれば 2 行になる）。``key`` の値は
+            正規化後の文字列。
         """
-        from comken.core.table.diff import DiffResult, RowChange, diff_row, index_for_diff
+        from comken.core.table.diff import DiffResult, changes_table, diff_row, index_for_diff
         from comken.exceptions import ColumnNotFoundError
 
         logger.debug(
@@ -432,23 +434,17 @@ class Table:
 
         added_rows = [other_by_key[k] for k in other_by_key if k not in self_by_key]
         removed_rows = [self_by_key[k] for k in self_by_key if k not in other_by_key]
-        changed = []
+        changed_cells: list[tuple[str, Any, dict[str, tuple[Any, Any]]]] = []
         for k in self_by_key:
             if k not in other_by_key:
                 continue
             columns = diff_row(self_by_key[k], other_by_key[k])
             if columns:
-                changed.append(
-                    RowChange(
-                        key=k,
-                        before=self_by_key[k],
-                        after=other_by_key[k],
-                        columns=columns,
-                    )
-                )
+                changed_cells.append((k, None, columns))
+        changed = changes_table(key, changed_cells)
 
         logger.debug(
-            "Table diff 完了: added=%d 行, removed=%d 行, changed=%d 行",
+            "Table diff 完了: added=%d 行, removed=%d 行, changed=%d セル",
             len(added_rows),
             len(removed_rows),
             len(changed),
@@ -537,14 +533,14 @@ class Table:
         )
         return HierarchyResult(details=details, subtotals=subtotals, unmatched=unmatched)
 
-    def changes(self, *, key: str, order_by: str | None = None) -> list[RowChange]:
+    def changes(self, *, key: str, order_by: str | None = None) -> Table:
         """``key`` の値ごとに行を分け、隣り合う行同士を比べる履歴の差分を取る。
 
         ``key`` の値（``_normalize`` 後）ごとに行を分け、``order_by`` が指定されていれば
         その列の値の**昇順（古い順）**に**安定ソート**してから、**隣り合う行どうし**
-        （1番目と2番目、2番目と3番目…）を比べる。値が変わった組だけを
-        ``RowChange(key=正規化後のキー, before=前の行, after=次の行, columns=変わった列)``
-        で返す。
+        （1番目と2番目、2番目と3番目…）を比べる。値が変わったセルだけを、
+        1 行 = 1 セルの ``Table`` で返す（列は ``key`` / ``order_by``（指定したとき。
+        変更後の行の値）/ ``列`` / ``変更前`` / ``変更後``。``key`` の値は正規化後の文字列）。
 
         比べる列から ``key`` と ``order_by`` の列を除く（変更時刻は毎回違うので、
         含めると全部が「変わった」になる）。
@@ -558,14 +554,14 @@ class Table:
             order_by: 並べ替えに使う列名。``None`` なら表の並び順のまま比べる。
 
         Returns:
-            値が変わった隣り合う行の組 (``RowChange``) のリスト。
+            値が変わったセルの ``Table``（``Table.diff()`` の ``changed`` と同じ形）。
 
         Raises:
             TableColumnNotFoundError: ``key`` / ``order_by`` の列が無いとき。
             TableError: ``order_by`` の列に空 (``None`` / ``""``) の行がある、
                 または値の型が混ざっていて比較できない (``TypeError``) とき。
         """
-        from comken.core.table.diff import RowChange, _normalize, diff_row
+        from comken.core.table.diff import _normalize, changes_table, diff_row
 
         logger.debug(
             "Table changes 開始: %d 行, key=%s, order_by=%s",
@@ -608,7 +604,7 @@ class Table:
                 rows[:] = sorted_rows
 
         exclude = {key, order_by} if order_by is not None else {key}
-        result: list[RowChange] = []
+        changed_cells: list[tuple[str, Any, dict[str, tuple[Any, Any]]]] = []
         for normalized_key, rows in rows_by_key.items():
             if len(rows) < 2:
                 continue
@@ -616,16 +612,11 @@ class Table:
                 columns = diff_row(before_row, after_row)
                 columns = {col: value for col, value in columns.items() if col not in exclude}
                 if columns:
-                    result.append(
-                        RowChange(
-                            key=normalized_key,
-                            before=dict(before_row),
-                            after=dict(after_row),
-                            columns=columns,
-                        )
-                    )
+                    order_value = after_row[order_by] if order_by is not None else None
+                    changed_cells.append((normalized_key, order_value, columns))
+        result = changes_table(key, changed_cells, order_by=order_by)
 
-        logger.debug("Table changes 完了: %d 件", len(result))
+        logger.debug("Table changes 完了: %d セル", len(result))
         return result
 
     def _iter_rows_for_update(self) -> Iterator[Row]:

@@ -1,8 +1,10 @@
 """comken/core/table/diff.py — 行・表の差分を取る部品。
 
-``diff_row``（行どうし）と、``Table.diff()`` / ``Table.changes()`` の結果である
-``RowChange`` / ``DiffResult`` を置く。``model.py`` との循環 import を避けるため、
-``Table`` の注釈は ``from __future__ import annotations`` + ``TYPE_CHECKING`` で参照する。
+``Table.diff()`` の結果である ``DiffResult`` と、1 行どうしを比べる ``diff_row``
+（``Table.diff()`` / ``Table.changes()`` の内部で使う）を置く。変更のあった値は
+``Table``（1 行 = 1 セルの変更）で返し、専用のクラスは増やさない。
+``model.py`` との循環 import を避けるため、``Table`` の注釈は
+``from __future__ import annotations`` + ``TYPE_CHECKING`` で参照する。
 """
 
 from __future__ import annotations
@@ -12,6 +14,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from comken.core.table.row import Row
+from comken.exceptions.tables import TableError
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +23,7 @@ if TYPE_CHECKING:
 
 
 def diff_row(before: Row, after: Row) -> dict[str, tuple[Any, Any]]:
-    """1行同士を比較し、値が異なる列だけを {列名: (変更前, 変更後)} で返す。
+    """1行同士を比較し、値が異なる列だけを {列名: (変更前, 変更後)} で返す（内部用）。
 
     CSV の str と Excel の数値は同一視する（"1000" と 1000 は差分にならない）。
     片方にしか存在しない列は、もう片方を空文字（``""``）に揃えて比較する。
@@ -43,37 +46,63 @@ def diff_row(before: Row, after: Row) -> dict[str, tuple[Any, Any]]:
 
 
 @dataclass
-class RowChange:
-    """``Table.diff()`` / ``Table.changes()`` が返す「変更のあった行」の情報。
-
-    Attributes:
-        key: キー列の正規化後の値（``_normalize`` を通した文字列）。
-        before: 変更前の行全体。
-        after: 変更後の行全体。
-        columns: 変わった列だけ {列名: (変更前, 変更後)}。
-    """
-
-    key: str
-    before: Row
-    after: Row
-    columns: dict[str, tuple[Any, Any]]
-
-
-@dataclass
 class DiffResult:
-    """``Table.diff()`` の結果。
+    """``Table.diff()`` の結果。3 つとも ``Table`` で、``filter`` / ``select`` / ``count`` などの
+    Table 標準の操作がそのまま使える。
 
-    なぜ ``added`` / ``removed`` が ``Table`` で ``changed`` が ``list[RowChange]``
-    なのか — ``changed`` の1件は「変更前・変更後・差分列」の3つを抱えており、
-    表の1行に収まらない（同じ列名で2つの値を並べると区別できない）ため
-    ``RowChange`` のリストのままで持つ。 一方 ``added`` / ``removed`` は表の行と
-    同じ形なので ``Table`` へ揃え、 ``filter`` / ``select`` / ``count`` などの
-    Table 標準の操作が直接使えるようにしてある。
+    ``changed`` は **1 行 = 1 セルの変更** の表。
+    列は ``キー列`` / ``列`` / ``変更前`` / ``変更後``。
+    1 つの行で 2 つの列が変わっていれば 2 行になる。「前」と「後」を 2 つ組（タプル）や
+    専用のクラスで持たず、列名で読めるようにしてある。
     """
 
     added: Table  # other にだけある行（other の列構成）
     removed: Table  # self にだけある行（self の列構成）
-    changed: list[RowChange]  # キーが一致して値が変わった行
+    changed: Table  # キーが一致して値が変わったセル（キー列 / 列 / 変更前 / 変更後）
+
+
+# ``DiffResult.changed`` / ``Table.changes()`` の表の、変更の中身を表す列名
+CHANGE_COLUMN = "列"
+BEFORE_COLUMN = "変更前"
+AFTER_COLUMN = "変更後"
+
+
+def changes_table(
+    key: str,
+    changes: list[tuple[str, Any, dict[str, tuple[Any, Any]]]],
+    *,
+    order_by: str | None = None,
+) -> Table:
+    """変更のあったセルを、1 行 = 1 セルの ``Table`` にする（``diff`` / ``changes`` の内部用）。
+
+    列は ``[key]``（``order_by`` を渡すと続けて ``[order_by]``）と、
+    ``列`` / ``変更前`` / ``変更後``。
+
+    Args:
+        key: キー列の名前。
+        changes: ``(キーの値, order_by の値, diff_row() の結果)`` のリスト。
+        order_by: 履歴の並べ替えに使った列の名前。渡すと、その列の値（変更後の行のもの）も入れる。
+    """
+    from comken.core.table.model import Table
+
+    columns = [key, *([order_by] if order_by is not None else []), CHANGE_COLUMN]
+    columns += [BEFORE_COLUMN, AFTER_COLUMN]
+    if len(columns) != len(set(columns)):
+        raise TableError(
+            f"キー列「{key}」"
+            + (f"・並べ替えの列「{order_by}」" if order_by else "")
+            + f"の名前が、差分の表の列名（{CHANGE_COLUMN} / {BEFORE_COLUMN} / {AFTER_COLUMN}）と"
+            "重なっています。\n対処: 列の名前を変えてから比べてください。"
+        )
+    rows = []
+    for key_value, order_value, cells in changes:
+        for column, (before, after) in cells.items():
+            row = {key: key_value}
+            if order_by is not None:
+                row[order_by] = order_value
+            row |= {CHANGE_COLUMN: column, BEFORE_COLUMN: before, AFTER_COLUMN: after}
+            rows.append(row)
+    return Table(columns, rows)
 
 
 def _normalize(value: object) -> str:
@@ -112,4 +141,4 @@ def index_for_diff(
     return index
 
 
-__all__ = ["diff_row", "RowChange", "DiffResult"]
+__all__ = ["DiffResult"]

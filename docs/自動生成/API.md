@@ -975,14 +975,13 @@ class DiffResult:
 
 #### 説明
 
-``Table.diff()`` の結果。
+``Table.diff()`` の結果。3 つとも ``Table`` で、``filter`` / ``select`` / ``count`` などの
+Table 標準の操作がそのまま使える。
 
-なぜ ``added`` / ``removed`` が ``Table`` で ``changed`` が ``list[RowChange]``
-なのか — ``changed`` の1件は「変更前・変更後・差分列」の3つを抱えており、
-表の1行に収まらない（同じ列名で2つの値を並べると区別できない）ため
-``RowChange`` のリストのままで持つ。 一方 ``added`` / ``removed`` は表の行と
-同じ形なので ``Table`` へ揃え、 ``filter`` / ``select`` / ``count`` などの
-Table 標準の操作が直接使えるようにしてある。
+``changed`` は **1 行 = 1 セルの変更** の表。
+列は ``キー列`` / ``列`` / ``変更前`` / ``変更後``。
+1 つの行で 2 つの列が変わっていれば 2 行になる。「前」と「後」を 2 つ組（タプル）や
+専用のクラスで持たず、列名で読めるようにしてある。
 
 ### `HierarchyResult`
 
@@ -1007,22 +1006,6 @@ Attributes:
 ### `Row`
 
 公開定数。
-
-### `RowChange`
-
-```text
-class RowChange:
-```
-
-#### 説明
-
-``Table.diff()`` / ``Table.changes()`` が返す「変更のあった行」の情報。
-
-Attributes:
-    key: キー列の正規化後の値（``_normalize`` を通した文字列）。
-    before: 変更前の行全体。
-    after: 変更後の行全体。
-    columns: 変わった列だけ {列名: (変更前, 変更後)}。
 
 ### `Table`
 
@@ -1244,8 +1227,10 @@ Args:
     key: 行を一意に識別するキー列名。
 
 Returns:
-    ``DiffResult``（``added`` / ``removed`` は ``Table``、``changed`` は
-    ``list[RowChange]``）。
+    ``DiffResult``（``added`` / ``removed`` / ``changed`` のどれも ``Table``）。
+    ``changed`` は 1 行 = 1 セルの変更で、列は ``key`` / ``列`` / ``変更前`` /
+    ``変更後``（1 つの行で 2 列が変わっていれば 2 行になる）。``key`` の値は
+    正規化後の文字列。
 
 #### `split_hierarchy`
 
@@ -1302,7 +1287,7 @@ Example:
 #### `changes`
 
 ```text
-def changes(self, *, key: str, order_by: str | None=None) -> list[RowChange]:
+def changes(self, *, key: str, order_by: str | None=None) -> Table:
 ```
 
 ##### 説明
@@ -1311,9 +1296,9 @@ def changes(self, *, key: str, order_by: str | None=None) -> list[RowChange]:
 
 ``key`` の値（``_normalize`` 後）ごとに行を分け、``order_by`` が指定されていれば
 その列の値の**昇順（古い順）**に**安定ソート**してから、**隣り合う行どうし**
-（1番目と2番目、2番目と3番目…）を比べる。値が変わった組だけを
-``RowChange(key=正規化後のキー, before=前の行, after=次の行, columns=変わった列)``
-で返す。
+（1番目と2番目、2番目と3番目…）を比べる。値が変わったセルだけを、
+1 行 = 1 セルの ``Table`` で返す（列は ``key`` / ``order_by``（指定したとき。
+変更後の行の値）/ ``列`` / ``変更前`` / ``変更後``。``key`` の値は正規化後の文字列）。
 
 比べる列から ``key`` と ``order_by`` の列を除く（変更時刻は毎回違うので、
 含めると全部が「変わった」になる）。
@@ -1327,7 +1312,7 @@ Args:
     order_by: 並べ替えに使う列名。``None`` なら表の並び順のまま比べる。
 
 Returns:
-    値が変わった隣り合う行の組 (``RowChange``) のリスト。
+    値が変わったセルの ``Table``（``Table.diff()`` の ``changed`` と同じ形）。
 
 Raises:
     TableColumnNotFoundError: ``key`` / ``order_by`` の列が無いとき。

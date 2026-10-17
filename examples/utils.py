@@ -5,7 +5,7 @@ import logging
 from comken.core.dates import now
 from comken.core.logger import setup_local_logging
 from comken.core.retry import retry
-from comken.core.table import DiffResult, RowChange, Table
+from comken.core.table import DiffResult, Row, Table
 from comken.core.text import normalize, remove_spaces
 from comken.core.wait import wait_until
 
@@ -30,9 +30,9 @@ def main() -> None:
         ],
     )
     result: DiffResult = before.diff(after, key="社員番号")
-    change: RowChange = result.changed[0]
+    change: Row = result.changed[0]  # 1 行 = 1 セルの変更（キー列 / 列 / 変更前 / 変更後）
     logger.info("DiffResult: 追加=%s 削除=%s", result.added, result.removed)
-    logger.info("RowChange: key=%s columns=%s", change.key, change.columns)
+    logger.info("変更: %s", change)
 
     attempts = 0
 

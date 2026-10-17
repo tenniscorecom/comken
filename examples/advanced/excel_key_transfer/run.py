@@ -131,8 +131,8 @@ def main() -> None:
     before_table = Table(destination.columns, before)
     after_table = Table(working.columns, after)
     result = before_table.diff(after_table, key=KEY)
-    for change in result.changed:
-        logger.info("変更 %s: %s", change.key, change.columns)
+    for cell in result.changed:
+        logger.info("変更 %s: %s %s → %s", cell[KEY], cell["列"], cell["変更前"], cell["変更後"])
 
     logger.info("転記結果: %s", INVOICE_XLSX)
 

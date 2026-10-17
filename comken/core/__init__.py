@@ -13,7 +13,7 @@ files などがここに入る。外に触る道具は toolbox に置く。
 
       from comken.core.dates import today
       from comken.core.files import project_dir
-      from comken.core.table import Table, DiffResult, RowChange
+      from comken.core.table import Table, DiffResult
       from comken.core.text import normalize
       from comken.core.timer import Timer
       from comken.core.wait import wait_until

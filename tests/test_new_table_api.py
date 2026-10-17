@@ -362,13 +362,26 @@ class TestTableChanges:
 
         result = history.changes(key="社員番号", order_by="変更時刻")
 
-        assert len(result) == 2
+        # 1 行 = 1 セルの変更。「変更時刻」は変更後の行のもの
         # 9/1 → 9/2: 役職だけ変わる（部署は営業のまま）
-        assert result[0].key == "1001"
-        assert result[0].columns == {"役職": ("一般", "主任")}
         # 9/2 → 9/3: 部署だけ変わる（役職は主任のまま）
-        assert result[1].key == "1001"
-        assert result[1].columns == {"部署": ("営業", "総務")}
+        assert result.columns == ["社員番号", "変更時刻", "列", "変更前", "変更後"]
+        assert result.to_rows() == [
+            {
+                "社員番号": "1001",
+                "変更時刻": "2026-09-02",
+                "列": "役職",
+                "変更前": "一般",
+                "変更後": "主任",
+            },
+            {
+                "社員番号": "1001",
+                "変更時刻": "2026-09-03",
+                "列": "部署",
+                "変更前": "営業",
+                "変更後": "総務",
+            },
+        ]
 
     def test_order_by_column_is_excluded_from_columns(self) -> None:
         """変更時刻の列は ``columns`` に入らない（含めると毎回「変わった」になる）。"""
@@ -402,14 +415,25 @@ class TestTableChanges:
 
         # order_by なし: 表の並び順（A→B→A）で比べる → 2 件
         result = history.changes(key="社員番号")
-        assert len(result) == 2
-        assert result[0].columns == {"変更時刻": ("2026-09-02", "2026-09-01"), "部署": ("A", "B")}
-        assert result[1].columns == {"変更時刻": ("2026-09-01", "2026-09-03"), "部署": ("B", "A")}
+        assert result.columns == ["社員番号", "列", "変更前", "変更後"]
+        assert [(r["列"], r["変更前"], r["変更後"]) for r in result] == [
+            ("変更時刻", "2026-09-02", "2026-09-01"),
+            ("部署", "A", "B"),
+            ("変更時刻", "2026-09-01", "2026-09-03"),
+            ("部署", "B", "A"),
+        ]
 
-        # order_by あり: 変更時刻の昇順（B→A→A）で比べる → 1 件だけ
+        # order_by あり: 変更時刻の昇順（B→A→A）で比べる → 1 セルだけ
         result_ordered = history.changes(key="社員番号", order_by="変更時刻")
-        assert len(result_ordered) == 1
-        assert result_ordered[0].columns == {"部署": ("B", "A")}
+        assert result_ordered.to_rows() == [
+            {
+                "社員番号": "1001",
+                "変更時刻": "2026-09-02",
+                "列": "部署",
+                "変更前": "B",
+                "変更後": "A",
+            }
+        ]
 
     def test_single_row_key_returns_empty(self) -> None:
         """行が1つしかないキーからは何も出ない。"""
@@ -464,9 +488,16 @@ class TestTableChanges:
 
         result = history.changes(key="社員番号", order_by="変更時刻")
 
-        assert len(result) == 1
-        assert result[0].key == "1001"  # 正規化後は文字列
-        assert result[0].columns == {"部署": ("営業", "総務")}
+        assert result.to_rows() == [
+            # キーの値は正規化後の文字列
+            {
+                "社員番号": "1001",
+                "変更時刻": "2026-09-02",
+                "列": "部署",
+                "変更前": "営業",
+                "変更後": "総務",
+            }
+        ]
 
     def test_missing_key_column_raises(self) -> None:
         """``key`` の列が無いと ``Table`` の既存と同じ例外（``TableColumnNotFoundError``）。"""

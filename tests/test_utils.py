@@ -733,9 +733,9 @@ class TestDiffRows:
 
         assert result.added == [{"社員番号": "003", "氏名": "鈴木"}]
         assert result.removed == [{"社員番号": "002", "氏名": "佐藤"}]
-        assert len(result.changed) == 1
-        assert result.changed[0].key == "001"
-        assert result.changed[0].columns == {"氏名": ("山田", "山田太郎")}
+        assert result.changed.to_rows() == [
+            {"社員番号": "001", "列": "氏名", "変更前": "山田", "変更後": "山田太郎"}
+        ]
 
     def test_no_diff_returns_empty_result(self):
         """同じデータなら added / removed / changed すべて空になることを確認する。"""
@@ -765,7 +765,9 @@ class TestDiffRows:
 
         assert result.added == []
         assert result.removed == []
-        assert result.changed[0].columns == {"金額": ("1000", 2000)}
+        assert result.changed.to_rows() == [
+            {"注文番号": "1001", "列": "金額", "変更前": "1000", "変更後": 2000}
+        ]
 
     def test_missing_key_column_raises(self):
         """key で指定した列が存在しないと ColumnNotFoundError になることを確認する。"""

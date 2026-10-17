@@ -85,17 +85,22 @@ with CSV("今日.csv") as csv_file:
 result = yesterday.diff(today, key="社員番号")
 result.added    # → today にだけある行（Table）
 result.removed  # → yesterday にだけある行（Table）
-result.changed  # → 値が変わった行のリスト（RowChange）
+result.changed  # → 値が変わったセル（Table。1 行 = 1 セルの変更）
 
-for change in result.changed:
-    print(change.key)      # → "001"（キー列の正規化後の値）
-    print(change.columns)  # → {"氏名": ("山田", "山田太郎")}（変わった列だけ）
-    print(change.before)   # → 変更前の行全体
-    print(change.after)    # → 変更後の行全体
+# result.changed の中身（1 つの行で 2 列変われば 2 行になる）
+# 社員番号 | 列   | 変更前 | 変更後
+# 001      | 氏名 | 山田   | 山田太郎
+# 001      | 部署 | 営業   | 企画
+
+for cell in result.changed:
+    print(cell["社員番号"], cell["列"], cell["変更前"], "→", cell["変更後"])
 ```
 
-`added` / `removed` は `Table` なので `filter` / `select` / `count` などの
-Table 標準の操作が直接使える。
+3 つとも `Table` なので `filter` / `select` / `count` や CSV・Excel への書き出しなど、
+Table 標準の操作が直接使える。`result.changed` の `社員番号` の値は、正規化後の文字列
+（`"001"`）。変更前・変更後の行まるごとが必要なら、元の表を `yesterday.index("社員番号")`
+で引く。専用のクラスや `(前, 後)` のタプルは返さない（前と後は列名で読める）。
+キー列の名前が `列` / `変更前` / `変更後` と重なっていると `TableError`。
 
 #### 同じ表の中の履歴（`Table.changes(key=..., order_by=...)`）
 
@@ -117,10 +122,11 @@ history = Table(
     ],
 )
 
-for change in history.changes(key="社員番号", order_by="変更時刻"):
-    print(change.key, change.columns)
-# 1001 {'役職': ('一般', '主任')}
-# 1001 {'部署': ('営業', '総務')}
+changed = history.changes(key="社員番号", order_by="変更時刻")
+# Table.diff() の changed と同じ形（1 行 = 1 セルの変更）。変更時刻は変更後の行のもの
+# 社員番号 | 変更時刻   | 列   | 変更前 | 変更後
+# 1001     | 2026-09-02 | 役職 | 一般   | 主任
+# 1001     | 2026-09-03 | 部署 | 営業   | 総務
 ```
 
 `order_by` の列に空（`None` / `""`）の行がある、または値の型が混ざって
