@@ -23,6 +23,7 @@ import sys
 from pathlib import Path
 
 import comken
+from comken.core.files import project_dir
 from comken.exceptions import ComkenError
 from comken.tools.errors_doc import ERRORS_DOC_PATH, update_errors_doc
 from comken.tools.new_project import create as create_project
@@ -229,15 +230,13 @@ def _run_errors(args: argparse.Namespace, remaining: list[str]) -> int:
     """``python -m comken errors`` の本体。今いるフォルダの ``docs/ERRORS.md`` を作り直す。
 
     プロジェクトの ``src`` は読まない（どのフォルダから打たれたか分からないため）。
-    場所は ``project_dir()`` ではなくカレント基準にする。``python -m comken`` では
-    ``sys.argv[0]`` が comken の ``__main__.py`` になり、comken の中を指してしまうため。
     プロジェクト固有のエラーまで載せるのは、ひな形の ``update_errors.py`` の役目。
     """
     # 打ち間違えた引数を黙って捨てると、意図しない場所を書き換えたように見えるので止める
     if remaining:
         print(f"解釈できない引数があります: {' '.join(remaining)}", file=sys.stderr)
         return 1
-    root = Path.cwd()
+    root = project_dir()  # python -m のときは、打ったフォルダ（カレント）
     changed = update_errors_doc(root)
     print(f"{'更新しました' if changed else '変更はありません'}: {root / ERRORS_DOC_PATH}")
     return 0

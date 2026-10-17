@@ -35,8 +35,11 @@ def project_dir() -> Path:
 
     ``sys.argv[0]`` が想定外の値になるケースのフォールバック:
     - ``sys.argv[0] == ""`` : 対話実行（REPL）。``Path.cwd()`` を返す
-    - ``sys.argv[0]`` が ``-m`` で起動されたパッケージ名を含む形
-      （例: ``.../python -m comken`` など）: ``Path.cwd()`` を返す
+    - ``python -m パッケージ名`` で起動した: ``Path.cwd()`` を返す。このとき
+      ``sys.argv[0]`` には、そのパッケージの ``__main__.py`` の絶対パスが入る
+      （``-m`` のときの ``__main__.__spec__`` が ``None`` でないことで見分ける）。
+      見分けないと、パッケージ自身のフォルダ（comken なら共有サーバー上）を返し、
+      ``config.ini`` や ``logs/`` をそこに探しに行ってしまう
     - ``sys.argv[0]`` が解決できない: ``Path.cwd()`` を返す
 
     Returns:
@@ -50,8 +53,11 @@ def project_dir() -> Path:
         return Path.cwd()
     script_path = Path(argv0)
     if not script_path.is_absolute():
-        # `python -m comken ...` 形式で起動すると sys.argv[0] がモジュール名
-        # になる（例: "comken"）。絶対パスにできないのでカレントにフォールバック
+        # 相対パスのまま渡されたときは、どこを基準にするか決められないのでカレントにする
+        return Path.cwd()
+    if script_path.name == "__main__.py" and getattr(sys.modules.get("__main__"), "__spec__", None):
+        # `python -m パッケージ名` で起動した。argv[0] はそのパッケージの __main__.py の
+        # 絶対パスなので、そのまま親を返すとパッケージの中を指してしまう
         return Path.cwd()
     try:
         return script_path.resolve().parent

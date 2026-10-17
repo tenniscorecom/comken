@@ -7,6 +7,7 @@ utils モジュールのテスト。
 
 import datetime
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -37,6 +38,8 @@ from comken.exceptions import BrowserError, ColumnNotFoundError, FileSuffixMissi
 from comken.exceptions.tables import TableDuplicateKeyError
 from comken.toolbox.browser.download import DownloadDir
 from comken.toolbox.windows import Paths
+
+_ROOT = Path(__file__).resolve().parent.parent
 
 
 class TestClock:
@@ -1023,6 +1026,61 @@ class TestProjectDir:
         monkeypatch.chdir(other)
 
         assert project_dir() == tmp_path.resolve()
+
+    def test_python_m_returns_the_current_directory_not_the_package_directory(self, tmp_path):
+        """``python -m パッケージ名`` で動かしたら、パッケージのフォルダではなくカレントを返す。
+
+        このとき ``sys.argv[0]`` は、パッケージの ``__main__.py`` の絶対パスになる。
+        """
+        package = tmp_path / "pkgroot" / "mytool"
+        package.mkdir(parents=True)
+        (package / "__init__.py").write_text("", encoding="utf-8")
+        (package / "__main__.py").write_text(
+            "from comken.core.files.ops import project_dir\nprint(project_dir())\n",
+            encoding="utf-8",
+        )
+        work = tmp_path / "work"
+        work.mkdir()
+        env = {
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join([str(tmp_path / "pkgroot"), str(_ROOT)]),
+            "PYTHONIOENCODING": "utf-8",
+        }
+
+        result = subprocess.run(
+            [sys.executable, "-m", "mytool"],
+            cwd=work,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env=env,
+            check=False,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert Path(result.stdout.strip()).resolve() == work.resolve()
+
+    def test_script_named_dunder_main_run_directly_returns_its_folder(self, tmp_path):
+        """``-m`` でなく ``python フォルダ/__main__.py`` で直接動かしたら、そのフォルダを返す。"""
+        script = tmp_path / "__main__.py"
+        script.write_text(
+            "from comken.core.files.ops import project_dir\nprint(project_dir())\n",
+            encoding="utf-8",
+        )
+        env = {**os.environ, "PYTHONPATH": str(_ROOT), "PYTHONIOENCODING": "utf-8"}
+
+        result = subprocess.run(
+            [sys.executable, str(script)],
+            cwd=tmp_path.parent,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env=env,
+            check=False,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert Path(result.stdout.strip()).resolve() == tmp_path.resolve()
 
     def test_returns_absolute_path_for_relative_argv(self, tmp_path, monkeypatch):
         """argv が相対パスでも絶対パスを返す（そのまま連結して使えるように）。"""
