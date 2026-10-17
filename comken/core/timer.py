@@ -16,12 +16,9 @@ import logging
 import time
 from collections.abc import Callable
 from types import TracebackType
-from typing import Any, ParamSpec, Self, TypeVar
+from typing import Any, Self
 
 logger = logging.getLogger(__name__)
-
-_P = ParamSpec("_P")
-_R = TypeVar("_R")
 
 # ログに出す文言の既定値。次のプレースホルダを使える。
 #
@@ -150,11 +147,11 @@ class Timer:
             ),
         )
 
-    def __call__(self, func: Callable[_P, _R]) -> Callable[_P, _R]:
+    def __call__[**P, R](self, func: Callable[P, R]) -> Callable[P, R]:
         """デコレータとして使う（@Timer("処理名")）。"""
 
         @functools.wraps(func)
-        def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             """呼び出しごとに独立したTimerで処理時間を測る。"""
             # 呼び出しごとに独立して計測する（同じ Timer を使い回さない）。
             # message / time_format も一緒に引き継ぐ（忘れると差し替えが効かない）

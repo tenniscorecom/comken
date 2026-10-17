@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import Any
 
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.remote.webelement import WebElement
@@ -22,9 +22,6 @@ from comken.toolbox.browser.locator import Locator
 from comken.toolbox.browser.management import BrowserSession
 
 logger = logging.getLogger(__name__)
-
-# to() が「渡したクラスをそのまま返す」ことを型で示す
-P = TypeVar("P", bound="_PageBase")
 
 
 class _PageBase:
@@ -51,7 +48,7 @@ class _PageBase:
             self._wait_seconds,
         )
 
-    def to(self, page_class: type[P]) -> P:
+    def to[P: _PageBase](self, page_class: type[P]) -> P:
         """遷移先の画面クラスを作る（同じブラウザを引き継ぐ）。
 
         画面が変わるメソッドの最後で使う。

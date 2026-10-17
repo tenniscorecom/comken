@@ -21,7 +21,7 @@ import math
 import shutil
 import types
 from pathlib import Path
-from typing import NoReturn
+from typing import Any
 
 from comken.core.files.ops import project_dir
 from comken.core.text import is_true_word
@@ -273,7 +273,7 @@ class Config:
                     empty_keys: list[str] = []
                     for key in options:
                         value = cfg.get(original_section, key)
-                        if value is None or value.strip() == "":
+                        if value.strip() == "":
                             empty_keys.append(key)
                         else:
                             pairs.append((key.strip(), value.strip()))
@@ -314,7 +314,10 @@ class Config:
 
         update_stub(cfg, path, section_map)
 
-    def __getattr__(self, name: str) -> NoReturn:
+    def __getattr__(self, name: str) -> Any:
+        # セクション・キーは config.ini から実行時に作る属性なので、型の上では Any にする。
+        # ``NoReturn`` だと、型チェッカーが動的な属性を読んだ行より後を「到達しない」と扱い、
+        # 型チェックしなくなる。
         # 通常の属性（設定済みセクション）は __dict__ にあり、ここには来ない。
         # 未定義セクションのアクセスだけがここに来るので、分かりやすいエラーにする。
         if name.startswith("_"):  # copy/pickle 等の内部属性探索は通常の AttributeError に
@@ -382,7 +385,7 @@ class _SectionNamespace(types.SimpleNamespace):
         object.__setattr__(self, "_keys", keys)
         object.__setattr__(self, "_path", path)
 
-    def __getattr__(self, name: str) -> NoReturn:
+    def __getattr__(self, name: str) -> Any:
         # dunder / private は通常の AttributeError にする。pickle・copy・hasattr・
         # len() 等は dunder を期待しているので、こちらを KeyError 系に潰すと
         # 別のところで壊れる

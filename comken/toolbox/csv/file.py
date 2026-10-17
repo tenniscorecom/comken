@@ -142,9 +142,7 @@ def _unencodable_error(
     path: Path, encoding: str, exc: UnicodeEncodeError
 ) -> InvalidTableInputError:
     """保った文字コードで表せない文字があるときのエラー（``?`` への暗黙の置換はしない）。"""
-    offending = ""
-    if exc.object is not None and exc.start is not None and exc.end is not None:
-        offending = repr(exc.object[exc.start : exc.end])
+    offending = repr(exc.object[exc.start : exc.end])
     return InvalidTableInputError(
         f"CSV を {encoding} で書き込めません（保った文字コードで表せない文字があります）: "
         f"{path}\n"

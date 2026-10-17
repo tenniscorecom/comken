@@ -5,12 +5,8 @@
 """
 
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from comken.exceptions.base import ComkenError
-
-if TYPE_CHECKING:
-    pass
 
 
 class DownloaderError(ComkenError):

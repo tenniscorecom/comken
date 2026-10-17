@@ -1242,7 +1242,7 @@ Returns:
 ### `retry`
 
 ```text
-def retry(times: int=3, wait: float=1.0, on: tuple[type[Exception], ...]=(Exception,)) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
+def retry[**P, R](times: int=3, wait: float=1.0, on: tuple[type[Exception], ...]=(Exception,)) -> Callable[[Callable[P, R]], Callable[P, R]]:
 ```
 
 #### 説明
@@ -4231,7 +4231,7 @@ Raises:
 #### `to`
 
 ```text
-def to(self, page_class: type[P]) -> P:
+def to[P: Page](self, page_class: type[P]) -> P:
 ```
 
 ##### 説明
@@ -4350,7 +4350,7 @@ Args:
 #### `to`
 
 ```text
-def to(self, page_class: type[P]) -> P:
+def to[P: _PageBase](self, page_class: type[P]) -> P:
 ```
 
 ##### 説明
@@ -5244,7 +5244,7 @@ Args:
 #### `to`
 
 ```text
-def to(self, page_class: type[P]) -> P:
+def to[P: _PageBase](self, page_class: type[P]) -> P:
 ```
 
 ##### 説明
@@ -5762,7 +5762,7 @@ Raises:
 #### `to`
 
 ```text
-def to(self, page_class: type[P]) -> P:
+def to[P: Page](self, page_class: type[P]) -> P:
 ```
 
 ##### 説明
@@ -5854,7 +5854,7 @@ Raises:
 #### `to`
 
 ```text
-def to(self, page_class: type[P]) -> P:
+def to[P: Page](self, page_class: type[P]) -> P:
 ```
 
 ##### 説明
@@ -6138,7 +6138,7 @@ Raises:
 #### `to`
 
 ```text
-def to(self, page_class: type[P]) -> P:
+def to[P: Page](self, page_class: type[P]) -> P:
 ```
 
 ##### 説明
@@ -6230,7 +6230,7 @@ Raises:
 #### `to`
 
 ```text
-def to(self, page_class: type[P]) -> P:
+def to[P: Page](self, page_class: type[P]) -> P:
 ```
 
 ##### 説明
@@ -6720,7 +6720,7 @@ Raises:
 #### `to`
 
 ```text
-def to(self, page_class: type[P]) -> P:
+def to[P: Page](self, page_class: type[P]) -> P:
 ```
 
 ##### 説明
@@ -6959,7 +6959,7 @@ Raises:
 #### `to`
 
 ```text
-def to(self, page_class: type[P]) -> P:
+def to[P: Page](self, page_class: type[P]) -> P:
 ```
 
 ##### 説明

@@ -40,7 +40,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from types import TracebackType
-from typing import TYPE_CHECKING, ClassVar, Self, TypeVar
+from typing import TYPE_CHECKING, ClassVar, Self
 
 from comken.exceptions import BrowserError, SiteOwnerRequiredError
 from comken.toolbox.browser.download import DownloadDir
@@ -49,10 +49,6 @@ from comken.toolbox.browser.options import BrowserOptions
 if TYPE_CHECKING:
     from comken.toolbox.browser.management import BrowserSession
     from comken.toolbox.browser.page import Page
-
-# page() が「渡したクラスをそのまま返す」ことを型で示す。
-# これがないと補完が Page 止まりになり、画面ごとのメソッドが出ない
-P = TypeVar("P", bound="Page")
 
 # comken 配下のクラスは OWNER 検査の対象外（管理者が既に昇格を判断した印）。
 # 検査する側の classmethod とこの定数を同じ場所に置いて、意味のずれを防ぐ
@@ -345,7 +341,7 @@ class SiteBase:
             raise _site_not_started_error(self)
         return self.session.download_dir
 
-    def to(self, page_class: type[P]) -> P:
+    def to[P: Page](self, page_class: type[P]) -> P:
         """このサイトの画面へ移る。
 
         画面クラスは動かすのにブラウザ（`BrowserSession`）を要るが、

@@ -8,17 +8,13 @@ import functools
 import logging
 import time
 from collections.abc import Callable
-from typing import ParamSpec, TypeVar
 
 logger = logging.getLogger(__name__)
 
-_P = ParamSpec("_P")
-_R = TypeVar("_R")
 
-
-def retry(
+def retry[**P, R](
     times: int = 3, wait: float = 1.0, on: tuple[type[Exception], ...] = (Exception,)
-) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
+) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """失敗したら wait 秒空けて実行し直すデコレータ。
 
     Args:
@@ -52,11 +48,11 @@ def retry(
     total = times
     retry_targets: tuple[type[Exception], ...] = tuple(on)
 
-    def decorator(func: Callable[_P, _R]) -> Callable[_P, _R]:
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
         """対象関数へ再実行処理を適用する。"""
 
         @functools.wraps(func)
-        def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             """指定回数まで対象関数を再実行する。"""
             for attempt in range(1, total + 1):
                 try:

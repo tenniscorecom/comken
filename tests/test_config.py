@@ -1135,11 +1135,11 @@ class TestGenerateStub:
         text = generate_stub(ini, tmp_path / "config.pyi").read_text(encoding="utf-8")
         _assert_stub_self_contained(text)
 
-    def test_class_stub_omits_unused_no_return_import(self, ini):
-        """class スタブ（src/config.pyi）は ``NoReturn`` を使わないので import も出さない。
+    def test_class_stub_omits_unused_any_import(self, ini):
+        """class スタブ（src/config.pyi）は ``Any`` を使わないので import も出さない。
 
-        ``NoReturn`` を使うのは module スタブの ``__getattr__ -> NoReturn`` だけなので、
-        class スタブ側に ``from typing import NoReturn`` が残ると、使われない
+        ``Any`` を使うのは module スタブの ``__getattr__ -> Any`` だけなので、
+        class スタブ側に ``from typing import Any`` が残ると、使われない
         import が生成物に残る。
         """
         import configparser
@@ -1151,14 +1151,12 @@ class TestGenerateStub:
         cfg.read(ini, encoding="utf-8")
         text = _build_stub_content(cfg, _build_section_map(cfg), ini.parent)
 
-        assert "from typing import NoReturn" not in text
-        # ``NoReturn`` を型注釈に使う箇所も無い（実行時 Config は未知キーで
-        # ``AttributeError`` を出すだけで ``NoReturn`` 型を返すわけではない）
-        assert "NoReturn" not in text
+        assert "from typing import Any" not in text
+        assert "-> Any" not in text
 
-    def test_module_stub_keeps_no_return_import_for_getattr(self, ini):
+    def test_module_stub_keeps_any_import_for_getattr(self, ini):
         """module スタブ（typings/comken/core/config.pyi）は ``__getattr__`` の
-        戻り値 ``NoReturn`` のために ``from typing import NoReturn`` を残す。
+        戻り値 ``Any`` のために ``from typing import Any`` を残す。
         """
         import configparser
 
@@ -1169,9 +1167,9 @@ class TestGenerateStub:
         cfg.read(ini, encoding="utf-8")
         text = _build_module_stub_content(cfg, _build_section_map(cfg), ini.parent)
 
-        assert "from typing import NoReturn\n" in text
+        assert "from typing import Any\n" in text
         assert "def __getattr__" in text
-        assert "-> NoReturn" in text
+        assert "-> Any" in text
 
 
 class TestAutoStub:
@@ -1628,10 +1626,7 @@ class TestMappingDictIsDictStrStr:
             "[TRANSFER_MAPPING]\nお名前 = 氏名\nご住所 = 住所\n",
             encoding="utf-8",
         )
-        # ``Config.__getattr__`` で動的に返される ``*_MAPPING`` セクションは
-        # pyright から ``NoReturn`` に見える。実行時は ``dict[str, str]`` なので
-        # ここで ``cast`` して反復可能であることを型検査側にも伝える。
-        mapping = cast("dict[str, str]", Config(ini).TRANSFER_MAPPING)
+        mapping = Config(ini).TRANSFER_MAPPING
 
         assert all(isinstance(v, str) for v in mapping.values())
         assert None not in mapping.values()

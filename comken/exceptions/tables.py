@@ -1,10 +1,8 @@
 """comken/exceptions/tables.py — 表データ・列・型変換に関する例外。
 
-WarnCoerce ヘルパーとテーブル／列の例外をまとめる。"""
+_coerce_to_str ヘルパーとテーブル／列の例外をまとめる。"""
 
 import warnings
-from collections.abc import Callable
-from typing import Any, cast
 
 from comken.exceptions.base import ComkenError
 
@@ -136,33 +134,27 @@ class _Warnings:
     COERCION = "{param} に {type_name}（{value!r}）が渡されました。{expected} に変換します。"
 
 
-def _callable_ctor[T](t: type[T]) -> Callable[[Any], T]:
-    """``type[T]`` を ``Callable[[Any], T]`` として読み替える内部ヘルパー。
+def _coerce_to_str(value: object, param: str, stacklevel: int = 3) -> str:
+    """``object`` を ``str`` に揃える。 ``None`` は ``TypeError``、 ``str`` 以外は警告して変換する。
 
-    pyright は ``type[T]`` だけでは ``T`` のコンストラクタ引数を推論できないため、
-    シグネチャ付きの callable として教えて呼び出し可能にする。実行時は ``t(value)`` と
-    等価（``type`` のインスタンスは呼び出せる）。
+    Args:
+        value: 渡された値。 ``None`` のときは ``TypeError``。
+        param: エラーメッセージ・呼び出しに添える引数名（例: ``"sheet_name"``）。
+        stacklevel: ``warnings.warn`` に渡す stacklevel。呼び出し元の
+                    フレームで警告させるため ``3`` を既定にする。
     """
-    return cast(Callable[[Any], T], t)
-
-
-def _warn_coerce[T](value: Any, expected: type[T], param: str, stacklevel: int = 3) -> T:
-    """型が違う場合に警告して変換する。"""
     if value is None:
-        raise TypeError(f"{param} に None が渡されました。{expected.__name__} を渡してください。")
-    if not isinstance(value, expected):
+        raise TypeError(f"{param} に None が渡されました。str を渡してください。")
+    if not isinstance(value, str):
         warnings.warn(
             _Warnings.COERCION.format(
                 param=param,
                 type_name=type(value).__name__,
                 value=value,
-                expected=expected.__name__,
+                expected="str",
             ),
             UserWarning,
             stacklevel=stacklevel,
         )
-    # expected は呼び出し側で ``str`` / ``int`` などの具体型を渡されるため、
-    # 実行時は ``expected(value)`` で安全に変換できる。pyright は ``type[T]`` だけでは
-    # ``T`` のコンストラクタ引数シグネチャを推論できないため、callable 型へ局所キャストして
-    # シグネチャを教える（型レベルだけで Any には逃げない）
-    return cast(T, _callable_ctor(expected)(value))
+        return str(value)
+    return value
