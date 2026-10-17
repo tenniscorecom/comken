@@ -30,7 +30,7 @@ class TestNumToCol:
             assert col_to_num(num_to_col(number)) == number
 
     def test_matches_openpyxl(self) -> None:
-        """openpyxl の ``get_column_letter`` と同じ結果になる（comken がそこから置き換えたため）。"""
+        """openpyxl の ``get_column_letter`` と同じ結果になる（そこから置き換えたため）。"""
         from openpyxl.utils import get_column_letter
 
         for number in range(1, 18279):
