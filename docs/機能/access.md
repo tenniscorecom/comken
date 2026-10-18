@@ -33,4 +33,4 @@ with AccessDatabase(r"C:\作業\顧客.accdb") as db:
 ## 関連
 
 - [README](../../README.md) — ライブラリ全体の概要と環境構築
-- [公開 API](../自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外
+- 公開 API — 型ヒント付き署名・引数・戻り値・例外（`python tools\export_for_chat.py` で生成。git では管理しない）

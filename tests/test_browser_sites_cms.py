@@ -35,7 +35,7 @@ class TestSITESAutoRegistration:
 
     def test_cms_reexported_from_site_module_matches(self):
         """``sites.cms.__init__`` の ``CMS`` と ``sites.cms.site`` の ``CMS`` が一致する
-        （雛形の見本 ``ouju`` / ``ams`` と同じ公開方法）"""
+        （雛形の見本 ``ams`` と同じ公開方法）"""
         assert CMS is CMSFromSite
 
     def test_cms_options_class_is_exported(self):

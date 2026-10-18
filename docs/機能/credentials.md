@@ -22,7 +22,7 @@ Windows 標準の **DPAPI** で暗号化して保管し、コードからは（�
 プログラムが実行中に受け取った値（Salesforce のリフレッシュトークンなど）を保存するのは
 コマンドではなく、`Credentials` の仕事で、人の操作は要らない。既に読み込み済みの
 `Credentials` インスタンスがあれば `cred.save()`（[使う側](#使う側)参照）、まだ
-インスタンスを持っていない場合だけ [`save_credential()` / `save_credentials()`](../自動生成/API.md)
+インスタンスを持っていない場合だけ `save_credential()` / `save_credentials()`
 を直接使う。
 
 #### gui — 画面から登録する
@@ -136,4 +136,4 @@ DPAPI は **Windows アカウント × PC** に紐付く。復号できない場
 ## 関連
 
 - [README](../../README.md) — ライブラリ全体の概要と環境構築
-- [公開 API](../自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外
+- 公開 API — 型ヒント付き署名・引数・戻り値・例外（`python tools\export_for_chat.py` で生成。git では管理しない）

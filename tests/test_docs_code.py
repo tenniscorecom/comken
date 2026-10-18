@@ -11,6 +11,7 @@ import re
 import subprocess
 from pathlib import Path
 
+import export_for_chat
 import pytest
 
 from comken.tools import errors_doc
@@ -319,7 +320,7 @@ def test_exception_docstring_tree_matches_public_api():
 
 
 def test_generated_api_covers_all_public_api():
-    api = (_ROOT / "docs" / "自動生成" / "API.md").read_text(encoding="utf-8")
+    api = export_for_chat._api_text()
     init_files = [
         _ROOT / "comken" / "__init__.py",
         *(_ROOT / "comken").glob("*/__init__.py"),

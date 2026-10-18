@@ -39,7 +39,7 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 | 何が用意されているか探す | このREADMEの「[モジュール一覧](#モジュール一覧)」 |
 | モジュールの使い方を知る | [CSV](docs/機能/csv.md)・[Excel](docs/機能/excel.md)・[Access](docs/機能/access.md)・[Outlook](docs/機能/outlook.md)・[Windows](docs/機能/windows.md)・[ブラウザ](docs/機能/browser.md)・[Salesforce](docs/機能/salesforce.md)・[core の部品](docs/機能/core.md)・[認証情報](docs/機能/credentials.md)・[日付・営業日・年度](docs/機能/dates.md)・[Salesforceレポートダウンローダー](docs/機能/salesforce-downloader.md) |
 | **初めて外部システムにつなぐ** | ID とパスワードの[登録](docs/機能/credentials.md#登録初回だけ) → [Salesforce につないで確かめる](docs/機能/salesforce.md#つないで確かめるコマンド) |
-| 引数・戻り値・例外を正確に知る | [公開 API](docs/自動生成/API.md)（**自動生成**） |
+| 引数・戻り値・例外を正確に知る | 公開 API（`python tools\export_for_chat.py` で `docs/自動生成/API.md` を生成。git 管理外） |
 | エラーが出た | [エラー対応ガイド](docs/ERRORS.md)（エラー表は **自動生成**） |
 | 動くコードを見る | [examples](examples/README.md) |
 | なぜこの設計なのか知る | [設計判断の歴史](docs/HISTORY.md) |
@@ -57,7 +57,7 @@ with Excel(r"C:\作業\report.xlsx") as excel:
   `comken` 直下にあるものは `from comken import X`。それ以外は
   `from comken.core.dates import today` / `from comken.core.table import Table` /
   `from comken.core.timer import Timer` のように書く。
-  公開している名前の一覧は [`docs/自動生成/API.md`](docs/自動生成/API.md) にある。
+  公開している名前の一覧は `python tools\export_for_chat.py` が作る `docs/自動生成/API.md` にある。
 - **表データは `CSV` / `Excel` と `Table` を使い、ファイル形式に依存しない処理にする**
   （どの機能群に依存しているかが import 行で分かる）
 - **ファイル・ブラウザ・COM は `with` で開く。** 途中で失敗しても閉じられる

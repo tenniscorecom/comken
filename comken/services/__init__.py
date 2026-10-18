@@ -8,7 +8,6 @@
 使う人が1人か複数かは問わない（利用者の数は services に置く条件ではない）。
 
     services/salesforce_downloader/   Salesforce レポートの集約取得と履歴管理
-    services/csv_column_reducer.py    応需CSVの新ロール→旧ロール列削減（業務固有の列リストを持つ）
 
 判別の基準:
 

@@ -165,7 +165,7 @@ src/
 
 `python -m comken init` が作る雛形には `src/sites/` は**含まれていない**。ブラウザ操作を使う
 プロジェクトでは、この節の形に合わせて `src/sites/<サイト名>/` を自分で追加する
-（書き方の見本はライブラリ側の `comken/toolbox/browser/sites/ouju/` にある）。
+（書き方の見本はライブラリ側の `comken/toolbox/browser/sites/cms/` にある）。
 サイトを増やすには、`src/sites/<サイト名>/` を隣にもう1つ作るだけ。
 
 **ライブラリ側の `SITES` は自動登録される** — `comken/core/discovery.py` の
@@ -469,14 +469,14 @@ def ensure_login(self, user_id: str, password: str) -> "HomePage":
 パスワード期限切れの変更画面（`ChangePasswordPage`）・単純な認証情報間違い
 （`LoginFailedError`）・非同期でボタンや表示が遅れて出るサイトへの対処は、
 雛形（`comken/toolbox/browser/sites/ams/pages/login_page.py`・
-`change_password_page.py`、`ouju/pages/login_page.py`）に実装済み。
+`change_password_page.py`）に実装済み。
 実装の詳細は `LoginPage.login()` / `ChangePasswordPage.submit_new_password()`
 を直接読む。DPAPI への反映まで含めた使い方は
 [認証情報のパスワードの変更](credentials.md#パスワードの変更) を参照。
 
 `click_if_present()` / `raise_if_shown()` / `wait_for_result()` は
 `comken.toolbox.browser.Page`（`SitePage` も継承先）が持つ汎用メソッドで、
-`ams`・`ouju` に限らずどのサイトの画面クラスでも使える。ログイン以外の
+`ams` に限らずどのサイトの画面クラスでも使える。ログイン以外の
 フォーム送信（例: 検索条件の送信でエラーが出る画面）でも同じ形になりやすい。
 
 ---
@@ -824,8 +824,8 @@ class LoginPage(SitePage):
 ```
 
 **メソッドの探し方**: 正確な名前・シグネチャは
-[自動生成 API.md の `Page`](../自動生成/API.md#page) を参照する
-（`python tools/export_for_chat.py` で生成されるため、実装と食い違わない）。
+`python tools/export_for_chat.py` が作る API.md の `Page` を参照する
+（実装から生成されるため、食い違わない）。
 ここでは用途別の見取り図だけ示す。
 
 | したいこと | 系統 |
@@ -857,18 +857,18 @@ class LoginPage(SitePage):
 
 ### サンプル実装
 
-`comken/toolbox/browser/sites/ouju/` にサイト実装の見本がある
+`comken/toolbox/browser/sites/cms/` にサイト実装の見本がある
 （実行スクリプトの例は examples/README.md 参照）。
 
 **上の「1サイト＝1フォルダ」で書いてある**ので、形の見本としてそのまま真似できる。
 
 ```
-comken/toolbox/browser/sites/ouju/
+comken/toolbox/browser/sites/cms/
 ├── site.py                 # サイトクラス＋このサイトの BrowserOptions
 └── pages/
     ├── app_page.py         # このサイトの画面に共通
     ├── login_page.py       # ログイン画面
-    └── secure_page.py      # ログイン後の画面
+    └── top_page.py         # ログイン後の画面
 ```
 
 プロジェクト側でサイトを増やすときは `sites/<サイト名>/` をもう1つ作るだけで、
@@ -880,6 +880,6 @@ comken/toolbox/browser/sites/ouju/
 
 ## 関連
 
-- [公開 API](../自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外
+- 公開 API — 型ヒント付き署名・引数・戻り値・例外（`python tools\export_for_chat.py` で生成。git では管理しない）
 - [エラー対応ガイド](../ERRORS.md#ブラウザedge-自動操作のエラー) — エラー名から対処を引く
-- `comken/toolbox/browser/sites/ouju/` — サイト実装の見本
+- `comken/toolbox/browser/sites/cms/` — サイト実装の見本

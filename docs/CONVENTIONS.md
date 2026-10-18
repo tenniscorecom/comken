@@ -601,6 +601,6 @@ raise ExcelError(f"シート「{name}」が見つかりません。存在する�
 
 - [共通規約](CONVENTIONS_COMMON.md) / [Python 規約](CONVENTIONS_PYTHON.md) / [VBA 規約](CONVENTIONS_VBA.md)
 - [README](../README.md) — comken 全体の使い方
-- [公開 API](自動生成/API.md) — 型ヒント付き署名・引数・戻り値・例外
+- 公開 API — 型ヒント付き署名・引数・戻り値・例外（`python tools\export_for_chat.py` で生成。git では管理しない）
 - [設計書](ARCHITECTURE.md) — 現在の設計
 - [設計判断の履歴](HISTORY.md) — 理由・却下した案

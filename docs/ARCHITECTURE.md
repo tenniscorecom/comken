@@ -3,7 +3,7 @@
 > この文書は comken の **現在の設計** を書く。
 > 経緯・却下した代替案・理由は [`HISTORY.md`](HISTORY.md) を参照する。
 > API の使い方（引数・戻り値・例外）は docstring が一次情報で、
-> [`自動生成/API.md`](自動生成/API.md) はそこから自動生成される。
+> `自動生成/API.md` はそこから `tools/export_for_chat.py` で生成する（git 管理外）。
 > コーディング規約は [`CONVENTIONS_COMMON.md`](CONVENTIONS_COMMON.md)（入口）を参照。
 
 ## 1. 基本方針
@@ -300,7 +300,7 @@ comken は共有サーバー上の 1 か所に置き、各プロジェクトは�
 
 1. 手元のクローンで `master` にコミットする
 2. `python -m pytest -q` ・ `python -m ruff check .` ・ `python -m ruff format --check .` を通す
-3. 公開 API・例外を変える変更の後には `python tools\export_for_chat.py` で [`自動生成/API.md`](自動生成/API.md) と [`ERRORS.md`](ERRORS.md) を再生成する
+3. 公開 API・例外を変える変更の後には `python tools\export_for_chat.py` で [`ERRORS.md`](ERRORS.md) を再生成する（`自動生成/API.md` は git 管理外なので、必要な場所で同じコマンドを実行して作る）
 4. push する
 
 実プロジェクトで開発版を試したいときは、そのコマンドプロンプト限りで `PYTHONPATH` を手元のクローンに切り替える。`setx` でユーザー環境変数を書き換えない（戻し忘れると PC が永久に開発版で動き続ける）。
@@ -309,7 +309,7 @@ comken は共有サーバー上の 1 か所に置き、各プロジェクトは�
 
 1. `comken/__init__.py` の `__version__` を 1 行変更（**定義はここだけ**）
 2. 上のテスト・lint を回す
-3. `python tools\export_for_chat.py` で [`自動生成/API.md`](自動生成/API.md) と [`ERRORS.md`](ERRORS.md) を再生成する
+3. `python tools\export_for_chat.py` で [`ERRORS.md`](ERRORS.md) を再生成する（`自動生成/API.md` は git 管理外なので、必要な場所で同じコマンドを実行して作る）
 4. コミットしてタグを打ち、push（`git tag vX.Y.Z && git push --tags`）
 5. 共有サーバーで `git fetch --tags && git checkout vX.Y.Z` を実行する
 
@@ -353,6 +353,6 @@ BO と intranet でバージョンを分けることはしない（版を分け�
 - [`機能/`](機能/): 機能ごとの使い方・仕様（`csv.md`・`excel.md`・`browser.md`・`salesforce.md` など）。入口は [`README.md`](../README.md) の「モジュール一覧」
 - [`HISTORY.md`](HISTORY.md): 設計判断の **経緯・却下した代替案・理由** だけを集めた文書。現状の説明はここに書かない
 - [`CONVENTIONS_COMMON.md`](CONVENTIONS_COMMON.md): **コーディング規約**の入口（言語共通）。Python は [`CONVENTIONS_PYTHON.md`](CONVENTIONS_PYTHON.md)、VBA は [`CONVENTIONS_VBA.md`](CONVENTIONS_VBA.md)、comken 固有は [`CONVENTIONS.md`](CONVENTIONS.md)
-- [`自動生成/API.md`](自動生成/API.md): 公開 API の署名・docstring（**生成物**、手で編集しない）
+- `自動生成/API.md`: 公開 API の署名・docstring（**生成物**・git 管理外。`tools/export_for_chat.py` で作る）
 - [`ERRORS.md`](ERRORS.md): 例外クラスと非エンジニア向けの対処（**生成物**、手で編集しない）
 - [`README.md`](../README.md): 入口とモジュール一覧
