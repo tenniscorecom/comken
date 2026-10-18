@@ -134,6 +134,10 @@ class SalesforceBase:
     # 認証情報のキー名の頭。組織クラスで指定する
     CREDENTIAL_PREFIX = ""
 
+    # この組織（本番）に対応するサンドボックスの組織クラス。無ければ ``None``。
+    # ``site_for(url, sandbox=True)`` が、本番の URL からサンドボックスへつなぐのに使う
+    SANDBOX_SITE: "type[SalesforceBase] | None" = None
+
     # 表示用の分かりやすい名前（任意）。空なら display_name() がクラス名を返す
     DISPLAY_NAME = ""
 
