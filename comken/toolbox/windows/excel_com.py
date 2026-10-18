@@ -262,23 +262,6 @@ class ExcelCOMHandler(FileBase):
         return Table(file_headers, data_rows)
 
     @measure
-    def count_non_empty_cells(self, sheet_name: str, row: int) -> int:
-        """指定行の空でないセル数を返す。
-
-        数式が入っていても "" を返すセルは空としてカウントされる。
-        行全体が空かどうかの判定（スキップ処理）に使う。
-
-        Args:
-            sheet_name: シート名。
-            row: 確認する行番号。
-
-        Returns:
-            空でないセルの数。0 なら行全体が空。
-        """
-        ws = self._sheet(sheet_name)
-        return self._excel.WorksheetFunction.CountA(ws.Rows(int(row)))
-
-    @measure
     def last_row(self, sheet_name: str) -> int:
         """データが存在する最終行の行番号を返す。
 

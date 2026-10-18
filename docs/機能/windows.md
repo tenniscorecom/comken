@@ -18,7 +18,6 @@ from comken.toolbox.windows.excel_com import ExcelCOMHandler
 SHEET = "Sheet1"
 DATA_ROW = 2
 DATA_COL = 3
-CHECK_ROW = 5
 MACRO_NAME = "Module1.UpdateData"
 READ_PW = "読み取りPW"
 WRITE_PW = "書き込みPW"
@@ -28,9 +27,6 @@ with ExcelCOMHandler("data.xlsx") as h:
     rows = h.read_row_values(SHEET)
     table = h.read(SHEET)
     last_row = h.last_row(SHEET)
-
-    if h.count_non_empty_cells(SHEET, row=CHECK_ROW) == 0:
-        print(f"{CHECK_ROW}行目は空行")
 
     h.run_macro(MACRO_NAME)
 

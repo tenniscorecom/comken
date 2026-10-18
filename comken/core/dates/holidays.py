@@ -340,11 +340,6 @@ class _Holidays:
         self._out_of_range_warned: bool = False
 
     @classmethod
-    def load_default(cls) -> _Holidays:
-        """``HOLIDAYS_CSV_PATH``（``company_calendar.csv``）を読んで返す。"""
-        return cls.load(HOLIDAYS_CSV_PATH)
-
-    @classmethod
     def load(cls, path: str | Path) -> _Holidays:
         """``company_calendar.csv`` 形式のファイルを読み ``_Holidays`` を返す。
 

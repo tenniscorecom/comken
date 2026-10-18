@@ -7796,27 +7796,6 @@ Raises:
     ExcelError: ヘッダー行に空のセルがある場合（``headers`` 未指定時のみ）、
         または ``headers`` の列数がシートの列数より少ない場合。
 
-#### `count_non_empty_cells`
-
-```text
-@measure
-def count_non_empty_cells(self, sheet_name: str, row: int) -> int:
-```
-
-##### 説明
-
-指定行の空でないセル数を返す。
-
-数式が入っていても "" を返すセルは空としてカウントされる。
-行全体が空かどうかの判定（スキップ処理）に使う。
-
-Args:
-    sheet_name: シート名。
-    row: 確認する行番号。
-
-Returns:
-    空でないセルの数。0 なら行全体が空。
-
 #### `last_row`
 
 ```text
