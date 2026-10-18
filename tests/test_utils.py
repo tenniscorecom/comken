@@ -1052,8 +1052,8 @@ class TestIsEnabledMark:
     """is_enabled_mark（Excel / CSV の管理表セル用 "有効" 判定）のテスト。
 
     soql-collector / report_master の ``"○"``/``"有効"`` 判定を共通化したもの。
-    ``is_true_word`` とは語集合が違う（ ``"1"`` / ``"yes"`` / ``"on"`` /
-    ``"○"`` / ``"有効"`` / ``"はい"`` を含む／ ``is_true_word("1") is False`` ）。
+    ``is_true_word`` とは語集合が違う（``"1"`` / ``"yes"`` / ``"on"`` /
+    ``"○"`` / ``"有効"`` / ``"はい"`` を含む／ ``is_true_word("1") is False``）。
     """
 
     @pytest.mark.parametrize(
@@ -1127,7 +1127,7 @@ class TestIsEnabledMark:
 
         config.ini の ``1`` を bool 化しないための既存仕様。 ``is_enabled_mark``
         が ``"1"`` を True にしても、 ``is_true_word`` 側の挙動は壊さないこと
-        （ ``Config`` の ``parse_value`` が ``is_true_word`` を使うため）。
+        （``Config`` の ``parse_value`` が ``is_true_word`` を使うため）。
         """
         assert is_true_word("1") is False
 

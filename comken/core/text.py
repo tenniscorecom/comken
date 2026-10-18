@@ -93,14 +93,14 @@ def is_enabled_mark(value: object) -> bool:
 
     真とみなす値:
 
-    - ``bool``: そのまま返す（ ``True`` / ``False`` ）
+    - ``bool``: そのまま返す（``True`` / ``False``）
     - ``int``: ``1`` だけ True、 それ以外は False
     - ``str``: 前後の空白（半角・全角）を除いたあと、大文字小文字を無視して
       ``is_true_word`` を通すか、以下の語のいずれかに一致すれば True::
 
           "有効" / "○" / "o" / "yes" / "1" / "on" / "はい" / "true"
 
-    それ以外（ ``None`` / 空文字 / ``"×"`` / ``"無効"`` / ``"no"`` / ``"0"`` /
+    それ以外（``None`` / 空文字 / ``"×"`` / ``"無効"`` / ``"no"`` / ``"0"`` /
     ``"off"`` / ``"いいえ"`` などの数値・文字列）は False。
 
     Args:
@@ -113,7 +113,7 @@ def is_enabled_mark(value: object) -> bool:
     Note:
         ``is_true_word`` とは語集合が違う。 ``"1"`` を True にするのは
         Excel 管理表の視認性のためで、 ``config.ini`` の ``1`` を bool に
-        しない設計（ ``is_true_word("1") is False`` ）を壊さないために、
+        しない設計（``is_true_word("1") is False``）を壊さないために、
         別の関数として公開している。
     """
     if isinstance(value, bool):

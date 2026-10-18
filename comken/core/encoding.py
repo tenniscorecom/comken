@@ -112,7 +112,7 @@ def code_page(name: str) -> int:
 
 # Web 側（Salesforce など）に渡す「charset 名」の対応表。
 # ``Shift_JIS`` は Salesforce の書き出しの既定として使ってきた名前。``UTF-8`` は
-# 標準的な名前だが、本物の Salesforce 組織で受け付けることは未確認（2026-10-07 時点）。
+# 標準的な名前だが、本物の Salesforce 組織で受け付けることは未確認。
 # Salesforce が受け付ける名前を comken が全部は知らないため、表にない有効な
 # 名前は ``charset_name`` 側でそのまま返す（``normalize_encoding`` の
 # ``ValueError`` はそのまま通す）。

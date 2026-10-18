@@ -53,7 +53,7 @@ from comken.exceptions import CredentialError, CredentialNotFoundError
 logger = logging.getLogger(__name__)
 
 # パッケージ名と関係なく、固定の保存先フォルダ名を使う。
-# ファイル名は社内の命名規則により system-id.enc に統一する（2026-09-02）。
+# ファイル名は社内の命名規則により system-id.enc に統一する。
 CREDENTIALS_PATH = Path.home() / ".rpa" / "system-id.enc"
 
 # サイト名・項目名に使える文字（半角英数字とアンダースコアのみ）
@@ -463,7 +463,7 @@ def _save_all(data: dict[str, dict[str, str]], path: Path) -> None:
 # 終了まで残る**問題があった。 ``weakref.WeakSet`` に変えると、 参照を持たない
 # インスタンスは GC で自然に消え、 レジストリも膨らまない。
 # ``Credentials`` は ``__getattr__`` を定義しているが ``__weakref__`` はクラスメンバ
-# として普通に解決されるため weakref はそのまま使える（ ``__slots__`` は不要）。
+# として普通に解決されるため weakref はそのまま使える（``__slots__`` は不要）。
 _instances_by_path: dict[str, weakref.WeakSet[Credentials]] = {}
 
 
@@ -489,7 +489,7 @@ def _invalidate_instances_for(path: Path) -> None:
     ``None`` に戻して次回 ``__getattr__`` で再復号させる。
 
     ``WeakSet`` を直接イテレートすると「GC された瞬間に壊れる」競合が起きる
-    ので、 スナップショット（ ``list(...)`` ）を取ってから走査する。
+    ので、 スナップショット（``list(...)``）を取ってから走査する。
     """
     key = str(path)
     invalidated = 0

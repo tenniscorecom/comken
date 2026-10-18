@@ -92,7 +92,7 @@ def reduce_ouju_csv_file(
     退避してから削減する順序だと、失敗するたびに直前の正常なバックアップが
     次のリトライで上書きされ、失敗を繰り返すと元データを失いかねない）。
 
-    **残す列（ ``columns`` 引数、無ければ ``OLD_ROLE_COLUMNS`` ）が空のときは
+    **残す列（``columns`` 引数、無ければ ``OLD_ROLE_COLUMNS``）が空のときは
     ファイルに触る前に ``ComkenError`` で停止する。** 設定ミスのまま bat を
     実行すると、全 CSV が空のファイルに書き換えられて元データを失う事故になる
     ため、ファイルを開かずに止める。 ``main`` から呼ばれた場合は
@@ -221,7 +221,7 @@ def main(argv: list[str] | None = None) -> None:
     except ComkenError as error:
         # ``reduce_ouju_csv_files`` 内の ``_raise_if_columns_empty`` が出す
         # ``ComkenError``（設定ミス）と、 1 ファイルが失敗したときに
-        # まとめる ``CSVError``（ ``ComkenError`` のサブクラス）を同じ
+        # まとめる ``CSVError``（``ComkenError`` のサブクラス）を同じ
         # ハンドラで受けて、終了コード 1 で bat に伝える
         logger.error("%s", error)
         raise SystemExit(1) from error
@@ -251,7 +251,7 @@ def _resolve_asterisk_aliases(
 def _raise_if_columns_empty(wanted: list[str]) -> None:
     """残す列リストが空のとき、 ``ComkenError`` で止める。
 
-    ``OLD_ROLE_COLUMNS`` 未設定（ ``[]`` ）のまま ``main`` を実行すると、
+    ``OLD_ROLE_COLUMNS`` 未設定（``[]``）のまま ``main`` を実行すると、
     全 CSV が空のファイルに書き換えられて元データを失う事故になる。 ファイル
     に触る前に、 非エンジニアにも分かる文言で止める。
     """

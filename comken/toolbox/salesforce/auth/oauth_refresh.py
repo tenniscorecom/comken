@@ -85,7 +85,7 @@ def _on_refresh_token_via_credentials(credentials: Credentials) -> Callable[[str
 
 
 def _on_refresh_token_via_prefix(prefix: str) -> Callable[[str], None]:
-    """新しい refresh_token を DPAPI（ ``{prefix: {"api_refresh_token": ...}}`` ）へ書き戻す。
+    """新しい refresh_token を DPAPI（``{prefix: {"api_refresh_token": ...}}``）へ書き戻す。
 
     ``exchange_code(prefix=...)`` が使う。初回登録の時点では読み込みに使った
     Credentials が無いため、書き込み専用にその場でインスタンスを作る。

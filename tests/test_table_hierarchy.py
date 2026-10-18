@@ -320,7 +320,7 @@ def test_split_hierarchy_does_not_mutate_source() -> None:
 
 
 def test_split_hierarchy_preserves_types_on_result() -> None:
-    """結果の ``types`` が元の ``types`` と同じ（ ``_from_normalized_rows`` の流儀）。"""
+    """結果の ``types`` が元の ``types`` と同じ（``_from_normalized_rows`` の流儀）。"""
     table = Table(
         ["大分類", "金額"],
         [{"大分類": "食品", "金額": 100}],
