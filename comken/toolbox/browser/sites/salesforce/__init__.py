@@ -33,13 +33,13 @@ comken.toolbox.salesforce（API版）の Reports and Dashboards REST API は2000
 from __future__ import annotations
 
 import sys
-from urllib.parse import urlsplit
 
 from comken.core.discovery import find_subclasses
 from comken.exceptions import SalesforceError
 from comken.toolbox.browser.sites.salesforce.base import SalesforceReportBrowser
 from comken.toolbox.browser.sites.salesforce.solution import Solution
 from comken.toolbox.browser.sites.salesforce.solution_sandbox import SolutionSandbox
+from comken.toolbox.salesforce.hosts import host_of
 
 
 def _site_not_found_error(url: str, known_domains: list[str]) -> SalesforceError:
@@ -77,26 +77,49 @@ __all__ = [
 ]
 
 
-def site_for(url: str) -> type[SalesforceReportBrowser]:
+def _no_sandbox_error(site: type[SalesforceReportBrowser], url: str) -> SalesforceError:
+    """``SalesforceError`` の「この組織に対応するサンドボックスが登録されていない」文言。
+
+    発生箇所: comken.toolbox.browser.sites.salesforce.site_for(sandbox=True)
+    """
+    return SalesforceError(
+        f"{site.__name__} に対応するサンドボックスが登録されていません: {url}\n"
+        "対処: 組織クラスの ``SANDBOX_SITE`` にサンドボックスの組織クラスを指定してください"
+        "（管理者へ連絡してください）。"
+    )
+
+
+def site_for(url: str, *, sandbox: bool = False) -> type[SalesforceReportBrowser]:
     """レポートのURLから、ブラウザ経由でつなぐ組織のクラスを返す。
 
         site_for("https://example.my.salesforce.com/lightning/...")
         # → Solution
 
+    ブラウザのアドレスバーの URL（``○○.lightning.force.com``）も、同じ組織として読む。
+    ``sandbox=True`` のときは、URL が指す本番の組織に対応するサンドボックスを返す
+    （URL がもともとサンドボックスのものなら、そのまま返す）。API 側の
+    ``comken.toolbox.salesforce.sites.site_for`` と同じ規則。
+
     Args:
         url: レポートを開いたときのアドレス。**ドメインを含む URL であること**
             （レポート ID だけでは、どの組織のものか決められない）。
+        sandbox: ``True`` なら、対応するサンドボックスの組織クラスを返す。
 
     Raises:
         SalesforceError: 登録済みのどの組織にも当てはまらない場合。
+            ``sandbox=True`` で、対応するサンドボックスが登録されていない場合。
     """
-    host = _host_of(url)
+    host = host_of(url)
     for site in SITES:
-        if host and _host_of(site.BASE_URL) == host:
-            return site
+        if host and host_of(site.BASE_URL) == host:
+            return _sandbox_of(site, url) if sandbox else site
     raise _site_not_found_error(url, [site.BASE_URL for site in SITES])
 
 
-def _host_of(url: str) -> str:
-    """URL からホスト名だけを取り出す（大文字小文字の違いは無視する）。"""
-    return urlsplit(url.strip()).netloc.lower()
+def _sandbox_of(site: type[SalesforceReportBrowser], url: str) -> type[SalesforceReportBrowser]:
+    """``site`` に対応するサンドボックスを返す。``site`` 自身がサンドボックスならそのまま返す。"""
+    if any(other.SANDBOX_SITE is site for other in SITES):
+        return site
+    if site.SANDBOX_SITE is None:
+        raise _no_sandbox_error(site, url)
+    return site.SANDBOX_SITE

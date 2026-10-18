@@ -7,6 +7,7 @@
 """
 
 from comken.toolbox.salesforce.client import SalesforceBase
+from comken.toolbox.salesforce.sites.solution_sandbox import SolutionSandbox
 
 
 class Solution(SalesforceBase):
@@ -25,6 +26,10 @@ class Solution(SalesforceBase):
     # 組織で固定なので config.ini には置かない（環境で変わる値だけを config.ini へ）
     # TODO: 配置するときに実際の URL へ置き換える
     DOMAIN_URL = "https://example.my.salesforce.com"
+
+    # 対応するサンドボックス組織。管理表は本番の URL だけを持ち、調査などでサンドボックスを
+    # 見たいときは ``site_for(url, sandbox=True)`` がこの組織へつなぐ
+    SANDBOX_SITE = SolutionSandbox
 
     # 認証情報のキー名の頭。DPAPI には solution_client_id / solution_client_secret で入る。
     # 別の登録に切り替えるときだけ Solution(prefix=...) で渡す

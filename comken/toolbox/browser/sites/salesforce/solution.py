@@ -10,6 +10,7 @@
 """
 
 from comken.toolbox.browser.sites.salesforce.base import SalesforceReportBrowser
+from comken.toolbox.browser.sites.salesforce.solution_sandbox import SolutionSandbox
 from comken.toolbox.salesforce.sites.solution import Solution as _SolutionApi
 
 
@@ -27,3 +28,5 @@ class Solution(SalesforceReportBrowser):
     BASE_URL = _SolutionApi.DOMAIN_URL
     CREDENTIAL_PREFIX = _SolutionApi.CREDENTIAL_PREFIX
     OWNER = "comken"
+    # 対応するサンドボックス組織（API 側の ``Solution.SANDBOX_SITE`` と対）
+    SANDBOX_SITE = SolutionSandbox

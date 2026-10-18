@@ -5955,7 +5955,7 @@ Returns:
 ### `site_for`
 
 ```text
-def site_for(url: str) -> type[SalesforceReportBrowser]:
+def site_for(url: str, *, sandbox: bool=False) -> type[SalesforceReportBrowser]:
 ```
 
 #### 説明
@@ -5965,12 +5965,19 @@ def site_for(url: str) -> type[SalesforceReportBrowser]:
     site_for("https://example.my.salesforce.com/lightning/...")
     # → Solution
 
+ブラウザのアドレスバーの URL（``○○.lightning.force.com``）も、同じ組織として読む。
+``sandbox=True`` のときは、URL が指す本番の組織に対応するサンドボックスを返す
+（URL がもともとサンドボックスのものなら、そのまま返す）。API 側の
+``comken.toolbox.salesforce.sites.site_for`` と同じ規則。
+
 Args:
     url: レポートを開いたときのアドレス。**ドメインを含む URL であること**
         （レポート ID だけでは、どの組織のものか決められない）。
+    sandbox: ``True`` なら、対応するサンドボックスの組織クラスを返す。
 
 Raises:
     SalesforceError: 登録済みのどの組織にも当てはまらない場合。
+        ``sandbox=True`` で、対応するサンドボックスが登録されていない場合。
 
 
 ## `from comken.toolbox.credentials import ...`
@@ -7627,7 +7634,7 @@ REST API のバージョン付きパスを組み立てる。
 ### `site_for`
 
 ```text
-def site_for(url: str) -> type[SalesforceBase]:
+def site_for(url: str, *, sandbox: bool=False) -> type[SalesforceBase]:
 ```
 
 #### 説明
@@ -7642,12 +7649,24 @@ URL のドメイン（My Domain）で決まるので、表に行を足すだけ�
     site_for("https://example.my.salesforce.com/lightning/...")
     # → Solution
 
+ブラウザのアドレスバーの URL（``○○.lightning.force.com``）も、同じ組織として読む。
+
+``sandbox=True`` のときは、URL が指す**本番の組織に対応するサンドボックス**を返す
+（管理表は本番の URL だけを持ち、調査などでサンドボックスを見たいとき用）。
+レポート ID は URL から取るので、サンドボックスにも同じ ID のレポートがある前提。
+URL がもともとサンドボックスのものなら、そのまま返す。
+
+    site_for("https://example.my.salesforce.com/lightning/...", sandbox=True)
+    # → SolutionSandbox
+
 Args:
     url: レポートを開いたときのアドレス。**ドメインを含む URL であること**
         （レポート ID だけでは、どの組織のものか決められない）。
+    sandbox: ``True`` なら、対応するサンドボックスの組織クラスを返す。
 
 Raises:
     SalesforceError: 登録済みのどの組織にも当てはまらない場合。
+        ``sandbox=True`` で、対応するサンドボックスが登録されていない場合。
 
 
 ## `from comken.toolbox.windows import ...`

@@ -128,6 +128,11 @@ class SalesforceReportBrowser(SiteBase):
     # （``comken.toolbox.salesforce.client.SalesforceBase.CREDENTIAL_PREFIX`` と同じ役割）
     CREDENTIAL_PREFIX = ""
 
+    # この組織（本番）に対応するサンドボックスのブラウザ用クラス。無ければ ``None``。
+    # ``site_for(url, sandbox=True)`` が、本番の URL からサンドボックスを開くのに使う
+    # （``comken.toolbox.salesforce.client.SalesforceBase.SANDBOX_SITE`` と同じ役割）
+    SANDBOX_SITE: type[SalesforceReportBrowser] | None = None
+
     def go_login(self) -> LoginPage:
         """ログイン画面を開く。
 

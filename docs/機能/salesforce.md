@@ -202,6 +202,23 @@ with site() as sf:
     rows = sf.report.get(report_id)
 ```
 
+**本番の URL からサンドボックスを見たいとき**（管理表は本番の URL だけを持ち、調査はサンドボックスで行う、など）は
+`sandbox=True` を渡す。URL が指す本番の組織に**対応するサンドボックス**の組織クラスが返り、レポート ID は
+URL からそのまま使う。
+
+```python
+site = site_for(report_url, sandbox=True)   # → SolutionSandbox
+with site() as sf:
+    rows = sf.report.get(report_id)         # サンドボックスにある同じ ID のレポート
+```
+
+- 本番とサンドボックスの対応は、本番の組織クラスの `SANDBOX_SITE` に書く（`Solution.SANDBOX_SITE = SolutionSandbox`）。
+  ブラウザ側（`comken.toolbox.browser.sites.salesforce.site_for`）も同じ引数・同じ規則。
+- URL がもともとサンドボックスのものなら、そのサンドボックスを返す。`SANDBOX_SITE` が無い組織は例外になる。
+- **サンドボックスに同じ ID のレポートがあることが前提。** サンドボックスの更新（リフレッシュ）より後に本番で作った
+  レポートは見つからない。サンドボックスのデータは本番と違うので、件数に依存する判定（2000 件超など）は参考値になる。
+- ブラウザのアドレスバーの URL（`○○.lightning.force.com`）も、`○○.my.salesforce.com` と同じ組織として読む。
+
 ---
 
 ## レポート — 2000行の壁
