@@ -755,7 +755,3 @@ class Table:
                 f"\n対処: 列「{order_by}」の値を文字列か数値に揃えてください。"
             ) from exc
         rows[:] = sorted_rows
-
-    def _iter_rows_for_update(self) -> Iterator[Row]:
-        """ライブラリ内部で更新する実体行を返す。"""
-        return iter(self._rows)
