@@ -39,6 +39,32 @@
 これが無いと、変数名を1文字打ち間違えただけで「空の新しい変数」として動き続け、間違いに気付けません。
 [18 章](#18-エディターの設定)の設定をすれば、新しいモジュールに自動で入ります。
 
+### 行継続（` _`）を使いすぎない
+
+1つの文を ` _` でつなぐのは3行くらいまでにします。それより長くなるなら、途中の値を変数に入れて文を分けます。
+` _` で何行もつないだ文は、どこで区切れているのか読みにくく、途中の行を消したり足したりすると `_` の付け忘れでエラーになりやすいためです。
+
+```vba
+' 悪い（条件が4行に渡り、どこまでが1つの条件か追いにくい）
+If dataSheet.Cells(rowIndex, COL_STATUS).Value = "済" And _
+    dataSheet.Cells(rowIndex, COL_AMOUNT).Value > 0 And _
+    IsDate(dataSheet.Cells(rowIndex, COL_ORDER_DATE).Value) And _
+    dataSheet.Cells(rowIndex, COL_ORDER_DATE).Value >= startDate Then
+
+' 良い（条件ごとに名前の付いた変数へ分ける）
+Dim isDone As Boolean
+isDone = dataSheet.Cells(rowIndex, COL_STATUS).Value = "済"
+
+Dim hasAmount As Boolean
+hasAmount = dataSheet.Cells(rowIndex, COL_AMOUNT).Value > 0
+
+Dim isInPeriod As Boolean
+isInPeriod = IsDate(dataSheet.Cells(rowIndex, COL_ORDER_DATE).Value)
+If isInPeriod Then isInPeriod = dataSheet.Cells(rowIndex, COL_ORDER_DATE).Value >= startDate
+
+If isDone And hasAmount And isInPeriod Then
+```
+
 ## 2. 命名規則
 
 | 種類 | 書き方 | 例 |
