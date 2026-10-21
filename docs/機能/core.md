@@ -403,7 +403,7 @@ unzip(r"C:\作業\data.zip")                           # → C:\作業\data\ に
 ### 空の値は `""`（`None` は持たない）
 
 `Table` に入れた値のうち `None` は **空文字 `""` にそろう**（`Table(...)`、`append`、
-`CSV` / Excel / Access / Salesforce から読んだ値、`from_dataframe` のどれでも同じ）。
+`CSV` / Excel / Access / Salesforce から読んだ値のどれでも同じ）。
 CSV は空欄が `""`、Excel / Access は空が `None` で返ってくるので、`Table` の入口で1回だけ
 そろえて、「`None` と `""` のどちらで来るか」を利用側が気にしなくて済むようにしている。
 `types=` の変換関数が受け取る値も、`None` ではなく `""` になる。
@@ -432,9 +432,9 @@ len(table)                   # → 2
 rows = table.to_rows()
 ```
 
-表全体は `Table`（pandas でいう DataFrame）、1 行は `Row`（Series にあたる。実体は
-`dict[str, Any]` の別名）です。`table[n]` / `for row in table` / `to_rows()` / `iter_rows()` など、
-行を返すものの注釈は `Row` で、型の名前が表と行で分かれています（実行時の動作は `dict` のままです）。
+表全体は `Table`、1 行は `Row`（実体は `dict[str, Any]` の別名）です。`table[n]` /
+`for row in table` / `to_rows()` / `iter_rows()` など、行を返すものの注釈は `Row` で、
+型の名前が表と行で分かれています（実行時の動作は `dict` のままです）。
 
 注釈に使う共通の型は、`comken.core.types` から 1 行で import します。
 
@@ -532,50 +532,6 @@ CSV の ``"1001"`` と Excel の ``1001.0``、全角の ``Ａ１`` と半角の 
 **セルの値は ``str`` / ``int`` / ``float`` / ``bool`` / ``datetime`` などの不変の値
 であること** を前提とする。``list`` や ``dict`` など変更可能な値をセルに入れた場合、
 浅いコピーによる共有は保証しない。
-
-### pandas と行き来する
-
-`Table` ↔ `pandas.DataFrame` を相互変換できる。`Table` だけでは書きにくい集計や
-ピボット操作は pandas 側に投げ、加工結果を `Table` に戻して Excel / CSV へ
-書き戻す、という使い分けができる。
-
-**pandas は comken の必須依存にしていない**（会社の実行環境に入っていない
-ことがあるため）。使う前にインストールが必要:
-
-```bash
-pip install pandas                   # 単体で入れる
-pip install -e .[pandas]             # リポジトリ開発時のインストール
-```
-
-- `Table.to_dataframe() → pandas.DataFrame`: 列の順番を保ったまま、行の値は
-  そのまま `DataFrame` へ渡す（型変換しない）。0 行の `Table` でも列は残る。
-- `Table.from_dataframe(df) → Table`: 列名は `str()` して使う（重複したら
-  `TableError`）。欠損値（`NaN` / `None` / `pd.NA` / `pd.NaT`）は `""` に
-  揃える（判定は `pd.isna`。リスト・辞書などスカラー以外の値は判定しない）。
-  `DataFrame` の index は捨てる（`Table` には index がない）。`types=` は
-  `Table` の `types` にそのまま渡せる。
-- pandas はこの 2 つのメソッドを呼んだときにだけ import する。pandas が無い
-  環境で `comken` を import しても ImportError は出ない。
-
-pandas が無い環境で `to_dataframe()` / `from_dataframe()` を呼ぶと
-`MissingOptionalDependencyError` を送出し、メッセージに
-`pip install pandas` の手順が出る。
-
-```python
-from comken.toolbox.csv import CSV
-from comken.toolbox.excel import Excel
-
-# CSV → pandas で集計 → Excel へ書き戻す
-with CSV("売上.csv") as csv_file:
-    table = csv_file.read()
-
-df = table.to_dataframe()                       # Table → DataFrame
-summary = df.groupby("支店")["金額"].sum().reset_index()
-result = Table.from_dataframe(summary)          # DataFrame → Table
-
-with Excel("report.xlsx") as excel:
-    excel.create_data_sheet("集計").create_table("集計", result)
-```
 
 ---
 

@@ -70,6 +70,7 @@
 45. `_` は「そのファイルの中だけで使う」印にそろえた（2026-10-18）
 46. `site_for(url, sandbox=True)` で、本番の URL からサンドボックスの組織を引けるようにした（2026-10-18）
 47. 応需関連のコードと、生成物の `API.md` をリポジトリから外した（2026-10-18）
+48. pandas 連携を削除した（2026-10-21）
 
 ## 1. 設定と非機密情報の扱い
 
@@ -1319,3 +1320,16 @@ docstring で表せる。`_` 付きを別ファイルから import すると、�
 `tests/test_docs_code.py` は生成した文字列をそのまま調べる（ファイルを読まない）。
 
 `HISTORY.md` は年ごとに分けず、1 ファイルのままにする。
+
+## 48. pandas 連携を削除した（2026-10-21）
+
+`Table.to_dataframe()` / `Table.from_dataframe()` と、それに合わせて用意していた
+`MissingOptionalDependencyError` を消した。pandas 連携のために置いていた `pyproject.toml` の
+`optional-dependencies` と、`pip install -e .[pandas]` をする CI の手順も一緒に消した。
+
+pandas は必須依存にできない（会社の実行環境に入っていないことがある）。そのため入口だけ
+持っていたが、実利用は無く、`pandas` が無い環境での「入っていないときのエラー」を
+再現するだけの機能になっていた。
+
+表の加工は `Table` の標準 API（`filter` / `select` / `group_by` / `index` / `concat`）で足りる。
+pandas へ渡してから加工して `Table` に戻す往復が要る場面は無い。
