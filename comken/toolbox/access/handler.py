@@ -7,8 +7,8 @@ import logging
 import re
 import shutil
 import tempfile
-from collections.abc import Iterator
-from datetime import timedelta
+from collections.abc import Iterator, Mapping
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Self
 
@@ -36,6 +36,9 @@ BACKUP_FOLDER_NAME = "backup"
 # read_table() は全件を list にして返すため、この件数を超えるとメモリに厳しい。
 # 大量データは iter_rows() か export_csv() を使うよう、利用者へ知らせる境界。
 _LARGE_TABLE_WARNING_THRESHOLD = 50_000
+
+# Access の TempVars に渡せる値。Access 側は null も配列も持てないため ``None`` は渡せない
+TempVarValue = str | int | float | bool | date | datetime
 
 
 class AccessDatabase(FileBase):
@@ -165,6 +168,7 @@ class AccessDatabase(FileBase):
         UPDATE・INSERT・DELETE・テーブル作成など、データを変更するクエリ向け。
         元データベースへ変更を反映する場合は、初期化時に ``local_copy=False`` を指定する。
         SELECT クエリの結果を読む場合は ``iter_rows()``、CSVへ出す場合は ``export_csv()`` を使う。
+        クエリが値を必要とする場合は、先に ``set_temp_vars()`` で設定する。
         """
         self._ensure_query(name)
         if is_dry_run():
@@ -175,6 +179,26 @@ class AccessDatabase(FileBase):
             self._access.CurrentDb().QueryDefs(name).Execute(DAO_FAIL_ON_ERROR)
         except Exception as e:
             raise _routine_error(name, "クエリ", e) from e
+
+    def set_temp_vars(self, values: Mapping[str, TempVarValue]) -> None:
+        """Access の ``TempVars`` に名前と値を設定する。
+
+        保存済みクエリは ``[TempVars]![名前]`` で値を参照する。Python には SQL を書かず、
+        クエリの名前と値だけを渡す。設定した値は ``AccessDatabase`` を閉じると消える。
+        dry-run 中も実行する（セッション内の設定で、外部には影響しないため）。
+        """
+        # 途中の値で止まって一部だけ設定された状態にならないよう、先に全部を検査する
+        checked = [_checked_temp_var(name, value) for name, value in values.items()]
+        for temp_var_name, temp_var_value in checked:
+            try:
+                # 同名の名前は Access 側で上書きされる
+                self._access.TempVars.Add(temp_var_name, temp_var_value)
+            except Exception as e:
+                raise _temp_vars_error(temp_var_name, e) from e
+
+    def clear_temp_vars(self) -> None:
+        """``set_temp_vars()`` で設定した値をすべて取り除く。"""
+        self._access.TempVars.RemoveAll()
 
     @measure
     def export_csv(
@@ -188,6 +212,7 @@ class AccessDatabase(FileBase):
         数十万件でも Python のメモリにデータを載せない、大量件数向けの方法。
         ``encoding`` は ``cp932`` / ``utf-8-sig`` を受け付け、別名（``sjis`` /
         ``utf8`` など）は ``cp932`` / ``utf-8-sig`` にそろえる。
+        クエリが値を必要とする場合は、先に ``set_temp_vars()`` で設定する。
         """
         self._ensure_source(source)
         codepage = code_page(encoding)
@@ -210,6 +235,7 @@ class AccessDatabase(FileBase):
 
         COM 往復を減らすため小さなバッチで取得する。数十万件を ``list`` にすると
         メモリを大量に使うため、CSV が目的なら ``export_csv()`` を使う。
+        クエリが値を必要とする場合は、先に ``set_temp_vars()`` で設定する。
         """
         self._ensure_source(source)
         recordset = self._access.CurrentDb().OpenRecordset(source)
@@ -234,6 +260,7 @@ class AccessDatabase(FileBase):
         全行をメモリへ載せるため、大量データには ``iter_rows()`` を使う。
         ``_LARGE_TABLE_WARNING_THRESHOLD`` を超える行を読んだときは警告ログを出す。
         表として絞り込み・索引・転記を行う場合の明示的な入口。
+        クエリが値を必要とする場合は、先に ``set_temp_vars()`` で設定する。
 
         列名は ``iter_rows()`` のイテレータから直接取れない（イテレータは
         行ごとにしか値を返さない）ため、レコードセットを別途開いて列名だけ
@@ -423,3 +450,50 @@ def _source_not_found_error(name: str, sources: list[str]) -> AccessError:
         f"Access のテーブルまたはクエリが見つかりません: {name}  "
         f"存在するテーブル／クエリ: {sources}"
     )
+
+
+def _temp_var_name_error(name: object) -> AccessError:
+    """TempVars の名前が空でない str でないときの ``AccessError``。"""
+    return AccessError(
+        f"Access の TempVars の名前が空でない str ではありません: {name!r}\n"
+        "対処: 名前は空でない文字列（例: 「開始日」）を指定してください。"
+    )
+
+
+def _temp_var_value_error(name: str, type_name: str) -> AccessError:
+    """TempVars に渡せない型の値だったときの ``AccessError``。
+
+    値そのものは顧客情報になりうるので載せない（型だけを伝える）。
+    """
+    return AccessError(
+        f"Access の TempVars に渡せない値です: 名前={name} 型={type_name}\n"
+        "対処: str / int / float / bool / date / datetime を渡してください。"
+        "Access の TempVars は null も配列も持てないので None は渡せません。"
+    )
+
+
+def _temp_vars_error(name: str, detail: Exception) -> AccessError:
+    """``TempVars.Add()`` が Access 由来の例外を返したときの ``AccessError``。
+
+    COM のメッセージには値そのものが含まれることがあるため、文言は載せず
+    例外の型の名前だけを出す（元の例外は ``__cause__`` で残る）。
+    """
+    return AccessError(
+        f"Access の TempVars を設定できませんでした: {name}（{type(detail).__name__}）\n"
+        "対処: 名前が空でないこと、設定数が Access の上限（255 個）を超えていないかを"
+        "確認してください。"
+    )
+
+
+def _checked_temp_var(name: object, value: object) -> tuple[str, TempVarValue]:
+    """TempVars へ渡す名前と値へ変換する。渡せないものは ``AccessError`` で止める。"""
+    if not isinstance(name, str) or not name:
+        raise _temp_var_name_error(name)
+    # bool は int の派生で、そのまま渡せば True のまま COM に届く
+    if isinstance(value, (str, int, float, datetime)):
+        return name, value
+    # COM は date を渡せないので、その日の 0 時の日時にして渡す
+    if isinstance(value, date):
+        midnight = datetime(value.year, value.month, value.day)  # noqa: DTZ001  # Access の日時は naive
+        return name, midnight
+    raise _temp_var_value_error(name, type(value).__name__)

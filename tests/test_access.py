@@ -3,8 +3,10 @@
 import inspect
 import logging
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -12,6 +14,11 @@ import pytest
 from comken import dry_run
 from comken.exceptions import AccessError, UnsupportedFileSuffixError
 from comken.toolbox.access import AccessDatabase
+
+# Access の TempVars に入る日時はタイムゾーン無し（Access 側と同じ形のため）
+_DAY_START = datetime(2026, 10, 1)  # noqa: DTZ001  # 業務日時として naive で扱う
+_NEXT_DAY_START = datetime(2026, 10, 2)  # noqa: DTZ001  # 業務日時として naive で扱う
+_AFTERNOON = datetime(2026, 10, 1, 12, 30, 45)  # noqa: DTZ001  # 業務日時として naive で扱う
 
 
 def _database(tmp_path: Path) -> tuple[AccessDatabase, MagicMock]:
@@ -316,6 +323,123 @@ class TestAccessDatabase:
 
         with pytest.raises(AccessError, match=r"Q_なし.*Q_日次更新"):
             database.run_query("Q_なし")
+
+    def test_set_temp_vars_adds_each_item(self, tmp_path):
+        database, access = _database(tmp_path)
+
+        database.set_temp_vars({"開始日": "2026-10-01", "件数": 3, "比率": 1.5})
+
+        assert [args.args for args in access.TempVars.Add.call_args_list] == [
+            ("開始日", "2026-10-01"),
+            ("件数", 3),
+            ("比率", 1.5),
+        ]
+
+    def test_set_temp_vars_keeps_bool_as_bool(self, tmp_path):
+        database, access = _database(tmp_path)
+
+        database.set_temp_vars({"真": True, "偽": False})
+
+        passed = [args.args[1] for args in access.TempVars.Add.call_args_list]
+        assert passed == [True, False]
+        # True が 1 になると Access 側で真偽値にならないため、型まで確かめる
+        assert [type(value) for value in passed] == [bool, bool]
+
+    def test_set_temp_vars_converts_date_but_keeps_datetime(self, tmp_path):
+        database, access = _database(tmp_path)
+
+        database.set_temp_vars({"日付": date(2026, 10, 1), "日時": _AFTERNOON})
+
+        assert [args.args for args in access.TempVars.Add.call_args_list] == [
+            ("日付", _DAY_START),
+            ("日時", _AFTERNOON),
+        ]
+
+    def test_set_temp_vars_adds_again_for_the_same_name(self, tmp_path):
+        database, access = _database(tmp_path)
+
+        database.set_temp_vars({"開始日": date(2026, 10, 1)})
+        database.set_temp_vars({"開始日": date(2026, 10, 2)})
+
+        assert [args.args for args in access.TempVars.Add.call_args_list] == [
+            ("開始日", _DAY_START),
+            ("開始日", _NEXT_DAY_START),
+        ]
+
+    @pytest.mark.parametrize(
+        "value",
+        [None, [1], Decimal("1.5"), b"\x01"],
+        ids=["none", "list", "decimal", "bytes"],
+    )
+    def test_set_temp_vars_rejects_values_access_cannot_hold(self, tmp_path, value):
+        database, access = _database(tmp_path)
+
+        with pytest.raises(AccessError, match="渡せない"):
+            database.set_temp_vars({"開始日": value})
+
+        access.TempVars.Add.assert_not_called()
+
+    def test_set_temp_vars_sets_nothing_when_a_later_value_is_invalid(self, tmp_path):
+        """途中の値が渡せないとき、手前の値だけが設定された状態にならない。"""
+        database, access = _database(tmp_path)
+
+        with pytest.raises(AccessError, match="渡せない"):
+            database.set_temp_vars({"開始日": "2026-10-01", "終了日": None})  # type: ignore[dict-item]
+
+        access.TempVars.Add.assert_not_called()
+
+    def test_set_temp_vars_error_message_keeps_the_value_out(self, tmp_path):
+        database, _ = _database(tmp_path)
+        # 実行時に落とす値（静的型では TempVarValue に入らない）をわざと渡す
+        values: dict[str, Any] = {"顧客名": ["山田太郎", "鈴木花子"]}
+
+        with pytest.raises(AccessError) as error:
+            database.set_temp_vars(values)
+
+        assert "list" in str(error.value)
+        assert "山田太郎" not in str(error.value)
+
+    @pytest.mark.parametrize("name", ["", 1, None], ids=["empty", "int", "none"])
+    def test_set_temp_vars_rejects_names_that_are_not_non_empty_str(self, tmp_path, name):
+        database, access = _database(tmp_path)
+
+        with pytest.raises(AccessError, match="名前"):
+            database.set_temp_vars({name: 1})
+
+        access.TempVars.Add.assert_not_called()
+
+    def test_set_temp_vars_wraps_com_error_without_value(self, tmp_path, caplog):
+        database, access = _database(tmp_path)
+        access.TempVars.Add.side_effect = RuntimeError("COM の失敗")
+        customer_name = "山田太郎"
+
+        with (
+            caplog.at_level(logging.DEBUG, logger="comken.toolbox.access.handler"),
+            pytest.raises(AccessError) as error,
+        ):
+            database.set_temp_vars({"顧客名": customer_name})
+
+        assert isinstance(error.value.__cause__, RuntimeError)
+        assert "顧客名" in str(error.value)
+        # 値は顧客情報になりうるので、例外メッセージにもログにも出さない
+        assert customer_name not in str(error.value)
+        assert customer_name not in caplog.text
+
+    def test_clear_temp_vars_calls_remove_all(self, tmp_path):
+        database, access = _database(tmp_path)
+
+        database.clear_temp_vars()
+
+        access.TempVars.RemoveAll.assert_called_once_with()
+
+    def test_dry_run_still_sets_temp_vars(self, tmp_path):
+        database, access = _database(tmp_path)
+
+        with dry_run():
+            database.set_temp_vars({"開始日": date(2026, 10, 1)})
+
+        # セッション内の設定なので dry-run でも実行する（結果の検証手順が通常と同じになる）
+        access.TempVars.Add.assert_called_once_with("開始日", _DAY_START)
 
     def test_export_csv_calls_transfer_text(self, tmp_path):
         database, access = _database(tmp_path)

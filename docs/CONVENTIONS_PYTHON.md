@@ -31,6 +31,7 @@ comken を使うときのルール（import してよい名前・例外・ログ
 17. [デコレーター](#17-デコレーター)
 18. [命名・型・dataclass・コメント・例外・ロギングの追補](#18-命名型dataclassコメント例外ロギングの追補)
 19. [ツールの設定](#19-ツールの設定)
+20. [Access と Salesforce のクエリ](#20-access-と-salesforce-のクエリ)
 
 ---
 
@@ -715,3 +716,71 @@ VS Code では拡張機能「Ruff」を入れ、保存時に整形されるよ�
   "editor.rulers": [100]
 }
 ```
+
+## 20. Access と Salesforce のクエリ
+
+外部システム（Access / Salesforce）に投げるクエリの書き方を、2 つの系統でそろえる。
+
+- Access の SQL は **Access の保存済みクエリに置く**（Python には書かない）
+- Salesforce の SOQL は **Python 側で組み立てる**（保存先が無いので）
+
+背景（人が RPA を止めずに動かせる形にしておく）は [共通規約 12 章](CONVENTIONS_COMMON.md#12-後で人間が動かせることrpa-で止まったときのために)。
+Access の詳しい例と例外的ルールは [`docs/機能/access.md`](機能/access.md) を参照。
+
+### Access: Python には SQL を書かない
+
+Python が持つのは「**保存済みクエリ名**」と「**TempVars に渡す値**」だけ。
+
+```python
+from datetime import date
+from comken.toolbox.access import AccessDatabase
+
+with AccessDatabase(r"C:\作業\顧客.accdb") as db:
+    # 値の既定は M_日次 マクロの中（Date()-1 など）。手で動かしても同じ結果になる
+    db.run_macro("M_日次")
+
+    # 過去分をやり直すときだけ、値を上書きして渡す
+    db.set_temp_vars({"開始日": date(2026, 9, 1), "終了日": date(2026, 9, 30)})
+    db.run_macro("M_月次")
+```
+
+| 場面 | 書き方 |
+|---|---|
+| Access の中で完結する連続実行 | **Access のマクロ（`M_`）に書く**。Python は `db.run_macro("M_...")` を呼ぶだけ |
+| 単発の更新クエリ 1 本 | `db.run_query("QA_...")` で直接呼んでよい |
+| 読み取り | `db.read_table("Q_...")` / `db.export_csv(...)` / `db.iter_rows("Q_...")` を直接呼んでよい |
+| 値の上書き | **上書きしたいときだけ** `db.set_temp_vars({...})` を先に呼ぶ。未指定の値はマクロ側が決める |
+
+**Python の側で `QA_` を 1 本ずつ順に動かさない。** RPA が止まったとき、人が Access を開いて
+マクロを実行すれば同じ結果になる形にしておく。
+
+### Salesforce: SOQL は Python 側で組み立てる
+
+Salesforce には Access のような「保存済みクエリ」が無いので、SOQL は Python 側で組み立てる。
+ただし、**文字列をつなぎ合わせない。** `comken.toolbox.salesforce.soql.Soql` を使う。
+
+```python
+from comken.toolbox.salesforce.soql import Soql, last_n_days
+
+# 悪い: 文字列をつなぐと、引用符・エスケープ・日付リテラル・項目名の検査を毎回自分で書くことになる
+raw = f"SELECT Id, Name FROM Account WHERE Name = '{name}' AND CreatedDate >= {start_iso}"
+
+# 良い: 値は Python の値のまま渡し、エスケープと検査は Soql に任せる
+query = (
+    Soql("Account")                                      # FROM にあたる対象
+    .select("Id", "Name")
+    .where("Name", "=", name)                            # 引用符・エスケープは Soql がやる
+    .where("CreatedDate", ">=", last_n_days(30))         # 日付リテラルも関数で書ける
+    .build()
+)
+```
+
+| ルール | 理由 |
+|---|---|
+| f-string や `+` で SOQL をつながない | `'` を含む値で SOQL が壊れたり、別の条件が混ざったりする（インジェクション） |
+| 値は引用符なしで、Python の値のまま `where()` に渡す | エスケープと型の変換（`bool` は `true`、`None` は `null` など）を `Soql` が行う |
+| 日付は `date` / タイムゾーン付き `datetime` か、`last_n_days()` などの日付リテラルで渡す | 書式の間違いと、タイムゾーン無しの曖昧な日時を防ぐ |
+| 項目名・オブジェクト名は `Soql` に渡す（`Id; DELETE` のような文字列は `SoqlBuildError` で止まる） | 識別子の検査を通す |
+
+使える機能と作っていないもの（NOT・サブクエリ・HAVING など）は
+[`docs/機能/salesforce.md`](機能/salesforce.md) の「SOQL を組み立てる（Soql）」を参照。
