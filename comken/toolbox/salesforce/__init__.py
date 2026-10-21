@@ -36,6 +36,15 @@ URL と認証情報のシステム名は組織クラスがクラス定数とし�
         sf.login_with_credentials()  # prefix省略 → CREDENTIAL_PREFIX / MFA承認は人が行う
         for report_id, path in sf.export_reports(reports):
             ...
+
+SOQL は文字列で手書きすると値のエスケープ漏れや日付リテラルの書き間違いが起きるため、
+`soql` モジュールの `Soql` で組み立てる（通信はしない。`requests` 非依存）。
+
+    from comken.toolbox.salesforce.soql import Soql, last_n_days
+
+    soql = Soql("Opportunity").select("Id", "Name").where("CreatedDate", ">=", last_n_days(30))
+    with Solution() as sf:
+        rows = sf.query(soql.build())
 """
 
 from types import ModuleType

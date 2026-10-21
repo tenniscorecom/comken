@@ -82,7 +82,7 @@ with Excel(r"C:\作業\report.xlsx") as excel:
 | [Windows（pywin32）](docs/機能/windows.md) | Excel COM 操作・ウィンドウ操作・レジストリ読み取り |
 | [Browser（Edge）](docs/機能/browser.md) | Edge ブラウザ操作 |
 | [Browser 公認サイト](docs/機能/browser.md) | ライブラリ公認の `SiteBase` サブクラスを集めた置き場（`comken.toolbox.browser.sites`）。プロジェクト横断で再利用するサイトだけ昇格する |
-| [Salesforce（requests）](docs/機能/salesforce.md) | Salesforce の SOQL・レコード操作・レポート取得・API 使用量の計測 |
+| [Salesforce（requests）](docs/機能/salesforce.md) | Salesforce の SOQL の組み立て（`Soql`）・レコード操作・レポート取得・API 使用量の計測 |
 | [credentials（DPAPI）](docs/機能/credentials.md) | パスワード・client_secret の暗号化保存（Windows ユーザーに紐付く） |
 | [祝日・営業日判定](docs/機能/dates.md) | 内閣府の祝日 CSV と会社休日ルールを合成した「会社用カレンダー CSV」を Python・VBA 共通で読み取って営業日判定（Excel の WORKDAY 互換） |
 | [core（部品）](docs/機能/core.md) | `__all__` で公開しているいちばん浅いパッケージ・モジュールから取る部品群。ファイル検索・操作・圧縮・ファイル名の組み立て／データ比較・テキスト正規化・待機・リトライ・時間計測・ローカル日時 |

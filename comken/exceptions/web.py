@@ -234,3 +234,25 @@ class SalesforceReportAccessDeniedError(SalesforceError):
         self.report_id = report_id
         self.status_code = status_code
         self.detail = detail
+
+
+class SoqlBuildError(SalesforceError):
+    """SOQL の組み立て方が不正で止まった
+
+    オブジェクト名・項目名の書式が壊れている、比較演算子が SOQL に無い、
+    値の型が SOQL に書けない、`SELECT` が 1 つも無い、といった組み立て方の誤り。
+
+    SOQL には `SELECT *` が無く、値を差し込む変数（バインド変数）も無い。
+    引用符やエスケープは文字列で組み立てると漏れるので、**値は Python の型で
+    そのまま渡し、`Soql` にエスケープを任せる。**
+
+    発生箇所: comken.toolbox.salesforce.soql の Soql（コンストラクタと
+             select() / where() / where_any() / group_by() / order_by() / limit() / build()）
+
+    対処:
+        メッセージに出た対象（項目名など）と値を確認する。識別子は英字・数字・`_` だけで書く
+        （項目名の途中だけ `.` で連結できる）。値は引用符を自分で書かず Python の値のまま渡す
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)

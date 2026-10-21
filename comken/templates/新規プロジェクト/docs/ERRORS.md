@@ -105,6 +105,7 @@
 | `SalesforceReportFormatError` | 対応外形式、または明細の列が無いレポートで止めた | レポート形式を ``TABULAR`` / ``SUMMARY`` / ``MATRIX`` のいずれかに変えるか、SOQL（``query``）で取得してください。集計だけで明細が無いレポートのときは、SOQL で組み立て直すか、レポート定義に明細列を足してもらうかを管理者に相談してください |
 | `SalesforceReportAccessDeniedError` | レポート API（Analytics API）への権限が無い（HTTP 401 / 403） | Salesforce 管理者に、refresh_token を発行したユーザーについて次を確認してもらってください:1. Profile / Permission Set に「API Enabled」権限があるか2. 対象のレポート・レポートフォルダへのアクセス権があるか3. 組織の Edition・ライセンスが Reports and Dashboards REST APIに対応しているか（一部の制限ライセンスでは使えない） |
 | `SalesforceReportIDNotFoundError` | レポートの URL からレポート ID を取り出せない | Salesforce でレポートを開いたときのアドレスを、そのまま貼り直す |
+| `SoqlBuildError` | SOQL の組み立て方が不正で止まった | メッセージに出た対象（項目名など）と値を確認する。識別子は英字・数字・`_` だけで書く（項目名の途中だけ `.` で連結できる）。値は引用符を自分で書かず Python の値のまま渡す |
 | `StateError` | state.ini に関するエラー。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `HolidayError` | 祝日カレンダーに関するエラー。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
 | `WorkdayNotFoundError` | 営業日が見つからなかった | n をその月の営業日数以下に直す、対象月の祝日に過不足がないか確認する、社内休日（会社用カレンダーCSV）が広範囲に登録されていないか確認する |

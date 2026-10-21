@@ -395,6 +395,112 @@ SOQL のフィールドパスとは 1 対 1 ではない点に注意する。
 
 ---
 
+## SOQL を組み立てる（Soql）
+
+SOQL を文字列で手書きすると、値の引用符・エスケープの漏れや日付リテラルの書き間違いが
+起きます。`comken.toolbox.salesforce.soql` の `Soql` で組み立てると、その取り違えは
+組み立てた時点で `SoqlBuildError` になります。**通信はしない**ので、実行は今まで通り
+`query()` へ文字列を渡すだけです。
+
+```python
+from comken.toolbox.salesforce.soql import Soql, last_n_days
+
+soql = (
+    Soql("Opportunity")                                 # FROM にあたる対象
+    .where("CloseDate", ">=", last_n_days(30))          # 以降は書く順番を問わない
+    .where("StageName", "=", "Closed Won")
+    .select("Id", "Name", "Amount")
+    .order_by("Amount", desc=True)
+    .limit(100)
+    .build()
+)
+# "SELECT Id, Name, Amount FROM Opportunity WHERE CloseDate >= LAST_N_DAYS:30
+#  AND StageName = 'Closed Won' ORDER BY Amount DESC LIMIT 100"
+
+with Solution() as sf:
+    rows = sf.query(soql)
+```
+
+- **`from` は Python の予約語なのでメソッド名に使えない。** 対象オブジェクトは
+  コンストラクタ（`Soql("Opportunity")`）で渡します。あとは `select` / `where` /
+  `where_any` / `group_by` / `order_by` / `limit` を**書く順番を問わずに**足し、
+  `build()` が SOQL の正しい並び（`SELECT` → `FROM` → `WHERE` → `GROUP BY` →
+  `ORDER BY` → `LIMIT`）へ組み直します。
+- **`Soql` は不変**です。各メソッドは新しい `Soql` を返し、元のオブジェクトは
+  変わりません。共通の `.select(...)` を作って、そこから条件を変えて分岐できます。
+- 識別子（オブジェクト名・項目名）は英字・数字・`_` だけ（項目の途中だけ `.`）を
+  要求します。`Id; DELETE` や `Name--` は組み立てる前に `SoqlBuildError` になります。
+- **値は Python のまま渡し、引用符は書きません。** `str` の `'` `\` 改行などは
+  自動でエスケープされるので、値の中に条件が混ざることはありません。
+
+### 値と日付リテラル
+
+```python
+from datetime import UTC, date, datetime
+
+from comken.toolbox.salesforce.soql import (
+    TODAY,
+    LAST_MONTH,
+    Soql,
+    last_n_days,
+    next_n_months,
+)
+
+Soql("Opportunity").select("Id").where("IsWon", "=", True)          # → IsWon = true
+Soql("Opportunity").select("Id").where("Amount", ">=", 100)         # → Amount >= 100
+Soql("Opportunity").select("Id").where("ParentId", "=", None)       # → ParentId = null
+Soql("Opportunity").select("Id").where("CloseDate", "=", date(2026, 10, 21))
+Soql("Opportunity").select("Id").where("CreatedDate", ">=", datetime(2026, 10, 21, tzinfo=UTC))
+Soql("Opportunity").select("Id").where("CloseDate", "=", TODAY)     # → CloseDate = TODAY
+Soql("Opportunity").select("Id").where("CloseDate", ">=", LAST_MONTH)
+Soql("Opportunity").select("Id").where("CloseDate", ">=", last_n_days(30))
+Soql("Opportunity").select("Id").where("CreatedDate", "<", next_n_months(3))
+Soql("Account").select("Id").where("Name", "IN", ["A", "B"])        # → Name IN ('A', 'B')
+Soql("Contact").select("Id").where("Name", "LIKE", "A%_x")          # → Name LIKE 'A%_x'
+```
+
+- 使える比較演算子は `=` `!=` `<` `<=` `>` `>=` `LIKE` `IN` `NOT IN`
+  `INCLUDES` `EXCLUDES` だけです。
+- **`None` は `=` / `!=` にしか書けない**ので、それ以外の演算子で渡すと
+  `SoqlBuildError` になります（`null` は SOQL 側の書き方が限られているため）。
+- `nan` / `inf`、タイムゾーン無しの `datetime` も通りません（`SoqlBuildError`）。
+  タイムゾーン無しの `datetime` はどちらの時刻として解釈するか決まらないためです。
+- 日付リテラルは `TODAY` / `YESTERDAY` / `TOMORROW` / `THIS_WEEK` / `LAST_WEEK` /
+  `NEXT_WEEK` / `THIS_MONTH` / `LAST_MONTH` / `NEXT_MONTH` / `THIS_QUARTER` /
+  `LAST_QUARTER` / `NEXT_QUARTER` / `THIS_YEAR` / `LAST_YEAR` / `NEXT_YEAR` の
+  定数と、`last_n_days()` / `next_n_days()` / `last_n_weeks()` / `next_n_weeks()` /
+  `last_n_months()` / `next_n_months()` / `last_n_years()` / `next_n_years()` で
+  作ります。**引用符なしで出ます。** ただの文字列 `"TODAY"` を渡すと文字列なので
+  `'TODAY'` と引用されます。日付の指定なら定数の `TODAY`、文字列として検索したいなら
+  `"TODAY"` と、意図した書き分けができます。
+
+### OR で結ぶ条件（where_any）
+
+```python
+from comken.toolbox.salesforce.soql import Soql
+
+query = (
+    Soql("Opportunity")
+    .select("Id", "Name")
+    .where("Amount", ">", 0)
+    .where_any(("StageName", "=", "Closed Won"), ("StageName", "=", "Closed Lost"))
+    .build()
+)
+# SELECT Id, Name FROM Opportunity WHERE Amount > 0
+#  AND (StageName = 'Closed Won' OR StageName = 'Closed Lost')
+```
+
+### 作っていないもの
+
+`NOT`・入れ子の OR/AND・サブクエリ・`HAVING`・`OFFSET`・`FIELDS(ALL)` は
+**今回は足していない**ので、文字列を直接組み立てる必要があります。
+足りなくなったら `Soql` へ足す方針です。
+
+設計の判断の根拠は [設計判断の履歴](../HISTORY.md) の
+「SOQL を組み立てる Soql クラスを追加した」を参照。
+
+---
+
 ## 計測
 
 | 取るもの | 用途 |
