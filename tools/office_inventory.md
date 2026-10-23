@@ -134,10 +134,6 @@ class Report:
         self.codes.append((title, lang, code))
 
 
-def safe_name(name: str) -> str:
-    return re.sub(r'[\\/:*?"<>|]', "_", name)
-
-
 def mask_secret(text: str) -> str:
     return re.sub(r"(?i)\b(password|pwd)=[^;]*", r"\1=***", text)
 
