@@ -1,7 +1,7 @@
 # Access / Excel 資産の棚卸しスクリプト（Python）
 
 既存の Access データベースと Excel ブック（VBA マクロ・Power Query・データ接続など）が何をしているかを洗い出すための Python スクリプトです。
-フォルダを指定すると配下のファイルを再帰的に調べ、全体をまとめた `report.md` と、抽出したコード（VBA・M・SQL）のファイルを出力します。
+フォルダを指定すると配下のファイルを再帰的に調べ、結果を **Markdown 1つ**（既定は `inventory.md`）にまとめて出力します。VBA・M・SQL のコード本文もその中に入ります。
 
 **追加のパッケージは不要。** 標準ライブラリと pywin32（comken で既に使用）だけで動きます。Excel・Access は COM で操作します。
 
@@ -23,25 +23,11 @@
 
 ```
 python office_inventory.py "調査したいフォルダ"
-python office_inventory.py "調査したいフォルダ" -o 出力先フォルダ
+python office_inventory.py "調査したいフォルダ" -o 出力ファイル.md
 python office_inventory.py "単体のファイル.accdb"
 ```
 
-出力（既定は `inventory_out`）:
-
-```
-inventory_out/
-├─ report.md              ← 全ファイルのまとめ（コード本文も含む）
-├─ 000_売上集計/
-│   ├─ vba/Module1.bas
-│   └─ powerquery/売上明細.m
-└─ 001_顧客管理/
-    ├─ queries/Q_月次集計.sql
-    ├─ forms/F_顧客.txt
-    ├─ reports/...
-    ├─ macros/...
-    └─ modules/...
-```
+出力は `inventory.md` 1つだけ（`-o` で変更可）。ファイルごとに見出しが分かれ、一覧のあとにコード本文が続きます。
 
 ## 安全面の配慮
 
@@ -49,7 +35,7 @@ inventory_out/
 - **マクロ・VBA は実行しない。** Excel・Access とも `AutomationSecurity = 3`（強制無効）で開くので、Workbook_Open や AutoExec は動かない想定。Excel はイベントも止め、外部リンクの更新もしない。
 - **パスワード付きのファイルで止まらない。** 入力画面を出さずにエラーとしてレポートに記録する。
 - **データ本体は出力しない。** テーブルは名前・列名・件数だけ。
-- **接続文字列のパスワードは伏せる。** `Password=` / `PWD=` の値は `***` に置き換える。ただしサーバー名・共有フォルダのパス・M コード内の URL などはそのまま出るので、外部に渡す前に `report.md` を目で確認すること。
+- **接続文字列のパスワードは伏せる。** `Password=` / `PWD=` の値は `***` に置き換える。ただしサーバー名・共有フォルダのパス・M コード内の URL などはそのまま出るので、外部に渡す前に出力した Markdown を目で確認すること。
 
 ## コード（office_inventory.py）
 
@@ -57,11 +43,11 @@ inventory_out/
 """既存の Access / Excel 資産を棚卸しする。
 
 使い方:
-    python office_inventory.py 調査フォルダ [-o 出力フォルダ]
+    python office_inventory.py 調査フォルダ [-o 出力ファイル.md]
 
 Excel: シート・名前定義・データ接続・外部リンク・Power Query・VBA
 Access: テーブル・リンクテーブル・クエリ SQL・リレーション・フォーム・レポート・マクロ・モジュール
-どちらも COM で開く（pywin32 のみ使用）。元ファイルは書き換えない。
+どちらも COM で開く（pywin32 のみ使用）。元ファイルは書き換えない。結果は Markdown 1つにまとめる。
 """
 
 from __future__ import annotations
@@ -97,12 +83,12 @@ CONNECTION_TYPES = {
     7: "ワークシート",
     8: "データモデル",
 }
-# VBComponent.Type → (種類, 拡張子)
+# VBComponent.Type
 VBA_COMPONENT_TYPES = {
-    1: ("標準モジュール", ".bas"),
-    2: ("クラスモジュール", ".cls"),
-    3: ("ユーザーフォーム", ".frm"),
-    100: ("シート／ブック", ".cls"),
+    1: "標準モジュール",
+    2: "クラスモジュール",
+    3: "ユーザーフォーム",
+    100: "シート／ブック",
 }
 
 # DAO の QueryDef.Type
@@ -118,12 +104,12 @@ QUERY_TYPES = {
     128: "ユニオン",
 }
 
-# (見出し, CurrentProject のコレクション名, SaveAsText の種類, 出力フォルダ)
+# (見出し, CurrentProject のコレクション名, SaveAsText の種類)
 ACCESS_OBJECTS = [
-    ("フォーム", "AllForms", 2, "forms"),
-    ("レポート", "AllReports", 3, "reports"),
-    ("マクロ", "AllMacros", 4, "macros"),
-    ("モジュール", "AllModules", 5, "modules"),
+    ("フォーム", "AllForms", 2),
+    ("レポート", "AllReports", 3),
+    ("マクロ", "AllMacros", 4),
+    ("モジュール", "AllModules", 5),
 ]
 
 PROCEDURE_PATTERN = re.compile(
@@ -178,7 +164,7 @@ def start_excel():
     return excel
 
 
-def inspect_excel(excel, path: Path, out_dir: Path) -> Report:
+def inspect_excel(excel, path: Path) -> Report:
     report = Report(path, "Excel")
     wb = excel.Workbooks.Open(
         str(path),
@@ -193,8 +179,8 @@ def inspect_excel(excel, path: Path, out_dir: Path) -> Report:
         read_names(wb, report)
         read_connections(wb, report)
         read_external_links(wb, report)
-        read_power_query(wb, report, out_dir)
-        read_vba(wb, report, out_dir)
+        read_power_query(wb, report)
+        read_vba(wb, report)
     finally:
         wb.Close(SaveChanges=False)
     return report
@@ -229,14 +215,13 @@ def read_external_links(wb, report: Report) -> None:
         report.add("外部リンク", link)
 
 
-def read_power_query(wb, report: Report, out_dir: Path) -> None:
+def read_power_query(wb, report: Report) -> None:
     for query in wb.Queries:
-        write_text(out_dir / "powerquery" / f"{safe_name(query.Name)}.m", query.Formula)
         report.add("Power Query", query.Name)
         report.add_code(f"Power Query {query.Name}", "powerquery", query.Formula.strip())
 
 
-def read_vba(wb, report: Report, out_dir: Path) -> None:
+def read_vba(wb, report: Report) -> None:
     if not wb.HasVBProject:
         return
     try:
@@ -258,8 +243,7 @@ def read_vba(wb, report: Report, out_dir: Path) -> None:
         code = module.Lines(1, module.CountOfLines).strip()
         if not code:
             continue
-        kind, ext = VBA_COMPONENT_TYPES.get(comp.Type, (f"種類{comp.Type}", ".txt"))
-        write_text(out_dir / "vba" / f"{safe_name(comp.Name)}{ext}", code)
+        kind = VBA_COMPONENT_TYPES.get(comp.Type, f"種類{comp.Type}")
         procs = ", ".join(PROCEDURE_PATTERN.findall(code)) or "（プロシージャなし）"
         report.add("VBA", f"{comp.Name}（{kind}）: {len(code.splitlines())}行 / {procs}")
         report.add_code(f"VBA {comp.Name}（{kind}）", "vb", code)
@@ -268,7 +252,7 @@ def read_vba(wb, report: Report, out_dir: Path) -> None:
 # ---------------------------------------------------------------- Access
 
 
-def inspect_access(path: Path, out_dir: Path) -> Report:
+def inspect_access(path: Path) -> Report:
     report = Report(path, "Access")
     with tempfile.TemporaryDirectory() as tmp:
         copy = Path(tmp) / path.name
@@ -280,9 +264,9 @@ def inspect_access(path: Path, out_dir: Path) -> Report:
             try:
                 db = app.CurrentDb()
                 read_tables(db, report)
-                read_queries(db, report, out_dir)
+                read_queries(db, report)
                 read_relations(db, report)
-                read_access_objects(app, report, out_dir)
+                read_access_objects(app, report, Path(tmp))
             finally:
                 app.CloseCurrentDatabase()
         finally:
@@ -304,7 +288,7 @@ def read_tables(db, report: Report) -> None:
             report.add("テーブル", f"{name}（{td.RecordCount}件）: {columns}")
 
 
-def read_queries(db, report: Report, out_dir: Path) -> None:
+def read_queries(db, report: Report) -> None:
     for qd in db.QueryDefs:
         # "~" 始まりはフォームやコンボボックスに埋め込まれた SQL
         if qd.Name.startswith("~"):
@@ -313,7 +297,6 @@ def read_queries(db, report: Report, out_dir: Path) -> None:
         sql = qd.SQL.strip()
         report.add("クエリ", f"{qd.Name}（{kind}）")
         report.add_code(f"クエリ {qd.Name}（{kind}）", "sql", sql)
-        write_text(out_dir / "queries" / f"{safe_name(qd.Name)}.sql", sql)
 
 
 def read_relations(db, report: Report) -> None:
@@ -324,16 +307,16 @@ def read_relations(db, report: Report) -> None:
         report.add("リレーション", f"{rel.Table} → {rel.ForeignTable}（{pairs}）")
 
 
-def read_access_objects(app, report: Report, out_dir: Path) -> None:
-    for label, collection_name, object_type, folder in ACCESS_OBJECTS:
+def read_access_objects(app, report: Report, work_dir: Path) -> None:
+    # SaveAsText はファイルにしか書き出せないので、作業フォルダに出して読んだら消す
+    dest = work_dir / "object.txt"
+    for label, collection_name, object_type in ACCESS_OBJECTS:
         collection = getattr(app.CurrentProject, collection_name)
         for i in range(collection.Count):
             name = collection.Item(i).Name
-            dest = out_dir / folder / f"{safe_name(name)}.txt"
-            dest.parent.mkdir(parents=True, exist_ok=True)
             app.SaveAsText(object_type, name, str(dest))
             text = read_saved_text(dest)
-            dest.write_text(text, encoding="utf-8")
+            dest.unlink()
 
             if label in ("フォーム", "レポート"):
                 summarize_form(label, name, text, report)
@@ -391,7 +374,7 @@ def find_targets(target: Path) -> list[Path]:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Access / Excel 資産を棚卸しする")
     parser.add_argument("target", type=Path, help="調査するフォルダまたはファイル")
-    parser.add_argument("-o", "--out", type=Path, default=Path("inventory_out"))
+    parser.add_argument("-o", "--out", type=Path, default=Path("inventory.md"))
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -400,15 +383,11 @@ def main() -> None:
     excel = start_excel() if not all(is_access(p) for p in targets) else None
     reports = []
     try:
-        for i, path in enumerate(targets):
-            out_dir = args.out / f"{i:03d}_{safe_name(path.stem)}"
+        for path in targets:
             kind = "Access" if is_access(path) else "Excel"
             logger.info("調査中: %s", path)
             try:
-                if kind == "Access":
-                    report = inspect_access(path, out_dir)
-                else:
-                    report = inspect_excel(excel, path, out_dir)
+                report = inspect_access(path) if kind == "Access" else inspect_excel(excel, path)
             except Exception as e:
                 logger.exception("失敗: %s", path)
                 report = Report(path, kind, error=str(e))
@@ -417,8 +396,8 @@ def main() -> None:
         if excel is not None:
             excel.Quit()
 
-    write_report(reports, args.out / "report.md")
-    logger.info("完了: %d ファイル → %s", len(reports), args.out / "report.md")
+    write_report(reports, args.out)
+    logger.info("完了: %d ファイル → %s", len(reports), args.out)
 
 
 if __name__ == "__main__":
@@ -428,6 +407,6 @@ if __name__ == "__main__":
 ## 制限・既知の穴
 
 - Excel の VBA は上記のトラストセンター設定が必要。VBA プロジェクトにパスワードがかかっている場合は読めない。
-- Access のフォームのレコードソースが長くて複数行に分かれている場合、先頭行しか拾わない（全文は `forms/*.txt` にある）。
+- Access のフォームのレコードソースが長くて複数行に分かれている場合、先頭行しか拾わない。
 - ワークシート上の数式（セルの関数）は調べていない。外部ブックを参照している数式は「外部リンク」に出る。
 - 1 ファイルの途中で失敗すると、そのファイルはエラーだけが記録される（途中まで取れた内容は残らない）。
