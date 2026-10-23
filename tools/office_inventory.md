@@ -250,7 +250,8 @@ def read_vba(wb, report: Report) -> None:
 
 def inspect_access(path: Path) -> Report:
     report = Report(path, "Access")
-    with tempfile.TemporaryDirectory() as tmp:
+    # Quit() は Access の終了を待たないので、片付けの時点でコピーがまだロックされていることがある
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         copy = Path(tmp) / path.name
         shutil.copy2(path, copy)
         app = win32com.client.DispatchEx("Access.Application")
@@ -304,15 +305,15 @@ def read_relations(db, report: Report) -> None:
 
 
 def read_access_objects(app, report: Report, work_dir: Path) -> None:
-    # SaveAsText はファイルにしか書き出せないので、作業フォルダに出して読んだら消す
-    dest = work_dir / "object.txt"
+    # SaveAsText はファイルにしか書き出せないので作業フォルダに出して読む。
+    # 書き出した直後は Access がファイルを掴んでいることがあるため、消さずに毎回別名にする
     for label, collection_name, object_type in ACCESS_OBJECTS:
         collection = getattr(app.CurrentProject, collection_name)
         for i in range(collection.Count):
             name = collection.Item(i).Name
+            dest = work_dir / f"{object_type}_{i}.txt"
             app.SaveAsText(object_type, name, str(dest))
             text = read_saved_text(dest)
-            dest.unlink()
 
             if label in ("フォーム", "レポート"):
                 summarize_form(label, name, text, report)
@@ -405,4 +406,5 @@ if __name__ == "__main__":
 - Excel の VBA は上記のトラストセンター設定が必要。VBA プロジェクトにパスワードがかかっている場合は読めない。
 - Access のフォームのレコードソースが長くて複数行に分かれている場合、先頭行しか拾わない。
 - ワークシート上の数式（セルの関数）は調べていない。外部ブックを参照している数式は「外部リンク」に出る。
+- Access の終了が遅れると、一時フォルダ（`%TEMP%` 配下の `tmp...`）が消えずに残ることがある。中身は Access ファイルのコピーなので、気になれば手で消す。
 - 1 ファイルの途中で失敗すると、そのファイルはエラーだけが記録される（途中まで取れた内容は残らない）。
