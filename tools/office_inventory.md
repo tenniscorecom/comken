@@ -3,18 +3,21 @@
 既存の Access データベースと Excel ブック（VBA マクロ・Power Query・データ接続など）が何をしているかを洗い出すための Python スクリプトです。
 フォルダを指定すると配下のファイルを再帰的に調べ、全体をまとめた `report.md` と、抽出したコード（VBA・M・SQL）のファイルを出力します。
 
+**追加のパッケージは不要。** 標準ライブラリと pywin32（comken で既に使用）だけで動きます。Excel・Access は COM で操作します。
+
 ## 調べる内容
 
-| 対象 | 取得する内容 | 必要なもの |
-|---|---|---|
-| Excel（.xlsx .xlsm .xlsb .xls .xltm .xlam） | シート一覧（非表示も）・名前定義・データ接続・外部リンク・Power Query の M コード・VBA モジュール | `oletools`（Excel 本体は不要） |
-| Access（.accdb .mdb） | テーブル（件数・列名）・リンクテーブルの接続先・クエリの種類と SQL・リレーション・フォーム／レポートのレコードソースとコードビハインド・マクロ・標準モジュール | `pywin32` と Access 本体 |
+| 対象 | 取得する内容 |
+|---|---|
+| Excel（.xlsx .xlsm .xlsb .xls .xltm .xlam） | シート一覧（非表示も）・名前定義・データ接続・外部リンク・Power Query の M コード・VBA モジュール |
+| Access（.accdb .mdb） | テーブル（件数・列名）・リンクテーブルの接続先・クエリの種類と SQL・リレーション・フォーム／レポートのレコードソースとコードビハインド・マクロ・標準モジュール |
 
 ## 前提
 
-- Windows、Python 3.10 以上
-- `pip install oletools pywin32`
-- Access の調査には Access 本体（またはランタイムではなく製品版）がインストールされていること
+- Windows、Python 3.10 以上、pywin32
+- Excel・Access の製品版がインストールされていること（調べる種類の分だけ）
+- Power Query の取得は Excel 2016 以降
+- **VBA を読むには Excel の設定が必要**: [ファイル] → [オプション] → [トラスト センター] → [トラスト センターの設定] → [マクロの設定] → 「VBA プロジェクト オブジェクト モデルへのアクセスを信頼する」にチェック。オフのままでも他の項目は調べられ、VBA だけ「読めない」とレポートに出る。
 
 ## 使い方
 
@@ -31,7 +34,7 @@ inventory_out/
 ├─ report.md              ← 全ファイルのまとめ（コード本文も含む）
 ├─ 000_売上集計/
 │   ├─ vba/Module1.bas
-│   └─ PowerQuery_Section1.m
+│   └─ powerquery/売上明細.m
 └─ 001_顧客管理/
     ├─ queries/Q_月次集計.sql
     ├─ forms/F_顧客.txt
@@ -42,11 +45,11 @@ inventory_out/
 
 ## 安全面の配慮
 
-- **元ファイルは書き換えない。** Excel はファイルを読むだけ。Access はコピーを一時フォルダに作ってから開く（Access は開くだけでファイルを更新することがあるため）。
-- **Access のマクロ・VBA は実行しない。** `AutomationSecurity = 3`（強制無効）で開くので、AutoExec マクロや起動時のフォームのコードは動かない想定。ただしコードを含まない安全なマクロアクションまで止まるかは環境によるので、心配なら先に AutoExec の有無を確認すること。
+- **元ファイルは書き換えない。** Excel は読み取り専用で開き、保存せずに閉じる。Access はコピーを一時フォルダに作ってから開く（Access は開くだけでファイルを更新することがあるため）。
+- **マクロ・VBA は実行しない。** Excel・Access とも `AutomationSecurity = 3`（強制無効）で開くので、Workbook_Open や AutoExec は動かない想定。Excel はイベントも止め、外部リンクの更新もしない。
+- **パスワード付きのファイルで止まらない。** 入力画面を出さずにエラーとしてレポートに記録する。
 - **データ本体は出力しない。** テーブルは名前・列名・件数だけ。
 - **接続文字列のパスワードは伏せる。** `Password=` / `PWD=` の値は `***` に置き換える。ただしサーバー名・共有フォルダのパス・M コード内の URL などはそのまま出るので、外部に渡す前に `report.md` を目で確認すること。
-- パスワード付きの Access ファイルは開けずにエラーとしてレポートに記録される。
 
 ## コード（office_inventory.py）
 
@@ -56,39 +59,51 @@ inventory_out/
 使い方:
     python office_inventory.py 調査フォルダ [-o 出力フォルダ]
 
-Excel: シート・名前定義・データ接続・外部リンク・Power Query・VBA（Excel 本体は不要）
+Excel: シート・名前定義・データ接続・外部リンク・Power Query・VBA
 Access: テーブル・リンクテーブル・クエリ SQL・リレーション・フォーム・レポート・マクロ・モジュール
-        （Access 本体が必要）
-元ファイルは読むだけ。Access は一時フォルダのコピーを開く。
+どちらも COM で開く（pywin32 のみ使用）。元ファイルは書き換えない。
 """
 
 from __future__ import annotations
 
 import argparse
-import base64
-import io
 import logging
 import re
 import shutil
-import struct
 import tempfile
-import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from xml.etree import ElementTree as ET
 
 import win32com.client
-from oletools.olevba import VBA_Parser
 
 logger = logging.getLogger(__name__)
 
 EXCEL_EXTS = {".xlsx", ".xlsm", ".xlsb", ".xls", ".xltm", ".xlam"}
 ACCESS_EXTS = {".accdb", ".mdb"}
 
-NS_MAIN = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
-NS_REL = "{http://schemas.openxmlformats.org/package/2006/relationships}"
-
 MSO_AUTOMATION_SECURITY_FORCE_DISABLE = 3
+XL_EXCEL_LINKS = 1
+# パスワード付きブックで入力画面を出さずに失敗させるためのダミー
+# （パスワード無しのブックでは無視される）
+DUMMY_PASSWORD = "__no_password__"
+
+SHEET_VISIBILITY = {-1: "表示", 0: "非表示", 2: "完全非表示"}
+CONNECTION_TYPES = {
+    1: "OLEDB",
+    2: "ODBC",
+    3: "XML",
+    4: "テキスト",
+    5: "Web",
+    7: "ワークシート",
+    8: "データモデル",
+}
+# VBComponent.Type → (種類, 拡張子)
+VBA_COMPONENT_TYPES = {
+    1: ("標準モジュール", ".bas"),
+    2: ("クラスモジュール", ".cls"),
+    3: ("ユーザーフォーム", ".frm"),
+    100: ("シート／ブック", ".cls"),
+}
 
 # DAO の QueryDef.Type
 QUERY_TYPES = {
@@ -110,6 +125,12 @@ ACCESS_OBJECTS = [
     ("マクロ", "AllMacros", 4, "macros"),
     ("モジュール", "AllModules", 5, "modules"),
 ]
+
+PROCEDURE_PATTERN = re.compile(
+    r"^\s*(?:Public\s+|Private\s+|Friend\s+)?(?:Static\s+)?"
+    r"(?:Sub|Function|Property\s+\w+)\s+(\w+)",
+    re.MULTILINE | re.IGNORECASE,
+)
 
 
 @dataclass
@@ -140,107 +161,108 @@ def write_text(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def is_access(path: Path) -> bool:
+    return path.suffix.lower() in ACCESS_EXTS
+
+
 # ---------------------------------------------------------------- Excel
 
 
-def inspect_excel(path: Path, out_dir: Path) -> Report:
+def start_excel():
+    excel = win32com.client.DispatchEx("Excel.Application")
+    excel.Visible = False
+    excel.DisplayAlerts = False
+    excel.AskToUpdateLinks = False
+    excel.EnableEvents = False
+    excel.AutomationSecurity = MSO_AUTOMATION_SECURITY_FORCE_DISABLE
+    return excel
+
+
+def inspect_excel(excel, path: Path, out_dir: Path) -> Report:
     report = Report(path, "Excel")
-    # .xls は zip ではないので VBA だけ調べる
-    if zipfile.is_zipfile(path):
-        with zipfile.ZipFile(path) as zf:
-            names = set(zf.namelist())
-            read_workbook_xml(zf, names, report)
-            read_connections(zf, names, report)
-            read_external_links(zf, names, report)
-            read_power_query(zf, names, report, out_dir)
-    read_vba(path, report, out_dir)
+    wb = excel.Workbooks.Open(
+        str(path),
+        UpdateLinks=0,
+        ReadOnly=True,
+        Password=DUMMY_PASSWORD,
+        IgnoreReadOnlyRecommended=True,
+        AddToMru=False,
+    )
+    try:
+        read_sheets(wb, report)
+        read_names(wb, report)
+        read_connections(wb, report)
+        read_external_links(wb, report)
+        read_power_query(wb, report, out_dir)
+        read_vba(wb, report, out_dir)
+    finally:
+        wb.Close(SaveChanges=False)
     return report
 
 
-def read_workbook_xml(zf: zipfile.ZipFile, names: set[str], report: Report) -> None:
-    # .xlsb は workbook.bin なのでここは読めない
-    if "xl/workbook.xml" not in names:
-        return
-    root = ET.fromstring(zf.read("xl/workbook.xml"))
-    for sheet in root.iter(f"{NS_MAIN}sheet"):
-        state = sheet.get("state", "visible")
-        report.add("シート", f"{sheet.get('name')}（{state}）")
-    for defined in root.iter(f"{NS_MAIN}definedName"):
-        report.add("名前定義", f"{defined.get('name')} = {defined.text}")
+def read_sheets(wb, report: Report) -> None:
+    for sheet in wb.Sheets:
+        visibility = SHEET_VISIBILITY.get(sheet.Visible, str(sheet.Visible))
+        report.add("シート", f"{sheet.Name}（{visibility}）")
 
 
-def read_connections(zf: zipfile.ZipFile, names: set[str], report: Report) -> None:
-    if "xl/connections.xml" not in names:
-        return
-    root = ET.fromstring(zf.read("xl/connections.xml"))
-    for conn in root.iter(f"{NS_MAIN}connection"):
-        line = f"{conn.get('name')}（type={conn.get('type')}）"
-        db = conn.find(f"{NS_MAIN}dbPr")
-        if db is not None:
-            line += f" 接続: {mask_secret(db.get('connection', ''))}"
-            line += f" / コマンド: {db.get('command', '')}"
+def read_names(wb, report: Report) -> None:
+    for name in wb.Names:
+        hidden = "" if name.Visible else "（非表示）"
+        report.add("名前定義", f"{name.Name}{hidden} = {name.RefersTo}")
+
+
+def read_connections(wb, report: Report) -> None:
+    for conn in wb.Connections:
+        kind = CONNECTION_TYPES.get(conn.Type, f"種類{conn.Type}")
+        line = f"{conn.Name}（{kind}）"
+        detail = {1: "OLEDBConnection", 2: "ODBCConnection"}.get(conn.Type)
+        if detail:
+            source = getattr(conn, detail)
+            line += f" 接続: {mask_secret(str(source.Connection))}"
+            line += f" / コマンド: {source.CommandText}"
         report.add("データ接続", line)
 
 
-def read_external_links(zf: zipfile.ZipFile, names: set[str], report: Report) -> None:
-    for name in sorted(names):
-        if not re.fullmatch(r"xl/externalLinks/_rels/externalLink\d+\.xml\.rels", name):
-            continue
-        root = ET.fromstring(zf.read(name))
-        for rel in root.iter(f"{NS_REL}Relationship"):
-            report.add("外部リンク", rel.get("Target", ""))
+def read_external_links(wb, report: Report) -> None:
+    for link in wb.LinkSources(XL_EXCEL_LINKS) or ():
+        report.add("外部リンク", link)
 
 
-def read_power_query(
-    zf: zipfile.ZipFile, names: set[str], report: Report, out_dir: Path
-) -> None:
-    # Power Query は customXml/itemN.xml の DataMashup 要素に base64 で入っている
-    for name in sorted(names):
-        if not re.fullmatch(r"customXml/item\d+\.xml", name):
-            continue
-        root = ET.fromstring(zf.read(name))
-        if not root.tag.endswith("DataMashup") or not root.text:
-            continue
-        m_code = decode_data_mashup(root.text)
-        write_text(out_dir / "PowerQuery_Section1.m", m_code)
-        for query in re.findall(r'^shared\s+(#"[^"]+"|\w+)\s*=', m_code, re.MULTILINE):
-            report.add("Power Query", query)
-        report.add_code("Power Query（Section1.m）", "powerquery", m_code.strip())
+def read_power_query(wb, report: Report, out_dir: Path) -> None:
+    for query in wb.Queries:
+        write_text(out_dir / "powerquery" / f"{safe_name(query.Name)}.m", query.Formula)
+        report.add("Power Query", query.Name)
+        report.add_code(f"Power Query {query.Name}", "powerquery", query.Formula.strip())
 
 
-def decode_data_mashup(text: str) -> str:
-    # 先頭 4 バイトがバージョン、次の 4 バイトが続く zip（パッケージ）の長さ
-    data = base64.b64decode(text)
-    package_size = struct.unpack_from("<i", data, 4)[0]
-    package = data[8 : 8 + package_size]
-    with zipfile.ZipFile(io.BytesIO(package)) as pz:
-        return pz.read("Formulas/Section1.m").decode("utf-8-sig")
-
-
-def read_vba(path: Path, report: Report, out_dir: Path) -> None:
-    parser = VBA_Parser(str(path))
+def read_vba(wb, report: Report, out_dir: Path) -> None:
+    if not wb.HasVBProject:
+        return
     try:
-        if not parser.detect_vba_macros():
-            return
-        for _, _, module_name, code in parser.extract_macros():
-            body = "\n".join(
-                line for line in code.splitlines() if not line.startswith("Attribute VB_")
-            ).strip()
-            if not body:
-                continue
-            write_text(out_dir / "vba" / safe_name(module_name), body)
-            procs = re.findall(
-                r"^\s*(?:Public\s+|Private\s+|Friend\s+)?(?:Static\s+)?"
-                r"(?:Sub|Function|Property\s+\w+)\s+(\w+)",
-                body,
-                re.MULTILINE | re.IGNORECASE,
-            )
-            report.add(
-                "VBA", f"{module_name}: {len(body.splitlines())}行 / {', '.join(procs) or '（プロシージャなし）'}"
-            )
-            report.add_code(f"VBA {module_name}", "vb", body)
-    finally:
-        parser.close()
+        project = wb.VBProject
+    except Exception:
+        report.add(
+            "VBA",
+            "読めない（「VBA プロジェクト オブジェクト モデルへのアクセスを信頼する」が無効）",
+        )
+        return
+    if project.Protection == 1:
+        report.add("VBA", "パスワードでロックされていて読めない")
+        return
+
+    for comp in project.VBComponents:
+        module = comp.CodeModule
+        if module.CountOfLines == 0:
+            continue
+        code = module.Lines(1, module.CountOfLines).strip()
+        if not code:
+            continue
+        kind, ext = VBA_COMPONENT_TYPES.get(comp.Type, (f"種類{comp.Type}", ".txt"))
+        write_text(out_dir / "vba" / f"{safe_name(comp.Name)}{ext}", code)
+        procs = ", ".join(PROCEDURE_PATTERN.findall(code)) or "（プロシージャなし）"
+        report.add("VBA", f"{comp.Name}（{kind}）: {len(code.splitlines())}行 / {procs}")
+        report.add_code(f"VBA {comp.Name}（{kind}）", "vb", code)
 
 
 # ---------------------------------------------------------------- Access
@@ -374,17 +396,26 @@ def main() -> None:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
+    targets = find_targets(args.target)
+    excel = start_excel() if not all(is_access(p) for p in targets) else None
     reports = []
-    for i, path in enumerate(find_targets(args.target)):
-        out_dir = args.out / f"{i:03d}_{safe_name(path.stem)}"
-        is_access = path.suffix.lower() in ACCESS_EXTS
-        logger.info("調査中: %s", path)
-        try:
-            report = inspect_access(path, out_dir) if is_access else inspect_excel(path, out_dir)
-        except Exception as e:
-            logger.exception("失敗: %s", path)
-            report = Report(path, "Access" if is_access else "Excel", error=str(e))
-        reports.append(report)
+    try:
+        for i, path in enumerate(targets):
+            out_dir = args.out / f"{i:03d}_{safe_name(path.stem)}"
+            kind = "Access" if is_access(path) else "Excel"
+            logger.info("調査中: %s", path)
+            try:
+                if kind == "Access":
+                    report = inspect_access(path, out_dir)
+                else:
+                    report = inspect_excel(excel, path, out_dir)
+            except Exception as e:
+                logger.exception("失敗: %s", path)
+                report = Report(path, kind, error=str(e))
+            reports.append(report)
+    finally:
+        if excel is not None:
+            excel.Quit()
 
     write_report(reports, args.out / "report.md")
     logger.info("完了: %d ファイル → %s", len(reports), args.out / "report.md")
@@ -396,8 +427,7 @@ if __name__ == "__main__":
 
 ## 制限・既知の穴
 
-- `.xlsb` はシート一覧・名前定義・データ接続が読めない（バイナリ形式のため）。VBA と Power Query は読める。
-- `.xls` は VBA だけ。Power Query・接続を調べたい場合は Excel で `.xlsx` / `.xlsm` に保存し直してから実行する。
-- Excel の VBA プロジェクトにパスワードがかかっていても oletools は中身を読めることが多いが、読めない場合はレポートに出ない。
+- Excel の VBA は上記のトラストセンター設定が必要。VBA プロジェクトにパスワードがかかっている場合は読めない。
 - Access のフォームのレコードソースが長くて複数行に分かれている場合、先頭行しか拾わない（全文は `forms/*.txt` にある）。
 - ワークシート上の数式（セルの関数）は調べていない。外部ブックを参照している数式は「外部リンク」に出る。
+- 1 ファイルの途中で失敗すると、そのファイルはエラーだけが記録される（途中まで取れた内容は残らない）。
