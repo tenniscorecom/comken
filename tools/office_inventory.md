@@ -39,7 +39,7 @@ python office_inventory.py "単体のファイル.accdb"
 
 ## コード（office_inventory.py）
 
-```python
+`````python
 """既存の Access / Excel 資産を棚卸しする。
 
 使い方:
@@ -399,7 +399,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-```
+`````
 
 ## 制限・既知の穴
 

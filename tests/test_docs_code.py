@@ -70,7 +70,18 @@ def _list_docs() -> list[Path]:
 
 _DOCS = _list_docs()
 
-_CODE_BLOCK = re.compile(r"```python(\s+skip)?\n(.*?)```", re.DOTALL)
+# Markdown のフェンス規則（CommonMark）に倣う。
+# - 開き: 行頭のバッククォート3つ以上 + 言語名
+# - 閉じ: 行頭に**開きと同じ以上の長さ**のバッククォートだけがある行
+# 開きより短いフェンスは閉じにならない。コードのなかに Markdown のフェンス
+# そのものを文字列として含む Python（tools/office_inventory.md など）は、
+# ここで切れてしまわない。
+_CODE_BLOCK = re.compile(
+    r"^(?P<fence>`{3,})python(?P<skip>[ \t]+skip)?[ \t]*\n"
+    r"(?P<code>.*?)"
+    r"^(?P=fence)`*[ \t]*$",
+    re.DOTALL | re.MULTILINE,
+)
 _ANY_FENCED_BLOCK = re.compile(r"```.*?```", re.DOTALL)
 _MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]*]\(([^)]+)\)")
 _HEADING = re.compile(r"^#{1,6}\s+(.+)$", re.MULTILINE)
@@ -91,16 +102,23 @@ _REMOVED_NAMES = (
 )
 
 
+def _code_blocks(text: str) -> list[tuple[str, bool]]:
+    """テキスト中の Python コードブロックを (コード, skip マーカー付きか) で返す。"""
+    return [
+        (match.group("code"), match.group("skip") is not None)
+        for match in _CODE_BLOCK.finditer(text)
+    ]
+
+
 def _python_blocks() -> list:
     blocks = []
     for doc in _DOCS:
         if not doc.exists():
             continue
-        for i, match in enumerate(_CODE_BLOCK.finditer(doc.read_text(encoding="utf-8"))):
-            skip_marker = match.group(1) is not None
+        for i, (code, skip_marker) in enumerate(_code_blocks(doc.read_text(encoding="utf-8"))):
             blocks.append(
                 pytest.param(
-                    match.group(2),
+                    code,
                     skip_marker,
                     id=f"{doc.name}#{i + 1}",
                 )
@@ -162,6 +180,44 @@ def test_python_code_block_compiles(code, skip_marker):
     if skip_marker:
         pytest.skip("ドキュメントで skip マーカーが付いたブロック")
     compile(code, "<doc>", "exec")
+
+
+def test_code_block_closes_at_fence_of_same_or_longer_length() -> None:
+    """コードブロックは「開きフェンスと同じ以上の長さのフェンス」で閉じる。
+
+    Markdown の仕様では、開きより短いフェンスは閉じにならない。
+    コードのなかに Markdown のフェンス（````）を文字列として含む Python が
+    あるため、この違いがそのまま「コードが途中で切れる」不具合になる。
+    """
+    # 開き5個・本文中の4個：4個では閉じない
+    blocks = _code_blocks("`````python\nx = 1\n````\ny = 2\n`````\n")
+    assert len(blocks) == 1
+    code, skip_marker = blocks[0]
+    assert not skip_marker
+    assert code == "x = 1\n````\ny = 2\n"
+
+    # 開き3個・閉じ5個：5個は閉じる
+    blocks = _code_blocks("```python\nx = 1\n`````\n")
+    assert len(blocks) == 1
+    code, _skip_marker = blocks[0]
+    assert code == "x = 1\n"
+
+
+def test_tool_doc_code_block_is_not_cut_at_inner_fence() -> None:
+    """`tools/office_inventory.md` のコードブロックは最後まで取り出される。
+
+    このスクリプトは Markdown のフェンス（````）を文字列として含むため、
+    途中で切れると SyntaxError になる。上の構文チェックは「通るか否か」しか
+    見ないので、切り落とされていないこと自体をここで押さえる。
+    """
+    doc = _ROOT / "tools" / "office_inventory.md"
+    blocks = _code_blocks(doc.read_text(encoding="utf-8"))
+    assert len(blocks) == 1
+    code, _skip_marker = blocks[0]
+    # コードのなかの Markdown フェンスまで取り出せている
+    assert "````" in code
+    # スクリプトの末尾まで取り出せている
+    assert code.rstrip().endswith("main()")
 
 
 def _all_names(path: Path) -> list[str]:
