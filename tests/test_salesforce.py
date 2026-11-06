@@ -223,6 +223,134 @@ class TestSalesforceQuery:
             assert csv_file.read() == [{"Id": "1", "Name": "Acme"}]
 
 
+class TestSalesforceQueryFlatten:
+    """``query_rows()`` / ``query()`` の参照項目（入れ子）の平坦化を検証する。
+
+    応答の参照項目は入れ子で返るため、平らにして返さないと
+    ``bulk_query()``（``Owner.Name`` の列になる）と列の形が合わない。
+    """
+
+    def test_flattens_nested_reference_and_drops_attributes(self):
+        """2 段の入れ子も "Owner.Manager.Name" の形にし、attributes は落とす。"""
+        response = _response(
+            json_body={
+                "records": [
+                    {
+                        "attributes": {"type": "Account", "url": "/services/data/v67.0/x/001"},
+                        "Id": "001",
+                        "Owner": {
+                            "attributes": {"type": "User", "url": "/services/data/v67.0/x/005"},
+                            "Name": "山田",
+                            "Manager": {
+                                "attributes": {"type": "User", "url": "/services/data/v67.0/x/005"},
+                                "Name": "佐藤",
+                            },
+                        },
+                    }
+                ],
+                "done": True,
+            }
+        )
+        with _salesforce([response]) as (client, _, _):
+            records = list(
+                client.query_rows("SELECT Id, Owner.Name, Owner.Manager.Name FROM Account")
+            )
+
+        assert records == [{"Id": "001", "Owner.Name": "山田", "Owner.Manager.Name": "佐藤"}]
+
+    def test_null_value_becomes_empty_string(self):
+        """値が null の項目は空文字にする（bulk_query() と同じ）。"""
+        response = _response(
+            json_body={"records": [{"Id": "001", "Name": None, "Amount": None}], "done": True}
+        )
+        with _salesforce([response]) as (client, _, _):
+            records = list(client.query_rows("SELECT Id, Name, Amount FROM Account"))
+
+        assert records == [{"Id": "001", "Name": "", "Amount": ""}]
+
+    def test_null_reference_makes_no_key(self):
+        """参照項目が null のときは、そのレコードではキーを作らない。"""
+        response = _response(json_body={"records": [{"Id": "001", "Owner": None}], "done": True})
+        with _salesforce([response]) as (client, _, _):
+            records = list(client.query_rows("SELECT Id, Owner.Name FROM Account"))
+
+        assert records == [{"Id": "001"}]
+
+    def test_query_columns_are_union_of_all_records(self):
+        """1 件目の参照項目が null でも、2 件目の "Owner.Name" が列に出る（1 件目は空文字）。"""
+        response = _response(
+            json_body={
+                "records": [
+                    {"Id": "001", "Owner": None},
+                    {
+                        "Id": "002",
+                        "Owner": {
+                            "attributes": {"type": "User", "url": "/services/data/v67.0/x/005"},
+                            "Name": "佐藤",
+                        },
+                    },
+                ],
+                "done": True,
+            }
+        )
+        with _salesforce([response]) as (client, _, _):
+            table = client.query("SELECT Id, Owner.Name FROM Account")
+
+        assert table.columns == ["Id", "Owner.Name"]
+        assert table.to_rows() == [
+            {"Id": "001", "Owner.Name": ""},
+            {"Id": "002", "Owner.Name": "佐藤"},
+        ]
+
+    def test_reference_null_in_every_record_makes_no_column(self):
+        """全レコードで参照項目が null のときは、その列が出ない。"""
+        response = _response(
+            json_body={
+                "records": [{"Id": "001", "Owner": None}, {"Id": "002", "Owner": None}],
+                "done": True,
+            }
+        )
+        with _salesforce([response]) as (client, _, _):
+            table = client.query("SELECT Id, Owner.Name FROM Account")
+
+        assert table.columns == ["Id"]
+        assert table.to_rows() == [{"Id": "001"}, {"Id": "002"}]
+
+    def test_subquery_dict_is_kept_as_is(self):
+        """子リレーションのサブクエリは平らにせず、そのままの値にする。"""
+        contacts = {
+            "totalSize": 1,
+            "done": True,
+            "records": [{"attributes": {"type": "Contact"}, "Id": "003"}],
+        }
+        response = _response(
+            json_body={"records": [{"Id": "001", "Contacts": contacts}], "done": True}
+        )
+        with _salesforce([response]) as (client, _, _):
+            records = list(client.query_rows("SELECT Id, (SELECT Id FROM Contacts) FROM Account"))
+
+        assert records == [{"Id": "001", "Contacts": contacts}]
+
+    def test_number_and_boolean_values_keep_their_type(self):
+        """数値・真偽値は文字列にせず、そのままの型で返す。"""
+        response = _response(
+            json_body={"records": [{"Id": "001", "Amount": 100, "IsWon": True}], "done": True}
+        )
+        with _salesforce([response]) as (client, _, _):
+            records = list(client.query_rows("SELECT Id, Amount, IsWon FROM Opportunity"))
+
+        assert records == [{"Id": "001", "Amount": 100, "IsWon": True}]
+
+    def test_zero_records_returns_table_without_columns(self):
+        """0 件のときは列が空の Table を返す。"""
+        response = _response(json_body={"records": [], "done": True})
+        with _salesforce([response]) as (client, _, _):
+            table = client.query("SELECT Id, Owner.Name FROM Account")
+
+        assert table.columns == []
+        assert table.to_rows() == []
+
+
 class TestSalesforceReauthentication:
     def test_401_triggers_one_retry_with_new_token(self):
         """401 ならトークンを取り直して1回だけやり直す。"""

@@ -84,6 +84,13 @@ DRY_RUN_RECORD_ID = "DRYRUN00000000000A"
 # カスタムオブジェクト・ ``_`` 始まりの内部オブジェクトを含む）。
 _OBJECT_NAME_PATTERN = re.compile(r"\A[A-Za-z0-9_]+\Z")
 
+# SOQL の SELECT 句にあるドット区切りの項目（``Owner.Name``）を探す正規表現。
+# 参照項目（子を持つ項目）のパスを SOQL から集めるのに使う
+_FIELD_PATH_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+")
+
+# SOQL の句の区切り（``FROM``）を探す正規表現。SELECT 句の終わりを判断する
+_FROM_PATTERN = re.compile(r"\bFROM\b", flags=re.IGNORECASE)
+
 # 一時的な失敗をやり直す回数と待ち時間。待ち時間は試行回数に比例して伸ばす
 MAX_ATTEMPTS = 3
 RETRY_WAIT_SECONDS = 2
@@ -270,10 +277,23 @@ class SalesforceBase:
         ``query()`` はこのイテレータを ``Table`` に包む薄い層
         （順序を「イテレータ先・Table 後」に揃えるため）。
 
+        **返り値は平らな形にする。** 応答の参照項目は入れ子で返る
+        （``{"Owner": {"Name": "山田"}}``）が、``Owner.Name`` のようにドット
+        区切りのキーにして返す（何段でも ``Owner.Manager.Name``）。各段の
+        ``attributes``（メタ情報）は落とす。値が null の項目は空文字 ``""``
+        にする（``bulk_query()`` と同じ）。
+
+        ただし **参照項目（子を持つ項目）が null のときは、そのレコードでは
+        キーを作らない**（``{"Owner": null}`` → ``Owner`` のキーは無い）。
+        null の参照の子の項目名は応答から分からないため。値が null の項目が
+        参照項目かどうかは応答の値だけからは分からないので、SOQL の SELECT 句
+        と応答の中身（dict として現れる項目）の両方から判断する。
+
         列の情報は SOQL のレスポンスからは取れないため、戻り値からは直接
-        列名が出ない。``query()`` は ``records[0]`` から列を推測するが、
-        これは「1 件以上あるとき」の便宜であって、本物のスキーマではない。
-        列名を厳密に扱いたいときは ``describe`` 系エンドポイントを使うこと。
+        列名が出ない。``query()`` は **全レコードのキーの和集合** から列を
+        推測するが、これは「1 件以上あるとき」の便宜であって、本物のスキーマ
+        ではない。列名を厳密に扱いたいときは ``describe`` 系エンドポイント
+        を使うこと。
 
         Args:
             soql: 実行する SOQL クエリ文字列。
@@ -285,15 +305,20 @@ class SalesforceBase:
         path = self.data_path(f"/query?q={urllib.parse.quote(soql)}")
         # 件数ログは逐次 yield と両立させるため、ページ受信のたびに数える
         yielded = 0
+        # 参照項目（子を持つ項目）のパス。値が null の項目が参照項目かどうかの
+        # 判定に使う。SOQL の SELECT 句から分かるものは先に求めておく
+        reference_paths = _soql_reference_paths(soql)
         while path:
             result, _ = self.request("GET", path, component="query")
             if not isinstance(result, dict):
                 break
             page_records = result.get("records", [])
+            # 応答の中に dict として現れる項目も参照項目。ページのレコードを
+            # 平らにする前に集める（null の項目が参照項目かどうかの判定に使う）
+            reference_paths |= _record_reference_paths(page_records)
             for record in page_records:
-                record.pop("attributes", None)  # メタ情報は業務データに不要
                 yielded += 1
-                yield record
+                yield _flatten_record(record, reference_paths)
             # done が真なら次のページは無い
             path = "" if result.get("done", True) else result.get("nextRecordsUrl", "")
         logger.debug("Salesforce SOQL取得完了: 件数=%d", yielded)
@@ -303,12 +328,17 @@ class SalesforceBase:
         """SOQL クエリを実行して ``Table`` を返す（全件取得・ページ送り自動）。
 
         ``query_rows()`` を呼んで ``Table`` に包むだけの薄い層。
-        列は SOQL からはメタデータが取れないため、**1 件目から推測**する。
-        0 件のときは列が空の ``Table`` を返す（``rows[0]`` からの推測に依存
-        しないため）。なお ``Account.Name`` のようなドット区切りの親子リレーション
-        項目は**そのまま列名にする**（平坦化しない）。``records[0]`` のキーが
-        そのまま列になるため、リレーションを跨いだ項目の取り回しを呼び出し側で
-        揃えておくこと。
+        列は SOQL からはメタデータが取れないため、**全レコードのキーの
+        和集合**（出現順）から推測する。1 件目に無いキーは 2 件目以降から
+        出るので、``Account.Name`` のようなドット区切りの参照項目も 2 件目に
+        入っていれば列に出る（1 件目の値は空文字）。あるレコードに無い
+        キーの値は空文字で埋める。
+
+        0 件のときは列が空の ``Table`` を返す（和集合が空になるため）。
+        **参照項目が全レコードで null のときは、その項目は列に出ない**
+        （``bulk_query()`` は CSV の見出しから列名を取るため出る）。
+        列名は ``bulk_query()`` と同じ形になるが、値が全部文字列になるかは
+        違う（``bulk_query()`` は全部文字列、こちらは数値・真偽値のまま）。
 
         Args:
             soql: 実行する SOQL クエリ文字列。
@@ -317,10 +347,13 @@ class SalesforceBase:
             SOQL の結果を表す ``Table``。
         """
         records = list(self.query_rows(soql))
-        # 0 件のときは列を空で返す。``list(records[0])`` は 0 件だと例外になるため、
-        # 分岐して空リストを返す（実装の意図を明示するため ``else []`` を付ける）。
-        columns = list(records[0]) if records else []
-        return Table(columns, records)
+        # 0 件のときは列が空になる（和集合が空になる）。``list(records[0])`` は
+        # 0 件だと例外になるため、分岐しない
+        columns = _column_union(records)
+        # あるレコードに無い列の値は空文字で埋める（``Table`` は列の過不足を
+        # 検査するため、行のキーは列と一致させる）
+        rows = [{column: record.get(column, "") for column in columns} for record in records]
+        return Table(columns, rows)
 
     @measure
     def query_csv(self, soql: str, path: str | Path) -> Path:
@@ -849,6 +882,111 @@ class SalesforceBase:
 
 
 # ── 内部ヘルパー ──────────────────────────────────────────────────────────────
+
+
+def _flatten_record(
+    record: dict[str, Any], reference_paths: set[str], prefix: str = ""
+) -> dict[str, Any]:
+    """SOQL のレコード 1 件を平らな dict にする。
+
+    入れ子の参照項目は "親.子" のドット区切りのキーにする（何段でも
+    ``Owner.Manager.Name``）。各段の ``attributes`` は落とす。値が null の
+    項目は空文字にするが、**参照項目が null のときはキーを作らない**
+    （子の項目名が分からないため。``reference_paths`` に含まれるパスが
+    参照項目）。
+
+    子リレーションのサブクエリ（``records`` を持つ dict）は平らにせず、
+    そのままの値で残す。
+    """
+    flat: dict[str, Any] = {}
+    for key, value in record.items():
+        if key == "attributes":
+            continue  # メタ情報は業務データに不要
+        path = f"{prefix}{key}"
+        if isinstance(value, dict):
+            if "records" in value:
+                flat[path] = value  # 子サブクエリは平らにしない
+                continue
+            flat.update(_flatten_record(value, reference_paths, f"{path}."))
+            continue
+        if value is None:
+            if path in reference_paths:
+                continue  # 参照項目が null。子の項目名が分からないため作らない
+            flat[path] = ""
+            continue
+        flat[path] = value
+    return flat
+
+
+def _column_union(records: list[dict[str, Any]]) -> list[str]:
+    """全レコードのキーを、出現順に重複なく並べた列名リストを返す。
+
+    1 件目だけを見ると、2 件目以降にある項目が列から漏れるため、全レコード
+    のキーの和集合を列にする。列の順番は応答の順を保つ。
+    """
+    columns: list[str] = []
+    seen: set[str] = set()
+    for record in records:
+        for key in record:
+            if key in seen:
+                continue
+            seen.add(key)
+            columns.append(key)
+    return columns
+
+
+def _soql_reference_paths(soql: str) -> set[str]:
+    """SOQL の SELECT 句から参照項目（子を持つ項目）のパス、集める。
+
+    ``Owner.Manager.Name`` があれば ``Owner`` と ``Owner.Manager`` が参照項目。
+    SELECT 句の境目は括弧の深さで見分ける（子サブクエリの中の ``FROM`` は
+    無視し、主オブジェクトの ``FROM`` で切る）。
+    """
+    paths: set[str] = set()
+    for match in _FIELD_PATH_PATTERN.finditer(_select_clause(soql)):
+        parts = match.group(0).split(".")
+        # ドット区切りの項目の「親」だけが参照項目（末端は通常の項目）
+        for index in range(1, len(parts)):
+            paths.add(".".join(parts[:index]))
+    return paths
+
+
+def _select_clause(soql: str) -> str:
+    """SOQL の SELECT 句の本文を返す（主オブジェクトの ``FROM`` の前まで）。"""
+    match = re.search(r"\bSELECT\b", soql, flags=re.IGNORECASE)
+    if match is None:
+        return ""
+    start = match.end()
+    depth = 0
+    index = start
+    while index < len(soql):
+        char = soql[index]
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        elif depth == 0 and _FROM_PATTERN.match(soql, index):
+            return soql[start:index]
+        index += 1
+    return soql[start:]
+
+
+def _record_reference_paths(records: list[dict[str, Any]], prefix: str = "") -> set[str]:
+    """レコードの中に dict として現れる項目（参照項目）のパス、集める。
+
+    値が null の項目が参照項目かどうかを判定する材料にする。参照項目は
+    応答の中では dict として返る（null のときだけ値が無くなる）ため、
+    同じ応答の中に 1 度でも dict として現れれば参照項目と分かる。
+    """
+    paths: set[str] = set()
+    for record in records:
+        for key, value in record.items():
+            if key == "attributes" or not isinstance(value, dict) or "records" in value:
+                continue
+            path = f"{prefix}{key}"
+            paths.add(path)
+            paths |= _record_reference_paths([value], f"{path}.")
+    return paths
 
 
 class _BulkTimeoutError(Exception):
