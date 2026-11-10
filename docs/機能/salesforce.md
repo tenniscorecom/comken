@@ -493,8 +493,11 @@ query = (
 ### 作っていないもの
 
 `NOT`・入れ子の OR/AND・サブクエリ・`HAVING`・`OFFSET`・`FIELDS(ALL)` は
-**今回は足していない**ので、文字列を直接組み立てる必要があります。
+**今回は `Soql` に足していない**ので、文字列を直接組み立てる必要があります。
 足りなくなったら `Soql` へ足す方針です。
+
+（子リレーションのサブクエリは文字列で書けば実行できる。`query()` が
+「子 1 件 = 1 行」に展開する。→「子リレーションの副問い合わせは「子 1 件 = 1 行」」）
 
 設計の判断の根拠は [設計判断の履歴](../HISTORY.md) の
 「SOQL を組み立てる Soql クラスを追加した」を参照。
@@ -725,6 +728,29 @@ with Solution() as sf:
   （平坦化しない）。
 
 動くサンプル: `examples/advanced/salesforce_query/`
+
+### 子リレーションの副問い合わせは「子 1 件 = 1 行」
+
+`query()` / `query_rows()` は、SOQL の SELECT 句に副問い合わせ（子リレーションの
+SELECT）があるとき、**子 1 件につき 1 行**に展開する。レポートの明細と同じ形になる。
+
+```python
+with Solution() as sf:
+    rows = sf.query("SELECT Name, (SELECT LastName, Email FROM Contacts) FROM Account")
+```
+
+- 列名は `リレーション名.項目名`（`Contacts.LastName`）。子の中の参照項目も
+  `Contacts.Owner.Name` の形になり、各段の `attributes`（メタ情報）は落ちる
+- 親の項目（`Name`）は子の行ごとに繰り返される
+- 子が 0 件のときは親の項目だけで 1 行を残す（`query()` では、列に無いキーは
+  空文字で埋める）
+- 子の続きのページ（`nextRecordsUrl`）も取得するので、子の全件が揃う
+
+**副問い合わせは 1 つだけ。** 2 つ以上あると行が組合せで膨らむため、通信の
+**前**に `SalesforceError` で止まる（SOQL を分けて実行する）。
+
+`bulk_query()`（Bulk API 2.0）は親→子のサブクエリを受け付けない（上の「制約」）。
+副問い合わせを使う SOQL は `query()` 側で実行する。
 
 ### オブジェクトのメタデータを取る (`describe_object`)
 

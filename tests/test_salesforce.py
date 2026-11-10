@@ -316,21 +316,6 @@ class TestSalesforceQueryFlatten:
         assert table.columns == ["Id"]
         assert table.to_rows() == [{"Id": "001"}, {"Id": "002"}]
 
-    def test_subquery_dict_is_kept_as_is(self):
-        """子リレーションのサブクエリは平らにせず、そのままの値にする。"""
-        contacts = {
-            "totalSize": 1,
-            "done": True,
-            "records": [{"attributes": {"type": "Contact"}, "Id": "003"}],
-        }
-        response = _response(
-            json_body={"records": [{"Id": "001", "Contacts": contacts}], "done": True}
-        )
-        with _salesforce([response]) as (client, _, _):
-            records = list(client.query_rows("SELECT Id, (SELECT Id FROM Contacts) FROM Account"))
-
-        assert records == [{"Id": "001", "Contacts": contacts}]
-
     def test_number_and_boolean_values_keep_their_type(self):
         """数値・真偽値は文字列にせず、そのままの型で返す。"""
         response = _response(
@@ -349,6 +334,250 @@ class TestSalesforceQueryFlatten:
 
         assert table.columns == []
         assert table.to_rows() == []
+
+
+class TestSalesforceSubquery:
+    """子リレーションの副問い合わせが「子 1 件 = 1 行」に展開されることを検証する。
+
+    レポートの明細と同じ形になること（親の項目は子の行ごとに繰り返され、
+    列名は ``Contacts.LastName`` のように ``リレーション名.項目名``）。
+    """
+
+    def test_expands_child_records_into_one_row_each(self):
+        """子が 2 件の親は 2 行になり、親の項目は子ごとに繰り返される。"""
+        response = _response(
+            json_body={
+                "records": [
+                    {
+                        "attributes": {"type": "Account"},
+                        "Id": "001",
+                        "Name": "A社",
+                        "Contacts": {
+                            "totalSize": 2,
+                            "done": True,
+                            "records": [
+                                {
+                                    "attributes": {"type": "Contact"},
+                                    "LastName": "山田",
+                                    "Email": "y@a.jp",
+                                },
+                                {
+                                    "attributes": {"type": "Contact"},
+                                    "LastName": "佐藤",
+                                    "Email": "s@a.jp",
+                                },
+                            ],
+                        },
+                    }
+                ],
+                "done": True,
+            }
+        )
+        with _salesforce([response]) as (client, _, _):
+            records = list(
+                client.query_rows(
+                    "SELECT Id, Name, (SELECT LastName, Email FROM Contacts) FROM Account"
+                )
+            )
+
+        assert records == [
+            {"Id": "001", "Name": "A社", "Contacts.LastName": "山田", "Contacts.Email": "y@a.jp"},
+            {"Id": "001", "Name": "A社", "Contacts.LastName": "佐藤", "Contacts.Email": "s@a.jp"},
+        ]
+
+    def test_parent_without_children_keeps_one_row(self):
+        """子が 0 件（null / records が空）の親は、親の項目だけで 1 行残る。"""
+        response = _response(
+            json_body={
+                "records": [
+                    {"Id": "002", "Name": "B社", "Contacts": None},
+                    {
+                        "Id": "003",
+                        "Name": "C社",
+                        "Contacts": {"totalSize": 0, "done": True, "records": []},
+                    },
+                ],
+                "done": True,
+            }
+        )
+        with _salesforce([response]) as (client, _, _):
+            records = list(
+                client.query_rows("SELECT Id, Name, (SELECT LastName FROM Contacts) FROM Account")
+            )
+
+        assert records == [{"Id": "002", "Name": "B社"}, {"Id": "003", "Name": "C社"}]
+
+    def test_null_child_with_lowercase_soql_relation_makes_no_key(self):
+        """SOQL のリレーション名が小文字でも、null の子にはキーを作らない。"""
+        response = _response(
+            json_body={
+                "records": [
+                    {"Id": "001", "Name": "A社", "Contacts": None},
+                    {"Id": "002", "Name": "B社", "Contacts": None},
+                ],
+                "done": True,
+            }
+        )
+        with _salesforce([response]) as (client, _, _):
+            records = list(
+                client.query_rows("SELECT Id, Name, (SELECT LastName FROM contacts) FROM Account")
+            )
+
+        assert records == [{"Id": "001", "Name": "A社"}, {"Id": "002", "Name": "B社"}]
+
+    def test_follows_child_next_records_url(self):
+        """子の続きのページ（nextRecordsUrl）を取って、子の全件を展開する。"""
+        page1 = _response(
+            json_body={
+                "records": [
+                    {
+                        "Id": "001",
+                        "Name": "A社",
+                        "Contacts": {
+                            "totalSize": 2,
+                            "done": False,
+                            "nextRecordsUrl": f"{DATA_PREFIX}/query/01g000-2000",
+                            "records": [{"Id": "003", "LastName": "山田"}],
+                        },
+                    }
+                ],
+                "done": True,
+            }
+        )
+        page2 = _response(json_body={"records": [{"Id": "004", "LastName": "佐藤"}], "done": True})
+
+        with _salesforce([page1, page2]) as (client, session, _):
+            records = list(
+                client.query_rows("SELECT Id, (SELECT Id, LastName FROM Contacts) FROM Account")
+            )
+
+        assert records == [
+            {"Id": "001", "Name": "A社", "Contacts.Id": "003", "Contacts.LastName": "山田"},
+            {"Id": "001", "Name": "A社", "Contacts.Id": "004", "Contacts.LastName": "佐藤"},
+        ]
+        second_url = session.request.call_args_list[1][0][1]
+        assert second_url == f"{INSTANCE_URL}{DATA_PREFIX}/query/01g000-2000"
+
+    def test_flattens_reference_inside_child_and_skips_null_reference(self):
+        """子の中の参照項目は平らになり、null の参照はキーを作らない。"""
+        response = _response(
+            json_body={
+                "records": [
+                    {
+                        "Id": "001",
+                        "Contacts": {
+                            "totalSize": 2,
+                            "done": True,
+                            "records": [
+                                {
+                                    "Id": "003",
+                                    "LastName": "山田",
+                                    "Owner": {"attributes": {"type": "User"}, "Name": "鈴木"},
+                                },
+                                {"Id": "004", "LastName": "佐藤", "Owner": None},
+                            ],
+                        },
+                    }
+                ],
+                "done": True,
+            }
+        )
+        with _salesforce([response]) as (client, _, _):
+            records = list(
+                client.query_rows(
+                    "SELECT Id, (SELECT Id, LastName, Owner.Name FROM Contacts) FROM Account"
+                )
+            )
+
+        assert records == [
+            {
+                "Id": "001",
+                "Contacts.Id": "003",
+                "Contacts.LastName": "山田",
+                "Contacts.Owner.Name": "鈴木",
+            },
+            {"Id": "001", "Contacts.Id": "004", "Contacts.LastName": "佐藤"},
+        ]
+
+    def test_two_subqueries_raise_before_any_request(self):
+        """副問い合わせが 2 つあると、通信前に SalesforceError で止まる。"""
+        soql = (
+            "SELECT Id, (SELECT LastName FROM Contacts), "
+            "(SELECT Name FROM Opportunities) FROM Account"
+        )
+        with (
+            _salesforce([]) as (client, session, _),
+            pytest.raises(SalesforceError, match="副問い合わせ") as excinfo,
+        ):
+            list(client.query_rows(soql))
+
+        assert "対処:" in str(excinfo.value)
+        assert session.request.call_count == 0, "通信する前に止める"
+
+    def test_subquery_owner_name_does_not_change_parent_owner(self):
+        """副問い合わせの "Owner.Name" が、親の "Owner" の null の扱いを変えない。"""
+        response = _response(
+            json_body={
+                "records": [
+                    {
+                        "Id": "001",
+                        "Owner": None,
+                        "Contacts": {
+                            "totalSize": 1,
+                            "done": True,
+                            "records": [
+                                {"Id": "003", "LastName": "山田", "Owner": {"Name": "鈴木"}},
+                            ],
+                        },
+                    }
+                ],
+                "done": True,
+            }
+        )
+        with _salesforce([response]) as (client, _, _):
+            records = list(
+                client.query_rows(
+                    "SELECT Id, Owner, (SELECT Id, LastName, Owner.Name FROM Contacts) FROM Account"
+                )
+            )
+
+        assert records == [
+            {
+                "Id": "001",
+                "Owner": "",
+                "Contacts.Id": "003",
+                "Contacts.LastName": "山田",
+                "Contacts.Owner.Name": "鈴木",
+            }
+        ]
+
+    def test_query_expands_subquery_into_columns(self):
+        """query() も展開された行から列を作る（無いキーは空文字）。"""
+        response = _response(
+            json_body={
+                "records": [
+                    {
+                        "Id": "001",
+                        "Name": "A社",
+                        "Contacts": {
+                            "totalSize": 1,
+                            "done": True,
+                            "records": [{"LastName": "山田"}],
+                        },
+                    },
+                    {"Id": "002", "Name": "B社", "Contacts": None},
+                ],
+                "done": True,
+            }
+        )
+        with _salesforce([response]) as (client, _, _):
+            table = client.query("SELECT Id, Name, (SELECT LastName FROM Contacts) FROM Account")
+
+        assert table.columns == ["Id", "Name", "Contacts.LastName"]
+        assert table.to_rows() == [
+            {"Id": "001", "Name": "A社", "Contacts.LastName": "山田"},
+            {"Id": "002", "Name": "B社", "Contacts.LastName": ""},
+        ]
 
 
 class TestSalesforceReauthentication:

@@ -68,6 +68,15 @@ def _external_id_missing_error(object_name: str, external_id_field: str) -> Sale
     )
 
 
+def _too_many_subqueries_error(count: int) -> SalesforceError:
+    """``SalesforceError`` の「副問い合わせが 2 つ以上ある」文言。"""
+    return SalesforceError(
+        f"SOQL の SELECT 句に副問い合わせが {count} 個あります。\n"
+        "副問い合わせが複数あると、親と子の組合せの分だけ行が膨らむため展開できません。\n"
+        "対処: 副問い合わせを 1 つにして、SOQL を分けて実行してください。"
+    )
+
+
 # comken 配下のクラスは OWNER 検査の対象外（管理者が既に昇格を判断した印）。
 # SiteBase 側と同じ定数を同じ目的で置く
 _COMKEN_MODULE_PREFIX = "comken."
@@ -90,6 +99,10 @@ _FIELD_PATH_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-
 
 # SOQL の句の区切り（``FROM``）を探す正規表現。SELECT 句の終わりを判断する
 _FROM_PATTERN = re.compile(r"\bFROM\b", flags=re.IGNORECASE)
+
+# SOQL の SELECT 句の括弧の中身が副問い合わせ（子リレーションの SELECT）か
+# を見る正規表現。集計関数の ``COUNT(Id)`` などは副問い合わせではない
+_SUBQUERY_START_PATTERN = re.compile(r"SELECT\b", flags=re.IGNORECASE)
 
 # 一時的な失敗をやり直す回数と待ち時間。待ち時間は試行回数に比例して伸ばす
 MAX_ATTEMPTS = 3
@@ -289,6 +302,19 @@ class SalesforceBase:
         参照項目かどうかは応答の値だけからは分からないので、SOQL の SELECT 句
         と応答の中身（dict として現れる項目）の両方から判断する。
 
+        **子リレーションの副問い合わせは「子 1 件 = 1 行」に展開する。**
+        ``SELECT Name, (SELECT LastName FROM Contacts) FROM Account`` のとき、
+        Contacts が 2 件ある Account は 2 行になり、親の項目（``Name``）は
+        子の行ごとに繰り返される。列名は ``Contacts.LastName`` のように
+        ``リレーション名.項目名`` になる（子の中の参照項目も
+        ``Contacts.Owner.Name`` の形）。**レポートの明細と同じ形**なる。
+        子が 0 件のときは親の項目だけで 1 行を残す（子のキーは作らない）。
+        副問い合わせの **続きのページ**（``nextRecordsUrl``）も取得するので、
+        子の全件が揃う。
+
+        副問い合わせは **1 つだけ**。2 つ以上あると行が組合せで膨らむため、
+        通信する前に ``SalesforceError`` で止める（SOQL を分けること）。
+
         列の情報は SOQL のレスポンスからは取れないため、戻り値からは直接
         列名が出ない。``query()`` は **全レコードのキーの和集合** から列を
         推測するが、これは「1 件以上あるとき」の便宜であって、本物のスキーマ
@@ -300,14 +326,24 @@ class SalesforceBase:
 
         Returns:
             SOQL のレコードを ``{項目: 値}`` の dict で 1 件ずつ返すイテレータ。
+
+        Raises:
+            SalesforceError: 副問い合わせが 2 つ以上ある場合（通信はしない）。
         """
         logger.debug("Salesforce SOQL取得開始")
+        # 副問い合わせが 2 つ以上あると、親と子の組合せの分だけ行が膨らむ。
+        # 通信する前に止める（Salesforce にも繋がない）
+        subqueries = _subquery_clauses(soql)
+        if len(subqueries) > 1:
+            raise _too_many_subqueries_error(len(subqueries))
         path = self.data_path(f"/query?q={urllib.parse.quote(soql)}")
         # 件数ログは逐次 yield と両立させるため、ページ受信のたびに数える
         yielded = 0
         # 参照項目（子を持つ項目）のパス。値が null の項目が参照項目かどうかの
         # 判定に使う。SOQL の SELECT 句から分かるものは先に求めておく
         reference_paths = _soql_reference_paths(soql)
+        # 子リレーション名（Contacts など）。応答のキーが正なので、応答から更新する
+        relation = _subquery_relation_name(subqueries[0]) if subqueries else ""
         while path:
             result, _ = self.request("GET", path, component="query")
             if not isinstance(result, dict):
@@ -316,12 +352,68 @@ class SalesforceBase:
             # 応答の中に dict として現れる項目も参照項目。ページのレコードを
             # 平らにする前に集める（null の項目が参照項目かどうかの判定に使う）
             reference_paths |= _record_reference_paths(page_records)
+            # 応答のキー（Contacts など）が子リレーション名の正
+            relation = _relation_name_in(page_records) or relation
             for record in page_records:
-                yielded += 1
-                yield _flatten_record(record, reference_paths)
+                for row in self._expand_record(record, reference_paths, relation, soql):
+                    yielded += 1
+                    yield row
             # done が真なら次のページは無い
             path = "" if result.get("done", True) else result.get("nextRecordsUrl", "")
         logger.debug("Salesforce SOQL取得完了: 件数=%d", yielded)
+
+    def _expand_record(
+        self,
+        record: dict[str, Any],
+        reference_paths: set[str],
+        relation: str,
+        soql: str,
+    ) -> Iterator[dict[str, Any]]:
+        """親レコード 1 件から、1 行または「子 1 件 = 1 行」を作る。
+
+        副問い合わせが無いときは、親の項目だけで 1 行を返す。
+        副問い合わせがあるときは、**子 1 件ごとに 1 行**を返し、親の項目は
+        子の行ごとに繰り返す。子が 0 件なら、親の項目だけで 1 行を返す
+        （子のキーは作らない）。
+        """
+        subquery_key = _subquery_key(record, relation)
+        if not subquery_key:
+            yield _flatten_record(record, reference_paths)
+            return
+        # 子が null のときのためにリレーション名のパスも参照項目として覚えて
+        # おく（null のキーは作らない。子の項目名が分からないため）
+        reference_paths.add(subquery_key)
+        parent_row = _flatten_record(record, reference_paths)
+        value = record[subquery_key]
+        if not isinstance(value, dict):
+            yield parent_row  # 子が 0 件（null）
+            return
+        children = self._subquery_records(value)
+        if not children:
+            yield parent_row  # 子が 0 件（records が空）
+            return
+        # 子の参照項目は「リレーション名.」を付けたパスで判定する
+        reference_paths |= _soql_child_reference_paths(soql, subquery_key)
+        reference_paths |= _record_reference_paths(children, f"{subquery_key}.")
+        for child in children:
+            yield {**parent_row, **_flatten_record(child, reference_paths, f"{subquery_key}.")}
+
+    def _subquery_records(self, value: dict[str, Any]) -> list[dict[str, Any]]:
+        """副問い合わせの子レコードを全部集める（続きのページも取る）。
+
+        子が多いと応答が ``done: false`` と ``nextRecordsUrl`` を持つため、
+        続きのページを ``request()`` で取って足す。``done`` が真になるまで
+        繰り返すので、子の全件が揃う。
+        """
+        records = list(value.get("records") or [])
+        url = "" if value.get("done", True) else value.get("nextRecordsUrl", "")
+        while url:
+            result, _ = self.request("GET", url, component="query")
+            if not isinstance(result, dict):
+                break
+            records.extend(result.get("records") or [])
+            url = "" if result.get("done", True) else result.get("nextRecordsUrl", "")
+        return records
 
     @measure
     def query(self, soql: str) -> Table:
@@ -340,11 +432,19 @@ class SalesforceBase:
         列名は ``bulk_query()`` と同じ形になるが、値が全部文字列になるかは
         違う（``bulk_query()`` は全部文字列、こちらは数値・真偽値のまま）。
 
+        **子リレーションの副問い合わせは「子 1 件 = 1 行」に展開される**
+        （``query_rows()`` と同じ。列名は ``Contacts.LastName`` のように
+        ``リレーション名.項目名`` になる）。副問い合わせが 2 つ以上あると、
+        通信する前に ``SalesforceError`` で止まる。
+
         Args:
             soql: 実行する SOQL クエリ文字列。
 
         Returns:
             SOQL の結果を表す ``Table``。
+
+        Raises:
+            SalesforceError: 副問い合わせが 2 つ以上ある場合（通信はしない）。
         """
         records = list(self.query_rows(soql))
         # 0 件のときは列が空になる（和集合が空になる）。``list(records[0])`` は
@@ -895,8 +995,9 @@ def _flatten_record(
     （子の項目名が分からないため。``reference_paths`` に含まれるパスが
     参照項目）。
 
-    子リレーションのサブクエリ（``records`` を持つ dict）は平らにせず、
-    そのままの値で残す。
+    **子リレーションの副問い合わせ（``records`` を持つ dict）は取り除く。**
+    「子 1 件 = 1 行」への展開は ``query_rows()`` が行う（子の続きのページを
+    取りに行く通信が要るため、ここでは扱えない）。
     """
     flat: dict[str, Any] = {}
     for key, value in record.items():
@@ -905,8 +1006,7 @@ def _flatten_record(
         path = f"{prefix}{key}"
         if isinstance(value, dict):
             if "records" in value:
-                flat[path] = value  # 子サブクエリは平らにしない
-                continue
+                continue  # 子リレーションの副問い合わせ。展開は query_rows() がする
             flat.update(_flatten_record(value, reference_paths, f"{path}."))
             continue
         if value is None:
@@ -939,16 +1039,134 @@ def _soql_reference_paths(soql: str) -> set[str]:
     """SOQL の SELECT 句から参照項目（子を持つ項目）のパス、集める。
 
     ``Owner.Manager.Name`` があれば ``Owner`` と ``Owner.Manager`` が参照項目。
-    SELECT 句の境目は括弧の深さで見分ける（子サブクエリの中の ``FROM`` は
+    SELECT 句の境目は括弧の深さで見分ける（副問い合わせの中の ``FROM`` は
     無視し、主オブジェクトの ``FROM`` で切る）。
+
+    **副問い合わせ（子リレーション）の中の項目は混ぜない。** 副問い合わせの
+    ``Owner.Name`` を親の ``Owner`` と数えると、親の ``Owner`` が null の
+    ときの扱いまで変わってしまうため。副問い合わせの中の参照項目は
+    ``_soql_child_reference_paths()`` で別に集める。
+    """
+    parent_clause, _ = _split_select_clause(soql)
+    return _reference_paths_in(parent_clause)
+
+
+def _soql_child_reference_paths(soql: str, relation: str) -> set[str]:
+    """副問い合わせの中の参照項目（子を持つ項目）のパスを集める。
+
+    ``(SELECT LastName, Owner.Name FROM Contacts)`` のとき ``relation`` に
+    ``Contacts`` を渡すと ``{"Contacts.Owner"}`` が返る。**親の
+    ``_soql_reference_paths()`` とは混ぜない**（親の ``Owner`` と区別する
+    ため）。``relation`` には応答のキー（子リレーション名）を渡す。
+    """
+    _, subqueries = _split_select_clause(soql)
+    paths: set[str] = set()
+    for clause in subqueries:
+        for path in _reference_paths_in(clause):
+            paths.add(f"{relation}.{path}")
+    return paths
+
+
+def _reference_paths_in(clause: str) -> set[str]:
+    """SELECT 句の一部から、参照項目（子を持つ項目）のパスを集める。
+
+    ``Owner.Manager.Name`` があれば ``Owner`` と ``Owner.Manager`` が返る。
+    ドット区切りの項目の「親」だけが参照項目（末端は通常の項目）。
     """
     paths: set[str] = set()
-    for match in _FIELD_PATH_PATTERN.finditer(_select_clause(soql)):
+    for match in _FIELD_PATH_PATTERN.finditer(clause):
         parts = match.group(0).split(".")
-        # ドット区切りの項目の「親」だけが参照項目（末端は通常の項目）
         for index in range(1, len(parts)):
             paths.add(".".join(parts[:index]))
     return paths
+
+
+def _split_select_clause(soql: str) -> tuple[str, list[str]]:
+    """SELECT 句を「親の部分」と「副問い合わせ」に分ける。
+
+    親の部分: 副問い合わせの括弧を取り除いた文字列。参照項目（子を持つ項目）
+    のパスを親のものとして集めるのに使う。
+    副問い合わせ: ``(SELECT ... FROM ...)`` の中身（括弧を含まない）のリスト。
+    括弧の深さを追うので、集計関数の ``COUNT(Id)`` は副問い合わせではなく
+    「親の部分」のまま残る。
+    """
+    clause = _select_clause(soql)
+    parent_parts: list[str] = []
+    subqueries: list[str] = []
+    depth = 0
+    group_start = 0
+    cursor = 0
+    for index, char in enumerate(clause):
+        if char == "(":
+            if depth == 0:
+                parent_parts.append(clause[cursor:index])
+                group_start = index + 1
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                content = clause[group_start:index]
+                if _SUBQUERY_START_PATTERN.match(content.strip()):
+                    subqueries.append(content)
+                else:
+                    # 集計関数など。副問い合わせではないので親の部分に残す
+                    parent_parts.append(clause[group_start - 1 : index + 1])
+                cursor = index + 1
+    parent_parts.append(clause[cursor:])
+    return "".join(parent_parts), subqueries
+
+
+def _subquery_clauses(soql: str) -> list[str]:
+    """SELECT 句にある副問い合わせ（子リレーションの SELECT 句）を返す。"""
+    return _split_select_clause(soql)[1]
+
+
+def _subquery_relation_name(clause: str) -> str:
+    """副問い合わせの FROM にある子リレーション名（Contacts など）を返す。
+
+    応答のキー（子リレーション名）が正だが、応答に子が無い（null の）とき
+    に備えるため、SOQL からも控えておく。
+    """
+    match = _FROM_PATTERN.search(clause)
+    if match is None:
+        return ""
+    # FROM の直後の識別子（英数字と _ だけ）を取る
+    return re.split(r"[\s,]", clause[match.end() :].strip(), maxsplit=1)[0]
+
+
+def _relation_name_in(records: list[dict[str, Any]]) -> str:
+    """レコードの中から、子リレーション（副問い合わせ）の結果が入るキーを探す。
+
+    応答のキーが Salesforce の子リレーション名の正。見つからなければ空文字。
+    """
+    for record in records:
+        for key, value in record.items():
+            if isinstance(value, dict) and "records" in value:
+                return key
+    return ""
+
+
+def _subquery_key(record: dict[str, Any], relation: str) -> str:
+    """親レコードから、副問い合わせの結果が入るキーを返す。無ければ空文字。
+
+    子リレーションの結果は ``records`` を持つ dict として返る。子が 0 件の
+    ときは null で返ることがあり、そのときはキーの名前が分からないため、
+    SOQL から分かるリレーション名（``relation``）で探す。
+
+    **SOQL のリレーション名は大文字小文字を区別しない。** ``FROM contacts``
+    と書いても応答のキーは ``Contacts`` になるため、null の値を持つキーとは
+    大文字小文字を区別せず比べ、応答側のキーを返す（SOQL の名前のまま返すと
+    応答に無い名前になり、行に余計なキーを作ってしまう）。
+    """
+    for key, value in record.items():
+        if isinstance(value, dict) and "records" in value:
+            return key
+    if relation:
+        relation_lower = relation.lower()
+        for key, value in record.items():
+            if value is None and key.lower() == relation_lower:
+                return key
+    return ""
 
 
 def _select_clause(soql: str) -> str:
@@ -977,13 +1195,20 @@ def _record_reference_paths(records: list[dict[str, Any]], prefix: str = "") -> 
     値が null の項目が参照項目かどうかを判定する材料にする。参照項目は
     応答の中では dict として返る（null のときだけ値が無くなる）ため、
     同じ応答の中に 1 度でも dict として現れれば参照項目と分かる。
+
+    子リレーションの副問い合わせ（``records`` を持つ dict）も辿り、子の
+    レコードの中の参照項目を ``Contacts.Owner`` の形で集める。
     """
     paths: set[str] = set()
     for record in records:
         for key, value in record.items():
-            if key == "attributes" or not isinstance(value, dict) or "records" in value:
+            if key == "attributes" or not isinstance(value, dict):
                 continue
             path = f"{prefix}{key}"
+            if "records" in value:
+                # 子リレーションの副問い合わせ。中のレコードの参照項目も集める
+                paths |= _record_reference_paths(value.get("records") or [], f"{path}.")
+                continue
             paths.add(path)
             paths |= _record_reference_paths([value], f"{path}.")
     return paths
