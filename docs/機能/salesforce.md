@@ -481,6 +481,33 @@ Soql("Contact").select("Id").where("Name", "LIKE", "A%_x")          # → Name L
   `'TODAY'` と引用されます。日付の指定なら定数の `TODAY`、文字列として検索したいなら
   `"TODAY"` と、意図した書き分けができます。
 
+### 文字列で書く（literal）
+
+条件の形そのものは文字列で書いたほうが読みやすいときは、SOQL を文字列で書き、
+値だけを `literal()` へ渡して差し込みます。引用符・エスケープ・日本の時刻から
+UTC への変換は `where` と同じ処理を使います。
+
+```python
+from datetime import datetime
+
+from comken.toolbox.salesforce.soql import literal
+
+query = (
+    f"SELECT Id FROM Opportunity WHERE CreatedDate >= {literal(datetime(2026, 11, 13))}"
+    f" AND StageName IN {literal(['A', 'B'])}"
+)
+# SELECT Id FROM Opportunity WHERE CreatedDate >= 2026-11-12T15:00:00Z
+#  AND StageName IN ('A', 'B')
+```
+
+- 扱える値は `where` と同じです（`str` `bool` `int` `float` `date` `datetime`
+  `DateLiteral` `None` と、`IN` などに使う `list` / `tuple` / `set`）。
+  リストは `('A', 'B')` の形になります。
+- **`datetime` の扱いは `where` と同じ**です。タイムゾーン無しの値は
+  日本時間（UTC+9 固定）とみなして UTC に直します。
+- `nan` / `inf`・空の値・入れ子・書けない型は `SoqlBuildError` になります。
+  メッセージは「`literal()` に渡した値」と読みます（`where` の項目名ではありません）。
+
 ### OR で結ぶ条件（where_any）
 
 ```python

@@ -33,6 +33,7 @@ from comken.toolbox.salesforce.soql import (
     last_n_months,
     last_n_weeks,
     last_n_years,
+    literal,
     next_n_days,
     next_n_months,
     next_n_weeks,
@@ -508,6 +509,97 @@ class TestDateLiterals:
     def test_str_of_date_literal_is_the_soql_text(self) -> None:
         assert str(TODAY) == "TODAY"
         assert str(last_n_days(7)) == "LAST_N_DAYS:7"
+
+
+class TestLiteral:
+    """``literal()`` は値を SOQL のリテラルへ変換する（文字列で書くときの差し込み用）。"""
+
+    def test_string_is_quoted(self) -> None:
+        assert literal("Closed Won") == "'Closed Won'"
+
+    def test_quote_in_string_is_escaped(self) -> None:
+        assert literal("O'Brien") == r"'O\'Brien'"
+
+    def test_backslash_in_string_is_escaped(self) -> None:
+        assert literal("a\\b") == r"'a\\b'"
+
+    def test_bool_is_rendered_as_true_false(self) -> None:
+        assert literal(True) == "true"
+        assert literal(False) == "false"
+
+    def test_int_and_float(self) -> None:
+        assert literal(100) == "100"
+        assert literal(1.5) == "1.5"
+
+    def test_none_becomes_null(self) -> None:
+        """`literal()` には演算子が無いので、`=` 以外でも null のままにする。"""
+        assert literal(None) == "null"
+
+    def test_date(self) -> None:
+        assert literal(date(2026, 10, 21)) == "2026-10-21"
+
+    def test_naive_datetime_is_treated_as_jst(self) -> None:
+        """タイムゾーン無しの datetime は日本時間（UTC+9 固定）とみなす。"""
+        value = datetime(2026, 11, 13)  # noqa: DTZ001  # タイムゾーン無しを渡すのが観察対象
+        assert literal(value) == "2026-11-12T15:00:00Z"
+
+    def test_aware_datetime_is_converted_to_utc(self) -> None:
+        value = datetime(2026, 10, 21, 9, 30, 45, tzinfo=JST)
+        assert literal(value) == "2026-10-21T00:30:45Z"
+
+    def test_date_literal_is_not_quoted(self) -> None:
+        assert literal(TODAY) == "TODAY"
+        assert literal(last_n_days(30)) == "LAST_N_DAYS:30"
+
+    def test_list_becomes_parenthesised_values(self) -> None:
+        assert literal(["A", "B"]) == "('A', 'B')"
+
+    def test_tuple_becomes_parenthesised_values(self) -> None:
+        assert literal(("A", "B")) == "('A', 'B')"
+
+    def test_set_becomes_parenthesised_values(self) -> None:
+        assert literal({"A"}) == "('A')"
+
+    def test_values_in_a_list_are_escaped(self) -> None:
+        assert literal(["O'B"]) == r"('O\'B')"
+
+    def test_it_can_be_embedded_in_a_soql_string(self) -> None:
+        created = datetime(2026, 11, 13)  # noqa: DTZ001  # タイムゾーン無しを渡すのが観察対象
+        query = (
+            f"SELECT Id FROM Opportunity WHERE CreatedDate >= {literal(created)}"
+            f" AND StageName IN {literal(['A', 'B'])}"
+        )
+        assert query == (
+            "SELECT Id FROM Opportunity WHERE CreatedDate >= 2026-11-12T15:00:00Z "
+            "AND StageName IN ('A', 'B')"
+        )
+
+    @pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf])
+    def test_nan_and_inf_are_rejected(self, value: float) -> None:
+        with pytest.raises(SoqlBuildError):
+            literal(value)
+
+    def test_empty_list_is_rejected(self) -> None:
+        with pytest.raises(SoqlBuildError):
+            literal([])
+
+    def test_nested_list_is_rejected(self) -> None:
+        with pytest.raises(SoqlBuildError):
+            literal([["A"]])
+
+    def test_unsupported_type_is_rejected(self) -> None:
+        with pytest.raises(SoqlBuildError):
+            literal({"a": 1})
+
+    def test_error_message_says_the_value_came_from_literal(self) -> None:
+        """エラーメッセージが「literal() に渡した値」として読める。"""
+        with pytest.raises(SoqlBuildError) as info:
+            literal({"a": 1})
+
+        message = str(info.value)
+        assert "literal()" in message
+        assert "dict" in message
+        assert "対処: " in message
 
 
 class TestWhereAny:
