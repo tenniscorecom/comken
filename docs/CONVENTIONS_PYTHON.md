@@ -722,7 +722,7 @@ VS Code では拡張機能「Ruff」を入れ、保存時に整形されるよ�
 外部システム（Access / Salesforce）に投げるクエリの書き方を、2 つの系統でそろえる。
 
 - Access の SQL は **Access の保存済みクエリに置く**（Python には書かない）
-- Salesforce の SOQL は **Python 側で組み立てる**（保存先が無いので）
+- Salesforce の SOQL は **Python 側で書く**（保存先が無いので）
 
 背景（人が RPA を止めずに動かせる形にしておく）は [共通規約 12 章](CONVENTIONS_COMMON.md#12-後で人間が動かせることrpa-で止まったときのために)。
 Access の詳しい例と例外的ルールは [`docs/機能/access.md`](機能/access.md) を参照。
@@ -754,33 +754,22 @@ with AccessDatabase(r"C:\作業\顧客.accdb") as db:
 **Python の側で `QA_` を 1 本ずつ順に動かさない。** RPA が止まったとき、人が Access を開いて
 マクロを実行すれば同じ結果になる形にしておく。
 
-### Salesforce: SOQL は Python 側で組み立てる
+### Salesforce: SOQL は文字列で書く
 
-Salesforce には Access のような「保存済みクエリ」が無いので、SOQL は Python 側で組み立てる。
-ただし、**文字列をつなぎ合わせない。** `comken.toolbox.salesforce.soql.Soql` を使う。
+Salesforce には Access のような「保存済みクエリ」が無いので、SOQL は Python 側で書く。
+**SOQL は三重引用符の文字列にそのまま書く**（`SELECT` / `FROM` / `WHERE` で行を分ける）。
+関数やクラスで包まない。**動的な日付だけ f-string で差し込む。**
 
 ```python
-from comken.toolbox.salesforce.soql import Soql, last_n_days
-
-# 悪い: 文字列をつなぐと、引用符・エスケープ・日付リテラル・項目名の検査を毎回自分で書くことになる
-raw = f"SELECT Id, Name FROM Account WHERE Name = '{name}' AND CreatedDate >= {start_iso}"
-
-# 良い: 値は Python の値のまま渡し、エスケープと検査は Soql に任せる
-query = (
-    Soql("Account")                                      # FROM にあたる対象
-    .select("Id", "Name")
-    .where("Name", "=", name)                            # 引用符・エスケープは Soql がやる
-    .where("CreatedDate", ">=", last_n_days(30))         # 日付リテラルも関数で書ける
-    .build()
-)
+soql = f"""
+SELECT Id, Name
+FROM Account
+WHERE CreatedDate >= {start_jst:%Y-%m-%dT%H:%M:%S}+09:00
+"""
 ```
 
 | ルール | 理由 |
 |---|---|
-| f-string や `+` で SOQL をつながない | `'` を含む値で SOQL が壊れたり、別の条件が混ざったりする（インジェクション） |
-| 値は引用符なしで、Python の値のまま `where()` に渡す | エスケープと型の変換（`bool` は `true`、`None` は `null` など）を `Soql` が行う |
-| 日付は `date` / タイムゾーン付き `datetime` か、`last_n_days()` などの日付リテラルで渡す | 書式の間違いを防ぐ。タイムゾーン無しの `datetime` は日本時間（UTC+9 固定）とみなして UTC に直すので、時刻の解釈はぶれない |
-| 項目名・オブジェクト名は `Soql` に渡す（`Id; DELETE` のような文字列は `SoqlBuildError` で止まる） | 識別子の検査を通す |
-
-使える機能と作っていないもの（NOT・サブクエリ・HAVING など）は
-[`docs/機能/salesforce.md`](機能/salesforce.md) の「SOQL を組み立てる（Soql）」を参照。
+| SOQL は三重引用符の文字列にそのまま書く（`SELECT` / `FROM` / `WHERE` で行を分ける） | 組んだ SOQL がそのまま読める。関数やクラスで包むと、見るべきものが完成した SOQL ではなくそれを作ったコードになり、包んだ側が正しいかまで気にする必要がある |
+| f-string で差し込むのは動的な日付だけにする | 条件の形は文字列のまま読める。文字列の値を差し込むと `'` のエスケープを自分で書くことになるので、固定の値はそのまま書く |
+| 日時型の項目は `+09:00` を付けて日本時間で書く | `Z` は UTC で日本時間より 9 時間ずれる。offset を付けないと UTC とみなされ、9 時間ずれた時刻で絞り込むことになる |
