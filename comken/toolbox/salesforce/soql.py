@@ -27,6 +27,12 @@ SOQL の正しい並びに組み直す。
 つまり値は必ず文字列へ埋め込むのでエスケープが要るが、その事故を
 利用者が意識せずに済むよう、このクラスが常にエスケープする。
 
+**日時は UTC で出す。** タイムゾーン付きの `datetime` は UTC に直して `Z` 付きで
+出す。タイムゾーン無しの `datetime` は**日本時間（UTC+9 固定）**とみなして UTC に
+直す（`JST` 定数で公開している）。利用者は日本の会社の人だけで、日本時間の 0 時に
+「前日15時Z」と手で計算するのは面倒だから。実行している PC のローカルタイムゾーンは
+使わない（PC の設定で結果が変わらないようにするため）。
+
 作っていないもの: `NOT`・入れ子の OR/AND・サブクエリ・`HAVING`・`OFFSET`・
 `FIELDS(ALL)`。足りなくなったら足す。
 
@@ -39,7 +45,7 @@ import math
 import re
 from collections.abc import Collection
 from dataclasses import dataclass, replace
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta, timezone
 from typing import Never
 
 from comken.exceptions import SoqlBuildError
@@ -67,6 +73,13 @@ _SEQUENCE_TYPES = (list, tuple, set, frozenset)
 _DATE_FORMAT = "%Y-%m-%d"
 _DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S"
 _UTC_SUFFIX = "Z"  # 秒以下は strftime が切り捨てるので、書式には入れず手で足す
+
+# 日本時間（UTC+9）。タイムゾーン無しの datetime はこの時刻とみなす。
+# ローカルのタイムゾーンは使わない: PC の設定や実行環境によって同じ値が別の時刻に
+# なると、クエリの意味が変わってしまうため。
+# ZoneInfo も使わない: オフライン環境で tzdata を要求しないため
+# （core/dates/clock.py と同じ理由）。
+JST = timezone(timedelta(hours=9))
 
 _BOOLEANS: dict[bool, str] = {True: "true", False: "false"}
 _OPERATOR_LIST = " / ".join(
@@ -164,13 +177,14 @@ def _render_number(value: int | float, *, field: str) -> str:
     return str(value)
 
 
-def _render_datetime(value: datetime, *, field: str) -> str:
+def _render_datetime(value: datetime) -> str:
+    """``datetime`` を UTC のリテラル（``...Z``）へ変換する。
+
+    タイムゾーン無しの値は日本時間（`JST`）とみなす。PC のローカルタイムゾーンには
+    依存させない。
+    """
     if value.tzinfo is None or value.tzinfo.utcoffset(value) is None:
-        _fail(
-            f"{field} の比較にタイムゾーン無しの datetime を渡しました: {value.isoformat()}",
-            "どの時刻か決められないため、タイムゾーンを付けて渡す"
-            "（例: datetime(2026, 10, 21, 9, 0, tzinfo=UTC)）",
-        )
+        value = value.replace(tzinfo=JST)
     return value.astimezone(UTC).strftime(_DATETIME_FORMAT) + _UTC_SUFFIX
 
 
@@ -203,7 +217,7 @@ def _render_value(value: object, *, field: str, operator: str) -> str:
     if isinstance(value, bool):  # bool は int より先に判定する（True が 1 にならないように）
         return _BOOLEANS[value]
     if isinstance(value, datetime):  # datetime は date の子。故に先に判定する
-        return _render_datetime(value, field=field)
+        return _render_datetime(value)
     if isinstance(value, date):
         return value.strftime(_DATE_FORMAT)
     if isinstance(value, str):
@@ -303,6 +317,8 @@ class Soql:
             value: Python の値。文字列は引用符つき・`'` などがエスケープされて出る。
                 ``IN`` 系は list / tuple / set。値は ``str`` ``bool`` ``int`` ``float``
                 ``date`` ``datetime`` ``DateLiteral`` ``None`` を扱える。
+                ``datetime`` は UTC へ直して出る。タイムゾーン無しの値は
+                日本時間（UTC+9 固定 :data:`JST`）とみなす。
 
         Returns:
             条件を足した新しい ``Soql``。

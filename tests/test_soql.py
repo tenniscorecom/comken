@@ -13,6 +13,7 @@ import pytest
 
 from comken.exceptions import ComkenError, SalesforceError, SoqlBuildError
 from comken.toolbox.salesforce.soql import (
+    JST,
     LAST_MONTH,
     LAST_WEEK,
     LAST_YEAR,
@@ -38,7 +39,6 @@ from comken.toolbox.salesforce.soql import (
     next_n_years,
 )
 
-JST = timezone(timedelta(hours=9))
 ALL_DATE_CONSTANTS = [
     TODAY,
     YESTERDAY,
@@ -340,13 +340,34 @@ class TestValueTypes:
         built = Soql("Opportunity").select("Id").where("CreatedDate", ">", value).build()
         assert built == "SELECT Id FROM Opportunity WHERE CreatedDate > 2026-10-21T00:00:00Z"
 
-    def test_naive_datetime_is_rejected(self) -> None:
-        with pytest.raises(SoqlBuildError):
-            Soql("Opportunity").select("Id").where(
-                "CreatedDate",
-                "=",
-                datetime(2026, 10, 21),  # noqa: DTZ001  # 検査したいのは tzinfo 無しの値そのもの
-            )
+    def test_naive_datetime_is_treated_as_jst(self) -> None:
+        """タイムゾーン無しの datetime は日本時間（UTC+9 固定）とみなす。"""
+        value = datetime(2026, 11, 13)  # noqa: DTZ001  # タイムゾーン無しを渡すのが観察対象
+        built = Soql("Opportunity").select("Id").where("CreatedDate", ">=", value).build()
+        assert built == "SELECT Id FROM Opportunity WHERE CreatedDate >= 2026-11-12T15:00:00Z"
+
+    def test_naive_datetime_does_not_cross_the_day(self) -> None:
+        """日付をまたがない時刻は、その日のまま UTC になる。"""
+        value = datetime(2026, 11, 13, 12, 0)  # noqa: DTZ001  # タイムゾーン無しを渡すのが観察対象
+        built = Soql("Opportunity").select("Id").where("CreatedDate", ">=", value).build()
+        assert built == "SELECT Id FROM Opportunity WHERE CreatedDate >= 2026-11-13T03:00:00Z"
+
+    def test_naive_datetime_late_at_night_stays_in_the_same_day(self) -> None:
+        """23時59分59秒は UTC では 14時59分59秒。翌日には送らない。"""
+        value = datetime(2026, 11, 13, 23, 59, 59)  # noqa: DTZ001  # 同じ理由
+        built = Soql("Opportunity").select("Id").where("CreatedDate", "<", value).build()
+        assert built == "SELECT Id FROM Opportunity WHERE CreatedDate < 2026-11-13T14:59:59Z"
+
+    def test_aware_datetime_in_utc_keeps_the_same_instant(self) -> None:
+        """タイムゾーン付き（UTC）は今までどおり、UTC へ直した時刻になる。"""
+        value = datetime(2026, 11, 13, 12, 0, tzinfo=UTC)
+        built = Soql("Opportunity").select("Id").where("CreatedDate", ">=", value).build()
+        assert built == "SELECT Id FROM Opportunity WHERE CreatedDate >= 2026-11-13T12:00:00Z"
+
+    def test_jst_constant_is_fixed_plus_nine(self) -> None:
+        """`JST` は固定の UTC+9。PC のローカルタイムゾーンには左右されない。"""
+        assert isinstance(JST, timezone)
+        assert JST.utcoffset(None) == timedelta(hours=9)
 
     @pytest.mark.parametrize(
         "container", [list, tuple, set, frozenset], ids=["list", "tuple", "set", "frozenset"]

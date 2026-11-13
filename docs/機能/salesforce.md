@@ -451,6 +451,7 @@ Soql("Opportunity").select("Id").where("Amount", ">=", 100)         # → Amount
 Soql("Opportunity").select("Id").where("ParentId", "=", None)       # → ParentId = null
 Soql("Opportunity").select("Id").where("CloseDate", "=", date(2026, 10, 21))
 Soql("Opportunity").select("Id").where("CreatedDate", ">=", datetime(2026, 10, 21, tzinfo=UTC))
+Soql("Opportunity").select("Id").where("CreatedDate", ">=", datetime(2026, 10, 21))  # → 2026-10-20T15:00:00Z
 Soql("Opportunity").select("Id").where("CloseDate", "=", TODAY)     # → CloseDate = TODAY
 Soql("Opportunity").select("Id").where("CloseDate", ">=", LAST_MONTH)
 Soql("Opportunity").select("Id").where("CloseDate", ">=", last_n_days(30))
@@ -463,8 +464,14 @@ Soql("Contact").select("Id").where("Name", "LIKE", "A%_x")          # → Name L
   `INCLUDES` `EXCLUDES` だけです。
 - **`None` は `=` / `!=` にしか書けない**ので、それ以外の演算子で渡すと
   `SoqlBuildError` になります（`null` は SOQL 側の書き方が限られているため）。
-- `nan` / `inf`、タイムゾーン無しの `datetime` も通りません（`SoqlBuildError`）。
-  タイムゾーン無しの `datetime` はどちらの時刻として解釈するか決まらないためです。
+- `nan` / `inf` は通りません（`SoqlBuildError`）。
+- **`datetime` は UTC で出ます。** タイムゾーン付きの値は UTC に直して `Z` 付きで
+  出ます。**タイムゾーン無しの値は日本時間（UTC+9 固定）とみなして** UTC に直します。
+  `datetime(2026, 10, 21)` は 0 時なので `2026-10-20T15:00:00Z` です。
+  利用者は日本の会社の人だけで、日本時間 0 時に「前日15時Z」と手で計算するのは
+  面倒だからです。**実行している PC のローカルタイムゾーンは使いません。**
+  固定の +9 なので、PC の設定が違っても同じ結果になります。
+  この定数は `JST` として公開しています（`from comken.toolbox.salesforce.soql import JST`）。
 - 日付リテラルは `TODAY` / `YESTERDAY` / `TOMORROW` / `THIS_WEEK` / `LAST_WEEK` /
   `NEXT_WEEK` / `THIS_MONTH` / `LAST_MONTH` / `NEXT_MONTH` / `THIS_QUARTER` /
   `LAST_QUARTER` / `NEXT_QUARTER` / `THIS_YEAR` / `LAST_YEAR` / `NEXT_YEAR` の
