@@ -33,23 +33,6 @@ SOQL の正しい並びに組み直す。
 「前日15時Z」と手で計算するのは面倒だから。実行している PC のローカルタイムゾーンは
 使わない（PC の設定で結果が変わらないようにするため）。
 
-**文字列で書くときは `literal()` で値を差し込む。** 条件の形そのものは
-Python の呼び出しより文字列の方が読みやすい。そのため SOQL を文字列で書くときは、
-値だけ関数で差し込む。
-
-    from datetime import datetime
-
-    from comken.toolbox.salesforce.soql import literal
-
-    query = (
-        f"SELECT Id FROM Opportunity WHERE CreatedDate >= {literal(datetime(2026, 11, 13))}"
-        f" AND StageName IN {literal(['A', 'B'])}"
-    )
-    # SELECT Id FROM Opportunity WHERE CreatedDate >= 2026-11-12T15:00:00Z
-    #  AND StageName IN ('A', 'B')
-
-引用符・エスケープ・日本の時刻から UTC への変換は `where` と同じ処理を使う。
-
 作っていないもの: `NOT`・入れ子の OR/AND・サブクエリ・`HAVING`・`OFFSET`・
 `FIELDS(ALL)`。足りなくなったら足す。
 
@@ -175,70 +158,20 @@ def _check_value_kind(operator: str, value: object, *, field: str) -> None:
         )
 
 
-@dataclass(frozen=True)
-class _ValuePlace:
-    """値をどこで使ったか。**エラーメッセージの言い回しだけ**を担う
-
-    `where` からの値は項目名と演算子を持ち、`literal()` からの値は持たない。
-    値の変換の中身はどちらでも同じなので、違うのは文言だけ。
-
-    Attributes:
-        field: `where` の項目名。`literal()` から渡された値では None。
-        operator: `where` の演算子。`literal()` から渡された値では None。
-    """
-
-    field: str | None = None
-    operator: str | None = None
-
-    @property
-    def is_literal(self) -> bool:
-        """`literal()` から渡された値かどうか。"""
-        return self.field is None
-
-    def null_text(self) -> str:
-        """None を表す文字列を返す。`where` では演算子の検査をする
-
-        `literal()` は演算子が分からないので、どの演算子でも `null` のままにする。
-        """
-        if self.is_literal:
-            return "null"
-        if self.operator not in _EQUALITY_OPERATORS:
-            _fail(
-                f"{self.field} の {self.operator} に None を渡しました",
-                "null は = / != にしか書けないため、別の値と比べる場合は値を直接渡す",
-            )
-        return "null"
-
-    def number_problem(self, value: float) -> str:
-        """nan / inf を弾くときの文。"""
-        if self.is_literal:
-            return f"literal() に渡した値は nan / inf です: {value}"
-        return f"{self.field} の比較に nan / inf を渡しました: {value}"
-
-    def empty_problem(self) -> str:
-        """空のシーケンスを弾くときの文。"""
-        if self.is_literal:
-            return "literal() に渡した値は空の値です"
-        return f"{self.field} の {self.operator} に空の値を渡しました"
-
-    def nested_problem(self, item: object) -> str:
-        """入れ子のシーケンスを弾くときの文。"""
-        if self.is_literal:
-            return f"literal() に渡した値は入れ子です: {item!r}"
-        return f"{self.field} の {self.operator} に入れ子の値を渡しました: {item!r}"
-
-    def unsupported_problem(self, type_name: str) -> str:
-        """SOQL に書けない型を弾くときの文。"""
-        if self.is_literal:
-            return f"literal() に渡した値は SOQL に書けない型です: {type_name}"
-        return f"{self.field} の比較に SOQL に書けない型を渡しました: {type_name}"
+def _render_null(*, field: str, operator: str) -> str:
+    if operator not in _EQUALITY_OPERATORS:
+        _fail(
+            f"{field} の {operator} に None を渡しました",
+            "null は = / != にしか書けないため、別の値と比べる場合は値を直接渡す",
+        )
+    return "null"
 
 
-def _render_number(value: int | float, *, place: _ValuePlace) -> str:
+def _render_number(value: int | float, *, field: str) -> str:
     # nan / inf は SOQL の数値リテラルとして書けない。文字列に変換すると NaN が混ざる
     if isinstance(value, float) and not math.isfinite(value):
         _fail(
-            place.number_problem(value),
+            f"{field} の比較に nan / inf を渡しました: {value}",
             "nan と inf は SOQL に書けないため、合計や平均の計算結果ではなく 0 などの値を渡す",
         )
     return str(value)
@@ -255,30 +188,30 @@ def _render_datetime(value: datetime) -> str:
     return value.astimezone(UTC).strftime(_DATETIME_FORMAT) + _UTC_SUFFIX
 
 
-def _render_sequence(value: Collection[object], *, place: _ValuePlace) -> str:
+def _render_sequence(value: Collection[object], *, field: str, operator: str) -> str:
     if not value:
         _fail(
-            place.empty_problem(),
+            f"{field} の {operator} に空の値を渡しました",
             "値を 1 つ以上入れてから渡す（空のままでは条件を組み立てられない）",
         )
     rendered: list[str] = []
     for item in value:
         if isinstance(item, _SEQUENCE_TYPES):
             _fail(
-                place.nested_problem(item),
+                f"{field} の {operator} に入れ子の値を渡しました: {item!r}",
                 "入れ子は書けない。値のリストは 1 段だけにする",
             )
-        if place.operator in _STRING_ONLY_OPERATORS and not isinstance(item, str):
+        if operator in _STRING_ONLY_OPERATORS and not isinstance(item, str):
             _fail(
-                f"{place.field} の {place.operator} の要素が文字列ではありません: {item!r}",
+                f"{field} の {operator} の要素が文字列ではありません: {item!r}",
                 "INCLUDES / EXCLUDES は複数選択項目の文字列しか受け付けない",
             )
-        rendered.append(_render_value(item, place=place))
+        rendered.append(_render_value(item, field=field, operator=operator))
     return "(" + ", ".join(rendered) + ")"
 
 
-def _render_value(value: object, *, place: _ValuePlace) -> str:
-    """値を SOQL 側のリテラル文字列へ変換する。"""
+def _render_value(value: object, *, field: str, operator: str) -> str:
+    """``where`` の値を SOQL 側のリテラル文字列へ変換する。"""
     if isinstance(value, DateLiteral):
         return value.text
     if isinstance(value, bool):  # bool は int より先に判定する（True が 1 にならないように）
@@ -290,13 +223,13 @@ def _render_value(value: object, *, place: _ValuePlace) -> str:
     if isinstance(value, str):
         return f"'{_quote(value)}'"
     if isinstance(value, (int, float)):
-        return _render_number(value, place=place)
+        return _render_number(value, field=field)
     if isinstance(value, _SEQUENCE_TYPES):
-        return _render_sequence(value, place=place)
+        return _render_sequence(value, field=field, operator=operator)
     if value is None:
-        return place.null_text()
+        return _render_null(field=field, operator=operator)
     _fail(
-        place.unsupported_problem(type(value).__name__),
+        f"{field} の比較に SOQL に書けない型を渡しました: {type(value).__name__}",
         "str / bool / int / float / date / datetime / DateLiteral / None か、"
         "IN などに list / tuple / set を渡す",
     )
@@ -307,7 +240,7 @@ def _render_condition(field: str, operator: str, value: object) -> str:
     name = _identifier(field, place="条件の項目")
     op = _operator(operator)
     _check_value_kind(op, value, field=name)
-    return f"{name} {op} {_render_value(value, place=_ValuePlace(field=name, operator=op))}"
+    return f"{name} {op} {_render_value(value, field=name, operator=op)}"
 
 
 def _render_grouped_condition(condition: object) -> str:
@@ -484,41 +417,6 @@ class Soql:
     def __str__(self) -> str:
         """`build()` と同じ文字列を返す"""
         return self.build()
-
-
-def literal(value: object) -> str:
-    """値を SOQL のリテラルへ変換する（文字列で SOQL を書くときの差し込み用）
-
-    条件の形そのものは文字列で書いたほうが読みやすい。そのため SOQL を文字列で
-    書くときは、値だけこの関数へ渡して差し込む。
-
-        from datetime import datetime
-
-        from comken.toolbox.salesforce.soql import literal
-
-        query = (
-            f"SELECT Id FROM Opportunity WHERE CreatedDate >= {literal(datetime(2026, 11, 13))}"
-            f" AND StageName IN {literal(['A', 'B'])}"
-        )
-        # SELECT Id FROM Opportunity WHERE CreatedDate >= 2026-11-12T15:00:00Z
-        #  AND StageName IN ('A', 'B')
-
-    引用符・エスケープ・日本の時刻から UTC への変換は `where` と同じ処理を使う。
-
-    Args:
-        value: Python の値。`str` `bool` `int` `float` `date` `datetime`
-            `DateLiteral` `None` と、`IN` などに使う `list` / `tuple` / `set`。
-            `datetime` は UTC へ直して出る。タイムゾーン無しの値は
-            日本時間（UTC+9 固定 :data:`JST`）とみなす。
-
-    Returns:
-        SOQL のリテラル文字列（`str` は引用符つき、`None` は `null`）。
-
-    Raises:
-        SoqlBuildError: SOQL に書けない値（nan / inf・空の値・入れ子・未対応の型）。
-    """
-    # 項目名も演算子も無いので、_ValuePlace は既定値（literal 用）を使う
-    return _render_value(value, place=_ValuePlace())
 
 
 # NOTE: DateLiteral はすぐ下の定数を定義する前に置く必要がある。定数が import 時に
