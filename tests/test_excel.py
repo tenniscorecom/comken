@@ -717,3 +717,55 @@ class TestExcelReadMissingSheet:
             assert "無い名前" in message
             assert "案件一覧" in message
 
+
+class TestExcelHeaderRowValidation:
+    """``header_row`` に 1 未満を渡したときの契約。
+
+    0 以下は「1 行目と同じ結果」になるか黙って無視されるため、
+    ``ExcelError`` で止める（文言は ``Sheet._validate_header_row`` の 1 か所
+    にまとめている）。
+    """
+
+    @pytest.mark.parametrize("header_row", [0, -1])
+    def test_read_rejects_header_row_below_one(
+        self, tmp_path: Path, header_row: int
+    ) -> None:
+        """``Excel.read()`` は 1 未満の ``header_row`` を ``ExcelError`` にする。"""
+        path = tmp_path / "book.xlsx"
+        with Excel(path) as excel:
+            excel.create_sheet("Sheet1")
+        with Excel(path, read_only=True) as excel, pytest.raises(ExcelError) as exc_info:
+            excel.read("Sheet1", header_row=header_row)
+        message = str(exc_info.value)
+        assert "header_row は 1 以上で指定してください" in message
+        assert str(header_row) in message
+
+    @pytest.mark.parametrize("header_row", [0, -1])
+    def test_iter_rows_rejects_header_row_below_one(
+        self, tmp_path: Path, header_row: int
+    ) -> None:
+        """``Sheet.iter_rows()`` も同じ検査をする。"""
+        path = tmp_path / "book.xlsx"
+        with Excel(path) as excel:
+            excel.create_sheet("Sheet1")
+        with Excel(path, read_only=True) as excel, pytest.raises(ExcelError) as exc_info:
+            list(excel.sheet("Sheet1").iter_rows(header_row=header_row))
+        message = str(exc_info.value)
+        assert "header_row は 1 以上で指定してください" in message
+        assert str(header_row) in message
+
+    @pytest.mark.parametrize("header_row", [0, -1])
+    def test_read_column_rejects_header_row_below_one(
+        self, tmp_path: Path, header_row: int
+    ) -> None:
+        """``Sheet.read_column()`` も同じ検査をする。"""
+        path = tmp_path / "book.xlsx"
+        with Excel(path) as excel:
+            sheet = excel.create_sheet("Sheet1")
+            sheet.write_range("A1:B1", [["ID", "名前"]])
+        with Excel(path) as excel, pytest.raises(ExcelError) as exc_info:
+            excel.sheet("Sheet1").read_column("A", header_row=header_row)
+        message = str(exc_info.value)
+        assert "header_row は 1 以上で指定してください" in message
+        assert str(header_row) in message
+

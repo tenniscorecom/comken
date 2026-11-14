@@ -840,6 +840,7 @@ class Excel:
             シートの内容を表す ``Table``。全セルが空の行は除外される。
         """
         self._ensure_open()
+        Sheet._validate_header_row(header_row)
         if self._engine == "com":
             # engine='com' は「COM 専用で読む」前提なので ``force_com`` は実質無効。
             # 受け取って無視しても害はないため、エラーにはせず握りつぶす。
