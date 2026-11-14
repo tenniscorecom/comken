@@ -7,6 +7,7 @@ Table はメモリ上の行だけを担当します。CSV や Excel の保存処
 from __future__ import annotations
 
 import logging
+import unicodedata
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from itertools import pairwise
 from typing import TYPE_CHECKING, Any, Self
@@ -30,6 +31,10 @@ if TYPE_CHECKING:
     from comken.core.table.transfer import TransferResult
 
 logger = logging.getLogger(__name__)
+
+# ``print(table)`` で見せる行数と、1セルの最大表示幅
+_PREVIEW_ROW_LIMIT = 10
+_CELL_WIDTH_LIMIT = 40
 
 
 class Table:
@@ -181,6 +186,42 @@ class Table:
         # それ以外の型とは比較しない（``list`` を「中身の ``dict``」と誤判定しない
         # よう ``__eq__`` で ``False`` を返さず ``NotImplemented`` を返す）
         return NotImplemented
+
+    def __repr__(self) -> str:
+        """1行で表の規模と列名を示す（デバッグ表示・ログ用）。
+
+        Example:
+            >>> repr(Table(["ID", "名前"], [{"ID": "001", "名前": "山田"}]))
+            "Table(1行 × 2列: ['ID', '名前'])"
+        """
+        return f"Table({len(self._rows)}行 × {len(self.columns)}列: {self.columns})"
+
+    def __str__(self) -> str:
+        """``print(table)`` で表の中身を人が読める形で見せる。
+
+        1行目に ``Table 3行 × 2列``、その下に列名の行と先頭10行の値を
+        `` | `` 区切りで並べる。全角文字は表示幅を2として数えるので、
+        列の右側がそろう。10行を超えるときは最後に ``… 残り N 行`` を付ける。
+        """
+        header_cells = [_format_cell(column) for column in self.columns]
+        body_cells = [
+            [_format_cell(row.get(column, "")) for column in self.columns]
+            for row in self._rows[:_PREVIEW_ROW_LIMIT]
+        ]
+        widths = [
+            max(
+                _display_width(header_cells[index]),
+                max((_display_width(cells[index]) for cells in body_cells), default=0),
+            )
+            for index in range(len(self.columns))
+        ]
+        lines = [f"Table {len(self._rows)}行 × {len(self.columns)}列"]
+        lines.append(_format_row(header_cells, widths))
+        lines.extend(_format_row(cells, widths) for cells in body_cells)
+        remaining = len(self._rows) - _PREVIEW_ROW_LIMIT
+        if remaining > 0:
+            lines.append(f"… 残り {remaining} 行")
+        return "\n".join(lines)
 
     def replace(self, rows: list[Row]) -> Self:
         """表の全行を置き換え、同じTableを返す。"""
@@ -676,3 +717,47 @@ class Table:
                 f"\n対処: 列「{order_by}」の値を文字列か数値に揃えてください。"
             ) from exc
         rows[:] = sorted_rows
+
+
+# ── 内部ヘルパー：``print(table)`` の表示 ──────────────────────────────────
+
+
+def _char_width(char: str) -> int:
+    """1文字の表示幅を返す（全角・全角ambig・半角ambig は 2、他は 1）。"""
+    return 2 if unicodedata.east_asian_width(char) in ("W", "F", "A") else 1
+
+
+def _display_width(text: str) -> int:
+    """文字列の表示幅（全角文字は 2 として数える）を返す。"""
+    return sum(_char_width(char) for char in text)
+
+
+def _format_cell(value: object) -> str:
+    """1セルの表示用の文字列にする（改行は表が崩れないよう ``\\n`` に見せる）。"""
+    text = str(value).replace("\n", "\\n").replace("\r", "\\r")
+    if _display_width(text) > _CELL_WIDTH_LIMIT:
+        text = _truncate_cell(text)
+    return text
+
+
+def _truncate_cell(text: str) -> str:
+    """長すぎるセルを表示幅の制限内に切って ``…`` を付ける。"""
+    budget = _CELL_WIDTH_LIMIT - _char_width("…")
+    kept: list[str] = []
+    width = 0
+    for char in text:
+        char_width = _char_width(char)
+        if width + char_width > budget:
+            break
+        kept.append(char)
+        width += char_width
+    return "".join(kept) + "…"
+
+
+def _format_row(cells: list[str], widths: list[int]) -> str:
+    """1行のセルを表示幅でそろえて `` | `` 区切りで並べる。"""
+    padded = [
+        cell + " " * (width - _display_width(cell))
+        for cell, width in zip(cells, widths, strict=True)
+    ]
+    return " | ".join(padded)
