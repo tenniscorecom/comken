@@ -925,7 +925,7 @@ class Excel:
         self._is_dirty = True
 
     def _ensure_sheet_exists(self, sheet_name: str) -> None:
-        """読み하려는シートがブックに実在するか確かめる。
+        """読もうとするシートがブックに実在するか確かめる。
 
         シート名をそのまま openpyxl へ渡すと、無い名前のとき素の
         ``KeyError``  (``Worksheet ... does not exist.``) になり、原因も

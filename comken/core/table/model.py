@@ -133,7 +133,7 @@ class Table:
 
         ``int`` 以外（スライス・列名など）が渡されたときは ``TableError`` で
         止める。素通しすると、``table[0:1]`` は「行のリストの dict」になり、
-        ``table["列名"]`` は ``TypeError`` になって、どちらも意味的结果が
+        ``table["列名"]`` は ``TypeError`` になって、どちらも意味のない結果が
         返っていた。
         """
         if isinstance(index, bool) or not isinstance(index, int):
