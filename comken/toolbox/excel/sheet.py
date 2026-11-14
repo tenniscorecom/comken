@@ -95,6 +95,18 @@ class Sheet:
         )
         return ExcelTable(self._excel, self._worksheet, name)
 
+    def _find_table(self, name: str) -> ExcelTable | None:
+        """同名のテーブルがあれば返す。無ければ ``None`` を返す。
+
+        ``table()`` は「無ければ例外」なので、「有るかどうか」で分岐したい
+        場面ではこちらを使う（``Excel.write`` が使う）。``PY_T_`` プレフィックス
+        はここで補う。
+        """
+        full_name = self._with_table_prefix(name)
+        if full_name not in self._worksheet.tables:
+            return None
+        return ExcelTable(self._excel, self._worksheet, full_name)
+
     def create_table(self, name: str, table: Table, start_cell: str = "A1") -> ExcelTable:
         """Python管理用の実テーブルを新規作成する。
 
@@ -109,7 +121,11 @@ class Sheet:
         assert workbook is not None  # Sheet は _ensure_normal_workbook() の後にしか作られない
         if any(full_name in worksheet.tables for worksheet in workbook.worksheets):
             raise ExcelError(
-                f"テーブル「{full_name}」は既に存在します。\n別のテーブル名を指定してください。"
+                f"テーブル「{full_name}」は既に存在します。\n"
+                "別のテーブル名を指定してください。\n"
+                f'無ければ作り、あれば置き換える場合は write("{name}", table) を使ってください。\n'
+                f"既存のテーブルを置き換える場合は "
+                f'table("{name}").replace(table) を使ってください。'
             )
         if not isinstance(table, Table):
             raise InvalidTableInputError("create_table には Table を指定してください。")

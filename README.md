@@ -26,13 +26,12 @@ with CSV(r"C:\作業\data.csv", read_only=True) as csv_file:
     table = csv_file.read()
 
 with Excel(r"C:\作業\report.xlsx") as excel:
-    excel.create_data_sheet("結果").create_table("結果", table)
+    excel.write("結果", table)
 ```
 
 - シート名は `PY_結果` になる（`PY_` は comken が読み書きするデータシートの印）
 - 新しく作ったファイルには、空の `Sheet` も一緒に残る
-- 同じファイルへもう一度実行すると「既に存在します」で止まる。作り直すなら
-  `report.xlsx` を消してから実行する
+- 何回実行しても同じコードで動く（2回目からは中身を全部置き換える）
 
 ## ドキュメントの地図
 

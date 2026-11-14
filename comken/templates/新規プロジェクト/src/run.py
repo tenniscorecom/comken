@@ -32,7 +32,7 @@ def run() -> None:
     #       table = csv_file.read()
     #   out = config.FILES.OUTPUT_FOLDER / f"レポート_{today():%Y%m%d}.xlsx"
     #   with Excel(out) as excel:
-    #       excel.create_data_sheet(SHEET).create_table(SHEET, table)
+    #       excel.write(SHEET, table)
     #   logger.info("出力しました: %s", out)
     # ──────────────────────────────────────────────────────────────────
     logger.info("run() を実装してください（出力先: %s）", config.FILES.OUTPUT_FOLDER)
