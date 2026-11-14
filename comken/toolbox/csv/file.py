@@ -451,15 +451,26 @@ class CSV:
             if self._columns is None:
                 raise CSVError(_missing_header_message(self.path))
             return Table(self._columns, [], types=self._types)
-        raw_rows = list(csv.reader(io.StringIO(self._read_text())))
+        reader = csv.reader(io.StringIO(self._read_text()))
+        # 行番号は「ファイル上の行番号」（``reader.line_num``）で記録する。
+        # 空行を読み飛ばしても、利用者が見ている行とずれないようにするため。
+        raw_rows: list[tuple[int, list[str]]] = []
+        for values in reader:
+            raw_rows.append((reader.line_num, values))
         if not raw_rows and self._columns is None:
             # UTF-8 BOM は文字ではなく署名なので、BOM だけのファイルにも見出しはない。
             raise CSVError(_missing_header_message(self.path))
-        columns = self._columns if self._columns is not None else raw_rows.pop(0)
+        if self._columns is None:
+            columns = raw_rows.pop(0)[1]
+        else:
+            columns = self._columns
         self._validate_columns(columns)
-        first_data_line = 1 if self._columns is not None else 2
         rows: list[dict[str, str]] = []
-        for line_number, values in enumerate(raw_rows, start=first_data_line):
+        for line_number, values in raw_rows:
+            if not values:
+                # 完全に空の行（ファイル末尾の余分な改行など）は読み飛ばす
+                # （``iter_rows()`` と同じ扱い。区切りのある行は空行ではない）。
+                continue
             if len(values) != len(columns):
                 raise _row_length_error(self.path, line_number, len(columns), len(values))
             rows.append(dict(zip(columns, values, strict=True)))
@@ -574,8 +585,10 @@ class CSV:
         # 同じ検査を ``_validate_columns()`` で行う）。データ行が 0 行のファイルでも
         # 検査されるように、行を返すループの前に行う。
         self._validate_columns(list(reader.fieldnames or ()))
-        first_data_line = 1 if self._columns is not None else 2
-        for line_number, row in enumerate(reader, start=first_data_line):
+        for row in reader:
+            # 行番号は「ファイル上の行番号」（``reader.line_num``）を使う。
+            # 空行を飛ばしても、利用者が見ている行とずれないようにするため。
+            line_number = reader.line_num
             expected = len(reader.fieldnames or ())
             # 型スタブ上は dict[str, str] だが、列数が多い行では csv.DictReader が
             # 実際には None キー（restkey）へ余分な値のリストを積む。cast() で

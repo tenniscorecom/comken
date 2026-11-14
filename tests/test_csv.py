@@ -408,6 +408,34 @@ class TestCSV:
         ):
             list(csv_file.iter_rows())
 
+    def test_read_skips_only_completely_blank_lines(self, tmp_path) -> None:
+        """``read()`` も完全に空の行を読み飛ばす（``iter_rows()`` と同じ）。"""
+        path = tmp_path / "data.csv"
+        path.write_text("id,name\n\n1,a\n", encoding="utf-8-sig")
+        with CSV(path) as csv_file:
+            assert csv_file.read().to_rows() == [{"id": "1", "name": "a"}]
+
+    def test_read_reports_separator_only_row_as_data(self, tmp_path) -> None:
+        """区切りのある行は空行ではないので、列数が違うときはエラーになる。"""
+        path = tmp_path / "data.csv"
+        path.write_text("id,name\n\n,,\n", encoding="utf-8-sig")
+        with pytest.raises(CSVError, match="3行目"), CSV(path) as csv_file:
+            csv_file.read()
+
+    def test_read_keeps_file_line_number_after_blank_line(self, tmp_path) -> None:
+        """空行を飛ばしてもエラーの行番号はファイル上の行番号のまま。"""
+        path = tmp_path / "data.csv"
+        path.write_text("id,name\n1,a\n\n2\n", encoding="utf-8-sig")
+        with pytest.raises(CSVError, match="4行目"), CSV(path) as csv_file:
+            csv_file.read()
+
+    def test_iter_rows_keeps_file_line_number_after_blank_line(self, tmp_path) -> None:
+        """``iter_rows()`` も空行を挟むとエラー行の番号がずれない。"""
+        path = tmp_path / "data.csv"
+        path.write_text("id,name\n1,a\n\n2\n", encoding="utf-8-sig")
+        with pytest.raises(CSVError, match="4行目"), CSV(path) as csv_file:
+            list(csv_file.iter_rows())
+
     def test_missing_and_zero_byte_have_dedicated_errors(self, tmp_path) -> None:
         path = tmp_path / "data.csv"
         with pytest.raises(ComkenFileNotFoundError), CSV(path) as csv_file:
