@@ -38,6 +38,7 @@ ComkenError
 │   ├── ExcelColumnNotFoundError
 │   └── TransferSourceColumnNotFoundError
 ├── ConfigError
+│   ├── ConfigCreatedError
 │   └── ConfigKeyNotFoundError
 ├── StateError
 ├── WindowNotFoundError
@@ -56,6 +57,7 @@ from comken.exceptions.base import (
     SiteOwnerRequiredError,
 )
 from comken.exceptions.config import (
+    ConfigCreatedError,
     ConfigError,
     ConfigKeyNotFoundError,
     CredentialError,
@@ -125,6 +127,7 @@ __all__ = [
     "TransferSourceColumnNotFoundError",
     "InvalidColumnError",
     "ConfigError",
+    "ConfigCreatedError",
     "ConfigKeyNotFoundError",
     "ComkenFileNotFoundError",
     "FileNotWritableError",

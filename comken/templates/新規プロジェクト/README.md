@@ -18,7 +18,8 @@ comken（社内共通ライブラリ）を使った業務自動化ツールで�
 
 ## セットアップ（初回だけ）
 
-1. `実行.bat` を1度動かす（または `python main.py`）。`config.ini.example` から `config.ini` が作られるので、値を書き換える
+1. `実行.bat` を1度動かす（または `python main.py`）。`config.ini.example` から `config.ini` が作られ、
+   「値を確認して書き換えてください」と案内を出して終了コード 1 で止まる。値を書き換えてからもう一度実行する
 
 comken の場所（`PYTHON_LIBRARY`）は作成時に入っているので、通常は触らなくてよい。
 comken を別の場所へ移したときだけ、`実行.bat` と `.vscode/settings.json` の**2つ**を直す

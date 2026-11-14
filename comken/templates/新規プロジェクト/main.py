@@ -8,9 +8,10 @@ main.py — エントリポイント
 """
 
 import logging
+import sys
 
 from comken import comken_logger, debug
-from comken.exceptions import ComkenError
+from comken.exceptions import ComkenError, ConfigCreatedError
 
 from src.run import run
 
@@ -36,6 +37,11 @@ if __name__ == "__main__":
 
         with debug():
             main()
+    except ConfigCreatedError as e:
+        # 初回実行（config.ini が example から作られた直後）は、案内だけ出して
+        # 終了コード 1 で止まる。トレースバックは出さない（正常な手順なので）。
+        logger.warning("%s", e)
+        sys.exit(1)
     except ComkenError as e:
         # comken のエラーはメッセージに対処法が入っている（docs/ERRORS.md も参照）
         logger.error("処理を中断しました: %s", e)
@@ -66,6 +72,9 @@ if __name__ == "__main__":
 #     if __name__ == "__main__":
 #         try:
 #             backoffice(main, PROJECT_NAME)
+#         except ConfigCreatedError as e:
+#             logger.warning("%s", e)
+#             sys.exit(1)
 #         except ComkenError as e:
 #             logger.error("処理を中断しました: %s", e)
 #             raise

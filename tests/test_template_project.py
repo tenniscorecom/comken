@@ -444,6 +444,39 @@ def test_runs_from_another_working_directory(generated: Path, tmp_path: Path) ->
     assert not (elsewhere / "logs").exists(), "カレント側に logs を作っている"
 
 
+# ── 12-2. 初回実行は案内だけ出して止まる ─────────────────────────────────────
+
+
+def test_first_run_stops_without_traceback(generated: Path) -> None:
+    """初回実行は案内を出して終了コード 1 で止まり、トレースバックを出さない。
+
+    「何を防いでいるか」: config.ini が example から作られた直後は**正常な手順**のはず
+    なのに、ERROR ログと長いトレースバックが出て、初学者が「壊れている」と
+    思って止まってしまう。案内だけを出し、終了コード 1 で止まるようにする。
+    """
+    env = {**os.environ, "PYTHONPATH": str(_ROOT), "PYTHONIOENCODING": "utf-8"}
+    run = partial(
+        subprocess.run,
+        [sys.executable, str(generated / "main.py")],
+        cwd=generated,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+    )
+
+    first = run()
+    output = f"{first.stdout}\n{first.stderr}"
+    assert (generated / "config.ini").is_file(), f"config.ini が作られていない:\n{output}"
+    assert first.returncode == 1, f"終了コードが 1 ではない:\n{output}"
+    assert "Traceback" not in output, f"トレースバックが出ている:\n{output}"
+    assert "config.ini.example から作成しました" in output, output
+
+    second = run()
+    assert second.returncode == 0, f"2回目が失敗した:\n{second.stdout}\n{second.stderr}"
+
+
 # ── 13. src/run.py のコメントの例が、そのまま動く ───────────────────────────────
 
 

@@ -73,6 +73,7 @@ docstring を直してください。手で書き足すのは「まず試すこ�
 | `TransferSourceColumnNotFoundError` | 列名転記で、lookup の転記元列が見つからない | 転記元データと config.ini のマッピング左側を確認する |
 | `InvalidColumnError` | 列の指定が正しくない（打ち間違いなど） | 列は番号（1, 2, …）か列記号（"A", "AA"）で指定する |
 | `ConfigError` | config.ini に関するエラー。具体的な状況はメッセージに出る | メッセージに書かれた対処に従う。直らなければ画面全体のスクリーンショットを管理者へ |
+| `ConfigCreatedError` | config.ini が無いので、example から作り直した | 作り直された config.ini の中の値（フォルダの場所など）を確認して書き換える。書き換えたら、もう一度実行する |
 | `ConfigKeyNotFoundError` | config.ini のセクションに必要なキーがない | メッセージに表示された **「読んだファイル」のパス** が、編集しているconfig.ini と一致するかを確認する。パスが正しければ、表示されたキー名を該当セクションへ追加する。**セクション名は合っているがキー名を 1 文字タイポした** とき（FILES.OUTPUT_FOLER 等）は、「もしかして」に近いキー名が出るので、それを config.ini に書き直す |
 | `ComkenFileNotFoundError` | ファイルまたはフォルダが見つからない | エラーに表示されたパスと名前が正しいか、存在するかを確認する |
 | `FileNotWritableError` | ファイルを保存できなかった | Excel などでこのファイルを開いている場合は、閉じてからもう一度実行する。開いていない場合は、保存先に書き込む権限があるかを確認する |

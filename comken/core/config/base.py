@@ -25,7 +25,12 @@ from typing import Any
 
 from comken.core.files.ops import project_dir
 from comken.core.text import is_true_word
-from comken.exceptions import ComkenFileNotFoundError, ConfigError, ConfigKeyNotFoundError
+from comken.exceptions import (
+    ComkenFileNotFoundError,
+    ConfigCreatedError,
+    ConfigError,
+    ConfigKeyNotFoundError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +42,13 @@ logger = logging.getLogger(__name__)
 # を直すだけで全箇所へ追随する）。
 
 
-def _created_from_example_error(path: Path) -> ConfigError:
-    """``config.ini`` が無いので example から作った場合に送出する ``ConfigError``。"""
-    return ConfigError(
+def _created_from_example_error(path: Path) -> ConfigCreatedError:
+    """``config.ini`` が無いので example から作った場合に送出する例外。
+
+    ``ConfigCreatedError`` は「値が未設定の状態だから止めた」ことを
+    呼び出し側で区別できるようにするための型。案内だけ出して終了できる。
+    """
+    return ConfigCreatedError(
         f"config.ini が無かったので、config.ini.example から作成しました: {path}\n"
         "中の値（フォルダの場所など）を確認して書き換えてから、もう一度実行してください。"
     )
