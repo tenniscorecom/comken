@@ -10,7 +10,7 @@ from comken.core.table import Table
 
 
 def _display_width(text: str) -> int:
-    """文字列の表示幅（全角・全角ambig・半角ambig は 2、他は 1）を返す。"""
+    """文字列の表示幅（``unicodedata.east_asian_width`` が W / F / A なら 2、他は 1）を返す。"""
     return sum(2 if unicodedata.east_asian_width(char) in ("W", "F", "A") else 1 for char in text)
 
 

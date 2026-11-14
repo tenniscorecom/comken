@@ -749,7 +749,7 @@ def _short_repr(value: object) -> str:
 
 
 def _char_width(char: str) -> int:
-    """1文字の表示幅を返す（全角・全角ambig・半角ambig は 2、他は 1）。"""
+    """1文字の表示幅を返す（``unicodedata.east_asian_width`` が W / F / A なら 2、他は 1）。"""
     return 2 if unicodedata.east_asian_width(char) in ("W", "F", "A") else 1
 
 

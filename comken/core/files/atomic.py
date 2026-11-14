@@ -45,7 +45,7 @@ def atomic_write(path: str | Path) -> Iterator[Path]:
     Raises:
         FileNotFoundError: 親フォルダが無い場合。
         FileNotWritableError: 保存先を開いている・書込権限が無いなど、
-            置き換えられなかった場合（``PermissionError`` の子类）。
+            置き換えられなかった場合（``PermissionError`` の派生クラス）。
     """
     target = Path(path)
     tmp_path = _new_temp_name(target)
@@ -56,7 +56,7 @@ def atomic_write(path: str | Path) -> Iterator[Path]:
         except PermissionError as e:
             # Excel などで保存先を開いていると、置き換えが PermissionError になる。
             # 一時ファイル名入りの生エラーは原因が分からないので、
-            # 保存先と対処，写した messages に変えて利用者へ渡す。
+            # 保存先と対処が書かれたメッセージに変えて利用者へ渡す。
             raise FileNotWritableError(target) from e
     except BaseException:
         try:
