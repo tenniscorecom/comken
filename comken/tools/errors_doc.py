@@ -65,6 +65,7 @@ ERROR_CATEGORIES = (
 )
 DIRECT_ERROR_CATEGORIES = {
     exceptions.ComkenFileNotFoundError: "ファイル・設定などのエラー",
+    exceptions.FileNotWritableError: "ファイル・設定などのエラー",
     exceptions.UnsupportedFileSuffixError: "ファイル・設定などのエラー",
     exceptions.InvalidColumnError: "ファイル・設定などのエラー",
     exceptions.SiteOwnerRequiredError: "ファイル・設定などのエラー",

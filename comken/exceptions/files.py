@@ -20,6 +20,29 @@ class ComkenFileNotFoundError(ComkenError, FileNotFoundError):
         super().__init__(message)
 
 
+class FileNotWritableError(ComkenError, PermissionError):
+    """ファイルを保存できなかった
+
+    発生箇所: comken.core.files.atomic.atomic_write()
+
+    Excel などでファイルを開いたまま保存すると、このエラーになる。
+    ``PermissionError`` も継承しているので、``except PermissionError`` で
+    受ける既存のコードはそのまま動く。保存先のパスは ``.path`` で読める。
+
+    対処:
+        Excel などでこのファイルを開いている場合は、閉じてからもう一度実行する。
+        開いていない場合は、保存先に書き込む権限があるかを確認する
+    """
+
+    def __init__(self, path: Path | str) -> None:
+        self.path = path
+        super().__init__(
+            f"ファイルを保存できませんでした: {path}\n"
+            "Excel などでこのファイルを開いている場合は、閉じてからもう一度実行してください。\n"
+            "開いていない場合は、保存先に書き込む権限があるかを確認してください。"
+        )
+
+
 class UnsupportedFileSuffixError(ComkenError):
     """対応外の拡張子が指定された
 

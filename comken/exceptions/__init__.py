@@ -6,6 +6,7 @@ ComkenError
 ├── LoggingConflictError            root logger に他ライブラリの handler が混ざっている
 ├── LogRootNotConfiguredError       LoggerSite の LOG_ROOT が未設定
 ├── ComkenFileNotFoundError         ファイルまたはフォルダが見つからない
+├── FileNotWritableError            ファイルを保存できなかった
 ├── UnsupportedFileSuffixError
 ├── FileDeletionError
 ├── FileSuffixMissingError
@@ -72,6 +73,7 @@ from comken.exceptions.files import (
     ComkenFileNotFoundError,
     CSVError,
     FileDeletionError,
+    FileNotWritableError,
     FileSuffixMissingError,
     LoggingAlreadyConfiguredError,
     LoggingConflictError,
@@ -125,6 +127,7 @@ __all__ = [
     "ConfigError",
     "ConfigKeyNotFoundError",
     "ComkenFileNotFoundError",
+    "FileNotWritableError",
     "UnsupportedFileSuffixError",
     "FileDeletionError",
     "FileSuffixMissingError",
