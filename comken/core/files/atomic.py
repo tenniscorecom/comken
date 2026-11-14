@@ -13,6 +13,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+from comken.exceptions.files import FileNotWritableError
+
 logger = logging.getLogger(__name__)
 
 __all__ = ["atomic_write"]
@@ -42,12 +44,20 @@ def atomic_write(path: str | Path) -> Iterator[Path]:
 
     Raises:
         FileNotFoundError: 親フォルダが無い場合。
+        FileNotWritableError: 保存先を開いている・書込権限が無いなど、
+            置き換えられなかった場合（``PermissionError`` の派生クラス）。
     """
     target = Path(path)
     tmp_path = _new_temp_name(target)
     try:
         yield tmp_path
-        tmp_path.replace(target)
+        try:
+            tmp_path.replace(target)
+        except PermissionError as e:
+            # Excel などで保存先を開いていると、置き換えが PermissionError になる。
+            # 一時ファイル名入りの生エラーは原因が分からないので、
+            # 保存先と対処が書かれたメッセージに変えて利用者へ渡す。
+            raise FileNotWritableError(target) from e
     except BaseException:
         try:
             tmp_path.unlink(missing_ok=True)

@@ -6,6 +6,7 @@ ComkenError
 ├── LoggingConflictError            root logger に他ライブラリの handler が混ざっている
 ├── LogRootNotConfiguredError       LoggerSite の LOG_ROOT が未設定
 ├── ComkenFileNotFoundError         ファイルまたはフォルダが見つからない
+├── FileNotWritableError            ファイルを保存できなかった
 ├── UnsupportedFileSuffixError
 ├── FileDeletionError
 ├── FileSuffixMissingError
@@ -37,6 +38,7 @@ ComkenError
 │   ├── ExcelColumnNotFoundError
 │   └── TransferSourceColumnNotFoundError
 ├── ConfigError
+│   ├── ConfigCreatedError
 │   └── ConfigKeyNotFoundError
 ├── StateError
 ├── WindowNotFoundError
@@ -55,6 +57,7 @@ from comken.exceptions.base import (
     SiteOwnerRequiredError,
 )
 from comken.exceptions.config import (
+    ConfigCreatedError,
     ConfigError,
     ConfigKeyNotFoundError,
     CredentialError,
@@ -72,6 +75,7 @@ from comken.exceptions.files import (
     ComkenFileNotFoundError,
     CSVError,
     FileDeletionError,
+    FileNotWritableError,
     FileSuffixMissingError,
     LoggingAlreadyConfiguredError,
     LoggingConflictError,
@@ -123,8 +127,10 @@ __all__ = [
     "TransferSourceColumnNotFoundError",
     "InvalidColumnError",
     "ConfigError",
+    "ConfigCreatedError",
     "ConfigKeyNotFoundError",
     "ComkenFileNotFoundError",
+    "FileNotWritableError",
     "UnsupportedFileSuffixError",
     "FileDeletionError",
     "FileSuffixMissingError",

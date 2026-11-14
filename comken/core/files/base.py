@@ -8,6 +8,7 @@
 
 from pathlib import Path
 
+from comken.core.files.ops import to_path
 from comken.exceptions.files import UnsupportedFileSuffixError
 
 
@@ -25,7 +26,7 @@ class FileBase:
     SUFFIXES: tuple[str, ...] = ()
 
     def __init__(self, path: str | Path) -> None:
-        self._path = Path(path)
+        self._path = to_path(path)
         if self.SUFFIXES and self._path.suffix.lower() not in self.SUFFIXES:
             raise UnsupportedFileSuffixError(self._path, self.SUFFIXES)
 

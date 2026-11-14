@@ -177,7 +177,11 @@ class TestConfigBasic:
         assert "input → INPUT" in str(exc.value)
 
     def test_multiple_sections(self, tmp_path):
-        """複数セクションをそれぞれ読み込めることを確認する。"""
+        """複数セクションをそれぞれ読み込めることを確認する。
+
+        ``FOLDER`` はキー名だけだと「置き場所」なので ``Path`` になる
+        （``TestConfigPathKeyConversion`` で確かめる）。
+        """
         ini = tmp_path / "config.ini"
         ini.write_text(
             "[SERVICE]\nUSERNAME = user@example.com\n\n[REPORT]\nFOLDER = output\n",
@@ -185,7 +189,7 @@ class TestConfigBasic:
         )
         config = Config(ini)
         assert config.SERVICE.USERNAME == "user@example.com"
-        assert config.REPORT.FOLDER == "output"
+        assert (tmp_path / "output").resolve() == config.REPORT.FOLDER
 
     def test_default_path_is_project_dir(self, tmp_path, monkeypatch):
         """パス省略時に**プロジェクトのフォルダ**（main.py の場所）の config.ini を読む。
@@ -400,6 +404,86 @@ class TestConfigTypeConversion:
         ini = tmp_path / "config.ini"
         ini.write_text(f"[S]\nX = {value}\n", encoding="utf-8")
         assert value == Config(ini).S.X
+
+
+class TestConfigPathKeyConversion:
+    """キー名の末尾が ``_FOLDER`` / ``_PATH`` の値を ``Path`` にする変換のテスト。
+
+    防いでいる事故: ``INPUT_FOLDER = input`` が ``str`` のままだと
+    ``config.FILES.INPUT_FOLDER / "data.csv"`` の ``/`` で ``TypeError`` になり、
+    初学者は ``./input`` と書かないと動かないことを知らずに詰まる。
+    """
+
+    def test_folder_key_without_separator_becomes_path(self, tmp_path):
+        """``INPUT_FOLDER = input`` は config.ini の親基準の絶対 ``Path`` になる。"""
+        ini = tmp_path / "config.ini"
+        ini.write_text("[FILES]\nINPUT_FOLDER = input\n", encoding="utf-8")
+
+        result = Config(ini).FILES.INPUT_FOLDER
+
+        assert isinstance(result, Path)
+        assert result == (tmp_path / "input").resolve()
+
+    def test_path_key_with_file_name_becomes_path(self, tmp_path):
+        """``REPORT_PATH = out.xlsx`` も ``Path`` になる。"""
+        ini = tmp_path / "config.ini"
+        ini.write_text("[REPORT]\nREPORT_PATH = out.xlsx\n", encoding="utf-8")
+
+        result = Config(ini).REPORT.REPORT_PATH
+
+        assert isinstance(result, Path)
+        assert result == (tmp_path / "out.xlsx").resolve()
+
+    def test_key_without_folder_or_path_suffix_stays_string(self, tmp_path):
+        """``NAME = input`` はキー名が置き場所ではないので ``str`` のまま。"""
+        ini = tmp_path / "config.ini"
+        ini.write_text("[S]\nNAME = input\n", encoding="utf-8")
+
+        result = Config(ini).S.NAME
+
+        assert isinstance(result, str)
+        assert result == "input"
+
+    def test_url_stays_string_even_for_path_key(self, tmp_path):
+        """``BASE_PATH = https://example.test/a`` は ``str`` のまま。"""
+        ini = tmp_path / "config.ini"
+        ini.write_text("[S]\nBASE_PATH = https://example.test/a\n", encoding="utf-8")
+
+        result = Config(ini).S.BASE_PATH
+
+        assert isinstance(result, str)
+        assert result == "https://example.test/a"
+
+    def test_empty_folder_value_stays_empty_string(self, tmp_path):
+        """空の値は今までどおり ``""``。"""
+        ini = tmp_path / "config.ini"
+        ini.write_text("[FILES]\nOUTPUT_FOLDER =\n", encoding="utf-8")
+
+        result = Config(ini).FILES.OUTPUT_FOLDER
+
+        assert result == ""
+        assert isinstance(result, str)
+
+    def test_numeric_folder_value_becomes_path(self, tmp_path):
+        """``OUTPUT_FOLDER = 2026`` は int ではなく ``Path`` になる。"""
+        ini = tmp_path / "config.ini"
+        ini.write_text("[FILES]\nOUTPUT_FOLDER = 2026\n", encoding="utf-8")
+
+        result = Config(ini).FILES.OUTPUT_FOLDER
+
+        assert isinstance(result, Path)
+        assert result == (tmp_path / "2026").resolve()
+
+    def test_stub_type_is_path_for_folder_key(self, tmp_path):
+        """補完用スタブの型も ``Path`` になる（実行時と揃える）。"""
+        from comken.core.config.stubs import generate_stub
+
+        ini = tmp_path / "config.ini"
+        ini.write_text("[FILES]\nINPUT_FOLDER = input\n", encoding="utf-8")
+
+        text = generate_stub(ini, tmp_path / "config.pyi").read_text(encoding="utf-8")
+
+        assert "    INPUT_FOLDER: Path" in text
 
 
 class TestConfigQuotedValue:

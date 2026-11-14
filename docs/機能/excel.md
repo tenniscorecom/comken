@@ -9,9 +9,7 @@ from comken.core.table import Table
 from comken.toolbox.excel import Excel
 
 with Excel("顧客.xlsx") as excel:
-    excel.create_data_sheet("顧客").create_table(
-        "顧客", Table(["顧客ID", "氏名"], [{"顧客ID": "001", "氏名": "山田"}])
-    )
+    excel.write("顧客", Table(["顧客ID", "氏名"], [{"顧客ID": "001", "氏名": "山田"}]))
 
 with Excel("顧客.xlsx", read_only=True) as excel:
     rows = excel.data_sheet("顧客").table().read()
@@ -45,6 +43,25 @@ with Excel("一覧.xlsx", read_only=True) as excel:
 （先頭が数字・セル参照と紛らわしい形・空白・特殊文字を含む）で `ExcelError` が
 出ます。エラーメッセージはそのまま非エンジニアへ届くため、**事前に `help` シートなどで
 命名ルールを書いておく**のが安全です。
+
+## 表を書く（`write`）
+
+`Excel.write("顧客", table)` は、データシート（`PY_顧客`）とテーブル（`PY_T_顧客`）を
+**無ければ作り、あれば中身を全部置き換える**。同じコードを何回実行しても止まらない
+（1回目は新規作成、2回目以降は中身の置き換え）。
+
+```python
+with Excel("顧客.xlsx") as excel:
+    excel.write("顧客", table)
+```
+
+- データシートが無ければ作る。既にあればそのまま使う（シート内の他のテーブルや
+  書式はそのまま残る）
+- テーブルの置き換えは `ExcelTable.replace` と同じ安全装置が効く。既存の見出しに
+  無い列は `ExcelError`、人が入れた数式は既定でエラーになる
+- 使い分け: **普段は `write`** を使う。**新規であることを保証したいとき**
+  （同名のシートやテーブルが既にあり、気づいて止まりたいとき）は
+  `create_data_sheet` と `create_table` を使う
 
 ## 表示用シート
 

@@ -217,6 +217,21 @@ lookup = {normalize(k): v for k, v in lookup.items()}
 row = lookup.get(normalize(key))
 ```
 
+### 引用符の除去（`strip_wrapping_quotes`）
+
+Windows の「パスのコピー」は `"C:\作業\data.csv"` のように引用符付きで
+貼り付けられる。`strip_wrapping_quotes` は、その引用符の 1 組だけ外す
+（引用符が対になっていない値はそのまま返す）。
+
+`CSV` / `Excel` / `FileBase` は、パスを文字列で渡したときは引用符を外してから
+`Path` にする。`Path` で渡したものは触らない。
+
+```python
+from comken.core.text import strip_wrapping_quotes
+
+strip_wrapping_quotes('"C:\\作業\\data.csv"')  # → "C:\\作業\\data.csv"
+```
+
 ### 管理表セルの真偽判定（`is_enabled_mark`）
 
 Excel / CSV の管理表（レポート管理表・スケジュール管理表など）の
@@ -643,6 +658,7 @@ TRANSFER_MAPPING = {"お名前": "氏名"}
 | `true` / `false`（大文字小文字問わず） | bool に自動変換 |
 | `yes` / `no` / `on` / `off` | **変換しない**（str のまま） |
 | `[a, b, c]` | list[str] に自動変換 |
+| キー名の末尾が `_FOLDER` / `_PATH` の値（空と URL を除く） | Path に自動変換 |
 | 整数（`10` など） | int に自動変換 |
 | 小数（`1.5` など） | float に自動変換 |
 | 絶対パス（`C:\...` / `\\...` / `/...`） | Path に自動変換 |
@@ -651,6 +667,16 @@ TRANSFER_MAPPING = {"お名前": "氏名"}
 `true` / `false` 以外の `yes` / `on` / `1` / `0` を bool に変換しないのは、
 `1` が「数値の1」なのか「ON の意味」なのか曖昧になる事故を避けるため。
 数値を文字列として使いたい場合（シート名 `"2024"` など）はコード側で `str()` に変換する。
+
+**キー名の末尾が `_FOLDER` / `_PATH` の値は、区切り文字が無くても `Path` になる。**
+`INPUT_FOLDER = input` と書けば `config.ini` と同じ階層の `input` フォルダを指す
+（`./` を付ける必要はない）。`config.FILES.INPUT_FOLDER / "data.csv"` のように
+`/` で連結しやすいのはそのせい。ただし、
+
+- 値が空なら `""`（str のまま）
+- `https://` などの URL を含む値は `str` のまま
+
+となる。キー名以外の値（`NAME = input` など）は今までどおり `str` のまま。
 
 **パスは引用符で囲んで書いても読み取れます。** Windows の「パスのコピー」は
 `"C:\作業\data.csv"` のように引用符付きで貼り付けられるため、引用符の 1 組は

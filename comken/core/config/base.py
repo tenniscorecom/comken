@@ -24,8 +24,13 @@ from pathlib import Path
 from typing import Any
 
 from comken.core.files.ops import project_dir
-from comken.core.text import is_true_word
-from comken.exceptions import ComkenFileNotFoundError, ConfigError, ConfigKeyNotFoundError
+from comken.core.text import is_true_word, strip_wrapping_quotes
+from comken.exceptions import (
+    ComkenFileNotFoundError,
+    ConfigCreatedError,
+    ConfigError,
+    ConfigKeyNotFoundError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +42,13 @@ logger = logging.getLogger(__name__)
 # を直すだけで全箇所へ追随する）。
 
 
-def _created_from_example_error(path: Path) -> ConfigError:
-    """``config.ini`` が無いので example から作った場合に送出する ``ConfigError``。"""
-    return ConfigError(
+def _created_from_example_error(path: Path) -> ConfigCreatedError:
+    """``config.ini`` が無いので example から作った場合に送出する例外。
+
+    ``ConfigCreatedError`` は「値が未設定の状態だから止めた」ことを
+    呼び出し側で区別できるようにするための型。案内だけ出して終了できる。
+    """
+    return ConfigCreatedError(
         f"config.ini が無かったので、config.ini.example から作成しました: {path}\n"
         "中の値（フォルダの場所など）を確認して書き換えてから、もう一度実行してください。"
     )
@@ -121,6 +130,7 @@ class Config:
     値の型変換（parse_value の変換順と同じ）:
         - true / false → bool
         - [a, b, c] → list[str]
+        - キー名が _FOLDER / _PATH で終わる値（空と URL を除く）→ Path
         - 絶対パス（C:\\ / \\\\ / /）→ Path
         - 整数 → int
         - 小数 → float
@@ -528,16 +538,34 @@ def _split_list_items(text: str) -> list[str]:
     return [s.strip() for s in items if s.strip()]
 
 
-def _strip_wrapping_quotes(value: str) -> str:
-    """値の両端を引用符（``"``）で囲んでいれば、その 1 組だけ外す。
+def _is_path_key(key: str) -> bool:
+    """キー名から「パスを持つキー」かどうかを判定する。
 
-    Windows の「パスのコピー」は ``"C:\\作業\\data.csv"`` のように引用符付きで
-    貼り付けられる。引用符のまま型変換すると、引用符を含むパスになって
-    存在しない場所を指す。引用符が対になっていない値はそのまま返す。
+    キー名の末尾が ``_FOLDER`` / ``_PATH``（または ``FOLDER`` / ``PATH``
+    そのもの）なら、その値はパスとして扱う。
+
+    判定の材料はキー名だけ。値は見ないので、``_FOLDER`` でも中身の文字列
+    （``T_data`` など）は区別できない。区切り文字が無くてもパスとして扱うのは
+    「フォルダやファイルの置き場所」というキーの意味を優先した判断。
     """
-    if len(value) >= 2 and value.startswith('"') and value.endswith('"'):
-        return value[1:-1].strip()
-    return value
+    upper = key.upper()
+    return upper.endswith(("_FOLDER", "_PATH")) or upper in ("FOLDER", "PATH")
+
+
+def _resolve_path(value: str, base_dir: Path | None) -> Path:
+    """パスの値を ``Path`` にする（相対パスは ``base_dir`` 基準で解決する）。
+
+    ``base_dir`` が渡せない経路（スタブ生成など）は ``Path(value)`` のまま返す
+    （文字列を ``Path`` 化しない設計のため、誤って ``str`` を ``Path`` にすると
+    「パスらしき値まで全部 Path」になる事故を防ぐ）。
+    """
+    path = Path(value)
+    if not path.is_absolute() and base_dir is not None:
+        # 相対パスは config.ini の親ディレクトリを基準に解決する。
+        # 業務ツールで ``input`` と書けば config.ini と同じ階層の
+        # ``input`` ディレクトリを指す（実行時のカレントに左右されない）。
+        path = (base_dir / path).resolve()
+    return path
 
 
 def _looks_like_path(value: str) -> bool:
@@ -580,12 +608,16 @@ def parse_value(
     変換の優先順位:
         1. true / false（大文字小文字問わず）→ bool
         2. [a, b, c] → list[str]（改行区切りも可）
-        3. 絶対パス（C:\\ / \\\\ / / で始まる）→ Path
-        4. 相対パス（値に ``/`` または ``\\`` を含む）→ Path
+        3. キーの名前が ``_FOLDER`` / ``_PATH`` で終わる（または ``FOLDER`` /
+           ``PATH`` そのもの）で、値が空でなく URL でない → Path
+           （区切り文字が無くても Path。相対なら config.ini の親ディレクトリを
+           基準に ``.resolve()`` した Path）
+        4. 絶対パス（C:\\ / \\\\ / / で始まる）→ Path
+        5. 相対パス（値に ``/`` または ``\\`` を含む）→ Path
            config.ini の親ディレクトリを基準に ``.resolve()`` した Path
-        5. 整数に変換できる → int（ただし先頭ゼロの数字は文字列のまま）
-        6. 小数に変換できる → float（ただし nan / inf は文字列のまま）
-        7. それ以外 → str
+        6. 整数に変換できる → int（ただし先頭ゼロの数字は文字列のまま）
+        7. 小数に変換できる → float（ただし nan / inf は文字列のまま）
+        8. それ以外 → str
 
     相対パスの解決基準は config.ini の親ディレクトリ（``base_dir``）。
     業務側で ``config.FILES.INPUT_FOLDER / "data.csv"`` のように ``/`` で
@@ -595,6 +627,11 @@ def parse_value(
     のまま返す（文字列を ``Path`` 化しない設計のため、誤って ``str`` を
     ``Path`` にすると「パスらしき値まで全部 Path」になる事故を防ぐ）。
 
+    ``INPUT_FOLDER`` / ``REPORT_PATH`` のようなキー名なら、**区切り文字が無くても**
+    ``Path`` にする（``INPUT_FOLDER = input``）。 フォルダやファイルの置き場所は
+    ``/`` で連結したいことが多く、``str`` のままだと ``TypeError`` になるため。
+    値は空なら今までどおり ``""``、URL（``://`` を含む）なら ``str`` のまま。
+
     文字列として使いたい数値（例: 管理番号 "123"）はコード側で str() に変換する。
     先頭ゼロ（電話番号 "0521234567"・社員番号 "007" 等）は int にすると桁落ちするため
     文字列で返す。nan / inf は float() が受理してしまうので数値化しない。
@@ -603,7 +640,7 @@ def parse_value(
     （Windows の「パスのコピー」は ``"C:\\作業\\data.csv"`` のように引用符付きで
     貼り付けられるため。引用符を残すと存在しないパスになる）。
     """
-    value = _strip_wrapping_quotes(cfg.get(section, key).strip())
+    value = strip_wrapping_quotes(cfg.get(section, key).strip())
     lower = value.lower()
 
     if is_true_word(value):
@@ -614,14 +651,12 @@ def parse_value(
     if value.startswith("[") and value.endswith("]"):
         return _split_list_items(value[1:-1])
 
+    if value and "://" not in value and _is_path_key(key):
+        # キーの名前が「置き場所」を表すなら、区切り文字が無くても Path にする
+        return _resolve_path(value, base_dir)
+
     if _looks_like_path(value):
-        path = Path(value)
-        if not path.is_absolute() and base_dir is not None:
-            # 相対パスは config.ini の親ディレクトリを基準に解決する。
-            # 業務ツールで ``./input`` と書けば config.ini と同じ階層の
-            # ``input`` ディレクトリを指す（実行時のカレントに左右されない）。
-            path = (base_dir / path).resolve()
-        return path
+        return _resolve_path(value, base_dir)
 
     # 先頭ゼロの数字は電話番号・社員番号等とみなし、桁落ちを避けて文字列のまま返す
     unsigned = value[1:] if value[:1] in ("+", "-") else value

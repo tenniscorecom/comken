@@ -59,6 +59,123 @@ def test_excel_rejects_duplicate_data_sheet(tmp_path) -> None:
             excel.create_data_sheet("顧客")
 
 
+def test_excel_duplicate_data_sheet_message_shows_four_options(tmp_path) -> None:
+    """既にシートがあるときのメッセージに、選び方が4つ並ぶ。
+
+    上書きはしない（止まるのは今までどおり）。初めて使う人には
+    「消す / 別の名前 / 既にあるシートを使う / write で置き換える」のどれを
+    選べばよいかを示す。
+    """
+    with Excel(tmp_path / "book.xlsx") as excel:
+        excel.create_data_sheet("顧客")
+        with pytest.raises(ExcelError) as caught:
+            excel.create_data_sheet("顧客")
+
+    message = str(caught.value)
+    assert "シート「PY_顧客」は既に存在します。" in message
+    assert "ファイルを消してから実行" in message
+    assert 'data_sheet("顧客")' in message
+    assert 'write("顧客", table)' in message
+
+
+def test_excel_duplicate_table_message_shows_ways_to_replace(tmp_path) -> None:
+    """既にテーブルがあるときのメッセージに、置き換える2つの方法を示す。"""
+    with Excel(tmp_path / "book.xlsx") as excel:
+        sheet = excel.create_data_sheet("顧客")
+        sheet.create_table("顧客", Table(["ID"], [{"ID": "001"}]))
+        with pytest.raises(ExcelError) as caught:
+            sheet.create_table("顧客", Table(["ID"], [{"ID": "002"}]))
+
+    message = str(caught.value)
+    assert "テーブル「PY_T_顧客」は既に存在します。" in message
+    assert 'write("顧客", table)' in message
+    assert 'table("顧客").replace(table)' in message
+
+
+def test_excel_write_creates_data_sheet_and_table(tmp_path) -> None:
+    """新規ファイルへ write すると、PY_ シートとテーブルができ、読み戻すと同じ行。"""
+    path = tmp_path / "book.xlsx"
+    with Excel(path) as excel:
+        excel.write("結果", Table(["ID", "名前"], [{"ID": "001", "名前": "山田"}]))
+
+    with Excel(path, read_only=True) as excel:
+        assert excel.list_data_sheets() == ["PY_結果"]
+        assert excel.data_sheet("結果").table("結果").read() == [{"ID": "001", "名前": "山田"}]
+
+
+def test_excel_write_replaces_table_on_second_run(tmp_path) -> None:
+    """2回目の write は「既に存在します」で止まらず、中身だけを入れ替える。
+
+    行数が減る場合と増える場合の両方で、2回目の中身だけが残ることを確かめる。
+    """
+    path = tmp_path / "book.xlsx"
+    with Excel(path) as excel:
+        excel.write("結果", Table(["ID"], [{"ID": "001"}, {"ID": "002"}, {"ID": "003"}]))
+
+    # 行が減る場合
+    with Excel(path) as excel:
+        excel.write("結果", Table(["ID"], [{"ID": "010"}]))
+    with Excel(path, read_only=True) as excel:
+        assert excel.data_sheet("結果").table("結果").read() == [{"ID": "010"}]
+
+    # 行が増える場合
+    with Excel(path) as excel:
+        excel.write("結果", Table(["ID"], [{"ID": "010"}, {"ID": "011"}]))
+    with Excel(path, read_only=True) as excel:
+        assert excel.data_sheet("結果").table("結果").read() == [
+            {"ID": "010"},
+            {"ID": "011"},
+        ]
+
+
+def test_excel_write_keeps_other_table_in_same_sheet(tmp_path) -> None:
+    """同じシートの別のテーブルは、write の後も中身が変わらない。"""
+    path = tmp_path / "book.xlsx"
+    with Excel(path) as excel:
+        sheet = excel.create_data_sheet("結果")
+        sheet.create_table("控え", Table(["ID"], [{"ID": "控え-1"}]), "D1")
+        excel.write("結果", Table(["ID"], [{"ID": "001"}]))
+
+    with Excel(path, read_only=True) as excel:
+        sheet = excel.data_sheet("結果")
+        assert sheet.table("控え").read() == [{"ID": "控え-1"}]
+        assert sheet.table("結果").read() == [{"ID": "001"}]
+
+
+def test_excel_write_rejects_column_missing_from_existing_headers(tmp_path) -> None:
+    """既存の見出しに無い列は ExcelError。ファイルの中身は変わらない。"""
+    path = tmp_path / "book.xlsx"
+    with Excel(path) as excel:
+        excel.write("結果", Table(["ID"], [{"ID": "001"}]))
+
+    def write_extra_column() -> None:
+        # 例外が with を抜けて「保存しない」経路を通すよう、内側の with を残す。
+        with Excel(path) as excel:
+            excel.write("結果", Table(["ID", "追加"], [{"ID": "002", "追加": "003"}]))
+
+    with pytest.raises(ExcelError):
+        write_extra_column()
+
+    with Excel(path, read_only=True) as excel:
+        assert excel.data_sheet("結果").table("結果").read() == [{"ID": "001"}]
+
+
+def test_excel_write_rejects_read_only_excel(tmp_path) -> None:
+    """read_only=True では、既存の書き込み系と同じ例外で止まる。"""
+    path = tmp_path / "book.xlsx"
+    with Excel(path) as excel:
+        excel.write("結果", Table(["ID"], [{"ID": "001"}]))
+
+    def write_in_read_only() -> None:
+        with Excel(path, read_only=True) as excel:
+            excel.write("結果", Table(["ID"], [{"ID": "002"}]))
+
+    with pytest.raises(ExcelError) as caught:
+        write_in_read_only()
+
+    assert "read_only=True のExcelではwriteできません。" in str(caught.value)
+
+
 def test_excel_table_append_accepts_row_list_and_table(tmp_path) -> None:
     path = tmp_path / "book.xlsx"
     with Excel(path) as excel:

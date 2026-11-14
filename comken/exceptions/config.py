@@ -79,6 +79,17 @@ class ConfigError(ComkenError):
     """
 
 
+class ConfigCreatedError(ConfigError):
+    """config.ini が無いので、example から作り直した
+
+    発生箇所: comken.core.config.base の Config 構築時
+
+    対処:
+        作り直された config.ini の中の値（フォルダの場所など）を確認して
+        書き換える。書き換えたら、もう一度実行する
+    """
+
+
 class ConfigKeyNotFoundError(ConfigError, AttributeError):
     """config.ini のセクションに必要なキーがない
 

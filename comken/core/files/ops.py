@@ -9,6 +9,7 @@ from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+from comken.core.text import strip_wrapping_quotes
 from comken.core.timer import measure
 from comken.exceptions import FileDeletionError
 from comken.runtime import dry_run_log, is_dry_run
@@ -332,3 +333,20 @@ def cleanup_stale_tmp(target: str | Path, max_age_seconds: float = 3600) -> None
                 tmp.unlink()
         except OSError:
             logger.debug("一時ファイルを削除できませんでした: %s", tmp, exc_info=True)
+
+
+def to_path(value: str | Path) -> Path:
+    """文字列なら引用符を外してから ``Path`` にする（内部用）。
+
+    Windows の「パスのコピー」は ``"C:\\作業\\data.csv"`` のように引用符付きで
+    貼り付けられる。引用符のまま ``Path`` にすると、存在しない場所を指す。
+    ``Path`` で渡されたものは触らない（引用符は値の一部なので）。
+
+    この関数は ``comken.core.files`` の **公開窓口** には入れない
+    （``comken.core.files.ops`` から直接 import する内部関数）。
+    利用者が直接呼ぶことは想定せず、CSV / Excel / FileBase の
+    パス正規化で使う。
+    """
+    if isinstance(value, str):
+        return Path(strip_wrapping_quotes(value))
+    return Path(value)

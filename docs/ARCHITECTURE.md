@@ -284,15 +284,41 @@ browser/
 
 共有サーバーではこの 3 ファイルを **`git update-index --skip-worktree`** で切り替えから守る（配置時に 1 回だけ）。タグ切り替え時にこのファイルに変更が入っていると checkout が止まるので、そのときだけ `--no-skip-worktree` で解除し手で合わせる。
 
+```bat
+git update-index --skip-worktree comken/toolbox/salesforce/sites/solution_sandbox.py
+git update-index --skip-worktree comken/toolbox/salesforce/sites/solution.py
+git update-index --skip-worktree comken/services/salesforce_downloader/paths.py
+```
+
+これで手元の書き換えが消えず、うっかり push することもない。
+
 ### 参照方式: 共有サーバーを直接参照
 
 comken は共有サーバー上の 1 か所に置き、各プロジェクトはそこから **直接 import する**（ローカルへのコピー・同期・`pip install` を行わない）。
 
 共有サーバーのチェックアウトは **リリース済みのタグだけ** に保つ。共有サーバーでブランチをチェックアウトしないこと（その瞬間に全プロジェクトへ伝播するため）。タグだけを指していれば、`master` に何をコミットしても本番へ流れない。
 
+**タグへの切り替え手順**（→ [「11. 開発とリリース」](#11-開発とリリース)）:
+
+```bat
+pushd \\server\share\tools\comken
+git fetch --tags
+git tag -l                 :: 出ているタグを確認する
+git checkout v2.0.0        :: 切り替えたいタグ（上で確認した最新版）
+popd
+```
+
+**切り替えた瞬間に、次に import した全プロジェクトが新しい版になる。** 更新のたびの配布作業はない。問題が出たら前のタグへ戻せば、同じように全プロジェクトが戻る。
+
 直接参照方式は「配布作業ゼロ・常に最新」が利点。代償は「**共有サーバーが落ちると import が失敗して全プロジェクトが止まる**」ことで、これを受け入れた上での方式。
 
-`sys.pycache_prefix` を `%LOCALAPPDATA%\comken-pycache` へ向ける処理は `comken/__init__.py` が担い、設定作業無しで `__pycache__` がローカルへ書かれる。
+**バイトコードキャッシュは自動でローカルに逃がす**: 共有サーバーが読み取り専用でも遅くならないよう、`sys.pycache_prefix` を `%LOCALAPPDATA%\comken-pycache` へ向ける処理は `comken/__init__.py` が担う。設定作業無しで `__pycache__` がローカルへ書かれ、環境変数 `PYTHONPYCACHEPREFIX` を設定済みの場合はそちらを尊重する。
+
+**代償**: import のたびにネットワークを読むので起動が遅く、共有サーバーが落ちると動かない。
+
+### comken の場所を変えたとき
+
+comken を別の共有フォルダへ移したときは、各プロジェクトの `実行.bat` / `.vscode/settings.json` の2か所を新しい場所に書き換える。`python -m comken init` で作ったプロジェクトではこの2か所は最初から `PYTHON_LIBRARY` で固定されているので、共有サーバーのパスが変わったときだけ書き換える。bat は cmd.exe に合わせて CP932、`.vscode/settings.json` は UTF-8（`\\` を `\` に、`\` を `/` に直して書く）。片方だけ直すと「動くのに補完だけ効かない」状態になり、原因の特定が難しくなる。
 
 ## 11. 開発とリリース
 
@@ -312,6 +338,7 @@ comken は共有サーバー上の 1 か所に置き、各プロジェクトは�
 3. `python tools\export_for_chat.py` で [`ERRORS.md`](ERRORS.md) を再生成する（`自動生成/API.md` は git 管理外なので、必要な場所で同じコマンドを実行して作る）
 4. コミットしてタグを打ち、push（`git tag vX.Y.Z && git push --tags`）
 5. 共有サーバーで `git fetch --tags && git checkout vX.Y.Z` を実行する
+   （共有サーバーでの作業手順の詳細は [「10. パッケージ構成と配置・運用」](#10-パッケージ構成と配置運用)）
 
 5 を実行するまで本番は変わらない。1〜4 は好きなときにやってよい。
 

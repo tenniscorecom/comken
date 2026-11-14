@@ -21,7 +21,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from comken.core.columns import num_to_col
 from comken.core.files import atomic_write
-from comken.core.files.ops import copy_to_local_if_large
+from comken.core.files.ops import copy_to_local_if_large, to_path
 from comken.core.table.model import Table
 from comken.core.timer import measure
 from comken.core.types import TypeMap
@@ -126,7 +126,7 @@ class Excel:
 
         ``read_only``、dry-run、またはwithブロックが例外で終わった場合は保存しない。
         """
-        self.path = Path(source)
+        self.path = to_path(source)
         if self.path.suffix.casefold() not in _EXCEL_SUFFIXES:
             raise UnsupportedFileSuffixError(self.path, tuple(sorted(_EXCEL_SUFFIXES)))
         self._types = dict(types or {})
@@ -146,7 +146,7 @@ class Excel:
             else:
                 # 書き込み時は UNC でのみ作業コピーを挟む。ローカルドライブは
                 # そもそもネットワーク問題の起きない素の読み書きで十分。
-                self._local_copy_required = self._is_unc_path(source)
+                self._local_copy_required = self._is_unc_path(self.path)
         else:
             self._local_copy_required = local_copy
         logger.debug(
@@ -415,14 +415,76 @@ class Excel:
         assert self._workbook is not None
         full_name = self._with_python_prefix(name)
         if full_name in self._workbook.sheetnames:
+            # 上書きはしない（止まるのは今までどおり）。作り直したい人へ
+            # 選択肢を4つ示す（消す / 別の名前 / 既にあるシートを使う / write で置き換える）。
+            short_name = full_name.removeprefix(self.PY_PREFIX)
             raise ExcelError(
                 f"シート「{full_name}」は既に存在します。\n"
-                "別のシート名を指定するか、既存のシートをリネームしてください。"
+                "作り直す場合は、ファイルを消してから実行するか、"
+                "別のシート名を指定してください。\n"
+                f'既にあるシートを使う場合は data_sheet("{short_name}") で取得できます。\n'
+                f"無ければ作り、あれば置き換える場合は "
+                f'write("{short_name}", table) を使ってください。'
             )
+        return self._new_data_sheet(full_name)
+
+    def _new_data_sheet(self, full_name: str) -> Sheet:
+        """名前付きのデータシートを新規作成して ``Sheet`` を返す。
+
+        ``full_name`` は ``PY_`` プレフィックス付きの名前。``create_data_sheet``
+        と ``write`` の両方から使う。
+        """
+        assert self._workbook is not None
         worksheet = self._workbook.create_sheet(full_name)
         self._mark_dirty()
         logger.debug("データシートを作成しました: name=%s", full_name)
         return Sheet(self, worksheet)
+
+    def write(self, name: str, table: Table) -> None:
+        """データシートのテーブルへ表を書く。無ければ作り、あれば中身を全部置き換える。
+
+        **同じコードを何回実行しても止まらない。** 1回目はデータシートと
+        テーブルを新しく作り、2回目以降は既存テーブルの中身を全部置き換える
+        （シート内の他のテーブルや書式はそのまま残る）。
+
+        置き換えは ``ExcelTable.replace`` と同じ安全装置が効く。既存の見出しに
+        無い列は ``ExcelError``、人が入れた数式は既定でエラーになる。
+
+        Args:
+            name: データシート名とテーブル名。どちらにも同じ名前を使う。
+            table: 書き込む ``Table``。
+
+        Raises:
+            TableError: ``engine='com'`` で開いたインスタンスで呼ばれたとき。
+            ExcelError: 読み取り専用のとき、既存テーブルの見出しに無い列が
+                含まれるとき、既存テーブルに人が入れた数式があるとき。
+        """
+        if self._engine == "com":
+            self._ensure_open()
+            raise _engine_not_supported_error("write")
+        self._ensure_writable("write")
+        sheet = self._ensure_data_sheet(name)
+        existing = sheet._find_table(name)
+        if existing is None:
+            sheet.create_table(name, table)
+            logger.debug("write: テーブルを新規作成しました: name=%s", name)
+            return
+        existing.replace(table)
+        logger.debug("write: 既存テーブルを置き換えました: name=%s", name)
+
+    def _ensure_data_sheet(self, name: str) -> Sheet:
+        """``write`` 用にデータシートを用意する。無ければ作り、あればそのまま返す。
+
+        ``create_data_sheet`` と違い、同名シートがあっても止めない。``write`` は
+        同じコードを何度でも実行できるようにするのが目的なため。既にシートが
+        あるときは、シート内の他のテーブルや書式に触れずにそのまま使う。
+        """
+        assert self._workbook is not None
+        full_name = self._with_python_prefix(name)
+        if full_name in self._workbook.sheetnames:
+            logger.debug("既存のデータシートを使います: name=%s", full_name)
+            return Sheet(self, self._workbook[full_name])
+        return self._new_data_sheet(full_name)
 
     def create_sheet(self, name: str) -> Sheet:
         """指定名の空の表示用シートを作成する。

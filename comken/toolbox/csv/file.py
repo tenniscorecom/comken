@@ -12,6 +12,7 @@ from typing import Any, Self, cast
 
 from comken.core.encoding import CP932, UTF8, UTF8_SIG, normalize_encoding
 from comken.core.files import atomic_write
+from comken.core.files.ops import to_path
 from comken.core.table.model import Table
 from comken.core.timer import measure
 from comken.core.types import Row, TypeMap, Value
@@ -379,7 +380,7 @@ class CSV:
         read_only: bool = False,
         dry_run: bool = False,
     ) -> None:
-        self.path = Path(source)
+        self.path = to_path(source)
         if self.path.suffix.lower() != ".csv":
             raise UnsupportedFileSuffixError(self.path, (".csv",))
         # ``None`` は「自動判定」、それ以外は表記ゆれを codec 名へそろえてから保持する。
