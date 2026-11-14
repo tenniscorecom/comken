@@ -852,6 +852,7 @@ class Excel:
                 len(table),
             )
             return table
+        self._ensure_sheet_exists(sheet_name)
         rows = self._computed._read_computed_rows(sheet_name, header_row)
         if not rows:
             logger.debug(
@@ -921,6 +922,32 @@ class Excel:
     def _mark_dirty(self) -> None:
         self._ensure_writable("書き込み")
         self._is_dirty = True
+
+    def _ensure_sheet_exists(self, sheet_name: str) -> None:
+        """読み하려는シートがブックに実在するか確かめる。
+
+        シート名をそのまま openpyxl へ渡すと、無い名前のとき素の
+        ``KeyError``  (``Worksheet ... does not exist.``) になり、原因も
+        対処も分からなかった。``last_row()`` と同じ ``SheetNotFoundError`` に
+        変えて、既存シート名一覧を利用者へ見せる。
+        """
+        sheet_names = self._sheet_names()
+        if sheet_name not in sheet_names:
+            raise SheetNotFoundError(sheet_name, sheet_names)
+
+    def _sheet_names(self) -> list[str]:
+        """ブックに実在するシート名一覧を返す。
+
+        どこから読むかは ``_cached_rows`` と同じ判定にそろえる（変更済み
+        （dirty）または作業ファイルが無いときはメモリ上の Workbook、
+        それ以外はストリームの Workbook）。``read_only=True`` の読み取りで
+        通常 Workbook を余計に開かないため。
+        """
+        if self._is_dirty or not self._working_path.exists():
+            self._ensure_normal_workbook()
+            assert self._workbook is not None
+            return list(self._workbook.sheetnames)
+        return list(self._computed._open_stream_workbook(data_only=True).sheetnames)
 
     def _ensure_writable(self, operation: str) -> None:
         self._ensure_normal_workbook()

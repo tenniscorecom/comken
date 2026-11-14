@@ -682,3 +682,38 @@ class TestSheetIterRows:
         excel = Excel(path, read_only=True)
         with pytest.raises(TableError):
             excel.sheet("Sheet1").iter_rows()
+
+
+class TestExcelReadMissingSheet:
+    """``Excel.read()`` に無いシート名を渡したときの契約。
+
+    以前はシート名をそのまま openpyxl へ渡していたため、素の ``KeyError``
+    （``Worksheet ... does not exist.``）になり、既存シート名も対処も
+    示せなかった。``last_row()`` と同じ ``SheetNotFoundError`` にする。
+    """
+
+    def test_read_only_raises_sheet_not_found_with_existing_names(self, tmp_path: Path) -> None:
+        """読み取り専用（ストリーム経路）で ``SheetNotFoundError`` になる。"""
+        path = tmp_path / "book.xlsx"
+        with Excel(path) as excel:
+            excel.create_sheet("案件一覧")
+        with Excel(path, read_only=True) as excel:
+            with pytest.raises(SheetNotFoundError) as exc_info:
+                excel.read("無い名前")
+            message = str(exc_info.value)
+            assert "無い名前" in message
+            assert "案件一覧" in message
+            # 読み取り専用のときは通常 Workbook を余計に開かない
+            assert excel._workbook is None
+
+    def test_memory_path_raises_sheet_not_found(self, tmp_path: Path) -> None:
+        """書き込み用に開いた（メモリ経路）ブックでも ``SheetNotFoundError`` になる。"""
+        path = tmp_path / "book.xlsx"
+        with Excel(path) as excel:
+            excel.create_sheet("案件一覧")
+            with pytest.raises(SheetNotFoundError) as exc_info:
+                excel.read("無い名前")
+            message = str(exc_info.value)
+            assert "無い名前" in message
+            assert "案件一覧" in message
+
