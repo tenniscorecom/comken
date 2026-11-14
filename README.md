@@ -182,6 +182,7 @@ example からコピーされ、**そこで終了コード 1 で止まる**（�
 
 **comken の場所を後から変えたくなったら**、`実行.bat` と `.vscode/settings.json` の
 2つを直す（片方だけ直すと「動くのに補完が効かない」状態になって原因が分かりにくい）。
+共有サーバーの配置・更新の詳細は [ARCHITECTURE.md「10. パッケージ構成と配置・運用」](docs/ARCHITECTURE.md#10-パッケージ構成と配置運用)を参照。
 
 ### プロジェクトごとに設定する
 
@@ -202,47 +203,4 @@ PCの環境変数を変更したくない場合は、各プロジェクトのル
 4. 処理の終了コードを**そのまま返す**。スケジューラや RPA 基盤が成否を判断できる
    （`pause`や`popd`で終わると、失敗しても成功したように見えてしまう）。
    `実行.bat` は RPA が絶対パスで起動する運用もあるので、`pause` を入れていない
-
-### 共有サーバーの comken を更新する
-
-共有サーバーのチェックアウトを、**リリース済みのタグへ切り替える**（→ [開発とリリース](docs/ARCHITECTURE.md#11-開発とリリース)）。
-
-```bat
-pushd \\server\share\tools\comken
-git fetch --tags
-git tag -l                 :: 出ているタグを確認する
-git checkout v2.0.0        :: 切り替えたいタグ（上で確認した最新版）
-popd
-```
-
-**社内固有の値を書いた3ファイルは、切り替えで上書きされないようにしておく。**
-配置したときに1回だけ設定する。
-
-```bat
-git update-index --skip-worktree comken/toolbox/salesforce/sites/solution_sandbox.py
-git update-index --skip-worktree comken/toolbox/salesforce/sites/solution.py
-git update-index --skip-worktree comken/services/salesforce_downloader/paths.py
-```
-
-これで手元の書き換えが消えず、うっかり push することもない。comken 側でこれらの
-ファイルを変更したときは切り替えが止まるので、そのときだけ `--no-skip-worktree` で解除して
-手で合わせ、また設定し直す（→ [ARCHITECTURE.md](docs/ARCHITECTURE.md#配置時に書き換える3ファイル)）。
-
-**切り替えた瞬間に、次に import した全プロジェクトが新しい版になる。** 更新のたびの
-配布作業はない。問題が出たら前のタグへ戻せば、同じように全プロジェクトが戻る。
-
-- **バイトコードキャッシュは自動でローカルに逃がす**: 共有サーバーが読み取り専用でも
-  遅くならないよう、comken は import 時に `.pyc` の出力先を `%LOCALAPPDATA%\comken-pycache`
-  に向ける（`sys.pycache_prefix`）。環境変数 `PYTHONPYCACHEPREFIX` を設定済みの場合はそちらを尊重する。
-- **代償**: import のたびにネットワークを読むので起動が遅く、共有サーバーが落ちると動かない。
-  詳しい仕組み・運用（更新/ロールバック/開発との分離）は [ARCHITECTURE.md「10. パッケージ構成と配置・運用」](docs/ARCHITECTURE.md#10-パッケージ構成と配置運用)を参照。
-
-### comken の場所を変えたとき
-
-comken を別の共有フォルダへ移したときは、各プロジェクトの
-`実行.bat` / `.vscode/settings.json` の2か所を新しい場所に書き換える。`python -m comken init` で
-作ったプロジェクトではこの2か所は最初から `PYTHON_LIBRARY` で固定されているので、
-共有サーバーのパスが変わったときだけ書き換える。bat は cmd.exe に合わせて CP932、
-`.vscode/settings.json` は UTF-8（`\\\\` を `\\` に、`\` を `/` に直して書く）。
-片方だけ直すと「動くのに補完だけ効かない」状態になり、原因の特定が難しくなる。
 

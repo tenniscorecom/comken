@@ -465,23 +465,23 @@ def test_documented_protected_files_exist(doc):
         )
 
 
-def test_readme_protects_all_files_written_at_deployment():
-    """README の配置手順が「配置時に書き換える3ファイル」を全部守っていること。
+def test_architecture_protects_all_files_written_at_deployment():
+    """ARCHITECTURE.md の配置手順が「配置時に書き換える3ファイル」を全部守っていること。
 
-    README は「社内固有の値を書いた3ファイル」と書きながら、
+    配置手順は README から ARCHITECTURE.md へ寄せた。ここは
+    「社内固有の値を書いた3ファイル」と書きながら、
     ``git update-index --skip-worktree`` の例が 2 行しかなく、
     ``comken/services/salesforce_downloader/paths.py`` が漏れていた
     （タグを切り替えると社内固有の値が消える）。
     """
-    readme = (_ROOT / "README.md").read_text(encoding="utf-8")
     architecture = (_ROOT / "docs" / "ARCHITECTURE.md").read_text(encoding="utf-8")
 
     section = architecture.split("### 配置時に書き換える3ファイル", 1)[1].split("\n### ", 1)[0]
     expected = set(re.findall(r"^- `(comken/[^`]+)`", section, re.MULTILINE))
-    protected = set(re.findall(r"git update-index --skip-worktree\s+(\S+)", readme))
+    protected = set(re.findall(r"git update-index --skip-worktree\s+(\S+)", architecture))
 
     assert expected, "ARCHITECTURE.md から書き換えるファイルが読めなかった"
     assert expected <= protected, (
-        "README の配置手順が、書き換えるファイルの一部を守っていません: "
+        "ARCHITECTURE.md の配置手順が、書き換えるファイルの一部を守っていません: "
         f"{sorted(expected - protected)}"
     )
