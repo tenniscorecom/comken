@@ -727,9 +727,7 @@ class TestExcelHeaderRowValidation:
     """
 
     @pytest.mark.parametrize("header_row", [0, -1])
-    def test_read_rejects_header_row_below_one(
-        self, tmp_path: Path, header_row: int
-    ) -> None:
+    def test_read_rejects_header_row_below_one(self, tmp_path: Path, header_row: int) -> None:
         """``Excel.read()`` は 1 未満の ``header_row`` を ``ExcelError`` にする。"""
         path = tmp_path / "book.xlsx"
         with Excel(path) as excel:
@@ -741,9 +739,7 @@ class TestExcelHeaderRowValidation:
         assert str(header_row) in message
 
     @pytest.mark.parametrize("header_row", [0, -1])
-    def test_iter_rows_rejects_header_row_below_one(
-        self, tmp_path: Path, header_row: int
-    ) -> None:
+    def test_iter_rows_rejects_header_row_below_one(self, tmp_path: Path, header_row: int) -> None:
         """``Sheet.iter_rows()`` も同じ検査をする。"""
         path = tmp_path / "book.xlsx"
         with Excel(path) as excel:
@@ -768,4 +764,3 @@ class TestExcelHeaderRowValidation:
         message = str(exc_info.value)
         assert "header_row は 1 以上で指定してください" in message
         assert str(header_row) in message
-

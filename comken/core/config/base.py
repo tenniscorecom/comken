@@ -528,6 +528,18 @@ def _split_list_items(text: str) -> list[str]:
     return [s.strip() for s in items if s.strip()]
 
 
+def _strip_wrapping_quotes(value: str) -> str:
+    """値の両端を引用符（``"``）で囲んでいれば、その 1 組だけ外す。
+
+    Windows の「パスのコピー」は ``"C:\\作業\\data.csv"`` のように引用符付きで
+    貼り付けられる。引用符のまま型変換すると、引用符を含むパスになって
+    存在しない場所を指す。引用符が対になっていない値はそのまま返す。
+    """
+    if len(value) >= 2 and value.startswith('"') and value.endswith('"'):
+        return value[1:-1].strip()
+    return value
+
+
 def _looks_like_path(value: str) -> bool:
     """値がパスとして扱うべき形かを返す。
 
@@ -591,12 +603,7 @@ def parse_value(
     （Windows の「パスのコピー」は ``"C:\\作業\\data.csv"`` のように引用符付きで
     貼り付けられるため。引用符を残すと存在しないパスになる）。
     """
-    value = cfg.get(section, key).strip()
-    # Windows の「パスのコピー」は引用符付きで貼り付けられる（"C:\作業\data.csv"）。
-    # 引用符のまま型変換すると、引用符を含むパスになって存在しない場所を指す。
-    # 外すのは型変換の入口（この関数）だけで、以降はいつもの変換へ進む。
-    if len(value) >= 2 and value.startswith('"') and value.endswith('"'):
-        value = value[1:-1].strip()
+    value = _strip_wrapping_quotes(cfg.get(section, key).strip())
     lower = value.lower()
 
     if is_true_word(value):

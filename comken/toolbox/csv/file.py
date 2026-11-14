@@ -460,20 +460,9 @@ class CSV:
         if not raw_rows and self._columns is None:
             # UTF-8 BOM は文字ではなく署名なので、BOM だけのファイルにも見出しはない。
             raise CSVError(_missing_header_message(self.path))
-        if self._columns is None:
-            columns = raw_rows.pop(0)[1]
-        else:
-            columns = self._columns
+        columns = self._columns if self._columns is not None else raw_rows.pop(0)[1]
         self._validate_columns(columns)
-        rows: list[dict[str, str]] = []
-        for line_number, values in raw_rows:
-            if not values:
-                # 完全に空の行（ファイル末尾の余分な改行など）は読み飛ばす
-                # （``iter_rows()`` と同じ扱い。区切りのある行は空行ではない）。
-                continue
-            if len(values) != len(columns):
-                raise _row_length_error(self.path, line_number, len(columns), len(values))
-            rows.append(dict(zip(columns, values, strict=True)))
+        rows = self._rows_from_raw_rows(columns, raw_rows)
         logger.debug(
             "CSV 読み込み完了: %s, %d 行, %d 列",
             self.path,
@@ -481,6 +470,23 @@ class CSV:
             len(columns),
         )
         return Table(columns, rows, types=self._types)
+
+    def _rows_from_raw_rows(
+        self, columns: list[str], raw_rows: list[tuple[int, list[str]]]
+    ) -> list[dict[str, str]]:
+        """読み取った行（行番号つき）を見出しに合わせて dict の行へ変える。
+
+        完全に空の行（ファイル末尾の余分な改行など）は読み飛ばす
+        （``iter_rows()`` と同じ扱い。区切りのある行は空行ではない）。
+        """
+        rows: list[dict[str, str]] = []
+        for line_number, values in raw_rows:
+            if not values:
+                continue
+            if len(values) != len(columns):
+                raise _row_length_error(self.path, line_number, len(columns), len(values))
+            rows.append(dict(zip(columns, values, strict=True)))
+        return rows
 
     def iter_rows(self) -> Iterator[Row]:
         """CSV を 1 行ずつ ``{列名: 値}`` の dict で返すイテレーター。
