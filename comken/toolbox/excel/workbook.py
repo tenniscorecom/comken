@@ -415,9 +415,14 @@ class Excel:
         assert self._workbook is not None
         full_name = self._with_python_prefix(name)
         if full_name in self._workbook.sheetnames:
+            # 上書きはしない（止まるのは今までどおり）。作り直したい人へ
+            # 選択肢を3つ示す（消す / 別の名前 / 既にあるシートを使う）。
+            short_name = full_name.removeprefix(self.PY_PREFIX)
             raise ExcelError(
                 f"シート「{full_name}」は既に存在します。\n"
-                "別のシート名を指定するか、既存のシートをリネームしてください。"
+                "作り直す場合は、ファイルを消してから実行するか、"
+                "別のシート名を指定してください。\n"
+                f'既にあるシートを使う場合は data_sheet("{short_name}") で取得できます。'
             )
         worksheet = self._workbook.create_sheet(full_name)
         self._mark_dirty()

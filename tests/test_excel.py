@@ -59,6 +59,23 @@ def test_excel_rejects_duplicate_data_sheet(tmp_path) -> None:
             excel.create_data_sheet("顧客")
 
 
+def test_excel_duplicate_data_sheet_message_shows_three_options(tmp_path) -> None:
+    """既にシートがあるときのメッセージに、選び方が3つ並ぶ。
+
+    上書きはしない（止まるのは今までどおり）。初めて使う人には
+    「消す / 別の名前 / 既にあるシートを使う」のどれを選べばよいかを示す。
+    """
+    with Excel(tmp_path / "book.xlsx") as excel:
+        excel.create_data_sheet("顧客")
+        with pytest.raises(ExcelError) as caught:
+            excel.create_data_sheet("顧客")
+
+    message = str(caught.value)
+    assert "シート「PY_顧客」は既に存在します。" in message
+    assert "ファイルを消してから実行" in message
+    assert 'data_sheet("顧客")' in message
+
+
 def test_excel_table_append_accepts_row_list_and_table(tmp_path) -> None:
     path = tmp_path / "book.xlsx"
     with Excel(path) as excel:

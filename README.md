@@ -29,6 +29,11 @@ with Excel(r"C:\作業\report.xlsx") as excel:
     excel.create_data_sheet("結果").create_table("結果", table)
 ```
 
+- シート名は `PY_結果` になる（`PY_` は comken が読み書きするデータシートの印）
+- 新しく作ったファイルには、空の `Sheet` も一緒に残る
+- 同じファイルへもう一度実行すると「既に存在します」で止まる。作り直すなら
+  `report.xlsx` を消してから実行する
+
 ## ドキュメントの地図
 
 この README がすべての入口です。目的に合う行から読み始めてください。
