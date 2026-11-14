@@ -206,7 +206,7 @@ PCの環境変数を変更したくない場合は、各プロジェクトのル
 pushd \\server\share\tools\comken
 git fetch --tags
 git tag -l                 :: 出ているタグを確認する
-git checkout v0.11.3       :: 切り替えたいタグ（上で確認した最新版）
+git checkout v2.0.0        :: 切り替えたいタグ（上で確認した最新版）
 popd
 ```
 
@@ -216,6 +216,7 @@ popd
 ```bat
 git update-index --skip-worktree comken/toolbox/salesforce/sites/solution_sandbox.py
 git update-index --skip-worktree comken/toolbox/salesforce/sites/solution.py
+git update-index --skip-worktree comken/services/salesforce_downloader/paths.py
 ```
 
 これで手元の書き換えが消えず、うっかり push することもない。comken 側でこれらの

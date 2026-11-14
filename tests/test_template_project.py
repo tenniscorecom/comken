@@ -447,6 +447,19 @@ def test_runs_from_another_working_directory(generated: Path, tmp_path: Path) ->
 # ── 13. src/run.py のコメントの例が、そのまま動く ───────────────────────────────
 
 
+def test_run_py_does_not_copy_config_value_into_local_variable() -> None:
+    """雛形の ``src/run.py`` は config の値をローカル変数に詰め替えない。
+
+    規約「config の値をローカル変数に詰め替えない」に反する
+    ``output_folder = config.FILES.OUTPUT_FOLDER`` を残さない。使う場所で
+    ``config.FILES.OUTPUT_FOLDER`` と直接書いている。
+    """
+    text = _read(TEMPLATE_DIR / "src" / "run.py")
+
+    assert "output_folder" not in text, "config の値をローカル変数に詰め替えている"
+    assert "config.FILES.OUTPUT_FOLDER" in text
+
+
 def test_run_py_commented_example_works(generated: Path) -> None:
     """`src/run.py` にコメントで書いてある「例」を有効にして動かすと、Excel が出力されること。
 

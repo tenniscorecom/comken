@@ -3,6 +3,8 @@
 Transfer 関連は tests/test_transfer.py へ移した。
 """
 
+from typing import Any
+
 import pytest
 
 from comken.core.table import Table
@@ -213,6 +215,41 @@ def test_table_public_rows_are_copies_and_duplicate_keys_raise() -> None:
     assert table.to_rows()[0]["id"] == 1
     with pytest.raises(TableDuplicateKeyError):
         table.index("id")
+
+
+class TestTableGetItemRejectsNonInt:
+    """``Table.__getitem__`` に ``int`` 以外を渡したときの契約。
+
+    以前は素通しで、スライスなら「行のリストの dict」、列名なら
+    ``TypeError`` になっていた。どちらも ``TableError`` にまとめて、
+    渡されたものに応じた対処を示す。
+    """
+
+    def test_slice_raises_table_error(self) -> None:
+        """スライスは ``TableError``（``to_rows()`` を使うよう指示する）。"""
+        table = Table(["ID", "名前"], [{"ID": "1", "名前": "山田"}])
+        table_any: Any = table
+        with pytest.raises(TableError) as exc_info:
+            table_any[0:1]
+        assert "to_rows()" in str(exc_info.value)
+        # 範囲外の int は今までどおり IndexError のまま
+        with pytest.raises(IndexError):
+            table_any[5]
+
+    def test_column_name_raises_table_error(self) -> None:
+        """列名は ``TableError``（``column()`` を使うよう指示する）。"""
+        table = Table(["ID", "名前"], [{"ID": "1", "名前": "山田"}])
+        table_any: Any = table
+        with pytest.raises(TableError) as exc_info:
+            table_any["名前"]
+        assert 'table.column("列名")' in str(exc_info.value)
+
+    def test_bool_raises_table_error(self) -> None:
+        """``bool`` は ``TableError``（``True`` が 1 行目として通っていた）。"""
+        table = Table(["ID"], [{"ID": "1"}])
+        table_any: Any = table
+        with pytest.raises(TableError):
+            table_any[True]
 
 
 def test_table_filter_predicate_cannot_change_source() -> None:

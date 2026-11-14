@@ -345,6 +345,22 @@ class Sheet:
         )
         return Table(headers, data_rows)
 
+    @staticmethod
+    def _validate_header_row(header_row: int) -> None:
+        """``header_row`` が 1 始まりの行番号として妥当か確かめる。
+
+        0 以下を渡すと、指定した行が黙って無視される（``Excel.read`` は 1 行目
+        と同じ結果になり、``Sheet.iter_rows`` はシート外の行として 0 行で
+        終わる）。利用者が指定した行を読めないまま進むのを防ぐため、
+        ``Excel.read`` / ``Sheet.iter_rows`` / ``Sheet.read_column`` で同じ
+        検査を行い、同じ文言で止める。
+        """
+        if header_row < 1:
+            raise ExcelError(
+                f"header_row は 1 以上で指定してください: {header_row}"
+                "\n対処: 見出し行の行番号（1 始まり）を指定してください。"
+            )
+
     def read_column(self, col: str, *, header_row: int = 1, force_com: bool = False) -> Table:
         """指定した1列だけを見出し付きで ``Table`` として読む。
 
@@ -360,6 +376,7 @@ class Sheet:
             ids = sheet.read_column("G").column("お客様ID")
         """
         self._ensure_display_sheet("read_column")
+        self._validate_header_row(header_row)
         return self.read_range(
             f"{col}{header_row}:{col}{self._worksheet.max_row}", force_com=force_com
         )
@@ -494,6 +511,7 @@ class Sheet:
         self._ensure_display_sheet("iter_rows")
         if not self._excel._read_only:
             raise _iter_rows_requires_read_only_error()
+        self._validate_header_row(header_row)
         # 見出し検証は **呼んだ時点で** 発火させる必要があるため、生成器ではなく
         # この時点で 2 本のストリーム Workbook を開き、見出しを読んで検証まで
         # 済ませる。検証中の例外は両 Workbook を閉じてから再送する

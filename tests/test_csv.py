@@ -362,6 +362,32 @@ class TestCSV:
         with pytest.raises(CSVError, match="2行目"), CSV(path) as csv_file:
             list(csv_file.iter_rows())
 
+    @pytest.mark.parametrize("text", ["id,\n1,A\n", "id,id\n1,2\n"])
+    def test_iter_rows_rejects_invalid_headers(self, tmp_path, text) -> None:
+        """``iter_rows()`` も見出しの空欄・重複を ``CSVError`` にする。
+
+        ``read()`` は ``_validate_columns()`` で検査するが ``iter_rows()`` は
+        検査しておらず、見出しが重複していると後ろの列の値が黙って消えた。
+        """
+        path = tmp_path / "data.csv"
+        path.write_text(text, encoding="utf-8-sig")
+        with pytest.raises(CSVError), CSV(path) as csv_file:
+            list(csv_file.iter_rows())
+
+    def test_iter_rows_rejects_invalid_headers_without_data_rows(self, tmp_path) -> None:
+        """データ行が 0 行でも見出しを検査する。"""
+        path = tmp_path / "data.csv"
+        path.write_text("id,id\n", encoding="utf-8-sig")
+        with pytest.raises(CSVError), CSV(path) as csv_file:
+            list(csv_file.iter_rows())
+
+    def test_iter_rows_rejects_invalid_columns_argument(self, tmp_path) -> None:
+        """``columns=`` を渡したときも同じ検査をする。"""
+        path = tmp_path / "data.csv"
+        path.write_text("1,A\n", encoding="utf-8-sig")
+        with pytest.raises(CSVError), CSV(path, columns=["id", "id"]) as csv_file:
+            list(csv_file.iter_rows())
+
     def test_iter_rows_with_explicit_encoding_rejects_wrong_data_width(self, tmp_path) -> None:
         """明示 encoding のストリーミング経路（``DictReader`` 直結）でも検出する。"""
         path = tmp_path / "data.csv"
@@ -380,6 +406,34 @@ class TestCSV:
             pytest.raises(CSVError, match="1行目"),
             CSV(path, columns=["id", "amount"]) as csv_file,
         ):
+            list(csv_file.iter_rows())
+
+    def test_read_skips_only_completely_blank_lines(self, tmp_path) -> None:
+        """``read()`` も完全に空の行を読み飛ばす（``iter_rows()`` と同じ）。"""
+        path = tmp_path / "data.csv"
+        path.write_text("id,name\n\n1,a\n", encoding="utf-8-sig")
+        with CSV(path) as csv_file:
+            assert csv_file.read().to_rows() == [{"id": "1", "name": "a"}]
+
+    def test_read_reports_separator_only_row_as_data(self, tmp_path) -> None:
+        """区切りのある行は空行ではないので、列数が違うときはエラーになる。"""
+        path = tmp_path / "data.csv"
+        path.write_text("id,name\n\n,,\n", encoding="utf-8-sig")
+        with pytest.raises(CSVError, match="3行目"), CSV(path) as csv_file:
+            csv_file.read()
+
+    def test_read_keeps_file_line_number_after_blank_line(self, tmp_path) -> None:
+        """空行を飛ばしてもエラーの行番号はファイル上の行番号のまま。"""
+        path = tmp_path / "data.csv"
+        path.write_text("id,name\n1,a\n\n2\n", encoding="utf-8-sig")
+        with pytest.raises(CSVError, match="4行目"), CSV(path) as csv_file:
+            csv_file.read()
+
+    def test_iter_rows_keeps_file_line_number_after_blank_line(self, tmp_path) -> None:
+        """``iter_rows()`` も空行を挟むとエラー行の番号がずれない。"""
+        path = tmp_path / "data.csv"
+        path.write_text("id,name\n1,a\n\n2\n", encoding="utf-8-sig")
+        with pytest.raises(CSVError, match="4行目"), CSV(path) as csv_file:
             list(csv_file.iter_rows())
 
     def test_missing_and_zero_byte_have_dedicated_errors(self, tmp_path) -> None:

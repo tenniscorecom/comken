@@ -130,8 +130,37 @@ class Table:
 
         返るのはコピーなので、``table[0]["列"] = x`` と書いても Table は変わらない。
         複数行を欲しいときは ``table.to_rows()[1:]`` のように ``to_rows()`` を使う。
+
+        ``int`` 以外（スライス・列名など）が渡されたときは ``TableError`` で
+        止める。素通しすると、``table[0:1]`` は「行のリストの dict」になり、
+        ``table["列名"]`` は ``TypeError`` になって、どちらも意味のない結果が
+        返っていた。
         """
+        if isinstance(index, bool) or not isinstance(index, int):
+            raise TableError(self._invalid_index_message(index))
         return dict(self._rows[index])
+
+    @staticmethod
+    def _invalid_index_message(index: Any) -> str:
+        """``__getitem__`` に ``int`` 以外が来たときのメッセージを作る。
+
+        渡されたものに応じて「どうすればいいか」を変える（スライスなら
+        ``to_rows()``、列名なら ``column()``）。
+        """
+        if isinstance(index, slice):
+            return (
+                f"Table の添字にスライスは指定できません: {index!r}\n"
+                "対処: 複数行は table.to_rows()[1:] のように to_rows() を使ってください。"
+            )
+        if isinstance(index, str):
+            return (
+                f"Table の添字に列名は指定できません: {index!r}\n"
+                '対処: 列の値は table.column("列名") を使って取り出してください。'
+            )
+        return (
+            f"Table の添字には整数を指定してください: {index!r}\n"
+            "対処: 行は table[0] のように添字で取り出してください。"
+        )
 
     def __iter__(self) -> Iterator[Row]:
         """各行のコピーを返す。反復中の変更は元のTableへ反映しない。"""
