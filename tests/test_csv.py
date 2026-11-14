@@ -362,6 +362,32 @@ class TestCSV:
         with pytest.raises(CSVError, match="2行目"), CSV(path) as csv_file:
             list(csv_file.iter_rows())
 
+    @pytest.mark.parametrize("text", ["id,\n1,A\n", "id,id\n1,2\n"])
+    def test_iter_rows_rejects_invalid_headers(self, tmp_path, text) -> None:
+        """``iter_rows()`` も見出しの空欄・重複を ``CSVError`` にする。
+
+        ``read()`` は ``_validate_columns()`` で検査するが ``iter_rows()`` は
+        検査しておらず、見出しが重複していると後ろの列の値が黙って消えた。
+        """
+        path = tmp_path / "data.csv"
+        path.write_text(text, encoding="utf-8-sig")
+        with pytest.raises(CSVError), CSV(path) as csv_file:
+            list(csv_file.iter_rows())
+
+    def test_iter_rows_rejects_invalid_headers_without_data_rows(self, tmp_path) -> None:
+        """データ行が 0 行でも見出しを検査する。"""
+        path = tmp_path / "data.csv"
+        path.write_text("id,id\n", encoding="utf-8-sig")
+        with pytest.raises(CSVError), CSV(path) as csv_file:
+            list(csv_file.iter_rows())
+
+    def test_iter_rows_rejects_invalid_columns_argument(self, tmp_path) -> None:
+        """``columns=`` を渡したときも同じ検査をする。"""
+        path = tmp_path / "data.csv"
+        path.write_text("1,A\n", encoding="utf-8-sig")
+        with pytest.raises(CSVError), CSV(path, columns=["id", "id"]) as csv_file:
+            list(csv_file.iter_rows())
+
     def test_iter_rows_with_explicit_encoding_rejects_wrong_data_width(self, tmp_path) -> None:
         """明示 encoding のストリーミング経路（``DictReader`` 直結）でも検出する。"""
         path = tmp_path / "data.csv"

@@ -569,6 +569,11 @@ class CSV:
             # 列名があらかじめ決まっているときは DictReader の headers を上書きして
             # ``csv.DictReader`` にヘッダー行を読ませない。残るのはデータ行のみ。
             reader = csv.DictReader(source, fieldnames=self._columns)
+        # 見出し行（または columns で指定した列名）を 1 行も返さない前に検査する。
+        # 空欄・重複をそのまま通すと、後ろの列の値が黙って消える（``read()`` は
+        # 同じ検査を ``_validate_columns()`` で行う）。データ行が 0 行のファイルでも
+        # 検査されるように、行を返すループの前に行う。
+        self._validate_columns(list(reader.fieldnames or ()))
         first_data_line = 1 if self._columns is not None else 2
         for line_number, row in enumerate(reader, start=first_data_line):
             expected = len(reader.fieldnames or ())
