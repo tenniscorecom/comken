@@ -165,9 +165,9 @@ INPUT_受注_EXCEL = 受注一覧.xlsx
 OUTPUT_FOLDER = ./output
 ```
 
-パスは **config.ini からの相対パス** で書くのが既定です。区切り文字を含まない値
-（`INPUT_FOLDER = input`）は `Path` にならず文字列のままになるため、
-相対パスとして扱わせたいときは `./input` のように `./` を付けてください。
+パスは **config.ini からの相対パス** で書くのが既定です。キー名の末尾が
+`_FOLDER` / `_PATH` の値（`INPUT_FOLDER = input`）は、区切り文字が無くても
+`Path` として扱われるので、`./input` のように `./` を付ける必要はありません。
 
 ---
 
