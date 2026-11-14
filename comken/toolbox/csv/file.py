@@ -303,13 +303,13 @@ def encode_rows_as_bytes(
     write_bom: bool,
     write_header: bool,
 ) -> bytes:
-    """``rows`` を ``csv.DictWriter`` の Excel ダイヤで ``\\r\\n`` 区切りに書き、
-    バイト列で返す（comken 内部用）。
+    """``rows`` を ``csv`` モジュールの excel 方言（dialect）で ``\\r\\n`` 区切りに
+    書き、バイト列で返す（comken 内部用）。
 
-    ``CSV._write`` が ``csv.DictWriter`` で書く出力と同じバイト列になるダイヤ
-    （Excel ダイヤ）を使う。 ``atomically ではない`` （``atomic_write`` 経由
-    を**しない**）ので、``history.py`` のような「既存ファイルに末尾 1 行だけ
-    足す」用途に使える。
+    ``CSV._write`` が ``csv.DictWriter`` で書く出力と同じバイト列になる
+    ``csv`` モジュールの excel 方言（dialect）を使う。``atomic_write`` を通さない
+    ので、``history.py`` のような「既存ファイルに末尾 1 行だけ足す」用途に
+    使える。
 
     ``write_bom=True`` のときは先頭に BOM を付ける（新規ファイル用）、
     ``False`` のときは BOM を付けない（既存ファイルへの追記用）。
@@ -485,7 +485,7 @@ class CSV:
     def iter_rows(self) -> Iterator[Row]:
         """CSV を 1 行ずつ ``{列名: 値}`` の dict で返すイテレーター。
 
-        ``read()`` と違ってファイル全体を内存に展開しないため、**行数が大きい
+        ``read()`` と違ってファイル全体をメモリに展開しないため、**行数が大きい
         CSV（数万件以上）**ではこちらを使う。``read()`` と同じく見出し行を
         自動で解釈し、列名は ``csv.DictReader`` の動作に従う。
 
