@@ -252,6 +252,58 @@ class TestTableGetItemRejectsNonInt:
             table_any[True]
 
 
+class TestTableRejectsNonDictRow:
+    """行が dict でないときのエラー文の契約。
+
+    行の型を取り違えると「余分な列: ['x']」のような的外れな文になり、
+    原因が分からなかった。dict ではないことを明示して対処を示す。
+    """
+
+    def test_constructor_with_list_row_mentions_dict(self) -> None:
+        """``Table(["a"], [["1"]])`` は「dict ではない」と分かるエラーにする。"""
+        with pytest.raises(TableError) as exc_info:
+            Table(["a"], [["1"]])  # type: ignore[list-item]
+
+        message = str(exc_info.value)
+        assert "dict" in message
+        assert "Table の1件目の行が dict ではありません（list）" in message
+        assert '{"列名": 値}' in message
+
+    def test_append_with_string_mentions_dict(self) -> None:
+        """``table.append("x")`` は「dict か行のリスト」と分かるエラーにする。"""
+        table = Table(["a"], [{"a": "1"}])
+
+        with pytest.raises(TableError) as exc_info:
+            table.append("x")  # type: ignore[arg-type]
+
+        message = str(exc_info.value)
+        assert "dict" in message
+        assert "append() には行（dict）か行のリストを渡してください" in message
+        assert "（str）" in message
+
+    def test_append_with_list_of_non_dict_mentions_dict(self) -> None:
+        """``table.append(["x"])`` も「dict ではない」と分かるエラーにする。"""
+        table = Table(["a"], [{"a": "1"}])
+
+        with pytest.raises(TableError) as exc_info:
+            table.append(["x"])  # type: ignore[list-item]
+
+        message = str(exc_info.value)
+        assert "dict" in message
+        assert "行が dict ではありません" in message
+
+    def test_long_value_is_cut_in_the_message(self) -> None:
+        """長く repr になる値は 80 字で切って出す。"""
+        table = Table(["a"], [{"a": "1"}])
+
+        with pytest.raises(TableError) as exc_info:
+            table.append("x" * 200)  # type: ignore[arg-type]
+
+        message = str(exc_info.value)
+        assert "…" not in message
+        assert len(message.split("（str）: ", 1)[1]) == 80
+
+
 def test_table_filter_predicate_cannot_change_source() -> None:
     table = Table(["id", "name"], [{"id": 1, "name": "before"}])
 

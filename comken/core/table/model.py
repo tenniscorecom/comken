@@ -36,6 +36,9 @@ logger = logging.getLogger(__name__)
 _PREVIEW_ROW_LIMIT = 10
 _CELL_WIDTH_LIMIT = 40
 
+# エラーメッセージに出す repr の最大文字数
+_REPR_LENGTH_LIMIT = 80
+
 
 class Table:
     """列と辞書行をメモリで扱う表。
@@ -66,7 +69,15 @@ class Table:
             len(self.types),
         )
 
-    def _normalize(self, row: Mapping[str, Any], row_number: int) -> Row:
+    def _normalize(self, row: object, row_number: int) -> Row:
+        if not isinstance(row, Mapping):
+            # 行が dict でないまま「列名が一致しません」まで進むと、
+            # 利用者には原因の分からない的外れなメッセージしか出ない。
+            raise TableError(
+                f"Table の{row_number}件目の行が dict ではありません"
+                f"（{type(row).__name__}）: {_short_repr(row)}\n"
+                '対処: 行は {"列名": 値} の dict で渡してください。'
+            )
         missing = [column for column in self.columns if column not in row]
         extra = [column for column in row if column not in self.columns]
         if missing or extra:
@@ -231,7 +242,17 @@ class Table:
 
     def append(self, rows: list[Row] | Row) -> Self:
         """1行または複数行を末尾へ追加する。"""
-        values = [rows] if isinstance(rows, dict) else rows
+        if isinstance(rows, Mapping):
+            values = [rows]
+        elif isinstance(rows, list):
+            values = rows
+        else:
+            # 文字列やタプルを渡すと「1文字ずつ別の行」としか見えず、
+            # 結局「余分な列」という的外れなメッセージになる。
+            raise TableError(
+                "append() には行（dict）か行のリストを渡してください"
+                f"（{type(rows).__name__}）: {_short_repr(rows)}"
+            )
         start = len(self._rows) + 1
         normalized = [self._normalize(row, start + index) for index, row in enumerate(values)]
         self._rows.extend(normalized)
@@ -720,6 +741,11 @@ class Table:
 
 
 # ── 内部ヘルパー：``print(table)`` の表示 ──────────────────────────────────
+
+
+def _short_repr(value: object) -> str:
+    """エラーメッセージに出す用の repr（長すぎるものは切る）。"""
+    return repr(value)[:_REPR_LENGTH_LIMIT]
 
 
 def _char_width(char: str) -> int:
