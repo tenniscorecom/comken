@@ -402,6 +402,56 @@ class TestConfigTypeConversion:
         assert value == Config(ini).S.X
 
 
+class TestConfigQuotedValue:
+    """引用符で囲んだ値の読み取りのテスト。
+
+    Windows の「パスのコピー」は ``"C:\\作業\\data.csv"`` のように引用符付きで
+    貼り付けられる。引用符のまま型変換すると ``<config.ini のフォルダ>/"C:/作業/data.csv"``
+    という存在しないパスになり、静かに進むだけだった。
+    """
+
+    def test_quoted_windows_path_becomes_path(self, tmp_path):
+        """引用符を外したうえで Path に変換されることを確認する。"""
+        ini = tmp_path / "config.ini"
+        ini.write_text('[S]\nFOLDER = "C:\\work\\input"\n', encoding="utf-8")
+
+        result = Config(ini).S.FOLDER
+
+        assert isinstance(result, Path)
+        assert result == Path("C:\\work\\input")
+
+    def test_quoted_relative_path_resolves_against_config_folder(self, tmp_path):
+        """引用符の付いた相対パスも config.ini の親を基準に解決される。"""
+        ini = tmp_path / "config.ini"
+        ini.write_text('[S]\nINPUT = "./input"\n', encoding="utf-8")
+
+        result = Config(ini).S.INPUT
+
+        assert isinstance(result, Path)
+        assert result == (tmp_path / "input").resolve()
+
+    def test_quoted_number_and_bool_are_converted(self, tmp_path):
+        """引用符を外したあとはいつもの変換（数値・真偽値）に入る。"""
+        ini = tmp_path / "config.ini"
+        ini.write_text('[S]\nCOUNT = "10"\nFLAG = "true"\n', encoding="utf-8")
+
+        config = Config(ini)
+
+        assert config.S.COUNT == 10
+        assert config.S.FLAG is True
+
+    def test_unpaired_quote_stays_string(self, tmp_path):
+        """引用符が対になっていない値はそのまま文字列で返す（外さない）。"""
+        ini = tmp_path / "config.ini"
+        ini.write_text('[S]\nNAME = "T_data\nCOUNT = "10"\n', encoding="utf-8")
+
+        config = Config(ini)
+
+        assert config.S.NAME == '"T_data'
+        # 引用符が対になっている値だけは外す
+        assert config.S.COUNT == 10
+
+
 class TestConfigStrftimeFormat:
     """strftime 書式が誤って Path に変換されないことの確認。"""
 

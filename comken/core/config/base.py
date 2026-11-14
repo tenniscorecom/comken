@@ -586,8 +586,17 @@ def parse_value(
     文字列として使いたい数値（例: 管理番号 "123"）はコード側で str() に変換する。
     先頭ゼロ（電話番号 "0521234567"・社員番号 "007" 等）は int にすると桁落ちするため
     文字列で返す。nan / inf は float() が受理してしまうので数値化しない。
+
+    値は両端が引用符（``"``）で囲まれていても、その 1 組だけ外してから変換する
+    （Windows の「パスのコピー」は ``"C:\\作業\\data.csv"`` のように引用符付きで
+    貼り付けられるため。引用符を残すと存在しないパスになる）。
     """
     value = cfg.get(section, key).strip()
+    # Windows の「パスのコピー」は引用符付きで貼り付けられる（"C:\作業\data.csv"）。
+    # 引用符のまま型変換すると、引用符を含むパスになって存在しない場所を指す。
+    # 外すのは型変換の入口（この関数）だけで、以降はいつもの変換へ進む。
+    if len(value) >= 2 and value.startswith('"') and value.endswith('"'):
+        value = value[1:-1].strip()
     lower = value.lower()
 
     if is_true_word(value):
