@@ -217,6 +217,21 @@ lookup = {normalize(k): v for k, v in lookup.items()}
 row = lookup.get(normalize(key))
 ```
 
+### 引用符の除去（`strip_wrapping_quotes`）
+
+Windows の「パスのコピー」は `"C:\作業\data.csv"` のように引用符付きで
+貼り付けられる。`strip_wrapping_quotes` は、その引用符の 1 組だけ外す
+（引用符が対になっていない値はそのまま返す）。
+
+`CSV` / `Excel` / `FileBase` は、パスを文字列で渡したときは引用符を外してから
+`Path` にする。`Path` で渡したものは触らない。
+
+```python
+from comken.core.text import strip_wrapping_quotes
+
+strip_wrapping_quotes('"C:\\作業\\data.csv"')  # → "C:\\作業\\data.csv"
+```
+
 ### 管理表セルの真偽判定（`is_enabled_mark`）
 
 Excel / CSV の管理表（レポート管理表・スケジュール管理表など）の

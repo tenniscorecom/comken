@@ -21,7 +21,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from comken.core.columns import num_to_col
 from comken.core.files import atomic_write
-from comken.core.files.ops import copy_to_local_if_large
+from comken.core.files.ops import copy_to_local_if_large, to_path
 from comken.core.table.model import Table
 from comken.core.timer import measure
 from comken.core.types import TypeMap
@@ -126,7 +126,7 @@ class Excel:
 
         ``read_only``、dry-run、またはwithブロックが例外で終わった場合は保存しない。
         """
-        self.path = Path(source)
+        self.path = to_path(source)
         if self.path.suffix.casefold() not in _EXCEL_SUFFIXES:
             raise UnsupportedFileSuffixError(self.path, tuple(sorted(_EXCEL_SUFFIXES)))
         self._types = dict(types or {})
@@ -146,7 +146,7 @@ class Excel:
             else:
                 # 書き込み時は UNC でのみ作業コピーを挟む。ローカルドライブは
                 # そもそもネットワーク問題の起きない素の読み書きで十分。
-                self._local_copy_required = self._is_unc_path(source)
+                self._local_copy_required = self._is_unc_path(self.path)
         else:
             self._local_copy_required = local_copy
         logger.debug(

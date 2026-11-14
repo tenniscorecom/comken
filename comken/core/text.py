@@ -11,7 +11,7 @@
 
 import unicodedata
 
-__all__ = ["is_enabled_mark", "is_true_word", "normalize", "remove_spaces"]
+__all__ = ["is_enabled_mark", "is_true_word", "normalize", "remove_spaces", "strip_wrapping_quotes"]
 
 
 def normalize(value: object) -> str:
@@ -55,6 +55,24 @@ def remove_spaces(text: str) -> str:
         スペースを除去した文字列。
     """
     return text.replace("　", "").replace(" ", "").replace("\t", "")
+
+
+def strip_wrapping_quotes(value: str) -> str:
+    """値の両端を引用符（``"``）で囲んでいれば、その 1 組だけ外す。
+
+    Windows の「パスのコピー」は ``"C:\\作業\\data.csv"`` のように引用符付きで
+    貼り付けられる。引用符のまま扱すと、引用符を含むパスになって
+    存在しない場所を指す。引用符が対になっていない値はそのまま返す。
+
+    Args:
+        value: 引用符を外すかもしれない文字列。
+
+    Returns:
+        引用符で囲まれていればその 1 組を外した文字列。囲まれていなければそのまま。
+    """
+    if len(value) >= 2 and value.startswith('"') and value.endswith('"'):
+        return value[1:-1].strip()
+    return value
 
 
 def is_true_word(text: str) -> bool:
