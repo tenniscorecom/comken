@@ -10,7 +10,7 @@
     from comken.toolbox.browser.sites.box import Box
 
     with Box() as box:
-        box.login_with_credentials()
+        box.login()
         folder = box.go_folder("0")
         for item in folder.items():
             print(item.name)

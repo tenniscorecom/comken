@@ -534,14 +534,14 @@ with Site() as site:
 ## Box（box.com）を操作する
 
 `comken/toolbox/browser/sites/box/` に Box（https://app.box.com）を操作する
-実装を入れてある。API（OAuth アプリ登録）は使わず、ログインはメールアドレスと
-パスワードで行う。
+実装を入れてある。API（OAuth アプリ登録）は使わず、ログインはログイン画面の
+「サインインで続行」ボタンを押すだけ（ID/パスワードの入力はしない）。
 
 ### できること
 
 | 操作 | 呼び出し |
 |---|---|
-| ログインする（DPAPI の認証情報を使う） | `box.login_with_credentials()` |
+| ログインする | `box.login()` |
 | フォルダを開く | `box.go_folder("123456789")` |
 | ファイルを開く | `box.go_file("123456789")` |
 | フォルダの中身を見る | `folder.items()` / `folder.find("名前")` |
@@ -551,10 +551,11 @@ with Site() as site:
 | ゴミ箱へ移す（完全削除はしない） | `folder.delete("古い.txt")` |
 | 子フォルダへ移る | `folder.open_folder("2026年")` |
 
-### 認証情報を登録する
+### ログインする
 
-`python -m comken cred gui` で `box` に `username`（メールアドレス）と
-`password` の2項目を登録する。`login_with_credentials()` はその2項目を使う。
+`box.login()` はログイン画面の「サインインで続行」を押したあと、人が2段階認証
+（アカウント選択・認証コード・端末承認など）を済ませるまで待つ。ID/パスワードを
+入力する処理はない。
 
 ```python
 from pathlib import Path
@@ -562,15 +563,18 @@ from pathlib import Path
 from comken.toolbox.browser.sites.box.site import Box
 
 with Box() as box:
-    box.login_with_credentials()
+    box.login()
     folder = box.go_folder("123456789")
     folder.upload(Path("報告.xlsx"))
     path = folder.download("元データ.csv")
 ```
 
-2段階認証があるときは、`login_with_credentials()` は送信後に人が承認するまで
-待つ。画面を表示しない HEADLESS で起動していると承認できないので、その場合は
-エラーになる（`OPTIONS.HEADLESS` を False にして起動し直す）。
+2段階認証があるときは、`login()` は送信後に人が承認するまで待つ。画面を表示
+しない HEADLESS で起動していると承認できないので、その場合はエラーになる
+（`OPTIONS.HEADLESS` を False にして起動し直す）。
+
+`PROFILE_ROOT` を指定するとログイン状態が残るので、2回目以降は「サインインで
+続行」を押さずに済む（[ログイン状態を残す](#ログイン状態を残す)）。
 
 会社の Box が独自サブドメイン（https://<社名>.app.box.com など）を使っている
 場合は、利用側で継承して `BASE_URL` を書き換える。
@@ -585,7 +589,9 @@ OSS 部品 `box/box-ui-elements` と、Selenium/Playwright による Box 自動�
 （`pages/login_page.py` / `pages/folder_page.py` / `pages/file_page.py`）。
 各定数のコメントに「根拠」（参照したファイル・URL）を残してあるので、
 実機で見えた値へ書き換えること。根拠が無いものは `# 未確認: 推測` と
-書いてある。
+書いてある。「サインインで続行」ボタンの文言だけは，利用者の画面（日本語）を
+根拠にしてある（英語UIの文言は未確認・推測で、`Continue` を含むものにも
+当たるようにしている）。
 
 日本語UI・英語UIのどちらでも動くものを優先している（`id` / `name` /
 `data-resin-target` / `data-testid` / `href` の形）。表示文字列でしか取れない

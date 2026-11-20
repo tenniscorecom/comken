@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.webdriver.common.by import By
 
 from comken.exceptions import BrowserError, LoginFailedError
 from comken.toolbox.browser import BrowserOptions, DownloadDir, Locator
@@ -22,10 +24,6 @@ from comken.toolbox.browser.sites.box.pages.app_page import AppPage
 from comken.toolbox.browser.sites.box.pages.folder_page import BoxItem, FolderPage
 from comken.toolbox.browser.sites.box.pages.login_page import LoginPage
 from comken.toolbox.browser.sites.box.site import Box, BoxBrowserOptions
-
-# テストで使う例示用の値（実在のアカウントではない）
-TEST_USERNAME = "user@example.com"
-TEST_PASSWORD = "secret-password"
 
 
 def _key(locator: Locator) -> tuple[str, str]:
@@ -55,6 +53,44 @@ class _InstantWait:
         return value
 
 
+def _xpath_literals(value: str) -> list[str]:
+    """XPath に含まれる引用符つきの文字列（``'...'``）を抜き出す。"""
+    return re.findall(r"'([^']*)'", value)
+
+
+def _matches_locator(locator: Locator, element: Any) -> bool:
+    """要素がセレクターに一致するかを判定する（XPath の表示文字列だけ）。
+
+    XPath で表示文字列を探す場合、「セレクターに書かれた文言」を要素の表示
+    文字が含んでいるときだけ一致する。**文言が変わると見つからなくなる**ことを
+    確かめるため（表示文字列で探すボタンのテストで使う）。
+
+    表示文字を持たない要素（モックの属性だけを持つ要素）は判定の対象にしない
+    （既存のテストを壊さないため）。
+    """
+    if locator.by != By.XPATH:
+        return True
+    text = getattr(element, "text", None)
+    if not isinstance(text, str):
+        return True
+    literals = _xpath_literals(locator.value)
+    if not literals:
+        return True
+    return any(literal in text for literal in literals)
+
+
+def _matching(
+    elements: dict[tuple[str, str], list[Any]],
+    locator: Locator,
+) -> list[Any]:
+    """セレクターに一致する要素のリストを返す。"""
+    return [
+        element
+        for element in elements.get((locator.by, locator.value), [])
+        if _matches_locator(locator, element)
+    ]
+
+
 def _make_driver(elements: dict[tuple[str, str], list[Any]]) -> MagicMock:
     """要素探索だけ本物の Selenium と同じ挙動にする WebDriver の代用。
 
@@ -65,18 +101,42 @@ def _make_driver(elements: dict[tuple[str, str], list[Any]]) -> MagicMock:
     driver = MagicMock()
 
     def find_element(by: str, value: str) -> Any:
-        found = elements.get((by, value), [])
+        found = _matching(elements, Locator(by, value))
         if not found:
             raise NoSuchElementException()
         return found[0]
 
     def find_elements(by: str, value: str) -> list[Any]:
-        return list(elements.get((by, value), []))
+        return _matching(elements, Locator(by, value))
 
     driver.find_element.side_effect = find_element
     driver.find_elements.side_effect = find_elements
     driver.current_url = "https://app.box.com/login"
     return driver
+
+
+class _FakeClock:
+    """待ち時間を進ませる時計の代用（``time`` モジュールの代わりに使う）。
+
+    ``sleep()`` を呼んだ回数を数え、``on_sleep`` で「待っている間に起きること」
+    を再現する（Box のログイン完了など）。
+    """
+
+    def __init__(self, on_sleep: Callable[[], None] | None = None) -> None:
+        self.now = 0.0
+        self.sleep_count = 0
+        self._on_sleep = on_sleep
+
+    def monotonic(self) -> float:
+        """経過時間（秒）を返す。"""
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        """待つ。呼ぶたびに時計を進め、``on_sleep`` を呼ぶ。"""
+        self.sleep_count += 1
+        self.now += seconds
+        if self._on_sleep is not None:
+            self._on_sleep()
 
 
 def _mock_element() -> MagicMock:
@@ -128,18 +188,6 @@ def _make_folder_page(
     driver = _make_driver(elements)
     session = _make_session(tmp_path, driver)
     page = FolderPage(session)
-    page._wait = _InstantWait(driver)
-    return page, driver
-
-
-def _make_login_page(
-    tmp_path: Path,
-    elements: dict[tuple[str, str], list[Any]],
-) -> tuple[LoginPage, MagicMock]:
-    """ログイン画面と WebDriver の代用を作る。"""
-    driver = _make_driver(elements)
-    session = _make_session(tmp_path, driver)
-    page = LoginPage(session)
     page._wait = _InstantWait(driver)
     return page, driver
 
@@ -403,98 +451,6 @@ class TestFolderPageUpload:
         assert _key(FolderPage.UPLOAD_NEW_VERSION_BTN) not in _looked_up(driver)
 
 
-class TestLoginPage:
-    """LoginPage.login() — ログイン画面の操作。"""
-
-    def test_two_step_login_asks_password_after_next(self, tmp_path):
-        """「メール → 次へ → パスワード → ログイン」の順で入力する。"""
-        email_input = _mock_element()
-        password_input = _mock_element()
-        next_button = _mock_element()
-        login_button = _mock_element()
-        elements: dict[tuple[str, str], list[Any]] = {
-            _key(LoginPage.EMAIL_INPUT): [email_input],
-            _key(LoginPage.NEXT_BTN): [next_button],
-            _key(LoginPage.LOGIN_BTN): [login_button],
-        }
-
-        def _on_next() -> None:
-            # 「次へ」を押すとパスワード入力欄が出る
-            elements[_key(LoginPage.PASSWORD_INPUT)] = [password_input]
-
-        next_button.click.side_effect = _on_next
-        page, driver = _make_login_page(tmp_path, elements)
-
-        def _on_login() -> None:
-            # ログイン後はログイン画面を離れる（URL が変わる）
-            driver.current_url = "https://app.box.com/folder/0"
-
-        login_button.click.side_effect = _on_login
-
-        page.login(TEST_USERNAME, TEST_PASSWORD)
-
-        email_input.send_keys.assert_called_once_with(TEST_USERNAME)
-        password_input.send_keys.assert_called_once_with(TEST_PASSWORD)
-        next_button.click.assert_called_once()
-        login_button.click.assert_called_once()
-
-    def test_single_screen_login_skips_next(self, tmp_path):
-        """1画面に両方出る場合は「次へ」を押さない。"""
-        email_input = _mock_element()
-        password_input = _mock_element()
-        next_button = _mock_element()
-        login_button = _mock_element()
-        elements: dict[tuple[str, str], list[Any]] = {
-            _key(LoginPage.EMAIL_INPUT): [email_input],
-            _key(LoginPage.PASSWORD_INPUT): [password_input],
-            _key(LoginPage.NEXT_BTN): [next_button],
-            _key(LoginPage.LOGIN_BTN): [login_button],
-        }
-        page, driver = _make_login_page(tmp_path, elements)
-
-        def _on_login() -> None:
-            # ログイン後はログイン画面を離れる（URL が変わる）
-            driver.current_url = "https://app.box.com/folder/0"
-
-        login_button.click.side_effect = _on_login
-
-        page.login(TEST_USERNAME, TEST_PASSWORD)
-
-        next_button.click.assert_not_called()
-        email_input.send_keys.assert_called_once_with(TEST_USERNAME)
-        password_input.send_keys.assert_called_once_with(TEST_PASSWORD)
-        login_button.click.assert_called_once()
-
-    def test_raises_login_failed_when_error_is_shown(self, tmp_path):
-        """ログイン画面のエラー表示が出たら LoginFailedError にする。"""
-        email_input = _mock_element()
-        password_input = _mock_element()
-        login_button = _mock_element()
-        error_element = _mock_element()
-        error_element.text = "パスワードが正しくありません"
-        elements: dict[tuple[str, str], list[Any]] = {
-            _key(LoginPage.EMAIL_INPUT): [email_input],
-            _key(LoginPage.PASSWORD_INPUT): [password_input],
-            _key(LoginPage.LOGIN_BTN): [login_button],
-            _key(LoginPage.ERROR_MSG): [error_element],
-        }
-        page, driver = _make_login_page(tmp_path, elements)
-        # URL が変わらない（エラーが出たまま）だと、待ちの条件が「エラー表示」になる
-        driver.current_url = "https://app.box.com/login"
-
-        with pytest.raises(LoginFailedError, match="パスワードが正しくありません"):
-            page.login(TEST_USERNAME, "wrong-password")
-
-
-class _FakeCredentials:
-    """認証情報の代用。"""
-
-    def __init__(self, site: str, path: Path | None = None) -> None:
-        self.site = site
-        self.username = TEST_USERNAME
-        self.password = TEST_PASSWORD
-
-
 class _HeadlessOptions(BoxBrowserOptions):
     """HEADLESS で起動したときの起動オプション。"""
 
@@ -507,85 +463,144 @@ class _HeadlessBox(Box):
     OPTIONS = _HeadlessOptions
 
 
-class TestBoxLoginWithCredentials:
-    """Box.login_with_credentials() — DPAPI の認証情報でログインする。"""
+class TestBoxLogin:
+    """Box.login() — 「サインインで続行」を押してログインする。"""
 
-    def test_passes_credentials_to_login_form(self, tmp_path, monkeypatch):
-        """DPAPIの認証情報がログイン画面へ渡される。"""
-        email_input = _mock_element()
-        password_input = _mock_element()
-        login_button = _mock_element()
+    def test_presses_continue_button_and_waits_until_logged_in(self, tmp_path, monkeypatch):
+        """未ログインなら「サインインで続行」を押し、ログイン済みになるまで待つ。"""
+        continue_button = _element("サインインで続行")
         elements: dict[tuple[str, str], list[Any]] = {
-            _key(LoginPage.EMAIL_INPUT): [email_input],
-            _key(LoginPage.PASSWORD_INPUT): [password_input],
-            _key(LoginPage.LOGIN_BTN): [login_button],
+            _key(LoginPage.CONTINUE_BTN): [continue_button],
         }
         driver = _make_driver(elements)
 
-        def _on_login() -> None:
-            # ログイン後: ログイン画面は消え、アプリの目印（アカウントアイコン）が出る
-            elements.pop(_key(LoginPage.EMAIL_INPUT), None)
-            elements.pop(_key(LoginPage.PASSWORD_INPUT), None)
-            elements[_key(AppPage.APP_SHELL)] = [_mock_element()]
+        def _on_click() -> None:
+            # 押した直後はログイン画面を離れるが、アプリはまだ読み込み中
+            elements.pop(_key(LoginPage.CONTINUE_BTN), None)
             driver.current_url = "https://app.box.com/folder/0"
 
-        login_button.click.side_effect = _on_login
-        session = _make_session(tmp_path, driver)
+        continue_button.click.side_effect = _on_click
+
+        def _on_sleep() -> None:
+            # 待っている間にアプリの目印（アカウントアイコン）が現れる
+            elements[_key(AppPage.APP_SHELL)] = [_mock_element()]
+
+        clock = _FakeClock(_on_sleep)
+        monkeypatch.setattr("comken.toolbox.browser.sites.box.site.time", clock)
+
         box = Box()
-        box.session = session
-        monkeypatch.setattr("comken.toolbox.credentials.Credentials", _FakeCredentials)
+        box.session = _make_session(tmp_path, driver)
 
-        box.login_with_credentials()
+        box.login(timeout=60, interval=1)
 
-        email_input.send_keys.assert_called_once_with(TEST_USERNAME)
-        password_input.send_keys.assert_called_once_with(TEST_PASSWORD)
+        continue_button.click.assert_called_once()
+        # ログイン済みになるまで待った（1回以上眠っている）
+        assert clock.sleep_count >= 1
 
-    def test_uses_class_credential_prefix_by_default(self, tmp_path, monkeypatch):
-        """prefix を省略するとクラスの CREDENTIAL_PREFIX が使われる。"""
+    def test_does_not_press_button_when_already_logged_in(self, tmp_path):
+        """既にログイン済みなら「サインインで続行」を押さない。"""
         elements: dict[tuple[str, str], list[Any]] = {
             _key(AppPage.APP_SHELL): [_mock_element()],
         }
         driver = _make_driver(elements)
         driver.current_url = "https://app.box.com/folder/0"
-        session = _make_session(tmp_path, driver)
         box = Box()
-        box.session = session
-        used: list[str] = []
+        box.session = _make_session(tmp_path, driver)
 
-        class _RecordingCredentials(_FakeCredentials):
-            def __init__(self, site: str, path: Path | None = None) -> None:
-                used.append(site)
-                super().__init__(site, path)
+        box.login(timeout=1, interval=0)
 
-        monkeypatch.setattr("comken.toolbox.credentials.Credentials", _RecordingCredentials)
+        # ボタンを探すことすらしない
+        assert _key(LoginPage.CONTINUE_BTN) not in _looked_up(driver)
 
-        box.login_with_credentials()
-
-        assert used == [Box.CREDENTIAL_PREFIX]
-
-    def test_raises_in_headless_when_login_is_not_finished(self, tmp_path, monkeypatch):
-        """HEADLESS でログインが済む前は、待たずにエラーにする。"""
-        email_input = _mock_element()
-        password_input = _mock_element()
-        login_button = _mock_element()
+    def test_presses_the_button_written_in_japanese(self, tmp_path):
+        """「サインインで続行」と書かれたボタンが押される。"""
+        other_button = _element("ログイン")
+        continue_button = _element("サインインで続行")
         elements: dict[tuple[str, str], list[Any]] = {
-            _key(LoginPage.EMAIL_INPUT): [email_input],
-            _key(LoginPage.PASSWORD_INPUT): [password_input],
-            _key(LoginPage.LOGIN_BTN): [login_button],
+            _key(LoginPage.CONTINUE_BTN): [other_button, continue_button],
         }
+        driver = _make_driver(elements)
 
-        def _on_login() -> None:
-            # 送信はできたが、まだログインは済んでいない（2段階認証の画面）
-            elements.pop(_key(LoginPage.EMAIL_INPUT), None)
-            elements.pop(_key(LoginPage.PASSWORD_INPUT), None)
+        def _on_click() -> None:
+            elements.pop(_key(LoginPage.CONTINUE_BTN), None)
+            elements[_key(AppPage.APP_SHELL)] = [_mock_element()]
+            driver.current_url = "https://app.box.com/folder/0"
 
-        login_button.click.side_effect = _on_login
+        continue_button.click.side_effect = _on_click
+        box = Box()
+        box.session = _make_session(tmp_path, driver)
+
+        box.login(timeout=1, interval=0)
+
+        continue_button.click.assert_called_once()
+        other_button.click.assert_not_called()
+
+    def test_raises_login_failed_when_error_is_shown(self, tmp_path):
+        """ログイン画面のエラー表示が出たら LoginFailedError にする。"""
+        continue_button = _element("サインインで続行")
+        error_element = _element("パスワードが正しくありません")
+        elements: dict[tuple[str, str], list[Any]] = {
+            _key(LoginPage.CONTINUE_BTN): [continue_button],
+            _key(LoginPage.ERROR_MSG): [error_element],
+        }
         driver = _make_driver(elements)
         driver.current_url = "https://app.box.com/login"
-        session = _make_session(tmp_path, driver)
+        box = Box()
+        box.session = _make_session(tmp_path, driver)
+
+        with pytest.raises(LoginFailedError, match="パスワードが正しくありません"):
+            box.login(timeout=1, interval=0)
+
+    def test_raises_in_headless_when_login_is_not_finished(self, tmp_path):
+        """HEADLESS でログインが済む前は、待たずにエラーにする。"""
+        continue_button = _element("サインインで続行")
+        elements: dict[tuple[str, str], list[Any]] = {
+            _key(LoginPage.CONTINUE_BTN): [continue_button],
+        }
+        driver = _make_driver(elements)
         box = _HeadlessBox()
-        box.session = session
-        monkeypatch.setattr("comken.toolbox.credentials.Credentials", _FakeCredentials)
+        box.session = _make_session(tmp_path, driver)
 
         with pytest.raises(BrowserError, match="HEADLESS"):
-            box.login_with_credentials()
+            box.login(timeout=1, interval=0)
+
+
+class TestBoxIsLoggedIn:
+    """Box._is_logged_in() — ログイン済みかどうかの判定。"""
+
+    def test_returns_false_when_continue_button_is_shown(self, tmp_path):
+        """「サインインで続行」ボタンが見えていれば、ログイン済みではない。"""
+        elements: dict[tuple[str, str], list[Any]] = {
+            _key(LoginPage.CONTINUE_BTN): [_element("サインインで続行")],
+            _key(AppPage.APP_SHELL): [_mock_element()],
+        }
+        driver = _make_driver(elements)
+        driver.current_url = "https://app.box.com/folder/0"
+        box = Box()
+        box.session = _make_session(tmp_path, driver)
+
+        assert box._is_logged_in() is False
+
+    def test_returns_false_on_microsoft_account_url(self, tmp_path):
+        """Microsoft のアカウント選択画面にいる間は、ログイン済みではない。"""
+        elements: dict[tuple[str, str], list[Any]] = {
+            _key(AppPage.APP_SHELL): [_mock_element()],
+        }
+        driver = _make_driver(elements)
+        driver.current_url = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
+        box = Box()
+        box.session = _make_session(tmp_path, driver)
+
+        assert box._is_logged_in() is False
+
+    def test_returns_true_when_app_shell_is_shown(self, tmp_path):
+        """目印（アカウントアイコン）があって URL が app.box.com ならログイン済み。"""
+        elements: dict[tuple[str, str], list[Any]] = {
+            _key(AppPage.APP_SHELL): [_mock_element()],
+        }
+        driver = _make_driver(elements)
+        driver.current_url = "https://app.box.com/folder/0"
+        box = Box()
+        box.session = _make_session(tmp_path, driver)
+
+        assert box._is_logged_in() is True

@@ -1,23 +1,19 @@
 """comken/toolbox/browser/sites/box/pages/login_page.py — Box のログイン画面。
 
-Box のログインは「メールアドレス → 次へ → パスワード → ログイン」の2段階の
-ことがある。1画面に両方出る場合（会社アカウントの設定など）もあるため、
-どちらの形でも同じコードで動くようにしている。
+Box のログインは ID/パスワードを入力しない。ログイン画面に出る
+「サインインで続行」ボタンを押すと Microsoft（など）のアカウント選択へ進み、
+あとは人が2段階認証も含めて承認する（待つのは ``Box.login()``）。
 
-パスワードはログに出さない（``Page.input()`` は値そのものを残さない）。
+英語UIのときの文言は未確認なので、"Continue" を含むものにも当たるようにしている。
 """
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
-from comken.exceptions import LoginFailedError
+from comken.exceptions import ElementNotFoundError
 from comken.toolbox.browser import Locator
 from comken.toolbox.browser.sites.box.pages.app_page import AppPage
-
-if TYPE_CHECKING:
-    from comken.toolbox.browser.page.waiting import Condition
 
 logger = logging.getLogger(__name__)
 
@@ -28,27 +24,17 @@ class LoginPage(AppPage):
     PATH = "/login"
 
     # ── セレクター ──
-    # メールアドレスの入力欄
-    # 根拠: https://github.com/veerDS/automation_test_jenkins の
-    # src/main/java/com/utils/Constants.java にある
-    # ``BOX_APP_URL = "https://account.box.com/login"`` と、
-    # 同じリポジトリの BoxAppLoginPage.java の ``By.id("login-email")``。
-    # 独立した 2 つの Selenium 事例
-    # （veerDS/automation_test_jenkins と bhandigare/UIAutomation）が
-    # 同じ id を使っている。id は表示文字列ではないので UI の言語に依存しない。
-    EMAIL_INPUT = Locator.id("login-email")
-
-    # 「次へ」ボタン（メールアドレス入力画面）
-    # 根拠: 上記 2 つの Selenium 事例の ``By.id("login-submit")``。
-    NEXT_BTN = Locator.id("login-submit")
-
-    # パスワードの入力欄
-    # 根拠: 上記 2 つの Selenium 事例の ``By.id("password-login")``。
-    PASSWORD_INPUT = Locator.id("password-login")
-
-    # 「ログイン」ボタン（パスワード入力画面）
-    # 根拠: 上記 2 つの Selenium 事例の ``By.id("login-submit-password")``。
-    LOGIN_BTN = Locator.id("login-submit-password")
+    # 「サインインで続行」ボタン
+    # 根拠: 利用者の画面の文言（日本語）。英語は 未確認: 推測
+    # 英語UIのときの文言は確認できていないため、"Continue" を含むものにも
+    # 当たるようにしている（属性ではなく表示文字列でしか取れないため、
+    # 英語と日本語の両方に当たる書き方にした）。
+    # button / role="button" / a のどれでも押せるようにしている。
+    CONTINUE_BTN = Locator.xpath(
+        "//button[contains(., 'サインインで続行') or contains(., 'Continue')]"
+        " | //*[@role='button'][contains(., 'サインインで続行') or contains(., 'Continue')]"
+        " | //a[contains(., 'サインインで続行') or contains(., 'Continue')]"
+    )
 
     # ログイン失敗時のエラー表示
     # 根拠: 未確認: 推測。公開資料ではこの表示要素のセレクターが見つかって
@@ -56,57 +42,26 @@ class LoginPage(AppPage):
     # 候補を複数置いて、どれか1つでも出ればエラーとして扱う。
     ERROR_MSG = Locator.css(".login-error, [data-resin-target='error-message'], form .error")
 
-    def login(self, username: str, password: str) -> None:
-        """メールアドレスとパスワードでログインする。
+    def continue_sign_in(self) -> None:
+        """「サインインで続行」ボタンを押す。
 
-        Box のログインは 2 段構成のことがある（メールアドレスを入れて「次へ」→
-        パスワードを入れて「ログイン」）。1画面に両方出る場合は、パスワード欄が
-        既にあるので「次へ」を押さずにそのまま進む。
+        ボタンが画面に出てくるまで待って押す。押したあとは Microsoft（など）
+        のアカウント選択画面へ進み、2段階認証が要るときは人が承認する
+        （待つのは ``Box.wait_for_manual_login()``）。
 
-        ログイン後は画面が別物に差し替わる（または二段階認証の画面になる）ので、
-        「URL が変わる・エラー表示が出る・パスワード欄が消える」のどれかが先に
-        起きるまで待つ。**パスワードはログに出さない。**
-
-        Args:
-            username: メールアドレス。
-            password: パスワード。
-
-        Raises:
-            LoginFailedError: ログイン画面にエラー表示が出た場合
-                （サイト側のメッセージつき）。
+        既にログイン済みでログイン画面が出ていない場合は、ボタンが
+        見つからないので何もしない（ログイン済みかどうかは
+        ``Box.wait_for_manual_login()`` が判定する）。
         """
-        self.input(self.EMAIL_INPUT, username)
-
-        # 2 段構成のときだけ「次へ」を押す。1画面構成ならパスワード欄が既にある
-        if not self.has_element(self.PASSWORD_INPUT):
-            self.click(self.NEXT_BTN)
-            self.wait_visible(self.PASSWORD_INPUT)
-
-        self.input(self.PASSWORD_INPUT, password)
-
-        url_before_login = self.session.current_url
-        self.click(self.LOGIN_BTN)
-        logger.info(
-            "Boxへログインを送信しました。二段階認証が要求される場合は表示中のEdgeで承認してください"
-        )
-
-        # ログイン結果のどれかが先に起きるまで待つ。二段階認証へ進む場合は
-        # URL が変わらないことがあるので、パスワード欄の消滅も判定に含める
-        self.wait_until_any(
-            self.url_changed(url_before_login),
-            self.text_shown(self.ERROR_MSG),
-            self.login_form_gone(),
-        )
-        self.raise_if_shown(self.ERROR_MSG, LoginFailedError)
-
-    def login_form_gone(self) -> Condition:
-        """ログインフォーム（パスワード欄）が無くなることを表す条件。
-
-        ログイン後は画面が別物に差し替わるため、パスワード欄が消えるのを
-        「ログイン手続きが進んだ」判定に使う。二段階認証の画面へ移った場合も
-        パスワード欄は消える。
-        """
-        return lambda driver: not driver.find_elements(*self.PASSWORD_INPUT)
+        try:
+            self.wait_visible(self.CONTINUE_BTN)
+        except ElementNotFoundError:
+            logger.warning(
+                "「サインインで続行」ボタンが見つかりません（ログイン済みの可能性）: %s",
+                self.CONTINUE_BTN,
+            )
+            return
+        self.click(self.CONTINUE_BTN)
 
     def error_message(self) -> str:
         """ログイン画面のエラー表示を返す。エラーが出ていなければ空文字。"""

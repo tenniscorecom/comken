@@ -7,9 +7,9 @@
 （``〇〇Site`` と ``〇〇SiteOptions`` は必ずセットで、フォルダが同じならファイルも
 分ける理由が無い）。
 
-API（OAuth アプリ登録）は使わない。ログインはメールアドレスとパスワードで行い、
-2段階認証などが必要なときは人がブラウザで承認する（``login_with_credentials()``
-は DPAPI の認証情報を入力したあと、その承認を待つ）。
+API（OAuth アプリ登録）は使わない。ログインはログイン画面の「サインインで続行」
+ボタンを押すだけ（ID/パスワードの入力はしない）。2段階認証などが必要なときは
+人がブラウザで承認する（``login()`` はその承認が終わるまで待つ）。
 
 行ける画面は `go_〇〇()` で書き、コードがそのまま遷移図になるようにする
 （書き方の正本は docs/機能/browser.md）。
@@ -58,11 +58,12 @@ class BoxBrowserOptions(BrowserOptions):
 class Box(SiteBase):
     """Box (https://app.box.com) を操作するためのサイトクラス。
 
-    ログインは 2 通り:
+    ログインは ``login()`` だけ。ID/パスワードの入力はせず、ログイン画面の
+    「サインインで続行」ボタンを押したあと、2段階認証の承認を人が終えるのを待つ。
 
-    - ``go_login()`` + ``LoginPage.login()`` — 自分でID/パスワードを入力する
-    - ``login_with_credentials()`` — DPAPI に保存したID/パスワードを自動入力し、
-      そのまま 2段階認証の承認を人が終えるのを待つ
+        with Box() as box:
+            box.login()
+            folder = box.go_folder("123456789")
 
     **ログインを使い回すには OPTIONS.PROFILE_ROOT を設定すること。**
     未設定だと起動のたびにまっさらなプロファイルになり、毎回ログインし直しになる
@@ -80,15 +81,11 @@ class Box(SiteBase):
     OPTIONS = BoxBrowserOptions
     OWNER = "comken"
 
-    # DPAPI に登録する認証情報のシステム名。
-    # ``username`` と ``password`` の2項目を登録しておく（``python -m comken cred gui``）
-    CREDENTIAL_PREFIX = "box"
-
     def go_login(self) -> LoginPage:
         """ログイン画面を開く。
 
-        ID/パスワードを自分で入力するなら ``LoginPage.login()``、人が手動で
-        入力するならこの後 ``wait_for_manual_login()`` を呼ぶ。
+        ``login()`` がこの画面を使って「サインインで続行」を押す。
+        自分で操作するなら、この後で ``wait_for_manual_login()`` を呼ぶ。
         """
         from comken.toolbox.browser.sites.box.pages.login_page import LoginPage
 
@@ -115,50 +112,37 @@ class Box(SiteBase):
 
         return self.to(FilePage).go(f"/file/{file_id}")
 
-    def login_with_credentials(
+    def login(
         self,
-        prefix: str = "",
         timeout: float = _DEFAULT_MANUAL_LOGIN_TIMEOUT_SECONDS,
         interval: float = _DEFAULT_MANUAL_LOGIN_INTERVAL_SECONDS,
     ) -> None:
-        """DPAPI に保存したID/パスワードでログインし、2段階認証などを人が済ませるのを待つ。
+        """「サインインで続行」を押してログインし、2段階認証などを人が済ませるのを待つ。
 
-        ``Credentials`` の ``username`` / ``password`` でログイン画面に入力・送信
-        したあと、そのまま ``wait_for_manual_login()`` を呼んで、2段階認証（認証
-        コード・端末承認など）の承認を人が終えるのを待つ。承認が完了して
-        ログイン済みになった時点で return する。
+        ログイン画面を開く → 既にログイン済みなら何もしない → そうでなければ
+        「サインインで続行」を押す → そのまま ``wait_for_manual_login()`` を呼んで、
+        2段階認証（アカウント選択・認証コード・端末承認など）の承認を人が終えるのを
+        待つ。承認が完了してログイン済みになった時点で return する。
 
         Args:
-            prefix: DPAPI に登録した認証情報のシステム名
-                （``comken.toolbox.credentials.Credentials`` のサイト名）。
-                ``username`` / ``password`` の2項目を登録しておく
-                （例: ``python -m comken cred gui``）。**省略時はクラスの
-                ``CREDENTIAL_PREFIX``** を使う。
             timeout: 2段階認証の承認を待つ最大の秒数。既定10分。
             interval: ブラウザ状態の確認間隔（秒）。既定3秒。
 
         Raises:
-            CredentialNotFoundError: prefix 配下に username/password が未登録の場合。
-            CredentialError: 別のユーザー・PC で登録されていて復号できない場合。
             LoginFailedError: ログイン画面のエラー表示が出た場合、
                 ``timeout`` 秒待ってもログイン済みにならなかった場合。
             BrowserError: HEADLESS で起動中、かつ2段階認証の承認が必要な場合
                 （人がブラウザを操作できないため、待たずにエラー）。
         """
-        from comken.toolbox.credentials import Credentials
-
-        prefix = prefix or self.CREDENTIAL_PREFIX
-        logger.info("DPAPIの認証情報でログインを試みます: prefix=%s", prefix)
-        cred = Credentials(prefix)
-
         login_page = self.go_login()
         if self._is_logged_in():
             # ログイン状態を保存したプロファイルで、すでにログイン済みのとき
             logger.info("Boxはすでにログイン済みです")
         else:
-            login_page.login(cred.username, cred.password)
+            login_page.continue_sign_in()
             logger.info(
-                "IDとパスワードを入力しました。2段階認証がある場合は表示中のEdgeで承認してください"
+                "「サインインで続行」を押しました。"
+                "2段階認証が要求される場合は表示中のEdgeで承認してください"
             )
         self.wait_for_manual_login(timeout=timeout, interval=interval)
 
@@ -244,7 +228,7 @@ class Box(SiteBase):
         """ブラウザの状態が「Box にログイン済み」かを判定する。
 
         判定基準:
-            - ログイン画面の入力欄（``#login-email``）が**無い**
+            - ログイン画面の「サインインで続行」ボタンが**見えていない**
             - **かつ** 現在 URL がログイン画面（account.box.com / login / sso）で無い
             - **かつ** ログイン後の画面にある目印（アカウントアイコン）が出ている
 
@@ -254,16 +238,16 @@ class Box(SiteBase):
         の ``_needs_login()`` と同じロジック
         （``"account.box.com" in url or "login" in url.lower() or "sso" in url.lower()``）。
         目印の要素は AppPage.APP_SHELL を参照。
+        Microsoft のアカウント選択画面（login.microsoftonline.com /
+        login.live.com）も "login" を含むので、未ログインとして扱われる。
         """
         from comken.toolbox.browser.sites.box.pages.app_page import AppPage
-        from comken.toolbox.browser.sites.box.pages.login_page import LoginPage
 
         session = self._require_session()
         driver = session.raw
 
-        # find_elements は要素が無ければ空リストを返す（例外は出ない）。
-        # 入力欄が見えていれば、まだログイン画面（あるいはその残骸）
-        if driver.find_elements(*LoginPage.EMAIL_INPUT):
+        # ログイン画面のボタンが見えていれば、まだログインしていない
+        if self._continue_button_shown():
             return False
 
         lowered_url = driver.current_url.lower()
@@ -272,6 +256,19 @@ class Box(SiteBase):
 
         # ログイン後の画面（アカウントアイコン）が出ていればログイン済み
         return bool(driver.find_elements(*AppPage.APP_SHELL))
+
+    def _continue_button_shown(self) -> bool:
+        """「サインインで続行」ボタンが画面に見えているかを返す（待たない）。
+
+        ログイン画面のボタンが見えている間は、まだログインしていない
+        （``_is_logged_in()`` の判定に使う）。
+        """
+        from comken.toolbox.browser.sites.box.pages.login_page import LoginPage
+
+        session = self._require_session()
+        # find_elements は要素が無ければ空リストを返す（例外は出ない）
+        elements = session.raw.find_elements(*LoginPage.CONTINUE_BTN)
+        return any(element.is_displayed() for element in elements)
 
     def _require_session(self) -> BrowserSession:
         """起動済みの BrowserSession を返す。未起動なら理由を示して落とす。"""
