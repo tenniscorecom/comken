@@ -6,8 +6,10 @@ tkinter（Python 標準ライブラリ）製。ターミナルを使わない人
 コマンドでできること（登録・取り込み・一覧・削除）を1つの画面にまとめたもの。
 平文 JSON もこの画面から選んで取り込めるので、登録の作業はここだけで済む。
 
-**登録した値を読み出す機能は載せない。** 画面に出せば覗き見やスクリーンショットで
-漏れる経路が増える。登録できたかどうかは、キー名の一覧と文字数で確かめられる。
+**登録した値は、選んで「値を表示」を押した時だけ画面に出す。** 一覧を開いただけでは
+復号しない。値は既定で伏せ字で、選択を切り替えると欄は空に戻る。値を見られるように
+すると、覗き見やスクリーンショットで漏れる経路が増えるため、**見たい項目を、その時だけ**
+表示する形にしてある。登録できたかどうかは、キー名の一覧と文字数で確かめられる。
 """
 
 import logging
@@ -66,7 +68,8 @@ def build_credential_name(system: str, field: str) -> tuple[tuple[str, str] | No
 class CredentialsApp:
     """認証情報の登録画面。
 
-    左: 登録済みの認証情報の一覧（値は表示しない）と、選んだキーの削除
+    左: 登録済みの認証情報の一覧（値は表示しない）、選んだキーの削除、
+        選んだ項目の値の表示（伏せ字が既定）
     右: 手入力での登録フォームと、平文 JSON の取り込み
     下: 保存先のパスと、直前の操作の結果
     """
@@ -80,8 +83,8 @@ class CredentialsApp:
         self.root = root
         self._path = path
         root.title("comken 認証情報の登録")
-        root.geometry("640x420")
-        root.minsize(560, 380)
+        root.geometry("700x540")
+        root.minsize(620, 500)
 
         self._build_widgets()
         self._refresh()
@@ -99,6 +102,9 @@ class CredentialsApp:
         self.tree = ttk.Treeview(left, show="tree", selectmode="browse")
         self.tree.pack(fill=tk.BOTH, expand=True)
         self.tree.bind("<<TreeviewSelect>>", self._on_select_existing)
+        # 選択が変わったら読み出した値を消す。 フォームへの自動入力とは別の
+        # 処理なので、 同じイベントに 2 つ目を追加する
+        self.tree.bind("<<TreeviewSelect>>", self._on_clear_read_value, add="+")
 
         ttk.Label(
             left,
@@ -107,12 +113,39 @@ class CredentialsApp:
             wraplength=280,
             justify=tk.LEFT,
         ).pack(anchor=tk.W, pady=(4, 0))
-        ttk.Label(left, text="値は表示されません（登録できたかの確認用）").pack(
-            anchor=tk.W, pady=(2, 0)
-        )
+        ttk.Label(
+            left,
+            text="値は一覧に出ません。「値を表示」を押すと下の欄に出ます（既定は伏せ字）。",
+            wraplength=280,
+            justify=tk.LEFT,
+        ).pack(anchor=tk.W, pady=(2, 0))
         ttk.Button(left, text="選択した項目を削除", command=self._on_delete).pack(
             anchor=tk.W, pady=(8, 0)
         )
+        ttk.Button(left, text="値を表示", command=self._on_show_value).pack(
+            anchor=tk.W, pady=(4, 0)
+        )
+
+        # 読み出した値の欄。読み取り専用にして、手で書き換えられないようにする
+        ttk.Label(left, text="読み出した値").pack(anchor=tk.W, pady=(8, 0))
+        self.read_value_var = tk.StringVar()
+        self.read_value_entry = ttk.Entry(
+            left,
+            textvariable=self.read_value_var,
+            show=_MASK_CHARACTER,
+            state="readonly",
+        )
+        self.read_value_entry.pack(fill=tk.X)
+
+        # 登録フォームの「値を表示する」とは別の変数にする。どちらの切り替えも
+        # もう片方の欄に影響しないこと
+        self.read_value_show_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            left,
+            text="値を表示する",
+            variable=self.read_value_show_var,
+            command=self._on_toggle_read_value_show,
+        ).pack(anchor=tk.W, pady=(2, 6))
 
         # ── 右: 登録フォーム ──
         right = ttk.Frame(main, padding=(12, 0, 0, 0))
@@ -190,6 +223,9 @@ class CredentialsApp:
             self._path or CREDENTIALS_PATH,
             len(pairs),
         )
+        # 一覧が変わったら読み出した値はもう可信ではない。 登録・削除・取り込みの
+        # どれでもここを通るので、 読み出した値の欄を空にする
+        self._on_clear_read_value()
 
     def _status(self, message: str) -> None:
         self.status_var.set(message)
@@ -197,6 +233,10 @@ class CredentialsApp:
     # --------------------------------------------------------- イベント処理
     def _on_toggle_show(self) -> None:
         self.value_entry.config(show="" if self.show_var.get() else _MASK_CHARACTER)
+
+    def _on_toggle_read_value_show(self) -> None:
+        """読み出した値の欄の伏せ字を外す（登録フォームの欄とは連動させない）。"""
+        self.read_value_entry.config(show="" if self.read_value_show_var.get() else _MASK_CHARACTER)
 
     def _on_select_existing(self, _event: tk.Event) -> None:
         """左の一覧から選ぶと、右のサイト名・項目名を自動入力する（登録し直し用）。
@@ -313,6 +353,66 @@ class CredentialsApp:
         self._refresh()
         self._status(f"削除しました: {site}{_DISPLAY_NAME_SEPARATOR}{field}")
         logger.debug("_on_delete 完了: display=%s", display)
+
+    def _on_show_value(self) -> None:
+        """選んだ項目の値だけを読み出して、伏せ字の欄に入れる。
+
+        値を見るのは「選んだ項目について表示を求めたとき」だけにする。
+        一覧を開いただけでは復号しないので、覗き見やスクリーンショットの
+        漏れる経路を増やさない。
+        """
+        selection = self.tree.selection()
+        if not selection:
+            messagebox.showinfo(
+                "値を表示",
+                "左の一覧から値を表示する項目を選んでください。",
+                parent=self.root,
+            )
+            return
+        selected_id = selection[0]
+        site = self.tree.parent(selected_id)
+        if not site:
+            # サイト行（親）だけを選ぶと、項目が定まらないので値も決められない
+            messagebox.showinfo(
+                "値を表示",
+                "サイト名ではなく、値を表示する項目（子）を選んでください。",
+                parent=self.root,
+            )
+            return
+        field = self.tree.item(selected_id, "text")
+        display = f"{site}{_DISPLAY_NAME_SEPARATOR}{field}"
+
+        try:
+            # 読み直す前に前の値を消す。 復号に失敗したときに前の値が残ると、
+            # 別の項目の値だと誤解される
+            self._hide_read_value()
+            value = load_credential(site, field, self._path)
+        except CredentialError as e:
+            # 別ユーザー・別 PC で登録されたときなどに復号できない
+            logger.debug("_on_show_value: 復号に失敗: display=%s", display)
+            messagebox.showerror("値を表示できませんでした", str(e), parent=self.root)
+            return
+
+        self.read_value_var.set(value)
+        self.read_value_entry.config(show="" if self.read_value_show_var.get() else _MASK_CHARACTER)
+        # 値そのものはステータスバーにもログにも出さない（長さだけ出す）
+        self._status(f"値を読み出しました: {display}（{len(value)} 文字）")
+        logger.debug("_on_show_value 完了: display=%s, 長さ=%d 文字", display, len(value))
+
+    def _hide_read_value(self) -> None:
+        """読み出した値の欄を空にして、伏せ字に戻す。"""
+        self.read_value_var.set("")
+        self.read_value_entry.config(show=_MASK_CHARACTER)
+
+    def _on_clear_read_value(self, _event: tk.Event | None = None) -> None:
+        """選択が変わったら読み出した値を消す。
+
+        選んだ項目が変わったのに前の値が残ると、違う項目の値だと誤解される。
+        画面に残っている間は値を保持したことになるため、必ず消す。
+        伏せ字を外すチェックも戻す（次の項目は伏せ字から始める）。
+        """
+        self._hide_read_value()
+        self.read_value_show_var.set(False)
 
     def _on_import_json(self) -> None:
         """平文 JSON を選んでまとめて取り込む（コマンドの import と同じ）。"""
