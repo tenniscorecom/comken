@@ -223,7 +223,7 @@ class CredentialsApp:
             self._path or CREDENTIALS_PATH,
             len(pairs),
         )
-        # 一覧が変わったら読み出した値はもう可信ではない。 登録・削除・取り込みの
+        # 一覧が変わったら読み出した値はもう正しいとは限らない。 登録・削除・取り込みの
         # どれでもここを通るので、 読み出した値の欄を空にする
         self._on_clear_read_value()
 
