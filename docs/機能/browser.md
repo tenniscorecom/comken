@@ -531,6 +531,68 @@ with Site() as site:
 
 ---
 
+## Box（box.com）を操作する
+
+`comken/toolbox/browser/sites/box/` に Box（https://app.box.com）を操作する
+実装を入れてある。API（OAuth アプリ登録）は使わず、ログインはメールアドレスと
+パスワードで行う。
+
+### できること
+
+| 操作 | 呼び出し |
+|---|---|
+| ログインする（DPAPI の認証情報を使う） | `box.login_with_credentials()` |
+| フォルダを開く | `box.go_folder("123456789")` |
+| ファイルを開く | `box.go_file("123456789")` |
+| フォルダの中身を見る | `folder.items()` / `folder.find("名前")` |
+| ファイルをアップロードする | `folder.upload(Path("報告.xlsx"))` |
+| フォルダを作る | `folder.create_folder("2026年")` |
+| ファイルをダウンロードする | `folder.download("元データ.csv")` |
+| ゴミ箱へ移す（完全削除はしない） | `folder.delete("古い.txt")` |
+| 子フォルダへ移る | `folder.open_folder("2026年")` |
+
+### 認証情報を登録する
+
+`python -m comken cred gui` で `box` に `username`（メールアドレス）と
+`password` の2項目を登録する。`login_with_credentials()` はその2項目を使う。
+
+```python
+from pathlib import Path
+
+from comken.toolbox.browser.sites.box.site import Box
+
+with Box() as box:
+    box.login_with_credentials()
+    folder = box.go_folder("123456789")
+    folder.upload(Path("報告.xlsx"))
+    path = folder.download("元データ.csv")
+```
+
+2段階認証があるときは、`login_with_credentials()` は送信後に人が承認するまで
+待つ。画面を表示しない HEADLESS で起動していると承認できないので、その場合は
+エラーになる（`OPTIONS.HEADLESS` を False にして起動し直す）。
+
+会社の Box が独自サブドメイン（https://<社名>.app.box.com など）を使っている
+場合は、利用側で継承して `BASE_URL` を書き換える。
+
+### セレクタは未確認（実機で直す必要がある）
+
+**この節のセレクタは実機で確認していない推測のもの。** 公開資料（Box の
+OSS 部品 `box/box-ui-elements` と、Selenium/Playwright による Box 自動化
+の事例）から決めたもので、実際の画面と違っている可能性がある。
+
+直すのは各 Page クラスの先頭に集めた定数だけ
+（`pages/login_page.py` / `pages/folder_page.py` / `pages/file_page.py`）。
+各定数のコメントに「根拠」（参照したファイル・URL）を残してあるので、
+実機で見えた値へ書き換えること。根拠が無いものは `# 未確認: 推測` と
+書いてある。
+
+日本語UI・英語UIのどちらでも動くものを優先している（`id` / `name` /
+`data-resin-target` / `data-testid` / `href` の形）。表示文字列でしか取れない
+ものは、日英両方に当たる書き方にした。
+
+---
+
 ## よくあるつまずき
 
 ### 要素が見つからない（`ElementNotFoundError`）
